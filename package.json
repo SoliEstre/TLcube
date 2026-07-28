@@ -1,0 +1,13 @@
+{
+  "name": "tlcube",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "2.5D visual code — data encoded in the luminance rank permutation of three rhombic faces per hexagonal cell",
+  "license": "UNLICENSED",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

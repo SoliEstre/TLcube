@@ -1,0 +1,51 @@
+# === Common ===
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# IDE / 편집기
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+.secrets/
+
+# 로그 / 디버그
+*.log
+logs/
+npm-debug.log*
+
+# === Node / JavaScript ===
+# 런타임 의존성은 0 원칙. 테스트 도구가 생기면 여기서 걸린다.
+node_modules/
+.pnpm-store/
+dist/
+build/
+out/
+coverage/
+.cache/
+
+# === 테스트 산출물 ===
+# 왜곡 하네스가 생성하는 이미지는 커밋하지 않는다 (수천 장).
+# 고정 테스트 벡터는 test/vectors/ 에 두고 명시적으로 커밋할 것.
+test/output/
+test/**/*.generated.png
+*.tmp.png

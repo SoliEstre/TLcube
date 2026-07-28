@@ -1,0 +1,13 @@
+# 결정성이 이 프로젝트의 수용 기준이다 (동일 입력 → 바이트 동일 출력).
+# 줄바꿈이 플랫폼마다 달라지면 해시 비교가 무의미해진다.
+* text=auto eol=lf
+
+# 바이너리 — 변환 금지
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+
+# 테스트 벡터는 절대 건드리지 않는다
+test/vectors/** -text
