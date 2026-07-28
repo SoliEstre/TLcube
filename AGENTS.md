@@ -47,10 +47,13 @@ git 조작은 항상 대상을 명시한다: `git -C TLcube <cmd>` (상위에서
 ```
 index.html          ← M0: 단일 파일 인코더
 src/
-  gf256.js          ← GF(2⁸) 산술 + RS
-  base6.js          ← 64bit ↔ base-6 digit 25
-  lehmer.js         ← digit ↔ (T,L,R) 순위
-  layout.js         ← axial 격자 · 불스아이 · 앵커 · 레퍼런스
+  gf256.js          ← ✅ GF(2⁸) 유한체 산술 (원시 다항식 0x11D)
+  rs.js             ← ✅ Reed-Solomon (체계적, BM+Chien+Forney)
+  base6.js          ← ✅ 64bit ↔ base-6 digit 25
+  lehmer.js         ← ✅ digit ↔ (T,L,R) 순위
+  hexgrid.js        ← ✅ axial 격자 · rhombille 3면 분할 · 샘플 원판
+  layout.js         ← 불스아이 · 앵커 · 레퍼런스 · 데이터 셀 배치 맵
+  header.js         ← 페이로드 헤더 (길이 필드) — 미설계
   mask.js           ← m(q,r)
   encode.js
   render-canvas.js
@@ -59,5 +62,11 @@ src/
 decoder/            ← M1
 test/               ← 테스트 벡터 + 왜곡 하네스
 ```
+
+테스트: `npm test` (= `node --test`). **`node --test test/` 는 이 Node 에서 동작하지 않는다** —
+인자를 glob 으로 해석해 매치 0 이 되고 `test` 를 모듈로 로드하려다 죽는다.
+
+⚠ `base6.js` 의 꼬리 청크 규약과 digit 순서·엔디안은 **SPEC 에 없는 본 구현의 단독 결정**이다
+(소스 `[C5]` 참조). SPEC 승격 전까지 잠정이며, 공개 시 상호운용 문제가 된다.
 
 `render-*.js` 와 `style-presets.js` 는 **순서 + Δmin 계약만** 지키면 나머지는 자유다. 이 경계를 침범하지 않는다.
