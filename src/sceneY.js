@@ -1,0 +1,298 @@
+/**
+ * sceneY.js — Type Y (단일 큐브) 인코딩 결과 → 결정적 도형(scene) 전개 (SPEC §14, TY6)
+ *
+ * scene.js(Type O)와 painter 계약을 그대로 승계한다 — shape kind 는 polygon | disc 만,
+ * shapes 배열 순서가 렌더러 소비 계약이다(raster.js·svg.js 는 뒤에 그려진 도형이
+ * 이긴다). 이 모듈은 encodeY.js 의 `{n, cellDigits}` 산출물을 소비하지만 encodeY.js 를
+ * import 하지 않는다 — 인터페이스 계약으로만 다룬다(병렬 lane 산출물 결합 지점을
+ * 최소화).
+ *
+ * 이 모듈도 순수 기하 + 색 변환만 다룬다 — node 전용 API·Math.random·Date·
+ * Math.hypot·삼각함수 금지(결정성 계약, AGENTS.md 공통 규약).
+ */
+
+import { moduleQuad, layoutForCube, cubeBounds, YFACES } from './ygrid.js';
+import { CORNER_UNIT_OFFSETS } from './hexgrid.js';
+import { digitToRanks } from './lehmer.js';
+import { srgbChannelToLinear } from './luminance.js';
+import { qrMatrix } from './qr.js';
+
+// ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
+
+/** 기본 면 게인. T=1(기준면), L·R 은 어둡게(입체감) — γ = max/min ≈ 1.923 ≤ 2. */
+export const DEFAULT_FACE_GAINS = Object.freeze({ T: 1, L: 0.72, R: 0.52 });
+
+function gainRatio(gains) {
+  const vals = [gains.T, gains.L, gains.R];
+  return Math.max(...vals) / Math.min(...vals);
+}
+
+// 모듈 로드 시 단언 — 기본값 자체가 SPEC §14 렌더러 의무(γ≤2)를 어기면 여기서
+// 즉시 터진다(런타임 호출 전에 잡는다).
+{
+  const ratio = gainRatio(DEFAULT_FACE_GAINS);
+  if (!(ratio <= 2)) {
+    throw new Error(`DEFAULT_FACE_GAINS 게인비 γ=${ratio} 가 SPEC §14 렌더러 의무(γ≤2)를 위반한다`);
+  }
+}
+
+/** 호출 시점에 실제 쓰일 faceGains 를 검증한다(팔레트로 넘어온 커스텀 값 포함). */
+function assertFaceGains(gains) {
+  for (const face of YFACES) {
+    const v = gains[face];
+    if (!Number.isFinite(v) || v <= 0) {
+      throw new RangeError(`faceGains.${face} 는 유한한 양수여야 한다: ${v}`);
+    }
+  }
+  const ratio = gainRatio(gains);
+  if (!(ratio <= 2)) {
+    throw new RangeError(`면 게인비 γ=${ratio} 가 SPEC §14 렌더러 의무(γ≤2)를 초과한다`);
+  }
+}
+
+/**
+ * 선형 채널(0..1) → sRGB 8bit 채널(0..255, 반올림). IEC 61966-2-1 역변환.
+ * luminance.js 는 순방향(sRGB→선형)만 노출하므로, 역방향은 여기 내부 헬퍼로
+ * 둔다(과제 지침: luminance.js 는 고치지 않는다).
+ */
+function linearChannelToSrgb8(linear) {
+  const clampedLinear = linear < 0 ? 0 : linear > 1 ? 1 : linear;
+  const c = clampedLinear <= 0.0031308
+    ? clampedLinear * 12.92
+    : 1.055 * Math.pow(clampedLinear, 1 / 2.4) - 0.055;
+  const v = Math.round(c * 255);
+  return v < 0 ? 0 : v > 255 ? 255 : v;
+}
+
+/**
+ * 레벨 색 {r,g,b} 에 면 게인을 적용한 색. 채널별 sRGB→선형→×gain→sRGB.
+ * 게인은 면 단위 스칼라라 동일 면 안에서는 모든 레벨에 똑같이 곱해진다 —
+ * 선형 곱은 단조 함수이므로 면 내부 순위(0<1<2)는 자동으로 보존된다.
+ */
+function applyFaceGain(rgb, gain) {
+  return {
+    r: linearChannelToSrgb8(srgbChannelToLinear(rgb.r) * gain),
+    g: linearChannelToSrgb8(srgbChannelToLinear(rgb.g) * gain),
+    b: linearChannelToSrgb8(srgbChannelToLinear(rgb.b) * gain),
+  };
+}
+
+// ── 콰이어트 존 + margin 기본값 (SPEC §14 QR fallback 계약) ────────────────
+
+/** qr.js 는 QR v1 고정(21×21) — SIZE 를 export 하지 않으므로 여기 재정의한다.
+ *  값이 어긋나면 콰이어트 겹침 계산이 조용히 깨지므로 테스트에서 실제
+ *  `qrMatrix().size` 와의 일치를 단언한다. */
+const QR_MODULE_GRID = 21;
+
+/** SPEC §14: 코너 QR 콰이어트 존 4모듈. */
+const QR_QUIET_MODULES = 4;
+
+/** 콰이어트 포함 QR 블록 한 변의 QR-모듈 수 (= 4 + 21 + 4). */
+const QR_BLOCK_MODULES = QR_MODULE_GRID + 2 * QR_QUIET_MODULES;
+
+/**
+ * margin 기본값 유도.
+ *
+ * QR 블록(콰이어트 포함, 1 QR-모듈 = cellSize/2 피치)의 좌상단은
+ * (margin·0.25, margin·0.25) 에 고정된다(계약). cubeBounds(n, layout) 의
+ * 좌상단은 항상 정확히 (margin, margin) 이다 — layoutForCube 가 bbox 를
+ * margin 으로 균등 패딩하기 때문(원점 0 기준 bbox.minX = -halfW 이므로
+ * originX - halfW = (margin - (-halfW)) - halfW = margin, n 에 무관).
+ *
+ * 따라서 겹침 없음(cubeBounds 사각형과 QR 블록 사각형의 사각-사각 비교)의
+ * 필요충분조건은:
+ *   margin·0.25 + QR_BLOCK_MODULES·(cellSize/2) <= margin
+ *   ⟺ margin >= QR_BLOCK_MODULES·cellSize/2 / 0.75 = (2·QR_BLOCK_MODULES/3)·cellSize
+ *   = (2·29/3)·cellSize ≈ 19.33·cellSize
+ *
+ * SPEC 원문이 적어 둔 "margin 기본 2·cellSize" 는 Type O 관례를 그대로 옮긴
+ * 것일 뿐 Type Y 콰이어트 겹침 계약과 충돌한다 — SPEC §14 QR 블록 조항이
+ * "n=21·25 기본 margin 에서 무겹침이도록 margin 기본값 조정 가능(조정했으면
+ * 명시)"이라고 명시적으로 허용하므로, 여기서 20·cellSize 로 상향한다
+ * (최소 필요치 ≈19.33·cellSize 에 여유를 둔 값 — n 에 무관하게 항상 충분하다).
+ */
+const DEFAULT_MARGIN_FACTOR = 20;
+
+function rectsOverlap(a, b) {
+  return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+}
+
+// ── 검증 ────────────────────────────────────────────────────────────────
+
+function assertEncoded(encoded) {
+  if (encoded === null || typeof encoded !== 'object') {
+    throw new TypeError('encoded 는 객체여야 한다');
+  }
+  const { n, cellDigits } = encoded;
+  if (!Number.isInteger(n) || n < 1) {
+    throw new RangeError(`encoded.n 은 1 이상의 정수여야 한다: ${n}`);
+  }
+  if (!(cellDigits instanceof Map)) {
+    throw new TypeError('encoded.cellDigits 는 Map 이어야 한다');
+  }
+  return { n, cellDigits };
+}
+
+function assertPalette(palette) {
+  if (palette === null || typeof palette !== 'object') {
+    throw new TypeError('palette 는 객체여야 한다');
+  }
+  return palette;
+}
+
+// ── 조립 ────────────────────────────────────────────────────────────────
+
+/**
+ * Type Y 인코딩 결과로부터 scene 을 조립한다.
+ *
+ * @param {{n: number, cellDigits: Map<string, {digit: number, role: string}>}} encoded
+ * @param {{
+ *   palette: {background:{r,g,b}, levels:[{r,g,b},{r,g,b},{r,g,b}], bullseyeDark:{r,g,b}, bullseyeLight:{r,g,b}, faceGains?:{T,L,R}},
+ *   qrText?: string, cellSize?: number, margin?: number,
+ * }} [options]
+ * @returns {{n:number, layout:object, width:number, height:number, background:{r,g,b}, shapes:Array}}
+ */
+export function buildSceneY(encoded, options) {
+  const { n, cellDigits } = assertEncoded(encoded);
+
+  const opts = options || {};
+  const palette = assertPalette(opts.palette);
+  const faceGains = opts.palette.faceGains === undefined ? DEFAULT_FACE_GAINS : opts.palette.faceGains;
+  assertFaceGains(faceGains);
+
+  const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
+  const margin = opts.margin === undefined ? DEFAULT_MARGIN_FACTOR * cellSize : opts.margin;
+
+  const layout = layoutForCube(n, { size: cellSize, margin });
+
+  // 게인 적용된 레벨 색(면당 3개) — 셀마다 다시 계산하지 않도록 미리 캐시한다.
+  const gainedLevels = {};
+  for (const face of YFACES) {
+    gainedLevels[face] = palette.levels.map((rgb) => applyFaceGain(rgb, faceGains[face]));
+  }
+
+  const shapes = [];
+
+  // ① 전 모듈 폴리곤 — 셀 (i,j) 를 j→i 오름차순(바깥 j, 안쪽 i, 둘 다 오름차순),
+  // 셀마다 YFACES 순서 [T,L,R]. cellDigits 에 없는 (i,j) 는 건너뛴다.
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
+      const key = `${i},${j}`;
+      const entry = cellDigits.get(key);
+      if (entry === undefined) continue;
+      const ranks = digitToRanks(entry.digit);
+      for (const face of YFACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: moduleQuad(face, i, j, layout),
+          color: gainedLevels[face][ranks[face]],
+        });
+      }
+    }
+  }
+
+  // ② Y-심 3선 — 중심(Y-심 = layout 원점) → C1·C3·C5 방향, 반폭 0.075·cellSize
+  // 얇은 사각 폴리곤. 반폭이 샘플 원판 여유(0.2165·cellSize = faceInradius·0.5,
+  // hexgrid.SAMPLE_FRACTION_DEFAULT 기본값 기준) 안쪽이라 심선이 샘플링 원판을
+  // 침범하지 않는다. 길이는 큐브 반경 R = n·cellSize(중심→꼭짓점, cubeBounds 유도와
+  // 동일 닫힌 형태) 만큼 — Y-심에서 육각 실루엣 꼭짓점까지 정확히 닿는다.
+  const seamHalfWidth = 0.075 * cellSize;
+  const R = n * cellSize;
+  const center = { x: layout.originX, y: layout.originY };
+  for (const cornerIdx of [1, 3, 5]) {
+    const u = CORNER_UNIT_OFFSETS[cornerIdx]; // 이미 단위벡터라 정규화(sqrt) 불필요.
+    const perp = { x: -u.y, y: u.x }; // 단위벡터의 수직 벡터도 단위벡터.
+    const far = { x: center.x + u.x * R, y: center.y + u.y * R };
+    shapes.push({
+      kind: 'polygon',
+      points: [
+        { x: center.x + perp.x * seamHalfWidth, y: center.y + perp.y * seamHalfWidth },
+        { x: far.x + perp.x * seamHalfWidth, y: far.y + perp.y * seamHalfWidth },
+        { x: far.x - perp.x * seamHalfWidth, y: far.y - perp.y * seamHalfWidth },
+        { x: center.x - perp.x * seamHalfWidth, y: center.y - perp.y * seamHalfWidth },
+      ],
+      color: palette.bullseyeDark,
+    });
+  }
+
+  // ③ 중심 도트 — 반지름 0.18·cellSize, bullseyeDark.
+  shapes.push({
+    kind: 'disc',
+    cx: center.x,
+    cy: center.y,
+    r: 0.18 * cellSize,
+    color: palette.bullseyeDark,
+  });
+
+  // ④ 코너 QR 블록 — qrText 가 없으면 생략(이 경우도 유효한 장면, SPEC §14 QR fallback 은
+  // 미학 옵션이 아니라 규범이지만 scene 조립 단계에서는 호출자가 아직 URL 을 안 정했을
+  // 수 있어 강제하지 않는다).
+  if (opts.qrText !== undefined) {
+    const qr = qrMatrix(opts.qrText);
+    if (qr.size !== QR_MODULE_GRID) {
+      // 방어적 가드 — qr.js 가 v1 고정을 벗어나면 위 margin 유도 전제가 깨진다.
+      throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
+    }
+    const qrModuleSize = cellSize / 2;
+    const blockOrigin = { x: margin * 0.25, y: margin * 0.25 };
+    const blockSide = QR_BLOCK_MODULES * qrModuleSize;
+    const blockRect = {
+      minX: blockOrigin.x,
+      minY: blockOrigin.y,
+      maxX: blockOrigin.x + blockSide,
+      maxY: blockOrigin.y + blockSide,
+    };
+    const silhouetteRect = cubeBounds(n, layout);
+    if (rectsOverlap(blockRect, silhouetteRect)) {
+      throw new Error(
+        'QR 블록(콰이어트 포함)이 큐브 실루엣(cubeBounds)과 겹친다 — margin 을 늘려야 한다: '
+          + `블록=${JSON.stringify(blockRect)}, 실루엣=${JSON.stringify(silhouetteRect)}`,
+      );
+    }
+
+    // 콰이어트 패치 — 블록 전체를 덮는 밝은 사각형(어두운 스킨에서도 QR 리더가
+    // 콰이어트 존을 확보하도록 렌더러가 보장, SPEC §14).
+    shapes.push({
+      kind: 'polygon',
+      points: [
+        { x: blockRect.minX, y: blockRect.minY },
+        { x: blockRect.maxX, y: blockRect.minY },
+        { x: blockRect.maxX, y: blockRect.maxY },
+        { x: blockRect.minX, y: blockRect.maxY },
+      ],
+      color: palette.bullseyeLight,
+    });
+
+    // QR 모듈 다크 사각형 — 콰이어트 4모듈 안쪽, row-major(y→x 오름차순).
+    const qrOrigin = {
+      x: blockOrigin.x + QR_QUIET_MODULES * qrModuleSize,
+      y: blockOrigin.y + QR_QUIET_MODULES * qrModuleSize,
+    };
+    for (let y = 0; y < qr.size; y += 1) {
+      for (let x = 0; x < qr.size; x += 1) {
+        if (qr.modules[y * qr.size + x] !== 1) continue;
+        const mx = qrOrigin.x + x * qrModuleSize;
+        const my = qrOrigin.y + y * qrModuleSize;
+        shapes.push({
+          kind: 'polygon',
+          points: [
+            { x: mx, y: my },
+            { x: mx + qrModuleSize, y: my },
+            { x: mx + qrModuleSize, y: my + qrModuleSize },
+            { x: mx, y: my + qrModuleSize },
+          ],
+          color: palette.bullseyeDark,
+        });
+      }
+    }
+  }
+
+  return {
+    n,
+    layout,
+    width: layout.width,
+    height: layout.height,
+    background: palette.background,
+    shapes,
+  };
+}

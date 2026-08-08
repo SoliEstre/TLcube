@@ -279,3 +279,42 @@ test('faceBasis — 단위 벡터, 잘못된 면 라벨은 예외', () => {
   assert.throws(() => cubeBounds(0), RangeError);
   assert.throws(() => cubeBounds(-1), RangeError);
 });
+
+// ── 축 규약 와이어 고정 (검증 라운드 major 대응) ─────────────────────────────
+// 120° 공변성 테스트는 축 규약과 **독립**이다 — ei/ej 를 세 면 전부 스왑한 뮤테이션도
+// 공변성·넓이·원점·경계 테스트를 전부 통과함이 사본 실험으로 실증됐다 (스왑본은 회전
+// 대칭을 그대로 보존하기 때문). 아래 두 테스트가 규약 자체를 좌표 리터럴로 고정한다.
+
+test('faceBasis KAT — SPEC §14 축 규약 좌표 고정 (i = 시계방향 이웃과의 공유 변)', () => {
+  const H = Math.sqrt(3) / 2;
+  const KAT = {
+    T: { ei: { x: H, y: -0.5 }, ej: { x: -H, y: -0.5 } }, // ei=C1(우상), ej=C5(좌상)
+    R: { ei: { x: 0, y: 1 }, ej: { x: H, y: -0.5 } }, //     ei=C3(하),   ej=C1(우상)
+    L: { ei: { x: -H, y: -0.5 }, ej: { x: 0, y: 1 } }, //    ei=C5(좌상), ej=C3(하)
+  };
+  for (const face of YFACES) {
+    const b = faceBasis(face);
+    assertClose(b.ei.x, KAT[face].ei.x, `${face} ei.x`);
+    assertClose(b.ei.y, KAT[face].ei.y, `${face} ei.y`);
+    assertClose(b.ej.x, KAT[face].ej.x, `${face} ej.x`);
+    assertClose(b.ej.y, KAT[face].ej.y, `${face} ej.y`);
+  }
+});
+
+test('면 경계 인접성 — T(k,0)↔R(0,k) · R(k,0)↔L(0,k) · L(k,0)↔T(0,k) 가 변(꼭짓점 2개)을 공유한다', () => {
+  const n = 5;
+  const pairs = [['T', 'R'], ['R', 'L'], ['L', 'T']];
+  for (const [a, b] of pairs) {
+    for (let k = 0; k < n; k += 1) {
+      const qa = moduleQuad(a, k, 0);
+      const qb = moduleQuad(b, 0, k);
+      let shared = 0;
+      for (const pa of qa) {
+        for (const pb of qb) {
+          if (Math.abs(pa.x - pb.x) < EPS && Math.abs(pa.y - pb.y) < EPS) shared += 1;
+        }
+      }
+      assert.equal(shared, 2, `${a}(${k},0) ↔ ${b}(0,${k}) 공유 꼭짓점 ${shared} ≠ 2`);
+    }
+  }
+});

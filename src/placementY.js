@@ -27,10 +27,11 @@ function key(i, j) {
 }
 
 function assertSize(n) {
-  if (!Number.isInteger(n) || n < 9) {
-    // n < 9 이면 앵커 (n-3,n-3) 등이 (2,2) 와 겹치거나 음수가 된다 — Type Y 최소
-    // 버전(Y1: n=21)보다 훨씬 작은 값에서 이미 무의미하므로 넉넉히 9 미만을 막는다.
-    throw new RangeError(`n 은 9 이상의 정수여야 한다: ${n}`);
+  // 하한 11: n=9·10 에서는 포맷 복제 2 가 레퍼런스 조와 실제로 충돌한다 (검증 라운드
+  // 전수 검산 — n=9 의 (2,7)·n=10 의 (2,8)). 그 범위를 허용하면 "충돌 시 throw" 계약이
+  // roleOf 우선순위에 은폐된다. n=11..20 은 무충돌이나 규범 버전은 21·25 뿐이다.
+  if (!Number.isInteger(n) || n < 11) {
+    throw new RangeError(`n 은 11 이상의 정수여야 한다: ${n}`);
   }
   return n;
 }
