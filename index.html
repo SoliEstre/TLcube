@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trilume — TLcube 인코더 (M0)</title>
+<style>
+  :root {
+    --bg: #101218;
+    --panel: #191c26;
+    --line: #2a2f40;
+    --text: #dfe3ee;
+    --dim: #8a91a6;
+    --accent: #7fa3ff;
+    --ok: #7fd8a4;
+    --bad: #ff8f8f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  header {
+    width: 100%; padding: 18px 24px 10px;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .04em; }
+  header .sub { color: var(--dim); font-size: 12px; }
+  main {
+    width: 100%; max-width: 1080px; padding: 8px 24px 40px;
+    display: grid; grid-template-columns: 300px 1fr; gap: 20px;
+  }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px;
+    align-self: start;
+  }
+  label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 4px; }
+  label:first-child { margin-top: 0; }
+  textarea, select {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px; font: inherit; font-size: 13px;
+  }
+  textarea { min-height: 84px; resize: vertical; }
+  button {
+    width: 100%; padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  #info { margin-top: 14px; font-size: 12px; line-height: 1.7; color: var(--dim); }
+  #info b { color: var(--text); font-weight: 600; }
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 99px;
+    font-size: 11px; border: 1px solid var(--line);
+  }
+  .badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+  #error { color: var(--bad); font-size: 12px; margin-top: 10px; white-space: pre-wrap; }
+  #stage {
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px; min-height: 420px; overflow: auto;
+  }
+  canvas { display: block; border-radius: 4px; }
+  footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Trilume <span style="color:var(--accent)">/ TLcube</span></h1>
+  <span class="sub">3면 휘도 순위 2.5D 코드 — M0 인코더 프리뷰</span>
+</header>
+<main>
+  <div class="panel">
+    <label for="payload">페이로드 (UTF-8 텍스트)</label>
+    <textarea id="payload" spellcheck="false">https://example.com/trilume</textarea>
+    <div class="row">
+      <div>
+        <label for="version">버전</label>
+        <select id="version">
+          <option value="auto" selected>자동 (최소)</option>
+          <option value="1">V1 (k=6 · 18 B)</option>
+          <option value="2">V2 (k=8 · 39 B)</option>
+          <option value="3">V3 (k=10 · 65 B)</option>
+        </select>
+      </div>
+      <div>
+        <label for="ecc">ECC</label>
+        <select id="ecc">
+          <option value="L">L (≈12%)</option>
+          <option value="M" selected>M (25%)</option>
+          <option value="H">H (≈40%)</option>
+        </select>
+      </div>
+    </div>
+    <label for="preset">스타일 프리셋</label>
+    <select id="preset"></select>
+    <label>내보내기 (결정적 — 동일 입력 → 바이트 동일)</label>
+    <div class="row">
+      <button id="exportPng" type="button">PNG</button>
+      <button id="exportSvg" type="button">SVG</button>
+    </div>
+    <div id="info"></div>
+    <div id="error"></div>
+  </div>
+  <div id="stage"><canvas id="view"></canvas></div>
+</main>
+<footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) 뿐</footer>
+
+<script type="module">
+import { encode, chooseVersion } from './src/encode.js';
+import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin } from './src/luminance.js';
+import { buildScene } from './src/scene.js';
+import { rasterize } from './src/raster.js';
+import { verifyRaster } from './src/verify.js';
+import { payloadByteLength } from './src/header.js';
+import { rasterToPng } from './src/png.js';
+import { sceneToSvg } from './src/svg.js';
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  payload: $('payload'), version: $('version'), ecc: $('ecc'), preset: $('preset'),
+  info: $('info'), error: $('error'), canvas: $('view'),
+  exportPng: $('exportPng'), exportSvg: $('exportSvg'),
+};
+
+/** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
+let current = null;
+
+function download(bytes, mime, filename) {
+  const blob = new Blob([bytes], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+els.exportPng.addEventListener('click', () => {
+  if (!current) return;
+  const raster = rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 });
+  download(rasterToPng(raster), 'image/png',
+    `trilume-v${current.encoded.version}-${current.encoded.eccLevel}.png`);
+});
+
+els.exportSvg.addEventListener('click', () => {
+  if (!current) return;
+  download(new TextEncoder().encode(sceneToSvg(current.scene)), 'image/svg+xml',
+    `trilume-v${current.encoded.version}-${current.encoded.eccLevel}.svg`);
+});
+
+for (const name of Object.keys(PRESETS)) {
+  const opt = document.createElement('option');
+  opt.value = name;
+  opt.textContent = PRESETS[name].label || name;
+  if (name === DEFAULT_PRESET) opt.selected = true;
+  els.preset.appendChild(opt);
+}
+
+function paletteOf(name) {
+  const p = getPreset(name);
+  return { background: p.background, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT };
+}
+
+const css = (c) => `rgb(${c.r},${c.g},${c.b})`;
+
+/** scene → canvas. 인접 마름모 사이 AA 실선(헤어라인 심) 방지를 위해 동일색 얇은 스트로크를 겹친다. */
+function drawScene(scene, canvas, ppu) {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(scene.width * ppu * dpr);
+  canvas.height = Math.round(scene.height * ppu * dpr);
+  canvas.style.width = `${Math.round(scene.width * ppu)}px`;
+  canvas.style.height = `${Math.round(scene.height * ppu)}px`;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(ppu * dpr, 0, 0, ppu * dpr, 0, 0);
+  ctx.fillStyle = css(scene.background);
+  ctx.fillRect(0, 0, scene.width, scene.height);
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 0.03;
+  for (const s of scene.shapes) {
+    ctx.fillStyle = css(s.color);
+    ctx.beginPath();
+    if (s.kind === 'polygon') {
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for (let i = 1; i < s.points.length; i += 1) ctx.lineTo(s.points[i].x, s.points[i].y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.stroke();
+    } else {
+      ctx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+let timer = 0;
+function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
+
+function render() {
+  els.error.textContent = '';
+  const text = els.payload.value;
+  const eccLevel = els.ecc.value;
+  const presetName = els.preset.value;
+  try {
+    const opts = { eccLevel };
+    if (els.version.value !== 'auto') opts.version = Number(els.version.value);
+    const encoded = encode(text, opts);
+    const scene = buildScene(encoded, { palette: paletteOf(presetName) });
+    current = { encoded, scene };
+    drawScene(scene, els.canvas, 26);
+
+    // 자체검증: 미리보기 canvas 가 아니라 결정적 래스터에서 §4.4 통계로 잰다.
+    const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
+    const check = verifyRaster(raster, scene, encoded);
+    const bytes = payloadByteLength(text);
+    const badge = check.ok
+      ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · Δmin ${check.minDelta.toFixed(3)}</span>`
+      : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건</span>`;
+    els.info.innerHTML =
+      `버전 <b>V${encoded.version}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
+      `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
+      `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(presetName).toFixed(3)}<br>` +
+      badge;
+  } catch (err) {
+    current = null;
+    els.info.innerHTML = '';
+    els.error.textContent = String(err && err.message ? err.message : err);
+  }
+}
+
+for (const el of [els.payload, els.version, els.ecc, els.preset]) {
+  el.addEventListener('input', schedule);
+  el.addEventListener('change', schedule);
+}
+render();
+</script>
+</body>
+</html>

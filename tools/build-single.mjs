@@ -1,0 +1,111 @@
+// build-single.mjs — index.html + src/*.js 를 단일 HTML 파일로 묶는 결정적 생성기 (SPEC §8)
+//
+// ESM 을 텍스트 병합하지 않는다 (식별자 충돌·재작성 취약). 대신 blob URL 로더 방식:
+// 각 모듈 소스를 JSON.stringify 문자열로 1회씩 임베드하고, 런타임에 토폴로지 순서대로
+// 의존 specifier('./이름.js')를 이미 만든 blob URL 로 문자열 치환한 뒤
+// URL.createObjectURL(new Blob([code], {type:'text/javascript'})) 로 등록, 마지막에
+// 진입 모듈(app.js — index.html 의 <script type="module"> 블록)을 동적 import 한다.
+// 서버 없이 file:// 로 열려야 하므로(SPEC §8) import map 이나 실제 네트워크 fetch 는 쓰지 않는다.
+//
+// 결정성: 생성물에 타임스탬프·해시·환경 정보를 넣지 않는다. 같은 입력 → 바이트 동일 출력.
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '..');
+const SRC_DIR = path.join(ROOT, 'src');
+const INDEX_HTML = path.join(ROOT, 'index.html');
+const OUT_DIR = path.join(ROOT, 'dist');
+const OUT_FILE = path.join(OUT_DIR, 'trilume.html');
+
+// 모듈 순서 — 디스크 순회 순서에 기대지 않는다. 의존 그래프상 위상 정렬 순서로 고정.
+const MODULE_ORDER = [
+  'hexgrid', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+  'header', 'placement', 'bullseye', 'layout', 'capacity', 'luminance',
+  'encode', 'scene', 'raster', 'verify', 'svg', 'png',
+];
+
+/** index.html 안의 <script type="module"> 블록 정확히 1개를 찾아 반환한다. */
+function extractModuleScript(html) {
+  const re = /<script type="module">([\s\S]*?)<\/script>/g;
+  const matches = [...html.matchAll(re)];
+  if (matches.length !== 1) {
+    throw new Error(`<script type="module"> 블록이 정확히 1개여야 하는데 ${matches.length}개 발견됨`);
+  }
+  return matches[0];
+}
+
+/** 로더 스크립트 본문을 만든다. MODULES 배열 + specifier 치환 + 마지막 app import. */
+function buildLoaderScript(moduleSources, appCode) {
+  const modulesLiteral = moduleSources
+    .map(([name, code]) => `  [${JSON.stringify(name)}, ${JSON.stringify(code)}]`)
+    .join(',\n');
+
+  return `
+// Trilume 단일 파일 로더 — blob URL 로 ESM 모듈을 등록한 뒤 app 을 동적 import 한다.
+// (tools/build-single.mjs 로 생성됨 — 직접 수정하지 말 것)
+const MODULES = [
+${modulesLiteral}
+];
+const APP_CODE = ${JSON.stringify(appCode)};
+
+const urls = {};
+for (const [name, code] of MODULES) {
+  let rewritten = code;
+  for (const [depName] of MODULES) {
+    if (urls[depName] === undefined) continue;
+    rewritten = rewritten.split(\`'./\${depName}.js'\`).join(\`'\${urls[depName]}'\`);
+  }
+  const blob = new Blob([rewritten], { type: 'text/javascript' });
+  urls[name] = URL.createObjectURL(blob);
+}
+
+let appRewritten = APP_CODE;
+for (const [depName] of MODULES) {
+  appRewritten = appRewritten.split(\`'./\${depName}.js'\`).join(\`'\${urls[depName]}'\`);
+}
+const appBlob = new Blob([appRewritten], { type: 'text/javascript' });
+const appUrl = URL.createObjectURL(appBlob);
+await import(appUrl);
+`;
+}
+
+/** index.html + src/*.js 를 읽어 단일 HTML 문자열을 만든다. 부수효과 없음(결정적, 순수 함수). */
+export function buildSingleHtml() {
+  const indexHtml = readFileSync(INDEX_HTML, 'utf8');
+  const [fullMatch, scriptBody] = extractModuleScript(indexHtml);
+  const matchStart = indexHtml.indexOf(fullMatch);
+
+  // app.js 가상 모듈: './src/X.js' → './X.js' 로 specifier 재작성.
+  let appCode = scriptBody;
+  for (const name of MODULE_ORDER) {
+    appCode = appCode.split(`'./src/${name}.js'`).join(`'./${name}.js'`);
+  }
+
+  const moduleSources = MODULE_ORDER.map((name) => {
+    const filePath = path.join(SRC_DIR, `${name}.js`);
+    return [name, readFileSync(filePath, 'utf8')];
+  });
+
+  const loaderBody = buildLoaderScript(moduleSources, appCode);
+  const loaderScriptTag = `<script type="module">${loaderBody}</script>`;
+
+  return indexHtml.slice(0, matchStart) +
+    loaderScriptTag +
+    indexHtml.slice(matchStart + fullMatch.length);
+}
+
+function main() {
+  const out = buildSingleHtml();
+  if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
+  writeFileSync(OUT_FILE, out, 'utf8');
+  process.stdout.write(`dist/trilume.html 생성됨 (${Buffer.byteLength(out, 'utf8')} B)\n`);
+}
+
+// CLI 로 직접 실행됐을 때만 빌드를 돈다 (test/bundle.test.js 는 buildSingleHtml() 만 import).
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  main();
+}

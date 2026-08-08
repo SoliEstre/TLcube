@@ -46,7 +46,12 @@ function distPointToSegment(p, a, b) {
   t = Math.max(0, Math.min(1, t));
   const cx = a.x + t * abx;
   const cy = a.y + t * aby;
-  return Math.hypot(p.x - cx, p.y - cy);
+  // Math.hypot 금지 — ES 규격상 implementation-approximated 라 엔진별 1 ulp 이 갈릴 수
+  // 있고, 이 값이 밴드 반지름을 거쳐 렌더 바이트 결정성에 물린다. sqrt 는 IEEE 754
+  // 정확 반올림이라 결정적이다 (T9 검증 라운드 발견).
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 /** 원점에서 원점 기준 정수 axial 셀 (q,r) 까지 — region(k) 소속 판정용. */
@@ -124,7 +129,8 @@ function ring3DiscClearance(cellSize) {
   for (const { q, r } of ring3) {
     for (const face of FACES) {
       const disc = faceSampleDisc(q, r, face, layout);
-      const centerDist = Math.hypot(disc.x, disc.y);
+      // hypot 대신 sqrt — 위 distPointToSegment 와 같은 결정성 사유.
+      const centerDist = Math.sqrt(disc.x * disc.x + disc.y * disc.y);
       const clearance = centerDist - disc.radius;
       if (clearance < minClearance) minClearance = clearance;
     }
@@ -165,7 +171,10 @@ export function bandRadii(cellSize) {
   const R = maxSafeRadius(cellSize);
   const width = R / BAND_COUNT;
   const radii = [];
-  for (let i = 1; i <= BAND_COUNT; i++) radii.push(width * i);
+  // 마지막 원소는 (R/N)·N 재계산이 아니라 R 그 자체 — 정의상 최외곽 경계 = R_max 이고,
+  // FP 재계산은 1 ulp 를 얹어 "마지막 원소가 R_max" 계약을 깬다 (T9 검증 라운드 여파).
+  for (let i = 1; i < BAND_COUNT; i++) radii.push(width * i);
+  radii.push(R);
   return radii;
 }
 
@@ -229,7 +238,9 @@ export function radialSignature(cellSize, samples) {
   const rMax = maxSafeRadius(cellSize);
   const out = [];
   for (let i = 0; i < n; i++) {
-    const d = (rMax * i) / (n - 1);
+    // 마지막 표본은 (rMax·i)/(n−1) 재계산이 아니라 rMax 그 자체 — FP 재계산이 1 ulp
+    // 위로 반올림되면 profileAt 의 범위 검사(> rMax)에 걸린다 (bandRadii 와 같은 부류).
+    const d = i === n - 1 ? rMax : (rMax * i) / (n - 1);
     out.push(profileAt(d, cellSize));
   }
   return out;

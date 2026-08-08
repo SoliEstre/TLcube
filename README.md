@@ -1,7 +1,7 @@
 # TLcube
 
 > 육각형을 마름모 3면으로 분할하고, 3면 간 **휘도 순위(순열)** 로 데이터를 싣는 2.5D 시각 코드.
-> 상태: **M0 착수 전** — 아직 구현이 없다.
+> 상태: **M0 인코더 구현 완료** — 텍스트 입력 → V1\~V3 렌더 · PNG/SVG 내보내기 · 결정성 테스트.
 
 ---
 
@@ -28,14 +28,31 @@
 
 | 마일스톤 | 내용 | 상태 |
 |---|---|---|
-| M0 | 제너레이터 — 레이아웃 확정 | 착수 전 |
+| M0 | 제너레이터 — 레이아웃 확정 | **구현 완료** |
 | M1 | 합성 디코더 + 왜곡 테스트 | — |
 | M2 | 실카메라 스캐너 | — |
 | M3 | 스타일 프리셋 · 패키징 | — |
 
+## 사용
+
+```
+node tools/dev-server.mjs        # http://localhost:8765 — 개발용 (index.html + src/)
+node tools/build-single.mjs      # dist/trilume.html — 서버 없이 file:// 로 열리는 단일 파일
+npm test                         # 전체 테스트 (node --test)
+```
+
 ## 기술
 
-바닐라 JavaScript + Canvas 2D. **빌드 툴체인 없음, 런타임 의존성 0.** 단일 HTML 파일로 동작한다.
+바닐라 JavaScript. **빌드 툴체인 없음, 런타임 의존성 0.** 단일 HTML 파일로 동작한다.
+
+내보내기는 **결정적**이다 — 동일 입력이면 PNG/SVG 가 바이트까지 동일하다. 그래서 픽셀은
+브라우저 canvas 가 아니라 자체 래스터라이저(`src/raster.js`)가 만들고, PNG 인코딩도 자체
+구현(`src/png.js`)이 한다. canvas 는 화면 미리보기 전용이다.
+
+인코딩 경로: `encode.js` (페이로드 → RS(GF(211)) 코드워드 → 셀별 digit) → `scene.js`
+(digit → 도형 목록) → canvas 미리보기 / `raster.js`+`png.js` / `svg.js`. 렌더 자체 검증은
+`verify.js` — 샘플 원판 median 통계로 전 셀의 휘도 순위가 의도한 digit 과 일치하는지
+픽셀에서 직접 확인한다.
 
 ## 라이선스
 

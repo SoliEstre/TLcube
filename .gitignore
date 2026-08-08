@@ -37,7 +37,8 @@ npm-debug.log*
 # 런타임 의존성은 0 원칙. 테스트 도구가 생기면 여기서 걸린다.
 node_modules/
 .pnpm-store/
-dist/
+dist/*
+!dist/trilume.html
 build/
 out/
 coverage/

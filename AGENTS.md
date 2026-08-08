@@ -42,10 +42,11 @@ git 조작은 항상 대상을 명시한다: `git -C TLcube <cmd>` (상위에서
 - 런타임 의존성 **0 원칙**. 추가는 중대 분기 결정 → 상위 repo 의 리서치 루프 + `docs/adr/`
 - 설계 SSoT 는 상위 `SPEC.md`. **구현이 스펙과 어긋나면 스펙을 고치거나 구현을 고친다 — 조용히 벌어지게 두지 않는다**
 
-## 모듈 배치 (예정)
+## 모듈 배치 (M0 완료 시점)
 
 ```
-index.html          ← M0: 단일 파일 인코더
+index.html          ← ✅ 인코더 UI (개발용 — dev-server 로 연다. canvas 미리보기 + export)
+dist/trilume.html   ← ✅ 생성물: 단일 파일 (blob-URL 로더, file:// 로 열림) — build-single 이 만든다
 src/
   gfp.js            ← ✅ GF(211) 소수체 산술 (ADR 0001 — 표수≠2, 부호 실재)
   rs211.js          ← ✅ RS over GF(211) (체계적, BM+Chien+Forney, NSYM_TABLE 규범)
@@ -53,18 +54,23 @@ src/
   lehmer.js         ← ✅ digit ↔ (T,L,R) 순위
   hexgrid.js        ← ✅ axial 격자 · rhombille 3면 분할 · 샘플 원판
   gf256.js/rs.js/base6.js ← ⚠ 사장(deprecated) — ADR 비교 기준·회귀 대조군. 수정 금지
-  layout.js         ← 불스아이 · 앵커 · 레퍼런스 · 데이터 셀 배치 맵
+  placement.js      ← ✅ 앵커 · 포맷 · 레퍼런스 배치 (T6) / bullseye.js ← ✅ 불스아이 형상 (T5)
+  layout.js         ← ✅ 캐노니컬 scan order + 배치 파사드 (T8, sha256 와이어 계약)
   header.js         ← ✅ 페이로드 헤더 1B + 0x00 패딩 (SPEC §4.5)
   capacity.js       ← ✅ 버전별 용량 (GF(211) 심볼 회계) — SPEC §5.5 표의 생성원
-  mask.js           ← m(q,r)
-  encode.js
-  render-canvas.js
-  render-svg.js
-  style-presets.js  ← 휘도 배정 (순서 + Δmin 계약만 지키면 자유)
+  mask.js           ← ✅ m(q,r) 정수 해시형 (T4, 수정 금지) / formatinfo.js ← ✅ CRC-6 포맷 5digit (T7)
+  encode.js         ← ✅ §7.1 파이프라인 통합: 텍스트 → 셀별 digit (T9)
+  luminance.js      ← ✅ 휘도 프리셋 (slate 1종, Δmin 실측 0.182 ≥ 계약 0.12) (T9)
+  scene.js          ← ✅ digit → 도형 목록 (canvas/래스터/SVG 공용 단일 진실) (T9)
+  raster.js         ← ✅ 순수 결정적 래스터라이저 (서브샘플 박스 평균) (T9)
+  verify.js         ← ✅ 렌더 자체 검증 — 원판 median 통계로 digit 왕복 (T9)
+  png.js            ← ✅ 자체 PNG 인코더 (고정 허프만 + 거리-1 RLE, zlib 오라클 검증) (T10)
+  svg.js            ← ✅ SVG 직렬화 (고정 소수 표기, 결정적) (T10)
 tools/
-  epsilon-harness.mjs ← ✅ ε_real 선행 측정 (ECC 불필요·임시 렌더러, T9 승격 금지)
+  epsilon-harness.mjs ← ✅ ε_real 선행 측정 (ECC 불필요·임시 렌더러, T9 승격 금지 — 승격 안 함 이행)
+  dev-server.mjs      ← ✅ 개발용 정적 서버 / build-single.mjs ← ✅ 단일 파일 생성기
 decoder/            ← M1
-test/               ← 테스트 벡터 + 왜곡 하네스
+test/               ← ✅ 테스트 (전 모듈 + 왕복 e2e + 결정성)
 ```
 
 테스트: `npm test` (= `node --test`). **`node --test test/` 는 이 Node 에서 동작하지 않는다** —
