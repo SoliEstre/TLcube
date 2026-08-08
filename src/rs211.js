@@ -40,10 +40,18 @@ export const DEFAULT_FCR = 0;
  *   심볼 수에 곱해 반올림한 것 (V1: 27×0.12→3, 27×0.4→11 / V2: 55×0.12→7, 55×0.4→22 /
  *   V3: 92×0.12→11). ADR·PM 문서에는 없다. SPEC §5.5 재생성 시 이 파생값이 표와 함께
  *   규범으로 승격된다 — 그 전까지는 잠정.
+ *
+ * **M0 T8 오버헤드 대사 (통합자 사전 검산, placement.js `overheadBreakdown(k)` 실계산과
+ * 일치)**: V2 의 overhead 가 잠정 50 → 실계산 49 로 정정되며 데이터 셀이 167 → 168 로
+ * 늘고(3의 배수), 이에 따라 사용 심볼 S 가 55 → **56** 으로 바뀐다. **nsym(L7/M14/H22) 은
+ * 하나도 바뀌지 않는다** — M=14 는 56 기준으로도 패리티율이 정확히 25.0%(14/56)라
+ * ADR §3.3.2 확정값을 그대로 재사용해도 비율 요건이 깨지지 않는다. V1(overhead 45→45,
+ * symbols 27 불변)·V3(overhead 55→53, dataCells 276→278, residual 0→2 지만 ⌊278/3⌋=92
+ * 로 symbols 92 불변)는 usedSymbols 자체가 바뀌지 않아 nsym 표를 그대로 쓴다.
  */
 export const NSYM_TABLE = Object.freeze({
   V1: Object.freeze({ symbols: 27, L: 3, M: 7, H: 11 }),
-  V2: Object.freeze({ symbols: 55, L: 7, M: 14, H: 22 }),
+  V2: Object.freeze({ symbols: 56, L: 7, M: 14, H: 22 }),
   V3: Object.freeze({ symbols: 92, L: 11, M: 23, H: 37 }),
 });
 

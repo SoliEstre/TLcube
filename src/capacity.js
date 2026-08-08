@@ -14,28 +14,30 @@
 //   데이터 바이트     K = max{k : 211^(S−nsym) >= 2^(8k)}  (BigInt 정확 계산)
 //   순 페이로드       = K − 1  (헤더 1 B, header.js 의 maxPayloadFor 와 정합)
 //
-// [P1] `overhead` 는 지금 **잠정 상수**다. 불스아이 형상(§5.1)·레퍼런스 배치(§5.3)·
-//      포맷 정보 배치(§5.4)가 확정되면 layout.js 가 구성요소 합으로 계산해 여기 넣는다.
-//      그때 스냅샷이 깨지는 것이 **정상**이고, 깨진 값을 확인 후 갱신하는 것이 절차다.
+// [T8 완료] `overhead` 는 더 이상 잠정 상수가 아니다 — 불스아이(§5.1)·앵커(§5.2)·
+//      포맷 정보(§5.4)·레퍼런스 셀(§5.3) 배치가 전부 확정됐으므로 `placement.js` 의
+//      `overheadBreakdown(k)` 실계산 합을 그대로 쓴다(구성요소별 유도, 아래 참조).
 
 import { cellCount } from './hexgrid.js';
 import { NSYM_TABLE, errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
+import { overheadBreakdown } from './placement.js';
 
 /**
- * 버전 정의. `overhead` 는 잠정 — [P1] 참조. `symbolKey` 는 `rs211.js` 의
+ * 버전 정의. `overhead` 는 `placement.overheadBreakdown(k).total` 로 **유도**한다
+ * (T8 이전엔 잠정 상수였다 — [P1] 이력 참조, 이제 내려감). `symbolKey` 는 `rs211.js` 의
  * `NSYM_TABLE` 조회 키.
- * @type {ReadonlyArray<{version: number, k: number, overhead: number, symbolKey: string, provisional: boolean}>}
+ * @type {ReadonlyArray<{version: number, k: number, overhead: number, symbolKey: string}>}
  */
 export const VERSIONS = Object.freeze([
   Object.freeze({
-    version: 1, k: 6, overhead: 45, symbolKey: 'V1', provisional: true,
+    version: 1, k: 6, overhead: overheadBreakdown(6).total, symbolKey: 'V1',
   }),
   Object.freeze({
-    version: 2, k: 8, overhead: 50, symbolKey: 'V2', provisional: true,
+    version: 2, k: 8, overhead: overheadBreakdown(8).total, symbolKey: 'V2',
   }),
   Object.freeze({
-    version: 3, k: 10, overhead: 55, symbolKey: 'V3', provisional: true,
+    version: 3, k: 10, overhead: overheadBreakdown(10).total, symbolKey: 'V3',
   }),
 ]);
 

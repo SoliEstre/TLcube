@@ -2,13 +2,17 @@
 //
 // **이 테스트의 목적은 통과가 아니라 깨지는 것이다.**
 //
-// V1 은 잔여 셀이 1, V2 는 2, V3 는 0 이다(dataCells mod 3). 불스아이(§5.1)나
+// 잔여 셀: V1 = 1, V2 = 0 (168 = 56·3 정확), V3 = 2 (dataCells mod 3, T8 대사 후). 불스아이(§5.1)나
 // 레퍼런스(§5.3)가 한 셀만 늘어도 usedSymbols 가 바뀌고, capacityFor 는 조용히 넘어가지
 // 않고 `NSYM_TABLE` 과의 불일치로 던진다(과제 지침 절대 규칙 6). 여기 박아둔 스냅샷은
 // 그 앞단에서 값 자체가 ADR §3.3 표와 일치하는지 잡는다.
 //
 // **깨졌다고 스냅샷부터 고치지 마라** — 무엇이 왜 바뀌었는지 먼저 확인해라.
-// layout.js 가 오버헤드를 실계산하게 되는 T8 에서 이 스냅샷은 **깨질 예정**이다.
+// M0 T8 에서 layout(placement.js `overheadBreakdown`) 이 오버헤드를 실계산하게 되며
+// 이 스냅샷은 확정 표로 갱신됐다 — V2 만 값이 바뀐다(overhead 50→49, dataCells 167→168,
+// usedSymbols 55→56, residual 2→0, dataSymbols 41→42, 순 페이로드 38→39). V1/V3 는
+// 실계산이 잠정치와 산술적으로 같은 usedSymbols 를 내 스냅샷이 그대로 유지된다
+// (V3 는 overhead 55→53 으로 내려가지만 dataCells 276→278 이 되어도 ⌊278/3⌋=92 로 불변).
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,20 +23,22 @@ import {
 import { cellCount } from '../src/hexgrid.js';
 import { NSYM_TABLE, errorCapacity } from '../src/rs211.js';
 import { maxPayloadFor } from '../src/header.js';
+import { overheadBreakdown } from '../src/placement.js';
 
-// ADR 0001 §3.3.2/§3.3.3 + .agent/PM/005_ecc_redesign.md P3 절. 사용자 검산 완료.
+// ADR 0001 §3.3.2/§3.3.3 + .agent/PM/005_ecc_redesign.md P3 절 + M0 T8 오버헤드 대사
+// (통합자 사전 검산, placement.overheadBreakdown(k) 실계산 반영). 사용자 검산 완료.
 const SNAPSHOT_M = [
   {
     version: 1, k: 6, totalCells: 127, overhead: 45, dataCells: 82, usedSymbols: 27,
     residualCells: 1, nsym: 7, errorCapacity: 3, dataSymbols: 20, dataBytes: 19, maxPayloadBytes: 18,
   },
   {
-    version: 2, k: 8, totalCells: 217, overhead: 50, dataCells: 167, usedSymbols: 55,
-    residualCells: 2, nsym: 14, errorCapacity: 7, dataSymbols: 41, dataBytes: 39, maxPayloadBytes: 38,
+    version: 2, k: 8, totalCells: 217, overhead: 49, dataCells: 168, usedSymbols: 56,
+    residualCells: 0, nsym: 14, errorCapacity: 7, dataSymbols: 42, dataBytes: 40, maxPayloadBytes: 39,
   },
   {
-    version: 3, k: 10, totalCells: 331, overhead: 55, dataCells: 276, usedSymbols: 92,
-    residualCells: 0, nsym: 23, errorCapacity: 11, dataSymbols: 69, dataBytes: 66, maxPayloadBytes: 65,
+    version: 3, k: 10, totalCells: 331, overhead: 53, dataCells: 278, usedSymbols: 92,
+    residualCells: 2, nsym: 23, errorCapacity: 11, dataSymbols: 69, dataBytes: 66, maxPayloadBytes: 65,
   },
 ];
 
@@ -51,7 +57,7 @@ describe('용량표 스냅샷 (ADR 0001 §3.3, ECC-M)', () => {
   test('마크다운 표가 렌더된다 (SPEC 에 붙일 형태)', () => {
     const md = renderMarkdownTable('M');
     assert.match(md, /\| V1 \| 6 \| 127 \| 45 \| 82 \| 27 \| 1 \| 7 \| 3 \| 20 \| 19 B \| \*\*18 B\*\* \|/);
-    assert.match(md, /\| V3 \| 10 \| 331 \| 55 \| 276 \| 92 \| 0 \| 23 \| 11 \| 69 \| 66 B \| \*\*65 B\*\* \|/);
+    assert.match(md, /\| V3 \| 10 \| 331 \| 53 \| 278 \| 92 \| 2 \| 23 \| 11 \| 69 \| 66 B \| \*\*65 B\*\* \|/);
     assert.ok(!md.includes('~'), '단일 물결표는 GFM 취소선 트랩이다 (규약 §6.11)');
   });
 });
@@ -149,12 +155,18 @@ describe('NSYM_TABLE 불일치는 조용히 넘어가지 않는다', () => {
   });
 });
 
-describe('오버헤드가 잠정임을 잊지 않기', () => {
-  test('전 버전이 provisional 로 표시돼 있다', () => {
-    // T8 에서 layout.js 가 실계산하면 이 플래그를 내리고 스냅샷을 갱신한다.
+describe('오버헤드는 이제 잠정이 아니다 (T8 완료)', () => {
+  test('VERSIONS 에 provisional 플래그가 더 이상 없다 — [P1] 잠정 상수 이력이 내려갔다', () => {
     for (const v of VERSIONS) {
-      assert.equal(v.provisional, true,
-        `V${v.version} 의 provisional 이 내려갔다 — 스냅샷과 SPEC §5.5 의 † 주석도 같이 갱신했는가?`);
+      assert.equal('provisional' in v, false,
+        `V${v.version} 에 provisional 플래그가 남아있다 — T8 완료 후엔 있으면 안 된다`);
+    }
+  });
+
+  test('overhead 는 placement.overheadBreakdown(k).total 실계산과 정확히 같다 (상수 아님을 단언)', () => {
+    for (const v of VERSIONS) {
+      assert.equal(v.overhead, overheadBreakdown(v.k).total,
+        `V${v.version}.overhead(${v.overhead}) 가 placement 실계산과 어긋난다`);
     }
   });
 
@@ -163,5 +175,22 @@ describe('오버헤드가 잠정임을 잊지 않기', () => {
     // usedSymbols 는 27 → 26 으로 줄어 NSYM_TABLE.V1.symbols(27) 과 어긋나 던진다.
     const v1 = VERSIONS[0];
     assert.throws(() => capacityFor({ ...v1, overhead: v1.overhead + 3 }, 'M'), /NSYM_TABLE/);
+  });
+
+  test('오버헤드가 최소 편차만큼 어긋나도(민감도) NSYM_TABLE 가드가 발화한다 — placement 기반이 된 후에도 성립', () => {
+    // usedSymbols = floor(dataCells/3) 이므로 잔여 셀(dataCells mod 3)에 따라 가드를
+    // 흔드는 최소 델타가 다르다: 잔여 0 이면 overhead+1(=dataCells-1)만으로 floor 가
+    // 즉시 줄고, 잔여 2 면 overhead-1(=dataCells+1)만으로 floor 가 즉시 는다, 잔여 1 은
+    // 양쪽으로 완충 1칸씩 있어 ±2 가 필요하다 — residualCells 로 방향·크기를 유도한다.
+    for (const v of VERSIONS) {
+      const r = capacityFor(v, 'M');
+      const delta = r.residualCells === 1 ? 2 : 1;
+      const sign = r.residualCells === 2 ? -1 : 1; // 잔여2: overhead 를 줄여 dataCells+1
+      assert.throws(
+        () => capacityFor({ ...v, overhead: v.overhead + sign * delta }, 'M'),
+        /NSYM_TABLE/,
+        `V${v.version}: overhead${sign > 0 ? '+' : '-'}${delta} 가 가드를 발화시키지 못했다 (residual=${r.residualCells})`,
+      );
+    }
   });
 });

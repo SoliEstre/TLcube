@@ -89,7 +89,9 @@ test('n > 210 은 거부된다', () => {
 
 test('nsym 표: V1/V2/V3 심볼 수·M·t', () => {
   assert.equal(NSYM_TABLE.V1.symbols, 27);
-  assert.equal(NSYM_TABLE.V2.symbols, 55);
+  // T8 오버헤드 대사 (2026-08-08): overhead 49 → 데이터 셀 168 = 56·3 → symbols 56.
+  // nsym(L7/M14/H22)은 불변 — M=14 는 56 기준 패리티율 정확히 25.0%.
+  assert.equal(NSYM_TABLE.V2.symbols, 56);
   assert.equal(NSYM_TABLE.V3.symbols, 92);
   assert.equal(NSYM_TABLE.V1.M, 7);
   assert.equal(NSYM_TABLE.V2.M, 14);

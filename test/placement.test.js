@@ -350,26 +350,23 @@ describe('오버헤드 실계산 vs 잠정치 (대조만, capacity.js 미수정)
     assert.equal(real, v1.overhead, 'V1 은 실계산과 잠정치가 같아야 한다');
   });
 
-  test('V2/V3: 실계산과 잠정치의 차이를 기록 (불일치는 예상돼 있다 — T8 입력)', () => {
-    const table = VERSIONS.map((v) => {
-      const real = overheadBreakdown(v.k);
-      return {
-        version: v.version, k: v.k, provisional: v.overhead, real: real.total,
-        diff: real.total - v.overhead,
-      };
-    });
-    // 표를 테스트 출력에 남긴다 (numbers_check 는 별도로 구조화 보고).
-    // eslint 없음 — console.log 로 실제 표를 남겨 npm test 로그에서 바로 보이게 한다.
-    console.log('오버헤드 실계산 vs 잠정치:', JSON.stringify(table));
-
-    assert.equal(table[0].k, 6);
-    assert.equal(table[0].diff, 0);
-    assert.equal(table[1].k, 8);
-    assert.equal(table[1].real, 49);
-    assert.equal(table[1].diff, -1);
-    assert.equal(table[2].k, 10);
-    assert.equal(table[2].real, 53);
-    assert.equal(table[2].diff, -2);
+  test('T8 대사 완결 기록: 실계산 = 33+2k, 과거 잠정치(45/50/55)와의 역사적 차이', () => {
+    // T8 이전 capacity.js 는 잠정 상수 45/50/55 를 썼다. T8 이 overhead 를
+    // placement 실계산으로 재배선했으므로 '실계산 vs VERSIONS.overhead' 는 이제
+    // 항등이고, 여기서는 (a) 닫힌 형태 33+2k, (b) 과거 잠정치 리터럴과의 차이를
+    // 역사 기록으로 고정한다 — 같은 대사를 두 번 하지 않게.
+    const HISTORIC_PROVISIONAL = { 6: 45, 8: 50, 10: 55 };
+    for (const k of [6, 8, 10]) {
+      const real = overheadBreakdown(k).total;
+      assert.equal(real, 33 + 2 * k, );
+      const diff = real - HISTORIC_PROVISIONAL[k];
+      assert.equal(diff, { 6: 0, 8: -1, 10: -2 }[k], );
+    }
+    // 그리고 capacity.js 가 실제로 실계산을 쓰고 있는가 (T8 재배선의 회귀 방지).
+    for (const v of VERSIONS) {
+      assert.equal(v.overhead, overheadBreakdown(v.k).total,
+        );
+    }
   });
 });
 
