@@ -47,19 +47,22 @@ git 조작은 항상 대상을 명시한다: `git -C TLcube <cmd>` (상위에서
 ```
 index.html          ← M0: 단일 파일 인코더
 src/
-  gf256.js          ← ✅ GF(2⁸) 유한체 산술 (원시 다항식 0x11D)
-  rs.js             ← ✅ Reed-Solomon (체계적, BM+Chien+Forney)
-  base6.js          ← ✅ 64bit ↔ base-6 digit 25
+  gfp.js            ← ✅ GF(211) 소수체 산술 (ADR 0001 — 표수≠2, 부호 실재)
+  rs211.js          ← ✅ RS over GF(211) (체계적, BM+Chien+Forney, NSYM_TABLE 규범)
+  base211.js        ← ✅ 3 digit ↔ 1 심볼 + 27B↔28심볼 청커 (불법값 211..215 소거 후보)
   lehmer.js         ← ✅ digit ↔ (T,L,R) 순위
   hexgrid.js        ← ✅ axial 격자 · rhombille 3면 분할 · 샘플 원판
+  gf256.js/rs.js/base6.js ← ⚠ 사장(deprecated) — ADR 비교 기준·회귀 대조군. 수정 금지
   layout.js         ← 불스아이 · 앵커 · 레퍼런스 · 데이터 셀 배치 맵
   header.js         ← ✅ 페이로드 헤더 1B + 0x00 패딩 (SPEC §4.5)
-  capacity.js       ← ✅ 버전별 용량 — SPEC §5.5 표의 생성원
+  capacity.js       ← ✅ 버전별 용량 (GF(211) 심볼 회계) — SPEC §5.5 표의 생성원
   mask.js           ← m(q,r)
   encode.js
   render-canvas.js
   render-svg.js
   style-presets.js  ← 휘도 배정 (순서 + Δmin 계약만 지키면 자유)
+tools/
+  epsilon-harness.mjs ← ✅ ε_real 선행 측정 (ECC 불필요·임시 렌더러, T9 승격 금지)
 decoder/            ← M1
 test/               ← 테스트 벡터 + 왜곡 하네스
 ```

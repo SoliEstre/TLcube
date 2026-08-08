@@ -1,51 +1,57 @@
-// capacity.test.js — SPEC §5.5 용량표 스냅샷
+// capacity.test.js — SPEC §5.5 용량표 스냅샷 (GF(211) 심볼 회계 — ADR 0001)
 //
 // **이 테스트의 목적은 통과가 아니라 깨지는 것이다.**
 //
-// V1 은 필러 여유가 3, V2·V3 는 1 뿐이다. 불스아이(§5.1)나 레퍼런스(§5.3)가 한 셀만
-// 늘어도 용량표가 조용히 틀려진다. 여기 박아둔 스냅샷이 그 순간 깨지고, 깨진 값을 확인해
-// SPEC §5.5 를 갱신하는 것이 절차다. **깨졌다고 스냅샷부터 고치지 마라** — 무엇이 왜
-// 바뀌었는지 먼저 확인해라.
+// V1 은 잔여 셀이 1, V2 는 2, V3 는 0 이다(dataCells mod 3). 불스아이(§5.1)나
+// 레퍼런스(§5.3)가 한 셀만 늘어도 usedSymbols 가 바뀌고, capacityFor 는 조용히 넘어가지
+// 않고 `NSYM_TABLE` 과의 불일치로 던진다(과제 지침 절대 규칙 6). 여기 박아둔 스냅샷은
+// 그 앞단에서 값 자체가 ADR §3.3 표와 일치하는지 잡는다.
 //
+// **깨졌다고 스냅샷부터 고치지 마라** — 무엇이 왜 바뀌었는지 먼저 확인해라.
 // layout.js 가 오버헤드를 실계산하게 되는 T8 에서 이 스냅샷은 **깨질 예정**이다.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  VERSIONS, fitCodeword, capacityFor, capacityTable, renderMarkdownTable,
+  VERSIONS, maxBytesForSymbols, capacityFor, capacityTable, renderMarkdownTable,
 } from '../src/capacity.js';
-import { digitCountForByteLength } from '../src/base6.js';
 import { cellCount } from '../src/hexgrid.js';
-import { nsymForLevel } from '../src/rs.js';
+import { NSYM_TABLE, errorCapacity } from '../src/rs211.js';
 import { maxPayloadFor } from '../src/header.js';
 
-// SPEC §5.5 (2026-07-29 판) 과 1:1 대응. 사용자 검산 완료.
+// ADR 0001 §3.3.2/§3.3.3 + .agent/PM/005_ecc_redesign.md P3 절. 사용자 검산 완료.
 const SNAPSHOT_M = [
-  { version: 1, k: 6, totalCells: 127, overhead: 45, dataSymbols: 82,
-    dataBytes: 19, nsym: 6, codewordBytes: 25, codewordDigits: 79, filler: 3, maxPayloadBytes: 18 },
-  { version: 2, k: 8, totalCells: 217, overhead: 50, dataSymbols: 167,
-    dataBytes: 39, nsym: 14, codewordBytes: 53, codewordDigits: 166, filler: 1, maxPayloadBytes: 38 },
-  { version: 3, k: 10, totalCells: 331, overhead: 55, dataSymbols: 276,
-    dataBytes: 66, nsym: 22, codewordBytes: 88, codewordDigits: 275, filler: 1, maxPayloadBytes: 65 },
+  {
+    version: 1, k: 6, totalCells: 127, overhead: 45, dataCells: 82, usedSymbols: 27,
+    residualCells: 1, nsym: 7, errorCapacity: 3, dataSymbols: 20, dataBytes: 19, maxPayloadBytes: 18,
+  },
+  {
+    version: 2, k: 8, totalCells: 217, overhead: 50, dataCells: 167, usedSymbols: 55,
+    residualCells: 2, nsym: 14, errorCapacity: 7, dataSymbols: 41, dataBytes: 39, maxPayloadBytes: 38,
+  },
+  {
+    version: 3, k: 10, totalCells: 331, overhead: 55, dataCells: 276, usedSymbols: 92,
+    residualCells: 0, nsym: 23, errorCapacity: 11, dataSymbols: 69, dataBytes: 66, maxPayloadBytes: 65,
+  },
 ];
 
-describe('용량표 스냅샷 (SPEC §5.5, ECC-M)', () => {
-  test('전 버전 튜플이 SPEC 과 일치', () => {
+describe('용량표 스냅샷 (ADR 0001 §3.3, ECC-M)', () => {
+  test('전 버전 튜플이 ADR 표와 일치', () => {
     const actual = capacityTable('M');
     assert.equal(actual.length, SNAPSHOT_M.length);
     for (let i = 0; i < SNAPSHOT_M.length; i += 1) {
       for (const [key, expected] of Object.entries(SNAPSHOT_M[i])) {
         assert.equal(actual[i][key], expected,
-          `V${SNAPSHOT_M[i].version}.${key}: ${actual[i][key]} !== ${expected} (SPEC §5.5 를 확인하라)`);
+          `V${SNAPSHOT_M[i].version}.${key}: ${actual[i][key]} !== ${expected} (ADR §3.3 을 확인하라)`);
       }
     }
   });
 
   test('마크다운 표가 렌더된다 (SPEC 에 붙일 형태)', () => {
     const md = renderMarkdownTable('M');
-    assert.match(md, /\| V1 \| 6 \| 127 \| 45 \| 82 \| 25 B \| 79 \| 3 \| \*\*18 B\*\* \|/);
-    assert.match(md, /\| V3 \| 10 \| 331 \| 55 \| 276 \| 88 B \| 275 \| 1 \| \*\*65 B\*\* \|/);
+    assert.match(md, /\| V1 \| 6 \| 127 \| 45 \| 82 \| 27 \| 1 \| 7 \| 3 \| 20 \| 19 B \| \*\*18 B\*\* \|/);
+    assert.match(md, /\| V3 \| 10 \| 331 \| 55 \| 276 \| 92 \| 0 \| 23 \| 11 \| 69 \| 66 B \| \*\*65 B\*\* \|/);
     assert.ok(!md.includes('~'), '단일 물결표는 GFM 취소선 트랩이다 (규약 §6.11)');
   });
 });
@@ -55,62 +61,91 @@ describe('용량 산술이 다른 모듈과 정합', () => {
     for (const r of capacityTable('M')) assert.equal(r.totalCells, cellCount(r.k));
   });
 
-  test('데이터 심볼 = 총 셀 − 오버헤드', () => {
-    for (const r of capacityTable('M')) assert.equal(r.dataSymbols, r.totalCells - r.overhead);
+  test('데이터 셀 = 총 셀 − 오버헤드', () => {
+    for (const r of capacityTable('M')) assert.equal(r.dataCells, r.totalCells - r.overhead);
   });
 
-  test('코드워드 digit = base6 가 계산한 값', () => {
+  test('사용 심볼/잔여 셀 = 데이터 셀을 3으로 나눈 몫/나머지', () => {
     for (const r of capacityTable('M')) {
-      assert.equal(r.codewordDigits, digitCountForByteLength(r.codewordBytes));
+      assert.equal(r.usedSymbols, Math.floor(r.dataCells / 3));
+      assert.equal(r.residualCells, r.dataCells - r.usedSymbols * 3);
+      assert.ok(r.residualCells >= 0 && r.residualCells < 3);
     }
   });
 
-  test('코드워드 = 데이터 + 패리티, 패리티는 rs 가 정한 값', () => {
-    for (const r of capacityTable('M')) {
-      assert.equal(r.nsym, nsymForLevel(r.dataBytes, 'M'));
-      assert.equal(r.codewordBytes, r.dataBytes + r.nsym);
+  test('nsym·t 는 rs211.js NSYM_TABLE 표 값과 정확히 같다 (공식 유도 아님)', () => {
+    for (const v of VERSIONS) {
+      for (const level of ['L', 'M', 'H']) {
+        const r = capacityFor(v, level);
+        assert.equal(r.nsym, NSYM_TABLE[v.symbolKey][level]);
+        assert.equal(r.errorCapacity, errorCapacity(r.nsym));
+      }
     }
   });
 
-  test('순 페이로드 = 데이터 − 헤더 1 B', () => {
+  test('데이터 심볼 = 사용 심볼 − nsym', () => {
+    for (const r of capacityTable('M')) assert.equal(r.dataSymbols, r.usedSymbols - r.nsym);
+  });
+
+  test('K = maxBytesForSymbols(데이터 심볼) — 211^S >= 2^(8K) 를 만족하는 최댓값', () => {
+    for (const r of capacityTable('M')) {
+      assert.equal(r.dataBytes, maxBytesForSymbols(r.dataSymbols));
+      const cap = 211n ** BigInt(r.dataSymbols);
+      assert.ok((1n << BigInt(8 * r.dataBytes)) <= cap, 'K 바이트는 실제로 들어가야 한다');
+      assert.ok((1n << BigInt(8 * (r.dataBytes + 1))) > cap, 'K+1 바이트는 들어가면 안 된다(최대성)');
+    }
+  });
+
+  test('순 페이로드 = 데이터 바이트 K − 헤더 1 B', () => {
     for (const r of capacityTable('M')) {
       assert.equal(r.maxPayloadBytes, maxPayloadFor(r.dataBytes));
       assert.equal(r.maxPayloadBytes, r.dataBytes - 1);
     }
   });
+});
 
-  test('필러는 음수가 아니다 — 코드워드가 용량을 넘으면 안 된다', () => {
-    for (const level of ['L', 'M', 'H']) {
-      for (const r of capacityTable(level)) {
-        assert.ok(r.filler >= 0, `V${r.version}/${level}: 필러 ${r.filler} < 0`);
-        assert.ok(r.codewordDigits <= r.dataSymbols);
-      }
+describe('maxBytesForSymbols 는 진짜 최대인가 (경계값)', () => {
+  test('S=0 이면 K=0', () => {
+    assert.equal(maxBytesForSymbols(0), 0);
+  });
+
+  test('임의 S 에서 K 는 유일하고 최대다', () => {
+    for (const S of [1, 5, 20, 27, 28, 41, 69, 92]) {
+      const K = maxBytesForSymbols(S);
+      const cap = 211n ** BigInt(S);
+      assert.ok((1n << BigInt(8 * K)) <= cap);
+      assert.ok((1n << BigInt(8 * (K + 1))) > cap);
     }
   });
 });
 
-describe('fitCodeword 는 진짜 최대인가', () => {
-  test('한 바이트 더 키우면 용량을 넘는다 (최대성)', () => {
-    for (const level of ['L', 'M', 'H']) {
-      for (const v of VERSIONS) {
-        const r = capacityFor(v, level);
-        const bigger = r.dataBytes + 1;
-        const biggerCw = bigger + nsymForLevel(bigger, level);
-        assert.ok(
-          biggerCw > 255 || digitCountForByteLength(biggerCw) > r.dataSymbols,
-          `V${v.version}/${level}: dataBytes ${bigger} 도 들어가는데 ${r.dataBytes} 에서 멈췄다`);
-      }
-    }
-  });
-
-  test('ECC 레벨이 높을수록 순 페이로드가 줄지 않는 일은 없다', () => {
+describe('ECC 레벨이 높을수록 순 페이로드가 줄지 않는 일은 없다', () => {
+  test('L >= M >= H (페이로드), L <= M <= H (정정 능력)', () => {
     for (const v of VERSIONS) {
-      const L = capacityFor(v, 'L'), M = capacityFor(v, 'M'), H = capacityFor(v, 'H');
+      const L = capacityFor(v, 'L');
+      const M = capacityFor(v, 'M');
+      const H = capacityFor(v, 'H');
       assert.ok(L.maxPayloadBytes >= M.maxPayloadBytes, `V${v.version}: L < M`);
       assert.ok(M.maxPayloadBytes >= H.maxPayloadBytes, `V${v.version}: M < H`);
       assert.ok(L.errorCapacity <= M.errorCapacity);
       assert.ok(M.errorCapacity <= H.errorCapacity);
     }
+  });
+});
+
+describe('NSYM_TABLE 불일치는 조용히 넘어가지 않는다', () => {
+  test('symbolKey 가 표에 없으면 던진다', () => {
+    const bogus = {
+      version: 99, k: 6, overhead: 45, symbolKey: 'V99',
+    };
+    assert.throws(() => capacityFor(bogus, 'M'), /NSYM_TABLE/);
+  });
+
+  test('오버헤드가 어긋나 usedSymbols 가 표와 안 맞으면 던진다', () => {
+    const v1 = VERSIONS[0];
+    // dataCells=82, usedSymbols=27. overhead+4 → dataCells=78 → usedSymbols=26 로 어긋난다.
+    const nudged = { ...v1, overhead: v1.overhead + 4 };
+    assert.throws(() => capacityFor(nudged, 'M'), /NSYM_TABLE\.V1\.symbols/);
   });
 });
 
@@ -123,11 +158,10 @@ describe('오버헤드가 잠정임을 잊지 않기', () => {
     }
   });
 
-  test('오버헤드가 1셀만 늘어도 결과가 바뀐다 (스냅샷이 민감하다는 증거)', () => {
+  test('오버헤드가 3셀 늘어도 잔여 셀 계산이 흔들린다 (스냅샷이 민감하다는 증거)', () => {
+    // V1 dataCells=82, residual=1. overhead+3 → dataCells=79, residual=1 이지만
+    // usedSymbols 는 27 → 26 으로 줄어 NSYM_TABLE.V1.symbols(27) 과 어긋나 던진다.
     const v1 = VERSIONS[0];
-    const base = capacityFor(v1, 'M');
-    const nudged = capacityFor({ ...v1, overhead: v1.overhead + 4 }, 'M');
-    assert.notEqual(nudged.codewordBytes, base.codewordBytes,
-      'V1 필러 여유가 3 이므로 오버헤드 +4 는 반드시 코드워드를 줄여야 한다');
+    assert.throws(() => capacityFor({ ...v1, overhead: v1.overhead + 3 }, 'M'), /NSYM_TABLE/);
   });
 });
