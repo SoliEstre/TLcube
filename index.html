@@ -320,8 +320,9 @@
       </div>
 
       <label>타입</label>
+      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 선택 = Y (사용자 지시 2026-08-09). -->
       <div class="card-row" id="typeCards">
-        <div class="toggle-card active" data-type="O" style="flex:1">
+        <div class="toggle-card" data-type="O" style="flex:1">
           <!-- Type O 실루엣 = 플랫탑 육각형 (pointy-top 셀 격자의 반경 k 영역 — 위아래 변이 평평) -->
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <path d="M20 11 L16 4.1 L8 4.1 L4 11 L8 17.9 L16 17.9 Z"/>
@@ -329,14 +330,6 @@
             <circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/>
           </svg>
           Type O
-        </div>
-        <div class="toggle-card" data-type="Y" style="flex:1">
-          <!-- Type Y = 위에서 본 큐브: Y-심 팔 = 좌상·우상 꼭짓점, 다리 = 아래 꼭짓점 (SPEC §14) -->
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z"/>
-            <path d="M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
-          </svg>
-          Type Y
         </div>
         <div class="toggle-card" data-type="A" style="flex:1">
           <!-- Type A 실루엣 = 플랫바닥 삼각(△, 위 꼭짓점) — 육각 실루엣에 삼각 패치 3개를 붙여
@@ -347,6 +340,14 @@
             <circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/>
           </svg>
           Type A
+        </div>
+        <div class="toggle-card active" data-type="Y" style="flex:1">
+          <!-- Type Y = 위에서 본 큐브: Y-심 팔 = 좌상·우상 꼭짓점, 다리 = 아래 꼭짓점 (SPEC §14) -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z"/>
+            <path d="M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
+          </svg>
+          Type Y
         </div>
       </div>
 
@@ -374,10 +375,11 @@
       <textarea id="payload" spellcheck="false">https://example.com/trilume</textarea>
 
       <label for="codeType">타입</label>
+      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
       <select id="codeType">
-        <option value="O" selected>Type O (마름모 8면체 필드)</option>
-        <option value="Y">Type Y (단일 큐브)</option>
+        <option value="O">Type O (마름모 8면체 필드)</option>
         <option value="A">Type A (삼각 실루엣 확장)</option>
+        <option value="Y" selected>Type Y (단일 큐브)</option>
       </select>
 
       <div class="row">
@@ -531,7 +533,8 @@ const els = {
 let mode = 'normal';
 // qrPosition: 'inner' | 'TL' | 'TR' | 'BL' | 'BR' — 기본 'TL'(좌상, 사용자 지시 2026-08-09).
 const normalState = {
-  contentTab: 'url', type: 'O', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
+  // type 기본 = 'Y' (용량 최대·간판 형태 — 사용자 지시 2026-08-09. 카드 배치는 용량 순 O/A/Y).
+  contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
 };
 
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
