@@ -254,9 +254,9 @@ describe('buildScene — 코너 QR 위치 4택 (ADR 0004 §1-7, Type A 패치 �
 // 않는다' 규약). 여기서는 실제 encodeA 산출물(잠정 A-U1 표 기준)로 통합 검증한다.
 
 describe('buildScene — 셀 캔버스 포함 가드 (실제 encodeA 통합)', () => {
-  test('A1/A2 + 기본 margin(×2, QR 없음) → RangeError("벗어난다") — 조용한 소실 대신 명시 실패', async () => {
+  test('A0/A1/A2 + 기본 margin(×2, QR 없음) → RangeError("벗어난다") — 조용한 소실 대신 명시 실패', async () => {
     const { encodeA } = await import('../src/encodeA.js');
-    for (const version of [1, 2]) {
+    for (const version of [0, 1, 2]) { // 0 = A0 (ADR 0006 D6)
       const enc = encodeA('CANVAS GUARD', { version });
       assert.throws(
         () => buildScene(enc, { palette: PALETTE }),
@@ -266,9 +266,9 @@ describe('buildScene — 셀 캔버스 포함 가드 (실제 encodeA 통합)', (
     }
   });
 
-  test('A1/A2 + margin ×20(코너 QR 경로와 동일 상수) → 전 셀 폴리곤이 캔버스 안', async () => {
+  test('A0/A1/A2 + margin ×20(코너 QR 경로와 동일 상수) → 전 셀 폴리곤이 캔버스 안', async () => {
     const { encodeA } = await import('../src/encodeA.js');
-    for (const version of [1, 2]) {
+    for (const version of [0, 1, 2]) { // 0 = A0 (ADR 0006 D6)
       const enc = encodeA('CANVAS GUARD', { version });
       const cellSize = 1;
       const scene = buildScene(enc, { palette: PALETTE, cellSize, margin: 20 * cellSize });

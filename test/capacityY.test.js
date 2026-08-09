@@ -33,12 +33,20 @@ import { maxPayloadFor } from '../src/header.js';
 
 const SNAPSHOT_M = [
   {
+    name: 'Y0', version: 0, n: 13, tones: 2, formatIndex: 0, totalCells: 169, overhead: 27, dataCells: 142,
+    usedSymbols: 47, residualCells: 1, nsym: 13, errorCapacity: 6, dataSymbols: 34, dataBytes: 32, maxPayloadBytes: 31,
+  },
+  {
     name: 'Y1', version: 1, n: 21, tones: 2, formatIndex: 8, totalCells: 441, overhead: 27, dataCells: 414,
     usedSymbols: 138, residualCells: 0, nsym: 35, errorCapacity: 17, dataSymbols: 103, dataBytes: 99, maxPayloadBytes: 98,
   },
   {
     name: 'Y2', version: 2, n: 25, tones: 2, formatIndex: 9, totalCells: 625, overhead: 27, dataCells: 598,
     usedSymbols: 199, residualCells: 1, nsym: 51, errorCapacity: 25, dataSymbols: 148, dataBytes: 142, maxPayloadBytes: 141,
+  },
+  {
+    name: 'Y0T', version: 0, n: 13, tones: 3, formatIndex: 2, totalCells: 169, overhead: 27, dataCells: 142,
+    usedSymbols: 47, residualCells: 1, nsym: 13, errorCapacity: 6, dataSymbols: 34, dataBytes: 32, maxPayloadBytes: 31,
   },
   {
     name: 'Y1T', version: 1, n: 21, tones: 3, formatIndex: 10, totalCells: 441, overhead: 27, dataCells: 414,
@@ -63,8 +71,10 @@ describe('용량표 스냅샷 (Type Y, ECC-M)', () => {
   });
 
   test('ADR 0003 D7 의 95 B(Y1)·137 B(Y2) 추정과 실계산이 다르다는 것을 명시 확인', () => {
-    const y1 = capacityForY(VERSIONS_Y[0], 'M');
-    const y2 = capacityForY(VERSIONS_Y[1], 'M');
+    // 위치 인덱스가 아니라 versionSpecY 로 잡는다 — ADR 0006 이 Y0/Y0T 를 각 tones
+    // 블록 선두에 끼워 넣었고, 앞으로도 버전 추가는 위치를 밀 수 있다.
+    const y1 = capacityForY(versionSpecY(1, 2), 'M');
+    const y2 = capacityForY(versionSpecY(2, 2), 'M');
     assert.notEqual(y1.maxPayloadBytes, 95,
       'ADR 추정 95 B 와 우연히 같아졌다 — 이 테스트 의도(차이 보고)를 재검토하라');
     assert.equal(y1.maxPayloadBytes, 98);
@@ -75,6 +85,8 @@ describe('용량표 스냅샷 (Type Y, ECC-M)', () => {
 
   test('마크다운 표가 렌더된다 (SPEC §14 에 붙일 형태)', () => {
     const md = renderMarkdownTableY('M');
+    assert.match(md, /\| Y0 \| 13 \| 169 \| 27 \| 142 \| 47 \| 1 \| 13 \| 6 \| 34 \| 32 B \| \*\*31 B\*\* \|/);
+    assert.match(md, /\| Y0T \| 13 \| 169 \| 27 \| 142 \| 47 \| 1 \| 13 \| 6 \| 34 \| 32 B \| \*\*31 B\*\* \|/);
     assert.match(md, /\| Y1 \| 21 \| 441 \| 27 \| 414 \| 138 \| 0 \| 35 \| 17 \| 103 \| 99 B \| \*\*98 B\*\* \|/);
     assert.match(md, /\| Y2 \| 25 \| 625 \| 27 \| 598 \| 199 \| 1 \| 51 \| 25 \| 148 \| 142 B \| \*\*141 B\*\* \|/);
     assert.match(md, /\| Y1T \| 21 \| 441 \| 27 \| 414 \| 138 \| 0 \| 35 \| 17 \| 103 \| 99 B \| \*\*98 B\*\* \|/);
@@ -84,41 +96,50 @@ describe('용량표 스냅샷 (Type Y, ECC-M)', () => {
 });
 
 describe('versionSpecY — (version, tones) 단일 조회 (v3.1 §4b)', () => {
-  test('Y1/Y2(tones=2, 기본값) 는 VERSIONS_Y[0]/[1] 과 정확히 같다', () => {
-    assert.equal(versionSpecY(1), VERSIONS_Y[0]);
-    assert.equal(versionSpecY(1, 2), VERSIONS_Y[0]);
-    assert.equal(versionSpecY(2, 2), VERSIONS_Y[1]);
+  test('Y0/Y1/Y2(tones=2, 기본값) 는 VERSIONS_Y[0]/[1]/[2] 와 정확히 같다 (배열 순 = tones 별 용량 오름차순)', () => {
+    assert.equal(versionSpecY(1), VERSIONS_Y[1]);
+    assert.equal(versionSpecY(0, 2), VERSIONS_Y[0]); // ADR 0006 D5
+    assert.equal(versionSpecY(1, 2), VERSIONS_Y[1]);
+    assert.equal(versionSpecY(2, 2), VERSIONS_Y[2]);
   });
 
-  test('Y1T/Y2T(tones=3) 는 VERSIONS_Y[2]/[3] 과 정확히 같다', () => {
-    assert.equal(versionSpecY(1, 3), VERSIONS_Y[2]);
-    assert.equal(versionSpecY(2, 3), VERSIONS_Y[3]);
+  test('Y0T/Y1T/Y2T(tones=3) 는 VERSIONS_Y[3]/[4]/[5] 와 정확히 같다', () => {
+    assert.equal(versionSpecY(0, 3), VERSIONS_Y[3]);
+    assert.equal(versionSpecY(1, 3), VERSIONS_Y[4]);
+    assert.equal(versionSpecY(2, 3), VERSIONS_Y[5]);
   });
 
   test('알 수 없는 (version, tones) 조합은 RangeError', () => {
     assert.throws(() => versionSpecY(99, 2), RangeError);
     assert.throws(() => versionSpecY(1, 4), RangeError);
-    assert.throws(() => versionSpecY(0, 2), RangeError);
+    assert.throws(() => versionSpecY(3, 2), RangeError);
+    assert.throws(() => versionSpecY(-1, 2), RangeError);
   });
 });
 
 describe('용량 회계는 tones 무관 동일 (v3.1 §4b 근거 수치)', () => {
-  test('Y1 과 Y1T — formatIndex·tones 만 다르고 나머지 용량 수치는 완전히 같다', () => {
-    const y1 = capacityForY(VERSIONS_Y[0], 'M');
-    const y1t = capacityForY(VERSIONS_Y[2], 'M');
-    for (const key of [
-      'n', 'totalCells', 'overhead', 'dataCells', 'usedSymbols', 'residualCells',
-      'nsym', 'errorCapacity', 'dataSymbols', 'dataBytes', 'maxPayloadBytes',
-    ]) {
-      assert.equal(y1[key], y1t[key], `Y1.${key} !== Y1T.${key}`);
-    }
-    assert.notEqual(y1.tones, y1t.tones);
-    assert.notEqual(y1.formatIndex, y1t.formatIndex);
-  });
+  // ADR 0006 이 Y0/Y0T 를 추가했으므로 전 버전을 훑는다 — 쌍이 늘어도 자동 확장된다.
+  for (const version of [0, 1, 2]) {
+    test(`Y${version} 과 Y${version}T — formatIndex·tones 만 다르고 나머지 용량 수치는 완전히 같다`, () => {
+      const main = capacityForY(versionSpecY(version, 2), 'M');
+      const tri = capacityForY(versionSpecY(version, 3), 'M');
+      for (const key of [
+        'n', 'totalCells', 'overhead', 'dataCells', 'usedSymbols', 'residualCells',
+        'nsym', 'errorCapacity', 'dataSymbols', 'dataBytes', 'maxPayloadBytes',
+      ]) {
+        assert.equal(main[key], tri[key], `Y${version}.${key} !== Y${version}T.${key}`);
+      }
+      assert.notEqual(main.tones, tri.tones);
+      assert.notEqual(main.formatIndex, tri.formatIndex);
+      // ADR 0006 D3-5 쌍 불변식 — 변형(T)은 기본형 + 2.
+      assert.equal(tri.formatIndex, main.formatIndex + 2,
+        `Y${version}T 의 formatIndex 는 Y${version} + 2 여야 한다 (ADR 0006 D3-5)`);
+    });
+  }
 
-  test('Y2 와 Y2T — 동일 항등', () => {
-    const y2 = capacityForY(VERSIONS_Y[1], 'M');
-    const y2t = capacityForY(VERSIONS_Y[3], 'M');
+  test('Y2 와 Y2T — 동일 항등 (근거 수치 명시 고정)', () => {
+    const y2 = capacityForY(versionSpecY(2, 2), 'M');
+    const y2t = capacityForY(versionSpecY(2, 3), 'M');
     for (const key of [
       'n', 'totalCells', 'overhead', 'dataCells', 'usedSymbols', 'residualCells',
       'nsym', 'errorCapacity', 'dataSymbols', 'dataBytes', 'maxPayloadBytes',
@@ -217,7 +238,7 @@ describe('NSYM_TABLE_Y 불일치는 조용히 넘어가지 않는다', () => {
   });
 
   test('오버헤드가 어긋나 usedSymbols 가 표와 안 맞으면 던진다', () => {
-    const y1 = VERSIONS_Y[0];
+    const y1 = versionSpecY(1, 2);
     // dataCells=414, usedSymbols=138. overhead+3 → dataCells=411 → usedSymbols=137 로 어긋난다.
     const nudged = { ...y1, overhead: y1.overhead + 3 };
     assert.throws(() => capacityForY(nudged, 'M'), /NSYM_TABLE_Y\.Y1\.symbols/);
@@ -360,7 +381,7 @@ describe('오버헤드/용량 — Y2W (실계산, 잠정 NSYM_TABLE_Y2W)', () =>
   });
 
   test('Y2(윈도 없음) 대비 순 페이로드가 준다 — 169셀을 데이터에서 뺐으니 당연하다', () => {
-    const y2 = capacityForY(VERSIONS_Y[1], 'M');
+    const y2 = capacityForY(versionSpecY(2, 2), 'M');
     const y2w = capacityForY2Window('M');
     assert.ok(y2w.maxPayloadBytes < y2.maxPayloadBytes,
       `Y2W(${y2w.maxPayloadBytes}) 가 Y2(${y2.maxPayloadBytes}) 보다 작아야 한다`);

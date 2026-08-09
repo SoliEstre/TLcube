@@ -200,7 +200,9 @@ test('encodeA — chooseVersionA 경계: 정확히 maxPayloadBytes 는 통과, �
 
 test('encodeA — 명시 버전이 알 수 없으면 RangeError', () => {
   assert.throws(() => encodeA('x', { version: 99 }), RangeError);
-  assert.throws(() => encodeA('x', { version: 0 }), RangeError);
+  // version 0 은 ADR 0006 이 A0(k=6) 로 배정했으므로 더 이상 미지값이 아니다.
+  assert.throws(() => encodeA('x', { version: 3 }), RangeError);
+  assert.throws(() => encodeA('x', { version: -1 }), RangeError);
 });
 
 test('encodeA — centerQr 이 boolean 이 아니면 TypeError', () => {

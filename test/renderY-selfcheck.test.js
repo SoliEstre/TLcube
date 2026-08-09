@@ -38,6 +38,7 @@ function paletteOf() {
 // ── 2톤(메인) e2e — Y1·Y2 × M ────────────────────────────────────────────────
 
 const CASES_2T = [
+  { version: 0, text: 'https://tl.estre.so/r/Yzero' }, //                        26 B ≤ 31 (ADR 0006 D5)
   { version: 1, text: 'Trilume Type Y — 단일 큐브 셀프체크 v1 왕복' }, //          61 B ≤ 98
   { version: 2, text: `https://example.com/trilume/type-y?payload=v2&pad=${'x'.repeat(80)}` }, // 128 B ≤ 141
 ];

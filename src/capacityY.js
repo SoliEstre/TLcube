@@ -13,6 +13,7 @@
 // [U3 ✅ 확정 — 사용자 비준 (ADR 0003 v3.1, 2026-08-09)] `NSYM_TABLE_Y` 는 Type O V3 전례(ADR 0001 §3.3.3: 오정정
 // 검출 여유 +1 로 홀수 nsym)를 따라 산출한 확정표다. 절차 (재현 가능 — 검증 라운드 정정):
 // **M = Math.round(0.25·S) (JS half-up), 결과가 짝수면 +1 홀수화 (홀수면 유지)**:
+//   Y0 S=47  → round(11.75) = 12 (짝수 → +1) = 13   [ADR 0006 D5, 2026-08-09 비준]
 //   Y1 S=138 → round(34.5) = 35 (홀수 → 유지)
 //   Y2 S=199 → round(49.75) = 50 (짝수 → +1) = 51
 // L = round(0.12·S), H = round(0.40·S) (반올림, 홀짝 보정 없음 — Type O NSYM_TABLE 의
@@ -53,6 +54,9 @@ export function overheadBreakdownY(n) {
  * @type {Readonly<Record<string, Readonly<{symbols:number, L:number, M:number, H:number}>>>}
  */
 export const NSYM_TABLE_Y = Object.freeze({
+  Y0: Object.freeze({
+    symbols: 47, L: 6, M: 13, H: 19,
+  }),
   Y1: Object.freeze({
     symbols: 138, L: 17, M: 35, H: 55,
   }),
@@ -63,17 +67,30 @@ export const NSYM_TABLE_Y = Object.freeze({
 
 /**
  * 버전 정의. `overhead` 는 `overheadBreakdownY(n).total` 로 유도한다(하드코딩 아님).
- * 포맷 정보 버전 인덱스 네임스페이스(SPEC §14): 8·9 = Y1·Y2(tones=2, 2톤 메인) ·
- * 10·11 = Y1T·Y2T(tones=3, Y-T 옵션). `symbolKey` 는 NSYM_TABLE_Y 조회 키 — n 이
- * 같으면(=용량 회계가 같으면) tones 와 무관하게 같은 키를 쓴다(Y1T 도 'Y1').
+ * 포맷 정보 버전 인덱스는 **cube 패밀리 표**의 값이다(ADR 0006 D1 — 4bit 는 격자
+ * 수립 경로별 독립 표다): 0·8·9 = Y0·Y1·Y2(tones=2, 2톤 메인) · 2·10·11 =
+ * Y0T·Y1T·Y2T(tones=3, Y-T 옵션). **변형(T)은 기본형 + 2** (ADR 0006 D3-5 쌍
+ * 불변식). cube 는 불스아이도 중앙 QR 도 없어 hex/tri 가설이 격자를 못 세우므로
+ * 축 분리 검사가 면제된다(D3-1) — 그래서 Y0 가 hex V1 과 같은 값 0 을 써도 안전하다.
+ * `symbolKey` 는 NSYM_TABLE_Y 조회 키 — n 이 같으면(=용량 회계가 같으면) tones 와
+ * 무관하게 같은 키를 쓴다(Y1T 도 'Y1').
+ *
+ * 배열 순서는 **tones 별 용량 오름차순** — `chooseVersionY` 가 앞에서부터 훑어
+ * 최소 버전을 고르므로 Y0 가 각 tones 블록의 선두여야 한다.
  * @type {ReadonlyArray<{name:string, version:number, n:number, tones:2|3, formatIndex:number, overhead:number, symbolKey:string}>}
  */
 export const VERSIONS_Y = Object.freeze([
+  Object.freeze({
+    name: 'Y0', version: 0, n: 13, tones: 2, formatIndex: 0, overhead: overheadBreakdownY(13).total, symbolKey: 'Y0',
+  }),
   Object.freeze({
     name: 'Y1', version: 1, n: 21, tones: 2, formatIndex: 8, overhead: overheadBreakdownY(21).total, symbolKey: 'Y1',
   }),
   Object.freeze({
     name: 'Y2', version: 2, n: 25, tones: 2, formatIndex: 9, overhead: overheadBreakdownY(25).total, symbolKey: 'Y2',
+  }),
+  Object.freeze({
+    name: 'Y0T', version: 0, n: 13, tones: 3, formatIndex: 2, overhead: overheadBreakdownY(13).total, symbolKey: 'Y0',
   }),
   Object.freeze({
     name: 'Y1T', version: 1, n: 21, tones: 3, formatIndex: 10, overhead: overheadBreakdownY(21).total, symbolKey: 'Y1',
@@ -86,7 +103,7 @@ export const VERSIONS_Y = Object.freeze([
 /**
  * (version, tones) → VERSIONS_Y 항목. 인코더/디코더가 모드를 명시했을 때의
  * 단일 조회 진입점 — 필드 4개(name/tones/formatIndex 포함)를 재조합하지 않는다.
- * @param {number} version 1 | 2
+ * @param {number} version 0 | 1 | 2
  * @param {2|3} [tones] 기본 2(2톤 메인).
  * @returns {{name:string, version:number, n:number, tones:2|3, formatIndex:number, overhead:number, symbolKey:string}}
  */

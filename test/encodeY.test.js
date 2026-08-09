@@ -173,7 +173,9 @@ test('encodeY — chooseVersionY: 알 수 없는 tones 는 RangeError', () => {
 
 test('encodeY — 명시 버전이 알 수 없으면 RangeError', () => {
   assert.throws(() => encodeY('x', { version: 99 }), RangeError);
-  assert.throws(() => encodeY('x', { version: 0 }), RangeError);
+  // version 0 은 ADR 0006 이 Y0(n=13) 로 배정했으므로 더 이상 미지값이 아니다.
+  assert.throws(() => encodeY('x', { version: 3 }), RangeError);
+  assert.throws(() => encodeY('x', { version: -1 }), RangeError);
 });
 
 test('encodeY — (version, tones) 조합이 VERSIONS_Y 에 없으면 RangeError (v3.1 §4b)', () => {

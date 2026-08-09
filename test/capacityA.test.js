@@ -36,6 +36,10 @@ import { symbolCountForByteLength } from '../src/base211.js';
 
 const SNAPSHOT_M = [
   {
+    name: 'A0', version: 0, k: 6, formatIndex: 1, totalCells: 190, overhead: 54, dataCells: 136,
+    usedSymbols: 45, residualCells: 1, nsym: 11, errorCapacity: 5, dataSymbols: 34, dataBytes: 32, maxPayloadBytes: 31,
+  },
+  {
     name: 'A1', version: 1, k: 8, formatIndex: 12, totalCells: 325, overhead: 58, dataCells: 267,
     usedSymbols: 89, residualCells: 0, nsym: 23, errorCapacity: 11, dataSymbols: 66, dataBytes: 63, maxPayloadBytes: 62,
   },
@@ -57,17 +61,23 @@ describe('용량표 스냅샷 (Type A, ECC-M)', () => {
   });
 
   test('ADR 0005 D5 순 페이로드 KAT — A1-M 62 B · A2-M 101 B (다르면 throw+보고, 조용히 맞추지 않는다)', () => {
-    const a1 = capacityForA(VERSIONS_A[0], 'M');
-    const a2 = capacityForA(VERSIONS_A[1], 'M');
+    // 위치 인덱스가 아니라 versionSpecA 로 잡는다 — ADR 0006 이 A0 를 배열 선두에
+    // 끼워 넣었고, 앞으로도 버전 추가는 위치를 밀 수 있다.
+    const a1 = capacityForA(versionSpecA(1), 'M');
+    const a2 = capacityForA(versionSpecA(2), 'M');
     assert.equal(a1.maxPayloadBytes, 62, 'A1-M KAT 불일치');
     assert.equal(a2.maxPayloadBytes, 101, 'A2-M KAT 불일치');
   });
 
-  test('L/H 참고값 — A1 L=74B/H=50B · A2 L=120B/H=80B (H=59, A-U1 비준 확정)', () => {
-    const a1L = capacityForA(VERSIONS_A[0], 'L');
-    const a1H = capacityForA(VERSIONS_A[0], 'H');
-    const a2L = capacityForA(VERSIONS_A[1], 'L');
-    const a2H = capacityForA(VERSIONS_A[1], 'H');
+  test('L/H 참고값 — A0 L=37B/H=25B · A1 L=74B/H=50B · A2 L=120B/H=80B (H=59, A-U1 비준 확정)', () => {
+    const a0L = capacityForA(versionSpecA(0), 'L');
+    const a0H = capacityForA(versionSpecA(0), 'H');
+    const a1L = capacityForA(versionSpecA(1), 'L');
+    const a1H = capacityForA(versionSpecA(1), 'H');
+    const a2L = capacityForA(versionSpecA(2), 'L');
+    const a2H = capacityForA(versionSpecA(2), 'H');
+    assert.equal(a0L.maxPayloadBytes, 37); // ADR 0006 D6
+    assert.equal(a0H.maxPayloadBytes, 25);
     assert.equal(a1L.maxPayloadBytes, 74);
     assert.equal(a1H.maxPayloadBytes, 50);
     assert.equal(a2L.maxPayloadBytes, 120);
@@ -86,18 +96,30 @@ describe('용량표 스냅샷 (Type A, ECC-M)', () => {
 });
 
 describe('versionSpecA — 버전 단일 조회', () => {
-  test('A1/A2 는 VERSIONS_A[0]/[1] 과 정확히 같다', () => {
-    assert.equal(versionSpecA(1), VERSIONS_A[0]);
-    assert.equal(versionSpecA(2), VERSIONS_A[1]);
+  test('A0/A1/A2 는 VERSIONS_A[0]/[1]/[2] 과 정확히 같다 (배열 순 = 용량 오름차순)', () => {
+    assert.equal(versionSpecA(0), VERSIONS_A[0]);
+    assert.equal(versionSpecA(1), VERSIONS_A[1]);
+    assert.equal(versionSpecA(2), VERSIONS_A[2]);
   });
 
   test('알 수 없는 version 은 RangeError', () => {
     assert.throws(() => versionSpecA(99), RangeError);
-    assert.throws(() => versionSpecA(0), RangeError);
+    assert.throws(() => versionSpecA(3), RangeError);
+    assert.throws(() => versionSpecA(-1), RangeError);
   });
 });
 
-describe('오버헤드 실계산 = 19(불스아이) + 15(포맷) + 6(앵커) + 육각레퍼런스 + 패치레퍼런스 (D5 검산 58/65)', () => {
+describe('오버헤드 실계산 = 19(불스아이) + 15(포맷) + 6(앵커) + 육각레퍼런스 + 패치레퍼런스 (검산 54/58/65)', () => {
+  test('overheadBreakdownA(6) = 54 — ADR 0006 D6 검산값 (A0)', () => {
+    const ob6 = overheadBreakdownA(6);
+    assert.equal(ob6.bullseye, 19);
+    assert.equal(ob6.anchor, 6);
+    assert.equal(ob6.format, 15);
+    assert.equal(ob6.hexReference, 8); // 2*(6-2)
+    assert.equal(ob6.patchReference, 6); // 규칙 R 링 {8,11}
+    assert.equal(ob6.total, 54);
+  });
+
   test('overheadBreakdownA(k) 는 k=8 에서 58, k=10 에서 65 (하드코딩 아님, 실계산 합)', () => {
     const ob8 = overheadBreakdownA(8);
     assert.equal(ob8.bullseye, 19);
@@ -201,7 +223,7 @@ describe('NSYM_TABLE_A 불일치는 조용히 넘어가지 않는다', () => {
   });
 
   test('오버헤드가 어긋나 usedSymbols 가 표와 안 맞으면 던진다', () => {
-    const a1 = VERSIONS_A[0];
+    const a1 = versionSpecA(1);
     // dataCells=267, usedSymbols=89. overhead+3 → dataCells=264 → usedSymbols=88 로 어긋난다.
     const nudged = { ...a1, overhead: a1.overhead + 3 };
     assert.throws(() => capacityForA(nudged, 'M'), /NSYM_TABLE_A\.A1\.symbols/);
@@ -209,7 +231,7 @@ describe('NSYM_TABLE_A 불일치는 조용히 넘어가지 않는다', () => {
 });
 
 describe('base211 청킹 정렬 — dataBytes 를 실제로 dataSymbols 개로 되돌릴 수 있는가', () => {
-  test('전 6조합(A1·A2 × L/M/H)이 정렬된다 — symbolCountForByteLength(dataBytes) === dataSymbols (A-U1 확정 후)', () => {
+  test('전 9조합(A0·A1·A2 × L/M/H)이 정렬된다 — symbolCountForByteLength(dataBytes) === dataSymbols (A-U1 확정 후)', () => {
     for (const spec of VERSIONS_A) {
       for (const level of ['L', 'M', 'H']) {
         const r = capacityForA(spec, level);

@@ -486,15 +486,17 @@
         <div id="versionWrapY" style="display:none">
           <label for="versionY">버전</label>
           <select id="versionY">
-            <option value="1" selected>Y1 (n=21)</option>
-            <option value="2">Y2 (n=25)</option>
+            <option value="0">Y0 (n=13 · 31 B)</option>
+            <option value="1" selected>Y1 (n=21 · 98 B)</option>
+            <option value="2">Y2 (n=25 · 141 B)</option>
           </select>
         </div>
         <div id="versionWrapA" style="display:none">
           <label for="versionA">버전</label>
           <select id="versionA">
-            <option value="1" selected>A1 (k=8)</option>
-            <option value="2">A2 (k=10)</option>
+            <option value="0">A0 (k=6 · 31 B)</option>
+            <option value="1" selected>A1 (k=8 · 62 B)</option>
+            <option value="2">A2 (k=10 · 101 B)</option>
           </select>
         </div>
         <div>
@@ -716,14 +718,14 @@ const normalState = {
 };
 
 /** 해상도 티어 → 버전 (타입별). 저 = 최소 버전(원거리) · 고 = 최대 버전(대용량).
- *  Y·A 는 2단뿐이라 저·중이 동일하다 (Y 소형판·A 소형판은 네임스페이스/RS 계약상 부재 —
- *  Y3(n=29)는 RS 블록 분할 신설, A 저해상도판은 인덱스 소진으로 포맷 v2 사안). */
+ *  전 타입 3단 (ADR 0006 비준 2026-08-09 — 소형판 Y0(n=13)·A0(k=6) 신설로 완성).
+ *  Y·A 재라벨: 기존 최저(Y1/A1)가 절대 밀도상 중거리급이라 '중'으로 승격됐고,
+ *  '저'가 진짜 하위 티어다. 절대 밀도(ADR 0006 D8)로는 광고판급이 V1 22.5 와
+ *  Y0 22.5 둘뿐이고 A0 는 32.9(중거리급 하한)라 — 티어 라벨은 **타입 내 상대**다. */
 const RES_TIER_VERSIONS = {
   O: { low: 1, mid: 2, high: 3 },
-  // Y·A 재라벨 (사용자 지시 2026-08-09): 기존 최저(Y1/A1)가 절대 밀도상 중거리급이라
-  // '중'으로 승격 — '저'는 소형판 Y0(n=13)/A0(k=6) 구현(ADR 0006 비준) 대기 비활성.
-  A: { mid: 1, high: 2 },
-  Y: { mid: 1, high: 2 },
+  A: { low: 0, mid: 1, high: 2 },
+  Y: { low: 0, mid: 1, high: 2 },
 };
 
 /** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). 면별 슬롯
@@ -1174,14 +1176,13 @@ for (const card of els.eccTierCards.children) {
   });
 }
 
-/** 해상도 카드 타입별 가용성 — Y·A 는 소형판이 없어 '중'이 '저'와 같은 버전이라
- *  비활성 표기하고 (신버전 Y0/A0 는 ADR 0006 안건), Y+안쪽(윈도 β)은 Y2 전용이라
- *  저·중을 함께 비활성한다 (사용자 지시 2026-08-09). */
+/** 해상도 카드 타입별 가용성 — 전 타입 3단이 열려 있고(ADR 0006 비준),
+ *  Y+안쪽(윈도 β)만 Y2 전용이라 저·중을 함께 비활성한다. */
 function syncResTierUi() {
   const type = currentType();
   const isO = type === 'O';
   const windowLocked = type === 'Y' && normalState.qrPosition === 'inner';
-  const isOff = (res) => (!isO && res === 'low') || (windowLocked && (res === 'low' || res === 'mid'));
+  const isOff = (res) => windowLocked && (res === 'low' || res === 'mid');
   // 1패스: 비활성 확정 + 선택이 비활성으로 밀렸으면 자동 복귀 — 그 뒤에 활성 표시.
   if (isOff(normalState.resTier)) normalState.resTier = 'auto';
   for (const card of els.resTierCards.children) {
@@ -1192,10 +1193,10 @@ function syncResTierUi() {
   els.resTierHint.textContent = windowLocked
     ? 'Y 안쪽(윈도 β)은 Y2 전용이라 해상도가 고(Y2)로 고정돼요.'
     : isO
-      ? '저 V1 = 광고판·원거리 (유일한 원거리급) / 중 V2 = 1~3m 인쇄물 / 고 V3 = 근거리 대용량이에요.'
+      ? '저 V1 = 광고판·원거리 / 중 V2 = 1~3m 인쇄물 / 고 V3 = 근거리 대용량이에요.'
       : type === 'Y'
-        ? '중 Y1 = 근거리 인쇄 / 고 Y2 = 고밀도예요. 저(Y0, n=13 — 광고판급)는 ADR 0006 비준 대기예요.'
-        : '중 A1 / 고 A2 예요. 저(A0, k=6 — 중거리급 하한)는 ADR 0006 비준 대기 — 광고판급 원거리는 Type O 저가 적합해요.';
+        ? '저 Y0 = 광고판·원거리 (O 저와 같은 급) / 중 Y1 = 근거리 인쇄 / 고 Y2 = 고밀도예요.'
+        : '저 A0 / 중 A1 / 고 A2 예요. A 는 삼각 확장 때문에 저(A0)도 절대 밀도가 중거리급 하한이라, 광고판급 원거리는 Type O 저나 Y 저가 적합해요.';
 }
 
 for (const card of els.resTierCards.children) {

@@ -8,8 +8,16 @@
 // 짝수면 +1 홀수화 / L = round(0.12·S) / H = round(0.40·S))를 따르되, **A2/H 만
 // 절차값 57 대신 59** 다 — 57·58 은 base-211 청킹 비정렬로 생성 불가(아래 chunkAligned
 // 참조), 59 는 정렬·홀수·절차 최근접(|59−57.2|=1.8) 3조건 동시 만족 (비준 확정값):
+//   A0 S=45  → L 5 · M 11 (24.4%) · H 18   [ADR 0006 D6, 2026-08-09 비준]
 //   A1 S=89  → L 11 · M 23 (25.8%) · H 36
 //   A2 S=143 → L 17 · M 37 (25.9%) · H 59 (41.3% — 절차값 57 은 비정렬로 대체)
+//
+// [ADR 0006 D6 — A0 변 스크레이프 딱지] A0(k=6) 는 변 하나(각 19셀 = 3k+1)가 통째로
+// 소실되면 터치 RS 심볼이 **9/8/10** (R/B/L 변)이라 **t(H)=9 로도 L 변을 못 산다** —
+// 어떤 ECC 레벨도 변 전체 소실을 오류-전용 복호로 보장하지 못한다. H 강제의 유일한
+// 명분이 변 방어인데 그걸 못 사면서 순 페이로드만 31→25 B 로 과세하므로 **기본 M 유지**
+// (A1 전례 승계). 소거 회계로는 e ≤ nsym 이라 M(11) ≥ 10 — **P4(소거 복호) 구현이
+// A0 변 방어의 전제 조건**이다. M1-A 결합 스윕에 A0 를 포함한다.
 //
 // 회계는 capacity.js 와 동형이다(심볼 도메인):
 //   총 셀           total = (3k+1)(3k+2)/2  (D1 — 육각 3k²+3k+1 + 패치 3·k(k+1)/2)
@@ -23,9 +31,20 @@
 //                     `maxBytesForSymbols` 재사용 — BigInt 정확 계산, 전용 재구현 아님)
 //   순 페이로드       = K − 1  (헤더 1B, header.js 승계)
 //
-// [D6 네임스페이스] formatIndex 12=A1 · 13=A2 · 14=A1Q · 15=A2Q(중앙 QR, +2 오프셋 —
-// encodeA.js 가 centerQr 옵션으로 적용). 3·7 은 Type O V4/V4Q 예약으로 여기서
-// 소진하지 않는다(D6 명시).
+// [ADR 0006 D3 네임스페이스 — 2026-08-09 비준] formatIndex 는 **tri 패밀리 표**의
+// 값이다(4bit 는 격자 수립 경로별 독립 표). 1=A0 · 12=A1 · 13=A2, 중앙 QR 변형은
+// +2 오프셋으로 3=A0Q · 14=A1Q · 15=A2Q (encodeA.js 가 centerQr 옵션으로 적용).
+//
+// **A0 가 0 이 아닌 이유 (설계 불변식)**: tri 는 hex 코어를 좌표까지 그대로 포함
+// 한다(`dataCellsInScanOrder(6)` 82셀 == `dataCellsInScanOrderA(6)` 접두). 그래서
+// A0(k=6) 를 hex 표의 k=6 값에 배정하면 삼각 패치가 마모·가림됐을 때 hex 로 오판된
+// 가설이 격자·앵커·포맷·CRC·인덱스를 전부 "정상 V1"으로 통과시키고 페이로드를 그대로
+// 읽는다 — 완전 도플갱어 (몬테카를로 실측 오수락 2.7e-5/L, 설계 불변식 10⁻²⁰ 대비
+// 15자릿수 위반). ADR 0006 D3 축 분리 검사: **격자 파라미터 k 가 반드시 달라야 한다**
+// (k 가 다르면 샘플링 격자 자체가 어긋나 구조적으로 실패). hex 에서 k=6 인 값은
+// **0(V1)·4(V1Q) 둘뿐**이고, +2 쌍 불변식을 지키는 최저 안전쌍이 **1·3** 이다.
+// 파인더 종류(불스아이 vs 중앙 QR) 상이는 **단독 근거로 쓰지 않는다** — centerQr 은
+// 셀 기하를 전혀 안 바꾸므로(19셀 슬롯 동일) 디코더의 명시적 비교에만 의존한다.
 
 import { cellCount } from './hexgrid.js';
 import { symbolCountForByteLength } from './base211.js';
@@ -55,9 +74,10 @@ export function overheadBreakdownA(k) {
   };
 }
 
-// ADR 0005 D5 검산값 — 58(k=8)/65(k=10). "조용히 맞추지 않는다"(과제 지침
-// 절대 규칙): 모듈 로드 시점에 실계산이 검산값과 어긋나면 즉시 던진다.
-for (const [k, expectedTotal] of [[8, 58], [10, 65]]) {
+// ADR 0005 D5 검산값 — 58(k=8)/65(k=10) · ADR 0006 D6 검산값 — 54(k=6).
+// "조용히 맞추지 않는다"(과제 지침 절대 규칙): 모듈 로드 시점에 실계산이 검산값과
+// 어긋나면 즉시 던진다.
+for (const [k, expectedTotal] of [[6, 54], [8, 58], [10, 65]]) {
   const actual = overheadBreakdownA(k).total;
   if (actual !== expectedTotal) {
     throw new Error(
@@ -72,6 +92,9 @@ for (const [k, expectedTotal] of [[8, 58], [10, 65]]) {
  * @type {Readonly<Record<string, Readonly<{symbols:number, L:number, M:number, H:number}>>>}
  */
 export const NSYM_TABLE_A = Object.freeze({
+  A0: Object.freeze({
+    symbols: 45, L: 5, M: 11, H: 18,
+  }),
   A1: Object.freeze({
     symbols: 89, L: 11, M: 23, H: 36,
   }),
@@ -82,11 +105,17 @@ export const NSYM_TABLE_A = Object.freeze({
 
 /**
  * 버전 정의. `overhead` 는 `overheadBreakdownA(k).total` 로 유도한다(하드코딩
- * 아님). `formatIndex` 는 D6 네임스페이스(12=A1·13=A2) — centerQr(A*Q) 는
- * encodeA.js 가 +2 오프셋으로 적용한다(14=A1Q·15=A2Q).
+ * 아님). `formatIndex` 는 tri 패밀리 표(1=A0·12=A1·13=A2, ADR 0006 D3) —
+ * centerQr(A*Q) 는 encodeA.js 가 +2 오프셋으로 적용한다(3=A0Q·14=A1Q·15=A2Q).
+ *
+ * 배열 순서는 **용량 오름차순** — `chooseVersionA` 가 앞에서부터 훑어 최소 버전을
+ * 고르므로 A0 가 선두여야 한다.
  * @type {ReadonlyArray<{name:string, version:number, k:number, formatIndex:number, overhead:number, symbolKey:string}>}
  */
 export const VERSIONS_A = Object.freeze([
+  Object.freeze({
+    name: 'A0', version: 0, k: 6, formatIndex: 1, overhead: overheadBreakdownA(6).total, symbolKey: 'A0',
+  }),
   Object.freeze({
     name: 'A1', version: 1, k: 8, formatIndex: 12, overhead: overheadBreakdownA(8).total, symbolKey: 'A1',
   }),
@@ -97,7 +126,7 @@ export const VERSIONS_A = Object.freeze([
 
 /**
  * version → VERSIONS_A 항목.
- * @param {number} version 1 | 2
+ * @param {number} version 0 | 1 | 2
  * @returns {{name:string, version:number, k:number, formatIndex:number, overhead:number, symbolKey:string}}
  */
 export function versionSpecA(version) {
