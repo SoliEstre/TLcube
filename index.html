@@ -72,10 +72,20 @@
   header .mode-switch, header .theme-toggle { flex-shrink: 0; }
   .mode-switch button, .theme-toggle button { white-space: nowrap; }
   main {
-    width: 100%; max-width: 1080px; padding: 8px 24px 40px;
-    display: grid; grid-template-columns: 340px 1fr; gap: 20px;
+    /* max-width 1080 → 1840: 화면이 넓어지면 미리보기 열이 함께 넓어진다 (반응형 개선). */
+    width: 100%; max-width: 1840px; padding: 8px 24px 40px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px;
   }
-  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  /* 넓은 화면: 미리보기(#stage)가 왼쪽, 컨트롤 패널이 오른쪽 (사용자 지시 2026-08-09).
+     DOM 은 패널이 먼저이므로 order 로 스왑한다 — 좁은 화면(1열)에서는 DOM 순서(패널 위)로 복귀. */
+  main > .panel { order: 2; }
+  main > #stage { order: 1; }
+  @media (max-width: 760px) {
+    /* minmax(0,1fr): 캔버스 고유 폭이 min-content 로 새어나와 열을 밀어내는 블로우아웃 방지. */
+    main { grid-template-columns: minmax(0, 1fr); }
+    main > .panel { order: 1; }
+    main > #stage { order: 2; }
+  }
   .panel {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 10px; padding: 16px;
@@ -124,9 +134,21 @@
   #stage {
     display: flex; align-items: center; justify-content: center;
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 20px; min-height: 420px; overflow: auto;
+    padding: 20px; min-height: 420px;
+    /* overflow:auto 제거 — 캔버스가 공간에 맞춰 스케일되므로 스크롤이 생기지 않는다. */
   }
-  canvas { display: block; border-radius: 4px; }
+  /* 미리보기 자동 확대/축소: 캔버스 내부 해상도(drawScene 픽셀)는 그대로 두고 CSS 로
+     열 폭에 맞춘다. max-height 로 세로도 뷰포트 안에 가두고, object-fit: contain 이
+     종횡비를 보존한다 (canvas 는 replaced element 라 object-fit 적용 가능). */
+  canvas {
+    display: block; border-radius: 4px;
+    width: 100%; height: auto;
+    /* min-width 0: flex/grid 의 min-width:auto(=고유 해상도)가 축소를 막는 것을 해제 —
+       이게 없으면 캔버스 고유 폭(수천 px)이 #stage·그리드 열을 밀어내 가로 오버플로가 난다. */
+    min-width: 0; min-height: 0; max-width: 100%;
+    max-height: calc(100vh - 180px);
+    object-fit: contain;
+  }
   footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; }
 
   /* ── 모드 스위치 ─────────────────────────────────────────────── */
@@ -352,14 +374,53 @@
       </div>
 
       <label>TL스캐너 QR링크 포함</label>
+      <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
+           (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
       <div class="card-row" id="qrPositionCards">
-        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)">안쪽<span class="hint" style="margin:0">β</span></div>
-        <div class="toggle-card active" data-pos="TL">좌상</div>
-        <div class="toggle-card" data-pos="TR">우상</div>
-        <div class="toggle-card" data-pos="BL">좌하</div>
-        <div class="toggle-card" data-pos="BR">우하</div>
+        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
+          </svg>
+          안쪽<span class="hint" style="margin:0">β</span>
+        </div>
+        <div class="toggle-card active" data-pos="TL">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <rect x="6.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
+          </svg>
+          좌상
+        </div>
+        <div class="toggle-card" data-pos="TR">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <rect x="12.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
+          </svg>
+          우상
+        </div>
+        <div class="toggle-card" data-pos="BL">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <rect x="6.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
+          </svg>
+          좌하
+        </div>
+        <div class="toggle-card" data-pos="BR">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <rect x="12.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
+          </svg>
+          우하
+        </div>
+        <div class="toggle-card" data-pos="none" title="QR 링크 없이 코드만 내보내요">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <path d="M6.5 17.5 L17.5 6.5"/>
+          </svg>
+          없음
+        </div>
       </div>
-      <p class="hint">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.</p>
+      <p class="hint">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
 
       <label for="nPreset">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
@@ -531,7 +592,7 @@ const els = {
 
 /** 일반 모드 전용 in-memory 상태 — localStorage 미사용(결정성·단순성, 새로고침 시 초기화). */
 let mode = 'normal';
-// qrPosition: 'inner' | 'TL' | 'TR' | 'BL' | 'BR' — 기본 'TL'(좌상, 사용자 지시 2026-08-09).
+// qrPosition: 'inner' | 'TL' | 'TR' | 'BL' | 'BR' | 'none' — 기본 'TL'(좌상, 사용자 지시 2026-08-09).
 const normalState = {
   // type 기본 = 'Y' (용량 최대·간판 형태 — 사용자 지시 2026-08-09. 카드 배치는 용량 순 O/A/Y).
   contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
@@ -764,7 +825,7 @@ for (const card of els.typeCards.children) {
   });
 }
 
-// ── 일반 모드: QR 링크 포함 위치 카드 (5택 — 안쪽/좌상/우상/좌하/우하) ──────
+// ── 일반 모드: QR 링크 포함 위치 카드 (6택 — 안쪽/좌상/우상/좌하/우하/없음) ──────
 
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
@@ -858,6 +919,7 @@ function normalPayloadText() {
  * mode: 'off' | 'center'(O/A 중앙 QR — Y 는 지원 안 함) | 'corner' | 'window'(Y2·2톤 전용 β).
  */
 function resolveFallback(type, position) {
+  if (position === 'none') return { mode: 'off' }; // QR 미인쇄 (사용자 지시 2026-08-09)
   if (position === 'inner') {
     return type === 'Y' ? { mode: 'window' } : { mode: 'center', cornerToo: false };
   }
