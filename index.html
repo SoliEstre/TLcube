@@ -380,6 +380,16 @@
       <label for="nPreset">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
 
+      <label>안정성 · 용량</label>
+      <!-- 사용자 지시 2026-08-09: 보정 강화(용량↓)/표준/대용량 3단 + 자동(기본 —
+           입력 크기에 따라 H→M→L 순서로 처음 들어가는 레벨 채택). -->
+      <div class="card-row" id="eccTierCards">
+        <div class="toggle-card active" data-tier="auto" title="입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택">자동</div>
+        <div class="toggle-card" data-tier="H" title="ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대">보정 우선</div>
+        <div class="toggle-card" data-tier="M" title="ECC M (25%) — 기본 균형">표준</div>
+        <div class="toggle-card" data-tier="L" title="ECC L (≈12%) — 최대 용량">대용량</div>
+      </div>
+      <p class="hint" id="eccTierHint"></p>
     </div>
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
@@ -419,8 +429,9 @@
         <div>
           <label for="ecc">ECC</label>
           <select id="ecc">
+            <option value="auto" selected>자동 (H→M→L 맞춤)</option>
             <option value="L">L (≈12%)</option>
-            <option value="M" selected>M (25%)</option>
+            <option value="M">M (25%)</option>
             <option value="H">H (≈40%)</option>
           </select>
         </div>
@@ -496,6 +507,19 @@
         </div>
       </div>
       <p class="hint">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
+
+      <!-- Y + 안쪽 전용: 좌/우 면 배제영역 장식 이미지 (렌더 자유구역 — 데이터 계약 무관.
+           사용자 지시 2026-08-09). -->
+      <div id="decorSection" style="display:none">
+        <label>장식 이미지 (좌/우 빈 면 — β)</label>
+        <div class="row">
+          <button id="decorPick" type="button">이미지 선택…</button>
+          <button id="decorClear" type="button" style="display:none">제거</button>
+        </div>
+        <input type="file" id="decorFile" accept="image/*" style="display:none">
+        <p class="hint">Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).
+          렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.</p>
+      </div>
       <div class="check-row" id="cornerTooRow" style="display:none">
         <input type="checkbox" id="qrCornerToo">
         <label for="qrCornerToo" style="margin:0;color:var(--text)">중앙 QR 과 코너 QR 병행 표시 (고급)</label>
@@ -545,6 +569,7 @@ import { encodeA } from './src/encodeA.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
+import { faceBasis } from './src/ygrid.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
 import { verifyRasterY } from './src/verifyY.js';
@@ -564,8 +589,11 @@ const els = {
   optionsY: $('optionsY'),
   tone: $('tone'), faceGain: $('faceGain'), faceGainValue: $('faceGainValue'),
   qrUrl: $('qrUrl'),
-  // 공용 컨트롤 (QR 위치 6택 + 병행 표시 + 게이지)
+  // 공용 컨트롤 (QR 위치 6택 + 병행 표시 + 게이지 + 장식 이미지)
   cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
+  decorSection: $('decorSection'), decorPick: $('decorPick'), decorClear: $('decorClear'),
+  decorFile: $('decorFile'),
+  eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
@@ -586,8 +614,13 @@ let mode = 'normal';
 // qrPosition: 'inner' | 'TL' | 'TR' | 'BL' | 'BR' | 'none' — 기본 'TL'(좌상, 사용자 지시 2026-08-09).
 const normalState = {
   // type 기본 = 'Y' (용량 최대·간판 형태 — 사용자 지시 2026-08-09. 카드 배치는 용량 순 O/A/Y).
+  // eccTier 기본 = 'auto' (입력 크기에 따라 H→M→L — 사용자 지시 2026-08-09).
   contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
+  eccTier: 'auto',
 };
+
+/** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). {bitmap, dataUrl, name} | null */
+let decor = null;
 
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
 let current = null;
@@ -615,15 +648,45 @@ function exportFilename(ext) {
   return `trilume-y${encoded.version}${encoded.tones === 3 ? 't' : ''}-${encoded.eccLevel}.${ext}`;
 }
 
-els.exportPng.addEventListener('click', () => {
+/** 장식 합성 PNG (β) — 캔버스 파이프라인. 이미지 리샘플이 브라우저 의존이라 바이트
+ *  결정성 계약 밖이지만, 데이터 셀 렌더는 동일 scene 셰이프에서 나와 판독 무관. */
+function decoratedPngBlob(cur, ppu) {
+  return new Promise((resolve, reject) => {
+    const off = document.createElement('canvas');
+    drawScene(cur.scene, off, ppu);
+    const ctx = off.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(ppu * dpr, 0, 0, ppu * dpr, 0, 0);
+    paintDecor(ctx, cur.scene, cur.faceGains);
+    off.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG 인코딩 실패'))), 'image/png');
+  });
+}
+
+/** SVG 마크업 — 장식 활성 시 클립·matrix 이미지 조각 주입. */
+function svgMarkup(cur) {
+  let svg = sceneToSvg(cur.scene);
+  if (decorActive(cur)) svg = svg.replace('</svg>', `${decorSvgFragment(cur.scene, cur.faceGains)}</svg>`);
+  return svg;
+}
+
+els.exportPng.addEventListener('click', async () => {
   if (!current) return;
+  if (decorActive(current)) {
+    try {
+      const blob = await decoratedPngBlob(current, 32);
+      download(new Uint8Array(await blob.arrayBuffer()), 'image/png', exportFilename('png'));
+    } catch (err) {
+      els.error.textContent = String(err && err.message ? err.message : err);
+    }
+    return;
+  }
   const raster = rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 });
   download(rasterToPng(raster), 'image/png', exportFilename('png'));
 });
 
 els.exportSvg.addEventListener('click', () => {
   if (!current) return;
-  download(new TextEncoder().encode(sceneToSvg(current.scene)), 'image/svg+xml', exportFilename('svg'));
+  download(new TextEncoder().encode(svgMarkup(current)), 'image/svg+xml', exportFilename('svg'));
 });
 
 // ── 클립보드 복사 (다운로드와 동일 파이프라인 — PNG 는 이미지, SVG 는 마크업 텍스트) ──
@@ -636,8 +699,9 @@ function flashCopied(btn) {
 $('copyPng').addEventListener('click', async () => {
   if (!current) return;
   try {
-    const raster = rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 });
-    const blob = new Blob([rasterToPng(raster)], { type: 'image/png' });
+    const blob = decorActive(current)
+      ? await decoratedPngBlob(current, 32)
+      : new Blob([rasterToPng(rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 }))], { type: 'image/png' });
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     flashCopied($('copyPng'));
   } catch (err) {
@@ -648,7 +712,7 @@ $('copyPng').addEventListener('click', async () => {
 $('copySvg').addEventListener('click', async () => {
   if (!current) return;
   try {
-    await navigator.clipboard.writeText(sceneToSvg(current.scene));
+    await navigator.clipboard.writeText(svgMarkup(current));
     flashCopied($('copySvg'));
   } catch (err) {
     els.error.textContent = `클립보드 복사 실패: ${err && err.message ? err.message : err}`;
@@ -815,6 +879,8 @@ function syncQrPositionUi() {
   const inner = normalState.qrPosition === 'inner';
   els.qrCenterHint.style.display = inner && !isY ? '' : 'none';
   els.cornerTooRow.style.display = mode === 'advanced' && inner && !isY ? '' : 'none';
+  // 장식 이미지는 Y+안쪽 전용 (L/R 배제영역이 존재하는 유일한 구성).
+  els.decorSection.style.display = inner && isY ? '' : 'none';
 }
 
 for (const card of els.typeCards.children) {
@@ -836,6 +902,134 @@ for (const card of els.qrPositionCards.children) {
   });
 }
 syncQrPositionUi();
+
+// ── 일반 모드: 안정성·용량 4택 (자동/H/M/L) ─────────────────────────────
+
+for (const card of els.eccTierCards.children) {
+  card.addEventListener('click', () => {
+    normalState.eccTier = card.dataset.tier;
+    for (const c of els.eccTierCards.children) c.classList.toggle('active', c === card);
+    schedule();
+  });
+}
+
+// ── 장식 이미지 (Y+안쪽 — L/R 배제영역 데칼) ─────────────────────────────
+
+els.decorPick.addEventListener('click', () => els.decorFile.click());
+els.decorClear.addEventListener('click', () => {
+  decor = null;
+  els.decorFile.value = '';
+  els.decorClear.style.display = 'none';
+  schedule();
+});
+els.decorFile.addEventListener('change', async () => {
+  const file = els.decorFile.files && els.decorFile.files[0];
+  if (!file) return;
+  try {
+    const [bitmap, dataUrl] = await Promise.all([
+      createImageBitmap(file),
+      new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(file);
+      }),
+    ]);
+    decor = { bitmap, dataUrl, name: file.name };
+    els.decorClear.style.display = '';
+    schedule();
+  } catch (e) {
+    els.error.textContent = `장식 이미지를 읽지 못했어요: ${e && e.message ? e.message : e}`;
+  }
+});
+
+/** 장식이 실제로 그려지는 구성인가 — Y + 윈도 β + 이미지 선택됨. */
+function decorActive(result) {
+  return decor !== null && result && result.type === 'Y' && result.encoded.window === true;
+}
+
+/** L/R 윈도 사각 (scene 좌표) — sceneY.js 필러와 동일 기하 (n=25 고정, Y2W 전용). */
+function decorQuads(scene) {
+  const n = 25;
+  const lo = n - 13;
+  const pt = (face, a, b) => {
+    const { ei, ej } = faceBasis(face);
+    return {
+      x: scene.layout.originX + (a * ei.x + b * ej.x) * scene.layout.size,
+      y: scene.layout.originY + (a * ei.y + b * ej.y) * scene.layout.size,
+    };
+  };
+  return ['L', 'R'].map((face) => ({
+    face,
+    quad: [pt(face, lo, lo), pt(face, n, lo), pt(face, n, n), pt(face, lo, n)],
+  }));
+}
+
+/** 사각(평행사변형) 위 데칼의 아핀 프레임 — 4개 코너 회전 후보 중 "이미지 x축이
+ *  화면 오른쪽, y축이 화면 아래쪽"에 가장 가까운 **비미러** 프레임을 고른다
+ *  (면 기저 그대로 매핑하면 면마다 눕거나 뒤집혀 보인다 — 육안 정립 보정). */
+function decorFrame(quad) {
+  // 코너 P_k 에서 인접 변 (e1 = 다음, e2 = 이전) — 비미러 조건은 y-아래 좌표계에서
+  // cross(u, v) > 0. 사변형 감김 방향에 따라 (e1,e2) 또는 (e2,e1) 중 한쪽만 만족한다.
+  const edge = (a, b) => ({ x: quad[b].x - quad[a].x, y: quad[b].y - quad[a].y });
+  const cross0 = (() => {
+    const e1 = edge(0, 1);
+    const e2 = edge(0, 3);
+    return e1.x * e2.y - e1.y * e2.x;
+  })();
+  let best = null;
+  for (let k = 0; k < 4; k += 1) {
+    const next = edge(k, (k + 1) % 4);
+    const prev = edge(k, (k + 3) % 4);
+    const u = cross0 > 0 ? next : prev;
+    const v = cross0 > 0 ? prev : next;
+    const lenU = Math.sqrt(u.x * u.x + u.y * u.y);
+    const lenV = Math.sqrt(v.x * v.x + v.y * v.y);
+    const score = u.x / lenU + v.y / lenV; // x축→화면 오른쪽 + y축→화면 아래쪽 선호
+    if (best === null || score > best.score) {
+      best = { origin: quad[k], u, v, score };
+    }
+  }
+  return best;
+}
+
+/** 캔버스 ctx(scene 좌표 변환 적용 상태)에 장식을 입힌다 — 클립 + 아핀 스트레치 +
+ *  면 게인 multiply 셰이딩 (셀·필러와 같은 조명 정합). */
+function paintDecor(ctx, scene, faceGains) {
+  for (const { face, quad } of decorQuads(scene)) {
+    const { origin, u, v } = decorFrame(quad);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(quad[0].x, quad[0].y);
+    for (let i = 1; i < 4; i += 1) ctx.lineTo(quad[i].x, quad[i].y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.transform(u.x, u.y, v.x, v.y, origin.x, origin.y);
+    ctx.drawImage(decor.bitmap, 0, 0, decor.bitmap.width, decor.bitmap.height, 0, 0, 1, 1);
+    const g = Math.round(((faceGains && faceGains[face]) === undefined ? 1 : faceGains[face]) * 255);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = `rgb(${g},${g},${g})`;
+    ctx.fillRect(0, 0, 1, 1);
+    ctx.restore();
+  }
+}
+
+/** SVG 문자열에 장식 이미지 조각을 주입한다 (클립 + matrix 스트레치, 게인은
+ *  검은 오버레이 근사 — SVG 에 multiply 없이 근사). */
+function decorSvgFragment(scene, faceGains) {
+  let frag = '';
+  decorQuads(scene).forEach(({ face, quad }, i) => {
+    const pts = quad.map((p) => `${p.x},${p.y}`).join(' ');
+    const { origin, u, v } = decorFrame(quad);
+    const gain = (faceGains && faceGains[face]) === undefined ? 1 : faceGains[face];
+    frag += `<clipPath id="tlDecor${i}"><polygon points="${pts}"/></clipPath>`
+      + `<g clip-path="url(#tlDecor${i})">`
+      + `<image href="${decor.dataUrl}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" `
+      + `transform="matrix(${u.x} ${u.y} ${v.x} ${v.y} ${origin.x} ${origin.y})"/>`
+      + `<polygon points="${pts}" fill="#000" opacity="${(1 - gain).toFixed(4)}"/></g>`;
+  });
+  return frag;
+}
 
 // ── 고급 모드: 옵션 패널 표시 전환 (QR 폴백 선택은 공용 6택 카드가 담당) ──
 
@@ -941,7 +1135,7 @@ function buildConfig() {
   return {
     type: normalState.type,
     text: normalPayloadText(),
-    eccLevel: 'M',
+    eccLevel: normalState.eccTier, // 'auto' | 'H' | 'M' | 'L'
     presetName: normalState.preset,
     versionO: undefined,
     versionY: fallback.mode === 'window' ? 2 : undefined,
@@ -985,11 +1179,27 @@ function sceneOptsForOA(cfg, centerQr) {
   return opts;
 }
 
+/** eccLevel 'auto' = H → M → L 순서로 처음 인코딩(버전 자동 포함)에 성공하는 레벨.
+ *  입력이 작으면 보정 우선, 크면 용량 우선 — 사용자 규약 2026-08-09. 명시 레벨은
+ *  그대로 시도하고 실패(용량 초과 등)를 표출한다. */
+function encodeWithEcc(encodeFn, text, baseOpts, eccLevel) {
+  if (eccLevel !== 'auto') return encodeFn(text, { ...baseOpts, eccLevel });
+  let lastErr = null;
+  for (const ecc of ['H', 'M', 'L']) {
+    try {
+      return encodeFn(text, { ...baseOpts, eccLevel: ecc });
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
 function renderTypeO(cfg) {
   const centerQr = cfg.fallback.mode === 'center';
-  const opts = { eccLevel: cfg.eccLevel, centerQr };
+  const opts = { centerQr };
   if (cfg.versionO !== undefined) opts.version = cfg.versionO;
-  const encoded = encode(cfg.text, opts);
+  const encoded = encodeWithEcc(encode, cfg.text, opts, cfg.eccLevel);
 
   const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
 
@@ -1009,9 +1219,9 @@ function renderTypeO(cfg) {
 
 function renderTypeA(cfg) {
   const centerQr = cfg.fallback.mode === 'center';
-  const opts = { eccLevel: cfg.eccLevel, centerQr };
+  const opts = { centerQr };
   if (cfg.versionA !== undefined) opts.version = cfg.versionA;
-  const encoded = encodeA(cfg.text, opts);
+  const encoded = encodeWithEcc(encodeA, cfg.text, opts, cfg.eccLevel);
 
   const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
 
@@ -1031,14 +1241,14 @@ function renderTypeA(cfg) {
 
 function renderTypeY(cfg) {
   const useWindow = cfg.fallback.mode === 'window';
-  const opts = { eccLevel: cfg.eccLevel, tones: cfg.tone };
+  const opts = { tones: cfg.tone };
   if (useWindow) {
     opts.version = 2;
     opts.window = true;
   } else if (cfg.versionY !== undefined) {
     opts.version = cfg.versionY;
   }
-  const encoded = encodeY(cfg.text, opts);
+  const encoded = encodeWithEcc(encodeY, cfg.text, opts, cfg.eccLevel);
 
   const sceneOpts = { palette: paletteOf(cfg.presetName, cfg.faceGains) };
   if (cfg.fallback.mode !== 'off') {
@@ -1090,21 +1300,35 @@ function updateGauge(type, encoded, text) {
 let timer = 0;
 function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
 
+const ECC_TIER_LABELS = { H: '보정 우선', M: '표준', L: '대용량' };
+
 function render() {
   els.error.textContent = '';
   syncFaceGainLabel();
   const cfg = buildConfig();
   try {
     const result = cfg.type === 'Y' ? renderTypeY(cfg) : cfg.type === 'A' ? renderTypeA(cfg) : renderTypeO(cfg);
-    current = { type: result.type, encoded: result.encoded, scene: result.scene };
+    current = {
+      type: result.type, encoded: result.encoded, scene: result.scene, faceGains: cfg.faceGains,
+    };
     drawScene(result.scene, els.canvas, 26);
+    if (decorActive(current)) {
+      const ctx = els.canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      ctx.setTransform(26 * dpr, 0, 0, 26 * dpr, 0, 0);
+      paintDecor(ctx, result.scene, cfg.faceGains);
+    }
     els.info.innerHTML = result.info;
     updateGauge(result.type, result.encoded, cfg.text);
+    els.eccTierHint.textContent = cfg.eccLevel === 'auto'
+      ? `자동 판정 → ECC ${result.encoded.eccLevel} (${ECC_TIER_LABELS[result.encoded.eccLevel]})`
+      : '';
   } catch (err) {
     current = null;
     els.info.innerHTML = '';
     els.error.textContent = String(err && err.message ? err.message : err);
     updateGauge(null, null, '');
+    els.eccTierHint.textContent = '';
   }
 }
 
