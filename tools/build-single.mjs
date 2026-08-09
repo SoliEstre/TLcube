@@ -49,6 +49,8 @@ const MODULE_ORDER = [
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'gf256', 'rs', 'qr', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',
+  // quietzone 은 순수 기하 모듈이라 의존이 없다 — 끝에 붙여도 위상 정렬이 성립한다.
+  'quietzone',
 ];
 
 /** index.html 안의 <script type="module"> 블록 정확히 1개를 찾아 반환한다. */

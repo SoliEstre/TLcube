@@ -166,6 +166,16 @@
   /* 미리보기 자동 확대/축소: 캔버스 내부 해상도(drawScene 픽셀)는 그대로 두고 CSS 로
      열 폭에 맞춘다. max-height 로 세로도 뷰포트 안에 가두고, object-fit: contain 이
      종횡비를 보존한다 (canvas 는 replaced element 라 object-fit 적용 가능). */
+  /* 배치 미리보기 레이어 — backdrop 은 view 뒤에 정확히 겹친다. */
+  #canvasWrap { position: relative; display: block; width: 100%; touch-action: none; }
+  #canvasWrap.pannable { cursor: grab; }
+  #canvasWrap.panning { cursor: grabbing; }
+  #backdropCanvas {
+    position: absolute; left: 0; top: 0; display: none;
+    width: 100%; height: 100%; object-fit: contain; border-radius: 4px;
+  }
+  #backdropCanvas.on { display: block; }
+  #view { position: relative; z-index: 1; }
   canvas {
     display: block; border-radius: 4px;
     width: 100%; height: auto;
@@ -582,6 +592,35 @@
       </div>
       <p class="hint" id="bgModeHint"></p>
 
+      <!-- 배치 미리보기 — 투명 배경 전용 (사용자 지시 2026-08-09).
+           코드를 얹을 표면 사진을 깔고 드래그/휠 줌으로 위치를 맞춰, 실루엣 검출이
+           될 자리인지 **인쇄 전에** 눈과 수치로 확인한다. 렌더 산출물에는 안 들어간다. -->
+      <div id="backdropSection" style="display:none">
+        <label>배치 미리보기 (표면 이미지)</label>
+        <div class="row">
+          <div class="export-pair" style="flex:1">
+            <button id="backdropPick" type="button">이미지 선택…</button>
+            <button id="backdropClear" type="button" class="icon-btn" title="배경 이미지 제거" style="display:none">✕</button>
+          </div>
+          <button id="backdropFit" type="button" style="display:none">위치 초기화</button>
+        </div>
+        <input type="file" id="backdropFile" accept="image/*" style="display:none">
+        <p class="hint" id="backdropHint">코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.
+          미리보기에서 <b>드래그로 이동</b>, <b>휠로 확대/축소</b> 할 수 있어요. 내보내는 파일에는 안 들어가요.</p>
+        <p class="hint" id="backdropVerdict" style="display:none"></p>
+      </div>
+
+      <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
+      <label>안전영역 (코드 주변 여백)</label>
+      <div class="card-row" id="quietModeCards">
+        <div class="toggle-card active" data-quiet="auto" title="배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략">자동</div>
+        <div class="toggle-card" data-quiet="none" title="안전영역 없이 코드만">없음</div>
+        <div class="toggle-card" data-quiet="white"><span class="swatch-mini" style="background:#fff"></span>흰색</div>
+        <div class="toggle-card" data-quiet="black"><span class="swatch-mini" style="background:#000"></span>검정</div>
+        <div class="toggle-card" data-quiet="contrast" title="셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름">고대비</div>
+      </div>
+      <p class="hint" id="quietModeHint"></p>
+
       <label>TL스캐너 QR링크 포함</label>
       <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
            (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
@@ -691,7 +730,15 @@
     <div id="info"></div>
     <div id="error"></div>
   </div>
-  <div id="stage"><canvas id="view"></canvas></div>
+  <div id="stage">
+    <!-- 배치 미리보기(사용자 지시 2026-08-09): 투명 배경일 때 코드를 얹을 표면 이미지를
+         뒤에 깔고 드래그/휠로 위치를 맞춘다. backdrop 은 view 와 **같은 내부 해상도**를
+         쓰고 둘 다 object-fit: contain 이라 CSS 축소에서도 픽셀이 정확히 겹친다. -->
+    <div id="canvasWrap">
+      <canvas id="backdropCanvas"></canvas>
+      <canvas id="view"></canvas>
+    </div>
+  </div>
 </main>
 <footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐
   <span class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume</span>
@@ -704,6 +751,7 @@ import { encodeA } from './src/encodeA.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
+import { addQuietZone } from './src/quietzone.js';
 import { faceBasis } from './src/ygrid.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
@@ -733,6 +781,11 @@ const els = {
   eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
   resTierCards: $('resTierCards'), resTierHint: $('resTierHint'),
   bgModeCards: $('bgModeCards'), bgModeHint: $('bgModeHint'),
+  quietModeCards: $('quietModeCards'), quietModeHint: $('quietModeHint'),
+  canvasWrap: $('canvasWrap'), backdropCanvas: $('backdropCanvas'),
+  backdropSection: $('backdropSection'), backdropPick: $('backdropPick'),
+  backdropClear: $('backdropClear'), backdropFit: $('backdropFit'),
+  backdropFile: $('backdropFile'), backdropVerdict: $('backdropVerdict'),
   customStyleCard: $('customStyleCard'), customChips: $('customChips'), customBg: $('customBg'),
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
@@ -763,6 +816,8 @@ const normalState = {
   eccTier: 'auto', resTier: 'auto', customHue: 210,
   // bgMode 기본 = 'transparent' (사용자 지시 2026-08-09). 색 스타일과 직교 축이다.
   bgMode: 'transparent',
+  // quietMode 기본 = 'auto' — 'auto'|'none'|'white'|'black'|'contrast'.
+  quietMode: 'auto',
 };
 
 /** 해상도 티어 → 버전 (타입별). 저 = 최소 버전(원거리) · 고 = 최대 버전(대용량).
@@ -786,6 +841,15 @@ const BG_MODE_COLORS = {
 
 /** 실루엣 검출을 위한 배경 ↔ 셀 레벨 최소 상대휘도 분리 (SPEC §7.1). */
 const BG_SEPARATION_MIN = 0.05;
+
+/** 안전영역 여백 (scene 단위 = 셀 크기 1 기준 "셀 몇 개분"). QR 콰이어트 존 4모듈 상당. */
+const QUIET_MARGIN_CELLS = 2;
+
+/** 배치 미리보기 상태 — 배경 이미지와 그 팬/줌 (캔버스 픽셀 기준). 렌더 산출물과 무관. */
+const backdrop = { bitmap: null, name: null };
+const backdropView = { x: 0, y: 0, scale: 1 };
+/** 마지막으로 실측한 배치 표면의 대표 상대휘도 — 고대비 권장색의 2순위 근거. */
+let lastBackdropLuminance = null;
 
 /** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). 면별 슬롯
  *  (사용자 지시 2026-08-09: 좌/우 각각 + 교환). 각 원소 {bitmap, dataUrl, name} | null */
@@ -1078,7 +1142,10 @@ function drawScene(scene, canvas, ppu) {
   ctx.setTransform(ppu * dpr, 0, 0, ppu * dpr, 0, 0);
   // 투명 배경은 지우기만 한다 — 캔버스 뒤의 .checker 패턴이 비쳐 보이는 게 표시 규약이다.
   ctx.clearRect(0, 0, scene.width, scene.height);
-  canvas.classList.toggle('checker', scene.background === null);
+  // ⚠ .checker 는 **view 캔버스 자신의 CSS 배경**이라 backdrop 레이어보다 위에 깔린다.
+  //    배치 미리보기 이미지가 올라와 있으면 체커를 꺼야 그 이미지가 보인다.
+  const backdropShowing = normalState.bgMode === 'transparent' && backdrop.bitmap !== null;
+  canvas.classList.toggle('checker', scene.background === null && !backdropShowing);
   if (scene.background !== null) {
     ctx.fillStyle = rgbCss(scene.background);
     ctx.fillRect(0, 0, scene.width, scene.height);
@@ -1327,10 +1394,308 @@ for (const card of els.bgModeCards.children) {
   card.addEventListener('click', () => {
     normalState.bgMode = card.dataset.bg;
     syncBgModeUi();
+    syncQuietModeUi();
+    syncBackdropUi();
     schedule();
   });
 }
 syncBgModeUi();
+
+// ── 안전영역 (QR 콰이어트 존 상당) ──────────────────────────────────────
+//
+// 자동 규칙: 배경이 **불투명**이면 캔버스 전체가 이미 균일한 배경이라 안전영역이
+// 중복이다(생략). 배경이 **투명**이면 실효 배경이 배치 표면이 되므로 고대비 색을
+// 자동으로 깐다 — 이게 투명 배경의 유일한 실질 위험(SPEC §9)을 덮는 장치다.
+
+const QUIET_WHITE = { r: 255, g: 255, b: 255 };
+const QUIET_BLACK = { r: 0, g: 0, b: 0 };
+
+/** 현재 색 스타일의 셀 레벨 3색. */
+function currentLevels() {
+  const name = currentPresetName();
+  return (name === 'custom' ? makeCustomPalette(normalState.customHue) : getPreset(name)).levels;
+}
+
+/** 후보색과 셀 레벨들 사이의 최소 상대휘도 분리. */
+function separationFromLevels(color) {
+  const y = relativeLuminance(color);
+  let min = Infinity;
+  for (const lvl of currentLevels()) min = Math.min(min, Math.abs(relativeLuminance(lvl) - y));
+  return min;
+}
+
+/**
+ * 고대비 권장색 — "큐브 컬러 및 큐브 주변에 따른 권장색"(사용자 지시).
+ * 1순위: 셀 레벨과의 분리가 큰 쪽 (실루엣이 살아야 한다).
+ * 2순위(동점 근처): 배치 표면 휘도와 **다른** 쪽 — 마크가 표면에 묻히지 않게.
+ */
+function highContrastQuietColor() {
+  const sepW = separationFromLevels(QUIET_WHITE);
+  const sepB = separationFromLevels(QUIET_BLACK);
+  if (Math.abs(sepW - sepB) > 0.02) return sepW > sepB ? QUIET_WHITE : QUIET_BLACK;
+  const surfaceY = lastBackdropLuminance;
+  if (surfaceY === null) return sepW >= sepB ? QUIET_WHITE : QUIET_BLACK;
+  return Math.abs(1 - surfaceY) >= surfaceY ? QUIET_WHITE : QUIET_BLACK;
+}
+
+/** 현재 설정의 안전영역 색 — null 이면 안전영역을 안 넣는다. */
+function resolveQuietColor() {
+  switch (normalState.quietMode) {
+    case 'none': return null;
+    case 'white': return QUIET_WHITE;
+    case 'black': return QUIET_BLACK;
+    case 'contrast': return highContrastQuietColor();
+    default: // 'auto'
+      return normalState.bgMode === 'transparent' ? highContrastQuietColor() : null;
+  }
+}
+
+/** scene 에 안전영역을 얹는다 (자체검증은 안전영역 **이전** scene 으로 돌린 뒤 호출한다). */
+function withQuietZone(scene) {
+  return addQuietZone(scene, { color: resolveQuietColor(), margin: QUIET_MARGIN_CELLS });
+}
+
+function syncQuietModeUi() {
+  for (const card of els.quietModeCards.children) {
+    card.classList.toggle('active', card.dataset.quiet === normalState.quietMode);
+  }
+  const color = resolveQuietColor();
+  if (!color) {
+    els.quietModeHint.textContent = normalState.quietMode === 'none'
+      ? '안전영역 없이 코드만 내보내요. 무늬 있는 표면에 얹으면 실루엣 검출이 흔들릴 수 있어요.'
+      : '배경이 불투명이라 캔버스 전체가 이미 균일한 여백이에요 — 안전영역을 따로 안 넣어요.';
+    return;
+  }
+  const isWhite = color.r === 255;
+  const sep = separationFromLevels(color);
+  const picked = normalState.quietMode === 'white' || normalState.quietMode === 'black'
+    ? '' : ` (자동 선택: <b>${isWhite ? '흰색' : '검정'}</b>)`;
+  els.quietModeHint.innerHTML = `코드와 QR 을 각각 감싸는 여백을 ${QUIET_MARGIN_CELLS}셀 폭으로 넣어요${picked}. `
+    + `셀 레벨과의 최소 분리 ${sep.toFixed(3)}${sep >= BG_SEPARATION_MIN ? '' : ' ⚠ 계약 미달'}. `
+    + '내보내는 PNG·SVG 에 함께 들어가요.';
+}
+
+for (const card of els.quietModeCards.children) {
+  card.addEventListener('click', () => {
+    normalState.quietMode = card.dataset.quiet;
+    syncQuietModeUi();
+    schedule();
+  });
+}
+syncQuietModeUi();
+
+// ── 배치 미리보기 (투명 배경 전용) ──────────────────────────────────────
+//
+// 목적: 투명 배경은 실효 배경이 **코드를 얹는 표면**이라 생성 시점에 실루엣 검출을
+// 보증할 수 없다(SPEC §9). 그 표면 사진을 미리 깔아 위치를 맞춰보고, 코드 둘레의
+// 표면 휘도와 셀 레벨의 분리를 **실측**해서 인쇄 전에 알려준다.
+//
+// backdrop 캔버스는 view 와 같은 내부 해상도를 쓰므로 픽셀 인덱스가 1:1 대응한다 —
+// 그래서 합성 없이 두 ImageData 를 같은 인덱스로 훑으면 된다.
+
+function syncBackdropUi() {
+  const on = normalState.bgMode === 'transparent';
+  els.backdropSection.style.display = on ? '' : 'none';
+  const has = backdrop.bitmap !== null;
+  els.backdropClear.style.display = has ? '' : 'none';
+  els.backdropFit.style.display = has ? '' : 'none';
+  els.backdropPick.textContent = has ? `이미지 교체… (${backdrop.name})` : '이미지 선택…';
+  els.canvasWrap.classList.toggle('pannable', on && has);
+  els.backdropCanvas.classList.toggle('on', on && has);
+  if (!(on && has)) els.backdropVerdict.style.display = 'none';
+}
+
+/** 캔버스를 덮도록(cover) 맞추고 가운데 정렬. */
+function fitBackdrop() {
+  const c = els.canvas;
+  const img = backdrop.bitmap;
+  if (!img || !c.width) return;
+  backdropView.scale = Math.max(c.width / img.width, c.height / img.height);
+  backdropView.x = (c.width - img.width * backdropView.scale) / 2;
+  backdropView.y = (c.height - img.height * backdropView.scale) / 2;
+}
+
+function drawBackdrop() {
+  const c = els.canvas;
+  const bc = els.backdropCanvas;
+  const img = backdrop.bitmap;
+  if (!img || !c.width) return;
+  if (bc.width !== c.width || bc.height !== c.height) {
+    bc.width = c.width;
+    bc.height = c.height;
+  }
+  const ctx = bc.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, bc.width, bc.height);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, backdropView.x, backdropView.y,
+    img.width * backdropView.scale, img.height * backdropView.scale);
+}
+
+/**
+ * 코드 둘레의 표면 휘도 ↔ 셀 레벨 분리를 실측한다.
+ * 범위 = view 알파가 0(=표면이 그대로 보이는 곳)이면서 **불투명 영역 bbox 를 조금
+ * 넓힌 안쪽**인 픽셀. 코드에서 먼 구석까지 재면 판정이 무의미해진다.
+ */
+function measureBackdrop() {
+  const c = els.canvas;
+  const bc = els.backdropCanvas;
+  if (!backdrop.bitmap || !c.width) return null;
+  const vd = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const bd = bc.getContext('2d').getImageData(0, 0, bc.width, bc.height).data;
+
+  const stride = Math.max(1, Math.round(Math.min(c.width, c.height) / 320));
+  let minX = c.width; let minY = c.height; let maxX = -1; let maxY = -1;
+  for (let y = 0; y < c.height; y += stride) {
+    for (let x = 0; x < c.width; x += stride) {
+      if (vd[(y * c.width + x) * 4 + 3] === 0) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return null;
+  const grow = Math.round(Math.max(maxX - minX, maxY - minY) * 0.08);
+  const x0 = Math.max(0, minX - grow); const x1 = Math.min(c.width - 1, maxX + grow);
+  const y0 = Math.max(0, minY - grow); const y1 = Math.min(c.height - 1, maxY + grow);
+
+  const levelYs = currentLevels().map(relativeLuminance);
+  let minSep = Infinity; let sumY = 0; let n = 0; let below = 0;
+  for (let y = y0; y <= y1; y += stride) {
+    for (let x = x0; x <= x1; x += stride) {
+      const i = (y * c.width + x) * 4;
+      if (vd[i + 3] !== 0) continue; // 코드가 덮은 곳은 표면이 안 보인다
+      const yy = relativeLuminance({ r: bd[i], g: bd[i + 1], b: bd[i + 2] });
+      sumY += yy; n += 1;
+      let sep = Infinity;
+      for (const ly of levelYs) sep = Math.min(sep, Math.abs(ly - yy));
+      if (sep < minSep) minSep = sep;
+      if (sep < BG_SEPARATION_MIN) below += 1;
+    }
+  }
+  if (n === 0) return null;
+  return { minSep, meanY: sumY / n, samples: n, belowRatio: below / n };
+}
+
+/** drawScene 직후에 호출 — 배경 레이어 크기·그리기·판정을 한 번에 맞춘다. */
+function syncBackdropLayer() {
+  syncBackdropUi();
+  if (normalState.bgMode !== 'transparent' || !backdrop.bitmap) {
+    lastBackdropLuminance = null;
+    return;
+  }
+  drawBackdrop();
+  const m = measureBackdrop();
+  if (!m) { els.backdropVerdict.style.display = 'none'; return; }
+  lastBackdropLuminance = m.meanY;
+  const quiet = resolveQuietColor();
+  els.backdropVerdict.style.display = '';
+  if (quiet) {
+    els.backdropVerdict.style.color = 'var(--ok)';
+    els.backdropVerdict.textContent = `안전영역이 코드 둘레를 덮고 있어서 표면 무늬의 영향은 차단돼요 `
+      + `(표면 평균 휘도 ${m.meanY.toFixed(3)}). 안전영역을 '없음'으로 두면 아래 판정이 적용돼요.`;
+    return;
+  }
+  const ok = m.minSep >= BG_SEPARATION_MIN;
+  els.backdropVerdict.style.color = ok ? 'var(--ok)' : 'var(--bad)';
+  els.backdropVerdict.textContent = ok
+    ? `이 자리 괜찮아요 — 코드 둘레 표면과 셀 레벨의 최소 분리 ${m.minSep.toFixed(3)} (계약 ${BG_SEPARATION_MIN} 이상).`
+    : `⚠ 이 자리는 위험해요 — 최소 분리 ${m.minSep.toFixed(3)} 로 계약 ${BG_SEPARATION_MIN} 미만이고, `
+      + `둘레 표본의 ${(m.belowRatio * 100).toFixed(0)}% 가 미달이에요. 위치를 옮기거나 안전영역을 켜세요.`;
+}
+
+els.backdropPick.addEventListener('click', () => els.backdropFile.click());
+els.backdropFile.addEventListener('change', async () => {
+  const file = els.backdropFile.files && els.backdropFile.files[0];
+  els.backdropFile.value = '';
+  if (!file) return;
+  try {
+    backdrop.bitmap = await createImageBitmap(file);
+    backdrop.name = file.name.length > 18 ? `${file.name.slice(0, 16)}…` : file.name;
+    fitBackdrop();
+  } catch (e) {
+    backdrop.bitmap = null;
+    backdrop.name = null;
+    els.error.textContent = `배경 이미지를 못 읽었어요: ${e.message}`;
+  }
+  syncBackdropUi();
+  schedule();
+});
+els.backdropClear.addEventListener('click', () => {
+  backdrop.bitmap = null;
+  backdrop.name = null;
+  lastBackdropLuminance = null;
+  syncBackdropUi();
+  schedule();
+});
+els.backdropFit.addEventListener('click', () => { fitBackdrop(); drawBackdrop(); syncBackdropLayer(); });
+
+// 드래그로 이동 · 휠로 확대/축소 (커서 아래 지점을 고정한 채 줌).
+{
+  let dragging = false;
+  let lastX = 0;
+  let lastY = 0;
+  const active = () => normalState.bgMode === 'transparent' && backdrop.bitmap !== null;
+  /** CSS 픽셀 → 캔버스 픽셀 배율 (미리보기가 축소돼 있어도 이동량이 어긋나지 않게). */
+  const ratio = () => {
+    const rect = els.canvas.getBoundingClientRect();
+    return rect.width > 0 ? els.canvas.width / rect.width : 1;
+  };
+
+  els.canvasWrap.addEventListener('pointerdown', (e) => {
+    if (!active()) return;
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    els.canvasWrap.classList.add('panning');
+    // 포인터 캡처는 실패해도(합성 이벤트·구형 브라우저) 드래그 자체는 살아야 한다.
+    try { els.canvasWrap.setPointerCapture(e.pointerId); } catch { /* 캡처 없이 진행 */ }
+  });
+  els.canvasWrap.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const k = ratio();
+    backdropView.x += (e.clientX - lastX) * k;
+    backdropView.y += (e.clientY - lastY) * k;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    drawBackdrop();
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    els.canvasWrap.classList.remove('panning');
+    try {
+      if (e && e.pointerId !== undefined && els.canvasWrap.hasPointerCapture(e.pointerId)) {
+        els.canvasWrap.releasePointerCapture(e.pointerId);
+      }
+    } catch { /* 캡처가 없었으면 해제할 것도 없다 */ }
+    syncBackdropLayer(); // 이동이 끝난 자리에서만 재판정 (드래그 중 매 프레임 측정은 과하다)
+  };
+  els.canvasWrap.addEventListener('pointerup', endDrag);
+  els.canvasWrap.addEventListener('pointercancel', endDrag);
+
+  let wheelTimer = null;
+  els.canvasWrap.addEventListener('wheel', (e) => {
+    if (!active()) return;
+    e.preventDefault();
+    const rect = els.canvas.getBoundingClientRect();
+    const k = ratio();
+    const cx = (e.clientX - rect.left) * k;
+    const cy = (e.clientY - rect.top) * k;
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    const next = Math.min(20, Math.max(0.05, backdropView.scale * factor));
+    const r = next / backdropView.scale;
+    backdropView.x = cx - (cx - backdropView.x) * r;
+    backdropView.y = cy - (cy - backdropView.y) * r;
+    backdropView.scale = next;
+    drawBackdrop();
+    if (wheelTimer) clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(syncBackdropLayer, 120);
+  }, { passive: false });
+}
+
+syncBackdropUi();
 
 // ── 장식 이미지 (Y+안쪽 — L/R 배제영역 데칼) ─────────────────────────────
 
@@ -1693,7 +2058,7 @@ function renderTypeO(cfg) {
     `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
     `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${deltaMinFor(cfg.presetName).toFixed(3)}<br>` +
     badge;
-  return { type: 'O', encoded, scene, info };
+  return { type: 'O', encoded, scene: withQuietZone(scene), info };
 }
 
 function renderTypeA(cfg) {
@@ -1714,7 +2079,7 @@ function renderTypeA(cfg) {
     `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
     `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${deltaMinFor(cfg.presetName).toFixed(3)}<br>` +
     badge;
-  return { type: 'A', encoded, scene, info };
+  return { type: 'A', encoded, scene: withQuietZone(scene), info };
 }
 
 function renderTypeY(cfg) {
@@ -1746,7 +2111,7 @@ function renderTypeY(cfg) {
     `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
     `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym}<br>` +
     badge;
-  return { type: 'Y', encoded, scene, info };
+  return { type: 'Y', encoded, scene: withQuietZone(scene), info };
 }
 
 function updateGauge(type, encoded, text) {
@@ -1824,6 +2189,8 @@ function render() {
       ctx.setTransform(26 * dpr, 0, 0, 26 * dpr, 0, 0);
       paintDecor(ctx, result.scene, cfg.faceGains);
     }
+    // 배경 레이어는 view 캔버스 크기가 확정된 뒤에 맞춘다 (drawScene 이 width/height 를 정한다).
+    syncBackdropLayer();
     els.info.innerHTML = result.info
       + (keptPayload !== null ? ' <span class="badge bad">용량 초과 — 잘린 채 렌더링</span>' : '');
     updateGauge(result.type, result.encoded, fullText); // 게이지는 원본 분량 기준 (초과 시 빨강)

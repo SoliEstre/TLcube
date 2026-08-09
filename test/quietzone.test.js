@@ -1,0 +1,201 @@
+// quietzone.test.js — 안전영역 도형 생성 (렌더 전용, 데이터 계약 무관)
+
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  convexHull, offsetConvex, clipToRect, clusterShapes, quietZonePolygons, addQuietZone,
+} from '../src/quietzone.js';
+
+const WHITE = { r: 255, g: 255, b: 255 };
+const RED = { r: 200, g: 20, b: 20 };
+
+/** 폴리곤의 부호 없는 넓이 (도형 확대/축소 판정용). */
+function area(poly) {
+  let s = 0;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    s += poly[j].x * poly[i].y - poly[i].x * poly[j].y;
+  }
+  return Math.abs(s) / 2;
+}
+
+const square = (x0, y0, side) => [
+  { x: x0, y: y0 }, { x: x0 + side, y: y0 },
+  { x: x0 + side, y: y0 + side }, { x: x0, y: y0 + side },
+];
+
+describe('convexHull', () => {
+  test('내부 점은 버리고 볼록 껍질만 남긴다', () => {
+    const hull = convexHull([
+      { x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 },
+      { x: 5, y: 5 }, { x: 3, y: 7 }, // 내부 점
+    ]);
+    assert.equal(hull.length, 4);
+    assert.equal(area(hull), 100);
+  });
+
+  test('점 3개 미만이면 입력 그대로 (복사본)', () => {
+    const pts = [{ x: 1, y: 2 }, { x: 3, y: 4 }];
+    const hull = convexHull(pts);
+    assert.deepEqual(hull, pts);
+    assert.notEqual(hull[0], pts[0], '입력 객체를 그대로 돌려주면 호출측 변형에 오염된다');
+  });
+
+  test('결정적 — 입력 순서를 바꿔도 같은 껍질', () => {
+    const pts = [{ x: 0, y: 0 }, { x: 4, y: 1 }, { x: 2, y: 5 }, { x: 1, y: 1 }];
+    const a = convexHull(pts);
+    const b = convexHull([...pts].reverse());
+    assert.deepEqual(new Set(a.map((p) => `${p.x},${p.y}`)), new Set(b.map((p) => `${p.x},${p.y}`)));
+  });
+});
+
+describe('offsetConvex — 마이터 바깥 오프셋', () => {
+  test('정사각형을 d 만큼 밀면 각 변이 정확히 d 만큼 바깥으로 간다', () => {
+    const off = offsetConvex(square(2, 2, 4), 1);
+    const xs = off.map((p) => p.x).sort((a, b) => a - b);
+    const ys = off.map((p) => p.y).sort((a, b) => a - b);
+    assert.deepEqual(xs, [1, 1, 7, 7]);
+    assert.deepEqual(ys, [1, 1, 7, 7]);
+  });
+
+  test('입력 방향(시계/반시계)과 무관하게 항상 바깥으로 간다', () => {
+    const cw = square(2, 2, 4);
+    const ccw = [...cw].reverse();
+    assert.ok(area(offsetConvex(cw, 1)) > area(cw), '시계 입력이 안쪽으로 갔다');
+    assert.ok(area(offsetConvex(ccw, 1)) > area(ccw), '반시계 입력이 안쪽으로 갔다');
+    assert.equal(area(offsetConvex(cw, 1)), area(offsetConvex(ccw, 1)));
+  });
+
+  test('d = 0 이면 그대로', () => {
+    const sq = square(0, 0, 3);
+    assert.deepEqual(offsetConvex(sq, 0), sq);
+  });
+
+  test('예각 꼭짓점은 마이터 한계에서 베벨로 잘린다 (정점 수가 늘어난다)', () => {
+    // 아주 납작한 삼각형 — 꼭짓점 내각이 좁아 마이터가 폭주한다.
+    const sliver = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 2 }];
+    const off = offsetConvex(sliver, 2, 2);
+    assert.ok(off.length > 3, `베벨이 안 걸렸다 (정점 ${off.length})`);
+    assert.ok(area(off) > area(sliver));
+  });
+
+  test('정삼각형(60°)은 기본 마이터 한계(4) 안이라 꼭짓점 3개를 유지한다', () => {
+    const tri = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 8.66 }];
+    assert.equal(offsetConvex(tri, 1).length, 3);
+  });
+});
+
+describe('clipToRect', () => {
+  test('캔버스를 넘는 폴리곤을 캔버스로 자른다', () => {
+    const clipped = clipToRect(square(-2, -2, 14), 10, 10);
+    assert.equal(area(clipped), 100);
+    for (const p of clipped) {
+      assert.ok(p.x >= 0 && p.x <= 10 && p.y >= 0 && p.y <= 10, `클립 밖 좌표 (${p.x},${p.y})`);
+    }
+  });
+
+  test('안에 완전히 들어 있으면 넓이가 보존된다', () => {
+    assert.equal(area(clipToRect(square(2, 2, 4), 10, 10)), 16);
+  });
+});
+
+describe('clusterShapes — 코너 QR 과 코드 본체를 분리한다', () => {
+  const shapes = [
+    // 본체 — 서로 붙어 있는 3개
+    { kind: 'polygon', color: RED, points: square(0, 0, 2) },
+    { kind: 'polygon', color: RED, points: square(2, 0, 2) },
+    { kind: 'polygon', color: RED, points: square(0, 2, 2) },
+    // 멀리 떨어진 QR 블록 1개
+    { kind: 'polygon', color: WHITE, points: square(40, 40, 3) },
+  ];
+
+  test('gap 보다 멀리 떨어진 덩어리는 다른 클러스터가 된다', () => {
+    const clusters = clusterShapes(shapes, 1);
+    assert.equal(clusters.length, 2);
+    const sizes = clusters.map((c) => c.length).sort((a, b) => a - b);
+    assert.deepEqual(sizes, [1, 3]);
+  });
+
+  test('gap 이 충분히 크면 전부 한 덩어리 — 이게 껍질 하나 방식의 실패 모드다', () => {
+    assert.equal(clusterShapes(shapes, 100).length, 1);
+  });
+
+  test('disc 도 외접 사각으로 클러스터에 참여한다', () => {
+    const withDisc = [...shapes, { kind: 'disc', color: RED, cx: 1, cy: 1, r: 1 }];
+    const clusters = clusterShapes(withDisc, 1);
+    assert.equal(clusters.length, 2);
+    assert.equal(Math.max(...clusters.map((c) => c.length)), 4);
+  });
+});
+
+describe('addQuietZone', () => {
+  const scene = () => ({
+    width: 50,
+    height: 50,
+    background: null,
+    shapes: [
+      { kind: 'polygon', color: RED, points: square(5, 5, 10) },
+      { kind: 'polygon', color: WHITE, points: square(38, 38, 6) },
+    ],
+  });
+
+  test('클러스터마다 폴리곤 1개를 shapes **앞**에 꽂는다 (painter 순서상 뒤로 깔린다)', () => {
+    const out = addQuietZone(scene(), { color: WHITE, margin: 2 });
+    assert.equal(out.shapes.length, 4);
+    assert.equal(out.quietZone.count, 2);
+    for (let i = 0; i < 2; i += 1) {
+      assert.deepEqual(out.shapes[i].color, WHITE);
+      assert.equal(out.shapes[i].kind, 'polygon');
+    }
+    // 원본 도형은 순서 그대로 뒤에 남는다.
+    assert.deepEqual(out.shapes.slice(2), scene().shapes);
+  });
+
+  test('입력 scene 을 변형하지 않는다', () => {
+    const s = scene();
+    const before = s.shapes.length;
+    addQuietZone(s, { color: WHITE, margin: 2 });
+    assert.equal(s.shapes.length, before);
+    assert.equal(s.quietZone, undefined);
+  });
+
+  test("color 가 null 이면('없음') 같은 scene 을 그대로 돌려준다", () => {
+    const s = scene();
+    assert.equal(addQuietZone(s, { color: null }), s);
+  });
+
+  test('음수·비유한 margin 은 RangeError', () => {
+    assert.throws(() => addQuietZone(scene(), { color: WHITE, margin: -1 }), RangeError);
+    assert.throws(() => addQuietZone(scene(), { color: WHITE, margin: NaN }), RangeError);
+  });
+
+  test('안전영역은 원 도형보다 넓고 캔버스를 안 넘는다', () => {
+    const out = addQuietZone(scene(), { color: WHITE, margin: 2 });
+    const quiet = out.shapes[0];
+    assert.ok(area(quiet.points) > 100, '10×10 도형을 감싸는데 넓이가 100 이하다');
+    for (const p of quiet.points) {
+      assert.ok(p.x >= -1e-9 && p.x <= 50 + 1e-9, `x=${p.x} 캔버스 밖`);
+      assert.ok(p.y >= -1e-9 && p.y <= 50 + 1e-9, `y=${p.y} 캔버스 밖`);
+    }
+  });
+});
+
+describe('실제 인코더 산출물과의 통합', () => {
+  test('Type Y + 코너 QR — 큐브 후광과 QR 후광이 **따로** 생긴다', async () => {
+    const { encodeY } = await import('../src/encodeY.js');
+    const { buildSceneY } = await import('../src/sceneY.js');
+    const { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const { TL_READER_URL } = await import('../src/qr.js');
+    const p = getPreset('slate');
+    const scene = buildSceneY(encodeY('quiet zone', { version: 0 }), {
+      palette: {
+        background: null, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+      },
+      qrText: TL_READER_URL,
+      qrCorner: 'TL',
+    });
+    const polys = quietZonePolygons(scene, 2);
+    assert.equal(polys.length, 2,
+      '코너 QR 과 코드가 한 덩어리로 묶이면 둘을 잇는 대각선 판때기가 나온다 (실측 확인된 실패 모드)');
+  });
+});
