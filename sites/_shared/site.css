@@ -1,0 +1,139 @@
+/* site.css — tl / tlscan 공용 스타일.
+ *
+ * 생성기(index.html)의 CSS 변수 체계를 그대로 승계한다 — 3사이트가 한 제품으로
+ * 보여야 하기 때문이다. 생성기는 단일 HTML 원칙 때문에 스타일을 인라인으로 갖고
+ * 있고, 이 파일은 나머지 두 사이트가 공유한다.
+ *
+ * 빌드 툴체인 없음 — 그대로 정적 서빙된다.
+ */
+
+:root {
+  --bg: #101218;
+  --panel: #191c26;
+  --line: #2a2f40;
+  --text: #dfe3ee;
+  --dim: #8a91a6;
+  --accent: #7fa3ff;
+  --ok: #7fd8a4;
+  --warn: #e8c56a;
+}
+:root[data-theme="light"] {
+  --bg: #f2f4f8;
+  --panel: #ffffff;
+  --line: #d4d9e4;
+  --text: #23293a;
+  --dim: #6a7185;
+  --accent: #3d6ae0;
+  --ok: #1f9d5f;
+  --warn: #a8791a;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --bg: #f2f4f8;
+    --panel: #ffffff;
+    --line: #d4d9e4;
+    --text: #23293a;
+    --dim: #6a7185;
+    --accent: #3d6ae0;
+    --ok: #1f9d5f;
+    --warn: #a8791a;
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  padding: 0 20px;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.7 system-ui, -apple-system, "Segoe UI", "Noto Sans KR", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 920px; margin: 0 auto; }
+
+/* ── 상단 바 ─────────────────────────────────────────────── */
+header.bar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 18px 0; border-bottom: 1px solid var(--line);
+}
+.brand { font-size: 19px; font-weight: 700; letter-spacing: -.2px; text-decoration: none; color: var(--text); }
+.brand .mark { color: var(--accent); }
+.bar nav { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.bar nav a {
+  padding: 6px 12px; border-radius: 8px; text-decoration: none;
+  color: var(--dim); font-size: 13px; border: 1px solid transparent;
+}
+.bar nav a:hover { color: var(--text); border-color: var(--line); }
+.bar nav a[aria-current="page"] { color: var(--text); background: var(--panel); border-color: var(--line); }
+
+/* ── 섹션 ───────────────────────────────────────────────── */
+section { padding: 42px 0; border-bottom: 1px solid var(--line); }
+section:last-of-type { border-bottom: none; }
+h1 { font-size: clamp(26px, 5vw, 40px); line-height: 1.25; margin: 0 0 14px; letter-spacing: -.5px; }
+h2 { font-size: 20px; margin: 0 0 12px; letter-spacing: -.2px; }
+h3 { font-size: 15px; margin: 0 0 6px; }
+p { margin: 0 0 12px; }
+.lead { font-size: 16px; color: var(--dim); max-width: 62ch; }
+.dim { color: var(--dim); }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .92em; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 4px; padding: 1px 5px;
+}
+
+/* ── 버튼 ───────────────────────────────────────────────── */
+.cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+.btn {
+  display: inline-block; padding: 11px 20px; border-radius: 10px;
+  text-decoration: none; font-weight: 600; font-size: 14px;
+  border: 1px solid var(--line); color: var(--text); background: var(--panel);
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #0c1220; }
+.btn.primary:hover { filter: brightness(1.08); }
+
+/* ── 카드 ───────────────────────────────────────────────── */
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 18px;
+}
+/* 타입별로 실루엣 비율이 달라(큐브는 세로로 김) 그대로 두면 카드 높이가 어긋난다.
+   정사각 박스에 contain 으로 맞춰 세 장을 같은 리듬으로 세운다. */
+.card img {
+  display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: contain;
+  border-radius: 8px; margin-bottom: 14px; background: #101218; padding: 10px;
+}
+.card { display: flex; flex-direction: column; }
+.card .meta { margin-top: auto; padding-top: 8px; }
+.card .meta { color: var(--dim); font-size: 12.5px; margin-top: 8px; }
+.badge {
+  display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px;
+  border: 1px solid var(--line); color: var(--dim);
+}
+.badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+
+/* ── 표 ─────────────────────────────────────────────────── */
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--dim); font-weight: 600; }
+
+/* ── 푸터 ───────────────────────────────────────────────── */
+footer {
+  padding: 30px 0 40px; color: var(--dim); font-size: 12px; text-align: center;
+  border-top: 1px solid var(--line);
+}
+footer .links { margin-bottom: 10px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+footer a { color: var(--dim); }
+footer .copyright { display: block; margin-top: 6px; font-size: 11px; opacity: .8; }
+
+/* ── 테마 토글 ──────────────────────────────────────────── */
+.theme-toggle { display: flex; gap: 2px; padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.theme-toggle button {
+  padding: 3px 9px; font-size: 11px; border: none; border-radius: 6px;
+  background: transparent; color: var(--dim); cursor: pointer; font-family: inherit;
+}
+.theme-toggle button.active { background: var(--line); color: var(--text); }

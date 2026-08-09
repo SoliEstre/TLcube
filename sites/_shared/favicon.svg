@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="TLcube">
+  <!-- 아이소메트릭 큐브 3면 = 이 포맷의 셀 한 개. 색은 slate 프리셋의 세 레벨을
+       그대로 쓴다 (rank 2 / 1 / 0) — 파비콘도 "휘도 순서"를 보여준다. -->
+  <polygon points="16,3 29,10.5 16,18 3,10.5" fill="#dce4f0"/>
+  <polygon points="3,10.5 16,18 16,29 3,21.5" fill="#6e87be"/>
+  <polygon points="29,10.5 16,18 16,29 29,21.5" fill="#3a446c"/>
+</svg>

@@ -95,7 +95,13 @@
     min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   header .spacer { flex: 1; }
-  header .mode-switch, header .theme-toggle { flex-shrink: 0; }
+  header .mode-switch, header .theme-toggle, header .site-nav { flex-shrink: 0; }
+  .site-nav { display: flex; gap: 2px; }
+  .site-nav a {
+    padding: 4px 10px; border-radius: 8px; font-size: 12px;
+    color: var(--dim); text-decoration: none; border: 1px solid transparent;
+  }
+  .site-nav a:hover { color: var(--text); border-color: var(--line); }
   .mode-switch button, .theme-toggle button { white-space: nowrap; }
   main {
     /* max-width 1080 → 1840: 화면이 넓어지면 미리보기 열이 함께 넓어진다 (반응형 개선). */
@@ -300,6 +306,11 @@
   <h1>TrilLuminance <span style="color:var(--accent)">/ TLcube</span></h1>
   <span class="sub">3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰</span>
   <span class="spacer"></span>
+  <!-- 3사이트 크로스링크 (PM/008 §1) — 절대 URL 이라 file:// 단일 파일에서도 동작한다. -->
+  <nav class="site-nav">
+    <a href="https://tl.estre.so">소개</a>
+    <a href="https://tlscan.estre.so">스캐너</a>
+  </nav>
   <div class="mode-switch" id="modeSwitch">
     <button type="button" id="modeNormalBtn" class="active">일반</button>
     <button type="button" id="modeAdvancedBtn">고급</button>

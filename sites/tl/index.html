@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko" prefix="og: https://ogp.me/ns#">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TLcube — 휘도 순위로 데이터를 싣는 2.5D 시각 코드</title>
+<meta name="description" content="육각 셀을 마름모 3면으로 나누고, 세 면의 상대 휘도 순서에 데이터를 싣는 오픈 시각 코드. 스펙과 레퍼런스 구현은 Apache-2.0 으로 공개돼 있습니다.">
+<link rel="canonical" href="https://tl.estre.so/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="TLcube — 휘도 순위로 데이터를 싣는 2.5D 시각 코드">
+<meta property="og:description" content="절대 밝기가 아니라 세 면의 순서에 데이터를 싣습니다. 조명이 흔들려도 순서만 지켜지면 살아남아요.">
+<meta property="og:url" content="https://tl.estre.so/">
+<meta property="og:image" content="https://tl.estre.so/assets/type-Y.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../_shared/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../_shared/site.css">
+</head>
+<body data-site="hub">
+<div class="wrap">
+
+  <header class="bar">
+    <a class="brand" href="/">TL<span class="mark">cube</span></a>
+    <nav>
+      <a href="#what">무엇인가</a>
+      <a href="#types">타입</a>
+      <a href="#spec">스펙</a>
+      <a href="https://tlcube.estre.so" data-out="tlcube">생성기</a>
+      <a href="https://tlscan.estre.so" data-out="tlscan">스캐너</a>
+      <div class="theme-toggle" role="group" aria-label="테마">
+        <button type="button" data-theme-choice="auto">자동</button>
+        <button type="button" data-theme-choice="light">라이트</button>
+        <button type="button" data-theme-choice="dark">다크</button>
+      </div>
+    </nav>
+  </header>
+
+  <section id="hero">
+    <h1>절대 밝기가 아니라<br><strong>순서</strong>에 데이터를 싣습니다</h1>
+    <p class="lead">
+      육각 셀 하나를 마름모 3면으로 나누고, 세 면의 <strong>상대 휘도 순서</strong>(3! = 6가지)를
+      심볼 하나로 씁니다. 절대값이 아니라 순서라서 인쇄 톤 커브나 조명이 흔들려도
+      순서만 지켜지면 값이 살아남고 — 그렇게 그리면 아이소메트릭 큐브가 됩니다.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://tlcube.estre.so" data-out="tlcube">코드 만들어보기</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+  </section>
+
+  <section id="types">
+    <h2>타입 3종</h2>
+    <p class="dim">같은 데이터 계약을 공유하고 실루엣만 다릅니다. 아래 코드에는 전부 <code>https://tl.estre.so</code> 가 들어 있어요.</p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card">
+        <img src="assets/type-Y.png" alt="Type Y — 단일 아이소메트릭 큐브 형태의 TLcube 코드. 좌상단에 폴백 QR 이 함께 인쇄돼 있다.">
+        <h3>Type Y — 단일 큐브</h3>
+        <p class="dim">세 면이 각각 n×n 격자. 한 덩어리라 간판·굿즈에 어울립니다.</p>
+        <div class="meta">n = 13 / 21 / 25 · 순 페이로드 31 / 98 / 141 B</div>
+      </div>
+      <div class="card">
+        <img src="assets/type-O.png" alt="Type O — 육각 필드 형태의 TLcube 코드. 중앙에 폴백 QR 이 배치돼 있다.">
+        <h3>Type O — 육각 필드</h3>
+        <p class="dim">가장 기본형. 중앙 파인더를 중심으로 마름모 셀이 깔립니다.</p>
+        <div class="meta">k = 6 / 8 / 10 · 순 페이로드 18 / 39 / 65 B</div>
+      </div>
+      <div class="card">
+        <img src="assets/type-A.png" alt="Type A — 삼각 실루엣 형태의 TLcube 코드. 중앙에 폴백 QR 이 배치돼 있다.">
+        <h3>Type A — 삼각 실루엣</h3>
+        <p class="dim">육각 코어에 코너 패치를 더해 정삼각형이 됩니다.</p>
+        <div class="meta">k = 6 / 8 / 10 · 순 페이로드 31 / 62 / 101 B</div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:16px">
+      순 페이로드는 ECC-M 기준이에요. 세 타입 모두 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있어서,
+      TL 코드를 못 읽는 환경에서도 최소한의 경로가 남습니다.
+    </p>
+  </section>
+
+  <section id="what">
+    <h2>어떻게 동작하나</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>1. 셀 = 마름모 3면</h3>
+        <p class="dim">육각 셀을 rhombille 타일링으로 T·L·R 세 면으로 나눕니다.</p>
+      </div>
+      <div class="card">
+        <h3>2. 순서 = 심볼</h3>
+        <p class="dim">세 면의 휘도에 순위를 매기면 3! = 6가지 — base-6 digit 하나입니다.</p>
+      </div>
+      <div class="card">
+        <h3>3. 3 digit = 1 심볼</h3>
+        <p class="dim">GF(211) 소수체 위의 Reed–Solomon 으로 오류를 정정합니다.</p>
+      </div>
+    </div>
+    <h2 style="margin-top:32px">왜 이렇게 만들었나</h2>
+    <p class="lead">
+      <strong>단조 변환에 불변합니다.</strong> 전역 조명 변화·감마·프린터 톤 매핑처럼
+      단조 증가하는 톤 변형은 순서를 바꾸지 못합니다. 순서만 보존되면 값이 삽니다.
+    </p>
+    <p class="lead">
+      <strong>렌더러가 자유롭습니다.</strong> 데이터 계약이 "면 사이의 순서 + 최소 분리폭" 뿐이라,
+      그 안에서 색·질감·면 그라데이션·애니메이션이 전부 열려 있습니다.
+      그 자유도가 이 포맷의 핵심이에요.
+    </p>
+    <p class="lead">
+      <strong>대신 밀도는 포기했습니다.</strong> 마름모 셀은 정사각 모듈보다 면적 효율이 불리합니다.
+      이 포맷은 밀도 경쟁을 하지 않아요. QR 을 대체하려는 게 아니라 옆자리를 하나 만드는 겁니다.
+    </p>
+  </section>
+
+  <section id="spec">
+    <h2>스펙과 구현</h2>
+    <p class="lead">
+      포맷 스펙과 레퍼런스 구현은 <strong>Apache License 2.0</strong> 으로 공개돼 있습니다.
+      바닐라 JavaScript, 빌드 툴체인 없음, 런타임 의존성 0 — 단일 HTML 파일로 동작합니다.
+    </p>
+    <p class="lead">
+      <strong>디코더만 구현해도 적합 구현</strong>입니다. 확산은 읽는 쪽부터 시작하니까요.
+    </p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">포맷 스펙 읽기</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">레퍼런스 구현</a>
+    </div>
+    <div class="table-scroll" style="margin-top:24px">
+      <table>
+        <thead><tr><th>사이트</th><th>역할</th><th>상태</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://tlcube.estre.so" data-out="tlcube">tlcube.estre.so</a></td><td>생성기</td><td><span class="badge ok">동작</span></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" data-out="tlscan">tlscan.estre.so</a></td><td>스캐너</td><td><span class="badge warn">준비 중</span></td></tr>
+          <tr><td>tl.estre.so</td><td>소개 허브</td><td><span class="badge ok">여기</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a href="https://tlcube.estre.so" data-out="tlcube">생성기</a>
+      <a href="https://tlscan.estre.so" data-out="tlscan">스캐너</a>
+      <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+    <div>QR Code is a registered trademark of DENSO WAVE INCORPORATED.</div>
+    <small class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume</small>
+  </footer>
+
+</div>
+<script src="../_shared/site.js"></script>
+</body>
+</html>
