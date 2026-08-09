@@ -511,12 +511,22 @@
       <!-- Y + 안쪽 전용: 좌/우 면 배제영역 장식 이미지 (렌더 자유구역 — 데이터 계약 무관.
            사용자 지시 2026-08-09). -->
       <div id="decorSection" style="display:none">
-        <label>장식 이미지 (좌/우 빈 면 — β)</label>
+        <label>장식 이미지 (좌/우 빈 면 각각 — β)</label>
         <div class="row">
-          <button id="decorPick" type="button">이미지 선택…</button>
-          <button id="decorClear" type="button" style="display:none">제거</button>
+          <div class="export-pair" style="flex:1">
+            <button id="decorPickL" type="button">좌측 선택…</button>
+            <button id="decorClearL" type="button" class="icon-btn" title="좌측 이미지 제거" style="display:none">✕</button>
+          </div>
+          <div class="export-pair" style="flex:1">
+            <button id="decorPickR" type="button">우측 선택…</button>
+            <button id="decorClearR" type="button" class="icon-btn" title="우측 이미지 제거" style="display:none">✕</button>
+          </div>
         </div>
-        <input type="file" id="decorFile" accept="image/*" style="display:none">
+        <div class="row" style="margin-top:6px">
+          <button id="decorSwap" type="button" style="display:none">좌우 ⇄ 교환</button>
+        </div>
+        <input type="file" id="decorFileL" accept="image/*" style="display:none">
+        <input type="file" id="decorFileR" accept="image/*" style="display:none">
         <p class="hint">Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).
           렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.</p>
       </div>
@@ -591,8 +601,10 @@ const els = {
   qrUrl: $('qrUrl'),
   // 공용 컨트롤 (QR 위치 6택 + 병행 표시 + 게이지 + 장식 이미지)
   cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
-  decorSection: $('decorSection'), decorPick: $('decorPick'), decorClear: $('decorClear'),
-  decorFile: $('decorFile'),
+  decorSection: $('decorSection'),
+  decorPickL: $('decorPickL'), decorPickR: $('decorPickR'),
+  decorClearL: $('decorClearL'), decorClearR: $('decorClearR'),
+  decorFileL: $('decorFileL'), decorFileR: $('decorFileR'), decorSwap: $('decorSwap'),
   eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
@@ -619,8 +631,9 @@ const normalState = {
   eccTier: 'auto',
 };
 
-/** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). {bitmap, dataUrl, name} | null */
-let decor = null;
+/** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). 면별 슬롯
+ *  (사용자 지시 2026-08-09: 좌/우 각각 + 교환). 각 원소 {bitmap, dataUrl, name} | null */
+const decor = { L: null, R: null };
 
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
 let current = null;
@@ -915,15 +928,17 @@ for (const card of els.eccTierCards.children) {
 
 // ── 장식 이미지 (Y+안쪽 — L/R 배제영역 데칼) ─────────────────────────────
 
-els.decorPick.addEventListener('click', () => els.decorFile.click());
-els.decorClear.addEventListener('click', () => {
-  decor = null;
-  els.decorFile.value = '';
-  els.decorClear.style.display = 'none';
-  schedule();
-});
-els.decorFile.addEventListener('change', async () => {
-  const file = els.decorFile.files && els.decorFile.files[0];
+function syncDecorUi() {
+  const shortName = (d) => (d.name.length > 14 ? `${d.name.slice(0, 13)}…` : d.name);
+  els.decorPickL.textContent = decor.L ? `좌: ${shortName(decor.L)}` : '좌측 선택…';
+  els.decorPickR.textContent = decor.R ? `우: ${shortName(decor.R)}` : '우측 선택…';
+  els.decorClearL.style.display = decor.L ? '' : 'none';
+  els.decorClearR.style.display = decor.R ? '' : 'none';
+  els.decorSwap.style.display = (decor.L || decor.R) ? '' : 'none';
+}
+
+async function loadDecorFile(input, face) {
+  const file = input.files && input.files[0];
   if (!file) return;
   try {
     const [bitmap, dataUrl] = await Promise.all([
@@ -935,17 +950,42 @@ els.decorFile.addEventListener('change', async () => {
         r.readAsDataURL(file);
       }),
     ]);
-    decor = { bitmap, dataUrl, name: file.name };
-    els.decorClear.style.display = '';
+    decor[face] = { bitmap, dataUrl, name: file.name };
+    syncDecorUi();
     schedule();
   } catch (e) {
     els.error.textContent = `장식 이미지를 읽지 못했어요: ${e && e.message ? e.message : e}`;
   }
+}
+
+els.decorPickL.addEventListener('click', () => els.decorFileL.click());
+els.decorPickR.addEventListener('click', () => els.decorFileR.click());
+els.decorFileL.addEventListener('change', () => loadDecorFile(els.decorFileL, 'L'));
+els.decorFileR.addEventListener('change', () => loadDecorFile(els.decorFileR, 'R'));
+els.decorClearL.addEventListener('click', () => {
+  decor.L = null;
+  els.decorFileL.value = '';
+  syncDecorUi();
+  schedule();
+});
+els.decorClearR.addEventListener('click', () => {
+  decor.R = null;
+  els.decorFileR.value = '';
+  syncDecorUi();
+  schedule();
+});
+els.decorSwap.addEventListener('click', () => {
+  const t = decor.L;
+  decor.L = decor.R;
+  decor.R = t;
+  syncDecorUi();
+  schedule();
 });
 
-/** 장식이 실제로 그려지는 구성인가 — Y + 윈도 β + 이미지 선택됨. */
+/** 장식이 실제로 그려지는 구성인가 — Y + 윈도 β + 이미지 1개 이상 선택됨. */
 function decorActive(result) {
-  return decor !== null && result && result.type === 'Y' && result.encoded.window === true;
+  return (decor.L !== null || decor.R !== null)
+    && result && result.type === 'Y' && result.encoded.window === true;
 }
 
 /** L/R 윈도 사각 (scene 좌표) — sceneY.js 필러와 동일 기하 (n=25 고정, Y2W 전용). */
@@ -997,6 +1037,8 @@ function decorFrame(quad) {
  *  면 게인 multiply 셰이딩 (셀·필러와 같은 조명 정합). */
 function paintDecor(ctx, scene, faceGains) {
   for (const { face, quad } of decorQuads(scene)) {
+    const d = decor[face];
+    if (!d) continue; // 그 면 슬롯이 비면 필러 톤이 그대로 보인다.
     const { origin, u, v } = decorFrame(quad);
     ctx.save();
     ctx.beginPath();
@@ -1005,7 +1047,7 @@ function paintDecor(ctx, scene, faceGains) {
     ctx.closePath();
     ctx.clip();
     ctx.transform(u.x, u.y, v.x, v.y, origin.x, origin.y);
-    ctx.drawImage(decor.bitmap, 0, 0, decor.bitmap.width, decor.bitmap.height, 0, 0, 1, 1);
+    ctx.drawImage(d.bitmap, 0, 0, d.bitmap.width, d.bitmap.height, 0, 0, 1, 1);
     const g = Math.round(((faceGains && faceGains[face]) === undefined ? 1 : faceGains[face]) * 255);
     ctx.globalCompositeOperation = 'multiply';
     ctx.fillStyle = `rgb(${g},${g},${g})`;
@@ -1019,12 +1061,14 @@ function paintDecor(ctx, scene, faceGains) {
 function decorSvgFragment(scene, faceGains) {
   let frag = '';
   decorQuads(scene).forEach(({ face, quad }, i) => {
+    const d = decor[face];
+    if (!d) return;
     const pts = quad.map((p) => `${p.x},${p.y}`).join(' ');
     const { origin, u, v } = decorFrame(quad);
     const gain = (faceGains && faceGains[face]) === undefined ? 1 : faceGains[face];
     frag += `<clipPath id="tlDecor${i}"><polygon points="${pts}"/></clipPath>`
       + `<g clip-path="url(#tlDecor${i})">`
-      + `<image href="${decor.dataUrl}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" `
+      + `<image href="${d.dataUrl}" x="0" y="0" width="1" height="1" preserveAspectRatio="none" `
       + `transform="matrix(${u.x} ${u.y} ${v.x} ${v.y} ${origin.x} ${origin.y})"/>`
       + `<polygon points="${pts}" fill="#000" opacity="${(1 - gain).toFixed(4)}"/></g>`;
   });
