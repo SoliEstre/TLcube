@@ -62,6 +62,16 @@
     } catch { return ''; }
   }
 
+  /** UA 힌트 — 문자열 파싱을 하지 않는다. 없으면 빈 값으로 두고 컬럼 기본값에 맡긴다. */
+  const uad = navigator.userAgentData;
+  const uaBrowser = (() => {
+    const brands = uad && uad.brands;
+    if (!brands) return '';
+    const b = brands.find((x) => !/Not.?A.?Brand/i.test(x.brand));
+    return b ? b.brand : '';
+  })();
+  const uaOs = (uad && uad.platform) || '';
+
   function send(event, props) {
     if (!navigator.sendBeacon) return;
     const row = {
@@ -70,8 +80,14 @@
       ts: new Date().toISOString().replace('T', ' ').replace('Z', ''),
       path: location.pathname,
       ref: refDomain(),
+      ua_browser: uaBrowser,
+      ua_os: uaOs,
       session,
-      props: props ? JSON.stringify(props) : '',
+      // ⚠ props 컬럼은 Map(String, String) 이다 — JSON **객체**로 보내야 하고
+      //   문자열로 보내면 JSONEachRow 파싱이 실패한다. 값도 전부 문자열로 맞춘다.
+      props: props
+        ? Object.fromEntries(Object.entries(props).map(([k, v]) => [k, String(v)]))
+        : {},
     };
     try {
       navigator.sendBeacon(ENDPOINT, new Blob([`${JSON.stringify(row)}\n`], { type: 'text/plain' }));

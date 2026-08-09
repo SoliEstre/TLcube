@@ -18,51 +18,7 @@ node tools/build-single.mjs      # dist/trilume.html 갱신 (생성기)
 
 정적 서빙이라 그 외 빌드 단계가 없다. `sites/` 를 그대로 올리고, 생성기는 `dist/trilume.html` 을 `tlcube.estre.so` 의 `index.html` 로 두면 된다.
 
-### Nginx 예시
-
-```nginx
-# ── 소개 허브 + 수집 엔드포인트 ──────────────────────────────
-server {
-    server_name tl.estre.so;
-    root /srv/tlcube/sites/tl;
-    index index.html;
-
-    # _shared 는 문서 루트 밖이므로 별도 alias
-    location /_shared/ { alias /srv/tlcube/sites/_shared/; }
-
-    # 수집 엔드포인트 — 경로에 analytics/collect/track/event 를 쓰지 않는다
-    # (광고차단 필터가 그 단어를 경로 패턴으로 잡는다)
-    location = /i {
-        if ($request_method != POST) { return 405; }
-
-        add_header Access-Control-Allow-Origin "$http_origin" always;
-        add_header Vary Origin always;
-
-        access_log off;
-
-        # INSERT 쿼리를 **서버 설정에 고정**한다 — 클라이언트는 JSONEachRow 본문만
-        # 보낼 수 있고 임의 SQL 은 원천 차단된다.
-        proxy_set_header X-ClickHouse-User     "$TL_CH_USER";
-        proxy_set_header X-ClickHouse-Key      "$TL_CH_KEY";
-        proxy_pass http://127.0.0.1:8123/?async_insert=1&wait_for_async_insert=0&query=INSERT%20INTO%20tl_analytics.events%20FORMAT%20JSONEachRow;
-    }
-}
-
-# ── 생성기 ──────────────────────────────────────────────────
-server {
-    server_name tlcube.estre.so;
-    root /srv/tlcube/dist;
-    location / { try_files /trilume.html =404; }
-}
-
-# ── 스캐너 ──────────────────────────────────────────────────
-server {
-    server_name tlscan.estre.so;
-    root /srv/tlcube/sites/tlscan;
-    index index.html;
-    location /_shared/ { alias /srv/tlcube/sites/_shared/; }
-}
-```
+**Nginx·ClickHouse 설정과 절차는 [`deploy/`](../deploy/) 에 실제 파일로 있다** — `deploy/nginx.conf` · `deploy/clickhouse-init.sql` · `deploy/README.md`.
 
 ⚠ **ClickHouse 는 `127.0.0.1` 에만 바인딩한다.** 8123 을 외부에 여는 것은 반복되는 사고 패턴이다 — INSERT-only 사용자여도 자격증명이 클라이언트로 나가는 구조 자체가 결격이다. 자격증명은 Nginx 가 주입하고, 클라이언트는 본문만 보낸다.
 
