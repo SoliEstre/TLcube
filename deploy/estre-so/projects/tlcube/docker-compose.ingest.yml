@@ -1,0 +1,54 @@
+# TLcube 사용 이벤트 수집(/i) — **선택 기능**. 이 파일을 안 올리면 수집만 없고 사이트는 정상이다.
+#
+# 왜 사이트 컨테이너에 안 넣고 분리했나:
+#   nginx 는 `proxy_pass http://clickhouse:8123` 의 호스트명을 **기동 시점에** 해석한다.
+#   ClickHouse 가 안 떠 있으면 `host not found in upstream` 으로 컨테이너 자체가 안 올라온다.
+#   같은 컨테이너에서 정적 서빙까지 했다면 선택 기능 하나가 tl.estre.so 를 통째로 죽이는
+#   구조가 된다 — "ClickHouse 없어도 사이트는 정상 동작한다" 가 코드 레벨에서 거짓이 된다.
+#   분리하면 선택성이 주석이 아니라 **구조**가 된다.
+#
+# 선행조건: shared/clickhouse 가 떠 있고 DB·유저가 준비돼 있을 것
+#           (deploy/estre-so/clickhouse/001_tlcube_provisioning.sql).
+#
+# 올리기 (수집까지 쓸 때만):
+#   docker compose --env-file ~/.secrets/estre.so.env \
+#     -f compose.yml \
+#     -f projects/tlcube/docker-compose.yml \
+#     -f projects/tlcube/docker-compose.ingest.yml up -d
+
+services:
+  tlcube-ingest:
+    image: nginx:alpine
+    restart: unless-stopped
+    environment:
+      # 템플릿 치환 대상을 TL_CH_ 접두사로 **좁힌다**. 필터가 없으면 envsubst 가 conf 안의
+      #   $request_method · $http_origin · $binary_remote_addr 같은 **nginx 변수까지**
+      #   후보로 삼는다. 지금은 동명 환경변수가 없어 우연히 무사하지만, 우연에 기대지 않는다.
+      NGINX_ENVSUBST_FILTER: "^TL_CH_"
+      TL_CH_USER: ${TLCUBE_INGEST_USER:-tlcube_ingest}
+      TL_CH_PASSWORD: ${TLCUBE_INGEST_PASSWORD:?TLCUBE_INGEST_PASSWORD 미설정 — ~/.secrets/estre.so.env 에 넣으세요}
+    volumes:
+      - ${TLCUBE_SRC:-/srv/tlcube}/deploy/estre-so/projects/tlcube/ingest.conf.template:/etc/nginx/templates/default.conf.template:ro
+    networks:
+      # 공개면(edge)과 내부 analytics 를 둘 다 갖는다. 브라우저는 edge 로 들어오고,
+      #   ClickHouse 호출은 analytics 안에서만 일어난다 — 8123 은 인터넷에 열리지 않는다.
+      - edge
+      - analytics
+    labels:
+      traefik.enable: "true"
+      # Host 만 쓰는 사이트 라우터보다 **더 구체적**이라 Traefik 규칙 우선순위상 이쪽이
+      #   /i 를 가져간다. 다만 우선순위를 자동 계산(규칙 길이)에 맡기지 않고 못 박는다 —
+      #   자동값에 의존하면 나중에 사이트 라우터 규칙이 길어질 때 조용히 뒤집힌다.
+      traefik.http.routers.tlcube-ingest.rule: "Host(`tl.${ROOT_DOMAIN}`) && Path(`/i`)"
+      traefik.http.routers.tlcube-ingest.priority: "100"
+      traefik.http.routers.tlcube-ingest.entrypoints: websecure
+      traefik.http.routers.tlcube-ingest.tls: "true"
+      traefik.http.services.tlcube-ingest.loadbalancer.server.port: "80"
+
+networks:
+  edge:
+    external: true
+    name: edge
+  analytics:
+    external: true
+    name: analytics

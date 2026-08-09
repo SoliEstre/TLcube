@@ -1,0 +1,39 @@
+# 수집 엔드포인트 conf — nginx:alpine 의 템플릿 기구가 기동 시 ${TL_CH_*} 를 채워
+# /etc/nginx/conf.d/default.conf 로 렌더한다. 자격증명이 이미지에도 저장소에도 남지 않는다.
+#
+# ⚠ 치환 대상은 compose 의 NGINX_ENVSUBST_FILTER=^TL_CH_ 로 좁혀 두었다. 그게 없으면
+#   아래 $request_method · $http_origin · $binary_remote_addr 같은 **nginx 변수**까지
+#   치환 후보가 된다.
+#
+# conf.d 는 http{} 안으로 include 되므로 여기 최상위는 http 레벨이다 — limit_req_zone 이
+#   여기 올 수 있는 이유다.
+
+limit_req_zone $binary_remote_addr zone=tl_ingest:10m rate=10r/s;
+
+server {
+    listen 80 default_server;
+
+    # Traefik 이 Path(`/i`) 로만 이 컨테이너에 보내지만, 컨테이너를 직접 찌르는 경로가
+    #   생겨도 다른 건 안 열리도록 여기서도 좁힌다.
+    location = /i {
+        if ($request_method = OPTIONS) { return 204; }
+        if ($request_method != POST)   { return 405; }
+
+        limit_req zone=tl_ingest burst=20 nodelay;
+        client_max_body_size 8k;
+        access_log off;
+
+        add_header Access-Control-Allow-Origin "$http_origin" always;
+        add_header Vary Origin always;
+
+        # INSERT 쿼리를 **서버 설정에 고정**한다. 클라이언트는 JSONEachRow 본문만 보낼 수
+        #   있고 임의 SQL 은 원천 차단된다. 자격증명은 여기서 주입되고 브라우저로 나가지 않는다.
+        # async_insert=1 이 서버측에서 배칭하고, wait_for_async_insert=0 이라 브라우저
+        #   연결을 잡아두지 않는다 (비콘은 응답을 안 본다).
+        proxy_set_header X-ClickHouse-User ${TL_CH_USER};
+        proxy_set_header X-ClickHouse-Key  ${TL_CH_PASSWORD};
+        proxy_pass http://clickhouse:8123/?async_insert=1&wait_for_async_insert=0&query=INSERT%20INTO%20tlcube.events%20FORMAT%20JSONEachRow;
+    }
+
+    location / { return 404; }
+}

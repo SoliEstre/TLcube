@@ -1,0 +1,83 @@
+# TLcube 3사이트 — estre.so 공용 호스트(Docker + Traefik)용 패키지.
+#
+# 이 호스트는 Traefik 이 80/443 을 컨테이너로 점유한다. 시스템 nginx 를 같은 포트에 올리면
+#   포트 충돌로 **기존 서비스가 전부 죽는다**. 그래서 `deploy/nginx.conf`(시스템 nginx +
+#   certbot 판)는 이 호스트에서 쓰지 않는다 — 그쪽은 단독 호스팅용이다.
+#
+# 인증서: certresolver 를 쓰지 않는다. `*.estre.so` 와일드카드가 이미 이 호스트들을 덮고,
+#   여기서 다시 요청하면 서브도메인 이름이 CT 로그에 개별로 남는다 — 그 노출을 피하는 게
+#   공용 compose.yml 의 설계 의도다.
+#
+# HTTP→HTTPS 리다이렉트도 달지 않는다. 엔트리포인트에서 전역으로 한 번 처리된다.
+#
+# 콘텐츠는 이 저장소를 호스트에 clone 해서 bind mount 한다. 전부 정적 파일이고
+#   dist/trilume.html 이 커밋돼 있어 **빌드 단계도 Node 도 없다**.
+#     git clone https://github.com/SoliEstre/TLcube /srv/tlcube
+#   다른 경로에 두려면 TLCUBE_SRC 로 덮어쓴다.
+#   갱신은 `git -C /srv/tlcube pull` 만으로 끝난다 (bind mount 라 재기동 불필요).
+#
+# 올리기 (승인 뒤, 사람/main):
+#   docker compose --env-file ~/.secrets/estre.so.env \
+#     -f compose.yml -f projects/tlcube/docker-compose.yml up -d
+#
+# 수집(/i)은 **이 파일에 없다** — 선택 기능이고, ClickHouse 가 없을 때 사이트까지 같이
+#   죽는 걸 막으려고 docker-compose.ingest.yml 로 분리했다. 이유는 그 파일 주석 참고.
+
+services:
+  # ── 소개 허브 ──────────────────────────────────────────────────────────
+  tlcube-hub:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ${TLCUBE_SRC:-/srv/tlcube}/sites/tl:/usr/share/nginx/html:ro
+      # _shared 를 문서 루트 **안쪽에** 마운트한다. 시스템 nginx 판은 문서 루트 밖이라
+      #   alias 지시자가 필요했는데, 컨테이너에선 마운트 지점을 고르면 그만이다.
+      - ${TLCUBE_SRC:-/srv/tlcube}/sites/_shared:/usr/share/nginx/html/_shared:ro
+      - ${TLCUBE_SRC:-/srv/tlcube}/deploy/estre-so/projects/tlcube/static.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.tlcube-hub.rule: "Host(`tl.${ROOT_DOMAIN}`)"
+      traefik.http.routers.tlcube-hub.entrypoints: websecure
+      traefik.http.routers.tlcube-hub.tls: "true"
+      traefik.http.services.tlcube-hub.loadbalancer.server.port: "80"
+
+  # ── 생성기 (단일 파일 산출물) ──────────────────────────────────────────
+  tlcube-gen:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      # 파일 하나를 index.html 로 직접 얹는다. try_files 도 커스텀 conf 도 필요 없다.
+      - ${TLCUBE_SRC:-/srv/tlcube}/dist/trilume.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.tlcube-gen.rule: "Host(`tlcube.${ROOT_DOMAIN}`)"
+      traefik.http.routers.tlcube-gen.entrypoints: websecure
+      traefik.http.routers.tlcube-gen.tls: "true"
+      traefik.http.services.tlcube-gen.loadbalancer.server.port: "80"
+
+  # ── 스캐너 ─────────────────────────────────────────────────────────────
+  # 폴백 QR 의 목적지 도메인이다. 이 호스트가 떠야 실기기 스캔 동선이 닫힌다.
+  tlcube-scan:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ${TLCUBE_SRC:-/srv/tlcube}/sites/tlscan:/usr/share/nginx/html:ro
+      - ${TLCUBE_SRC:-/srv/tlcube}/sites/_shared:/usr/share/nginx/html/_shared:ro
+      - ${TLCUBE_SRC:-/srv/tlcube}/deploy/estre-so/projects/tlcube/static.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.tlcube-scan.rule: "Host(`tlscan.${ROOT_DOMAIN}`)"
+      traefik.http.routers.tlcube-scan.entrypoints: websecure
+      traefik.http.routers.tlcube-scan.tls: "true"
+      traefik.http.services.tlcube-scan.loadbalancer.server.port: "80"
+
+networks:
+  edge:
+    external: true
+    name: edge
