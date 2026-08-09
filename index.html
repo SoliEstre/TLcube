@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Trilume — TLcube 인코더 (M0)</title>
 <style>
+  /* 테마: 다크 값이 기본. 라이트 세트는 [data-theme="light"] 또는
+     (자동 모드 + OS 라이트) 에서 적용. 코드 렌더(프리셋 배경)와는 독립 — 페이지 크롬만. */
   :root {
     --bg: #101218;
     --panel: #191c26;
@@ -14,7 +16,41 @@
     --accent: #7fa3ff;
     --ok: #7fd8a4;
     --bad: #ff8f8f;
+    --warn: #e8c56a;
   }
+  :root[data-theme="light"] {
+    --bg: #f2f4f8;
+    --panel: #ffffff;
+    --line: #d4d9e4;
+    --text: #23293a;
+    --dim: #6a7185;
+    --accent: #3d6ae0;
+    --ok: #1f9d5f;
+    --bad: #d64545;
+    --warn: #a8791a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]):not([data-theme="light"]) {
+      --bg: #f2f4f8;
+      --panel: #ffffff;
+      --line: #d4d9e4;
+      --text: #23293a;
+      --dim: #6a7185;
+      --accent: #3d6ae0;
+      --ok: #1f9d5f;
+      --bad: #d64545;
+      --warn: #a8791a;
+    }
+  }
+  .theme-toggle {
+    display: flex; gap: 2px; padding: 2px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .theme-toggle button {
+    padding: 3px 10px; font-size: 11px; border: none; border-radius: 6px;
+    background: transparent; color: var(--dim); cursor: pointer;
+  }
+  .theme-toggle button.active { background: var(--line); color: var(--text); }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh;
@@ -24,13 +60,14 @@
   }
   header {
     width: 100%; padding: 18px 24px 10px;
-    display: flex; align-items: baseline; gap: 12px;
+    display: flex; align-items: center; gap: 12px;
   }
   header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .04em; }
   header .sub { color: var(--dim); font-size: 12px; }
+  header .spacer { flex: 1; }
   main {
     width: 100%; max-width: 1080px; padding: 8px 24px 40px;
-    display: grid; grid-template-columns: 300px 1fr; gap: 20px;
+    display: grid; grid-template-columns: 340px 1fr; gap: 20px;
   }
   @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
   .panel {
@@ -40,20 +77,21 @@
   }
   label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 4px; }
   label:first-child { margin-top: 0; }
-  textarea, select {
+  textarea, select, input[type="text"], input[type="password"] {
     width: 100%; background: var(--bg); color: var(--text);
     border: 1px solid var(--line); border-radius: 6px;
     padding: 8px; font: inherit; font-size: 13px;
   }
   textarea { min-height: 84px; resize: vertical; }
   button {
-    width: 100%; padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer;
+    padding: 7px 0; font: inherit; font-size: 13px; cursor: pointer;
     background: var(--bg); color: var(--text);
     border: 1px solid var(--line); border-radius: 6px;
   }
   button:hover { border-color: var(--accent); color: var(--accent); }
   .row { display: flex; gap: 10px; }
   .row > div { flex: 1; }
+  .row > button { flex: 1; width: auto; }
   .check-row {
     display: flex; align-items: center; gap: 8px; margin: 12px 0 0;
     font-size: 12px; color: var(--text);
@@ -77,75 +115,295 @@
   }
   canvas { display: block; border-radius: 4px; }
   footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; }
+
+  /* ── 모드 스위치 ─────────────────────────────────────────────── */
+  .mode-switch {
+    display: inline-flex; border: 1px solid var(--line); border-radius: 99px;
+    padding: 2px; gap: 2px;
+  }
+  .mode-switch button {
+    border: none; border-radius: 99px; padding: 5px 14px; font-size: 12px;
+    background: transparent; color: var(--dim);
+  }
+  .mode-switch button:hover { color: var(--text); border-color: transparent; }
+  .mode-switch button.active { background: var(--accent); color: #0c1220; font-weight: 600; }
+
+  /* ── 카드 토글 공용 ──────────────────────────────────────────── */
+  .card-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .toggle-card {
+    flex: 1 1 0; min-width: 64px; display: flex; flex-direction: column;
+    align-items: center; gap: 4px; padding: 10px 6px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    cursor: pointer; color: var(--dim); text-align: center; font-size: 11px;
+    user-select: none;
+  }
+  .toggle-card svg { color: var(--dim); }
+  .toggle-card:hover { border-color: var(--accent); color: var(--text); }
+  .toggle-card.active {
+    border-color: var(--accent); color: var(--text);
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  }
+  .toggle-card.active svg { color: var(--accent); }
+  .toggle-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ── 스타일 스와치 ───────────────────────────────────────────── */
+  .swatch-card { flex: 1 1 0; }
+  .swatch-chips { display: flex; gap: 3px; }
+  .swatch-chip { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(255,255,255,.15); }
+  .swatch-bg { width: 100%; height: 8px; border-radius: 3px; margin-top: 2px; }
+
+  /* ── 콘텐츠 탭 입력 그룹 ─────────────────────────────────────── */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .seg-buttons { display: flex; gap: 6px; margin-top: 4px; }
+  .seg-buttons button {
+    flex: 1; padding: 6px 0; font-size: 12px; border-radius: 6px;
+  }
+  .seg-buttons button.active { border-color: var(--accent); color: var(--accent); }
+
+  /* ── 용량 게이지 ─────────────────────────────────────────────── */
+  .gauge-track {
+    width: 100%; height: 8px; border-radius: 99px; background: var(--bg);
+    border: 1px solid var(--line); overflow: hidden; margin-top: 6px;
+  }
+  .gauge-fill { height: 100%; background: var(--ok); width: 0%; transition: width .15s ease; }
+  .gauge-fill.warn { background: var(--warn); }
+  .gauge-fill.bad { background: var(--bad); }
+  .gauge-label { font-size: 11px; color: var(--dim); margin-top: 4px; }
+
+  /* ── 고급 모드: 슬라이더 ─────────────────────────────────────── */
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .slider-value { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+  .section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--dim); margin: 16px 0 4px;
+  }
+  .section-title:first-child { margin-top: 0; }
 </style>
 </head>
 <body>
 <header>
   <h1>Trilume <span style="color:var(--accent)">/ TLcube</span></h1>
   <span class="sub">3면 휘도 순위 2.5D 코드 — M0 인코더 프리뷰</span>
+  <span class="spacer"></span>
+  <div class="mode-switch" id="modeSwitch">
+    <button type="button" id="modeNormalBtn" class="active">일반</button>
+    <button type="button" id="modeAdvancedBtn">고급</button>
+  </div>
+  <div class="theme-toggle" id="themeToggle" title="페이지 테마 (코드 렌더와 무관)">
+    <button type="button" data-theme-choice="auto" class="active">자동</button>
+    <button type="button" data-theme-choice="light">라이트</button>
+    <button type="button" data-theme-choice="dark">다크</button>
+  </div>
 </header>
+<script>
+// 테마 적용은 module 로드보다 먼저 (플래시 방지). localStorage 저장 — 페이지 크롬
+// 설정일 뿐 출력 결정성과 무관하다. 자동 = data-theme 미부착 (media query 가 처리).
+(function initTheme() {
+  var saved = null;
+  try { saved = localStorage.getItem('tlcube-theme'); } catch (e) { /* 프라이빗 모드 등 */ }
+  var choice = saved === 'light' || saved === 'dark' ? saved : 'auto';
+  if (choice !== 'auto') document.documentElement.setAttribute('data-theme', choice);
+  var toggle = document.getElementById('themeToggle');
+  var buttons = toggle.querySelectorAll('button');
+  buttons.forEach(function (b) {
+    b.classList.toggle('active', b.dataset.themeChoice === choice);
+    b.addEventListener('click', function () {
+      var c = b.dataset.themeChoice;
+      if (c === 'auto') document.documentElement.removeAttribute('data-theme');
+      else document.documentElement.setAttribute('data-theme', c);
+      try {
+        if (c === 'auto') localStorage.removeItem('tlcube-theme');
+        else localStorage.setItem('tlcube-theme', c);
+      } catch (e) { /* 무시 */ }
+      buttons.forEach(function (x) { x.classList.toggle('active', x === b); });
+    });
+  });
+})();
+</script>
 <main>
   <div class="panel">
-    <label for="payload">페이로드 (UTF-8 텍스트)</label>
-    <textarea id="payload" spellcheck="false">https://example.com/trilume</textarea>
 
-    <label for="codeType">타입</label>
-    <select id="codeType">
-      <option value="O" selected>Type O (마름모 8면체 필드)</option>
-      <option value="Y">Type Y (단일 큐브)</option>
-    </select>
+    <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
+    <div id="panelNormal">
+      <label>콘텐츠</label>
+      <div class="card-row" id="contentTabs">
+        <div class="toggle-card active" data-tab="text">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="5" y="3" width="14" height="18" rx="1.5"/>
+            <line x1="8" y1="8" x2="16" y2="8"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+            <line x1="8" y1="16" x2="13" y2="16"/>
+          </svg>
+          텍스트
+        </div>
+        <div class="toggle-card" data-tab="url">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 12a4 4 0 0 0 5.66 0l2-2a4 4 0 1 0-5.66-5.66l-1 1"/>
+            <path d="M15 12a4 4 0 0 0-5.66 0l-2 2a4 4 0 1 0 5.66 5.66l1-1"/>
+          </svg>
+          URL
+        </div>
+        <div class="toggle-card" data-tab="wifi">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 9a12 12 0 0 1 16 0"/>
+            <path d="M7 12.5a7.5 7.5 0 0 1 10 0"/>
+            <path d="M10.3 16a3 3 0 0 1 3.4 0"/>
+            <circle cx="12" cy="19" r="1.1" fill="currentColor" stroke="none"/>
+          </svg>
+          Wi-Fi
+        </div>
+        <div class="toggle-card" data-tab="card">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <circle cx="8.2" cy="12" r="2.1"/>
+            <line x1="13" y1="9.5" x2="18" y2="9.5"/>
+            <line x1="13" y1="12.5" x2="18" y2="12.5"/>
+            <line x1="13" y1="15.5" x2="16" y2="15.5"/>
+          </svg>
+          명함
+        </div>
+      </div>
 
-    <div class="row">
-      <div id="versionWrapO">
-        <label for="versionO">버전</label>
-        <select id="versionO">
-          <option value="auto" selected>자동 (최소)</option>
-          <option value="1">V1 (k=6 · 18 B)</option>
-          <option value="2">V2 (k=8 · 39 B)</option>
-          <option value="3">V3 (k=10 · 65 B)</option>
-        </select>
+      <div class="tab-panel active" id="tabText">
+        <label for="nTextPayload">텍스트</label>
+        <textarea id="nTextPayload" spellcheck="false">https://example.com/trilume</textarea>
       </div>
-      <div id="versionWrapY" style="display:none">
-        <label for="versionY">버전</label>
-        <select id="versionY">
-          <option value="1" selected>Y1 (n=21)</option>
-          <option value="2">Y2 (n=25)</option>
-        </select>
+
+      <div class="tab-panel" id="tabUrl">
+        <label for="nUrlPayload">URL</label>
+        <input type="text" id="nUrlPayload" placeholder="example.com/..." spellcheck="false">
+        <p class="hint">http(s):// 가 없으면 https:// 를 자동으로 붙여요.</p>
       </div>
-      <div>
-        <label for="ecc">ECC</label>
-        <select id="ecc">
-          <option value="L">L (≈12%)</option>
-          <option value="M" selected>M (25%)</option>
-          <option value="H">H (≈40%)</option>
-        </select>
+
+      <div class="tab-panel" id="tabWifi">
+        <label for="nWifiSsid">SSID</label>
+        <input type="text" id="nWifiSsid" spellcheck="false">
+        <label for="nWifiPassword">암호</label>
+        <input type="text" id="nWifiPassword" spellcheck="false">
+        <label>보안</label>
+        <div class="seg-buttons" id="wifiSecButtons">
+          <button type="button" data-sec="WPA" class="active">WPA</button>
+          <button type="button" data-sec="WEP">WEP</button>
+          <button type="button" data-sec="nopass">없음</button>
+        </div>
       </div>
+
+      <div class="tab-panel" id="tabCard">
+        <label for="nCardName">이름</label>
+        <input type="text" id="nCardName" spellcheck="false">
+        <label for="nCardPhone">전화</label>
+        <input type="text" id="nCardPhone" spellcheck="false">
+        <label for="nCardEmail">이메일</label>
+        <input type="text" id="nCardEmail" spellcheck="false">
+        <label for="nCardOrg">조직</label>
+        <input type="text" id="nCardOrg" spellcheck="false">
+        <label for="nCardUrl">URL</label>
+        <input type="text" id="nCardUrl" spellcheck="false">
+      </div>
+
+      <label>타입</label>
+      <div class="card-row" id="typeCards">
+        <div class="toggle-card active" data-type="O" style="flex:1">
+          <!-- Type O 실루엣 = 플랫탑 육각형 (pointy-top 셀 격자의 반경 k 영역 — 위아래 변이 평평) -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M20 11 L16 4.1 L8 4.1 L4 11 L8 17.9 L16 17.9 Z"/>
+            <circle cx="12" cy="11" r="4.2"/>
+            <circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/>
+          </svg>
+          Type O
+        </div>
+        <div class="toggle-card" data-type="Y" style="flex:1">
+          <!-- Type Y = 위에서 본 큐브: Y-심 팔 = 좌상·우상 꼭짓점, 다리 = 아래 꼭짓점 (SPEC §14) -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z"/>
+            <path d="M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
+          </svg>
+          Type Y
+        </div>
+      </div>
+
+      <label for="nPreset">스타일</label>
+      <div class="card-row" id="presetSwatches"></div>
+
+      <div class="section-title">용량</div>
+      <div class="gauge-track"><div class="gauge-fill" id="nGaugeFill"></div></div>
+      <div class="gauge-label" id="nGaugeLabel">–</div>
     </div>
 
-    <fieldset class="typeOptions" id="optionsO">
-      <div class="check-row">
-        <input type="checkbox" id="qrCorner" checked>
-        <label for="qrCorner" style="margin:0;color:var(--text)">QR 코너 폴백 (기본 ON)</label>
-      </div>
-      <div class="check-row">
-        <input type="checkbox" id="qrCenter">
-        <label for="qrCenter" style="margin:0;color:var(--text)">중앙 QR 변형 (V*Q — 대형 인쇄용)</label>
-      </div>
-      <p class="hint" id="qrCenterHint" style="display:none">
-        V*Q 는 불스아이 대신 중앙에 QR 을 배치합니다 — 코드 폭 13cm 이상 인쇄를 권장합니다.
-      </p>
-    </fieldset>
+    <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
+    <div id="panelAdvanced" style="display:none">
+      <label for="payload">페이로드 (UTF-8 텍스트)</label>
+      <textarea id="payload" spellcheck="false">https://example.com/trilume</textarea>
 
-    <fieldset class="typeOptions" id="optionsY" style="display:none">
-      <label for="tone">톤</label>
-      <select id="tone">
-        <option value="2" selected>2톤 (기본)</option>
-        <option value="3">3톤 (Y-T)</option>
+      <label for="codeType">타입</label>
+      <select id="codeType">
+        <option value="O" selected>Type O (마름모 8면체 필드)</option>
+        <option value="Y">Type Y (단일 큐브)</option>
       </select>
-    </fieldset>
 
-    <label for="preset">스타일 프리셋</label>
-    <select id="preset"></select>
+      <div class="row">
+        <div id="versionWrapO">
+          <label for="versionO">버전</label>
+          <select id="versionO">
+            <option value="auto" selected>자동 (최소)</option>
+            <option value="1">V1 (k=6 · 18 B)</option>
+            <option value="2">V2 (k=8 · 39 B)</option>
+            <option value="3">V3 (k=10 · 65 B)</option>
+          </select>
+        </div>
+        <div id="versionWrapY" style="display:none">
+          <label for="versionY">버전</label>
+          <select id="versionY">
+            <option value="1" selected>Y1 (n=21)</option>
+            <option value="2">Y2 (n=25)</option>
+          </select>
+        </div>
+        <div>
+          <label for="ecc">ECC</label>
+          <select id="ecc">
+            <option value="L">L (≈12%)</option>
+            <option value="M" selected>M (25%)</option>
+            <option value="H">H (≈40%)</option>
+          </select>
+        </div>
+      </div>
+
+      <fieldset class="typeOptions" id="optionsO">
+        <div class="check-row">
+          <input type="checkbox" id="qrCorner" checked>
+          <label for="qrCorner" style="margin:0;color:var(--text)">QR 코너 폴백 (기본 ON)</label>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="qrCenter">
+          <label for="qrCenter" style="margin:0;color:var(--text)">중앙 QR 변형 (V*Q — 대형 인쇄용)</label>
+        </div>
+        <p class="hint" id="qrCenterHint" style="display:none">
+          V*Q 는 불스아이 대신 중앙에 QR 을 배치합니다 — 코드 폭 13cm 이상 인쇄를 권장합니다.
+        </p>
+      </fieldset>
+
+      <fieldset class="typeOptions" id="optionsY" style="display:none">
+        <label for="tone">톤</label>
+        <select id="tone">
+          <option value="2" selected>2톤 (기본)</option>
+          <option value="3">3톤 (Y-T)</option>
+        </select>
+
+        <label for="faceGain">면 게인 강도 (1.0 평면 ~ 기본)</label>
+        <input type="range" id="faceGain" min="0" max="100" value="100" step="1">
+        <p class="slider-value" id="faceGainValue"></p>
+      </fieldset>
+
+      <label for="qrUrl">QR 폴백 URL (고급)</label>
+      <input type="text" id="qrUrl" spellcheck="false">
+
+      <label for="preset">스타일 프리셋</label>
+      <select id="preset"></select>
+    </div>
+
+    <!-- ══════════════════════ 공통 ══════════════════════ -->
     <label>내보내기 (결정적 — 동일 입력 → 바이트 동일)</label>
     <div class="row">
       <button id="exportPng" type="button">PNG</button>
@@ -159,7 +417,7 @@
 <footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐</footer>
 
 <script type="module">
-import { encode, chooseVersion } from './src/encode.js';
+import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
@@ -171,19 +429,36 @@ import { payloadByteLength } from './src/header.js';
 import { rasterToPng } from './src/png.js';
 import { sceneToSvg } from './src/svg.js';
 import { TL_READER_URL } from './src/qr.js';
+import { wifiPayload, cardPayload } from './src/payloadform.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
+  // 고급 모드
   payload: $('payload'), codeType: $('codeType'),
   versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'),
   versionO: $('versionO'), versionY: $('versionY'),
   ecc: $('ecc'), preset: $('preset'),
   optionsO: $('optionsO'), optionsY: $('optionsY'),
   qrCorner: $('qrCorner'), qrCenter: $('qrCenter'), qrCenterHint: $('qrCenterHint'),
-  tone: $('tone'),
+  tone: $('tone'), faceGain: $('faceGain'), faceGainValue: $('faceGainValue'),
+  qrUrl: $('qrUrl'),
+  // 일반 모드
+  panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
+  modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
+  contentTabs: $('contentTabs'), typeCards: $('typeCards'), presetSwatches: $('presetSwatches'),
+  nTextPayload: $('nTextPayload'), nUrlPayload: $('nUrlPayload'),
+  nWifiSsid: $('nWifiSsid'), nWifiPassword: $('nWifiPassword'), wifiSecButtons: $('wifiSecButtons'),
+  nCardName: $('nCardName'), nCardPhone: $('nCardPhone'), nCardEmail: $('nCardEmail'),
+  nCardOrg: $('nCardOrg'), nCardUrl: $('nCardUrl'),
+  nGaugeFill: $('nGaugeFill'), nGaugeLabel: $('nGaugeLabel'),
+  // 공통
   info: $('info'), error: $('error'), canvas: $('view'),
   exportPng: $('exportPng'), exportSvg: $('exportSvg'),
 };
+
+/** 일반 모드 전용 in-memory 상태 — localStorage 미사용(결정성·단순성, 새로고침 시 초기화). */
+let mode = 'normal';
+const normalState = { contentTab: 'text', type: 'O', preset: DEFAULT_PRESET, wifiSecurity: 'WPA' };
 
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
 let current = null;
@@ -218,6 +493,8 @@ els.exportSvg.addEventListener('click', () => {
   download(new TextEncoder().encode(sceneToSvg(current.scene)), 'image/svg+xml', exportFilename('svg'));
 });
 
+// ── 프리셋 목록 채우기 (고급 모드 select + 일반 모드 스와치 카드) ──────────
+
 for (const name of Object.keys(PRESETS)) {
   const opt = document.createElement('option');
   opt.value = name;
@@ -226,16 +503,64 @@ for (const name of Object.keys(PRESETS)) {
   els.preset.appendChild(opt);
 }
 
-function paletteOf(name) {
+els.qrUrl.value = TL_READER_URL;
+
+function rgbCss(c) { return `rgb(${c.r},${c.g},${c.b})`; }
+
+for (const name of Object.keys(PRESETS)) {
+  const p = PRESETS[name];
+  const card = document.createElement('div');
+  card.className = 'toggle-card swatch-card' + (name === DEFAULT_PRESET ? ' active' : '');
+  card.dataset.preset = name;
+  const chips = document.createElement('div');
+  chips.className = 'swatch-chips';
+  for (const lvl of p.levels) {
+    const chip = document.createElement('span');
+    chip.className = 'swatch-chip';
+    chip.style.background = rgbCss(lvl);
+    chips.appendChild(chip);
+  }
+  const bgStrip = document.createElement('div');
+  bgStrip.className = 'swatch-bg';
+  bgStrip.style.background = rgbCss(p.background);
+  const labelEl = document.createElement('div');
+  labelEl.textContent = p.label || name;
+  card.appendChild(chips);
+  card.appendChild(bgStrip);
+  card.appendChild(labelEl);
+  card.addEventListener('click', () => {
+    normalState.preset = name;
+    for (const c of els.presetSwatches.children) c.classList.toggle('active', c.dataset.preset === name);
+    schedule();
+  });
+  els.presetSwatches.appendChild(card);
+}
+
+// 카드 토글 UI 키보드 접근성 — 클릭 핸들러는 위에서 이미 붙었으니 Enter/Space 로
+// 같은 click 을 재사용한다(동적 생성된 스와치 카드까지 포함해 한 번에 처리).
+for (const card of document.querySelectorAll('.toggle-card')) {
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      card.click();
+    }
+  });
+}
+
+/**
+ * @param {string} name 프리셋 이름
+ * @param {{T:number,L:number,R:number}} [faceGains] Type Y 면 게인 (생략 시 기본값)
+ */
+function paletteOf(name, faceGains) {
   const p = getPreset(name);
   return {
     background: p.background, levels: p.levels,
     bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
-    faceGains: DEFAULT_FACE_GAINS,
+    faceGains: faceGains === undefined ? DEFAULT_FACE_GAINS : faceGains,
   };
 }
-
-const css = (c) => `rgb(${c.r},${c.g},${c.b})`;
 
 /** scene → canvas. 인접 도형 사이 AA 실선(헤어라인 심) 방지를 위해 동일색 얇은 스트로크를 겹친다. */
 function drawScene(scene, canvas, ppu) {
@@ -246,12 +571,12 @@ function drawScene(scene, canvas, ppu) {
   canvas.style.height = `${Math.round(scene.height * ppu)}px`;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(ppu * dpr, 0, 0, ppu * dpr, 0, 0);
-  ctx.fillStyle = css(scene.background);
+  ctx.fillStyle = rgbCss(scene.background);
   ctx.fillRect(0, 0, scene.width, scene.height);
   ctx.lineJoin = 'round';
   ctx.lineWidth = 0.03;
   for (const s of scene.shapes) {
-    ctx.fillStyle = css(s.color);
+    ctx.fillStyle = rgbCss(s.color);
     ctx.beginPath();
     if (s.kind === 'polygon') {
       ctx.moveTo(s.points[0].x, s.points[0].y);
@@ -267,7 +592,58 @@ function drawScene(scene, canvas, ppu) {
   }
 }
 
-/** Type O/Y 옵션 패널 표시 전환 + 중앙 QR 토글 시 코너 기본 OFF (ADR 0004 §1-4). */
+// ── 모드 전환 ───────────────────────────────────────────────────────────
+
+function setMode(next) {
+  mode = next;
+  els.modeNormalBtn.classList.toggle('active', mode === 'normal');
+  els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
+  els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
+  els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
+  schedule();
+}
+els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
+els.modeAdvancedBtn.addEventListener('click', () => setMode('advanced'));
+
+// ── 일반 모드: 콘텐츠 탭 ────────────────────────────────────────────────
+
+function syncContentTabUi() {
+  for (const card of els.contentTabs.children) {
+    card.classList.toggle('active', card.dataset.tab === normalState.contentTab);
+  }
+  for (const name of ['text', 'url', 'wifi', 'card']) {
+    $('tab' + name[0].toUpperCase() + name.slice(1)).classList.toggle('active', name === normalState.contentTab);
+  }
+}
+for (const card of els.contentTabs.children) {
+  card.addEventListener('click', () => {
+    normalState.contentTab = card.dataset.tab;
+    syncContentTabUi();
+    schedule();
+  });
+}
+syncContentTabUi();
+
+for (const btn of els.wifiSecButtons.children) {
+  btn.addEventListener('click', () => {
+    normalState.wifiSecurity = btn.dataset.sec;
+    for (const b of els.wifiSecButtons.children) b.classList.toggle('active', b === btn);
+    schedule();
+  });
+}
+
+// ── 일반 모드: 타입 카드 ────────────────────────────────────────────────
+
+for (const card of els.typeCards.children) {
+  card.addEventListener('click', () => {
+    normalState.type = card.dataset.type;
+    for (const c of els.typeCards.children) c.classList.toggle('active', c === card);
+    schedule();
+  });
+}
+
+// ── 고급 모드: 옵션 패널 표시 전환 + 중앙 QR 토글 시 코너 기본 OFF (ADR 0004 §1-4) ──
+
 function syncTypeUi() {
   const isY = els.codeType.value === 'Y';
   els.versionWrapO.style.display = isY ? 'none' : '';
@@ -289,43 +665,128 @@ els.qrCenter.addEventListener('change', () => {
 els.codeType.addEventListener('change', () => { syncTypeUi(); schedule(); });
 syncTypeUi();
 
-function renderTypeO(text, eccLevel, presetName) {
-  const opts = { eccLevel };
-  if (els.versionO.value !== 'auto') opts.version = Number(els.versionO.value);
-  opts.centerQr = els.qrCenter.checked;
-  const encoded = encode(text, opts);
+// ── 고급 모드: 면 게인 슬라이더 (Type Y — 1.0(평면) ~ DEFAULT_FACE_GAINS(기본) 보간) ──
 
-  const qrEnabled = els.qrCenter.checked || els.qrCorner.checked;
-  const sceneOpts = { palette: paletteOf(presetName), centerQr: els.qrCenter.checked };
-  if (qrEnabled) sceneOpts.qrText = TL_READER_URL;
-  if (els.qrCenter.checked) sceneOpts.cornerToo = els.qrCorner.checked;
+function currentFaceGains() {
+  const t = Number(els.faceGain.value) / 100; // 0..1
+  const L = 1 + t * (DEFAULT_FACE_GAINS.L - 1);
+  const R = 1 + t * (DEFAULT_FACE_GAINS.R - 1);
+  return { T: 1, L, R };
+}
+function gainRatio(g) { return Math.max(g.T, g.L, g.R) / Math.min(g.T, g.L, g.R); }
+function syncFaceGainLabel() {
+  const g = currentFaceGains();
+  const ratio = gainRatio(g);
+  els.faceGainValue.textContent =
+    `T ${g.T.toFixed(2)} · L ${g.L.toFixed(2)} · R ${g.R.toFixed(2)} · γ=${ratio.toFixed(3)} (≤ 2)`;
+}
+syncFaceGainLabel();
+
+// ── 페이로드 조립 ───────────────────────────────────────────────────────
+
+function normalizeUrl(raw) {
+  const v = raw.trim();
+  if (v === '') return '';
+  return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+}
+
+/** 일반 모드: 활성 콘텐츠 탭에서 페이로드 문자열을 조립한다. */
+function normalPayloadText() {
+  switch (normalState.contentTab) {
+    case 'text':
+      return els.nTextPayload.value;
+    case 'url':
+      return normalizeUrl(els.nUrlPayload.value);
+    case 'wifi':
+      return wifiPayload({
+        ssid: els.nWifiSsid.value,
+        password: els.nWifiPassword.value,
+        security: normalState.wifiSecurity,
+      });
+    case 'card':
+      return cardPayload({
+        name: els.nCardName.value,
+        phone: els.nCardPhone.value,
+        email: els.nCardEmail.value,
+        org: els.nCardOrg.value,
+        url: els.nCardUrl.value,
+      });
+    default:
+      return '';
+  }
+}
+
+/** 현재 모드에서 렌더 설정을 하나로 모은다 — 모드별 DOM 을 여기서만 읽는다. */
+function buildConfig() {
+  if (mode === 'advanced') {
+    return {
+      type: els.codeType.value,
+      text: els.payload.value,
+      eccLevel: els.ecc.value,
+      presetName: els.preset.value,
+      versionO: els.versionO.value === 'auto' ? undefined : Number(els.versionO.value),
+      versionY: Number(els.versionY.value),
+      qrCorner: els.qrCorner.checked,
+      qrCenter: els.qrCenter.checked,
+      tone: Number(els.tone.value),
+      qrText: els.qrUrl.value.trim() === '' ? TL_READER_URL : els.qrUrl.value.trim(),
+      faceGains: currentFaceGains(),
+    };
+  }
+  return {
+    type: normalState.type,
+    text: normalPayloadText(),
+    eccLevel: 'M',
+    presetName: normalState.preset,
+    versionO: undefined,
+    versionY: undefined,
+    qrCorner: true,
+    qrCenter: false,
+    tone: 2,
+    qrText: TL_READER_URL,
+    faceGains: DEFAULT_FACE_GAINS,
+  };
+}
+
+// ── 렌더 ────────────────────────────────────────────────────────────────
+
+function renderTypeO(cfg) {
+  const opts = { eccLevel: cfg.eccLevel };
+  if (cfg.versionO !== undefined) opts.version = cfg.versionO;
+  opts.centerQr = cfg.qrCenter;
+  const encoded = encode(cfg.text, opts);
+
+  const qrEnabled = cfg.qrCenter || cfg.qrCorner;
+  const sceneOpts = { palette: paletteOf(cfg.presetName), centerQr: cfg.qrCenter };
+  if (qrEnabled) sceneOpts.qrText = cfg.qrText;
+  if (cfg.qrCenter) sceneOpts.cornerToo = cfg.qrCorner;
   const scene = buildScene(encoded, sceneOpts);
 
   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
   const check = verifyRaster(raster, scene, encoded);
-  const bytes = payloadByteLength(text);
+  const bytes = payloadByteLength(cfg.text);
   const badge = check.ok
     ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · Δmin ${check.minDelta.toFixed(3)}</span>`
     : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건</span>`;
   const info =
     `타입 <b>O</b> · 버전 <b>V${encoded.version}${encoded.centerQr ? 'Q' : ''}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
     `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
-    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(presetName).toFixed(3)}<br>` +
+    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(cfg.presetName).toFixed(3)}<br>` +
     badge;
   return { type: 'O', encoded, scene, info };
 }
 
-function renderTypeY(text, eccLevel, presetName) {
-  const version = Number(els.versionY.value);
-  const tones = Number(els.tone.value);
-  const encoded = encodeY(text, { version, eccLevel, tones });
+function renderTypeY(cfg) {
+  const opts = { eccLevel: cfg.eccLevel, tones: cfg.tone };
+  if (cfg.versionY !== undefined) opts.version = cfg.versionY;
+  const encoded = encodeY(cfg.text, opts);
 
-  const scene = buildSceneY(encoded, { palette: paletteOf(presetName), qrText: TL_READER_URL });
+  const scene = buildSceneY(encoded, { palette: paletteOf(cfg.presetName, cfg.faceGains), qrText: cfg.qrText });
 
   const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
   const check = verifyRasterY(raster, scene, encoded);
-  const bytes = payloadByteLength(text);
-  const marginLabel = tones === 2
+  const bytes = payloadByteLength(cfg.text);
+  const marginLabel = cfg.tone === 2
     ? `logMargin ${check.logMargin.toFixed(3)}`
     : `Δmin-Y ${check.minDeltaY.toFixed(3)}`;
   const badge = check.ok
@@ -339,31 +800,54 @@ function renderTypeY(text, eccLevel, presetName) {
   return { type: 'Y', encoded, scene, info };
 }
 
+function updateGauge(encoded, text) {
+  if (mode !== 'normal') return; // 게이지는 일반 모드 전용 UI 요소
+  if (!encoded) {
+    els.nGaugeFill.style.width = '0%';
+    els.nGaugeFill.classList.remove('warn', 'bad');
+    els.nGaugeLabel.textContent = '–';
+    return;
+  }
+  const bytes = payloadByteLength(text);
+  const max = encoded.capacity.maxPayloadBytes;
+  const pct = max > 0 ? Math.min(100, (bytes / max) * 100) : 0;
+  els.nGaugeFill.style.width = `${pct}%`;
+  els.nGaugeFill.classList.toggle('warn', pct >= 70 && pct < 90);
+  els.nGaugeFill.classList.toggle('bad', pct >= 90);
+  els.nGaugeLabel.textContent = `${bytes} B / ${max} B (V${encoded.version}${encoded.tones !== undefined && encoded.tones === 3 ? 'T' : ''})`;
+}
+
 let timer = 0;
 function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
 
 function render() {
   els.error.textContent = '';
-  const text = els.payload.value;
-  const eccLevel = els.ecc.value;
-  const presetName = els.preset.value;
+  syncFaceGainLabel();
+  const cfg = buildConfig();
   try {
-    const result = els.codeType.value === 'Y'
-      ? renderTypeY(text, eccLevel, presetName)
-      : renderTypeO(text, eccLevel, presetName);
+    const result = cfg.type === 'Y' ? renderTypeY(cfg) : renderTypeO(cfg);
     current = { type: result.type, encoded: result.encoded, scene: result.scene };
     drawScene(result.scene, els.canvas, 26);
     els.info.innerHTML = result.info;
+    updateGauge(result.encoded, cfg.text);
   } catch (err) {
     current = null;
     els.info.innerHTML = '';
     els.error.textContent = String(err && err.message ? err.message : err);
+    updateGauge(null, '');
   }
 }
 
 for (const el of [
   els.payload, els.versionO, els.versionY, els.ecc, els.preset,
-  els.qrCorner, els.qrCenter, els.tone,
+  els.qrCorner, els.qrCenter, els.tone, els.faceGain, els.qrUrl,
+]) {
+  el.addEventListener('input', schedule);
+  el.addEventListener('change', schedule);
+}
+for (const el of [
+  els.nTextPayload, els.nUrlPayload, els.nWifiSsid, els.nWifiPassword,
+  els.nCardName, els.nCardPhone, els.nCardEmail, els.nCardOrg, els.nCardUrl,
 ]) {
   el.addEventListener('input', schedule);
   el.addEventListener('change', schedule);

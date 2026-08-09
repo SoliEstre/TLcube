@@ -16,6 +16,7 @@ const DIST_FILE = path.join(ROOT, 'dist', 'trilume.html');
 const SRC_DIR = path.join(ROOT, 'src');
 
 const MODULE_ORDER = [
+  'vendor/jcodd', 'payloadform',
   'hexgrid', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity', 'luminance',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',

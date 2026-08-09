@@ -20,6 +20,19 @@ import { digitToRanks } from './lehmer.js';
 /** SPEC §4.4 계약: 순위 간 최소 분리폭 (sRGB 상대휘도 Y, 0..1). */
 export const DELTA_MIN_CONTRACT = 0.12;
 
+/**
+ * 프리셋 저자 품질 바 — SPEC 최소치(0.12)보다 여유를 둔 내부 기준. 기존
+ * 'slate' 테스트가 이미 이 값을 관례로 썼다(>= 0.15) — 신규 프리셋도 동일 바를
+ * 모듈 로드 시 자동 단언한다(수기 스크래치 검증에 의존하지 않는다).
+ */
+export const PRESET_DELTA_MIN = 0.15;
+
+/** SPEC §14 U17: 2톤 렌더용 최소 대비비 ρ = Y(levels[2]) / Y(levels[0]). */
+export const RHO_MIN_CONTRACT = 10;
+
+/** 프리셋 배경과 각 레벨 사이 최소 분리 (Y, 0..1) — 기존 slate 관례를 일반화. */
+export const PRESET_BG_SEPARATION_MIN = 0.05;
+
 /** SPEC §5.1: 불스아이 파인더 마커 — 최대 대비, Δmin 계약과 무관. */
 export const BULLSEYE_DARK = Object.freeze({ r: 0, g: 0, b: 0 });
 export const BULLSEYE_LIGHT = Object.freeze({ r: 255, g: 255, b: 255 });
@@ -60,18 +73,65 @@ export function relativeLuminance(rgb) {
  *   levels[1]  {110,135,190}→ Y ≈ 0.2436   (levels[0] 과 분리 ≈ 0.1824 >= 0.15)
  *   levels[2]  {220,228,240}→ Y ≈ 0.7699   (levels[1] 과 분리 ≈ 0.5263 >= 0.15)
  * presetDeltaMin('slate') = min(0.1824, 0.5263) ≈ 0.1824 >= 0.15 (계약 0.12 + 여유).
+ * ρ = Y(levels[2])/Y(levels[0]) ≈ 0.7699/0.0612 ≈ 12.58 >= 10 (U17).
  */
+const SLATE = Object.freeze({
+  name: 'slate',
+  label: '슬레이트 블루 (Slate Blue)',
+  background: Object.freeze({ r: 14, g: 16, b: 24 }),
+  levels: Object.freeze([
+    Object.freeze({ r: 58, g: 68, b: 108 }), // rank 0 (어두움)
+    Object.freeze({ r: 110, g: 135, b: 190 }), // rank 1 (중간)
+    Object.freeze({ r: 220, g: 228, b: 240 }), // rank 2 (밝음)
+  ]),
+});
+
+/**
+ * ember 프리셋 — 웜 앰버·다크 브라운. 노을/불빛 톤 인상. 실측 Y (node -e 스크래치,
+ * repo 밖):
+ *   background {18,11,7}    → Y ≈ 0.0038
+ *   levels[0]  {108,52,16}  → Y ≈ 0.0568  (bg 분리 ≈ 0.0530 >= 0.05)
+ *   levels[1]  {200,120,40} → Y ≈ 0.2587  (levels[0] 분리 ≈ 0.2018)
+ *   levels[2]  {255,210,140}→ Y ≈ 0.6925  (levels[1] 분리 ≈ 0.4338)
+ * presetDeltaMin('ember') = min(0.2018, 0.4338) ≈ 0.2018 >= 0.15.
+ * ρ = Y(levels[2])/Y(levels[0]) ≈ 0.6925/0.0568 ≈ 12.19 >= 10 (U17).
+ */
+const EMBER = Object.freeze({
+  name: 'ember',
+  label: '엠버 (Ember)',
+  background: Object.freeze({ r: 18, g: 11, b: 7 }),
+  levels: Object.freeze([
+    Object.freeze({ r: 108, g: 52, b: 16 }), // rank 0 (어두움)
+    Object.freeze({ r: 200, g: 120, b: 40 }), // rank 1 (중간)
+    Object.freeze({ r: 255, g: 210, b: 140 }), // rank 2 (밝음)
+  ]),
+});
+
+/**
+ * mono 프리셋 — 무채색 그레이. 인쇄 안전(단색 인쇄에서도 순위 판별 가능). 실측 Y
+ * (node -e 스크래치, repo 밖):
+ *   background {16,16,16}   → Y ≈ 0.0052
+ *   levels[0]  {70,70,70}   → Y ≈ 0.0612  (bg 분리 ≈ 0.0561 >= 0.05)
+ *   levels[1]  {150,150,150}→ Y ≈ 0.3050  (levels[0] 분리 ≈ 0.2437)
+ *   levels[2]  {245,245,245}→ Y ≈ 0.9131  (levels[1] 분리 ≈ 0.6081)
+ * presetDeltaMin('mono') = min(0.2437, 0.6081) ≈ 0.2437 >= 0.15.
+ * ρ = Y(levels[2])/Y(levels[0]) ≈ 0.9131/0.0612 ≈ 14.91 >= 10 (U17).
+ */
+const MONO = Object.freeze({
+  name: 'mono',
+  label: '모노 (Mono, 인쇄 안전)',
+  background: Object.freeze({ r: 16, g: 16, b: 16 }),
+  levels: Object.freeze([
+    Object.freeze({ r: 70, g: 70, b: 70 }), // rank 0 (어두움)
+    Object.freeze({ r: 150, g: 150, b: 150 }), // rank 1 (중간)
+    Object.freeze({ r: 245, g: 245, b: 245 }), // rank 2 (밝음)
+  ]),
+});
+
 export const PRESETS = Object.freeze({
-  slate: Object.freeze({
-    name: 'slate',
-    label: '슬레이트 블루 (Slate Blue)',
-    background: Object.freeze({ r: 14, g: 16, b: 24 }),
-    levels: Object.freeze([
-      Object.freeze({ r: 58, g: 68, b: 108 }), // rank 0 (어두움)
-      Object.freeze({ r: 110, g: 135, b: 190 }), // rank 1 (중간)
-      Object.freeze({ r: 220, g: 228, b: 240 }), // rank 2 (밝음)
-    ]),
-  }),
+  slate: SLATE,
+  ember: EMBER,
+  mono: MONO,
 });
 
 /** 기본 프리셋 이름. */
@@ -107,6 +167,57 @@ export function presetLuminances(name) {
 export function presetDeltaMin(name) {
   const [y0, y1, y2] = presetLuminances(name);
   return Math.min(y1 - y0, y2 - y1);
+}
+
+/**
+ * 프리셋의 2톤 대비비 ρ = Y(levels[2]) / Y(levels[0]) (SPEC §14 U17 계약 검증용).
+ * @param {string} name
+ * @returns {number}
+ */
+export function presetRho(name) {
+  const [y0, , y2] = presetLuminances(name);
+  return y2 / y0;
+}
+
+/**
+ * 프리셋 배경과 레벨들 사이 최소 분리 (Y, 0..1).
+ * @param {string} name
+ * @returns {number}
+ */
+export function presetBackgroundSeparation(name) {
+  const preset = getPreset(name);
+  const bgY = relativeLuminance(preset.background);
+  const ys = presetLuminances(name);
+  return Math.min(...ys.map((y) => y - bgY));
+}
+
+/**
+ * 프리셋 계약 3종을 단언한다 (① 3톤 Δmin >= PRESET_DELTA_MIN ② 2톤 ρ >=
+ * RHO_MIN_CONTRACT ③ 배경 분리 >= PRESET_BG_SEPARATION_MIN). 위반 시 던진다 —
+ * 모듈 로드 시(아래) 전 프리셋에 대해 자동 실행되므로, 신규 프리셋을 추가하면서
+ * 계약을 어기면 import 시점에 즉시 드러난다(수기 스크래치 검증에만 의존하지 않는다).
+ * @param {string} name
+ */
+export function assertPresetContract(name) {
+  const deltaMin = presetDeltaMin(name);
+  if (!(deltaMin >= PRESET_DELTA_MIN)) {
+    throw new Error(`프리셋 '${name}': Δmin=${deltaMin} 가 PRESET_DELTA_MIN(${PRESET_DELTA_MIN}) 미만이다`);
+  }
+  const rho = presetRho(name);
+  if (!(rho >= RHO_MIN_CONTRACT)) {
+    throw new Error(`프리셋 '${name}': ρ=${rho} 가 RHO_MIN_CONTRACT(${RHO_MIN_CONTRACT}) 미만이다`);
+  }
+  const bgSep = presetBackgroundSeparation(name);
+  if (!(bgSep >= PRESET_BG_SEPARATION_MIN)) {
+    throw new Error(`프리셋 '${name}': 배경 분리=${bgSep} 가 PRESET_BG_SEPARATION_MIN(${PRESET_BG_SEPARATION_MIN}) 미만이다`);
+  }
+}
+
+// 모듈 로드 시 전 프리셋 자동 단언 — 등록된 프리셋이 계약을 어기면 import 시점에
+// 즉시 터진다(런타임 호출 전에 잡는다, sceneY.js의 DEFAULT_FACE_GAINS 자기단언과
+// 동일 패턴).
+for (const presetName of Object.keys(PRESETS)) {
+  assertPresetContract(presetName);
 }
 
 /**

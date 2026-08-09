@@ -25,7 +25,14 @@ const OUT_FILE = path.join(OUT_DIR, 'trilume.html');
 // 모듈만 의존하거나(ygrid→hexgrid, capacityY→capacity/rs211/header, encodeY→...,
 // verifyY→verify 등) 새로 추가되는 gf256→rs→qr 체인에 의존한다(qr.js 는 rs.js 를,
 // rs.js 는 gf256.js 를 쓴다 — Type O RS 경로의 gfp/rs211 과는 별개 체인).
+// 생성기 v2(PM/009): 'vendor/jcodd' → 'payloadform' 을 맨 앞에 추가 — payloadform.js
+// 가 vendor/jcodd.js 를 import 하므로(JCODD 직렬화, Wi-Fi·명함 콘텐츠 탭), 등록
+// 루프가 'vendor/jcodd' 의 blob URL 을 먼저 만들어 둬야 payloadform.js 원문 안의
+// './vendor/jcodd.js' specifier 치환이 성립한다(buildLoaderScript 의 등록 순서 =
+// 치환 가능 순서, 본 파일 상단 주석 참조). 다른 Type O/Y 모듈은 payloadform 을
+// 의존하지 않으므로 나머지 순서에는 영향이 없다 — index.html(app 코드)만 소비한다.
 const MODULE_ORDER = [
+  'vendor/jcodd', 'payloadform',
   'hexgrid', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity', 'luminance',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
