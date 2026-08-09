@@ -98,6 +98,13 @@
   .row { display: flex; gap: 10px; }
   .row > div { flex: 1; }
   .row > button { flex: 1; width: auto; }
+  .export-pair { display: flex; gap: 4px; }
+  .export-pair > button:first-child { flex: 1; }
+  .icon-btn {
+    width: 34px; padding: 0; flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .icon-btn.copied { color: var(--ok); border-color: var(--ok); }
   .check-row {
     display: flex; align-items: center; gap: 8px; margin: 12px 0 0;
     font-size: 12px; color: var(--text);
@@ -414,9 +421,25 @@
 
     <!-- ══════════════════════ 공통 ══════════════════════ -->
     <label>내보내기 (결정적 — 동일 입력 → 바이트 동일)</label>
-    <div class="row">
-      <button id="exportPng" type="button">PNG</button>
-      <button id="exportSvg" type="button">SVG</button>
+    <div class="row export-row">
+      <div class="export-pair">
+        <button id="exportPng" type="button">PNG</button>
+        <button id="copyPng" type="button" class="icon-btn" title="PNG를 클립보드에 복사">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+            <rect x="8" y="8" width="12" height="12" rx="2"/>
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="export-pair">
+        <button id="exportSvg" type="button">SVG</button>
+        <button id="copySvg" type="button" class="icon-btn" title="SVG 마크업을 클립보드에 복사">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+            <rect x="8" y="8" width="12" height="12" rx="2"/>
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div id="info"></div>
     <div id="error"></div>
@@ -500,6 +523,35 @@ els.exportPng.addEventListener('click', () => {
 els.exportSvg.addEventListener('click', () => {
   if (!current) return;
   download(new TextEncoder().encode(sceneToSvg(current.scene)), 'image/svg+xml', exportFilename('svg'));
+});
+
+// ── 클립보드 복사 (다운로드와 동일 파이프라인 — PNG 는 이미지, SVG 는 마크업 텍스트) ──
+
+function flashCopied(btn) {
+  btn.classList.add('copied');
+  setTimeout(() => btn.classList.remove('copied'), 1200);
+}
+
+$('copyPng').addEventListener('click', async () => {
+  if (!current) return;
+  try {
+    const raster = rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 });
+    const blob = new Blob([rasterToPng(raster)], { type: 'image/png' });
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    flashCopied($('copyPng'));
+  } catch (err) {
+    els.error.textContent = `클립보드 복사 실패: ${err && err.message ? err.message : err}`;
+  }
+});
+
+$('copySvg').addEventListener('click', async () => {
+  if (!current) return;
+  try {
+    await navigator.clipboard.writeText(sceneToSvg(current.scene));
+    flashCopied($('copySvg'));
+  } catch (err) {
+    els.error.textContent = `클립보드 복사 실패: ${err && err.message ? err.message : err}`;
+  }
 });
 
 // ── 프리셋 목록 채우기 (고급 모드 select + 일반 모드 스와치 카드) ──────────
