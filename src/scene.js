@@ -12,8 +12,9 @@
 
 import {
   FACES, facePolygon, layoutForRegion, regionCells, axialToPixel, codeBounds,
+  hexCorners, hexDistance,
 } from './hexgrid.js';
-import { bandRadii, maxSafeRadius } from './bullseye.js';
+import { bandRadii } from './bullseye.js';
 import { digitToRanks } from './lehmer.js';
 import { qrMatrix } from './qr.js';
 
@@ -35,22 +36,70 @@ const QR_BLOCK_MODULES = QR_MODULE_GRID + 2 * QR_QUIET_MODULES;
 
 /**
  * 코너 QR 이 실제로 렌더될 때만 쓰는 확대 margin 배수 (sceneY.js 와 동일 유도).
- *
- * 코너 QR 블록(콰이어트 포함, 1 QR-모듈 = cellSize/2 피치)의 좌상단은
- * (margin·0.25, margin·0.25) 에 고정된다(계약, sceneY.js 와 동일 painter 패턴).
- * `layoutForRegion(k, {size, margin})` 의 좌상단도 항상 정확히 (margin, margin)
- * 이다 — codeBounds(k, layout).minX = originX − halfW = margin (k·size 에 무관,
- * originX = margin − b.minX = margin + halfW 이므로).
- *
- * 따라서 겹침 없음의 필요충분조건은:
- *   margin·0.25 + QR_BLOCK_MODULES·(cellSize/2) <= margin
- *   ⟺ margin >= (2·QR_BLOCK_MODULES/3)·cellSize ≈ 19.33·cellSize
- * sceneY.js 와 동일 상수(20)로 여유를 둔다.
+ * 겹침 없음의 필요충분조건: margin·0.25 + 29·(cellSize/2) ≤ margin ⟺ margin ≥ 19.33·s.
  */
 const DEFAULT_MARGIN_FACTOR_QR = 20;
 
+/**
+ * V*Q 중앙 QR 의 보호 콰이어트 모듈 수 (2026-08-09 사용자 지시 — "바깥 흰색 구간이
+ * 큐브에 가려 조금 손실되더라도 중앙 QR 을 키워라").
+ *
+ * 확대 규약: **심볼 21×21 + 안전 콰이어트 1모듈 = 23모듈 사각**만 셀 무침범을
+ * 보장하고, 바깥쪽 콰이어트 3모듈은 셀 폴리곤 **밑에 깔려** 잘린다 (painter:
+ * 중앙 블록을 셀보다 먼저 그린다). 모듈 피치는 19셀 슬롯 안의 최대 중심 정사각을
+ * 이분탐색으로 실계산해 유도한다 — 구판(안전 원판 내접, √26·s/29 ≈ 0.176s)보다
+ * 커진다. 판독 안전성: 심볼 사방 1모듈 콰이어트는 유지되고, jsQR 재실측으로 확인.
+ */
+const QR_PROTECTED_QUIET = 1;
+
+/** 보호 사각(심볼 + 안전 콰이어트) 한 변의 QR-모듈 수 = 1 + 21 + 1. */
+const QR_PROTECTED_MODULES = QR_MODULE_GRID + 2 * QR_PROTECTED_QUIET;
+
 function rectsOverlap(a, b) {
   return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+}
+
+/** 짝홀 point-in-polygon (raster.js 와 동일 규약). */
+function pointInPoly(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    const xi = poly[i].x;
+    const yi = poly[i].y;
+    const xj = poly[j].x;
+    const yj = poly[j].y;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** 축평행 사각형과 폴리곤의 겹침 — 꼭짓점 상호 포함 + 변 교차 검사. */
+function rectPolyOverlap(rect, poly) {
+  for (const p of poly) {
+    if (p.x > rect.minX && p.x < rect.maxX && p.y > rect.minY && p.y < rect.maxY) return true;
+  }
+  const corners = [
+    { x: rect.minX, y: rect.minY }, { x: rect.maxX, y: rect.minY },
+    { x: rect.maxX, y: rect.maxY }, { x: rect.minX, y: rect.maxY },
+  ];
+  for (const c of corners) {
+    if (pointInPoly(c.x, c.y, poly)) return true;
+  }
+  // 변 교차: 사각형 4변 × 폴리곤 변
+  const rectEdges = corners.map((c, i) => [c, corners[(i + 1) % 4]]);
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    for (const [a, b] of rectEdges) {
+      if (segmentsIntersect(a, b, poly[j], poly[i])) return true;
+    }
+  }
+  return false;
+}
+
+function segmentsIntersect(p1, p2, p3, p4) {
+  const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+  if (d === 0) return false; // 평행(공선 접촉은 보호 여유가 흡수)
+  const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+  const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+  return t > 0 && t < 1 && u > 0 && u < 1;
 }
 
 /** 콰이어트 패치(밝음) + QR 다크 모듈들을 axis-aligned 사각형 폴리곤으로 shapes 에 밀어넣는다. */
@@ -158,6 +207,47 @@ export function buildScene(encoded, options) {
   const layout = layoutForRegion(k, { size: cellSize, margin });
 
   const shapes = [];
+  const center0 = axialToPixel(0, 0, layout);
+
+  // (0) V*Q 중앙 QR 블록 — **셀보다 먼저** 그린다 (확대 규약: 바깥 콰이어트 3모듈은
+  // 셀이 위에 덮어 잘린다. QR_PROTECTED_QUIET 주석 참조). 모듈 피치는 19셀 슬롯 안
+  // 최대 중심 정사각을 이분탐색(고정 48회 — 결정적)으로 실계산해 유도한다.
+  if (centerQr) {
+    const qr = qrMatrix(opts.qrText);
+    if (qr.size !== QR_MODULE_GRID) {
+      throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
+    }
+    // 슬롯 경계 = ring 3 셀 (hexDistance 3) — 더 바깥 링은 항상 더 멀다.
+    const ring3Polys = regionCells(3)
+      .filter((c) => hexDistance(c.q, c.r) === 3)
+      .map((c) => hexCorners(c.q, c.r, layout));
+    const protectedRectAt = (side) => ({
+      minX: center0.x - side / 2,
+      minY: center0.y - side / 2,
+      maxX: center0.x + side / 2,
+      maxY: center0.y + side / 2,
+    });
+    let lo = 0;
+    let hi = 10 * cellSize;
+    for (let it = 0; it < 48; it += 1) {
+      const mid = (lo + hi) / 2;
+      const hit = ring3Polys.some((poly) => rectPolyOverlap(protectedRectAt(mid), poly));
+      if (hit) hi = mid;
+      else lo = mid;
+    }
+    const protectedSide = lo * 0.995; // 수치 접촉 회피 여유
+    const qrModuleSize = protectedSide / QR_PROTECTED_MODULES;
+    // 안전 재단언 (이분탐색과 중복이지만 계약 명시용).
+    const guard = protectedRectAt(QR_PROTECTED_MODULES * qrModuleSize);
+    for (const poly of ring3Polys) {
+      if (rectPolyOverlap(guard, poly)) {
+        throw new Error('V*Q 보호 영역(심볼+콰이어트 1모듈)이 ring-3 셀과 겹친다 — 유도 버그');
+      }
+    }
+    const blockSide = QR_BLOCK_MODULES * qrModuleSize;
+    const blockOrigin = { x: center0.x - blockSide / 2, y: center0.y - blockSide / 2 };
+    pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette);
+  }
 
   // (1) 셀 3면 폴리곤 — regionCells(k) 순회 순서로, cellDigits 에 있는 셀만.
   for (const { q, r } of regionCells(k)) {
@@ -174,7 +264,7 @@ export function buildScene(encoded, options) {
     }
   }
 
-  const center = axialToPixel(0, 0, layout);
+  const center = center0;
 
   if (!centerQr) {
     // (2) 불스아이 6 disc — 바깥 밴드(반지름 큰 것)부터. i(0=중심)가 짝수면 dark, 홀수면 light.
@@ -188,22 +278,8 @@ export function buildScene(encoded, options) {
         color: i % 2 === 0 ? palette.bullseyeDark : palette.bullseyeLight,
       });
     }
-  } else {
-    // (2') 중앙 QR 변형(V*Q, ADR 0004 §1-3~§1-5) — 불스아이 disc 6개 대신
-    // 중심 정렬 축평행 QR 블록. QR 모듈 크기는 불스아이 안전 원판(R = maxSafeRadius)
-    // 에 내접하는 정사각형 변을 29(콰이어트 포함 QR 모듈수)로 나눈 값
-    // (= √26·cellSize/29, ADR 0004 §2 닫힌 형태 — 여기서는 실제 R 에서 유도해
-    // bullseye.js 쪽 공식이 바뀌어도 자동으로 정합한다).
-    const qr = qrMatrix(opts.qrText);
-    if (qr.size !== QR_MODULE_GRID) {
-      throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
-    }
-    const R = maxSafeRadius(cellSize);
-    const qrModuleSize = (R * Math.sqrt(2)) / QR_BLOCK_MODULES;
-    const blockSide = QR_BLOCK_MODULES * qrModuleSize;
-    const blockOrigin = { x: center.x - blockSide / 2, y: center.y - blockSide / 2 };
-    pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette);
   }
+  // (centerQr 의 중앙 블록은 (0) 에서 이미 — 셀 밑에 깔리는 painter 순서가 확대 규약이다.)
 
   // (3) 코너 QR 블록 — sceneY.js 와 동일 painter 패턴(콰이어트 4모듈 밝은 패치 +
   // 다크 모듈, QR 모듈 = cellSize/2, 캔버스 좌상단). codeBounds(k, layout) 실루엣과

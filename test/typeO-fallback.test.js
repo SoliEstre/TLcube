@@ -17,7 +17,9 @@ import { encode } from '../src/encode.js';
 import { VERSIONS } from '../src/capacity.js';
 import { decode as decodeFormatInfo, ECC_LEVEL } from '../src/formatinfo.js';
 import { buildScene } from '../src/scene.js';
-import { codeBounds, layoutForRegion } from '../src/hexgrid.js';
+import {
+  codeBounds, layoutForRegion, regionCells, hexDistance, hexCorners,
+} from '../src/hexgrid.js';
 import { maxSafeRadius } from '../src/bullseye.js';
 import { qrMatrix, TL_READER_URL } from '../src/qr.js';
 
@@ -151,29 +153,57 @@ describe('(3) V*Q — 불스아이 disc 부재 + QR 모듈 크기 √26·cellSiz
     assert.equal(discs.length, 0);
   });
 
-  test('QR 모듈 크기 = maxSafeRadius(cellSize)·√2/29 = √26·cellSize/29 (ADR 0004 §2)', () => {
-    const cellSize = 3; // 1 이 아닌 값으로도 선형성 확인.
-    const scene = buildScene(encoded, {
-      palette: PALETTE, qrText: TL_READER_URL, centerQr: true, cellSize,
-    });
-    const cellShapeCount = 3 * encoded.cellDigits.size;
-    const quiet = scene.shapes[cellShapeCount]; // centerQr: 셀 폴리곤 바로 다음이 QR 콰이어트 패치.
-    assert.deepEqual(quiet.color, PALETTE.bullseyeLight);
-    const xs = quiet.points.map((p) => p.x);
-    const width = Math.max(...xs) - Math.min(...xs);
-    const qrModuleSize = width / QR_BLOCK_MODULES;
+  // 확대 규약 (2026-08-09 사용자 지시): 중앙 블록은 **셀보다 먼저** 그려져
+  // (shapes[0] = 콰이어트 패치) 바깥 콰이어트 3모듈이 셀 밑에 깔려 잘린다.
+  // 모듈 피치는 19셀 슬롯 최대 중심 정사각에서 유도 — 구판 √26·s/29 보다 커야 한다.
 
-    const rFromCode = maxSafeRadius(cellSize);
-    const expectedFromR = (rFromCode * Math.sqrt(2)) / QR_BLOCK_MODULES;
-    const expectedClosedForm = (Math.sqrt(26) * cellSize) / QR_BLOCK_MODULES; // ADR 0004 §2 닫힌 형태.
-    assert.ok(Math.abs(qrModuleSize - expectedFromR) < 1e-9);
-    assert.ok(Math.abs(qrModuleSize - expectedClosedForm) < 1e-9);
+  test('QR 모듈 크기 — 구판(√26·cellSize/29)보다 확대 + cellSize 선형성', () => {
+    const sizes = [1, 3];
+    const ratios = [];
+    for (const cellSize of sizes) {
+      const scene = buildScene(encoded, {
+        palette: PALETTE, qrText: TL_READER_URL, centerQr: true, cellSize,
+      });
+      const quiet = scene.shapes[0]; // 확대 규약: 중앙 블록이 painter 선두.
+      assert.deepEqual(quiet.color, PALETTE.bullseyeLight);
+      const xs = quiet.points.map((p) => p.x);
+      const width = Math.max(...xs) - Math.min(...xs);
+      const qrModuleSize = width / QR_BLOCK_MODULES;
+      const oldClosedForm = (Math.sqrt(26) * cellSize) / QR_BLOCK_MODULES;
+      assert.ok(qrModuleSize > oldClosedForm * 1.1,
+        `확대 미달: ${qrModuleSize} vs 구판 ${oldClosedForm}`);
+      ratios.push(qrModuleSize / cellSize);
+    }
+    assert.ok(Math.abs(ratios[0] - ratios[1]) < 1e-9, 'cellSize 선형성 위반');
   });
 
-  test('축 정렬: 콰이어트 패치·다크 모듈 폴리곤 전부 축평행 사각형(각 변 x 또는 y 값 2종뿐)', () => {
+  test('보호 영역(심볼+콰이어트 1모듈)이 ring-3 셀과 무교차, 바깥 콰이어트는 침범 허용', () => {
+    const cellSize = 1;
+    const scene = buildScene(encoded, { palette: PALETTE, qrText: TL_READER_URL, centerQr: true, cellSize });
+    const quiet = scene.shapes[0];
+    const xs = quiet.points.map((p) => p.x);
+    const ys = quiet.points.map((p) => p.y);
+    const blockSide = Math.max(...xs) - Math.min(...xs);
+    const qm = blockSide / QR_BLOCK_MODULES;
+    // 보호 사각 = 심볼 21 + 양쪽 1모듈 = 23모듈, 블록 중심 기준.
+    const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+    const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+    const half = (23 * qm) / 2;
+    const ring3 = regionCells(3).filter((c) => hexDistance(c.q, c.r) === 3);
+    for (const { q, r } of ring3) {
+      for (const p of hexCorners(q, r, scene.layout)) {
+        const inside = p.x > cx - half && p.x < cx + half && p.y > cy - half && p.y < cy + half;
+        assert.ok(!inside, `ring-3 셀 (${q},${r}) 꼭짓점이 보호 영역 안: (${p.x},${p.y})`);
+      }
+    }
+    // 바깥 콰이어트(블록 전체)는 ring-3 에 닿아도 된다 — 확대의 목적. 여기서는 단언하지
+    // 않고, 실제로 블록이 구판보다 커졌음은 위 테스트가 보장한다.
+  });
+
+  test('축 정렬: 중앙 블록(선두 1+darkCount 개) 전부 축평행 사각형', () => {
     const scene = buildScene(encoded, { palette: PALETTE, qrText: TL_READER_URL, centerQr: true });
-    const cellShapeCount = 3 * encoded.cellDigits.size;
-    for (let i = cellShapeCount; i < scene.shapes.length; i += 1) {
+    const darkCount = darkModuleCoords(qrMatrix(TL_READER_URL)).length;
+    for (let i = 0; i < 1 + darkCount; i += 1) {
       const s = scene.shapes[i];
       assert.equal(s.kind, 'polygon');
       const xs = new Set(s.points.map((p) => p.x));
@@ -186,8 +216,7 @@ describe('(3) V*Q — 불스아이 disc 부재 + QR 모듈 크기 √26·cellSiz
   test('블록 중심이 격자 원점(불스아이 중심)과 일치 — 축 정렬 + 중심 정렬', () => {
     const cellSize = 1;
     const scene = buildScene(encoded, { palette: PALETTE, qrText: TL_READER_URL, centerQr: true, cellSize });
-    const cellShapeCount = 3 * encoded.cellDigits.size;
-    const quiet = scene.shapes[cellShapeCount];
+    const quiet = scene.shapes[0];
     const xs = quiet.points.map((p) => p.x);
     const ys = quiet.points.map((p) => p.y);
     const centerX = (Math.max(...xs) + Math.min(...xs)) / 2;
@@ -211,11 +240,11 @@ describe('(4) 코너·중앙 동시 표시 시 QR 내용 동일 계약 (ADR 0004
     });
 
     const cellShapeCount = 3 * encoded.cellDigits.size;
-    // painter 순서(구현 계약): 셀 폴리곤 → 중앙 QR(콰이어트+다크) → 코너 QR(콰이어트+다크).
-    const centerQuietIdx = cellShapeCount;
-    const centerDarkStart = centerQuietIdx + 1;
+    // painter 순서(확대 규약): **중앙 QR(콰이어트+다크) → 셀 폴리곤** → 코너 QR(콰이어트+다크).
+    const centerQuietIdx = 0;
+    const centerDarkStart = 1;
     const centerDarkEnd = centerDarkStart + darkCount;
-    const cornerQuietIdx = centerDarkEnd;
+    const cornerQuietIdx = centerDarkEnd + cellShapeCount;
     const cornerDarkStart = cornerQuietIdx + 1;
     const cornerDarkEnd = cornerDarkStart + darkCount;
     assert.equal(scene.shapes.length, cornerDarkEnd, '전체 shape 수가 예상과 다름 — painter 순서/개수 확인');
@@ -255,8 +284,8 @@ describe('(4) 코너·중앙 동시 표시 시 QR 내용 동일 계약 (ADR 0004
     const cellShapeCount = 3 * encoded.cellDigits.size;
     const qr = qrMatrix(TL_READER_URL);
     const darkCount = darkModuleCoords(qr).length;
-    // 셀 폴리곤 + 중앙 QR(콰이어트 1 + 다크 darkCount) 뿐 — 코너분 추가 없음.
-    assert.equal(scene.shapes.length, cellShapeCount + 1 + darkCount);
+    // 중앙 QR(콰이어트 1 + 다크 darkCount, painter 선두) + 셀 폴리곤 뿐 — 코너분 추가 없음.
+    assert.equal(scene.shapes.length, 1 + darkCount + cellShapeCount);
   });
 });
 
