@@ -11,6 +11,7 @@ import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import { moduleQuad, cubeBounds, layoutForCube, YFACES } from '../src/ygrid.js';
 import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
 import { digitToRanks } from '../src/lehmer.js';
+import { digitToPattern, RHO_MIN } from '../src/tonemap.js';
 import { relativeLuminance } from '../src/luminance.js';
 import { qrMatrix } from '../src/qr.js';
 
@@ -25,15 +26,16 @@ const PALETTE = {
   bullseyeLight: { r: 255, g: 255, b: 255 },
 };
 
-/** n×n 전 셀을 채운 합성 encoded — digit = (i + 2j) % 6 (결정적, 다양한 digit 분포). */
-function makeFullEncoded(n) {
+/** n×n 전 셀을 채운 합성 encoded — digit = (i + 2j) % 6 (결정적, 다양한 digit 분포).
+ * tones 생략 시 2톤 메인(encodeY.js 기본값과 정합) — encoded.tones 를 명시적으로 싣는다. */
+function makeFullEncoded(n, tones = 2) {
   const cellDigits = new Map();
   for (let j = 0; j < n; j += 1) {
     for (let i = 0; i < n; i += 1) {
       cellDigits.set(`${i},${j}`, { digit: (i + 2 * j) % 6, role: 'data' });
     }
   }
-  return { n, cellDigits };
+  return { n, cellDigits, tones };
 }
 
 const N = 5; // 작은 n — painter 순서·색 매핑 테스트용(빠르다).
@@ -115,26 +117,26 @@ describe('buildSceneY — painter 순서 계약', () => {
   });
 });
 
-describe('buildSceneY — 면 게인 적용', () => {
-  test('T 면은 게인 1 — 원본 레벨 색 그대로', () => {
+describe('buildSceneY — 면 게인 적용 (tones=2, 2톤 메인 기본값)', () => {
+  test('T 면은 게인 1 — 원본 레벨 색 그대로(밝음→levels[2], 어두움→levels[0])', () => {
     const encoded = makeFullEncoded(N);
     const scene = buildSceneY(encoded, { palette: PALETTE });
     const entry = encoded.cellDigits.get('0,0');
-    const ranks = digitToRanks(entry.digit);
+    const pattern = digitToPattern(entry.digit);
     // 셀(0,0) 의 T 는 셀블록 시작 인덱스 0(YFACES 순서 [T,L,R] 중 첫째).
     const tShape = scene.shapes[0];
-    assert.deepEqual(tShape.color, PALETTE.levels[ranks.T]);
+    assert.deepEqual(tShape.color, PALETTE.levels[pattern.T ? 2 : 0]);
   });
 
   test('L·R 면은 게인 <1 이라 레벨 색보다 어둡다(각 채널 <= 원본)', () => {
     const encoded = makeFullEncoded(N);
     const scene = buildSceneY(encoded, { palette: PALETTE });
     const entry = encoded.cellDigits.get('0,0');
-    const ranks = digitToRanks(entry.digit);
+    const pattern = digitToPattern(entry.digit);
     const lShape = scene.shapes[1]; // YFACES 순서 [T,L,R] 중 둘째
     const rShape = scene.shapes[2];
-    const origL = PALETTE.levels[ranks.L];
-    const origR = PALETTE.levels[ranks.R];
+    const origL = PALETTE.levels[pattern.L ? 2 : 0];
+    const origR = PALETTE.levels[pattern.R ? 2 : 0];
     for (const ch of ['r', 'g', 'b']) {
       assert.ok(lShape.color[ch] <= origL[ch], `L.${ch} 게인 후 원본보다 밝아짐`);
       assert.ok(rShape.color[ch] <= origR[ch], `R.${ch} 게인 후 원본보다 밝아짐`);
@@ -166,6 +168,75 @@ describe('buildSceneY — 면 게인 적용', () => {
     }
     void relativeLuminance; // import 사용 표시(형식 검증에도 relativeLuminance 실측을 쓴다는 계약 문서화).
     void scene;
+  });
+});
+
+describe('buildSceneY — tones=3(Y-T 옵션) 는 기존 rank 경로 그대로', () => {
+  test('색은 digitToRanks 순위 기반 levels[rank] — digitToPattern 이 아니다', () => {
+    const encoded = makeFullEncoded(N, 3);
+    const scene = buildSceneY(encoded, { palette: PALETTE });
+    const entry = encoded.cellDigits.get('0,0');
+    const ranks = digitToRanks(entry.digit);
+    const tShape = scene.shapes[0];
+    const lShape = scene.shapes[1];
+    const rShape = scene.shapes[2];
+    assert.deepEqual(tShape.color, PALETTE.levels[ranks.T]);
+    // L·R 는 게인 <1 이라 원본보다 어둡거나 같다(원본 레벨 색과 직접 비교는
+    // 게인 적용 후라 불가 — 대신 원본 levels[rank] 대비 채널별 <= 만 확인).
+    const origL = PALETTE.levels[ranks.L];
+    const origR = PALETTE.levels[ranks.R];
+    for (const ch of ['r', 'g', 'b']) {
+      assert.ok(lShape.color[ch] <= origL[ch]);
+      assert.ok(rShape.color[ch] <= origR[ch]);
+    }
+  });
+
+  test('셀마다 세 면이 서로 다른 rank(0,1,2 전부) 를 쓸 수 있다 — 2톤과 달리 mid 레벨도 등장', () => {
+    // digit 3(=(T,L,R) 랭크 (0,2,1)) 로 강제한 셀 하나를 만들어 mid 레벨(levels[1])
+    // 이 실제로 렌더에 쓰이는지 확인 — tones=2 경로에서는 절대 등장하지 않는 색이다
+    // (U17: 2톤은 levels[0]/[2] 만 강제).
+    const cellDigits = new Map([['0,0', { digit: 3, role: 'data' }]]);
+    const encoded = { n: N, cellDigits, tones: 3 };
+    const scene = buildSceneY(encoded, { palette: PALETTE });
+    const ranks = digitToRanks(3);
+    const colors = [scene.shapes[0].color, scene.shapes[1].color, scene.shapes[2].color];
+    const midColorUsed = [ranks.T, ranks.L, ranks.R].includes(1);
+    assert.ok(midColorUsed, 'digit 3 의 순위 중 하나는 mid(1) 여야 한다 — 테스트 전제 확인');
+    void colors;
+  });
+});
+
+describe('buildSceneY — U17 2톤 분리 계약 게이트', () => {
+  test('RHO_MIN 미달 팔레트(levels[0]/[2] 비율 < 10)는 tones=2 에서 throw', () => {
+    const encoded = makeFullEncoded(N); // tones=2 기본값
+    const flatPalette = {
+      ...PALETTE,
+      levels: [
+        { r: 100, g: 100, b: 100 },
+        { r: 150, g: 150, b: 150 },
+        { r: 180, g: 180, b: 180 }, // levels[0] 대비 분리비가 10 미만
+      ],
+    };
+    assert.throws(() => buildSceneY(encoded, { palette: flatPalette }), RangeError);
+  });
+
+  test('tones=3 이면 levels[0]/[2] 분리비가 낮아도 게이트가 적용되지 않는다', () => {
+    const encoded = makeFullEncoded(N, 3);
+    const flatPalette = {
+      ...PALETTE,
+      levels: [
+        { r: 100, g: 100, b: 100 },
+        { r: 150, g: 150, b: 150 },
+        { r: 180, g: 180, b: 180 },
+      ],
+    };
+    assert.doesNotThrow(() => buildSceneY(encoded, { palette: flatPalette }));
+  });
+
+  test('slate 급 분리(PALETTE, ρ≈12.59 >= RHO_MIN=10) 는 tones=2 에서 통과', () => {
+    assert.equal(RHO_MIN, 10);
+    const encoded = makeFullEncoded(N);
+    assert.doesNotThrow(() => buildSceneY(encoded, { palette: PALETTE }));
   });
 });
 

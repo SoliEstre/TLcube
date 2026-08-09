@@ -145,6 +145,41 @@ test('encode: 앵커/레퍼런스 digit 및 위치, 포맷 정보 왕복', () =>
   }
 });
 
+test('encode: centerQr=false(기본) 는 버전 인덱스·반환 형태를 바꾸지 않는다 (ADR 0004 §1-3)', () => {
+  for (const spec of VERSIONS) {
+    const result = encode('anchor test', { version: spec.version, eccLevel: 'M' });
+    assert.equal(result.centerQr, false);
+    const reads = [
+      result.formatDigits.slice(0, 5),
+      result.formatDigits.slice(5, 10),
+      result.formatDigits.slice(10, 15),
+    ];
+    const decoded = decodeFormatInfo(reads);
+    assert.equal(decoded.ok, true);
+    assert.equal(decoded.version, spec.version - 1); // 0~2, centerQr 오프셋 없음.
+  }
+});
+
+test('encode: centerQr=true 는 포맷 정보 버전 인덱스에 +4 오프셋을 준다 → V1Q=4·V2Q=5·V3Q=6 (ADR 0004 §1-3)', () => {
+  for (const spec of VERSIONS) {
+    const result = encode('anchor test', { version: spec.version, eccLevel: 'M', centerQr: true });
+    assert.equal(result.centerQr, true);
+    const reads = [
+      result.formatDigits.slice(0, 5),
+      result.formatDigits.slice(5, 10),
+      result.formatDigits.slice(10, 15),
+    ];
+    const decoded = decodeFormatInfo(reads);
+    assert.equal(decoded.ok, true);
+    assert.equal(decoded.version, (spec.version - 1) + 4); // 4,5,6
+    assert.equal(decoded.eccLevel, ECC_LEVEL.M);
+  }
+});
+
+test('encode: centerQr 이 boolean 이 아니면 TypeError', () => {
+  assert.throws(() => encode('x', { centerQr: 'yes' }), TypeError);
+});
+
 test('encode: 용량 초과 페이로드는 RangeError (버전 지정)', () => {
   const spec = VERSIONS[0];
   const level = 'M';

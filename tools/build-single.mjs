@@ -21,10 +21,16 @@ const OUT_DIR = path.join(ROOT, 'dist');
 const OUT_FILE = path.join(OUT_DIR, 'trilume.html');
 
 // 모듈 순서 — 디스크 순회 순서에 기대지 않는다. 의존 그래프상 위상 정렬 순서로 고정.
+// TY8: Type Y(+QR fallback) 모듈을 뒤에 추가 — 전부 위 Type O 접두(prefix) 안의
+// 모듈만 의존하거나(ygrid→hexgrid, capacityY→capacity/rs211/header, encodeY→...,
+// verifyY→verify 등) 새로 추가되는 gf256→rs→qr 체인에 의존한다(qr.js 는 rs.js 를,
+// rs.js 는 gf256.js 를 쓴다 — Type O RS 경로의 gfp/rs211 과는 별개 체인).
 const MODULE_ORDER = [
   'hexgrid', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity', 'luminance',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
+  'gf256', 'rs', 'qr', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
+  'encodeY', 'sceneY', 'verifyY',
 ];
 
 /** index.html 안의 <script type="module"> 블록 정확히 1개를 찾아 반환한다. */

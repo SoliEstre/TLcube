@@ -51,9 +51,9 @@ export function chooseVersion(text, eccLevel = 'M') {
  * 인코더 파이프라인 진입점 (SPEC §7.1). version 을 생략하면 `chooseVersion` 으로
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H'}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean}} [options]
  * @returns {{
- *   version: number, k: number, eccLevel: 'L'|'M'|'H',
+ *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
  *   dataDigits: Uint8Array,
@@ -70,7 +70,10 @@ export function encode(text, options = {}) {
   if (typeof text !== 'string') {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
-  const { version, eccLevel = 'M' } = options;
+  const { version, eccLevel = 'M', centerQr = false } = options;
+  if (typeof centerQr !== 'boolean') {
+    throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
+  }
 
   const spec = version === undefined
     ? chooseVersion(text, eccLevel)
@@ -134,11 +137,15 @@ export function encode(text, options = {}) {
   }
 
   // 포맷 정보(§5.4): 버전 인덱스 = version − 1(V1→0…), eccLevel 문자 → formatinfo 매핑.
+  // centerQr(V*Q, ADR 0004 §1-3): 인덱스에 +4 오프셋 — V1Q=4·V2Q=5·V3Q=6. 이 인덱스는
+  // 파인더 종류의 **사후 검증**이다(디코더가 발견한 파인더 종류와 복호 인덱스가
+  // 일치하는지 대조) — 여기 인코더 쪽은 오프셋 부착까지만 한다.
   const eccLevelValue = ECC_LEVEL[eccLevel];
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
-  const formatReplicas = encodeReplicated({ version: spec.version - 1, eccLevel: eccLevelValue });
+  const versionIndex = (spec.version - 1) + (centerQr ? 4 : 0);
+  const formatReplicas = encodeReplicated({ version: versionIndex, eccLevel: eccLevelValue });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(k) 순서와 정합
 
   // 셀별 digit + role 맵 (불스아이 셀은 애초에 어느 목록에도 없으므로 자동 제외).
@@ -174,6 +181,7 @@ export function encode(text, options = {}) {
     version: spec.version,
     k,
     eccLevel,
+    centerQr,
     capacity,
     codewordSymbols,
     dataDigits,

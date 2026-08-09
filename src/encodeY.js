@@ -3,15 +3,21 @@
 // UTF-8 페이로드 → 길이 헤더 1B 부착 → 0x00 패딩(고정 dataBytes까지) → base-211 심볼
 // 변환(27B↔28심볼, MSD-first) → RS(GF(211)) 패리티 → 코드워드 = 심볼 열 S개 →
 // 심볼 → 3 digit(MSD-first) → 마스크 가산 → scan order-Y 로 셀 배치 → 잔여 셀에
-// 필러(프리마스크 0 + 마스크) → digit 확정까지. 배정(digit → 3면 상대 휘도 순위)·
-// 렌더는 다른 모듈 몫이다 — 여기서는 셀별 digit 확정까지만 한다.
+// 필러(프리마스크 0 + 마스크) → digit 확정까지. 배정(digit → 3면 색 — 2톤 패턴 또는
+// 3톤 순위)·렌더는 다른 모듈 몫이다 — 여기서는 셀별 digit 확정까지만 한다.
 //
 // 이 모듈은 새 규약을 만들지 않는다 — capacityY.js/header.js/base211.js/rs211.js/
 // mask.js/formatinfo.js/layoutY.js/placementY.js 가 이미 확정한 조각을 파이프라인
 // 순서대로 조합만 한다. nsym 은 rs211.js 의 NSYM_TABLE(Type O)이 아니라 capacityY.js
 // 의 NSYM_TABLE_Y(Type Y, [U3] 잠정)를 쓴다 — capacityForY 가 이미 그 표를 참조한다.
+//
+// [v3.1 §4b 2톤 메인 전환] tones 옵션(기본 2)이 데이터 파이프라인 자체(마스크·
+// scan order·RS·심볼 변환)에는 영향을 주지 않는다 — capacityY.js 주석대로 용량 회계가
+// tones 무관이기 때문. tones 가 바꾸는 것은 딱 둘: ① 레퍼런스 조 digit 배정
+// (placementY.referenceCellsAll 이 tones 를 받는다) ② 포맷 정보 버전 인덱스
+// (versionSpecY 가 반환하는 spec.formatIndex — Y1/Y2=8/9, Y1T/Y2T=10/11).
 
-import { VERSIONS_Y, capacityForY } from './capacityY.js';
+import { VERSIONS_Y, capacityForY, versionSpecY } from './capacityY.js';
 import { frame, payloadByteLength } from './header.js';
 import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
 import { rsEncode } from './rs211.js';
@@ -20,31 +26,31 @@ import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { dataCellsInScanOrder, fillerCells } from './layoutY.js';
 import { referenceCellsAll, formatCells } from './placementY.js';
 
-// 포맷 정보 버전 인덱스 네임스페이스 분할 (SPEC §14): 0~7 = Type O V1~V8,
-// 8~15 = Type Y Y1~Y8 (Y1→8, Y2→9). Type Y 는 spec.version(1,2,...) 에 이 오프셋을
-// 더해 formatinfo 의 version 필드를 채운다.
-const FORMAT_VERSION_OFFSET_Y = 8;
-
 function cellKey(i, j) {
   return `${i},${j}`;
 }
 
 /**
- * 페이로드 바이트 길이가 들어가는 최소 VERSIONS_Y 항목을 고른다.
- * 마지막 항목도 초과하면 RangeError.
+ * 페이로드 바이트 길이가 들어가는 최소 VERSIONS_Y 항목을 고른다(같은 tones 안에서만
+ * 후보로 삼는다). 마지막 항목도 초과하면 RangeError.
  * @param {string} text
  * @param {'L'|'M'|'H'} [eccLevel]
- * @returns {{version:number, n:number, overhead:number, symbolKey:string}} VERSIONS_Y 원소
+ * @param {2|3} [tones] 기본 2(2톤 메인).
+ * @returns {{name:string, version:number, n:number, tones:2|3, formatIndex:number, overhead:number, symbolKey:string}} VERSIONS_Y 원소
  */
-export function chooseVersionY(text, eccLevel = 'M') {
+export function chooseVersionY(text, eccLevel = 'M', tones = 2) {
   const byteLength = payloadByteLength(text);
-  for (const spec of VERSIONS_Y) {
+  const candidates = VERSIONS_Y.filter((v) => v.tones === tones);
+  if (candidates.length === 0) {
+    throw new RangeError(`지원하지 않는 tones: ${tones} (허용 ${[...new Set(VERSIONS_Y.map((v) => v.tones))].join(', ')})`);
+  }
+  for (const spec of candidates) {
     const capacity = capacityForY(spec, eccLevel);
     if (byteLength <= capacity.maxPayloadBytes) return spec;
   }
-  const last = VERSIONS_Y[VERSIONS_Y.length - 1];
+  const last = candidates[candidates.length - 1];
   throw new RangeError(
-    `페이로드 ${byteLength} B 는 Y${last.version}(ECC-${eccLevel}) 용량을 초과한다`,
+    `페이로드 ${byteLength} B 는 ${last.name}(ECC-${eccLevel}) 용량을 초과한다`,
   );
 }
 
@@ -52,9 +58,10 @@ export function chooseVersionY(text, eccLevel = 'M') {
  * Type Y 인코더 파이프라인 진입점 (SPEC §14). version 을 생략하면
  * `chooseVersionY` 로 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H'}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', tones?: 2|3}} [options] tones
+ *   기본 2(2톤 메인, ADR 0003 v3.1 §4b) — 3 은 Y-T 옵션.
  * @returns {{
- *   version: number, n: number, eccLevel: 'L'|'M'|'H',
+ *   version: number, n: number, eccLevel: 'L'|'M'|'H', tones: 2|3, formatIndex: number,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
  *   dataDigits: Uint8Array,
@@ -70,14 +77,11 @@ export function encodeY(text, options = {}) {
   if (typeof text !== 'string') {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
-  const { version, eccLevel = 'M' } = options;
+  const { version, eccLevel = 'M', tones = 2 } = options;
 
   const spec = version === undefined
-    ? chooseVersionY(text, eccLevel)
-    : VERSIONS_Y.find((v) => v.version === version);
-  if (!spec) {
-    throw new RangeError(`알 수 없는 Type Y 버전: ${version} (허용 ${VERSIONS_Y.map((v) => v.version).join(', ')})`);
-  }
+    ? chooseVersionY(text, eccLevel, tones)
+    : versionSpecY(version, tones);
 
   const capacity = capacityForY(spec, eccLevel);
   const { n } = spec;
@@ -135,14 +139,15 @@ export function encodeY(text, options = {}) {
     fillerDigits[i] = maskAdd(0, c.i, c.j);
   }
 
-  // 포맷 정보(§5.4 승계): 버전 인덱스 네임스페이스 8~15(Y1→8, Y2→9), eccLevel 문자
-  // → formatinfo 매핑. formatCells(n) 순서로 15셀에 배치한다.
+  // 포맷 정보(§5.4 승계): 버전 인덱스는 spec.formatIndex(Y1/Y2=8/9, Y1T/Y2T=10/11 —
+  // versionSpecY 가 이미 tones 로 갈랐다), eccLevel 문자 → formatinfo 매핑.
+  // formatCells(n) 순서로 15셀에 배치한다.
   const eccLevelValue = ECC_LEVEL[eccLevel];
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
   const formatReplicas = encodeReplicated({
-    version: FORMAT_VERSION_OFFSET_Y + (spec.version - 1),
+    version: spec.formatIndex,
     eccLevel: eccLevelValue,
   });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(n) 순서와 정합
@@ -150,7 +155,8 @@ export function encodeY(text, options = {}) {
   // 셀별 digit + role 맵. Type Y 는 불스아이·앵커가 없다(reference | format | data | filler).
   const cellDigits = new Map();
 
-  const references = referenceCellsAll(n); // 각 원소가 이미 REFERENCE_GROUP_DIGITS 를 들고 있다 — 마스크 없음.
+  // 레퍼런스 조 digit 배정도 tones 모드별(placementY.js D9 전환 비용 항목) — 마스크 없음.
+  const references = referenceCellsAll(n, spec.tones);
   for (const c of references) {
     cellDigits.set(cellKey(c.i, c.j), { digit: c.digit, role: 'reference' });
   }
@@ -175,6 +181,8 @@ export function encodeY(text, options = {}) {
     version: spec.version,
     n,
     eccLevel,
+    tones: spec.tones,
+    formatIndex: spec.formatIndex,
     capacity,
     codewordSymbols,
     dataDigits,

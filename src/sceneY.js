@@ -14,8 +14,9 @@
 import { moduleQuad, layoutForCube, cubeBounds, YFACES } from './ygrid.js';
 import { CORNER_UNIT_OFFSETS } from './hexgrid.js';
 import { digitToRanks } from './lehmer.js';
-import { srgbChannelToLinear } from './luminance.js';
+import { srgbChannelToLinear, relativeLuminance } from './luminance.js';
 import { qrMatrix } from './qr.js';
+import { digitToPattern, assertToneSeparation } from './tonemap.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -123,14 +124,20 @@ function assertEncoded(encoded) {
   if (encoded === null || typeof encoded !== 'object') {
     throw new TypeError('encoded 는 객체여야 한다');
   }
-  const { n, cellDigits } = encoded;
+  const { n, cellDigits, tones } = encoded;
   if (!Number.isInteger(n) || n < 1) {
     throw new RangeError(`encoded.n 은 1 이상의 정수여야 한다: ${n}`);
   }
   if (!(cellDigits instanceof Map)) {
     throw new TypeError('encoded.cellDigits 는 Map 이어야 한다');
   }
-  return { n, cellDigits };
+  // tones 생략 시 2톤 메인(ADR 0003 v3.1 §4b 기본값)으로 취급한다 — encodeY.js 의
+  // 기본값과 정합.
+  const resolvedTones = tones === undefined ? 2 : tones;
+  if (resolvedTones !== 2 && resolvedTones !== 3) {
+    throw new RangeError(`encoded.tones 는 2 또는 3 이어야 한다: ${resolvedTones}`);
+  }
+  return { n, cellDigits, tones: resolvedTones };
 }
 
 function assertPalette(palette) {
@@ -153,12 +160,20 @@ function assertPalette(palette) {
  * @returns {{n:number, layout:object, width:number, height:number, background:{r,g,b}, shapes:Array}}
  */
 export function buildSceneY(encoded, options) {
-  const { n, cellDigits } = assertEncoded(encoded);
+  const { n, cellDigits, tones } = assertEncoded(encoded);
 
   const opts = options || {};
   const palette = assertPalette(opts.palette);
   const faceGains = opts.palette.faceGains === undefined ? DEFAULT_FACE_GAINS : opts.palette.faceGains;
   assertFaceGains(faceGains);
+
+  // U17(2톤 분리 계약): tones===2 일 때만 levels[0]/[2] 를 실제로 렌더에 쓰므로,
+  // 그 둘의 분리비가 RHO_MIN 을 만족하는지 여기서 검증한다(팔레트 게이트).
+  if (tones === 2) {
+    const yLo = relativeLuminance(palette.levels[0]);
+    const yHi = relativeLuminance(palette.levels[2]);
+    assertToneSeparation(yLo, yHi);
+  }
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
   const margin = opts.margin === undefined ? DEFAULT_MARGIN_FACTOR * cellSize : opts.margin;
@@ -175,17 +190,23 @@ export function buildSceneY(encoded, options) {
 
   // ① 전 모듈 폴리곤 — 셀 (i,j) 를 j→i 오름차순(바깥 j, 안쪽 i, 둘 다 오름차순),
   // 셀마다 YFACES 순서 [T,L,R]. cellDigits 에 없는 (i,j) 는 건너뛴다.
+  //
+  // 색 인덱스 산출은 tones 로 갈린다(D9, v3.1 §4b): tones===2(2톤 메인) 는
+  // digitToPattern 의 밝음/어두움 비트를 levels[2]/levels[0] 에 매핑(U17 — 팔레트
+  // 3원소 중 [0]/[2] 만 쓴다), tones===3(Y-T) 는 기존 digitToRanks 순위 경로.
   for (let j = 0; j < n; j += 1) {
     for (let i = 0; i < n; i += 1) {
       const key = `${i},${j}`;
       const entry = cellDigits.get(key);
       if (entry === undefined) continue;
-      const ranks = digitToRanks(entry.digit);
+      const ranks = tones === 3 ? digitToRanks(entry.digit) : null;
+      const pattern = tones === 2 ? digitToPattern(entry.digit) : null;
       for (const face of YFACES) {
+        const levelIndex = tones === 2 ? (pattern[face] ? 2 : 0) : ranks[face];
         shapes.push({
           kind: 'polygon',
           points: moduleQuad(face, i, j, layout),
-          color: gainedLevels[face][ranks[face]],
+          color: gainedLevels[face][levelIndex],
         });
       }
     }

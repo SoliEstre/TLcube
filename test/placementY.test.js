@@ -7,7 +7,8 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  REFERENCE_GROUP_DIGITS,
+  REFERENCE_GROUP_DIGITS_2T,
+  REFERENCE_GROUP_DIGITS_3T,
   FORMAT_BLOCK_LENGTH,
   FORMAT_REPLICAS,
   referenceAnchors,
@@ -52,11 +53,40 @@ describe('레퍼런스 4조', () => {
     }
   });
 
-  test('digit 배정 = REFERENCE_GROUP_DIGITS = [0,4,3], 그 순서로', () => {
-    assert.deepEqual(REFERENCE_GROUP_DIGITS, [0, 4, 3]);
+  test('digit 배정(tones=2, 기본값/2톤 메인) = REFERENCE_GROUP_DIGITS_2T = [0,1,2]', () => {
+    assert.deepEqual(REFERENCE_GROUP_DIGITS_2T, [0, 1, 2]);
     for (const n of VERSIONS_N) {
       for (const g of referenceGroups(n)) {
-        assert.deepEqual(g.digits, REFERENCE_GROUP_DIGITS);
+        assert.deepEqual(g.digits, REFERENCE_GROUP_DIGITS_2T);
+      }
+      for (const g of referenceGroups(n, 2)) {
+        assert.deepEqual(g.digits, REFERENCE_GROUP_DIGITS_2T);
+      }
+    }
+  });
+
+  test('digit 배정(tones=3, Y-T 옵션) = REFERENCE_GROUP_DIGITS_3T = [0,4,3]', () => {
+    assert.deepEqual(REFERENCE_GROUP_DIGITS_3T, [0, 4, 3]);
+    for (const n of VERSIONS_N) {
+      for (const g of referenceGroups(n, 3)) {
+        assert.deepEqual(g.digits, REFERENCE_GROUP_DIGITS_3T);
+      }
+    }
+  });
+
+  test('알 수 없는 tones 는 RangeError', () => {
+    for (const n of VERSIONS_N) {
+      assert.throws(() => referenceGroups(n, 4), RangeError);
+      assert.throws(() => referenceCellsAll(n, 0), RangeError);
+    }
+  });
+
+  test('조 좌표·L자형 셀 구조는 tones 무관 불변 (digit 만 갈린다)', () => {
+    for (const n of VERSIONS_N) {
+      const g2 = referenceGroups(n, 2);
+      const g3 = referenceGroups(n, 3);
+      for (let g = 0; g < 4; g += 1) {
+        assert.deepEqual(g2[g].cells, g3[g].cells, `n=${n} 조 ${g}`);
       }
     }
   });

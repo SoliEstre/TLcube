@@ -5,9 +5,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { encodeY, chooseVersionY } from '../src/encodeY.js';
-import { VERSIONS_Y, capacityForY } from '../src/capacityY.js';
+import { VERSIONS_Y, capacityForY, versionSpecY } from '../src/capacityY.js';
 import { dataCellsInScanOrder, layoutMapY } from '../src/layoutY.js';
-import { referenceCellsAll, formatCells, REFERENCE_GROUP_DIGITS } from '../src/placementY.js';
+import {
+  referenceCellsAll, formatCells, REFERENCE_GROUP_DIGITS_2T, REFERENCE_GROUP_DIGITS_3T,
+} from '../src/placementY.js';
 import { maskSub, maskAdd } from '../src/mask.js';
 import { packCellDigitsToSymbols } from '../src/base211.js';
 import { rsDecodeMessage } from '../src/rs211.js';
@@ -17,6 +19,8 @@ import { decodeSingle } from '../src/formatinfo.js';
 
 const key = (i, j) => `${i},${j}`;
 
+// tones 를 생략한 케이스(기본 2, 2톤 메인)와 tones=3(Y-T 옵션) 을 명시한 케이스를
+// 섞는다 — encodeY 의 기본값 경로와 명시 경로 양쪽을 실제로 왕복시킨다.
 const CASES = [
   { version: 1, eccLevel: 'L', text: 'Type Y wire V1/L' },
   { version: 1, eccLevel: 'M', text: 'Type Y 와이어 V1/M — 한글 포함' },
@@ -24,13 +28,15 @@ const CASES = [
   { version: 2, eccLevel: 'L', text: 'Type Y wire V2/L' },
   { version: 2, eccLevel: 'M', text: 'Type Y 와이어 V2/M — 한글 포함' },
   { version: 2, eccLevel: 'H', text: 'Type Y wire V2/H' },
+  { version: 1, eccLevel: 'M', tones: 3, text: 'Type Y-T wire V1/M' },
+  { version: 2, eccLevel: 'M', tones: 3, text: 'Type Y-T 와이어 V2/M — 한글 포함' },
 ];
 
 // ── 1. cellDigits 맵 단독 복호 왕복 (Y1·Y2 × L/M/H) ─────────────────────────
 
-for (const { version, eccLevel, text } of CASES) {
-  test(`encodeY — cellDigits 단독 복호 왕복 Y${version}/${eccLevel} — 배열 경유 없이 맵에서만`, () => {
-    const encoded = encodeY(text, { version, eccLevel });
+for (const { version, eccLevel, tones, text } of CASES) {
+  test(`encodeY — cellDigits 단독 복호 왕복 Y${version}/${eccLevel}/t${tones ?? 2} — 배열 경유 없이 맵에서만`, () => {
+    const encoded = encodeY(text, { version, eccLevel, ...(tones === undefined ? {} : { tones }) });
     const { n, capacity } = encoded;
     const scanCells = dataCellsInScanOrder(n);
     const map = layoutMapY(n);
@@ -67,9 +73,9 @@ for (const { version, eccLevel, text } of CASES) {
 
 // ── 2. cellDigits.size / role 개수 ───────────────────────────────────────────
 
-for (const { version, eccLevel, text } of CASES) {
-  test(`encodeY — cellDigits.size === n², role 개수 정합 Y${version}/${eccLevel}`, () => {
-    const encoded = encodeY(text, { version, eccLevel });
+for (const { version, eccLevel, tones, text } of CASES) {
+  test(`encodeY — cellDigits.size === n², role 개수 정합 Y${version}/${eccLevel}/t${tones ?? 2}`, () => {
+    const encoded = encodeY(text, { version, eccLevel, ...(tones === undefined ? {} : { tones }) });
     const { n, capacity } = encoded;
     assert.equal(encoded.cellDigits.size, n * n, 'n² 전 좌표를 커버해야 한다');
 
@@ -87,12 +93,14 @@ for (const { version, eccLevel, text } of CASES) {
   });
 }
 
-// ── 3. formatDigits 왕복 + 레퍼런스 조 digit [0,4,3] ────────────────────────
+// ── 3. formatDigits 왕복(formatIndex — v3.1 §4b) + 레퍼런스 조 digit(tones 별) ──
 
-for (const { version, eccLevel, text } of CASES) {
-  test(`encodeY — formatDigits 를 formatinfo.decode 로 왕복 Y${version}/${eccLevel}`, () => {
-    const encoded = encodeY(text, { version, eccLevel });
+for (const { version, eccLevel, tones, text } of CASES) {
+  test(`encodeY — formatDigits 를 formatinfo.decode 로 왕복 Y${version}/${eccLevel}/t${tones ?? 2}`, () => {
+    const encoded = encodeY(text, { version, eccLevel, ...(tones === undefined ? {} : { tones }) });
     assert.equal(encoded.formatDigits.length, 15);
+    assert.equal(encoded.tones, tones === undefined ? 2 : tones);
+    assert.equal(encoded.formatIndex, versionSpecY(version, encoded.tones).formatIndex);
 
     const replicas = [
       encoded.formatDigits.slice(0, 5),
@@ -102,17 +110,18 @@ for (const { version, eccLevel, text } of CASES) {
     for (const replica of replicas) {
       const result = decodeSingle(replica);
       assert.equal(result.ok, true);
-      assert.equal(result.version, 8 + (version - 1), 'Y1→8, Y2→9 네임스페이스');
+      assert.equal(result.version, encoded.formatIndex, 'Y1/Y2=8/9, Y1T/Y2T=10/11 네임스페이스');
       const ECC_INDEX = { L: 0, M: 1, H: 2 };
       assert.equal(result.eccLevel, ECC_INDEX[eccLevel]);
     }
 
-    // 레퍼런스 4조 전부 digit [0,4,3] (마스크 없음).
-    const references = referenceCellsAll(encoded.n);
+    // 레퍼런스 4조 전부 tones 모드에 맞는 digit (마스크 없음).
+    const expectedDigits = encoded.tones === 2 ? REFERENCE_GROUP_DIGITS_2T : REFERENCE_GROUP_DIGITS_3T;
+    const references = referenceCellsAll(encoded.n, encoded.tones);
     assert.equal(references.length, 12);
     for (let g = 0; g < 4; g += 1) {
       const group = references.slice(g * 3, g * 3 + 3);
-      assert.deepEqual(group.map((c) => c.digit), REFERENCE_GROUP_DIGITS);
+      assert.deepEqual(group.map((c) => c.digit), expectedDigits);
     }
     // cellDigits 맵에서도 동일하게 확인.
     for (const c of references) {
@@ -126,7 +135,10 @@ for (const { version, eccLevel, text } of CASES) {
 // ── 4. 용량 초과 / chooseVersionY 경계 / 비문자열 / 결정성 ──────────────────
 
 test('encodeY — 용량 초과 RangeError', () => {
-  const last = VERSIONS_Y[VERSIONS_Y.length - 1];
+  // tones=2(기본, 2톤 메인) 후보 중 최대 용량 = Y2. 용량 회계는 tones 무관 동일하므로
+  // Y2T 로 재어도 같은 수치가 나온다(capacityY.test.js 항등 참조) — 여기서는 encodeY
+  // 기본 경로(tones=2)와 맞춰 versionSpecY(2,2) 로 명시한다.
+  const last = versionSpecY(2, 2);
   const capacity = capacityForY(last, 'H');
   const tooLong = 'x'.repeat(capacity.maxPayloadBytes + 1);
   assert.throws(() => encodeY(tooLong, { eccLevel: 'H' }), RangeError);
@@ -138,20 +150,33 @@ test('encodeY — chooseVersionY 경계: 정확히 maxPayloadBytes 는 통과, +
     for (const eccLevel of ['L', 'M', 'H']) {
       const capacity = capacityForY(spec, eccLevel);
       const exact = 'a'.repeat(capacity.maxPayloadBytes);
-      const chosen = chooseVersionY(exact, eccLevel);
+      const chosen = chooseVersionY(exact, eccLevel, spec.tones);
+      assert.equal(chosen.tones, spec.tones, `${spec.name}/${eccLevel}: tones 필터링이 새지 않아야 한다`);
       assert.ok(
         capacityForY(chosen, eccLevel).maxPayloadBytes >= capacity.maxPayloadBytes,
-        `Y${spec.version}/${eccLevel}: 정확히 용량인 페이로드가 더 작은 버전을 골라선 안 된다`,
+        `${spec.name}/${eccLevel}: 정확히 용량인 페이로드가 더 작은 버전을 골라선 안 된다`,
       );
-      const encoded = encodeY(exact, { version: chosen.version, eccLevel });
+      const encoded = encodeY(exact, { version: chosen.version, eccLevel, tones: spec.tones });
       assert.equal(encoded.eccLevel, eccLevel);
+      assert.equal(encoded.tones, spec.tones);
     }
   }
+});
+
+test('encodeY — chooseVersionY: 알 수 없는 tones 는 RangeError', () => {
+  assert.throws(() => chooseVersionY('x', 'M', 4), RangeError);
+  assert.throws(() => chooseVersionY('x', 'M', 0), RangeError);
 });
 
 test('encodeY — 명시 버전이 알 수 없으면 RangeError', () => {
   assert.throws(() => encodeY('x', { version: 99 }), RangeError);
   assert.throws(() => encodeY('x', { version: 0 }), RangeError);
+});
+
+test('encodeY — (version, tones) 조합이 VERSIONS_Y 에 없으면 RangeError (v3.1 §4b)', () => {
+  assert.throws(() => encodeY('x', { version: 1, tones: 4 }), RangeError);
+  // version=1 은 tones=2/3 둘 다 존재하지만, 존재하지 않는 조합을 요구하면 던진다.
+  assert.throws(() => encodeY('x', { version: 99, tones: 3 }), RangeError);
 });
 
 test('encodeY — 비문자열 페이로드는 version 명시 여부와 무관하게 TypeError', () => {

@@ -13,12 +13,14 @@ import {
   estimateGainFromPairs,
   estimateFaceGains,
   fitResiduals,
+  estimateFaceThetas,
   verifyRasterY,
   EPSILON_FIT,
 } from '../src/verifyY.js';
 import { YFACES, moduleSampleDisc, layoutForCube } from '../src/ygrid.js';
 import { referenceCellsAll } from '../src/placementY.js';
 import { digitToRanks, RADIX } from '../src/lehmer.js';
+import { digitToPattern, thetaFromAnchors } from '../src/tonemap.js';
 import { relativeLuminance, getPreset, DEFAULT_PRESET } from '../src/luminance.js';
 
 const N = 11; // placementY.assertSize 최소값 (n=9·10 은 포맷↔레퍼런스 실충돌로 하한 상향 — 검증 라운드).
@@ -102,15 +104,50 @@ function renderEncoded(scene, encoded, options = {}) {
   return raster;
 }
 
+// 이 파일의 기존 헬퍼(renderEncoded/buildEncoded)는 3톤(rank 기반, 3레벨) 렌더를
+// 시뮬레이션한다 — 그래서 buildEncoded 는 명시적으로 tones:3 을 싣는다(verifyRasterY
+// 의 기본값은 이제 2 — encoded.tones 를 생략하면 안 된다). "3톤 경로 무변경" 계약을
+// 이 파일이 실제로 3톤 경로를 태워서 검증한다.
 function buildEncoded(dataCells) {
   const cellDigits = new Map();
-  for (const c of referenceCellsAll(N)) {
+  for (const c of referenceCellsAll(N, 3)) {
     cellDigits.set(`${c.i},${c.j}`, { digit: c.digit, role: 'reference' });
   }
   for (const { i, j, digit } of dataCells) {
     cellDigits.set(`${i},${j}`, { digit, role: 'data' });
   }
-  return { n: N, cellDigits };
+  return { n: N, cellDigits, tones: 3 };
+}
+
+/** 2톤 전용 렌더 — digitToPattern(digit)[face] 비트로 levels[2]/levels[0] 만 칠한다
+ * (U17: 2톤은 mid 레벨을 절대 쓰지 않는다). */
+function renderEncoded2T(scene, encoded, options = {}) {
+  const faceGain = options.faceGain || { T: 1, L: 1, R: 1 };
+  const background = options.background || { r: 5, g: 5, b: 5 };
+  const raster = createRaster(scene, background);
+  const levels = getPreset(DEFAULT_PRESET).levels.map((rgb) => relativeLuminance(rgb));
+  for (const [key, { digit }] of encoded.cellDigits) {
+    const [i, j] = key.split(',').map(Number);
+    const pattern = digitToPattern(digit);
+    for (const face of YFACES) {
+      const yKnown = pattern[face] ? levels[2] : levels[0];
+      const yObs = yKnown * faceGain[face];
+      paintModule(raster, scene, face, i, j, relLuminanceToGray(yObs));
+    }
+  }
+  return raster;
+}
+
+/** 2톤 레퍼런스(4조 × digit [0,1,2]) + 데이터 셀. */
+function buildEncoded2T(dataCells) {
+  const cellDigits = new Map();
+  for (const c of referenceCellsAll(N, 2)) {
+    cellDigits.set(`${c.i},${c.j}`, { digit: c.digit, role: 'reference' });
+  }
+  for (const { i, j, digit } of dataCells) {
+    cellDigits.set(`${i},${j}`, { digit, role: 'data' });
+  }
+  return { n: N, cellDigits, tones: 2 };
 }
 
 // ── measureModuleMedian: 기하 + 원판 median 왕복 ──────────────────────────────
@@ -293,4 +330,139 @@ test('verifyRasterY: 한 데이터 셀만 순위를 뒤바꿔 그리면 그 셀�
   assert.equal(result.mismatches[0].j, 0);
   assert.equal(result.mismatches[0].expected, 2);
   assert.equal(result.ok, false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2톤 경로 (v3.1 §4b — U14 등급 iii 분류기, U18 소거)
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('estimateFaceThetas: 왜곡 없는 렌더면 θ_f ≈ thetaFromAnchors(levels[0], levels[2])', () => {
+  const scene = makeScene();
+  const encoded = buildEncoded2T([]);
+  const raster = renderEncoded2T(scene, encoded);
+  const { gains } = estimateFaceGains(raster, scene, encoded);
+  const { theta, anchors } = estimateFaceThetas(raster, scene, encoded, gains);
+  const levels = getPreset(DEFAULT_PRESET).levels.map((rgb) => relativeLuminance(rgb));
+  const expected = thetaFromAnchors(levels[0], levels[2]);
+  for (const face of YFACES) {
+    assert.ok(Math.abs(theta[face] - expected) < 0.01, `${face}: theta=${theta[face]} expected=${expected}`);
+    assert.equal(anchors[face].lows.length, 8, `${face}: 조당 2 어두움 × 4조`);
+    assert.equal(anchors[face].highs.length, 4, `${face}: 조당 1 밝음 × 4조`);
+  }
+});
+
+test('verifyRasterY 2톤: digit 0..5 전부 왕복, erasures=0, logMargin>0, minDeltaY=NaN', () => {
+  const scene = makeScene();
+  const coords = [
+    { i: 0, j: 0 }, { i: 1, j: 0 }, { i: 0, j: 1 },
+    { i: 4, j: 0 }, { i: 0, j: 4 }, { i: 4, j: 4 },
+  ];
+  assert.equal(coords.length, RADIX);
+  const dataCells = coords.map((c, digit) => ({ ...c, digit }));
+  const encoded = buildEncoded2T(dataCells);
+  const raster = renderEncoded2T(scene, encoded);
+
+  const result = verifyRasterY(raster, scene, encoded);
+
+  assert.equal(result.total, encoded.cellDigits.size);
+  assert.equal(result.matched, result.total);
+  assert.deepEqual(result.mismatches, []);
+  assert.deepEqual(result.erasures, []);
+  assert.ok(Number.isFinite(result.logMargin) && result.logMargin > 0, `logMargin=${result.logMargin}`);
+  assert.ok(Number.isNaN(result.minDeltaY), 'tones=2 에서는 minDeltaY 를 NaN 으로 보고한다');
+  assert.ok(result.residualGate.ok);
+  assert.equal(result.ok, true);
+});
+
+test('verifyRasterY 2톤: 면별 시스템 게인 왜곡을 §7.2-Y 정규화로 흡수해도 여전히 일치한다', () => {
+  const scene = makeScene();
+  const dataCells = [
+    { i: 0, j: 0, digit: 1 },
+    { i: 4, j: 4, digit: 5 },
+  ];
+  const encoded = buildEncoded2T(dataCells);
+  const faceGain = { T: 1.3, L: 1.0, R: 0.85 }; // 렌더 전역에 균일 왜곡
+  const raster = renderEncoded2T(scene, encoded, { faceGain });
+
+  const result = verifyRasterY(raster, scene, encoded);
+
+  assert.equal(result.matched, result.total);
+  assert.deepEqual(result.mismatches, []);
+  assert.deepEqual(result.erasures, []);
+  assert.equal(result.ok, true);
+});
+
+test('verifyRasterY 2톤: 한 데이터 셀만 다른 합법 패턴으로 그리면 그 셀만 mismatch 로 잡힌다', () => {
+  const scene = makeScene();
+  const dataCells = [
+    { i: 0, j: 0, digit: 2 },
+    { i: 4, j: 4, digit: 5 },
+  ];
+  const encoded = buildEncoded2T(dataCells);
+  const raster = renderEncoded2T(scene, encoded);
+
+  // (0,0) 셀을 다른 합법 패턴(digit 4, digit 2 와 다름)으로 다시 덮어 그려
+  // 렌더-계약 불일치를 시뮬레이션.
+  const corruptedPattern = digitToPattern(4);
+  const levels = getPreset(DEFAULT_PRESET).levels.map((rgb) => relativeLuminance(rgb));
+  for (const face of YFACES) {
+    const yKnown = corruptedPattern[face] ? levels[2] : levels[0];
+    paintModule(raster, scene, face, 0, 0, relLuminanceToGray(yKnown));
+  }
+
+  const result = verifyRasterY(raster, scene, encoded);
+
+  assert.equal(result.matched, result.total - 1);
+  assert.equal(result.mismatches.length, 1);
+  assert.equal(result.mismatches[0].i, 0);
+  assert.equal(result.mismatches[0].j, 0);
+  assert.equal(result.mismatches[0].expected, 2);
+  assert.equal(result.erasures.length, 0);
+  assert.equal(result.ok, false);
+});
+
+test('verifyRasterY 2톤: 불법 트리플(전부-밝음)을 강제로 그리면 erasures 로 잡힌다 (mismatch 아님, U18)', () => {
+  const scene = makeScene();
+  const dataCells = [{ i: 0, j: 0, digit: 2 }];
+  const encoded = buildEncoded2T(dataCells);
+  const raster = renderEncoded2T(scene, encoded);
+  const levels = getPreset(DEFAULT_PRESET).levels.map((rgb) => relativeLuminance(rgb));
+  // 전부-밝음(levels[2])으로 덮어 그린다 — 자기표식 소거 후보(illegal).
+  for (const face of YFACES) {
+    paintModule(raster, scene, face, 0, 0, relLuminanceToGray(levels[2]));
+  }
+
+  const result = verifyRasterY(raster, scene, encoded);
+
+  assert.equal(result.erasures.length, 1);
+  assert.equal(result.erasures[0].i, 0);
+  assert.equal(result.erasures[0].j, 0);
+  assert.equal(result.erasures[0].expected, 2);
+  assert.equal(result.mismatches.length, 0);
+  assert.equal(result.ok, false);
+});
+
+// ── 검증 라운드 minor 대응 회귀 2건 ─────────────────────────────────────────
+
+test('encoded.tones 생략 시 2톤 메인 경로가 탄다 (와이어 기본값 = 2 — 뮤테이션 사각 봉쇄)', () => {
+  const scene = makeScene();
+  const encoded = buildEncoded2T([{ i: 0, j: 0, digit: 4 }]);
+  delete encoded.tones; // 생략 계약 — verifyY docblock 선언대로 기본 2 로 해석돼야 한다
+  const raster = renderEncoded2T(scene, { ...encoded, tones: 2 });
+  const result = verifyRasterY(raster, scene, encoded);
+  // 2톤 경로의 표지: theta 산출 + logMargin 유한 (3톤 경로면 theta=null, logMargin=NaN).
+  assert.ok(result.theta !== null && result.theta !== undefined);
+  assert.ok(Number.isFinite(result.logMargin));
+  assert.equal(result.mismatches.length, 0);
+  assert.equal(result.ok, true);
+});
+
+test('게인 전면 실패(NaN) 시 잔차 게이트가 공허 통과하지 않는다 (unfittableFaces → ok=false)', () => {
+  const scene = makeScene();
+  const encoded = buildEncoded2T([]);
+  const raster = renderEncoded2T(scene, encoded);
+  const gate = fitResiduals(raster, scene, encoded, { T: NaN, L: NaN, R: NaN });
+  assert.equal(gate.ok, false);
+  assert.deepEqual(gate.unfittableFaces, ['T', 'L', 'R']);
+  assert.equal(gate.residuals.length, 0);
 });

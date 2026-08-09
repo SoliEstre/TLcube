@@ -42,6 +42,14 @@ export const QR_ALNUM_CHARSET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
 /** v1-L 알파뉴메릭 모드 순 용량 (문자 수). */
 export const QR_V1L_CAPACITY = 25;
 
+/**
+ * TL 리더 URL — 코너 QR·중앙 QR(V*Q) 공용 상수 (PM/008 규범, ADR 0004 §1-4).
+ * 23자, v1-L 알파뉴메릭 용량(25자) 이내, 문자셋(대문자·숫자·`:` `/` `.`) 전부
+ * `QR_ALNUM_CHARSET` 안에 있다. 전 소비자(scene.js·sceneY.js 및 그 상위)는 이
+ * 상수만 import 해서 쓴다 — 리터럴 재작성 금지.
+ */
+export const TL_READER_URL = 'HTTPS://TLSCAN.ESTRE.SO';
+
 // ── 내부 상수 ────────────────────────────────────────────────────────────
 
 const SIZE = 21; // QR v1 모듈 한 변

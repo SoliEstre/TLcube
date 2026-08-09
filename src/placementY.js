@@ -8,7 +8,7 @@
 // 런타임 의존성 0 · 순수 ESM (node: API 금지, Math.random/Date 금지).
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 레퍼런스 4조 (U9) — SPEC §14 "라틴 스퀘어 digit {0,4,3} 3셀 1조, 공간 분산 ≥ 3조"
+// 레퍼런스 4조 (U9) — SPEC §14 "라틴 스퀘어 3셀 1조, 공간 분산 ≥ 3조"
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // 조 앵커(순서 고정): A = (2,2), (n-3,2), (2,n-3), (n-3,n-3). 네 앵커는 격자의 네
@@ -16,11 +16,28 @@
 // 코너 대각 배치로 만족한다.
 //
 // 조 내 3셀: L자형 [(p,q), (p+1,q), (p,q+1)] — 앵커 (p,q) 에서 i 방향으로 한 칸,
-// j 방향으로 한 칸. 이 3셀에 `REFERENCE_GROUP_DIGITS = [0,4,3]` 을 그 순서대로 배정한다
-// (ADR 0003 D3: digit {0,4,3} 의 순위행이 세 면 모두에 레벨 {0,1,2} 전부를 준다).
+// j 방향으로 한 칸. 이 3셀에 digit 을 그 순서대로 배정한다 — **어떤 digit 인지는
+// 톤 모드(tones)에 따라 갈린다** (ADR 0003 v3.1 §4b D9, 전환 비용 항목):
+//
+//   tones=2(2톤 메인) → REFERENCE_GROUP_DIGITS_2T = [0,1,2] : 조 내 3셀이 매 면마다
+//     밝음 1·어두움 2 를 갖는다(양 앵커 확보 — U14 θ_f 추정이 밝은/어두운 앵커 둘
+//     다 필요). 4조 구조는 3톤과 동일 — 공간 분산이 오염 방어선(§4b 근거 수치).
+//   tones=3(Y-T 옵션) → REFERENCE_GROUP_DIGITS_3T = [0,4,3] (구 REFERENCE_GROUP_DIGITS,
+//     ADR 0003 D3): 이 순위행이 세 면 모두에 레벨 {0,1,2} 전부를 준다.
+//
+// 조 좌표·L자형 셀 구조 자체는 톤 모드 무관 불변 — 바뀌는 것은 digit 배정뿐이다.
 
-/** 레퍼런스 조 내 3셀에 배정하는 digit, L자형 셀 순서([(p,q),(p+1,q),(p,q+1)])대로. */
-export const REFERENCE_GROUP_DIGITS = Object.freeze([0, 4, 3]);
+/** 레퍼런스 조 내 3셀에 배정하는 digit(tones=2, 2톤 메인), L자형 셀 순서대로. */
+export const REFERENCE_GROUP_DIGITS_2T = Object.freeze([0, 1, 2]);
+
+/** 레퍼런스 조 내 3셀에 배정하는 digit(tones=3, Y-T 옵션), L자형 셀 순서대로. */
+export const REFERENCE_GROUP_DIGITS_3T = Object.freeze([0, 4, 3]);
+
+function referenceDigitsFor(tones) {
+  if (tones === 2) return REFERENCE_GROUP_DIGITS_2T;
+  if (tones === 3) return REFERENCE_GROUP_DIGITS_3T;
+  throw new RangeError(`지원하지 않는 tones: ${tones} (허용 2 또는 3)`);
+}
 
 function key(i, j) {
   return `${i},${j}`;
@@ -48,31 +65,35 @@ export function referenceAnchors(n) {
 }
 
 /**
- * 레퍼런스 4조. 각 조 = {cells: [{i,j}×3], digits: REFERENCE_GROUP_DIGITS}.
- * cells 순서 = [(p,q), (p+1,q), (p,q+1)], digits[k] 가 cells[k] 에 대응.
+ * 레퍼런스 4조. 각 조 = {cells: [{i,j}×3], digits}. cells 순서 = [(p,q), (p+1,q),
+ * (p,q+1)], digits[k] 가 cells[k] 에 대응. digits 는 tones 모드별
+ * (REFERENCE_GROUP_DIGITS_2T | _3T) — 조 좌표·셀 구조는 tones 무관 불변.
  * @param {number} n
+ * @param {2|3} [tones] 기본 2(2톤 메인, ADR 0003 v3.1 §4b).
  * @returns {{cells:{i:number,j:number}[], digits: number[]}[]} 길이 4
  */
-export function referenceGroups(n) {
+export function referenceGroups(n, tones = 2) {
   assertSize(n);
+  const digits = referenceDigitsFor(tones);
   return referenceAnchors(n).map(({ p, q }) => ({
     cells: [
       { i: p, j: q },
       { i: p + 1, j: q },
       { i: p, j: q + 1 },
     ],
-    digits: REFERENCE_GROUP_DIGITS,
+    digits,
   }));
 }
 
 /**
  * 레퍼런스 12셀 전부(조 순 · 조 내 순 평탄화), 각 셀에 digit 을 얹은 목록.
  * @param {number} n
+ * @param {2|3} [tones] 기본 2(2톤 메인) — referenceGroups 로 그대로 전달.
  * @returns {{i:number, j:number, digit:number}[]} 길이 12
  */
-export function referenceCellsAll(n) {
+export function referenceCellsAll(n, tones = 2) {
   const out = [];
-  for (const group of referenceGroups(n)) {
+  for (const group of referenceGroups(n, tones)) {
     group.cells.forEach((cell, idx) => {
       out.push({ ...cell, digit: group.digits[idx] });
     });

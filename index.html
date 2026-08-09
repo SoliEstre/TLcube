@@ -54,6 +54,13 @@
   button:hover { border-color: var(--accent); color: var(--accent); }
   .row { display: flex; gap: 10px; }
   .row > div { flex: 1; }
+  .check-row {
+    display: flex; align-items: center; gap: 8px; margin: 12px 0 0;
+    font-size: 12px; color: var(--text);
+  }
+  .check-row input { width: auto; margin: 0; }
+  .hint { font-size: 11px; color: var(--dim); margin: 4px 0 0; line-height: 1.5; }
+  fieldset.typeOptions { border: none; margin: 0; padding: 0; }
   #info { margin-top: 14px; font-size: 12px; line-height: 1.7; color: var(--dim); }
   #info b { color: var(--text); font-weight: 600; }
   .badge {
@@ -81,14 +88,28 @@
   <div class="panel">
     <label for="payload">페이로드 (UTF-8 텍스트)</label>
     <textarea id="payload" spellcheck="false">https://example.com/trilume</textarea>
+
+    <label for="codeType">타입</label>
+    <select id="codeType">
+      <option value="O" selected>Type O (마름모 8면체 필드)</option>
+      <option value="Y">Type Y (단일 큐브)</option>
+    </select>
+
     <div class="row">
-      <div>
-        <label for="version">버전</label>
-        <select id="version">
+      <div id="versionWrapO">
+        <label for="versionO">버전</label>
+        <select id="versionO">
           <option value="auto" selected>자동 (최소)</option>
           <option value="1">V1 (k=6 · 18 B)</option>
           <option value="2">V2 (k=8 · 39 B)</option>
           <option value="3">V3 (k=10 · 65 B)</option>
+        </select>
+      </div>
+      <div id="versionWrapY" style="display:none">
+        <label for="versionY">버전</label>
+        <select id="versionY">
+          <option value="1" selected>Y1 (n=21)</option>
+          <option value="2">Y2 (n=25)</option>
         </select>
       </div>
       <div>
@@ -100,6 +121,29 @@
         </select>
       </div>
     </div>
+
+    <fieldset class="typeOptions" id="optionsO">
+      <div class="check-row">
+        <input type="checkbox" id="qrCorner" checked>
+        <label for="qrCorner" style="margin:0;color:var(--text)">QR 코너 폴백 (기본 ON)</label>
+      </div>
+      <div class="check-row">
+        <input type="checkbox" id="qrCenter">
+        <label for="qrCenter" style="margin:0;color:var(--text)">중앙 QR 변형 (V*Q — 대형 인쇄용)</label>
+      </div>
+      <p class="hint" id="qrCenterHint" style="display:none">
+        V*Q 는 불스아이 대신 중앙에 QR 을 배치합니다 — 코드 폭 13cm 이상 인쇄를 권장합니다.
+      </p>
+    </fieldset>
+
+    <fieldset class="typeOptions" id="optionsY" style="display:none">
+      <label for="tone">톤</label>
+      <select id="tone">
+        <option value="2" selected>2톤 (기본)</option>
+        <option value="3">3톤 (Y-T)</option>
+      </select>
+    </fieldset>
+
     <label for="preset">스타일 프리셋</label>
     <select id="preset"></select>
     <label>내보내기 (결정적 — 동일 입력 → 바이트 동일)</label>
@@ -112,21 +156,31 @@
   </div>
   <div id="stage"><canvas id="view"></canvas></div>
 </main>
-<footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) 뿐</footer>
+<footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐</footer>
 
 <script type="module">
 import { encode, chooseVersion } from './src/encode.js';
+import { encodeY } from './src/encodeY.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
+import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
+import { verifyRasterY } from './src/verifyY.js';
 import { payloadByteLength } from './src/header.js';
 import { rasterToPng } from './src/png.js';
 import { sceneToSvg } from './src/svg.js';
+import { TL_READER_URL } from './src/qr.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
-  payload: $('payload'), version: $('version'), ecc: $('ecc'), preset: $('preset'),
+  payload: $('payload'), codeType: $('codeType'),
+  versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'),
+  versionO: $('versionO'), versionY: $('versionY'),
+  ecc: $('ecc'), preset: $('preset'),
+  optionsO: $('optionsO'), optionsY: $('optionsY'),
+  qrCorner: $('qrCorner'), qrCenter: $('qrCenter'), qrCenterHint: $('qrCenterHint'),
+  tone: $('tone'),
   info: $('info'), error: $('error'), canvas: $('view'),
   exportPng: $('exportPng'), exportSvg: $('exportSvg'),
 };
@@ -144,17 +198,24 @@ function download(bytes, mime, filename) {
   URL.revokeObjectURL(url);
 }
 
+function exportFilename(ext) {
+  const { type, encoded } = current;
+  if (type === 'O') {
+    const qMark = encoded.centerQr ? 'Q' : '';
+    return `trilume-o-v${encoded.version}${qMark}-${encoded.eccLevel}.${ext}`;
+  }
+  return `trilume-y${encoded.version}${encoded.tones === 3 ? 't' : ''}-${encoded.eccLevel}.${ext}`;
+}
+
 els.exportPng.addEventListener('click', () => {
   if (!current) return;
   const raster = rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 });
-  download(rasterToPng(raster), 'image/png',
-    `trilume-v${current.encoded.version}-${current.encoded.eccLevel}.png`);
+  download(rasterToPng(raster), 'image/png', exportFilename('png'));
 });
 
 els.exportSvg.addEventListener('click', () => {
   if (!current) return;
-  download(new TextEncoder().encode(sceneToSvg(current.scene)), 'image/svg+xml',
-    `trilume-v${current.encoded.version}-${current.encoded.eccLevel}.svg`);
+  download(new TextEncoder().encode(sceneToSvg(current.scene)), 'image/svg+xml', exportFilename('svg'));
 });
 
 for (const name of Object.keys(PRESETS)) {
@@ -167,12 +228,16 @@ for (const name of Object.keys(PRESETS)) {
 
 function paletteOf(name) {
   const p = getPreset(name);
-  return { background: p.background, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT };
+  return {
+    background: p.background, levels: p.levels,
+    bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+    faceGains: DEFAULT_FACE_GAINS,
+  };
 }
 
 const css = (c) => `rgb(${c.r},${c.g},${c.b})`;
 
-/** scene → canvas. 인접 마름모 사이 AA 실선(헤어라인 심) 방지를 위해 동일색 얇은 스트로크를 겹친다. */
+/** scene → canvas. 인접 도형 사이 AA 실선(헤어라인 심) 방지를 위해 동일색 얇은 스트로크를 겹친다. */
 function drawScene(scene, canvas, ppu) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(scene.width * ppu * dpr);
@@ -202,6 +267,78 @@ function drawScene(scene, canvas, ppu) {
   }
 }
 
+/** Type O/Y 옵션 패널 표시 전환 + 중앙 QR 토글 시 코너 기본 OFF (ADR 0004 §1-4). */
+function syncTypeUi() {
+  const isY = els.codeType.value === 'Y';
+  els.versionWrapO.style.display = isY ? 'none' : '';
+  els.versionWrapY.style.display = isY ? '' : 'none';
+  els.optionsO.style.display = isY ? 'none' : '';
+  els.optionsY.style.display = isY ? '' : 'none';
+}
+
+let lastQrCenter = els.qrCenter.checked;
+els.qrCenter.addEventListener('change', () => {
+  // 켜지는 순간(off→on)에만 코너 기본을 끈다 — 이후 사용자가 다시 켜면(cornerToo) 존중한다.
+  if (els.qrCenter.checked && !lastQrCenter) {
+    els.qrCorner.checked = false;
+  }
+  lastQrCenter = els.qrCenter.checked;
+  els.qrCenterHint.style.display = els.qrCenter.checked ? '' : 'none';
+});
+
+els.codeType.addEventListener('change', () => { syncTypeUi(); schedule(); });
+syncTypeUi();
+
+function renderTypeO(text, eccLevel, presetName) {
+  const opts = { eccLevel };
+  if (els.versionO.value !== 'auto') opts.version = Number(els.versionO.value);
+  opts.centerQr = els.qrCenter.checked;
+  const encoded = encode(text, opts);
+
+  const qrEnabled = els.qrCenter.checked || els.qrCorner.checked;
+  const sceneOpts = { palette: paletteOf(presetName), centerQr: els.qrCenter.checked };
+  if (qrEnabled) sceneOpts.qrText = TL_READER_URL;
+  if (els.qrCenter.checked) sceneOpts.cornerToo = els.qrCorner.checked;
+  const scene = buildScene(encoded, sceneOpts);
+
+  const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
+  const check = verifyRaster(raster, scene, encoded);
+  const bytes = payloadByteLength(text);
+  const badge = check.ok
+    ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · Δmin ${check.minDelta.toFixed(3)}</span>`
+    : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건</span>`;
+  const info =
+    `타입 <b>O</b> · 버전 <b>V${encoded.version}${encoded.centerQr ? 'Q' : ''}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
+    `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
+    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(presetName).toFixed(3)}<br>` +
+    badge;
+  return { type: 'O', encoded, scene, info };
+}
+
+function renderTypeY(text, eccLevel, presetName) {
+  const version = Number(els.versionY.value);
+  const tones = Number(els.tone.value);
+  const encoded = encodeY(text, { version, eccLevel, tones });
+
+  const scene = buildSceneY(encoded, { palette: paletteOf(presetName), qrText: TL_READER_URL });
+
+  const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
+  const check = verifyRasterY(raster, scene, encoded);
+  const bytes = payloadByteLength(text);
+  const marginLabel = tones === 2
+    ? `logMargin ${check.logMargin.toFixed(3)}`
+    : `Δmin-Y ${check.minDeltaY.toFixed(3)}`;
+  const badge = check.ok
+    ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · ${marginLabel}</span>`
+    : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건 · 소거 ${check.erasures.length}건</span>`;
+  const info =
+    `타입 <b>Y</b> · 버전 <b>Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}</b> (n=${encoded.n}) · ECC <b>${encoded.eccLevel}</b> · 톤 <b>${encoded.tones}</b><br>` +
+    `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
+    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym}<br>` +
+    badge;
+  return { type: 'Y', encoded, scene, info };
+}
+
 let timer = 0;
 function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
 
@@ -211,25 +348,12 @@ function render() {
   const eccLevel = els.ecc.value;
   const presetName = els.preset.value;
   try {
-    const opts = { eccLevel };
-    if (els.version.value !== 'auto') opts.version = Number(els.version.value);
-    const encoded = encode(text, opts);
-    const scene = buildScene(encoded, { palette: paletteOf(presetName) });
-    current = { encoded, scene };
-    drawScene(scene, els.canvas, 26);
-
-    // 자체검증: 미리보기 canvas 가 아니라 결정적 래스터에서 §4.4 통계로 잰다.
-    const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
-    const check = verifyRaster(raster, scene, encoded);
-    const bytes = payloadByteLength(text);
-    const badge = check.ok
-      ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · Δmin ${check.minDelta.toFixed(3)}</span>`
-      : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건</span>`;
-    els.info.innerHTML =
-      `버전 <b>V${encoded.version}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
-      `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
-      `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(presetName).toFixed(3)}<br>` +
-      badge;
+    const result = els.codeType.value === 'Y'
+      ? renderTypeY(text, eccLevel, presetName)
+      : renderTypeO(text, eccLevel, presetName);
+    current = { type: result.type, encoded: result.encoded, scene: result.scene };
+    drawScene(result.scene, els.canvas, 26);
+    els.info.innerHTML = result.info;
   } catch (err) {
     current = null;
     els.info.innerHTML = '';
@@ -237,7 +361,10 @@ function render() {
   }
 }
 
-for (const el of [els.payload, els.version, els.ecc, els.preset]) {
+for (const el of [
+  els.payload, els.versionO, els.versionY, els.ecc, els.preset,
+  els.qrCorner, els.qrCenter, els.tone,
+]) {
   el.addEventListener('input', schedule);
   el.addEventListener('change', schedule);
 }

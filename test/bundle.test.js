@@ -19,6 +19,8 @@ const MODULE_ORDER = [
   'hexgrid', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity', 'luminance',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
+  'gf256', 'rs', 'qr', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
+  'encodeY', 'sceneY', 'verifyY',
 ];
 
 test('동기화: buildSingleHtml() 결과가 dist/trilume.html 과 바이트 동일하다', () => {

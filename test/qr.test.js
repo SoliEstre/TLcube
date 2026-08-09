@@ -8,7 +8,13 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 
-import { qrMatrix, formatInfoBits, QR_ALNUM_CHARSET, QR_V1L_CAPACITY } from '../src/qr.js';
+import {
+  qrMatrix,
+  formatInfoBits,
+  QR_ALNUM_CHARSET,
+  QR_V1L_CAPACITY,
+  TL_READER_URL,
+} from '../src/qr.js';
 
 const SIZE = 21;
 
@@ -126,6 +132,32 @@ describe('와이어 스냅샷 (sha256)', () => {
     const matrix = qrMatrix('HTTPS://TLCUBE.APP/S');
     const hash = createHash('sha256').update(Buffer.from(matrix.modules)).digest('hex');
     assert.equal(hash, SNAPSHOT_SHA256);
+  });
+});
+
+describe('TL_READER_URL (ADR 0004 §1-4, PM/008)', () => {
+  test('상수값 = HTTPS://TLSCAN.ESTRE.SO, 23자, v1-L 알파뉴메릭 용량 이내', () => {
+    assert.equal(TL_READER_URL, 'HTTPS://TLSCAN.ESTRE.SO');
+    assert.equal(TL_READER_URL.length, 23);
+    assert.ok(TL_READER_URL.length <= QR_V1L_CAPACITY);
+    for (const ch of TL_READER_URL) assert.ok(QR_ALNUM_CHARSET.includes(ch), `문자셋 밖: ${ch}`);
+  });
+
+  test('인코딩 가능(RangeError 없음) — 구조 재확인은 위 "HTTPS://TLCUBE.APP/S" 스위트로 충분', () => {
+    assert.doesNotThrow(() => qrMatrix(TL_READER_URL));
+  });
+
+  // "HTTPS://TLSCAN.ESTRE.SO" (23자) 행렬 전체를 sha256 으로 고정한다 — 위
+  // "HTTPS://TLCUBE.APP/S" 벡터는 구 URL 을 여전히 유효한 테스트 벡터로 유지
+  // (삭제 금지, 공통 규약). 값이 바뀌면 비트스트림·RS·배치·마스크 선택 중
+  // 하나가 회귀한 것이다.
+  const NEW_URL_SNAPSHOT_SHA256 =
+    '78bae7b8c1b7ba5c625ad68fcd7bed7009d0dc4f484631b813f4900865e39265';
+
+  test('TL_READER_URL 행렬 sha256 고정', () => {
+    const matrix = qrMatrix(TL_READER_URL);
+    const hash = createHash('sha256').update(Buffer.from(matrix.modules)).digest('hex');
+    assert.equal(hash, NEW_URL_SNAPSHOT_SHA256);
   });
 });
 

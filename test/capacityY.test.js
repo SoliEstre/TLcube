@@ -1,4 +1,4 @@
-// capacityY.test.js — SPEC §14 Type Y 용량표 스냅샷 (ADR 0003 D7·U3·U9)
+// capacityY.test.js — SPEC §14 Type Y 용량표 스냅샷 (ADR 0003 D7·U3·U9·v3.1§4b)
 //
 // **이 테스트의 목적은 통과가 아니라 깨지는 것이다** (capacity.test.js 와 같은 자세).
 //
@@ -11,12 +11,17 @@
 // 아래 스냅샷은 **98 B** 로 고정한다(조용히 95 로 맞추지 않는다). Y2 도 마찬가지로
 // ADR 137 B 추정과 달리 **141 B** 로 고정한다. 차이는 오버헤드 실계산(27, ADR 의 5%
 // 가정과 다름)과 NSYM_TABLE_Y 잠정표(U3 미확정)에서 온다 — U3 확정 후 재검증 필요.
+//
+// [v3.1 §4b 2톤 메인 전환] VERSIONS_Y 가 4항목(Y1·Y2·Y1T·Y2T)으로 늘었다. Y1T/Y2T 는
+// tones=3·formatIndex 만 다르고 나머지 용량 수치는 Y1/Y2 와 완전히 같아야 한다
+// ("용량 회계는 tones 무관 동일" — ADR 근거 수치). 스냅샷이 그 항등을 고정한다.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
   VERSIONS_Y, NSYM_TABLE_Y, overheadBreakdownY, capacityForY, capacityTableY, renderMarkdownTableY,
+  versionSpecY,
 } from '../src/capacityY.js';
 import { maxBytesForSymbols } from '../src/capacity.js';
 import { errorCapacity } from '../src/rs211.js';
@@ -24,12 +29,20 @@ import { maxPayloadFor } from '../src/header.js';
 
 const SNAPSHOT_M = [
   {
-    version: 1, n: 21, totalCells: 441, overhead: 27, dataCells: 414, usedSymbols: 138,
-    residualCells: 0, nsym: 35, errorCapacity: 17, dataSymbols: 103, dataBytes: 99, maxPayloadBytes: 98,
+    name: 'Y1', version: 1, n: 21, tones: 2, formatIndex: 8, totalCells: 441, overhead: 27, dataCells: 414,
+    usedSymbols: 138, residualCells: 0, nsym: 35, errorCapacity: 17, dataSymbols: 103, dataBytes: 99, maxPayloadBytes: 98,
   },
   {
-    version: 2, n: 25, totalCells: 625, overhead: 27, dataCells: 598, usedSymbols: 199,
-    residualCells: 1, nsym: 51, errorCapacity: 25, dataSymbols: 148, dataBytes: 142, maxPayloadBytes: 141,
+    name: 'Y2', version: 2, n: 25, tones: 2, formatIndex: 9, totalCells: 625, overhead: 27, dataCells: 598,
+    usedSymbols: 199, residualCells: 1, nsym: 51, errorCapacity: 25, dataSymbols: 148, dataBytes: 142, maxPayloadBytes: 141,
+  },
+  {
+    name: 'Y1T', version: 1, n: 21, tones: 3, formatIndex: 10, totalCells: 441, overhead: 27, dataCells: 414,
+    usedSymbols: 138, residualCells: 0, nsym: 35, errorCapacity: 17, dataSymbols: 103, dataBytes: 99, maxPayloadBytes: 98,
+  },
+  {
+    name: 'Y2T', version: 2, n: 25, tones: 3, formatIndex: 11, totalCells: 625, overhead: 27, dataCells: 598,
+    usedSymbols: 199, residualCells: 1, nsym: 51, errorCapacity: 25, dataSymbols: 148, dataBytes: 142, maxPayloadBytes: 141,
   },
 ];
 
@@ -60,7 +73,54 @@ describe('용량표 스냅샷 (Type Y, ECC-M)', () => {
     const md = renderMarkdownTableY('M');
     assert.match(md, /\| Y1 \| 21 \| 441 \| 27 \| 414 \| 138 \| 0 \| 35 \| 17 \| 103 \| 99 B \| \*\*98 B\*\* \|/);
     assert.match(md, /\| Y2 \| 25 \| 625 \| 27 \| 598 \| 199 \| 1 \| 51 \| 25 \| 148 \| 142 B \| \*\*141 B\*\* \|/);
+    assert.match(md, /\| Y1T \| 21 \| 441 \| 27 \| 414 \| 138 \| 0 \| 35 \| 17 \| 103 \| 99 B \| \*\*98 B\*\* \|/);
+    assert.match(md, /\| Y2T \| 25 \| 625 \| 27 \| 598 \| 199 \| 1 \| 51 \| 25 \| 148 \| 142 B \| \*\*141 B\*\* \|/);
     assert.ok(!md.includes('~'), '단일 물결표는 GFM 취소선 트랩이다 (규약 §6.11)');
+  });
+});
+
+describe('versionSpecY — (version, tones) 단일 조회 (v3.1 §4b)', () => {
+  test('Y1/Y2(tones=2, 기본값) 는 VERSIONS_Y[0]/[1] 과 정확히 같다', () => {
+    assert.equal(versionSpecY(1), VERSIONS_Y[0]);
+    assert.equal(versionSpecY(1, 2), VERSIONS_Y[0]);
+    assert.equal(versionSpecY(2, 2), VERSIONS_Y[1]);
+  });
+
+  test('Y1T/Y2T(tones=3) 는 VERSIONS_Y[2]/[3] 과 정확히 같다', () => {
+    assert.equal(versionSpecY(1, 3), VERSIONS_Y[2]);
+    assert.equal(versionSpecY(2, 3), VERSIONS_Y[3]);
+  });
+
+  test('알 수 없는 (version, tones) 조합은 RangeError', () => {
+    assert.throws(() => versionSpecY(99, 2), RangeError);
+    assert.throws(() => versionSpecY(1, 4), RangeError);
+    assert.throws(() => versionSpecY(0, 2), RangeError);
+  });
+});
+
+describe('용량 회계는 tones 무관 동일 (v3.1 §4b 근거 수치)', () => {
+  test('Y1 과 Y1T — formatIndex·tones 만 다르고 나머지 용량 수치는 완전히 같다', () => {
+    const y1 = capacityForY(VERSIONS_Y[0], 'M');
+    const y1t = capacityForY(VERSIONS_Y[2], 'M');
+    for (const key of [
+      'n', 'totalCells', 'overhead', 'dataCells', 'usedSymbols', 'residualCells',
+      'nsym', 'errorCapacity', 'dataSymbols', 'dataBytes', 'maxPayloadBytes',
+    ]) {
+      assert.equal(y1[key], y1t[key], `Y1.${key} !== Y1T.${key}`);
+    }
+    assert.notEqual(y1.tones, y1t.tones);
+    assert.notEqual(y1.formatIndex, y1t.formatIndex);
+  });
+
+  test('Y2 와 Y2T — 동일 항등', () => {
+    const y2 = capacityForY(VERSIONS_Y[1], 'M');
+    const y2t = capacityForY(VERSIONS_Y[3], 'M');
+    for (const key of [
+      'n', 'totalCells', 'overhead', 'dataCells', 'usedSymbols', 'residualCells',
+      'nsym', 'errorCapacity', 'dataSymbols', 'dataBytes', 'maxPayloadBytes',
+    ]) {
+      assert.equal(y2[key], y2t[key], `Y2.${key} !== Y2T.${key}`);
+    }
   });
 });
 
