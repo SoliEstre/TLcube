@@ -3,20 +3,18 @@
 // **이 테스트의 목적은 통과가 아니라 깨지는 것이다** (capacity.test.js/capacityY.test.js
 // 와 같은 자세).
 //
-// [A-U1 잠정 경고] NSYM_TABLE_A 는 아직 사용자 비준 전 잠정표다(capacityA.js 모듈
-// 헤더 주석 참조). 이 스냅샷이 깨졌다면 먼저 NSYM_TABLE_A 가 왜 바뀌었는지
-// 확인해라 — A-U1 비준으로 바뀐 것이라면 스냅샷을 그 확정값으로 갱신하는 것이 맞다.
+// [A-U1 ✅ 확정] NSYM_TABLE_A 는 사용자 비준 완료표다 (2026-08-09,
+// hb-20260809-tlrat1 — A2/H 는 절차값 57 대신 정렬되는 59 로 확정). 이 스냅샷이
+// 깨졌다면 먼저 NSYM_TABLE_A 가 왜 바뀌었는지 확인해라.
 //
-// [발견 — base211 청킹 정렬 불일치, A2/H] capacity.js 의 K=maxBytesForSymbols(S)
+// [발견 — base211 청킹 정렬 불일치] capacity.js 의 K=maxBytesForSymbols(S)
 // 는 S 심볼 전체를 **하나의 큰 base-211 숫자**로 보는 공식이고, 실제 인코더
 // (base211.js)는 **27B↔28심볼 청크** 단위로 변환한다 — 두 방식의 "심볼당 효율"이
 // 항상 일치하지는 않는다(청크 경계에서 반올림 손실이 다르게 쌓인다). Type O(V1~V3)
-// 의 기존 9개 (버전,레벨) 조합은 전부 우연히 정렬되어 있었지만, Type A 의
-// NSYM_TABLE_A.A2.H=57(dataSymbols=86)은 **정렬이 깨진다**(청크 인코더가 86개가
-// 아니라 87개 심볼을 요구) — encodeA.js 의 자기검증이 이를 그 자리에서 던진다
-// (조용히 넘어가지 않는다, 과제 지침 절대 규칙 6). 이 테스트가 그 사실 자체를
-// 회귀로 고정한다 — "언젠가 우연히 맞아떨어지면" 재검토가 필요하다는 신호다.
-// A-U1 비준 시 이 불일치를 근거로 A2/H nsym 재검토를 권고한다.
+// 의 기존 9개 (버전,레벨) 조합은 전부 우연히 정렬되어 있었지만, 구 절차값
+// A2/H=57(dataSymbols=86)은 정렬이 깨졌다(청크 인코더가 87개 심볼을 요구) —
+// A-U1 비준이 이 불일치를 근거로 H 를 59 로 확정했다 (정렬·홀수·절차 최근접).
+// 아래 청킹 정렬 절이 구 57 비정렬 사실과 현행 전 조합 정렬을 함께 고정한다.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -65,7 +63,7 @@ describe('용량표 스냅샷 (Type A, ECC-M)', () => {
     assert.equal(a2.maxPayloadBytes, 101, 'A2-M KAT 불일치');
   });
 
-  test('ADR 0005 D5 L/H 참고값 — A1 L=74B/H=50B · A2 L=120B/H=82B', () => {
+  test('L/H 참고값 — A1 L=74B/H=50B · A2 L=120B/H=80B (H=59, A-U1 비준 확정)', () => {
     const a1L = capacityForA(VERSIONS_A[0], 'L');
     const a1H = capacityForA(VERSIONS_A[0], 'H');
     const a2L = capacityForA(VERSIONS_A[1], 'L');
@@ -73,7 +71,10 @@ describe('용량표 스냅샷 (Type A, ECC-M)', () => {
     assert.equal(a1L.maxPayloadBytes, 74);
     assert.equal(a1H.maxPayloadBytes, 50);
     assert.equal(a2L.maxPayloadBytes, 120);
-    assert.equal(a2H.maxPayloadBytes, 82);
+    assert.equal(a2H.maxPayloadBytes, 80);
+    assert.equal(a2H.nsym, 59);
+    assert.equal(a2H.dataSymbols, 84);
+    assert.equal(a2H.errorCapacity, 29);
   });
 
   test('마크다운 표가 렌더된다', () => {
@@ -208,46 +209,34 @@ describe('NSYM_TABLE_A 불일치는 조용히 넘어가지 않는다', () => {
 });
 
 describe('base211 청킹 정렬 — dataBytes 를 실제로 dataSymbols 개로 되돌릴 수 있는가', () => {
-  test('A1(L/M/H)·A2(L/M) 은 정렬된다 — symbolCountForByteLength(dataBytes) === dataSymbols', () => {
-    for (const [spec, level] of [
-      [VERSIONS_A[0], 'L'], [VERSIONS_A[0], 'M'], [VERSIONS_A[0], 'H'],
-      [VERSIONS_A[1], 'L'], [VERSIONS_A[1], 'M'],
-    ]) {
-      const r = capacityForA(spec, level);
-      assert.equal(
-        symbolCountForByteLength(r.dataBytes), r.dataSymbols,
-        `${r.name}/${level}: dataBytes=${r.dataBytes} 를 청크 인코더로 되돌리면 dataSymbols 와 어긋난다`,
+  test('전 6조합(A1·A2 × L/M/H)이 정렬된다 — symbolCountForByteLength(dataBytes) === dataSymbols (A-U1 확정 후)', () => {
+    for (const spec of VERSIONS_A) {
+      for (const level of ['L', 'M', 'H']) {
+        const r = capacityForA(spec, level);
+        assert.equal(
+          symbolCountForByteLength(r.dataBytes), r.dataSymbols,
+          `${r.name}/${level}: dataBytes=${r.dataBytes} 를 청크 인코더로 되돌리면 dataSymbols 와 어긋난다`,
+        );
+        assert.equal(r.chunkAligned, true, `${r.name}/${level} chunkAligned`);
+      }
+    }
+  });
+
+  test('구 절차값 A2/H=57 은 비정렬이었다 — 발견 사실의 회귀 기록 (표 무관 직접 계산)', () => {
+    // dataSymbols=143-57=86 → K 공식 83B, 그러나 청크 인코더는 83B 에 87심볼 요구.
+    const oldDataSymbols = 143 - 57;
+    const oldK = maxBytesForSymbols(oldDataSymbols);
+    assert.equal(oldK, 83);
+    assert.equal(symbolCountForByteLength(oldK), 87);
+    assert.notEqual(symbolCountForByteLength(oldK), oldDataSymbols);
+  });
+
+  test('renderMarkdownTableA: 현행 표에는 어느 레벨에도 인코딩 불가 마킹이 없다', () => {
+    for (const level of ['L', 'M', 'H']) {
+      assert.ok(
+        !renderMarkdownTableA(level).includes('청킹 비정렬'),
+        `${level} 표에 비정렬 마킹이 남아 있다 — NSYM_TABLE_A 재확인 필요`,
       );
     }
-  });
-
-  test('A2/H 는 정렬이 깨진다(발견 — 위 모듈 헤더 주석 참조) — 우연히 맞아떨어지면 이 테스트를 재검토하라', () => {
-    const r = capacityForA(VERSIONS_A[1], 'H');
-    assert.equal(r.dataSymbols, 86);
-    assert.equal(r.dataBytes, 83);
-    assert.notEqual(
-      symbolCountForByteLength(r.dataBytes), r.dataSymbols,
-      'A2/H 청킹 정렬 불일치가 해소됐다 — NSYM_TABLE_A.A2.H 가 바뀌었는지 확인하고 이 테스트를 갱신하라',
-    );
-    assert.equal(symbolCountForByteLength(r.dataBytes), 87);
-  });
-
-  test('chunkAligned 플래그가 정렬 여부를 그대로 노출한다 (표 소비자 계약)', () => {
-    for (const [spec, level, expected] of [
-      [VERSIONS_A[0], 'L', true], [VERSIONS_A[0], 'M', true], [VERSIONS_A[0], 'H', true],
-      [VERSIONS_A[1], 'L', true], [VERSIONS_A[1], 'M', true], [VERSIONS_A[1], 'H', false],
-    ]) {
-      const r = capacityForA(spec, level);
-      assert.equal(r.chunkAligned, expected, `${r.name}/${level} chunkAligned`);
-    }
-  });
-
-  test('renderMarkdownTableA: 비정렬 행(A2/H)에만 인코딩 불가 마킹이 붙는다', () => {
-    const tableH = renderMarkdownTableA('H');
-    const a2Row = tableH.split('\n').find((line) => line.startsWith('| A2 '));
-    assert.ok(a2Row.includes('청킹 비정렬'), 'A2/H 행에 인코딩 불가 마킹이 없다');
-    const a1Row = tableH.split('\n').find((line) => line.startsWith('| A1 '));
-    assert.ok(!a1Row.includes('청킹 비정렬'), 'A1/H 행에 마킹이 잘못 붙었다');
-    assert.ok(!renderMarkdownTableA('M').includes('청킹 비정렬'), 'M 표에 마킹이 잘못 붙었다');
   });
 });

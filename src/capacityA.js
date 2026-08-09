@@ -1,14 +1,15 @@
 // capacityA.js — Type A 버전별 용량 산출 (ADR 0005 D5·D6, capacity.js/capacityY.js 대칭)
 //
-// **이 모듈이 향후 SPEC 생성물 표(nsym 확정 전까지 잠정)의 소스다.** 수기로 유지
+// **이 모듈이 SPEC 생성물 표의 소스다.** 수기로 유지
 // 하지 않는다.
 //
-// [A-U1 — 잠정, 사용자 비준 대기] `NSYM_TABLE_A` 는 ADR 0005 D5 실계산 절차(기존
-// rs211.js NSYM_TABLE 표 규칙 승계: M = round(0.25·S), 짝수면 +1 홀수화 / L =
-// round(0.12·S) / H = round(0.40·S), 보정 없음)를 그대로 따른 잠정표다:
-//   A1 S=89  → round(22.25)=22(짝수 → +1) = 23(25.8%)
-//   A2 S=143 → round(35.75)=36(짝수 → +1) = 37(25.9%)
-// 확정되면 이 주석과 함께 rs211.js NSYM_TABLE 전례처럼 사용자 확정 값으로 교체한다.
+// [A-U1 ✅ 확정 — 사용자 비준 2026-08-09, hb-20260809-tlrat1] `NSYM_TABLE_A` 는
+// ADR 0005 D5 실계산 절차(기존 rs211.js NSYM_TABLE 표 규칙 승계: M = round(0.25·S),
+// 짝수면 +1 홀수화 / L = round(0.12·S) / H = round(0.40·S))를 따르되, **A2/H 만
+// 절차값 57 대신 59** 다 — 57·58 은 base-211 청킹 비정렬로 생성 불가(아래 chunkAligned
+// 참조), 59 는 정렬·홀수·절차 최근접(|59−57.2|=1.8) 3조건 동시 만족 (비준 확정값):
+//   A1 S=89  → L 11 · M 23 (25.8%) · H 36
+//   A2 S=143 → L 17 · M 37 (25.9%) · H 59 (41.3% — 절차값 57 은 비정렬로 대체)
 //
 // 회계는 capacity.js 와 동형이다(심볼 도메인):
 //   총 셀           total = (3k+1)(3k+2)/2  (D1 — 육각 3k²+3k+1 + 패치 3·k(k+1)/2)
@@ -66,8 +67,8 @@ for (const [k, expectedTotal] of [[8, 58], [10, 65]]) {
 }
 
 /**
- * [A-U1 잠정] Type A 사용 심볼 수 대비 ECC 레벨별 nsym 표. 산출 근거는 위 모듈
- * 헤더 주석 (ADR 0005 D5).
+ * [A-U1 ✅ 확정] Type A 사용 심볼 수 대비 ECC 레벨별 nsym 표 (사용자 비준
+ * 2026-08-09). 산출 근거는 위 모듈 헤더 주석 (ADR 0005 D5).
  * @type {Readonly<Record<string, Readonly<{symbols:number, L:number, M:number, H:number}>>>}
  */
 export const NSYM_TABLE_A = Object.freeze({
@@ -75,7 +76,7 @@ export const NSYM_TABLE_A = Object.freeze({
     symbols: 89, L: 11, M: 23, H: 36,
   }),
   A2: Object.freeze({
-    symbols: 143, L: 17, M: 37, H: 57,
+    symbols: 143, L: 17, M: 37, H: 59,
   }),
 });
 
@@ -153,10 +154,10 @@ export function capacityForA(spec, level = 'M') {
 
   // [발견 — 검증 라운드 2026-08-09] "S개 심볼 = 하나의 큰 base-211 수" K 산정과
   // base211.js 의 27B↔28심볼 청크 인코더는 효율이 미세하게 달라, K 를 실제 청크
-  // 인코딩하면 dataSymbols 와 어긋나는 조합이 존재한다(현행 표에선 A2/H 가 유일 —
-  // symbolCountForByteLength(83)=87 ≠ 86). 그런 조합은 encodeA.js 자기검증이
-  // throw 하므로 **생산 불가**다 — 표 소비자가 이를 정상 용량으로 게시하지 않도록
-  // 플래그로 명시한다 (A-U1 비준에서 nsym 재조정 대상).
+  // 인코딩하면 dataSymbols 와 어긋나는 조합이 존재할 수 있다 (구 A2/H=57 이 그랬고,
+  // A-U1 비준으로 59 로 교체해 현행 표는 전 조합 정렬이다). 그런 조합은 encodeA.js
+  // 자기검증이 throw 하므로 **생산 불가**다 — 표가 미래에 다시 어긋나면 소비자가
+  // 정상 용량으로 게시하지 않도록 플래그를 유지한다 (가드).
   const chunkAligned = symbolCountForByteLength(dataBytes) === dataSymbols;
 
   return {
@@ -202,7 +203,7 @@ export function renderMarkdownTableA(level = 'M') {
   const body = rows.map((r) => `| ${r.name} | ${r.k} | ${r.totalCells} | ${r.overhead} | `
     + `${r.dataCells} | ${r.usedSymbols} | ${r.residualCells} | ${r.nsym} | ${r.errorCapacity} | `
     + `${r.dataSymbols} | ${r.dataBytes} B | **${r.maxPayloadBytes} B**`
-    + `${r.chunkAligned ? '' : ' ⚠ 청킹 비정렬 — 인코딩 불가 (A-U1 재조정 대상)'} |`);
+    + `${r.chunkAligned ? '' : ' ⚠ 청킹 비정렬 — 인코딩 불가 (nsym 재조정 필요)'} |`);
   return [head, sep, ...body].join('\n');
 }
 

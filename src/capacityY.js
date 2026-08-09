@@ -1,6 +1,6 @@
 // capacityY.js — Type Y 버전별 용량 산출 (SPEC §14, ADR 0003 D7·U3·U9·v3.1§4b — capacity.js 대칭)
 //
-// **이 모듈이 SPEC §14 생성물 표(nsym 확정 전까지 잠정)의 소스다.** 수기로 유지하지
+// **이 모듈이 SPEC §14 생성물 표의 소스다.** 수기로 유지하지
 // 않는다.
 //
 // [v3.1 §4b 2톤 메인 전환] VERSIONS_Y 는 이제 4항목이다 — n=21·25 각각에 톤 모드
@@ -10,14 +10,13 @@
 // Y2 와 Y2T 는 formatIndex 만 다르고 나머지 용량 수치는 항상 완전히 같다 — 이 항등을
 // capacityY.test.js 가 회귀로 고정한다.
 //
-// [U3 — 잠정, 사용자 확정 대기] `NSYM_TABLE_Y` 는 Type O V3 전례(ADR 0001 §3.3.3: 오정정
-// 검출 여유 +1 로 홀수 nsym)를 따라 산출한 잠정표다. 절차 (재현 가능 — 검증 라운드 정정):
+// [U3 ✅ 확정 — 사용자 비준 (ADR 0003 v3.1, 2026-08-09)] `NSYM_TABLE_Y` 는 Type O V3 전례(ADR 0001 §3.3.3: 오정정
+// 검출 여유 +1 로 홀수 nsym)를 따라 산출한 확정표다. 절차 (재현 가능 — 검증 라운드 정정):
 // **M = Math.round(0.25·S) (JS half-up), 결과가 짝수면 +1 홀수화 (홀수면 유지)**:
 //   Y1 S=138 → round(34.5) = 35 (홀수 → 유지)
 //   Y2 S=199 → round(49.75) = 50 (짝수 → +1) = 51
 // L = round(0.12·S), H = round(0.40·S) (반올림, 홀짝 보정 없음 — Type O NSYM_TABLE 의
-// L/H 열도 동일 절차). 이 표는 U3 확정 전까지 잠정이며, 확정되면 이 주석과 함께
-// rs211.js 의 NSYM_TABLE 처럼 사용자 확정 값으로 교체한다.
+// L/H 열도 동일 절차).
 //
 // 회계는 capacity.js 와 동형이다(심볼 도메인):
 //   총 좌표(셀)     total = n²  (Type Y 는 3면 공통 좌표 격자 — 기하 곱셈 없이 n×n)
@@ -50,7 +49,7 @@ export function overheadBreakdownY(n) {
 }
 
 /**
- * [U3 잠정] Type Y 사용 심볼 수 대비 ECC 레벨별 nsym 표. 산출 근거는 위 모듈 헤더 주석.
+ * [U3 ✅ 확정] Type Y 사용 심볼 수 대비 ECC 레벨별 nsym 표. 산출 근거는 위 모듈 헤더 주석.
  * @type {Readonly<Record<string, Readonly<{symbols:number, L:number, M:number, H:number}>>>}
  */
 export const NSYM_TABLE_Y = Object.freeze({
@@ -265,7 +264,7 @@ export function overheadBreakdownY2Window() {
 }
 
 /**
- * [U3급 잠정] Y2W 사용 심볼(143) 대비 ECC 레벨별 nsym. capacityForY2Window() 가
+ * [✅ 확정 — 사용자 비준 2026-08-09, hb-20260809-tlrat1] Y2W 사용 심볼(143) 대비 ECC 레벨별 nsym. capacityForY2Window() 가
  * 실계산하는 dataCells(429)/usedSymbols(143) 에 대해 NSYM_TABLE_Y 와 동일 절차
  * (M = round(0.25·S), 짝수면 +1 홀수화 · L = round(0.12·S) · H = round(0.40·S)):
  *   S=143 → M: round(35.75)=36(짝) → 37 · L: round(17.16)=17 · H: round(57.2)=57

@@ -380,6 +380,20 @@
       <label for="nPreset">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
 
+      <label>해상도 (모듈 밀도)</label>
+      <!-- 사용자 지시 2026-08-09: 용량과 다른 축 — 버전(모듈 수) 3단 + 자동(기본).
+           저 = 원거리·광고판(모듈 큼) / 중 = 1~3m 인쇄 / 고 = 근거리·대용량(모듈 작음).
+           자동 조합 규칙: 해상도를 먼저 올리고, 최대에서도 안 들어가면 용량 단계(ECC)를
+           내린다 — encodeWithEcc 의 H→M→L × 버전 최소적합 순서가 정확히 이 격자다. -->
+      <div class="card-row" id="resTierCards">
+        <div class="toggle-card active" data-res="auto" title="내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합">자동</div>
+        <div class="toggle-card" data-res="low" title="원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식">저</div>
+        <div class="toggle-card" data-res="mid" title="1~3m 거리 — 어느 정도 크게 인쇄된 포스터급">중</div>
+        <div class="toggle-card" data-res="high" title="근거리·대용량 — 모듈이 작아 가까운 거리에서 인식">고</div>
+      </div>
+      <p class="hint">저 = 광고판·원거리 / 중 = 1~3m 인쇄물 / 고 = 근거리 대용량이에요.
+        Type Y·A 는 소형판이 없어 저·중이 같은 버전이에요.</p>
+
       <label>안정성 · 용량</label>
       <!-- 사용자 지시 2026-08-09: 보정 강화(용량↓)/표준/대용량 3단 + 자동(기본 —
            입력 크기에 따라 H→M→L 순서로 처음 들어가는 레벨 채택). -->
@@ -606,6 +620,7 @@ const els = {
   decorClearL: $('decorClearL'), decorClearR: $('decorClearR'),
   decorFileL: $('decorFileL'), decorFileR: $('decorFileR'), decorSwap: $('decorSwap'),
   eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
+  resTierCards: $('resTierCards'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
@@ -626,9 +641,19 @@ let mode = 'normal';
 // qrPosition: 'inner' | 'TL' | 'TR' | 'BL' | 'BR' | 'none' — 기본 'TL'(좌상, 사용자 지시 2026-08-09).
 const normalState = {
   // type 기본 = 'Y' (용량 최대·간판 형태 — 사용자 지시 2026-08-09. 카드 배치는 용량 순 O/A/Y).
-  // eccTier 기본 = 'auto' (입력 크기에 따라 H→M→L — 사용자 지시 2026-08-09).
+  // eccTier·resTier 기본 = 'auto' (자동 조합: 해상도 먼저 ↑, 최대에서 용량 단계 ↓ —
+  // 사용자 지시 2026-08-09).
   contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
-  eccTier: 'auto',
+  eccTier: 'auto', resTier: 'auto',
+};
+
+/** 해상도 티어 → 버전 (타입별). 저 = 최소 버전(원거리) · 고 = 최대 버전(대용량).
+ *  Y·A 는 2단뿐이라 저·중이 동일하다 (Y 소형판·A 소형판은 네임스페이스/RS 계약상 부재 —
+ *  Y3(n=29)는 RS 블록 분할 신설, A 저해상도판은 인덱스 소진으로 포맷 v2 사안). */
+const RES_TIER_VERSIONS = {
+  O: { low: 1, mid: 2, high: 3 },
+  A: { low: 1, mid: 1, high: 2 },
+  Y: { low: 1, mid: 1, high: 2 },
 };
 
 /** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). 면별 슬롯
@@ -916,12 +941,20 @@ for (const card of els.qrPositionCards.children) {
 }
 syncQrPositionUi();
 
-// ── 일반 모드: 안정성·용량 4택 (자동/H/M/L) ─────────────────────────────
+// ── 일반 모드: 안정성·용량 4택 (자동/H/M/L) + 해상도 4택 (자동/저/중/고) ──────
 
 for (const card of els.eccTierCards.children) {
   card.addEventListener('click', () => {
     normalState.eccTier = card.dataset.tier;
     for (const c of els.eccTierCards.children) c.classList.toggle('active', c === card);
+    schedule();
+  });
+}
+
+for (const card of els.resTierCards.children) {
+  card.addEventListener('click', () => {
+    normalState.resTier = card.dataset.res;
+    for (const c of els.resTierCards.children) c.classList.toggle('active', c === card);
     schedule();
   });
 }
@@ -1181,9 +1214,17 @@ function buildConfig() {
     text: normalPayloadText(),
     eccLevel: normalState.eccTier, // 'auto' | 'H' | 'M' | 'L'
     presetName: normalState.preset,
-    versionO: undefined,
-    versionY: fallback.mode === 'window' ? 2 : undefined,
-    versionA: undefined,
+    // 해상도 티어가 명시면 버전 고정 (자동이면 undefined → encodeWithEcc 가 ECC 별
+    // 최소적합 버전으로 스캔 = "해상도 먼저 ↑, 그다음 용량 ↓" 자동 조합).
+    // Y 안쪽(윈도 β)은 Y2 전용이라 티어와 무관하게 버전 2 강제.
+    versionO: normalState.type === 'O' && normalState.resTier !== 'auto'
+      ? RES_TIER_VERSIONS.O[normalState.resTier] : undefined,
+    versionY: fallback.mode === 'window'
+      ? 2
+      : (normalState.type === 'Y' && normalState.resTier !== 'auto'
+        ? RES_TIER_VERSIONS.Y[normalState.resTier] : undefined),
+    versionA: normalState.type === 'A' && normalState.resTier !== 'auto'
+      ? RES_TIER_VERSIONS.A[normalState.resTier] : undefined,
     tone: 2,
     qrText: TL_READER_URL,
     faceGains: DEFAULT_FACE_GAINS,
@@ -1364,9 +1405,16 @@ function render() {
     }
     els.info.innerHTML = result.info;
     updateGauge(result.type, result.encoded, cfg.text);
-    els.eccTierHint.textContent = cfg.eccLevel === 'auto'
-      ? `자동 판정 → ECC ${result.encoded.eccLevel} (${ECC_TIER_LABELS[result.encoded.eccLevel]})`
-      : '';
+    {
+      // 자동 축(해상도/용량)이 하나라도 켜져 있으면 판정 결과(버전·ECC)를 힌트로 보여준다.
+      const vPrefix = result.type === 'O' ? 'V' : result.type;
+      const autoBits = [];
+      if (mode === 'normal' && normalState.resTier === 'auto') autoBits.push('해상도');
+      if (cfg.eccLevel === 'auto') autoBits.push('용량');
+      els.eccTierHint.textContent = autoBits.length
+        ? `자동 판정(${autoBits.join('·')}) → ${vPrefix}${result.encoded.version} · ECC ${result.encoded.eccLevel} (${ECC_TIER_LABELS[result.encoded.eccLevel]})`
+        : '';
+    }
   } catch (err) {
     current = null;
     els.info.innerHTML = '';

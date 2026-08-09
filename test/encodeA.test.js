@@ -2,11 +2,9 @@
 // 의 교훈을 처음부터 반영: cellDigits 맵 단독 복호 왕복을 dataDigits 배열 불개입으로
 // 검증한다)
 //
-// [A2/H 제외 안내] capacityA.test.js "base211 청킹 정렬" 절에서 확인했듯 A2/H
-// (NSYM_TABLE_A.A2.H=57, dataSymbols=86) 는 base211.js 청크 인코더와 정렬이
-// 깨져 있다 — encodeA 가 파이프라인 자기검증에서 그 자리에서 던진다(조용히
-// 넘어가지 않는다). 아래 왕복 스위트는 정렬이 확인된 5개 조합(A1 L/M/H · A2 L/M)
-// 만 돌리고, A2/H 는 별도로 "던진다"를 명시적으로 확인한다.
+// [A-U1 ✅ 확정] 구 절차값 A2/H=57 은 base211 청킹 비정렬로 생성 불가였고,
+// 사용자 비준(2026-08-09, hb-20260809-tlrat1)이 H 를 59 로 확정했다 — 이제
+// 전 6조합(A1·A2 × L/M/H)이 정렬되어 왕복 스위트가 전부를 돌린다.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,13 +26,13 @@ import { decodeSingle } from '../src/formatinfo.js';
 
 const key = (c) => `${c.q},${c.r}`;
 
-// A2/H 는 base211 청킹 정렬이 깨져 있어(capacityA.test.js 참조) 왕복 대상에서 제외한다.
 const CASES = [
   { version: 1, eccLevel: 'L', text: 'Type A wire A1/L' },
   { version: 1, eccLevel: 'M', text: 'Type A 와이어 A1/M — 한글 포함' },
   { version: 1, eccLevel: 'H', text: 'Type A wire A1/H' },
   { version: 2, eccLevel: 'L', text: 'Type A wire A2/L' },
   { version: 2, eccLevel: 'M', text: 'Type A 와이어 A2/M — 한글 포함' },
+  { version: 2, eccLevel: 'H', text: 'Type A wire A2/H (nsym 59)' },
 ];
 
 // ── 1. cellDigits 맵 단독 복호 왕복 ─────────────────────────────────────────
@@ -166,17 +164,19 @@ for (const { version, eccLevel, text } of CASES) {
   });
 }
 
-// ── 4. A2/H 는 base211 청킹 정렬이 깨져 있어 자기검증이 그 자리에서 던진다 ──────
+// ── 4. A2/H (nsym 59, A-U1 확정) 는 정상 인코딩된다 — 구 57 비정렬 회귀의 반대 방향 고정 ──
 
-test('encodeA — A2/H 는 파이프라인 자기검증에서 RangeError (base211 청킹 정렬 불일치, capacityA.test.js 참조)', () => {
-  assert.throws(() => encodeA('아무 텍스트', { version: 2, eccLevel: 'H' }), /심볼 개수 불일치/);
+test('encodeA — A2/H 정상 인코딩 (구 절차값 57 시절 자기검증 throw 의 해소 확인)', () => {
+  const encoded = encodeA('A2/H now aligned', { version: 2, eccLevel: 'H' });
+  assert.equal(encoded.capacity.nsym, 59);
+  assert.equal(encoded.capacity.maxPayloadBytes, 80);
 });
 
 // ── 5. 용량 초과 / chooseVersionA 경계 / 비문자열 / 결정성 ──────────────────
 
 test('encodeA — 용량 초과 RangeError', () => {
   const last = versionSpecA(2);
-  const capacity = capacityForA(last, 'M'); // A2/H 는 자체가 자기검증에서 던지므로 M 을 기준으로 검사
+  const capacity = capacityForA(last, 'M');
   const tooLong = 'x'.repeat(capacity.maxPayloadBytes + 1);
   assert.throws(() => encodeA(tooLong, { eccLevel: 'M' }), RangeError);
   assert.throws(() => chooseVersionA(tooLong, 'M'), RangeError);
