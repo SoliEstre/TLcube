@@ -1,5 +1,6 @@
-# TLcube
+# TLcube — TrilLuminance (cube)
 
+> 정식 명칭 **TrilLuminance (cube)** · 코드네임 Trilume.
 > 육각형을 마름모 3면으로 분할하고, 3면 간 **휘도 순위(순열)** 로 데이터를 싣는 2.5D 시각 코드.
 > 상태: **M0 인코더 구현 완료** — 텍스트 입력 → V1\~V3 렌더 · PNG/SVG 내보내기 · 결정성 테스트.
 
