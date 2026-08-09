@@ -187,30 +187,28 @@ function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
   const lo = n - WINDOW_SIZE_Y; // 윈도 안쪽 모서리(Y-심 쪽) 데이터 셀 좌표.
   const half = 0.5; // QR 모듈 = 데이터 모듈 피치의 절반(D1).
 
-  // **세 면 전부** 그린다 (2026-08-09 사용자 육안 지적 — "안쪽이면 저렇게 모양이
-  // 나오는게 맞나?"): 윈도 좌표는 세 면 공통 배제(교차면 순위 계약)인데 T 면만
-  // QR 을 얹으면 L/R 배제영역이 구멍(배경 노출)으로 남아 큐브 실루엣이 깨진다.
-  // 채움 = 동일 QR 레플리카 (사용자 원 목업의 "QR 텍스처 3면"과 동형) — 세 QR 의
-  // 내용 동일은 계약(ADR 0004 §1-4 준용)이라 폰 리더가 어느 면을 잡아도 무해.
-  // 면 위 잉크는 셀과 동일하게 면 게인을 받는다 (D2 렌더러 의무와 정합 — 기본
-  // 게인 T=1 에서 T 면은 종전 무게인 색과 바이트 동일).
-  for (const face of YFACES) {
-    const quiet = applyFaceGain(palette.bullseyeLight, faceGains[face]);
-    const dark = applyFaceGain(palette.bullseyeDark, faceGains[face]);
+  // 렌더 규약 (2026-08-09 사용자 육안 재판정 — "큐브 윗면에 하나만"):
+  //   · QR 은 **상단면(T) 단독** — 3면 레플리카 안은 기각 (한 코드에 QR 4개는 과잉).
+  //   · L/R 배제영역은 **필러 톤(levels[0] × 면 게인)** 으로 채운다 — 윈도 좌표는
+  //     세 면 공통 배제(교차면 순위 계약)라 데이터를 실을 수 없고, 비워 두면
+  //     배경 노출 구멍으로 실루엣이 깨진다(직전 육안 지적). 필러는 데이터 아님이
+  //     명백하도록 면 전체 단일 톤 — 디코더는 어차피 이 좌표를 읽지 않는다.
+  //   · T 면 잉크도 면 게인을 받는다 (D2 정합 — 기본 게인 T=1 에서 무게인과 동일).
 
-    // 콰이어트 패치 — 윈도 bbox(13×13 데이터 셀) 전체를 밝게 덮는다.
+  // ① T 면: 콰이어트 패치 + QR 다크 모듈 (뒤집기 매핑 — 위 주석).
+  {
+    const quiet = applyFaceGain(palette.bullseyeLight, faceGains.T);
+    const dark = applyFaceGain(palette.bullseyeDark, faceGains.T);
     shapes.push({
       kind: 'polygon',
       points: [
-        facePointFor(face, lo, lo, layout),
-        facePointFor(face, n, lo, layout),
-        facePointFor(face, n, n, layout),
-        facePointFor(face, lo, n, layout),
+        facePointFor('T', lo, lo, layout),
+        facePointFor('T', n, lo, layout),
+        facePointFor('T', n, n, layout),
+        facePointFor('T', lo, n, layout),
       ],
       color: quiet,
     });
-
-    // QR 다크 모듈 — row-major(qy→qx 오름차순) 순회, u/v 로 뒤집어 매핑(위 주석).
     for (let qy = 0; qy < qr.size; qy += 1) {
       for (let qx = 0; qx < qr.size; qx += 1) {
         if (qr.modules[qy * qr.size + qx] !== 1) continue;
@@ -221,15 +219,29 @@ function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
         shapes.push({
           kind: 'polygon',
           points: [
-            facePointFor(face, a0, b0, layout),
-            facePointFor(face, a0 + half, b0, layout),
-            facePointFor(face, a0 + half, b0 + half, layout),
-            facePointFor(face, a0, b0 + half, layout),
+            facePointFor('T', a0, b0, layout),
+            facePointFor('T', a0 + half, b0, layout),
+            facePointFor('T', a0 + half, b0 + half, layout),
+            facePointFor('T', a0, b0 + half, layout),
           ],
           color: dark,
         });
       }
     }
+  }
+
+  // ② L/R 면: 배제영역 필러 (면당 폴리곤 1개).
+  for (const face of ['L', 'R']) {
+    shapes.push({
+      kind: 'polygon',
+      points: [
+        facePointFor(face, lo, lo, layout),
+        facePointFor(face, n, lo, layout),
+        facePointFor(face, n, n, layout),
+        facePointFor(face, lo, n, layout),
+      ],
+      color: applyFaceGain(palette.levels[0], faceGains[face]),
+    });
   }
 }
 
@@ -377,8 +389,16 @@ export function buildSceneY(encoded, options) {
 
   // ④ 코너 QR 블록 — qrText 가 없으면 생략(이 경우도 유효한 장면, SPEC §14 QR fallback 은
   // 미학 옵션이 아니라 규범이지만 scene 조립 단계에서는 호출자가 아직 URL 을 안 정했을
-  // 수 있어 강제하지 않는다).
-  if (opts.qrText !== undefined) {
+  // 수 있어 강제하지 않는다). opts.cornerQr === false 는 명시 억제 — 윈도 β(안쪽)가
+  // QR 채널을 대신할 때 코너 병행을 끄는 용도 (2026-08-09 사용자 육안 재판정:
+  // "큐브 윗면에 하나만").
+  if (opts.cornerQr !== undefined && typeof opts.cornerQr !== 'boolean') {
+    throw new TypeError(`opts.cornerQr 는 boolean 이어야 한다: ${opts.cornerQr}`);
+  }
+  // 기본값: 윈도 β 가 켜져 있으면 코너는 자동 억제("윗면에 하나만") — 병행이 필요한
+  // 특수 용도만 cornerQr: true 로 명시 opt-in 한다.
+  const cornerQr = opts.cornerQr === undefined ? !window : opts.cornerQr;
+  if (opts.qrText !== undefined && cornerQr) {
     const qr = qrMatrix(opts.qrText);
     if (qr.size !== QR_MODULE_GRID) {
       // 방어적 가드 — qr.js 가 v1 고정을 벗어나면 위 margin 유도 전제가 깨진다.

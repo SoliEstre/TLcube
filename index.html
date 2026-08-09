@@ -1044,6 +1044,8 @@ function renderTypeY(cfg) {
   if (cfg.fallback.mode !== 'off') {
     sceneOpts.qrText = cfg.qrText;
     if (cfg.fallback.mode === 'corner') sceneOpts.qrCorner = cfg.fallback.corner;
+    // 안쪽(윈도 β) = 상단면 QR 단독 — 코너 QR 병행 억제 (사용자 재판정 2026-08-09).
+    if (useWindow) sceneOpts.cornerQr = false;
   }
   const scene = buildSceneY(encoded, sceneOpts);
 
