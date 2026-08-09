@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trilume — TLcube 인코더 (M0)</title>
+<title>TrilLuminance (cube) — TLcube 인코더 (M0)</title>
 <style>
   /* 테마: 다크 값이 기본. 라이트 세트는 [data-theme="light"] 또는
      (자동 모드 + OS 라이트) 에서 적용. 코드 렌더(프리셋 배경)와는 독립 — 페이지 크롬만. */
@@ -149,7 +149,8 @@
     max-height: calc(100vh - 180px);
     object-fit: contain;
   }
-  footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; }
+  footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; text-align: center; }
+  footer .copyright { display: block; margin-top: 4px; font-size: 10px; opacity: .75; }
 
   /* ── 모드 스위치 ─────────────────────────────────────────────── */
   .mode-switch {
@@ -260,8 +261,8 @@
 </head>
 <body>
 <header>
-  <h1>Trilume <span style="color:var(--accent)">/ TLcube</span></h1>
-  <span class="sub">3면 휘도 순위 2.5D 코드 — M0 인코더 프리뷰</span>
+  <h1>TrilLuminance <span style="color:var(--accent)">/ TLcube</span></h1>
+  <span class="sub">3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰</span>
   <span class="spacer"></span>
   <div class="mode-switch" id="modeSwitch">
     <button type="button" id="modeNormalBtn" class="active">일반</button>
@@ -645,7 +646,9 @@
   </div>
   <div id="stage"><canvas id="view"></canvas></div>
 </main>
-<footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐</footer>
+<footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐
+  <span class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume</span>
+</footer>
 
 <script type="module">
 import { encode } from './src/encode.js';
@@ -717,8 +720,10 @@ const normalState = {
  *  Y3(n=29)는 RS 블록 분할 신설, A 저해상도판은 인덱스 소진으로 포맷 v2 사안). */
 const RES_TIER_VERSIONS = {
   O: { low: 1, mid: 2, high: 3 },
-  A: { low: 1, mid: 1, high: 2 },
-  Y: { low: 1, mid: 1, high: 2 },
+  // Y·A 재라벨 (사용자 지시 2026-08-09): 기존 최저(Y1/A1)가 절대 밀도상 중거리급이라
+  // '중'으로 승격 — '저'는 소형판 Y0(n=13)/A0(k=6) 구현(ADR 0006 비준) 대기 비활성.
+  A: { mid: 1, high: 2 },
+  Y: { mid: 1, high: 2 },
 };
 
 /** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). 면별 슬롯
@@ -1176,7 +1181,7 @@ function syncResTierUi() {
   const type = currentType();
   const isO = type === 'O';
   const windowLocked = type === 'Y' && normalState.qrPosition === 'inner';
-  const isOff = (res) => (!isO && res === 'mid') || (windowLocked && (res === 'low' || res === 'mid'));
+  const isOff = (res) => (!isO && res === 'low') || (windowLocked && (res === 'low' || res === 'mid'));
   // 1패스: 비활성 확정 + 선택이 비활성으로 밀렸으면 자동 복귀 — 그 뒤에 활성 표시.
   if (isOff(normalState.resTier)) normalState.resTier = 'auto';
   for (const card of els.resTierCards.children) {
@@ -1187,8 +1192,10 @@ function syncResTierUi() {
   els.resTierHint.textContent = windowLocked
     ? 'Y 안쪽(윈도 β)은 Y2 전용이라 해상도가 고(Y2)로 고정돼요.'
     : isO
-      ? '저 = 광고판·원거리 (V1) / 중 = 1~3m 인쇄물 (V2) / 고 = 근거리 대용량 (V3)이에요.'
-      : `저 = 광고판·원거리 / 고 = 근거리 대용량이에요. Type ${type} 는 소형판(${type}0)이 없어 중이 비활성이에요 — ADR 0006 안건.`;
+      ? '저 V1 = 광고판·원거리 (유일한 원거리급) / 중 V2 = 1~3m 인쇄물 / 고 V3 = 근거리 대용량이에요.'
+      : type === 'Y'
+        ? '중 Y1 = 근거리 인쇄 / 고 Y2 = 고밀도예요. 저(Y0, n=13 — 광고판급)는 ADR 0006 비준 대기예요.'
+        : '중 A1 / 고 A2 예요. 저(A0, k=6 — 중거리급 하한)는 ADR 0006 비준 대기 — 광고판급 원거리는 Type O 저가 적합해요.';
 }
 
 for (const card of els.resTierCards.children) {
