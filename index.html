@@ -262,8 +262,8 @@
 <main>
   <div class="panel">
 
-    <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
-    <div id="panelNormal">
+    <!-- ══════ 공용: 콘텐츠 (일반·고급 공통 — 사용자 지시 2026-08-09 "고급에도 일반 선택지 전부") ══════ -->
+    <div id="sharedContent">
       <label>콘텐츠</label>
       <div class="card-row" id="contentTabs">
         <!-- URL 이 맨 앞 + 진입 기본 선택 (사용자 지시 2026-08-09) -->
@@ -340,7 +340,10 @@
         <label for="nCardUrl">URL</label>
         <input type="text" id="nCardUrl" spellcheck="false">
       </div>
+    </div>
 
+    <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
+    <div id="panelNormal">
       <label>타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 선택 = Y (사용자 지시 2026-08-09). -->
       <div class="card-row" id="typeCards">
@@ -373,6 +376,78 @@
         </div>
       </div>
 
+
+      <label for="nPreset">스타일</label>
+      <div class="card-row" id="presetSwatches"></div>
+
+    </div>
+
+    <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
+    <div id="panelAdvanced" style="display:none">
+      <label for="codeType">타입</label>
+      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
+      <select id="codeType">
+        <option value="O">Type O (마름모 8면체 필드)</option>
+        <option value="A">Type A (삼각 실루엣 확장)</option>
+        <option value="Y" selected>Type Y (단일 큐브)</option>
+      </select>
+
+      <div class="row">
+        <div id="versionWrapO">
+          <label for="versionO">버전</label>
+          <select id="versionO">
+            <option value="auto" selected>자동 (최소)</option>
+            <option value="1">V1 (k=6 · 18 B)</option>
+            <option value="2">V2 (k=8 · 39 B)</option>
+            <option value="3">V3 (k=10 · 65 B)</option>
+          </select>
+        </div>
+        <div id="versionWrapY" style="display:none">
+          <label for="versionY">버전</label>
+          <select id="versionY">
+            <option value="1" selected>Y1 (n=21)</option>
+            <option value="2">Y2 (n=25)</option>
+          </select>
+        </div>
+        <div id="versionWrapA" style="display:none">
+          <label for="versionA">버전</label>
+          <select id="versionA">
+            <option value="1" selected>A1 (k=8)</option>
+            <option value="2">A2 (k=10)</option>
+          </select>
+        </div>
+        <div>
+          <label for="ecc">ECC</label>
+          <select id="ecc">
+            <option value="L">L (≈12%)</option>
+            <option value="M" selected>M (25%)</option>
+            <option value="H">H (≈40%)</option>
+          </select>
+        </div>
+      </div>
+
+
+      <fieldset class="typeOptions" id="optionsY" style="display:none">
+        <label for="tone">톤</label>
+        <select id="tone">
+          <option value="2" selected>2톤 (기본)</option>
+          <option value="3">3톤 (Y-T)</option>
+        </select>
+
+        <label for="faceGain">면 게인 강도 (1.0 평면 ~ 기본)</label>
+        <input type="range" id="faceGain" min="0" max="100" value="100" step="1">
+        <p class="slider-value" id="faceGainValue"></p>
+      </fieldset>
+
+      <label for="qrUrl">QR 폴백 URL (고급)</label>
+      <input type="text" id="qrUrl" spellcheck="false">
+
+      <label for="preset">스타일 프리셋</label>
+      <select id="preset"></select>
+    </div>
+
+    <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
+    <div id="sharedControls">
       <label>TL스캐너 QR링크 포함</label>
       <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
            (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
@@ -421,101 +496,17 @@
         </div>
       </div>
       <p class="hint">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
-
-      <label for="nPreset">스타일</label>
-      <div class="card-row" id="presetSwatches"></div>
+      <div class="check-row" id="cornerTooRow" style="display:none">
+        <input type="checkbox" id="qrCornerToo">
+        <label for="qrCornerToo" style="margin:0;color:var(--text)">중앙 QR 과 코너 QR 병행 표시 (고급)</label>
+      </div>
+      <p class="hint" id="qrCenterHint" style="display:none">
+        중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.
+      </p>
 
       <div class="section-title">용량</div>
       <div class="gauge-track"><div class="gauge-fill" id="nGaugeFill"></div></div>
       <div class="gauge-label" id="nGaugeLabel">–</div>
-    </div>
-
-    <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
-    <div id="panelAdvanced" style="display:none">
-      <label for="payload">페이로드 (UTF-8 텍스트)</label>
-      <textarea id="payload" spellcheck="false">https://example.com/trilume</textarea>
-
-      <label for="codeType">타입</label>
-      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
-      <select id="codeType">
-        <option value="O">Type O (마름모 8면체 필드)</option>
-        <option value="A">Type A (삼각 실루엣 확장)</option>
-        <option value="Y" selected>Type Y (단일 큐브)</option>
-      </select>
-
-      <div class="row">
-        <div id="versionWrapO">
-          <label for="versionO">버전</label>
-          <select id="versionO">
-            <option value="auto" selected>자동 (최소)</option>
-            <option value="1">V1 (k=6 · 18 B)</option>
-            <option value="2">V2 (k=8 · 39 B)</option>
-            <option value="3">V3 (k=10 · 65 B)</option>
-          </select>
-        </div>
-        <div id="versionWrapY" style="display:none">
-          <label for="versionY">버전</label>
-          <select id="versionY">
-            <option value="1" selected>Y1 (n=21)</option>
-            <option value="2">Y2 (n=25)</option>
-          </select>
-        </div>
-        <div id="versionWrapA" style="display:none">
-          <label for="versionA">버전</label>
-          <select id="versionA">
-            <option value="1" selected>A1 (k=8)</option>
-            <option value="2">A2 (k=10)</option>
-          </select>
-        </div>
-        <div>
-          <label for="ecc">ECC</label>
-          <select id="ecc">
-            <option value="L">L (≈12%)</option>
-            <option value="M" selected>M (25%)</option>
-            <option value="H">H (≈40%)</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="check-row">
-        <input type="checkbox" id="qrFallbackEnabled" checked>
-        <label for="qrFallbackEnabled" style="margin:0;color:var(--text)">TL스캐너 QR링크 폴백 사용</label>
-      </div>
-
-      <!-- Type O·A 공용 — 둘 다 centerQr(중앙 QR)·코너 QR 계약을 그대로 공유한다
-           (encodeA.js D6: A1/A2 의 formatIndex 12/13 → centerQr 시 +2 오프셋 14/15,
-           buildScene() 은 O 와 완전히 같은 렌더 경로를 쓴다). -->
-      <fieldset class="typeOptions" id="optionsOA">
-        <div class="check-row">
-          <input type="checkbox" id="qrCorner" checked>
-          <label for="qrCorner" style="margin:0;color:var(--text)">QR 코너 폴백 (기본 ON)</label>
-        </div>
-        <div class="check-row">
-          <input type="checkbox" id="qrCenter">
-          <label for="qrCenter" style="margin:0;color:var(--text)">중앙 QR 변형 (V*Q/A*Q — 대형 인쇄용)</label>
-        </div>
-        <p class="hint" id="qrCenterHint" style="display:none">
-          중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치합니다 — 코드 폭 13cm 이상 인쇄를 권장합니다.
-        </p>
-      </fieldset>
-
-      <fieldset class="typeOptions" id="optionsY" style="display:none">
-        <label for="tone">톤</label>
-        <select id="tone">
-          <option value="2" selected>2톤 (기본)</option>
-          <option value="3">3톤 (Y-T)</option>
-        </select>
-
-        <label for="faceGain">면 게인 강도 (1.0 평면 ~ 기본)</label>
-        <input type="range" id="faceGain" min="0" max="100" value="100" step="1">
-        <p class="slider-value" id="faceGainValue"></p>
-      </fieldset>
-
-      <label for="qrUrl">QR 폴백 URL (고급)</label>
-      <input type="text" id="qrUrl" spellcheck="false">
-
-      <label for="preset">스타일 프리셋</label>
-      <select id="preset"></select>
     </div>
 
     <!-- ══════════════════════ 공통 ══════════════════════ -->
@@ -565,16 +556,16 @@ import { wifiPayload, cardPayload } from './src/payloadform.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
-  // 고급 모드
-  payload: $('payload'), codeType: $('codeType'),
+  // 고급 모드 (페이로드·QR 폴백 체크박스류는 공용 블록으로 통합 — 사용자 지시 2026-08-09)
+  codeType: $('codeType'),
   versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'), versionWrapA: $('versionWrapA'),
   versionO: $('versionO'), versionY: $('versionY'), versionA: $('versionA'),
   ecc: $('ecc'), preset: $('preset'),
-  qrFallbackEnabled: $('qrFallbackEnabled'),
-  optionsOA: $('optionsOA'), optionsY: $('optionsY'),
-  qrCorner: $('qrCorner'), qrCenter: $('qrCenter'), qrCenterHint: $('qrCenterHint'),
+  optionsY: $('optionsY'),
   tone: $('tone'), faceGain: $('faceGain'), faceGainValue: $('faceGainValue'),
   qrUrl: $('qrUrl'),
+  // 공용 컨트롤 (QR 위치 6택 + 병행 표시 + 게이지)
+  cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
@@ -771,6 +762,7 @@ function setMode(next) {
   els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
   els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
   els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
+  syncQrPositionUi(); // 공용 QR 위치 카드의 모드 의존 요소(병행 표시 행) 갱신
   schedule();
 }
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
@@ -805,15 +797,24 @@ for (const btn of els.wifiSecButtons.children) {
 
 // ── 일반 모드: 타입 카드 ────────────────────────────────────────────────
 
-/** "안쪽" 위치 카드의 라벨/툴팁을 현재 타입에 맞게 갱신한다(β 딱지, PM/009 §2b). */
+/** 현재 활성 타입 — 일반은 카드 상태, 고급은 select (공용 컨트롤이 양쪽을 섬긴다). */
+function currentType() {
+  return mode === 'normal' ? normalState.type : els.codeType.value;
+}
+
+/** 공용 QR 위치 카드 갱신 — 안쪽 툴팁(β 딱지), 활성 표시, 고급 전용 병행 표시 행,
+ *  중앙 QR 인쇄 힌트(안쪽 + O/A 에서만). PM/009 §2b. */
 function syncQrPositionUi() {
-  const isY = normalState.type === 'Y';
+  const isY = currentType() === 'Y';
   els.qrPosInner.title = isY
     ? '안쪽 — Y2 윈도 β (실기기 미검증, 미학 옵션)'
     : '안쪽 — 중앙 QR 변형(불스아이 대체)';
   for (const card of els.qrPositionCards.children) {
     card.classList.toggle('active', card.dataset.pos === normalState.qrPosition);
   }
+  const inner = normalState.qrPosition === 'inner';
+  els.qrCenterHint.style.display = inner && !isY ? '' : 'none';
+  els.cornerTooRow.style.display = mode === 'advanced' && inner && !isY ? '' : 'none';
 }
 
 for (const card of els.typeCards.children) {
@@ -836,7 +837,7 @@ for (const card of els.qrPositionCards.children) {
 }
 syncQrPositionUi();
 
-// ── 고급 모드: 옵션 패널 표시 전환 + 중앙 QR 토글 시 코너 기본 OFF (ADR 0004 §1-4) ──
+// ── 고급 모드: 옵션 패널 표시 전환 (QR 폴백 선택은 공용 6택 카드가 담당) ──
 
 function syncTypeUi() {
   const type = els.codeType.value;
@@ -845,21 +846,10 @@ function syncTypeUi() {
   els.versionWrapO.style.display = (isY || isA) ? 'none' : '';
   els.versionWrapY.style.display = isY ? '' : 'none';
   els.versionWrapA.style.display = isA ? '' : 'none';
-  els.optionsOA.style.display = isY ? 'none' : '';
   els.optionsY.style.display = isY ? '' : 'none';
 }
 
-let lastQrCenter = els.qrCenter.checked;
-els.qrCenter.addEventListener('change', () => {
-  // 켜지는 순간(off→on)에만 코너 기본을 끈다 — 이후 사용자가 다시 켜면(cornerToo) 존중한다.
-  if (els.qrCenter.checked && !lastQrCenter) {
-    els.qrCorner.checked = false;
-  }
-  lastQrCenter = els.qrCenter.checked;
-  els.qrCenterHint.style.display = els.qrCenter.checked ? '' : 'none';
-});
-
-els.codeType.addEventListener('change', () => { syncTypeUi(); schedule(); });
+els.codeType.addEventListener('change', () => { syncTypeUi(); syncQrPositionUi(); schedule(); });
 syncTypeUi();
 
 // ── 고급 모드: 면 게인 슬라이더 (Type Y — 1.0(평면) ~ DEFAULT_FACE_GAINS(기본) 보간) ──
@@ -929,20 +919,13 @@ function resolveFallback(type, position) {
 function buildConfig() {
   if (mode === 'advanced') {
     const type = els.codeType.value;
-    let fallback = { mode: 'off' };
-    if (els.qrFallbackEnabled.checked) {
-      if (type === 'Y') {
-        // Y 고급 모드는 기존 동작 유지(코너 QR, 위치는 항상 TL — 위치 카드는 일반 모드 전용).
-        fallback = { mode: 'corner', corner: 'TL' };
-      } else if (els.qrCenter.checked) {
-        fallback = { mode: 'center', cornerToo: els.qrCorner.checked };
-      } else if (els.qrCorner.checked) {
-        fallback = { mode: 'corner', corner: 'TL' };
-      }
-    }
+    // 공용 6택 카드가 폴백을 결정한다 (일반과 동일 규약 — 없음=off · 안쪽=중앙 QR/Y 윈도 β).
+    // 고급 전용 추가: 안쪽(중앙 QR) + 코너 병행 표시 체크(cornerToo), QR URL 오버라이드.
+    const fallback = resolveFallback(type, normalState.qrPosition);
+    if (fallback.mode === 'center') fallback.cornerToo = els.qrCornerToo.checked;
     return {
       type,
-      text: els.payload.value,
+      text: normalPayloadText(), // 콘텐츠 탭 공용 (URL/텍스트/Wi-Fi/명함)
       eccLevel: els.ecc.value,
       presetName: els.preset.value,
       versionO: els.versionO.value === 'auto' ? undefined : Number(els.versionO.value),
@@ -1082,8 +1065,8 @@ function renderTypeY(cfg) {
   return { type: 'Y', encoded, scene, info };
 }
 
-function updateGauge(encoded, text) {
-  if (mode !== 'normal') return; // 게이지는 일반 모드 전용 UI 요소
+function updateGauge(type, encoded, text) {
+  // 공용 UI (일반·고급 양쪽 — 사용자 지시 2026-08-09 "고급에도 일반 선택지 전부").
   if (!encoded) {
     els.nGaugeFill.style.width = '0%';
     els.nGaugeFill.classList.remove('warn', 'bad');
@@ -1096,7 +1079,10 @@ function updateGauge(encoded, text) {
   els.nGaugeFill.style.width = `${pct}%`;
   els.nGaugeFill.classList.toggle('warn', pct >= 70 && pct < 90);
   els.nGaugeFill.classList.toggle('bad', pct >= 90);
-  els.nGaugeLabel.textContent = `${bytes} B / ${max} B (V${encoded.version}${encoded.tones !== undefined && encoded.tones === 3 ? 'T' : ''})`;
+  // 버전 라벨은 타입 접두 (O→V, A→A, Y→Y — export 파일명 규약과 동일 계열).
+  const prefix = type === 'O' ? 'V' : type;
+  const suffix = `${encoded.tones === 3 ? 'T' : ''}${encoded.centerQr ? 'Q' : ''}${encoded.window ? 'W' : ''}`;
+  els.nGaugeLabel.textContent = `${bytes} B / ${max} B (${prefix}${encoded.version}${suffix})`;
 }
 
 let timer = 0;
@@ -1111,18 +1097,18 @@ function render() {
     current = { type: result.type, encoded: result.encoded, scene: result.scene };
     drawScene(result.scene, els.canvas, 26);
     els.info.innerHTML = result.info;
-    updateGauge(result.encoded, cfg.text);
+    updateGauge(result.type, result.encoded, cfg.text);
   } catch (err) {
     current = null;
     els.info.innerHTML = '';
     els.error.textContent = String(err && err.message ? err.message : err);
-    updateGauge(null, '');
+    updateGauge(null, null, '');
   }
 }
 
 for (const el of [
-  els.payload, els.codeType, els.versionO, els.versionY, els.versionA, els.ecc, els.preset,
-  els.qrFallbackEnabled, els.qrCorner, els.qrCenter, els.tone, els.faceGain, els.qrUrl,
+  els.codeType, els.versionO, els.versionY, els.versionA, els.ecc, els.preset,
+  els.qrCornerToo, els.tone, els.faceGain, els.qrUrl,
 ]) {
   el.addEventListener('input', schedule);
   el.addEventListener('change', schedule);
