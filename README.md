@@ -1,72 +1,89 @@
 # TLcube — TrilLuminance (cube)
 
-> 정식 명칭 **TrilLuminance (cube)** · 코드네임 Trilume.
-> 육각형을 마름모 3면으로 분할하고, 3면 간 **휘도 순위(순열)** 로 데이터를 싣는 2.5D 시각 코드.
-> 상태: **M0 인코더 구현 완료** — 텍스트 입력 → V1\~V3 렌더 · PNG/SVG 내보내기 · 결정성 테스트.
+**English** · [한국어](README.ko.md)
+
+> Formal name **TrilLuminance (cube)** · codename Trilume.
+> A 2.5D visual code that stores data in the **luminance rank** of three rhombic faces per hexagonal cell.
+> Status: **M0 encoder complete** — text in → render · PNG/SVG export · deterministic output.
+
+<p align="center">
+  <img src="sites/tl/assets/type-Y.png" alt="Type Y — a single isometric cube with a fallback QR at the top left" width="30%">
+  <img src="sites/tl/assets/type-O.png" alt="Type O — a hexagonal field with a central QR finder" width="30%">
+  <img src="sites/tl/assets/type-A.png" alt="Type A — a triangular silhouette with a central QR finder" width="30%">
+</p>
 
 ---
 
-## 무엇인가
+## What it is
 
-각 육각 셀을 rhombille 타일링으로 3개의 마름모(`T` 상단 · `L` 좌측 · `R` 우측)로 나누고, 세 면의 **상대 휘도 순서** 로 데이터를 싣는다. 3면의 순열은 3! = 6가지 → 셀당 base-6 digit 하나(log₂6 ≈ 2.585 bit).
+Each hexagonal cell is split by a rhombille tiling into three rhombi — `T` (top), `L` (left), `R` (right) — and data rides on the **relative luminance order** of those three faces. Three faces permute 3! = 6 ways, so one cell carries one base-6 digit (log₂6 ≈ 2.585 bits).
 
-결과물은 *제각각 다른 방향에서 빛을 받은 아이소메트릭 큐브 필드* 처럼 보인다. 인코딩 원리와 비주얼이 일치하는 코드다.
+The result looks like *a field of isometric cubes, each lit from a different direction*. The encoding principle and the visual are the same thing.
 
-## 왜
+## Why
 
-**QR 대체재가 아니다.** 마름모 셀은 모듈 밀도에서 정사각 대비 불리하고, 그건 이미 결론이 난 이야기다. 노리는 것은 둘:
+**This is not a QR replacement.** Rhombic cells lose to square modules on density, and that argument is settled. Two things are worth having instead:
 
-1. **미학** — 그 자체로 전시 가능한 코드
-2. **차분 인코딩 강건성** — 데이터가 절대 휘도가 아니라 셀 내 3면의 **상대 순서** 에 실리므로, 단조(monotonic) 톤 커브 변형 — 전역 조명 변화, 감마, 프린터/디스플레이 톤 매핑 — 에 대해 이론상 불변
+1. **Aesthetics** — a code you would actually put on a wall.
+2. **Differential-encoding robustness** — data lives in the **relative order** of three faces within a cell, not in absolute luminance. Any **monotonic** tone transform — global illumination change, gamma, printer/display tone mapping — leaves the order intact, and therefore the data.
 
-## 렌더러 자유도
+## Renderer freedom
 
-데이터 계약은 **면 간 순서**와 **최소 분리폭(Δmin)** 뿐이다. 그 안에서 렌더러는 자유롭다 — 셀마다 절대 휘도를 지터해도, 색을 입혀도, 면 안에 그라데이션을 넣어도, 시간축으로 흔들어도 된다. 상대휘도 환산 후 순서만 보존되면 된다.
+The data contract is only **the order between faces** and a **minimum separation (Δmin)**. Inside that, a renderer does what it likes: jitter absolute luminance per cell, apply color, gradient the inside of a face, animate over time. Only the order after conversion to relative luminance has to survive.
 
-이 자유도가 이 포맷의 핵심 차별점이다.
+That freedom is the point of the format.
 
-## 상태
+## Three types
 
-| 마일스톤 | 내용 | 상태 |
+| Type | Silhouette | Net payload (ECC-M) |
 |---|---|---|
-| M0 | 제너레이터 — 레이아웃 확정 | **구현 완료** |
-| M1 | 합성 디코더 + 왜곡 테스트 | — |
-| M2 | 실카메라 스캐너 | — |
-| M3 | 스타일 프리셋 · 패키징 | — |
+| **O** | Hexagonal field | 18 / 39 / 65 B (k = 6 / 8 / 10) |
+| **A** | Triangular silhouette | 31 / 62 / 101 B (k = 6 / 8 / 10) |
+| **Y** | Single isometric cube | 31 / 98 / 141 B (n = 13 / 21 / 25) |
 
-## 사용
+All three share the same data contract and differ only in silhouette. Each can carry a **fallback QR** printed alongside, so a reader that cannot decode the TL code still has a path.
 
+## Status
+
+| Milestone | Scope | Status |
+|---|---|---|
+| M0 | Generator — layout frozen | **complete** |
+| M1 | Synthetic decoder + distortion harness | — |
+| M2 | Real-camera scanner | — |
+| M3 | Style presets · packaging | — |
+
+## Usage
+
+```bash
+node tools/dev-server.mjs        # http://localhost:8765 — development (index.html + src/)
+node tools/build-single.mjs      # dist/trilume.html — one file, opens over file:// with no server
+npm test                         # full suite (node --test)
 ```
-node tools/dev-server.mjs        # http://localhost:8765 — 개발용 (index.html + src/)
-node tools/build-single.mjs      # dist/trilume.html — 서버 없이 file:// 로 열리는 단일 파일
-npm test                         # 전체 테스트 (node --test)
-```
 
-## 기술
+## How it is built
 
-바닐라 JavaScript. **빌드 툴체인 없음, 런타임 의존성 0.** 단일 HTML 파일로 동작한다.
+Vanilla JavaScript. **No build toolchain, zero runtime dependencies.** It runs as a single HTML file.
 
-내보내기는 **결정적**이다 — 동일 입력이면 PNG/SVG 가 바이트까지 동일하다. 그래서 픽셀은
-브라우저 canvas 가 아니라 자체 래스터라이저(`src/raster.js`)가 만들고, PNG 인코딩도 자체
-구현(`src/png.js`)이 한다. canvas 는 화면 미리보기 전용이다.
+Export is **deterministic** — identical input yields byte-identical PNG/SVG. That is why pixels come from an in-repo rasterizer (`src/raster.js`) rather than a browser canvas, and PNG encoding is also in-repo (`src/png.js`). Canvas is used only for the on-screen preview.
 
-인코딩 경로: `encode.js` (페이로드 → RS(GF(211)) 코드워드 → 셀별 digit) → `scene.js`
-(digit → 도형 목록) → canvas 미리보기 / `raster.js`+`png.js` / `svg.js`. 렌더 자체 검증은
-`verify.js` — 샘플 원판 median 통계로 전 셀의 휘도 순위가 의도한 digit 과 일치하는지
-픽셀에서 직접 확인한다.
+Encoding path: `encode.js` (payload → RS over GF(211) codeword → per-cell digits) → `scene.js` (digits → shape list) → canvas preview / `raster.js` + `png.js` / `svg.js`. Render self-check lives in `verify.js`, which reads the rasterized pixels back and confirms every cell's luminance ranking matches the intended digit, using the same sample-disc median statistic the decoder is specified to use.
 
-## 스펙
+## Spec
 
-포맷 규범은 **[SPEC.md](SPEC.md)** 다 — 기하·심볼 인코딩·레이아웃·용량·오류 정정·적합성 요건. 본문의 수치 표는 전부 `src/` 의 생성물이고, 와이어 계약은 `test/` 스냅샷이 정본이다.
+The normative format spec is **[SPEC.md](SPEC.md)** — geometry, symbol encoding, layout, capacity, error correction, and conformance requirements. Every numeric table in it is generated from `src/`, and the wire contract is pinned by snapshots in `test/`.
 
-**디코더만 구현해도 적합 구현**이다 (SPEC §11).
+**Implementing only a decoder still counts as a conforming implementation** (SPEC §11). Adoption starts with the reading side, so partial implementations are deliberately not excluded.
 
-## 라이선스
+## License
 
-이 repo 의 코드는 **[Apache License 2.0](LICENSE)** 으로 배포한다. Copyright 2026 SoliEstre.
+Code and spec in this repository are released under the **[Apache License 2.0](LICENSE)**. Copyright 2026 SoliEstre.
 
-**특허**: 2026-08-09 현재 SoliEstre 는 이 포맷에 관해 **보유하거나 출원 중인 특허가 없다.** 이 사실 진술은 조건 없이 누구나 이 포맷을 구현할 수 있다는 뜻이다 — 전체 구현이든 디코더만이든, 상업적이든 아니든 상관없다. (Apache-2.0 §3 이 배포된 코드에 대해 별도의 명시적 특허 실시권을 준다.)
+**Patents**: as of 2026-08-09, SoliEstre holds **no patents and has no patent applications pending** on this format. That statement is unconditional — anyone may implement this format, whole or in part, decoder-only or not, commercially or not. (Apache-2.0 §3 separately grants an explicit patent license for the distributed code.)
 
-**서드파티**: `src/vendor/jcodd.js` 는 [jcodd](https://github.com/Esterkxz/JCODD) 무수정 벤더링본이며 원본 MIT 라이선스가 적용된다 (파일 헤더에 원문 포함).
+**Third party**: `src/vendor/jcodd.js` is an unmodified vendored copy of [jcodd](https://github.com/Esterkxz/JCODD) and remains under its original MIT license (full text in the file header).
 
-**상표 고지**: QR Code is a registered trademark of DENSO WAVE INCORPORATED.
+**Trademark notice**: QR Code is a registered trademark of DENSO WAVE INCORPORATED.
+
+---
+
+*Generator: [tlcube.estre.so](https://tlcube.estre.so) · Overview: [tl.estre.so](https://tl.estre.so) · Scanner: [tlscan.estre.so](https://tlscan.estre.so)*
