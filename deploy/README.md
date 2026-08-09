@@ -19,6 +19,35 @@
 바로 실패한다 (`no "ssl_certificate" is defined ...`). certbot 이 내부적으로 돌리는 검사도
 같이 터지므로 "conf 먼저 깔고 certbot" 순서는 성립하지 않는다.
 
+### 0. 먼저 확인 — 인증서가 이미 있는가
+
+```bash
+certbot certificates            # 서버에서
+# 또는 밖에서: echo | openssl s_client -connect tl.estre.so:443 -servername tl.estre.so \
+#              2>/dev/null | openssl x509 -noout -subject -ext subjectAltName
+```
+
+세 이름을 이미 커버하는 인증서(특히 **와일드카드**)가 있으면 **발급 단계를 통째로 건너뛴다.**
+`*.estre.so` 같은 와일드카드가 있는데도 절차대로 `certbot` 을 돌리면, 이미 커버되는 이름에
+대해 **중복 인증서**가 발급돼 갱신 표면만 하나 늘어난다. estre.so 는 실제로 이 경우다
+(2026-08-10 실측: `CN=estre.so`, `SAN=*.estre.so, estre.so`).
+
+### A. 인증서가 이미 있을 때 (2단계)
+
+```bash
+git clone https://github.com/SoliEstre/TLcube /srv/tlcube
+
+cp deploy/nginx.conf /etc/nginx/sites-available/tlcube
+# 인증서 경로 3쌍을 실제 lineage 로 교체 — 이름은 `certbot certificates` 로 확인, 추측 금지
+sed -i 's#/etc/letsencrypt/live/tlcube/#/etc/letsencrypt/live/<실제lineage>/#g' \
+  /etc/nginx/sites-available/tlcube
+# TL_CH_USER / TL_CH_KEY 도 실제 값으로 교체 (수집을 쓸 때만)
+ln -sf /etc/nginx/sites-available/tlcube /etc/nginx/sites-enabled/tlcube
+nginx -t && systemctl reload nginx
+```
+
+### B. 인증서를 새로 받아야 할 때 (4단계)
+
 ```bash
 # 1. 배치
 git clone https://github.com/SoliEstre/TLcube /srv/tlcube
@@ -40,8 +69,11 @@ certbot certonly --webroot -w /var/www/acme --cert-name tlcube \
 cp deploy/nginx.conf /etc/nginx/sites-available/tlcube
 #    TL_CH_USER / TL_CH_KEY 를 실제 값으로 교체 (수집을 쓸 때만)
 nginx -t && systemctl reload nginx
+```
 
-# 4. (선택) 수집
+### 공통 — (선택) 수집
+
+```bash
 clickhouse-client --multiquery < deploy/clickhouse-init.sql
 #    파일 하단 주석의 INSERT 전용 사용자 생성 블록도 실행
 ```
@@ -77,9 +109,12 @@ clickhouse-client -q "SELECT count() FROM tl_analytics.events"
 - **`certbot --nginx` 를 쓰지 않는다.** 그 플러그인은 conf 를 제자리에서 재작성하면서
   주석과 서식을 날린다. 이 파일들의 주석은 설계 근거라서 보존 대상이다. 그래서
   발급은 `certonly --webroot` 로 분리하고 conf 는 사람이 소유한다.
-- **ACME location 이 본 설정의 :80 블록에도 남아 있다.** 갱신은 평문 80 을 타는데,
-  리다이렉트가 그것까지 삼키면 **90일 뒤에 조용히 실패**한다. 그때는 이미 사이트가
-  죽은 뒤라서 발견이 가장 늦는 고장 유형이다. `location ^~` 로 우선권을 준다.
+- **ACME location 이 본 설정의 :80 블록에도 남아 있다.** webroot(HTTP-01)로 받은
+  인증서의 갱신은 평문 80 을 타는데, 리다이렉트가 그것까지 삼키면 **90일 뒤에 조용히
+  실패**한다. 그때는 이미 사이트가 죽은 뒤라서 발견이 가장 늦는 고장 유형이다.
+  `location ^~` 로 우선권을 준다.
+  (경로 A — 기존 **와일드카드**를 쓰는 경우는 대개 DNS-01 이라 이 경로를 타지 않는다.
+  그래도 남겨둔다: 해가 없고, 나중에 HTTP-01 로 바뀌어도 그때 다시 안 겪는다.)
 - **TLS 공통값을 http 레벨로 올리지 않는다.** 이 conf 는 `http{}` 안으로 include 되므로
   최상위 `ssl_protocols` 는 같은 서버의 **다른 사이트에도 적용된다**. estre.so 는 공용
   호스트라 server 블록마다 반복해서 blast radius 를 0 으로 둔다.
