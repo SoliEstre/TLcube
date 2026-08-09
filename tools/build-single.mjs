@@ -31,10 +31,21 @@ const OUT_FILE = path.join(OUT_DIR, 'trilume.html');
 // './vendor/jcodd.js' specifier 치환이 성립한다(buildLoaderScript 의 등록 순서 =
 // 치환 가능 순서, 본 파일 상단 주석 참조). 다른 Type O/Y 모듈은 payloadform 을
 // 의존하지 않으므로 나머지 순서에는 영향이 없다 — index.html(app 코드)만 소비한다.
+// Type A (ADR 0005, PM/009 §2b): placementA→layoutA→capacityA→encodeA — 'capacity'
+// (Type O) 뒤에 삽입한다. placementA 는 hexgrid·placement 만 의존, layoutA 는
+// layout·placement·bullseye·placementA, capacityA 는 hexgrid·capacity·rs211·header·
+// bullseye·placement·placementA, encodeA 는 capacityA·header·base211·rs211·mask·
+// formatinfo·layoutA·placement·placementA 를 의존한다 — 이 순서면 위상 정렬이
+// 성립한다(전 의존이 이미 등록된 뒤에 등록됨). scene.js(Type O) 를 그대로 재사용하므로
+// 별도 sceneA 모듈은 없다(buildScene 이 cellDigits 삽입 순서만 순회 — 렌더 경로 공유,
+// D7). MODULE_ORDER 등록 = MODULES 배열 등록 순서 = specifier 치환 가능 순서(본 파일
+// 상단 주석) — capacity.js 를 import 하는 capacityA 는 반드시 'capacity' 뒤에 온다.
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
   'hexgrid', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
-  'header', 'placement', 'bullseye', 'layout', 'capacity', 'luminance',
+  'header', 'placement', 'bullseye', 'layout', 'capacity',
+  'placementA', 'layoutA', 'capacityA', 'encodeA',
+  'luminance',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'gf256', 'rs', 'qr', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',

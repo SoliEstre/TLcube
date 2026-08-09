@@ -338,7 +338,27 @@
           </svg>
           Type Y
         </div>
+        <div class="toggle-card" data-type="A" style="flex:1">
+          <!-- Type A 실루엣 = 플랫바닥 삼각(△, 위 꼭짓점) — 육각 실루엣에 삼각 패치 3개를 붙여
+               닫은 확장(ADR 0005). 미니 불스아이 아이콘으로 Type O 와 파인더 계약 공유를 암시. -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3 L21 19 L3 19 Z"/>
+            <circle cx="12" cy="14" r="3"/>
+            <circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/>
+          </svg>
+          Type A
+        </div>
       </div>
+
+      <label>TL스캐너 QR링크 포함</label>
+      <div class="card-row" id="qrPositionCards">
+        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)">안쪽<span class="hint" style="margin:0">β</span></div>
+        <div class="toggle-card active" data-pos="TL">좌상</div>
+        <div class="toggle-card" data-pos="TR">우상</div>
+        <div class="toggle-card" data-pos="BL">좌하</div>
+        <div class="toggle-card" data-pos="BR">우하</div>
+      </div>
+      <p class="hint">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.</p>
 
       <label for="nPreset">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
@@ -357,6 +377,7 @@
       <select id="codeType">
         <option value="O" selected>Type O (마름모 8면체 필드)</option>
         <option value="Y">Type Y (단일 큐브)</option>
+        <option value="A">Type A (삼각 실루엣 확장)</option>
       </select>
 
       <div class="row">
@@ -376,6 +397,13 @@
             <option value="2">Y2 (n=25)</option>
           </select>
         </div>
+        <div id="versionWrapA" style="display:none">
+          <label for="versionA">버전</label>
+          <select id="versionA">
+            <option value="1" selected>A1 (k=8)</option>
+            <option value="2">A2 (k=10)</option>
+          </select>
+        </div>
         <div>
           <label for="ecc">ECC</label>
           <select id="ecc">
@@ -386,17 +414,25 @@
         </div>
       </div>
 
-      <fieldset class="typeOptions" id="optionsO">
+      <div class="check-row">
+        <input type="checkbox" id="qrFallbackEnabled" checked>
+        <label for="qrFallbackEnabled" style="margin:0;color:var(--text)">TL스캐너 QR링크 폴백 사용</label>
+      </div>
+
+      <!-- Type O·A 공용 — 둘 다 centerQr(중앙 QR)·코너 QR 계약을 그대로 공유한다
+           (encodeA.js D6: A1/A2 의 formatIndex 12/13 → centerQr 시 +2 오프셋 14/15,
+           buildScene() 은 O 와 완전히 같은 렌더 경로를 쓴다). -->
+      <fieldset class="typeOptions" id="optionsOA">
         <div class="check-row">
           <input type="checkbox" id="qrCorner" checked>
           <label for="qrCorner" style="margin:0;color:var(--text)">QR 코너 폴백 (기본 ON)</label>
         </div>
         <div class="check-row">
           <input type="checkbox" id="qrCenter">
-          <label for="qrCenter" style="margin:0;color:var(--text)">중앙 QR 변형 (V*Q — 대형 인쇄용)</label>
+          <label for="qrCenter" style="margin:0;color:var(--text)">중앙 QR 변형 (V*Q/A*Q — 대형 인쇄용)</label>
         </div>
         <p class="hint" id="qrCenterHint" style="display:none">
-          V*Q 는 불스아이 대신 중앙에 QR 을 배치합니다 — 코드 폭 13cm 이상 인쇄를 권장합니다.
+          중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치합니다 — 코드 폭 13cm 이상 인쇄를 권장합니다.
         </p>
       </fieldset>
 
@@ -451,6 +487,7 @@
 <script type="module">
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
+import { encodeA } from './src/encodeA.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
@@ -467,10 +504,11 @@ const $ = (id) => document.getElementById(id);
 const els = {
   // 고급 모드
   payload: $('payload'), codeType: $('codeType'),
-  versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'),
-  versionO: $('versionO'), versionY: $('versionY'),
+  versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'), versionWrapA: $('versionWrapA'),
+  versionO: $('versionO'), versionY: $('versionY'), versionA: $('versionA'),
   ecc: $('ecc'), preset: $('preset'),
-  optionsO: $('optionsO'), optionsY: $('optionsY'),
+  qrFallbackEnabled: $('qrFallbackEnabled'),
+  optionsOA: $('optionsOA'), optionsY: $('optionsY'),
   qrCorner: $('qrCorner'), qrCenter: $('qrCenter'), qrCenterHint: $('qrCenterHint'),
   tone: $('tone'), faceGain: $('faceGain'), faceGainValue: $('faceGainValue'),
   qrUrl: $('qrUrl'),
@@ -478,6 +516,7 @@ const els = {
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
   contentTabs: $('contentTabs'), typeCards: $('typeCards'), presetSwatches: $('presetSwatches'),
+  qrPositionCards: $('qrPositionCards'), qrPosInner: $('qrPosInner'),
   nTextPayload: $('nTextPayload'), nUrlPayload: $('nUrlPayload'),
   nWifiSsid: $('nWifiSsid'), nWifiPassword: $('nWifiPassword'), wifiSecButtons: $('wifiSecButtons'),
   nCardName: $('nCardName'), nCardPhone: $('nCardPhone'), nCardEmail: $('nCardEmail'),
@@ -490,7 +529,10 @@ const els = {
 
 /** 일반 모드 전용 in-memory 상태 — localStorage 미사용(결정성·단순성, 새로고침 시 초기화). */
 let mode = 'normal';
-const normalState = { contentTab: 'url', type: 'O', preset: DEFAULT_PRESET, wifiSecurity: 'WPA' }; // URL 이 기본 (사용자 지시)
+// qrPosition: 'inner' | 'TL' | 'TR' | 'BL' | 'BR' — 기본 'TL'(좌상, 사용자 지시 2026-08-09).
+const normalState = {
+  contentTab: 'url', type: 'O', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
+};
 
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
 let current = null;
@@ -510,6 +552,10 @@ function exportFilename(ext) {
   if (type === 'O') {
     const qMark = encoded.centerQr ? 'Q' : '';
     return `trilume-o-v${encoded.version}${qMark}-${encoded.eccLevel}.${ext}`;
+  }
+  if (type === 'A') {
+    const qMark = encoded.centerQr ? 'Q' : '';
+    return `trilume-a-v${encoded.version}${qMark}-${encoded.eccLevel}.${ext}`;
   }
   return `trilume-y${encoded.version}${encoded.tones === 3 ? 't' : ''}-${encoded.eccLevel}.${ext}`;
 }
@@ -695,21 +741,47 @@ for (const btn of els.wifiSecButtons.children) {
 
 // ── 일반 모드: 타입 카드 ────────────────────────────────────────────────
 
+/** "안쪽" 위치 카드의 라벨/툴팁을 현재 타입에 맞게 갱신한다(β 딱지, PM/009 §2b). */
+function syncQrPositionUi() {
+  const isY = normalState.type === 'Y';
+  els.qrPosInner.title = isY
+    ? '안쪽 — Y2 윈도 β (실기기 미검증, 미학 옵션)'
+    : '안쪽 — 중앙 QR 변형(불스아이 대체)';
+  for (const card of els.qrPositionCards.children) {
+    card.classList.toggle('active', card.dataset.pos === normalState.qrPosition);
+  }
+}
+
 for (const card of els.typeCards.children) {
   card.addEventListener('click', () => {
     normalState.type = card.dataset.type;
     for (const c of els.typeCards.children) c.classList.toggle('active', c === card);
+    syncQrPositionUi();
     schedule();
   });
 }
 
+// ── 일반 모드: QR 링크 포함 위치 카드 (5택 — 안쪽/좌상/우상/좌하/우하) ──────
+
+for (const card of els.qrPositionCards.children) {
+  card.addEventListener('click', () => {
+    normalState.qrPosition = card.dataset.pos;
+    syncQrPositionUi();
+    schedule();
+  });
+}
+syncQrPositionUi();
+
 // ── 고급 모드: 옵션 패널 표시 전환 + 중앙 QR 토글 시 코너 기본 OFF (ADR 0004 §1-4) ──
 
 function syncTypeUi() {
-  const isY = els.codeType.value === 'Y';
-  els.versionWrapO.style.display = isY ? 'none' : '';
+  const type = els.codeType.value;
+  const isY = type === 'Y';
+  const isA = type === 'A';
+  els.versionWrapO.style.display = (isY || isA) ? 'none' : '';
   els.versionWrapY.style.display = isY ? '' : 'none';
-  els.optionsO.style.display = isY ? 'none' : '';
+  els.versionWrapA.style.display = isA ? '' : 'none';
+  els.optionsOA.style.display = isY ? 'none' : '';
   els.optionsY.style.display = isY ? '' : 'none';
 }
 
@@ -778,50 +850,100 @@ function normalPayloadText() {
 }
 
 /** 현재 모드에서 렌더 설정을 하나로 모은다 — 모드별 DOM 을 여기서만 읽는다. */
+/**
+ * QR 링크 폴백 선택을 렌더 함수들이 그대로 소비할 정규 객체로 만든다.
+ * mode: 'off' | 'center'(O/A 중앙 QR — Y 는 지원 안 함) | 'corner' | 'window'(Y2·2톤 전용 β).
+ */
+function resolveFallback(type, position) {
+  if (position === 'inner') {
+    return type === 'Y' ? { mode: 'window' } : { mode: 'center', cornerToo: false };
+  }
+  return { mode: 'corner', corner: position };
+}
+
 function buildConfig() {
   if (mode === 'advanced') {
+    const type = els.codeType.value;
+    let fallback = { mode: 'off' };
+    if (els.qrFallbackEnabled.checked) {
+      if (type === 'Y') {
+        // Y 고급 모드는 기존 동작 유지(코너 QR, 위치는 항상 TL — 위치 카드는 일반 모드 전용).
+        fallback = { mode: 'corner', corner: 'TL' };
+      } else if (els.qrCenter.checked) {
+        fallback = { mode: 'center', cornerToo: els.qrCorner.checked };
+      } else if (els.qrCorner.checked) {
+        fallback = { mode: 'corner', corner: 'TL' };
+      }
+    }
     return {
-      type: els.codeType.value,
+      type,
       text: els.payload.value,
       eccLevel: els.ecc.value,
       presetName: els.preset.value,
       versionO: els.versionO.value === 'auto' ? undefined : Number(els.versionO.value),
       versionY: Number(els.versionY.value),
-      qrCorner: els.qrCorner.checked,
-      qrCenter: els.qrCenter.checked,
+      versionA: Number(els.versionA.value),
       tone: Number(els.tone.value),
       qrText: els.qrUrl.value.trim() === '' ? TL_READER_URL : els.qrUrl.value.trim(),
       faceGains: currentFaceGains(),
+      fallback,
     };
   }
+  const fallback = resolveFallback(normalState.type, normalState.qrPosition);
   return {
     type: normalState.type,
     text: normalPayloadText(),
     eccLevel: 'M',
     presetName: normalState.preset,
     versionO: undefined,
-    versionY: undefined,
-    qrCorner: true,
-    qrCenter: false,
+    versionY: fallback.mode === 'window' ? 2 : undefined,
+    versionA: undefined,
     tone: 2,
     qrText: TL_READER_URL,
     faceGains: DEFAULT_FACE_GAINS,
+    fallback,
   };
 }
 
 // ── 렌더 ────────────────────────────────────────────────────────────────
 
+/**
+ * O/A 공용 — buildScene() 은 두 타입 모두 같은 렌더 경로를 쓴다(D7, encodeA 모듈 주석).
+ *
+ * [실측 확인된 이슈, 이 lane 파일 목록(index.html/build-single.mjs/bundle.test.js)
+ * 밖이라 근본 수정은 별도 과제] Type A 의 삼각 패치는 hexgrid.layoutForRegion(k) 가
+ * 계산하는 캔버스 크기·원점(Type O 육각 실루엣 기준)보다 바깥까지 뻗는다. scene.js
+ * 는 코너 QR 이 실제로 그려질 때(needsCornerQr — qrText 있고 (!centerQr || cornerToo))
+ * 만 margin ×20 을 자동 적용하는데, 그 경우엔 우연히 패치도 충분히 들어간다. 반대로
+ * 코너 QR 이 없는 경로(fallback 꺼짐 · centerQr 단독)는 기본 margin ×2 를 쓰고, 그러면
+ * 패치가 캔버스 밖으로 밀려나 자체검증 샘플링이 깨진다(실측: A1/A2 k=8·10 전부
+ * margin<18 에서 shape bbox 이탈 — QR 유무와 무관하게 Type A 자체의 문제).
+ * margin ×20(코너 QR 과 동일 상수)이면 A1·A2 양쪽 다 여유 있게 들어간다(실측 최소
+ * 18) — needsCornerQr 가 false 가 되는 두 경로에서만 여기서 앱 레이어로 우회한다.
+ */
+function sceneOptsForOA(cfg, centerQr) {
+  const opts = { palette: paletteOf(cfg.presetName), centerQr };
+  let needsCornerQr = false;
+  if (cfg.fallback.mode === 'center') {
+    opts.qrText = cfg.qrText;
+    opts.cornerToo = Boolean(cfg.fallback.cornerToo);
+    needsCornerQr = opts.cornerToo;
+  } else if (cfg.fallback.mode === 'corner') {
+    opts.qrText = cfg.qrText;
+    opts.qrCorner = cfg.fallback.corner;
+    needsCornerQr = true;
+  }
+  if (cfg.type === 'A' && !needsCornerQr) opts.margin = 20;
+  return opts;
+}
+
 function renderTypeO(cfg) {
-  const opts = { eccLevel: cfg.eccLevel };
+  const centerQr = cfg.fallback.mode === 'center';
+  const opts = { eccLevel: cfg.eccLevel, centerQr };
   if (cfg.versionO !== undefined) opts.version = cfg.versionO;
-  opts.centerQr = cfg.qrCenter;
   const encoded = encode(cfg.text, opts);
 
-  const qrEnabled = cfg.qrCenter || cfg.qrCorner;
-  const sceneOpts = { palette: paletteOf(cfg.presetName), centerQr: cfg.qrCenter };
-  if (qrEnabled) sceneOpts.qrText = cfg.qrText;
-  if (cfg.qrCenter) sceneOpts.cornerToo = cfg.qrCorner;
-  const scene = buildScene(encoded, sceneOpts);
+  const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
 
   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
   const check = verifyRaster(raster, scene, encoded);
@@ -837,12 +959,45 @@ function renderTypeO(cfg) {
   return { type: 'O', encoded, scene, info };
 }
 
+function renderTypeA(cfg) {
+  const centerQr = cfg.fallback.mode === 'center';
+  const opts = { eccLevel: cfg.eccLevel, centerQr };
+  if (cfg.versionA !== undefined) opts.version = cfg.versionA;
+  const encoded = encodeA(cfg.text, opts);
+
+  const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
+
+  const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
+  const check = verifyRaster(raster, scene, encoded);
+  const bytes = payloadByteLength(cfg.text);
+  const badge = check.ok
+    ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · Δmin ${check.minDelta.toFixed(3)}</span>`
+    : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건</span>`;
+  const info =
+    `타입 <b>A</b> · 버전 <b>A${encoded.version}${encoded.centerQr ? 'Q' : ''}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
+    `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
+    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(cfg.presetName).toFixed(3)}<br>` +
+    badge;
+  return { type: 'A', encoded, scene, info };
+}
+
 function renderTypeY(cfg) {
+  const useWindow = cfg.fallback.mode === 'window';
   const opts = { eccLevel: cfg.eccLevel, tones: cfg.tone };
-  if (cfg.versionY !== undefined) opts.version = cfg.versionY;
+  if (useWindow) {
+    opts.version = 2;
+    opts.window = true;
+  } else if (cfg.versionY !== undefined) {
+    opts.version = cfg.versionY;
+  }
   const encoded = encodeY(cfg.text, opts);
 
-  const scene = buildSceneY(encoded, { palette: paletteOf(cfg.presetName, cfg.faceGains), qrText: cfg.qrText });
+  const sceneOpts = { palette: paletteOf(cfg.presetName, cfg.faceGains) };
+  if (cfg.fallback.mode !== 'off') {
+    sceneOpts.qrText = cfg.qrText;
+    if (cfg.fallback.mode === 'corner') sceneOpts.qrCorner = cfg.fallback.corner;
+  }
+  const scene = buildSceneY(encoded, sceneOpts);
 
   const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
   const check = verifyRasterY(raster, scene, encoded);
@@ -854,7 +1009,8 @@ function renderTypeY(cfg) {
     ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · ${marginLabel}</span>`
     : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건 · 소거 ${check.erasures.length}건</span>`;
   const info =
-    `타입 <b>Y</b> · 버전 <b>Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}</b> (n=${encoded.n}) · ECC <b>${encoded.eccLevel}</b> · 톤 <b>${encoded.tones}</b><br>` +
+    `타입 <b>Y</b> · 버전 <b>Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}</b> (n=${encoded.n}) · ECC <b>${encoded.eccLevel}</b> · 톤 <b>${encoded.tones}</b>` +
+    `${encoded.window ? ' · 윈도 <b>β</b>' : ''}<br>` +
     `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
     `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym}<br>` +
     badge;
@@ -886,7 +1042,7 @@ function render() {
   syncFaceGainLabel();
   const cfg = buildConfig();
   try {
-    const result = cfg.type === 'Y' ? renderTypeY(cfg) : renderTypeO(cfg);
+    const result = cfg.type === 'Y' ? renderTypeY(cfg) : cfg.type === 'A' ? renderTypeA(cfg) : renderTypeO(cfg);
     current = { type: result.type, encoded: result.encoded, scene: result.scene };
     drawScene(result.scene, els.canvas, 26);
     els.info.innerHTML = result.info;
@@ -900,8 +1056,8 @@ function render() {
 }
 
 for (const el of [
-  els.payload, els.versionO, els.versionY, els.ecc, els.preset,
-  els.qrCorner, els.qrCenter, els.tone, els.faceGain, els.qrUrl,
+  els.payload, els.codeType, els.versionO, els.versionY, els.versionA, els.ecc, els.preset,
+  els.qrFallbackEnabled, els.qrCorner, els.qrCenter, els.tone, els.faceGain, els.qrUrl,
 ]) {
   el.addEventListener('input', schedule);
   el.addEventListener('change', schedule);

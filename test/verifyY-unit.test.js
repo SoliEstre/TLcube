@@ -18,7 +18,8 @@ import {
   EPSILON_FIT,
 } from '../src/verifyY.js';
 import { YFACES, moduleSampleDisc, layoutForCube } from '../src/ygrid.js';
-import { referenceCellsAll } from '../src/placementY.js';
+import { referenceCellsAll, referenceGroups } from '../src/placementY.js';
+import { windowedReferenceGroupsY, windowedReferenceCellsY } from '../src/capacityY.js';
 import { digitToRanks, RADIX } from '../src/lehmer.js';
 import { digitToPattern, thetaFromAnchors } from '../src/tonemap.js';
 import { relativeLuminance, getPreset, DEFAULT_PRESET } from '../src/luminance.js';
@@ -465,4 +466,118 @@ test('게인 전면 실패(NaN) 시 잔차 게이트가 공허 통과하지 않�
   assert.equal(gate.ok, false);
   assert.deepEqual(gate.unfittableFaces, ['T', 'L', 'R']);
   assert.equal(gate.residuals.length, 0);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 면 내 QR 윈도 β (ADR 0003 D1 + [C7 Q7]) — Y2(n=25)·tones=2 전용. encoded.window
+// ===true 면 estimateFaceGains/fitResiduals/estimateFaceThetas 가 (capacityY.js
+// windowedReferenceGroupsY 의) 재배치 좌표를 써야 한다 — 베이스 좌표([C7 부속
+// 계약 ① 대상, 그룹 D)는 윈도 모드에서 이미 배제돼 존재하지 않는다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WN = 25; // 윈도는 n=25(Y2) 전용.
+
+function makeWindowScene() {
+  return { layout: layoutForCube(WN, { size: SIZE, margin: 2 * SIZE }) };
+}
+
+/** 윈도 재배치 레퍼런스(capacityY.windowedReferenceCellsY) + 데이터 셀,
+ * encoded.window=true(verifyY.referenceGroupsFor 분기의 소비측 회귀). */
+function buildWindowEncoded(dataCells) {
+  const cellDigits = new Map();
+  for (const c of windowedReferenceCellsY(WN, 2)) {
+    cellDigits.set(`${c.i},${c.j}`, { digit: c.digit, role: 'reference' });
+  }
+  for (const { i, j, digit } of dataCells) {
+    cellDigits.set(`${i},${j}`, { digit, role: 'data' });
+  }
+  return {
+    n: WN, cellDigits, tones: 2, window: true,
+  };
+}
+
+test('verifyY 윈도: estimateFaceGains 가 재배치된(윈도 밖) 레퍼런스 좌표를 쓴다 — 베이스 좌표가 아니다', () => {
+  const scene = makeWindowScene();
+  const encoded = buildWindowEncoded([]);
+  const raster = renderEncoded2T(scene, encoded);
+  const { observations } = estimateFaceGains(raster, scene, encoded);
+
+  const windowedKeys = new Set(
+    windowedReferenceGroupsY(WN, 2).flatMap((g) => g.cells).map((c) => `${c.i},${c.j}`),
+  );
+  const baseKeys = new Set(
+    referenceGroups(WN, 2).flatMap((g) => g.cells).map((c) => `${c.i},${c.j}`),
+  );
+  assert.notDeepEqual([...windowedKeys].sort(), [...baseKeys].sort(), '재배치가 실제로 좌표를 바꿨는지 전제 확인');
+
+  for (const face of YFACES) {
+    const obsKeys = new Set(observations[face].map((p) => `${p.i},${p.j}`));
+    assert.equal(obsKeys.size, 12, `${face}: 레퍼런스 12점을 모아야 한다`);
+    for (const k of obsKeys) assert.ok(windowedKeys.has(k), `${face}: ${k} 가 윈도 재배치 좌표 집합 밖`);
+  }
+});
+
+test('verifyY 윈도: 왜곡 없는 렌더 — 데이터 셀 왕복 100%, erasures=0 (제외 좌표는 애초에 cellDigits 에 없어 측정되지 않는다)', () => {
+  const scene = makeWindowScene();
+  const dataCells = [
+    { i: 0, j: 0, digit: 3 },
+    { i: 1, j: 1, digit: 4 },
+    { i: 5, j: 5, digit: 5 },
+  ];
+  const encoded = buildWindowEncoded(dataCells);
+  const raster = renderEncoded2T(scene, encoded);
+
+  const result = verifyRasterY(raster, scene, encoded);
+
+  assert.equal(
+    result.total,
+    encoded.cellDigits.size,
+    '측정 대상 = cellDigits 에 실제로 있는 셀뿐(윈도 배제 좌표는 세지도 않는다 — D1 무측정)',
+  );
+  assert.equal(result.matched, result.total);
+  assert.deepEqual(result.mismatches, []);
+  assert.deepEqual(result.erasures, []);
+  assert.ok(result.residualGate.ok);
+  assert.equal(result.ok, true);
+});
+
+test('verifyY 윈도: 면별 시스템 게인 왜곡도 §7.2-Y 정규화(윈도 재배치 레퍼런스 기반)로 흡수한다', () => {
+  const scene = makeWindowScene();
+  const dataCells = [
+    { i: 0, j: 0, digit: 1 },
+    { i: 5, j: 5, digit: 5 },
+  ];
+  const encoded = buildWindowEncoded(dataCells);
+  const faceGain = { T: 1.25, L: 0.95, R: 0.8 };
+  const raster = renderEncoded2T(scene, encoded, { faceGain });
+
+  const result = verifyRasterY(raster, scene, encoded);
+
+  assert.equal(result.matched, result.total);
+  assert.deepEqual(result.mismatches, []);
+  assert.equal(result.ok, true);
+});
+
+test('verifyY: encoded.window 생략(기본 false) 은 기존 베이스 레퍼런스 좌표 경로 그대로', () => {
+  const scene = makeWindowScene();
+  const dataCells = [{ i: 0, j: 0, digit: 2 }];
+  const cellDigits = new Map();
+  for (const c of referenceCellsAll(WN, 2)) {
+    cellDigits.set(`${c.i},${c.j}`, { digit: c.digit, role: 'reference' });
+  }
+  for (const { i, j, digit } of dataCells) cellDigits.set(`${i},${j}`, { digit, role: 'data' });
+  const encoded = { n: WN, cellDigits, tones: 2 }; // window 필드 없음 — 기본 false.
+
+  const raster = renderEncoded2T(scene, encoded);
+  const { observations } = estimateFaceGains(raster, scene, encoded);
+  const baseKeys = new Set(
+    referenceGroups(WN, 2).flatMap((g) => g.cells).map((c) => `${c.i},${c.j}`),
+  );
+  for (const face of YFACES) {
+    for (const p of observations[face]) {
+      assert.ok(baseKeys.has(`${p.i},${p.j}`), `${face}: window 생략 시 베이스 좌표를 써야 한다`);
+    }
+  }
+  const result = verifyRasterY(raster, scene, encoded);
+  assert.equal(result.ok, true);
 });

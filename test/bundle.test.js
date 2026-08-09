@@ -15,10 +15,14 @@ const ROOT = path.resolve(__dirname, '..');
 const DIST_FILE = path.join(ROOT, 'dist', 'trilume.html');
 const SRC_DIR = path.join(ROOT, 'src');
 
+// tools/build-single.mjs 의 MODULE_ORDER 와 반드시 동기 — Type A(ADR 0005) 4개
+// 추가: placementA·layoutA·capacityA·encodeA ('capacity' 뒤, 위상 순서).
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
   'hexgrid', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
-  'header', 'placement', 'bullseye', 'layout', 'capacity', 'luminance',
+  'header', 'placement', 'bullseye', 'layout', 'capacity',
+  'placementA', 'layoutA', 'capacityA', 'encodeA',
+  'luminance',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'gf256', 'rs', 'qr', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',

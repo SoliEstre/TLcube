@@ -7,7 +7,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
+import { buildSceneY, DEFAULT_FACE_GAINS, QR_CORNERS } from '../src/sceneY.js';
 import { moduleQuad, cubeBounds, layoutForCube, YFACES } from '../src/ygrid.js';
 import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
 import { digitToRanks } from '../src/lehmer.js';
@@ -294,6 +294,134 @@ describe('buildSceneY — QR 블록 vs 실루엣 무교차', () => {
   });
 });
 
+describe('buildSceneY — 코너 QR 위치 4택 (ADR 0004 §1-7)', () => {
+  const encoded = { n: 21, cellDigits: new Map([['0,0', { digit: 0, role: 'data' }]]) };
+
+  test('QR_CORNERS = [TL, TR, BL, BR]', () => {
+    assert.deepEqual(QR_CORNERS, ['TL', 'TR', 'BL', 'BR']);
+  });
+
+  test('4 코너 전부 기본 margin 에서 무교차(throw 없음)', () => {
+    for (const qrCorner of QR_CORNERS) {
+      assert.doesNotThrow(() => buildSceneY(encoded, { palette: PALETTE, qrText: 'A', qrCorner }));
+    }
+  });
+
+  test('알 수 없는 qrCorner 는 RangeError', () => {
+    assert.throws(
+      () => buildSceneY(encoded, { palette: PALETTE, qrText: 'A', qrCorner: 'MID' }),
+      RangeError,
+    );
+  });
+
+  test('margin 을 너무 작게 강제하면 4 코너 전부 겹침 감지 throw', () => {
+    for (const qrCorner of QR_CORNERS) {
+      assert.throws(
+        () => buildSceneY(encoded, { palette: PALETTE, qrText: 'A', qrCorner, margin: 2 }),
+        /겹친다/,
+      );
+    }
+  });
+
+  test('bbox 대칭 이동: TR/BL/BR 블록 원점이 TL 대비 layout.width/height 기준 거울상', () => {
+    const cellSize = 1;
+    const margin = 20 * cellSize;
+    const qrModuleSize = cellSize / 2;
+    const blockSide = 29 * qrModuleSize;
+
+    function quietOriginFor(qrCorner) {
+      const scene = buildSceneY(encoded, {
+        palette: PALETTE, qrText: 'A', qrCorner, cellSize, margin,
+      });
+      const quiet = scene.shapes.find((s) => s.kind === 'polygon' && s.color === PALETTE.bullseyeLight);
+      return {
+        x: Math.min(...quiet.points.map((p) => p.x)),
+        y: Math.min(...quiet.points.map((p) => p.y)),
+        width: scene.width,
+        height: scene.height,
+      };
+    }
+
+    const tl = quietOriginFor('TL');
+    assert.ok(Math.abs(tl.x - margin * 0.25) < 1e-9);
+    assert.ok(Math.abs(tl.y - margin * 0.25) < 1e-9);
+
+    const tr = quietOriginFor('TR');
+    assert.ok(Math.abs(tr.x - (tl.width - margin * 0.25 - blockSide)) < 1e-9);
+    assert.ok(Math.abs(tr.y - tl.y) < 1e-9);
+
+    const bl = quietOriginFor('BL');
+    assert.ok(Math.abs(bl.x - tl.x) < 1e-9);
+    assert.ok(Math.abs(bl.y - (tl.height - margin * 0.25 - blockSide)) < 1e-9);
+
+    const br = quietOriginFor('BR');
+    assert.ok(Math.abs(br.x - tr.x) < 1e-9);
+    assert.ok(Math.abs(br.y - bl.y) < 1e-9);
+  });
+
+  test('기존 기본값 경로(qrCorner 생략 = TL) 스냅샷 불변', () => {
+    const cellSize = 1;
+    const margin = 20 * cellSize;
+    const sceneDefault = buildSceneY(encoded, { palette: PALETTE, qrText: 'A', cellSize, margin });
+    const sceneExplicitTL = buildSceneY(
+      encoded,
+      { palette: PALETTE, qrText: 'A', qrCorner: 'TL', cellSize, margin },
+    );
+    assert.deepEqual(sceneDefault, sceneExplicitTL);
+  });
+
+  test('방위 고정(ADR 0004 §1-7): 4코너 전부 다크 모듈 절대좌표 집합이 qrMatrix 원본과 완전 일치', () => {
+    // 검증 lane 지적(2026-08-09): 존재·원점 검사만으로는 전역 전치(x↔y)·코너별
+    // 90° 회전 뮤테이션이 전부 생존한다. typeO-fallback.test.js 와 같은 방식으로
+    // 렌더된 다크 모듈을 (x,y) 모듈 인덱스로 역산해 원본 행렬의 다크 집합과
+    // **완전 대조**한다 — 위치 4택은 평행이동만 허용, 회전·미러·전치는 전부 잡힌다.
+    const cellSize = 1;
+    const margin = 20 * cellSize;
+    const qrText = 'HTTPS://TL.EXAMPLE/A';
+    const qr = qrMatrix(qrText);
+    const qrModuleSize = cellSize / 2;
+
+    const expected = new Set();
+    for (let y = 0; y < qr.size; y += 1) {
+      for (let x = 0; x < qr.size; x += 1) {
+        if (qr.modules[y * qr.size + x] === 1) expected.add(`${x},${y}`);
+      }
+    }
+    assert.ok(expected.size > 0);
+
+    for (const qrCorner of QR_CORNERS) {
+      const scene = buildSceneY(encoded, {
+        palette: PALETTE, qrText, qrCorner, cellSize, margin,
+      });
+      const quietIdx = scene.shapes.findIndex(
+        (s) => s.kind === 'polygon' && s.color === PALETTE.bullseyeLight,
+      );
+      assert.ok(quietIdx >= 0, `${qrCorner}: 콰이어트 패치 없음`);
+      const quiet = scene.shapes[quietIdx];
+      const originX = Math.min(...quiet.points.map((p) => p.x)) + 4 * qrModuleSize;
+      const originY = Math.min(...quiet.points.map((p) => p.y)) + 4 * qrModuleSize;
+
+      // 콰이어트 패치 뒤 shape 전부가 이 코너 QR 의 다크 모듈이다(윈도 미사용 경로).
+      const got = new Set();
+      for (const s of scene.shapes.slice(quietIdx + 1)) {
+        const mx = (Math.min(...s.points.map((p) => p.x)) - originX) / qrModuleSize;
+        const my = (Math.min(...s.points.map((p) => p.y)) - originY) / qrModuleSize;
+        const xi = Math.round(mx);
+        const yi = Math.round(my);
+        assert.ok(Math.abs(mx - xi) < 1e-9 && Math.abs(my - yi) < 1e-9,
+          `${qrCorner}: 모듈 그리드 비정렬 (${mx},${my})`);
+        assert.ok(xi >= 0 && xi < qr.size && yi >= 0 && yi < qr.size,
+          `${qrCorner}: 모듈 인덱스 범위 밖 (${xi},${yi})`);
+        got.add(`${xi},${yi}`);
+      }
+      assert.equal(got.size, expected.size, `${qrCorner}: 다크 모듈 수 불일치`);
+      for (const k of expected) {
+        assert.ok(got.has(k), `${qrCorner}: 원본 다크 모듈 (${k}) 이 렌더에 없다 — 방위 계약 위반`);
+      }
+    }
+  });
+});
+
 describe('buildSceneY — 콰이어트 존이 QR 을 4모듈로 감싼다', () => {
   test('첫 다크 모듈(있다면)의 좌상단 오프셋 = 콰이어트 패치 좌상단 + 4모듈', () => {
     const encoded = makeFullEncoded(N);
@@ -346,4 +474,216 @@ describe('buildSceneY — qrText 생략', () => {
       assert.notDeepEqual(s.color, PALETTE.bullseyeLight);
     }
   });
+});
+
+// ── 면 내 QR 윈도 β (ADR 0003 D1 + [C7 Q7]) — Y2(n=25)·tones=2 전용 ─────────
+
+describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
+  const WN = 25; // 윈도는 n=25(Y2) 전용.
+  const QR_WINDOW_TEXT = 'HTTPS://TL.EXAMPLE/W';
+
+  /** n=25 전 셀을 채운 합성 encoded, window=true. 윈도 좌표([12,24]²)는 실제
+   * encodeY.js 라면 cellDigits 에서 빠지지만, 여기서는 sceneY.js 단독 계약(①의
+   * `entry===undefined` 스킵)만 확인하면 되므로 그 169 좌표를 의도적으로 비운다. */
+  function makeWindowEncoded() {
+    const cellDigits = new Map();
+    const lo = WN - 13;
+    for (let j = 0; j < WN; j += 1) {
+      for (let i = 0; i < WN; i += 1) {
+        if (i >= lo && j >= lo) continue; // 윈도 배제(D1) — encodeY.js 가 실제로 하는 일.
+        cellDigits.set(`${i},${j}`, { digit: (i + 2 * j) % 6, role: 'data' });
+      }
+    }
+    return {
+      n: WN, cellDigits, tones: 2, window: true,
+    };
+  }
+
+  test('window===true 인데 n!==25 면 RangeError', () => {
+    const encoded = { n: 21, cellDigits: new Map([['0,0', { digit: 0, role: 'data' }]]), window: true };
+    assert.throws(() => buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT }), RangeError);
+  });
+
+  test('window===true 이지만 qrText 미지정이면 윈도 shape 없이 조용히 생략(코너와 동일 계약)', () => {
+    const encoded = makeWindowEncoded();
+    const scene = buildSceneY(encoded, { palette: PALETTE });
+    assert.equal(scene.shapes.length, 3 * cellCount(encoded) + 3 + 1);
+  });
+
+  function cellCount(encoded) {
+    return encoded.cellDigits.size;
+  }
+
+  test('window===true + qrText 있음 — 콰이어트 패치(밝음) 1 + 다크 모듈 N 이 맨 끝에 추가된다', () => {
+    const encoded = makeWindowEncoded();
+    const withoutWindow = buildSceneY({ ...encoded, window: false }, { palette: PALETTE, qrText: QR_WINDOW_TEXT });
+    const withWindow = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT });
+
+    const qr = qrMatrix(QR_WINDOW_TEXT);
+    let darkCount = 0;
+    for (const v of qr.modules) if (v === 1) darkCount += 1;
+
+    assert.equal(withWindow.shapes.length, withoutWindow.shapes.length + 1 + darkCount);
+
+    // 맨 끝 (1+darkCount) 개가 윈도 블록 — 콰이어트(밝음) 먼저, 다크가 뒤따른다.
+    const windowBlock = withWindow.shapes.slice(withWindow.shapes.length - (1 + darkCount));
+    assert.equal(windowBlock[0].kind, 'polygon');
+    assert.deepEqual(windowBlock[0].color, PALETTE.bullseyeLight);
+    for (let i = 1; i < windowBlock.length; i += 1) {
+      assert.equal(windowBlock[i].kind, 'polygon');
+      assert.deepEqual(windowBlock[i].color, PALETTE.bullseyeDark);
+    }
+    // 코너 QR 블록(윈도 앞)은 그대로 남아 있다 — 둘이 배타적이지 않다.
+    assert.equal(withoutWindow.shapes.length, withWindow.shapes.length - (1 + darkCount));
+  });
+
+  test('윈도 콰이어트 패치 bbox = 13×13 데이터 셀(윈도 폭 W), T 면 파라메트릭 (n-13,n-13)..(n,n)', () => {
+    const encoded = makeWindowEncoded();
+    const cellSize = 3;
+    const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
+    const quiet = scene.shapes[scene.shapes.length - 1 - (() => {
+      const qr = qrMatrix(QR_WINDOW_TEXT);
+      let d = 0; for (const v of qr.modules) if (v === 1) d += 1;
+      return d;
+    })()];
+    assert.deepEqual(quiet.color, PALETTE.bullseyeLight);
+    const xs = quiet.points.map((p) => p.x);
+    const ys = quiet.points.map((p) => p.y);
+    const width = Math.max(...xs) - Math.min(...xs);
+    const height = Math.max(...ys) - Math.min(...ys);
+    // T 면 마름모 기하라 축정렬 폭은 13·cellSize 가 아니다(면이 60/120 마름모) —
+    // 대신 대각선 폭·높이가 13·cellSize·(면 기저 성분)의 닫힌 형태를 따른다는 것만
+    // (0보다 크고 유한하다는 형태로) 약하게 단언한다. 강한 스냅샷은 아래 좌표 직접
+    // 비교 테스트가 담당한다.
+    assert.ok(width > 0 && Number.isFinite(width));
+    assert.ok(height > 0 && Number.isFinite(height));
+  });
+
+  test('윈도 콰이어트 패치 꼭짓점이 facePoint(T, a, b) 닫힌 형태와 정확히 일치(직접 좌표 재현)', () => {
+    const encoded = makeWindowEncoded();
+    const cellSize = 2;
+    const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
+    const qr = qrMatrix(QR_WINDOW_TEXT);
+    let darkCount = 0;
+    for (const v of qr.modules) if (v === 1) darkCount += 1;
+    const quiet = scene.shapes[scene.shapes.length - 1 - darkCount];
+
+    const lo = 25 - 13;
+    const layout = scene.layout;
+    const { ei, ej } = { ei: CORNER_UNIT_OFFSETS[1], ej: CORNER_UNIT_OFFSETS[5] }; // T 면 기저(ygrid.js 규범).
+    const facePoint = (a, b) => ({
+      x: layout.originX + (a * ei.x + b * ej.x) * layout.size,
+      y: layout.originY + (a * ei.y + b * ej.y) * layout.size,
+    });
+    const expected = [
+      facePoint(lo, lo), facePoint(25, lo), facePoint(25, 25), facePoint(lo, 25),
+    ];
+    for (let i = 0; i < 4; i += 1) {
+      assert.ok(Math.abs(quiet.points[i].x - expected[i].x) < 1e-9, `점 ${i} x`);
+      assert.ok(Math.abs(quiet.points[i].y - expected[i].y) < 1e-9, `점 ${i} y`);
+    }
+  });
+
+  test('방향 규약 — 파인더 없는 QR 코너(행렬 (20,20))가 윈도 안쪽(Y-심 쪽, u=v=4)에 매핑된다', () => {
+    // qr.js FINDER_CENTERS = [[3,3],[17,3],[3,17]] — 행렬 코너 (20,20) 은 어느
+    // 파인더에도 속하지 않는다(파인더 없는 코너). renderWindowQr 매핑:
+    // u = 4+(20-qx), v = 4+(20-qy) → qx=qy=20 이면 u=v=4(윈도 안쪽 경계 — 콰이어트
+    // 4 QR모듈 바로 다음 첫 데이터 모듈), qx=qy=3(파인더 중심)이면 u=v=21(윈도
+    // 바깥쪽, 실루엣 꼭짓점 쪽) — 순수 좌표 매핑 공식이므로 payload 내용(다크/밝음)
+    // 과 무관하게 항상 성립한다(모듈 값 자체는 payload 의존이라 별도로 단언하지 않는다).
+    assert.equal(4 + (20 - 20), 4, '파인더 없는 코너(20,20) → u=4(안쪽)');
+    assert.equal(4 + (20 - 3), 21, '파인더 중심(3,3) → u=21(바깥쪽)');
+    assert.ok(21 > 4, '파인더 쪽이 파인더 없는 코너보다 항상 바깥쪽(더 큰 u,v)에 매핑된다');
+
+    // 렌더 파이프라인 재현 — 파인더 중심(3,3, 항상 다크: 함수 패턴이라 payload 무관)
+    // 이 실제로 u=v=21 위치에 그려졌는지 좌표로 직접 확인한다.
+    const encoded = makeWindowEncoded();
+    const cellSize = 5;
+    const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
+    const qr = qrMatrix(QR_WINDOW_TEXT);
+    assert.equal(qr.modules[3 * qr.size + 3], 1, '파인더 중심(3,3)은 항상 다크 — 함수 패턴, payload 무관');
+
+    const lo = 25 - 13;
+    const layout = scene.layout;
+    const { ei, ej } = { ei: CORNER_UNIT_OFFSETS[1], ej: CORNER_UNIT_OFFSETS[5] };
+    const facePoint = (a, b) => ({
+      x: layout.originX + (a * ei.x + b * ej.x) * layout.size,
+      y: layout.originY + (a * ei.y + b * ej.y) * layout.size,
+    });
+    const half = 0.5;
+    const a0 = lo + 21 * half;
+    const b0 = lo + 21 * half;
+    const expectedQuad = [
+      facePoint(a0, b0), facePoint(a0 + half, b0), facePoint(a0 + half, b0 + half), facePoint(a0, b0 + half),
+    ];
+    const found = scene.shapes.some((s) => s.kind === 'polygon'
+      && Array.isArray(s.points) && s.points.length === 4
+      && s.points.every((p, idx) => Math.abs(p.x - expectedQuad[idx].x) < 1e-9
+        && Math.abs(p.y - expectedQuad[idx].y) < 1e-9));
+    assert.ok(found, '파인더 중심(3,3) 다크 모듈이 예상 위치(u=v=21, 바깥쪽)에 그려지지 않았다');
+  });
+
+  test('방향 규약 강고정 — 윈도 다크 모듈 전좌표 집합 = 뒤집기 매핑된 qrMatrix (미러·무플립 뮤테이션 검출)', () => {
+    // 검증 lane 지적(2026-08-09): (21,21) 위치의 '다크 존재' 단독 검사는 미러 시
+    // 우상 파인더 중심(항상 다크)이, 무플립 시 payload 의존 다크가 그 자리로 사상돼
+    // 우연 통과한다. 여기서는 윈도 다크 shape **전체**의 첫 꼭짓점 좌표 집합을
+    // 뒤집기 매핑(u=4+(20-qx), v=4+(20-qy)) 기대 집합과 완전 대조한다 — 무플립·
+    // 단축 미러(카이럴리티 파괴)·전치 어느 쪽도 집합이 달라져 반드시 잡힌다.
+    const encoded = makeWindowEncoded();
+    const cellSize = 5;
+    const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
+    const qr = qrMatrix(QR_WINDOW_TEXT);
+    let darkCount = 0;
+    for (const v of qr.modules) if (v === 1) darkCount += 1;
+
+    const lo = 25 - 13;
+    const layout = scene.layout;
+    const { ei, ej } = { ei: CORNER_UNIT_OFFSETS[1], ej: CORNER_UNIT_OFFSETS[5] }; // T 면 기저.
+    const facePoint = (a, b) => ({
+      x: layout.originX + (a * ei.x + b * ej.x) * layout.size,
+      y: layout.originY + (a * ei.y + b * ej.y) * layout.size,
+    });
+    const half = 0.5;
+    const key = (p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+
+    const expected = new Set();
+    for (let qy = 0; qy < qr.size; qy += 1) {
+      for (let qx = 0; qx < qr.size; qx += 1) {
+        if (qr.modules[qy * qr.size + qx] !== 1) continue;
+        const u = 4 + (20 - qx);
+        const v = 4 + (20 - qy);
+        expected.add(key(facePoint(lo + u * half, lo + v * half)));
+      }
+    }
+    assert.equal(expected.size, darkCount, '기대 집합 좌표 충돌 — 매핑이 단사가 아니다');
+
+    // 윈도 다크는 shapes 맨 끝 darkCount 개(콰이어트 패치 바로 뒤).
+    const got = new Set(
+      scene.shapes.slice(scene.shapes.length - darkCount).map((s) => key(s.points[0])),
+    );
+    assert.equal(got.size, darkCount, '렌더 다크 모듈 좌표 충돌/누락');
+    for (const k of expected) {
+      assert.ok(got.has(k), `기대 다크 좌표 (${k}) 부재 — 방향 규약(뒤집기 매핑) 위반`);
+    }
+  });
+
+  test('결정성: 동일 입력 2회 호출 결과가 deepEqual', () => {
+    const encoded = makeWindowEncoded();
+    const a = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT });
+    const b = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT });
+    assert.deepEqual(a, b);
+  });
+
+  test('window 생략(기본 false) 은 기존 경로와 완전히 동일 — 윈도 shape 없음', () => {
+    const encoded = makeFullEncoded(N); // window 필드 없음.
+    const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT });
+    assert.equal(scene.shapes.length, 3 * N * N + 3 + 1 + 1 + darkCountOf(QR_WINDOW_TEXT));
+  });
+
+  function darkCountOf(text) {
+    const qr = qrMatrix(text);
+    let d = 0;
+    for (const v of qr.modules) if (v === 1) d += 1;
+    return d;
+  }
 });

@@ -10,6 +10,7 @@ import { buildScene } from '../src/scene.js';
 import { FACES, layoutForRegion, facePolygon, regionCells } from '../src/hexgrid.js';
 import { bandRadii } from '../src/bullseye.js';
 import { digitToRanks } from '../src/lehmer.js';
+import { encode } from '../src/encode.js';
 
 const PALETTE = {
   background: { r: 255, g: 255, b: 255 },
@@ -63,29 +64,25 @@ describe('buildScene — 순서 계약', () => {
     }
   });
 
-  test('셀 순회 순서는 regionCells(k) 순서 그대로(Map 에 있는 셀만)', () => {
+  test('셀 순회 순서는 cellDigits 삽입 순서 그대로', () => {
+    // Type A 회귀(ADR 0005 D1): 삼각 패치 셀은 regionCells(k) 필터로 걸리지 않으므로,
+    // painter 순서의 계약은 이제 "cellDigits 삽입 순서"다 — encoder(encode.js·encodeA.js)
+    // 가 이미 결정적으로 구성해 둔 순서를 그대로 쓴다.
     const encoded = makeEncoded();
     const scene = buildScene(encoded, { palette: PALETTE });
-    const regionOrder = regionCells(K)
-      .map(({ q, r }) => `${q},${r}`)
-      .filter((key) => encoded.cellDigits.has(key));
+    const insertOrder = [...encoded.cellDigits.keys()];
     const nCellShapes = 3 * encoded.cellDigits.size;
-    // 폴리곤 3개씩 묶어 셀 단위로 확인 — 각 묶음의 좌표가 regionOrder 순서를 따르는지는
-    // facePolygon 좌표 대조로 검증(아래 색 매핑 테스트에서 좌표까지 함께 확인).
-    assert.equal(nCellShapes / 3, regionOrder.length);
+    assert.equal(nCellShapes / 3, insertOrder.length);
   });
 });
 
 describe('buildScene — 색 매핑', () => {
-  test('digitToRanks 와 일치, 좌표는 facePolygon 과 일치', () => {
+  test('digitToRanks 와 일치, 좌표는 facePolygon 과 일치, 순서는 cellDigits 삽입 순서', () => {
     const encoded = makeEncoded();
     const scene = buildScene(encoded, { palette: PALETTE });
-    const regionOrder = regionCells(K).filter(({ q, r }) =>
-      encoded.cellDigits.has(`${q},${r}`),
-    );
     let idx = 0;
-    for (const { q, r } of regionOrder) {
-      const entry = encoded.cellDigits.get(`${q},${r}`);
+    for (const [key, entry] of encoded.cellDigits) {
+      const [q, r] = key.split(',').map(Number);
       const ranks = digitToRanks(entry.digit);
       for (const face of FACES) {
         const shape = scene.shapes[idx];
@@ -94,6 +91,46 @@ describe('buildScene — 색 매핑', () => {
         assert.deepEqual(shape.points, facePolygon(q, r, face, scene.layout));
         idx += 1;
       }
+    }
+  });
+});
+
+describe('buildScene — Type O 회귀: 신구 셀 순회가 동일 shapes 집합을 낸다', () => {
+  /** 구방식(regionCells(k) 필터) 으로 셀 폴리곤 shapes 를 재현 — 변경 전 scene.js 로직. */
+  function legacyCellShapes(encoded, layout, palette) {
+    const shapes = [];
+    for (const { q, r } of regionCells(encoded.k)) {
+      const entry = encoded.cellDigits.get(`${q},${r}`);
+      if (entry === undefined) continue;
+      const ranks = digitToRanks(entry.digit);
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(q, r, face, layout),
+          color: palette.levels[ranks[face]],
+        });
+      }
+    }
+    return shapes;
+  }
+
+  /** 순서 무관 비교용 정규 키 — 셀 폴리곤은 서로 겹치지 않으므로 집합 비교로 충분하다. */
+  function canonicalKey(shape) {
+    return JSON.stringify([shape.kind, shape.points, shape.color]);
+  }
+
+  test('V1/V2/V3 실제 encode() 산출물 — 신구 셀 폴리곤 shapes 가 정확히 같은 다중집합', () => {
+    for (const version of [1, 2, 3]) {
+      const encoded = encode(`regr v${version}`, { version, eccLevel: 'M' });
+      // qrText·centerQr 미지정 — scene.shapes 의 polygon 은 전부 셀 폴리곤(불스아이는
+      // disc, QR 블록 없음)이라 kind 필터만으로 신구 비교가 정확하다.
+      const scene = buildScene(encoded, { palette: PALETTE });
+      const legacyOnSceneLayout = legacyCellShapes(encoded, scene.layout, PALETTE);
+      const newCellShapes = scene.shapes.filter((s) => s.kind === 'polygon');
+
+      const legacyKeys = legacyOnSceneLayout.map(canonicalKey).sort();
+      const newKeys = newCellShapes.map(canonicalKey).sort();
+      assert.deepEqual(newKeys, legacyKeys, `V${version} 신구 셀 shapes 불일치`);
     }
   });
 });

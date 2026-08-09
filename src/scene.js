@@ -55,6 +55,39 @@ const QR_PROTECTED_QUIET = 1;
 /** 보호 사각(심볼 + 안전 콰이어트) 한 변의 QR-모듈 수 = 1 + 21 + 1. */
 const QR_PROTECTED_MODULES = QR_MODULE_GRID + 2 * QR_PROTECTED_QUIET;
 
+/**
+ * 코너 QR 위치 4택 (ADR 0004 §1-7 U11 개정). "좌상 고정" → "방위 고정 + 4택 위치".
+ * **방위는 고정** — QR 매트릭스 자체를 회전하지 않는다. 위치만 bbox 코너로
+ * 대칭 이동한다(기존 TL 배치 로직 그대로, 나머지 세 코너는 그 거울상).
+ */
+export const QR_CORNERS = Object.freeze(['TL', 'TR', 'BL', 'BR']);
+
+function assertQrCorner(qrCorner) {
+  if (!QR_CORNERS.includes(qrCorner)) {
+    throw new RangeError(`qrCorner 는 ${QR_CORNERS.join(' | ')} 중 하나여야 한다: ${qrCorner}`);
+  }
+  return qrCorner;
+}
+
+/**
+ * 코너 QR 블록(콰이어트 포함)의 좌상단 원점을 bbox 코너별로 계산한다.
+ * TL 은 기존 로직(margin·0.25, margin·0.25) 그대로 — 나머지는 layout.width/height
+ * 기준 대칭 이동(방위 고정, 위치만 이동).
+ */
+function cornerBlockOrigin(qrCorner, margin, blockSide, width, height) {
+  const nearX = margin * 0.25;
+  const nearY = margin * 0.25;
+  const farX = width - margin * 0.25 - blockSide;
+  const farY = height - margin * 0.25 - blockSide;
+  switch (qrCorner) {
+    case 'TL': return { x: nearX, y: nearY };
+    case 'TR': return { x: farX, y: nearY };
+    case 'BL': return { x: nearX, y: farY };
+    case 'BR': return { x: farX, y: farY };
+    default: throw new RangeError(`qrCorner 는 ${QR_CORNERS.join(' | ')} 중 하나여야 한다: ${qrCorner}`);
+  }
+}
+
 function rectsOverlap(a, b) {
   return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
 }
@@ -147,6 +180,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   palette: {background: {r,g,b}, levels: [{r,g,b},{r,g,b},{r,g,b}], bullseyeDark: {r,g,b}, bullseyeLight: {r,g,b}},
  *   cellSize?: number, margin?: number,
  *   qrText?: string, centerQr?: boolean, cornerToo?: boolean,
+ *   qrCorner?: 'TL'|'TR'|'BL'|'BR',
  * }} options
  * @returns {{k: number, layout: object, width: number, height: number, background: {r,g,b}, shapes: Array}}
  */
@@ -194,6 +228,8 @@ export function buildScene(encoded, options) {
   }
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
+
+  const qrCorner = opts.qrCorner === undefined ? 'TL' : assertQrCorner(opts.qrCorner);
 
   // 코너 QR 을 실제로 그릴지 — qrText 가 있고, (centerQr 이 아니거나, centerQr 이어도
   // cornerToo 로 병행 요청된 경우) (ADR 0004 §1-3·§1-4: centerQr 기본값은 코너 생략).
@@ -249,18 +285,54 @@ export function buildScene(encoded, options) {
     pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette);
   }
 
-  // (1) 셀 3면 폴리곤 — regionCells(k) 순회 순서로, cellDigits 에 있는 셀만.
-  for (const { q, r } of regionCells(k)) {
-    const key = `${q},${r}`;
-    const entry = cellDigits.get(key);
-    if (entry === undefined) continue; // 불스아이 셀은 Map 에 없다.
+  // (1) 셀 3면 폴리곤 — cellDigits 삽입 순서 그대로 순회한다(Type A 회귀 —
+  // ADR 0005 D1: 삼각 패치 셀은 hexDistance(q,r) > k 라 regionCells(k) 필터로는
+  // 절대 걸리지 않는다. cellDigits 는 인코더(encode.js/encodeA.js)가 이미 결정적
+  // 순서로 구성해 두므로, 여기서는 그 삽입 순서를 그대로 painter 순서로 쓴다 —
+  // 불스아이 셀만 애초에 Map 에 없어 자동 제외된다(육각·삼각 공통).
+  // Type O 회귀 계약: 셀 폴리곤끼리는 서로 겹치지 않으므로(인접 셀은 변만 공유)
+  // 순회 순서가 바뀌어도 최종 shapes 는 regionCells(k) 필터 방식과 **집합으로
+  // 동일**하다 — test/scene.test.js 의 신구 순회 비교 회귀 테스트가 encode.js
+  // 실산출물로 이를 단언한다.
+  // 셀 캔버스 포함 가드 — layoutForRegion(k) 캔버스는 육각(Type O) 실루엣 기준이라
+  // Type A 삼각 패치 셀은 기본 margin(×2)에서 캔버스 밖으로 밀려난다. 래스터는
+  // 캔버스 밖 픽셀을 조용히 버리므로 데이터가 **침묵 소실**된다 — '조용히 맞추지
+  // 않는다' 규약대로 이탈을 감지하면 throw 한다 (검증 lane 2026-08-09 지적).
+  // 근본 수정(삼각 실루엣 자체 layout 유도)은 후속 과제 — 그때까지 호출자는
+  // margin 을 늘려서 수용한다 (코너 QR 경로의 ×20 은 A1/A2 실측 수용 확인).
+  let cellMinX = Infinity;
+  let cellMinY = Infinity;
+  let cellMaxX = -Infinity;
+  let cellMaxY = -Infinity;
+  for (const [key, entry] of cellDigits) {
+    const commaIdx = key.indexOf(',');
+    const q = Number(key.slice(0, commaIdx));
+    const r = Number(key.slice(commaIdx + 1));
     const ranks = digitToRanks(entry.digit);
     for (const face of FACES) {
+      const points = facePolygon(q, r, face, layout);
+      for (const p of points) {
+        if (p.x < cellMinX) cellMinX = p.x;
+        if (p.y < cellMinY) cellMinY = p.y;
+        if (p.x > cellMaxX) cellMaxX = p.x;
+        if (p.y > cellMaxY) cellMaxY = p.y;
+      }
       shapes.push({
         kind: 'polygon',
-        points: facePolygon(q, r, face, layout),
+        points,
         color: palette.levels[ranks[face]],
       });
+    }
+  }
+  if (cellDigits.size > 0) {
+    const eps = 1e-9;
+    if (cellMinX < -eps || cellMinY < -eps
+      || cellMaxX > layout.width + eps || cellMaxY > layout.height + eps) {
+      throw new RangeError(
+        `셀 폴리곤이 캔버스(${layout.width}×${layout.height})를 벗어난다 — `
+        + `x[${cellMinX}, ${cellMaxX}] y[${cellMinY}, ${cellMaxY}]. `
+        + 'Type A 삼각 패치는 육각 기준 기본 margin 으로 수용되지 않는다 — margin 을 늘려야 한다',
+      );
     }
   }
 
@@ -282,16 +354,17 @@ export function buildScene(encoded, options) {
   // (centerQr 의 중앙 블록은 (0) 에서 이미 — 셀 밑에 깔리는 painter 순서가 확대 규약이다.)
 
   // (3) 코너 QR 블록 — sceneY.js 와 동일 painter 패턴(콰이어트 4모듈 밝은 패치 +
-  // 다크 모듈, QR 모듈 = cellSize/2, 캔버스 좌상단). codeBounds(k, layout) 실루엣과
-  // 무교차를 단언한다.
+  // 다크 모듈, QR 모듈 = cellSize/2). 위치는 qrCorner 4택(ADR 0004 §1-7) — 방위는
+  // 고정하고 bbox 코너로 대칭 이동만 한다. codeBounds(k, layout) 실루엣과 무교차를
+  // 코너별로 단언한다(기존 TL 전용 검사의 일반화).
   if (needsCornerQr) {
     const qr = qrMatrix(opts.qrText);
     if (qr.size !== QR_MODULE_GRID) {
       throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
     }
     const qrModuleSize = cellSize / 2;
-    const blockOrigin = { x: margin * 0.25, y: margin * 0.25 };
     const blockSide = QR_BLOCK_MODULES * qrModuleSize;
+    const blockOrigin = cornerBlockOrigin(qrCorner, margin, blockSide, layout.width, layout.height);
     const blockRect = {
       minX: blockOrigin.x,
       minY: blockOrigin.y,
@@ -301,8 +374,8 @@ export function buildScene(encoded, options) {
     const silhouetteRect = codeBounds(k, layout);
     if (rectsOverlap(blockRect, silhouetteRect)) {
       throw new Error(
-        '코너 QR 블록(콰이어트 포함)이 코드 실루엣(codeBounds)과 겹친다 — margin 을 늘려야 한다: '
-          + `블록=${JSON.stringify(blockRect)}, 실루엣=${JSON.stringify(silhouetteRect)}`,
+        `코너 QR 블록(콰이어트 포함, qrCorner=${qrCorner})이 코드 실루엣(codeBounds)과 겹친다 — `
+          + `margin 을 늘려야 한다: 블록=${JSON.stringify(blockRect)}, 실루엣=${JSON.stringify(silhouetteRect)}`,
       );
     }
     pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette);

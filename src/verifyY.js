@@ -28,6 +28,7 @@
 import { discMedianLuminance } from './verify.js';
 import { YFACES, moduleSampleDisc } from './ygrid.js';
 import { referenceGroups } from './placementY.js';
+import { windowedReferenceGroupsY } from './capacityY.js';
 import { digitToRanks, ranksToDigit } from './lehmer.js';
 import { relativeLuminance, DELTA_MIN_CONTRACT, getPreset, DEFAULT_PRESET } from './luminance.js';
 import { thetaFromAnchors, classifyTriple, digitToPattern } from './tonemap.js';
@@ -52,6 +53,26 @@ function resolveTones(encoded) {
     throw new RangeError(`encoded.tones 는 2 또는 3 이어야 한다: ${tones}`);
   }
   return tones;
+}
+
+/** encoded.window 생략 시 false(윈도 없음, encodeY.js 기본값과 정합). */
+function resolveWindow(encoded) {
+  const { window } = encoded;
+  return window === undefined ? false : window;
+}
+
+/**
+ * 레퍼런스 4조 — encoded.window===true 면(Y2/tones=2 전용, [C7 부속 계약 ①) 재배치
+ * 좌표(capacityY.windowedReferenceGroupsY), 아니면 placementY.js 베이스 좌표.
+ * estimateFaceGains/fitResiduals/estimateFaceThetas 가 이 하나만 참조한다 —
+ * 윈도 여부에 따라 레퍼런스 좌표가 갈리는 지점을 여기 하나로 모은다.
+ * @param {{n:number, window?:boolean}} encoded
+ * @param {2|3} tones
+ */
+function referenceGroupsFor(encoded, tones) {
+  return resolveWindow(encoded)
+    ? windowedReferenceGroupsY(encoded.n, tones)
+    : referenceGroups(encoded.n, tones);
 }
 
 /** 결정적 median — 정렬 기반(Math.random 미사용). 빈 배열은 NaN. */
@@ -157,7 +178,7 @@ export function estimateFaceGains(raster, scene, encoded, options = {}) {
 
   for (const face of YFACES) {
     const pairs = [];
-    for (const group of referenceGroups(n, tones)) {
+    for (const group of referenceGroupsFor(encoded, tones)) {
       for (const cell of group.cells) {
         const entry = cellDigits.get(`${cell.i},${cell.j}`);
         // 방어적 가드 — 레퍼런스 좌표는 placementY.js 가 이미 로드 시점에
@@ -201,7 +222,7 @@ export function fitResiduals(raster, scene, encoded, gains, options = {}) {
     const pairs = (options.observations && options.observations[face])
       || (() => {
         const out = [];
-        for (const group of referenceGroups(n, tones)) {
+        for (const group of referenceGroupsFor(encoded, tones)) {
           for (const cell of group.cells) {
             const entry = cellDigits.get(`${cell.i},${cell.j}`);
             if (!entry || entry.role !== 'reference') continue;
@@ -266,7 +287,7 @@ export function estimateFaceThetas(raster, scene, encoded, gains) {
   for (const face of YFACES) {
     const lows = [];
     const highs = [];
-    for (const group of referenceGroups(n, tones)) {
+    for (const group of referenceGroupsFor(encoded, tones)) {
       for (const cell of group.cells) {
         const entry = cellDigits.get(`${cell.i},${cell.j}`);
         if (!entry || entry.role !== 'reference') continue;

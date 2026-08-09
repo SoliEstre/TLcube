@@ -11,12 +11,15 @@
  * Math.hypot·삼각함수 금지(결정성 계약, AGENTS.md 공통 규약).
  */
 
-import { moduleQuad, layoutForCube, cubeBounds, YFACES } from './ygrid.js';
+import {
+  moduleQuad, layoutForCube, cubeBounds, YFACES, faceBasis,
+} from './ygrid.js';
 import { CORNER_UNIT_OFFSETS } from './hexgrid.js';
 import { digitToRanks } from './lehmer.js';
 import { srgbChannelToLinear, relativeLuminance } from './luminance.js';
 import { qrMatrix } from './qr.js';
 import { digitToPattern, assertToneSeparation } from './tonemap.js';
+import { WINDOW_SIZE_Y, WINDOW_SUPPORTED_N } from './capacityY.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -114,8 +117,108 @@ const QR_BLOCK_MODULES = QR_MODULE_GRID + 2 * QR_QUIET_MODULES;
  */
 const DEFAULT_MARGIN_FACTOR = 20;
 
+/**
+ * 코너 QR 위치 4택 (ADR 0004 §1-7 U11 개정, scene.js 와 동일 계약). 방위는 고정,
+ * 위치만 bbox 코너로 대칭 이동한다.
+ */
+export const QR_CORNERS = Object.freeze(['TL', 'TR', 'BL', 'BR']);
+
+function assertQrCorner(qrCorner) {
+  if (!QR_CORNERS.includes(qrCorner)) {
+    throw new RangeError(`qrCorner 는 ${QR_CORNERS.join(' | ')} 중 하나여야 한다: ${qrCorner}`);
+  }
+  return qrCorner;
+}
+
+/** scene.js 의 cornerBlockOrigin 과 동일 계약 — TL 이 기존 로직, 나머지는 대칭 이동. */
+function cornerBlockOrigin(qrCorner, margin, blockSide, width, height) {
+  const nearX = margin * 0.25;
+  const nearY = margin * 0.25;
+  const farX = width - margin * 0.25 - blockSide;
+  const farY = height - margin * 0.25 - blockSide;
+  switch (qrCorner) {
+    case 'TL': return { x: nearX, y: nearY };
+    case 'TR': return { x: farX, y: nearY };
+    case 'BL': return { x: nearX, y: farY };
+    case 'BR': return { x: farX, y: farY };
+    default: throw new RangeError(`qrCorner 는 ${QR_CORNERS.join(' | ')} 중 하나여야 한다: ${qrCorner}`);
+  }
+}
+
 function rectsOverlap(a, b) {
   return a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+}
+
+// ── 면 내 QR 윈도 β (ADR 0003 D1 + [C7 Q7]) ─────────────────────────────
+//
+// **실기기(ML Kit·Vision) 실측 미통과 — 규범 아님, 미학 옵션 렌더.** encoded.window
+// ===true(Y2/tones=2 전용, capacityY.js 가 강제)일 때만 그린다. 윈도 좌표는 이미
+// encoded.cellDigits 에서 빠져 있으므로(①의 `entry===undefined` 스킵) 여기서
+// 다시 배제 처리를 하지 않는다 — QR 오버레이만 추가로 그린다.
+//
+// 기하: 윈도는 T 면의 바깥 꼭짓점 코너, 데이터 셀 좌표 (i,j) ∈ [n-13,n-1]²
+// (파라메트릭으로는 a,b ∈ [n-13,n] — 13 데이터 피치). QR 모듈 = 데이터 피치의
+// ½(D1). 안쪽 콰이어트 4 QR모듈 + 21 QR모듈 데이터 = 25 QR모듈(12.5 피치) —
+// 나머지 0.5 피치 슬랙은 콰이어트 패치가 윈도 bbox 전체를 덮어 무해화한다.
+// 바깥 2변 콰이어트는 D1 규약대로 실루엣 밖 배경이 제공(추가로 그리지 않는다).
+//
+// 방향(사용자 확정 6, ADR 0003 D1): 정렬 패턴(파인더 없는 코너 — qr.js
+// FINDER_CENTERS 가 (3,3)/(SIZE-4,3)/(3,SIZE-4) 뿐이라 행렬 코너 (SIZE-1,SIZE-1)
+// 이 파인더 없음)이 Y-심 쪽((n-13,n-13) 쪽) 을 향한다. QR 행렬 좌표(qx,qy, 0..20)
+// 를 뒤집어 안쪽(윈도 원점)에 가깝게 매핑한다: u = QUIET + (20-qx), v = QUIET + (20-qy).
+
+/** 면 (a,b) 파라메트릭 좌표 → 절대 픽셀. ygrid.moduleQuad 내부 facePoint 와 동일
+ *  공식이지만 ygrid.js 가 그 헬퍼를 export 하지 않으므로 여기서 재구성한다
+ *  (faceBasis 는 export 되어 있다 — 재계산이 아니라 재사용). */
+function facePointFor(face, a, b, layout) {
+  const { ei, ej } = faceBasis(face);
+  return {
+    x: layout.originX + (a * ei.x + b * ej.x) * layout.size + 0,
+    y: layout.originY + (a * ei.y + b * ej.y) * layout.size + 0,
+  };
+}
+
+function renderWindowQr(shapes, n, layout, qrText, palette) {
+  const qr = qrMatrix(qrText);
+  if (qr.size !== QR_MODULE_GRID) {
+    // 방어적 가드 — 코너 QR 블록과 동일 전제(qr.js v1 고정).
+    throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
+  }
+  const lo = n - WINDOW_SIZE_Y; // 윈도 안쪽 모서리(Y-심 쪽) 데이터 셀 좌표.
+  const half = 0.5; // QR 모듈 = 데이터 모듈 피치의 절반(D1).
+
+  // 콰이어트 패치 — 윈도 bbox(13×13 데이터 셀) 전체를 밝게 덮는다.
+  shapes.push({
+    kind: 'polygon',
+    points: [
+      facePointFor('T', lo, lo, layout),
+      facePointFor('T', n, lo, layout),
+      facePointFor('T', n, n, layout),
+      facePointFor('T', lo, n, layout),
+    ],
+    color: palette.bullseyeLight,
+  });
+
+  // QR 다크 모듈 — row-major(qy→qx 오름차순) 순회, u/v 로 뒤집어 매핑(위 주석).
+  for (let qy = 0; qy < qr.size; qy += 1) {
+    for (let qx = 0; qx < qr.size; qx += 1) {
+      if (qr.modules[qy * qr.size + qx] !== 1) continue;
+      const u = (QR_MODULE_GRID - 1 - qx) + QR_QUIET_MODULES;
+      const v = (QR_MODULE_GRID - 1 - qy) + QR_QUIET_MODULES;
+      const a0 = lo + u * half;
+      const b0 = lo + v * half;
+      shapes.push({
+        kind: 'polygon',
+        points: [
+          facePointFor('T', a0, b0, layout),
+          facePointFor('T', a0 + half, b0, layout),
+          facePointFor('T', a0 + half, b0 + half, layout),
+          facePointFor('T', a0, b0 + half, layout),
+        ],
+        color: palette.bullseyeDark,
+      });
+    }
+  }
 }
 
 // ── 검증 ────────────────────────────────────────────────────────────────
@@ -124,7 +227,9 @@ function assertEncoded(encoded) {
   if (encoded === null || typeof encoded !== 'object') {
     throw new TypeError('encoded 는 객체여야 한다');
   }
-  const { n, cellDigits, tones } = encoded;
+  const {
+    n, cellDigits, tones, window,
+  } = encoded;
   if (!Number.isInteger(n) || n < 1) {
     throw new RangeError(`encoded.n 은 1 이상의 정수여야 한다: ${n}`);
   }
@@ -137,7 +242,17 @@ function assertEncoded(encoded) {
   if (resolvedTones !== 2 && resolvedTones !== 3) {
     throw new RangeError(`encoded.tones 는 2 또는 3 이어야 한다: ${resolvedTones}`);
   }
-  return { n, cellDigits, tones: resolvedTones };
+  // window 생략 시 false(윈도 없음 — encodeY.js 기본값과 정합).
+  const resolvedWindow = window === undefined ? false : window;
+  if (resolvedWindow !== true && resolvedWindow !== false) {
+    throw new RangeError(`encoded.window 는 boolean 이어야 한다: ${resolvedWindow}`);
+  }
+  if (resolvedWindow && n !== WINDOW_SUPPORTED_N) {
+    throw new RangeError(`encoded.window 는 n=${WINDOW_SUPPORTED_N}(Y2) 에서만 지원한다: n=${n}`);
+  }
+  return {
+    n, cellDigits, tones: resolvedTones, window: resolvedWindow,
+  };
 }
 
 function assertPalette(palette) {
@@ -155,12 +270,14 @@ function assertPalette(palette) {
  * @param {{n: number, cellDigits: Map<string, {digit: number, role: string}>}} encoded
  * @param {{
  *   palette: {background:{r,g,b}, levels:[{r,g,b},{r,g,b},{r,g,b}], bullseyeDark:{r,g,b}, bullseyeLight:{r,g,b}, faceGains?:{T,L,R}},
- *   qrText?: string, cellSize?: number, margin?: number,
+ *   qrText?: string, cellSize?: number, margin?: number, qrCorner?: 'TL'|'TR'|'BL'|'BR',
  * }} [options]
  * @returns {{n:number, layout:object, width:number, height:number, background:{r,g,b}, shapes:Array}}
  */
 export function buildSceneY(encoded, options) {
-  const { n, cellDigits, tones } = assertEncoded(encoded);
+  const {
+    n, cellDigits, tones, window,
+  } = assertEncoded(encoded);
 
   const opts = options || {};
   const palette = assertPalette(opts.palette);
@@ -177,6 +294,7 @@ export function buildSceneY(encoded, options) {
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
   const margin = opts.margin === undefined ? DEFAULT_MARGIN_FACTOR * cellSize : opts.margin;
+  const qrCorner = opts.qrCorner === undefined ? 'TL' : assertQrCorner(opts.qrCorner);
 
   const layout = layoutForCube(n, { size: cellSize, margin });
 
@@ -255,8 +373,8 @@ export function buildSceneY(encoded, options) {
       throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
     }
     const qrModuleSize = cellSize / 2;
-    const blockOrigin = { x: margin * 0.25, y: margin * 0.25 };
     const blockSide = QR_BLOCK_MODULES * qrModuleSize;
+    const blockOrigin = cornerBlockOrigin(qrCorner, margin, blockSide, layout.width, layout.height);
     const blockRect = {
       minX: blockOrigin.x,
       minY: blockOrigin.y,
@@ -266,8 +384,8 @@ export function buildSceneY(encoded, options) {
     const silhouetteRect = cubeBounds(n, layout);
     if (rectsOverlap(blockRect, silhouetteRect)) {
       throw new Error(
-        'QR 블록(콰이어트 포함)이 큐브 실루엣(cubeBounds)과 겹친다 — margin 을 늘려야 한다: '
-          + `블록=${JSON.stringify(blockRect)}, 실루엣=${JSON.stringify(silhouetteRect)}`,
+        `QR 블록(콰이어트 포함, qrCorner=${qrCorner})이 큐브 실루엣(cubeBounds)과 겹친다 — `
+          + `margin 을 늘려야 한다: 블록=${JSON.stringify(blockRect)}, 실루엣=${JSON.stringify(silhouetteRect)}`,
       );
     }
 
@@ -306,6 +424,13 @@ export function buildSceneY(encoded, options) {
         });
       }
     }
+  }
+
+  // ⑤ 면 내 QR 윈도(β, ADR 0003 D1 + [C7 Q7]) — encoded.window===true 이고 qrText
+  // 가 있을 때만(코너 QR 과 동일하게 qrText 미지정이면 조용히 생략). 코너 QR 과
+  // 배타적이지 않다 — 둘 다 표시될 수 있다(내용은 항상 같은 opts.qrText).
+  if (window && opts.qrText !== undefined) {
+    renderWindowQr(shapes, n, layout, opts.qrText, palette);
   }
 
   return {

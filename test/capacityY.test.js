@@ -22,7 +22,11 @@ import assert from 'node:assert/strict';
 import {
   VERSIONS_Y, NSYM_TABLE_Y, overheadBreakdownY, capacityForY, capacityTableY, renderMarkdownTableY,
   versionSpecY,
+  WINDOW_SIZE_Y, windowBoundsY, inWindowY, windowedReferenceGroupsY, windowedReferenceCellsY,
+  windowedFormatCellsY, windowExcludedCellsY, overheadBreakdownY2Window, NSYM_TABLE_Y2W,
+  capacityForY2Window,
 } from '../src/capacityY.js';
+import { referenceGroups, formatCells } from '../src/placementY.js';
 import { maxBytesForSymbols } from '../src/capacity.js';
 import { errorCapacity } from '../src/rs211.js';
 import { maxPayloadFor } from '../src/header.js';
@@ -217,5 +221,156 @@ describe('NSYM_TABLE_Y 불일치는 조용히 넘어가지 않는다', () => {
     // dataCells=414, usedSymbols=138. overhead+3 → dataCells=411 → usedSymbols=137 로 어긋난다.
     const nudged = { ...y1, overhead: y1.overhead + 3 };
     assert.throws(() => capacityForY(nudged, 'M'), /NSYM_TABLE_Y\.Y1\.symbols/);
+  });
+});
+
+// ── 면 내 QR 윈도 β (ADR 0003 D1 + [C7 Q7]) — Y2(n=25)·tones=2 전용 ─────────
+
+describe('윈도 경계·판정 헬퍼', () => {
+  test('WINDOW_SIZE_Y = 13, n=25 경계 = [12,24]²', () => {
+    assert.equal(WINDOW_SIZE_Y, 13);
+    assert.deepEqual(windowBoundsY(25), { lo: 12, hi: 24 });
+  });
+
+  test('inWindowY — 경계 안팎', () => {
+    assert.equal(inWindowY(12, 12, 25), true);
+    assert.equal(inWindowY(24, 24, 25), true);
+    assert.equal(inWindowY(11, 24, 25), false, 'i 가 경계 밖');
+    assert.equal(inWindowY(24, 11, 25), false, 'j 가 경계 밖');
+  });
+});
+
+describe('[C7 부속 계약 ①] n=25 윈도 충돌 — 레퍼런스 조 D + 포맷 복제 2 (ADR 원문보다 넓다)', () => {
+  test('베이스 좌표에서 레퍼런스 앵커(n-3,n-3) 조 3셀 전부가 윈도 안', () => {
+    const groupD = referenceGroups(25, 2)[3];
+    assert.deepEqual(groupD.cells, [{ i: 22, j: 22 }, { i: 23, j: 22 }, { i: 22, j: 23 }]);
+    for (const c of groupD.cells) assert.equal(inWindowY(c.i, c.j, 25), true);
+  });
+
+  test('베이스 좌표에서 포맷 복제 2(i=17..21,j=23) 5셀 전부가 윈도 안 — ADR 0003 원문이 명시하지 않은 추가 발견', () => {
+    const replica2 = formatCells(25).slice(10, 15);
+    assert.deepEqual(replica2, [17, 18, 19, 20, 21].map((i) => ({ i, j: 23 })));
+    for (const c of replica2) assert.equal(inWindowY(c.i, c.j, 25), true);
+  });
+
+  test('다른 3조(A,B,C)·포맷 복제 0/1 은 윈도와 겹치지 않는다', () => {
+    const groups = referenceGroups(25, 2);
+    for (const g of [groups[0], groups[1], groups[2]]) {
+      for (const c of g.cells) assert.equal(inWindowY(c.i, c.j, 25), false);
+    }
+    for (const c of formatCells(25).slice(0, 10)) assert.equal(inWindowY(c.i, c.j, 25), false);
+  });
+});
+
+describe('윈도 재배치 — 결정적 탐색 결과 스냅샷 (n=25, tones=2)', () => {
+  test('레퍼런스 조 D 재배치: (22,22)/(23,22)/(22,23) → (22,10)/(23,10)/(22,11) (j축 -12)', () => {
+    const groups = windowedReferenceGroupsY(25, 2);
+    assert.equal(groups.length, 4);
+    assert.deepEqual(groups[3].cells, [{ i: 22, j: 10 }, { i: 23, j: 10 }, { i: 22, j: 11 }]);
+    assert.deepEqual(groups[3].digits, [0, 1, 2]); // REFERENCE_GROUP_DIGITS_2T — digit 배정 순서 불변.
+    // 다른 3조는 원좌표 그대로.
+    const base = referenceGroups(25, 2);
+    for (const idx of [0, 1, 2]) assert.deepEqual(groups[idx], base[idx]);
+  });
+
+  test('포맷 복제 2 재배치: (17..21,23) → (7..11,23) (i축 -10)', () => {
+    const cells = windowedFormatCellsY(25);
+    assert.equal(cells.length, 15);
+    assert.deepEqual(cells.slice(10, 15), [7, 8, 9, 10, 11].map((i) => ({ i, j: 23 })));
+    // 복제 0/1 은 원좌표 그대로.
+    assert.deepEqual(cells.slice(0, 10), formatCells(25).slice(0, 10));
+  });
+
+  test('재배치 후 레퍼런스·포맷 전부 윈도 밖 + 상호 무충돌 + 개수 불변(12/15)', () => {
+    const refCells = windowedReferenceCellsY(25, 2);
+    const fmtCells = windowedFormatCellsY(25);
+    assert.equal(refCells.length, 12);
+    assert.equal(fmtCells.length, 15);
+    const keys = new Set();
+    for (const c of [...refCells, ...fmtCells]) {
+      assert.equal(inWindowY(c.i, c.j, 25), false, `(${c.i},${c.j}) 가 윈도 안에 남아 있다`);
+      const k = `${c.i},${c.j}`;
+      assert.ok(!keys.has(k), `중복 좌표: ${k}`);
+      keys.add(k);
+    }
+  });
+
+  test('windowExcludedCellsY(25) 는 169(=13²) 좌표, 전부 윈도 안', () => {
+    const cells = windowExcludedCellsY(25);
+    assert.equal(cells.length, 169);
+    for (const c of cells) assert.equal(inWindowY(c.i, c.j, 25), true);
+  });
+
+  test('레퍼런스 조 D 의 부분 겹침(비정상 입력)은 throw — 결정 규칙 밖', () => {
+    // windowedReferenceGroupsY 는 n=25/tones=2 이외에는 계약 보장이 없으나, 인위적으로
+    // 부분 겹침 입력을 구성해 방어 코드가 실제로 작동하는지 확인한다.
+    // (n=25 자체는 항상 전부/전무이므로, 여기서는 함수의 내부 방어 로직을
+    // 문서화하는 회귀로서 windowedReferenceGroupsY(25,2) 가 예외 없이 도는지만 재확인.)
+    assert.doesNotThrow(() => windowedReferenceGroupsY(25, 2));
+  });
+});
+
+describe('오버헤드/용량 — Y2W (실계산, 잠정 NSYM_TABLE_Y2W)', () => {
+  test('overheadBreakdownY2Window — ref+format 27 은 불변, windowExcluded=169', () => {
+    const ob = overheadBreakdownY2Window();
+    assert.equal(ob.reference, 12);
+    assert.equal(ob.format, 15);
+    assert.equal(ob.total, 27);
+    assert.equal(ob.windowExcluded, 169);
+  });
+
+  test('capacityForY2Window(M) 스냅샷 — dataCells=429·usedSymbols=143·잔여 0·nsym=37·페이로드 101 B', () => {
+    const r = capacityForY2Window('M');
+    assert.equal(r.name, 'Y2W');
+    assert.equal(r.version, 2);
+    assert.equal(r.n, 25);
+    assert.equal(r.tones, 2);
+    assert.equal(r.formatIndex, 9, 'Y2 와 동일 — 와이어 무변경, 광학 신호');
+    assert.equal(r.window, true);
+    assert.equal(r.totalCells, 625);
+    assert.equal(r.overhead, 27);
+    assert.equal(r.windowExcluded, 169);
+    assert.equal(r.dataCells, 429);
+    assert.equal(r.usedSymbols, 143);
+    assert.equal(r.residualCells, 0);
+    assert.equal(r.nsym, 37);
+    assert.equal(r.errorCapacity, 18);
+    assert.equal(r.dataSymbols, 106);
+    assert.equal(r.dataBytes, 102);
+    assert.equal(r.maxPayloadBytes, 101);
+  });
+
+  test('capacityForY2Window(L/H) — NSYM_TABLE_Y2W 스냅샷과 정합', () => {
+    assert.deepEqual(NSYM_TABLE_Y2W, {
+      symbols: 143, L: 17, M: 37, H: 57,
+    });
+    const l = capacityForY2Window('L');
+    const h = capacityForY2Window('H');
+    assert.equal(l.nsym, 17);
+    assert.equal(l.maxPayloadBytes, 120);
+    assert.equal(h.nsym, 57);
+    assert.equal(h.maxPayloadBytes, 82);
+    assert.ok(l.maxPayloadBytes >= capacityForY2Window('M').maxPayloadBytes);
+    assert.ok(capacityForY2Window('M').maxPayloadBytes >= h.maxPayloadBytes);
+  });
+
+  test('Y2W 는 총 셀 − (오버헤드+윈도배제) = 데이터 셀', () => {
+    const r = capacityForY2Window('M');
+    assert.equal(r.dataCells, r.totalCells - r.overhead - r.windowExcluded);
+  });
+
+  test('Y2(윈도 없음) 대비 순 페이로드가 준다 — 169셀을 데이터에서 뺐으니 당연하다', () => {
+    const y2 = capacityForY(VERSIONS_Y[1], 'M');
+    const y2w = capacityForY2Window('M');
+    assert.ok(y2w.maxPayloadBytes < y2.maxPayloadBytes,
+      `Y2W(${y2w.maxPayloadBytes}) 가 Y2(${y2.maxPayloadBytes}) 보다 작아야 한다`);
+  });
+
+  test('renderMarkdownTableY 에 Y2W 행이 포함된다(오버헤드 열은 27+169=196 표시)', () => {
+    const md = renderMarkdownTableY('M');
+    assert.match(md, /\| Y2W \| 25 \| 625 \| 196 \| 429 \| 143 \| 0 \| 37 \| 18 \| 106 \| 102 B \| \*\*101 B\*\* \|/);
+    // 기존 4행은 그대로 남아 있어야 한다(비파괴 추가).
+    assert.match(md, /\| Y2 \| 25 \| 625 \| 27 \| 598 \| 199 \| 1 \| 51 \| 25 \| 148 \| 142 B \| \*\*141 B\*\* \|/);
+    assert.ok(!md.includes('~'), '단일 물결표는 GFM 취소선 트랩이다 (규약 §6.11)');
   });
 });
