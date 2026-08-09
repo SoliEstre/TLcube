@@ -149,8 +149,10 @@
   /* ── 스타일 스와치 ───────────────────────────────────────────── */
   .swatch-card { flex: 1 1 0; }
   .swatch-chips { display: flex; gap: 3px; }
-  .swatch-chip { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(255,255,255,.15); }
-  .swatch-bg { width: 100%; height: 8px; border-radius: 3px; margin-top: 2px; }
+  /* 칩 테두리는 중간 회색 반투명 — 밝은 칩(slate 최상위 등)이 선택 카드 배경·라이트
+     테마 패널과 겹쳐도 구분된다 (사용자 지적: outline 필수). */
+  .swatch-chip { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(128,128,128,.55); }
+  .swatch-bg { width: 100%; height: 8px; border-radius: 3px; margin-top: 2px; border: 1px solid rgba(128,128,128,.4); }
 
   /* ── 콘텐츠 탭 입력 그룹 ─────────────────────────────────────── */
   .tab-panel { display: none; }
