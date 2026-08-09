@@ -448,8 +448,7 @@
         <div class="toggle-card" data-res="mid" title="1~3m 거리 — 어느 정도 크게 인쇄된 포스터급">중</div>
         <div class="toggle-card" data-res="high" title="근거리·대용량 — 모듈이 작아 가까운 거리에서 인식">고</div>
       </div>
-      <p class="hint">저 = 광고판·원거리 / 중 = 1~3m 인쇄물 / 고 = 근거리 대용량이에요.
-        Type Y·A 는 소형판이 없어 저·중이 같은 버전이에요.</p>
+      <p class="hint" id="resTierHint"></p>
 
       <label>안정성 · 용량</label>
       <!-- 사용자 지시 2026-08-09: 보정 강화(용량↓)/표준/대용량 3단 + 자동(기본 —
@@ -682,7 +681,7 @@ const els = {
   decorClearL: $('decorClearL'), decorClearR: $('decorClearR'),
   decorFileL: $('decorFileL'), decorFileR: $('decorFileR'), decorSwap: $('decorSwap'),
   eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
-  resTierCards: $('resTierCards'),
+  resTierCards: $('resTierCards'), resTierHint: $('resTierHint'),
   customStyleCard: $('customStyleCard'), customChips: $('customChips'), customBg: $('customBg'),
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
@@ -1154,6 +1153,7 @@ for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     normalState.qrPosition = card.dataset.pos;
     syncQrPositionUi();
+    syncResTierUi();
     schedule();
   });
 }
@@ -1170,15 +1170,25 @@ for (const card of els.eccTierCards.children) {
 }
 
 /** 해상도 카드 타입별 가용성 — Y·A 는 소형판이 없어 '중'이 '저'와 같은 버전이라
- *  비활성 표기한다 (신버전 Y0/A0 는 포맷 번호 신설이 필요한 설계 안건). */
+ *  비활성 표기하고 (신버전 Y0/A0 는 ADR 0006 안건), Y+안쪽(윈도 β)은 Y2 전용이라
+ *  저·중을 함께 비활성한다 (사용자 지시 2026-08-09). */
 function syncResTierUi() {
-  const isO = currentType() === 'O';
+  const type = currentType();
+  const isO = type === 'O';
+  const windowLocked = type === 'Y' && normalState.qrPosition === 'inner';
+  const isOff = (res) => (!isO && res === 'mid') || (windowLocked && (res === 'low' || res === 'mid'));
+  // 1패스: 비활성 확정 + 선택이 비활성으로 밀렸으면 자동 복귀 — 그 뒤에 활성 표시.
+  if (isOff(normalState.resTier)) normalState.resTier = 'auto';
   for (const card of els.resTierCards.children) {
-    const dup = !isO && card.dataset.res === 'mid';
-    card.classList.toggle('disabled', dup);
-    if (dup && normalState.resTier === 'mid') normalState.resTier = 'auto';
-    card.classList.toggle('active', card.dataset.res === normalState.resTier);
+    const res = card.dataset.res;
+    card.classList.toggle('disabled', isOff(res));
+    card.classList.toggle('active', res === normalState.resTier);
   }
+  els.resTierHint.textContent = windowLocked
+    ? 'Y 안쪽(윈도 β)은 Y2 전용이라 해상도가 고(Y2)로 고정돼요.'
+    : isO
+      ? '저 = 광고판·원거리 (V1) / 중 = 1~3m 인쇄물 (V2) / 고 = 근거리 대용량 (V3)이에요.'
+      : `저 = 광고판·원거리 / 고 = 근거리 대용량이에요. Type ${type} 는 소형판(${type}0)이 없어 중이 비활성이에요 — ADR 0006 안건.`;
 }
 
 for (const card of els.resTierCards.children) {
