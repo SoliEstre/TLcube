@@ -82,7 +82,16 @@ function pointInShape(x, y, shape) {
  * 도형 색으로 **덮어쓴다**(뒤에 그려진 도형이 이긴다 — scene.shapes 순서가
  * 그 계약). 마지막에 ss×ss 블록을 채널별 산술평균해 출력 픽셀로 다운샘플한다.
  *
- * @param {{width: number, height: number, background: {r,g,b}, shapes: Array}} scene
+ * **투명 배경** (`scene.background === null`): 배경색으로 채우는 대신 서브픽셀
+ * **커버리지**를 따로 세고, 다운샘플에서 alpha = 커버리지 비율 · RGB = **덮인
+ * 서브픽셀만의 평균**(언프리멀티플라이드)으로 낸다. 배경색이 있는 경로의 출력은
+ * 한 바이트도 바뀌지 않는다 — 커버리지 배열 자체가 그때는 할당되지 않는다.
+ *
+ * ⚠ 투명 배경은 **실루엣 검출의 배경 분리 계약(§7.1, ≥ 0.05)을 생성 시점에
+ * 보증할 수 없다** — 실효 배경이 코드가 놓이는 표면이 되기 때문이다. 소비자
+ * (생성기 UI)가 그 사실을 사용자에게 알린다.
+ *
+ * @param {{width: number, height: number, background: {r,g,b}|null, shapes: Array}} scene
  * @param {{pixelsPerUnit?: number, supersample?: number}} [options]
  * @returns {{width: number, height: number, pixelsPerUnit: number, supersample: number, pixels: Uint8ClampedArray}}
  */
@@ -111,13 +120,24 @@ export function rasterize(scene, options) {
   const ssHeight = height * ss;
   const bg = scene.background;
 
-  // 서브픽셀 격자(RGB, 항상 불투명이므로 alpha 는 다운샘플 후 한 번만 채운다).
+  // 배경은 {r,g,b} 아니면 null(투명) 둘 중 하나다. undefined 를 조용히 흘려보내면
+  // 서브픽셀이 NaN 으로 채워져 전면 검정이 나오므로 여기서 잡는다.
+  if (bg !== null && (bg === undefined || typeof bg !== 'object')) {
+    throw new TypeError(`scene.background 는 {r,g,b} 또는 null(투명) 이어야 한다: ${bg}`);
+  }
+  const transparent = bg === null;
+
+  // 서브픽셀 격자(RGB). 불투명 경로에서는 배경색으로 초기화하고 alpha 를 다운샘플
+  // 후 한 번만 채운다. 투명 경로에서는 커버리지를 따로 센다(0 = 배경 그대로).
   const sub = new Uint8ClampedArray(ssWidth * ssHeight * 3);
-  for (let i = 0; i < ssWidth * ssHeight; i += 1) {
-    const o = i * 3;
-    sub[o] = bg.r;
-    sub[o + 1] = bg.g;
-    sub[o + 2] = bg.b;
+  const cov = transparent ? new Uint8Array(ssWidth * ssHeight) : null;
+  if (!transparent) {
+    for (let i = 0; i < ssWidth * ssHeight; i += 1) {
+      const o = i * 3;
+      sub[o] = bg.r;
+      sub[o + 1] = bg.g;
+      sub[o + 2] = bg.b;
+    }
   }
 
   for (const shape of scene.shapes) {
@@ -132,15 +152,19 @@ export function rasterize(scene, options) {
       for (let sx = sxMin; sx <= sxMax; sx += 1) {
         const sceneX = (sx + 0.5) / ssPixelsPerUnit;
         if (!pointInShape(sceneX, sceneY, shape)) continue;
-        const o = (sy * ssWidth + sx) * 3;
+        const i = sy * ssWidth + sx;
+        const o = i * 3;
         sub[o] = shape.color.r;
         sub[o + 1] = shape.color.g;
         sub[o + 2] = shape.color.b;
+        if (cov !== null) cov[i] = 1;
       }
     }
   }
 
   // 다운샘플: ss×ss 서브픽셀 블록을 채널별 산술평균 → 출력 픽셀.
+  // 투명 경로는 **덮인 서브픽셀만** 평균한다 — 배경(RGB 0)까지 섞으면 가장자리가
+  // 검게 번지는 전형적 프리멀티플라이드 헤일로가 생긴다.
   const ssArea = ss * ss;
   const pixels = new Uint8ClampedArray(width * height * 4);
   for (let py = 0; py < height; py += 1) {
@@ -148,21 +172,33 @@ export function rasterize(scene, options) {
       let sumR = 0;
       let sumG = 0;
       let sumB = 0;
+      let covered = 0;
       for (let dy = 0; dy < ss; dy += 1) {
         const sy = py * ss + dy;
         for (let dx = 0; dx < ss; dx += 1) {
           const sx = px * ss + dx;
-          const o = (sy * ssWidth + sx) * 3;
+          const i = sy * ssWidth + sx;
+          if (cov !== null && cov[i] === 0) continue;
+          const o = i * 3;
           sumR += sub[o];
           sumG += sub[o + 1];
           sumB += sub[o + 2];
+          covered += 1;
         }
       }
       const o = (py * width + px) * 4;
-      pixels[o] = Math.round(sumR / ssArea);
-      pixels[o + 1] = Math.round(sumG / ssArea);
-      pixels[o + 2] = Math.round(sumB / ssArea);
-      pixels[o + 3] = 255;
+      if (covered === 0) {
+        // 투명 경로에서만 도달한다(불투명 경로는 항상 ssArea 개가 덮인 것으로 센다).
+        pixels[o] = 0;
+        pixels[o + 1] = 0;
+        pixels[o + 2] = 0;
+        pixels[o + 3] = 0;
+      } else {
+        pixels[o] = Math.round(sumR / covered);
+        pixels[o + 1] = Math.round(sumG / covered);
+        pixels[o + 2] = Math.round(sumB / covered);
+        pixels[o + 3] = cov === null ? 255 : Math.round((covered / ssArea) * 255);
+      }
     }
   }
 

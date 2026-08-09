@@ -62,3 +62,17 @@ test('sceneToSvg — 옵션 검증', () => {
   assert.throws(() => sceneToSvg(scene, { precision: 0 }), RangeError);
   assert.throws(() => sceneToSvg(scene, { precision: 9 }), RangeError);
 });
+
+// ── 투명 배경 (생성기 배경 3택 기본값) ──────────────────────────────────────
+
+test('sceneToSvg — background === null 이면 배경 rect 를 아예 안 낸다', () => {
+  const scene = { ...sampleScene(), background: null };
+  const svg = sceneToSvg(scene);
+  assert.ok(!/<rect /.test(svg), 'fill="none" 이 아니라 요소 자체가 없어야 한다');
+  // 나머지 도형은 그대로 나온다.
+  assert.ok(svg.includes('<polygon '), '폴리곤이 사라졌다');
+  assert.ok(svg.includes('<circle '), '불스아이 disc 가 사라졌다');
+
+  // 불투명 경로는 여전히 배경 rect 를 낸다 (회귀).
+  assert.ok(/<rect x="0" y="0"/.test(sceneToSvg(sampleScene())));
+});

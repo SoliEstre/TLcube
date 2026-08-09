@@ -17,6 +17,9 @@
     --ok: #7fd8a4;
     --bad: #ff8f8f;
     --warn: #e8c56a;
+    /* 투명 배경 표시용 체커보드 (포토샵 관례) — 다크에서는 회색/검정. */
+    --checker-a: #14161b;
+    --checker-b: #262a33;
   }
   :root[data-theme="light"] {
     --bg: #f2f4f8;
@@ -28,6 +31,9 @@
     --ok: #1f9d5f;
     --bad: #d64545;
     --warn: #a8791a;
+    /* 라이트에서는 흰색/회색. */
+    --checker-a: #c9ced8;
+    --checker-b: #ffffff;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]):not([data-theme="light"]) {
@@ -40,8 +46,28 @@
       --ok: #1f9d5f;
       --bad: #d64545;
       --warn: #a8791a;
+      --checker-a: #c9ced8;
+      --checker-b: #ffffff;
     }
   }
+  /* 투명 영역을 눈에 보이게 하는 체커보드. 코드 렌더가 아니라 **표시 장치**다 —
+     export 파일에는 들어가지 않는다 (PNG 는 알파, SVG 는 배경 rect 부재). */
+  .checker {
+    background-color: var(--checker-b);
+    background-image:
+      linear-gradient(45deg, var(--checker-a) 25%, transparent 25%),
+      linear-gradient(-45deg, var(--checker-a) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, var(--checker-a) 75%),
+      linear-gradient(-45deg, transparent 75%, var(--checker-a) 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+  /* 카드 안 미니 체커 스와치 — 같은 패턴을 8px 로 줄여 쓴다. */
+  .swatch-mini {
+    display: block; width: 22px; height: 22px; border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  .swatch-mini.checker { background-size: 8px 8px; background-position: 0 0, 0 4px, 4px -4px, -4px 0; }
   .theme-toggle {
     display: flex; gap: 2px; padding: 2px;
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
@@ -537,6 +563,25 @@
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
     <div id="sharedControls">
+      <!-- 사용자 지시 2026-08-09: 배경 3택(투명/흰색/검정), 기본 투명.
+           투명은 미리보기에서 포토샵식 체커보드로 표시한다(테마별 색). -->
+      <label>배경</label>
+      <div class="card-row" id="bgModeCards">
+        <div class="toggle-card active" data-bg="transparent" title="배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음">
+          <span class="swatch-mini checker"></span>
+          투명
+        </div>
+        <div class="toggle-card" data-bg="white" title="흰색 배경 — 밝은 인쇄물·문서에 얹을 때">
+          <span class="swatch-mini" style="background:#fff"></span>
+          흰색
+        </div>
+        <div class="toggle-card" data-bg="black" title="검정 배경 — 어두운 지면·화면에 얹을 때">
+          <span class="swatch-mini" style="background:#000"></span>
+          검정
+        </div>
+      </div>
+      <p class="hint" id="bgModeHint"></p>
+
       <label>TL스캐너 QR링크 포함</label>
       <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
            (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
@@ -687,6 +732,7 @@ const els = {
   decorFileL: $('decorFileL'), decorFileR: $('decorFileR'), decorSwap: $('decorSwap'),
   eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
   resTierCards: $('resTierCards'), resTierHint: $('resTierHint'),
+  bgModeCards: $('bgModeCards'), bgModeHint: $('bgModeHint'),
   customStyleCard: $('customStyleCard'), customChips: $('customChips'), customBg: $('customBg'),
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
@@ -715,6 +761,8 @@ const normalState = {
   // 사용자 지시 2026-08-09).
   contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
   eccTier: 'auto', resTier: 'auto', customHue: 210,
+  // bgMode 기본 = 'transparent' (사용자 지시 2026-08-09). 색 스타일과 직교 축이다.
+  bgMode: 'transparent',
 };
 
 /** 해상도 티어 → 버전 (타입별). 저 = 최소 버전(원거리) · 고 = 최대 버전(대용량).
@@ -727,6 +775,17 @@ const RES_TIER_VERSIONS = {
   A: { low: 0, mid: 1, high: 2 },
   Y: { low: 0, mid: 1, high: 2 },
 };
+
+/** 배경 3택 → scene.background 값. null 은 투명(래스터는 알파, SVG 는 배경 요소 부재).
+ *  ⚠ 이 두 상수는 `syncStyleUi()` 의 최초 호출(→ syncBgModeUi)보다 위에 있어야 한다 — TDZ. */
+const BG_MODE_COLORS = {
+  transparent: null,
+  white: { r: 255, g: 255, b: 255 },
+  black: { r: 0, g: 0, b: 0 },
+};
+
+/** 실루엣 검출을 위한 배경 ↔ 셀 레벨 최소 상대휘도 분리 (SPEC §7.1). */
+const BG_SEPARATION_MIN = 0.05;
 
 /** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). 면별 슬롯
  *  (사용자 지시 2026-08-09: 좌/우 각각 + 교환). 각 원소 {bitmap, dataUrl, name} | null */
@@ -959,6 +1018,8 @@ function syncStyleUi() {
   els.hueBarAdv.value = hue;
   els.hueValue.textContent = `Hue ${hue}° — 휘도 구조는 슬레이트와 동일 (인식 계약 보존)`;
   els.hueValueAdv.textContent = `Hue ${hue}°`;
+  // 배경 분리 수치는 레벨 색에 의존하므로 스타일이 바뀔 때마다 다시 계산한다.
+  syncBgModeUi();
 }
 
 els.customStyleCard.addEventListener('click', () => {
@@ -992,11 +1053,15 @@ for (const card of document.querySelectorAll('.toggle-card')) {
 /**
  * @param {string} name 프리셋 이름
  * @param {{T:number,L:number,R:number}} [faceGains] Type Y 면 게인 (생략 시 기본값)
+ *
+ * 배경은 프리셋 값이 아니라 **배경 3택**이 결정한다 (사용자 지시 2026-08-09).
+ * 프리셋의 background 는 레벨 설계의 기준점으로만 남는다 — 색 스타일과 배경은
+ * 직교 축이다.
  */
 function paletteOf(name, faceGains) {
   const p = name === 'custom' ? makeCustomPalette(normalState.customHue) : getPreset(name);
   return {
-    background: p.background, levels: p.levels,
+    background: BG_MODE_COLORS[normalState.bgMode], levels: p.levels,
     bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
     faceGains: faceGains === undefined ? DEFAULT_FACE_GAINS : faceGains,
   };
@@ -1011,8 +1076,13 @@ function drawScene(scene, canvas, ppu) {
   canvas.style.height = `${Math.round(scene.height * ppu)}px`;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(ppu * dpr, 0, 0, ppu * dpr, 0, 0);
-  ctx.fillStyle = rgbCss(scene.background);
-  ctx.fillRect(0, 0, scene.width, scene.height);
+  // 투명 배경은 지우기만 한다 — 캔버스 뒤의 .checker 패턴이 비쳐 보이는 게 표시 규약이다.
+  ctx.clearRect(0, 0, scene.width, scene.height);
+  canvas.classList.toggle('checker', scene.background === null);
+  if (scene.background !== null) {
+    ctx.fillStyle = rgbCss(scene.background);
+    ctx.fillRect(0, 0, scene.width, scene.height);
+  }
   ctx.lineJoin = 'round';
   ctx.lineWidth = 0.03;
   for (const s of scene.shapes) {
@@ -1042,6 +1112,7 @@ function setMode(next) {
   els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
   syncQrPositionUi(); // 공용 QR 위치 카드의 모드 의존 요소(병행 표시 행) 갱신
   syncResTierUi();
+  syncBgModeUi(); // 분리 수치는 모드별 색 스타일 소스를 따른다
   schedule();
 }
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
@@ -1127,6 +1198,11 @@ function currentType() {
   return mode === 'normal' ? normalState.type : els.codeType.value;
 }
 
+/** 현재 활성 색 스타일 — currentType 과 같은 규약 (일반 카드 / 고급 select). */
+function currentPresetName() {
+  return mode === 'normal' ? normalState.preset : els.preset.value;
+}
+
 /** 공용 QR 위치 카드 갱신 — 안쪽 툴팁(β 딱지), 활성 표시, 고급 전용 병행 표시 행,
  *  중앙 QR 인쇄 힌트(안쪽 + O/A 에서만). PM/009 §2b. */
 function syncQrPositionUi() {
@@ -1207,6 +1283,54 @@ for (const card of els.resTierCards.children) {
   });
 }
 syncResTierUi();
+
+// ── 배경 3택 ────────────────────────────────────────────────────────────
+//
+// 실루엣 검출은 **배경과 셀 레벨의 상대휘도 분리**에 기댄다 (SPEC §7.1, 계약 0.05).
+// 흰색/검정은 여기서 실제로 계산해 보여주고, 계약 미달이면 경고한다. 투명은 실효
+// 배경이 코드가 놓이는 표면이라 생성 시점에 보증이 불가능하다 — 그 사실을 말한다.
+// (상수 2개는 `syncStyleUi()` 초기 호출보다 위에 있어야 한다 — TDZ.)
+
+function bgSeparationFor(bgMode) {
+  const color = BG_MODE_COLORS[bgMode];
+  if (color === null) return null;
+  const bgY = relativeLuminance(color);
+  const name = currentPresetName();
+  const levels = (name === 'custom'
+    ? makeCustomPalette(normalState.customHue)
+    : getPreset(name)).levels;
+  let min = Infinity;
+  for (const lvl of levels) min = Math.min(min, Math.abs(relativeLuminance(lvl) - bgY));
+  return min;
+}
+
+function syncBgModeUi() {
+  for (const card of els.bgModeCards.children) {
+    card.classList.toggle('active', card.dataset.bg === normalState.bgMode);
+  }
+  if (normalState.bgMode === 'transparent') {
+    els.bgModeHint.textContent = 'PNG 는 알파 채널로, SVG 는 배경 요소 없이 나가요. '
+      + '체커보드는 화면 표시일 뿐 파일에는 안 들어가요. '
+      + '⚠ 실효 배경이 코드를 얹는 표면이 되니, 셀 색과 뚜렷이 구분되는 바탕에 얹어 주세요.';
+    els.bgModeHint.style.color = '';
+    return;
+  }
+  const sep = bgSeparationFor(normalState.bgMode);
+  const ok = sep >= BG_SEPARATION_MIN;
+  els.bgModeHint.textContent = ok
+    ? `배경 ↔ 가장 가까운 셀 레벨 상대휘도 분리 ${sep.toFixed(3)} (계약 ${BG_SEPARATION_MIN} 이상) — 실루엣 검출 여유가 있어요.`
+    : `⚠ 배경 ↔ 가장 가까운 셀 레벨 분리가 ${sep.toFixed(3)} 로 계약 ${BG_SEPARATION_MIN} 미만이에요 — 실루엣 검출이 불안정해질 수 있어요. 색 스타일을 바꾸거나 반대 배경을 쓰세요.`;
+  els.bgModeHint.style.color = ok ? '' : 'var(--warn)';
+}
+
+for (const card of els.bgModeCards.children) {
+  card.addEventListener('click', () => {
+    normalState.bgMode = card.dataset.bg;
+    syncBgModeUi();
+    schedule();
+  });
+}
+syncBgModeUi();
 
 // ── 장식 이미지 (Y+안쪽 — L/R 배제영역 데칼) ─────────────────────────────
 

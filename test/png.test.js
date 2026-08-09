@@ -143,3 +143,46 @@ test('결정성 — 같은 래스터 2회 인코딩 → 바이트 동일, 압축
   assert.ok(a.length < raster.pixels.length / 4,
     `압축 미달: PNG ${a.length} B vs 원시 RGBA ${raster.pixels.length} B`);
 });
+
+// ── 투명 배경 (생성기 배경 3택 기본값) — 색 타입 6 승격 ─────────────────────
+
+test('rasterToPng — 알파가 있으면 색 타입 6(RGBA), 없으면 2(RGB)', () => {
+  const opaque = sampleRaster();
+  const opaquePng = rasterToPng(opaque);
+  // IHDR 색 타입 오프셋: 시그니처 8 + 길이 4 + 'IHDR' 4 + width 4 + height 4 + depth 1 = 25
+  assert.equal(opaquePng[25], 2, '불투명 래스터는 색 타입 2 여야 한다 (기존 KAT 보존)');
+
+  const withAlpha = {
+    ...opaque,
+    pixels: Uint8ClampedArray.from(opaque.pixels),
+  };
+  withAlpha.pixels[3] = 0; // 픽셀 하나만 투명하게
+  const alphaPng = rasterToPng(withAlpha);
+  assert.equal(alphaPng[25], 6, '알파가 하나라도 있으면 색 타입 6 이어야 한다');
+});
+
+test('filterScanlines — channels=4 는 알파를 싣고 Sub 필터 bpp 도 4 를 쓴다', () => {
+  const width = 2;
+  const height = 1;
+  const pixels = Uint8ClampedArray.from([10, 20, 30, 40, 50, 60, 70, 80]);
+  const s4 = filterScanlines(pixels, width, height, 4);
+  // 첫 행 Sub(1): [필터, (10,20,30,40), (50-10, 60-20, 70-30, 80-40)]
+  assert.deepEqual([...s4], [1, 10, 20, 30, 40, 40, 40, 40, 40]);
+  // 기본값(3채널)은 알파를 버린다 — 기존 호출부 계약 불변.
+  assert.deepEqual([...filterScanlines(pixels, width, height)], [1, 10, 20, 30, 40, 40, 40]);
+  assert.throws(() => filterScanlines(pixels, width, height, 2), RangeError);
+});
+
+test('투명 배경 scene → PNG 왕복: 투명 픽셀이 실제로 alpha 0 으로 실린다', () => {
+  const encoded = encode('알파 왕복', { version: 1, eccLevel: 'M' });
+  const p = paletteOf(DEFAULT_PRESET);
+  const scene = buildScene(encoded, { palette: { ...p, background: null } });
+  const raster = rasterize(scene, { pixelsPerUnit: 6, supersample: 2 });
+  const png = rasterToPng(raster);
+  assert.equal(png[25], 6);
+  // 모서리(도형 밖)는 완전 투명이어야 한다.
+  assert.equal(raster.pixels[3], 0);
+  let transparentCount = 0;
+  for (let i = 3; i < raster.pixels.length; i += 4) if (raster.pixels[i] === 0) transparentCount += 1;
+  assert.ok(transparentCount > 0, '투명 픽셀이 하나도 없다');
+});

@@ -61,10 +61,14 @@ export function sceneToSvg(scene, options = {}) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" `
     + `viewBox="0 0 ${n(scene.width)} ${n(scene.height)}">`,
   );
-  lines.push(
-    `<rect x="0" y="0" width="${n(scene.width)}" height="${n(scene.height)}" `
-    + `fill="${colorToHex(scene.background)}"/>`,
-  );
+  // 투명 배경(scene.background === null)은 배경 rect 자체를 내지 않는다 —
+  // fill="none" 이 아니라 **요소 부재**여야 편집기·브라우저 어디서도 투명이다.
+  if (scene.background !== null) {
+    lines.push(
+      `<rect x="0" y="0" width="${n(scene.width)}" height="${n(scene.height)}" `
+      + `fill="${colorToHex(scene.background)}"/>`,
+    );
+  }
 
   for (const s of scene.shapes) {
     const fill = colorToHex(s.color);

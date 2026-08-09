@@ -142,3 +142,62 @@ describe('alpha', () => {
     }
   });
 });
+
+// ── 투명 배경 (background === null) — 생성기 배경 3택의 기본값 ──────────────
+
+describe('투명 배경 — background === null', () => {
+  const transparentScene = () => ({
+    width: 10,
+    height: 10,
+    background: null,
+    shapes: [{ kind: 'polygon', color: RED, points: [
+      { x: 2, y: 2 }, { x: 6, y: 2 }, { x: 6, y: 6 }, { x: 2, y: 6 },
+    ] }],
+  });
+
+  test('도형 밖은 alpha 0 · 도형 안은 alpha 255', () => {
+    const r = rasterize(transparentScene(), { pixelsPerUnit: 5, supersample: 2 });
+    const at = (px, py) => {
+      const o = (py * r.width + px) * 4;
+      return [r.pixels[o], r.pixels[o + 1], r.pixels[o + 2], r.pixels[o + 3]];
+    };
+    assert.deepEqual(at(0, 0), [0, 0, 0, 0], '모서리는 완전 투명이어야 한다');
+    assert.deepEqual(at(20, 20), [RED.r, RED.g, RED.b, 255], '도형 내부는 불투명 도형색이어야 한다');
+  });
+
+  test('가장자리는 커버리지 비율 alpha 를 갖고, **색은 배경과 안 섞인다** (프리멀티플라이드 헤일로 방지)', () => {
+    // 폴리곤 경계를 픽셀 중앙이 아니라 서브픽셀 격자에 걸치게 두어 부분 커버리지를 만든다.
+    const scene = transparentScene();
+    scene.shapes[0].points = [
+      { x: 2.1, y: 2.1 }, { x: 5.9, y: 2.1 }, { x: 5.9, y: 5.9 }, { x: 2.1, y: 5.9 },
+    ];
+    const r = rasterize(scene, { pixelsPerUnit: 5, supersample: 2 });
+    let partial = 0;
+    for (let i = 0; i < r.width * r.height; i += 1) {
+      const a = r.pixels[i * 4 + 3];
+      if (a === 0 || a === 255) continue;
+      partial += 1;
+      // 부분 커버 픽셀도 RGB 는 도형색 그대로여야 한다 — 검은 배경이 섞이면 어두워진다.
+      assert.equal(r.pixels[i * 4], RED.r, '부분 커버 픽셀 R 이 도형색과 다르다 (배경이 섞였다)');
+      assert.equal(r.pixels[i * 4 + 1], RED.g);
+      assert.equal(r.pixels[i * 4 + 2], RED.b);
+    }
+    assert.ok(partial > 0, '부분 커버리지 픽셀이 하나도 없다 — 테스트 전제가 깨졌다');
+  });
+
+  test('불투명 경로의 출력은 투명 지원 이후에도 한 바이트도 안 바뀐다 (동일 scene 회귀)', () => {
+    const opaque = { ...transparentScene(), background: BG };
+    const r = rasterize(opaque, { pixelsPerUnit: 5, supersample: 2 });
+    for (let i = 0; i < r.width * r.height; i += 1) assert.equal(r.pixels[i * 4 + 3], 255);
+    const o = 0; // 모서리는 배경색 그대로
+    assert.deepEqual(
+      [r.pixels[o], r.pixels[o + 1], r.pixels[o + 2]], [BG.r, BG.g, BG.b],
+    );
+  });
+
+  test('background 가 undefined 면 조용히 넘어가지 않고 던진다 (NaN 서브픽셀 방지)', () => {
+    const bogus = { ...transparentScene() };
+    delete bogus.background;
+    assert.throws(() => rasterize(bogus, { pixelsPerUnit: 5 }), TypeError);
+  });
+});

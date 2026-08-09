@@ -185,7 +185,8 @@ export function zlibWrap(rawData) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PNG_SIGNATURE = Object.freeze([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const BYTES_PER_PIXEL = 3; // 색 타입 2 (RGB)
+const BYTES_PER_PIXEL = 3; // 색 타입 2 (RGB) — 불투명 래스터의 기본
+const BYTES_PER_PIXEL_ALPHA = 4; // 색 타입 6 (RGBA) — 투명 배경 래스터
 
 function writeU32BE(buf, offset, value) {
   buf[offset] = (value >>> 24) & 0xff;
@@ -204,11 +205,20 @@ function chunk(type, data) {
 }
 
 /**
- * RGBA 래스터 → 필터 적용된 스캔라인 스트림 (행마다 [필터 타입, RGB…]).
+ * RGBA 래스터 → 필터 적용된 스캔라인 스트림 (행마다 [필터 타입, RGB(A)…]).
  * 첫 행 Sub(1), 나머지 Up(2) — 고정 규칙 (모듈 헤더 참조).
+ *
+ * @param {Uint8ClampedArray} pixels RGBA 4채널 버퍼
+ * @param {number} width
+ * @param {number} height
+ * @param {3|4} [channels] 출력 채널 수 — 3 = 색 타입 2(RGB, 기본) · 4 = 색 타입 6(RGBA).
+ *   Sub 필터의 bpp 도 이 값을 따라야 한다(PNG 규격).
  */
-export function filterScanlines(pixels, width, height) {
-  const stride = width * BYTES_PER_PIXEL;
+export function filterScanlines(pixels, width, height, channels = BYTES_PER_PIXEL) {
+  if (channels !== BYTES_PER_PIXEL && channels !== BYTES_PER_PIXEL_ALPHA) {
+    throw new RangeError(`channels 는 3 또는 4 여야 한다: ${channels}`);
+  }
+  const stride = width * channels;
   const out = new Uint8Array((stride + 1) * height);
   const row = new Uint8Array(stride);
   const prev = new Uint8Array(stride);
@@ -216,16 +226,17 @@ export function filterScanlines(pixels, width, height) {
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const src = (y * width + x) * 4;
-      const dst = x * BYTES_PER_PIXEL;
+      const dst = x * channels;
       row[dst] = pixels[src];
       row[dst + 1] = pixels[src + 1];
       row[dst + 2] = pixels[src + 2];
+      if (channels === BYTES_PER_PIXEL_ALPHA) row[dst + 3] = pixels[src + 3];
     }
     const base = y * (stride + 1);
     if (y === 0) {
       out[base] = 1; // Sub
       for (let j = 0; j < stride; j += 1) {
-        const left = j >= BYTES_PER_PIXEL ? row[j - BYTES_PER_PIXEL] : 0;
+        const left = j >= channels ? row[j - channels] : 0;
         out[base + 1 + j] = (row[j] - left) & 0xff;
       }
     } else {
@@ -241,6 +252,11 @@ export function filterScanlines(pixels, width, height) {
 
 /**
  * 래스터(rasterize() 산출물) → PNG 파일 바이트. 완전 결정적.
+ *
+ * 색 타입은 **래스터가 결정한다**: alpha 가 전부 255 면 색 타입 2(RGB), 하나라도
+ * 255 미만이면 색 타입 6(RGBA). 불투명 래스터의 출력 바이트는 알파 지원 이전과
+ * 완전히 동일하다(기존 KAT·해시 스냅샷 유효).
+ *
  * @param {{width:number, height:number, pixels:Uint8ClampedArray}} raster
  * @returns {Uint8Array}
  */
@@ -253,16 +269,22 @@ export function rasterToPng(raster) {
     throw new RangeError(`픽셀 버퍼 길이 불일치: ${pixels.length} ≠ ${width * height * 4}`);
   }
 
+  let hasAlpha = false;
+  for (let i = 3; i < pixels.length; i += 4) {
+    if (pixels[i] !== 255) { hasAlpha = true; break; }
+  }
+  const channels = hasAlpha ? BYTES_PER_PIXEL_ALPHA : BYTES_PER_PIXEL;
+
   const ihdr = new Uint8Array(13);
   writeU32BE(ihdr, 0, width);
   writeU32BE(ihdr, 4, height);
   ihdr[8] = 8; //  비트 심도
-  ihdr[9] = 2; //  색 타입 RGB
+  ihdr[9] = hasAlpha ? 6 : 2; // 색 타입 — 6 = RGBA · 2 = RGB
   ihdr[10] = 0; // 압축 (deflate)
   ihdr[11] = 0; // 필터 방식 0
   ihdr[12] = 0; // 논인터레이스
 
-  const idat = zlibWrap(filterScanlines(pixels, width, height));
+  const idat = zlibWrap(filterScanlines(pixels, width, height, channels));
 
   const parts = [
     Uint8Array.from(PNG_SIGNATURE),
