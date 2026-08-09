@@ -242,15 +242,39 @@ export function clusterShapes(shapes, gap) {
   return [...groups.values()];
 }
 
+const sameColor = (a, b) => a && b && a.r === b.r && a.g === b.g && a.b === b.b;
+
+/**
+ * 클러스터의 모든 도형이 `selfQuietColors` 안의 색만 쓰는가.
+ *
+ * 용도: **폴백 QR 블록은 이미 자기 콰이어트 존(4모듈 밝은 패치)을 갖고 있다**. 거기에
+ * 안전영역을 또 두르면 여백만 겹쳐 낭비다(사용자 판정 2026-08-09). QR 블록은 밝은
+ * 콰이어트 패치 + 어두운 모듈로만 이뤄지므로, 그 두 색만으로 구성된 클러스터를 건너뛴다.
+ *
+ * 불스아이도 같은 두 색을 쓰지만 **코드 셀과 같은 클러스터**에 있어서(실루엣 안쪽)
+ * 이 검사에 걸리지 않는다 — 걸리는 건 코너 QR 처럼 따로 떨어진 덩어리뿐이다.
+ * 중앙 QR·Y2W 윈도 QR 은 애초에 코드와 한 클러스터라 무관하다.
+ */
+function isSelfQuiet(shapes, idx, selfQuietColors) {
+  if (!selfQuietColors || selfQuietColors.length === 0) return false;
+  for (const i of idx) {
+    if (!selfQuietColors.some((c) => sameColor(c, shapes[i].color))) return false;
+  }
+  return true;
+}
+
 /**
  * 안전영역 폴리곤들을 만든다 — 클러스터별 볼록 껍질 + 바깥 오프셋 + 캔버스 클립.
  * @param {{width:number, height:number, shapes:Array}} scene
  * @param {number} margin 오프셋 거리 (scene 단위 — 셀 크기 1 기준 "셀 몇 개분")
+ * @param {{r:number,g:number,b:number}[]} [selfQuietColors] 이 색들로만 이뤄진 클러스터는
+ *   자체 콰이어트 존이 있다고 보고 건너뛴다 (폴백 QR 블록).
  * @returns {{x:number,y:number}[][]}
  */
-export function quietZonePolygons(scene, margin) {
+export function quietZonePolygons(scene, margin, selfQuietColors) {
   const out = [];
   for (const idx of clusterShapes(scene.shapes, margin)) {
+    if (isSelfQuiet(scene.shapes, idx, selfQuietColors)) continue;
     const pts = [];
     for (const i of idx) pts.push(...shapePoints(scene.shapes[i]));
     const hull = convexHull(pts);
@@ -264,16 +288,17 @@ export function quietZonePolygons(scene, margin) {
 /**
  * scene 에 안전영역을 얹은 **새 scene** 을 돌려준다 (입력은 안 건드린다).
  * @param {object} scene buildScene / buildSceneY 산출물
- * @param {{color: {r,g,b}|null, margin?: number}} opts color 가 null 이면 무변경(= '없음')
+ * @param {{color: {r,g,b}|null, margin?: number, selfQuietColors?: {r,g,b}[]}} opts
+ *   color 가 null 이면 무변경(= '없음').
  * @returns {object}
  */
 export function addQuietZone(scene, opts) {
-  const { color, margin = 2 } = opts || {};
+  const { color, margin = 2, selfQuietColors } = opts || {};
   if (!color) return scene;
   if (!Number.isFinite(margin) || margin < 0) {
     throw new RangeError(`margin 은 0 이상 유한수여야 한다: ${margin}`);
   }
-  const polys = quietZonePolygons(scene, margin);
+  const polys = quietZonePolygons(scene, margin, selfQuietColors);
   if (polys.length === 0) return scene;
   return {
     ...scene,

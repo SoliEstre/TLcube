@@ -1450,9 +1450,20 @@ function resolveQuietColor() {
   }
 }
 
-/** scene 에 안전영역을 얹는다 (자체검증은 안전영역 **이전** scene 으로 돌린 뒤 호출한다). */
+/**
+ * scene 에 안전영역을 얹는다 (자체검증은 안전영역 **이전** scene 으로 돌린 뒤 호출한다).
+ *
+ * 폴백 QR 블록은 제외한다 — QR 은 이미 자기 콰이어트 존(4모듈 밝은 패치)을 갖고
+ * 있어서 두 번 두르면 여백만 겹친다 (사용자 판정 2026-08-09). 판별은 색으로 한다:
+ * QR 블록은 콰이어트 패치(bullseyeLight) + 다크 모듈(bullseyeDark) 두 색만 쓴다.
+ * 불스아이도 같은 두 색이지만 코드 셀과 한 클러스터라 걸리지 않는다.
+ */
 function withQuietZone(scene) {
-  return addQuietZone(scene, { color: resolveQuietColor(), margin: QUIET_MARGIN_CELLS });
+  return addQuietZone(scene, {
+    color: resolveQuietColor(),
+    margin: QUIET_MARGIN_CELLS,
+    selfQuietColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
+  });
 }
 
 function syncQuietModeUi() {
@@ -1470,7 +1481,8 @@ function syncQuietModeUi() {
   const sep = separationFromLevels(color);
   const picked = normalState.quietMode === 'white' || normalState.quietMode === 'black'
     ? '' : ` (자동 선택: <b>${isWhite ? '흰색' : '검정'}</b>)`;
-  els.quietModeHint.innerHTML = `코드와 QR 을 각각 감싸는 여백을 ${QUIET_MARGIN_CELLS}셀 폭으로 넣어요${picked}. `
+  els.quietModeHint.innerHTML = `코드 둘레에 ${QUIET_MARGIN_CELLS}셀 폭 여백을 둘러요${picked}. `
+    + '폴백 QR 은 자체 콰이어트 존이 있어서 제외해요. '
     + `셀 레벨과의 최소 분리 ${sep.toFixed(3)}${sep >= BG_SEPARATION_MIN ? '' : ' ⚠ 계약 미달'}. `
     + '내보내는 PNG·SVG 에 함께 들어가요.';
 }

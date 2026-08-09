@@ -181,21 +181,55 @@ describe('addQuietZone', () => {
 });
 
 describe('실제 인코더 산출물과의 통합', () => {
-  test('Type Y + 코너 QR — 큐브 후광과 QR 후광이 **따로** 생긴다', async () => {
+  async function cornerQrScene() {
     const { encodeY } = await import('../src/encodeY.js');
     const { buildSceneY } = await import('../src/sceneY.js');
     const { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
     const { TL_READER_URL } = await import('../src/qr.js');
     const p = getPreset('slate');
-    const scene = buildSceneY(encodeY('quiet zone', { version: 0 }), {
+    return {
+      scene: buildSceneY(encodeY('quiet zone', { version: 0 }), {
+        palette: {
+          background: null, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+        },
+        qrText: TL_READER_URL,
+        qrCorner: 'TL',
+      }),
+      qrColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
+    };
+  }
+
+  test('코너 QR 은 코드와 **다른 클러스터**로 떨어진다', async () => {
+    const { scene } = await cornerQrScene();
+    assert.equal(quietZonePolygons(scene, 2).length, 2,
+      '한 덩어리로 묶이면 둘을 잇는 대각선 판때기가 나온다 (실측 확인된 실패 모드)');
+  });
+
+  test('selfQuietColors 를 주면 QR 클러스터는 빠지고 코드 후광만 남는다', async () => {
+    const { scene, qrColors } = await cornerQrScene();
+    const polys = quietZonePolygons(scene, 2, qrColors);
+    assert.equal(polys.length, 1, 'QR 은 자체 콰이어트 존이 있어 제외돼야 한다');
+    // 남은 하나가 QR 이 아니라 **코드** 쪽인지 — 넓이로 확인 (코드가 훨씬 크다).
+    const [only] = polys;
+    const xs = only.map((p) => p.x);
+    const ys = only.map((p) => p.y);
+    const w = Math.max(...xs) - Math.min(...xs);
+    const h = Math.max(...ys) - Math.min(...ys);
+    assert.ok(w > 10 && h > 10, `남은 폴리곤이 코드가 아니라 QR 쪽으로 보인다 (${w.toFixed(1)}×${h.toFixed(1)})`);
+  });
+
+  test('불스아이는 코드와 한 클러스터라 selfQuietColors 로도 코드가 제외되지 않는다', async () => {
+    const { encode } = await import('../src/encode.js');
+    const { buildScene } = await import('../src/scene.js');
+    const { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const p = getPreset('slate');
+    // 코너 QR 없음 — 불스아이(bullseyeDark/Light 색)가 코드 안에 있는 구성.
+    const scene = buildScene(encode('bullseye', { version: 1 }), {
       palette: {
         background: null, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
       },
-      qrText: TL_READER_URL,
-      qrCorner: 'TL',
     });
-    const polys = quietZonePolygons(scene, 2);
-    assert.equal(polys.length, 2,
-      '코너 QR 과 코드가 한 덩어리로 묶이면 둘을 잇는 대각선 판때기가 나온다 (실측 확인된 실패 모드)');
+    const polys = quietZonePolygons(scene, 2, [BULLSEYE_LIGHT, BULLSEYE_DARK]);
+    assert.equal(polys.length, 1, '불스아이 색 때문에 코드 전체가 제외되면 안 된다');
   });
 });
