@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // [벤더링] jcodd v0.9.1 — JSON Characterized Object Data Definition
-// 원본: npm 패키지 jcodd (https://github.com/Esterkxz/JCODD, MIT — 본 프로젝트
-// 메인테이너 본인의 라이브러리). 원본 코드 무수정 복사이며, 이 헤더 블록과 파일
+// 원본: npm 패키지 jcodd (https://github.com/Esterkxz/JCODD, MIT).
+// 원본 코드 무수정 복사이며, 이 헤더 블록과 파일
 // 맨 끝의 ESM export 한 줄만 추가됐다 (classic .js 라 ESM export 가 없음).
 // 갱신 시 npm 원본으로 본문을 통째로 교체하고 이 두 추가분만 유지할 것.
 // ─────────────────────────────────────────────────────────────────────────────

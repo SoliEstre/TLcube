@@ -14,7 +14,7 @@
  *   wifi: { t:"wifi", s: SSID(필수), p: 암호(없으면 생략), e: "WEP" (WPA 는 기본이라 생략) }
  *   card: { t:"card", n: 이름(필수), tel: 전화, em: 이메일, org: 조직, u: URL } — 빈 값 생략
  *
- * JCODD 는 사용자(메인테이너) 본인의 직렬화 라이브러리다 — src/vendor/jcodd.js 벤더링.
+ * JCODD 는 외부 MIT 직렬화 라이브러리다 — src/vendor/jcodd.js 로 벤더링(무수정 복사).
  *
  * ⚠ 용량 주의: JCODD 는 비 -ASCII 를 `%uXXXX` 로 이스케이프한다 (규약 4) — **한글 1자 =
  * 6 B** (UTF-8 원문 3 B 의 2배). 한글 SSID·이름이 든 페이로드는 V3/Y1 대역을 잡는 게

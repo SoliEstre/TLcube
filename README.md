@@ -55,10 +55,18 @@ npm test                         # 전체 테스트 (node --test)
 `verify.js` — 샘플 원판 median 통계로 전 셀의 휘도 순위가 의도한 digit 과 일치하는지
 픽셀에서 직접 확인한다.
 
+## 스펙
+
+포맷 규범은 **[SPEC.md](SPEC.md)** 다 — 기하·심볼 인코딩·레이아웃·용량·오류 정정·적합성 요건. 본문의 수치 표는 전부 `src/` 의 생성물이고, 와이어 계약은 `test/` 스냅샷이 정본이다.
+
+**디코더만 구현해도 적합 구현**이다 (SPEC §11).
+
 ## 라이선스
 
-**미정.** 포맷 스펙과 레퍼런스 구현은 공개·무료로 배포할 계획이지만, 정확한 라이선스는 아직 정하지 않았다. 확정 전까지 이 repo 의 사용 조건은 열려 있지 않다.
+이 repo 의 코드는 **[Apache License 2.0](LICENSE)** 으로 배포한다. Copyright 2026 SoliEstre.
 
----
+**특허**: 2026-08-09 현재 SoliEstre 는 이 포맷에 관해 **보유하거나 출원 중인 특허가 없다.** 이 사실 진술은 조건 없이 누구나 이 포맷을 구현할 수 있다는 뜻이다 — 전체 구현이든 디코더만이든, 상업적이든 아니든 상관없다. (Apache-2.0 §3 이 배포된 코드에 대해 별도의 명시적 특허 실시권을 준다.)
 
-*이 repo 는 아직 공개되지 않았다. 원격 없음.*
+**서드파티**: `src/vendor/jcodd.js` 는 [jcodd](https://github.com/Esterkxz/JCODD) 무수정 벤더링본이며 원본 MIT 라이선스가 적용된다 (파일 헤더에 원문 포함).
+
+**상표 고지**: QR Code is a registered trademark of DENSO WAVE INCORPORATED.
