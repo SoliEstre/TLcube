@@ -12,13 +12,17 @@ TLcube 는 도메인 세 개로 나뉜다. 전부 **정적 파일**이고 빌드
 
 ## 배포
 
+서버에서는 빌드 단계가 **없다**. `dist/trilume.html` 이 repo 에 커밋돼 있어서 Node 조차 필요 없다 — clone 한 것을 그대로 서빙하면 된다.
+
+생성기 소스를 고쳤을 때만, **개발 머신에서** 다시 빌드해 커밋한다:
+
 ```bash
 node tools/build-single.mjs      # dist/trilume.html 갱신 (생성기)
 ```
 
-정적 서빙이라 그 외 빌드 단계가 없다. `sites/` 를 그대로 올리고, 생성기는 `dist/trilume.html` 을 `tlcube.estre.so` 의 `index.html` 로 두면 된다.
+**Nginx·ClickHouse 설정과 절차는 [`deploy/`](../deploy/) 에 실제 파일로 있다** — `deploy/nginx.bootstrap.conf`(인증서 발급용 1회성) · `deploy/nginx.conf` · `deploy/clickhouse-init.sql` · `deploy/README.md`.
 
-**Nginx·ClickHouse 설정과 절차는 [`deploy/`](../deploy/) 에 실제 파일로 있다** — `deploy/nginx.conf` · `deploy/clickhouse-init.sql` · `deploy/README.md`.
+⚠ 인증서가 **먼저**, TLS conf 가 나중이다. 순서를 뒤집으면 nginx 가 설정 검증에서 실패한다 — 이유는 `deploy/README.md`.
 
 ⚠ **ClickHouse 는 `127.0.0.1` 에만 바인딩한다.** 8123 을 외부에 여는 것은 반복되는 사고 패턴이다 — INSERT-only 사용자여도 자격증명이 클라이언트로 나가는 구조 자체가 결격이다. 자격증명은 Nginx 가 주입하고, 클라이언트는 본문만 보낸다.
 
