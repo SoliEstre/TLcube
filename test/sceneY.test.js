@@ -8,7 +8,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildSceneY, DEFAULT_FACE_GAINS, QR_CORNERS } from '../src/sceneY.js';
-import { moduleQuad, cubeBounds, layoutForCube, YFACES } from '../src/ygrid.js';
+import { moduleQuad, cubeBounds, layoutForCube, faceBasis, YFACES } from '../src/ygrid.js';
 import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
 import { digitToRanks } from '../src/lehmer.js';
 import { digitToPattern, RHO_MIN } from '../src/tonemap.js';
@@ -514,7 +514,9 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
     return encoded.cellDigits.size;
   }
 
-  test('window===true + qrText 있음 — 콰이어트 패치(밝음) 1 + 다크 모듈 N 이 맨 끝에 추가된다', () => {
+  test('window===true + qrText 있음 — 면당 [콰이어트 1 + 다크 N] × 3면(T/L/R) 이 맨 끝에 추가된다', () => {
+    // 2026-08-09 사용자 육안 지적 반영: 윈도 좌표는 세 면 공통 배제이므로 T 면만
+    // 그리면 L/R 이 구멍으로 남아 실루엣이 깨진다 — 세 면 전부 QR 레플리카를 얹는다.
     const encoded = makeWindowEncoded();
     const withoutWindow = buildSceneY({ ...encoded, window: false }, { palette: PALETTE, qrText: QR_WINDOW_TEXT });
     const withWindow = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT });
@@ -522,30 +524,44 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
     const qr = qrMatrix(QR_WINDOW_TEXT);
     let darkCount = 0;
     for (const v of qr.modules) if (v === 1) darkCount += 1;
+    const perFace = 1 + darkCount;
 
-    assert.equal(withWindow.shapes.length, withoutWindow.shapes.length + 1 + darkCount);
+    assert.equal(withWindow.shapes.length, withoutWindow.shapes.length + 3 * perFace);
 
-    // 맨 끝 (1+darkCount) 개가 윈도 블록 — 콰이어트(밝음) 먼저, 다크가 뒤따른다.
-    const windowBlock = withWindow.shapes.slice(withWindow.shapes.length - (1 + darkCount));
-    assert.equal(windowBlock[0].kind, 'polygon');
-    assert.deepEqual(windowBlock[0].color, PALETTE.bullseyeLight);
-    for (let i = 1; i < windowBlock.length; i += 1) {
-      assert.equal(windowBlock[i].kind, 'polygon');
-      assert.deepEqual(windowBlock[i].color, PALETTE.bullseyeDark);
+    // 맨 끝 3·(1+darkCount) 개가 윈도 블록 — YFACES 순서(T→L→R), 면마다 콰이어트
+    // 먼저·다크가 뒤따른다. T 면(게인 1)은 무게인 bullseye 색과 바이트 동일, L/R 은
+    // 면 게인 적용색(면당 단일 quiet/dark 색).
+    const windowBlock = withWindow.shapes.slice(withWindow.shapes.length - 3 * perFace);
+    for (let f = 0; f < 3; f += 1) {
+      const chunk = windowBlock.slice(f * perFace, (f + 1) * perFace);
+      assert.equal(chunk[0].kind, 'polygon');
+      const darkColors = new Set(chunk.slice(1).map((s) => JSON.stringify(s.color)));
+      assert.equal(darkColors.size, 1, `면 ${f}: 다크 색이 단일이 아니다`);
+      for (const s of chunk.slice(1)) assert.equal(s.kind, 'polygon');
+      if (f === 0) {
+        assert.deepEqual(chunk[0].color, PALETTE.bullseyeLight, 'T 면 콰이어트 = 무게인 bullseyeLight');
+        assert.deepEqual(chunk[1].color, PALETTE.bullseyeDark, 'T 면 다크 = 무게인 bullseyeDark');
+      } else {
+        // L/R: 게인 < 1 이므로 콰이어트가 T 보다 어둡다 (동일 색이면 게인 미적용 회귀).
+        assert.notDeepEqual(chunk[0].color, PALETTE.bullseyeLight, `면 ${f}: 면 게인 미적용`);
+      }
     }
     // 코너 QR 블록(윈도 앞)은 그대로 남아 있다 — 둘이 배타적이지 않다.
-    assert.equal(withoutWindow.shapes.length, withWindow.shapes.length - (1 + darkCount));
+    assert.equal(withoutWindow.shapes.length, withWindow.shapes.length - 3 * perFace);
   });
+
+  /** 윈도 블록(맨 끝 3면 세트)에서 T 면 콰이어트 패치를 얻는다. */
+  function tQuietOf(scene) {
+    const qr = qrMatrix(QR_WINDOW_TEXT);
+    let d = 0; for (const v of qr.modules) if (v === 1) d += 1;
+    return scene.shapes[scene.shapes.length - 3 * (1 + d)];
+  }
 
   test('윈도 콰이어트 패치 bbox = 13×13 데이터 셀(윈도 폭 W), T 면 파라메트릭 (n-13,n-13)..(n,n)', () => {
     const encoded = makeWindowEncoded();
     const cellSize = 3;
     const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
-    const quiet = scene.shapes[scene.shapes.length - 1 - (() => {
-      const qr = qrMatrix(QR_WINDOW_TEXT);
-      let d = 0; for (const v of qr.modules) if (v === 1) d += 1;
-      return d;
-    })()];
+    const quiet = tQuietOf(scene);
     assert.deepEqual(quiet.color, PALETTE.bullseyeLight);
     const xs = quiet.points.map((p) => p.x);
     const ys = quiet.points.map((p) => p.y);
@@ -563,10 +579,7 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
     const encoded = makeWindowEncoded();
     const cellSize = 2;
     const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
-    const qr = qrMatrix(QR_WINDOW_TEXT);
-    let darkCount = 0;
-    for (const v of qr.modules) if (v === 1) darkCount += 1;
-    const quiet = scene.shapes[scene.shapes.length - 1 - darkCount];
+    const quiet = tQuietOf(scene);
 
     const lo = 25 - 13;
     const layout = scene.layout;
@@ -623,47 +636,52 @@ describe('buildSceneY — 면 내 QR 윈도 (encoded.window===true)', () => {
     assert.ok(found, '파인더 중심(3,3) 다크 모듈이 예상 위치(u=v=21, 바깥쪽)에 그려지지 않았다');
   });
 
-  test('방향 규약 강고정 — 윈도 다크 모듈 전좌표 집합 = 뒤집기 매핑된 qrMatrix (미러·무플립 뮤테이션 검출)', () => {
+  test('방향 규약 강고정 — 3면 각각 윈도 다크 모듈 전좌표 집합 = 뒤집기 매핑된 qrMatrix (미러·무플립 뮤테이션 검출)', () => {
     // 검증 lane 지적(2026-08-09): (21,21) 위치의 '다크 존재' 단독 검사는 미러 시
     // 우상 파인더 중심(항상 다크)이, 무플립 시 payload 의존 다크가 그 자리로 사상돼
-    // 우연 통과한다. 여기서는 윈도 다크 shape **전체**의 첫 꼭짓점 좌표 집합을
+    // 우연 통과한다. 여기서는 면마다 윈도 다크 shape **전체**의 첫 꼭짓점 좌표 집합을
     // 뒤집기 매핑(u=4+(20-qx), v=4+(20-qy)) 기대 집합과 완전 대조한다 — 무플립·
     // 단축 미러(카이럴리티 파괴)·전치 어느 쪽도 집합이 달라져 반드시 잡힌다.
+    // (3면 레플리카 — 블록 순서 YFACES [T,L,R], 면마다 [콰이어트 1 + 다크 N].)
     const encoded = makeWindowEncoded();
     const cellSize = 5;
     const scene = buildSceneY(encoded, { palette: PALETTE, qrText: QR_WINDOW_TEXT, cellSize });
     const qr = qrMatrix(QR_WINDOW_TEXT);
     let darkCount = 0;
     for (const v of qr.modules) if (v === 1) darkCount += 1;
+    const perFace = 1 + darkCount;
 
     const lo = 25 - 13;
     const layout = scene.layout;
-    const { ei, ej } = { ei: CORNER_UNIT_OFFSETS[1], ej: CORNER_UNIT_OFFSETS[5] }; // T 면 기저.
-    const facePoint = (a, b) => ({
-      x: layout.originX + (a * ei.x + b * ej.x) * layout.size,
-      y: layout.originY + (a * ei.y + b * ej.y) * layout.size,
-    });
     const half = 0.5;
     const key = (p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+    const wStart = scene.shapes.length - 3 * perFace;
 
-    const expected = new Set();
-    for (let qy = 0; qy < qr.size; qy += 1) {
-      for (let qx = 0; qx < qr.size; qx += 1) {
-        if (qr.modules[qy * qr.size + qx] !== 1) continue;
-        const u = 4 + (20 - qx);
-        const v = 4 + (20 - qy);
-        expected.add(key(facePoint(lo + u * half, lo + v * half)));
+    for (let f = 0; f < YFACES.length; f += 1) {
+      const face = YFACES[f];
+      const { ei, ej } = faceBasis(face);
+      const facePoint = (a, b) => ({
+        x: layout.originX + (a * ei.x + b * ej.x) * layout.size,
+        y: layout.originY + (a * ei.y + b * ej.y) * layout.size,
+      });
+
+      const expected = new Set();
+      for (let qy = 0; qy < qr.size; qy += 1) {
+        for (let qx = 0; qx < qr.size; qx += 1) {
+          if (qr.modules[qy * qr.size + qx] !== 1) continue;
+          const u = 4 + (20 - qx);
+          const v = 4 + (20 - qy);
+          expected.add(key(facePoint(lo + u * half, lo + v * half)));
+        }
       }
-    }
-    assert.equal(expected.size, darkCount, '기대 집합 좌표 충돌 — 매핑이 단사가 아니다');
+      assert.equal(expected.size, darkCount, `${face}: 기대 집합 좌표 충돌 — 매핑이 단사가 아니다`);
 
-    // 윈도 다크는 shapes 맨 끝 darkCount 개(콰이어트 패치 바로 뒤).
-    const got = new Set(
-      scene.shapes.slice(scene.shapes.length - darkCount).map((s) => key(s.points[0])),
-    );
-    assert.equal(got.size, darkCount, '렌더 다크 모듈 좌표 충돌/누락');
-    for (const k of expected) {
-      assert.ok(got.has(k), `기대 다크 좌표 (${k}) 부재 — 방향 규약(뒤집기 매핑) 위반`);
+      const chunk = scene.shapes.slice(wStart + f * perFace + 1, wStart + (f + 1) * perFace);
+      const got = new Set(chunk.map((s) => key(s.points[0])));
+      assert.equal(got.size, darkCount, `${face}: 렌더 다크 모듈 좌표 충돌/누락`);
+      for (const k of expected) {
+        assert.ok(got.has(k), `${face}: 기대 다크 좌표 (${k}) 부재 — 방향 규약(뒤집기 매핑) 위반`);
+      }
     }
   });
 

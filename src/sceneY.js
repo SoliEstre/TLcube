@@ -178,7 +178,7 @@ function facePointFor(face, a, b, layout) {
   };
 }
 
-function renderWindowQr(shapes, n, layout, qrText, palette) {
+function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
   const qr = qrMatrix(qrText);
   if (qr.size !== QR_MODULE_GRID) {
     // 방어적 가드 — 코너 QR 블록과 동일 전제(qr.js v1 고정).
@@ -187,36 +187,48 @@ function renderWindowQr(shapes, n, layout, qrText, palette) {
   const lo = n - WINDOW_SIZE_Y; // 윈도 안쪽 모서리(Y-심 쪽) 데이터 셀 좌표.
   const half = 0.5; // QR 모듈 = 데이터 모듈 피치의 절반(D1).
 
-  // 콰이어트 패치 — 윈도 bbox(13×13 데이터 셀) 전체를 밝게 덮는다.
-  shapes.push({
-    kind: 'polygon',
-    points: [
-      facePointFor('T', lo, lo, layout),
-      facePointFor('T', n, lo, layout),
-      facePointFor('T', n, n, layout),
-      facePointFor('T', lo, n, layout),
-    ],
-    color: palette.bullseyeLight,
-  });
+  // **세 면 전부** 그린다 (2026-08-09 사용자 육안 지적 — "안쪽이면 저렇게 모양이
+  // 나오는게 맞나?"): 윈도 좌표는 세 면 공통 배제(교차면 순위 계약)인데 T 면만
+  // QR 을 얹으면 L/R 배제영역이 구멍(배경 노출)으로 남아 큐브 실루엣이 깨진다.
+  // 채움 = 동일 QR 레플리카 (사용자 원 목업의 "QR 텍스처 3면"과 동형) — 세 QR 의
+  // 내용 동일은 계약(ADR 0004 §1-4 준용)이라 폰 리더가 어느 면을 잡아도 무해.
+  // 면 위 잉크는 셀과 동일하게 면 게인을 받는다 (D2 렌더러 의무와 정합 — 기본
+  // 게인 T=1 에서 T 면은 종전 무게인 색과 바이트 동일).
+  for (const face of YFACES) {
+    const quiet = applyFaceGain(palette.bullseyeLight, faceGains[face]);
+    const dark = applyFaceGain(palette.bullseyeDark, faceGains[face]);
 
-  // QR 다크 모듈 — row-major(qy→qx 오름차순) 순회, u/v 로 뒤집어 매핑(위 주석).
-  for (let qy = 0; qy < qr.size; qy += 1) {
-    for (let qx = 0; qx < qr.size; qx += 1) {
-      if (qr.modules[qy * qr.size + qx] !== 1) continue;
-      const u = (QR_MODULE_GRID - 1 - qx) + QR_QUIET_MODULES;
-      const v = (QR_MODULE_GRID - 1 - qy) + QR_QUIET_MODULES;
-      const a0 = lo + u * half;
-      const b0 = lo + v * half;
-      shapes.push({
-        kind: 'polygon',
-        points: [
-          facePointFor('T', a0, b0, layout),
-          facePointFor('T', a0 + half, b0, layout),
-          facePointFor('T', a0 + half, b0 + half, layout),
-          facePointFor('T', a0, b0 + half, layout),
-        ],
-        color: palette.bullseyeDark,
-      });
+    // 콰이어트 패치 — 윈도 bbox(13×13 데이터 셀) 전체를 밝게 덮는다.
+    shapes.push({
+      kind: 'polygon',
+      points: [
+        facePointFor(face, lo, lo, layout),
+        facePointFor(face, n, lo, layout),
+        facePointFor(face, n, n, layout),
+        facePointFor(face, lo, n, layout),
+      ],
+      color: quiet,
+    });
+
+    // QR 다크 모듈 — row-major(qy→qx 오름차순) 순회, u/v 로 뒤집어 매핑(위 주석).
+    for (let qy = 0; qy < qr.size; qy += 1) {
+      for (let qx = 0; qx < qr.size; qx += 1) {
+        if (qr.modules[qy * qr.size + qx] !== 1) continue;
+        const u = (QR_MODULE_GRID - 1 - qx) + QR_QUIET_MODULES;
+        const v = (QR_MODULE_GRID - 1 - qy) + QR_QUIET_MODULES;
+        const a0 = lo + u * half;
+        const b0 = lo + v * half;
+        shapes.push({
+          kind: 'polygon',
+          points: [
+            facePointFor(face, a0, b0, layout),
+            facePointFor(face, a0 + half, b0, layout),
+            facePointFor(face, a0 + half, b0 + half, layout),
+            facePointFor(face, a0, b0 + half, layout),
+          ],
+          color: dark,
+        });
+      }
     }
   }
 }
@@ -430,7 +442,7 @@ export function buildSceneY(encoded, options) {
   // 가 있을 때만(코너 QR 과 동일하게 qrText 미지정이면 조용히 생략). 코너 QR 과
   // 배타적이지 않다 — 둘 다 표시될 수 있다(내용은 항상 같은 opts.qrText).
   if (window && opts.qrText !== undefined) {
-    renderWindowQr(shapes, n, layout, opts.qrText, palette);
+    renderWindowQr(shapes, n, layout, opts.qrText, palette, faceGains);
   }
 
   return {
