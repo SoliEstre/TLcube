@@ -178,6 +178,45 @@
     border-color: var(--accent); color: var(--text);
     background: color-mix(in srgb, var(--accent) 12%, var(--bg));
   }
+  .toggle-card.disabled { opacity: .35; pointer-events: none; }
+
+  /* ── 용량 초과 하이라이트 (텍스트·URL 입력) ─────────────────────────
+     입력 필드 뒤에 동일 메트릭 백드롭을 깔고, 수용 한계를 넘는 구간만
+     빨간 배경 마크로 보여준다 — 필드 자체는 투명 배경으로 그 위에 얹힌다. */
+  .hl-wrap { position: relative; }
+  .hl-wrap > textarea, .hl-wrap > input[type="text"] {
+    position: relative; z-index: 1; background: transparent;
+  }
+  .hl-backdrop {
+    position: absolute; inset: 0; z-index: 0; overflow: hidden;
+    background: var(--bg); border: 1px solid transparent; border-radius: 6px;
+    padding: 8px; font: inherit; font-size: 13px;
+    color: transparent; pointer-events: none;
+    white-space: pre-wrap; overflow-wrap: break-word;
+  }
+  .hl-backdrop.single { white-space: pre; }
+  .hl-backdrop .over {
+    background: color-mix(in srgb, var(--bad) 45%, transparent);
+    border-radius: 2px;
+  }
+
+  /* ── 커스텀 스타일 hue 바 (전폭 무지개 트랙) ───────────────────────── */
+  .hue-bar {
+    width: 100%; height: 14px; margin-top: 6px;
+    appearance: none; -webkit-appearance: none;
+    border-radius: 99px; border: 1px solid var(--line); outline: none;
+    background: linear-gradient(to right,
+      hsl(0,80%,55%), hsl(60,80%,55%), hsl(120,80%,55%),
+      hsl(180,80%,55%), hsl(240,80%,55%), hsl(300,80%,55%), hsl(360,80%,55%));
+  }
+  .hue-bar::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 2px solid rgba(0,0,0,.55); cursor: pointer;
+  }
+  .hue-bar::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff; border: 2px solid rgba(0,0,0,.55); cursor: pointer;
+  }
   .toggle-card.active svg { color: var(--accent); }
   .toggle-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -306,13 +345,19 @@
 
       <div class="tab-panel active" id="tabUrl">
         <label for="nUrlPayload">URL</label>
-        <input type="text" id="nUrlPayload" value="example.com/trilume" spellcheck="false">
+        <div class="hl-wrap">
+          <div class="hl-backdrop single" id="nUrlBackdrop" aria-hidden="true"></div>
+          <input type="text" id="nUrlPayload" value="example.com/trilume" spellcheck="false">
+        </div>
         <p class="hint">http(s):// 가 없으면 https:// 를 자동으로 붙여요.</p>
       </div>
 
       <div class="tab-panel" id="tabText">
         <label for="nTextPayload">텍스트</label>
-        <textarea id="nTextPayload" spellcheck="false">Trilume ✦ 텍스트 예시</textarea>
+        <div class="hl-wrap">
+          <div class="hl-backdrop" id="nTextBackdrop" aria-hidden="true"></div>
+          <textarea id="nTextPayload" spellcheck="false">Trilume ✦ 텍스트 예시</textarea>
+        </div>
       </div>
 
       <div class="tab-panel" id="tabWifi">
@@ -379,6 +424,18 @@
 
       <label for="nPreset">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
+      <!-- 커스텀은 다음 줄 전폭 배치 — hue 바가 폭 전체를 쓴다 (사용자 지시 2026-08-09). -->
+      <div class="card-row">
+        <div class="toggle-card swatch-card" id="customStyleCard" data-preset="custom" style="flex:1">
+          <div class="swatch-chips" id="customChips"></div>
+          <div class="swatch-bg" id="customBg"></div>
+          <div>커스텀 (Hue)</div>
+        </div>
+      </div>
+      <div id="hueRow" style="display:none">
+        <input type="range" id="hueBar" class="hue-bar" min="0" max="359" step="1" value="210">
+        <p class="slider-value" id="hueValue"></p>
+      </div>
 
       <label>해상도 (모듈 밀도)</label>
       <!-- 사용자 지시 2026-08-09: 용량과 다른 축 — 버전(모듈 수) 3단 + 자동(기본).
@@ -469,6 +526,11 @@
 
       <label for="preset">스타일 프리셋</label>
       <select id="preset"></select>
+      <div id="hueRowAdv" style="display:none">
+        <label for="hueBarAdv">커스텀 Hue</label>
+        <input type="range" id="hueBarAdv" class="hue-bar" min="0" max="359" step="1" value="210">
+        <p class="slider-value" id="hueValueAdv"></p>
+      </div>
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
@@ -590,7 +652,7 @@
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { encodeA } from './src/encodeA.js';
-import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin } from './src/luminance.js';
+import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
 import { faceBasis } from './src/ygrid.js';
@@ -621,12 +683,16 @@ const els = {
   decorFileL: $('decorFileL'), decorFileR: $('decorFileR'), decorSwap: $('decorSwap'),
   eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
   resTierCards: $('resTierCards'),
+  customStyleCard: $('customStyleCard'), customChips: $('customChips'), customBg: $('customBg'),
+  hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
+  hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
   contentTabs: $('contentTabs'), typeCards: $('typeCards'), presetSwatches: $('presetSwatches'),
   qrPositionCards: $('qrPositionCards'), qrPosInner: $('qrPosInner'),
   nTextPayload: $('nTextPayload'), nUrlPayload: $('nUrlPayload'),
+  nTextBackdrop: $('nTextBackdrop'), nUrlBackdrop: $('nUrlBackdrop'),
   nWifiSsid: $('nWifiSsid'), nWifiPassword: $('nWifiPassword'), wifiSecButtons: $('wifiSecButtons'),
   nCardName: $('nCardName'), nCardPhone: $('nCardPhone'), nCardEmail: $('nCardEmail'),
   nCardOrg: $('nCardOrg'), nCardUrl: $('nCardUrl'),
@@ -644,7 +710,7 @@ const normalState = {
   // eccTier·resTier 기본 = 'auto' (자동 조합: 해상도 먼저 ↑, 최대에서 용량 단계 ↓ —
   // 사용자 지시 2026-08-09).
   contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
-  eccTier: 'auto', resTier: 'auto',
+  eccTier: 'auto', resTier: 'auto', customHue: 210,
 };
 
 /** 해상도 티어 → 버전 (타입별). 저 = 최소 버전(원거리) · 고 = 최대 버전(대용량).
@@ -757,6 +823,60 @@ $('copySvg').addEventListener('click', async () => {
   }
 });
 
+// ── 커스텀 팔레트 (hue 바) — slate 의 **휘도 구조를 그대로 물려받아** 색상만
+// 회전한다. 각 색은 목표 상대휘도 Y 를 HSL lightness 이진 탐색(40회 고정 —
+// 결정적)으로 재현 — Δmin·2톤 분리비 ρ(U17)·배경 분리 계약이 slate 와 동일하게
+// 보존된다. 채도는 slate 근사 상수.
+function hslToRgb(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hp = ((h % 360) + 360) % 360 / 60;
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r1 = 0; let g1 = 0; let b1 = 0;
+  if (hp < 1) { r1 = c; g1 = x; } else if (hp < 2) { r1 = x; g1 = c; }
+  else if (hp < 3) { g1 = c; b1 = x; } else if (hp < 4) { g1 = x; b1 = c; }
+  else if (hp < 5) { r1 = x; b1 = c; } else { r1 = c; b1 = x; }
+  const m = l - c / 2;
+  return {
+    r: Math.round((r1 + m) * 255),
+    g: Math.round((g1 + m) * 255),
+    b: Math.round((b1 + m) * 255),
+  };
+}
+
+/** hue·sat 고정, 상대휘도 targetY 를 만족하는 lightness 를 이진 탐색으로 찾는다
+ *  (Y 는 lightness 에 단조증가 — L=0 → 검정, L=1 → 흰색). */
+function colorAtLuminance(hue, sat, targetY) {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 40; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (relativeLuminance(hslToRgb(hue, sat, mid)) < targetY) lo = mid; else hi = mid;
+  }
+  return hslToRgb(hue, sat, (lo + hi) / 2);
+}
+
+const CUSTOM_SATS = { background: 0.32, levels: [0.42, 0.4, 0.3] };
+let customPaletteCache = { hue: null, palette: null };
+function makeCustomPalette(hue) {
+  if (customPaletteCache.hue === hue) return customPaletteCache.palette;
+  const base = getPreset('slate');
+  const palette = {
+    name: 'custom',
+    label: '커스텀',
+    background: colorAtLuminance(hue, CUSTOM_SATS.background, relativeLuminance(base.background)),
+    levels: base.levels.map((lvl, i) => colorAtLuminance(hue, CUSTOM_SATS.levels[i], relativeLuminance(lvl))),
+  };
+  customPaletteCache = { hue, palette };
+  return palette;
+}
+
+/** 프리셋/커스텀 공용 Δmin (info 표기용) — presetDeltaMin 은 등록 프리셋 전용. */
+function deltaMinFor(name) {
+  if (name !== 'custom') return presetDeltaMin(name);
+  const ys = makeCustomPalette(normalState.customHue).levels.map(relativeLuminance);
+  return Math.min(ys[1] - ys[0], ys[2] - ys[1]);
+}
+
 // ── 프리셋 목록 채우기 (고급 모드 select + 일반 모드 스와치 카드) ──────────
 
 for (const name of Object.keys(PRESETS)) {
@@ -794,11 +914,61 @@ for (const name of Object.keys(PRESETS)) {
   card.appendChild(labelEl);
   card.addEventListener('click', () => {
     normalState.preset = name;
-    for (const c of els.presetSwatches.children) c.classList.toggle('active', c.dataset.preset === name);
+    syncStyleUi();
     schedule();
   });
   els.presetSwatches.appendChild(card);
 }
+
+// ── 커스텀 스타일 (hue 바 — 사용자 지시 2026-08-09) ─────────────────────
+
+// 고급 select 에도 커스텀 항목 (고급 = 일반 상위집합 규약).
+{
+  const opt = document.createElement('option');
+  opt.value = 'custom';
+  opt.textContent = '커스텀 (Hue)';
+  els.preset.appendChild(opt);
+}
+
+// 커스텀 카드 칩 3개 + 배경 스트립 — syncStyleUi 가 색을 채운다.
+for (let i = 0; i < 3; i += 1) {
+  const chip = document.createElement('span');
+  chip.className = 'swatch-chip';
+  els.customChips.appendChild(chip);
+}
+
+function syncStyleUi() {
+  for (const c of els.presetSwatches.children) {
+    c.classList.toggle('active', c.dataset.preset === normalState.preset);
+  }
+  els.customStyleCard.classList.toggle('active', normalState.preset === 'custom');
+  els.hueRow.style.display = normalState.preset === 'custom' ? '' : 'none';
+  els.hueRowAdv.style.display = els.preset.value === 'custom' ? '' : 'none';
+  const hue = normalState.customHue;
+  const p = makeCustomPalette(hue);
+  const chips = els.customChips.children;
+  for (let i = 0; i < 3; i += 1) chips[i].style.background = rgbCss(p.levels[i]);
+  els.customBg.style.background = rgbCss(p.background);
+  els.hueBar.value = hue;
+  els.hueBarAdv.value = hue;
+  els.hueValue.textContent = `Hue ${hue}° — 휘도 구조는 슬레이트와 동일 (인식 계약 보존)`;
+  els.hueValueAdv.textContent = `Hue ${hue}°`;
+}
+
+els.customStyleCard.addEventListener('click', () => {
+  normalState.preset = 'custom';
+  syncStyleUi();
+  schedule();
+});
+for (const bar of [els.hueBar, els.hueBarAdv]) {
+  bar.addEventListener('input', () => {
+    normalState.customHue = Number(bar.value);
+    syncStyleUi();
+    schedule();
+  });
+}
+els.preset.addEventListener('change', syncStyleUi);
+syncStyleUi();
 
 // 카드 토글 UI 키보드 접근성 — 클릭 핸들러는 위에서 이미 붙었으니 Enter/Space 로
 // 같은 click 을 재사용한다(동적 생성된 스와치 카드까지 포함해 한 번에 처리).
@@ -818,7 +988,7 @@ for (const card of document.querySelectorAll('.toggle-card')) {
  * @param {{T:number,L:number,R:number}} [faceGains] Type Y 면 게인 (생략 시 기본값)
  */
 function paletteOf(name, faceGains) {
-  const p = getPreset(name);
+  const p = name === 'custom' ? makeCustomPalette(normalState.customHue) : getPreset(name);
   return {
     background: p.background, levels: p.levels,
     bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
@@ -865,6 +1035,7 @@ function setMode(next) {
   els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
   els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
   syncQrPositionUi(); // 공용 QR 위치 카드의 모드 의존 요소(병행 표시 행) 갱신
+  syncResTierUi();
   schedule();
 }
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
@@ -897,6 +1068,52 @@ for (const btn of els.wifiSecButtons.children) {
   });
 }
 
+// ── 용량 초과 하이라이트 (텍스트·URL 탭 — 합성 페이로드 탭(Wi-Fi/명함)은 상단
+//    빨간 안내줄이 대신 알린다) ─────────────────────────────────────────────
+
+const escapeHtml = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** keptPayload(잘린 렌더에 실제 실린 페이로드 문자열, 무절단이면 null)를 입력 필드
+ *  백드롭에 반영한다 — 수용 한계 이후 구간을 빨간 배경으로. 코드포인트 단위 계산. */
+function updateOverflowHighlight(keptPayload) {
+  const targets = [
+    { tab: 'text', el: els.nTextPayload, backdrop: els.nTextBackdrop, payloadOf: (v) => v },
+    { tab: 'url', el: els.nUrlPayload, backdrop: els.nUrlBackdrop, payloadOf: (v) => normalizeUrl(v) },
+  ];
+  for (const t of targets) {
+    const raw = t.el.value;
+    let cut = null; // raw 코드포인트 기준 절단 시작 인덱스
+    if (keptPayload !== null && normalState.contentTab === t.tab) {
+      const rawCps = Array.from(raw);
+      const payloadCps = Array.from(t.payloadOf(raw));
+      const keptCps = Array.from(keptPayload);
+      // 자동 부착 접두(https:// 등)를 뺀 오프셋 — 페이로드 꼬리가 입력과 일치할 때만.
+      const offset = t.payloadOf(raw).endsWith(raw) ? payloadCps.length - rawCps.length : 0;
+      cut = Math.max(0, Math.min(rawCps.length, keptCps.length - offset));
+      if (cut >= rawCps.length) cut = null; // 절단점이 입력 밖(이론상) — 표시 없음
+    }
+    if (cut === null) {
+      t.backdrop.innerHTML = escapeHtml(raw);
+    } else {
+      const rawCps = Array.from(raw);
+      t.backdrop.innerHTML = escapeHtml(rawCps.slice(0, cut).join(''))
+        + `<span class="over">${escapeHtml(rawCps.slice(cut).join(''))}</span>`;
+    }
+    // 스크롤 정렬 (긴 한 줄 URL·스크롤된 textarea).
+    t.backdrop.scrollTop = t.el.scrollTop;
+    t.backdrop.scrollLeft = t.el.scrollLeft;
+  }
+}
+
+for (const [el, backdrop] of [
+  [els.nTextPayload, els.nTextBackdrop], [els.nUrlPayload, els.nUrlBackdrop],
+]) {
+  el.addEventListener('scroll', () => {
+    backdrop.scrollTop = el.scrollTop;
+    backdrop.scrollLeft = el.scrollLeft;
+  });
+}
+
 // ── 일반 모드: 타입 카드 ────────────────────────────────────────────────
 
 /** 현재 활성 타입 — 일반은 카드 상태, 고급은 select (공용 컨트롤이 양쪽을 섬긴다). */
@@ -926,6 +1143,7 @@ for (const card of els.typeCards.children) {
     normalState.type = card.dataset.type;
     for (const c of els.typeCards.children) c.classList.toggle('active', c === card);
     syncQrPositionUi();
+    syncResTierUi();
     schedule();
   });
 }
@@ -951,13 +1169,26 @@ for (const card of els.eccTierCards.children) {
   });
 }
 
+/** 해상도 카드 타입별 가용성 — Y·A 는 소형판이 없어 '중'이 '저'와 같은 버전이라
+ *  비활성 표기한다 (신버전 Y0/A0 는 포맷 번호 신설이 필요한 설계 안건). */
+function syncResTierUi() {
+  const isO = currentType() === 'O';
+  for (const card of els.resTierCards.children) {
+    const dup = !isO && card.dataset.res === 'mid';
+    card.classList.toggle('disabled', dup);
+    if (dup && normalState.resTier === 'mid') normalState.resTier = 'auto';
+    card.classList.toggle('active', card.dataset.res === normalState.resTier);
+  }
+}
+
 for (const card of els.resTierCards.children) {
   card.addEventListener('click', () => {
     normalState.resTier = card.dataset.res;
-    for (const c of els.resTierCards.children) c.classList.toggle('active', c === card);
+    syncResTierUi();
     schedule();
   });
 }
+syncResTierUi();
 
 // ── 장식 이미지 (Y+안쪽 — L/R 배제영역 데칼) ─────────────────────────────
 
@@ -1120,7 +1351,7 @@ function syncTypeUi() {
   els.optionsY.style.display = isY ? '' : 'none';
 }
 
-els.codeType.addEventListener('change', () => { syncTypeUi(); syncQrPositionUi(); schedule(); });
+els.codeType.addEventListener('change', () => { syncTypeUi(); syncQrPositionUi(); syncResTierUi(); schedule(); });
 syncTypeUi();
 
 // ── 고급 모드: 면 게인 슬라이더 (Type Y — 1.0(평면) ~ DEFAULT_FACE_GAINS(기본) 보간) ──
@@ -1280,11 +1511,32 @@ function encodeWithEcc(encodeFn, text, baseOpts, eccLevel) {
   throw lastErr;
 }
 
+/** 타입별 인코더 함수 + 기본 옵션 — 렌더와 용량 초과 절단 프로브가 공유한다. */
+function encodeOptsFor(cfg) {
+  if (cfg.type === 'Y') {
+    const opts = { tones: cfg.tone };
+    if (cfg.fallback.mode === 'window') {
+      opts.version = 2;
+      opts.window = true;
+    } else if (cfg.versionY !== undefined) {
+      opts.version = cfg.versionY;
+    }
+    return { fn: encodeY, opts };
+  }
+  if (cfg.type === 'A') {
+    const opts = { centerQr: cfg.fallback.mode === 'center' };
+    if (cfg.versionA !== undefined) opts.version = cfg.versionA;
+    return { fn: encodeA, opts };
+  }
+  const opts = { centerQr: cfg.fallback.mode === 'center' };
+  if (cfg.versionO !== undefined) opts.version = cfg.versionO;
+  return { fn: encode, opts };
+}
+
 function renderTypeO(cfg) {
   const centerQr = cfg.fallback.mode === 'center';
-  const opts = { centerQr };
-  if (cfg.versionO !== undefined) opts.version = cfg.versionO;
-  const encoded = encodeWithEcc(encode, cfg.text, opts, cfg.eccLevel);
+  const { fn, opts } = encodeOptsFor(cfg);
+  const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
 
   const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
 
@@ -1297,16 +1549,15 @@ function renderTypeO(cfg) {
   const info =
     `타입 <b>O</b> · 버전 <b>V${encoded.version}${encoded.centerQr ? 'Q' : ''}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
     `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
-    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(cfg.presetName).toFixed(3)}<br>` +
+    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${deltaMinFor(cfg.presetName).toFixed(3)}<br>` +
     badge;
   return { type: 'O', encoded, scene, info };
 }
 
 function renderTypeA(cfg) {
   const centerQr = cfg.fallback.mode === 'center';
-  const opts = { centerQr };
-  if (cfg.versionA !== undefined) opts.version = cfg.versionA;
-  const encoded = encodeWithEcc(encodeA, cfg.text, opts, cfg.eccLevel);
+  const { fn, opts } = encodeOptsFor(cfg);
+  const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
 
   const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
 
@@ -1319,21 +1570,15 @@ function renderTypeA(cfg) {
   const info =
     `타입 <b>A</b> · 버전 <b>A${encoded.version}${encoded.centerQr ? 'Q' : ''}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
     `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
-    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${presetDeltaMin(cfg.presetName).toFixed(3)}<br>` +
+    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${deltaMinFor(cfg.presetName).toFixed(3)}<br>` +
     badge;
   return { type: 'A', encoded, scene, info };
 }
 
 function renderTypeY(cfg) {
   const useWindow = cfg.fallback.mode === 'window';
-  const opts = { tones: cfg.tone };
-  if (useWindow) {
-    opts.version = 2;
-    opts.window = true;
-  } else if (cfg.versionY !== undefined) {
-    opts.version = cfg.versionY;
-  }
-  const encoded = encodeWithEcc(encodeY, cfg.text, opts, cfg.eccLevel);
+  const { fn, opts } = encodeOptsFor(cfg);
+  const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
 
   const sceneOpts = { palette: paletteOf(cfg.presetName, cfg.faceGains) };
   if (cfg.fallback.mode !== 'off') {
@@ -1387,12 +1632,46 @@ function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
 
 const ECC_TIER_LABELS = { H: '보정 우선', M: '표준', L: '대용량' };
 
+/** 인코더의 용량 초과 계열 에러인가 (다른 에러는 절단 재시도 대상이 아니다). */
+function isCapacityError(err) {
+  return err instanceof RangeError && /용량|초과/.test(String(err && err.message));
+}
+
 function render() {
   els.error.textContent = '';
   syncFaceGainLabel();
   const cfg = buildConfig();
+  const fullText = cfg.text;
+  let keptPayload = null; // 절단 렌더 시 실제로 실린 페이로드 문자열
   try {
-    const result = cfg.type === 'Y' ? renderTypeY(cfg) : cfg.type === 'A' ? renderTypeA(cfg) : renderTypeO(cfg);
+    const renderCurrent = () => (cfg.type === 'Y' ? renderTypeY(cfg) : cfg.type === 'A' ? renderTypeA(cfg) : renderTypeO(cfg));
+    let result;
+    try {
+      result = renderCurrent();
+    } catch (err) {
+      if (!isCapacityError(err)) throw err;
+      // 용량 초과 — 최대 수용 접두를 이진 탐색해 **잘린 채로 렌더링** 하고, 초과
+      // 구간은 입력창 빨간 배경으로 표시한다 (사용자 지시 2026-08-09: "안그럼
+      // 인지를 못하겠네"). 코드포인트 단위 절단 — 서러게이트 반토막 방지.
+      const cps = Array.from(fullText);
+      const { fn, opts } = encodeOptsFor(cfg);
+      const fits = (n) => {
+        try {
+          encodeWithEcc(fn, cps.slice(0, n).join(''), opts, cfg.eccLevel);
+          return true;
+        } catch { return false; }
+      };
+      if (!fits(0)) throw err; // 빈 페이로드조차 안 들어가는 구성이면 원 에러 그대로.
+      let lo = 0;
+      let hi = cps.length - 1;
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi + 1) / 2);
+        if (fits(mid)) lo = mid; else hi = mid - 1;
+      }
+      keptPayload = cps.slice(0, lo).join('');
+      cfg.text = keptPayload;
+      result = renderCurrent();
+    }
     current = {
       type: result.type, encoded: result.encoded, scene: result.scene, faceGains: cfg.faceGains,
     };
@@ -1403,8 +1682,13 @@ function render() {
       ctx.setTransform(26 * dpr, 0, 0, 26 * dpr, 0, 0);
       paintDecor(ctx, result.scene, cfg.faceGains);
     }
-    els.info.innerHTML = result.info;
-    updateGauge(result.type, result.encoded, cfg.text);
+    els.info.innerHTML = result.info
+      + (keptPayload !== null ? ' <span class="badge bad">용량 초과 — 잘린 채 렌더링</span>' : '');
+    updateGauge(result.type, result.encoded, fullText); // 게이지는 원본 분량 기준 (초과 시 빨강)
+    if (keptPayload !== null) {
+      const overBytes = payloadByteLength(fullText) - payloadByteLength(keptPayload);
+      els.error.textContent = `용량 초과 — 내용 뒤쪽 ${overBytes} B 가 잘린 채로 렌더링 중이에요 (빨간 구간이 잘리는 부분).`;
+    }
     {
       // 자동 축(해상도/용량)이 하나라도 켜져 있으면 판정 결과(버전·ECC)를 힌트로 보여준다.
       const vPrefix = result.type === 'O' ? 'V' : result.type;
@@ -1422,6 +1706,7 @@ function render() {
     updateGauge(null, null, '');
     els.eccTierHint.textContent = '';
   }
+  updateOverflowHighlight(keptPayload);
 }
 
 for (const el of [
