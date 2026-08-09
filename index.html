@@ -237,7 +237,15 @@
     <div id="panelNormal">
       <label>콘텐츠</label>
       <div class="card-row" id="contentTabs">
-        <div class="toggle-card active" data-tab="text">
+        <!-- URL 이 맨 앞 + 진입 기본 선택 (사용자 지시 2026-08-09) -->
+        <div class="toggle-card active" data-tab="url">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 12a4 4 0 0 0 5.66 0l2-2a4 4 0 1 0-5.66-5.66l-1 1"/>
+            <path d="M15 12a4 4 0 0 0-5.66 0l-2 2a4 4 0 1 0 5.66 5.66l1-1"/>
+          </svg>
+          URL
+        </div>
+        <div class="toggle-card" data-tab="text">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <rect x="5" y="3" width="14" height="18" rx="1.5"/>
             <line x1="8" y1="8" x2="16" y2="8"/>
@@ -245,13 +253,6 @@
             <line x1="8" y1="16" x2="13" y2="16"/>
           </svg>
           텍스트
-        </div>
-        <div class="toggle-card" data-tab="url">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 12a4 4 0 0 0 5.66 0l2-2a4 4 0 1 0-5.66-5.66l-1 1"/>
-            <path d="M15 12a4 4 0 0 0-5.66 0l-2 2a4 4 0 1 0 5.66 5.66l1-1"/>
-          </svg>
-          URL
         </div>
         <div class="toggle-card" data-tab="wifi">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -274,15 +275,15 @@
         </div>
       </div>
 
-      <div class="tab-panel active" id="tabText">
-        <label for="nTextPayload">텍스트</label>
-        <textarea id="nTextPayload" spellcheck="false">https://example.com/trilume</textarea>
+      <div class="tab-panel active" id="tabUrl">
+        <label for="nUrlPayload">URL</label>
+        <input type="text" id="nUrlPayload" value="example.com/trilume" spellcheck="false">
+        <p class="hint">http(s):// 가 없으면 https:// 를 자동으로 붙여요.</p>
       </div>
 
-      <div class="tab-panel" id="tabUrl">
-        <label for="nUrlPayload">URL</label>
-        <input type="text" id="nUrlPayload" placeholder="example.com/..." spellcheck="false">
-        <p class="hint">http(s):// 가 없으면 https:// 를 자동으로 붙여요.</p>
+      <div class="tab-panel" id="tabText">
+        <label for="nTextPayload">텍스트</label>
+        <textarea id="nTextPayload" spellcheck="false">Trilume ✦ 텍스트 예시</textarea>
       </div>
 
       <div class="tab-panel" id="tabWifi">
@@ -466,7 +467,7 @@ const els = {
 
 /** 일반 모드 전용 in-memory 상태 — localStorage 미사용(결정성·단순성, 새로고침 시 초기화). */
 let mode = 'normal';
-const normalState = { contentTab: 'text', type: 'O', preset: DEFAULT_PRESET, wifiSecurity: 'WPA' };
+const normalState = { contentTab: 'url', type: 'O', preset: DEFAULT_PRESET, wifiSecurity: 'WPA' }; // URL 이 기본 (사용자 지시)
 
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
 let current = null;
