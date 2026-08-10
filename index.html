@@ -19,6 +19,9 @@
     --text: #dfe3ee;
     --dim: #8a91a6;
     --accent: #7fa3ff;
+    /* accent 위에 얹는 글자색. accent 는 테마마다 명도가 뒤집히므로 이 값도 같이 뒤집어야
+       한다 — 하드코딩하면 한쪽 테마에서 어두운 배경에 검은 글자가 된다(사용자 보고 2026-08-11). */
+    --accent-on: #0c1220;
     --ok: #7fd8a4;
     --bad: #ff8f8f;
     --warn: #e8c56a;
@@ -33,6 +36,7 @@
     --text: #23293a;
     --dim: #6a7185;
     --accent: #3d6ae0;
+    --accent-on: #ffffff;
     --ok: #1f9d5f;
     --bad: #d64545;
     --warn: #a8791a;
@@ -48,6 +52,7 @@
       --text: #23293a;
       --dim: #6a7185;
       --accent: #3d6ae0;
+      --accent-on: #ffffff;
       --ok: #1f9d5f;
       --bad: #d64545;
       --warn: #a8791a;
@@ -209,7 +214,7 @@
     background: transparent; color: var(--dim);
   }
   .mode-switch button:hover { color: var(--text); border-color: transparent; }
-  .mode-switch button.active { background: var(--accent); color: #0c1220; font-weight: 600; }
+  .mode-switch button.active { background: var(--accent); color: var(--accent-on); font-weight: 600; }
 
   /* ── 카드 토글 공용 ──────────────────────────────────────────── */
   .card-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }

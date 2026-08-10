@@ -28,6 +28,8 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
+  // 실기기 스캔 영상 진단용(프레임을 뽑아 앞단에 먹인다).
+  '.mp4': 'video/mp4',
   '.css': 'text/css; charset=utf-8',
   '.md': 'text/plain; charset=utf-8',
 };

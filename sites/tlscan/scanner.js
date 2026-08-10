@@ -28,6 +28,20 @@ const FRAME_INTERVAL_MS = 320;
 const FRAME_MAX_SIDE = 960;
 
 /**
+ * 사진 경로의 총 픽셀 상한. 라이브와 달리 자르지 않으므로(코드가 가운데 있으리란 보장이
+ * 없다) 짧은 변 기준으로 키우면 세로로 긴 사진이 매우 커질 수 있다 — 비용만 제한한다.
+ * 960×2400 정도까지 허용한다.
+ */
+const PHOTO_MAX_PIXELS = 960 * 2400;
+
+/**
+ * 배포본 식별자. 실기기 피드백에서 **어느 빌드를 보고 있는지** 즉시 알기 위한 것이다.
+ * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
+ * 푸터에 표시하고, 갱신할 때 같이 올린다.
+ */
+export const SCANNER_BUILD = '2026-08-11.2';
+
+/**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
  * 복호 실패의 가장 흔한 원인이 거리(셀당 픽셀 부족)인데, 아무 피드백이 없으면
  * 사용자는 무엇을 바꿔야 할지 알 수 없다.
@@ -75,6 +89,45 @@ let stoppedForVisibility = false;
 let activeUrl = '';
 let returnFocus = null;
 let consecutiveFailedFrames = 0;
+let selectedCameraId = '';
+let knownCameras = [];
+
+/** 지금 열려 있는 스트림이 실제로 쓰는 deviceId. 선택 UI 를 실제 상태와 맞추는 데 쓴다. */
+function activeDeviceIdOf(stream) {
+  const track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+  if (!track || typeof track.getSettings !== 'function') return '';
+  try {
+    return track.getSettings().deviceId || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 렌즈 선택 UI 를 채운다. 후면 카메라가 **2개 이상일 때만** 보인다 — 하나뿐인 기기에서
+ * 고를 것 없는 선택지를 띄우지 않는다.
+ */
+async function refreshCameraChoices() {
+  const picker = document.getElementById('camera-picker');
+  if (!picker) return;
+
+  knownCameras = await listRearCameras();
+  if (knownCameras.length < 2) {
+    picker.hidden = true;
+    return;
+  }
+
+  const current = selectedCameraId || activeDeviceIdOf(cameraStream);
+  picker.replaceChildren();
+  knownCameras.forEach((device, index) => {
+    const option = document.createElement('option');
+    option.value = device.deviceId;
+    option.textContent = device.label || `카메라 ${index + 1}`;
+    if (device.deviceId === current) option.selected = true;
+    picker.append(option);
+  });
+  picker.hidden = false;
+}
 
 /**
  * TLcube 디코더 경계.
@@ -265,19 +318,61 @@ function waitForVideoMetadata(video) {
  * `ideal` 을 쓰고 `exact`·`min` 을 쓰지 않는다 — 후자는 못 맞추면 OverconstrainedError 로
  * 카메라 자체가 안 열린다. ideal 은 지원되면 올리고 아니면 조용히 낮은 쪽으로 떨어진다.
  */
-async function requestCameraStream() {
+/**
+ * 후면 카메라 목록. 렌즈가 여러 개인 기기(폴드·프로 계열)에서 **어느 렌즈인지가 복호에
+ * 직접 영향**을 준다 — 초광각은 같은 거리에서 코드가 훨씬 작게 잡혀 셀당 픽셀이 하한
+ * 아래로 내려간다. `facingMode` 만으로는 브라우저가 임의로 하나를 고른다.
+ *
+ * ⚠ 권한 부여 **전에는** label 이 빈 문자열이라 렌즈를 구분할 수 없다. 그래서 스트림을
+ *    한 번 연 뒤에 목록을 다시 읽는다.
+ */
+async function listRearCameras() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
   try {
-    return await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        frameRate: { ideal: 30 },
-      },
-      audio: false,
-    });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter((device) => device.kind === 'videoinput');
+    const rear = cameras.filter((device) => /back|rear|environment|후면/i.test(device.label));
+    return rear.length > 0 ? rear : cameras;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 카메라 스트림을 연다.
+ *
+ * ⚠ 해상도 제약을 **반드시** 준다. 제약이 없으면 브라우저 기본값이 잡히는데 Android
+ *    Chrome 의 기본은 640×480 이고, 그걸 1080p+ 화면에 `object-fit: cover` 로 채우면
+ *    확대율이 2\~3배가 되어 눈에 띄게 흐려진다(실기기 확인, 2026-08-10).
+ *
+ * `ideal` 을 쓰고 `exact`·`min` 을 쓰지 않는다 — 후자는 못 맞추면 OverconstrainedError 로
+ * 카메라 자체가 안 열린다. 다만 **deviceId 는 exact** 로 준다: 사용자가 고른 렌즈를
+ * 브라우저가 조용히 무시하면 선택 UI 가 거짓말이 되기 때문이다.
+ */
+async function requestCameraStream(deviceId) {
+  const video = {
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30 },
+  };
+  if (deviceId) video.deviceId = { exact: deviceId };
+  else video.facingMode = { ideal: 'environment' };
+
+  try {
+    return await navigator.mediaDevices.getUserMedia({ video, audio: false });
   } catch (error) {
     if (!error || error.name !== 'OverconstrainedError') throw error;
+    // 고른 렌즈가 이 제약을 못 맞추면 해상도 요구를 버리고 그 렌즈만 유지한다.
+    if (deviceId) {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } },
+          audio: false,
+        });
+      } catch {
+        // 렌즈 고정 자체가 실패하면 아래 기본 경로로 떨어진다.
+      }
+    }
     return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
   }
 }
@@ -309,10 +404,57 @@ function tryContinuousFocus(stream) {
   });
 }
 
-function imageDataFromSource(source, width, height) {
+/**
+ * 프레임에서 **가이드 정사각**만 잘라 복호 해상도를 확보한다.
+ *
+ * ⚠ 이전 구현은 `FRAME_MAX_SIDE / max(width, height)` 로 축소했다. 세로로 긴 폰 프레임
+ *    (예: 1080×2520, 9:21)에서는 **대부분 빈 공간인 세로**가 960 을 차지하고 정작 코드가
+ *    있는 가로가 411 로 무너진다. 실기기 영상 실측(2026-08-11):
+ *
+ *      긴 변 960  → 411×960   → 셀당 **4.89 px**   ← 하한 9 px 의 절반, 복호 불가
+ *      중앙 정사각 960 → 960×960 → 셀당 11.34 px
+ *      중앙 정사각 1440 → 1440×1440 → 셀당 17.0 px
+ *
+ *    화면에 보이는 가이드 윤곽도 중앙 정사각이므로, 사용자가 "가이드 안에 맞췄다" 는
+ *    영역과 실제로 복호하는 영역이 일치하게 된다 — 이전에는 어긋나 있었다.
+ *
+ * 가이드 밖을 버리므로 잡동사니(주변 UI·책상·손)도 같이 빠져 검출이 쉬워진다.
+ */
+function imageDataCenterSquare(source, width, height) {
   if (!frameContext || !width || !height) return null;
 
-  const scale = Math.min(1, FRAME_MAX_SIDE / Math.max(width, height));
+  const side = Math.min(width, height);
+  const sourceX = (width - side) / 2;
+  const sourceY = (height - side) / 2;
+  const target = Math.max(1, Math.min(FRAME_MAX_SIDE, Math.round(side)));
+
+  frameCanvas.width = target;
+  frameCanvas.height = target;
+
+  try {
+    frameContext.drawImage(source, sourceX, sourceY, side, side, 0, 0, target, target);
+    return frameContext.getImageData(0, 0, target, target);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 고른 **사진 전체**를 복호용으로 축소한다 — 자르지 않는다.
+ *
+ * 라이브 프레임과 달리 사진은 코드가 가운데 있으리란 보장이 없다(사용자가 이미 찍어 둔
+ * 것이다). 그래서 정사각 크롭을 쓰면 코드를 잘라 버릴 수 있다.
+ *
+ * 대신 **짧은 변**을 기준으로 축소한다. 긴 변 기준으로 하면 세로로 긴 사진에서 가로가
+ * 무너져 셀당 픽셀이 하한(9px) 아래로 내려간다 — 라이브 경로에서 실측된 바로 그 결함이다.
+ * 실시간 제약이 없으므로 총 픽셀 상한까지만 지키면 된다.
+ */
+function imageDataWhole(source, width, height) {
+  if (!frameContext || !width || !height) return null;
+
+  const shortSideScale = Math.min(1, FRAME_MAX_SIDE / Math.min(width, height));
+  const areaScale = Math.min(1, Math.sqrt(PHOTO_MAX_PIXELS / (width * height)));
+  const scale = Math.min(shortSideScale, areaScale);
   const targetWidth = Math.max(1, Math.round(width * scale));
   const targetHeight = Math.max(1, Math.round(height * scale));
 
@@ -328,7 +470,7 @@ function imageDataFromSource(source, width, height) {
 }
 
 function grabVideoFrame() {
-  return imageDataFromSource(cameraVideo, cameraVideo.videoWidth, cameraVideo.videoHeight);
+  return imageDataCenterSquare(cameraVideo, cameraVideo.videoWidth, cameraVideo.videoHeight);
 }
 
 function normalizePayload(result) {
@@ -405,6 +547,7 @@ function startFrameLoop(session) {
 async function startCamera(options) {
   const settings = options || {};
   const automatic = Boolean(settings.automatic);
+  const deviceId = settings.deviceId || selectedCameraId;
 
   if (!isSecureForCamera()) {
     setStatus('HTTPS 연결이 아니어서 카메라를 사용할 수 없어요.');
@@ -429,7 +572,7 @@ async function startCamera(options) {
   }
 
   try {
-    const stream = await requestCameraStream();
+    const stream = await requestCameraStream(deviceId);
 
     if (session !== scanSession) {
       stopTracks(stream);
@@ -437,7 +580,10 @@ async function startCamera(options) {
     }
 
     cameraStream = stream;
+    selectedCameraId = activeDeviceIdOf(stream) || deviceId || '';
     tryContinuousFocus(stream);
+    // 권한 부여 뒤에야 label 이 채워지므로 여기서 렌즈 목록을 갱신한다.
+    refreshCameraChoices().catch(() => {});
     cameraVideo.srcObject = stream;
     await waitForVideoMetadata(cameraVideo);
     await cameraVideo.play();
@@ -508,7 +654,7 @@ async function decodeImageFile(file) {
 
   try {
     const image = await loadImage(file);
-    const imageData = imageDataFromSource(image, image.naturalWidth, image.naturalHeight);
+    const imageData = imageDataWhole(image, image.naturalWidth, image.naturalHeight);
     if (!imageData) throw new Error('image-data-unavailable');
 
     const result = await decodeFrame(imageData);
@@ -835,6 +981,32 @@ startCameraButton.addEventListener('click', () => {
   void startCamera({ automatic: false });
 });
 chooseImageButton.addEventListener('click', openImagePicker);
+
+// 렌즈를 바꾸면 스트림을 다시 연다 — 같은 스트림에 deviceId 를 적용할 수는 없다.
+const cameraPicker = document.getElementById('camera-picker');
+if (cameraPicker) {
+  cameraPicker.addEventListener('change', () => {
+    selectedCameraId = cameraPicker.value || '';
+    stopCamera();
+    startCamera({ deviceId: selectedCameraId }).catch(() => {});
+  });
+}
+
+// 빌드 식별자 — 실기기 피드백에서 어느 배포본인지 바로 알기 위한 것.
+const buildTag = document.getElementById('build-tag');
+if (buildTag) buildTag.textContent = SCANNER_BUILD;
+
+/*
+ * 서비스 워커 등록 — PWA 설치 요건(manifest + HTTPS + fetch 핸들러 워커) 중 마지막 조각.
+ *
+ * 실패는 전부 삼킨다. dev 서버에는 `/sw.js` alias 가 없어 404 가 나고, 비보안 컨텍스트나
+ * 미지원 브라우저도 있다 — 설치 가능 여부는 부가 기능이지 스캐너 동작 조건이 아니다.
+ */
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  });
+}
 gateChooseImageButton.addEventListener('click', openImagePicker);
 imageInput.addEventListener('change', () => {
   void decodeImageFile(imageInput.files && imageInput.files[0]);

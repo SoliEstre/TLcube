@@ -7,6 +7,15 @@
 <meta name="description" content="TLcube 코드를 카메라나 사진에서 읽는 스캐너입니다.">
 <link rel="canonical" href="https://tlscan.estre.so/">
 <link rel="icon" href="../_shared/favicon.svg" type="image/svg+xml">
+<!-- PWA — 홈 화면에 설치해서 브라우저 크롬 없이 전체화면으로 쓴다.
+     manifest·sw 는 배포 nginx 가 루트로 alias 한다(deploy/.../static.conf). dev 서버에는
+     그 경로가 없어 404 가 나는데, 등록 실패는 삼키므로 스캐너 동작에는 영향이 없다. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TLcube">
 <style>
   :root {
     color-scheme: dark;
@@ -278,6 +287,32 @@
   .site-footer a {
     color: #fff;
     pointer-events: auto;
+  }
+
+  /* 빌드 식별자 — 실기기 피드백에서 어느 배포본인지 바로 알기 위한 것. 눈에 띌 필요는
+     없지만 읽을 수는 있어야 해서 본문보다 흐리게만 둔다. */
+  .build-tag {
+    opacity: 0.65;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .camera-picker {
+    pointer-events: auto;
+    margin-top: 10px;
+    max-width: min(320px, 80vw);
+    padding: 7px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(18, 18, 20, 0.78);
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+  }
+
+  /* 목록이 열렸을 때는 OS 가 그리므로 어두운 배경에 검은 글자가 되지 않도록 명시한다. */
+  .camera-picker option {
+    background: #17181c;
+    color: #fff;
   }
 
   .camera-gate {
@@ -630,11 +665,14 @@
     <div class="scanner-bottom">
       <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true">카메라를 준비하고 있어요.</p>
       <button class="photo-button" id="choose-image" type="button">사진에서 스캔</button>
+      <!-- 렌즈가 2개 이상인 기기에서만 나타난다. 초광각이 잡히면 같은 거리에서 코드가
+           훨씬 작게 찍혀 셀당 픽셀이 복호 하한 아래로 내려간다. -->
+      <select class="camera-picker" id="camera-picker" aria-label="카메라 렌즈 선택" hidden></select>
       <input id="image-input" type="file" accept="image/*" aria-label="스캔할 사진 선택" hidden>
     </div>
 
     <footer class="site-footer">
-      <small>© 2026 SoliEstre · <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">tl.estre.so</a></small>
+      <small>© 2026 SoliEstre · <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">tl.estre.so</a> · <span id="build-tag" class="build-tag">—</span></small>
     </footer>
   </div>
 
