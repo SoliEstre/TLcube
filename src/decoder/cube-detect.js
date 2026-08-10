@@ -48,6 +48,8 @@ export const UNVERIFIED_CUBE_DETECTION = Object.freeze({
   backgroundClusters: 4,
   backgroundToleranceFloor: 0.018,
   backgroundSpreadMultiplier: 2.5,
+  foregroundDensityRadius: 4,
+  minimumForegroundDensity: 0.25,
   minimumComponentAreaFraction: 0.0025,
   maximumComponentAreaFraction: 0.82,
   minimumComponentPixels: 48,
@@ -229,6 +231,48 @@ function backgroundModels(values, cfg) {
   return merged;
 }
 
+
+// 휘도 모드에서 벗어난 원시 마스크를 저주파 점유율로 한 번 더 본다. 모아레의
+// 산발적 잔차는 창 안에서 희석되지만, 코드 면의 비배경 픽셀은 조밀하게 남는다.
+// 원시 마스크 자체는 폐기하지 않고 별도 shape 후보원으로 유지한다.
+function recoverStructuredForeground(rawMask, width, height, cfg) {
+  const radius = Math.max(0, Math.floor(cfg.foregroundDensityRadius));
+  if (radius === 0) return { mask: rawMask, recoveredPixels: 0 };
+
+  const stride = width + 1;
+  const integral = new Uint32Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y += 1) {
+    let rowSum = 0;
+    for (let x = 0; x < width; x += 1) {
+      rowSum += rawMask[y * width + x];
+      integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + rowSum;
+    }
+  }
+
+  const mask = rawMask.slice();
+  let recoveredPixels = 0;
+  for (let y = 0; y < height; y += 1) {
+    const top = Math.max(0, y - radius);
+    const bottom = Math.min(height, y + radius + 1);
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (rawMask[index]) continue;
+      const left = Math.max(0, x - radius);
+      const right = Math.min(width, x + radius + 1);
+      const foreground = integral[bottom * stride + right]
+        - integral[top * stride + right]
+        - integral[bottom * stride + left]
+        + integral[top * stride + left];
+      const density = foreground / ((right - left) * (bottom - top));
+      if (density >= cfg.minimumForegroundDensity) {
+        mask[index] = 1;
+        recoveredPixels += 1;
+      }
+    }
+  }
+  return { mask, recoveredPixels };
+}
+
 function foregroundMask(luma, cfg) {
   const length = luma.width * luma.height;
   const mask = new Uint8Array(length);
@@ -260,7 +304,20 @@ function foregroundMask(luma, cfg) {
     }
     mask[index] = background ? 0 : 1;
   }
-  return { mask, models, source: 'border-clusters' };
+  const structured = recoverStructuredForeground(
+    mask,
+    luma.width,
+    luma.height,
+    cfg,
+  );
+  return {
+    mask,
+    structuredMask: structured.mask,
+    models,
+    source: 'border-clusters',
+    rawForegroundPixels: mask.reduce((sum, value) => sum + value, 0),
+    recoveredForegroundPixels: structured.recoveredPixels,
+  };
 }
 
 function closeMask(mask, width, height) {
@@ -528,75 +585,121 @@ function seamEvidence(luma, center, vertices, parity) {
 
 function shapeCandidates(luma, cfg) {
   const foreground = foregroundMask(luma, cfg);
-  const mask = closeMask(foreground.mask, luma.width, luma.height);
-  const components = connectedComponents(mask, luma.width, luma.height, cfg);
-  const candidates = [];
+  const variants = [{ source: 'raw', mask: foreground.mask }];
+  if (foreground.structuredMask && foreground.recoveredForegroundPixels > 0) {
+    variants.push({ source: 'structured-density', mask: foreground.structuredMask });
+  }
 
-  components.forEach((component, componentIndex) => {
-    const hull = convexHull(component.boundary);
-    const vertices = simplifyHullToHex(hull);
-    if (!vertices) return;
-    const diagonal = diagonalCenter(vertices);
-    if (!diagonal || diagonal.residual > cfg.maximumConcurrencyResidual) return;
-    const area = Math.abs(polygonArea(vertices));
-    const maskFill = component.area / Math.max(area, EPSILON);
-    if (maskFill < cfg.minimumMaskFill) return;
+  const candidatesBySource = new Map();
+  const componentCounts = {};
+  let componentOffset = 0;
+  for (const variant of variants) {
+    const mask = closeMask(variant.mask, luma.width, luma.height);
+    const components = connectedComponents(mask, luma.width, luma.height, cfg);
+    componentCounts[variant.source] = components.length;
+    const sourceCandidates = [];
 
-    const even = seamEvidence(luma, diagonal.center, vertices, 0);
-    const odd = seamEvidence(luma, diagonal.center, vertices, 1);
-    const seamScore = (report) => report.contrast
-      + cfg.minimumSeamContrast * report.positiveRayCount;
-    const evenScore = seamScore(even);
-    const oddScore = seamScore(odd);
-    const parity = oddScore > evenScore ? 1 : 0;
-    const seam = parity === 1 ? odd : even;
-    const other = parity === 1 ? even : odd;
-    const parityMargin = Math.abs(evenScore - oddScore);
-    const hardChecks = {
-      hexSilhouette: true,
-      diagonalConcurrency: diagonal.residual <= cfg.maximumConcurrencyResidual,
-      yJunction: seam.contrast >= cfg.minimumSeamContrast
-        && seam.support >= cfg.minimumSeamSupport
-        && parityMargin >= cfg.minimumSeamParityMargin,
-    };
-    hardChecks.all = hardChecks.hexSilhouette
-      && hardChecks.diagonalConcurrency
-      && hardChecks.yJunction;
-    if (!hardChecks.all) return;
+    components.forEach((component, localComponentIndex) => {
+      const componentIndex = componentOffset + localComponentIndex;
+      const hull = convexHull(component.boundary);
+      const vertices = simplifyHullToHex(hull);
+      if (!vertices) return;
+      const diagonal = diagonalCenter(vertices);
+      if (!diagonal || diagonal.residual > cfg.maximumConcurrencyResidual) return;
+      const area = Math.abs(polygonArea(vertices));
+      const maskFill = component.area / Math.max(area, EPSILON);
+      if (maskFill < cfg.minimumMaskFill) return;
 
-    candidates.push({
-      componentIndex,
-      center: diagonal.center,
-      vertices,
-      seamParity: parity,
-      seamVertices: [0, 1, 2].map((index) => vertices[(parity + 2 * index) % 6]),
-      radius: diagonal.radius,
-      maskFill,
-      concurrencyResidual: diagonal.residual,
-      seam,
-      otherParitySeam: other,
-      parityMargin,
-      hardChecks,
-      score: clamp01(
-        0.32 * (1 - diagonal.residual / cfg.maximumConcurrencyResidual)
-        + 0.38 * clamp01(seam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON))
-        + 0.20 * seam.support
-        + 0.10 * clamp01(maskFill),
-      ),
+      const even = seamEvidence(luma, diagonal.center, vertices, 0);
+      const odd = seamEvidence(luma, diagonal.center, vertices, 1);
+      const seamScore = (report) => report.contrast
+        + cfg.minimumSeamContrast * report.positiveRayCount;
+      const evenScore = seamScore(even);
+      const oddScore = seamScore(odd);
+      const parity = oddScore > evenScore ? 1 : 0;
+      const seam = parity === 1 ? odd : even;
+      const other = parity === 1 ? even : odd;
+      const parityMargin = Math.abs(evenScore - oddScore);
+      const hardChecks = {
+        hexSilhouette: true,
+        diagonalConcurrency: diagonal.residual <= cfg.maximumConcurrencyResidual,
+        yJunction: seam.contrast >= cfg.minimumSeamContrast
+          && seam.support >= cfg.minimumSeamSupport
+          && parityMargin >= cfg.minimumSeamParityMargin,
+      };
+      hardChecks.all = hardChecks.hexSilhouette
+        && hardChecks.diagonalConcurrency
+        && hardChecks.yJunction;
+      if (!hardChecks.all) return;
+
+      const emitParityCandidate = (
+        candidateParity,
+        candidateSeam,
+        candidateOther,
+        alternateParity,
+      ) => {
+        sourceCandidates.push({
+          componentIndex,
+          componentSource: variant.source,
+          center: diagonal.center,
+          vertices,
+          seamParity: candidateParity,
+          seamParityAlternative: alternateParity,
+          junctionEvidenceParity: parity,
+          seamVertices: [0, 1, 2].map(
+            (index) => vertices[(candidateParity + 2 * index) % 6],
+          ),
+          radius: diagonal.radius,
+          maskFill,
+          concurrencyResidual: diagonal.residual,
+          seam: candidateSeam,
+          otherParitySeam: candidateOther,
+          parityMargin,
+          hardChecks,
+          score: clamp01(
+            0.32 * (1 - diagonal.residual / cfg.maximumConcurrencyResidual)
+            + 0.38 * clamp01(
+              candidateSeam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON),
+            )
+            + 0.20 * candidateSeam.support
+            + 0.10 * clamp01(maskFill),
+          ),
+        });
+      };
+      emitParityCandidate(parity, seam, other, false);
+      // Y 존재 증거와 세 꼭짓점 패리티 확정을 분리한다. 양쪽 ray가 모두
+      // 양성이면 12셀 비대칭 레퍼런스가 잘못된 패리티를 제거하게 한다.
+      if (other.contrast >= cfg.minimumSeamContrast
+        && other.support >= cfg.minimumSeamSupport) {
+        emitParityCandidate(1 - parity, other, seam, true);
+      }
     });
-  });
+    sourceCandidates.sort((left, right) =>
+      right.score - left.score
+      || right.radius - left.radius
+      || left.componentIndex - right.componentIndex);
+    candidatesBySource.set(variant.source, sourceCandidates);
+    componentOffset += components.length;
+  }
 
-  candidates.sort((left, right) =>
-    right.score - left.score
-    || right.radius - left.radius
-    || left.componentIndex - right.componentIndex);
+  const candidates = [];
+  for (const variant of variants) {
+    candidates.push(...(candidatesBySource.get(variant.source) || [])
+      .slice(0, cfg.maximumShapeCandidates));
+  }
   return {
-    candidates: candidates.slice(0, cfg.maximumShapeCandidates),
+    candidates,
     diagnostics: {
       foregroundSource: foreground.source,
       backgroundModels: foreground.models,
-      componentCount: components.length,
+      rawForegroundPixels: foreground.rawForegroundPixels,
+      recoveredForegroundPixels: foreground.recoveredForegroundPixels,
+      componentCount: componentCounts.raw || 0,
       acceptedShapeCount: candidates.length,
+      rawAcceptedShapeCount: (candidatesBySource.get('raw') || []).length,
+      structuredComponentCount: componentCounts['structured-density'] || 0,
+      structuredAcceptedShapeCount:
+        (candidatesBySource.get('structured-density') || []).length,
     },
   };
 }
@@ -1228,10 +1331,12 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
               },
               logicalHypothesisId: 'cube-n' + n
                 + '-c' + shape.componentIndex
+                + '-p' + shape.seamParity
                 + '-o' + orientation
                 + '-t' + refined.referenceCalibration.tones,
               hypothesisId: 'cube-n' + n
                 + '-c' + shape.componentIndex
+                + '-p' + shape.seamParity
                 + '-o' + orientation
                 + '-t' + refined.referenceCalibration.tones
                 + '-g' + seed.id,

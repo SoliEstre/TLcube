@@ -115,14 +115,63 @@ function gaussianBlur(raster, sigma) {
   return { ...raster, pixels };
 }
 
-function checkerClutter(fixture) {
+// 실제 seam을 지우지 않고 반대 세 ray에 가는 1px 암선을 더해 패리티만 오도한다.
+function falseSeamDistractor(fixture) {
+  const { raster, scene, pixelsPerUnit } = fixture;
+  const pixels = new Uint8ClampedArray(raster.pixels);
+  const center = {
+    x: scene.layout.originX * pixelsPerUnit,
+    y: scene.layout.originY * pixelsPerUnit,
+  };
+  const radius = scene.layout.n * pixelsPerUnit;
+  for (const cornerIndex of [0, 2, 4]) {
+    const corner = CORNER_UNIT_OFFSETS[cornerIndex];
+    const target = {
+      x: center.x + corner.x * radius,
+      y: center.y + corner.y * radius,
+    };
+    const steps = Math.ceil(Math.hypot(target.x - center.x, target.y - center.y));
+    for (let step = Math.floor(steps * 0.08);
+      step <= Math.floor(steps * 0.72);
+      step += 1) {
+      const t = step / steps;
+      const x = Math.round(center.x + (target.x - center.x) * t);
+      const y = Math.round(center.y + (target.y - center.y) * t);
+      for (let oy = -1; oy <= 1; oy += 1) {
+        for (let ox = -1; ox <= 1; ox += 1) {
+          if (ox * ox + oy * oy > 1) continue;
+          const xx = x + ox;
+          const yy = y + oy;
+          if (xx < 0 || yy < 0 || xx >= raster.width || yy >= raster.height) continue;
+          const offset = (yy * raster.width + xx) * 4;
+          pixels[offset] = 0;
+          pixels[offset + 1] = 0;
+          pixels[offset + 2] = 0;
+        }
+      }
+    }
+  }
+  return { ...raster, pixels };
+}
+
+function checkerClutter(fixture, { overlappingLuma = false } = {}) {
   const width = 1100;
   const height = 760;
   const pixels = new Uint8ClampedArray(width * height * 4);
-  const tile = 18;
+  const tile = overlappingLuma ? 12 : 18;
+  const modes = [133, 160, 176, 197];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const value = (Math.floor(x / tile) + Math.floor(y / tile)) % 2 ? 205 : 235;
+      let value;
+      if (overlappingLuma) {
+        const mode = (Math.floor(x / tile) + 2 * Math.floor(y / tile)) % modes.length;
+        const localX = x % tile;
+        const periodic = localX - (tile - 1) / 2;
+        const amplitude = mode === 0 ? 3 : 2.1;
+        value = modes[mode] + periodic * amplitude;
+      } else {
+        value = (Math.floor(x / tile) + Math.floor(y / tile)) % 2 ? 205 : 235;
+      }
       const offset = (y * width + x) * 4;
       pixels[offset] = value;
       pixels[offset + 1] = value;
@@ -185,17 +234,32 @@ function checkerClutter(fixture) {
     }
     return true;
   };
+  let sourceRaster = raster;
+  if (overlappingLuma) {
+    const clipped = new Uint8ClampedArray(raster.pixels);
+    for (let y = 0; y < raster.height; y += 1) {
+      for (let x = 0; x < raster.width; x += 1) {
+        if (!inside(x + 0.5, y + 0.5)) clipped[(y * raster.width + x) * 4 + 3] = 0;
+      }
+    }
+    sourceRaster = distortImage({ ...raster, pixels: clipped }, {
+      perspective: { degrees: 6, axis: 'horizontal' },
+      fill: { r: 0, g: 0, b: 0, a: 0 },
+    });
+  }
   const offsetX = 430 - Math.round(sourceCenter.x);
   const offsetY = 380 - Math.round(sourceCenter.y);
-  for (let sourceY = 0; sourceY < raster.height; sourceY += 1) {
-    for (let sourceX = 0; sourceX < raster.width; sourceX += 1) {
-      if (!inside(sourceX + 0.5, sourceY + 0.5)) continue;
+  for (let sourceY = 0; sourceY < sourceRaster.height; sourceY += 1) {
+    for (let sourceX = 0; sourceX < sourceRaster.width; sourceX += 1) {
+      const sourceOffset = (sourceY * sourceRaster.width + sourceX) * 4;
+      if (overlappingLuma
+        ? sourceRaster.pixels[sourceOffset + 3] < 128
+        : !inside(sourceX + 0.5, sourceY + 0.5)) continue;
       const targetX = sourceX + offsetX;
       const targetY = sourceY + offsetY;
       if (targetX < 0 || targetY < 0 || targetX >= width || targetY >= height) continue;
-      const sourceOffset = (sourceY * raster.width + sourceX) * 4;
       const targetOffset = (targetY * width + targetX) * 4;
-      pixels.set(raster.pixels.subarray(sourceOffset, sourceOffset + 3), targetOffset);
+      pixels.set(sourceRaster.pixels.subarray(sourceOffset, sourceOffset + 3), targetOffset);
       pixels[targetOffset + 3] = 255;
     }
   }
@@ -291,6 +355,57 @@ test('Type Y checkerboard + UI + fallback QR clutter, partial frame occupancy', 
     margin: 6,
   });
   assertYDecoded(decodeFrontend(checkerClutter(fixture)), text, 1, 2);
+});
+
+test('Type Y four-mode luminance-overlap clutter keeps the spatially-flat cube', {
+  timeout: 60_000,
+}, () => {
+  const text = 'luma-overlap-14';
+  const fixture = renderY(text, {
+    pixelsPerUnit: 10,
+    margin: 6,
+  });
+  const cluttered = checkerClutter(fixture, { overlappingLuma: true });
+  const photographed = gaussianBlur(cluttered, 1.1);
+  const detected = detectCubeHypotheses(rasterToLuma(photographed));
+  const models = detected.ok
+    ? detected.diagnostics.shapes.backgroundModels
+    : detected.detail.diagnostics.shapes.backgroundModels;
+  const brightLumas = Object.values(DEFAULT_FACE_GAINS)
+    .map((gain) => relativeLuminance(PRESET.levels[2]) * gain);
+  const overlappedFaces = brightLumas.filter((value) =>
+    models.some((model) => Math.abs(value - model.mean) <= model.tolerance));
+
+  const targetMeans = [0.238, 0.344, 0.425, 0.524];
+  assert.equal(models.length, 4, JSON.stringify(models));
+  assert.ok(models.every((model, index) =>
+    Math.abs(model.mean - targetMeans[index]) <= 0.015), JSON.stringify(models));
+  assert.ok(models.every((model) =>
+    model.tolerance >= 0.05 && model.tolerance <= 0.07), JSON.stringify(models));
+  assert.ok(overlappedFaces.length >= 2, JSON.stringify({ models, brightLumas }));
+  assert.equal(detected.ok, true, JSON.stringify(detected));
+  assert.ok(detected.hypotheses.some((entry) =>
+    entry.n === 21
+      && entry.referenceAgreement >= 10 / 12
+      && entry.shapeDiagnostics.componentSource === 'structured-density'));
+  assertYDecoded(decodeFrontend(photographed), text, 1, 2);
+});
+
+test('Type Y reference groups resolve a false stronger Y-seam parity', {
+  timeout: 30_000,
+}, () => {
+  const text = 'parity-distractor';
+  const fixture = renderY(text, {
+    pixelsPerUnit: 10,
+    margin: 6,
+  });
+  const distracted = falseSeamDistractor(fixture);
+  const detected = detectCubeHypotheses(rasterToLuma(distracted));
+
+  assert.equal(detected.ok, true, JSON.stringify(detected));
+  assert.ok(detected.hypotheses.some((entry) =>
+    entry.shapeDiagnostics.seamParityAlternative === true));
+  assertYDecoded(decodeFrontend(distracted), text, 1, 2);
 });
 
 test('family split: clean Type O stays hex and Type Y stays cube', {
