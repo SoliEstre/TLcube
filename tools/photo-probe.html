@@ -47,6 +47,7 @@
   <label>최대 변 <input type="number" id="maxSide" value="960" min="240" max="4096" step="80"></label>
   <label><input type="checkbox" id="sweep"> 해상도 스윕 (640·960·1440·2160)</label>
   <button id="run">사진 폴더 실행</button>
+  <button id="dump">휘도 덤프 내보내기</button>
   <input type="file" id="picker" accept="image/*" multiple>
   <span id="status" class="dim"></span>
 </div>
@@ -173,6 +174,68 @@ document.getElementById('run').addEventListener('click', async () => {
     return;
   }
   await runList(names.map((n) => ({ name: n, src: base + encodeURIComponent(n) })));
+});
+
+/*
+ * 휘도 덤프 — 레인(외부 CLI)이 **실사진 픽셀**로 개발할 수 있게 하는 다리.
+ *
+ * Node 에 JPEG 디코더가 없어서 레인은 합성 모사로만 개발했고, "합성은 고쳐졌는데 실사진은
+ * 그대로" 를 세 번 반복했다. 여기서 canvas 가 디코드한 결과를 raw 로 내려 두면 레인이
+ * `tools/read-luma.mjs` 로 바로 읽는다.
+ *
+ * 형식(리틀엔디언): magic "TLLU" · u32 width · u32 height · u8[width*height]
+ *   값은 **relativeLuminance × 255 반올림**이다 — 0..1 실수를 그대로 복원하려면 /255.
+ *   8비트로 양자화되므로 미세 대비 실험에는 부적합하다(그 경우 사진을 직접 봐야 한다).
+ */
+async function dumpLuma(name, img, maxSide) {
+  const { toRelativeLuminance } = await import('/src/decoder/luma.js');
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  const image = ctx.getImageData(0, 0, w, h);
+  const luma = toRelativeLuminance({ width: w, height: h, pixels: image.data }, {});
+
+  const out = new Uint8Array(12 + w * h);
+  const view = new DataView(out.buffer);
+  out.set([0x54, 0x4c, 0x4c, 0x55], 0); // "TLLU"
+  view.setUint32(4, w, true);
+  view.setUint32(8, h, true);
+  for (let i = 0; i < w * h; i += 1) {
+    out[12 + i] = Math.max(0, Math.min(255, Math.round(luma.data[i] * 255)));
+  }
+
+  const target = `test/output/photos/luma/${name.replace(/\.[^.]+$/, '')}.${maxSide}.luma`;
+  const res = await fetch(`/__luma?path=${encodeURIComponent(target)}`, { method: 'PUT', body: out });
+  if (!res.ok) throw new Error(`덤프 실패 ${res.status}: ${await res.text()}`);
+  return { target, bytes: Number(await res.text()), w, h };
+}
+
+document.getElementById('dump').addEventListener('click', async () => {
+  const button = document.getElementById('dump');
+  button.disabled = true;
+  rows.replaceChildren();
+  try {
+    const base = '/test/output/photos/';
+    const names = await (await fetch(`${base}manifest.json`)).json();
+    for (const name of names) {
+      statusEl.textContent = `덤프 ${name}`;
+      const img = await loadImage(base + encodeURIComponent(name));
+      for (const maxSide of [960, 1440]) {
+        const info = await dumpLuma(name, img, maxSide);
+        const tr = addRow(name, null, `${info.w}×${info.h}`);
+        tr.children[3].innerHTML = '<span class="ok">DUMP</span>';
+        tr.children[5].textContent = `${info.target} (${info.bytes.toLocaleString()} B)`;
+      }
+    }
+    statusEl.textContent = '휘도 덤프 완료 — 레인이 tools/read-luma.mjs 로 읽는다';
+  } catch (error) {
+    statusEl.textContent = `덤프 실패: ${error.message}`;
+  }
+  button.disabled = false;
 });
 
 document.getElementById('picker').addEventListener('change', async (event) => {

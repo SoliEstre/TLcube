@@ -9,8 +9,8 @@
  */
 
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { extname, join, normalize, sep } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -32,9 +32,39 @@ const MIME = {
   '.md': 'text/plain; charset=utf-8',
 };
 
+/**
+ * 개발 전용 쓰기 엔드포인트 — 브라우저가 뽑은 **실사진 휘도 필드**를 파일로 떨군다.
+ *
+ * 왜: Node 에 JPEG 디코더가 없어서 레인(외부 CLI)이 실사진으로 테스트를 못 한다. 그래서
+ * 합성 모사로만 개발하다가 "합성은 고쳐졌는데 실사진은 그대로" 를 세 번 반복했다.
+ * 브라우저가 canvas 로 디코드한 휘도를 raw 로 내려 두면 레인이 `fs.readFileSync` 만으로
+ * 진짜 픽셀을 쓴다 — 추측 대신 측정이 된다.
+ *
+ * 쓰기는 `test/output/` 아래로만 허용한다(gitignore 구역). 그 밖은 403.
+ */
+async function handleLumaDump(req, res, url) {
+  const rel = decodeURIComponent(url.searchParams.get('path') || '');
+  const target = normalize(join(ROOT, rel));
+  const allowed = normalize(join(ROOT, 'test', 'output')) + sep;
+  if (!rel || !target.startsWith(allowed)) {
+    res.writeHead(403).end('write allowed only under test/output/');
+    return;
+  }
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const body = Buffer.concat(chunks);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, body);
+  res.writeHead(200, { 'Content-Type': 'text/plain' }).end(`${body.length}`);
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host}`);
+    if (req.method === 'PUT' && url.pathname === '/__luma') {
+      await handleLumaDump(req, res, url);
+      return;
+    }
     const rel = decodeURIComponent(url.pathname) === '/' ? '/index.html' : decodeURIComponent(url.pathname);
     const path = normalize(join(ROOT, rel));
     if (!path.startsWith(normalize(ROOT + sep)) && path !== normalize(ROOT)) {
