@@ -39,6 +39,7 @@ node_modules/
 .pnpm-store/
 dist/*
 !dist/trilume.html
+!dist/tlscan.html
 build/
 out/
 coverage/
