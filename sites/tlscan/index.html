@@ -1,86 +1,634 @@
 <!doctype html>
-<html lang="ko" prefix="og: https://ogp.me/ns#">
+<html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TL 스캐너 — TLcube 코드 읽기</title>
-<meta name="description" content="TLcube 코드를 읽는 웹 스캐너. 카메라 디코더는 준비 중이며, 지금은 함께 인쇄된 폴백 QR 이 이 페이지로 안내합니다.">
+<title>TLcube 스캐너</title>
+<meta name="description" content="TLcube 코드를 카메라나 사진에서 읽는 스캐너입니다.">
 <link rel="canonical" href="https://tlscan.estre.so/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="TL 스캐너 — TLcube 코드 읽기">
-<meta property="og:description" content="카메라 디코더 준비 중. TLcube 는 휘도 순위로 데이터를 싣는 2.5D 시각 코드입니다.">
-<meta property="og:url" content="https://tlscan.estre.so/">
 <link rel="icon" href="../_shared/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../_shared/site.css">
+<style>
+  :root {
+    color-scheme: dark;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #000;
+    color: #fff;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    min-height: 100%;
+    margin: 0;
+    background: #000;
+  }
+
+  body {
+    min-width: 320px;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  button {
+    border: 0;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    outline: 3px solid #fff;
+    outline-offset: 4px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  .scanner-app {
+    position: relative;
+    isolation: isolate;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background: #000;
+  }
+
+  .camera-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    background: #000;
+  }
+
+  .camera-backdrop::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, rgb(0 0 0 / .58), transparent 26%, transparent 64%, rgb(0 0 0 / .7)),
+      linear-gradient(90deg, rgb(0 0 0 / .18), transparent 22%, transparent 78%, rgb(0 0 0 / .18));
+  }
+
+  #camera-preview {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 180ms ease;
+  }
+
+  .camera-backdrop.is-active #camera-preview {
+    opacity: 1;
+  }
+
+  .scanner-overlay {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding:
+      max(18px, env(safe-area-inset-top))
+      max(18px, env(safe-area-inset-right))
+      max(14px, env(safe-area-inset-bottom))
+      max(18px, env(safe-area-inset-left));
+    pointer-events: none;
+  }
+
+  .scanner-top,
+  .scanner-bottom,
+  .site-footer {
+    display: flex;
+    justify-content: center;
+  }
+
+  .scanner-top {
+    justify-content: flex-start;
+  }
+
+  .brand-logo {
+    display: inline-flex;
+    align-items: baseline;
+    padding: 8px 10px;
+    border: 1px solid rgb(255 255 255 / .22);
+    border-radius: 999px;
+    color: #fff;
+    background: rgb(0 0 0 / .42);
+    box-shadow: 0 8px 24px rgb(0 0 0 / .24);
+    font-size: 14px;
+    font-weight: 760;
+    letter-spacing: -.04em;
+    line-height: 1;
+    text-decoration: none;
+    text-shadow: 0 1px 10px rgb(0 0 0 / .9);
+    pointer-events: auto;
+  }
+
+  .brand-logo span {
+    color: #b7e5ff;
+  }
+
+  .scan-center {
+    display: grid;
+    flex: 1;
+    place-items: center;
+    padding: 42px 0 24px;
+  }
+
+  .scan-guide-wrap {
+    display: grid;
+    justify-items: center;
+    gap: 18px;
+  }
+
+  .scan-guide {
+    position: relative;
+    width: min(72vw, 356px);
+    aspect-ratio: 1;
+    border: 2px solid rgb(255 255 255 / .44);
+    border-radius: 28px;
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / .18) inset,
+      0 18px 55px rgb(0 0 0 / .22);
+  }
+
+  .scan-corner {
+    position: absolute;
+    width: 38px;
+    height: 38px;
+    border-color: #d6f2ff;
+    border-style: solid;
+    filter: drop-shadow(0 1px 8px rgb(0 0 0 / .72));
+  }
+
+  .scan-corner.top-left {
+    top: -3px;
+    left: -3px;
+    border-width: 4px 0 0 4px;
+    border-radius: 13px 0 0;
+  }
+
+  .scan-corner.top-right {
+    top: -3px;
+    right: -3px;
+    border-width: 4px 4px 0 0;
+    border-radius: 0 13px 0 0;
+  }
+
+  .scan-corner.bottom-right {
+    right: -3px;
+    bottom: -3px;
+    border-width: 0 4px 4px 0;
+    border-radius: 0 0 13px;
+  }
+
+  .scan-corner.bottom-left {
+    bottom: -3px;
+    left: -3px;
+    border-width: 0 0 4px 4px;
+    border-radius: 0 0 0 13px;
+  }
+
+  .scan-guide-message {
+    max-width: calc(100vw - 40px);
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 999px;
+    color: #fff;
+    background: rgb(0 0 0 / .52);
+    box-shadow: 0 3px 18px rgb(0 0 0 / .34);
+    font-size: clamp(14px, 3.8vw, 16px);
+    font-weight: 650;
+    line-height: 1.35;
+    text-align: center;
+    text-shadow: 0 1px 6px #000;
+  }
+
+  .scanner-bottom {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    padding-top: 12px;
+  }
+
+  .scan-status {
+    max-width: min(100%, 460px);
+    margin: 0;
+    padding: 7px 11px;
+    border-radius: 10px;
+    color: rgb(255 255 255 / .94);
+    background: rgb(0 0 0 / .5);
+    box-shadow: 0 3px 16px rgb(0 0 0 / .26);
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+    text-shadow: 0 1px 6px #000;
+  }
+
+  .photo-button,
+  .gate-primary,
+  .result-primary,
+  .open-url-button {
+    min-height: 52px;
+    border-radius: 16px;
+    color: #061117;
+    background: #e7f7ff;
+    box-shadow: 0 10px 28px rgb(0 0 0 / .3);
+    cursor: pointer;
+    font-weight: 760;
+    letter-spacing: -.01em;
+  }
+
+  .photo-button {
+    width: min(100%, 360px);
+    padding: 14px 20px;
+    pointer-events: auto;
+  }
+
+  .photo-button:hover,
+  .gate-primary:hover,
+  .result-primary:hover,
+  .open-url-button:hover {
+    background: #fff;
+  }
+
+  .site-footer {
+    padding-top: 14px;
+    color: rgb(255 255 255 / .72);
+    font-size: 11px;
+    line-height: 1.35;
+    text-align: center;
+    text-shadow: 0 1px 6px #000;
+  }
+
+  .site-footer a {
+    color: #fff;
+    pointer-events: auto;
+  }
+
+  .camera-gate {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: max(22px, env(safe-area-inset-top)) 22px max(22px, env(safe-area-inset-bottom));
+    background: rgb(0 0 0 / .7);
+    backdrop-filter: blur(10px);
+  }
+
+  .camera-gate-card {
+    width: min(100%, 390px);
+    padding: 26px;
+    border: 1px solid rgb(255 255 255 / .18);
+    border-radius: 24px;
+    background: rgb(20 22 24 / .88);
+    box-shadow: 0 24px 70px rgb(0 0 0 / .46);
+    text-align: center;
+  }
+
+  .camera-gate-card h1 {
+    margin: 0;
+    color: #fff;
+    font-size: clamp(23px, 6vw, 29px);
+    letter-spacing: -.045em;
+    line-height: 1.18;
+  }
+
+  .camera-gate-card p {
+    margin: 12px 0 0;
+    color: rgb(255 255 255 / .76);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .camera-gate-actions {
+    display: grid;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .gate-primary,
+  .gate-secondary {
+    width: 100%;
+    padding: 13px 16px;
+  }
+
+  .gate-primary:disabled {
+    cursor: not-allowed;
+    opacity: .52;
+  }
+
+  .gate-secondary,
+  .result-secondary,
+  .result-close,
+  .copy-button {
+    color: #fff;
+    background: rgb(255 255 255 / .1);
+    cursor: pointer;
+  }
+
+  .gate-secondary {
+    min-height: 48px;
+    border: 1px solid rgb(255 255 255 / .19);
+    border-radius: 14px;
+    font-weight: 680;
+  }
+
+  .result-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: end center;
+    padding: 16px;
+    background: rgb(0 0 0 / .64);
+    backdrop-filter: blur(12px);
+  }
+
+  .result-card {
+    position: relative;
+    width: min(100%, 600px);
+    max-height: min(84dvh, 760px);
+    overflow: auto;
+    padding: 28px 20px 20px;
+    border: 1px solid rgb(255 255 255 / .16);
+    border-radius: 24px;
+    color: #fff;
+    background: #141618;
+    box-shadow: 0 28px 80px rgb(0 0 0 / .52);
+  }
+
+  .result-close {
+    position: absolute;
+    top: 13px;
+    right: 13px;
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 23px;
+    line-height: 1;
+  }
+
+  .result-eyebrow {
+    margin: 0;
+    color: #b7e5ff;
+    font-size: 12px;
+    font-weight: 760;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .result-card h2 {
+    margin: 6px 44px 0 0;
+    font-size: clamp(24px, 7vw, 32px);
+    letter-spacing: -.045em;
+    line-height: 1.17;
+  }
+
+  .result-content {
+    display: grid;
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .result-intro {
+    margin: 0;
+    color: rgb(255 255 255 / .68);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .payload-url,
+  .text-payload,
+  .payload-field {
+    overflow-wrap: anywhere;
+    border: 1px solid rgb(255 255 255 / .1);
+    border-radius: 16px;
+    background: rgb(255 255 255 / .055);
+  }
+
+  .payload-url,
+  .text-payload {
+    display: block;
+    padding: 15px;
+  }
+
+  .payload-url {
+    color: #c7ecff;
+    font-weight: 650;
+    line-height: 1.5;
+  }
+
+  .text-payload {
+    margin: 0;
+    color: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.58;
+    white-space: pre-wrap;
+  }
+
+  .payload-field {
+    display: grid;
+    gap: 5px;
+    padding: 13px;
+  }
+
+  .payload-field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .payload-label {
+    color: rgb(255 255 255 / .64);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .payload-value {
+    min-width: 0;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 650;
+    line-height: 1.45;
+  }
+
+  a.payload-value {
+    color: #c7ecff;
+  }
+
+  .copy-button {
+    flex: 0 0 auto;
+    min-height: 31px;
+    padding: 5px 9px;
+    border: 1px solid rgb(255 255 255 / .14);
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .popup-fallback {
+    display: grid;
+    gap: 10px;
+    padding: 16px;
+    border: 1px solid rgb(183 229 255 / .34);
+    border-radius: 16px;
+    background: rgb(74 121 145 / .18);
+  }
+
+  .popup-fallback p {
+    margin: 0;
+    color: #e5f6ff;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .open-url-button {
+    width: 100%;
+    padding: 14px 16px;
+  }
+
+  .result-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .result-primary,
+  .result-secondary {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border-radius: 14px;
+    font-weight: 760;
+  }
+
+  .result-secondary {
+    border: 1px solid rgb(255 255 255 / .16);
+  }
+
+  @media (min-width: 560px) {
+    .result-sheet {
+      place-items: center;
+    }
+
+    .result-card {
+      padding: 32px 28px 26px;
+      border-radius: 28px;
+    }
+
+    .result-actions {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-height: 620px) and (orientation: landscape) {
+    .scan-guide {
+      width: min(42vh, 300px);
+    }
+
+    .scan-center {
+      padding: 16px 0;
+    }
+
+    .camera-gate-card {
+      padding: 20px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      transition-duration: .01ms !important;
+    }
+  }
+</style>
 </head>
-<body data-site="tlscan">
-<div class="wrap">
+<body>
+<main class="scanner-app" id="scanner-app" aria-label="TLcube 스캐너">
+  <div class="camera-backdrop" id="camera-stage">
+    <video id="camera-preview" autoplay muted playsinline aria-label="TLcube 코드를 비추는 카메라 화면"></video>
+  </div>
 
-  <header class="bar">
-    <a class="brand" href="https://tl.estre.so" data-out="hub">TL<span class="mark">cube</span></a>
-    <nav>
-      <a href="https://tl.estre.so" data-out="hub">소개</a>
-      <a href="https://tlcube.estre.so" data-out="tlcube">생성기</a>
-      <a href="/" aria-current="page">스캐너</a>
-      <div class="theme-toggle" role="group" aria-label="테마">
-        <button type="button" data-theme-choice="auto">자동</button>
-        <button type="button" data-theme-choice="light">라이트</button>
-        <button type="button" data-theme-choice="dark">다크</button>
+  <div class="scanner-overlay">
+    <header class="scanner-top">
+      <a class="brand-logo" href="https://tl.estre.so" aria-label="TLcube 홈페이지">TL<span>cube</span></a>
+    </header>
+
+    <section class="scan-center" aria-label="스캔 가이드">
+      <div class="scan-guide-wrap">
+        <div class="scan-guide" aria-hidden="true">
+          <span class="scan-corner top-left"></span>
+          <span class="scan-corner top-right"></span>
+          <span class="scan-corner bottom-right"></span>
+          <span class="scan-corner bottom-left"></span>
+        </div>
+        <p class="scan-guide-message">TLcube 코드를 프레임 안에 맞춰 주세요.</p>
       </div>
-    </nav>
-  </header>
+    </section>
 
-  <section>
-    <span class="badge warn">준비 중</span>
-    <h1 style="margin-top:14px">TL 스캐너</h1>
-    <p class="lead">
-      카메라로 TLcube 코드를 읽는 웹 스캐너를 만들고 있습니다.
-      아직 공개 전이라, 이 페이지에 QR 로 도착하셨다면 <strong>그 코드는 TLcube 코드</strong>예요.
-    </p>
-    <p class="lead">
-      TLcube 코드에는 스캔 실패에 대비해 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있습니다.
-      지금 보고 계신 이 페이지가 그 폴백 경로의 도착지예요 — 스캐너가 준비되면
-      같은 주소에서 바로 열립니다.
-    </p>
-    <div class="cta">
-      <a class="btn primary" href="https://tl.estre.so" data-out="hub">TLcube 가 뭔가요?</a>
-      <a class="btn" href="https://tlcube.estre.so" data-out="tlcube">직접 만들어보기</a>
+    <div class="scanner-bottom">
+      <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true">카메라를 준비하고 있어요.</p>
+      <button class="photo-button" id="choose-image" type="button">사진에서 스캔</button>
+      <input id="image-input" type="file" accept="image/*" aria-label="스캔할 사진 선택" hidden>
+    </div>
+
+    <footer class="site-footer">
+      <small>© 2026 SoliEstre · <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">tl.estre.so</a></small>
+    </footer>
+  </div>
+
+  <section class="camera-gate" id="camera-gate" aria-labelledby="camera-gate-title" aria-describedby="camera-gate-message">
+    <div class="camera-gate-card">
+      <h1 id="camera-gate-title">카메라를 시작할까요?</h1>
+      <p id="camera-gate-message">카메라 권한을 허용하면 바로 스캔해요.</p>
+      <div class="camera-gate-actions">
+        <button class="gate-primary" id="start-camera" type="button">탭해서 카메라 시작</button>
+        <button class="gate-secondary" id="gate-choose-image" type="button">사진에서 스캔</button>
+      </div>
     </div>
   </section>
+</main>
 
-  <section>
-    <h2>준비되면 이렇게 됩니다</h2>
-    <div class="grid">
-      <div class="card">
-        <h3>카메라로 바로</h3>
-        <p class="dim">설치 없이 브라우저에서 카메라를 열어 읽습니다. 앱을 깔 필요가 없어요.</p>
-      </div>
-      <div class="card">
-        <h3>타입 자동 판별</h3>
-        <p class="dim">Type O · A · Y 를 격자 수립 경로로 구분해 알아서 처리합니다.</p>
-      </div>
-      <div class="card">
-        <h3>폴백 QR 동시 인식</h3>
-        <p class="dim">TL 코드가 안 읽히면 함께 인쇄된 QR 로 넘어갑니다.</p>
-      </div>
+<section class="result-sheet" id="scan-result" hidden role="dialog" aria-modal="true" aria-labelledby="result-title" tabindex="-1">
+  <div class="result-card">
+    <button class="result-close" id="close-result" type="button" aria-label="스캔 결과 닫기">×</button>
+    <p class="result-eyebrow">스캔 결과</p>
+    <h2 id="result-title">내용을 읽었어요</h2>
+    <div class="result-content" id="result-content"></div>
+    <div class="popup-fallback" id="popup-fallback" hidden>
+      <p>브라우저가 자동으로 새 탭을 열지 못했어요. 아래 버튼을 탭해서 열어 주세요.</p>
+      <a class="open-url-button" id="open-url" href="#" target="_blank" rel="noopener noreferrer" role="button">링크 열기</a>
     </div>
-    <p class="dim" style="margin-top:18px">
-      디코더는 합성 왜곡 테스트를 먼저 통과한 뒤 실기기 검증으로 넘어갑니다.
-      진행 상황은 <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a> 에서 볼 수 있어요.
-    </p>
-  </section>
-
-  <footer>
-    <div class="links">
-      <a href="https://tl.estre.so" data-out="hub">소개</a>
-      <a href="https://tlcube.estre.so" data-out="tlcube">생성기</a>
-      <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    <div class="result-actions">
+      <button class="result-primary" id="rescan" type="button">다시 스캔</button>
+      <button class="result-secondary" id="close-result-secondary" type="button">닫기</button>
     </div>
-    <div>QR Code is a registered trademark of DENSO WAVE INCORPORATED.</div>
-    <small class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume</small>
-  </footer>
+  </div>
+</section>
 
-</div>
-<script src="../_shared/site.js"></script>
+<script type="module" src="scanner.js"></script>
 </body>
 </html>
