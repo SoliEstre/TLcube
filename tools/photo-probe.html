@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>TLcube — 실기기 사진 복호 프로브</title>
+<!--
+  photo-probe.html — **실기기 사진**으로 앞단을 때려 보는 개발 하네스.
+
+  왜 브라우저인가: Node 에 JPEG 디코더가 없다. 합성 래스터로는 M1 축을 아무리 늘려도
+  실제 카메라 입력(센서 노이즈·톤 커브·JPEG 링잉·조명 기울기)을 흉내내지 못한다.
+  실제로 합성 테스트 1077개가 전부 통과하는 동안 실사진은 한 장도 안 읽혔다.
+  그래서 검증은 canvas `getImageData` 로 **진짜 픽셀**을 뽑아 앞단에 그대로 먹인다.
+
+  사진은 `test/output/photos/` (gitignore 됨 — public repo 로 안 넘어간다). 목록은
+  같은 폴더의 `manifest.json`. 없으면 아래 파일 선택으로 즉석 투입할 수 있다.
+
+  사용: node tools/dev-server.mjs → http://localhost:8765/tools/photo-probe.html
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 16px; background: #14161a; color: #e6e8ec;
+         font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  .sub { color: #99a; margin-bottom: 14px; }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  label { color: #99a; }
+  input[type=number] { width: 68px; background: #1e2128; color: #e6e8ec;
+                       border: 1px solid #333a45; border-radius: 4px; padding: 3px 6px; font: inherit; }
+  button { background: #2a5bd7; color: #fff; border: 0; border-radius: 5px;
+           padding: 6px 14px; font: inherit; cursor: pointer; }
+  button:disabled { background: #333a45; color: #777; cursor: default; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid #262b33; vertical-align: top; }
+  th { color: #99a; font-weight: normal; position: sticky; top: 0; background: #14161a; }
+  .ok { color: #4ad07a; } .bad { color: #ff7a7a; } .dim { color: #778; }
+  td.reason { font-size: 12px; word-break: break-all; max-width: 340px; }
+  img.thumb { width: 92px; height: auto; border-radius: 4px; display: block; }
+  pre.detail { margin: 4px 0 0; color: #8892a4; font-size: 11px; white-space: pre-wrap;
+               max-height: 8em; overflow: auto; }
+</style>
+</head>
+<body>
+<h1>실기기 사진 복호 프로브</h1>
+<div class="sub">canvas <code>getImageData</code> → <code>decodeFrontend</code>. 합성 래스터가 못 잡는 실입력 결함용.</div>
+
+<div class="bar">
+  <label>최대 변 <input type="number" id="maxSide" value="960" min="240" max="4096" step="80"></label>
+  <label><input type="checkbox" id="sweep"> 해상도 스윕 (640·960·1440·2160)</label>
+  <button id="run">사진 폴더 실행</button>
+  <input type="file" id="picker" accept="image/*" multiple>
+  <span id="status" class="dim"></span>
+</div>
+
+<table>
+  <thead><tr><th>사진</th><th>미리보기</th><th>입력</th><th>결과</th><th>시간</th><th class="reason">reason / detail</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+
+<script type="module">
+import { decodeFrontend } from '/src/decoder/frontend.js';
+
+const rows = document.getElementById('rows');
+const statusEl = document.getElementById('status');
+
+/** 이미지를 최대 변 기준으로 축소해 ImageData 로 뽑는다 (스캐너 프레임 경로와 같은 방식). */
+function toImageData(img, maxSide) {
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  return ctx.getImageData(0, 0, w, h);
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`이미지 로드 실패: ${src}`));
+    img.src = src;
+  });
+}
+
+/** 한 프레임을 앞단에 먹이고 결과를 정규화한다. 예외도 결과로 취급한다. */
+function probe(imageData) {
+  const t0 = performance.now();
+  let result;
+  try {
+    result = decodeFrontend({ width: imageData.width, height: imageData.height, pixels: imageData.data });
+  } catch (error) {
+    return { ok: false, reason: `threw: ${error && error.message}`, stack: error && error.stack, ms: performance.now() - t0 };
+  }
+  return { ...result, ms: performance.now() - t0 };
+}
+
+function addRow(name, img, sizes) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = '<td></td><td></td><td></td><td></td><td></td><td class="reason"></td>';
+  tr.children[0].textContent = name;
+  if (img) {
+    const t = document.createElement('img');
+    t.className = 'thumb'; t.src = img.src;
+    tr.children[1].append(t);
+  }
+  tr.children[2].textContent = sizes;
+  rows.append(tr);
+  return tr;
+}
+
+async function runOne(name, src) {
+  const img = await loadImage(src);
+  const maxSides = document.getElementById('sweep').checked
+    ? [640, 960, 1440, 2160]
+    : [Number(document.getElementById('maxSide').value) || 960];
+
+  let first = true;
+  for (const maxSide of maxSides) {
+    const data = toImageData(img, maxSide);
+    // 동기 복호가 UI 를 막지 않게 프레임을 한 번 넘긴다.
+    await new Promise((r) => requestAnimationFrame(r));
+    const out = probe(data);
+    const tr = addRow(first ? name : '', first ? img : null, `${data.width}×${data.height}`);
+    first = false;
+    tr.children[3].innerHTML = out.ok
+      ? '<span class="ok">OK</span>'
+      : '<span class="bad">FAIL</span>';
+    tr.children[4].textContent = `${out.ms.toFixed(0)}ms`;
+    const cell = tr.children[5];
+    if (out.ok) {
+      cell.textContent = JSON.stringify(out.text);
+    } else {
+      cell.textContent = out.reason || '(reason 없음)';
+      const extra = out.detail ?? out.stack;
+      if (extra !== undefined) {
+        const pre = document.createElement('pre');
+        pre.className = 'detail';
+        pre.textContent = typeof extra === 'string' ? extra : JSON.stringify(extra, null, 1);
+        cell.append(pre);
+      }
+    }
+  }
+}
+
+async function runList(entries) {
+  document.getElementById('run').disabled = true;
+  rows.replaceChildren();
+  let done = 0;
+  for (const { name, src } of entries) {
+    statusEl.textContent = `${++done}/${entries.length} — ${name}`;
+    try {
+      await runOne(name, src);
+    } catch (error) {
+      const tr = addRow(name, null, '—');
+      tr.children[3].innerHTML = '<span class="bad">ERR</span>';
+      tr.children[5].textContent = error.message;
+    }
+  }
+  statusEl.textContent = `완료 (${entries.length}장)`;
+  document.getElementById('run').disabled = false;
+}
+
+document.getElementById('run').addEventListener('click', async () => {
+  const base = '/test/output/photos/';
+  let names;
+  try {
+    const res = await fetch(`${base}manifest.json`);
+    if (!res.ok) throw new Error(String(res.status));
+    names = await res.json();
+  } catch {
+    statusEl.textContent = 'manifest.json 이 없다 — 아래 파일 선택을 쓰거나 tools/make-photo-manifest.mjs 를 돌려라.';
+    return;
+  }
+  await runList(names.map((n) => ({ name: n, src: base + encodeURIComponent(n) })));
+});
+
+document.getElementById('picker').addEventListener('change', async (event) => {
+  const files = [...event.target.files];
+  if (files.length === 0) return;
+  await runList(files.map((f) => ({ name: f.name, src: URL.createObjectURL(f) })));
+});
+</script>
+</body>
+</html>

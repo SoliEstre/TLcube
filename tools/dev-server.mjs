@@ -23,6 +23,11 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  // 실기기 사진 검증용(tools/photo-probe.html). octet-stream 이면 브라우저가 스니핑에
+  // 기대야 하고 canvas 경로에서 조용히 어긋날 수 있어 명시한다.
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.css': 'text/css; charset=utf-8',
   '.md': 'text/plain; charset=utf-8',
 };
