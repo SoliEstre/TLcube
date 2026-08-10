@@ -542,13 +542,51 @@
     }
   }
 
+  /* 가로모드 — 세로 쌓기를 버리고 컨트롤을 우측 열로 옮긴다.
+     세로 축을 그대로 두면 로고·가이드·버튼·푸터가 \~390px 높이에 전부 쌓여
+     하단 버튼과 푸터가 화면 밖으로 잘린다(실기기 확인 2026-08-10).
+     가이드 크기만 줄이는 것으로는 부족했다 — 축을 바꿔야 한다. */
   @media (max-height: 620px) and (orientation: landscape) {
-    .scan-guide {
-      width: min(42vh, 300px);
+    .scanner-overlay {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "top     top"
+        "center  actions"
+        "center  footer";
+      align-items: center;
+      column-gap: 16px;
     }
 
+    .scanner-top { grid-area: top; }
+
     .scan-center {
-      padding: 16px 0;
+      grid-area: center;
+      min-height: 0;
+      padding: 8px 0;
+    }
+
+    /* 상태 문구 + "사진에서 스캔" 을 우측에 세로로 세운다. */
+    .scanner-bottom {
+      grid-area: actions;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .site-footer {
+      grid-area: footer;
+      justify-content: flex-end;
+      align-self: end;
+    }
+
+    /* 우측 열이 폭을 가져가므로 가이드는 **높이 기준**으로 잡는다.
+       스캔 대상은 클수록 유리하므로 남는 세로 공간을 쓴다 — 다만 가이드 아래
+       안내 문구가 같은 열에 들어가므로 100% 를 채우지 않는다. */
+    .scan-guide {
+      width: min(56vh, 300px);
     }
 
     .camera-gate-card {
