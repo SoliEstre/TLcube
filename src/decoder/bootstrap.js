@@ -27,6 +27,7 @@ import {
 } from '../layoutA.js';
 import {
   FRONTEND_FAILURE,
+  HOMOGRAPHY_CANONICAL_SPACE,
   assertLumaField,
   fail,
   ok,
@@ -249,8 +250,16 @@ function outlineEvidence(luma, cfg) {
   };
 }
 
-function downsampleLuma(luma, maxDimension) {
-  const factor = Math.max(1, Math.ceil(Math.max(luma.width, luma.height) / maxDimension));
+function downsampleLuma(luma, maxDimension, contentBounds) {
+  const contentWidth = contentBounds
+    ? contentBounds.maxX - contentBounds.minX + 1
+    : luma.width;
+  const contentHeight = contentBounds
+    ? contentBounds.maxY - contentBounds.minY + 1
+    : luma.height;
+  // [미검증] M1 calibration에서 확정: finder 해상도는 빈 margin이 아니라 실제
+  // foreground span으로 제한한다. margin이 커졌다는 이유로 셀 표본을 더 줄이지 않는다.
+  const factor = Math.max(1, Math.ceil(Math.max(contentWidth, contentHeight) / maxDimension));
   if (factor === 1) return { luma, factor };
 
   const width = Math.ceil(luma.width / factor);
@@ -335,11 +344,14 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
   if (supplied.length > 0) return ok({ finders: supplied, source: 'supplied' });
 
   // [미검증] M1 calibration 에서 확정: finder 탐색만 축소하는 작업량 상한.
+  // 빈 canvas margin은 검출 해상도를 낮출 근거가 아니므로 foreground bounds를 쓴다.
+  const fullOutline = outlineEvidence(luma, cfg);
   const reduced = downsampleLuma(
     luma,
     Number.isFinite(options.finderMaxDimension)
       ? options.finderMaxDimension
       : cfg.finderMaxDimension,
+    fullOutline && fullOutline.bounds,
   );
   const reducedOutline = outlineEvidence(reduced.luma, cfg);
   const finderOptions = {
@@ -369,18 +381,6 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
 
 function canonicalCenter(q, r) {
   return axialToPixel(q, r, { size: 1, originX: 0, originY: 0 });
-}
-
-function reconstructDirectHomography(finder, anchorHypothesis) {
-  const canonical = [
-    { x: 0, y: 0 },
-    ...anchorHypothesis.canonicalAnchors.map((cell) => canonicalCenter(cell.q, cell.r)),
-  ];
-  const image = [
-    finder.center,
-    ...anchorHypothesis.anchors,
-  ];
-  return estimateHomography4(canonical, image);
 }
 
 function boundaryAlongRay(luma, center, direction, outline) {
@@ -546,20 +546,12 @@ function silhouetteHypotheses(luma, finder, k, outline, options, cfg) {
     const anchorValidation = validateAnchorPattern(luma, provisional, k, sampleOptions);
     if (anchorValidation.agreement !== 3) continue;
 
-    /*
-     * estimateHomography4를 앵커 대응에도 명시적으로 통과시킨다. 외곽 H가 예측한
-     * 앵커 중심을 correspondence로 삼고, 실제 면 순위 검증은 위 기존 sampler가
-     * 담당한다. 이 어댑터는 anchor-detect.js의 axial H를 grid-sample 계약에
-     * 직접 넘기지 않기 위한 조립 경계다.
-     */
+    // provisional 자체가 unit-cell canonical Euclidean -> image pixel이다.
+    // 같은 대응점을 다시 추정하는 axial->Euclidean 어댑터를 두지 않는다.
+    const H = provisional;
     const canonicalAnchors = anchorCells(k).map((cell) => canonicalCenter(cell.q, cell.r));
-    const imageAnchors = canonicalAnchors.map((point) => projectPoint(provisional, point));
+    const imageAnchors = canonicalAnchors.map((point) => projectPoint(H, point));
     if (imageAnchors.some((point) => point === null)) continue;
-    const H = estimateHomography4(
-      [{ x: 0, y: 0 }, ...canonicalAnchors],
-      [center, ...imageAnchors],
-    );
-    if (!H) continue;
 
     candidates.push({
       family: 'hex',
@@ -570,11 +562,12 @@ function silhouetteHypotheses(luma, finder, k, outline, options, cfg) {
       anchors: imageAnchors,
       canonicalAnchors: anchorCells(k).map((cell) => ({ q: cell.q, r: cell.r })),
       H,
+      canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
       geometryResidual: 0,
       anchorMargin: anchorValidation.separation / 3,
       anchorValidation,
       finder,
-      source: 'outline-anchor-adapter',
+      source: 'outline-anchor',
       hypothesisId: 'hex-' + k + '-r' + String(degrees).padStart(3, '0'),
       luma,
     });
@@ -594,14 +587,11 @@ function directAnchorHypotheses(luma, finder, family, options) {
 
   const hypotheses = [];
   for (const raw of result.hypotheses) {
-    const H = reconstructDirectHomography(finder, raw);
-    if (!H) continue;
+    // anchor-detect가 이미 계약 좌표의 H를 반환한다. 재해석·재추정하지 않는다.
     hypotheses.push({
       ...raw,
-      H,
       finder,
       source: 'anchor-detector',
-      hypothesisId: raw.hypothesisId + '-direct',
       luma,
     });
   }
@@ -783,10 +773,30 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
     return fail(FRONTEND_FAILURE.EMPTY_INPUT, { stage: 'bootstrap', message: error.message });
   }
   const cfg = calibration(options);
-  const finderResult = discoverFinders(luma, familyEvidence, options, cfg);
-  if (!finderResult.ok) return finderResult;
-
   const outline = outlineEvidence(luma, cfg);
+  const finderResult = discoverFinders(luma, familyEvidence, options, cfg);
+  if (!finderResult.ok) {
+    const finderSawCandidates = finderResult.detail
+      && Number.isFinite(finderResult.detail.evaluatedRaw)
+      && finderResult.detail.evaluatedRaw > 0
+      && finderResult.detail.hardChecks
+      && finderResult.detail.hardChecks.alternating === true
+      && finderResult.detail.hardChecks.outerBandLight === true;
+    if (finderSawCandidates && outline && outline.touchesBorder) {
+      return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
+        stage: 'bootstrap-finder',
+        cause: 'finder-candidate-truncated-by-image-boundary',
+        finderFailure: finderResult,
+        outline: {
+          area: outline.area,
+          bounds: outline.bounds,
+          touchesBorder: true,
+        },
+      });
+    }
+    return finderResult;
+  }
+
   const classified = classifyFamilies(
     luma,
     finderResult.finders,
@@ -832,7 +842,7 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   const unique = deduplicateHypotheses(hypotheses);
   if (unique.length === 0) {
     const reason = outline && outline.touchesBorder
-      ? FRONTEND_FAILURE.SAMPLE_STARVED
+      ? FRONTEND_FAILURE.SYMBOL_CLIPPED
       : FRONTEND_FAILURE.NO_ANCHORS;
     return fail(reason, {
       stage: 'bootstrap-geometry',

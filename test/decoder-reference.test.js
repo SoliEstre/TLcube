@@ -53,8 +53,11 @@ function fixture() {
   const scene = buildScene(encoded, { palette: paletteOf(DEFAULT_PRESET) });
   const raster = rasterize(scene, { pixelsPerUnit: 24, supersample: 1 });
   const geometry = {
-    layout: scene.layout,
-    H: new Float64Array([24, 0, 0, 0, 24, 0, 0, 0, 1]),
+    H: new Float64Array([
+      raster.pixelsPerUnit, 0, scene.layout.originX * raster.pixelsPerUnit,
+      0, raster.pixelsPerUnit, scene.layout.originY * raster.pixelsPerUnit,
+      0, 0, 1,
+    ]),
   };
   const grid = sampleHexGrid(lumaFromRaster(raster), geometry, layoutMap(encoded.k));
   assert.equal(grid.ok, true);

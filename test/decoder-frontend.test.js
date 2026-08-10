@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { encode } from '../src/encode.js';
 import {
   FRONTEND_FAILURE,
+  HOMOGRAPHY_CANONICAL_SPACE,
 } from '../src/decoder/contracts.js';
 import {
   selectGridHypothesis,
@@ -98,37 +99,84 @@ test('encode → buildScene → rasterize → decodeFrontend: V1/V2/V3 × ECC L/
   }
 });
 
-const DISTORTIONS = Object.freeze([
-  {
-    name: 'rotation',
-    options: { rotation: 37, fill: FILL },
-  },
-  {
-    name: 'perspective',
-    options: { perspective: { degrees: 20, axis: 'both' }, fill: FILL },
-  },
-  {
-    name: 'scale',
-    options: { scale: 0.75, fill: FILL },
-  },
-]);
+const ROTATION_SWEEP = Object.freeze(
+  Array.from({ length: 12 }, (_, index) => index * 30),
+);
+const PERSPECTIVE_SWEEP = Object.freeze([-30, -20, -10, 0, 10, 20, 30]);
+const SCALE_SWEEP = Object.freeze([0.5, 0.6, 0.75, 1, 1.25, 1.5, 2]);
+const SWEEP_TEXT = 'https://tl.estre.so/x';
 
-test('oracle 없는 회전·원근·스케일 왜곡도 V1/V2/V3에서 복호', {
+function failureMessage(axis, value, result) {
+  const detail = result && result.detail;
+  const cause = detail && detail.cause;
+  return JSON.stringify({
+    axis,
+    value,
+    reason: result && result.reason,
+    stage: detail && (detail.pipelineStage || detail.stage),
+    pipelineCode: detail && detail.pipelineCode,
+    cause: cause && (cause.cause || cause.message || cause.stage),
+  });
+}
+
+function assertSweepDecoded(axis, value, result) {
+  assert.equal(result.ok, true, failureMessage(axis, value, result));
+  assert.equal(result.text, SWEEP_TEXT, failureMessage(axis, value, result));
+  assert.equal(result.version, 2, failureMessage(axis, value, result));
+  assert.equal(result.eccLevel, 'M', failureMessage(axis, value, result));
+  assert.equal(result.hypothesis.canonicalSpace, HOMOGRAPHY_CANONICAL_SPACE);
+}
+
+test('회전 sweep 12점: 0~330도 전 구간 복호', {
+  timeout: 120_000,
+}, () => {
+  const fixture = render(SWEEP_TEXT, 2, 'M', {
+    pixelsPerUnit: 12,
+    supersample: 2,
+    margin: 8,
+  });
+  for (const degrees of ROTATION_SWEEP) {
+    const distorted = distortImage(fixture.raster, {
+      rotation: degrees,
+      fill: FILL,
+    });
+    assertSweepDecoded('rotation', degrees, decodeFrontend(distorted));
+  }
+});
+
+test('원근 sweep 7점 × 양축: -30~30도 전 구간 복호', {
   timeout: 180_000,
 }, () => {
-  for (const distortion of DISTORTIONS) {
-    for (const version of [1, 2, 3]) {
-      const text = distortion.name + '-V' + version;
-      const fixture = render(text, version, version === 1 ? 'L' : version === 2 ? 'M' : 'H', {
-        pixelsPerUnit: 20,
-        margin: 8,
+  // 고정 캔버스 원근이 심볼을 자르지 않도록 M1 기하 시험용 여백을 둔다.
+  const fixture = render(SWEEP_TEXT, 2, 'M', {
+    pixelsPerUnit: 12,
+    supersample: 2,
+    margin: 18,
+  });
+  for (const axis of ['horizontal', 'vertical']) {
+    for (const degrees of PERSPECTIVE_SWEEP) {
+      const distorted = distortImage(fixture.raster, {
+        perspective: { degrees, axis },
+        fill: FILL,
       });
-      const raster = distortImage(fixture.raster, distortion.options);
-      const result = decodeFrontend(raster);
-      assert.equal(result.ok, true, JSON.stringify({ distortion: distortion.name, version, result }));
-      assert.equal(result.text, text);
-      assert.equal(result.version, version);
+      assertSweepDecoded('perspective-' + axis, degrees, decodeFrontend(distorted));
     }
+  }
+});
+
+test('full-frame scale sweep 7점: 0.5~2.0배 전 구간 복호', {
+  timeout: 180_000,
+}, () => {
+  // distortImage의 scale은 고정 캔버스 zoom이다. 확대에서는 전체 심볼이 시야에
+  // 남도록 margin을 확보한다. 기본 margin crop은 아래 SYMBOL_CLIPPED 회귀가 맡는다.
+  for (const scale of SCALE_SWEEP) {
+    const fixture = render(SWEEP_TEXT, 2, 'M', {
+      pixelsPerUnit: 20,
+      supersample: 2,
+      margin: scale > 1 ? 18 : undefined,
+    });
+    const distorted = distortImage(fixture.raster, { scale, fill: FILL });
+    assertSweepDecoded('scale', scale, decodeFrontend(distorted));
   }
 });
 
@@ -157,13 +205,18 @@ test('외곽이 잘린 코드는 성공으로 오인하지 않고 앞단 실패 
   );
   const result = decodeFrontend(clipped);
   assert.equal(result.ok, false, JSON.stringify(result));
-  assert.ok([
-    FRONTEND_FAILURE.NO_FINDER,
-    FRONTEND_FAILURE.NO_ANCHORS,
-    FRONTEND_FAILURE.SAMPLE_STARVED,
-    FRONTEND_FAILURE.NO_FORMAT_CANDIDATE,
-    FRONTEND_FAILURE.NO_GRID_HYPOTHESIS,
-  ].includes(result.reason), result.reason);
+  assert.equal(result.reason, FRONTEND_FAILURE.SYMBOL_CLIPPED);
+  assert.equal(result.detail.pipelineStage, 'bootstrap-geometry');
+
+  const zoomFixture = render('zoom-clipped', 2, 'M', {
+    pixelsPerUnit: 20,
+    supersample: 2,
+  });
+  const zoomed = distortImage(zoomFixture.raster, { scale: 2, fill: FILL });
+  const zoomResult = decodeFrontend(zoomed);
+  assert.equal(zoomResult.ok, false, JSON.stringify(zoomResult));
+  assert.equal(zoomResult.reason, FRONTEND_FAILURE.SYMBOL_CLIPPED);
+  assert.equal(zoomResult.detail.pipelineStage, 'bootstrap-finder');
 });
 
 test('동일 입력 두 번은 성공 결과와 진단까지 동일', {

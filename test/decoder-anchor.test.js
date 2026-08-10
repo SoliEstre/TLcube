@@ -25,7 +25,10 @@ import {
   findOAnchorHypotheses,
   physicalRotationSigma,
 } from '../src/decoder/anchor-detect.js';
-import { FRONTEND_FAILURE } from '../src/decoder/contracts.js';
+import {
+  FRONTEND_FAILURE,
+  HOMOGRAPHY_CANONICAL_SPACE,
+} from '../src/decoder/contracts.js';
 
 const PRESET = getPreset('slate');
 const PALETTE = {
@@ -148,6 +151,16 @@ test('Type O: 0/120/240도 전체 평가에서 정답 방향 가설은 정확히
     assert.equal(first.hypotheses[0].k, encoded.k);
     assert.equal(first.hypotheses[0].orientation, turn);
     assert.equal(first.hypotheses[0].hardChecks.all, true);
+    assert.equal(first.hypotheses[0].canonicalSpace, HOMOGRAPHY_CANONICAL_SPACE);
+    if (turn === 0) {
+      const H = first.hypotheses[0].H;
+      // unit-cell Euclidean H는 선형부가 cellSize·I다. axial H라면 √3/1.5 기저가
+      // 여기에 섞여 이 단언을 통과하지 못한다.
+      assert.equal(H[0], rendered.bullseye.cellSize);
+      assert.equal(H[1], 0);
+      assert.equal(H[3], 0);
+      assert.equal(H[4], rendered.bullseye.cellSize);
+    }
     results.push(first.hypotheses.map((item) => [item.k, item.orientation]));
   }
 

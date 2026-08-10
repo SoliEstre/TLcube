@@ -27,15 +27,19 @@ function compactHypothesis(candidate) {
     rotationDegrees: hypothesis.rotationDegrees,
     centerQr: hypothesis.centerQr,
     source: hypothesis.source,
+    canonicalSpace: hypothesis.canonicalSpace,
     geometryResidual: hypothesis.geometryResidual,
     sizeGeometry: hypothesis.sizeGeometry,
   };
 }
 
 function failureDetail(stage, result, diagnostics) {
+  const cause = result && result.detail;
   return {
     stage,
-    cause: result && result.detail,
+    pipelineStage: cause && cause.stage ? cause.stage : stage,
+    pipelineCode: cause && cause.pipelineCode,
+    cause,
     diagnostics,
   };
 }
@@ -46,9 +50,10 @@ function failureDetail(stage, result, diagnostics) {
  * 성공:
  *   {ok:true,text,version,eccLevel,corrected,crsDistance,hypothesis,diagnostics}
  *
- * 실패는 contracts.js의 FRONTEND_FAILURE만 공개 reason으로 쓰고, 개정 설계의
- * BODY_RS_FAILED/PAYLOAD_VALIDATION_FAILED/NO_VALID_HYPOTHESIS 구분은 현재
- * contracts.js에 항목이 없으므로 detail.pipelineCode로 보존한다.
+ * 실패는 contracts.js의 FRONTEND_FAILURE만 공개 reason으로 쓰고, 기하 crop과
+ * 실제 표본 부족을 구분한다. 내부 BODY_RS_FAILED/PAYLOAD_VALIDATION_FAILED/
+ * NO_VALID_HYPOTHESIS는 detail.pipelineCode, 실제 실패 단계는 detail.pipelineStage에
+ * 보존한다.
  */
 export function decodeFrontend(raster, options = {}) {
   if (options === null || typeof options !== 'object') {

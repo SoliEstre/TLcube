@@ -7,28 +7,30 @@
  * 일치에서 멈추지 않는다. 후단 bootstrap 이 포맷·본문 검증으로 선택한다.
  *
  * 좌표 규약:
- *   - 입력 bullseye.center 는 image 픽셀이다.
- *   - 내부 q/r 은 인코더와 같은 canonical axial 좌표다.
- *   - 출력 H 는 canonical -> image 이다.
+ *   - 입력 bullseye.center 는 image pixel이다.
+ *   - q/r은 셀 식별용 axial 좌표이며 H에 직접 넣지 않는다.
+ *   - 모든 투영점은 unit-cell canonical Euclidean으로 변환한다.
+ *   - 출력 H는 canonical Euclidean -> image pixel이다.
  *
  * @module decoder/anchor-detect
  */
 
 import {
   FRONTEND_FAILURE,
+  HOMOGRAPHY_CANONICAL_SPACE,
+  assertHomography,
   assertLumaField,
   fail,
   ok,
 } from './contracts.js';
 import {
-  CORNER_UNIT_OFFSETS,
-  FACE_SPINE_CORNER,
   FACES,
-  SQRT3,
+  axialToPixel,
 } from '../hexgrid.js';
 import { ranksToDigit } from '../lehmer.js';
 import { anchorCells } from '../placement.js';
 import { vertexAnchors } from '../placementA.js';
+import { sampleHexCell } from './grid-sample.js';
 
 /*
  * 아래 값 중 separation/tie/sample count 는 설계에서 아직 M1 calibration 전
@@ -41,10 +43,10 @@ const DEFAULT_ANCHOR_MIN_SEPARATION = 0.08;
 const DEFAULT_ANCHOR_TIE_EPSILON = 0.02;
 // [미검증] M1 calibration 에서 확정: 앵커 면 원판의 최소 유효 표본 수.
 const DEFAULT_ANCHOR_MIN_SAMPLE_COUNT = 3;
-// [미검증] M1 calibration 에서 확정: 원판 내 고정 표본 격자 해상도.
-const DEFAULT_ANCHOR_SAMPLE_GRID = 5;
 // [미검증] M1 calibration 에서 확정: 내접원 반지름 대비 표본 원판 반경.
 const DEFAULT_ANCHOR_SAMPLE_RADIUS_FRACTION = 0.5;
+// [미검증] M1 calibration 에서 확정: projective 원판의 최소 짧은축 지름.
+const DEFAULT_ANCHOR_MIN_PROJECTED_MINOR_DIAMETER_PX = 1;
 const LUMA_RANGE_EPSILON = 1e-9;
 const ORIENTATIONS = Object.freeze([0, 1, 2]);
 const FACE_NAMES = Object.freeze(['T', 'L', 'R']);
@@ -127,120 +129,62 @@ function normalizeBullseye(bullseye, options) {
     center: { x: center.x, y: center.y },
     cellSize,
     centerQr: Boolean(source.centerQr || options.centerQr),
-    baseHomography: source.H || source.homography || options.H,
+    baseHomography: source.H || source.homography || source.transform || source.B || options.H,
   };
 }
 
-function rotateVector(x, y, angle) {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  return { x: c * x - s * y, y: s * x + c * y };
-}
-
-function axialPixel(q, r, cellSize) {
-  return {
-    x: cellSize * SQRT3 * (q + r / 2),
-    y: cellSize * 1.5 * r,
-  };
-}
-
-function applyHomography(H, q, r) {
-  const h = H;
-  const denominator = h[6] * q + h[7] * r + h[8];
+function applyHomography(H, point) {
+  const denominator = H[6] * point.x + H[7] * point.y + H[8];
   if (!Number.isFinite(denominator) || Math.abs(denominator) <= LUMA_RANGE_EPSILON) return null;
-  const x = (h[0] * q + h[1] * r + h[2]) / denominator;
-  const y = (h[3] * q + h[4] * r + h[5]) / denominator;
+  const x = (H[0] * point.x + H[1] * point.y + H[2]) / denominator;
+  const y = (H[3] * point.x + H[4] * point.y + H[5]) / denominator;
   return finitePoint({ x, y }) ? { x, y } : null;
 }
 
-function makeAffineHomography(center, cellSize, orientation, sign) {
-  const angle = sign * orientation * (2 * Math.PI / 3);
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  const qx = cellSize * SQRT3;
-  const rx = cellSize * SQRT3 / 2;
-  const ry = cellSize * 1.5;
+function multiplyHomographies(left, right) {
+  const out = new Float64Array(9);
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      for (let inner = 0; inner < 3; inner += 1) {
+        out[row * 3 + column] += left[row * 3 + inner] * right[inner * 3 + column];
+      }
+    }
+  }
+  return out;
+}
+
+function rotationHomography(angle) {
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
   return new Float64Array([
-    c * qx,
-    c * rx - s * ry,
-    center.x,
-    s * qx,
-    s * rx + c * ry,
-    center.y,
-    0,
-    0,
-    1,
+    cosine, -sine, 0,
+    sine, cosine, 0,
+    0, 0, 1,
   ]);
 }
 
-function projectCell(center, cellSize, q, r, orientation, options) {
+function makeAffineHomography(center, cellSize) {
+  return new Float64Array([
+    cellSize, 0, center.x,
+    0, cellSize, center.y,
+    0, 0, 1,
+  ]);
+}
+
+function homographyForOrientation(bullseye, orientation, options) {
+  const supplied = options.H || bullseye.baseHomography;
+  const base = supplied === undefined
+    ? makeAffineHomography(bullseye.center, bullseye.cellSize)
+    : assertHomography(supplied);
   const sign = options.orientationSign === -1 ? -1 : 1;
-  const angle = sign * orientation * (2 * Math.PI / 3);
-  if (typeof options.project === 'function') {
-    const point = options.project({ q, r, orientation, angle, center, cellSize });
-    return finitePoint(point) ? { x: point.x, y: point.y } : null;
-  }
-
-  const local = axialPixel(q, r, cellSize);
-  const rotated = rotateVector(local.x, local.y, angle);
-  return { x: center.x + rotated.x, y: center.y + rotated.y };
+  return multiplyHomographies(
+    base,
+    rotationHomography(sign * orientation * (2 * Math.PI / 3)),
+  );
 }
 
-function projectFace(center, cellSize, q, r, face, orientation, options) {
-  const cellCenter = projectCell(center, cellSize, q, r, orientation, options);
-  if (!cellCenter) return null;
-  const spine = FACE_SPINE_CORNER[face];
-  const unit = CORNER_UNIT_OFFSETS[spine];
-  const sign = options.orientationSign === -1 ? -1 : 1;
-  const local = rotateVector(unit.x * cellSize / 2, unit.y * cellSize / 2,
-    sign * orientation * (2 * Math.PI / 3));
-  return { x: cellCenter.x + local.x, y: cellCenter.y + local.y };
-}
-
-function projectWithHomography(center, cellSize, q, r, orientation, options) {
-  const candidate = options.H;
-  if (!(candidate instanceof Float64Array) || candidate.length !== 9) {
-    return makeAffineHomography(center, cellSize, orientation,
-      options.orientationSign === -1 ? -1 : 1);
-  }
-  /*
-   * H 가 제공되면 q/r 셀 중심은 H 로 투영한다. H 는 이미 중심·스케일을
-   * 담은 canonical -> image 변환이라는 계약이므로, 방향 가설은 canonical
-   * axial 120도 회전으로 먼저 반영한다.
-   */
-  const turns = orientation;
-  let cq = q;
-  let cr = r;
-  for (let i = 0; i < turns; i += 1) {
-    if (options.orientationSign === -1) {
-      const nextQ = cr;
-      const nextR = -cq - cr;
-      cq = nextQ;
-      cr = nextR;
-    } else {
-      const nextQ = -cq - cr;
-      const nextR = cq;
-      cq = nextQ;
-      cr = nextR;
-    }
-  }
-  return applyHomography(candidate, cq, cr);
-}
-
-function bilinear(luma, x, y) {
-  if (!Number.isFinite(x) || !Number.isFinite(y)
-    || x < 0 || y < 0 || x > luma.width - 1 || y > luma.height - 1) return null;
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const x1 = Math.min(luma.width - 1, x0 + 1);
-  const y1 = Math.min(luma.height - 1, y0 + 1);
-  const tx = x - x0;
-  const ty = y - y0;
-  const a = luma.data[y0 * luma.width + x0];
-  const b = luma.data[y0 * luma.width + x1];
-  const c = luma.data[y1 * luma.width + x0];
-  const d = luma.data[y1 * luma.width + x1];
-  return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+function projectCell(H, q, r) {
+  return applyHomography(H, axialToPixel(q, r));
 }
 
 function median(values) {
@@ -250,29 +194,6 @@ function median(values) {
   return sorted.length % 2 === 1
     ? sorted[middle]
     : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
-function sampleDisc(luma, center, radius, grid) {
-  const values = [];
-  const denominator = Math.max(1, grid - 1);
-  for (let gy = 0; gy < grid; gy += 1) {
-    for (let gx = 0; gx < grid; gx += 1) {
-      const ox = ((gx / denominator) * 2 - 1) * radius;
-      const oy = ((gy / denominator) * 2 - 1) * radius;
-      if (ox * ox + oy * oy > radius * radius + LUMA_RANGE_EPSILON) continue;
-      const value = bilinear(luma, center.x + ox, center.y + oy);
-      if (value !== null) values.push(value);
-    }
-  }
-  return values;
-}
-
-function faceStat(luma, point, radius, grid) {
-  const values = sampleDisc(luma, point, radius, grid);
-  if (values.length === 0) return { median: NaN, mad: NaN, count: 0 };
-  const value = median(values);
-  const deviations = values.map((item) => Math.abs(item - value));
-  return { median: value, mad: median(deviations), count: values.length };
 }
 
 function rankStat(faces, tieEpsilon) {
@@ -309,9 +230,6 @@ function geometryResidual(points, center, cellSize) {
 }
 
 function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, options) {
-  const sampleGrid = Number.isInteger(options.sampleGrid) && options.sampleGrid >= 3
-    ? options.sampleGrid
-    : DEFAULT_ANCHOR_SAMPLE_GRID;
   const sampleFraction = Number.isFinite(options.sampleRadiusFraction)
     && options.sampleRadiusFraction > 0
     && options.sampleRadiusFraction <= 1
@@ -326,9 +244,12 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
   const minSampleCount = Number.isInteger(options.minSampleCount)
     ? Math.max(1, options.minSampleCount)
     : DEFAULT_ANCHOR_MIN_SAMPLE_COUNT;
+  const minProjectedMinorDiameter = Number.isFinite(options.minProjectedMinorDiameter)
+    ? Math.max(0, options.minProjectedMinorDiameter)
+    : DEFAULT_ANCHOR_MIN_PROJECTED_MINOR_DIAMETER_PX;
+  const H = homographyForOrientation(bullseye, orientation, options);
   const pointList = [];
   const measurements = [];
-  const sampleRadius = bullseye.cellSize * (SQRT3 / 4) * sampleFraction;
   let allSamples = true;
   let allRanks = true;
   let allExpected = true;
@@ -336,35 +257,46 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
 
   for (let i = 0; i < canonicalAnchors.length; i += 1) {
     const anchor = canonicalAnchors[i];
-    const point = projectCell(
-      bullseye.center,
-      bullseye.cellSize,
-      anchor.q,
-      anchor.r,
-      orientation,
-      options,
-    );
+    const point = projectCell(H, anchor.q, anchor.r);
     pointList.push(point || { x: NaN, y: NaN });
-    const faces = {};
-    for (const face of FACES) {
-      const facePoint = point
-        ? projectFace(bullseye.center, bullseye.cellSize, anchor.q, anchor.r, face, orientation, options)
-        : null;
-      faces[face] = facePoint
-        ? faceStat(luma, facePoint, sampleRadius, sampleGrid)
-        : { median: NaN, mad: NaN, count: 0 };
-      minCount = Math.min(minCount, faces[face].count);
-    }
+    const sampled = point
+      ? sampleHexCell(
+        luma,
+        { H, canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE },
+        anchor.q,
+        anchor.r,
+        {
+          discOptions: { fraction: sampleFraction, fractionOf: 'radius' },
+          minSampleCount,
+          minProjectedMinorDiameter,
+          tieEpsilon,
+        },
+      )
+      : fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+        stage: 'anchor-project',
+        cause: 'anchor-crosses-projective-horizon',
+      });
+    const faces = sampled.ok
+      ? { T: sampled.T, L: sampled.L, R: sampled.R }
+      : {
+        T: { median: NaN, mad: NaN, count: 0 },
+        L: { median: NaN, mad: NaN, count: 0 },
+        R: { median: NaN, mad: NaN, count: 0 },
+      };
     const orderedFaces = FACE_NAMES.map((face) => faces[face]);
     const rank = rankStat(orderedFaces, tieEpsilon);
     const expected = anchor.digit;
-    const sampleCheck = orderedFaces.every((face) => face.count >= minSampleCount);
-    const rankCheck = !rank.tie && Number.isFinite(rank.separation)
+    const sampleCheck = sampled.ok
+      && orderedFaces.every((face) => face.count >= minSampleCount);
+    const rankCheck = sampled.ok
+      && !rank.tie
+      && Number.isFinite(rank.separation)
       && rank.separation >= minSeparation;
-    const expectedCheck = rank.digit === expected;
+    const expectedCheck = sampled.ok && rank.digit === expected;
     allSamples = allSamples && sampleCheck;
     allRanks = allRanks && rankCheck;
     allExpected = allExpected && expectedCheck;
+    for (const face of orderedFaces) minCount = Math.min(minCount, face.count);
     measurements.push({
       canonical: { q: anchor.q, r: anchor.r },
       expectedDigit: expected,
@@ -375,6 +307,10 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
       sampleCheck,
       rankCheck,
       expectedCheck,
+      samplingFailure: sampled.ok ? null : {
+        reason: sampled.reason,
+        detail: sampled.detail,
+      },
     });
   }
 
@@ -386,12 +322,6 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
     : separations.reduce((sum, value) => sum + value, 0) / separations.length;
   const score = clamp01(meanSeparation / Math.max(minSeparation, LUMA_RANGE_EPSILON));
   const residual = geometryResidual(pointList, bullseye.center, bullseye.cellSize);
-  const H = makeAffineHomography(
-    bullseye.center,
-    bullseye.cellSize,
-    orientation,
-    options.orientationSign === -1 ? -1 : 1,
-  );
 
   return {
     family,
@@ -401,6 +331,7 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
     anchors: pointList,
     canonicalAnchors: canonicalAnchors.map((anchor) => ({ q: anchor.q, r: anchor.r })),
     H,
+    canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
     geometryResidual: residual,
     anchorMargin: separations.length === 0 ? 0 : Math.min(...separations),
     score,

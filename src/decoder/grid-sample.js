@@ -1,14 +1,17 @@
 /**
  * grid-sample.js — projective canonical 원판 기반의 격자 면 휘도 표본화
  *
- * 화면에서 원을 다시 그리지 않는다. canonical 면 원판을 H(canonical → image)로
- * 보낸 뒤, image pixel center를 역투영해 원판 포함 여부를 판정한다. 그래야
+ * 화면에서 원을 다시 그리지 않는다. 중심 원점·unit-cell canonical Euclidean
+ * 면 원판을 H(canonical Euclidean → image pixel)로 보낸 뒤, image pixel center를
+ * 역투영해 원판 포함 여부를 판정한다. axial 좌표나 canvas-origin scene 좌표를
+ * H에 직접 넣지 않는다. 그래야
  * 원근 왜곡에서도 SPEC §7.2의 "면 내접원 50% 영역 median" 계약을 보존한다.
  */
 
 import { FACES, cellSampleDiscs } from '../hexgrid.js';
 import {
   FRONTEND_FAILURE,
+  HOMOGRAPHY_CANONICAL_SPACE,
   assertHomography,
   assertLumaField,
   fail,
@@ -211,15 +214,27 @@ function homographyForGeometry(geometry) {
   if (!geometry || typeof geometry !== 'object') {
     throw new TypeError('geometry 는 H를 가진 객체 또는 Homography 여야 한다');
   }
+  if (geometry.canonicalSpace !== undefined
+    && geometry.canonicalSpace !== HOMOGRAPHY_CANONICAL_SPACE) {
+    throw new TypeError(
+      'geometry.canonicalSpace 계약 불일치: '
+      + geometry.canonicalSpace + ' !== ' + HOMOGRAPHY_CANONICAL_SPACE,
+    );
+  }
   return geometry.H || geometry.homography;
 }
 
-function layoutForGeometry(geometry, options) {
-  if (options.layout !== undefined) return options.layout;
-  if (geometry && typeof geometry === 'object') {
-    return geometry.layout || geometry.canonicalLayout;
+function assertNoCanonicalLayoutOverride(geometry, options) {
+  const geometryHasLayout = geometry
+    && typeof geometry === 'object'
+    && !(geometry instanceof Float64Array)
+    && (geometry.layout !== undefined || geometry.canonicalLayout !== undefined);
+  if (geometryHasLayout || options.layout !== undefined) {
+    throw new TypeError(
+      'canonical layout override는 금지다. H는 중심 원점·셀 외접반지름 1인 '
+      + HOMOGRAPHY_CANONICAL_SPACE + '에서 image pixel로 가야 한다',
+    );
   }
-  return undefined;
 }
 
 function discOptions(options) {
@@ -310,6 +325,17 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
 
   // 설계 §9.2의 1px 확장. 포함 여부는 역투영 원판 검사만 결정하므로 여기의
   // 여유는 bbox 경계 반올림 누락을 막을 뿐 표본 영역을 넓히지 않는다.
+  const projectedIntersectsImage = !(
+    maxX < 0 || maxY < 0 || minX > luma.width || minY > luma.height
+  );
+  if (!projectedIntersectsImage) {
+    return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
+      stage: 'sample-projected-disc',
+      cause: 'projected-disc-outside-image',
+      projectedBounds: { minX, minY, maxX, maxY },
+      imageBounds: { width: luma.width, height: luma.height },
+    });
+  }
   const x0 = Math.max(0, Math.floor(minX) - 1);
   const x1 = Math.min(luma.width - 1, Math.ceil(maxX) + 1);
   const y0 = Math.max(0, Math.floor(minY) - 1);
@@ -343,13 +369,21 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
 
   const minorDiameter = projectedMinorDiameter(normalizedH, disc);
   const opaqueRatio = geometricCount === 0 ? 0 : opaqueCount / geometricCount;
-  if (
-    minorDiameter < config.minProjectedMinorDiameter
-    || opaqueCount < config.minSampleCount
-    || opaqueRatio < config.minOpaqueRatio
-  ) {
+  const constraintsFailed = [];
+  if (minorDiameter < config.minProjectedMinorDiameter) {
+    constraintsFailed.push('projected-disc-too-small');
+  }
+  if (opaqueCount < config.minSampleCount) {
+    constraintsFailed.push('insufficient-pixel-samples');
+  }
+  if (opaqueRatio < config.minOpaqueRatio) {
+    constraintsFailed.push('insufficient-opaque-coverage');
+  }
+  if (constraintsFailed.length > 0) {
     return fail(FRONTEND_FAILURE.SAMPLE_STARVED, {
       stage: 'sample-projected-disc',
+      cause: constraintsFailed[0],
+      constraintsFailed,
       count: opaqueCount,
       geometricCount,
       opaqueCount,
@@ -427,20 +461,19 @@ export function rankConfidence(faceSamples, options = {}) {
 /**
  * 한 hex cell의 T/L/R canonical sample discs를 측정한다.
  *
- * geometry는 최소한 {H, layout?}를 받는다. layout을 생략하면 canonical s=1,
- * 원점 (0,0)을 hexgrid 기본값으로 쓰며, H는 항상 그 canonical 평면에서 image로
- * 가는 방향이다.
+ * geometry는 {H, canonicalSpace?} 또는 H를 받는다. canonical 평면은 항상
+ * 중심 원점·s=1이며 layout override는 좌표 계약을 다시 갈라놓으므로 거부한다.
  */
 export function sampleHexCell(luma, geometry, q, r, options = {}) {
   if (!Number.isInteger(q) || !Number.isInteger(r)) {
     throw new TypeError('q, r 은 정수 axial 좌표여야 한다');
   }
   assertLumaField(luma);
+  assertNoCanonicalLayoutOverride(geometry, options);
   const H = homographyForGeometry(geometry);
   assertHomography(H);
 
-  const layout = layoutForGeometry(geometry, options);
-  const discs = cellSampleDiscs(q, r, layout, discOptions(options));
+  const discs = cellSampleDiscs(q, r, undefined, discOptions(options));
   const optionsForDisc = sampleOptions(options);
   const measured = {};
   const failures = [];
@@ -461,9 +494,18 @@ export function sampleHexCell(luma, geometry, q, r, options = {}) {
   }
 
   if (failures.length > 0) {
-    const homographyOnly = failures.every((entry) => entry.reason === FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE);
+    const homographyOnly = failures.every(
+      (entry) => entry.reason === FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE,
+    );
+    const clipped = failures.some(
+      (entry) => entry.reason === FRONTEND_FAILURE.SYMBOL_CLIPPED,
+    );
     return fail(
-      homographyOnly ? FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE : FRONTEND_FAILURE.SAMPLE_STARVED,
+      homographyOnly
+        ? FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE
+        : clipped
+          ? FRONTEND_FAILURE.SYMBOL_CLIPPED
+          : FRONTEND_FAILURE.SAMPLE_STARVED,
       { stage: 'sample-hex-cell', q, r, failures },
     );
   }
@@ -541,9 +583,18 @@ export function sampleHexGrid(luma, geometry, layoutMap, options = {}) {
   }
 
   if (failures.length > 0) {
-    const homographyOnly = failures.every((entry) => entry.reason === FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE);
+    const homographyOnly = failures.every(
+      (entry) => entry.reason === FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE,
+    );
+    const clipped = failures.some(
+      (entry) => entry.reason === FRONTEND_FAILURE.SYMBOL_CLIPPED,
+    );
     return fail(
-      homographyOnly ? FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE : FRONTEND_FAILURE.SAMPLE_STARVED,
+      homographyOnly
+        ? FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE
+        : clipped
+          ? FRONTEND_FAILURE.SYMBOL_CLIPPED
+          : FRONTEND_FAILURE.SAMPLE_STARVED,
       {
         stage: 'sample-hex-grid',
         sampledCount: cells.size,

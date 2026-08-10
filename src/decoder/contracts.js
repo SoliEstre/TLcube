@@ -7,8 +7,13 @@
  * 불변식 검사만 둔다.
  *
  * 규약:
- *   · 좌표계는 두 개뿐이다 — **canonical**(격자 단위, 인코더가 쓰는 좌표)과
- *     **image**(픽셀). 둘을 섞지 않는다. 호모그래피는 항상 canonical → image 방향이다.
+ *   · 좌표계는 두 개뿐이다 — **canonical Euclidean** 과 **image pixel**.
+ *   · canonical Euclidean은 불스아이 중심이 원점 (0,0), +x는 오른쪽, +y는 아래,
+ *     hex 셀 외접반지름이 1인 유클리드 평면이다. axial (q,r)은 셀 식별자일 뿐
+ *     Homography 입력이 아니다. 점 좌표는 `axialToPixel(q,r,DEFAULT_LAYOUT)`로 만든다.
+ *   · 이 단위는 `buildScene(...,{cellSize:1})`의 길이 단위와 같지만, canvas margin이
+ *     들어간 scene 절대좌표는 아니다. scene origin을 canonical로 흘려보내지 않는다.
+ *   · 호모그래피는 항상 canonical Euclidean → image pixel 방향이다.
  *   · 휘도는 `luminance.js` 의 `relativeLuminance` 와 **같은 정의**의 0..1 실수다.
  *     8비트 값을 그대로 넘기지 않는다.
  *   · 실패는 예외가 아니라 `{ok:false, reason}` 이다 (후단 `decode.js` 와 같은 규약).
@@ -35,9 +40,23 @@
  */
 
 /**
- * 호모그래피. **canonical → image** 방향, row-major 3×3.
- * 역방향이 필요하면 `invertHomography` 로 만든다 — 방향을 헷갈리면 증상이
- * "격자가 조금 어긋난다" 로만 보여서 진단이 비싸다.
+ * Homography canonical 공간의 런타임 태그. GridHypothesis 진단에 넣어 좌표 계약이
+ * 다시 갈라질 때 조용한 재해석 대신 즉시 식별한다.
+ */
+export const HOMOGRAPHY_CANONICAL_SPACE = 'hex-euclidean-unit-cell';
+
+/**
+ * 호모그래피. **canonical Euclidean → image pixel** 방향, row-major 3×3.
+ *
+ * canonical 점 (u,v):
+ *   - 원점: 불스아이 중심
+ *   - 축: +u 오른쪽, +v 아래
+ *   - 단위: hex 셀 외접반지름 1
+ *   - axial 셀 (q,r)의 중심:
+ *     u = √3·(q+r/2), v = 3r/2
+ *
+ * 역방향이 필요하면 `invertHomography` 로 만든다. axial (q,r), canvas-origin
+ * scene 좌표, image pixel을 H의 입력으로 대신 쓰는 어댑터는 계약 위반이다.
  * @typedef {Float64Array} Homography  길이 9
  */
 
@@ -61,7 +80,8 @@
  * @property {0|1|2} orientation   120° 회전 가설 인덱스
  * @property {boolean} centerQr    중앙 QR 변형 여부
  * @property {Point[]} anchors     앵커 3점(영상 좌표)
- * @property {Homography} H        canonical → image
+ * @property {Homography} H        canonical Euclidean → image pixel
+ * @property {'hex-euclidean-unit-cell'} canonicalSpace
  * @property {number} geometryResidual  재투영 잔차(픽셀). 낮을수록 좋음.
  */
 
@@ -95,6 +115,7 @@ export const FRONTEND_FAILURE = Object.freeze({
   NO_ANCHORS: 'frontend:no-anchors',
   HOMOGRAPHY_DEGENERATE: 'frontend:homography-degenerate',
   NO_GRID_HYPOTHESIS: 'frontend:no-grid-hypothesis',
+  SYMBOL_CLIPPED: 'frontend:symbol-clipped',
   SAMPLE_STARVED: 'frontend:sample-starved',
   REFERENCE_MISMATCH: 'frontend:reference-mismatch',
   NO_FORMAT_CANDIDATE: 'frontend:no-format-candidate',
@@ -130,7 +151,7 @@ export function assertLumaField(luma) {
 /** Homography 불변식 검사. 길이 9 · 전부 유한 · 마지막 원소 0 아님(정규화 가능). */
 export function assertHomography(H) {
   if (!(H instanceof Float64Array) || H.length !== 9) {
-    throw new TypeError('Homography 는 길이 9 의 Float64Array 여야 한다 (row-major, canonical→image)');
+    throw new TypeError('Homography 는 길이 9 의 Float64Array 여야 한다 (row-major, canonical Euclidean→image pixel)');
   }
   for (let i = 0; i < 9; i += 1) {
     if (!Number.isFinite(H[i])) throw new RangeError(`H[${i}] 가 유한하지 않다: ${H[i]}`);

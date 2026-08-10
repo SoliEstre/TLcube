@@ -69,8 +69,11 @@ function renderedFixture() {
     raster,
     luma: lumaFromRaster(raster),
     geometry: {
-      layout: scene.layout,
-      H: new Float64Array([24, 0, 0, 0, 24, 0, 0, 0, 1]),
+      H: new Float64Array([
+        raster.pixelsPerUnit, 0, scene.layout.originX * raster.pixelsPerUnit,
+        0, raster.pixelsPerUnit, scene.layout.originY * raster.pixelsPerUnit,
+        0, 0, 1,
+      ]),
     },
   };
 }
@@ -96,13 +99,13 @@ test('실제 렌더: canonical 원판 표본은 verify.js와 같은 digit을 복
   assert.equal(recoverDigit(measured), expected);
   assert.equal(sampled.tie, false);
 
-  const disc = faceSampleDisc(q, r, 'T', fixture.scene.layout);
+  const disc = faceSampleDisc(q, r, 'T');
   const projected = sampleProjectedDisc(fixture.luma, fixture.geometry.H, disc);
   assert.equal(projected.ok, true);
   const verifyMedian = discMedianLuminance(
     fixture.raster,
-    disc.x * fixture.raster.pixelsPerUnit,
-    disc.y * fixture.raster.pixelsPerUnit,
+    fixture.geometry.H[0] * disc.x + fixture.geometry.H[2],
+    fixture.geometry.H[4] * disc.y + fixture.geometry.H[5],
     disc.radius * fixture.raster.pixelsPerUnit,
   );
   assert.ok(Math.abs(projected.median - verifyMedian) < 1e-6);
