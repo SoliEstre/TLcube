@@ -689,29 +689,42 @@ async function initialiseCamera() {
   showSupportedStartGate();
   setStatus('카메라를 시작하려면 화면을 탭해 주세요.');
 
-  if (!navigator.permissions || typeof navigator.permissions.query !== 'function') {
+  // 권한 상태를 **먼저 조회해서** 자동 시작 여부를 정하지 않는다.
+  //
+  // ⚠ Safari 계열은 `permissions.query({name:'camera'})` 를 지원하지 않아 throw 한다.
+  //    조회 결과에 자동 시작을 걸어 두면 그 브라우저에서는 **권한을 이미 허용했어도
+  //    매번 탭을 요구**하게 된다 — 스캐너의 주 사용처가 아이폰인 걸 감안하면
+  //    "접속 즉시 켜짐" 요구가 가장 중요한 기기에서 깨진다.
+  //
+  // 그래서 순서를 뒤집는다: **일단 시도하고, 실패하면 게이트로 강등**한다.
+  //   · 이미 허용돼 있으면 제스처 없이 그대로 열린다 (모든 브라우저 공통).
+  //   · 미결정이면 네이티브 권한 프롬프트가 뜬다 — 스캐너 페이지에선 그게 맞는 동선이다.
+  //   · 거부됐거나 제스처를 요구하는 브라우저면 reject 되고, catch 에서 게이트를 세운다.
+  // 권한 조회는 자동 시작의 **조건이 아니라 문구를 고르는 용도**로만 남긴다.
+
+  let knownState = '';
+  if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+    try {
+      knownState = (await navigator.permissions.query({ name: 'camera' })).state;
+    } catch {
+      // Safari 등 — 알 수 없음. 아래 시도가 판정한다.
+    }
+  }
+
+  if (knownState === 'denied') {
+    setStatus('카메라 권한을 허용한 뒤 다시 탭해 주세요.');
+    showCameraGate({
+      title: '카메라 권한이 꺼져 있어요',
+      message: '브라우저 설정에서 카메라 권한을 허용한 뒤 다시 탭해 주세요.',
+      startLabel: '카메라 다시 시도',
+    });
     return;
   }
 
-  try {
-    const permission = await navigator.permissions.query({ name: 'camera' });
-
-    if (permission.state === 'granted') {
-      await startCamera({ automatic: true });
-      return;
-    }
-
-    if (permission.state === 'denied') {
-      setStatus('카메라 권한을 허용한 뒤 다시 탭해 주세요.');
-      showCameraGate({
-        title: '카메라 권한이 꺼져 있어요',
-        message: '브라우저 설정에서 카메라 권한을 허용한 뒤 다시 탭해 주세요.',
-        startLabel: '카메라 다시 시도',
-      });
-    }
-  } catch {
-    // 권한 상태를 알 수 없으면 제스처 시작 레이어를 유지합니다.
-  }
+  // startCamera 는 실패를 스스로 처리한다 — 재던지지 않고, automatic 실패 시
+  // showSupportedStartGate() 로 탭-투-시작 게이트를 세운다. 그래서 여기서 catch 하지
+  // 않는다(잡을 것이 없다). 그 계약이 깨지면 이 자동 시작 경로가 조용히 무응답이 된다.
+  await startCamera({ automatic: true });
 }
 
 startCameraButton.addEventListener('click', () => {
