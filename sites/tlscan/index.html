@@ -4,14 +4,256 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TL 스캐너 — TLcube 코드 읽기</title>
-<meta name="description" content="TLcube 코드를 읽는 웹 스캐너. 카메라 디코더는 준비 중이며, 지금은 함께 인쇄된 폴백 QR 이 이 페이지로 안내합니다.">
+<meta name="description" content="카메라 또는 이미지 파일로 TLcube 코드를 읽는 웹 스캐너입니다.">
 <link rel="canonical" href="https://tlscan.estre.so/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="TL 스캐너 — TLcube 코드 읽기">
-<meta property="og:description" content="카메라 디코더 준비 중. TLcube 는 휘도 순위로 데이터를 싣는 2.5D 시각 코드입니다.">
+<meta property="og:description" content="카메라 또는 이미지 파일로 TLcube 코드를 읽어보세요.">
 <meta property="og:url" content="https://tlscan.estre.so/">
 <link rel="icon" href="../_shared/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../_shared/site.css">
+<style>
+  button.btn {
+    cursor: pointer;
+    font: inherit;
+    line-height: 1.4;
+  }
+  button.btn:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+  }
+  .btn:focus-visible,
+  .scanner-upload input:focus-visible + .btn,
+  a:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .scanner-intro {
+    padding-bottom: 28px;
+  }
+  .scanner-workspace {
+    padding-top: 28px;
+  }
+  .scanner-layout {
+    display: grid;
+    gap: 18px;
+  }
+  .scanner-camera,
+  .scanner-sidebar {
+    min-width: 0;
+  }
+  .scanner-stage {
+    position: relative;
+    overflow: hidden;
+    min-height: 360px;
+    aspect-ratio: 3 / 4;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 42%),
+      var(--panel);
+  }
+  .scanner-stage video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity .18s ease;
+  }
+  .scanner-stage.is-active video {
+    opacity: 1;
+  }
+  .scanner-placeholder {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 36px;
+    color: var(--dim);
+    text-align: center;
+    transition: opacity .18s ease;
+  }
+  .scanner-stage.is-active .scanner-placeholder {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .scanner-guide {
+    position: absolute;
+    inset: 13%;
+    border: 2px solid color-mix(in srgb, var(--text) 76%, transparent);
+    border-radius: 18px;
+    box-shadow: 0 0 0 999px rgb(16 18 24 / .14);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease;
+  }
+  .scanner-stage.is-active .scanner-guide {
+    opacity: 1;
+  }
+  .scanner-guide::before,
+  .scanner-guide::after {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    content: "";
+  }
+  .scanner-guide::before {
+    top: -2px;
+    left: -2px;
+    border-top: 4px solid var(--accent);
+    border-left: 4px solid var(--accent);
+    border-radius: 12px 0 0;
+  }
+  .scanner-guide::after {
+    right: -2px;
+    bottom: -2px;
+    border-right: 4px solid var(--accent);
+    border-bottom: 4px solid var(--accent);
+    border-radius: 0 0 12px;
+  }
+  .scanner-controls,
+  .scanner-result-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .scanner-sidebar {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+  }
+  .scanner-status,
+  .scanner-upload,
+  .scanner-note,
+  .scanner-result {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+  }
+  .scanner-status {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 11px;
+    padding: 16px;
+  }
+  .scanner-status strong {
+    display: block;
+    margin-bottom: 3px;
+  }
+  .scanner-status p {
+    margin: 0;
+    color: var(--dim);
+  }
+  .scanner-status-dot {
+    width: 10px;
+    height: 10px;
+    margin-top: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  .scanner-status[data-state="success"] .scanner-status-dot {
+    background: var(--ok);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 18%, transparent);
+  }
+  .scanner-status[data-state="denied"] .scanner-status-dot,
+  .scanner-status[data-state="unavailable"] .scanner-status-dot,
+  .scanner-status[data-state="insecure"] .scanner-status-dot,
+  .scanner-status[data-state="failure"] .scanner-status-dot {
+    background: var(--warn);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 18%, transparent);
+  }
+  .scanner-status[data-state="requesting"] .scanner-status-dot,
+  .scanner-status[data-state="processing"] .scanner-status-dot {
+    animation: scanner-pulse 1.1s ease-in-out infinite;
+  }
+  @keyframes scanner-pulse {
+    50% { transform: scale(.68); opacity: .62; }
+  }
+  .scanner-upload,
+  .scanner-note {
+    padding: 16px;
+  }
+  .scanner-upload h2,
+  .scanner-note h2 {
+    margin-bottom: 6px;
+    font-size: 16px;
+  }
+  .scanner-upload p,
+  .scanner-note p {
+    margin-bottom: 12px;
+    color: var(--dim);
+  }
+  .scanner-upload p:last-child,
+  .scanner-note p:last-child {
+    margin-bottom: 0;
+  }
+  .scanner-upload input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .scanner-result {
+    margin-top: 18px;
+    padding: 18px;
+  }
+  .scanner-result[hidden] {
+    display: none;
+  }
+  .scanner-result h2 {
+    margin-bottom: 6px;
+  }
+  .scanner-result > p {
+    color: var(--dim);
+  }
+  .scanner-payload {
+    display: block;
+    width: 100%;
+    margin-top: 14px;
+    padding: 13px 14px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    color: var(--text);
+    background: color-mix(in srgb, var(--bg) 58%, transparent);
+  }
+  a.scanner-payload {
+    color: var(--accent);
+  }
+  .scanner-help {
+    padding-top: 28px;
+  }
+  .scanner-help .grid {
+    margin-top: 18px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  @media (min-width: 720px) {
+    .scanner-layout {
+      grid-template-columns: minmax(0, 1.25fr) minmax(265px, .75fr);
+      align-items: start;
+    }
+    .scanner-stage {
+      min-height: 480px;
+      aspect-ratio: 4 / 5;
+    }
+  }
+</style>
 </head>
 <body data-site="tlscan">
 <div class="wrap">
@@ -30,45 +272,82 @@
     </nav>
   </header>
 
-  <section>
-    <span class="badge warn">준비 중</span>
-    <h1 style="margin-top:14px">TL 스캐너</h1>
-    <p class="lead">
-      카메라로 TLcube 코드를 읽는 웹 스캐너를 만들고 있습니다.
-      아직 공개 전이라, 이 페이지에 QR 로 도착하셨다면 <strong>그 코드는 TLcube 코드</strong>예요.
-    </p>
-    <p class="lead">
-      TLcube 코드에는 스캔 실패에 대비해 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있습니다.
-      지금 보고 계신 이 페이지가 그 폴백 경로의 도착지예요 — 스캐너가 준비되면
-      같은 주소에서 바로 열립니다.
-    </p>
-    <div class="cta">
-      <a class="btn primary" href="https://tl.estre.so" data-out="hub">TLcube 가 뭔가요?</a>
-      <a class="btn" href="https://tlcube.estre.so" data-out="tlcube">직접 만들어보기</a>
-    </div>
-  </section>
+  <main>
+    <section class="scanner-intro" aria-labelledby="scan-heading">
+      <h1 id="scan-heading">TLcube 코드 읽기</h1>
+      <p class="lead">
+        코드를 카메라 프레임 안에 맞추면 이 자리에서 내용을 보여줘요.
+        카메라를 쓸 수 없는 환경이라면 이미지 파일을 선택해도 돼요.
+      </p>
+    </section>
 
-  <section>
-    <h2>준비되면 이렇게 됩니다</h2>
-    <div class="grid">
-      <div class="card">
-        <h3>카메라로 바로</h3>
-        <p class="dim">설치 없이 브라우저에서 카메라를 열어 읽습니다. 앱을 깔 필요가 없어요.</p>
+    <section class="scanner-workspace" aria-labelledby="camera-heading">
+      <div class="scanner-layout">
+        <div class="scanner-camera">
+          <h2 id="camera-heading">카메라</h2>
+          <div class="scanner-stage" id="camera-stage">
+            <video id="camera-preview" autoplay muted playsinline aria-label="TLcube 코드를 비추는 카메라 미리보기"></video>
+            <div class="scanner-guide" aria-hidden="true"></div>
+            <p class="scanner-placeholder" id="camera-placeholder">카메라를 열고 TLcube 코드를 이 영역에 맞춰 주세요.</p>
+          </div>
+          <div class="scanner-controls">
+            <button class="btn primary" id="start-camera" type="button">카메라 열기</button>
+            <button class="btn" id="stop-camera" type="button" hidden>카메라 끄기</button>
+          </div>
+        </div>
+
+        <aside class="scanner-sidebar" aria-label="스캔 상태와 대체 입력">
+          <div class="scanner-status" id="scan-status" data-state="ready" role="status" aria-live="polite" aria-atomic="true">
+            <span class="scanner-status-dot" aria-hidden="true"></span>
+            <div>
+              <strong id="scan-status-title">카메라를 열어 주세요</strong>
+              <p id="scan-status-message">카메라 권한을 허용하면 코드를 찾기 시작해요.</p>
+            </div>
+          </div>
+
+          <div class="scanner-upload">
+            <h2>이미지에서 읽기</h2>
+            <p id="image-upload-help">저장한 PNG, JPG 등 이미지 파일도 같은 디코더로 확인할 수 있어요.</p>
+            <input id="image-input" type="file" accept="image/*" aria-label="읽을 이미지 파일 선택" aria-describedby="image-upload-help">
+            <button class="btn" id="choose-image" type="button">이미지 파일 선택</button>
+          </div>
+
+          <div class="scanner-note">
+            <h2>카메라 사용 안내</h2>
+            <p>카메라는 HTTPS 연결에서만 열려요. 페이지를 떠나거나 다른 탭으로 가면 카메라를 바로 끌게요.</p>
+          </div>
+        </aside>
       </div>
-      <div class="card">
-        <h3>타입 자동 판별</h3>
-        <p class="dim">Type O · A · Y 를 격자 수립 경로로 구분해 알아서 처리합니다.</p>
+
+      <div class="scanner-result" id="scan-result" tabindex="-1" hidden aria-labelledby="scan-result-heading">
+        <h2 id="scan-result-heading">읽은 내용</h2>
+        <p>내용을 확인하거나 복사할 수 있어요.</p>
+        <a class="scanner-payload" id="result-link" href="#" rel="noopener noreferrer" target="_blank" hidden></a>
+        <code class="scanner-payload" id="result-text" hidden></code>
+        <div class="scanner-result-actions">
+          <button class="btn primary" id="copy-result" type="button">내용 복사</button>
+        </div>
       </div>
-      <div class="card">
-        <h3>폴백 QR 동시 인식</h3>
-        <p class="dim">TL 코드가 안 읽히면 함께 인쇄된 QR 로 넘어갑니다.</p>
+    </section>
+
+    <section class="scanner-help" aria-labelledby="scan-help-heading">
+      <h2 id="scan-help-heading">잘 읽히게 하려면</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>정면에서 비춰 주세요</h3>
+          <p class="dim">코드 전체가 프레임에 들어오고, 기울어지지 않게 맞춰 주세요.</p>
+        </div>
+        <div class="card">
+          <h3>빛 반사를 피해주세요</h3>
+          <p class="dim">세 면의 밝기 순서를 읽으므로 강한 반사나 그림자는 피해 주세요.</p>
+        </div>
+        <div class="card">
+          <h3>이미지 파일도 가능해요</h3>
+          <p class="dim">카메라 권한을 줄 수 없으면 원본 이미지를 선택해서 확인할 수 있어요.</p>
+        </div>
       </div>
-    </div>
-    <p class="dim" style="margin-top:18px">
-      디코더는 합성 왜곡 테스트를 먼저 통과한 뒤 실기기 검증으로 넘어갑니다.
-      진행 상황은 <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a> 에서 볼 수 있어요.
-    </p>
-  </section>
+    </section>
+  </main>
 
   <footer>
     <div class="links">
@@ -82,5 +361,6 @@
 
 </div>
 <script src="../_shared/site.js"></script>
+<script src="scanner.js"></script>
 </body>
 </html>
