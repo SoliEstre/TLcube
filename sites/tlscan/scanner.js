@@ -10,6 +10,7 @@
 //    잡히지 않는 dev/prod 괴리다. 절대 경로 + nginx alias(`/src/`)로 양쪽을 일치시킨다.
 //    (같은 이유로 `_shared` 도 alias 로 붙인다 — deploy/estre-so/projects/tlcube/static.conf)
 import { sniffPayload } from '/src/payloadform.js';
+import { decodeFrontend } from '/src/decoder/frontend.js';
 
 const FRAME_INTERVAL_MS = 320;
 
@@ -67,14 +68,39 @@ let activeUrl = '';
 let returnFocus = null;
 
 /**
- * TLcube 디코더 경계입니다. 실제 구현을 연결할 때는 이 함수의 본문만 교체하세요.
+ * TLcube 디코더 경계.
+ *
+ * ⚠ `ImageData` 는 `.data` 를, 디코더는 `.pixels` 를 쓴다. 여기서 맞춰 준다 —
+ *    디코더가 브라우저 전용 타입(`ImageData`)에 의존하면 Node 측 테스트·M1 하네스에서
+ *    그대로 못 쓴다. 경계를 이쪽에 두는 이유다.
+ *
+ * 반환은 이 셸의 계약(`{ok, payload?, reason?}`)으로 변환한다. 디코더의 상세 실패
+ * 코드(`frontend:no-finder` 등)는 reason 에 그대로 실어, 스캔이 안 될 때 **어느 단계에서
+ * 포기했는지** 알 수 있게 한다.
  *
  * @param {ImageData} imageData 카메라 또는 업로드 이미지에서 얻은 프레임
  * @returns {Promise<{ ok: boolean, payload?: string, reason?: string }>}
  */
 async function decodeFrame(imageData) {
-  void imageData;
-  return { ok: false, reason: 'decoder-not-implemented' };
+  if (!imageData || !imageData.data || !imageData.width || !imageData.height) {
+    return { ok: false, reason: 'frame-invalid' };
+  }
+
+  try {
+    const result = decodeFrontend({
+      width: imageData.width,
+      height: imageData.height,
+      pixels: imageData.data,
+    });
+
+    if (result && result.ok === true && typeof result.text === 'string') {
+      return { ok: true, payload: result.text };
+    }
+    return { ok: false, reason: (result && result.reason) || 'decode-failed' };
+  } catch (error) {
+    // 디코더가 던지면 스캐너 루프가 멈추면 안 된다 — 다음 프레임으로 넘어간다.
+    return { ok: false, reason: 'decode-threw:' + (error && error.message ? error.message : 'unknown') };
+  }
 }
 
 function setStatus(message) {
