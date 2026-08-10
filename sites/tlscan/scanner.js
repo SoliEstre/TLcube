@@ -15,16 +15,24 @@ import { decodeFrontend } from '/src/decoder/frontend.js';
 const FRAME_INTERVAL_MS = 320;
 
 /**
- * 디코더에 넘기기 전 프레임을 줄이는 상한(긴 변, px). **미리보기 화질과는 무관하다** —
- * 미리보기는 원본 스트림을 그대로 보여주고, 이 값은 복호 입력에만 걸린다.
+ * 디코더에 넘기기 전 프레임을 줄이는 상한(긴 변, px). 미리보기 화질과는 무관하다.
  *
- * ⚠ **디코더가 붙으면 재검토 대상이다.** 개산: V3(k=10)는 21셀 폭이고, 코드가 화면의
- *    70% 를 채운다면 960px 기준 셀당 \~32px, 면 하나의 내접원은 그보다 훨씬 작아
- *    §7.2 샘플 원판(내접원 50%) 안에 드는 픽셀이 한 자릿수까지 내려간다. 그 표본으로
- *    median 을 잡으면 휘도 순위가 노이즈에 뒤집히기 쉽다 — H1 과 무관한 실패로
- *    M1 판정을 오염시킬 수 있는 자리다. 실측으로 하한을 정할 것.
+ * ⚠ **셀당 9픽셀이 복호 하한이다** (실측 2026-08-11: V1/V2/V3 전부 ppu 9 에서 처음
+ *    성공, 8 이하는 no-format-candidate). 버전과 무관하게 일정한 것은 셀 개수가 아니라
+ *    셀당 해상도가 관건이기 때문이다 — 면당 샘플 원판에 들어갈 픽셀 수가 결정한다.
+ *
+ * 그래서 이 상한이 곧 **최소 촬영 거리**를 정한다. V3(21셀 폭) 코드가 960px 프레임의
+ * 절반을 채우면 셀당 약 23px 로 여유롭지만, 1/4 만 차지하면 셀당 약 11px 로 하한에
+ * 근접하고 더 멀어지면 못 읽는다. 960 을 더 낮추면 그만큼 사용자가 더 가까이 가야 한다.
  */
 const FRAME_MAX_SIDE = 960;
+
+/**
+ * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
+ * 복호 실패의 가장 흔한 원인이 거리(셀당 픽셀 부족)인데, 아무 피드백이 없으면
+ * 사용자는 무엇을 바꿔야 할지 알 수 없다.
+ */
+const HINT_AFTER_FAILED_FRAMES = 24;
 
 const scannerApp = document.getElementById('scanner-app');
 const cameraStage = document.getElementById('camera-stage');
@@ -66,6 +74,7 @@ let lastDecodeAt = 0;
 let stoppedForVisibility = false;
 let activeUrl = '';
 let returnFocus = null;
+let consecutiveFailedFrames = 0;
 
 /**
  * TLcube 디코더 경계.
@@ -333,6 +342,20 @@ function handleDecodeResult(result, source, session) {
   if (session !== scanSession) return;
 
   const payload = normalizePayload(result);
+
+  // 거리(셀당 픽셀 부족)가 복호 실패의 가장 흔한 원인인데 아무 피드백이 없으면
+  // 사용자는 무엇을 바꿔야 할지 알 수 없다. 연속 실패가 쌓이면 한 번만 안내한다.
+  if (source === 'camera') {
+    if (payload) {
+      consecutiveFailedFrames = 0;
+    } else {
+      consecutiveFailedFrames += 1;
+      if (consecutiveFailedFrames === HINT_AFTER_FAILED_FRAMES) {
+        setStatus('코드가 화면에 더 크게 보이도록 가까이 가져가 보세요.');
+      }
+    }
+  }
+
   if (!payload) {
     if (source === 'file') {
       setStatus('사진에서 결과를 찾지 못했어요. 다른 사진을 선택하거나 카메라를 시작해 주세요.');
