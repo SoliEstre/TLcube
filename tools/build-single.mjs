@@ -46,12 +46,62 @@ const MODULE_ORDER = [
   'header', 'placement', 'bullseye', 'layout', 'capacity',
   'placementA', 'layoutA', 'capacityA', 'encodeA',
   'luminance',
+  // gf256→rs→qr 체인은 **scene 앞**에 와야 한다. scene.js 가 폴백 QR 을 그리려고
+  // './qr.js' 를 import 하기 때문이다 — 원래는 Type Y 전용이라 보고 뒤에 뒀는데(TY8),
+  // Type O 의 scene 이 그걸 쓰게 되면서 전방 참조가 됐다. 등록 순서 = 치환 가능 순서라
+  // 전방 참조는 치환이 조용히 건너뛰어지고, 브라우저에서 blob: base 상대 해석 실패로
+  // 터진다. 이 불변식은 이제 assertTopologicalOrder() 가 빌드 시점에 강제한다.
+  'gf256', 'rs', 'qr',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
-  'gf256', 'rs', 'qr', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
+  'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',
   // quietzone 은 순수 기하 모듈이라 의존이 없다 — 끝에 붙여도 위상 정렬이 성립한다.
   'quietzone',
 ];
+
+/**
+ * MODULE_ORDER 가 위상 정렬인지 빌드 시점에 강제한다.
+ *
+ * 로더의 치환 루프에는 `if (urls[depName] === undefined) continue;` 가 있다 — 아직 등록되지
+ * 않은 의존은 **조용히 건너뛴다**. 그래서 전방 참조가 있으면 specifier 가 원문 그대로 남고,
+ * blob URL 모듈 안의 상대 경로라 브라우저가 `Failed to resolve module specifier "./x.js"
+ * — base scheme isn't hierarchical` 로 터진다. 원인(순서)과 증상(브라우저 콘솔)이 멀어서
+ * 진단이 비싸다. 실제로 scene→qr 전방 참조가 이 경로로 배포까지 나갔다(2026-08-10).
+ *
+ * 그래서 규칙을 주석이 아니라 **빌드 실패**로 옮긴다. 여기서 던지면 `node tools/build-single.mjs`
+ * 도, `buildSingleHtml()` 을 호출하는 번들 테스트도 같이 걸린다.
+ *
+ * 로더가 실제로 치환하는 형태(작은따옴표 `'./name.js'`)와 **같은 패턴**으로 검사한다 —
+ * 검사와 치환이 다른 문법을 보면 검사를 통과하고도 치환이 안 되는 구멍이 생긴다.
+ */
+function assertTopologicalOrder(moduleSources) {
+  const pos = new Map(moduleSources.map(([name], i) => [name, i]));
+  const problems = [];
+
+  for (const [name, code] of moduleSources) {
+    const deps = new Set(
+      [...code.matchAll(/'\.\/([A-Za-z0-9_/-]+)\.js'/g)].map((m) => m[1]),
+    );
+    for (const dep of deps) {
+      if (!pos.has(dep)) {
+        problems.push(`${name} → ${dep} : MODULE_ORDER 에 없는 모듈`);
+      } else if (pos.get(dep) >= pos.get(name)) {
+        problems.push(
+          `${name}(${pos.get(name)}) → ${dep}(${pos.get(dep)}) : 전방 참조 — ` +
+          `'${dep}' 를 '${name}' 앞으로 옮겨야 한다`,
+        );
+      }
+    }
+  }
+
+  if (problems.length) {
+    throw new Error(
+      `MODULE_ORDER 가 위상 정렬이 아니다 (${problems.length}건). 이대로 빌드하면 ` +
+      `specifier 치환이 조용히 건너뛰어져 브라우저에서만 터진다:\n  ` +
+      problems.join('\n  '),
+    );
+  }
+}
 
 /** index.html 안의 <script type="module"> 블록 정확히 1개를 찾아 반환한다. */
 function extractModuleScript(html) {
@@ -114,6 +164,8 @@ export function buildSingleHtml() {
     const filePath = path.join(SRC_DIR, `${name}.js`);
     return [name, readFileSync(filePath, 'utf8')];
   });
+
+  assertTopologicalOrder(moduleSources);
 
   const loaderBody = buildLoaderScript(moduleSources, appCode);
   const loaderScriptTag = `<script type="module">${loaderBody}</script>`;

@@ -41,7 +41,19 @@ docker compose --env-file ~/.secrets/estre.so.env \
 `deploy/estre-so/projects/tlcube/` 를 그대로 옮기거나 심볼릭 링크하면 된다.
 콘텐츠 경로를 `/srv/tlcube` 가 아닌 곳에 두려면 `TLCUBE_SRC` 로 덮어쓴다.
 
-**갱신은 `git -C /srv/tlcube pull` 로 끝난다** — bind mount 라 재기동도 필요 없다.
+### 갱신
+
+```bash
+git -C /srv/tlcube pull
+docker compose --env-file ~/.secrets/estre.so.env \
+  -f compose.yml -f projects/tlcube/docker-compose.yml restart tlcube-gen
+```
+
+⚠ **`tlcube-gen` 은 반드시 restart 해야 한다.** 나머지 둘(hub·scan)은 디렉터리를 마운트해서
+`git pull` 만으로 즉시 반영되지만, gen 은 `dist/trilume.html` **파일 하나**를 마운트한다.
+Docker 의 단일 파일 bind mount 는 **inode 에 묶이고**, `git pull` 은 제자리 수정이 아니라
+새로 쓰고 rename 하므로 inode 가 바뀐다 → 컨테이너는 계속 **옛 파일을 서빙**한다.
+증상이 "분명히 pull 했는데 안 바뀐다" 라서 원인을 찾기 어렵다.
 
 ### 수집(/i) — 선택
 

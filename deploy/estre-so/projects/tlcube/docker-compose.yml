@@ -14,7 +14,9 @@
 #   dist/trilume.html 이 커밋돼 있어 **빌드 단계도 Node 도 없다**.
 #     git clone https://github.com/SoliEstre/TLcube /srv/tlcube
 #   다른 경로에 두려면 TLCUBE_SRC 로 덮어쓴다.
-#   갱신은 `git -C /srv/tlcube pull` 만으로 끝난다 (bind mount 라 재기동 불필요).
+#   갱신: `git -C /srv/tlcube pull` 뒤 **`docker compose restart tlcube-gen`** 까지 해야 한다.
+#   hub·scan 은 디렉터리 마운트라 pull 만으로 즉시 반영되지만, gen 은 파일 하나를 마운트해서
+#   inode 에 묶인다 — git 은 제자리 수정이 아니라 rename 이라 컨테이너가 옛 파일을 계속 본다.
 #
 # 올리기 (승인 뒤, 사람/main):
 #   docker compose --env-file ~/.secrets/estre.so.env \
