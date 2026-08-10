@@ -24,6 +24,12 @@ import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
 import { distortImage } from './harness/distort.mjs';
 
+// [미검증] M1 calibration 에서 확정 — 중심 허용치는 절대 px가 아니라 cellSize 비율이다.
+const MAX_CENTER_ERROR_CELL_RATIO = 0.15;
+// [미검증] M1 calibration 에서 확정 — 무왜곡·합성 왜곡의 국소 cellSize 목표 오차.
+const MAX_CELL_SIZE_ERROR_RATIO = 0.05;
+const RESOLUTION_SWEEP_PPUS = Object.freeze([6, 10, 16, 20, 24, 32]);
+
 function palette() {
   const preset = getPreset(DEFAULT_PRESET);
   return {
@@ -50,7 +56,7 @@ function rasterToLuma(raster) {
 }
 
 function renderedFixture(pixelsPerUnit = 8) {
-  const encoded = encode('bullseye frontend', { version: 1, eccLevel: 'M' });
+  const encoded = encode('gt', { version: 1, eccLevel: 'M' });
   const scene = buildScene(encoded, { palette: palette() });
   const raster = rasterize(scene, { pixelsPerUnit, supersample: 2 });
   return {
@@ -58,9 +64,8 @@ function renderedFixture(pixelsPerUnit = 8) {
     raster,
     luma: rasterToLuma(raster),
     center: {
-      // raster.js는 정수 index를 픽셀 중심으로 쓴다. scene 좌표 x는 x*ppu-0.5에 놓인다.
-      x: scene.layout.originX * pixelsPerUnit - 0.5,
-      y: scene.layout.originY * pixelsPerUnit - 0.5,
+      x: scene.layout.originX * pixelsPerUnit,
+      y: scene.layout.originY * pixelsPerUnit,
     },
     cellSize: pixelsPerUnit,
   };
@@ -89,14 +94,40 @@ test('실제 encode → buildScene → rasterize 영상에서 중심을 서브�
   assert.ok(first.candidates.length >= 1);
 
   const candidate = nearest(first.candidates, fixture.center);
-  assert.ok(distance(candidate.center, fixture.center) < 0.75,
-    '중심 오차가 서브픽셀 범위를 벗어났다: ' + JSON.stringify(candidate.center));
-  assert.ok(Math.abs(candidate.cellSize - fixture.cellSize) < 0.6,
-    '밴드 폭에서 역산한 cellSize가 어긋났다: ' + candidate.cellSize);
+  assert.ok(
+    distance(candidate.center, fixture.center) / fixture.cellSize <= MAX_CENTER_ERROR_CELL_RATIO,
+    '중심 오차가 cellSize 상대 허용치를 벗어났다: ' + JSON.stringify(candidate.center),
+  );
+  assert.ok(
+    Math.abs(candidate.cellSize - fixture.cellSize) / fixture.cellSize
+      <= MAX_CELL_SIZE_ERROR_RATIO,
+    '밴드 폭에서 역산한 cellSize가 상대 허용치를 벗어났다: ' + candidate.cellSize,
+  );
   assert.equal(candidate.hardChecksPassed, true);
   assert.ok(candidate.score >= 0 && candidate.score <= 1);
   assert.ok(candidate.transform instanceof Float64Array);
   assert.deepEqual(candidate.bands.values.map((band) => band.expected), [0, 1, 0, 1, 0, 1]);
+});
+
+test('ppu 6·10·16·20·24·32 실해상도 스윕에서 중심·cellSize 상대 오차를 지킨다', () => {
+  for (const pixelsPerUnit of RESOLUTION_SWEEP_PPUS) {
+    const fixture = renderedFixture(pixelsPerUnit);
+    const result = detectBullseyes(fixture.luma);
+    assert.equal(result.ok, true, JSON.stringify({ pixelsPerUnit, result }));
+
+    const candidate = nearest(result.candidates, fixture.center);
+    const centerErrorRatio = distance(candidate.center, fixture.center) / fixture.cellSize;
+    const cellSizeErrorRatio = Math.abs(candidate.cellSize - fixture.cellSize) / fixture.cellSize;
+    assert.ok(
+      centerErrorRatio <= MAX_CENTER_ERROR_CELL_RATIO,
+      'ppu ' + pixelsPerUnit + ' 중심 상대 오차: ' + centerErrorRatio,
+    );
+    assert.ok(
+      cellSizeErrorRatio <= MAX_CELL_SIZE_ERROR_RATIO,
+      'ppu ' + pixelsPerUnit + ' cellSize 상대 오차: ' + cellSizeErrorRatio,
+    );
+    assert.equal(candidate.hardChecksPassed, true);
+  }
 });
 
 test('score/refine은 §6.4 hard check와 닫힌 투영 실패를 드러낸다', () => {
@@ -127,14 +158,17 @@ test('score/refine은 §6.4 hard check와 닫힌 투영 실패를 드러낸다',
   });
   assert.equal(refined.ok, true, JSON.stringify(refined));
   assert.equal(refined.candidate.hardChecksPassed, true);
-  assert.ok(distance(refined.candidate.center, fixture.center) < 1);
+  assert.ok(
+    distance(refined.candidate.center, fixture.center) / fixture.cellSize
+      <= MAX_CENTER_ERROR_CELL_RATIO,
+  );
 });
 
-test('회전·원근 30°·스케일 0.5×와 2×에서도 불스아이를 찾는다', () => {
-  const fixture = renderedFixture(8);
+test('회전·원근·스케일 불변성을 저해상도와 높은 ppu에서 지킨다', () => {
   const background = getPreset(DEFAULT_PRESET).background;
   const cases = [
     {
+      pixelsPerUnit: 8,
       options: {
         rotation: 37,
         perspective: { degrees: 30, axis: 'both' },
@@ -144,6 +178,7 @@ test('회전·원근 30°·스케일 0.5×와 2×에서도 불스아이를 찾�
       expectedCellSize: 4,
     },
     {
+      pixelsPerUnit: 8,
       options: {
         rotation: 123,
         perspective: { degrees: -30, axis: 'horizontal' },
@@ -152,9 +187,20 @@ test('회전·원근 30°·스케일 0.5×와 2×에서도 불스아이를 찾�
       },
       expectedCellSize: 16,
     },
+    {
+      pixelsPerUnit: 20,
+      options: {
+        rotation: 73,
+        perspective: { degrees: 30, axis: 'both' },
+        scale: 0.75,
+        fill: { ...background, a: 255 },
+      },
+      expectedCellSize: 15,
+    },
   ];
 
   for (const entry of cases) {
+    const fixture = renderedFixture(entry.pixelsPerUnit);
     const distorted = distortImage(fixture.raster, entry.options);
     const luma = rasterToLuma(distorted);
     const expectedCenter = {
@@ -164,10 +210,16 @@ test('회전·원근 30°·스케일 0.5×와 2×에서도 불스아이를 찾�
     const result = detectBullseyes(luma, { maxRefinedProposals: 3 });
     assert.equal(result.ok, true, JSON.stringify({ options: entry.options, result }));
     const candidate = nearest(result.candidates, expectedCenter);
-    assert.ok(distance(candidate.center, expectedCenter) < 2,
-      '왜곡 후 중심 오차가 너무 크다: ' + JSON.stringify(candidate.center));
-    assert.ok(Math.abs(candidate.cellSize - entry.expectedCellSize) / entry.expectedCellSize < 0.2,
-      '왜곡 후 cellSize 오차가 20%를 넘었다: ' + candidate.cellSize);
+    assert.ok(
+      distance(candidate.center, expectedCenter) / entry.expectedCellSize
+        <= MAX_CENTER_ERROR_CELL_RATIO,
+      '왜곡 후 중심 상대 오차가 너무 크다: ' + JSON.stringify(candidate.center),
+    );
+    assert.ok(
+      Math.abs(candidate.cellSize - entry.expectedCellSize) / entry.expectedCellSize
+        <= MAX_CELL_SIZE_ERROR_RATIO,
+      '왜곡 후 cellSize 상대 오차가 너무 크다: ' + candidate.cellSize,
+    );
     assert.equal(candidate.hardChecksPassed, true);
   }
 });

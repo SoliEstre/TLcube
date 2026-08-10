@@ -34,6 +34,12 @@ const MIN_PROJECTED_BAND_WIDTH_PX = 1.5;
 const MIN_CONTRAST_SPAN_RATIO = 0.45;
 // [미검증] M1 calibration 에서 확정 — 같은 반지름의 angular MAD/contrast 상한.
 const MAX_ANGULAR_MAD_CONTRAST = 0.25;
+// [미검증] M1 calibration 에서 확정 — 경계 정렬은 해상도와 함께 넓어지지 않는 픽셀 간격으로 잰다.
+const BOUNDARY_ALIGNMENT_INSET_PX = 1.5;
+// [미검증] M1 calibration 에서 확정 — 0에 붙은 보간 오차는 반전 경계로 판정하지 않는다.
+const BOUNDARY_SIGN_TOLERANCE_RATIO = 1e-7;
+// [미검증] M1 calibration 에서 확정 — 0 경계를 허용하되 전체 경계 정렬 증거를 요구한다.
+const MIN_BOUNDARY_ALIGNMENT_SCORE = 0.20;
 // [미검증] M1 calibration 에서 확정 — octave당 고정 스케일 seed 수.
 const SCALE_SEEDS_PER_OCTAVE = 8;
 
@@ -54,6 +60,18 @@ const DEFAULT_REFINE_ITERATIONS = 6;
 const REFINEMENT_RADIAL_SAMPLES = 24;
 // [미검증] M1 calibration 에서 확정.
 const REFINEMENT_ANGULAR_SAMPLES = 24;
+// [미검증] M1 calibration 에서 확정 — 중심 x·y와 등방 스케일을 함께 옮기는 다단 격자.
+const ISOTROPIC_GRID_STEPS = Object.freeze([
+  Object.freeze({
+    center: 0.14, centerSubdivisions: 2, logScale: 0.055, scaleRadius: 2,
+  }),
+  Object.freeze({
+    center: 0.05, centerSubdivisions: 1, logScale: 0.020, scaleRadius: 1,
+  }),
+  Object.freeze({
+    center: 0.018, centerSubdivisions: 1, logScale: 0.007, scaleRadius: 1,
+  }),
+]);
 // [미검증] M1 calibration 에서 확정.
 const MAX_OUTER_RADIUS_FRACTION = 0.42;
 // [미검증] M1 calibration 에서 확정.
@@ -461,8 +479,10 @@ function bandIndexAt(radius) {
 }
 
 function compareScored(a, b) {
-  if (a.hardChecksPassed !== b.hardChecksPassed) return a.hardChecksPassed ? -1 : 1;
+  // 정제 중 hard check를 먼저 세우면 경계 중앙값이 잠시 0이 되는 한 step을 건너지
+  // 못하고 약한 양수 plateau에 갇힌다. 연속 점수를 먼저 최적화하고 hard check는 동점만 푼다.
   if (Math.abs(a.score - b.score) > SCORE_EPSILON) return b.score - a.score;
+  if (a.hardChecksPassed !== b.hardChecksPassed) return a.hardChecksPassed ? -1 : 1;
   if (Math.abs(a.radialError - b.radialError) > SCORE_EPSILON) {
     return a.radialError - b.radialError;
   }
@@ -541,8 +561,40 @@ function scoreBullseyeCore(luma, H, options, stats) {
     if (!(signed > 0)) alternating = false;
   }
 
+  const projectedBandWidths = [];
+  for (let angularIndex = 0; angularIndex < angularSamples; angularIndex += 1) {
+    const angle = (2 * Math.PI * angularIndex) / angularSamples;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    let previous = project(H, 0, 0);
+    for (let boundary = 1; boundary <= BAND_COUNT; boundary += 1) {
+      const radius = boundary === BAND_COUNT
+        ? CANONICAL_OUTER_RADIUS
+        : CANONICAL_BAND_WIDTH * boundary;
+      const current = project(H, radius * cos, radius * sin);
+      if (previous === null || current === null) {
+        projectedClosed = false;
+      } else {
+        const dx = current.x - previous.x;
+        const dy = current.y - previous.y;
+        projectedBandWidths.push(Math.sqrt(dx * dx + dy * dy));
+      }
+      previous = current;
+    }
+  }
+  const minProjectedBandWidth = projectedBandWidths.length === 0
+    ? 0
+    : Math.min(...projectedBandWidths);
+  const medianProjectedBandWidth = median(projectedBandWidths);
+  const cellSize = (medianProjectedBandWidth * BAND_COUNT) / CANONICAL_OUTER_RADIUS;
+
   const boundaryGradients = [];
-  const boundaryInset = CANONICAL_BAND_WIDTH * 0.22;
+  // canonical 비율을 고정하면 ppu가 커질수록 양쪽 표본이 경계에서 멀어져 점수 1의
+  // 평탄부가 해상도에 비례해 넓어진다. 영상 픽셀 간격을 고정해 정제 분해능을 보존한다.
+  const boundaryInset = Math.min(
+    CANONICAL_BAND_WIDTH * 0.22,
+    BOUNDARY_ALIGNMENT_INSET_PX / Math.max(cellSize, Number.EPSILON),
+  );
   for (let boundary = 1; boundary < BAND_COUNT; boundary += 1) {
     const radius = CANONICAL_BAND_WIDTH * boundary;
     const signedSamples = [];
@@ -574,33 +626,6 @@ function scoreBullseyeCore(luma, H, options, stats) {
     });
   }
 
-  const projectedBandWidths = [];
-  for (let angularIndex = 0; angularIndex < angularSamples; angularIndex += 1) {
-    const angle = (2 * Math.PI * angularIndex) / angularSamples;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    let previous = project(H, 0, 0);
-    for (let boundary = 1; boundary <= BAND_COUNT; boundary += 1) {
-      const radius = boundary === BAND_COUNT
-        ? CANONICAL_OUTER_RADIUS
-        : CANONICAL_BAND_WIDTH * boundary;
-      const current = project(H, radius * cos, radius * sin);
-      if (previous === null || current === null) {
-        projectedClosed = false;
-      } else {
-        const dx = current.x - previous.x;
-        const dy = current.y - previous.y;
-        projectedBandWidths.push(Math.sqrt(dx * dx + dy * dy));
-      }
-      previous = current;
-    }
-  }
-  const minProjectedBandWidth = projectedBandWidths.length === 0
-    ? 0
-    : Math.min(...projectedBandWidths);
-  const medianProjectedBandWidth = median(projectedBandWidths);
-  const cellSize = (medianProjectedBandWidth * BAND_COUNT) / CANONICAL_OUTER_RADIUS;
-
   const usableRadialMads = radiusSummaries
     .filter((summary) => summary.radius > 0 && Number.isFinite(summary.mad))
     .map((summary) => summary.mad);
@@ -623,8 +648,21 @@ function scoreBullseyeCore(luma, H, options, stats) {
   const robustSpan = stats.span;
   const contrastPass = Number.isFinite(contrast)
     && contrast >= robustSpan * MIN_CONTRAST_SPAN_RATIO;
-  const boundarySignsPass = boundaryGradients.length === BAND_COUNT - 1
-    && boundaryGradients.every((entry) => entry.count === angularSamples && entry.signedMedian > 0);
+  const boundaryAlignmentScores = boundaryGradients.map((entry) => (
+    contrast > 0 ? clamp01(entry.signedMedian / contrast) : 0
+  ));
+  const gradientScore = boundaryAlignmentScores.length === BAND_COUNT - 1
+    ? boundaryAlignmentScores.reduce((sum, value) => sum + value, 0)
+      / boundaryAlignmentScores.length
+    : 0;
+  const boundarySignTolerance = Number.isFinite(contrast)
+    ? Math.max(SCORE_EPSILON, Math.abs(contrast) * BOUNDARY_SIGN_TOLERANCE_RATIO)
+    : SCORE_EPSILON;
+  const boundariesNotReversed = boundaryGradients.length === BAND_COUNT - 1
+    && boundaryGradients.every((entry) => entry.count === angularSamples
+      && entry.signedMedian >= -boundarySignTolerance);
+  const boundarySignsPass = boundariesNotReversed
+    && gradientScore >= MIN_BOUNDARY_ALIGNMENT_SCORE;
   const outerBandLight = profileAt(CANONICAL_OUTER_RADIUS, 1) === 1
     && Number.isFinite(bandMedians[BAND_COUNT - 1])
     && bandMedians[BAND_COUNT - 1] > darkMedian;
@@ -655,8 +693,7 @@ function scoreBullseyeCore(luma, H, options, stats) {
   const alternationScore = contrast > 0
     ? clamp01((minAlternationMargin * 2) / contrast)
     : 0;
-  const signedGradientMedian = median(boundaryGradients.map((entry) => entry.signedMedian));
-  const gradientScore = contrast > 0 ? clamp01((signedGradientMedian * 2) / contrast) : 0;
+  // 중앙값 하나를 2×로 포화시키지 않고 모든 경계 정렬도를 목적함수에 반영한다.
   const symmetryScore = Number.isFinite(angularMadContrast)
     ? clamp01(1 - angularMadContrast / MAX_ANGULAR_MAD_CONTRAST)
     : 0;
@@ -686,6 +723,8 @@ function scoreBullseyeCore(luma, H, options, stats) {
     boundaryAngularMad,
     angularMadContrast,
     boundaryGradients,
+    boundaryAlignmentScore: gradientScore,
+    boundaryAlignmentInsetPx: boundaryInset * cellSize,
     minProjectedBandWidth,
     medianProjectedBandWidth,
     hardChecks: hardCheckDetails,
@@ -759,6 +798,47 @@ function scoreParams(luma, params, options, stats) {
   return scored.ok ? candidateFromScore(scored) : null;
 }
 
+function isotropicGridRefine(luma, initialParams, options, stats) {
+  let params = initialParams.slice();
+  let current = scoreParams(luma, params, options, stats);
+  if (current === null) return fail(FRONTEND_FAILURE.NO_FINDER, {
+    message: '등방 격자 정제의 초기 변환이 퇴화했다',
+  });
+
+  for (const step of ISOTROPIC_GRID_STEPS) {
+    const a = Math.exp(params[2]);
+    const c = Math.exp(params[3]);
+    const localCellSize = Math.sqrt(Math.max(1e-9, a * c - params[4] * params[4]));
+    let bestParams = params;
+    let best = current;
+    for (let dyIndex = -step.centerSubdivisions;
+      dyIndex <= step.centerSubdivisions; dyIndex += 1) {
+      const dy = dyIndex / step.centerSubdivisions;
+      for (let dxIndex = -step.centerSubdivisions;
+        dxIndex <= step.centerSubdivisions; dxIndex += 1) {
+        const dx = dxIndex / step.centerSubdivisions;
+        for (let scaleDirection = -step.scaleRadius;
+          scaleDirection <= step.scaleRadius; scaleDirection += 1) {
+          if (dx === 0 && dy === 0 && scaleDirection === 0) continue;
+          const trialParams = params.slice();
+          trialParams[0] += dx * localCellSize * step.center;
+          trialParams[1] += dy * localCellSize * step.center;
+          trialParams[2] += scaleDirection * step.logScale;
+          trialParams[3] += scaleDirection * step.logScale;
+          const trial = scoreParams(luma, trialParams, options, stats);
+          if (trial !== null && compareScored(trial, best) < 0) {
+            best = trial;
+            bestParams = trialParams;
+          }
+        }
+      }
+    }
+    params = bestParams;
+    current = best;
+  }
+  return ok({ candidate: current, params });
+}
+
 function coordinateRefine(luma, initialParams, options, stats) {
   const iterations = options.refineIterations === undefined
     ? DEFAULT_REFINE_ITERATIONS
@@ -815,10 +895,14 @@ function refineBullseyeCore(luma, initial, options, stats) {
     return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, { message: error.message });
   }
 
+  const fastOptions = lowCostScoreOptions(options);
+  const gridded = isotropicGridRefine(luma, baseParams, fastOptions, stats);
+  if (!gridded.ok) return gridded;
+  baseParams = gridded.params;
+
   const seeds = options.projectiveSeeds === false
     ? [[baseParams[5], baseParams[6]]]
     : PROJECTIVE_TILT_SEEDS.map(([x, y]) => [baseParams[5] + x, baseParams[6] + y]);
-  const fastOptions = lowCostScoreOptions(options);
   const seededCandidates = [];
   // 모든 tilt seed를 저비용 표본으로 먼저 평가하고, 최고 seed 하나만 고정 횟수 정제한다.
   // 첫 hard-pass seed에서 멈추지 않으므로 seed 순서가 결과를 바꾸지 않는다.
@@ -837,10 +921,17 @@ function refineBullseyeCore(luma, initial, options, stats) {
   if (!refined.ok) return refined;
 
   // 저비용 표본은 탐색에만 쓴다. 공개 점수와 hard check는 규범 기본 64×48로 다시 계산한다.
-  const finalScore = scoreBullseyeCore(luma, refined.candidate.transform, options, stats);
-  if (!finalScore.ok) return finalScore;
+  // 격자 결과도 함께 보존해 projective coordinate descent의 저비용 표본 과적합을 막는다.
+  const finalScores = [
+    scoreBullseyeCore(luma, gridded.candidate.transform, options, stats),
+    scoreBullseyeCore(luma, refined.candidate.transform, options, stats),
+  ].filter((entry) => entry.ok).map(candidateFromScore);
+  if (finalScores.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: '정제 후보의 최종 점수를 만들 수 없다' });
+  }
+  finalScores.sort(compareScored);
   return ok({
-    candidate: candidateFromScore(finalScore),
+    candidate: finalScores[0],
     evaluatedSeeds: seededCandidates.length,
   });
 }
@@ -854,6 +945,26 @@ export function refineBullseye(luma, initial, options = {}) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '휘도 span이 없어 정제할 수 없다' });
   }
   return refineBullseyeCore(luma, initial, options, stats);
+}
+
+function selectRefinementEntries(coarse, limit) {
+  const byScore = coarse.slice();
+  const byVote = coarse.slice().sort((a, b) => b.proposal.vote - a.proposal.vote
+    || a.proposal.pyramidLevel - b.proposal.pyramidLevel
+    || compareScored(a.candidate, b.candidate));
+  const selected = [];
+  const seen = new Set();
+  for (let index = 0; selected.length < limit
+    && (index < byScore.length || index < byVote.length); index += 1) {
+    for (const entry of [byScore[index], byVote[index]]) {
+      if (entry !== undefined && !seen.has(entry)) {
+        seen.add(entry);
+        selected.push(entry);
+        if (selected.length >= limit) break;
+      }
+    }
+  }
+  return selected;
 }
 
 function finalCandidateNms(candidates) {
@@ -914,9 +1025,10 @@ export function detectBullseyes(luma, options = {}) {
     });
   }
 
+  const refinementEntries = selectRefinementEntries(coarse, refineLimit);
   const refined = [];
-  // 첫 통과에서 반환하지 않는다. 정해진 평가 예산의 proposal을 모두 정제한다.
-  for (const entry of coarse.slice(0, refineLimit)) {
+  // 첫 통과에서 반환하지 않는다. 점수·방사 투표 순위를 섞은 고정 예산을 모두 정제한다.
+  for (const entry of refinementEntries) {
     const result = refineBullseyeCore(luma, entry.candidate, options, stats);
     if (result.ok) refined.push(result.candidate);
   }
@@ -928,7 +1040,7 @@ export function detectBullseyes(luma, options = {}) {
     const best = refined[0] ?? coarse[0]?.candidate;
     return fail(FRONTEND_FAILURE.NO_FINDER, {
       evaluatedRaw: raw.length,
-      evaluatedRefined: refined.length,
+      evaluatedRefined: refinementEntries.length,
       bestScore: best?.score,
       hardChecks: best?.bands?.hardChecks,
     });
