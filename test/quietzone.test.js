@@ -218,6 +218,108 @@ describe('실제 인코더 산출물과의 통합', () => {
     assert.ok(w > 10 && h > 10, `남은 폴리곤이 코드가 아니라 QR 쪽으로 보인다 (${w.toFixed(1)}×${h.toFixed(1)})`);
   });
 
+  // ── 마진이 QR 과 코드를 잇는 구성 (실사진에서 관측된 결함) ────────────────
+  //
+  // 위 두 테스트는 **Type Y v0** 을 쓴다. 거기선 QR 과 코드 간격이 마진(2셀)보다 넓어
+  // 애초에 두 클러스터로 갈린다 — 즉 결함이 나는 영역을 건드리지 않는다. 실제로 결함
+  // 코드로 되돌려도 21개가 전부 통과했다(2026-08-11 mutation 검증).
+  //
+  // 결함이 나는 구성은 **A v0 · O v1** 이다. 마진이 QR 과 코드 사이를 메워 한 덩어리가
+  // 되고, 그 덩어리엔 코드 셀이 섞여 있어 "전부 QR 색인가" 가 false → 제외가 조용히
+  // 무력화된다. 이때도 폴리곤은 **1개**라서 개수 단언으로는 절대 못 잡는다. 실제 산출은
+  //   결함: 47x39@(3,3)  ← 좌상단 QR 까지 삼킨다
+  //   정상: 37x33@(13,9) ← 코드만
+  // 그래서 여기서는 **기하**를 본다.
+  const BRIDGING = [
+    { type: 'A', version: 0 },
+    { type: 'O', version: 1 },
+  ];
+
+  async function oaScene(type, version) {
+    const { encode } = await import('../src/encode.js');
+    const { encodeA } = await import('../src/encodeA.js');
+    const { buildScene } = await import('../src/scene.js');
+    const { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const { TL_READER_URL } = await import('../src/qr.js');
+    const p = getPreset('slate');
+    const encoded = (type === 'A' ? encodeA : encode)('quiet zone', { version });
+    return buildScene(encoded, {
+      palette: {
+        background: null, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+      },
+      qrText: TL_READER_URL,
+      qrCorner: 'TL',
+    });
+  }
+
+  // 코너 QR 도형을 **색 + 위치**로 찾는다. clusterShapes 를 쓰면 검증 대상 로직으로
+  // 검증 기준을 만드는 꼴이라 순환이 된다. 불스아이도 같은 색이지만 코드 한가운데
+  // 있으므로, 좌상단 사분면 조건으로 코너 QR 만 걸러진다.
+  function cornerQrPoints(scene, qrColors) {
+    const isQrColor = (c) => qrColors.some((q) => q.r === c.r && q.g === c.g && q.b === c.b);
+    const pts = [];
+    for (const s of scene.shapes) {
+      if (!isQrColor(s.color)) continue;
+      const p = s.kind === 'disc'
+        ? { x: s.cx, y: s.cy }
+        : s.points.reduce((a, q) => ({ x: a.x + q.x / s.points.length, y: a.y + q.y / s.points.length }), { x: 0, y: 0 });
+      if (p.x < scene.width / 2 && p.y < scene.height / 2
+        && Math.hypot(p.x - scene.width / 2, p.y - scene.height / 2) > Math.min(scene.width, scene.height) / 4) {
+        pts.push(p);
+      }
+    }
+    return pts;
+  }
+
+  /** 짝수-교차 규칙 point-in-polygon. */
+  function inside(poly, p) {
+    let hit = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+      const a = poly[j]; const b = poly[i];
+      if ((b.y > p.y) !== (a.y > p.y)
+        && p.x < ((a.x - b.x) * (p.y - b.y)) / (a.y - b.y) + b.x) hit = !hit;
+    }
+    return hit;
+  }
+
+  for (const { type, version } of BRIDGING) {
+    test(`${type} v${version} — 마진이 QR 과 코드를 이어도 QR 은 안전영역 밖이다`, async () => {
+      const { BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+      const qrColors = [BULLSEYE_LIGHT, BULLSEYE_DARK];
+      const scene = await oaScene(type, version);
+
+      // 전제: 이 구성이 정말 "마진으로 이어지는" 구성인가. 아니면 결함 영역을 안
+      // 건드리는 셈이라 테스트가 무의미해진다 (Y v0 가 정확히 그래서 결함을 놓쳤다).
+      assert.equal(quietZonePolygons(scene, 2).length, 1,
+        '전제 위반: 마진으로도 QR 과 코드가 안 이어진다 — 결함 영역을 못 건드린다');
+
+      const qrPts = cornerQrPoints(scene, qrColors);
+      assert.ok(qrPts.length > 0, '코너 QR 도형을 못 찾았다 — 로케이터가 깨졌다');
+
+      // 자체 콰이어트 존을 가진 블록 위에는 안전영역이 덮이면 안 된다.
+      for (const poly of quietZonePolygons(scene, 2, qrColors)) {
+        const covered = qrPts.filter((p) => inside(poly, p));
+        assert.equal(covered.length, 0,
+          `안전영역이 코너 QR 을 ${covered.length}/${qrPts.length} 덮었다 (QR 과 코드를 잇는 판때기)`);
+      }
+    });
+  }
+
+  test('제외 판정은 마진에 의존하지 않는다', async () => {
+    const { BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const qrColors = [BULLSEYE_LIGHT, BULLSEYE_DARK];
+    const scene = await oaScene('A', 0);
+    const qrPts = cornerQrPoints(scene, qrColors);
+
+    // 마진을 키우면 언젠가는 QR 과 코드가 붙는다. 붙는 순간 제외가 꺼지던 것이 결함이다.
+    for (const margin of [0.5, 1, 2, 3, 4]) {
+      for (const poly of quietZonePolygons(scene, margin, qrColors)) {
+        assert.equal(qrPts.filter((p) => inside(poly, p)).length, 0,
+          `margin=${margin} 에서 안전영역이 코너 QR 을 덮었다`);
+      }
+    }
+  });
+
   test('불스아이는 코드와 한 클러스터라 selfQuietColors 로도 코드가 제외되지 않는다', async () => {
     const { encode } = await import('../src/encode.js');
     const { buildScene } = await import('../src/scene.js');

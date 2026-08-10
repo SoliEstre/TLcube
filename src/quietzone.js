@@ -245,38 +245,75 @@ export function clusterShapes(shapes, gap) {
 const sameColor = (a, b) => a && b && a.r === b.r && a.g === b.g && a.b === b.b;
 
 /**
- * 클러스터의 모든 도형이 `selfQuietColors` 안의 색만 쓰는가.
+ * **연결성** 판정용 간격 (scene 단위 = 셀 크기 1 기준).
  *
- * 용도: **폴백 QR 블록은 이미 자기 콰이어트 존(4모듈 밝은 패치)을 갖고 있다**. 거기에
- * 안전영역을 또 두르면 여백만 겹쳐 낭비다(사용자 판정 2026-08-09). QR 블록은 밝은
- * 콰이어트 패치 + 어두운 모듈로만 이뤄지므로, 그 두 색만으로 구성된 클러스터를 건너뛴다.
- *
- * 불스아이도 같은 두 색을 쓰지만 **코드 셀과 같은 클러스터**에 있어서(실루엣 안쪽)
- * 이 검사에 걸리지 않는다 — 걸리는 건 코너 QR 처럼 따로 떨어진 덩어리뿐이다.
- * 중앙 QR·Y2W 윈도 QR 은 애초에 코드와 한 클러스터라 무관하다.
+ * 안전영역 마진(보통 2셀)과 **분리해야 한다.** 마진으로 연결성을 판정하면 코너 QR 이
+ * 코드와 같은 덩어리로 묶여 버린다 — 실제로 그랬다(2026-08-11, Type A·O 모두 클러스터 1개).
+ * 서로 맞닿은 셀은 묶고(변을 공유하므로 0 초과면 충분), 눈에 보이는 간격만큼 떨어진
+ * 코너 QR 은 안 묶이는 값이어야 한다.
  */
-function isSelfQuiet(shapes, idx, selfQuietColors) {
-  if (!selfQuietColors || selfQuietColors.length === 0) return false;
-  for (const i of idx) {
-    if (!selfQuietColors.some((c) => sameColor(c, shapes[i].color))) return false;
+const CONNECT_GAP = 0.25;
+
+/**
+ * 도형 하나가 `selfQuietColors` 안의 색만 쓰는가.
+ */
+function shapeIsSelfQuietColored(shape, selfQuietColors) {
+  return selfQuietColors.some((c) => sameColor(c, shape.color));
+}
+
+/**
+ * 자체 콰이어트 존을 가진 덩어리(폴백 QR 블록)의 도형 인덱스 집합.
+ *
+ * **폴백 QR 블록은 이미 자기 콰이어트 존(4모듈 밝은 패치)을 갖고 있다.** 거기에 안전영역을
+ * 또 두르면 여백만 겹쳐 낭비다(사용자 판정 2026-08-09).
+ *
+ * ⚠ 판정을 **안전영역 마진이 아니라 연결성 간격**으로 한다. 이전 구현은 마진(2셀)으로 묶은
+ * 클러스터 단위로 "전부 QR 색인가" 를 물었는데, 그 마진이 QR 과 코드 사이를 메워 한 덩어리가
+ * 되면 검사가 `false` 가 되어 **제외가 조용히 무력화**됐다. 그 결과가 QR 과 코드를 잇는
+ * 대각선 안전영역 덩어리다(실사진에서 관측).
+ *
+ * 불스아이도 같은 두 색을 쓰지만 코드 셀과 **맞닿아** 있어 연결성 간격에서 한 덩어리가 되고,
+ * 그 덩어리에는 코드 셀이 섞이므로 제외되지 않는다. 중앙 QR·Y2W 윈도 QR 도 마찬가지다.
+ */
+function selfQuietShapeIndices(shapes, selfQuietColors) {
+  const excluded = new Set();
+  if (!selfQuietColors || selfQuietColors.length === 0) return excluded;
+
+  for (const idx of clusterShapes(shapes, CONNECT_GAP)) {
+    let all = true;
+    for (const i of idx) {
+      if (!shapeIsSelfQuietColored(shapes[i], selfQuietColors)) { all = false; break; }
+    }
+    if (all) for (const i of idx) excluded.add(i);
   }
-  return true;
+  return excluded;
 }
 
 /**
  * 안전영역 폴리곤들을 만든다 — 클러스터별 볼록 껍질 + 바깥 오프셋 + 캔버스 클립.
  * @param {{width:number, height:number, shapes:Array}} scene
  * @param {number} margin 오프셋 거리 (scene 단위 — 셀 크기 1 기준 "셀 몇 개분")
- * @param {{r:number,g:number,b:number}[]} [selfQuietColors] 이 색들로만 이뤄진 클러스터는
- *   자체 콰이어트 존이 있다고 보고 건너뛴다 (폴백 QR 블록).
+ * @param {{r:number,g:number,b:number}[]} [selfQuietColors] 이 색들로만 이뤄진 **연결
+ *   덩어리**는 자체 콰이어트 존이 있다고 보고 제외한다 (폴백 QR 블록).
  * @returns {{x:number,y:number}[][]}
  */
 export function quietZonePolygons(scene, margin, selfQuietColors) {
+  // 제외 판정을 **먼저** 한다 — 연결성 간격 기준으로. 그 다음 남은 도형만 마진으로
+  // 묶어 hull 을 만든다. 순서를 반대로 하면 마진이 QR 과 코드를 한 덩어리로 붙여
+  // 제외가 무력화된다(그 결과가 QR 과 코드를 잇는 대각선 안전영역이다).
+  const excluded = selfQuietShapeIndices(scene.shapes, selfQuietColors);
+  const kept = [];
+  const keptIndex = [];
+  for (let i = 0; i < scene.shapes.length; i += 1) {
+    if (excluded.has(i)) continue;
+    kept.push(scene.shapes[i]);
+    keptIndex.push(i);
+  }
+
   const out = [];
-  for (const idx of clusterShapes(scene.shapes, margin)) {
-    if (isSelfQuiet(scene.shapes, idx, selfQuietColors)) continue;
+  for (const idx of clusterShapes(kept, margin)) {
     const pts = [];
-    for (const i of idx) pts.push(...shapePoints(scene.shapes[i]));
+    for (const i of idx) pts.push(...shapePoints(kept[i]));
     const hull = convexHull(pts);
     if (hull.length < 3) continue;
     const poly = clipToRect(offsetConvex(hull, margin), scene.width, scene.height);
