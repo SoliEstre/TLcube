@@ -22,7 +22,11 @@ import {
 } from '../src/luminance.js';
 import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
-import { distortImage } from './harness/distort.mjs';
+import {
+  applyJpegApproximation,
+  distortImage,
+  scaleImage,
+} from './harness/distort.mjs';
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -73,6 +77,83 @@ function cropRaster(raster, x, y, width, height) {
   return { width, height, pixels };
 }
 
+function padRaster(raster, factor, fill) {
+  const width = Math.round(raster.width * factor);
+  const height = Math.round(raster.height * factor);
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let index = 0; index < width * height; index += 1) {
+    const offset = index * 4;
+    pixels[offset] = fill.r;
+    pixels[offset + 1] = fill.g;
+    pixels[offset + 2] = fill.b;
+    pixels[offset + 3] = fill.a;
+  }
+
+  const offsetX = Math.floor((width - raster.width) / 2);
+  const offsetY = Math.floor((height - raster.height) / 2);
+  for (let y = 0; y < raster.height; y += 1) {
+    const sourceStart = y * raster.width * 4;
+    const targetStart = ((y + offsetY) * width + offsetX) * 4;
+    pixels.set(
+      raster.pixels.subarray(sourceStart, sourceStart + raster.width * 4),
+      targetStart,
+    );
+  }
+  return { width, height, pixels };
+}
+
+function gaussianKernel(sigma) {
+  const radius = Math.ceil(3 * sigma);
+  const weights = new Float64Array(radius * 2 + 1);
+  let sum = 0;
+  for (let offset = -radius; offset <= radius; offset += 1) {
+    const weight = Math.exp(-(offset * offset) / (2 * sigma * sigma));
+    weights[offset + radius] = weight;
+    sum += weight;
+  }
+  for (let index = 0; index < weights.length; index += 1) weights[index] /= sum;
+  return { radius, weights };
+}
+
+function gaussianBlurRaster(raster, sigma) {
+  assert.ok(Number.isFinite(sigma) && sigma > 0, 'sigma는 양의 유한수여야 한다');
+  const { radius, weights } = gaussianKernel(sigma);
+  const { width, height } = raster;
+  const horizontal = new Float32Array(width * height * 3);
+  const pixels = new Uint8ClampedArray(raster.pixels);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const target = (y * width + x) * 3;
+      for (let channel = 0; channel < 3; channel += 1) {
+        let sum = 0;
+        for (let offset = -radius; offset <= radius; offset += 1) {
+          const sourceX = Math.max(0, Math.min(width - 1, x + offset));
+          sum += raster.pixels[(y * width + sourceX) * 4 + channel]
+            * weights[offset + radius];
+        }
+        horizontal[target + channel] = sum;
+      }
+    }
+  }
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const target = (y * width + x) * 4;
+      for (let channel = 0; channel < 3; channel += 1) {
+        let sum = 0;
+        for (let offset = -radius; offset <= radius; offset += 1) {
+          const sourceY = Math.max(0, Math.min(height - 1, y + offset));
+          sum += horizontal[(sourceY * width + x) * 3 + channel]
+            * weights[offset + radius];
+        }
+        pixels[target + channel] = Math.round(sum);
+      }
+    }
+  }
+  return { ...raster, pixels };
+}
+
 const CLEAN_CASES = Object.freeze([
   { version: 1, eccLevel: 'L', text: 'TLcube' },
   { version: 1, eccLevel: 'M', text: '안녕' },
@@ -104,6 +185,9 @@ const ROTATION_SWEEP = Object.freeze(
 );
 const PERSPECTIVE_SWEEP = Object.freeze([-30, -20, -10, 0, 10, 20, 30]);
 const SCALE_SWEEP = Object.freeze([0.5, 0.6, 0.75, 1, 1.25, 1.5, 2]);
+const RESAMPLE_SWEEP = Object.freeze([0.9, 0.8, 0.7, 0.6, 0.5]);
+const BLUR_SIGMA_SWEEP = Object.freeze([0.5, 1, 1.5, 2, 2.5]);
+const JPEG_BLUR_SIGMA_SWEEP = Object.freeze([1, 2, 3]);
 const SWEEP_TEXT = 'https://tl.estre.so/x';
 
 function failureMessage(axis, value, result) {
@@ -177,6 +261,61 @@ test('full-frame scale sweep 7점: 0.5~2.0배 전 구간 복호', {
     });
     const distorted = distortImage(fixture.raster, { scale, fill: FILL });
     assertSweepDecoded('scale', scale, decodeFrontend(distorted));
+  }
+});
+
+test('1.8배 패딩 뒤 bilinear resample sweep 5점: 0.5–0.9배 전 구간 복호', {
+  timeout: 180_000,
+}, () => {
+  const fixture = render(SWEEP_TEXT, 2, 'M', {
+    pixelsPerUnit: 24,
+    supersample: 2,
+  });
+  assert.deepEqual([fixture.raster.width, fixture.raster.height], [803, 720]);
+  const padded = padRaster(fixture.raster, 1.8, FILL);
+  assert.deepEqual([padded.width, padded.height], [1445, 1296]);
+  assertSweepDecoded('resample-clean', 1, decodeFrontend(padded));
+
+  for (const scale of RESAMPLE_SWEEP) {
+    const resampled = scaleImage(padded, scale, { fill: FILL });
+    assertSweepDecoded(
+      'resample',
+      { scale, effectiveWidth: Math.round(padded.width * scale) },
+      decodeFrontend(resampled),
+    );
+  }
+});
+
+test('0.5배 resample 뒤 Gaussian blur sigma sweep 5점 복호', {
+  timeout: 180_000,
+}, () => {
+  const fixture = render(SWEEP_TEXT, 2, 'M', {
+    pixelsPerUnit: 24,
+    supersample: 2,
+  });
+  const padded = padRaster(fixture.raster, 1.8, FILL);
+  const resampled = scaleImage(padded, 0.5, { fill: FILL });
+
+  for (const sigma of BLUR_SIGMA_SWEEP) {
+    const blurred = gaussianBlurRaster(resampled, sigma);
+    assertSweepDecoded('gaussian-blur', sigma, decodeFrontend(blurred));
+  }
+});
+
+test('0.5배 resample + Gaussian blur sigma sweep + JPEG 근사 q=60 3점 복호', {
+  timeout: 180_000,
+}, () => {
+  const fixture = render(SWEEP_TEXT, 2, 'M', {
+    pixelsPerUnit: 24,
+    supersample: 2,
+  });
+  const padded = padRaster(fixture.raster, 1.8, FILL);
+  const resampled = scaleImage(padded, 0.5, { fill: FILL });
+
+  for (const sigma of JPEG_BLUR_SIGMA_SWEEP) {
+    const blurred = gaussianBlurRaster(resampled, sigma);
+    const compressed = applyJpegApproximation(blurred, 60);
+    assertSweepDecoded('jpeg-q60+gaussian-blur', sigma, decodeFrontend(compressed));
   }
 });
 

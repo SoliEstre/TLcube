@@ -38,7 +38,7 @@ import { sampleHexCell } from './grid-sample.js';
  * 포맷 규범처럼 숨기지 않는다.
  */
 // [미검증] M1 calibration 에서 확정: 앵커 면 순위의 최소 상대휘도 간격.
-const DEFAULT_ANCHOR_MIN_SEPARATION = 0.08;
+const DEFAULT_ANCHOR_MIN_SEPARATION = 0.04;
 // [미검증] M1 calibration 에서 확정: 근접동률로 취급할 간격.
 const DEFAULT_ANCHOR_TIE_EPSILON = 0.02;
 // [미검증] M1 calibration 에서 확정: 앵커 면 원판의 최소 유효 표본 수.

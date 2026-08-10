@@ -42,6 +42,8 @@ const BOUNDARY_SIGN_TOLERANCE_RATIO = 1e-7;
 const MIN_BOUNDARY_ALIGNMENT_SCORE = 0.20;
 // [미검증] M1 calibration 에서 확정 — octave당 고정 스케일 seed 수.
 const SCALE_SEEDS_PER_OCTAVE = 8;
+// [미검증] M1 calibration 에서 확정 — 5–95% span이 0일 때만 제외할 양끝 표본 수.
+const ROBUST_TAIL_TRIM_SAMPLES = 32;
 
 // 아래 탐색 예산·proposal 문턱도 M1에서 recall/비용 곡선으로 보정해야 한다.
 // [미검증] M1 calibration 에서 확정.
@@ -140,9 +142,39 @@ function robustStats(luma) {
   if (finite.length === 0) {
     return { low: Number.NaN, high: Number.NaN, span: Number.NaN, finiteCount: 0 };
   }
-  const low = percentileFromSorted(finite, 0.05);
-  const high = percentileFromSorted(finite, 0.95);
-  return { low, high, span: high - low, finiteCount: finite.length };
+
+  const coreLow = percentileFromSorted(finite, 0.05);
+  const coreHigh = percentileFromSorted(finite, 0.95);
+  const coreSpan = coreHigh - coreLow;
+  if (coreSpan > 1e-6 || finite.length <= ROBUST_TAIL_TRIM_SAMPLES * 2) {
+    return {
+      low: coreLow,
+      high: coreHigh,
+      span: coreSpan,
+      finiteCount: finite.length,
+      spanSource: 'p05-p95',
+    };
+  }
+
+  /*
+   * 큰 배경 패딩 안에서 코드가 전체 픽셀의 5%보다 작으면 p05와 p95가 둘 다
+   * 배경에 놓인다. 이 경우에만 고정 개수 꼬리를 버린 범위를 사용한다. 비율
+   * 분위수를 더 넓히는 방식과 달리 전경 점유율이 작아져도 불스아이의 최대
+   * 대비를 잃지 않고, 고립된 극값 32개는 span에 들어오지 않는다.
+   */
+  const tail = Math.min(
+    ROBUST_TAIL_TRIM_SAMPLES,
+    Math.floor((finite.length - 1) / 2),
+  );
+  const low = finite[tail];
+  const high = finite[finite.length - 1 - tail];
+  return {
+    low,
+    high,
+    span: high - low,
+    finiteCount: finite.length,
+    spanSource: 'fixed-tail-fallback',
+  };
 }
 
 function checkedLuma(luma) {
