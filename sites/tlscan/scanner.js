@@ -32,14 +32,21 @@ const FRAME_MAX_SIDE = 960;
  * 없다) 짧은 변 기준으로 키우면 세로로 긴 사진이 매우 커질 수 있다 — 비용만 제한한다.
  * 960×2400 정도까지 허용한다.
  */
-const PHOTO_MAX_PIXELS = 960 * 2400;
+const PHOTO_MAX_PIXELS = 1440 * 3200;
+
+/**
+ * 사진 경로의 짧은 변 상한. 라이브(960)보다 크게 잡는다 — 실시간 제약이 없고, 실측에서
+ * 성공/실패가 셀당 9픽셀 하나로 갈렸기 때문에 여유를 두는 편이 낫다.
+ * (초광각 사진 7.6px 은 960 에서 실패했다. 1440 이면 11.4px 로 하한을 넘는다.)
+ */
+const PHOTO_MAX_SHORT_SIDE = 1440;
 
 /**
  * 배포본 식별자. 실기기 피드백에서 **어느 빌드를 보고 있는지** 즉시 알기 위한 것이다.
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-11.2';
+export const SCANNER_BUILD = '2026-08-11.3';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -420,13 +427,13 @@ function tryContinuousFocus(stream) {
  *
  * 가이드 밖을 버리므로 잡동사니(주변 UI·책상·손)도 같이 빠져 검출이 쉬워진다.
  */
-function imageDataCenterSquare(source, width, height) {
+function imageDataCenterSquare(source, width, height, maxSide = FRAME_MAX_SIDE) {
   if (!frameContext || !width || !height) return null;
 
   const side = Math.min(width, height);
   const sourceX = (width - side) / 2;
   const sourceY = (height - side) / 2;
-  const target = Math.max(1, Math.min(FRAME_MAX_SIDE, Math.round(side)));
+  const target = Math.max(1, Math.min(maxSide, Math.round(side)));
 
   frameCanvas.width = target;
   frameCanvas.height = target;
@@ -452,7 +459,7 @@ function imageDataCenterSquare(source, width, height) {
 function imageDataWhole(source, width, height) {
   if (!frameContext || !width || !height) return null;
 
-  const shortSideScale = Math.min(1, FRAME_MAX_SIDE / Math.min(width, height));
+  const shortSideScale = Math.min(1, PHOTO_MAX_SHORT_SIDE / Math.min(width, height));
   const areaScale = Math.min(1, Math.sqrt(PHOTO_MAX_PIXELS / (width * height)));
   const scale = Math.min(shortSideScale, areaScale);
   const targetWidth = Math.max(1, Math.round(width * scale));
@@ -469,8 +476,32 @@ function imageDataWhole(source, width, height) {
   }
 }
 
+/**
+ * 실패가 쌓이면 **해상도를 올려** 한 프레임을 다시 시도한다.
+ *
+ * 왜: 실기기 사진 실측(2026-08-11)에서 성공/실패가 **셀당 픽셀 하나로 갈렸다.**
+ *   초광각 7.6px·9.0px → 실패 / 광각 9.1px·10.4px → 성공 / 망원 10.1px·11.9px → 성공
+ * 하한이 9px 인데 실패 표본이 정확히 그 아래였다. 즉 마진이 거의 없다.
+ *
+ * 렌즈 선택 UI 를 뒀지만 기본 렌즈가 초광각인 기기에서는 사용자가 그걸 알 도리가 없다.
+ * 그래서 **연속 실패가 쌓이면 스캐너가 스스로 해상도를 올린다** — 같은 거리에서 셀당
+ * 픽셀이 1.5배가 되어 하한을 넘긴다.
+ *
+ * 매 프레임 올리지 않는 이유는 비용이다(복호가 프레임당 수백 ms\~수 초). 흔한 경우는
+ * 빠르게 돌리고, 안 될 때만 비싸게 한 번 더 본다.
+ */
+const FRAME_ESCALATED_SIDE = 1440;
+const ESCALATE_EVERY = 5;
+
 function grabVideoFrame() {
-  return imageDataCenterSquare(cameraVideo, cameraVideo.videoWidth, cameraVideo.videoHeight);
+  const escalate = consecutiveFailedFrames > 0
+    && consecutiveFailedFrames % ESCALATE_EVERY === 0;
+  return imageDataCenterSquare(
+    cameraVideo,
+    cameraVideo.videoWidth,
+    cameraVideo.videoHeight,
+    escalate ? FRAME_ESCALATED_SIDE : FRAME_MAX_SIDE,
+  );
 }
 
 function normalizePayload(result) {
