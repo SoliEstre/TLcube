@@ -10,8 +10,8 @@
  * 모든 경로 가설과 hard-check 진단을 함께 싣고, 한 경로가 먼저 통과했다고
  * 다른 경로 평가를 중단하지 않는다.
  *
- * Type Y는 현재 영상 검출 계약이 없으므로 scoreCubeTiling은 의도적으로
- * 미구현 실패를 반환한다. 불스아이 실패를 Y 폴백으로 취급하지 않는다.
+ * Type Y는 전용 cube-detect 경로에서 육각 실루엣 + Y 심 + 세 면 격자 +
+ * referenceAnchors 네 조를 모두 확인한다. 불스아이 실패는 Y 증거로 쓰지 않는다.
  *
  * @module decoder/family
  */
@@ -22,6 +22,7 @@ import {
   fail,
   ok,
 } from './contracts.js';
+import { detectCubeHypotheses } from './cube-detect.js';
 import {
   CORNER_UNIT_OFFSETS,
   FACE_SPINE_CORNER,
@@ -595,16 +596,52 @@ export function scoreTriTiling(luma, finder, options = {}) {
 }
 
 /**
- * Type Y에는 현재 영상 검출 계약이 없다. 불스아이 실패를 Y로 승격하는
- * 폴백은 ADR/설계에서 금지하므로, 입력과 무관하게 명시적 실패를 반환한다.
+ * Type Y의 육각 실루엣 + 중앙 Y 심 + 세 면 공변 격자 + 레퍼런스 네 조 점수.
+ * 검출 실패를 불스아이 경로와 연결하지 않으며, tone/n/orientation 전 가설을 보존한다.
  */
 export function scoreCubeTiling(luma, yJunction, options = {}) {
-  return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+  const cubeOptions = options.cube && typeof options.cube === 'object'
+    ? options.cube
+    : options;
+  const detected = detectCubeHypotheses(luma, yJunction, cubeOptions);
+  if (!detected.ok) return detected;
+
+  const best = detected.hypotheses[0];
+  const referenceCheck = best.referenceCalibration
+    && best.referenceCalibration.hardChecks
+    && best.referenceCalibration.hardChecks.all;
+  const silhouetteCheck = best.shapeDiagnostics
+    ? best.shapeDiagnostics.hardChecks.hexSilhouette
+    : true;
+  const junctionCheck = best.shapeDiagnostics
+    ? best.shapeDiagnostics.hardChecks.yJunction
+    : true;
+  const geometryCheck = best.sizeGeometry
+    && Number.isFinite(best.sizeGeometry.relativeVertexResidual);
+  const all = Boolean(silhouetteCheck && junctionCheck && geometryCheck && referenceCheck);
+
+  return ok({
     family: 'cube',
-    gridKind: 'y-junction',
-    unimplemented: true,
-    message: 'Type Y Y-junction 영상 검출 계약이 아직 확정되지 않았다',
-    yJunctionProvided: yJunction !== undefined && yJunction !== null,
+    finderKind: 'y-junction',
+    gridKind: 'three-face-nxn',
+    n: best.n,
+    tones: best.tones,
+    orientation: best.orientation,
+    score: clamp01(
+      0.35 * (Number.isFinite(best.shapeScore) ? best.shapeScore : 0.5)
+      + 0.45 * best.referenceAgreement
+      + 0.20 * (1 - clamp01(best.sizeGeometry.relativeVertexResidual)),
+    ),
+    hardChecks: {
+      silhouette: Boolean(silhouetteCheck),
+      yJunction: Boolean(junctionCheck),
+      threeFaceGrid: Boolean(geometryCheck),
+      referenceAnchors: Boolean(referenceCheck),
+      all,
+    },
+    geometryHypotheses: detected.hypotheses,
+    diagnostics: detected.diagnostics,
+    hypothesisId: 'cube-' + best.n + '-' + best.orientation + '-t' + best.tones,
   });
 }
 
@@ -627,7 +664,7 @@ function suppliedHypotheses(evidence) {
   const raw = evidence.hypotheses || evidence.familyHypotheses || evidence.candidates;
   if (!Array.isArray(raw)) return [];
   return raw.filter((candidate) => candidate
-    && (candidate.family === 'hex' || candidate.family === 'tri')
+    && (candidate.family === 'hex' || candidate.family === 'tri' || candidate.family === 'cube')
     && candidate.hardChecks
     && typeof candidate.hardChecks === 'object')
     .map((candidate, index) => ({
@@ -700,7 +737,8 @@ export function classifyFamily(luma, evidence, options = {}) {
   }
 
   const cube = scoreCubeTiling(luma, normalizedEvidence.yJunction, options);
-  reports.push({ family: 'cube', result: cube });
+  if (cube.ok === true) hypotheses.push(cube);
+  else reports.push({ family: 'cube', result: cube });
 
   /*
    * A 패치가 양성인 같은 finder에서 hex 코어만 통과시키면 A0 도플갱어를

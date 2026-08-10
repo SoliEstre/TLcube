@@ -48,6 +48,12 @@ const ROBUST_TAIL_TRIM_SAMPLES = 32;
 // 아래 탐색 예산·proposal 문턱도 M1에서 recall/비용 곡선으로 보정해야 한다.
 // [미검증] M1 calibration 에서 확정.
 const SOBEL_GRADIENT_SPAN_RATIO = 0.06;
+// 프레임 잡동사니가 gradient 목록을 독점하지 않도록 공간별 강한 edge만 보존한다.
+const SOBEL_TILE_SIZE = 32;
+const MAX_SOBEL_POINTS_PER_TILE = 64;
+// 일반 다중스케일 탐색은 레벨별 한 octave 안쪽만 맡아 물리 스케일 중복을 피한다.
+const PYRAMID_SEARCH_MIN_OUTER_RADIUS = 12;
+const PYRAMID_SEARCH_MAX_OUTER_RADIUS = 24;
 // [미검증] M1 calibration 에서 확정.
 const MAX_PYRAMID_LEVELS = 4;
 // [미검증] M1 calibration 에서 확정.
@@ -132,10 +138,10 @@ function percentileFromSorted(sorted, quantile) {
   return sorted[lower] * (1 - fraction) + sorted[upper] * fraction;
 }
 
-function robustStats(luma) {
+function robustStatsFromValues(values) {
   const finite = [];
-  for (let i = 0; i < luma.data.length; i += 1) {
-    const value = luma.data[i];
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
     if (Number.isFinite(value)) finite.push(value);
   }
   finite.sort((a, b) => a - b);
@@ -175,6 +181,10 @@ function robustStats(luma) {
     finiteCount: finite.length,
     spanSource: 'fixed-tail-fallback',
   };
+}
+
+function robustStats(luma) {
+  return robustStatsFromValues(luma.data);
 }
 
 function checkedLuma(luma) {
@@ -250,25 +260,40 @@ function sobelPoints(luma, span) {
   const points = [];
   const threshold = span * SOBEL_GRADIENT_SPAN_RATIO;
   const { width, height, data } = luma;
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const top = (y - 1) * width;
-      const middle = y * width;
-      const bottom = (y + 1) * width;
-      const gx = (
-        data[top + x + 1] + 2 * data[middle + x + 1] + data[bottom + x + 1]
-      ) - (
-        data[top + x - 1] + 2 * data[middle + x - 1] + data[bottom + x - 1]
-      );
-      const gy = (
-        data[bottom + x - 1] + 2 * data[bottom + x] + data[bottom + x + 1]
-      ) - (
-        data[top + x - 1] + 2 * data[top + x] + data[top + x + 1]
-      );
-      const magnitude = Math.sqrt(gx * gx + gy * gy);
-      if (magnitude >= threshold && Number.isFinite(magnitude)) {
-        points.push({ x, y, gx, gy, magnitude });
+
+  /*
+   * 전역 top-K는 화면 UI 한 곳의 선명한 글자/테두리가 표를 독점한다. 32px 타일마다
+   * 강한 edge를 같은 수만 남기면 위치 편향 없이 상한이 생기고, 약한 질감은 국소
+   * 순위에서 밀린다. tie는 y/x로 고정해 RNG 없이 동일 입력의 누적 순서도 고정한다.
+   */
+  for (let tileY = 0; tileY < height; tileY += SOBEL_TILE_SIZE) {
+    const yEnd = Math.min(height - 1, tileY + SOBEL_TILE_SIZE);
+    for (let tileX = 0; tileX < width; tileX += SOBEL_TILE_SIZE) {
+      const xEnd = Math.min(width - 1, tileX + SOBEL_TILE_SIZE);
+      const tile = [];
+      for (let y = Math.max(1, tileY); y < yEnd; y += 1) {
+        for (let x = Math.max(1, tileX); x < xEnd; x += 1) {
+          const top = (y - 1) * width;
+          const middle = y * width;
+          const bottom = (y + 1) * width;
+          const gx = (
+            data[top + x + 1] + 2 * data[middle + x + 1] + data[bottom + x + 1]
+          ) - (
+            data[top + x - 1] + 2 * data[middle + x - 1] + data[bottom + x - 1]
+          );
+          const gy = (
+            data[bottom + x - 1] + 2 * data[bottom + x] + data[bottom + x + 1]
+          ) - (
+            data[top + x - 1] + 2 * data[top + x] + data[top + x + 1]
+          );
+          const magnitude = Math.sqrt(gx * gx + gy * gy);
+          if (magnitude >= threshold && Number.isFinite(magnitude)) {
+            tile.push({ x, y, gx, gy, magnitude });
+          }
+        }
       }
+      tile.sort((a, b) => b.magnitude - a.magnitude || a.y - b.y || a.x - b.x);
+      points.push(...tile.slice(0, MAX_SOBEL_POINTS_PER_TILE));
     }
   }
   return points;
@@ -284,8 +309,14 @@ function radiusSeedsForLevel(level, options) {
       .sort((a, b) => a - b);
   }
 
-  const minOuter = MIN_PROJECTED_BAND_WIDTH_PX * BAND_COUNT;
-  const maxOuter = Math.min(level.width, level.height) * MAX_OUTER_RADIUS_FRACTION;
+  const minimumResolvable = MIN_PROJECTED_BAND_WIDTH_PX * BAND_COUNT;
+  const minOuter = level.level === 0
+    ? minimumResolvable
+    : Math.max(minimumResolvable, PYRAMID_SEARCH_MIN_OUTER_RADIUS);
+  const maxOuter = Math.min(
+    Math.min(level.width, level.height) * MAX_OUTER_RADIUS_FRACTION,
+    PYRAMID_SEARCH_MAX_OUTER_RADIUS,
+  );
   if (maxOuter < minOuter) return [];
   const ratio = Math.pow(2, 1 / SCALE_SEEDS_PER_OCTAVE);
   const radii = [];
@@ -677,8 +708,16 @@ function scoreBullseyeCore(luma, H, options, stats) {
     ? median(templateErrors) / contrast
     : Number.POSITIVE_INFINITY;
 
-  const robustSpan = stats.span;
+  /*
+   * 프레임 전역 span은 UI/테두리/질감의 범위이지 finder의 노출 범위가 아니다.
+   * 후보 원판 안의 실제 표본만으로 정규화해야 주변 구조가 임계를 움직이지 않는다.
+   * stats.span은 Sobel의 절대 하한과 진단에만 남긴다.
+   */
+  const localStats = robustStatsFromValues(bandSamples.flat());
+  const robustSpan = localStats.span;
   const contrastPass = Number.isFinite(contrast)
+    && Number.isFinite(robustSpan)
+    && robustSpan > 1e-6
     && contrast >= robustSpan * MIN_CONTRAST_SPAN_RATIO;
   const boundaryAlignmentScores = boundaryGradients.map((entry) => (
     contrast > 0 ? clamp01(entry.signedMedian / contrast) : 0
@@ -757,6 +796,9 @@ function scoreBullseyeCore(luma, H, options, stats) {
     boundaryGradients,
     boundaryAlignmentScore: gradientScore,
     boundaryAlignmentInsetPx: boundaryInset * cellSize,
+    normalizationSpan: robustSpan,
+    normalizationSpanSource: 'candidate-local-p05-p95',
+    globalSpan: stats.span,
     minProjectedBandWidth,
     medianProjectedBandWidth,
     hardChecks: hardCheckDetails,
@@ -1074,6 +1116,10 @@ export function detectBullseyes(luma, options = {}) {
       evaluatedRaw: raw.length,
       evaluatedRefined: refinementEntries.length,
       bestScore: best?.score,
+      bestCandidate: best && {
+        center: { x: best.center.x, y: best.center.y },
+        cellSize: best.cellSize,
+      },
       hardChecks: best?.bands?.hardChecks,
     });
   }

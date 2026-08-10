@@ -11,6 +11,11 @@
 import { VERSIONS } from '../capacity.js';
 import { VERSIONS_A } from '../capacityA.js';
 import { VERSIONS_Y } from '../capacityY.js';
+import {
+  dataCellsInScanOrder as dataCellsInScanOrderY,
+  formatCells as formatCellsY,
+  layoutMapY,
+} from '../layoutY.js';
 import { decodeCells } from '../decode.js';
 import { enumerateFormatProposals } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
@@ -36,8 +41,14 @@ import {
   findAAnchorHypotheses,
   findOAnchorHypotheses,
 } from './anchor-detect.js';
-import { detectBullseyes } from './bullseye-detect.js';
-import { classifyFamily } from './family.js';
+import { detectBullseyes, refineBullseye } from './bullseye-detect.js';
+import { classifyFamily, scoreCubeTiling } from './family.js';
+import {
+  UNVERIFIED_CUBE_DETECTION,
+  readCubeDigit,
+  sampleCubeCell,
+  sampleCubeGrid,
+} from './cube-detect.js';
 import { sampleHexCell, sampleHexGrid } from './grid-sample.js';
 import { estimateHomography4, projectPoint } from './homography.js';
 import { estimateLocalWarp, validateOReferences } from './reference-validate.js';
@@ -59,6 +70,9 @@ export const UNVERIFIED_BOOTSTRAP_CALIBRATION = Object.freeze({
   outlineThresholdFraction: 0.02,
   rotationStepDegrees: 2,
   finderMaxDimension: 240,
+  finderClutterMaxDimension: 240,
+  finderClutterRetryMaxDimension: 768,
+  finderClutterPyramidLevels: 2,
   finderRefineIterations: 1,
   maxGeometryCandidatesPerSize: 4,
   anchorSampleMinCount: 3,
@@ -66,6 +80,7 @@ export const UNVERIFIED_BOOTSTRAP_CALIBRATION = Object.freeze({
   minimumOutlinePixels: 16,
   finderPyramidLevels: 1,
   finderMaxRefinedProposals: 1,
+  finderClutterMaxRefinedProposals: 1,
   finderProjectiveSeeds: false,
   localWarpSearchRadiusCells: 0.10,
   localWarpSearchStepCells: 0.05,
@@ -171,8 +186,15 @@ function validVersionIndices(hypothesis) {
     return [profile.spec.formatIndex + (hypothesis.centerQr ? 2 : 0)];
   }
   return familyProfiles('cube')
-    .filter((entry) => entry.dimension === hypothesis.n)
+    .filter((entry) => entry.dimension === hypothesis.n
+      && (hypothesis.tones === undefined || entry.spec.tones === hypothesis.tones))
     .map((entry) => entry.spec.formatIndex);
+}
+
+function profileForFormatCandidate(hypothesis, formatIndex) {
+  const dimension = hypothesis.family === 'cube' ? hypothesis.n : hypothesis.k;
+  return familyProfiles(hypothesis.family).find((entry) =>
+    entry.dimension === dimension && entry.formatIndices.includes(formatIndex));
 }
 
 function sampleToDigit(sample) {
@@ -188,21 +210,25 @@ function sampleToDigit(sample) {
   return ranksToDigit(ranks);
 }
 
-function borderBackground(luma) {
+function borderBackground(luma, inset = 0) {
   const values = [];
   const { width, height, data, alpha } = luma;
+  const left = Math.min(Math.max(0, inset), Math.floor((width - 1) / 2));
+  const top = Math.min(Math.max(0, inset), Math.floor((height - 1) / 2));
+  const right = width - 1 - left;
+  const bottom = height - 1 - top;
   const append = (index) => {
     if (alpha && alpha[index] === 0) return;
     const value = data[index];
     if (Number.isFinite(value)) values.push(value);
   };
-  for (let x = 0; x < width; x += 1) {
-    append(x);
-    append((height - 1) * width + x);
+  for (let x = left; x <= right; x += 1) {
+    append(top * width + x);
+    append(bottom * width + x);
   }
-  for (let y = 1; y < height - 1; y += 1) {
-    append(y * width);
-    append(y * width + width - 1);
+  for (let y = top + 1; y < bottom; y += 1) {
+    append(y * width + left);
+    append(y * width + right);
   }
   return median(values);
 }
@@ -210,7 +236,9 @@ function borderBackground(luma) {
 function outlineEvidence(luma, cfg) {
   const percentiles = robustPercentiles(luma, [0.01, 0.99]);
   const background = borderBackground(luma);
-  if (!percentiles || background === null) return null;
+  const inset = Math.max(2, Math.min(24, Math.floor(Math.min(luma.width, luma.height) * 0.02)));
+  const innerBackground = borderBackground(luma, inset);
+  if (!percentiles || background === null || innerBackground === null) return null;
 
   // [미검증] M1 calibration 에서 확정: 배경 대비 foreground 분할 비율.
   const threshold = Math.max(
@@ -241,11 +269,16 @@ function outlineEvidence(luma, cfg) {
   }
 
   if (area < cfg.minimumOutlinePixels || maxX < minX || maxY < minY) return null;
+  const bounds = { minX, minY, maxX, maxY };
+  const boundsArea = (maxX - minX + 1) * (maxY - minY + 1);
   return {
     background,
+    innerBackground,
+    borderDisagreement: Math.abs(background - innerBackground),
     threshold,
     area,
-    bounds: { minX, minY, maxX, maxY },
+    bounds,
+    fillRatio: area / boundsArea,
     touchesBorder,
   };
 }
@@ -343,38 +376,100 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
   const supplied = findersFromEvidence(familyEvidence);
   if (supplied.length > 0) return ok({ finders: supplied, source: 'supplied' });
 
-  // [미검증] M1 calibration 에서 확정: finder 탐색만 축소하는 작업량 상한.
-  // 빈 canvas margin은 검출 해상도를 낮출 근거가 아니므로 foreground bounds를 쓴다.
+  // 경계가 안정된 입력은 기존 outline 면적 seed가 가장 싸고 정확하다.
+  // 이 fast path가 실패하면 outline aggregate가 UI/복수 코드에 오염된 것으로 보고
+  // 같은 프레임을 일반 다중스케일로 한 번 더 탐색한다.
   const fullOutline = outlineEvidence(luma, cfg);
-  const reduced = downsampleLuma(
-    luma,
-    Number.isFinite(options.finderMaxDimension)
-      ? options.finderMaxDimension
-      : cfg.finderMaxDimension,
-    fullOutline && fullOutline.bounds,
-  );
-  const reducedOutline = outlineEvidence(reduced.luma, cfg);
-  const finderOptions = {
-    maxPyramidLevels: cfg.finderPyramidLevels,
-    maxRefinedProposals: cfg.finderMaxRefinedProposals,
-    refineIterations: cfg.finderRefineIterations,
-    projectiveSeeds: cfg.finderProjectiveSeeds,
-    outerRadiusSeeds: finderRadiusSeeds(reduced.luma, reducedOutline),
-    ...(options.finder || {}),
-  };
-  if (finderOptions.outerRadiusSeeds === undefined) delete finderOptions.outerRadiusSeeds;
+  const outlineCanSeed = fullOutline
+    && !fullOutline.touchesBorder
+    && fullOutline.borderDisagreement <= fullOutline.threshold;
+  const finderOverrides = options.finder && typeof options.finder === 'object'
+    ? options.finder
+    : {};
+  const requestedMaxDimension = Number.isFinite(options.finderMaxDimension)
+    ? options.finderMaxDimension
+    : null;
 
-  const detected = detectBullseyes(reduced.luma, finderOptions);
+  const makeFinderOptions = (useOutlineSeeds, reducedOutline) => {
+    const configured = {
+      maxPyramidLevels: useOutlineSeeds
+        ? cfg.finderPyramidLevels
+        : cfg.finderClutterPyramidLevels,
+      maxRefinedProposals: useOutlineSeeds
+        ? cfg.finderMaxRefinedProposals
+        : cfg.finderClutterMaxRefinedProposals,
+      refineIterations: cfg.finderRefineIterations,
+      projectiveSeeds: cfg.finderProjectiveSeeds,
+      outerRadiusSeeds: useOutlineSeeds
+        ? finderRadiusSeeds(reducedOutline && reducedOutline.luma, reducedOutline && reducedOutline.outline)
+        : undefined,
+      ...finderOverrides,
+    };
+    if (configured.outerRadiusSeeds === undefined) delete configured.outerRadiusSeeds;
+    return configured;
+  };
+
+  let usedOutlineSeeds = Boolean(outlineCanSeed);
+  let reduced = downsampleLuma(
+    luma,
+    requestedMaxDimension ?? (
+      usedOutlineSeeds ? cfg.finderMaxDimension : cfg.finderClutterMaxDimension
+    ),
+    usedOutlineSeeds ? fullOutline.bounds : null,
+  );
+  let reducedOutline = outlineEvidence(reduced.luma, cfg);
+  let finderOptions = makeFinderOptions(
+    usedOutlineSeeds,
+    { luma: reduced.luma, outline: reducedOutline },
+  );
+  let detected = detectBullseyes(reduced.luma, finderOptions);
+
+  const callerFixedScaleSearch = Object.prototype.hasOwnProperty.call(
+    finderOverrides,
+    'outerRadiusSeeds',
+  );
+  if (!detected.ok && usedOutlineSeeds && !callerFixedScaleSearch) {
+    usedOutlineSeeds = false;
+    reduced = downsampleLuma(
+      luma,
+      requestedMaxDimension ?? cfg.finderClutterMaxDimension,
+      null,
+    );
+    reducedOutline = outlineEvidence(reduced.luma, cfg);
+    finderOptions = makeFinderOptions(false, null);
+    detected = detectBullseyes(reduced.luma, finderOptions);
+  }
+  if (!detected.ok
+    && !callerFixedScaleSearch
+    && requestedMaxDimension === null
+    && cfg.finderClutterRetryMaxDimension > cfg.finderClutterMaxDimension
+    && Math.max(luma.width, luma.height) > cfg.finderClutterMaxDimension) {
+    usedOutlineSeeds = false;
+    reduced = downsampleLuma(luma, cfg.finderClutterRetryMaxDimension, null);
+    reducedOutline = outlineEvidence(reduced.luma, cfg);
+    finderOptions = makeFinderOptions(false, null);
+    detected = detectBullseyes(reduced.luma, finderOptions);
+  }
   if (!detected.ok) return detected;
   const finders = detected.candidates
     .map((finder) => liftFinder(finder, reduced.factor))
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((finder) => {
+      if (usedOutlineSeeds || reduced.factor === 1) return finder;
+      const fullResolution = refineBullseye(luma, finder, {
+        refineIterations: 0,
+        projectiveSeeds: false,
+      });
+      return fullResolution.ok ? fullResolution.candidate : finder;
+    });
   if (finders.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'bootstrap-finder-lift' });
   }
   return ok({
     finders,
-    source: reduced.factor === 1 ? 'detected' : 'detected-downsampled',
+    source: usedOutlineSeeds
+      ? reduced.factor === 1 ? 'detected' : 'detected-downsampled'
+      : reduced.factor === 1 ? 'detected-multiscale' : 'detected-multiscale-downsampled',
     downsampleFactor: reduced.factor,
   });
 }
@@ -415,6 +510,72 @@ function outerCanonicalPoints(k) {
     { x: -SQRT3 * radius / 2, y: 1.5 * radius },
     { x: -SQRT3 * radius / 2, y: -1.5 * radius },
   ];
+}
+
+function symbolBoundaryPoints(k) {
+  const half = outerCanonicalPoints(k);
+  return half.concat(half.map((point) => ({ x: -point.x, y: -point.y })));
+}
+
+function finderGeometry(finder) {
+  const H = finderTransform(finder);
+  if (H) return H;
+  const center = finder && finder.center;
+  const cellSize = finder && finder.cellSize;
+  if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)
+    || !Number.isFinite(cellSize) || !(cellSize > 0)) return null;
+  return new Float64Array([
+    cellSize, 0, center.x,
+    0, cellSize, center.y,
+    0, 0, 1,
+  ]);
+}
+
+/*
+ * 배경/outline이 영상 경계에 닿는지는 심볼 crop의 증거가 아니다. finder 기하로
+ * 지원하는 가장 작은 심볼조차 프레임 안에 닫히지 않을 때만 clipped로 승격한다.
+ */
+function supportedDimensions() {
+  return Array.from(new Set([
+    ...uniqueDimensions('hex'),
+    ...uniqueDimensions('tri'),
+  ])).sort((a, b) => a - b);
+}
+
+function clippingSides(luma, finder, k) {
+  const H = finderGeometry(finder);
+  if (!H) return new Set(['unknown']);
+  const sides = new Set();
+  for (const canonical of symbolBoundaryPoints(k)) {
+    const point = projectPoint(H, canonical);
+    if (!point) {
+      sides.add('horizon');
+      continue;
+    }
+    if (point.x < 0) sides.add('left');
+    if (point.x > luma.width - 1) sides.add('right');
+    if (point.y < 0) sides.add('top');
+    if (point.y > luma.height - 1) sides.add('bottom');
+  }
+  return sides;
+}
+
+function anySupportedSymbolFits(luma, finders) {
+  const dimensions = supportedDimensions();
+  return finders.some((finder) => dimensions.some(
+    (k) => clippingSides(luma, finder, k).size === 0,
+  ));
+}
+
+function minimumClippingSideCount(luma, finders) {
+  const dimensions = supportedDimensions();
+  let minimum = Number.POSITIVE_INFINITY;
+  for (const finder of finders) {
+    for (const k of dimensions) {
+      minimum = Math.min(minimum, clippingSides(luma, finder, k).size);
+    }
+  }
+  return minimum;
 }
 
 function validateAnchorPattern(luma, H, k, sampleOptions) {
@@ -638,7 +799,10 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
 
   const classified = classifyFamily(
     luma,
-    { finder: finders },
+    {
+      finder: finders,
+      yJunction: familyEvidence && familyEvidence.yJunction,
+    },
     {
       ks: classificationDimensions(finders, outline),
       ...(options.family || {}),
@@ -677,10 +841,28 @@ function layoutForFamily(family, dimension) {
       type: 'A',
     };
   }
+  if (family === 'cube') {
+    return {
+      map: layoutMapY(dimension),
+      dataCells: dataCellsInScanOrderY(dimension),
+      type: 'Y',
+    };
+  }
   return null;
 }
 
 function referenceReportFor(hypothesis, grid, options) {
+  if (hypothesis.family === 'cube') {
+    const reference = hypothesis.referenceCalibration;
+    return {
+      ok: Boolean(reference && reference.hardChecks && reference.hardChecks.all),
+      total: reference ? reference.total : 0,
+      confident: reference ? reference.agreement : 0,
+      orderFraction: reference ? reference.agreementRate : 0,
+      tones: hypothesis.tones,
+      observations: reference ? reference.observations : [],
+    };
+  }
   if (hypothesis.family !== 'hex') {
     return { ok: true, total: 0, confident: 0, orderFraction: 0, unsupported: true };
   }
@@ -696,6 +878,19 @@ function referenceAgreement(referenceResult) {
 }
 
 function reprojectionResidual(luma, hypothesis, referenceResult, options, cfg) {
+  if (hypothesis.family === 'cube') {
+    const center = projectPoint(hypothesis.H, { x: 0, y: 0 });
+    const iStep = projectPoint(hypothesis.H, { x: 1, y: 0 });
+    const jStep = projectPoint(hypothesis.H, { x: 0, y: 1 });
+    if (!center || !iStep || !jStep || !Number.isFinite(hypothesis.geometryResidual)) return 1;
+    const pitch = median([
+      Math.hypot(iStep.x - center.x, iStep.y - center.y),
+      Math.hypot(jStep.x - center.x, jStep.y - center.y),
+    ]);
+    return Number.isFinite(pitch) && pitch > EPSILON
+      ? hypothesis.geometryResidual / pitch
+      : 1;
+  }
   if (!referenceResult.ok || hypothesis.family !== 'hex') {
     const cellSize = hypothesis.finder && hypothesis.finder.cellSize;
     return Number.isFinite(hypothesis.geometryResidual) && Number.isFinite(cellSize) && cellSize > 0
@@ -774,50 +969,105 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   }
   const cfg = calibration(options);
   const outline = outlineEvidence(luma, cfg);
-  const finderResult = discoverFinders(luma, familyEvidence, options, cfg);
-  if (!finderResult.ok) {
+
+  /*
+   * Type Y는 불스아이 실패 뒤에 실행되는 폴백이 아니다. 전용 기하 검출을 독립 평가하고,
+   * Type O/A finder 경로도 가능한 경우 classifyFamily가 두 양성 경로를 함께 보고
+   * FAMILY_AMBIGUOUS로 닫게 한다.
+   */
+  const yJunctionEvidence = familyEvidence && typeof familyEvidence === 'object'
+    ? familyEvidence.yJunction
+    : undefined;
+  const cubeResult = scoreCubeTiling(
+    luma,
+    yJunctionEvidence,
+    options.family && typeof options.family === 'object' ? options.family : {},
+  );
+  const finderResult = cubeResult.ok && options.alwaysCompareFinders !== true
+    ? fail(FRONTEND_FAILURE.NO_FINDER, {
+      stage: 'bootstrap-finder',
+      cause: 'cube-positive-independent-path',
+    })
+    : discoverFinders(luma, familyEvidence, options, cfg);
+
+  if (!finderResult.ok && !cubeResult.ok) {
     const finderSawCandidates = finderResult.detail
       && Number.isFinite(finderResult.detail.evaluatedRaw)
       && finderResult.detail.evaluatedRaw > 0
       && finderResult.detail.hardChecks
       && finderResult.detail.hardChecks.alternating === true
       && finderResult.detail.hardChecks.outerBandLight === true;
-    if (finderSawCandidates && outline && outline.touchesBorder) {
+    const bestCandidate = finderResult.detail && finderResult.detail.bestCandidate;
+    if (finderSawCandidates
+      && bestCandidate
+      && !anySupportedSymbolFits(luma, [bestCandidate])) {
       return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
         stage: 'bootstrap-finder',
-        cause: 'finder-candidate-truncated-by-image-boundary',
+        cause: 'supported-symbol-footprint-crosses-image-boundary',
         finderFailure: finderResult,
-        outline: {
+        cubeFailure: cubeResult,
+        outline: outline && {
           area: outline.area,
           bounds: outline.bounds,
-          touchesBorder: true,
+          touchesBorder: outline.touchesBorder,
+          fillRatio: outline.fillRatio,
         },
       });
     }
     return finderResult;
   }
 
-  const classified = classifyFamilies(
-    luma,
-    finderResult.finders,
-    familyEvidence,
-    options,
-    outline,
-  );
+  const finders = finderResult.ok ? finderResult.finders : [];
+  let classified;
+  if (finderResult.ok) {
+    const evidence = familyEvidence && typeof familyEvidence === 'object'
+      ? { ...familyEvidence }
+      : {};
+    if (cubeResult.ok) {
+      evidence.yJunction = { geometryHypotheses: cubeResult.geometryHypotheses };
+    }
+    classified = classifyFamilies(
+      luma,
+      finders,
+      evidence,
+      options,
+      outline,
+    );
+  } else {
+    classified = ok({
+      families: ['cube'],
+      classification: ok({
+        family: 'cube',
+        hypotheses: [cubeResult],
+        diagnostics: { cubeOnly: true },
+      }),
+      cubeOnly: true,
+    });
+  }
   if (!classified.ok) return classified;
+
   const hypotheses = [];
   const anchorDiagnostics = [];
   for (const family of classified.families) {
     if (family === 'cube') {
+      const cubeHypotheses = cubeResult.ok ? cubeResult.geometryHypotheses : [];
+      for (const raw of cubeHypotheses) {
+        hypotheses.push({
+          ...raw,
+          source: raw.source || 'cube-detector',
+          luma,
+        });
+      }
       anchorDiagnostics.push({
         family,
-        unsupported: true,
-        message: 'Type Y 영상용 Y-junction 검출 계약이 없다',
+        cubeHypothesisCount: cubeHypotheses.length,
+        cubeDiagnostics: cubeResult.diagnostics,
       });
       continue;
     }
-    for (let finderIndex = 0; finderIndex < finderResult.finders.length; finderIndex += 1) {
-      const finder = finderResult.finders[finderIndex];
+
+    for (let finderIndex = 0; finderIndex < finders.length; finderIndex += 1) {
+      const finder = finders[finderIndex];
       const direct = directAnchorHypotheses(luma, finder, family, options);
       direct.hypotheses.forEach((hypothesis) => {
         hypotheses.push({ ...hypothesis, finderIndex });
@@ -841,12 +1091,30 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
 
   const unique = deduplicateHypotheses(hypotheses);
   if (unique.length === 0) {
-    const reason = outline && outline.touchesBorder
-      ? FRONTEND_FAILURE.SYMBOL_CLIPPED
-      : FRONTEND_FAILURE.NO_ANCHORS;
+    const shouldRetryFinderResolution = options._finderResolutionRetry !== false
+      && options.finderMaxDimension === undefined
+      && typeof finderResult.source === 'string'
+      && finderResult.source.includes('multiscale')
+      && cfg.finderClutterRetryMaxDimension > cfg.finderClutterMaxDimension;
+    if (shouldRetryFinderResolution) {
+      const retried = enumerateGeometryHypotheses(luma, familyEvidence, {
+        ...options,
+        finderMaxDimension: cfg.finderClutterRetryMaxDimension,
+        _finderResolutionRetry: false,
+      });
+      if (retried.ok) return retried;
+    }
+
+    const clipped = finders.length > 0 && !anySupportedSymbolFits(luma, finders);
+    const reason = clipped ? FRONTEND_FAILURE.SYMBOL_CLIPPED : FRONTEND_FAILURE.NO_ANCHORS;
+    const clippingSideCount = clipped
+      ? minimumClippingSideCount(luma, finders)
+      : 0;
     return fail(reason, {
-      stage: 'bootstrap-geometry',
+      stage: clippingSideCount >= 2 ? 'bootstrap-finder' : 'bootstrap-geometry',
+      clippingSideCount,
       anchorDiagnostics,
+      cubeFailure: cubeResult.ok ? undefined : cubeResult,
       outline: outline && {
         area: outline.area,
         bounds: outline.bounds,
@@ -856,15 +1124,24 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   }
 
   for (const hypothesis of unique) {
-    hypothesis.sizeGeometry = sizeGeometryEvidence(hypothesis, outline);
+    if (hypothesis.family !== 'cube') {
+      hypothesis.sizeGeometry = sizeGeometryEvidence(hypothesis, outline);
+    }
     delete hypothesis.luma;
   }
   return ok({
     hypotheses: unique,
     diagnostics: {
-      finderSource: finderResult.source,
-      finderCount: finderResult.finders.length,
-      downsampleFactor: finderResult.downsampleFactor || 1,
+      finderSource: finderResult.ok ? finderResult.source : 'none-cube-positive',
+      finderCount: finders.length,
+      finderFailure: finderResult.ok ? undefined : finderResult,
+      cube: {
+        ok: cubeResult.ok,
+        reason: cubeResult.reason,
+        hypothesisCount: cubeResult.ok ? cubeResult.geometryHypotheses.length : 0,
+        diagnostics: cubeResult.ok ? cubeResult.diagnostics : cubeResult.detail,
+      },
+      downsampleFactor: finderResult.ok ? finderResult.downsampleFactor || 1 : 1,
       classification: {
         ok: classified.classification && classified.classification.ok,
         reason: classified.classification && classified.classification.reason,
@@ -882,6 +1159,7 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
         area: outline.area,
         bounds: outline.bounds,
         touchesBorder: outline.touchesBorder,
+        fillRatio: outline.fillRatio,
         threshold: outline.threshold,
       },
     },
@@ -892,7 +1170,20 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
  * 한 기하 가설의 ring 3 세 복제를 읽고 enumerateFormatProposals의 전 후보를
  * 반환한다. validVersionIndices는 family+size+finderKind에서 유도한 필수 집합이다.
  */
-export function readFormatForHypothesis(luma, hypothesis, options = {}) {
+export function cubeSampleOptions(options) {
+  return {
+    minSampleCount: UNVERIFIED_CUBE_DETECTION.minimumSampleCount,
+    minProjectedMinorDiameter:
+      UNVERIFIED_CUBE_DETECTION.minimumProjectedMinorDiameter,
+    disc: {
+      fraction: UNVERIFIED_CUBE_DETECTION.sampleDiscFraction,
+      ...((options.sample && options.sample.disc) || {}),
+    },
+    ...(options.sample || {}),
+  };
+}
+
+function readFormatForHypothesis(luma, hypothesis, options = {}) {
   try {
     assertLumaField(luma);
   } catch (error) {
@@ -907,11 +1198,14 @@ export function readFormatForHypothesis(luma, hypothesis, options = {}) {
     });
   }
 
-  const cells = formatCells(hypothesis.k);
+  const cube = hypothesis.family === 'cube';
+  const cells = cube ? formatCellsY(hypothesis.n) : formatCells(hypothesis.k);
   const samples = [];
   const observedDigits = [];
   for (const cell of cells) {
-    const sampled = sampleHexCell(luma, hypothesis, cell.q, cell.r, options.sample || {});
+    const sampled = cube
+      ? sampleCubeCell(luma, hypothesis, cell.i, cell.j, cubeSampleOptions(options))
+      : sampleHexCell(luma, hypothesis, cell.q, cell.r, options.sample || {});
     samples.push(sampled);
     if (!sampled.ok) {
       return fail(sampled.reason, {
@@ -921,7 +1215,21 @@ export function readFormatForHypothesis(luma, hypothesis, options = {}) {
         cause: sampled.detail,
       });
     }
-    observedDigits.push(sampleToDigit(sampled));
+    if (cube) {
+      const read = readCubeDigit(sampled, hypothesis.referenceCalibration);
+      if (read === null) {
+        return fail(FRONTEND_FAILURE.NO_FORMAT_CANDIDATE, {
+          stage: 'format-sampling',
+          cause: 'illegal-two-tone-triple-or-unreadable-three-tone-rank',
+          hypothesisId: hypothesis.hypothesisId,
+          cell,
+          tones: hypothesis.tones,
+        });
+      }
+      observedDigits.push(read.digit);
+    } else {
+      observedDigits.push(sampleToDigit(sampled));
+    }
   }
   const reads = [0, 1, 2].map((replica) =>
     observedDigits.slice(replica * 5, replica * 5 + 5));
@@ -935,6 +1243,7 @@ export function readFormatForHypothesis(luma, hypothesis, options = {}) {
       hypothesisId: hypothesis.hypothesisId,
       validVersionIndices: valid,
       reads,
+      tones: hypothesis.tones,
       diagnostics: enumerated.diagnostics,
     });
   }
@@ -1016,10 +1325,13 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     diagnostics.formatProposalCount += formatRead.proposals.length;
     diagnostics.formatCandidateCount += formatRead.formatCandidates.length;
 
-    const dimension = hypothesis.k;
+    const cube = hypothesis.family === 'cube';
+    const dimension = cube ? hypothesis.n : hypothesis.k;
     const layout = layoutForFamily(hypothesis.family, dimension);
     if (!layout) continue;
-    const grid = sampleHexGrid(luma, hypothesis, layout.map, options.sample || {});
+    const grid = cube
+      ? sampleCubeGrid(luma, hypothesis, layout.map, cubeSampleOptions(options))
+      : sampleHexGrid(luma, hypothesis, layout.map, options.sample || {});
     if (!grid.ok) {
       diagnostics.bodyFailures.push({
         hypothesisId: hypothesis.hypothesisId,
@@ -1029,26 +1341,49 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       continue;
     }
 
-    const digits = layout.dataCells.map((cell) => {
-      const sample = grid.cells.get(cell.q + ',' + cell.r);
-      return sampleToDigit(sample);
-    });
+    const digits = [];
+    const cubeUnreadableCells = [];
+    for (const cell of layout.dataCells) {
+      const key = cube ? cell.i + ',' + cell.j : cell.q + ',' + cell.r;
+      const sample = grid.cells.get(key);
+      if (cube) {
+        const read = readCubeDigit(sample, hypothesis.referenceCalibration);
+        if (read === null) {
+          // 000/111은 Type Y 2톤 알파벳 밖이다. 위치를 보존한 결정적 0으로
+          // 넘기고 RS/header 검증이 이 기하 가설을 살릴지 최종 판정한다.
+          digits.push(0);
+          cubeUnreadableCells.push({ cell, cause: 'illegal-tone-triple' });
+        } else {
+          digits.push(read.digit);
+        }
+      } else {
+        digits.push(sampleToDigit(sample));
+      }
+    }
+
     const referenceResult = referenceReportFor(hypothesis, grid, options);
     const acceptedForHypothesis = [];
 
     for (const formatCandidate of formatRead.formatCandidates) {
-      const decoded = decodeCells(digits, {
+      const decodeFormat = {
         type: layout.type,
         formatIndex: formatCandidate.versionIndex,
         eccLevel: formatCandidate.eccLevel,
-        k: dimension,
-      });
+      };
+      if (cube) {
+        decodeFormat.n = dimension;
+        decodeFormat.tones = hypothesis.tones;
+      } else {
+        decodeFormat.k = dimension;
+      }
+      const decoded = decodeCells(digits, decodeFormat);
       if (!decoded.ok) {
         diagnostics.bodyFailures.push({
           hypothesisId: hypothesis.hypothesisId,
           versionIndex: formatCandidate.versionIndex,
           eccLevel: formatCandidate.eccLevel,
           reason: decoded.reason,
+          cubeUnreadableCount: cubeUnreadableCells.length,
         });
         continue;
       }
@@ -1056,8 +1391,8 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       let matchingFormatDigits = 0;
       for (let index = 0; index < formatRead.samples.length; index += 1) {
         const observed = formatRead.reads[Math.floor(index / 5)][index % 5];
-        if (!formatRead.samples[index].tie
-          && observed === formatCandidate.maskedDigits[index % 5]) {
+        const confident = cube || !formatRead.samples[index].tie;
+        if (confident && observed === formatCandidate.maskedDigits[index % 5]) {
           matchingFormatDigits += 1;
         }
       }
@@ -1072,21 +1407,33 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     const rH = reprojectionResidual(luma, hypothesis, referenceResult, options, cfg);
     const rK = hypothesis.sizeGeometry ? hypothesis.sizeGeometry.rK : 1;
     const refAgreement = referenceAgreement(referenceResult);
-    const profile = profileForHypothesis(hypothesis);
 
     for (const accepted of acceptedForHypothesis) {
+      const profile = profileForFormatCandidate(
+        hypothesis,
+        accepted.formatCandidate.versionIndex,
+      );
+      if (!profile) continue;
       const candidate = {
         hypothesisId: hypothesis.hypothesisId + '-' + accepted.formatCandidate.source,
         geometryHypothesisId: hypothesis.hypothesisId,
         hypothesis,
         family: hypothesis.family,
         version: profile.spec.version,
+        versionName: profile.spec.name,
+        tones: profile.spec.tones,
         formatIndex: accepted.formatCandidate.versionIndex,
         eccLevel: ECC_NAME[accepted.formatCandidate.eccLevel],
         text: accepted.decoded.text,
         corrected: accepted.decoded.corrected,
         crsDistance: accepted.decoded.crsDistance,
         erasureFallback: accepted.decoded.erasureFallback,
+        cubeSamplingFallback: cubeUnreadableCells.length > 0
+          ? {
+            mode: 'deterministic-zero-digit-rs-validation',
+            cells: cubeUnreadableCells,
+          }
+          : undefined,
         formatCandidate: accepted.formatCandidate,
         formatAgreement: accepted.formatAgreement,
         referenceAgreement: refAgreement,

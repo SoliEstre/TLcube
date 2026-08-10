@@ -102,6 +102,116 @@ function padRaster(raster, factor, fill) {
   return { width, height, pixels };
 }
 
+function solidRaster(width, height, fill = { r: 255, g: 255, b: 255, a: 255 }) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let index = 0; index < width * height; index += 1) {
+    const offset = index * 4;
+    pixels[offset] = fill.r;
+    pixels[offset + 1] = fill.g;
+    pixels[offset + 2] = fill.b;
+    pixels[offset + 3] = fill.a;
+  }
+  return { width, height, pixels };
+}
+
+function fillRectRaster(raster, x, y, width, height, rgba) {
+  for (let targetY = Math.max(0, y);
+    targetY < Math.min(raster.height, y + height);
+    targetY += 1) {
+    for (let targetX = Math.max(0, x);
+      targetX < Math.min(raster.width, x + width);
+      targetX += 1) {
+      const offset = (targetY * raster.width + targetX) * 4;
+      raster.pixels[offset] = rgba[0];
+      raster.pixels[offset + 1] = rgba[1];
+      raster.pixels[offset + 2] = rgba[2];
+      raster.pixels[offset + 3] = rgba[3] === undefined ? 255 : rgba[3];
+    }
+  }
+}
+
+function blitRaster(target, source, offsetX, offsetY) {
+  assert.ok(offsetX >= 0 && offsetY >= 0);
+  assert.ok(offsetX + source.width <= target.width);
+  assert.ok(offsetY + source.height <= target.height);
+  for (let y = 0; y < source.height; y += 1) {
+    const sourceStart = y * source.width * 4;
+    const targetStart = ((y + offsetY) * target.width + offsetX) * 4;
+    target.pixels.set(
+      source.pixels.subarray(sourceStart, sourceStart + source.width * 4),
+      targetStart,
+    );
+  }
+}
+
+function placementOffset(frame, code, position) {
+  if (position === 'top-left') {
+    return {
+      x: Math.min(12, frame.width - code.width),
+      y: Math.min(12, frame.height - code.height),
+    };
+  }
+  if (position === 'bottom-right') {
+    return {
+      x: Math.max(0, frame.width - code.width - 12),
+      y: Math.max(0, frame.height - code.height - 12),
+    };
+  }
+  return {
+    x: Math.floor((frame.width - code.width) / 2),
+    y: Math.floor((frame.height - code.height) / 2),
+  };
+}
+
+function clutterFrame(code, {
+  width,
+  height,
+  kind = 'clean',
+  position = 'center',
+} = {}) {
+  const frame = solidRaster(width, height);
+  if (kind === 'texture') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const noise = ((x * 73 + y * 151 + (x * y) % 251) % 41) - 20;
+        const value = 235 + noise;
+        const offset = (y * width + x) * 4;
+        frame.pixels[offset] = value;
+        frame.pixels[offset + 1] = value;
+        frame.pixels[offset + 2] = value;
+      }
+    }
+  } else if (kind === 'border') {
+    fillRectRaster(frame, 0, 0, width, 10, [0, 0, 0, 255]);
+    fillRectRaster(frame, 0, height - 10, width, 10, [0, 0, 0, 255]);
+    fillRectRaster(frame, 0, 0, 10, height, [0, 0, 0, 255]);
+    fillRectRaster(frame, width - 10, 0, 10, height, [0, 0, 0, 255]);
+  } else if (kind === 'ui') {
+    for (let line = 0; line < 6; line += 1) {
+      fillRectRaster(
+        frame,
+        Math.floor(width * 0.12),
+        Math.max(6, Math.floor(height * 0.045) + line * Math.max(12, Math.floor(height * 0.021))),
+        Math.floor(width * (0.48 + 0.04 * (line % 3))),
+        Math.max(4, Math.floor(height * 0.007)),
+        [38, 45, 54, 255],
+      );
+    }
+    fillRectRaster(
+      frame,
+      Math.floor(width * 0.32),
+      Math.floor(height * 0.84),
+      Math.floor(width * 0.36),
+      Math.max(16, Math.floor(height * 0.055)),
+      [32, 112, 226, 255],
+    );
+  }
+
+  const offset = placementOffset(frame, code, position);
+  blitRaster(frame, code, offset.x, offset.y);
+  return { ...frame, codeBounds: { ...offset, width: code.width, height: code.height } };
+}
+
 function gaussianKernel(sigma) {
   const radius = Math.ceil(3 * sigma);
   const weights = new Float64Array(radius * 2 + 1);
@@ -317,6 +427,94 @@ test('0.5배 resample + Gaussian blur sigma sweep + JPEG 근사 q=60 3점 복호
     const compressed = applyJpegApproximation(blurred, 60);
     assertSweepDecoded('jpeg-q60+gaussian-blur', sigma, decodeFrontend(compressed));
   }
+});
+
+const CLUTTER_TEXT = 'https://tl.estre.so/';
+const CLUTTER_KINDS = Object.freeze(['clean', 'ui', 'border', 'texture']);
+const FRAME_LINEAR_RATIOS = Object.freeze([0.20, 0.35, 0.50, 0.65, 0.80]);
+const FRAME_POSITIONS = Object.freeze(['center', 'top-left', 'bottom-right']);
+
+function assertClutterDecoded(axis, value, result, expectedText = CLUTTER_TEXT) {
+  const message = failureMessage(axis, value, result);
+  assert.equal(result.ok, true, message);
+  assert.equal(result.text, expectedText, message);
+  assert.equal(result.version, 2, message);
+  assert.equal(result.eccLevel, 'M', message);
+}
+
+test('코드 1.7w × 1.9h 프레임: clean/UI/검은 테두리/결정적 질감 4종 복호', {
+  timeout: 180_000,
+}, () => {
+  const fixture = render(CLUTTER_TEXT, 2, 'M', {
+    pixelsPerUnit: 20,
+    supersample: 2,
+  });
+  const width = Math.round(fixture.raster.width * 1.7);
+  const height = Math.round(fixture.raster.height * 1.9);
+
+  for (const kind of CLUTTER_KINDS) {
+    const frame = clutterFrame(fixture.raster, { width, height, kind });
+    assertClutterDecoded('clutter-kind', kind, decodeFrontend(frame));
+  }
+});
+
+test('코드 선형 점유 20~80% × 중앙/좌상단/우하단 위치 sweep 복호', {
+  timeout: 240_000,
+}, () => {
+  const fixture = render(CLUTTER_TEXT, 2, 'M', {
+    pixelsPerUnit: 9,
+    supersample: 2,
+  });
+
+  for (const ratio of FRAME_LINEAR_RATIOS) {
+    const width = Math.ceil(fixture.raster.width / ratio);
+    const height = Math.ceil(fixture.raster.height / ratio);
+    for (const position of FRAME_POSITIONS) {
+      const frame = clutterFrame(fixture.raster, {
+        width,
+        height,
+        kind: 'texture',
+        position,
+      });
+      const actualWidthRatio = fixture.raster.width / width;
+      const actualHeightRatio = fixture.raster.height / height;
+      assert.ok(Math.abs(actualWidthRatio - ratio) < 0.005);
+      assert.ok(Math.abs(actualHeightRatio - ratio) < 0.005);
+      assertClutterDecoded(
+        'clutter-ratio-position',
+        { ratio, position, width, height },
+        decodeFrontend(frame),
+      );
+    }
+  }
+});
+
+test('프레임에 코드가 둘이면 결정적 후보 하나를 복호', {
+  timeout: 120_000,
+}, () => {
+  const first = render('first-code', 2, 'M', {
+    pixelsPerUnit: 12,
+    supersample: 2,
+  }).raster;
+  const second = render('second-code', 2, 'M', {
+    pixelsPerUnit: 12,
+    supersample: 2,
+  }).raster;
+  const frame = clutterFrame(first, {
+    width: 960,
+    height: 600,
+    kind: 'texture',
+    position: 'top-left',
+  });
+  blitRaster(frame, second, frame.width - second.width - 12, frame.height - second.height - 12);
+
+  const result = decodeFrontend(frame);
+  const repeated = decodeFrontend(frame);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(repeated, result, '복수 코드 선택이 동일 프레임에서 달라졌다');
+  assert.ok(['first-code', 'second-code'].includes(result.text), JSON.stringify(result));
+  assert.equal(result.version, 2);
+  assert.equal(result.eccLevel, 'M');
 });
 
 test('코드가 없는 비퇴화 영상은 NO_FINDER', {

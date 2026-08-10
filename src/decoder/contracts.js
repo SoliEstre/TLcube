@@ -8,9 +8,10 @@
  *
  * 규약:
  *   · 좌표계는 두 개뿐이다 — **canonical Euclidean** 과 **image pixel**.
- *   · canonical Euclidean은 불스아이 중심이 원점 (0,0), +x는 오른쪽, +y는 아래,
- *     hex 셀 외접반지름이 1인 유클리드 평면이다. axial (q,r)은 셀 식별자일 뿐
- *     Homography 입력이 아니다. 점 좌표는 `axialToPixel(q,r,DEFAULT_LAYOUT)`로 만든다.
+ *   · canonical Euclidean은 Type O/A에서 불스아이 중심, Type Y에서 Y-심이 원점
+ *     (0,0)이고 +x는 오른쪽, +y는 아래인 유클리드 평면이다. 단위는 각 타입의 모듈
+ *     변 길이 1이다. axial (q,r) 또는 Type Y (i,j)는 셀 식별자일 뿐 Homography
+ *     입력이 아니며, 각 격자 모듈의 기하 함수가 canonical 점을 만든다.
  *   · 이 단위는 `buildScene(...,{cellSize:1})`의 길이 단위와 같지만, canvas margin이
  *     들어간 scene 절대좌표는 아니다. scene origin을 canonical로 흘려보내지 않는다.
  *   · 호모그래피는 항상 canonical Euclidean → image pixel 방향이다.
@@ -49,11 +50,11 @@ export const HOMOGRAPHY_CANONICAL_SPACE = 'hex-euclidean-unit-cell';
  * 호모그래피. **canonical Euclidean → image pixel** 방향, row-major 3×3.
  *
  * canonical 점 (u,v):
- *   - 원점: 불스아이 중심
+ *   - 원점: Type O/A 불스아이 중심 또는 Type Y 중앙 Y-심
  *   - 축: +u 오른쪽, +v 아래
- *   - 단위: hex 셀 외접반지름 1
- *   - axial 셀 (q,r)의 중심:
- *     u = √3·(q+r/2), v = 3r/2
+ *   - 단위: 모듈 변 길이 1
+ *   - Type O/A axial 셀은 `axialToPixel`, Type Y 면 셀은
+ *     `moduleCenter/moduleSampleDisc`가 canonical 점을 만든다.
  *
  * 역방향이 필요하면 `invertHomography` 로 만든다. axial (q,r), canvas-origin
  * scene 좌표, image pixel을 H의 입력으로 대신 쓰는 어댑터는 계약 위반이다.
@@ -76,10 +77,13 @@ export const HOMOGRAPHY_CANONICAL_SPACE = 'hex-euclidean-unit-cell';
  *
  * @typedef {object} GridHypothesis
  * @property {'hex'|'tri'|'cube'} family
- * @property {number} k            격자 반경(hex·tri) 또는 n(cube)
+ * @property {number} [k]          Type O/A 격자 반경
+ * @property {number} [n]          Type Y 면별 모듈 수
  * @property {0|1|2} orientation   120° 회전 가설 인덱스
  * @property {boolean} centerQr    중앙 QR 변형 여부
- * @property {Point[]} anchors     앵커 3점(영상 좌표)
+ * @property {Point[]} [anchors]   Type O/A 앵커 3점(영상 좌표)
+ * @property {Point[]} [vertices]  Type Y 육각 외곽 6점(영상 좌표)
+ * @property {Point[]} [seamVertices] Type Y Y-심에서 뻗는 외곽 3점(영상 좌표)
  * @property {Homography} H        canonical Euclidean → image pixel
  * @property {'hex-euclidean-unit-cell'} canonicalSpace
  * @property {number} geometryResidual  재투영 잔차(픽셀). 낮을수록 좋음.

@@ -110,7 +110,8 @@ test('Type O: classifyFamily는 전 가설·진단을 보존하고 hex만 선택
   assert.ok(first.hypotheses.some((candidate) => candidate.family === 'hex'));
   assert.ok(first.hypotheses.some((candidate) => candidate.family === 'tri'));
   assert.equal(first.diagnostics.cube.ok, false);
-  assert.equal(first.diagnostics.cube.detail.unimplemented, true);
+  assert.equal(first.diagnostics.cube.reason, FRONTEND_FAILURE.NO_GRID_HYPOTHESIS);
+  assert.equal(first.diagnostics.cube.detail.stage, 'cube-detect');
 });
 
 test('Type A: 육각 코어가 hex로 보이더라도 tri 패치가 있으면 O를 hard 선택하지 않음', () => {
@@ -146,7 +147,7 @@ test('Type A: 육각 코어가 hex로 보이더라도 tri 패치가 있으면 O�
   assert.equal(hex.hardChecks.all, false);
 });
 
-test('Type Y: 검출 계약이 없으므로 scoreCubeTiling은 명시적 fail', () => {
+test('Type Y: 구조 증거가 없는 tiny 입력은 명시적 no-grid', () => {
   const luma = {
     width: 2,
     height: 2,
@@ -156,8 +157,8 @@ test('Type Y: 검출 계약이 없으므로 scoreCubeTiling은 명시적 fail', 
   const result = scoreCubeTiling(luma, { center: { x: 1, y: 1 } });
   assert.equal(result.ok, false);
   assert.equal(result.reason, FRONTEND_FAILURE.NO_GRID_HYPOTHESIS);
-  assert.equal(result.detail.family, 'cube');
-  assert.equal(result.detail.unimplemented, true);
+  assert.equal(result.detail.stage, 'cube-detect');
+  assert.equal(result.detail.cause, 'no-positive-hex-y-junction');
 });
 
 test('패밀리 충돌은 포맷으로 타이브레이크하지 않고 FAMILY_AMBIGUOUS', () => {

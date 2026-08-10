@@ -1,0 +1,1328 @@
+/**
+ * cube-detect.js — Type Y 영상 기하 검출과 세 면 모듈 샘플링.
+ *
+ * 검출 계약은 외곽 단독이 아니다. 정육각형 실루엣, 중앙 Y 심의 세 어두운 seam,
+ * 세 면 공변 n x n 기저, referenceAnchors(n)의 네 분산 조를 모두 양성 증거로
+ * 요구한다. 불스아이 검출 실패는 이 경로의 입력이 아니다.
+ *
+ * 모든 임계값은 M1 실측 전 [미검증]이며 options.calibration으로 교체할 수 있다.
+ * Homography 방향은 canonical Euclidean -> image pixel로 고정한다.
+ */
+
+import {
+  CORNER_UNIT_OFFSETS,
+} from '../hexgrid.js';
+import {
+  digitToRanks,
+  ranksToDigit,
+} from '../lehmer.js';
+import {
+  referenceAnchors,
+  referenceGroups,
+} from '../placementY.js';
+import {
+  digitToPattern,
+  patternToDigit,
+} from '../tonemap.js';
+import {
+  moduleSampleDisc,
+  YFACES,
+} from '../ygrid.js';
+import {
+  FRONTEND_FAILURE,
+  HOMOGRAPHY_CANONICAL_SPACE,
+  assertLumaField,
+  fail,
+  ok,
+} from './contracts.js';
+import {
+  sampleProjectedDisc,
+} from './grid-sample.js';
+import {
+  estimateHomography4,
+  projectPoint,
+} from './homography.js';
+
+export const UNVERIFIED_CUBE_DETECTION = Object.freeze({
+  maxDimension: 1024,
+  backgroundClusters: 4,
+  backgroundToleranceFloor: 0.018,
+  backgroundSpreadMultiplier: 2.5,
+  minimumComponentAreaFraction: 0.0025,
+  maximumComponentAreaFraction: 0.82,
+  minimumComponentPixels: 48,
+  maximumComponents: 16,
+  minimumMaskFill: 0.12,
+  maximumConcurrencyResidual: 0.14,
+  minimumSeamContrast: 0.010,
+  minimumSeamSupport: 0.34,
+  minimumSeamParityMargin: 0.0005,
+  maximumVertexResidual: 0.105,
+  minimumReferenceAgreement: 10 / 12,
+  minimumToneSpan: 0.012,
+  minimumTwoToneRatio: 1.35,
+  minimumProjectedMinorDiameter: 0.8,
+  minimumSampleCount: 3,
+  sampleDiscFraction: 0.35,
+  referenceRefineRadiusModules: 0.45,
+  referenceRefineStepModules: 0.125,
+  referenceRefineScaleRadius: 0.035,
+  referenceRefineScaleStep: 0.0175,
+  maximumShapeCandidates: 4,
+});
+
+const EPSILON = 1e-9;
+const SUPPORTED_N = Object.freeze([13, 21, 25]);
+const SUPPORTED_TONES = Object.freeze([2, 3]);
+const CANONICAL_SEAM_CORNERS = Object.freeze([1, 3, 5]);
+
+function calibration(options) {
+  const supplied = options && options.calibration && typeof options.calibration === 'object'
+    ? options.calibration
+    : {};
+  return { ...UNVERIFIED_CUBE_DETECTION, ...supplied };
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function median(values) {
+  if (!Array.isArray(values) || values.length === 0) return NaN;
+  const ordered = values.slice().sort((a, b) => a - b);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 === 1
+    ? ordered[middle]
+    : (ordered[middle - 1] + ordered[middle]) / 2;
+}
+
+function bilinear(luma, x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)
+    || x < 0 || y < 0 || x > luma.width - 1 || y > luma.height - 1) return null;
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(luma.width - 1, x0 + 1);
+  const y1 = Math.min(luma.height - 1, y0 + 1);
+  const tx = x - x0;
+  const ty = y - y0;
+  const a = luma.data[y0 * luma.width + x0];
+  const b = luma.data[y0 * luma.width + x1];
+  const c = luma.data[y1 * luma.width + x0];
+  const d = luma.data[y1 * luma.width + x1];
+  return (a * (1 - tx) + b * tx) * (1 - ty)
+    + (c * (1 - tx) + d * tx) * ty;
+}
+
+function downsampleLuma(luma, maxDimension) {
+  const factor = Math.max(1, Math.ceil(Math.max(luma.width, luma.height) / maxDimension));
+  if (factor === 1) return { luma, factor };
+  const width = Math.ceil(luma.width / factor);
+  const height = Math.ceil(luma.height / factor);
+  const data = new Float32Array(width * height);
+  const alpha = luma.alpha ? new Uint8Array(width * height) : null;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let sum = 0;
+      let count = 0;
+      let maximumAlpha = 0;
+      for (let sourceY = y * factor;
+        sourceY < Math.min(luma.height, (y + 1) * factor);
+        sourceY += 1) {
+        for (let sourceX = x * factor;
+          sourceX < Math.min(luma.width, (x + 1) * factor);
+          sourceX += 1) {
+          const index = sourceY * luma.width + sourceX;
+          const a = luma.alpha ? luma.alpha[index] : 255;
+          maximumAlpha = Math.max(maximumAlpha, a);
+          if (a === 0) continue;
+          sum += luma.data[index];
+          count += 1;
+        }
+      }
+      const target = y * width + x;
+      data[target] = count > 0 ? sum / count : 0;
+      if (alpha) alpha[target] = maximumAlpha;
+    }
+  }
+  return { luma: { width, height, data, alpha }, factor };
+}
+
+function borderValues(luma) {
+  const values = [];
+  const band = Math.max(1, Math.min(6, Math.floor(Math.min(luma.width, luma.height) * 0.015)));
+  for (let y = 0; y < luma.height; y += 1) {
+    for (let x = 0; x < luma.width; x += 1) {
+      if (x >= band && x < luma.width - band && y >= band && y < luma.height - band) continue;
+      const index = y * luma.width + x;
+      if (luma.alpha && luma.alpha[index] === 0) continue;
+      const value = luma.data[index];
+      if (Number.isFinite(value)) values.push(value);
+    }
+  }
+  return values;
+}
+
+function backgroundModels(values, cfg) {
+  if (values.length === 0) return [];
+  const ordered = values.slice().sort((a, b) => a - b);
+  const k = Math.max(1, Math.min(cfg.backgroundClusters, ordered.length));
+  let means = Array.from({ length: k }, (_, index) => {
+    const q = (index + 0.5) / k;
+    return ordered[Math.min(ordered.length - 1, Math.floor(q * ordered.length))];
+  });
+
+  let assignments = new Int16Array(values.length);
+  for (let iteration = 0; iteration < 12; iteration += 1) {
+    const sums = new Float64Array(k);
+    const counts = new Uint32Array(k);
+    for (let index = 0; index < values.length; index += 1) {
+      let best = 0;
+      let bestDistance = Math.abs(values[index] - means[0]);
+      for (let cluster = 1; cluster < k; cluster += 1) {
+        const distance = Math.abs(values[index] - means[cluster]);
+        if (distance < bestDistance) {
+          best = cluster;
+          bestDistance = distance;
+        }
+      }
+      assignments[index] = best;
+      sums[best] += values[index];
+      counts[best] += 1;
+    }
+    means = means.map((mean, index) => counts[index] > 0 ? sums[index] / counts[index] : mean);
+  }
+
+  const models = [];
+  for (let cluster = 0; cluster < k; cluster += 1) {
+    const members = [];
+    for (let index = 0; index < values.length; index += 1) {
+      if (assignments[index] === cluster) members.push(values[index]);
+    }
+    if (members.length < Math.max(3, Math.floor(values.length * 0.015))) continue;
+    const mean = members.reduce((sum, value) => sum + value, 0) / members.length;
+    const spread = median(members.map((value) => Math.abs(value - mean)));
+    models.push({
+      mean,
+      tolerance: Math.max(
+        cfg.backgroundToleranceFloor,
+        Number.isFinite(spread) ? spread * cfg.backgroundSpreadMultiplier : 0,
+      ),
+      count: members.length,
+    });
+  }
+  models.sort((left, right) => left.mean - right.mean);
+
+  const merged = [];
+  for (const model of models) {
+    const previous = merged[merged.length - 1];
+    if (previous && Math.abs(previous.mean - model.mean)
+      <= Math.max(previous.tolerance, model.tolerance) * 0.35) {
+      const count = previous.count + model.count;
+      previous.mean = (previous.mean * previous.count + model.mean * model.count) / count;
+      previous.tolerance = Math.max(previous.tolerance, model.tolerance);
+      previous.count = count;
+    } else {
+      merged.push({ ...model });
+    }
+  }
+  return merged;
+}
+
+function foregroundMask(luma, cfg) {
+  const length = luma.width * luma.height;
+  const mask = new Uint8Array(length);
+  let transparent = 0;
+  if (luma.alpha) {
+    for (let index = 0; index < length; index += 1) {
+      if (luma.alpha[index] < 32) transparent += 1;
+    }
+  }
+
+  if (luma.alpha && transparent >= length * 0.02) {
+    for (let index = 0; index < length; index += 1) {
+      mask[index] = luma.alpha[index] >= 128 ? 1 : 0;
+    }
+    return { mask, models: [], source: 'alpha' };
+  }
+
+  const models = backgroundModels(borderValues(luma), cfg);
+  if (models.length === 0) return { mask, models, source: 'none' };
+  for (let index = 0; index < length; index += 1) {
+    if (luma.alpha && luma.alpha[index] === 0) continue;
+    const value = luma.data[index];
+    let background = false;
+    for (const model of models) {
+      if (Math.abs(value - model.mean) <= model.tolerance) {
+        background = true;
+        break;
+      }
+    }
+    mask[index] = background ? 0 : 1;
+  }
+  return { mask, models, source: 'border-clusters' };
+}
+
+function closeMask(mask, width, height) {
+  const dilated = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let on = 0;
+      for (let oy = -1; oy <= 1 && on === 0; oy += 1) {
+        const yy = y + oy;
+        if (yy < 0 || yy >= height) continue;
+        for (let ox = -1; ox <= 1; ox += 1) {
+          const xx = x + ox;
+          if (xx >= 0 && xx < width && mask[yy * width + xx]) {
+            on = 1;
+            break;
+          }
+        }
+      }
+      dilated[y * width + x] = on;
+    }
+  }
+
+  const closed = new Uint8Array(mask.length);
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      let on = 1;
+      for (let oy = -1; oy <= 1 && on === 1; oy += 1) {
+        for (let ox = -1; ox <= 1; ox += 1) {
+          if (!dilated[(y + oy) * width + x + ox]) {
+            on = 0;
+            break;
+          }
+        }
+      }
+      closed[y * width + x] = on;
+    }
+  }
+  return closed;
+}
+
+function connectedComponents(mask, width, height, cfg) {
+  const visited = new Uint8Array(mask.length);
+  const queue = new Int32Array(mask.length);
+  const components = [];
+  const minimum = Math.max(
+    cfg.minimumComponentPixels,
+    Math.floor(mask.length * cfg.minimumComponentAreaFraction),
+  );
+  const maximum = Math.floor(mask.length * cfg.maximumComponentAreaFraction);
+  const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (!mask[start] || visited[start]) continue;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    visited[start] = 1;
+    let area = 0;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+    const boundary = [];
+
+    while (head < tail) {
+      const index = queue[head++];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      area += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      let edge = false;
+
+      for (const neighbor of neighbors) {
+        const xx = x + neighbor[0];
+        const yy = y + neighbor[1];
+        if (xx < 0 || yy < 0 || xx >= width || yy >= height) {
+          edge = true;
+          continue;
+        }
+        const next = yy * width + xx;
+        if (!mask[next]) {
+          edge = true;
+          continue;
+        }
+        if (!visited[next]) {
+          visited[next] = 1;
+          queue[tail++] = next;
+        }
+      }
+      if (edge) boundary.push({ x: x + 0.5, y: y + 0.5 });
+    }
+
+    if (area >= minimum && area <= maximum && boundary.length >= 6) {
+      components.push({ area, minX, minY, maxX, maxY, boundary });
+    }
+  }
+
+  return components.sort((left, right) =>
+    right.area - left.area
+    || left.minY - right.minY
+    || left.minX - right.minX)
+    .slice(0, cfg.maximumComponents);
+}
+
+function cross(origin, left, right) {
+  return (left.x - origin.x) * (right.y - origin.y)
+    - (left.y - origin.y) * (right.x - origin.x);
+}
+
+function convexHull(points) {
+  const ordered = points.slice().sort((left, right) =>
+    left.x - right.x || left.y - right.y);
+  if (ordered.length <= 1) return ordered;
+  const lower = [];
+  for (const point of ordered) {
+    while (lower.length >= 2
+      && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+  const upper = [];
+  for (let index = ordered.length - 1; index >= 0; index -= 1) {
+    const point = ordered[index];
+    while (upper.length >= 2
+      && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
+
+function polygonArea(points) {
+  let twice = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const next = points[(index + 1) % points.length];
+    twice += points[index].x * next.y - next.x * points[index].y;
+  }
+  return twice / 2;
+}
+
+function simplifyHullToHex(hull) {
+  const points = hull.slice();
+  while (points.length > 6) {
+    let remove = 0;
+    let cost = Infinity;
+    for (let index = 0; index < points.length; index += 1) {
+      const previous = points[(index + points.length - 1) % points.length];
+      const current = points[index];
+      const next = points[(index + 1) % points.length];
+      const triangle = Math.abs(cross(previous, current, next));
+      const span = Math.hypot(next.x - previous.x, next.y - previous.y);
+      const normalized = triangle / Math.max(span, EPSILON);
+      if (normalized < cost) {
+        cost = normalized;
+        remove = index;
+      }
+    }
+    points.splice(remove, 1);
+  }
+  if (points.length !== 6) return null;
+  if (polygonArea(points) < 0) points.reverse();
+  return points;
+}
+
+function lineIntersection(a, b, c, d) {
+  const rx = b.x - a.x;
+  const ry = b.y - a.y;
+  const sx = d.x - c.x;
+  const sy = d.y - c.y;
+  const denominator = rx * sy - ry * sx;
+  if (Math.abs(denominator) <= EPSILON) return null;
+  const qx = c.x - a.x;
+  const qy = c.y - a.y;
+  const t = (qx * sy - qy * sx) / denominator;
+  return { x: a.x + t * rx, y: a.y + t * ry };
+}
+
+function diagonalCenter(vertices) {
+  const intersections = [
+    lineIntersection(vertices[0], vertices[3], vertices[1], vertices[4]),
+    lineIntersection(vertices[1], vertices[4], vertices[2], vertices[5]),
+    lineIntersection(vertices[2], vertices[5], vertices[0], vertices[3]),
+  ].filter(Boolean);
+  if (intersections.length !== 3) return null;
+  const center = {
+    x: intersections.reduce((sum, point) => sum + point.x, 0) / 3,
+    y: intersections.reduce((sum, point) => sum + point.y, 0) / 3,
+  };
+  const radius = vertices.reduce(
+    (sum, point) => sum + Math.hypot(point.x - center.x, point.y - center.y),
+    0,
+  ) / vertices.length;
+  const residual = Math.max(
+    ...intersections.map((point) => Math.hypot(point.x - center.x, point.y - center.y)),
+  ) / Math.max(radius, EPSILON);
+  return { center, radius, residual, intersections };
+}
+
+function lumaSpan(luma) {
+  let min = Infinity;
+  let max = -Infinity;
+  for (let index = 0; index < luma.data.length; index += 1) {
+    const value = luma.data[index];
+    if (!Number.isFinite(value)) continue;
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+  return Number.isFinite(min) && Number.isFinite(max) ? max - min : 0;
+}
+
+function seamEvidence(luma, center, vertices, parity) {
+  const rayReports = [];
+  const span = Math.max(lumaSpan(luma), EPSILON);
+  for (let ray = 0; ray < 3; ray += 1) {
+    const endpoint = vertices[(parity + 2 * ray) % 6];
+    const dx = endpoint.x - center.x;
+    const dy = endpoint.y - center.y;
+    const length = Math.hypot(dx, dy);
+    if (!(length > 4)) return { contrast: 0, support: 0, rays: [] };
+    const px = -dy / length;
+    const py = dx / length;
+    const offset = Math.max(1.25, length * 0.014);
+    const contrasts = [];
+    let supported = 0;
+
+    for (let step = 0; step < 28; step += 1) {
+      const t = 0.08 + (0.84 * step) / 27;
+      const x = center.x + dx * t;
+      const y = center.y + dy * t;
+      const middle = bilinear(luma, x, y);
+      const left = bilinear(luma, x + px * offset, y + py * offset);
+      const right = bilinear(luma, x - px * offset, y - py * offset);
+      if (middle === null || left === null || right === null) continue;
+      const contrast = ((left + right) / 2) - middle;
+      contrasts.push(contrast);
+      if (contrast >= span * 0.006) supported += 1;
+    }
+    rayReports.push({
+      contrast: median(contrasts) / span,
+      support: contrasts.length === 0 ? 0 : supported / contrasts.length,
+      samples: contrasts.length,
+    });
+  }
+
+  const ordered = rayReports.slice().sort((left, right) =>
+    right.contrast - left.contrast || right.support - left.support);
+  return {
+    // 셀 내용이 심과 같은 암부일 수 있으므로 3개 ray의 중앙값은 내용 의존적이다.
+    // 패리티 판정에는 가장 또렷한 한 ray를 쓰고, 4조 레퍼런스가 거짓 양성을 닫는다.
+    contrast: ordered[0] ? ordered[0].contrast : 0,
+    support: ordered[0] ? ordered[0].support : 0,
+    positiveRayCount: rayReports.filter(
+      (report) => report.contrast >= UNVERIFIED_CUBE_DETECTION.minimumSeamContrast,
+    ).length,
+    rays: rayReports,
+  };
+}
+
+function shapeCandidates(luma, cfg) {
+  const foreground = foregroundMask(luma, cfg);
+  const mask = closeMask(foreground.mask, luma.width, luma.height);
+  const components = connectedComponents(mask, luma.width, luma.height, cfg);
+  const candidates = [];
+
+  components.forEach((component, componentIndex) => {
+    const hull = convexHull(component.boundary);
+    const vertices = simplifyHullToHex(hull);
+    if (!vertices) return;
+    const diagonal = diagonalCenter(vertices);
+    if (!diagonal || diagonal.residual > cfg.maximumConcurrencyResidual) return;
+    const area = Math.abs(polygonArea(vertices));
+    const maskFill = component.area / Math.max(area, EPSILON);
+    if (maskFill < cfg.minimumMaskFill) return;
+
+    const even = seamEvidence(luma, diagonal.center, vertices, 0);
+    const odd = seamEvidence(luma, diagonal.center, vertices, 1);
+    const seamScore = (report) => report.contrast
+      + cfg.minimumSeamContrast * report.positiveRayCount;
+    const evenScore = seamScore(even);
+    const oddScore = seamScore(odd);
+    const parity = oddScore > evenScore ? 1 : 0;
+    const seam = parity === 1 ? odd : even;
+    const other = parity === 1 ? even : odd;
+    const parityMargin = Math.abs(evenScore - oddScore);
+    const hardChecks = {
+      hexSilhouette: true,
+      diagonalConcurrency: diagonal.residual <= cfg.maximumConcurrencyResidual,
+      yJunction: seam.contrast >= cfg.minimumSeamContrast
+        && seam.support >= cfg.minimumSeamSupport
+        && parityMargin >= cfg.minimumSeamParityMargin,
+    };
+    hardChecks.all = hardChecks.hexSilhouette
+      && hardChecks.diagonalConcurrency
+      && hardChecks.yJunction;
+    if (!hardChecks.all) return;
+
+    candidates.push({
+      componentIndex,
+      center: diagonal.center,
+      vertices,
+      seamParity: parity,
+      seamVertices: [0, 1, 2].map((index) => vertices[(parity + 2 * index) % 6]),
+      radius: diagonal.radius,
+      maskFill,
+      concurrencyResidual: diagonal.residual,
+      seam,
+      otherParitySeam: other,
+      parityMargin,
+      hardChecks,
+      score: clamp01(
+        0.32 * (1 - diagonal.residual / cfg.maximumConcurrencyResidual)
+        + 0.38 * clamp01(seam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON))
+        + 0.20 * seam.support
+        + 0.10 * clamp01(maskFill),
+      ),
+    });
+  });
+
+  candidates.sort((left, right) =>
+    right.score - left.score
+    || right.radius - left.radius
+    || left.componentIndex - right.componentIndex);
+  return {
+    candidates: candidates.slice(0, cfg.maximumShapeCandidates),
+    diagnostics: {
+      foregroundSource: foreground.source,
+      backgroundModels: foreground.models,
+      componentCount: components.length,
+      acceptedShapeCount: candidates.length,
+    },
+  };
+}
+
+function liftPoint(point, factor) {
+  return {
+    x: point.x * factor + (factor - 1) / 2,
+    y: point.y * factor + (factor - 1) / 2,
+  };
+}
+
+function vertexSetResidual(H, n, observedVertices) {
+  const predicted = CORNER_UNIT_OFFSETS.map((corner) =>
+    projectPoint(H, { x: corner.x * n, y: corner.y * n }));
+  if (predicted.some((point) => point === null)) return Infinity;
+  let sumSquares = 0;
+  for (const point of predicted) {
+    let nearest = Infinity;
+    for (const observed of observedVertices) {
+      nearest = Math.min(nearest, Math.hypot(point.x - observed.x, point.y - observed.y));
+    }
+    sumSquares += nearest * nearest;
+  }
+  return Math.sqrt(sumSquares / predicted.length);
+}
+
+function cubeGeometrySeeds(
+  n,
+  center,
+  vertices,
+  seamVertices,
+  seamParity,
+  orientation,
+) {
+  const seeds = [];
+  const observedSeams = [0, 1, 2].map(
+    (index) => seamVertices[(index + orientation) % 3],
+  );
+  const seamCanonical = [
+    { x: 0, y: 0 },
+    ...CANONICAL_SEAM_CORNERS.map((index) => ({
+      x: CORNER_UNIT_OFFSETS[index].x * n,
+      y: CORNER_UNIT_OFFSETS[index].y * n,
+    })),
+  ];
+  const centerSeams = estimateHomography4(seamCanonical, [center, ...observedSeams]);
+  if (centerSeams) {
+    seeds.push({ id: 'center-seams', H: centerSeams, observedSeams });
+  }
+
+  const shift = ((seamParity - 1 + 2 * orientation) % 6 + 6) % 6;
+  const subsets = [
+    { id: 'outer-a', indices: [0, 1, 3, 4] },
+    { id: 'outer-b', indices: [1, 2, 4, 5] },
+    { id: 'outer-c', indices: [0, 2, 3, 5] },
+  ];
+  for (const subset of subsets) {
+    const canonical = subset.indices.map((index) => ({
+      x: CORNER_UNIT_OFFSETS[index].x * n,
+      y: CORNER_UNIT_OFFSETS[index].y * n,
+    }));
+    const observed = subset.indices.map(
+      (index) => vertices[(index + shift) % 6],
+    );
+    const H = estimateHomography4(canonical, observed);
+    if (H) seeds.push({ id: subset.id, H, observedSeams });
+  }
+  return seeds;
+}
+
+function sampleOptions(options, cfg) {
+  const supplied = options && options.sample && typeof options.sample === 'object'
+    ? options.sample
+    : {};
+  return {
+    minSampleCount: cfg.minimumSampleCount,
+    minProjectedMinorDiameter: cfg.minimumProjectedMinorDiameter,
+    disc: {
+      fraction: cfg.sampleDiscFraction,
+      ...(supplied.disc || {}),
+    },
+    ...supplied,
+  };
+}
+
+export function sampleCubeCell(luma, geometry, i, j, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'cube-cell-sampling',
+      message: error.message,
+    });
+  }
+  if (!geometry || !(geometry.H instanceof Float64Array)) {
+    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+      stage: 'cube-cell-sampling',
+      cause: 'missing-homography',
+    });
+  }
+
+  const faces = {};
+  for (const face of YFACES) {
+    const disc = moduleSampleDisc(
+      face,
+      i,
+      j,
+      { size: 1, originX: 0, originY: 0 },
+      options.disc || {},
+    );
+    const sampled = sampleProjectedDisc(luma, geometry.H, disc, options);
+    if (!sampled.ok) {
+      return fail(sampled.reason, {
+        stage: 'cube-cell-sampling',
+        face,
+        i,
+        j,
+        cause: sampled.detail,
+      });
+    }
+    faces[face] = {
+      median: sampled.median,
+      mad: sampled.mad,
+      count: sampled.count,
+      projectedMinorDiameter: sampled.projectedMinorDiameter,
+    };
+  }
+  return ok({ ...faces, i, j });
+}
+
+function referenceSampleMap(luma, hypothesis, n, options, cfg) {
+  const coordinates = [];
+  for (const group of referenceGroups(n, 2)) {
+    for (const cell of group.cells) coordinates.push(cell);
+  }
+  const map = new Map();
+  for (const cell of coordinates) {
+    const key = cell.i + ',' + cell.j;
+    if (map.has(key)) continue;
+    const sample = sampleCubeCell(luma, hypothesis, cell.i, cell.j, sampleOptions(options, cfg));
+    if (!sample.ok) return sample;
+    map.set(key, sample);
+  }
+  return ok({ samples: map });
+}
+
+function knownReferenceDigits(n, tones) {
+  const map = new Map();
+  for (const group of referenceGroups(n, tones)) {
+    group.cells.forEach((cell, index) => {
+      map.set(cell.i + ',' + cell.j, group.digits[index]);
+    });
+  }
+  return map;
+}
+
+function normalizeThreeTone(value, anchors) {
+  const a0 = anchors[0];
+  const a1 = anchors[1];
+  const a2 = anchors[2];
+  if (value <= a1) return (value - a0) / Math.max(a1 - a0, EPSILON);
+  return 1 + (value - a1) / Math.max(a2 - a1, EPSILON);
+}
+
+export function readCubeDigit(sample, calibrationResult) {
+  if (!sample || sample.ok === false || !calibrationResult) return null;
+  if (calibrationResult.tones === 2) {
+    const bits = {};
+    let minimumMargin = Infinity;
+    for (const face of YFACES) {
+      const value = sample[face].median;
+      const threshold = calibrationResult.thresholds[face];
+      bits[face] = value > threshold ? 1 : 0;
+      minimumMargin = Math.min(
+        minimumMargin,
+        Math.abs(Math.log(Math.max(value, EPSILON)) - Math.log(Math.max(threshold, EPSILON))),
+      );
+    }
+    try {
+      const digit = patternToDigit(bits.T, bits.L, bits.R);
+      if (digit === null) return null;
+      return {
+        digit,
+        bits,
+        margin: minimumMargin,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const normalized = {};
+  for (const face of YFACES) {
+    normalized[face] = normalizeThreeTone(
+      sample[face].median,
+      calibrationResult.levelAnchors[face],
+    );
+  }
+  const rows = YFACES.map((face, order) => ({ face, order, value: normalized[face] }))
+    .sort((left, right) => left.value - right.value || left.order - right.order);
+  const ranks = {};
+  rows.forEach((row, rank) => {
+    ranks[row.face] = rank;
+  });
+  const gaps = [
+    rows[1].value - rows[0].value,
+    rows[2].value - rows[1].value,
+  ];
+  return {
+    digit: ranksToDigit(ranks),
+    normalized,
+    margin: Math.min(...gaps),
+  };
+}
+
+function buildToneCalibration(samples, n, tones, cfg) {
+  const expected = knownReferenceDigits(n, tones);
+  if (tones === 2) {
+    const thresholds = {};
+    const anchors = {};
+    let minimumRatio = Infinity;
+    let minimumSpan = Infinity;
+    for (const face of YFACES) {
+      const lows = [];
+      const highs = [];
+      for (const [key, digit] of expected) {
+        const sample = samples.get(key);
+        const bright = digitToPattern(digit)[face];
+        (bright ? highs : lows).push(sample[face].median);
+      }
+      const low = median(lows);
+      const high = median(highs);
+      const span = high - low;
+      const ratio = high / Math.max(low, EPSILON);
+      const threshold = low > 0 && high > 0 ? Math.sqrt(low * high) : (low + high) / 2;
+      thresholds[face] = threshold;
+      anchors[face] = { low, high, lows, highs, span, ratio };
+      minimumRatio = Math.min(minimumRatio, ratio);
+      minimumSpan = Math.min(minimumSpan, span);
+    }
+
+    const provisional = { tones, thresholds, anchors };
+    let agreement = 0;
+    const observations = [];
+    for (const [key, digit] of expected) {
+      const read = readCubeDigit(samples.get(key), provisional);
+      const matched = read !== null && read.digit === digit;
+      if (matched) agreement += 1;
+      observations.push({
+        key,
+        expected: digit,
+        observed: read && read.digit,
+        matched,
+        margin: read && read.margin,
+      });
+    }
+    const agreementRate = agreement / expected.size;
+    const margins = observations
+      .map((entry) => entry.margin)
+      .filter(Number.isFinite);
+    const medianMargin = margins.length > 0 ? median(margins) : 0;
+    const hardChecks = {
+      toneSeparation: minimumSpan >= cfg.minimumToneSpan
+        && minimumRatio >= cfg.minimumTwoToneRatio,
+      referenceAgreement: agreementRate >= cfg.minimumReferenceAgreement,
+    };
+    hardChecks.all = hardChecks.toneSeparation && hardChecks.referenceAgreement;
+    return {
+      ...provisional,
+      agreement,
+      total: expected.size,
+      agreementRate,
+      minimumRatio,
+      minimumSpan,
+      medianMargin,
+      observations,
+      hardChecks,
+    };
+  }
+
+  const levelAnchors = {};
+  let minimumSpan = Infinity;
+  for (const face of YFACES) {
+    const byRank = [[], [], []];
+    for (const [key, digit] of expected) {
+      const rank = digitToRanks(digit)[face];
+      byRank[rank].push(samples.get(key)[face].median);
+    }
+    const anchors = byRank.map((values) => median(values));
+    levelAnchors[face] = anchors;
+    minimumSpan = Math.min(
+      minimumSpan,
+      anchors[1] - anchors[0],
+      anchors[2] - anchors[1],
+    );
+  }
+
+  const provisional = { tones, levelAnchors };
+  let agreement = 0;
+  const observations = [];
+  for (const [key, digit] of expected) {
+    const read = readCubeDigit(samples.get(key), provisional);
+    const matched = read !== null && read.digit === digit;
+    if (matched) agreement += 1;
+    observations.push({
+      key,
+      expected: digit,
+      observed: read && read.digit,
+      matched,
+      margin: read && read.margin,
+    });
+  }
+  const agreementRate = agreement / expected.size;
+  const margins = observations
+    .map((entry) => entry.margin)
+    .filter(Number.isFinite);
+  const medianMargin = margins.length > 0 ? median(margins) : 0;
+  const hardChecks = {
+    toneSeparation: minimumSpan >= cfg.minimumToneSpan,
+    referenceAgreement: agreementRate >= cfg.minimumReferenceAgreement,
+  };
+  hardChecks.all = hardChecks.toneSeparation && hardChecks.referenceAgreement;
+  return {
+    ...provisional,
+    agreement,
+    total: expected.size,
+    agreementRate,
+    minimumSpan,
+    medianMargin,
+    observations,
+    hardChecks,
+  };
+}
+
+export function calibrateCubeReferences(luma, hypothesis, options = {}) {
+  const cfg = calibration(options);
+  const n = hypothesis && hypothesis.n;
+  if (!SUPPORTED_N.includes(n)) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'cube-reference',
+      cause: 'unsupported-n',
+      n,
+    });
+  }
+  const sampled = referenceSampleMap(luma, hypothesis, n, options, cfg);
+  if (!sampled.ok) return sampled;
+  const requested = options.tones === 2 || options.tones === 3
+    ? [options.tones]
+    : SUPPORTED_TONES;
+  const calibrations = requested.map((tones) =>
+    buildToneCalibration(sampled.samples, n, tones, cfg));
+  return ok({
+    samples: sampled.samples,
+    calibrations,
+    accepted: calibrations.filter((entry) => entry.hardChecks.all),
+    anchors: referenceAnchors(n),
+  });
+}
+
+function explicitCubeHypotheses(yJunction) {
+  if (!yJunction || typeof yJunction !== 'object') return null;
+  const raw = yJunction.geometryHypotheses
+    || yJunction.cubeHypotheses
+    || yJunction.hypotheses;
+  if (!Array.isArray(raw)) return null;
+  return raw.filter((entry) => entry
+    && entry.family === 'cube'
+    && entry.H instanceof Float64Array
+    && SUPPORTED_N.includes(entry.n));
+}
+
+function translateHomography(H, dx, dy) {
+  return new Float64Array([
+    H[0] + dx * H[6], H[1] + dx * H[7], H[2] + dx * H[8],
+    H[3] + dy * H[6], H[4] + dy * H[7], H[5] + dy * H[8],
+    H[6], H[7], H[8],
+  ]);
+}
+
+function scaleHomographyAroundOrigin(H, scale) {
+  const center = projectPoint(H, { x: 0, y: 0 });
+  if (!center) return null;
+  const offsetX = (1 - scale) * center.x;
+  const offsetY = (1 - scale) * center.y;
+  return new Float64Array([
+    scale * H[0] + offsetX * H[6],
+    scale * H[1] + offsetX * H[7],
+    scale * H[2] + offsetX * H[8],
+    scale * H[3] + offsetY * H[6],
+    scale * H[4] + offsetY * H[7],
+    scale * H[5] + offsetY * H[8],
+    H[6],
+    H[7],
+    H[8],
+  ]);
+}
+
+function projectedModulePitch(H) {
+  const center = projectPoint(H, { x: 0, y: 0 });
+  const iStep = projectPoint(H, { x: 1, y: 0 });
+  const jStep = projectPoint(H, { x: 0, y: 1 });
+  if (!center || !iStep || !jStep) return NaN;
+  return median([
+    Math.hypot(iStep.x - center.x, iStep.y - center.y),
+    Math.hypot(jStep.x - center.x, jStep.y - center.y),
+  ]);
+}
+
+function calibrationQuality(entry) {
+  const margin = Number.isFinite(entry.medianMargin) ? entry.medianMargin : 0;
+  const span = Number.isFinite(entry.minimumSpan) ? entry.minimumSpan : 0;
+  return 100 * entry.agreementRate
+    + 2 * clamp01(span / 0.08)
+    + clamp01(margin);
+}
+
+function refineHomographyWithReferences(
+  luma,
+  base,
+  tones,
+  options,
+  cfg,
+  translationOnly = false,
+) {
+  const pitch = projectedModulePitch(base.H);
+  if (!(pitch > 0)) return null;
+  const radius = cfg.referenceRefineRadiusModules * pitch;
+  const step = Math.max(0.25, cfg.referenceRefineStepModules * pitch);
+  const offsets = [];
+  for (let dy = -radius; dy <= radius + EPSILON; dy += step) {
+    for (let dx = -radius; dx <= radius + EPSILON; dx += step) {
+      offsets.push({ dx, dy });
+    }
+  }
+  offsets.push({ dx: 0, dy: 0 });
+  offsets.sort((left, right) =>
+    Math.hypot(left.dx, left.dy) - Math.hypot(right.dx, right.dy)
+    || left.dy - right.dy
+    || left.dx - right.dx);
+
+  const scales = [];
+  if (!translationOnly) {
+    for (let delta = -cfg.referenceRefineScaleRadius;
+      delta <= cfg.referenceRefineScaleRadius + EPSILON;
+      delta += cfg.referenceRefineScaleStep) {
+      scales.push(1 + delta);
+    }
+  }
+  scales.push(1);
+  scales.sort((left, right) => Math.abs(left - 1) - Math.abs(right - 1) || left - right);
+
+  let best = null;
+  for (const scale of scales) {
+    const scaled = scaleHomographyAroundOrigin(base.H, scale);
+    if (!scaled) continue;
+    for (const offset of offsets) {
+      const H = translateHomography(scaled, offset.dx, offset.dy);
+      const hypothesis = { ...base, H };
+      const sampled = referenceSampleMap(luma, hypothesis, base.n, options, cfg);
+      if (!sampled.ok) continue;
+      const entry = buildToneCalibration(sampled.samples, base.n, tones, cfg);
+      if (!entry.hardChecks.all) continue;
+      const quality = calibrationQuality(entry);
+      const adjustment = Math.abs(scale - 1)
+        + Math.hypot(offset.dx, offset.dy) / Math.max(pitch, EPSILON);
+      const candidate = {
+        H,
+        referenceCalibration: entry,
+        referenceSamples: sampled.samples,
+        dx: offset.dx,
+        dy: offset.dy,
+        scale,
+        adjustment,
+        quality,
+      };
+      if (!best
+        || candidate.quality > best.quality + EPSILON
+        || (Math.abs(candidate.quality - best.quality) <= EPSILON
+          && (candidate.adjustment < best.adjustment - EPSILON
+            || (Math.abs(candidate.adjustment - best.adjustment) <= EPSILON
+              && (candidate.scale < best.scale
+                || (candidate.scale === best.scale
+                  && (candidate.dy < best.dy
+                    || (candidate.dy === best.dy && candidate.dx < best.dx)))))))) {
+        best = candidate;
+      }
+    }
+  }
+  return best && {
+    ...best,
+    pitch,
+    radius,
+    step,
+  };
+}
+
+export function detectCubeHypotheses(luma, yJunction, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'cube-detect',
+      message: error.message,
+    });
+  }
+  const explicit = explicitCubeHypotheses(yJunction);
+  if (explicit && explicit.length > 0) {
+    return ok({
+      hypotheses: explicit,
+      diagnostics: { source: 'supplied', hypothesisCount: explicit.length },
+    });
+  }
+
+  const cfg = calibration(options);
+  const reduced = downsampleLuma(luma, cfg.maxDimension);
+  const shapes = shapeCandidates(reduced.luma, cfg);
+  const hypotheses = [];
+  const geometryReports = [];
+
+  for (const shape of shapes.candidates) {
+    const center = liftPoint(shape.center, reduced.factor);
+    const vertices = shape.vertices.map((point) => liftPoint(point, reduced.factor));
+    const seamVertices = shape.seamVertices.map((point) => liftPoint(point, reduced.factor));
+    const radius = shape.radius * reduced.factor;
+
+    for (const n of SUPPORTED_N) {
+      for (let orientation = 0; orientation < 3; orientation += 1) {
+        const seeds = cubeGeometrySeeds(
+          n,
+          center,
+          vertices,
+          seamVertices,
+          shape.seamParity,
+          orientation,
+        );
+        for (const seed of seeds) {
+          const vertexResidual = vertexSetResidual(seed.H, n, vertices);
+          const relativeVertexResidual = vertexResidual / Math.max(radius, EPSILON);
+          if (relativeVertexResidual > cfg.maximumVertexResidual) continue;
+
+          const base = {
+            family: 'cube',
+            finderKind: 'y-junction',
+            gridKind: 'three-face-nxn',
+            n,
+            k: n,
+            orientation,
+            rotationDegrees: orientation * 120,
+            centerQr: false,
+            center,
+            vertices,
+            seamVertices: seed.observedSeams,
+            H: seed.H,
+            canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+            geometryResidual: vertexResidual,
+            sizeGeometry: {
+              rK: relativeVertexResidual,
+              vertexResidual,
+              relativeVertexResidual,
+            },
+            source: 'cube-silhouette-y-junction',
+            geometrySeed: seed.id,
+            shapeScore: shape.score,
+            seamScore: shape.seam.contrast,
+            seamSupport: shape.seam.support,
+            shapeDiagnostics: shape,
+          };
+          const references = calibrateCubeReferences(luma, base, options);
+          geometryReports.push({
+            n,
+            orientation,
+            geometrySeed: seed.id,
+            vertexResidual,
+            relativeVertexResidual,
+            referenceResult: references.ok
+              ? references.calibrations.map((entry) => ({
+                tones: entry.tones,
+                agreementRate: entry.agreementRate,
+                minimumSpan: entry.minimumSpan,
+                hardChecks: entry.hardChecks,
+              }))
+              : { reason: references.reason, detail: references.detail },
+          });
+          if (!references.ok) continue;
+
+          const refinable = references.calibrations.filter(
+            (entry) => entry.hardChecks.all || entry.minimumSpan > 0,
+          );
+          for (const initialCalibration of refinable) {
+            const refined = refineHomographyWithReferences(
+              luma,
+              base,
+              initialCalibration.tones,
+              options,
+              cfg,
+              initialCalibration.hardChecks.all,
+            );
+            if (!refined) continue;
+            const refinedVertexResidual = vertexSetResidual(refined.H, n, vertices);
+            const refinedRelativeVertexResidual =
+              refinedVertexResidual / Math.max(radius, EPSILON);
+            if (refinedRelativeVertexResidual > cfg.maximumVertexResidual) continue;
+            const refinedCenter = projectPoint(refined.H, { x: 0, y: 0 });
+            hypotheses.push({
+              ...base,
+              center: refinedCenter || center,
+              H: refined.H,
+              geometryResidual: refinedVertexResidual,
+              sizeGeometry: {
+                rK: refinedRelativeVertexResidual,
+                vertexResidual: refinedVertexResidual,
+                relativeVertexResidual: refinedRelativeVertexResidual,
+                initialVertexResidual: vertexResidual,
+                initialRelativeVertexResidual: relativeVertexResidual,
+              },
+              tones: refined.referenceCalibration.tones,
+              referenceCalibration: refined.referenceCalibration,
+              referenceSamples: refined.referenceSamples,
+              referenceAnchors: references.anchors,
+              referenceAgreement: refined.referenceCalibration.agreementRate,
+              referenceRefinement: {
+                dx: refined.dx,
+                dy: refined.dy,
+                pitch: refined.pitch,
+                radius: refined.radius,
+                step: refined.step,
+                scale: refined.scale,
+                quality: refined.quality,
+              },
+              logicalHypothesisId: 'cube-n' + n
+                + '-c' + shape.componentIndex
+                + '-o' + orientation
+                + '-t' + refined.referenceCalibration.tones,
+              hypothesisId: 'cube-n' + n
+                + '-c' + shape.componentIndex
+                + '-o' + orientation
+                + '-t' + refined.referenceCalibration.tones
+                + '-g' + seed.id,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 같은 n/방향/톤에서 레퍼런스 상위 2개를 본문 RS까지 보낸다. 외곽의 한
+  // 꼭짓점이 blur로 치우치면 레퍼런스 최상위 seed가 가장자리 본문에는 열등할 수 있다.
+  const groups = new Map();
+  for (const hypothesis of hypotheses) {
+    const key = hypothesis.logicalHypothesisId;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(hypothesis);
+  }
+  hypotheses.length = 0;
+  for (const group of groups.values()) {
+    group.sort((left, right) =>
+      right.referenceAgreement - left.referenceAgreement
+      || right.referenceRefinement.quality - left.referenceRefinement.quality
+      || left.geometryResidual - right.geometryResidual
+      || left.geometrySeed.localeCompare(right.geometrySeed));
+    hypotheses.push(...group.slice(0, 2));
+  }
+
+  hypotheses.sort((left, right) =>
+    right.referenceAgreement - left.referenceAgreement
+    || right.shapeScore - left.shapeScore
+    || left.sizeGeometry.relativeVertexResidual - right.sizeGeometry.relativeVertexResidual
+    || left.n - right.n
+    || left.orientation - right.orientation
+    || left.tones - right.tones
+    || left.hypothesisId.localeCompare(right.hypothesisId));
+
+  if (hypotheses.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'cube-detect',
+      cause: shapes.candidates.length === 0
+        ? 'no-positive-hex-y-junction'
+        : 'no-reference-supported-grid',
+      diagnostics: {
+        downsampleFactor: reduced.factor,
+        shapes: shapes.diagnostics,
+        shapeCandidates: shapes.candidates,
+        geometryReports,
+      },
+    });
+  }
+
+  return ok({
+    hypotheses,
+    diagnostics: {
+      source: reduced.factor === 1 ? 'detected' : 'detected-downsampled',
+      downsampleFactor: reduced.factor,
+      shapes: shapes.diagnostics,
+      shapeCandidates: shapes.candidates,
+      geometryReports,
+      hypothesisCount: hypotheses.length,
+    },
+  });
+}
+
+export function sampleCubeGrid(luma, geometry, layoutMap, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'cube-grid-sampling',
+      message: error.message,
+    });
+  }
+  if (!(layoutMap instanceof Map)) {
+    throw new TypeError('layoutMapY는 Map이어야 한다');
+  }
+  const cells = new Map();
+  for (const key of layoutMap.keys()) {
+    const parts = key.split(',');
+    const i = Number(parts[0]);
+    const j = Number(parts[1]);
+    const sampled = sampleCubeCell(luma, geometry, i, j, options);
+    if (!sampled.ok) {
+      return fail(sampled.reason, {
+        stage: 'cube-grid-sampling',
+        cell: { i, j },
+        cause: sampled.detail,
+      });
+    }
+    cells.set(key, sampled);
+  }
+  return ok({ cells, sampledCellCount: cells.size });
+}

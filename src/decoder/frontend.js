@@ -116,7 +116,10 @@ export function decodeFrontend(raster, options = {}) {
   const winner = selected.candidate;
   return ok({
     text: winner.text,
+    family: winner.family,
     version: winner.version,
+    versionName: winner.versionName,
+    tones: winner.tones,
     eccLevel: winner.eccLevel,
     corrected: winner.corrected,
     crsDistance: winner.crsDistance,
@@ -135,6 +138,7 @@ export function decodeFrontend(raster, options = {}) {
         agreement: winner.referenceAgreement,
       },
       erasureFallback: winner.erasureFallback,
+      cubeSamplingFallback: winner.cubeSamplingFallback,
     },
   });
 }
