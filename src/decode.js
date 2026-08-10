@@ -388,6 +388,7 @@ function assertZeroPadding(framed, payloadLength) {
  *   ok:true,
  *   text:string,
  *   corrected:number,
+ *   crsDistance:number,
  *   erasureFallback?: {
  *     mode:'error-only-fallback',
  *     illegalSymbolIndices:number[],
@@ -462,6 +463,10 @@ export function decodeCells(cellDigits, format) {
     ok: true,
     text: payload.text,
     corrected: rsResult.errorCount,
+    // rsResult.errorCount는 rs211.js가 실제 변경한 errorPositions 수, 즉 u다.
+    // C_RS = 2u + e. rs211.js는 아직 소거 복호가 없으므로 e=0이고, 불법 심볼도
+    // 일반 오류 fallback으로만 센다. 소거 지원 뒤에도 점수 계약은 이 필드를 그대로 쓴다.
+    crsDistance: 2 * rsResult.errorCount,
   };
   if (packed.illegalIndices.length > 0) {
     result.erasureFallback = {

@@ -121,6 +121,7 @@ function assertCleanRoundTrip(text, options) {
   assert.equal(result.ok, true, result.ok ? '' : result.reason);
   assert.equal(result.text, text);
   assert.equal(result.corrected, 0);
+  assert.equal(result.crsDistance, 0);
 }
 
 describe('Type O encoder ↔ decoder digit-layer round trip', () => {
@@ -205,6 +206,25 @@ describe('RS error correction at the cell-digit boundary', () => {
     assert.equal(result.ok, true, result.ok ? '' : result.reason);
     assert.equal(result.text, text);
     assert.equal(result.corrected, t);
+    assert.equal(result.crsDistance, 2 * t);
+  });
+
+  test('C_RS 거리는 오류 k개에 2k이고 정정 한계 t에서도 유지된다', () => {
+    const encoded = encode('C_RS distance', { version: 3, eccLevel: 'M' });
+    const t = encoded.capacity.errorCapacity;
+
+    for (const k of [0, 1, t]) {
+      const corrupted = encoded.dataDigits.slice();
+      for (let symbolIndex = 0; symbolIndex < k; symbolIndex += 1) {
+        setOneSafeSymbolError(corrupted, encoded, symbolIndex);
+      }
+
+      const result = decodeCells(corrupted, oFormat(encoded));
+      assert.equal(result.ok, true, result.ok ? '' : result.reason);
+      assert.equal(result.corrected, k);
+      // rs211.js는 소거 복호가 없으므로 이 경로의 e는 항상 0, C_RS=2u다.
+      assert.equal(result.crsDistance, 2 * k);
+    }
   });
 
   test('정정 한계를 명확히 넘는 훼손은 rs 단계 실패로 반환한다', () => {
@@ -236,6 +256,7 @@ describe('illegal 211..215 symbol handling without RS erasure support', () => {
     assert.equal(result.ok, true, result.ok ? '' : result.reason);
     assert.equal(result.text, text);
     assert.equal(result.corrected, 1);
+    assert.equal(result.crsDistance, 2);
     assert.deepEqual(result.erasureFallback, {
       mode: RS211_ERASURE_MODE,
       illegalSymbolIndices: [target],
