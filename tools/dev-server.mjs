@@ -74,7 +74,38 @@ const server = createServer(async (req, res) => {
       return;
     }
     const body = await readFile(path);
-    res.writeHead(200, { 'Content-Type': MIME[extname(path)] || 'application/octet-stream' });
+    const type = MIME[extname(path)] || 'application/octet-stream';
+
+    /*
+     * Range 요청 지원 — **미디어 탐색(seek)에 필수**다.
+     *
+     * 없으면 브라우저가 큰 동영상에서 `currentTime` 을 못 옮긴다. 조용히 실패해서 더
+     * 나쁘다: `seeked` 이벤트는 그대로 오고 `currentTime` 만 0 에 머무르므로, 프레임을
+     * 뽑아 측정하면 **전부 첫 프레임 값**이 나온다. 실제로 33MB 스캔 영상에서 모든
+     * 타임스탬프가 같은 값(9.2px/cell)으로 나와 한참 오독했다(2026-08-11).
+     */
+    const range = req.headers.range;
+    const match = typeof range === 'string' ? /^bytes=(\d*)-(\d*)$/.exec(range.trim()) : null;
+    if (match) {
+      const size = body.length;
+      const start = match[1] === '' ? size - Number(match[2]) : Number(match[1]);
+      const end = match[1] === '' || match[2] === '' ? size - 1 : Number(match[2]);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start > end || start >= size) {
+        res.writeHead(416, { 'Content-Range': `bytes */${size}` }).end();
+        return;
+      }
+      const last = Math.min(end, size - 1);
+      res.writeHead(206, {
+        'Content-Type': type,
+        'Content-Range': `bytes ${start}-${last}/${size}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': last - start + 1,
+      });
+      res.end(body.subarray(start, last + 1));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': type, 'Accept-Ranges': 'bytes' });
     res.end(body);
   } catch {
     res.writeHead(404).end('not found');
