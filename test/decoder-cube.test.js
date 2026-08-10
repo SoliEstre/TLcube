@@ -21,6 +21,7 @@ import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { detectCubeHypotheses } from '../src/decoder/cube-detect.js';
 import { distortImage } from './harness/distort.mjs';
+import { listLumaDumps, readLumaDump } from '../tools/read-luma.mjs';
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -406,6 +407,36 @@ test('Type Y reference groups resolve a false stronger Y-seam parity', {
   assert.ok(detected.hypotheses.some((entry) =>
     entry.shapeDiagnostics.seamParityAlternative === true));
   assertYDecoded(decodeFrontend(distracted), text, 1, 2);
+});
+
+test('Type Y real-photo luma dumps establish a reference-supported grid', {
+  timeout: 180_000,
+}, (t) => {
+  const dumps = listLumaDumps();
+  if (dumps.length === 0) {
+    t.skip('휘도 덤프 없음 — photo-probe 에서 구워야 한다');
+    return;
+  }
+  const typeYDumps = dumps.filter(({ name }) => name.includes('014930219'));
+  assert.equal(typeYDumps.length, 6, `Type Y 휘도 덤프 6장 필요: ${typeYDumps.length}`);
+  for (const dump of typeYDumps) {
+    const detected = detectCubeHypotheses(readLumaDump(dump.path), undefined, {});
+    assert.equal(detected.ok, true, `${dump.name}: ${JSON.stringify(detected)}`);
+    const supported = detected.hypotheses.find((entry) =>
+      entry.n === 13
+        && entry.tones === 2
+        && entry.referenceAgreement === 1
+        && entry.shapeDiagnostics?.hardChecks?.yJunction === true);
+    assert.ok(supported, `${dump.name}: 12/12 레퍼런스와 Y 접합이 지지한 Y0 가설 없음`);
+    assert.equal(supported.referenceCalibration.agreement, 12, dump.name);
+    assert.equal(supported.referenceCalibration.total, 12, dump.name);
+  }
+  const typeADumps = dumps.filter(({ name }) => name.includes('015525403'));
+  assert.equal(typeADumps.length, 6, `Type A 휘도 덤프 6장 필요: ${typeADumps.length}`);
+  for (const dump of typeADumps) {
+    const detected = detectCubeHypotheses(readLumaDump(dump.path), undefined, {});
+    assert.equal(detected.ok, false, `${dump.name}: Type A를 Type Y로 오수용`);
+  }
 });
 
 test('family split: clean Type O stays hex and Type Y stays cube', {

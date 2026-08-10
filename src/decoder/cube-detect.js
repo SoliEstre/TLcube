@@ -1196,6 +1196,554 @@ function refineHomographyWithReferences(
   };
 }
 
+
+function flatBlockCandidates(luma, cfg) {
+  const { width, height } = luma;
+  const edges = new Uint8Array(width * height);
+  for (let y = 1; y < height; y += 1) {
+    for (let x = 1; x < width; x += 1) {
+      const index = y * width + x;
+      const value = luma.data[index];
+      edges[index] = Math.abs(value - luma.data[index - 1])
+          > cfg.backgroundToleranceFloor
+        || Math.abs(value - luma.data[index - width])
+          > cfg.backgroundToleranceFloor
+        ? 1
+        : 0;
+    }
+  }
+
+  const stride = width + 1;
+  const integral = new Uint32Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y += 1) {
+    let row = 0;
+    for (let x = 0; x < width; x += 1) {
+      row += edges[y * width + x];
+      integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + row;
+    }
+  }
+
+  const flat = new Uint8Array(width * height);
+  const radius = cfg.foregroundDensityRadius;
+  for (let y = 0; y < height; y += 1) {
+    const top = Math.max(0, y - radius);
+    const bottom = Math.min(height, y + radius + 1);
+    for (let x = 0; x < width; x += 1) {
+      const left = Math.max(0, x - radius);
+      const right = Math.min(width, x + radius + 1);
+      const edgeCount = integral[bottom * stride + right]
+        - integral[top * stride + right]
+        - integral[bottom * stride + left]
+        + integral[top * stride + left];
+      const sampleCount = (right - left) * (bottom - top);
+      if (edgeCount / sampleCount <= cfg.minimumForegroundDensity) {
+        flat[y * width + x] = 1;
+      }
+    }
+  }
+
+  const blockSize = 2 * radius + 1;
+  const blockWidth = Math.ceil(width / blockSize);
+  const blockHeight = Math.ceil(height / blockSize);
+  const occupied = new Uint8Array(blockWidth * blockHeight);
+  for (let blockY = 0; blockY < blockHeight; blockY += 1) {
+    for (let blockX = 0; blockX < blockWidth; blockX += 1) {
+      let flatCount = 0;
+      let sampleCount = 0;
+      for (let y = blockY * blockSize;
+        y < Math.min(height, (blockY + 1) * blockSize);
+        y += 1) {
+        for (let x = blockX * blockSize;
+          x < Math.min(width, (blockX + 1) * blockSize);
+          x += 1) {
+          flatCount += flat[y * width + x];
+          sampleCount += 1;
+        }
+      }
+      if (flatCount / sampleCount >= cfg.minimumMaskFill) {
+        occupied[blockY * blockWidth + blockX] = 1;
+      }
+    }
+  }
+
+  // 한 블록의 위상적 닫힘만 수행한다. 수용 임계값은 위 cfg 값을 그대로 쓴다.
+  const closed = new Uint8Array(occupied.length);
+  for (let blockY = 0; blockY < blockHeight; blockY += 1) {
+    for (let blockX = 0; blockX < blockWidth; blockX += 1) {
+      for (let dy = -1; dy <= 1 && !closed[blockY * blockWidth + blockX]; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const x = blockX + dx;
+          const y = blockY + dy;
+          if (x >= 0 && x < blockWidth && y >= 0 && y < blockHeight
+            && occupied[y * blockWidth + x]) {
+            closed[blockY * blockWidth + blockX] = 1;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  const seen = new Uint8Array(closed.length);
+  const candidates = [];
+  let componentCount = 0;
+  let frameComponentCount = 0;
+  for (let start = 0; start < closed.length; start += 1) {
+    if (!closed[start] || seen[start]) continue;
+    componentCount += 1;
+    const queue = [start];
+    const cells = [];
+    let touchesFrame = false;
+    seen[start] = 1;
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const index = queue[cursor];
+      const x = index % blockWidth;
+      const y = Math.floor(index / blockWidth);
+      cells.push({ x, y });
+      if (x === 0 || y === 0 || x === blockWidth - 1 || y === blockHeight - 1) {
+        touchesFrame = true;
+      }
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const nextX = x + dx;
+          const nextY = y + dy;
+          if (nextX < 0 || nextX >= blockWidth
+            || nextY < 0 || nextY >= blockHeight) continue;
+          const next = nextY * blockWidth + nextX;
+          if (closed[next] && !seen[next]) {
+            seen[next] = 1;
+            queue.push(next);
+          }
+        }
+      }
+    }
+    if (touchesFrame) {
+      frameComponentCount += 1;
+      continue;
+    }
+
+    const estimatedPixels = cells.length * blockSize * blockSize;
+    const areaFraction = estimatedPixels / (width * height);
+    if (estimatedPixels < cfg.minimumComponentPixels
+      || areaFraction < cfg.minimumComponentAreaFraction
+      || areaFraction > cfg.maximumComponentAreaFraction) continue;
+    const minBlockX = Math.min(...cells.map((cell) => cell.x));
+    const minBlockY = Math.min(...cells.map((cell) => cell.y));
+    const maxBlockX = Math.max(...cells.map((cell) => cell.x));
+    const maxBlockY = Math.max(...cells.map((cell) => cell.y));
+    const bounds = {
+      minX: minBlockX * blockSize,
+      minY: minBlockY * blockSize,
+      maxX: Math.min(width, (maxBlockX + 1) * blockSize),
+      maxY: Math.min(height, (maxBlockY + 1) * blockSize),
+    };
+    const boundingBlocks = (maxBlockX - minBlockX + 1) * (maxBlockY - minBlockY + 1);
+    candidates.push({
+      blocks: cells.length,
+      blockFill: cells.length / boundingBlocks,
+      areaFraction,
+      bounds,
+    });
+  }
+
+  candidates.sort((left, right) =>
+    right.blocks - left.blocks
+    || right.blockFill - left.blockFill
+    || left.bounds.minY - right.bounds.minY
+    || left.bounds.minX - right.bounds.minX);
+  return {
+    candidates: candidates.slice(0, cfg.maximumShapeCandidates),
+    diagnostics: {
+      blockSize,
+      componentCount,
+      frameComponentCount,
+      acceptedCandidateCount: candidates.length,
+    },
+  };
+}
+
+function blockCandidateHomography(candidate, n, factor) {
+  const bounds = candidate.bounds;
+  const center = {
+    x: ((bounds.minX + bounds.maxX) / 2) * factor,
+    y: ((bounds.minY + bounds.maxY) / 2) * factor,
+  };
+  const width = (bounds.maxX - bounds.minX) * factor;
+  const height = (bounds.maxY - bounds.minY) * factor;
+  const canonical = [
+    { x: 0, y: 0 },
+    ...CANONICAL_SEAM_CORNERS.map((index) => ({
+      x: CORNER_UNIT_OFFSETS[index].x * n,
+      y: CORNER_UNIT_OFFSETS[index].y * n,
+    })),
+  ];
+  const observed = [
+    center,
+    { x: bounds.maxX * factor, y: center.y - height / 4 },
+    { x: center.x, y: bounds.maxY * factor },
+    { x: bounds.minX * factor, y: center.y - height / 4 },
+  ];
+  return estimateHomography4(canonical, observed);
+}
+
+function scaleHomographyAxesAroundOrigin(H, scaleX, scaleY) {
+  const center = projectPoint(H, { x: 0, y: 0 });
+  if (!center) return null;
+  const offsetX = (1 - scaleX) * center.x;
+  const offsetY = (1 - scaleY) * center.y;
+  return new Float64Array([
+    scaleX * H[0] + offsetX * H[6],
+    scaleX * H[1] + offsetX * H[7],
+    scaleX * H[2] + offsetX * H[8],
+    scaleY * H[3] + offsetY * H[6],
+    scaleY * H[4] + offsetY * H[7],
+    scaleY * H[5] + offsetY * H[8],
+    H[6],
+    H[7],
+    H[8],
+  ]);
+}
+
+function quickTwoToneReferenceScore(luma, H, n) {
+  const expected = [];
+  for (const group of referenceGroups(n, 2)) {
+    group.cells.forEach((cell, index) => {
+      expected.push({ i: cell.i, j: cell.j, digit: group.digits[index] });
+    });
+  }
+  const samples = expected.map((entry) => {
+    const faces = {};
+    for (const face of YFACES) {
+      const disc = moduleSampleDisc(
+        face,
+        entry.i,
+        entry.j,
+        { size: 1, originX: 0, originY: 0 },
+        {},
+      );
+      const point = projectPoint(H, { x: disc.x, y: disc.y });
+      const value = point && bilinear(luma, point.x, point.y);
+      if (value === null || !Number.isFinite(value)) return null;
+      faces[face] = value;
+    }
+    return faces;
+  });
+  if (samples.some((sample) => sample === null)) {
+    return { agreement: -1, minimumSpan: -Infinity, minimumRatio: -Infinity };
+  }
+
+  const thresholds = {};
+  let minimumSpan = Infinity;
+  let minimumRatio = Infinity;
+  for (const face of YFACES) {
+    const lows = [];
+    const highs = [];
+    expected.forEach((entry, index) => {
+      const bright = digitToPattern(entry.digit)[face];
+      (bright ? highs : lows).push(samples[index][face]);
+    });
+    const low = median(lows);
+    const high = median(highs);
+    thresholds[face] = low > 0 && high > 0 ? Math.sqrt(low * high) : (low + high) / 2;
+    minimumSpan = Math.min(minimumSpan, high - low);
+    minimumRatio = Math.min(minimumRatio, high / Math.max(low, EPSILON));
+  }
+
+  let agreement = 0;
+  expected.forEach((entry, index) => {
+    const bits = {};
+    for (const face of YFACES) {
+      bits[face] = samples[index][face] > thresholds[face] ? 1 : 0;
+    }
+    let observed = null;
+    try {
+      observed = patternToDigit(bits.T, bits.L, bits.R);
+    } catch {
+      observed = null;
+    }
+    if (observed === entry.digit) agreement += 1;
+  });
+  return { agreement, minimumSpan, minimumRatio };
+}
+
+function rankQuickReference(left, right) {
+  return right.quick.agreement - left.quick.agreement
+    || right.quick.minimumSpan - left.quick.minimumSpan
+    || right.quick.minimumRatio - left.quick.minimumRatio
+    || left.scaleX - right.scaleX
+    || left.scaleY - right.scaleY
+    || left.dy - right.dy
+    || left.dx - right.dx;
+}
+
+function blockReferenceSearch(luma, initialH, n, options, cfg) {
+  const pitch = projectedModulePitch(initialH);
+  if (!(pitch > 0)) return { accepted: null, report: { cause: 'invalid-pitch' } };
+  const scales = [1.05, 1, 0.95, 0.9, 0.85, 0.8, 0.75];
+  const coarse = [];
+  for (const scaleX of scales) {
+    for (const scaleY of scales) {
+      const scaled = scaleHomographyAxesAroundOrigin(initialH, scaleX, scaleY);
+      if (!scaled) continue;
+      for (let dyIndex = -3; dyIndex <= 3; dyIndex += 1) {
+        for (let dxIndex = -3; dxIndex <= 3; dxIndex += 1) {
+          const dx = dxIndex * pitch / 2;
+          const dy = dyIndex * pitch / 2;
+          const H = translateHomography(scaled, dx, dy);
+          coarse.push({
+            H,
+            scaleX,
+            scaleY,
+            dx,
+            dy,
+            quick: quickTwoToneReferenceScore(luma, H, n),
+          });
+        }
+      }
+    }
+  }
+  coarse.sort(rankQuickReference);
+
+  const fine = [];
+  for (const base of coarse.slice(0, 8)) {
+    for (const deltaX of [-0.025, 0, 0.025]) {
+      for (const deltaY of [-0.025, 0, 0.025]) {
+        const scaleX = base.scaleX + deltaX;
+        const scaleY = base.scaleY + deltaY;
+        const scaled = scaleHomographyAxesAroundOrigin(initialH, scaleX, scaleY);
+        if (!scaled) continue;
+        for (const shiftX of [-0.25, 0, 0.25]) {
+          for (const shiftY of [-0.25, 0, 0.25]) {
+            const dx = base.dx + shiftX * pitch;
+            const dy = base.dy + shiftY * pitch;
+            const H = translateHomography(scaled, dx, dy);
+            fine.push({
+              H,
+              scaleX,
+              scaleY,
+              dx,
+              dy,
+              quick: quickTwoToneReferenceScore(luma, H, n),
+            });
+          }
+        }
+      }
+    }
+  }
+  fine.sort(rankQuickReference);
+
+  const unique = [];
+  const seen = new Set();
+  for (const candidate of [...fine.slice(0, 40), ...coarse.slice(0, 20)]) {
+    const key = Array.from(candidate.H, (value) => value.toFixed(8)).join(',');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(candidate);
+  }
+
+  const fullySampled = [];
+  for (const candidate of unique) {
+    const references = calibrateCubeReferences(
+      luma,
+      { n, H: candidate.H },
+      { ...options, tones: 2 },
+    );
+    if (!references.ok) continue;
+    const referenceCalibration = references.accepted.find((entry) => entry.tones === 2);
+    if (!referenceCalibration) continue;
+
+    const center = projectPoint(candidate.H, { x: 0, y: 0 });
+    const vertices = CORNER_UNIT_OFFSETS.map((corner) =>
+      projectPoint(candidate.H, { x: corner.x * n, y: corner.y * n }));
+    if (!center || vertices.some((point) => point === null)) continue;
+    const even = seamEvidence(luma, center, vertices, 0);
+    const odd = seamEvidence(luma, center, vertices, 1);
+    const seamScore = (report) => report.contrast
+      + cfg.minimumSeamContrast * report.positiveRayCount;
+    const parityMargin = Math.abs(seamScore(odd) - seamScore(even));
+    const yJunction = seamScore(odd) > seamScore(even)
+      && odd.contrast >= cfg.minimumSeamContrast
+      && odd.support >= cfg.minimumSeamSupport
+      && parityMargin >= cfg.minimumSeamParityMargin;
+    if (!yJunction) continue;
+    fullySampled.push({
+      ...candidate,
+      references,
+      referenceCalibration,
+      center,
+      vertices,
+      seam: odd,
+      otherParitySeam: even,
+      parityMargin,
+    });
+  }
+
+  fullySampled.sort((left, right) =>
+    right.referenceCalibration.agreement - left.referenceCalibration.agreement
+    || right.referenceCalibration.minimumSpan - left.referenceCalibration.minimumSpan
+    || right.referenceCalibration.minimumRatio - left.referenceCalibration.minimumRatio
+    || right.parityMargin - left.parityMargin
+    || rankQuickReference(left, right));
+  const accepted = fullySampled[0] || null;
+  return {
+    accepted,
+    report: {
+      pitch,
+      coarseBest: coarse[0] && {
+        scaleX: coarse[0].scaleX,
+        scaleY: coarse[0].scaleY,
+        dxModules: coarse[0].dx / pitch,
+        dyModules: coarse[0].dy / pitch,
+        ...coarse[0].quick,
+      },
+      fineBest: fine[0] && {
+        scaleX: fine[0].scaleX,
+        scaleY: fine[0].scaleY,
+        dxModules: fine[0].dx / pitch,
+        dyModules: fine[0].dy / pitch,
+        ...fine[0].quick,
+      },
+      fullyAcceptedCount: fullySampled.length,
+      accepted: accepted && {
+        agreement: accepted.referenceCalibration.agreement,
+        total: accepted.referenceCalibration.total,
+        minimumSpan: accepted.referenceCalibration.minimumSpan,
+        minimumRatio: accepted.referenceCalibration.minimumRatio,
+        scaleX: accepted.scaleX,
+        scaleY: accepted.scaleY,
+        dxModules: accepted.dx / pitch,
+        dyModules: accepted.dy / pitch,
+        seamContrast: accepted.seam.contrast,
+        seamSupport: accepted.seam.support,
+        parityMargin: accepted.parityMargin,
+        observations: accepted.referenceCalibration.observations,
+      },
+    },
+  };
+}
+
+function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
+  const proposals = flatBlockCandidates(reduced.luma, cfg);
+  const reports = [];
+  if (options.tones === 3) {
+    return {
+      hypotheses: [],
+      reports,
+      diagnostics: { ...proposals.diagnostics, cause: 'two-tone-recovery-not-requested' },
+    };
+  }
+
+  for (let componentIndex = 0;
+    componentIndex < proposals.candidates.length;
+    componentIndex += 1) {
+    const proposal = proposals.candidates[componentIndex];
+    for (const n of SUPPORTED_N) {
+      const initialH = blockCandidateHomography(proposal, n, reduced.factor);
+      if (!initialH) continue;
+      const searched = blockReferenceSearch(luma, initialH, n, options, cfg);
+      reports.push({
+        componentIndex,
+        n,
+        proposal,
+        ...searched.report,
+      });
+      if (!searched.accepted) continue;
+
+      const accepted = searched.accepted;
+      const radius = median(accepted.vertices.map((point) =>
+        Math.hypot(point.x - accepted.center.x, point.y - accepted.center.y)));
+      const shapeScore = clamp01(
+        0.38 * clamp01(
+          accepted.seam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON),
+        )
+        + 0.20 * accepted.seam.support
+        + 0.22 * accepted.referenceCalibration.agreementRate
+        + 0.20 * clamp01(proposal.blockFill),
+      );
+      const geometryResidual = 0;
+      const hypothesisId = 'cube-n' + n
+        + '-flat-block-c' + componentIndex + '-o0-t2';
+      const hardChecks = {
+        flatModuleRegion: true,
+        yJunction: true,
+        referenceAgreement: accepted.referenceCalibration.hardChecks.referenceAgreement,
+        toneSeparation: accepted.referenceCalibration.hardChecks.toneSeparation,
+        all: true,
+      };
+      return {
+        hypotheses: [{
+          family: 'cube',
+          finderKind: 'y-junction',
+          gridKind: 'three-face-nxn',
+          n,
+          k: n,
+          orientation: 0,
+          rotationDegrees: 0,
+          centerQr: false,
+          center: accepted.center,
+          vertices: accepted.vertices,
+          seamVertices: CANONICAL_SEAM_CORNERS.map((index) => accepted.vertices[index]),
+          H: accepted.H,
+          canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+          geometryResidual,
+          sizeGeometry: {
+            rK: 0,
+            vertexResidual: geometryResidual,
+            relativeVertexResidual: 0,
+            proposalScaleX: accepted.scaleX,
+            proposalScaleY: accepted.scaleY,
+          },
+          source: 'cube-flat-block-reference',
+          geometrySeed: 'flat-block-affine',
+          shapeScore,
+          seamScore: accepted.seam.contrast,
+          seamSupport: accepted.seam.support,
+          shapeDiagnostics: {
+            componentIndex,
+            componentSource: 'flat-block-density',
+            center: accepted.center,
+            vertices: accepted.vertices,
+            seamParity: 1,
+            seamVertices: CANONICAL_SEAM_CORNERS.map(
+              (index) => accepted.vertices[index],
+            ),
+            radius,
+            maskFill: proposal.blockFill,
+            concurrencyResidual: 0,
+            seam: accepted.seam,
+            otherParitySeam: accepted.otherParitySeam,
+            parityMargin: accepted.parityMargin,
+            hardChecks,
+            score: shapeScore,
+            proposal,
+          },
+          tones: 2,
+          referenceCalibration: accepted.referenceCalibration,
+          referenceSamples: accepted.references.samples,
+          referenceAnchors: accepted.references.anchors,
+          referenceAgreement: accepted.referenceCalibration.agreementRate,
+          referenceRefinement: {
+            dx: accepted.dx,
+            dy: accepted.dy,
+            pitch: searched.report.pitch,
+            radius: 1.75 * searched.report.pitch,
+            step: 0.25 * searched.report.pitch,
+            scale: median([accepted.scaleX, accepted.scaleY]),
+            scaleX: accepted.scaleX,
+            scaleY: accepted.scaleY,
+            quality: calibrationQuality(accepted.referenceCalibration),
+          },
+          logicalHypothesisId: hypothesisId,
+          hypothesisId: hypothesisId + '-gflat-block-affine',
+        }],
+        reports,
+        diagnostics: proposals.diagnostics,
+      };
+    }
+  }
+  return { hypotheses: [], reports, diagnostics: proposals.diagnostics };
+}
+
 export function detectCubeHypotheses(luma, yJunction, options = {}) {
   try {
     assertLumaField(luma);
@@ -1218,6 +1766,7 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
   const shapes = shapeCandidates(reduced.luma, cfg);
   const hypotheses = [];
   const geometryReports = [];
+  let blockRecovery = null;
 
   for (const shape of shapes.candidates) {
     const center = liftPoint(shape.center, reduced.factor);
@@ -1347,6 +1896,15 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
     }
   }
 
+  if (hypotheses.length === 0) {
+    blockRecovery = recoverFlatBlockHypotheses(luma, reduced, options, cfg);
+    hypotheses.push(...blockRecovery.hypotheses);
+    geometryReports.push(...blockRecovery.reports.map((report) => ({
+      geometrySeed: 'flat-block-affine',
+      ...report,
+    })));
+  }
+
   // 같은 n/방향/톤에서 레퍼런스 상위 2개를 본문 RS까지 보낸다. 외곽의 한
   // 꼭짓점이 blur로 치우치면 레퍼런스 최상위 seed가 가장자리 본문에는 열등할 수 있다.
   const groups = new Map();
@@ -1385,6 +1943,7 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
         shapes: shapes.diagnostics,
         shapeCandidates: shapes.candidates,
         geometryReports,
+        blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
       },
     });
   }
@@ -1397,6 +1956,7 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       shapes: shapes.diagnostics,
       shapeCandidates: shapes.candidates,
       geometryReports,
+      blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
       hypothesisCount: hypotheses.length,
     },
   });
