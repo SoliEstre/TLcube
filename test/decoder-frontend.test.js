@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { encode } from '../src/encode.js';
+import { encodeA } from '../src/encodeA.js';
 import {
   FRONTEND_FAILURE,
   HOMOGRAPHY_CANONICAL_SPACE,
@@ -582,4 +583,70 @@ test('복수 body-valid 후보는 hard reject하지 않고 점수와 고정 총�
   assert.equal(result.ok, true);
   assert.equal(result.candidate.hypothesisId, 'a');
   assert.equal(result.diagnostics.bodyValidCount, 2);
+});
+
+// ── 패밀리 재배치 (CRC 유효 out-of-family → 재시도) ──────────────────────────
+//
+// 실기기 Type A 사진이 죽던 경로다: 분류기가 실패해 hex 로 폴백하면, 포맷 셀은
+// 불스아이 근방이라 패밀리와 거의 무관하게 **정확히 읽히는데**(복제 3/3 합의 + CRC 통과)
+// 그 인덱스가 hex 의 허용 집합 밖이라 `versionOutsideFamily` 로 폐기됐다.
+// 상세 = 문서 repo `.agent/decoder/004_real_photo_findings.md`.
+
+function renderA(text, version, eccLevel, options = {}) {
+  const encoded = encodeA(text, { version, eccLevel });
+  const scene = buildScene(encoded, { palette: PALETTE, margin: options.margin });
+  return rasterize(scene, {
+    pixelsPerUnit: options.pixelsPerUnit === undefined ? 12 : options.pixelsPerUnit,
+    supersample: options.supersample === undefined ? 1 : options.supersample,
+  });
+}
+
+test('재배치: tri 코드를 hex 로 오분류해도 복호된다 (실사진 실패 경로)', () => {
+  const raster = renderA('relocate-me', 0, 'M', { margin: 20 });
+
+  // 전제 — 강제 hex 는 "정답을 읽고도 버리는" 그 상태여야 한다.
+  const forcedNoRelocation = decodeFrontend(raster, {
+    familyEvidence: { family: 'hex' },
+    bootstrap: { _familyRelocation: false },
+  });
+  assert.equal(forcedNoRelocation.ok, false,
+    '전제 위반: 재배치 없이도 hex 로 복호된다 — 이 테스트는 결함 영역을 못 건드린다');
+
+  // 재배치가 켜지면 같은 입력이 복호돼야 한다.
+  const relocated = decodeFrontend(raster, { familyEvidence: { family: 'hex' } });
+  assert.equal(relocated.ok, true,
+    `재배치 실패: ${relocated.reason} ${JSON.stringify(relocated.detail && relocated.detail.relocation)}`);
+  assert.equal(relocated.text, 'relocate-me');
+
+  const relocation = relocated.diagnostics.bootstrap.relocation;
+  assert.ok(relocation, '재배치 진단이 없다 — 다른 경로로 우연히 성공했을 수 있다');
+  assert.equal(relocation.to, 'tri');
+  assert.ok(relocation.evidence.length > 0 && relocation.evidence[0].formatIndex === 1,
+    `A0 의 포맷 인덱스 1 이 근거로 남아야 한다: ${JSON.stringify(relocation.evidence)}`);
+});
+
+test('재배치: 정상 hex 코드의 결과를 바꾸지 않는다 (회귀)', () => {
+  for (const version of [1, 2, 3]) {
+    const { raster } = render('hex-unchanged', version, 'M');
+    const withRelocation = decodeFrontend(raster);
+    const without = decodeFrontend(raster, { bootstrap: { _familyRelocation: false } });
+    assert.equal(withRelocation.ok, true, `V${version} 복호 실패`);
+    assert.equal(withRelocation.text, without.text, `V${version} 텍스트가 달라졌다`);
+    assert.equal(withRelocation.version, without.version, `V${version} 버전이 달라졌다`);
+    // 정상 경로에서는 재배치가 **아예 발동하지 않아야** 한다 (비용 0).
+    assert.equal(withRelocation.diagnostics.bootstrap.relocation, undefined,
+      `V${version}: 정상 경로에서 재배치가 발동했다 — 비용이 새고 있다`);
+  }
+});
+
+test('재배치: CRC 가 틀린 포맷은 재배치를 트리거하지 않는다', () => {
+  // 코드가 전혀 없는 프레임 — 포맷 읽기가 나오더라도 CRC 가 맞을 리 없다.
+  const noise = gradientRaster(320, 320);
+  const result = decodeFrontend(noise);
+  assert.equal(result.ok, false);
+  const relocation = result.detail && result.detail.relocation;
+  if (relocation) {
+    assert.equal(relocation.targets.length, 0,
+      `CRC 불일치인데 재배치 대상이 잡혔다: ${JSON.stringify(relocation.evidence)}`);
+  }
 });

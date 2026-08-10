@@ -191,6 +191,38 @@ function validVersionIndices(hypothesis) {
     .map((entry) => entry.spec.formatIndex);
 }
 
+/** 모든 패밀리를 통틀어 존재하는 포맷 인덱스 전체. 재배치 탐색의 열거 범위다. */
+function allFormatIndices() {
+  const out = new Set();
+  for (const family of ['hex', 'tri', 'cube']) {
+    for (const entry of familyProfiles(family)) {
+      for (const index of entry.formatIndices) out.add(index);
+    }
+  }
+  return Array.from(out).sort((a, b) => a - b);
+}
+
+/**
+ * 포맷 인덱스의 **소유자** (패밀리, 차원) 목록. `validVersionIndices` 의 역방향이다.
+ *
+ * 왜 필요한가: 포맷 정보는 CRC 로 보호된다. CRC 가 맞는데 인덱스가 가정한 패밀리 밖이면
+ * 그건 "포맷이 틀렸다" 가 아니라 **"패밀리 가정이 틀렸다"** 는 뜻이다. 실제로 실기기
+ * Type A 사진에서 복제 3/3 합의 + CRC 통과로 읽힌 인덱스 1 이 hex 폴백 때문에
+ * `versionOutsideFamily` 로 폐기됐다 (`.agent/decoder/004`). 그 인덱스의 주인을
+ * 되짚어 기하를 다시 세우려고 만든다.
+ */
+function formatIndexOwners(formatIndex) {
+  const owners = [];
+  for (const family of ['hex', 'tri', 'cube']) {
+    for (const entry of familyProfiles(family)) {
+      if (entry.formatIndices.includes(formatIndex)) {
+        owners.push({ family, dimension: entry.dimension });
+      }
+    }
+  }
+  return owners;
+}
+
 function profileForFormatCandidate(hypothesis, formatIndex) {
   const dimension = hypothesis.family === 'cube' ? hypothesis.n : hypothesis.k;
   return familyProfiles(hypothesis.family).find((entry) =>
@@ -1473,14 +1505,92 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
  * finder/anchor/H 열거부터 포맷 전 후보와 본문 RS 검증까지 한 번에 수행한다.
  * 반환 candidates는 전부 decodeCells 성공 후보이며, 첫 성공 순서에 의존하지 않는다.
  */
+/**
+ * 실패한 검증에서 **CRC 가 유효한 out-of-family 포맷**을 찾아 재배치 대상 패밀리를 낸다.
+ *
+ * 폐기된 포맷 읽기(`formatFailures[].detail.reads`)를 **전 인덱스 허용**으로 다시 열거해
+ * CRC 통과 후보만 남기고, 그 인덱스의 소유자 패밀리 중 **아직 시도하지 않은 것**을 고른다.
+ * CRC 가 틀린 읽기는 여기서 그냥 사라진다 — 잡음으로 재배치가 발동하지 않게 하는 게 핵심이다.
+ */
+function relocationTargets(validated, attemptedFamilies) {
+  const failures = (validated.detail && validated.detail.diagnostics
+    && validated.detail.diagnostics.formatFailures) || [];
+  const everyIndex = allFormatIndices();
+  const targets = new Set();
+  const evidence = [];
+
+  for (const failure of failures) {
+    const reads = failure.detail && failure.detail.reads;
+    if (!Array.isArray(reads) || reads.length !== 3) continue;
+    let enumerated;
+    try {
+      enumerated = enumerateFormatProposals(reads, { validVersionIndices: everyIndex });
+    } catch {
+      continue;
+    }
+    for (const proposal of enumerated.proposals) {
+      if (!proposal.crcOk) continue;
+      for (const owner of formatIndexOwners(proposal.versionIndex)) {
+        if (attemptedFamilies.has(owner.family)) continue;
+        targets.add(owner.family);
+        evidence.push({
+          fromHypothesis: failure.hypothesisId,
+          formatIndex: proposal.versionIndex,
+          eccLevel: proposal.eccLevel,
+          owner,
+        });
+      }
+    }
+  }
+  return { families: Array.from(targets), evidence };
+}
+
 export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
   const geometry = enumerateGeometryHypotheses(luma, familyEvidence, options);
   if (!geometry.ok) return geometry;
   const validated = validateGridHypotheses(luma, geometry.hypotheses, options);
   if (!validated.ok) {
+    /*
+     * 패밀리 재배치 — 분류기가 틀려도 복구되는 안전망이다.
+     *
+     * 분류가 실패해 hex 로 폴백하면 tri 코드의 포맷을 **정확히 읽고도**
+     * `versionOutsideFamily` 로 버린다(포맷 셀이 불스아이 근방이라 패밀리와 거의
+     * 무관하게 잡히기 때문). 실기기 Type A 사진이 정확히 그 경로로 죽었다.
+     *
+     * 재배치는 **CRC 가 맞은 경우에만** 발동하므로 정상 경로 비용은 0 이고,
+     * **한 번만** 돈다(`_familyRelocation:false`). 재배치로 생긴 후보도 001c 가
+     * 필수로 올린 본문 RS 를 통과해야 하므로 후보를 넓혀도 오인식은 늘지 않는다.
+     */
+    const relocationEnabled = options._familyRelocation !== false;
+    const attempted = new Set(geometry.hypotheses.map((hypothesis) => hypothesis.family));
+    const relocation = relocationEnabled
+      ? relocationTargets(validated, attempted)
+      : { families: [], evidence: [] };
+
+    for (const family of relocation.families) {
+      const retried = enumerateGridHypotheses(luma, { family }, {
+        ...options,
+        _familyRelocation: false,
+      });
+      if (retried.ok) {
+        retried.diagnostics.relocation = {
+          from: Array.from(attempted),
+          to: family,
+          evidence: relocation.evidence.filter((item) => item.owner.family === family),
+        };
+        return retried;
+      }
+    }
+
     return fail(validated.reason, {
       ...(validated.detail || {}),
       geometryDiagnostics: geometry.diagnostics,
+      relocation: {
+        attemptedFamilies: Array.from(attempted),
+        targets: relocation.families,
+        evidence: relocation.evidence,
+        enabled: relocationEnabled,
+      },
     });
   }
   return ok({
