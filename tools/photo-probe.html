@@ -183,9 +183,13 @@ document.getElementById('run').addEventListener('click', async () => {
  * 그대로" 를 세 번 반복했다. 여기서 canvas 가 디코드한 결과를 raw 로 내려 두면 레인이
  * `tools/read-luma.mjs` 로 바로 읽는다.
  *
- * 형식(리틀엔디언): magic "TLLU" · u32 width · u32 height · u8[width*height]
- *   값은 **relativeLuminance × 255 반올림**이다 — 0..1 실수를 그대로 복원하려면 /255.
- *   8비트로 양자화되므로 미세 대비 실험에는 부적합하다(그 경우 사진을 직접 봐야 한다).
+ * 형식(리틀엔디언): magic "TLL2" · u32 width · u32 height · u16[width*height]
+ *   값은 **relativeLuminance × 65535 반올림**이다 — 복원은 /65535.
+ *
+ *   ⚠ 처음엔 8비트("TLLU")로 만들었는데 **그 양자화가 실제로 복호를 깨뜨렸다**:
+ *      같은 프레임이 원본 RGBA 로는 `tri/A0` 로 복호되는데 8비트 왕복이면 `no-anchors`
+ *      가 됐다(2026-08-11 실측). 레인이 그 손상을 «검출 결함»으로 오인해 임계값을
+ *      맞추면 프로덕션에 없는 문제를 고치게 된다. 그래서 16비트로 올렸다.
  */
 async function dumpLuma(name, img, maxSide) {
   const { toRelativeLuminance } = await import('/src/decoder/luma.js');
@@ -199,13 +203,14 @@ async function dumpLuma(name, img, maxSide) {
   const image = ctx.getImageData(0, 0, w, h);
   const luma = toRelativeLuminance({ width: w, height: h, pixels: image.data }, {});
 
-  const out = new Uint8Array(12 + w * h);
+  const out = new Uint8Array(12 + w * h * 2);
   const view = new DataView(out.buffer);
-  out.set([0x54, 0x4c, 0x4c, 0x55], 0); // "TLLU"
+  out.set([0x54, 0x4c, 0x4c, 0x32], 0); // "TLL2" (16비트)
   view.setUint32(4, w, true);
   view.setUint32(8, h, true);
   for (let i = 0; i < w * h; i += 1) {
-    out[12 + i] = Math.max(0, Math.min(255, Math.round(luma.data[i] * 255)));
+    const v = Math.max(0, Math.min(65535, Math.round(luma.data[i] * 65535)));
+    view.setUint16(12 + i * 2, v, true);
   }
 
   const target = `test/output/photos/luma/${name.replace(/\.[^.]+$/, '')}.${maxSide}.luma`;

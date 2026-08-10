@@ -772,11 +772,89 @@ function silhouetteHypotheses(luma, finder, k, outline, options, cfg) {
   return candidates.slice(0, cfg.maxGeometryCandidatesPerSize);
 }
 
-function directAnchorHypotheses(luma, finder, family, options) {
+/*
+ * finder가 닫혔는데 촬영 UI가 외곽 앵커를 덮으면 3/3 hard-all은 증거 없음과
+ * 오염을 구분하지 못한다. 이 경로는 후보를 채택하지 않고, 영상 안에서 실제로
+ * 표본화 가능한 유한 3(k) × 3(방향)만 후단 CRC·reference·RS 검증에 넘긴다.
+ */
+function weakAnchorHypotheses(luma, finder, family, options) {
+  if (family !== 'hex') return [];
+  const baseH = finderGeometry(finder);
+  if (!baseH) return [];
+  const cfg = calibration(options);
+  const sampleOptions = {
+    minSampleCount: cfg.anchorSampleMinCount,
+    minProjectedMinorDiameter: cfg.anchorProjectedMinorDiameter,
+    ...(options.sample || {}),
+  };
+  const hypotheses = [];
+
+  for (const k of uniqueDimensions(family)) {
+    for (const orientation of [0, 1, 2]) {
+      const rotationDegrees = orientation * 120;
+      const H = multiplyHomographies(baseH, rotationHomography(rotationDegrees));
+      const anchorValidation = validateAnchorPattern(luma, H, k, sampleOptions);
+      const allSampled = anchorValidation.observations.length === 3
+        && anchorValidation.observations.every((observation) => observation.observed !== null);
+      if (!allSampled) continue;
+      const canonicalAnchors = anchorCells(k).map((cell) => ({ q: cell.q, r: cell.r }));
+      const anchors = canonicalAnchors.map((cell) =>
+        projectPoint(H, canonicalCenter(cell.q, cell.r)));
+      if (anchors.some((point) => point === null)) continue;
+
+      hypotheses.push({
+        family,
+        k,
+        orientation,
+        rotationDegrees,
+        centerQr: Boolean(finder.centerQr),
+        anchors,
+        canonicalAnchors,
+        H,
+        canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+        geometryResidual: 0,
+        anchorMargin: anchorValidation.separation / 3,
+        anchorValidation,
+        anchorEvidence: {
+          mode: 'weak-bounded-fallback',
+          sampledAnchorCount: 3,
+          expectedMatchCount: anchorValidation.agreement,
+          totalAnchorCount: 3,
+        },
+        hardChecks: {
+          sampleCount: true,
+          rankSeparation: false,
+          expectedPattern: false,
+          all: false,
+        },
+        hypothesisId: family + '-' + k + '-' + orientation,
+      });
+    }
+  }
+  return hypotheses;
+}
+
+export function directAnchorHypotheses(luma, finder, family, options) {
   const dimensions = uniqueDimensions(family);
   const detector = family === 'tri' ? findAAnchorHypotheses : findOAnchorHypotheses;
   const result = detector(luma, finder, dimensions, options.anchor || {});
-  if (!result.ok) return { hypotheses: [], failure: result };
+  if (!result.ok) {
+    const fallback = options.allowWeakAnchorFallback === true
+      && result.reason === FRONTEND_FAILURE.NO_ANCHORS
+      ? weakAnchorHypotheses(luma, finder, family, options)
+      : [];
+    return {
+      hypotheses: fallback.map((raw) => ({
+        ...raw,
+        finder,
+        source: 'anchor-fallback',
+        luma,
+      })),
+      strictCount: 0,
+      fallbackCount: fallback.length,
+      failure: result,
+    };
+  }
 
   const hypotheses = [];
   for (const raw of result.hypotheses) {
@@ -788,7 +866,12 @@ function directAnchorHypotheses(luma, finder, family, options) {
       luma,
     });
   }
-  return { hypotheses, diagnostics: result.diagnostics };
+  return {
+    hypotheses,
+    strictCount: hypotheses.length,
+    fallbackCount: 0,
+    diagnostics: result.diagnostics,
+  };
 }
 
 function deduplicateHypotheses(hypotheses) {
@@ -1079,6 +1162,7 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   if (!classified.ok) return classified;
 
   const hypotheses = [];
+  const deferredWeakHypotheses = [];
   const anchorDiagnostics = [];
   for (const family of classified.families) {
     if (family === 'cube') {
@@ -1100,19 +1184,29 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
 
     for (let finderIndex = 0; finderIndex < finders.length; finderIndex += 1) {
       const finder = finders[finderIndex];
-      const direct = directAnchorHypotheses(luma, finder, family, options);
+      const allowWeakAnchorFallback = options.allowWeakAnchorFallback === true
+        || (options.allowWeakAnchorFallback !== false
+          && (!outline || outline.touchesBorder));
+      const direct = directAnchorHypotheses(luma, finder, family, {
+        ...options,
+        allowWeakAnchorFallback,
+      });
       direct.hypotheses.forEach((hypothesis) => {
-        hypotheses.push({ ...hypothesis, finderIndex });
+        const annotated = { ...hypothesis, finderIndex };
+        if (hypothesis.source === 'anchor-fallback') deferredWeakHypotheses.push(annotated);
+        else hypotheses.push(annotated);
       });
       anchorDiagnostics.push({
         family,
         finderIndex,
         directCount: direct.hypotheses.length,
+        strictCount: direct.strictCount,
+        fallbackCount: direct.fallbackCount,
         directFailure: direct.failure,
       });
 
       if (family === 'hex'
-        && (direct.hypotheses.length === 0 || options.alwaysOutlineHypotheses === true)) {
+        && (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true)) {
         for (const k of uniqueDimensions('hex')) {
           silhouetteHypotheses(luma, finder, k, outline, options, cfg)
             .forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
@@ -1121,7 +1215,7 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
     }
   }
 
-  const unique = deduplicateHypotheses(hypotheses);
+  let unique = deduplicateHypotheses(hypotheses);
   if (unique.length === 0) {
     const shouldRetryFinderResolution = options._finderResolutionRetry !== false
       && options.finderMaxDimension === undefined
@@ -1136,7 +1230,10 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
       });
       if (retried.ok) return retried;
     }
+    unique = deduplicateHypotheses(deferredWeakHypotheses);
+  }
 
+  if (unique.length === 0) {
     const clipped = finders.length > 0 && !anySupportedSymbolFits(luma, finders);
     const reason = clipped ? FRONTEND_FAILURE.SYMBOL_CLIPPED : FRONTEND_FAILURE.NO_ANCHORS;
     const clippingSideCount = clipped

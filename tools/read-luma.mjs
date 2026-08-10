@@ -41,19 +41,30 @@ export function readLumaDump(path) {
     );
   }
   const buffer = readFileSync(absolute);
-  if (buffer.length < 12 || buffer.toString('latin1', 0, 4) !== 'TLLU') {
+  const magic = buffer.length >= 4 ? buffer.toString('latin1', 0, 4) : '';
+  const bytesPerSample = magic === 'TLL2' ? 2 : magic === 'TLLU' ? 1 : 0;
+  if (bytesPerSample === 0) {
     throw new Error(`휘도 덤프 magic 이 아니다: ${absolute}`);
   }
   const width = buffer.readUInt32LE(4);
   const height = buffer.readUInt32LE(8);
-  if (buffer.length !== 12 + width * height) {
+  const expected = 12 + width * height * bytesPerSample;
+  if (buffer.length !== expected) {
     throw new Error(
-      `휘도 덤프 길이 불일치: ${buffer.length} != ${12 + width * height} (${width}x${height})`,
+      `휘도 덤프 길이 불일치: ${buffer.length} != ${expected} (${width}x${height}, ${bytesPerSample * 8}bit)`,
     );
   }
+
   const data = new Float32Array(width * height);
-  for (let i = 0; i < data.length; i += 1) data[i] = buffer[12 + i] / 255;
-  return { width, height, data, alpha: null };
+  if (bytesPerSample === 2) {
+    for (let i = 0; i < data.length; i += 1) data[i] = buffer.readUInt16LE(12 + i * 2) / 65535;
+  } else {
+    // 구형 8비트 덤프. Type A(tri) 앵커 경로는 이 양자화에서 실제로 깨진다 —
+    // 같은 프레임이 원본 RGBA 로는 복호되는데 8비트 왕복이면 no-anchors 가 된다(실측).
+    // 남아 있으면 읽어는 주되, 새로 구울 땐 16비트를 쓴다.
+    for (let i = 0; i < data.length; i += 1) data[i] = buffer[12 + i] / 255;
+  }
+  return { width, height, data, alpha: null, bitDepth: bytesPerSample * 8 };
 }
 
 /** 사용 가능한 덤프 목록. 없으면 빈 배열 — 호출부가 "덤프 없음" 을 스킵 사유로 쓸 수 있다. */

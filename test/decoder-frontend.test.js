@@ -12,9 +12,11 @@ import {
   HOMOGRAPHY_CANONICAL_SPACE,
 } from '../src/decoder/contracts.js';
 import {
+  directAnchorHypotheses,
   selectGridHypothesis,
 } from '../src/decoder/bootstrap.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import { detectBullseyes, refineBullseye } from '../src/decoder/bullseye-detect.js';
 import {
   BULLSEYE_DARK,
   BULLSEYE_LIGHT,
@@ -28,6 +30,7 @@ import {
   distortImage,
   scaleImage,
 } from './harness/distort.mjs';
+import { listLumaDumps, readLumaDump } from '../tools/read-luma.mjs';
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -264,6 +267,111 @@ function gaussianBlurRaster(raster, sigma) {
   }
   return { ...raster, pixels };
 }
+
+// bootstrap finder의 240px box-downsample/lift 경로를 실덤프에서 그대로 재현한다.
+function multiplyTestHomographies(left, right) {
+  const out = new Float64Array(9);
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      for (let inner = 0; inner < 3; inner += 1) {
+        out[row * 3 + column] += left[row * 3 + inner] * right[inner * 3 + column];
+      }
+    }
+  }
+  return out;
+}
+
+function downsampleFinderInput(luma, maxDimension = 240) {
+  const factor = Math.max(1, Math.ceil(Math.max(luma.width, luma.height) / maxDimension));
+  if (factor === 1) return { luma, factor };
+  const width = Math.ceil(luma.width / factor);
+  const height = Math.ceil(luma.height / factor);
+  const data = new Float32Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let sum = 0;
+      let count = 0;
+      for (let sourceY = y * factor;
+        sourceY < Math.min(luma.height, (y + 1) * factor);
+        sourceY += 1) {
+        for (let sourceX = x * factor;
+          sourceX < Math.min(luma.width, (x + 1) * factor);
+          sourceX += 1) {
+          sum += luma.data[sourceY * luma.width + sourceX];
+          count += 1;
+        }
+      }
+      data[y * width + x] = sum / count;
+    }
+  }
+  return { luma: { width, height, data, alpha: null }, factor };
+}
+
+function liftTestFinder(finder, factor) {
+  if (factor === 1) return finder;
+  const sourceH = finder.H || finder.transform || finder.B;
+  const scale = new Float64Array([
+    factor, 0, (factor - 1) / 2,
+    0, factor, (factor - 1) / 2,
+    0, 0, 1,
+  ]);
+  const H = multiplyTestHomographies(scale, sourceH);
+  return {
+    ...finder,
+    center: { x: H[2] / H[8], y: H[5] / H[8] },
+    cellSize: finder.cellSize * factor,
+    H,
+    transform: H,
+    B: H,
+  };
+}
+
+function detectRealFrameFinder(luma) {
+  const reduced = downsampleFinderInput(luma);
+  const detected = detectBullseyes(reduced.luma, {
+    maxPyramidLevels: 2,
+    maxRefinedProposals: 1,
+    refineIterations: 1,
+    projectiveSeeds: false,
+  });
+  assert.equal(detected.ok, true, JSON.stringify(detected));
+  let finder = liftTestFinder(detected.candidates[0], reduced.factor);
+  const refined = refineBullseye(luma, finder, {
+    refineIterations: 0,
+    projectiveSeeds: false,
+  });
+  if (refined.ok) finder = refined.candidate;
+  return finder;
+}
+
+test('실기기 Type O luma: 가려진 앵커에서도 V2 기본 기하 후보를 보존', {
+  timeout: 240_000,
+}, (t) => {
+  const dumps = listLumaDumps().filter((dump) => dump.name.startsWith('typeO-fold-'));
+  if (dumps.length === 0) {
+    t.skip('휘도 덤프 없음');
+    return;
+  }
+
+  for (const dump of dumps) {
+    const luma = readLumaDump(dump.path);
+    const finder = detectRealFrameFinder(luma);
+    const direct = directAnchorHypotheses(luma, finder, 'hex', {
+      allowWeakAnchorFallback: true,
+    });
+    assert.ok(
+      direct.hypotheses.some((hypothesis) =>
+        hypothesis.k === 8
+        && hypothesis.orientation === 0
+        && hypothesis.source === 'anchor-fallback'),
+      JSON.stringify({
+        dump: dump.name,
+        directCount: direct.hypotheses.length,
+        failure: direct.failure,
+      }),
+    );
+  }
+});
 
 const CLEAN_CASES = Object.freeze([
   { version: 1, eccLevel: 'L', text: 'TLcube' },
