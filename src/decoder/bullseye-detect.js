@@ -1,0 +1,937 @@
+/**
+ * bullseye-detect.js — Type O 6밴드 불스아이의 결정적 검출·점수화·정제.
+ *
+ * 입력은 contracts.js의 LumaField이며 모든 기하는 canonical → image 방향이다.
+ * canonical 좌표의 단위는 셀 크기 하나이고 원점은 불스아이 중심이다. 반환하는
+ * transform/B는 반지름 √13인 정규 불스아이 평면을 영상으로 보낸다.
+ *
+ * 탐색은 고정 2×2 피라미드와 Sobel 방사 대칭 투표로 중심·스케일 proposal을 모두
+ * 모은 뒤, SPD 국소 affine 3자유도와 projective tilt 2자유도를 고정 횟수
+ * coordinate descent로 정제한다. 첫 성공을 채택하지 않는다.
+ */
+
+import { maxSafeRadius, profileAt } from '../bullseye.js';
+import {
+  FRONTEND_FAILURE,
+  assertHomography,
+  assertLumaField,
+  fail,
+  ok,
+} from './contracts.js';
+
+const BAND_COUNT = 6;
+const CANONICAL_OUTER_RADIUS = maxSafeRadius(1);
+const CANONICAL_BAND_WIDTH = CANONICAL_OUTER_RADIUS / BAND_COUNT;
+
+/** radialSignature()의 규범 기본값과 같다. */
+const DEFAULT_RADIAL_SAMPLES = 64;
+
+// [미검증] M1 calibration 에서 확정 — 설계 §6.4/§15의 초기 angular sample 수.
+const DEFAULT_ANGULAR_SAMPLES = 48;
+// [미검증] M1 calibration 에서 확정 — 투영된 밴드가 이보다 얇으면 조기 거부한다.
+const MIN_PROJECTED_BAND_WIDTH_PX = 1.5;
+// [미검증] M1 calibration 에서 확정 — 영상 robust span 대비 최소 불스아이 대비.
+const MIN_CONTRAST_SPAN_RATIO = 0.45;
+// [미검증] M1 calibration 에서 확정 — 같은 반지름의 angular MAD/contrast 상한.
+const MAX_ANGULAR_MAD_CONTRAST = 0.25;
+// [미검증] M1 calibration 에서 확정 — octave당 고정 스케일 seed 수.
+const SCALE_SEEDS_PER_OCTAVE = 8;
+
+// 아래 탐색 예산·proposal 문턱도 M1에서 recall/비용 곡선으로 보정해야 한다.
+// [미검증] M1 calibration 에서 확정.
+const SOBEL_GRADIENT_SPAN_RATIO = 0.06;
+// [미검증] M1 calibration 에서 확정.
+const MAX_PYRAMID_LEVELS = 4;
+// [미검증] M1 calibration 에서 확정.
+const PROPOSALS_PER_SCALE = 4;
+// [미검증] M1 calibration 에서 확정.
+const MAX_RAW_PROPOSALS = 72;
+// [미검증] M1 calibration 에서 확정.
+const MAX_REFINED_PROPOSALS = 4;
+// [미검증] M1 calibration 에서 확정.
+const DEFAULT_REFINE_ITERATIONS = 6;
+// [미검증] M1 calibration 에서 확정 — proposal 정제용 저비용 표본 수. 최종 후보는 64×48로 재평가한다.
+const REFINEMENT_RADIAL_SAMPLES = 24;
+// [미검증] M1 calibration 에서 확정.
+const REFINEMENT_ANGULAR_SAMPLES = 24;
+// [미검증] M1 calibration 에서 확정.
+const MAX_OUTER_RADIUS_FRACTION = 0.42;
+// [미검증] M1 calibration 에서 확정.
+const RAW_SCALE_NMS_LOG_DISTANCE = Math.log(1.22);
+// [미검증] M1 calibration 에서 확정.
+const FINAL_CENTER_NMS_RADIUS_FACTOR = 0.45;
+
+// denominator=1+p·u+q·v. ±30° 하네스를 0 seed 하나에 맡기지 않는 고정 순서.
+// [미검증] M1 calibration 에서 확정.
+const PROJECTIVE_TILT_SEEDS = Object.freeze([
+  Object.freeze([0, 0]),
+  Object.freeze([0.024, 0]),
+  Object.freeze([-0.024, 0]),
+  Object.freeze([0, 0.024]),
+  Object.freeze([0, -0.024]),
+  Object.freeze([0.017, 0.017]),
+  Object.freeze([-0.017, -0.017]),
+]);
+
+const SCORE_EPSILON = 1e-12;
+
+function clamp01(value) {
+  if (value <= 0) return 0;
+  if (value >= 1) return 1;
+  return value;
+}
+
+function squaredDistance(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy;
+}
+
+/** verify.js와 같은 숫자 오름차순/짝수 중앙 두 값 평균 규약. */
+function median(values) {
+  if (values.length === 0) return Number.NaN;
+  const sorted = Array.from(values).sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function mad(values, center = median(values)) {
+  if (!Number.isFinite(center)) return Number.NaN;
+  return median(values.map((value) => Math.abs(value - center)));
+}
+
+function percentileFromSorted(sorted, quantile) {
+  if (sorted.length === 0) return Number.NaN;
+  const index = quantile * (sorted.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower];
+  const fraction = index - lower;
+  return sorted[lower] * (1 - fraction) + sorted[upper] * fraction;
+}
+
+function robustStats(luma) {
+  const finite = [];
+  for (let i = 0; i < luma.data.length; i += 1) {
+    const value = luma.data[i];
+    if (Number.isFinite(value)) finite.push(value);
+  }
+  finite.sort((a, b) => a - b);
+  if (finite.length === 0) {
+    return { low: Number.NaN, high: Number.NaN, span: Number.NaN, finiteCount: 0 };
+  }
+  const low = percentileFromSorted(finite, 0.05);
+  const high = percentileFromSorted(finite, 0.95);
+  return { low, high, span: high - low, finiteCount: finite.length };
+}
+
+function checkedLuma(luma) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, { message: error.message });
+  }
+  if (luma.alpha !== null && luma.alpha !== undefined) {
+    if (!(luma.alpha instanceof Uint8Array) || luma.alpha.length !== luma.width * luma.height) {
+      return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+        message: 'alpha 는 null 또는 width*height 길이의 Uint8Array 여야 한다',
+      });
+    }
+  }
+  return ok({ luma });
+}
+
+/**
+ * 2×2 box average 피라미드. level 픽셀 중심을 원본으로 옮길 때
+ * original=factor*level+offset, offset=(factor-1)/2다.
+ */
+function makePyramid(luma, maxLevels) {
+  const levels = [{ ...luma, factor: 1, offset: 0, level: 0 }];
+  let current = levels[0];
+  for (let level = 1; level < maxLevels; level += 1) {
+    if (Math.min(current.width, current.height) < 48) break;
+    const width = Math.ceil(current.width / 2);
+    const height = Math.ceil(current.height / 2);
+    const data = new Float32Array(width * height);
+    const alpha = current.alpha === null || current.alpha === undefined
+      ? null
+      : new Uint8Array(width * height);
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        let sum = 0;
+        let count = 0;
+        let alphaSum = 0;
+        for (let dy = 0; dy < 2; dy += 1) {
+          const sourceY = y * 2 + dy;
+          if (sourceY >= current.height) continue;
+          for (let dx = 0; dx < 2; dx += 1) {
+            const sourceX = x * 2 + dx;
+            if (sourceX >= current.width) continue;
+            const sourceIndex = sourceY * current.width + sourceX;
+            sum += current.data[sourceIndex];
+            if (alpha !== null) alphaSum += current.alpha[sourceIndex];
+            count += 1;
+          }
+        }
+        const targetIndex = y * width + x;
+        data[targetIndex] = sum / count;
+        if (alpha !== null) alpha[targetIndex] = Math.round(alphaSum / count);
+      }
+    }
+
+    current = {
+      width,
+      height,
+      data,
+      alpha,
+      factor: current.factor * 2,
+      offset: (current.factor * 2 - 1) / 2,
+      level,
+    };
+    levels.push(current);
+  }
+  return levels;
+}
+
+function sobelPoints(luma, span) {
+  const points = [];
+  const threshold = span * SOBEL_GRADIENT_SPAN_RATIO;
+  const { width, height, data } = luma;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const top = (y - 1) * width;
+      const middle = y * width;
+      const bottom = (y + 1) * width;
+      const gx = (
+        data[top + x + 1] + 2 * data[middle + x + 1] + data[bottom + x + 1]
+      ) - (
+        data[top + x - 1] + 2 * data[middle + x - 1] + data[bottom + x - 1]
+      );
+      const gy = (
+        data[bottom + x - 1] + 2 * data[bottom + x] + data[bottom + x + 1]
+      ) - (
+        data[top + x - 1] + 2 * data[top + x] + data[top + x + 1]
+      );
+      const magnitude = Math.sqrt(gx * gx + gy * gy);
+      if (magnitude >= threshold && Number.isFinite(magnitude)) {
+        points.push({ x, y, gx, gy, magnitude });
+      }
+    }
+  }
+  return points;
+}
+
+function radiusSeedsForLevel(level, options) {
+  if (Array.isArray(options.outerRadiusSeeds)) {
+    return options.outerRadiusSeeds
+      .filter((radius) => Number.isFinite(radius) && radius > 0)
+      .map((radius) => radius / level.factor)
+      .filter((radius) => radius >= MIN_PROJECTED_BAND_WIDTH_PX * BAND_COUNT
+        && radius <= Math.min(level.width, level.height) * MAX_OUTER_RADIUS_FRACTION)
+      .sort((a, b) => a - b);
+  }
+
+  const minOuter = MIN_PROJECTED_BAND_WIDTH_PX * BAND_COUNT;
+  const maxOuter = Math.min(level.width, level.height) * MAX_OUTER_RADIUS_FRACTION;
+  if (maxOuter < minOuter) return [];
+  const ratio = Math.pow(2, 1 / SCALE_SEEDS_PER_OCTAVE);
+  const radii = [];
+  for (let radius = minOuter; radius <= maxOuter * (1 + 1e-12); radius *= ratio) {
+    radii.push(radius);
+  }
+  if (radii.length === 0 || radii[radii.length - 1] < maxOuter / Math.sqrt(ratio)) {
+    radii.push(maxOuter);
+  }
+  return radii;
+}
+
+/** 내부 다섯 경계의 기대 gradient 부호를 이용한 radial-symmetry 중심 투표. */
+function voteScale(level, gradients, outerRadius) {
+  const votes = new Float32Array(level.width * level.height);
+  const contributionScale = 1 / outerRadius;
+  for (const point of gradients) {
+    const inverseMagnitude = 1 / point.magnitude;
+    for (let boundary = 1; boundary < BAND_COUNT; boundary += 1) {
+      const expectedSign = boundary % 2 === 1 ? 1 : -1;
+      const radialX = expectedSign * point.gx * inverseMagnitude;
+      const radialY = expectedSign * point.gy * inverseMagnitude;
+      const boundaryRadius = (outerRadius * boundary) / BAND_COUNT;
+      const centerX = Math.round(point.x - radialX * boundaryRadius);
+      const centerY = Math.round(point.y - radialY * boundaryRadius);
+      if (centerX < 1 || centerX >= level.width - 1
+        || centerY < 1 || centerY >= level.height - 1) continue;
+      votes[centerY * level.width + centerX] += point.magnitude * contributionScale;
+    }
+  }
+  return votes;
+}
+
+function localVoteMaxima(level, votes, outerRadius) {
+  const maxima = [];
+  for (let y = 2; y < level.height - 2; y += 1) {
+    for (let x = 2; x < level.width - 2; x += 1) {
+      const value = votes[y * level.width + x];
+      if (!(value > 0)) continue;
+      let isMaximum = true;
+      for (let dy = -2; dy <= 2 && isMaximum; dy += 1) {
+        for (let dx = -2; dx <= 2; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const other = votes[(y + dy) * level.width + x + dx];
+          if (other > value || (other === value && (dy < 0 || (dy === 0 && dx < 0)))) {
+            isMaximum = false;
+            break;
+          }
+        }
+      }
+      if (isMaximum) maxima.push({ x, y, outerRadius, vote: value });
+    }
+  }
+  maxima.sort((a, b) => b.vote - a.vote || a.y - b.y || a.x - b.x);
+  return maxima.slice(0, PROPOSALS_PER_SCALE);
+}
+
+function collectRawProposals(luma, options) {
+  const maxLevels = options.maxPyramidLevels === undefined
+    ? MAX_PYRAMID_LEVELS
+    : options.maxPyramidLevels;
+  if (!Number.isInteger(maxLevels) || maxLevels < 1 || maxLevels > 8) return [];
+  const pyramid = makePyramid(luma, maxLevels);
+  const raw = [];
+
+  for (const level of pyramid) {
+    const stats = robustStats(level);
+    if (!(stats.span > 1e-6)) continue;
+    const gradients = sobelPoints(level, stats.span);
+    if (gradients.length === 0) continue;
+    for (const radius of radiusSeedsForLevel(level, options)) {
+      const votes = voteScale(level, gradients, radius);
+      for (const maximum of localVoteMaxima(level, votes, radius)) {
+        raw.push({
+          center: {
+            x: maximum.x * level.factor + level.offset,
+            y: maximum.y * level.factor + level.offset,
+          },
+          outerRadius: maximum.outerRadius * level.factor,
+          vote: maximum.vote,
+          pyramidLevel: level.level,
+        });
+      }
+    }
+  }
+
+  raw.sort((a, b) => b.vote - a.vote
+    || a.pyramidLevel - b.pyramidLevel
+    || a.outerRadius - b.outerRadius
+    || a.center.y - b.center.y
+    || a.center.x - b.center.x);
+
+  const kept = [];
+  for (const proposal of raw) {
+    const duplicate = kept.some((other) => {
+      const centerLimit = 0.22 * Math.min(proposal.outerRadius, other.outerRadius);
+      const scaleDistance = Math.abs(Math.log(proposal.outerRadius / other.outerRadius));
+      return squaredDistance(proposal.center, other.center) <= centerLimit * centerLimit
+        && scaleDistance <= RAW_SCALE_NMS_LOG_DISTANCE;
+    });
+    if (!duplicate) kept.push(proposal);
+    if (kept.length >= MAX_RAW_PROPOSALS) break;
+  }
+  return kept;
+}
+
+/** params=[cx,cy,log(a),log(c),b,p,q], SPD S=[[a,b],[b,c]]. */
+function homographyFromParams(params) {
+  const [centerX, centerY, logA, logC, cross, tiltX, tiltY] = params;
+  const a = Math.exp(logA);
+  const c = Math.exp(logC);
+  if (!(a * c - cross * cross > 1e-9)) return null;
+  const tiltNorm = Math.sqrt(tiltX * tiltX + tiltY * tiltY);
+  if (!(1 - CANONICAL_OUTER_RADIUS * tiltNorm > 0.15)) return null;
+  return new Float64Array([
+    a + centerX * tiltX,
+    cross + centerX * tiltY,
+    centerX,
+    cross + centerY * tiltX,
+    c + centerY * tiltY,
+    centerY,
+    tiltX,
+    tiltY,
+    1,
+  ]);
+}
+
+function isotropicParams(center, cellSize) {
+  return [center.x, center.y, Math.log(cellSize), Math.log(cellSize), 0, 0, 0];
+}
+
+function paramsFromHomography(H) {
+  assertHomography(H);
+  if (H[8] === 0) throw new RangeError('H[8]가 0이라 원점 중심 gauge로 정규화할 수 없다');
+  const scale = 1 / H[8];
+  const h = Array.from(H, (value) => value * scale);
+  const centerX = h[2];
+  const centerY = h[5];
+  const tiltX = h[6];
+  const tiltY = h[7];
+  const j00 = h[0] - centerX * tiltX;
+  const j01 = h[1] - centerX * tiltY;
+  const j10 = h[3] - centerY * tiltX;
+  const j11 = h[4] - centerY * tiltY;
+
+  // 방사 패턴이 식별하지 못하는 회전 gauge를 제거한다. J=SPD·R인 left polar의
+  // SPD=sqrt(JJᵀ)를 2×2 폐형식으로 계산한다.
+  const c00 = j00 * j00 + j01 * j01;
+  const c01 = j00 * j10 + j01 * j11;
+  const c11 = j10 * j10 + j11 * j11;
+  const determinant = c00 * c11 - c01 * c01;
+  if (!(determinant > 0)) throw new RangeError('호모그래피의 국소 affine이 퇴화했다');
+  const rootDet = Math.sqrt(determinant);
+  const denominator = Math.sqrt(c00 + c11 + 2 * rootDet);
+  const a = (c00 + rootDet) / denominator;
+  const cross = c01 / denominator;
+  const c = (c11 + rootDet) / denominator;
+  if (!(a > 0 && c > 0 && a * c - cross * cross > 0)) {
+    throw new RangeError('호모그래피의 SPD gauge를 만들 수 없다');
+  }
+  return [centerX, centerY, Math.log(a), Math.log(c), cross, tiltX, tiltY];
+}
+
+function homographyFromInitial(initial) {
+  if (initial instanceof Float64Array) return initial;
+  if (!initial || typeof initial !== 'object') {
+    throw new TypeError('initial/transform은 Homography 또는 중심·cellSize 객체여야 한다');
+  }
+  const H = initial.transform ?? initial.B ?? initial.H;
+  if (H !== undefined) {
+    if (H instanceof Float64Array) return H;
+    if (Array.isArray(H) && H.length === 9) return new Float64Array(H);
+    throw new TypeError('transform/B/H는 길이 9 Homography여야 한다');
+  }
+  const center = initial.center;
+  const cellSize = initial.cellSize ?? initial.cellSizePxAtCenter;
+  if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)
+    || !Number.isFinite(cellSize) || cellSize <= 0) {
+    throw new TypeError('중심·cellSize가 유한한 초기 가설이어야 한다');
+  }
+  const params = isotropicParams(center, cellSize);
+  if (initial.tilt && Number.isFinite(initial.tilt.x) && Number.isFinite(initial.tilt.y)) {
+    params[5] = initial.tilt.x;
+    params[6] = initial.tilt.y;
+  }
+  return homographyFromParams(params);
+}
+
+function project(H, x, y) {
+  const denominator = H[6] * x + H[7] * y + H[8];
+  if (!Number.isFinite(denominator) || Math.abs(denominator) < 1e-12) return null;
+  return {
+    x: (H[0] * x + H[1] * y + H[2]) / denominator,
+    y: (H[3] * x + H[4] * y + H[5]) / denominator,
+  };
+}
+
+function sampleBilinear(luma, x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)
+    || x < 0 || y < 0 || x > luma.width - 1 || y > luma.height - 1) {
+    return { inside: false, value: Number.NaN };
+  }
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(x0 + 1, luma.width - 1);
+  const y1 = Math.min(y0 + 1, luma.height - 1);
+  const tx = x - x0;
+  const ty = y - y0;
+  const top = luma.data[y0 * luma.width + x0] * (1 - tx)
+    + luma.data[y0 * luma.width + x1] * tx;
+  const bottom = luma.data[y1 * luma.width + x0] * (1 - tx)
+    + luma.data[y1 * luma.width + x1] * tx;
+  const value = top * (1 - ty) + bottom * ty;
+  return { inside: Number.isFinite(value), value };
+}
+
+/** 반개구간 [하한,상한), 마지막만 상한 포함인 band index. */
+function bandIndexAt(radius) {
+  for (let band = 0; band < BAND_COUNT - 1; band += 1) {
+    if (radius < CANONICAL_BAND_WIDTH * (band + 1)) return band;
+  }
+  return BAND_COUNT - 1;
+}
+
+function compareScored(a, b) {
+  if (a.hardChecksPassed !== b.hardChecksPassed) return a.hardChecksPassed ? -1 : 1;
+  if (Math.abs(a.score - b.score) > SCORE_EPSILON) return b.score - a.score;
+  if (Math.abs(a.radialError - b.radialError) > SCORE_EPSILON) {
+    return a.radialError - b.radialError;
+  }
+  const ac = a.center;
+  const bc = b.center;
+  return ac.y - bc.y || ac.x - bc.x || a.cellSize - b.cellSize;
+}
+
+function scoreBullseyeCore(luma, H, options, stats) {
+  const radialSamples = options.radialSamples === undefined
+    ? DEFAULT_RADIAL_SAMPLES
+    : options.radialSamples;
+  const angularSamples = options.angularSamples === undefined
+    ? DEFAULT_ANGULAR_SAMPLES
+    : options.angularSamples;
+  if (!Number.isInteger(radialSamples) || radialSamples < 12) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: 'radialSamples는 12 이상의 정수여야 한다' });
+  }
+  if (!Number.isInteger(angularSamples) || angularSamples < 12) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: 'angularSamples는 12 이상의 정수여야 한다' });
+  }
+
+  const bandSamples = Array.from({ length: BAND_COUNT }, () => []);
+  const radiusSummaries = [];
+  const lightSamples = [];
+  const darkSamples = [];
+  let projectedClosed = true;
+
+  for (let radialIndex = 0; radialIndex < radialSamples; radialIndex += 1) {
+    const radius = radialIndex === radialSamples - 1
+      ? CANONICAL_OUTER_RADIUS
+      : (CANONICAL_OUTER_RADIUS * radialIndex) / (radialSamples - 1);
+    const expected = profileAt(radius, 1);
+    const bandIndex = bandIndexAt(radius);
+    const angularValues = [];
+    for (let angularIndex = 0; angularIndex < angularSamples; angularIndex += 1) {
+      const angle = (2 * Math.PI * angularIndex) / angularSamples;
+      const point = project(H, radius * Math.cos(angle), radius * Math.sin(angle));
+      if (point === null) {
+        projectedClosed = false;
+        continue;
+      }
+      const sampled = sampleBilinear(luma, point.x, point.y);
+      if (!sampled.inside) {
+        projectedClosed = false;
+        continue;
+      }
+      angularValues.push(sampled.value);
+      bandSamples[bandIndex].push(sampled.value);
+      if (expected === 1) lightSamples.push(sampled.value);
+      else darkSamples.push(sampled.value);
+    }
+    const radialMedian = median(angularValues);
+    radiusSummaries.push({
+      radius,
+      expected,
+      median: radialMedian,
+      mad: mad(angularValues, radialMedian),
+      count: angularValues.length,
+    });
+  }
+
+  const bandMedians = bandSamples.map((samples) => median(samples));
+  const bandMads = bandSamples.map((samples, index) => mad(samples, bandMedians[index]));
+  const lightMedian = median(lightSamples);
+  const darkMedian = median(darkSamples);
+  const contrast = lightMedian - darkMedian;
+
+  let alternating = bandMedians.every(Number.isFinite);
+  const alternationMargins = [];
+  for (let band = 1; band < BAND_COUNT; band += 1) {
+    const signed = band % 2 === 1
+      ? bandMedians[band] - bandMedians[band - 1]
+      : bandMedians[band - 1] - bandMedians[band];
+    alternationMargins.push(signed);
+    if (!(signed > 0)) alternating = false;
+  }
+
+  const boundaryGradients = [];
+  const boundaryInset = CANONICAL_BAND_WIDTH * 0.22;
+  for (let boundary = 1; boundary < BAND_COUNT; boundary += 1) {
+    const radius = CANONICAL_BAND_WIDTH * boundary;
+    const signedSamples = [];
+    const expectedSign = boundary % 2 === 1 ? 1 : -1;
+    for (let angularIndex = 0; angularIndex < angularSamples; angularIndex += 1) {
+      const angle = (2 * Math.PI * angularIndex) / angularSamples;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const inner = project(H, (radius - boundaryInset) * cos, (radius - boundaryInset) * sin);
+      const outer = project(H, (radius + boundaryInset) * cos, (radius + boundaryInset) * sin);
+      if (inner === null || outer === null) {
+        projectedClosed = false;
+        continue;
+      }
+      const insideValue = sampleBilinear(luma, inner.x, inner.y);
+      const outsideValue = sampleBilinear(luma, outer.x, outer.y);
+      if (!insideValue.inside || !outsideValue.inside) {
+        projectedClosed = false;
+        continue;
+      }
+      signedSamples.push(expectedSign * (outsideValue.value - insideValue.value));
+    }
+    boundaryGradients.push({
+      boundary,
+      expectedSign,
+      signedMedian: median(signedSamples),
+      mad: mad(signedSamples),
+      count: signedSamples.length,
+    });
+  }
+
+  const projectedBandWidths = [];
+  for (let angularIndex = 0; angularIndex < angularSamples; angularIndex += 1) {
+    const angle = (2 * Math.PI * angularIndex) / angularSamples;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    let previous = project(H, 0, 0);
+    for (let boundary = 1; boundary <= BAND_COUNT; boundary += 1) {
+      const radius = boundary === BAND_COUNT
+        ? CANONICAL_OUTER_RADIUS
+        : CANONICAL_BAND_WIDTH * boundary;
+      const current = project(H, radius * cos, radius * sin);
+      if (previous === null || current === null) {
+        projectedClosed = false;
+      } else {
+        const dx = current.x - previous.x;
+        const dy = current.y - previous.y;
+        projectedBandWidths.push(Math.sqrt(dx * dx + dy * dy));
+      }
+      previous = current;
+    }
+  }
+  const minProjectedBandWidth = projectedBandWidths.length === 0
+    ? 0
+    : Math.min(...projectedBandWidths);
+  const medianProjectedBandWidth = median(projectedBandWidths);
+  const cellSize = (medianProjectedBandWidth * BAND_COUNT) / CANONICAL_OUTER_RADIUS;
+
+  const usableRadialMads = radiusSummaries
+    .filter((summary) => summary.radius > 0 && Number.isFinite(summary.mad))
+    .map((summary) => summary.mad);
+  const radialAngularMad = median(usableRadialMads);
+  // 밴드 내부의 넓은 평탄부만 보면 중심이 몇 픽셀 틀려도 MAD 중앙값이 0이 된다.
+  // 내부 다섯 경계에서 같은 반지름의 signed-gradient MAD를 함께 보아 그 plateau를 깬다.
+  const boundaryAngularMad = median(boundaryGradients.map((entry) => entry.mad));
+  const angularMad = Math.max(radialAngularMad, boundaryAngularMad);
+  const angularMadContrast = contrast > 0 ? angularMad / contrast : Number.POSITIVE_INFINITY;
+
+  const templateErrors = radiusSummaries
+    .filter((summary) => Number.isFinite(summary.median))
+    .map((summary) => Math.abs(
+      summary.median - (summary.expected === 1 ? lightMedian : darkMedian),
+    ));
+  const radialError = contrast > 0
+    ? median(templateErrors) / contrast
+    : Number.POSITIVE_INFINITY;
+
+  const robustSpan = stats.span;
+  const contrastPass = Number.isFinite(contrast)
+    && contrast >= robustSpan * MIN_CONTRAST_SPAN_RATIO;
+  const boundarySignsPass = boundaryGradients.length === BAND_COUNT - 1
+    && boundaryGradients.every((entry) => entry.count === angularSamples && entry.signedMedian > 0);
+  const outerBandLight = profileAt(CANONICAL_OUTER_RADIUS, 1) === 1
+    && Number.isFinite(bandMedians[BAND_COUNT - 1])
+    && bandMedians[BAND_COUNT - 1] > darkMedian;
+  const angularSymmetryPass = Number.isFinite(angularMadContrast)
+    && angularMadContrast <= MAX_ANGULAR_MAD_CONTRAST;
+  const bandWidthPass = minProjectedBandWidth >= MIN_PROJECTED_BAND_WIDTH_PX;
+  const sampleCoveragePass = bandSamples.every((samples) => samples.length > 0)
+    && radiusSummaries.every((summary) => summary.count === angularSamples);
+
+  const hardCheckDetails = {
+    alternating,
+    boundarySignsPass,
+    contrastPass,
+    angularSymmetryPass,
+    outerBandLight,
+    projectedClosed,
+    bandWidthPass,
+    sampleCoveragePass,
+  };
+  const hardChecksPassed = Object.values(hardCheckDetails).every(Boolean);
+
+  const contrastScore = robustSpan > 0
+    ? clamp01(contrast / (robustSpan * MIN_CONTRAST_SPAN_RATIO))
+    : 0;
+  const minAlternationMargin = alternationMargins.length === BAND_COUNT - 1
+    ? Math.min(...alternationMargins)
+    : 0;
+  const alternationScore = contrast > 0
+    ? clamp01((minAlternationMargin * 2) / contrast)
+    : 0;
+  const signedGradientMedian = median(boundaryGradients.map((entry) => entry.signedMedian));
+  const gradientScore = contrast > 0 ? clamp01((signedGradientMedian * 2) / contrast) : 0;
+  const symmetryScore = Number.isFinite(angularMadContrast)
+    ? clamp01(1 - angularMadContrast / MAX_ANGULAR_MAD_CONTRAST)
+    : 0;
+  const templateScore = Number.isFinite(radialError) ? clamp01(1 - radialError) : 0;
+  let score = 0.28 * contrastScore
+    + 0.22 * alternationScore
+    + 0.22 * gradientScore
+    + 0.18 * symmetryScore
+    + 0.10 * templateScore;
+  if (!projectedClosed || !bandWidthPass || !sampleCoveragePass) score *= 0.5;
+  score = clamp01(score);
+
+  const center = project(H, 0, 0) ?? { x: Number.NaN, y: Number.NaN };
+  const bands = {
+    values: bandMedians.map((value, index) => ({
+      index,
+      expected: index % 2 === 0 ? 0 : 1,
+      median: value,
+      mad: bandMads[index],
+      count: bandSamples[index].length,
+    })),
+    contrast,
+    darkMedian,
+    lightMedian,
+    angularMad,
+    radialAngularMad,
+    boundaryAngularMad,
+    angularMadContrast,
+    boundaryGradients,
+    minProjectedBandWidth,
+    medianProjectedBandWidth,
+    hardChecks: hardCheckDetails,
+  };
+
+  return ok({
+    transform: H,
+    B: H,
+    center,
+    cellSize,
+    score,
+    bands,
+    contrast,
+    radialError,
+    hardChecksPassed,
+  });
+}
+
+/**
+ * 주어진 canonical→image 변환의 6밴드 적합 점수를 계산한다.
+ * hard check 실패도 수렴 진단에 필요하므로 ok:true, hardChecksPassed:false로 낸다.
+ */
+export function scoreBullseye(luma, transform, options = {}) {
+  const checked = checkedLuma(luma);
+  if (!checked.ok) return checked;
+  let H;
+  try {
+    H = homographyFromInitial(transform);
+    assertHomography(H);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, { message: error.message });
+  }
+  const stats = robustStats(luma);
+  if (!(stats.span > 1e-6)) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: '휘도 span이 없어 불스아이 점수를 만들 수 없다' });
+  }
+  return scoreBullseyeCore(luma, H, options, stats);
+}
+
+function candidateFromScore(scored) {
+  return {
+    center: scored.center,
+    cellSize: scored.cellSize,
+    score: scored.score,
+    bands: scored.bands,
+    hardChecksPassed: scored.hardChecksPassed,
+    // BullseyeCandidate의 필수 shape는 바꾸지 않고 후단 재사용용 진단만 확장한다.
+    transform: scored.transform,
+    B: scored.B,
+    contrast: scored.contrast,
+    radialError: scored.radialError,
+  };
+}
+
+function lowCostScoreOptions(options) {
+  return {
+    ...options,
+    radialSamples: options.refineRadialSamples === undefined
+      ? REFINEMENT_RADIAL_SAMPLES
+      : options.refineRadialSamples,
+    angularSamples: options.refineAngularSamples === undefined
+      ? REFINEMENT_ANGULAR_SAMPLES
+      : options.refineAngularSamples,
+  };
+}
+
+function scoreParams(luma, params, options, stats) {
+  const H = homographyFromParams(params);
+  if (H === null) return null;
+  const scored = scoreBullseyeCore(luma, H, options, stats);
+  return scored.ok ? candidateFromScore(scored) : null;
+}
+
+function coordinateRefine(luma, initialParams, options, stats) {
+  const iterations = options.refineIterations === undefined
+    ? DEFAULT_REFINE_ITERATIONS
+    : options.refineIterations;
+  if (!Number.isInteger(iterations) || iterations < 0 || iterations > 20) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: 'refineIterations는 0..20 정수여야 한다' });
+  }
+  let params = initialParams.slice();
+  let current = scoreParams(luma, params, options, stats);
+  if (current === null) return fail(FRONTEND_FAILURE.NO_FINDER, { message: '초기 변환이 퇴화했다' });
+
+  const a = Math.exp(params[2]);
+  const c = Math.exp(params[3]);
+  const localCellSize = Math.sqrt(Math.max(1e-9, a * c - params[4] * params[4]));
+  const localBandWidth = (localCellSize * CANONICAL_OUTER_RADIUS) / BAND_COUNT;
+  const steps = [
+    Math.max(0.25, localBandWidth * 0.45),
+    Math.max(0.25, localBandWidth * 0.45),
+    0.06,
+    0.06,
+    localCellSize * 0.055,
+    0.008,
+    0.008,
+  ];
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    for (let dimension = 0; dimension < params.length; dimension += 1) {
+      let bestParams = params;
+      let best = current;
+      for (const direction of [-1, 1]) {
+        const trialParams = params.slice();
+        trialParams[dimension] += direction * steps[dimension];
+        const trial = scoreParams(luma, trialParams, options, stats);
+        if (trial !== null && compareScored(trial, best) < 0) {
+          best = trial;
+          bestParams = trialParams;
+        }
+      }
+      params = bestParams;
+      current = best;
+    }
+    for (let dimension = 0; dimension < steps.length; dimension += 1) {
+      steps[dimension] *= 0.5;
+    }
+  }
+  return ok({ candidate: current });
+}
+
+function refineBullseyeCore(luma, initial, options, stats) {
+  let baseParams;
+  try {
+    baseParams = paramsFromHomography(homographyFromInitial(initial));
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, { message: error.message });
+  }
+
+  const seeds = options.projectiveSeeds === false
+    ? [[baseParams[5], baseParams[6]]]
+    : PROJECTIVE_TILT_SEEDS.map(([x, y]) => [baseParams[5] + x, baseParams[6] + y]);
+  const fastOptions = lowCostScoreOptions(options);
+  const seededCandidates = [];
+  // 모든 tilt seed를 저비용 표본으로 먼저 평가하고, 최고 seed 하나만 고정 횟수 정제한다.
+  // 첫 hard-pass seed에서 멈추지 않으므로 seed 순서가 결과를 바꾸지 않는다.
+  for (const [tiltX, tiltY] of seeds) {
+    const seeded = baseParams.slice();
+    seeded[5] = tiltX;
+    seeded[6] = tiltY;
+    const candidate = scoreParams(luma, seeded, fastOptions, stats);
+    if (candidate !== null) seededCandidates.push({ params: seeded, candidate });
+  }
+  if (seededCandidates.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: '모든 projective seed의 초기 평가가 실패했다' });
+  }
+  seededCandidates.sort((a, b) => compareScored(a.candidate, b.candidate));
+  const refined = coordinateRefine(luma, seededCandidates[0].params, fastOptions, stats);
+  if (!refined.ok) return refined;
+
+  // 저비용 표본은 탐색에만 쓴다. 공개 점수와 hard check는 규범 기본 64×48로 다시 계산한다.
+  const finalScore = scoreBullseyeCore(luma, refined.candidate.transform, options, stats);
+  if (!finalScore.ok) return finalScore;
+  return ok({
+    candidate: candidateFromScore(finalScore),
+    evaluatedSeeds: seededCandidates.length,
+  });
+}
+
+/** 고정 seed와 고정 횟수 coordinate descent로 한 초기 가설을 정제한다. */
+export function refineBullseye(luma, initial, options = {}) {
+  const checked = checkedLuma(luma);
+  if (!checked.ok) return checked;
+  const stats = robustStats(luma);
+  if (!(stats.span > 1e-6)) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: '휘도 span이 없어 정제할 수 없다' });
+  }
+  return refineBullseyeCore(luma, initial, options, stats);
+}
+
+function finalCandidateNms(candidates) {
+  const kept = [];
+  for (const candidate of candidates) {
+    const duplicate = kept.some((other) => {
+      const outerA = candidate.cellSize * CANONICAL_OUTER_RADIUS;
+      const outerB = other.cellSize * CANONICAL_OUTER_RADIUS;
+      const limit = FINAL_CENTER_NMS_RADIUS_FACTOR * Math.min(outerA, outerB);
+      return squaredDistance(candidate.center, other.center) <= limit * limit;
+    });
+    if (!duplicate) kept.push(candidate);
+  }
+  return kept;
+}
+
+/**
+ * Type O 불스아이 후보를 전부 평가해 점수순으로 반환한다.
+ * @returns {{ok:true,candidates:object[]}|{ok:false,reason:string,detail?:object}}
+ */
+export function detectBullseyes(luma, options = {}) {
+  const checked = checkedLuma(luma);
+  if (!checked.ok) return checked;
+  const stats = robustStats(luma);
+  if (!(stats.span > 1e-6)) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: '유효 휘도 대비가 없다' });
+  }
+
+  const raw = collectRawProposals(luma, options);
+  if (raw.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: '방사 대칭 중심 proposal이 없다' });
+  }
+
+  const coarse = [];
+  const fastOptions = lowCostScoreOptions(options);
+  for (const proposal of raw) {
+    const cellSize = proposal.outerRadius / CANONICAL_OUTER_RADIUS;
+    const H = homographyFromParams(isotropicParams(proposal.center, cellSize));
+    if (H === null) continue;
+    const scored = scoreBullseyeCore(luma, H, fastOptions, stats);
+    if (scored.ok) {
+      coarse.push({
+        proposal,
+        candidate: candidateFromScore(scored),
+      });
+    }
+  }
+  coarse.sort((a, b) => compareScored(a.candidate, b.candidate)
+    || b.proposal.vote - a.proposal.vote
+    || a.proposal.pyramidLevel - b.proposal.pyramidLevel);
+
+  const refineLimit = options.maxRefinedProposals === undefined
+    ? MAX_REFINED_PROPOSALS
+    : options.maxRefinedProposals;
+  if (!Number.isInteger(refineLimit) || refineLimit < 1 || refineLimit > MAX_RAW_PROPOSALS) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      message: 'maxRefinedProposals는 1..' + MAX_RAW_PROPOSALS + ' 정수여야 한다',
+    });
+  }
+
+  const refined = [];
+  // 첫 통과에서 반환하지 않는다. 정해진 평가 예산의 proposal을 모두 정제한다.
+  for (const entry of coarse.slice(0, refineLimit)) {
+    const result = refineBullseyeCore(luma, entry.candidate, options, stats);
+    if (result.ok) refined.push(result.candidate);
+  }
+  refined.sort(compareScored);
+
+  const valid = finalCandidateNms(refined.filter((candidate) => candidate.hardChecksPassed));
+  valid.sort(compareScored);
+  if (valid.length === 0) {
+    const best = refined[0] ?? coarse[0]?.candidate;
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      evaluatedRaw: raw.length,
+      evaluatedRefined: refined.length,
+      bestScore: best?.score,
+      hardChecks: best?.bands?.hardChecks,
+    });
+  }
+  return ok({ candidates: valid });
+}
