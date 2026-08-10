@@ -12,6 +12,17 @@
 import { sniffPayload } from '/src/payloadform.js';
 
 const FRAME_INTERVAL_MS = 320;
+
+/**
+ * 디코더에 넘기기 전 프레임을 줄이는 상한(긴 변, px). **미리보기 화질과는 무관하다** —
+ * 미리보기는 원본 스트림을 그대로 보여주고, 이 값은 복호 입력에만 걸린다.
+ *
+ * ⚠ **디코더가 붙으면 재검토 대상이다.** 개산: V3(k=10)는 21셀 폭이고, 코드가 화면의
+ *    70% 를 채운다면 960px 기준 셀당 \~32px, 면 하나의 내접원은 그보다 훨씬 작아
+ *    §7.2 샘플 원판(내접원 50%) 안에 드는 픽셀이 한 자릿수까지 내려간다. 그 표본으로
+ *    median 을 잡으면 휘도 순위가 노이즈에 뒤집히기 쉽다 — H1 과 무관한 실패로
+ *    M1 판정을 오염시킬 수 있는 자리다. 실측으로 하한을 정할 것.
+ */
 const FRAME_MAX_SIDE = 960;
 
 const scannerApp = document.getElementById('scanner-app');
@@ -208,16 +219,59 @@ function waitForVideoMetadata(video) {
   });
 }
 
+/**
+ * 카메라 스트림을 연다.
+ *
+ * ⚠ 해상도 제약을 **반드시** 준다. 제약이 없으면 브라우저 기본값이 잡히는데 Android
+ *    Chrome 의 기본은 640×480 이고, 그걸 1080p+ 화면에 `object-fit: cover` 로 채우면
+ *    확대율이 2\~3배가 되어 눈에 띄게 흐려진다(실기기 확인, 2026-08-10). iOS 는 더 높은
+ *    기본값을 고르는 경향이 있어 **안드로이드에서만** 증상이 보였다.
+ *
+ * `ideal` 을 쓰고 `exact`·`min` 을 쓰지 않는다 — 후자는 못 맞추면 OverconstrainedError 로
+ * 카메라 자체가 안 열린다. ideal 은 지원되면 올리고 아니면 조용히 낮은 쪽으로 떨어진다.
+ */
 async function requestCameraStream() {
   try {
     return await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' },
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30 },
+      },
       audio: false,
     });
   } catch (error) {
     if (!error || error.name !== 'OverconstrainedError') throw error;
     return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
   }
+}
+
+/**
+ * 지원하는 기기에서 연속 자동초점을 켠다.
+ *
+ * 스캐너는 근거리 피사체를 계속 겨누는 사용 패턴이라, 단발 초점이면 손이 조금만 움직여도
+ * 흐려진 채로 머문다. 능력 조회(`getCapabilities`)로 지원 여부를 먼저 확인하고, 실패는
+ * 전부 삼킨다 — 초점 모드는 있으면 좋은 것이지 없다고 스캐너를 막을 이유가 없다.
+ */
+function tryContinuousFocus(stream) {
+  const track = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+  if (!track || typeof track.applyConstraints !== 'function') return;
+
+  let capabilities = null;
+  try {
+    capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : null;
+  } catch {
+    return;
+  }
+  if (!capabilities || !Array.isArray(capabilities.focusMode) ||
+      !capabilities.focusMode.includes('continuous')) {
+    return;
+  }
+
+  track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {
+    // 지원한다고 보고했어도 적용이 거부될 수 있다 — 초점은 부가 기능이므로 무시한다.
+  });
 }
 
 function imageDataFromSource(source, width, height) {
@@ -334,6 +388,7 @@ async function startCamera(options) {
     }
 
     cameraStream = stream;
+    tryContinuousFocus(stream);
     cameraVideo.srcObject = stream;
     await waitForVideoMetadata(cameraVideo);
     await cameraVideo.play();
