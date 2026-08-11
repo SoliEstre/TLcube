@@ -47,6 +47,8 @@ import {
   findOAnchorHypotheses,
 } from './anchor-detect.js';
 import { detectBullseyes, refineBullseye } from './bullseye-detect.js';
+import { detectCellFinders } from './cell-finder-detect.js';
+import { FINDER_PATTERNS } from '../finder-patterns.js';
 import { classifyFamily, scoreCubeTiling } from './family.js';
 import {
   UNVERIFIED_CUBE_DETECTION,
@@ -88,6 +90,7 @@ export const UNVERIFIED_BOOTSTRAP_CALIBRATION = Object.freeze({
   finderMaxRefinedProposals: 1,
   finderClutterMaxRefinedProposals: 1,
   finderProjectiveSeeds: false,
+  cellFinderMaxDimension: 480,
   localWarpSearchRadiusCells: 0.10,
   localWarpSearchStepCells: 0.05,
 });
@@ -639,6 +642,53 @@ function findersFromEvidence(familyEvidence) {
   return [];
 }
 
+function discoverCellFinders(luma, fullOutline, options, cfg) {
+  if (options.cellFinder === false || options._disableCellFinder === true) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      stage: 'cell-finder-disabled',
+      cause: 'disabled-by-caller',
+    });
+  }
+  const overrides = options.cellFinder && typeof options.cellFinder === 'object'
+    ? options.cellFinder
+    : {};
+  const maxDimension = Number.isFinite(options.cellFinderMaxDimension)
+    ? options.cellFinderMaxDimension
+    : cfg.cellFinderMaxDimension;
+  const stableBounds = fullOutline && !fullOutline.touchesBorder
+    && fullOutline.borderDisagreement <= fullOutline.threshold
+    ? fullOutline.bounds
+    : null;
+  const reduced = downsampleLuma(luma, maxDimension, stableBounds);
+  const reducedOutline = outlineEvidence(reduced.luma, cfg);
+  const centerSeeds = [];
+  if (reducedOutline && !reducedOutline.touchesBorder) {
+    centerSeeds.push({
+      x: (reducedOutline.bounds.minX + reducedOutline.bounds.maxX) / 2,
+      y: (reducedOutline.bounds.minY + reducedOutline.bounds.maxY) / 2,
+    });
+  }
+  const radiusSeeds = finderRadiusSeeds(reduced.luma, reducedOutline);
+  const cellSizeSeeds = radiusSeeds
+    ? radiusSeeds.map((radius) => radius / Math.sqrt(13))
+    : undefined;
+  const detected = detectCellFinders(reduced.luma, FINDER_PATTERNS, {
+    centerSeeds,
+    cellSizeSeeds,
+    ...overrides,
+  });
+  if (!detected.ok) return detected;
+  const finders = detected.candidates
+    .map((finder) => liftFinder(finder, reduced.factor))
+    .filter(Boolean);
+  return finders.length > 0 ? ok({
+    finders,
+    source: reduced.factor === 1 ? 'cell-mask-detected' : 'cell-mask-detected-downsampled',
+    downsampleFactor: reduced.factor,
+    cellFinderDiagnostics: detected.diagnostics,
+  }) : fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-lift' });
+}
+
 function discoverFinders(luma, familyEvidence, options, cfg) {
   const supplied = findersFromEvidence(familyEvidence);
   if (supplied.length > 0) return ok({ finders: supplied, source: 'supplied' });
@@ -705,6 +755,10 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     reducedOutline = outlineEvidence(reduced.luma, cfg);
     finderOptions = makeFinderOptions(false, null);
     detected = detectBullseyes(reduced.luma, finderOptions);
+  }
+  if (!detected.ok) {
+    const cellDetected = discoverCellFinders(luma, fullOutline, options, cfg);
+    if (cellDetected.ok) return cellDetected;
   }
   if (!detected.ok
     && !callerFixedScaleSearch
@@ -1076,6 +1130,32 @@ function weakAnchorHypotheses(luma, finder, family, options) {
   return hypotheses;
 }
 
+function cellFinderHypotheses(luma, finder, family) {
+  const H = finderTransform(finder);
+  if (!H || finder.finderKind !== 'cell-mask' || !['hex', 'tri'].includes(family)) return [];
+  return uniqueDimensions(family).map((k) => ({
+    family,
+    k,
+    orientation: finder.orientation,
+    rotationDegrees: finder.rotationDegrees,
+    centerQr: false,
+    H,
+    canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+    geometryResidual: Number.isFinite(finder.geometryResidual) ? finder.geometryResidual : 0,
+    anchorMargin: finder.orientationMargin,
+    orientationEvidence: {
+      source: 'finder-pattern',
+      patternId: finder.patternId,
+      margin: finder.orientationMargin,
+    },
+    finder,
+    source: 'cell-finder',
+    hypothesisId: family + '-' + k + '-cell-' + finder.patternId
+      + '-' + (finder.geometryMode || 'affine'),
+    luma,
+  }));
+}
+
 export function directAnchorHypotheses(luma, finder, family, options) {
   const dimensions = uniqueDimensions(family);
   const detector = family === 'tri' ? findAAnchorHypotheses : findOAnchorHypotheses;
@@ -1152,6 +1232,23 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
   }
   if (familyEvidence && typeof familyEvidence.family === 'string') {
     return ok({ families: [familyEvidence.family], classification: familyEvidence });
+  }
+
+  const cellFinders = finders.filter((finder) => finder && finder.finderKind === 'cell-mask');
+  if (cellFinders.length > 0) {
+    return ok({
+      families: ['hex', 'tri'],
+      classification: ok({
+        family: 'cell-mask',
+        hypotheses: cellFinders.map((finder) => ({
+          patternId: finder.patternId,
+          orientation: finder.orientation,
+          orientationMargin: finder.orientationMargin,
+        })),
+        diagnostics: { orientationSource: 'finder-pattern' },
+      }),
+      fallback: 'cell-mask-body-validated',
+    });
   }
 
   const classified = classifyFamily(
@@ -1823,7 +1920,17 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
       const allowWeakAnchorFallback = options.allowWeakAnchorFallback === true
         || (options.allowWeakAnchorFallback !== false
           && (!outline || outline.touchesBorder));
-      const direct = directAnchorHypotheses(luma, finder, family, {
+      const patternHypotheses = cellFinderHypotheses(luma, finder, family);
+      const direct = patternHypotheses.length > 0 ? {
+        hypotheses: patternHypotheses,
+        strictCount: patternHypotheses.length,
+        fallbackCount: 0,
+        diagnostics: {
+          mode: 'finder-pattern',
+          orientationSource: 'finder-pattern',
+          patternId: finder.patternId,
+        },
+      } : directAnchorHypotheses(luma, finder, family, {
         ...options,
         allowWeakAnchorFallback,
       });
