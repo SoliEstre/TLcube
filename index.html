@@ -283,8 +283,12 @@
   .finder-gate-badge.rejected { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); font-weight: 700; }
   .finder-score-rows { display: grid; gap: 8px; }
   .finder-score-row {
-    display: grid; grid-template-columns: minmax(118px, .95fr) minmax(124px, 1.3fr) 40px;
-    align-items: center; gap: 8px;
+    /* ⚠ minmax 의 «최소» 를 0 으로 둔다. 118+124+40+gap = 298px 를 바닥으로 깔면
+       카드가 그보다 좁을 때 행이 카드 밖으로 삐져나온다(실측). 이건 뷰포트가 아니라
+       «컨테이너» 폭 문제라 media query 로는 못 막는다 — 사이드바·패딩 때문에
+       뷰포트가 420px 를 넘어도 카드 안쪽은 298px 미만일 수 있다. */
+    display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.3fr) 40px;
+    align-items: center; gap: 8px; min-width: 0;
   }
   .finder-score-axis { display: grid; gap: 2px; min-width: 0; font-size: 10px; line-height: 1.25; }
   .finder-score-evidence.measured { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 42%, var(--line)); }
@@ -529,7 +533,7 @@
   <div class="panel">
 
     <!-- ══════ 공용: 콘텐츠 (일반·고급 공통 — 사용자 지시 2026-08-09 "고급에도 일반 선택지 전부") ══════ -->
-    <div id="sharedContent">
+    <div id="sharedContent" data-state-keys="contentTab wifiSecurity">
       <label data-i18n="g031">콘텐츠</label>
       <div class="card-row" id="contentTabs">
         <!-- URL 이 맨 앞 + 진입 기본 선택 (사용자 지시 2026-08-09) -->
@@ -611,7 +615,7 @@
     </div>
 
     <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
-    <div id="panelNormal">
+    <div id="panelNormal" data-state-keys="type preset versionO versionA versionY eccLevel customHue">
       <label data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 선택 = Y (사용자 지시 2026-08-09). -->
       <div class="card-row" id="typeCards">
@@ -686,7 +690,7 @@
     </div>
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
-    <div id="panelAdvanced" style="display:none">
+    <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone faceGain qrText qrCornerToo">
       <label for="codeType" data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
       <select id="codeType">
@@ -708,16 +712,18 @@
         <div id="versionWrapY" style="display:none">
           <label for="versionY" data-i18n="g049">버전</label>
           <select id="versionY">
+            <option value="auto" selected data-i18n="g050">자동 (최소)</option>
             <option value="0">Y0 (n=13 · 31 B)</option>
-            <option value="1" selected>Y1 (n=21 · 98 B)</option>
+            <option value="1">Y1 (n=21 · 98 B)</option>
             <option value="2">Y2 (n=25 · 141 B)</option>
           </select>
         </div>
         <div id="versionWrapA" style="display:none">
           <label for="versionA" data-i18n="g049">버전</label>
           <select id="versionA">
+            <option value="auto" selected data-i18n="g050">자동 (최소)</option>
             <option value="0">A0 (k=6 · 31 B)</option>
-            <option value="1" selected>A1 (k=8 · 62 B)</option>
+            <option value="1">A1 (k=8 · 62 B)</option>
             <option value="2">A2 (k=10 · 101 B)</option>
           </select>
         </div>
@@ -758,7 +764,7 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls">
+    <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode">
       <!-- 사용자 지시 2026-08-09: 배경 3택(투명/흰색/검정), 기본 투명.
            투명은 미리보기에서 포토샵식 체커보드로 표시한다(테마별 색). -->
       <label data-i18n="g059">배경</label>
@@ -1603,9 +1609,13 @@ import {
   FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
 } from './src/finder-patterns.js';
 import {
-  CENTER_QR_FINDER_PATTERN_ID, DEFAULT_OUTER_QR_POSITION, commitFinderQrTransition,
-  normalizeFinderQrState, selectFinderPattern, selectQrPosition,
+  CENTER_QR_FINDER_PATTERN_ID, commitFinderQrTransition,
+  selectFinderPattern, selectQrPosition,
 } from './src/finder-selection.js';
+import {
+  createGeneratorState, resolutionTierForVersion, transitionGeneratorMode,
+  versionForResolutionTier, versionStateKey,
+} from './src/generator-state.js';
 import { FACES, facePolygon } from './src/hexgrid.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
@@ -1672,34 +1682,9 @@ const els = {
   exportPng: $('exportPng'), exportSvg: $('exportSvg'),
 };
 
-/** 일반 모드 전용 in-memory 상태 — localStorage 미사용(결정성·단순성, 새로고침 시 초기화). */
+/** 생성기 선택의 단일 상태 — 모드는 이 객체의 노출 범위만 바꾼다. */
 let mode = 'normal';
-// qrPosition: 'inner' | 'TL' | 'TR' | 'BL' | 'BR' | 'none' — 기본 'TL'(좌상, 사용자 지시 2026-08-09).
-const normalState = {
-  // type 기본 = 'Y' (용량 최대·간판 형태 — 사용자 지시 2026-08-09. 카드 배치는 용량 순 O/A/Y).
-  // eccTier·resTier 기본 = 'auto' (자동 조합: 해상도 먼저 ↑, 최대에서 용량 단계 ↓ —
-  // 사용자 지시 2026-08-09).
-  contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
-  finderPatternId: DEFAULT_FINDER_PATTERN_ID,
-  previousFinderPatternId: DEFAULT_FINDER_PATTERN_ID,
-  previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
-  eccTier: 'auto', resTier: 'auto', customHue: 210,
-  // bgMode 기본 = 'transparent' (사용자 지시 2026-08-09). 색 스타일과 직교 축이다.
-  bgMode: 'transparent',
-  // quietMode 기본 = 'auto' — 'auto'|'none'|'white'|'black'|'contrast'.
-  quietMode: 'auto',
-};
-
-/** 해상도 티어 → 버전 (타입별). 저 = 최소 버전(원거리) · 고 = 최대 버전(대용량).
- *  전 타입 3단 (ADR 0006 비준 2026-08-09 — 소형판 Y0(n=13)·A0(k=6) 신설로 완성).
- *  Y·A 재라벨: 기존 최저(Y1/A1)가 절대 밀도상 중거리급이라 '중'으로 승격됐고,
- *  '저'가 진짜 하위 티어다. 절대 밀도(ADR 0006 D8)로는 광고판급이 V1 22.5 와
- *  Y0 22.5 둘뿐이고 A0 는 32.9(중거리급 하한)라 — 티어 라벨은 **타입 내 상대**다. */
-const RES_TIER_VERSIONS = {
-  O: { low: 1, mid: 2, high: 3 },
-  A: { low: 0, mid: 1, high: 2 },
-  Y: { low: 0, mid: 1, high: 2 },
-};
+const generatorState = createGeneratorState();
 
 /** 배경 3택 → scene.background 값. null 은 투명(래스터는 알파, SVG 는 배경 요소 부재).
  *  ⚠ 이 두 상수는 `syncStyleUi()` 의 최초 호출(→ syncBgModeUi)보다 위에 있어야 한다 — TDZ. */
@@ -1872,7 +1857,7 @@ function makeCustomPalette(hue) {
 /** 프리셋/커스텀 공용 Δmin (info 표기용) — presetDeltaMin 은 등록 프리셋 전용. */
 function deltaMinFor(name) {
   if (name !== 'custom') return presetDeltaMin(name);
-  const ys = makeCustomPalette(normalState.customHue).levels.map(relativeLuminance);
+  const ys = makeCustomPalette(generatorState.customHue).levels.map(relativeLuminance);
   return Math.min(ys[1] - ys[0], ys[2] - ys[1]);
 }
 
@@ -1895,7 +1880,7 @@ for (const name of Object.keys(PRESETS)) {
   els.preset.appendChild(opt);
 }
 
-els.qrUrl.value = TL_READER_URL;
+els.qrUrl.value = generatorState.qrText;
 
 function rgbCss(c) { return `rgb(${c.r},${c.g},${c.b})`; }
 
@@ -1922,7 +1907,7 @@ for (const name of Object.keys(PRESETS)) {
   card.appendChild(bgStrip);
   card.appendChild(labelEl);
   card.addEventListener('click', () => {
-    normalState.preset = name;
+    generatorState.preset = name;
     syncStyleUi();
     schedule();
   });
@@ -1948,13 +1933,14 @@ for (let i = 0; i < 3; i += 1) {
 }
 
 function syncStyleUi() {
+  els.preset.value = generatorState.preset;
   for (const c of els.presetSwatches.children) {
-    c.classList.toggle('active', c.dataset.preset === normalState.preset);
+    c.classList.toggle('active', c.dataset.preset === generatorState.preset);
   }
-  els.customStyleCard.classList.toggle('active', normalState.preset === 'custom');
-  els.hueRow.style.display = normalState.preset === 'custom' ? '' : 'none';
-  els.hueRowAdv.style.display = els.preset.value === 'custom' ? '' : 'none';
-  const hue = normalState.customHue;
+  els.customStyleCard.classList.toggle('active', generatorState.preset === 'custom');
+  els.hueRow.style.display = generatorState.preset === 'custom' ? '' : 'none';
+  els.hueRowAdv.style.display = generatorState.preset === 'custom' ? '' : 'none';
+  const hue = generatorState.customHue;
   const p = makeCustomPalette(hue);
   const chips = els.customChips.children;
   for (let i = 0; i < 3; i += 1) chips[i].style.background = rgbCss(p.levels[i]);
@@ -1968,18 +1954,22 @@ function syncStyleUi() {
 }
 
 els.customStyleCard.addEventListener('click', () => {
-  normalState.preset = 'custom';
+  generatorState.preset = 'custom';
   syncStyleUi();
   schedule();
 });
 for (const bar of [els.hueBar, els.hueBarAdv]) {
   bar.addEventListener('input', () => {
-    normalState.customHue = Number(bar.value);
+    generatorState.customHue = Number(bar.value);
     syncStyleUi();
     schedule();
   });
 }
-els.preset.addEventListener('change', syncStyleUi);
+els.preset.addEventListener('change', () => {
+  generatorState.preset = els.preset.value;
+  syncStyleUi();
+  schedule();
+});
 syncStyleUi();
 
 // 카드 토글 UI 키보드 접근성 — 클릭 핸들러는 위에서 이미 붙었으니 Enter/Space 로
@@ -2004,9 +1994,9 @@ for (const card of document.querySelectorAll('.toggle-card')) {
  * 직교 축이다.
  */
 function paletteOf(name, faceGains) {
-  const p = name === 'custom' ? makeCustomPalette(normalState.customHue) : getPreset(name);
+  const p = name === 'custom' ? makeCustomPalette(generatorState.customHue) : getPreset(name);
   return {
-    background: BG_MODE_COLORS[normalState.bgMode], levels: p.levels,
+    background: BG_MODE_COLORS[generatorState.bgMode], levels: p.levels,
     bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
     faceGains: faceGains === undefined ? DEFAULT_FACE_GAINS : faceGains,
   };
@@ -2025,7 +2015,7 @@ function drawScene(scene, canvas, ppu) {
   ctx.clearRect(0, 0, scene.width, scene.height);
   // ⚠ .checker 는 **view 캔버스 자신의 CSS 배경**이라 backdrop 레이어보다 위에 깔린다.
   //    배치 미리보기 이미지가 올라와 있으면 체커를 꺼야 그 이미지가 보인다.
-  const backdropShowing = normalState.bgMode === 'transparent' && backdrop.bitmap !== null;
+  const backdropShowing = generatorState.bgMode === 'transparent' && backdrop.bitmap !== null;
   canvas.classList.toggle('checker', scene.background === null && !backdropShowing);
   if (scene.background !== null) {
     ctx.fillStyle = rgbCss(scene.background);
@@ -2053,13 +2043,19 @@ function drawScene(scene, canvas, ppu) {
 // ── 모드 전환 ───────────────────────────────────────────────────────────
 
 function setMode(next) {
-  mode = next;
+  // 모드는 오직 노출만 바꾼다. generatorState를 DOM에서 읽어 덮거나 정규화하지 않는다.
+  mode = transitionGeneratorMode(next);
   els.modeNormalBtn.classList.toggle('active', mode === 'normal');
   els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
   els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
   els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
-  syncBgModeUi(); // 분리 수치는 모드별 색 스타일 소스를 따른다
-  commitFinderQrUi(normalState, currentType());
+  syncTypeUi();
+  syncStyleUi();
+  syncResTierUi();
+  syncBgModeUi();
+  renderQrPositionUi();
+  renderFinderUi();
+  syncFaceGainLabel();
 }
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
 els.modeAdvancedBtn.addEventListener('click', () => setMode('advanced'));
@@ -2068,15 +2064,15 @@ els.modeAdvancedBtn.addEventListener('click', () => setMode('advanced'));
 
 function syncContentTabUi() {
   for (const card of els.contentTabs.children) {
-    card.classList.toggle('active', card.dataset.tab === normalState.contentTab);
+    card.classList.toggle('active', card.dataset.tab === generatorState.contentTab);
   }
   for (const name of ['text', 'url', 'wifi', 'card']) {
-    $('tab' + name[0].toUpperCase() + name.slice(1)).classList.toggle('active', name === normalState.contentTab);
+    $('tab' + name[0].toUpperCase() + name.slice(1)).classList.toggle('active', name === generatorState.contentTab);
   }
 }
 for (const card of els.contentTabs.children) {
   card.addEventListener('click', () => {
-    normalState.contentTab = card.dataset.tab;
+    generatorState.contentTab = card.dataset.tab;
     syncContentTabUi();
     schedule();
   });
@@ -2085,7 +2081,7 @@ syncContentTabUi();
 
 for (const btn of els.wifiSecButtons.children) {
   btn.addEventListener('click', () => {
-    normalState.wifiSecurity = btn.dataset.sec;
+    generatorState.wifiSecurity = btn.dataset.sec;
     for (const b of els.wifiSecButtons.children) b.classList.toggle('active', b === btn);
     schedule();
   });
@@ -2106,7 +2102,7 @@ function updateOverflowHighlight(keptPayload) {
   for (const t of targets) {
     const raw = t.el.value;
     let cut = null; // raw 코드포인트 기준 절단 시작 인덱스
-    if (keptPayload !== null && normalState.contentTab === t.tab) {
+    if (keptPayload !== null && generatorState.contentTab === t.tab) {
       const rawCps = Array.from(raw);
       const payloadCps = Array.from(t.payloadOf(raw));
       const keptCps = Array.from(keptPayload);
@@ -2139,14 +2135,13 @@ for (const [el, backdrop] of [
 
 // ── 일반 모드: 타입 카드 ────────────────────────────────────────────────
 
-/** 현재 활성 타입 — 일반은 카드 상태, 고급은 select (공용 컨트롤이 양쪽을 섬긴다). */
+/** 현재 타입과 색 스타일은 모드와 무관하게 단일 상태에서 읽는다. */
 function currentType() {
-  return mode === 'normal' ? normalState.type : els.codeType.value;
+  return generatorState.type;
 }
 
-/** 현재 활성 색 스타일 — currentType 과 같은 규약 (일반 카드 / 고급 select). */
 function currentPresetName() {
-  return mode === 'normal' ? normalState.preset : els.preset.value;
+  return generatorState.preset;
 }
 
 const FINDER_LABEL_KEYS = Object.freeze({
@@ -2302,7 +2297,7 @@ function makeFinderCard(id, pattern) {
   const activate = () => {
     const type = currentType();
     commitFinderQrUi(
-      selectFinderPattern(normalState, id, type, DEFAULT_FINDER_PATTERN_ID), type,
+      selectFinderPattern(generatorState, id, type, DEFAULT_FINDER_PATTERN_ID), type,
     );
   };
   card.addEventListener('click', activate);
@@ -2348,7 +2343,7 @@ function renderFinderUi() {
     heading.textContent = t(heading.dataset.finderFamilyKey);
   }
   for (const card of document.querySelectorAll('[data-finder-id]')) {
-    const active = card.dataset.finderId === normalState.finderPatternId;
+    const active = card.dataset.finderId === generatorState.finderPatternId;
     card.classList.toggle('active', active);
     card.setAttribute('aria-pressed', String(active));
     const label = card.querySelector('[data-finder-label-key]');
@@ -2356,12 +2351,12 @@ function renderFinderUi() {
   }
 
   const selectedPattern = FINDER_PATTERNS.find(
-    (pattern) => pattern.id === normalState.finderPatternId,
+    (pattern) => pattern.id === generatorState.finderPatternId,
   );
-  const scoreRecord = selectedPattern || FINDER_BASELINE_SCORES[normalState.finderPatternId];
-  if (!scoreRecord) throw new Error('finder score record missing: ' + normalState.finderPatternId);
-  const selectedLabelKey = FINDER_LABEL_KEYS[normalState.finderPatternId];
-  if (!selectedLabelKey) throw new Error('finder label key missing: ' + normalState.finderPatternId);
+  const scoreRecord = selectedPattern || FINDER_BASELINE_SCORES[generatorState.finderPatternId];
+  if (!scoreRecord) throw new Error('finder score record missing: ' + generatorState.finderPatternId);
+  const selectedLabelKey = FINDER_LABEL_KEYS[generatorState.finderPatternId];
+  if (!selectedLabelKey) throw new Error('finder label key missing: ' + generatorState.finderPatternId);
   const gateKey = scoreRecord.centerBalanceGatePassed ? 'g493' : 'g494';
   const gateClass = scoreRecord.centerBalanceGatePassed ? 'passed' : 'rejected';
   els.finderScorePanel.classList.toggle('gate-rejected', !scoreRecord.centerBalanceGatePassed);
@@ -2372,7 +2367,7 @@ function renderFinderUi() {
   els.finderCenterGate.className = 'finder-gate-badge ' + gateClass;
   els.finderCenterGate.textContent = t(gateKey);
 
-  const centerQrSelected = normalState.finderPatternId === CENTER_QR_FINDER_PATTERN_ID;
+  const centerQrSelected = generatorState.finderPatternId === CENTER_QR_FINDER_PATTERN_ID;
   const centerQrScores = FINDER_BASELINE_SCORES[CENTER_QR_FINDER_PATTERN_ID].scores;
   for (let axisIndex = 0; axisIndex < FINDER_SCORE_AXES.length; axisIndex += 1) {
     const axis = FINDER_SCORE_AXES[axisIndex];
@@ -2401,8 +2396,8 @@ function renderFinderUi() {
     row.querySelector('.finder-score-value').textContent = scoreText;
   }
 
-  const measuredRate = FINDER_MEASURED_DECODE_RATES[normalState.finderPatternId];
-  const baselineEvidence = normalState.finderPatternId === LEGACY_FINDER_PATTERN_ID
+  const measuredRate = FINDER_MEASURED_DECODE_RATES[generatorState.finderPatternId];
+  const baselineEvidence = generatorState.finderPatternId === LEGACY_FINDER_PATTERN_ID
     ? tf('g498', { rotation: scoreRecord.scores.rotation.toFixed(2), rate: measuredRate })
     : (measuredRate === undefined ? '' : tf('g499', { rate: measuredRate }));
   els.finderBaselineEvidence.textContent = baselineEvidence;
@@ -2419,18 +2414,17 @@ function renderQrPositionUi() {
   const isY = currentType() === 'Y';
   els.qrPosInner.title = isY ? t('g406') : t('g407');
   for (const card of els.qrPositionCards.children) {
-    card.classList.toggle('active', card.dataset.pos === normalState.qrPosition);
+    card.classList.toggle('active', card.dataset.pos === generatorState.qrPosition);
   }
-  const inner = normalState.qrPosition === 'inner';
+  const inner = generatorState.qrPosition === 'inner';
+  els.qrCornerToo.checked = generatorState.qrCornerToo;
   els.qrCenterHint.style.display = inner && !isY ? '' : 'none';
   els.cornerTooRow.style.display = mode === 'advanced' && inner && !isY ? '' : 'none';
   els.decorSection.style.display = inner && isY ? '' : 'none';
 }
 
 function syncFinderQrUi() {
-  Object.assign(normalState, normalizeFinderQrState(
-    normalState, currentType(), DEFAULT_FINDER_PATTERN_ID,
-  ));
+  // 언어·모드 재표시는 상태를 정규화하지 않는다. 사용자 선택 이벤트의 commit만 쓴다.
   renderQrPositionUi();
   renderFinderUi();
 }
@@ -2438,8 +2432,7 @@ function syncFinderQrUi() {
 for (const card of els.typeCards.children) {
   card.addEventListener('click', () => {
     const type = card.dataset.type;
-    for (const c of els.typeCards.children) c.classList.toggle('active', c === card);
-    commitFinderQrUi({ ...normalState, type }, type);
+    commitFinderQrUi({ ...generatorState, type }, type);
   });
 }
 
@@ -2449,7 +2442,7 @@ for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     const type = currentType();
     commitFinderQrUi(
-      selectQrPosition(normalState, card.dataset.pos, type, DEFAULT_FINDER_PATTERN_ID), type,
+      selectQrPosition(generatorState, card.dataset.pos, type, DEFAULT_FINDER_PATTERN_ID), type,
     );
   });
 }
@@ -2457,9 +2450,10 @@ syncFinderQrUi();
 
 function commitFinderQrUi(nextState, type = currentType()) {
   commitFinderQrTransition(
-    normalState, nextState, type, DEFAULT_FINDER_PATTERN_ID, {
+    generatorState, nextState, type, DEFAULT_FINDER_PATTERN_ID, {
       cancelPendingRender: cancelScheduledRender,
       render: () => {
+        syncTypeUi();
         renderQrPositionUi();
         renderFinderUi();
         syncResTierUi();
@@ -2474,8 +2468,8 @@ function commitFinderQrUi(nextState, type = currentType()) {
 
 for (const card of els.eccTierCards.children) {
   card.addEventListener('click', () => {
-    normalState.eccTier = card.dataset.tier;
-    for (const c of els.eccTierCards.children) c.classList.toggle('active', c === card);
+    generatorState.eccLevel = card.dataset.tier;
+    syncTypeUi();
     schedule();
   });
 }
@@ -2485,14 +2479,17 @@ for (const card of els.eccTierCards.children) {
 function syncResTierUi() {
   const type = currentType();
   const isO = type === 'O';
-  const windowLocked = type === 'Y' && normalState.qrPosition === 'inner';
+  const windowLocked = type === 'Y' && generatorState.qrPosition === 'inner';
   const isOff = (res) => windowLocked && (res === 'low' || res === 'mid');
-  // 1패스: 비활성 확정 + 선택이 비활성으로 밀렸으면 자동 복귀 — 그 뒤에 활성 표시.
-  if (isOff(normalState.resTier)) normalState.resTier = 'auto';
+  const selectedTier = resolutionTierForVersion(
+    type, generatorState[versionStateKey(type)],
+  );
+  // Y 안쪽은 렌더에서 Y2를 강제하지만 저장값은 바꾸지 않는다. 윈도를 벗어나면
+  // 기존 auto/저/중/고 선택이 그대로 복원되어야 하기 때문이다.
   for (const card of els.resTierCards.children) {
     const res = card.dataset.res;
     card.classList.toggle('disabled', isOff(res));
-    card.classList.toggle('active', res === normalState.resTier);
+    card.classList.toggle('active', res === selectedTier);
   }
   els.resTierHint.textContent = windowLocked
     ? t('g408')
@@ -2505,7 +2502,10 @@ function syncResTierUi() {
 
 for (const card of els.resTierCards.children) {
   card.addEventListener('click', () => {
-    normalState.resTier = card.dataset.res;
+    if (card.classList.contains('disabled')) return;
+    const type = currentType();
+    generatorState[versionStateKey(type)] = versionForResolutionTier(type, card.dataset.res);
+    syncTypeUi();
     syncResTierUi();
     schedule();
   });
@@ -2525,7 +2525,7 @@ function bgSeparationFor(bgMode) {
   const bgY = relativeLuminance(color);
   const name = currentPresetName();
   const levels = (name === 'custom'
-    ? makeCustomPalette(normalState.customHue)
+    ? makeCustomPalette(generatorState.customHue)
     : getPreset(name)).levels;
   let min = Infinity;
   for (const lvl of levels) min = Math.min(min, Math.abs(relativeLuminance(lvl) - bgY));
@@ -2534,14 +2534,14 @@ function bgSeparationFor(bgMode) {
 
 function syncBgModeUi() {
   for (const card of els.bgModeCards.children) {
-    card.classList.toggle('active', card.dataset.bg === normalState.bgMode);
+    card.classList.toggle('active', card.dataset.bg === generatorState.bgMode);
   }
-  if (normalState.bgMode === 'transparent') {
+  if (generatorState.bgMode === 'transparent') {
     els.bgModeHint.textContent = t('g412');
     els.bgModeHint.style.color = '';
     return;
   }
-  const sep = bgSeparationFor(normalState.bgMode);
+  const sep = bgSeparationFor(generatorState.bgMode);
   const ok = sep >= BG_SEPARATION_MIN;
   els.bgModeHint.textContent = ok
     ? tf('g432', { sep: sep.toFixed(3), min: BG_SEPARATION_MIN })
@@ -2551,7 +2551,7 @@ function syncBgModeUi() {
 
 for (const card of els.bgModeCards.children) {
   card.addEventListener('click', () => {
-    normalState.bgMode = card.dataset.bg;
+    generatorState.bgMode = card.dataset.bg;
     syncBgModeUi();
     syncQuietModeUi();
     syncBackdropUi();
@@ -2572,7 +2572,7 @@ const QUIET_BLACK = { r: 0, g: 0, b: 0 };
 /** 현재 색 스타일의 셀 레벨 3색. */
 function currentLevels() {
   const name = currentPresetName();
-  return (name === 'custom' ? makeCustomPalette(normalState.customHue) : getPreset(name)).levels;
+  return (name === 'custom' ? makeCustomPalette(generatorState.customHue) : getPreset(name)).levels;
 }
 
 /** 후보색과 셀 레벨들 사이의 최소 상대휘도 분리. */
@@ -2599,13 +2599,13 @@ function highContrastQuietColor() {
 
 /** 현재 설정의 안전영역 색 — null 이면 안전영역을 안 넣는다. */
 function resolveQuietColor() {
-  switch (normalState.quietMode) {
+  switch (generatorState.quietMode) {
     case 'none': return null;
     case 'white': return QUIET_WHITE;
     case 'black': return QUIET_BLACK;
     case 'contrast': return highContrastQuietColor();
     default: // 'auto'
-      return normalState.bgMode === 'transparent' ? highContrastQuietColor() : null;
+      return generatorState.bgMode === 'transparent' ? highContrastQuietColor() : null;
   }
 }
 
@@ -2627,18 +2627,18 @@ function withQuietZone(scene) {
 
 function syncQuietModeUi() {
   for (const card of els.quietModeCards.children) {
-    card.classList.toggle('active', card.dataset.quiet === normalState.quietMode);
+    card.classList.toggle('active', card.dataset.quiet === generatorState.quietMode);
   }
   const color = resolveQuietColor();
   if (!color) {
-    els.quietModeHint.textContent = normalState.quietMode === 'none'
+    els.quietModeHint.textContent = generatorState.quietMode === 'none'
       ? t('g413')
       : t('g414');
     return;
   }
   const isWhite = color.r === 255;
   const sep = separationFromLevels(color);
-  const picked = normalState.quietMode === 'white' || normalState.quietMode === 'black'
+  const picked = generatorState.quietMode === 'white' || generatorState.quietMode === 'black'
     ? '' : tf('g434', { color: isWhite ? t('g415') : t('g416') });
   els.quietModeHint.innerHTML = tf('g435', { cells: QUIET_MARGIN_CELLS, picked })
     + t('g417')
@@ -2648,7 +2648,7 @@ function syncQuietModeUi() {
 
 for (const card of els.quietModeCards.children) {
   card.addEventListener('click', () => {
-    normalState.quietMode = card.dataset.quiet;
+    generatorState.quietMode = card.dataset.quiet;
     syncQuietModeUi();
     schedule();
   });
@@ -2665,7 +2665,7 @@ syncQuietModeUi();
 // 그래서 합성 없이 두 ImageData 를 같은 인덱스로 훑으면 된다.
 
 function syncBackdropUi() {
-  const on = normalState.bgMode === 'transparent';
+  const on = generatorState.bgMode === 'transparent';
   els.backdropSection.style.display = on ? '' : 'none';
   const has = backdrop.bitmap !== null;
   els.backdropClear.style.display = has ? '' : 'none';
@@ -2752,7 +2752,7 @@ function measureBackdrop() {
 /** drawScene 직후에 호출 — 배경 레이어 크기·그리기·판정을 한 번에 맞춘다. */
 function syncBackdropLayer() {
   syncBackdropUi();
-  if (normalState.bgMode !== 'transparent' || !backdrop.bitmap) {
+  if (generatorState.bgMode !== 'transparent' || !backdrop.bitmap) {
     lastBackdropLuminance = null;
     return;
   }
@@ -2805,7 +2805,7 @@ els.backdropFit.addEventListener('click', () => { fitBackdrop(); drawBackdrop();
   let dragging = false;
   let lastX = 0;
   let lastY = 0;
-  const active = () => normalState.bgMode === 'transparent' && backdrop.bitmap !== null;
+  const active = () => generatorState.bgMode === 'transparent' && backdrop.bitmap !== null;
   /** CSS 픽셀 → 캔버스 픽셀 배율 (미리보기가 축소돼 있어도 이동량이 어긋나지 않게). */
   const ratio = () => {
     const rect = els.canvas.getBoundingClientRect();
@@ -3018,9 +3018,23 @@ function decorSvgFragment(scene, faceGains) {
 // ── 고급 모드: 옵션 패널 표시 전환 (QR 폴백 선택은 공용 6택 카드가 담당) ──
 
 function syncTypeUi() {
-  const type = els.codeType.value;
+  const type = generatorState.type;
   const isY = type === 'Y';
   const isA = type === 'A';
+  els.codeType.value = type;
+  els.versionO.value = String(generatorState.versionO);
+  els.versionY.value = String(generatorState.versionY);
+  els.versionA.value = String(generatorState.versionA);
+  els.ecc.value = generatorState.eccLevel;
+  els.tone.value = String(generatorState.tone);
+  els.faceGain.value = String(generatorState.faceGain);
+  els.qrUrl.value = generatorState.qrText;
+  for (const card of els.typeCards.children) {
+    card.classList.toggle('active', card.dataset.type === type);
+  }
+  for (const card of els.eccTierCards.children) {
+    card.classList.toggle('active', card.dataset.tier === generatorState.eccLevel);
+  }
   els.versionWrapO.style.display = (isY || isA) ? 'none' : '';
   els.versionWrapY.style.display = isY ? '' : 'none';
   els.versionWrapA.style.display = isA ? '' : 'none';
@@ -3028,21 +3042,53 @@ function syncTypeUi() {
 }
 
 els.codeType.addEventListener('change', () => {
+  const type = els.codeType.value;
+  commitFinderQrUi({ ...generatorState, type }, type);
+});
+for (const [select, key] of [
+  [els.versionO, 'versionO'], [els.versionY, 'versionY'], [els.versionA, 'versionA'],
+]) {
+  select.addEventListener('change', () => {
+    generatorState[key] = select.value === 'auto' ? 'auto' : Number(select.value);
+    syncResTierUi();
+    schedule();
+  });
+}
+els.ecc.addEventListener('change', () => {
+  generatorState.eccLevel = els.ecc.value;
   syncTypeUi();
-  commitFinderQrUi(normalState, currentType());
+  schedule();
+});
+els.tone.addEventListener('change', () => {
+  generatorState.tone = Number(els.tone.value);
+  schedule();
+});
+els.faceGain.addEventListener('input', () => {
+  generatorState.faceGain = Number(els.faceGain.value);
+  syncFaceGainLabel();
+  schedule();
+});
+els.qrUrl.addEventListener('input', () => {
+  generatorState.qrText = els.qrUrl.value;
+  schedule();
+});
+els.qrCornerToo.addEventListener('change', () => {
+  generatorState.qrCornerToo = els.qrCornerToo.checked;
+  schedule();
 });
 syncTypeUi();
 
 // ── 고급 모드: 면 게인 슬라이더 (Type Y — 1.0(평면) ~ DEFAULT_FACE_GAINS(기본) 보간) ──
 
 function currentFaceGains() {
-  const t = Number(els.faceGain.value) / 100; // 0..1
+  const t = Number(generatorState.faceGain) / 100; // 0..1
   const L = 1 + t * (DEFAULT_FACE_GAINS.L - 1);
   const R = 1 + t * (DEFAULT_FACE_GAINS.R - 1);
   return { T: 1, L, R };
 }
 function gainRatio(g) { return Math.max(g.T, g.L, g.R) / Math.min(g.T, g.L, g.R); }
 function syncFaceGainLabel() {
+  els.faceGain.value = String(generatorState.faceGain);
   const g = currentFaceGains();
   const ratio = gainRatio(g);
   els.faceGainValue.textContent =
@@ -3060,7 +3106,7 @@ function normalizeUrl(raw) {
 
 /** 일반 모드: 활성 콘텐츠 탭에서 페이로드 문자열을 조립한다. */
 function normalPayloadText() {
-  switch (normalState.contentTab) {
+  switch (generatorState.contentTab) {
     case 'text':
       return els.nTextPayload.value;
     case 'url':
@@ -3069,7 +3115,7 @@ function normalPayloadText() {
       return wifiPayload({
         ssid: els.nWifiSsid.value,
         password: els.nWifiPassword.value,
-        security: normalState.wifiSecurity,
+        security: generatorState.wifiSecurity,
       });
     case 'card':
       return cardPayload({
@@ -3098,48 +3144,30 @@ function resolveFallback(type, position) {
 }
 
 function buildConfig() {
-  if (mode === 'advanced') {
-    const type = els.codeType.value;
-    // 공용 6택 카드가 폴백을 결정한다 (일반과 동일 규약 — 없음=off · 안쪽=중앙 QR/Y 윈도 β).
-    // 고급 전용 추가: 안쪽(중앙 QR) + 코너 병행 표시 체크(cornerToo), QR URL 오버라이드.
-    const fallback = resolveFallback(type, normalState.qrPosition);
-    if (fallback.mode === 'center') fallback.cornerToo = els.qrCornerToo.checked;
-    return {
-      type,
-      text: normalPayloadText(), // 콘텐츠 탭 공용 (URL/텍스트/Wi-Fi/명함)
-      eccLevel: els.ecc.value,
-      presetName: els.preset.value,
-      versionO: els.versionO.value === 'auto' ? undefined : Number(els.versionO.value),
-      versionY: Number(els.versionY.value),
-      versionA: Number(els.versionA.value),
-      tone: Number(els.tone.value),
-      qrText: els.qrUrl.value.trim() === '' ? TL_READER_URL : els.qrUrl.value.trim(),
-      faceGains: currentFaceGains(),
-      finderPatternId: normalState.finderPatternId,
-      fallback,
-    };
-  }
-  const fallback = resolveFallback(normalState.type, normalState.qrPosition);
+  const type = generatorState.type;
+  const fallback = resolveFallback(type, generatorState.qrPosition);
+  if (fallback.mode === 'center') fallback.cornerToo = generatorState.qrCornerToo;
+
+  const selectedVersion = (candidate) =>
+    candidate === 'auto' ? undefined : Number(candidate);
+
   return {
-    type: normalState.type,
-    text: normalPayloadText(),
-    eccLevel: normalState.eccTier, // 'auto' | 'H' | 'M' | 'L'
-    presetName: normalState.preset,
-    // 해상도 티어가 명시면 버전 고정 (자동이면 undefined → encodeWithEcc 가 ECC 별
-    // 최소적합 버전으로 스캔 = "해상도 먼저 ↑, 그다음 용량 ↓" 자동 조합).
-    // Y 안쪽(윈도 β)은 Y2 전용이라 티어와 무관하게 버전 2 강제.
-    versionO: normalState.type === 'O' && normalState.resTier !== 'auto'
-      ? RES_TIER_VERSIONS.O[normalState.resTier] : undefined,
+    type,
+    text: normalPayloadText(), // 콘텐츠 입력은 양 모드가 같은 DOM을 공유한다.
+    eccLevel: generatorState.eccLevel,
+    presetName: generatorState.preset,
+    versionO: selectedVersion(generatorState.versionO),
+    // Y 안쪽 윈도는 렌더 의미상 Y2 전용이다. 이 유효값은 저장된 versionY를
+    // 덮지 않으므로 윈도/타입/모드 왕복 뒤 수동 또는 자동 선택이 복원된다.
     versionY: fallback.mode === 'window'
       ? 2
-      : (normalState.type === 'Y' && normalState.resTier !== 'auto'
-        ? RES_TIER_VERSIONS.Y[normalState.resTier] : undefined),
-    versionA: normalState.type === 'A' && normalState.resTier !== 'auto'
-      ? RES_TIER_VERSIONS.A[normalState.resTier] : undefined,
-    tone: 2,
-    qrText: TL_READER_URL,
-    faceGains: DEFAULT_FACE_GAINS,
-    finderPatternId: normalState.finderPatternId,
+      : selectedVersion(generatorState.versionY),
+    versionA: selectedVersion(generatorState.versionA),
+    tone: generatorState.tone,
+    qrText: generatorState.qrText.trim() === ''
+      ? TL_READER_URL : generatorState.qrText.trim(),
+    faceGains: currentFaceGains(),
+    finderPatternId: generatorState.finderPatternId,
     fallback,
   };
 }
@@ -3389,7 +3417,7 @@ function render() {
       // 자동 축(해상도/용량)이 하나라도 켜져 있으면 판정 결과(버전·ECC)를 힌트로 보여준다.
       const vPrefix = result.type === 'O' ? 'V' : result.type;
       const autoBits = [];
-      if (mode === 'normal' && normalState.resTier === 'auto') autoBits.push(t('g426'));
+      if (generatorState[versionStateKey(result.type)] === 'auto') autoBits.push(t('g426'));
       if (cfg.eccLevel === 'auto') autoBits.push(t('g427'));
       els.eccTierHint.textContent = autoBits.length
         ? tf('g456', { bits: autoBits.join('·'), ver: `${vPrefix}${result.encoded.version}`, ecc: result.encoded.eccLevel, tier: eccTierLabel(result.encoded.eccLevel) })
@@ -3407,13 +3435,6 @@ function render() {
   });
 }
 
-for (const el of [
-  els.codeType, els.versionO, els.versionY, els.versionA, els.ecc, els.preset,
-  els.qrCornerToo, els.tone, els.faceGain, els.qrUrl,
-]) {
-  el.addEventListener('input', schedule);
-  el.addEventListener('change', schedule);
-}
 for (const el of [
   els.nTextPayload, els.nUrlPayload, els.nWifiSsid, els.nWifiPassword,
   els.nCardName, els.nCardPhone, els.nCardEmail, els.nCardOrg, els.nCardUrl,
@@ -3438,7 +3459,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-12.04';
+const GENERATOR_BUILD = '2026-08-12.05';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

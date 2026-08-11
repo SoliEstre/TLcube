@@ -62,7 +62,7 @@ const MODULE_ORDER = [
   // Type O 의 scene 이 그걸 쓰게 되면서 전방 참조가 됐다. 등록 순서 = 치환 가능 순서라
   // 전방 참조는 치환이 조용히 건너뛰어지고, 브라우저에서 blob: base 상대 해석 실패로
   // 터진다. 이 불변식은 이제 assertTopologicalOrder() 가 빌드 시점에 강제한다.
-  'gf256', 'rs', 'qr',
+  'gf256', 'rs', 'qr', 'generator-state',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',

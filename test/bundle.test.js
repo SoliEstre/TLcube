@@ -24,7 +24,7 @@ const MODULE_ORDER = [
   'placementA', 'layoutA', 'capacityA', 'encodeA',
   'luminance',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
-  'gf256', 'rs', 'qr', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
+  'gf256', 'rs', 'qr', 'generator-state', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',
 ];
 

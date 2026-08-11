@@ -89,7 +89,7 @@ test('select 대신 4계열 카드 격자이고 실험 썸네일은 19셀 마스
   assert.match(source, /data-i18n="g492"/);
   const built = buildGeneratorVariants();
   for (const html of [built.official, built.experiment]) {
-    assert.match(html, /2026-08-12\.04/);
+    assert.match(html, /2026-08-12\.05/);
     const finderSource = embeddedFinderSource(html);
     assert.match(finderSource, /export const FINDER_BASELINE_SCORES/);
     assert.match(html, /\["finder-selection",/);
@@ -106,7 +106,8 @@ test('파인더/QR 결합은 정규화 뒤 한 번씩만 그리는 비재귀 경
   const combinedEnd = source.indexOf('for (const card of els.typeCards.children)', combinedStart);
   assert.ok(combinedStart >= 0 && combinedEnd > combinedStart, '통합 sync 함수를 못 찾았다');
   const combined = source.slice(combinedStart, combinedEnd);
-  assert.match(combined, /normalizeFinderQrState\(/);
+  assert.doesNotMatch(combined, /normalizeFinderQrState\(/);
+  assert.match(combined, /상태를 정규화하지 않는다/);
   assert.equal((combined.match(/renderQrPositionUi\(\)/g) || []).length, 1);
   assert.equal((combined.match(/renderFinderUi\(\)/g) || []).length, 1);
 
@@ -137,7 +138,7 @@ test('실험 경고는 8종 후보 선택에만 연결되고 두 기준선에는
   const source = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.match(source, /const selectedPattern = FINDER_PATTERNS\.find\(/);
   assert.match(source, /const experimental = Boolean\(selectedPattern\)/);
-  assert.match(source, /FINDER_BASELINE_SCORES\[normalState\.finderPatternId\]/);
+  assert.match(source, /FINDER_BASELINE_SCORES\[generatorState\.finderPatternId\]/);
 });
 
 test('robots는 임시 생성기 엔드포인트를 색인에서 제외한다', () => {
