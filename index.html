@@ -19,6 +19,9 @@
      (deploy/estre-so/projects/tlcube/static-gen.conf). file:// 나 dev 서버에는 그 경로가
      없어 404 가 나는데, 등록 실패는 삼키므로 **단일 파일 원칙(SPEC §8)은 그대로**다. -->
 <link rel="manifest" href="/manifest.webmanifest">
+<!-- iOS 는 매니페스트 아이콘을 홈 화면에 쓰지 않는다. 이 링크가 없으면 파비콘을
+     확대해 저해상도로 나온다(실기기 확인 2026-08-11). PNG 는 tools/make-icons.mjs 가 굽는다. -->
+<link rel="apple-touch-icon" sizes="180x180" href="/_shared/icon-180.png">
 <meta name="theme-color" content="#101218">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2321,7 +2324,7 @@ render();
  * 배포본 식별자. 실기기 피드백에서 **어느 빌드를 보고 있는지** 즉시 알기 위한 것이다.
  * 스캐너(`SCANNER_BUILD`)와 같은 이유이고, 갱신할 때 같이 올린다.
  */
-const GENERATOR_BUILD = '2026-08-11.1';
+const GENERATOR_BUILD = '2026-08-11.2';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

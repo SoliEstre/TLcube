@@ -34,6 +34,9 @@
      manifest·sw 는 배포 nginx 가 루트로 alias 한다(deploy/.../static.conf). dev 서버에는
      그 경로가 없어 404 가 나는데, 등록 실패는 삼키므로 스캐너 동작에는 영향이 없다. -->
 <link rel="manifest" href="/manifest.webmanifest">
+<!-- iOS 는 매니페스트 아이콘을 홈 화면에 쓰지 않는다. 이 링크가 없으면 파비콘을
+     확대해 저해상도로 나온다(실기기 확인 2026-08-11). PNG 는 tools/make-icons.mjs 가 굽는다. -->
+<link rel="apple-touch-icon" sizes="180x180" href="/_shared/icon-180.png">
 <meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
