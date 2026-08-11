@@ -7,12 +7,14 @@ import assert from 'node:assert/strict';
 
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
+import { encodeY } from '../src/encodeY.js';
 import {
   FRONTEND_FAILURE,
   HOMOGRAPHY_CANONICAL_SPACE,
 } from '../src/decoder/contracts.js';
 import {
   directAnchorHypotheses,
+  enumerateGridHypotheses,
   selectGridHypothesis,
 } from '../src/decoder/bootstrap.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
@@ -25,6 +27,7 @@ import {
 } from '../src/luminance.js';
 import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
+import { buildSceneY } from '../src/sceneY.js';
 import {
   applyJpegApproximation,
   distortImage,
@@ -757,4 +760,171 @@ test('재배치: CRC 가 틀린 포맷은 재배치를 트리거하지 않는다
     assert.equal(relocation.targets.length, 0,
       `CRC 불일치인데 재배치 대상이 잡혔다: ${JSON.stringify(relocation.evidence)}`);
   }
+});
+
+
+const CENTER_QR_TEXT = 'HTTPS://TL.ESTRE.SO/';
+
+function renderCenterQr(type, text) {
+  let encoded;
+  let scene;
+  if (type === 'O') {
+    encoded = encode(text, { version: 2, eccLevel: 'M', centerQr: true });
+    scene = buildScene(encoded, {
+      palette: PALETTE,
+      centerQr: true,
+      qrText: CENTER_QR_TEXT,
+      margin: 20,
+    });
+  } else if (type === 'A') {
+    encoded = encodeA(text, { version: 1, eccLevel: 'M', centerQr: true });
+    scene = buildScene(encoded, {
+      palette: PALETTE,
+      centerQr: true,
+      qrText: CENTER_QR_TEXT,
+      margin: 20,
+    });
+  } else if (type === 'Y') {
+    // Type Y 의 "안쪽 QR"은 O/A의 centerQr 포맷 축이 아니라 Y2 윈도 β다.
+    encoded = encodeY(text, { version: 2, eccLevel: 'M', tones: 2, window: true });
+    scene = buildSceneY(encoded, {
+      palette: PALETTE,
+      qrText: CENTER_QR_TEXT,
+      cornerQr: false,
+      margin: 4,
+    });
+  } else {
+    throw new RangeError('알 수 없는 타입: ' + type);
+  }
+  return {
+    encoded,
+    raster: rasterize(scene, { pixelsPerUnit: 12, supersample: 1 }),
+  };
+}
+
+test('중앙 QR 축: Type O/A 중앙 슬롯과 Type Y 윈도 β를 앞단이 복호', {
+  timeout: 180_000,
+}, () => {
+  for (const type of ['O', 'A', 'Y']) {
+    const text = 'center-qr-' + type;
+    const fixture = renderCenterQr(type, text);
+    assert.equal(
+      type === 'Y' ? fixture.encoded.window : fixture.encoded.centerQr,
+      true,
+      type + ': 픽스처가 중앙 QR 결함 영역을 실제로 건드리지 않는다',
+    );
+
+    const result = decodeFrontend(fixture.raster);
+    assert.equal(result.ok, true, failureMessage('center-qr', type, result));
+    assert.equal(result.text, text, failureMessage('center-qr', type, result));
+    assert.equal(result.family, type === 'O' ? 'hex' : type === 'A' ? 'tri' : 'cube');
+    if (type !== 'Y') {
+      assert.equal(result.hypothesis.centerQr, true);
+    }
+  }
+});
+
+
+function renderCornerQr(type, text) {
+  let encoded;
+  let scene;
+  if (type === 'O') {
+    encoded = encode(text, { version: 2, eccLevel: 'M' });
+    scene = buildScene(encoded, {
+      palette: PALETTE,
+      qrText: CENTER_QR_TEXT,
+      qrCorner: 'TL',
+      margin: 20,
+    });
+  } else if (type === 'A') {
+    encoded = encodeA(text, { version: 1, eccLevel: 'M' });
+    scene = buildScene(encoded, {
+      palette: PALETTE,
+      qrText: CENTER_QR_TEXT,
+      qrCorner: 'TL',
+      margin: 20,
+    });
+  } else {
+    encoded = encodeY(text, { version: 2, eccLevel: 'M', tones: 2 });
+    scene = buildSceneY(encoded, {
+      palette: PALETTE,
+      qrText: CENTER_QR_TEXT,
+      qrCorner: 'TL',
+      cornerQr: true,
+      margin: 20,
+    });
+  }
+  return rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
+}
+
+test('코너 QR은 중앙 QR로 승격하지 않는다', {
+  timeout: 180_000,
+}, () => {
+  for (const type of ['O', 'A', 'Y']) {
+    const text = 'corner-qr-' + type;
+    const result = decodeFrontend(renderCornerQr(type, text), {
+      // QR 후보를 의도적으로 함께 평가해도 정상 포맷/본문 후보가 이겨야 한다.
+      bootstrap: { _forceQrFinder: true },
+    });
+    assert.equal(result.ok, true, failureMessage('corner-qr', type, result));
+    assert.equal(result.text, text, failureMessage('corner-qr', type, result));
+    assert.equal(result.family, type === 'O' ? 'hex' : type === 'A' ? 'tri' : 'cube');
+    assert.notEqual(result.hypothesis.centerQr, true);
+    assert.notEqual(result.hypothesis.window, true);
+  }
+});
+
+
+const CENTER_QR_PHOTO_DUMPS = listLumaDumps()
+  .filter((entry) =>
+    entry.name.startsWith('centerqr-') && entry.name.endsWith('.1440.luma'));
+
+test('중앙 QR 16비트 실사진: 세 타입 8/9 복호 성적을 유지', {
+  timeout: 240_000,
+  skip: CENTER_QR_PHOTO_DUMPS.length === 0
+    ? '중앙 QR TLL2 휘도 덤프가 없어 실사진 가드를 건너뜀'
+    : false,
+}, () => {
+  const expectedFamily = (name) => {
+    if (name.includes('080805616')) return 'hex';
+    if (name.includes('080809884')) return 'tri';
+    if (name.includes('080813540')) return 'cube';
+    throw new Error('알 수 없는 중앙 QR 실사진 덤프: ' + name);
+  };
+  const results = CENTER_QR_PHOTO_DUMPS.map((entry) => {
+    const luma = readLumaDump(entry.path);
+    assert.equal(luma.bitDepth, 16, entry.name + ': 구형 8비트 덤프는 가드에 쓰지 않는다');
+    const enumerated = enumerateGridHypotheses(luma);
+    const selected = enumerated.ok
+      ? selectGridHypothesis(enumerated.candidates)
+      : enumerated;
+    return { entry, selected };
+  });
+
+  const successes = results.filter(({ selected }) => selected.ok);
+  assert.equal(successes.length, 8, results.map(({ entry, selected }) => ({
+    name: entry.name,
+    ok: selected.ok,
+    reason: selected.reason,
+  })));
+
+  const counts = { hex: 0, tri: 0, cube: 0 };
+  for (const { entry, selected } of successes) {
+    assert.equal(selected.candidate.text, 'https://tl.estre.so', entry.name);
+    const family = expectedFamily(entry.name);
+    assert.equal(selected.candidate.family, family, entry.name);
+    counts[family] += 1;
+    if (family === 'cube') {
+      assert.equal(selected.candidate.hypothesis.window, true, entry.name);
+    } else {
+      assert.equal(selected.candidate.hypothesis.centerQr, true, entry.name);
+    }
+  }
+  assert.deepEqual(counts, { hex: 3, tri: 2, cube: 3 });
+
+  const failures = results.filter(({ selected }) => !selected.ok);
+  assert.deepEqual(
+    failures.map(({ entry }) => entry.name),
+    ['centerqr-080809884_01.1440.luma'],
+  );
 });

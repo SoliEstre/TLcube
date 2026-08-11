@@ -10,7 +10,12 @@
 
 import { VERSIONS } from '../capacity.js';
 import { VERSIONS_A } from '../capacityA.js';
-import { VERSIONS_Y } from '../capacityY.js';
+import {
+  VERSIONS_Y,
+  windowedReferenceCellsY,
+  windowedFormatCellsY,
+  windowExcludedCellsY,
+} from '../capacityY.js';
 import {
   dataCellsInScanOrder as dataCellsInScanOrderY,
   formatCells as formatCellsY,
@@ -53,6 +58,7 @@ import { sampleHexCell, sampleHexGrid } from './grid-sample.js';
 import { estimateHomography4, projectPoint } from './homography.js';
 import { estimateLocalWarp, validateOReferences } from './reference-validate.js';
 import { robustPercentiles } from './luma.js';
+import { digitToPattern } from '../tonemap.js';
 
 /*
  * 아래 값은 전부 [미검증] M1 calibration 에서 확정한다. 공개 와이어 규범이
@@ -941,7 +947,7 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
   });
 }
 
-function layoutForFamily(family, dimension) {
+function layoutForFamily(family, dimension, hypothesis) {
   if (family === 'hex') {
     return {
       map: layoutMap(dimension),
@@ -957,6 +963,16 @@ function layoutForFamily(family, dimension) {
     };
   }
   if (family === 'cube') {
+    if (hypothesis && hypothesis.window === true) {
+      const dataCells = windowedDataCells(dimension, hypothesis.tones);
+      const map = new Map(
+        dataCells.map((cell, index) => [
+          cell.i + ',' + cell.j,
+          { role: 'data', index },
+        ]),
+      );
+      return { map, dataCells, type: 'Y' };
+    }
     return {
       map: layoutMapY(dimension),
       dataCells: dataCellsInScanOrderY(dimension),
@@ -1076,6 +1092,365 @@ function compareCandidates(left, right) {
  * 전수 평가한다. 성공 결과의 candidates는 아직 포맷/본문을 통과하지 않은 기하
  * 가설이다.
  */
+
+/*
+ * scene.js가 19셀 슬롯의 최대 보호 정사각을 48회 이분탐색하고 0.995 여유를
+ * 적용해 얻는 QR 모듈 피치/cellSize. 중앙 QR 세 파인더를 셀 좌표로 옮기는 와이어 값이다.
+ */
+const CENTER_QR_MODULE_TO_CELL = 0.2247900722;
+const Y_WINDOW_N = 25;
+const Y_WINDOW_TONES = 2;
+const Y_WINDOW_FINDER_COORDS = Object.freeze({
+  shared: Object.freeze({ i: 22.75, j: 22.75 }),
+  axisA: Object.freeze({ i: 15.75, j: 22.75 }),
+  axisB: Object.freeze({ i: 22.75, j: 15.75 }),
+});
+
+function affineHomographyFromThree(canonical, observed) {
+  const ux = canonical[1].x - canonical[0].x;
+  const uy = canonical[1].y - canonical[0].y;
+  const vx = canonical[2].x - canonical[0].x;
+  const vy = canonical[2].y - canonical[0].y;
+  const det = ux * vy - uy * vx;
+  if (Math.abs(det) <= EPSILON) return null;
+  const imageU = {
+    x: observed[1].x - observed[0].x,
+    y: observed[1].y - observed[0].y,
+  };
+  const imageV = {
+    x: observed[2].x - observed[0].x,
+    y: observed[2].y - observed[0].y,
+  };
+  const a = (imageU.x * vy - imageV.x * uy) / det;
+  const b = (-imageU.x * vx + imageV.x * ux) / det;
+  const d = (imageU.y * vy - imageV.y * uy) / det;
+  const e = (-imageU.y * vx + imageV.y * ux) / det;
+  return new Float64Array([
+    a, b, observed[0].x - a * canonical[0].x - b * canonical[0].y,
+    d, e, observed[0].y - d * canonical[0].x - e * canonical[0].y,
+    0, 0, 1,
+  ]);
+}
+
+function qrCenterHomographies(candidate) {
+  const offset = 7 * CENTER_QR_MODULE_TO_CELL;
+  const canonical = [
+    { x: -offset, y: -offset },
+    { x: offset, y: -offset },
+    { x: -offset, y: offset },
+  ];
+  return [
+    [candidate.shared, candidate.axisA, candidate.axisB],
+    [candidate.shared, candidate.axisB, candidate.axisA],
+  ].map((observed) => affineHomographyFromThree(canonical, observed))
+    .filter(Boolean);
+}
+
+function yTopPoint(cell) {
+  return {
+    x: (SQRT3 / 2) * (cell.i - cell.j),
+    y: -0.5 * (cell.i + cell.j),
+  };
+}
+
+function qrWindowHomographies(candidate) {
+  const canonical = [
+    yTopPoint(Y_WINDOW_FINDER_COORDS.shared),
+    yTopPoint(Y_WINDOW_FINDER_COORDS.axisA),
+    yTopPoint(Y_WINDOW_FINDER_COORDS.axisB),
+  ];
+  return [
+    [candidate.shared, candidate.axisA, candidate.axisB],
+    [candidate.shared, candidate.axisB, candidate.axisA],
+  ].map((observed) => affineHomographyFromThree(canonical, observed))
+    .filter(Boolean);
+}
+
+function medianOrNaN(values) {
+  return values.length > 0 ? median(values) : NaN;
+}
+
+function calibrateWindowReferences(luma, hypothesis, options = {}) {
+  const cells = windowedReferenceCellsY(Y_WINDOW_N, Y_WINDOW_TONES);
+  const samples = new Map();
+  for (const cell of cells) {
+    const sampled = sampleCubeCell(
+      luma,
+      hypothesis,
+      cell.i,
+      cell.j,
+      cubeSampleOptions(options),
+    );
+    if (!sampled.ok) return null;
+    samples.set(cell.i + ',' + cell.j, sampled);
+  }
+
+  const thresholds = {};
+  const anchors = {};
+  let minimumRatio = Infinity;
+  let minimumSpan = Infinity;
+  for (const face of ['T', 'L', 'R']) {
+    const lows = [];
+    const highs = [];
+    for (const cell of cells) {
+      const sample = samples.get(cell.i + ',' + cell.j);
+      const bright = digitToPattern(cell.digit)[face];
+      (bright ? highs : lows).push(sample[face].median);
+    }
+    const low = medianOrNaN(lows);
+    const high = medianOrNaN(highs);
+    if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
+    const span = high - low;
+    const ratio = high / Math.max(low, EPSILON);
+    thresholds[face] = low > 0 && high > 0
+      ? Math.sqrt(low * high)
+      : (low + high) / 2;
+    anchors[face] = { low, high, lows, highs, span, ratio };
+    minimumRatio = Math.min(minimumRatio, ratio);
+    minimumSpan = Math.min(minimumSpan, span);
+  }
+
+  const provisional = { tones: Y_WINDOW_TONES, thresholds, anchors };
+  let agreement = 0;
+  const observations = [];
+  for (const cell of cells) {
+    const key = cell.i + ',' + cell.j;
+    const read = readCubeDigit(samples.get(key), provisional);
+    const matched = read !== null && read.digit === cell.digit;
+    if (matched) agreement += 1;
+    observations.push({
+      key,
+      expected: cell.digit,
+      observed: read && read.digit,
+      matched,
+      margin: read && read.margin,
+    });
+  }
+  const agreementRate = agreement / cells.length;
+  const hardChecks = {
+    toneSeparation:
+      minimumSpan >= UNVERIFIED_CUBE_DETECTION.minimumToneSpan
+      && minimumRatio >= UNVERIFIED_CUBE_DETECTION.minimumTwoToneRatio,
+    referenceAgreement:
+      agreementRate >= UNVERIFIED_CUBE_DETECTION.minimumReferenceAgreement,
+  };
+  hardChecks.all = hardChecks.toneSeparation && hardChecks.referenceAgreement;
+  return {
+    ...provisional,
+    samples,
+    agreement,
+    total: cells.length,
+    agreementRate,
+    minimumRatio,
+    minimumSpan,
+    medianMargin: medianOrNaN(
+      observations.map((entry) => entry.margin).filter(Number.isFinite),
+    ),
+    observations,
+    hardChecks,
+  };
+}
+
+function windowedDataCells(n, tones) {
+  const references = new Set(
+    windowedReferenceCellsY(n, tones).map((cell) => cell.i + ',' + cell.j),
+  );
+  const formats = new Set(
+    windowedFormatCellsY(n).map((cell) => cell.i + ',' + cell.j),
+  );
+  const excluded = new Set(
+    windowExcludedCellsY(n).map((cell) => cell.i + ',' + cell.j),
+  );
+  const cells = [];
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
+      const key = i + ',' + j;
+      if (!references.has(key) && !formats.has(key) && !excluded.has(key)) {
+        cells.push({ i, j });
+      }
+    }
+  }
+  return cells;
+}
+
+
+
+
+function qrWindowReferenceRefinedHypotheses(luma, qrResult, options = {}) {
+  if (!qrResult || !qrResult.ok) return [];
+  const canonicalQr = [
+    yTopPoint(Y_WINDOW_FINDER_COORDS.shared),
+    yTopPoint(Y_WINDOW_FINDER_COORDS.axisA),
+    yTopPoint(Y_WINDOW_FINDER_COORDS.axisB),
+  ];
+  const windowCandidates = qrResult.candidates
+    .filter((candidate) => candidate.kind === 'window')
+    .slice(0, 1);
+  const offsetUnits = [
+    0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75,
+    -1, 1, -1.25, 1.25, -1.5, 1.5,
+  ];
+  const hypotheses = [];
+
+  windowCandidates.forEach((candidate, candidateIndex) => {
+    const observedOrders = [
+      [candidate.shared, candidate.axisA, candidate.axisB],
+      [candidate.shared, candidate.axisB, candidate.axisA],
+    ];
+    observedOrders.forEach((observedQr, axisIndex) => {
+      const affine = affineHomographyFromThree(canonicalQr, observedQr);
+      if (!affine) return;
+      const baseOrigin = projectPoint(affine, { x: 0, y: 0 });
+      const baseStep = projectPoint(affine, { x: 1, y: 0 });
+      if (!baseOrigin || !baseStep) return;
+      const pitch = Math.hypot(
+        baseStep.x - baseOrigin.x,
+        baseStep.y - baseOrigin.y,
+      );
+      const refined = [];
+      for (const dyUnits of offsetUnits) {
+        for (const dxUnits of offsetUnits) {
+          const observedOrigin = {
+            x: baseOrigin.x + dxUnits * pitch,
+            y: baseOrigin.y + dyUnits * pitch,
+          };
+          const H = estimateHomography4(
+            [...canonicalQr, { x: 0, y: 0 }],
+            [...observedQr, observedOrigin],
+          );
+          if (!H) continue;
+          const base = {
+            family: 'cube',
+            n: Y_WINDOW_N,
+            tones: Y_WINDOW_TONES,
+            window: true,
+            H,
+            canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+          };
+          const referenceCalibration = calibrateWindowReferences(luma, base, options);
+          if (!referenceCalibration) continue;
+          const adjustment = Math.hypot(dxUnits, dyUnits);
+          const quality =
+            (referenceCalibration.hardChecks.all ? 10000 : 0)
+            + 100 * referenceCalibration.agreement
+            + Math.max(0, referenceCalibration.minimumSpan)
+            - 0.01 * adjustment;
+          refined.push({
+            ...base,
+            referenceCalibration,
+            quality,
+            adjustment,
+            dxUnits,
+            dyUnits,
+          });
+        }
+      }
+      refined.sort((left, right) =>
+        right.quality - left.quality
+        || left.adjustment - right.adjustment
+        || left.dyUnits - right.dyUnits
+        || left.dxUnits - right.dxUnits);
+      refined.slice(0, 12).forEach((entry, rank) => {
+        hypotheses.push({
+          ...entry,
+          referenceSamples: entry.referenceCalibration.samples,
+          geometryResidual: entry.adjustment * pitch,
+          referenceRefinement: {
+            mode: 'qr-fixed-fourth-point-grid',
+            dxCells: entry.dxUnits,
+            dyCells: entry.dyUnits,
+            pitch,
+            rank,
+          },
+          source: 'center-qr-window-reference-refined',
+          hypothesisId:
+            'qr-window-refined-c' + candidateIndex
+            + '-a' + axisIndex + '-r' + rank,
+          luma,
+        });
+      });
+    });
+  });
+  return hypotheses;
+}
+
+function qrGeometryHypotheses(luma, qrResult, options = {}) {
+  if (!qrResult || !qrResult.ok) return [];
+  const hypotheses = [];
+  qrResult.candidates.forEach((candidate, candidateIndex) => {
+    if (candidate.kind === 'center') {
+      qrCenterHomographies(candidate).forEach((H, axisIndex) => {
+        const center = projectPoint(H, { x: 0, y: 0 });
+        const xStep = projectPoint(H, { x: 1, y: 0 });
+        const yStep = projectPoint(H, { x: 0, y: 1 });
+        if (!center || !xStep || !yStep) return;
+        const cellSize = median([
+          Math.hypot(xStep.x - center.x, xStep.y - center.y),
+          Math.hypot(yStep.x - center.x, yStep.y - center.y),
+        ]);
+        const finder = {
+          center,
+          cellSize,
+          H,
+          transform: H,
+          centerQr: true,
+          qrCandidate: candidate,
+        };
+        for (const family of ['hex', 'tri']) {
+          for (const dimension of uniqueDimensions(family)) {
+            hypotheses.push({
+              family,
+              k: dimension,
+              orientation: axisIndex,
+              rotationDegrees: 0,
+              centerQr: true,
+              H,
+              canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+              geometryResidual: Math.max(0, candidate.score) * cellSize,
+              finder,
+              source: 'center-qr-finder',
+              hypothesisId:
+                'qr-center-' + family + '-' + dimension
+                + '-c' + candidateIndex + '-a' + axisIndex,
+              luma,
+            });
+          }
+        }
+      });
+      return;
+    }
+
+    qrWindowHomographies(candidate).forEach((H, axisIndex) => {
+      const base = {
+        family: 'cube',
+        n: Y_WINDOW_N,
+        tones: Y_WINDOW_TONES,
+        window: true,
+        H,
+        canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+      };
+      const referenceCalibration = calibrateWindowReferences(luma, base, options);
+      if (!referenceCalibration) return;
+      const origin = projectPoint(H, { x: 0, y: 0 });
+      const iStep = projectPoint(H, { x: 1, y: 0 });
+      const pitch = origin && iStep
+        ? Math.hypot(iStep.x - origin.x, iStep.y - origin.y)
+        : candidate.module * 2;
+      hypotheses.push({
+        ...base,
+        referenceCalibration,
+        referenceSamples: referenceCalibration.samples,
+        geometryResidual: Math.max(0, candidate.score) * pitch,
+        source: 'center-qr-window-finder',
+        hypothesisId:
+          'qr-window-c' + candidateIndex + '-a' + axisIndex,
+        luma,
+      });
+    });
+  });
+  return hypotheses;
+}
+
 function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   try {
     assertLumaField(luma);
@@ -1104,8 +1479,17 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
       cause: 'cube-positive-independent-path',
     })
     : discoverFinders(luma, familyEvidence, options, cfg);
+  const shouldProbeQr = options._forceQrFinder === true
+    || !finderResult.ok
+    || cubeResult.ok;
+  const qrResult = shouldProbeQr
+    ? detectQrFinderTriples(luma, options.qrFinder || {})
+    : fail(FRONTEND_FAILURE.NO_FINDER, {
+      stage: 'qr-finder',
+      cause: 'existing-path-positive',
+    });
 
-  if (!finderResult.ok && !cubeResult.ok) {
+  if (!finderResult.ok && !cubeResult.ok && !qrResult.ok) {
     const finderSawCandidates = finderResult.detail
       && Number.isFinite(finderResult.detail.evaluatedRaw)
       && finderResult.detail.evaluatedRaw > 0
@@ -1148,7 +1532,7 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
       options,
       outline,
     );
-  } else {
+  } else if (cubeResult.ok) {
     classified = ok({
       families: ['cube'],
       classification: ok({
@@ -1157,6 +1541,16 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
         diagnostics: { cubeOnly: true },
       }),
       cubeOnly: true,
+    });
+  } else {
+    classified = ok({
+      families: [],
+      classification: ok({
+        family: 'qr',
+        hypotheses: [],
+        diagnostics: { qrOnly: true },
+      }),
+      qrOnly: true,
     });
   }
   if (!classified.ok) return classified;
@@ -1215,6 +1609,9 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
     }
   }
 
+  hypotheses.push(...qrGeometryHypotheses(luma, qrResult, options));
+  hypotheses.push(...qrWindowReferenceRefinedHypotheses(luma, qrResult, options));
+
   let unique = deduplicateHypotheses(hypotheses);
   if (unique.length === 0) {
     const shouldRetryFinderResolution = options._finderResolutionRetry !== false
@@ -1264,6 +1661,14 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
       finderSource: finderResult.ok ? finderResult.source : 'none-cube-positive',
       finderCount: finders.length,
       finderFailure: finderResult.ok ? undefined : finderResult,
+      qr: {
+        ok: qrResult.ok,
+        reason: qrResult.reason,
+        diagnostics: qrResult.ok ? qrResult.diagnostics : qrResult.detail,
+        hypothesisCount: hypotheses.filter((entry) =>
+          typeof entry.source === 'string' && entry.source.startsWith('center-qr')).length,
+        skipped: !shouldProbeQr,
+      },
       cube: {
         ok: cubeResult.ok,
         reason: cubeResult.reason,
@@ -1328,7 +1733,11 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
   }
 
   const cube = hypothesis.family === 'cube';
-  const cells = cube ? formatCellsY(hypothesis.n) : formatCells(hypothesis.k);
+  const cells = cube
+    ? hypothesis.window === true
+      ? windowedFormatCellsY(hypothesis.n)
+      : formatCellsY(hypothesis.n)
+    : formatCells(hypothesis.k);
   const samples = [];
   const observedDigits = [];
   for (const cell of cells) {
@@ -1456,7 +1865,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
 
     const cube = hypothesis.family === 'cube';
     const dimension = cube ? hypothesis.n : hypothesis.k;
-    const layout = layoutForFamily(hypothesis.family, dimension);
+    const layout = layoutForFamily(hypothesis.family, dimension, hypothesis);
     if (!layout) continue;
     const grid = cube
       ? sampleCubeGrid(luma, hypothesis, layout.map, cubeSampleOptions(options))
@@ -1502,6 +1911,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       if (cube) {
         decodeFormat.n = dimension;
         decodeFormat.tones = hypothesis.tones;
+        decodeFormat.window = hypothesis.window === true;
       } else {
         decodeFormat.k = dimension;
       }
@@ -1679,6 +2089,29 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
       }
     }
 
+    /*
+     * QR 후보만 남은 잘린 입력은 포맷 실패로 재분류하지 않는다. 프레임 경계에
+     * 닿은 전경에서 QR 유사 패턴이 생겨도 기존의 symbol-clipped 계약이 우선이다.
+     */
+    const qrOnlyGeometry = geometry.hypotheses.length > 0
+      && geometry.hypotheses.every((hypothesis) => hypothesis.source?.startsWith('center-qr'));
+    const outlineTouchesFrame = geometry.diagnostics?.outline?.touchesBorder === true;
+    if (qrOnlyGeometry && outlineTouchesFrame) {
+      const outlineBounds = geometry.diagnostics?.outline?.bounds;
+      const clippingSideCount = outlineBounds
+        ? Number(outlineBounds.minX <= 0)
+          + Number(outlineBounds.minY <= 0)
+          + Number(outlineBounds.maxX >= luma.width - 1)
+          + Number(outlineBounds.maxY >= luma.height - 1)
+        : 0;
+      return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
+        stage: clippingSideCount >= 2 ? 'bootstrap-finder' : 'bootstrap-geometry',
+        cause: 'qr-only-no-valid-format',
+        clippingSideCount,
+        geometryDiagnostics: geometry.diagnostics,
+      });
+    }
+
     return fail(validated.reason, {
       ...(validated.detail || {}),
       geometryDiagnostics: geometry.diagnostics,
@@ -1696,6 +2129,337 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
     diagnostics: {
       geometry: geometry.diagnostics,
       validation: validated.diagnostics,
+    },
+  });
+}
+
+
+/*
+ * 중앙 QR 기하 진입점.
+ *
+ * QR 파인더의 가로/세로 1:1:3:1:1 run을 교차 확인하고, 같은 파인더에서
+ * 나온 관측을 합친 뒤 세 파인더의 직각(center) 또는 120도(window) 삼중점을
+ * 열거한다. 이 함수는 QR을 해독하지 않으며, 반환 후보는 bootstrap의
+ * 포맷 CRC + 본문 RS/header 검증을 통과하기 전까지 채택되지 않는다.
+ */
+const QR_PATTERN_MODULES = 7;
+const QR_MAX_CLUSTER_COUNT = 128;
+const QR_MAX_CANDIDATES_PER_KIND = 16;
+
+function qrOtsuThreshold(luma) {
+  const histogram = new Uint32Array(256);
+  let count = 0;
+  let sum = 0;
+  for (let index = 0; index < luma.data.length; index += 1) {
+    if (luma.alpha && luma.alpha[index] === 0) continue;
+    const bin = Math.max(0, Math.min(255, Math.round(luma.data[index] * 255)));
+    histogram[bin] += 1;
+    count += 1;
+    sum += bin;
+  }
+  if (count === 0) return null;
+
+  let backgroundCount = 0;
+  let backgroundSum = 0;
+  let bestVariance = -1;
+  let threshold = 127;
+  for (let bin = 0; bin < histogram.length; bin += 1) {
+    backgroundCount += histogram[bin];
+    backgroundSum += bin * histogram[bin];
+    if (backgroundCount === 0) continue;
+    const foregroundCount = count - backgroundCount;
+    if (foregroundCount === 0) break;
+    const backgroundMean = backgroundSum / backgroundCount;
+    const foregroundMean = (sum - backgroundSum) / foregroundCount;
+    const delta = backgroundMean - foregroundMean;
+    const variance = backgroundCount * foregroundCount * delta * delta;
+    if (variance > bestVariance) {
+      bestVariance = variance;
+      threshold = bin;
+    }
+  }
+  return threshold / 255;
+}
+
+function qrPatternMatches(counts, tolerance = 0.9) {
+  const total = counts.reduce((sum, value) => sum + value, 0);
+  const module = total / QR_PATTERN_MODULES;
+  if (!(module >= 1)) return false;
+  return Math.abs(counts[0] - module) <= module * tolerance
+    && Math.abs(counts[1] - module) <= module * tolerance
+    && Math.abs(counts[2] - module * 3) <= module * 3 * 0.5
+    && Math.abs(counts[3] - module) <= module * tolerance
+    && Math.abs(counts[4] - module) <= module * tolerance;
+}
+
+function qrCrossCheck(luma, threshold, x, y, dx, dy) {
+  const { width, height, data, alpha } = luma;
+  const inside = (px, py) => px >= 0 && py >= 0 && px < width && py < height;
+  const dark = (px, py) => {
+    if (!inside(px, py)) return false;
+    const index = py * width + px;
+    return (!alpha || alpha[index] !== 0) && data[index] <= threshold;
+  };
+
+  x = Math.round(x);
+  y = Math.round(y);
+  if (!dark(x, y)) return null;
+
+  const counts = [0, 0, 0, 0, 0];
+  let px = x;
+  let py = y;
+  while (dark(px, py)) {
+    counts[2] += 1;
+    px -= dx;
+    py -= dy;
+  }
+  while (inside(px, py) && !dark(px, py)) {
+    counts[1] += 1;
+    px -= dx;
+    py -= dy;
+  }
+  while (dark(px, py)) {
+    counts[0] += 1;
+    px -= dx;
+    py -= dy;
+  }
+
+  px = x + dx;
+  py = y + dy;
+  while (dark(px, py)) {
+    counts[2] += 1;
+    px += dx;
+    py += dy;
+  }
+  while (inside(px, py) && !dark(px, py)) {
+    counts[3] += 1;
+    px += dx;
+    py += dy;
+  }
+  while (dark(px, py)) {
+    counts[4] += 1;
+    px += dx;
+    py += dy;
+  }
+  if (!qrPatternMatches(counts)) return null;
+
+  let negative = 0;
+  px = x - dx;
+  py = y - dy;
+  while (dark(px, py)) {
+    negative += 1;
+    px -= dx;
+    py -= dy;
+  }
+  let positive = 0;
+  px = x + dx;
+  py = y + dy;
+  while (dark(px, py)) {
+    positive += 1;
+    px += dx;
+    py += dy;
+  }
+  return {
+    center: (dx !== 0 ? x : y) + (positive - negative) / 2,
+    module: counts.reduce((sum, value) => sum + value, 0) / QR_PATTERN_MODULES,
+  };
+}
+
+function qrScanHits(luma, threshold) {
+  const { width, height, data, alpha } = luma;
+  const dark = (x, y) => {
+    const index = y * width + x;
+    return (!alpha || alpha[index] !== 0) && data[index] <= threshold;
+  };
+  const hits = [];
+
+  const scanLine = (horizontal, outer) => {
+    const length = horizontal ? width : height;
+    let previousDark = dark(horizontal ? 0 : outer, horizontal ? outer : 0);
+    let start = 0;
+    const runs = [];
+    for (let position = 1; position <= length; position += 1) {
+      const currentDark = position < length
+        ? dark(horizontal ? position : outer, horizontal ? outer : position)
+        : !previousDark;
+      if (currentDark === previousDark) continue;
+
+      runs.push({ dark: previousDark, start, length: position - start });
+      if (runs.length >= 5) {
+        const pattern = runs.slice(-5);
+        if (pattern[0].dark && qrPatternMatches(pattern.map((run) => run.length))) {
+          const center = pattern[2].start + pattern[2].length / 2;
+          let x = horizontal ? center : outer;
+          let y = horizontal ? outer : center;
+          const cross = qrCrossCheck(
+            luma,
+            threshold,
+            x,
+            y,
+            horizontal ? 0 : 1,
+            horizontal ? 1 : 0,
+          );
+          if (cross) {
+            if (horizontal) y = cross.center;
+            else x = cross.center;
+            const lineModule = pattern.reduce((sum, run) => sum + run.length, 0)
+              / QR_PATTERN_MODULES;
+            hits.push({ x, y, module: (lineModule + cross.module) / 2 });
+          }
+        }
+      }
+      previousDark = currentDark;
+      start = position;
+    }
+  };
+
+  for (let y = 0; y < height; y += 1) scanLine(true, y);
+  for (let x = 0; x < width; x += 1) scanLine(false, x);
+  return hits;
+}
+
+function qrClusterHits(hits) {
+  const clusters = [];
+  for (const hit of hits) {
+    const cluster = clusters.find((candidate) =>
+      Math.hypot(candidate.x - hit.x, candidate.y - hit.y)
+        <= Math.max(3, candidate.module * 2)
+      && Math.abs(candidate.module - hit.module)
+        <= Math.max(candidate.module, hit.module) * 0.55);
+    if (cluster) {
+      const count = cluster.count + 1;
+      cluster.x = (cluster.x * cluster.count + hit.x) / count;
+      cluster.y = (cluster.y * cluster.count + hit.y) / count;
+      cluster.module = (cluster.module * cluster.count + hit.module) / count;
+      cluster.count = count;
+    } else {
+      clusters.push({ ...hit, count: 1 });
+    }
+  }
+  return clusters
+    .filter((cluster) => cluster.count >= 2)
+    .sort((left, right) =>
+      right.count - left.count
+      || left.y - right.y
+      || left.x - right.x)
+    .slice(0, QR_MAX_CLUSTER_COUNT);
+}
+
+function qrTripleCandidates(clusters, options = {}) {
+  const candidates = [];
+  for (let sharedIndex = 0; sharedIndex < clusters.length; sharedIndex += 1) {
+    for (let firstIndex = 0; firstIndex < clusters.length; firstIndex += 1) {
+      if (firstIndex === sharedIndex) continue;
+      for (let secondIndex = firstIndex + 1;
+        secondIndex < clusters.length;
+        secondIndex += 1) {
+        if (secondIndex === sharedIndex) continue;
+        const shared = clusters[sharedIndex];
+        const axisA = clusters[firstIndex];
+        const axisB = clusters[secondIndex];
+        const ax = axisA.x - shared.x;
+        const ay = axisA.y - shared.y;
+        const bx = axisB.x - shared.x;
+        const by = axisB.y - shared.y;
+        const legA = Math.hypot(ax, ay);
+        const legB = Math.hypot(bx, by);
+        const module = (shared.module + axisA.module + axisB.module) / 3;
+        const minimumSpacing = options.minimumSpacingModules ?? 8;
+        const maximumSpacing = options.maximumSpacingModules ?? 22;
+        if (Math.min(legA, legB) / module < minimumSpacing
+          || Math.max(legA, legB) / module > maximumSpacing
+          || Math.abs(legA - legB) / Math.max(legA, legB) > 0.35) {
+          continue;
+        }
+
+        const sine = Math.abs(ax * by - ay * bx) / (legA * legB);
+        const cosine = (ax * bx + ay * by) / (legA * legB);
+        if (sine < 0.65 || cosine > 0.45 || cosine < -0.8) continue;
+        const moduleRatio = Math.max(shared.module, axisA.module, axisB.module)
+          / Math.min(shared.module, axisA.module, axisB.module);
+        if (moduleRatio > 1.8) continue;
+
+        const kind = cosine < -0.25 ? 'window' : 'center';
+        const targetCosine = kind === 'window' ? -0.5 : 0;
+        const score =
+          Math.abs(legA - legB) / Math.max(legA, legB)
+          + Math.abs(cosine - targetCosine)
+          + 0.05 * (moduleRatio - 1)
+          - Math.min(100, shared.count + axisA.count + axisB.count) * 0.002;
+        candidates.push({
+          kind,
+          score,
+          cosine,
+          module,
+          legA,
+          legB,
+          shared,
+          axisA,
+          axisB,
+          center: {
+            x: shared.x + (ax + bx) / 2,
+            y: shared.y + (ay + by) / 2,
+          },
+        });
+      }
+    }
+  }
+
+  candidates.sort((left, right) =>
+    left.score - right.score
+    || left.center.y - right.center.y
+    || left.center.x - right.center.x);
+  const limit = options.maxCandidatesPerKind ?? QR_MAX_CANDIDATES_PER_KIND;
+  const countByKind = { center: 0, window: 0 };
+  return candidates.filter((candidate) => {
+    if (countByKind[candidate.kind] >= limit) return false;
+    countByKind[candidate.kind] += 1;
+    return true;
+  });
+}
+
+/**
+ * QR 파인더 삼중점 후보를 결정적으로 열거한다.
+ *
+ * center는 O/A 중앙 정사각 QR, window는 Type Y2 top-face QR의 120도 투영이다.
+ * QR 후보만으로 타입을 확정하지 않으며 bootstrap 본문 검증이 최종 게이트다.
+ */
+export function detectQrFinderTriples(luma, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'qr-finder',
+      message: error.message,
+    });
+  }
+  const threshold = qrOtsuThreshold(luma);
+  if (threshold === null) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      stage: 'qr-finder',
+      cause: 'no-opaque-samples',
+    });
+  }
+  const hits = qrScanHits(luma, threshold);
+  const finderCenters = qrClusterHits(hits);
+  const candidates = qrTripleCandidates(finderCenters, options);
+  if (candidates.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      stage: 'qr-finder',
+      cause: 'no-qr-triple',
+      threshold,
+      hitCount: hits.length,
+      finderCenterCount: finderCenters.length,
+    });
+  }
+  return ok({
+    candidates,
+    finderCenters,
+    diagnostics: {
+      threshold,
+      hitCount: hits.length,
+      finderCenterCount: finderCenters.length,
+      candidateCount: candidates.length,
     },
   });
 }
