@@ -4,8 +4,10 @@
 -- 두고 `deploy/nginx.conf` 로 수집하는 구성(DB=tl_analytics, 127.0.0.1:8123).
 -- estre.so 공용 호스트에 올리는 우리 배포는 `deploy/estre-so/clickhouse/
 -- 001_tlcube_provisioning.sql`(DB=tlcube)을 쓴다 — **두 파일의 컬럼 집합은 같아야 한다.**
--- 어긋나면 비콘 행이 파싱 단계에서 통째로 거부되는데 `async_insert` 라 아무 에러도
--- 안 보인다. `test/beacon-contract.test.js` 가 두 스키마와 두 구현을 함께 고정한다.
+-- 어긋나면 비콘이 보내는 그 필드가 조용히 폐기된다(`input_format_skip_unknown_fields`
+-- 기본값이 1이라 행은 살고 그 키만 사라진다). `async_insert` 라 에러도 안 보이므로
+-- 증상은 «그 컬럼만 영영 빈 칸» 뿐이다. `test/beacon-contract.test.js` 가 두 스키마와
+-- 두 구현을 함께 고정한다.
 --
 -- 수집 스탠스: 페이로드 **내용은 저장하지 않는다**. 크기·종류 같은 메타만 남긴다.
 -- referrer 는 도메인만, 세션 ID 는 탭 수명 임시값(쿠키 없음).

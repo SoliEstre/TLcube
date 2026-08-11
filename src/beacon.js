@@ -137,11 +137,18 @@ export function createBeacon(site) {
   return function send(event, props) {
     /*
      * ⚠ **필드 집합이 ClickHouse 테이블 컬럼과 정확히 일치해야 한다.**
-     *   수집은 `INSERT … FORMAT JSONEachRow` 인데, 컬럼에 없는 키가 하나라도 있으면
-     *   그 행은 파싱 단계에서 거부된다. 게다가 `async_insert=1&wait_for_async_insert=0`
-     *   이라 **클라이언트엔 아무 에러도 안 보이고 조용히 사라진다.**
-     *   실제로 초기 구현이 스키마에 없는 `lang` 만 보내고 `ref`·`ua_*` 를 빠뜨려서,
-     *   수집을 켰어도 스캐너·생성기 이벤트가 전부 버려질 상태였다(2026-08-11에 발견).
+     *   수집은 `INSERT … FORMAT JSONEachRow` 이고 `async_insert=1&
+     *   wait_for_async_insert=0` 이라 **서버가 뭘 하든 클라이언트엔 안 보인다.**
+     *   보내는 쪽에서만 맞출 수 있다는 뜻이다.
+     *
+     *   서버가 실제로 어떻게 반응하는지는 실측해 뒀다(2026-08-11, estre.so):
+     *     · 컬럼에 없는 키 → `input_format_skip_unknown_fields=1` 이라 **그 키만 조용히
+     *       버려지고 행은 들어간다.** 행이 죽지 않으니 더 고약하다 — 수집되는 줄 알고
+     *       대시보드를 보는데 그 필드만 영영 비어 있다.
+     *     · 컬럼은 맞는데 **타입**이 틀리면(예: Map 컬럼인 `props` 에 문자열) 파싱
+     *       단계에서 **행 전체가 거부된다.** 이쪽이 유일한 행 단위 손실 경로다.
+     *     · 안 보낸 컬럼 → DEFAULT 로 채워진다. 두 구현이 갈리면 사이트마다 빈 칸이
+     *       달라져 집계가 조용히 어긋난다.
      *   `test/beacon-contract.test.js` 가 이 일치를 고정한다.
      */
     const row = {
