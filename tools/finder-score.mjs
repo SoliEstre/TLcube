@@ -3,9 +3,9 @@
 /**
  * finder-score.mjs — 중앙 19셀 파인더 후보의 검출기 무관 채점 하네스
  *
- * 실행: node tools/finder-score.mjs [--top N] [--output DIR] [--blur-sigma PX]
+ * 실행: node tools/finder-score.mjs [--top N] [--per-family N] [--output DIR] [--blur-sigma PX]
  *
- * 후보를 채점하기 전에 현행 불스아이와 중앙 QR을 같은 네 지표로 잰다.
+ * 후보를 채점하기 전에 현행 불스아이와 중앙 QR을 같은 여섯 지표로 잰다.
  * 알려진 실측 방향(중앙 QR 89% > 불스아이 53%)을 재현하지 못하면 후보를
  * 생성하거나 순위를 내지 않는다. 점수는 성공률 예측값이 아니다.
  */
@@ -17,7 +17,7 @@ import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
-  AXIAL_DIRECTIONS, CENTER_SPACING_COEFF, FACES, axialToPixel, codeBounds,
+  AXIAL_DIRECTIONS, CENTER_SPACING_COEFF, FACE_AREA_COEFF, FACES, axialToPixel, codeBounds,
   facePolygon, faceSampleDisc, hexDistance, layoutForRegion, pixelToAxial, regionCells,
 } from '../src/hexgrid.js';
 import { maxSafeRadius, profileAt } from '../src/bullseye.js';
@@ -49,13 +49,38 @@ const DEFAULT_BLUR_SIGMA = 0.75;
 const GAUSSIAN_CUTOFF_SIGMAS = 3;
 const DEFAULT_TOP = 12;
 const MAX_TOP = 100;
-const ROTATIONS = Object.freeze([1, 2, 3, 4, 5]);
+const DEFAULT_PER_FAMILY = 1;
+const MAX_PER_FAMILY = 20;
+// rhombille 이 갖는 유일한 비자명 회전 대칭은 120도/240도 뿐이다 (src/placement.js §회전,
+// 디코더 orientation 가설도 {0|1|2} 셋뿐). 60/180/300도는 T/L/R 분할을 다른 대각 분할로
+// 보내므로 «코드를 그렇게 다시 읽는» 해석 자체가 존재하지 않는다 — 실재하지 않는 모호성이다.
+// 여기에 그 셋을 넣으면 최솟값이 가짜 각도에 걸려 멀쩡한 후보를 떨어뜨린다.
+const ROTATIONS = Object.freeze([2, 4]);
 const FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
 const SINGLE_FACE_MASKS = Object.freeze([1, 2, 4]);
 const NONZERO_MASKS = Object.freeze([1, 2, 3, 4, 5, 6, 7]);
 const PNG_CELL_SIZE = 64;
 const PNG_MARGIN = 24;
 const PNG_SUPERSAMPLE = 4;
+const FACE_EDGE_COUNT = 4;
+// test/ygrid.test.js의 「면 경계 인접성」이 공유 꼭짓점을 비교할 때 쓰는 EPS를 재사용한다.
+const SHARED_EDGE_EPS = 1e-9;
+const COMPOSITE_AXES = Object.freeze([
+  'rotation', 'lowResolution', 'localization', 'dataDistinction',
+  'structuralSimplicity', 'defectConcentration',
+]);
+const LEGACY_AXES = Object.freeze([
+  'rotation', 'lowResolution', 'localization', 'dataDistinction',
+]);
+
+// [미검증] 19셀에서 미감 후보 공간을 훑기 위한 규칙 파라미터 표본이다.
+// 검출 실측으로 보정한 값이 아니며, 결과 JSON에 그대로 남긴다.
+const RULE_SWEEP = Object.freeze({
+  radialLengths: Object.freeze([2.8, 3.7]),
+  widthFractions: Object.freeze([0.42, 0.64]),
+  twistFractions: Object.freeze([0.35, 0.7]),
+  phases: Object.freeze([0, 0.5]),
+});
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, '..');
@@ -80,6 +105,35 @@ function cellKey(q, r) { return q + ',' + r; }
 const CELL_INDEX = new Map(CELLS.map((cell, index) => [cellKey(cell.q, cell.r), index]));
 const FACE_POLYGONS = CELLS.map((cell) =>
   FACES.map((face) => facePolygon(cell.q, cell.r, face, UNIT_LAYOUT)));
+
+function samePoint(a, b) {
+  return Math.abs(a.x - b.x) < SHARED_EDGE_EPS && Math.abs(a.y - b.y) < SHARED_EDGE_EPS;
+}
+function sharedVertexCount(a, b) {
+  let shared = 0;
+  for (const pa of a) for (const pb of b) if (samePoint(pa, pb)) shared += 1;
+  return shared;
+}
+function buildFaceTopology() {
+  const polygons = FACE_POLYGONS.flat();
+  const neighbors = Array.from({ length: polygons.length }, () => []);
+  for (let a = 0; a < polygons.length; a += 1) {
+    for (let b = a + 1; b < polygons.length; b += 1) {
+      // 기존 면 경계 테스트와 같은 규약: 꼭짓점 2개를 공유할 때만 변 인접이다.
+      if (sharedVertexCount(polygons[a], polygons[b]) !== 2) continue;
+      neighbors[a].push(b);
+      neighbors[b].push(a);
+    }
+  }
+  const internalEdges = neighbors.reduce((sum, list) => sum + list.length, 0) / 2;
+  const outerEdges = FACE_EDGE_COUNT * FACE_COUNT - 2 * internalEdges;
+  return Object.freeze({
+    neighbors: Object.freeze(neighbors.map((list) => Object.freeze(list))),
+    internalEdges,
+    outerEdges,
+  });
+}
+const FACE_TOPOLOGY = buildFaceTopology();
 
 function pointOnSegment(x, y, a, b) {
   const cross = (x - a.x) * (b.y - a.y) - (y - a.y) * (b.x - a.x);
@@ -153,6 +207,26 @@ const ROTATED_FACE_MAPS = Object.freeze(ROTATIONS.map((steps) => {
     map[i] = faceIndexAt(p.x, p.y);
   }
   return map;
+}));
+const FACE_GEOMETRY = Object.freeze(FACE_POLYGONS.flatMap((polygons, ci) =>
+  polygons.map((polygon, fi) => {
+    const x = polygon.reduce((sum, point) => sum + point.x, 0) / polygon.length;
+    const y = polygon.reduce((sum, point) => sum + point.y, 0) / polygon.length;
+    return Object.freeze({ index: ci * FACES.length + fi, ci, fi, face: FACES[fi],
+      cell: CELLS[ci], x, y, radius: Math.hypot(x, y), angle: Math.atan2(y, x) });
+  })));
+const MAX_FACE_RADIUS = Math.max(...FACE_GEOMETRY.map((face) => face.radius));
+// rhombille T/L/R 분할은 120도 회전에서만 면→면 순열이다. 60/180/300도는
+// 다른 대각 분할로 넘어가므로 억지 면 순열을 만들지 않고 기존 표본 사상을 쓴다.
+const ROTATED_FACE_INDEX_MAPS = new Map([2, 4].map((steps) => {
+  const map = new Int16Array(FACE_COUNT);
+  for (const face of FACE_GEOMETRY) {
+    const point = rotatePoint(face, -steps);
+    map[face.index] = faceIndexAt(point.x, point.y);
+  }
+  assert([...map].every((index) => index >= 0), steps * 60 + '도 면 회전 사상 누락');
+  assert(new Set(map).size === FACE_COUNT, steps * 60 + '도 면 회전 사상이 순열이 아님');
+  return [steps, map];
 }));
 
 function buildGrid() {
@@ -323,9 +397,10 @@ function dot(a, b) {
 }
 
 /**
- * 1. 회전 유일성: 60..300도 각각에서 달라진 RMS의 최솟값.
+ * 1. 회전 유일성: 실재하는 모호성(120도/240도)에서 달라진 RMS의 최솟값.
  * 이진 서명에서 RMS^2은 달라진 표본 비율이다. 한 회전이라도 같으면 0점이고,
  * 반지름만의 함수인 동심원은 구조적으로 정확히 0점이다.
+ * 180도 대칭은 여기서 감점되지 않는다 — rhombille 의 대칭이 아니라서 그 해석이 없다.
  */
 function rotationMetric(clean, rotated) {
   let minMse = Infinity;
@@ -355,6 +430,175 @@ function rotationMetric(clean, rotated) {
  * dot(c,b)/(norm(c)*max(norm(c),norm(b))). 상관과 대비 보존을 함께 요구한다.
  * 동일하면 1, 완전 소실이나 직교면 0이다. blur sigma는 [미검증]이다.
  */
+function componentSizes(active) {
+  const seen = new Uint8Array(FACE_COUNT);
+  const sizes = [];
+  for (let start = 0; start < FACE_COUNT; start += 1) {
+    if (!active[start] || seen[start]) continue;
+    let size = 0;
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const current = stack.pop();
+      size += 1;
+      for (const next of FACE_TOPOLOGY.neighbors[current]) {
+        if (active[next] && !seen[next]) {
+          seen[next] = 1;
+          stack.push(next);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  sizes.sort((a, b) => b - a);
+  return sizes;
+}
+function stateTopology(bits, value) {
+  const active = Uint8Array.from(bits, (bit) => bit === value ? 1 : 0);
+  const count = active.reduce((sum, bit) => sum + bit, 0);
+  const components = componentSizes(active);
+  let perimeterEdges = 0;
+  for (let index = 0; index < FACE_COUNT; index += 1) {
+    if (!active[index]) continue;
+    let sameNeighbors = 0;
+    for (const neighbor of FACE_TOPOLOGY.neighbors[index]) {
+      if (active[neighbor]) sameNeighbors += 1;
+    }
+    perimeterEdges += FACE_EDGE_COUNT - sameNeighbors;
+  }
+  return {
+    faceCount: count,
+    componentCount: components.length,
+    componentSizes: components,
+    perimeterEdges,
+    perimeterAreaRatio: count === 0 ? Infinity : perimeterEdges / (count * FACE_AREA_COEFF),
+  };
+}
+
+/**
+ * 5. 구조 단순성: 켜진/꺼진 면을 같은 공유-변 그래프에서 각각 성분 분해한다.
+ * 성분 점수는 가능한 총 성분 수 2..FACE_COUNT, 둘레 점수는 고정 외곽 +
+ * 최소 한 절단변 .. 모든 내부변 절단이라는 기하학적 범위로 정규화한다.
+ * 두 하위 점수의 동일 가중 기하평균은 [미검증]이다.
+ */
+function structuralSimplicityMetric(bits) {
+  const on = stateTopology(bits, 1);
+  const off = stateTopology(bits, 0);
+  if (on.faceCount === 0 || off.faceCount === 0) {
+    return { score: 0, componentScore: 0, perimeterScore: 0, on, off };
+  }
+  const totalComponents = on.componentCount + off.componentCount;
+  const componentScore = 100 * clamp(
+    (FACE_COUNT - totalComponents) / (FACE_COUNT - 2), 0, 1,
+  );
+  const totalPerimeterEdges = on.perimeterEdges + off.perimeterEdges;
+  const minimumPerimeter = FACE_TOPOLOGY.outerEdges + 2;
+  const maximumPerimeter = FACE_EDGE_COUNT * FACE_COUNT;
+  const perimeterScore = 100 * clamp(
+    (maximumPerimeter - totalPerimeterEdges) / (maximumPerimeter - minimumPerimeter), 0, 1,
+  );
+  return {
+    score: Math.sqrt(componentScore * perimeterScore),
+    componentScore,
+    perimeterScore,
+    totalComponents,
+    totalPerimeterEdges,
+    totalPerimeterAreaRatio: totalPerimeterEdges / (FACE_COUNT * FACE_AREA_COEFF),
+    on,
+    off,
+  };
+}
+function weightedComponents(weights) {
+  const active = Uint8Array.from(weights, (weight) => weight > 0 ? 1 : 0);
+  const seen = new Uint8Array(FACE_COUNT);
+  const components = [];
+  for (let start = 0; start < FACE_COUNT; start += 1) {
+    if (!active[start] || seen[start]) continue;
+    let weight = 0;
+    const faceIndices = [];
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const current = stack.pop();
+      weight += weights[current];
+      faceIndices.push(current);
+      for (const next of FACE_TOPOLOGY.neighbors[current]) {
+        if (active[next] && !seen[next]) {
+          seen[next] = 1;
+          stack.push(next);
+        }
+      }
+    }
+    let perimeterEdges = 0;
+    for (const index of faceIndices) {
+      let activeNeighbors = 0;
+      for (const neighbor of FACE_TOPOLOGY.neighbors[index]) {
+        if (active[neighbor]) activeNeighbors += 1;
+      }
+      perimeterEdges += FACE_EDGE_COUNT - activeNeighbors;
+    }
+    const area = faceIndices.length * FACE_AREA_COEFF;
+    const compactness = clamp(4 * Math.PI * area / (perimeterEdges ** 2), 0, 1);
+    components.push({ weight, faces: faceIndices.length, perimeterEdges, compactness });
+  }
+  components.sort((a, b) => b.weight - a.weight || b.faces - a.faces);
+  return components;
+}
+
+/**
+ * 6. 결손 집중도: 회전 축이 고른 최선(가장 덜 다른) 회전의 표본 차이를
+ * 소유 면에 누적하고 공유-변 그래프에서 가중 성분을 구한다.
+ * sum((componentWeight / differenceSamples)^2)는 임의의 두 결손 표본이 같은
+ * 연결 영역에 속할 확률(HHI)이다. 각 영역의 4*pi*A/P^2 등주 compactness를
+ * 표본 비중으로 평균해 가느다란 다리로 이어진 잡음을 막는다. 등주비는 유사 도형의
+ * 크기 배율에 불변이며, 결손 총량은 HHI에서 상쇄된다. 0표본이면 0점이다.
+ */
+function defectConcentrationMetric(clean, rotated, worstDegrees) {
+  const chosen = rotated[ROTATIONS.indexOf(worstDegrees / 60)];
+  assert(chosen !== undefined, '결손 집중도: 회전 축이 고른 각도가 ROTATIONS 밖 — ' + worstDegrees);
+  const faceWeights = new Uint16Array(FACE_COUNT);
+  let differenceSamples = 0;
+  for (let i = 0; i < clean.length; i += 1) {
+    if (clean[i] === chosen[i]) continue;
+    faceWeights[REFERENCE.points[i].ownerFaceIndex] += 1;
+    differenceSamples += 1;
+  }
+  if (differenceSamples === 0) {
+    return { score: 0, hhi: 0, differenceSamples: 0, differenceFaces: 0,
+      componentCount: 0, componentWeights: [], componentFaceSizes: [],
+      largestComponentShare: 0, worstDegrees };
+  }
+  const components = weightedComponents(faceWeights);
+  const hhi = components.reduce((sum, component) =>
+    sum + (component.weight / differenceSamples) ** 2, 0);
+  const isoperimetricCompactness = components.reduce((sum, component) =>
+    sum + (component.weight / differenceSamples) * component.compactness, 0);
+  const differenceFaces = faceWeights.reduce((sum, weight) => sum + (weight > 0 ? 1 : 0), 0);
+  return { score: 100 * hhi * isoperimetricCompactness, hhi,
+    isoperimetricCompactness, differenceSamples, differenceFaces,
+    componentCount: components.length,
+    componentWeights: components.map((component) => component.weight),
+    componentFaceSizes: components.map((component) => component.faces),
+    componentPerimeterEdges: components.map((component) => component.perimeterEdges),
+    componentCompactness: components.map((component) => component.compactness),
+    largestComponentShare: components[0].weight / differenceSamples, worstDegrees };
+}
+function faceProjection(signature) {
+  const sums = new Float64Array(FACE_COUNT);
+  const counts = new Uint16Array(FACE_COUNT);
+  for (let i = 0; i < signature.length; i += 1) {
+    const owner = REFERENCE.points[i].ownerFaceIndex;
+    sums[owner] += signature[i];
+    counts[owner] += 1;
+  }
+  const means = Float64Array.from(sums, (sum, index) => sum / counts[index]);
+  const minimum = Math.min(...means);
+  const maximum = Math.max(...means);
+  const threshold = (minimum + maximum) / 2;
+  const bits = Uint8Array.from(means, (mean) => maximum === minimum ? 0 : mean >= threshold ? 1 : 0);
+  return { bits, minimum, maximum, threshold };
+}
+
 function lowResolutionMetric(clean, blurred) {
   const c = centered(clean);
   const b = centered(blurred);
@@ -539,9 +783,9 @@ function dataMetric(clean, blurred, bases) {
     probabilityUpperBound: logProbability === -Infinity ? 0 : Math.exp(logProbability),
     logProbabilityUpperBound: logProbability, bits, totalEntropyBits: totalBits, threshold };
 }
-function composite(metrics) {
-  const scores = [metrics.rotation.score, metrics.lowResolution.score,
-    metrics.localization.score, metrics.dataDistinction.score];
+function composite(metrics, axes = COMPOSITE_AXES) {
+  // [미검증] 축별 실측 보정 전이므로 가중치는 모두 1이다.
+  const scores = axes.map((axis) => metrics[axis].score);
   if (scores.some((score) => score <= 0)) return 0;
   return Math.exp(scores.reduce((sum, score) => sum + Math.log(score), 0) / scores.length);
 }
@@ -566,25 +810,43 @@ function scoreBits(candidate, kernel, bases) {
   const clean = bitsSignature(candidate.bits);
   const lowRaster = renderBitsLow(candidate.bits, kernel);
   const blurred = lowSignature(lowRaster);
+  const rotated = rotatedBitsSignatures(candidate.bits);
+  const rotation = rotationMetric(clean, rotated);
   const metrics = {
-    rotation: rotationMetric(clean, rotatedBitsSignatures(candidate.bits)),
+    rotation,
     lowResolution: lowResolutionMetric(clean, blurred),
     localization: localizationMetric(lowRaster),
     dataDistinction: dataMetric(clean, blurred, bases),
+    structuralSimplicity: structuralSimplicityMetric(candidate.bits),
+    defectConcentration: defectConcentrationMetric(clean, rotated, rotation.worstDegrees),
   };
-  return { ...candidate, metrics, total: composite(metrics) };
+  return { ...candidate, metrics, legacyTotal: composite(metrics, LEGACY_AXES),
+    total: composite(metrics) };
 }
 function scoreBaseline(name, kind, evaluate, kernel, bases) {
   const clean = functionSignature(evaluate);
   const lowRaster = renderFunctionLow(evaluate, kernel);
   const blurred = lowSignature(lowRaster);
+  const rotated = rotatedFunctionSignatures(evaluate);
+  const rotation = rotationMetric(clean, rotated);
+  const projection = faceProjection(clean);
+  const structure = structuralSimplicityMetric(projection.bits);
+  structure.faceProjection = {
+    minimum: projection.minimum,
+    maximum: projection.maximum,
+    threshold: projection.threshold,
+    note: '[미검증] 연속 기준선을 면 평균의 min/max 중점에서 이진화했다.',
+  };
   const metrics = {
-    rotation: rotationMetric(clean, rotatedFunctionSignatures(evaluate)),
+    rotation,
     lowResolution: lowResolutionMetric(clean, blurred),
     localization: localizationMetric(lowRaster),
     dataDistinction: dataMetric(clean, blurred, bases),
+    structuralSimplicity: structure,
+    defectConcentration: defectConcentrationMetric(clean, rotated, rotation.worstDegrees),
   };
-  return { id: kind, name, family: 'baseline', kind, metrics, total: composite(metrics) };
+  return { id: kind, name, family: 'baseline', kind, metrics,
+    legacyTotal: composite(metrics, LEGACY_AXES), total: composite(metrics) };
 }
 function bullseyeEvaluator() {
   const radius = maxSafeRadius(1);
@@ -627,6 +889,127 @@ function bitsFor(pattern) {
   }
   return bits;
 }
+function bitsForFaces(pattern) {
+  return Uint8Array.from(FACE_GEOMETRY, (face) => pattern(face) ? 1 : 0);
+}
+function positiveModulo(value, modulus) {
+  return ((value % modulus) + modulus) % modulus;
+}
+function polarArm(face, count, phase, twistFraction = 0, winding = 1) {
+  const pitch = 2 * Math.PI / count;
+  const adjusted = face.angle - phase * pitch
+    - winding * twistFraction * pitch * (face.radius / MAX_FACE_RADIUS);
+  const coordinate = positiveModulo(adjusted / pitch, 1);
+  const distance = Math.min(coordinate, 1 - coordinate);
+  const index = Math.floor(positiveModulo(adjusted / pitch + 0.5, count));
+  return { distance, index };
+}
+function symmetricUnion(bits, rotationSteps) {
+  const out = bits.slice();
+  for (let index = 0; index < FACE_COUNT; index += 1) {
+    for (const steps of rotationSteps) {
+      if (bits[ROTATED_FACE_INDEX_MAPS.get(steps)[index]]) {
+        out[index] = 1;
+        break;
+      }
+    }
+  }
+  return out;
+}
+function applyCenterTreatment(bits, treatment) {
+  const out = bits.slice();
+  for (const face of FACE_GEOMETRY) {
+    if (face.cell.q !== 0 || face.cell.r !== 0) continue;
+    if (treatment === 'solid') out[face.index] = 1;
+    else if (treatment === 'open') out[face.index] = 0;
+    else if (treatment === 'offset') out[face.index] = face.face === 'R' ? 1 : 0;
+    else throw new RangeError('중심 처리 오류: ' + treatment);
+  }
+  return out;
+}
+function pinwheelBits(params) {
+  let bits = bitsForFaces((face) => {
+    const arm = polarArm(face, params.blades, params.phase,
+      params.twistFraction, params.winding);
+    return face.radius <= params.length && arm.distance <= params.widthFraction / 2;
+  });
+  // C3 대칭 바탕은 표본 경계의 부동소수 우연과 무관하게 정확한 120도 대칭으로 만든다.
+  if (params.blades === 3) bits = symmetricUnion(bits, [2, 4]);
+  bits = applyCenterTreatment(bits, params.centerTreatment === 'offset' ? 'solid'
+    : params.centerTreatment);
+  if (params.breakMode === 'missing' || params.breakMode === 'short') {
+    for (const face of FACE_GEOMETRY) {
+      if (face.cell.q === 0 && face.cell.r === 0) continue;
+      const arm = polarArm(face, params.blades, params.phase,
+        params.twistFraction, params.winding);
+      if (arm.index !== 0) continue;
+      if (params.breakMode === 'missing'
+        || face.radius > params.length * (1 / 2)) bits[face.index] = 0;
+    }
+  } else if (params.breakMode !== 'coprime' && params.breakMode !== 'symmetric') {
+    throw new RangeError('바람개비 대칭 깨기 오류: ' + params.breakMode);
+  }
+  if (params.centerTreatment === 'offset') bits = applyCenterTreatment(bits, 'offset');
+  return bits;
+}
+function flowerPetal(face, params, layer) {
+  const layerPhase = params.phase + (layer === 0 ? 0 : 0.5);
+  const arm = polarArm(face, params.petals, layerPhase);
+  // [미검증] 두 번째 겹의 폭/길이 2/3와 중심 반경 0.75는 미감 표본값이다.
+  const width = params.widthFraction * (layer === 0 ? 1 : 2 / 3);
+  if (arm.distance > width / 2) return false;
+  const coreRadius = 0.75;
+  const extent = layer === 0 ? params.length : coreRadius + (params.length - coreRadius) * 2 / 3;
+  const normalized = arm.distance / (width / 2);
+  const radialLimit = coreRadius + (extent - coreRadius)
+    * Math.cos(normalized * Math.PI / 2) ** 2;
+  return face.radius <= radialLimit;
+}
+function flowerBits(params) {
+  if (params.petals === 6) {
+    // 모든 면을 켠 중심+ring-1 심과 여섯 axial ring-2 셀을 꽃잎으로 삼는다.
+    // 셀 단위 C6라 60도에서 정확히 자기 자신이며, 육망성 외곽선은 만들지 않는다.
+    let bits = bitsFor((cell) => {
+      const ring = hexDistance(cell.q, cell.r);
+      if (ring <= 1) return 7;
+      if (ring === 2 && AXIAL_DIRECTIONS.some((direction) =>
+        onDirectedRay(cell, direction))) return 7;
+      return 0;
+    });
+    if (params.breakMode === 'missing' || params.breakMode === 'short') {
+      for (const face of FACE_GEOMETRY) {
+        if (!onDirectedRay(face.cell, AXIAL_DIRECTIONS[0])) continue;
+        const ring = hexDistance(face.cell.q, face.cell.r);
+        if (params.breakMode === 'missing' || ring === 2) bits[face.index] = 0;
+      }
+    } else if (params.breakMode !== 'symmetric') {
+      throw new RangeError('C6 꽃 대칭 깨기 오류: ' + params.breakMode);
+    }
+    return applyCenterTreatment(bits, params.centerTreatment);
+  }
+
+  let bits = bitsForFaces((face) => {
+    for (let layer = 0; layer < params.layers; layer += 1) {
+      if (flowerPetal(face, params, layer)) return true;
+    }
+    return false;
+  });
+  bits = applyCenterTreatment(bits, params.centerTreatment);
+  if (params.breakMode !== 'coprime') {
+    throw new RangeError('C5/C7 꽃 대칭 깨기 오류: ' + params.breakMode);
+  }
+  return bits;
+}
+function gapRingBits(params) {
+  return bitsForFaces((face) => {
+    if (face.cell.q === 0 && face.cell.r === 0 && params.centerTreatment === 'solid') return true;
+    if (face.radius < params.innerRadius || face.radius > params.outerRadius) return false;
+    const gapAngle = params.gapDirection * Math.PI / 3;
+    const delta = Math.abs(Math.atan2(Math.sin(face.angle - gapAngle),
+      Math.cos(face.angle - gapAngle)));
+    return delta > params.gapWidthFraction * Math.PI / 6;
+  });
+}
 function sectorIndex(cell) {
   const point = axialToPixel(cell.q, cell.r, UNIT_LAYOUT);
   let best = 0;
@@ -647,25 +1030,130 @@ function onDirectedRay(cell, direction) {
 }
 
 /**
- * 무작위 난사 없이 네 족을 열거한다.
- * ring: ring 0/1/2별 8개 면 마스크 전수(8^3).
- * axis: 세 무방향 축 위/밖을 나눠 3축 대칭을 탐색.
- * ray-break: AXIAL_DIRECTIONS 한 방향만 XOR해 대칭을 의도적으로 깸.
- * face-swirl: 방향 sector에 T/L/R 단일면 또는 보수를 순환해 면이 도는 족 생성.
+ * 비트마스크 무작위 난사 없이 짧은 규칙의 파라미터 공간을 열거한다.
+ * 바람개비·꽃을 우선하고, 틈 링과 기존 ring/axis/ray-break/face-swirl을 비교군으로 둔다.
  */
 function generateCandidates() {
   const candidates = [];
-  const seen = new Set();
-  const add = (id, family, params, pattern) => {
-    const bits = bitsFor(pattern);
+  const seenByFamily = new Map();
+  const addBits = (id, family, params, bits) => {
     let on = 0;
     for (const bit of bits) on += bit;
     if (on === 0 || on === bits.length) return;
     const fingerprint = Array.from(bits).join('');
-    if (seen.has(fingerprint)) return;
-    seen.add(fingerprint);
+    if (!seenByFamily.has(family)) seenByFamily.set(family, new Set());
+    if (seenByFamily.get(family).has(fingerprint)) return;
+    seenByFamily.get(family).add(fingerprint);
     candidates.push(Object.freeze({ id, family, params: Object.freeze(params), bits }));
   };
+  const add = (id, family, params, pattern) =>
+    addBits(id, family, params, bitsFor(pattern));
+
+  // 대칭 실패 증거판. 규칙 생성에서 먼저 넣어 같은 족의 중복 제거가 이름을 보존하게 한다.
+  addBits('pinwheel-symmetric-c3', 'pinwheel', {
+    blades: 3, length: 3.7, widthFraction: 0.64, twistFraction: 0.7,
+    phase: 0, winding: 1, centerTreatment: 'solid',
+    breakMode: 'symmetric', symmetryWitness: true,
+  }, pinwheelBits({
+    blades: 3, length: 3.7, widthFraction: 0.64, twistFraction: 0.7,
+    phase: 0, winding: 1, centerTreatment: 'solid', breakMode: 'symmetric',
+  }));
+  addBits('flower-symmetric-c6', 'flower', {
+    petals: 6, length: 3.7, widthFraction: 0.64, layers: 1,
+    phase: 0, centerTreatment: 'solid',
+    breakMode: 'symmetric', symmetryWitness: true,
+  }, flowerBits({
+    petals: 6, length: 3.7, widthFraction: 0.64, layers: 1,
+    phase: 0, centerTreatment: 'solid', breakMode: 'symmetric',
+  }));
+
+  // 최우선 1: 바람개비. C3은 날개 하나 전체/바깥 절반을 결손시키고,
+  // C5는 6회 격자 회전과 서로소인 날개 수 자체로 대칭을 깬다.
+  for (const blades of [3, 5]) {
+    const breakModes = blades === 3 ? ['missing', 'short'] : ['coprime'];
+    for (let li = 0; li < RULE_SWEEP.radialLengths.length; li += 1) {
+      for (let wi = 0; wi < RULE_SWEEP.widthFractions.length; wi += 1) {
+        for (let ti = 0; ti < RULE_SWEEP.twistFractions.length; ti += 1) {
+          for (let pi = 0; pi < RULE_SWEEP.phases.length; pi += 1) {
+            for (const winding of [-1, 1]) {
+              for (const centerTreatment of ['solid', 'open', 'offset']) {
+                for (const breakMode of breakModes) {
+                  const params = {
+                    blades,
+                    length: RULE_SWEEP.radialLengths[li],
+                    widthFraction: RULE_SWEEP.widthFractions[wi],
+                    twistFraction: RULE_SWEEP.twistFractions[ti],
+                    phase: RULE_SWEEP.phases[pi],
+                    winding,
+                    centerTreatment,
+                    breakMode,
+                  };
+                  addBits('pinwheel-' + blades + '-' + li + wi + ti + pi + '-'
+                    + (winding > 0 ? 'cw' : 'ccw') + '-' + breakMode + '-'
+                    + centerTreatment, 'pinwheel', params, pinwheelBits(params));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 최우선 2: 꽃/꽃잎. C6은 꽃잎 한 장을 통째/바깥 절반 결손시키고,
+  // C5/C7은 격자 회전수 6과 서로소인 꽃잎 수로 대칭을 깬다.
+  for (const petals of [5, 6, 7]) {
+    const breakModes = petals === 6 ? ['missing', 'short'] : ['coprime'];
+    for (let li = 0; li < RULE_SWEEP.radialLengths.length; li += 1) {
+      for (let wi = 0; wi < RULE_SWEEP.widthFractions.length; wi += 1) {
+        for (const layers of [1, 2]) {
+          for (let pi = 0; pi < RULE_SWEEP.phases.length; pi += 1) {
+            for (const centerTreatment of ['solid', 'open', 'offset']) {
+              for (const breakMode of breakModes) {
+                const params = {
+                  petals,
+                  length: RULE_SWEEP.radialLengths[li],
+                  widthFraction: RULE_SWEEP.widthFractions[wi],
+                  layers,
+                  phase: RULE_SWEEP.phases[pi],
+                  centerTreatment,
+                  breakMode,
+                };
+                addBits('flower-' + petals + '-' + li + wi + layers + pi + '-'
+                  + breakMode + '-' + centerTreatment, 'flower', params, flowerBits(params));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 부차 족: 틈 하나를 뭉쳐 뺀 링. 육망성 실루엣 규칙은 만들지 않는다.
+  // [미검증] 틈 링 안쪽 반경 표본. 실기기/미감 보정 전이다.
+  const gapInnerRadii = [1.0, 1.5];
+  for (let ii = 0; ii < gapInnerRadii.length; ii += 1) {
+    for (let oi = 0; oi < RULE_SWEEP.radialLengths.length; oi += 1) {
+      for (let gapDirection = 0; gapDirection < 6; gapDirection += 1) {
+        for (const gapWidthFraction of [0.5, 1]) {
+          for (const centerTreatment of ['open', 'solid']) {
+            const params = {
+              innerRadius: gapInnerRadii[ii],
+              outerRadius: RULE_SWEEP.radialLengths[oi],
+              gapDirection,
+              gapWidthFraction,
+              centerTreatment,
+            };
+            addBits('gap-ring-' + ii + oi + '-' + gapDirection + '-'
+              + String(gapWidthFraction).replace('.', '') + '-' + centerTreatment,
+            'gap-ring', params, gapRingBits(params));
+          }
+        }
+      }
+    }
+  }
+
+  // 기존 비교 족은 삭제하지 않는다.
   for (let r0 = 0; r0 < 8; r0 += 1) {
     for (let r1 = 0; r1 < 8; r1 += 1) {
       for (let r2 = 0; r2 < 8; r2 += 1) {
@@ -724,31 +1212,99 @@ function generateCandidates() {
       }
     }
   }
-  assert(candidates.length >= 500 && candidates.length <= 5000,
+  const familyCounts = Object.fromEntries([...seenByFamily]
+    .map(([family, fingerprints]) => [family, fingerprints.size]));
+  assert(familyCounts.pinwheel > 1, '바람개비 후보가 생성되지 않음');
+  assert(familyCounts.flower > 1, '꽃 후보가 생성되지 않음');
+  assert(candidates.length >= 500 && candidates.length <= 10000,
     '구조화 후보 수 예상 범위 이탈: ' + candidates.length);
   return candidates;
 }
 function scoreText(value) { return Number(value).toFixed(2); }
 function resultRow(result, rank) {
+  const structure = result.metrics.structuralSimplicity;
+  const defect = result.metrics.defectConcentration;
   return { rank, name: result.name || result.id, family: result.family,
     rotation: scoreText(result.metrics.rotation.score),
     low9px: scoreText(result.metrics.lowResolution.score),
     localization: scoreText(result.metrics.localization.score),
-    data: scoreText(result.metrics.dataDistinction.score), total: scoreText(result.total) };
+    data: scoreText(result.metrics.dataDistinction.score),
+    simplicity: scoreText(structure.score),
+    defect: scoreText(defect.score),
+    structureRaw: structure.totalComponents + 'c/' + scoreText(structure.totalPerimeterAreaRatio) + 'P/A',
+    defectRaw: defect.componentCount + 'c/' + defect.differenceFaces + 'f',
+    total: scoreText(result.total) };
+}
+function rankResults(a, b) {
+  return b.total - a.total
+    || b.metrics.structuralSimplicity.score - a.metrics.structuralSimplicity.score
+    || b.metrics.defectConcentration.score - a.metrics.defectConcentration.score
+    || b.metrics.rotation.score - a.metrics.rotation.score
+    || b.metrics.dataDistinction.score - a.metrics.dataDistinction.score
+    || a.id.localeCompare(b.id);
+}
+function rankLegacy(a, b) {
+  return b.legacyTotal - a.legacyTotal
+    || b.metrics.rotation.score - a.metrics.rotation.score
+    || b.metrics.dataDistinction.score - a.metrics.dataDistinction.score
+    || a.id.localeCompare(b.id);
+}
+function axisSummary(results, axis) {
+  const values = results.map((result) => result.metrics[axis].score);
+  if (values.length === 0) return { count: 0, minimum: null, maximum: null,
+    mean: null, standardDeviation: null, uniqueScoreCount: 0, saturated: null };
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  const uniqueScoreCount = new Set(values.map((value) => value.toPrecision(12))).size;
+  return { count: values.length, minimum: Math.min(...values), maximum: Math.max(...values),
+    mean, standardDeviation: Math.sqrt(variance), uniqueScoreCount,
+    saturated: uniqueScoreCount === 1 };
+}
+function pearsonCorrelation(results, axisA, axisB) {
+  if (results.length < 2) return null;
+  const a = results.map((result) => result.metrics[axisA].score);
+  const b = results.map((result) => result.metrics[axisB].score);
+  const meanA = a.reduce((sum, value) => sum + value, 0) / a.length;
+  const meanB = b.reduce((sum, value) => sum + value, 0) / b.length;
+  let covariance = 0;
+  let energyA = 0;
+  let energyB = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    const da = a[i] - meanA;
+    const db = b[i] - meanB;
+    covariance += da * db;
+    energyA += da * da;
+    energyB += db * db;
+  }
+  return energyA === 0 || energyB === 0 ? null : covariance / Math.sqrt(energyA * energyB);
+}
+function separationAnalysis(results) {
+  return {
+    count: results.length,
+    structuralSimplicity: axisSummary(results, 'structuralSimplicity'),
+    defectConcentration: axisSummary(results, 'defectConcentration'),
+    rotationDefectPearson: pearsonCorrelation(results, 'rotation', 'defectConcentration'),
+  };
 }
 function timestamp() { return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z'); }
 function parseArgs(argv) {
-  const options = { top: DEFAULT_TOP, outputParent: DEFAULT_OUTPUT,
-    blurSigma: DEFAULT_BLUR_SIGMA, help: false };
+  const options = { top: DEFAULT_TOP, perFamily: DEFAULT_PER_FAMILY,
+    outputParent: DEFAULT_OUTPUT, blurSigma: DEFAULT_BLUR_SIGMA, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--help' || argv[i] === '-h') options.help = true;
     else if (argv[i] === '--top') options.top = Number(argv[++i]);
+    else if (argv[i] === '--per-family') options.perFamily = Number(argv[++i]);
     else if (argv[i] === '--output') options.outputParent = path.resolve(argv[++i]);
     else if (argv[i] === '--blur-sigma') options.blurSigma = Number(argv[++i]);
     else throw new RangeError('알 수 없는 인자: ' + argv[i]);
   }
   if (!Number.isInteger(options.top) || options.top < 1 || options.top > MAX_TOP) {
     throw new RangeError('--top은 1..' + MAX_TOP + ' 정수여야 한다: ' + options.top);
+  }
+  if (!Number.isInteger(options.perFamily) || options.perFamily < 1
+    || options.perFamily > MAX_PER_FAMILY) {
+    throw new RangeError('--per-family는 1..' + MAX_PER_FAMILY + ' 정수여야 한다: '
+      + options.perFamily);
   }
   if (!Number.isFinite(options.blurSigma) || options.blurSigma < 0) {
     throw new RangeError('--blur-sigma는 0 이상의 유한수여야 한다: ' + options.blurSigma);
@@ -757,7 +1313,8 @@ function parseArgs(argv) {
 }
 function help() {
   console.log('사용법: node tools/finder-score.mjs [options]\n\n'
-    + '  --top N           렌더할 상위 후보 수 (기본 ' + DEFAULT_TOP + ')\n'
+    + '  --top N           전체 상위 후보 수 (기본 ' + DEFAULT_TOP + ')\n'
+    + '  --per-family N    족별 PNG 후보 수 (기본 ' + DEFAULT_PER_FAMILY + ')\n'
     + '  --output DIR      실행별 출력 폴더의 상위 경로\n'
     + '  --blur-sigma PX   [미검증] 가우시안 sigma (기본 ' + DEFAULT_BLUR_SIGMA + ')\n'
     + '  --help            도움말');
@@ -801,8 +1358,15 @@ function publicResult(result) {
     scores: { rotation: result.metrics.rotation.score,
       lowResolution: result.metrics.lowResolution.score,
       localization: result.metrics.localization.score,
-      dataDistinction: result.metrics.dataDistinction.score, total: result.total },
-    diagnostics: result.metrics, png: result.png };
+      dataDistinction: result.metrics.dataDistinction.score,
+      structuralSimplicity: result.metrics.structuralSimplicity.score,
+      defectConcentration: result.metrics.defectConcentration.score,
+      legacyTotal: result.legacyTotal,
+      total: result.total },
+    diagnostics: result.metrics,
+    png: result.png,
+    familyPng: result.familyPng,
+    witnessPng: result.witnessPng };
 }
 function validateRuler(bullseye, centerQr) {
   // 한 우연 표본이 아니라 합동 faceSampleDisc 하나의 전체 표본 이상이 달라야 한다.
@@ -818,21 +1382,32 @@ function validateRuler(bullseye, centerQr) {
 }
 
 export async function runHarness(options = {}) {
-  const config = { top: options.top === undefined ? DEFAULT_TOP : options.top,
+  const config = {
+    top: options.top === undefined ? DEFAULT_TOP : options.top,
+    perFamily: options.perFamily === undefined ? DEFAULT_PER_FAMILY : options.perFamily,
     outputParent: options.outputParent || DEFAULT_OUTPUT,
-    blurSigma: options.blurSigma === undefined ? DEFAULT_BLUR_SIGMA : options.blurSigma };
+    blurSigma: options.blurSigma === undefined ? DEFAULT_BLUR_SIGMA : options.blurSigma,
+  };
   if (!Number.isInteger(config.top) || config.top < 1 || config.top > MAX_TOP) {
     throw new RangeError('top 범위 오류: ' + config.top);
+  }
+  if (!Number.isInteger(config.perFamily) || config.perFamily < 1
+    || config.perFamily > MAX_PER_FAMILY) {
+    throw new RangeError('perFamily 범위 오류: ' + config.perFamily);
   }
   const startedAt = new Date();
   const outputDir = await runDirectory(config.outputParent);
   const kernel = gaussianKernel(config.blurSigma);
   const bases = blurredFaceBases(kernel);
   console.log('TLcube 중앙 파인더 채점 하네스');
-  console.log('19셀 x 3면=' + FACE_COUNT + ' face; faceSampleDisc 표본='
-    + REFERENCE.points.length + ' (' + REFERENCE.samplesPerFace + '/face); 저해상도='
-    + LOW_PIXELS_PER_CELL + ' px/cell; [미검증] blur sigma=' + config.blurSigma + ' px');
-  console.log('출력: ' + outputDir + '\n');
+  console.log('19셀 x 3면=' + FACE_COUNT + ' face; 공유-변 그래프='
+    + FACE_TOPOLOGY.internalEdges + ' internal/' + FACE_TOPOLOGY.outerEdges + ' outer edge');
+  console.log('faceSampleDisc 표본=' + REFERENCE.points.length + ' ('
+    + REFERENCE.samplesPerFace + '/face); 저해상도=' + LOW_PIXELS_PER_CELL
+    + ' px/cell; [미검증] blur sigma=' + config.blurSigma + ' px');
+  console.log('[미검증] 6축 종합은 동일 가중 기하평균이며 축별 원점수를 함께 읽어야 한다.');
+  console.log('출력: ' + outputDir);
+  console.log('');
 
   const bullseye = scoreBaseline('현행 불스아이', 'bullseye', bullseyeEvaluator(), kernel, bases);
   const centerQr = scoreBaseline('중앙 QR', 'center-qr', centerQrEvaluator(), kernel, bases);
@@ -849,49 +1424,155 @@ export async function runHarness(options = {}) {
   console.log('회전 차이: 불스아이 ' + bullseye.metrics.rotation.minDifferenceCount + '/'
     + bullseye.metrics.rotation.sampleCount + '; 중앙 QR 최악 회전 '
     + centerQr.metrics.rotation.minDifferenceCount + '/' + centerQr.metrics.rotation.sampleCount);
-  console.log('자가 검증: ' + (validation.passed ? '통과' : '실패') + '\n');
+  console.log('자가 검증: ' + (validation.passed ? '통과' : '실패'));
+  console.log('');
 
   let candidateCount = 0;
+  let familyCounts = {};
   let top = [];
+  let topByFamily = {};
+  let symmetryWitnesses = [];
+  let analysis = {
+    selectedTop: separationAnalysis([]),
+    legacyFourAxisTop: separationAnalysis([]),
+    note: 'rotationDefectPearson은 회전 원점수와 결손 집중도 원점수의 Pearson r이다.',
+  };
   if (validation.passed) {
     const candidates = generateCandidates();
     candidateCount = candidates.length;
+    const familyOrder = [...new Set(candidates.map((candidate) => candidate.family))];
+    familyCounts = Object.fromEntries(familyOrder.map((family) => [
+      family, candidates.filter((candidate) => candidate.family === family).length,
+    ]));
     console.log('구조화 후보 ' + candidateCount + '개 채점 중...');
     const ranked = candidates.map((candidate) => scoreBits(candidate, kernel, bases));
-    ranked.sort((a, b) => b.total - a.total
-      || b.metrics.rotation.score - a.metrics.rotation.score
-      || b.metrics.dataDistinction.score - a.metrics.dataDistinction.score
-      || a.id.localeCompare(b.id));
+    ranked.sort(rankResults);
     top = ranked.slice(0, config.top);
+    const legacyTop = [...ranked].sort(rankLegacy).slice(0, config.top);
+    analysis = {
+      selectedTop: separationAnalysis(top),
+      legacyFourAxisTop: separationAnalysis(legacyTop),
+      note: 'rotationDefectPearson은 회전 원점수와 결손 집중도 원점수의 Pearson r이다.',
+    };
+
     for (let i = 0; i < top.length; i += 1) {
       const fileName = String(i + 1).padStart(2, '0') + '-' + top[i].id + '.png';
       top[i].png = path.join(outputDir, fileName);
       await writePng(candidateScene(top[i].bits), top[i].png);
     }
-    console.log('상위 후보 + 기준선');
+
+    const familyRoot = path.join(outputDir, 'by-family');
+    await fs.mkdir(familyRoot, { recursive: true });
+    for (const family of familyOrder) {
+      const selected = ranked.filter((result) => result.family === family)
+        .slice(0, config.perFamily);
+      assert(selected.length > 0, family + ' 족별 후보가 비어 있음');
+      const familyDir = path.join(familyRoot, family.replace(/[^a-z0-9-]/gi, '_'));
+      await fs.mkdir(familyDir, { recursive: true });
+      for (let i = 0; i < selected.length; i += 1) {
+        selected[i].familyPng = path.join(familyDir,
+          String(i + 1).padStart(2, '0') + '-' + selected[i].id + '.png');
+        await writePng(candidateScene(selected[i].bits), selected[i].familyPng);
+      }
+      topByFamily[family] = selected;
+    }
+
+    symmetryWitnesses = ranked.filter((result) => result.params && result.params.symmetryWitness);
+    assert(symmetryWitnesses.length === 2, 'C3/C6 대칭 증거판 수가 2가 아님');
+    for (const witness of symmetryWitnesses) {
+      assert(witness.metrics.rotation.score === 0,
+        witness.id + ' 대칭 증거판 회전 점수가 0이 아님');
+      assert(witness.metrics.rotation.minDifferenceCount === 0,
+        witness.id + ' 대칭 증거판 차이 표본 수가 0이 아님');
+    }
+    const witnessDir = path.join(outputDir, 'symmetry-witnesses');
+    await fs.mkdir(witnessDir, { recursive: true });
+    for (const witness of symmetryWitnesses) {
+      witness.witnessPng = path.join(witnessDir, witness.id + '.png');
+      await writePng(candidateScene(witness.bits), witness.witnessPng);
+    }
+
+    console.log('전체 상위 후보 + 기준선 — 축별 원점수');
     console.table([
       ...baselines.map((result) => resultRow(result, '기준')),
       ...top.map((result, index) => resultRow(result, index + 1)),
     ]);
+    console.log('족별 상위 후보');
+    for (const family of familyOrder) {
+      console.log('[' + family + '] ' + familyCounts[family] + '개 중 '
+        + topByFamily[family].length + '개');
+      console.table(topByFamily[family].map((result, index) => resultRow(result, index + 1)));
+    }
+    console.log('대칭 실패 증거 — C3/C6은 회전 0점');
+    console.table(symmetryWitnesses.map((result) => resultRow(result, '증거')));
+
+    const oldStructure = analysis.legacyFourAxisTop.structuralSimplicity;
+    const oldDefect = analysis.legacyFourAxisTop.defectConcentration;
+    console.log('기존 4축 상위 ' + legacyTop.length + '개에서 새 축 분별: 구조 단순성 '
+      + scoreText(oldStructure.minimum) + '..' + scoreText(oldStructure.maximum)
+      + ' (' + oldStructure.uniqueScoreCount + '값), 결손 집중도 '
+      + scoreText(oldDefect.minimum) + '..' + scoreText(oldDefect.maximum)
+      + ' (' + oldDefect.uniqueScoreCount + '값)');
+    const selectedR = analysis.selectedTop.rotationDefectPearson;
+    const legacyR = analysis.legacyFourAxisTop.rotationDefectPearson;
+    console.log('회전-결손 집중도 Pearson r: 새 상위='
+      + (selectedR === null ? '계산 불가' : selectedR.toFixed(4))
+      + '; 기존 4축 상위=' + (legacyR === null ? '계산 불가' : legacyR.toFixed(4)));
+
     if (top.every((result) => result.metrics.dataDistinction.score === 100)) {
       console.warn('[미검증] 데이터 구별도 상계가 상위권에서 100점으로 포화됐다; 센서 허용오차 모델 전에는 이 축이 상위 후보끼리 순위를 가르지 못한다.');
     }
-    console.log('상위 PNG');
+    console.log('전체 상위 PNG');
     for (const result of top) console.log('- ' + result.id + ': ' + result.png);
+    console.log('족별 PNG');
+    for (const family of familyOrder) {
+      for (const result of topByFamily[family]) console.log('- [' + family + '] '
+        + result.id + ': ' + result.familyPng);
+    }
+    console.log('대칭 증거 PNG');
+    for (const result of symmetryWitnesses) console.log('- ' + result.id + ': ' + result.witnessPng);
   } else {
     console.error('자가 검증에 실패했다. 이 자로 후보를 고르지 않으며 후보 순위를 출력하지 않는다.');
   }
 
   const report = {
-    meta: { generatedAt: startedAt.toISOString(), wallTimeMs: Date.now() - startedAt.getTime(),
-      candidateCount, finderCells: CELLS.length, faces: FACE_COUNT,
-      referenceSamples: REFERENCE.points.length, samplesPerFace: REFERENCE.samplesPerFace,
-      lowPixelsPerCell: LOW_PIXELS_PER_CELL, areaSupersample: AREA_SUPERSAMPLE,
-      blurSigmaPx: config.blurSigma, outputDir },
+    meta: {
+      generatedAt: startedAt.toISOString(),
+      wallTimeMs: Date.now() - startedAt.getTime(),
+      candidateCount,
+      familyCounts,
+      finderCells: CELLS.length,
+      faces: FACE_COUNT,
+      faceTopology: {
+        convention: 'facePolygon 꼭짓점 2개 공유',
+        epsilon: SHARED_EDGE_EPS,
+        internalEdges: FACE_TOPOLOGY.internalEdges,
+        outerEdges: FACE_TOPOLOGY.outerEdges,
+      },
+      referenceSamples: REFERENCE.points.length,
+      samplesPerFace: REFERENCE.samplesPerFace,
+      lowPixelsPerCell: LOW_PIXELS_PER_CELL,
+      areaSupersample: AREA_SUPERSAMPLE,
+      blurSigmaPx: config.blurSigma,
+      top: config.top,
+      perFamily: config.perFamily,
+      compositeAxes: COMPOSITE_AXES,
+      compositePolicy: '[미검증] 동일 가중 기하평균',
+      ruleSweep: RULE_SWEEP,
+      outputDir,
+    },
     rulerValidation: validation,
     baselines: baselines.map(publicResult),
     topCandidates: top.map(publicResult),
+    topByFamily: Object.fromEntries(Object.entries(topByFamily)
+      .map(([family, results]) => [family, results.map(publicResult)])),
+    symmetryWitnesses: symmetryWitnesses.map(publicResult),
+    analysis,
     limitations: [
+      '[미검증] 6축 종합점수는 실측 보정 없이 동일 가중 기하평균을 쓴다. 축별 원점수가 우선이다.',
+      '[미검증] 바람개비·꽃·틈 링의 길이·폭·감김·중심 처리 파라미터 표본은 실기기와 미감으로 보정되지 않았다.',
+      '[미검증] 결손 집중도의 HHI x 등주 compactness 결합은 실기기 복호율로 보정되지 않았다.',
+      '[미검증] 연속 기준선의 구조 축은 면 평균의 min/max 중점에서 이진화한 투영이다.',
       '[미검증] 가우시안 sigma와 4x 면적 서브샘플은 실기기 MTF 및 수렴 시험으로 보정되지 않았다.',
       '[미검증] 데이터 구별도는 19개 독립·균등 digit, 기본 팔레트, 선형 등방 블러를 가정한다.',
       '노이즈 없는 matched-filter 상계가 0이면 100점으로 포화되어 센서 허용오차 전에는 후보끼리 못 가른다.',
@@ -901,8 +1582,9 @@ export async function runHarness(options = {}) {
     ],
   };
   const reportPath = path.join(outputDir, 'scores.json');
-  await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + '\n', 'utf8');
-  console.log('\n점수 JSON: ' + reportPath);
+  await fs.writeFile(reportPath, JSON.stringify(report, null, 2) + String.fromCharCode(10), 'utf8');
+  console.log('');
+  console.log('점수 JSON: ' + reportPath);
   console.log('기준선 PNG: ' + bullseye.png);
   console.log('기준선 PNG: ' + centerQr.png);
   return report;
