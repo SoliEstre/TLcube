@@ -250,7 +250,7 @@
   .experiment-banner a { flex-shrink: 0; color: var(--warn); font-weight: 600; }
 
   /* 중앙 파인더 카드 — 기존 card-row/toggle-card 관용구 위에 배치만 격자로 고정한다. */
-  .finder-legacy-row { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 4px; }
+  .finder-legacy-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 4px; }
   .finder-legacy-row .finder-card { flex-direction: row; justify-content: center; }
   .finder-family-grid.card-row {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px;
@@ -302,7 +302,8 @@
   .finder-score-value { color: var(--text); font-size: 11px; text-align: right; }
   .finder-offset-row { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10px; }
   .finder-offset-result { display: inline-flex; align-items: center; gap: 6px; }
-  .finder-score-note { margin: 8px 0 0; }
+  .finder-baseline-evidence, .finder-score-note { margin: 8px 0 0; }
+  .finder-baseline-evidence { color: var(--ok); }
   @media (max-width: 420px) {
     .finder-score-row { grid-template-columns: minmax(0, 1fr) 40px; }
     .finder-score-visual { grid-column: 1 / -1; grid-row: 2; }
@@ -817,9 +818,9 @@
               <span id="finderCenterGate"></span>
             </span>
           </div>
+          <p class="hint finder-baseline-evidence" id="finderBaselineEvidence" style="display:none"></p>
           <p class="hint finder-score-note" data-i18n="g492">이 값은 모형 점수이며 인식률 예측이 아니에요.</p>
         </div>
-        <p class="hint" id="finderOverrideHint" data-i18n="g471" style="display:none">중앙 QR이 선택되어 위 실험 파인더 대신 렌더돼요.</p>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
         <strong data-i18n="g469">실험 — 아직 스캔되지 않음</strong><br>
@@ -1136,7 +1137,7 @@ const GENERATOR_STRINGS = {
     "g468": "C2 나선",
     "g469": "실험 — 아직 스캔되지 않음",
     "g470": "현행 스캐너는 이 파인더를 읽지 못해요. 실제 코드 안에서 모양을 비교하는 용도로만 내보내세요.",
-    "g471": "중앙 QR이 선택되어 위 실험 파인더 대신 렌더돼요.",
+    "g471": "중앙 QR",
     "g472": "바람개비",
     "g473": "틈 링",
     "g474": "7잎 꽃",
@@ -1161,7 +1162,11 @@ const GENERATOR_STRINGS = {
     "g493": "게이트 통과",
     "g494": "게이트 탈락",
     "g495": "모형 점수 {score}; 중앙 QR 기준선 {baseline}",
-    "g496": "선택 파인더 특성"
+    "g496": "선택 파인더 특성",
+    "g497": "이 항목이 기준선입니다",
+    "g498": "회전 {rotation} — 동심원은 회전 대칭이라 원리적으로 방향을 제공하지 못해요. · 실측 복호율 {rate}%",
+    "g499": "실측 복호율 {rate}%",
+    "g500": "모형 점수 {score}; 이 항목이 기준선입니다"
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1331,7 +1336,7 @@ const GENERATOR_STRINGS = {
     "g468": "C2 swirl",
     "g469": "Experiment — not scannable yet",
     "g470": "The current scanner cannot read this finder. Export it only to compare the mark inside a complete code.",
-    "g471": "The centre QR is selected and renders instead of the experimental finder above.",
+    "g471": "Centre QR",
     "g472": "Pinwheel",
     "g473": "Gap ring",
     "g474": "7-petal flower",
@@ -1356,7 +1361,11 @@ const GENERATOR_STRINGS = {
     "g493": "Gate passed",
     "g494": "Gate failed",
     "g495": "Model score {score}; centre QR baseline {baseline}",
-    "g496": "Selected finder characteristics"
+    "g496": "Selected finder characteristics",
+    "g497": "This item is the baseline",
+    "g498": "Rotation {rotation} — concentric circles are rotationally symmetric, so they cannot provide orientation in principle. · Measured decode rate {rate}%",
+    "g499": "Measured decode rate {rate}%",
+    "g500": "Model score {score}; this item is the baseline"
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1526,7 +1535,7 @@ const GENERATOR_STRINGS = {
     "g468": "C2 スワール",
     "g469": "実験 — まだスキャンできません",
     "g470": "現行スキャナーはこのファインダーを読み取れません。コード全体の中で見え方を比較する用途にのみ書き出してください。",
-    "g471": "中央QRが選択されているため、上の実験ファインダーの代わりに描画されます。",
+    "g471": "中央QR",
     "g472": "ピンホイール",
     "g473": "ギャップリング",
     "g474": "7枚花弁",
@@ -1551,7 +1560,11 @@ const GENERATOR_STRINGS = {
     "g493": "ゲート通過",
     "g494": "ゲート不通過",
     "g495": "モデルスコア {score}、中央QR基準線 {baseline}",
-    "g496": "選択したファインダーの特性"
+    "g496": "選択したファインダーの特性",
+    "g497": "この項目が基準線です",
+    "g498": "回転 {rotation} — 同心円は回転対称のため、原理的に方向を示せません。・実測復号率 {rate}%",
+    "g499": "実測復号率 {rate}%",
+    "g500": "モデルスコア {score}、この項目が基準線です"
   },
 };
 
@@ -1570,9 +1583,9 @@ const GENERATOR_STRINGS = {
  * 결과와 함께 부르는 것들이고, 아래 render() 호출이 그걸 덮는다.
  */
 const TEXT_SYNCERS = [
-  syncStyleUi, syncContentTabUi, syncQrPositionUi, syncResTierUi, syncBgModeUi,
+  syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
-  syncFaceGainLabel, syncFinderUi,
+  syncFaceGainLabel,
 ];
 
 const genI18n = createI18n(GENERATOR_STRINGS, {
@@ -1589,6 +1602,10 @@ import {
   DEFAULT_FINDER_PATTERN_ID, FINDER_BASELINE_SCORES, LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
 } from './src/finder-patterns.js';
+import {
+  CENTER_QR_FINDER_PATTERN_ID, DEFAULT_OUTER_QR_POSITION, normalizeFinderQrState,
+  selectFinderPattern, selectQrPosition,
+} from './src/finder-selection.js';
 import { FACES, facePolygon } from './src/hexgrid.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
@@ -1636,8 +1653,8 @@ const els = {
   finderScorePanel: $('finderScorePanel'), finderScoreRows: $('finderScoreRows'),
   finderScoreName: $('finderScoreName'), finderGateBadge: $('finderGateBadge'),
   finderCenterOffset: $('finderCenterOffset'), finderCenterGate: $('finderCenterGate'),
+  finderBaselineEvidence: $('finderBaselineEvidence'),
   finderExperimentalWarning: $('finderExperimentalWarning'),
-  finderOverrideHint: $('finderOverrideHint'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
@@ -1663,6 +1680,8 @@ const normalState = {
   // 사용자 지시 2026-08-09).
   contentTab: 'url', type: 'Y', preset: DEFAULT_PRESET, wifiSecurity: 'WPA', qrPosition: 'TL',
   finderPatternId: DEFAULT_FINDER_PATTERN_ID,
+  previousFinderPatternId: DEFAULT_FINDER_PATTERN_ID,
+  previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
   eccTier: 'auto', resTier: 'auto', customHue: 210,
   // bgMode 기본 = 'transparent' (사용자 지시 2026-08-09). 색 스타일과 직교 축이다.
   bgMode: 'transparent',
@@ -2038,7 +2057,7 @@ function setMode(next) {
   els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
   els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
   els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
-  syncQrPositionUi(); // 공용 QR 위치 카드의 모드 의존 요소(병행 표시 행) 갱신
+  syncFinderQrUi(); // 공용 QR 위치 카드의 모드 의존 요소(병행 표시 행) 갱신
   syncResTierUi();
   syncBgModeUi(); // 분리 수치는 모드별 색 스타일 소스를 따른다
   schedule();
@@ -2132,6 +2151,8 @@ function currentPresetName() {
 }
 
 const FINDER_LABEL_KEYS = Object.freeze({
+  bullseye: 'g460',
+  [CENTER_QR_FINDER_PATTERN_ID]: 'g471',
   'pinwheel-3-0101-cw-missing-solid': 'g463',
   'gap-ring-01-2-1-solid': 'g462',
   'flower-7-0020-coprime-offset': 'g464',
@@ -2156,6 +2177,10 @@ const FINDER_SCORE_AXES = Object.freeze([
   Object.freeze({ id: 'structuralSimplicity', labelKey: 'g486', evidenceKey: 'g491', evidenceClass: 'unverified' }),
   Object.freeze({ id: 'defectConcentration', labelKey: 'g487', evidenceKey: 'g491', evidenceClass: 'unverified' }),
 ]);
+const FINDER_MEASURED_DECODE_RATES = Object.freeze({
+  bullseye: 53,
+  [CENTER_QR_FINDER_PATTERN_ID]: 89,
+});
 const FINDER_SVG_NS = 'http://www.w3.org/2000/svg';
 
 function ensureFinderScoreRows() {
@@ -2249,21 +2274,37 @@ function legacyFinderThumbnail() {
   return svg;
 }
 
+function centerQrThumbnail() {
+  const svg = finderSvgElement('svg', { viewBox: '0 0 56 48', 'aria-hidden': 'true' });
+  for (const [x, y] of [[5, 3], [35, 3], [5, 27]]) {
+    svg.append(finderSvgElement('rect', { x, y, width: 16, height: 16, rx: 1, fill: 'currentColor' }));
+    svg.append(finderSvgElement('rect', { x: x + 3, y: y + 3, width: 10, height: 10, fill: 'var(--bg)' }));
+    svg.append(finderSvgElement('rect', { x: x + 6, y: y + 6, width: 4, height: 4, fill: 'currentColor' }));
+  }
+  for (const [x, y] of [[27, 5], [25, 13], [29, 19], [23, 25], [31, 29], [25, 35], [37, 25], [43, 31], [35, 39], [45, 39]]) {
+    svg.append(finderSvgElement('rect', { x, y, width: 4, height: 4, fill: 'currentColor' }));
+  }
+  return svg;
+}
+
 function makeFinderCard(id, pattern) {
   const card = document.createElement('div');
   card.className = 'toggle-card finder-card';
   card.dataset.finderId = id;
   card.setAttribute('role', 'button');
   card.setAttribute('tabindex', '0');
-  card.append(pattern ? finderMaskThumbnail(pattern) : legacyFinderThumbnail());
+  card.append(pattern
+    ? finderMaskThumbnail(pattern)
+    : (id === CENTER_QR_FINDER_PATTERN_ID ? centerQrThumbnail() : legacyFinderThumbnail()));
   const label = document.createElement('span');
   label.className = 'finder-card-label';
-  label.dataset.finderLabelKey = pattern ? FINDER_LABEL_KEYS[id] : 'g460';
+  label.dataset.finderLabelKey = FINDER_LABEL_KEYS[id];
   card.append(label);
   const activate = () => {
-    if (card.classList.contains('disabled')) return;
-    normalState.finderPatternId = id;
-    syncFinderUi();
+    Object.assign(normalState, selectFinderPattern(
+      normalState, id, currentType(), DEFAULT_FINDER_PATTERN_ID,
+    ));
+    syncFinderQrUi();
     schedule();
   };
   card.addEventListener('click', activate);
@@ -2278,7 +2319,10 @@ function makeFinderCard(id, pattern) {
 function ensureFinderCards() {
   ensureFinderScoreRows();
   if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount) return;
-  els.finderLegacyRow.append(makeFinderCard(LEGACY_FINDER_PATTERN_ID, null));
+  els.finderLegacyRow.append(
+    makeFinderCard(LEGACY_FINDER_PATTERN_ID, null),
+    makeFinderCard(CENTER_QR_FINDER_PATTERN_ID, null),
+  );
   for (let column = 0; column < 4; column += 1) {
     const top = FINDER_PATTERNS[column];
     const bottom = FINDER_PATTERNS[column + 4];
@@ -2296,12 +2340,11 @@ function ensureFinderCards() {
   }
 }
 
-// Type O/A 중앙 파인더 선택기 — 카드명·계열명·실험 경고를 언어 전환 때 함께 갱신한다.
-function syncFinderUi() {
+// Type O/A 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
+function renderFinderUi() {
   ensureFinderCards();
   const visible = currentType() !== 'Y';
   els.finderSection.style.display = visible ? '' : 'none';
-  const centerQrOverrides = visible && normalState.qrPosition === 'inner';
 
   for (const heading of els.finderPatternCards.querySelectorAll('[data-finder-family-key]')) {
     heading.textContent = t(heading.dataset.finderFamilyKey);
@@ -2309,10 +2352,7 @@ function syncFinderUi() {
   for (const card of document.querySelectorAll('[data-finder-id]')) {
     const active = card.dataset.finderId === normalState.finderPatternId;
     card.classList.toggle('active', active);
-    card.classList.toggle('disabled', centerQrOverrides);
     card.setAttribute('aria-pressed', String(active));
-    card.setAttribute('aria-disabled', String(centerQrOverrides));
-    card.tabIndex = centerQrOverrides ? -1 : 0;
     const label = card.querySelector('[data-finder-label-key]');
     label.textContent = t(label.dataset.finderLabelKey);
   }
@@ -2322,8 +2362,8 @@ function syncFinderUi() {
   );
   const scoreRecord = selectedPattern || FINDER_BASELINE_SCORES[normalState.finderPatternId];
   if (!scoreRecord) throw new Error('finder score record missing: ' + normalState.finderPatternId);
-  const selectedLabelKey = selectedPattern
-    ? FINDER_LABEL_KEYS[selectedPattern.id] : 'g460';
+  const selectedLabelKey = FINDER_LABEL_KEYS[normalState.finderPatternId];
+  if (!selectedLabelKey) throw new Error('finder label key missing: ' + normalState.finderPatternId);
   const gateKey = scoreRecord.centerBalanceGatePassed ? 'g493' : 'g494';
   const gateClass = scoreRecord.centerBalanceGatePassed ? 'passed' : 'rejected';
   els.finderScorePanel.classList.toggle('gate-rejected', !scoreRecord.centerBalanceGatePassed);
@@ -2334,57 +2374,74 @@ function syncFinderUi() {
   els.finderCenterGate.className = 'finder-gate-badge ' + gateClass;
   els.finderCenterGate.textContent = t(gateKey);
 
-  const centerQrScores = FINDER_BASELINE_SCORES['center-qr'].scores;
+  const centerQrSelected = normalState.finderPatternId === CENTER_QR_FINDER_PATTERN_ID;
+  const centerQrScores = FINDER_BASELINE_SCORES[CENTER_QR_FINDER_PATTERN_ID].scores;
   for (let axisIndex = 0; axisIndex < FINDER_SCORE_AXES.length; axisIndex += 1) {
     const axis = FINDER_SCORE_AXES[axisIndex];
     const row = els.finderScoreRows.children[axisIndex];
     const score = scoreRecord.scores[axis.id];
     const baselineScore = centerQrScores[axis.id];
-    const scoreText = score.toFixed(1);
-    const baselineText = baselineScore.toFixed(1);
+    const scoreText = score.toFixed(2);
+    const baselineText = baselineScore.toFixed(2);
     row.querySelector('.finder-score-axis-label').textContent = t(axis.labelKey);
     const evidence = row.querySelector('.finder-score-evidence');
     evidence.textContent = t(axis.evidenceKey);
     evidence.className = 'finder-score-evidence ' + axis.evidenceClass;
     const track = row.querySelector('.finder-score-track');
     track.setAttribute('aria-valuenow', scoreText);
-    track.setAttribute('aria-label', tf('g495', { score: scoreText, baseline: baselineText }));
+    track.setAttribute('aria-label', centerQrSelected
+      ? tf('g500', { score: scoreText })
+      : tf('g495', { score: scoreText, baseline: baselineText }));
     row.querySelector('.finder-score-fill').style.width
       = Math.max(0, Math.min(100, score)) + '%';
-    row.querySelector('.finder-score-marker').style.left
-      = Math.max(0, Math.min(100, baselineScore)) + '%';
-    row.querySelector('.finder-score-baseline').textContent = tf('g481', { score: baselineText });
+    const marker = row.querySelector('.finder-score-marker');
+    marker.style.left = Math.max(0, Math.min(100, baselineScore)) + '%';
+    marker.style.display = centerQrSelected ? 'none' : '';
+    row.querySelector('.finder-score-baseline').textContent = centerQrSelected
+      ? t('g497')
+      : tf('g481', { score: baselineText });
     row.querySelector('.finder-score-value').textContent = scoreText;
   }
+
+  const measuredRate = FINDER_MEASURED_DECODE_RATES[normalState.finderPatternId];
+  const baselineEvidence = normalState.finderPatternId === LEGACY_FINDER_PATTERN_ID
+    ? tf('g498', { rotation: scoreRecord.scores.rotation.toFixed(2), rate: measuredRate })
+    : (measuredRate === undefined ? '' : tf('g499', { rate: measuredRate }));
+  els.finderBaselineEvidence.textContent = baselineEvidence;
+  els.finderBaselineEvidence.style.display = baselineEvidence ? '' : 'none';
+
   const experimental = Boolean(selectedPattern);
   const trialBuild = document.body.dataset.generatorEdition === 'finder-experiment';
   els.finderExperimentalWarning.style.display =
-    experimental && !centerQrOverrides && (visible || trialBuild) ? '' : 'none';
-  els.finderOverrideHint.style.display = centerQrOverrides ? '' : 'none';
+    experimental && (visible || trialBuild) ? '' : 'none';
 }
-/** 공용 QR 위치 카드 갱신 — 안쪽 툴팁(β 딱지), 활성 표시, 고급 전용 병행 표시 행,
- *  중앙 QR 인쇄 힌트(안쪽 + O/A 에서만). PM/009 §2b. */
-function syncQrPositionUi() {
+
+/** 공용 QR 위치 카드 갱신 — 상태는 건드리지 않고 현재 정규 상태만 그린다. */
+function renderQrPositionUi() {
   const isY = currentType() === 'Y';
-  els.qrPosInner.title = isY
-    ? t('g406')
-    : t('g407');
+  els.qrPosInner.title = isY ? t('g406') : t('g407');
   for (const card of els.qrPositionCards.children) {
     card.classList.toggle('active', card.dataset.pos === normalState.qrPosition);
   }
   const inner = normalState.qrPosition === 'inner';
   els.qrCenterHint.style.display = inner && !isY ? '' : 'none';
   els.cornerTooRow.style.display = mode === 'advanced' && inner && !isY ? '' : 'none';
-  // 장식 이미지는 Y+안쪽 전용 (L/R 배제영역이 존재하는 유일한 구성).
   els.decorSection.style.display = inner && isY ? '' : 'none';
-  syncFinderUi();
+}
+
+function syncFinderQrUi() {
+  Object.assign(normalState, normalizeFinderQrState(
+    normalState, currentType(), DEFAULT_FINDER_PATTERN_ID,
+  ));
+  renderQrPositionUi();
+  renderFinderUi();
 }
 
 for (const card of els.typeCards.children) {
   card.addEventListener('click', () => {
     normalState.type = card.dataset.type;
     for (const c of els.typeCards.children) c.classList.toggle('active', c === card);
-    syncQrPositionUi();
+    syncFinderQrUi();
     syncResTierUi();
     schedule();
   });
@@ -2394,13 +2451,15 @@ for (const card of els.typeCards.children) {
 
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
-    normalState.qrPosition = card.dataset.pos;
-    syncQrPositionUi();
+    Object.assign(normalState, selectQrPosition(
+      normalState, card.dataset.pos, currentType(), DEFAULT_FINDER_PATTERN_ID,
+    ));
+    syncFinderQrUi();
     syncResTierUi();
     schedule();
   });
 }
-syncQrPositionUi();
+syncFinderQrUi();
 
 
 // ── 일반 모드: 안정성·용량 4택 (자동/H/M/L) + 해상도 4택 (자동/저/중/고) ──────
@@ -2960,7 +3019,7 @@ function syncTypeUi() {
   els.optionsY.style.display = isY ? '' : 'none';
 }
 
-els.codeType.addEventListener('change', () => { syncTypeUi(); syncQrPositionUi(); syncResTierUi(); schedule(); });
+els.codeType.addEventListener('change', () => { syncTypeUi(); syncFinderQrUi(); syncResTierUi(); schedule(); });
 syncTypeUi();
 
 // ── 고급 모드: 면 게인 슬라이더 (Type Y — 1.0(평면) ~ DEFAULT_FACE_GAINS(기본) 보간) ──
@@ -3356,7 +3415,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-12.02';
+const GENERATOR_BUILD = '2026-08-12.03';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

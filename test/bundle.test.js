@@ -19,7 +19,7 @@ const SRC_DIR = path.join(ROOT, 'src');
 // 추가: placementA·layoutA·capacityA·encodeA ('capacity' 뒤, 위상 순서).
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
-  'hexgrid', 'finder-patterns', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+  'hexgrid', 'finder-patterns', 'finder-selection', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity',
   'placementA', 'layoutA', 'capacityA', 'encodeA',
   'luminance',
