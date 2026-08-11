@@ -28,10 +28,22 @@ test('자 검증 — 두 기준선을 모두 채점하고 통과 판정을 남�
   assert.ok(bullseye, '불스아이 기준선이 보고에 없다');
   assert.ok(centerQr, '중앙 QR 기준선이 보고에 없다');
   assert.equal(REPORT.rulerValidation.passed, true);
+  assert.equal(bullseye.centerBalance, null, '기준선에 후보 게이트를 적용했다');
+  assert.equal(centerQr.centerBalance, null, '기준선에 후보 게이트를 적용했다');
+  const gate = REPORT.meta.centerBalanceGate;
+  assert.equal(gate.limitCells, 0.5);
+  assert.ok(gate.rejectedCount > 0, '중심 균형 게이트가 후보를 하나도 거르지 않았다');
+  assert.equal(Object.values(gate.rejectedByFamily).reduce((sum, count) => sum + count, 0),
+    gate.rejectedCount, '족별 중심 게이트 탈락 수의 합이 맞지 않는다');
+  for (const candidate of [...REPORT.topCandidates, ...Object.values(REPORT.topByFamily).flat()]) {
+    assert.equal(candidate.centerBalance.passed, true, candidate.id + '가 중심 게이트를 우회했다');
+    assert.ok(candidate.centerOffsetCells <= gate.limitCells,
+      candidate.id + ' 중심 오프셋이 ' + candidate.centerOffsetCells + 'c다');
+  }
 });
 
 test('동심원은 회전 점수가 정확히 0 — 격자 회전 사상이 실제 대칭이라는 증거', () => {
-  // 동심원은 반지름만의 함수라 6가지 격자 회전 전부에서 자기 자신이다. 회전 사상이
+  // 동심원은 반지름만의 함수라 두 비자명 격자 회전 모두에서 자기 자신이다. 회전 사상이
   // 기하학적으로 틀렸다면 이 값은 0 이 아니게 된다 — 즉 이 단언이 사상의 검증이다.
   assert.equal(bullseye.scores.rotation, 0);
   assert.equal(bullseye.diagnostics.rotation.minDifferenceCount, 0);
@@ -74,13 +86,28 @@ test('종합 1위를 그대로 채택하면 안 된다 — 축 하나는 반드�
     '1위가 중앙 QR 을 전 축에서 지배한다 — 파레토 규칙으로 되돌릴 수 있다');
 });
 
-test('대칭 판본은 정확히 0점 — 꽃잎 6장·날개 3장을 왜 깨야 하는지의 근거', () => {
-  // C6 꽃과 C3 바람개비는 «예쁜 꽃» 의 가장 자연스러운 형태이면서 현행 불스아이와
-  // 똑같은 방식으로 죽는다. 그 사실을 표에 증거로 남기는 것이 이 판본들의 존재 이유다.
-  assert.ok(REPORT.symmetryWitnesses.length >= 2, '대칭 증거판이 보고에 없다');
-  for (const witness of REPORT.symmetryWitnesses) {
-    assert.equal(witness.scores.rotation, 0, `${witness.id} 회전 점수가 0 이 아니다`);
-    assert.equal(witness.scores.total, 0, `${witness.id} 종합 점수가 0 이 아니다`);
+test('대칭 증거판 — C3/C6은 0점, C2는 중심을 지키면서 0점이 아니다', () => {
+  // C6 꽃과 C3 바람개비는 120도 대칭을 포함해서 죽는다. C2는 120도 대칭을 포함하지
+  // 않으며, 180도는 rhombille orientation 가설이 아니므로 회전 축에서 손실이 없어야 한다.
+  const harmful = REPORT.symmetryWitnesses.filter((witness) =>
+    witness.params.symmetryClass === 'C3' || witness.params.symmetryClass === 'C6');
+  const c2 = REPORT.symmetryWitnesses.filter((witness) =>
+    witness.params.symmetryClass === 'C2');
+  assert.equal(harmful.length, 2, 'C3/C6 대칭 증거판 수가 맞지 않는다');
+  assert.equal(c2.length, 4, '네 우선 족의 C2 증거판이 모두 없다');
+  for (const witness of harmful) {
+    assert.equal(witness.scores.rotation, 0,
+      witness.id + ' 회전 점수가 0 이 아니다');
+    assert.equal(witness.scores.total, 0,
+      witness.id + ' 종합 점수가 0 이 아니다');
+  }
+  for (const witness of c2) {
+    assert.ok(witness.scores.rotation > 0,
+      witness.id + ' C2 회전 점수가 0 이다');
+    assert.ok(witness.scores.total > 0,
+      witness.id + ' C2 종합 점수가 0 이다');
+    assert.equal(witness.centerBalance.passed, true,
+      witness.id + ' C2 판본이 중심 게이트를 통과하지 못했다');
   }
 });
 

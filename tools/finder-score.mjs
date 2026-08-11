@@ -37,6 +37,12 @@ const BOUNDS = Object.freeze(codeBounds(FINDER_RADIUS, UNIT_LAYOUT));
 // 실측 복호 하한. 셀 폭은 인접 중심 간격 sqrt(3)*size로 정의한다.
 const LOW_PIXELS_PER_CELL = 9;
 const LOW_PPU = LOW_PIXELS_PER_CELL / CENTER_SPACING_COEFF;
+const CELL_WIDTH = CENTER_SPACING_COEFF;
+// 파인더가 코드 중심을 정의한다면 켜진 면의 시각 질량중심도 중앙 셀의 Voronoi 경계 안에
+// 있어야 한다. 인접 셀 중심까지가 1 cell width이므로 그 경계는 절반인 0.5c다. 이를
+// 넘으면 가장 가까운 셀 중심이 진짜 중앙이 아닌 쪽으로 넘어가므로 후보 자격과 모순된다.
+// 이 값은 점수 가중치가 아니라 통과/탈락의 기하학적 게이트다.
+const CENTER_BALANCE_LIMIT_CELLS = 1 / 2;
 
 // [미검증] 경계 면적 적분용 4x 서브샘플. 카메라 모델이 아니라 수치 적분 선택이다.
 const AREA_SUPERSAMPLE = 4;
@@ -51,6 +57,7 @@ const DEFAULT_TOP = 12;
 const MAX_TOP = 100;
 const DEFAULT_PER_FAMILY = 1;
 const MAX_PER_FAMILY = 20;
+const PRIORITY_FAMILIES = Object.freeze(['face-swirl', 'gap-ring', 'pinwheel', 'flower']);
 // rhombille 이 갖는 유일한 비자명 회전 대칭은 120도/240도 뿐이다 (src/placement.js §회전,
 // 디코더 orientation 가설도 {0|1|2} 셋뿐). 60/180/300도는 T/L/R 분할을 다른 대각 분할로
 // 보내므로 «코드를 그렇게 다시 읽는» 해석 자체가 존재하지 않는다 — 실재하지 않는 모호성이다.
@@ -59,6 +66,10 @@ const ROTATIONS = Object.freeze([2, 4]);
 const FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
 const SINGLE_FACE_MASKS = Object.freeze([1, 2, 4]);
 const NONZERO_MASKS = Object.freeze([1, 2, 3, 4, 5, 6, 7]);
+const FACE_CYCLES = Object.freeze([
+  SINGLE_FACE_MASKS,
+  Object.freeze([6, 5, 3]),
+]);
 const PNG_CELL_SIZE = 64;
 const PNG_MARGIN = 24;
 const PNG_SUPERSAMPLE = 4;
@@ -103,6 +114,47 @@ function clamp(value, lo, hi) { return Math.max(lo, Math.min(hi, value)); }
 function cellKey(q, r) { return q + ',' + r; }
 
 const CELL_INDEX = new Map(CELLS.map((cell, index) => [cellKey(cell.q, cell.r), index]));
+function balancedMaskSequences(repeats) {
+  const sequences = [];
+  const targetLength = repeats * 3;
+  const counts = [repeats, repeats, repeats];
+  const build = (prefix) => {
+    if (prefix.length === targetLength) {
+      sequences.push(Object.freeze(prefix));
+      return;
+    }
+    for (let maskIndex = 0; maskIndex < counts.length; maskIndex += 1) {
+      if (counts[maskIndex] === 0) continue;
+      counts[maskIndex] -= 1;
+      build([...prefix, maskIndex]);
+      counts[maskIndex] += 1;
+    }
+  };
+  build([]);
+  return Object.freeze(sequences);
+}
+const C2_INNER_SEQUENCES = balancedMaskSequences(1);
+const C2_OUTER_SEQUENCES = balancedMaskSequences(2);
+const C2_PAIR_INDEX = new Map();
+for (const ring of [1, 2]) {
+  const representatives = CELLS.filter((cell) =>
+    hexDistance(cell.q, cell.r) === ring
+      && (cell.q > 0 || (cell.q === 0 && cell.r > 0)))
+    .sort((a, b) => {
+      const pa = axialToPixel(a.q, a.r, UNIT_LAYOUT);
+      const pb = axialToPixel(b.q, b.r, UNIT_LAYOUT);
+      return Math.atan2(pa.y, pa.x) - Math.atan2(pb.y, pb.x);
+    });
+  for (let pairIndex = 0; pairIndex < representatives.length; pairIndex += 1) {
+    const cell = representatives[pairIndex];
+    const descriptor = Object.freeze({ ring, pairIndex });
+    C2_PAIR_INDEX.set(cellKey(cell.q, cell.r), descriptor);
+    C2_PAIR_INDEX.set(cellKey(-cell.q, -cell.r), descriptor);
+  }
+}
+assert(C2_INNER_SEQUENCES.length === 6, 'C2 ring-1 균형 순열 수 불일치');
+assert(C2_OUTER_SEQUENCES.length === 90, 'C2 ring-2 균형 순열 수 불일치');
+assert(C2_PAIR_INDEX.size === CELLS.length - 1, 'C2 반대 셀 짝 인덱스 누락');
 const FACE_POLYGONS = CELLS.map((cell) =>
   FACES.map((face) => facePolygon(cell.q, cell.r, face, UNIT_LAYOUT)));
 
@@ -216,6 +268,29 @@ const FACE_GEOMETRY = Object.freeze(FACE_POLYGONS.flatMap((polygons, ci) =>
       cell: CELLS[ci], x, y, radius: Math.hypot(x, y), angle: Math.atan2(y, x) });
   })));
 const MAX_FACE_RADIUS = Math.max(...FACE_GEOMETRY.map((face) => face.radius));
+
+function centerBalanceMetric(bits) {
+  let weightedX = 0;
+  let weightedY = 0;
+  let totalArea = 0;
+  let onFaces = 0;
+  for (const face of FACE_GEOMETRY) {
+    if (!bits[face.index]) continue;
+    // 모든 rhombille 면은 합동이지만, 정의를 흐리지 않도록 실제 면적 가중치로 적분한다.
+    weightedX += face.x * FACE_AREA_COEFF;
+    weightedY += face.y * FACE_AREA_COEFF;
+    totalArea += FACE_AREA_COEFF;
+    onFaces += 1;
+  }
+  assert(totalArea > 0, '중심 균형: 켜진 면이 없음');
+  const centroidX = weightedX / totalArea;
+  const centroidY = weightedY / totalArea;
+  const offset = Math.hypot(centroidX, centroidY);
+  const offsetCells = offset / CELL_WIDTH;
+  return { passed: offsetCells <= CENTER_BALANCE_LIMIT_CELLS,
+    offsetCells, offset, centroidX, centroidY, onFaces, totalArea,
+    limitCells: CENTER_BALANCE_LIMIT_CELLS };
+}
 // rhombille T/L/R 분할은 120도 회전에서만 면→면 순열이다. 60/180/300도는
 // 다른 대각 분할로 넘어가므로 억지 면 순열을 만들지 않고 기존 표본 사상을 쓴다.
 const ROTATED_FACE_INDEX_MAPS = new Map([2, 4].map((steps) => {
@@ -1010,6 +1085,73 @@ function gapRingBits(params) {
     return delta > params.gapWidthFraction * Math.PI / 6;
   });
 }
+
+function cellPolarArm(cell, count, phase, twistFraction, winding) {
+  const point = axialToPixel(cell.q, cell.r, UNIT_LAYOUT);
+  return polarArm({ angle: Math.atan2(point.y, point.x), radius: Math.hypot(point.x, point.y) },
+    count, phase, twistFraction, winding);
+}
+
+// 2/4개의 날개를 셀 단위로 켜면 반대편 셀이 언제나 함께 켜진다. rhombille 면 분할 자체는
+// 180도 대칭이 아니므로 면을 억지로 회전시키지 않고, C2 대칭인 전체 육각 셀을 원자로 쓴다.
+function pinwheelC2Bits(params) {
+  return bitsFor((cell) => {
+    if (cell.q === 0 && cell.r === 0) return 7;
+    const point = axialToPixel(cell.q, cell.r, UNIT_LAYOUT);
+    if (Math.hypot(point.x, point.y) > params.length) return 0;
+    const arm = cellPolarArm(cell, params.blades, params.phase,
+      params.twistFraction, params.winding);
+    return arm.distance <= params.widthFraction / 2 ? 7 : 0;
+  });
+}
+
+function flowerC2Bits(params) {
+  const secondAxis = (params.axis + 1) % 3;
+  const directions = params.petals === 2
+    ? [params.axis, params.axis + 3]
+    : [params.axis, secondAxis, params.axis + 3, secondAxis + 3];
+  return bitsFor((cell) => {
+    const ring = hexDistance(cell.q, cell.r);
+    if (ring === 0 || (params.coreRing && ring === 1)) return 7;
+    if (ring > params.petalLength) return 0;
+    return directions.some((index) => onDirectedRay(cell, AXIAL_DIRECTIONS[index])) ? 7 : 0;
+  });
+}
+
+function gapRingC2Bits(params) {
+  const gapDirections = [
+    AXIAL_DIRECTIONS[params.gapAxis],
+    AXIAL_DIRECTIONS[params.gapAxis + 3],
+  ];
+  return bitsFor((cell) => {
+    const ring = hexDistance(cell.q, cell.r);
+    if (ring === 0) return params.centerTreatment === 'solid' ? 7 : 0;
+    if (ring < params.innerRing || ring > params.outerRing) return 0;
+    const inGap = gapDirections.some((direction) => onDirectedRay(cell, direction));
+    if (inGap && (params.gapDepth === 'all' || ring === params.outerRing)) return 0;
+    return 7;
+  });
+}
+
+// 반대 셀은 같은 axis(0..2)와 같은 mask를 받아 외곽 면이 명시적인 180도 짝을 이룬다.
+// 개별 마름모는 C2 격자 사상이 아니지만, 각 ring에서 T/L/R mask가 같은 횟수로 나타나
+// 면 중심 오프셋의 합도 0이 된다. 따라서 전체 면적 가중 질량중심은 정확히 중앙이다.
+function faceSwirlC2Bits(params) {
+  return bitsFor((cell) => {
+    const ring = hexDistance(cell.q, cell.r);
+    if (ring === 0) return 7;
+    if (params.ringMode === 'outer' && ring === 1) return 0;
+    const descriptor = C2_PAIR_INDEX.get(cellKey(cell.q, cell.r));
+    assert(descriptor !== undefined, 'C2 face-swirl 반대 셀 짝 누락: ' + cellKey(cell.q, cell.r));
+    const inner = descriptor.ring === 1;
+    const sequence = inner
+      ? C2_INNER_SEQUENCES[params.innerSequence]
+      : C2_OUTER_SEQUENCES[params.outerSequence];
+    const cycle = FACE_CYCLES[inner ? params.innerCycle : params.outerCycle];
+    return cycle[sequence[descriptor.pairIndex]];
+  });
+}
+
 function sectorIndex(cell) {
   const point = axialToPixel(cell.q, cell.r, UNIT_LAYOUT);
   let best = 0;
@@ -1053,7 +1195,7 @@ function generateCandidates() {
   addBits('pinwheel-symmetric-c3', 'pinwheel', {
     blades: 3, length: 3.7, widthFraction: 0.64, twistFraction: 0.7,
     phase: 0, winding: 1, centerTreatment: 'solid',
-    breakMode: 'symmetric', symmetryWitness: true,
+    breakMode: 'symmetric', symmetryWitness: true, symmetryClass: 'C3',
   }, pinwheelBits({
     blades: 3, length: 3.7, widthFraction: 0.64, twistFraction: 0.7,
     phase: 0, winding: 1, centerTreatment: 'solid', breakMode: 'symmetric',
@@ -1061,11 +1203,66 @@ function generateCandidates() {
   addBits('flower-symmetric-c6', 'flower', {
     petals: 6, length: 3.7, widthFraction: 0.64, layers: 1,
     phase: 0, centerTreatment: 'solid',
-    breakMode: 'symmetric', symmetryWitness: true,
+    breakMode: 'symmetric', symmetryWitness: true, symmetryClass: 'C6',
   }, flowerBits({
     petals: 6, length: 3.7, widthFraction: 0.64, layers: 1,
     phase: 0, centerTreatment: 'solid', breakMode: 'symmetric',
   }));
+
+  // C2 적극 대조군. 180도는 채점할 격자 orientation이 아니어서 감점되지 않지만,
+  // 아래 네 판본은 켜진 질량을 반대편에 짝지어 중심 게이트를 정확히 통과한다.
+  const pinwheelC2Witness = {
+    blades: 2, length: 3.7, widthFraction: 0.64, twistFraction: 0.7,
+    phase: 0, winding: 1, centerTreatment: 'solid', symmetryClass: 'C2',
+    symmetryWitness: true,
+  };
+  addBits('pinwheel-symmetric-c2', 'pinwheel', pinwheelC2Witness,
+    pinwheelC2Bits(pinwheelC2Witness));
+  const flowerC2Witness = {
+    petals: 2, axis: 0, petalLength: 2, coreRing: false,
+    centerTreatment: 'solid', symmetryClass: 'C2', symmetryWitness: true,
+  };
+  addBits('flower-symmetric-c2', 'flower', flowerC2Witness,
+    flowerC2Bits(flowerC2Witness));
+  const gapRingC2Witness = {
+    innerRing: 1, outerRing: 2, gapAxis: 0, gapDepth: 'all',
+    centerTreatment: 'solid', symmetryClass: 'C2', symmetryWitness: true,
+  };
+  addBits('gap-ring-symmetric-c2', 'gap-ring', gapRingC2Witness,
+    gapRingC2Bits(gapRingC2Witness));
+  const faceSwirlC2Witness = {
+    innerSequence: 0, outerSequence: 1, innerCycle: 0, outerCycle: 1,
+    ringMode: 'both',
+    centerTreatment: 'solid', symmetryClass: 'C2', symmetryWitness: true,
+  };
+  addBits('face-swirl-symmetric-c2', 'face-swirl', faceSwirlC2Witness,
+    faceSwirlC2Bits(faceSwirlC2Witness));
+
+  // C2 바람개비: 2/4장 날개를 전체 셀로 만들어 편심 없이 감김·폭을 훑는다.
+  for (const blades of [2, 4]) {
+    for (let li = 0; li < RULE_SWEEP.radialLengths.length; li += 1) {
+      for (let wi = 0; wi < RULE_SWEEP.widthFractions.length; wi += 1) {
+        for (let ti = 0; ti < RULE_SWEEP.twistFractions.length; ti += 1) {
+          for (let pi = 0; pi < RULE_SWEEP.phases.length; pi += 1) {
+            for (const winding of [-1, 1]) {
+              const params = {
+                blades,
+                length: RULE_SWEEP.radialLengths[li],
+                widthFraction: RULE_SWEEP.widthFractions[wi],
+                twistFraction: RULE_SWEEP.twistFractions[ti],
+                phase: RULE_SWEEP.phases[pi],
+                winding,
+                centerTreatment: 'solid',
+                symmetryClass: 'C2',
+              };
+              addBits('pinwheel-c2-' + blades + '-' + li + wi + ti + pi + '-'
+                + (winding > 0 ? 'cw' : 'ccw'), 'pinwheel', params, pinwheelC2Bits(params));
+            }
+          }
+        }
+      }
+    }
+  }
 
   // 최우선 1: 바람개비. C3은 날개 하나 전체/바깥 절반을 결손시키고,
   // C5는 6회 격자 회전과 서로소인 날개 수 자체로 대칭을 깬다.
@@ -1129,6 +1326,22 @@ function generateCandidates() {
     }
   }
 
+  // C2 꽃: 2/4장 꽃잎을 반대 axial ray 쌍으로 놓는다.
+  for (const petals of [2, 4]) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      for (const petalLength of [1, 2]) {
+        for (const coreRing of [false, true]) {
+          const params = {
+            petals, axis, petalLength, coreRing,
+            centerTreatment: 'solid', symmetryClass: 'C2',
+          };
+          addBits('flower-c2-' + petals + '-' + axis + '-' + petalLength + '-'
+            + (coreRing ? 'core' : 'open'), 'flower', params, flowerC2Bits(params));
+        }
+      }
+    }
+  }
+
   // 부차 족: 틈 하나를 뭉쳐 뺀 링. 육망성 실루엣 규칙은 만들지 않는다.
   // [미검증] 틈 링 안쪽 반경 표본. 실기기/미감 보정 전이다.
   const gapInnerRadii = [1.0, 1.5];
@@ -1148,6 +1361,22 @@ function generateCandidates() {
               + String(gapWidthFraction).replace('.', '') + '-' + centerTreatment,
             'gap-ring', params, gapRingBits(params));
           }
+        }
+      }
+    }
+  }
+
+  // C2 틈 링: 전체 셀 링에서 정확히 마주보는 두 ray를 함께 비운다.
+  for (const innerRing of [1, 2]) {
+    for (let gapAxis = 0; gapAxis < 3; gapAxis += 1) {
+      for (const gapDepth of ['all', 'outer']) {
+        for (const centerTreatment of ['open', 'solid']) {
+          const params = {
+            innerRing, outerRing: 2, gapAxis, gapDepth, centerTreatment,
+            symmetryClass: 'C2',
+          };
+          addBits('gap-ring-c2-' + innerRing + '-' + gapAxis + '-' + gapDepth + '-'
+            + centerTreatment, 'gap-ring', params, gapRingC2Bits(params));
         }
       }
     }
@@ -1195,16 +1424,15 @@ function generateCandidates() {
       }
     }
   }
-  const cycles = [SINGLE_FACE_MASKS, Object.freeze([6, 5, 3])];
   for (let phase = 0; phase < 6; phase += 1) {
     for (let center = 0; center < 8; center += 1) {
-      for (let cycle = 0; cycle < cycles.length; cycle += 1) {
+      for (let cycle = 0; cycle < FACE_CYCLES.length; cycle += 1) {
         for (const invertOuter of [false, true]) {
           add('swirl-' + phase + '-' + center + cycle + (invertOuter ? 1 : 0),
             'face-swirl', { phase, center, cycle, invertOuter }, (cell) => {
               const ring = hexDistance(cell.q, cell.r);
               if (ring === 0) return center;
-              let mask = cycles[cycle][(sectorIndex(cell) + phase) % 3];
+              let mask = FACE_CYCLES[cycle][(sectorIndex(cell) + phase) % 3];
               if (ring === 2 && invertOuter) mask ^= 7;
               return mask;
             });
@@ -1212,6 +1440,26 @@ function generateCandidates() {
       }
     }
   }
+
+  // C2 face-swirl은 중앙 육각을 채우고 ring-1/ring-2의 반대 셀에 같은 face mask를
+  // 배정한다. 두 ring의 균형 순열과 face cycle을 독립적으로 훑어 이 족을 가장 넓게 본다.
+  for (let innerSequence = 0; innerSequence < C2_INNER_SEQUENCES.length; innerSequence += 1) {
+    for (let outerSequence = 0; outerSequence < C2_OUTER_SEQUENCES.length; outerSequence += 1) {
+      for (let innerCycle = 0; innerCycle < FACE_CYCLES.length; innerCycle += 1) {
+        for (let outerCycle = 0; outerCycle < FACE_CYCLES.length; outerCycle += 1) {
+          for (const ringMode of ['both', 'outer']) {
+            const params = {
+              innerSequence, outerSequence, innerCycle, outerCycle, ringMode,
+              centerTreatment: 'solid', symmetryClass: 'C2',
+            };
+            addBits('swirl-c2-' + innerSequence + '-' + outerSequence + '-'
+              + innerCycle + outerCycle + '-' + ringMode,
+            'face-swirl', params, faceSwirlC2Bits(params));
+          }
+        }
+      }
+      }
+    }
   const familyCounts = Object.fromEntries([...seenByFamily]
     .map(([family, fingerprints]) => [family, fingerprints.size]));
   assert(familyCounts.pinwheel > 1, '바람개비 후보가 생성되지 않음');
@@ -1225,6 +1473,7 @@ function resultRow(result, rank) {
   const structure = result.metrics.structuralSimplicity;
   const defect = result.metrics.defectConcentration;
   return { rank, name: result.name || result.id, family: result.family,
+    offset: result.centerBalance ? scoreText(result.centerBalance.offsetCells) + 'c' : '—',
     rotation: scoreText(result.metrics.rotation.score),
     low9px: scoreText(result.metrics.lowResolution.score),
     localization: scoreText(result.metrics.localization.score),
@@ -1314,7 +1563,8 @@ function parseArgs(argv) {
 function help() {
   console.log('사용법: node tools/finder-score.mjs [options]\n\n'
     + '  --top N           전체 상위 후보 수 (기본 ' + DEFAULT_TOP + ')\n'
-    + '  --per-family N    족별 PNG 후보 수 (기본 ' + DEFAULT_PER_FAMILY + ')\n'
+    + '  --per-family N    네 우선 족별 PNG 수; 비교 족은 1개 (기본 '
+      + DEFAULT_PER_FAMILY + ')\n'
     + '  --output DIR      실행별 출력 폴더의 상위 경로\n'
     + '  --blur-sigma PX   [미검증] 가우시안 sigma (기본 ' + DEFAULT_BLUR_SIGMA + ')\n'
     + '  --help            도움말');
@@ -1355,6 +1605,8 @@ async function writePng(scene, filePath) {
 }
 function publicResult(result) {
   return { id: result.id, name: result.name, family: result.family, params: result.params,
+    centerOffsetCells: result.centerBalance ? result.centerBalance.offsetCells : null,
+    centerBalance: result.centerBalance || null,
     scores: { rotation: result.metrics.rotation.score,
       lowResolution: result.metrics.lowResolution.score,
       localization: result.metrics.localization.score,
@@ -1428,7 +1680,10 @@ export async function runHarness(options = {}) {
   console.log('');
 
   let candidateCount = 0;
+  let generatedCandidateCount = 0;
   let familyCounts = {};
+  let familyGeneratedCounts = {};
+  let centerGateRejectedByFamily = {};
   let top = [];
   let topByFamily = {};
   let symmetryWitnesses = [];
@@ -1438,13 +1693,34 @@ export async function runHarness(options = {}) {
     note: 'rotationDefectPearson은 회전 원점수와 결손 집중도 원점수의 Pearson r이다.',
   };
   if (validation.passed) {
-    const candidates = generateCandidates();
+    const generatedCandidates = generateCandidates();
+    generatedCandidateCount = generatedCandidates.length;
+    const familyOrder = [...new Set(generatedCandidates.map((candidate) => candidate.family))];
+    familyGeneratedCounts = Object.fromEntries(familyOrder.map((family) => [
+      family, generatedCandidates.filter((candidate) => candidate.family === family).length,
+    ]));
+    const measuredCandidates = generatedCandidates.map((candidate) => ({
+      ...candidate,
+      centerBalance: centerBalanceMetric(candidate.bits),
+    }));
+    centerGateRejectedByFamily = Object.fromEntries(familyOrder.map((family) => [
+      family,
+      measuredCandidates.filter((candidate) =>
+        candidate.family === family && !candidate.centerBalance.passed).length,
+    ]));
+    const candidates = measuredCandidates.filter((candidate) => candidate.centerBalance.passed);
     candidateCount = candidates.length;
-    const familyOrder = [...new Set(candidates.map((candidate) => candidate.family))];
     familyCounts = Object.fromEntries(familyOrder.map((family) => [
       family, candidates.filter((candidate) => candidate.family === family).length,
     ]));
-    console.log('구조화 후보 ' + candidateCount + '개 채점 중...');
+    console.log('중심 균형 게이트 <= ' + CENTER_BALANCE_LIMIT_CELLS.toFixed(2) + 'c');
+    for (const family of familyOrder) {
+      console.log('- [' + family + '] 생성 ' + familyGeneratedCounts[family]
+        + '개 / 탈락 ' + centerGateRejectedByFamily[family]
+        + '개 / 채점 ' + familyCounts[family] + '개');
+    }
+    console.log('구조화 후보 ' + generatedCandidateCount + '개 중 게이트 통과 '
+      + candidateCount + '개 채점 중...');
     const ranked = candidates.map((candidate) => scoreBits(candidate, kernel, bases));
     ranked.sort(rankResults);
     top = ranked.slice(0, config.top);
@@ -1464,8 +1740,9 @@ export async function runHarness(options = {}) {
     const familyRoot = path.join(outputDir, 'by-family');
     await fs.mkdir(familyRoot, { recursive: true });
     for (const family of familyOrder) {
+      const familyLimit = PRIORITY_FAMILIES.includes(family) ? config.perFamily : 1;
       const selected = ranked.filter((result) => result.family === family)
-        .slice(0, config.perFamily);
+        .slice(0, familyLimit);
       assert(selected.length > 0, family + ' 족별 후보가 비어 있음');
       const familyDir = path.join(familyRoot, family.replace(/[^a-z0-9-]/gi, '_'));
       await fs.mkdir(familyDir, { recursive: true });
@@ -1478,12 +1755,23 @@ export async function runHarness(options = {}) {
     }
 
     symmetryWitnesses = ranked.filter((result) => result.params && result.params.symmetryWitness);
-    assert(symmetryWitnesses.length === 2, 'C3/C6 대칭 증거판 수가 2가 아님');
-    for (const witness of symmetryWitnesses) {
+    const harmfulWitnesses = symmetryWitnesses.filter((result) =>
+      result.params.symmetryClass === 'C3' || result.params.symmetryClass === 'C6');
+    const c2Witnesses = symmetryWitnesses.filter((result) => result.params.symmetryClass === 'C2');
+    assert(harmfulWitnesses.length === 2, 'C3/C6 대칭 증거판 수가 2가 아님');
+    assert(c2Witnesses.length === PRIORITY_FAMILIES.length,
+      'C2 대칭 증거판 수가 우선 족 수와 다름');
+    for (const witness of harmfulWitnesses) {
       assert(witness.metrics.rotation.score === 0,
         witness.id + ' 대칭 증거판 회전 점수가 0이 아님');
       assert(witness.metrics.rotation.minDifferenceCount === 0,
         witness.id + ' 대칭 증거판 차이 표본 수가 0이 아님');
+    }
+    for (const witness of c2Witnesses) {
+      assert(witness.centerBalance.passed, witness.id + ' C2 판본이 중심 게이트를 통과하지 못함');
+      assert(witness.metrics.rotation.score > 0,
+        witness.id + ' C2 판본 회전 점수가 0임');
+      assert(witness.total > 0, witness.id + ' C2 판본 종합 점수가 0임');
     }
     const witnessDir = path.join(outputDir, 'symmetry-witnesses');
     await fs.mkdir(witnessDir, { recursive: true });
@@ -1503,7 +1791,7 @@ export async function runHarness(options = {}) {
         + topByFamily[family].length + '개');
       console.table(topByFamily[family].map((result, index) => resultRow(result, index + 1)));
     }
-    console.log('대칭 실패 증거 — C3/C6은 회전 0점');
+    console.log('대칭 증거 — C3/C6은 회전 0점, C2는 0점이 아님');
     console.table(symmetryWitnesses.map((result) => resultRow(result, '증거')));
 
     const oldStructure = analysis.legacyFourAxisTop.structuralSimplicity;
@@ -1540,7 +1828,9 @@ export async function runHarness(options = {}) {
       generatedAt: startedAt.toISOString(),
       wallTimeMs: Date.now() - startedAt.getTime(),
       candidateCount,
+      generatedCandidateCount,
       familyCounts,
+      familyGeneratedCounts,
       finderCells: CELLS.length,
       faces: FACE_COUNT,
       faceTopology: {
@@ -1556,9 +1846,20 @@ export async function runHarness(options = {}) {
       blurSigmaPx: config.blurSigma,
       top: config.top,
       perFamily: config.perFamily,
+      priorityFamilies: PRIORITY_FAMILIES,
+      comparisonPerFamily: 1,
       compositeAxes: COMPOSITE_AXES,
       compositePolicy: '[미검증] 동일 가중 기하평균',
       ruleSweep: RULE_SWEEP,
+      centerBalanceGate: {
+        policy: 'score-axis가 아닌 후보 자격 게이트',
+        limitCells: CENTER_BALANCE_LIMIT_CELLS,
+        cellWidth: CELL_WIDTH,
+        generatedCount: generatedCandidateCount,
+        passedCount: candidateCount,
+        rejectedCount: generatedCandidateCount - candidateCount,
+        rejectedByFamily: centerGateRejectedByFamily,
+      },
       outputDir,
     },
     rulerValidation: validation,
