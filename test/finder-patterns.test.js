@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { encode } from '../src/encode.js';
 import {
   DEFAULT_FINDER_PATTERN_ID,
+  FINDER_BASELINE_SCORES,
   LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER,
   FINDER_FACE_BITS,
@@ -22,7 +23,9 @@ import { verifyRaster } from '../src/verify.js';
 import {
   SELECTED_FINDER_IDS, bitsToCellMasks, renderFinderPatternsModule,
 } from '../tools/extract-finder-patterns.mjs';
-import { generateFinderCandidates } from '../tools/finder-score.mjs';
+import {
+  generateFinderCandidates, measureFinderPatternScores,
+} from '../tools/finder-score.mjs';
 
 const MODULE_PATH = fileURLToPath(new URL('../src/finder-patterns.js', import.meta.url));
 const PRESET = getPreset(DEFAULT_PRESET);
@@ -31,6 +34,53 @@ const PALETTE = Object.freeze({
   levels: PRESET.levels,
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
+});
+
+const FINDER_SCORE_AXES = Object.freeze([
+  'rotation', 'lowResolution', 'localization', 'dataDistinction',
+  'structuralSimplicity', 'defectConcentration',
+]);
+const EXPECTED_FINDER_MEASUREMENTS = Object.freeze({
+  "pinwheel-3-0101-cw-missing-solid": Object.freeze({
+    centerOffsetCells: 0.4003203845127178,
+    scores: Object.freeze({"rotation":41.88539082916955,"lowResolution":96.76318469627645,"localization":13.956257981685615,"dataDistinction":100,"structuralSimplicity":90.91372900969897,"defectConcentration":42.51092259923948}),
+  }),
+  "gap-ring-01-2-1-solid": Object.freeze({
+    centerOffsetCells: 0.26268091278848715,
+    scores: Object.freeze({"rotation":52.98129428260175,"lowResolution":95.31975482327525,"localization":13.693929273351637,"dataDistinction":100,"structuralSimplicity":86.6828394595597,"defectConcentration":30.22998940390363}),
+  }),
+  "flower-7-0020-coprime-offset": Object.freeze({
+    centerOffsetCells: 0.5265081997022854,
+    scores: Object.freeze({"rotation":45.883146774112355,"lowResolution":95.24771635431023,"localization":16.094778612701756,"dataDistinction":100,"structuralSimplicity":91.18880899993957,"defectConcentration":51.01310711908737}),
+  }),
+  "swirl-2-200": Object.freeze({
+    centerOffsetCells: 0.015193428136569088,
+    scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":91.34433401090291,"localization":22.81112784741712,"dataDistinction":100,"structuralSimplicity":55.579256952027684,"defectConcentration":11.624045166840785}),
+  }),
+  "pinwheel-c2-2-1100-cw": Object.freeze({
+    centerOffsetCells: 5.0923777502508197e-17,
+    scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":97.07728924112143,"localization":11.17193090966036,"dataDistinction":100,"structuralSimplicity":92.28092947267801,"defectConcentration":30.229989403903623}),
+  }),
+  "gap-ring-01-2-1-open": Object.freeze({
+    centerOffsetCells: 0.28238198124762376,
+    scores: Object.freeze({"rotation":52.98129428260175,"lowResolution":95.43798666192357,"localization":13.80747895581605,"dataDistinction":100,"structuralSimplicity":84.51542547285166,"defectConcentration":30.22998940390363}),
+  }),
+  "flower-7-1020-coprime-offset": Object.freeze({
+    centerOffsetCells: 0.06943296507508846,
+    scores: Object.freeze({"rotation":59.23488777590924,"lowResolution":94.16580922822094,"localization":17.492914686282145,"dataDistinction":100,"structuralSimplicity":82.53857253110874,"defectConcentration":31.478487966284845}),
+  }),
+  "swirl-c2-5-5-11-both": Object.freeze({
+    centerOffsetCells: 5.611412357367492e-17,
+    scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":91.17102980798893,"localization":23.55161544174186,"dataDistinction":100,"structuralSimplicity":56.325320629094655,"defectConcentration":12.065908777314663}),
+  }),
+  "bullseye": Object.freeze({
+    centerOffsetCells: 0.049771574930140124,
+    scores: Object.freeze({"rotation":0,"lowResolution":55.504960185798204,"localization":32.22404593197675,"dataDistinction":100,"structuralSimplicity":59.79246730623948,"defectConcentration":0}),
+  }),
+  "center-qr": Object.freeze({
+    centerOffsetCells: 0.1022033350678163,
+    scores: Object.freeze({"rotation":64.88856845230502,"lowResolution":44.354818376683234,"localization":23.89512046344338,"dataDistinction":100,"structuralSimplicity":65.77636818983622,"defectConcentration":42.7374753470321}),
+  })
 });
 
 test('고정 목록은 요청된 8개 ID와 regionCells(2) 좌표 순서를 그대로 쓴다', () => {
@@ -50,19 +100,47 @@ test('고정 목록은 요청된 8개 ID와 regionCells(2) 좌표 순서를 그�
   assert.deepEqual(FACES.map((face) => FINDER_FACE_BITS[face]), [1, 2, 4]);
 });
 
-test('고정 8개 면 마스크가 채점 하네스의 게이트 전 동일 ID와 정확히 일치한다', () => {
+test('고정 8개 마스크·6축 점수·중심 오프셋이 채점 하네스와 정확히 일치한다', () => {
   const generated = generateFinderCandidates();
+  const measured = measureFinderPatternScores(generated);
+  const measuredById = new Map(
+    [...measured.candidates, ...measured.baselines].map((entry) => [entry.id, entry]),
+  );
   for (const pattern of FINDER_PATTERNS) {
     const candidate = generated.find((entry) => entry.id === pattern.id);
-    assert.ok(candidate, `${pattern.id}: 하네스 후보에서 사라졌다`);
+    assert.ok(candidate, pattern.id + ': 하네스 후보에서 사라졌다');
     assert.deepEqual(
       pattern.cellMasks,
       bitsToCellMasks(candidate.bits),
-      `${pattern.id}: 고정 마스크와 하네스 생성 마스크가 어긋났다`,
+      pattern.id + ': 고정 마스크와 하네스 생성 마스크가 어긋났다',
     );
+    const expected = EXPECTED_FINDER_MEASUREMENTS[pattern.id];
+    const harness = measuredById.get(pattern.id);
+    assert.deepEqual(pattern.scores, expected.scores, pattern.id + ': 6축 고정값 변경');
+    assert.equal(pattern.centerOffsetCells, expected.centerOffsetCells,
+      pattern.id + ': 중심 오프셋 고정값 변경');
+    assert.deepEqual(harness.scores, expected.scores, pattern.id + ': 6축 하네스 회귀');
+    assert.equal(harness.centerOffsetCells, expected.centerOffsetCells,
+      pattern.id + ': 중심 오프셋 하네스 회귀');
+    assert.deepEqual(Object.keys(pattern.scores), FINDER_SCORE_AXES, pattern.id);
+    assert.equal('total' in pattern.scores, false, pattern.id + ': total 저장 금지');
+  }
+
+  assert.deepEqual(Object.keys(FINDER_BASELINE_SCORES), ['bullseye', 'center-qr']);
+  for (const [id, baseline] of Object.entries(FINDER_BASELINE_SCORES)) {
+    const expected = EXPECTED_FINDER_MEASUREMENTS[id];
+    const harness = measuredById.get(id);
+    assert.deepEqual(baseline.scores, expected.scores, id + ': 기준선 6축 고정값 변경');
+    assert.equal(baseline.centerOffsetCells, expected.centerOffsetCells,
+      id + ': 기준선 중심 오프셋 고정값 변경');
+    assert.deepEqual(harness.scores, expected.scores, id + ': 기준선 6축 하네스 회귀');
+    assert.equal(harness.centerOffsetCells, expected.centerOffsetCells,
+      id + ': 기준선 중심 오프셋 하네스 회귀');
+    assert.equal(baseline.centerBalanceGatePassed, true, id + ': 기준선 게이트');
+    assert.deepEqual(Object.keys(baseline.scores), FINDER_SCORE_AXES, id);
+    assert.equal('total' in baseline.scores, false, id + ': total 저장 금지');
   }
 });
-
 test('중심 균형 게이트 탈락 2개도 대체 없이 그대로 수록한다', () => {
   const rejected = FINDER_PATTERNS
     .filter((pattern) => !pattern.centerBalanceGatePassed)

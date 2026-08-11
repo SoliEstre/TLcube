@@ -898,7 +898,7 @@ function scoreBits(candidate, kernel, bases) {
   return { ...candidate, metrics, legacyTotal: composite(metrics, LEGACY_AXES),
     total: composite(metrics) };
 }
-function scoreBaseline(name, kind, evaluate, kernel, bases) {
+function scoreBaseline(name, kind, evaluate, kernel, bases, includeCenterBalance = false) {
   const clean = functionSignature(evaluate);
   const lowRaster = renderFunctionLow(evaluate, kernel);
   const blurred = lowSignature(lowRaster);
@@ -921,6 +921,7 @@ function scoreBaseline(name, kind, evaluate, kernel, bases) {
     defectConcentration: defectConcentrationMetric(clean, rotated, rotation.worstDegrees),
   };
   return { id: kind, name, family: 'baseline', kind, metrics,
+    ...(includeCenterBalance ? { centerBalance: centerBalanceMetric(projection.bits) } : {}),
     legacyTotal: composite(metrics, LEGACY_AXES), total: composite(metrics) };
 }
 function bullseyeEvaluator() {
@@ -1477,6 +1478,45 @@ function generateCandidates() {
  */
 export function generateFinderCandidates() {
   return generateCandidates();
+}
+
+/**
+ * 고정 파인더 데이터와 UI가 하네스의 같은 자를 쓰는지 확인하는 순수 측정 진입점.
+ *
+ * 후보 자격 게이트를 적용하기 전의 전 후보를 채점하며, 검증되지 않은 종합점수는 일부러
+ * 반환하지 않는다. 기준선의 중심 오프셋은 연속 도형을 구조 축과 같은 면 투영으로 이진화해
+ * 잰 값이다.
+ */
+export function measureFinderPatternScores(candidates = generateCandidates(), options = {}) {
+  if (!Array.isArray(candidates)) {
+    throw new TypeError('파인더 후보 목록은 배열이어야 한다');
+  }
+  const blurSigma = options.blurSigma === undefined ? DEFAULT_BLUR_SIGMA : options.blurSigma;
+  if (!Number.isFinite(blurSigma) || blurSigma <= 0) {
+    throw new RangeError('blurSigma 는 0보다 큰 유한수여야 한다: ' + blurSigma);
+  }
+  const kernel = gaussianKernel(blurSigma);
+  const bases = blurredFaceBases(kernel);
+  const record = (result) => Object.freeze({
+    id: result.id,
+    centerOffsetCells: result.centerBalance.offsetCells,
+    centerBalanceGatePassed: result.centerBalance.passed,
+    scores: Object.freeze(Object.fromEntries(COMPOSITE_AXES.map(
+      (axis) => [axis, result.metrics[axis].score],
+    ))),
+  });
+  const baselines = [
+    scoreBaseline('현행 불스아이', 'bullseye', bullseyeEvaluator(), kernel, bases, true),
+    scoreBaseline('중앙 QR', 'center-qr', centerQrEvaluator(), kernel, bases, true),
+  ];
+  const measuredCandidates = candidates.map((candidate) => scoreBits({
+    ...candidate,
+    centerBalance: centerBalanceMetric(candidate.bits),
+  }, kernel, bases));
+  return Object.freeze({
+    baselines: Object.freeze(baselines.map(record)),
+    candidates: Object.freeze(measuredCandidates.map(record)),
+  });
 }
 function scoreText(value) { return Number(value).toFixed(2); }
 function resultRow(result, rank) {

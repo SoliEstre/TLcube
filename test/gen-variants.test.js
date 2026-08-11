@@ -73,6 +73,19 @@ test('select 대신 4계열 카드 격자이고 실험 썸네일은 19셀 마스
   assert.match(source, /pattern\.cellMasks\[cellIndex\]/);
   assert.match(source, /facePolygon\(cell\.q, cell\.r, face, layout\)/);
   assert.match(source, /'data-mask-cells': FINDER_CELL_ORDER\.length/);
+  assert.match(source, /id="finderScorePanel"/);
+  assert.match(source, /const centerQrScores = FINDER_BASELINE_SCORES\['center-qr'\]\.scores/);
+  assert.match(source, /classList\.toggle\('gate-rejected'/);
+  assert.match(source, /evidenceKey: 'g489'.*evidenceClass: 'measured'/);
+  assert.match(source, /evidenceKey: 'g490'.*evidenceClass: 'counterexample'/);
+  assert.match(source, /data-i18n="g492"/);
+  const built = buildGeneratorVariants();
+  for (const html of [built.official, built.experiment]) {
+    assert.match(html, /2026-08-12\.02/);
+    const finderSource = embeddedFinderSource(html);
+    assert.match(finderSource, /export const FINDER_BASELINE_SCORES/);
+    assert.doesNotMatch(finderSource, /\btotal\b/);
+  }
 });
 
 test('robots는 임시 생성기 엔드포인트를 색인에서 제외한다', () => {

@@ -263,6 +263,50 @@
   .finder-card { min-width: 0; width: 100%; padding: 7px 3px; justify-content: flex-start; }
   .finder-card svg { width: 100%; max-width: 52px; height: auto; flex: 0 0 auto; }
   .finder-card-label { min-height: 2.4em; display: flex; align-items: center; line-height: 1.2; }
+  .finder-score-panel {
+    margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: color-mix(in srgb, var(--panel) 72%, var(--bg));
+  }
+  .finder-score-panel.gate-rejected {
+    border-color: color-mix(in srgb, var(--bad) 72%, var(--line));
+    background: color-mix(in srgb, var(--bad) 7%, var(--panel));
+  }
+  .finder-score-heading, .finder-offset-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .finder-score-heading { margin-bottom: 9px; font-size: 12px; }
+  .finder-gate-badge, .finder-score-evidence {
+    display: inline-flex; width: fit-content; align-items: center; padding: 1px 6px;
+    border: 1px solid var(--line); border-radius: 99px; font-size: 9px; line-height: 1.45;
+  }
+  .finder-gate-badge.passed { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+  .finder-gate-badge.rejected { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); font-weight: 700; }
+  .finder-score-rows { display: grid; gap: 8px; }
+  .finder-score-row {
+    display: grid; grid-template-columns: minmax(118px, .95fr) minmax(124px, 1.3fr) 40px;
+    align-items: center; gap: 8px;
+  }
+  .finder-score-axis { display: grid; gap: 2px; min-width: 0; font-size: 10px; line-height: 1.25; }
+  .finder-score-evidence.measured { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 42%, var(--line)); }
+  .finder-score-evidence.counterexample { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 48%, var(--line)); }
+  .finder-score-evidence.unverified { color: var(--dim); }
+  .finder-score-visual { display: grid; gap: 2px; min-width: 0; }
+  .finder-score-track { position: relative; height: 9px; overflow: visible; background: var(--bg); border: 1px solid var(--line); border-radius: 99px; }
+  .finder-score-fill { height: 100%; border-radius: inherit; background: var(--accent); }
+  .finder-score-marker {
+    position: absolute; top: -3px; width: 2px; height: 13px; transform: translateX(-1px);
+    background: var(--text); box-shadow: 0 0 0 1px var(--bg);
+  }
+  .finder-score-baseline { color: var(--dim); font-size: 8px; line-height: 1.2; text-align: right; }
+  .finder-score-value, .finder-offset-value { font-variant-numeric: tabular-nums; }
+  .finder-score-value { color: var(--text); font-size: 11px; text-align: right; }
+  .finder-offset-row { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10px; }
+  .finder-offset-result { display: inline-flex; align-items: center; gap: 6px; }
+  .finder-score-note { margin: 8px 0 0; }
+  @media (max-width: 420px) {
+    .finder-score-row { grid-template-columns: minmax(0, 1fr) 40px; }
+    .finder-score-visual { grid-column: 1 / -1; grid-row: 2; }
+  }
   @media (max-width: 420px) {
     .experiment-banner { width: calc(100% - 32px); margin-inline: 16px; align-items: flex-start; flex-direction: column; }
     .finder-family-grid.card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -760,6 +804,21 @@
         <label data-i18n="g459">중앙 파인더 (Type O/A)</label>
         <div class="finder-legacy-row card-row" id="finderLegacyRow"></div>
         <div class="finder-family-grid card-row" id="finderPatternCards"></div>
+        <div class="finder-score-panel" id="finderScorePanel" aria-live="polite" aria-label="선택 파인더 특성" data-i18n-attr="aria-label:g496">
+          <div class="finder-score-heading">
+            <strong id="finderScoreName"></strong>
+            <span class="finder-gate-badge" id="finderGateBadge"></span>
+          </div>
+          <div class="finder-score-rows" id="finderScoreRows"></div>
+          <div class="finder-offset-row">
+            <span data-i18n="g488">중심 오프셋</span>
+            <span class="finder-offset-result">
+              <strong class="finder-offset-value" id="finderCenterOffset"></strong>
+              <span id="finderCenterGate"></span>
+            </span>
+          </div>
+          <p class="hint finder-score-note" data-i18n="g492">이 값은 모형 점수이며 인식률 예측이 아니에요.</p>
+        </div>
         <p class="hint" id="finderOverrideHint" data-i18n="g471" style="display:none">중앙 QR이 선택되어 위 실험 파인더 대신 렌더돼요.</p>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
@@ -1085,7 +1144,24 @@ const GENERATOR_STRINGS = {
     "g476": "실험 파인더 시험판",
     "g477": "정식 생성기로 돌아가기",
     "g478": "시험판 — 실험 파인더 생성기",
-    "g479": "여기서 만든 실험 파인더 코드는 아직 스캔되지 않아요. 모양 비교용으로만 사용해 주세요."
+    "g479": "여기서 만든 실험 파인더 코드는 아직 스캔되지 않아요. 모양 비교용으로만 사용해 주세요.",
+    "g480": "선택: {name}",
+    "g481": "중앙 QR {score}",
+    "g482": "방향 정보 (회전 유일성)",
+    "g483": "저해상도 생존",
+    "g484": "국소화",
+    "g485": "데이터 구별도",
+    "g486": "구조 단순성",
+    "g487": "결손 집중도",
+    "g488": "중심 오프셋",
+    "g489": "실측이 지목한 축",
+    "g490": "실측을 예측하지 못함",
+    "g491": "[미검증]",
+    "g492": "이 값은 모형 점수이며 인식률 예측이 아니에요.",
+    "g493": "게이트 통과",
+    "g494": "게이트 탈락",
+    "g495": "모형 점수 {score}; 중앙 QR 기준선 {baseline}",
+    "g496": "선택 파인더 특성"
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1263,7 +1339,24 @@ const GENERATOR_STRINGS = {
     "g476": "Experimental finder trial",
     "g477": "Back to the official generator",
     "g478": "Trial — experimental finder generator",
-    "g479": "Codes made with experimental finders are not scannable yet. Use them only for visual comparison."
+    "g479": "Codes made with experimental finders are not scannable yet. Use them only for visual comparison.",
+    "g480": "Selected: {name}",
+    "g481": "Centre QR {score}",
+    "g482": "Orientation (rotation uniqueness)",
+    "g483": "Low-resolution survival",
+    "g484": "Localization",
+    "g485": "Data distinction",
+    "g486": "Structural simplicity",
+    "g487": "Defect concentration",
+    "g488": "Centre offset",
+    "g489": "Axis identified by measurement",
+    "g490": "Did not predict measurements",
+    "g491": "[Unverified]",
+    "g492": "These are model scores, not recognition-rate predictions.",
+    "g493": "Gate passed",
+    "g494": "Gate failed",
+    "g495": "Model score {score}; centre QR baseline {baseline}",
+    "g496": "Selected finder characteristics"
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1441,7 +1534,24 @@ const GENERATOR_STRINGS = {
     "g476": "実験ファインダー試用版",
     "g477": "正式ジェネレーターに戻る",
     "g478": "試用版 — 実験ファインダー生成",
-    "g479": "ここで作る実験ファインダーのコードはまだスキャンできません。見た目の比較にのみ使用してください。"
+    "g479": "ここで作る実験ファインダーのコードはまだスキャンできません。見た目の比較にのみ使用してください。",
+    "g480": "選択中：{name}",
+    "g481": "中央QR {score}",
+    "g482": "方向情報（回転一意性）",
+    "g483": "低解像度での生存性",
+    "g484": "局所化",
+    "g485": "データ識別性",
+    "g486": "構造の単純性",
+    "g487": "欠損集中度",
+    "g488": "中心オフセット",
+    "g489": "実測が示した軸",
+    "g490": "実測を予測できず",
+    "g491": "[未検証]",
+    "g492": "これはモデルのスコアであり、認識率の予測ではありません。",
+    "g493": "ゲート通過",
+    "g494": "ゲート不通過",
+    "g495": "モデルスコア {score}、中央QR基準線 {baseline}",
+    "g496": "選択したファインダーの特性"
   },
 };
 
@@ -1476,7 +1586,7 @@ import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { encodeA } from './src/encodeA.js';
 import {
-  DEFAULT_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
+  DEFAULT_FINDER_PATTERN_ID, FINDER_BASELINE_SCORES, LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
 } from './src/finder-patterns.js';
 import { FACES, facePolygon } from './src/hexgrid.js';
@@ -1523,6 +1633,9 @@ const els = {
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
   finderPatternCards: $('finderPatternCards'),
+  finderScorePanel: $('finderScorePanel'), finderScoreRows: $('finderScoreRows'),
+  finderScoreName: $('finderScoreName'), finderGateBadge: $('finderGateBadge'),
+  finderCenterOffset: $('finderCenterOffset'), finderCenterGate: $('finderCenterGate'),
   finderExperimentalWarning: $('finderExperimentalWarning'),
   finderOverrideHint: $('finderOverrideHint'),
   // 일반 모드
@@ -2035,8 +2148,53 @@ const FINDER_FAMILY_KEYS = Object.freeze({
   flower: 'g474',
   'face-swirl': 'g475',
 });
+const FINDER_SCORE_AXES = Object.freeze([
+  Object.freeze({ id: 'rotation', labelKey: 'g482', evidenceKey: 'g489', evidenceClass: 'measured' }),
+  Object.freeze({ id: 'lowResolution', labelKey: 'g483', evidenceKey: 'g491', evidenceClass: 'unverified' }),
+  Object.freeze({ id: 'localization', labelKey: 'g484', evidenceKey: 'g490', evidenceClass: 'counterexample' }),
+  Object.freeze({ id: 'dataDistinction', labelKey: 'g485', evidenceKey: 'g491', evidenceClass: 'unverified' }),
+  Object.freeze({ id: 'structuralSimplicity', labelKey: 'g486', evidenceKey: 'g491', evidenceClass: 'unverified' }),
+  Object.freeze({ id: 'defectConcentration', labelKey: 'g487', evidenceKey: 'g491', evidenceClass: 'unverified' }),
+]);
 const FINDER_SVG_NS = 'http://www.w3.org/2000/svg';
 
+function ensureFinderScoreRows() {
+  if (els.finderScoreRows.childElementCount) return;
+  for (const axis of FINDER_SCORE_AXES) {
+    const row = document.createElement('div');
+    row.className = 'finder-score-row';
+    row.dataset.finderScoreAxis = axis.id;
+
+    const axisWrap = document.createElement('div');
+    axisWrap.className = 'finder-score-axis';
+    const label = document.createElement('span');
+    label.className = 'finder-score-axis-label';
+    const evidence = document.createElement('span');
+    evidence.className = 'finder-score-evidence ' + axis.evidenceClass;
+    axisWrap.append(label, evidence);
+
+    const visual = document.createElement('div');
+    visual.className = 'finder-score-visual';
+    const track = document.createElement('div');
+    track.className = 'finder-score-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+    const fill = document.createElement('div');
+    fill.className = 'finder-score-fill';
+    const marker = document.createElement('span');
+    marker.className = 'finder-score-marker';
+    track.append(fill, marker);
+    const baseline = document.createElement('span');
+    baseline.className = 'finder-score-baseline';
+    visual.append(track, baseline);
+
+    const value = document.createElement('strong');
+    value.className = 'finder-score-value';
+    row.append(axisWrap, visual, value);
+    els.finderScoreRows.append(row);
+  }
+}
 function finderSvgElement(tag, attrs = {}) {
   const element = document.createElementNS(FINDER_SVG_NS, tag);
   for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, String(value));
@@ -2118,6 +2276,7 @@ function makeFinderCard(id, pattern) {
 }
 
 function ensureFinderCards() {
+  ensureFinderScoreRows();
   if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount) return;
   els.finderLegacyRow.append(makeFinderCard(LEGACY_FINDER_PATTERN_ID, null));
   for (let column = 0; column < 4; column += 1) {
@@ -2158,9 +2317,46 @@ function syncFinderUi() {
     label.textContent = t(label.dataset.finderLabelKey);
   }
 
-  const experimental = FINDER_PATTERNS.some(
+  const selectedPattern = FINDER_PATTERNS.find(
     (pattern) => pattern.id === normalState.finderPatternId,
   );
+  const scoreRecord = selectedPattern || FINDER_BASELINE_SCORES[normalState.finderPatternId];
+  if (!scoreRecord) throw new Error('finder score record missing: ' + normalState.finderPatternId);
+  const selectedLabelKey = selectedPattern
+    ? FINDER_LABEL_KEYS[selectedPattern.id] : 'g460';
+  const gateKey = scoreRecord.centerBalanceGatePassed ? 'g493' : 'g494';
+  const gateClass = scoreRecord.centerBalanceGatePassed ? 'passed' : 'rejected';
+  els.finderScorePanel.classList.toggle('gate-rejected', !scoreRecord.centerBalanceGatePassed);
+  els.finderScoreName.textContent = tf('g480', { name: t(selectedLabelKey) });
+  els.finderGateBadge.className = 'finder-gate-badge ' + gateClass;
+  els.finderGateBadge.textContent = t(gateKey);
+  els.finderCenterOffset.textContent = scoreRecord.centerOffsetCells.toFixed(2) + 'c';
+  els.finderCenterGate.className = 'finder-gate-badge ' + gateClass;
+  els.finderCenterGate.textContent = t(gateKey);
+
+  const centerQrScores = FINDER_BASELINE_SCORES['center-qr'].scores;
+  for (let axisIndex = 0; axisIndex < FINDER_SCORE_AXES.length; axisIndex += 1) {
+    const axis = FINDER_SCORE_AXES[axisIndex];
+    const row = els.finderScoreRows.children[axisIndex];
+    const score = scoreRecord.scores[axis.id];
+    const baselineScore = centerQrScores[axis.id];
+    const scoreText = score.toFixed(1);
+    const baselineText = baselineScore.toFixed(1);
+    row.querySelector('.finder-score-axis-label').textContent = t(axis.labelKey);
+    const evidence = row.querySelector('.finder-score-evidence');
+    evidence.textContent = t(axis.evidenceKey);
+    evidence.className = 'finder-score-evidence ' + axis.evidenceClass;
+    const track = row.querySelector('.finder-score-track');
+    track.setAttribute('aria-valuenow', scoreText);
+    track.setAttribute('aria-label', tf('g495', { score: scoreText, baseline: baselineText }));
+    row.querySelector('.finder-score-fill').style.width
+      = Math.max(0, Math.min(100, score)) + '%';
+    row.querySelector('.finder-score-marker').style.left
+      = Math.max(0, Math.min(100, baselineScore)) + '%';
+    row.querySelector('.finder-score-baseline').textContent = tf('g481', { score: baselineText });
+    row.querySelector('.finder-score-value').textContent = scoreText;
+  }
+  const experimental = Boolean(selectedPattern);
   const trialBuild = document.body.dataset.generatorEdition === 'finder-experiment';
   els.finderExperimentalWarning.style.display =
     experimental && !centerQrOverrides && (visible || trialBuild) ? '' : 'none';
@@ -3160,7 +3356,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-12.01';
+const GENERATOR_BUILD = '2026-08-12.02';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

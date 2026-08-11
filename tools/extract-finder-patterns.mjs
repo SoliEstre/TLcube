@@ -13,79 +13,97 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { generateFinderCandidates } from './finder-score.mjs';
+import { generateFinderCandidates, measureFinderPatternScores } from './finder-score.mjs';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, '..');
 const OUTPUT_PATH = path.join(REPO_ROOT, 'src', 'finder-patterns.js');
 
+const SCORE_AXES = Object.freeze([
+  'rotation', 'lowResolution', 'localization', 'dataDistinction',
+  'structuralSimplicity', 'defectConcentration',
+]);
+
 const TARGETS = Object.freeze([
-  // 이 순서는 생성기 UI 배치와 묶여 있다: 2차 후보 4개를 첫 행에, 같은 계열의
-  // 3차(C2) 후보 4개를 둘째 행에 둔다. UI 는 [0,4]·[1,5]·[2,6]·[3,7]을 세로로 묶는다.
   Object.freeze({
-    id: 'pinwheel-3-0101-cw-missing-solid',
-    name: 'Three-blade pinwheel',
+    id: "pinwheel-3-0101-cw-missing-solid",
+    name: "Three-blade pinwheel",
     run: 2,
     gatePassed: false,
-    rotation: 41.88539082916955,
-    structuralSimplicity: 90.91372900969897,
+    centerOffsetCells: 0.4003203845127178,
+    scores: Object.freeze({"rotation":41.88539082916955,"lowResolution":96.76318469627645,"localization":13.956257981685615,"dataDistinction":100,"structuralSimplicity":90.91372900969897,"defectConcentration":42.51092259923948}),
   }),
   Object.freeze({
-    id: 'gap-ring-01-2-1-solid',
-    name: 'Solid gap ring',
+    id: "gap-ring-01-2-1-solid",
+    name: "Solid gap ring",
     run: 2,
     gatePassed: true,
-    rotation: 52.98129428260175,
-    structuralSimplicity: 86.6828394595597,
+    centerOffsetCells: 0.26268091278848715,
+    scores: Object.freeze({"rotation":52.98129428260175,"lowResolution":95.31975482327525,"localization":13.693929273351637,"dataDistinction":100,"structuralSimplicity":86.6828394595597,"defectConcentration":30.22998940390363}),
   }),
   Object.freeze({
-    id: 'flower-7-0020-coprime-offset',
-    name: 'Seven-petal flower (compact)',
+    id: "flower-7-0020-coprime-offset",
+    name: "Seven-petal flower (compact)",
     run: 2,
     gatePassed: false,
-    rotation: 45.883146774112355,
-    structuralSimplicity: 91.18880899993957,
+    centerOffsetCells: 0.5265081997022854,
+    scores: Object.freeze({"rotation":45.883146774112355,"lowResolution":95.24771635431023,"localization":16.094778612701756,"dataDistinction":100,"structuralSimplicity":91.18880899993957,"defectConcentration":51.01310711908737}),
   }),
   Object.freeze({
-    id: 'swirl-2-200',
-    name: 'Face swirl',
+    id: "swirl-2-200",
+    name: "Face swirl",
     run: 2,
     gatePassed: true,
-    rotation: 79.47194142390262,
-    structuralSimplicity: 55.579256952027684,
+    centerOffsetCells: 0.015193428136569088,
+    scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":91.34433401090291,"localization":22.81112784741712,"dataDistinction":100,"structuralSimplicity":55.579256952027684,"defectConcentration":11.624045166840785}),
   }),
   Object.freeze({
-    id: 'pinwheel-c2-2-1100-cw',
-    name: 'C2 twin pinwheel',
+    id: "pinwheel-c2-2-1100-cw",
+    name: "C2 twin pinwheel",
     run: 3,
     gatePassed: true,
-    rotation: 79.47194142390262,
-    structuralSimplicity: 92.28092947267801,
+    centerOffsetCells: 5.0923777502508197e-17,
+    scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":97.07728924112143,"localization":11.17193090966036,"dataDistinction":100,"structuralSimplicity":92.28092947267801,"defectConcentration":30.229989403903623}),
   }),
   Object.freeze({
-    id: 'gap-ring-01-2-1-open',
-    name: 'Open gap ring',
+    id: "gap-ring-01-2-1-open",
+    name: "Open gap ring",
     run: 3,
     gatePassed: true,
-    rotation: 52.98129428260175,
-    structuralSimplicity: 84.51542547285166,
+    centerOffsetCells: 0.28238198124762376,
+    scores: Object.freeze({"rotation":52.98129428260175,"lowResolution":95.43798666192357,"localization":13.80747895581605,"dataDistinction":100,"structuralSimplicity":84.51542547285166,"defectConcentration":30.22998940390363}),
   }),
   Object.freeze({
-    id: 'flower-7-1020-coprime-offset',
-    name: 'Seven-petal flower (wide)',
+    id: "flower-7-1020-coprime-offset",
+    name: "Seven-petal flower (wide)",
     run: 3,
     gatePassed: true,
-    rotation: 59.23488777590924,
-    structuralSimplicity: 82.53857253110874,
+    centerOffsetCells: 0.06943296507508846,
+    scores: Object.freeze({"rotation":59.23488777590924,"lowResolution":94.16580922822094,"localization":17.492914686282145,"dataDistinction":100,"structuralSimplicity":82.53857253110874,"defectConcentration":31.478487966284845}),
   }),
   Object.freeze({
-    id: 'swirl-c2-5-5-11-both',
-    name: 'C2 face swirl',
+    id: "swirl-c2-5-5-11-both",
+    name: "C2 face swirl",
     run: 3,
     gatePassed: true,
-    rotation: 79.47194142390262,
-    structuralSimplicity: 56.325320629094655,
+    centerOffsetCells: 5.611412357367492e-17,
+    scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":91.17102980798893,"localization":23.55161544174186,"dataDistinction":100,"structuralSimplicity":56.325320629094655,"defectConcentration":12.065908777314663}),
+  })
+]);
+
+const BASELINES = Object.freeze([
+  Object.freeze({
+    id: "bullseye",
+    centerOffsetCells: 0.049771574930140124,
+    centerBalanceGatePassed: true,
+    scores: Object.freeze({"rotation":0,"lowResolution":55.504960185798204,"localization":32.22404593197675,"dataDistinction":100,"structuralSimplicity":59.79246730623948,"defectConcentration":0}),
   }),
+  Object.freeze({
+    id: "center-qr",
+    centerOffsetCells: 0.1022033350678163,
+    centerBalanceGatePassed: true,
+    scores: Object.freeze({"rotation":64.88856845230502,"lowResolution":44.354818376683234,"localization":23.89512046344338,"dataDistinction":100,"structuralSimplicity":65.77636818983622,"defectConcentration":42.7374753470321}),
+  })
 ]);
 
 export const SELECTED_FINDER_IDS = Object.freeze(TARGETS.map((target) => target.id));
@@ -114,12 +132,16 @@ function indentJson(value, spaces) {
   return JSON.stringify(value, null, 2).replace(/^/gm, padding);
 }
 
+function scoreSource(scores) {
+  return '{ ' + SCORE_AXES.map((axis) => axis + ': ' + scores[axis]).join(', ') + ' }';
+}
+
 function patternSource(target, candidate) {
   const gate = target.gatePassed ? '통과' : '탈락';
   const params = indentJson(candidate.params, 4);
   const masks = bitsToCellMasks(candidate.bits).join(', ');
   return `  // ${target.run}차 실행 · ${candidate.family} ${JSON.stringify(candidate.params)}
-  // 중심 균형 게이트 ${gate} · [미검증] 회전 ${target.rotation.toFixed(2)} / 단순성 ${target.structuralSimplicity.toFixed(2)}
+  // 중심 균형 게이트 ${gate} · 중심 오프셋 ${target.centerOffsetCells.toFixed(2)}c · 축별 모형 점수
   definePattern({
     id: ${JSON.stringify(target.id)},
     name: ${JSON.stringify(target.name)},
@@ -128,12 +150,39 @@ function patternSource(target, candidate) {
     params:
 ${params},
     centerBalanceGatePassed: ${target.gatePassed},
-    scores: { rotation: ${target.rotation}, structuralSimplicity: ${target.structuralSimplicity} },
+    centerOffsetCells: ${target.centerOffsetCells},
+    scores: ${scoreSource(target.scores)},
     cellMasks: [${masks}],
   })`;
 }
 
+function baselineSource(baseline) {
+  return `  ${JSON.stringify(baseline.id)}: defineScoreRecord({
+    id: ${JSON.stringify(baseline.id)},
+    centerBalanceGatePassed: ${baseline.centerBalanceGatePassed},
+    centerOffsetCells: ${baseline.centerOffsetCells},
+    scores: ${scoreSource(baseline.scores)},
+  })`;
+}
+
+function assertFixtureMatches(fixture, measured) {
+  if (!measured) throw new Error('파인더 점수 하네스에서 사라짐: ' + fixture.id);
+  if (fixture.centerOffsetCells !== measured.centerOffsetCells) {
+    throw new Error(fixture.id + ': 중심 오프셋 고정값과 하네스가 다르다');
+  }
+  for (const axis of SCORE_AXES) {
+    if (fixture.scores[axis] !== measured.scores[axis]) {
+      throw new Error(fixture.id + ': ' + axis + ' 고정값과 하네스가 다르다');
+    }
+  }
+}
 export function renderFinderPatternsModule(candidates = generateFinderCandidates()) {
+  const measured = measureFinderPatternScores(candidates);
+  const measuredCandidates = new Map(measured.candidates.map((entry) => [entry.id, entry]));
+  const measuredBaselines = new Map(measured.baselines.map((entry) => [entry.id, entry]));
+  for (const target of TARGETS) assertFixtureMatches(target, measuredCandidates.get(target.id));
+  for (const baseline of BASELINES) assertFixtureMatches(baseline, measuredBaselines.get(baseline.id));
+
   const selected = TARGETS.map((target) => {
     const candidate = candidates.find((entry) => entry.id === target.id);
     if (candidate) return { target, candidate };
@@ -148,6 +197,7 @@ export function renderFinderPatternsModule(candidates = generateFinderCandidates
   const entries = selected
     .map(({ target, candidate }) => patternSource(target, candidate))
     .join(',\n\n');
+  const baselineEntries = BASELINES.map(baselineSource).join(',\n');
 
   return `// finder-patterns.js — 실물 비교용 중앙 19셀 파인더 후보 8개
 //
@@ -171,6 +221,16 @@ if (FACES.join(',') !== 'T,L,R') {
   throw new Error(\`파인더 면 순서 불일치: \${FACES.join(',')} !== T,L,R\`);
 }
 
+function defineScoreRecord(record) {
+  return Object.freeze({
+    ...record,
+    scores: Object.freeze({ ...record.scores }),
+  });
+}
+
+export const FINDER_BASELINE_SCORES = Object.freeze({
+${baselineEntries}
+});
 function definePattern(pattern) {
   if (!Array.isArray(pattern.cellMasks) || pattern.cellMasks.length !== FINDER_CELL_ORDER.length) {
     throw new RangeError(\`\${pattern.id}: cellMasks 는 19개여야 한다\`);
