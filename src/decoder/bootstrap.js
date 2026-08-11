@@ -2180,6 +2180,41 @@ export function selectGridHypothesis(candidates, options = {}) {
       pipelineCode: 'NO_VALID_HYPOTHESIS',
     });
   }
+  const cubeSolutions = new Map();
+  for (const candidate of candidates) {
+    if (candidate.family !== 'cube') continue;
+    const orientation = candidate.hypothesis?.orientation;
+    const tones = candidate.tones ?? candidate.hypothesis?.tones;
+    if (!Number.isInteger(orientation) || !Number.isInteger(tones)) continue;
+    const key = JSON.stringify([
+      tones,
+      candidate.formatIndex,
+      candidate.eccLevel,
+      candidate.text,
+    ]);
+    const existing = cubeSolutions.get(key);
+    if (existing) {
+      if (!existing.orientations.includes(orientation)) {
+        existing.orientations.push(orientation);
+        existing.orientations.sort((left, right) => left - right);
+      }
+    } else {
+      cubeSolutions.set(key, {
+        tones,
+        formatIndex: candidate.formatIndex,
+        eccLevel: candidate.eccLevel,
+        orientations: [orientation],
+      });
+    }
+  }
+  if (cubeSolutions.size > 1) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'selection',
+      pipelineCode: 'CUBE_DIRECTION_AMBIGUOUS',
+      solutions: [...cubeSolutions.values()],
+    });
+  }
+
   const cfg = calibration(options);
   const scored = candidates.map((candidate) => {
     if (Number.isFinite(candidate.score)) return candidate;

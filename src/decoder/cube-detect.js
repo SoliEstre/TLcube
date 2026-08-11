@@ -1598,7 +1598,7 @@ function flatBlockCandidates(luma, cfg) {
   };
 }
 
-function blockCandidateHomography(candidate, n, factor) {
+function blockCandidateHomography(candidate, n, factor, orientation = 0) {
   const bounds = candidate.bounds;
   const center = {
     x: ((bounds.minX + bounds.maxX) / 2) * factor,
@@ -1613,11 +1613,15 @@ function blockCandidateHomography(candidate, n, factor) {
       y: CORNER_UNIT_OFFSETS[index].y * n,
     })),
   ];
-  const observed = [
-    center,
+  const observedSeams = [
     { x: bounds.maxX * factor, y: center.y - height / 4 },
     { x: center.x, y: bounds.maxY * factor },
     { x: bounds.minX * factor, y: center.y - height / 4 },
+  ];
+  const observed = [
+    center,
+    ...CANONICAL_SEAM_CORNERS.map((_, index) =>
+      observedSeams[(index + orientation) % CANONICAL_SEAM_CORNERS.length]),
   ];
   return estimateHomography4(canonical, observed);
 }
@@ -1646,8 +1650,18 @@ const QUICK_PATTERN_TO_DIGIT = new Int8Array([-1, 2, 1, 3, 0, 4, 5, -1]);
 const quickReferenceTemplates = new Map();
 let quickReferenceSamplesScratch = new Float64Array(0);
 let quickReferenceLowsScratch = new Float64Array(0);
+let quickReferenceMidsScratch = new Float64Array(0);
 let quickReferenceHighsScratch = new Float64Array(0);
 let quickReferenceThresholdsScratch = new Float64Array(3);
+let quickReferenceLevelAnchorsScratch = new Float64Array(YFACES.length * 3);
+const QUICK_RANK_DIGITS = Object.freeze({
+  TLR: ranksToDigit({ T: 0, L: 1, R: 2 }),
+  TRL: ranksToDigit({ T: 0, L: 2, R: 1 }),
+  LTR: ranksToDigit({ T: 1, L: 0, R: 2 }),
+  LRT: ranksToDigit({ T: 2, L: 0, R: 1 }),
+  RTL: ranksToDigit({ T: 1, L: 2, R: 0 }),
+  RLT: ranksToDigit({ T: 2, L: 1, R: 0 }),
+});
 const quickTranslatedHomographyScratch = new Float64Array(9);
 const quickScaledHomographyScratch = new Float64Array(9);
 const quickReferenceScoreScratch = {
@@ -1669,28 +1683,30 @@ function ensureQuickReferenceScratch(length) {
   }
   if (quickReferenceLowsScratch.length < length) {
     quickReferenceLowsScratch = new Float64Array(length);
+    quickReferenceMidsScratch = new Float64Array(length);
     quickReferenceHighsScratch = new Float64Array(length);
   }
 }
 
 /*
- * 2톤 block recovery의 기준 12셀은 n마다 불변이다. 후보마다 referenceGroups,
- * moduleSampleDisc, digitToPattern을 다시 만들지 않고 canonical 좌표와 기대 비트를
- * 한 번만 준비한다. 공개 ygrid/tonemap API의 반환물은 이 캐시 구축 시 그대로 쓴다.
+ * block recovery의 기준 12셀은 (n, tones)마다 불변이다. 후보마다 referenceGroups,
+ * moduleSampleDisc, digit 의미론을 다시 만들지 않고 canonical 좌표와 기대 레벨을
+ * 한 번만 준비한다. 공개 ygrid/tonemap/lehmer API의 반환물은 그대로 쓴다.
  */
-function quickReferenceTemplate(n) {
-  const cached = quickReferenceTemplates.get(n);
+function quickReferenceTemplate(n, tones) {
+  const cacheKey = n + ':' + tones;
+  const cached = quickReferenceTemplates.get(cacheKey);
   if (cached) return cached;
 
   const points = new Float64Array(12 * YFACES.length * 2);
   const digits = new Uint8Array(12);
-  const bright = new Uint8Array(12 * YFACES.length);
+  const expectedLevels = new Uint8Array(12 * YFACES.length);
   let entryIndex = 0;
-  for (const group of referenceGroups(n, 2)) {
+  for (const group of referenceGroups(n, tones)) {
     for (let groupIndex = 0; groupIndex < group.cells.length; groupIndex += 1) {
       const cell = group.cells[groupIndex];
       const digit = group.digits[groupIndex];
-      const pattern = TONE_PATTERNS[digit];
+      const levels = tones === 2 ? TONE_PATTERNS[digit] : digitToRanks(digit);
       digits[entryIndex] = digit;
       for (let faceIndex = 0; faceIndex < YFACES.length; faceIndex += 1) {
         const disc = moduleSampleDisc(
@@ -1703,52 +1719,36 @@ function quickReferenceTemplate(n) {
         const sampleIndex = entryIndex * YFACES.length + faceIndex;
         points[2 * sampleIndex] = disc.x;
         points[2 * sampleIndex + 1] = disc.y;
-        bright[sampleIndex] = pattern[faceIndex];
+        expectedLevels[sampleIndex] = tones === 2
+          ? levels[faceIndex]
+          : levels[YFACES[faceIndex]];
       }
       entryIndex += 1;
     }
   }
-  const template = { count: entryIndex, points, digits, bright };
-  quickReferenceTemplates.set(n, template);
+  const template = { count: entryIndex, points, digits, expectedLevels };
+  quickReferenceTemplates.set(cacheKey, template);
   return template;
 }
 
-/* projectPoint + bilinear의 수식을 객체 할당 없이 같은 연산 순서로 펼친다. */
-function quickReferenceLumaSample(luma, H, x, y) {
-  const h6x = H[6] * x;
-  const h7y = H[7] * y;
-  const denominator = h6x + h7y + H[8];
-  const denominatorScale = Math.abs(h6x) + Math.abs(h7y) + Math.abs(H[8]);
-  if (
-    !Number.isFinite(denominator)
-    || Math.abs(denominator) <= PROJECTIVE_DENOMINATOR_MIN_RATIO * denominatorScale
-  ) return Number.NaN;
-
-  const imageX = (H[0] * x + H[1] * y + H[2]) / denominator;
-  const imageY = (H[3] * x + H[4] * y + H[5]) / denominator;
-  if (!Number.isFinite(imageX) || !Number.isFinite(imageY)
-    || imageX < 0 || imageY < 0 || imageX > luma.width - 1 || imageY > luma.height - 1) {
-    return Number.NaN;
+function quickThreeToneDigit(t, l, r) {
+  if (t <= l) {
+    if (l <= r) return QUICK_RANK_DIGITS.TLR;
+    if (t <= r) return QUICK_RANK_DIGITS.TRL;
+    return QUICK_RANK_DIGITS.RTL;
   }
-
-  const x0 = Math.floor(imageX);
-  const y0 = Math.floor(imageY);
-  const x1 = Math.min(luma.width - 1, x0 + 1);
-  const y1 = Math.min(luma.height - 1, y0 + 1);
-  const tx = imageX - x0;
-  const ty = imageY - y0;
-  const row0 = y0 * luma.width;
-  const row1 = y1 * luma.width;
-  const a = luma.data[row0 + x0];
-  const b = luma.data[row0 + x1];
-  const c = luma.data[row1 + x0];
-  const d = luma.data[row1 + x1];
-  return (a * (1 - tx) + b * tx) * (1 - ty)
-    + (c * (1 - tx) + d * tx) * ty;
+  if (t <= r) return QUICK_RANK_DIGITS.LTR;
+  if (l <= r) return QUICK_RANK_DIGITS.LRT;
+  return QUICK_RANK_DIGITS.RLT;
 }
 
-function quickTwoToneReferenceScore(luma, H, n, output = quickReferenceScoreScratch) {
-  const template = quickReferenceTemplate(n);
+function quickNormalizeThreeTone(value, a0, a1, a2) {
+  if (value <= a1) return (value - a0) / Math.max(a1 - a0, EPSILON);
+  return 1 + (value - a1) / Math.max(a2 - a1, EPSILON);
+}
+
+function quickReferenceScore(luma, H, n, tones, output = quickReferenceScoreScratch) {
+  const template = quickReferenceTemplate(n, tones);
   const faceCount = YFACES.length;
   const sampleCount = template.count * faceCount;
   ensureQuickReferenceScratch(sampleCount);
@@ -1823,33 +1823,75 @@ function quickTwoToneReferenceScore(luma, H, n, output = quickReferenceScoreScra
   let minimumRatio = Infinity;
   for (let faceIndex = 0; faceIndex < faceCount; faceIndex += 1) {
     let lowCount = 0;
+    let midCount = 0;
     let highCount = 0;
     for (let entryIndex = 0; entryIndex < template.count; entryIndex += 1) {
       const sampleIndex = entryIndex * faceCount + faceIndex;
-      if (template.bright[sampleIndex]) {
-        quickReferenceHighsScratch[highCount] = samples[sampleIndex];
-        highCount += 1;
-      } else {
+      const expected = template.expectedLevels[sampleIndex];
+      if (expected === 0) {
         quickReferenceLowsScratch[lowCount] = samples[sampleIndex];
         lowCount += 1;
+      } else if (tones === 3 && expected === 1) {
+        quickReferenceMidsScratch[midCount] = samples[sampleIndex];
+        midCount += 1;
+      } else {
+        quickReferenceHighsScratch[highCount] = samples[sampleIndex];
+        highCount += 1;
       }
     }
     const low = medianFromArrayLike(quickReferenceLowsScratch, lowCount);
     const high = medianFromArrayLike(quickReferenceHighsScratch, highCount);
-    quickReferenceThresholdsScratch[faceIndex] = low > 0 && high > 0
-      ? Math.sqrt(low * high)
-      : (low + high) / 2;
-    minimumSpan = Math.min(minimumSpan, high - low);
-    minimumRatio = Math.min(minimumRatio, high / Math.max(low, EPSILON));
+    if (tones === 2) {
+      quickReferenceThresholdsScratch[faceIndex] = low > 0 && high > 0
+        ? Math.sqrt(low * high)
+        : (low + high) / 2;
+      minimumSpan = Math.min(minimumSpan, high - low);
+      minimumRatio = Math.min(minimumRatio, high / Math.max(low, EPSILON));
+    } else {
+      const mid = medianFromArrayLike(quickReferenceMidsScratch, midCount);
+      const anchorIndex = faceIndex * 3;
+      quickReferenceLevelAnchorsScratch[anchorIndex] = low;
+      quickReferenceLevelAnchorsScratch[anchorIndex + 1] = mid;
+      quickReferenceLevelAnchorsScratch[anchorIndex + 2] = high;
+      minimumSpan = Math.min(minimumSpan, mid - low, high - mid);
+      minimumRatio = Math.min(
+        minimumRatio,
+        mid / Math.max(low, EPSILON),
+        high / Math.max(mid, EPSILON),
+      );
+    }
   }
 
   let agreement = 0;
   for (let entryIndex = 0; entryIndex < template.count; entryIndex += 1) {
     const sampleIndex = entryIndex * faceCount;
-    const bitsT = samples[sampleIndex] > quickReferenceThresholdsScratch[0] ? 1 : 0;
-    const bitsL = samples[sampleIndex + 1] > quickReferenceThresholdsScratch[1] ? 1 : 0;
-    const bitsR = samples[sampleIndex + 2] > quickReferenceThresholdsScratch[2] ? 1 : 0;
-    const observed = QUICK_PATTERN_TO_DIGIT[(bitsT << 2) | (bitsL << 1) | bitsR];
+    let observed;
+    if (tones === 2) {
+      const bitsT = samples[sampleIndex] > quickReferenceThresholdsScratch[0] ? 1 : 0;
+      const bitsL = samples[sampleIndex + 1] > quickReferenceThresholdsScratch[1] ? 1 : 0;
+      const bitsR = samples[sampleIndex + 2] > quickReferenceThresholdsScratch[2] ? 1 : 0;
+      observed = QUICK_PATTERN_TO_DIGIT[(bitsT << 2) | (bitsL << 1) | bitsR];
+    } else {
+      const t = quickNormalizeThreeTone(
+        samples[sampleIndex],
+        quickReferenceLevelAnchorsScratch[0],
+        quickReferenceLevelAnchorsScratch[1],
+        quickReferenceLevelAnchorsScratch[2],
+      );
+      const l = quickNormalizeThreeTone(
+        samples[sampleIndex + 1],
+        quickReferenceLevelAnchorsScratch[3],
+        quickReferenceLevelAnchorsScratch[4],
+        quickReferenceLevelAnchorsScratch[5],
+      );
+      const r = quickNormalizeThreeTone(
+        samples[sampleIndex + 2],
+        quickReferenceLevelAnchorsScratch[6],
+        quickReferenceLevelAnchorsScratch[7],
+        quickReferenceLevelAnchorsScratch[8],
+      );
+      observed = quickThreeToneDigit(t, l, r);
+    }
     if (observed === template.digits[entryIndex]) agreement += 1;
   }
   output.agreement = agreement;
@@ -1858,7 +1900,7 @@ function quickTwoToneReferenceScore(luma, H, n, output = quickReferenceScoreScra
   return output;
 }
 
-function quickTwoToneTranslatedReferenceScore(luma, scaled, dx, dy, n) {
+function quickTranslatedReferenceScore(luma, scaled, dx, dy, n, tones) {
   quickTranslatedHomographyScratch[0] = scaled[0] + dx * scaled[6];
   quickTranslatedHomographyScratch[1] = scaled[1] + dx * scaled[7];
   quickTranslatedHomographyScratch[2] = scaled[2] + dx * scaled[8];
@@ -1868,7 +1910,7 @@ function quickTwoToneTranslatedReferenceScore(luma, scaled, dx, dy, n) {
   quickTranslatedHomographyScratch[6] = scaled[6];
   quickTranslatedHomographyScratch[7] = scaled[7];
   quickTranslatedHomographyScratch[8] = scaled[8];
-  return quickTwoToneReferenceScore(luma, quickTranslatedHomographyScratch, n);
+  return quickReferenceScore(luma, quickTranslatedHomographyScratch, n, tones);
 }
 
 function materializeQuickReferenceCandidate(initialH, candidate) {
@@ -1944,7 +1986,7 @@ function fillQuickScaledHomography(H, center, scaleX, scaleY, output) {
   return output;
 }
 
-function blockReferenceSearch(luma, initialH, n, options, cfg) {
+function blockReferenceSearch(luma, initialH, n, tones, options, cfg) {
   const pitch = projectedModulePitch(initialH);
   if (!(pitch > 0)) return { accepted: null, report: { cause: 'invalid-pitch' } };
   const scaleCenter = projectPoint(initialH, { x: 0, y: 0 });
@@ -1970,7 +2012,7 @@ function blockReferenceSearch(luma, initialH, n, options, cfg) {
           quickCandidate.scaleY = scaleY;
           quickCandidate.dx = dx;
           quickCandidate.dy = dy;
-          quickCandidate.quick = quickTwoToneTranslatedReferenceScore(luma, scaled, dx, dy, n);
+          quickCandidate.quick = quickTranslatedReferenceScore(luma, scaled, dx, dy, n, tones);
           retainQuickReferenceCandidate(coarse, quickCandidate, 20);
         }
       }
@@ -2000,7 +2042,7 @@ function blockReferenceSearch(luma, initialH, n, options, cfg) {
             quickCandidate.scaleY = scaleY;
             quickCandidate.dx = dx;
             quickCandidate.dy = dy;
-            quickCandidate.quick = quickTwoToneTranslatedReferenceScore(luma, scaled, dx, dy, n);
+            quickCandidate.quick = quickTranslatedReferenceScore(luma, scaled, dx, dy, n, tones);
             retainQuickReferenceCandidate(fine, quickCandidate, 40);
           }
         }
@@ -2027,10 +2069,10 @@ function blockReferenceSearch(luma, initialH, n, options, cfg) {
     const references = calibrateCubeReferences(
       luma,
       { n, H: candidate.H },
-      { ...options, tones: 2 },
+      { ...options, tones },
     );
     if (!references.ok) continue;
-    const referenceCalibration = references.accepted.find((entry) => entry.tones === 2);
+    const referenceCalibration = references.accepted.find((entry) => entry.tones === tones);
     if (!referenceCalibration) continue;
 
     const center = projectPoint(candidate.H, { x: 0, y: 0 });
@@ -2105,124 +2147,125 @@ function blockReferenceSearch(luma, initialH, n, options, cfg) {
 }
 function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
   const proposals = flatBlockCandidates(reduced.luma, cfg);
+  const hypotheses = [];
   const reports = [];
-  if (options.tones === 3) {
-    return {
-      hypotheses: [],
-      reports,
-      diagnostics: { ...proposals.diagnostics, cause: 'two-tone-recovery-not-requested' },
-    };
-  }
+  const requestedTones = options.tones === 2 || options.tones === 3
+    ? [options.tones]
+    : SUPPORTED_TONES;
 
   for (let componentIndex = 0;
     componentIndex < proposals.candidates.length;
     componentIndex += 1) {
     const proposal = proposals.candidates[componentIndex];
     for (const n of SUPPORTED_N) {
-      const initialH = blockCandidateHomography(proposal, n, reduced.factor);
-      if (!initialH) continue;
-      const searched = blockReferenceSearch(luma, initialH, n, options, cfg);
-      reports.push({
-        componentIndex,
-        n,
-        proposal,
-        ...searched.report,
-      });
-      if (!searched.accepted) continue;
-
-      const accepted = searched.accepted;
-      const radius = median(accepted.vertices.map((point) =>
-        Math.hypot(point.x - accepted.center.x, point.y - accepted.center.y)));
-      const shapeScore = clamp01(
-        0.38 * clamp01(
-          accepted.seam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON),
-        )
-        + 0.20 * accepted.seam.support
-        + 0.22 * accepted.referenceCalibration.agreementRate
-        + 0.20 * clamp01(proposal.blockFill),
-      );
-      const geometryResidual = 0;
-      const hypothesisId = 'cube-n' + n
-        + '-flat-block-c' + componentIndex + '-o0-t2';
-      const hardChecks = {
-        flatModuleRegion: true,
-        yJunction: true,
-        referenceAgreement: accepted.referenceCalibration.hardChecks.referenceAgreement,
-        toneSeparation: accepted.referenceCalibration.hardChecks.toneSeparation,
-        all: true,
-      };
-      return {
-        hypotheses: [{
-          family: 'cube',
-          finderKind: 'y-junction',
-          gridKind: 'three-face-nxn',
-          n,
-          k: n,
-          orientation: 0,
-          rotationDegrees: 0,
-          centerQr: false,
-          center: accepted.center,
-          vertices: accepted.vertices,
-          seamVertices: CANONICAL_SEAM_CORNERS.map((index) => accepted.vertices[index]),
-          H: accepted.H,
-          canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-          geometryResidual,
-          sizeGeometry: {
-            rK: 0,
-            vertexResidual: geometryResidual,
-            relativeVertexResidual: 0,
-            proposalScaleX: accepted.scaleX,
-            proposalScaleY: accepted.scaleY,
-          },
-          source: 'cube-flat-block-reference',
-          geometrySeed: 'flat-block-affine',
-          shapeScore,
-          seamScore: accepted.seam.contrast,
-          seamSupport: accepted.seam.support,
-          shapeDiagnostics: {
+      for (let orientation = 0;
+        orientation < CANONICAL_SEAM_CORNERS.length;
+        orientation += 1) {
+        const initialH = blockCandidateHomography(proposal, n, reduced.factor, orientation);
+        if (!initialH) continue;
+        for (const tones of requestedTones) {
+          const searched = blockReferenceSearch(luma, initialH, n, tones, options, cfg);
+          reports.push({
             componentIndex,
-            componentSource: 'flat-block-density',
+            n,
+            orientation,
+            tones,
+            proposal,
+            ...searched.report,
+          });
+          if (!searched.accepted) continue;
+
+          const accepted = searched.accepted;
+          const radius = median(accepted.vertices.map((point) =>
+            Math.hypot(point.x - accepted.center.x, point.y - accepted.center.y)));
+          const shapeScore = clamp01(
+            0.38 * clamp01(
+              accepted.seam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON),
+            )
+            + 0.20 * accepted.seam.support
+            + 0.22 * accepted.referenceCalibration.agreementRate
+            + 0.20 * clamp01(proposal.blockFill),
+          );
+          const geometryResidual = 0;
+          const logicalHypothesisId = 'cube-n' + n
+            + '-flat-block-c' + componentIndex + '-o' + orientation + '-t' + tones;
+          const hardChecks = {
+            flatModuleRegion: true,
+            yJunction: true,
+            referenceAgreement: accepted.referenceCalibration.hardChecks.referenceAgreement,
+            toneSeparation: accepted.referenceCalibration.hardChecks.toneSeparation,
+            all: true,
+          };
+          hypotheses.push({
+            family: 'cube',
+            finderKind: 'y-junction',
+            gridKind: 'three-face-nxn',
+            n,
+            k: n,
+            orientation,
+            rotationDegrees: orientation * 120,
+            centerQr: false,
             center: accepted.center,
             vertices: accepted.vertices,
-            seamParity: 1,
-            seamVertices: CANONICAL_SEAM_CORNERS.map(
-              (index) => accepted.vertices[index],
-            ),
-            radius,
-            maskFill: proposal.blockFill,
-            concurrencyResidual: 0,
-            seam: accepted.seam,
-            otherParitySeam: accepted.otherParitySeam,
-            parityMargin: accepted.parityMargin,
-            hardChecks,
-            score: shapeScore,
-            proposal,
-          },
-          tones: 2,
-          referenceCalibration: accepted.referenceCalibration,
-          referenceSamples: accepted.references.samples,
-          referenceAnchors: accepted.references.anchors,
-          referenceAgreement: accepted.referenceCalibration.agreementRate,
-          referenceRefinement: {
-            dx: accepted.dx,
-            dy: accepted.dy,
-            pitch: searched.report.pitch,
-            radius: 1.75 * searched.report.pitch,
-            step: 0.25 * searched.report.pitch,
-            scale: median([accepted.scaleX, accepted.scaleY]),
-            scaleX: accepted.scaleX,
-            scaleY: accepted.scaleY,
-            quality: calibrationQuality(accepted.referenceCalibration),
-          },
-          logicalHypothesisId: hypothesisId,
-          hypothesisId: hypothesisId + '-gflat-block-affine',
-        }],
-        reports,
-        diagnostics: proposals.diagnostics,
-      };
+            seamVertices: CANONICAL_SEAM_CORNERS.map((index) => accepted.vertices[index]),
+            H: accepted.H,
+            canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+            geometryResidual,
+            sizeGeometry: {
+              rK: 0,
+              vertexResidual: geometryResidual,
+              relativeVertexResidual: 0,
+              proposalScaleX: accepted.scaleX,
+              proposalScaleY: accepted.scaleY,
+            },
+            source: 'cube-flat-block-reference',
+            geometrySeed: 'flat-block-affine',
+            shapeScore,
+            seamScore: accepted.seam.contrast,
+            seamSupport: accepted.seam.support,
+            shapeDiagnostics: {
+              componentIndex,
+              componentSource: 'flat-block-density',
+              center: accepted.center,
+              vertices: accepted.vertices,
+              seamParity: 1,
+              seamVertices: CANONICAL_SEAM_CORNERS.map(
+                (index) => accepted.vertices[index],
+              ),
+              radius,
+              maskFill: proposal.blockFill,
+              concurrencyResidual: 0,
+              seam: accepted.seam,
+              otherParitySeam: accepted.otherParitySeam,
+              parityMargin: accepted.parityMargin,
+              hardChecks,
+              score: shapeScore,
+              proposal,
+            },
+            tones,
+            referenceCalibration: accepted.referenceCalibration,
+            referenceSamples: accepted.references.samples,
+            referenceAnchors: accepted.references.anchors,
+            referenceAgreement: accepted.referenceCalibration.agreementRate,
+            referenceRefinement: {
+              dx: accepted.dx,
+              dy: accepted.dy,
+              pitch: searched.report.pitch,
+              radius: 1.75 * searched.report.pitch,
+              step: 0.25 * searched.report.pitch,
+              scale: median([accepted.scaleX, accepted.scaleY]),
+              scaleX: accepted.scaleX,
+              scaleY: accepted.scaleY,
+              quality: calibrationQuality(accepted.referenceCalibration),
+            },
+            logicalHypothesisId,
+            hypothesisId: logicalHypothesisId + '-gflat-block-affine',
+          });
+        }
+      }
     }
   }
-  return { hypotheses: [], reports, diagnostics: proposals.diagnostics };
+  return { hypotheses, reports, diagnostics: proposals.diagnostics };
 }
 
 export function detectCubeHypotheses(luma, yJunction, options = {}) {

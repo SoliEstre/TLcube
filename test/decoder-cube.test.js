@@ -21,7 +21,7 @@ import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { detectCubeHypotheses } from '../src/decoder/cube-detect.js';
 import { distortImage } from './harness/distort.mjs';
-import { listLumaDumps, readLumaDump } from '../tools/read-luma.mjs';
+import { listLumaDumps, lumaToRaster, readLumaDump } from '../tools/read-luma.mjs';
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -312,6 +312,17 @@ test('Type Y rotation 0..330 degrees in 30-degree steps', {
   }
 });
 
+test('Type Y 3톤은 120도 물리 회전 세 방향을 모두 평가해 유일 복호', {
+  timeout: 60_000,
+}, () => {
+  const text = 'type-y-three-tone-rotation';
+  const fixture = renderY(text, { tones: 3, margin: 12 });
+  for (const degrees of [0, 120, 240]) {
+    const distorted = distortImage(fixture.raster, { rotation: degrees, fill: FILL });
+    assertYDecoded(decodeFrontend(distorted), text, 1, 3);
+  }
+});
+
 test('Type Y perspective -30..30 degrees on both axes', {
   timeout: 180_000,
 }, () => {
@@ -436,6 +447,23 @@ test('Type Y real-photo luma dumps establish a reference-supported grid', {
   for (const dump of typeADumps) {
     const detected = detectCubeHypotheses(readLumaDump(dump.path), undefined, {});
     assert.equal(detected.ok, false, `${dump.name}: Type A를 Type Y로 오수용`);
+  }
+});
+
+test('Type Y 3톤 실사진 성공분은 960/1440 모두 Y1T로 복호', {
+  timeout: 240_000,
+}, (t) => {
+  const dumps = listLumaDumps().filter(({ name }) =>
+    /^KakaoTalk_20260812_030145439_(01|02)\.(960|1440)\.luma$/.test(name));
+  if (dumps.length === 0) {
+    t.skip('Type Y 3톤 성공 사진 휘도 덤프 없음');
+    return;
+  }
+  assert.equal(dumps.length, 4, `Type Y 3톤 성공 덤프 4장 필요: ${dumps.length}`);
+  for (const dump of dumps) {
+    const result = decodeFrontend(lumaToRaster(readLumaDump(dump.path)));
+    assertYDecoded(result, 'https://tl.estre.so', 1, 3);
+    assert.equal(result.versionName, 'Y1T', dump.name);
   }
 });
 

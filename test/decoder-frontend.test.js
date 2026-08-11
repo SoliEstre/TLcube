@@ -696,6 +696,37 @@ test('복수 body-valid 후보는 hard reject하지 않고 점수와 고정 총�
   assert.equal(result.diagnostics.bodyValidCount, 2);
 });
 
+test('Type Y body-valid 방향에서 서로 다른 복호 결과가 나오면 거부', () => {
+  const base = {
+    family: 'cube',
+    tones: 3,
+    formatIndex: 10,
+    eccLevel: 'M',
+    text: 'ambiguous',
+    corrected: 0,
+    crsDistance: 0,
+    formatAgreement: 1,
+    referenceAgreement: 1,
+    rH: 0,
+    rK: 0,
+  };
+  const result = selectGridHypothesis([
+    { ...base, hypothesisId: 'o0', hypothesis: { orientation: 0, tones: 3 } },
+    {
+      ...base,
+      hypothesisId: 'o1',
+      text: 'different',
+      hypothesis: { orientation: 1, tones: 3 },
+    },
+  ]);
+  assert.equal(result.ok, false);
+  assert.equal(result.detail.pipelineCode, 'CUBE_DIRECTION_AMBIGUOUS');
+  assert.deepEqual(
+    result.detail.solutions.map((entry) => entry.orientations),
+    [[0], [1]],
+  );
+});
+
 // ── 패밀리 재배치 (CRC 유효 out-of-family → 재시도) ──────────────────────────
 //
 // 실기기 Type A 사진이 죽던 경로다: 분류기가 실패해 hex 로 폴백하면, 포맷 셀은
