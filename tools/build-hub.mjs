@@ -92,6 +92,10 @@ const LANG_SCRIPT = `
       if (a) localStorage.setItem(KEY, a.getAttribute('data-lang-pick'));
     });
     if (localStorage.getItem(KEY)) return;
+    /* 언어 URL 을 **직접 연 경우엔 튕기지 않는다.** /en/ 링크를 받은 사람이 브라우저
+       언어가 다르다는 이유로 루트로 끌려가면 공유한 링크가 무의미해진다. 자동 선택은
+       기본 문서(루트)에 온 사람에게만 의미가 있다. */
+    if (location.pathname !== '/' && location.pathname !== '/index.html') return;
     var want = (navigator.languages || [navigator.language || 'ko'])
       .map(function (l) { return String(l).toLowerCase().split('-')[0]; })
       .filter(function (l) { return l === 'ko' || l === 'en' || l === 'ja'; })[0];
