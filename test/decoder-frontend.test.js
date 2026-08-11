@@ -33,7 +33,7 @@ import {
   distortImage,
   scaleImage,
 } from './harness/distort.mjs';
-import { listLumaDumps, readLumaDump } from '../tools/read-luma.mjs';
+import { listLumaDumps, lumaToRaster, readLumaDump } from '../tools/read-luma.mjs';
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -927,4 +927,72 @@ test('중앙 QR 16비트 실사진: 세 타입 8/9 복호 성적을 유지', {
     failures.map(({ entry }) => entry.name),
     ['centerqr-080809884_01.1440.luma'],
   );
+});
+
+
+const CELL_FINDER_REAL_PHOTO_CASES = Object.freeze([
+  { name: 'cellfinder-20260812-07.960.luma', patternId: 'gap-ring-01-2-1-solid' },
+  { name: 'cellfinder-20260812-09.960.luma', patternId: 'gap-ring-01-2-1-open' },
+  { name: 'cellfinder-20260812-14.1440.luma', patternId: 'flower-7-1020-coprime-offset' },
+]);
+const CELL_FINDER_REAL_PHOTO_DUMPS = new Map(
+  listLumaDumps().map((entry) => [entry.name, entry]),
+);
+
+test('19셀 파인더 16비트 실사진: 검출 성공 3장을 본문까지 복호', {
+  timeout: 300_000,
+  skip: CELL_FINDER_REAL_PHOTO_CASES.every(({ name }) =>
+    CELL_FINDER_REAL_PHOTO_DUMPS.has(name))
+    ? false
+    : '19셀 파인더 TLL2 휘도 덤프 3장이 없어 실사진 가드를 건너뜀',
+}, () => {
+  for (const expected of CELL_FINDER_REAL_PHOTO_CASES) {
+    const entry = CELL_FINDER_REAL_PHOTO_DUMPS.get(expected.name);
+    const luma = readLumaDump(entry.path);
+    assert.equal(luma.bitDepth, 16, entry.name);
+    const result = decodeFrontend(lumaToRaster(luma));
+    assert.equal(result.ok, true, JSON.stringify({
+      name: entry.name,
+      reason: result.reason,
+      detail: result.detail,
+    }));
+    assert.equal(result.text, 'https://tl.estre.so', entry.name);
+    assert.equal(result.family, 'tri', entry.name);
+    assert.equal(result.hypothesis.source, 'cell-finder', entry.name);
+    assert.match(result.hypothesis.id, new RegExp(expected.patternId), entry.name);
+  }
+});
+
+const BULLSEYE_REAL_PHOTO_DUMPS = listLumaDumps().filter((entry) =>
+  entry.name.endsWith('.1440.luma')
+  && (
+    entry.name.startsWith('015529194')
+    || entry.name.startsWith('KakaoTalk_20260811_014930219')
+    || entry.name.startsWith('KakaoTalk_20260811_015525403')
+    || entry.name.startsWith('typeO-fold-')
+    || entry.name.startsWith('video-')
+  ));
+
+test('기존 불스아이 실사진: 1440 기준 9/17 복호 성적을 유지', {
+  timeout: 600_000,
+  skip: BULLSEYE_REAL_PHOTO_DUMPS.length === 17
+    ? false
+    : '기존 불스아이 TLL2 휘도 덤프 17장이 없어 실사진 가드를 건너뜀',
+}, () => {
+  const results = BULLSEYE_REAL_PHOTO_DUMPS.map((entry) => {
+    const luma = readLumaDump(entry.path);
+    assert.equal(luma.bitDepth, 16, entry.name);
+    return { entry, result: decodeFrontend(lumaToRaster(luma)) };
+  });
+  const successes = results.filter(({ result }) => result.ok);
+  assert.equal(successes.length, 9, results.map(({ entry, result }) => ({
+    name: entry.name,
+    ok: result.ok,
+    reason: result.reason,
+    stage: result.detail?.pipelineStage,
+    code: result.detail?.pipelineCode,
+  })));
+  for (const { entry, result } of successes) {
+    assert.equal(result.text, 'https://tl.estre.so', entry.name);
+  }
 });

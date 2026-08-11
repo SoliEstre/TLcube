@@ -90,7 +90,8 @@ export const UNVERIFIED_BOOTSTRAP_CALIBRATION = Object.freeze({
   finderMaxRefinedProposals: 1,
   finderClutterMaxRefinedProposals: 1,
   finderProjectiveSeeds: false,
-  cellFinderMaxDimension: 480,
+  // [미검증] 라이브 전처리의 960 기본 프레임과 1440 승격 프레임을 재축소하지 않는다.
+  cellFinderMaxDimension: 1440,
   localWarpSearchRadiusCells: 0.10,
   localWarpSearchStepCells: 0.05,
 });
@@ -668,15 +669,30 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
       y: (reducedOutline.bounds.minY + reducedOutline.bounds.maxY) / 2,
     });
   }
-  const radiusSeeds = finderRadiusSeeds(reduced.luma, reducedOutline);
+  const reducedOutlineCanSeed = reducedOutline
+    && !reducedOutline.touchesBorder
+    && reducedOutline.borderDisagreement <= reducedOutline.threshold;
+  const radiusSeeds = reducedOutlineCanSeed
+    ? finderRadiusSeeds(reduced.luma, reducedOutline)
+    : undefined;
   const cellSizeSeeds = radiusSeeds
     ? radiusSeeds.map((radius) => radius / Math.sqrt(13))
     : undefined;
-  const detected = detectCellFinders(reduced.luma, FINDER_PATTERNS, {
+  let detected = detectCellFinders(reduced.luma, FINDER_PATTERNS, {
     centerSeeds,
     cellSizeSeeds,
     ...overrides,
   });
+  const callerFixedScaleSearch = Object.prototype.hasOwnProperty.call(
+    overrides,
+    'cellSizeSeeds',
+  );
+  if (!detected.ok && cellSizeSeeds !== undefined && !callerFixedScaleSearch) {
+    detected = detectCellFinders(reduced.luma, FINDER_PATTERNS, {
+      centerSeeds,
+      ...overrides,
+    });
+  }
   if (!detected.ok) return detected;
   const finders = detected.candidates
     .map((finder) => liftFinder(finder, reduced.factor))
@@ -740,6 +756,7 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     { luma: reduced.luma, outline: reducedOutline },
   );
   let detected = detectBullseyes(reduced.luma, finderOptions);
+  const shouldTryCellFinder = !detected.ok;
 
   const callerFixedScaleSearch = Object.prototype.hasOwnProperty.call(
     finderOverrides,
@@ -756,10 +773,6 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     finderOptions = makeFinderOptions(false, null);
     detected = detectBullseyes(reduced.luma, finderOptions);
   }
-  if (!detected.ok) {
-    const cellDetected = discoverCellFinders(luma, fullOutline, options, cfg);
-    if (cellDetected.ok) return cellDetected;
-  }
   if (!detected.ok
     && !callerFixedScaleSearch
     && requestedMaxDimension === null
@@ -771,7 +784,13 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     finderOptions = makeFinderOptions(false, null);
     detected = detectBullseyes(reduced.luma, finderOptions);
   }
-  if (!detected.ok) return detected;
+  const cellDetected = shouldTryCellFinder
+    ? discoverCellFinders(luma, fullOutline, options, cfg)
+    : null;
+  if (!detected.ok) {
+    if (cellDetected && cellDetected.ok) return cellDetected;
+    return detected;
+  }
   const finders = detected.candidates
     .map((finder) => liftFinder(finder, reduced.factor))
     .filter(Boolean)
@@ -783,6 +802,7 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       });
       return fullResolution.ok ? fullResolution.candidate : finder;
     });
+  if (cellDetected && cellDetected.ok) finders.push(...cellDetected.finders);
   if (finders.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'bootstrap-finder-lift' });
   }
@@ -792,6 +812,7 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       ? reduced.factor === 1 ? 'detected' : 'detected-downsampled'
       : reduced.factor === 1 ? 'detected-multiscale' : 'detected-multiscale-downsampled',
     downsampleFactor: reduced.factor,
+    cellFinderMerged: Boolean(cellDetected && cellDetected.ok),
   });
 }
 
@@ -1820,6 +1841,9 @@ function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
     : discoverFinders(luma, familyEvidence, options, cfg);
   const shouldProbeQr = options._forceQrFinder === true
     || !finderResult.ok
+    || finderResult.cellFinderMerged === true
+    || (typeof finderResult.source === 'string'
+      && finderResult.source.includes('cell-mask'))
     || cubeResult.ok;
   const qrResult = shouldProbeQr
     ? detectQrFinderTriples(luma, options.qrFinder || {})
