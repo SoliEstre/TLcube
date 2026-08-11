@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLcube 스캐너</title>
+<!-- 탭 제목도 언어를 따라간다. 지금 문구는 app.label(main 의 aria-label)과 같지만 **키는
+     분리한다** — 붙여 두면 나중에 제목에 설명을 덧붙일 때 스크린리더 라벨까지 장황해진다.
+     같은 값이라는 이유로 키를 합치면 두 소비자의 요구가 갈릴 때 되돌리기 어렵다.
+     meta(description·og:*)는 안 건다 — 크롤러가 JS 를 안 돌려 런타임 변경이 무의미하다. -->
+<title data-i18n="document.title">TLcube 스캐너</title>
 <meta name="description" content="TLcube 코드를 카메라나 사진에서 읽는 스캐너입니다.">
 <link rel="canonical" href="https://tlscan.estre.so/">
 <meta name="robots" content="index,follow,max-image-preview:large">
@@ -754,7 +758,10 @@
   <div class="result-card">
     <button class="result-close" id="close-result" type="button" data-i18n-attr="aria-label:result.close" aria-label="스캔 결과 닫기">×</button>
     <p class="result-eyebrow" data-i18n="result.title">스캔 결과</p>
-    <h2 id="result-title">내용을 읽었어요</h2>
+    <!-- 스캔 성공 시 showResult() 가 페이로드 종류에 맞는 제목으로 덮는다. 여기 정적
+         문구는 그 전 상태의 기본값이라 거의 안 보이지만, data-i18n 을 걸어 두지 않으면
+         패널을 띄우는 경로가 하나라도 생겼을 때 한국어가 샌다. -->
+    <h2 id="result-title" data-i18n="result.generic">내용을 읽었어요</h2>
     <div class="result-content" id="result-content"></div>
     <div class="popup-fallback" id="popup-fallback" hidden>
       <p data-i18n="result.popupBlocked">브라우저가 자동으로 새 탭을 열지 못했어요. 아래 버튼을 탭해서 열어 주세요.</p>

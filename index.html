@@ -3,7 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLcube 생성기 — TrilLuminance (cube) 코드 만들기</title>
+<!-- data-i18n 은 head 에도 걸린다 (applyTranslations 가 document 전체를 훑는다).
+     <title> 의 textContent 를 바꾸면 탭 제목이 따라온다 — 사용자가 바로 보는 자리다.
+     ⚠ 아래 meta(description·og:*)는 **일부러 안 건다.** 소셜 크롤러·검색봇은 JS 를
+     실행하지 않아서 런타임에 바꿔도 링크 미리보기엔 반영되지 않는다. 단일 파일이라
+     URL 이 하나뿐인 구조의 한계이고, 언어별 SEO 는 허브(tl.estre.so/en/·/ja/)가 맡는다. -->
+<title data-i18n="g457">TLcube 생성기 — TrilLuminance (cube) 코드 만들기</title>
 <meta name="description" content="TrilLuminance (cube) 코드를 브라우저에서 만들고 PNG·SVG 로 내보냅니다. URL·텍스트·Wi-Fi·명함을 Type O / A / Y 세 형태로 인코딩하고, 폴백 QR 도 함께 넣을 수 있어요.">
 <link rel="canonical" href="https://tlcube.estre.so/">
 <meta name="robots" content="index,follow,max-image-preview:large">
@@ -25,7 +30,10 @@
 <meta name="theme-color" content="#101218">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="TLcube 생성">
+<!-- iOS 는 «홈 화면에 추가» 시점의 **살아 있는 DOM** 에서 이 값을 읽는다. 그래서 여기는
+     런타임 전환이 실제로 먹는다 — 아래 og:* 와 갈리는 지점이다(그쪽은 크롤러가 JS 를
+     안 돌려 무의미). 홈 화면 라벨은 길면 잘리므로 세 언어 모두 짧게 둔다. -->
+<meta name="apple-mobile-web-app-title" content="TLcube 생성" data-i18n-attr="content:g458">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -995,7 +1003,9 @@ const GENERATOR_STRINGS = {
     "g453": "타입 <b>Y</b> · 버전 <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · 톤 <b>{tones}</b>",
     "g454": " · 윈도 <b>β</b>",
     "g455": "용량 초과 — 내용 뒤쪽 {n} B 가 잘린 채로 렌더링 중이에요 (빨간 구간이 잘리는 부분).",
-    "g456": "자동 판정({bits}) → {ver} · ECC {ecc} ({tier})"
+    "g456": "자동 판정({bits}) → {ver} · ECC {ecc} ({tier})",
+    "g457": "TLcube 생성기 — TrilLuminance (cube) 코드 만들기",
+    "g458": "TLcube 생성"
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1150,7 +1160,9 @@ const GENERATOR_STRINGS = {
     "g453": "Type <b>Y</b> · version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tones <b>{tones}</b>",
     "g454": " · window <b>β</b>",
     "g455": "Over capacity — the last {n} B of your content are cut in this render (the red span marks what gets dropped).",
-    "g456": "Auto ({bits}) → {ver} · ECC {ecc} ({tier})"
+    "g456": "Auto ({bits}) → {ver} · ECC {ecc} ({tier})",
+    "g457": "TLcube generator — make TrilLuminance (cube) codes",
+    "g458": "TLcube gen"
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1305,7 +1317,9 @@ const GENERATOR_STRINGS = {
     "g453": "タイプ <b>Y</b> · バージョン <b>{ver}</b>（n={n}）· ECC <b>{ecc}</b> · トーン <b>{tones}</b>",
     "g454": " · ウィンドウ <b>β</b>",
     "g455": "容量超過 — 内容の後ろ {n} B が切り詰められた状態で描画されています（赤い区間が切れる部分です）。",
-    "g456": "自動判定（{bits}）→ {ver} · ECC {ecc}（{tier}）"
+    "g456": "自動判定（{bits}）→ {ver} · ECC {ecc}（{tier}）",
+    "g457": "TLcube ジェネレータ — TrilLuminance (cube) コードを作る",
+    "g458": "TLcube 生成"
   },
 };
 
@@ -2861,7 +2875,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-11.8';
+const GENERATOR_BUILD = '2026-08-11.9';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 
