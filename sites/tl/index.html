@@ -161,14 +161,14 @@
           <tr><th>타입</th><th>실사진 복호</th><th>복호 시간</th><th>실시간 스캔</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Type Y</strong> — 단일 큐브</td><td><span class="badge ok">3 / 3</span></td><td>약 0.4초</td><td><span class="badge ok">쓸 만함</span></td></tr>
-          <tr><td><strong>Type O</strong> — 육각 필드</td><td><span class="badge ok">3 / 3</span></td><td>약 1.1초</td><td><span class="badge warn">개선 중</span></td></tr>
-          <tr><td><strong>Type A</strong> — 삼각 실루엣</td><td><span class="badge warn">2 / 3</span></td><td>약 0.8초</td><td><span class="badge warn">개선 중</span></td></tr>
+          <tr><td><strong>Type Y</strong> — 단일 큐브</td><td><span class="badge ok">3 / 3</span></td><td>약 0.23초</td><td><span class="badge ok">쓸 만함</span></td></tr>
+          <tr><td><strong>Type O</strong> — 육각 필드</td><td><span class="badge ok">3 / 3</span></td><td>약 0.69초</td><td><span class="badge warn">개선 중</span></td></tr>
+          <tr><td><strong>Type A</strong> — 삼각 실루엣</td><td><span class="badge warn">2 / 3</span></td><td>약 0.72초</td><td><span class="badge warn">개선 중</span></td></tr>
           <tr><td><strong>중앙 QR 변형</strong> (세 타입 공통)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">개선 중</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px">복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데 한 번 읽는 데 몇 초가 걸리면 그동안 프레임이 버려져서, 정확도와 무관하게 <strong>“어쩌다 한 번 읽히는”</strong> 느낌이 됩니다. 그래서 지금은 속도가 최우선 과제예요.</p>
+    <p class="dim" style="margin-top:16px">복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. 최적화로 O·A 가 1초 아래로 내려왔지만 아직 프레임 간격보다는 길어요 — Y 가 가장 매끄럽습니다.</p>
     <p class="dim">촬영 조건도 크게 작용합니다. 실측에서 <strong>셀당 9픽셀</strong>이 복호 하한이었고, 같은 거리라도 <strong>초광각 렌즈</strong>로 찍으면 코드가 작게 담겨 이 선 아래로 내려갔어요 (초광각 7.6px 실패 / 광각 9.1px 성공). 스캐너에 렌즈 선택을 넣어 둔 이유입니다.</p>
     <p class="dim"><strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하는 형태예요. 진입점이 없어 한동안 못 읽었는데, QR 자신의 파인더를 기준점으로 삼는 경로를 넣어 이제 읽힙니다.</p>
     <p class="dim" style="margin-top:16px"><small>측정 2026-08-11 · 표본은 스마트폰 3개 센서(초광각·광각·망원)로 찍은 사진 9장 · 짧은 변 1440px 기준. 표본이 작아 성공률이 아니라 <em>현재 상태</em>로 읽어 주세요.</small></p>

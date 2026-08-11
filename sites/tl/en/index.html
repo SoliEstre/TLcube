@@ -161,14 +161,14 @@
           <tr><th>Type</th><th>Real photos decoded</th><th>Decode time</th><th>Live scanning</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.4 s</td><td><span class="badge ok">usable</span></td></tr>
-          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~1.1 s</td><td><span class="badge warn">improving</span></td></tr>
-          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge warn">2 / 3</span></td><td>~0.8 s</td><td><span class="badge warn">improving</span></td></tr>
+          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.23 s</td><td><span class="badge ok">usable</span></td></tr>
+          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~0.69 s</td><td><span class="badge warn">improving</span></td></tr>
+          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge warn">2 / 3</span></td><td>~0.72 s</td><td><span class="badge warn">improving</span></td></tr>
           <tr><td><strong>Centre-QR variant</strong> (all three types)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">improving</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px">Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes several seconds the frames in between are dropped — and regardless of accuracy it feels like it <strong>“only reads once in a while”</strong>. Speed is the top priority right now.</p>
+    <p class="dim" style="margin-top:16px">Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. Optimization brought O and A under a second, but that is still longer than the frame interval — Y is the smoothest.</p>
     <p class="dim">Shooting conditions matter too. Measured, <strong>9 pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide 7.6 px failed / wide 9.1 px succeeded). That is why the scanner offers a lens picker.</p>
     <p class="dim">In the <strong>centre-QR variant</strong> a QR block takes the place of the central finder. It was unreadable for a while because there was no entry point; a path that uses the QR’s own finder patterns as reference now handles it.</p>
     <p class="dim" style="margin-top:16px"><small>Measured 2026-08-11 · sample of 9 photos across three phone sensors (ultra-wide, wide, telephoto) · short side 1440 px. The sample is small — read this as a <em>current state</em>, not a success rate.</small></p>

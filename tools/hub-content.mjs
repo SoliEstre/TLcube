@@ -17,10 +17,14 @@ export const stats = {
   cellFloorPx: 9,
   ultraWideFailPx: 7.6,
   wideOkPx: 9.1,
+  // 복호 시간은 **1440px 짧은 변 기준, 파일별 최소값(교차 5회)의 타입 중앙값**이다.
+  // 순차 측정은 워밍업·열 편향이 들어가 실제 1.44배가 1.14배로 보인 전례가 있어
+  // 최적화 전후를 같은 프로세스에서 번갈아 잰다. 절대값은 측정 머신에 종속되므로
+  // 배수(전 대비)가 더 안정적인 값이라는 점을 알아 둔다.
   types: {
-    Y: { decoded: '3 / 3', ms: '약 0.4초', msEn: '~0.4 s', msJa: '約 0.4 秒' },
-    O: { decoded: '3 / 3', ms: '약 1.1초', msEn: '~1.1 s', msJa: '約 1.1 秒' },
-    A: { decoded: '2 / 3', ms: '약 0.8초', msEn: '~0.8 s', msJa: '約 0.8 秒' },
+    Y: { decoded: '3 / 3', ms: '약 0.23초', msEn: '~0.23 s', msJa: '約 0.23 秒' },
+    O: { decoded: '3 / 3', ms: '약 0.69초', msEn: '~0.69 s', msJa: '約 0.69 秒' },
+    A: { decoded: '2 / 3', ms: '약 0.72초', msEn: '~0.72 s', msJa: '約 0.72 秒' },
   },
   centerQr: { decoded: '8 / 9' },
 };
@@ -85,7 +89,7 @@ export const strings = {
     rowAName: '<strong>Type A</strong> — 삼각 실루엣',
     rowCenterQr: '<strong>중앙 QR 변형</strong> (세 타입 공통)',
     badgeUsable: '쓸 만함', badgeSlow: '개선 중',
-    statusNote1: '복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데 한 번 읽는 데 몇 초가 걸리면 그동안 프레임이 버려져서, 정확도와 무관하게 <strong>“어쩌다 한 번 읽히는”</strong> 느낌이 됩니다. 그래서 지금은 속도가 최우선 과제예요.',
+    statusNote1: '복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. 최적화로 O·A 가 1초 아래로 내려왔지만 아직 프레임 간격보다는 길어요 — Y 가 가장 매끄럽습니다.',
     statusNote2: `촬영 조건도 크게 작용합니다. 실측에서 <strong>셀당 ${stats.cellFloorPx}픽셀</strong>이 복호 하한이었고, 같은 거리라도 <strong>초광각 렌즈</strong>로 찍으면 코드가 작게 담겨 이 선 아래로 내려갔어요 (초광각 ${stats.ultraWideFailPx}px 실패 / 광각 ${stats.wideOkPx}px 성공). 스캐너에 렌즈 선택을 넣어 둔 이유입니다.`,
     statusNote3: '<strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하는 형태예요. 진입점이 없어 한동안 못 읽었는데, QR 자신의 파인더를 기준점으로 삼는 경로를 넣어 이제 읽힙니다.',
     statusFoot: `측정 ${stats.measuredOn} · 표본은 스마트폰 3개 센서(초광각·광각·망원)로 찍은 사진 ${stats.sampleCount}장 · 짧은 변 ${stats.shortSidePx}px 기준. 표본이 작아 성공률이 아니라 <em>현재 상태</em>로 읽어 주세요.`,
@@ -154,7 +158,7 @@ export const strings = {
     rowAName: '<strong>Type A</strong> — triangular silhouette',
     rowCenterQr: '<strong>Centre-QR variant</strong> (all three types)',
     badgeUsable: 'usable', badgeSlow: 'improving',
-    statusNote1: 'Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes several seconds the frames in between are dropped — and regardless of accuracy it feels like it <strong>“only reads once in a while”</strong>. Speed is the top priority right now.',
+    statusNote1: 'Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. Optimization brought O and A under a second, but that is still longer than the frame interval — Y is the smoothest.',
     statusNote2: `Shooting conditions matter too. Measured, <strong>${stats.cellFloorPx} pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide ${stats.ultraWideFailPx} px failed / wide ${stats.wideOkPx} px succeeded). That is why the scanner offers a lens picker.`,
     statusNote3: 'In the <strong>centre-QR variant</strong> a QR block takes the place of the central finder. It was unreadable for a while because there was no entry point; a path that uses the QR’s own finder patterns as reference now handles it.',
     statusFoot: `Measured ${stats.measuredOn} · sample of ${stats.sampleCount} photos across three phone sensors (ultra-wide, wide, telephoto) · short side ${stats.shortSidePx} px. The sample is small — read this as a <em>current state</em>, not a success rate.`,
@@ -223,7 +227,7 @@ export const strings = {
     rowAName: '<strong>Type A</strong> — 三角シルエット',
     rowCenterQr: '<strong>中央 QR 変種</strong>（3 タイプ共通）',
     badgeUsable: '実用的', badgeSlow: '改善中',
-    statusNote1: '復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りに数秒かかるとその間のフレームは捨てられ、精度とは無関係に<strong>「たまにしか読めない」</strong>感覚になります。いまは速度が最優先課題です。',
+    statusNote1: '復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。最適化で O・A は 1 秒を切りましたが、まだフレーム間隔よりは長めです — Y が最も滑らかです。',
     statusNote2: `撮影条件も大きく効きます。実測では<strong>セルあたり ${stats.cellFloorPx} ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 ${stats.ultraWideFailPx}px 失敗 / 広角 ${stats.wideOkPx}px 成功）。スキャナにレンズ選択を入れているのはそのためです。`,
     statusNote3: '<strong>中央 QR 変種</strong>は QR ブロックが中央ファインダの位置を代わりに占める形です。入口がなくしばらく読めませんでしたが、QR 自身のファインダを基準にする経路を入れて読めるようになりました。',
     statusFoot: `測定 ${stats.measuredOn} · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 ${stats.sampleCount} 枚 · 短辺 ${stats.shortSidePx}px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。`,

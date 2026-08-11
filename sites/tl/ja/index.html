@@ -161,14 +161,14 @@
           <tr><th>タイプ</th><th>実写真の復号</th><th>復号時間</th><th>リアルタイム</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">3 / 3</span></td><td>約 0.4 秒</td><td><span class="badge ok">実用的</span></td></tr>
-          <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">3 / 3</span></td><td>約 1.1 秒</td><td><span class="badge warn">改善中</span></td></tr>
-          <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge warn">2 / 3</span></td><td>約 0.8 秒</td><td><span class="badge warn">改善中</span></td></tr>
+          <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">3 / 3</span></td><td>約 0.23 秒</td><td><span class="badge ok">実用的</span></td></tr>
+          <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">3 / 3</span></td><td>約 0.69 秒</td><td><span class="badge warn">改善中</span></td></tr>
+          <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge warn">2 / 3</span></td><td>約 0.72 秒</td><td><span class="badge warn">改善中</span></td></tr>
           <tr><td><strong>中央 QR 変種</strong>（3 タイプ共通）</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">改善中</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px">復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りに数秒かかるとその間のフレームは捨てられ、精度とは無関係に<strong>「たまにしか読めない」</strong>感覚になります。いまは速度が最優先課題です。</p>
+    <p class="dim" style="margin-top:16px">復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。最適化で O・A は 1 秒を切りましたが、まだフレーム間隔よりは長めです — Y が最も滑らかです。</p>
     <p class="dim">撮影条件も大きく効きます。実測では<strong>セルあたり 9 ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 7.6px 失敗 / 広角 9.1px 成功）。スキャナにレンズ選択を入れているのはそのためです。</p>
     <p class="dim"><strong>中央 QR 変種</strong>は QR ブロックが中央ファインダの位置を代わりに占める形です。入口がなくしばらく読めませんでしたが、QR 自身のファインダを基準にする経路を入れて読めるようになりました。</p>
     <p class="dim" style="margin-top:16px"><small>測定 2026-08-11 · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 9 枚 · 短辺 1440px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。</small></p>
