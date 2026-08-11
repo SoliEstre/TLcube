@@ -94,7 +94,27 @@ function enqueue(row) {
  * @param {string} site `body[data-site]` 에 해당하는 사이트 식별자
  * @returns {(event: string, props?: Record<string, unknown>) => void}
  */
+/** 리퍼러의 **도메인만**. 전체 URL 은 저장하지 않는다. */
+function refDomain() {
+  try {
+    if (typeof document === 'undefined' || !document.referrer) return '';
+    const url = new URL(document.referrer);
+    return url.hostname === location.hostname ? '' : url.hostname;
+  } catch {
+    return '';
+  }
+}
+
+/** UA 힌트 — 문자열 파싱을 하지 않는다. 없으면 빈 값으로 두고 컬럼 기본값에 맡긴다. */
+function uaHints() {
+  const uad = typeof navigator === 'undefined' ? null : navigator.userAgentData;
+  const brands = uad && uad.brands;
+  const brand = brands ? brands.find((x) => !/Not.?A.?Brand/i.test(x.brand)) : null;
+  return { browser: brand ? brand.brand : '', os: (uad && uad.platform) || '' };
+}
+
 export function createBeacon(site) {
+  const { browser: uaBrowser, os: uaOs } = uaHints();
   /** 탭 수명 임시 ID — 영속 식별자가 아니다. */
   const session = (() => {
     try {
@@ -115,11 +135,23 @@ export function createBeacon(site) {
   }
 
   return function send(event, props) {
+    /*
+     * ⚠ **필드 집합이 ClickHouse 테이블 컬럼과 정확히 일치해야 한다.**
+     *   수집은 `INSERT … FORMAT JSONEachRow` 인데, 컬럼에 없는 키가 하나라도 있으면
+     *   그 행은 파싱 단계에서 거부된다. 게다가 `async_insert=1&wait_for_async_insert=0`
+     *   이라 **클라이언트엔 아무 에러도 안 보이고 조용히 사라진다.**
+     *   실제로 초기 구현이 스키마에 없는 `lang` 만 보내고 `ref`·`ua_*` 를 빠뜨려서,
+     *   수집을 켰어도 스캐너·생성기 이벤트가 전부 버려질 상태였다(2026-08-11에 발견).
+     *   `test/beacon-contract.test.js` 가 이 일치를 고정한다.
+     */
     const row = {
       site,
       event,
       ts: new Date().toISOString().replace('T', ' ').replace('Z', ''),
       path: typeof location === 'undefined' ? '' : location.pathname,
+      ref: refDomain(),
+      ua_browser: uaBrowser,
+      ua_os: uaOs,
       lang: typeof document === 'undefined' ? '' : (document.documentElement.lang || ''),
       session,
       // ⚠ props 는 Map(String, String) 컬럼이라 **객체**로 보내고 값도 문자열로 맞춘다.

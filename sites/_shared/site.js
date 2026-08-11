@@ -82,6 +82,7 @@
       ref: refDomain(),
       ua_browser: uaBrowser,
       ua_os: uaOs,
+      lang: document.documentElement.lang || '',
       session,
       // ⚠ props 컬럼은 Map(String, String) 이다 — JSON **객체**로 보내야 하고
       //   문자열로 보내면 JSONEachRow 파싱이 실패한다. 값도 전부 문자열로 맞춘다.

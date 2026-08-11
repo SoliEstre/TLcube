@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS tlcube.events
     ref        LowCardinality(String) DEFAULT '', -- referrer 도메인만 (전체 URL 미저장)
     ua_browser LowCardinality(String) DEFAULT '', -- UA 힌트 (문자열 파싱 안 함)
     ua_os      LowCardinality(String) DEFAULT '',
+    lang       LowCardinality(String) DEFAULT '', -- 문서 언어(ko|en|ja) — 3언어 전환 이후 의미가 생겼다
     session    String DEFAULT '',                 -- sessionStorage 임시 ID — 영속 식별자 아님
     props      Map(LowCardinality(String), String) DEFAULT map()
 )
@@ -66,3 +67,7 @@ CREATE QUOTA IF NOT EXISTS tlcube_ingest_q FOR INTERVAL 1 hour MAX queries 20000
 -- SELECT site, event, count() FROM tlcube.events GROUP BY site, event ORDER BY count() DESC;
 -- SELECT date, site, countMerge(views) v, uniqMerge(sessions) s
 --   FROM tlcube.daily_stats GROUP BY date, site ORDER BY date DESC LIMIT 30;
+
+-- 이미 tlcube.events 가 존재하는 환경(이전 프로비저닝을 돌린 적이 있는 경우)을 위한 보정.
+-- 새로 만드는 환경에서는 위 CREATE 가 이미 lang 을 갖고 있으므로 아무 일도 하지 않는다.
+ALTER TABLE tlcube.events ADD COLUMN IF NOT EXISTS lang LowCardinality(String) DEFAULT '' AFTER ua_os;
