@@ -18,7 +18,7 @@ CREATE DATABASE IF NOT EXISTS tlcube;
 
 CREATE TABLE IF NOT EXISTS tlcube.events
 (
-    site       LowCardinality(String),            -- 'tlcube' | 'tlscan' | 'hub'
+    site       LowCardinality(String),            -- 'hub' | 'gen' | 'scan' (호스트명이 아니라 코드가 보내는 값)
     event      LowCardinality(String),            -- pageview | generate | export | fail | scan_ok | scan_fail | out
     ts         DateTime64(3, 'UTC'),
     path       String DEFAULT '',

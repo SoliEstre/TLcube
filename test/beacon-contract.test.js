@@ -22,11 +22,21 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const read = (rel) => readFileSync(ROOT + rel, 'utf8');
 
-/** 프로비저닝 SQL 의 `CREATE TABLE tlcube.events` 에서 컬럼 이름을 뽑는다. */
-function schemaColumns() {
-  const sql = read('deploy/estre-so/clickhouse/001_tlcube_provisioning.sql');
-  const start = sql.indexOf('CREATE TABLE IF NOT EXISTS tlcube.events');
-  assert.ok(start >= 0, 'tlcube.events 정의를 못 찾았다');
+// 스키마도 **둘**이다 — 우리 배포(estre.so 공용 호스트, DB=tlcube)와 공개 저장소가
+// 자체 호스팅용으로 제공하는 것(DB=tl_analytics). 둘의 컬럼 집합이 갈리면 자체 호스팅
+// 이용자 쪽에서만 조용히 전부 버려진다. 실제로 갈려 있었다 — 자체 호스팅 스키마에
+// `lang` 이 없었다(2026-08-11 발견).
+const SCHEMAS = [
+  ['우리 배포 (tlcube)', 'deploy/estre-so/clickhouse/001_tlcube_provisioning.sql', 'tlcube.events'],
+  ['자체 호스팅 (tl_analytics)', 'deploy/clickhouse-init.sql', 'tl_analytics.events'],
+];
+const CANONICAL = SCHEMAS[0];
+
+/** SQL 의 `CREATE TABLE <table>` 에서 컬럼 이름을 뽑는다. */
+function schemaColumns(rel = CANONICAL[1], table = CANONICAL[2]) {
+  const sql = read(rel);
+  const start = sql.indexOf(`CREATE TABLE IF NOT EXISTS ${table}`);
+  assert.ok(start >= 0, `${rel}: ${table} 정의를 못 찾았다`);
   const open = sql.indexOf('(', start);
   const close = sql.indexOf('\n)', open);
   const body = sql.slice(open + 1, close);
@@ -66,12 +76,22 @@ function payloadKeys(rel) {
   return keys;
 }
 
-test('테이블 컬럼 집합을 읽어낼 수 있다 (파서 자체 검증)', () => {
-  const cols = schemaColumns();
-  assert.ok(cols.length >= 8, `컬럼을 너무 적게 읽었다: ${JSON.stringify(cols)}`);
-  for (const required of ['site', 'event', 'ts', 'path', 'session', 'props']) {
-    assert.ok(cols.includes(required), `${required} 컬럼이 없다 — 파서가 깨졌을 수 있다`);
-  }
+for (const [label, rel, table] of SCHEMAS) {
+  test(`${label} 컬럼 집합을 읽어낼 수 있다 (파서 자체 검증)`, () => {
+    const cols = schemaColumns(rel, table);
+    assert.ok(cols.length >= 8, `컬럼을 너무 적게 읽었다: ${JSON.stringify(cols)}`);
+    for (const required of ['site', 'event', 'ts', 'path', 'session', 'props']) {
+      assert.ok(cols.includes(required), `${required} 컬럼이 없다 — 파서가 깨졌을 수 있다`);
+    }
+  });
+}
+
+test('두 스키마의 컬럼 집합이 서로 같다', () => {
+  const [[labelA, relA, tableA], [labelB, relB, tableB]] = SCHEMAS;
+  const a = schemaColumns(relA, tableA).slice().sort();
+  const b = schemaColumns(relB, tableB).slice().sort();
+  assert.deepEqual(a, b,
+    `${labelA} 와 ${labelB} 의 컬럼이 갈렸다 — 갈린 쪽 호스팅에서만 행이 조용히 버려진다`);
 });
 
 for (const [label, rel] of [
