@@ -15,6 +15,9 @@ import {
   hexCorners, hexDistance,
 } from './hexgrid.js';
 import { bandRadii } from './bullseye.js';
+import {
+  DEFAULT_FINDER_PATTERN_ID, FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
+} from './finder-patterns.js';
 import { digitToRanks } from './lehmer.js';
 import { qrMatrix } from './qr.js';
 
@@ -180,6 +183,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   palette: {background: {r,g,b}, levels: [{r,g,b},{r,g,b},{r,g,b}], bullseyeDark: {r,g,b}, bullseyeLight: {r,g,b}},
  *   cellSize?: number, margin?: number,
  *   qrText?: string, centerQr?: boolean, cornerToo?: boolean,
+ *   finderPatternId?: string,
  *   qrCorner?: 'TL'|'TR'|'BL'|'BR',
  * }} options
  * @returns {{k: number, layout: object, width: number, height: number, background: {r,g,b}, shapes: Array}}
@@ -218,6 +222,18 @@ export function buildScene(encoded, options) {
     }
   }
   const centerQr = encodedCenterQr;
+  const finderPatternId = opts.finderPatternId === undefined
+    ? DEFAULT_FINDER_PATTERN_ID : opts.finderPatternId;
+  if (typeof finderPatternId !== 'string') {
+    throw new TypeError(`finderPatternId 는 문자열이어야 한다: ${typeof finderPatternId}`);
+  }
+  const finderPattern = finderPatternId === DEFAULT_FINDER_PATTERN_ID
+    ? null : getFinderPattern(finderPatternId);
+  if (centerQr && finderPattern !== null) {
+    throw new RangeError(
+      `centerQr=true 인데 실험 파인더(${finderPatternId})도 지정됐다 — 중앙 슬롯은 둘 중 하나만 렌더할 수 있다`,
+    );
+  }
   const cornerToo = opts.cornerToo === undefined ? false : opts.cornerToo;
   if (typeof cornerToo !== 'boolean') {
     throw new TypeError(`cornerToo 는 boolean 이어야 한다: ${typeof cornerToo}`);
@@ -338,7 +354,22 @@ export function buildScene(encoded, options) {
 
   const center = center0;
 
-  if (!centerQr) {
+  if (finderPattern !== null) {
+    // (2a) 실험 파인더 — 예약된 19셀을 regionCells(2) 순서 그대로 3면 최대 대비로 칠한다.
+    // 인코더 cellDigits 에 이 슬롯이 없으므로 용량·오버헤드·포맷 정보는 전혀 바뀌지 않는다.
+    for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
+      const cell = FINDER_CELL_ORDER[ci];
+      const mask = finderPattern.cellMasks[ci];
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(cell.q, cell.r, face, layout),
+          color: mask & FINDER_FACE_BITS[face]
+            ? palette.bullseyeLight : palette.bullseyeDark,
+        });
+      }
+    }
+  } else if (!centerQr) {
     // (2) 불스아이 6 disc — 바깥 밴드(반지름 큰 것)부터. i(0=중심)가 짝수면 dark, 홀수면 light.
     const radii = bandRadii(cellSize); // 오름차순(안→밖), 마지막이 R_max.
     for (let i = radii.length - 1; i >= 0; i -= 1) {
@@ -387,6 +418,7 @@ export function buildScene(encoded, options) {
     width: layout.width,
     height: layout.height,
     background: palette.background,
+    finderPatternId: centerQr ? 'centerQr' : finderPatternId,
     shapes,
   };
 }

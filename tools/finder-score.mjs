@@ -1468,6 +1468,16 @@ function generateCandidates() {
     '구조화 후보 수 예상 범위 이탈: ' + candidates.length);
   return candidates;
 }
+
+/**
+ * 고정 파인더 패턴 재생성·회귀 테스트용 공개 진입점.
+ *
+ * 중심 균형 게이트를 적용하기 **전** 후보를 반환한다. 후보 채택은 사람의 실물 판단이
+ * 상위 심급이므로, 게이트에서 탈락한 ID도 이 목록에서 정확히 다시 꺼낼 수 있어야 한다.
+ */
+export function generateFinderCandidates() {
+  return generateCandidates();
+}
 function scoreText(value) { return Number(value).toFixed(2); }
 function resultRow(result, rank) {
   const structure = result.metrics.structuralSimplicity;
