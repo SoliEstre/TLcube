@@ -25,10 +25,30 @@ const SIZES = [180, 192, 512];
 const SUPERSAMPLE = 4;
 
 /** favicon.svg 와 같은 32단위 좌표계의 큐브 3면. 위·왼쪽·오른쪽 순으로 밝기가 낮아진다. */
+/*
+ * ⚠ **참 아이소메트릭**이어야 한다 — 실루엣이 정육각형이고 큐브 세 모서리가 투영 후
+ *    같은 길이여야 한다. 예전 값은 윗면 마름모만 맞고 수직 모서리가 눌려서 실루엣이
+ *    가로로 2/√3 배 늘어난 «직육각형» 이었다(2026-08-11 수정).
+ *    중심 (16,16) · 외접반경 R=14 · 가로 반폭 R·√3/2 = 12.124 → 모서리 3종 모두 14.
+ */
+const R = 14;
+const CX = 16;
+const CY = 16;
+const HX = R * Math.sqrt(3) / 2;
+const P = {
+  top: [CX, CY - R],
+  upperRight: [CX + HX, CY - R / 2],
+  lowerRight: [CX + HX, CY + R / 2],
+  bottom: [CX, CY + R],
+  lowerLeft: [CX - HX, CY + R / 2],
+  upperLeft: [CX - HX, CY - R / 2],
+  centre: [CX, CY],
+};
+
 const FACES = [
-  { points: [[16, 3], [29, 10.5], [16, 18], [3, 10.5]], color: [0xdc, 0xe4, 0xf0] },
-  { points: [[3, 10.5], [16, 18], [16, 29], [3, 21.5]], color: [0x6e, 0x87, 0xbe] },
-  { points: [[29, 10.5], [16, 18], [16, 29], [29, 21.5]], color: [0x3a, 0x44, 0x6c] },
+  { points: [P.top, P.upperRight, P.centre, P.upperLeft], color: [0xdc, 0xe4, 0xf0] },
+  { points: [P.upperLeft, P.centre, P.bottom, P.lowerLeft], color: [0x6e, 0x87, 0xbe] },
+  { points: [P.upperRight, P.centre, P.bottom, P.lowerRight], color: [0x3a, 0x44, 0x6c] },
 ];
 
 /** 배경 — 투명하게 두면 iOS 가 검게 채운다. 다크 패널색으로 채워 두는 편이 안전하다. */

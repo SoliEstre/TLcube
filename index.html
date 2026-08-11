@@ -49,8 +49,9 @@
 <!-- 파비콘을 data URI 로 인라인한다. 외부 파일을 링크하면 단일 파일 원칙(SPEC §8 —
      file:// 로 열려야 한다)이 깨지고, 아예 없으면 브라우저가 /favicon.ico 를 찾아
      콘솔에 404 를 남긴다. 도형은 sites/_shared/favicon.svg 와 같다 — 아이소메트릭
-     큐브 3면에 slate 프리셋의 rank 2/1/0 을 그대로 써서 파비콘도 "휘도 순서"를 보여준다. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16,3 29,10.5 16,18 3,10.5' fill='%23dce4f0'/%3E%3Cpolygon points='3,10.5 16,18 16,29 3,21.5' fill='%236e87be'/%3E%3Cpolygon points='29,10.5 16,18 16,29 29,21.5' fill='%233a446c'/%3E%3C/svg%3E">
+     큐브 3면에 slate 프리셋의 rank 2/1/0 을 그대로 써서 파비콘도 "휘도 순서"를 보여준다.
+     ⚠ 도형은 sites/_shared/favicon.svg 와 **같은 좌표**를 유지한다 — 한쪽만 고치면 어긋난다. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpolygon points='16,2 28.124,9 16,16 3.876,9' fill='%23dce4f0'/%3E%3Cpolygon points='3.876,9 16,16 16,30 3.876,23' fill='%236e87be'/%3E%3Cpolygon points='28.124,9 16,16 16,30 28.124,23' fill='%233a446c'/%3E%3C/svg%3E">
 <style>
   /* 테마: 다크 값이 기본. 라이트 세트는 [data-theme="light"] 또는
      (자동 모드 + OS 라이트) 에서 적용. 코드 렌더(프리셋 배경)와는 독립 — 페이지 크롬만. */
