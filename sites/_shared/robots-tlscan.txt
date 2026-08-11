@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+# 디코더 버전 비교용 임시 테스트 빌드. 실기기에서만 재현되는 회귀를 가르려고 두 버전을
+# 나란히 올려 둔 것이라 색인 대상이 아니다 — 조사 끝나면 파일째 지운다.
+Disallow: /_shared/scan-
 
 Sitemap: https://tlscan.estre.so/sitemap.xml
