@@ -10,6 +10,8 @@
 //    잡히지 않는 dev/prod 괴리다. 절대 경로 + nginx alias(`/src/`)로 양쪽을 일치시킨다.
 //    (같은 이유로 `_shared` 도 alias 로 붙인다 — deploy/estre-so/projects/tlcube/static.conf)
 import { sniffPayload } from '/src/payloadform.js';
+import { createI18n, wireLanguageSwitch } from '/src/i18n.js';
+import { SCANNER_STRINGS } from './strings.js';
 import { decodeFrontend } from '/src/decoder/frontend.js';
 
 const FRAME_INTERVAL_MS = 320;
@@ -96,6 +98,20 @@ let stoppedForVisibility = false;
 let activeUrl = '';
 let returnFocus = null;
 let consecutiveFailedFrames = 0;
+
+/*
+ * 언어. 문구가 바뀌면 **이미 떠 있는 화면도 다시 그려야** 한다 — 게이트 문구와 결과
+ * 패널은 JS 가 채우므로 `data-i18n` 재적용만으로는 안 돌아온다. onChange 에서 현재
+ * 상태에 맞는 화면을 다시 그린다.
+ */
+const i18n = createI18n(SCANNER_STRINGS, {
+  onChange() {
+    if (!cameraGate.hidden) showSupportedStartGate();
+    if (!resultPanel.hidden && lastResult !== null) showResult(lastResult);
+  },
+});
+const t = (key) => i18n.t(key);
+let lastResult = null;
 let selectedCameraId = '';
 let knownCameras = [];
 
@@ -201,9 +217,9 @@ function showCameraGate(settings) {
   const options = settings || {};
   const canStart = options.canStart !== false;
 
-  cameraGateTitle.textContent = options.title || '카메라를 시작할까요?';
-  cameraGateMessage.textContent = options.message || '카메라 권한을 허용하면 바로 스캔해요.';
-  startCameraButton.textContent = options.startLabel || '탭해서 카메라 시작';
+  cameraGateTitle.textContent = options.title || t('gate.title');
+  cameraGateMessage.textContent = options.message || t('gate.message');
+  startCameraButton.textContent = options.startLabel || t('gate.start');
   startCameraButton.disabled = !canStart;
   cameraGate.hidden = false;
 }
@@ -215,26 +231,26 @@ function hideCameraGate() {
 function showSupportedStartGate(message) {
   if (!isSecureForCamera()) {
     showCameraGate({
-      title: 'HTTPS 연결이 필요해요',
-      message: 'HTTPS가 아닌 연결에서는 카메라를 사용할 수 없어요. 사진에서 스캔할 수 있어요.',
+      title: t('gate.https.title'),
+      message: t('gate.https.message'),
       canStart: false,
-      startLabel: 'HTTPS에서 카메라 사용',
+      startLabel: t('gate.https.start'),
     });
     return;
   }
 
   if (!hasCameraApi()) {
     showCameraGate({
-      title: '카메라를 사용할 수 없어요',
-      message: '이 브라우저에서는 카메라 기능을 지원하지 않아요. 사진에서 스캔할 수 있어요.',
+      title: t('gate.unsupported.title'),
+      message: t('gate.unsupported.message'),
       canStart: false,
-      startLabel: '카메라를 사용할 수 없어요',
+      startLabel: t('gate.unsupported.title'),
     });
     return;
   }
 
   showCameraGate({
-    message: message || '카메라 권한을 허용하면 바로 스캔해요.',
+    message: message || t('gate.message'),
   });
 }
 
@@ -272,8 +288,8 @@ function cameraFailure(error) {
 
   if (name === 'NotAllowedError' || name === 'SecurityError') {
     return {
-      title: '카메라 권한이 필요해요',
-      message: '브라우저에서 카메라 권한을 허용한 뒤 다시 탭해 주세요.',
+      title: t('gate.denied.title'),
+      message: t('gate.denied.message'),
     };
   }
 
@@ -281,14 +297,14 @@ function cameraFailure(error) {
       name === 'OverconstrainedError' || name === 'NotReadableError' ||
       name === 'AbortError') {
     return {
-      title: '카메라를 찾지 못했어요',
-      message: '카메라 연결을 확인한 뒤 다시 탭하거나 사진에서 스캔해 주세요.',
+      title: t('gate.notfound.title'),
+      message: t('gate.notfound.message'),
     };
   }
 
   return {
-    title: '카메라를 열지 못했어요',
-    message: '잠시 후 다시 탭하거나 사진에서 스캔해 주세요.',
+    title: t('gate.failed.title'),
+    message: t('gate.failed.message'),
   };
 }
 
@@ -524,22 +540,22 @@ function handleDecodeResult(result, source, session) {
     } else {
       consecutiveFailedFrames += 1;
       if (consecutiveFailedFrames === HINT_AFTER_FAILED_FRAMES) {
-        setStatus('코드가 화면에 더 크게 보이도록 가까이 가져가 보세요.');
+        setStatus(t('status.closer'));
       }
     }
   }
 
   if (!payload) {
     if (source === 'file') {
-      setStatus('사진에서 결과를 찾지 못했어요. 다른 사진을 선택하거나 카메라를 시작해 주세요.');
-      showSupportedStartGate('카메라를 시작하거나 다른 사진을 선택해 주세요.');
+      setStatus(t('status.photoNoResult'));
+      showSupportedStartGate(t('status.startOrPick'));
     }
     return;
   }
 
   stopCamera();
   showResult(payload);
-  setStatus('코드를 읽었어요.');
+  setStatus(t('status.decoded'));
 }
 
 function startFrameLoop(session) {
@@ -560,8 +576,8 @@ function startFrameLoop(session) {
           .catch(() => {
             if (session !== scanSession) return;
             stopCamera();
-            setStatus('프레임을 처리하는 중 문제가 생겼어요. 다시 시작해 주세요.');
-            showSupportedStartGate('카메라를 다시 시작해 주세요.');
+            setStatus(t('status.frameError'));
+            showSupportedStartGate(t('status.restart'));
           })
           .finally(() => {
             if (session === scanSession) isDecoding = false;
@@ -581,13 +597,13 @@ async function startCamera(options) {
   const deviceId = settings.deviceId || selectedCameraId;
 
   if (!isSecureForCamera()) {
-    setStatus('HTTPS 연결이 아니어서 카메라를 사용할 수 없어요.');
+    setStatus(t('status.noHttps'));
     showSupportedStartGate();
     return;
   }
 
   if (!hasCameraApi()) {
-    setStatus('이 브라우저에서는 카메라를 사용할 수 없어요.');
+    setStatus(t('status.unsupported'));
     showSupportedStartGate();
     return;
   }
@@ -596,7 +612,7 @@ async function startCamera(options) {
 
   const session = ++scanSession;
   cameraRequestPending = true;
-  setStatus('카메라를 시작하고 있어요.');
+  setStatus(t('status.starting'));
 
   if (!automatic) {
     hideCameraGate();
@@ -627,7 +643,7 @@ async function startCamera(options) {
     cameraRequestPending = false;
     setCameraStageActive(true);
     hideCameraGate();
-    setStatus('코드를 프레임 안에 맞춰 주세요.');
+    setStatus(t('status.aim'));
     startFrameLoop(session);
   } catch (error) {
     if (session !== scanSession) return;
@@ -635,7 +651,7 @@ async function startCamera(options) {
     stopCamera();
 
     if (automatic) {
-      setStatus('카메라를 시작하려면 화면을 탭해 주세요.');
+      setStatus(t('status.tapToStart'));
       showSupportedStartGate();
       return;
     }
@@ -645,7 +661,7 @@ async function startCamera(options) {
     showCameraGate({
       title: problem.title,
       message: problem.message,
-      startLabel: '카메라 다시 시도',
+      startLabel: t('gate.retry'),
     });
   } finally {
     if (session === scanSession) {
@@ -681,7 +697,7 @@ async function decodeImageFile(file) {
   hideResult({ restoreFocus: false });
 
   const session = ++scanSession;
-  setStatus('사진을 확인하고 있어요.');
+  setStatus(t('status.checkingPhoto'));
 
   try {
     const image = await loadImage(file);
@@ -692,8 +708,8 @@ async function decodeImageFile(file) {
     handleDecodeResult(result, 'file', session);
   } catch {
     if (session === scanSession) {
-      setStatus('사진을 읽지 못했어요. 다른 사진을 선택해 주세요.');
-      showSupportedStartGate('카메라를 시작하거나 다른 사진을 선택해 주세요.');
+      setStatus(t('status.photoUnreadable'));
+      showSupportedStartGate(t('status.startOrPick'));
     }
   } finally {
     imageInput.value = '';
@@ -766,15 +782,15 @@ async function copyValue(value, label, button) {
   }
 
   if (!copied) {
-    setStatus(label + '을(를) 복사하지 못했어요. 직접 선택해서 복사해 주세요.');
+    setStatus(label + t('copy.failSuffix'));
     return;
   }
 
-  setStatus(label + '을(를) 복사했어요.');
+  setStatus(label + t('copy.doneSuffix'));
   if (!button) return;
 
   const originalLabel = button.textContent;
-  button.textContent = '복사했어요';
+  button.textContent = t('copy.done');
   window.setTimeout(() => {
     button.textContent = originalLabel;
   }, 1600);
@@ -784,8 +800,8 @@ function createCopyButton(value, label) {
   const button = document.createElement('button');
   button.className = 'copy-button';
   button.type = 'button';
-  button.textContent = '복사';
-  button.setAttribute('aria-label', label + ' 복사');
+  button.textContent = t('copy.button');
+  button.setAttribute('aria-label', label + t('copy.suffix'));
   button.addEventListener('click', () => {
     void copyValue(value, label, button);
   });
@@ -798,7 +814,7 @@ function addPayloadField(label, value, options) {
   const header = document.createElement('div');
   const labelElement = document.createElement('span');
   const valueElement = settings.href ? document.createElement('a') : document.createElement('div');
-  const visibleValue = value === '' ? '없음' : value;
+  const visibleValue = value === '' ? t('value.none') : value;
   const copyValueText = settings.copyValue === undefined ? visibleValue : settings.copyValue;
 
   field.className = 'payload-field';
@@ -823,13 +839,13 @@ function addPayloadField(label, value, options) {
 }
 
 function renderTextPayload(payload) {
-  setResultTitle('텍스트를 읽었어요');
-  addResultIntro('내용을 확인하거나 복사할 수 있어요.');
+  setResultTitle(t('result.text.title'));
+  addResultIntro(t('result.text.hint'));
 
   const text = document.createElement('pre');
   text.className = 'text-payload';
   text.textContent = payload;
-  resultContent.append(text, createCopyButton(payload, '내용'));
+  resultContent.append(text, createCopyButton(payload, t('result.text.field')));
 }
 
 function tryOpenUrl(url) {
@@ -847,8 +863,8 @@ function renderUrlPayload(payload) {
   openUrlLink.href = url;
   popupFallback.hidden = opened;
 
-  setResultTitle('링크를 읽었어요');
-  addResultIntro(opened ? '새 탭에서 주소를 열었어요.' : '아래 버튼을 탭해서 주소를 열어 주세요.');
+  setResultTitle(t('result.url.title'));
+  addResultIntro(opened ? t('result.url.opened') : t('result.url.manual'));
 
   const link = document.createElement('a');
   link.className = 'payload-url';
@@ -856,7 +872,7 @@ function renderUrlPayload(payload) {
   link.target = '_blank';
   link.rel = 'noopener noreferrer';
   link.textContent = url;
-  resultContent.append(link, createCopyButton(url, '주소'));
+  resultContent.append(link, createCopyButton(url, t('result.url.field')));
 }
 
 function renderWifiPayload(data) {
@@ -865,11 +881,11 @@ function renderWifiPayload(data) {
   const password = stringValue(wifi.p);
   const security = wifi.e === 'WEP' ? 'WEP' : 'WPA';
 
-  setResultTitle('Wi-Fi 정보를 읽었어요');
-  addResultIntro('웹에서는 Wi-Fi에 바로 연결할 수 없어요. 필요한 값을 각각 복사해 사용해 주세요.');
-  addPayloadField('SSID', ssid, { copyValue: ssid || '없음' });
-  addPayloadField('보안 방식', security);
-  addPayloadField('비밀번호', password, { copyValue: password || '없음' });
+  setResultTitle(t('result.wifi.title'));
+  addResultIntro(t('result.wifi.hint'));
+  addPayloadField('SSID', ssid, { copyValue: ssid || t('value.none') });
+  addPayloadField(t('result.wifi.security'), security);
+  addPayloadField(t('result.wifi.password'), password, { copyValue: password || t('value.none') });
 }
 
 function renderCardPayload(data) {
@@ -881,21 +897,21 @@ function renderCardPayload(data) {
   const website = stringValue(card.u);
   const safeWebsite = safeHttpUrl(website);
 
-  setResultTitle('명함을 읽었어요');
-  addResultIntro('연락처와 웹사이트를 바로 사용할 수 있어요.');
-  addPayloadField('이름', name, { copyValue: name || '없음' });
+  setResultTitle(t('result.card.title'));
+  addResultIntro(t('result.card.hint'));
+  addPayloadField(t('result.card.name'), name, { copyValue: name || t('value.none') });
 
   if (organization !== '') {
-    addPayloadField('소속', organization);
+    addPayloadField(t('result.card.org'), organization);
   }
   if (telephone !== '') {
-    addPayloadField('전화', telephone, { href: 'tel:' + telephone });
+    addPayloadField(t('result.card.phone'), telephone, { href: 'tel:' + telephone });
   }
   if (email !== '') {
-    addPayloadField('이메일', email, { href: 'mailto:' + email });
+    addPayloadField(t('result.card.email'), email, { href: 'mailto:' + email });
   }
   if (website !== '') {
-    addPayloadField('웹사이트', website, {
+    addPayloadField(t('result.card.site'), website, {
       href: safeWebsite || undefined,
       external: Boolean(safeWebsite),
     });
@@ -903,6 +919,8 @@ function renderCardPayload(data) {
 }
 
 function showResult(payload) {
+  // 언어 전환 시 이 패널을 같은 내용으로 다시 그리기 위해 보관한다.
+  lastResult = payload;
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   activeUrl = '';
   popupFallback.hidden = true;
@@ -946,8 +964,8 @@ function hideResult(options) {
 
 function closeResult() {
   hideResult();
-  setStatus('계속 스캔하려면 화면을 탭해 주세요.');
-  showSupportedStartGate('카메라를 시작하거나 사진에서 스캔해 주세요.');
+  setStatus(t('status.tapToContinue'));
+  showSupportedStartGate(t('status.startOrPhoto'));
 }
 
 function openImagePicker() {
@@ -956,19 +974,19 @@ function openImagePicker() {
 
 async function initialiseCamera() {
   if (!isSecureForCamera()) {
-    setStatus('HTTPS 연결이 아니어서 카메라를 사용할 수 없어요. 사진에서 스캔할 수 있어요.');
+    setStatus(t('gate.https.message'));
     showSupportedStartGate();
     return;
   }
 
   if (!hasCameraApi()) {
-    setStatus('이 브라우저에서는 카메라를 사용할 수 없어요. 사진에서 스캔할 수 있어요.');
+    setStatus(t('gate.unsupported.message'));
     showSupportedStartGate();
     return;
   }
 
   showSupportedStartGate();
-  setStatus('카메라를 시작하려면 화면을 탭해 주세요.');
+  setStatus(t('status.tapToStart'));
 
   // 권한 상태를 **먼저 조회해서** 자동 시작 여부를 정하지 않는다.
   //
@@ -993,11 +1011,11 @@ async function initialiseCamera() {
   }
 
   if (knownState === 'denied') {
-    setStatus('카메라 권한을 허용한 뒤 다시 탭해 주세요.');
+    setStatus(t('gate.denied.message'));
     showCameraGate({
-      title: '카메라 권한이 꺼져 있어요',
-      message: '브라우저 설정에서 카메라 권한을 허용한 뒤 다시 탭해 주세요.',
-      startLabel: '카메라 다시 시도',
+      title: t('gate.off.title'),
+      message: t('gate.off.message'),
+      startLabel: t('gate.retry'),
     });
     return;
   }
@@ -1026,6 +1044,11 @@ if (cameraPicker) {
 // 빌드 식별자 — 실기기 피드백에서 어느 배포본인지 바로 알기 위한 것.
 const buildTag = document.getElementById('build-tag');
 if (buildTag) buildTag.textContent = SCANNER_BUILD;
+
+// 초기 언어 적용 — DOM 의 `data-i18n` 을 채우고 <html lang> 을 맞춘다.
+document.documentElement.setAttribute('lang', i18n.lang);
+i18n.apply();
+wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
 
 /*
  * 서비스 워커 등록 — PWA 설치 요건(manifest + HTTPS + fetch 핸들러 워커) 중 마지막 조각.
@@ -1066,8 +1089,8 @@ document.addEventListener('visibilitychange', () => {
 
   if (stoppedForVisibility) {
     stoppedForVisibility = false;
-    setStatus('탭을 떠나면서 카메라를 껐어요. 계속하려면 다시 시작해 주세요.');
-    showSupportedStartGate('탭을 떠나면서 카메라를 껐어요. 다시 시작해 주세요.');
+    setStatus(t('status.hiddenStopped'));
+    showSupportedStartGate(t('status.hiddenRestart'));
   }
 });
 window.addEventListener('pagehide', stopCamera);

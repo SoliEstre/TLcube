@@ -322,6 +322,32 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .lang-switch {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    margin-top: 10px;
+    border: 1px solid rgb(255 255 255 / .22);
+    border-radius: 999px;
+    background: rgb(0 0 0 / .42);
+    pointer-events: auto;
+  }
+
+  .lang-switch button {
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: transparent;
+    color: rgb(255 255 255 / .72);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .lang-switch button.active {
+    background: rgb(255 255 255 / .92);
+    color: #061117;
+    font-weight: 700;
+  }
+
   .camera-picker {
     pointer-events: auto;
     margin-top: 10px;
@@ -666,17 +692,17 @@
 </style>
 </head>
 <body>
-<main class="scanner-app" id="scanner-app" aria-label="TLcube 스캐너">
+<main class="scanner-app" id="scanner-app" data-i18n-attr="aria-label:app.label" aria-label="TLcube 스캐너">
   <div class="camera-backdrop" id="camera-stage">
-    <video id="camera-preview" autoplay muted playsinline aria-label="TLcube 코드를 비추는 카메라 화면"></video>
+    <video id="camera-preview" autoplay muted playsinline data-i18n-attr="aria-label:camera.label" aria-label="TLcube 코드를 비추는 카메라 화면"></video>
   </div>
 
   <div class="scanner-overlay">
     <header class="scanner-top">
-      <a class="brand-logo" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" aria-label="TLcube 소개 홈페이지 (새 창)">TL<span>cube</span></a>
+      <a class="brand-logo" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n-attr="aria-label:brand.label" aria-label="TLcube 소개 홈페이지 (새 창)">TL<span>cube</span></a>
     </header>
 
-    <section class="scan-center" aria-label="스캔 가이드">
+    <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">
       <div class="scan-guide-wrap">
         <div class="scan-guide" aria-hidden="true">
           <span class="scan-corner top-left"></span>
@@ -684,21 +710,26 @@
           <span class="scan-corner bottom-right"></span>
           <span class="scan-corner bottom-left"></span>
         </div>
-        <p class="scan-guide-message">TLcube 코드를 프레임 안에 맞춰 주세요.</p>
+        <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 프레임 안에 맞춰 주세요.</p>
       </div>
     </section>
 
     <div class="scanner-bottom">
-      <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true">카메라를 준비하고 있어요.</p>
-      <button class="photo-button" id="choose-image" type="button">사진에서 스캔</button>
+      <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true" data-i18n="status.preparing">카메라를 준비하고 있어요.</p>
+      <button class="photo-button" id="choose-image" type="button" data-i18n="button.photo">사진에서 스캔</button>
       <!-- 렌즈가 2개 이상인 기기에서만 나타난다. 초광각이 잡히면 같은 거리에서 코드가
            훨씬 작게 찍혀 셀당 픽셀이 복호 하한 아래로 내려간다. -->
-      <select class="camera-picker" id="camera-picker" aria-label="카메라 렌즈 선택" hidden></select>
-      <input id="image-input" type="file" accept="image/*" aria-label="스캔할 사진 선택" hidden>
+      <div class="lang-switch" id="lang-switch" role="group" data-i18n-attr="aria-label:lang.label" aria-label="언어">
+        <button type="button" data-lang="ko">한국어</button>
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="ja">日本語</button>
+      </div>
+      <select class="camera-picker" id="camera-picker" data-i18n-attr="aria-label:picker.label" aria-label="카메라 렌즈 선택" hidden></select>
+      <input id="image-input" type="file" accept="image/*" data-i18n-attr="aria-label:input.label" aria-label="스캔할 사진 선택" hidden>
     </div>
 
     <footer class="site-footer">
-      <small>© 2026 SoliEstre · <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">소개</a> · <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer">생성기</a> · <span id="build-tag" class="build-tag">—</span></small>
+      <small>© 2026 SoliEstre · <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="footer.intro">소개</a> · <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="footer.generator">생성기</a> · <span id="build-tag" class="build-tag">—</span></small>
     </footer>
   </div>
 
@@ -708,7 +739,7 @@
       <p id="camera-gate-message">카메라 권한을 허용하면 바로 스캔해요.</p>
       <div class="camera-gate-actions">
         <button class="gate-primary" id="start-camera" type="button">탭해서 카메라 시작</button>
-        <button class="gate-secondary" id="gate-choose-image" type="button">사진에서 스캔</button>
+        <button class="gate-secondary" id="gate-choose-image" type="button" data-i18n="button.photo">사진에서 스캔</button>
       </div>
     </div>
   </section>
@@ -716,17 +747,17 @@
 
 <section class="result-sheet" id="scan-result" hidden role="dialog" aria-modal="true" aria-labelledby="result-title" tabindex="-1">
   <div class="result-card">
-    <button class="result-close" id="close-result" type="button" aria-label="스캔 결과 닫기">×</button>
-    <p class="result-eyebrow">스캔 결과</p>
+    <button class="result-close" id="close-result" type="button" data-i18n-attr="aria-label:result.close" aria-label="스캔 결과 닫기">×</button>
+    <p class="result-eyebrow" data-i18n="result.title">스캔 결과</p>
     <h2 id="result-title">내용을 읽었어요</h2>
     <div class="result-content" id="result-content"></div>
     <div class="popup-fallback" id="popup-fallback" hidden>
-      <p>브라우저가 자동으로 새 탭을 열지 못했어요. 아래 버튼을 탭해서 열어 주세요.</p>
-      <a class="open-url-button" id="open-url" href="#" target="_blank" rel="noopener noreferrer" role="button">링크 열기</a>
+      <p data-i18n="result.popupBlocked">브라우저가 자동으로 새 탭을 열지 못했어요. 아래 버튼을 탭해서 열어 주세요.</p>
+      <a class="open-url-button" id="open-url" href="#" target="_blank" rel="noopener noreferrer" role="button" data-i18n="result.openLink">링크 열기</a>
     </div>
     <div class="result-actions">
-      <button class="result-primary" id="rescan" type="button">다시 스캔</button>
-      <button class="result-secondary" id="close-result-secondary" type="button">닫기</button>
+      <button class="result-primary" id="rescan" type="button" data-i18n="result.rescan">다시 스캔</button>
+      <button class="result-secondary" id="close-result-secondary" type="button" data-i18n="result.closeButton">닫기</button>
     </div>
   </div>
 </section>

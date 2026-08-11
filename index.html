@@ -366,24 +366,24 @@
        새 창으로 여는 이유: 생성기는 입력해 둔 내용이 있는 작업 화면이라, 같은 탭에서
        나가면 그 상태가 사라진다. 크로스링크는 세 사이트 모두 같은 규약을 쓴다. -->
   <h1>TrilLuminance <a class="brand-link" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">/ TLcube</a></h1>
-  <span class="sub">3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰</span>
+  <span class="sub" data-i18n="g023">3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰</span>
   <span class="spacer"></span>
   <!-- 3사이트 크로스링크 (PM/008 §1) — 절대 URL 이라 file:// 단일 파일에서도 동작한다. -->
   <nav class="site-nav">
-    <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">소개</a>
-    <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer">스캐너</a>
+    <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="g024">소개</a>
+    <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="g025">스캐너</a>
   </nav>
   <div class="mode-switch" id="modeSwitch">
-    <button type="button" id="modeNormalBtn" class="active">일반</button>
-    <button type="button" id="modeAdvancedBtn">고급</button>
+    <button type="button" id="modeNormalBtn" class="active" data-i18n="g026">일반</button>
+    <button type="button" id="modeAdvancedBtn" data-i18n="g027">고급</button>
   </div>
-  <div class="theme-toggle" id="themeToggle" title="페이지 테마 (코드 렌더와 무관)">
-    <button type="button" data-theme-choice="auto" class="active">자동</button>
-    <button type="button" data-theme-choice="light">라이트</button>
-    <button type="button" data-theme-choice="dark">다크</button>
+  <div class="theme-toggle" id="themeToggle" title="페이지 테마 (코드 렌더와 무관)" data-i18n-attr="title:g001">
+    <button type="button" data-theme-choice="auto" class="active" data-i18n="g028">자동</button>
+    <button type="button" data-theme-choice="light" data-i18n="g029">라이트</button>
+    <button type="button" data-theme-choice="dark" data-i18n="g030">다크</button>
   </div>
 </header>
-<script>
+<script data-i18n="g205">
 // 테마 적용은 module 로드보다 먼저 (플래시 방지). localStorage 저장 — 페이지 크롬
 // 설정일 뿐 출력 결정성과 무관하다. 자동 = data-theme 미부착 (media query 가 처리).
 (function initTheme() {
@@ -413,7 +413,7 @@
 
     <!-- ══════ 공용: 콘텐츠 (일반·고급 공통 — 사용자 지시 2026-08-09 "고급에도 일반 선택지 전부") ══════ -->
     <div id="sharedContent">
-      <label>콘텐츠</label>
+      <label data-i18n="g031">콘텐츠</label>
       <div class="card-row" id="contentTabs">
         <!-- URL 이 맨 앞 + 진입 기본 선택 (사용자 지시 2026-08-09) -->
         <div class="toggle-card active" data-tab="url">
@@ -429,9 +429,7 @@
             <line x1="8" y1="8" x2="16" y2="8"/>
             <line x1="8" y1="12" x2="16" y2="12"/>
             <line x1="8" y1="16" x2="13" y2="16"/>
-          </svg>
-          텍스트
-        </div>
+          </svg><span data-i18n="g033">텍스트</span></div>
         <div class="toggle-card" data-tab="wifi">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 9a12 12 0 0 1 16 0"/>
@@ -448,9 +446,7 @@
             <line x1="13" y1="9.5" x2="18" y2="9.5"/>
             <line x1="13" y1="12.5" x2="18" y2="12.5"/>
             <line x1="13" y1="15.5" x2="16" y2="15.5"/>
-          </svg>
-          명함
-        </div>
+          </svg><span data-i18n="g082">명함</span></div>
       </div>
 
       <div class="tab-panel active" id="tabUrl">
@@ -459,11 +455,11 @@
           <div class="hl-backdrop single" id="nUrlBackdrop" aria-hidden="true"></div>
           <input type="text" id="nUrlPayload" value="example.com/trilume" spellcheck="false">
         </div>
-        <p class="hint">http(s):// 가 없으면 https:// 를 자동으로 붙여요.</p>
+        <p class="hint" data-i18n="g032">http(s):// 가 없으면 https:// 를 자동으로 붙여요.</p>
       </div>
 
       <div class="tab-panel" id="tabText">
-        <label for="nTextPayload">텍스트</label>
+        <label for="nTextPayload" data-i18n="g033">텍스트</label>
         <div class="hl-wrap">
           <div class="hl-backdrop" id="nTextBackdrop" aria-hidden="true"></div>
           <textarea id="nTextPayload" spellcheck="false">Trilume ✦ 텍스트 예시</textarea>
@@ -473,24 +469,24 @@
       <div class="tab-panel" id="tabWifi">
         <label for="nWifiSsid">SSID</label>
         <input type="text" id="nWifiSsid" spellcheck="false">
-        <label for="nWifiPassword">암호</label>
+        <label for="nWifiPassword" data-i18n="g034">암호</label>
         <input type="text" id="nWifiPassword" spellcheck="false">
-        <label>보안</label>
+        <label data-i18n="g035">보안</label>
         <div class="seg-buttons" id="wifiSecButtons">
           <button type="button" data-sec="WPA" class="active">WPA</button>
           <button type="button" data-sec="WEP">WEP</button>
-          <button type="button" data-sec="nopass">없음</button>
+          <button type="button" data-sec="nopass" data-i18n="g036">없음</button>
         </div>
       </div>
 
       <div class="tab-panel" id="tabCard">
-        <label for="nCardName">이름</label>
+        <label for="nCardName" data-i18n="g037">이름</label>
         <input type="text" id="nCardName" spellcheck="false">
-        <label for="nCardPhone">전화</label>
+        <label for="nCardPhone" data-i18n="g038">전화</label>
         <input type="text" id="nCardPhone" spellcheck="false">
-        <label for="nCardEmail">이메일</label>
+        <label for="nCardEmail" data-i18n="g039">이메일</label>
         <input type="text" id="nCardEmail" spellcheck="false">
-        <label for="nCardOrg">조직</label>
+        <label for="nCardOrg" data-i18n="g040">조직</label>
         <input type="text" id="nCardOrg" spellcheck="false">
         <label for="nCardUrl">URL</label>
         <input type="text" id="nCardUrl" spellcheck="false">
@@ -499,7 +495,7 @@
 
     <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
     <div id="panelNormal">
-      <label>타입</label>
+      <label data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 선택 = Y (사용자 지시 2026-08-09). -->
       <div class="card-row" id="typeCards">
         <div class="toggle-card" data-type="O" style="flex:1">
@@ -532,14 +528,14 @@
       </div>
 
 
-      <label for="nPreset">스타일</label>
+      <label for="nPreset" data-i18n="g042">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
       <!-- 커스텀은 다음 줄 전폭 배치 — hue 바가 폭 전체를 쓴다 (사용자 지시 2026-08-09). -->
       <div class="card-row">
         <div class="toggle-card swatch-card" id="customStyleCard" data-preset="custom" style="flex:1">
           <div class="swatch-chips" id="customChips"></div>
           <div class="swatch-bg" id="customBg"></div>
-          <div>커스텀 (Hue)</div>
+          <div data-i18n="g043">커스텀 (Hue)</div>
         </div>
       </div>
       <div id="hueRow" style="display:none">
@@ -547,53 +543,53 @@
         <p class="slider-value" id="hueValue"></p>
       </div>
 
-      <label>해상도 (모듈 밀도)</label>
+      <label data-i18n="g044">해상도 (모듈 밀도)</label>
       <!-- 사용자 지시 2026-08-09: 용량과 다른 축 — 버전(모듈 수) 3단 + 자동(기본).
            저 = 원거리·광고판(모듈 큼) / 중 = 1~3m 인쇄 / 고 = 근거리·대용량(모듈 작음).
            자동 조합 규칙: 해상도를 먼저 올리고, 최대에서도 안 들어가면 용량 단계(ECC)를
            내린다 — encodeWithEcc 의 H→M→L × 버전 최소적합 순서가 정확히 이 격자다. -->
       <div class="card-row" id="resTierCards">
-        <div class="toggle-card active" data-res="auto" title="내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합">자동</div>
-        <div class="toggle-card" data-res="low" title="원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식">저</div>
-        <div class="toggle-card" data-res="mid" title="1~3m 거리 — 어느 정도 크게 인쇄된 포스터급">중</div>
-        <div class="toggle-card" data-res="high" title="근거리·대용량 — 모듈이 작아 가까운 거리에서 인식">고</div>
+        <div class="toggle-card active" data-res="auto" title="내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합" data-i18n-attr="title:g002" data-i18n="g028">자동</div>
+        <div class="toggle-card" data-res="low" title="원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식" data-i18n-attr="title:g003" data-i18n="g075">저</div>
+        <div class="toggle-card" data-res="mid" title="1~3m 거리 — 어느 정도 크게 인쇄된 포스터급" data-i18n-attr="title:g004" data-i18n="g076">중</div>
+        <div class="toggle-card" data-res="high" title="근거리·대용량 — 모듈이 작아 가까운 거리에서 인식" data-i18n-attr="title:g005" data-i18n="g077">고</div>
       </div>
       <p class="hint" id="resTierHint"></p>
 
-      <label>안정성 · 용량</label>
+      <label data-i18n="g045">안정성 · 용량</label>
       <!-- 사용자 지시 2026-08-09: 보정 강화(용량↓)/표준/대용량 3단 + 자동(기본 —
            입력 크기에 따라 H→M→L 순서로 처음 들어가는 레벨 채택). -->
       <div class="card-row" id="eccTierCards">
-        <div class="toggle-card active" data-tier="auto" title="입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택">자동</div>
-        <div class="toggle-card" data-tier="H" title="ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대">보정 우선</div>
-        <div class="toggle-card" data-tier="M" title="ECC M (25%) — 기본 균형">표준</div>
-        <div class="toggle-card" data-tier="L" title="ECC L (≈12%) — 최대 용량">대용량</div>
+        <div class="toggle-card active" data-tier="auto" title="입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택" data-i18n-attr="title:g006" data-i18n="g028">자동</div>
+        <div class="toggle-card" data-tier="H" title="ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대" data-i18n-attr="title:g007" data-i18n="g078">보정 우선</div>
+        <div class="toggle-card" data-tier="M" title="ECC M (25%) — 기본 균형" data-i18n-attr="title:g008" data-i18n="g079">표준</div>
+        <div class="toggle-card" data-tier="L" title="ECC L (≈12%) — 최대 용량" data-i18n-attr="title:g009" data-i18n="g080">대용량</div>
       </div>
       <p class="hint" id="eccTierHint"></p>
     </div>
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
     <div id="panelAdvanced" style="display:none">
-      <label for="codeType">타입</label>
+      <label for="codeType" data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
       <select id="codeType">
-        <option value="O">Type O (마름모 8면체 필드)</option>
-        <option value="A">Type A (삼각 실루엣 확장)</option>
-        <option value="Y" selected>Type Y (단일 큐브)</option>
+        <option value="O" data-i18n="g046">Type O (마름모 8면체 필드)</option>
+        <option value="A" data-i18n="g047">Type A (삼각 실루엣 확장)</option>
+        <option value="Y" selected data-i18n="g048">Type Y (단일 큐브)</option>
       </select>
 
       <div class="row">
         <div id="versionWrapO">
-          <label for="versionO">버전</label>
+          <label for="versionO" data-i18n="g049">버전</label>
           <select id="versionO">
-            <option value="auto" selected>자동 (최소)</option>
+            <option value="auto" selected data-i18n="g050">자동 (최소)</option>
             <option value="1">V1 (k=6 · 18 B)</option>
             <option value="2">V2 (k=8 · 39 B)</option>
             <option value="3">V3 (k=10 · 65 B)</option>
           </select>
         </div>
         <div id="versionWrapY" style="display:none">
-          <label for="versionY">버전</label>
+          <label for="versionY" data-i18n="g049">버전</label>
           <select id="versionY">
             <option value="0">Y0 (n=13 · 31 B)</option>
             <option value="1" selected>Y1 (n=21 · 98 B)</option>
@@ -601,7 +597,7 @@
           </select>
         </div>
         <div id="versionWrapA" style="display:none">
-          <label for="versionA">버전</label>
+          <label for="versionA" data-i18n="g049">버전</label>
           <select id="versionA">
             <option value="0">A0 (k=6 · 31 B)</option>
             <option value="1" selected>A1 (k=8 · 62 B)</option>
@@ -611,7 +607,7 @@
         <div>
           <label for="ecc">ECC</label>
           <select id="ecc">
-            <option value="auto" selected>자동 (H→M→L 맞춤)</option>
+            <option value="auto" selected data-i18n="g051">자동 (H→M→L 맞춤)</option>
             <option value="L">L (≈12%)</option>
             <option value="M">M (25%)</option>
             <option value="H">H (≈40%)</option>
@@ -621,24 +617,24 @@
 
 
       <fieldset class="typeOptions" id="optionsY" style="display:none">
-        <label for="tone">톤</label>
+        <label for="tone" data-i18n="g052">톤</label>
         <select id="tone">
-          <option value="2" selected>2톤 (기본)</option>
-          <option value="3">3톤 (Y-T)</option>
+          <option value="2" selected data-i18n="g053">2톤 (기본)</option>
+          <option value="3" data-i18n="g054">3톤 (Y-T)</option>
         </select>
 
-        <label for="faceGain">면 게인 강도 (1.0 평면 ~ 기본)</label>
+        <label for="faceGain" data-i18n="g055">면 게인 강도 (1.0 평면 ~ 기본)</label>
         <input type="range" id="faceGain" min="0" max="100" value="100" step="1">
         <p class="slider-value" id="faceGainValue"></p>
       </fieldset>
 
-      <label for="qrUrl">QR 폴백 URL (고급)</label>
+      <label for="qrUrl" data-i18n="g056">QR 폴백 URL (고급)</label>
       <input type="text" id="qrUrl" spellcheck="false">
 
-      <label for="preset">스타일 프리셋</label>
+      <label for="preset" data-i18n="g057">스타일 프리셋</label>
       <select id="preset"></select>
       <div id="hueRowAdv" style="display:none">
-        <label for="hueBarAdv">커스텀 Hue</label>
+        <label for="hueBarAdv" data-i18n="g058">커스텀 Hue</label>
         <input type="range" id="hueBarAdv" class="hue-bar" min="0" max="359" step="1" value="210">
         <p class="slider-value" id="hueValueAdv"></p>
       </div>
@@ -648,20 +644,14 @@
     <div id="sharedControls">
       <!-- 사용자 지시 2026-08-09: 배경 3택(투명/흰색/검정), 기본 투명.
            투명은 미리보기에서 포토샵식 체커보드로 표시한다(테마별 색). -->
-      <label>배경</label>
+      <label data-i18n="g059">배경</label>
       <div class="card-row" id="bgModeCards">
-        <div class="toggle-card active" data-bg="transparent" title="배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음">
-          <span class="swatch-mini checker"></span>
-          투명
-        </div>
-        <div class="toggle-card" data-bg="white" title="흰색 배경 — 밝은 인쇄물·문서에 얹을 때">
-          <span class="swatch-mini" style="background:#fff"></span>
-          흰색
-        </div>
-        <div class="toggle-card" data-bg="black" title="검정 배경 — 어두운 지면·화면에 얹을 때">
-          <span class="swatch-mini" style="background:#000"></span>
-          검정
-        </div>
+        <div class="toggle-card active" data-bg="transparent" title="배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음" data-i18n-attr="title:g010">
+          <span class="swatch-mini checker"></span><span data-i18n="g201">투명</span></div>
+        <div class="toggle-card" data-bg="white" title="흰색 배경 — 밝은 인쇄물·문서에 얹을 때" data-i18n-attr="title:g011">
+          <span class="swatch-mini" style="background:#fff"></span><span data-i18n="g202">흰색</span></div>
+        <div class="toggle-card" data-bg="black" title="검정 배경 — 어두운 지면·화면에 얹을 때" data-i18n-attr="title:g012">
+          <span class="swatch-mini" style="background:#000"></span><span data-i18n="g203">검정</span></div>
       </div>
       <p class="hint" id="bgModeHint"></p>
 
@@ -669,121 +659,110 @@
            코드를 얹을 표면 사진을 깔고 드래그/휠 줌으로 위치를 맞춰, 실루엣 검출이
            될 자리인지 **인쇄 전에** 눈과 수치로 확인한다. 렌더 산출물에는 안 들어간다. -->
       <div id="backdropSection" style="display:none">
-        <label>배치 미리보기 (표면 이미지)</label>
+        <label data-i18n="g060">배치 미리보기 (표면 이미지)</label>
         <div class="row">
           <div class="export-pair" style="flex:1">
-            <button id="backdropPick" type="button">이미지 선택…</button>
-            <button id="backdropClear" type="button" class="icon-btn" title="배경 이미지 제거" style="display:none">✕</button>
+            <button id="backdropPick" type="button" data-i18n="g061">이미지 선택…</button>
+            <button id="backdropClear" type="button" class="icon-btn" title="배경 이미지 제거" style="display:none" data-i18n-attr="title:g013">✕</button>
           </div>
-          <button id="backdropFit" type="button" style="display:none">위치 초기화</button>
+          <button id="backdropFit" type="button" style="display:none" data-i18n="g062">위치 초기화</button>
         </div>
         <input type="file" id="backdropFile" accept="image/*" style="display:none">
-        <p class="hint" id="backdropHint">코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.
-          미리보기에서 <b>드래그로 이동</b>, <b>휠로 확대/축소</b> 할 수 있어요. 내보내는 파일에는 안 들어가요.</p>
+        <p class="hint" id="backdropHint" data-i18n-html="g300">코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.
+          미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠로 확대/축소</b><span data-i18n="g083">할 수 있어요. 내보내는 파일에는 안 들어가요.</span></p>
         <p class="hint" id="backdropVerdict" style="display:none"></p>
       </div>
 
       <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
-      <label>안전영역 (코드 주변 여백)</label>
+      <label data-i18n="g063">안전영역 (코드 주변 여백)</label>
       <div class="card-row" id="quietModeCards">
-        <div class="toggle-card active" data-quiet="auto" title="배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략">자동</div>
-        <div class="toggle-card" data-quiet="none" title="안전영역 없이 코드만">없음</div>
-        <div class="toggle-card" data-quiet="white"><span class="swatch-mini" style="background:#fff"></span>흰색</div>
-        <div class="toggle-card" data-quiet="black"><span class="swatch-mini" style="background:#000"></span>검정</div>
-        <div class="toggle-card" data-quiet="contrast" title="셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름">고대비</div>
+        <div class="toggle-card active" data-quiet="auto" title="배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략" data-i18n-attr="title:g014" data-i18n="g028">자동</div>
+        <div class="toggle-card" data-quiet="none" title="안전영역 없이 코드만" data-i18n-attr="title:g015" data-i18n="g036">없음</div>
+        <div class="toggle-card" data-quiet="white"><span class="swatch-mini" style="background:#fff"></span><span data-i18n="g202">흰색</span></div>
+        <div class="toggle-card" data-quiet="black"><span class="swatch-mini" style="background:#000"></span><span data-i18n="g203">검정</span></div>
+        <div class="toggle-card" data-quiet="contrast" title="셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름" data-i18n-attr="title:g016" data-i18n="g081">고대비</div>
       </div>
       <p class="hint" id="quietModeHint"></p>
 
-      <label>TL스캐너 QR링크 포함</label>
+      <label data-i18n="g064">TL스캐너 QR링크 포함</label>
       <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
            (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
       <div class="card-row" id="qrPositionCards">
-        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)">
+        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)" data-i18n-attr="title:g017">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg>
-          안쪽<span class="hint" style="margin:0">β</span>
+          </svg><span data-i18n="g204">안쪽</span><span class="hint" style="margin:0">β</span>
         </div>
         <div class="toggle-card active" data-pos="TL">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <rect x="6.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg>
-          좌상
-        </div>
+          </svg><span data-i18n="g084">좌상</span></div>
         <div class="toggle-card" data-pos="TR">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <rect x="12.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg>
-          우상
-        </div>
+          </svg><span data-i18n="g085">우상</span></div>
         <div class="toggle-card" data-pos="BL">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <rect x="6.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg>
-          좌하
-        </div>
+          </svg><span data-i18n="g086">좌하</span></div>
         <div class="toggle-card" data-pos="BR">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <rect x="12.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg>
-          우하
-        </div>
-        <div class="toggle-card" data-pos="none" title="QR 링크 없이 코드만 내보내요">
+          </svg><span data-i18n="g087">우하</span></div>
+        <div class="toggle-card" data-pos="none" title="QR 링크 없이 코드만 내보내요" data-i18n-attr="title:g018">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <path d="M6.5 17.5 L17.5 6.5"/>
-          </svg>
-          없음
-        </div>
+          </svg><span data-i18n="g036">없음</span></div>
       </div>
-      <p class="hint">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
+      <p class="hint" data-i18n="g065">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
 
       <!-- Y + 안쪽 전용: 좌/우 면 배제영역 장식 이미지 (렌더 자유구역 — 데이터 계약 무관.
            사용자 지시 2026-08-09). -->
       <div id="decorSection" style="display:none">
-        <label>장식 이미지 (좌/우 빈 면 각각 — β)</label>
+        <label data-i18n="g066">장식 이미지 (좌/우 빈 면 각각 — β)</label>
         <div class="row">
           <div class="export-pair" style="flex:1">
-            <button id="decorPickL" type="button">좌측 선택…</button>
-            <button id="decorClearL" type="button" class="icon-btn" title="좌측 이미지 제거" style="display:none">✕</button>
+            <button id="decorPickL" type="button" data-i18n="g067">좌측 선택…</button>
+            <button id="decorClearL" type="button" class="icon-btn" title="좌측 이미지 제거" style="display:none" data-i18n-attr="title:g019">✕</button>
           </div>
           <div class="export-pair" style="flex:1">
-            <button id="decorPickR" type="button">우측 선택…</button>
-            <button id="decorClearR" type="button" class="icon-btn" title="우측 이미지 제거" style="display:none">✕</button>
+            <button id="decorPickR" type="button" data-i18n="g068">우측 선택…</button>
+            <button id="decorClearR" type="button" class="icon-btn" title="우측 이미지 제거" style="display:none" data-i18n-attr="title:g020">✕</button>
           </div>
         </div>
         <div class="row" style="margin-top:6px">
-          <button id="decorSwap" type="button" style="display:none">좌우 ⇄ 교환</button>
+          <button id="decorSwap" type="button" style="display:none" data-i18n="g069">좌우 ⇄ 교환</button>
         </div>
         <input type="file" id="decorFileL" accept="image/*" style="display:none">
         <input type="file" id="decorFileR" accept="image/*" style="display:none">
-        <p class="hint">Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).
+        <p class="hint" data-i18n="g070">Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).
           렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.</p>
       </div>
       <div class="check-row" id="cornerTooRow" style="display:none">
         <input type="checkbox" id="qrCornerToo">
-        <label for="qrCornerToo" style="margin:0;color:var(--text)">중앙 QR 과 코너 QR 병행 표시 (고급)</label>
+        <label for="qrCornerToo" style="margin:0;color:var(--text)" data-i18n="g071">중앙 QR 과 코너 QR 병행 표시 (고급)</label>
       </div>
-      <p class="hint" id="qrCenterHint" style="display:none">
+      <p class="hint" id="qrCenterHint" style="display:none" data-i18n="g072">
         중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.
       </p>
 
-      <div class="section-title">용량</div>
+      <div class="section-title" data-i18n="g073">용량</div>
       <div class="gauge-track"><div class="gauge-fill" id="nGaugeFill"></div></div>
       <div class="gauge-label" id="nGaugeLabel">–</div>
     </div>
 
     <!-- ══════════════════════ 공통 ══════════════════════ -->
-    <label>내보내기 (결정적 — 동일 입력 → 바이트 동일)</label>
+    <label data-i18n="g074">내보내기 (결정적 — 동일 입력 → 바이트 동일)</label>
     <div class="row export-row">
       <div class="export-pair">
         <button id="exportPng" type="button">PNG</button>
-        <button id="copyPng" type="button" class="icon-btn" title="PNG를 클립보드에 복사">
+        <button id="copyPng" type="button" class="icon-btn" title="PNG를 클립보드에 복사" data-i18n-attr="title:g021">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
             <rect x="8" y="8" width="12" height="12" rx="2"/>
             <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
@@ -792,7 +771,7 @@
       </div>
       <div class="export-pair">
         <button id="exportSvg" type="button">SVG</button>
-        <button id="copySvg" type="button" class="icon-btn" title="SVG 마크업을 클립보드에 복사">
+        <button id="copySvg" type="button" class="icon-btn" title="SVG 마크업을 클립보드에 복사" data-i18n-attr="title:g022">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
             <rect x="8" y="8" width="12" height="12" rx="2"/>
             <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
@@ -813,8 +792,8 @@
     </div>
   </div>
 </main>
-<footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐
-  <span class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume ·
+<footer data-i18n-html="g301">동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐
+  <span class="copyright" data-i18n-html="g302">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume ·
     <span id="buildTag" class="build-tag">—</span></span>
 </footer>
 
