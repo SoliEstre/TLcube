@@ -11,6 +11,7 @@
 //    (같은 이유로 `_shared` 도 alias 로 붙인다 — deploy/estre-so/projects/tlcube/static.conf)
 import { sniffPayload } from '/src/payloadform.js';
 import { createI18n, wireLanguageSwitch } from '/src/i18n.js';
+import { createBeacon } from '/src/beacon.js';
 import { SCANNER_STRINGS } from './strings.js';
 import { decodeFrontend } from '/src/decoder/frontend.js';
 
@@ -48,7 +49,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-11.4';
+export const SCANNER_BUILD = '2026-08-11.5';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -1049,6 +1050,13 @@ if (buildTag) buildTag.textContent = SCANNER_BUILD;
 document.documentElement.setAttribute('lang', i18n.lang);
 i18n.apply();
 wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
+
+/*
+ * 사용 이벤트 비콘. 페이로드 **내용은 절대 담지 않는다** — 종류(url/text/wifi/card)와
+ * 성공 여부 같은 메타만 보낸다. 오프라인이면 큐에 쌓였다가 온라인 복귀 때 흘러간다.
+ */
+const beacon = createBeacon('scan');
+beacon('pageview');
 
 /*
  * 서비스 워커 등록 — PWA 설치 요건(manifest + HTTPS + fetch 핸들러 워커) 중 마지막 조각.

@@ -377,13 +377,18 @@
     <button type="button" id="modeNormalBtn" class="active" data-i18n="g026">일반</button>
     <button type="button" id="modeAdvancedBtn" data-i18n="g027">고급</button>
   </div>
+  <div class="theme-toggle" id="langSwitch" role="group" aria-label="Language" style="margin-right:6px">
+    <button type="button" data-lang="ko">한국어</button>
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="ja">日本語</button>
+  </div>
   <div class="theme-toggle" id="themeToggle" title="페이지 테마 (코드 렌더와 무관)" data-i18n-attr="title:g001">
     <button type="button" data-theme-choice="auto" class="active" data-i18n="g028">자동</button>
     <button type="button" data-theme-choice="light" data-i18n="g029">라이트</button>
     <button type="button" data-theme-choice="dark" data-i18n="g030">다크</button>
   </div>
 </header>
-<script data-i18n="g205">
+<script>
 // 테마 적용은 module 로드보다 먼저 (플래시 방지). localStorage 저장 — 페이지 크롬
 // 설정일 뿐 출력 결정성과 무관하다. 자동 = data-theme 미부착 (media query 가 처리).
 (function initTheme() {
@@ -792,12 +797,17 @@
     </div>
   </div>
 </main>
-<footer data-i18n-html="g301">동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐
-  <span class="copyright" data-i18n-html="g302">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume ·
-    <span id="buildTag" class="build-tag">—</span></span>
+<footer>
+  <span data-i18n="g301">동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐</span>
+  <span class="copyright">
+    <span data-i18n="g302">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume</span> ·
+    <span id="buildTag" class="build-tag">—</span>
+  </span>
 </footer>
 
 <script type="module">
+import { createI18n, wireLanguageSwitch } from './src/i18n.js';
+import { createBeacon } from './src/beacon.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { encodeA } from './src/encodeA.js';
@@ -2303,9 +2313,333 @@ render();
  * 배포본 식별자. 실기기 피드백에서 **어느 빌드를 보고 있는지** 즉시 알기 위한 것이다.
  * 스캐너(`SCANNER_BUILD`)와 같은 이유이고, 갱신할 때 같이 올린다.
  */
-const GENERATOR_BUILD = '2026-08-11.2';
+/**
+ * 생성기 UI 문구 사전 (ko · en · ja).
+ *
+ * ⚠ 정적 문구만 둔다. `data-i18n-html` 이 innerHTML 을 쓰므로 사용자 입력·페이로드 같은
+ *    외부 문자열을 절대 섞지 마라 — 그 순간 XSS 경로가 된다.
+ * ⚠ 키를 더하면 세 언어 모두 채운다. 빠지면 한국어로 폴백되어 조용히 섞인다.
+ * ⚠ textarea 의 샘플 문구는 **일부러 사전에 없다** — 사용자가 편집하는 데이터라
+ *    언어 전환으로 덮으면 입력이 날아간다.
+ */
+const GENERATOR_STRINGS = {
+  ko: {
+    "g001": "페이지 테마 (코드 렌더와 무관)",
+    "g002": "내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합",
+    "g003": "원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식",
+    "g004": "1~3m 거리 — 어느 정도 크게 인쇄된 포스터급",
+    "g005": "근거리·대용량 — 모듈이 작아 가까운 거리에서 인식",
+    "g006": "입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택",
+    "g007": "ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대",
+    "g008": "ECC M (25%) — 기본 균형",
+    "g009": "ECC L (≈12%) — 최대 용량",
+    "g010": "배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음",
+    "g011": "흰색 배경 — 밝은 인쇄물·문서에 얹을 때",
+    "g012": "검정 배경 — 어두운 지면·화면에 얹을 때",
+    "g013": "배경 이미지 제거",
+    "g014": "배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략",
+    "g015": "안전영역 없이 코드만",
+    "g016": "셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름",
+    "g017": "안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)",
+    "g018": "QR 링크 없이 코드만 내보내요",
+    "g019": "좌측 이미지 제거",
+    "g020": "우측 이미지 제거",
+    "g021": "PNG를 클립보드에 복사",
+    "g022": "SVG 마크업을 클립보드에 복사",
+    "g023": "3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰",
+    "g024": "소개",
+    "g025": "스캐너",
+    "g026": "일반",
+    "g027": "고급",
+    "g028": "자동",
+    "g029": "라이트",
+    "g030": "다크",
+    "g031": "콘텐츠",
+    "g032": "http(s):// 가 없으면 https:// 를 자동으로 붙여요.",
+    "g033": "텍스트",
+    "g034": "암호",
+    "g035": "보안",
+    "g036": "없음",
+    "g037": "이름",
+    "g038": "전화",
+    "g039": "이메일",
+    "g040": "조직",
+    "g041": "타입",
+    "g042": "스타일",
+    "g043": "커스텀 (Hue)",
+    "g044": "해상도 (모듈 밀도)",
+    "g045": "안정성 · 용량",
+    "g046": "Type O (마름모 8면체 필드)",
+    "g047": "Type A (삼각 실루엣 확장)",
+    "g048": "Type Y (단일 큐브)",
+    "g049": "버전",
+    "g050": "자동 (최소)",
+    "g051": "자동 (H→M→L 맞춤)",
+    "g052": "톤",
+    "g053": "2톤 (기본)",
+    "g054": "3톤 (Y-T)",
+    "g055": "면 게인 강도 (1.0 평면 ~ 기본)",
+    "g056": "QR 폴백 URL (고급)",
+    "g057": "스타일 프리셋",
+    "g058": "커스텀 Hue",
+    "g059": "배경",
+    "g060": "배치 미리보기 (표면 이미지)",
+    "g061": "이미지 선택…",
+    "g062": "위치 초기화",
+    "g063": "안전영역 (코드 주변 여백)",
+    "g064": "TL스캐너 QR링크 포함",
+    "g065": "TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.",
+    "g066": "장식 이미지 (좌/우 빈 면 각각 — β)",
+    "g067": "좌측 선택…",
+    "g068": "우측 선택…",
+    "g069": "좌우 ⇄ 교환",
+    "g070": "Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).\n          렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.",
+    "g071": "중앙 QR 과 코너 QR 병행 표시 (고급)",
+    "g072": "중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.",
+    "g073": "용량",
+    "g074": "내보내기 (결정적 — 동일 입력 → 바이트 동일)",
+    "g075": "저",
+    "g076": "중",
+    "g077": "고",
+    "g078": "보정 우선",
+    "g079": "표준",
+    "g080": "대용량",
+    "g081": "고대비",
+    "g082": "명함",
+    "g083": "할 수 있어요. 내보내는 파일에는 안 들어가요.",
+    "g084": "좌상",
+    "g085": "우상",
+    "g086": "좌하",
+    "g087": "우하",
+    "g201": "투명",
+    "g202": "흰색",
+    "g203": "검정",
+    "g204": "안쪽",
+    "g206": "드래그로 이동",
+    "g207": "휠로 확대/축소",
+    "g300": "코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.\n          미리보기에서 <b>드래그로 이동</b>, <b>휠로 확대/축소</b><span>할 수 있어요. 내보내는 파일에는 안 들어가요.</span>",
+    "g301": "동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐",
+    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume",
+  },
+  en: {
+    "g001": "Page theme (unrelated to code rendering)",
+    "g002": "Automatically combines resolution then capacity to fit your content",
+    "g003": "Long range, large print (billboards) — big modules read from far away",
+    "g004": "1–3 m range — poster-sized print",
+    "g005": "Close range, high capacity — small modules, read up close",
+    "g006": "Automatically picks error-correction first, then standard, then high capacity",
+    "g007": "ECC H (≈40%) — least capacity, most damage tolerance",
+    "g008": "ECC M (25%) — the default balance",
+    "g009": "ECC L (≈12%) — maximum capacity",
+    "g010": "Code only, no background — alpha channel in PNG, no background element in SVG",
+    "g011": "White background — for light print and documents",
+    "g012": "Black background — for dark surfaces and screens",
+    "g013": "Remove background image",
+    "g014": "Automatic high-contrast colour on a transparent background; skipped on an opaque one, where the background already acts as the quiet zone",
+    "g015": "Code only, no quiet zone",
+    "g016": "Picks white or black based on the cell colours and the surrounding surface",
+    "g017": "Inside (O/A: centre QR · Y: Y2 window β)",
+    "g018": "Export the code only, without a QR link",
+    "g019": "Remove left image",
+    "g020": "Remove right image",
+    "g021": "Copy PNG to clipboard",
+    "g022": "Copy SVG markup to clipboard",
+    "g023": "2.5D code from three-face luminance rank (codename Trilume) — M0 encoder preview",
+    "g024": "About",
+    "g025": "Scanner",
+    "g026": "Basic",
+    "g027": "Advanced",
+    "g028": "Auto",
+    "g029": "Light",
+    "g030": "Dark",
+    "g031": "Content",
+    "g032": "https:// is added automatically when the scheme is missing.",
+    "g033": "Text",
+    "g034": "Password",
+    "g035": "Security",
+    "g036": "None",
+    "g037": "Name",
+    "g038": "Phone",
+    "g039": "Email",
+    "g040": "Organisation",
+    "g041": "Type",
+    "g042": "Style",
+    "g043": "Custom (Hue)",
+    "g044": "Resolution (module density)",
+    "g045": "Robustness · capacity",
+    "g046": "Type O (rhombic field)",
+    "g047": "Type A (triangular silhouette)",
+    "g048": "Type Y (single cube)",
+    "g049": "Version",
+    "g050": "Auto (smallest)",
+    "g051": "Auto (H→M→L fit)",
+    "g052": "Tones",
+    "g053": "2 tones (default)",
+    "g054": "3 tones (Y-T)",
+    "g055": "Face gain (1.0 = flat, default)",
+    "g056": "QR fallback URL (advanced)",
+    "g057": "Style preset",
+    "g058": "Custom hue",
+    "g059": "Background",
+    "g060": "Placement preview (surface photo)",
+    "g061": "Choose image…",
+    "g062": "Reset position",
+    "g063": "Quiet zone (margin around the code)",
+    "g064": "Include TL scanner QR link",
+    "g065": "Prints a QR alongside the code as a fallback when the TL scanner cannot read it. “None” exports the code only.",
+    "g066": "Decorative images (left / right blank faces — β)",
+    "g067": "Choose left…",
+    "g068": "Choose right…",
+    "g069": "Swap left ⇄ right",
+    "g070": "Applied like a decal to the left and right faces left blank by the inner QR on Type Y (with face shading). Render-only — it does not affect the data or scan contract.",
+    "g071": "Show centre QR and corner QR together (advanced)",
+    "g072": "The centre-QR variant puts a QR where the bullseye would be — printing at 13 cm code width or wider is recommended.",
+    "g073": "Capacity",
+    "g074": "Export (deterministic — same input, same bytes)",
+    "g075": "Low",
+    "g076": "Mid",
+    "g077": "High",
+    "g078": "Correction first",
+    "g079": "Standard",
+    "g080": "High capacity",
+    "g081": "High contrast",
+    "g082": "Contact card",
+    "g083": " in the preview. It is not included in the exported file.",
+    "g084": "Top left",
+    "g085": "Top right",
+    "g086": "Bottom left",
+    "g087": "Bottom right",
+    "g201": "Transparent",
+    "g202": "White",
+    "g203": "Black",
+    "g204": "Inside",
+    "g206": "drag to move",
+    "g207": "scroll to zoom",
+    "g300": "Add a photo of the surface you will place the code on and it appears behind the preview. You can <b>drag to move</b> and <b>scroll to zoom</b><span> in the preview. It is not included in the exported file.</span>",
+    "g301": "Same input → deterministic output · the data contract is only SPEC §4.4 (disc median order + Δmin) / §14 (Type Y)",
+    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume",
+  },
+  ja: {
+    "g001": "ページのテーマ（コード描画とは無関係）",
+    "g002": "内容の大きさに合わせて解像度→容量の順に自動で組み合わせます",
+    "g003": "遠距離・大型印刷（看板）— モジュールが大きく遠くからでも読めます",
+    "g004": "1〜3m の距離 — ポスター程度の印刷",
+    "g005": "近距離・大容量 — モジュールが小さく近くで読みます",
+    "g006": "入力の大きさに合わせて誤り訂正優先→標準→大容量の順に自動選択します",
+    "g007": "ECC H（約40%）— 容量は減りますが破損耐性は最大です",
+    "g008": "ECC M（25%）— 標準のバランス",
+    "g009": "ECC L（約12%）— 最大容量",
+    "g010": "背景なしでコードのみ — PNG はアルファチャンネル、SVG は背景要素なし",
+    "g011": "白背景 — 明るい印刷物や書類に載せるとき",
+    "g012": "黒背景 — 暗い紙面や画面に載せるとき",
+    "g013": "背景画像を削除",
+    "g014": "背景が透明なら高コントラスト色を自動で選び、不透明なら背景自体がクワイエットゾーンになるため省略します",
+    "g015": "クワイエットゾーンなしでコードのみ",
+    "g016": "セルの色と周囲の面を見て白・黒から推奨色を選びます",
+    "g017": "内側（O/A: 中央 QR · Y: Y2 ウィンドウ β）",
+    "g018": "QR リンクなしでコードのみ書き出します",
+    "g019": "左の画像を削除",
+    "g020": "右の画像を削除",
+    "g021": "PNG をクリップボードにコピー",
+    "g022": "SVG マークアップをクリップボードにコピー",
+    "g023": "3面の輝度順序による 2.5D コード（コードネーム Trilume）— M0 エンコーダプレビュー",
+    "g024": "紹介",
+    "g025": "スキャナ",
+    "g026": "標準",
+    "g027": "詳細",
+    "g028": "自動",
+    "g029": "ライト",
+    "g030": "ダーク",
+    "g031": "コンテンツ",
+    "g032": "http(s):// がない場合は https:// を自動で付けます。",
+    "g033": "テキスト",
+    "g034": "パスワード",
+    "g035": "セキュリティ",
+    "g036": "なし",
+    "g037": "名前",
+    "g038": "電話",
+    "g039": "メール",
+    "g040": "組織",
+    "g041": "タイプ",
+    "g042": "スタイル",
+    "g043": "カスタム（Hue）",
+    "g044": "解像度（モジュール密度）",
+    "g045": "安定性・容量",
+    "g046": "Type O（菱形フィールド）",
+    "g047": "Type A（三角シルエット拡張）",
+    "g048": "Type Y（単一キューブ）",
+    "g049": "バージョン",
+    "g050": "自動（最小）",
+    "g051": "自動（H→M→L 適合）",
+    "g052": "トーン",
+    "g053": "2トーン（標準）",
+    "g054": "3トーン（Y-T）",
+    "g055": "面ゲイン強度（1.0 で平面・標準）",
+    "g056": "QR フォールバック URL（詳細）",
+    "g057": "スタイルプリセット",
+    "g058": "カスタム Hue",
+    "g059": "背景",
+    "g060": "配置プレビュー（表面画像）",
+    "g061": "画像を選択…",
+    "g062": "位置をリセット",
+    "g063": "クワイエットゾーン（コード周囲の余白）",
+    "g064": "TL スキャナ QR リンクを含める",
+    "g065": "TL スキャナで読めなかったときの代替経路となる QR をコードと一緒に印刷します。「なし」は QR なしでコードのみ書き出します。",
+    "g066": "装飾画像（左右の空き面それぞれ — β）",
+    "g067": "左を選択…",
+    "g068": "右を選択…",
+    "g069": "左右 ⇄ 入れ替え",
+    "g070": "Type Y の内側 QR で空く左右の面にデカールのように貼ります（面の陰影を適用）。描画専用で、データやスキャンの契約には影響しません。",
+    "g071": "中央 QR とコーナー QR を併記（詳細）",
+    "g072": "中央 QR 変種はブルズアイの代わりに中央へ QR を配置します — コード幅 13cm 以上での印刷を推奨します。",
+    "g073": "容量",
+    "g074": "エクスポート（決定的 — 同じ入力なら同じバイト）",
+    "g075": "低",
+    "g076": "中",
+    "g077": "高",
+    "g078": "訂正優先",
+    "g079": "標準",
+    "g080": "大容量",
+    "g081": "高コントラスト",
+    "g082": "名刺",
+    "g083": "できます。書き出すファイルには含まれません。",
+    "g084": "左上",
+    "g085": "右上",
+    "g086": "左下",
+    "g087": "右下",
+    "g201": "透明",
+    "g202": "白",
+    "g203": "黒",
+    "g204": "内側",
+    "g206": "ドラッグで移動",
+    "g207": "ホイールで拡大縮小",
+    "g300": "コードを実際に載せる面の写真を入れるとプレビューの背面に敷かれます。プレビューでは <b>ドラッグで移動</b>、<b>ホイールで拡大縮小</b><span>できます。書き出すファイルには含まれません。</span>",
+    "g301": "同じ入力 → 決定的な出力 · データ契約は SPEC §4.4（円板 median の順序 + Δmin）/ §14（Type Y）のみ",
+    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume",
+  },
+};
+
+const GENERATOR_BUILD = '2026-08-11.3';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
+
+/*
+ * 언어 — 허브(언어별 HTML 3벌)와 달리 **한 파일 안에서 런타임 전환**한다.
+ * 생성기는 `file://` 로도 열려야 해서(SPEC §8) 언어별로 쪼갤 수 없다.
+ * 전환 후 `render()` 를 다시 부른다 — 용량 라벨처럼 JS 가 채우는 문구가 있기 때문이다.
+ */
+const genI18n = createI18n(GENERATOR_STRINGS, { onChange() { render(); } });
+document.documentElement.setAttribute('lang', genI18n.lang);
+genI18n.apply();
+wireLanguageSwitch(document.getElementById('langSwitch'), genI18n);
+
+/*
+ * 사용 이벤트 비콘. **입력 내용은 절대 담지 않는다** — 타입·버전 같은 메타만.
+ * 오프라인이면 큐에 쌓였다가 온라인 복귀 때 흘러간다(PWA 설치 사용자 대비).
+ */
+const genBeacon = createBeacon('gen');
+genBeacon('pageview');
+
 
 /*
  * 서비스 워커 등록 — PWA 설치 요건의 마지막 조각(Android Chrome 은 fetch 핸들러를 가진

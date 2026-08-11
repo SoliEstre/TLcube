@@ -57,6 +57,10 @@ const MODULE_ORDER = [
   'encodeY', 'sceneY', 'verifyY',
   // quietzone 은 순수 기하 모듈이라 의존이 없다 — 끝에 붙여도 위상 정렬이 성립한다.
   'quietzone',
+  // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
+  'i18n',
+  // beacon 도 의존이 없다 — 네트워크 전송과 오프라인 큐만 담는다.
+  'beacon',
 ];
 
 /**

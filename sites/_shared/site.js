@@ -89,10 +89,58 @@
         ? Object.fromEntries(Object.entries(props).map(([k, v]) => [k, String(v)]))
         : {},
     };
-    try {
-      navigator.sendBeacon(ENDPOINT, new Blob([`${JSON.stringify(row)}\n`], { type: 'text/plain' }));
-    } catch { /* 엔드포인트 미배선·차단 — 사이트 기능과 무관하므로 삼킨다 */ }
+    // 오프라인이면 큐에 쌓았다가 온라인 복귀·다음 방문에 흘려보낸다.
+    // sendBeacon 은 오프라인에서 **던지지 않고 false 만** 돌려주므로 반환값을 본다.
+    const online = navigator.onLine !== false;
+    if (!online || !post(row)) enqueue(row);
   }
+
+  /* ── 오프라인 큐 ──────────────────────────────────────────
+     ⚠ `src/beacon.js` 에 같은 규약의 구현이 하나 더 있다(생성기·스캐너용 ESM).
+        허브는 이 파일을 classic script 로 불러 쓰고, 저 둘은 **단일 파일**이라 외부
+        스크립트를 못 참조해서 갈라져 있다. 둘 중 하나만 고치면 어긋난다.
+     상한을 두고 넘치면 **오래된 것부터** 버린다 — 최신 행동이 더 쓸모 있다.
+     나이 상한도 둔다 — 며칠 지난 이벤트는 통계를 흐리기만 한다. */
+  const QUEUE_KEY = 'tl-beacon-queue';
+  const MAX_QUEUE = 50;
+  const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
+  function readQueue() {
+    try {
+      const list = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+      return Array.isArray(list) ? list : [];
+    } catch { return []; }
+  }
+  function writeQueue(list) {
+    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(list)); } catch { /* 저장소 차단 */ }
+  }
+  function post(row) {
+    if (!navigator.sendBeacon) return false;
+    try {
+      return navigator.sendBeacon(
+        ENDPOINT, new Blob([JSON.stringify(row) + String.fromCharCode(10)], { type: 'text/plain' }),
+      ) === true;
+    } catch { return false; }
+  }
+  function enqueue(row) {
+    const q = readQueue();
+    q.push(Object.assign({}, row, { queued_at: Date.now() }));
+    writeQueue(q.slice(-MAX_QUEUE));
+  }
+  function flushQueue() {
+    const q = readQueue();
+    if (q.length === 0) return;
+    const cutoff = Date.now() - MAX_AGE_MS;
+    const kept = [];
+    for (const row of q.filter((r) => !r.queued_at || r.queued_at >= cutoff)) {
+      const payload = Object.assign({}, row);
+      delete payload.queued_at;
+      if (!post(payload)) kept.push(row);
+    }
+    writeQueue(kept);
+  }
+  window.addEventListener('online', flushQueue);
+  flushQueue();
   window.tlSend = send;
 
   send('pageview');
