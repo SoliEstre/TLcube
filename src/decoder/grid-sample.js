@@ -60,11 +60,37 @@ function homographyCacheKey(H) {
   return key;
 }
 
+/*
+ * config 세 값은 한 복호 안에서 거의 항상 같은데 `samplingConfig` 가 매번 새 객체를
+ * 돌려주므로 객체 정체성으로는 캐시가 안 된다. 값 세 개를 `Object.is` 로 비교해
+ * (NaN·-0 까지 정확히) 접미사 문자열만 재사용한다 — 키당 `String()` 6번이 3번이 된다.
+ */
+let lastConfigMinSampleCount = null;
+let lastConfigMinProjectedMinorDiameter = null;
+let lastConfigMinOpaqueRatio = null;
+let lastConfigKeySuffix = null;
+
+function configCacheKeySuffix(config) {
+  const a = config.minSampleCount;
+  const b = config.minProjectedMinorDiameter;
+  const c = config.minOpaqueRatio;
+  if (lastConfigKeySuffix !== null
+    && Object.is(a, lastConfigMinSampleCount)
+    && Object.is(b, lastConfigMinProjectedMinorDiameter)
+    && Object.is(c, lastConfigMinOpaqueRatio)) {
+    return lastConfigKeySuffix;
+  }
+  lastConfigMinSampleCount = a;
+  lastConfigMinProjectedMinorDiameter = b;
+  lastConfigMinOpaqueRatio = c;
+  lastConfigKeySuffix = cacheNumberKey(a) + '|' + cacheNumberKey(b) + '|'
+    + cacheNumberKey(c);
+  return lastConfigKeySuffix;
+}
+
 function discCacheKey(disc, config) {
   return cacheNumberKey(disc.x) + '|' + cacheNumberKey(disc.y) + '|'
-    + cacheNumberKey(disc.radius) + '|' + cacheNumberKey(config.minSampleCount) + '|'
-    + cacheNumberKey(config.minProjectedMinorDiameter) + '|'
-    + cacheNumberKey(config.minOpaqueRatio);
+    + cacheNumberKey(disc.radius) + '|' + configCacheKeySuffix(config);
 }
 
 function successfulDiscCacheFor(luma, H) {
@@ -82,12 +108,8 @@ function successfulDiscCacheFor(luma, H) {
   return samples;
 }
 
-function cachedSuccessfulDiscSample(luma, H, disc, config) {
-  return successfulDiscCacheFor(luma, H).get(discCacheKey(disc, config));
-}
-
-function cacheSuccessfulDiscSample(luma, H, disc, config, result) {
-  successfulDiscCacheFor(luma, H).set(discCacheKey(disc, config), {
+function cacheSuccessfulDiscSample(samples, key, result) {
+  samples.set(key, {
     median: result.median,
     mad: result.mad,
     count: result.count,
@@ -486,7 +508,10 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   assertHomography(H);
   validateDisc(disc);
   const config = samplingConfig(options);
-  const cached = cachedSuccessfulDiscSample(luma, H, disc, config);
+  // 조회와 저장이 같은 키·같은 Map 을 쓰도록 한 번만 만든다 (예전엔 두 번 만들었다).
+  const discSamples = successfulDiscCacheFor(luma, H);
+  const discKey = discCacheKey(disc, config);
+  const cached = discSamples.get(discKey);
   if (cached !== undefined) return ok(cached);
 
   const normalizedH = normalizeHomographyScale(H);
@@ -620,7 +645,7 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
     projectedMinorDiameter: minorDiameter,
     geometricCount,
   });
-  cacheSuccessfulDiscSample(luma, H, disc, config, result);
+  cacheSuccessfulDiscSample(discSamples, discKey, result);
   return result;
 }
 

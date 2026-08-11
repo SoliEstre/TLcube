@@ -72,7 +72,25 @@ function normalizeDirection(direction) {
   throw new RangeError('direction 은 0 | 1 | 2 | identity | cw | ccw 여야 한다: ' + direction);
 }
 
+/*
+ * 성공(=null) 만 캐시한다. family.js 의 같은 이름 함수와 마찬가지로 전 픽셀을 훑어
+ * 범위를 검사하는데, 한 복호에서 finder 마다·재시도마다 다시 불린다. 입력은 luma
+ * 하나뿐이라 결과는 luma 에만 달려 있다. 실패는 위반 표본을 만나는 즉시 빠져나오고
+ * 반환한 fail 객체는 상위에서 확장될 수 있어 공유하지 않는다.
+ */
+const validatedLumaCache = new WeakSet();
+
 function validateLuma(luma) {
+  if (luma !== null && typeof luma === 'object') {
+    if (validatedLumaCache.has(luma)) return null;
+    const computed = computeValidateLuma(luma);
+    if (computed === null) validatedLumaCache.add(luma);
+    return computed;
+  }
+  return computeValidateLuma(luma);
+}
+
+function computeValidateLuma(luma) {
   if (luma === null || luma === undefined) {
     return fail(FRONTEND_FAILURE.EMPTY_INPUT, { message: 'luma 가 없다' });
   }

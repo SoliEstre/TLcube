@@ -10,7 +10,7 @@
  * @module decoder/luma
  */
 
-import { relativeLuminance } from '../luminance.js';
+import { relativeLuminance8 } from '../luminance.js';
 import {
   FRONTEND_FAILURE,
   assertLumaField,
@@ -94,6 +94,55 @@ function opaqueSampleCount(luma) {
   return count;
 }
 
+/*
+ * histogram 은 quantile 과 무관하다 — 같은 LumaField 면 같은 표다.
+ *
+ * 한 복호에서 `robustPercentiles` 는 최소 두 번 불린다(`toRelativeLuminance` 의
+ * 동적범위 검사, `outlineEvidence` 의 전경 임계값). 그때마다 전 픽셀을 다시 훑을
+ * 이유가 없다. grid-sample 의 표본 캐시와 같은 «LumaField = 불변» 전제를 따른다.
+ */
+const percentileHistogramCache = new WeakMap();
+const PERCENTILE_HISTOGRAM_INVALID = Object.freeze({ invalid: true });
+
+function percentileHistogram(luma) {
+  const cached = percentileHistogramCache.get(luma);
+  if (cached !== undefined) return cached;
+
+  const histogram = new Uint32Array(PERCENTILE_HISTOGRAM_BINS);
+  const { data, alpha } = luma;
+  const length = data.length;
+  const hasAlpha = alpha !== null && alpha !== undefined;
+  let validCount = 0;
+  let computed = null;
+
+  // 픽셀마다 `alpha !== null && alpha !== undefined` 를 재평가하지 않도록 밖으로 뺐다.
+  // bin 은 `Math.min(BINS-1, Math.floor(value * BINS))` 와 같다 — 바로 위에서 value 가
+  // 유한하고 0..1 임을 확인했으므로 `| 0` 이 곧 floor 다 (음수·2^31 초과가 없다).
+  for (let i = 0; i < length; i += 1) {
+    if (hasAlpha && alpha[i] === 0) continue;
+    const value = data[i];
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      computed = PERCENTILE_HISTOGRAM_INVALID;
+      break;
+    }
+
+    const scaled = value * PERCENTILE_HISTOGRAM_BINS;
+    const bin = scaled >= PERCENTILE_HISTOGRAM_BINS - 1
+      ? PERCENTILE_HISTOGRAM_BINS - 1
+      : scaled | 0;
+    histogram[bin] += 1;
+    validCount += 1;
+  }
+
+  if (computed === null) {
+    computed = validCount === 0
+      ? PERCENTILE_HISTOGRAM_INVALID
+      : { histogram, validCount };
+  }
+  percentileHistogramCache.set(luma, computed);
+  return computed;
+}
+
 /**
  * 고정 4096-bin histogram percentile. 반환 순서는 요청 quantile 순서와 같다.
  *
@@ -110,24 +159,9 @@ export function robustPercentiles(luma, quantiles = DEFAULT_ROBUST_QUANTILES) {
   const requested = normalizeQuantiles(quantiles);
   if (requested === null) return null;
 
-  const histogram = new Uint32Array(PERCENTILE_HISTOGRAM_BINS);
-  const { data, alpha } = luma;
-  let validCount = 0;
-
-  for (let i = 0; i < data.length; i += 1) {
-    if (alpha !== null && alpha !== undefined && alpha[i] === 0) continue;
-    const value = data[i];
-    if (!Number.isFinite(value) || value < 0 || value > 1) return null;
-
-    const bin = Math.min(
-      PERCENTILE_HISTOGRAM_BINS - 1,
-      Math.floor(value * PERCENTILE_HISTOGRAM_BINS),
-    );
-    histogram[bin] += 1;
-    validCount += 1;
-  }
-
-  if (validCount === 0) return null;
+  const prepared = percentileHistogram(luma);
+  if (prepared === PERCENTILE_HISTOGRAM_INVALID) return null;
+  const { histogram, validCount } = prepared;
 
   const ranks = requested.map((quantile) => Math.max(1, Math.ceil(quantile * validCount)));
   const results = new Array(requested.length);
@@ -208,17 +242,16 @@ export function toRelativeLuminance(raster, options = {}) {
 
   const data = new Float32Array(pixelCount);
   const alpha = new Uint8Array(pixelCount);
-  const rgb = { r: 0, g: 0, b: 0 };
 
-  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += 1) {
-    const offset = pixelIndex * 4;
-    rgb.r = pixels[offset];
-    rgb.g = pixels[offset + 1];
-    rgb.b = pixels[offset + 2];
-
-    // relativeLuminance 내부가 srgbChannelToLinear를 사용한다. 여기서 식을 다시
-    // 쓰지 않아 렌더러와 디코더의 sRGB 경계가 갈라질 가능성을 없앤다.
-    data[pixelIndex] = relativeLuminance(rgb);
+  for (let pixelIndex = 0, offset = 0; pixelIndex < pixelCount; pixelIndex += 1, offset += 4) {
+    // relativeLuminance8 은 relativeLuminance 와 같은 sRGB 표·계수·덧셈 순서를 쓴다.
+    // 여기서 식을 다시 쓰지 않아 렌더러와 디코더의 sRGB 경계가 갈라질 가능성을 없앤다.
+    // Uint8ClampedArray 원소는 항상 0..255 정수라 8비트 진입점의 전제가 성립한다.
+    data[pixelIndex] = relativeLuminance8(
+      pixels[offset],
+      pixels[offset + 1],
+      pixels[offset + 2],
+    );
     alpha[pixelIndex] = pixels[offset + 3];
   }
 

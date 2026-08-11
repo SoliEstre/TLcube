@@ -68,7 +68,26 @@ function finitePoint(point) {
   return point && Number.isFinite(point.x) && Number.isFinite(point.y);
 }
 
+/*
+ * 성공 결과만 캐시한다. `validateLuma` 는 전체 픽셀을 훑어 min/max 를 구하는데
+ * 한 복호에서 세 번 불린다(실측 Type O/A). 입력은 luma 하나뿐이고 반환된
+ * `{min,max,span}` 은 호출부가 읽기만 한다. 실패 경로는 위반 표본을 만나는 즉시
+ * 빠져나오는 데다, 반환한 fail 객체가 상위에서 확장될 수 있어 공유하지 않는다.
+ */
+const validateLumaCache = new WeakMap();
+
 function validateLuma(luma) {
+  if (luma !== null && typeof luma === 'object') {
+    const cached = validateLumaCache.get(luma);
+    if (cached !== undefined) return cached;
+    const computed = computeValidateLuma(luma);
+    if (computed && computed.ok !== false) validateLumaCache.set(luma, computed);
+    return computed;
+  }
+  return computeValidateLuma(luma);
+}
+
+function computeValidateLuma(luma) {
   if (luma === null || luma === undefined) {
     return fail(FRONTEND_FAILURE.EMPTY_INPUT, { message: 'luma 가 없다' });
   }
@@ -80,17 +99,23 @@ function validateLuma(luma) {
 
   let min = Infinity;
   let max = -Infinity;
-  for (let i = 0; i < luma.data.length; i += 1) {
-    const value = luma.data[i];
-    if (!Number.isFinite(value) || value < -LUMA_RANGE_EPSILON || value > 1 + LUMA_RANGE_EPSILON) {
+  // 버퍼·상한을 루프 밖으로 빼고 Math.min/max 를 비교로 바꿨다. 값은 같다 —
+  // 위 가드가 유한값만 통과시키므로 NaN 전파 차이가 생길 여지가 없다.
+  const data = luma.data;
+  const length = data.length;
+  const upperBound = 1 + LUMA_RANGE_EPSILON;
+  const lowerBound = -LUMA_RANGE_EPSILON;
+  for (let i = 0; i < length; i += 1) {
+    const value = data[i];
+    if (!Number.isFinite(value) || value < lowerBound || value > upperBound) {
       return fail(FRONTEND_FAILURE.LUMA_DEGENERATE, {
         message: '상대휘도 범위를 벗어난 표본이 있다',
         index: i,
         value,
       });
     }
-    min = Math.min(min, value);
-    max = Math.max(max, value);
+    if (value < min) min = value;
+    if (value > max) max = value;
   }
   if (!Number.isFinite(min) || max - min <= LUMA_RANGE_EPSILON) {
     return fail(FRONTEND_FAILURE.LUMA_DEGENERATE, {
@@ -603,6 +628,62 @@ export function scoreCubeTiling(luma, yJunction, options = {}) {
   const cubeOptions = options.cube && typeof options.cube === 'object'
     ? options.cube
     : options;
+  const cached = cachedCubeTiling(luma, yJunction, cubeOptions);
+  if (cached !== undefined) return cached;
+  const computed = computeCubeTiling(luma, yJunction, cubeOptions);
+  storeCubeTiling(luma, yJunction, cubeOptions, computed);
+  return computed;
+}
+
+/*
+ * cube 타일링 결과 재사용 캐시.
+ *
+ * `detectCubeHypotheses` 는 Type Y 검출 전체(실루엣·심·레퍼런스 보정·호모그래피
+ * 정제)를 돌린다. 실측상 **Type O 복호 시간의 46%** 가 여기인데, 한 복호에서
+ * 같은 계산이 서너 번 돈다:
+ *   · `enumerateGeometryHypotheses` 의 독립 평가
+ *   · 같은 함수 안의 `classifyFamily` (여기 아래 `scoreCubeTiling` 호출)
+ *   · 재배치 재시도 / finder 해상도 재시도가 그 둘을 다시 부른다
+ *
+ * 캐시가 안전한 이유: 결과는 (`luma`, `yJunction`, cube 경로가 실제로 읽는 옵션
+ * 네 개)의 순수 함수다. `cube-detect.js` 가 options 에서 읽는 키는 `calibration` ·
+ * `sample` · `disc` · `tones` 가 전부이고(중첩 호출의 `samplingConfig` 도 그 넷에서
+ * 파생된다), 나머지 bootstrap 전용 플래그는 이 경로에 도달하지 않는다.
+ * 넷과 yJunction 은 `Object.is` 로 비교한다 — 객체면 동일성, 원시값이면 값.
+ * 다르면 그냥 다시 계산한다.
+ */
+const cubeTilingCache = new WeakMap();
+
+function cubeTilingKeyMatches(entry, yJunction, cubeOptions) {
+  return Object.is(entry.yJunction, yJunction)
+    && Object.is(entry.calibration, cubeOptions.calibration)
+    && Object.is(entry.sample, cubeOptions.sample)
+    && Object.is(entry.disc, cubeOptions.disc)
+    && Object.is(entry.tones, cubeOptions.tones);
+}
+
+function cachedCubeTiling(luma, yJunction, cubeOptions) {
+  if (luma === null || typeof luma !== 'object') return undefined;
+  const entry = cubeTilingCache.get(luma);
+  if (entry === undefined || !cubeTilingKeyMatches(entry, yJunction, cubeOptions)) {
+    return undefined;
+  }
+  return entry.value;
+}
+
+function storeCubeTiling(luma, yJunction, cubeOptions, value) {
+  if (luma === null || typeof luma !== 'object') return;
+  cubeTilingCache.set(luma, {
+    yJunction,
+    calibration: cubeOptions.calibration,
+    sample: cubeOptions.sample,
+    disc: cubeOptions.disc,
+    tones: cubeOptions.tones,
+    value,
+  });
+}
+
+function computeCubeTiling(luma, yJunction, cubeOptions) {
   const detected = detectCubeHypotheses(luma, yJunction, cubeOptions);
   if (!detected.ok) return detected;
 

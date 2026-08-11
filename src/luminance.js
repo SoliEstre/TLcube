@@ -80,6 +80,23 @@ export function relativeLuminance(rgb) {
 }
 
 /**
+ * `relativeLuminance` 의 8비트 전용 진입점 — 채널을 **0..255 정수로 이미 아는**
+ * 자리에서만 쓴다 (canvas RGBA 등).
+ *
+ * 같은 `SRGB_TO_LINEAR` 표와 같은 계수·같은 덧셈 순서를 쓰므로 정수 입력에 대해
+ * `relativeLuminance({r,g,b})` 와 **비트 단위로 같은 값**이다. 차이는 채널마다
+ * 하던 `Number.isInteger` 가드와 인자 객체가 없다는 것뿐이다 — 픽셀당 3회씩,
+ * 1440×1920 이면 830만 번의 가드였다.
+ */
+export function relativeLuminance8(r8, g8, b8) {
+  return (
+    0.2126 * SRGB_TO_LINEAR[r8] +
+    0.7152 * SRGB_TO_LINEAR[g8] +
+    0.0722 * SRGB_TO_LINEAR[b8]
+  );
+}
+
+/**
  * slate 프리셋 — 단색조 슬레이트 블루. 파랑 채널 우세·저채도로 "어두운 배경 위에
  * 뜬 아이소메트릭 큐브 필드" 인상을 노린다. 최상위 레벨(rank 2)은 흰색 쪽으로
  * 탈채도해 Y 를 끌어올렸다 (파랑 우세 색만으로는 Y 0.72 이상이 물리적으로 불가 —

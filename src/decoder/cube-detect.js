@@ -292,24 +292,42 @@ function downsampleLuma(luma, maxDimension) {
   const height = Math.ceil(luma.height / factor);
   const data = new Float32Array(width * height);
   const alpha = luma.alpha ? new Uint8Array(width * height) : null;
+  // 원본은 안쪽 두 루프의 **종료 조건에서** Math.min 과 luma.width/height 프로퍼티를
+  // 매 픽셀 다시 읽었다. 값은 그대로 두고 경계만 밖으로 끌어낸다.
+  const sourceWidth = luma.width;
+  const sourceHeight = luma.height;
+  const sourceData = luma.data;
+  const sourceAlpha = luma.alpha;
 
   for (let y = 0; y < height; y += 1) {
+    const yStart = y * factor;
+    const yEnd = Math.min(sourceHeight, yStart + factor);
     for (let x = 0; x < width; x += 1) {
+      const xStart = x * factor;
+      const xEnd = Math.min(sourceWidth, xStart + factor);
       let sum = 0;
       let count = 0;
       let maximumAlpha = 0;
-      for (let sourceY = y * factor;
-        sourceY < Math.min(luma.height, (y + 1) * factor);
-        sourceY += 1) {
-        for (let sourceX = x * factor;
-          sourceX < Math.min(luma.width, (x + 1) * factor);
-          sourceX += 1) {
-          const index = sourceY * luma.width + sourceX;
-          const a = luma.alpha ? luma.alpha[index] : 255;
-          maximumAlpha = Math.max(maximumAlpha, a);
-          if (a === 0) continue;
-          sum += luma.data[index];
-          count += 1;
+      if (sourceAlpha) {
+        for (let sourceY = yStart; sourceY < yEnd; sourceY += 1) {
+          const row = sourceY * sourceWidth;
+          for (let sourceX = xStart; sourceX < xEnd; sourceX += 1) {
+            const index = row + sourceX;
+            const a = sourceAlpha[index];
+            if (a > maximumAlpha) maximumAlpha = a;
+            if (a === 0) continue;
+            sum += sourceData[index];
+            count += 1;
+          }
+        }
+      } else {
+        maximumAlpha = 255;
+        for (let sourceY = yStart; sourceY < yEnd; sourceY += 1) {
+          const row = sourceY * sourceWidth;
+          for (let sourceX = xStart; sourceX < xEnd; sourceX += 1) {
+            sum += sourceData[row + sourceX];
+            count += 1;
+          }
         }
       }
       const target = y * width + x;
