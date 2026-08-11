@@ -67,6 +67,42 @@ export function readLumaDump(path) {
   return { width, height, data, alpha: null, bitDepth: bytesPerSample * 8 };
 }
 
+/** 선형 휘도 → sRGB 코드값. `luminance.js` 의 역변환이다. */
+function srgbEncode(linear) {
+  const l = linear <= 0 ? 0 : linear >= 1 ? 1 : linear;
+  return l <= 0.0031308 ? l * 12.92 : 1.055 * (l ** (1 / 2.4)) - 0.055;
+}
+
+/**
+ * `LumaField` → `decodeFrontend` 가 받는 **RGBA raster**.
+ *
+ * ⚠ **반드시 이 함수를 써라. 선형 휘도를 코드값으로 그대로 쓰면 안 된다.**
+ *
+ * 덤프에 든 값은 `relativeLuminance`, 즉 **선형** 휘도다. 그런데 `toRelativeLuminance` 는
+ * 입력 RGBA 를 sRGB 코드값으로 보고 **다시 선형화**한다. 그래서 선형값을 그대로 바이트로
+ * 넣으면 감마가 한 번 더 먹어 대비가 뭉개진다 — 실측(2026-08-11):
+ *
+ *     원래 L   0.05    0.20    0.50    0.80
+ *     그대로   0.0040  0.0331  0.2159  0.6038   ← 6배까지 어두워진다
+ *     sRGB인코딩 0.0497 0.2016  0.5029  0.7991   ← 복원된다
+ *
+ * 이 실수 때문에 실제로 오진이 났다: Type A 사진이 **원본 JPEG 으로는 복호되는데 덤프로는
+ * 안 되는** 현상을 한동안 «8비트 양자화» 로 잘못 짚었고(16비트로 올려도 그대로였다),
+ * 앵커 레인은 뭉개진 대비를 보고 "separation 이 임계값 아래" 라는 진단을 냈다.
+ * 덤프로 재현이 안 되면 **먼저 이 변환을 의심하라.**
+ */
+export function lumaToRaster(luma) {
+  const pixels = new Uint8ClampedArray(luma.width * luma.height * 4);
+  for (let i = 0; i < luma.data.length; i += 1) {
+    const byte = Math.round(srgbEncode(luma.data[i]) * 255);
+    pixels[i * 4] = byte;
+    pixels[i * 4 + 1] = byte;
+    pixels[i * 4 + 2] = byte;
+    pixels[i * 4 + 3] = 255;
+  }
+  return { width: luma.width, height: luma.height, pixels };
+}
+
 /** 사용 가능한 덤프 목록. 없으면 빈 배열 — 호출부가 "덤프 없음" 을 스킵 사유로 쓸 수 있다. */
 export function listLumaDumps() {
   if (!existsSync(LUMA_DIR)) return [];
