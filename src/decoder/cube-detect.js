@@ -21,8 +21,8 @@ import {
   referenceGroups,
 } from '../placementY.js';
 import {
-  digitToPattern,
   patternToDigit,
+  TONE_PATTERNS,
 } from '../tonemap.js';
 import {
   moduleSampleDisc,
@@ -40,6 +40,7 @@ import {
 } from './grid-sample.js';
 import {
   estimateHomography4,
+  PROJECTIVE_DENOMINATOR_MIN_RATIO,
   projectPoint,
 } from './homography.js';
 
@@ -77,6 +78,179 @@ const EPSILON = 1e-9;
 const SUPPORTED_N = Object.freeze([13, 21, 25]);
 const SUPPORTED_TONES = Object.freeze([2, 3]);
 const CANONICAL_SEAM_CORNERS = Object.freeze([1, 3, 5]);
+const TONE_FACE_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
+
+/*
+ * 레퍼런스 보정과 심 점수는 짧은 배열의 중앙값을 매우 자주 구한다. 매 호출마다
+ * Array#sort와 복사 배열을 만들지 않고, 숫자/순번 scratch에서 필요한 순위만
+ * quickselect 한다. NaN과 -0은 stable Array#sort((a, b) => a - b)의 순서를
+ * 그대로 따르기 위해 별도 안정 경로를 둔다.
+ */
+let statsValuesScratch = new Float64Array(0);
+let statsOrderScratch = new Uint32Array(0);
+let statsUseStableOrder = false;
+
+function ensureStatsScratch(length) {
+  if (statsValuesScratch.length >= length) return;
+  statsValuesScratch = new Float64Array(length);
+  statsOrderScratch = new Uint32Array(length);
+}
+
+function swapStatsScratch(left, right) {
+  const value = statsValuesScratch[left];
+  statsValuesScratch[left] = statsValuesScratch[right];
+  statsValuesScratch[right] = value;
+  const order = statsOrderScratch[left];
+  statsOrderScratch[left] = statsOrderScratch[right];
+  statsOrderScratch[right] = order;
+}
+
+function compareStatsScratch(left, right) {
+  const leftValue = statsValuesScratch[left];
+  const rightValue = statsValuesScratch[right];
+  if (leftValue < rightValue) return -1;
+  if (leftValue > rightValue) return 1;
+  return statsOrderScratch[left] - statsOrderScratch[right];
+}
+
+function swapStatsValues(left, right) {
+  const value = statsValuesScratch[left];
+  statsValuesScratch[left] = statsValuesScratch[right];
+  statsValuesScratch[right] = value;
+}
+
+function numericStatsMedianOfThree(left, middle, right) {
+  const a = statsValuesScratch[left];
+  const b = statsValuesScratch[middle];
+  const c = statsValuesScratch[right];
+  if (a < b) {
+    if (b < c) return b;
+    return a < c ? c : a;
+  }
+  if (a < c) return a;
+  return b < c ? c : b;
+}
+
+function selectNumericStatsKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    const pivot = numericStatsMedianOfThree(left, middle, right);
+    let less = left;
+    let scan = left;
+    let greater = right;
+    while (scan <= greater) {
+      const value = statsValuesScratch[scan];
+      if (value < pivot) {
+        swapStatsValues(less, scan);
+        less += 1;
+        scan += 1;
+      } else if (value > pivot) {
+        swapStatsValues(scan, greater);
+        greater -= 1;
+      } else {
+        scan += 1;
+      }
+    }
+    if (rank < less) right = less - 1;
+    else if (rank > greater) left = greater + 1;
+    else return statsValuesScratch[rank];
+  }
+  return statsValuesScratch[left];
+}
+
+function selectStableStatsKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    if (compareStatsScratch(left, middle) > 0) swapStatsScratch(left, middle);
+    if (compareStatsScratch(left, right) > 0) swapStatsScratch(left, right);
+    if (compareStatsScratch(middle, right) > 0) swapStatsScratch(middle, right);
+
+    const pivotValue = statsValuesScratch[middle];
+    const pivotOrder = statsOrderScratch[middle];
+    let i = left;
+    let j = right;
+    while (i <= j) {
+      while (
+        statsValuesScratch[i] < pivotValue
+        || (!(statsValuesScratch[i] > pivotValue) && statsOrderScratch[i] < pivotOrder)
+      ) i += 1;
+      while (
+        statsValuesScratch[j] > pivotValue
+        || (!(statsValuesScratch[j] < pivotValue) && statsOrderScratch[j] > pivotOrder)
+      ) j -= 1;
+      if (i <= j) {
+        swapStatsScratch(i, j);
+        i += 1;
+        j -= 1;
+      }
+    }
+    if (rank <= j) right = j;
+    else if (rank >= i) left = i;
+    else return statsValuesScratch[rank];
+  }
+  return statsValuesScratch[left];
+}
+
+function selectStatsKth(length, rank) {
+  return statsUseStableOrder
+    ? selectStableStatsKth(length, rank)
+    : selectNumericStatsKth(length, rank);
+}
+
+function prepareStatsValues(values, length = values.length) {
+  ensureStatsScratch(length);
+  let stableOrder = false;
+  for (let i = 0; i < length; i += 1) {
+    const value = values[i];
+    statsValuesScratch[i] = value;
+    if (Number.isNaN(value) || (value === 0 && 1 / value === -Infinity)) stableOrder = true;
+  }
+  statsUseStableOrder = stableOrder;
+  if (stableOrder) {
+    for (let i = 0; i < length; i += 1) statsOrderScratch[i] = i;
+  }
+}
+
+function medianFromPreparedStats(length) {
+  if (length === 0) return Number.NaN;
+  const middle = Math.floor(length / 2);
+  const upper = selectStatsKth(length, middle);
+  return length % 2 === 1
+    ? upper
+    : (selectStatsKth(length, middle - 1) + upper) / 2;
+}
+
+function medianFromArrayLike(values, length) {
+  if (length === 0) return Number.NaN;
+  prepareStatsValues(values, length);
+  return medianFromPreparedStats(length);
+}
+
+
+/* shape 후보는 한 프레임 안에서 순차적으로만 소비된다. 큰 mask/queue를 재사용해
+ * 반복적인 zero-fill 할당과 GC를 없애되, 호출마다 visit stamp와 경계 초기화로 새
+ * Uint8Array와 동일한 관측값을 만든다. */
+let closeMaskDilatedScratch = new Uint8Array(0);
+let closeMaskClosedScratch = new Uint8Array(0);
+let componentVisitedScratch = new Uint32Array(0);
+let componentQueueScratch = new Int32Array(0);
+let componentVisitStamp = 0;
+
+function ensureShapeScratch(length) {
+  if (closeMaskDilatedScratch.length < length) {
+    closeMaskDilatedScratch = new Uint8Array(length);
+    closeMaskClosedScratch = new Uint8Array(length);
+  }
+  if (componentVisitedScratch.length < length) {
+    componentVisitedScratch = new Uint32Array(length);
+    componentQueueScratch = new Int32Array(length);
+    componentVisitStamp = 0;
+  }
+}
 
 function calibration(options) {
   const supplied = options && options.calibration && typeof options.calibration === 'object'
@@ -91,11 +265,7 @@ function clamp01(value) {
 
 function median(values) {
   if (!Array.isArray(values) || values.length === 0) return NaN;
-  const ordered = values.slice().sort((a, b) => a - b);
-  const middle = Math.floor(ordered.length / 2);
-  return ordered.length % 2 === 1
-    ? ordered[middle]
-    : (ordered[middle - 1] + ordered[middle]) / 2;
+  return medianFromArrayLike(values, values.length);
 }
 
 function bilinear(luma, x, y) {
@@ -321,7 +491,15 @@ function foregroundMask(luma, cfg) {
 }
 
 function closeMask(mask, width, height) {
-  const dilated = new Uint8Array(mask.length);
+  const length = mask.length;
+  ensureShapeScratch(length);
+  const dilated = closeMaskDilatedScratch.length === length
+    ? closeMaskDilatedScratch
+    : closeMaskDilatedScratch.subarray(0, length);
+  const closed = closeMaskClosedScratch.length === length
+    ? closeMaskClosedScratch
+    : closeMaskClosedScratch.subarray(0, length);
+
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       let on = 0;
@@ -340,8 +518,16 @@ function closeMask(mask, width, height) {
     }
   }
 
-  const closed = new Uint8Array(mask.length);
+  if (height > 0) {
+    for (let x = 0; x < width; x += 1) {
+      closed[x] = 0;
+      closed[(height - 1) * width + x] = 0;
+    }
+  }
   for (let y = 1; y < height - 1; y += 1) {
+    const row = y * width;
+    closed[row] = 0;
+    if (width > 1) closed[row + width - 1] = 0;
     for (let x = 1; x < width - 1; x += 1) {
       let on = 1;
       for (let oy = -1; oy <= 1 && on === 1; oy += 1) {
@@ -352,29 +538,34 @@ function closeMask(mask, width, height) {
           }
         }
       }
-      closed[y * width + x] = on;
+      closed[row + x] = on;
     }
   }
   return closed;
 }
-
 function connectedComponents(mask, width, height, cfg) {
-  const visited = new Uint8Array(mask.length);
-  const queue = new Int32Array(mask.length);
+  ensureShapeScratch(mask.length);
+  componentVisitStamp += 1;
+  if (componentVisitStamp > 0xffffffff) {
+    componentVisitedScratch.fill(0);
+    componentVisitStamp = 1;
+  }
+  const stamp = componentVisitStamp;
+  const visited = componentVisitedScratch;
+  const queue = componentQueueScratch;
   const components = [];
   const minimum = Math.max(
     cfg.minimumComponentPixels,
     Math.floor(mask.length * cfg.minimumComponentAreaFraction),
   );
   const maximum = Math.floor(mask.length * cfg.maximumComponentAreaFraction);
-  const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
   for (let start = 0; start < mask.length; start += 1) {
-    if (!mask[start] || visited[start]) continue;
+    if (!mask[start] || visited[start] === stamp) continue;
     let head = 0;
     let tail = 0;
     queue[tail++] = start;
-    visited[start] = 1;
+    visited[start] = stamp;
     let area = 0;
     let minX = width;
     let minY = height;
@@ -387,29 +578,54 @@ function connectedComponents(mask, width, height, cfg) {
       const x = index % width;
       const y = Math.floor(index / width);
       area += 1;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
       let edge = false;
+      let next;
 
-      for (const neighbor of neighbors) {
-        const xx = x + neighbor[0];
-        const yy = y + neighbor[1];
-        if (xx < 0 || yy < 0 || xx >= width || yy >= height) {
-          edge = true;
-          continue;
-        }
-        const next = yy * width + xx;
-        if (!mask[next]) {
-          edge = true;
-          continue;
-        }
-        if (!visited[next]) {
-          visited[next] = 1;
+      if (x + 1 >= width) {
+        edge = true;
+      } else {
+        next = index + 1;
+        if (!mask[next]) edge = true;
+        else if (visited[next] !== stamp) {
+          visited[next] = stamp;
           queue[tail++] = next;
         }
       }
+      if (x - 1 < 0) {
+        edge = true;
+      } else {
+        next = index - 1;
+        if (!mask[next]) edge = true;
+        else if (visited[next] !== stamp) {
+          visited[next] = stamp;
+          queue[tail++] = next;
+        }
+      }
+      if (y + 1 >= height) {
+        edge = true;
+      } else {
+        next = index + width;
+        if (!mask[next]) edge = true;
+        else if (visited[next] !== stamp) {
+          visited[next] = stamp;
+          queue[tail++] = next;
+        }
+      }
+      if (y - 1 < 0) {
+        edge = true;
+      } else {
+        next = index - width;
+        if (!mask[next]) edge = true;
+        else if (visited[next] !== stamp) {
+          visited[next] = stamp;
+          queue[tail++] = next;
+        }
+      }
+
       if (edge) boundary.push({ x: x + 0.5, y: y + 0.5 });
     }
 
@@ -418,13 +634,13 @@ function connectedComponents(mask, width, height, cfg) {
     }
   }
 
+
   return components.sort((left, right) =>
     right.area - left.area
     || left.minY - right.minY
     || left.minX - right.minX)
     .slice(0, cfg.maximumComponents);
 }
-
 function cross(origin, left, right) {
   return (left.x - origin.x) * (right.y - origin.y)
     - (left.y - origin.y) * (right.x - origin.x);
@@ -529,15 +745,15 @@ function lumaSpan(luma) {
   for (let index = 0; index < luma.data.length; index += 1) {
     const value = luma.data[index];
     if (!Number.isFinite(value)) continue;
-    min = Math.min(min, value);
-    max = Math.max(max, value);
+    if (value < min || (value === 0 && min === 0 && 1 / value === -Infinity)) min = value;
+    if (value > max || (value === 0 && max === 0 && 1 / value === Infinity)) max = value;
   }
   return Number.isFinite(min) && Number.isFinite(max) ? max - min : 0;
 }
 
-function seamEvidence(luma, center, vertices, parity) {
+function seamEvidence(luma, center, vertices, parity, cachedSpan) {
   const rayReports = [];
-  const span = Math.max(lumaSpan(luma), EPSILON);
+  const span = Math.max(cachedSpan === undefined ? lumaSpan(luma) : cachedSpan, EPSILON);
   for (let ray = 0; ray < 3; ray += 1) {
     const endpoint = vertices[(parity + 2 * ray) % 6];
     const dx = endpoint.x - center.x;
@@ -593,6 +809,7 @@ function shapeCandidates(luma, cfg) {
   const candidatesBySource = new Map();
   const componentCounts = {};
   let componentOffset = 0;
+  let seamSpan;
   for (const variant of variants) {
     const mask = closeMask(variant.mask, luma.width, luma.height);
     const components = connectedComponents(mask, luma.width, luma.height, cfg);
@@ -610,8 +827,9 @@ function shapeCandidates(luma, cfg) {
       const maskFill = component.area / Math.max(area, EPSILON);
       if (maskFill < cfg.minimumMaskFill) return;
 
-      const even = seamEvidence(luma, diagonal.center, vertices, 0);
-      const odd = seamEvidence(luma, diagonal.center, vertices, 1);
+      if (seamSpan === undefined) seamSpan = lumaSpan(luma);
+      const even = seamEvidence(luma, diagonal.center, vertices, 0, seamSpan);
+      const odd = seamEvidence(luma, diagonal.center, vertices, 1, seamSpan);
       const seamScore = (report) => report.contrast
         + cfg.minimumSeamContrast * report.positiveRayCount;
       const evenScore = seamScore(even);
@@ -927,7 +1145,7 @@ function buildToneCalibration(samples, n, tones, cfg) {
       const highs = [];
       for (const [key, digit] of expected) {
         const sample = samples.get(key);
-        const bright = digitToPattern(digit)[face];
+        const bright = TONE_PATTERNS[digit][TONE_FACE_INDEX[face]];
         (bright ? highs : lows).push(sample[face].median);
       }
       const low = median(lows);
@@ -1404,66 +1622,248 @@ function scaleHomographyAxesAroundOrigin(H, scaleX, scaleY) {
   ]);
 }
 
-function quickTwoToneReferenceScore(luma, H, n) {
-  const expected = [];
-  for (const group of referenceGroups(n, 2)) {
-    group.cells.forEach((cell, index) => {
-      expected.push({ i: cell.i, j: cell.j, digit: group.digits[index] });
-    });
+const QUICK_REFERENCE_LAYOUT = Object.freeze({ size: 1, originX: 0, originY: 0 });
+const QUICK_REFERENCE_DISC_OPTIONS = Object.freeze({});
+const QUICK_PATTERN_TO_DIGIT = new Int8Array([-1, 2, 1, 3, 0, 4, 5, -1]);
+const quickReferenceTemplates = new Map();
+let quickReferenceSamplesScratch = new Float64Array(0);
+let quickReferenceLowsScratch = new Float64Array(0);
+let quickReferenceHighsScratch = new Float64Array(0);
+let quickReferenceThresholdsScratch = new Float64Array(3);
+const quickTranslatedHomographyScratch = new Float64Array(9);
+const quickScaledHomographyScratch = new Float64Array(9);
+const quickReferenceScoreScratch = {
+  agreement: -1,
+  minimumSpan: -Infinity,
+  minimumRatio: -Infinity,
+};
+const quickReferenceCandidateScratch = {
+  scaleX: 0,
+  scaleY: 0,
+  dx: 0,
+  dy: 0,
+  quick: quickReferenceScoreScratch,
+};
+
+function ensureQuickReferenceScratch(length) {
+  if (quickReferenceSamplesScratch.length < length) {
+    quickReferenceSamplesScratch = new Float64Array(length);
   }
-  const samples = expected.map((entry) => {
-    const faces = {};
-    for (const face of YFACES) {
-      const disc = moduleSampleDisc(
-        face,
-        entry.i,
-        entry.j,
-        { size: 1, originX: 0, originY: 0 },
-        {},
-      );
-      const point = projectPoint(H, { x: disc.x, y: disc.y });
-      const value = point && bilinear(luma, point.x, point.y);
-      if (value === null || !Number.isFinite(value)) return null;
-      faces[face] = value;
+  if (quickReferenceLowsScratch.length < length) {
+    quickReferenceLowsScratch = new Float64Array(length);
+    quickReferenceHighsScratch = new Float64Array(length);
+  }
+}
+
+/*
+ * 2톤 block recovery의 기준 12셀은 n마다 불변이다. 후보마다 referenceGroups,
+ * moduleSampleDisc, digitToPattern을 다시 만들지 않고 canonical 좌표와 기대 비트를
+ * 한 번만 준비한다. 공개 ygrid/tonemap API의 반환물은 이 캐시 구축 시 그대로 쓴다.
+ */
+function quickReferenceTemplate(n) {
+  const cached = quickReferenceTemplates.get(n);
+  if (cached) return cached;
+
+  const points = new Float64Array(12 * YFACES.length * 2);
+  const digits = new Uint8Array(12);
+  const bright = new Uint8Array(12 * YFACES.length);
+  let entryIndex = 0;
+  for (const group of referenceGroups(n, 2)) {
+    for (let groupIndex = 0; groupIndex < group.cells.length; groupIndex += 1) {
+      const cell = group.cells[groupIndex];
+      const digit = group.digits[groupIndex];
+      const pattern = TONE_PATTERNS[digit];
+      digits[entryIndex] = digit;
+      for (let faceIndex = 0; faceIndex < YFACES.length; faceIndex += 1) {
+        const disc = moduleSampleDisc(
+          YFACES[faceIndex],
+          cell.i,
+          cell.j,
+          QUICK_REFERENCE_LAYOUT,
+          QUICK_REFERENCE_DISC_OPTIONS,
+        );
+        const sampleIndex = entryIndex * YFACES.length + faceIndex;
+        points[2 * sampleIndex] = disc.x;
+        points[2 * sampleIndex + 1] = disc.y;
+        bright[sampleIndex] = pattern[faceIndex];
+      }
+      entryIndex += 1;
     }
-    return faces;
-  });
-  if (samples.some((sample) => sample === null)) {
-    return { agreement: -1, minimumSpan: -Infinity, minimumRatio: -Infinity };
+  }
+  const template = { count: entryIndex, points, digits, bright };
+  quickReferenceTemplates.set(n, template);
+  return template;
+}
+
+/* projectPoint + bilinear의 수식을 객체 할당 없이 같은 연산 순서로 펼친다. */
+function quickReferenceLumaSample(luma, H, x, y) {
+  const h6x = H[6] * x;
+  const h7y = H[7] * y;
+  const denominator = h6x + h7y + H[8];
+  const denominatorScale = Math.abs(h6x) + Math.abs(h7y) + Math.abs(H[8]);
+  if (
+    !Number.isFinite(denominator)
+    || Math.abs(denominator) <= PROJECTIVE_DENOMINATOR_MIN_RATIO * denominatorScale
+  ) return Number.NaN;
+
+  const imageX = (H[0] * x + H[1] * y + H[2]) / denominator;
+  const imageY = (H[3] * x + H[4] * y + H[5]) / denominator;
+  if (!Number.isFinite(imageX) || !Number.isFinite(imageY)
+    || imageX < 0 || imageY < 0 || imageX > luma.width - 1 || imageY > luma.height - 1) {
+    return Number.NaN;
   }
 
-  const thresholds = {};
+  const x0 = Math.floor(imageX);
+  const y0 = Math.floor(imageY);
+  const x1 = Math.min(luma.width - 1, x0 + 1);
+  const y1 = Math.min(luma.height - 1, y0 + 1);
+  const tx = imageX - x0;
+  const ty = imageY - y0;
+  const row0 = y0 * luma.width;
+  const row1 = y1 * luma.width;
+  const a = luma.data[row0 + x0];
+  const b = luma.data[row0 + x1];
+  const c = luma.data[row1 + x0];
+  const d = luma.data[row1 + x1];
+  return (a * (1 - tx) + b * tx) * (1 - ty)
+    + (c * (1 - tx) + d * tx) * ty;
+}
+
+function quickTwoToneReferenceScore(luma, H, n, output = quickReferenceScoreScratch) {
+  const template = quickReferenceTemplate(n);
+  const faceCount = YFACES.length;
+  const sampleCount = template.count * faceCount;
+  ensureQuickReferenceScratch(sampleCount);
+
+  const h0 = H[0];
+  const h1 = H[1];
+  const h2 = H[2];
+  const h3 = H[3];
+  const h4 = H[4];
+  const h5 = H[5];
+  const h6 = H[6];
+  const h7 = H[7];
+  const h8 = H[8];
+  const width = luma.width;
+  const height = luma.height;
+  const data = luma.data;
+  const maximumX = width - 1;
+  const maximumY = height - 1;
+  const points = template.points;
+  const samples = quickReferenceSamplesScratch;
+
+  for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+    const x = points[2 * sampleIndex];
+    const y = points[2 * sampleIndex + 1];
+    const h6x = h6 * x;
+    const h7y = h7 * y;
+    const denominator = h6x + h7y + h8;
+    const denominatorScale = Math.abs(h6x) + Math.abs(h7y) + Math.abs(h8);
+    if (
+      !Number.isFinite(denominator)
+      || Math.abs(denominator) <= PROJECTIVE_DENOMINATOR_MIN_RATIO * denominatorScale
+    ) {
+      output.agreement = -1;
+      output.minimumSpan = -Infinity;
+      output.minimumRatio = -Infinity;
+      return output;
+    }
+
+    const imageX = (h0 * x + h1 * y + h2) / denominator;
+    const imageY = (h3 * x + h4 * y + h5) / denominator;
+    if (!Number.isFinite(imageX) || !Number.isFinite(imageY)
+      || imageX < 0 || imageY < 0 || imageX > maximumX || imageY > maximumY) {
+      output.agreement = -1;
+      output.minimumSpan = -Infinity;
+      output.minimumRatio = -Infinity;
+      return output;
+    }
+
+    const x0 = Math.floor(imageX);
+    const y0 = Math.floor(imageY);
+    const x1 = x0 + 1 > maximumX ? maximumX : x0 + 1;
+    const y1 = y0 + 1 > maximumY ? maximumY : y0 + 1;
+    const tx = imageX - x0;
+    const ty = imageY - y0;
+    const row0 = y0 * width;
+    const row1 = y1 * width;
+    const a = data[row0 + x0];
+    const b = data[row0 + x1];
+    const c = data[row1 + x0];
+    const d = data[row1 + x1];
+    samples[sampleIndex] = (a * (1 - tx) + b * tx) * (1 - ty)
+      + (c * (1 - tx) + d * tx) * ty;
+    if (!Number.isFinite(samples[sampleIndex])) {
+      output.agreement = -1;
+      output.minimumSpan = -Infinity;
+      output.minimumRatio = -Infinity;
+      return output;
+    }
+  }
+
   let minimumSpan = Infinity;
   let minimumRatio = Infinity;
-  for (const face of YFACES) {
-    const lows = [];
-    const highs = [];
-    expected.forEach((entry, index) => {
-      const bright = digitToPattern(entry.digit)[face];
-      (bright ? highs : lows).push(samples[index][face]);
-    });
-    const low = median(lows);
-    const high = median(highs);
-    thresholds[face] = low > 0 && high > 0 ? Math.sqrt(low * high) : (low + high) / 2;
+  for (let faceIndex = 0; faceIndex < faceCount; faceIndex += 1) {
+    let lowCount = 0;
+    let highCount = 0;
+    for (let entryIndex = 0; entryIndex < template.count; entryIndex += 1) {
+      const sampleIndex = entryIndex * faceCount + faceIndex;
+      if (template.bright[sampleIndex]) {
+        quickReferenceHighsScratch[highCount] = samples[sampleIndex];
+        highCount += 1;
+      } else {
+        quickReferenceLowsScratch[lowCount] = samples[sampleIndex];
+        lowCount += 1;
+      }
+    }
+    const low = medianFromArrayLike(quickReferenceLowsScratch, lowCount);
+    const high = medianFromArrayLike(quickReferenceHighsScratch, highCount);
+    quickReferenceThresholdsScratch[faceIndex] = low > 0 && high > 0
+      ? Math.sqrt(low * high)
+      : (low + high) / 2;
     minimumSpan = Math.min(minimumSpan, high - low);
     minimumRatio = Math.min(minimumRatio, high / Math.max(low, EPSILON));
   }
 
   let agreement = 0;
-  expected.forEach((entry, index) => {
-    const bits = {};
-    for (const face of YFACES) {
-      bits[face] = samples[index][face] > thresholds[face] ? 1 : 0;
-    }
-    let observed = null;
-    try {
-      observed = patternToDigit(bits.T, bits.L, bits.R);
-    } catch {
-      observed = null;
-    }
-    if (observed === entry.digit) agreement += 1;
-  });
-  return { agreement, minimumSpan, minimumRatio };
+  for (let entryIndex = 0; entryIndex < template.count; entryIndex += 1) {
+    const sampleIndex = entryIndex * faceCount;
+    const bitsT = samples[sampleIndex] > quickReferenceThresholdsScratch[0] ? 1 : 0;
+    const bitsL = samples[sampleIndex + 1] > quickReferenceThresholdsScratch[1] ? 1 : 0;
+    const bitsR = samples[sampleIndex + 2] > quickReferenceThresholdsScratch[2] ? 1 : 0;
+    const observed = QUICK_PATTERN_TO_DIGIT[(bitsT << 2) | (bitsL << 1) | bitsR];
+    if (observed === template.digits[entryIndex]) agreement += 1;
+  }
+  output.agreement = agreement;
+  output.minimumSpan = minimumSpan;
+  output.minimumRatio = minimumRatio;
+  return output;
+}
+
+function quickTwoToneTranslatedReferenceScore(luma, scaled, dx, dy, n) {
+  quickTranslatedHomographyScratch[0] = scaled[0] + dx * scaled[6];
+  quickTranslatedHomographyScratch[1] = scaled[1] + dx * scaled[7];
+  quickTranslatedHomographyScratch[2] = scaled[2] + dx * scaled[8];
+  quickTranslatedHomographyScratch[3] = scaled[3] + dy * scaled[6];
+  quickTranslatedHomographyScratch[4] = scaled[4] + dy * scaled[7];
+  quickTranslatedHomographyScratch[5] = scaled[5] + dy * scaled[8];
+  quickTranslatedHomographyScratch[6] = scaled[6];
+  quickTranslatedHomographyScratch[7] = scaled[7];
+  quickTranslatedHomographyScratch[8] = scaled[8];
+  return quickTwoToneReferenceScore(luma, quickTranslatedHomographyScratch, n);
+}
+
+function materializeQuickReferenceCandidate(initialH, candidate) {
+  const scaled = scaleHomographyAxesAroundOrigin(initialH, candidate.scaleX, candidate.scaleY);
+  if (!scaled) return null;
+  return {
+    H: translateHomography(scaled, candidate.dx, candidate.dy),
+    scaleX: candidate.scaleX,
+    scaleY: candidate.scaleY,
+    dx: candidate.dx,
+    dy: candidate.dy,
+    quick: candidate.quick,
+  };
 }
 
 function rankQuickReference(left, right) {
@@ -1476,72 +1876,135 @@ function rankQuickReference(left, right) {
     || left.dx - right.dx;
 }
 
+/*
+ * Only the leading coarse/fine candidates can reach calibration. Keep that exact
+ * stable prefix while scoring instead of retaining and sorting every candidate.
+ */
+function retainQuickReferenceCandidate(top, candidate, limit) {
+  const currentLength = top.length;
+  if (currentLength === limit
+    && rankQuickReference(candidate, top[currentLength - 1]) >= 0) return;
+
+  let insertAt = currentLength;
+  for (let index = 0; index < currentLength; index += 1) {
+    if (rankQuickReference(candidate, top[index]) < 0) {
+      insertAt = index;
+      break;
+    }
+  }
+  top.splice(insertAt, 0, {
+    scaleX: candidate.scaleX,
+    scaleY: candidate.scaleY,
+    dx: candidate.dx,
+    dy: candidate.dy,
+    quick: {
+      agreement: candidate.quick.agreement,
+      minimumSpan: candidate.quick.minimumSpan,
+      minimumRatio: candidate.quick.minimumRatio,
+    },
+  });
+  if (top.length > limit) top.pop();
+}
+
+/*
+ * scaleHomographyAxesAroundOrigin() projects the same origin for every search
+ * position. Reuse that exact origin and a typed-array scratch during quick-only
+ * scoring; materialization below continues through the canonical helper.
+ */
+function fillQuickScaledHomography(H, center, scaleX, scaleY, output) {
+  const offsetX = (1 - scaleX) * center.x;
+  const offsetY = (1 - scaleY) * center.y;
+  output[0] = scaleX * H[0] + offsetX * H[6];
+  output[1] = scaleX * H[1] + offsetX * H[7];
+  output[2] = scaleX * H[2] + offsetX * H[8];
+  output[3] = scaleY * H[3] + offsetY * H[6];
+  output[4] = scaleY * H[4] + offsetY * H[7];
+  output[5] = scaleY * H[5] + offsetY * H[8];
+  output[6] = H[6];
+  output[7] = H[7];
+  output[8] = H[8];
+  return output;
+}
+
 function blockReferenceSearch(luma, initialH, n, options, cfg) {
   const pitch = projectedModulePitch(initialH);
   if (!(pitch > 0)) return { accepted: null, report: { cause: 'invalid-pitch' } };
+  const scaleCenter = projectPoint(initialH, { x: 0, y: 0 });
+  if (!scaleCenter) return { accepted: null, report: { cause: 'invalid-pitch' } };
+
   const scales = [1.05, 1, 0.95, 0.9, 0.85, 0.8, 0.75];
   const coarse = [];
+  const quickCandidate = quickReferenceCandidateScratch;
   for (const scaleX of scales) {
     for (const scaleY of scales) {
-      const scaled = scaleHomographyAxesAroundOrigin(initialH, scaleX, scaleY);
-      if (!scaled) continue;
+      const scaled = fillQuickScaledHomography(
+        initialH,
+        scaleCenter,
+        scaleX,
+        scaleY,
+        quickScaledHomographyScratch,
+      );
       for (let dyIndex = -3; dyIndex <= 3; dyIndex += 1) {
         for (let dxIndex = -3; dxIndex <= 3; dxIndex += 1) {
           const dx = dxIndex * pitch / 2;
           const dy = dyIndex * pitch / 2;
-          const H = translateHomography(scaled, dx, dy);
-          coarse.push({
-            H,
-            scaleX,
-            scaleY,
-            dx,
-            dy,
-            quick: quickTwoToneReferenceScore(luma, H, n),
-          });
+          quickCandidate.scaleX = scaleX;
+          quickCandidate.scaleY = scaleY;
+          quickCandidate.dx = dx;
+          quickCandidate.dy = dy;
+          quickCandidate.quick = quickTwoToneTranslatedReferenceScore(luma, scaled, dx, dy, n);
+          retainQuickReferenceCandidate(coarse, quickCandidate, 20);
         }
       }
     }
   }
-  coarse.sort(rankQuickReference);
 
   const fine = [];
-  for (const base of coarse.slice(0, 8)) {
+  const coarseLimit = Math.min(8, coarse.length);
+  for (let baseIndex = 0; baseIndex < coarseLimit; baseIndex += 1) {
+    const base = coarse[baseIndex];
     for (const deltaX of [-0.025, 0, 0.025]) {
       for (const deltaY of [-0.025, 0, 0.025]) {
         const scaleX = base.scaleX + deltaX;
         const scaleY = base.scaleY + deltaY;
-        const scaled = scaleHomographyAxesAroundOrigin(initialH, scaleX, scaleY);
-        if (!scaled) continue;
+        const scaled = fillQuickScaledHomography(
+          initialH,
+          scaleCenter,
+          scaleX,
+          scaleY,
+          quickScaledHomographyScratch,
+        );
         for (const shiftX of [-0.25, 0, 0.25]) {
           for (const shiftY of [-0.25, 0, 0.25]) {
             const dx = base.dx + shiftX * pitch;
             const dy = base.dy + shiftY * pitch;
-            const H = translateHomography(scaled, dx, dy);
-            fine.push({
-              H,
-              scaleX,
-              scaleY,
-              dx,
-              dy,
-              quick: quickTwoToneReferenceScore(luma, H, n),
-            });
+            quickCandidate.scaleX = scaleX;
+            quickCandidate.scaleY = scaleY;
+            quickCandidate.dx = dx;
+            quickCandidate.dy = dy;
+            quickCandidate.quick = quickTwoToneTranslatedReferenceScore(luma, scaled, dx, dy, n);
+            retainQuickReferenceCandidate(fine, quickCandidate, 40);
           }
         }
       }
     }
   }
-  fine.sort(rankQuickReference);
 
   const unique = [];
   const seen = new Set();
-  for (const candidate of [...fine.slice(0, 40), ...coarse.slice(0, 20)]) {
-    const key = Array.from(candidate.H, (value) => value.toFixed(8)).join(',');
-    if (seen.has(key)) continue;
+  const appendUnique = (candidate) => {
+    const materialized = materializeQuickReferenceCandidate(initialH, candidate);
+    if (!materialized) return;
+    const key = Array.from(materialized.H, (value) => value.toFixed(8)).join(',');
+    if (seen.has(key)) return;
     seen.add(key);
-    unique.push(candidate);
-  }
+    unique.push(materialized);
+  };
+  for (let index = 0; index < Math.min(40, fine.length); index += 1) appendUnique(fine[index]);
+  for (let index = 0; index < Math.min(20, coarse.length); index += 1) appendUnique(coarse[index]);
 
   const fullySampled = [];
+  let seamSpan;
   for (const candidate of unique) {
     const references = calibrateCubeReferences(
       luma,
@@ -1556,8 +2019,9 @@ function blockReferenceSearch(luma, initialH, n, options, cfg) {
     const vertices = CORNER_UNIT_OFFSETS.map((corner) =>
       projectPoint(candidate.H, { x: corner.x * n, y: corner.y * n }));
     if (!center || vertices.some((point) => point === null)) continue;
-    const even = seamEvidence(luma, center, vertices, 0);
-    const odd = seamEvidence(luma, center, vertices, 1);
+    if (seamSpan === undefined) seamSpan = lumaSpan(luma);
+    const even = seamEvidence(luma, center, vertices, 0, seamSpan);
+    const odd = seamEvidence(luma, center, vertices, 1, seamSpan);
     const seamScore = (report) => report.contrast
       + cfg.minimumSeamContrast * report.positiveRayCount;
     const parityMargin = Math.abs(seamScore(odd) - seamScore(even));
@@ -1621,7 +2085,6 @@ function blockReferenceSearch(luma, initialH, n, options, cfg) {
     },
   };
 }
-
 function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
   const proposals = flatBlockCandidates(reduced.luma, cfg);
   const reports = [];

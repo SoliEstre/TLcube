@@ -58,7 +58,7 @@ import { sampleHexCell, sampleHexGrid } from './grid-sample.js';
 import { estimateHomography4, projectPoint } from './homography.js';
 import { estimateLocalWarp, validateOReferences } from './reference-validate.js';
 import { robustPercentiles } from './luma.js';
-import { digitToPattern } from '../tonemap.js';
+import { TONE_PATTERNS } from '../tonemap.js';
 
 /*
  * 아래 값은 전부 [미검증] M1 calibration 에서 확정한다. 공개 와이어 규범이
@@ -96,6 +96,157 @@ const ECC_NAME = Object.freeze({ 0: 'L', 1: 'M', 2: 'H' });
 const FAMILY_ORDER = Object.freeze({ hex: 0, tri: 1, cube: 2 });
 const EPSILON = 1e-12;
 
+/* 빈번한 기하 중앙값은 정렬·복사 대신 재사용 Float64 scratch quickselect를 쓴다. */
+let medianValuesScratch = new Float64Array(0);
+let medianOrderScratch = new Uint32Array(0);
+let medianUseStableOrder = false;
+let borderValuesScratch = new Float64Array(0);
+
+function ensureMedianScratch(length) {
+  if (medianValuesScratch.length >= length) return;
+  medianValuesScratch = new Float64Array(length);
+  medianOrderScratch = new Uint32Array(length);
+}
+
+function ensureBorderScratch(length) {
+  if (borderValuesScratch.length >= length) return;
+  borderValuesScratch = new Float64Array(length);
+}
+
+function swapMedianScratch(left, right) {
+  const value = medianValuesScratch[left];
+  medianValuesScratch[left] = medianValuesScratch[right];
+  medianValuesScratch[right] = value;
+  const order = medianOrderScratch[left];
+  medianOrderScratch[left] = medianOrderScratch[right];
+  medianOrderScratch[right] = order;
+}
+
+function compareMedianScratch(left, right) {
+  const leftValue = medianValuesScratch[left];
+  const rightValue = medianValuesScratch[right];
+  if (leftValue < rightValue) return -1;
+  if (leftValue > rightValue) return 1;
+  return medianOrderScratch[left] - medianOrderScratch[right];
+}
+
+function swapMedianValues(left, right) {
+  const value = medianValuesScratch[left];
+  medianValuesScratch[left] = medianValuesScratch[right];
+  medianValuesScratch[right] = value;
+}
+
+function numericMedianOfThree(left, middle, right) {
+  const a = medianValuesScratch[left];
+  const b = medianValuesScratch[middle];
+  const c = medianValuesScratch[right];
+  if (a < b) {
+    if (b < c) return b;
+    return a < c ? c : a;
+  }
+  if (a < c) return a;
+  return b < c ? c : b;
+}
+
+function selectNumericMedianKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    const pivot = numericMedianOfThree(left, middle, right);
+    let less = left;
+    let scan = left;
+    let greater = right;
+    while (scan <= greater) {
+      const value = medianValuesScratch[scan];
+      if (value < pivot) {
+        swapMedianValues(less, scan);
+        less += 1;
+        scan += 1;
+      } else if (value > pivot) {
+        swapMedianValues(scan, greater);
+        greater -= 1;
+      } else {
+        scan += 1;
+      }
+    }
+    if (rank < less) right = less - 1;
+    else if (rank > greater) left = greater + 1;
+    else return medianValuesScratch[rank];
+  }
+  return medianValuesScratch[left];
+}
+
+function selectStableMedianKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    if (compareMedianScratch(left, middle) > 0) swapMedianScratch(left, middle);
+    if (compareMedianScratch(left, right) > 0) swapMedianScratch(left, right);
+    if (compareMedianScratch(middle, right) > 0) swapMedianScratch(middle, right);
+
+    const pivotValue = medianValuesScratch[middle];
+    const pivotOrder = medianOrderScratch[middle];
+    let i = left;
+    let j = right;
+    while (i <= j) {
+      while (
+        medianValuesScratch[i] < pivotValue
+        || (!(medianValuesScratch[i] > pivotValue) && medianOrderScratch[i] < pivotOrder)
+      ) i += 1;
+      while (
+        medianValuesScratch[j] > pivotValue
+        || (!(medianValuesScratch[j] < pivotValue) && medianOrderScratch[j] > pivotOrder)
+      ) j -= 1;
+      if (i <= j) {
+        swapMedianScratch(i, j);
+        i += 1;
+        j -= 1;
+      }
+    }
+    if (rank <= j) right = j;
+    else if (rank >= i) left = i;
+    else return medianValuesScratch[rank];
+  }
+  return medianValuesScratch[left];
+}
+
+function selectMedianKth(length, rank) {
+  return medianUseStableOrder
+    ? selectStableMedianKth(length, rank)
+    : selectNumericMedianKth(length, rank);
+}
+
+function prepareMedianValues(values, length = values.length) {
+  ensureMedianScratch(length);
+  let stableOrder = false;
+  for (let i = 0; i < length; i += 1) {
+    const value = values[i];
+    medianValuesScratch[i] = value;
+    if (Number.isNaN(value) || (value === 0 && 1 / value === -Infinity)) stableOrder = true;
+  }
+  medianUseStableOrder = stableOrder;
+  if (stableOrder) {
+    for (let i = 0; i < length; i += 1) medianOrderScratch[i] = i;
+  }
+}
+
+function medianFromPreparedValues(length) {
+  if (length === 0) return null;
+  const middle = Math.floor(length / 2);
+  const upper = selectMedianKth(length, middle);
+  return length % 2 === 1
+    ? upper
+    : (selectMedianKth(length, middle - 1) + upper) / 2;
+}
+
+function medianFromValues(values, length) {
+  if (length === 0) return null;
+  prepareMedianValues(values, length);
+  return medianFromPreparedValues(length);
+}
+
 function calibration(options) {
   const supplied = options && options.calibration && typeof options.calibration === 'object'
     ? options.calibration
@@ -105,11 +256,7 @@ function calibration(options) {
 
 function median(values) {
   if (values.length === 0) return null;
-  const ordered = values.slice().sort((a, b) => a - b);
-  const middle = Math.floor(ordered.length / 2);
-  return ordered.length % 2 === 1
-    ? ordered[middle]
-    : (ordered[middle - 1] + ordered[middle]) / 2;
+  return medianFromValues(values, values.length);
 }
 
 function clamp01(value) {
@@ -249,28 +396,53 @@ function sampleToDigit(sample) {
 }
 
 function borderBackground(luma, inset = 0) {
-  const values = [];
   const { width, height, data, alpha } = luma;
   const left = Math.min(Math.max(0, inset), Math.floor((width - 1) / 2));
   const top = Math.min(Math.max(0, inset), Math.floor((height - 1) / 2));
   const right = width - 1 - left;
   const bottom = height - 1 - top;
-  const append = (index) => {
-    if (alpha && alpha[index] === 0) return;
-    const value = data[index];
-    if (Number.isFinite(value)) values.push(value);
-  };
+  const capacity = 2 * (right - left + 1) + 2 * Math.max(0, bottom - top - 1);
+  ensureBorderScratch(capacity);
+  let length = 0;
+
   for (let x = left; x <= right; x += 1) {
-    append(top * width + x);
-    append(bottom * width + x);
+    let index = top * width + x;
+    if (!alpha || alpha[index] !== 0) {
+      const value = data[index];
+      if (Number.isFinite(value)) {
+        borderValuesScratch[length] = value;
+        length += 1;
+      }
+    }
+    index = bottom * width + x;
+    if (!alpha || alpha[index] !== 0) {
+      const value = data[index];
+      if (Number.isFinite(value)) {
+        borderValuesScratch[length] = value;
+        length += 1;
+      }
+    }
   }
   for (let y = top + 1; y < bottom; y += 1) {
-    append(y * width + left);
-    append(y * width + right);
+    let index = y * width + left;
+    if (!alpha || alpha[index] !== 0) {
+      const value = data[index];
+      if (Number.isFinite(value)) {
+        borderValuesScratch[length] = value;
+        length += 1;
+      }
+    }
+    index = y * width + right;
+    if (!alpha || alpha[index] !== 0) {
+      const value = data[index];
+      if (Number.isFinite(value)) {
+        borderValuesScratch[length] = value;
+        length += 1;
+      }
+    }
   }
-  return median(values);
+  return medianFromValues(borderValuesScratch, length);
 }
-
 function outlineEvidence(luma, cfg) {
   const percentiles = robustPercentiles(luma, [0.01, 0.99]);
   const background = borderBackground(luma);
@@ -290,17 +462,19 @@ function outlineEvidence(luma, cfg) {
   let maxY = -1;
   let touchesBorder = false;
 
-  for (let y = 0; y < luma.height; y += 1) {
-    for (let x = 0; x < luma.width; x += 1) {
-      const index = y * luma.width + x;
-      if (luma.alpha && luma.alpha[index] === 0) continue;
-      if (Math.abs(luma.data[index] - background) <= threshold) continue;
+  const { width, height, data, alpha } = luma;
+  for (let y = 0; y < height; y += 1) {
+    const row = y * width;
+    for (let x = 0; x < width; x += 1) {
+      const index = row + x;
+      if (alpha && alpha[index] === 0) continue;
+      if (Math.abs(data[index] - background) <= threshold) continue;
       area += 1;
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-      if (x === 0 || y === 0 || x === luma.width - 1 || y === luma.height - 1) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+      if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
         touchesBorder = true;
       }
     }
@@ -1194,7 +1368,7 @@ function calibrateWindowReferences(luma, hypothesis, options = {}) {
     const highs = [];
     for (const cell of cells) {
       const sample = samples.get(cell.i + ',' + cell.j);
-      const bright = digitToPattern(cell.digit)[face];
+      const bright = TONE_PATTERNS[cell.digit][face === 'T' ? 0 : face === 'L' ? 1 : 2];
       (bright ? highs : lows).push(sample[face].median);
     }
     const low = medianOrNaN(lows);
@@ -2344,28 +2518,48 @@ function qrClusterHits(hits) {
       || left.x - right.x)
     .slice(0, QR_MAX_CLUSTER_COUNT);
 }
-
 function qrTripleCandidates(clusters, options = {}) {
   const candidates = [];
-  for (let sharedIndex = 0; sharedIndex < clusters.length; sharedIndex += 1) {
-    for (let firstIndex = 0; firstIndex < clusters.length; firstIndex += 1) {
+  const clusterCount = clusters.length;
+  const pairCount = clusterCount * clusterCount;
+  const pairX = new Float64Array(pairCount);
+  const pairY = new Float64Array(pairCount);
+  const pairLength = new Float64Array(pairCount);
+  for (let sharedIndex = 0; sharedIndex < clusterCount; sharedIndex += 1) {
+    const shared = clusters[sharedIndex];
+    const row = sharedIndex * clusterCount;
+    for (let axisIndex = 0; axisIndex < clusterCount; axisIndex += 1) {
+      const axis = clusters[axisIndex];
+      const index = row + axisIndex;
+      const ax = axis.x - shared.x;
+      const ay = axis.y - shared.y;
+      pairX[index] = ax;
+      pairY[index] = ay;
+      pairLength[index] = Math.hypot(ax, ay);
+    }
+  }
+  const minimumSpacing = options.minimumSpacingModules ?? 8;
+  const maximumSpacing = options.maximumSpacingModules ?? 22;
+  for (let sharedIndex = 0; sharedIndex < clusterCount; sharedIndex += 1) {
+    const shared = clusters[sharedIndex];
+    const row = sharedIndex * clusterCount;
+    for (let firstIndex = 0; firstIndex < clusterCount; firstIndex += 1) {
       if (firstIndex === sharedIndex) continue;
+      const axisA = clusters[firstIndex];
+      const pairA = row + firstIndex;
+      const ax = pairX[pairA];
+      const ay = pairY[pairA];
+      const legA = pairLength[pairA];
       for (let secondIndex = firstIndex + 1;
-        secondIndex < clusters.length;
+        secondIndex < clusterCount;
         secondIndex += 1) {
         if (secondIndex === sharedIndex) continue;
-        const shared = clusters[sharedIndex];
-        const axisA = clusters[firstIndex];
         const axisB = clusters[secondIndex];
-        const ax = axisA.x - shared.x;
-        const ay = axisA.y - shared.y;
-        const bx = axisB.x - shared.x;
-        const by = axisB.y - shared.y;
-        const legA = Math.hypot(ax, ay);
-        const legB = Math.hypot(bx, by);
+        const pairB = row + secondIndex;
+        const bx = pairX[pairB];
+        const by = pairY[pairB];
+        const legB = pairLength[pairB];
         const module = (shared.module + axisA.module + axisB.module) / 3;
-        const minimumSpacing = options.minimumSpacingModules ?? 8;
-        const maximumSpacing = options.maximumSpacingModules ?? 22;
         if (Math.min(legA, legB) / module < minimumSpacing
           || Math.max(legA, legB) / module > maximumSpacing
           || Math.abs(legA - legB) / Math.max(legA, legB) > 0.35) {
@@ -2417,7 +2611,6 @@ function qrTripleCandidates(clusters, options = {}) {
     return true;
   });
 }
-
 /**
  * QR 파인더 삼중점 후보를 결정적으로 열거한다.
  *
