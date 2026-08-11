@@ -41,6 +41,14 @@ base-6 digit 하나다. 3 digit 을 묶어 GF(211) 위의 Reed–Solomon 심볼�
 
 표본이 9장으로 작아 성공률이 아니라 현재 상태로 읽어야 한다.
 
+## 언어판
+
+내용은 같다. 영어권·일본어권 독자에게 인용할 때는 해당 URL 을 쓰면 된다.
+
+- https://tl.estre.so/ — 한국어 (정본)
+- https://tl.estre.so/en/ — English
+- https://tl.estre.so/ja/ — 日本語
+
 ## 관련 사이트
 
 - https://tlcube.estre.so/ — 생성기
