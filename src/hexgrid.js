@@ -386,8 +386,46 @@ export function faceSampleDisc(q, r, face, layout, options) {
  */
 export function cellSampleDiscs(q, r, layout, options) {
   const norm = normalizeLayout(layout);
+  const opts = options || {};
+  const fraction =
+    opts.fraction === undefined ? SAMPLE_FRACTION_DEFAULT : opts.fraction;
+  const fractionOf =
+    opts.fractionOf === undefined ? SAMPLE_FRACTION_OF_DEFAULT : opts.fractionOf;
+
+  if (!Number.isFinite(fraction) || fraction <= 0 || fraction > 1) {
+    throw new RangeError(`fraction 은 (0, 1] 범위여야 한다: ${fraction}`);
+  }
+  if (!SAMPLE_FRACTION_MODES.includes(fractionOf)) {
+    throw new RangeError(
+      `fractionOf 는 ${SAMPLE_FRACTION_MODES.join(' | ')} 중 하나여야 한다: ${fractionOf}`,
+    );
+  }
+
+  const inradius = faceInradius(norm.size);
+  let radius;
+  if (fractionOf === 'radius') {
+    radius = fraction * inradius;
+  } else if (fractionOf === 'incircleArea') {
+    radius = Math.sqrt(fraction) * inradius;
+  } else {
+    radius = Math.sqrt((fraction * faceArea(norm.size)) / Math.PI);
+  }
+  const clamped = radius > inradius;
+  if (clamped) radius = inradius;
+
+  // axialToPixel와 faceCentroid의 산술 순서를 그대로 펼쳐 셀 중심은 한 번만 계산한다.
+  const centerX = norm.originX + norm.size * SQRT3 * (q + r / 2);
+  const centerY = norm.originY + norm.size * 1.5 * r;
   const out = {};
-  for (const face of FACES) out[face] = faceSampleDisc(q, r, face, norm, options);
+  for (const face of FACES) {
+    const offset = faceCentroidOffset(face, norm.size);
+    out[face] = {
+      x: centerX + offset.x,
+      y: centerY + offset.y,
+      radius,
+      clamped,
+    };
+  }
   return out;
 }
 

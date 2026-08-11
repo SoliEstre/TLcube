@@ -39,13 +39,222 @@ export const NEAR_TIE_EPSILON = 1 / 255;
 // vanishing line과 교차시키면 그 가설은 사진상 표본을 정의할 수 없다.
 const HOMOGENEOUS_EPSILON = 1e-12;
 
-function median(values) {
-  if (values.length === 0) throw new RangeError('median: 빈 표본');
-  const sorted = values.slice().sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[middle - 1] + sorted[middle]) / 2
-    : sorted[middle];
+/*
+ * 같은 LumaField 안에서는 H가 새 Float64Array로 재구성돼도 계수가 같으면 같은
+ * 투영이다. 그래서 객체 정체성이 아니라 9개 계수와 원판/표본 설정으로 성공값을
+ * 캐시한다. LumaField 자체가 WeakMap 경계라 서로 다른 프레임은 섞이지 않는다.
+ */
+const successfulDiscSamplesByLuma = new WeakMap();
+const homographyCacheKeys = new WeakMap();
+
+function cacheNumberKey(value) {
+  return Object.is(value, -0) ? '-0' : String(value);
+}
+
+function homographyCacheKey(H) {
+  const cached = homographyCacheKeys.get(H);
+  if (cached !== undefined) return cached;
+  let key = '';
+  for (let i = 0; i < 9; i += 1) key += cacheNumberKey(H[i]) + '|';
+  homographyCacheKeys.set(H, key);
+  return key;
+}
+
+function discCacheKey(disc, config) {
+  return cacheNumberKey(disc.x) + '|' + cacheNumberKey(disc.y) + '|'
+    + cacheNumberKey(disc.radius) + '|' + cacheNumberKey(config.minSampleCount) + '|'
+    + cacheNumberKey(config.minProjectedMinorDiameter) + '|'
+    + cacheNumberKey(config.minOpaqueRatio);
+}
+
+function successfulDiscCacheFor(luma, H) {
+  let byHomography = successfulDiscSamplesByLuma.get(luma);
+  if (byHomography === undefined) {
+    byHomography = new Map();
+    successfulDiscSamplesByLuma.set(luma, byHomography);
+  }
+  const hKey = homographyCacheKey(H);
+  let samples = byHomography.get(hKey);
+  if (samples === undefined) {
+    samples = new Map();
+    byHomography.set(hKey, samples);
+  }
+  return samples;
+}
+
+function cachedSuccessfulDiscSample(luma, H, disc, config) {
+  return successfulDiscCacheFor(luma, H).get(discCacheKey(disc, config));
+}
+
+function cacheSuccessfulDiscSample(luma, H, disc, config, result) {
+  successfulDiscCacheFor(luma, H).set(discCacheKey(disc, config), {
+    median: result.median,
+    mad: result.mad,
+    count: result.count,
+    opaqueCount: result.opaqueCount,
+    opaqueRatio: result.opaqueRatio,
+    projectedMinorDiameter: result.projectedMinorDiameter,
+    geometricCount: result.geometricCount,
+  });
+}
+
+/*
+ * 원판 표본은 셀마다 median과 MAD를 구한다. Float64Array scratch와 stable 순번을
+ * 재사용해 전체 정렬과 임시 deviations 배열을 없앤다.
+ */
+let discValuesScratch = new Float64Array(0);
+let medianValuesScratch = new Float64Array(0);
+let medianOrderScratch = new Uint32Array(0);
+let medianUseStableOrder = false;
+
+function ensureDiscValuesScratch(length) {
+  if (discValuesScratch.length >= length) return discValuesScratch;
+  discValuesScratch = new Float64Array(length);
+  return discValuesScratch;
+}
+
+function ensureMedianScratch(length) {
+  if (medianValuesScratch.length >= length) return;
+  medianValuesScratch = new Float64Array(length);
+  medianOrderScratch = new Uint32Array(length);
+}
+
+function swapMedianScratch(left, right) {
+  const value = medianValuesScratch[left];
+  medianValuesScratch[left] = medianValuesScratch[right];
+  medianValuesScratch[right] = value;
+  const order = medianOrderScratch[left];
+  medianOrderScratch[left] = medianOrderScratch[right];
+  medianOrderScratch[right] = order;
+}
+
+function compareMedianScratch(left, right) {
+  const leftValue = medianValuesScratch[left];
+  const rightValue = medianValuesScratch[right];
+  if (leftValue < rightValue) return -1;
+  if (leftValue > rightValue) return 1;
+  return medianOrderScratch[left] - medianOrderScratch[right];
+}
+
+function swapMedianValues(left, right) {
+  const value = medianValuesScratch[left];
+  medianValuesScratch[left] = medianValuesScratch[right];
+  medianValuesScratch[right] = value;
+}
+
+function numericMedianMedianOfThree(left, middle, right) {
+  const a = medianValuesScratch[left];
+  const b = medianValuesScratch[middle];
+  const c = medianValuesScratch[right];
+  if (a < b) {
+    if (b < c) return b;
+    return a < c ? c : a;
+  }
+  if (a < c) return a;
+  return b < c ? c : b;
+}
+
+function selectNumericMedianKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    const pivot = numericMedianMedianOfThree(left, middle, right);
+    let less = left;
+    let scan = left;
+    let greater = right;
+    while (scan <= greater) {
+      const value = medianValuesScratch[scan];
+      if (value < pivot) {
+        swapMedianValues(less, scan);
+        less += 1;
+        scan += 1;
+      } else if (value > pivot) {
+        swapMedianValues(scan, greater);
+        greater -= 1;
+      } else {
+        scan += 1;
+      }
+    }
+    if (rank < less) right = less - 1;
+    else if (rank > greater) left = greater + 1;
+    else return medianValuesScratch[rank];
+  }
+  return medianValuesScratch[left];
+}
+
+function selectMedianKth(length, rank) {
+  return medianUseStableOrder
+    ? selectStableMedianKth(length, rank)
+    : selectNumericMedianKth(length, rank);
+}
+function selectStableMedianKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    if (compareMedianScratch(left, middle) > 0) swapMedianScratch(left, middle);
+    if (compareMedianScratch(left, right) > 0) swapMedianScratch(left, right);
+    if (compareMedianScratch(middle, right) > 0) swapMedianScratch(middle, right);
+
+    const pivotValue = medianValuesScratch[middle];
+    const pivotOrder = medianOrderScratch[middle];
+    let i = left;
+    let j = right;
+    while (i <= j) {
+      while (
+        medianValuesScratch[i] < pivotValue
+        || (!(medianValuesScratch[i] > pivotValue) && medianOrderScratch[i] < pivotOrder)
+      ) i += 1;
+      while (
+        medianValuesScratch[j] > pivotValue
+        || (!(medianValuesScratch[j] < pivotValue) && medianOrderScratch[j] > pivotOrder)
+      ) j -= 1;
+      if (i <= j) {
+        swapMedianScratch(i, j);
+        i += 1;
+        j -= 1;
+      }
+    }
+    if (rank <= j) right = j;
+    else if (rank >= i) left = i;
+    else return medianValuesScratch[rank];
+  }
+  return medianValuesScratch[left];
+}
+
+function medianFromPreparedValues(length) {
+  if (length === 0) throw new RangeError('median: 빈 표본');
+  const middle = Math.floor(length / 2);
+  const upper = selectMedianKth(length, middle);
+  return length % 2 === 0
+    ? (selectMedianKth(length, middle - 1) + upper) / 2
+    : upper;
+}
+
+function median(values, length = values.length) {
+  if (length === 0) throw new RangeError('median: 빈 표본');
+  ensureMedianScratch(length);
+  let stableOrder = false;
+  for (let i = 0; i < length; i += 1) {
+    const value = values[i];
+    medianValuesScratch[i] = value;
+    if (Number.isNaN(value) || (value === 0 && 1 / value === -Infinity)) stableOrder = true;
+  }
+  medianUseStableOrder = stableOrder;
+  if (stableOrder) {
+    for (let i = 0; i < length; i += 1) medianOrderScratch[i] = i;
+  }
+  return medianFromPreparedValues(length);
+}
+
+function mad(values, length, center) {
+  ensureMedianScratch(length);
+  medianUseStableOrder = false;
+  for (let i = 0; i < length; i += 1) {
+    medianValuesScratch[i] = Math.abs(values[i] - center);
+  }
+  return medianFromPreparedValues(length);
 }
 
 function assertOptionalAlpha(luma) {
@@ -277,6 +486,8 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   assertHomography(H);
   validateDisc(disc);
   const config = samplingConfig(options);
+  const cached = cachedSuccessfulDiscSample(luma, H, disc, config);
+  if (cached !== undefined) return ok(cached);
 
   const normalizedH = normalizeHomographyScale(H);
   if (normalizedH === null) {
@@ -341,7 +552,8 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   const y0 = Math.max(0, Math.floor(minY) - 1);
   const y1 = Math.min(luma.height - 1, Math.ceil(maxY) + 1);
   const radiusSquared = disc.radius * disc.radius;
-  const values = [];
+  const values = ensureDiscValuesScratch((x1 - x0 + 1) * (y1 - y0 + 1));
+  let valueCount = 0;
   let geometricCount = 0;
   let opaqueCount = 0;
 
@@ -363,7 +575,8 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
         throw new RangeError('LumaField.data 는 0..1 유한 상대휘도여야 한다');
       }
       opaqueCount += 1;
-      values.push(value);
+      values[valueCount] = value;
+      valueCount += 1;
     }
   }
 
@@ -397,17 +610,18 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
     });
   }
 
-  const sampleMedian = median(values);
-  const deviations = values.map((value) => Math.abs(value - sampleMedian));
-  return ok({
+  const sampleMedian = median(values, valueCount);
+  const result = ok({
     median: sampleMedian,
-    mad: median(deviations),
+    mad: mad(values, valueCount, sampleMedian),
     count: opaqueCount,
     opaqueCount,
     opaqueRatio,
     projectedMinorDiameter: minorDiameter,
     geometricCount,
   });
+  cacheSuccessfulDiscSample(luma, H, disc, config, result);
+  return result;
 }
 
 /**

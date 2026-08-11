@@ -42,9 +42,27 @@ export const BULLSEYE_LIGHT = Object.freeze({ r: 255, g: 255, b: 255 });
  * @param {number} v8 0..255 정수
  * @returns {number} 0..1
  */
+/**
+ * 0..255 정수 입력에 대한 사전 계산 표.
+ *
+ * 정의역이 **정확히 256개**라 표가 실수 계산을 완전히 대체한다 — 근사가 아니라 같은 식을
+ * 미리 돌려 담은 것이므로 **비트 단위로 동일**하다.
+ *
+ * 왜 필요한가: 복호는 픽셀마다 이 함수를 3번 부른다. 1440×1920 프레임이면 약 830만 번의
+ * `Math.pow` 다. 실측 프로파일에서 이 함수 하나가 self 7.5% 를 먹었다(2026-08-11).
+ */
+const SRGB_TO_LINEAR = new Float64Array(256);
+for (let v = 0; v < 256; v += 1) {
+  const c = v / 255;
+  SRGB_TO_LINEAR[v] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
 export function srgbChannelToLinear(v8) {
+  // 표는 0..255 **정수**에만 쓴다. 렌더 경로(sceneY 의 게인 보정 등)가 소수를 넘길 수
+  // 있는데, 그때 반올림해서 표를 쓰면 값이 조용히 달라진다.
+  if (Number.isInteger(v8) && v8 >= 0 && v8 <= 255) return SRGB_TO_LINEAR[v8];
   const c = v8 / 255;
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
 }
 
 /**

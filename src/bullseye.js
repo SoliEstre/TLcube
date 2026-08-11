@@ -31,6 +31,11 @@ export const BAND_COUNT = RING_PAIRS * 2;
 /** 불스아이 점유 반경(hexDistance 상한). 반경 2링 = 19셀. */
 export const OCCUPIED_RADIUS = 2;
 
+// 정규화된 기본 셀 크기(1)의 기하 계산은 순수·불변이므로 재사용한다.
+// 공개 API는 새 배열을 계속 반환하며, profileAt 내부만 이 읽기 전용 캐시를 쓴다.
+let canonicalMaxSafeRadius;
+let canonicalProfileBandRadii;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 기하 헬퍼 (모듈 내부 전용)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +151,12 @@ function ring3DiscClearance(cellSize) {
  */
 export function maxSafeRadius(cellSize) {
   const size = cellSize === undefined ? 1 : normalizeLayout({ size: cellSize }).size;
+  if (size === 1) {
+    if (canonicalMaxSafeRadius === undefined) {
+      canonicalMaxSafeRadius = Math.min(footprintBoundaryClearance(size), ring3DiscClearance(size));
+    }
+    return canonicalMaxSafeRadius;
+  }
   return Math.min(footprintBoundaryClearance(size), ring3DiscClearance(size));
 }
 
@@ -178,6 +189,16 @@ export function bandRadii(cellSize) {
   return radii;
 }
 
+function profileBandRadii(cellSize) {
+  if (cellSize === undefined || cellSize === 1) {
+    if (canonicalProfileBandRadii === undefined) {
+      canonicalProfileBandRadii = bandRadii(1);
+    }
+    return canonicalProfileBandRadii;
+  }
+  return bandRadii(cellSize);
+}
+
 /**
  * distFromCenter 위치의 불스아이 프로파일. 반환값은 상대 순위가 아니라
  * 그 자체로 최대 대비 휘도다(0.0 = 암, 1.0 = 명) — 불스아이는 파인더이지
@@ -195,7 +216,7 @@ export function profileAt(distFromCenter, cellSize) {
   if (!Number.isFinite(distFromCenter) || distFromCenter < 0) {
     throw new RangeError(`distFromCenter 는 0 이상의 유한수여야 한다: ${distFromCenter}`);
   }
-  const radii = bandRadii(cellSize);
+  const radii = profileBandRadii(cellSize);
   const rMax = radii[radii.length - 1];
   if (distFromCenter > rMax) {
     throw new RangeError(

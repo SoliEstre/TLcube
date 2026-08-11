@@ -183,8 +183,15 @@ export function moduleSampleDisc(face, i, j, layout, options) {
   const clamped = radius > inradius;
   if (clamped) radius = inradius;
 
-  const c = moduleCenter(face, i, j, norm);
-  return { x: c.x, y: c.y, radius, clamped };
+  assertModuleIndex(i, 'i');
+  assertModuleIndex(j, 'j');
+  const { ei, ej } = FACE_BASIS[face];
+  // moduleCenter → facePoint의 산술 순서를 그대로 펼쳐 재정규화·중복 검증을 없앤다.
+  const a = i + 0.5;
+  const b = j + 0.5;
+  const x = norm.originX + (a * ei.x + b * ej.x) * norm.size + 0;
+  const y = norm.originY + (a * ei.y + b * ej.y) * norm.size + 0;
+  return { x, y, radius, clamped };
 }
 
 /**

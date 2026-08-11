@@ -113,74 +113,352 @@ function squaredDistance(a, b) {
   return dx * dx + dy * dy;
 }
 
+/*
+ * 모든 score 경로가 이 통계를 아주 자주 부른다. 각 호출의 배열을 새로 정렬하지
+ * 않고 모듈 범위의 숫자/순번 버퍼에서 k번째 원소만 선택한다. 순번은 숫자가 같은
+ * 값(-0/+0 포함)을 원래 Array#sort((a, b) => a - b)의 stable 순서와 같게 만든다.
+ */
+let statsValuesScratch = new Float64Array(0);
+let statsOrderScratch = new Uint32Array(0);
+let statsUseStableOrder = false;
+const statsRankScratch = new Int32Array(4);
+const statsRankValues = new Float64Array(4);
+const statsSelectLeft = new Int32Array(4);
+const statsSelectRight = new Int32Array(4);
+const statsSelectMasks = new Int32Array(4);
+
+function ensureStatsScratch(length) {
+  if (statsValuesScratch.length >= length) return;
+  statsValuesScratch = new Float64Array(length);
+  statsOrderScratch = new Uint32Array(length);
+}
+
+function swapStatsScratch(left, right) {
+  const value = statsValuesScratch[left];
+  statsValuesScratch[left] = statsValuesScratch[right];
+  statsValuesScratch[right] = value;
+  const order = statsOrderScratch[left];
+  statsOrderScratch[left] = statsOrderScratch[right];
+  statsOrderScratch[right] = order;
+}
+
+function compareStatsScratch(left, right) {
+  const leftValue = statsValuesScratch[left];
+  const rightValue = statsValuesScratch[right];
+  if (leftValue < rightValue) return -1;
+  if (leftValue > rightValue) return 1;
+  return statsOrderScratch[left] - statsOrderScratch[right];
+}
+
+/**
+ * stable numeric-order k번째 선택. median-of-three pivot으로 편향된 입력도 피하고,
+ * 비교자 호출/전체 정렬/추가 배열을 만들지 않는다.
+ */
+function swapStatsValues(left, right) {
+  const value = statsValuesScratch[left];
+  statsValuesScratch[left] = statsValuesScratch[right];
+  statsValuesScratch[right] = value;
+}
+
+function numericStatsMedianOfThree(left, middle, right) {
+  const a = statsValuesScratch[left];
+  const b = statsValuesScratch[middle];
+  const c = statsValuesScratch[right];
+  if (a < b) {
+    if (b < c) return b;
+    return a < c ? c : a;
+  }
+  if (a < c) return a;
+  return b < c ? c : b;
+}
+
+function selectNumericStatsKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    const pivot = numericStatsMedianOfThree(left, middle, right);
+    let less = left;
+    let scan = left;
+    let greater = right;
+    while (scan <= greater) {
+      const value = statsValuesScratch[scan];
+      if (value < pivot) {
+        swapStatsValues(less, scan);
+        less += 1;
+        scan += 1;
+      } else if (value > pivot) {
+        swapStatsValues(scan, greater);
+        greater -= 1;
+      } else {
+        scan += 1;
+      }
+    }
+    if (rank < less) right = less - 1;
+    else if (rank > greater) left = greater + 1;
+    else return statsValuesScratch[rank];
+  }
+  return statsValuesScratch[left];
+}
+
+function selectNumericStatsRanks(length, rankCount) {
+  let stackLength = 1;
+  statsSelectLeft[0] = 0;
+  statsSelectRight[0] = length - 1;
+  statsSelectMasks[0] = (1 << rankCount) - 1;
+
+  while (stackLength > 0) {
+    stackLength -= 1;
+    const left = statsSelectLeft[stackLength];
+    const right = statsSelectRight[stackLength];
+    const mask = statsSelectMasks[stackLength];
+    if (left === right) {
+      for (let rankIndex = 0; rankIndex < rankCount; rankIndex += 1) {
+        if (mask & (1 << rankIndex)) statsRankValues[rankIndex] = statsValuesScratch[left];
+      }
+      continue;
+    }
+
+    const middle = left + Math.floor((right - left) / 2);
+    const pivot = numericStatsMedianOfThree(left, middle, right);
+    let less = left;
+    let scan = left;
+    let greater = right;
+    while (scan <= greater) {
+      const value = statsValuesScratch[scan];
+      if (value < pivot) {
+        swapStatsValues(less, scan);
+        less += 1;
+        scan += 1;
+      } else if (value > pivot) {
+        swapStatsValues(scan, greater);
+        greater -= 1;
+      } else {
+        scan += 1;
+      }
+    }
+
+    let lowerMask = 0;
+    let equalMask = 0;
+    let upperMask = 0;
+    for (let rankIndex = 0; rankIndex < rankCount; rankIndex += 1) {
+      const bit = 1 << rankIndex;
+      if (!(mask & bit)) continue;
+      const rank = statsRankScratch[rankIndex];
+      if (rank < less) lowerMask |= bit;
+      else if (rank > greater) upperMask |= bit;
+      else equalMask |= bit;
+    }
+    for (let rankIndex = 0; rankIndex < rankCount; rankIndex += 1) {
+      if (equalMask & (1 << rankIndex)) statsRankValues[rankIndex] = statsValuesScratch[less];
+    }
+    if (lowerMask !== 0) {
+      statsSelectLeft[stackLength] = left;
+      statsSelectRight[stackLength] = less - 1;
+      statsSelectMasks[stackLength] = lowerMask;
+      stackLength += 1;
+    }
+    if (upperMask !== 0) {
+      statsSelectLeft[stackLength] = greater + 1;
+      statsSelectRight[stackLength] = right;
+      statsSelectMasks[stackLength] = upperMask;
+      stackLength += 1;
+    }
+  }
+}
+function selectStableStatsKth(length, rank) {
+  let left = 0;
+  let right = length - 1;
+
+  while (left < right) {
+    const middle = left + Math.floor((right - left) / 2);
+    if (compareStatsScratch(left, middle) > 0) swapStatsScratch(left, middle);
+    if (compareStatsScratch(left, right) > 0) swapStatsScratch(left, right);
+    if (compareStatsScratch(middle, right) > 0) swapStatsScratch(middle, right);
+
+    const pivotValue = statsValuesScratch[middle];
+    const pivotOrder = statsOrderScratch[middle];
+    let i = left;
+    let j = right;
+    while (i <= j) {
+      while (
+        statsValuesScratch[i] < pivotValue
+        || (!(statsValuesScratch[i] > pivotValue) && statsOrderScratch[i] < pivotOrder)
+      ) i += 1;
+      while (
+        statsValuesScratch[j] > pivotValue
+        || (!(statsValuesScratch[j] < pivotValue) && statsOrderScratch[j] > pivotOrder)
+      ) j -= 1;
+      if (i <= j) {
+        swapStatsScratch(i, j);
+        i += 1;
+        j -= 1;
+      }
+    }
+
+    if (rank <= j) right = j;
+    else if (rank >= i) left = i;
+    else return statsValuesScratch[rank];
+  }
+  return statsValuesScratch[left];
+}
+
+function selectStatsKth(length, rank) {
+  return statsUseStableOrder
+    ? selectStableStatsKth(length, rank)
+    : selectNumericStatsKth(length, rank);
+}
+
+function prepareStatsValues(values, length = values.length) {
+  ensureStatsScratch(length);
+  let stableOrder = false;
+  for (let i = 0; i < length; i += 1) {
+    const value = values[i];
+    statsValuesScratch[i] = value;
+    if (Number.isNaN(value) || (value === 0 && 1 / value === -Infinity)) stableOrder = true;
+  }
+  statsUseStableOrder = stableOrder;
+  if (stableOrder) {
+    for (let i = 0; i < length; i += 1) statsOrderScratch[i] = i;
+  }
+}
+
+function medianFromPreparedStats(length) {
+  if (length === 0) return Number.NaN;
+  const middle = Math.floor(length / 2);
+  const upper = selectStatsKth(length, middle);
+  return length % 2 === 1
+    ? upper
+    : (selectStatsKth(length, middle - 1) + upper) / 2;
+}
+
 /** verify.js와 같은 숫자 오름차순/짝수 중앙 두 값 평균 규약. */
 function median(values) {
   if (values.length === 0) return Number.NaN;
-  const sorted = Array.from(values).sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1
-    ? sorted[middle]
-    : (sorted[middle - 1] + sorted[middle]) / 2;
+  prepareStatsValues(values);
+  return medianFromPreparedStats(values.length);
 }
 
 function mad(values, center = median(values)) {
   if (!Number.isFinite(center)) return Number.NaN;
-  return median(values.map((value) => Math.abs(value - center)));
+  ensureStatsScratch(values.length);
+  statsUseStableOrder = false;
+  for (let i = 0; i < values.length; i += 1) {
+    statsValuesScratch[i] = Math.abs(values[i] - center);
+  }
+  return medianFromPreparedStats(values.length);
 }
 
-function percentileFromSorted(sorted, quantile) {
-  if (sorted.length === 0) return Number.NaN;
-  const index = quantile * (sorted.length - 1);
+function percentileFromPreparedStats(length, quantile) {
+  if (length === 0) return Number.NaN;
+  const index = quantile * (length - 1);
   const lower = Math.floor(index);
   const upper = Math.ceil(index);
-  if (lower === upper) return sorted[lower];
+  if (lower === upper) return selectStatsKth(length, lower);
   const fraction = index - lower;
-  return sorted[lower] * (1 - fraction) + sorted[upper] * fraction;
+  const lowerValue = selectStatsKth(length, lower);
+  const upperValue = selectStatsKth(length, upper);
+  return lowerValue * (1 - fraction) + upperValue * fraction;
 }
 
-function robustStatsFromValues(values) {
-  const finite = [];
-  for (let i = 0; i < values.length; i += 1) {
-    const value = values[i];
-    if (Number.isFinite(value)) finite.push(value);
-  }
-  finite.sort((a, b) => a - b);
-  if (finite.length === 0) {
+function robustStatsFromPreparedFinite(finiteCount) {
+  if (finiteCount === 0) {
     return { low: Number.NaN, high: Number.NaN, span: Number.NaN, finiteCount: 0 };
   }
 
-  const coreLow = percentileFromSorted(finite, 0.05);
-  const coreHigh = percentileFromSorted(finite, 0.95);
+  let coreLow;
+  let coreHigh;
+  if (statsUseStableOrder) {
+    coreLow = percentileFromPreparedStats(finiteCount, 0.05);
+    coreHigh = percentileFromPreparedStats(finiteCount, 0.95);
+  } else {
+    const lowIndex = 0.05 * (finiteCount - 1);
+    const highIndex = 0.95 * (finiteCount - 1);
+    const lowLower = Math.floor(lowIndex);
+    const lowUpper = Math.ceil(lowIndex);
+    const highLower = Math.floor(highIndex);
+    const highUpper = Math.ceil(highIndex);
+    statsRankScratch[0] = lowLower;
+    statsRankScratch[1] = lowUpper;
+    statsRankScratch[2] = highLower;
+    statsRankScratch[3] = highUpper;
+    selectNumericStatsRanks(finiteCount, 4);
+    const lowFraction = lowIndex - lowLower;
+    const highFraction = highIndex - highLower;
+    coreLow = lowLower === lowUpper
+      ? statsRankValues[0]
+      : statsRankValues[0] * (1 - lowFraction) + statsRankValues[1] * lowFraction;
+    coreHigh = highLower === highUpper
+      ? statsRankValues[2]
+      : statsRankValues[2] * (1 - highFraction) + statsRankValues[3] * highFraction;
+  }
   const coreSpan = coreHigh - coreLow;
-  if (coreSpan > 1e-6 || finite.length <= ROBUST_TAIL_TRIM_SAMPLES * 2) {
+  if (coreSpan > 1e-6 || finiteCount <= ROBUST_TAIL_TRIM_SAMPLES * 2) {
     return {
       low: coreLow,
       high: coreHigh,
       span: coreSpan,
-      finiteCount: finite.length,
+      finiteCount,
       spanSource: 'p05-p95',
     };
   }
 
-  /*
-   * 큰 배경 패딩 안에서 코드가 전체 픽셀의 5%보다 작으면 p05와 p95가 둘 다
-   * 배경에 놓인다. 이 경우에만 고정 개수 꼬리를 버린 범위를 사용한다. 비율
-   * 분위수를 더 넓히는 방식과 달리 전경 점유율이 작아져도 불스아이의 최대
-   * 대비를 잃지 않고, 고립된 극값 32개는 span에 들어오지 않는다.
-   */
   const tail = Math.min(
     ROBUST_TAIL_TRIM_SAMPLES,
-    Math.floor((finite.length - 1) / 2),
+    Math.floor((finiteCount - 1) / 2),
   );
-  const low = finite[tail];
-  const high = finite[finite.length - 1 - tail];
+  const low = selectStatsKth(finiteCount, tail);
+  const high = selectStatsKth(finiteCount, finiteCount - 1 - tail);
   return {
     low,
     high,
     span: high - low,
-    finiteCount: finite.length,
+    finiteCount,
     spanSource: 'fixed-tail-fallback',
   };
+}
+function robustStatsFromValues(values) {
+  ensureStatsScratch(values.length);
+  let finiteCount = 0;
+  let stableOrder = false;
+  for (let i = 0; i < values.length; i += 1) {
+    const value = values[i];
+    if (!Number.isFinite(value)) continue;
+    statsValuesScratch[finiteCount] = value;
+    if (value === 0 && 1 / value === -Infinity) stableOrder = true;
+    finiteCount += 1;
+  }
+  statsUseStableOrder = stableOrder;
+  if (stableOrder) {
+    for (let i = 0; i < finiteCount; i += 1) statsOrderScratch[i] = i;
+  }
+  return robustStatsFromPreparedFinite(finiteCount);
+}
+
+/** 배열 그룹을 바로 채워 candidate-local 통계의 flat() 할당을 없앤다. */
+function robustStatsFromGroups(groups) {
+  let capacity = 0;
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    capacity += groups[groupIndex].length;
+  }
+  ensureStatsScratch(capacity);
+  let finiteCount = 0;
+  let stableOrder = false;
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    const values = groups[groupIndex];
+    for (let i = 0; i < values.length; i += 1) {
+      const value = values[i];
+      if (!Number.isFinite(value)) continue;
+      statsValuesScratch[finiteCount] = value;
+      if (value === 0 && 1 / value === -Infinity) stableOrder = true;
+      finiteCount += 1;
+    }
+  }
+  statsUseStableOrder = stableOrder;
+  if (stableOrder) {
+    for (let i = 0; i < finiteCount; i += 1) statsOrderScratch[i] = i;
+  }
+  return robustStatsFromPreparedFinite(finiteCount);
 }
 
 function robustStats(luma) {
@@ -219,6 +497,23 @@ function makePyramid(luma, maxLevels) {
       ? null
       : new Uint8Array(width * height);
 
+    if (alpha === null && current.width % 2 === 0 && current.height % 2 === 0) {
+      const sourceWidth = current.width;
+      const sourceData = current.data;
+      for (let y = 0; y < height; y += 1) {
+        const sourceRow = y * 2 * sourceWidth;
+        const targetRow = y * width;
+        for (let x = 0; x < width; x += 1) {
+          const sourceIndex = sourceRow + x * 2;
+          // 기존 dy→dx 순회의 a+b+c+d 합산 순서를 그대로 유지한다.
+          const sum = sourceData[sourceIndex]
+            + sourceData[sourceIndex + 1]
+            + sourceData[sourceIndex + sourceWidth]
+            + sourceData[sourceIndex + sourceWidth + 1];
+          data[targetRow + x] = sum / 4;
+        }
+      }
+    } else {
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         let sum = 0;
@@ -241,7 +536,7 @@ function makePyramid(luma, maxLevels) {
         if (alpha !== null) alpha[targetIndex] = Math.round(alphaSum / count);
       }
     }
-
+    }
     current = {
       width,
       height,
@@ -352,20 +647,24 @@ function voteScale(level, gradients, outerRadius) {
 
 function localVoteMaxima(level, votes, outerRadius) {
   const maxima = [];
+  const width = level.width;
   for (let y = 2; y < level.height - 2; y += 1) {
-    for (let x = 2; x < level.width - 2; x += 1) {
-      const value = votes[y * level.width + x];
+    const rowStart = y * width;
+    for (let x = 2; x < width - 2; x += 1) {
+      const value = votes[rowStart + x];
       if (!(value > 0)) continue;
       let isMaximum = true;
+      let neighborIndex = (y - 2) * width + x;
       for (let dy = -2; dy <= 2 && isMaximum; dy += 1) {
         for (let dx = -2; dx <= 2; dx += 1) {
           if (dx === 0 && dy === 0) continue;
-          const other = votes[(y + dy) * level.width + x + dx];
+          const other = votes[neighborIndex + dx];
           if (other > value || (other === value && (dy < 0 || (dy === 0 && dx < 0)))) {
             isMaximum = false;
             break;
           }
         }
+        neighborIndex += width;
       }
       if (isMaximum) maxima.push({ x, y, outerRadius, vote: value });
     }
@@ -373,7 +672,6 @@ function localVoteMaxima(level, votes, outerRadius) {
   maxima.sort((a, b) => b.vote - a.vote || a.y - b.y || a.x - b.x);
   return maxima.slice(0, PROPOSALS_PER_SCALE);
 }
-
 function collectRawProposals(luma, options) {
   const maxLevels = options.maxPyramidLevels === undefined
     ? MAX_PYRAMID_LEVELS
@@ -713,7 +1011,7 @@ function scoreBullseyeCore(luma, H, options, stats) {
    * 후보 원판 안의 실제 표본만으로 정규화해야 주변 구조가 임계를 움직이지 않는다.
    * stats.span은 Sobel의 절대 하한과 진단에만 남긴다.
    */
-  const localStats = robustStatsFromValues(bandSamples.flat());
+  const localStats = robustStatsFromGroups(bandSamples);
   const robustSpan = localStats.span;
   const contrastPass = Number.isFinite(contrast)
     && Number.isFinite(robustSpan)
