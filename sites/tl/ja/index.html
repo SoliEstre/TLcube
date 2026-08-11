@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="ja" prefix="og: https://ogp.me/ns#">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TLcube — 輝度の順序でデータを載せる 2.5D ビジュアルコード</title>
+<meta name="description" content="六角形のセルを 3 つの菱形の面に分け、面どうしの相対輝度の順序にデータを載せるオープンなビジュアルコード。仕様とリファレンス実装は Apache-2.0 で公開しています。">
+<link rel="canonical" href="https://tl.estre.so/ja/">
+<link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
+<link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
+<link rel="alternate" hreflang="ja" href="https://tl.estre.so/ja/">
+<link rel="alternate" hreflang="x-default" href="https://tl.estre.so/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TLcube">
+<meta property="og:title" content="TLcube — 輝度の順序でデータを載せる 2.5D ビジュアルコード">
+<meta property="og:description" content="絶対的な明るさではなく、3 面の順序にデータを載せます。順序さえ保たれれば値は生き残ります。">
+<meta property="og:url" content="https://tl.estre.so/ja/">
+<meta property="og:image" content="https://tl.estre.so/assets/type-Y.png">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:locale:alternate" content="ko_KR">
+<meta property="og:locale:alternate" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://tl.estre.so/#website",
+      "name": "TLcube",
+      "alternateName": "TrilLuminance (cube)",
+      "url": "https://tl.estre.so/",
+      "inLanguage": [
+        "ko",
+        "en",
+        "ja"
+      ]
+    },
+    {
+      "@type": "TechArticle",
+      "headline": "TLcube — 絶対輝度ではなく順序にデータを載せる 2.5D ビジュアルコード",
+      "description": "六角形のセルを 3 つの菱形の面に分け、その相対輝度の順序（3! = 6 通り）を base-6 シンボル 1 つとして使うオープンなビジュアルコード。単調なトーン変換に対して不変です。",
+      "url": "https://tl.estre.so/ja/",
+      "inLanguage": "ja",
+      "isPartOf": {
+        "@id": "https://tl.estre.so/#website"
+      },
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "author": {
+        "@type": "Organization",
+        "name": "SoliEstre"
+      }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "TLcube reference implementation",
+      "codeRepository": "https://github.com/SoliEstre/TLcube",
+      "programmingLanguage": "JavaScript",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ]
+}
+</script>
+<link rel="icon" href="../../_shared/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../_shared/site.css">
+</head>
+<body data-site="hub">
+<div class="wrap">
+
+  <header class="bar">
+    <a class="brand" href="https://tl.estre.so/ja/">TL<span class="mark">cube</span></a>
+    <nav>
+      <a href="#what">仕組み</a>
+      <a href="#types">タイプ</a>
+      <a href="#scanner-status">スキャナ状況</a>
+      <a href="#spec">仕様</a>
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">ジェネレータ</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">スキャナ</a>
+      <div class="lang-switch" role="group" aria-label="言語">
+        <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
+        <a href="https://tl.estre.so/en/" hreflang="en" data-lang-pick="en">English</a>
+        <a href="https://tl.estre.so/ja/" hreflang="ja" aria-current="true" data-lang-pick="ja">日本語</a>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="テーマ">
+        <button type="button" data-theme-choice="auto">自動</button>
+        <button type="button" data-theme-choice="light">ライト</button>
+        <button type="button" data-theme-choice="dark">ダーク</button>
+      </div>
+    </nav>
+  </header>
+
+  <section id="hero">
+    <h1>絶対的な明るさではなく<br><strong>順序</strong>にデータを載せます</h1>
+    <p class="lead">六角形のセル 1 つを 3 つの菱形の面に分け、面どうしの<strong>相対輝度の順序</strong>（3! = 6 通り）をシンボル 1 つとして使います。絶対値ではなく順序なので、印刷のトーンカーブや照明が揺らいでも順序さえ保たれれば値は生き残り — そう描くとアイソメトリックな立方体になります。</p>
+    <div class="cta">
+      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">コードを作ってみる</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+  </section>
+
+  <section id="types">
+    <h2>3 つのタイプ</h2>
+    <p class="dim">同じデータ契約を共有し、シルエットだけが異なります。以下のコードにはすべて <code>https://tl.estre.so</code> が入っています。</p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card">
+        <img src="../assets/type-Y.png" alt="Type Y — 単一キューブ">
+        <h3>Type Y — 単一キューブ</h3>
+        <p class="dim">3 面がそれぞれ n×n の格子。ひと塊なので看板やグッズに向きます。</p>
+        <div class="meta">n = 13 / 21 / 25 · 正味ペイロード 31 / 98 / 141 B</div>
+      </div>
+      <div class="card">
+        <img src="../assets/type-O.png" alt="Type O — 六角フィールド">
+        <h3>Type O — 六角フィールド</h3>
+        <p class="dim">最も基本の形。中央のファインダを中心に菱形セルが広がります。</p>
+        <div class="meta">k = 6 / 8 / 10 · 正味ペイロード 18 / 39 / 65 B</div>
+      </div>
+      <div class="card">
+        <img src="../assets/type-A.png" alt="Type A — 三角シルエット">
+        <h3>Type A — 三角シルエット</h3>
+        <p class="dim">六角のコアにコーナーパッチを足して正三角形になります。</p>
+        <div class="meta">k = 6 / 8 / 10 · 正味ペイロード 31 / 62 / 101 B</div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:16px">正味ペイロードは ECC-M 基準です。3 タイプとも<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。</p>
+  </section>
+
+  <section id="what">
+    <h2>仕組み</h2>
+    <div class="grid">
+      <div class="card"><h3>1. セル = 3 つの菱形</h3><p class="dim">rhombille タイリングで六角セルを T・L・R の 3 面に分けます。</p></div>
+      <div class="card"><h3>2. 順序 = シンボル</h3><p class="dim">3 面の輝度に順位をつけると 3! = 6 通り — base-6 の 1 桁です。</p></div>
+      <div class="card"><h3>3. 3 桁 = 1 シンボル</h3><p class="dim">素体 GF(211) 上の Reed–Solomon で誤りを訂正します。</p></div>
+    </div>
+    <h2 style="margin-top:32px">なぜこの作りなのか</h2>
+    <p class="lead"><strong>単調変換に対して不変です。</strong> 全体的な照明の変化・ガンマ・プリンタのトーンマッピングは単調なので、順序を入れ替えられません。順序が保たれれば値は生きます。</p>
+    <p class="lead"><strong>レンダラが自由です。</strong> データ契約は「面どうしの順序 + 最小分離幅」だけ。その中で色・質感・面のグラデーション・アニメーションがすべて開いています。この自由度こそがこのフォーマットの核心です。</p>
+    <p class="lead"><strong>代わりに密度は捨てました。</strong> 菱形セルは正方モジュールより面積効率で不利です。このフォーマットは密度で競いません。QR を置き換えるのではなく、隣にもう一席つくるものです。</p>
+  </section>
+
+  <section id="scanner-status">
+    <h2>スキャナ開発状況</h2>
+    <p class="lead">デコーダは開発中です。以下は<strong>実機で撮影した写真</strong>で測った現在の状態で、合成テストではなく実際のスマートフォンのカメラの結果です。</p>
+    <div class="table-scroll" style="margin-top:20px">
+      <table>
+        <thead>
+          <tr><th>タイプ</th><th>実写真の復号</th><th>復号時間</th><th>リアルタイム</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">3 / 3</span></td><td>約 0.9 秒</td><td><span class="badge ok">実用的</span></td></tr>
+          <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">3 / 3</span></td><td>約 2.2 秒</td><td><span class="badge warn">遅い</span></td></tr>
+          <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge warn">2 / 3</span></td><td>約 2.1 秒</td><td><span class="badge warn">遅い</span></td></tr>
+          <tr><td><strong>中央 QR 変種</strong>（3 タイプ共通）</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">遅い</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="dim" style="margin-top:16px">復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りに数秒かかるとその間のフレームは捨てられ、精度とは無関係に<strong>「たまにしか読めない」</strong>感覚になります。いまは速度が最優先課題です。</p>
+    <p class="dim">撮影条件も大きく効きます。実測では<strong>セルあたり 9 ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 7.6px 失敗 / 広角 9.1px 成功）。スキャナにレンズ選択を入れているのはそのためです。</p>
+    <p class="dim"><strong>中央 QR 変種</strong>は QR ブロックが中央ファインダの位置を代わりに占める形です。入口がなくしばらく読めませんでしたが、QR 自身のファインダを基準にする経路を入れて読めるようになりました。</p>
+    <p class="dim" style="margin-top:16px"><small>測定 2026-08-11 · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 9 枚 · 短辺 1440px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。</small></p>
+  </section>
+
+  <section id="spec">
+    <h2>仕様と実装</h2>
+    <p class="lead">フォーマット仕様とリファレンス実装は <strong>Apache License 2.0</strong> で公開しています。バニラ JavaScript、ビルドツールチェーンなし、ランタイム依存 0 — 単一の HTML ファイルで動きます。</p>
+    <p class="lead"><strong>デコーダだけの実装でも適合実装</strong>とみなします。普及は読む側から始まるからです。</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">仕様を読む</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">リファレンス実装</a>
+    </div>
+    <div class="table-scroll" style="margin-top:24px">
+      <table>
+        <thead><tr><th>サイト</th><th>役割</th><th>状態</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>ジェネレータ</td><td><span class="badge ok">稼働中</span></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>スキャナ</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge warn">開発中 — 状況 ›</span></a></td></tr>
+          <tr><td>tl.estre.so</td><td>紹介ハブ</td><td><span class="badge ok">ここ</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">ジェネレータ</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">スキャナ</a>
+      <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+    <div>QR Code is a registered trademark of DENSO WAVE INCORPORATED.</div>
+    <small class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume</small>
+  </footer>
+
+</div>
+<script src="../../_shared/site.js"></script>
+<script>
+/* 언어 자동 선택 — **첫 방문에만** 한다.
+   매번 브라우저 언어로 튕기면 사용자가 고른 언어로 돌아올 수 없다. 그래서 링크를
+   누른 순간 선택을 저장하고, 저장된 선택이 있으면 자동 이동을 하지 않는다.
+   크롤러는 hreflang 을 보므로 이 스크립트에 의존하지 않는다. */
+(function () {
+  var KEY = 'tlcube-lang';
+  var here = document.documentElement.lang;
+  try {
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-lang-pick]');
+      if (a) localStorage.setItem(KEY, a.getAttribute('data-lang-pick'));
+    });
+    if (localStorage.getItem(KEY)) return;
+    var want = (navigator.languages || [navigator.language || 'ko'])
+      .map(function (l) { return String(l).toLowerCase().split('-')[0]; })
+      .filter(function (l) { return l === 'ko' || l === 'en' || l === 'ja'; })[0];
+    if (!want || want === here) return;
+    localStorage.setItem(KEY, want);
+    location.replace(want === 'ko' ? '/' : '/' + want + '/');
+  } catch (err) { /* 저장소가 막혀 있으면 자동 선택을 포기한다 — 페이지는 그대로 쓴다. */ }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en" prefix="og: https://ogp.me/ns#">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TLcube — a 2.5D visual code that carries data in luminance rank</title>
+<meta name="description" content="An open visual code that splits a hexagonal cell into three rhombic faces and carries data in the relative luminance order of those faces. Spec and reference implementation are published under Apache-2.0.">
+<link rel="canonical" href="https://tl.estre.so/en/">
+<link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
+<link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
+<link rel="alternate" hreflang="ja" href="https://tl.estre.so/ja/">
+<link rel="alternate" hreflang="x-default" href="https://tl.estre.so/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TLcube">
+<meta property="og:title" content="TLcube — a 2.5D visual code that carries data in luminance rank">
+<meta property="og:description" content="Data rides on the order of three faces, not on absolute brightness. As long as the order survives, so does the value.">
+<meta property="og:url" content="https://tl.estre.so/en/">
+<meta property="og:image" content="https://tl.estre.so/assets/type-Y.png">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="ko_KR">
+<meta property="og:locale:alternate" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://tl.estre.so/#website",
+      "name": "TLcube",
+      "alternateName": "TrilLuminance (cube)",
+      "url": "https://tl.estre.so/",
+      "inLanguage": [
+        "ko",
+        "en",
+        "ja"
+      ]
+    },
+    {
+      "@type": "TechArticle",
+      "headline": "TLcube — a 2.5D visual code carrying data in rank, not absolute brightness",
+      "description": "An open visual code that splits a hexagonal cell into three rhombic faces and uses their relative luminance order (3! = 6) as one base-6 symbol. Invariant under monotonic tone transforms.",
+      "url": "https://tl.estre.so/en/",
+      "inLanguage": "en",
+      "isPartOf": {
+        "@id": "https://tl.estre.so/#website"
+      },
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "author": {
+        "@type": "Organization",
+        "name": "SoliEstre"
+      }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "TLcube reference implementation",
+      "codeRepository": "https://github.com/SoliEstre/TLcube",
+      "programmingLanguage": "JavaScript",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ]
+}
+</script>
+<link rel="icon" href="../../_shared/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../_shared/site.css">
+</head>
+<body data-site="hub">
+<div class="wrap">
+
+  <header class="bar">
+    <a class="brand" href="https://tl.estre.so/en/">TL<span class="mark">cube</span></a>
+    <nav>
+      <a href="#what">How it works</a>
+      <a href="#types">Types</a>
+      <a href="#scanner-status">Scanner status</a>
+      <a href="#spec">Spec</a>
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Generator</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">Scanner</a>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
+        <a href="https://tl.estre.so/en/" hreflang="en" aria-current="true" data-lang-pick="en">English</a>
+        <a href="https://tl.estre.so/ja/" hreflang="ja" data-lang-pick="ja">日本語</a>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="Theme">
+        <button type="button" data-theme-choice="auto">Auto</button>
+        <button type="button" data-theme-choice="light">Light</button>
+        <button type="button" data-theme-choice="dark">Dark</button>
+      </div>
+    </nav>
+  </header>
+
+  <section id="hero">
+    <h1>Data rides on <strong>order</strong>,<br>not on absolute brightness</h1>
+    <p class="lead">One hexagonal cell splits into three rhombic faces, and the <strong>relative luminance order</strong> of those faces (3! = 6) becomes a single symbol. Because it is order rather than absolute value, a print tone curve or shifting light cannot break it as long as the ordering holds — and drawn that way, it looks like an isometric cube.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Make a code</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+  </section>
+
+  <section id="types">
+    <h2>Three types</h2>
+    <p class="dim">They share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card">
+        <img src="../assets/type-Y.png" alt="Type Y — single cube">
+        <h3>Type Y — single cube</h3>
+        <p class="dim">Three n×n faces. A single solid mark, good for signage and merch.</p>
+        <div class="meta">n = 13 / 21 / 25 · net payload 31 / 98 / 141 B</div>
+      </div>
+      <div class="card">
+        <img src="../assets/type-O.png" alt="Type O — hex field">
+        <h3>Type O — hex field</h3>
+        <p class="dim">The base form. Rhombic cells tile outward from a central finder.</p>
+        <div class="meta">k = 6 / 8 / 10 · net payload 18 / 39 / 65 B</div>
+      </div>
+      <div class="card">
+        <img src="../assets/type-A.png" alt="Type A — triangular silhouette">
+        <h3>Type A — triangular silhouette</h3>
+        <p class="dim">A hexagonal core plus corner patches, forming an equilateral triangle.</p>
+        <div class="meta">k = 6 / 8 / 10 · net payload 31 / 62 / 101 B</div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:16px">Net payload is at ECC-M. All three types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.</p>
+  </section>
+
+  <section id="what">
+    <h2>How it works</h2>
+    <div class="grid">
+      <div class="card"><h3>1. Cell = three rhombi</h3><p class="dim">A rhombille tiling splits each hexagonal cell into T, L and R faces.</p></div>
+      <div class="card"><h3>2. Order = symbol</h3><p class="dim">Ranking the three luminances gives 3! = 6 outcomes — one base-6 digit.</p></div>
+      <div class="card"><h3>3. 3 digits = 1 symbol</h3><p class="dim">Reed–Solomon over the prime field GF(211) corrects errors.</p></div>
+    </div>
+    <h2 style="margin-top:32px">Why build it this way</h2>
+    <p class="lead"><strong>Invariant under monotonic transforms.</strong> Global lighting shifts, gamma, and printer tone mapping are monotonic — they cannot change an ordering. If the order survives, the value survives.</p>
+    <p class="lead"><strong>The renderer stays free.</strong> The data contract is only "the order between faces, plus a minimum separation". Inside that, colour, texture, per-face gradients and animation are all open. That freedom is the point of the format.</p>
+    <p class="lead"><strong>Density was the trade.</strong> Rhombic cells are less area-efficient than square modules. This format does not compete on density. It is not trying to replace QR — it is trying to sit next to it.</p>
+  </section>
+
+  <section id="scanner-status">
+    <h2>Scanner status</h2>
+    <p class="lead">The decoder is under development. The numbers below come from <strong>photos taken on real phones</strong> — not synthetic test renders.</p>
+    <div class="table-scroll" style="margin-top:20px">
+      <table>
+        <thead>
+          <tr><th>Type</th><th>Real photos decoded</th><th>Decode time</th><th>Live scanning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.9 s</td><td><span class="badge ok">usable</span></td></tr>
+          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~2.2 s</td><td><span class="badge warn">slow</span></td></tr>
+          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge warn">2 / 3</span></td><td>~2.1 s</td><td><span class="badge warn">slow</span></td></tr>
+          <tr><td><strong>Centre-QR variant</strong> (all three types)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">slow</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="dim" style="margin-top:16px">Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes several seconds the frames in between are dropped — and regardless of accuracy it feels like it <strong>“only reads once in a while”</strong>. Speed is the top priority right now.</p>
+    <p class="dim">Shooting conditions matter too. Measured, <strong>9 pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide 7.6 px failed / wide 9.1 px succeeded). That is why the scanner offers a lens picker.</p>
+    <p class="dim">In the <strong>centre-QR variant</strong> a QR block takes the place of the central finder. It was unreadable for a while because there was no entry point; a path that uses the QR’s own finder patterns as reference now handles it.</p>
+    <p class="dim" style="margin-top:16px"><small>Measured 2026-08-11 · sample of 9 photos across three phone sensors (ultra-wide, wide, telephoto) · short side 1440 px. The sample is small — read this as a <em>current state</em>, not a success rate.</small></p>
+  </section>
+
+  <section id="spec">
+    <h2>Spec and implementation</h2>
+    <p class="lead">The format spec and reference implementation are published under the <strong>Apache License 2.0</strong>. Vanilla JavaScript, no build toolchain, zero runtime dependencies — it runs as a single HTML file.</p>
+    <p class="lead"><strong>Implementing only the decoder counts as a conforming implementation.</strong> Adoption starts with the reading side.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">Read the spec</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">Reference implementation</a>
+    </div>
+    <div class="table-scroll" style="margin-top:24px">
+      <table>
+        <thead><tr><th>Site</th><th>Role</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>Generator</td><td><span class="badge ok">live</span></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>Scanner</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge warn">in development — status ›</span></a></td></tr>
+          <tr><td>tl.estre.so</td><td>Overview hub</td><td><span class="badge ok">you are here</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Generator</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">Scanner</a>
+      <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+    <div>QR Code is a registered trademark of DENSO WAVE INCORPORATED.</div>
+    <small class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume</small>
+  </footer>
+
+</div>
+<script src="../../_shared/site.js"></script>
+<script>
+/* 언어 자동 선택 — **첫 방문에만** 한다.
+   매번 브라우저 언어로 튕기면 사용자가 고른 언어로 돌아올 수 없다. 그래서 링크를
+   누른 순간 선택을 저장하고, 저장된 선택이 있으면 자동 이동을 하지 않는다.
+   크롤러는 hreflang 을 보므로 이 스크립트에 의존하지 않는다. */
+(function () {
+  var KEY = 'tlcube-lang';
+  var here = document.documentElement.lang;
+  try {
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-lang-pick]');
+      if (a) localStorage.setItem(KEY, a.getAttribute('data-lang-pick'));
+    });
+    if (localStorage.getItem(KEY)) return;
+    var want = (navigator.languages || [navigator.language || 'ko'])
+      .map(function (l) { return String(l).toLowerCase().split('-')[0]; })
+      .filter(function (l) { return l === 'ko' || l === 'en' || l === 'ja'; })[0];
+    if (!want || want === here) return;
+    localStorage.setItem(KEY, want);
+    location.replace(want === 'ko' ? '/' : '/' + want + '/');
+  } catch (err) { /* 저장소가 막혀 있으면 자동 선택을 포기한다 — 페이지는 그대로 쓴다. */ }
+})();
+</script>
+</body>
+</html>
