@@ -152,7 +152,11 @@
   }
 
   .scanner-top {
-    justify-content: flex-start;
+    /* 로고는 왼쪽, 언어 토글은 오른쪽. 사용자 지시로 언어를 우상단으로 옮겼다
+       (하단은 «사진에서 스캔» 이 주역이라 컨트롤이 몰리면 탭 표적이 붐빈다). */
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .brand-logo {
@@ -324,9 +328,10 @@
 
   .lang-switch {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 2px;
     padding: 2px;
-    margin-top: 10px;
     border: 1px solid rgb(255 255 255 / .22);
     border-radius: 999px;
     background: rgb(0 0 0 / .42);
@@ -700,6 +705,11 @@
   <div class="scanner-overlay">
     <header class="scanner-top">
       <a class="brand-logo" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n-attr="aria-label:brand.label" aria-label="TLcube 소개 홈페이지 (새 창)">TL<span>cube</span></a>
+      <div class="lang-switch" id="lang-switch" role="group" data-i18n-attr="aria-label:lang.label" aria-label="언어">
+        <button type="button" data-lang="ko">한국어</button>
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="ja">日本語</button>
+      </div>
     </header>
 
     <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">
@@ -719,11 +729,6 @@
       <button class="photo-button" id="choose-image" type="button" data-i18n="button.photo">사진에서 스캔</button>
       <!-- 렌즈가 2개 이상인 기기에서만 나타난다. 초광각이 잡히면 같은 거리에서 코드가
            훨씬 작게 찍혀 셀당 픽셀이 복호 하한 아래로 내려간다. -->
-      <div class="lang-switch" id="lang-switch" role="group" data-i18n-attr="aria-label:lang.label" aria-label="언어">
-        <button type="button" data-lang="ko">한국어</button>
-        <button type="button" data-lang="en">EN</button>
-        <button type="button" data-lang="ja">日本語</button>
-      </div>
       <select class="camera-picker" id="camera-picker" data-i18n-attr="aria-label:picker.label" aria-label="카메라 렌즈 선택" hidden></select>
       <input id="image-input" type="file" accept="image/*" data-i18n-attr="aria-label:input.label" aria-label="스캔할 사진 선택" hidden>
     </div>

@@ -139,8 +139,13 @@
   header {
     width: 100%; padding: 18px 24px 10px;
     display: flex; align-items: center; gap: 12px;
+    /* ⚠ 규칙이 바뀌었다. 예전엔 «우측 토글은 절대 줄바꿈하지 않는다» 였는데, 언어
+       토글이 4번째로 붙으면서 폰 폭에서 화면 밖으로 밀려났다(사용자 보고 2026-08-11).
+       이제 넘치면 다음 줄로 접는다 — 토글이 안 보이는 것보다 두 줄이 낫다. */
+    flex-wrap: wrap;
+    row-gap: 8px;
   }
-  /* 좁은 폭: 좌측 텍스트가 줄어들고(말줄임) 우측 토글들은 절대 줄바꿈·축소되지 않는다. */
+  /* 좁은 폭: 좌측 텍스트가 줄어들고(말줄임), 우측 토글들은 접히되 각각은 안 쪼개진다. */
   header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .04em; flex-shrink: 0; white-space: nowrap; }
   /* 제목 안의 브랜드 링크 — 색은 accent 를 유지하고 밑줄은 hover 에서만 준다.
      기본 링크색(파랑)이 들어오면 제목 대비가 무너진다. */
@@ -151,7 +156,12 @@
     min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   header .spacer { flex: 1; }
-  header .mode-switch, header .theme-toggle, header .site-nav { flex-shrink: 0; }
+  header .mode-switch, header .theme-toggle, header .site-nav, header .lang-switch { flex-shrink: 0; }
+  /* 부제는 좁은 폭에서 가장 먼저 양보한다 — 없어도 기능에 지장이 없는 유일한 요소다. */
+  @media (max-width: 640px) {
+    header .sub { display: none; }
+    header { padding: 14px 16px 8px; }
+  }
   .site-nav { display: flex; gap: 2px; }
   .site-nav a {
     padding: 4px 10px; border-radius: 8px; font-size: 12px;
@@ -377,7 +387,7 @@
     <button type="button" id="modeNormalBtn" class="active" data-i18n="g026">일반</button>
     <button type="button" id="modeAdvancedBtn" data-i18n="g027">고급</button>
   </div>
-  <div class="theme-toggle" id="langSwitch" role="group" aria-label="Language" style="margin-right:6px">
+  <div class="theme-toggle lang-switch" id="langSwitch" role="group" aria-label="Language">
     <button type="button" data-lang="ko">한국어</button>
     <button type="button" data-lang="en">EN</button>
     <button type="button" data-lang="ja">日本語</button>
@@ -2619,7 +2629,7 @@ const GENERATOR_STRINGS = {
   },
 };
 
-const GENERATOR_BUILD = '2026-08-11.3';
+const GENERATOR_BUILD = '2026-08-11.4';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 
