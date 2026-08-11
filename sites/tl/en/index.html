@@ -71,6 +71,7 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/en/">TL<span class="mark">cube</span></a>
     <nav>
+      <a href="#why-now">Why now</a>
       <a href="#what">How it works</a>
       <a href="#types">Types</a>
       <a href="#scanner-status">Scanner status</a>
@@ -91,17 +92,30 @@
   </header>
 
   <section id="hero">
-    <h1>Data rides on <strong>order</strong>,<br>not on absolute brightness</h1>
-    <p class="lead">One hexagonal cell splits into three rhombic faces, and the <strong>relative luminance order</strong> of those faces (3! = 6) becomes a single symbol. Because it is order rather than absolute value, a print tone curve or shifting light cannot break it as long as the ordering holds — and drawn that way, it looks like an isometric cube.</p>
+    <h1>QR reads well.<br>It has just never been <strong>pretty</strong></h1>
+    <p class="lead">Posters, packaging, business cards — QR is everywhere, and dropping a black-and-white square onto a design you spent weeks on has always stung. But QR looks the way it does for a reason: it is what you build when a <strong>1994 camera and 1994 silicon</strong> have to read it at all.</p>
+    <p class="lead">Those constraints have largely lifted. Phone cameras and compute have room to spare now. So instead of chasing recognition alone, we spent that headroom on <strong>being worth looking at</strong>. This is not a replacement for QR — it is <strong>a seat next to it</strong>.</p>
     <div class="cta">
       <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Make a code</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
     </div>
   </section>
 
+
+  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
+       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
+       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
+       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
+  <section id="why-now">
+    <h2>Why now</h2>
+    <p class="lead"><strong>QR was the right answer for its moment.</strong> Two values, square modules, big finder patterns — every one of those choices existed so a weak camera could still read it. Under those constraints, giving up on looks was rational.</p>
+    <p class="lead"><strong>That premise changed.</strong> Phone cameras today are nothing like those, and real-time video processing runs inside a browser. So the headroom could go into density — or it could go into <strong>how it looks</strong>. That is why this exists.</p>
+    <p class="lead"><strong>Density was the trade.</strong> Rhombic cells are less area-efficient than square modules. This format does not compete on density. If you need to carry a lot, QR is the right tool.</p>
+  </section>
+
   <section id="types">
     <h2>Three types</h2>
-    <p class="dim">They share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
+    <p class="dim">Pick by where it will sit. All three share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="../assets/type-Y.png" alt="Type Y — single cube">
@@ -132,10 +146,10 @@
       <div class="card"><h3>2. Order = symbol</h3><p class="dim">Ranking the three luminances gives 3! = 6 outcomes — one base-6 digit.</p></div>
       <div class="card"><h3>3. 3 digits = 1 symbol</h3><p class="dim">Reed–Solomon over the prime field GF(211) corrects errors.</p></div>
     </div>
-    <h2 style="margin-top:32px">Why build it this way</h2>
+    <h2 style="margin-top:32px">What this frees up</h2>
     <p class="lead"><strong>Invariant under monotonic transforms.</strong> Global lighting shifts, gamma, and printer tone mapping are monotonic — they cannot change an ordering. If the order survives, the value survives.</p>
     <p class="lead"><strong>The renderer stays free.</strong> The data contract is only "the order between faces, plus a minimum separation". Inside that, colour, texture, per-face gradients and animation are all open. That freedom is the point of the format.</p>
-    <p class="lead"><strong>Density was the trade.</strong> Rhombic cells are less area-efficient than square modules. This format does not compete on density. It is not trying to replace QR — it is trying to sit next to it.</p>
+    <p class="lead"><strong>It does not make anything pretty on its own.</strong> What opens up is the contract, not the outcome. What you draw inside it is still your work.</p>
   </section>
 
   <section id="scanner-status">

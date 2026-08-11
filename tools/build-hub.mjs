@@ -143,6 +143,7 @@ ${jsonLd(lang, t)}
   <header class="bar">
     <a class="brand" href="${ORIGIN}/${lang.dir}">TL<span class="mark">cube</span></a>
     <nav>
+      <a href="#why-now">${t.navWhyNow}</a>
       <a href="#what">${t.navWhat}</a>
       <a href="#types">${t.navTypes}</a>
       <a href="#scanner-status">${t.navStatus}</a>
@@ -161,10 +162,23 @@ ${jsonLd(lang, t)}
   <section id="hero">
     <h1>${t.heroTitle}</h1>
     <p class="lead">${t.heroLead}</p>
+    <p class="lead">${t.heroLead2}</p>
     <div class="cta">
       <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">${t.ctaMake}</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
     </div>
+  </section>
+
+
+  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
+       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
+       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
+       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
+  <section id="why-now">
+    <h2>${t.whyNowTitle}</h2>
+    <p class="lead">${t.whyNow1}</p>
+    <p class="lead">${t.whyNow2}</p>
+    <p class="lead">${t.whyNow3}</p>
   </section>
 
   <section id="types">

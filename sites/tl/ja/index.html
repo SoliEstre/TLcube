@@ -71,6 +71,7 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/ja/">TL<span class="mark">cube</span></a>
     <nav>
+      <a href="#why-now">なぜ今</a>
       <a href="#what">仕組み</a>
       <a href="#types">タイプ</a>
       <a href="#scanner-status">スキャナ状況</a>
@@ -91,17 +92,30 @@
   </header>
 
   <section id="hero">
-    <h1>絶対的な明るさではなく<br><strong>順序</strong>にデータを載せます</h1>
-    <p class="lead">六角形のセル 1 つを 3 つの菱形の面に分け、面どうしの<strong>相対輝度の順序</strong>（3! = 6 通り）をシンボル 1 つとして使います。絶対値ではなく順序なので、印刷のトーンカーブや照明が揺らいでも順序さえ保たれれば値は生き残り — そう描くとアイソメトリックな立方体になります。</p>
+    <h1>QR はよく読めます。<br>ただ<strong>綺麗だった試しがない</strong></h1>
+    <p class="lead">ポスター、パッケージ、名刺 — QR が入らない場所はほとんどありません。けれど何週間もかけたデザインの上に、最後に白黒の四角を置くのはいつも心残りでした。とはいえ QR があの形なのには理由があります。<strong>1994 年のカメラと演算で「とにかく読める」ようにした結果</strong>なのです。</p>
+    <p class="lead">その制約はもうかなり緩みました。カメラも演算も余裕があります。そこで認識性能をさらに追うかわりに、その余裕を<strong>見て気持ちのいいもの</strong>に使ってみました。QR を置き換えるためではなく、<strong>隣にもう一席</strong>つくるためのものです。</p>
     <div class="cta">
       <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">コードを作ってみる</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
     </div>
   </section>
 
+
+  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
+       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
+       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
+       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
+  <section id="why-now">
+    <h2>なぜ今なのか</h2>
+    <p class="lead"><strong>QR は当時の最適解でした。</strong>白黒の 2 値、正方モジュール、大きなファインダ — どれも性能の限られたカメラでも読めるようにするための選択です。その制約の下では、見た目を諦めるのは合理的でした。</p>
+    <p class="lead"><strong>その前提が変わりました。</strong>いまのスマートフォンのカメラは当時とは比べものにならず、リアルタイムの映像処理がブラウザの中で動きます。ならばその余裕を密度にではなく、<strong>見え方</strong>に使ってもいいのではないか — それがこれを作った理由です。</p>
+    <p class="lead"><strong>代わりに密度は捨てました。</strong>菱形セルは正方モジュールより面積効率で不利です。このフォーマットは密度で競いません。たくさん詰め込みたいなら QR が適しています。</p>
+  </section>
+
   <section id="types">
     <h2>3 つのタイプ</h2>
-    <p class="dim">同じデータ契約を共有し、シルエットだけが異なります。以下のコードにはすべて <code>https://tl.estre.so</code> が入っています。</p>
+    <p class="dim">どこに載せるかで選んでください。3 つとも同じデータ契約を共有し、シルエットだけが異なります。以下のコードにはすべて <code>https://tl.estre.so</code> が入っています。</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="../assets/type-Y.png" alt="Type Y — 単一キューブ">
@@ -132,10 +146,10 @@
       <div class="card"><h3>2. 順序 = シンボル</h3><p class="dim">3 面の輝度に順位をつけると 3! = 6 通り — base-6 の 1 桁です。</p></div>
       <div class="card"><h3>3. 3 桁 = 1 シンボル</h3><p class="dim">素体 GF(211) 上の Reed–Solomon で誤りを訂正します。</p></div>
     </div>
-    <h2 style="margin-top:32px">なぜこの作りなのか</h2>
+    <h2 style="margin-top:32px">何が自由になるのか</h2>
     <p class="lead"><strong>単調変換に対して不変です。</strong> 全体的な照明の変化・ガンマ・プリンタのトーンマッピングは単調なので、順序を入れ替えられません。順序が保たれれば値は生きます。</p>
     <p class="lead"><strong>レンダラが自由です。</strong> データ契約は「面どうしの順序 + 最小分離幅」だけ。その中で色・質感・面のグラデーション・アニメーションがすべて開いています。この自由度こそがこのフォーマットの核心です。</p>
-    <p class="lead"><strong>代わりに密度は捨てました。</strong> 菱形セルは正方モジュールより面積効率で不利です。このフォーマットは密度で競いません。QR を置き換えるのではなく、隣にもう一席つくるものです。</p>
+    <p class="lead"><strong>ただし「自動できれいになる」わけではありません。</strong>自由になるのは契約であって結果ではありません。その中で何を描くかは作り手の仕事のままです。</p>
   </section>
 
   <section id="scanner-status">
