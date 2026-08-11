@@ -93,6 +93,8 @@ export const SCANNER_STRINGS = {
     'copy.doneSuffix': '을(를) 복사했어요.',
     'copy.failSuffix': '을(를) 복사하지 못했어요. 직접 선택해서 복사해 주세요.',
     'value.none': '없음',
+    // 브라우저가 카메라 이름을 안 주면(권한 전) 쓰는 대체 이름. 뒤에 번호가 붙는다.
+    'camera.fallback': '카메라',
   },
 
   en: {
@@ -176,6 +178,7 @@ export const SCANNER_STRINGS = {
     'copy.doneSuffix': ' copied.',
     'copy.failSuffix': ' could not be copied. Please select it and copy manually.',
     'value.none': 'None',
+    'camera.fallback': 'Camera',
   },
 
   ja: {
@@ -259,5 +262,6 @@ export const SCANNER_STRINGS = {
     'copy.doneSuffix': ' をコピーしました。',
     'copy.failSuffix': ' をコピーできませんでした。手動で選択してコピーしてください。',
     'value.none': 'なし',
+    'camera.fallback': 'カメラ',
   },
 };

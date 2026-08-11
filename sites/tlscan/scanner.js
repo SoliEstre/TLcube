@@ -49,7 +49,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-11.8';
+export const SCANNER_BUILD = '2026-08-11.9';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -109,6 +109,9 @@ const i18n = createI18n(SCANNER_STRINGS, {
   onChange() {
     if (!cameraGate.hidden) showSupportedStartGate();
     if (!resultPanel.hidden && lastResult !== null) showResult(lastResult);
+    // 렌즈 선택지도 JS 가 채운다 — 권한 전에는 기기 이름이 없어 «카메라 1» 같은
+    // 대체 이름을 우리가 붙이므로, 언어가 바뀌면 다시 그려야 한다.
+    refreshCameraChoices();
   },
 });
 const t = (key) => i18n.t(key);
@@ -146,7 +149,7 @@ async function refreshCameraChoices() {
   knownCameras.forEach((device, index) => {
     const option = document.createElement('option');
     option.value = device.deviceId;
-    option.textContent = device.label || `카메라 ${index + 1}`;
+    option.textContent = device.label || `${t('camera.fallback')} ${index + 1}`;
     if (device.deviceId === current) option.selected = true;
     picker.append(option);
   });

@@ -818,6 +818,507 @@
 
 <script type="module">
 import { createI18n, wireLanguageSwitch } from './src/i18n.js';
+/*
+ * ⚠ JS 가 만드는 문구는 **전부 `t()`/`tf()` 를 거친다.**
+ *
+ * 처음엔 `data-i18n` (정적 DOM) 만 있었고, JS 가 채우는 힌트·푸터·에러는 한국어를
+ * 그대로 박아 뒀다. 그래서 언어를 바꿔도 화면 절반이 한국어로 남았다 — 정적 라벨만
+ * 바뀌니 오히려 «번역이 됐다» 고 착각하기 쉬웠다(2026-08-11 사용자 제보).
+ *
+ * 자리표시자는 `{name}` 형태만 지원한다. 사전은 정적 문자열이라 표현식을 넣을 수
+ * 없고, 넣을 수 있게 만들면 그게 곧 주입 경로가 된다.
+ */
+function t(key) { return genI18n.t(key); }
+function tf(key, vars) {
+  return genI18n.t(key).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
+}
+
+/*
+ * ⚠ 사전과 i18n 인스턴스는 **스크립트 맨 앞**에 있어야 한다. 초기화 도중에 t() 를
+ *   부르는 자리가 있어서(스타일 UI 첫 동기화 등) 파일 끝에 두면 TDZ 로 터진다 —
+ *   실제로 그렇게 터졌고, 증상은 «영어로 바꿔도 안 바뀜» 이었다. 모듈이 통째로 죽어서
+ *   정적 HTML(한국어)만 남은 것이라, 번역 누락처럼 보이지만 원인은 초기화 실패다.
+ *   반대로 genI18n.apply() 는 **끝에** 남긴다 — 프리셋 카드·옵션이 그 뒤에서 만들어지고
+ *   그것들을 data-i18n 으로 채워야 하기 때문이다.
+ */
+const GENERATOR_STRINGS = {
+  ko: {
+    "g001": "페이지 테마 (코드 렌더와 무관)",
+    "g002": "내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합",
+    "g003": "원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식",
+    "g004": "1~3m 거리 — 어느 정도 크게 인쇄된 포스터급",
+    "g005": "근거리·대용량 — 모듈이 작아 가까운 거리에서 인식",
+    "g006": "입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택",
+    "g007": "ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대",
+    "g008": "ECC M (25%) — 기본 균형",
+    "g009": "ECC L (≈12%) — 최대 용량",
+    "g010": "배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음",
+    "g011": "흰색 배경 — 밝은 인쇄물·문서에 얹을 때",
+    "g012": "검정 배경 — 어두운 지면·화면에 얹을 때",
+    "g013": "배경 이미지 제거",
+    "g014": "배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략",
+    "g015": "안전영역 없이 코드만",
+    "g016": "셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름",
+    "g017": "안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)",
+    "g018": "QR 링크 없이 코드만 내보내요",
+    "g019": "좌측 이미지 제거",
+    "g020": "우측 이미지 제거",
+    "g021": "PNG를 클립보드에 복사",
+    "g022": "SVG 마크업을 클립보드에 복사",
+    "g023": "3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰",
+    "g024": "소개",
+    "g025": "스캐너",
+    "g026": "일반",
+    "g027": "고급",
+    "g028": "자동",
+    "g029": "라이트",
+    "g030": "다크",
+    "g031": "콘텐츠",
+    "g032": "http(s):// 가 없으면 https:// 를 자동으로 붙여요.",
+    "g033": "텍스트",
+    "g034": "암호",
+    "g035": "보안",
+    "g036": "없음",
+    "g037": "이름",
+    "g038": "전화",
+    "g039": "이메일",
+    "g040": "조직",
+    "g041": "타입",
+    "g042": "스타일",
+    "g043": "커스텀 (Hue)",
+    "g044": "해상도 (모듈 밀도)",
+    "g045": "안정성 · 용량",
+    "g046": "Type O (마름모 8면체 필드)",
+    "g047": "Type A (삼각 실루엣 확장)",
+    "g048": "Type Y (단일 큐브)",
+    "g049": "버전",
+    "g050": "자동 (최소)",
+    "g051": "자동 (H→M→L 맞춤)",
+    "g052": "톤",
+    "g053": "2톤 (기본)",
+    "g054": "3톤 (Y-T)",
+    "g055": "면 게인 강도 (1.0 평면 ~ 기본)",
+    "g056": "QR 폴백 URL (고급)",
+    "g057": "스타일 프리셋",
+    "g058": "커스텀 Hue",
+    "g059": "배경",
+    "g060": "배치 미리보기 (표면 이미지)",
+    "g061": "이미지 선택…",
+    "g062": "위치 초기화",
+    "g063": "안전영역 (코드 주변 여백)",
+    "g064": "TL스캐너 QR링크 포함",
+    "g065": "TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.",
+    "g066": "장식 이미지 (좌/우 빈 면 각각 — β)",
+    "g067": "좌측 선택…",
+    "g068": "우측 선택…",
+    "g069": "좌우 ⇄ 교환",
+    "g070": "Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).\n          렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.",
+    "g071": "중앙 QR 과 코너 QR 병행 표시 (고급)",
+    "g072": "중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.",
+    "g073": "용량",
+    "g074": "내보내기 (결정적 — 동일 입력 → 바이트 동일)",
+    "g075": "저",
+    "g076": "중",
+    "g077": "고",
+    "g078": "보정 우선",
+    "g079": "표준",
+    "g080": "대용량",
+    "g081": "고대비",
+    "g082": "명함",
+    "g083": "할 수 있어요. 내보내는 파일에는 안 들어가요.",
+    "g084": "좌상",
+    "g085": "우상",
+    "g086": "좌하",
+    "g087": "우하",
+    "g201": "투명",
+    "g202": "흰색",
+    "g203": "검정",
+    "g204": "안쪽",
+    "g206": "드래그로 이동",
+    "g207": "휠로 확대/축소",
+    "g300": "코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.\n          미리보기에서 <b>드래그로 이동</b>, <b>휠로 확대/축소</b><span>할 수 있어요. 내보내는 파일에는 안 들어가요.</span>",
+    "g301": "동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐",
+    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume",
+
+    "g400": "슬레이트 블루 (Slate Blue)",
+    "g401": "엠버 (Ember)",
+    "g402": "모노 (Mono, 인쇄 안전)",
+    "g403": "커스텀 (Hue)",
+    "g404": "커스텀",
+    "g405": "PNG 인코딩 실패",
+    "g406": "안쪽 — Y2 윈도 β (실기기 미검증, 미학 옵션)",
+    "g407": "안쪽 — 중앙 QR 변형(불스아이 대체)",
+    "g408": "Y 안쪽(윈도 β)은 Y2 전용이라 해상도가 고(Y2)로 고정돼요.",
+    "g409": "저 V1 = 광고판·원거리 / 중 V2 = 1~3m 인쇄물 / 고 V3 = 근거리 대용량이에요.",
+    "g410": "저 Y0 = 광고판·원거리 (O 저와 같은 급) / 중 Y1 = 근거리 인쇄 / 고 Y2 = 고밀도예요.",
+    "g411": "저 A0 / 중 A1 / 고 A2 예요. A 는 삼각 확장 때문에 저(A0)도 절대 밀도가 중거리급 하한이라, 광고판급 원거리는 Type O 저나 Y 저가 적합해요.",
+    "g412": "PNG 는 알파 채널로, SVG 는 배경 요소 없이 나가요. 체커보드는 화면 표시일 뿐 파일에는 안 들어가요. ⚠ 실효 배경이 코드를 얹는 표면이 되니, 셀 색과 뚜렷이 구분되는 바탕에 얹어 주세요.",
+    "g413": "안전영역 없이 코드만 내보내요. 무늬 있는 표면에 얹으면 실루엣 검출이 흔들릴 수 있어요.",
+    "g414": "배경이 불투명이라 캔버스 전체가 이미 균일한 여백이에요 — 안전영역을 따로 안 넣어요.",
+    "g415": "흰색",
+    "g416": "검정",
+    "g417": "폴백 QR 은 자체 콰이어트 존이 있어서 제외해요. ",
+    "g418": "내보내는 PNG·SVG 에 함께 들어가요.",
+    "g419": "이미지 선택…",
+    "g420": "좌측 선택…",
+    "g421": "우측 선택…",
+    "g422": "보정 우선",
+    "g423": "표준",
+    "g424": "대용량",
+    "g425": "용량 초과 — 잘린 채 렌더링",
+    "g426": "해상도",
+    "g427": "용량",
+    "g428": " ⚠ 계약 미달",
+    "g430": "클립보드 복사 실패: {msg}",
+    "g431": "Hue {hue}° — 휘도 구조는 슬레이트와 동일 (인식 계약 보존)",
+    "g432": "배경 ↔ 가장 가까운 셀 레벨 상대휘도 분리 {sep} (계약 {min} 이상) — 실루엣 검출 여유가 있어요.",
+    "g433": "⚠ 배경 ↔ 가장 가까운 셀 레벨 분리가 {sep} 로 계약 {min} 미만이에요 — 실루엣 검출이 불안정해질 수 있어요. 색 스타일을 바꾸거나 반대 배경을 쓰세요.",
+    "g434": " (자동 선택: <b>{color}</b>)",
+    "g435": "코드 둘레에 {cells}셀 폭 여백을 둘러요{picked}. ",
+    "g436": "셀 레벨과의 최소 분리 {sep}{warn}. ",
+    "g437": "이미지 교체… ({name})",
+    "g438": "안전영역이 코드 둘레를 덮고 있어서 표면 무늬의 영향은 차단돼요 (표면 평균 휘도 {mean}). 안전영역을 '없음'으로 두면 아래 판정이 적용돼요.",
+    "g439": "이 자리 괜찮아요 — 코드 둘레 표면과 셀 레벨의 최소 분리 {sep} (계약 {min} 이상).",
+    "g440": "⚠ 이 자리는 위험해요 — 최소 분리 {sep} 로 계약 {min} 미만이고, 둘레 표본의 {ratio}% 가 미달이에요. 위치를 옮기거나 안전영역을 켜세요.",
+    "g441": "배경 이미지를 못 읽었어요: {msg}",
+    "g442": "좌: {name}",
+    "g443": "우: {name}",
+    "g444": "장식 이미지를 읽지 못했어요: {msg}",
+    "g445": "자체검증 ✓ {total}셀 · Δmin {delta}",
+    "g446": "자체검증 ✗ 불일치 {n}건",
+    "g447": "자체검증 ✓ {total}셀 · {margin}",
+    "g448": "자체검증 ✗ 불일치 {n}건 · 소거 {e}건",
+    "g449": "타입 <b>{type}</b> · 버전 <b>{ver}</b> (k={k}) · ECC <b>{ecc}</b>",
+    "g450": "페이로드 <b>{bytes}</b> / {max} B · ",
+    "g451": "심볼 {d}+{n} · 프리셋 Δmin {delta}",
+    "g452": "심볼 {d}+{n}",
+    "g453": "타입 <b>Y</b> · 버전 <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · 톤 <b>{tones}</b>",
+    "g454": " · 윈도 <b>β</b>",
+    "g455": "용량 초과 — 내용 뒤쪽 {n} B 가 잘린 채로 렌더링 중이에요 (빨간 구간이 잘리는 부분).",
+    "g456": "자동 판정({bits}) → {ver} · ECC {ecc} ({tier})"
+  },
+  en: {
+    "g001": "Page theme (unrelated to code rendering)",
+    "g002": "Automatically combines resolution then capacity to fit your content",
+    "g003": "Long range, large print (billboards) — big modules read from far away",
+    "g004": "1–3 m range — poster-sized print",
+    "g005": "Close range, high capacity — small modules, read up close",
+    "g006": "Automatically picks error-correction first, then standard, then high capacity",
+    "g007": "ECC H (≈40%) — least capacity, most damage tolerance",
+    "g008": "ECC M (25%) — the default balance",
+    "g009": "ECC L (≈12%) — maximum capacity",
+    "g010": "Code only, no background — alpha channel in PNG, no background element in SVG",
+    "g011": "White background — for light print and documents",
+    "g012": "Black background — for dark surfaces and screens",
+    "g013": "Remove background image",
+    "g014": "Automatic high-contrast colour on a transparent background; skipped on an opaque one, where the background already acts as the quiet zone",
+    "g015": "Code only, no quiet zone",
+    "g016": "Picks white or black based on the cell colours and the surrounding surface",
+    "g017": "Inside (O/A: centre QR · Y: Y2 window β)",
+    "g018": "Export the code only, without a QR link",
+    "g019": "Remove left image",
+    "g020": "Remove right image",
+    "g021": "Copy PNG to clipboard",
+    "g022": "Copy SVG markup to clipboard",
+    "g023": "2.5D code from three-face luminance rank (codename Trilume) — M0 encoder preview",
+    "g024": "About",
+    "g025": "Scanner",
+    "g026": "Basic",
+    "g027": "Advanced",
+    "g028": "Auto",
+    "g029": "Light",
+    "g030": "Dark",
+    "g031": "Content",
+    "g032": "https:// is added automatically when the scheme is missing.",
+    "g033": "Text",
+    "g034": "Password",
+    "g035": "Security",
+    "g036": "None",
+    "g037": "Name",
+    "g038": "Phone",
+    "g039": "Email",
+    "g040": "Organisation",
+    "g041": "Type",
+    "g042": "Style",
+    "g043": "Custom (Hue)",
+    "g044": "Resolution (module density)",
+    "g045": "Robustness · capacity",
+    "g046": "Type O (rhombic field)",
+    "g047": "Type A (triangular silhouette)",
+    "g048": "Type Y (single cube)",
+    "g049": "Version",
+    "g050": "Auto (smallest)",
+    "g051": "Auto (H→M→L fit)",
+    "g052": "Tones",
+    "g053": "2 tones (default)",
+    "g054": "3 tones (Y-T)",
+    "g055": "Face gain (1.0 = flat, default)",
+    "g056": "QR fallback URL (advanced)",
+    "g057": "Style preset",
+    "g058": "Custom hue",
+    "g059": "Background",
+    "g060": "Placement preview (surface photo)",
+    "g061": "Choose image…",
+    "g062": "Reset position",
+    "g063": "Quiet zone (margin around the code)",
+    "g064": "Include TL scanner QR link",
+    "g065": "Prints a QR alongside the code as a fallback when the TL scanner cannot read it. “None” exports the code only.",
+    "g066": "Decorative images (left / right blank faces — β)",
+    "g067": "Choose left…",
+    "g068": "Choose right…",
+    "g069": "Swap left ⇄ right",
+    "g070": "Applied like a decal to the left and right faces left blank by the inner QR on Type Y (with face shading). Render-only — it does not affect the data or scan contract.",
+    "g071": "Show centre QR and corner QR together (advanced)",
+    "g072": "The centre-QR variant puts a QR where the bullseye would be — printing at 13 cm code width or wider is recommended.",
+    "g073": "Capacity",
+    "g074": "Export (deterministic — same input, same bytes)",
+    "g075": "Low",
+    "g076": "Mid",
+    "g077": "High",
+    "g078": "Correction first",
+    "g079": "Standard",
+    "g080": "High capacity",
+    "g081": "High contrast",
+    "g082": "Contact card",
+    "g083": " in the preview. It is not included in the exported file.",
+    "g084": "Top left",
+    "g085": "Top right",
+    "g086": "Bottom left",
+    "g087": "Bottom right",
+    "g201": "Transparent",
+    "g202": "White",
+    "g203": "Black",
+    "g204": "Inside",
+    "g206": "drag to move",
+    "g207": "scroll to zoom",
+    "g300": "Add a photo of the surface you will place the code on and it appears behind the preview. You can <b>drag to move</b> and <b>scroll to zoom</b><span> in the preview. It is not included in the exported file.</span>",
+    "g301": "Same input → deterministic output · the data contract is only SPEC §4.4 (disc median order + Δmin) / §14 (Type Y)",
+    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume",
+
+    "g400": "Slate Blue",
+    "g401": "Ember",
+    "g402": "Mono (print-safe)",
+    "g403": "Custom (Hue)",
+    "g404": "Custom",
+    "g405": "PNG encoding failed",
+    "g406": "Inside — Y2 window β (unverified on real devices, aesthetic option)",
+    "g407": "Inside — center QR variant (replaces the bullseye)",
+    "g408": "Y inside (window β) is Y2-only, so resolution is pinned to High (Y2).",
+    "g409": "Low V1 = billboards and long range / Mid V2 = print at 1–3 m / High V3 = close range, high capacity.",
+    "g410": "Low Y0 = billboards and long range (same class as O Low) / Mid Y1 = close-range print / High Y2 = high density.",
+    "g411": "Low A0 / Mid A1 / High A2. Because of the triangular extension, even A0 sits at the low end of mid-range density — for billboard distances use Type O Low or Y Low.",
+    "g412": "PNG exports with an alpha channel; SVG carries no background element. The checkerboard is a screen indicator only and is not written to the file. ⚠ Whatever is behind it becomes the surface the code sits on, so place it on something clearly distinct from the cell colors.",
+    "g413": "Exports the code with no safe area. On a patterned surface, silhouette detection may waver.",
+    "g414": "The background is opaque, so the whole canvas is already a uniform margin — no separate safe area is added.",
+    "g415": "white",
+    "g416": "black",
+    "g417": "The fallback QR is excluded — it carries its own quiet zone. ",
+    "g418": "Included in the exported PNG and SVG.",
+    "g419": "Choose image…",
+    "g420": "Choose left…",
+    "g421": "Choose right…",
+    "g422": "Correction first",
+    "g423": "Standard",
+    "g424": "High capacity",
+    "g425": "Over capacity — rendered truncated",
+    "g426": "resolution",
+    "g427": "capacity",
+    "g428": " ⚠ below contract",
+    "g430": "Clipboard copy failed: {msg}",
+    "g431": "Hue {hue}° — luminance structure identical to Slate (recognition contract preserved)",
+    "g432": "Background ↔ nearest cell level, relative-luminance separation {sep} (contract ≥ {min}) — comfortable margin for silhouette detection.",
+    "g433": "⚠ Background ↔ nearest cell level separation is {sep}, under the contract {min} — silhouette detection may become unstable. Change the color style or use the opposite background.",
+    "g434": " (auto: <b>{color}</b>)",
+    "g435": "Wraps the code in a {cells}-cell margin{picked}. ",
+    "g436": "Minimum separation from cell levels {sep}{warn}. ",
+    "g437": "Replace image… ({name})",
+    "g438": "The safe area covers the code's surroundings, so the surface pattern is blocked out (surface mean luminance {mean}). Set the safe area to \"None\" and the verdict below applies instead.",
+    "g439": "This spot works — minimum separation between the surrounding surface and the cell levels is {sep} (contract ≥ {min}).",
+    "g440": "⚠ This spot is risky — minimum separation {sep} is under the contract {min}, and {ratio}% of the perimeter samples fall short. Move it, or turn the safe area on.",
+    "g441": "Could not read the background image: {msg}",
+    "g442": "L: {name}",
+    "g443": "R: {name}",
+    "g444": "Could not read the decoration image: {msg}",
+    "g445": "self-check ✓ {total} cells · Δmin {delta}",
+    "g446": "self-check ✗ {n} mismatches",
+    "g447": "self-check ✓ {total} cells · {margin}",
+    "g448": "self-check ✗ {n} mismatches · {e} erasures",
+    "g449": "Type <b>{type}</b> · version <b>{ver}</b> (k={k}) · ECC <b>{ecc}</b>",
+    "g450": "Payload <b>{bytes}</b> / {max} B · ",
+    "g451": "symbols {d}+{n} · preset Δmin {delta}",
+    "g452": "symbols {d}+{n}",
+    "g453": "Type <b>Y</b> · version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tones <b>{tones}</b>",
+    "g454": " · window <b>β</b>",
+    "g455": "Over capacity — the last {n} B of your content are cut in this render (the red span marks what gets dropped).",
+    "g456": "Auto ({bits}) → {ver} · ECC {ecc} ({tier})"
+  },
+  ja: {
+    "g001": "ページのテーマ（コード描画とは無関係）",
+    "g002": "内容の大きさに合わせて解像度→容量の順に自動で組み合わせます",
+    "g003": "遠距離・大型印刷（看板）— モジュールが大きく遠くからでも読めます",
+    "g004": "1〜3m の距離 — ポスター程度の印刷",
+    "g005": "近距離・大容量 — モジュールが小さく近くで読みます",
+    "g006": "入力の大きさに合わせて誤り訂正優先→標準→大容量の順に自動選択します",
+    "g007": "ECC H（約40%）— 容量は減りますが破損耐性は最大です",
+    "g008": "ECC M（25%）— 標準のバランス",
+    "g009": "ECC L（約12%）— 最大容量",
+    "g010": "背景なしでコードのみ — PNG はアルファチャンネル、SVG は背景要素なし",
+    "g011": "白背景 — 明るい印刷物や書類に載せるとき",
+    "g012": "黒背景 — 暗い紙面や画面に載せるとき",
+    "g013": "背景画像を削除",
+    "g014": "背景が透明なら高コントラスト色を自動で選び、不透明なら背景自体がクワイエットゾーンになるため省略します",
+    "g015": "クワイエットゾーンなしでコードのみ",
+    "g016": "セルの色と周囲の面を見て白・黒から推奨色を選びます",
+    "g017": "内側（O/A: 中央 QR · Y: Y2 ウィンドウ β）",
+    "g018": "QR リンクなしでコードのみ書き出します",
+    "g019": "左の画像を削除",
+    "g020": "右の画像を削除",
+    "g021": "PNG をクリップボードにコピー",
+    "g022": "SVG マークアップをクリップボードにコピー",
+    "g023": "3面の輝度順序による 2.5D コード（コードネーム Trilume）— M0 エンコーダプレビュー",
+    "g024": "紹介",
+    "g025": "スキャナ",
+    "g026": "標準",
+    "g027": "詳細",
+    "g028": "自動",
+    "g029": "ライト",
+    "g030": "ダーク",
+    "g031": "コンテンツ",
+    "g032": "http(s):// がない場合は https:// を自動で付けます。",
+    "g033": "テキスト",
+    "g034": "パスワード",
+    "g035": "セキュリティ",
+    "g036": "なし",
+    "g037": "名前",
+    "g038": "電話",
+    "g039": "メール",
+    "g040": "組織",
+    "g041": "タイプ",
+    "g042": "スタイル",
+    "g043": "カスタム（Hue）",
+    "g044": "解像度（モジュール密度）",
+    "g045": "安定性・容量",
+    "g046": "Type O（菱形フィールド）",
+    "g047": "Type A（三角シルエット拡張）",
+    "g048": "Type Y（単一キューブ）",
+    "g049": "バージョン",
+    "g050": "自動（最小）",
+    "g051": "自動（H→M→L 適合）",
+    "g052": "トーン",
+    "g053": "2トーン（標準）",
+    "g054": "3トーン（Y-T）",
+    "g055": "面ゲイン強度（1.0 で平面・標準）",
+    "g056": "QR フォールバック URL（詳細）",
+    "g057": "スタイルプリセット",
+    "g058": "カスタム Hue",
+    "g059": "背景",
+    "g060": "配置プレビュー（表面画像）",
+    "g061": "画像を選択…",
+    "g062": "位置をリセット",
+    "g063": "クワイエットゾーン（コード周囲の余白）",
+    "g064": "TL スキャナ QR リンクを含める",
+    "g065": "TL スキャナで読めなかったときの代替経路となる QR をコードと一緒に印刷します。「なし」は QR なしでコードのみ書き出します。",
+    "g066": "装飾画像（左右の空き面それぞれ — β）",
+    "g067": "左を選択…",
+    "g068": "右を選択…",
+    "g069": "左右 ⇄ 入れ替え",
+    "g070": "Type Y の内側 QR で空く左右の面にデカールのように貼ります（面の陰影を適用）。描画専用で、データやスキャンの契約には影響しません。",
+    "g071": "中央 QR とコーナー QR を併記（詳細）",
+    "g072": "中央 QR 変種はブルズアイの代わりに中央へ QR を配置します — コード幅 13cm 以上での印刷を推奨します。",
+    "g073": "容量",
+    "g074": "エクスポート（決定的 — 同じ入力なら同じバイト）",
+    "g075": "低",
+    "g076": "中",
+    "g077": "高",
+    "g078": "訂正優先",
+    "g079": "標準",
+    "g080": "大容量",
+    "g081": "高コントラスト",
+    "g082": "名刺",
+    "g083": "できます。書き出すファイルには含まれません。",
+    "g084": "左上",
+    "g085": "右上",
+    "g086": "左下",
+    "g087": "右下",
+    "g201": "透明",
+    "g202": "白",
+    "g203": "黒",
+    "g204": "内側",
+    "g206": "ドラッグで移動",
+    "g207": "ホイールで拡大縮小",
+    "g300": "コードを実際に載せる面の写真を入れるとプレビューの背面に敷かれます。プレビューでは <b>ドラッグで移動</b>、<b>ホイールで拡大縮小</b><span>できます。書き出すファイルには含まれません。</span>",
+    "g301": "同じ入力 → 決定的な出力 · データ契約は SPEC §4.4（円板 median の順序 + Δmin）/ §14（Type Y）のみ",
+    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume",
+
+    "g400": "スレートブルー (Slate Blue)",
+    "g401": "アンバー (Ember)",
+    "g402": "モノ (Mono・印刷向け)",
+    "g403": "カスタム (Hue)",
+    "g404": "カスタム",
+    "g405": "PNG のエンコードに失敗しました",
+    "g406": "内側 — Y2 ウィンドウ β（実機未検証・美観オプション）",
+    "g407": "内側 — 中央 QR 変種（ブルズアイの代替）",
+    "g408": "Y の内側（ウィンドウ β）は Y2 専用なので、解像度は高（Y2）に固定されます。",
+    "g409": "低 V1 = 看板・遠距離 / 中 V2 = 1〜3m の印刷物 / 高 V3 = 近距離・大容量です。",
+    "g410": "低 Y0 = 看板・遠距離（O の低と同じ級）/ 中 Y1 = 近距離の印刷 / 高 Y2 = 高密度です。",
+    "g411": "低 A0 / 中 A1 / 高 A2 です。A は三角の拡張があるため、低（A0）でも絶対密度が中距離級の下限にあたります。看板級の遠距離には Type O の低か Y の低が向いています。",
+    "g412": "PNG はアルファチャンネル付き、SVG は背景要素なしで書き出されます。チェッカーボードは画面表示だけで、ファイルには入りません。⚠ 背後にあるものが実際にコードを載せる面になるので、セルの色とはっきり区別できる下地に置いてください。",
+    "g413": "安全領域なしでコードだけを書き出します。柄のある面に載せると、シルエット検出が揺らぐことがあります。",
+    "g414": "背景が不透明なのでキャンバス全体がすでに均一な余白です — 安全領域は別途入れません。",
+    "g415": "白",
+    "g416": "黒",
+    "g417": "フォールバック QR は自前のクワイエットゾーンを持つため除外します。",
+    "g418": "書き出す PNG・SVG に含まれます。",
+    "g419": "画像を選択…",
+    "g420": "左を選択…",
+    "g421": "右を選択…",
+    "g422": "訂正優先",
+    "g423": "標準",
+    "g424": "大容量",
+    "g425": "容量超過 — 切り詰めて描画中",
+    "g426": "解像度",
+    "g427": "容量",
+    "g428": " ⚠ 契約未満",
+    "g430": "クリップボードへのコピーに失敗しました: {msg}",
+    "g431": "Hue {hue}° — 輝度構造はスレートと同一（認識契約は保たれます）",
+    "g432": "背景 ↔ 最も近いセルレベルの相対輝度の分離 {sep}（契約 {min} 以上）— シルエット検出に余裕があります。",
+    "g433": "⚠ 背景 ↔ 最も近いセルレベルの分離が {sep} で、契約 {min} を下回っています — シルエット検出が不安定になることがあります。色スタイルを変えるか、反対の背景を使ってください。",
+    "g434": "（自動選択: <b>{color}</b>）",
+    "g435": "コードの周囲に {cells} セル幅の余白を回します{picked}。",
+    "g436": "セルレベルとの最小分離 {sep}{warn}。",
+    "g437": "画像を差し替え…（{name}）",
+    "g438": "安全領域がコードの周囲を覆っているため、面の柄の影響は遮断されます（面の平均輝度 {mean}）。安全領域を「なし」にすると、下の判定が適用されます。",
+    "g439": "この位置なら大丈夫です — コード周囲の面とセルレベルの最小分離は {sep}（契約 {min} 以上）。",
+    "g440": "⚠ この位置は危険です — 最小分離 {sep} が契約 {min} を下回り、周囲の標本の {ratio}% が未達です。位置を変えるか、安全領域をオンにしてください。",
+    "g441": "背景画像を読み込めませんでした: {msg}",
+    "g442": "左: {name}",
+    "g443": "右: {name}",
+    "g444": "装飾画像を読み込めませんでした: {msg}",
+    "g445": "自己検証 ✓ {total} セル · Δmin {delta}",
+    "g446": "自己検証 ✗ 不一致 {n} 件",
+    "g447": "自己検証 ✓ {total} セル · {margin}",
+    "g448": "自己検証 ✗ 不一致 {n} 件 · 消去 {e} 件",
+    "g449": "タイプ <b>{type}</b> · バージョン <b>{ver}</b>（k={k}）· ECC <b>{ecc}</b>",
+    "g450": "ペイロード <b>{bytes}</b> / {max} B · ",
+    "g451": "シンボル {d}+{n} · プリセット Δmin {delta}",
+    "g452": "シンボル {d}+{n}",
+    "g453": "タイプ <b>Y</b> · バージョン <b>{ver}</b>（n={n}）· ECC <b>{ecc}</b> · トーン <b>{tones}</b>",
+    "g454": " · ウィンドウ <b>β</b>",
+    "g455": "容量超過 — 内容の後ろ {n} B が切り詰められた状態で描画されています（赤い区間が切れる部分です）。",
+    "g456": "自動判定（{bits}）→ {ver} · ECC {ecc}（{tier}）"
+  },
+};
+
+const genI18n = createI18n(GENERATOR_STRINGS, {
+  onChange() {
+    syncResTierUi();
+    syncQuietModeUi();
+    syncBackdropUi();
+    syncBackdropLayer();
+    syncDecorUi();
+    render();
+  },
+});
 import { createBeacon } from './src/beacon.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
@@ -965,7 +1466,7 @@ function decoratedPngBlob(cur, ppu) {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(ppu * dpr, 0, 0, ppu * dpr, 0, 0);
     paintDecor(ctx, cur.scene, cur.faceGains);
-    off.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('PNG 인코딩 실패'))), 'image/png');
+    off.toBlob((blob) => (blob ? resolve(blob) : reject(new Error(t('g405')))), 'image/png');
   });
 }
 
@@ -1012,7 +1513,7 @@ $('copyPng').addEventListener('click', async () => {
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     flashCopied($('copyPng'));
   } catch (err) {
-    els.error.textContent = `클립보드 복사 실패: ${err && err.message ? err.message : err}`;
+    els.error.textContent = tf('g430', { msg: err && err.message ? err.message : err });
   }
 });
 
@@ -1022,7 +1523,7 @@ $('copySvg').addEventListener('click', async () => {
     await navigator.clipboard.writeText(svgMarkup(current));
     flashCopied($('copySvg'));
   } catch (err) {
-    els.error.textContent = `클립보드 복사 실패: ${err && err.message ? err.message : err}`;
+    els.error.textContent = tf('g430', { msg: err && err.message ? err.message : err });
   }
 });
 
@@ -1065,7 +1566,7 @@ function makeCustomPalette(hue) {
   const base = getPreset('slate');
   const palette = {
     name: 'custom',
-    label: '커스텀',
+    label: t('g404'),
     background: colorAtLuminance(hue, CUSTOM_SATS.background, relativeLuminance(base.background)),
     levels: base.levels.map((lvl, i) => colorAtLuminance(hue, CUSTOM_SATS.levels[i], relativeLuminance(lvl))),
   };
@@ -1082,9 +1583,18 @@ function deltaMinFor(name) {
 
 // ── 프리셋 목록 채우기 (고급 모드 select + 일반 모드 스와치 카드) ──────────
 
+/*
+ * 프리셋 표시명은 `src/luminance.js` 가 한국어로 들고 있다(포맷 정의의 일부라 거기
+ * 두는 게 맞다). UI 는 그 이름을 그대로 쓰지 않고 사전 키로 갈아끼운다 — 아래 라벨은
+ * 모듈 초기화 때 한 번만 채워지므로, `data-i18n` 을 달아 언어 전환마다 기존
+ * applyTranslations 가 다시 채우게 한다.
+ */
+const PRESET_LABEL_KEYS = { slate: 'g400', ember: 'g401', mono: 'g402' };
+
 for (const name of Object.keys(PRESETS)) {
   const opt = document.createElement('option');
   opt.value = name;
+  opt.dataset.i18n = PRESET_LABEL_KEYS[name];
   opt.textContent = PRESETS[name].label || name;
   if (name === DEFAULT_PRESET) opt.selected = true;
   els.preset.appendChild(opt);
@@ -1111,6 +1621,7 @@ for (const name of Object.keys(PRESETS)) {
   bgStrip.className = 'swatch-bg';
   bgStrip.style.background = rgbCss(p.background);
   const labelEl = document.createElement('div');
+  labelEl.dataset.i18n = PRESET_LABEL_KEYS[name];
   labelEl.textContent = p.label || name;
   card.appendChild(chips);
   card.appendChild(bgStrip);
@@ -1129,7 +1640,8 @@ for (const name of Object.keys(PRESETS)) {
 {
   const opt = document.createElement('option');
   opt.value = 'custom';
-  opt.textContent = '커스텀 (Hue)';
+  opt.dataset.i18n = 'g403';
+  opt.textContent = t('g403');
   els.preset.appendChild(opt);
 }
 
@@ -1154,7 +1666,7 @@ function syncStyleUi() {
   els.customBg.style.background = rgbCss(p.background);
   els.hueBar.value = hue;
   els.hueBarAdv.value = hue;
-  els.hueValue.textContent = `Hue ${hue}° — 휘도 구조는 슬레이트와 동일 (인식 계약 보존)`;
+  els.hueValue.textContent = tf('g431', { hue });
   els.hueValueAdv.textContent = `Hue ${hue}°`;
   // 배경 분리 수치는 레벨 색에 의존하므로 스타일이 바뀔 때마다 다시 계산한다.
   syncBgModeUi();
@@ -1349,8 +1861,8 @@ function currentPresetName() {
 function syncQrPositionUi() {
   const isY = currentType() === 'Y';
   els.qrPosInner.title = isY
-    ? '안쪽 — Y2 윈도 β (실기기 미검증, 미학 옵션)'
-    : '안쪽 — 중앙 QR 변형(불스아이 대체)';
+    ? t('g406')
+    : t('g407');
   for (const card of els.qrPositionCards.children) {
     card.classList.toggle('active', card.dataset.pos === normalState.qrPosition);
   }
@@ -1408,12 +1920,12 @@ function syncResTierUi() {
     card.classList.toggle('active', res === normalState.resTier);
   }
   els.resTierHint.textContent = windowLocked
-    ? 'Y 안쪽(윈도 β)은 Y2 전용이라 해상도가 고(Y2)로 고정돼요.'
+    ? t('g408')
     : isO
-      ? '저 V1 = 광고판·원거리 / 중 V2 = 1~3m 인쇄물 / 고 V3 = 근거리 대용량이에요.'
+      ? t('g409')
       : type === 'Y'
-        ? '저 Y0 = 광고판·원거리 (O 저와 같은 급) / 중 Y1 = 근거리 인쇄 / 고 Y2 = 고밀도예요.'
-        : '저 A0 / 중 A1 / 고 A2 예요. A 는 삼각 확장 때문에 저(A0)도 절대 밀도가 중거리급 하한이라, 광고판급 원거리는 Type O 저나 Y 저가 적합해요.';
+        ? t('g410')
+        : t('g411');
 }
 
 for (const card of els.resTierCards.children) {
@@ -1450,17 +1962,15 @@ function syncBgModeUi() {
     card.classList.toggle('active', card.dataset.bg === normalState.bgMode);
   }
   if (normalState.bgMode === 'transparent') {
-    els.bgModeHint.textContent = 'PNG 는 알파 채널로, SVG 는 배경 요소 없이 나가요. '
-      + '체커보드는 화면 표시일 뿐 파일에는 안 들어가요. '
-      + '⚠ 실효 배경이 코드를 얹는 표면이 되니, 셀 색과 뚜렷이 구분되는 바탕에 얹어 주세요.';
+    els.bgModeHint.textContent = t('g412');
     els.bgModeHint.style.color = '';
     return;
   }
   const sep = bgSeparationFor(normalState.bgMode);
   const ok = sep >= BG_SEPARATION_MIN;
   els.bgModeHint.textContent = ok
-    ? `배경 ↔ 가장 가까운 셀 레벨 상대휘도 분리 ${sep.toFixed(3)} (계약 ${BG_SEPARATION_MIN} 이상) — 실루엣 검출 여유가 있어요.`
-    : `⚠ 배경 ↔ 가장 가까운 셀 레벨 분리가 ${sep.toFixed(3)} 로 계약 ${BG_SEPARATION_MIN} 미만이에요 — 실루엣 검출이 불안정해질 수 있어요. 색 스타일을 바꾸거나 반대 배경을 쓰세요.`;
+    ? tf('g432', { sep: sep.toFixed(3), min: BG_SEPARATION_MIN })
+    : tf('g433', { sep: sep.toFixed(3), min: BG_SEPARATION_MIN });
   els.bgModeHint.style.color = ok ? '' : 'var(--warn)';
 }
 
@@ -1547,18 +2057,18 @@ function syncQuietModeUi() {
   const color = resolveQuietColor();
   if (!color) {
     els.quietModeHint.textContent = normalState.quietMode === 'none'
-      ? '안전영역 없이 코드만 내보내요. 무늬 있는 표면에 얹으면 실루엣 검출이 흔들릴 수 있어요.'
-      : '배경이 불투명이라 캔버스 전체가 이미 균일한 여백이에요 — 안전영역을 따로 안 넣어요.';
+      ? t('g413')
+      : t('g414');
     return;
   }
   const isWhite = color.r === 255;
   const sep = separationFromLevels(color);
   const picked = normalState.quietMode === 'white' || normalState.quietMode === 'black'
-    ? '' : ` (자동 선택: <b>${isWhite ? '흰색' : '검정'}</b>)`;
-  els.quietModeHint.innerHTML = `코드 둘레에 ${QUIET_MARGIN_CELLS}셀 폭 여백을 둘러요${picked}. `
-    + '폴백 QR 은 자체 콰이어트 존이 있어서 제외해요. '
-    + `셀 레벨과의 최소 분리 ${sep.toFixed(3)}${sep >= BG_SEPARATION_MIN ? '' : ' ⚠ 계약 미달'}. `
-    + '내보내는 PNG·SVG 에 함께 들어가요.';
+    ? '' : tf('g434', { color: isWhite ? t('g415') : t('g416') });
+  els.quietModeHint.innerHTML = tf('g435', { cells: QUIET_MARGIN_CELLS, picked })
+    + t('g417')
+    + tf('g436', { sep: sep.toFixed(3), warn: sep >= BG_SEPARATION_MIN ? '' : t('g428') })
+    + t('g418');
 }
 
 for (const card of els.quietModeCards.children) {
@@ -1585,7 +2095,7 @@ function syncBackdropUi() {
   const has = backdrop.bitmap !== null;
   els.backdropClear.style.display = has ? '' : 'none';
   els.backdropFit.style.display = has ? '' : 'none';
-  els.backdropPick.textContent = has ? `이미지 교체… (${backdrop.name})` : '이미지 선택…';
+  els.backdropPick.textContent = has ? tf('g437', { name: backdrop.name }) : t('g419');
   els.canvasWrap.classList.toggle('pannable', on && has);
   els.backdropCanvas.classList.toggle('on', on && has);
   if (!(on && has)) els.backdropVerdict.style.display = 'none';
@@ -1679,16 +2189,14 @@ function syncBackdropLayer() {
   els.backdropVerdict.style.display = '';
   if (quiet) {
     els.backdropVerdict.style.color = 'var(--ok)';
-    els.backdropVerdict.textContent = `안전영역이 코드 둘레를 덮고 있어서 표면 무늬의 영향은 차단돼요 `
-      + `(표면 평균 휘도 ${m.meanY.toFixed(3)}). 안전영역을 '없음'으로 두면 아래 판정이 적용돼요.`;
+    els.backdropVerdict.textContent = tf('g438', { mean: m.meanY.toFixed(3) });
     return;
   }
   const ok = m.minSep >= BG_SEPARATION_MIN;
   els.backdropVerdict.style.color = ok ? 'var(--ok)' : 'var(--bad)';
   els.backdropVerdict.textContent = ok
-    ? `이 자리 괜찮아요 — 코드 둘레 표면과 셀 레벨의 최소 분리 ${m.minSep.toFixed(3)} (계약 ${BG_SEPARATION_MIN} 이상).`
-    : `⚠ 이 자리는 위험해요 — 최소 분리 ${m.minSep.toFixed(3)} 로 계약 ${BG_SEPARATION_MIN} 미만이고, `
-      + `둘레 표본의 ${(m.belowRatio * 100).toFixed(0)}% 가 미달이에요. 위치를 옮기거나 안전영역을 켜세요.`;
+    ? tf('g439', { sep: m.minSep.toFixed(3), min: BG_SEPARATION_MIN })
+    : tf('g440', { sep: m.minSep.toFixed(3), min: BG_SEPARATION_MIN, ratio: (m.belowRatio * 100).toFixed(0) });
 }
 
 els.backdropPick.addEventListener('click', () => els.backdropFile.click());
@@ -1703,7 +2211,7 @@ els.backdropFile.addEventListener('change', async () => {
   } catch (e) {
     backdrop.bitmap = null;
     backdrop.name = null;
-    els.error.textContent = `배경 이미지를 못 읽었어요: ${e.message}`;
+    els.error.textContent = tf('g441', { msg: e.message });
   }
   syncBackdropUi();
   schedule();
@@ -1787,8 +2295,8 @@ syncBackdropUi();
 
 function syncDecorUi() {
   const shortName = (d) => (d.name.length > 14 ? `${d.name.slice(0, 13)}…` : d.name);
-  els.decorPickL.textContent = decor.L ? `좌: ${shortName(decor.L)}` : '좌측 선택…';
-  els.decorPickR.textContent = decor.R ? `우: ${shortName(decor.R)}` : '우측 선택…';
+  els.decorPickL.textContent = decor.L ? tf('g442', { name: shortName(decor.L) }) : t('g420');
+  els.decorPickR.textContent = decor.R ? tf('g443', { name: shortName(decor.R) }) : t('g421');
   els.decorClearL.style.display = decor.L ? '' : 'none';
   els.decorClearR.style.display = decor.R ? '' : 'none';
   els.decorSwap.style.display = (decor.L || decor.R) ? '' : 'none';
@@ -1811,7 +2319,7 @@ async function loadDecorFile(input, face) {
     syncDecorUi();
     schedule();
   } catch (e) {
-    els.error.textContent = `장식 이미지를 읽지 못했어요: ${e && e.message ? e.message : e}`;
+    els.error.textContent = tf('g444', { msg: e && e.message ? e.message : e });
   }
 }
 
@@ -2137,12 +2645,12 @@ function renderTypeO(cfg) {
   const check = verifyRaster(raster, scene, encoded);
   const bytes = payloadByteLength(cfg.text);
   const badge = check.ok
-    ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · Δmin ${check.minDelta.toFixed(3)}</span>`
-    : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건</span>`;
+    ? `<span class="badge ok">${tf('g445', { total: check.total, delta: check.minDelta.toFixed(3) })}</span>`
+    : `<span class="badge bad">${tf('g446', { n: check.mismatches.length })}</span>`;
   const info =
-    `타입 <b>O</b> · 버전 <b>V${encoded.version}${encoded.centerQr ? 'Q' : ''}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
-    `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
-    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${deltaMinFor(cfg.presetName).toFixed(3)}<br>` +
+    `${tf('g449', { type: 'O', ver: `V${encoded.version}${encoded.centerQr ? 'Q' : ''}`, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
+    tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
+    `${tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) })}<br>` +
     badge;
   return { type: 'O', encoded, scene: withQuietZone(scene), info };
 }
@@ -2158,12 +2666,12 @@ function renderTypeA(cfg) {
   const check = verifyRaster(raster, scene, encoded);
   const bytes = payloadByteLength(cfg.text);
   const badge = check.ok
-    ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · Δmin ${check.minDelta.toFixed(3)}</span>`
-    : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건</span>`;
+    ? `<span class="badge ok">${tf('g445', { total: check.total, delta: check.minDelta.toFixed(3) })}</span>`
+    : `<span class="badge bad">${tf('g446', { n: check.mismatches.length })}</span>`;
   const info =
-    `타입 <b>A</b> · 버전 <b>A${encoded.version}${encoded.centerQr ? 'Q' : ''}</b> (k=${encoded.k}) · ECC <b>${encoded.eccLevel}</b><br>` +
-    `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
-    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym} · 프리셋 Δmin ${deltaMinFor(cfg.presetName).toFixed(3)}<br>` +
+    `${tf('g449', { type: 'A', ver: `A${encoded.version}${encoded.centerQr ? 'Q' : ''}`, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
+    tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
+    `${tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) })}<br>` +
     badge;
   return { type: 'A', encoded, scene: withQuietZone(scene), info };
 }
@@ -2189,13 +2697,13 @@ function renderTypeY(cfg) {
     ? `logMargin ${check.logMargin.toFixed(3)}`
     : `Δmin-Y ${check.minDeltaY.toFixed(3)}`;
   const badge = check.ok
-    ? `<span class="badge ok">자체검증 ✓ ${check.total}셀 · ${marginLabel}</span>`
-    : `<span class="badge bad">자체검증 ✗ 불일치 ${check.mismatches.length}건 · 소거 ${check.erasures.length}건</span>`;
+    ? `<span class="badge ok">${tf('g447', { total: check.total, margin: marginLabel })}</span>`
+    : `<span class="badge bad">${tf('g448', { n: check.mismatches.length, e: check.erasures.length })}</span>`;
   const info =
-    `타입 <b>Y</b> · 버전 <b>Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}</b> (n=${encoded.n}) · ECC <b>${encoded.eccLevel}</b> · 톤 <b>${encoded.tones}</b>` +
-    `${encoded.window ? ' · 윈도 <b>β</b>' : ''}<br>` +
-    `페이로드 <b>${bytes}</b> / ${encoded.capacity.maxPayloadBytes} B · ` +
-    `심볼 ${encoded.capacity.dataSymbols}+${encoded.capacity.nsym}<br>` +
+    tf('g453', { ver: `Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}`, n: encoded.n, ecc: encoded.eccLevel, tones: encoded.tones }) +
+    `${encoded.window ? t('g454') : ''}<br>` +
+    tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
+    `${tf('g452', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym })}<br>` +
     badge;
   return { type: 'Y', encoded, scene: withQuietZone(scene), info };
 }
@@ -2223,7 +2731,9 @@ function updateGauge(type, encoded, text) {
 let timer = 0;
 function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
 
-const ECC_TIER_LABELS = { H: '보정 우선', M: '표준', L: '대용량' };
+function eccTierLabel(level) {
+  return t({ H: 'g422', M: 'g423', L: 'g424' }[level] || 'g423');
+}
 
 /** 인코더의 용량 초과 계열 에러인가 (다른 에러는 절단 재시도 대상이 아니다). */
 function isCapacityError(err) {
@@ -2278,20 +2788,20 @@ function render() {
     // 배경 레이어는 view 캔버스 크기가 확정된 뒤에 맞춘다 (drawScene 이 width/height 를 정한다).
     syncBackdropLayer();
     els.info.innerHTML = result.info
-      + (keptPayload !== null ? ' <span class="badge bad">용량 초과 — 잘린 채 렌더링</span>' : '');
+      + (keptPayload !== null ? ` <span class="badge bad">${t('g425')}</span>` : '');
     updateGauge(result.type, result.encoded, fullText); // 게이지는 원본 분량 기준 (초과 시 빨강)
     if (keptPayload !== null) {
       const overBytes = payloadByteLength(fullText) - payloadByteLength(keptPayload);
-      els.error.textContent = `용량 초과 — 내용 뒤쪽 ${overBytes} B 가 잘린 채로 렌더링 중이에요 (빨간 구간이 잘리는 부분).`;
+      els.error.textContent = tf('g455', { n: overBytes });
     }
     {
       // 자동 축(해상도/용량)이 하나라도 켜져 있으면 판정 결과(버전·ECC)를 힌트로 보여준다.
       const vPrefix = result.type === 'O' ? 'V' : result.type;
       const autoBits = [];
-      if (mode === 'normal' && normalState.resTier === 'auto') autoBits.push('해상도');
-      if (cfg.eccLevel === 'auto') autoBits.push('용량');
+      if (mode === 'normal' && normalState.resTier === 'auto') autoBits.push(t('g426'));
+      if (cfg.eccLevel === 'auto') autoBits.push(t('g427'));
       els.eccTierHint.textContent = autoBits.length
-        ? `자동 판정(${autoBits.join('·')}) → ${vPrefix}${result.encoded.version} · ECC ${result.encoded.eccLevel} (${ECC_TIER_LABELS[result.encoded.eccLevel]})`
+        ? tf('g456', { bits: autoBits.join('·'), ver: `${vPrefix}${result.encoded.version}`, ecc: result.encoded.eccLevel, tier: eccTierLabel(result.encoded.eccLevel) })
         : '';
     }
   } catch (err) {
@@ -2333,313 +2843,21 @@ render();
  * ⚠ textarea 의 샘플 문구는 **일부러 사전에 없다** — 사용자가 편집하는 데이터라
  *    언어 전환으로 덮으면 입력이 날아간다.
  */
-const GENERATOR_STRINGS = {
-  ko: {
-    "g001": "페이지 테마 (코드 렌더와 무관)",
-    "g002": "내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합",
-    "g003": "원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식",
-    "g004": "1~3m 거리 — 어느 정도 크게 인쇄된 포스터급",
-    "g005": "근거리·대용량 — 모듈이 작아 가까운 거리에서 인식",
-    "g006": "입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택",
-    "g007": "ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대",
-    "g008": "ECC M (25%) — 기본 균형",
-    "g009": "ECC L (≈12%) — 최대 용량",
-    "g010": "배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음",
-    "g011": "흰색 배경 — 밝은 인쇄물·문서에 얹을 때",
-    "g012": "검정 배경 — 어두운 지면·화면에 얹을 때",
-    "g013": "배경 이미지 제거",
-    "g014": "배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략",
-    "g015": "안전영역 없이 코드만",
-    "g016": "셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름",
-    "g017": "안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)",
-    "g018": "QR 링크 없이 코드만 내보내요",
-    "g019": "좌측 이미지 제거",
-    "g020": "우측 이미지 제거",
-    "g021": "PNG를 클립보드에 복사",
-    "g022": "SVG 마크업을 클립보드에 복사",
-    "g023": "3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰",
-    "g024": "소개",
-    "g025": "스캐너",
-    "g026": "일반",
-    "g027": "고급",
-    "g028": "자동",
-    "g029": "라이트",
-    "g030": "다크",
-    "g031": "콘텐츠",
-    "g032": "http(s):// 가 없으면 https:// 를 자동으로 붙여요.",
-    "g033": "텍스트",
-    "g034": "암호",
-    "g035": "보안",
-    "g036": "없음",
-    "g037": "이름",
-    "g038": "전화",
-    "g039": "이메일",
-    "g040": "조직",
-    "g041": "타입",
-    "g042": "스타일",
-    "g043": "커스텀 (Hue)",
-    "g044": "해상도 (모듈 밀도)",
-    "g045": "안정성 · 용량",
-    "g046": "Type O (마름모 8면체 필드)",
-    "g047": "Type A (삼각 실루엣 확장)",
-    "g048": "Type Y (단일 큐브)",
-    "g049": "버전",
-    "g050": "자동 (최소)",
-    "g051": "자동 (H→M→L 맞춤)",
-    "g052": "톤",
-    "g053": "2톤 (기본)",
-    "g054": "3톤 (Y-T)",
-    "g055": "면 게인 강도 (1.0 평면 ~ 기본)",
-    "g056": "QR 폴백 URL (고급)",
-    "g057": "스타일 프리셋",
-    "g058": "커스텀 Hue",
-    "g059": "배경",
-    "g060": "배치 미리보기 (표면 이미지)",
-    "g061": "이미지 선택…",
-    "g062": "위치 초기화",
-    "g063": "안전영역 (코드 주변 여백)",
-    "g064": "TL스캐너 QR링크 포함",
-    "g065": "TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.",
-    "g066": "장식 이미지 (좌/우 빈 면 각각 — β)",
-    "g067": "좌측 선택…",
-    "g068": "우측 선택…",
-    "g069": "좌우 ⇄ 교환",
-    "g070": "Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).\n          렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.",
-    "g071": "중앙 QR 과 코너 QR 병행 표시 (고급)",
-    "g072": "중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.",
-    "g073": "용량",
-    "g074": "내보내기 (결정적 — 동일 입력 → 바이트 동일)",
-    "g075": "저",
-    "g076": "중",
-    "g077": "고",
-    "g078": "보정 우선",
-    "g079": "표준",
-    "g080": "대용량",
-    "g081": "고대비",
-    "g082": "명함",
-    "g083": "할 수 있어요. 내보내는 파일에는 안 들어가요.",
-    "g084": "좌상",
-    "g085": "우상",
-    "g086": "좌하",
-    "g087": "우하",
-    "g201": "투명",
-    "g202": "흰색",
-    "g203": "검정",
-    "g204": "안쪽",
-    "g206": "드래그로 이동",
-    "g207": "휠로 확대/축소",
-    "g300": "코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.\n          미리보기에서 <b>드래그로 이동</b>, <b>휠로 확대/축소</b><span>할 수 있어요. 내보내는 파일에는 안 들어가요.</span>",
-    "g301": "동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐",
-    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume",
-  },
-  en: {
-    "g001": "Page theme (unrelated to code rendering)",
-    "g002": "Automatically combines resolution then capacity to fit your content",
-    "g003": "Long range, large print (billboards) — big modules read from far away",
-    "g004": "1–3 m range — poster-sized print",
-    "g005": "Close range, high capacity — small modules, read up close",
-    "g006": "Automatically picks error-correction first, then standard, then high capacity",
-    "g007": "ECC H (≈40%) — least capacity, most damage tolerance",
-    "g008": "ECC M (25%) — the default balance",
-    "g009": "ECC L (≈12%) — maximum capacity",
-    "g010": "Code only, no background — alpha channel in PNG, no background element in SVG",
-    "g011": "White background — for light print and documents",
-    "g012": "Black background — for dark surfaces and screens",
-    "g013": "Remove background image",
-    "g014": "Automatic high-contrast colour on a transparent background; skipped on an opaque one, where the background already acts as the quiet zone",
-    "g015": "Code only, no quiet zone",
-    "g016": "Picks white or black based on the cell colours and the surrounding surface",
-    "g017": "Inside (O/A: centre QR · Y: Y2 window β)",
-    "g018": "Export the code only, without a QR link",
-    "g019": "Remove left image",
-    "g020": "Remove right image",
-    "g021": "Copy PNG to clipboard",
-    "g022": "Copy SVG markup to clipboard",
-    "g023": "2.5D code from three-face luminance rank (codename Trilume) — M0 encoder preview",
-    "g024": "About",
-    "g025": "Scanner",
-    "g026": "Basic",
-    "g027": "Advanced",
-    "g028": "Auto",
-    "g029": "Light",
-    "g030": "Dark",
-    "g031": "Content",
-    "g032": "https:// is added automatically when the scheme is missing.",
-    "g033": "Text",
-    "g034": "Password",
-    "g035": "Security",
-    "g036": "None",
-    "g037": "Name",
-    "g038": "Phone",
-    "g039": "Email",
-    "g040": "Organisation",
-    "g041": "Type",
-    "g042": "Style",
-    "g043": "Custom (Hue)",
-    "g044": "Resolution (module density)",
-    "g045": "Robustness · capacity",
-    "g046": "Type O (rhombic field)",
-    "g047": "Type A (triangular silhouette)",
-    "g048": "Type Y (single cube)",
-    "g049": "Version",
-    "g050": "Auto (smallest)",
-    "g051": "Auto (H→M→L fit)",
-    "g052": "Tones",
-    "g053": "2 tones (default)",
-    "g054": "3 tones (Y-T)",
-    "g055": "Face gain (1.0 = flat, default)",
-    "g056": "QR fallback URL (advanced)",
-    "g057": "Style preset",
-    "g058": "Custom hue",
-    "g059": "Background",
-    "g060": "Placement preview (surface photo)",
-    "g061": "Choose image…",
-    "g062": "Reset position",
-    "g063": "Quiet zone (margin around the code)",
-    "g064": "Include TL scanner QR link",
-    "g065": "Prints a QR alongside the code as a fallback when the TL scanner cannot read it. “None” exports the code only.",
-    "g066": "Decorative images (left / right blank faces — β)",
-    "g067": "Choose left…",
-    "g068": "Choose right…",
-    "g069": "Swap left ⇄ right",
-    "g070": "Applied like a decal to the left and right faces left blank by the inner QR on Type Y (with face shading). Render-only — it does not affect the data or scan contract.",
-    "g071": "Show centre QR and corner QR together (advanced)",
-    "g072": "The centre-QR variant puts a QR where the bullseye would be — printing at 13 cm code width or wider is recommended.",
-    "g073": "Capacity",
-    "g074": "Export (deterministic — same input, same bytes)",
-    "g075": "Low",
-    "g076": "Mid",
-    "g077": "High",
-    "g078": "Correction first",
-    "g079": "Standard",
-    "g080": "High capacity",
-    "g081": "High contrast",
-    "g082": "Contact card",
-    "g083": " in the preview. It is not included in the exported file.",
-    "g084": "Top left",
-    "g085": "Top right",
-    "g086": "Bottom left",
-    "g087": "Bottom right",
-    "g201": "Transparent",
-    "g202": "White",
-    "g203": "Black",
-    "g204": "Inside",
-    "g206": "drag to move",
-    "g207": "scroll to zoom",
-    "g300": "Add a photo of the surface you will place the code on and it appears behind the preview. You can <b>drag to move</b> and <b>scroll to zoom</b><span> in the preview. It is not included in the exported file.</span>",
-    "g301": "Same input → deterministic output · the data contract is only SPEC §4.4 (disc median order + Δmin) / §14 (Type Y)",
-    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume",
-  },
-  ja: {
-    "g001": "ページのテーマ（コード描画とは無関係）",
-    "g002": "内容の大きさに合わせて解像度→容量の順に自動で組み合わせます",
-    "g003": "遠距離・大型印刷（看板）— モジュールが大きく遠くからでも読めます",
-    "g004": "1〜3m の距離 — ポスター程度の印刷",
-    "g005": "近距離・大容量 — モジュールが小さく近くで読みます",
-    "g006": "入力の大きさに合わせて誤り訂正優先→標準→大容量の順に自動選択します",
-    "g007": "ECC H（約40%）— 容量は減りますが破損耐性は最大です",
-    "g008": "ECC M（25%）— 標準のバランス",
-    "g009": "ECC L（約12%）— 最大容量",
-    "g010": "背景なしでコードのみ — PNG はアルファチャンネル、SVG は背景要素なし",
-    "g011": "白背景 — 明るい印刷物や書類に載せるとき",
-    "g012": "黒背景 — 暗い紙面や画面に載せるとき",
-    "g013": "背景画像を削除",
-    "g014": "背景が透明なら高コントラスト色を自動で選び、不透明なら背景自体がクワイエットゾーンになるため省略します",
-    "g015": "クワイエットゾーンなしでコードのみ",
-    "g016": "セルの色と周囲の面を見て白・黒から推奨色を選びます",
-    "g017": "内側（O/A: 中央 QR · Y: Y2 ウィンドウ β）",
-    "g018": "QR リンクなしでコードのみ書き出します",
-    "g019": "左の画像を削除",
-    "g020": "右の画像を削除",
-    "g021": "PNG をクリップボードにコピー",
-    "g022": "SVG マークアップをクリップボードにコピー",
-    "g023": "3面の輝度順序による 2.5D コード（コードネーム Trilume）— M0 エンコーダプレビュー",
-    "g024": "紹介",
-    "g025": "スキャナ",
-    "g026": "標準",
-    "g027": "詳細",
-    "g028": "自動",
-    "g029": "ライト",
-    "g030": "ダーク",
-    "g031": "コンテンツ",
-    "g032": "http(s):// がない場合は https:// を自動で付けます。",
-    "g033": "テキスト",
-    "g034": "パスワード",
-    "g035": "セキュリティ",
-    "g036": "なし",
-    "g037": "名前",
-    "g038": "電話",
-    "g039": "メール",
-    "g040": "組織",
-    "g041": "タイプ",
-    "g042": "スタイル",
-    "g043": "カスタム（Hue）",
-    "g044": "解像度（モジュール密度）",
-    "g045": "安定性・容量",
-    "g046": "Type O（菱形フィールド）",
-    "g047": "Type A（三角シルエット拡張）",
-    "g048": "Type Y（単一キューブ）",
-    "g049": "バージョン",
-    "g050": "自動（最小）",
-    "g051": "自動（H→M→L 適合）",
-    "g052": "トーン",
-    "g053": "2トーン（標準）",
-    "g054": "3トーン（Y-T）",
-    "g055": "面ゲイン強度（1.0 で平面・標準）",
-    "g056": "QR フォールバック URL（詳細）",
-    "g057": "スタイルプリセット",
-    "g058": "カスタム Hue",
-    "g059": "背景",
-    "g060": "配置プレビュー（表面画像）",
-    "g061": "画像を選択…",
-    "g062": "位置をリセット",
-    "g063": "クワイエットゾーン（コード周囲の余白）",
-    "g064": "TL スキャナ QR リンクを含める",
-    "g065": "TL スキャナで読めなかったときの代替経路となる QR をコードと一緒に印刷します。「なし」は QR なしでコードのみ書き出します。",
-    "g066": "装飾画像（左右の空き面それぞれ — β）",
-    "g067": "左を選択…",
-    "g068": "右を選択…",
-    "g069": "左右 ⇄ 入れ替え",
-    "g070": "Type Y の内側 QR で空く左右の面にデカールのように貼ります（面の陰影を適用）。描画専用で、データやスキャンの契約には影響しません。",
-    "g071": "中央 QR とコーナー QR を併記（詳細）",
-    "g072": "中央 QR 変種はブルズアイの代わりに中央へ QR を配置します — コード幅 13cm 以上での印刷を推奨します。",
-    "g073": "容量",
-    "g074": "エクスポート（決定的 — 同じ入力なら同じバイト）",
-    "g075": "低",
-    "g076": "中",
-    "g077": "高",
-    "g078": "訂正優先",
-    "g079": "標準",
-    "g080": "大容量",
-    "g081": "高コントラスト",
-    "g082": "名刺",
-    "g083": "できます。書き出すファイルには含まれません。",
-    "g084": "左上",
-    "g085": "右上",
-    "g086": "左下",
-    "g087": "右下",
-    "g201": "透明",
-    "g202": "白",
-    "g203": "黒",
-    "g204": "内側",
-    "g206": "ドラッグで移動",
-    "g207": "ホイールで拡大縮小",
-    "g300": "コードを実際に載せる面の写真を入れるとプレビューの背面に敷かれます。プレビューでは <b>ドラッグで移動</b>、<b>ホイールで拡大縮小</b><span>できます。書き出すファイルには含まれません。</span>",
-    "g301": "同じ入力 → 決定的な出力 · データ契約は SPEC §4.4（円板 median の順序 + Δmin）/ §14（Type Y）のみ",
-    "g302": "© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume",
-  },
-};
 
-const GENERATOR_BUILD = '2026-08-11.6';
+
+const GENERATOR_BUILD = '2026-08-11.7';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 
 /*
  * 언어 — 허브(언어별 HTML 3벌)와 달리 **한 파일 안에서 런타임 전환**한다.
  * 생성기는 `file://` 로도 열려야 해서(SPEC §8) 언어별로 쪼갤 수 없다.
- * 전환 후 `render()` 를 다시 부른다 — 용량 라벨처럼 JS 가 채우는 문구가 있기 때문이다.
+ *
+ * ⚠ 전환 시 `render()` 만으로는 **부족하다.** 힌트 문구들은 `sync*Ui()` 가 채우는데
+ *   그것들은 render 경로에 없어서, 예전엔 언어를 바꿔도 사용자가 그 컨트롤을 건드리기
+ *   전까지 옛 언어가 남아 있었다. 화면을 채우는 함수를 전부 다시 부른다.
  */
-const genI18n = createI18n(GENERATOR_STRINGS, { onChange() { render(); } });
+
 document.documentElement.setAttribute('lang', genI18n.lang);
 genI18n.apply();
 wireLanguageSwitch(document.getElementById('langSwitch'), genI18n);
