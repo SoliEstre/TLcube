@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tl.estre.so/sitemap.xml

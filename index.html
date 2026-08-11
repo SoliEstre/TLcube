@@ -3,7 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TrilLuminance (cube) — TLcube 인코더 (M0)</title>
+<title>TLcube 생성기 — TrilLuminance (cube) 코드 만들기</title>
+<meta name="description" content="TrilLuminance (cube) 코드를 브라우저에서 만들고 PNG·SVG 로 내보냅니다. URL·텍스트·Wi-Fi·명함을 Type O / A / Y 세 형태로 인코딩하고, 폴백 QR 도 함께 넣을 수 있어요.">
+<link rel="canonical" href="https://tlcube.estre.so/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TLcube">
+<meta property="og:title" content="TLcube 생성기 — 휘도 순위로 데이터를 싣는 2.5D 시각 코드 만들기">
+<meta property="og:description" content="절대 밝기가 아니라 세 면의 순서에 데이터를 싣는 오픈 시각 코드. 브라우저에서 바로 만들고 PNG·SVG 로 내보냅니다.">
+<meta property="og:url" content="https://tlcube.estre.so/">
+<meta property="og:image" content="https://tl.estre.so/assets/type-Y.png">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<!-- PWA — 홈 화면에 설치해서 앱처럼 쓴다. manifest·sw 는 배포 nginx 가 루트로 alias 한다
+     (deploy/estre-so/projects/tlcube/static-gen.conf). file:// 나 dev 서버에는 그 경로가
+     없어 404 가 나는데, 등록 실패는 삼키므로 **단일 파일 원칙(SPEC §8)은 그대로**다. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#101218">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TLcube 생성">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "TLcube 생성기",
+  "url": "https://tlcube.estre.so/",
+  "applicationCategory": "DesignApplication",
+  "operatingSystem": "Any (web browser)",
+  "description": "TrilLuminance (cube) 코드를 브라우저에서 만들고 PNG·SVG 로 내보냅니다. 인코딩은 전부 브라우저 안에서 끝나고 서버로 아무것도 보내지 않습니다.",
+  "featureList": [
+    "Type O / Type A / Type Y 세 가지 코드 형태",
+    "URL · 텍스트 · Wi-Fi · 명함(vCard) 인코딩",
+    "Reed-Solomon over GF(211) 오류 정정 (L/M/H)",
+    "폴백 QR 중앙 또는 코너 배치",
+    "PNG · SVG 내보내기 (동일 입력 → 결정적 출력)"
+  ],
+  "isPartOf": { "@type": "WebSite", "name": "TLcube", "url": "https://tl.estre.so/" },
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" }
+}
+</script>
 <!-- 파비콘을 data URI 로 인라인한다. 외부 파일을 링크하면 단일 파일 원칙(SPEC §8 —
      file:// 로 열려야 한다)이 깨지고, 아예 없으면 브라우저가 /favicon.ico 를 찾아
      콘솔에 404 를 남긴다. 도형은 sites/_shared/favicon.svg 와 같다 — 아이소메트릭
@@ -100,6 +139,10 @@
   }
   /* 좁은 폭: 좌측 텍스트가 줄어들고(말줄임) 우측 토글들은 절대 줄바꿈·축소되지 않는다. */
   header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: .04em; flex-shrink: 0; white-space: nowrap; }
+  /* 제목 안의 브랜드 링크 — 색은 accent 를 유지하고 밑줄은 hover 에서만 준다.
+     기본 링크색(파랑)이 들어오면 제목 대비가 무너진다. */
+  header h1 .brand-link { color: var(--accent); text-decoration: none; }
+  header h1 .brand-link:hover { text-decoration: underline; }
   header .sub {
     color: var(--dim); font-size: 12px;
     min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -203,6 +246,9 @@
   }
   footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; text-align: center; }
   footer .copyright { display: block; margin-top: 4px; font-size: 10px; opacity: .75; }
+  /* 빌드 식별자 — 실기기 피드백에서 어느 배포본인지 즉시 알기 위한 것.
+     이 값이 없어서 «배포가 갱신됐나» 를 바이트수 비교로 확인해야 했다(2026-08-11). */
+  footer .build-tag { font-variant-numeric: tabular-nums; }
 
   /* ── 모드 스위치 ─────────────────────────────────────────────── */
   .mode-switch {
@@ -313,13 +359,16 @@
 </head>
 <body>
 <header>
-  <h1>TrilLuminance <span style="color:var(--accent)">/ TLcube</span></h1>
+  <!-- 제목의 «TLcube» 자체가 소개 허브로 가는 링크다(사용자 지시 2026-08-11).
+       새 창으로 여는 이유: 생성기는 입력해 둔 내용이 있는 작업 화면이라, 같은 탭에서
+       나가면 그 상태가 사라진다. 크로스링크는 세 사이트 모두 같은 규약을 쓴다. -->
+  <h1>TrilLuminance <a class="brand-link" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">/ TLcube</a></h1>
   <span class="sub">3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰</span>
   <span class="spacer"></span>
   <!-- 3사이트 크로스링크 (PM/008 §1) — 절대 URL 이라 file:// 단일 파일에서도 동작한다. -->
   <nav class="site-nav">
-    <a href="https://tl.estre.so">소개</a>
-    <a href="https://tlscan.estre.so">스캐너</a>
+    <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">소개</a>
+    <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer">스캐너</a>
   </nav>
   <div class="mode-switch" id="modeSwitch">
     <button type="button" id="modeNormalBtn" class="active">일반</button>
@@ -762,7 +811,8 @@
   </div>
 </main>
 <footer>동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐
-  <span class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume</span>
+  <span class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume ·
+    <span id="buildTag" class="build-tag">—</span></span>
 </footer>
 
 <script type="module">
@@ -2266,6 +2316,25 @@ for (const el of [
   el.addEventListener('change', schedule);
 }
 render();
+
+/**
+ * 배포본 식별자. 실기기 피드백에서 **어느 빌드를 보고 있는지** 즉시 알기 위한 것이다.
+ * 스캐너(`SCANNER_BUILD`)와 같은 이유이고, 갱신할 때 같이 올린다.
+ */
+const GENERATOR_BUILD = '2026-08-11.1';
+const buildTagEl = document.getElementById('buildTag');
+if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
+
+/*
+ * 서비스 워커 등록 — PWA 설치 요건의 마지막 조각(Android Chrome 은 fetch 핸들러를 가진
+ * 워커를 요구한다). 실패는 전부 삼킨다 — file:// 로 열거나 dev 서버에는 `/sw.js` 가 없고,
+ * 설치 가능 여부는 부가 기능이지 생성기 동작 조건이 아니다.
+ */
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  });
+}
 </script>
 </body>
 </html>

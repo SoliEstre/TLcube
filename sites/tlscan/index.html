@@ -6,6 +6,29 @@
 <title>TLcube 스캐너</title>
 <meta name="description" content="TLcube 코드를 카메라나 사진에서 읽는 스캐너입니다.">
 <link rel="canonical" href="https://tlscan.estre.so/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TLcube">
+<meta property="og:title" content="TLcube 스캐너 — 카메라로 TLcube 코드 읽기">
+<meta property="og:description" content="설치 없이 브라우저에서 TLcube 코드를 읽습니다. 프레임은 기기 안에서만 처리하고 서버로 이미지를 보내지 않아요.">
+<meta property="og:url" content="https://tlscan.estre.so/">
+<meta property="og:image" content="https://tl.estre.so/assets/type-Y.png">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "TLcube 스캐너",
+  "url": "https://tlscan.estre.so/",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any (web browser)",
+  "browserRequirements": "HTTPS, 카메라 접근을 지원하는 최신 브라우저",
+  "description": "TrilLuminance (cube) 코드를 카메라나 사진에서 읽는 웹 스캐너. 프레임은 기기 안에서만 처리합니다.",
+  "isPartOf": { "@type": "WebSite", "name": "TLcube", "url": "https://tl.estre.so/" },
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" }
+}
+</script>
 <link rel="icon" href="../_shared/favicon.svg" type="image/svg+xml">
 <!-- PWA — 홈 화면에 설치해서 브라우저 크롬 없이 전체화면으로 쓴다.
      manifest·sw 는 배포 nginx 가 루트로 alias 한다(deploy/.../static.conf). dev 서버에는
@@ -647,7 +670,7 @@
 
   <div class="scanner-overlay">
     <header class="scanner-top">
-      <a class="brand-logo" href="https://tl.estre.so" aria-label="TLcube 홈페이지">TL<span>cube</span></a>
+      <a class="brand-logo" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" aria-label="TLcube 소개 홈페이지 (새 창)">TL<span>cube</span></a>
     </header>
 
     <section class="scan-center" aria-label="스캔 가이드">
@@ -672,7 +695,7 @@
     </div>
 
     <footer class="site-footer">
-      <small>© 2026 SoliEstre · <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">tl.estre.so</a> · <span id="build-tag" class="build-tag">—</span></small>
+      <small>© 2026 SoliEstre · <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">소개</a> · <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer">생성기</a> · <span id="build-tag" class="build-tag">—</span></small>
     </footer>
   </div>
 

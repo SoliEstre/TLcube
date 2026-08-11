@@ -1,0 +1,25 @@
+{
+  "name": "TLcube 생성기",
+  "short_name": "TLcube 생성",
+  "description": "TrilLuminance (cube) 코드를 만들고 PNG·SVG 로 내보냅니다.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101218",
+  "theme_color": "#101218",
+  "icons": [
+    {
+      "src": "/_shared/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/_shared/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

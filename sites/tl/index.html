@@ -13,6 +13,40 @@
 <meta property="og:image" content="https://tl.estre.so/assets/type-Y.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="../_shared/favicon.svg" type="image/svg+xml">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta property="og:site_name" content="TLcube">
+<meta property="og:locale" content="ko_KR">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://tl.estre.so/#website",
+      "name": "TLcube",
+      "alternateName": "TrilLuminance (cube)",
+      "url": "https://tl.estre.so/",
+      "inLanguage": "ko"
+    },
+    {
+      "@type": "TechArticle",
+      "headline": "TLcube — 절대 밝기가 아니라 순서에 데이터를 싣는 2.5D 시각 코드",
+      "description": "육각 셀을 마름모 3면으로 나누고 세 면의 상대 휘도 순서(3! = 6가지)를 base-6 심볼로 쓰는 오픈 시각 코드. 단조 톤 변형에 불변합니다.",
+      "url": "https://tl.estre.so/",
+      "isPartOf": { "@id": "https://tl.estre.so/#website" },
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "author": { "@type": "Organization", "name": "SoliEstre" }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "TLcube 레퍼런스 구현",
+      "codeRepository": "https://github.com/SoliEstre/TLcube",
+      "programmingLanguage": "JavaScript",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ]
+}
+</script>
 <link rel="stylesheet" href="../_shared/site.css">
 </head>
 <body data-site="hub">
@@ -25,8 +59,8 @@
       <a href="#types">타입</a>
       <a href="#scanner-status">스캐너 현황</a>
       <a href="#spec">스펙</a>
-      <a href="https://tlcube.estre.so" data-out="tlcube">생성기</a>
-      <a href="https://tlscan.estre.so" data-out="tlscan">스캐너</a>
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">생성기</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">스캐너</a>
       <div class="theme-toggle" role="group" aria-label="테마">
         <button type="button" data-theme-choice="auto">자동</button>
         <button type="button" data-theme-choice="light">라이트</button>
@@ -43,7 +77,7 @@
       순서만 지켜지면 값이 살아남고 — 그렇게 그리면 아이소메트릭 큐브가 됩니다.
     </p>
     <div class="cta">
-      <a class="btn primary" href="https://tlcube.estre.so" data-out="tlcube">코드 만들어보기</a>
+      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">코드 만들어보기</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
     </div>
   </section>
@@ -189,8 +223,8 @@
       <table>
         <thead><tr><th>사이트</th><th>역할</th><th>상태</th></tr></thead>
         <tbody>
-          <tr><td><a href="https://tlcube.estre.so" data-out="tlcube">tlcube.estre.so</a></td><td>생성기</td><td><span class="badge ok">동작</span></td></tr>
-          <tr><td><a href="https://tlscan.estre.so" data-out="tlscan">tlscan.estre.so</a></td><td>스캐너</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge warn">개발 중 — 현황 &rsaquo;</span></a></td></tr>
+          <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>생성기</td><td><span class="badge ok">동작</span></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>스캐너</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge warn">개발 중 — 현황 &rsaquo;</span></a></td></tr>
           <tr><td>tl.estre.so</td><td>소개 허브</td><td><span class="badge ok">여기</span></td></tr>
         </tbody>
       </table>
@@ -199,8 +233,8 @@
 
   <footer>
     <div class="links">
-      <a href="https://tlcube.estre.so" data-out="tlcube">생성기</a>
-      <a href="https://tlscan.estre.so" data-out="tlscan">스캐너</a>
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">생성기</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">스캐너</a>
       <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
     </div>
     <div>QR Code is a registered trademark of DENSO WAVE INCORPORATED.</div>
