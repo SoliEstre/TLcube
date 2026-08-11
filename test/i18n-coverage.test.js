@@ -142,6 +142,29 @@ test('en·ja 사전에 한국어가 남아 있지 않다', () => {
   }
 });
 
+test('인자 없는 sync* 함수가 전부 TEXT_SYNCERS 에 등록돼 있다', () => {
+  // 언어 전환은 JS 가 채운 문구를 **다시 그려야** 완성된다. 목록에서 빠진 함수의
+  // 문구는 바뀌기 전 언어로 굳는데, 화면상 «저기만 번역 안 됨» 으로 보여서 원인을
+  // 엉뚱한 데서 찾게 된다. 실제로 두 번 그랬다(2026-08-11).
+  //
+  // 인자를 받는 update* 는 render() 가 인코딩 결과와 함께 부르므로 제외한다.
+  const src = readFileSync(`${ROOT}index.html`, 'utf8');
+  const declared = [...src.matchAll(/^function (sync[A-Za-z]*)\(\)\s*\{/gm)].map((m) => m[1]);
+  assert.ok(declared.length >= 8, `sync 함수를 너무 적게 찾았다(${declared.length}) — 파서가 깨졌을 수 있다`);
+
+  const listMatch = /const TEXT_SYNCERS = \[([\s\S]*?)\];/.exec(src);
+  assert.ok(listMatch, 'TEXT_SYNCERS 목록을 못 찾았다');
+  const registered = new Set(listMatch[1].split(',').map((s) => s.trim()).filter(Boolean));
+
+  const missing = declared.filter((fn) => !registered.has(fn));
+  assert.deepEqual(missing, [],
+    `TEXT_SYNCERS 에 빠진 함수: ${missing.join(', ')} — 언어를 바꿔도 이 함수가 채우는 문구는 안 바뀐다`);
+
+  const unknown = [...registered].filter((fn) => !declared.includes(fn));
+  assert.deepEqual(unknown, [],
+    `TEXT_SYNCERS 에 없는 함수가 있다: ${unknown.join(', ')} — 이름이 바뀌었거나 인자를 받게 됐다`);
+});
+
 test('생성기 사전의 세 언어가 같은 키 집합을 갖는다', () => {
   // 키가 빠지면 조용히 한국어로 폴백한다(i18n.js translate). 그게 이번 사고의
   // 증상과 똑같이 보이므로, 폴백에 기대지 말고 여기서 막는다.

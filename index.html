@@ -1309,13 +1309,29 @@ const GENERATOR_STRINGS = {
   },
 };
 
+/*
+ * 언어가 바뀌면 **JS 가 채운 문구를 전부 다시 그려야 한다.** 이 목록에서 하나만 빠져도
+ * 그 문구는 바뀌기 전 언어로 굳는다 — 사용자는 «저 부분만 번역이 안 됐다» 로 보게 되는데
+ * 실은 번역은 있고 다시 그리지 않은 것이다.
+ *
+ * 실제로 두 번 당했다. 처음엔 render() 만 불러서 힌트 전부가 굳었고, 고치면서 목록을
+ * 손으로 적다가 syncStyleUi·syncBgModeUi 를 빠뜨려 Hue 표시와 PNG/배경 힌트가 옛 언어로
+ * 남았다(2026-08-11 사용자 제보 2회). 손으로 적는 목록은 또 빠뜨린다 —
+ * 그래서 `test/i18n-coverage.test.js` 가 «인자 없는 sync* 는 전부 여기 있어야 한다» 를
+ * 강제한다. 새 sync 함수를 만들고 여기 안 넣으면 테스트가 깨진다.
+ *
+ * 인자를 받는 updateOverflowHighlight·updateGauge 는 제외한다 — render() 가 현재 인코딩
+ * 결과와 함께 부르는 것들이고, 아래 render() 호출이 그걸 덮는다.
+ */
+const TEXT_SYNCERS = [
+  syncStyleUi, syncContentTabUi, syncQrPositionUi, syncResTierUi, syncBgModeUi,
+  syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
+  syncFaceGainLabel,
+];
+
 const genI18n = createI18n(GENERATOR_STRINGS, {
   onChange() {
-    syncResTierUi();
-    syncQuietModeUi();
-    syncBackdropUi();
-    syncBackdropLayer();
-    syncDecorUi();
+    for (const sync of TEXT_SYNCERS) sync();
     render();
   },
 });
@@ -2845,7 +2861,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-11.7';
+const GENERATOR_BUILD = '2026-08-11.8';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 
