@@ -89,7 +89,7 @@ test('select 대신 4계열 카드 격자이고 실험 썸네일은 19셀 마스
   assert.match(source, /data-i18n="g492"/);
   const built = buildGeneratorVariants();
   for (const html of [built.official, built.experiment]) {
-    assert.match(html, /2026-08-12\.03/);
+    assert.match(html, /2026-08-12\.04/);
     const finderSource = embeddedFinderSource(html);
     assert.match(finderSource, /export const FINDER_BASELINE_SCORES/);
     assert.match(html, /\["finder-selection",/);
@@ -120,6 +120,17 @@ test('파인더/QR 결합은 정규화 뒤 한 번씩만 그리는 비재귀 경
   );
   assert.doesNotMatch(finderRender, /syncFinderQrUi\(/);
   assert.doesNotMatch(qrRender, /syncFinderQrUi\(/);
+
+  assert.match(source, /commitFinderQrTransition\(/);
+  assert.match(source, /cancelPendingRender:\s*cancelScheduledRender/);
+  assert.match(source, /render:\s*\(\)\s*=>\s*\{[\s\S]*?render\(\);[\s\S]*?\}/);
+
+  const renderStart = source.indexOf('function render()');
+  const renderEnd = source.indexOf('for (const el of [', renderStart);
+  assert.ok(renderStart >= 0 && renderEnd > renderStart, '주 렌더 함수를 못 찾았다');
+  const renderSource = source.slice(renderStart, renderEnd);
+  assert.match(renderSource, /renderWithErrorDisplay\(els\.error,/);
+  assert.doesNotMatch(renderSource, /els\.error\.textContent\s*=/);
 });
 
 test('실험 경고는 8종 후보 선택에만 연결되고 두 기준선에는 연결되지 않는다', () => {

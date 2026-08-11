@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   CENTER_QR_FINDER_PATTERN_ID,
+  commitFinderQrTransition,
   normalizeFinderQrState,
   selectFinderPattern,
   selectQrPosition,
@@ -101,4 +102,46 @@ test('정규화는 멱등이고 중앙 QR/안쪽 모순을 한 번에 없앤다'
       once.qrPosition === 'inner',
     );
   }
+});
+
+test('빠른 파인더/QR 전환은 예약을 먼저 취소하고 정규 상태를 각 1회만 렌더한다', () => {
+  const live = state({
+    finderPatternId: TRIAL_DEFAULT,
+    previousFinderPatternId: TRIAL_DEFAULT,
+  });
+  const transitions = [
+    () => selectQrPosition(live, 'inner', 'O', OFFICIAL_DEFAULT),
+    () => selectFinderPattern(live, TRIAL_DEFAULT, 'O', OFFICIAL_DEFAULT),
+    () => selectFinderPattern(
+      live, CENTER_QR_FINDER_PATTERN_ID, 'O', OFFICIAL_DEFAULT,
+    ),
+    () => selectQrPosition(live, 'BR', 'O', OFFICIAL_DEFAULT),
+  ];
+  let cancelCalls = 0;
+  let renderCalls = 0;
+
+  for (const transition of transitions) {
+    const order = [];
+    commitFinderQrTransition(live, transition(), 'O', OFFICIAL_DEFAULT, {
+      cancelPendingRender() {
+        cancelCalls += 1;
+        order.push('cancel');
+      },
+      render(committed) {
+        renderCalls += 1;
+        order.push('render');
+        assert.equal(
+          committed.finderPatternId === CENTER_QR_FINDER_PATTERN_ID,
+          committed.qrPosition === 'inner',
+          '렌더가 중앙 QR/안쪽 상호배타 상태만 봐야 한다',
+        );
+      },
+    });
+    assert.deepEqual(order, ['cancel', 'render']);
+  }
+
+  assert.equal(cancelCalls, transitions.length);
+  assert.equal(renderCalls, transitions.length);
+  assert.equal(live.finderPatternId, TRIAL_DEFAULT);
+  assert.equal(live.qrPosition, 'BR');
 });

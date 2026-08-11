@@ -29,6 +29,25 @@ export function normalizeFinderQrState(state, type, defaultFinderPatternId) {
   return next;
 }
 
+/**
+ * 파인더/QR 전환을 하나의 커밋 경계로 묶는다.
+ * 예약 렌더를 먼저 취소하고, 정규 상태를 반영한 뒤 렌더 콜백을 정확히 한 번 호출한다.
+ */
+export function commitFinderQrTransition(
+  state, nextState, type, defaultFinderPatternId, lifecycle,
+) {
+  const { cancelPendingRender, render } = lifecycle || {};
+  if (typeof cancelPendingRender !== 'function' || typeof render !== 'function') {
+    throw new TypeError('cancelPendingRender 와 render 콜백이 필요하다');
+  }
+
+  cancelPendingRender();
+  const committed = normalizeFinderQrState(nextState, type, defaultFinderPatternId);
+  Object.assign(state, committed);
+  render(state);
+  return state;
+}
+
 /** 파인더 카드 선택. 중앙 QR은 안쪽을 고르고, 다른 파인더는 직전 바깥 QR 위치를 복원한다. */
 export function selectFinderPattern(state, finderPatternId, type, defaultFinderPatternId) {
   const next = { ...state, finderPatternId };

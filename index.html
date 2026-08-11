@@ -1603,8 +1603,8 @@ import {
   FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
 } from './src/finder-patterns.js';
 import {
-  CENTER_QR_FINDER_PATTERN_ID, DEFAULT_OUTER_QR_POSITION, normalizeFinderQrState,
-  selectFinderPattern, selectQrPosition,
+  CENTER_QR_FINDER_PATTERN_ID, DEFAULT_OUTER_QR_POSITION, commitFinderQrTransition,
+  normalizeFinderQrState, selectFinderPattern, selectQrPosition,
 } from './src/finder-selection.js';
 import { FACES, facePolygon } from './src/hexgrid.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
@@ -1620,6 +1620,7 @@ import { rasterToPng } from './src/png.js';
 import { sceneToSvg } from './src/svg.js';
 import { TL_READER_URL } from './src/qr.js';
 import { wifiPayload, cardPayload } from './src/payloadform.js';
+import { renderWithErrorDisplay } from './src/render-status.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -2057,10 +2058,8 @@ function setMode(next) {
   els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
   els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
   els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
-  syncFinderQrUi(); // 공용 QR 위치 카드의 모드 의존 요소(병행 표시 행) 갱신
-  syncResTierUi();
   syncBgModeUi(); // 분리 수치는 모드별 색 스타일 소스를 따른다
-  schedule();
+  commitFinderQrUi(normalState, currentType());
 }
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
 els.modeAdvancedBtn.addEventListener('click', () => setMode('advanced'));
@@ -2301,11 +2300,10 @@ function makeFinderCard(id, pattern) {
   label.dataset.finderLabelKey = FINDER_LABEL_KEYS[id];
   card.append(label);
   const activate = () => {
-    Object.assign(normalState, selectFinderPattern(
-      normalState, id, currentType(), DEFAULT_FINDER_PATTERN_ID,
-    ));
-    syncFinderQrUi();
-    schedule();
+    const type = currentType();
+    commitFinderQrUi(
+      selectFinderPattern(normalState, id, type, DEFAULT_FINDER_PATTERN_ID), type,
+    );
   };
   card.addEventListener('click', activate);
   card.addEventListener('keydown', (event) => {
@@ -2439,11 +2437,9 @@ function syncFinderQrUi() {
 
 for (const card of els.typeCards.children) {
   card.addEventListener('click', () => {
-    normalState.type = card.dataset.type;
+    const type = card.dataset.type;
     for (const c of els.typeCards.children) c.classList.toggle('active', c === card);
-    syncFinderQrUi();
-    syncResTierUi();
-    schedule();
+    commitFinderQrUi({ ...normalState, type }, type);
   });
 }
 
@@ -2451,15 +2447,27 @@ for (const card of els.typeCards.children) {
 
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
-    Object.assign(normalState, selectQrPosition(
-      normalState, card.dataset.pos, currentType(), DEFAULT_FINDER_PATTERN_ID,
-    ));
-    syncFinderQrUi();
-    syncResTierUi();
-    schedule();
+    const type = currentType();
+    commitFinderQrUi(
+      selectQrPosition(normalState, card.dataset.pos, type, DEFAULT_FINDER_PATTERN_ID), type,
+    );
   });
 }
 syncFinderQrUi();
+
+function commitFinderQrUi(nextState, type = currentType()) {
+  commitFinderQrTransition(
+    normalState, nextState, type, DEFAULT_FINDER_PATTERN_ID, {
+      cancelPendingRender: cancelScheduledRender,
+      render: () => {
+        renderQrPositionUi();
+        renderFinderUi();
+        syncResTierUi();
+        render();
+      },
+    },
+  );
+}
 
 
 // ── 일반 모드: 안정성·용량 4택 (자동/H/M/L) + 해상도 4택 (자동/저/중/고) ──────
@@ -3019,7 +3027,10 @@ function syncTypeUi() {
   els.optionsY.style.display = isY ? '' : 'none';
 }
 
-els.codeType.addEventListener('change', () => { syncTypeUi(); syncFinderQrUi(); syncResTierUi(); schedule(); });
+els.codeType.addEventListener('change', () => {
+  syncTypeUi();
+  commitFinderQrUi(normalState, currentType());
+});
 syncTypeUi();
 
 // ── 고급 모드: 면 게인 슬라이더 (Type Y — 1.0(평면) ~ DEFAULT_FACE_GAINS(기본) 보간) ──
@@ -3299,7 +3310,17 @@ function updateGauge(type, encoded, text) {
 }
 
 let timer = 0;
-function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
+function cancelScheduledRender() {
+  clearTimeout(timer);
+  timer = 0;
+}
+function schedule() {
+  cancelScheduledRender();
+  timer = setTimeout(() => {
+    timer = 0;
+    render();
+  }, 120);
+}
 
 function eccTierLabel(level) {
   return t({ H: 'g422', M: 'g423', L: 'g424' }[level] || 'g423');
@@ -3311,12 +3332,11 @@ function isCapacityError(err) {
 }
 
 function render() {
-  els.error.textContent = '';
-  syncFaceGainLabel();
-  const cfg = buildConfig();
-  const fullText = cfg.text;
   let keptPayload = null; // 절단 렌더 시 실제로 실린 페이로드 문자열
-  try {
+  renderWithErrorDisplay(els.error, () => {
+    syncFaceGainLabel();
+    const cfg = buildConfig();
+    const fullText = cfg.text;
     const renderCurrent = () => (cfg.type === 'Y' ? renderTypeY(cfg) : cfg.type === 'A' ? renderTypeA(cfg) : renderTypeO(cfg));
     let result;
     try {
@@ -3360,9 +3380,10 @@ function render() {
     els.info.innerHTML = result.info
       + (keptPayload !== null ? ` <span class="badge bad">${t('g425')}</span>` : '');
     updateGauge(result.type, result.encoded, fullText); // 게이지는 원본 분량 기준 (초과 시 빨강)
+    let renderMessage = '';
     if (keptPayload !== null) {
       const overBytes = payloadByteLength(fullText) - payloadByteLength(keptPayload);
-      els.error.textContent = tf('g455', { n: overBytes });
+      renderMessage = tf('g455', { n: overBytes });
     }
     {
       // 자동 축(해상도/용량)이 하나라도 켜져 있으면 판정 결과(버전·ECC)를 힌트로 보여준다.
@@ -3374,14 +3395,16 @@ function render() {
         ? tf('g456', { bits: autoBits.join('·'), ver: `${vPrefix}${result.encoded.version}`, ecc: result.encoded.eccLevel, tier: eccTierLabel(result.encoded.eccLevel) })
         : '';
     }
-  } catch (err) {
+    updateOverflowHighlight(keptPayload);
+    return renderMessage;
+  }, () => {
+    keptPayload = null;
     current = null;
     els.info.innerHTML = '';
-    els.error.textContent = String(err && err.message ? err.message : err);
     updateGauge(null, null, '');
     els.eccTierHint.textContent = '';
-  }
-  updateOverflowHighlight(keptPayload);
+    updateOverflowHighlight(null);
+  });
 }
 
 for (const el of [
@@ -3415,7 +3438,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-12.03';
+const GENERATOR_BUILD = '2026-08-12.04';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 
