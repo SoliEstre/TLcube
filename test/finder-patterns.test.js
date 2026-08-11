@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { encode } from '../src/encode.js';
 import {
   DEFAULT_FINDER_PATTERN_ID,
+  LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER,
   FINDER_FACE_BITS,
   FINDER_PATTERN_IDS,
@@ -34,6 +35,16 @@ const PALETTE = Object.freeze({
 
 test('고정 목록은 요청된 8개 ID와 regionCells(2) 좌표 순서를 그대로 쓴다', () => {
   assert.deepEqual(FINDER_PATTERN_IDS, SELECTED_FINDER_IDS);
+  assert.deepEqual(FINDER_PATTERN_IDS, [
+    'pinwheel-3-0101-cw-missing-solid',
+    'gap-ring-01-2-1-solid',
+    'flower-7-0020-coprime-offset',
+    'swirl-2-200',
+    'pinwheel-c2-2-1100-cw',
+    'gap-ring-01-2-1-open',
+    'flower-7-1020-coprime-offset',
+    'swirl-c2-5-5-11-both',
+  ]);
   assert.equal(FINDER_PATTERNS.length, 8);
   assert.deepEqual(FINDER_CELL_ORDER, regionCells(2));
   assert.deepEqual(FACES.map((face) => FINDER_FACE_BITS[face]), [1, 2, 4]);
@@ -98,8 +109,10 @@ test('finderPatternId 생략과 bullseye 명시는 기존 장면을 정확히 �
   const implicit = buildScene(encoded, { palette: PALETTE });
   const explicit = buildScene(encoded, {
     palette: PALETTE,
-    finderPatternId: DEFAULT_FINDER_PATTERN_ID,
+    finderPatternId: LEGACY_FINDER_PATTERN_ID,
   });
+  assert.equal(DEFAULT_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
+    '소스 기본값은 실패 안전하게 현행 불스아이여야 한다');
   assert.deepEqual(explicit, implicit);
   assert.equal(implicit.finderPatternId, DEFAULT_FINDER_PATTERN_ID);
   assert.equal(implicit.shapes.filter((shape) => shape.kind === 'disc').length, 6);

@@ -234,6 +234,39 @@
     background: color-mix(in srgb, var(--warn) 8%, transparent);
     border-radius: 0 6px 6px 0; font-size: 11px; line-height: 1.5;
   }
+  /* 같은 index.html 에서 정식/시험판을 빌드한다. edition 속성은 build-single 만 바꾼다. */
+  .official-edition-only, .finder-experiment-only { display: none !important; }
+  body[data-generator-edition="official"] .official-edition-only { display: inline-flex !important; }
+  body[data-generator-edition="finder-experiment"] .finder-experiment-only { display: inline-flex !important; }
+  body[data-generator-edition="finder-experiment"] .experiment-banner.finder-experiment-only { display: flex !important; }
+  .experiment-banner {
+    width: calc(100% - 48px); max-width: 1792px; margin: 4px 24px 0; padding: 9px 12px;
+    align-items: center; justify-content: space-between; gap: 14px;
+    color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+    background: color-mix(in srgb, var(--warn) 9%, var(--panel)); border-radius: 8px;
+    font-size: 12px; line-height: 1.45;
+  }
+  .experiment-banner strong { display: block; color: var(--text); }
+  .experiment-banner a { flex-shrink: 0; color: var(--warn); font-weight: 600; }
+
+  /* 중앙 파인더 카드 — 기존 card-row/toggle-card 관용구 위에 배치만 격자로 고정한다. */
+  .finder-legacy-row { display: grid; grid-template-columns: minmax(0, 1fr); margin-top: 4px; }
+  .finder-legacy-row .finder-card { flex-direction: row; justify-content: center; }
+  .finder-family-grid.card-row {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px;
+  }
+  .finder-family { display: grid; grid-template-rows: auto 1fr 1fr; gap: 6px; min-width: 0; }
+  .finder-family-title {
+    min-height: 2.4em; display: flex; align-items: end; justify-content: center;
+    color: var(--dim); font-size: 10px; line-height: 1.2; text-align: center;
+  }
+  .finder-card { min-width: 0; width: 100%; padding: 7px 3px; justify-content: flex-start; }
+  .finder-card svg { width: 100%; max-width: 52px; height: auto; flex: 0 0 auto; }
+  .finder-card-label { min-height: 2.4em; display: flex; align-items: center; line-height: 1.2; }
+  @media (max-width: 420px) {
+    .experiment-banner { width: calc(100% - 32px); margin-inline: 16px; align-items: flex-start; flex-direction: column; }
+    .finder-family-grid.card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
   fieldset.typeOptions { border: none; margin: 0; padding: 0; }
   #info { margin-top: 14px; font-size: 12px; line-height: 1.7; color: var(--dim); }
   #info b { color: var(--text); font-weight: 600; }
@@ -385,7 +418,7 @@
   .section-title:first-child { margin-top: 0; }
 </style>
 </head>
-<body>
+<body data-generator-edition="official">
 <header>
   <!-- 제목의 «TLcube» 자체가 소개 허브로 가는 링크다(사용자 지시 2026-08-11).
        새 창으로 여는 이유: 생성기는 입력해 둔 내용이 있는 작업 화면이라, 같은 탭에서
@@ -397,6 +430,8 @@
   <nav class="site-nav">
     <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="g024">소개</a>
     <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="g025">스캐너</a>
+    <a class="official-edition-only" href="https://tlcube.estre.so/_shared/gen-finder.html" data-i18n="g476">실험 파인더 시험판</a>
+    <a class="finder-experiment-only" href="https://tlcube.estre.so/" data-i18n="g477">정식 생성기로 돌아가기</a>
   </nav>
   <div class="mode-switch" id="modeSwitch">
     <button type="button" id="modeNormalBtn" class="active" data-i18n="g026">일반</button>
@@ -413,6 +448,13 @@
     <button type="button" data-theme-choice="dark" data-i18n="g030">다크</button>
   </div>
 </header>
+<aside class="experiment-banner finder-experiment-only" id="finderExperimentBanner" role="status">
+  <div>
+    <strong data-i18n="g478">시험판 — 실험 파인더 생성기</strong>
+    <span data-i18n="g479">여기서 만든 실험 파인더 코드는 아직 스캔되지 않아요. 모양 비교용으로만 사용해 주세요.</span>
+  </div>
+  <a href="https://tlcube.estre.so/" data-i18n="g477">정식 생성기로 돌아가기</a>
+</aside>
 <script>
 // 테마 적용은 module 로드보다 먼저 (플래시 방지). localStorage 저장 — 페이지 크롬
 // 설정일 뿐 출력 결정성과 무관하다. 자동 = data-theme 미부착 (media query 가 처리).
@@ -715,14 +757,15 @@
       <p class="hint" id="quietModeHint"></p>
 
       <div id="finderSection" style="display:none">
-        <label for="finderPattern" data-i18n="g459">중앙 파인더 (Type O/A)</label>
-        <select id="finderPattern"></select>
-        <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
-          <strong data-i18n="g469">실험 — 아직 스캔되지 않음</strong><br>
-          <span data-i18n="g470">현행 스캐너는 이 파인더를 읽지 못해요. 실제 코드 안에서 모양을 비교하는 용도로만 내보내세요.</span>
-        </p>
+        <label data-i18n="g459">중앙 파인더 (Type O/A)</label>
+        <div class="finder-legacy-row card-row" id="finderLegacyRow"></div>
+        <div class="finder-family-grid card-row" id="finderPatternCards"></div>
         <p class="hint" id="finderOverrideHint" data-i18n="g471" style="display:none">중앙 QR이 선택되어 위 실험 파인더 대신 렌더돼요.</p>
       </div>
+      <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
+        <strong data-i18n="g469">실험 — 아직 스캔되지 않음</strong><br>
+        <span data-i18n="g470">현행 스캐너는 이 파인더를 읽지 못해요. 실제 코드 안에서 모양을 비교하는 용도로만 내보내세요.</span>
+      </p>
 
       <label data-i18n="g064">TL스캐너 QR링크 포함</label>
       <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
@@ -1023,18 +1066,26 @@ const GENERATOR_STRINGS = {
     "g457": "TLcube 생성기 — TrilLuminance (cube) 코드 만들기",
     "g458": "TLcube 생성",
     "g459": "중앙 파인더 (Type O/A)",
-    "g460": "현행 불스아이 (기본)",
+    "g460": "현행 불스아이",
     "g461": "면 나선",
-    "g462": "틈 링 · 솔리드 중심",
-    "g463": "3날 바람개비",
-    "g464": "7잎 꽃 · 컴팩트",
-    "g465": "C2 쌍날 바람개비",
-    "g466": "틈 링 · 열린 중심",
-    "g467": "7잎 꽃 · 와이드",
-    "g468": "C2 면 나선",
+    "g462": "솔리드 중심",
+    "g463": "3날",
+    "g464": "컴팩트",
+    "g465": "C2 쌍날",
+    "g466": "열린 중심",
+    "g467": "와이드",
+    "g468": "C2 나선",
     "g469": "실험 — 아직 스캔되지 않음",
     "g470": "현행 스캐너는 이 파인더를 읽지 못해요. 실제 코드 안에서 모양을 비교하는 용도로만 내보내세요.",
-    "g471": "중앙 QR이 선택되어 위 실험 파인더 대신 렌더돼요."
+    "g471": "중앙 QR이 선택되어 위 실험 파인더 대신 렌더돼요.",
+    "g472": "바람개비",
+    "g473": "틈 링",
+    "g474": "7잎 꽃",
+    "g475": "면 나선",
+    "g476": "실험 파인더 시험판",
+    "g477": "정식 생성기로 돌아가기",
+    "g478": "시험판 — 실험 파인더 생성기",
+    "g479": "여기서 만든 실험 파인더 코드는 아직 스캔되지 않아요. 모양 비교용으로만 사용해 주세요."
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1193,18 +1244,26 @@ const GENERATOR_STRINGS = {
     "g457": "TLcube generator — make TrilLuminance (cube) codes",
     "g458": "TLcube gen",
     "g459": "Centre finder (Type O/A)",
-    "g460": "Current bullseye (default)",
+    "g460": "Current bullseye",
     "g461": "Face swirl",
-    "g462": "Gap ring · solid centre",
-    "g463": "Three-blade pinwheel",
-    "g464": "Seven-petal flower · compact",
-    "g465": "C2 twin pinwheel",
-    "g466": "Gap ring · open centre",
-    "g467": "Seven-petal flower · wide",
-    "g468": "C2 face swirl",
+    "g462": "Solid centre",
+    "g463": "3 blades",
+    "g464": "Compact",
+    "g465": "C2 twin",
+    "g466": "Open centre",
+    "g467": "Wide",
+    "g468": "C2 swirl",
     "g469": "Experiment — not scannable yet",
     "g470": "The current scanner cannot read this finder. Export it only to compare the mark inside a complete code.",
-    "g471": "The centre QR is selected and renders instead of the experimental finder above."
+    "g471": "The centre QR is selected and renders instead of the experimental finder above.",
+    "g472": "Pinwheel",
+    "g473": "Gap ring",
+    "g474": "7-petal flower",
+    "g475": "Face swirl",
+    "g476": "Experimental finder trial",
+    "g477": "Back to the official generator",
+    "g478": "Trial — experimental finder generator",
+    "g479": "Codes made with experimental finders are not scannable yet. Use them only for visual comparison."
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1363,18 +1422,26 @@ const GENERATOR_STRINGS = {
     "g457": "TLcube ジェネレータ — TrilLuminance (cube) コードを作る",
     "g458": "TLcube 生成",
     "g459": "中央ファインダー（Type O/A）",
-    "g460": "現行ブルズアイ（デフォルト）",
+    "g460": "現行ブルズアイ",
     "g461": "フェイス・スワール",
-    "g462": "ギャップリング・中心塗り",
-    "g463": "3枚羽根ピンホイール",
-    "g464": "7枚花弁・コンパクト",
-    "g465": "C2 2枚羽根ピンホイール",
-    "g466": "ギャップリング・中心開き",
-    "g467": "7枚花弁・ワイド",
-    "g468": "C2 フェイス・スワール",
+    "g462": "中心塗り",
+    "g463": "3枚羽根",
+    "g464": "コンパクト",
+    "g465": "C2 2枚羽根",
+    "g466": "中心開き",
+    "g467": "ワイド",
+    "g468": "C2 スワール",
     "g469": "実験 — まだスキャンできません",
     "g470": "現行スキャナーはこのファインダーを読み取れません。コード全体の中で見え方を比較する用途にのみ書き出してください。",
-    "g471": "中央QRが選択されているため、上の実験ファインダーの代わりに描画されます。"
+    "g471": "中央QRが選択されているため、上の実験ファインダーの代わりに描画されます。",
+    "g472": "ピンホイール",
+    "g473": "ギャップリング",
+    "g474": "7枚花弁",
+    "g475": "フェイス・スワール",
+    "g476": "実験ファインダー試用版",
+    "g477": "正式ジェネレーターに戻る",
+    "g478": "試用版 — 実験ファインダー生成",
+    "g479": "ここで作る実験ファインダーのコードはまだスキャンできません。見た目の比較にのみ使用してください。"
   },
 };
 
@@ -1408,7 +1475,11 @@ import { createBeacon } from './src/beacon.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { encodeA } from './src/encodeA.js';
-import { DEFAULT_FINDER_PATTERN_ID, FINDER_PATTERNS } from './src/finder-patterns.js';
+import {
+  DEFAULT_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
+  FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
+} from './src/finder-patterns.js';
+import { FACES, facePolygon } from './src/hexgrid.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
@@ -1450,7 +1521,8 @@ const els = {
   customStyleCard: $('customStyleCard'), customChips: $('customChips'), customBg: $('customBg'),
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
-  finderSection: $('finderSection'), finderPattern: $('finderPattern'),
+  finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
+  finderPatternCards: $('finderPatternCards'),
   finderExperimentalWarning: $('finderExperimentalWarning'),
   finderOverrideHint: $('finderOverrideHint'),
   // 일반 모드
@@ -1947,47 +2019,153 @@ function currentPresetName() {
 }
 
 const FINDER_LABEL_KEYS = Object.freeze({
-  'swirl-2-200': 'g461',
-  'gap-ring-01-2-1-solid': 'g462',
   'pinwheel-3-0101-cw-missing-solid': 'g463',
+  'gap-ring-01-2-1-solid': 'g462',
   'flower-7-0020-coprime-offset': 'g464',
+  'swirl-2-200': 'g461',
   'pinwheel-c2-2-1100-cw': 'g465',
   'gap-ring-01-2-1-open': 'g466',
   'flower-7-1020-coprime-offset': 'g467',
   'swirl-c2-5-5-11-both': 'g468',
 });
 
-// Type O/A 중앙 파인더 선택기 — 옵션명과 실험 경고를 언어 전환 때 함께 갱신한다.
-function syncFinderUi() {
-  const visible = currentType() !== 'Y';
-  els.finderSection.style.display = visible ? '' : 'none';
+const FINDER_FAMILY_KEYS = Object.freeze({
+  pinwheel: 'g472',
+  'gap-ring': 'g473',
+  flower: 'g474',
+  'face-swirl': 'g475',
+});
+const FINDER_SVG_NS = 'http://www.w3.org/2000/svg';
 
-  const choices = [
-    { id: DEFAULT_FINDER_PATTERN_ID, key: 'g460' },
-    ...FINDER_PATTERNS.map((pattern) => ({ id: pattern.id, key: FINDER_LABEL_KEYS[pattern.id] })),
-  ];
-  if (els.finderPattern.options.length !== choices.length) {
-    els.finderPattern.replaceChildren(...choices.map((choice) => {
-      const option = document.createElement('option');
-      option.value = choice.id;
-      return option;
+function finderSvgElement(tag, attrs = {}) {
+  const element = document.createElementNS(FINDER_SVG_NS, tag);
+  for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, String(value));
+  return element;
+}
+
+/** 19셀×3면 마스크를 그대로 작은 rhombille SVG로 펼친다 — 별도 path 정본은 두지 않는다. */
+function finderMaskThumbnail(pattern) {
+  const layout = { size: 6, originX: 0, originY: 0 };
+  const faces = [];
+  const points = [];
+  for (let cellIndex = 0; cellIndex < FINDER_CELL_ORDER.length; cellIndex += 1) {
+    const cell = FINDER_CELL_ORDER[cellIndex];
+    const mask = pattern.cellMasks[cellIndex];
+    for (const face of FACES) {
+      const polygon = facePolygon(cell.q, cell.r, face, layout);
+      faces.push({ polygon, light: Boolean(mask & FINDER_FACE_BITS[face]) });
+      points.push(...polygon);
+    }
+  }
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  const pad = 0.7;
+  const svg = finderSvgElement('svg', {
+    viewBox: [minX - pad, minY - pad, maxX - minX + 2 * pad, maxY - minY + 2 * pad].join(' '),
+    'aria-hidden': 'true',
+    'data-mask-cells': FINDER_CELL_ORDER.length,
+  });
+  for (const face of faces) {
+    svg.append(finderSvgElement('polygon', {
+      points: face.polygon.map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
+      fill: face.light ? 'currentColor' : 'var(--bg)',
+      stroke: 'var(--line)',
+      'stroke-width': 0.35,
+      'vector-effect': 'non-scaling-stroke',
     }));
   }
-  choices.forEach((choice, index) => {
-    els.finderPattern.options[index].textContent = t(choice.key);
-  });
-  els.finderPattern.value = normalState.finderPatternId;
+  return svg;
+}
 
+function legacyFinderThumbnail() {
+  const svg = finderSvgElement('svg', { viewBox: '0 0 56 48', 'aria-hidden': 'true' });
+  [20, 16, 12, 8, 4].forEach((radius, index) => {
+    svg.append(finderSvgElement('circle', {
+      cx: 28, cy: 24, r: radius,
+      fill: index % 2 === 0 ? 'currentColor' : 'var(--bg)',
+      stroke: 'var(--line)', 'stroke-width': 0.5,
+    }));
+  });
+  return svg;
+}
+
+function makeFinderCard(id, pattern) {
+  const card = document.createElement('div');
+  card.className = 'toggle-card finder-card';
+  card.dataset.finderId = id;
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.append(pattern ? finderMaskThumbnail(pattern) : legacyFinderThumbnail());
+  const label = document.createElement('span');
+  label.className = 'finder-card-label';
+  label.dataset.finderLabelKey = pattern ? FINDER_LABEL_KEYS[id] : 'g460';
+  card.append(label);
+  const activate = () => {
+    if (card.classList.contains('disabled')) return;
+    normalState.finderPatternId = id;
+    syncFinderUi();
+    schedule();
+  };
+  card.addEventListener('click', activate);
+  card.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    activate();
+  });
+  return card;
+}
+
+function ensureFinderCards() {
+  if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount) return;
+  els.finderLegacyRow.append(makeFinderCard(LEGACY_FINDER_PATTERN_ID, null));
+  for (let column = 0; column < 4; column += 1) {
+    const top = FINDER_PATTERNS[column];
+    const bottom = FINDER_PATTERNS[column + 4];
+    if (!top || !bottom || top.family !== bottom.family) {
+      throw new Error('finder UI family column mismatch: ' + column);
+    }
+    const family = document.createElement('div');
+    family.className = 'finder-family';
+    family.dataset.finderFamily = top.family;
+    const heading = document.createElement('div');
+    heading.className = 'finder-family-title';
+    heading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS[top.family];
+    family.append(heading, makeFinderCard(top.id, top), makeFinderCard(bottom.id, bottom));
+    els.finderPatternCards.append(family);
+  }
+}
+
+// Type O/A 중앙 파인더 선택기 — 카드명·계열명·실험 경고를 언어 전환 때 함께 갱신한다.
+function syncFinderUi() {
+  ensureFinderCards();
+  const visible = currentType() !== 'Y';
+  els.finderSection.style.display = visible ? '' : 'none';
   const centerQrOverrides = visible && normalState.qrPosition === 'inner';
+
+  for (const heading of els.finderPatternCards.querySelectorAll('[data-finder-family-key]')) {
+    heading.textContent = t(heading.dataset.finderFamilyKey);
+  }
+  for (const card of document.querySelectorAll('[data-finder-id]')) {
+    const active = card.dataset.finderId === normalState.finderPatternId;
+    card.classList.toggle('active', active);
+    card.classList.toggle('disabled', centerQrOverrides);
+    card.setAttribute('aria-pressed', String(active));
+    card.setAttribute('aria-disabled', String(centerQrOverrides));
+    card.tabIndex = centerQrOverrides ? -1 : 0;
+    const label = card.querySelector('[data-finder-label-key]');
+    label.textContent = t(label.dataset.finderLabelKey);
+  }
+
   const experimental = FINDER_PATTERNS.some(
     (pattern) => pattern.id === normalState.finderPatternId,
   );
-  els.finderPattern.disabled = centerQrOverrides;
+  const trialBuild = document.body.dataset.generatorEdition === 'finder-experiment';
   els.finderExperimentalWarning.style.display =
-    visible && !centerQrOverrides && experimental ? '' : 'none';
+    experimental && !centerQrOverrides && (visible || trialBuild) ? '' : 'none';
   els.finderOverrideHint.style.display = centerQrOverrides ? '' : 'none';
 }
-
 /** 공용 QR 위치 카드 갱신 — 안쪽 툴팁(β 딱지), 활성 표시, 고급 전용 병행 표시 행,
  *  중앙 QR 인쇄 힌트(안쪽 + O/A 에서만). PM/009 §2b. */
 function syncQrPositionUi() {
@@ -2028,11 +2206,6 @@ for (const card of els.qrPositionCards.children) {
 }
 syncQrPositionUi();
 
-els.finderPattern.addEventListener('change', () => {
-  normalState.finderPatternId = els.finderPattern.value;
-  syncFinderUi();
-  schedule();
-});
 
 // ── 일반 모드: 안정성·용량 4택 (자동/H/M/L) + 해상도 4택 (자동/저/중/고) ──────
 
@@ -2987,7 +3160,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-11.10';
+const GENERATOR_BUILD = '2026-08-11.11';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

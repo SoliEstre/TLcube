@@ -13,12 +13,23 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import { FINDER_PATTERN_IDS, LEGACY_FINDER_PATTERN_ID } from '../src/finder-patterns.js';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const SRC_DIR = path.join(ROOT, 'src');
 const INDEX_HTML = path.join(ROOT, 'index.html');
 const OUT_DIR = path.join(ROOT, 'dist');
 const OUT_FILE = path.join(OUT_DIR, 'trilume.html');
+
+export const OFFICIAL_GENERATOR_EDITION = 'official';
+export const FINDER_EXPERIMENT_EDITION = 'finder-experiment';
+const GENERATOR_EDITIONS = Object.freeze([
+  OFFICIAL_GENERATOR_EDITION, FINDER_EXPERIMENT_EDITION,
+]);
+const BODY_EDITION_DECLARATION = '<body data-generator-edition="official">';
+const DEFAULT_FINDER_DECLARATION =
+  "export const DEFAULT_FINDER_PATTERN_ID = '" + LEGACY_FINDER_PATTERN_ID + "';";
 
 // 모듈 순서 — 디스크 순회 순서에 기대지 않는다. 의존 그래프상 위상 정렬 순서로 고정.
 // TY8: Type Y(+QR fallback) 모듈을 뒤에 추가 — 전부 위 Type O 접두(prefix) 안의
@@ -107,6 +118,15 @@ function assertTopologicalOrder(moduleSources) {
   }
 }
 
+function replaceExactlyOnce(source, needle, replacement, label) {
+  const first = source.indexOf(needle);
+  if (first < 0) throw new Error(label + ': 빌드 치환 대상을 찾지 못했다');
+  if (source.indexOf(needle, first + needle.length) >= 0) {
+    throw new Error(label + ': 빌드 치환 대상이 2개 이상이다');
+  }
+  return source.slice(0, first) + replacement + source.slice(first + needle.length);
+}
+
 /** index.html 안의 <script type="module"> 블록 정확히 1개를 찾아 반환한다. */
 function extractModuleScript(html) {
   const re = /<script type="module">([\s\S]*?)<\/script>/g;
@@ -153,8 +173,32 @@ await import(appUrl);
 }
 
 /** index.html + src/*.js 를 읽어 단일 HTML 문자열을 만든다. 부수효과 없음(결정적, 순수 함수). */
-export function buildSingleHtml() {
-  const indexHtml = readFileSync(INDEX_HTML, 'utf8');
+export function buildSingleHtml(options = {}) {
+  const defaultFinderPatternId = options.defaultFinderPatternId === undefined
+    ? LEGACY_FINDER_PATTERN_ID : options.defaultFinderPatternId;
+  const generatorEdition = options.generatorEdition === undefined
+    ? OFFICIAL_GENERATOR_EDITION : options.generatorEdition;
+  const validFinderIds = [LEGACY_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS];
+  if (!validFinderIds.includes(defaultFinderPatternId)) {
+    throw new RangeError('알 수 없는 기본 파인더 id: ' + defaultFinderPatternId);
+  }
+  if (!GENERATOR_EDITIONS.includes(generatorEdition)) {
+    throw new RangeError('알 수 없는 생성기 edition: ' + generatorEdition);
+  }
+  // 정식판에서 실험 기본값을 허용하지 않는다. 옵션 누락은 위의 레거시 기본값으로
+  // 떨어지므로, 플래그가 어긋났을 때도 복호 가능한 코드가 나온다.
+  if (generatorEdition === OFFICIAL_GENERATOR_EDITION
+      && defaultFinderPatternId !== LEGACY_FINDER_PATTERN_ID) {
+    throw new RangeError('정식 생성기의 기본 파인더는 bullseye 여야 한다');
+  }
+
+  const sourceIndexHtml = readFileSync(INDEX_HTML, 'utf8');
+  const indexHtml = replaceExactlyOnce(
+    sourceIndexHtml,
+    BODY_EDITION_DECLARATION,
+    '<body data-generator-edition="' + generatorEdition + '">',
+    'generator edition',
+  );
   const [fullMatch, scriptBody] = extractModuleScript(indexHtml);
   const matchStart = indexHtml.indexOf(fullMatch);
 
@@ -166,7 +210,16 @@ export function buildSingleHtml() {
 
   const moduleSources = MODULE_ORDER.map((name) => {
     const filePath = path.join(SRC_DIR, `${name}.js`);
-    return [name, readFileSync(filePath, 'utf8')];
+    let code = readFileSync(filePath, 'utf8');
+    if (name === 'finder-patterns') {
+      code = replaceExactlyOnce(
+        code,
+        DEFAULT_FINDER_DECLARATION,
+        "export const DEFAULT_FINDER_PATTERN_ID = '" + defaultFinderPatternId + "';",
+        'default finder pattern',
+      );
+    }
+    return [name, code];
   });
 
   assertTopologicalOrder(moduleSources);

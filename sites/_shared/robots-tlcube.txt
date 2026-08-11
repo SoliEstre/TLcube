@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /_shared/gen-
 
 Sitemap: https://tlcube.estre.so/sitemap.xml

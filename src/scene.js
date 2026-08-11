@@ -16,7 +16,8 @@ import {
 } from './hexgrid.js';
 import { bandRadii } from './bullseye.js';
 import {
-  DEFAULT_FINDER_PATTERN_ID, FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
+  DEFAULT_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
+  FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
 } from './finder-patterns.js';
 import { digitToRanks } from './lehmer.js';
 import { qrMatrix } from './qr.js';
@@ -227,7 +228,9 @@ export function buildScene(encoded, options) {
   if (typeof finderPatternId !== 'string') {
     throw new TypeError(`finderPatternId 는 문자열이어야 한다: ${typeof finderPatternId}`);
   }
-  const finderPattern = finderPatternId === DEFAULT_FINDER_PATTERN_ID
+  // DEFAULT 는 빌드별 초기값이고, LEGACY 만 동심원 렌더 분기의 식별자다. 시험판이
+  // DEFAULT 를 실험 id로 덮어도 이 비교는 바뀌면 안 된다.
+  const finderPattern = finderPatternId === LEGACY_FINDER_PATTERN_ID
     ? null : getFinderPattern(finderPatternId);
   if (centerQr && finderPattern !== null) {
     throw new RangeError(

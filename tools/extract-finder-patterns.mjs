@@ -20,13 +20,15 @@ const REPO_ROOT = path.resolve(MODULE_DIR, '..');
 const OUTPUT_PATH = path.join(REPO_ROOT, 'src', 'finder-patterns.js');
 
 const TARGETS = Object.freeze([
+  // 이 순서는 생성기 UI 배치와 묶여 있다: 2차 후보 4개를 첫 행에, 같은 계열의
+  // 3차(C2) 후보 4개를 둘째 행에 둔다. UI 는 [0,4]·[1,5]·[2,6]·[3,7]을 세로로 묶는다.
   Object.freeze({
-    id: 'swirl-2-200',
-    name: 'Face swirl',
+    id: 'pinwheel-3-0101-cw-missing-solid',
+    name: 'Three-blade pinwheel',
     run: 2,
-    gatePassed: true,
-    rotation: 79.47194142390262,
-    structuralSimplicity: 55.579256952027684,
+    gatePassed: false,
+    rotation: 41.88539082916955,
+    structuralSimplicity: 90.91372900969897,
   }),
   Object.freeze({
     id: 'gap-ring-01-2-1-solid',
@@ -37,20 +39,20 @@ const TARGETS = Object.freeze([
     structuralSimplicity: 86.6828394595597,
   }),
   Object.freeze({
-    id: 'pinwheel-3-0101-cw-missing-solid',
-    name: 'Three-blade pinwheel',
-    run: 2,
-    gatePassed: false,
-    rotation: 41.88539082916955,
-    structuralSimplicity: 90.91372900969897,
-  }),
-  Object.freeze({
     id: 'flower-7-0020-coprime-offset',
     name: 'Seven-petal flower (compact)',
     run: 2,
     gatePassed: false,
     rotation: 45.883146774112355,
     structuralSimplicity: 91.18880899993957,
+  }),
+  Object.freeze({
+    id: 'swirl-2-200',
+    name: 'Face swirl',
+    run: 2,
+    gatePassed: true,
+    rotation: 79.47194142390262,
+    structuralSimplicity: 55.579256952027684,
   }),
   Object.freeze({
     id: 'pinwheel-c2-2-1100-cw',
@@ -155,6 +157,7 @@ export function renderFinderPatternsModule(candidates = generateFinderCandidates
 
 import { FACES, regionCells } from './hexgrid.js';
 
+export const LEGACY_FINDER_PATTERN_ID = 'bullseye';
 export const DEFAULT_FINDER_PATTERN_ID = 'bullseye';
 export const FINDER_FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
 export const FINDER_CELL_ORDER = Object.freeze(
@@ -186,6 +189,7 @@ function definePattern(pattern) {
 }
 
 export const FINDER_PATTERNS = Object.freeze([
+  // 순서는 생성기 UI 배치와 묶여 있다: 2차 후보 4개(첫 행), 같은 계열의 3차 후보 4개(둘째 행).
 ${entries}
 ]);
 
