@@ -127,6 +127,21 @@ export function rasterize(scene, options) {
   }
   const transparent = bg === null;
 
+  // shape.color 에는 투명이 없다 — 배경과 달리 **구체 {r,g,b} 만**이다. 아래 채움 루프는
+  // shape.color.r 을 무조건 읽으므로, null 이 새면 픽셀 루프 한가운데서 «Cannot read
+  // properties of null (reading 'r')» 로 죽는다. 어느 도형인지도 안 나와 추적에 하루가
+  // 걸렸다(2026-08-12, 중앙 3톤 큐브가 슬롯을 palette.background 로 칠했다) — 여기서
+  // 도형 번호와 함께 먼저 잡는다. 도형 수는 픽셀 수에 비해 무시할 만하다.
+  for (let i = 0; i < scene.shapes.length; i += 1) {
+    const color = scene.shapes[i].color;
+    if (color === null || typeof color !== 'object') {
+      throw new TypeError(
+        `shape[${i}](${scene.shapes[i].kind}).color 는 {r,g,b} 여야 한다: ${color} — `
+        + '투명은 scene.background 에만 허용된다',
+      );
+    }
+  }
+
   // 서브픽셀 격자(RGB). 불투명 경로에서는 배경색으로 초기화하고 alpha 를 다운샘플
   // 후 한 번만 채운다. 투명 경로에서는 커버리지를 따로 센다(0 = 배경 그대로).
   const sub = new Uint8ClampedArray(ssWidth * ssHeight * 3);

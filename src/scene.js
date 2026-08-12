@@ -397,12 +397,22 @@ export function buildScene(encoded, options) {
     };
     // 데이터 ring-3과 연결되지 않도록 19셀 슬롯 전체를 배경으로 먼저 덮는다.
     // 0.25c 경계는 기존 Type Y 연결요소 실루엣 검출을 그대로 재사용하기 위한 최소 띠다.
-    for (const face of FACES) {
-      shapes.push({
-        kind: 'polygon',
-        points: facePolygon(0, 0, face, slotLayout),
-        color: palette.background,
-      });
+    //
+    // ⚠ 투명 배경에서는 이 칠을 **넣지 않는다.** shape.color 는 언제나 구체 {r,g,b} 이고
+    //   투명(null)이 허용되는 곳은 scene.background 하나뿐이다 — raster.js·svg.js 는
+    //   shape.color.r 을 무조건 읽으므로 null 이 새면 렌더 전체가 죽는다. bgMode 기본값이
+    //   transparent 라 큐브를 고르는 즉시 재현됐다 (2026-08-12 라이브 결함).
+    //   빼도 되는 근거: 이 칠 밑에는 애초에 아무 shape 도 없다 — 19셀 슬롯은 cellDigits 에서
+    //   빠져 있고 ring-3 은 슬롯 밖이다. O V1~V3 · A A1~A2 실측 전부 «칠 유무 픽셀 차이 0»
+    //   이라 불투명에서도 방어적 no-op 이고, 투명에서는 안 칠하는 것이 곧 배경이다.
+    if (palette.background !== null) {
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(0, 0, face, slotLayout),
+          color: palette.background,
+        });
+      }
     }
     for (const face of FACES) {
       shapes.push({

@@ -29,8 +29,18 @@ function hex2(v) {
   return v.toString(16).padStart(2, '0');
 }
 
-/** {r,g,b} 8bit → #rrggbb. */
+/**
+ * {r,g,b} 8bit → #rrggbb.
+ *
+ * 투명은 여기서 표현하지 않는다 — scene.background === null 은 호출자가 **rect 를 아예
+ * 내지 않는** 방식으로 처리하고, shape.color 에는 투명 자체가 없다. null 이 들어오면
+ * `c.r` 이 «reading 'r'» 로 터지면서 어디서 왔는지를 감추므로 이름을 붙여 던진다
+ * (2026-08-12 라이브 결함: 중앙 3톤 큐브 슬롯칠이 투명 배경색을 그대로 물고 왔다).
+ */
 export function colorToHex(c) {
+  if (c === null || typeof c !== 'object') {
+    throw new TypeError(`색은 {r,g,b} 객체여야 한다: ${c} — 투명은 배경에서만 표현한다`);
+  }
   return `#${hex2(c.r)}${hex2(c.g)}${hex2(c.b)}`;
 }
 

@@ -104,8 +104,14 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
   assert.match(source, /evidenceKey: 'g490'.*evidenceClass: 'counterexample'/);
   assert.match(source, /data-i18n="g492"/);
   const built = buildGeneratorVariants();
+  // ⚠ 태그 리터럴을 여기 박지 않는다. 박아 두면 릴리스마다 손으로 올려야 하고, 잊으면
+  //   «커밋 제목은 .10 인데 소스는 .09» 같은 어긋남을 테스트가 되레 잠가 버린다
+  //   (d91a34d 에서 실제로 났다). 실제 불변식은 «두 변형이 index.html 의 태그를
+  //   그대로 나른다» 이므로 소스에서 읽어서 잰다.
+  const tagMatch = /const GENERATOR_BUILD = '([^']+)'/.exec(source);
+  assert.ok(tagMatch, 'index.html 에서 GENERATOR_BUILD 를 못 찾았다');
   for (const html of [built.official, built.experiment]) {
-    assert.match(html, /2026-08-12\.09/);
+    assert.ok(html.includes(tagMatch[1]), '빌드 태그 ' + tagMatch[1] + ' 가 변형에 없다');
     const finderSource = embeddedFinderSource(html);
     assert.match(finderSource, /export const FINDER_BASELINE_SCORES/);
     assert.match(html, /\["finder-selection",/);
