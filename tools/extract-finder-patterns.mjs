@@ -15,9 +15,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   generateFinderCandidates,
+  measureCubeBullseyePatternScore,
   measureFinderPatternScores,
   measureThreeToneCubePatternScore,
 } from './finder-score.mjs';
+import { HYBRID_INNER_CUBE_BANDS } from '../src/bullseye.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, '..');
@@ -156,9 +158,26 @@ const THREE_TONE_CUBE = Object.freeze({
   toneRanks: Object.freeze({ T: 2, L: 1, R: 0 }),
 });
 
+/*
+ * 하이브리드 — 바깥 불스아이 링(위치·스케일) + 안쪽 3톤 큐브(방향).
+ *
+ * 기하는 전부 `bullseye.js` 의 HYBRID_INNER_CUBE_BANDS 에서 유도되므로 여기엔 반지름
+ * 상수를 두지 않는다. toneRanks 는 순수 큐브와 같은 값을 쓴다 — 두 파인더가 같은 방향
+ * 규약(T=밝음/L=중간/R=어두움)을 공유해야 디코더의 방향 읽기를 한 벌만 유지한다.
+ */
+const CUBE_BULLSEYE = Object.freeze({
+  id: 'cube-bullseye',
+  name: 'Cube in bullseye',
+  family: 'cube-bullseye',
+  sourceRun: 6,
+  renderKind: 'cube-bullseye',
+  toneRanks: THREE_TONE_CUBE.toneRanks,
+});
+
 export const SELECTED_FINDER_IDS = Object.freeze([
   ...TARGETS.map((target) => target.id),
   THREE_TONE_CUBE.id,
+  CUBE_BULLSEYE.id,
 ]);
 
 
@@ -255,6 +274,28 @@ function threeTonePatternSource(pattern, measured) {
   })`;
 }
 
+function cubeBullseyePatternSource(pattern, measured) {
+  return `  // 하이브리드 · 링에서 위치·스케일, 큐브에서 방향 · 기하는 bullseye.js 에서 유도
+  // 회전 점수 ${measured.scores.rotation.toFixed(4)} · 큐브 반지름 = 안쪽 ${HYBRID_INNER_CUBE_BANDS}밴드 폭
+  definePattern({
+    id: ${JSON.stringify(pattern.id)},
+    name: ${JSON.stringify(pattern.name)},
+    family: ${JSON.stringify(pattern.family)},
+    sourceRun: ${pattern.sourceRun},
+    renderKind: ${JSON.stringify(pattern.renderKind)},
+    params: {
+      detector: 'bullseye-ring-plus-three-tone-rank',
+      palette: 'finder-cube-tones',
+      faceOrder: 'T-bright-L-mid-R-dark',
+      innerCubeBands: ${HYBRID_INNER_CUBE_BANDS},
+    },
+    centerBalanceGatePassed: ${measured.centerBalance.passed},
+    centerOffsetCells: ${measured.centerBalance.offsetCells},
+    scores: ${scoreSource(measured.scores)},
+    toneRanks: ${JSON.stringify(pattern.toneRanks)},
+  })`;
+}
+
 function baselineSource(baseline) {
   return `  ${JSON.stringify(baseline.id)}: defineScoreRecord({
     id: ${JSON.stringify(baseline.id)},
@@ -300,6 +341,11 @@ export function renderFinderPatternsModule(candidates = generateSelectedFinderCa
     radiusCells: THREE_TONE_CUBE.radiusCells,
   });
   const threeToneEntry = threeTonePatternSource(THREE_TONE_CUBE, threeToneMeasured);
+  const cubeBullseyeMeasured = measureCubeBullseyePatternScore(CUBE_BULLSEYE.toneRanks, {
+    id: CUBE_BULLSEYE.id,
+    name: CUBE_BULLSEYE.name,
+  });
+  const cubeBullseyeEntry = cubeBullseyePatternSource(CUBE_BULLSEYE, cubeBullseyeMeasured);
   const baselineEntries = BASELINES.map(baselineSource).join(',\n');
 
   return `// finder-patterns.js — 중앙 19셀 슬롯 파인더 후보 12개
@@ -314,6 +360,7 @@ export const LEGACY_FINDER_PATTERN_ID = 'bullseye';
 export const DEFAULT_FINDER_PATTERN_ID = 'bullseye';
 export const FINDER_FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
 export const THREE_TONE_CUBE_FINDER_PATTERN_ID = ${JSON.stringify(THREE_TONE_CUBE.id)};
+export const CUBE_BULLSEYE_FINDER_PATTERN_ID = ${JSON.stringify(CUBE_BULLSEYE.id)};
 export const FINDER_CUBE_RADIUS_CELLS = ${THREE_TONE_CUBE.radiusCells};
 export const FINDER_CUBE_SLOT_RADIUS_CELLS = ${THREE_TONE_CUBE.slotRadiusCells};
 export const FINDER_CUBE_FACE_RANKS = Object.freeze(
@@ -362,14 +409,17 @@ function definePattern(pattern) {
       cellMasks: Object.freeze([...pattern.cellMasks]),
     });
   }
-  if (renderKind !== 'three-tone-cube') {
+  if (renderKind !== 'three-tone-cube' && renderKind !== 'cube-bullseye') {
     throw new RangeError(pattern.id + ': 알 수 없는 renderKind ' + renderKind);
   }
   const ranks = FACES.map((face) => pattern.toneRanks && pattern.toneRanks[face]);
   if (ranks.slice().sort().join(',') !== '0,1,2') {
     throw new RangeError(pattern.id + ': toneRanks 는 0/1/2 순열이어야 한다');
   }
-  if (!Number.isFinite(pattern.radiusCells) || pattern.radiusCells <= 0) {
+  // 하이브리드의 반지름은 bullseye.js 의 밴드 격자에서 유도된다 — 여기 상수를 두면
+  // 두 곳이 갈라질 수 있으므로 radiusCells 를 요구하지 않는다.
+  if (renderKind === 'three-tone-cube'
+    && (!Number.isFinite(pattern.radiusCells) || pattern.radiusCells <= 0)) {
     throw new RangeError(pattern.id + ': radiusCells 는 양수여야 한다');
   }
   return Object.freeze({
@@ -379,10 +429,13 @@ function definePattern(pattern) {
 }
 
 export const FINDER_PATTERNS = Object.freeze([
-  // 첫 8개는 기존 4계열×2행, 다음 3개는 사용자 손그림 개선안, 마지막은 3톤 큐다.
+  // 첫 8개는 기존 4계열×2행, 다음 3개는 사용자 손그림 개선안,
+  // 그 다음이 3톤 큐브, 마지막이 하이브리드(링+큐브)다.
 ${entries},
 
-${threeToneEntry}
+${threeToneEntry},
+
+${cubeBullseyeEntry}
 ]);
 
 export const FINDER_CELL_MASK_PATTERNS = Object.freeze(

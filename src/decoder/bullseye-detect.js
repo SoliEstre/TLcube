@@ -11,6 +11,7 @@
  */
 
 import { maxSafeRadius, profileAt } from '../bullseye.js';
+import { readCubeOrientation } from './cube-bullseye.js';
 import {
   FRONTEND_FAILURE,
   assertHomography,
@@ -624,13 +625,100 @@ function radiusSeedsForLevel(level, options) {
   return radii;
 }
 
-/** 내부 다섯 경계의 기대 gradient 부호를 이용한 radial-symmetry 중심 투표. */
-function voteScale(level, gradients, outerRadius) {
+/**
+ * 제안 단계가 투표에 쓰는 경계 번호(1..BAND_COUNT-1).
+ *
+ * ⚠ **여기가 «결정하는 단계» 다.** 안쪽 밴드를 다른 무늬로 갈아 끼우는 하이브리드에서
+ * 검증 단계만 관대하게 만들면 소용이 없다 — 제안 단계가 지워진 경계에도 투표를 걸어
+ * 엉뚱한 중심을 만들고, 진짜 중심은 표를 못 받아 애초에 후보로 올라오지 않는다.
+ * 2026-08-12 에 검증 쪽만 고쳐 0/6 을 받고 «길이 닫혔다» 고 잘못 결론냈던 자리다.
+ */
+const DEFAULT_PROPOSAL_BOUNDARIES = Object.freeze([1, 2, 3, 4, 5]);
+
+/*
+ * 하이브리드 후보가 통과해야 하는 «큐브를 봤다» 증거 문턱 두 개. 실측 분포(2026-08-12):
+ *
+ *                          순위 여유          면 평탄도
+ *   진짜 하이브리드(합성)   0.376 \~ 0.381     0.989 \~ 1.000
+ *   순수 불스아이 오독(합성) 0.000 \~ 0.284     0.000 \~ 0.703
+ *   순수 불스아이 오독(실사진) 0.001 \~ 0.248   0.006 \~ 0.525
+ *
+ * 순위 여유 하나로는 0.284 vs 0.376 이라 여유가 얇다. **면 평탄도**가 결정적이다 —
+ * 오독의 원인이 «후보 중심이 어긋나 표본 고리가 밴드 경계를 스치는 것» 이라 조각 안이
+ * 기울어 있고, 진짜 면은 평평하기 때문이다. 둘의 AND 를 요구한다.
+ *
+ * ⚠ 진짜 하이브리드 쪽 분포는 **아직 합성뿐**이다. 실사진이 생기면 이 두 값을 다시 잰다.
+ */
+const MIN_CUBE_TONE_RANK_MARGIN = 0.30;
+const MIN_CUBE_FACE_FLATNESS = 0.80;
+
+/**
+ * 안쪽 몇 밴드가 **링이 아닌 다른 무늬로 대체됐는가** (하이브리드 = 3톤 큐브 2밴드).
+ * 0 이면 순수 불스아이. 이 값 하나가 제안·검증 두 단계의 밴드/경계 범위를 함께 정한다 —
+ * 한쪽만 알면 정확히 2026-08-12 의 실패가 재현된다.
+ */
+function ringFirstBand(options) {
+  const replaced = options.innerBandsReplaced;
+  if (replaced === undefined) return 0;
+  // 최소한 바깥 2밴드(경계 1개)는 남아야 «교대 링» 이라는 증거가 성립한다.
+  if (!Number.isInteger(replaced) || replaced < 0 || replaced > BAND_COUNT - 2) return null;
+  return replaced;
+}
+
+/**
+ * 한 번의 호출에서 검사할 링 레이아웃 목록.
+ *
+ * 스캐너는 «이 코드가 하이브리드인지» 를 미리 모른다. 그래서 제안은 한 번만 돌리고
+ * **검증만 레이아웃마다** 반복한다 — 제안(피라미드+Sobel+투표)이 비싸고 검증은 싸다.
+ */
+function ringLayouts(options) {
+  const requested = options.ringLayouts;
+  if (requested === undefined) {
+    const firstBand = ringFirstBand(options);
+    return firstBand === null ? null : [firstBand];
+  }
+  if (!Array.isArray(requested) || requested.length === 0) return null;
+  const seen = new Set();
+  for (const firstBand of requested) {
+    if (!Number.isInteger(firstBand) || firstBand < 0 || firstBand > BAND_COUNT - 2) return null;
+    seen.add(firstBand);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+function proposalBoundaries(options) {
+  const requested = options.proposalBoundaries;
+  if (requested === undefined) {
+    const layouts = ringLayouts(options);
+    if (layouts === null) return null;
+    // 여러 레이아웃을 함께 볼 땐 **가장 안쪽까지 링인 것** 을 기준으로 잡는다.
+    // 그래야 순수 불스아이의 투표가 지금과 한 표도 다르지 않다(회귀 0).
+    const firstBand = layouts[0];
+    if (firstBand === 0) return DEFAULT_PROPOSAL_BOUNDARIES;
+    // 경계 firstBand 는 «대체 무늬 ↔ 첫 링» 접면이다. 극성이 방향마다 섞이지만
+    // (하이브리드에선 큐브의 밝은 면만 부호가 맞는다) 투표는 가산이라 맞는 방향의
+    // 표만 쌓인다 — 실사진 대리 실험에서 이 경계를 넣은 쪽이 약한 후보 1건을 더 건졌다.
+    const list = [];
+    for (let boundary = firstBand; boundary < BAND_COUNT; boundary += 1) list.push(boundary);
+    return Object.freeze(list);
+  }
+  if (!Array.isArray(requested)) return null;
+  const seen = new Set();
+  for (const boundary of requested) {
+    if (!Number.isInteger(boundary) || boundary < 1 || boundary >= BAND_COUNT) return null;
+    seen.add(boundary);
+  }
+  if (seen.size === 0) return null;
+  return Object.freeze([...seen].sort((a, b) => a - b));
+}
+
+/** 내부 경계의 기대 gradient 부호를 이용한 radial-symmetry 중심 투표. */
+function voteScale(level, gradients, outerRadius, boundaries) {
   const votes = new Float32Array(level.width * level.height);
   const contributionScale = 1 / outerRadius;
   for (const point of gradients) {
     const inverseMagnitude = 1 / point.magnitude;
-    for (let boundary = 1; boundary < BAND_COUNT; boundary += 1) {
+    for (const boundary of boundaries) {
       const expectedSign = boundary % 2 === 1 ? 1 : -1;
       const radialX = expectedSign * point.gx * inverseMagnitude;
       const radialY = expectedSign * point.gy * inverseMagnitude;
@@ -677,6 +765,8 @@ function collectRawProposals(luma, options) {
     ? MAX_PYRAMID_LEVELS
     : options.maxPyramidLevels;
   if (!Number.isInteger(maxLevels) || maxLevels < 1 || maxLevels > 8) return [];
+  const boundaries = proposalBoundaries(options);
+  if (boundaries === null) return [];
   const pyramid = makePyramid(luma, maxLevels);
   const raw = [];
 
@@ -686,7 +776,7 @@ function collectRawProposals(luma, options) {
     const gradients = sobelPoints(level, stats.span);
     if (gradients.length === 0) continue;
     for (const radius of radiusSeedsForLevel(level, options)) {
-      const votes = voteScale(level, gradients, radius);
+      const votes = voteScale(level, gradients, radius, boundaries);
       for (const maximum of localVoteMaxima(level, votes, radius)) {
         raw.push({
           center: {
@@ -865,6 +955,15 @@ function scoreBullseyeCore(luma, H, options, stats) {
   if (!Number.isInteger(angularSamples) || angularSamples < 12) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: 'angularSamples는 12 이상의 정수여야 한다' });
   }
+  const firstBand = ringFirstBand(options);
+  if (firstBand === null) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      message: `innerBandsReplaced 는 0..${BAND_COUNT - 2} 정수여야 한다`,
+    });
+  }
+  // 살아 있는 밴드 firstBand..BAND_COUNT-1 사이의 «안쪽» 경계 수. 대체 무늬와 맞닿는
+  // 경계(firstBand)는 세지 않는다 — 그 부호는 대체 무늬가 정하지 링이 정하지 않는다.
+  const ringBoundaryCount = BAND_COUNT - 1 - firstBand;
 
   const bandSamples = Array.from({ length: BAND_COUNT }, () => []);
   const radiusSummaries = [];
@@ -878,6 +977,9 @@ function scoreBullseyeCore(luma, H, options, stats) {
       : (CANONICAL_OUTER_RADIUS * radialIndex) / (radialSamples - 1);
     const expected = profileAt(radius, 1);
     const bandIndex = bandIndexAt(radius);
+    // 대체된 안쪽 밴드는 링의 기대 프로파일을 따르지 않는다 — 표본·요약 어디에도
+    // 넣지 않는다. 넣으면 contrast·template·MAD 가 전부 큐브 톤에 오염된다.
+    if (bandIndex < firstBand) continue;
     const angularValues = [];
     for (let angularIndex = 0; angularIndex < angularSamples; angularIndex += 1) {
       const angle = (2 * Math.PI * angularIndex) / angularSamples;
@@ -912,9 +1014,9 @@ function scoreBullseyeCore(luma, H, options, stats) {
   const darkMedian = median(darkSamples);
   const contrast = lightMedian - darkMedian;
 
-  let alternating = bandMedians.every(Number.isFinite);
+  let alternating = bandMedians.slice(firstBand).every(Number.isFinite);
   const alternationMargins = [];
-  for (let band = 1; band < BAND_COUNT; band += 1) {
+  for (let band = firstBand + 1; band < BAND_COUNT; band += 1) {
     const signed = band % 2 === 1
       ? bandMedians[band] - bandMedians[band - 1]
       : bandMedians[band - 1] - bandMedians[band];
@@ -956,7 +1058,7 @@ function scoreBullseyeCore(luma, H, options, stats) {
     CANONICAL_BAND_WIDTH * 0.22,
     BOUNDARY_ALIGNMENT_INSET_PX / Math.max(cellSize, Number.EPSILON),
   );
-  for (let boundary = 1; boundary < BAND_COUNT; boundary += 1) {
+  for (let boundary = firstBand + 1; boundary < BAND_COUNT; boundary += 1) {
     const radius = CANONICAL_BAND_WIDTH * boundary;
     const signedSamples = [];
     const expectedSign = boundary % 2 === 1 ? 1 : -1;
@@ -1011,7 +1113,7 @@ function scoreBullseyeCore(luma, H, options, stats) {
    * 후보 원판 안의 실제 표본만으로 정규화해야 주변 구조가 임계를 움직이지 않는다.
    * stats.span은 Sobel의 절대 하한과 진단에만 남긴다.
    */
-  const localStats = robustStatsFromGroups(bandSamples);
+  const localStats = robustStatsFromGroups(bandSamples.slice(firstBand));
   const robustSpan = localStats.span;
   const contrastPass = Number.isFinite(contrast)
     && Number.isFinite(robustSpan)
@@ -1020,14 +1122,14 @@ function scoreBullseyeCore(luma, H, options, stats) {
   const boundaryAlignmentScores = boundaryGradients.map((entry) => (
     contrast > 0 ? clamp01(entry.signedMedian / contrast) : 0
   ));
-  const gradientScore = boundaryAlignmentScores.length === BAND_COUNT - 1
+  const gradientScore = boundaryAlignmentScores.length === ringBoundaryCount
     ? boundaryAlignmentScores.reduce((sum, value) => sum + value, 0)
       / boundaryAlignmentScores.length
     : 0;
   const boundarySignTolerance = Number.isFinite(contrast)
     ? Math.max(SCORE_EPSILON, Math.abs(contrast) * BOUNDARY_SIGN_TOLERANCE_RATIO)
     : SCORE_EPSILON;
-  const boundariesNotReversed = boundaryGradients.length === BAND_COUNT - 1
+  const boundariesNotReversed = boundaryGradients.length === ringBoundaryCount
     && boundaryGradients.every((entry) => entry.count === angularSamples
       && entry.signedMedian >= -boundarySignTolerance);
   const boundarySignsPass = boundariesNotReversed
@@ -1038,7 +1140,7 @@ function scoreBullseyeCore(luma, H, options, stats) {
   const angularSymmetryPass = Number.isFinite(angularMadContrast)
     && angularMadContrast <= MAX_ANGULAR_MAD_CONTRAST;
   const bandWidthPass = minProjectedBandWidth >= MIN_PROJECTED_BAND_WIDTH_PX;
-  const sampleCoveragePass = bandSamples.every((samples) => samples.length > 0)
+  const sampleCoveragePass = bandSamples.slice(firstBand).every((samples) => samples.length > 0)
     && radiusSummaries.every((summary) => summary.count === angularSamples);
 
   const hardCheckDetails = {
@@ -1056,7 +1158,7 @@ function scoreBullseyeCore(luma, H, options, stats) {
   const contrastScore = robustSpan > 0
     ? clamp01(contrast / (robustSpan * MIN_CONTRAST_SPAN_RATIO))
     : 0;
-  const minAlternationMargin = alternationMargins.length === BAND_COUNT - 1
+  const minAlternationMargin = alternationMargins.length === ringBoundaryCount
     ? Math.min(...alternationMargins)
     : 0;
   const alternationScore = contrast > 0
@@ -1077,9 +1179,11 @@ function scoreBullseyeCore(luma, H, options, stats) {
 
   const center = project(H, 0, 0) ?? { x: Number.NaN, y: Number.NaN };
   const bands = {
+    firstBand,
     values: bandMedians.map((value, index) => ({
       index,
       expected: index % 2 === 0 ? 0 : 1,
+      replaced: index < firstBand,
       median: value,
       mad: bandMads[index],
       count: bandSamples[index].length,
@@ -1370,18 +1474,29 @@ export function detectBullseyes(luma, options = {}) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '방사 대칭 중심 proposal이 없다' });
   }
 
+  const layouts = ringLayouts(options);
+  if (layouts === null) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      message: `ringLayouts 는 0..${BAND_COUNT - 2} 정수 배열이어야 한다`,
+    });
+  }
+
   const coarse = [];
   const fastOptions = lowCostScoreOptions(options);
   for (const proposal of raw) {
     const cellSize = proposal.outerRadius / CANONICAL_OUTER_RADIUS;
     const H = homographyFromParams(isotropicParams(proposal.center, cellSize));
     if (H === null) continue;
-    const scored = scoreBullseyeCore(luma, H, fastOptions, stats);
-    if (scored.ok) {
-      coarse.push({
-        proposal,
-        candidate: candidateFromScore(scored),
-      });
+    for (const firstBand of layouts) {
+      const layoutOptions = { ...fastOptions, innerBandsReplaced: firstBand };
+      const scored = scoreBullseyeCore(luma, H, layoutOptions, stats);
+      if (scored.ok) {
+        coarse.push({
+          proposal,
+          firstBand,
+          candidate: candidateFromScore(scored),
+        });
+      }
     }
   }
   coarse.sort((a, b) => compareScored(a.candidate, b.candidate)
@@ -1397,12 +1512,49 @@ export function detectBullseyes(luma, options = {}) {
     });
   }
 
-  const refinementEntries = selectRefinementEntries(coarse, refineLimit);
+  // 예산은 «몇 개의 제안을 정제하나» 로 읽는다. 레이아웃이 둘이면 같은 제안이 두 항목이
+  // 되므로 그만큼 늘려야 순수 불스아이 때와 같은 수의 **서로 다른 중심**을 정제한다.
+  const refinementEntries = selectRefinementEntries(
+    coarse,
+    Math.min(refineLimit * layouts.length, MAX_RAW_PROPOSALS),
+  );
   const refined = [];
   // 첫 통과에서 반환하지 않는다. 점수·방사 투표 순위를 섞은 고정 예산을 모두 정제한다.
   for (const entry of refinementEntries) {
-    const result = refineBullseyeCore(luma, entry.candidate, options, stats);
-    if (result.ok) refined.push(result.candidate);
+    // 정제도 그 후보를 만든 레이아웃으로 해야 한다 — 섞이면 큐브 자리를 링으로 재고
+    // 중심이 그리로 끌려간다.
+    const layoutOptions = { ...options, innerBandsReplaced: entry.firstBand };
+    const result = refineBullseyeCore(luma, entry.candidate, layoutOptions, stats);
+    if (!result.ok) continue;
+    if (entry.firstBand === 0) {
+      refined.push({ ...result.candidate, innerBandsReplaced: 0 });
+      continue;
+    }
+    /*
+     * 하이브리드라는 «주장» 에는 큐브를 실제로 봤다는 증거를 요구한다.
+     *
+     * 없으면 이런 일이 난다(실측, 2026-08-12): 뭉개진 **순수** 불스아이가 하이브리드로
+     * 채점될 때 더 높은 점수를 받는다 — 블러로 뭉개진 안쪽 두 밴드를 «어차피 링이 아닌
+     * 자리» 라며 빼고 재기 때문이다. 그 후보로 정제가 진행되면 안쪽 정보를 버린 채
+     * 중심을 맞추게 되고, ring-3 포맷 표본이 어긋나 복호가 죽는다.
+     * (jpeg q60 + blur 3점 스윕이 이걸 잡아냈다.)
+     */
+    const cube = readCubeOrientation(luma, {
+      transform: result.candidate.transform,
+      innerBandsReplaced: entry.firstBand,
+    });
+    if (cube === null
+      || !(cube.orientationMargin >= MIN_CUBE_TONE_RANK_MARGIN)
+      || !(cube.faceFlatness >= MIN_CUBE_FACE_FLATNESS)) continue;
+    refined.push({
+      ...result.candidate,
+      innerBandsReplaced: entry.firstBand,
+      rotationDegrees: cube.rotationDegrees,
+      orientation: cube.orientation,
+      orientationSource: 'hybrid-cube-face-rank',
+      orientationMargin: cube.orientationMargin,
+      cubeFaceMedians: cube.faceMedians,
+    });
   }
   refined.sort(compareScored);
 

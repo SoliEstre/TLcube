@@ -18,7 +18,7 @@ import {
   FACES, facePolygon, layoutForRegion, regionCells, axialToPixel, codeBounds,
   hexCorners, hexDistance, CORNER_UNIT_OFFSETS,
 } from './hexgrid.js';
-import { bandRadii } from './bullseye.js';
+import { HYBRID_INNER_CUBE_BANDS, bandRadii, hybridCubeRadius } from './bullseye.js';
 import {
   DEFAULT_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
@@ -70,7 +70,9 @@ function resolveFinderRenderPattern(id) {
 }
 
 function isExperimentalFinderRenderKind(renderKind) {
-  return renderKind === 'cell-mask' || renderKind === 'three-tone-cube';
+  return renderKind === 'cell-mask'
+    || renderKind === 'three-tone-cube'
+    || renderKind === 'cube-bullseye';
 }
 
 /**
@@ -451,6 +453,44 @@ export function buildScene(encoded, options) {
       r: 0.18 * cellSize,
       color: palette.bullseyeDark,
     });
+  } else if (finderPattern.renderKind === 'cube-bullseye') {
+    /*
+     * 하이브리드 — 바깥은 불스아이 링(위치·스케일), 안쪽은 3톤 큐브(방향).
+     *
+     * 밴드 격자는 canonical `bandRadii` 그대로다. 안쪽 HYBRID_INNER_CUBE_BANDS 개만
+     * 큐브로 갈아 끼우므로 남는 링은 원래 반지름·원래 명암을 유지한다 — 검출기가 쓰는
+     * 정규 기하(`profileAt`·밴드 인덱스)를 한 줄도 안 바꾸고 재사용하려는 것이 목적이다.
+     *
+     * ⚠ 순수 큐브에 있던 **Y 심 3줄과 중심점은 여기 없다.** 그 둘은 실루엣 검출기가
+     *   Y-접합을 찾으라고 넣은 장치인데, 하이브리드는 위치를 링에서 얻고 방향만 면 톤
+     *   중앙값으로 읽으므로 쓸 데가 없다. 반지름이 3.5c → 1.2c 로 줄어 같은 비율이면
+     *   9px/cell 에서 0.2px 대의 선이 되고, 그 sub-pixel 검정 선이 세 면의 중앙값을
+     *   중심 근처에서 오염시키기만 한다. 서로 다른 밝기의 마름모 3개가 한 점에서 만나는
+     *   것 자체가 아이소메트릭 큐브다 — 심은 윤곽이지 구조가 아니다.
+     */
+    const radii = bandRadii(cellSize);
+    for (let i = radii.length - 1; i >= HYBRID_INNER_CUBE_BANDS; i -= 1) {
+      shapes.push({
+        kind: 'disc',
+        cx: center.x,
+        cy: center.y,
+        r: radii[i],
+        color: i % 2 === 0 ? palette.bullseyeDark : palette.bullseyeLight,
+      });
+    }
+    const cubeLayout = {
+      size: hybridCubeRadius(cellSize),
+      originX: center.x,
+      originY: center.y,
+    };
+    for (const face of FACES) {
+      shapes.push({
+        kind: 'polygon',
+        points: facePolygon(0, 0, face, cubeLayout),
+        // 프리셋이 아니라 고정 포맷 상수 — 이유는 FINDER_CUBE_TONES 주석.
+        color: FINDER_CUBE_TONES[finderPattern.toneRanks[face]],
+      });
+    }
   } else if (finderPattern.renderKind === 'cell-mask') {
     for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
       // 기존 이진 실험 파인더 — 예약 19셀을 regionCells(2) 순서로 칠한다.

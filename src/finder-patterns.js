@@ -10,6 +10,7 @@ export const LEGACY_FINDER_PATTERN_ID = 'bullseye';
 export const DEFAULT_FINDER_PATTERN_ID = 'bullseye';
 export const FINDER_FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
 export const THREE_TONE_CUBE_FINDER_PATTERN_ID = "central-cube-3tone";
+export const CUBE_BULLSEYE_FINDER_PATTERN_ID = "cube-bullseye";
 export const FINDER_CUBE_RADIUS_CELLS = 3.5;
 export const FINDER_CUBE_SLOT_RADIUS_CELLS = 4;
 export const FINDER_CUBE_FACE_RANKS = Object.freeze(
@@ -69,14 +70,17 @@ function definePattern(pattern) {
       cellMasks: Object.freeze([...pattern.cellMasks]),
     });
   }
-  if (renderKind !== 'three-tone-cube') {
+  if (renderKind !== 'three-tone-cube' && renderKind !== 'cube-bullseye') {
     throw new RangeError(pattern.id + ': 알 수 없는 renderKind ' + renderKind);
   }
   const ranks = FACES.map((face) => pattern.toneRanks && pattern.toneRanks[face]);
   if (ranks.slice().sort().join(',') !== '0,1,2') {
     throw new RangeError(pattern.id + ': toneRanks 는 0/1/2 순열이어야 한다');
   }
-  if (!Number.isFinite(pattern.radiusCells) || pattern.radiusCells <= 0) {
+  // 하이브리드의 반지름은 bullseye.js 의 밴드 격자에서 유도된다 — 여기 상수를 두면
+  // 두 곳이 갈라질 수 있으므로 radiusCells 를 요구하지 않는다.
+  if (renderKind === 'three-tone-cube'
+    && (!Number.isFinite(pattern.radiusCells) || pattern.radiusCells <= 0)) {
     throw new RangeError(pattern.id + ': radiusCells 는 양수여야 한다');
   }
   return Object.freeze({
@@ -86,7 +90,8 @@ function definePattern(pattern) {
 }
 
 export const FINDER_PATTERNS = Object.freeze([
-  // 첫 8개는 기존 4계열×2행, 다음 3개는 사용자 손그림 개선안, 마지막은 3톤 큐다.
+  // 첫 8개는 기존 4계열×2행, 다음 3개는 사용자 손그림 개선안,
+  // 그 다음이 3톤 큐브, 마지막이 하이브리드(링+큐브)다.
   // 2차 실행 · pinwheel {"blades":3,"length":2.8,"widthFraction":0.64,"twistFraction":0.35,"phase":0.5,"winding":1,"centerTreatment":"solid","breakMode":"missing"}
   // 중심 균형 게이트 탈락 · 중심 오프셋 0.40c · 축별 모형 점수
   definePattern({
@@ -353,6 +358,26 @@ export const FINDER_PATTERNS = Object.freeze([
     scores: { rotation: 42.30185603408032, lowResolution: 86.47166246267717, localization: 10.188350875030123, dataDistinction: 100, structuralSimplicity: 88.3994979795851, defectConcentration: 54.41398092702653 },
     radiusCells: 3.5,
     slotRadiusCells: 4,
+    toneRanks: {"T":2,"L":1,"R":0},
+  }),
+
+  // 하이브리드 · 링에서 위치·스케일, 큐브에서 방향 · 기하는 bullseye.js 에서 유도
+  // 회전 점수 8.4965 · 큐브 반지름 = 안쪽 2밴드 폭
+  definePattern({
+    id: "cube-bullseye",
+    name: "Cube in bullseye",
+    family: "cube-bullseye",
+    sourceRun: 6,
+    renderKind: "cube-bullseye",
+    params: {
+      detector: 'bullseye-ring-plus-three-tone-rank',
+      palette: 'finder-cube-tones',
+      faceOrder: 'T-bright-L-mid-R-dark',
+      innerCubeBands: 2,
+    },
+    centerBalanceGatePassed: true,
+    centerOffsetCells: 0.05773502691896258,
+    scores: { rotation: 8.496527462282083, lowResolution: 56.86305472329061, localization: 31.206263986495248, dataDistinction: 100, structuralSimplicity: 55.779182982313365, defectConcentration: 90.68996821171089 },
     toneRanks: {"T":2,"L":1,"R":0},
   })
 ]);

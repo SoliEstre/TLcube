@@ -8,6 +8,7 @@ import path from 'node:path';
 import {
   loadFinderMaskCandidates, parseFinderMaskCandidates, runHarness,
 } from '../tools/finder-score.mjs';
+import { FINDER_PATTERNS } from '../src/finder-patterns.js';
 
 /**
  * finder-score 는 «검출기 없이» 파인더 후보를 거르는 자다. 자가 틀리면 후보 순위 전체가
@@ -202,10 +203,14 @@ test('임의 마스크 입력 오류는 조용히 보정하지 않는다', () =>
   }), /충돌/);
 });
 
-test('임의 후보 모드는 3톤까지 고정 12종·기준선과 한 표에서 6축만 채점한다', () => {
+test('임의 후보 모드는 등록된 파인더 전종·기준선과 한 표에서 6축만 채점한다', () => {
   assert.equal(MASK_REPORT.rulerValidation.passed, true);
   assert.equal(MASK_REPORT.meta.mode, 'manual-masks');
-  assert.equal(MASK_REPORT.customMasks.table.length, 2 + 12 + MASK_CANDIDATES.length);
+  // 고정 숫자를 두면 파인더가 늘 때마다 여기서 걸린다. 등록부에서 유도한다 (기준선 2종 + 전종).
+  assert.equal(
+    MASK_REPORT.customMasks.table.length,
+    2 + FINDER_PATTERNS.length + MASK_CANDIDATES.length,
+  );
   assert.equal(MASK_REPORT.customMasks.candidates.length, MASK_CANDIDATES.length);
   assert.equal(MASK_REPORT.meta.centerBalanceGate.scoredCount, MASK_CANDIDATES.length);
   assert.equal(MASK_REPORT.meta.centerBalanceGate.passedCount, 2);

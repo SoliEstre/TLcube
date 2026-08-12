@@ -22,12 +22,12 @@ import {
   AXIAL_DIRECTIONS, CENTER_SPACING_COEFF, FACE_AREA_COEFF, FACES, axialToPixel, codeBounds,
   facePolygon, faceSampleDisc, hexDistance, layoutForRegion, pixelToAxial, regionCells,
 } from '../src/hexgrid.js';
-import { maxSafeRadius, profileAt } from '../src/bullseye.js';
+import { hybridCubeRadius, maxSafeRadius, profileAt } from '../src/bullseye.js';
 import { encode } from '../src/encode.js';
 import { FINDER_PATTERNS } from '../src/finder-patterns.js';
 import { digitToRanks } from '../src/lehmer.js';
 import {
-  BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset, presetLuminances,
+  BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, FINDER_CUBE_TONES, getPreset, presetLuminances,
   relativeLuminance,
 } from '../src/luminance.js';
 import { rasterToPng } from '../src/png.js';
@@ -1148,6 +1148,49 @@ function scoreTonePattern(candidate, kernel, bases) {
     legacyTotal: scored.legacyTotal,
     total: scored.total,
   };
+}
+
+/**
+ * 하이브리드(불스아이 링 + 중앙 3톤 큐브) 평가자.
+ *
+ * ⚠ 여기서만 `FINDER_CUBE_TONES` 를 쓴다 — 위 `threeToneCubeEvaluator` 는 아직
+ *   프리셋 데이터 레벨로 잰다. 순수 큐브가 «데이터 레벨 → 고정 포맷 상수» 로 바뀐 게
+ *   나중이라 그쪽 채점만 옛 색에 남아 있는 것이고, 축 점수는 후보 간 **상대 비교**용이라
+ *   당장 결과를 뒤집지는 않는다. 하이브리드는 처음부터 고정 색이므로 렌더와 맞춘다.
+ */
+function cubeBullseyeEvaluator(toneRanks) {
+  const ranks = normalizeToneRanks(toneRanks, 'cube-bullseye');
+  const polygons = threeToneCubePolygons(hybridCubeRadius(1));
+  const tones = FINDER_CUBE_TONES.map((color) => relativeLuminance(color));
+  const radius = maxSafeRadius(1);
+  return (x, y) => {
+    for (const face of FACES) {
+      if (pointInPolygon(x, y, polygons[face])) return tones[ranks[face]];
+    }
+    const distance = Math.sqrt(x * x + y * y);
+    return distance <= radius ? profileAt(distance, 1) : 0;
+  };
+}
+
+/** 하이브리드를 다른 후보와 같은 자로 잰다 (중심 균형 포함 — 링이 있어 기준선 쪽에 가깝다). */
+export function measureCubeBullseyePatternScore(toneRanks, options = {}) {
+  const kernel = gaussianKernel(options.blurSigma === undefined
+    ? DEFAULT_BLUR_SIGMA : options.blurSigma);
+  const scored = scoreBaseline(
+    options.name || 'Cube bullseye',
+    options.id || 'cube-bullseye',
+    cubeBullseyeEvaluator(toneRanks),
+    kernel,
+    blurredFaceBases(kernel),
+    true,
+  );
+  return Object.freeze({
+    ...scored,
+    toneRanks: normalizeToneRanks(toneRanks, 'cube-bullseye'),
+    scores: Object.freeze(Object.fromEntries(COMPOSITE_AXES.map(
+      (axis) => [axis, scored.metrics[axis].score],
+    ))),
+  });
 }
 
 /** --masks-file 의 toneRanks 후보와 같은 자로 중앙 3톤 큐브를 잰다. */

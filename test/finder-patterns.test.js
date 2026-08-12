@@ -101,7 +101,7 @@ const EXPECTED_FINDER_MEASUREMENTS = Object.freeze({
   })
 });
 
-test('이진 11개와 중앙 3톤 큐브 ID가 생성기 순서를 그대로 쓴다', () => {
+test('이진 11개 · 중앙 3톤 큐브 · 하이브리드 ID가 생성기 순서를 그대로 쓴다', () => {
   assert.deepEqual(FINDER_PATTERN_IDS, SELECTED_FINDER_IDS);
   assert.deepEqual(FINDER_PATTERN_IDS, [
     'pinwheel-3-0101-cw-missing-solid',
@@ -116,8 +116,9 @@ test('이진 11개와 중앙 3톤 큐브 ID가 생성기 순서를 그대로 쓴
     'tree-refined-h3',
     'cats-refined-h3',
     'central-cube-3tone',
+    'cube-bullseye',
   ]);
-  assert.equal(FINDER_PATTERNS.length, 12);
+  assert.equal(FINDER_PATTERNS.length, 13);
   assert.equal(FINDER_CELL_MASK_PATTERNS.length, 11);
   assert.deepEqual(FINDER_CELL_ORDER, regionCells(2));
   assert.deepEqual(FACES.map((face) => FINDER_FACE_BITS[face]), [1, 2, 4]);

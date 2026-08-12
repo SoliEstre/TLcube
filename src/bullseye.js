@@ -234,6 +234,42 @@ export function profileAt(distFromCenter, cellSize) {
   return 1;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 하이브리드 (불스아이 링 + 중앙 3톤 큐브)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 하이브리드에서 3톤 큐브가 **대체하는 안쪽 밴드 수**. 이 상수 하나가 하이브리드
+ * 기하 전체를 결정한다 — 큐브 반지름도, 남는 링 밴드도, 검출기가 투표·검증에 쓰는
+ * 경계 번호도 전부 여기서 유도된다.
+ *
+ * 왜 하이브리드인가: 두 파인더가 서로 없는 걸 갖고 있다. 동심원은 롬빌 데이터 필드에
+ * 존재하지 않는 시그니처라 **위치·스케일**을 잡는 데 강하고(실사진 6/6), 큐브는 회전
+ * 대칭이 없어 **방향**을 준다(단독 검출은 실사진 0/6 — 실루엣을 못 찾는다).
+ *
+ * 왜 하필 2인가: 밴드 폭이 균등(R_max/6)이라 안쪽 2밴드를 걷어내면 큐브 반지름이
+ * R_max/3 ≈ 1.202c 가 되고, 남는 4밴드는 **원래 자리 그대로**다. 즉 canonical 밴드
+ * 격자(`bandRadii`)를 하나도 안 바꾸고 «어느 밴드가 살아 있나» 만 달라진다 — 검출기의
+ * 정규 기하를 재사용할 수 있는 유일한 분할점이다.
+ */
+export const HYBRID_INNER_CUBE_BANDS = 2;
+
+/** 하이브리드에서 살아 있는 링 밴드 수 (바깥쪽). */
+export const HYBRID_RING_BAND_COUNT = BAND_COUNT - HYBRID_INNER_CUBE_BANDS;
+
+/** 하이브리드 중앙 큐브의 외접 반지름 = 안쪽 `HYBRID_INNER_CUBE_BANDS` 밴드의 폭 합. */
+export function hybridCubeRadius(cellSize) {
+  return (maxSafeRadius(cellSize) * HYBRID_INNER_CUBE_BANDS) / BAND_COUNT;
+}
+
+/**
+ * 하이브리드가 실제로 그리는 링 경계 반지름(안→밖). 첫 원소가 큐브와 맞닿는
+ * 경계(= `hybridCubeRadius`), 마지막이 R_max.
+ */
+export function hybridBandRadii(cellSize) {
+  return bandRadii(cellSize).slice(HYBRID_INNER_CUBE_BANDS - 1);
+}
+
 /**
  * 불스아이가 점유하는 19셀 (hexDistance ≤ 2), 결정적 순서(regionCells 순서
  * 그대로).

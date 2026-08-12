@@ -46,6 +46,7 @@ import {
   findAAnchorHypotheses,
   findOAnchorHypotheses,
 } from './anchor-detect.js';
+import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
 import { detectBullseyes, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
 import { FINDER_CELL_MASK_PATTERNS } from '../finder-patterns.js';
@@ -756,6 +757,10 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
         : cfg.finderClutterMaxRefinedProposals,
       refineIterations: cfg.finderRefineIterations,
       projectiveSeeds: cfg.finderProjectiveSeeds,
+      // 스캐너는 «이 코드가 하이브리드인가» 를 미리 모른다. 순수 링(0)과 하이브리드
+      // (안쪽 2밴드가 큐브)를 **같은 제안 위에서** 둘 다 채점하고 점수로 고른다.
+      // 제안 단계는 한 번만 돌므로 추가 비용은 싼 검증 쪽뿐이다.
+      ringLayouts: [0, HYBRID_INNER_CUBE_BANDS],
       outerRadiusSeeds: useOutlineSeeds
         ? finderRadiusSeeds(reducedOutline && reducedOutline.luma, reducedOutline && reducedOutline.outline)
         : undefined,

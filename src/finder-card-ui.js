@@ -4,6 +4,7 @@
 // 3톤 큐브는 19셀 마스크가 아니므로 정식 행에서 별도 표현으로 배치한다.
 
 import {
+  CUBE_BULLSEYE_FINDER_PATTERN_ID,
   FINDER_PATTERNS,
   LEGACY_FINDER_PATTERN_ID,
   THREE_TONE_CUBE_FINDER_PATTERN_ID,
@@ -23,6 +24,14 @@ if (threeTonePatterns.length !== 1
   throw new Error('정식 3톤 큐브 파인더가 정확히 하나 필요하다');
 }
 
+const cubeBullseyePatterns = FINDER_PATTERNS.filter(
+  (pattern) => pattern.id === CUBE_BULLSEYE_FINDER_PATTERN_ID,
+);
+if (cubeBullseyePatterns.length !== 1
+    || cubeBullseyePatterns[0].renderKind !== 'cube-bullseye') {
+  throw new Error('하이브리드(링+큐브) 파인더가 정확히 하나 필요하다');
+}
+
 const generatedPatterns = FINDER_PATTERNS.filter(
   (pattern) => pattern.renderKind === 'cell-mask' && pattern.family !== 'user-refined',
 );
@@ -39,9 +48,11 @@ if (refinedPatterns.length !== 3) {
 
 export const FINDER_CARD_GROUPS = Object.freeze({
   // 사용자 지시 2026-08-12: 정식 선택지 행은 이 순서다.
+  // 하이브리드는 두 큐브 선택지가 붙어 보이도록 순수 큐브 바로 뒤에 넣는다.
   formal: Object.freeze([
     descriptor(LEGACY_FINDER_PATTERN_ID, null),
     descriptor(THREE_TONE_CUBE_FINDER_PATTERN_ID, getFinderPattern(THREE_TONE_CUBE_FINDER_PATTERN_ID)),
+    descriptor(CUBE_BULLSEYE_FINDER_PATTERN_ID, getFinderPattern(CUBE_BULLSEYE_FINDER_PATTERN_ID)),
     descriptor(CENTER_QR_FINDER_PATTERN_ID, null),
   ]),
   generated: Object.freeze(generatedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
