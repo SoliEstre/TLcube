@@ -19,13 +19,15 @@ const SRC_DIR = path.join(ROOT, 'src');
 // 추가: placementA·layoutA·capacityA·encodeA ('capacity' 뒤, 위상 순서).
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
-  'hexgrid', 'finder-patterns', 'finder-selection', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+  'hexgrid', 'finder-patterns', 'finder-selection', 'finder-card-ui', 'generator-render-config', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity',
   'placementA', 'layoutA', 'capacityA', 'encodeA',
   'luminance',
+  'gf256', 'rs', 'qr', 'generator-state', 'export-filename',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
-  'gf256', 'rs', 'qr', 'generator-state', 'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
+  'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',
+  'quietzone', 'i18n', 'beacon',
 ];
 
 test('동기화: buildSingleHtml() 결과가 dist/trilume.html 과 바이트 동일하다', () => {

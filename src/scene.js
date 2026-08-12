@@ -44,6 +44,30 @@ const QR_BLOCK_MODULES = QR_MODULE_GRID + 2 * QR_QUIET_MODULES;
  */
 const DEFAULT_MARGIN_FACTOR_QR = 20;
 
+// 기준선·실험 후보를 모두 명시적 렌더 표현으로 정규화한다.
+const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
+
+/**
+ * 기본 파인더는 일반 O/A 경로에만 적용한다. 중앙 QR은 자신의 렌더 표현을 명시해
+ * 실험판 기본 cell-mask가 중앙 슬롯으로 역류하는 모순을 막는다.
+ */
+export function resolveSceneFinderPatternId(
+  finderPatternId, centerQr, defaultFinderPatternId = DEFAULT_FINDER_PATTERN_ID,
+) {
+  if (finderPatternId !== undefined) return finderPatternId;
+  return centerQr ? CENTER_QR_FINDER_PATTERN_ID : defaultFinderPatternId;
+}
+
+function resolveFinderRenderPattern(id) {
+  if (id === LEGACY_FINDER_PATTERN_ID) return { id, renderKind: 'bullseye' };
+  if (id === CENTER_QR_FINDER_PATTERN_ID) return { id, renderKind: 'center-qr' };
+  return getFinderPattern(id);
+}
+
+function isExperimentalFinderRenderKind(renderKind) {
+  return renderKind === 'cell-mask' || renderKind === 'three-tone-cube';
+}
+
 /**
  * V*Q 중앙 QR 의 보호 콰이어트 모듈 수 (2026-08-09 사용자 지시 — "바깥 흰색 구간이
  * 큐브에 가려 조금 손실되더라도 중앙 QR 을 키워라").
@@ -223,18 +247,21 @@ export function buildScene(encoded, options) {
     }
   }
   const centerQr = encodedCenterQr;
-  const finderPatternId = opts.finderPatternId === undefined
-    ? DEFAULT_FINDER_PATTERN_ID : opts.finderPatternId;
+  const finderPatternId = resolveSceneFinderPatternId(opts.finderPatternId, centerQr);
   if (typeof finderPatternId !== 'string') {
     throw new TypeError(`finderPatternId 는 문자열이어야 한다: ${typeof finderPatternId}`);
   }
-  // DEFAULT 는 빌드별 초기값이고, LEGACY 만 동심원 렌더 분기의 식별자다. 시험판이
-  // DEFAULT 를 실험 id로 덮어도 이 비교는 바뀌면 안 된다.
-  const finderPattern = finderPatternId === LEGACY_FINDER_PATTERN_ID
-    ? null : getFinderPattern(finderPatternId);
-  if (centerQr && finderPattern !== null) {
+  // DEFAULT 는 빌드별 초기값이다. 기준선과 실험 후보를 모두 렌더 표현으로 정규화해
+  // 두 데이터 모양을 같은 마스크 분기로 잘못 보내지 않는다.
+  const finderPattern = resolveFinderRenderPattern(finderPatternId);
+  if (centerQr && isExperimentalFinderRenderKind(finderPattern.renderKind)) {
     throw new RangeError(
       `centerQr=true 인데 실험 파인더(${finderPatternId})도 지정됐다 — 중앙 슬롯은 둘 중 하나만 렌더할 수 있다`,
+    );
+  }
+  if (!centerQr && finderPattern.renderKind === 'center-qr') {
+    throw new RangeError(
+      'center-qr 기준선은 encoded.centerQr=true 일 때만 렌더할 수 있다',
     );
   }
   const cornerToo = opts.cornerToo === undefined ? false : opts.cornerToo;
@@ -357,58 +384,58 @@ export function buildScene(encoded, options) {
 
   const center = center0;
 
-  if (finderPattern !== null) {
-    // 인코더 cellDigits 에 이 슬롯이 없으므로 용량·오버헤드·포맷 정보는 전혀 바뀌지 않는다.
-    if (finderPattern.renderKind === 'three-tone-cube') {
-      // (2a) 19셀 슬롯에서 Type Y 경로가 데이터 링과 분리해 검출하는 최대 실측 큐브.
-      // 같은 실루엣/Y 심을 만들고, T/L/R 밝기 순위(밝음/중간/어두움)에서 방향을 읽는다.
-      const radius = finderPattern.radiusCells * cellSize;
-      const cubeLayout = { size: radius, originX: center.x, originY: center.y };
-      const slotLayout = {
-        size: finderPattern.slotRadiusCells * cellSize,
-        originX: center.x,
-        originY: center.y,
-      };
-      // 데이터 ring-3과 연결되지 않도록 19셀 슬롯 전체를 배경으로 먼저 덮는다.
-      // 0.25c 경계는 기존 Type Y 연결요소 실루엣 검출을 그대로 재사용하기 위한 최소 띠다.
-      for (const face of FACES) {
-        shapes.push({
-          kind: 'polygon',
-          points: facePolygon(0, 0, face, slotLayout),
-          color: palette.background,
-        });
-      }
-      for (const face of FACES) {
-        shapes.push({
-          kind: 'polygon',
-          points: facePolygon(0, 0, face, cubeLayout),
-          color: palette.levels[finderPattern.toneRanks[face]],
-        });
-      }
-      const seamHalfWidth = 0.075 * cellSize;
-      for (const cornerIndex of [1, 3, 5]) {
-        const unit = CORNER_UNIT_OFFSETS[cornerIndex];
-        const perpendicular = { x: -unit.y, y: unit.x };
-        const far = { x: center.x + unit.x * radius, y: center.y + unit.y * radius };
-        shapes.push({
-          kind: 'polygon',
-          points: [
-            { x: center.x + perpendicular.x * seamHalfWidth, y: center.y + perpendicular.y * seamHalfWidth },
-            { x: far.x + perpendicular.x * seamHalfWidth, y: far.y + perpendicular.y * seamHalfWidth },
-            { x: far.x - perpendicular.x * seamHalfWidth, y: far.y - perpendicular.y * seamHalfWidth },
-            { x: center.x - perpendicular.x * seamHalfWidth, y: center.y - perpendicular.y * seamHalfWidth },
-          ],
-          color: palette.bullseyeDark,
-        });
-      }
+  if (finderPattern.renderKind === 'three-tone-cube') {
+  // 인코더 cellDigits 에 이 슬롯이 없으므로 용량·오버헤드·포맷 정보는 전혀 바뀌지 않는다.
+    // (2a) 19셀 슬롯에서 Type Y 경로가 데이터 링과 분리해 검출하는 최대 실측 큐브.
+    // 같은 실루엣/Y 심을 만들고, T/L/R 밝기 순위(밝음/중간/어두움)에서 방향을 읽는다.
+    const radius = finderPattern.radiusCells * cellSize;
+    const cubeLayout = { size: radius, originX: center.x, originY: center.y };
+    const slotLayout = {
+      size: finderPattern.slotRadiusCells * cellSize,
+      originX: center.x,
+      originY: center.y,
+    };
+    // 데이터 ring-3과 연결되지 않도록 19셀 슬롯 전체를 배경으로 먼저 덮는다.
+    // 0.25c 경계는 기존 Type Y 연결요소 실루엣 검출을 그대로 재사용하기 위한 최소 띠다.
+    for (const face of FACES) {
       shapes.push({
-        kind: 'disc',
-        cx: center.x,
-        cy: center.y,
-        r: 0.18 * cellSize,
+        kind: 'polygon',
+        points: facePolygon(0, 0, face, slotLayout),
+        color: palette.background,
+      });
+    }
+    for (const face of FACES) {
+      shapes.push({
+        kind: 'polygon',
+        points: facePolygon(0, 0, face, cubeLayout),
+        color: palette.levels[finderPattern.toneRanks[face]],
+      });
+    }
+    const seamHalfWidth = 0.075 * cellSize;
+    for (const cornerIndex of [1, 3, 5]) {
+      const unit = CORNER_UNIT_OFFSETS[cornerIndex];
+      const perpendicular = { x: -unit.y, y: unit.x };
+      const far = { x: center.x + unit.x * radius, y: center.y + unit.y * radius };
+      shapes.push({
+        kind: 'polygon',
+        points: [
+          { x: center.x + perpendicular.x * seamHalfWidth, y: center.y + perpendicular.y * seamHalfWidth },
+          { x: far.x + perpendicular.x * seamHalfWidth, y: far.y + perpendicular.y * seamHalfWidth },
+          { x: far.x - perpendicular.x * seamHalfWidth, y: far.y - perpendicular.y * seamHalfWidth },
+          { x: center.x - perpendicular.x * seamHalfWidth, y: center.y - perpendicular.y * seamHalfWidth },
+        ],
         color: palette.bullseyeDark,
       });
-    } else for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
+    }
+    shapes.push({
+      kind: 'disc',
+      cx: center.x,
+      cy: center.y,
+      r: 0.18 * cellSize,
+      color: palette.bullseyeDark,
+    });
+  } else if (finderPattern.renderKind === 'cell-mask') {
+    for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
       // 기존 이진 실험 파인더 — 예약 19셀을 regionCells(2) 순서로 칠한다.
       const cell = FINDER_CELL_ORDER[ci];
       const mask = finderPattern.cellMasks[ci];
@@ -421,7 +448,7 @@ export function buildScene(encoded, options) {
         });
       }
     }
-  } else if (!centerQr) {
+  } else if (finderPattern.renderKind === 'bullseye' && !centerQr) {
     // (2) 불스아이 6 disc — 바깥 밴드(반지름 큰 것)부터. i(0=중심)가 짝수면 dark, 홀수면 light.
     const radii = bandRadii(cellSize); // 오름차순(안→밖), 마지막이 R_max.
     for (let i = radii.length - 1; i >= 0; i -= 1) {
@@ -433,6 +460,8 @@ export function buildScene(encoded, options) {
         color: i % 2 === 0 ? palette.bullseyeDark : palette.bullseyeLight,
       });
     }
+  } else if (finderPattern.renderKind !== 'center-qr' && finderPattern.renderKind !== 'bullseye') {
+    throw new RangeError('지원하지 않는 파인더 렌더 표현: ' + finderPattern.renderKind);
   }
   // (centerQr 의 중앙 블록은 (0) 에서 이미 — 셀 밑에 깔리는 painter 순서가 확대 규약이다.)
 

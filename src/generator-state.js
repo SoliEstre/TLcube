@@ -57,7 +57,7 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
   quietMode: field('auto', BOTH, ['auto', 'none', 'white', 'black', 'contrast']),
-  tone: field(2, ADVANCED, [2, 3]),
+  tone: field(3, BOTH, [2, 3]),
   faceGain: field(100, ADVANCED, [100, 41]),
   qrText: field(TL_READER_URL, ADVANCED,
     [TL_READER_URL, 'https://example.com/fallback']),

@@ -7,11 +7,13 @@ import { fileURLToPath } from 'node:url';
 import {
   buildSingleHtml, FINDER_EXPERIMENT_EDITION,
 } from './build-single.mjs';
+import { buildFinderEditorHtml } from './build-finder-editor.mjs';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(MODULE_DIR, '..');
 const OFFICIAL_PATH = path.join(ROOT, 'dist', 'trilume.html');
 const EXPERIMENT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder.html');
+const EDITOR_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html');
 
 export const FINDER_EXPERIMENT_DEFAULT_ID = 'pinwheel-c2-2-1100-cw';
 
@@ -22,6 +24,7 @@ export function buildGeneratorVariants() {
       generatorEdition: FINDER_EXPERIMENT_EDITION,
       defaultFinderPatternId: FINDER_EXPERIMENT_DEFAULT_ID,
     }),
+    editor: buildFinderEditorHtml(),
   });
 }
 
@@ -31,8 +34,10 @@ function main() {
   mkdirSync(path.dirname(EXPERIMENT_PATH), { recursive: true });
   writeFileSync(OFFICIAL_PATH, built.official, 'utf8');
   writeFileSync(EXPERIMENT_PATH, built.experiment, 'utf8');
+  writeFileSync(EDITOR_PATH, built.editor, 'utf8');
   process.stdout.write('dist/trilume.html 생성됨 (' + Buffer.byteLength(built.official, 'utf8') + ' B)\n');
   process.stdout.write('sites/_shared/gen-finder.html 생성됨 (' + Buffer.byteLength(built.experiment, 'utf8') + ' B)\n');
+  process.stdout.write('sites/_shared/gen-finder-editor.html 생성됨 (' + Buffer.byteLength(built.editor, 'utf8') + ' B)\n');
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

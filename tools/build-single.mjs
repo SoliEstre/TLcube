@@ -53,7 +53,7 @@ const DEFAULT_FINDER_DECLARATION =
 // 상단 주석) — capacity.js 를 import 하는 capacityA 는 반드시 'capacity' 뒤에 온다.
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
-  'hexgrid', 'finder-patterns', 'finder-selection', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+  'hexgrid', 'finder-patterns', 'finder-selection', 'finder-card-ui', 'generator-render-config', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity',
   'placementA', 'layoutA', 'capacityA', 'encodeA',
   'luminance',
@@ -62,7 +62,7 @@ const MODULE_ORDER = [
   // Type O 의 scene 이 그걸 쓰게 되면서 전방 참조가 됐다. 등록 순서 = 치환 가능 순서라
   // 전방 참조는 치환이 조용히 건너뛰어지고, 브라우저에서 blob: base 상대 해석 실패로
   // 터진다. 이 불변식은 이제 assertTopologicalOrder() 가 빌드 시점에 강제한다.
-  'gf256', 'rs', 'qr', 'generator-state',
+  'gf256', 'rs', 'qr', 'generator-state', 'export-filename',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
   'encodeY', 'sceneY', 'verifyY',

@@ -107,3 +107,15 @@ test('buildConfig은 모드나 고급 DOM이 아니라 단일 generatorState만 
   assert.match(source, /generatorState\.versionY/);
   assert.match(source, /fallback\.mode === 'window'[\s\S]*\? 2/);
 });
+
+
+test('Type Y 톤은 일반·고급 카드가 같은 단일 상태를 쓰고 기본값은 3톤이다', () => {
+  const state = createGeneratorState();
+  assert.equal(state.tone, 3);
+  assert.ok(exposedGeneratorStateKeys('normal').includes('tone'));
+  assert.ok(exposedGeneratorStateKeys('advanced').includes('tone'));
+  assert.match(INDEX_SOURCE, /id="toneCardsNormal"[\s\S]*data-tone="2"[\s\S]*data-tone="3"/);
+  assert.match(INDEX_SOURCE, /id="toneCardsAdvanced"[\s\S]*data-tone="2"[\s\S]*data-tone="3"/);
+  assert.match(INDEX_SOURCE,
+    /const generatorState = createGeneratorState\(\);\s*const nextExportFilename = createExportFilenameFactory\(\);/);
+});

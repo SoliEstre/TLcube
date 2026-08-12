@@ -250,7 +250,7 @@
   .experiment-banner a { flex-shrink: 0; color: var(--warn); font-weight: 600; }
 
   /* 중앙 파인더 카드 — 기존 card-row/toggle-card 관용구 위에 배치만 격자로 고정한다. */
-  .finder-legacy-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 4px; }
+  .finder-legacy-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 4px; }
   .finder-legacy-row .finder-card { flex-direction: row; justify-content: center; }
   .finder-family-grid.card-row {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px;
@@ -468,9 +468,24 @@
     color: var(--dim); margin: 16px 0 4px;
   }
   .section-title:first-child { margin-top: 0; }
+
+  /* 저장 확인은 모바일에서 손가락과 멀고, 스크린리더에도 같은 문구가 전달되는 Toast. */
+  .download-toast {
+    position: fixed; z-index: 100; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
+    transform: translate(-50%, 14px); width: max-content; max-width: calc(100vw - 32px);
+    padding: 11px 15px; border-radius: 999px; background: rgba(21, 25, 36, .96);
+    color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,.32); font-size: 13px;
+    line-height: 1.35; text-align: center; opacity: 0; pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .download-toast.visible { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 520px) {
+    .download-toast { bottom: max(14px, env(safe-area-inset-bottom)); font-size: 12px; }
+  }
 </style>
 </head>
 <body data-generator-edition="official">
+<div id="downloadToast" class="download-toast" role="status" aria-live="polite" aria-atomic="true"></div>
 <header>
   <!-- 제목의 «TLcube» 자체가 소개 허브로 가는 링크다(사용자 지시 2026-08-11).
        새 창으로 여는 이유: 생성기는 입력해 둔 내용이 있는 작업 화면이라, 같은 탭에서
@@ -618,7 +633,7 @@
     </div>
 
     <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
-    <div id="panelNormal" data-state-keys="type preset versionO versionA versionY eccLevel customHue">
+    <div id="panelNormal" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone">
       <label data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 선택 = Y (사용자 지시 2026-08-09). -->
       <div class="card-row" id="typeCards">
@@ -651,6 +666,28 @@
         </div>
       </div>
 
+      <div id="toneNormalSection" style="display:none">
+        <label data-i18n="g052">톤</label>
+        <div class="card-row" id="toneCardsNormal">
+          <div class="toggle-card" data-tone="2" style="flex:1">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z"/>
+              <path d="M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
+              <path d="M12 11 L5 7 L5 15 L12 19 Z" fill="currentColor" opacity=".24" stroke="none"/>
+            </svg>
+            <span data-i18n="g053">2톤</span>
+          </div>
+          <div class="toggle-card active" data-tone="3" style="flex:1">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L19 7 L12 11 L5 7 Z" fill="currentColor" opacity=".22"/>
+              <path d="M5 7 L12 11 L12 19 L5 15 Z" fill="currentColor" opacity=".46"/>
+              <path d="M12 11 L19 7 L19 15 L12 19 Z" fill="currentColor" opacity=".78"/>
+              <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
+            </svg>
+            <span data-i18n="g054">3톤 (기본)</span>
+          </div>
+        </div>
+      </div>
 
       <label for="nPreset" data-i18n="g042">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
@@ -743,11 +780,26 @@
 
 
       <fieldset class="typeOptions" id="optionsY" style="display:none">
-        <label for="tone" data-i18n="g052">톤</label>
-        <select id="tone">
-          <option value="2" selected data-i18n="g053">2톤 (기본)</option>
-          <option value="3" data-i18n="g054">3톤 (Y-T)</option>
-        </select>
+        <label data-i18n="g052">톤</label>
+        <div class="card-row" id="toneCardsAdvanced">
+          <div class="toggle-card" data-tone="2" style="flex:1">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z"/>
+              <path d="M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
+              <path d="M12 11 L5 7 L5 15 L12 19 Z" fill="currentColor" opacity=".24" stroke="none"/>
+            </svg>
+            <span data-i18n="g053">2톤</span>
+          </div>
+          <div class="toggle-card active" data-tone="3" style="flex:1">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L19 7 L12 11 L5 7 Z" fill="currentColor" opacity=".22"/>
+              <path d="M5 7 L12 11 L12 19 L5 15 Z" fill="currentColor" opacity=".46"/>
+              <path d="M12 11 L19 7 L19 15 L12 19 Z" fill="currentColor" opacity=".78"/>
+              <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
+            </svg>
+            <span data-i18n="g054">3톤 (기본)</span>
+          </div>
+        </div>
 
         <label for="faceGain" data-i18n="g055">면 게인 강도 (1.0 평면 ~ 기본)</label>
         <input type="range" id="faceGain" min="0" max="100" value="100" step="1">
@@ -1031,8 +1083,8 @@ const GENERATOR_STRINGS = {
     "g050": "자동 (최소)",
     "g051": "자동 (H→M→L 맞춤)",
     "g052": "톤",
-    "g053": "2톤 (기본)",
-    "g054": "3톤 (Y-T)",
+    "g053": "2톤",
+    "g054": "3톤 (기본)",
     "g055": "면 게인 강도 (1.0 평면 ~ 기본)",
     "g056": "QR 폴백 URL (고급)",
     "g057": "스타일 프리셋",
@@ -1181,7 +1233,8 @@ const GENERATOR_STRINGS = {
     "g503": "고양이 개선안",
     "g504": "사용자 손그림 개선안",
     "g505": "최대 3톤 큐브",
-    "g506": "촬영 강건성"
+    "g506": "촬영 강건성",
+    "g507": "{filename}으로 다운로드되었습니다."
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1236,8 +1289,8 @@ const GENERATOR_STRINGS = {
     "g050": "Auto (smallest)",
     "g051": "Auto (H→M→L fit)",
     "g052": "Tones",
-    "g053": "2 tones (default)",
-    "g054": "3 tones (Y-T)",
+    "g053": "2 tones",
+    "g054": "3 tones (default)",
     "g055": "Face gain (1.0 = flat, default)",
     "g056": "QR fallback URL (advanced)",
     "g057": "Style preset",
@@ -1386,7 +1439,8 @@ const GENERATOR_STRINGS = {
     "g503": "Refined cats",
     "g504": "Refined hand-drawn designs",
     "g505": "Maximum three-tone cube",
-    "g506": "Capture robustness"
+    "g506": "Capture robustness",
+    "g507": "Downloaded as {filename}."
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1441,8 +1495,8 @@ const GENERATOR_STRINGS = {
     "g050": "自動（最小）",
     "g051": "自動（H→M→L 適合）",
     "g052": "トーン",
-    "g053": "2トーン（標準）",
-    "g054": "3トーン（Y-T）",
+    "g053": "2トーン",
+    "g054": "3トーン（標準）",
     "g055": "面ゲイン強度（1.0 で平面・標準）",
     "g056": "QR フォールバック URL（詳細）",
     "g057": "スタイルプリセット",
@@ -1591,7 +1645,8 @@ const GENERATOR_STRINGS = {
     "g503": "キャッツ改良案",
     "g504": "手描きデザイン改良案",
     "g505": "最大3トーンキューブ",
-    "g506": "撮影堅牢性"
+    "g506": "撮影堅牢性",
+    "g507": "{filename} としてダウンロードしました。"
   },
 };
 
@@ -1634,6 +1689,10 @@ import {
   selectFinderPattern, selectQrPosition,
 } from './src/finder-selection.js';
 import {
+  FINDER_CARD_GROUPS, wireFinderCardActivation,
+} from './src/finder-card-ui.js';
+import { sceneOptionsForOA } from './src/generator-render-config.js';
+import {
   createGeneratorState, resolutionTierForVersion, transitionGeneratorMode,
   versionForResolutionTier, versionStateKey,
 } from './src/generator-state.js';
@@ -1652,6 +1711,7 @@ import { sceneToSvg } from './src/svg.js';
 import { TL_READER_URL } from './src/qr.js';
 import { wifiPayload, cardPayload } from './src/payloadform.js';
 import { renderWithErrorDisplay } from './src/render-status.js';
+import { createExportFilenameFactory } from './src/export-filename.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -1660,8 +1720,9 @@ const els = {
   versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'), versionWrapA: $('versionWrapA'),
   versionO: $('versionO'), versionY: $('versionY'), versionA: $('versionA'),
   ecc: $('ecc'), preset: $('preset'),
-  optionsY: $('optionsY'),
-  tone: $('tone'), faceGain: $('faceGain'), faceGainValue: $('faceGainValue'),
+  optionsY: $('optionsY'), toneNormalSection: $('toneNormalSection'),
+  toneCardsNormal: $('toneCardsNormal'), toneCardsAdvanced: $('toneCardsAdvanced'),
+  faceGain: $('faceGain'), faceGainValue: $('faceGainValue'),
   qrUrl: $('qrUrl'),
   // 공용 컨트롤 (QR 위치 6택 + 병행 표시 + 게이지 + 장식 이미지)
   cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
@@ -1701,11 +1762,14 @@ const els = {
   // 공통
   info: $('info'), error: $('error'), canvas: $('view'),
   exportPng: $('exportPng'), exportSvg: $('exportSvg'),
+  downloadToast: $('downloadToast'),
 };
 
 /** 생성기 선택의 단일 상태 — 모드는 이 객체의 노출 범위만 바꾼다. */
 let mode = 'normal';
 const generatorState = createGeneratorState();
+const nextExportFilename = createExportFilenameFactory();
+let downloadToastTimer = 0;
 
 /** 배경 3택 → scene.background 값. null 은 투명(래스터는 알파, SVG 는 배경 요소 부재).
  *  ⚠ 이 두 상수는 `syncStyleUi()` 의 최초 호출(→ syncBgModeUi)보다 위에 있어야 한다 — TDZ. */
@@ -1734,27 +1798,46 @@ const decor = { L: null, R: null };
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
 let current = null;
 
+function showDownloadToast(filename) {
+  els.downloadToast.textContent = tf('g507', { filename });
+  els.downloadToast.classList.add('visible');
+  clearTimeout(downloadToastTimer);
+  downloadToastTimer = setTimeout(() => {
+    els.downloadToast.classList.remove('visible');
+  }, 4200);
+}
+
 function download(bytes, mime, filename) {
   const blob = new Blob([bytes], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  document.body.append(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // 모바일 브라우저가 클릭 뒤 Blob을 읽을 시간을 남긴다.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  showDownloadToast(filename);
 }
 
-function exportFilename(ext) {
+function exportFinderLabel(cur) {
+  if (cur.type === 'Y') return 'y-seam';
+  if (cur.encoded.centerQr) return 'center-qr';
+  return cur.finderPatternId || 'bullseye';
+}
+
+function exportFilename(extension) {
   const { type, encoded } = current;
-  if (type === 'O') {
-    const qMark = encoded.centerQr ? 'Q' : '';
-    return `trilume-o-v${encoded.version}${qMark}-${encoded.eccLevel}.${ext}`;
-  }
-  if (type === 'A') {
-    const qMark = encoded.centerQr ? 'Q' : '';
-    return `trilume-a-v${encoded.version}${qMark}-${encoded.eccLevel}.${ext}`;
-  }
-  return `trilume-y${encoded.version}${encoded.tones === 3 ? 't' : ''}-${encoded.eccLevel}.${ext}`;
+  const version = type === 'Y'
+    ? 'Y' + encoded.version + (encoded.tones === 3 ? 'T' : '')
+    : type + encoded.version + (encoded.centerQr ? 'Q' : '');
+  return nextExportFilename({
+    extension,
+    type,
+    version,
+    finder: exportFinderLabel(current),
+  });
 }
 
 /** 장식 합성 PNG (β) — 캔버스 파이프라인. 이미지 리샘플이 브라우저 의존이라 바이트
@@ -2252,6 +2335,11 @@ function finderMaskThumbnail(pattern) {
   const layout = { size: 6, originX: 0, originY: 0 };
   const faces = [];
   const points = [];
+  // ⚠ 파인더 표현은 하나가 아니다. 셀 마스크(19셀 x T/L/R 이진)와 3톤 큐브
+  //   (renderKind·toneRanks·radiusCells)가 공존하고, 앞으로도 늘 수 있다.
+  //   여기서 cellMasks 를 «있다고 가정» 해서 라이브가 죽었다(2026-08-12) —
+  //   scene.js 는 고쳤는데 이 썸네일이 남아 있었다. 표현을 늘릴 땐 이 분기도 같이 본다.
+  if (!Array.isArray(pattern.cellMasks)) return finderCubeThumbnail(pattern);
   for (let cellIndex = 0; cellIndex < FINDER_CELL_ORDER.length; cellIndex += 1) {
     const cell = FINDER_CELL_ORDER[cellIndex];
     const mask = pattern.cellMasks[cellIndex];
@@ -2366,43 +2454,41 @@ function makeFinderCard(id, pattern) {
       selectFinderPattern(generatorState, id, type, DEFAULT_FINDER_PATTERN_ID), type,
     );
   };
-  card.addEventListener('click', activate);
-  card.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    activate();
-  });
+  wireFinderCardActivation(card, activate);
   return card;
 }
 
 function ensureFinderCards() {
   ensureFinderScoreRows();
   if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount) return;
+
+  // 정식 선택지: 불스아이 → 3톤 큐브 → 중앙 QR. 큐브는 cell-mask 행에 섞지 않는다.
   els.finderLegacyRow.append(
-    makeFinderCard(LEGACY_FINDER_PATTERN_ID, null),
-    makeFinderCard(CENTER_QR_FINDER_PATTERN_ID, null),
+    ...FINDER_CARD_GROUPS.formal.map(({ id, pattern }) => makeFinderCard(id, pattern)),
   );
 
-  const generatedFamilies = FINDER_PATTERNS.slice(0, 8);
+  const generatedFamilies = FINDER_CARD_GROUPS.generated;
   for (let column = 0; column < 4; column += 1) {
     const top = generatedFamilies[column];
     const bottom = generatedFamilies[column + 4];
-    if (!top || !bottom || top.family !== bottom.family) {
+    if (!top || !bottom || top.pattern.family !== bottom.pattern.family) {
       throw new Error('finder UI family column mismatch: ' + column);
     }
     const family = document.createElement('div');
     family.className = 'finder-family';
-    family.dataset.finderFamily = top.family;
+    family.dataset.finderFamily = top.pattern.family;
     const heading = document.createElement('div');
     heading.className = 'finder-family-title';
-    heading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS[top.family];
-    family.append(heading, makeFinderCard(top.id, top), makeFinderCard(bottom.id, bottom));
+    heading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS[top.pattern.family];
+    family.append(
+      heading,
+      makeFinderCard(top.id, top.pattern),
+      makeFinderCard(bottom.id, bottom.pattern),
+    );
     els.finderPatternCards.append(family);
   }
 
-  const refinedPatterns = FINDER_PATTERNS.filter(
-    (pattern) => pattern.family === 'user-refined',
-  );
+  const refinedPatterns = FINDER_CARD_GROUPS.refined;
   if (refinedPatterns.length) {
     const family = document.createElement('div');
     family.className = 'finder-family finder-user-family';
@@ -2412,29 +2498,10 @@ function ensureFinderCards() {
     heading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS['user-refined'];
     const cards = document.createElement('div');
     cards.className = 'finder-user-patterns';
-    cards.append(...refinedPatterns.map((pattern) => makeFinderCard(pattern.id, pattern)));
+    cards.append(...refinedPatterns.map(({ id, pattern }) => makeFinderCard(id, pattern)));
     family.append(heading, cards);
     els.finderPatternCards.append(family);
   }
-
-  const robustPatterns = FINDER_PATTERNS.filter(
-    (pattern) => pattern.family === 'three-tone-cube',
-  );
-  if (robustPatterns.length !== 1) {
-    throw new Error('finder UI three-tone-cube row mismatch');
-  }
-  // 이진 마스크 4계열·손그림 계열과 검출 증거가 다르므로 촬영 강건성 별도 행에 둔다.
-  const robustFamily = document.createElement('div');
-  robustFamily.className = 'finder-family finder-user-family';
-  robustFamily.dataset.finderFamily = 'three-tone-cube';
-  const robustHeading = document.createElement('div');
-  robustHeading.className = 'finder-family-title';
-  robustHeading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS['three-tone-cube'];
-  const robustCards = document.createElement('div');
-  robustCards.className = 'finder-user-patterns';
-  robustCards.append(...robustPatterns.map((pattern) => makeFinderCard(pattern.id, pattern)));
-  robustFamily.append(robustHeading, robustCards);
-  els.finderPatternCards.append(robustFamily);
 }
 
 // Type O/A 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
@@ -3130,7 +3197,12 @@ function syncTypeUi() {
   els.versionY.value = String(generatorState.versionY);
   els.versionA.value = String(generatorState.versionA);
   els.ecc.value = generatorState.eccLevel;
-  els.tone.value = String(generatorState.tone);
+  for (const toneCards of [els.toneCardsNormal, els.toneCardsAdvanced]) {
+    for (const card of toneCards.children) {
+      card.classList.toggle('active', Number(card.dataset.tone) === generatorState.tone);
+    }
+  }
+  els.toneNormalSection.style.display = isY ? '' : 'none';
   els.faceGain.value = String(generatorState.faceGain);
   els.qrUrl.value = generatorState.qrText;
   for (const card of els.typeCards.children) {
@@ -3163,10 +3235,15 @@ els.ecc.addEventListener('change', () => {
   syncTypeUi();
   schedule();
 });
-els.tone.addEventListener('change', () => {
-  generatorState.tone = Number(els.tone.value);
-  schedule();
-});
+for (const toneCards of [els.toneCardsNormal, els.toneCardsAdvanced]) {
+  for (const card of toneCards.children) {
+    card.addEventListener('click', () => {
+      generatorState.tone = Number(card.dataset.tone);
+      syncTypeUi();
+      schedule();
+    });
+  }
+}
 els.faceGain.addEventListener('input', () => {
   generatorState.faceGain = Number(els.faceGain.value);
   syncFaceGainLabel();
@@ -3293,20 +3370,16 @@ function buildConfig() {
  * 18) — needsCornerQr 가 false 가 되는 두 경로에서만 여기서 앱 레이어로 우회한다.
  */
 function sceneOptsForOA(cfg, centerQr) {
-  const opts = { palette: paletteOf(cfg.presetName), centerQr };
-  if (!centerQr) opts.finderPatternId = cfg.finderPatternId;
-  let needsCornerQr = false;
-  if (cfg.fallback.mode === 'center') {
-    opts.qrText = cfg.qrText;
-    opts.cornerToo = Boolean(cfg.fallback.cornerToo);
-    needsCornerQr = opts.cornerToo;
-  } else if (cfg.fallback.mode === 'corner') {
-    opts.qrText = cfg.qrText;
-    opts.qrCorner = cfg.fallback.corner;
-    needsCornerQr = true;
+  if (centerQr !== (cfg.fallback.mode === 'center')) {
+    throw new Error('O/A center QR render state diverges from fallback state');
   }
-  if (cfg.type === 'A' && !needsCornerQr) opts.margin = 20;
-  return opts;
+  return sceneOptionsForOA({
+    fallback: cfg.fallback,
+    finderPatternId: cfg.finderPatternId,
+    palette: paletteOf(cfg.presetName),
+    qrText: cfg.qrText,
+    type: cfg.type,
+  });
 }
 
 /** eccLevel 'auto' = H → M → L 순서로 처음 인코딩(버전 자동 포함)에 성공하는 레벨.
@@ -3365,7 +3438,10 @@ function renderTypeO(cfg) {
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     `${tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) })}<br>` +
     badge;
-  return { type: 'O', encoded, scene: withQuietZone(scene), info };
+  return {
+    type: 'O', encoded, scene: withQuietZone(scene), info,
+    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : cfg.finderPatternId,
+  };
 }
 
 function renderTypeA(cfg) {
@@ -3386,7 +3462,10 @@ function renderTypeA(cfg) {
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     `${tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) })}<br>` +
     badge;
-  return { type: 'A', encoded, scene: withQuietZone(scene), info };
+  return {
+    type: 'A', encoded, scene: withQuietZone(scene), info,
+    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : cfg.finderPatternId,
+  };
 }
 
 function renderTypeY(cfg) {
@@ -3563,7 +3642,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-12.07';
+const GENERATOR_BUILD = '2026-08-12.09';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

@@ -15,6 +15,7 @@ import {
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const OFFICIAL_PATH = path.join(ROOT, 'dist', 'trilume.html');
 const EXPERIMENT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder.html');
+const EDITOR_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html');
 const ROBOTS_PATH = path.join(ROOT, 'sites', '_shared', 'robots-tlcube.txt');
 
 function embeddedFinderSource(html) {
@@ -27,6 +28,7 @@ test('정식/시험판 산출물이 같은 소스 빌더의 현재 결과와 바
   const built = buildGeneratorVariants();
   assert.equal(readFileSync(OFFICIAL_PATH, 'utf8'), built.official);
   assert.equal(readFileSync(EXPERIMENT_PATH, 'utf8'), built.experiment);
+  assert.equal(readFileSync(EDITOR_PATH, 'utf8'), built.editor);
 });
 
 test('정식은 bullseye, 시험판은 C2 쌍날만 빌드 인자로 초기값을 덮는다', () => {
@@ -63,26 +65,31 @@ test('두 빌드에 시험판/정식 상호 링크와 상시 시험 배너가 �
 
 test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸네일을 소스에서 만든다', () => {
   const source = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const cardUiSource = readFileSync(path.join(ROOT, 'src', 'finder-card-ui.js'), 'utf8');
   assert.doesNotMatch(source, /<select id="finderPattern"/);
   assert.match(source, /class="finder-family-grid card-row"/);
-  assert.match(source, /finder-legacy-row \{ display: grid; grid-template-columns: repeat\(2,/);
-  assert.match(source, /makeFinderCard\(CENTER_QR_FINDER_PATTERN_ID, null\)/);
+  assert.match(source, /finder-legacy-row \{ display: grid; grid-template-columns: repeat\(3,/);
+  assert.match(source, /FINDER_CARD_GROUPS\.formal\.map/);
   assert.match(source, /function centerQrThumbnail\(\)/);
   assert.match(source, /finder-family-grid\.card-row \{\s*display: grid; grid-template-columns: repeat\(4,/);
   assert.match(source, /@media \(max-width: 420px\)[\s\S]*finder-family-grid\.card-row \{ grid-template-columns: repeat\(2,/);
-  assert.match(source, /const generatedFamilies = FINDER_PATTERNS\.slice\(0, 8\)/);
+  assert.match(source, /const generatedFamilies = FINDER_CARD_GROUPS\.generated/);
   assert.match(source, /const bottom = generatedFamilies\[column \+ 4\]/);
-  assert.match(source, /const refinedPatterns = FINDER_PATTERNS\.filter\(/);
+  assert.match(source, /const refinedPatterns = FINDER_CARD_GROUPS\.refined/);
   assert.match(source, /className = 'finder-user-patterns'/);
   assert.match(source, /'user-refined': 'g504'/);
-  assert.match(source, /top\.family !== bottom\.family/);
+  assert.match(source, /top\.pattern\.family !== bottom\.pattern\.family/);
   assert.match(source, /className = 'toggle-card finder-card'/);
   assert.match(source, /pattern\.cellMasks\[cellIndex\]/);
   assert.match(source, /facePolygon\(cell\.q, cell\.r, face, layout\)/);
   assert.match(source, /'data-mask-cells': FINDER_CELL_ORDER\.length/);
   assert.match(source, /function finderCubeThumbnail\(pattern\)/);
   assert.match(source, /pattern\.renderKind === 'three-tone-cube'/);
-  assert.match(source, /pattern\.family === 'three-tone-cube'/);
+  assert.match(cardUiSource, /threeTonePatterns\[0\]\.renderKind !== 'three-tone-cube'/);
+  assert.match(
+    cardUiSource,
+    /formal:\s*Object\.freeze\(\[\s*descriptor\(LEGACY_FINDER_PATTERN_ID[\s\S]*descriptor\(THREE_TONE_CUBE_FINDER_PATTERN_ID[\s\S]*descriptor\(CENTER_QR_FINDER_PATTERN_ID/,
+  );
   assert.match(source, /'central-cube-3tone': 'g505'/);
   assert.match(source, /'three-tone-cube': 'g506'/);
   assert.match(source, /id="finderScorePanel"/);
@@ -98,10 +105,12 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
   assert.match(source, /data-i18n="g492"/);
   const built = buildGeneratorVariants();
   for (const html of [built.official, built.experiment]) {
-    assert.match(html, /2026-08-12\.07/);
+    assert.match(html, /2026-08-12\.09/);
     const finderSource = embeddedFinderSource(html);
     assert.match(finderSource, /export const FINDER_BASELINE_SCORES/);
     assert.match(html, /\["finder-selection",/);
+    assert.match(html, /\["finder-card-ui",/);
+    assert.match(html, /\["generator-render-config",/);
     assert.doesNotMatch(finderSource, /\btotal\b/);
   }
 });

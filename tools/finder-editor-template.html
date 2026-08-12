@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>TLcube 파인더 에디터</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b0d13;
+  --panel: #141824;
+  --panel-2: #10131c;
+  --line: #2a3042;
+  --text: #e7ebf5;
+  --muted: #929bb0;
+  --accent: #f0a35d;
+  --accent-soft: rgba(240,163,93,.16);
+  --ok: #70d7a2;
+  --bad: #ff8585;
+  font-family: "Segoe UI", "Malgun Gothic", "Noto Sans", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); }
+button, select { font: inherit; }
+button, select {
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--text);
+}
+button { min-height: 36px; padding: 7px 11px; cursor: pointer; }
+button:hover:not(:disabled), button:focus-visible { border-color: var(--accent); }
+button:disabled { opacity: .38; cursor: default; }
+button[aria-pressed="true"], .primary {
+  background: var(--accent); color: #1d1209; border-color: var(--accent);
+  font-weight: 700;
+}
+header {
+  min-height: 68px; padding: 14px 22px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.brand { min-width: 0; }
+.brand-row { display: flex; align-items: center; gap: 9px; }
+h1 { margin: 0; font-size: 19px; letter-spacing: .02em; }
+.subtitle { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.dev-badge, .chip {
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 8px; color: var(--muted); font-size: 11px; white-space: nowrap;
+}
+.dev-badge { color: var(--accent); border-color: rgba(240,163,93,.42); }
+.lang-switch { display: flex; gap: 4px; margin-left: auto; }
+.lang-switch button { min-height: 30px; padding: 4px 9px; font-size: 11px; }
+main {
+  width: min(1560px, 100%); margin: 0 auto; padding: 18px 22px 30px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px;
+}
+.preview-panel, .controls {
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+}
+.preview-panel { min-width: 0; overflow: hidden; }
+.preview-head {
+  min-height: 54px; padding: 10px 13px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+}
+.preview-head .spacer { flex: 1; }
+.canvas-stage {
+  min-height: 520px; padding: 12px; display: grid; place-items: center;
+  background:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px),
+    #090b10;
+  background-size: 24px 24px;
+}
+canvas {
+  display: block; max-width: 100%; border-radius: 9px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.34);
+  touch-action: none; cursor: crosshair;
+}
+canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.preview-foot {
+  padding: 10px 13px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 11px; line-height: 1.55;
+}
+.controls { padding: 14px; align-self: start; }
+section + section { border-top: 1px solid var(--line); margin-top: 15px; padding-top: 15px; }
+h2 {
+  margin: 0 0 9px; color: var(--muted); font-size: 11px;
+  letter-spacing: .12em; text-transform: uppercase;
+}
+.segmented { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.grid-4 button { padding-inline: 5px; }
+label { display: block; margin: 9px 0 5px; color: var(--muted); font-size: 11px; }
+select { width: 100%; min-height: 38px; padding: 7px 9px; }
+.payload {
+  min-height: 40px; padding: 9px; border: 1px solid var(--line); border-radius: 8px;
+  background: #0b0e15; color: #bdc8e4; font: 12px/1.5 ui-monospace, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+.payload-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: stretch; }
+.payload-row button { height: 100%; }
+pre {
+  margin: 0; min-height: 70px; max-height: 128px; overflow: auto;
+  padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: #090b11; color: #cad5f2; font: 12px/1.55 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
+.status {
+  min-height: 20px; margin-top: 9px; color: var(--ok);
+  font-size: 11px; line-height: 1.5;
+}
+.status.error { color: var(--bad); }
+.count { color: var(--accent); font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) {
+  main { grid-template-columns: minmax(0, 1fr); padding-inline: 14px; }
+  .controls { order: 1; }
+  .preview-panel { order: 2; }
+  .canvas-stage { min-height: 360px; }
+}
+@media (max-width: 520px) {
+  header { padding-inline: 14px; }
+  .subtitle { display: none; }
+  .lang-switch { width: 100%; margin-left: 0; }
+  .lang-switch button { flex: 1; }
+  main { padding-top: 12px; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-row">
+      <h1 data-i18n="title">파인더 에디터</h1>
+      <span class="dev-badge" data-i18n="devBadge">개발 도구</span>
+    </div>
+    <p class="subtitle" data-i18n="subtitle">실제 Type O/A 데이터 필드 안에서 중앙 19셀 또는 3톤 큐브를 편집해요.</p>
+  </div>
+  <div class="lang-switch" aria-label="Language">
+    <button type="button" data-lang="ko">KO</button>
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="ja">JA</button>
+  </div>
+</header>
+
+<main>
+  <article class="preview-panel">
+    <div class="preview-head">
+      <span class="chip" id="typeChip">Type O</span>
+      <span class="chip" id="dataChip">Data 01</span>
+      <span class="chip"><span class="count" id="litCount">0</span> <span id="metricSuffix" data-i18n="litFaces">/ 57 밝은 면</span></span>
+      <span class="spacer"></span>
+      <span class="chip" data-i18n="contextBadge">실제 데이터 문맥</span>
+    </div>
+    <div class="canvas-stage" id="canvasStage">
+      <canvas id="preview" tabindex="0" aria-describedby="editHint"></canvas>
+    </div>
+    <div class="preview-foot" id="editHint">
+      <span data-i18n="pointerHint">좌클릭: 다음 톤 · 우클릭: 이전 톤 (드래그도 같은 방향)</span>
+      · <span data-i18n="shiftHint">2톤에서는 Shift+클릭·드래그: 셀 3면 전체</span>
+      · <span data-i18n="keyboardHint">키보드: 방향키로 면 선택, Space 다음 톤 · Shift+Space 이전 톤</span>
+    </div>
+  </article>
+
+  <aside class="controls">
+    <section>
+      <h2 data-i18n="contextTitle">문맥</h2>
+      <label data-i18n="typeLabel">코드 타입</label>
+      <div class="segmented">
+        <button type="button" id="typeO">Type O</button>
+        <button type="button" id="typeA">Type A</button>
+      </div>
+      <label data-i18n="dataLabel">고정 테스트 데이터</label>
+      <div class="payload-row">
+        <div class="payload" id="payload"></div>
+        <button type="button" id="regenerate" data-i18n="regenerate">재생성</button>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="editTitle">편집</h2>
+      <label for="starter" data-i18n="starterLabel">시작점 불러오기</label>
+      <select id="starter"></select>
+      <div class="grid-4" style="margin-top:8px">
+        <button type="button" id="undo" data-i18n="undo">되돌리기</button>
+        <button type="button" id="redo" data-i18n="redo">다시하기</button>
+        <button type="button" id="reset" data-i18n="reset">초기화</button>
+        <button type="button" id="invert" data-i18n="invert">반전</button>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="dataExportTitle">데이터 내보내기</h2>
+      <pre id="maskOutput"></pre>
+      <button type="button" class="primary" id="copyPattern" style="width:100%;margin-top:7px" data-i18n="copyPattern">표현 복사</button>
+    </section>
+
+    <section>
+      <h2 data-i18n="pngTitle">PNG 내보내기</h2>
+      <div class="grid-2">
+        <button type="button" id="exportFull" data-i18n="fullPng">전체 코드</button>
+        <button type="button" id="exportFinder" data-i18n="finderPng">파인더 단독</button>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </section>
+  </aside>
+</main>
+
+<!-- FINDER_EDITOR_LOADER -->
+</body>
+</html>
