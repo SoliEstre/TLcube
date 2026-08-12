@@ -282,6 +282,33 @@
     text-shadow: 0 1px 6px #000;
   }
 
+  /*
+   * 사진 스캔 실패 토스트.
+   *
+   * 왜 상태줄만으로 부족한가: 실패 문구는 `.scan-status` 에 조용히 갈아끼워지는데, 사진을
+   * 고르는 동작 자체가 시스템 파일 선택기를 거쳐 돌아오는 흐름이라 사용자의 시선이 화면
+   * 하단에 없다. 아무 일도 안 일어난 것처럼 보인다는 제보(2026-08-12).
+   *
+   * 왜 위쪽인가: 실패 후 사용자가 바로 할 일은 «다른 사진 고르기» 이고 그 버튼이 하단에
+   * 있다. 생성기처럼 하단에 띄우면 눌러야 할 버튼을 토스트가 덮는다.
+   *
+   * ⚠ 배경이 고정으로 어두우니 글자도 고정 밝은 색이다 — 생성기 토스트와 같은 규칙
+   *   (테마 변수를 쓰면 라이트에서 어두운 글자 + 어두운 배경이 된다).
+   */
+  .scan-toast {
+    position: fixed; z-index: 60; left: 50%; top: max(64px, calc(env(safe-area-inset-top) + 60px));
+    transform: translate(-50%, -12px); width: max-content; max-width: calc(100vw - 32px);
+    padding: 11px 15px; border-radius: 999px; background: rgb(21 25 36 / .96);
+    /* 스캐너 배경은 카메라 화면이거나 게이트의 거의 검은 오버레이다. 알약과 배경이 둘 다
+       어두워 경계가 녹으므로 실선 테두리로 형태를 세운다(실브라우저 확인 2026-08-12). */
+    border: 1px solid rgb(255 255 255 / .16);
+    color: #f2f5fb; box-shadow: 0 10px 30px rgb(0 0 0 / .38); font-size: 13px;
+    line-height: 1.35; text-align: center; opacity: 0; pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .scan-toast.visible { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 520px) { .scan-toast { font-size: 12px; } }
+
   .photo-button,
   .gate-primary,
   .result-primary,
@@ -701,6 +728,9 @@
 </style>
 </head>
 <body>
+<!-- ⚠ aria-hidden 이다. 같은 문구를 `.scan-status`(role=status·aria-live)가 이미 읽어 주므로
+     여기까지 live 로 두면 스크린리더가 **두 번** 읽는다. 이건 순수 시각 보조다. -->
+<div id="scan-toast" class="scan-toast" aria-hidden="true"></div>
 <main class="scanner-app" id="scanner-app" data-i18n-attr="aria-label:app.label" aria-label="TLcube 스캐너">
   <div class="camera-backdrop" id="camera-stage">
     <video id="camera-preview" autoplay muted playsinline data-i18n-attr="aria-label:camera.label" aria-label="TLcube 코드를 비추는 카메라 화면"></video>

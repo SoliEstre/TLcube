@@ -49,7 +49,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-12.08';
+export const SCANNER_BUILD = '2026-08-12.09';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -69,6 +69,7 @@ const chooseImageButton = document.getElementById('choose-image');
 const gateChooseImageButton = document.getElementById('gate-choose-image');
 const imageInput = document.getElementById('image-input');
 const statusBox = document.getElementById('scan-status');
+const scanToast = document.getElementById('scan-toast');
 const resultPanel = document.getElementById('scan-result');
 const resultTitle = document.getElementById('result-title');
 const resultContent = document.getElementById('result-content');
@@ -80,7 +81,7 @@ const closeResultSecondaryButton = document.getElementById('close-result-seconda
 
 if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTitle ||
     !cameraGateMessage || !startCameraButton || !chooseImageButton || !gateChooseImageButton ||
-    !imageInput || !statusBox || !resultPanel || !resultTitle || !resultContent ||
+    !imageInput || !statusBox || !scanToast || !resultPanel || !resultTitle || !resultContent ||
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
     !closeResultSecondaryButton) {
   throw new Error('TLcube scanner markup is incomplete.');
@@ -194,6 +195,27 @@ async function decodeFrame(imageData) {
 
 function setStatus(message) {
   statusBox.textContent = message;
+}
+
+let scanToastTimer = 0;
+
+/**
+ * 사진 스캔 실패를 **눈에 띄게** 알린다.
+ *
+ * 상태줄(`setStatus`)과 중복이지만 의도된 중복이다 — 사진 경로는 시스템 파일 선택기를
+ * 거쳐 돌아오는 흐름이라 사용자의 시선이 하단 상태줄에 없고, 실패가 «아무 일도 안 일어남»
+ * 으로 보였다(사용자 제보 2026-08-12). 라이브 프레임 실패엔 쓰지 않는다 — 초당 여러 번
+ * 실패하는 게 정상이라 토스트를 띄우면 화면이 깜빡인다.
+ *
+ * 문구는 호출자가 이미 번역해서 넘긴다(사전 키를 여기서 고르지 않는다).
+ */
+function showScanToast(message) {
+  scanToast.textContent = message;
+  scanToast.classList.add('visible');
+  clearTimeout(scanToastTimer);
+  scanToastTimer = setTimeout(() => {
+    scanToast.classList.remove('visible');
+  }, 4200);
 }
 
 function hasCameraApi() {
@@ -552,6 +574,7 @@ function handleDecodeResult(result, source, session) {
   if (!payload) {
     if (source === 'file') {
       setStatus(t('status.photoNoResult'));
+      showScanToast(t('toast.photoNoResult'));
       showSupportedStartGate(t('status.startOrPick'));
     }
     return;
@@ -713,6 +736,7 @@ async function decodeImageFile(file) {
   } catch {
     if (session === scanSession) {
       setStatus(t('status.photoUnreadable'));
+      showScanToast(t('toast.photoUnreadable'));
       showSupportedStartGate(t('status.startOrPick'));
     }
   } finally {

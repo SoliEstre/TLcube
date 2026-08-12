@@ -55,6 +55,10 @@ export const SCANNER_STRINGS = {
     'status.photoUnreadable': '사진을 읽지 못했어요. 다른 사진을 선택해 주세요.',
     'status.photoNoResult': '사진에서 결과를 찾지 못했어요. 다른 사진을 선택하거나 카메라를 시작해 주세요.',
     'status.startOrPick': '카메라를 시작하거나 다른 사진을 선택해 주세요.',
+    // 토스트는 상태줄과 같은 사건을 «눈에 띄게» 다시 말한다. 그래서 문구는 더 짧다 —
+    // 무엇을 해야 하는지(다른 사진 고르기)는 상태줄이 이어서 안내한다.
+    'toast.photoNoResult': '사진에서 코드를 찾지 못했어요.',
+    'toast.photoUnreadable': '사진을 읽지 못했어요.',
     'status.decoded': '코드를 읽었어요.',
     'status.frameError': '프레임을 처리하는 중 문제가 생겼어요. 다시 시작해 주세요.',
     'status.restart': '카메라를 다시 시작해 주세요.',
@@ -141,6 +145,8 @@ export const SCANNER_STRINGS = {
     'status.photoUnreadable': 'Could not read that photo. Please choose another one.',
     'status.photoNoResult': 'No code found in that photo. Choose another one or start the camera.',
     'status.startOrPick': 'Start the camera or choose another photo.',
+    'toast.photoNoResult': 'No code found in that photo.',
+    'toast.photoUnreadable': 'Could not read that photo.',
     'status.decoded': 'Code read.',
     'status.frameError': 'Something went wrong while processing the frame. Please start again.',
     'status.restart': 'Please start the camera again.',
@@ -226,6 +232,8 @@ export const SCANNER_STRINGS = {
     'status.photoUnreadable': '写真を読み取れませんでした。別の写真を選んでください。',
     'status.photoNoResult': '写真からコードが見つかりませんでした。別の写真を選ぶか、カメラを起動してください。',
     'status.startOrPick': 'カメラを起動するか、別の写真を選んでください。',
+    'toast.photoNoResult': '写真からコードが見つかりませんでした。',
+    'toast.photoUnreadable': '写真を読み取れませんでした。',
     'status.decoded': 'コードを読み取りました。',
     'status.frameError': 'フレームの処理中に問題が起きました。もう一度起動してください。',
     'status.restart': 'カメラをもう一度起動してください。',
