@@ -12,10 +12,12 @@
  * 파일 목록을 손으로 적지 않는다. repo 를 훑어 인라인 모듈을 **가진 모든 HTML** 을
  * 검사하므로, 새 페이지가 생겨도 자동으로 포함된다.
  *
- * 번들(dist/*.html)은 앱 소스를 APP_CODE **문자열**로 물고 있어서 로더만 파싱된다.
- * 그쪽 보장은 사슬로 성립한다: index.html 이 파싱된다 → 빌더가 그 모듈 본문을 그대로
- * 잘라 APP_CODE 로 넣는다 → gen-variants 테스트가 산출물이 방금 빌드와 바이트 동일임을
- * 단언한다. 사슬의 첫 고리가 여기다.
+ * ⚠ 번들(dist/*.html)은 앱 소스를 APP_CODE **문자열**로 물고 있다. 그래서 인라인
+ *   스크립트만 파싱하면 **로더만** 검사되고 앱 본체는 통째로 지나간다 — 실제로 이
+ *   구분을 잊고 라이브를 «파싱 OK» 로 오판했다(2026-08-12, 그때 라이브는 죽어 있었다).
+ *   사슬 논증(index.html 이 파싱된다 → 빌더가 그 본문을 그대로 APP_CODE 로 넣는다 →
+ *   gen-variants 가 바이트 동일을 단언한다)으로도 닿기는 하지만, 사슬은 사람이 틀리기
+ *   쉽다. 아래에서 APP_CODE 를 **직접 꺼내 파싱**한다.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,6 +30,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SKIP_DIRS = new Set(['node_modules', '.git', '.playwright-mcp', 'test']);
 const MODULE_SCRIPT = /<script type="module">([\s\S]*?)<\/script>/g;
+// 단일 파일 번들의 앱 본체. 로더가 blob URL 로 만들어 import 하는 «진짜 앱» 이다.
+const APP_CODE = /const APP_CODE = ("(?:\\.|[^"\\])*");/;
 
 function htmlFiles(dir) {
   const found = [];
@@ -42,30 +46,43 @@ function htmlFiles(dir) {
   return found;
 }
 
-test('인라인 모듈을 가진 모든 HTML 이 자바스크립트로 파싱된다', () => {
+test('인라인 모듈과 번들 앱 본체가 모두 자바스크립트로 파싱된다', () => {
   const scratch = mkdtempSync(path.join(tmpdir(), 'tlcube-syntax-'));
   let checked = 0;
+  let appBodies = 0;
+
+  // --check 는 «파싱만» 한다 — 실행하지 않으므로 DOM 이 없어도 안전하다.
+  const parses = (source, label) => {
+    const scratchFile = path.join(scratch, checked + '.mjs');
+    writeFileSync(scratchFile, source, 'utf8');
+    checked += 1;
+    try {
+      execFileSync(process.execPath, ['--check', scratchFile], { stdio: 'pipe' });
+    } catch (error) {
+      const detail = String(error.stderr || error.message)
+        .split('\n').filter((line) => /SyntaxError|\^/.test(line)).join(' ');
+      assert.fail(label + ' 이 파싱되지 않는다: ' + detail);
+    }
+  };
+
   for (const file of htmlFiles(ROOT)) {
     const html = readFileSync(file, 'utf8');
+    const rel = path.relative(ROOT, file).split(path.sep).join('/');
     MODULE_SCRIPT.lastIndex = 0;
     let match;
     let index = 0;
     while ((match = MODULE_SCRIPT.exec(html)) !== null) {
-      const rel = path.relative(ROOT, file).split(path.sep).join('/');
-      const scratchFile = path.join(scratch, checked + '.mjs');
-      writeFileSync(scratchFile, match[1], 'utf8');
-      try {
-        // --check 는 «파싱만» 한다 — 실행하지 않으므로 DOM 이 없어도 안전하다.
-        execFileSync(process.execPath, ['--check', scratchFile], { stdio: 'pipe' });
-      } catch (error) {
-        const detail = String(error.stderr || error.message)
-          .split('\n').filter((line) => /SyntaxError|\^/.test(line)).join(' ');
-        assert.fail(rel + ' 의 ' + index + '번째 인라인 모듈이 파싱되지 않는다: ' + detail);
-      }
-      checked += 1;
+      parses(match[1], rel + ' 의 ' + index + '번째 인라인 모듈');
       index += 1;
     }
+    const app = APP_CODE.exec(html);
+    if (app !== null) {
+      parses(JSON.parse(app[1]), rel + ' 의 APP_CODE(번들 앱 본체)');
+      appBodies += 1;
+    }
   }
-  // 0 개를 «전부 통과» 로 보고하는 사고를 막는다 — 추출 정규식이 죽으면 조용히 0 이 된다.
+
+  // 0 개를 «전부 통과» 로 보고하는 사고를 막는다 — 추출이 깨지면 조용히 0 이 된다.
   assert.ok(checked >= 5, '인라인 모듈을 ' + checked + '개만 찾았다 — 추출이 깨졌는지 확인');
+  assert.ok(appBodies >= 2, 'APP_CODE 를 ' + appBodies + '개만 찾았다 — 번들이 검사에서 빠졌다');
 });
