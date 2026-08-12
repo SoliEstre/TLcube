@@ -1,0 +1,162 @@
+{
+  "purpose": "full Type O codes with data surrounding each experimental finder",
+  "payload": "https://tl.estre.so/finder-lab",
+  "version": 3,
+  "eccLevel": "M",
+  "preset": "slate",
+  "pixelsPerUnit": 18,
+  "supersample": 2,
+  "files": [
+    {
+      "id": "pinwheel-3-0101-cw-missing-solid",
+      "file": "01-pinwheel-3-0101-cw-missing-solid.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 130646,
+      "sha256": "6095dc0ede101a5d47e83237d84ec247eae6b16c199b187b628356f8bbd8c6a0",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "gap-ring-01-2-1-solid",
+      "file": "02-gap-ring-01-2-1-solid.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 130599,
+      "sha256": "fcac90c729f065b5e1654e5355aa31f66972f69b3452477220b0d37373741840",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "flower-7-0020-coprime-offset",
+      "file": "03-flower-7-0020-coprime-offset.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 130436,
+      "sha256": "d3a5a07204d849718fc4d31020f332f60230f23fb1d10ae34741aeb3c3d76822",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "swirl-2-200",
+      "file": "04-swirl-2-200.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 132754,
+      "sha256": "7fff65c28fff9f376dc07ffec43d1f625b651223c9ccf52c85b0b02319428dbb",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "pinwheel-c2-2-1100-cw",
+      "file": "05-pinwheel-c2-2-1100-cw.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 130446,
+      "sha256": "5d040887aa7ddc5dd96ce934c459d3535673be0243183fb452ec9195d2f177b7",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "gap-ring-01-2-1-open",
+      "file": "06-gap-ring-01-2-1-open.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 130803,
+      "sha256": "34b41972f021118412a5a3c1c46b17024eefb561c2790272d2fb07cc6fe856c5",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "flower-7-1020-coprime-offset",
+      "file": "07-flower-7-1020-coprime-offset.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 131028,
+      "sha256": "e2d7a3f397cf64d5f3a98eedbd50d153ee803ff141f2ae466f3f2509365e9fc0",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "swirl-c2-5-5-11-both",
+      "file": "08-swirl-c2-5-5-11-both.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 132871,
+      "sha256": "267293224445767f01e835014c4501a3cd5926486405f1ee11919f8337fbf6fa",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "tristar-refined-h3",
+      "file": "09-tristar-refined-h3.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 132615,
+      "sha256": "2678bef570127e4d30b09b073b8c144320f27702779f4f61faac4780b810af65",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "tree-refined-h3",
+      "file": "10-tree-refined-h3.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 132513,
+      "sha256": "fd30d42dde9852ba1b35dafef3efee84013abbfaff94833c00e93b2da06aefe4",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "cats-refined-h3",
+      "file": "11-cats-refined-h3.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 132007,
+      "sha256": "24b2ef2f62cee85905d3fca2c29f685d6613fc1ddb00d09e32f9ea24eb7f674e",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      }
+    },
+    {
+      "id": "central-cube-3tone",
+      "file": "12-central-cube-3tone.png",
+      "width": 727,
+      "height": 648,
+      "bytes": 132522,
+      "sha256": "e42c780cd808eac33d5e25992688781a7d14c1d854d3062e74fd5ad87eb6c1b0",
+      "selfCheck": {
+        "total": 312,
+        "minDelta": 0.1824415340168724
+      },
+      "finder": {
+        "file": "12-central-cube-3tone-finder.png",
+        "width": 161,
+        "height": 180,
+        "bytes": 4176,
+        "sha256": "05da1d7b8cd30415faa50d080a925f510c957e522f9c8fb4cfec8eeacd56ce33"
+      }
+    }
+  ]
+}

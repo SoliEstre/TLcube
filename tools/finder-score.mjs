@@ -28,6 +28,7 @@ import { FINDER_PATTERNS } from '../src/finder-patterns.js';
 import { digitToRanks } from '../src/lehmer.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset, presetLuminances,
+  relativeLuminance,
 } from '../src/luminance.js';
 import { rasterToPng } from '../src/png.js';
 import { TL_READER_URL } from '../src/qr.js';
@@ -85,6 +86,7 @@ const TYPE_O_VERSION = 3;
 const TYPE_O_ECC_LEVEL = 'M';
 const TYPE_O_PIXELS_PER_UNIT = 18;
 const TYPE_O_SUPERSAMPLE = 2;
+const THREE_TONE_CUBE_RADIUS_CELLS = 4;
 const FACE_EDGE_COUNT = 4;
 // test/ygrid.test.js의 「면 경계 인접성」이 공유 꼭짓점을 비교할 때 쓰는 EPS를 재사용한다.
 const SHARED_EDGE_EPS = 1e-9;
@@ -154,6 +156,24 @@ function cellMasksToBits(cellMasks, label) {
   return bits;
 }
 
+function normalizeToneRanks(toneRanks, label) {
+  if (toneRanks === null || typeof toneRanks !== 'object' || Array.isArray(toneRanks)) {
+    throw new TypeError(label + ': toneRanks 는 {T,L,R} 객체여야 한다');
+  }
+  const ranks = {};
+  for (const face of FACES) {
+    const rank = toneRanks[face];
+    if (!Number.isInteger(rank) || rank < 0 || rank > 2) {
+      throw new RangeError(label + ': toneRanks.' + face + '는 0..2 정수여야 한다: ' + rank);
+    }
+    ranks[face] = rank;
+  }
+  if (new Set(FACES.map((face) => ranks[face])).size !== FACES.length) {
+    throw new RangeError(label + ': toneRanks 는 0/1/2 순열이어야 한다');
+  }
+  return Object.freeze(ranks);
+}
+
 function maskInputEntries(value) {
   if (Array.isArray(value)) return value;
   if (value === null || typeof value !== 'object') {
@@ -165,7 +185,8 @@ function maskInputEntries(value) {
     }
     return value.candidates;
   }
-  if (Object.hasOwn(value, 'cellMasks') || Object.hasOwn(value, 'masks')) return [value];
+  if (Object.hasOwn(value, 'cellMasks') || Object.hasOwn(value, 'masks')
+    || Object.hasOwn(value, 'toneRanks')) return [value];
   return Object.entries(value).map(([label, entry]) => (
     Array.isArray(entry)
       ? { id: label, name: label, cellMasks: entry }
@@ -212,15 +233,33 @@ export function parseFinderMaskCandidates(input) {
     if (reserved.has(id)) throw new RangeError(id + ': 기존 이름과 충돌한다');
     if (seen.has(id)) throw new RangeError(id + ': 마스크 후보 id가 중복됐다');
     seen.add(id);
+    const toneRanks = entry.toneRanks === undefined
+      ? null : normalizeToneRanks(entry.toneRanks, id);
     const cellMasks = entry.cellMasks === undefined ? entry.masks : entry.cellMasks;
-    const bits = cellMasksToBits(cellMasks, id);
+    if (toneRanks === null && cellMasks === undefined) {
+      throw new TypeError(id + ': cellMasks/masks 또는 toneRanks 가 필요하다');
+    }
+    if (toneRanks !== null && cellMasks !== undefined) {
+      throw new RangeError(id + ': cellMasks/masks 와 toneRanks 는 함께 쓸 수 없다');
+    }
+    const bits = toneRanks === null ? cellMasksToBits(cellMasks, id) : undefined;
+    const radiusCells = entry.radiusCells === undefined
+      ? THREE_TONE_CUBE_RADIUS_CELLS
+      : entry.radiusCells;
+    if (toneRanks !== null && (!Number.isFinite(radiusCells) || radiusCells <= 0 || radiusCells > 4)) {
+      throw new RangeError(id + ': radiusCells 는 0보다 크고 4 이하여야 한다');
+    }
     return Object.freeze({
       id,
       name,
       family: 'manual',
-      params: Object.freeze({ ...(entry.params || {}), source: 'mask-input' }),
-      cellMasks: Object.freeze([...cellMasks]),
-      bits,
+      params: Object.freeze({
+        ...(entry.params || {}),
+        source: toneRanks === null ? 'mask-input' : 'three-tone-input',
+      }),
+      ...(toneRanks === null
+        ? { cellMasks: Object.freeze([...cellMasks]), bits }
+        : { toneRanks, radiusCells }),
     });
   }));
 }
@@ -332,6 +371,31 @@ function pointInPolygon(x, y, polygon) {
       && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
   }
   return inside;
+}
+
+function threeToneCubePolygons(radiusCells) {
+  return Object.fromEntries(FACES.map((face) => [
+    face, facePolygon(0, 0, face, {
+    size: radiusCells,
+    originX: 0,
+    originY: 0,
+  }),
+  ]));
+}
+
+function threeToneCubeEvaluator(toneRanks, radiusCells = THREE_TONE_CUBE_RADIUS_CELLS) {
+  const ranks = normalizeToneRanks(toneRanks, 'three-tone-cube');
+  const polygons = threeToneCubePolygons(radiusCells);
+  const levels = presetLuminances(DEFAULT_PRESET);
+  const background = relativeLuminance(TYPE_O_PRESET.background);
+  return (x, y) => {
+    for (const face of FACES) {
+      if (pointInPolygon(x, y, polygons[face])) {
+        return levels[ranks[face]];
+      }
+    }
+    return background;
+  };
 }
 
 // 좌표는 pixelToAxial로 셀을 찾고 facePolygon으로 면을 판정한다. 새 규약을 만들지 않는다.
@@ -1051,6 +1115,61 @@ function scoreBaseline(name, kind, evaluate, kernel, bases, includeCenterBalance
     ...(includeCenterBalance ? { centerBalance: centerBalanceMetric(projection.bits) } : {}),
     legacyTotal: composite(metrics, LEGACY_AXES), total: composite(metrics) };
 }
+
+function centeredCubeBalance(radiusCells) {
+  return {
+    passed: true,
+    offsetCells: 0,
+    offset: 0,
+    centroidX: 0,
+    centroidY: 0,
+    onFaces: 3,
+    totalArea: 3 * FACE_AREA_COEFF * radiusCells ** 2,
+    limitCells: CENTER_BALANCE_LIMIT_CELLS,
+    source: 'three-tone-cube-silhouette',
+  };
+}
+
+function scoreTonePattern(candidate, kernel, bases) {
+  const toneRanks = normalizeToneRanks(candidate.toneRanks, candidate.id);
+  const radiusCells = candidate.radiusCells || THREE_TONE_CUBE_RADIUS_CELLS;
+  const scored = scoreBaseline(
+    candidate.name,
+    candidate.id,
+    threeToneCubeEvaluator(toneRanks, radiusCells),
+    kernel,
+    bases,
+  );
+  return {
+    ...candidate,
+    toneRanks,
+    centerBalance: centeredCubeBalance(radiusCells),
+    metrics: scored.metrics,
+    legacyTotal: scored.legacyTotal,
+    total: scored.total,
+  };
+}
+
+/** --masks-file 의 toneRanks 후보와 같은 자로 중앙 3톤 큐브를 잰다. */
+export function measureThreeToneCubePatternScore(toneRanks, options = {}) {
+  const kernel = gaussianKernel(options.blurSigma === undefined
+    ? DEFAULT_BLUR_SIGMA : options.blurSigma);
+  const result = scoreTonePattern({
+    id: options.id || 'three-tone-cube',
+    name: options.name || 'Three-tone cube',
+    family: options.family || 'three-tone-cube',
+    params: Object.freeze({ source: 'three-tone-rank-input' }),
+    radiusCells: options.radiusCells || THREE_TONE_CUBE_RADIUS_CELLS,
+    toneRanks,
+  }, kernel, blurredFaceBases(kernel));
+  return Object.freeze({
+    ...result,
+    scores: Object.freeze(Object.fromEntries(COMPOSITE_AXES.map(
+      (axis) => [axis, result.metrics[axis].score],
+    ))),
+  });
+}
+
 function bullseyeEvaluator() {
   const radius = maxSafeRadius(1);
   return (x, y) => {
@@ -1800,6 +1919,56 @@ function candidateScene(bits) {
   }
   return { width: layout.width, height: layout.height, background: PALETTE.background, shapes };
 }
+
+function threeToneFinderShapes(
+  layout, palette, toneRanks, radiusCells = THREE_TONE_CUBE_RADIUS_CELLS,
+) {
+  const ranks = normalizeToneRanks(toneRanks, 'three-tone-render');
+  const macroLayout = {
+    size: radiusCells * layout.size,
+    originX: layout.originX,
+    originY: layout.originY,
+  };
+  return FACES.map((face) => ({
+    kind: 'polygon',
+    points: facePolygon(0, 0, face, macroLayout),
+    color: palette.levels[ranks[face]],
+  }));
+}
+
+function toneCandidateScene(toneRanks, radiusCells) {
+  const layout = layoutForRegion(FINDER_RADIUS, { size: PNG_CELL_SIZE, margin: PNG_MARGIN });
+  return {
+    width: layout.width,
+    height: layout.height,
+    background: PALETTE.background,
+    shapes: threeToneFinderShapes(layout, PALETTE, toneRanks, radiusCells),
+  };
+}
+
+function customTypeOToneScene(toneRanks, encoded, radiusCells) {
+  const scene = buildScene(encoded, {
+    palette: TYPE_O_PALETTE,
+    cellSize: 1,
+    margin: 2,
+  });
+  const shapes = scene.shapes.filter((shape) => shape.kind !== 'disc');
+  shapes.push(...threeToneFinderShapes(scene.layout, TYPE_O_PALETTE, toneRanks, radiusCells));
+  return { ...scene, finderPatternId: 'manual-three-tone', shapes };
+}
+
+function manualFinderScene(result) {
+  return result.toneRanks === undefined
+    ? candidateScene(result.bits)
+    : toneCandidateScene(result.toneRanks, result.radiusCells);
+}
+
+function manualTypeOScene(result, encoded) {
+  return result.toneRanks === undefined
+    ? customTypeOScene(result.bits, encoded)
+    : customTypeOToneScene(result.toneRanks, encoded, result.radiusCells);
+}
+
 function customTypeOScene(bits, encoded) {
   const scene = buildScene(encoded, {
     palette: TYPE_O_PALETTE,
@@ -1901,11 +2070,11 @@ async function renderManualComparisons(results, outputDir, encoded) {
     const finderName = stem + '-finder-seed-h1-h2-h3.png';
     const typeOName = stem + '-type-o-seed-h1-h2-h3.png';
     const finder = await writePng(
-      horizontalScene(ordered.map((result) => candidateScene(result.bits)), 0.5),
+      horizontalScene(ordered.map((result) => manualFinderScene(result)), 0.5),
       path.join(comparisonDir, finderName),
     );
     const typeO = await writePng(
-      horizontalScene(ordered.map((result) => customTypeOScene(result.bits, encoded)), 1),
+      horizontalScene(ordered.map((result) => manualTypeOScene(result, encoded)), 1),
       path.join(comparisonDir, typeOName),
       { pixelsPerUnit: TYPE_O_PIXELS_PER_UNIT, supersample: TYPE_O_SUPERSAMPLE },
     );
@@ -1943,8 +2112,8 @@ async function renderManualCandidates(results, outputDir) {
     const typeOName = prefix + '-type-o.png';
     const finderPath = path.join(finderDir, finderName);
     const typeOPath = path.join(typeODir, typeOName);
-    const finder = await writePng(candidateScene(result.bits), finderPath);
-    const typeO = await writePng(customTypeOScene(result.bits, encoded), typeOPath, {
+    const finder = await writePng(manualFinderScene(result), finderPath);
+    const typeO = await writePng(manualTypeOScene(result, encoded), typeOPath, {
       pixelsPerUnit: TYPE_O_PIXELS_PER_UNIT,
       supersample: TYPE_O_SUPERSAMPLE,
       encoded,
@@ -1957,7 +2126,8 @@ async function renderManualCandidates(results, outputDir) {
     files.push({
       id: result.id,
       name: result.name,
-      cellMasks: result.cellMasks,
+      ...(result.cellMasks === undefined ? {} : { cellMasks: result.cellMasks }),
+      ...(result.toneRanks === undefined ? {} : { toneRanks: result.toneRanks }),
       centerOffsetCells: result.centerBalance.offsetCells,
       centerBalanceGatePassed: result.centerBalance.passed,
       ...result.renders,
@@ -2003,6 +2173,7 @@ function publicAxisResult(result) {
     family: result.family,
     params: result.params,
     ...(result.cellMasks === undefined ? {} : { cellMasks: result.cellMasks }),
+    ...(result.toneRanks === undefined ? {} : { toneRanks: result.toneRanks }),
     centerOffsetCells: result.centerBalance ? result.centerBalance.offsetCells : null,
     centerBalanceGatePassed: result.centerBalance ? result.centerBalance.passed : null,
     scores: Object.fromEntries(COMPOSITE_AXES.map(
@@ -2043,7 +2214,9 @@ export async function runHarness(options = {}) {
   }
   if (!Array.isArray(config.maskCandidates)
     || config.maskCandidates.some((candidate) =>
-      !(candidate.bits instanceof Uint8Array) || candidate.bits.length !== FACE_COUNT)) {
+      candidate.toneRanks === undefined
+        ? !(candidate.bits instanceof Uint8Array) || candidate.bits.length !== FACE_COUNT
+        : candidate.bits !== undefined)) {
     throw new TypeError('maskCandidates 는 parseFinderMaskCandidates()의 반환 배열이어야 한다');
   }
   const customMode = config.maskCandidates.length > 0;
@@ -2104,21 +2277,29 @@ export async function runHarness(options = {}) {
       scoreBaseline('중앙 QR', 'center-qr', centerQrEvaluator(), kernel, bases, true),
     ];
     const fixedComparison = FINDER_PATTERNS.map((pattern) => {
+      if (pattern.toneRanks) {
+        return scoreTonePattern(pattern, kernel, bases);
+      }
       const bits = cellMasksToBits(pattern.cellMasks, pattern.id);
       return scoreBits({
         id: pattern.id,
         name: pattern.name,
         family: pattern.family,
         params: pattern.params,
+        renderKind: pattern.renderKind,
         cellMasks: pattern.cellMasks,
         bits,
         centerBalance: centerBalanceMetric(bits),
       }, kernel, bases);
     });
-    const manualResults = config.maskCandidates.map((candidate) => scoreBits({
-      ...candidate,
-      centerBalance: centerBalanceMetric(candidate.bits),
-    }, kernel, bases));
+    const manualResults = config.maskCandidates.map((candidate) => (
+      candidate.toneRanks
+        ? scoreTonePattern(candidate, kernel, bases)
+        : scoreBits({
+          ...candidate,
+          centerBalance: centerBalanceMetric(candidate.bits),
+        }, kernel, bases)
+    ));
     generatedCandidateCount = manualResults.length;
     candidateCount = manualResults.length;
     centerGatePassedCount = manualResults.filter((result) => result.centerBalance.passed).length;
@@ -2133,12 +2314,12 @@ export async function runHarness(options = {}) {
       ...fixedComparison,
       ...manualResults,
     ];
-    console.log('기준선 2종 + 고정 11종 + 임의 마스크 — 6축 원점수');
+    console.log('기준선 2종 + 고정 ' + fixedComparison.length + '종 + 임의 후보 — 6축 원점수');
     console.log('중심 균형 <= ' + CENTER_BALANCE_LIMIT_CELLS.toFixed(2)
       + 'c는 표시 전용이며 임의 마스크를 탈락시키지 않는다.');
     console.table([
       ...baselineComparison.map((result) => axisOnlyRow(result, '기준선')),
-      ...fixedComparison.map((result) => axisOnlyRow(result, '고정 11종')),
+      ...fixedComparison.map((result) => axisOnlyRow(result, '고정 ' + fixedComparison.length + '종')),
       ...manualResults.map((result) => axisOnlyRow(result, '직접 그림')),
     ]);
     customComparison = {

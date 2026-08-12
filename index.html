@@ -1179,7 +1179,9 @@ const GENERATOR_STRINGS = {
     "g501": "트라이스타 개선안",
     "g502": "나무 개선안",
     "g503": "고양이 개선안",
-    "g504": "사용자 손그림 개선안"
+    "g504": "사용자 손그림 개선안",
+    "g505": "최대 3톤 큐브",
+    "g506": "촬영 강건성"
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1382,7 +1384,9 @@ const GENERATOR_STRINGS = {
     "g501": "Refined tristar",
     "g502": "Refined tree",
     "g503": "Refined cats",
-    "g504": "Refined hand-drawn designs"
+    "g504": "Refined hand-drawn designs",
+    "g505": "Maximum three-tone cube",
+    "g506": "Capture robustness"
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1585,7 +1589,9 @@ const GENERATOR_STRINGS = {
     "g501": "トライスター改良案",
     "g502": "ツリー改良案",
     "g503": "キャッツ改良案",
-    "g504": "手描きデザイン改良案"
+    "g504": "手描きデザイン改良案",
+    "g505": "最大3トーンキューブ",
+    "g506": "撮影堅牢性"
   },
 };
 
@@ -2173,6 +2179,7 @@ const FINDER_LABEL_KEYS = Object.freeze({
   'tristar-refined-h3': 'g501',
   'tree-refined-h3': 'g502',
   'cats-refined-h3': 'g503',
+  'central-cube-3tone': 'g505',
 });
 
 const FINDER_FAMILY_KEYS = Object.freeze({
@@ -2181,6 +2188,7 @@ const FINDER_FAMILY_KEYS = Object.freeze({
   flower: 'g474',
   'face-swirl': 'g475',
   'user-refined': 'g504',
+  'three-tone-cube': 'g506',
 });
 const FINDER_SCORE_AXES = Object.freeze([
   Object.freeze({ id: 'rotation', labelKey: 'g482', evidenceKey: 'g489', evidenceClass: 'measured' }),
@@ -2275,6 +2283,43 @@ function finderMaskThumbnail(pattern) {
   return svg;
 }
 
+function finderCubeThumbnail(pattern) {
+  const size = 6;
+  const layout = { size: pattern.radiusCells * size, originX: 0, originY: 0 };
+  const slotLayout = { size: pattern.slotRadiusCells * size, originX: 0, originY: 0 };
+  const slotFaces = FACES.map((face) => facePolygon(0, 0, face, slotLayout));
+  const cubeFaces = FACES.map((face) => ({
+    face,
+    polygon: facePolygon(0, 0, face, layout),
+  }));
+  const points = slotFaces.flat();
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  const fills = ['#344064', '#8797b8', 'currentColor'];
+  const svg = finderSvgElement('svg', {
+    viewBox: [minX, minY, maxX - minX, maxY - minY].join(' '),
+    'aria-hidden': 'true',
+    'data-three-tone-cube': 'true',
+  });
+  for (const polygon of slotFaces) {
+    svg.append(finderSvgElement('polygon', {
+      points: polygon.map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
+      fill: 'var(--bg)',
+    }));
+  }
+  for (const entry of cubeFaces) {
+    svg.append(finderSvgElement('polygon', {
+      points: entry.polygon.map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
+      fill: fills[pattern.toneRanks[entry.face]],
+      stroke: 'var(--line)',
+      'stroke-width': 0.35,
+    }));
+  }
+  return svg;
+}
+
 function legacyFinderThumbnail() {
   const svg = finderSvgElement('svg', { viewBox: '0 0 56 48', 'aria-hidden': 'true' });
   [20, 16, 12, 8, 4].forEach((radius, index) => {
@@ -2307,7 +2352,9 @@ function makeFinderCard(id, pattern) {
   card.setAttribute('role', 'button');
   card.setAttribute('tabindex', '0');
   card.append(pattern
-    ? finderMaskThumbnail(pattern)
+    ? pattern.renderKind === 'three-tone-cube'
+      ? finderCubeThumbnail(pattern)
+      : finderMaskThumbnail(pattern)
     : (id === CENTER_QR_FINDER_PATTERN_ID ? centerQrThumbnail() : legacyFinderThumbnail()));
   const label = document.createElement('span');
   label.className = 'finder-card-label';
@@ -2353,11 +2400,10 @@ function ensureFinderCards() {
     els.finderPatternCards.append(family);
   }
 
-  const refinedPatterns = FINDER_PATTERNS.slice(8);
+  const refinedPatterns = FINDER_PATTERNS.filter(
+    (pattern) => pattern.family === 'user-refined',
+  );
   if (refinedPatterns.length) {
-    if (refinedPatterns.some((pattern) => pattern.family !== 'user-refined')) {
-      throw new Error('finder UI user-refined row mismatch');
-    }
     const family = document.createElement('div');
     family.className = 'finder-family finder-user-family';
     family.dataset.finderFamily = 'user-refined';
@@ -2370,6 +2416,25 @@ function ensureFinderCards() {
     family.append(heading, cards);
     els.finderPatternCards.append(family);
   }
+
+  const robustPatterns = FINDER_PATTERNS.filter(
+    (pattern) => pattern.family === 'three-tone-cube',
+  );
+  if (robustPatterns.length !== 1) {
+    throw new Error('finder UI three-tone-cube row mismatch');
+  }
+  // 이진 마스크 4계열·손그림 계열과 검출 증거가 다르므로 촬영 강건성 별도 행에 둔다.
+  const robustFamily = document.createElement('div');
+  robustFamily.className = 'finder-family finder-user-family';
+  robustFamily.dataset.finderFamily = 'three-tone-cube';
+  const robustHeading = document.createElement('div');
+  robustHeading.className = 'finder-family-title';
+  robustHeading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS['three-tone-cube'];
+  const robustCards = document.createElement('div');
+  robustCards.className = 'finder-user-patterns';
+  robustCards.append(...robustPatterns.map((pattern) => makeFinderCard(pattern.id, pattern)));
+  robustFamily.append(robustHeading, robustCards);
+  els.finderPatternCards.append(robustFamily);
 }
 
 // Type O/A 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
@@ -3498,7 +3563,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-12.06';
+const GENERATOR_BUILD = '2026-08-12.07';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

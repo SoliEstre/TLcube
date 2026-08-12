@@ -9,6 +9,10 @@ import {
   FINDER_BASELINE_SCORES,
   LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER,
+  FINDER_CELL_MASK_PATTERNS,
+  FINDER_CUBE_FACE_RANKS,
+  FINDER_CUBE_RADIUS_CELLS,
+  FINDER_CUBE_SLOT_RADIUS_CELLS,
   FINDER_FACE_BITS,
   FINDER_PATTERN_IDS,
   FINDER_PATTERNS,
@@ -24,7 +28,9 @@ import {
   SELECTED_FINDER_IDS, bitsToCellMasks, generateSelectedFinderCandidates,
   renderFinderPatternsModule,
 } from '../tools/extract-finder-patterns.mjs';
-import { measureFinderPatternScores } from '../tools/finder-score.mjs';
+import {
+  measureFinderPatternScores, measureThreeToneCubePatternScore,
+} from '../tools/finder-score.mjs';
 
 const MODULE_PATH = fileURLToPath(new URL('../src/finder-patterns.js', import.meta.url));
 const PRESET = getPreset(DEFAULT_PRESET);
@@ -94,7 +100,7 @@ const EXPECTED_FINDER_MEASUREMENTS = Object.freeze({
   })
 });
 
-test('기존 8개와 손그림 개선안 3개 ID가 regionCells(2) 좌표 순서를 그대로 쓴다', () => {
+test('이진 11개와 중앙 3톤 큐브 ID가 생성기 순서를 그대로 쓴다', () => {
   assert.deepEqual(FINDER_PATTERN_IDS, SELECTED_FINDER_IDS);
   assert.deepEqual(FINDER_PATTERN_IDS, [
     'pinwheel-3-0101-cw-missing-solid',
@@ -108,19 +114,21 @@ test('기존 8개와 손그림 개선안 3개 ID가 regionCells(2) 좌표 순서
     'tristar-refined-h3',
     'tree-refined-h3',
     'cats-refined-h3',
+    'central-cube-3tone',
   ]);
-  assert.equal(FINDER_PATTERNS.length, 11);
+  assert.equal(FINDER_PATTERNS.length, 12);
+  assert.equal(FINDER_CELL_MASK_PATTERNS.length, 11);
   assert.deepEqual(FINDER_CELL_ORDER, regionCells(2));
   assert.deepEqual(FACES.map((face) => FINDER_FACE_BITS[face]), [1, 2, 4]);
 });
 
-test('고정 11개 마스크·6축 점수·중심 오프셋이 채점 하네스와 정확히 일치한다', () => {
+test('고정 이진 11개 마스크·6축 점수·중심 오프셋이 채점 하네스와 정확히 일치한다', () => {
   const generated = generateSelectedFinderCandidates();
   const measured = measureFinderPatternScores(generated);
   const measuredById = new Map(
     [...measured.candidates, ...measured.baselines].map((entry) => [entry.id, entry]),
   );
-  for (const pattern of FINDER_PATTERNS) {
+  for (const pattern of FINDER_CELL_MASK_PATTERNS) {
     const candidate = generated.find((entry) => entry.id === pattern.id);
     assert.ok(candidate, pattern.id + ': 하네스 후보에서 사라졌다');
     assert.deepEqual(
@@ -155,6 +163,22 @@ test('고정 11개 마스크·6축 점수·중심 오프셋이 채점 하네스�
     assert.equal('total' in baseline.scores, false, id + ': total 저장 금지');
   }
 });
+
+test('3톤 큐브 순열·크기·회전 점수가 생성 모듈과 같은 자를 쓴다', () => {
+  const pattern = FINDER_PATTERNS.find((entry) => entry.id === 'central-cube-3tone');
+  const measured = measureThreeToneCubePatternScore(FINDER_CUBE_FACE_RANKS, {
+    id: pattern.id,
+    name: pattern.name,
+    family: pattern.family,
+    radiusCells: FINDER_CUBE_RADIUS_CELLS,
+  });
+  assert.deepEqual(pattern.toneRanks, { T: 2, L: 1, R: 0 });
+  assert.equal(FINDER_CUBE_RADIUS_CELLS, 3.5);
+  assert.equal(FINDER_CUBE_SLOT_RADIUS_CELLS, 4);
+  assert.ok(pattern.scores.rotation > 0);
+  assert.deepEqual(pattern.scores, measured.scores);
+  assert.equal(pattern.centerOffsetCells, 0);
+});
 test('중심 균형 게이트 탈락 2개도 대체 없이 그대로 수록한다', () => {
   const rejected = FINDER_PATTERNS
     .filter((pattern) => !pattern.centerBalanceGatePassed)
@@ -169,10 +193,10 @@ test('finder-patterns.js 가 재생성 도구 출력과 바이트 동일하다',
   assert.equal(readFileSync(MODULE_PATH, 'utf8'), renderFinderPatternsModule());
 });
 
-test('11개 렌더는 19셀×3면을 최대 대비로 칠하고 불스아이 disc를 그리지 않는다', () => {
+test('이진 11개 렌더는 19셀×3면을 최대 대비로 칠하고 불스아이 disc를 그리지 않는다', () => {
   const encoded = encode('finder render', { version: 1, eccLevel: 'M' });
   const cellShapeCount = encoded.cellDigits.size * FACES.length;
-  for (const pattern of FINDER_PATTERNS) {
+  for (const pattern of FINDER_CELL_MASK_PATTERNS) {
     const scene = buildScene(encoded, { palette: PALETTE, finderPatternId: pattern.id });
     const finderShapes = scene.shapes.slice(cellShapeCount);
     assert.equal(scene.finderPatternId, pattern.id);
@@ -207,10 +231,32 @@ test('finderPatternId 생략과 bullseye 명시는 기존 장면을 정확히 �
     '소스 기본값은 실패 안전하게 현행 불스아이여야 한다');
   assert.deepEqual(explicit, implicit);
   assert.equal(implicit.finderPatternId, DEFAULT_FINDER_PATTERN_ID);
+
   assert.equal(implicit.shapes.filter((shape) => shape.kind === 'disc').length, 6);
 });
+test('3톤 큐브는 4c 슬롯 안 3.5c 실루엣과 T/L/R 밝음·중간·어두움을 그린다', () => {
+  const encoded = encode('three tone', { version: 1, eccLevel: 'M' });
+  const dataShapeCount = encoded.cellDigits.size * FACES.length;
+  const scene = buildScene(encoded, {
+    palette: PALETTE,
+    finderPatternId: 'central-cube-3tone',
+  });
+  const finderShapes = scene.shapes.slice(dataShapeCount);
+  assert.equal(finderShapes.length, 10);
+  assert.deepEqual(
+    finderShapes.slice(0, 3).map((shape) => shape.color),
+    [PALETTE.background, PALETTE.background, PALETTE.background],
+  );
+  assert.deepEqual(
+    finderShapes.slice(3, 6).map((shape) => shape.color),
+    [PALETTE.levels[2], PALETTE.levels[1], PALETTE.levels[0]],
+  );
+  assert.equal(finderShapes.slice(6, 9).every((shape) => shape.kind === 'polygon'), true);
+  assert.equal(finderShapes[9].kind, 'disc');
+  assert.deepEqual(FINDER_CUBE_FACE_RANKS, { T: 2, L: 1, R: 0 });
+});
 
-test('실험 파인더 11개 모두 데이터 셀 자체검증을 통과하고 centerQr와 중복 지정은 거부한다', () => {
+test('실험 파인더 12개 모두 데이터 셀 자체검증을 통과하고 centerQr와 중복 지정은 거부한다', () => {
   const encoded = encode('finder self-check', { version: 1, eccLevel: 'M' });
   for (const pattern of FINDER_PATTERNS) {
     const scene = buildScene(encoded, { palette: PALETTE, finderPatternId: pattern.id });

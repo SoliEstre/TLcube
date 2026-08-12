@@ -13,7 +13,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { generateFinderCandidates, measureFinderPatternScores } from './finder-score.mjs';
+import {
+  generateFinderCandidates,
+  measureFinderPatternScores,
+  measureThreeToneCubePatternScore,
+} from './finder-score.mjs';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(MODULE_DIR, '..');
@@ -140,7 +144,22 @@ const BASELINES = Object.freeze([
   })
 ]);
 
-export const SELECTED_FINDER_IDS = Object.freeze(TARGETS.map((target) => target.id));
+const THREE_TONE_CUBE = Object.freeze({
+  id: 'central-cube-3tone',
+  name: 'Maximum three-tone cube',
+  family: 'three-tone-cube',
+  sourceRun: 5,
+  renderKind: 'three-tone-cube',
+  radiusCells: 3.5,
+  slotRadiusCells: 4,
+  palette: 'data-levels',
+  toneRanks: Object.freeze({ T: 2, L: 1, R: 0 }),
+});
+
+export const SELECTED_FINDER_IDS = Object.freeze([
+  ...TARGETS.map((target) => target.id),
+  THREE_TONE_CUBE.id,
+]);
 
 
 function cellMasksToBits(cellMasks) {
@@ -213,6 +232,29 @@ ${params},
   })`;
 }
 
+function threeTonePatternSource(pattern, measured) {
+  return `  // Type Y 실루엣/Y 심/투영기하 재사용 · T/L/R = 밝음/중간/어두움
+  // 회전 점수 ${measured.scores.rotation.toFixed(4)} · 19셀 슬롯 안 최대 반지름 ${pattern.radiusCells}c
+  definePattern({
+    id: ${JSON.stringify(pattern.id)},
+    name: ${JSON.stringify(pattern.name)},
+    family: ${JSON.stringify(pattern.family)},
+    sourceRun: ${pattern.sourceRun},
+    renderKind: ${JSON.stringify(pattern.renderKind)},
+    params: {
+      detector: 'cube-silhouette-y-junction',
+      palette: ${JSON.stringify(pattern.palette)},
+      faceOrder: 'T-bright-L-mid-R-dark',
+    },
+    centerBalanceGatePassed: ${measured.centerBalance.passed},
+    centerOffsetCells: ${measured.centerBalance.offsetCells},
+    scores: ${scoreSource(measured.scores)},
+    radiusCells: ${pattern.radiusCells},
+    slotRadiusCells: ${pattern.slotRadiusCells},
+    toneRanks: ${JSON.stringify(pattern.toneRanks)},
+  })`;
+}
+
 function baselineSource(baseline) {
   return `  ${JSON.stringify(baseline.id)}: defineScoreRecord({
     id: ${JSON.stringify(baseline.id)},
@@ -254,19 +296,29 @@ export function renderFinderPatternsModule(candidates = generateSelectedFinderCa
   const entries = selected
     .map(({ target, candidate }) => patternSource(target, candidate))
     .join(',\n\n');
+  const threeToneMeasured = measureThreeToneCubePatternScore(THREE_TONE_CUBE.toneRanks, {
+    radiusCells: THREE_TONE_CUBE.radiusCells,
+  });
+  const threeToneEntry = threeTonePatternSource(THREE_TONE_CUBE, threeToneMeasured);
   const baselineEntries = BASELINES.map(baselineSource).join(',\n');
 
-  return `// finder-patterns.js — 실물 비교용 중앙 19셀 파인더 후보 11개
+  return `// finder-patterns.js — 중앙 19셀 슬롯 파인더 후보 12개
 //
 // ⚠ tools/extract-finder-patterns.mjs 생성물. 직접 마스크를 고치지 말고 생성기를 갱신한 뒤
 // 이 도구를 다시 실행한다. 좌표 순서는 hexgrid.regionCells(2), 면 비트는 T=1/L=2/R=4다.
-// 기존 8개와 사용자 손그림 국소 개선안 3개를 마스크 파라미터형 공용 디코더가 읽는다.
+// 이진 11개는 마스크 공용 디코더가, 3톤 중앙 큐브 1개는 Type Y 검출 경로가 읽는다.
 
 import { FACES, regionCells } from './hexgrid.js';
 
 export const LEGACY_FINDER_PATTERN_ID = 'bullseye';
 export const DEFAULT_FINDER_PATTERN_ID = 'bullseye';
 export const FINDER_FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
+export const THREE_TONE_CUBE_FINDER_PATTERN_ID = ${JSON.stringify(THREE_TONE_CUBE.id)};
+export const FINDER_CUBE_RADIUS_CELLS = ${THREE_TONE_CUBE.radiusCells};
+export const FINDER_CUBE_SLOT_RADIUS_CELLS = ${THREE_TONE_CUBE.slotRadiusCells};
+export const FINDER_CUBE_FACE_RANKS = Object.freeze(
+  ${JSON.stringify(THREE_TONE_CUBE.toneRanks)},
+);
 export const FINDER_CELL_ORDER = Object.freeze(
   regionCells(2).map(({ q, r }) => Object.freeze({ q, r })),
 );
@@ -289,27 +341,53 @@ export const FINDER_BASELINE_SCORES = Object.freeze({
 ${baselineEntries}
 });
 function definePattern(pattern) {
-  if (!Array.isArray(pattern.cellMasks) || pattern.cellMasks.length !== FINDER_CELL_ORDER.length) {
-    throw new RangeError(\`\${pattern.id}: cellMasks 는 19개여야 한다\`);
-  }
-  for (const mask of pattern.cellMasks) {
-    if (!Number.isInteger(mask) || mask < 0 || mask > 7) {
-      throw new RangeError(\`\${pattern.id}: 면 마스크 범위 오류 \${mask}\`);
-    }
-  }
-  return Object.freeze({
+  const renderKind = pattern.renderKind || 'cell-mask';
+  const common = {
     ...pattern,
+    renderKind,
     params: Object.freeze({ ...pattern.params }),
     scores: Object.freeze({ ...pattern.scores }),
-    cellMasks: Object.freeze([...pattern.cellMasks]),
+  };
+  if (renderKind === 'cell-mask') {
+    if (!Array.isArray(pattern.cellMasks) || pattern.cellMasks.length !== FINDER_CELL_ORDER.length) {
+      throw new RangeError(pattern.id + ': cellMasks 는 19개여야 한다');
+    }
+    for (const mask of pattern.cellMasks) {
+      if (!Number.isInteger(mask) || mask < 0 || mask > 7) {
+        throw new RangeError(pattern.id + ': 면 마스크 범위 오류 ' + mask);
+      }
+    }
+    return Object.freeze({
+      ...common,
+      cellMasks: Object.freeze([...pattern.cellMasks]),
+    });
+  }
+  if (renderKind !== 'three-tone-cube') {
+    throw new RangeError(pattern.id + ': 알 수 없는 renderKind ' + renderKind);
+  }
+  const ranks = FACES.map((face) => pattern.toneRanks && pattern.toneRanks[face]);
+  if (ranks.slice().sort().join(',') !== '0,1,2') {
+    throw new RangeError(pattern.id + ': toneRanks 는 0/1/2 순열이어야 한다');
+  }
+  if (!Number.isFinite(pattern.radiusCells) || pattern.radiusCells <= 0) {
+    throw new RangeError(pattern.id + ': radiusCells 는 양수여야 한다');
+  }
+  return Object.freeze({
+    ...common,
+    toneRanks: Object.freeze({ ...pattern.toneRanks }),
   });
 }
 
 export const FINDER_PATTERNS = Object.freeze([
-  // 첫 8개는 기존 4계열×2행, 마지막 3개는 사용자 손그림 개선안 별도 행이다.
-${entries}
+  // 첫 8개는 기존 4계열×2행, 다음 3개는 사용자 손그림 개선안, 마지막은 3톤 큐다.
+${entries},
+
+${threeToneEntry}
 ]);
 
+export const FINDER_CELL_MASK_PATTERNS = Object.freeze(
+  FINDER_PATTERNS.filter((pattern) => pattern.renderKind === 'cell-mask'),
+);
 export const FINDER_PATTERN_IDS = Object.freeze(FINDER_PATTERNS.map((pattern) => pattern.id));
 const PATTERN_BY_ID = new Map(FINDER_PATTERNS.map((pattern) => [pattern.id, pattern]));
 

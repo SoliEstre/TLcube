@@ -13,6 +13,11 @@ import {
   CORNER_UNIT_OFFSETS,
 } from '../hexgrid.js';
 import {
+  FINDER_CUBE_FACE_RANKS,
+  FINDER_CUBE_RADIUS_CELLS,
+  THREE_TONE_CUBE_FINDER_PATTERN_ID,
+} from '../finder-patterns.js';
+import {
   digitToRanks,
   ranksToDigit,
 } from '../lehmer.js';
@@ -72,6 +77,8 @@ export const UNVERIFIED_CUBE_DETECTION = Object.freeze({
   referenceRefineScaleRadius: 0.035,
   referenceRefineScaleStep: 0.0175,
   maximumShapeCandidates: 4,
+  minimumFinderToneSpanRatio: 0.05,
+  minimumFinderOrientationMargin: 0.04,
 });
 
 const EPSILON = 1e-9;
@@ -2482,6 +2489,208 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       geometryReports,
       blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
       hypothesisCount: hypotheses.length,
+    },
+  });
+}
+
+const CENTRAL_CUBE_SAMPLE_COORDINATES = Object.freeze([
+  Object.freeze({ i: 0, j: 0 }),
+  Object.freeze({ i: 0, j: 2 }),
+  Object.freeze({ i: 1, j: 1 }),
+  Object.freeze({ i: 2, j: 0 }),
+  Object.freeze({ i: 2, j: 2 }),
+  Object.freeze({ i: 3, j: 3 }),
+]);
+
+function centralCubeRankReport(luma, H, options, cfg, span) {
+  const values = Object.fromEntries(YFACES.map((face) => [face, []]));
+  const sampleConfig = sampleOptions(options, cfg);
+  for (const coordinate of CENTRAL_CUBE_SAMPLE_COORDINATES) {
+    const sample = sampleCubeCell(
+      luma,
+      { H },
+      coordinate.i,
+      coordinate.j,
+      sampleConfig,
+    );
+    if (!sample.ok) return null;
+    for (const face of YFACES) values[face].push(sample[face].median);
+  }
+  const faceMedians = Object.fromEntries(
+    YFACES.map((face) => [face, median(values[face])]),
+  );
+  const orderMargins = [];
+  for (let leftIndex = 0; leftIndex < YFACES.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < YFACES.length; rightIndex += 1) {
+      const left = YFACES[leftIndex];
+      const right = YFACES[rightIndex];
+      const sign = Math.sign(FINDER_CUBE_FACE_RANKS[left] - FINDER_CUBE_FACE_RANKS[right]);
+      orderMargins.push(sign * (faceMedians[left] - faceMedians[right]) / span);
+    }
+  }
+  const sortedMedians = Object.values(faceMedians).slice().sort((left, right) => left - right);
+  return {
+    score: Math.min(...orderMargins),
+    toneSpanRatio: (sortedMedians[2] - sortedMedians[0]) / span,
+    faceMedians,
+    orderMargins,
+    samples: values,
+  };
+}
+
+/**
+ * 중앙 3톤 큐브 파인더. Type Y의 실루엣→Y 심→투영기하 단계를 그대로 쓰고,
+ * 전용 12셀 레퍼런스 대신 고정 면 순위 T/L/R=밝음/중간/어두움으로 120°를 고른다.
+ */
+export function detectCentralCubeFinders(luma, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'central-cube-finder',
+      message: error.message,
+    });
+  }
+  const cfg = calibration(options);
+  const reduced = downsampleLuma(luma, cfg.maxDimension);
+  const shapes = shapeCandidates(reduced.luma, cfg);
+  const span = Math.max(lumaSpan(luma), EPSILON);
+  const candidates = [];
+  const geometryReports = [];
+
+  for (const shape of shapes.candidates) {
+    const center = liftPoint(shape.center, reduced.factor);
+    const vertices = shape.vertices.map((point) => liftPoint(point, reduced.factor));
+    const bounds = {
+      minX: Math.min(...vertices.map((point) => point.x)),
+      minY: Math.min(...vertices.map((point) => point.y)),
+      maxX: Math.max(...vertices.map((point) => point.x)),
+      maxY: Math.max(...vertices.map((point) => point.y)),
+    };
+    const radius = shape.radius * reduced.factor;
+    const byOrientation = [];
+
+    for (let orientation = 0; orientation < 3; orientation += 1) {
+      let best = null;
+      const seeds = [];
+      const affineH = blockCandidateHomography(
+        { bounds }, FINDER_CUBE_RADIUS_CELLS, 1, orientation,
+      );
+      if (affineH) seeds.push({ id: 'flat-block-affine', H: affineH });
+      for (const seed of seeds) {
+        const vertexResidual = vertexSetResidual(
+          seed.H,
+          FINDER_CUBE_RADIUS_CELLS,
+          vertices,
+        );
+        const relativeVertexResidual = vertexResidual / Math.max(radius, EPSILON);
+        if (relativeVertexResidual > cfg.maximumVertexResidual) continue;
+        const rank = centralCubeRankReport(luma, seed.H, options, cfg, span);
+        if (!rank) continue;
+        const report = {
+          orientation,
+          seed,
+          rank,
+          vertexResidual,
+          relativeVertexResidual,
+        };
+        if (!best
+          || report.rank.score > best.rank.score
+          || (report.rank.score === best.rank.score
+            && report.relativeVertexResidual < best.relativeVertexResidual)) {
+          best = report;
+        }
+      }
+      if (best) byOrientation.push(best);
+    }
+
+    byOrientation.sort((left, right) =>
+      right.rank.score - left.rank.score
+      || left.relativeVertexResidual - right.relativeVertexResidual
+      || left.orientation - right.orientation);
+    const best = byOrientation[0];
+    const runnerUp = byOrientation[1];
+    const orientationMargin = best
+      ? best.rank.score - (runnerUp ? runnerUp.rank.score : -1)
+      : -Infinity;
+    geometryReports.push({
+      componentIndex: shape.componentIndex,
+      orientations: byOrientation.map((entry) => ({
+        orientation: entry.orientation,
+        geometrySeed: entry.seed.id,
+        rankScore: entry.rank.score,
+        toneSpanRatio: entry.rank.toneSpanRatio,
+        faceMedians: entry.rank.faceMedians,
+        relativeVertexResidual: entry.relativeVertexResidual,
+      })),
+      orientationMargin,
+    });
+    if (!best
+      || best.rank.score < cfg.minimumFinderToneSpanRatio
+      || orientationMargin < cfg.minimumFinderOrientationMargin) continue;
+
+    const hardChecks = {
+      ...shape.hardChecks,
+      toneOrder: best.rank.score >= cfg.minimumFinderToneSpanRatio,
+      orientation: orientationMargin >= cfg.minimumFinderOrientationMargin,
+    };
+    hardChecks.all = hardChecks.hexSilhouette && hardChecks.diagonalConcurrency
+      && hardChecks.yJunction && hardChecks.toneOrder && hardChecks.orientation;
+    const score = clamp01(
+      0.55 * shape.score
+      + 0.30 * clamp01(best.rank.toneSpanRatio)
+      + 0.15 * clamp01(orientationMargin),
+    );
+    // seed 배열 인덱스는 hull 시작 꼭짓점에 따라 순환할 수 있다. 실제 canonical→image
+    // 행렬의 원점 국소 x축 각도를 120°로 양자화해 외부 방향 번호를 안정화한다.
+    const localDxX = best.seed.H[0] - best.seed.H[6] * best.seed.H[2];
+    const localDxY = best.seed.H[3] - best.seed.H[6] * best.seed.H[5];
+    const localDegrees = ((Math.atan2(localDxY, localDxX) * 180 / Math.PI) % 360 + 360) % 360;
+    const normalizedOrientation = Math.round(localDegrees / 120) % 3;
+    candidates.push({
+      finderKind: 'three-tone-cube',
+      kind: 'three-tone-cube',
+      patternId: THREE_TONE_CUBE_FINDER_PATTERN_ID,
+      toneRanks: FINDER_CUBE_FACE_RANKS,
+      center,
+      cellSize: radius / FINDER_CUBE_RADIUS_CELLS,
+      score,
+      orientation: normalizedOrientation,
+      orientationSource: 'three-tone-face-rank',
+      orientationMargin,
+      rotationDegrees: normalizedOrientation * 120,
+      H: best.seed.H,
+      transform: best.seed.H,
+      B: best.seed.H,
+      geometryResidual: best.vertexResidual,
+      geometryMode: best.seed.id,
+      hardChecks,
+      hardChecksPassed: hardChecks.all,
+      source: 'cube-silhouette-y-junction-three-tone-rank',
+      bands: { matcher: 'three-tone-face-rank', faceMedians: best.rank.faceMedians },
+    });
+  }
+
+  candidates.sort((left, right) =>
+    right.score - left.score
+    || right.orientationMargin - left.orientationMargin
+    || left.geometryResidual - right.geometryResidual);
+  if (candidates.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      stage: 'central-cube-finder',
+      cause: shapes.candidates.length === 0
+        ? 'no-positive-hex-y-junction'
+        : 'no-unique-three-tone-rank',
+      diagnostics: { shapes: shapes.diagnostics, geometryReports },
+    });
+  }
+  return ok({
+    candidates: candidates.slice(0, cfg.maximumShapeCandidates),
+    diagnostics: {
+      source: reduced.factor === 1 ? 'detected' : 'detected-downsampled',
+      downsampleFactor: reduced.factor,
+      shapes: shapes.diagnostics,
+      geometryReports,
     },
   });
 }

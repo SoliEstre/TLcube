@@ -33,6 +33,12 @@ const MASK_CANDIDATES = parseFinderMaskCandidates([
     cellMasks: [0, 0, 0, 0, 0, 5, 0, 0, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0],
     params: { comparisonGroup: 'fixture', comparisonOrder: 1, comparisonLabel: 'h1' },
   },
+  {
+    id: 'three-tone-manual',
+    toneRanks: { T: 2, L: 1, R: 0 },
+    radiusCells: 3.5,
+    params: { comparisonGroup: 'fixture', comparisonOrder: 2, comparisonLabel: '3tone' },
+  },
 ]);
 const MASK_REPORT = await runHarness({
   outputParent: MASK_OUTPUT_PARENT,
@@ -165,6 +171,11 @@ test('임의 마스크 입력은 이름→배열·후보 배열·파일을 같�
   assert.equal(mapped[0].bits.length, 57);
   assert.equal(listed[0].id, 'bird-2');
 
+  const tone = parseFinderMaskCandidates({
+    cube: { toneRanks: { T: 2, L: 1, R: 0 }, radiusCells: 3.5 },
+  });
+  assert.deepEqual(tone[0].toneRanks, { T: 2, L: 1, R: 0 });
+  assert.equal(tone[0].radiusCells, 3.5);
   const inputDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tlcube-finder-masks-'));
   const inputPath = path.join(inputDir, 'masks.json');
   try {
@@ -191,13 +202,13 @@ test('임의 마스크 입력 오류는 조용히 보정하지 않는다', () =>
   }), /충돌/);
 });
 
-test('임의 마스크 모드는 자 검증 뒤 고정 11종·기준선과 한 표에서 6축만 채점한다', () => {
+test('임의 후보 모드는 3톤까지 고정 12종·기준선과 한 표에서 6축만 채점한다', () => {
   assert.equal(MASK_REPORT.rulerValidation.passed, true);
   assert.equal(MASK_REPORT.meta.mode, 'manual-masks');
-  assert.equal(MASK_REPORT.customMasks.table.length, 2 + 11 + MASK_CANDIDATES.length);
+  assert.equal(MASK_REPORT.customMasks.table.length, 2 + 12 + MASK_CANDIDATES.length);
   assert.equal(MASK_REPORT.customMasks.candidates.length, MASK_CANDIDATES.length);
   assert.equal(MASK_REPORT.meta.centerBalanceGate.scoredCount, MASK_CANDIDATES.length);
-  assert.equal(MASK_REPORT.meta.centerBalanceGate.passedCount, 1);
+  assert.equal(MASK_REPORT.meta.centerBalanceGate.passedCount, 2);
   assert.equal(MASK_REPORT.meta.centerBalanceGate.rejectedCount, 1);
   assert.match(MASK_REPORT.meta.centerBalanceGate.policy, /탈락시키지 않음/);
 
@@ -205,6 +216,9 @@ test('임의 마스크 모드는 자 검증 뒤 고정 11종·기준선과 한 �
   assert.equal(offcenter.centerBalanceGatePassed, false);
   assert.ok(offcenter.centerOffsetCells > 0.5, offcenter.centerOffsetCells);
   for (const entry of MASK_REPORT.customMasks.table) {
+  const tone = MASK_REPORT.customMasks.candidates.find((entry) => entry.id === 'three-tone-manual');
+  assert.ok(tone.scores.rotation > 0);
+  assert.deepEqual(tone.toneRanks, { T: 2, L: 1, R: 0 });
     assert.deepEqual(Object.keys(entry.scores), [
       'rotation', 'lowResolution', 'localization', 'dataDistinction',
       'structuralSimplicity', 'defectConcentration',
@@ -231,7 +245,7 @@ test('임의 마스크는 탈락 여부와 무관하게 단독·실제 Type O PN
 
   assert.equal(manifest.comparisons.files.length, 1);
   const comparison = manifest.comparisons.files[0];
-  assert.deepEqual(comparison.columns.map((column) => column.label), ['seed', 'h1']);
+  assert.deepEqual(comparison.columns.map((column) => column.label), ['seed', 'h1', '3tone']);
   for (const image of [comparison.finder, comparison.typeO]) {
     const bytes = await fs.readFile(path.join(outputDir, image.file));
     assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);

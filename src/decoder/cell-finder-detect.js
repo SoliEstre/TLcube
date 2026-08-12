@@ -5,7 +5,9 @@
  * 모든 후보를 같은 기하 가설에서 한 번 표본화한 뒤 정규화 상관으로 함께 비교한다.
  * 반환 H와 120/240도 방향 여유는 파인더 자체에서 나오며 앵커를 쓰지 않는다.
  */
-import { FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS } from '../finder-patterns.js';
+import {
+  FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_CELL_MASK_PATTERNS,
+} from '../finder-patterns.js';
 import { FACES, faceCentroid, facePolygon } from '../hexgrid.js';
 import { robustPercentiles } from './luma.js';
 import { FRONTEND_FAILURE, assertLumaField, fail, ok } from './contracts.js';
@@ -67,14 +69,18 @@ function assertMasks(cellMasks, label = 'cellMasks') {
   return cellMasks;
 }
 function normalizePatterns(input, options) {
-  const source = input === undefined ? FINDER_PATTERNS : input;
+  const source = input === undefined ? FINDER_CELL_MASK_PATTERNS : input;
   if (Array.isArray(source) && source.length === 19 && source.every(Number.isInteger)) {
     return [{ id: options.patternId || 'cell-mask', cellMasks: assertMasks(source) }];
   }
   if (!Array.isArray(source) || source.length === 0) {
     throw new TypeError('patterns는 cellMasks 또는 패턴 객체 배열이어야 한다');
   }
-  return source.map((pattern, index) => ({
+  const cellPatterns = source.filter((pattern) => pattern && Array.isArray(pattern.cellMasks));
+  if (cellPatterns.length === 0) {
+    throw new TypeError('patterns에 이진 cellMasks 후보가 없다');
+  }
+  return cellPatterns.map((pattern, index) => ({
     ...pattern,
     id: typeof pattern.id === 'string' ? pattern.id : 'cell-mask-' + index,
     cellMasks: assertMasks(pattern.cellMasks, 'patterns[' + index + '].cellMasks'),
@@ -467,7 +473,7 @@ export function scoreCellMaskAtHomography(luma, cellMasks, H, options = {}) {
     : fail(FRONTEND_FAILURE.NO_FINDER, { cause: 'pattern-outside-image' });
 }
 
-export function detectCellFinders(luma, patternInput = FINDER_PATTERNS, options = {}) {
+export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS, options = {}) {
   try { assertLumaField(luma); } catch (error) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-input', message: error.message });
   }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// 고정된 실험 파인더 11개를 데이터 필드가 둘러싼 Type O 전체 코드 PNG로 렌더한다.
-// 파인더만 잘라낸 채점 그림이 아니라 생성기와 같은 scene/raster/png 경로를 통과한다.
+// 고정된 파인더 12개를 데이터 필드가 둘러싼 Type O 전체 코드 PNG로 렌더하고,
+// 중앙 3톤 큐브는 같은 scene에서 파인더 단독 PNG도 함께 남긴다.
 
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -35,6 +35,42 @@ function outputFromArgs(args) {
   return path.resolve(args[at + 1]);
 }
 
+function standaloneFinderScene(shapes, background, padding = 1) {
+  const points = shapes.flatMap((shape) => shape.kind === 'polygon'
+    ? shape.points
+    : [
+      { x: shape.cx - shape.r, y: shape.cy - shape.r },
+      { x: shape.cx + shape.r, y: shape.cy + shape.r },
+    ]);
+  const minX = Math.min(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const maxY = Math.max(...points.map((point) => point.y));
+  const dx = padding - minX;
+  const dy = padding - minY;
+  return {
+    width: maxX - minX + 2 * padding,
+    height: maxY - minY + 2 * padding,
+    background,
+    shapes: shapes.map((shape) => shape.kind === 'polygon'
+      ? {
+        ...shape,
+        points: shape.points.map((point) => ({ x: point.x + dx, y: point.y + dy })),
+      }
+      : { ...shape, cx: shape.cx + dx, cy: shape.cy + dy }),
+  };
+}
+
+function imageRecord(file, raster, png) {
+  return {
+    file,
+    width: raster.width,
+    height: raster.height,
+    bytes: png.length,
+    sha256: createHash('sha256').update(png).digest('hex'),
+  };
+}
+
 export async function renderFinderPatternPngs(outputDir = DEFAULT_OUTPUT) {
   const preset = getPreset(DEFAULT_PRESET);
   const palette = Object.freeze({
@@ -66,15 +102,27 @@ export async function renderFinderPatternPngs(outputDir = DEFAULT_OUTPUT) {
     const png = rasterToPng(raster);
     const fileName = `${String(index + 1).padStart(2, '0')}-${pattern.id}.png`;
     await fs.writeFile(path.join(outputDir, fileName), png);
-    files.push({
+    const record = {
       id: pattern.id,
-      file: fileName,
-      width: raster.width,
-      height: raster.height,
-      bytes: png.length,
-      sha256: createHash('sha256').update(png).digest('hex'),
+      ...imageRecord(fileName, raster, png),
       selfCheck: { total: check.total, minDelta: check.minDelta },
-    });
+    };
+    if (pattern.renderKind === 'three-tone-cube') {
+      const dataShapeCount = encoded.cellDigits.size * 3;
+      const standalone = standaloneFinderScene(
+        scene.shapes.slice(dataShapeCount),
+        palette.background,
+      );
+      const finderRaster = rasterize(standalone, {
+        pixelsPerUnit: PIXELS_PER_UNIT,
+        supersample: SUPERSAMPLE,
+      });
+      const finderPng = rasterToPng(finderRaster);
+      const finderFile = `${String(index + 1).padStart(2, '0')}-${pattern.id}-finder.png`;
+      await fs.writeFile(path.join(outputDir, finderFile), finderPng);
+      record.finder = imageRecord(finderFile, finderRaster, finderPng);
+    }
+    files.push(record);
   }
 
   const manifest = {

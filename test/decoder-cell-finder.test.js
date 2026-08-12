@@ -9,7 +9,7 @@ import { detectCellFinders } from '../src/decoder/cell-finder-detect.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { encode } from '../src/encode.js';
-import { FINDER_PATTERNS } from '../src/finder-patterns.js';
+import { FINDER_CELL_MASK_PATTERNS, FINDER_PATTERNS } from '../src/finder-patterns.js';
 import {
   BULLSEYE_DARK,
   BULLSEYE_LIGHT,
@@ -42,7 +42,7 @@ function detect(raster, patternInput = FINDER_PATTERNS) {
 }
 
 test('cellMasks 공용 정합기가 11종을 같은 경로로 식별한다', () => {
-  for (const pattern of FINDER_PATTERNS) {
+  for (const pattern of FINDER_CELL_MASK_PATTERNS) {
     const result = detect(render(pattern.id));
     assert.equal(result.ok, true, pattern.id);
     assert.equal(result.candidates[0].patternId, pattern.id, pattern.id);

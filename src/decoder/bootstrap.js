@@ -48,10 +48,11 @@ import {
 } from './anchor-detect.js';
 import { detectBullseyes, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
-import { FINDER_PATTERNS } from '../finder-patterns.js';
+import { FINDER_CELL_MASK_PATTERNS } from '../finder-patterns.js';
 import { classifyFamily, scoreCubeTiling } from './family.js';
 import {
   UNVERIFIED_CUBE_DETECTION,
+  detectCentralCubeFinders,
   readCubeDigit,
   sampleCubeCell,
   sampleCubeGrid,
@@ -678,7 +679,7 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
   const cellSizeSeeds = radiusSeeds
     ? radiusSeeds.map((radius) => radius / Math.sqrt(13))
     : undefined;
-  let detected = detectCellFinders(reduced.luma, FINDER_PATTERNS, {
+  let detected = detectCellFinders(reduced.luma, FINDER_CELL_MASK_PATTERNS, {
     centerSeeds,
     cellSizeSeeds,
     ...overrides,
@@ -688,7 +689,7 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
     'cellSizeSeeds',
   );
   if (!detected.ok && cellSizeSeeds !== undefined && !callerFixedScaleSearch) {
-    detected = detectCellFinders(reduced.luma, FINDER_PATTERNS, {
+    detected = detectCellFinders(reduced.luma, FINDER_CELL_MASK_PATTERNS, {
       centerSeeds,
       ...overrides,
     });
@@ -703,6 +704,28 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
     downsampleFactor: reduced.factor,
     cellFinderDiagnostics: detected.diagnostics,
   }) : fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-lift' });
+}
+
+function discoverCentralCubeFinders(luma, options) {
+  if (options.centralCubeFinder === false) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, {
+      stage: 'central-cube-finder-disabled',
+      cause: 'disabled-by-caller',
+    });
+  }
+  const overrides = options.centralCubeFinder
+    && typeof options.centralCubeFinder === 'object'
+    ? options.centralCubeFinder
+    : {};
+  const detected = detectCentralCubeFinders(luma, overrides);
+  if (!detected.ok) return detected;
+  return detected.candidates.length > 0 ? ok({
+    finders: detected.candidates,
+    source: 'central-cube-detected',
+    centralCubeFinderDiagnostics: detected.diagnostics,
+  }) : fail(FRONTEND_FAILURE.NO_FINDER, {
+    stage: 'central-cube-finder-empty',
+  });
 }
 
 function discoverFinders(luma, familyEvidence, options, cfg) {
@@ -756,7 +779,7 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     { luma: reduced.luma, outline: reducedOutline },
   );
   let detected = detectBullseyes(reduced.luma, finderOptions);
-  const shouldTryCellFinder = !detected.ok;
+  const shouldTryPatternFinder = !detected.ok;
 
   const callerFixedScaleSearch = Object.prototype.hasOwnProperty.call(
     finderOverrides,
@@ -784,11 +807,28 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     finderOptions = makeFinderOptions(false, null);
     detected = detectBullseyes(reduced.luma, finderOptions);
   }
-  const cellDetected = shouldTryCellFinder
+  const centralCubeDetected = shouldTryPatternFinder
+    ? discoverCentralCubeFinders(luma, options)
+    : null;
+  const cellDetected = shouldTryPatternFinder
     ? discoverCellFinders(luma, fullOutline, options, cfg)
     : null;
+  const patternFinders = [];
+  if (centralCubeDetected && centralCubeDetected.ok) {
+    patternFinders.push(...centralCubeDetected.finders);
+  }
+  if (cellDetected && cellDetected.ok) patternFinders.push(...cellDetected.finders);
   if (!detected.ok) {
-    if (cellDetected && cellDetected.ok) return cellDetected;
+    if (patternFinders.length > 0) {
+      return ok({
+        finders: patternFinders,
+        source: centralCubeDetected && centralCubeDetected.ok
+          ? 'central-cube-detected'
+          : 'cell-mask-detected',
+        centralCubeFinderMerged: Boolean(centralCubeDetected && centralCubeDetected.ok),
+        cellFinderMerged: Boolean(cellDetected && cellDetected.ok),
+      });
+    }
     return detected;
   }
   const finders = detected.candidates
@@ -802,7 +842,7 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       });
       return fullResolution.ok ? fullResolution.candidate : finder;
     });
-  if (cellDetected && cellDetected.ok) finders.push(...cellDetected.finders);
+  finders.push(...patternFinders);
   if (finders.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'bootstrap-finder-lift' });
   }
@@ -813,6 +853,7 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       : reduced.factor === 1 ? 'detected-multiscale' : 'detected-multiscale-downsampled',
     downsampleFactor: reduced.factor,
     cellFinderMerged: Boolean(cellDetected && cellDetected.ok),
+    centralCubeFinderMerged: Boolean(centralCubeDetected && centralCubeDetected.ok),
   });
 }
 
@@ -1153,7 +1194,9 @@ function weakAnchorHypotheses(luma, finder, family, options) {
 
 function cellFinderHypotheses(luma, finder, family) {
   const H = finderTransform(finder);
-  if (!H || finder.finderKind !== 'cell-mask' || !['hex', 'tri'].includes(family)) return [];
+  const patternFinder = finder.finderKind === 'cell-mask'
+    || finder.finderKind === 'three-tone-cube';
+  if (!H || !patternFinder || !['hex', 'tri'].includes(family)) return [];
   return uniqueDimensions(family).map((k) => ({
     family,
     k,
@@ -1165,13 +1208,13 @@ function cellFinderHypotheses(luma, finder, family) {
     geometryResidual: Number.isFinite(finder.geometryResidual) ? finder.geometryResidual : 0,
     anchorMargin: finder.orientationMargin,
     orientationEvidence: {
-      source: 'finder-pattern',
+      source: finder.orientationSource || 'finder-pattern',
       patternId: finder.patternId,
       margin: finder.orientationMargin,
     },
     finder,
-    source: 'cell-finder',
-    hypothesisId: family + '-' + k + '-cell-' + finder.patternId
+    source: finder.finderKind === 'three-tone-cube' ? 'central-cube-finder' : 'cell-finder',
+    hypothesisId: family + '-' + k + '-' + finder.finderKind + '-' + finder.patternId
       + '-' + (finder.geometryMode || 'affine'),
     luma,
   }));
@@ -1255,20 +1298,26 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
     return ok({ families: [familyEvidence.family], classification: familyEvidence });
   }
 
-  const cellFinders = finders.filter((finder) => finder && finder.finderKind === 'cell-mask');
-  if (cellFinders.length > 0) {
+  const patternFinders = finders.filter((finder) => finder
+    && (finder.finderKind === 'cell-mask' || finder.finderKind === 'three-tone-cube'));
+  if (patternFinders.length > 0) {
+    const hasCentralCube = !patternFinders.some((finder) => finder.finderKind === 'cell-mask')
+      && patternFinders.some(
+        (finder) => finder.finderKind === 'three-tone-cube',
+    );
     return ok({
       families: ['hex', 'tri'],
       classification: ok({
-        family: 'cell-mask',
-        hypotheses: cellFinders.map((finder) => ({
+        family: hasCentralCube ? 'three-tone-cube' : 'cell-mask',
+        hypotheses: patternFinders.map((finder) => ({
+          finderKind: finder.finderKind,
           patternId: finder.patternId,
           orientation: finder.orientation,
           orientationMargin: finder.orientationMargin,
         })),
-        diagnostics: { orientationSource: 'finder-pattern' },
+        diagnostics: { orientationSource: 'finder-pattern-or-three-tone-rank' },
       }),
-      fallback: 'cell-mask-body-validated',
+      fallback: hasCentralCube ? 'central-cube-body-validated' : 'cell-mask-body-validated',
     });
   }
 

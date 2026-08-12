@@ -12,7 +12,7 @@
 
 import {
   FACES, facePolygon, layoutForRegion, regionCells, axialToPixel, codeBounds,
-  hexCorners, hexDistance,
+  hexCorners, hexDistance, CORNER_UNIT_OFFSETS,
 } from './hexgrid.js';
 import { bandRadii } from './bullseye.js';
 import {
@@ -358,9 +358,58 @@ export function buildScene(encoded, options) {
   const center = center0;
 
   if (finderPattern !== null) {
-    // (2a) 실험 파인더 — 예약된 19셀을 regionCells(2) 순서 그대로 3면 최대 대비로 칠한다.
     // 인코더 cellDigits 에 이 슬롯이 없으므로 용량·오버헤드·포맷 정보는 전혀 바뀌지 않는다.
-    for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
+    if (finderPattern.renderKind === 'three-tone-cube') {
+      // (2a) 19셀 슬롯에서 Type Y 경로가 데이터 링과 분리해 검출하는 최대 실측 큐브.
+      // 같은 실루엣/Y 심을 만들고, T/L/R 밝기 순위(밝음/중간/어두움)에서 방향을 읽는다.
+      const radius = finderPattern.radiusCells * cellSize;
+      const cubeLayout = { size: radius, originX: center.x, originY: center.y };
+      const slotLayout = {
+        size: finderPattern.slotRadiusCells * cellSize,
+        originX: center.x,
+        originY: center.y,
+      };
+      // 데이터 ring-3과 연결되지 않도록 19셀 슬롯 전체를 배경으로 먼저 덮는다.
+      // 0.25c 경계는 기존 Type Y 연결요소 실루엣 검출을 그대로 재사용하기 위한 최소 띠다.
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(0, 0, face, slotLayout),
+          color: palette.background,
+        });
+      }
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(0, 0, face, cubeLayout),
+          color: palette.levels[finderPattern.toneRanks[face]],
+        });
+      }
+      const seamHalfWidth = 0.075 * cellSize;
+      for (const cornerIndex of [1, 3, 5]) {
+        const unit = CORNER_UNIT_OFFSETS[cornerIndex];
+        const perpendicular = { x: -unit.y, y: unit.x };
+        const far = { x: center.x + unit.x * radius, y: center.y + unit.y * radius };
+        shapes.push({
+          kind: 'polygon',
+          points: [
+            { x: center.x + perpendicular.x * seamHalfWidth, y: center.y + perpendicular.y * seamHalfWidth },
+            { x: far.x + perpendicular.x * seamHalfWidth, y: far.y + perpendicular.y * seamHalfWidth },
+            { x: far.x - perpendicular.x * seamHalfWidth, y: far.y - perpendicular.y * seamHalfWidth },
+            { x: center.x - perpendicular.x * seamHalfWidth, y: center.y - perpendicular.y * seamHalfWidth },
+          ],
+          color: palette.bullseyeDark,
+        });
+      }
+      shapes.push({
+        kind: 'disc',
+        cx: center.x,
+        cy: center.y,
+        r: 0.18 * cellSize,
+        color: palette.bullseyeDark,
+      });
+    } else for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
+      // 기존 이진 실험 파인더 — 예약 19셀을 regionCells(2) 순서로 칠한다.
       const cell = FINDER_CELL_ORDER[ci];
       const mask = finderPattern.cellMasks[ci];
       for (const face of FACES) {

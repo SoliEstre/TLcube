@@ -1,14 +1,20 @@
-// finder-patterns.js — 실물 비교용 중앙 19셀 파인더 후보 11개
+// finder-patterns.js — 중앙 19셀 슬롯 파인더 후보 12개
 //
 // ⚠ tools/extract-finder-patterns.mjs 생성물. 직접 마스크를 고치지 말고 생성기를 갱신한 뒤
 // 이 도구를 다시 실행한다. 좌표 순서는 hexgrid.regionCells(2), 면 비트는 T=1/L=2/R=4다.
-// 기존 8개와 사용자 손그림 국소 개선안 3개를 마스크 파라미터형 공용 디코더가 읽는다.
+// 이진 11개는 마스크 공용 디코더가, 3톤 중앙 큐브 1개는 Type Y 검출 경로가 읽는다.
 
 import { FACES, regionCells } from './hexgrid.js';
 
 export const LEGACY_FINDER_PATTERN_ID = 'bullseye';
 export const DEFAULT_FINDER_PATTERN_ID = 'bullseye';
 export const FINDER_FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
+export const THREE_TONE_CUBE_FINDER_PATTERN_ID = "central-cube-3tone";
+export const FINDER_CUBE_RADIUS_CELLS = 3.5;
+export const FINDER_CUBE_SLOT_RADIUS_CELLS = 4;
+export const FINDER_CUBE_FACE_RANKS = Object.freeze(
+  {"T":2,"L":1,"R":0},
+);
 export const FINDER_CELL_ORDER = Object.freeze(
   regionCells(2).map(({ q, r }) => Object.freeze({ q, r })),
 );
@@ -42,24 +48,45 @@ export const FINDER_BASELINE_SCORES = Object.freeze({
   })
 });
 function definePattern(pattern) {
-  if (!Array.isArray(pattern.cellMasks) || pattern.cellMasks.length !== FINDER_CELL_ORDER.length) {
-    throw new RangeError(`${pattern.id}: cellMasks 는 19개여야 한다`);
-  }
-  for (const mask of pattern.cellMasks) {
-    if (!Number.isInteger(mask) || mask < 0 || mask > 7) {
-      throw new RangeError(`${pattern.id}: 면 마스크 범위 오류 ${mask}`);
-    }
-  }
-  return Object.freeze({
+  const renderKind = pattern.renderKind || 'cell-mask';
+  const common = {
     ...pattern,
+    renderKind,
     params: Object.freeze({ ...pattern.params }),
     scores: Object.freeze({ ...pattern.scores }),
-    cellMasks: Object.freeze([...pattern.cellMasks]),
+  };
+  if (renderKind === 'cell-mask') {
+    if (!Array.isArray(pattern.cellMasks) || pattern.cellMasks.length !== FINDER_CELL_ORDER.length) {
+      throw new RangeError(pattern.id + ': cellMasks 는 19개여야 한다');
+    }
+    for (const mask of pattern.cellMasks) {
+      if (!Number.isInteger(mask) || mask < 0 || mask > 7) {
+        throw new RangeError(pattern.id + ': 면 마스크 범위 오류 ' + mask);
+      }
+    }
+    return Object.freeze({
+      ...common,
+      cellMasks: Object.freeze([...pattern.cellMasks]),
+    });
+  }
+  if (renderKind !== 'three-tone-cube') {
+    throw new RangeError(pattern.id + ': 알 수 없는 renderKind ' + renderKind);
+  }
+  const ranks = FACES.map((face) => pattern.toneRanks && pattern.toneRanks[face]);
+  if (ranks.slice().sort().join(',') !== '0,1,2') {
+    throw new RangeError(pattern.id + ': toneRanks 는 0/1/2 순열이어야 한다');
+  }
+  if (!Number.isFinite(pattern.radiusCells) || pattern.radiusCells <= 0) {
+    throw new RangeError(pattern.id + ': radiusCells 는 양수여야 한다');
+  }
+  return Object.freeze({
+    ...common,
+    toneRanks: Object.freeze({ ...pattern.toneRanks }),
   });
 }
 
 export const FINDER_PATTERNS = Object.freeze([
-  // 첫 8개는 기존 4계열×2행, 마지막 3개는 사용자 손그림 개선안 별도 행이다.
+  // 첫 8개는 기존 4계열×2행, 다음 3개는 사용자 손그림 개선안, 마지막은 3톤 큐다.
   // 2차 실행 · pinwheel {"blades":3,"length":2.8,"widthFraction":0.64,"twistFraction":0.35,"phase":0.5,"winding":1,"centerTreatment":"solid","breakMode":"missing"}
   // 중심 균형 게이트 탈락 · 중심 오프셋 0.40c · 축별 모형 점수
   definePattern({
@@ -306,9 +333,33 @@ export const FINDER_PATTERNS = Object.freeze([
     centerOffsetCells: 0.14309504001254023,
     scores: { rotation: 74.92686492653552, lowResolution: 93.81394930841353, localization: 18.614131155703078, dataDistinction: 100, structuralSimplicity: 70.9594987568394, defectConcentration: 14.144181028565711 },
     cellMasks: [5, 5, 7, 7, 2, 0, 1, 7, 7, 1, 7, 5, 1, 0, 6, 1, 7, 5, 6],
+  }),
+
+  // Type Y 실루엣/Y 심/투영기하 재사용 · T/L/R = 밝음/중간/어두움
+  // 회전 점수 42.3019 · 19셀 슬롯 안 최대 반지름 3.5c
+  definePattern({
+    id: "central-cube-3tone",
+    name: "Maximum three-tone cube",
+    family: "three-tone-cube",
+    sourceRun: 5,
+    renderKind: "three-tone-cube",
+    params: {
+      detector: 'cube-silhouette-y-junction',
+      palette: "data-levels",
+      faceOrder: 'T-bright-L-mid-R-dark',
+    },
+    centerBalanceGatePassed: true,
+    centerOffsetCells: 0,
+    scores: { rotation: 42.30185603408032, lowResolution: 86.47166246267717, localization: 10.188350875030123, dataDistinction: 100, structuralSimplicity: 88.3994979795851, defectConcentration: 54.41398092702653 },
+    radiusCells: 3.5,
+    slotRadiusCells: 4,
+    toneRanks: {"T":2,"L":1,"R":0},
   })
 ]);
 
+export const FINDER_CELL_MASK_PATTERNS = Object.freeze(
+  FINDER_PATTERNS.filter((pattern) => pattern.renderKind === 'cell-mask'),
+);
 export const FINDER_PATTERN_IDS = Object.freeze(FINDER_PATTERNS.map((pattern) => pattern.id));
 const PATTERN_BY_ID = new Map(FINDER_PATTERNS.map((pattern) => [pattern.id, pattern]));
 
