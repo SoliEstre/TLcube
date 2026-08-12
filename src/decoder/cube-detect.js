@@ -835,6 +835,19 @@ function shapeCandidates(luma, cfg) {
   const componentCounts = {};
   let componentOffset = 0;
   let seamSpan;
+
+  /*
+   * 왜 떨어졌는지를 남긴다.
+   *
+   * 아래 네 관문은 전부 조용히 `return` 했다. 그래서 실사진에서 후보가 0개로 나와도
+   * 「육각이 아니었나 · 대각이 안 모였나 · 심이 약했나」를 **가릴 수가 없었다** —
+   * 실촬영 6장을 놓고 원인을 세 번 잘못 짚었다(2026-08-12). 임계값을 손대기 전에
+   * 무엇이 걸리는지부터 보이게 한다. 컴포넌트 수는 한 자리라 비용은 무시할 만하다.
+   */
+  const rejections = [];
+  const reject = (componentIndex, source, stage, measured, threshold) => {
+    rejections.push({ componentIndex, source, stage, measured, threshold });
+  };
   for (const variant of variants) {
     const mask = closeMask(variant.mask, luma.width, luma.height);
     const components = connectedComponents(mask, luma.width, luma.height, cfg);
@@ -845,12 +858,27 @@ function shapeCandidates(luma, cfg) {
       const componentIndex = componentOffset + localComponentIndex;
       const hull = convexHull(component.boundary);
       const vertices = simplifyHullToHex(hull);
-      if (!vertices) return;
+      if (!vertices) {
+        reject(componentIndex, variant.source, 'hull-not-hexagon', hull.length, 6);
+        return;
+      }
       const diagonal = diagonalCenter(vertices);
-      if (!diagonal || diagonal.residual > cfg.maximumConcurrencyResidual) return;
+      if (!diagonal || diagonal.residual > cfg.maximumConcurrencyResidual) {
+        // 반지름·면적을 같이 남긴다 — 떨어진 게 «중앙 큐브» 인지 «코드 전체 실루엣» 인지
+        //   숫자 하나로 갈린다. 잔차만 보면 그걸 알 수 없다.
+        reject(componentIndex, variant.source, 'diagonal-concurrency', {
+          residual: diagonal ? diagonal.residual : null,
+          radius: diagonal ? diagonal.radius : null,
+          componentArea: component.area,
+        }, cfg.maximumConcurrencyResidual);
+        return;
+      }
       const area = Math.abs(polygonArea(vertices));
       const maskFill = component.area / Math.max(area, EPSILON);
-      if (maskFill < cfg.minimumMaskFill) return;
+      if (maskFill < cfg.minimumMaskFill) {
+        reject(componentIndex, variant.source, 'mask-fill', maskFill, cfg.minimumMaskFill);
+        return;
+      }
 
       if (seamSpan === undefined) seamSpan = lumaSpan(luma);
       const even = seamEvidence(luma, diagonal.center, vertices, 0, seamSpan);
@@ -873,7 +901,25 @@ function shapeCandidates(luma, cfg) {
       hardChecks.all = hardChecks.hexSilhouette
         && hardChecks.diagonalConcurrency
         && hardChecks.yJunction;
-      if (!hardChecks.all) return;
+      if (!hardChecks.all) {
+        // Y 심은 세 조건의 AND 라, 어느 하나가 걸렸는지까지 남겨야 쓸모가 있다.
+        reject(componentIndex, variant.source, 'y-junction', {
+          seamContrast: seam.contrast,
+          seamSupport: seam.support,
+          parityMargin,
+          failed: [
+            seam.contrast < cfg.minimumSeamContrast ? 'contrast' : null,
+            seam.support < cfg.minimumSeamSupport ? 'support' : null,
+            parityMargin < cfg.minimumSeamParityMargin ? 'parityMargin' : null,
+            !hardChecks.diagonalConcurrency ? 'concurrency' : null,
+          ].filter(Boolean),
+        }, {
+          seamContrast: cfg.minimumSeamContrast,
+          seamSupport: cfg.minimumSeamSupport,
+          parityMargin: cfg.minimumSeamParityMargin,
+        });
+        return;
+      }
 
       const emitParityCandidate = (
         candidateParity,
@@ -938,6 +984,11 @@ function shapeCandidates(luma, cfg) {
       rawForegroundPixels: foreground.rawForegroundPixels,
       recoveredForegroundPixels: foreground.recoveredForegroundPixels,
       componentCount: componentCounts.raw || 0,
+      rejections,
+      rejectionCounts: rejections.reduce((counts, entry) => {
+        counts[entry.stage] = (counts[entry.stage] || 0) + 1;
+        return counts;
+      }, {}),
       acceptedShapeCount: candidates.length,
       rawAcceptedShapeCount: (candidatesBySource.get('raw') || []).length,
       structuredComponentCount: componentCounts['structured-density'] || 0,
