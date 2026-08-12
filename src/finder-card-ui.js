@@ -47,12 +47,12 @@ if (refinedPatterns.length !== 3) {
 }
 
 export const FINDER_CARD_GROUPS = Object.freeze({
-  // 사용자 지시 2026-08-12: 정식 선택지 행은 이 순서다.
-  // 하이브리드는 두 큐브 선택지가 붙어 보이도록 순수 큐브 바로 뒤에 넣는다.
+  // 사용자 지시 2026-08-13: 하이브리드를 두 번째로 — 실사진에서 실제로 읽히는 큐브
+  // 선택지가 이쪽이고, 순수 3톤 큐브는 정지 사진 0/6 이라 뒤로 민다.
   formal: Object.freeze([
     descriptor(LEGACY_FINDER_PATTERN_ID, null),
-    descriptor(THREE_TONE_CUBE_FINDER_PATTERN_ID, getFinderPattern(THREE_TONE_CUBE_FINDER_PATTERN_ID)),
     descriptor(CUBE_BULLSEYE_FINDER_PATTERN_ID, getFinderPattern(CUBE_BULLSEYE_FINDER_PATTERN_ID)),
+    descriptor(THREE_TONE_CUBE_FINDER_PATTERN_ID, getFinderPattern(THREE_TONE_CUBE_FINDER_PATTERN_ID)),
     descriptor(CENTER_QR_FINDER_PATTERN_ID, null),
   ]),
   generated: Object.freeze(generatedPatterns.map((pattern) => descriptor(pattern.id, pattern))),

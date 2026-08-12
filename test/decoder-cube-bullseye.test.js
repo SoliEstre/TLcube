@@ -19,7 +19,7 @@ import { rasterize } from '../src/raster.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset, relativeLuminance,
 } from '../src/luminance.js';
-import { detectBullseyes } from '../src/decoder/bullseye-detect.js';
+import { detectBullseyes, pyramidLevelsForImage } from '../src/decoder/bullseye-detect.js';
 import { readCubeOrientation } from '../src/decoder/cube-bullseye.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { rotateImage } from './harness/distort.mjs';
@@ -110,7 +110,10 @@ test('레이아웃을 모르고도 고른다 — 두 레이아웃을 같은 제�
   const hybrid = bestCandidate(detectBullseyes(toLuma(render('cube-bullseye', 24)), layouts));
   assert.ok(hybrid);
   assert.equal(hybrid.innerBandsReplaced, HYBRID_INNER_CUBE_BANDS);
-  assert.equal(hybrid.orientationSource, 'hybrid-cube-face-rank');
+  // 방향은 `cube` 아래에만 둔다 — 최상위에 얹으면 하류 가설 정렬 비교자가 집는다.
+  assert.equal(hybrid.cube.orientationSource, 'hybrid-cube-face-rank');
+  assert.equal(hybrid.rotationDegrees, undefined);
+  assert.equal(hybrid.orientation, undefined);
 
   const plain = bestCandidate(detectBullseyes(toLuma(render('bullseye', 24)), layouts));
   assert.ok(plain);
@@ -189,6 +192,43 @@ test('순수 불스아이에서는 큐브 증거가 나오지 않는다 (오검�
     assert.ok(read.faceFlatness < 0.80,
       `순수 불스아이인데 면 평탄도 ${read.faceFlatness.toFixed(3)}`);
   }
+});
+
+test('탐색 커버는 이미지에서 유도된다 — «크게 찍으면 안 읽힌다» 방지', () => {
+  /*
+   * 피라미드 레벨 하나가 한 옥타브(~24px)만 맡으므로, 레벨 수를 상수로 고정하면 탐색이
+   * 24·2^(n-1) px 에서 끊기고 그보다 큰 파인더는 **제안조차 안 만들어진다**. 실사진
+   * (2026-08-13) 파인더 반지름이 76~136px 였는데 파이프라인은 1~2레벨(24·48px)로 불러
+   * 전멸했다. 지금까지 안 드러난 건 outline 이 반지름을 직접 넘겨 사다리를 우회해 준
+   * 경우가 많았기 때문이다.
+   */
+  assert.equal(pyramidLevelsForImage({ width: 100, height: 50 }), 1);
+  for (const size of [240, 480, 960, 1920]) {
+    const levels = pyramidLevelsForImage({ width: size, height: size });
+    const reach = 24 * 2 ** (levels - 1);
+    const largestPlausible = size * 0.42;
+    assert.ok(reach >= largestPlausible,
+      `${size}px 이미지: 커버 ${reach}px < 최대 파인더 ${largestPlausible.toFixed(0)}px`);
+  }
+});
+
+test('프레임을 꽉 채운 하이브리드도 복호된다 (커버 천장 회귀)', () => {
+  // margin 0 · 240px 급 렌더 → 축소본에서 파인더 반지름이 옛 커버(24·48px)를 넘는다.
+  const scene = buildScene(ENCODED, {
+    palette: PALETTE, cellSize: 1, finderPatternId: 'cube-bullseye', margin: 0,
+  });
+  const raster = rasterize(scene, { pixelsPerUnit: 20, supersample: 2 });
+  const image = { width: raster.width, height: raster.height, pixels: raster.pixels };
+
+  // 1 은 파이프라인 outline 경로가 쓰던 상수 그대로다 — 이 케이스가 실제로 실패해야
+  // 이 테스트가 진짜 결함을 막는다(실측: cap1 ✖ · cap2 이상 ✔ · 유도값 4).
+  const capped = decodeFrontend(image, { bootstrap: { finder: { maxPyramidLevels: 1 } } });
+  assert.equal(capped.ok, false, '레벨 1로 묶으면 실패해야 이 테스트가 진짜 결함을 막는다');
+  assert.ok(pyramidLevelsForImage(raster) >= 3, '이 렌더는 3레벨 이상을 요구해야 한다');
+
+  const result = decodeFrontend(image);
+  assert.equal(result.ok, true, `기본 경로: ${result.reason}`);
+  assert.equal(result.text, TEXT);
 });
 
 test('하이브리드 코드가 끝에서 끝까지 복호된다 (파이프라인 기본 옵션)', () => {

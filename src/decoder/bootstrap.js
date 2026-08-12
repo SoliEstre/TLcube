@@ -47,7 +47,7 @@ import {
   findOAnchorHypotheses,
 } from './anchor-detect.js';
 import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
-import { detectBullseyes, refineBullseye } from './bullseye-detect.js';
+import { detectBullseyes, pyramidLevelsForImage, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
 import { FINDER_CELL_MASK_PATTERNS } from '../finder-patterns.js';
 import { classifyFamily, scoreCubeTiling } from './family.js';
@@ -747,11 +747,21 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     ? options.finderMaxDimension
     : null;
 
-  const makeFinderOptions = (useOutlineSeeds, reducedOutline) => {
+  const makeFinderOptions = (useOutlineSeeds, reducedOutline, searchLuma) => {
+    /*
+     * 레벨 수는 «예산» 이 아니라 «닿는 거리» 다. 레벨 하나가 한 옥타브(~24px)만 맡으므로
+     * 상수로 고정하면 탐색이 24·2^(n-1) px 에서 끊기고, 그보다 큰 파인더는 **제안조차
+     * 안 만들어진다**. 실측(2026-08-13): 파인더 반지름 76~136px 실사진이 1~2레벨에서
+     * 전멸했다. 설정값은 하한으로 두고 이미지가 요구하는 깊이까지 올린다 —
+     * 깊은 레벨은 픽셀이 1/4씩 줄어 거의 공짜다.
+     */
+    const configuredLevels = useOutlineSeeds
+      ? cfg.finderPyramidLevels
+      : cfg.finderClutterPyramidLevels;
     const configured = {
-      maxPyramidLevels: useOutlineSeeds
-        ? cfg.finderPyramidLevels
-        : cfg.finderClutterPyramidLevels,
+      maxPyramidLevels: searchLuma
+        ? Math.max(configuredLevels, pyramidLevelsForImage(searchLuma))
+        : configuredLevels,
       maxRefinedProposals: useOutlineSeeds
         ? cfg.finderMaxRefinedProposals
         : cfg.finderClutterMaxRefinedProposals,
@@ -812,6 +822,24 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     finderOptions = makeFinderOptions(false, null);
     detected = detectBullseyes(reduced.luma, finderOptions);
   }
+  /*
+   * 마지막 수단 — **탐색 커버를 이미지에서 유도해** 다시 한 번. 레벨 하나가 한
+   * 옥타브(~24px)만 맡으므로 상수 깊이(1~2)는 24·48px 에서 끊긴다. 실사진 파인더가
+   * 76~136px 여서 «크게 찍을수록 안 읽히는» 상태였다(2026-08-13 실측).
+   *
+   * ⚠ 깊이를 **항상** 올리면 안 된다. 제안이 늘어난 만큼 정제 예산(1×레이아웃)을 두고
+   *   경쟁이 심해져, 통과하던 Type Y 실사진이 상위 2위 밖으로 밀려 죽었다. 그래서
+   *   앞 시도가 전부 실패했을 때만 켠다 — 통과하던 경로는 한 줄도 안 바뀐다.
+   */
+  if (!detected.ok && !callerFixedScaleSearch) {
+    const deeper = pyramidLevelsForImage(reduced.luma);
+    if (deeper > (finderOptions.maxPyramidLevels ?? 1)) {
+      detected = detectBullseyes(reduced.luma, {
+        ...finderOptions,
+        maxPyramidLevels: deeper,
+      });
+    }
+  }
   const centralCubeDetected = shouldTryPatternFinder
     ? discoverCentralCubeFinders(luma, options)
     : null;
@@ -841,11 +869,22 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     .filter(Boolean)
     .map((finder) => {
       if (usedOutlineSeeds || reduced.factor === 1) return finder;
+      /*
+       * ⚠ **레이아웃을 같이 넘겨야 한다.** 이 재정제는 축소본에서 찾은 후보를 원본
+       *   해상도로 다시 맞추는 단계인데, `innerBandsReplaced` 를 빼먹으면 하이브리드를
+       *   순수 6밴드 불스아이로 재채점한다 — 큐브가 들어앉은 안쪽 두 밴드를 «링인데
+       *   교대가 깨졌다» 로 읽으니 중심·스케일이 끌려간다. 후보를 그대로 주입하면
+       *   4/12 → 8/12 였다(2026-08-13 실측). 제안·검증에 이어 **세 번째로** 같은
+       *   «두 단계가 같은 레이아웃을 봐야 한다» 자리다.
+       */
       const fullResolution = refineBullseye(luma, finder, {
         refineIterations: 0,
         projectiveSeeds: false,
+        innerBandsReplaced: finder.innerBandsReplaced ?? 0,
       });
-      return fullResolution.ok ? fullResolution.candidate : finder;
+      return fullResolution.ok
+        ? { ...fullResolution.candidate, innerBandsReplaced: finder.innerBandsReplaced ?? 0 }
+        : finder;
     });
   finders.push(...patternFinders);
   if (finders.length === 0) {

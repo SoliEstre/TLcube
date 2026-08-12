@@ -68,7 +68,9 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
   const cardUiSource = readFileSync(path.join(ROOT, 'src', 'finder-card-ui.js'), 'utf8');
   assert.doesNotMatch(source, /<select id="finderPattern"/);
   assert.match(source, /class="finder-family-grid card-row"/);
-  assert.match(source, /finder-legacy-row \{ display: grid; grid-template-columns: repeat\(3,/);
+  // 정식 행이 4개(하이브리드 추가)라 4칸 격자 + 세로 배치(썸네일 위·글자 아래)다.
+  assert.match(source, /finder-legacy-row \{ display: grid; grid-template-columns: repeat\(4,/);
+  assert.doesNotMatch(source, /finder-legacy-row \.finder-card \{ flex-direction: row/);
   assert.match(source, /FINDER_CARD_GROUPS\.formal\.map/);
   assert.match(source, /function centerQrThumbnail\(\)/);
   assert.match(source, /finder-family-grid\.card-row \{\s*display: grid; grid-template-columns: repeat\(4,/);

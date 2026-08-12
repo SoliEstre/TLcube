@@ -760,6 +760,27 @@ function localVoteMaxima(level, votes, outerRadius) {
   maxima.sort((a, b) => b.vote - a.vote || a.y - b.y || a.x - b.x);
   return maxima.slice(0, PROPOSALS_PER_SCALE);
 }
+/**
+ * 이 이미지에서 **가장 큰 파인더까지 닿으려면** 피라미드가 몇 레벨이어야 하는가.
+ *
+ * 레벨 하나는 한 옥타브(\~24px)만 맡으므로 탐색 커버는 `24 × 2^(레벨-1)` px 에서 끊긴다.
+ * 레벨 수를 이미지와 무관한 상수로 고정하면 «크게 찍을수록 안 읽힌다» 가 된다 — 실측
+ * (2026-08-13): 파인더 반지름 76\~136px 인 실사진이 1\~2레벨에서 **전멸**하고 3\~4레벨에서
+ * 살아났다. 지금까지 안 드러난 건 outline 이 반지름을 직접 넘겨 사다리를 우회해 준
+ * 경우가 많았기 때문이다.
+ *
+ * 깊은 레벨은 거의 공짜다 — 레벨마다 픽셀이 1/4 이라 전체가 레벨 0 의 4/3 을 못 넘고,
+ * `makePyramid` 가 짧은 변 48px 에서 멈춘다.
+ */
+export function pyramidLevelsForImage(luma) {
+  const reach = Math.min(luma.width, luma.height) * MAX_OUTER_RADIUS_FRACTION;
+  if (!(reach > PYRAMID_SEARCH_MAX_OUTER_RADIUS)) return 1;
+  return Math.min(
+    8,
+    1 + Math.ceil(Math.log2(reach / PYRAMID_SEARCH_MAX_OUTER_RADIUS)),
+  );
+}
+
 function collectRawProposals(luma, options) {
   const maxLevels = options.maxPyramidLevels === undefined
     ? MAX_PYRAMID_LEVELS
@@ -797,6 +818,17 @@ function collectRawProposals(luma, options) {
     || a.center.y - b.center.y
     || a.center.x - b.center.x);
 
+  /*
+   * 상한은 **레벨 수에 비례**해야 한다. 전역 vote 순 정렬 뒤 고정 72개에서 자르면,
+   * 레벨이 늘어난 만큼 새 제안이 들어와 **원래 통과하던 후보를 밀어낸다** — 커버를
+   * 넓히면서 자리를 안 넓혀 Type Y 실사진 하나가 죽었다(2026-08-13, `evaluatedRaw: 72`
+   * 로 상한에 정확히 걸려 있었다). 레벨끼리 vote 크기가 서로 보정돼 있지도 않아
+   * (레벨마다 gradient 수·크기가 다르다) 전역 순위로 자르는 것 자체가 편향이다.
+   *
+   * 얕은 레벨의 몫을 종전대로 두고 깊은 레벨은 그 위에 얹는다. 원시 제안은 저비용
+   * 옵션(24×24 표본)으로만 채점되므로 늘어난 비용은 피라미드 구축보다 훨씬 싸다.
+   */
+  const rawLimit = MAX_RAW_PROPOSALS * Math.max(1, pyramid.length - 1);
   const kept = [];
   for (const proposal of raw) {
     const duplicate = kept.some((other) => {
@@ -806,7 +838,7 @@ function collectRawProposals(luma, options) {
         && scaleDistance <= RAW_SCALE_NMS_LOG_DISTANCE;
     });
     if (!duplicate) kept.push(proposal);
-    if (kept.length >= MAX_RAW_PROPOSALS) break;
+    if (kept.length >= rawLimit) break;
   }
   return kept;
 }
@@ -1546,14 +1578,24 @@ export function detectBullseyes(luma, options = {}) {
     if (cube === null
       || !(cube.orientationMargin >= MIN_CUBE_TONE_RANK_MARGIN)
       || !(cube.faceFlatness >= MIN_CUBE_FACE_FLATNESS)) continue;
+    /*
+     * ⚠ 큐브에서 읽은 방향은 **`cube` 아래에만** 둔다. `rotationDegrees`·`orientation` 을
+     *   후보 최상위에 얹었더니 하류 가설 정렬 비교자(bootstrap 의 `rotationDegrees ??
+     *   orientation ?? 0`)가 그 값을 집어 순서가 흔들렸다 — 순수 불스아이는 그 필드가
+     *   없어 0 으로 정렬되는데 하이브리드만 0\~360 연속값이 들어가, 상위 N개 절단에서
+     *   맞는 가설이 밀려났다. 방향은 아직 하류가 소비할 계약이 아니므로 격리한다.
+     */
     refined.push({
       ...result.candidate,
       innerBandsReplaced: entry.firstBand,
-      rotationDegrees: cube.rotationDegrees,
-      orientation: cube.orientation,
-      orientationSource: 'hybrid-cube-face-rank',
-      orientationMargin: cube.orientationMargin,
-      cubeFaceMedians: cube.faceMedians,
+      cube: {
+        rotationDegrees: cube.rotationDegrees,
+        orientation: cube.orientation,
+        orientationSource: 'hybrid-cube-face-rank',
+        orientationMargin: cube.orientationMargin,
+        faceFlatness: cube.faceFlatness,
+        faceMedians: cube.faceMedians,
+      },
     });
   }
   refined.sort(compareScored);

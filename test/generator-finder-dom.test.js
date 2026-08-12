@@ -156,16 +156,16 @@ function makeUiHarness(type) {
   };
 }
 
-test('정식 파인더 카드 행은 불스아이 → 3톤 큐브 → 하이브리드 → 중앙 QR이고 나머지는 동적으로 이어진다', () => {
+test('정식 파인더 카드 행은 불스아이 → 하이브리드 → 3톤 큐브 → 중앙 QR이고 나머지는 동적으로 이어진다', () => {
   const root = new DomRootFallback();
   appendFinderCards(root);
   const ids = root.querySelectorAll('[data-finder-id]').map((card) => card.dataset.finderId);
 
-  // 하이브리드(링+큐브)는 두 큐브 선택지가 붙어 보이도록 순수 큐브 바로 뒤다.
+  // 사용자 지시 2026-08-13: 실사진에서 실제로 읽히는 큐브 선택지가 하이브리드라 두 번째다.
   assert.deepEqual(ids.slice(0, 4), [
     'bullseye',
-    'central-cube-3tone',
     'cube-bullseye',
+    'central-cube-3tone',
     CENTER_QR_FINDER_PATTERN_ID,
   ]);
   assert.equal(ids.length, 15);

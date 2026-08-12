@@ -103,9 +103,25 @@ export function lumaToRaster(luma) {
   return { width: luma.width, height: luma.height, pixels };
 }
 
-/** 사용 가능한 덤프 목록. 없으면 빈 배열 — 호출부가 "덤프 없음" 을 스킵 사유로 쓸 수 있다. */
+/**
+ * 사용 가능한 덤프 목록. 없으면 빈 배열 — 호출부가 "덤프 없음" 을 스킵 사유로 쓸 수 있다.
+ *
+ * 촬영 세션 폴더(`hybrid-20260813/` 등)를 그대로 따라가므로 **재귀로 훑는다.** manifest 가
+ * `photos/` 기준 상대경로를 담고 probe 가 그 경로 모양대로 덤프를 떨구기 때문이다.
+ * `name` 은 LUMA_DIR 기준 상대경로이고 `/` 로 잇는다.
+ */
 export function listLumaDumps() {
   if (!existsSync(LUMA_DIR)) return [];
-  return readdirSync(LUMA_DIR).filter((n) => n.endsWith('.luma')).sort()
-    .map((name) => ({ name, path: join(LUMA_DIR, name) }));
+  const walk = (directory, prefix) => {
+    const found = [];
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        found.push(...walk(join(directory, entry.name), `${prefix}${entry.name}/`));
+      } else if (entry.name.endsWith('.luma')) {
+        found.push({ name: prefix + entry.name, path: join(directory, entry.name) });
+      }
+    }
+    return found;
+  };
+  return walk(LUMA_DIR, '').sort((left, right) => (left.name < right.name ? -1 : 1));
 }
