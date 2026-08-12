@@ -869,6 +869,8 @@ function shapeCandidates(luma, cfg) {
         reject(componentIndex, variant.source, 'diagonal-concurrency', {
           residual: diagonal ? diagonal.residual : null,
           radius: diagonal ? diagonal.radius : null,
+          center: diagonal ? diagonal.center : null,
+          vertices,
           componentArea: component.area,
         }, cfg.maximumConcurrencyResidual);
         return;
@@ -904,6 +906,12 @@ function shapeCandidates(luma, cfg) {
       if (!hardChecks.all) {
         // Y 심은 세 조건의 AND 라, 어느 하나가 걸렸는지까지 남겨야 쓸모가 있다.
         reject(componentIndex, variant.source, 'y-junction', {
+          // 기하도 같이 남긴다 — 대비가 낮을 때 «심이 흐린 것» 과 «엉뚱한 데를 잰 것» 을
+          //   숫자만으로는 못 가른다. 중심·꼭짓점이 있으면 사진 위에 그려서 확인된다.
+          center: diagonal.center,
+          radius: diagonal.radius,
+          vertices,
+          seamVertices: [0, 1, 2].map((index) => vertices[(parity + 2 * index) % 6]),
           seamContrast: seam.contrast,
           seamSupport: seam.support,
           parityMargin,
