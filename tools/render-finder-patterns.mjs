@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// 고정된 실험 파인더 8개를 데이터 필드가 둘러싼 Type O 전체 코드 PNG로 렌더한다.
+// 고정된 실험 파인더 11개를 데이터 필드가 둘러싼 Type O 전체 코드 PNG로 렌더한다.
 // 파인더만 잘라낸 채점 그림이 아니라 생성기와 같은 scene/raster/png 경로를 통과한다.
 
 import { createHash } from 'node:crypto';

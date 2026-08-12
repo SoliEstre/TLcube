@@ -70,7 +70,11 @@ test('select 대신 4계열 카드 격자이고 실험 썸네일은 19셀 마스
   assert.match(source, /function centerQrThumbnail\(\)/);
   assert.match(source, /finder-family-grid\.card-row \{\s*display: grid; grid-template-columns: repeat\(4,/);
   assert.match(source, /@media \(max-width: 420px\)[\s\S]*finder-family-grid\.card-row \{ grid-template-columns: repeat\(2,/);
-  assert.match(source, /const bottom = FINDER_PATTERNS\[column \+ 4\]/);
+  assert.match(source, /const generatedFamilies = FINDER_PATTERNS\.slice\(0, 8\)/);
+  assert.match(source, /const bottom = generatedFamilies\[column \+ 4\]/);
+  assert.match(source, /const refinedPatterns = FINDER_PATTERNS\.slice\(8\)/);
+  assert.match(source, /className = 'finder-user-patterns'/);
+  assert.match(source, /'user-refined': 'g504'/);
   assert.match(source, /top\.family !== bottom\.family/);
   assert.match(source, /className = 'toggle-card finder-card'/);
   assert.match(source, /pattern\.cellMasks\[cellIndex\]/);
@@ -89,7 +93,7 @@ test('select 대신 4계열 카드 격자이고 실험 썸네일은 19셀 마스
   assert.match(source, /data-i18n="g492"/);
   const built = buildGeneratorVariants();
   for (const html of [built.official, built.experiment]) {
-    assert.match(html, /2026-08-12\.05/);
+    assert.match(html, /2026-08-12\.06/);
     const finderSource = embeddedFinderSource(html);
     assert.match(finderSource, /export const FINDER_BASELINE_SCORES/);
     assert.match(html, /\["finder-selection",/);
@@ -134,7 +138,7 @@ test('파인더/QR 결합은 정규화 뒤 한 번씩만 그리는 비재귀 경
   assert.doesNotMatch(renderSource, /els\.error\.textContent\s*=/);
 });
 
-test('실험 경고는 8종 후보 선택에만 연결되고 두 기준선에는 연결되지 않는다', () => {
+test('실험 경고는 11종 후보 선택에만 연결되고 두 기준선에는 연결되지 않는다', () => {
   const source = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.match(source, /const selectedPattern = FINDER_PATTERNS\.find\(/);
   assert.match(source, /const experimental = Boolean\(selectedPattern\)/);

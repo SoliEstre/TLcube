@@ -1,8 +1,8 @@
-// finder-patterns.js — 실물 비교용 중앙 19셀 파인더 후보 8개
+// finder-patterns.js — 실물 비교용 중앙 19셀 파인더 후보 11개
 //
 // ⚠ tools/extract-finder-patterns.mjs 생성물. 직접 마스크를 고치지 말고 생성기를 갱신한 뒤
 // 이 도구를 다시 실행한다. 좌표 순서는 hexgrid.regionCells(2), 면 비트는 T=1/L=2/R=4다.
-// 이 후보들은 렌더 실험용이며 현행 동심원 디코더로 스캔되지 않는다.
+// 기존 8개와 사용자 손그림 국소 개선안 3개를 마스크 파라미터형 공용 디코더가 읽는다.
 
 import { FACES, regionCells } from './hexgrid.js';
 
@@ -59,7 +59,7 @@ function definePattern(pattern) {
 }
 
 export const FINDER_PATTERNS = Object.freeze([
-  // 순서는 생성기 UI 배치와 묶여 있다: 2차 후보 4개(첫 행), 같은 계열의 3차 후보 4개(둘째 행).
+  // 첫 8개는 기존 4계열×2행, 마지막 3개는 사용자 손그림 개선안 별도 행이다.
   // 2차 실행 · pinwheel {"blades":3,"length":2.8,"widthFraction":0.64,"twistFraction":0.35,"phase":0.5,"winding":1,"centerTreatment":"solid","breakMode":"missing"}
   // 중심 균형 게이트 탈락 · 중심 오프셋 0.40c · 축별 모형 점수
   definePattern({
@@ -237,6 +237,75 @@ export const FINDER_PATTERNS = Object.freeze([
     centerOffsetCells: 5.611412357367492e-17,
     scores: { rotation: 79.47194142390262, lowResolution: 91.17102980798893, localization: 23.55161544174186, dataDistinction: 100, structuralSimplicity: 56.325320629094655, defectConcentration: 12.065908777314663 },
     cellMasks: [3, 3, 6, 5, 5, 3, 6, 5, 6, 7, 6, 5, 6, 3, 5, 5, 6, 3, 3],
+  }),
+
+  // 국소 탐색 · tristar h3 · user-refined {"sourceSeed":"tristar","hammingDistance":3,"flippedFaces":[25,48,52]}
+  // 중심 균형 게이트 통과 · 중심 오프셋 0.25c · 축별 모형 점수
+  definePattern({
+    id: "tristar-refined-h3",
+    name: "Refined tristar",
+    family: "user-refined",
+    sourceRun: 4,
+    params:
+    {
+      "sourceSeed": "tristar",
+      "hammingDistance": 3,
+      "flippedFaces": [
+        25,
+        48,
+        52
+      ]
+    },
+    centerBalanceGatePassed: true,
+    centerOffsetCells: 0.2508488988774462,
+    scores: { rotation: 77.2328445721233, lowResolution: 92.71851740803673, localization: 20.86677705125009, dataDistinction: 100, structuralSimplicity: 61.05139414683933, defectConcentration: 12.74765297802717 },
+    cellMasks: [0, 0, 1, 5, 2, 5, 0, 6, 1, 6, 3, 2, 0, 4, 0, 1, 3, 3, 4],
+  }),
+
+  // 국소 탐색 · tree h3 · user-refined {"sourceSeed":"tree","hammingDistance":3,"flippedFaces":[4,26,38]}
+  // 중심 균형 게이트 통과 · 중심 오프셋 0.20c · 축별 모형 점수
+  definePattern({
+    id: "tree-refined-h3",
+    name: "Refined tree",
+    family: "user-refined",
+    sourceRun: 4,
+    params:
+    {
+      "sourceSeed": "tree",
+      "hammingDistance": 3,
+      "flippedFaces": [
+        4,
+        26,
+        38
+      ]
+    },
+    centerBalanceGatePassed: true,
+    centerOffsetCells: 0.19736928613257246,
+    scores: { rotation: 77.2328445721233, lowResolution: 93.1591076237279, localization: 20.200631706634137, dataDistinction: 100, structuralSimplicity: 62.28488025177328, defectConcentration: 12.600900066186604 },
+    cellMasks: [6, 5, 0, 3, 7, 4, 0, 5, 5, 0, 4, 1, 1, 2, 4, 7, 4, 6, 4],
+  }),
+
+  // 국소 탐색 · cats h3 · user-refined {"sourceSeed":"cats","hammingDistance":3,"flippedFaces":[20,25,34]}
+  // 중심 균형 게이트 통과 · 중심 오프셋 0.14c · 축별 모형 점수
+  definePattern({
+    id: "cats-refined-h3",
+    name: "Refined cats",
+    family: "user-refined",
+    sourceRun: 4,
+    params:
+    {
+      "sourceSeed": "cats",
+      "hammingDistance": 3,
+      "flippedFaces": [
+        20,
+        25,
+        34
+      ]
+    },
+    centerBalanceGatePassed: true,
+    centerOffsetCells: 0.14309504001254023,
+    scores: { rotation: 74.92686492653552, lowResolution: 93.81394930841353, localization: 18.614131155703078, dataDistinction: 100, structuralSimplicity: 70.9594987568394, defectConcentration: 14.144181028565711 },
+    cellMasks: [5, 5, 7, 7, 2, 0, 1, 7, 7, 1, 7, 5, 1, 0, 6, 1, 7, 5, 6],
   })
 ]);
 

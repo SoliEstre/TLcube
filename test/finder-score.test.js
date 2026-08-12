@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { runHarness } from '../tools/finder-score.mjs';
+import {
+  loadFinderMaskCandidates, parseFinderMaskCandidates, runHarness,
+} from '../tools/finder-score.mjs';
 
 /**
  * finder-score 는 «검출기 없이» 파인더 후보를 거르는 자다. 자가 틀리면 후보 순위 전체가
@@ -17,7 +20,28 @@ import { runHarness } from '../tools/finder-score.mjs';
  */
 const OUTPUT_PARENT = path.join(os.tmpdir(), 'tlcube-finder-score-test');
 const REPORT = await runHarness({ top: 1, outputParent: OUTPUT_PARENT });
-test.after(() => fs.rm(OUTPUT_PARENT, { recursive: true, force: true }));
+
+const MASK_OUTPUT_PARENT = path.join(os.tmpdir(), 'tlcube-finder-score-mask-test');
+const MASK_CANDIDATES = parseFinderMaskCandidates([
+  {
+    id: 'centered',
+    cellMasks: Array(19).fill(7),
+    params: { comparisonGroup: 'fixture', comparisonOrder: 0, comparisonLabel: 'seed' },
+  },
+  {
+    id: 'offcenter',
+    cellMasks: [0, 0, 0, 0, 0, 5, 0, 0, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0],
+    params: { comparisonGroup: 'fixture', comparisonOrder: 1, comparisonLabel: 'h1' },
+  },
+]);
+const MASK_REPORT = await runHarness({
+  outputParent: MASK_OUTPUT_PARENT,
+  maskCandidates: MASK_CANDIDATES,
+});
+test.after(async () => {
+  await fs.rm(OUTPUT_PARENT, { recursive: true, force: true });
+  await fs.rm(MASK_OUTPUT_PARENT, { recursive: true, force: true });
+});
 
 const bullseye = REPORT.baselines.find((b) => b.id === 'bullseye');
 const centerQr = REPORT.baselines.find((b) => b.id === 'center-qr');
@@ -128,4 +152,90 @@ test('데이터 구별도는 아직 포화 상태 — 순위를 가르지 못한
   assert.equal(winner.scores.dataDistinction, 100);
   assert.ok(REPORT.limitations.some((line) => line.includes('[미검증]')),
     '한계 항목에 [미검증] 표기가 없다');
+});
+
+
+test('임의 마스크 입력은 이름→배열·후보 배열·파일을 같은 후보 형식으로 읽는다', async () => {
+  const masks = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const mapped = parseFinderMaskCandidates({ bird: masks });
+  const listed = parseFinderMaskCandidates([{ name: 'bird-2', cellMasks: masks }]);
+  assert.equal(mapped[0].id, 'bird');
+  assert.equal(mapped[0].name, 'bird');
+  assert.deepEqual(mapped[0].cellMasks, masks);
+  assert.equal(mapped[0].bits.length, 57);
+  assert.equal(listed[0].id, 'bird-2');
+
+  const inputDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tlcube-finder-masks-'));
+  const inputPath = path.join(inputDir, 'masks.json');
+  try {
+    await fs.writeFile(inputPath, JSON.stringify({ 'bird-file': masks }), 'utf8');
+    const loaded = await loadFinderMaskCandidates({ masksFile: inputPath });
+    assert.equal(loaded[0].id, 'bird-file');
+    assert.deepEqual(loaded[0].cellMasks, masks);
+  } finally {
+    await fs.rm(inputDir, { recursive: true, force: true });
+  }
+});
+
+test('임의 마스크 입력 오류는 조용히 보정하지 않는다', () => {
+  assert.throws(() => parseFinderMaskCandidates({}), /하나 이상/);
+  assert.throws(() => parseFinderMaskCandidates({ empty: Array(19).fill(0) }), /켜진 면/);
+  assert.throws(() => parseFinderMaskCandidates({ short: [1, 2] }), /19개/);
+  assert.throws(() => parseFinderMaskCandidates({ bad: [...Array(18).fill(0), 8] }), /0..7/);
+  assert.throws(() => parseFinderMaskCandidates([
+    { id: 'same', cellMasks: Array(19).fill(1) },
+    { id: 'same', cellMasks: Array(19).fill(2) },
+  ]), /중복/);
+  assert.throws(() => parseFinderMaskCandidates({
+    bullseye: Array(19).fill(1),
+  }), /충돌/);
+});
+
+test('임의 마스크 모드는 자 검증 뒤 고정 11종·기준선과 한 표에서 6축만 채점한다', () => {
+  assert.equal(MASK_REPORT.rulerValidation.passed, true);
+  assert.equal(MASK_REPORT.meta.mode, 'manual-masks');
+  assert.equal(MASK_REPORT.customMasks.table.length, 2 + 11 + MASK_CANDIDATES.length);
+  assert.equal(MASK_REPORT.customMasks.candidates.length, MASK_CANDIDATES.length);
+  assert.equal(MASK_REPORT.meta.centerBalanceGate.scoredCount, MASK_CANDIDATES.length);
+  assert.equal(MASK_REPORT.meta.centerBalanceGate.passedCount, 1);
+  assert.equal(MASK_REPORT.meta.centerBalanceGate.rejectedCount, 1);
+  assert.match(MASK_REPORT.meta.centerBalanceGate.policy, /탈락시키지 않음/);
+
+  const offcenter = MASK_REPORT.customMasks.candidates.find((entry) => entry.id === 'offcenter');
+  assert.equal(offcenter.centerBalanceGatePassed, false);
+  assert.ok(offcenter.centerOffsetCells > 0.5, offcenter.centerOffsetCells);
+  for (const entry of MASK_REPORT.customMasks.table) {
+    assert.deepEqual(Object.keys(entry.scores), [
+      'rotation', 'lowResolution', 'localization', 'dataDistinction',
+      'structuralSimplicity', 'defectConcentration',
+    ]);
+    assert.equal('total' in entry.scores, false, entry.id + ': total 노출');
+    assert.equal('legacyTotal' in entry.scores, false, entry.id + ': legacyTotal 노출');
+  }
+});
+
+test('임의 마스크는 탈락 여부와 무관하게 단독·실제 Type O PNG를 각각 남긴다', async () => {
+  const outputDir = MASK_REPORT.meta.outputDir;
+  const manifest = MASK_REPORT.customMasks.renderManifest;
+  assert.equal(manifest.files.length, MASK_CANDIDATES.length);
+  for (const entry of manifest.files) {
+    for (const image of [entry.finder, entry.typeO]) {
+      const bytes = await fs.readFile(path.join(outputDir, image.file));
+      assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+      assert.equal(createHash('sha256').update(bytes).digest('hex'), image.sha256);
+      assert.ok(image.width > 0 && image.height > 0 && image.bytes === bytes.length);
+    }
+    assert.ok(entry.typeO.selfCheck.total > 0, entry.id);
+    assert.ok(entry.typeO.selfCheck.minDelta > 0, entry.id);
+  }
+
+  assert.equal(manifest.comparisons.files.length, 1);
+  const comparison = manifest.comparisons.files[0];
+  assert.deepEqual(comparison.columns.map((column) => column.label), ['seed', 'h1']);
+  for (const image of [comparison.finder, comparison.typeO]) {
+    const bytes = await fs.readFile(path.join(outputDir, image.file));
+    assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), image.sha256);
+    assert.ok(image.width > 0 && image.height > 0 && image.bytes === bytes.length);
+  }
 });

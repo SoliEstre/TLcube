@@ -21,11 +21,10 @@ import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
 import { verifyRaster } from '../src/verify.js';
 import {
-  SELECTED_FINDER_IDS, bitsToCellMasks, renderFinderPatternsModule,
+  SELECTED_FINDER_IDS, bitsToCellMasks, generateSelectedFinderCandidates,
+  renderFinderPatternsModule,
 } from '../tools/extract-finder-patterns.mjs';
-import {
-  generateFinderCandidates, measureFinderPatternScores,
-} from '../tools/finder-score.mjs';
+import { measureFinderPatternScores } from '../tools/finder-score.mjs';
 
 const MODULE_PATH = fileURLToPath(new URL('../src/finder-patterns.js', import.meta.url));
 const PRESET = getPreset(DEFAULT_PRESET);
@@ -73,6 +72,18 @@ const EXPECTED_FINDER_MEASUREMENTS = Object.freeze({
     centerOffsetCells: 5.611412357367492e-17,
     scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":91.17102980798893,"localization":23.55161544174186,"dataDistinction":100,"structuralSimplicity":56.325320629094655,"defectConcentration":12.065908777314663}),
   }),
+  "tristar-refined-h3": Object.freeze({
+    centerOffsetCells: 0.2508488988774462,
+    scores: Object.freeze({"rotation":77.2328445721233,"lowResolution":92.71851740803673,"localization":20.86677705125009,"dataDistinction":100,"structuralSimplicity":61.05139414683933,"defectConcentration":12.74765297802717}),
+  }),
+  "tree-refined-h3": Object.freeze({
+    centerOffsetCells: 0.19736928613257246,
+    scores: Object.freeze({"rotation":77.2328445721233,"lowResolution":93.1591076237279,"localization":20.200631706634137,"dataDistinction":100,"structuralSimplicity":62.28488025177328,"defectConcentration":12.600900066186604}),
+  }),
+  "cats-refined-h3": Object.freeze({
+    centerOffsetCells: 0.14309504001254023,
+    scores: Object.freeze({"rotation":74.92686492653552,"lowResolution":93.81394930841353,"localization":18.614131155703078,"dataDistinction":100,"structuralSimplicity":70.9594987568394,"defectConcentration":14.144181028565711}),
+  }),
   "bullseye": Object.freeze({
     centerOffsetCells: 0.049771574930140124,
     scores: Object.freeze({"rotation":0,"lowResolution":55.504960185798204,"localization":32.22404593197675,"dataDistinction":100,"structuralSimplicity":59.79246730623948,"defectConcentration":0}),
@@ -83,7 +94,7 @@ const EXPECTED_FINDER_MEASUREMENTS = Object.freeze({
   })
 });
 
-test('고정 목록은 요청된 8개 ID와 regionCells(2) 좌표 순서를 그대로 쓴다', () => {
+test('기존 8개와 손그림 개선안 3개 ID가 regionCells(2) 좌표 순서를 그대로 쓴다', () => {
   assert.deepEqual(FINDER_PATTERN_IDS, SELECTED_FINDER_IDS);
   assert.deepEqual(FINDER_PATTERN_IDS, [
     'pinwheel-3-0101-cw-missing-solid',
@@ -94,14 +105,17 @@ test('고정 목록은 요청된 8개 ID와 regionCells(2) 좌표 순서를 그�
     'gap-ring-01-2-1-open',
     'flower-7-1020-coprime-offset',
     'swirl-c2-5-5-11-both',
+    'tristar-refined-h3',
+    'tree-refined-h3',
+    'cats-refined-h3',
   ]);
-  assert.equal(FINDER_PATTERNS.length, 8);
+  assert.equal(FINDER_PATTERNS.length, 11);
   assert.deepEqual(FINDER_CELL_ORDER, regionCells(2));
   assert.deepEqual(FACES.map((face) => FINDER_FACE_BITS[face]), [1, 2, 4]);
 });
 
-test('고정 8개 마스크·6축 점수·중심 오프셋이 채점 하네스와 정확히 일치한다', () => {
-  const generated = generateFinderCandidates();
+test('고정 11개 마스크·6축 점수·중심 오프셋이 채점 하네스와 정확히 일치한다', () => {
+  const generated = generateSelectedFinderCandidates();
   const measured = measureFinderPatternScores(generated);
   const measuredById = new Map(
     [...measured.candidates, ...measured.baselines].map((entry) => [entry.id, entry]),
@@ -155,7 +169,7 @@ test('finder-patterns.js 가 재생성 도구 출력과 바이트 동일하다',
   assert.equal(readFileSync(MODULE_PATH, 'utf8'), renderFinderPatternsModule());
 });
 
-test('8개 렌더는 19셀×3면을 최대 대비로 칠하고 불스아이 disc를 그리지 않는다', () => {
+test('11개 렌더는 19셀×3면을 최대 대비로 칠하고 불스아이 disc를 그리지 않는다', () => {
   const encoded = encode('finder render', { version: 1, eccLevel: 'M' });
   const cellShapeCount = encoded.cellDigits.size * FACES.length;
   for (const pattern of FINDER_PATTERNS) {
@@ -196,7 +210,7 @@ test('finderPatternId 생략과 bullseye 명시는 기존 장면을 정확히 �
   assert.equal(implicit.shapes.filter((shape) => shape.kind === 'disc').length, 6);
 });
 
-test('실험 파인더 8개 모두 데이터 셀 자체검증을 통과하고 centerQr와 중복 지정은 거부한다', () => {
+test('실험 파인더 11개 모두 데이터 셀 자체검증을 통과하고 centerQr와 중복 지정은 거부한다', () => {
   const encoded = encode('finder self-check', { version: 1, eccLevel: 'M' });
   for (const pattern of FINDER_PATTERNS) {
     const scene = buildScene(encoded, { palette: PALETTE, finderPatternId: pattern.id });

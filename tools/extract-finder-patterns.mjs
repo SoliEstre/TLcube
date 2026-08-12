@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// finder-score 후보 생성기에서 선택된 8개를 게이트 적용 전에 찾아
+// 생성 후보 8개와 손그림 국소 개선안 3개를 게이트 적용 전에 찾아
 // src/finder-patterns.js 로 고정한다.
 //
 // 실행:
@@ -88,6 +88,40 @@ const TARGETS = Object.freeze([
     gatePassed: true,
     centerOffsetCells: 5.611412357367492e-17,
     scores: Object.freeze({"rotation":79.47194142390262,"lowResolution":91.17102980798893,"localization":23.55161544174186,"dataDistinction":100,"structuralSimplicity":56.325320629094655,"defectConcentration":12.065908777314663}),
+  }),
+  Object.freeze({
+    id: "tristar-refined-h3",
+    name: "Refined tristar",
+    run: 4,
+    sourceLabel: "국소 탐색 · tristar h3",
+    gatePassed: true,
+    centerOffsetCells: 0.2508488988774462,
+    scores: Object.freeze({"rotation":77.2328445721233,"lowResolution":92.71851740803673,"localization":20.86677705125009,"dataDistinction":100,"structuralSimplicity":61.05139414683933,"defectConcentration":12.74765297802717}),
+    cellMasks: Object.freeze([0, 0, 1, 5, 2, 5, 0, 6, 1, 6, 3, 2, 0, 4, 0, 1, 3, 3, 4]),
+    params: Object.freeze({ sourceSeed: "tristar", hammingDistance: 3, flippedFaces: Object.freeze([25, 48, 52]) }),
+  }),
+  Object.freeze({
+    id: "tree-refined-h3",
+    name: "Refined tree",
+    run: 4,
+    sourceLabel: "국소 탐색 · tree h3",
+    gatePassed: true,
+    centerOffsetCells: 0.19736928613257246,
+    scores: Object.freeze({"rotation":77.2328445721233,"lowResolution":93.1591076237279,"localization":20.200631706634137,"dataDistinction":100,"structuralSimplicity":62.28488025177328,"defectConcentration":12.600900066186604}),
+    cellMasks: Object.freeze([6, 5, 0, 3, 7, 4, 0, 5, 5, 0, 4, 1, 1, 2, 4, 7, 4, 6, 4]),
+    params: Object.freeze({ sourceSeed: "tree", hammingDistance: 3, flippedFaces: Object.freeze([4, 26, 38]) }),
+  }),
+  Object.freeze({
+    id: "cats-refined-h3",
+    name: "Refined cats",
+    run: 4,
+    sourceLabel: "국소 탐색 · cats h3",
+    gatePassed: true,
+    centerOffsetCells: 0.14309504001254023,
+    scores: Object.freeze({"rotation":74.92686492653552,"lowResolution":93.81394930841353,"localization":18.614131155703078,"dataDistinction":100,"structuralSimplicity":70.9594987568394,"defectConcentration":14.144181028565711}),
+    cellMasks: Object.freeze([5, 5, 7, 7, 2, 0, 1, 7, 7, 1, 7, 5, 1, 0, 6, 1, 7, 5, 6]),
+    params: Object.freeze({ sourceSeed: "cats", hammingDistance: 3, flippedFaces: Object.freeze([20, 25, 34]) }),
+
   })
 ]);
 
@@ -107,6 +141,29 @@ const BASELINES = Object.freeze([
 ]);
 
 export const SELECTED_FINDER_IDS = Object.freeze(TARGETS.map((target) => target.id));
+
+
+function cellMasksToBits(cellMasks) {
+  const bits = new Uint8Array(19 * 3);
+  for (let cellIndex = 0; cellIndex < cellMasks.length; cellIndex += 1) {
+    for (let faceIndex = 0; faceIndex < 3; faceIndex += 1) {
+      bits[cellIndex * 3 + faceIndex] = (cellMasks[cellIndex] >> faceIndex) & 1;
+    }
+  }
+  return bits;
+}
+function localSearchCandidates() {
+  return TARGETS.filter((target) => target.cellMasks).map((target) => Object.freeze({
+    id: target.id,
+    name: target.name,
+    family: 'user-refined',
+    params: target.params,
+    bits: cellMasksToBits(target.cellMasks),
+  }));
+}
+export function generateSelectedFinderCandidates() {
+  return Object.freeze([...generateFinderCandidates(), ...localSearchCandidates()]);
+}
 
 export function bitsToCellMasks(bits) {
   if (!(bits instanceof Uint8Array) || bits.length !== 19 * 3) {
@@ -140,7 +197,7 @@ function patternSource(target, candidate) {
   const gate = target.gatePassed ? '통과' : '탈락';
   const params = indentJson(candidate.params, 4);
   const masks = bitsToCellMasks(candidate.bits).join(', ');
-  return `  // ${target.run}차 실행 · ${candidate.family} ${JSON.stringify(candidate.params)}
+  return `  // ${target.sourceLabel || target.run + '차 실행'} · ${candidate.family} ${JSON.stringify(candidate.params)}
   // 중심 균형 게이트 ${gate} · 중심 오프셋 ${target.centerOffsetCells.toFixed(2)}c · 축별 모형 점수
   definePattern({
     id: ${JSON.stringify(target.id)},
@@ -176,7 +233,7 @@ function assertFixtureMatches(fixture, measured) {
     }
   }
 }
-export function renderFinderPatternsModule(candidates = generateFinderCandidates()) {
+export function renderFinderPatternsModule(candidates = generateSelectedFinderCandidates()) {
   const measured = measureFinderPatternScores(candidates);
   const measuredCandidates = new Map(measured.candidates.map((entry) => [entry.id, entry]));
   const measuredBaselines = new Map(measured.baselines.map((entry) => [entry.id, entry]));
@@ -199,11 +256,11 @@ export function renderFinderPatternsModule(candidates = generateFinderCandidates
     .join(',\n\n');
   const baselineEntries = BASELINES.map(baselineSource).join(',\n');
 
-  return `// finder-patterns.js — 실물 비교용 중앙 19셀 파인더 후보 8개
+  return `// finder-patterns.js — 실물 비교용 중앙 19셀 파인더 후보 11개
 //
 // ⚠ tools/extract-finder-patterns.mjs 생성물. 직접 마스크를 고치지 말고 생성기를 갱신한 뒤
 // 이 도구를 다시 실행한다. 좌표 순서는 hexgrid.regionCells(2), 면 비트는 T=1/L=2/R=4다.
-// 이 후보들은 렌더 실험용이며 현행 동심원 디코더로 스캔되지 않는다.
+// 기존 8개와 사용자 손그림 국소 개선안 3개를 마스크 파라미터형 공용 디코더가 읽는다.
 
 import { FACES, regionCells } from './hexgrid.js';
 
@@ -249,7 +306,7 @@ function definePattern(pattern) {
 }
 
 export const FINDER_PATTERNS = Object.freeze([
-  // 순서는 생성기 UI 배치와 묶여 있다: 2차 후보 4개(첫 행), 같은 계열의 3차 후보 4개(둘째 행).
+  // 첫 8개는 기존 4계열×2행, 마지막 3개는 사용자 손그림 개선안 별도 행이다.
 ${entries}
 ]);
 

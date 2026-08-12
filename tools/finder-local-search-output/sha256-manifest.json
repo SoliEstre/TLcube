@@ -1,0 +1,71 @@
+{
+  "purpose": "finder local-search seed | h1 | h2 | h3 comparisons",
+  "columnOrder": [
+    "seed",
+    "h1",
+    "h2",
+    "h3"
+  ],
+  "entries": [
+    {
+      "file": "cats-finder-seed-h1-h2-h3.png",
+      "bytes": 99685,
+      "sha256": "52c814528cef68661c8a030606459114693905768adb4402c8b1a842b5cf01c9"
+    },
+    {
+      "file": "cats-type-o-seed-h1-h2-h3.png",
+      "bytes": 521422,
+      "sha256": "d0ffe653adf0061972b91b4ab7ea29182407a0cb20f640a3b87cf3edbb489cbb"
+    },
+    {
+      "file": "dandelion-finder-seed-h1-h2-h3.png",
+      "bytes": 93017,
+      "sha256": "8fdc053f97351f2c84c4d0c743124c7adf974706ce0a5a273b9d4f05f8dbcf13"
+    },
+    {
+      "file": "dandelion-type-o-seed-h1-h2-h3.png",
+      "bytes": 523215,
+      "sha256": "26fae0cef46387968c989758fa9674a5ff0aa9707fa37dd9abe2147e33f850a0"
+    },
+    {
+      "file": "local-search.json",
+      "bytes": 64704,
+      "sha256": "667fd698b34b3239dfd40eeef9e4ef09f3fc00d2192aef40a36893c727c00cfc"
+    },
+    {
+      "file": "northstar-finder-seed-h1-h2-h3.png",
+      "bytes": 85298,
+      "sha256": "ab834b211e7dfe5d71371fa6c28c6dcfadc31f3f32581c0116afc188f67ee3ec"
+    },
+    {
+      "file": "northstar-type-o-seed-h1-h2-h3.png",
+      "bytes": 522892,
+      "sha256": "914503f84590b093d7356b5583bb5a04404e9ca8c89b55dd43ec49cf1086e27e"
+    },
+    {
+      "file": "scores.json",
+      "bytes": 270046,
+      "sha256": "4818aec977cedff8a5aaaf1cc3bd57e4c0db6fb4e8b4382117da7e8fac9a1f67"
+    },
+    {
+      "file": "tree-finder-seed-h1-h2-h3.png",
+      "bytes": 99935,
+      "sha256": "9117371195c84cf80aaca543756de16d6fa4777b06855e573958270e34976087"
+    },
+    {
+      "file": "tree-type-o-seed-h1-h2-h3.png",
+      "bytes": 523609,
+      "sha256": "c07302cb1830c854d9a87676ba0d09e8f5ca7566382ffe29ed8ee24898dfda16"
+    },
+    {
+      "file": "tristar-finder-seed-h1-h2-h3.png",
+      "bytes": 96665,
+      "sha256": "591ef532bee6c4ea396d27f38f8e618eb4243f1c47c774c64a0621c2bbec1997"
+    },
+    {
+      "file": "tristar-type-o-seed-h1-h2-h3.png",
+      "bytes": 524100,
+      "sha256": "76abd88e6aea0bc266e320d132ea4510b2edd8f3eac6a0869c5fde21f1592053"
+    }
+  ]
+}

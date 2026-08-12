@@ -41,7 +41,7 @@ function detect(raster, patternInput = FINDER_PATTERNS) {
   });
 }
 
-test('cellMasks 공용 정합기가 8종을 같은 경로로 식별한다', () => {
+test('cellMasks 공용 정합기가 11종을 같은 경로로 식별한다', () => {
   for (const pattern of FINDER_PATTERNS) {
     const result = detect(render(pattern.id));
     assert.equal(result.ok, true, pattern.id);

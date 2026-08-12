@@ -1,0 +1,2370 @@
+{
+  "meta": {
+    "axes": [
+      "rotation",
+      "lowResolution",
+      "localization",
+      "dataDistinction",
+      "structuralSimplicity",
+      "defectConcentration"
+    ],
+    "maximumHammingDistance": 3,
+    "totalCandidates": 154565,
+    "selectionPolicy": "gate pass; rotation above seed; other five axes at least seed",
+    "fallbackPolicy": "maximize worst other-axis delta; then fewer degraded axes; then rotation",
+    "weightedCompositeUsed": false
+  },
+  "seeds": {
+    "tristar": {
+      "seed": {
+        "cellMasks": [
+          0,
+          0,
+          1,
+          5,
+          2,
+          5,
+          0,
+          6,
+          3,
+          6,
+          3,
+          2,
+          0,
+          4,
+          0,
+          1,
+          2,
+          1,
+          4
+        ],
+        "id": "tristar",
+        "centerOffsetCells": 0.1421560175769332,
+        "centerBalanceGatePassed": true,
+        "scores": {
+          "rotation": 74.92686492653552,
+          "lowResolution": 92.66249791674895,
+          "localization": 20.772077941912425,
+          "dataDistinction": 100,
+          "structuralSimplicity": 59.54371961386478,
+          "defectConcentration": 11.13005698130479
+        }
+      },
+      "distances": {
+        "1": {
+          "total": 57,
+          "zeroRotation": 0,
+          "centerGatePassed": 57,
+          "rotationImproved": 9,
+          "nonDegradingOtherAxes": 0,
+          "strictQualified": 0,
+          "selection": "tradeoff",
+          "best": {
+            "id": "tristar-h1-48",
+            "distance": 1,
+            "flippedFaces": [
+              48
+            ],
+            "cellMasks": [
+              0,
+              0,
+              1,
+              5,
+              2,
+              5,
+              0,
+              6,
+              3,
+              6,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              3,
+              1,
+              4
+            ],
+            "centerOffsetCells": 0.227128381289749,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 92.71858985442162,
+              "localization": 20.575334612882976,
+              "dataDistinction": 100,
+              "structuralSimplicity": 59.54371961386478,
+              "defectConcentration": 10.99601165587593
+            },
+            "deltas": {
+              "rotation": 2.305979645587783,
+              "lowResolution": 0.05609193767267584,
+              "localization": -0.1967433290294487,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": -0.13404532542885939
+            },
+            "worstOtherDelta": -0.1967433290294487,
+            "degradedAxes": [
+              "localization",
+              "defectConcentration"
+            ]
+          },
+          "strictBest": null,
+          "tradeoffBest": {
+            "id": "tristar-h1-48",
+            "distance": 1,
+            "flippedFaces": [
+              48
+            ],
+            "cellMasks": [
+              0,
+              0,
+              1,
+              5,
+              2,
+              5,
+              0,
+              6,
+              3,
+              6,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              3,
+              1,
+              4
+            ],
+            "centerOffsetCells": 0.227128381289749,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 92.71858985442162,
+              "localization": 20.575334612882976,
+              "dataDistinction": 100,
+              "structuralSimplicity": 59.54371961386478,
+              "defectConcentration": 10.99601165587593
+            },
+            "deltas": {
+              "rotation": 2.305979645587783,
+              "lowResolution": 0.05609193767267584,
+              "localization": -0.1967433290294487,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": -0.13404532542885939
+            },
+            "worstOtherDelta": -0.1967433290294487,
+            "degradedAxes": [
+              "localization",
+              "defectConcentration"
+            ]
+          }
+        },
+        "2": {
+          "total": 1596,
+          "zeroRotation": 0,
+          "centerGatePassed": 1596,
+          "rotationImproved": 324,
+          "nonDegradingOtherAxes": 7,
+          "strictQualified": 0,
+          "selection": "tradeoff",
+          "best": {
+            "id": "tristar-h2-28_47",
+            "distance": 2,
+            "flippedFaces": [
+              28,
+              47
+            ],
+            "cellMasks": [
+              0,
+              0,
+              1,
+              5,
+              2,
+              5,
+              0,
+              6,
+              3,
+              4,
+              3,
+              2,
+              0,
+              4,
+              0,
+              5,
+              2,
+              1,
+              4
+            ],
+            "centerOffsetCells": 0.11273124382057238,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 92.54853125881888,
+              "localization": 20.71445424798958,
+              "dataDistinction": 100,
+              "structuralSimplicity": 60.30226891555272,
+              "defectConcentration": 11.503831483474329
+            },
+            "deltas": {
+              "rotation": 2.305979645587783,
+              "lowResolution": -0.11396665793006377,
+              "localization": -0.05762369392284583,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.7585493016879425,
+              "defectConcentration": 0.3737745021695389
+            },
+            "worstOtherDelta": -0.11396665793006377,
+            "degradedAxes": [
+              "lowResolution",
+              "localization"
+            ]
+          },
+          "strictBest": null,
+          "tradeoffBest": {
+            "id": "tristar-h2-28_47",
+            "distance": 2,
+            "flippedFaces": [
+              28,
+              47
+            ],
+            "cellMasks": [
+              0,
+              0,
+              1,
+              5,
+              2,
+              5,
+              0,
+              6,
+              3,
+              4,
+              3,
+              2,
+              0,
+              4,
+              0,
+              5,
+              2,
+              1,
+              4
+            ],
+            "centerOffsetCells": 0.11273124382057238,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 92.54853125881888,
+              "localization": 20.71445424798958,
+              "dataDistinction": 100,
+              "structuralSimplicity": 60.30226891555272,
+              "defectConcentration": 11.503831483474329
+            },
+            "deltas": {
+              "rotation": 2.305979645587783,
+              "lowResolution": -0.11396665793006377,
+              "localization": -0.05762369392284583,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.7585493016879425,
+              "defectConcentration": 0.3737745021695389
+            },
+            "worstOtherDelta": -0.11396665793006377,
+            "degradedAxes": [
+              "lowResolution",
+              "localization"
+            ]
+          }
+        },
+        "3": {
+          "total": 29260,
+          "zeroRotation": 0,
+          "centerGatePassed": 29260,
+          "rotationImproved": 6273,
+          "nonDegradingOtherAxes": 64,
+          "strictQualified": 4,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "tristar-h3-25_48_52",
+            "distance": 3,
+            "flippedFaces": [
+              25,
+              48,
+              52
+            ],
+            "cellMasks": [
+              0,
+              0,
+              1,
+              5,
+              2,
+              5,
+              0,
+              6,
+              1,
+              6,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              3,
+              3,
+              4
+            ],
+            "centerOffsetCells": 0.2508488988774462,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 92.71851740803673,
+              "localization": 20.86677705125009,
+              "dataDistinction": 100,
+              "structuralSimplicity": 61.05139414683933,
+              "defectConcentration": 12.74765297802717
+            },
+            "deltas": {
+              "rotation": 2.305979645587783,
+              "lowResolution": 0.05601949128778472,
+              "localization": 0.09469910933766457,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.5076745329745478,
+              "defectConcentration": 1.6175959967223807
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "tristar-h3-25_48_52",
+            "distance": 3,
+            "flippedFaces": [
+              25,
+              48,
+              52
+            ],
+            "cellMasks": [
+              0,
+              0,
+              1,
+              5,
+              2,
+              5,
+              0,
+              6,
+              1,
+              6,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              3,
+              3,
+              4
+            ],
+            "centerOffsetCells": 0.2508488988774462,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 92.71851740803673,
+              "localization": 20.86677705125009,
+              "dataDistinction": 100,
+              "structuralSimplicity": 61.05139414683933,
+              "defectConcentration": 12.74765297802717
+            },
+            "deltas": {
+              "rotation": 2.305979645587783,
+              "lowResolution": 0.05601949128778472,
+              "localization": 0.09469910933766457,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.5076745329745478,
+              "defectConcentration": 1.6175959967223807
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "tristar-h3-25_48_52",
+            "distance": 3,
+            "flippedFaces": [
+              25,
+              48,
+              52
+            ],
+            "cellMasks": [
+              0,
+              0,
+              1,
+              5,
+              2,
+              5,
+              0,
+              6,
+              1,
+              6,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              3,
+              3,
+              4
+            ],
+            "centerOffsetCells": 0.2508488988774462,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 92.71851740803673,
+              "localization": 20.86677705125009,
+              "dataDistinction": 100,
+              "structuralSimplicity": 61.05139414683933,
+              "defectConcentration": 12.74765297802717
+            },
+            "deltas": {
+              "rotation": 2.305979645587783,
+              "lowResolution": 0.05601949128778472,
+              "localization": 0.09469910933766457,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.5076745329745478,
+              "defectConcentration": 1.6175959967223807
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        }
+      }
+    },
+    "tree": {
+      "seed": {
+        "cellMasks": [
+          6,
+          7,
+          0,
+          3,
+          7,
+          4,
+          0,
+          5,
+          1,
+          0,
+          4,
+          1,
+          5,
+          2,
+          4,
+          7,
+          4,
+          6,
+          4
+        ],
+        "id": "tree",
+        "centerOffsetCells": 0.20370370370370375,
+        "centerBalanceGatePassed": true,
+        "scores": {
+          "rotation": 70.08766440504624,
+          "lowResolution": 93.08092125814356,
+          "localization": 19.449565567930794,
+          "dataDistinction": 100,
+          "structuralSimplicity": 62.28488025177328,
+          "defectConcentration": 8.727752680578552
+        }
+      },
+      "distances": {
+        "1": {
+          "total": 57,
+          "zeroRotation": 0,
+          "centerGatePassed": 57,
+          "rotationImproved": 15,
+          "nonDegradingOtherAxes": 5,
+          "strictQualified": 2,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "tree-h1-38",
+            "distance": 1,
+            "flippedFaces": [
+              38
+            ],
+            "cellMasks": [
+              6,
+              7,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              1,
+              0,
+              4,
+              1,
+              1,
+              2,
+              4,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.16801721053950203,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 72.54762501100116,
+              "lowResolution": 93.28147536927541,
+              "localization": 19.565047248029156,
+              "dataDistinction": 100,
+              "structuralSimplicity": 64.2640656188988,
+              "defectConcentration": 12.369059212594415
+            },
+            "deltas": {
+              "rotation": 2.459960605954919,
+              "lowResolution": 0.20055411113185073,
+              "localization": 0.11548168009836246,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.9791853671255168,
+              "defectConcentration": 3.6413065320158626
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "tree-h1-38",
+            "distance": 1,
+            "flippedFaces": [
+              38
+            ],
+            "cellMasks": [
+              6,
+              7,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              1,
+              0,
+              4,
+              1,
+              1,
+              2,
+              4,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.16801721053950203,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 72.54762501100116,
+              "lowResolution": 93.28147536927541,
+              "localization": 19.565047248029156,
+              "dataDistinction": 100,
+              "structuralSimplicity": 64.2640656188988,
+              "defectConcentration": 12.369059212594415
+            },
+            "deltas": {
+              "rotation": 2.459960605954919,
+              "lowResolution": 0.20055411113185073,
+              "localization": 0.11548168009836246,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.9791853671255168,
+              "defectConcentration": 3.6413065320158626
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "tree-h1-38",
+            "distance": 1,
+            "flippedFaces": [
+              38
+            ],
+            "cellMasks": [
+              6,
+              7,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              1,
+              0,
+              4,
+              1,
+              1,
+              2,
+              4,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.16801721053950203,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 72.54762501100116,
+              "lowResolution": 93.28147536927541,
+              "localization": 19.565047248029156,
+              "dataDistinction": 100,
+              "structuralSimplicity": 64.2640656188988,
+              "defectConcentration": 12.369059212594415
+            },
+            "deltas": {
+              "rotation": 2.459960605954919,
+              "lowResolution": 0.20055411113185073,
+              "localization": 0.11548168009836246,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.9791853671255168,
+              "defectConcentration": 3.6413065320158626
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        },
+        "2": {
+          "total": 1596,
+          "zeroRotation": 0,
+          "centerGatePassed": 1596,
+          "rotationImproved": 525,
+          "nonDegradingOtherAxes": 88,
+          "strictQualified": 34,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "tree-h2-38_43",
+            "distance": 2,
+            "flippedFaces": [
+              38,
+              43
+            ],
+            "cellMasks": [
+              6,
+              7,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              1,
+              0,
+              4,
+              1,
+              1,
+              2,
+              6,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.13981174880131025,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 74.92686492653552,
+              "lowResolution": 93.14052136515886,
+              "localization": 19.8542366276465,
+              "dataDistinction": 100,
+              "structuralSimplicity": 62.28488025177328,
+              "defectConcentration": 13.685394258530666
+            },
+            "deltas": {
+              "rotation": 4.839200521489275,
+              "lowResolution": 0.059600107015299386,
+              "localization": 0.4046710597157066,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 4.9576415779521135
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "tree-h2-38_43",
+            "distance": 2,
+            "flippedFaces": [
+              38,
+              43
+            ],
+            "cellMasks": [
+              6,
+              7,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              1,
+              0,
+              4,
+              1,
+              1,
+              2,
+              6,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.13981174880131025,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 74.92686492653552,
+              "lowResolution": 93.14052136515886,
+              "localization": 19.8542366276465,
+              "dataDistinction": 100,
+              "structuralSimplicity": 62.28488025177328,
+              "defectConcentration": 13.685394258530666
+            },
+            "deltas": {
+              "rotation": 4.839200521489275,
+              "lowResolution": 0.059600107015299386,
+              "localization": 0.4046710597157066,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 4.9576415779521135
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "tree-h2-38_43",
+            "distance": 2,
+            "flippedFaces": [
+              38,
+              43
+            ],
+            "cellMasks": [
+              6,
+              7,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              1,
+              0,
+              4,
+              1,
+              1,
+              2,
+              6,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.13981174880131025,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 74.92686492653552,
+              "lowResolution": 93.14052136515886,
+              "localization": 19.8542366276465,
+              "dataDistinction": 100,
+              "structuralSimplicity": 62.28488025177328,
+              "defectConcentration": 13.685394258530666
+            },
+            "deltas": {
+              "rotation": 4.839200521489275,
+              "lowResolution": 0.059600107015299386,
+              "localization": 0.4046710597157066,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 4.9576415779521135
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        },
+        "3": {
+          "total": 29260,
+          "zeroRotation": 0,
+          "centerGatePassed": 29260,
+          "rotationImproved": 10530,
+          "nonDegradingOtherAxes": 1425,
+          "strictQualified": 596,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "tree-h3-4_26_38",
+            "distance": 3,
+            "flippedFaces": [
+              4,
+              26,
+              38
+            ],
+            "cellMasks": [
+              6,
+              5,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              5,
+              0,
+              4,
+              1,
+              1,
+              2,
+              4,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.19736928613257246,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 93.1591076237279,
+              "localization": 20.200631706634137,
+              "dataDistinction": 100,
+              "structuralSimplicity": 62.28488025177328,
+              "defectConcentration": 12.600900066186604
+            },
+            "deltas": {
+              "rotation": 7.145180167077058,
+              "lowResolution": 0.07818636558434378,
+              "localization": 0.7510661387033437,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 3.8731473856080516
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "tree-h3-4_26_38",
+            "distance": 3,
+            "flippedFaces": [
+              4,
+              26,
+              38
+            ],
+            "cellMasks": [
+              6,
+              5,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              5,
+              0,
+              4,
+              1,
+              1,
+              2,
+              4,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.19736928613257246,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 93.1591076237279,
+              "localization": 20.200631706634137,
+              "dataDistinction": 100,
+              "structuralSimplicity": 62.28488025177328,
+              "defectConcentration": 12.600900066186604
+            },
+            "deltas": {
+              "rotation": 7.145180167077058,
+              "lowResolution": 0.07818636558434378,
+              "localization": 0.7510661387033437,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 3.8731473856080516
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "tree-h3-4_26_38",
+            "distance": 3,
+            "flippedFaces": [
+              4,
+              26,
+              38
+            ],
+            "cellMasks": [
+              6,
+              5,
+              0,
+              3,
+              7,
+              4,
+              0,
+              5,
+              5,
+              0,
+              4,
+              1,
+              1,
+              2,
+              4,
+              7,
+              4,
+              6,
+              4
+            ],
+            "centerOffsetCells": 0.19736928613257246,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 77.2328445721233,
+              "lowResolution": 93.1591076237279,
+              "localization": 20.200631706634137,
+              "dataDistinction": 100,
+              "structuralSimplicity": 62.28488025177328,
+              "defectConcentration": 12.600900066186604
+            },
+            "deltas": {
+              "rotation": 7.145180167077058,
+              "lowResolution": 0.07818636558434378,
+              "localization": 0.7510661387033437,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 3.8731473856080516
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        }
+      }
+    },
+    "cats": {
+      "seed": {
+        "cellMasks": [
+          5,
+          5,
+          7,
+          7,
+          2,
+          0,
+          5,
+          7,
+          5,
+          1,
+          7,
+          7,
+          1,
+          0,
+          6,
+          1,
+          7,
+          5,
+          6
+        ],
+        "id": "cats",
+        "centerOffsetCells": 0.013888888888888848,
+        "centerBalanceGatePassed": true,
+        "scores": {
+          "rotation": 67.53816335059705,
+          "lowResolution": 93.77109753393992,
+          "localization": 17.942985629300637,
+          "dataDistinction": 100,
+          "structuralSimplicity": 70.9594987568394,
+          "defectConcentration": 12.866883647147425
+        }
+      },
+      "distances": {
+        "1": {
+          "total": 57,
+          "zeroRotation": 0,
+          "centerGatePassed": 57,
+          "rotationImproved": 18,
+          "nonDegradingOtherAxes": 1,
+          "strictQualified": 1,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "cats-h1-25",
+            "distance": 1,
+            "flippedFaces": [
+              25
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              5,
+              7,
+              7,
+              1,
+              7,
+              7,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.039010153323623335,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 70.08766440504624,
+              "lowResolution": 93.92664877677251,
+              "localization": 18.212428760087093,
+              "dataDistinction": 100,
+              "structuralSimplicity": 72.15217890142081,
+              "defectConcentration": 15.704512869630248
+            },
+            "deltas": {
+              "rotation": 2.5495010544491947,
+              "lowResolution": 0.15555124283258692,
+              "localization": 0.2694431307864562,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.1926801445814164,
+              "defectConcentration": 2.837629222482823
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "cats-h1-25",
+            "distance": 1,
+            "flippedFaces": [
+              25
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              5,
+              7,
+              7,
+              1,
+              7,
+              7,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.039010153323623335,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 70.08766440504624,
+              "lowResolution": 93.92664877677251,
+              "localization": 18.212428760087093,
+              "dataDistinction": 100,
+              "structuralSimplicity": 72.15217890142081,
+              "defectConcentration": 15.704512869630248
+            },
+            "deltas": {
+              "rotation": 2.5495010544491947,
+              "lowResolution": 0.15555124283258692,
+              "localization": 0.2694431307864562,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.1926801445814164,
+              "defectConcentration": 2.837629222482823
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "cats-h1-25",
+            "distance": 1,
+            "flippedFaces": [
+              25
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              5,
+              7,
+              7,
+              1,
+              7,
+              7,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.039010153323623335,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 70.08766440504624,
+              "lowResolution": 93.92664877677251,
+              "localization": 18.212428760087093,
+              "dataDistinction": 100,
+              "structuralSimplicity": 72.15217890142081,
+              "defectConcentration": 15.704512869630248
+            },
+            "deltas": {
+              "rotation": 2.5495010544491947,
+              "lowResolution": 0.15555124283258692,
+              "localization": 0.2694431307864562,
+              "dataDistinction": 0,
+              "structuralSimplicity": 1.1926801445814164,
+              "defectConcentration": 2.837629222482823
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        },
+        "2": {
+          "total": 1596,
+          "zeroRotation": 0,
+          "centerGatePassed": 1596,
+          "rotationImproved": 621,
+          "nonDegradingOtherAxes": 52,
+          "strictQualified": 29,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "cats-h2-25_33",
+            "distance": 2,
+            "flippedFaces": [
+              25,
+              33
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              5,
+              7,
+              7,
+              1,
+              7,
+              6,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.08673608331108888,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 72.54762501100116,
+              "lowResolution": 93.78609395990175,
+              "localization": 18.723183810291978,
+              "dataDistinction": 100,
+              "structuralSimplicity": 70.9594987568394,
+              "defectConcentration": 14.541651230078392
+            },
+            "deltas": {
+              "rotation": 5.009461660404114,
+              "lowResolution": 0.014996425961825821,
+              "localization": 0.7801981809913414,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 1.6747675829309667
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "cats-h2-25_33",
+            "distance": 2,
+            "flippedFaces": [
+              25,
+              33
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              5,
+              7,
+              7,
+              1,
+              7,
+              6,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.08673608331108888,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 72.54762501100116,
+              "lowResolution": 93.78609395990175,
+              "localization": 18.723183810291978,
+              "dataDistinction": 100,
+              "structuralSimplicity": 70.9594987568394,
+              "defectConcentration": 14.541651230078392
+            },
+            "deltas": {
+              "rotation": 5.009461660404114,
+              "lowResolution": 0.014996425961825821,
+              "localization": 0.7801981809913414,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 1.6747675829309667
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "cats-h2-25_33",
+            "distance": 2,
+            "flippedFaces": [
+              25,
+              33
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              5,
+              7,
+              7,
+              1,
+              7,
+              6,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.08673608331108888,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 72.54762501100116,
+              "lowResolution": 93.78609395990175,
+              "localization": 18.723183810291978,
+              "dataDistinction": 100,
+              "structuralSimplicity": 70.9594987568394,
+              "defectConcentration": 14.541651230078392
+            },
+            "deltas": {
+              "rotation": 5.009461660404114,
+              "lowResolution": 0.014996425961825821,
+              "localization": 0.7801981809913414,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 1.6747675829309667
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        },
+        "3": {
+          "total": 29260,
+          "zeroRotation": 0,
+          "centerGatePassed": 29260,
+          "rotationImproved": 12627,
+          "nonDegradingOtherAxes": 697,
+          "strictQualified": 359,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "cats-h3-20_25_34",
+            "distance": 3,
+            "flippedFaces": [
+              20,
+              25,
+              34
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              1,
+              7,
+              7,
+              1,
+              7,
+              5,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.14309504001254023,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 74.92686492653552,
+              "lowResolution": 93.81394930841353,
+              "localization": 18.614131155703078,
+              "dataDistinction": 100,
+              "structuralSimplicity": 70.9594987568394,
+              "defectConcentration": 14.144181028565711
+            },
+            "deltas": {
+              "rotation": 7.3887015759384695,
+              "lowResolution": 0.04285177447360411,
+              "localization": 0.6711455264024409,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 1.2772973814182862
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "cats-h3-20_25_34",
+            "distance": 3,
+            "flippedFaces": [
+              20,
+              25,
+              34
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              1,
+              7,
+              7,
+              1,
+              7,
+              5,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.14309504001254023,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 74.92686492653552,
+              "lowResolution": 93.81394930841353,
+              "localization": 18.614131155703078,
+              "dataDistinction": 100,
+              "structuralSimplicity": 70.9594987568394,
+              "defectConcentration": 14.144181028565711
+            },
+            "deltas": {
+              "rotation": 7.3887015759384695,
+              "lowResolution": 0.04285177447360411,
+              "localization": 0.6711455264024409,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 1.2772973814182862
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "cats-h3-20_25_34",
+            "distance": 3,
+            "flippedFaces": [
+              20,
+              25,
+              34
+            ],
+            "cellMasks": [
+              5,
+              5,
+              7,
+              7,
+              2,
+              0,
+              1,
+              7,
+              7,
+              1,
+              7,
+              5,
+              1,
+              0,
+              6,
+              1,
+              7,
+              5,
+              6
+            ],
+            "centerOffsetCells": 0.14309504001254023,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 74.92686492653552,
+              "lowResolution": 93.81394930841353,
+              "localization": 18.614131155703078,
+              "dataDistinction": 100,
+              "structuralSimplicity": 70.9594987568394,
+              "defectConcentration": 14.144181028565711
+            },
+            "deltas": {
+              "rotation": 7.3887015759384695,
+              "lowResolution": 0.04285177447360411,
+              "localization": 0.6711455264024409,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 1.2772973814182862
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        }
+      }
+    },
+    "dandelion": {
+      "seed": {
+        "cellMasks": [
+          1,
+          0,
+          1,
+          0,
+          0,
+          4,
+          0,
+          2,
+          4,
+          2,
+          1,
+          2,
+          1,
+          1,
+          4,
+          0,
+          0,
+          2,
+          4
+        ],
+        "id": "dandelion",
+        "centerOffsetCells": 0.1456130345076993,
+        "centerBalanceGatePassed": true,
+        "scores": {
+          "rotation": 64.88856845230502,
+          "lowResolution": 91.05823004895092,
+          "localization": 23.40989319734087,
+          "dataDistinction": 100,
+          "structuralSimplicity": 64.86749731408024,
+          "defectConcentration": 6.955696635990788
+        }
+      },
+      "distances": {
+        "1": {
+          "total": 57,
+          "zeroRotation": 0,
+          "centerGatePassed": 57,
+          "rotationImproved": 21,
+          "nonDegradingOtherAxes": 1,
+          "strictQualified": 0,
+          "selection": "tradeoff",
+          "best": {
+            "id": "dandelion-h1-20",
+            "distance": 1,
+            "flippedFaces": [
+              20
+            ],
+            "cellMasks": [
+              1,
+              0,
+              1,
+              0,
+              0,
+              4,
+              4,
+              2,
+              4,
+              2,
+              1,
+              2,
+              1,
+              1,
+              4,
+              0,
+              0,
+              2,
+              4
+            ],
+            "centerOffsetCells": 0.13521210347143506,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 67.53816335059705,
+              "lowResolution": 91.1480803155338,
+              "localization": 22.807437438099765,
+              "dataDistinction": 100,
+              "structuralSimplicity": 64.2640656188988,
+              "defectConcentration": 7.2266891459235785
+            },
+            "deltas": {
+              "rotation": 2.6495948982920225,
+              "lowResolution": 0.08985026658288575,
+              "localization": -0.6024557592411064,
+              "dataDistinction": 0,
+              "structuralSimplicity": -0.6034316951814418,
+              "defectConcentration": 0.2709925099327908
+            },
+            "worstOtherDelta": -0.6034316951814418,
+            "degradedAxes": [
+              "localization",
+              "structuralSimplicity"
+            ]
+          },
+          "strictBest": null,
+          "tradeoffBest": {
+            "id": "dandelion-h1-20",
+            "distance": 1,
+            "flippedFaces": [
+              20
+            ],
+            "cellMasks": [
+              1,
+              0,
+              1,
+              0,
+              0,
+              4,
+              4,
+              2,
+              4,
+              2,
+              1,
+              2,
+              1,
+              1,
+              4,
+              0,
+              0,
+              2,
+              4
+            ],
+            "centerOffsetCells": 0.13521210347143506,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 67.53816335059705,
+              "lowResolution": 91.1480803155338,
+              "localization": 22.807437438099765,
+              "dataDistinction": 100,
+              "structuralSimplicity": 64.2640656188988,
+              "defectConcentration": 7.2266891459235785
+            },
+            "deltas": {
+              "rotation": 2.6495948982920225,
+              "lowResolution": 0.08985026658288575,
+              "localization": -0.6024557592411064,
+              "dataDistinction": 0,
+              "structuralSimplicity": -0.6034316951814418,
+              "defectConcentration": 0.2709925099327908
+            },
+            "worstOtherDelta": -0.6034316951814418,
+            "degradedAxes": [
+              "localization",
+              "structuralSimplicity"
+            ]
+          }
+        },
+        "2": {
+          "total": 1596,
+          "zeroRotation": 0,
+          "centerGatePassed": 1596,
+          "rotationImproved": 714,
+          "nonDegradingOtherAxes": 4,
+          "strictQualified": 0,
+          "selection": "tradeoff",
+          "best": {
+            "id": "dandelion-h2-20_34",
+            "distance": 2,
+            "flippedFaces": [
+              20,
+              34
+            ],
+            "cellMasks": [
+              1,
+              0,
+              1,
+              0,
+              0,
+              4,
+              4,
+              2,
+              4,
+              2,
+              1,
+              0,
+              1,
+              1,
+              4,
+              0,
+              0,
+              2,
+              4
+            ],
+            "centerOffsetCells": 0.11750194089630357,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 67.53816335059705,
+              "lowResolution": 91.05823004895097,
+              "localization": 23.41110928910302,
+              "dataDistinction": 100,
+              "structuralSimplicity": 64.86749731408024,
+              "defectConcentration": 6.769740944515173
+            },
+            "deltas": {
+              "rotation": 2.6495948982920225,
+              "lowResolution": 5.684341886080802e-14,
+              "localization": 0.0012160917621493184,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": -0.18595569147561442
+            },
+            "worstOtherDelta": -0.18595569147561442,
+            "degradedAxes": [
+              "defectConcentration"
+            ]
+          },
+          "strictBest": null,
+          "tradeoffBest": {
+            "id": "dandelion-h2-20_34",
+            "distance": 2,
+            "flippedFaces": [
+              20,
+              34
+            ],
+            "cellMasks": [
+              1,
+              0,
+              1,
+              0,
+              0,
+              4,
+              4,
+              2,
+              4,
+              2,
+              1,
+              0,
+              1,
+              1,
+              4,
+              0,
+              0,
+              2,
+              4
+            ],
+            "centerOffsetCells": 0.11750194089630357,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 67.53816335059705,
+              "lowResolution": 91.05823004895097,
+              "localization": 23.41110928910302,
+              "dataDistinction": 100,
+              "structuralSimplicity": 64.86749731408024,
+              "defectConcentration": 6.769740944515173
+            },
+            "deltas": {
+              "rotation": 2.6495948982920225,
+              "lowResolution": 5.684341886080802e-14,
+              "localization": 0.0012160917621493184,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": -0.18595569147561442
+            },
+            "worstOtherDelta": -0.18595569147561442,
+            "degradedAxes": [
+              "defectConcentration"
+            ]
+          }
+        },
+        "3": {
+          "total": 29260,
+          "zeroRotation": 0,
+          "centerGatePassed": 29159,
+          "rotationImproved": 14679,
+          "nonDegradingOtherAxes": 45,
+          "strictQualified": 0,
+          "selection": "tradeoff",
+          "best": {
+            "id": "dandelion-h3-3_20_30",
+            "distance": 3,
+            "flippedFaces": [
+              3,
+              20,
+              30
+            ],
+            "cellMasks": [
+              1,
+              1,
+              1,
+              0,
+              0,
+              4,
+              4,
+              2,
+              4,
+              2,
+              0,
+              2,
+              1,
+              1,
+              4,
+              0,
+              0,
+              2,
+              4
+            ],
+            "centerOffsetCells": 0.054554472558998084,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 67.53816335059705,
+              "lowResolution": 91.14791934303723,
+              "localization": 23.276286743045464,
+              "dataDistinction": 100,
+              "structuralSimplicity": 65.02461357868661,
+              "defectConcentration": 6.83787964264223
+            },
+            "deltas": {
+              "rotation": 2.6495948982920225,
+              "lowResolution": 0.08968929408631254,
+              "localization": -0.13360645429540696,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.15711626460637262,
+              "defectConcentration": -0.11781699334855755
+            },
+            "worstOtherDelta": -0.13360645429540696,
+            "degradedAxes": [
+              "localization",
+              "defectConcentration"
+            ]
+          },
+          "strictBest": null,
+          "tradeoffBest": {
+            "id": "dandelion-h3-3_20_30",
+            "distance": 3,
+            "flippedFaces": [
+              3,
+              20,
+              30
+            ],
+            "cellMasks": [
+              1,
+              1,
+              1,
+              0,
+              0,
+              4,
+              4,
+              2,
+              4,
+              2,
+              0,
+              2,
+              1,
+              1,
+              4,
+              0,
+              0,
+              2,
+              4
+            ],
+            "centerOffsetCells": 0.054554472558998084,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 67.53816335059705,
+              "lowResolution": 91.14791934303723,
+              "localization": 23.276286743045464,
+              "dataDistinction": 100,
+              "structuralSimplicity": 65.02461357868661,
+              "defectConcentration": 6.83787964264223
+            },
+            "deltas": {
+              "rotation": 2.6495948982920225,
+              "lowResolution": 0.08968929408631254,
+              "localization": -0.13360645429540696,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.15711626460637262,
+              "defectConcentration": -0.11781699334855755
+            },
+            "worstOtherDelta": -0.13360645429540696,
+            "degradedAxes": [
+              "localization",
+              "defectConcentration"
+            ]
+          }
+        }
+      }
+    },
+    "northstar": {
+      "seed": {
+        "cellMasks": [
+          1,
+          4,
+          0,
+          0,
+          5,
+          0,
+          2,
+          2,
+          6,
+          3,
+          2,
+          0,
+          4,
+          0,
+          1,
+          1,
+          4,
+          0,
+          0
+        ],
+        "id": "northstar",
+        "centerOffsetCells": 0.29059326290271154,
+        "centerBalanceGatePassed": true,
+        "scores": {
+          "rotation": 59.23488777590924,
+          "lowResolution": 92.07140989571965,
+          "localization": 21.186609869838307,
+          "dataDistinction": 100,
+          "structuralSimplicity": 66.2401321106836,
+          "defectConcentration": 7.175994884698646
+        }
+      },
+      "distances": {
+        "1": {
+          "total": 57,
+          "zeroRotation": 0,
+          "centerGatePassed": 57,
+          "rotationImproved": 27,
+          "nonDegradingOtherAxes": 0,
+          "strictQualified": 0,
+          "selection": "tradeoff",
+          "best": {
+            "id": "northstar-h1-18",
+            "distance": 1,
+            "flippedFaces": [
+              18
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              3,
+              2,
+              6,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              1,
+              4,
+              0,
+              0
+            ],
+            "centerOffsetCells": 0.23034733736974977,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 62.12607441973955,
+              "lowResolution": 92.37321333242892,
+              "localization": 20.991434764855494,
+              "dataDistinction": 100,
+              "structuralSimplicity": 66.2401321106836,
+              "defectConcentration": 9.507506267860933
+            },
+            "deltas": {
+              "rotation": 2.8911866438303093,
+              "lowResolution": 0.3018034367092639,
+              "localization": -0.19517510498281254,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 2.3315113831622867
+            },
+            "worstOtherDelta": -0.19517510498281254,
+            "degradedAxes": [
+              "localization"
+            ]
+          },
+          "strictBest": null,
+          "tradeoffBest": {
+            "id": "northstar-h1-18",
+            "distance": 1,
+            "flippedFaces": [
+              18
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              3,
+              2,
+              6,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              1,
+              4,
+              0,
+              0
+            ],
+            "centerOffsetCells": 0.23034733736974977,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 62.12607441973955,
+              "lowResolution": 92.37321333242892,
+              "localization": 20.991434764855494,
+              "dataDistinction": 100,
+              "structuralSimplicity": 66.2401321106836,
+              "defectConcentration": 9.507506267860933
+            },
+            "deltas": {
+              "rotation": 2.8911866438303093,
+              "lowResolution": 0.3018034367092639,
+              "localization": -0.19517510498281254,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0,
+              "defectConcentration": 2.3315113831622867
+            },
+            "worstOtherDelta": -0.19517510498281254,
+            "degradedAxes": [
+              "localization"
+            ]
+          }
+        },
+        "2": {
+          "total": 1596,
+          "zeroRotation": 0,
+          "centerGatePassed": 1587,
+          "rotationImproved": 891,
+          "nonDegradingOtherAxes": 35,
+          "strictQualified": 12,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "northstar-h2-18_28",
+            "distance": 2,
+            "flippedFaces": [
+              18,
+              28
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              3,
+              2,
+              6,
+              1,
+              2,
+              0,
+              4,
+              0,
+              1,
+              1,
+              4,
+              0,
+              0
+            ],
+            "centerOffsetCells": 0.23333333333333336,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 62.12607441973955,
+              "lowResolution": 92.17705523862256,
+              "localization": 21.752253218825373,
+              "dataDistinction": 100,
+              "structuralSimplicity": 67.005939426049,
+              "defectConcentration": 12.71885354334037
+            },
+            "deltas": {
+              "rotation": 2.8911866438303093,
+              "lowResolution": 0.1056453429029034,
+              "localization": 0.5656433489870665,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.765807315365393,
+              "defectConcentration": 5.542858658641723
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "northstar-h2-18_28",
+            "distance": 2,
+            "flippedFaces": [
+              18,
+              28
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              3,
+              2,
+              6,
+              1,
+              2,
+              0,
+              4,
+              0,
+              1,
+              1,
+              4,
+              0,
+              0
+            ],
+            "centerOffsetCells": 0.23333333333333336,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 62.12607441973955,
+              "lowResolution": 92.17705523862256,
+              "localization": 21.752253218825373,
+              "dataDistinction": 100,
+              "structuralSimplicity": 67.005939426049,
+              "defectConcentration": 12.71885354334037
+            },
+            "deltas": {
+              "rotation": 2.8911866438303093,
+              "lowResolution": 0.1056453429029034,
+              "localization": 0.5656433489870665,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.765807315365393,
+              "defectConcentration": 5.542858658641723
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "northstar-h2-18_28",
+            "distance": 2,
+            "flippedFaces": [
+              18,
+              28
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              3,
+              2,
+              6,
+              1,
+              2,
+              0,
+              4,
+              0,
+              1,
+              1,
+              4,
+              0,
+              0
+            ],
+            "centerOffsetCells": 0.23333333333333336,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 62.12607441973955,
+              "lowResolution": 92.17705523862256,
+              "localization": 21.752253218825373,
+              "dataDistinction": 100,
+              "structuralSimplicity": 67.005939426049,
+              "defectConcentration": 12.71885354334037
+            },
+            "deltas": {
+              "rotation": 2.8911866438303093,
+              "lowResolution": 0.1056453429029034,
+              "localization": 0.5656433489870665,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.765807315365393,
+              "defectConcentration": 5.542858658641723
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        },
+        "3": {
+          "total": 29260,
+          "zeroRotation": 0,
+          "centerGatePassed": 28626,
+          "rotationImproved": 18576,
+          "nonDegradingOtherAxes": 596,
+          "strictQualified": 211,
+          "selection": "strict-nondegrading",
+          "best": {
+            "id": "northstar-h3-25_47_51",
+            "distance": 3,
+            "flippedFaces": [
+              25,
+              47,
+              51
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              2,
+              2,
+              4,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              5,
+              4,
+              1,
+              0
+            ],
+            "centerOffsetCells": 0.1301041249666333,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 64.88856845230502,
+              "lowResolution": 92.13788132707516,
+              "localization": 21.660398010014948,
+              "dataDistinction": 100,
+              "structuralSimplicity": 66.39400022069857,
+              "defectConcentration": 9.037974975932988
+            },
+            "deltas": {
+              "rotation": 5.65368067639578,
+              "lowResolution": 0.06647143135550948,
+              "localization": 0.47378814017664084,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.1538681100149688,
+              "defectConcentration": 1.8619800912343418
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "strictBest": {
+            "id": "northstar-h3-25_47_51",
+            "distance": 3,
+            "flippedFaces": [
+              25,
+              47,
+              51
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              2,
+              2,
+              4,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              5,
+              4,
+              1,
+              0
+            ],
+            "centerOffsetCells": 0.1301041249666333,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 64.88856845230502,
+              "lowResolution": 92.13788132707516,
+              "localization": 21.660398010014948,
+              "dataDistinction": 100,
+              "structuralSimplicity": 66.39400022069857,
+              "defectConcentration": 9.037974975932988
+            },
+            "deltas": {
+              "rotation": 5.65368067639578,
+              "lowResolution": 0.06647143135550948,
+              "localization": 0.47378814017664084,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.1538681100149688,
+              "defectConcentration": 1.8619800912343418
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          },
+          "tradeoffBest": {
+            "id": "northstar-h3-25_47_51",
+            "distance": 3,
+            "flippedFaces": [
+              25,
+              47,
+              51
+            ],
+            "cellMasks": [
+              1,
+              4,
+              0,
+              0,
+              5,
+              0,
+              2,
+              2,
+              4,
+              3,
+              2,
+              0,
+              4,
+              0,
+              1,
+              5,
+              4,
+              1,
+              0
+            ],
+            "centerOffsetCells": 0.1301041249666333,
+            "centerBalanceGatePassed": true,
+            "scores": {
+              "rotation": 64.88856845230502,
+              "lowResolution": 92.13788132707516,
+              "localization": 21.660398010014948,
+              "dataDistinction": 100,
+              "structuralSimplicity": 66.39400022069857,
+              "defectConcentration": 9.037974975932988
+            },
+            "deltas": {
+              "rotation": 5.65368067639578,
+              "lowResolution": 0.06647143135550948,
+              "localization": 0.47378814017664084,
+              "dataDistinction": 0,
+              "structuralSimplicity": 0.1538681100149688,
+              "defectConcentration": 1.8619800912343418
+            },
+            "worstOtherDelta": 0,
+            "degradedAxes": []
+          }
+        }
+      }
+    }
+  },
+  "harness": {
+    "generatedAt": "2026-08-12T00:28:51.006Z",
+    "wallTimeMs": 8689,
+    "mode": "manual-masks",
+    "candidateCount": 20,
+    "generatedCandidateCount": 20,
+    "familyCounts": {
+      "manual": 20
+    },
+    "familyGeneratedCounts": {
+      "manual": 20
+    },
+    "finderCells": 19,
+    "faces": 57,
+    "faceTopology": {
+      "convention": "facePolygon 꼭짓점 2개 공유",
+      "epsilon": 1e-9,
+      "internalEdges": 99,
+      "outerEdges": 30
+    },
+    "referenceSamples": 1197,
+    "samplesPerFace": 21,
+    "lowPixelsPerCell": 9,
+    "areaSupersample": 4,
+    "blurSigmaPx": 0.75,
+    "top": 12,
+    "perFamily": 1,
+    "priorityFamilies": [
+      "face-swirl",
+      "gap-ring",
+      "pinwheel",
+      "flower"
+    ],
+    "comparisonPerFamily": 1,
+    "compositeAxes": [
+      "rotation",
+      "lowResolution",
+      "localization",
+      "dataDistinction",
+      "structuralSimplicity",
+      "defectConcentration"
+    ],
+    "compositePolicy": "[미검증] 동일 가중 기하평균",
+    "ruleSweep": {
+      "radialLengths": [
+        2.8,
+        3.7
+      ],
+      "widthFractions": [
+        0.42,
+        0.64
+      ],
+      "twistFractions": [
+        0.35,
+        0.7
+      ],
+      "phases": [
+        0,
+        0.5
+      ]
+    },
+    "centerBalanceGate": {
+      "policy": "임의 마스크는 표시 전용; 탈락시키지 않음",
+      "limitCells": 0.5,
+      "cellWidth": 1.7320508075688772,
+      "generatedCount": 20,
+      "scoredCount": 20,
+      "passedCount": 20,
+      "rejectedCount": 0,
+      "rejectedByFamily": {
+        "manual": 0
+      }
+    },
+    "outputDir": "."
+  }
+}

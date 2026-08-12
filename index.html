@@ -256,6 +256,8 @@
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px;
   }
   .finder-family { display: grid; grid-template-rows: auto 1fr 1fr; gap: 6px; min-width: 0; }
+  .finder-user-family { grid-column: 1 / -1; grid-template-rows: auto 1fr; }
+  .finder-user-patterns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .finder-family-title {
     min-height: 2.4em; display: flex; align-items: end; justify-content: center;
     color: var(--dim); font-size: 10px; line-height: 1.2; text-align: center;
@@ -315,6 +317,7 @@
   @media (max-width: 420px) {
     .experiment-banner { width: calc(100% - 32px); margin-inline: 16px; align-items: flex-start; flex-direction: column; }
     .finder-family-grid.card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .finder-user-patterns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
   fieldset.typeOptions { border: none; margin: 0; padding: 0; }
   #info { margin-top: 14px; font-size: 12px; line-height: 1.7; color: var(--dim); }
@@ -500,7 +503,7 @@
 <aside class="experiment-banner finder-experiment-only" id="finderExperimentBanner" role="status">
   <div>
     <strong data-i18n="g478">시험판 — 실험 파인더 생성기</strong>
-    <span data-i18n="g479">여기서 만든 실험 파인더 코드는 아직 스캔되지 않아요. 모양 비교용으로만 사용해 주세요.</span>
+    <span data-i18n="g479">셀 파인더 코드는 공용 스캐너 경로를 사용해요. 실사진 보정은 아직 실험 단계입니다.</span>
   </div>
   <a href="https://tlcube.estre.so/" data-i18n="g477">정식 생성기로 돌아가기</a>
 </aside>
@@ -829,8 +832,8 @@
         </div>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
-        <strong data-i18n="g469">실험 — 아직 스캔되지 않음</strong><br>
-        <span data-i18n="g470">현행 스캐너는 이 파인더를 읽지 못해요. 실제 코드 안에서 모양을 비교하는 용도로만 내보내세요.</span>
+        <strong data-i18n="g469">실험 — 셀 파인더 스캔 경로 연결됨</strong><br>
+        <span data-i18n="g470">공용 마스크 검출기가 이 파인더를 읽어요. 실사진 보정은 아직 실험 단계이므로 비교·검증용으로 사용해 주세요.</span>
       </p>
 
       <label data-i18n="g064">TL스캐너 QR링크 포함</label>
@@ -1141,8 +1144,8 @@ const GENERATOR_STRINGS = {
     "g466": "열린 중심",
     "g467": "와이드",
     "g468": "C2 나선",
-    "g469": "실험 — 아직 스캔되지 않음",
-    "g470": "현행 스캐너는 이 파인더를 읽지 못해요. 실제 코드 안에서 모양을 비교하는 용도로만 내보내세요.",
+    "g469": "실험 — 셀 파인더 스캔 경로 연결됨",
+    "g470": "공용 마스크 검출기가 이 파인더를 읽어요. 실사진 보정은 아직 실험 단계이므로 비교·검증용으로 사용해 주세요.",
     "g471": "중앙 QR",
     "g472": "바람개비",
     "g473": "틈 링",
@@ -1151,7 +1154,7 @@ const GENERATOR_STRINGS = {
     "g476": "실험 파인더 시험판",
     "g477": "정식 생성기로 돌아가기",
     "g478": "시험판 — 실험 파인더 생성기",
-    "g479": "여기서 만든 실험 파인더 코드는 아직 스캔되지 않아요. 모양 비교용으로만 사용해 주세요.",
+    "g479": "셀 파인더 코드는 공용 스캐너 경로를 사용해요. 실사진 보정은 아직 실험 단계입니다.",
     "g480": "선택: {name}",
     "g481": "중앙 QR {score}",
     "g482": "방향 정보 (회전 유일성)",
@@ -1172,7 +1175,11 @@ const GENERATOR_STRINGS = {
     "g497": "이 항목이 기준선입니다",
     "g498": "회전 {rotation} — 동심원은 회전 대칭이라 원리적으로 방향을 제공하지 못해요. · 실측 복호율 {rate}%",
     "g499": "실측 복호율 {rate}%",
-    "g500": "모형 점수 {score}; 이 항목이 기준선입니다"
+    "g500": "모형 점수 {score}; 이 항목이 기준선입니다",
+    "g501": "트라이스타 개선안",
+    "g502": "나무 개선안",
+    "g503": "고양이 개선안",
+    "g504": "사용자 손그림 개선안"
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1340,8 +1347,8 @@ const GENERATOR_STRINGS = {
     "g466": "Open centre",
     "g467": "Wide",
     "g468": "C2 swirl",
-    "g469": "Experiment — not scannable yet",
-    "g470": "The current scanner cannot read this finder. Export it only to compare the mark inside a complete code.",
+    "g469": "Experiment — cell-finder scan path connected",
+    "g470": "The shared mask detector reads this finder. Real-photo calibration is still experimental; use it for comparison and validation.",
     "g471": "Centre QR",
     "g472": "Pinwheel",
     "g473": "Gap ring",
@@ -1350,7 +1357,7 @@ const GENERATOR_STRINGS = {
     "g476": "Experimental finder trial",
     "g477": "Back to the official generator",
     "g478": "Trial — experimental finder generator",
-    "g479": "Codes made with experimental finders are not scannable yet. Use them only for visual comparison.",
+    "g479": "Codes made with cell finders now use the shared scanner path. Real-photo calibration remains experimental.",
     "g480": "Selected: {name}",
     "g481": "Centre QR {score}",
     "g482": "Orientation (rotation uniqueness)",
@@ -1371,7 +1378,11 @@ const GENERATOR_STRINGS = {
     "g497": "This item is the baseline",
     "g498": "Rotation {rotation} — concentric circles are rotationally symmetric, so they cannot provide orientation in principle. · Measured decode rate {rate}%",
     "g499": "Measured decode rate {rate}%",
-    "g500": "Model score {score}; this item is the baseline"
+    "g500": "Model score {score}; this item is the baseline",
+    "g501": "Refined tristar",
+    "g502": "Refined tree",
+    "g503": "Refined cats",
+    "g504": "Refined hand-drawn designs"
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1539,8 +1550,8 @@ const GENERATOR_STRINGS = {
     "g466": "中心開き",
     "g467": "ワイド",
     "g468": "C2 スワール",
-    "g469": "実験 — まだスキャンできません",
-    "g470": "現行スキャナーはこのファインダーを読み取れません。コード全体の中で見え方を比較する用途にのみ書き出してください。",
+    "g469": "実験 — セルファインダーのスキャン経路に接続済み",
+    "g470": "共通マスク検出器がこのファインダーを読み取ります。実写補正はまだ実験段階のため、比較・検証用に使用してください。",
     "g471": "中央QR",
     "g472": "ピンホイール",
     "g473": "ギャップリング",
@@ -1549,7 +1560,7 @@ const GENERATOR_STRINGS = {
     "g476": "実験ファインダー試用版",
     "g477": "正式ジェネレーターに戻る",
     "g478": "試用版 — 実験ファインダー生成",
-    "g479": "ここで作る実験ファインダーのコードはまだスキャンできません。見た目の比較にのみ使用してください。",
+    "g479": "セルファインダーのコードは共通スキャナー経路を使用します。実写補正はまだ実験段階です。",
     "g480": "選択中：{name}",
     "g481": "中央QR {score}",
     "g482": "方向情報（回転一意性）",
@@ -1570,7 +1581,11 @@ const GENERATOR_STRINGS = {
     "g497": "この項目が基準線です",
     "g498": "回転 {rotation} — 同心円は回転対称のため、原理的に方向を示せません。・実測復号率 {rate}%",
     "g499": "実測復号率 {rate}%",
-    "g500": "モデルスコア {score}、この項目が基準線です"
+    "g500": "モデルスコア {score}、この項目が基準線です",
+    "g501": "トライスター改良案",
+    "g502": "ツリー改良案",
+    "g503": "キャッツ改良案",
+    "g504": "手描きデザイン改良案"
   },
 };
 
@@ -2155,6 +2170,9 @@ const FINDER_LABEL_KEYS = Object.freeze({
   'gap-ring-01-2-1-open': 'g466',
   'flower-7-1020-coprime-offset': 'g467',
   'swirl-c2-5-5-11-both': 'g468',
+  'tristar-refined-h3': 'g501',
+  'tree-refined-h3': 'g502',
+  'cats-refined-h3': 'g503',
 });
 
 const FINDER_FAMILY_KEYS = Object.freeze({
@@ -2162,6 +2180,7 @@ const FINDER_FAMILY_KEYS = Object.freeze({
   'gap-ring': 'g473',
   flower: 'g474',
   'face-swirl': 'g475',
+  'user-refined': 'g504',
 });
 const FINDER_SCORE_AXES = Object.freeze([
   Object.freeze({ id: 'rotation', labelKey: 'g482', evidenceKey: 'g489', evidenceClass: 'measured' }),
@@ -2316,9 +2335,11 @@ function ensureFinderCards() {
     makeFinderCard(LEGACY_FINDER_PATTERN_ID, null),
     makeFinderCard(CENTER_QR_FINDER_PATTERN_ID, null),
   );
+
+  const generatedFamilies = FINDER_PATTERNS.slice(0, 8);
   for (let column = 0; column < 4; column += 1) {
-    const top = FINDER_PATTERNS[column];
-    const bottom = FINDER_PATTERNS[column + 4];
+    const top = generatedFamilies[column];
+    const bottom = generatedFamilies[column + 4];
     if (!top || !bottom || top.family !== bottom.family) {
       throw new Error('finder UI family column mismatch: ' + column);
     }
@@ -2329,6 +2350,24 @@ function ensureFinderCards() {
     heading.className = 'finder-family-title';
     heading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS[top.family];
     family.append(heading, makeFinderCard(top.id, top), makeFinderCard(bottom.id, bottom));
+    els.finderPatternCards.append(family);
+  }
+
+  const refinedPatterns = FINDER_PATTERNS.slice(8);
+  if (refinedPatterns.length) {
+    if (refinedPatterns.some((pattern) => pattern.family !== 'user-refined')) {
+      throw new Error('finder UI user-refined row mismatch');
+    }
+    const family = document.createElement('div');
+    family.className = 'finder-family finder-user-family';
+    family.dataset.finderFamily = 'user-refined';
+    const heading = document.createElement('div');
+    heading.className = 'finder-family-title';
+    heading.dataset.finderFamilyKey = FINDER_FAMILY_KEYS['user-refined'];
+    const cards = document.createElement('div');
+    cards.className = 'finder-user-patterns';
+    cards.append(...refinedPatterns.map((pattern) => makeFinderCard(pattern.id, pattern)));
+    family.append(heading, cards);
     els.finderPatternCards.append(family);
   }
 }
@@ -3459,7 +3498,7 @@ render();
  */
 
 
-const GENERATOR_BUILD = '2026-08-12.05';
+const GENERATOR_BUILD = '2026-08-12.06';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

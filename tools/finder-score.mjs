@@ -4,12 +4,14 @@
  * finder-score.mjs — 중앙 19셀 파인더 후보의 검출기 무관 채점 하네스
  *
  * 실행: node tools/finder-score.mjs [--top N] [--per-family N] [--output DIR] [--blur-sigma PX]
+ *        node tools/finder-score.mjs --masks-file candidates.json [--output DIR]
  *
  * 후보를 채점하기 전에 현행 불스아이와 중앙 QR을 같은 여섯 지표로 잰다.
  * 알려진 실측 방향(중앙 QR 89% > 불스아이 53%)을 재현하지 못하면 후보를
  * 생성하거나 순위를 내지 않는다. 점수는 성공률 예측값이 아니다.
  */
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,12 +23,17 @@ import {
   facePolygon, faceSampleDisc, hexDistance, layoutForRegion, pixelToAxial, regionCells,
 } from '../src/hexgrid.js';
 import { maxSafeRadius, profileAt } from '../src/bullseye.js';
+import { encode } from '../src/encode.js';
+import { FINDER_PATTERNS } from '../src/finder-patterns.js';
 import { digitToRanks } from '../src/lehmer.js';
-import { DEFAULT_PRESET, presetLuminances } from '../src/luminance.js';
+import {
+  BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset, presetLuminances,
+} from '../src/luminance.js';
 import { rasterToPng } from '../src/png.js';
 import { TL_READER_URL } from '../src/qr.js';
 import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
+import { verifyRaster } from '../src/verify.js';
 
 const FINDER_RADIUS = 2;
 const CELLS = Object.freeze(regionCells(FINDER_RADIUS));
@@ -73,6 +80,11 @@ const FACE_CYCLES = Object.freeze([
 const PNG_CELL_SIZE = 64;
 const PNG_MARGIN = 24;
 const PNG_SUPERSAMPLE = 4;
+const TYPE_O_PAYLOAD = 'https://tl.estre.so/finder-lab';
+const TYPE_O_VERSION = 3;
+const TYPE_O_ECC_LEVEL = 'M';
+const TYPE_O_PIXELS_PER_UNIT = 18;
+const TYPE_O_SUPERSAMPLE = 2;
 const FACE_EDGE_COUNT = 4;
 // test/ygrid.test.js의 「면 경계 인접성」이 공유 꼭짓점을 비교할 때 쓰는 EPS를 재사용한다.
 const SHARED_EDGE_EPS = 1e-9;
@@ -106,6 +118,13 @@ const PALETTE = Object.freeze({
   bullseyeDark: Object.freeze({ r: 0, g: 0, b: 0 }),
   bullseyeLight: Object.freeze({ r: 255, g: 255, b: 255 }),
 });
+const TYPE_O_PRESET = getPreset(DEFAULT_PRESET);
+const TYPE_O_PALETTE = Object.freeze({
+  background: TYPE_O_PRESET.background,
+  levels: TYPE_O_PRESET.levels,
+  bullseyeDark: BULLSEYE_DARK,
+  bullseyeLight: BULLSEYE_LIGHT,
+});
 
 function assert(condition, message) {
   if (!condition) throw new Error('finder-score 자기검사 실패: ' + message);
@@ -114,6 +133,114 @@ function clamp(value, lo, hi) { return Math.max(lo, Math.min(hi, value)); }
 function cellKey(q, r) { return q + ',' + r; }
 
 const CELL_INDEX = new Map(CELLS.map((cell, index) => [cellKey(cell.q, cell.r), index]));
+
+function cellMasksToBits(cellMasks, label) {
+  if (!Array.isArray(cellMasks) || cellMasks.length !== CELLS.length) {
+    throw new RangeError(label + ': cellMasks 는 ' + CELLS.length + '개여야 한다');
+  }
+  const bits = new Uint8Array(FACE_COUNT);
+  for (let ci = 0; ci < cellMasks.length; ci += 1) {
+    const mask = cellMasks[ci];
+    if (!Number.isInteger(mask) || mask < 0 || mask > 7) {
+      throw new RangeError(label + ': cellMasks[' + ci + ']는 0..7 정수여야 한다: ' + mask);
+    }
+    for (let fi = 0; fi < FACES.length; fi += 1) {
+      bits[ci * FACES.length + fi] = (mask >> fi) & 1;
+    }
+  }
+  if (!cellMasks.some((mask) => mask !== 0)) {
+    throw new RangeError(label + ': 켜진 면이 하나 이상이어야 한다');
+  }
+  return bits;
+}
+
+function maskInputEntries(value) {
+  if (Array.isArray(value)) return value;
+  if (value === null || typeof value !== 'object') {
+    throw new TypeError('마스크 JSON은 이름→배열 객체, 후보 객체 배열, 또는 {candidates:[...]}여야 한다');
+  }
+  if (Object.hasOwn(value, 'candidates')) {
+    if (!Array.isArray(value.candidates)) {
+      throw new TypeError('masks.candidates 는 배열이어야 한다');
+    }
+    return value.candidates;
+  }
+  if (Object.hasOwn(value, 'cellMasks') || Object.hasOwn(value, 'masks')) return [value];
+  return Object.entries(value).map(([label, entry]) => (
+    Array.isArray(entry)
+      ? { id: label, name: label, cellMasks: entry }
+      : { ...entry, id: entry && entry.id === undefined ? label : entry.id,
+        name: entry && entry.name === undefined ? label : entry.name }
+  ));
+}
+
+/**
+ * 파인더 에디터 출력용 상시 입력 경로.
+ *
+ * 지원 JSON:
+ *   { "bird": [0, ... 19개] }
+ *   [{ "name": "bird", "cellMasks": [0, ... 19개] }]
+ *   { "candidates": [{ "id": "bird", "name": "Bird", "masks": [...] }] }
+ */
+export function parseFinderMaskCandidates(input) {
+  let value = input;
+  if (typeof input === 'string') {
+    try {
+      value = JSON.parse(input);
+    } catch (error) {
+      throw new SyntaxError('마스크 JSON 파싱 실패: ' + error.message);
+    }
+  }
+  const entries = maskInputEntries(value);
+  if (entries.length === 0) throw new RangeError('마스크 후보가 하나 이상 필요하다');
+  const reserved = new Set(['bullseye', 'center-qr', ...FINDER_PATTERNS.map((entry) => entry.id)]);
+  const seen = new Set();
+  return Object.freeze(entries.map((entry, index) => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new TypeError('마스크 후보 #' + (index + 1) + '는 객체여야 한다');
+    }
+    const rawId = entry.id === undefined ? entry.name : entry.id;
+    const rawName = entry.name === undefined ? rawId : entry.name;
+    if (typeof rawId !== 'string' || rawId.trim() === '') {
+      throw new TypeError('마스크 후보 #' + (index + 1) + '의 id 또는 name이 필요하다');
+    }
+    if (typeof rawName !== 'string' || rawName.trim() === '') {
+      throw new TypeError(rawId + ': name은 비어 있지 않은 문자열이어야 한다');
+    }
+    const id = rawId.trim();
+    const name = rawName.trim();
+    if (reserved.has(id)) throw new RangeError(id + ': 기존 이름과 충돌한다');
+    if (seen.has(id)) throw new RangeError(id + ': 마스크 후보 id가 중복됐다');
+    seen.add(id);
+    const cellMasks = entry.cellMasks === undefined ? entry.masks : entry.cellMasks;
+    const bits = cellMasksToBits(cellMasks, id);
+    return Object.freeze({
+      id,
+      name,
+      family: 'manual',
+      params: Object.freeze({ ...(entry.params || {}), source: 'mask-input' }),
+      cellMasks: Object.freeze([...cellMasks]),
+      bits,
+    });
+  }));
+}
+
+export async function loadFinderMaskCandidates(options = {}) {
+  const inline = options.masks;
+  const filePath = options.masksFile;
+  if (inline !== undefined && filePath !== undefined) {
+    throw new RangeError('--masks와 --masks-file은 함께 쓸 수 없다');
+  }
+  if (inline === undefined && filePath === undefined) return Object.freeze([]);
+  if (filePath !== undefined) {
+    if (typeof filePath !== 'string' || filePath.trim() === '') {
+      throw new TypeError('--masks-file 뒤에 경로가 필요하다');
+    }
+    return parseFinderMaskCandidates(await fs.readFile(filePath, 'utf8'));
+  }
+  return parseFinderMaskCandidates(inline);
+}
+
 function balancedMaskSequences(repeats) {
   const sequences = [];
   const targetLength = repeats * 3;
@@ -1534,6 +1661,22 @@ function resultRow(result, rank) {
     defectRaw: defect.componentCount + 'c/' + defect.differenceFaces + 'f',
     total: scoreText(result.total) };
 }
+function axisOnlyRow(result, group) {
+  return {
+    group,
+    name: result.name || result.id,
+    family: result.family,
+    offset: result.centerBalance ? scoreText(result.centerBalance.offsetCells) + 'c' : '—',
+    centerGate: result.centerBalance
+      ? (result.centerBalance.passed ? '통과' : '탈락') : '—',
+    rotation: scoreText(result.metrics.rotation.score),
+    low9px: scoreText(result.metrics.lowResolution.score),
+    localization: scoreText(result.metrics.localization.score),
+    data: scoreText(result.metrics.dataDistinction.score),
+    simplicity: scoreText(result.metrics.structuralSimplicity.score),
+    defect: scoreText(result.metrics.defectConcentration.score),
+  };
+}
 function rankResults(a, b) {
   return b.total - a.total
     || b.metrics.structuralSimplicity.score - a.metrics.structuralSimplicity.score
@@ -1588,14 +1731,25 @@ function separationAnalysis(results) {
 function timestamp() { return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z'); }
 function parseArgs(argv) {
   const options = { top: DEFAULT_TOP, perFamily: DEFAULT_PER_FAMILY,
-    outputParent: DEFAULT_OUTPUT, blurSigma: DEFAULT_BLUR_SIGMA, help: false };
+    outputParent: DEFAULT_OUTPUT, blurSigma: DEFAULT_BLUR_SIGMA, help: false,
+    masks: undefined, masksFile: undefined };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--help' || argv[i] === '-h') options.help = true;
     else if (argv[i] === '--top') options.top = Number(argv[++i]);
     else if (argv[i] === '--per-family') options.perFamily = Number(argv[++i]);
     else if (argv[i] === '--output') options.outputParent = path.resolve(argv[++i]);
     else if (argv[i] === '--blur-sigma') options.blurSigma = Number(argv[++i]);
+    else if (argv[i] === '--masks') {
+      if (argv[i + 1] === undefined) throw new RangeError('--masks 뒤에 JSON이 필요하다');
+      options.masks = argv[++i];
+    } else if (argv[i] === '--masks-file') {
+      if (argv[i + 1] === undefined) throw new RangeError('--masks-file 뒤에 경로가 필요하다');
+      options.masksFile = path.resolve(argv[++i]);
+    }
     else throw new RangeError('알 수 없는 인자: ' + argv[i]);
+  }
+  if (options.masks !== undefined && options.masksFile !== undefined) {
+    throw new RangeError('--masks와 --masks-file은 함께 쓸 수 없다');
   }
   if (!Number.isInteger(options.top) || options.top < 1 || options.top > MAX_TOP) {
     throw new RangeError('--top은 1..' + MAX_TOP + ' 정수여야 한다: ' + options.top);
@@ -1617,6 +1771,9 @@ function help() {
       + DEFAULT_PER_FAMILY + ')\n'
     + '  --output DIR      실행별 출력 폴더의 상위 경로\n'
     + '  --blur-sigma PX   [미검증] 가우시안 sigma (기본 ' + DEFAULT_BLUR_SIGMA + ')\n'
+    + '  --masks JSON      이름표 있는 임의 19셀 마스크 JSON\n'
+    + '  --masks-file FILE 같은 JSON을 읽을 파일; --masks와 상호 배타\n'
+    + '                    예: {\"bird\":[0, ..., 0]}\n'
     + '  --help            도움말');
 }
 async function runDirectory(parent) {
@@ -1643,15 +1800,184 @@ function candidateScene(bits) {
   }
   return { width: layout.width, height: layout.height, background: PALETTE.background, shapes };
 }
+function customTypeOScene(bits, encoded) {
+  const scene = buildScene(encoded, {
+    palette: TYPE_O_PALETTE,
+    cellSize: 1,
+    margin: 2,
+  });
+  const discCount = scene.shapes.filter((shape) => shape.kind === 'disc').length;
+  assert(discCount === 6, 'Type O 기본 장면의 불스아이 disc 수가 6이 아님');
+  const shapes = scene.shapes.filter((shape) => shape.kind !== 'disc');
+  for (let ci = 0; ci < CELLS.length; ci += 1) {
+    for (let fi = 0; fi < FACES.length; fi += 1) {
+      shapes.push({
+        kind: 'polygon',
+        points: facePolygon(CELLS[ci].q, CELLS[ci].r, FACES[fi], scene.layout),
+        color: bits[ci * FACES.length + fi]
+          ? TYPE_O_PALETTE.bullseyeLight : TYPE_O_PALETTE.bullseyeDark,
+      });
+    }
+  }
+  return { ...scene, finderPatternId: 'manual', shapes };
+}
+
 function baselineScene(kind) {
   const centerQr = kind === 'center-qr';
   return buildScene({ k: FINDER_RADIUS, cellDigits: new Map(), centerQr },
     { palette: PALETTE, cellSize: PNG_CELL_SIZE, margin: PNG_MARGIN, centerQr,
       ...(centerQr ? { qrText: TL_READER_URL } : {}) });
 }
-async function writePng(scene, filePath) {
-  const raster = rasterize(scene, { pixelsPerUnit: 1, supersample: PNG_SUPERSAMPLE });
-  await fs.writeFile(filePath, rasterToPng(raster));
+async function writePng(scene, filePath, options = {}) {
+  const raster = rasterize(scene, {
+    pixelsPerUnit: options.pixelsPerUnit === undefined ? 1 : options.pixelsPerUnit,
+    supersample: options.supersample === undefined ? PNG_SUPERSAMPLE : options.supersample,
+  });
+  let selfCheck = null;
+  if (options.encoded !== undefined) {
+    const check = verifyRaster(raster, scene, options.encoded);
+    if (!check.ok) {
+      throw new Error(options.id + ': Type O 전체 코드 자체검증 실패 '
+        + JSON.stringify(check.mismatches));
+    }
+    selfCheck = { total: check.total, minDelta: check.minDelta };
+  }
+  const png = rasterToPng(raster);
+  await fs.writeFile(filePath, png);
+  return {
+    width: raster.width,
+    height: raster.height,
+    bytes: png.length,
+    sha256: createHash('sha256').update(png).digest('hex'),
+    ...(selfCheck === null ? {} : { selfCheck }),
+  };
+}
+
+function safeFileStem(id, index) {
+  const safe = id.normalize('NFKD').replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '');
+  return safe || 'candidate-' + String(index + 1);
+}
+
+
+function shiftedShape(shape, dx, dy) {
+  if (shape.kind === 'polygon') {
+    return { ...shape, points: shape.points.map((point) => ({ x: point.x + dx, y: point.y + dy })) };
+  }
+  if (shape.kind === 'disc') return { ...shape, cx: shape.cx + dx, cy: shape.cy + dy };
+  throw new RangeError('비교 장면의 알 수 없는 shape.kind: ' + shape.kind);
+}
+function horizontalScene(scenes, gap) {
+  assert(scenes.length >= 2, '비교 장면은 2개 이상이어야 함');
+  const height = Math.max(...scenes.map((scene) => scene.height));
+  let width = gap * (scenes.length - 1);
+  for (const scene of scenes) width += scene.width;
+  const shapes = [];
+  let offsetX = 0;
+  for (const scene of scenes) {
+    const offsetY = (height - scene.height) / 2;
+    for (const shape of scene.shapes) shapes.push(shiftedShape(shape, offsetX, offsetY));
+    offsetX += scene.width + gap;
+  }
+  return { width, height, background: scenes[0].background, shapes };
+}
+async function renderManualComparisons(results, outputDir, encoded) {
+  const groups = new Map();
+  for (const result of results) {
+    const group = result.params && result.params.comparisonGroup;
+    if (typeof group !== 'string' || group === '') continue;
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(result);
+  }
+  const comparisonDir = path.join(outputDir, 'manual-comparisons');
+  const files = [];
+  for (const [group, unsorted] of groups) {
+    if (unsorted.length < 2) continue;
+    const ordered = [...unsorted].sort((a, b) =>
+      (a.params.comparisonOrder || 0) - (b.params.comparisonOrder || 0)
+      || a.id.localeCompare(b.id));
+    await fs.mkdir(comparisonDir, { recursive: true });
+    const stem = safeFileStem(group, files.length);
+    const finderName = stem + '-finder-seed-h1-h2-h3.png';
+    const typeOName = stem + '-type-o-seed-h1-h2-h3.png';
+    const finder = await writePng(
+      horizontalScene(ordered.map((result) => candidateScene(result.bits)), 0.5),
+      path.join(comparisonDir, finderName),
+    );
+    const typeO = await writePng(
+      horizontalScene(ordered.map((result) => customTypeOScene(result.bits, encoded)), 1),
+      path.join(comparisonDir, typeOName),
+      { pixelsPerUnit: TYPE_O_PIXELS_PER_UNIT, supersample: TYPE_O_SUPERSAMPLE },
+    );
+    files.push({
+      group,
+      columns: ordered.map((result) => ({
+        id: result.id,
+        label: result.params.comparisonLabel || result.id,
+        order: result.params.comparisonOrder || 0,
+      })),
+      finder: { file: path.join('manual-comparisons', finderName), ...finder },
+      typeO: { file: path.join('manual-comparisons', typeOName), ...typeO },
+    });
+  }
+  return {
+    purpose: 'seed | hamming-1 | hamming-2 | hamming-3 side-by-side comparisons',
+    files,
+  };
+}
+
+async function renderManualCandidates(results, outputDir) {
+  const finderDir = path.join(outputDir, 'manual-finders');
+  const typeODir = path.join(outputDir, 'manual-type-o');
+  await fs.mkdir(finderDir, { recursive: true });
+  await fs.mkdir(typeODir, { recursive: true });
+  const encoded = encode(TYPE_O_PAYLOAD, {
+    version: TYPE_O_VERSION,
+    eccLevel: TYPE_O_ECC_LEVEL,
+  });
+  const files = [];
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
+    const prefix = String(index + 1).padStart(2, '0') + '-' + safeFileStem(result.id, index);
+    const finderName = prefix + '-finder.png';
+    const typeOName = prefix + '-type-o.png';
+    const finderPath = path.join(finderDir, finderName);
+    const typeOPath = path.join(typeODir, typeOName);
+    const finder = await writePng(candidateScene(result.bits), finderPath);
+    const typeO = await writePng(customTypeOScene(result.bits, encoded), typeOPath, {
+      pixelsPerUnit: TYPE_O_PIXELS_PER_UNIT,
+      supersample: TYPE_O_SUPERSAMPLE,
+      encoded,
+      id: result.id,
+    });
+    result.renders = {
+      finder: { file: path.join('manual-finders', finderName), ...finder },
+      typeO: { file: path.join('manual-type-o', typeOName), ...typeO },
+    };
+    files.push({
+      id: result.id,
+      name: result.name,
+      cellMasks: result.cellMasks,
+      centerOffsetCells: result.centerBalance.offsetCells,
+      centerBalanceGatePassed: result.centerBalance.passed,
+      ...result.renders,
+    });
+  }
+  const comparisons = await renderManualComparisons(results, outputDir, encoded);
+  const manifest = {
+    purpose: 'manual finder candidates: isolated finder and full Type O code',
+    payload: TYPE_O_PAYLOAD,
+    version: TYPE_O_VERSION,
+    eccLevel: TYPE_O_ECC_LEVEL,
+    preset: DEFAULT_PRESET,
+    pixelsPerUnit: TYPE_O_PIXELS_PER_UNIT,
+    supersample: TYPE_O_SUPERSAMPLE,
+    files,
+    comparisons,
+  };
+  const manifestPath = path.join(outputDir, 'manual-manifest.json');
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  return { ...manifest, file: manifestPath };
 }
 function publicResult(result) {
   return { id: result.id, name: result.name, family: result.family, params: result.params,
@@ -1670,6 +1996,23 @@ function publicResult(result) {
     familyPng: result.familyPng,
     witnessPng: result.witnessPng };
 }
+function publicAxisResult(result) {
+  return {
+    id: result.id,
+    name: result.name,
+    family: result.family,
+    params: result.params,
+    ...(result.cellMasks === undefined ? {} : { cellMasks: result.cellMasks }),
+    centerOffsetCells: result.centerBalance ? result.centerBalance.offsetCells : null,
+    centerBalanceGatePassed: result.centerBalance ? result.centerBalance.passed : null,
+    scores: Object.fromEntries(COMPOSITE_AXES.map(
+      (axis) => [axis, result.metrics[axis].score],
+    )),
+    diagnostics: result.metrics,
+    ...(result.renders === undefined ? {} : { renders: result.renders }),
+  };
+}
+
 function validateRuler(bullseye, centerQr) {
   // 한 우연 표본이 아니라 합동 faceSampleDisc 하나의 전체 표본 이상이 달라야 한다.
   const bullseyeZero = bullseye.metrics.rotation.minDifferenceCount === 0
@@ -1689,6 +2032,7 @@ export async function runHarness(options = {}) {
     perFamily: options.perFamily === undefined ? DEFAULT_PER_FAMILY : options.perFamily,
     outputParent: options.outputParent || DEFAULT_OUTPUT,
     blurSigma: options.blurSigma === undefined ? DEFAULT_BLUR_SIGMA : options.blurSigma,
+    maskCandidates: options.maskCandidates === undefined ? [] : options.maskCandidates,
   };
   if (!Number.isInteger(config.top) || config.top < 1 || config.top > MAX_TOP) {
     throw new RangeError('top 범위 오류: ' + config.top);
@@ -1697,6 +2041,12 @@ export async function runHarness(options = {}) {
     || config.perFamily > MAX_PER_FAMILY) {
     throw new RangeError('perFamily 범위 오류: ' + config.perFamily);
   }
+  if (!Array.isArray(config.maskCandidates)
+    || config.maskCandidates.some((candidate) =>
+      !(candidate.bits instanceof Uint8Array) || candidate.bits.length !== FACE_COUNT)) {
+    throw new TypeError('maskCandidates 는 parseFinderMaskCandidates()의 반환 배열이어야 한다');
+  }
+  const customMode = config.maskCandidates.length > 0;
   const startedAt = new Date();
   const outputDir = await runDirectory(config.outputParent);
   const kernel = gaussianKernel(config.blurSigma);
@@ -1707,7 +2057,9 @@ export async function runHarness(options = {}) {
   console.log('faceSampleDisc 표본=' + REFERENCE.points.length + ' ('
     + REFERENCE.samplesPerFace + '/face); 저해상도=' + LOW_PIXELS_PER_CELL
     + ' px/cell; [미검증] blur sigma=' + config.blurSigma + ' px');
-  console.log('[미검증] 6축 종합은 동일 가중 기하평균이며 축별 원점수를 함께 읽어야 한다.');
+  console.log(customMode
+    ? '[미검증] 임의 마스크 모드는 종합점수를 표시하지 않고 6축 원점수만 비교한다.'
+    : '[미검증] 6축 종합은 동일 가중 기하평균이며 축별 원점수를 함께 읽어야 한다.');
   console.log('출력: ' + outputDir);
   console.log('');
 
@@ -1721,7 +2073,8 @@ export async function runHarness(options = {}) {
   await writePng(baselineScene('center-qr'), centerQr.png);
 
   console.log('자가 검증 — 동일한 자로 잰 기준선');
-  console.table(baselines.map((result) => resultRow(result, '기준')));
+  console.table(baselines.map((result) => customMode
+    ? axisOnlyRow(result, '기준선') : resultRow(result, '기준')));
   console.log('실측 방향: 중앙 QR 8/9(89%) > 불스아이 9/17(53%)');
   console.log('회전 차이: 불스아이 ' + bullseye.metrics.rotation.minDifferenceCount + '/'
     + bullseye.metrics.rotation.sampleCount + '; 중앙 QR 최악 회전 '
@@ -1737,12 +2090,69 @@ export async function runHarness(options = {}) {
   let top = [];
   let topByFamily = {};
   let symmetryWitnesses = [];
+  let centerGatePassedCount = 0;
+  let baselineComparison = [];
+  let customComparison = null;
   let analysis = {
     selectedTop: separationAnalysis([]),
     legacyFourAxisTop: separationAnalysis([]),
     note: 'rotationDefectPearson은 회전 원점수와 결손 집중도 원점수의 Pearson r이다.',
   };
-  if (validation.passed) {
+  if (validation.passed && customMode) {
+    baselineComparison = [
+      scoreBaseline('현행 불스아이', 'bullseye', bullseyeEvaluator(), kernel, bases, true),
+      scoreBaseline('중앙 QR', 'center-qr', centerQrEvaluator(), kernel, bases, true),
+    ];
+    const fixedComparison = FINDER_PATTERNS.map((pattern) => {
+      const bits = cellMasksToBits(pattern.cellMasks, pattern.id);
+      return scoreBits({
+        id: pattern.id,
+        name: pattern.name,
+        family: pattern.family,
+        params: pattern.params,
+        cellMasks: pattern.cellMasks,
+        bits,
+        centerBalance: centerBalanceMetric(bits),
+      }, kernel, bases);
+    });
+    const manualResults = config.maskCandidates.map((candidate) => scoreBits({
+      ...candidate,
+      centerBalance: centerBalanceMetric(candidate.bits),
+    }, kernel, bases));
+    generatedCandidateCount = manualResults.length;
+    candidateCount = manualResults.length;
+    centerGatePassedCount = manualResults.filter((result) => result.centerBalance.passed).length;
+    familyGeneratedCounts = { manual: manualResults.length };
+    familyCounts = { manual: manualResults.length };
+    centerGateRejectedByFamily = {
+      manual: manualResults.length - centerGatePassedCount,
+    };
+    const renderManifest = await renderManualCandidates(manualResults, outputDir);
+    const comparisonResults = [
+      ...baselineComparison,
+      ...fixedComparison,
+      ...manualResults,
+    ];
+    console.log('기준선 2종 + 고정 11종 + 임의 마스크 — 6축 원점수');
+    console.log('중심 균형 <= ' + CENTER_BALANCE_LIMIT_CELLS.toFixed(2)
+      + 'c는 표시 전용이며 임의 마스크를 탈락시키지 않는다.');
+    console.table([
+      ...baselineComparison.map((result) => axisOnlyRow(result, '기준선')),
+      ...fixedComparison.map((result) => axisOnlyRow(result, '고정 11종')),
+      ...manualResults.map((result) => axisOnlyRow(result, '직접 그림')),
+    ]);
+    customComparison = {
+      centerBalancePolicy: '0.5c 값과 통과 여부만 표시; 임의 마스크를 필터링하지 않음',
+      table: comparisonResults.map(publicAxisResult),
+      candidates: manualResults.map(publicAxisResult),
+      renderManifest,
+    };
+    console.log('임의 파인더 PNG');
+    for (const result of manualResults) {
+      console.log('- ' + result.id + ' 단독: ' + path.join(outputDir, result.renders.finder.file));
+      console.log('- ' + result.id + ' Type O: ' + path.join(outputDir, result.renders.typeO.file));
+    }
+  } else if (validation.passed) {
     const generatedCandidates = generateCandidates();
     generatedCandidateCount = generatedCandidates.length;
     const familyOrder = [...new Set(generatedCandidates.map((candidate) => candidate.family))];
@@ -1760,6 +2170,7 @@ export async function runHarness(options = {}) {
     ]));
     const candidates = measuredCandidates.filter((candidate) => candidate.centerBalance.passed);
     candidateCount = candidates.length;
+    centerGatePassedCount = candidateCount;
     familyCounts = Object.fromEntries(familyOrder.map((family) => [
       family, candidates.filter((candidate) => candidate.family === family).length,
     ]));
@@ -1877,6 +2288,7 @@ export async function runHarness(options = {}) {
     meta: {
       generatedAt: startedAt.toISOString(),
       wallTimeMs: Date.now() - startedAt.getTime(),
+      mode: customMode ? 'manual-masks' : 'family-sweep',
       candidateCount,
       generatedCandidateCount,
       familyCounts,
@@ -1902,22 +2314,27 @@ export async function runHarness(options = {}) {
       compositePolicy: '[미검증] 동일 가중 기하평균',
       ruleSweep: RULE_SWEEP,
       centerBalanceGate: {
-        policy: 'score-axis가 아닌 후보 자격 게이트',
+        policy: customMode
+          ? '임의 마스크는 표시 전용; 탈락시키지 않음'
+          : 'score-axis가 아닌 후보 자격 게이트',
         limitCells: CENTER_BALANCE_LIMIT_CELLS,
         cellWidth: CELL_WIDTH,
         generatedCount: generatedCandidateCount,
-        passedCount: candidateCount,
-        rejectedCount: generatedCandidateCount - candidateCount,
+        scoredCount: candidateCount,
+        passedCount: centerGatePassedCount,
+        rejectedCount: generatedCandidateCount - centerGatePassedCount,
         rejectedByFamily: centerGateRejectedByFamily,
       },
       outputDir,
     },
     rulerValidation: validation,
-    baselines: baselines.map(publicResult),
+    baselines: customMode
+      ? baselineComparison.map(publicAxisResult) : baselines.map(publicResult),
     topCandidates: top.map(publicResult),
     topByFamily: Object.fromEntries(Object.entries(topByFamily)
       .map(([family, results]) => [family, results.map(publicResult)])),
     symmetryWitnesses: symmetryWitnesses.map(publicResult),
+    customMasks: customComparison,
     analysis,
     limitations: [
       '[미검증] 6축 종합점수는 실측 보정 없이 동일 가중 기하평균을 쓴다. 축별 원점수가 우선이다.',
@@ -1947,7 +2364,10 @@ if (isMain) {
   try {
     const options = parseArgs(process.argv.slice(2));
     if (options.help) help();
-    else await runHarness(options);
+    else {
+      const maskCandidates = await loadFinderMaskCandidates(options);
+      await runHarness({ ...options, maskCandidates });
+    }
   } catch (error) {
     console.error(error && error.stack ? error.stack : String(error));
     process.exitCode = 1;
