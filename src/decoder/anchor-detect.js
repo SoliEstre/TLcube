@@ -365,6 +365,48 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
   };
 }
 
+/**
+ * 앵커 3점을 찍기 전에 훑을 **cellSize 배율** 목록.
+ *
+ * 왜 필요한가: 앵커는 파인더 H 로 «점 투영» 만 하고 탐색 창이 없다. 그런데 앵커는 중심에서
+ * `3k` 떨어져 있어서 파인더의 상대 스케일 오차 ε 가 `ε·3k` 셀만큼 증폭된다 — 허용치가
+ * **1/k 로 줄어든다.** 실측(2026-08-13, 참 H 에 ε 를 주입해 3/3 이 깨지는 지점):
+ *
+ *     A0(k=6) 3.0% · A1(k=8) 2.0% · A2(k=10) 1.5%   ← ε*·k ≈ 16 으로 거의 상수
+ *
+ * 그래서 상위 버전일수록 처참했다. Type O 는 앵커가 `k√3` 로 √3 배 가깝고, 게다가
+ * 빗나가도 `weakAnchorHypotheses`·`silhouetteHypotheses` 로 H 를 다시 잡는다 — 둘 다
+ * `family !== 'hex'` 로 A 를 막아 두어서 A 는 3/3 이 빗나가면 바로 no-anchors 였다.
+ *
+ * 배율 폭을 **`1/k` 에 비례**시켜 잡는다. 그러면 훑는 범위가 «앵커에서의 변위» 단위로
+ * 일정해지고(±ANCHOR_SCALE_SEARCH_CELLS 셀), 허용치의 1/k 스케일링이 사라진다.
+ */
+const ANCHOR_SCALE_SEARCH_CELLS = 1.5;
+const ANCHOR_SCALE_SEARCH_STEP_CELLS = 0.25;
+
+function cellSizeSearchScales(k, options) {
+  if (options.cellSizeSearch === false) return [1];
+  const span = Number.isFinite(options.cellSizeSearchCells)
+    ? Math.max(0, options.cellSizeSearchCells)
+    : ANCHOR_SCALE_SEARCH_CELLS;
+  if (!(span > 0) || !(k > 0)) return [1];
+  // 앵커 반지름은 3k 셀이므로, 변위 d 셀 = 배율 오차 d/(3k).
+  const step = ANCHOR_SCALE_SEARCH_STEP_CELLS / (3 * k);
+  const steps = Math.round(span / ANCHOR_SCALE_SEARCH_STEP_CELLS);
+  const scales = [1];
+  for (let i = 1; i <= steps; i += 1) {
+    scales.push(1 + i * step, 1 - i * step);
+  }
+  return scales;
+}
+
+/** 어느 후보가 «더 멀리 갔나» — 진단에 남길 대표 실패를 고른다. */
+function anchorProgress(evaluated) {
+  const checks = evaluated.hardChecks;
+  return (checks.sampleCount ? 4 : 0) + (checks.rankSeparation ? 2 : 0)
+    + (checks.expectedPattern ? 1 : 0);
+}
+
 function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
   const inputFailure = validateLuma(luma);
   if (inputFailure) return inputFailure;
@@ -394,15 +436,28 @@ function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
       continue;
     }
     for (const orientation of ORIENTATIONS) {
-      const evaluated = evaluate(
-        luma,
-        normalizedBullseye,
-        anchors,
-        family,
-        k,
-        orientation,
-        options,
-      );
+      let evaluated = null;
+      for (const scale of cellSizeSearchScales(k, options)) {
+        const probed = evaluate(
+          luma,
+          scale === 1
+            ? normalizedBullseye
+            : { ...normalizedBullseye, cellSize: normalizedBullseye.cellSize * scale },
+          anchors,
+          family,
+          k,
+          orientation,
+          options,
+        );
+        // 통과하면 즉시 채택. 아니면 «가장 멀리 간» 것을 진단용으로 남긴다.
+        if (probed.hardChecks.all) {
+          evaluated = probed;
+          if (scale !== 1) evaluated.cellSizeScale = scale;
+          break;
+        }
+        if (evaluated === null
+          || anchorProgress(probed) > anchorProgress(evaluated)) evaluated = probed;
+      }
       if (evaluated.hardChecks.all) hypotheses.push(evaluated);
       else rejected.push({
         hypothesisId: evaluated.hypothesisId,
