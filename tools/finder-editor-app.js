@@ -14,7 +14,7 @@ import { encode } from './encode.js';
 import { encodeA } from './encodeA.js';
 import { buildScene } from './scene.js';
 import {
-  BULLSEYE_DARK, BULLSEYE_LIGHT, getPreset,
+  BULLSEYE_DARK, BULLSEYE_LIGHT, FINDER_CUBE_TONES, getPreset,
 } from './luminance.js';
 import { rasterize } from './raster.js';
 import { rasterToPng } from './png.js';
@@ -302,7 +302,8 @@ function syncFinderColors() {
   if (isCubePattern()) {
     for (let faceIndex = 0; faceIndex < FACES.length; faceIndex += 1) {
       const face = FACES[faceIndex];
-      state.finderShapes[faceIndex].color = PALETTE.levels[state.pattern.toneRanks[face]];
+      // 프리셋 레벨이 아니라 고정 파인더 색 — 편집기가 실제 렌더와 달라 보이면 안 된다.
+      state.finderShapes[faceIndex].color = FINDER_CUBE_TONES[state.pattern.toneRanks[face]];
     }
     return;
   }

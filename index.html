@@ -2392,7 +2392,9 @@ function finderCubeThumbnail(pattern) {
   const maxX = Math.max(...points.map((point) => point.x));
   const minY = Math.min(...points.map((point) => point.y));
   const maxY = Math.max(...points.map((point) => point.y));
-  const fills = ['#344064', '#8797b8', 'currentColor'];
+  // 썸네일도 실제 렌더와 같은 고정 파인더 색을 쓴다 — 카드에서 본 것과 코드에 찍히는
+  // 것이 다르면 «색을 골랐다» 는 착각이 생긴다. FINDER_CUBE_TONES 와 같은 값이다.
+  const fills = ['#4a5789', '#7994d1', '#c8cfda'];
   const svg = finderSvgElement('svg', {
     viewBox: [minX, minY, maxX - minX, maxY - minY].join(' '),
     'aria-hidden': 'true',

@@ -5,9 +5,13 @@
  * 단일 도형 목록으로 펼친다. 여기서 확정한 순서(painter order)가 계약이다 —
  * 이후 어떤 백엔드도 이 순서를 재해석하지 않고 그대로 따라 그린다.
  *
- * 이 모듈은 순수 기하 + 계약 조립만 다룬다. luminance.js·encode.js 는 아직
- * 없으므로(병렬 lane 작성 중) import 하지 않는다 — encoded/palette 는 인터페이스
- * 계약으로만 다룬다.
+ * 이 모듈은 순수 기하 + 계약 조립만 다룬다. encoded/palette 는 인터페이스 계약으로만
+ * 다루고 인코더에 의존하지 않는다.
+ *
+ * ⚠ 예외 하나 — `FINDER_CUBE_TONES`(luminance.js). 파인더 색은 **프리셋을 따르지 않는
+ *   포맷 상수**라 palette 로 흘려보내지 않는다. 그래야 어떤 프리셋에서도 같은 검출
+ *   특성이 나온다(불스아이의 BULLSEYE_DARK/LIGHT 와 같은 규약).
+ *   (이 자리에 있던 «luminance.js 는 아직 없다» 주석은 오래전에 사실이 아니게 됐다.)
  */
 
 import {
@@ -20,6 +24,7 @@ import {
   FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
 } from './finder-patterns.js';
 import { digitToRanks } from './lehmer.js';
+import { FINDER_CUBE_TONES } from './luminance.js';
 import { qrMatrix } from './qr.js';
 
 /** 콰이어트 존 기본 배수 — margin 미지정 시 `cellSize · DEFAULT_MARGIN_FACTOR`. */
@@ -418,7 +423,9 @@ export function buildScene(encoded, options) {
       shapes.push({
         kind: 'polygon',
         points: facePolygon(0, 0, face, cubeLayout),
-        color: palette.levels[finderPattern.toneRanks[face]],
+        // 데이터 레벨이 아니라 고정 파인더 색을 쓴다 — 이유는 FINDER_CUBE_TONES 주석.
+        // 순위(=방향 정보)는 그대로다. 바뀐 건 그 순위를 어떤 실제 색으로 그리느냐뿐.
+        color: FINDER_CUBE_TONES[finderPattern.toneRanks[face]],
       });
     }
     const seamHalfWidth = 0.075 * cellSize;

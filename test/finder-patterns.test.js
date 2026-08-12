@@ -19,7 +19,8 @@ import {
 } from '../src/finder-patterns.js';
 import { FACES, facePolygon, regionCells } from '../src/hexgrid.js';
 import {
-  BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
+  BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, FINDER_CUBE_TONES,
+  getPreset, relativeLuminance,
 } from '../src/luminance.js';
 import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
@@ -247,9 +248,23 @@ test('3톤 큐브는 4c 슬롯 안 3.5c 실루엣과 T/L/R 밝음·중간·어�
     finderShapes.slice(0, 3).map((shape) => shape.color),
     [PALETTE.background, PALETTE.background, PALETTE.background],
   );
+  // 면 색은 **프리셋이 아니라** 고정 파인더 색이다 — 프리셋마다 검출 특성이 달라지면
+  // 안 되기 때문(FINDER_CUBE_TONES 주석 참조). 그래서 levels 와 같지 **않아야** 한다.
   assert.deepEqual(
     finderShapes.slice(3, 6).map((shape) => shape.color),
-    [PALETTE.levels[2], PALETTE.levels[1], PALETTE.levels[0]],
+    [FINDER_CUBE_TONES[2], FINDER_CUBE_TONES[1], FINDER_CUBE_TONES[0]],
+  );
+  assert.notDeepEqual(finderShapes[3].color, PALETTE.levels[2], '프리셋 레벨로 되돌아갔다');
+
+  // 진짜 계약은 «색 값» 이 아니라 «T > L > R 휘도 순서» 다 — 방향이 거기서 나온다.
+  // 그리고 밝은·어두운 배경 양쪽과 떨어져 있어야 실루엣이 산다(실촬영에서 이게 무너졌다).
+  const faceY = finderShapes.slice(3, 6).map((shape) => relativeLuminance(shape.color));
+  assert.ok(faceY[0] > faceY[1] && faceY[1] > faceY[2], `T>L>R 아님: ${faceY}`);
+  assert.ok(1 - faceY[0] >= 0.3, `흰 배경과 최상위 면 여유 부족: ${(1 - faceY[0]).toFixed(3)}`);
+  assert.ok(faceY[2] >= 0.08, `검은 배경과 최하위 면 여유 부족: ${faceY[2].toFixed(3)}`);
+  assert.ok(
+    Math.min(faceY[0] - faceY[1], faceY[1] - faceY[2]) >= 0.15,
+    `면 간 간격 부족: ${faceY}`,
   );
   assert.equal(finderShapes.slice(6, 9).every((shape) => shape.kind === 'polygon'), true);
   assert.equal(finderShapes[9].kind, 'disc');
