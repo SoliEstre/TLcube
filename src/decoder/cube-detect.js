@@ -830,6 +830,33 @@ function shapeCandidates(luma, cfg) {
   if (foreground.structuredMask && foreground.recoveredForegroundPixels > 0) {
     variants.push({ source: 'structured-density', mask: foreground.structuredMask });
   }
+  /*
+   * 반전 마스크 — 배경 모델이 «어느 쪽» 을 배경으로 잡았는지에 검출이 걸리지 않게 한다.
+   *
+   * 배경 모델은 **이미지 테두리** 픽셀로 만든다. 코드만 찍힌 사진이면 테두리가 코드의 밝은
+   * 배경이라 어두운 셀·큐브가 전경이 된다. 그런데 화면을 찍으면 테두리가 **베젤(어두움)**
+   * 이라 판정이 뒤집혀 «밝은 화면 전체» 가 전경이 되고, 어두운 큐브는 전경 덩어리 속
+   * **구멍**이 되어 연결요소가 아예 안 생긴다 — 실촬영 6장 전부 그랬다. 후보를 전부 그려
+   * 보니 베젤·화면 반사에만 얹혀 있었고 큐브 위엔 하나도 없었다(2026-08-12).
+   *
+   * 큐브는 «밝은 띠로 둘러싸인 어두운 육각» 이라, 어느 극성에서 보든 한쪽에서는 반드시
+   * 독립 연결요소가 된다. 그래서 반대 극성도 본다. 거짓 후보가 늘지만 하류의 12셀 레퍼런스
+   * 일치(minimumReferenceAgreement)가 닫는다 — 그게 그 단계의 존재 이유다.
+   *
+   * ⚠ **폴백이다.** 앞 변형이 후보를 하나라도 찾으면 돌지 않는다. 연결요소 계산이
+   *   프레임 크기에 비례해 비싸서(실측 +\~50%), 정상 경로까지 느려지면 손해다.
+   *   실측상 이득도 검출 단계에 그치고(0/6 → 1\~2/6) 복호까지는 아직 안 간다.
+   */
+  if (foreground.source === 'border-clusters') {
+    variants.push({ source: 'inverted', fallbackOnly: true, buildMask: () => {
+      const inverted = new Uint8Array(foreground.mask.length);
+      for (let index = 0; index < inverted.length; index += 1) {
+        if (luma.alpha && luma.alpha[index] === 0) continue;
+        inverted[index] = foreground.mask[index] ? 0 : 1;
+      }
+      return inverted;
+    } });
+  }
 
   const candidatesBySource = new Map();
   const componentCounts = {};
@@ -849,6 +876,12 @@ function shapeCandidates(luma, cfg) {
     rejections.push({ componentIndex, source, stage, measured, threshold });
   };
   for (const variant of variants) {
+    // 폴백 변형은 앞선 변형이 전부 빈손일 때만 돈다 — 정상 경로의 비용을 0 으로 둔다.
+    if (variant.fallbackOnly) {
+      const found = [...candidatesBySource.values()].some((list) => list.length > 0);
+      if (found) break;
+      variant.mask = variant.buildMask();
+    }
     const mask = closeMask(variant.mask, luma.width, luma.height);
     const components = connectedComponents(mask, luma.width, luma.height, cfg);
     componentCounts[variant.source] = components.length;
