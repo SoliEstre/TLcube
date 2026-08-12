@@ -474,7 +474,10 @@
     position: fixed; z-index: 100; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
     transform: translate(-50%, 14px); width: max-content; max-width: calc(100vw - 32px);
     padding: 11px 15px; border-radius: 999px; background: rgba(21, 25, 36, .96);
-    color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,.32); font-size: 13px;
+    /* ⚠ 배경이 «테마와 무관하게» 어두우므로 글자도 고정 밝은 색이어야 한다.
+       var(--text) 를 쓰면 라이트 테마에서 어두운 글자 + 어두운 배경이 되어
+       사실상 안 보인다(사용자 제보 2026-08-12). 배경이 고정이면 전경도 고정한다. */
+    color: #f2f5fb; box-shadow: 0 10px 30px rgba(0,0,0,.32); font-size: 13px;
     line-height: 1.35; text-align: center; opacity: 0; pointer-events: none;
     transition: opacity .18s ease, transform .18s ease;
   }
@@ -498,6 +501,7 @@
     <a href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="g024">소개</a>
     <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-i18n="g025">스캐너</a>
     <a class="official-edition-only" href="https://tlcube.estre.so/_shared/gen-finder.html" data-i18n="g476">실험 파인더 시험판</a>
+    <a href="https://tlcube.estre.so/_shared/gen-finder-editor.html" data-i18n="g508">파인더 에디터</a>
     <a class="finder-experiment-only" href="https://tlcube.estre.so/" data-i18n="g477">정식 생성기로 돌아가기</a>
   </nav>
   <div class="mode-switch" id="modeSwitch">
@@ -1235,6 +1239,7 @@ const GENERATOR_STRINGS = {
     "g505": "최대 3톤 큐브",
     "g506": "촬영 강건성",
     "g507": "{filename}으로 다운로드되었습니다."
+    "g508": "파인더 에디터",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1441,6 +1446,7 @@ const GENERATOR_STRINGS = {
     "g505": "Maximum three-tone cube",
     "g506": "Capture robustness",
     "g507": "Downloaded as {filename}."
+    "g508": "Finder editor",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1647,6 +1653,7 @@ const GENERATOR_STRINGS = {
     "g505": "最大3トーンキューブ",
     "g506": "撮影堅牢性",
     "g507": "{filename} としてダウンロードしました。"
+    "g508": "ファインダーエディタ",
   },
 };
 
