@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { DEFAULT_FINDER_PATTERN_ID } from '../src/finder-patterns.js';
+
 import { commitFinderQrTransition } from '../src/finder-selection.js';
 import {
+  GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   GENERATOR_STATE_SCHEMA, createGeneratorState, exposedGeneratorStateKeys,
   resolutionTierForVersion, transitionGeneratorMode, versionForResolutionTier,
 } from '../src/generator-state.js';
@@ -64,10 +65,19 @@ test('모드·타입 혼합 왕복이 모든 상태 키를 항목별로 보존�
 
   // 키 목록을 손으로 적지 않는다. 스키마의 각 선택지에서 기본값과 다른 값을 골라
   // 다음 필드가 추가되어도 같은 테스트가 자동으로 그 필드를 왕복시킨다.
+  /*
+   * ⚠ `qrPosition: 'inner'` 는 독립 축이 아니다 — Type O/A 에서 **중앙 QR 파인더를
+   *   강제**하므로 finderPatternId 와 짝지어 움직인다. 그 둘을 각각 «기본값과 다른 첫
+   *   선택지» 로 잡으면 모순된 조합이 만들어지고, 전환이 그걸 옳게 해소한 결과를
+   *   «왕복이 깨졌다» 로 읽게 된다. (기본 파인더가 불스아이일 땐 대안이 마침
+   *   center-qr 이라 이 결함이 우연히 가려져 있었다 — 2026-08-13 기본값 변경에서 드러남.)
+   */
+  const coupledToFinder = new Set(['inner']);
   for (const key of Object.keys(state)) {
     const descriptor = GENERATOR_STATE_SCHEMA[key];
     const alternative = descriptor.options.find(
-      (candidate) => !Object.is(candidate, state[key]),
+      (candidate) => !Object.is(candidate, state[key])
+        && !(key === 'qrPosition' && coupledToFinder.has(candidate)),
     );
     assert.notEqual(alternative, undefined, key + '에 기본값과 다른 테스트 선택지가 필요함');
     state[key] = alternative;
@@ -78,11 +88,11 @@ test('모드·타입 혼합 왕복이 모든 상태 키를 항목별로 보존�
   let mode = 'normal';
   mode = transitionGeneratorMode('advanced');
   commitFinderQrTransition(
-    state, { ...state, type: 'Y' }, 'Y', DEFAULT_FINDER_PATTERN_ID,
+    state, { ...state, type: 'Y' }, 'Y', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
     { cancelPendingRender() {}, render() {} },
   );
   commitFinderQrTransition(
-    state, { ...state, type: 'O' }, 'O', DEFAULT_FINDER_PATTERN_ID,
+    state, { ...state, type: 'O' }, 'O', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
     { cancelPendingRender() {}, render() {} },
   );
   mode = transitionGeneratorMode('normal');

@@ -7,7 +7,7 @@
 // 않는다 — 윈도를 끄거나 O→Y→O로 돌아오면 사용자가 고른 값이 그대로 살아야 한다.
 
 import {
-  DEFAULT_FINDER_PATTERN_ID, FINDER_PATTERN_IDS, LEGACY_FINDER_PATTERN_ID,
+  CUBE_BULLSEYE_FINDER_PATTERN_ID, FINDER_PATTERN_IDS, LEGACY_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
 import { CENTER_QR_FINDER_PATTERN_ID, DEFAULT_OUTER_QR_POSITION } from './finder-selection.js';
 import { DEFAULT_PRESET, PRESETS } from './luminance.js';
@@ -37,6 +37,9 @@ function field(defaultValue, exposure, options) {
 
 // 선택 가능한 축을 한 곳에 등록한다. UI 노출 대조와 상태 왕복 테스트가 이 스키마를
 // 순회하므로 새 항목을 더하면 일반/고급 누락과 보존 검사가 함께 확장된다.
+/** 생성기 화면의 초기 파인더 — 라이브러리 기본값과 별개다(위 주석). */
+export const GENERATOR_DEFAULT_FINDER_PATTERN_ID = CUBE_BULLSEYE_FINDER_PATTERN_ID;
+
 export const GENERATOR_STATE_SCHEMA = Object.freeze({
   contentTab: field('url', BOTH, ['url', 'text', 'wifi', 'card']),
   type: field('Y', BOTH, GENERATOR_TYPES),
@@ -44,9 +47,15 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   wifiSecurity: field('WPA', BOTH, ['WPA', 'WEP', 'nopass']),
   qrPosition: field(DEFAULT_OUTER_QR_POSITION, BOTH,
     ['inner', 'TL', 'TR', 'BL', 'BR', 'none']),
-  finderPatternId: field(DEFAULT_FINDER_PATTERN_ID, BOTH,
+  // 생성기 화면의 **초기 선택**은 하이브리드다(사용자 지시 2026-08-13). 실사진 12/12 ·
+  // 285ms 로 순수 불스아이(24/24 · 603ms)와 같은 인식률에 절반 가까이 빠르고, 프로젝트
+  // 정체성인 큐브가 코드에 실제로 보인다.
+  // ⚠ 라이브러리 기본값(`DEFAULT_FINDER_PATTERN_ID`)은 «불스아이» 그대로 둔다 — 그쪽은
+  //   finderPatternId 를 안 준 buildScene 이 받는 값이라 임베더의 계약이고, 바꾸면
+  //   불스아이 렌더 계약을 고정한 테스트 30건이 한꺼번에 깨진다. 둘은 다른 개념이다.
+  finderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, BOTH,
     [LEGACY_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
-  previousFinderPatternId: field(DEFAULT_FINDER_PATTERN_ID, INTERNAL,
+  previousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
     [LEGACY_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
     ['TL', 'TR', 'BL', 'BR', 'none']),

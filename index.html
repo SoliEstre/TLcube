@@ -128,6 +128,10 @@
     display: block; width: 22px; height: 22px; border-radius: 4px;
     border: 1px solid var(--line);
   }
+  /* 색 견본이 없는 항목(자동·없음·고대비)도 같은 22px 상자를 차지해야 카드 높이와
+     시각 리듬이 맞는다 — 아이콘 없는 칸만 짧아 보이던 것을 사용자가 지적(2026-08-13). */
+  .swatch-icon { display: block; width: 22px; height: 22px; color: var(--dim); }
+  .toggle-card.active .swatch-icon { color: var(--text); }
   .swatch-mini.checker { background-size: 8px 8px; background-position: 0 0, 0 4px, 4px -4px, -4px 0; }
   .theme-toggle {
     display: flex; gap: 2px; padding: 2px;
@@ -268,6 +272,16 @@
   .finder-card { min-width: 0; width: 100%; padding: 7px 3px; justify-content: flex-start; }
   .finder-card svg { width: 100%; max-width: 52px; height: auto; flex: 0 0 auto; }
   .finder-card-label { min-height: 2.4em; display: flex; align-items: center; line-height: 1.2; }
+  .finder-collapse { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; }
+  .finder-collapse > summary {
+    padding: 8px 10px; color: var(--dim); font-size: 12px; cursor: pointer;
+    list-style: none; user-select: none;
+  }
+  .finder-collapse > summary::-webkit-details-marker { display: none; }
+  .finder-collapse > summary::before { content: '▸ '; }
+  .finder-collapse[open] > summary::before { content: '▾ '; }
+  .finder-collapse[open] > summary { color: var(--text); border-bottom: 1px solid var(--line); }
+  .finder-collapse > :not(summary) { padding: 8px; }
   .finder-score-panel {
     margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
     background: color-mix(in srgb, var(--panel) 72%, var(--bg));
@@ -861,18 +875,27 @@
       <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
       <label data-i18n="g063">안전영역 (코드 주변 여백)</label>
       <div class="card-row" id="quietModeCards">
-        <div class="toggle-card active" data-quiet="auto" title="배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략" data-i18n-attr="title:g014" data-i18n="g028">자동</div>
-        <div class="toggle-card" data-quiet="none" title="안전영역 없이 코드만" data-i18n-attr="title:g015" data-i18n="g036">없음</div>
+        <div class="toggle-card active" data-quiet="auto" title="배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략" data-i18n-attr="title:g014"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3 2.4"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor" stroke="none"/></svg><span data-i18n="g028">자동</span></div>
+        <div class="toggle-card" data-quiet="none" title="안전영역 없이 코드만" data-i18n-attr="title:g015"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/><path d="M4 20 L20 4"/></svg><span data-i18n="g036">없음</span></div>
         <div class="toggle-card" data-quiet="white"><span class="swatch-mini" style="background:#fff"></span><span data-i18n="g202">흰색</span></div>
         <div class="toggle-card" data-quiet="black"><span class="swatch-mini" style="background:#000"></span><span data-i18n="g203">검정</span></div>
-        <div class="toggle-card" data-quiet="contrast" title="셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름" data-i18n-attr="title:g016" data-i18n="g081">고대비</div>
+        <div class="toggle-card" data-quiet="contrast" title="셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름" data-i18n-attr="title:g016"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3 A9 9 0 0 1 12 21 Z" fill="currentColor" stroke="none"/></svg><span data-i18n="g081">고대비</span></div>
       </div>
       <p class="hint" id="quietModeHint"></p>
 
       <div id="finderSection" style="display:none">
         <label data-i18n="g459">중앙 파인더 (Type O/A)</label>
         <div class="finder-legacy-row card-row" id="finderLegacyRow"></div>
-        <div class="finder-family-grid card-row" id="finderPatternCards"></div>
+        <!-- 실험 후보 둘은 기본 접힘(사용자 지시 2026-08-13). 정식 4종만 펼쳐 두면
+             카드 수가 15개에서 4개로 줄어 «무엇을 고르면 되는가» 가 바로 보인다. -->
+        <details class="finder-collapse" id="finderBelowBar">
+          <summary data-i18n="g510">기준 미달 후보</summary>
+          <div class="finder-family-grid card-row" id="finderPatternCards"></div>
+        </details>
+        <details class="finder-collapse" id="finderUnscannable">
+          <summary data-i18n="g511">스캔 불가 후보</summary>
+          <div id="finderUserCards"></div>
+        </details>
         <div class="finder-score-panel" id="finderScorePanel" aria-live="polite" aria-label="선택 파인더 특성" data-i18n-attr="aria-label:g496">
           <div class="finder-score-heading">
             <strong id="finderScoreName"></strong>
@@ -899,12 +922,6 @@
       <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
            (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
       <div class="card-row" id="qrPositionCards">
-        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)" data-i18n-attr="title:g017">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg><span data-i18n="g204">안쪽</span><span class="hint" style="margin:0">β</span>
-        </div>
         <div class="toggle-card active" data-pos="TL">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
@@ -925,6 +942,11 @@
             <rect x="4" y="4" width="16" height="16" rx="2"/>
             <rect x="12.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
           </svg><span data-i18n="g087">우하</span></div>
+        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도)" data-i18n-attr="title:g017">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
+          </svg><span data-i18n="g204">안쪽</span></div>
         <div class="toggle-card" data-pos="none" title="QR 링크 없이 코드만 내보내요" data-i18n-attr="title:g018">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <rect x="4" y="4" width="16" height="16" rx="2"/>
@@ -1194,7 +1216,7 @@ const GENERATOR_STRINGS = {
     "g457": "TLcube 생성기 — TrilLuminance (cube) 코드 만들기",
     "g458": "TLcube 생성",
     "g459": "중앙 파인더 (Type O/A)",
-    "g460": "현행 불스아이",
+    "g460": "불스아이",
     "g461": "면 나선",
     "g462": "솔리드 중심",
     "g463": "3날",
@@ -1239,11 +1261,13 @@ const GENERATOR_STRINGS = {
     "g502": "나무 개선안",
     "g503": "고양이 개선안",
     "g504": "사용자 손그림 개선안",
-    "g505": "최대 3톤 큐브",
+    "g505": "3톤 큐브",
     "g506": "촬영 강건성",
     "g507": "{filename}으로 다운로드되었습니다.",
     "g508": "파인더 에디터",
     "g509": "불스아이 속 큐브",
+    "g510": "기준 미달 후보",
+    "g511": "스캔 불가 후보",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1402,7 +1426,7 @@ const GENERATOR_STRINGS = {
     "g457": "TLcube generator — make TrilLuminance (cube) codes",
     "g458": "TLcube gen",
     "g459": "Centre finder (Type O/A)",
-    "g460": "Current bullseye",
+    "g460": "Bullseye",
     "g461": "Face swirl",
     "g462": "Solid centre",
     "g463": "3 blades",
@@ -1447,11 +1471,13 @@ const GENERATOR_STRINGS = {
     "g502": "Refined tree",
     "g503": "Refined cats",
     "g504": "Refined hand-drawn designs",
-    "g505": "Maximum three-tone cube",
+    "g505": "Three-tone cube",
     "g506": "Capture robustness",
     "g507": "Downloaded as {filename}.",
     "g508": "Finder editor",
     "g509": "Cube in bullseye",
+    "g510": "Below-bar candidates",
+    "g511": "Not scannable",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1610,7 +1636,7 @@ const GENERATOR_STRINGS = {
     "g457": "TLcube ジェネレータ — TrilLuminance (cube) コードを作る",
     "g458": "TLcube 生成",
     "g459": "中央ファインダー（Type O/A）",
-    "g460": "現行ブルズアイ",
+    "g460": "ブルズアイ",
     "g461": "フェイス・スワール",
     "g462": "中心塗り",
     "g463": "3枚羽根",
@@ -1655,11 +1681,13 @@ const GENERATOR_STRINGS = {
     "g502": "ツリー改良案",
     "g503": "キャッツ改良案",
     "g504": "手描きデザイン改良案",
-    "g505": "最大3トーンキューブ",
+    "g505": "3トーンキューブ",
     "g506": "撮影堅牢性",
     "g507": "{filename} としてダウンロードしました。",
     "g508": "ファインダーエディタ",
     "g509": "ブルズアイの中のキューブ",
+    "g510": "基準未達の候補",
+    "g511": "スキャン不可の候補",
   },
 };
 
@@ -1694,7 +1722,7 @@ import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { encodeA } from './src/encodeA.js';
 import {
-  DEFAULT_FINDER_PATTERN_ID, FINDER_BASELINE_SCORES, LEGACY_FINDER_PATTERN_ID,
+  FINDER_BASELINE_SCORES, LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
 } from './src/finder-patterns.js';
 import {
@@ -1706,10 +1734,12 @@ import {
 } from './src/finder-card-ui.js';
 import { sceneOptionsForOA } from './src/generator-render-config.js';
 import {
+  GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   createGeneratorState, resolutionTierForVersion, transitionGeneratorMode,
   versionForResolutionTier, versionStateKey,
 } from './src/generator-state.js';
 import { FACES, facePolygon } from './src/hexgrid.js';
+import { maxSafeRadius } from './src/bullseye.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
@@ -1756,6 +1786,7 @@ const els = {
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
   finderPatternCards: $('finderPatternCards'),
+  finderUserCards: $('finderUserCards'),
   finderScorePanel: $('finderScorePanel'), finderScoreRows: $('finderScoreRows'),
   finderScoreName: $('finderScoreName'), finderGateBadge: $('finderGateBadge'),
   finderCenterOffset: $('finderCenterOffset'), finderCenterGate: $('finderCenterGate'),
@@ -2302,6 +2333,9 @@ const FINDER_MEASURED_DECODE_RATES = Object.freeze({
   [CENTER_QR_FINDER_PATTERN_ID]: 89,
 });
 const FINDER_SVG_NS = 'http://www.w3.org/2000/svg';
+// 썸네일 공용 프레임(56×48)에서 파인더 바깥 반지름. 모든 파인더가 이 자를 쓴다.
+// 20 = 기존 불스아이 썸네일의 최외곽 원 — 그게 눈에 익은 기준이라 거기에 맞춘다.
+const FINDER_THUMB_OUTER = 20;
 
 function ensureFinderScoreRows() {
   if (els.finderScoreRows.childElementCount) return;
@@ -2388,37 +2422,30 @@ function finderMaskThumbnail(pattern) {
 }
 
 function finderCubeThumbnail(pattern) {
-  const size = 6;
-  const layout = { size: pattern.radiusCells * size, originX: 0, originY: 0 };
-  const slotLayout = { size: pattern.slotRadiusCells * size, originX: 0, originY: 0 };
-  const slotFaces = FACES.map((face) => facePolygon(0, 0, face, slotLayout));
-  const cubeFaces = FACES.map((face) => ({
-    face,
-    polygon: facePolygon(0, 0, face, layout),
-  }));
-  const points = slotFaces.flat();
-  const minX = Math.min(...points.map((point) => point.x));
-  const maxX = Math.max(...points.map((point) => point.x));
-  const minY = Math.min(...points.map((point) => point.y));
-  const maxY = Math.max(...points.map((point) => point.y));
+  /*
+   * 다른 썸네일과 **같은 56×48 프레임**을 쓴다. 예전엔 19셀 슬롯(4c) 경계에서 viewBox 를
+   * 뽑아 혼자 좌표계가 달랐고, 그래서 카드 안에서 눈에 띄게 크게 그려졌다(사용자 지적
+   * 2026-08-13). 크기는 R_max 대비 비율로 맞춘다 — 불스아이·하이브리드가 바깥 반지름
+   * 24 를 쓰므로 큐브도 같은 자로 잰다.
+   */
+  const layout = {
+    size: (FINDER_THUMB_OUTER * pattern.radiusCells) / maxSafeRadius(1),
+    originX: 28,
+    originY: 24,
+  };
   // 썸네일도 실제 렌더와 같은 고정 파인더 색을 쓴다 — 카드에서 본 것과 코드에 찍히는
   // 것이 다르면 «색을 골랐다» 는 착각이 생긴다. FINDER_CUBE_TONES 와 같은 값이다.
   const fills = ['#4a5789', '#7994d1', '#c8cfda'];
   const svg = finderSvgElement('svg', {
-    viewBox: [minX, minY, maxX - minX, maxY - minY].join(' '),
+    viewBox: '0 0 56 48',
     'aria-hidden': 'true',
     'data-three-tone-cube': 'true',
   });
-  for (const polygon of slotFaces) {
+  for (const face of FACES) {
     svg.append(finderSvgElement('polygon', {
-      points: polygon.map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
-      fill: 'var(--bg)',
-    }));
-  }
-  for (const entry of cubeFaces) {
-    svg.append(finderSvgElement('polygon', {
-      points: entry.polygon.map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
-      fill: fills[pattern.toneRanks[entry.face]],
+      points: facePolygon(0, 0, face, layout)
+        .map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
+      fill: fills[pattern.toneRanks[face]],
       stroke: 'var(--line)',
       'stroke-width': 0.35,
     }));
@@ -2435,7 +2462,7 @@ function finderCubeThumbnail(pattern) {
  *   «표현이 늘 때 같이 봐야 하는 분기» 가 바로 여기다.
  */
 function finderCubeBullseyeThumbnail(pattern) {
-  const outer = 24;
+  const outer = FINDER_THUMB_OUTER;
   const bands = 6;
   const innerBands = pattern.params.innerCubeBands;
   const svg = finderSvgElement('svg', { viewBox: '0 0 56 48', 'aria-hidden': 'true',
@@ -2505,7 +2532,7 @@ function makeFinderCard(id, pattern) {
   const activate = () => {
     const type = currentType();
     commitFinderQrUi(
-      selectFinderPattern(generatorState, id, type, DEFAULT_FINDER_PATTERN_ID), type,
+      selectFinderPattern(generatorState, id, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
     );
   };
   wireFinderCardActivation(card, activate);
@@ -2514,7 +2541,8 @@ function makeFinderCard(id, pattern) {
 
 function ensureFinderCards() {
   ensureFinderScoreRows();
-  if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount) return;
+  if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount
+    || els.finderUserCards.childElementCount) return;
 
   // 정식 선택지: 불스아이 → 3톤 큐브 → 중앙 QR. 큐브는 cell-mask 행에 섞지 않는다.
   els.finderLegacyRow.append(
@@ -2554,7 +2582,7 @@ function ensureFinderCards() {
     cards.className = 'finder-user-patterns';
     cards.append(...refinedPatterns.map(({ id, pattern }) => makeFinderCard(id, pattern)));
     family.append(heading, cards);
-    els.finderPatternCards.append(family);
+    els.finderUserCards.append(family);
   }
 }
 
@@ -2667,7 +2695,7 @@ for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     const type = currentType();
     commitFinderQrUi(
-      selectQrPosition(generatorState, card.dataset.pos, type, DEFAULT_FINDER_PATTERN_ID), type,
+      selectQrPosition(generatorState, card.dataset.pos, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
     );
   });
 }
@@ -2675,7 +2703,7 @@ syncFinderQrUi();
 
 function commitFinderQrUi(nextState, type = currentType()) {
   commitFinderQrTransition(
-    generatorState, nextState, type, DEFAULT_FINDER_PATTERN_ID, {
+    generatorState, nextState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID, {
       cancelPendingRender: cancelScheduledRender,
       render: () => {
         syncTypeUi();
@@ -3698,7 +3726,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-13.01';
+const GENERATOR_BUILD = '2026-08-13.02';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

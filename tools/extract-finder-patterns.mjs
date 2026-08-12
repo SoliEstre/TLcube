@@ -357,6 +357,10 @@ export function renderFinderPatternsModule(candidates = generateSelectedFinderCa
 import { FACES, regionCells } from './hexgrid.js';
 
 export const LEGACY_FINDER_PATTERN_ID = 'bullseye';
+// ⚠ 여기는 **라이브러리 기본값** 이다 — finderPatternId 를 안 준 buildScene 이 받는 값이고
+// 임베더가 그대로 받는다. «생성기 화면의 초기 선택» 은 별개이며 generator-state.js 가
+// 정한다(2026-08-13 하이브리드로 바꾼 것은 그쪽이다). 둘을 섞으면 불스아이 렌더 계약을
+// 고정한 테스트 30건이 한꺼번에 깨진다.
 export const DEFAULT_FINDER_PATTERN_ID = 'bullseye';
 export const FINDER_FACE_BITS = Object.freeze({ T: 1, L: 2, R: 4 });
 export const THREE_TONE_CUBE_FINDER_PATTERN_ID = ${JSON.stringify(THREE_TONE_CUBE.id)};
