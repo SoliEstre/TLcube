@@ -25,8 +25,8 @@ base-6 심볼 하나로 쓴다. 절대 밝기가 아니라 순서에 데이터�
 
 ## 관련 사이트
 
-- https://tl.estre.so/ — 소개 허브, 스캐너 개발 현황
-- https://tlscan.estre.so/ — 웹 스캐너 (개발 중)
+- https://tl.estre.so/ — 소개 허브, 스캐너 개선 현황
+- https://tlscan.estre.so/ — 웹 스캐너 (동작 · 개선 중)
 - https://github.com/SoliEstre/TLcube — 스펙과 레퍼런스 구현 (Apache-2.0)
 
 ## 라이선스

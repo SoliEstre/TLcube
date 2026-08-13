@@ -35,12 +35,29 @@ function alternates() {
     .join('\n');
 }
 
+/* 언어 선택은 **접힌 레이어**다. 펼친 pill 3개로 두면 상단 바에서 자리를 너무 먹는다
+   — 내비 5 + 외부 링크 2 + 테마 3버튼이 이미 있어 좁은 화면에서 줄이 접혔다.
+   현재 언어를 토글에 적어 두면 접혀 있어도 «지금 무슨 언어인지»는 계속 보인다.
+
+   ⚠ `role="menu"` 를 쓰지 않는다. ARIA 메뉴는 «명령» 을 담는 위젯이라 보조기술이
+   방향키 조작을 기대하고 Tab 을 건너뛴다. 여기 든 것은 그냥 **링크 3개**이므로
+   disclosure(펼침) 패턴이 맞다 — 버튼의 `aria-expanded` + `aria-controls` 만으로 족하고
+   Tab 이동이 그대로 산다.
+   ⚠ 크롤러는 hreflang 을 보므로 메뉴가 `hidden` 이어도 색인에는 영향이 없다. */
 function langSwitch(current, t) {
   const items = languages.map((l) => {
     const active = l.code === current.code;
     return `<a href="${ORIGIN}/${l.dir}" hreflang="${l.code}"${active ? ' aria-current="true"' : ''} data-lang-pick="${l.code}">${l.label}</a>`;
-  }).join('\n        ');
-  return `<div class="lang-switch" role="group" aria-label="${t.langLabel}">\n        ${items}\n      </div>`;
+  }).join('\n          ');
+  return `<div class="lang-drop" data-lang-drop>
+        <button type="button" class="lang-drop-toggle" aria-expanded="false" aria-controls="lang-menu" aria-label="${t.langLabel}">
+          <span class="lang-drop-current">${current.label}</span>
+          <span class="lang-drop-caret" aria-hidden="true"></span>
+        </button>
+        <div class="lang-drop-menu" id="lang-menu" hidden>
+          ${items}
+        </div>
+      </div>`;
 }
 
 function jsonLd(lang, t) {
@@ -143,9 +160,12 @@ ${jsonLd(lang, t)}
   <header class="bar">
     <a class="brand" href="${ORIGIN}/${lang.dir}">TL<span class="mark">cube</span></a>
     <nav>
+      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
+           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
+           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
       <a href="#why-now">${t.navWhyNow}</a>
-      <a href="#what">${t.navWhat}</a>
       <a href="#types">${t.navTypes}</a>
+      <a href="#what">${t.navWhat}</a>
       <a href="#scanner-status">${t.navStatus}</a>
       <a href="#spec">${t.navSpec}</a>
       <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">${t.navGenerator}</a>
@@ -229,14 +249,18 @@ ${jsonLd(lang, t)}
           <tr><th>${t.thType}</th><th>${t.thDecoded}</th><th>${t.thTime}</th><th>${t.thRealtime}</th></tr>
         </thead>
         <tbody>
-          <tr><td>${t.rowYName}</td><td>${badge('ok', s.types.Y.decoded)}</td><td>${lang.code === 'ko' ? s.types.Y.ms : lang.code === 'en' ? s.types.Y.msEn : s.types.Y.msJa}</td><td>${badge('ok', t.badgeUsable)}</td></tr>
+          <!-- 실시간 스캔 배지는 «복호 시간 vs 0.3초 프레임 간격» 이라는 이 페이지 자신의
+               기준을 따른다. 세 타입 모두 그 간격보다 길어 전부 «개선 중» 이다 —
+               Y 를 «쓸 만함» 으로 두면 페이지가 스스로 세운 기준과 어긋난다. -->
+          <tr><td>${t.rowYName}</td><td>${badge('ok', s.types.Y.decoded)}</td><td>${lang.code === 'ko' ? s.types.Y.ms : lang.code === 'en' ? s.types.Y.msEn : s.types.Y.msJa}</td><td>${badge('warn', t.badgeSlow)}</td></tr>
           <tr><td>${t.rowOName}</td><td>${badge('ok', s.types.O.decoded)}</td><td>${lang.code === 'ko' ? s.types.O.ms : lang.code === 'en' ? s.types.O.msEn : s.types.O.msJa}</td><td>${badge('warn', t.badgeSlow)}</td></tr>
-          <tr><td>${t.rowAName}</td><td>${badge('warn', s.types.A.decoded)}</td><td>${lang.code === 'ko' ? s.types.A.ms : lang.code === 'en' ? s.types.A.msEn : s.types.A.msJa}</td><td>${badge('warn', t.badgeSlow)}</td></tr>
+          <tr><td>${t.rowAName}</td><td>${badge('ok', s.types.A.decoded)}</td><td>${lang.code === 'ko' ? s.types.A.ms : lang.code === 'en' ? s.types.A.msEn : s.types.A.msJa}</td><td>${badge('warn', t.badgeSlow)}</td></tr>
           <tr><td>${t.rowCenterQr}</td><td>${badge('ok', s.centerQr.decoded)}</td><td>—</td><td>${badge('warn', t.badgeSlow)}</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px">${t.statusNote1}</p>
+    <p class="dim" style="margin-top:16px">${t.statusNote0}</p>
+    <p class="dim">${t.statusNote1}</p>
     <p class="dim">${t.statusNote2}</p>
     <p class="dim">${t.statusNote3}</p>
     <p class="dim" style="margin-top:16px"><small>${t.statusFoot}</small></p>
@@ -255,7 +279,7 @@ ${jsonLd(lang, t)}
         <thead><tr><th>${t.thSite}</th><th>${t.thRole}</th><th>${t.thState}</th></tr></thead>
         <tbody>
           <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>${t.roleGenerator}</td><td>${badge('ok', t.stateWorking)}</td></tr>
-          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>${t.roleScanner}</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none">${badge('warn', t.stateDev)}</a></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>${t.roleScanner}</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none">${badge('ok', t.stateScanner)}</a></td></tr>
           <tr><td>tl.estre.so</td><td>${t.roleHub}</td><td>${badge('ok', t.stateHere)}</td></tr>
         </tbody>
       </table>

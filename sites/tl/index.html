@@ -71,17 +71,26 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/">TL<span class="mark">cube</span></a>
     <nav>
+      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
+           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
+           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
       <a href="#why-now">왜 지금</a>
-      <a href="#what">무엇인가</a>
       <a href="#types">타입</a>
+      <a href="#what">동작 방식</a>
       <a href="#scanner-status">스캐너 현황</a>
       <a href="#spec">스펙</a>
       <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">생성기</a>
       <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">스캐너</a>
-      <div class="lang-switch" role="group" aria-label="언어">
-        <a href="https://tl.estre.so/" hreflang="ko" aria-current="true" data-lang-pick="ko">한국어</a>
-        <a href="https://tl.estre.so/en/" hreflang="en" data-lang-pick="en">English</a>
-        <a href="https://tl.estre.so/ja/" hreflang="ja" data-lang-pick="ja">日本語</a>
+      <div class="lang-drop" data-lang-drop>
+        <button type="button" class="lang-drop-toggle" aria-expanded="false" aria-controls="lang-menu" aria-label="언어">
+          <span class="lang-drop-current">한국어</span>
+          <span class="lang-drop-caret" aria-hidden="true"></span>
+        </button>
+        <div class="lang-drop-menu" id="lang-menu" hidden>
+          <a href="https://tl.estre.so/" hreflang="ko" aria-current="true" data-lang-pick="ko">한국어</a>
+          <a href="https://tl.estre.so/en/" hreflang="en" data-lang-pick="en">English</a>
+          <a href="https://tl.estre.so/ja/" hreflang="ja" data-lang-pick="ja">日本語</a>
+        </div>
       </div>
       <div class="theme-toggle" role="group" aria-label="테마">
         <button type="button" data-theme-choice="auto">자동</button>
@@ -153,25 +162,29 @@
   </section>
 
   <section id="scanner-status">
-    <h2>스캐너 개발 현황</h2>
-    <p class="lead">디코더는 개발 중입니다. 아래는 <strong>실기기 촬영 사진</strong>으로 잰 현재 상태예요 — 합성 테스트가 아니라 실제 스마트폰 카메라 결과입니다.</p>
+    <h2>스캐너 개선 현황</h2>
+    <p class="lead"><strong>디코더는 동작합니다.</strong> 세 타입 모두 실기기 사진에서 읽히고, 지금은 인식률과 속도를 끌어올리는 개선 단계예요. 아래는 <strong>실기기 촬영 사진</strong>으로 잰 현재 상태입니다 — 합성 테스트가 아니라 실제 스마트폰 카메라 결과예요.</p>
     <div class="table-scroll" style="margin-top:20px">
       <table>
         <thead>
           <tr><th>타입</th><th>실사진 복호</th><th>복호 시간</th><th>실시간 스캔</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Type Y</strong> — 단일 큐브</td><td><span class="badge ok">3 / 3</span></td><td>약 0.23초</td><td><span class="badge ok">쓸 만함</span></td></tr>
-          <tr><td><strong>Type O</strong> — 육각 필드</td><td><span class="badge ok">3 / 3</span></td><td>약 0.69초</td><td><span class="badge warn">개선 중</span></td></tr>
-          <tr><td><strong>Type A</strong> — 삼각 실루엣</td><td><span class="badge warn">2 / 3</span></td><td>약 0.72초</td><td><span class="badge warn">개선 중</span></td></tr>
+          <!-- 실시간 스캔 배지는 «복호 시간 vs 0.3초 프레임 간격» 이라는 이 페이지 자신의
+               기준을 따른다. 세 타입 모두 그 간격보다 길어 전부 «개선 중» 이다 —
+               Y 를 «쓸 만함» 으로 두면 페이지가 스스로 세운 기준과 어긋난다. -->
+          <tr><td><strong>Type Y</strong> — 단일 큐브</td><td><span class="badge ok">3 / 3</span></td><td>약 0.85초</td><td><span class="badge warn">개선 중</span></td></tr>
+          <tr><td><strong>Type O</strong> — 육각 필드</td><td><span class="badge ok">3 / 3</span></td><td>약 2.2초</td><td><span class="badge warn">개선 중</span></td></tr>
+          <tr><td><strong>Type A</strong> — 삼각 실루엣</td><td><span class="badge ok">3 / 3</span></td><td>약 1.0초</td><td><span class="badge warn">개선 중</span></td></tr>
           <tr><td><strong>중앙 QR 변형</strong> (세 타입 공통)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">개선 중</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px">복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. 최적화로 O·A 가 1초 아래로 내려왔지만 아직 프레임 간격보다는 길어요 — Y 가 가장 매끄럽습니다.</p>
+    <p class="dim" style="margin-top:16px"><strong>지난 갱신보다 시간이 늘었습니다.</strong> 파인더를 새로 짜고 포맷 판독에 재시도 경로를 넣으면서 <strong>인식률을 시간으로 샀어요</strong> — 그 대가로 Type A 가 2/3 에서 3/3 이 됐습니다. 같은 사진·같은 방법으로 옛 버전과 번갈아 재서 확인한 값이고, 다음 개선 과제는 여기입니다.</p>
+    <p class="dim">복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. 지금은 세 타입 모두 그 간격보다 길어요 — Y 가 그중 가장 매끄럽습니다. (라이브는 더 작은 프레임을 보기 때문에 실제로는 이 표보다 빠릅니다 — 같은 사진의 960px 판에서 Y 0.6초 · A 0.66초 · O 1.4초였어요.)</p>
     <p class="dim">촬영 조건도 크게 작용합니다. 실측에서 <strong>셀당 9픽셀</strong>이 복호 하한이었고, 같은 거리라도 <strong>초광각 렌즈</strong>로 찍으면 코드가 작게 담겨 이 선 아래로 내려갔어요 (초광각 7.6px 실패 / 광각 9.1px 성공). 스캐너에 렌즈 선택을 넣어 둔 이유입니다.</p>
     <p class="dim"><strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하는 형태예요. 진입점이 없어 한동안 못 읽었는데, QR 자신의 파인더를 기준점으로 삼는 경로를 넣어 이제 읽힙니다.</p>
-    <p class="dim" style="margin-top:16px"><small>측정 2026-08-11 · 표본은 스마트폰 3개 센서(초광각·광각·망원)로 찍은 사진 9장 · 짧은 변 1440px 기준. 표본이 작아 성공률이 아니라 <em>현재 상태</em>로 읽어 주세요.</small></p>
+    <p class="dim" style="margin-top:16px"><small>측정 2026-08-13 · 표본은 스마트폰 3개 센서(초광각·광각·망원)로 찍은 사진 9장 · 짧은 변 1440px 기준. 표본이 작아 성공률이 아니라 <em>현재 상태</em>로 읽어 주세요.</small></p>
   </section>
 
   <section id="spec">
@@ -187,7 +200,7 @@
         <thead><tr><th>사이트</th><th>역할</th><th>상태</th></tr></thead>
         <tbody>
           <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>생성기</td><td><span class="badge ok">동작</span></td></tr>
-          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>스캐너</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge warn">개발 중 — 현황 ›</span></a></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>스캐너</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge ok">동작 — 현황 ›</span></a></td></tr>
           <tr><td>tl.estre.so</td><td>소개 허브</td><td><span class="badge ok">여기</span></td></tr>
         </tbody>
       </table>

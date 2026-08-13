@@ -71,17 +71,26 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/en/">TL<span class="mark">cube</span></a>
     <nav>
+      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
+           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
+           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
       <a href="#why-now">Why now</a>
-      <a href="#what">How it works</a>
       <a href="#types">Types</a>
+      <a href="#what">How it works</a>
       <a href="#scanner-status">Scanner status</a>
       <a href="#spec">Spec</a>
       <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Generator</a>
       <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">Scanner</a>
-      <div class="lang-switch" role="group" aria-label="Language">
-        <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
-        <a href="https://tl.estre.so/en/" hreflang="en" aria-current="true" data-lang-pick="en">English</a>
-        <a href="https://tl.estre.so/ja/" hreflang="ja" data-lang-pick="ja">日本語</a>
+      <div class="lang-drop" data-lang-drop>
+        <button type="button" class="lang-drop-toggle" aria-expanded="false" aria-controls="lang-menu" aria-label="Language">
+          <span class="lang-drop-current">English</span>
+          <span class="lang-drop-caret" aria-hidden="true"></span>
+        </button>
+        <div class="lang-drop-menu" id="lang-menu" hidden>
+          <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
+          <a href="https://tl.estre.so/en/" hreflang="en" aria-current="true" data-lang-pick="en">English</a>
+          <a href="https://tl.estre.so/ja/" hreflang="ja" data-lang-pick="ja">日本語</a>
+        </div>
       </div>
       <div class="theme-toggle" role="group" aria-label="Theme">
         <button type="button" data-theme-choice="auto">Auto</button>
@@ -153,25 +162,29 @@
   </section>
 
   <section id="scanner-status">
-    <h2>Scanner status</h2>
-    <p class="lead">The decoder is under development. The numbers below come from <strong>photos taken on real phones</strong> — not synthetic test renders.</p>
+    <h2>Scanner — where it stands</h2>
+    <p class="lead"><strong>The decoder works.</strong> All three types read from real-device photos; what is left is raising accuracy and speed. The numbers below come from <strong>photos taken on real phones</strong> — not synthetic test renders.</p>
     <div class="table-scroll" style="margin-top:20px">
       <table>
         <thead>
           <tr><th>Type</th><th>Real photos decoded</th><th>Decode time</th><th>Live scanning</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.23 s</td><td><span class="badge ok">usable</span></td></tr>
-          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~0.69 s</td><td><span class="badge warn">improving</span></td></tr>
-          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge warn">2 / 3</span></td><td>~0.72 s</td><td><span class="badge warn">improving</span></td></tr>
+          <!-- 실시간 스캔 배지는 «복호 시간 vs 0.3초 프레임 간격» 이라는 이 페이지 자신의
+               기준을 따른다. 세 타입 모두 그 간격보다 길어 전부 «개선 중» 이다 —
+               Y 를 «쓸 만함» 으로 두면 페이지가 스스로 세운 기준과 어긋난다. -->
+          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.85 s</td><td><span class="badge warn">improving</span></td></tr>
+          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~2.2 s</td><td><span class="badge warn">improving</span></td></tr>
+          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge ok">3 / 3</span></td><td>~1.0 s</td><td><span class="badge warn">improving</span></td></tr>
           <tr><td><strong>Centre-QR variant</strong> (all three types)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">improving</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px">Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. Optimization brought O and A under a second, but that is still longer than the frame interval — Y is the smoothest.</p>
+    <p class="dim" style="margin-top:16px"><strong>These times are slower than the previous update.</strong> Rebuilding the finder and adding a retry path to format reading <strong>bought accuracy with time</strong> — and it moved Type A from 2/3 to 3/3. The figures come from running the old and new versions alternately on the same photos with the same method. This is the next thing to improve.</p>
+    <p class="dim">Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. All three types are currently longer than that interval, with Y the smoothest of them. (Live scanning works on smaller frames, so it is faster in practice — on the 960 px versions of the same photos: Y 0.6 s, A 0.66 s, O 1.4 s.)</p>
     <p class="dim">Shooting conditions matter too. Measured, <strong>9 pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide 7.6 px failed / wide 9.1 px succeeded). That is why the scanner offers a lens picker.</p>
     <p class="dim">In the <strong>centre-QR variant</strong> a QR block takes the place of the central finder. It was unreadable for a while because there was no entry point; a path that uses the QR’s own finder patterns as reference now handles it.</p>
-    <p class="dim" style="margin-top:16px"><small>Measured 2026-08-11 · sample of 9 photos across three phone sensors (ultra-wide, wide, telephoto) · short side 1440 px. The sample is small — read this as a <em>current state</em>, not a success rate.</small></p>
+    <p class="dim" style="margin-top:16px"><small>Measured 2026-08-13 · sample of 9 photos across three phone sensors (ultra-wide, wide, telephoto) · short side 1440 px. The sample is small — read this as a <em>current state</em>, not a success rate.</small></p>
   </section>
 
   <section id="spec">
@@ -187,7 +200,7 @@
         <thead><tr><th>Site</th><th>Role</th><th>State</th></tr></thead>
         <tbody>
           <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>Generator</td><td><span class="badge ok">live</span></td></tr>
-          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>Scanner</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge warn">in development — status ›</span></a></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>Scanner</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge ok">live — status ›</span></a></td></tr>
           <tr><td>tl.estre.so</td><td>Overview hub</td><td><span class="badge ok">you are here</span></td></tr>
         </tbody>
       </table>

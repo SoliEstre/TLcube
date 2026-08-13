@@ -71,17 +71,26 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/ja/">TL<span class="mark">cube</span></a>
     <nav>
+      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
+           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
+           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
       <a href="#why-now">なぜ今</a>
-      <a href="#what">仕組み</a>
       <a href="#types">タイプ</a>
+      <a href="#what">仕組み</a>
       <a href="#scanner-status">スキャナ状況</a>
       <a href="#spec">仕様</a>
       <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">ジェネレータ</a>
       <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">スキャナ</a>
-      <div class="lang-switch" role="group" aria-label="言語">
-        <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
-        <a href="https://tl.estre.so/en/" hreflang="en" data-lang-pick="en">English</a>
-        <a href="https://tl.estre.so/ja/" hreflang="ja" aria-current="true" data-lang-pick="ja">日本語</a>
+      <div class="lang-drop" data-lang-drop>
+        <button type="button" class="lang-drop-toggle" aria-expanded="false" aria-controls="lang-menu" aria-label="言語">
+          <span class="lang-drop-current">日本語</span>
+          <span class="lang-drop-caret" aria-hidden="true"></span>
+        </button>
+        <div class="lang-drop-menu" id="lang-menu" hidden>
+          <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
+          <a href="https://tl.estre.so/en/" hreflang="en" data-lang-pick="en">English</a>
+          <a href="https://tl.estre.so/ja/" hreflang="ja" aria-current="true" data-lang-pick="ja">日本語</a>
+        </div>
       </div>
       <div class="theme-toggle" role="group" aria-label="テーマ">
         <button type="button" data-theme-choice="auto">自動</button>
@@ -153,25 +162,29 @@
   </section>
 
   <section id="scanner-status">
-    <h2>スキャナ開発状況</h2>
-    <p class="lead">デコーダは開発中です。以下は<strong>実機で撮影した写真</strong>で測った現在の状態で、合成テストではなく実際のスマートフォンのカメラの結果です。</p>
+    <h2>スキャナ改善状況</h2>
+    <p class="lead"><strong>デコーダは動作します。</strong>3 タイプとも実機の写真から読めており、いまは認識率と速度を上げる改善段階です。以下は<strong>実機で撮影した写真</strong>で測った現在の状態で、合成テストではなく実際のスマートフォンのカメラの結果です。</p>
     <div class="table-scroll" style="margin-top:20px">
       <table>
         <thead>
           <tr><th>タイプ</th><th>実写真の復号</th><th>復号時間</th><th>リアルタイム</th></tr>
         </thead>
         <tbody>
-          <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">3 / 3</span></td><td>約 0.23 秒</td><td><span class="badge ok">実用的</span></td></tr>
-          <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">3 / 3</span></td><td>約 0.69 秒</td><td><span class="badge warn">改善中</span></td></tr>
-          <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge warn">2 / 3</span></td><td>約 0.72 秒</td><td><span class="badge warn">改善中</span></td></tr>
+          <!-- 실시간 스캔 배지는 «복호 시간 vs 0.3초 프레임 간격» 이라는 이 페이지 자신의
+               기준을 따른다. 세 타입 모두 그 간격보다 길어 전부 «개선 중» 이다 —
+               Y 를 «쓸 만함» 으로 두면 페이지가 스스로 세운 기준과 어긋난다. -->
+          <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">3 / 3</span></td><td>約 0.85 秒</td><td><span class="badge warn">改善中</span></td></tr>
+          <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">3 / 3</span></td><td>約 2.2 秒</td><td><span class="badge warn">改善中</span></td></tr>
+          <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge ok">3 / 3</span></td><td>約 1.0 秒</td><td><span class="badge warn">改善中</span></td></tr>
           <tr><td><strong>中央 QR 変種</strong>（3 タイプ共通）</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">改善中</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px">復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。最適化で O・A は 1 秒を切りましたが、まだフレーム間隔よりは長めです — Y が最も滑らかです。</p>
+    <p class="dim" style="margin-top:16px"><strong>前回の更新より時間が延びました。</strong>ファインダを作り直し、フォーマット判読に再試行の経路を入れたことで<strong>認識率を時間で買いました</strong> — その代わりに Type A が 2/3 から 3/3 になりました。同じ写真・同じ方法で旧版と交互に測って確認した値で、次の改善課題はここです。</p>
+    <p class="dim">復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。いまは 3 タイプともその間隔より長く、その中では Y が最も滑らかです。（ライブはより小さいフレームを見るため実際にはこの表より速く、同じ写真の 960px 版では Y 0.6 秒・A 0.66 秒・O 1.4 秒でした。）</p>
     <p class="dim">撮影条件も大きく効きます。実測では<strong>セルあたり 9 ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 7.6px 失敗 / 広角 9.1px 成功）。スキャナにレンズ選択を入れているのはそのためです。</p>
     <p class="dim"><strong>中央 QR 変種</strong>は QR ブロックが中央ファインダの位置を代わりに占める形です。入口がなくしばらく読めませんでしたが、QR 自身のファインダを基準にする経路を入れて読めるようになりました。</p>
-    <p class="dim" style="margin-top:16px"><small>測定 2026-08-11 · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 9 枚 · 短辺 1440px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。</small></p>
+    <p class="dim" style="margin-top:16px"><small>測定 2026-08-13 · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 9 枚 · 短辺 1440px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。</small></p>
   </section>
 
   <section id="spec">
@@ -187,7 +200,7 @@
         <thead><tr><th>サイト</th><th>役割</th><th>状態</th></tr></thead>
         <tbody>
           <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>ジェネレータ</td><td><span class="badge ok">稼働中</span></td></tr>
-          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>スキャナ</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge warn">開発中 — 状況 ›</span></a></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>スキャナ</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge ok">稼働中 — 状況 ›</span></a></td></tr>
           <tr><td>tl.estre.so</td><td>紹介ハブ</td><td><span class="badge ok">ここ</span></td></tr>
         </tbody>
       </table>

@@ -63,6 +63,62 @@ test('실측 수치는 세 언어가 같은 값을 쓴다 (한 언어만 옛 숫
   }
 });
 
+// 상단 내비는 이 페이지의 목차다. 목차가 본문과 다른 순서로 서 있으면 방문자는
+// «건너뛴 섹션이 있나» 하고 되짚는다. 실제로 내비만 옛 순서(why-now → what → types)로
+// 남아 본문(why-now → types → what)과 어긋나 있었다.
+test('상단 내비의 앵커 순서가 본문 섹션 순서와 같다', () => {
+  for (const lang of languages) {
+    const html = read(lang);
+    const nav = /<nav>([\s\S]*?)<\/nav>/.exec(html);
+    assert.ok(nav, `${lang.code}: nav 블록 없음`);
+    const anchors = [...nav[1].matchAll(/href="#([\w-]+)"/g)].map((m) => m[1]);
+    assert.ok(anchors.length >= 4, `${lang.code}: 내비 앵커가 너무 적다 — 정규식이 안 맞는 것일 수 있다`);
+    const sections = [...html.matchAll(/<section id="([\w-]+)"/g)].map((m) => m[1]);
+    // 내비에 없는 섹션(hero)은 빼고, 남은 것끼리 순서를 비교한다.
+    assert.deepEqual(anchors, sections.filter((id) => anchors.includes(id)),
+      `${lang.code}: 내비 순서가 본문 섹션 순서와 다르다`);
+    for (const id of anchors) {
+      assert.ok(sections.includes(id), `${lang.code}: 내비가 없는 섹션 #${id} 을 가리킨다`);
+    }
+  }
+});
+
+// 언어 선택은 접힌 레이어다. 접혀 있어도 ① 지금 무슨 언어인지 보이고 ② 세 언어 링크가
+// 문서에 남아야 한다 — 링크가 사라지면 크롤러의 언어판 연결이 끊긴다.
+test('언어 선택이 닫힌 드롭다운이고 현재 언어를 토글에 드러낸다', () => {
+  for (const lang of languages) {
+    const html = read(lang);
+    assert.match(html, /<div class="lang-drop-menu"[^>]*\shidden>/,
+      `${lang.code}: 메뉴가 기본으로 닫혀 있어야 한다`);
+    assert.match(html, /class="lang-drop-toggle"[^>]*aria-expanded="false"/,
+      `${lang.code}: 토글의 초기 aria-expanded 는 false`);
+    assert.ok(html.includes(`<span class="lang-drop-current">${lang.label}</span>`),
+      `${lang.code}: 토글에 현재 언어(${lang.label})가 적혀 있어야 한다`);
+    for (const l of languages) {
+      assert.ok(html.includes(`data-lang-pick="${l.code}"`), `${lang.code}: ${l.code} 링크 누락`);
+    }
+  }
+});
+
+// llms.txt 계열은 **에이전트가 읽는 표면**이다. 사람 눈에 안 띄어서 조용히 낡는다 —
+// 실제로 HTML 이 두 번 갱신되는 동안 이쪽은 「중앙 QR 미지원 · Type O 10.9초」로 남아
+// 있었다. 페이지가 «된다» 고 말하는 것을 llms 는 «안 된다» 고 말하고 있었던 셈이다.
+// 이 두 파일은 HTML 과 같은 수치를 싣는다고 선언했으므로 같은 값인지 지킨다.
+const LLMS_WITH_STATS = ['sites/tl/llms.txt', 'sites/_shared/llms-tlscan.txt'];
+test('llms.txt 계열이 페이지와 같은 실측값을 쓴다', () => {
+  for (const rel of LLMS_WITH_STATS) {
+    const txt = readFileSync(ROOT + rel, 'utf8');
+    assert.ok(txt.includes(stats.measuredOn), `${rel}: 측정일이 ${stats.measuredOn} 이 아니다`);
+    for (const type of ['Y', 'O', 'A']) {
+      assert.ok(txt.includes(stats.types[type].decoded),
+        `${rel}: Type ${type} 복호 수치 ${stats.types[type].decoded} 가 없다`);
+    }
+    assert.ok(txt.includes(stats.centerQr.decoded), `${rel}: 중앙 QR 수치`);
+    assert.ok(!/개발 중/.test(txt),
+      `${rel}: 「개발 중」이 남아 있다 — 페이지는 «동작 · 개선 중» 이라고 말하고 있다`);
+  }
+});
+
 test('JSON-LD 가 파싱되고 문서 언어를 선언한다', () => {
   for (const lang of languages) {
     const html = read(lang);

@@ -37,6 +37,31 @@
   });
   syncThemeButtons();
 
+  // ── 언어 드롭다운 ────────────────────────────────────────
+  // 마크업이 없으면 손대지 않는다. 같은 IIFE 아래 비콘이 있어서, 여기서
+  // throw 하면 이 마크업이 없는 페이지(tlscan)의 사용 집계까지 같이 죽는다.
+  // 링크 기본 동작은 막지 않는다 — 인라인 스크립트가 클릭으로 선택을 저장한다.
+  const langDrop = document.querySelector('[data-lang-drop]');
+  const langToggle = langDrop && langDrop.querySelector('.lang-drop-toggle');
+  const langMenu = langDrop && langDrop.querySelector('.lang-drop-menu');
+  if (langToggle && langMenu) {
+    const langOpen = () => langToggle.getAttribute('aria-expanded') === 'true';
+    const langSet = (open) => {
+      langToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      langMenu.hidden = !open;
+    };
+    langToggle.addEventListener('click', () => { langSet(!langOpen()); });
+    document.addEventListener('click', (e) => {
+      if (!langOpen() || langDrop.contains(e.target)) return;
+      langSet(false);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !langOpen()) return;
+      langSet(false);
+      langToggle.focus();
+    });
+  }
+
   // ── 비콘 ────────────────────────────────────────────────
   const ENDPOINT = 'https://tl.estre.so/i';
   const site = document.body.dataset.site || 'hub';

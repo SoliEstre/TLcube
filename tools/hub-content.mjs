@@ -11,20 +11,31 @@
 
 /** 실측 수치 — 세 언어가 공유한다. 값이 바뀌면 여기만 고친다. */
 export const stats = {
-  measuredOn: '2026-08-11',
+  measuredOn: '2026-08-13',
   sampleCount: 9,
   shortSidePx: 1440,
   cellFloorPx: 9,
   ultraWideFailPx: 7.6,
   wideOkPx: 9.1,
-  // 복호 시간은 **1440px 짧은 변 기준, 파일별 최소값(교차 5회)의 타입 중앙값**이다.
+  // 복호 시간은 **1440px 짧은 변 기준, 파일별 최소값(교차 8회)의 타입 중앙값**이다.
   // 순차 측정은 워밍업·열 편향이 들어가 실제 1.44배가 1.14배로 보인 전례가 있어
   // 최적화 전후를 같은 프로세스에서 번갈아 잰다. 절대값은 측정 머신에 종속되므로
   // 배수(전 대비)가 더 안정적인 값이라는 점을 알아 둔다.
+  // 재현: `node test/output/lanes/hub-stats.mjs` — 표본·방법·대조군이 그 안에 있다.
+  //
+  // ⚠ 2026-08-13 갱신에서 **시간이 나빠졌다.** 같은 9장·같은 방법으로 같은 머신에서
+  //   옛 커밋(9879068)과 번갈아 재 확인했다: Y 4.1× · A 2.0× · O 1.7× 느려졌다.
+  //   원인은 파인더 하이브리드화와 포맷 재라벨 — **인식률을 시간으로 샀다**
+  //   (그 대가로 Type A 가 2/3 → 3/3 이 됐다).
+  //   배수는 **짝지은 측정**이라 머신 상태에 무관하다(같은 프로세스·같은 래스터를 두
+  //   디코더에 번갈아 먹였다). 보조 근거로 옛 커밋이 이 머신에서 Y 를 207ms 로 내
+  //   당시 게시값 230ms 를 재현한다. ⚠ 다만 O 는 재현되지 않는다(옛 코드 1273ms vs
+  //   당시 게시 690ms) — **당시 O 수치 자체가 의심스럽다.** 그래서 이번 갱신은 옛
+  //   게시값과의 차이가 아니라 **짝지은 배수**를 근거로 삼는다.
   types: {
-    Y: { decoded: '3 / 3', ms: '약 0.23초', msEn: '~0.23 s', msJa: '約 0.23 秒' },
-    O: { decoded: '3 / 3', ms: '약 0.69초', msEn: '~0.69 s', msJa: '約 0.69 秒' },
-    A: { decoded: '2 / 3', ms: '약 0.72초', msEn: '~0.72 s', msJa: '約 0.72 秒' },
+    Y: { decoded: '3 / 3', ms: '약 0.85초', msEn: '~0.85 s', msJa: '約 0.85 秒' },
+    O: { decoded: '3 / 3', ms: '약 2.2초', msEn: '~2.2 s', msJa: '約 2.2 秒' },
+    A: { decoded: '3 / 3', ms: '약 1.0초', msEn: '~1.0 s', msJa: '約 1.0 秒' },
   },
   centerQr: { decoded: '8 / 9' },
 };
@@ -45,7 +56,9 @@ export const strings = {
     jsonDescription: '육각 셀을 마름모 3면으로 나누고 세 면의 상대 휘도 순서(3! = 6가지)를 base-6 심볼로 쓰는 오픈 시각 코드. 단조 톤 변형에 불변합니다.',
 
     navWhyNow: '왜 지금',
-    navWhat: '무엇인가', navTypes: '타입', navStatus: '스캐너 현황', navSpec: '스펙',
+    // 섹션 h2 가 «어떻게 동작하나» 인데 내비만 «무엇인가» 였다 — 같은 곳을 가리키는
+    // 두 이름이 다르면 목차가 다른 섹션을 가리키는 것처럼 읽힌다.
+    navWhat: '동작 방식', navTypes: '타입', navStatus: '스캐너 현황', navSpec: '스펙',
     navGenerator: '생성기', navScanner: '스캐너',
     themeLabel: '테마', themeAuto: '자동', themeLight: '라이트', themeDark: '다크',
     langLabel: '언어',
@@ -81,15 +94,16 @@ export const strings = {
     why2: '<strong>렌더러가 자유롭습니다.</strong> 데이터 계약이 "면 사이의 순서 + 최소 분리폭" 뿐이라, 그 안에서 색·질감·면 그라데이션·애니메이션이 전부 열려 있습니다. 그 자유도가 이 포맷의 핵심이에요.',
     why3: '<strong>다만 «자동으로 예뻐지는» 건 아닙니다.</strong> 자유로워지는 것은 계약이지 결과가 아니에요. 그 안에서 무엇을 그릴지는 여전히 만드는 사람 몫입니다.',
 
-    statusTitle: '스캐너 개발 현황',
-    statusLead: '디코더는 개발 중입니다. 아래는 <strong>실기기 촬영 사진</strong>으로 잰 현재 상태예요 — 합성 테스트가 아니라 실제 스마트폰 카메라 결과입니다.',
+    statusTitle: '스캐너 개선 현황',
+    statusLead: '<strong>디코더는 동작합니다.</strong> 세 타입 모두 실기기 사진에서 읽히고, 지금은 인식률과 속도를 끌어올리는 개선 단계예요. 아래는 <strong>실기기 촬영 사진</strong>으로 잰 현재 상태입니다 — 합성 테스트가 아니라 실제 스마트폰 카메라 결과예요.',
     thType: '타입', thDecoded: '실사진 복호', thTime: '복호 시간', thRealtime: '실시간 스캔',
     rowYName: '<strong>Type Y</strong> — 단일 큐브',
     rowOName: '<strong>Type O</strong> — 육각 필드',
     rowAName: '<strong>Type A</strong> — 삼각 실루엣',
     rowCenterQr: '<strong>중앙 QR 변형</strong> (세 타입 공통)',
-    badgeUsable: '쓸 만함', badgeSlow: '개선 중',
-    statusNote1: '복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. 최적화로 O·A 가 1초 아래로 내려왔지만 아직 프레임 간격보다는 길어요 — Y 가 가장 매끄럽습니다.',
+    badgeSlow: '개선 중',
+    statusNote1: '복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. 지금은 세 타입 모두 그 간격보다 길어요 — Y 가 그중 가장 매끄럽습니다. (라이브는 더 작은 프레임을 보기 때문에 실제로는 이 표보다 빠릅니다 — 같은 사진의 960px 판에서 Y 0.6초 · A 0.66초 · O 1.4초였어요.)',
+    statusNote0: '<strong>지난 갱신보다 시간이 늘었습니다.</strong> 파인더를 새로 짜고 포맷 판독에 재시도 경로를 넣으면서 <strong>인식률을 시간으로 샀어요</strong> — 그 대가로 Type A 가 2/3 에서 3/3 이 됐습니다. 같은 사진·같은 방법으로 옛 버전과 번갈아 재서 확인한 값이고, 다음 개선 과제는 여기입니다.',
     statusNote2: `촬영 조건도 크게 작용합니다. 실측에서 <strong>셀당 ${stats.cellFloorPx}픽셀</strong>이 복호 하한이었고, 같은 거리라도 <strong>초광각 렌즈</strong>로 찍으면 코드가 작게 담겨 이 선 아래로 내려갔어요 (초광각 ${stats.ultraWideFailPx}px 실패 / 광각 ${stats.wideOkPx}px 성공). 스캐너에 렌즈 선택을 넣어 둔 이유입니다.`,
     statusNote3: '<strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하는 형태예요. 진입점이 없어 한동안 못 읽었는데, QR 자신의 파인더를 기준점으로 삼는 경로를 넣어 이제 읽힙니다.',
     statusFoot: `측정 ${stats.measuredOn} · 표본은 스마트폰 3개 센서(초광각·광각·망원)로 찍은 사진 ${stats.sampleCount}장 · 짧은 변 ${stats.shortSidePx}px 기준. 표본이 작아 성공률이 아니라 <em>현재 상태</em>로 읽어 주세요.`,
@@ -100,7 +114,7 @@ export const strings = {
     ctaSpec: '포맷 스펙 읽기', ctaImpl: '레퍼런스 구현',
     thSite: '사이트', thRole: '역할', thState: '상태',
     roleGenerator: '생성기', roleScanner: '스캐너', roleHub: '소개 허브',
-    stateWorking: '동작', stateHere: '여기', stateDev: '개발 중 — 현황 ›',
+    stateWorking: '동작', stateHere: '여기', stateScanner: '동작 — 현황 ›',
     footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
     footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume',
   },
@@ -150,15 +164,16 @@ export const strings = {
     why2: '<strong>The renderer stays free.</strong> The data contract is only "the order between faces, plus a minimum separation". Inside that, colour, texture, per-face gradients and animation are all open. That freedom is the point of the format.',
     why3: '<strong>It does not make anything pretty on its own.</strong> What opens up is the contract, not the outcome. What you draw inside it is still your work.',
 
-    statusTitle: 'Scanner status',
-    statusLead: 'The decoder is under development. The numbers below come from <strong>photos taken on real phones</strong> — not synthetic test renders.',
+    statusTitle: 'Scanner — where it stands',
+    statusLead: '<strong>The decoder works.</strong> All three types read from real-device photos; what is left is raising accuracy and speed. The numbers below come from <strong>photos taken on real phones</strong> — not synthetic test renders.',
     thType: 'Type', thDecoded: 'Real photos decoded', thTime: 'Decode time', thRealtime: 'Live scanning',
     rowYName: '<strong>Type Y</strong> — single cube',
     rowOName: '<strong>Type O</strong> — hex field',
     rowAName: '<strong>Type A</strong> — triangular silhouette',
     rowCenterQr: '<strong>Centre-QR variant</strong> (all three types)',
-    badgeUsable: 'usable', badgeSlow: 'improving',
-    statusNote1: 'Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. Optimization brought O and A under a second, but that is still longer than the frame interval — Y is the smoothest.',
+    badgeSlow: 'improving',
+    statusNote1: 'Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. All three types are currently longer than that interval, with Y the smoothest of them. (Live scanning works on smaller frames, so it is faster in practice — on the 960 px versions of the same photos: Y 0.6 s, A 0.66 s, O 1.4 s.)',
+    statusNote0: '<strong>These times are slower than the previous update.</strong> Rebuilding the finder and adding a retry path to format reading <strong>bought accuracy with time</strong> — and it moved Type A from 2/3 to 3/3. The figures come from running the old and new versions alternately on the same photos with the same method. This is the next thing to improve.',
     statusNote2: `Shooting conditions matter too. Measured, <strong>${stats.cellFloorPx} pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide ${stats.ultraWideFailPx} px failed / wide ${stats.wideOkPx} px succeeded). That is why the scanner offers a lens picker.`,
     statusNote3: 'In the <strong>centre-QR variant</strong> a QR block takes the place of the central finder. It was unreadable for a while because there was no entry point; a path that uses the QR’s own finder patterns as reference now handles it.',
     statusFoot: `Measured ${stats.measuredOn} · sample of ${stats.sampleCount} photos across three phone sensors (ultra-wide, wide, telephoto) · short side ${stats.shortSidePx} px. The sample is small — read this as a <em>current state</em>, not a success rate.`,
@@ -169,7 +184,7 @@ export const strings = {
     ctaSpec: 'Read the spec', ctaImpl: 'Reference implementation',
     thSite: 'Site', thRole: 'Role', thState: 'State',
     roleGenerator: 'Generator', roleScanner: 'Scanner', roleHub: 'Overview hub',
-    stateWorking: 'live', stateHere: 'you are here', stateDev: 'in development — status ›',
+    stateWorking: 'live', stateHere: 'you are here', stateScanner: 'live — status ›',
     footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
     footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume',
   },
@@ -219,15 +234,16 @@ export const strings = {
     why2: '<strong>レンダラが自由です。</strong> データ契約は「面どうしの順序 + 最小分離幅」だけ。その中で色・質感・面のグラデーション・アニメーションがすべて開いています。この自由度こそがこのフォーマットの核心です。',
     why3: '<strong>ただし「自動できれいになる」わけではありません。</strong>自由になるのは契約であって結果ではありません。その中で何を描くかは作り手の仕事のままです。',
 
-    statusTitle: 'スキャナ開発状況',
-    statusLead: 'デコーダは開発中です。以下は<strong>実機で撮影した写真</strong>で測った現在の状態で、合成テストではなく実際のスマートフォンのカメラの結果です。',
+    statusTitle: 'スキャナ改善状況',
+    statusLead: '<strong>デコーダは動作します。</strong>3 タイプとも実機の写真から読めており、いまは認識率と速度を上げる改善段階です。以下は<strong>実機で撮影した写真</strong>で測った現在の状態で、合成テストではなく実際のスマートフォンのカメラの結果です。',
     thType: 'タイプ', thDecoded: '実写真の復号', thTime: '復号時間', thRealtime: 'リアルタイム',
     rowYName: '<strong>Type Y</strong> — 単一キューブ',
     rowOName: '<strong>Type O</strong> — 六角フィールド',
     rowAName: '<strong>Type A</strong> — 三角シルエット',
     rowCenterQr: '<strong>中央 QR 変種</strong>（3 タイプ共通）',
-    badgeUsable: '実用的', badgeSlow: '改善中',
-    statusNote1: '復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。最適化で O・A は 1 秒を切りましたが、まだフレーム間隔よりは長めです — Y が最も滑らかです。',
+    badgeSlow: '改善中',
+    statusNote1: '復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。いまは 3 タイプともその間隔より長く、その中では Y が最も滑らかです。（ライブはより小さいフレームを見るため実際にはこの表より速く、同じ写真の 960px 版では Y 0.6 秒・A 0.66 秒・O 1.4 秒でした。）',
+    statusNote0: '<strong>前回の更新より時間が延びました。</strong>ファインダを作り直し、フォーマット判読に再試行の経路を入れたことで<strong>認識率を時間で買いました</strong> — その代わりに Type A が 2/3 から 3/3 になりました。同じ写真・同じ方法で旧版と交互に測って確認した値で、次の改善課題はここです。',
     statusNote2: `撮影条件も大きく効きます。実測では<strong>セルあたり ${stats.cellFloorPx} ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 ${stats.ultraWideFailPx}px 失敗 / 広角 ${stats.wideOkPx}px 成功）。スキャナにレンズ選択を入れているのはそのためです。`,
     statusNote3: '<strong>中央 QR 変種</strong>は QR ブロックが中央ファインダの位置を代わりに占める形です。入口がなくしばらく読めませんでしたが、QR 自身のファインダを基準にする経路を入れて読めるようになりました。',
     statusFoot: `測定 ${stats.measuredOn} · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 ${stats.sampleCount} 枚 · 短辺 ${stats.shortSidePx}px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。`,
@@ -238,7 +254,7 @@ export const strings = {
     ctaSpec: '仕様を読む', ctaImpl: 'リファレンス実装',
     thSite: 'サイト', thRole: '役割', thState: '状態',
     roleGenerator: 'ジェネレータ', roleScanner: 'スキャナ', roleHub: '紹介ハブ',
-    stateWorking: '稼働中', stateHere: 'ここ', stateDev: '開発中 — 状況 ›',
+    stateWorking: '稼働中', stateHere: 'ここ', stateScanner: '稼働中 — 状況 ›',
     footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
     footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume',
   },
