@@ -9,6 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
@@ -46,7 +47,22 @@ test('언어 디렉터리의 자산 경로가 한 단계 올라간다', () => {
     assert.ok(html.includes(`src="${expected}"`),
       `${lang.code}: 자산 경로가 ${expected} 여야 한다 — 언어 디렉터리에서 흔한 404 원인이다`);
     const css = lang.dir === '' ? '../_shared/site.css' : '../../_shared/site.css';
-    assert.ok(html.includes(`href="${css}"`), `${lang.code}: CSS 경로`);
+    assert.ok(html.includes(`href="${css}?v=`), `${lang.code}: CSS 경로`);
+  }
+});
+
+// nginx 는 `_shared/*` 에 7일 캐시를 주는데 HTML 에는 안 준다. 버전 쿼리가 없으면
+// 재방문자가 **새 HTML + 옛 CSS/JS** 를 받는다 — 실제로 언어 드롭다운이 그 조합으로
+// 모양이 깨지고 클릭이 안 먹었다. 해시가 내용과 함께 움직이는지 지킨다.
+test('공유 자산 URL 에 내용 해시 버전이 붙는다 (캐시 스큐 방지)', () => {
+  const shared = (name) => readFileSync(`${ROOT}sites/_shared/${name}`);
+  const expected = (name) => createHash('sha256').update(shared(name)).digest('hex').slice(0, 8);
+  for (const lang of languages) {
+    const html = read(lang);
+    for (const [name, v] of [['site.css', expected('site.css')], ['site.js', expected('site.js')]]) {
+      assert.ok(html.includes(`${name}?v=${v}`),
+        `${lang.code}: ${name} 의 버전 쿼리가 현재 파일 내용의 해시(${v})와 달라요 — build-hub 를 다시 돌리세요`);
+    }
   }
 });
 

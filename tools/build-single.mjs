@@ -53,7 +53,7 @@ const DEFAULT_FINDER_DECLARATION =
 // 상단 주석) — capacity.js 를 import 하는 capacityA 는 반드시 'capacity' 뒤에 온다.
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
-  'hexgrid', 'finder-patterns', 'finder-selection', 'finder-card-ui', 'generator-render-config', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+  'hexgrid', 'finder-patterns', 'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity',
   'placementA', 'layoutA', 'capacityA', 'encodeA',
   'luminance',
@@ -65,6 +65,10 @@ const MODULE_ORDER = [
   'gf256', 'rs', 'qr', 'generator-state', 'export-filename',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'ygrid', 'placementY', 'layoutY', 'capacityY', 'tonemap',
+  // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
+  // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,
+  // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.
+  'generator-render-config',
   'encodeY', 'sceneY', 'verifyY',
   // quietzone 은 순수 기하 모듈이라 의존이 없다 — 끝에 붙여도 위상 정렬이 성립한다.
   'quietzone',

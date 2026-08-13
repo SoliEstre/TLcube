@@ -145,9 +145,10 @@ export function versionSpecY(version, tones = 2) {
 /** 윈도 한 변의 데이터 셀 폭 W (ADR 0003 D1). */
 export const WINDOW_SIZE_Y = 13;
 
-/** 윈도가 지원되는 유일한 (n, tones) — Y2/2톤(D1 조건 ②: n≥25, Y1 은 불가). */
+/** 윈도가 지원되는 유일한 (version, n, tones) — Y2/2톤(D1 조건 ②: n≥25, Y1 은 불가). */
 export const WINDOW_SUPPORTED_N = 25;
 export const WINDOW_SUPPORTED_TONES = 2;
+export const WINDOW_SUPPORTED_VERSION = 2;
 
 /** 윈도 경계(포함) — (i,j) ∈ [lo, hi]² 이면 윈도 안. */
 export function windowBoundsY(n) {

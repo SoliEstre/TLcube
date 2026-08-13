@@ -17,13 +17,29 @@
  * 사용: node tools/build-hub.mjs
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 import { languages, strings, stats } from './hub-content.mjs';
 
 const ROOT = fileURLToPath(new URL('../sites/tl/', import.meta.url));
+const SHARED = fileURLToPath(new URL('../sites/_shared/', import.meta.url));
 const ORIGIN = 'https://tl.estre.so';
+
+/*
+ * ⚠ 공유 자산은 **내용 해시를 쿼리로 달아야 한다.**
+ * nginx 가 `_shared/*` 에 `Cache-Control: public, max-age=604800`(7일)을 주는데 HTML 에는
+ * 안 준다. 그래서 CSS/JS 만 고치면 재방문자는 **새 HTML + 옛 CSS/JS** 를 받는다 —
+ * 마크업은 바뀌었는데 그걸 꾸밀 CSS 도 동작시킬 JS 도 없는 상태다.
+ * 실제로 언어 드롭다운이 이 조합으로 «모양 깨지고 클릭 무반응» 이 됐다.
+ * 해시가 바뀌면 URL 이 바뀌므로 HTML 과 자산이 항상 같이 움직인다.
+ */
+function assetVersion(name) {
+  return createHash('sha256').update(readFileSync(SHARED + name)).digest('hex').slice(0, 8);
+}
+const SITE_CSS_V = assetVersion('site.css');
+const SITE_JS_V = assetVersion('site.js');
 
 /** 정적 자산은 언어 디렉터리에서 한 단계 위로 올라가야 한다. */
 const prefix = (lang) => (lang.dir === '' ? '' : '../');
@@ -152,7 +168,7 @@ ${languages.filter((l) => l.code !== lang.code).map((l) => `<meta property="og:l
 ${jsonLd(lang, t)}
 </script>
 <link rel="icon" href="${p}../_shared/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="${p}../_shared/site.css">
+<link rel="stylesheet" href="${p}../_shared/site.css?v=${SITE_CSS_V}">
 </head>
 <body data-site="hub">
 <div class="wrap">
@@ -297,7 +313,7 @@ ${jsonLd(lang, t)}
   </footer>
 
 </div>
-<script src="${p}../_shared/site.js"></script>${LANG_SCRIPT}
+<script src="${p}../_shared/site.js?v=${SITE_JS_V}"></script>${LANG_SCRIPT}
 </body>
 </html>
 `;
