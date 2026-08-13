@@ -85,9 +85,15 @@ function exactLocationBlocks(source, requestPath) {
 
 function validateLabHtmlRoute(source, expectedAlias) {
   const candidates = exactLocationBlocks(source, '/lab/');
-  const block = candidates.find((candidate) => candidate.includes(`alias ${expectedAlias};`));
+  // ⚠ alias 가 아니라 root+try_files 다. 슬래시로 끝나는 URI 에 alias 로 파일을
+  // 가리키면 nginx 가 index 모듈을 태워 **500** 이 난다 — 라이브에서 실제로 당했다.
+  const dir = expectedAlias.slice(0, expectedAlias.lastIndexOf('/'));
+  const base = dir.slice(0, dir.lastIndexOf('/'));
+  const rel = expectedAlias.slice(base.length);
+  const block = candidates.find((candidate) => candidate.includes(`root ${base};`)
+    && candidate.includes(`try_files ${rel} =404;`));
 
-  assert.ok(block, `/lab/ 이 ${expectedAlias} 를 alias 하지 않는다`);
+  assert.ok(block, `/lab/ 이 root+try_files 로 ${expectedAlias} 를 내보내지 않는다 (alias 는 슬래시 URI 에서 500)`);
   assert.match(block, /add_header\s+Cache-Control\s+"no-store"\s+always;/);
   assert.doesNotMatch(block, /expires\s+7d|Cache-Control\s+"public/);
   return block;
@@ -162,7 +168,10 @@ test('가드 반증: /lab/의 no-store를 public 7일 캐시로 바꾸면 검증
 test('가드 반증: /lab/ alias가 안정판 index로 돌아가면 검증이 실패한다', () => {
   const route = ROUTES[3];
   const source = read(route.file);
-  const mutated = source.replace(route.alias, '/usr/share/nginx/html/index.html');
+  // root 를 안정판 문서 루트로 돌리면 /lab/ 이 안정판 index 를 내보내게 된다.
+  const dir = route.alias.slice(0, route.alias.lastIndexOf('/'));
+  const base = dir.slice(0, dir.lastIndexOf('/'));
+  const mutated = source.replace(`root ${base};`, 'root /usr/share/nginx/html;');
 
   assert.notEqual(mutated, source, '반증용 mutation이 적용되지 않았다');
   assert.throws(() => validateLabHtmlRoute(mutated, route.alias));
