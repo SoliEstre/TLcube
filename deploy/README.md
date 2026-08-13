@@ -89,11 +89,29 @@ clickhouse-client --multiquery < deploy/clickhouse-init.sql
 #    파일 하단 주석의 INSERT 전용 사용자 생성 블록도 실행
 ```
 
+### 공통 — (선택) 시험판 릴레이
+
+단독 호스트에서는 릴레이를 nginx와 같은 네트워크 네임스페이스에서 기본값
+`127.0.0.1:8787`로 실행한다. 릴레이가 없으면 시험판 HTML은 계속 열리고 `/lab/ws`만 502다.
+
+```bash
+clickhouse-client --multiquery < relay/schema.sql
+TL_LAB_CH_USER=tl_lab_ingest TL_LAB_CH_KEY='<INSERT-only 암호>' node relay/server.mjs
+```
+
+프로세스 상시 기동 방식(systemd 등)은 호스트 운영 규약에 맞추되, 외부 포트를 열지 않는다.
+estre.so Docker 배포는 이 방식이 아니라 [`estre-so/`](estre-so/)의 선택 lab overlay를 쓴다.
+
 소스를 고쳤을 때만 생성기를 다시 빌드한다 (서버가 아니라 **개발 머신에서**):
 
 ```bash
 node tools/build-single.mjs      # dist/trilume.html 갱신 → 커밋
+# 시험판 통합 직후에는 아래 타깃을 마지막으로 한 번 실행한다.
+node tools/build-lab.mjs         # sites/_shared/lab-gen.html · lab-scan.html 갱신 → 커밋
 ```
+
+`build-lab.mjs` 는 기존 생성기 실험 변형과 현재 스캐너 빌더를 재사용한다. 서버에서 즉석
+빌드하지 않는다. 통합자가 클라이언트·릴레이 변경을 합친 뒤 한 번만 굽고 산출물까지 배포한다.
 
 ## 확인
 
@@ -101,6 +119,14 @@ node tools/build-single.mjs      # dist/trilume.html 갱신 → 커밋
 curl -sI https://tl.estre.so      | head -1   # 200
 curl -sI https://tlcube.estre.so  | head -1   # 200 — 생성기
 curl -sI https://tlscan.estre.so  | head -1   # 200 — 폴백 QR 목적지
+curl -sI https://tlcube.estre.so/lab/ | grep -i '^cache-control: no-store'
+curl -sI https://tlscan.estre.so/lab/ | grep -i '^cache-control: no-store'
+
+# 릴레이를 안 올렸다면 502, 올렸다면 101
+curl --http1.1 -si https://tlcube.estre.so/lab/ws \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  | head -1
 
 # 평문 → HTTPS 리다이렉트
 curl -sI http://tl.estre.so | head -1         # 301

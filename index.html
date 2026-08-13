@@ -252,6 +252,8 @@
   }
   .experiment-banner strong { display: block; color: var(--text); }
   .experiment-banner a { flex-shrink: 0; color: var(--warn); font-weight: 600; }
+  aside.lab-notice { display: flex; }
+  aside.lab-notice[hidden] { display: none !important; }
 
   /* 중앙 파인더 카드 — 기존 card-row/toggle-card 관용구 위에 배치만 격자로 고정한다. */
   /* 정식 행이 3개일 땐 썸네일 옆에 글자를 두는 가로 배치가 넉넉했는데, 하이브리드가
@@ -536,6 +538,12 @@
     <button type="button" data-theme-choice="dark" data-i18n="g030">다크</button>
   </div>
 </header>
+<aside class="experiment-banner lab-notice" id="labNotice" hidden role="status">
+  <div>
+    <strong data-i18n="g512">시험판입니다</strong>
+    <span data-i18n="g513">이 주소는 시험판입니다. 기기 정보와 생성 설정(타입·버전 등)이 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 이런 전송을 하지 않습니다.</span>
+  </div>
+</aside>
 <aside class="experiment-banner finder-experiment-only" id="finderExperimentBanner" role="status">
   <div>
     <strong data-i18n="g478">시험판 — 실험 파인더 생성기</strong>
@@ -1270,6 +1278,8 @@ const GENERATOR_STRINGS = {
     "g509": "불스아이 속 큐브",
     "g510": "기준 미달 후보",
     "g511": "스캔 불가 후보",
+    "g512": "시험판입니다",
+    "g513": "이 주소는 시험판입니다. 기기 정보와 생성 설정(타입·버전 등)이 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 이런 전송을 하지 않습니다.",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1482,6 +1492,8 @@ const GENERATOR_STRINGS = {
     "g509": "Cube in bullseye",
     "g510": "Below-bar candidates",
     "g511": "Not scannable",
+    "g512": "This is the lab build",
+    "g513": "This is the lab generator. Device details and generation settings (type, version, and so on) are sent in real time. Payload contents are not sent. The stable generator does not send this.",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1694,6 +1706,8 @@ const GENERATOR_STRINGS = {
     "g509": "ブルズアイの中のキューブ",
     "g510": "基準未達の候補",
     "g511": "スキャン不可の候補",
+    "g512": "試用版です",
+    "g513": "このアドレスは試用版です。端末情報と生成設定（タイプ・バージョンなど）がリアルタイムで送信されます。ペイロードの内容は送りません。安定版ではこの送信はありません。",
   },
 };
 
@@ -1724,6 +1738,7 @@ const genI18n = createI18n(GENERATOR_STRINGS, {
   },
 });
 import { createBeacon } from './src/beacon.js';
+import { createLabTelemetry, isLabPath } from './src/lab-telemetry.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
@@ -3698,6 +3713,7 @@ function render() {
     current = {
       type: result.type, encoded: result.encoded, scene: result.scene, faceGains: cfg.faceGains,
     };
+    emitLabGen(result, cfg);
     drawScene(result.scene, els.canvas, 26);
     if (decorActive(current)) {
       const ctx = els.canvas.getContext('2d');
@@ -3737,6 +3753,43 @@ function render() {
   });
 }
 
+const lab = createLabTelemetry({ site: 'gen' });
+const labNotice = document.getElementById('labNotice');
+if (labNotice && isLabPath()) labNotice.hidden = false;
+if (lab.enabled) {
+  const uad = typeof navigator !== 'undefined' ? navigator.userAgentData : null;
+  const brands = uad && uad.brands;
+  const brand = brands ? brands.find((x) => !/Not.?A.?Brand/i.test(x.brand)) : null;
+  const scr = typeof screen !== 'undefined' ? screen : { width: 0, height: 0 };
+  lab.env({
+    ua: { browser: brand ? brand.brand : '', platform: (uad && uad.platform) || '' },
+    screen: {
+      w: scr.width || 0,
+      h: scr.height || 0,
+      dpr: typeof devicePixelRatio === 'number' ? devicePixelRatio : 1,
+    },
+  });
+}
+
+let lastLabGen = '';
+function emitLabGen(result, cfg) {
+  if (!lab.enabled || !result || !result.encoded) return;
+  const body = {
+    type: result.type,
+    version: result.encoded.version,
+    ecc: result.encoded.eccLevel,
+    tones: result.encoded.tones == null ? 3 : result.encoded.tones,
+    finderPatternId: result.finderPatternId || cfg.finderPatternId,
+    qrPosition: generatorState.qrPosition,
+    bgMode: generatorState.bgMode,
+    quietMode: generatorState.quietMode,
+  };
+  const sig = JSON.stringify(body);
+  if (sig === lastLabGen) return;
+  lastLabGen = sig;
+  try { lab.gen(body); } catch { /* 계측 실패는 렌더를 막지 않는다 */ }
+}
+
 for (const el of [
   els.nTextPayload, els.nUrlPayload, els.nWifiSsid, els.nWifiPassword,
   els.nCardName, els.nCardPhone, els.nCardEmail, els.nCardOrg, els.nCardUrl,
@@ -3763,7 +3816,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-13.05';
+const GENERATOR_BUILD = '2026-08-14.01';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 
@@ -3793,8 +3846,11 @@ genBeacon('pageview');
  * 핸들러를 가진 워커를 요구한다)이자, 실기기 시험 중 「배포가 갱신됐나?」를 없애는 장치다.
  * 실패는 전부 삼킨다 — file:// 나 dev 서버에는 `/sw.js` 가 없고, 설치 가능 여부는 부가
  * 기능이지 생성기 동작 조건이 아니다.
+ * 시험판(`/lab/`)은 서비스 워커를 등록하지 않는다.
  */
-startPwaUpdateWatch({ text: t('g600'), applyText: t('g601') });
+if (!isLabPath()) {
+  startPwaUpdateWatch({ text: t('g600'), applyText: t('g601') });
+}
 </script>
 </body>
 </html>

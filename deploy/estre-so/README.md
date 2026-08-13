@@ -29,7 +29,7 @@ TLcube 3사이트를 estre.so 에 올리기 위한 재패키징본이다. **이�
 ## 올리기
 
 ```bash
-# 콘텐츠 배치 — 전부 정적이고 dist/trilume.html 이 커밋돼 있어 빌드도 Node 도 없다
+# 콘텐츠 배치 — lab 산출물까지 통합자가 미리 빌드·커밋하므로 서버에는 Node 가 없다
 git clone https://github.com/SoliEstre/TLcube /srv/tlcube
 
 # 사이트 3종
@@ -46,14 +46,14 @@ docker compose --env-file ~/.secrets/estre.so.env \
 ```bash
 git -C /srv/tlcube pull
 docker compose --env-file ~/.secrets/estre.so.env \
-  -f compose.yml -f projects/tlcube/docker-compose.yml restart tlcube-gen
+  -f compose.yml -f projects/tlcube/docker-compose.yml restart tlcube-gen tlcube-scan
 ```
 
-⚠ **`tlcube-gen` 은 반드시 restart 해야 한다.** 나머지 둘(hub·scan)은 디렉터리를 마운트해서
-`git pull` 만으로 즉시 반영되지만, gen 은 `dist/trilume.html` **파일 하나**를 마운트한다.
-Docker 의 단일 파일 bind mount 는 **inode 에 묶이고**, `git pull` 은 제자리 수정이 아니라
-새로 쓰고 rename 하므로 inode 가 바뀐다 → 컨테이너는 계속 **옛 파일을 서빙**한다.
-증상이 "분명히 pull 했는데 안 바뀐다" 라서 원인을 찾기 어렵다.
+⚠ **`tlcube-gen` 과 `tlcube-scan` 은 반드시 restart 해야 한다.** 둘 다 안정판 HTML과 nginx
+conf 를 단일 파일로 bind mount 한다. Docker 의 단일 파일 bind mount 는 **inode 에 묶이고**,
+`git pull` 은 제자리 수정이 아니라 새로 쓰고 rename 하므로 inode 가 바뀐다 → 컨테이너는
+계속 **옛 HTML/conf 를 서빙**한다. `_shared` 안 lab HTML 자체는 디렉터리 마운트라 pull 즉시
+보이지만, `/lab/` alias와 `/lab/ws` 프록시를 읽는 conf 갱신에는 restart가 필요하다.
 
 ### 수집(/i) — 선택
 
@@ -81,12 +81,45 @@ docker compose --env-file ~/.secrets/estre.so.env \
 ingest 계정은 `GRANT INSERT` 만 갖는다 (Estre Axes 선례와 동일). 자격증명은 nginx 가 주입하고
 브라우저로 나가지 않으며, INSERT 쿼리가 설정에 고정돼 임의 SQL 이 원천 차단된다.
 
+### 시험판(`/lab/`) 릴레이 — 선택
+
+시험판 HTML은 기본 사이트 compose만으로도 열린다. 릴레이 overlay를 빼면 `/lab/ws`만 502가
+되는 것이 정상이다. nginx는 Docker DNS를 요청 시점에 해석하므로 릴레이 부재가 생성기·스캐너
+기동 실패로 번지지 않는다.
+
+```bash
+# 1. 테이블·INSERT-only 유저 준비. 암호는 schema.sql 주석 블록을 채워 별도로 실행한다.
+clickhouse-client --multiquery < /srv/tlcube/relay/schema.sql
+
+# 2. ~/.secrets/estre.so.env 에 추가
+#    TLCUBE_LAB_CH_USER=tl_lab_ingest
+#    TLCUBE_LAB_CH_KEY=<INSERT-only 암호>
+
+# 3. 사이트 + 릴레이 기동
+docker compose --env-file ~/.secrets/estre.so.env \
+  -f compose.yml \
+  -f projects/tlcube/docker-compose.yml \
+  -f projects/tlcube/docker-compose.lab.yml up -d
+```
+
+릴레이 컨테이너는 `tlcube-lab-relay:8787`로 `edge`에만 내부 노출되고 호스트 `ports`는 없다.
+ClickHouse도 `analytics`의 `clickhouse:8123`으로만 접근한다. 브라우저에 보이는 표면은 두
+호스트의 `wss://<host>/lab/ws`뿐이다.
+
 ## 확인
 
 ```bash
 curl -sI https://tl.estre.so      | head -1   # 200
 curl -sI https://tlcube.estre.so  | head -1   # 200 — 생성기
 curl -sI https://tlscan.estre.so  | head -1   # 200 — 폴백 QR 목적지
+curl -sI https://tlcube.estre.so/lab/ | grep -i '^cache-control: no-store'
+curl -sI https://tlscan.estre.so/lab/ | grep -i '^cache-control: no-store'
+
+# 릴레이를 안 올렸다면 502가 정상. 올렸다면 이 Upgrade probe가 101을 돌려야 한다.
+curl --http1.1 -si https://tlcube.estre.so/lab/ws \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  | head -1
 
 # 수집을 올렸다면
 curl -s -X POST https://tl.estre.so/i -H 'Content-Type: text/plain' \
@@ -101,7 +134,9 @@ curl -s -X POST https://tl.estre.so/i -H 'Content-Type: text/plain' \
 | | |
 |---|---|
 | `projects/tlcube/docker-compose.yml` | 사이트 3종 (hub · gen · scan) |
-| `projects/tlcube/static.conf` | hub·scan 공용 정적 conf (`server_name` 없음 — Traefik 이 라우팅) |
+| `projects/tlcube/static-gen.conf` | 생성기 정적 conf와 `/lab/` alias |
+| `projects/tlcube/static.conf` | 스캐너 정적 conf와 `/lab/` alias |
+| `projects/tlcube/docker-compose.lab.yml` | `/lab/ws` 릴레이 — 선택 overlay, 호스트 포트 없음 |
 | `projects/tlcube/docker-compose.ingest.yml` | 수집 — 선택, 별도 파일 |
 | `projects/tlcube/ingest.conf.template` | `/i` conf. `${TL_CH_*}` 는 기동 시 주입 |
 | `clickhouse/001_tlcube_provisioning.sql` | `tlcube` DB·테이블·INSERT 전용 유저 |

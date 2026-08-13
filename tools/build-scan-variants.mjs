@@ -34,8 +34,16 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import { buildScannerHtml } from './build-scanner.mjs';
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'sites', '_shared');
+export const LAB_SCANNER_PATH = path.join(OUT_DIR, 'lab-scan.html');
+
+/** 현재 작업트리의 스캐너를 /lab/ 용으로 만든다. 기존 단일 파일 빌더를 그대로 쓴다. */
+export function buildScannerLabHtml() {
+  return buildScannerHtml();
+}
 
 /**
  * 비교할 버전들. `ref: null` 은 **현재 작업트리**를 뜻한다.
@@ -100,45 +108,56 @@ function buildAt(dir) {
   return readFileSync(path.join(dir, 'dist', 'tlscan.html'), 'utf8');
 }
 
-const built = {};
-const tags = {};
-for (const v of VARIANTS) {
-  if (v.ref === null) {
-    built[v.id] = buildAt(ROOT);
-  } else {
-    /*
-     * 그 커밋의 트리를 통째로 꺼내 **그 안에서** 빌드한다. 작업트리 파일을 섞으면
-     * 어느 코드가 들어갔는지 알 수 없게 된다.
-     *
-     * `git archive | tar` 대신 worktree 를 쓰는 이유는 순전히 Windows 경로 때문이다 —
-     * GNU tar 은 `C:\...` 의 콜론을 원격 호스트 구분자로 읽어 "Cannot connect to C" 로
-     * 죽고, `--force-local` 을 붙이면 이번엔 `-C` 인자의 역슬래시를 망가뜨린다.
-     * worktree 는 경로를 git 이 직접 다루므로 인용 문제가 없다.
-     */
-    const tmp = path.join(tmpdir(), `tlscan-variant-${v.id}`);
-    rmSync(tmp, { recursive: true, force: true });
-    execFileSync('git', ['worktree', 'add', '--detach', tmp, v.ref], { cwd: ROOT, stdio: 'pipe' });
-    try {
-      built[v.id] = buildAt(tmp);
-    } finally {
-      // remove 가 실패해도(락 등) 다음 실행이 막히지 않게 prune 까지 돌린다.
-      try { execFileSync('git', ['worktree', 'remove', '--force', tmp], { cwd: ROOT, stdio: 'pipe' }); } catch { /* 아래 prune 이 정리한다 */ }
+function main() {
+  const built = {};
+  const tags = {};
+  for (const v of VARIANTS) {
+    if (v.ref === null) {
+      built[v.id] = buildAt(ROOT);
+    } else {
+      /*
+       * 그 커밋의 트리를 통째로 꺼내 **그 안에서** 빌드한다. 작업트리 파일을 섞으면
+       * 어느 코드가 들어갔는지 알 수 없게 된다.
+       *
+       * `git archive | tar` 대신 worktree 를 쓰는 이유는 순전히 Windows 경로 때문이다 —
+       * GNU tar 은 `C:\...` 의 콜론을 원격 호스트 구분자로 읽어 "Cannot connect to C" 로
+       * 죽고, `--force-local` 을 붙이면 이번엔 `-C` 인자의 역슬래시를 망가뜨린다.
+       * worktree 는 경로를 git 이 직접 다루므로 인용 문제가 없다.
+       */
+      const tmp = path.join(tmpdir(), `tlscan-variant-${v.id}`);
       rmSync(tmp, { recursive: true, force: true });
-      try { execFileSync('git', ['worktree', 'prune'], { cwd: ROOT, stdio: 'pipe' }); } catch { /* 정리 실패는 빌드 결과와 무관하다 */ }
+      execFileSync('git', ['worktree', 'add', '--detach', tmp, v.ref], { cwd: ROOT, stdio: 'pipe' });
+      try {
+        built[v.id] = buildAt(tmp);
+      } finally {
+        // remove 가 실패해도(락 등) 다음 실행이 막히지 않게 prune 까지 돌린다.
+        try { execFileSync('git', ['worktree', 'remove', '--force', tmp], { cwd: ROOT, stdio: 'pipe' }); } catch { /* 아래 prune 이 정리한다 */ }
+        rmSync(tmp, { recursive: true, force: true });
+        try { execFileSync('git', ['worktree', 'prune'], { cwd: ROOT, stdio: 'pipe' }); } catch { /* 정리 실패는 빌드 결과와 무관하다 */ }
+      }
     }
+    tags[v.id] = buildTagOf(built[v.id]);
   }
-  tags[v.id] = buildTagOf(built[v.id]);
+
+  mkdirSync(OUT_DIR, { recursive: true });
+  for (const v of VARIANTS) {
+    const html = built[v.id];
+    const at = html.indexOf('>', html.indexOf('<body')) + 1;
+    if (at <= 0) throw new Error(`${v.id}: <body> 를 못 찾았다`);
+    const out = html.slice(0, at) + pickerBar(v.id, tags) + html.slice(at);
+    const file = path.join(OUT_DIR, `scan-${v.id}.html`);
+    writeFileSync(file, out);
+    console.log(`sites/_shared/scan-${v.id}.html  ${tags[v.id].padEnd(16)} ${(out.length / 1024).toFixed(0)} KB  (${v.name})`);
+  }
+
+  // 비교 UI가 없는 현재 스캐너 원본을 시험판 경로용으로 함께 둔다.
+  writeFileSync(LAB_SCANNER_PATH, built.new, 'utf8');
+  console.log(`sites/_shared/lab-scan.html ${tags.new.padEnd(16)} ${(built.new.length / 1024).toFixed(0)} KB`);
+
+  console.log('\n배포되면:');
+  for (const v of VARIANTS) console.log(`  https://tlscan.estre.so/_shared/scan-${v.id}.html  — ${v.name}`);
+  console.log('  https://tlscan.estre.so/lab/ — 시험판');
 }
 
-mkdirSync(OUT_DIR, { recursive: true });
-for (const v of VARIANTS) {
-  const html = built[v.id];
-  const at = html.indexOf('>', html.indexOf('<body')) + 1;
-  if (at <= 0) throw new Error(`${v.id}: <body> 를 못 찾았다`);
-  const out = html.slice(0, at) + pickerBar(v.id, tags) + html.slice(at);
-  const file = path.join(OUT_DIR, `scan-${v.id}.html`);
-  writeFileSync(file, out);
-  console.log(`sites/_shared/scan-${v.id}.html  ${tags[v.id].padEnd(16)} ${(out.length / 1024).toFixed(0)} KB  (${v.name})`);
-}
-console.log('\n배포되면:');
-for (const v of VARIANTS) console.log(`  https://tlscan.estre.so/_shared/scan-${v.id}.html  — ${v.name}`);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) main();

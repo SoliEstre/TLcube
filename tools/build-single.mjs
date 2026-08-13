@@ -78,6 +78,8 @@ const MODULE_ORDER = [
   'beacon',
   // pwa-update 도 의존이 없다 — 서비스 워커 등록과 갱신 배너 DOM 만 담는다.
   'pwa-update',
+  // lab-telemetry 도 의존이 없다 — WS 전송과 봉투 조립만 담는다. 시험판에서만 켜진다.
+  'lab-telemetry',
 ];
 
 /**

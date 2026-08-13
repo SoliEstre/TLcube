@@ -102,6 +102,9 @@ export const SCANNER_STRINGS = {
     'value.none': '없음',
     // 브라우저가 카메라 이름을 안 주면(권한 전) 쓰는 대체 이름. 뒤에 번호가 붙는다.
     'camera.fallback': '카메라',
+
+    'lab.notice.title': '시험판입니다',
+    'lab.notice.body': '이 주소는 시험판입니다. 기기·카메라 정보와 실패한 프레임의 축소 이미지가 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 프레임을 기기 안에서만 처리합니다.',
   },
 
   en: {
@@ -191,6 +194,9 @@ export const SCANNER_STRINGS = {
     'copy.failSuffix': ' could not be copied. Please select it and copy manually.',
     'value.none': 'None',
     'camera.fallback': 'Camera',
+
+    'lab.notice.title': 'This is the lab build',
+    'lab.notice.body': 'This is the lab scanner. Device and camera details, and shrunken images of failed frames, are sent in real time. Payload contents are not sent. The stable scanner processes frames only on the device.',
   },
 
   ja: {
@@ -280,5 +286,8 @@ export const SCANNER_STRINGS = {
     'copy.failSuffix': ' をコピーできませんでした。手動で選択してコピーしてください。',
     'value.none': 'なし',
     'camera.fallback': 'カメラ',
+
+    'lab.notice.title': '試用版です',
+    'lab.notice.body': 'このアドレスは試用版です。端末・カメラ情報と、失敗したフレームの縮小画像がリアルタイムで送信されます。ペイロードの内容は送りません。安定版はフレームを端末の中だけで処理します。',
   },
 };

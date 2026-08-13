@@ -1,0 +1,38 @@
+# /lab/ WebSocket 릴레이 — 선택 overlay. 이 파일을 빼면 정적 시험판은 열리고
+# /lab/ws 만 502가 된다. static-*.conf 는 Docker DNS를 요청 시점에 해석하므로
+# 릴레이 부재가 생성기·스캐너 nginx의 기동 실패로 번지지 않는다.
+
+services:
+  tlcube-lab-relay:
+    image: node:24-alpine
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "server.mjs"]
+    environment:
+      # 컨테이너의 0.0.0.0은 edge 내부 공개일 뿐 호스트 포트를 열지 않는다.
+      # 브라우저는 nginx의 /lab/ws만 보고 이 포트에 직접 닿지 못한다.
+      TL_LAB_HOST: "0.0.0.0"
+      TL_LAB_PORT: "8787"
+      TL_LAB_CH_URL: "http://clickhouse:8123"
+      TL_LAB_CH_DATABASE: "tl_lab"
+      TL_LAB_CH_USER: ${TLCUBE_LAB_CH_USER:-tl_lab_ingest}
+      TL_LAB_CH_KEY: ${TLCUBE_LAB_CH_KEY:?TLCUBE_LAB_CH_KEY 미설정 — ~/.secrets/estre.so.env 에 넣으세요}
+    volumes:
+      - ${TLCUBE_SRC:-/srv/tlcube}/relay:/app:ro
+    expose:
+      - "8787"
+    networks:
+      # nginx 프록시는 edge에서 8787로, ClickHouse 호출은 analytics에서 8123으로 간다.
+      # ports를 두지 않아 어느 쪽도 호스트/인터넷에 직접 열리지 않는다.
+      - edge
+      - analytics
+    labels:
+      traefik.enable: "false"
+
+networks:
+  edge:
+    external: true
+    name: edge
+  analytics:
+    external: true
+    name: analytics

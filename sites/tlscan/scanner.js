@@ -15,6 +15,15 @@ import { createBeacon } from '/src/beacon.js';
 import { SCANNER_STRINGS } from './strings.js';
 import { startPwaUpdateWatch } from '/src/pwa-update.js';
 import { decodeFrontend } from '/src/decoder/frontend.js';
+import {
+  classifyStage,
+  createLabTelemetry,
+  estimateCellPx,
+  familyToType,
+  fillFrameMs,
+  isLabPath,
+  nowMs,
+} from '/src/lab-telemetry.js';
 
 const FRAME_INTERVAL_MS = 320;
 
@@ -50,7 +59,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-13.03';
+export const SCANNER_BUILD = '2026-08-14.01';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -101,6 +110,120 @@ let stoppedForVisibility = false;
 let activeUrl = '';
 let returnFocus = null;
 let consecutiveFailedFrames = 0;
+let frameSeq = 0;
+let labEnvSent = false;
+
+const lab = createLabTelemetry({ site: 'scan' });
+
+function resetFrameSeq() {
+  frameSeq = 0;
+}
+
+function currentZoom() {
+  try {
+    const track = cameraStream && cameraStream.getVideoTracks
+      ? cameraStream.getVideoTracks()[0]
+      : null;
+    if (!track || typeof track.getSettings !== 'function') return 1;
+    const zoom = track.getSettings().zoom;
+    return Number.isFinite(zoom) ? zoom : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function stripIdentifying(obj) {
+  if (!obj || typeof obj !== 'object') return {};
+  const out = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (key === 'deviceId' || key === 'groupId') continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+async function collectLabEnv(stream) {
+  const uad = typeof navigator !== 'undefined' ? navigator.userAgentData : null;
+  const brands = uad && uad.brands;
+  const brand = brands ? brands.find((x) => !/Not.?A.?Brand/i.test(x.brand)) : null;
+  const cameras = [];
+  try {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      for (const device of devices) {
+        if (device.kind !== 'videoinput') continue;
+        cameras.push({ label: device.label || '', kind: device.kind });
+      }
+    }
+  } catch {
+    // 목록을 못 읽어도 env 의 나머지(화면·UA)는 보낸다.
+  }
+
+  let track = null;
+  const video = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+  if (video) {
+    let capabilities = {};
+    let settings = {};
+    try {
+      capabilities = typeof video.getCapabilities === 'function' ? video.getCapabilities() : {};
+    } catch {
+      capabilities = {};
+    }
+    try {
+      settings = typeof video.getSettings === 'function' ? video.getSettings() : {};
+    } catch {
+      settings = {};
+    }
+    track = {
+      label: video.label || '',
+      capabilities: stripIdentifying(capabilities),
+      settings: stripIdentifying(settings),
+    };
+  }
+
+  const scr = typeof screen !== 'undefined' ? screen : { width: 0, height: 0 };
+  return {
+    ua: { browser: brand ? brand.brand : '', platform: (uad && uad.platform) || '' },
+    screen: {
+      w: scr.width || 0,
+      h: scr.height || 0,
+      dpr: typeof devicePixelRatio === 'number' ? devicePixelRatio : 1,
+    },
+    cameras,
+    track,
+  };
+}
+
+function sendLabEnvOnce(stream) {
+  if (!lab.enabled || labEnvSent) return;
+  labEnvSent = true;
+  void collectLabEnv(stream).then((body) => {
+    try { lab.env(body); } catch { /* 계측 실패는 스캔을 막지 않는다 */ }
+  }).catch(() => {});
+}
+
+function reportLabFrame(imageData, result, ms, stage) {
+  if (!lab.enabled || !imageData) return;
+  frameSeq += 1;
+  const ok = result && result.ok === true;
+  try {
+    lab.frame({
+      seq: frameSeq,
+      w: imageData.width,
+      h: imageData.height,
+      zoom: currentZoom(),
+      ms,
+      stage,
+      ok,
+      reason: ok ? '' : ((result && result.reason) || 'decode-failed'),
+      type: ok ? familyToType(result.family) : null,
+      cellPx: ok ? estimateCellPx(result, imageData.width, imageData.height) : null,
+    });
+    if (!ok) lab.frameShot({ seq: frameSeq, imageData });
+  } catch {
+    // 계측 실패는 스캔을 막지 않는다.
+  }
+}
 
 /*
  * 언어. 문구가 바뀌면 **이미 떠 있는 화면도 다시 그려야** 한다 — 게이트 문구와 결과
@@ -174,23 +297,34 @@ async function refreshCameraChoices() {
  */
 async function decodeFrame(imageData) {
   if (!imageData || !imageData.data || !imageData.width || !imageData.height) {
-    return { ok: false, reason: 'frame-invalid' };
+    const failed = { ok: false, reason: 'frame-invalid' };
+    reportLabFrame(imageData, failed, fillFrameMs(0, 'proposal'), 'proposal');
+    return failed;
   }
 
+  const t0 = nowMs();
   try {
     const result = decodeFrontend({
       width: imageData.width,
       height: imageData.height,
       pixels: imageData.data,
     });
+    const stage = classifyStage(result);
+    const ms = fillFrameMs(nowMs() - t0, stage);
+    reportLabFrame(imageData, result, ms, stage);
 
     if (result && result.ok === true && typeof result.text === 'string') {
-      return { ok: true, payload: result.text };
+      return { ok: true, payload: result.text, family: result.family, hypothesis: result.hypothesis };
     }
     return { ok: false, reason: (result && result.reason) || 'decode-failed' };
   } catch (error) {
     // 디코더가 던지면 스캐너 루프가 멈추면 안 된다 — 다음 프레임으로 넘어간다.
-    return { ok: false, reason: 'decode-threw:' + (error && error.message ? error.message : 'unknown') };
+    const failed = {
+      ok: false,
+      reason: 'decode-threw:' + (error && error.message ? error.message : 'unknown'),
+    };
+    reportLabFrame(imageData, failed, fillFrameMs(nowMs() - t0, 'proposal'), 'proposal');
+    return failed;
   }
 }
 
@@ -639,6 +773,7 @@ async function startCamera(options) {
   if (cameraStream || cameraRequestPending) return;
 
   const session = ++scanSession;
+  resetFrameSeq();
   cameraRequestPending = true;
   setStatus(t('status.starting'));
 
@@ -672,10 +807,12 @@ async function startCamera(options) {
     setCameraStageActive(true);
     hideCameraGate();
     setStatus(t('status.aim'));
+    sendLabEnvOnce(stream);
     startFrameLoop(session);
   } catch (error) {
     if (session !== scanSession) return;
 
+    sendLabEnvOnce(null);
     stopCamera();
 
     if (automatic) {
@@ -725,6 +862,8 @@ async function decodeImageFile(file) {
   hideResult({ restoreFocus: false });
 
   const session = ++scanSession;
+  resetFrameSeq();
+  sendLabEnvOnce(null);
   setStatus(t('status.checkingPhoto'));
 
   try {
@@ -1046,6 +1185,7 @@ async function initialiseCamera() {
       message: t('gate.off.message'),
       startLabel: t('gate.retry'),
     });
+    sendLabEnvOnce(null);
     return;
   }
 
@@ -1092,7 +1232,12 @@ beacon('pageview');
  * 실패는 전부 삼킨다. dev 서버에는 `/sw.js` alias 가 없어 404 가 나고, 비보안 컨텍스트나
  * 미지원 브라우저도 있다 — 설치 가능 여부는 부가 기능이지 스캐너 동작 조건이 아니다.
  */
-startPwaUpdateWatch({ text: t('update.ready'), applyText: t('update.apply') });
+if (!isLabPath()) {
+  startPwaUpdateWatch({ text: t('update.ready'), applyText: t('update.apply') });
+}
+
+const labNotice = document.getElementById('lab-notice');
+if (labNotice && isLabPath()) labNotice.hidden = false;
 gateChooseImageButton.addEventListener('click', openImagePicker);
 imageInput.addEventListener('change', () => {
   void decodeImageFile(imageInput.files && imageInput.files[0]);

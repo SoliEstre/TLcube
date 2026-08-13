@@ -47,6 +47,13 @@ function createBanner(text, applyText, onApply) {
 export function startPwaUpdateWatch(options) {
   const { swUrl = '/sw.js', scope = '/', text, applyText } = options || {};
   if (!('serviceWorker' in navigator) || !window.isSecureContext) return;
+  /*
+   * ⚠ 시험판(`/lab/`)에서는 **등록조차 하지 않는다.**
+   * 루트 워커는 이미 `/lab/` 요청을 안 가로채지만, 등록 자체를 남겨 두면 시험 중에
+   * 「지금 적용」 배너가 떠서 시험판을 새로고침시키고, 계약(§1)과 워커 주석이 말하는
+   * 「시험판은 워커를 등록하지 않는다」가 거짓이 된다. 캐시는 시험의 적이다.
+   */
+  if (location.pathname === '/lab' || location.pathname.startsWith('/lab/')) return;
 
   let banner = null;
   const show = (registration) => {

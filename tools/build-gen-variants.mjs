@@ -14,17 +14,25 @@ const ROOT = path.resolve(MODULE_DIR, '..');
 const OFFICIAL_PATH = path.join(ROOT, 'dist', 'trilume.html');
 const EXPERIMENT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder.html');
 const EDITOR_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html');
+export const LAB_GENERATOR_PATH = path.join(ROOT, 'sites', '_shared', 'lab-gen.html');
 
 export const FINDER_EXPERIMENT_DEFAULT_ID = 'pinwheel-c2-2-1100-cw';
 
+export function buildGeneratorLabHtml() {
+  return buildSingleHtml({
+    generatorEdition: FINDER_EXPERIMENT_EDITION,
+    defaultFinderPatternId: FINDER_EXPERIMENT_DEFAULT_ID,
+  });
+}
+
 export function buildGeneratorVariants() {
+  const experiment = buildGeneratorLabHtml();
   return Object.freeze({
     official: buildSingleHtml(),
-    experiment: buildSingleHtml({
-      generatorEdition: FINDER_EXPERIMENT_EDITION,
-      defaultFinderPatternId: FINDER_EXPERIMENT_DEFAULT_ID,
-    }),
+    experiment,
     editor: buildFinderEditorHtml(),
+    // /lab/ 은 기존 실험 변형을 별도 URL에서 서빙한다. 소스·툴체인을 복제하지 않는다.
+    lab: experiment,
   });
 }
 
@@ -35,9 +43,11 @@ function main() {
   writeFileSync(OFFICIAL_PATH, built.official, 'utf8');
   writeFileSync(EXPERIMENT_PATH, built.experiment, 'utf8');
   writeFileSync(EDITOR_PATH, built.editor, 'utf8');
+  writeFileSync(LAB_GENERATOR_PATH, built.lab, 'utf8');
   process.stdout.write('dist/trilume.html 생성됨 (' + Buffer.byteLength(built.official, 'utf8') + ' B)\n');
   process.stdout.write('sites/_shared/gen-finder.html 생성됨 (' + Buffer.byteLength(built.experiment, 'utf8') + ' B)\n');
   process.stdout.write('sites/_shared/gen-finder-editor.html 생성됨 (' + Buffer.byteLength(built.editor, 'utf8') + ' B)\n');
+  process.stdout.write('sites/_shared/lab-gen.html 생성됨 (' + Buffer.byteLength(built.lab, 'utf8') + ' B)\n');
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
