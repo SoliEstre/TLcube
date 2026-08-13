@@ -13,6 +13,7 @@ import { sniffPayload } from '/src/payloadform.js';
 import { createI18n, wireLanguageSwitch } from '/src/i18n.js';
 import { createBeacon } from '/src/beacon.js';
 import { SCANNER_STRINGS } from './strings.js';
+import { startPwaUpdateWatch } from '/src/pwa-update.js';
 import { decodeFrontend } from '/src/decoder/frontend.js';
 
 const FRAME_INTERVAL_MS = 320;
@@ -49,7 +50,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-13.02';
+export const SCANNER_BUILD = '2026-08-13.03';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -1091,11 +1092,7 @@ beacon('pageview');
  * 실패는 전부 삼킨다. dev 서버에는 `/sw.js` alias 가 없어 404 가 나고, 비보안 컨텍스트나
  * 미지원 브라우저도 있다 — 설치 가능 여부는 부가 기능이지 스캐너 동작 조건이 아니다.
  */
-if ('serviceWorker' in navigator && window.isSecureContext) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
-  });
-}
+startPwaUpdateWatch({ text: t('update.ready'), applyText: t('update.apply') });
 gateChooseImageButton.addEventListener('click', openImagePicker);
 imageInput.addEventListener('change', () => {
   void decodeImageFile(imageInput.files && imageInput.files[0]);

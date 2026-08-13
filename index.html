@@ -1209,6 +1209,8 @@ const GENERATOR_STRINGS = {
     "g450": "페이로드 <b>{bytes}</b> / {max} B · ",
     "g451": "심볼 {d}+{n} · 프리셋 Δmin {delta}",
     "g452": "심볼 {d}+{n}",
+    "g600": "새 버전이 준비됐어요.",
+    "g601": "지금 적용",
     "g453": "타입 <b>Y</b> · 버전 <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · 톤 <b>{tones}</b>",
     "g454": " · 윈도 <b>β</b>",
     "g455": "용량 초과 — 내용 뒤쪽 {n} B 가 잘린 채로 렌더링 중이에요 (빨간 구간이 잘리는 부분).",
@@ -1419,6 +1421,8 @@ const GENERATOR_STRINGS = {
     "g450": "Payload <b>{bytes}</b> / {max} B · ",
     "g451": "symbols {d}+{n} · preset Δmin {delta}",
     "g452": "symbols {d}+{n}",
+    "g600": "A new version is ready.",
+    "g601": "Apply now",
     "g453": "Type <b>Y</b> · version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tones <b>{tones}</b>",
     "g454": " · window <b>β</b>",
     "g455": "Over capacity — the last {n} B of your content are cut in this render (the red span marks what gets dropped).",
@@ -1629,6 +1633,8 @@ const GENERATOR_STRINGS = {
     "g450": "ペイロード <b>{bytes}</b> / {max} B · ",
     "g451": "シンボル {d}+{n} · プリセット Δmin {delta}",
     "g452": "シンボル {d}+{n}",
+    "g600": "新しいバージョンが利用できます。",
+    "g601": "今すぐ適用",
     "g453": "タイプ <b>Y</b> · バージョン <b>{ver}</b>（n={n}）· ECC <b>{ecc}</b> · トーン <b>{tones}</b>",
     "g454": " · ウィンドウ <b>β</b>",
     "g455": "容量超過 — 内容の後ろ {n} B が切り詰められた状態で描画されています（赤い区間が切れる部分です）。",
@@ -1720,6 +1726,7 @@ const genI18n = createI18n(GENERATOR_STRINGS, {
 import { createBeacon } from './src/beacon.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
+import { startPwaUpdateWatch } from './src/pwa-update.js';
 import { WINDOW_SUPPORTED_TONES as WINDOW_TONES } from './src/capacityY.js';
 
 import { encodeA } from './src/encodeA.js';
@@ -3782,15 +3789,12 @@ genBeacon('pageview');
 
 
 /*
- * 서비스 워커 등록 — PWA 설치 요건의 마지막 조각(Android Chrome 은 fetch 핸들러를 가진
- * 워커를 요구한다). 실패는 전부 삼킨다 — file:// 로 열거나 dev 서버에는 `/sw.js` 가 없고,
- * 설치 가능 여부는 부가 기능이지 생성기 동작 조건이 아니다.
+ * 서비스 워커 등록 + 갱신 배너 — PWA 설치 요건의 마지막 조각(Android Chrome 은 fetch
+ * 핸들러를 가진 워커를 요구한다)이자, 실기기 시험 중 「배포가 갱신됐나?」를 없애는 장치다.
+ * 실패는 전부 삼킨다 — file:// 나 dev 서버에는 `/sw.js` 가 없고, 설치 가능 여부는 부가
+ * 기능이지 생성기 동작 조건이 아니다.
  */
-if ('serviceWorker' in navigator && window.isSecureContext) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
-  });
-}
+startPwaUpdateWatch({ text: t('g600'), applyText: t('g601') });
 </script>
 </body>
 </html>

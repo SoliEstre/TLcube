@@ -13,6 +13,8 @@
 
 export const SCANNER_STRINGS = {
   ko: {
+    'update.ready': '새 버전이 준비됐어요.',
+    'update.apply': '지금 적용',
     'app.label': 'TLcube 스캐너',
     'document.title': 'TLcube 스캐너',
     'camera.label': 'TLcube 코드를 비추는 카메라 화면',
@@ -103,6 +105,8 @@ export const SCANNER_STRINGS = {
   },
 
   en: {
+    'update.ready': 'A new version is ready.',
+    'update.apply': 'Apply now',
     'app.label': 'TLcube scanner',
     'document.title': 'TLcube scanner',
     'camera.label': 'Camera view for scanning a TLcube code',
@@ -190,6 +194,8 @@ export const SCANNER_STRINGS = {
   },
 
   ja: {
+    'update.ready': '新しいバージョンが利用できます。',
+    'update.apply': '今すぐ適用',
     'app.label': 'TLcube スキャナ',
     'document.title': 'TLcube スキャナ',
     'camera.label': 'TLcube コードを写すカメラ画面',

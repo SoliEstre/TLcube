@@ -76,6 +76,8 @@ const MODULE_ORDER = [
   'i18n',
   // beacon 도 의존이 없다 — 네트워크 전송과 오프라인 큐만 담는다.
   'beacon',
+  // pwa-update 도 의존이 없다 — 서비스 워커 등록과 갱신 배너 DOM 만 담는다.
+  'pwa-update',
 ];
 
 /**

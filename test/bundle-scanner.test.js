@@ -18,6 +18,20 @@ const ROOT = path.resolve(__dirname, '..');
 const DIST_FILE = path.join(ROOT, 'dist', 'tlscan.html');
 const RELATIVE_JS_SPECIFIER_RE = /(['"])(?:\.\/|\.\.\/)[^'"]+\.js\1/;
 
+// ⚠ 이건 **소스**를 본다 (번들이 아니라). 배포 컨테이너는 `sites/tlscan` 을 문서 루트
+// 그 자체로 마운트하므로 `../../src/...` 는 루트를 벗어나 404 가 된다. 그런데 dev 서버는
+// TLcube 루트를 서빙해서 상대 경로가 **동작해 버리고**, 번들러는 어차피 인라인하므로
+// 번들 검사도 통과한다 — 즉 프로덕션에서만 죽는다. 파일 상단 주석이 경고하고 있었는데도
+// 실제로 이 실수가 났다(2026-08-13, pwa-update 추가 시). 주석 대신 테스트로 강제한다.
+test('소스: sites/tlscan 의 모듈은 src 를 절대 경로로만 import 한다', () => {
+  for (const name of ['scanner.js', 'strings.js']) {
+    const source = readFileSync(path.join(ROOT, 'sites', 'tlscan', name), 'utf8');
+    const offenders = [...source.matchAll(/^\s*import[^'"]*(['"])(\.\.?\/[^'"]*src\/[^'"]+)\1/gm)];
+    assert.deepEqual(offenders.map((m) => m[2]), [],
+      `${name}: src 를 상대 경로로 import 했다 — 배포에서 404 가 된다. '/src/...' 로 쓸 것`);
+  }
+});
+
 test('결정성: buildScannerHtml()을 2회 호출해도 바이트가 동일하다', () => {
   const first = buildScannerHtml();
   const second = buildScannerHtml();

@@ -22,9 +22,16 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
       .then((cache) => cache.add(SHELL))
-      .catch(() => undefined)
-      .then(() => self.skipWaiting()),
+      .catch(() => undefined),
   );
+});
+
+/*
+ * 갱신 적용은 **사용자가 배너를 누를 때만** 한다. install 에서 skipWaiting() 을 부르면
+ * registration.waiting 이 채워지지 않아 배너를 띄울 순간 자체가 사라진다 (src/pwa-update.js).
+ */
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -35,24 +42,39 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/*
+ * ⚠ 시험판(`/lab/`)은 **가로채지 않는다.**
+ * 이 워커는 `scope: '/'` 라 경로를 안 가리면 시험판까지 지배한다. 캐시는 시험의 적이다 —
+ * 「고쳤는데 왜 그대로지」의 정확한 경로이고, 오프라인은 안정판의 요구사항이지 시험판의
+ * 것이 아니다. 시험판은 워커를 등록하지도 않는다.
+ */
+const LAB_PREFIX = '/lab/';
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith(LAB_PREFIX)) return;
 
-  // 네트워크 우선. 성공하면 최신을 돌려주고 캐시도 갱신한다.
+  /*
+   * ⚠ navigate 응답을 **자기 URL 로** 캐시한다. 종전엔 어느 페이지를 열든 고정 키 `SHELL`
+   * 에 덮어써서, 한 페이지를 연 뒤 다른 페이지 로드가 실패하면 **엉뚱한 페이지가 떴다.**
+   * 폴백도 같은 순서로 좁힌다: 그 URL 의 캐시 → 없으면 셸.
+   */
+  const isNavigate = request.mode === 'navigate';
   event.respondWith(
     fetch(request)
       .then((response) => {
-        if (response && response.ok && request.mode === 'navigate') {
+        if (response && response.ok && isNavigate) {
           const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(SHELL, copy)).catch(() => undefined);
+          caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
         }
         return response;
       })
-      .catch(() => caches.match(request.mode === 'navigate' ? SHELL : request)
+      .catch(() => caches.match(request)
+        .then((cached) => cached || (isNavigate ? caches.match(SHELL) : undefined))
         .then((cached) => cached || Response.error())),
   );
 });
