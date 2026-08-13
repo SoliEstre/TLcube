@@ -1905,7 +1905,7 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
  */
 const EMPTY_FAMILY_OPTIONS = Object.freeze({});
 
-function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
+export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   try {
     assertLumaField(luma);
   } catch (error) {
@@ -2520,6 +2520,87 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
  * CRC 통과 후보만 남기고, 그 인덱스의 소유자 패밀리 중 **아직 시도하지 않은 것**을 고른다.
  * CRC 가 틀린 읽기는 여기서 그냥 사라진다 — 잡음으로 재배치가 발동하지 않게 하는 게 핵심이다.
  */
+/** 포맷 재라벨로 만들 수 있는 가설 수 상한 — QR 잡음이 후보를 부풀리지 못하게 한다. */
+const FORMAT_RECAST_MAX = 12;
+
+/**
+ * **포맷 재라벨** — 이미 «좋은 H» 를 든 가설이 남의 패밀리 포맷을 CRC 까지 맞춰 읽었다면,
+ * H 는 그대로 두고 **패밀리·차원 라벨만** 갈아 끼운 가설을 낸다.
+ *
+ * 왜 패밀리 재배치(`relocationTargets`)만으로는 부족한가 — 측정으로 확인한 것:
+ *
+ *   Type A(tri) 는 앵커 3셀이 중심에서 `3k` 라, 파인더 H 의 상대 오차가 `3k` 로 증폭돼
+ *   `findAAnchorHypotheses` 의 3/3 하드체크가 깨진다. 그런데 **같은 H** 로 만들어진
+ *   hex 가설은 앵커가 `k√3`(√3배 가깝다) 라 살아남는다. 포맷 셀은 `formatCells(k)` 의
+ *   **ring 3** — 패밀리와 무관하게 같은 15칸이라, 그 hex 가설이 A 의 포맷을
+ *   **3/3 합의 + CRC 통과**로 정확히 읽는다. 그러고도 `validVersionIndices` 가
+ *   hex 집합 밖이라며 CRC 검사 **전에** 버린다.
+ *
+ *   실측 (A2 · ppu=12 · 무왜곡): `hex-10-0` 이 `[2,0,0,5,5]`×3 을 읽고 versionIndex
+ *   **13 = A2** 로 CRC 통과. 참 H 대비 ring3 오차 0.24셀 · 꼭짓점 오차 0.66셀.
+ *
+ *   그런데 `relocationTargets` 는 `attemptedFamilies` 에 tri 가 이미 있으면 건너뛴다.
+ *   쓰레기 `cell-finder` tri 가설(참 H 대비 ring3 20셀 오차)이 그 집합에 tri 를 넣어
+ *   두므로, 재배치는 «tri 는 해봤다» 며 발동하지 않는다. 설령 발동해도 기하를 다시
+ *   열거할 뿐이라 같은 앵커 게이트에서 또 죽는다.
+ *
+ * 그래서 «기하를 다시 만드는» 대신 **이미 검증된 그 H 를 재사용**한다.
+ * 안전성: 재라벨 가설도 포맷 CRC → reference 검증 → 본문 RS(GF(211)) 를 전부 통과해야
+ * 후보가 된다. 그리고 이 함수는 **검증이 이미 실패한 뒤에만** 불리므로 정상 경로
+ * (Type O 포함) 비용은 0 이다.
+ */
+function recastHypothesesByFormat(hypotheses, validated) {
+  const failures = (validated.detail && validated.detail.diagnostics
+    && validated.detail.diagnostics.formatFailures) || [];
+  if (failures.length === 0) return [];
+  const byId = new Map(hypotheses.map((hypothesis) => [hypothesis.hypothesisId, hypothesis]));
+  const everyIndex = allFormatIndices();
+  const recast = [];
+  const seen = new Set();
+
+  for (const failure of failures) {
+    if (recast.length >= FORMAT_RECAST_MAX) break;
+    const reads = failure.detail && failure.detail.reads;
+    const source = byId.get(failure.hypothesisId);
+    // cube 는 격자 파라미터화(canonicalSpace)가 달라 라벨만 갈아 끼울 수 없다.
+    if (!source || source.family === 'cube') continue;
+    if (!Array.isArray(reads) || reads.length !== 3) continue;
+    let enumerated;
+    try {
+      enumerated = enumerateFormatProposals(reads, { validVersionIndices: everyIndex });
+    } catch {
+      continue;
+    }
+    for (const proposal of enumerated.proposals) {
+      if (!proposal.crcOk) continue;
+      for (const owner of formatIndexOwners(proposal.versionIndex)) {
+        if (owner.family === 'cube') continue;
+        if (owner.family === source.family && owner.dimension === source.k) continue;
+        for (const centerQr of [false, true]) {
+          const candidate = {
+            ...source,
+            family: owner.family,
+            k: owner.dimension,
+            centerQr,
+          };
+          // 라벨 조합이 실제로 이 인덱스를 소유하는지는 기존 규칙에 물어본다.
+          if (!validVersionIndices(candidate).includes(proposal.versionIndex)) continue;
+          const id = `${source.hypothesisId}~recast-${owner.family}-${owner.dimension}`
+            + (centerQr ? '-qr' : '');
+          if (seen.has(id)) continue;
+          seen.add(id);
+          candidate.hypothesisId = id;
+          candidate.source = `${source.source}+format-recast`;
+          // 크기 증거는 옛 패밀리 기준이라 그대로 쓰면 안 된다. 없으면 rK=1 로 떨어진다.
+          delete candidate.sizeGeometry;
+          recast.push(candidate);
+        }
+      }
+    }
+  }
+  return recast;
+}
+
 function relocationTargets(validated, attemptedFamilies) {
   const failures = (validated.detail && validated.detail.diagnostics
     && validated.detail.diagnostics.formatFailures) || [];
@@ -2571,6 +2652,35 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
      */
     const relocationEnabled = options._familyRelocation !== false;
     const attempted = new Set(geometry.hypotheses.map((hypothesis) => hypothesis.family));
+
+    /*
+     * 1차 — **포맷 재라벨**. 기하를 다시 만들지 않고, CRC 가 맞은 읽기를 낸 그 가설의
+     * H 를 그대로 재사용한다. 패밀리 재배치보다 싸고 정확하다 (근거는
+     * `recastHypothesesByFormat` 주석). 재배치와 같은 게이트를 쓴다 — 검증 실패 뒤에만.
+     */
+    if (relocationEnabled && options._formatRecast !== false) {
+      const recast = recastHypothesesByFormat(geometry.hypotheses, validated);
+      if (recast.length > 0) {
+        const revalidated = validateGridHypotheses(luma, recast, options);
+        if (revalidated.ok) {
+          return ok({
+            hypotheses: recast,
+            candidates: revalidated.candidates,
+            diagnostics: {
+              geometry: geometry.diagnostics,
+              validation: revalidated.diagnostics,
+              formatRecast: {
+                from: Array.from(attempted),
+                count: recast.length,
+                labels: recast.map((hypothesis) =>
+                  `${hypothesis.family}-${hypothesis.k}`),
+              },
+            },
+          });
+        }
+      }
+    }
+
     const relocation = relocationEnabled
       ? relocationTargets(validated, attempted)
       : { families: [], evidence: [] };

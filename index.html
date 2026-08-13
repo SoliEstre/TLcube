@@ -2205,6 +2205,28 @@ function setMode(next) {
   renderFinderUi();
   syncFaceGainLabel();
 }
+
+/*
+ * 실험 후보 두 묶음(기준 미달 · 스캔 불가)은 **고급 모드에서만** 보인다.
+ *
+ * 셀 표면(cell-mask) 파인더는 사실상 폐기 수순이다(사용자 판단 2026-08-13). 기하로도
+ * 닫혔다 — 19셀 ring-2 외접이 √19 = 4.359 인데 R_max 는 √13 = 3.606 이라, 안전영역
+ * 원을 어떻게 잡아도 ring-2 12셀이 잘린다(.agent/decoder/009). 일반 모드에서 고를 수
+ * 있는 선택지로 남겨 둘 이유가 없다.
+ *
+ * ⚠ 숨기기만 한다. 이미 그 파인더를 고른 상태(저장값·URL 복원)를 강제로 바꾸지 않는다 —
+ *   모드는 «노출만» 바꾼다는 이 파일의 규약을 지킨다.
+ */
+function applyFinderExperimentVisibility() {
+  const show = mode === 'advanced';
+  for (const id of ['finderBelowBar', 'finderUnscannable']) {
+    const block = document.getElementById(id);
+    if (block) {
+      block.style.display = show ? '' : 'none';
+      if (!show) block.open = false;
+    }
+  }
+}
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
 els.modeAdvancedBtn.addEventListener('click', () => setMode('advanced'));
 
@@ -2591,6 +2613,8 @@ function renderFinderUi() {
   ensureFinderCards();
   const visible = currentType() !== 'Y';
   els.finderSection.style.display = visible ? '' : 'none';
+  // 초기 로드에도 걸려야 한다 — setMode 안에만 두면 모드를 한 번 눌러야 적용됐다.
+  applyFinderExperimentVisibility();
 
   for (const heading of els.finderPatternCards.querySelectorAll('[data-finder-family-key]')) {
     heading.textContent = t(heading.dataset.finderFamilyKey);
@@ -3726,7 +3750,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-13.02';
+const GENERATOR_BUILD = '2026-08-13.03';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

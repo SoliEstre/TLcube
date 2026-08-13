@@ -1506,6 +1506,7 @@ export function detectBullseyes(luma, options = {}) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '방사 대칭 중심 proposal이 없다' });
   }
 
+  const innerEvidence = options.innerEvidence === 'none' ? 'none' : 'cube';
   const layouts = ringLayouts(options);
   if (layouts === null) {
     return fail(FRONTEND_FAILURE.NO_FINDER, {
@@ -1571,13 +1572,22 @@ export function detectBullseyes(luma, options = {}) {
      * 중심을 맞추게 되고, ring-3 포맷 표본이 어긋나 복호가 죽는다.
      * (jpeg q60 + blur 3점 스윕이 이걸 잡아냈다.)
      */
-    const cube = readCubeOrientation(luma, {
+    /*
+     * 안쪽이 **무엇인지** 는 레이아웃마다 다르다. 하이브리드는 3톤 큐브라 그 증거를
+     * 요구하지만, «안쪽 원판에 임의 이미지(로고)» 같은 변형은 요구할 증거가 없다.
+     * 그 경우 `innerEvidence: 'none'` 을 준다 — 위치·스케일은 바깥 링만으로 나온다.
+     *
+     * ⚠ 'none' 은 뭉개진 순수 불스아이를 이 레이아웃으로 «승격» 시킬 수 있다(그걸 막으려고
+     *   큐브 증거를 넣었다). 그래서 호출자는 레이아웃 0 이 통과하면 그쪽을 우선해야 한다.
+     */
+    const cube = innerEvidence === 'none' ? null : readCubeOrientation(luma, {
       transform: result.candidate.transform,
       innerBandsReplaced: entry.firstBand,
     });
-    if (cube === null
-      || !(cube.orientationMargin >= MIN_CUBE_TONE_RANK_MARGIN)
-      || !(cube.faceFlatness >= MIN_CUBE_FACE_FLATNESS)) continue;
+    if (innerEvidence !== 'none'
+      && (cube === null
+        || !(cube.orientationMargin >= MIN_CUBE_TONE_RANK_MARGIN)
+        || !(cube.faceFlatness >= MIN_CUBE_FACE_FLATNESS))) continue;
     /*
      * ⚠ 큐브에서 읽은 방향은 **`cube` 아래에만** 둔다. `rotationDegrees`·`orientation` 을
      *   후보 최상위에 얹었더니 하류 가설 정렬 비교자(bootstrap 의 `rotationDegrees ??
@@ -1585,6 +1595,10 @@ export function detectBullseyes(luma, options = {}) {
      *   없어 0 으로 정렬되는데 하이브리드만 0\~360 연속값이 들어가, 상위 N개 절단에서
      *   맞는 가설이 밀려났다. 방향은 아직 하류가 소비할 계약이 아니므로 격리한다.
      */
+    if (cube === null) {
+      refined.push({ ...result.candidate, innerBandsReplaced: entry.firstBand });
+      continue;
+    }
     refined.push({
       ...result.candidate,
       innerBandsReplaced: entry.firstBand,

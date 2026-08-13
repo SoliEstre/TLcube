@@ -754,8 +754,18 @@ test('재배치: tri 코드를 hex 로 오분류해도 복호된다 (실사진 �
   assert.equal(forcedNoRelocation.ok, false,
     '전제 위반: 재배치 없이도 hex 로 복호된다 — 이 테스트는 결함 영역을 못 건드린다');
 
-  // 재배치가 켜지면 같은 입력이 복호돼야 한다.
-  const relocated = decodeFrontend(raster, { familyEvidence: { family: 'hex' } });
+  /*
+   * 재배치가 켜지면 같은 입력이 복호돼야 한다.
+   *
+   * ⚠ `_formatRecast: false` 로 **포맷 재라벨을 끈다.** 재라벨은 재배치보다 먼저 시도되고
+   *   같은 입력을 같은 결과로 구제하므로(2026-08-13 도입), 켜 두면 이 테스트가 재배치가
+   *   아니라 재라벨을 재게 된다 — 재배치 경로의 보증이 조용히 사라진다.
+   *   두 경로를 각각 검증하려면 여기서 하나를 꺼야 한다.
+   */
+  const relocated = decodeFrontend(raster, {
+    familyEvidence: { family: 'hex' },
+    bootstrap: { _formatRecast: false },
+  });
   assert.equal(relocated.ok, true,
     `재배치 실패: ${relocated.reason} ${JSON.stringify(relocated.detail && relocated.detail.relocation)}`);
   assert.equal(relocated.text, 'relocate-me');
@@ -1004,7 +1014,7 @@ const BULLSEYE_REAL_PHOTO_DUMPS = listLumaDumps().filter((entry) =>
     || entry.name.startsWith('video-')
   ));
 
-test('기존 불스아이 실사진: 1440 기준 9/17 복호 성적을 유지', {
+test('기존 불스아이 실사진: 1440 기준 12/17 복호 성적을 유지', {
   timeout: 600_000,
   skip: BULLSEYE_REAL_PHOTO_DUMPS.length === 17
     ? false
@@ -1016,7 +1026,13 @@ test('기존 불스아이 실사진: 1440 기준 9/17 복호 성적을 유지', 
     return { entry, result: decodeFrontend(lumaToRaster(luma)) };
   });
   const successes = results.filter(({ result }) => result.ok);
-  assert.equal(successes.length, 9, results.map(({ entry, result }) => ({
+  /*
+   * 9 → 12. «포맷 재라벨» 로 3장이 새로 복호됐고 **죽은 장은 0** 이다
+   * (2026-08-13, `.agent/decoder/008`). 신규 3장은 텍스트·패밀리·버전·ECC 가 전부
+   * 정답이라 오탐이 아니다. 개수를 못박은 이 단언 덕에 «집합이 바뀌었나» 를 확인하게 됐다 —
+   * 숫자를 올릴 때는 **어느 장이 늘었는지** 를 확인하고 올린다.
+   */
+  assert.equal(successes.length, 12, results.map(({ entry, result }) => ({
     name: entry.name,
     ok: result.ok,
     reason: result.reason,
