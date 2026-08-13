@@ -250,9 +250,9 @@ ${jsonLd(lang, t)}
         </thead>
         <tbody>
           <!-- 실시간 스캔 배지는 «복호 시간 vs 0.3초 프레임 간격» 이라는 이 페이지 자신의
-               기준을 따른다. 세 타입 모두 그 간격보다 길어 전부 «개선 중» 이다 —
-               Y 를 «쓸 만함» 으로 두면 페이지가 스스로 세운 기준과 어긋난다. -->
-          <tr><td>${t.rowYName}</td><td>${badge('ok', s.types.Y.decoded)}</td><td>${lang.code === 'ko' ? s.types.Y.ms : lang.code === 'en' ? s.types.Y.msEn : s.types.Y.msJa}</td><td>${badge('warn', t.badgeSlow)}</td></tr>
+               기준을 따른다. 배지를 손으로 고르지 말고 이 기준으로 판정할 것 —
+               한때 Y 가 0.85초인데 «쓸 만함» 이 붙어 있었다. 지금 Y 는 0.1초라 자격이 있다. -->
+          <tr><td>${t.rowYName}</td><td>${badge('ok', s.types.Y.decoded)}</td><td>${lang.code === 'ko' ? s.types.Y.ms : lang.code === 'en' ? s.types.Y.msEn : s.types.Y.msJa}</td><td>${badge('ok', t.badgeUsable)}</td></tr>
           <tr><td>${t.rowOName}</td><td>${badge('ok', s.types.O.decoded)}</td><td>${lang.code === 'ko' ? s.types.O.ms : lang.code === 'en' ? s.types.O.msEn : s.types.O.msJa}</td><td>${badge('warn', t.badgeSlow)}</td></tr>
           <tr><td>${t.rowAName}</td><td>${badge('ok', s.types.A.decoded)}</td><td>${lang.code === 'ko' ? s.types.A.ms : lang.code === 'en' ? s.types.A.msEn : s.types.A.msJa}</td><td>${badge('warn', t.badgeSlow)}</td></tr>
           <tr><td>${t.rowCenterQr}</td><td>${badge('ok', s.centerQr.decoded)}</td><td>—</td><td>${badge('warn', t.badgeSlow)}</td></tr>

@@ -171,17 +171,17 @@
         </thead>
         <tbody>
           <!-- 실시간 스캔 배지는 «복호 시간 vs 0.3초 프레임 간격» 이라는 이 페이지 자신의
-               기준을 따른다. 세 타입 모두 그 간격보다 길어 전부 «개선 중» 이다 —
-               Y 를 «쓸 만함» 으로 두면 페이지가 스스로 세운 기준과 어긋난다. -->
-          <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">3 / 3</span></td><td>約 0.85 秒</td><td><span class="badge warn">改善中</span></td></tr>
-          <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">3 / 3</span></td><td>約 2.2 秒</td><td><span class="badge warn">改善中</span></td></tr>
-          <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge ok">3 / 3</span></td><td>約 1.0 秒</td><td><span class="badge warn">改善中</span></td></tr>
+               기준을 따른다. 배지를 손으로 고르지 말고 이 기준으로 판정할 것 —
+               한때 Y 가 0.85초인데 «쓸 만함» 이 붙어 있었다. 지금 Y 는 0.1초라 자격이 있다. -->
+          <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">3 / 3</span></td><td>約 0.1 秒</td><td><span class="badge ok">実用的</span></td></tr>
+          <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">3 / 3</span></td><td>約 1.8 秒</td><td><span class="badge warn">改善中</span></td></tr>
+          <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge ok">3 / 3</span></td><td>約 0.86 秒</td><td><span class="badge warn">改善中</span></td></tr>
           <tr><td><strong>中央 QR 変種</strong>（3 タイプ共通）</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">改善中</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px"><strong>前回の更新より時間が延びました。</strong>ファインダを作り直し、フォーマット判読に再試行の経路を入れたことで<strong>認識率を時間で買いました</strong> — その代わりに Type A が 2/3 から 3/3 になりました。同じ写真・同じ方法で旧版と交互に測って確認した値で、次の改善課題はここです。</p>
-    <p class="dim">復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。いまは 3 タイプともその間隔より長く、その中では Y が最も滑らかです。（ライブはより小さいフレームを見るため実際にはこの表より速く、同じ写真の 960px 版では Y 0.6 秒・A 0.66 秒・O 1.4 秒でした。）</p>
+    <p class="dim" style="margin-top:16px"><strong>Type Y は速くなり、O・A は遅くなりました。</strong>ファインダを作り直し、フォーマット判読に再試行の経路を入れたことで<strong>認識率を時間で買いました</strong> — その代わりに Type A が 2/3 から 3/3 になりました。Y については、キューブ経路を「まず安く試し、失敗したときだけ一度だけ全部を走査する」形に変えたことで以前より速くなっています。同じ形を O・A に適用するのが次の課題です。</p>
+    <p class="dim">復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。<strong>Y はその間隔を下回りました</strong>が、O・A はまだ長めです。（ライブはより小さいフレームを見るため実際にはこの表より速く、同じ写真の 960px 版では Y 0.1 秒・A 0.54 秒・O 1.2 秒でした。）</p>
     <p class="dim">撮影条件も大きく効きます。実測では<strong>セルあたり 9 ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 7.6px 失敗 / 広角 9.1px 成功）。スキャナにレンズ選択を入れているのはそのためです。</p>
     <p class="dim"><strong>中央 QR 変種</strong>は QR ブロックが中央ファインダの位置を代わりに占める形です。入口がなくしばらく読めませんでしたが、QR 自身のファインダを基準にする経路を入れて読めるようになりました。</p>
     <p class="dim" style="margin-top:16px"><small>測定 2026-08-13 · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 9 枚 · 短辺 1440px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。</small></p>

@@ -21,21 +21,25 @@ export const stats = {
   // 순차 측정은 워밍업·열 편향이 들어가 실제 1.44배가 1.14배로 보인 전례가 있어
   // 최적화 전후를 같은 프로세스에서 번갈아 잰다. 절대값은 측정 머신에 종속되므로
   // 배수(전 대비)가 더 안정적인 값이라는 점을 알아 둔다.
-  // 재현: `node test/output/lanes/hub-stats.mjs` — 표본·방법·대조군이 그 안에 있다.
+  // 재현 하네스는 `test/output/lanes/hub-stats.mjs` 다 — 표본·방법·대조군이 그 안에 있다.
+  //   ⚠ 이 경로는 **로컬 전용**이다(`test/output/` 은 gitignore). 실기기 사진 휘도 덤프도
+  //   저장소에 없으므로 clone 만으로는 재현되지 않는다 — 수치를 고치려면 덤프를 가진
+  //   개발 머신에서 재야 한다.
+  //   ⚠ **스위트 안에서 재지 마라.** `node --test` 가 `test/` 아래 `.mjs` 를 전부 실행해서
+  //   이 하네스까지 돌린다. 그러면 CPU 를 다투는 상태로 재고 결과 JSON 을 덮는다
+  //   (실측: 그렇게 덮인 값 225/1217/2794 vs 한가한 상태 102/863/1805 — 하마터면
+  //   «고쳤는데 느려졌다» 는 정반대 결론을 실을 뻔했다). 하네스에 가드를 넣어 뒀다.
   //
-  // ⚠ 2026-08-13 갱신에서 **시간이 나빠졌다.** 같은 9장·같은 방법으로 같은 머신에서
-  //   옛 커밋(9879068)과 번갈아 재 확인했다: Y 4.1× · A 2.0× · O 1.7× 느려졌다.
-  //   원인은 파인더 하이브리드화와 포맷 재라벨 — **인식률을 시간으로 샀다**
-  //   (그 대가로 Type A 가 2/3 → 3/3 이 됐다).
-  //   배수는 **짝지은 측정**이라 머신 상태에 무관하다(같은 프로세스·같은 래스터를 두
-  //   디코더에 번갈아 먹였다). 보조 근거로 옛 커밋이 이 머신에서 Y 를 207ms 로 내
-  //   당시 게시값 230ms 를 재현한다. ⚠ 다만 O 는 재현되지 않는다(옛 코드 1273ms vs
-  //   당시 게시 690ms) — **당시 O 수치 자체가 의심스럽다.** 그래서 이번 갱신은 옛
-  //   게시값과의 차이가 아니라 **짝지은 배수**를 근거로 삼는다.
+  // 이번 갱신 이력(같은 9장·같은 방법, 옛 커밋 9879068 과 짝지어 측정):
+  //   한때 Y 4.1× · A 2.0× · O 1.7× 느려져 있었다. 파인더 하이브리드화와 포맷 재라벨이
+  //   **인식률을 시간으로 산** 결과였다(그 대가로 Type A 가 2/3 → 3/3).
+  //   그 뒤 큐브 경로를 «낙관적 빠른 경로 + 실패 시 1회 전수 재시도» 로 바꿔 되돌렸다.
+  //   ⚠ 옛 게시값과 직접 비교하지 마라 — O 는 옛 게시값(690ms)이 이 머신에서 재현되지
+  //   않아(옛 코드 1273ms) **당시 O 수치 자체가 의심스럽다.** 근거는 짝지은 배수다.
   types: {
-    Y: { decoded: '3 / 3', ms: '약 0.85초', msEn: '~0.85 s', msJa: '約 0.85 秒' },
-    O: { decoded: '3 / 3', ms: '약 2.2초', msEn: '~2.2 s', msJa: '約 2.2 秒' },
-    A: { decoded: '3 / 3', ms: '약 1.0초', msEn: '~1.0 s', msJa: '約 1.0 秒' },
+    Y: { decoded: '3 / 3', ms: '약 0.1초', msEn: '~0.1 s', msJa: '約 0.1 秒' },
+    O: { decoded: '3 / 3', ms: '약 1.8초', msEn: '~1.8 s', msJa: '約 1.8 秒' },
+    A: { decoded: '3 / 3', ms: '약 0.86초', msEn: '~0.86 s', msJa: '約 0.86 秒' },
   },
   centerQr: { decoded: '8 / 9' },
 };
@@ -101,9 +105,9 @@ export const strings = {
     rowOName: '<strong>Type O</strong> — 육각 필드',
     rowAName: '<strong>Type A</strong> — 삼각 실루엣',
     rowCenterQr: '<strong>중앙 QR 변형</strong> (세 타입 공통)',
-    badgeSlow: '개선 중',
-    statusNote1: '복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. 지금은 세 타입 모두 그 간격보다 길어요 — Y 가 그중 가장 매끄럽습니다. (라이브는 더 작은 프레임을 보기 때문에 실제로는 이 표보다 빠릅니다 — 같은 사진의 960px 판에서 Y 0.6초 · A 0.66초 · O 1.4초였어요.)',
-    statusNote0: '<strong>지난 갱신보다 시간이 늘었습니다.</strong> 파인더를 새로 짜고 포맷 판독에 재시도 경로를 넣으면서 <strong>인식률을 시간으로 샀어요</strong> — 그 대가로 Type A 가 2/3 에서 3/3 이 됐습니다. 같은 사진·같은 방법으로 옛 버전과 번갈아 재서 확인한 값이고, 다음 개선 과제는 여기입니다.',
+    badgeUsable: '쓸 만함', badgeSlow: '개선 중',
+    statusNote1: '복호 시간이 실시간 스캔 체감을 지배합니다. 스캐너는 프레임을 약 0.3초 간격으로 보는데, 한 번 읽는 데 그보다 오래 걸리면 그동안의 프레임이 버려져서 정확도와 무관하게 <strong>“대고 기다리는”</strong> 느낌이 됩니다. <strong>Y 는 그 간격 아래로 내려왔고</strong>, O·A 는 아직 깁니다. (라이브는 더 작은 프레임을 보기 때문에 실제로는 이 표보다 빠릅니다 — 같은 사진의 960px 판에서 Y 0.1초 · A 0.54초 · O 1.2초였어요.)',
+    statusNote0: '<strong>Type Y 는 빨라지고 O·A 는 느려졌습니다.</strong> 파인더를 새로 짜고 포맷 판독에 재시도 경로를 넣으면서 <strong>인식률을 시간으로 샀어요</strong> — 그 대가로 Type A 가 2/3 에서 3/3 이 됐습니다. Y 는 큐브 경로를 «싸게 먼저 시도하고, 실패했을 때만 한 번 전부 훑는» 구조로 바꿔 오히려 예전보다 빨라졌고, 같은 방식을 O·A 에 적용하는 것이 다음 과제예요.',
     statusNote2: `촬영 조건도 크게 작용합니다. 실측에서 <strong>셀당 ${stats.cellFloorPx}픽셀</strong>이 복호 하한이었고, 같은 거리라도 <strong>초광각 렌즈</strong>로 찍으면 코드가 작게 담겨 이 선 아래로 내려갔어요 (초광각 ${stats.ultraWideFailPx}px 실패 / 광각 ${stats.wideOkPx}px 성공). 스캐너에 렌즈 선택을 넣어 둔 이유입니다.`,
     statusNote3: '<strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하는 형태예요. 진입점이 없어 한동안 못 읽었는데, QR 자신의 파인더를 기준점으로 삼는 경로를 넣어 이제 읽힙니다.',
     statusFoot: `측정 ${stats.measuredOn} · 표본은 스마트폰 3개 센서(초광각·광각·망원)로 찍은 사진 ${stats.sampleCount}장 · 짧은 변 ${stats.shortSidePx}px 기준. 표본이 작아 성공률이 아니라 <em>현재 상태</em>로 읽어 주세요.`,
@@ -171,9 +175,9 @@ export const strings = {
     rowOName: '<strong>Type O</strong> — hex field',
     rowAName: '<strong>Type A</strong> — triangular silhouette',
     rowCenterQr: '<strong>Centre-QR variant</strong> (all three types)',
-    badgeSlow: 'improving',
-    statusNote1: 'Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. All three types are currently longer than that interval, with Y the smoothest of them. (Live scanning works on smaller frames, so it is faster in practice — on the 960 px versions of the same photos: Y 0.6 s, A 0.66 s, O 1.4 s.)',
-    statusNote0: '<strong>These times are slower than the previous update.</strong> Rebuilding the finder and adding a retry path to format reading <strong>bought accuracy with time</strong> — and it moved Type A from 2/3 to 3/3. The figures come from running the old and new versions alternately on the same photos with the same method. This is the next thing to improve.',
+    badgeUsable: 'usable', badgeSlow: 'improving',
+    statusNote1: 'Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. <strong>Y is now under that interval</strong>; O and A are still above it. (Live scanning works on smaller frames, so it is faster in practice — on the 960 px versions of the same photos: Y 0.1 s, A 0.54 s, O 1.2 s.)',
+    statusNote0: '<strong>Type Y got faster; O and A got slower.</strong> Rebuilding the finder and adding a retry path to format reading <strong>bought accuracy with time</strong> — and it moved Type A from 2/3 to 3/3. For Y we then reshaped the cube path to <em>try the cheap route first and only sweep everything after a failure</em>, which made it faster than it had ever been. Applying the same shape to O and A is what comes next.',
     statusNote2: `Shooting conditions matter too. Measured, <strong>${stats.cellFloorPx} pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide ${stats.ultraWideFailPx} px failed / wide ${stats.wideOkPx} px succeeded). That is why the scanner offers a lens picker.`,
     statusNote3: 'In the <strong>centre-QR variant</strong> a QR block takes the place of the central finder. It was unreadable for a while because there was no entry point; a path that uses the QR’s own finder patterns as reference now handles it.',
     statusFoot: `Measured ${stats.measuredOn} · sample of ${stats.sampleCount} photos across three phone sensors (ultra-wide, wide, telephoto) · short side ${stats.shortSidePx} px. The sample is small — read this as a <em>current state</em>, not a success rate.`,
@@ -241,9 +245,9 @@ export const strings = {
     rowOName: '<strong>Type O</strong> — 六角フィールド',
     rowAName: '<strong>Type A</strong> — 三角シルエット',
     rowCenterQr: '<strong>中央 QR 変種</strong>（3 タイプ共通）',
-    badgeSlow: '改善中',
-    statusNote1: '復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。いまは 3 タイプともその間隔より長く、その中では Y が最も滑らかです。（ライブはより小さいフレームを見るため実際にはこの表より速く、同じ写真の 960px 版では Y 0.6 秒・A 0.66 秒・O 1.4 秒でした。）',
-    statusNote0: '<strong>前回の更新より時間が延びました。</strong>ファインダを作り直し、フォーマット判読に再試行の経路を入れたことで<strong>認識率を時間で買いました</strong> — その代わりに Type A が 2/3 から 3/3 になりました。同じ写真・同じ方法で旧版と交互に測って確認した値で、次の改善課題はここです。',
+    badgeUsable: '実用的', badgeSlow: '改善中',
+    statusNote1: '復号時間がリアルタイム性の体感を左右します。スキャナは約 0.3 秒ごとにフレームを見ますが、1 回の読み取りがそれより長いとその間のフレームは捨てられ、精度とは無関係に<strong>「かざして待つ」</strong>感覚になります。<strong>Y はその間隔を下回りました</strong>が、O・A はまだ長めです。（ライブはより小さいフレームを見るため実際にはこの表より速く、同じ写真の 960px 版では Y 0.1 秒・A 0.54 秒・O 1.2 秒でした。）',
+    statusNote0: '<strong>Type Y は速くなり、O・A は遅くなりました。</strong>ファインダを作り直し、フォーマット判読に再試行の経路を入れたことで<strong>認識率を時間で買いました</strong> — その代わりに Type A が 2/3 から 3/3 になりました。Y については、キューブ経路を「まず安く試し、失敗したときだけ一度だけ全部を走査する」形に変えたことで以前より速くなっています。同じ形を O・A に適用するのが次の課題です。',
     statusNote2: `撮影条件も大きく効きます。実測では<strong>セルあたり ${stats.cellFloorPx} ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 ${stats.ultraWideFailPx}px 失敗 / 広角 ${stats.wideOkPx}px 成功）。スキャナにレンズ選択を入れているのはそのためです。`,
     statusNote3: '<strong>中央 QR 変種</strong>は QR ブロックが中央ファインダの位置を代わりに占める形です。入口がなくしばらく読めませんでしたが、QR 自身のファインダを基準にする経路を入れて読めるようになりました。',
     statusFoot: `測定 ${stats.measuredOn} · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 ${stats.sampleCount} 枚 · 短辺 ${stats.shortSidePx}px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。`,

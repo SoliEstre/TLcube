@@ -1905,6 +1905,19 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
  */
 const EMPTY_FAMILY_OPTIONS = Object.freeze({});
 
+function exhaustiveCubeFamilyOptions(options) {
+  const family = options.family && typeof options.family === 'object'
+    ? options.family
+    : EMPTY_FAMILY_OPTIONS;
+  if (family.cube && typeof family.cube === 'object') {
+    return {
+      ...family,
+      cube: { ...family.cube, exhaustiveBlockRecovery: true },
+    };
+  }
+  return { ...family, exhaustiveBlockRecovery: true };
+}
+
 export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   try {
     assertLumaField(luma);
@@ -1932,12 +1945,16 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
       cause: 'cube-positive-independent-path',
     })
     : discoverFinders(luma, familyEvidence, options, cfg);
+  /*
+   * 큐브 경로가 이미 양성인데 QR 트리플까지 열면 가설이 200개 가까이 늘어
+   * 포맷 검사만 수십 ms 다(실측 Type Y). 중앙 QR 세트는 큐브 양성이 아니라
+   * 파인더 실패·셀마스크 쪽에서 이 분기를 탄다.
+   */
   const shouldProbeQr = options._forceQrFinder === true
-    || !finderResult.ok
+    || (!cubeResult.ok && !finderResult.ok)
     || finderResult.cellFinderMerged === true
     || (typeof finderResult.source === 'string'
-      && finderResult.source.includes('cell-mask'))
-    || cubeResult.ok;
+      && finderResult.source.includes('cell-mask'));
   const qrResult = shouldProbeQr
     ? detectQrFinderTriples(luma, options.qrFinder || {})
     : fail(FRONTEND_FAILURE.NO_FINDER, {
@@ -2639,6 +2656,30 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
   if (!geometry.ok) return geometry;
   const validated = validateGridHypotheses(luma, geometry.hypotheses, options);
   if (!validated.ok) {
+    /*
+     * 레퍼런스만 맞은 큐브 후보는 최종 채택이 아니다. 빠른 첫 통과에서 줄였던 블록
+     * 후보와 QR 윈도 경로를 포맷·RS 실패 뒤에 한 번만 모두 복원하면, 정상 Type Y의
+     * 비용은 지키면서 뒤쪽 정답 가설도 버리지 않는다.
+     */
+    const retryCubeAlternatives = options._cubeAlternativeRetry !== false
+      && geometry.diagnostics?.cube?.ok === true
+      && geometry.diagnostics?.qr?.skipped === true;
+    if (retryCubeAlternatives) {
+      const retried = enumerateGridHypotheses(luma, familyEvidence, {
+        ...options,
+        family: exhaustiveCubeFamilyOptions(options),
+        _forceQrFinder: true,
+        _cubeAlternativeRetry: false,
+      });
+      if (retried.ok) {
+        retried.diagnostics.cubeAlternativeRetry = {
+          exhaustiveBlockRecovery: true,
+          qrFinder: true,
+        };
+        return retried;
+      }
+    }
+
     /*
      * 패밀리 재배치 — 분류기가 틀려도 복구되는 안전망이다.
      *

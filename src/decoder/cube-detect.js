@@ -2244,153 +2244,7 @@ function blockReferenceSearch(luma, initialH, n, tones, options, cfg) {
     },
   };
 }
-function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
-  const proposals = flatBlockCandidates(reduced.luma, cfg);
-  const hypotheses = [];
-  const reports = [];
-  const requestedTones = options.tones === 2 || options.tones === 3
-    ? [options.tones]
-    : SUPPORTED_TONES;
-
-  for (let componentIndex = 0;
-    componentIndex < proposals.candidates.length;
-    componentIndex += 1) {
-    const proposal = proposals.candidates[componentIndex];
-    for (const n of SUPPORTED_N) {
-      for (let orientation = 0;
-        orientation < CANONICAL_SEAM_CORNERS.length;
-        orientation += 1) {
-        const initialH = blockCandidateHomography(proposal, n, reduced.factor, orientation);
-        if (!initialH) continue;
-        for (const tones of requestedTones) {
-          const searched = blockReferenceSearch(luma, initialH, n, tones, options, cfg);
-          reports.push({
-            componentIndex,
-            n,
-            orientation,
-            tones,
-            proposal,
-            ...searched.report,
-          });
-          if (!searched.accepted) continue;
-
-          const accepted = searched.accepted;
-          const radius = median(accepted.vertices.map((point) =>
-            Math.hypot(point.x - accepted.center.x, point.y - accepted.center.y)));
-          const shapeScore = clamp01(
-            0.38 * clamp01(
-              accepted.seam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON),
-            )
-            + 0.20 * accepted.seam.support
-            + 0.22 * accepted.referenceCalibration.agreementRate
-            + 0.20 * clamp01(proposal.blockFill),
-          );
-          const geometryResidual = 0;
-          const logicalHypothesisId = 'cube-n' + n
-            + '-flat-block-c' + componentIndex + '-o' + orientation + '-t' + tones;
-          const hardChecks = {
-            flatModuleRegion: true,
-            yJunction: true,
-            referenceAgreement: accepted.referenceCalibration.hardChecks.referenceAgreement,
-            toneSeparation: accepted.referenceCalibration.hardChecks.toneSeparation,
-            all: true,
-          };
-          hypotheses.push({
-            family: 'cube',
-            finderKind: 'y-junction',
-            gridKind: 'three-face-nxn',
-            n,
-            k: n,
-            orientation,
-            rotationDegrees: orientation * 120,
-            centerQr: false,
-            center: accepted.center,
-            vertices: accepted.vertices,
-            seamVertices: CANONICAL_SEAM_CORNERS.map((index) => accepted.vertices[index]),
-            H: accepted.H,
-            canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-            geometryResidual,
-            sizeGeometry: {
-              rK: 0,
-              vertexResidual: geometryResidual,
-              relativeVertexResidual: 0,
-              proposalScaleX: accepted.scaleX,
-              proposalScaleY: accepted.scaleY,
-            },
-            source: 'cube-flat-block-reference',
-            geometrySeed: 'flat-block-affine',
-            shapeScore,
-            seamScore: accepted.seam.contrast,
-            seamSupport: accepted.seam.support,
-            shapeDiagnostics: {
-              componentIndex,
-              componentSource: 'flat-block-density',
-              center: accepted.center,
-              vertices: accepted.vertices,
-              seamParity: 1,
-              seamVertices: CANONICAL_SEAM_CORNERS.map(
-                (index) => accepted.vertices[index],
-              ),
-              radius,
-              maskFill: proposal.blockFill,
-              concurrencyResidual: 0,
-              seam: accepted.seam,
-              otherParitySeam: accepted.otherParitySeam,
-              parityMargin: accepted.parityMargin,
-              hardChecks,
-              score: shapeScore,
-              proposal,
-            },
-            tones,
-            referenceCalibration: accepted.referenceCalibration,
-            referenceSamples: accepted.references.samples,
-            referenceAnchors: accepted.references.anchors,
-            referenceAgreement: accepted.referenceCalibration.agreementRate,
-            referenceRefinement: {
-              dx: accepted.dx,
-              dy: accepted.dy,
-              pitch: searched.report.pitch,
-              radius: 1.75 * searched.report.pitch,
-              step: 0.25 * searched.report.pitch,
-              scale: median([accepted.scaleX, accepted.scaleY]),
-              scaleX: accepted.scaleX,
-              scaleY: accepted.scaleY,
-              quality: calibrationQuality(accepted.referenceCalibration),
-            },
-            logicalHypothesisId,
-            hypothesisId: logicalHypothesisId + '-gflat-block-affine',
-          });
-        }
-      }
-    }
-  }
-  return { hypotheses, reports, diagnostics: proposals.diagnostics };
-}
-
-export function detectCubeHypotheses(luma, yJunction, options = {}) {
-  try {
-    assertLumaField(luma);
-  } catch (error) {
-    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
-      stage: 'cube-detect',
-      message: error.message,
-    });
-  }
-  const explicit = explicitCubeHypotheses(yJunction);
-  if (explicit && explicit.length > 0) {
-    return ok({
-      hypotheses: explicit,
-      diagnostics: { source: 'supplied', hypothesisCount: explicit.length },
-    });
-  }
-
-  const cfg = calibration(options);
-  const reduced = downsampleLuma(luma, cfg.maxDimension);
-  const shapes = shapeCandidates(reduced.luma, cfg);
-  const hypotheses = [];
-  const geometryReports = [];
-  let blockRecovery = null;
-
+function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports) {
   for (const shape of shapes.candidates) {
     const center = liftPoint(shape.center, reduced.factor);
     const vertices = shape.vertices.map((point) => liftPoint(point, reduced.factor));
@@ -2518,6 +2372,165 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       }
     }
   }
+}
+
+function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
+  const proposals = flatBlockCandidates(reduced.luma, cfg);
+  const hypotheses = [];
+  const reports = [];
+  const requestedTones = options.tones === 2 || options.tones === 3
+    ? [options.tones]
+    : SUPPORTED_TONES;
+
+  for (let componentIndex = 0;
+    componentIndex < proposals.candidates.length;
+    componentIndex += 1) {
+    const proposal = proposals.candidates[componentIndex];
+    for (const n of SUPPORTED_N) {
+      for (let orientation = 0;
+        orientation < CANONICAL_SEAM_CORNERS.length;
+        orientation += 1) {
+        const initialH = blockCandidateHomography(proposal, n, reduced.factor, orientation);
+        if (!initialH) continue;
+        for (const tones of requestedTones) {
+          const searched = blockReferenceSearch(luma, initialH, n, tones, options, cfg);
+          reports.push({
+            componentIndex,
+            n,
+            orientation,
+            tones,
+            proposal,
+            ...searched.report,
+          });
+          if (!searched.accepted) continue;
+
+          const accepted = searched.accepted;
+          const radius = median(accepted.vertices.map((point) =>
+            Math.hypot(point.x - accepted.center.x, point.y - accepted.center.y)));
+          const shapeScore = clamp01(
+            0.38 * clamp01(
+              accepted.seam.contrast / Math.max(cfg.minimumSeamContrast * 4, EPSILON),
+            )
+            + 0.20 * accepted.seam.support
+            + 0.22 * accepted.referenceCalibration.agreementRate
+            + 0.20 * clamp01(proposal.blockFill),
+          );
+          const geometryResidual = 0;
+          const logicalHypothesisId = 'cube-n' + n
+            + '-flat-block-c' + componentIndex + '-o' + orientation + '-t' + tones;
+          const hardChecks = {
+            flatModuleRegion: true,
+            yJunction: true,
+            referenceAgreement: accepted.referenceCalibration.hardChecks.referenceAgreement,
+            toneSeparation: accepted.referenceCalibration.hardChecks.toneSeparation,
+            all: true,
+          };
+          hypotheses.push({
+            family: 'cube',
+            finderKind: 'y-junction',
+            gridKind: 'three-face-nxn',
+            n,
+            k: n,
+            orientation,
+            rotationDegrees: orientation * 120,
+            centerQr: false,
+            center: accepted.center,
+            vertices: accepted.vertices,
+            seamVertices: CANONICAL_SEAM_CORNERS.map((index) => accepted.vertices[index]),
+            H: accepted.H,
+            canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+            geometryResidual,
+            sizeGeometry: {
+              rK: 0,
+              vertexResidual: geometryResidual,
+              relativeVertexResidual: 0,
+              proposalScaleX: accepted.scaleX,
+              proposalScaleY: accepted.scaleY,
+            },
+            source: 'cube-flat-block-reference',
+            geometrySeed: 'flat-block-affine',
+            shapeScore,
+            seamScore: accepted.seam.contrast,
+            seamSupport: accepted.seam.support,
+            shapeDiagnostics: {
+              componentIndex,
+              componentSource: 'flat-block-density',
+              center: accepted.center,
+              vertices: accepted.vertices,
+              seamParity: 1,
+              seamVertices: CANONICAL_SEAM_CORNERS.map(
+                (index) => accepted.vertices[index],
+              ),
+              radius,
+              maskFill: proposal.blockFill,
+              concurrencyResidual: 0,
+              seam: accepted.seam,
+              otherParitySeam: accepted.otherParitySeam,
+              parityMargin: accepted.parityMargin,
+              hardChecks,
+              score: shapeScore,
+              proposal,
+            },
+            tones,
+            referenceCalibration: accepted.referenceCalibration,
+            referenceSamples: accepted.references.samples,
+            referenceAnchors: accepted.references.anchors,
+            referenceAgreement: accepted.referenceCalibration.agreementRate,
+            referenceRefinement: {
+              dx: accepted.dx,
+              dy: accepted.dy,
+              pitch: searched.report.pitch,
+              radius: 1.75 * searched.report.pitch,
+              step: 0.25 * searched.report.pitch,
+              scale: median([accepted.scaleX, accepted.scaleY]),
+              scaleX: accepted.scaleX,
+              scaleY: accepted.scaleY,
+              quality: calibrationQuality(accepted.referenceCalibration),
+            },
+            logicalHypothesisId,
+            hypothesisId: logicalHypothesisId + '-gflat-block-affine',
+          });
+          /*
+           * 레퍼런스 일치는 본문 격자의 충분조건이 아니므로 실패를 확정하는 경로에서는
+           * 끝까지 보존한다. 정상 입력의 첫 통과만 여기서 줄이고, 포맷·RS가 모두 막히면
+           * 상위 검증기가 exhaustiveBlockRecovery로 다시 열거한다.
+           */
+          if (accepted.referenceCalibration.hardChecks.all
+            && options.exhaustiveBlockRecovery !== true) {
+            return { hypotheses, reports, diagnostics: proposals.diagnostics };
+          }
+        }
+      }
+    }
+  }
+  return { hypotheses, reports, diagnostics: proposals.diagnostics };
+}
+
+export function detectCubeHypotheses(luma, yJunction, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'cube-detect',
+      message: error.message,
+    });
+  }
+  const explicit = explicitCubeHypotheses(yJunction);
+  if (explicit && explicit.length > 0) {
+    return ok({
+      hypotheses: explicit,
+      diagnostics: { source: 'supplied', hypothesisCount: explicit.length },
+    });
+  }
+
+  const cfg = calibration(options);
+  const reduced = downsampleLuma(luma, cfg.maxDimension);
+  const shapes = shapeCandidates(reduced.luma, cfg);
+  const hypotheses = [];
+  const geometryReports = [];
+  let blockRecovery = null;
+
+  hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports);
 
   if (hypotheses.length === 0) {
     blockRecovery = recoverFlatBlockHypotheses(luma, reduced, options, cfg);
