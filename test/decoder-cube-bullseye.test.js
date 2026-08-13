@@ -231,6 +231,56 @@ test('프레임을 꽉 채운 하이브리드도 복호된다 (커버 천장 회
   assert.equal(result.text, TEXT);
 });
 
+test('안쪽이 임의 내용이어도 링만으로 잡힌다 — 그리고 진짜 불스아이를 가로채지 않는다', () => {
+  /*
+   * «불스아이 안쪽 원판에 커스텀 이미지(로고)» 를 위한 계약.
+   *
+   * 근거: 19셀 슬롯은 `cellDigits` 에서 빠져 있어 안쪽 원판은 **데이터를 한 비트도 안 먹는다**
+   * (QR 로고는 데이터를 덮는다). 실측(합성, 안쪽을 단색·고대비 무늬로 채움): 안쪽 2·3·4밴드
+   * 전부 링만으로 중심이 잡혔다(오차 ≤0.09셀).
+   *
+   * ⚠ `innerEvidence: 'none'` 은 안쪽을 아예 안 재므로 **뭉개진 순수 불스아이도 통과시킨다.**
+   *   그래서 «레이아웃 0 이 통과하면 그쪽이 이긴다» 규칙이 함께 있어야 한다. 이 테스트가
+   *   두 번째 단언으로 그걸 고정한다 — 규칙이 빠지면 순수 불스아이가 로고 레이아웃으로
+   *   승격돼 중심이 끌려간다(2026-08-12 에 같은 부류로 실사진 복호가 죽은 적이 있다).
+   */
+  const innerBands = 3;
+  const radii = bandRadii(1);
+  const scene = buildScene(ENCODED, {
+    palette: PALETTE, cellSize: 1, finderPatternId: 'bullseye',
+  });
+  const outer = scene.shapes.find(
+    (shape) => shape.kind === 'disc' && Math.abs(shape.r - maxSafeRadius(1)) < 1e-9,
+  );
+  // 링은 바깥 3밴드만 남기고, 안쪽은 «로고» 대역으로 단색을 채운다.
+  const shapes = scene.shapes.filter(
+    (shape) => !(shape.kind === 'disc' && radii.some((r) => Math.abs(shape.r - r) < 1e-9)),
+  );
+  for (let index = radii.length - 1; index >= innerBands; index -= 1) {
+    shapes.push({
+      kind: 'disc', cx: outer.cx, cy: outer.cy, r: radii[index],
+      color: index % 2 === 0 ? BULLSEYE_DARK : BULLSEYE_LIGHT,
+    });
+  }
+  shapes.push({
+    kind: 'disc', cx: outer.cx, cy: outer.cy, r: radii[innerBands - 1],
+    color: { r: 120, g: 180, b: 90 },
+  });
+  const raster = rasterize({ ...scene, shapes }, { pixelsPerUnit: 24, supersample: 2 });
+
+  const layouts = { ringLayouts: [0, { firstBand: innerBands, innerEvidence: 'none' }] };
+  const logo = bestCandidate(detectBullseyes(toLuma(raster), layouts));
+  assert.ok(logo, '안쪽이 임의 내용인데 링만으로도 못 잡았다');
+  assert.equal(logo.innerBandsReplaced, innerBands);
+  assert.equal(logo.innerEvidence, 'none');
+
+  // 같은 옵션을 **진짜 순수 불스아이**에 걸면 레이아웃 0 이 이겨야 한다.
+  const plain = bestCandidate(detectBullseyes(toLuma(render('bullseye', 24)), layouts));
+  assert.ok(plain);
+  assert.equal(plain.innerBandsReplaced, 0,
+    '순수 불스아이가 증거 없는 레이아웃으로 승격됐다 — 우선순위 규칙이 빠졌다');
+});
+
 test('하이브리드 코드가 끝에서 끝까지 복호된다 (파이프라인 기본 옵션)', () => {
   for (const pixelsPerUnit of [24, 12, 9]) {
     const raster = render('cube-bullseye', pixelsPerUnit);

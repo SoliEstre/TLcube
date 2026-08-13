@@ -672,18 +672,27 @@ function ringFirstBand(options) {
  * **검증만 레이아웃마다** 반복한다 — 제안(피라미드+Sobel+투표)이 비싸고 검증은 싸다.
  */
 function ringLayouts(options) {
+  const fallbackEvidence = options.innerEvidence === 'none' ? 'none' : 'cube';
   const requested = options.ringLayouts;
   if (requested === undefined) {
     const firstBand = ringFirstBand(options);
-    return firstBand === null ? null : [firstBand];
+    return firstBand === null ? null : [{ firstBand, innerEvidence: fallbackEvidence }];
   }
   if (!Array.isArray(requested) || requested.length === 0) return null;
-  const seen = new Set();
-  for (const firstBand of requested) {
+  const seen = new Map();
+  for (const entry of requested) {
+    // 숫자 하나면 «그 레이아웃 + 기본 증거». 안쪽이 큐브가 아닌 변형(로고 등)은
+    // `{ firstBand, innerEvidence: 'none' }` 로 준다 — 요구할 증거가 없기 때문이다.
+    const firstBand = typeof entry === 'object' && entry !== null ? entry.firstBand : entry;
     if (!Number.isInteger(firstBand) || firstBand < 0 || firstBand > BAND_COUNT - 2) return null;
-    seen.add(firstBand);
+    const innerEvidence = typeof entry === 'object' && entry !== null && entry.innerEvidence === 'none'
+      ? 'none'
+      : (firstBand === 0 ? 'cube' : fallbackEvidence);
+    const key = `${firstBand}:${innerEvidence}`;
+    if (!seen.has(key)) seen.set(key, { firstBand, innerEvidence });
   }
-  return [...seen].sort((a, b) => a - b);
+  return [...seen.values()].sort((a, b) => a.firstBand - b.firstBand
+    || (a.innerEvidence === b.innerEvidence ? 0 : a.innerEvidence === 'cube' ? -1 : 1));
 }
 
 function proposalBoundaries(options) {
@@ -693,7 +702,7 @@ function proposalBoundaries(options) {
     if (layouts === null) return null;
     // 여러 레이아웃을 함께 볼 땐 **가장 안쪽까지 링인 것** 을 기준으로 잡는다.
     // 그래야 순수 불스아이의 투표가 지금과 한 표도 다르지 않다(회귀 0).
-    const firstBand = layouts[0];
+    const firstBand = layouts[0].firstBand;
     if (firstBand === 0) return DEFAULT_PROPOSAL_BOUNDARIES;
     // 경계 firstBand 는 «대체 무늬 ↔ 첫 링» 접면이다. 극성이 방향마다 섞이지만
     // (하이브리드에선 큐브의 밝은 면만 부호가 맞는다) 투표는 가산이라 맞는 방향의
@@ -1506,7 +1515,6 @@ export function detectBullseyes(luma, options = {}) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '방사 대칭 중심 proposal이 없다' });
   }
 
-  const innerEvidence = options.innerEvidence === 'none' ? 'none' : 'cube';
   const layouts = ringLayouts(options);
   if (layouts === null) {
     return fail(FRONTEND_FAILURE.NO_FINDER, {
@@ -1520,13 +1528,14 @@ export function detectBullseyes(luma, options = {}) {
     const cellSize = proposal.outerRadius / CANONICAL_OUTER_RADIUS;
     const H = homographyFromParams(isotropicParams(proposal.center, cellSize));
     if (H === null) continue;
-    for (const firstBand of layouts) {
-      const layoutOptions = { ...fastOptions, innerBandsReplaced: firstBand };
+    for (const layout of layouts) {
+      const layoutOptions = { ...fastOptions, innerBandsReplaced: layout.firstBand };
       const scored = scoreBullseyeCore(luma, H, layoutOptions, stats);
       if (scored.ok) {
         coarse.push({
           proposal,
-          firstBand,
+          firstBand: layout.firstBand,
+          innerEvidence: layout.innerEvidence,
           candidate: candidateFromScore(scored),
         });
       }
@@ -1580,11 +1589,11 @@ export function detectBullseyes(luma, options = {}) {
      * ⚠ 'none' 은 뭉개진 순수 불스아이를 이 레이아웃으로 «승격» 시킬 수 있다(그걸 막으려고
      *   큐브 증거를 넣었다). 그래서 호출자는 레이아웃 0 이 통과하면 그쪽을 우선해야 한다.
      */
-    const cube = innerEvidence === 'none' ? null : readCubeOrientation(luma, {
+    const cube = entry.innerEvidence === 'none' ? null : readCubeOrientation(luma, {
       transform: result.candidate.transform,
       innerBandsReplaced: entry.firstBand,
     });
-    if (innerEvidence !== 'none'
+    if (entry.innerEvidence !== 'none'
       && (cube === null
         || !(cube.orientationMargin >= MIN_CUBE_TONE_RANK_MARGIN)
         || !(cube.faceFlatness >= MIN_CUBE_FACE_FLATNESS))) continue;
@@ -1596,7 +1605,11 @@ export function detectBullseyes(luma, options = {}) {
      *   맞는 가설이 밀려났다. 방향은 아직 하류가 소비할 계약이 아니므로 격리한다.
      */
     if (cube === null) {
-      refined.push({ ...result.candidate, innerBandsReplaced: entry.firstBand });
+      refined.push({
+        ...result.candidate,
+        innerBandsReplaced: entry.firstBand,
+        innerEvidence: 'none',
+      });
       continue;
     }
     refined.push({
@@ -1614,7 +1627,25 @@ export function detectBullseyes(luma, options = {}) {
   }
   refined.sort(compareScored);
 
-  const valid = finalCandidateNms(refined.filter((candidate) => candidate.hardChecksPassed));
+  /*
+   * **레이아웃 0 이 이긴다.**
+   *
+   * `innerEvidence: 'none'` 레이아웃(안쪽이 로고 등 임의 내용)은 안쪽을 아예 안 재므로,
+   * **뭉개진 순수 불스아이도 통과시킨다.** 그 상태로 정제까지 가면 안쪽 정보를 버린 채
+   * 중심을 맞추게 되고 ring-3 포맷 표본이 어긋난다 — 큐브 증거 게이트를 넣은 이유가
+   * 바로 그것이었는데(2026-08-12 jpeg q60+blur 회귀), 'none' 은 그 방어가 없다.
+   *
+   * 그래서 순수 링(firstBand 0)이 hard check 를 통과했으면 증거 없는 후보는 버린다.
+   * 진짜 불스아이는 레이아웃 0 으로 통과하고, 진짜 로고 파인더는 안쪽 밴드가 링이 아니라
+   * 레이아웃 0 이 실패하므로 — 두 경우가 자연히 갈린다.
+   */
+  const passed = refined.filter((candidate) => candidate.hardChecksPassed);
+  const plainRingWon = passed.some((candidate) => candidate.innerBandsReplaced === 0);
+  const survivors = plainRingWon
+    ? passed.filter((candidate) => candidate.innerEvidence !== 'none')
+    : passed;
+
+  const valid = finalCandidateNms(survivors);
   valid.sort(compareScored);
   if (valid.length === 0) {
     const best = refined[0] ?? coarse[0]?.candidate;
