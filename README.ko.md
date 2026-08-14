@@ -60,6 +60,8 @@ node tools/build-single.mjs      # dist/trilume.html — 서버 없이 file:// �
 npm test                         # 전체 테스트 (node --test)
 ```
 
+영상 촬영용 A4 인쇄 포스터는 [`print/tlcube-poster.html`](print/tlcube-poster.html) 이다. `file://` 로 연다. [`print/README.md`](print/README.md).
+
 ## 기술
 
 바닐라 JavaScript. **빌드 툴체인 없음, 런타임 의존성 0.** 단일 HTML 파일로 동작한다.

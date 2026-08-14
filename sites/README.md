@@ -10,6 +10,8 @@ TLcube 는 도메인 세 개로 나뉜다. 전부 **정적 파일**이고 빌드
 
 `sites/_shared/` 는 tl·tlscan 이 공유하는 CSS·JS 다. 생성기는 단일 파일 원칙 때문에 스타일을 인라인으로 갖고 있고, 이 공유분은 나머지 두 사이트만 쓴다.
 
+로컬 촬영용 A4 포스터(`print/tlcube-poster.html`)는 이 세 사이트 배포에 포함하지 않는다. `file://` 로 열고 인쇄한다. [`print/README.md`](../print/README.md).
+
 ## 배포
 
 서버에서는 빌드 단계가 **없다**. `dist/trilume.html` 이 repo 에 커밋돼 있어서 Node 조차 필요 없다 — clone 한 것을 그대로 서빙하면 된다.

@@ -60,6 +60,8 @@ node tools/build-single.mjs      # dist/trilume.html — one file, opens over fi
 npm test                         # full suite (node --test)
 ```
 
+A filming print sheet (A4, QR then TLcube, same on-paper size) lives at [`print/tlcube-poster.html`](print/tlcube-poster.html). It opens over `file://`. See [`print/README.md`](print/README.md).
+
 ## How it is built
 
 Vanilla JavaScript. **No build toolchain, zero runtime dependencies.** It runs as a single HTML file.
