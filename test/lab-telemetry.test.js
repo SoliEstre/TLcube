@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parseEnvelope } from '../relay/protocol.mjs';
 import {
+  MAX_SHOT_CHARS,
   SID_KEY,
   classifyStage,
   createLabTelemetry,
@@ -297,4 +298,45 @@ test('안내 카드 3언어와 생성기 사전에 시험판 문구가 있다', 
   assert.match(gen, /id="labTelemetryDisclosure" hidden/);
   assert.match(gen, /labTelemetryDisclosure && isLabPath\(\)/);
   assert.match(gen, /createLabTelemetry\(\{ site: 'gen' \}\)/);
+});
+
+/*
+ * 회귀 고정 — base64 인코딩의 «브라우저 분기».
+ *
+ * node 는 `Buffer` 분기를 타므로 브라우저에서만 도는 청크 루프를 **한 번도 안 밟는다.**
+ * 2026-08-14 에 그 루프의 전진 폭이 `chunk` 에서 `1` 로 바뀌었는데 전체 스위트가
+ * 초록이었고, 실기기에서 29KB PNG 하나가 426MB 문자열이 되어 프레임당 수 초를 먹고
+ * 캡처는 상한 초과로 통째로 버려졌다. 그래서 이 테스트는 Buffer 를 지워 그 분기를 강제한다.
+ */
+function noisyFrame(side = 96) {
+  const data = new Uint8ClampedArray(side * side * 4);
+  let seed = 1;
+  for (let i = 0; i < side * side; i += 1) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff; // 결정적 · 잘 안 눌리는 입력
+    const v = seed & 0xff;
+    data[i * 4] = v; data[i * 4 + 1] = v; data[i * 4 + 2] = v; data[i * 4 + 3] = 255;
+  }
+  return { width: side, height: side, data };
+}
+
+function withoutBuffer(fn) {
+  const saved = globalThis.Buffer;
+  globalThis.Buffer = undefined; // typeof Buffer === 'undefined' → 브라우저 분기
+  try { return fn(); } finally { globalThis.Buffer = saved; }
+}
+
+test('shrinkFrameShot 은 Buffer 없는 환경에서도 같은 data URI 를 낸다', () => {
+  const frame = noisyFrame();
+  const viaBuffer = shrinkFrameShot(frame);
+  assert.ok(viaBuffer, 'Buffer 분기가 캡처를 만들어야 한다');
+
+  const viaBrowser = withoutBuffer(() => shrinkFrameShot(frame));
+  assert.ok(viaBrowser, '브라우저 분기가 null 이면 캡처가 통째로 사라진다');
+  assert.equal(viaBrowser.png, viaBuffer.png, '두 분기의 data URI 는 바이트까지 같아야 한다');
+});
+
+test('브라우저 분기 캡처가 전송 상한 안에 들어온다', () => {
+  const viaBrowser = withoutBuffer(() => shrinkFrameShot(noisyFrame()));
+  assert.ok(viaBrowser.png.length < MAX_SHOT_CHARS,
+    `data URI ${viaBrowser.png.length}자가 상한 ${MAX_SHOT_CHARS}자를 넘으면 릴레이가 버린다`);
 });

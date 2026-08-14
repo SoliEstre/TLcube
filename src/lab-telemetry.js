@@ -871,11 +871,18 @@ export function normalizeFrameShotBody(body) {
   };
 }
 
+/**
+ * ⚠ 전진 폭은 **반드시 `chunk`** 다. `i += 1` 이면 매 반복이 «남은 배열 전체» 를 다시
+ *   이어붙여 O(n²) 로 커진다 — 29KB PNG 하나가 426MB 문자열이 됐고(실측), 그 결과
+ *   ① 프레임당 수 초가 사라지고 ② data URI 가 MAX_SHOT_CHARS 를 넘겨 캡처가 통째로
+ *   버려졌다. node 는 위 Buffer 분기를 타서 이 경로를 **안 지나므로 테스트가 못 잡는다** —
+ *   `lab-telemetry.test.js` 가 Buffer 를 지워 이 분기를 강제로 밟는 이유다.
+ */
 function bytesToBase64(bytes) {
   if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
   let binary = '';
   const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += 1) {
+  for (let i = 0; i < bytes.length; i += chunk) {
     binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
   }
   return btoa(binary);
