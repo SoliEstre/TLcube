@@ -5,7 +5,7 @@
  *
  * QR: src/qr-v2-byte.js 의 v2-L 바이트 모드. 페이로드는 TLcube 와 같은
  *     소문자 문자열 `https://tl.estre.so` 이다 (바이트 단위 동일).
- * TLcube: Type Y1 · 3톤 · ECC-M. 영상용 컬러 포스터에서 세 휘도 단계가 드러나도록
+ * TLcube: Type Y0 · 3톤 · ECC-M. 영상용 컬러 포스터에서 세 휘도 단계가 드러나도록
  *         하되, 코드 영역에는 장식을 겹치지 않는다.
  */
 
@@ -24,7 +24,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const POSTER_REL = 'print/tlcube-poster.html';
 export const POSTER_URL = 'https://tl.estre.so';
 export const POSTER_TL_TYPE = 'Y';
-export const POSTER_TL_VERSION = 1;
+export const POSTER_TL_VERSION = 0;
 export const POSTER_TL_TONES = 3;
 export const POSTER_TL_ECC = 'M';
 export const SYMBOL_BOX_CLASS = 'symbol-box';
@@ -445,7 +445,7 @@ ${tlSvg.trim()}
           </div>
         </div>
         <div class="dimension">2.5D</div>
-        <div class="format-note">TYPE Y · THREE-TONE</div>
+        <div class="format-note">TYPE Y · LOW · THREE-TONE</div>
       </figure>
     </div>
     <footer class="facts">

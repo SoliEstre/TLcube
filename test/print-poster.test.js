@@ -173,7 +173,7 @@ test('영어 카피에 금지 주장·CTA 가 없고 좌→우 라벨이 있다'
   assert.doesNotMatch(POSTER, />then</i);
   assert.match(POSTER, /<div class="dimension">2D<\/div>/);
   assert.match(POSTER, /<div class="dimension">2\.5D<\/div>/);
-  assert.match(POSTER, />TYPE Y · THREE-TONE</);
+  assert.match(POSTER, />TYPE Y · LOW · THREE-TONE</);
   assert.doesNotMatch(POSTER, />TLCUBE</);
   const qrAt = POSTER.indexOf('id="qr-symbol"');
   const tlAt = POSTER.indexOf('id="tlcube-symbol"');
@@ -189,6 +189,7 @@ test('영어 카피에 금지 주장·CTA 가 없고 좌→우 라벨이 있다'
 
 test('컬러 인쇄 포스터는 Type Y 3톤 계약과 장식-코드 분리를 고정한다', () => {
   assert.equal(POSTER_TL_TYPE, 'Y');
+  assert.equal(POSTER_TL_VERSION, 0);
   assert.equal(POSTER_TL_TONES, 3);
   assert.match(POSTER, /--violet:\s*#6548e8/);
   assert.match(POSTER, /radial-gradient/);
