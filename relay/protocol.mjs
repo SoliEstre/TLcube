@@ -116,6 +116,21 @@ export function validateFrameBody(body) {
   if (body.geometry !== undefined && body.geometry !== null && !isPlainObject(body.geometry)) {
     return 'frame.geometry';
   }
+  if (body.cellSurface !== undefined && body.cellSurface !== null) {
+    if (!isPlainObject(body.cellSurface)) return 'frame.cellSurface';
+    if (body.cellSurface.attempted !== undefined && typeof body.cellSurface.attempted !== 'boolean') {
+      return 'frame.cellSurface.attempted';
+    }
+    if (body.cellSurface.accepted !== undefined && typeof body.cellSurface.accepted !== 'boolean') {
+      return 'frame.cellSurface.accepted';
+    }
+    if (!(body.cellSurface.score === null || body.cellSurface.score === undefined
+      || isFiniteNumber(body.cellSurface.score))) {
+      return 'frame.cellSurface.score';
+    }
+    if (!isNullableString(body.cellSurface.reason)) return 'frame.cellSurface.reason';
+    if (!isNullableString(body.cellSurface.profile)) return 'frame.cellSurface.profile';
+  }
   return null;
 }
 
@@ -229,8 +244,31 @@ export function eventRow(event) {
     rotation_deg: geometryField(body, 'rotation_deg'),
     perspective: geometryField(body, 'perspective'),
     residual_px: geometryField(body, 'residual_px'),
+    cs_attempted: cellSurfaceFlag(body, 'attempted'),
+    cs_accepted: cellSurfaceFlag(body, 'accepted'),
+    cs_score: cellSurfaceScore(body),
+    cs_reason: cellSurfaceString(body, 'reason'),
+    cs_profile: cellSurfaceString(body, 'profile'),
     body: JSON.stringify(body),
   };
+}
+
+function cellSurfaceFlag(body, key) {
+  const cs = isPlainObject(body.cellSurface) ? body.cellSurface : null;
+  if (!cs || cs[key] == null) return 0;
+  return cs[key] === true ? 1 : 0;
+}
+
+function cellSurfaceScore(body) {
+  const cs = isPlainObject(body.cellSurface) ? body.cellSurface : null;
+  if (!cs) return null;
+  return asNullableFloat(cs.score);
+}
+
+function cellSurfaceString(body, key) {
+  const cs = isPlainObject(body.cellSurface) ? body.cellSurface : null;
+  if (!cs || cs[key] == null) return '';
+  return String(cs[key]);
 }
 
 /** tl_lab.thumbnails 한 행. */

@@ -355,6 +355,8 @@ test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다',
   assert.doesNotMatch(MIG, /^clickhouse-client/m);
   assert.match(SQL, /ms_proposal\s+Nullable/);
   assert.match(SQL, /cell_px\s+Nullable/);
+  assert.match(SQL, /cs_attempted\s+UInt8/);
+  assert.match(MIG, /ADD COLUMN IF NOT EXISTS cs_attempted/);
 });
 
 test('decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다', () => {

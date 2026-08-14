@@ -14,6 +14,12 @@ import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { detectCubeHypotheses } from '../src/decoder/cube-detect.js';
 import {
+  UNVERIFIED_CELL_SURFACE_Y,
+  scoreCellSurfaceSamples,
+} from '../src/decoder/cellSurfaceY-detect.js';
+import { locatorCellsCellSurface } from '../src/cellSurfaceY.js';
+import { FRONTEND_FAILURE } from '../src/decoder/contracts.js';
+import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset, relativeLuminance,
 } from '../src/luminance.js';
 import {
@@ -311,4 +317,90 @@ test('빈 입력은 cell-surface 로 오수용되지 않는다', () => {
   const pixels = new Uint8ClampedArray(64 * 64 * 4);
   const empty = decodeLab({ width: 64, height: 64, pixels });
   assert.notEqual(empty.ok && empty.hypothesis && empty.hypothesis.cellSurface, true);
+});
+
+function idealLocatorSamples(cycle = ['T', 'L', 'R']) {
+  return locatorCellsCellSurface().map((cell) => ({
+    i: cell.i,
+    j: cell.j,
+    ok: true,
+    T: { median: cell[cycle[0]] === 0 ? 0.08 : 0.82 },
+    L: { median: cell[cycle[1]] === 0 ? 0.08 : 0.82 },
+    R: { median: cell[cycle[2]] === 0 ? 0.08 : 0.82 },
+  }));
+}
+
+test('방향 게이트 — 정방향은 수용, 오방향은 78% 를 넘겨도 거부', () => {
+  const correct = scoreCellSurfaceSamples(idealLocatorSamples(['T', 'L', 'R']));
+  assert.equal(correct.ok, true);
+  assert.equal(correct.accepted, true);
+  assert.ok(correct.best.agreement >= UNVERIFIED_CELL_SURFACE_Y.minimumAgreement);
+  assert.ok(correct.orientationMargin >= UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin);
+
+  const rates = { correct: 0, wrong: 0 };
+  if (correct.accepted) rates.correct += 1;
+
+  for (const cycle of [['L', 'R', 'T'], ['R', 'T', 'L']]) {
+    const wrong = scoreCellSurfaceSamples(idealLocatorSamples(cycle));
+    assert.equal(wrong.ok, true);
+    assert.ok(
+      wrong.best.agreement >= UNVERIFIED_CELL_SURFACE_Y.minimumAgreement,
+      '오방향 이상적 일치율이 78% 미만이면 결함 전제가 바뀐다: ' + wrong.best.agreement,
+    );
+    assert.equal(
+      wrong.accepted,
+      false,
+      '오방향이 수용됐다: ' + JSON.stringify({
+        agreement: wrong.best.agreement,
+        orientationMargin: wrong.orientationMargin,
+        rejectReason: wrong.diagnostics && wrong.diagnostics.rejectReason,
+      }),
+    );
+    assert.equal(wrong.diagnostics.rejectReason, 'orientation-margin');
+    if (wrong.accepted) rates.wrong += 1;
+  }
+  assert.equal(rates.correct, 1);
+  assert.equal(rates.wrong, 0);
+});
+
+function letterboxRaster(raster, size, fill = FILL) {
+  const pixels = new Uint8ClampedArray(size * size * 4);
+  for (let i = 0; i < size * size; i += 1) {
+    const o = i * 4;
+    pixels[o] = fill.r;
+    pixels[o + 1] = fill.g;
+    pixels[o + 2] = fill.b;
+    pixels[o + 3] = fill.a;
+  }
+  const ox = Math.floor((size - raster.width) / 2);
+  const oy = Math.floor((size - raster.height) / 2);
+  for (let y = 0; y < raster.height; y += 1) {
+    for (let x = 0; x < raster.width; x += 1) {
+      const src = (y * raster.width + x) * 4;
+      const dst = ((y + oy) * size + (x + ox)) * 4;
+      pixels[dst] = raster.pixels[src];
+      pixels[dst + 1] = raster.pixels[src + 1];
+      pixels[dst + 2] = raster.pixels[src + 2];
+      pixels[dst + 3] = raster.pixels[src + 3];
+    }
+  }
+  return { width: size, height: size, pixels };
+}
+
+test('경계에 안 닿는 셀 표면 실패는 symbol-clipped 가 아니다', {
+  timeout: 90_000,
+}, () => {
+  const fixture = renderSurface(PAYLOAD, { tones: 2, margin: 72, pixelsPerUnit: 8 });
+  const tiny = scaleImage(scaleImage(fixture.raster, 0.5, { fill: FILL }), 0.5, { fill: FILL });
+  const inset = letterboxRaster(tiny, Math.max(tiny.width, tiny.height) * 3);
+  const result = decodeLab(inset);
+  assert.equal(result.ok, false, '축소·여백 입력이 성공하면 이 회귀의 전제가 바뀐다');
+  assert.notEqual(
+    result.reason,
+    FRONTEND_FAILURE.SYMBOL_CLIPPED,
+    JSON.stringify({
+      reason: result.reason,
+      stage: result.detail && result.detail.pipelineStage,
+    }),
+  );
 });

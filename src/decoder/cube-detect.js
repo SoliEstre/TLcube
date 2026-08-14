@@ -55,6 +55,7 @@ import {
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_OFF,
 } from '../locatorY.js';
+import { CELL_SURFACE_PROFILE_ID } from '../cellSurfaceY.js';
 import { evaluateCellSurfaceGeometry } from './cellSurfaceY-detect.js';
 
 function locatorShapesFromSilhouette(luma, shapes, options) {
@@ -2295,6 +2296,81 @@ function blockReferenceSearch(luma, initialH, n, tones, options, cfg) {
     },
   };
 }
+function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
+  if (!cellSurface.ok) {
+    return {
+      n,
+      orientation,
+      geometrySeed: seedId,
+      attempted: true,
+      accepted: false,
+      score: null,
+      reason: cellSurface.reason || 'score-failed',
+      profile: CELL_SURFACE_PROFILE_ID,
+    };
+  }
+  const diag = cellSurface.diagnostics
+    || (cellSurface.scored && cellSurface.scored.diagnostics)
+    || {};
+  const score = Number.isFinite(diag.agreement)
+    ? diag.agreement
+    : (cellSurface.scored && cellSurface.scored.best
+      ? cellSurface.scored.best.agreement
+      : null);
+  return {
+    n,
+    orientation,
+    geometrySeed: seedId,
+    attempted: true,
+    accepted: cellSurface.accepted === true,
+    score: Number.isFinite(score) ? score : null,
+    reason: cellSurface.accepted ? null : (diag.rejectReason || cellSurface.reason || 'rejected'),
+    profile: diag.profile || CELL_SURFACE_PROFILE_ID,
+    orientationMargin: Number.isFinite(diag.orientationMargin) ? diag.orientationMargin : null,
+  };
+}
+
+function summarizeCellSurfaceProbe(options, geometryReports) {
+  if (options.enableCellSurfaceY !== true) {
+    return {
+      attempted: false,
+      accepted: false,
+      score: null,
+      reason: null,
+      profile: null,
+    };
+  }
+  const reports = geometryReports.filter((entry) => entry.attempted === true);
+  if (reports.length === 0) {
+    return {
+      attempted: true,
+      accepted: false,
+      score: null,
+      reason: 'no-geometry',
+      profile: CELL_SURFACE_PROFILE_ID,
+    };
+  }
+  let best = reports[0];
+  for (const entry of reports) {
+    if (entry.accepted === true && best.accepted !== true) {
+      best = entry;
+      continue;
+    }
+    if (entry.accepted === best.accepted
+      && Number.isFinite(entry.score)
+      && (!Number.isFinite(best.score) || entry.score > best.score)) {
+      best = entry;
+    }
+  }
+  return {
+    attempted: true,
+    accepted: best.accepted === true,
+    score: Number.isFinite(best.score) ? best.score : null,
+    reason: best.accepted ? null : (best.reason || 'rejected'),
+    profile: best.profile || CELL_SURFACE_PROFILE_ID,
+  };
+}
+
 function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports) {
   for (const shape of shapes.candidates) {
     const center = liftPoint(shape.center, reduced.factor);
@@ -2365,14 +2441,12 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
               (i, j) => sampleCubeCell(luma, base, i, j, sampleOptions(options, cfg)),
               options,
             );
-            geometryReports.push({
+            geometryReports.push(cellSurfaceSeedReport(
               n,
               orientation,
-              geometrySeed: seed.id,
-              cellSurface: cellSurface.ok
-                ? cellSurface.diagnostics || cellSurface.scored && cellSurface.scored.diagnostics
-                : { reason: cellSurface.reason, detail: cellSurface.detail },
-            });
+              seed.id,
+              cellSurface,
+            ));
             if (cellSurface.ok && cellSurface.accepted) {
               const patches = cellSurface.hypothesisPatches
                 || (cellSurface.hypothesisPatch ? [cellSurface.hypothesisPatch] : []);
@@ -2694,6 +2768,8 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
     || left.tones - right.tones
     || left.hypothesisId.localeCompare(right.hypothesisId));
 
+  const cellSurfaceProbe = summarizeCellSurfaceProbe(options, geometryReports);
+
   if (hypotheses.length === 0) {
     return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
       stage: 'cube-detect',
@@ -2705,6 +2781,7 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
         shapes: shapes.diagnostics,
         shapeCandidates: shapes.candidates,
         geometryReports,
+        cellSurfaceProbe,
         blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
         locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },
       },
@@ -2719,6 +2796,7 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       shapes: shapes.diagnostics,
       shapeCandidates: shapes.candidates,
       geometryReports,
+      cellSurfaceProbe,
       blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
       hypothesisCount: hypotheses.length,
       locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },

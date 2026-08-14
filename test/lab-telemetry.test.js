@@ -16,6 +16,7 @@ import {
   classifyStage,
   createLabTelemetry,
   estimateCellPx,
+  extractCellSurfaceProbe,
   familyToType,
   fillFrameMs,
   isLabPath,
@@ -173,6 +174,47 @@ test('gen 정규화는 페이로드 내용을 버리고 config_id 를 붙인다'
   ]);
   assert.equal(body.locatorProfile, 'hex-frame-v1');
   assert.match(body.config_id, /^c[0-9a-f]{8}$/);
+});
+
+test('extractCellSurfaceProbe 는 시도/점수/사유를 정규화하고 없으면 미시도다', () => {
+  const empty = extractCellSurfaceProbe({ ok: false, reason: 'frontend:no-finder' });
+  assert.equal(empty.attempted, false);
+  assert.equal(empty.accepted, false);
+  assert.equal(empty.score, null);
+
+  const probed = extractCellSurfaceProbe({
+    ok: false,
+    reason: 'frontend:no-grid-hypothesis',
+    diagnostics: {
+      bootstrap: {
+        cube: {
+          diagnostics: {
+            cellSurfaceProbe: {
+              attempted: true,
+              accepted: false,
+              score: 0.61,
+              reason: 'orientation-margin',
+              profile: 'cell-surface-v1',
+            },
+          },
+        },
+      },
+    },
+  });
+  assert.equal(probed.attempted, true);
+  assert.equal(probed.accepted, false);
+  assert.equal(probed.score, 0.61);
+  assert.equal(probed.reason, 'orientation-margin');
+  assert.equal(probed.profile, 'cell-surface-v1');
+
+  const body = normalizeFrameBody({
+    seq: 1, w: 10, h: 10, ok: false, reason: 'x',
+    cellSurface: probed,
+  });
+  assert.equal(body.cellSurface.attempted, true);
+  assert.equal(body.cellSurface.score, 0.61);
+  const parsed = parseEnvelope(JSON.stringify(makeEnvelope('s', 'scan', 'frame', body)));
+  assert.equal(parsed.ok, true, parsed.error);
 });
 
 test('frame 단계별 ms 가 빠지면 미측정은 null 이고 total 만 숫자다', () => {

@@ -65,6 +65,29 @@ const R_ASYMMETRY = Object.freeze([
   Object.freeze({ i: 2, j: 3 }),
 ]);
 
+/**
+ * 기존 locator 61 안에서 T 만 뒤집어 면 순위를 네 코너에 흩뿌린다.
+ * 신규 비데이터 좌표 없음 — data 365 · formatIndex 12/14 유지.
+ * 측정: 세 방향 해밍 셀 18 · 면 36/183. 코너 하나 탈락 시에도 셀 13~14.
+ */
+const T_FLIP = Object.freeze([
+  Object.freeze({ i: 4, j: 0 }),
+  Object.freeze({ i: 3, j: 1 }),
+  Object.freeze({ i: 0, j: 17 }),
+  Object.freeze({ i: 0, j: 20 }),
+  Object.freeze({ i: 2, j: 20 }),
+  Object.freeze({ i: 1, j: 18 }),
+  Object.freeze({ i: 17, j: 0 }),
+  Object.freeze({ i: 20, j: 0 }),
+  Object.freeze({ i: 20, j: 3 }),
+  Object.freeze({ i: 19, j: 2 }),
+  Object.freeze({ i: 17, j: 19 }),
+  Object.freeze({ i: 18, j: 20 }),
+  Object.freeze({ i: 19, j: 17 }),
+  Object.freeze({ i: 19, j: 19 }),
+  Object.freeze({ i: 20, j: 18 }),
+]);
+
 /** 사용자가 데이터에서 뺀 47좌표 (편집기 userNonData). */
 const USER_NON_DATA_SPEC = Object.freeze([
   [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 17], [0, 18], [0, 19], [0, 20],
@@ -133,11 +156,12 @@ function buildLocatorCells() {
       throw new Error('locator 좌표 중복: ' + key);
     }
     seen.add(key);
+    const flipT = T_FLIP.some((cell) => cell.i === i && cell.j === j);
     const asymmetric = R_ASYMMETRY.some((cell) => cell.i === i && cell.j === j);
     cells.push(Object.freeze({
       i,
       j,
-      T: toneTL,
+      T: flipT ? (toneTL === 0 ? 2 : 0) : toneTL,
       L: toneTL,
       R: asymmetric ? 2 : toneTL,
     }));

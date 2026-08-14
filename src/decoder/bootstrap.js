@@ -1054,6 +1054,19 @@ function anySupportedSymbolFits(luma, finders) {
   ));
 }
 
+/*
+ * 파인더 풋프린트가 hex/tri 최소 심볼조차 프레임에 안 들어가면 예전엔 바로
+ * symbol-clipped 였다. 실기기 704프레임 교차표: clipped 306건 전부 bbox 없음·
+ * clip_side 빈 칸이다. 전경 outline 이 경계에 안 닿으면 잘림이 아니라
+ * 잘못된 스케일의 파인더다.
+ */
+function shouldLabelSymbolClipped(luma, finders, outline) {
+  if (!finders || finders.length === 0) return false;
+  if (anySupportedSymbolFits(luma, finders)) return false;
+  if (!outline || outline.touchesBorder !== true) return false;
+  return true;
+}
+
 function minimumClippingSideCount(luma, finders) {
   const dimensions = supportedDimensions();
   let minimum = Number.POSITIVE_INFINITY;
@@ -2032,7 +2045,7 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
     const bestCandidate = finderResult.detail && finderResult.detail.bestCandidate;
     if (finderSawCandidates
       && bestCandidate
-      && !anySupportedSymbolFits(luma, [bestCandidate])) {
+      && shouldLabelSymbolClipped(luma, [bestCandidate], outline)) {
       return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
         stage: 'bootstrap-finder',
         cause: 'supported-symbol-footprint-crosses-image-boundary',
@@ -2174,7 +2187,7 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
   }
 
   if (unique.length === 0) {
-    const clipped = finders.length > 0 && !anySupportedSymbolFits(luma, finders);
+    const clipped = shouldLabelSymbolClipped(luma, finders, outline);
     const reason = clipped ? FRONTEND_FAILURE.SYMBOL_CLIPPED : FRONTEND_FAILURE.NO_ANCHORS;
     const clippingSideCount = clipped
       ? minimumClippingSideCount(luma, finders)

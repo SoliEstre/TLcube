@@ -41,7 +41,12 @@ ALTER TABLE tl_lab.events
     ADD COLUMN IF NOT EXISTS clip_side LowCardinality(String) DEFAULT '' AFTER occupancy,
     ADD COLUMN IF NOT EXISTS rotation_deg Nullable(Float32) AFTER clip_side,
     ADD COLUMN IF NOT EXISTS perspective Nullable(Float32) AFTER rotation_deg,
-    ADD COLUMN IF NOT EXISTS residual_px Nullable(Float32) AFTER perspective;
+    ADD COLUMN IF NOT EXISTS residual_px Nullable(Float32) AFTER perspective,
+    ADD COLUMN IF NOT EXISTS cs_attempted UInt8 DEFAULT 0 AFTER residual_px,
+    ADD COLUMN IF NOT EXISTS cs_accepted UInt8 DEFAULT 0 AFTER cs_attempted,
+    ADD COLUMN IF NOT EXISTS cs_score Nullable(Float32) AFTER cs_accepted,
+    ADD COLUMN IF NOT EXISTS cs_reason String DEFAULT '' AFTER cs_score,
+    ADD COLUMN IF NOT EXISTS cs_profile LowCardinality(String) DEFAULT '' AFTER cs_reason;
 
 ALTER TABLE tl_lab.events
     MODIFY COLUMN ms_proposal Nullable(UInt32),

@@ -60,6 +60,11 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     rotation_deg Nullable(Float32),                -- 가설 rotationDegrees, 시계 방향
     perspective Nullable(Float32),                 -- 네 모서리 대각선비 - 1. 미측정 NULL
     residual_px Nullable(Float32),                 -- 호모그래피 재투영 잔차(px)
+    cs_attempted UInt8 DEFAULT 0,                  -- 셀 표면 검출기를 이 프레임에서 돌렸는가
+    cs_accepted  UInt8 DEFAULT 0,                  -- 검출기가 가설을 수락했는가
+    cs_score     Nullable(Float32),                -- 셀 표면 agreement. 미시도 NULL
+    cs_reason    String DEFAULT '',                -- 거절 사유. 미시도 빈 문자열
+    cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v1
     -- env/gen 본문과 frame 의 원본 JSON. 계약이 키를 닫지 않은 쪽을 잃지 않기 위함.
     body        String DEFAULT ''
 )

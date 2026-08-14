@@ -573,6 +573,105 @@ export function emptyGeometry() {
   };
 }
 
+export function emptyCellSurfaceProbe() {
+  return {
+    attempted: false,
+    accepted: false,
+    score: null,
+    reason: null,
+    profile: null,
+  };
+}
+
+function cubeDiagnosticsOf(cube) {
+  if (!cube || typeof cube !== 'object') return null;
+  const top = cube.diagnostics || (cube.detail && cube.detail.diagnostics) || null;
+  if (!top || typeof top !== 'object') return null;
+  if (top.cellSurfaceProbe || Array.isArray(top.geometryReports)) return top;
+  if (top.diagnostics && typeof top.diagnostics === 'object'
+    && (top.diagnostics.cellSurfaceProbe || Array.isArray(top.diagnostics.geometryReports))) {
+    return top.diagnostics;
+  }
+  return top;
+}
+
+function collectGeometryReports(result) {
+  const bags = [];
+  const { detail, diagnostics, geometry } = lookupDiagnostics(result || {});
+  const bootstrap = diagnostics && diagnostics.bootstrap;
+  const cubes = [
+    diagnostics && diagnostics.cube,
+    bootstrap && bootstrap.cube,
+    geometry && geometry.cube,
+  ];
+  for (const cube of cubes) {
+    const diag = cubeDiagnosticsOf(cube);
+    if (diag && Array.isArray(diag.geometryReports)) bags.push(diag.geometryReports);
+    if (diag && diag.cellSurfaceProbe) bags.push([diag.cellSurfaceProbe]);
+  }
+  const cause = detail && detail.cause;
+  const failDiag = cubeDiagnosticsOf(cause && cause.cubeFailure);
+  if (failDiag && Array.isArray(failDiag.geometryReports)) bags.push(failDiag.geometryReports);
+  if (failDiag && failDiag.cellSurfaceProbe) bags.push([failDiag.cellSurfaceProbe]);
+  const out = [];
+  for (const bag of bags) {
+    for (const entry of bag) {
+      if (entry && typeof entry === 'object') out.push(entry);
+    }
+  }
+  return out;
+}
+
+/**
+ * 셀 표면 검출기가 돌았는지 / 몇 점인지 / 왜 거절됐는지.
+ * geometryReports 가 프레임까지 안 나가던 구멍을 메운다.
+ */
+export function extractCellSurfaceProbe(result) {
+  const empty = emptyCellSurfaceProbe();
+  const reports = collectGeometryReports(result).filter((entry) =>
+    entry.attempted === true
+    || entry.attempted === false
+    || typeof entry.profile === 'string'
+    || entry.accepted === true);
+  if (reports.length === 0) return empty;
+
+  let best = reports[0];
+  for (const entry of reports) {
+    if (entry.accepted === true && best.accepted !== true) {
+      best = entry;
+      continue;
+    }
+    const score = Number(entry.score);
+    const bestScore = Number(best.score);
+    if (entry.accepted === best.accepted
+      && Number.isFinite(score)
+      && (!Number.isFinite(bestScore) || score > bestScore)) {
+      best = entry;
+    }
+  }
+  const score = Number(best.score);
+  return {
+    attempted: best.attempted !== false,
+    accepted: best.accepted === true,
+    score: Number.isFinite(score) ? score : null,
+    reason: typeof best.reason === 'string' && best.reason ? best.reason : null,
+    profile: typeof best.profile === 'string' ? best.profile : null,
+  };
+}
+
+function normalizeCellSurfaceProbe(src) {
+  const empty = emptyCellSurfaceProbe();
+  if (!src || typeof src !== 'object') return empty;
+  const score = finiteOrNull(src.score);
+  return {
+    attempted: src.attempted === true,
+    accepted: src.accepted === true,
+    score: score == null ? null : score,
+    reason: typeof src.reason === 'string' && src.reason ? src.reason : null,
+    profile: typeof src.profile === 'string' && src.profile ? src.profile : null,
+  };
+}
+
 /**
  * 신뢰할 수 있는 diagnostics 만 정규화한다. 측정되지 않으면 null.
  * 좌표는 이미지 픽셀, 원점 좌상단, +x 오른쪽, +y 아래.
@@ -844,6 +943,7 @@ export function normalizeFrameBody(body) {
     observed: normalizeConfigSide(src.observed),
     chain: normalizeCauseChain(src.chain),
     geometry,
+    cellSurface: normalizeCellSurfaceProbe(src.cellSurface),
   };
 }
 

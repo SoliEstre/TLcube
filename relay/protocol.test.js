@@ -118,6 +118,26 @@ test('frame 본문 — 단계별 ms 가 빠지면 거절 (계약 §4)', () => {
   }
 });
 
+test('frame.cellSurface 는 선택이고 시도/점수/사유를 행으로 편다', () => {
+  const ok = validateEnvelope(envelope({
+    body: frameBody({
+      cellSurface: {
+        attempted: true, accepted: false, score: 0.4, reason: 'below-threshold', profile: 'cell-surface-v1',
+      },
+    }),
+  }));
+  assert.equal(ok.ok, true, ok.error);
+  const row = eventRow(ok.event);
+  assert.equal(row.cs_attempted, 1);
+  assert.equal(row.cs_accepted, 0);
+  assert.equal(row.cs_score, 0.4);
+  assert.equal(row.cs_reason, 'below-threshold');
+  assert.equal(row.cs_profile, 'cell-surface-v1');
+  const missing = eventRow(envelope({ body: frameBody() }));
+  assert.equal(missing.cs_attempted, 0);
+  assert.equal(missing.cs_score, null);
+});
+
 test('ClickHouse 행 — ISO ts 를 UTC DateTime64 문자열로', () => {
   assert.equal(toChDateTime('2026-08-13T12:00:00.000Z'), '2026-08-13 12:00:00.000');
   const row = eventRow(envelope({ body: frameBody({ ok: true, type: 'hex', cellPx: 11.4 }) }));

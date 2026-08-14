@@ -21,6 +21,7 @@ import {
   createLabTelemetry,
   createStageClock,
   emptyConfigSide,
+  extractCellSurfaceProbe,
   extractGeometry,
   familyToType,
   fillFrameMs,
@@ -221,6 +222,7 @@ function reportLabFrame(imageData, result, ms, stage) {
   const ok = result && result.ok === true;
   const chain = buildCauseChain(result);
   const geometry = extractGeometry(result, imageData.width, imageData.height);
+  const cellSurface = extractCellSurfaceProbe(result);
   const observed = observedFromResult(result);
   const reason = ok ? '' : ((result && result.reason) || 'decode-failed');
   try {
@@ -241,6 +243,7 @@ function reportLabFrame(imageData, result, ms, stage) {
       observed,
       chain,
       geometry,
+      cellSurface,
     });
     lab.frameShot({
       seq: frameSeq,

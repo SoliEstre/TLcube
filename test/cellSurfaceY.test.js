@@ -88,11 +88,31 @@ test('locator 61좌표·톤이 사용자 정본과 같다', () => {
   assert.equal(locatorTone('R', 1, 3), 2);
   assert.equal(locatorTone('T', 2, 3), 0);
   assert.equal(locatorTone('R', 2, 3), 2);
+  assert.equal(locatorTone('T', 4, 0), 0);
+  assert.equal(locatorTone('L', 4, 0), 2);
+  assert.equal(locatorTone('T', 0, 20), 2);
+  assert.equal(locatorTone('L', 0, 20), 0);
+  assert.equal(locatorTone('T', 17, 19), 0);
+  assert.equal(locatorTone('L', 17, 19), 2);
+  const tFlip = new Set([
+    '4,0', '3,1', '0,17', '0,20', '2,20', '1,18',
+    '17,0', '20,0', '20,3', '19,2',
+    '17,19', '18,20', '19,17', '19,19', '20,18',
+  ]);
+  let ranking = 0;
   for (const cell of CELL_SURFACE_LOCATOR_CELLS) {
-    assert.equal(cell.T, cell.L);
+    const k = key(cell.i, cell.j);
     const asymmetric = (cell.i === 0 || cell.i === 1 || cell.i === 2) && cell.j === 3;
-    assert.equal(cell.R, asymmetric ? 2 : cell.T);
+    if (tFlip.has(k)) {
+      assert.equal(cell.T, cell.L === 0 ? 2 : 0);
+      assert.equal(cell.L, cell.R);
+    } else {
+      assert.equal(cell.T, cell.L);
+      assert.equal(cell.R, asymmetric ? 2 : cell.T);
+    }
+    if (cell.T !== cell.L || cell.T !== cell.R || cell.L !== cell.R) ranking += 1;
   }
+  assert.equal(ranking, 18);
 });
 
 test('편집기 JSON 정본과 프로파일 상수가 같다', () => {

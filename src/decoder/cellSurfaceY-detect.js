@@ -3,7 +3,9 @@
  *
  * 기하 후보는 기존 Type Y 실루엣/Y-심이 만든다. 이 모듈은 그 격자 위에
  * 61좌표 dark/bright 표본을 읽어 profile·면 위상·방향을 점수로 남긴다.
- * R 의 3셀 비대칭은 단독 hard truth 가 아니다.
+ * 면 순환 3상의 agreement 차로 orientation margin 을 재고, 선언된
+ * minimumOrientationMargin 을 hard gate 로 쓴다. 오방향은 이상적 일치율이
+ * 78% 를 넘겨도 거부한다.
  *
  * 모든 임계값은 합성 실험용 [미검증]이며 options.calibration 으로 덮을 수 있다.
  */
@@ -26,8 +28,24 @@ export const UNVERIFIED_CELL_SURFACE_Y = Object.freeze({
   classifyMidFraction: 0.28,
 });
 
+const FACE_CYCLES = Object.freeze([
+  Object.freeze(['T', 'L', 'R']),
+  Object.freeze(['L', 'R', 'T']),
+  Object.freeze(['R', 'T', 'L']),
+]);
+
 function cellKey(i, j) {
   return i + ',' + j;
+}
+
+function remappedLocators(cycle) {
+  return locatorCellsCellSurface().map((cell) => ({
+    i: cell.i,
+    j: cell.j,
+    T: cell[cycle[0]],
+    L: cell[cycle[1]],
+    R: cell[cycle[2]],
+  }));
 }
 
 function calibration(options) {
@@ -62,13 +80,13 @@ function classifyTone(value, dark, bright, midFraction) {
   return 1;
 }
 
-function scoreMappedSamples(samples, cfg) {
+function scoreMappedSamples(samples, cfg, locators) {
   const darkByFace = { T: [], L: [], R: [] };
   const brightByFace = { T: [], L: [], R: [] };
-  const locators = locatorCellsCellSurface();
+  const table = locators || locatorCellsCellSurface();
 
-  for (let index = 0; index < locators.length; index += 1) {
-    const expected = locators[index];
+  for (let index = 0; index < table.length; index += 1) {
+    const expected = table[index];
     const sample = samples[index];
     if (!sample || sample.ok === false) continue;
     for (const face of YFACES) {
@@ -101,8 +119,8 @@ function scoreMappedSamples(samples, cfg) {
   const faceTotal = { T: 0, L: 0, R: 0 };
   const observations = [];
 
-  for (let index = 0; index < locators.length; index += 1) {
-    const expected = locators[index];
+  for (let index = 0; index < table.length; index += 1) {
+    const expected = table[index];
     const sample = samples[index];
     if (!sample || sample.ok === false) continue;
     for (const face of YFACES) {
@@ -183,28 +201,49 @@ export function scoreCellSurfaceSamples(samples, options = {}) {
     });
   }
 
-  // 면 위상은 cube-detect 의 orientation 0/1/2 가 이미 담당한다.
-  // 여기서 다시 순환하면 점수만 맞고 복호 면 배정이 어긋난다.
-  const best = { phase: 0, cycle: ['T', 'L', 'R'], ...scoreMappedSamples(samples, cfg) };
-  const accepted = best.accepted;
+  const phases = FACE_CYCLES.map((cycle, phase) => ({
+    phase,
+    cycle,
+    ...scoreMappedSamples(samples, cfg, remappedLocators(cycle)),
+  }));
+  const ranked = phases.slice().sort((left, right) =>
+    right.agreement - left.agreement || left.phase - right.phase);
+  const claimed = phases[0];
+  const rival = ranked.find((entry) => entry.phase !== 0) || ranked[1];
+  const orientationMargin = claimed.agreement - (rival ? rival.agreement : 0);
+  const orientationOk = ranked[0].phase === 0
+    && orientationMargin >= cfg.minimumOrientationMargin;
+  const accepted = claimed.accepted && orientationOk;
+  let rejectReason = null;
+  if (!accepted) {
+    if (!claimed.enoughSamples) rejectReason = 'sample-count';
+    else if (!claimed.toneSeparation) rejectReason = 'tone-separation';
+    else if (claimed.agreement < cfg.minimumAgreement) rejectReason = 'below-agreement';
+    else if (!orientationOk) rejectReason = 'orientation-margin';
+    else rejectReason = 'rejected';
+  }
+  const best = { ...claimed, accepted };
 
   return ok({
     accepted,
     best,
-    phases: [best],
-    orientationMargin: 0,
+    phases,
+    orientationMargin,
     diagnostics: {
       profile: CELL_SURFACE_PROFILE_ID,
       accepted,
-      agreement: best.agreement,
-      orientationMargin: 0,
+      agreement: claimed.agreement,
+      orientationMargin,
       phase: 0,
-      cycle: best.cycle,
-      sampleCounts: best.sampleCounts,
-      faceAgreement: best.faceAgreement,
-      minimumSpan: best.minimumSpan,
-      enoughSamples: best.enoughSamples,
-      toneSeparation: best.toneSeparation,
+      cycle: claimed.cycle,
+      rivalPhase: rival ? rival.phase : null,
+      rivalAgreement: rival ? rival.agreement : 0,
+      rejectReason,
+      sampleCounts: claimed.sampleCounts,
+      faceAgreement: claimed.faceAgreement,
+      minimumSpan: claimed.minimumSpan,
+      enoughSamples: claimed.enoughSamples,
+      toneSeparation: claimed.toneSeparation,
     },
   });
 }
@@ -315,6 +354,7 @@ export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}
     scored,
     hypothesisPatches,
     hypothesisPatch: hypothesisPatches[1],
+    diagnostics: scored.diagnostics,
   });
 }
 
