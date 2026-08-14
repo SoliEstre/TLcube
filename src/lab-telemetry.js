@@ -476,6 +476,11 @@ function finiteOrNull(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function finiteOrDefault(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function bboxFromMinMax(bounds) {
   const minX = finiteOrNull(bounds.minX);
   const minY = finiteOrNull(bounds.minY);
@@ -957,6 +962,14 @@ export function normalizeFrameBody(body) {
     w: Number(src.w) || 0,
     h: Number(src.h) || 0,
     zoom: Number.isFinite(Number(src.zoom)) ? Number(src.zoom) : 1,
+    zoomRequested: finiteOrDefault(src.zoomRequested, Number.isFinite(Number(src.zoom)) ? Number(src.zoom) : 1),
+    crop: finiteOrDefault(src.crop, 1),
+    cropRequested: finiteOrDefault(src.cropRequested, finiteOrDefault(src.crop, 1)),
+    effectiveZoom: finiteOrDefault(
+      src.effectiveZoom,
+      (Number.isFinite(Number(src.zoom)) ? Number(src.zoom) : 1) * finiteOrDefault(src.crop, 1),
+    ),
+    zoomError: typeof src.zoomError === 'string' && src.zoomError ? src.zoomError : '',
     ms,
     stage: typeof src.stage === 'string' && src.stage.length > 0 ? src.stage : 'proposal',
     ok: src.ok === true,

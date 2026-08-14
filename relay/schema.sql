@@ -24,7 +24,12 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     seq         UInt32 DEFAULT 0,                  -- 스캔 시작부터 누적. 성공 프레임의 seq 가 본 질문
     w           UInt16 DEFAULT 0,
     h           UInt16 DEFAULT 0,
-    zoom        Float32 DEFAULT 0,
+    zoom        Float32 DEFAULT 0,             -- 트랙 getSettings().zoom. 요청값이 아님
+    zoom_requested Float32 DEFAULT 0,          -- applyConstraints 에 넣은 값. 미요청 0
+    crop        Float32 DEFAULT 1,             -- 원본 대비 중앙 크롭 배율. 1 = 자르지 않음
+    crop_requested Float32 DEFAULT 0,          -- 사용자가 요청한 크롭 배율
+    effective_zoom Float32 DEFAULT 0,          -- (적용 zoom / native) * 적용 crop
+    zoom_error  String DEFAULT '',             -- apply 거부·불일치. 성공은 빈 문자열
     ms_total    UInt32 DEFAULT 0,                  -- 프레임 벽시계. 단계 합과 같을 필요 없음
     ms_proposal Nullable(UInt32),                  -- 실측 구간만. 미측정은 NULL (total 복사 금지)
     ms_verify   Nullable(UInt32),

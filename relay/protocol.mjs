@@ -89,6 +89,22 @@ export function validateFrameBody(body) {
   if (!isFiniteNumber(body.w) || body.w <= 0) return 'frame.w';
   if (!isFiniteNumber(body.h) || body.h <= 0) return 'frame.h';
   if (!isFiniteNumber(body.zoom)) return 'frame.zoom';
+  if (body.zoomRequested !== undefined && body.zoomRequested !== null
+    && !isFiniteNumber(body.zoomRequested)) {
+    return 'frame.zoomRequested';
+  }
+  if (body.crop !== undefined && body.crop !== null && !isFiniteNumber(body.crop)) {
+    return 'frame.crop';
+  }
+  if (body.cropRequested !== undefined && body.cropRequested !== null
+    && !isFiniteNumber(body.cropRequested)) {
+    return 'frame.cropRequested';
+  }
+  if (body.effectiveZoom !== undefined && body.effectiveZoom !== null
+    && !isFiniteNumber(body.effectiveZoom)) {
+    return 'frame.effectiveZoom';
+  }
+  if (!isNullableString(body.zoomError)) return 'frame.zoomError';
   if (!isPlainObject(body.ms)) return 'frame.ms';
   if (!isFiniteNumber(body.ms.total) || body.ms.total < 0) return 'frame.ms.total';
   for (const key of ['proposal', 'verify', 'format', 'decode']) {
@@ -224,6 +240,11 @@ export function eventRow(event) {
     w: asUInt(body.w),
     h: asUInt(body.h),
     zoom: asFloat(body.zoom),
+    zoom_requested: asFloat(body.zoomRequested),
+    crop: body.crop == null ? 1 : asFloat(body.crop),
+    crop_requested: asFloat(body.cropRequested),
+    effective_zoom: asFloat(body.effectiveZoom),
+    zoom_error: body.zoomError == null ? '' : String(body.zoomError),
     ms_total: asUInt(ms.total),
     ms_proposal: asNullableUInt(ms.proposal),
     ms_verify: asNullableUInt(ms.verify),

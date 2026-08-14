@@ -29,6 +29,7 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SQL = readFileSync(ROOT + 'relay/schema.sql', 'utf8');
 const MIG = readFileSync(ROOT + 'deploy/estre-so/clickhouse/002_tl_lab_p0_instrumentation.sql', 'utf8');
 const MIG_AB = readFileSync(ROOT + 'deploy/estre-so/clickhouse/003_tl_lab_cellsurface_ab.sql', 'utf8');
+const MIG_ZOOM = readFileSync(ROOT + 'deploy/estre-so/clickhouse/004_tl_lab_zoom.sql', 'utf8');
 
 function memoryStore() {
   const map = new Map();
@@ -366,6 +367,15 @@ test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다',
   assert.match(MIG_AB, /ADD COLUMN IF NOT EXISTS cs_orientation_gate/);
   assert.match(MIG_AB, /ADD COLUMN IF NOT EXISTS cs_ambiguous/);
   assert.doesNotMatch(MIG_AB, /^clickhouse-client/m);
+  assert.match(SQL, /zoom_requested\s+Float32/);
+  assert.match(SQL, /effective_zoom\s+Float32/);
+  assert.match(SQL, /zoom_error\s+String/);
+  assert.match(MIG_ZOOM, /ADD COLUMN IF NOT EXISTS zoom_requested/);
+  assert.match(MIG_ZOOM, /ADD COLUMN IF NOT EXISTS crop /);
+  assert.match(MIG_ZOOM, /ADD COLUMN IF NOT EXISTS crop_requested/);
+  assert.match(MIG_ZOOM, /ADD COLUMN IF NOT EXISTS effective_zoom/);
+  assert.match(MIG_ZOOM, /ADD COLUMN IF NOT EXISTS zoom_error/);
+  assert.doesNotMatch(MIG_ZOOM, /^clickhouse-client/m);
 });
 
 test('decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다', () => {

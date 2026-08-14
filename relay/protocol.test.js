@@ -118,6 +118,34 @@ test('frame 본문 — 단계별 ms 가 빠지면 거절 (계약 §4)', () => {
   }
 });
 
+test('frame 확대 필드는 선택이고 요청값·적용값·크롭을 행으로 편다', () => {
+  const ok = validateEnvelope(envelope({
+    body: frameBody({
+      zoom: 1,
+      zoomRequested: 3,
+      crop: 3,
+      cropRequested: 3,
+      effectiveZoom: 3,
+      zoomError: 'mismatch',
+    }),
+  }));
+  assert.equal(ok.ok, true, ok.error);
+  const row = eventRow(ok.event);
+  assert.equal(row.zoom, 1);
+  assert.equal(row.zoom_requested, 3);
+  assert.equal(row.crop, 3);
+  assert.equal(row.crop_requested, 3);
+  assert.equal(row.effective_zoom, 3);
+  assert.equal(row.zoom_error, 'mismatch');
+  const missing = eventRow(envelope({ body: frameBody() }));
+  assert.equal(missing.crop, 1);
+  assert.equal(missing.zoom_error, '');
+  const bad = validateEnvelope(envelope({
+    body: frameBody({ zoomRequested: '3x' }),
+  }));
+  assert.equal(bad.ok, false);
+});
+
 test('frame.cellSurface 는 선택이고 시도/점수/사유를 행으로 편다', () => {
   const ok = validateEnvelope(envelope({
     body: frameBody({

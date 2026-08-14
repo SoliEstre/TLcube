@@ -31,6 +31,17 @@ import {
   nowMs,
   observedFromResult,
 } from '/src/lab-telemetry.js';
+import {
+  applyTrackZoom,
+  buttonStep,
+  cropWindow,
+  readTrackCapability,
+  readTrackZoom,
+  resolveZoomPlan,
+  snapZoom,
+  zoomRangeFor,
+  zoomTelemetry,
+} from '/src/scanner-zoom.js';
 
 const FRAME_INTERVAL_MS = 320;
 
@@ -66,7 +77,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-15.01';
+export const SCANNER_BUILD = '2026-08-15.02';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -95,12 +106,19 @@ const openUrlLink = document.getElementById('open-url');
 const rescanButton = document.getElementById('rescan');
 const closeResultButton = document.getElementById('close-result');
 const closeResultSecondaryButton = document.getElementById('close-result-secondary');
+const zoomControls = document.getElementById('zoom-controls');
+const zoomSlider = document.getElementById('zoom-slider');
+const zoomInButton = document.getElementById('zoom-in');
+const zoomOutButton = document.getElementById('zoom-out');
+const zoomValue = document.getElementById('zoom-value');
+const zoomErrorBox = document.getElementById('zoom-error');
 
 if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTitle ||
     !cameraGateMessage || !startCameraButton || !chooseImageButton || !gateChooseImageButton ||
     !imageInput || !statusBox || !scanToast || !resultPanel || !resultTitle || !resultContent ||
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
-    !closeResultSecondaryButton) {
+    !closeResultSecondaryButton || !zoomControls || !zoomSlider || !zoomInButton ||
+    !zoomOutButton || !zoomValue || !zoomErrorBox) {
   throw new Error('TLcube scanner markup is incomplete.');
 }
 
@@ -120,6 +138,11 @@ let consecutiveFailedFrames = 0;
 let frameSeq = 0;
 let labEnvSent = false;
 let attemptId = '';
+let zoomCapability = null;
+let userZoom = 1;
+let zoomPlan = resolveZoomPlan({ userZoom: 1 });
+let zoomApplyToken = 0;
+let zoomApplyTimer = 0;
 
 const lab = createLabTelemetry({ site: 'scan' });
 
@@ -133,17 +156,148 @@ function beginScanAttempt() {
   return attemptId;
 }
 
+function activeVideoTrack() {
+  return cameraStream && cameraStream.getVideoTracks
+    ? cameraStream.getVideoTracks()[0]
+    : null;
+}
+
 function currentZoom() {
-  try {
-    const track = cameraStream && cameraStream.getVideoTracks
-      ? cameraStream.getVideoTracks()[0]
-      : null;
-    if (!track || typeof track.getSettings !== 'function') return 1;
-    const zoom = track.getSettings().zoom;
-    return Number.isFinite(zoom) ? zoom : 1;
-  } catch {
-    return 1;
+  const zoom = readTrackZoom(activeVideoTrack());
+  return zoom == null ? 1 : zoom;
+}
+
+function currentZoomTelemetry() {
+  return zoomTelemetry({
+    trackRequested: zoomPlan.trackRequested,
+    trackApplied: currentZoom(),
+    cropRequested: zoomPlan.cropRequested,
+    cropApplied: zoomPlan.cropApplied,
+    trackNative: zoomPlan.trackNative,
+    error: zoomPlan.error,
+  });
+}
+
+function formatZoomLabel(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '1×';
+  const rounded = Math.round(n * 10) / 10;
+  return (Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)) + '×';
+}
+
+function setZoomErrorVisible(message) {
+  if (!message) {
+    zoomErrorBox.hidden = true;
+    zoomErrorBox.textContent = '';
+    return;
   }
+  zoomErrorBox.hidden = false;
+  zoomErrorBox.textContent = message;
+}
+
+function refreshZoomChrome() {
+  const range = zoomRangeFor(zoomCapability);
+  zoomSlider.min = String(range.min);
+  zoomSlider.max = String(range.max);
+  zoomSlider.step = String(range.step);
+  zoomSlider.value = String(userZoom);
+  zoomSlider.setAttribute('aria-valuemin', String(range.min));
+  zoomSlider.setAttribute('aria-valuemax', String(range.max));
+  zoomSlider.setAttribute('aria-valuenow', String(userZoom));
+  zoomValue.textContent = formatZoomLabel(userZoom);
+  zoomOutButton.disabled = userZoom <= range.min;
+  zoomInButton.disabled = userZoom >= range.max;
+  if (zoomPlan.error) {
+    setZoomErrorVisible(t('zoom.failed'));
+  } else if (!zoomCapability && zoomPlan.mode === 'crop' && userZoom > 1) {
+    setZoomErrorVisible('');
+  } else {
+    setZoomErrorVisible('');
+  }
+}
+
+function syncPreviewTransform() {
+  const scale = zoomPlan.cropApplied > 1.001 ? zoomPlan.cropApplied : 1;
+  cameraVideo.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
+  cameraVideo.style.transformOrigin = 'center center';
+}
+
+function resetZoomState() {
+  zoomCapability = null;
+  userZoom = 1;
+  zoomPlan = resolveZoomPlan({ userZoom: 1 });
+  zoomApplyToken += 1;
+  if (zoomApplyTimer) {
+    clearTimeout(zoomApplyTimer);
+    zoomApplyTimer = 0;
+  }
+  zoomControls.hidden = true;
+  setZoomErrorVisible('');
+  cameraVideo.style.transform = '';
+}
+
+function revealZoomControls() {
+  zoomControls.hidden = false;
+  refreshZoomChrome();
+}
+
+async function commitUserZoom() {
+  const token = ++zoomApplyToken;
+  const range = zoomRangeFor(zoomCapability);
+  userZoom = snapZoom(userZoom, range);
+  refreshZoomChrome();
+
+  let applyError = null;
+  let trackApplied = null;
+  let settingsMissing = false;
+
+  if (zoomCapability) {
+    const result = await applyTrackZoom(activeVideoTrack(), userZoom);
+    if (token !== zoomApplyToken) return;
+    if (!result.ok) {
+      applyError = result.error || 'applyConstraints-rejected';
+      trackApplied = result.applied;
+      settingsMissing = result.error === 'settings-unreported';
+    } else {
+      trackApplied = result.applied;
+    }
+  }
+
+  if (token !== zoomApplyToken) return;
+
+  const previousError = zoomPlan.error;
+  zoomPlan = resolveZoomPlan({
+    userZoom,
+    capability: zoomCapability,
+    trackApplied,
+    applyError,
+    settingsMissing,
+  });
+  syncPreviewTransform();
+  refreshZoomChrome();
+
+  if (zoomPlan.error && zoomPlan.error !== previousError) {
+    showScanToast(t('zoom.failed'));
+    setStatus(t('zoom.failed'));
+  }
+}
+
+function scheduleUserZoom(nextValue, immediate) {
+  const range = zoomRangeFor(zoomCapability);
+  userZoom = snapZoom(nextValue, range);
+  refreshZoomChrome();
+  if (zoomApplyTimer) {
+    clearTimeout(zoomApplyTimer);
+    zoomApplyTimer = 0;
+  }
+  if (immediate) {
+    void commitUserZoom();
+    return;
+  }
+  zoomApplyTimer = setTimeout(() => {
+    zoomApplyTimer = 0;
+    void commitUserZoom();
+  }, 80);
 }
 
 function stripIdentifying(obj) {
@@ -235,7 +389,7 @@ function reportLabFrame(imageData, result, ms, stage) {
       seq: frameSeq,
       w: imageData.width,
       h: imageData.height,
-      zoom: currentZoom(),
+      ...currentZoomTelemetry(),
       ms,
       stage,
       ok,
@@ -276,6 +430,7 @@ const i18n = createI18n(SCANNER_STRINGS, {
   onChange() {
     if (!cameraGate.hidden) showSupportedStartGate();
     if (!resultPanel.hidden && lastResult !== null) showResult(lastResult);
+    if (!zoomControls.hidden) refreshZoomChrome();
     // 렌즈 선택지도 JS 가 채운다 — 권한 전에는 기기 이름이 없어 «카메라 1» 같은
     // 대체 이름을 우리가 붙이므로, 언어가 바뀌면 다시 그려야 한다.
     refreshCameraChoices();
@@ -490,6 +645,7 @@ function stopCamera() {
   }
   cameraVideo.srcObject = null;
   setCameraStageActive(false);
+  resetZoomState();
 }
 
 function cameraFailure(error) {
@@ -652,20 +808,29 @@ function tryContinuousFocus(stream) {
  *
  * 가이드 밖을 버리므로 잡동사니(주변 UI·책상·손)도 같이 빠져 검출이 쉬워진다.
  */
-function imageDataCenterSquare(source, width, height, maxSide = FRAME_MAX_SIDE) {
+function imageDataCenterSquare(source, width, height, maxSide = FRAME_MAX_SIDE, cropZoom = 1) {
   if (!frameContext || !width || !height) return null;
 
-  const side = Math.min(width, height);
-  const sourceX = (width - side) / 2;
-  const sourceY = (height - side) / 2;
-  const target = Math.max(1, Math.min(maxSide, Math.round(side)));
+  const crop = cropWindow(width, height, cropZoom, maxSide);
+  if (!crop) return null;
 
-  frameCanvas.width = target;
-  frameCanvas.height = target;
+  frameCanvas.width = crop.target;
+  frameCanvas.height = crop.target;
 
   try {
-    frameContext.drawImage(source, sourceX, sourceY, side, side, 0, 0, target, target);
-    return frameContext.getImageData(0, 0, target, target);
+    // 원본 픽셀에서 먼저 자르고, 그 다음에만 target 으로 줄인다.
+    frameContext.drawImage(
+      source,
+      crop.sourceX,
+      crop.sourceY,
+      crop.sourceSide,
+      crop.sourceSide,
+      0,
+      0,
+      crop.target,
+      crop.target,
+    );
+    return frameContext.getImageData(0, 0, crop.target, crop.target);
   } catch {
     return null;
   }
@@ -726,6 +891,7 @@ function grabVideoFrame() {
     cameraVideo.videoWidth,
     cameraVideo.videoHeight,
     escalate ? FRAME_ESCALATED_SIDE : FRAME_MAX_SIDE,
+    zoomPlan.cropApplied,
   );
 }
 
@@ -841,6 +1007,11 @@ async function startCamera(options) {
     cameraStream = stream;
     selectedCameraId = activeDeviceIdOf(stream) || deviceId || '';
     tryContinuousFocus(stream);
+    zoomCapability = readTrackCapability(activeVideoTrack());
+    userZoom = snapZoom(1, zoomRangeFor(zoomCapability));
+    zoomPlan = resolveZoomPlan({ userZoom, capability: zoomCapability });
+    revealZoomControls();
+    syncPreviewTransform();
     // 권한 부여 뒤에야 label 이 채워지므로 여기서 렌즈 목록을 갱신한다.
     refreshCameraChoices().catch(() => {});
     cameraVideo.srcObject = stream;
@@ -1259,6 +1430,19 @@ if (cameraPicker) {
     startCamera({ deviceId: selectedCameraId }).catch(() => {});
   });
 }
+
+zoomSlider.addEventListener('input', () => {
+  scheduleUserZoom(Number(zoomSlider.value), false);
+});
+zoomSlider.addEventListener('change', () => {
+  scheduleUserZoom(Number(zoomSlider.value), true);
+});
+zoomOutButton.addEventListener('click', () => {
+  scheduleUserZoom(userZoom - buttonStep(zoomCapability), true);
+});
+zoomInButton.addEventListener('click', () => {
+  scheduleUserZoom(userZoom + buttonStep(zoomCapability), true);
+});
 
 // 빌드 식별자 — 실기기 피드백에서 어느 배포본인지 바로 알기 위한 것.
 const buildTag = document.getElementById('build-tag');

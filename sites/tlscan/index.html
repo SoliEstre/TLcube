@@ -209,6 +209,19 @@
       0 18px 55px rgb(0 0 0 / .22);
   }
 
+  /*
+   * 안쪽 채움 칸. 960px 프레임에서 셀당 9px 하한이면 21셀(V3/Y1)은 한 변의 19.7%,
+   * Y2(25셀)는 23.4% 가 최소다. 여유를 둔 권장 40% = inset 30%.
+   */
+  .scan-aim-fill {
+    position: absolute;
+    inset: 30%;
+    border: 2px dashed rgb(214 242 255 / .88);
+    border-radius: 16px;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / .28);
+    pointer-events: none;
+  }
+
   .scan-corner {
     position: absolute;
     width: 38px;
@@ -431,6 +444,72 @@
     background: rgb(255 255 255 / .92);
     color: #061117;
     font-weight: 700;
+  }
+
+  .zoom-controls {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(100%, 360px);
+    padding: 8px 10px;
+    border: 1px solid rgb(255 255 255 / .22);
+    border-radius: 14px;
+    background: rgb(0 0 0 / .55);
+    box-shadow: 0 8px 24px rgb(0 0 0 / .28);
+    touch-action: manipulation;
+  }
+
+  .zoom-controls button {
+    flex: 0 0 auto;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgb(255 255 255 / .14);
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .zoom-controls button:disabled {
+    cursor: default;
+    opacity: .38;
+  }
+
+  .zoom-controls input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 44px;
+    margin: 0;
+    accent-color: #b7e5ff;
+  }
+
+  .zoom-value {
+    flex: 0 0 3.4em;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 740;
+    text-align: right;
+    text-shadow: 0 1px 6px #000;
+  }
+
+  .zoom-error {
+    pointer-events: auto;
+    width: min(100%, 360px);
+    margin: 0;
+    padding: 7px 10px;
+    border: 1px solid rgb(255 160 140 / .42);
+    border-radius: 10px;
+    background: rgb(72 18 14 / .86);
+    color: #ffd4cc;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.4;
+    text-align: center;
+    text-shadow: 0 1px 6px #000;
   }
 
   .camera-picker {
@@ -817,14 +896,23 @@
           <span class="scan-corner top-right"></span>
           <span class="scan-corner bottom-right"></span>
           <span class="scan-corner bottom-left"></span>
+          <span class="scan-aim-fill"></span>
         </div>
         <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 프레임 안에 맞춰 주세요.</p>
+        <p class="scan-scope-note" data-i18n="guide.fill">안쪽 칸을 코드로 채워 주세요.</p>
         <p class="scan-scope-note" data-i18n="guide.tlcubeOnly">QR 및 다른 바코드는 읽히지 않아요.</p>
       </div>
     </section>
 
     <div class="scanner-bottom">
       <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true" data-i18n="status.preparing">카메라를 준비하고 있어요.</p>
+      <div class="zoom-controls" id="zoom-controls" hidden>
+        <button type="button" id="zoom-out" data-i18n-attr="aria-label:zoom.out" aria-label="축소">−</button>
+        <input id="zoom-slider" type="range" min="1" max="8" step="0.1" value="1" data-i18n-attr="aria-label:zoom.slider" aria-label="확대 배율">
+        <button type="button" id="zoom-in" data-i18n-attr="aria-label:zoom.in" aria-label="확대">+</button>
+        <span class="zoom-value" id="zoom-value" aria-hidden="true">1×</span>
+      </div>
+      <p class="zoom-error" id="zoom-error" role="status" hidden></p>
       <button class="photo-button" id="choose-image" type="button" data-i18n="button.photo">사진에서 스캔</button>
       <!-- 렌즈가 2개 이상인 기기에서만 나타난다. 초광각이 잡히면 같은 거리에서 코드가
            훨씬 작게 찍혀 셀당 픽셀이 복호 하한 아래로 내려간다. -->
