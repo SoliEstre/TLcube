@@ -160,28 +160,29 @@ test('sid 는 sessionStorage 이고 쿠키·localStorage 영속 키가 아니다
   assert.equal(local.getItem(SID_KEY), null);
 });
 
-test('gen 정규화는 페이로드 내용을 버린다', () => {
+test('gen 정규화는 페이로드 내용을 버리고 config_id 를 붙인다', () => {
   const body = normalizeGenBody({
     type: 'A', version: 1, ecc: 'L', tones: 3,
     finderPatternId: 'x', qrPosition: 'TL', bgMode: 'white', quietMode: 'none',
     text: 'secret', payload: 'secret', url: 'https://evil.example/',
   });
   assert.deepEqual(Object.keys(body).sort(), [
-    'bgMode', 'ecc', 'finderPatternId', 'qrPosition', 'quietMode', 'tones', 'type', 'version',
+    'bgMode', 'config_id', 'ecc', 'finderPatternId', 'qrPosition', 'quietMode', 'tones', 'type', 'version',
   ]);
+  assert.match(body.config_id, /^c[0-9a-f]{8}$/);
 });
 
-test('frame 단계별 ms 가 빠지면 0 으로라도 채운다', () => {
+test('frame 단계별 ms 가 빠지면 미측정은 null 이고 total 만 숫자다', () => {
   const body = normalizeFrameBody({ seq: 1, w: 10, h: 10, ok: false, reason: 'x' });
-  for (const key of ['total', 'proposal', 'verify', 'format', 'decode']) {
-    assert.equal(typeof body.ms[key], 'number');
-    assert.ok(body.ms[key] >= 0);
+  assert.equal(body.ms.total, 0);
+  for (const key of ['proposal', 'verify', 'format', 'decode']) {
+    assert.equal(body.ms[key], null);
   }
   const parsed = parseEnvelope(JSON.stringify(makeEnvelope('s', 'scan', 'frame', body)));
   assert.equal(parsed.ok, true, parsed.error);
 });
 
-test('classifyStage / fillFrameMs 는 마지막 도달 단계에 벽시계를 넣는다', () => {
+test('classifyStage 는 호환되고 fillFrameMs 는 total 을 단계에 복사하지 않는다', () => {
   assert.equal(classifyStage({ ok: true }), 'decode');
   assert.equal(classifyStage({ ok: false, reason: 'frontend:no-finder' }), 'proposal');
   assert.equal(classifyStage({ ok: false, reason: 'frontend:no-format-candidate' }), 'format');
@@ -191,11 +192,16 @@ test('classifyStage / fillFrameMs 는 마지막 도달 단계에 벽시계를 �
     reason: 'frontend:no-grid-hypothesis',
     detail: { pipelineStage: 'bootstrap-validation' },
   }), 'decode');
-  const ms = fillFrameMs(90, 'format');
-  assert.equal(ms.total, 90);
-  assert.equal(ms.format, 90);
-  assert.equal(ms.decode, 0);
-  assert.equal(ms.proposal, 0);
+  const copied = fillFrameMs(90, 'format');
+  assert.equal(copied.total, 90);
+  assert.equal(copied.format, null);
+  assert.equal(copied.decode, null);
+  const measured = fillFrameMs(90, { format: 12, proposal: 30 });
+  assert.equal(measured.total, 90);
+  assert.equal(measured.format, 12);
+  assert.equal(measured.proposal, 30);
+  assert.equal(measured.verify, null);
+  assert.notEqual(measured.format, measured.total);
 });
 
 test('familyToType · estimateCellPx', () => {
@@ -205,7 +211,7 @@ test('familyToType · estimateCellPx', () => {
   assert.equal(estimateCellPx({ ok: true, hypothesis: { k: 4 } }, 960, 960), 960 / 9);
 });
 
-test('frameShot 은 실패 프레임만 장변 96px 그레이스케일이고 세션당 20장', async () => {
+test('frameShot 은 장변 96px 그레이스케일이고 세션 총량 20을 넘지 않는다', async () => {
   FakeWS.instances = [];
   const tel = createLabTelemetry(labOpts());
   const big = {
@@ -224,13 +230,23 @@ test('frameShot 은 실패 프레임만 장변 96px 그레이스케일이고 세
   })));
   assert.equal(parsed.ok, true, parsed.error);
 
-  for (let i = 0; i < 25; i += 1) tel.frameShot({ seq: i, imageData: big });
+  tel.beginAttempt('a-cap');
+  for (let i = 0; i < 40; i += 1) {
+    tel.frameShot({
+      seq: i,
+      imageData: big,
+      attempt_id: 'a-cap',
+      reason: `frontend:reason-${i}`,
+      hasCandidate: i === 0,
+    });
+  }
   await new Promise((r) => setTimeout(r, 30));
   const shots = FakeWS.instances[0].sent
     .slice(1)
     .map((line) => JSON.parse(line))
     .filter((ev) => ev.kind === 'frameShot');
-  assert.equal(shots.length, 20);
+  assert.ok(shots.length <= 20);
+  assert.ok(shots.length >= 8, `층화 표본이 너무 적다: ${shots.length}`);
 });
 
 test('소켓 URL 은 같은 호스트의 /lab/ws 다', () => {
@@ -256,7 +272,7 @@ test('공개 문구는 안정판으로 한정하고 시험판을 구분한다', 
   assert.match(llms, /안정판/);
   assert.match(llms, /시험판/);
   assert.match(llms, /\/lab\//);
-  assert.match(llms, /실패한 프레임의 축소 이미지/);
+  assert.match(llms, /축소 이미지/);
   assert.doesNotMatch(
     llms,
     /동작하고, 프레임은 \*\*기기 안에서만\*\* 처리한다\(서버로 이미지를 보내지 않는다\)\./,
@@ -264,15 +280,15 @@ test('공개 문구는 안정판으로 한정하고 시험판을 구분한다', 
   assert.match(html, /안정판은 프레임을 기기 안에서만 처리/);
   assert.match(html, /시험판\(\/lab\/\)/);
   assert.match(html, /id="lab-notice"/);
-  assert.match(html, /실패한 프레임의 축소 이미지/);
+  assert.match(html, /축소 이미지/);
 });
 
 test('안내 카드 3언어와 생성기 사전에 시험판 문구가 있다', () => {
   const strings = read('sites/tlscan/strings.js');
   assert.match(strings, /lab\.notice\.title/);
-  assert.match(strings, /기기·카메라 정보와 실패한 프레임의 축소 이미지/);
-  assert.match(strings, /Device and camera details, and shrunken images of failed frames/);
-  assert.match(strings, /端末・カメラ情報と、失敗したフレームの縮小画像/);
+  assert.match(strings, /기기·카메라 정보와 축소 이미지/);
+  assert.match(strings, /Device and camera details, and shrunken frame images/);
+  assert.match(strings, /端末・カメラ情報と、フレームの縮小画像/);
   const gen = read('index.html');
   assert.match(gen, /"g512"/);
   assert.match(gen, /"g513"/);

@@ -16,13 +16,19 @@ import { SCANNER_STRINGS } from './strings.js';
 import { startPwaUpdateWatch } from '/src/pwa-update.js';
 import { decodeFrontend } from '/src/decoder/frontend.js';
 import {
+  buildCauseChain,
   classifyStage,
   createLabTelemetry,
-  estimateCellPx,
+  createStageClock,
+  emptyConfigSide,
+  extractGeometry,
   familyToType,
   fillFrameMs,
+  frameHasCandidate,
   isLabPath,
+  makeAttemptId,
   nowMs,
+  observedFromResult,
 } from '/src/lab-telemetry.js';
 
 const FRAME_INTERVAL_MS = 320;
@@ -59,7 +65,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-14.01';
+export const SCANNER_BUILD = '2026-08-14.02';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -112,11 +118,18 @@ let returnFocus = null;
 let consecutiveFailedFrames = 0;
 let frameSeq = 0;
 let labEnvSent = false;
+let attemptId = '';
 
 const lab = createLabTelemetry({ site: 'scan' });
 
 function resetFrameSeq() {
   frameSeq = 0;
+}
+
+function beginScanAttempt() {
+  attemptId = makeAttemptId();
+  if (lab.beginAttempt) lab.beginAttempt(attemptId);
+  return attemptId;
 }
 
 function currentZoom() {
@@ -206,6 +219,10 @@ function reportLabFrame(imageData, result, ms, stage) {
   if (!lab.enabled || !imageData) return;
   frameSeq += 1;
   const ok = result && result.ok === true;
+  const chain = buildCauseChain(result);
+  const geometry = extractGeometry(result, imageData.width, imageData.height);
+  const observed = observedFromResult(result);
+  const reason = ok ? '' : ((result && result.reason) || 'decode-failed');
   try {
     lab.frame({
       seq: frameSeq,
@@ -215,11 +232,28 @@ function reportLabFrame(imageData, result, ms, stage) {
       ms,
       stage,
       ok,
-      reason: ok ? '' : ((result && result.reason) || 'decode-failed'),
-      type: ok ? familyToType(result.family) : null,
-      cellPx: ok ? estimateCellPx(result, imageData.width, imageData.height) : null,
+      reason,
+      type: observed.type || (ok ? familyToType(result.family) : null),
+      cellPx: geometry.cellPx,
+      attempt_id: attemptId || null,
+      config_id: null,
+      expected: emptyConfigSide(),
+      observed,
+      chain,
+      geometry,
     });
-    if (!ok) lab.frameShot({ seq: frameSeq, imageData });
+    lab.frameShot({
+      seq: frameSeq,
+      imageData,
+      ok,
+      reason,
+      stage,
+      attempt_id: attemptId || null,
+      config_id: null,
+      chain_failed: chain.failed || '',
+      geometry,
+      hasCandidate: frameHasCandidate(result, geometry),
+    });
   } catch {
     // 계측 실패는 스캔을 막지 않는다.
   }
@@ -298,19 +332,22 @@ async function refreshCameraChoices() {
 async function decodeFrame(imageData) {
   if (!imageData || !imageData.data || !imageData.width || !imageData.height) {
     const failed = { ok: false, reason: 'frame-invalid' };
-    reportLabFrame(imageData, failed, fillFrameMs(0, 'proposal'), 'proposal');
+    reportLabFrame(imageData, failed, fillFrameMs(0), 'proposal');
     return failed;
   }
 
   const t0 = nowMs();
   try {
+    const clock = createStageClock();
     const result = decodeFrontend({
       width: imageData.width,
       height: imageData.height,
       pixels: imageData.data,
+    }, {
+      onStage: (stageName, phase) => clock.onStage(stageName, phase),
     });
     const stage = classifyStage(result);
-    const ms = fillFrameMs(nowMs() - t0, stage);
+    const ms = fillFrameMs(nowMs() - t0, clock.snapshot());
     reportLabFrame(imageData, result, ms, stage);
 
     if (result && result.ok === true && typeof result.text === 'string') {
@@ -323,7 +360,7 @@ async function decodeFrame(imageData) {
       ok: false,
       reason: 'decode-threw:' + (error && error.message ? error.message : 'unknown'),
     };
-    reportLabFrame(imageData, failed, fillFrameMs(nowMs() - t0, 'proposal'), 'proposal');
+    reportLabFrame(imageData, failed, fillFrameMs(nowMs() - t0), 'proposal');
     return failed;
   }
 }
@@ -774,6 +811,7 @@ async function startCamera(options) {
 
   const session = ++scanSession;
   resetFrameSeq();
+  beginScanAttempt();
   cameraRequestPending = true;
   setStatus(t('status.starting'));
 
@@ -863,6 +901,7 @@ async function decodeImageFile(file) {
 
   const session = ++scanSession;
   resetFrameSeq();
+  beginScanAttempt();
   sendLabEnvOnce(null);
   setStatus(t('status.checkingPhoto'));
 

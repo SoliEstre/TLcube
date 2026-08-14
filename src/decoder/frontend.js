@@ -16,6 +16,24 @@ import {
 } from './contracts.js';
 import { toRelativeLuminance } from './luma.js';
 
+function pointsOf(value) {
+  if (!Array.isArray(value) || value.length < 3) return null;
+  const out = [];
+  for (const point of value) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+    out.push({ x: point.x, y: point.y });
+  }
+  return out;
+}
+
+function cellPxFromH(H) {
+  if (!H || H.length < 6) return null;
+  const sx = Math.hypot(Number(H[0]), Number(H[3]));
+  const sy = Math.hypot(Number(H[1]), Number(H[4]));
+  if (!(sx > 0) || !(sy > 0)) return null;
+  return (sx + sy) / 2;
+}
+
 function compactHypothesis(candidate) {
   const hypothesis = candidate.hypothesis;
   return {
@@ -30,6 +48,9 @@ function compactHypothesis(candidate) {
     canonicalSpace: hypothesis.canonicalSpace,
     geometryResidual: hypothesis.geometryResidual,
     sizeGeometry: hypothesis.sizeGeometry,
+    cellSizePx: cellPxFromH(hypothesis.H),
+    anchors: pointsOf(hypothesis.anchors),
+    vertices: pointsOf(hypothesis.vertices),
   };
 }
 
@@ -69,8 +90,11 @@ export function decodeFrontend(raster, options = {}) {
   }
 
   const bootstrapOptions = options.bootstrap && typeof options.bootstrap === 'object'
-    ? options.bootstrap
+    ? { ...options.bootstrap }
     : {};
+  if (typeof options.onStage === 'function' && typeof bootstrapOptions.onStage !== 'function') {
+    bootstrapOptions.onStage = options.onStage;
+  }
   let enumerated;
   try {
     enumerated = enumerateGridHypotheses(

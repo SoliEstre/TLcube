@@ -75,15 +75,25 @@ export function validateEnvelope(value) {
   return { ok: true, event: value };
 }
 
-/** 계약 §4 — 단계별 ms 가 빠지면 이 수집의 존재 이유가 사라진다. */
+function isNullableNumber(value) {
+  return value === null || value === undefined || (isFiniteNumber(value) && value >= 0);
+}
+
+function isNullableString(value) {
+  return value === null || value === undefined || typeof value === 'string';
+}
+
+/** 계약 §4 — 단계별 ms 키는 있어야 한다. 측정 안 된 단계는 null, total 복사는 거부하지 않지만 권장하지 않는다. */
 export function validateFrameBody(body) {
   if (!isFiniteNumber(body.seq) || body.seq < 0) return 'frame.seq';
   if (!isFiniteNumber(body.w) || body.w <= 0) return 'frame.w';
   if (!isFiniteNumber(body.h) || body.h <= 0) return 'frame.h';
   if (!isFiniteNumber(body.zoom)) return 'frame.zoom';
   if (!isPlainObject(body.ms)) return 'frame.ms';
-  for (const key of FRAME_MS_KEYS) {
-    if (!isFiniteNumber(body.ms[key]) || body.ms[key] < 0) return `frame.ms.${key}`;
+  if (!isFiniteNumber(body.ms.total) || body.ms.total < 0) return 'frame.ms.total';
+  for (const key of ['proposal', 'verify', 'format', 'decode']) {
+    if (!(key in body.ms)) return `frame.ms.${key}`;
+    if (!isNullableNumber(body.ms[key])) return `frame.ms.${key}`;
   }
   if (typeof body.stage !== 'string' || body.stage.length === 0) return 'frame.stage';
   if (typeof body.ok !== 'boolean') return 'frame.ok';
@@ -91,6 +101,20 @@ export function validateFrameBody(body) {
   if (!(body.type === null || typeof body.type === 'string')) return 'frame.type';
   if (!(body.cellPx === null || body.cellPx === undefined || isFiniteNumber(body.cellPx))) {
     return 'frame.cellPx';
+  }
+  if (!isNullableString(body.attempt_id)) return 'frame.attempt_id';
+  if (!isNullableString(body.config_id)) return 'frame.config_id';
+  if (body.expected !== undefined && body.expected !== null && !isPlainObject(body.expected)) {
+    return 'frame.expected';
+  }
+  if (body.observed !== undefined && body.observed !== null && !isPlainObject(body.observed)) {
+    return 'frame.observed';
+  }
+  if (body.chain !== undefined && body.chain !== null && !isPlainObject(body.chain)) {
+    return 'frame.chain';
+  }
+  if (body.geometry !== undefined && body.geometry !== null && !isPlainObject(body.geometry)) {
+    return 'frame.geometry';
   }
   return null;
 }
@@ -101,6 +125,11 @@ export function validateFrameShotBody(body) {
   if (!isFiniteNumber(body.h) || body.h <= 0) return 'frameShot.h';
   if (typeof body.png !== 'string' || !body.png.startsWith('data:image/')) return 'frameShot.png';
   if (body.png.length > MAX_SHOT_CHARS) return 'frameShot.png too large';
+  if (!isNullableString(body.attempt_id)) return 'frameShot.attempt_id';
+  if (!isNullableString(body.config_id)) return 'frameShot.config_id';
+  if (!isNullableString(body.reason)) return 'frameShot.reason';
+  if (!isNullableString(body.stage)) return 'frameShot.stage';
+  if (!isNullableString(body.shot_role)) return 'frameShot.shot_role';
   return null;
 }
 
@@ -112,10 +141,49 @@ export function toChDateTime(iso) {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}.${p(d.getUTCMilliseconds(), 3)}`;
 }
 
+function configSide(src, key) {
+  if (!isPlainObject(src)) return '';
+  const value = src[key];
+  return value == null ? '' : String(value);
+}
+
+function configSideNum(src, key) {
+  if (!isPlainObject(src)) return null;
+  const value = src[key];
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function geometryField(body, key) {
+  const geo = isPlainObject(body.geometry) ? body.geometry : null;
+  if (!geo) return null;
+  if (key === 'clip_side') {
+    return typeof geo.clipSide === 'string' ? geo.clipSide : '';
+  }
+  if (key.startsWith('bbox_')) {
+    const bbox = isPlainObject(geo.bbox) ? geo.bbox : null;
+    if (!bbox) return null;
+    const map = { bbox_x: 'x', bbox_y: 'y', bbox_w: 'w', bbox_h: 'h' };
+    return asNullableFloat(bbox[map[key]]);
+  }
+  const map = {
+    occupancy: 'occupancy',
+    rotation_deg: 'rotationDeg',
+    perspective: 'perspective',
+    residual_px: 'residualPx',
+    cell_px: 'cellPx',
+  };
+  return asNullableFloat(geo[map[key]]);
+}
+
 /** tl_lab.events 한 행. 키 집합은 schema.sql 과 테스트가 고정한다. */
 export function eventRow(event) {
   const body = event.body || {};
   const ms = isPlainObject(body.ms) ? body.ms : {};
+  const expected = isPlainObject(body.expected) ? body.expected : {};
+  const observed = isPlainObject(body.observed) ? body.observed : {};
+  const chain = isPlainObject(body.chain) ? body.chain : {};
   return {
     v: event.v,
     sid: event.sid,
@@ -127,15 +195,40 @@ export function eventRow(event) {
     h: asUInt(body.h),
     zoom: asFloat(body.zoom),
     ms_total: asUInt(ms.total),
-    ms_proposal: asUInt(ms.proposal),
-    ms_verify: asUInt(ms.verify),
-    ms_format: asUInt(ms.format),
-    ms_decode: asUInt(ms.decode),
+    ms_proposal: asNullableUInt(ms.proposal),
+    ms_verify: asNullableUInt(ms.verify),
+    ms_format: asNullableUInt(ms.format),
+    ms_decode: asNullableUInt(ms.decode),
     stage: body.stage == null ? '' : String(body.stage),
     ok: body.ok ? 1 : 0,
     reason: body.reason == null ? '' : String(body.reason),
     type: body.type == null ? '' : String(body.type),
-    cell_px: body.cellPx == null ? 0 : asFloat(body.cellPx),
+    cell_px: body.cellPx == null ? geometryField(body, 'cell_px') : asNullableFloat(body.cellPx),
+    attempt_id: body.attempt_id == null ? '' : String(body.attempt_id),
+    config_id: body.config_id == null ? '' : String(body.config_id),
+    expected_type: configSide(expected, 'type'),
+    expected_version: expected.version == null ? '' : String(expected.version),
+    expected_ecc: configSide(expected, 'ecc'),
+    expected_tones: configSideNum(expected, 'tones'),
+    expected_finder: configSide(expected, 'finderPatternId'),
+    expected_qr: configSide(expected, 'qrPosition'),
+    observed_type: configSide(observed, 'type'),
+    observed_version: observed.version == null ? '' : String(observed.version),
+    observed_ecc: configSide(observed, 'ecc'),
+    observed_tones: configSideNum(observed, 'tones'),
+    observed_finder: configSide(observed, 'finderPatternId'),
+    observed_qr: configSide(observed, 'qrPosition'),
+    chain_json: Object.keys(chain).length ? JSON.stringify(chain) : '',
+    chain_failed: chain.failed == null ? '' : String(chain.failed),
+    bbox_x: geometryField(body, 'bbox_x'),
+    bbox_y: geometryField(body, 'bbox_y'),
+    bbox_w: geometryField(body, 'bbox_w'),
+    bbox_h: geometryField(body, 'bbox_h'),
+    occupancy: geometryField(body, 'occupancy'),
+    clip_side: geometryField(body, 'clip_side') || '',
+    rotation_deg: geometryField(body, 'rotation_deg'),
+    perspective: geometryField(body, 'perspective'),
+    residual_px: geometryField(body, 'residual_px'),
     body: JSON.stringify(body),
   };
 }
@@ -143,6 +236,8 @@ export function eventRow(event) {
 /** tl_lab.thumbnails 한 행. */
 export function thumbnailRow(event) {
   const body = event.body || {};
+  const geo = isPlainObject(body.geometry) ? body.geometry : {};
+  const bbox = isPlainObject(geo.bbox) ? geo.bbox : {};
   return {
     v: event.v,
     sid: event.sid,
@@ -152,6 +247,20 @@ export function thumbnailRow(event) {
     w: asUInt(body.w),
     h: asUInt(body.h),
     png: typeof body.png === 'string' ? body.png : '',
+    attempt_id: body.attempt_id == null ? '' : String(body.attempt_id),
+    config_id: body.config_id == null ? '' : String(body.config_id),
+    reason: body.reason == null ? '' : String(body.reason),
+    stage: body.stage == null ? '' : String(body.stage),
+    shot_role: body.shot_role == null ? '' : String(body.shot_role),
+    chain_failed: body.chain_failed == null ? '' : String(body.chain_failed),
+    bbox_x: asNullableFloat(bbox.x),
+    bbox_y: asNullableFloat(bbox.y),
+    bbox_w: asNullableFloat(bbox.w),
+    bbox_h: asNullableFloat(bbox.h),
+    occupancy: asNullableFloat(geo.occupancy),
+    clip_side: typeof geo.clipSide === 'string' ? geo.clipSide : '',
+    rotation_deg: asNullableFloat(geo.rotationDeg),
+    cell_px: asNullableFloat(geo.cellPx),
   };
 }
 
@@ -275,7 +384,20 @@ function asUInt(v) {
   return Math.floor(n);
 }
 
+function asNullableUInt(v) {
+  if (v == null) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.floor(n);
+}
+
 function asFloat(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function asNullableFloat(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }

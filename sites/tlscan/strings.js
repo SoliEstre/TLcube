@@ -104,7 +104,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': '카메라',
 
     'lab.notice.title': '시험판입니다',
-    'lab.notice.body': '이 주소는 시험판입니다. 기기·카메라 정보와 실패한 프레임의 축소 이미지가 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 프레임을 기기 안에서만 처리합니다.',
+    'lab.notice.body': '이 주소는 시험판입니다. 기기·카메라 정보와 축소 이미지(실패·성공 직전·성공의 층화 표본)가 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 프레임을 기기 안에서만 처리합니다.',
   },
 
   en: {
@@ -196,7 +196,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'Camera',
 
     'lab.notice.title': 'This is the lab build',
-    'lab.notice.body': 'This is the lab scanner. Device and camera details, and shrunken images of failed frames, are sent in real time. Payload contents are not sent. The stable scanner processes frames only on the device.',
+    'lab.notice.body': 'This is the lab scanner. Device and camera details, and shrunken frame images (stratified samples of failures, the frame before success, and success), are sent in real time. Payload contents are not sent. The stable scanner processes frames only on the device.',
   },
 
   ja: {
@@ -288,6 +288,6 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'カメラ',
 
     'lab.notice.title': '試用版です',
-    'lab.notice.body': 'このアドレスは試用版です。端末・カメラ情報と、失敗したフレームの縮小画像がリアルタイムで送信されます。ペイロードの内容は送りません。安定版はフレームを端末の中だけで処理します。',
+    'lab.notice.body': 'このアドレスは試用版です。端末・カメラ情報と、フレームの縮小画像（失敗・成功直前・成功の層化標本）がリアルタイムで送信されます。ペイロードの内容は送りません。安定版はフレームを端末の中だけで処理します。',
   },
 };

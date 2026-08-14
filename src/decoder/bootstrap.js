@@ -102,6 +102,23 @@ const ECC_NAME = Object.freeze({ 0: 'L', 1: 'M', 2: 'H' });
 const FAMILY_ORDER = Object.freeze({ hex: 0, tri: 1, cube: 2 });
 const EPSILON = 1e-12;
 
+function emitStage(options, stage, phase) {
+  const fn = options && typeof options === 'object' ? options.onStage : null;
+  if (typeof fn !== 'function') return;
+  try { fn(stage, phase); } catch {
+    // 계측 훅은 복호를 막지 않는다.
+  }
+}
+
+function withStage(options, stage, fn) {
+  emitStage(options, stage, 'enter');
+  try {
+    return fn();
+  } finally {
+    emitStage(options, stage, 'leave');
+  }
+}
+
 /* 빈번한 기하 중앙값은 정렬·복사 대신 재사용 Float64 scratch quickselect를 쓴다. */
 let medianValuesScratch = new Float64Array(0);
 let medianOrderScratch = new Uint32Array(0);
@@ -2369,7 +2386,8 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
   };
 
   for (const hypothesis of hypotheses) {
-    const formatRead = readFormatForHypothesis(luma, hypothesis, options);
+    const formatRead = withStage(options, 'format', () =>
+      readFormatForHypothesis(luma, hypothesis, options));
     if (!formatRead.ok) {
       diagnostics.formatFailures.push({
         hypothesisId: hypothesis.hypothesisId,
@@ -2385,9 +2403,9 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     const dimension = cube ? hypothesis.n : hypothesis.k;
     const layout = layoutForFamily(hypothesis.family, dimension, hypothesis);
     if (!layout) continue;
-    const grid = cube
+    const grid = withStage(options, 'decode', () => (cube
       ? sampleCubeGrid(luma, hypothesis, layout.map, cubeSampleOptions(options))
-      : sampleHexGrid(luma, hypothesis, layout.map, options.sample || {});
+      : sampleHexGrid(luma, hypothesis, layout.map, options.sample || {})));
     if (!grid.ok) {
       diagnostics.bodyFailures.push({
         hypothesisId: hypothesis.hypothesisId,
@@ -2417,7 +2435,8 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       }
     }
 
-    const referenceResult = referenceReportFor(hypothesis, grid, options);
+    const referenceResult = withStage(options, 'verify', () =>
+      referenceReportFor(hypothesis, grid, options));
     const acceptedForHypothesis = [];
 
     for (const formatCandidate of formatRead.formatCandidates) {
@@ -2433,7 +2452,8 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       } else {
         decodeFormat.k = dimension;
       }
-      const decoded = decodeCells(digits, decodeFormat);
+      const decoded = withStage(options, 'decode', () =>
+        decodeCells(digits, decodeFormat));
       if (!decoded.ok) {
         diagnostics.bodyFailures.push({
           hypothesisId: hypothesis.hypothesisId,
@@ -2652,7 +2672,8 @@ function relocationTargets(validated, attemptedFamilies) {
 }
 
 export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
-  const geometry = enumerateGeometryHypotheses(luma, familyEvidence, options);
+  const geometry = withStage(options, 'proposal', () =>
+    enumerateGeometryHypotheses(luma, familyEvidence, options));
   if (!geometry.ok) return geometry;
   const validated = validateGridHypotheses(luma, geometry.hypotheses, options);
   if (!validated.ok) {

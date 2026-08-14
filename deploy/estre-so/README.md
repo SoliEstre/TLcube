@@ -140,6 +140,26 @@ curl -s -X POST https://tl.estre.so/i -H 'Content-Type: text/plain' \
 | `projects/tlcube/docker-compose.ingest.yml` | 수집 — 선택, 별도 파일 |
 | `projects/tlcube/ingest.conf.template` | `/i` conf. `${TL_CH_*}` 는 기동 시 주입 |
 | `clickhouse/001_tlcube_provisioning.sql` | `tlcube` DB·테이블·INSERT 전용 유저 |
+| `clickhouse/002_tl_lab_p0_instrumentation.sql` | 기존 `tl_lab` live DB 용 P0 ALTER (실행하지 않음) |
+
+### 시험판 텔레메트리 스키마 갱신
+
+신규 설치는 `/srv/tlcube/relay/schema.sql` 만 적용한다. 이미 `tl_lab.events` 가
+있는 live DB 에는 **이 저장소에서 실행하지 말고** 통합자가 아래만 적용한다.
+
+```bash
+# 1. ALTER 먼저 (idempotent: ADD COLUMN IF NOT EXISTS / MODIFY COLUMN)
+clickhouse-client --multiquery \
+  < /srv/tlcube/deploy/estre-so/clickhouse/002_tl_lab_p0_instrumentation.sql
+
+# 2. 그 다음 릴레이 재시작
+docker compose --env-file ~/.secrets/estre.so.env \
+  -f compose.yml \
+  -f projects/tlcube/docker-compose.yml \
+  -f projects/tlcube/docker-compose.lab.yml up -d
+```
+
+옛 `ms_*`/`cell_px` 의 0 은 미측정과 구분되지 않는다. 새 행만 NULL 을 쓴다.
 
 ## 검증한 것 / 안 한 것
 

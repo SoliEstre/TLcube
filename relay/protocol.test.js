@@ -125,6 +125,12 @@ test('ClickHouse 행 — ISO ts 를 UTC DateTime64 문자열로', () => {
   assert.equal(row.type, 'hex');
   assert.equal(row.cell_px, 11.4);
   assert.equal(row.ms_proposal, 90);
+  const missingCell = eventRow(envelope({ body: frameBody({ cellPx: null }) }));
+  assert.equal(missingCell.cell_px, null);
+  const missingMs = eventRow(envelope({
+    body: frameBody({ ms: { total: 10, proposal: null, verify: null, format: null, decode: null } }),
+  }));
+  assert.equal(missingMs.ms_proposal, null);
   const shot = thumbnailRow(envelope({
     kind: 'frameShot',
     body: { seq: 4, w: 96, h: 54, png: 'data:image/png;base64,AA==' },

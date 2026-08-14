@@ -1,8 +1,11 @@
--- schema.sql — /lab/ 텔레메트리 ClickHouse DDL (계약 lab-telemetry.md §6)
+-- schema.sql — /lab/ 텔레메트리 ClickHouse DDL
 --
 -- 기존 tl_analytics.events / tlcube.events (계약이 말한 service_events_v1) 를
 -- **재사용하지 않는다.** 프레임 루프는 행 수가 비콘과 차원이 달라 TTL·쿼터·테이블을
 -- 따로 둔다. 이 파일만 적용하면 되고, deploy/** 는 건드리지 않는다.
+--
+-- 이미 tl_lab 이 있는 live DB 는 이 파일을 다시 실행하지 말고
+-- deploy/estre-so/clickhouse/002_tl_lab_p0_instrumentation.sql 의 ALTER 를 쓴다.
 --
 -- 적용:  clickhouse-client --multiquery < relay/schema.sql
 -- 되돌리기: README 의 DROP 순서.
@@ -22,16 +25,41 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     w           UInt16 DEFAULT 0,
     h           UInt16 DEFAULT 0,
     zoom        Float32 DEFAULT 0,
-    ms_total    UInt32 DEFAULT 0,
-    ms_proposal UInt32 DEFAULT 0,
-    ms_verify   UInt32 DEFAULT 0,
-    ms_format   UInt32 DEFAULT 0,
-    ms_decode   UInt32 DEFAULT 0,
+    ms_total    UInt32 DEFAULT 0,                  -- 프레임 벽시계. 단계 합과 같을 필요 없음
+    ms_proposal Nullable(UInt32),                  -- 실측 구간만. 미측정은 NULL (total 복사 금지)
+    ms_verify   Nullable(UInt32),
+    ms_format   Nullable(UInt32),
+    ms_decode   Nullable(UInt32),
     stage       LowCardinality(String) DEFAULT '',
     ok          UInt8 DEFAULT 0,
-    reason      String DEFAULT '',
-    type        LowCardinality(String) DEFAULT '', -- 성공 시. 와이어 키는 cellPx → cell_px
-    cell_px     Float32 DEFAULT 0,
+    reason      String DEFAULT '',                 -- 최종 실패 문자열. 호환 유지
+    type        LowCardinality(String) DEFAULT '', -- 관측 type. 와이어 키는 cellPx → cell_px
+    cell_px     Nullable(Float32),                 -- 실측 셀 크기(px). 미측정은 NULL. 거짓 0 금지
+    attempt_id  String DEFAULT '',                 -- 한 스캔 시도. 카메라 세션 또는 사진 1장
+    config_id   String DEFAULT '',                 -- 생성 설정 해시. 스캐너가 모르면 빈 문자열
+    expected_type    LowCardinality(String) DEFAULT '',
+    expected_version String DEFAULT '',
+    expected_ecc     LowCardinality(String) DEFAULT '',
+    expected_tones   Nullable(UInt8),
+    expected_finder  String DEFAULT '',
+    expected_qr      String DEFAULT '',
+    observed_type    LowCardinality(String) DEFAULT '',
+    observed_version String DEFAULT '',
+    observed_ecc     LowCardinality(String) DEFAULT '',
+    observed_tones   Nullable(UInt8),
+    observed_finder  String DEFAULT '',
+    observed_qr      String DEFAULT '',
+    chain_json       String DEFAULT '',            -- 원인 사슬 JSON
+    chain_failed     LowCardinality(String) DEFAULT '',
+    bbox_x      Nullable(Float32),                 -- 이미지 픽셀, 원점 좌상단
+    bbox_y      Nullable(Float32),
+    bbox_w      Nullable(Float32),
+    bbox_h      Nullable(Float32),
+    occupancy   Nullable(Float32),                 -- bbox 면적 / 프레임 면적
+    clip_side   LowCardinality(String) DEFAULT '',
+    rotation_deg Nullable(Float32),                -- 가설 rotationDegrees, 시계 방향
+    perspective Nullable(Float32),                 -- 네 모서리 대각선비 - 1. 미측정 NULL
+    residual_px Nullable(Float32),                 -- 호모그래피 재투영 잔차(px)
     -- env/gen 본문과 frame 의 원본 JSON. 계약이 키를 닫지 않은 쪽을 잃지 않기 위함.
     body        String DEFAULT ''
 )
@@ -41,7 +69,7 @@ PARTITION BY toYYYYMM(ts)
 ORDER BY (site, kind, sid, ts)
 TTL toDateTime(ts) + INTERVAL 14 DAY DELETE;
 
--- frameShot 만. 실패 프레임 표본, 세션당 상한은 릴레이가 강제한다(계약 §5).
+-- frameShot 만. 층화 표본, 세션당 상한은 릴레이가 강제한다.
 CREATE TABLE IF NOT EXISTS tl_lab.thumbnails
 (
     v    UInt8,
@@ -51,7 +79,21 @@ CREATE TABLE IF NOT EXISTS tl_lab.thumbnails
     seq  UInt32,
     w    UInt16,
     h    UInt16,
-    png  String                                 -- data URI. 장변 ~96px 그레이스케일
+    png  String,                                -- data URI. 장변 ~96px 그레이스케일
+    attempt_id   String DEFAULT '',
+    config_id    String DEFAULT '',
+    reason       String DEFAULT '',
+    stage        LowCardinality(String) DEFAULT '',
+    shot_role    LowCardinality(String) DEFAULT '',
+    chain_failed LowCardinality(String) DEFAULT '',
+    bbox_x       Nullable(Float32),
+    bbox_y       Nullable(Float32),
+    bbox_w       Nullable(Float32),
+    bbox_h       Nullable(Float32),
+    occupancy    Nullable(Float32),
+    clip_side    LowCardinality(String) DEFAULT '',
+    rotation_deg Nullable(Float32),
+    cell_px      Nullable(Float32)
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)

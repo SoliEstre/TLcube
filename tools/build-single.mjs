@@ -80,6 +80,8 @@ const MODULE_ORDER = [
   'pwa-update',
   // lab-telemetry 도 의존이 없다 — WS 전송과 봉투 조립만 담는다. 시험판에서만 켜진다.
   'lab-telemetry',
+  // URL 칸 전체 선택. 의존 없음. 앱만 쓴다.
+  'input-select-all',
 ];
 
 /**

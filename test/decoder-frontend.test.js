@@ -1043,3 +1043,15 @@ test('기존 불스아이 실사진: 1440 기준 12/17 복호 성적을 유지',
     assert.equal(result.text, 'https://tl.estre.so', entry.name);
   }
 });
+
+test('onStage 훅이 없어도 반환 계약은 같다', () => {
+  const raster = {
+    width: 8,
+    height: 8,
+    pixels: new Uint8ClampedArray(8 * 8 * 4),
+  };
+  const plain = decodeFrontend(raster);
+  const hooked = decodeFrontend(raster, { onStage() {} });
+  assert.equal(plain.ok, hooked.ok);
+  assert.equal(plain.reason, hooked.reason);
+});

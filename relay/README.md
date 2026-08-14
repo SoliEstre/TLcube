@@ -1,8 +1,43 @@
 # lab 릴레이
 
-시험판(`/lab/`) 텔레메트리 WebSocket 릴레이. 와이어 포맷은 계약 §3·§4
-(공통 봉투 `v/sid/site/ts/kind/body`, kind 는 `env|gen|frame|frameShot`),
-스키마는 §6 (이벤트/썸네일 분리, TTL 14일/7일) 이 정본이다.
+시험판(`/lab/`) 텔레메트리 WebSocket 릴레이. 와이어 포맷은 공통 봉투
+`v/sid/site/ts/kind/body`(kind 는 `env|gen|frame|frameShot`),
+스키마는 이벤트/썸네일 분리, TTL 14일/7일이다.
+
+P0 부터 frame 본문은 기존 `reason`/`ms`/`type`/`cellPx` 를 유지한 채
+`attempt_id`, `config_id`, `expected`/`observed`, `chain`, `geometry` 를 더한다.
+스캐너가 생성 설정을 모르면 `expected_*` 와 `config_id` 는 null/빈 값이다.
+시간 근접성으로 생성·스캔을 잇지 않는다.
+
+## 좌표계·단위 (geometry)
+
+이미지 픽셀. 원점은 프레임 좌상단, +x 오른쪽, +y 아래. 단위는 1 픽셀.
+
+| 필드 | 단위·범위 | 미측정 |
+|---|---|---|
+| `bbox` `{x,y,w,h}` | 이미지 px, 축 정렬 | `null` |
+| `corners` | 이미지 px 점 배열(≥3) | `null` |
+| `occupancy` | bbox 면적 / 프레임 면적 | `null` |
+| `clipSide` | `none`/`left`/`right`/`top`/`bottom`/`multi`/`border` | `null` |
+| `rotationDeg` | 디코더 `hypothesis.rotationDegrees`, 시계 방향 도 | `null` |
+| `perspective` | 네 모서리 대각선비 − 1 | `null` |
+| `residualPx` | 호모그래피 재투영 잔차 px | `null` |
+| `cellPx` | H 스케일 또는 가설 `cellSizePx` (실측만) | `null` |
+
+`ms.total` 은 프레임 벽시계다. `ms.proposal|verify|format|decode` 는 해당 구간
+실측만 넣고, 측정하지 못하면 `null` 이다. total 을 마지막 단계에 복사하지 않는다.
+
+원인 사슬 `chain.stages` 순서는
+`input-quality → proposal → finder → geometry → sample → format → body` 다.
+각 칸의 `status` 는 `reached`/`failed`/`skipped`/`unknown` 이고, 증거가 없으면
+`unknown` 이다.
+
+썸네일은 시험판 한정, 장변 96px 회색조, 세션당 최대 20장. 첫 실패 20장이 아니라
+시도·사유·성공 직전·성공을 층화한다.
+
+live ClickHouse 가 이미 있으면 `relay/schema.sql` 을 다시 실행하지 말고
+`deploy/estre-so/clickhouse/002_tl_lab_p0_instrumentation.sql` 을 적용한다.
+이 저장소의 구현 레인은 그 ALTER 를 실행하지 않는다.
 
 ```
 브라우저(/lab/) ──WS──> 이 프로세스 ──┬──> ClickHouse (적재)

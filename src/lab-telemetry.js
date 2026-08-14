@@ -1,7 +1,6 @@
 /**
  * lab-telemetry.js — 시험판(`/lab/`) 전용 계측 클라이언트.
  *
- * 계약: `.agent/_contracts/lab-telemetry.md` §3·§4·§5.
  * 와이어 검증 정본은 `relay/protocol.mjs` 와 같은 모양이어야 한다.
  *
  * 안정판 경로에서는 소켓을 열지 않고, 큐에 쓰지 않고, 한 바이트도 보내지 않는다.
@@ -20,12 +19,19 @@ export const MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 export const MAX_SHOTS = 20;
 export const SHOT_MAX_SIDE = 96;
 export const MAX_SHOT_CHARS = 80 * 1024;
+export const SHOT_MAX_PER_REASON = 3;
+export const SHOT_LATE_RESERVE = 2;
 export const FRAME_MS_KEYS = Object.freeze(['total', 'proposal', 'verify', 'format', 'decode']);
+export const TIMING_STAGES = Object.freeze(['proposal', 'verify', 'format', 'decode']);
+export const CHAIN_STAGES = Object.freeze([
+  'input-quality', 'proposal', 'finder', 'geometry', 'sample', 'format', 'body',
+]);
+export const CONFIG_SIDE_KEYS = Object.freeze([
+  'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition',
+]);
 export const GEN_BODY_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'bgMode', 'quietMode',
 ]);
-
-const STAGES = Object.freeze(['proposal', 'verify', 'format', 'decode']);
 
 /** `/lab` 또는 `/lab/…` 만 시험판. `/label` 같은 접두 오탐을 막는다. */
 export function isLabPath(pathname) {
@@ -62,14 +68,73 @@ export function classifyStage(result) {
 }
 
 /**
- * 디코더 내부 단계 시계는 이 레인이 못 고친다. 벽시계 `total` 을 항상 채우고,
- * 도달한 마지막 단계에 같은 값을 넣는다. 아직 안 간 단계는 0.
+ * 단계 시간. `total` 은 벽시계 전체.
+ * 측정된 구간만 정수 ms 로 넣고, 측정하지 못한 단계는 null.
+ * 마지막 단계에 total 을 복사하지 않는다.
+ *
+ * 두 번째 인자가 문자열이면 예전 호출 형태다. 도달 단계 힌트일 뿐이며
+ * 그 칸에 total 을 넣지 않는다.
  */
-export function fillFrameMs(totalMs, stage) {
+export function fillFrameMs(totalMs, measured) {
   const total = finiteMs(totalMs);
-  const ms = { total, proposal: 0, verify: 0, format: 0, decode: 0 };
-  if (STAGES.includes(stage)) ms[stage] = total;
+  const ms = { total, proposal: null, verify: null, format: null, decode: null };
+  const src = measured && typeof measured === 'object' && !Array.isArray(measured)
+    ? measured
+    : {};
+  for (const key of TIMING_STAGES) {
+    if (src[key] == null) continue;
+    const n = Number(src[key]);
+    if (Number.isFinite(n) && n >= 0) ms[key] = Math.round(n);
+  }
   return ms;
+}
+
+export function timingKey(stage) {
+  if (stage === 'proposal' || stage === 'finder' || stage === 'geometry') return 'proposal';
+  if (stage === 'verify') return 'verify';
+  if (stage === 'format') return 'format';
+  if (stage === 'decode' || stage === 'body') return 'decode';
+  return null;
+}
+
+/** decoder `onStage(stage, 'enter'|'leave')` 를 구간 합으로 모은다. */
+export function createStageClock(nowFn = nowMs) {
+  const acc = { proposal: 0, verify: 0, format: 0, decode: 0 };
+  const measured = { proposal: false, verify: false, format: false, decode: false };
+  const open = { proposal: [], verify: [], format: [], decode: [] };
+
+  function onStage(stage, phase) {
+    const key = timingKey(stage);
+    if (!key) return;
+    const t = nowFn();
+    if (phase === 'leave') {
+      const start = open[key].pop();
+      if (start != null) {
+        acc[key] += Math.max(0, t - start);
+        measured[key] = true;
+      }
+      return;
+    }
+    open[key].push(t);
+  }
+
+  function snapshot() {
+    const t = nowFn();
+    const out = { proposal: null, verify: null, format: null, decode: null };
+    for (const key of TIMING_STAGES) {
+      let value = measured[key] ? acc[key] : 0;
+      const stack = open[key];
+      if (stack.length > 0) {
+        value += Math.max(0, t - stack[stack.length - 1]);
+        out[key] = Math.round(value);
+      } else if (measured[key]) {
+        out[key] = Math.round(acc[key]);
+      }
+    }
+    return out;
+  }
+
+  return { onStage, snapshot };
 }
 
 export function familyToType(family) {
@@ -79,6 +144,9 @@ export function familyToType(family) {
   return null;
 }
 
+/**
+ * 프레임이 코드를 가득 채웠다고 가정한 추정. 와이어의 실측 cellPx 로 쓰지 않는다.
+ */
 export function estimateCellPx(result, width, height) {
   if (!result || result.ok !== true || !result.hypothesis) return null;
   const side = Math.min(Number(width) || 0, Number(height) || 0);
@@ -97,14 +165,602 @@ export function nowMs() {
   return Date.now();
 }
 
+export function makeAttemptId(now = Date.now, random = Math.random) {
+  return `a${Number(now()).toString(36)}${String(random()).slice(2, 8)}`;
+}
+
+export function fnv1a32(text) {
+  let hash = 0x811c9dc5;
+  const src = String(text);
+  for (let i = 0; i < src.length; i += 1) {
+    hash ^= src.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+export function canonicalGenConfig(src) {
+  const input = src && typeof src === 'object' ? src : {};
+  const out = {};
+  for (const key of GEN_BODY_KEYS) {
+    if (input[key] === undefined || input[key] === null || input[key] === '') continue;
+    out[key] = input[key];
+  }
+  return out;
+}
+
+export function makeConfigId(config) {
+  const norm = canonicalGenConfig(config);
+  const keys = Object.keys(norm).sort();
+  if (keys.length === 0) return null;
+  return `c${fnv1a32(JSON.stringify(keys.map((key) => [key, norm[key]])))}`;
+}
+
+export function emptyConfigSide() {
+  return {
+    type: null,
+    version: null,
+    ecc: null,
+    tones: null,
+    finderPatternId: null,
+    qrPosition: null,
+  };
+}
+
+export function normalizeConfigSide(src) {
+  const out = emptyConfigSide();
+  if (!src || typeof src !== 'object') return out;
+  for (const key of CONFIG_SIDE_KEYS) {
+    const value = src[key];
+    if (value == null || value === '') {
+      out[key] = null;
+      continue;
+    }
+    if (key === 'tones') {
+      const n = Number(value);
+      out[key] = Number.isFinite(n) ? n : null;
+      continue;
+    }
+    if (key === 'version') {
+      const n = Number(value);
+      out[key] = Number.isFinite(n) ? n : String(value);
+      continue;
+    }
+    out[key] = String(value);
+  }
+  return out;
+}
+
+export function observedFromResult(result) {
+  const out = emptyConfigSide();
+  if (!result || typeof result !== 'object') return out;
+  if (result.family) out.type = familyToType(result.family);
+  if (Number.isFinite(result.version)) out.version = result.version;
+  if (typeof result.eccLevel === 'string' && result.eccLevel) out.ecc = result.eccLevel;
+  if (Number.isFinite(result.tones)) out.tones = result.tones;
+  const hyp = result.hypothesis;
+  if (hyp && hyp.centerQr === true) {
+    out.qrPosition = 'inner';
+    out.finderPatternId = 'center-qr';
+  } else if (hyp && (hyp.source === 'center-qr' || hyp.source === 'bullseye')) {
+    out.finderPatternId = hyp.source;
+    if (hyp.source === 'center-qr') out.qrPosition = 'inner';
+  }
+  return out;
+}
+
+function emptyChainStage(stage) {
+  return { stage, status: 'unknown', reason: null };
+}
+
+export function emptyCauseChain() {
+  return {
+    stages: CHAIN_STAGES.map(emptyChainStage),
+    failed: null,
+  };
+}
+
+function setChain(by, stage, status, reason) {
+  const row = by[stage];
+  if (!row) return;
+  row.status = status;
+  row.reason = reason || null;
+}
+
+function reachBefore(by, stage) {
+  const idx = CHAIN_STAGES.indexOf(stage);
+  for (let i = 0; i < idx; i += 1) {
+    const name = CHAIN_STAGES[i];
+    if (by[name].status === 'unknown') setChain(by, name, 'reached');
+  }
+}
+
+function lookupDiagnostics(result) {
+  const detail = result && result.detail && typeof result.detail === 'object'
+    ? result.detail
+    : {};
+  const diagnostics = (result && result.diagnostics)
+    || detail.diagnostics
+    || null;
+  const bootstrap = diagnostics && diagnostics.bootstrap;
+  const geometry = (bootstrap && bootstrap.geometry)
+    || (diagnostics && diagnostics.geometry)
+    || detail.geometryDiagnostics
+    || null;
+  const validation = (bootstrap && bootstrap.validation)
+    || (diagnostics && diagnostics.validation)
+    || (detail.diagnostics && detail.diagnostics.validation)
+    || null;
+  return { detail, diagnostics, geometry, validation };
+}
+
+/**
+ * 기존 diagnostics/detail 만으로 도달·실패 사슬을 만든다. 없는 원인을 추정하지 않는다.
+ */
+export function buildCauseChain(result) {
+  const chain = emptyCauseChain();
+  const by = Object.fromEntries(chain.stages.map((row) => [row.stage, row]));
+  if (!result || typeof result !== 'object') return chain;
+
+  const reason = result.ok === true ? '' : (typeof result.reason === 'string' ? result.reason : '');
+  const { detail, diagnostics, geometry, validation } = lookupDiagnostics(result);
+  const pipeline = String(detail.pipelineStage || detail.stage || '');
+  const code = String(detail.pipelineCode || '');
+  const blob = `${reason} ${pipeline} ${code}`.toLowerCase();
+
+  if (result.ok === true) {
+    for (const stage of CHAIN_STAGES) setChain(by, stage, 'reached');
+    chain.failed = null;
+    return chain;
+  }
+
+  if (
+    reason === 'frontend:empty-input'
+    || reason === 'frontend:luma-degenerate'
+    || reason === 'frame-invalid'
+    || blob.includes('empty-input')
+    || blob.includes('luma-degenerate')
+    || blob.includes('frame-invalid')
+    || blob.includes('options-not-object')
+  ) {
+    setChain(by, 'input-quality', 'failed', reason || 'input-quality');
+    chain.failed = 'input-quality';
+    return chain;
+  }
+
+  if (reason || diagnostics || pipeline) {
+    setChain(by, 'input-quality', 'reached');
+  }
+
+  if (geometry && Number(geometry.finderCount) > 0) {
+    setChain(by, 'proposal', 'reached');
+    setChain(by, 'finder', 'reached');
+  }
+  if (geometry && Number(geometry.geometryHypothesisCount) > 0) {
+    setChain(by, 'proposal', 'reached');
+    setChain(by, 'finder', 'reached');
+    setChain(by, 'geometry', 'reached');
+  }
+  if (validation && Number(validation.formatProposalCount) > 0) {
+    reachBefore(by, 'format');
+    setChain(by, 'format', 'reached');
+  }
+  if (validation && Number(validation.formatCandidateCount) > 0) {
+    reachBefore(by, 'format');
+    setChain(by, 'format', 'reached');
+  }
+  if (validation && Number(validation.bodyValidCount) > 0) {
+    reachBefore(by, 'body');
+    setChain(by, 'body', 'reached');
+  }
+
+  if (reason === 'frontend:no-finder' || /\bno-finder\b/.test(blob)) {
+    setChain(by, 'proposal', 'reached');
+    setChain(by, 'finder', 'failed', reason);
+    chain.failed = 'finder';
+    return chain;
+  }
+
+  if (reason === 'frontend:family-ambiguous') {
+    setChain(by, 'proposal', 'failed', reason);
+    reachBefore(by, 'proposal');
+    chain.failed = 'proposal';
+    return chain;
+  }
+
+  if (reason === 'frontend:no-anchors' || reason === 'frontend:homography-degenerate') {
+    if (by.finder.status === 'unknown') setChain(by, 'finder', 'reached');
+    setChain(by, 'geometry', 'failed', reason);
+    reachBefore(by, 'geometry');
+    chain.failed = 'geometry';
+    return chain;
+  }
+
+  if (reason === 'frontend:symbol-clipped') {
+    if (pipeline.includes('finder')) {
+      setChain(by, 'finder', 'failed', reason);
+      reachBefore(by, 'finder');
+      chain.failed = 'finder';
+      return chain;
+    }
+    setChain(by, 'geometry', 'failed', reason);
+    reachBefore(by, 'geometry');
+    chain.failed = 'geometry';
+    return chain;
+  }
+
+  if (reason === 'frontend:sample-starved' || reason === 'frontend:reference-mismatch') {
+    setChain(by, 'sample', 'failed', reason);
+    reachBefore(by, 'sample');
+    chain.failed = 'sample';
+    return chain;
+  }
+
+  if (reason === 'frontend:no-format-candidate' || code === 'NO_FORMAT_CANDIDATE') {
+    setChain(by, 'format', 'failed', reason || 'frontend:no-format-candidate');
+    reachBefore(by, 'format');
+    chain.failed = 'format';
+    return chain;
+  }
+
+  if (
+    code === 'BODY_RS_FAILED'
+    || code === 'PAYLOAD_VALIDATION_FAILED'
+    || blob.includes('body_rs')
+    || blob.includes('payload')
+    || pipeline.includes('selection')
+  ) {
+    setChain(by, 'body', 'failed', reason);
+    reachBefore(by, 'body');
+    chain.failed = 'body';
+    return chain;
+  }
+
+  if (reason === 'frontend:no-grid-hypothesis') {
+    if (validation && Number(validation.formatCandidateCount) > 0) {
+      setChain(by, 'body', 'failed', reason);
+      reachBefore(by, 'body');
+      chain.failed = 'body';
+      return chain;
+    }
+    if (by.geometry.status === 'reached') {
+      chain.failed = null;
+      return chain;
+    }
+    setChain(by, 'proposal', 'failed', reason);
+    reachBefore(by, 'proposal');
+    chain.failed = 'proposal';
+    return chain;
+  }
+
+  chain.failed = null;
+  return chain;
+}
+
+export function normalizeCauseChain(src) {
+  const fallback = emptyCauseChain();
+  if (!src || typeof src !== 'object') return fallback;
+  const incoming = Array.isArray(src.stages) ? src.stages : [];
+  const byName = new Map();
+  for (const row of incoming) {
+    if (!row || typeof row !== 'object') continue;
+    if (!CHAIN_STAGES.includes(row.stage)) continue;
+    const status = row.status === 'reached' || row.status === 'failed' || row.status === 'skipped'
+      ? row.status
+      : 'unknown';
+    byName.set(row.stage, {
+      stage: row.stage,
+      status,
+      reason: typeof row.reason === 'string' && row.reason ? row.reason : null,
+    });
+  }
+  const stages = CHAIN_STAGES.map((stage) => byName.get(stage) || emptyChainStage(stage));
+  const failed = CHAIN_STAGES.includes(src.failed) ? src.failed : null;
+  return { stages, failed };
+}
+
+function finiteOrNull(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function bboxFromMinMax(bounds) {
+  const minX = finiteOrNull(bounds.minX);
+  const minY = finiteOrNull(bounds.minY);
+  const maxX = finiteOrNull(bounds.maxX);
+  const maxY = finiteOrNull(bounds.maxY);
+  if (minX == null || minY == null || maxX == null || maxY == null) return null;
+  const w = maxX - minX;
+  const h = maxY - minY;
+  if (!(w > 0) || !(h > 0)) return null;
+  return { x: minX, y: minY, w, h };
+}
+
+function bboxFromXYWH(src) {
+  const x = finiteOrNull(src.x);
+  const y = finiteOrNull(src.y);
+  const w = finiteOrNull(src.w);
+  const h = finiteOrNull(src.h);
+  if (x == null || y == null || !(w > 0) || !(h > 0)) return null;
+  return { x, y, w, h };
+}
+
+function bboxFromBounds(bounds) {
+  if (!bounds || typeof bounds !== 'object') return null;
+  if ('minX' in bounds) return bboxFromMinMax(bounds);
+  if ('w' in bounds || 'width' in bounds) {
+    return bboxFromXYWH({
+      x: bounds.x,
+      y: bounds.y,
+      w: bounds.w != null ? bounds.w : bounds.width,
+      h: bounds.h != null ? bounds.h : bounds.height,
+    });
+  }
+  return null;
+}
+
+function bboxFromPoints(points) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y > maxY) maxY = point.y;
+  }
+  const w = maxX - minX;
+  const h = maxY - minY;
+  if (!(w > 0) || !(h > 0)) return null;
+  return { x: minX, y: minY, w, h };
+}
+
+function normalizePoints(value) {
+  if (!Array.isArray(value) || value.length < 3) return null;
+  const out = [];
+  for (const point of value) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+    out.push({ x: point.x, y: point.y });
+  }
+  return out;
+}
+
+function clipSideFromBbox(bbox, width, height) {
+  if (!bbox || !(width > 0) || !(height > 0)) return null;
+  const tol = 1;
+  const sides = [];
+  if (bbox.x <= tol) sides.push('left');
+  if (bbox.y <= tol) sides.push('top');
+  if (bbox.x + bbox.w >= width - tol) sides.push('right');
+  if (bbox.y + bbox.h >= height - tol) sides.push('bottom');
+  if (sides.length === 0) return 'none';
+  if (sides.length === 1) return sides[0];
+  return 'multi';
+}
+
+function perspectiveFromCorners(corners) {
+  if (!corners || corners.length < 4) return null;
+  const a = corners[0];
+  const b = corners[1];
+  const c = corners[2];
+  const d = corners[3];
+  const d1 = Math.hypot(a.x - c.x, a.y - c.y);
+  const d2 = Math.hypot(b.x - d.x, b.y - d.y);
+  if (!(d1 > 0) || !(d2 > 0)) return null;
+  const ratio = d1 >= d2 ? d1 / d2 : d2 / d1;
+  if (!Number.isFinite(ratio)) return null;
+  return ratio - 1;
+}
+
+export function emptyGeometry() {
+  return {
+    bbox: null,
+    corners: null,
+    occupancy: null,
+    clipSide: null,
+    rotationDeg: null,
+    perspective: null,
+    residualPx: null,
+    cellPx: null,
+  };
+}
+
+/**
+ * 신뢰할 수 있는 diagnostics 만 정규화한다. 측정되지 않으면 null.
+ * 좌표는 이미지 픽셀, 원점 좌상단, +x 오른쪽, +y 아래.
+ */
+export function extractGeometry(result, width, height) {
+  const geo = emptyGeometry();
+  const w = Number(width) || 0;
+  const h = Number(height) || 0;
+  if (!result || typeof result !== 'object') return geo;
+
+  const hypothesis = result.hypothesis;
+  const { detail, geometry } = lookupDiagnostics(result);
+  const outline = geometry && geometry.outline;
+
+  let corners = null;
+  if (hypothesis) {
+    corners = normalizePoints(hypothesis.vertices)
+      || normalizePoints(hypothesis.anchors)
+      || normalizePoints(hypothesis.corners);
+  }
+  geo.corners = corners;
+
+  let bbox = corners ? bboxFromPoints(corners) : null;
+  if (!bbox && outline && outline.bounds) bbox = bboxFromBounds(outline.bounds);
+  geo.bbox = bbox;
+
+  if (bbox && w > 0 && h > 0) {
+    const occupancy = (bbox.w * bbox.h) / (w * h);
+    geo.occupancy = Number.isFinite(occupancy) ? occupancy : null;
+  } else if (outline && Number.isFinite(outline.fillRatio)) {
+    geo.occupancy = outline.fillRatio;
+  }
+
+  if (Number.isInteger(detail.clippingSideCount)) {
+    if (detail.clippingSideCount <= 0) geo.clipSide = 'none';
+    else if (detail.clippingSideCount >= 2) geo.clipSide = 'multi';
+    else geo.clipSide = clipSideFromBbox(bbox, w, h);
+  } else if (outline && outline.touchesBorder === true) {
+    geo.clipSide = clipSideFromBbox(bbox, w, h) || 'border';
+  } else if (outline && outline.touchesBorder === false) {
+    geo.clipSide = 'none';
+  }
+
+  if (hypothesis && Number.isFinite(hypothesis.rotationDegrees)) {
+    geo.rotationDeg = hypothesis.rotationDegrees;
+  }
+  if (hypothesis && Number.isFinite(hypothesis.geometryResidual)) {
+    geo.residualPx = hypothesis.geometryResidual;
+  }
+  if (hypothesis && Number.isFinite(hypothesis.cellSizePx) && hypothesis.cellSizePx > 0) {
+    geo.cellPx = hypothesis.cellSizePx;
+  }
+  geo.perspective = perspectiveFromCorners(corners);
+  return geo;
+}
+
+export function normalizeGeometry(src) {
+  const geo = emptyGeometry();
+  if (!src || typeof src !== 'object') return geo;
+  geo.bbox = bboxFromXYWH(src.bbox || {}) || bboxFromBounds(src.bbox);
+  geo.corners = normalizePoints(src.corners);
+  const occupancy = finiteOrNull(src.occupancy);
+  geo.occupancy = occupancy == null ? null : occupancy;
+  geo.clipSide = typeof src.clipSide === 'string' && src.clipSide ? src.clipSide : null;
+  geo.rotationDeg = finiteOrNull(src.rotationDeg);
+  geo.perspective = finiteOrNull(src.perspective);
+  geo.residualPx = finiteOrNull(src.residualPx);
+  const cellPx = finiteOrNull(src.cellPx);
+  geo.cellPx = cellPx != null && cellPx > 0 ? cellPx : null;
+  return geo;
+}
+
+export function frameHasCandidate(result, geometry) {
+  if (result && result.ok === true) return true;
+  if (result && result.hypothesis) return true;
+  const { geometry: geoDiag } = lookupDiagnostics(result || {});
+  if (geoDiag && Number(geoDiag.finderCount) > 0) return true;
+  if (geoDiag && Number(geoDiag.geometryHypothesisCount) > 0) return true;
+  if (geometry && geometry.bbox) return true;
+  if (geometry && geometry.corners && geometry.corners.length >= 3) return true;
+  return false;
+}
+
+export function rootReasonOf(reason, ok) {
+  if (ok === true) return 'ok';
+  return typeof reason === 'string' && reason ? reason : 'unknown';
+}
+
+/**
+ * 시도·사유를 가로지르는 상한 샘플러.
+ * 세션 첫 실패 20장이 한도를 독점하지 않게, 늦은 성공/직전 실패를 위해 2칸을 비워 둔다.
+ */
+export function createShotSampler(options = {}) {
+  const maxTotal = Number.isFinite(options.maxTotal) ? options.maxTotal : MAX_SHOTS;
+  const maxPerReason = Number.isFinite(options.maxPerReason)
+    ? options.maxPerReason
+    : SHOT_MAX_PER_REASON;
+  const lateReserve = Number.isFinite(options.lateReserve)
+    ? options.lateReserve
+    : SHOT_LATE_RESERVE;
+
+  let emitted = 0;
+  const reasonCounts = new Map();
+  const firstCandidateAttempts = new Set();
+  const successAttempts = new Set();
+
+  function canEmitRegular() {
+    return emitted < Math.max(0, maxTotal - lateReserve);
+  }
+
+  function canEmitLate() {
+    return emitted < maxTotal;
+  }
+
+  function note(reason) {
+    emitted += 1;
+    const key = rootReasonOf(reason, reason === 'ok');
+    reasonCounts.set(key, (reasonCounts.get(key) || 0) + 1);
+  }
+
+  function decide(input) {
+    const attemptId = input && input.attemptId ? String(input.attemptId) : '';
+    const ok = !!(input && input.ok);
+    const reason = rootReasonOf(input && input.reason, ok);
+    const count = reasonCounts.get(reason) || 0;
+
+    if (ok) {
+      if (successAttempts.has(attemptId) || !canEmitLate()) {
+        return { action: 'skip', role: 'success-dup' };
+      }
+      successAttempts.add(attemptId);
+      note('ok');
+      return { action: 'emit', role: 'success' };
+    }
+
+    if (input && input.hasCandidate && attemptId && !firstCandidateAttempts.has(attemptId)
+      && canEmitRegular()) {
+      firstCandidateAttempts.add(attemptId);
+      note(reason);
+      return { action: 'emit', role: 'first-candidate' };
+    }
+
+    if (count === 0 && canEmitRegular()) {
+      note(reason);
+      return { action: 'emit', role: 'new-reason' };
+    }
+
+    if (count < maxPerReason && canEmitRegular()) {
+      note(reason);
+      return { action: 'emit', role: 'reason-sample' };
+    }
+
+    // 성공·성공 직전만 늦은 예약 칸을 쓴다. 시도 종료 flush 가 그 칸을 먹으면
+    // 이후 성공 프레임이 빠진다.
+    if (input && input.flush === 'pre-success' && canEmitLate()) {
+      note(reason);
+      return { action: 'emit', role: 'pre-success' };
+    }
+    if (input && input.flush === 'attempt-end' && canEmitRegular()) {
+      note(reason);
+      return { action: 'emit', role: 'attempt-end' };
+    }
+
+    return { action: input && input.flush ? 'skip' : 'hold-last', role: 'hold-last' };
+  }
+
+  return {
+    decide,
+    get emitted() { return emitted; },
+    reasonCount(reason) { return reasonCounts.get(rootReasonOf(reason, reason === 'ok')) || 0; },
+    maxTotal,
+  };
+}
+
 function finiteMs(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.round(n);
 }
 
+function nullableMs(value) {
+  if (value == null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n);
+}
+
 function isoNow() {
   return new Date().toISOString();
+}
+
+function nullableString(value) {
+  if (value == null) return null;
+  const text = String(value);
+  return text.length > 0 ? text : null;
 }
 
 function readSessionSid(storage) {
@@ -157,12 +813,13 @@ export function makeEnvelope(sid, site, kind, body, ts) {
 export function normalizeFrameBody(body) {
   const src = body && typeof body === 'object' ? body : {};
   const msIn = src.ms && typeof src.ms === 'object' ? src.ms : {};
-  const ms = {};
-  for (const key of FRAME_MS_KEYS) ms[key] = finiteMs(msIn[key]);
+  const ms = { total: finiteMs(msIn.total) };
+  for (const key of TIMING_STAGES) ms[key] = nullableMs(msIn[key]);
   const type = src.type == null ? null : String(src.type);
-  const cellPx = src.cellPx == null || !Number.isFinite(Number(src.cellPx))
-    ? null
-    : Number(src.cellPx);
+  const geometry = normalizeGeometry(src.geometry);
+  let cellPx = src.cellPx == null ? geometry.cellPx : Number(src.cellPx);
+  if (!Number.isFinite(cellPx) || cellPx <= 0) cellPx = geometry.cellPx;
+  if (!Number.isFinite(cellPx) || cellPx <= 0) cellPx = null;
   return {
     seq: Number.isFinite(Number(src.seq)) ? Number(src.seq) : 0,
     w: Number(src.w) || 0,
@@ -174,23 +831,44 @@ export function normalizeFrameBody(body) {
     reason: typeof src.reason === 'string' ? src.reason : '',
     type,
     cellPx,
+    attempt_id: nullableString(src.attempt_id),
+    config_id: nullableString(src.config_id),
+    expected: normalizeConfigSide(src.expected),
+    observed: normalizeConfigSide(src.observed),
+    chain: normalizeCauseChain(src.chain),
+    geometry,
   };
 }
 
 export function normalizeGenBody(body) {
-  const src = body && typeof body === 'object' ? body : {};
-  const out = {};
-  for (const key of GEN_BODY_KEYS) {
-    if (src[key] !== undefined) out[key] = src[key];
-  }
+  const out = canonicalGenConfig(body);
+  const configId = makeConfigId(out);
+  if (configId) out.config_id = configId;
   return out;
+}
+
+export function normalizeFrameShotBody(body) {
+  const src = body && typeof body === 'object' ? body : {};
+  return {
+    seq: Number.isFinite(Number(src.seq)) ? Number(src.seq) : 0,
+    w: Number(src.w) || 0,
+    h: Number(src.h) || 0,
+    png: typeof src.png === 'string' ? src.png : '',
+    attempt_id: nullableString(src.attempt_id),
+    config_id: nullableString(src.config_id),
+    reason: typeof src.reason === 'string' ? src.reason : '',
+    stage: typeof src.stage === 'string' ? src.stage : '',
+    shot_role: typeof src.shot_role === 'string' ? src.shot_role : '',
+    chain_failed: typeof src.chain_failed === 'string' ? src.chain_failed : '',
+    geometry: normalizeGeometry(src.geometry),
+  };
 }
 
 function bytesToBase64(bytes) {
   if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
   let binary = '';
   const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
+  for (let i = 0; i < bytes.length; i += 1) {
     binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
   }
   return btoa(binary);
@@ -243,11 +921,13 @@ function disabledClient() {
   return {
     enabled: false,
     sid: '',
+    attemptId: '',
     emit: noop,
     env: noop,
     gen: noop,
     frame: noop,
     frameShot: noop,
+    beginAttempt: () => '',
     close: noop,
   };
 }
@@ -279,8 +959,10 @@ export function createLabTelemetry(options = {}) {
   const url = labSocketUrl(loc);
   let socket = null;
   let roleSent = false;
-  let shotCount = 0;
   let closed = false;
+  let attemptId = '';
+  const sampler = createShotSampler();
+  const heldByAttempt = new Map();
 
   function enqueue(event) {
     const q = readQueue(queueStore);
@@ -360,6 +1042,38 @@ export function createLabTelemetry(options = {}) {
     sendEvent(makeEnvelope(sid, site, kind, body));
   }
 
+  function emitShotRecord(record, roleOverride) {
+    if (!record || !record.shot) return;
+    const shot = normalizeFrameShotBody({
+      ...record.meta,
+      ...record.shot,
+      shot_role: roleOverride || record.meta.shot_role || '',
+    });
+    if (sampler.emitted > sampler.maxTotal) return;
+    emit('frameShot', shot);
+  }
+
+  function flushHeld(id, role) {
+    if (!id || !heldByAttempt.has(id)) return;
+    const held = heldByAttempt.get(id);
+    heldByAttempt.delete(id);
+    const decision = sampler.decide({
+      ok: false,
+      reason: held.meta.reason,
+      attemptId: id,
+      hasCandidate: held.meta.hasCandidate,
+      flush: role === 'pre-success' ? 'pre-success' : 'attempt-end',
+    });
+    if (decision.action === 'emit') emitShotRecord(held, role || decision.role);
+  }
+
+  function beginAttempt(nextId) {
+    const previous = attemptId;
+    if (previous && previous !== nextId) flushHeld(previous, 'attempt-end');
+    attemptId = nextId || makeAttemptId();
+    return attemptId;
+  }
+
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
       connect();
@@ -372,20 +1086,52 @@ export function createLabTelemetry(options = {}) {
   return {
     enabled: true,
     sid,
+    get attemptId() { return attemptId; },
     emit,
+    beginAttempt,
     env(body) { emit('env', body && typeof body === 'object' ? body : {}); },
     gen(body) { emit('gen', normalizeGenBody(body)); },
-    frame(body) { emit('frame', normalizeFrameBody(body)); },
+    frame(body) {
+      const normalized = normalizeFrameBody({
+        ...body,
+        attempt_id: body && body.attempt_id != null ? body.attempt_id : (attemptId || null),
+      });
+      emit('frame', normalized);
+    },
     frameShot(input) {
-      if (shotCount >= MAX_SHOTS) return;
       const image = input && input.imageData ? input.imageData : input;
       const shot = shrinkFrameShot(image);
       if (!shot) return;
-      shotCount += 1;
-      shot.seq = Number.isFinite(Number(input && input.seq)) ? Number(input.seq) : 0;
-      emit('frameShot', shot);
+      const id = nullableString(input && input.attempt_id) || attemptId || '';
+      const reason = input && input.ok === true
+        ? 'ok'
+        : (typeof (input && input.reason) === 'string' ? input.reason : '');
+      const meta = {
+        seq: Number.isFinite(Number(input && input.seq)) ? Number(input.seq) : 0,
+        attempt_id: id || null,
+        config_id: nullableString(input && input.config_id),
+        reason: input && input.ok === true ? '' : reason,
+        stage: typeof (input && input.stage) === 'string' ? input.stage : '',
+        chain_failed: typeof (input && input.chain_failed) === 'string' ? input.chain_failed : '',
+        geometry: normalizeGeometry(input && input.geometry),
+        hasCandidate: !!(input && input.hasCandidate),
+      };
+      if (input && input.ok === true) flushHeld(id, 'pre-success');
+      const decision = sampler.decide({
+        ok: input && input.ok === true,
+        reason,
+        attemptId: id,
+        hasCandidate: meta.hasCandidate,
+      });
+      if (decision.action === 'hold-last') {
+        heldByAttempt.set(id, { shot, meta });
+        return;
+      }
+      if (decision.action !== 'emit') return;
+      emitShotRecord({ shot, meta: { ...meta, shot_role: decision.role } }, decision.role);
     },
     close() {
+      if (attemptId) flushHeld(attemptId, 'attempt-end');
       closed = true;
       try { if (socket) socket.close(); } catch { /* */ }
       socket = null;
