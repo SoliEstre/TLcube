@@ -75,7 +75,7 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
 });
 
 test('로케이터 문구는 ko/en/ja 가 같고 성능 보장을 하지 않는다', () => {
-  for (const key of ['g515', 'g516', 'g517', 'g518', 'g519', 'g520', 'g541', 'g542']) {
+  for (const key of ['g515', 'g516', 'g517', 'g518', 'g519', 'g520', 'g541', 'g542', 'g543', 'g544', 'g545', 'g546']) {
     for (const lang of ['ko', 'en', 'ja']) {
       assert.match(langBlock(lang), new RegExp('"' + key + '"\\s*:'), `${lang} 에 ${key} 가 없다`);
     }
@@ -84,6 +84,12 @@ test('로케이터 문구는 ko/en/ja 가 같고 성능 보장을 하지 않는�
   assert.match(INDEX, /Does not guarantee rotation, lighting, print, or live-scan performance/);
   assert.match(INDEX, /回転・照明・印刷・ライブスキャンの性能は保証しません/);
   assert.match(INDEX, /data-locator="cell-surface-v1"[\s\S]*?data-i18n="g542">셀 표면 v1</);
+  assert.match(INDEX, /id="yLocatorArmSection"/);
+  assert.match(INDEX, /data-locator-arm="A"/);
+  assert.match(INDEX, /data-locator-arm="B"/);
+  assert.match(INDEX, /locatorArmY/);
+  assert.equal(GENERATOR_STATE_SCHEMA.locatorArmY.defaultValue, 'B');
+  assert.equal(GENERATOR_STATE_SCHEMA.locatorArmY.exposure, 'internal');
 });
 
 test('시험판 번들에는 섹션이 있고 안정판은 런타임에 숨긴다', () => {

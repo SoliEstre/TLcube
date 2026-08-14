@@ -173,6 +173,11 @@ test('gen 정규화는 페이로드 내용을 버리고 config_id 를 붙인다'
     'bgMode', 'config_id', 'ecc', 'finderPatternId', 'locatorProfile', 'qrPosition', 'quietMode', 'tones', 'type', 'version',
   ]);
   assert.equal(body.locatorProfile, 'hex-frame-v1');
+  const withArm = normalizeGenBody({
+    type: 'Y', locatorProfile: 'cell-surface-v1', locatorArm: 'A',
+  });
+  assert.equal(withArm.locatorArm, 'A');
+  assert.equal(withArm.locatorProfile, 'cell-surface-v1');
   assert.match(body.config_id, /^c[0-9a-f]{8}$/);
 });
 
@@ -194,7 +199,11 @@ test('extractCellSurfaceProbe 는 시도/점수/사유를 정규화하고 없으
               accepted: false,
               score: 0.61,
               reason: 'orientation-margin',
-              profile: 'cell-surface-v1',
+              profile: 'cell-surface-v1-B',
+              arm: 'B',
+              orientationGate: 'applied',
+              orientationGateApplied: true,
+              ambiguous: false,
             },
           },
         },
@@ -205,7 +214,11 @@ test('extractCellSurfaceProbe 는 시도/점수/사유를 정규화하고 없으
   assert.equal(probed.accepted, false);
   assert.equal(probed.score, 0.61);
   assert.equal(probed.reason, 'orientation-margin');
-  assert.equal(probed.profile, 'cell-surface-v1');
+  assert.equal(probed.profile, 'cell-surface-v1-B');
+  assert.equal(probed.arm, 'B');
+  assert.equal(probed.orientationGate, 'applied');
+  assert.equal(probed.orientationGateApplied, true);
+  assert.equal(probed.ambiguous, false);
 
   const body = normalizeFrameBody({
     seq: 1, w: 10, h: 10, ok: false, reason: 'x',

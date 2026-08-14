@@ -28,6 +28,12 @@ import {
 } from './placementY.js';
 
 export const CELL_SURFACE_PROFILE_ID = 'cell-surface-v1';
+/** 구 대칭 톤. T=L, R 만 (0,3)(1,3)(2,3) 비대칭. */
+export const CELL_SURFACE_ARM_A = 'A';
+/** 신 비대칭 톤. 기존 61셀 안에서 T 15개를 뒤집음. 기본값. */
+export const CELL_SURFACE_ARM_B = 'B';
+export const CELL_SURFACE_ARMS = Object.freeze([CELL_SURFACE_ARM_A, CELL_SURFACE_ARM_B]);
+export const DEFAULT_CELL_SURFACE_ARM = CELL_SURFACE_ARM_B;
 export const CELL_SURFACE_N = 21;
 export const CELL_SURFACE_VERSION = 1;
 export const CELL_SURFACE_NAME_2T = 'Y1-CS';
@@ -125,6 +131,30 @@ export function assertCellSurfaceTones(tones) {
   return tones;
 }
 
+export function assertCellSurfaceArm(arm) {
+  if (arm === undefined || arm === null || arm === '') return DEFAULT_CELL_SURFACE_ARM;
+  if (arm !== CELL_SURFACE_ARM_A && arm !== CELL_SURFACE_ARM_B) {
+    throw new RangeError('cell-surface locatorArm 은 A 또는 B 여야 한다: ' + arm);
+  }
+  return arm;
+}
+
+/** 텔레메트리·가설에 싣는 팔 구분 프로파일. 패밀리 id 는 CELL_SURFACE_PROFILE_ID. */
+export function cellSurfaceProfileId(arm) {
+  return CELL_SURFACE_PROFILE_ID + '-' + assertCellSurfaceArm(arm);
+}
+
+export function parseCellSurfaceArm(profileOrArm) {
+  if (profileOrArm === CELL_SURFACE_ARM_A || profileOrArm === CELL_SURFACE_ARM_B) {
+    return profileOrArm;
+  }
+  if (typeof profileOrArm !== 'string') return null;
+  if (profileOrArm === CELL_SURFACE_PROFILE_ID + '-' + CELL_SURFACE_ARM_A) return CELL_SURFACE_ARM_A;
+  if (profileOrArm === CELL_SURFACE_PROFILE_ID + '-' + CELL_SURFACE_ARM_B) return CELL_SURFACE_ARM_B;
+  if (profileOrArm === CELL_SURFACE_PROFILE_ID) return DEFAULT_CELL_SURFACE_ARM;
+  return null;
+}
+
 export function formatIndexCellSurface(tones) {
   return assertCellSurfaceTones(tones) === 3
     ? CELL_SURFACE_FORMAT_INDEX_3T
@@ -147,7 +177,9 @@ export function tonesFromCellSurfaceFormatIndex(index) {
   throw new RangeError('cell-surface-v1 formatIndex 는 12 또는 14 이어야 한다: ' + index);
 }
 
-function buildLocatorCells() {
+function buildLocatorCells(arm) {
+  const resolved = assertCellSurfaceArm(arm);
+  const flipEnabled = resolved === CELL_SURFACE_ARM_B;
   const cells = [];
   const seen = new Set();
   for (const [i, j, toneTL] of TL_TONE_SPEC) {
@@ -156,7 +188,7 @@ function buildLocatorCells() {
       throw new Error('locator 좌표 중복: ' + key);
     }
     seen.add(key);
-    const flipT = T_FLIP.some((cell) => cell.i === i && cell.j === j);
+    const flipT = flipEnabled && T_FLIP.some((cell) => cell.i === i && cell.j === j);
     const asymmetric = R_ASYMMETRY.some((cell) => cell.i === i && cell.j === j);
     cells.push(Object.freeze({
       i,
@@ -170,23 +202,40 @@ function buildLocatorCells() {
   return Object.freeze(cells);
 }
 
-export const CELL_SURFACE_LOCATOR_CELLS = buildLocatorCells();
+function toneTableFor(cells) {
+  return Object.freeze({
+    T: Object.freeze(Object.fromEntries(
+      cells.map((cell) => [cellKey(cell.i, cell.j), cell.T]),
+    )),
+    L: Object.freeze(Object.fromEntries(
+      cells.map((cell) => [cellKey(cell.i, cell.j), cell.L]),
+    )),
+    R: Object.freeze(Object.fromEntries(
+      cells.map((cell) => [cellKey(cell.i, cell.j), cell.R]),
+    )),
+  });
+}
+
+export const CELL_SURFACE_LOCATOR_CELLS_A = buildLocatorCells(CELL_SURFACE_ARM_A);
+export const CELL_SURFACE_LOCATOR_CELLS_B = buildLocatorCells(CELL_SURFACE_ARM_B);
+/** 기본(B) 표. 기존 호출부가 팔 없이 읽어도 현재 HEAD 톤을 본다. */
+export const CELL_SURFACE_LOCATOR_CELLS = CELL_SURFACE_LOCATOR_CELLS_B;
+
+const LOCATOR_CELLS_BY_ARM = Object.freeze({
+  [CELL_SURFACE_ARM_A]: CELL_SURFACE_LOCATOR_CELLS_A,
+  [CELL_SURFACE_ARM_B]: CELL_SURFACE_LOCATOR_CELLS_B,
+});
 
 const LOCATOR_KEY_SET = new Set(
   CELL_SURFACE_LOCATOR_CELLS.map((cell) => cellKey(cell.i, cell.j)),
 );
 
-const TONE_BY_FACE = Object.freeze({
-  T: Object.freeze(Object.fromEntries(
-    CELL_SURFACE_LOCATOR_CELLS.map((cell) => [cellKey(cell.i, cell.j), cell.T]),
-  )),
-  L: Object.freeze(Object.fromEntries(
-    CELL_SURFACE_LOCATOR_CELLS.map((cell) => [cellKey(cell.i, cell.j), cell.L]),
-  )),
-  R: Object.freeze(Object.fromEntries(
-    CELL_SURFACE_LOCATOR_CELLS.map((cell) => [cellKey(cell.i, cell.j), cell.R]),
-  )),
+const TONE_BY_FACE_BY_ARM = Object.freeze({
+  [CELL_SURFACE_ARM_A]: toneTableFor(CELL_SURFACE_LOCATOR_CELLS_A),
+  [CELL_SURFACE_ARM_B]: toneTableFor(CELL_SURFACE_LOCATOR_CELLS_B),
 });
+
+const TONE_BY_FACE = TONE_BY_FACE_BY_ARM[DEFAULT_CELL_SURFACE_ARM];
 
 /**
  * format 15셀. locator 61 과 겹치지 않는 내부 좌표, 복제 3개를 공간 분산.
@@ -211,8 +260,9 @@ export function isCellSurfaceLocator(i, j) {
   return LOCATOR_KEY_SET.has(cellKey(i, j));
 }
 
-export function locatorTone(face, i, j) {
-  const table = TONE_BY_FACE[face];
+export function locatorTone(face, i, j, arm) {
+  const resolved = assertCellSurfaceArm(arm);
+  const table = TONE_BY_FACE_BY_ARM[resolved][face];
   if (!table) throw new RangeError('면 라벨은 T | L | R 이어야 한다: ' + face);
   const tone = table[cellKey(i, j)];
   return tone === undefined ? DEFAULT_CELL_TONE : tone;
@@ -222,8 +272,8 @@ export function formatCellsCellSurface() {
   return CELL_SURFACE_FORMAT_CELLS;
 }
 
-export function locatorCellsCellSurface() {
-  return CELL_SURFACE_LOCATOR_CELLS;
+export function locatorCellsCellSurface(arm) {
+  return LOCATOR_CELLS_BY_ARM[assertCellSurfaceArm(arm)];
 }
 
 export function buildRoleSetsCellSurface() {
@@ -332,12 +382,13 @@ export function isCellSurfaceCompatibleY(version, tones) {
 /**
  * 편집기 JSON 정본. 47 userNonData + 183 toneOverrides (61×3, 전부 mid 가 아님).
  */
-export function canonicalCellEditorDocument() {
+export function canonicalCellEditorDocument(arm) {
+  const cells = locatorCellsCellSurface(arm);
   const state = createCellEditorState(CELL_SURFACE_N);
   for (const { i, j } of CELL_SURFACE_USER_NON_DATA) {
     state.userNonData.add(coordKey(i, j));
   }
-  for (const cell of CELL_SURFACE_LOCATOR_CELLS) {
+  for (const cell of cells) {
     for (const face of FACES) {
       const tone = cell[face];
       if (tone !== DEFAULT_CELL_TONE) {
@@ -358,6 +409,35 @@ export { CELL_EDITOR_SCHEMA };
 {
   if (CELL_SURFACE_LOCATOR_CELLS.length !== CELL_SURFACE_LOCATOR_COUNT) {
     throw new Error('locator 61좌표가 아니다: ' + CELL_SURFACE_LOCATOR_CELLS.length);
+  }
+  if (CELL_SURFACE_LOCATOR_CELLS_A.length !== CELL_SURFACE_LOCATOR_COUNT
+    || CELL_SURFACE_LOCATOR_CELLS_B.length !== CELL_SURFACE_LOCATOR_COUNT) {
+    throw new Error('A/B locator 61좌표가 아니다');
+  }
+  {
+    const keysA = CELL_SURFACE_LOCATOR_CELLS_A.map((c) => cellKey(c.i, c.j)).join('|');
+    const keysB = CELL_SURFACE_LOCATOR_CELLS_B.map((c) => cellKey(c.i, c.j)).join('|');
+    if (keysA !== keysB) throw new Error('A/B locator 좌표가 다르다');
+    let rankingA = 0;
+    let rankingB = 0;
+    let tDiff = 0;
+    for (let i = 0; i < CELL_SURFACE_LOCATOR_CELLS_A.length; i += 1) {
+      const a = CELL_SURFACE_LOCATOR_CELLS_A[i];
+      const b = CELL_SURFACE_LOCATOR_CELLS_B[i];
+      if (a.L !== b.L || a.R !== b.R) throw new Error('A/B 는 T 만 갈라야 한다: ' + cellKey(a.i, a.j));
+      if (a.T !== b.T) tDiff += 1;
+      if (a.T !== a.L || a.T !== a.R || a.L !== a.R) rankingA += 1;
+      if (b.T !== b.L || b.T !== b.R || b.L !== b.R) rankingB += 1;
+    }
+    if (tDiff !== T_FLIP.length) {
+      throw new Error('A/B T 차이 수가 T_FLIP 과 다르다: ' + tDiff);
+    }
+    if (rankingA !== R_ASYMMETRY.length) {
+      throw new Error('A 팔 순위 셀이 R 비대칭 3이 아니다: ' + rankingA);
+    }
+    if (rankingB !== R_ASYMMETRY.length + T_FLIP.length) {
+      throw new Error('B 팔 순위 셀이 18이 아니다: ' + rankingB);
+    }
   }
   if (CELL_SURFACE_USER_NON_DATA.length !== 47) {
     throw new Error('userNonData 47좌표가 아니다: ' + CELL_SURFACE_USER_NON_DATA.length);

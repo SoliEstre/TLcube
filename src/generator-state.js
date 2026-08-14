@@ -90,6 +90,8 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 보여 주지 않고 항상 off.
   locatorProfileY: field(DEFAULT_LOCATOR_PROFILE_Y, INTERNAL,
     [LOCATOR_PROFILE_OFF, LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_CELL_SURFACE_V1]),
+  // 셀 표면 로케이터 톤 팔. A=구 대칭, B=신 비대칭(기본). 안정판은 안 쓰고 기본 B.
+  locatorArmY: field('B', INTERNAL, ['A', 'B']),
 });
 
 export function createGeneratorState(overrides = {}) {

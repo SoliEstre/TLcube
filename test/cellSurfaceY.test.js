@@ -7,27 +7,34 @@ import assert from 'node:assert/strict';
 
 import {
   CELL_EDITOR_SCHEMA,
+  CELL_SURFACE_ARM_A,
+  CELL_SURFACE_ARM_B,
   CELL_SURFACE_DATA_CELLS,
   CELL_SURFACE_FORMAT_CELLS,
   CELL_SURFACE_FORMAT_INDEX,
   CELL_SURFACE_FORMAT_INDEX_2T,
   CELL_SURFACE_FORMAT_INDEX_3T,
   CELL_SURFACE_LOCATOR_CELLS,
+  CELL_SURFACE_LOCATOR_CELLS_A,
   CELL_SURFACE_LOCATOR_COUNT,
   CELL_SURFACE_N,
   CELL_SURFACE_PROFILE_ID,
   CELL_SURFACE_RESIDUAL_CELLS,
   CELL_SURFACE_USED_SYMBOLS,
   CELL_SURFACE_USER_NON_DATA,
+  DEFAULT_CELL_SURFACE_ARM,
   NSYM_TABLE_CELL_SURFACE_Y,
   canonicalCellEditorDocument,
   capacityForCellSurfaceY,
+  cellSurfaceProfileId,
   dataCellsInScanOrderCellSurface,
   formatCellsCellSurface,
   formatIndexCellSurface,
   isCellSurfaceLocator,
+  locatorCellsCellSurface,
   locatorTone,
   nameCellSurface,
+  parseCellSurfaceArm,
   roleOfCellSurface,
   usedCubeFormatIndices,
 } from '../src/cellSurfaceY.js';
@@ -60,6 +67,12 @@ function key(i, j) {
 
 test('프로파일 id 와 cube format index 12/14 가 비어 있고 +2 불변식을 지킨다', () => {
   assert.equal(CELL_SURFACE_PROFILE_ID, 'cell-surface-v1');
+  assert.equal(DEFAULT_CELL_SURFACE_ARM, CELL_SURFACE_ARM_B);
+  assert.equal(cellSurfaceProfileId('A'), 'cell-surface-v1-A');
+  assert.equal(cellSurfaceProfileId('B'), 'cell-surface-v1-B');
+  assert.equal(parseCellSurfaceArm('cell-surface-v1-A'), 'A');
+  assert.equal(parseCellSurfaceArm('cell-surface-v1-B'), 'B');
+  assert.equal(parseCellSurfaceArm('cell-surface-v1'), 'B');
   assert.deepEqual([...usedCubeFormatIndices()], [0, 2, 8, 9, 10, 11]);
   assert.equal(CELL_SURFACE_FORMAT_INDEX_2T, 12);
   assert.equal(CELL_SURFACE_FORMAT_INDEX_3T, 14);
@@ -113,6 +126,36 @@ test('locator 61좌표·톤이 사용자 정본과 같다', () => {
     if (cell.T !== cell.L || cell.T !== cell.R || cell.L !== cell.R) ranking += 1;
   }
   assert.equal(ranking, 18);
+});
+
+test('A 팔은 T 플립이 없고 순위 셀이 R 비대칭 3개다', () => {
+  assert.equal(locatorCellsCellSurface('A'), CELL_SURFACE_LOCATOR_CELLS_A);
+  assert.equal(locatorCellsCellSurface('B'), CELL_SURFACE_LOCATOR_CELLS);
+  assert.equal(locatorTone('T', 4, 0, 'A'), 2);
+  assert.equal(locatorTone('L', 4, 0, 'A'), 2);
+  assert.equal(locatorTone('T', 4, 0, 'B'), 0);
+  assert.equal(locatorTone('L', 4, 0, 'B'), 2);
+  let ranking = 0;
+  for (const cell of CELL_SURFACE_LOCATOR_CELLS_A) {
+    assert.equal(cell.T, cell.L);
+    const asymmetric = (cell.i === 0 || cell.i === 1 || cell.i === 2) && cell.j === 3;
+    assert.equal(cell.R, asymmetric ? 2 : cell.T);
+    if (cell.T !== cell.L || cell.T !== cell.R || cell.L !== cell.R) ranking += 1;
+  }
+  assert.equal(ranking, 3);
+  const encodedA = encodeY('https://tl.estre.so', {
+    version: 1, tones: 2, eccLevel: 'M', cellSurface: true, locatorArm: 'A',
+  });
+  const encodedB = encodeY('https://tl.estre.so', {
+    version: 1, tones: 2, eccLevel: 'M', cellSurface: true, locatorArm: 'B',
+  });
+  assert.equal(encodedA.locatorArm, 'A');
+  assert.equal(encodedB.locatorArm, 'B');
+  assert.deepEqual(encodedA.cellDigits.get('4,0').tones, { T: 2, L: 2, R: 2 });
+  assert.deepEqual(encodedB.cellDigits.get('4,0').tones, { T: 0, L: 2, R: 2 });
+  assert.equal(encodedA.formatIndex, encodedB.formatIndex);
+  assert.equal(encodedA.capacity.dataCells, 365);
+  assert.equal(encodedB.capacity.dataCells, 365);
 });
 
 test('편집기 JSON 정본과 프로파일 상수가 같다', () => {

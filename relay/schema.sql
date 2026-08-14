@@ -43,12 +43,16 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     expected_tones   Nullable(UInt8),
     expected_finder  String DEFAULT '',
     expected_qr      String DEFAULT '',
+    expected_locator String DEFAULT '',
+    expected_locator_arm LowCardinality(String) DEFAULT '', -- A | B. 셀 표면 로케이터 팔
     observed_type    LowCardinality(String) DEFAULT '',
     observed_version String DEFAULT '',
     observed_ecc     LowCardinality(String) DEFAULT '',
     observed_tones   Nullable(UInt8),
     observed_finder  String DEFAULT '',
     observed_qr      String DEFAULT '',
+    observed_locator String DEFAULT '',
+    observed_locator_arm LowCardinality(String) DEFAULT '', -- 디코더가 고른 팔
     chain_json       String DEFAULT '',            -- 원인 사슬 JSON
     chain_failed     LowCardinality(String) DEFAULT '',
     bbox_x      Nullable(Float32),                 -- 이미지 픽셀, 원점 좌상단
@@ -64,7 +68,12 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     cs_accepted  UInt8 DEFAULT 0,                  -- 검출기가 가설을 수락했는가
     cs_score     Nullable(Float32),                -- 셀 표면 agreement. 미시도 NULL
     cs_reason    String DEFAULT '',                -- 거절 사유. 미시도 빈 문자열
-    cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v1
+    cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v1-A | cell-surface-v1-B
+    cs_arm       LowCardinality(String) DEFAULT '', -- 관측 팔 A | B
+    cs_expected_arm LowCardinality(String) DEFAULT '', -- 기대 팔. 없으면 빈 문자열
+    cs_orientation_gate LowCardinality(String) DEFAULT '', -- applied | waived
+    cs_orientation_gate_applied UInt8 DEFAULT 0, -- 1=방향 게이트 적용. A 는 0
+    cs_ambiguous UInt8 DEFAULT 0,               -- 1=A·B 둘 다 맞아서 점수 높은 쪽을 택함
     -- env/gen 본문과 frame 의 원본 JSON. 계약이 키를 닫지 않은 쪽을 잃지 않기 위함.
     body        String DEFAULT ''
 )

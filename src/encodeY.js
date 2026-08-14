@@ -33,6 +33,7 @@ import {
   CELL_SURFACE_N,
   CELL_SURFACE_PROFILE_ID,
   CELL_SURFACE_VERSION,
+  assertCellSurfaceArm,
   assertCellSurfaceTones,
   capacityForCellSurfaceY,
   dataCellsInScanOrderCellSurface,
@@ -116,13 +117,14 @@ export function chooseVersionY(text, eccLevel = 'M', tones = 2) {
  * Type Y 인코더 파이프라인 진입점 (SPEC §14). version 을 생략하면
  * `chooseVersionY` 로 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', tones?: 2|3, window?: boolean, cellSurface?: boolean}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', tones?: 2|3, window?: boolean, cellSurface?: boolean, locatorArm?: 'A'|'B'}} [options]
  *   tones 기본 2(2톤 메인, ADR 0003 v3.1 §4b) — 3 은 Y-T 옵션. window 는 면 내 QR
  *   윈도 β(ADR 0003 D1 + [C7 Q7]) — version=2(Y2)·tones=2 에서만 허용(그 외 RangeError),
  *   version 생략 시 2 로 강제한다(윈도가 지원되는 유일한 버전이므로).
  *   cellSurface 는 /lab/ 시험판 cell-surface-v1 — version=1(Y1/Y1T, n=21) 만
  *   허용하고 tones 는 2|3(생략 시 기본 2). 같은 61셀 locator 를 공유하며 와이어는
- *   formatIndex 로만 가른다. 기본 encodeY() 와이어를 바꾸지 않는다.
+ *   formatIndex 로만 가른다. locatorArm 은 로케이터 톤만 가른다(A=구 대칭, B=신 비대칭,
+ *   기본 B). 기본 encodeY() 와이어를 바꾸지 않는다.
  * @returns {{
  *   version: number, n: number, eccLevel: 'L'|'M'|'H', tones: 2|3, formatIndex: number,
  *   window: boolean,
@@ -143,6 +145,7 @@ export function encodeY(text, options = {}) {
   }
   const {
     version, eccLevel = 'M', tones = 2, window = false, cellSurface = false,
+    locatorArm,
   } = options;
 
   if (cellSurface) {
@@ -155,7 +158,7 @@ export function encodeY(text, options = {}) {
         'cell-surface-v1 은 version=' + CELL_SURFACE_VERSION + '(Y1/Y1T) 전용이다: version=' + version,
       );
     }
-    return encodeYCellSurface(text, eccLevel, tones);
+    return encodeYCellSurface(text, eccLevel, tones, locatorArm);
   }
 
   // 면 내 QR 윈도(ADR 0003 D1 조건 ②: n≥25 → Y2 만 가능, Y1 은 애초 불가) —
@@ -293,7 +296,8 @@ export function encodeY(text, options = {}) {
   };
 }
 
-function encodeYCellSurface(text, eccLevel, tones) {
+function encodeYCellSurface(text, eccLevel, tones, locatorArm) {
+  const arm = assertCellSurfaceArm(locatorArm);
   const capacity = capacityForCellSurfaceY(eccLevel, tones);
   const n = CELL_SURFACE_N;
   const framed = frame(text, capacity.dataBytes);
@@ -353,7 +357,7 @@ function encodeYCellSurface(text, eccLevel, tones) {
   const formatDigits = formatReplicas.flat();
 
   const cellDigits = new Map();
-  for (const c of locatorCellsCellSurface()) {
+  for (const c of locatorCellsCellSurface(arm)) {
     cellDigits.set(cellKey(c.i, c.j), {
       digit: null,
       role: 'locator',
@@ -386,6 +390,7 @@ function encodeYCellSurface(text, eccLevel, tones) {
     window: false,
     cellSurface: true,
     locatorProfile: CELL_SURFACE_PROFILE_ID,
+    locatorArm: arm,
     capacity,
     codewordSymbols,
     dataDigits,

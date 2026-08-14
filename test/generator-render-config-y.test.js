@@ -57,6 +57,7 @@ test('셀 표면 v1 은 version=1 을 강제하되 사용자 톤을 보존하고
     assert.equal(opts.tones, tone);
     assert.equal(opts.version, 1);
     assert.equal(opts.window, undefined);
+    assert.equal(opts.locatorArm, 'B');
     const encoded = encodeY('https://tl.estre.so', opts);
     assert.equal(encoded.cellSurface, true);
     assert.equal(encoded.tones, tone);

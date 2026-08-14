@@ -2307,6 +2307,9 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
       score: null,
       reason: cellSurface.reason || 'score-failed',
       profile: CELL_SURFACE_PROFILE_ID,
+      arm: null,
+      orientationGate: null,
+      ambiguous: false,
     };
   }
   const diag = cellSurface.diagnostics
@@ -2317,6 +2320,7 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
     : (cellSurface.scored && cellSurface.scored.best
       ? cellSurface.scored.best.agreement
       : null);
+  const arm = typeof diag.arm === 'string' ? diag.arm : (cellSurface.arm || null);
   return {
     n,
     orientation,
@@ -2325,7 +2329,11 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
     accepted: cellSurface.accepted === true,
     score: Number.isFinite(score) ? score : null,
     reason: cellSurface.accepted ? null : (diag.rejectReason || cellSurface.reason || 'rejected'),
-    profile: diag.profile || CELL_SURFACE_PROFILE_ID,
+    profile: diag.profile || (arm ? CELL_SURFACE_PROFILE_ID + '-' + arm : CELL_SURFACE_PROFILE_ID),
+    arm,
+    orientationGate: typeof diag.orientationGate === 'string' ? diag.orientationGate : null,
+    orientationGateApplied: diag.orientationGateApplied === true,
+    ambiguous: diag.ambiguous === true || cellSurface.ambiguous === true,
     orientationMargin: Number.isFinite(diag.orientationMargin) ? diag.orientationMargin : null,
   };
 }
@@ -2338,6 +2346,9 @@ function summarizeCellSurfaceProbe(options, geometryReports) {
       score: null,
       reason: null,
       profile: null,
+      arm: null,
+      orientationGate: null,
+      ambiguous: false,
     };
   }
   const reports = geometryReports.filter((entry) => entry.attempted === true);
@@ -2348,6 +2359,9 @@ function summarizeCellSurfaceProbe(options, geometryReports) {
       score: null,
       reason: 'no-geometry',
       profile: CELL_SURFACE_PROFILE_ID,
+      arm: null,
+      orientationGate: null,
+      ambiguous: false,
     };
   }
   let best = reports[0];
@@ -2368,6 +2382,10 @@ function summarizeCellSurfaceProbe(options, geometryReports) {
     score: Number.isFinite(best.score) ? best.score : null,
     reason: best.accepted ? null : (best.reason || 'rejected'),
     profile: best.profile || CELL_SURFACE_PROFILE_ID,
+    arm: typeof best.arm === 'string' ? best.arm : null,
+    orientationGate: typeof best.orientationGate === 'string' ? best.orientationGate : null,
+    orientationGateApplied: best.orientationGateApplied === true,
+    ambiguous: best.ambiguous === true,
   };
 }
 

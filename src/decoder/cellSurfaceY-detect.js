@@ -3,17 +3,23 @@
  *
  * 기하 후보는 기존 Type Y 실루엣/Y-심이 만든다. 이 모듈은 그 격자 위에
  * 61좌표 dark/bright 표본을 읽어 profile·면 위상·방향을 점수로 남긴다.
- * 면 순환 3상의 agreement 차로 orientation margin 을 재고, 선언된
- * minimumOrientationMargin 을 hard gate 로 쓴다. 오방향은 이상적 일치율이
- * 78% 를 넘겨도 거부한다.
+ * A(구 대칭)·B(신 비대칭) 기대를 둘 다 채점하고 더 높은 쪽을 택한다.
+ * B 는 면 순환 3상의 agreement 차로 orientation margin 을 재고 선언된
+ * minimumOrientationMargin 을 hard gate 로 쓴다. A 는 거의 대칭이라
+ * margin ≈ 0 이므로 그 게이트를 면제하되, 면제 사실을 진단에 남긴다.
  *
  * 모든 임계값은 합성 실험용 [미검증]이며 options.calibration 으로 덮을 수 있다.
  */
 
 import {
+  CELL_SURFACE_ARM_A,
+  CELL_SURFACE_ARM_B,
+  CELL_SURFACE_ARMS,
   CELL_SURFACE_N,
   CELL_SURFACE_PROFILE_ID,
   CELL_SURFACE_VERSION,
+  DEFAULT_CELL_SURFACE_ARM,
+  cellSurfaceProfileId,
   formatIndexCellSurface,
   locatorCellsCellSurface,
 } from '../cellSurfaceY.js';
@@ -38,8 +44,8 @@ function cellKey(i, j) {
   return i + ',' + j;
 }
 
-function remappedLocators(cycle) {
-  return locatorCellsCellSurface().map((cell) => ({
+function remappedLocators(cycle, arm) {
+  return locatorCellsCellSurface(arm).map((cell) => ({
     i: cell.i,
     j: cell.j,
     T: cell[cycle[0]],
@@ -188,23 +194,11 @@ function scoreMappedSamples(samples, cfg, locators) {
   };
 }
 
-/**
- * 이미 샘플된 61셀에 대해 3개 면 위상을 점수화한다.
- */
-export function scoreCellSurfaceSamples(samples, options = {}) {
-  const cfg = calibration(options);
-  if (!Array.isArray(samples) || samples.length !== locatorCellsCellSurface().length) {
-    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
-      stage: 'cell-surface',
-      cause: 'sample-count',
-      count: samples && samples.length,
-    });
-  }
-
+function scoreOneArm(samples, cfg, arm) {
   const phases = FACE_CYCLES.map((cycle, phase) => ({
     phase,
     cycle,
-    ...scoreMappedSamples(samples, cfg, remappedLocators(cycle)),
+    ...scoreMappedSamples(samples, cfg, remappedLocators(cycle, arm)),
   }));
   const ranked = phases.slice().sort((left, right) =>
     right.agreement - left.agreement || left.phase - right.phase);
@@ -213,27 +207,39 @@ export function scoreCellSurfaceSamples(samples, options = {}) {
   const orientationMargin = claimed.agreement - (rival ? rival.agreement : 0);
   const orientationOk = ranked[0].phase === 0
     && orientationMargin >= cfg.minimumOrientationMargin;
-  const accepted = claimed.accepted && orientationOk;
+  // A 는 거의 대칭이라 margin ≈ 0. 게이트를 그대로 쓰면 A/B 가
+  // 「A 가 고장났다」만 측정한다. 면제는 팔=톤과 별도 축으로 남긴다.
+  const orientationGate = arm === CELL_SURFACE_ARM_A ? 'waived' : 'applied';
+  const orientationGateApplied = orientationGate === 'applied';
+  const accepted = claimed.accepted
+    && (orientationGateApplied ? orientationOk : true);
   let rejectReason = null;
   if (!accepted) {
     if (!claimed.enoughSamples) rejectReason = 'sample-count';
     else if (!claimed.toneSeparation) rejectReason = 'tone-separation';
     else if (claimed.agreement < cfg.minimumAgreement) rejectReason = 'below-agreement';
-    else if (!orientationOk) rejectReason = 'orientation-margin';
+    else if (orientationGateApplied && !orientationOk) rejectReason = 'orientation-margin';
     else rejectReason = 'rejected';
   }
-  const best = { ...claimed, accepted };
-
-  return ok({
+  const profile = cellSurfaceProfileId(arm);
+  return {
+    arm,
+    profile,
     accepted,
-    best,
+    best: { ...claimed, accepted, arm, profile },
     phases,
     orientationMargin,
+    orientationOk,
+    orientationGate,
+    orientationGateApplied,
     diagnostics: {
-      profile: CELL_SURFACE_PROFILE_ID,
+      profile,
+      arm,
       accepted,
       agreement: claimed.agreement,
       orientationMargin,
+      orientationGate,
+      orientationGateApplied,
       phase: 0,
       cycle: claimed.cycle,
       rivalPhase: rival ? rival.phase : null,
@@ -245,6 +251,100 @@ export function scoreCellSurfaceSamples(samples, options = {}) {
       enoughSamples: claimed.enoughSamples,
       toneSeparation: claimed.toneSeparation,
     },
+  };
+}
+
+function pickBetterArm(left, right) {
+  if (left.accepted !== right.accepted) return left.accepted ? left : right;
+  const leftScore = left.best && left.best.agreement;
+  const rightScore = right.best && right.best.agreement;
+  if (leftScore !== rightScore) {
+    if (!Number.isFinite(leftScore)) return right;
+    if (!Number.isFinite(rightScore)) return left;
+    return leftScore >= rightScore ? left : right;
+  }
+  return left.arm === DEFAULT_CELL_SURFACE_ARM ? left : right;
+}
+
+/**
+ * 이미 샘플된 61셀에 대해 A·B 기대 패턴과 3개 면 위상을 점수화한다.
+ * 둘 다 맞으면 더 높은 agreement 쪽을 택하고 ambiguous 를 남긴다.
+ */
+export function scoreCellSurfaceSamples(samples, options = {}) {
+  const cfg = calibration(options);
+  if (!Array.isArray(samples) || samples.length !== locatorCellsCellSurface().length) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'cell-surface',
+      cause: 'sample-count',
+      count: samples && samples.length,
+    });
+  }
+
+  const requestedArm = options.locatorArm == null || options.locatorArm === ''
+    ? null
+    : options.locatorArm;
+  if (requestedArm !== null && requestedArm !== CELL_SURFACE_ARM_A
+    && requestedArm !== CELL_SURFACE_ARM_B) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'cell-surface',
+      cause: 'unknown-arm',
+      locatorArm: requestedArm,
+    });
+  }
+  const tryArms = requestedArm ? [requestedArm] : CELL_SURFACE_ARMS;
+  const arms = {};
+  for (const arm of tryArms) {
+    arms[arm] = scoreOneArm(samples, cfg, arm);
+  }
+  const scoredA = arms[CELL_SURFACE_ARM_A] || null;
+  const scoredB = arms[CELL_SURFACE_ARM_B] || null;
+  const chosen = scoredA && scoredB
+    ? pickBetterArm(scoredA, scoredB)
+    : (scoredA || scoredB);
+  const bothAccepted = Boolean(scoredA && scoredB && scoredA.accepted && scoredB.accepted);
+  const ambiguous = bothAccepted;
+  const accepted = chosen.accepted;
+  const diagnostics = {
+    ...chosen.diagnostics,
+    profile: chosen.profile,
+    arm: chosen.arm,
+    ambiguous,
+    arms: {
+      A: scoredA ? {
+        accepted: scoredA.accepted,
+        agreement: scoredA.best.agreement,
+        orientationMargin: scoredA.orientationMargin,
+        orientationGate: scoredA.orientationGate,
+        rejectReason: scoredA.diagnostics.rejectReason,
+        profile: scoredA.profile,
+      } : null,
+      B: scoredB ? {
+        accepted: scoredB.accepted,
+        agreement: scoredB.best.agreement,
+        orientationMargin: scoredB.orientationMargin,
+        orientationGate: scoredB.orientationGate,
+        rejectReason: scoredB.diagnostics.rejectReason,
+        profile: scoredB.profile,
+      } : null,
+    },
+  };
+  if (ambiguous) diagnostics.rejectReason = null;
+  else if (!accepted && chosen.diagnostics.rejectReason) {
+    diagnostics.rejectReason = chosen.diagnostics.rejectReason;
+  }
+
+  return ok({
+    accepted,
+    best: chosen.best,
+    phases: chosen.phases,
+    orientationMargin: chosen.orientationMargin,
+    orientationGate: chosen.orientationGate,
+    orientationGateApplied: chosen.orientationGateApplied,
+    arm: chosen.arm,
+    profile: chosen.profile,
+    ambiguous,
+    arms,
+    diagnostics,
   });
 }
 
@@ -262,6 +362,7 @@ function calibrationForTones(best, scored, tones) {
       all: scored.accepted,
     },
     source: CELL_SURFACE_PROFILE_ID,
+    locatorArm: best.arm || DEFAULT_CELL_SURFACE_ARM,
   };
   if (tones === 2) {
     const thresholds = {};
@@ -291,6 +392,7 @@ function hypothesisPatchForTones(best, scored, samples, tones) {
   return {
     cellSurface: true,
     locatorProfile: CELL_SURFACE_PROFILE_ID,
+    locatorArm: scored.arm || best.arm || DEFAULT_CELL_SURFACE_ARM,
     locatorRoute: 'cell-surface',
     source: 'locator-cell-surface-v1',
     version: CELL_SURFACE_VERSION,
@@ -302,6 +404,9 @@ function hypothesisPatchForTones(best, scored, samples, tones) {
     faceCycle: best.cycle,
     cellSurfaceScore: best.agreement,
     orientationMargin: scored.orientationMargin,
+    orientationGate: scored.orientationGate || 'applied',
+    orientationGateApplied: scored.orientationGateApplied !== false,
+    cellSurfaceAmbiguous: scored.ambiguous === true,
     referenceCalibration: calibrationForTones(best, scored, tones),
     referenceSamples: new Map(samples.map((sample) => [cellKey(sample.i, sample.j), sample])),
     referenceAgreement: best.agreement,

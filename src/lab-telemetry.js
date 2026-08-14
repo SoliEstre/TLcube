@@ -28,10 +28,11 @@ export const CHAIN_STAGES = Object.freeze([
 ]);
 export const CONFIG_SIDE_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile',
+  'locatorArm',
 ]);
 export const GEN_BODY_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'bgMode', 'quietMode',
-  'locatorProfile',
+  'locatorProfile', 'locatorArm',
 ]);
 
 /** `/lab` 또는 `/lab/…` 만 시험판. `/label` 같은 접두 오탐을 막는다. */
@@ -206,6 +207,7 @@ export function emptyConfigSide() {
     finderPatternId: null,
     qrPosition: null,
     locatorProfile: null,
+    locatorArm: null,
   };
 }
 
@@ -252,6 +254,9 @@ export function observedFromResult(result) {
     out.locatorProfile = hyp.locatorProfile;
   } else if (hyp && typeof hyp.source === 'string' && hyp.source.startsWith('locator-')) {
     out.locatorProfile = hyp.source.slice('locator-'.length);
+  }
+  if (hyp && typeof hyp.locatorArm === 'string' && hyp.locatorArm) {
+    out.locatorArm = hyp.locatorArm;
   }
   return out;
 }
@@ -580,6 +585,11 @@ export function emptyCellSurfaceProbe() {
     score: null,
     reason: null,
     profile: null,
+    arm: null,
+    expectedArm: null,
+    orientationGate: null,
+    orientationGateApplied: null,
+    ambiguous: false,
   };
 }
 
@@ -656,6 +666,14 @@ export function extractCellSurfaceProbe(result) {
     score: Number.isFinite(score) ? score : null,
     reason: typeof best.reason === 'string' && best.reason ? best.reason : null,
     profile: typeof best.profile === 'string' ? best.profile : null,
+    arm: typeof best.arm === 'string' && best.arm ? best.arm : null,
+    expectedArm: typeof best.expectedArm === 'string' && best.expectedArm ? best.expectedArm : null,
+    orientationGate: typeof best.orientationGate === 'string' && best.orientationGate
+      ? best.orientationGate : null,
+    orientationGateApplied: best.orientationGateApplied === true
+      ? true
+      : best.orientationGateApplied === false ? false : null,
+    ambiguous: best.ambiguous === true,
   };
 }
 
@@ -669,6 +687,14 @@ function normalizeCellSurfaceProbe(src) {
     score: score == null ? null : score,
     reason: typeof src.reason === 'string' && src.reason ? src.reason : null,
     profile: typeof src.profile === 'string' && src.profile ? src.profile : null,
+    arm: typeof src.arm === 'string' && src.arm ? src.arm : null,
+    expectedArm: typeof src.expectedArm === 'string' && src.expectedArm ? src.expectedArm : null,
+    orientationGate: typeof src.orientationGate === 'string' && src.orientationGate
+      ? src.orientationGate : null,
+    orientationGateApplied: src.orientationGateApplied === true
+      ? true
+      : src.orientationGateApplied === false ? false : null,
+    ambiguous: src.ambiguous === true,
   };
 }
 
@@ -943,8 +969,18 @@ export function normalizeFrameBody(body) {
     observed: normalizeConfigSide(src.observed),
     chain: normalizeCauseChain(src.chain),
     geometry,
-    cellSurface: normalizeCellSurfaceProbe(src.cellSurface),
+    cellSurface: mergeExpectedArmIntoProbe(
+      normalizeCellSurfaceProbe(src.cellSurface),
+      src.expected,
+    ),
   };
+}
+
+function mergeExpectedArmIntoProbe(probe, expected) {
+  if (!probe || probe.expectedArm) return probe;
+  const arm = expected && typeof expected.locatorArm === 'string' ? expected.locatorArm : null;
+  if (!arm) return probe;
+  return { ...probe, expectedArm: arm };
 }
 
 export function normalizeGenBody(body) {

@@ -66,7 +66,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-14.03';
+export const SCANNER_BUILD = '2026-08-15.01';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -224,6 +224,11 @@ function reportLabFrame(imageData, result, ms, stage) {
   const geometry = extractGeometry(result, imageData.width, imageData.height);
   const cellSurface = extractCellSurfaceProbe(result);
   const observed = observedFromResult(result);
+  const expected = emptyConfigSide();
+  if (expectedLocatorArm) expected.locatorArm = expectedLocatorArm;
+  if (cellSurface && expectedLocatorArm && !cellSurface.expectedArm) {
+    cellSurface.expectedArm = expectedLocatorArm;
+  }
   const reason = ok ? '' : ((result && result.reason) || 'decode-failed');
   try {
     lab.frame({
@@ -239,7 +244,7 @@ function reportLabFrame(imageData, result, ms, stage) {
       cellPx: geometry.cellPx,
       attempt_id: attemptId || null,
       config_id: null,
-      expected: emptyConfigSide(),
+      expected,
       observed,
       chain,
       geometry,
@@ -1283,6 +1288,20 @@ if (!isLabPath()) {
 
 const labNotice = document.getElementById('lab-notice');
 if (labNotice && isLabPath()) labNotice.hidden = false;
+
+let expectedLocatorArm = null;
+const expectedArmRoot = document.getElementById('lab-expected-arm');
+if (expectedArmRoot && isLabPath()) {
+  for (const button of expectedArmRoot.querySelectorAll('[data-expected-arm]')) {
+    button.addEventListener('click', () => {
+      const next = button.dataset.expectedArm;
+      expectedLocatorArm = next === 'A' || next === 'B' ? next : null;
+      for (const other of expectedArmRoot.querySelectorAll('[data-expected-arm]')) {
+        other.classList.toggle('active', other === button);
+      }
+    });
+  }
+}
 gateChooseImageButton.addEventListener('click', openImagePicker);
 imageInput.addEventListener('change', () => {
   void decodeImageFile(imageInput.files && imageInput.files[0]);

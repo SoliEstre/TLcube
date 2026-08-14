@@ -1054,6 +1054,18 @@
             <span data-i18n="g542">셀 표면 v1</span>
           </div>
         </div>
+        <div id="yLocatorArmSection" hidden>
+          <label class="section-heading" data-i18n="g543">로케이터 팔</label>
+          <div class="card-row" id="yLocatorArmCards">
+            <div class="toggle-card" data-locator-arm="A">
+              <span data-i18n="g544">A (구·대칭)</span>
+            </div>
+            <div class="toggle-card active" data-locator-arm="B">
+              <span data-i18n="g545">B (신·비대칭)</span>
+            </div>
+          </div>
+          <p class="hint" id="yLocatorArmHint" data-i18n="g546">A는 변경 전 대칭 톤, B는 지금 쓰는 비대칭 톤입니다. 기본은 B입니다.</p>
+        </div>
         <p class="hint" id="yLocatorHint" data-i18n="g518">실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.</p>
       </div>
 
@@ -1429,6 +1441,10 @@ const GENERATOR_STRINGS = {
     "g520": "육각 바깥에 이중 테두리와 가운데 허브를 더해요. 검출 실험용이며 성능을 약속하지 않아요.",
     "g542": "셀 표면 v1",
     "g541": "Y1/Y1T(n=21) 공용 시험판입니다. 셀 표면에 코너 패턴을 그립니다. 데이터 톤(2/3)은 그대로 씁니다. 성능을 보장하지 않아요.",
+    "g543": "로케이터 팔",
+    "g544": "A (구·대칭)",
+    "g545": "B (신·비대칭)",
+    "g546": "A는 변경 전 대칭 톤, B는 지금 쓰는 비대칭 톤입니다. 기본은 B입니다.",
     "g521": "Y타입 셀 편집기",
     "g522": "한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
     "g523": "톤 편집",
@@ -1671,6 +1687,10 @@ const GENERATOR_STRINGS = {
     "g520": "Adds a double hex border and a centre hub. For detection experiments only; performance is not promised.",
     "g542": "Cell surface v1",
     "g541": "Shared Y1/Y1T (n=21) trial. Paints a corner pattern on the cell faces. Keeps the selected 2- or 3-tone data mode. Does not guarantee performance.",
+    "g543": "Locator arm",
+    "g544": "A (old, symmetric)",
+    "g545": "B (new, asymmetric)",
+    "g546": "A is the pre-change symmetric tone. B is the current asymmetric tone. Default is B.",
     "g521": "Type Y cell editor",
     "g522": "Painting one face excludes that (i,j) data triple on T, L, and R. Edits are not applied to the current code output.",
     "g523": "Tone edit",
@@ -1913,6 +1933,10 @@ const GENERATOR_STRINGS = {
     "g520": "六角の外側に二重枠と中央ハブを足します。検出実験用で、性能は約束しません。",
     "g542": "セル表面 v1",
     "g541": "Y1/Y1T（n=21）共用の試験版です。セル表面にコーナーパターンを描きます。データの2/3トーンはそのまま使います。性能は保証しません。",
+    "g543": "ロケーターアーム",
+    "g544": "A（旧・対称）",
+    "g545": "B（新・非対称）",
+    "g546": "Aは変更前の対称トーン、Bは現在の非対称トーンです。既定は B です。",
     "g521": "Yタイプセル編集",
     "g522": "1面だけ塗っても、その座標 (i,j) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
     "g523": "トーン編集",
@@ -1996,6 +2020,11 @@ import {
   LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_OFF,
 } from './src/locatorY.js';
 import {
+  CELL_SURFACE_ARM_A,
+  CELL_SURFACE_ARM_B,
+  DEFAULT_CELL_SURFACE_ARM,
+} from './src/cellSurfaceY.js';
+import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   createGeneratorState, resolutionTierForVersion, transitionGeneratorMode,
   versionForResolutionTier, versionStateKey,
@@ -2055,6 +2084,8 @@ const els = {
   finderExperimentalWarning: $('finderExperimentalWarning'),
   yLocatorSection: $('yLocatorSection'), yLocatorCards: $('yLocatorCards'),
   yLocatorHint: $('yLocatorHint'),
+  yLocatorArmSection: $('yLocatorArmSection'), yLocatorArmCards: $('yLocatorArmCards'),
+  yLocatorArmHint: $('yLocatorArmHint'),
   yCellEditorSection: $('yCellEditorSection'), yCellEditorModeCards: $('yCellEditorModeCards'),
   yCellEditorModeHint: $('yCellEditorModeHint'), yCellEditorViewport: $('yCellEditorViewport'),
   yCellEditorSvg: $('yCellEditorSvg'), yCellEditorStatus: $('yCellEditorStatus'),
@@ -3228,6 +3259,18 @@ if (els.yLocatorCards) {
     });
   }
 }
+if (els.yLocatorArmCards) {
+  for (const card of els.yLocatorArmCards.children) {
+    card.addEventListener('click', () => {
+      const next = card.dataset.locatorArm;
+      if (next === CELL_SURFACE_ARM_A || next === CELL_SURFACE_ARM_B) {
+        generatorState.locatorArmY = next;
+      }
+      syncYLocatorUi();
+      schedule();
+    });
+  }
+}
 
 const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
 let yCellEditorWired = false;
@@ -3902,6 +3945,19 @@ function syncYLocatorUi() {
         ? t('g520')
         : t('g519');
   }
+  const armSection = els.yLocatorArmSection;
+  if (armSection) {
+    const showArm = show && profile === LOCATOR_PROFILE_CELL_SURFACE_V1;
+    armSection.hidden = !showArm;
+    const arm = generatorState.locatorArmY === CELL_SURFACE_ARM_A
+      ? CELL_SURFACE_ARM_A
+      : DEFAULT_CELL_SURFACE_ARM;
+    if (els.yLocatorArmCards) {
+      for (const card of els.yLocatorArmCards.children) {
+        card.classList.toggle('active', card.dataset.locatorArm === arm);
+      }
+    }
+  }
 }
 
 els.codeType.addEventListener('change', () => {
@@ -4102,6 +4158,7 @@ function encodeOptsFor(cfg) {
         versionY: cfg.versionY,
         fallback: cfg.fallback,
         locatorProfileY: generatorState.locatorProfileY,
+        locatorArmY: generatorState.locatorArmY,
       }),
     };
   }
@@ -4356,6 +4413,9 @@ function emitLabGen(result, cfg) {
     bgMode: generatorState.bgMode,
     quietMode: generatorState.quietMode,
     locatorProfile: generatorState.locatorProfileY || LOCATOR_PROFILE_OFF,
+    locatorArm: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1
+      ? (generatorState.locatorArmY || DEFAULT_CELL_SURFACE_ARM)
+      : undefined,
   };
   const sig = JSON.stringify(body);
   if (sig === lastLabGen) return;

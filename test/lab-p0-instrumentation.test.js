@@ -28,6 +28,7 @@ import {
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SQL = readFileSync(ROOT + 'relay/schema.sql', 'utf8');
 const MIG = readFileSync(ROOT + 'deploy/estre-so/clickhouse/002_tl_lab_p0_instrumentation.sql', 'utf8');
+const MIG_AB = readFileSync(ROOT + 'deploy/estre-so/clickhouse/003_tl_lab_cellsurface_ab.sql', 'utf8');
 
 function memoryStore() {
   const map = new Map();
@@ -129,7 +130,7 @@ test('config ID 는 결정적이고 expected/observed 미상은 null', () => {
     expected: emptyConfigSide(),
     observed: observedFromResult({ ok: false, reason: 'frontend:no-finder' }),
   });
-  for (const key of ['type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile']) {
+  for (const key of ['type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile', 'locatorArm']) {
     assert.equal(frame.expected[key], null);
     assert.equal(frame.observed[key], null);
   }
@@ -357,6 +358,14 @@ test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다',
   assert.match(SQL, /cell_px\s+Nullable/);
   assert.match(SQL, /cs_attempted\s+UInt8/);
   assert.match(MIG, /ADD COLUMN IF NOT EXISTS cs_attempted/);
+  assert.match(SQL, /cs_arm\s+LowCardinality/);
+  assert.match(SQL, /expected_locator_arm\s+LowCardinality/);
+  assert.match(SQL, /observed_locator_arm\s+LowCardinality/);
+  assert.match(MIG_AB, /ADD COLUMN IF NOT EXISTS cs_arm/);
+  assert.match(MIG_AB, /ADD COLUMN IF NOT EXISTS expected_locator_arm/);
+  assert.match(MIG_AB, /ADD COLUMN IF NOT EXISTS cs_orientation_gate/);
+  assert.match(MIG_AB, /ADD COLUMN IF NOT EXISTS cs_ambiguous/);
+  assert.doesNotMatch(MIG_AB, /^clickhouse-client/m);
 });
 
 test('decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다', () => {

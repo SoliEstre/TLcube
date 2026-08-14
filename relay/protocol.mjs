@@ -130,6 +130,21 @@ export function validateFrameBody(body) {
     }
     if (!isNullableString(body.cellSurface.reason)) return 'frame.cellSurface.reason';
     if (!isNullableString(body.cellSurface.profile)) return 'frame.cellSurface.profile';
+    if (!isNullableString(body.cellSurface.arm)) return 'frame.cellSurface.arm';
+    if (!isNullableString(body.cellSurface.expectedArm)) return 'frame.cellSurface.expectedArm';
+    if (!isNullableString(body.cellSurface.orientationGate)) {
+      return 'frame.cellSurface.orientationGate';
+    }
+    if (body.cellSurface.orientationGateApplied !== undefined
+      && body.cellSurface.orientationGateApplied !== null
+      && typeof body.cellSurface.orientationGateApplied !== 'boolean') {
+      return 'frame.cellSurface.orientationGateApplied';
+    }
+    if (body.cellSurface.ambiguous !== undefined
+      && body.cellSurface.ambiguous !== null
+      && typeof body.cellSurface.ambiguous !== 'boolean') {
+      return 'frame.cellSurface.ambiguous';
+    }
   }
   return null;
 }
@@ -227,12 +242,16 @@ export function eventRow(event) {
     expected_tones: configSideNum(expected, 'tones'),
     expected_finder: configSide(expected, 'finderPatternId'),
     expected_qr: configSide(expected, 'qrPosition'),
+    expected_locator: configSide(expected, 'locatorProfile'),
+    expected_locator_arm: configSide(expected, 'locatorArm'),
     observed_type: configSide(observed, 'type'),
     observed_version: observed.version == null ? '' : String(observed.version),
     observed_ecc: configSide(observed, 'ecc'),
     observed_tones: configSideNum(observed, 'tones'),
     observed_finder: configSide(observed, 'finderPatternId'),
     observed_qr: configSide(observed, 'qrPosition'),
+    observed_locator: configSide(observed, 'locatorProfile'),
+    observed_locator_arm: configSide(observed, 'locatorArm'),
     chain_json: Object.keys(chain).length ? JSON.stringify(chain) : '',
     chain_failed: chain.failed == null ? '' : String(chain.failed),
     bbox_x: geometryField(body, 'bbox_x'),
@@ -249,6 +268,11 @@ export function eventRow(event) {
     cs_score: cellSurfaceScore(body),
     cs_reason: cellSurfaceString(body, 'reason'),
     cs_profile: cellSurfaceString(body, 'profile'),
+    cs_arm: cellSurfaceString(body, 'arm'),
+    cs_expected_arm: cellSurfaceString(body, 'expectedArm'),
+    cs_orientation_gate: cellSurfaceString(body, 'orientationGate'),
+    cs_orientation_gate_applied: cellSurfaceFlag(body, 'orientationGateApplied'),
+    cs_ambiguous: cellSurfaceFlag(body, 'ambiguous'),
     body: JSON.stringify(body),
   };
 }

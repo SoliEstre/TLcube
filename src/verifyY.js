@@ -180,7 +180,7 @@ export function estimateFaceGains(raster, scene, encoded, options = {}) {
   for (const face of YFACES) {
     const pairs = [];
     if (encoded.cellSurface === true) {
-      for (const cell of locatorCellsCellSurface()) {
+      for (const cell of locatorCellsCellSurface(encoded.locatorArm)) {
         const yKnown = yLevels[cell[face]];
         const yObs = measureModuleMedian(raster, scene, face, cell.i, cell.j);
         pairs.push({ i: cell.i, j: cell.j, yKnown, yObs });
@@ -297,7 +297,7 @@ export function estimateFaceThetas(raster, scene, encoded, gains) {
     const lows = [];
     const highs = [];
     if (encoded.cellSurface === true) {
-      for (const cell of locatorCellsCellSurface()) {
+      for (const cell of locatorCellsCellSurface(encoded.locatorArm)) {
         const yObs = measureModuleMedian(raster, scene, face, cell.i, cell.j);
         const g = gains[face];
         const normalized = Number.isFinite(g) && g > 0 ? yObs / g : yObs;

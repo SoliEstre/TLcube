@@ -106,6 +106,10 @@ export const SCANNER_STRINGS = {
 
     'lab.notice.title': '시험판입니다',
     'lab.notice.body': '이 주소는 시험판입니다. 기기·카메라 정보와 축소 이미지(실패·성공 직전·성공의 층화 표본)가 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 프레임을 기기 안에서만 처리합니다.',
+    'lab.expectedArm.label': '기대 로케이터 팔',
+    'lab.expectedArm.unknown': '모름',
+    'lab.expectedArm.a': 'A (구)',
+    'lab.expectedArm.b': 'B (신)',
   },
 
   en: {
@@ -199,6 +203,10 @@ export const SCANNER_STRINGS = {
 
     'lab.notice.title': 'This is the lab build',
     'lab.notice.body': 'This is the lab scanner. Device and camera details, and shrunken frame images (stratified samples of failures, the frame before success, and success), are sent in real time. Payload contents are not sent. The stable scanner processes frames only on the device.',
+    'lab.expectedArm.label': 'Expected locator arm',
+    'lab.expectedArm.unknown': 'Unknown',
+    'lab.expectedArm.a': 'A (old)',
+    'lab.expectedArm.b': 'B (new)',
   },
 
   ja: {
@@ -292,5 +300,9 @@ export const SCANNER_STRINGS = {
 
     'lab.notice.title': '試用版です',
     'lab.notice.body': 'このアドレスは試用版です。端末・カメラ情報と、フレームの縮小画像（失敗・成功直前・成功の層化標本）がリアルタイムで送信されます。ペイロードの内容は送りません。安定版はフレームを端末の中だけで処理します。',
+    'lab.expectedArm.label': '期待ロケーターアーム',
+    'lab.expectedArm.unknown': '不明',
+    'lab.expectedArm.a': 'A（旧）',
+    'lab.expectedArm.b': 'B（新）',
   },
 };

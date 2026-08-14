@@ -45,9 +45,10 @@ function renderSurface(text, {
   pixelsPerUnit = 10,
   supersample = 2,
   margin = 16,
+  locatorArm,
 } = {}) {
   const encoded = encodeY(text, {
-    version: 1, tones, eccLevel, cellSurface: true,
+    version: 1, tones, eccLevel, cellSurface: true, locatorArm,
   });
   const scene = buildSceneY(encoded, {
     palette: PALETTE,
@@ -169,6 +170,7 @@ test('Y1-CS / Y1T-CS cell-surface-v1 가 https://tl.estre.so 를 각자 왕복�
     assert.equal(result.versionName, tones === 3 ? 'Y1T-CS' : 'Y1-CS');
     assert.equal(result.hypothesis.cellSurface, true);
     assert.equal(result.hypothesis.locatorProfile, 'cell-surface-v1');
+    assert.equal(result.hypothesis.locatorArm, 'B');
     assert.equal(result.hypothesis.tones, tones);
     assert.equal(result.diagnostics.format.formatIndex, tones === 3 ? 14 : 12);
 
@@ -331,7 +333,11 @@ function idealLocatorSamples(cycle = ['T', 'L', 'R']) {
 }
 
 test('방향 게이트 — 정방향은 수용, 오방향은 78% 를 넘겨도 거부', () => {
-  const correct = scoreCellSurfaceSamples(idealLocatorSamples(['T', 'L', 'R']));
+  // B 팔만. 이중 시도는 A 면제 때문에 오방향 B 표본을 A 로 받을 수 있어
+  // 이 테스트는 게이트 계약 그대로 B 에 고정한다.
+  const correct = scoreCellSurfaceSamples(idealLocatorSamples(['T', 'L', 'R']), {
+    locatorArm: 'B',
+  });
   assert.equal(correct.ok, true);
   assert.equal(correct.accepted, true);
   assert.ok(correct.best.agreement >= UNVERIFIED_CELL_SURFACE_Y.minimumAgreement);
@@ -341,7 +347,7 @@ test('방향 게이트 — 정방향은 수용, 오방향은 78% 를 넘겨도 �
   if (correct.accepted) rates.correct += 1;
 
   for (const cycle of [['L', 'R', 'T'], ['R', 'T', 'L']]) {
-    const wrong = scoreCellSurfaceSamples(idealLocatorSamples(cycle));
+    const wrong = scoreCellSurfaceSamples(idealLocatorSamples(cycle), { locatorArm: 'B' });
     assert.equal(wrong.ok, true);
     assert.ok(
       wrong.best.agreement >= UNVERIFIED_CELL_SURFACE_Y.minimumAgreement,

@@ -122,7 +122,9 @@ test('frame.cellSurface 는 선택이고 시도/점수/사유를 행으로 편�
   const ok = validateEnvelope(envelope({
     body: frameBody({
       cellSurface: {
-        attempted: true, accepted: false, score: 0.4, reason: 'below-threshold', profile: 'cell-surface-v1',
+        attempted: true, accepted: false, score: 0.4, reason: 'below-threshold',
+        profile: 'cell-surface-v1-B', arm: 'B', expectedArm: 'A',
+        orientationGate: 'applied', orientationGateApplied: true, ambiguous: false,
       },
     }),
   }));
@@ -132,7 +134,12 @@ test('frame.cellSurface 는 선택이고 시도/점수/사유를 행으로 편�
   assert.equal(row.cs_accepted, 0);
   assert.equal(row.cs_score, 0.4);
   assert.equal(row.cs_reason, 'below-threshold');
-  assert.equal(row.cs_profile, 'cell-surface-v1');
+  assert.equal(row.cs_profile, 'cell-surface-v1-B');
+  assert.equal(row.cs_arm, 'B');
+  assert.equal(row.cs_expected_arm, 'A');
+  assert.equal(row.cs_orientation_gate, 'applied');
+  assert.equal(row.cs_orientation_gate_applied, 1);
+  assert.equal(row.cs_ambiguous, 0);
   const missing = eventRow(envelope({ body: frameBody() }));
   assert.equal(missing.cs_attempted, 0);
   assert.equal(missing.cs_score, null);

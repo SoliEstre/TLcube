@@ -368,7 +368,7 @@ export function buildSceneY(encoded, options) {
       if (entry === undefined) continue;
       if (cellSurface && entry.role === 'locator') {
         for (const face of YFACES) {
-          const levelIndex = locatorTone(face, i, j);
+          const levelIndex = locatorTone(face, i, j, encoded.locatorArm);
           shapes.push({
             kind: 'polygon',
             points: moduleQuad(face, i, j, layout),
