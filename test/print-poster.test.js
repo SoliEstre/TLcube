@@ -167,6 +167,9 @@ test('영어 카피에 금지 주장·CTA 가 없고 좌→우 라벨이 있다'
   assert.match(POSTER, />Familiar by design\.</);
   assert.match(POSTER, />Designed to live with your work\.</);
   assert.match(POSTER, />ONE LINK<strong>CHOOSE<br>YOUR WAY<\/strong>/);
+  assert.match(POSTER, /\.card\s*\{[\s\S]*?z-index:\s*0/);
+  assert.match(POSTER, /\.choice\s*\{[\s\S]*?z-index:\s*2/);
+  assert.match(POSTER, /\.choice-copy\s*\{[\s\S]*?z-index:\s*1/);
   assert.doesNotMatch(POSTER, />then</i);
   assert.match(POSTER, /<div class="dimension">2D<\/div>/);
   assert.match(POSTER, /<div class="dimension">2\.5D<\/div>/);

@@ -218,6 +218,7 @@ export function buildPrintPosterHtml() {
   }
   .card {
     position: relative;
+    z-index: 0;
     display: flex;
     min-width: 0;
     min-height: 112mm;
@@ -315,6 +316,8 @@ export function buildPrintPosterHtml() {
     text-transform: uppercase;
   }
   .choice {
+    position: relative;
+    z-index: 2;
     display: flex;
     min-width: 0;
     flex-direction: column;
@@ -332,6 +335,8 @@ export function buildPrintPosterHtml() {
     background: linear-gradient(var(--pink), var(--violet), var(--cyan));
   }
   .choice-copy {
+    position: relative;
+    z-index: 1;
     display: block;
     margin: 4mm -3mm;
     font-size: 7.5pt;
