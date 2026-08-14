@@ -2,11 +2,12 @@
 
 Standalone A4 sheet for a short left-to-right scan video.
 
-## File
+## Files
 
-`print/tlcube-poster.html`
+- Color: `print/tlcube-poster.html`
+- Black-and-white: `print/tlcube-poster-bw.html`
 
-Regenerate (does **not** touch `dist/` or lab bundles):
+Regenerate both files (does **not** touch `dist/` or lab bundles):
 
 ```bash
 node tools/build-print-poster.mjs
@@ -23,6 +24,10 @@ node tools/dev-server.mjs
 
 then `http://localhost:8765/print/tlcube-poster.html`
 
+Black-and-white preview:
+
+`http://localhost:8765/print/tlcube-poster-bw.html`
+
 ## Print
 
 - Paper: A4 portrait.
@@ -30,6 +35,8 @@ then `http://localhost:8765/print/tlcube-poster.html`
 - Enable **background graphics** / print backgrounds so the modules stay black.
 - Confirm both codes stay the same on-paper size (`--symbol-box: 45mm`). The
   original 68mm box was reduced by roughly one third, not reduced to one third.
+- For a monochrome printer, use `tlcube-poster-bw.html`. Its decoration uses
+  line weight, hatching, and grayscale instead of relying on hue.
 
 ## Payload and format
 
@@ -41,6 +48,9 @@ then `http://localhost:8765/print/tlcube-poster.html`
 
 The poster intentionally uses a magenta Y0 3-tone palette for the requested
 visual comparison; the QR card carries the contrasting blue/cyan accents.
+The black-and-white companion uses 24/112/206 neutral RGB levels for the same
+Y0T contract so all three tones survive grayscale printing without color
+conversion ambiguity.
 Existing field evidence still shows a Type Y **3-tone** real-photo limitation,
 so decode the actual color print before filming; this poster change does not
 claim or implement a scanner fix.

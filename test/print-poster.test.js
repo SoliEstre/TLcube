@@ -11,6 +11,7 @@ import { decodeFrontend } from '../src/decoder/frontend.js';
 import { rasterize } from '../src/raster.js';
 import { qrV2ByteMatrix } from '../src/qr-v2-byte.js';
 import {
+  POSTER_BW_REL,
   POSTER_REL,
   POSTER_TL_ECC,
   POSTER_TL_TONES,
@@ -18,16 +19,19 @@ import {
   POSTER_TL_VERSION,
   POSTER_URL,
   PRINT_PALETTE,
+  PRINT_PALETTE_BW,
   QR_QUIET_MODULES,
   SYMBOL_BOX_CLASS,
   SYMBOL_BOX_MM,
   SYMBOL_BOX_TOKEN,
+  buildPrintPosterBwHtml,
   buildPrintPosterHtml,
 } from '../tools/build-print-poster.mjs';
 import { decodeQrV2Byte, modulesFromQrSvg } from './harness/qr-v2-byte-decode.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const POSTER = readFileSync(ROOT + POSTER_REL, 'utf8');
+const POSTER_BW = readFileSync(ROOT + POSTER_BW_REL, 'utf8');
 
 function extractBox(html, id) {
   const start = html.indexOf(`id="${id}"`);
@@ -87,6 +91,8 @@ function sceneFromSvg(svg) {
 
 test('커밋된 포스터와 빌더 출력이 같다', () => {
   assert.equal(POSTER, buildPrintPosterHtml());
+  assert.equal(POSTER_BW, buildPrintPosterBwHtml());
+  assert.throws(() => buildPrintPosterHtml({ variant: 'unknown' }), /알 수 없는 포스터 변형/);
 });
 
 test('인라인 QR 을 v2 바이트 디코더로 읽으면 POSTER_URL 과 엄격히 같다', () => {
@@ -125,6 +131,26 @@ test('인라인 TLcube 를 기존 디코더로 읽으면 https://tl.estre.so 다
   assert.equal(result.family, 'cube');
   assert.equal(result.version, POSTER_TL_VERSION);
   assert.equal(result.tones, POSTER_TL_TONES);
+});
+
+test('흑백판 QR·Y0T도 인라인 심볼 그대로 같은 URL로 복호한다', () => {
+  const qr = extractBox(POSTER_BW, 'qr-symbol');
+  const qrModules = modulesFromQrSvg(extractSvg(qr.inner), QR_QUIET_MODULES);
+  assert.equal(decodeQrV2Byte(qrModules).text, POSTER_URL);
+
+  const tl = extractBox(POSTER_BW, 'tlcube-symbol');
+  const scene = sceneFromSvg(extractSvg(tl.inner));
+  const raster = rasterize(scene, { pixelsPerUnit: 14, supersample: 2 });
+  const result = decodeFrontend({
+    width: raster.width,
+    height: raster.height,
+    pixels: raster.pixels,
+  });
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(result.text, POSTER_URL);
+  assert.equal(result.family, 'cube');
+  assert.equal(result.version, 0);
+  assert.equal(result.tones, 3);
 });
 
 test('두 심볼이 같은 CSS 박스 토큰을 쓰고 개별 크기 덮어쓰기가 없다', () => {
@@ -202,4 +228,26 @@ test('컬러 인쇄 포스터는 Type Y 3톤 계약과 장식-코드 분리를 �
   assert.match(POSTER, /\.card--tlcube::before\s*\{[\s\S]*?var\(--pink\), #ff9a74/);
   assert.match(POSTER, /\.code-stage\s*\{[\s\S]*?background:\s*#ffffff/);
   assert.doesNotMatch(POSTER, /\.symbol-box\s*::(?:before|after)/);
+});
+
+test('흑백판은 별도 파일·회색 3톤·인쇄용 해칭 위계를 쓴다', () => {
+  assert.match(POSTER_BW, /<title>TLcube monochrome print poster<\/title>/);
+  assert.match(POSTER_BW, /class="sheet sheet--mono" data-poster-variant="bw"/);
+  assert.match(POSTER_BW, />BLACK & WHITE EDITION</);
+  assert.match(POSTER_BW, />STANDARD QR · MONO</);
+  assert.match(POSTER_BW, />TYPE Y · LOW · THREE-TONE · MONO</);
+  assert.match(POSTER_BW, /repeating-linear-gradient/);
+  assert.match(POSTER_BW, /\.sheet--mono \.card\s*\{[\s\S]*?border-color:\s*#111111/);
+  assert.deepEqual(PRINT_PALETTE_BW.levels, [
+    { r: 24, g: 24, b: 24 },
+    { r: 112, g: 112, b: 112 },
+    { r: 206, g: 206, b: 206 },
+  ]);
+  for (const level of PRINT_PALETTE_BW.levels) {
+    assert.equal(level.r, level.g);
+    assert.equal(level.g, level.b);
+  }
+  assert.match(POSTER_BW, /@page\s*\{\s*size:\s*A4 portrait/);
+  assert.match(POSTER_BW, /print-color-adjust:\s*exact/);
+  assert.doesNotMatch(POSTER_BW, /<script\b|\b(?:src|href)="https?:/);
 });

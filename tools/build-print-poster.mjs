@@ -1,7 +1,8 @@
 /**
  * build-print-poster.mjs — 영상 촬영용 A4 인쇄 포스터를 정적 HTML 로 굽는다.
  *
- * 기존 생성기 번들(dist/, lab-*)을 건드리지 않는다. 출력은 print/tlcube-poster.html.
+ * 기존 생성기 번들(dist/, lab-*)을 건드리지 않는다. 컬러·흑백 출력을 각각
+ * print/tlcube-poster.html, print/tlcube-poster-bw.html 에 쓴다.
  *
  * QR: src/qr-v2-byte.js 의 v2-L 바이트 모드. 페이로드는 TLcube 와 같은
  *     소문자 문자열 `https://tl.estre.so` 이다 (바이트 단위 동일).
@@ -22,6 +23,7 @@ import { BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src/luminance.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const POSTER_REL = 'print/tlcube-poster.html';
+export const POSTER_BW_REL = 'print/tlcube-poster-bw.html';
 export const POSTER_URL = 'https://tl.estre.so';
 export const POSTER_TL_TYPE = 'Y';
 export const POSTER_TL_VERSION = 0;
@@ -39,6 +41,19 @@ export const PRINT_PALETTE = Object.freeze({
     Object.freeze({ r: 47, g: 23, b: 56 }),
     Object.freeze({ r: 184, g: 66, b: 130 }),
     Object.freeze({ r: 255, g: 209, b: 229 }),
+  ]),
+  bullseyeDark: BULLSEYE_DARK,
+  bullseyeLight: BULLSEYE_LIGHT,
+  faceGains: DEFAULT_FACE_GAINS,
+});
+
+/** 흑백 프린터용 3톤. 채널을 완전히 같게 두어 컬러 관리 없이 명도만 남긴다. */
+export const PRINT_PALETTE_BW = Object.freeze({
+  background: Object.freeze({ r: 255, g: 255, b: 255 }),
+  levels: Object.freeze([
+    Object.freeze({ r: 24, g: 24, b: 24 }),
+    Object.freeze({ r: 112, g: 112, b: 112 }),
+    Object.freeze({ r: 206, g: 206, b: 206 }),
   ]),
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
@@ -64,14 +79,14 @@ function qrToSvg(matrix, quiet = QR_QUIET_MODULES) {
   return `${parts.join('\n')}\n`;
 }
 
-function tlcubeToSvg() {
+function tlcubeToSvg(palette = PRINT_PALETTE) {
   const encoded = encodeY(POSTER_URL, {
     version: POSTER_TL_VERSION,
     tones: POSTER_TL_TONES,
     eccLevel: POSTER_TL_ECC,
   });
   const scene = buildSceneY(encoded, {
-    palette: PRINT_PALETTE,
+    palette,
     cellSize: 1,
     margin: 3,
     cornerQr: false,
@@ -82,15 +97,88 @@ function tlcubeToSvg() {
     .replace('<svg ', '<svg class="symbol-render" role="img" aria-label="TLcube" ');
 }
 
-export function buildPrintPosterHtml() {
+export function buildPrintPosterHtml({ variant = 'color' } = {}) {
+  if (variant !== 'color' && variant !== 'bw') {
+    throw new RangeError(`알 수 없는 포스터 변형: ${variant}`);
+  }
+  const isBw = variant === 'bw';
   const qrSvg = qrToSvg(qrV2ByteMatrix(POSTER_URL));
-  const tlSvg = tlcubeToSvg();
+  const tlSvg = tlcubeToSvg(isBw ? PRINT_PALETTE_BW : PRINT_PALETTE);
+  const title = isBw ? 'TLcube monochrome print poster' : 'TLcube print poster';
+  const edition = isBw ? 'BLACK & WHITE EDITION' : 'PRINT / SCAN STUDY';
+  const qrFormat = isBw ? 'STANDARD QR · MONO' : 'STANDARD QR';
+  const tlFormat = isBw ? 'TYPE Y · LOW · THREE-TONE · MONO' : 'TYPE Y · LOW · THREE-TONE';
+  const factsKicker = isBw ? 'Built in black & white' : 'Built in the open';
+  const monochromeCss = isBw ? `
+  .sheet--mono {
+    background:
+      repeating-linear-gradient(135deg, transparent 0 4mm, rgba(0, 0, 0, 0.035) 4mm 4.5mm),
+      linear-gradient(145deg, #ffffff 0%, #f1f1f1 100%);
+  }
+  .sheet--mono::before {
+    border-color: #1c1c1c;
+    box-shadow: 0 0 0 9mm rgba(0, 0, 0, 0.07), 0 0 0 20mm rgba(0, 0, 0, 0.035);
+  }
+  .sheet--mono::after {
+    background: repeating-linear-gradient(45deg, #111111 0 1.4mm, #bdbdbd 1.4mm 2.8mm);
+    opacity: 0.22;
+  }
+  .sheet--mono .brand {
+    border-color: #111111;
+    background: #ffffff;
+    box-shadow: 2mm 2mm 0 #d4d4d4;
+  }
+  .sheet--mono .brand-dot { background: #111111; }
+  .sheet--mono .edition,
+  .sheet--mono .headline em,
+  .sheet--mono .choice { color: #111111; }
+  .sheet--mono .headline em {
+    text-decoration: underline;
+    text-decoration-color: #9a9a9a;
+    text-decoration-thickness: 0.7mm;
+    text-underline-offset: 1.5mm;
+  }
+  .sheet--mono .lede,
+  .sheet--mono .tagline,
+  .sheet--mono .format-note { color: #333333; }
+  .sheet--mono .card {
+    border-color: #111111;
+    background: #ffffff;
+    box-shadow: 3mm 3mm 0 #d2d2d2;
+  }
+  .sheet--mono .card::before { background: #222222; }
+  .sheet--mono .card--tlcube::before {
+    background: repeating-linear-gradient(135deg, #111111 0 2mm, #777777 2mm 4mm);
+  }
+  .sheet--mono .code-stage {
+    border-color: #111111;
+    box-shadow: inset 0 0 0 1.2mm #f0f0f0;
+  }
+  .sheet--mono .dimension {
+    border: 0.45mm solid #111111;
+    background: #111111;
+    color: #ffffff;
+  }
+  .sheet--mono .card--tlcube .dimension {
+    background: #ffffff;
+    color: #111111;
+  }
+  .sheet--mono .choice::before,
+  .sheet--mono .choice::after { background: #111111; }
+  .sheet--mono .facts { background: #111111; }
+  .sheet--mono .facts-kicker {
+    color: #ffffff;
+    text-decoration: underline;
+    text-decoration-thickness: 0.35mm;
+    text-underline-offset: 1mm;
+  }
+` : '';
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLcube print poster</title>
+<title>${title}</title>
 <style>
   :root {
     ${SYMBOL_BOX_TOKEN}: ${SYMBOL_BOX_MM}mm;
@@ -378,6 +466,7 @@ export function buildPrintPosterHtml() {
     font-size: 11.5pt;
     line-height: 1.35;
   }
+${monochromeCss}
   @media screen {
     body {
       min-height: 100vh;
@@ -409,11 +498,11 @@ export function buildPrintPosterHtml() {
 </style>
 </head>
 <body>
-<main class="sheet">
+<main class="sheet${isBw ? ' sheet--mono' : ''}" data-poster-variant="${variant}">
   <div class="content">
     <div class="brand-line">
       <div class="brand"><span class="brand-dot" aria-hidden="true"></span>TLcube · OPEN VISUAL CODE</div>
-      <div class="edition">PRINT / SCAN STUDY</div>
+      <div class="edition">${edition}</div>
     </div>
     <h1 class="headline">A code can be part of <em>the design.</em></h1>
     <p class="lede">Both marks carry the same link. QR stays familiar; TLcube explores a 2.5D visual language made to live with the work around it.</p>
@@ -429,7 +518,7 @@ ${qrSvg.trim()}
           </div>
         </div>
         <div class="dimension">2D</div>
-        <div class="format-note">STANDARD QR</div>
+        <div class="format-note">${qrFormat}</div>
       </figure>
       <div class="choice" aria-label="One link. Choose your way.">
         <span class="choice-copy">ONE LINK<strong>CHOOSE<br>YOUR WAY</strong></span>
@@ -445,11 +534,11 @@ ${tlSvg.trim()}
           </div>
         </div>
         <div class="dimension">2.5D</div>
-        <div class="format-note">TYPE Y · LOW · THREE-TONE</div>
+        <div class="format-note">${tlFormat}</div>
       </figure>
     </div>
     <footer class="facts">
-      <div class="facts-kicker">Built in the open</div>
+      <div class="facts-kicker">${factsKicker}</div>
       <p class="facts-copy">TLcube is an open-source 2.5D visual code. A fallback QR can be included when the situation calls for one.</p>
     </footer>
   </div>
@@ -459,8 +548,12 @@ ${tlSvg.trim()}
 `;
 }
 
-export function writePrintPoster(html = buildPrintPosterHtml()) {
-  const out = path.join(ROOT, POSTER_REL);
+export function buildPrintPosterBwHtml() {
+  return buildPrintPosterHtml({ variant: 'bw' });
+}
+
+export function writePrintPoster(html = buildPrintPosterHtml(), relativePath = POSTER_REL) {
+  const out = path.join(ROOT, relativePath);
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, html, 'utf8');
   return out;
@@ -468,7 +561,10 @@ export function writePrintPoster(html = buildPrintPosterHtml()) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const html = buildPrintPosterHtml();
-  writePrintPoster(html);
-  process.stdout.write(`${POSTER_REL} written (${Buffer.byteLength(html, 'utf8')} B)\n`);
+  const colorHtml = buildPrintPosterHtml();
+  const bwHtml = buildPrintPosterBwHtml();
+  writePrintPoster(colorHtml, POSTER_REL);
+  writePrintPoster(bwHtml, POSTER_BW_REL);
+  process.stdout.write(`${POSTER_REL} written (${Buffer.byteLength(colorHtml, 'utf8')} B)\n`);
+  process.stdout.write(`${POSTER_BW_REL} written (${Buffer.byteLength(bwHtml, 'utf8')} B)\n`);
 }
