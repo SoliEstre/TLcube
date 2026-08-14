@@ -53,7 +53,7 @@ const DEFAULT_FINDER_DECLARATION =
 // 상단 주석) — capacity.js 를 import 하는 capacityA 는 반드시 'capacity' 뒤에 온다.
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
-  'hexgrid', 'finder-patterns', 'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+  'hexgrid', 'locatorY', 'finder-patterns', 'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity',
   'placementA', 'layoutA', 'capacityA', 'encodeA',
   'luminance',

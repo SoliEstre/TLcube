@@ -79,6 +79,20 @@ test('실측 수치는 세 언어가 같은 값을 쓴다 (한 언어만 옛 숫
   }
 });
 
+test('정지사진 1회 수치를 라이브 등급으로 외삽하지 않는다', () => {
+  const forbidden = /복호 시간이 실시간 스캔 체감을 지배|Decode time dominates how live scanning feels|復号時間がリアルタイム性の体感を左右/;
+  for (const lang of languages) {
+    const html = read(lang);
+    assert.doesNotMatch(html, forbidden, `${lang.code}: 철회한 라이브 인과 주장이 남아 있다`);
+    assert.ok(html.includes(strings[lang.code].badgePending),
+      `${lang.code}: 라이브 상태가 추가 측정 중으로 표시돼야 한다`);
+    assert.ok(html.includes(strings[lang.code].thTime),
+      `${lang.code}: 시간 열이 정지사진 1회 기준임을 밝혀야 한다`);
+    assert.doesNotMatch(html, /badge ok">(?:쓸 만함|usable|実用的)/,
+      `${lang.code}: 근거 없는 라이브 사용성 배지가 남아 있다`);
+  }
+});
+
 // 상단 내비는 이 페이지의 목차다. 목차가 본문과 다른 순서로 서 있으면 방문자는
 // «건너뛴 섹션이 있나» 하고 되짚는다. 실제로 내비만 옛 순서(why-now → what → types)로
 // 남아 본문(why-now → types → what)과 어긋나 있었다.
@@ -132,6 +146,10 @@ test('llms.txt 계열이 페이지와 같은 실측값을 쓴다', () => {
     assert.ok(txt.includes(stats.centerQr.decoded), `${rel}: 중앙 QR 수치`);
     assert.ok(!/개발 중/.test(txt),
       `${rel}: 「개발 중」이 남아 있다 — 페이지는 «동작 · 개선 중» 이라고 말하고 있다`);
+    assert.doesNotMatch(txt, /복호 시간이 실시간 체감을 지배/,
+      `${rel}: 철회한 라이브 인과 주장이 남아 있다`);
+    assert.match(txt, /정지사진 1장|정지사진 한 장/,
+      `${rel}: 시간 수치가 정지사진 기준임을 밝혀야 한다`);
   }
 });
 

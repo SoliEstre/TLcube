@@ -48,6 +48,26 @@ import {
   PROJECTIVE_DENOMINATOR_MIN_RATIO,
   projectPoint,
 } from './homography.js';
+import {
+  locatorSourceId, shrinkSilhouetteToCubeCandidates,
+} from './locatorY-detect.js';
+import {
+  LOCATOR_PROFILE_HEX_FRAME_V1,
+  LOCATOR_PROFILE_OFF,
+} from '../locatorY.js';
+
+function locatorShapesFromSilhouette(luma, shapes, options) {
+  const extra = [];
+  const diagnostics = [];
+  for (const shape of shapes.candidates) {
+    if (!shape.vertices || shape.vertices.length !== 6) continue;
+    extra.push(...shrinkSilhouetteToCubeCandidates(luma, shape, {
+      ...options,
+      locatorYDiagnostics: diagnostics,
+    }));
+  }
+  return { candidates: extra, diagnostics };
+}
 
 export const UNVERIFIED_CUBE_DETECTION = Object.freeze({
   maxDimension: 1024,
@@ -1068,6 +1088,8 @@ function cubeGeometrySeeds(
   seamVertices,
   seamParity,
   orientation,
+  adjacentPhase = false,
+  locatorPhase = null,
 ) {
   const seeds = [];
   const observedSeams = [0, 1, 2].map(
@@ -1082,25 +1104,53 @@ function cubeGeometrySeeds(
   ];
   const centerSeams = estimateHomography4(seamCanonical, [center, ...observedSeams]);
   if (centerSeams) {
-    seeds.push({ id: 'center-seams', H: centerSeams, observedSeams });
+    seeds.push({
+      id: 'center-seams',
+      H: centerSeams,
+      observedSeams,
+      locatorPhaseUsed: false,
+      locatorPhaseFallback: adjacentPhase,
+    });
   }
 
   const shift = ((seamParity - 1 + 2 * orientation) % 6 + 6) % 6;
+  // 외곽 locator는 회전 각도에 따라 convex-hull의 시작 꼭짓점이 한 칸
+  // 달라질 수 있다. orientation 3개가 짝수 shift(0/2/4)를 담당하므로,
+  // locator 후보에만 인접 phase(+1)를 더하면 여섯 cyclic mapping을 모두
+  // 검증할 수 있다. 레퍼런스 12셀이 거짓 mapping을 제거한다.
+  const phaseIsReliable = locatorPhase && locatorPhase.reliable === true
+    && Number.isInteger(locatorPhase.phaseShift);
+  const shifts = phaseIsReliable
+    ? [((locatorPhase.phaseShift % 6) + 6) % 6]
+    : adjacentPhase ? [shift, (shift + 1) % 6] : [shift];
   const subsets = [
     { id: 'outer-a', indices: [0, 1, 3, 4] },
     { id: 'outer-b', indices: [1, 2, 4, 5] },
     { id: 'outer-c', indices: [0, 2, 3, 5] },
   ];
-  for (const subset of subsets) {
-    const canonical = subset.indices.map((index) => ({
-      x: CORNER_UNIT_OFFSETS[index].x * n,
-      y: CORNER_UNIT_OFFSETS[index].y * n,
-    }));
-    const observed = subset.indices.map(
-      (index) => vertices[(index + shift) % 6],
-    );
-    const H = estimateHomography4(canonical, observed);
-    if (H) seeds.push({ id: subset.id, H, observedSeams });
+  for (const phaseShift of shifts) {
+    for (const subset of subsets) {
+      const canonical = subset.indices.map((index) => ({
+        x: CORNER_UNIT_OFFSETS[index].x * n,
+        y: CORNER_UNIT_OFFSETS[index].y * n,
+      }));
+      const observed = subset.indices.map(
+        (index) => vertices[(index + phaseShift) % 6],
+      );
+      const H = estimateHomography4(canonical, observed);
+      if (H) {
+        const phaseSuffix = phaseIsReliable
+          ? '-c-phase'
+          : phaseShift === shift ? '' : '-adjacent-phase';
+        seeds.push({
+          id: subset.id + phaseSuffix,
+          H,
+          observedSeams,
+          locatorPhaseUsed: phaseIsReliable,
+          locatorPhaseFallback: adjacentPhase && !phaseIsReliable,
+        });
+      }
+    }
   }
   return seeds;
 }
@@ -2251,7 +2301,10 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
     const seamVertices = shape.seamVertices.map((point) => liftPoint(point, reduced.factor));
     const radius = shape.radius * reduced.factor;
 
-    for (const n of SUPPORTED_N) {
+    const candidateNs = shape.locatorProfile && SUPPORTED_N.includes(shape.estimatedN)
+      ? [shape.estimatedN]
+      : SUPPORTED_N;
+    for (const n of candidateNs) {
       for (let orientation = 0; orientation < 3; orientation += 1) {
         const seeds = cubeGeometrySeeds(
           n,
@@ -2260,6 +2313,8 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
           seamVertices,
           shape.seamParity,
           orientation,
+          Boolean(shape.locatorProfile),
+          shape.locatorPhase,
         );
         for (const seed of seeds) {
           const vertexResidual = vertexSetResidual(seed.H, n, vertices);
@@ -2286,7 +2341,16 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
               vertexResidual,
               relativeVertexResidual,
             },
-            source: 'cube-silhouette-y-junction',
+            source: shape.locatorProfile
+              ? locatorSourceId(shape.locatorProfile)
+              : 'cube-silhouette-y-junction',
+            locatorProfile: shape.locatorProfile || LOCATOR_PROFILE_OFF,
+            locatorRoute: shape.locatorRoute || 'silhouette',
+            locatorPhase: shape.locatorPhase ? {
+              ...shape.locatorPhase,
+              used: seed.locatorPhaseUsed === true,
+              fallback: seed.locatorPhaseFallback === true,
+            } : null,
             geometrySeed: seed.id,
             shapeScore: shape.score,
             seamScore: shape.seam.contrast,
@@ -2526,13 +2590,36 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
   const cfg = calibration(options);
   const reduced = downsampleLuma(luma, cfg.maxDimension);
   const shapes = shapeCandidates(reduced.luma, cfg);
+  // 새 Type Y 로케이터는 시험판에서 명시적으로 켠 경우에만 후보를 만든다.
+  // 라이브러리/정식 스캐너의 기본 검출 계약과 프레임 비용은 그대로 유지한다.
+  const locatorEnabled = options.enableLocatorY === true;
+  const locatorShapes = locatorEnabled
+    ? locatorShapesFromSilhouette(reduced.luma, shapes, options)
+    : { candidates: [], diagnostics: [] };
+  const fromSilhouette = locatorShapes.candidates;
+  const locator = {
+    ok: true,
+    diagnostics: {
+      source: locatorEnabled ? 'locator-hex-frame-v1' : 'disabled',
+      enabled: locatorEnabled,
+      profile: fromSilhouette.length ? LOCATOR_PROFILE_HEX_FRAME_V1 : LOCATOR_PROFILE_OFF,
+      accepted: fromSilhouette.length,
+      via: 'silhouette-shrink',
+      proposalChain: locatorShapes.diagnostics,
+    },
+  };
+  for (const candidate of fromSilhouette) shapes.candidates.unshift(candidate);
   const hypotheses = [];
   const geometryReports = [];
   let blockRecovery = null;
 
   hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports);
 
-  if (hypotheses.length === 0) {
+  const hasConfirmedGrid = hypotheses.some((entry) =>
+    entry.referenceCalibration
+    && entry.referenceCalibration.hardChecks
+    && entry.referenceCalibration.hardChecks.all);
+  if (!hasConfirmedGrid) {
     blockRecovery = recoverFlatBlockHypotheses(luma, reduced, options, cfg);
     hypotheses.push(...blockRecovery.hypotheses);
     geometryReports.push(...blockRecovery.reports.map((report) => ({
@@ -2580,6 +2667,7 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
         shapeCandidates: shapes.candidates,
         geometryReports,
         blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
+        locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },
       },
     });
   }
@@ -2594,6 +2682,7 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       geometryReports,
       blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
       hypothesisCount: hypotheses.length,
+      locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },
     },
   });
 }

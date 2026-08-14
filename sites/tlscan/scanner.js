@@ -65,7 +65,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-14.02';
+export const SCANNER_BUILD = '2026-08-14.03';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -345,6 +345,9 @@ async function decodeFrame(imageData) {
       pixels: imageData.data,
     }, {
       onStage: (stageName, phase) => clock.onStage(stageName, phase),
+      // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너는 종전
+      // 검출 계약과 프레임 비용을 그대로 유지한다.
+      bootstrap: { family: { cube: { enableLocatorY: isLabPath() } } },
     });
     const stage = classifyStage(result);
     const ms = fillFrameMs(nowMs() - t0, clock.snapshot());

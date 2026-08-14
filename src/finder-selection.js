@@ -3,6 +3,66 @@
 export const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
 export const DEFAULT_OUTER_QR_POSITION = 'TL';
 
+const profileFamily = (type) => type === 'Y' ? 'Y' : 'OA';
+
+/**
+ * O/A는 중앙 QR을 기본 파인더로, Y는 종전의 바깥 QR을 기본으로 쓴다.
+ *
+ * 공용 qrPosition 하나만 두고 타입을 바꾸면 O/A의 `inner`가 Y의 윈도 β로 새거나,
+ * 반대로 Y의 코너 선택이 O/A 기본값을 덮는다. 타입군별 스냅샷을 별도로 들고 전환할 때만
+ * 공용 렌더 상태로 올린다. 스냅샷은 불변 객체처럼 교체하며 직접 수정하지 않는다.
+ */
+export function createFinderQrProfiles(defaultFinderPatternId) {
+  if (typeof defaultFinderPatternId !== 'string' || defaultFinderPatternId === '') {
+    throw new TypeError('기본 파인더 id가 필요하다');
+  }
+  return Object.freeze({
+    OA: Object.freeze({
+      qrPosition: 'inner',
+      finderPatternId: CENTER_QR_FINDER_PATTERN_ID,
+      previousFinderPatternId: defaultFinderPatternId,
+      previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
+    }),
+    Y: Object.freeze({
+      qrPosition: DEFAULT_OUTER_QR_POSITION,
+      finderPatternId: defaultFinderPatternId,
+      previousFinderPatternId: defaultFinderPatternId,
+      previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
+    }),
+  });
+}
+
+function finderQrSnapshot(state) {
+  return Object.freeze({
+    qrPosition: state.qrPosition,
+    finderPatternId: state.finderPatternId,
+    previousFinderPatternId: state.previousFinderPatternId,
+    previousOuterQrPosition: state.previousOuterQrPosition,
+  });
+}
+
+/** 타입을 바꾸면서 현재 타입군 선택을 저장하고 대상 타입군 선택을 복원한다. */
+export function selectGeneratorType(state, type, defaultFinderPatternId) {
+  if (!['O', 'A', 'Y'].includes(type)) {
+    throw new RangeError('알 수 없는 생성기 타입: ' + type);
+  }
+  const defaults = createFinderQrProfiles(defaultFinderPatternId);
+  const sourceFamily = profileFamily(state.type);
+  const targetFamily = profileFamily(type);
+  const currentProfiles = state.finderQrProfiles || defaults;
+  const finderQrProfiles = Object.freeze({
+    ...currentProfiles,
+    [sourceFamily]: finderQrSnapshot(state),
+  });
+  const target = finderQrProfiles[targetFamily] || defaults[targetFamily];
+  return normalizeFinderQrState({
+    ...state,
+    ...target,
+    type,
+    finderQrProfiles,
+  }, type, defaultFinderPatternId);
+}
+
 function previousFinderOrDefault(state, defaultFinderPatternId) {
   const previous = state.previousFinderPatternId;
   return previous && previous !== CENTER_QR_FINDER_PATTERN_ID

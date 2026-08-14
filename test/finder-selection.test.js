@@ -4,8 +4,10 @@ import assert from 'node:assert/strict';
 import {
   CENTER_QR_FINDER_PATTERN_ID,
   commitFinderQrTransition,
+  createFinderQrProfiles,
   normalizeFinderQrState,
   selectFinderPattern,
+  selectGeneratorType,
   selectQrPosition,
 } from '../src/finder-selection.js';
 
@@ -87,6 +89,38 @@ test('Type Y의 안쪽 윈도는 파인더와 결합하지 않는다', () => {
   const outer = selectQrPosition(inner, 'BR', 'Y', TRIAL_DEFAULT);
   assert.equal(outer.finderPatternId, TRIAL_DEFAULT);
   assert.equal(outer.qrPosition, 'BR');
+});
+
+test('타입 전환 기본값은 O/A 중앙 QR, Y 바깥 QR이며 서로 새지 않는다', () => {
+  const initial = state({
+    type: 'Y',
+    finderQrProfiles: createFinderQrProfiles(TRIAL_DEFAULT),
+    finderPatternId: TRIAL_DEFAULT,
+  });
+
+  const typeO = selectGeneratorType(initial, 'O', TRIAL_DEFAULT);
+  assert.equal(typeO.qrPosition, 'inner');
+  assert.equal(typeO.finderPatternId, CENTER_QR_FINDER_PATTERN_ID);
+
+  const typeY = selectGeneratorType(typeO, 'Y', TRIAL_DEFAULT);
+  assert.equal(typeY.qrPosition, 'TL');
+  assert.equal(typeY.finderPatternId, TRIAL_DEFAULT);
+});
+
+test('O/A에서 사용자가 고른 바깥 QR과 파인더는 Y 왕복 뒤 복원된다', () => {
+  const initial = state({
+    type: 'Y',
+    finderQrProfiles: createFinderQrProfiles(TRIAL_DEFAULT),
+    finderPatternId: TRIAL_DEFAULT,
+  });
+  const typeO = selectGeneratorType(initial, 'O', TRIAL_DEFAULT);
+  const outer = selectQrPosition(typeO, 'BR', 'O', TRIAL_DEFAULT);
+  const typeY = selectGeneratorType(outer, 'Y', TRIAL_DEFAULT);
+  const typeA = selectGeneratorType(typeY, 'A', TRIAL_DEFAULT);
+
+  assert.equal(typeA.qrPosition, 'BR');
+  assert.equal(typeA.finderPatternId, TRIAL_DEFAULT);
+  assert.equal(typeA.previousOuterQrPosition, 'BR');
 });
 
 test('정규화는 멱등이고 중앙 QR/안쪽 모순을 한 번에 없앤다', () => {

@@ -20,6 +20,12 @@ import { srgbChannelToLinear, relativeLuminance } from './luminance.js';
 import { qrMatrix } from './qr.js';
 import { digitToPattern, assertToneSeparation } from './tonemap.js';
 import { WINDOW_SIZE_Y, WINDOW_SUPPORTED_N } from './capacityY.js';
+import {
+  DEFAULT_LOCATOR_PROFILE_Y,
+  assertLocatorProfileY,
+  locatorMarginCells,
+  locatorShapesY,
+} from './locatorY.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -295,6 +301,7 @@ function assertPalette(palette) {
  * @param {{
  *   palette: {background:{r,g,b}, levels:[{r,g,b},{r,g,b},{r,g,b}], bullseyeDark:{r,g,b}, bullseyeLight:{r,g,b}, faceGains?:{T,L,R}},
  *   qrText?: string, cellSize?: number, margin?: number, qrCorner?: 'TL'|'TR'|'BL'|'BR',
+ *   locatorProfile?: 'off'|'hex-frame-v1',
  * }} [options]
  * @returns {{n:number, layout:object, width:number, height:number, background:{r,g,b}, shapes:Array}}
  */
@@ -317,7 +324,14 @@ export function buildSceneY(encoded, options) {
   }
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
-  const margin = opts.margin === undefined ? DEFAULT_MARGIN_FACTOR * cellSize : opts.margin;
+  const locatorProfile = opts.locatorProfile === undefined
+    ? DEFAULT_LOCATOR_PROFILE_Y
+    : assertLocatorProfileY(opts.locatorProfile);
+  const requestedMargin = opts.margin === undefined
+    ? DEFAULT_MARGIN_FACTOR * cellSize
+    : opts.margin;
+  const locatorPad = locatorMarginCells(locatorProfile) * cellSize;
+  const margin = requestedMargin < locatorPad ? locatorPad : requestedMargin;
   const qrCorner = opts.qrCorner === undefined ? 'TL' : assertQrCorner(opts.qrCorner);
 
   const layout = layoutForCube(n, { size: cellSize, margin });
@@ -386,6 +400,11 @@ export function buildSceneY(encoded, options) {
     r: 0.18 * cellSize,
     color: palette.bullseyeDark,
   });
+
+  // ③½ 실험 로케이터 — 실루엣 밖 테두리·허브. 페이로드 샘플 원판 밖.
+  // 기본값 off 이면 도형이 0개라 기존 painter 수 계약이 그대로다.
+  const locatorShapes = locatorShapesY(n, layout, palette, locatorProfile);
+  for (const shape of locatorShapes) shapes.push(shape);
 
   // ④ 코너 QR 블록 — qrText 가 없으면 생략(이 경우도 유효한 장면, SPEC §14 QR fallback 은
   // 미학 옵션이 아니라 규범이지만 scene 조립 단계에서는 호출자가 아직 URL 을 안 정했을
@@ -471,6 +490,7 @@ export function buildSceneY(encoded, options) {
     width: layout.width,
     height: layout.height,
     background: palette.background,
+    locatorProfile,
     shapes,
   };
 }

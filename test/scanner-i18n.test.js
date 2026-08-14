@@ -63,6 +63,21 @@ test('index.html 의 data-i18n 키가 전부 사전에 있다', () => {
   assert.deepEqual(unknown, [], '사전에 없는 키를 참조한다');
 });
 
+test('스캔 가이드 아래에 TLcube 전용 범위를 세 언어로 알린다', () => {
+  assert.match(SCANNER_HTML, /class="scan-scope-note" data-i18n="guide\.tlcubeOnly"/);
+  assert.equal(SCANNER_STRINGS.ko['guide.tlcubeOnly'], 'QR 및 다른 바코드는 읽히지 않아요.');
+  assert.equal(SCANNER_STRINGS.en['guide.tlcubeOnly'], 'QR codes and other barcodes are not supported.');
+  assert.equal(SCANNER_STRINGS.ja['guide.tlcubeOnly'], 'QR コードやその他のバーコードは読み取れません。');
+});
+
+test('Type Y 강화 로케이터는 /lab/ 스캐너에서만 디코더에 켠다', () => {
+  assert.match(
+    SCANNER_JS,
+    /bootstrap:\s*\{\s*family:\s*\{\s*cube:\s*\{\s*enableLocatorY:\s*isLabPath\(\)\s*\}\s*\}\s*\}/,
+  );
+  assert.doesNotMatch(SCANNER_JS, /enableLocatorY:\s*true/);
+});
+
 test('사진 스캔 실패 두 경로가 모두 토스트를 띄운다', () => {
   // 사진 경로의 실패는 «결과 없음» 과 «읽기 실패» 둘뿐이고, 둘 다 알려야 한다.
   // ⚠ 소스 매칭이라 «호출이 적혀 있다» 까지만 보증한다 — 실제로 보이는지는 실브라우저로

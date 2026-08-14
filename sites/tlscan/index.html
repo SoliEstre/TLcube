@@ -261,6 +261,21 @@
     text-shadow: 0 1px 6px #000;
   }
 
+  .scan-scope-note {
+    max-width: calc(100vw - 48px);
+    margin: -8px 0 0;
+    padding: 5px 9px;
+    border: 1px solid rgb(214 242 255 / .3);
+    border-radius: 8px;
+    color: rgb(255 255 255 / .86);
+    background: rgb(0 0 0 / .42);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+    text-shadow: 0 1px 6px #000;
+  }
+
   .scanner-bottom {
     display: grid;
     justify-items: center;
@@ -783,6 +798,7 @@
           <span class="scan-corner bottom-left"></span>
         </div>
         <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 프레임 안에 맞춰 주세요.</p>
+        <p class="scan-scope-note" data-i18n="guide.tlcubeOnly">QR 및 다른 바코드는 읽히지 않아요.</p>
       </div>
     </section>
 

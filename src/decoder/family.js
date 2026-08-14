@@ -646,10 +646,10 @@ export function scoreCubeTiling(luma, yJunction, options = {}) {
  *   · 재배치 재시도 / finder 해상도 재시도가 그 둘을 다시 부른다
  *
  * 캐시가 안전한 이유: 결과는 (`luma`, `yJunction`, cube 경로가 실제로 읽는 옵션
- * 다섯 개)의 순수 함수다. `cube-detect.js` 가 options 에서 읽는 키는 `calibration` ·
- * `sample` · `disc` · `tones` · `exhaustiveBlockRecovery`이고(중첩 호출의
+ * 여섯 개)의 순수 함수다. `cube-detect.js` 가 options 에서 읽는 키는 `calibration` ·
+ * `sample` · `disc` · `tones` · `exhaustiveBlockRecovery` · `enableLocatorY`이고(중첩 호출의
  * `samplingConfig`도 여기서 파생된다), 나머지 bootstrap 전용 플래그는 이 경로에
- * 도달하지 않는다. 다섯 값과 yJunction 은 `Object.is` 로 비교한다 — 객체면 동일성,
+ * 도달하지 않는다. 여섯 값과 yJunction 은 `Object.is` 로 비교한다 — 객체면 동일성,
  * 원시값이면 값.
  * 다르면 그냥 다시 계산한다.
  */
@@ -661,6 +661,7 @@ function cubeTilingKeyMatches(entry, yJunction, cubeOptions) {
     && Object.is(entry.sample, cubeOptions.sample)
     && Object.is(entry.disc, cubeOptions.disc)
     && Object.is(entry.tones, cubeOptions.tones)
+    && Object.is(entry.enableLocatorY, cubeOptions.enableLocatorY)
     && Object.is(entry.exhaustiveBlockRecovery, cubeOptions.exhaustiveBlockRecovery);
 }
 
@@ -681,6 +682,7 @@ function storeCubeTiling(luma, yJunction, cubeOptions, value) {
     sample: cubeOptions.sample,
     disc: cubeOptions.disc,
     tones: cubeOptions.tones,
+    enableLocatorY: cubeOptions.enableLocatorY,
     exhaustiveBlockRecovery: cubeOptions.exhaustiveBlockRecovery,
     value,
   });

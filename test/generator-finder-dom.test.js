@@ -21,8 +21,12 @@ import {
   CENTER_QR_FINDER_PATTERN_ID,
   commitFinderQrTransition,
   selectFinderPattern,
+  selectGeneratorType,
 } from '../src/finder-selection.js';
-import { createGeneratorState } from '../src/generator-state.js';
+import {
+  GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  createGeneratorState,
+} from '../src/generator-state.js';
 import {
   BULLSEYE_DARK,
   BULLSEYE_LIGHT,
@@ -191,6 +195,30 @@ test('중앙 QR 렌더 옵션은 실험 기본 파인더를 중앙 QR로 명시 
   assert.equal(options.centerQr, true);
   assert.equal(options.finderPatternId, CENTER_QR_FINDER_PATTERN_ID);
   assert.equal(options.qrText, 'HTTPS://TLSCAN.ESTRE.SO');
+});
+
+test('초기 Y에서 O/A로 전환하면 중앙 QR 포맷과 장면을 실제 기본 경로로 렌더한다', () => {
+  for (const type of ['O', 'A']) {
+    const state = selectGeneratorType(
+      createGeneratorState(), type, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+    );
+    const fallback = fallbackFor(state);
+    const encoded = encodeFor(type, fallback.mode === 'center');
+    const scene = buildScene(encoded, sceneOptionsForOA({
+      fallback,
+      finderPatternId: state.finderPatternId,
+      palette: PALETTE,
+      qrText: 'HTTPS://TLSCAN.ESTRE.SO',
+      type,
+    }));
+
+    assert.equal(state.qrPosition, 'inner', type);
+    assert.equal(encoded.centerQr, true, type);
+    assert.equal(scene.finderPatternId, 'centerQr', type);
+    assert.equal(verifyRaster(
+      rasterize(scene, { pixelsPerUnit: 12, supersample: 2 }), scene, encoded,
+    ).ok, true, type);
+  }
 });
 
 test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기 연속 클릭은 오류 없이 렌더한다', () => {

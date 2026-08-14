@@ -129,7 +129,7 @@ test('config ID 는 결정적이고 expected/observed 미상은 null', () => {
     expected: emptyConfigSide(),
     observed: observedFromResult({ ok: false, reason: 'frontend:no-finder' }),
   });
-  for (const key of ['type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition']) {
+  for (const key of ['type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile']) {
     assert.equal(frame.expected[key], null);
     assert.equal(frame.observed[key], null);
   }

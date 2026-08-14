@@ -9,9 +9,18 @@
 import {
   CUBE_BULLSEYE_FINDER_PATTERN_ID, FINDER_PATTERN_IDS, LEGACY_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
-import { CENTER_QR_FINDER_PATTERN_ID, DEFAULT_OUTER_QR_POSITION } from './finder-selection.js';
+import {
+  CENTER_QR_FINDER_PATTERN_ID,
+  DEFAULT_OUTER_QR_POSITION,
+  createFinderQrProfiles,
+} from './finder-selection.js';
 import { DEFAULT_PRESET, PRESETS } from './luminance.js';
 import { TL_READER_URL } from './qr.js';
+import {
+  DEFAULT_LOCATOR_PROFILE_Y,
+  LOCATOR_PROFILE_HEX_FRAME_V1,
+  LOCATOR_PROFILE_OFF,
+} from './locatorY.js';
 
 export const GENERATOR_MODES = Object.freeze(['normal', 'advanced']);
 export const GENERATOR_TYPES = Object.freeze(['O', 'A', 'Y']);
@@ -39,6 +48,8 @@ function field(defaultValue, exposure, options) {
 // 순회하므로 새 항목을 더하면 일반/고급 누락과 보존 검사가 함께 확장된다.
 /** 생성기 화면의 초기 파인더 — 라이브러리 기본값과 별개다(위 주석). */
 export const GENERATOR_DEFAULT_FINDER_PATTERN_ID = CUBE_BULLSEYE_FINDER_PATTERN_ID;
+const DEFAULT_FINDER_QR_PROFILES = createFinderQrProfiles(GENERATOR_DEFAULT_FINDER_PATTERN_ID);
+const ALTERNATE_FINDER_QR_PROFILES = createFinderQrProfiles(LEGACY_FINDER_PATTERN_ID);
 
 export const GENERATOR_STATE_SCHEMA = Object.freeze({
   contentTab: field('url', BOTH, ['url', 'text', 'wifi', 'card']),
@@ -59,6 +70,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
     [LEGACY_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
     ['TL', 'TR', 'BL', 'BR', 'none']),
+  // O/A는 회전 기준을 함께 주는 중앙 QR이 기본이고, Y는 종전 코너 QR 기본을 유지한다.
+  // 공용 상태가 타입 사이로 새지 않게 타입군별 마지막 선택을 별도 보존한다.
+  finderQrProfiles: field(DEFAULT_FINDER_QR_PROFILES, INTERNAL,
+    [DEFAULT_FINDER_QR_PROFILES, ALTERNATE_FINDER_QR_PROFILES]),
   eccLevel: field('auto', BOTH, ['auto', 'H', 'M', 'L']),
   versionO: field('auto', BOTH, ['auto', 1, 2, 3]),
   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
@@ -71,6 +86,9 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   qrText: field(TL_READER_URL, ADVANCED,
     [TL_READER_URL, 'https://example.com/fallback']),
   qrCornerToo: field(false, ADVANCED, [false, true]),
+  // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 보여 주지 않고 항상 off.
+  locatorProfileY: field(DEFAULT_LOCATOR_PROFILE_Y, INTERNAL,
+    [LOCATOR_PROFILE_OFF, LOCATOR_PROFILE_HEX_FRAME_V1]),
 });
 
 export function createGeneratorState(overrides = {}) {

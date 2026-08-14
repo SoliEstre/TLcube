@@ -163,27 +163,26 @@
 
   <section id="scanner-status">
     <h2>Scanner — where it stands</h2>
-    <p class="lead"><strong>The decoder works.</strong> All three types read from real-device photos; what is left is raising accuracy and speed. The numbers below come from <strong>photos taken on real phones</strong> — not synthetic test renders.</p>
+    <p class="lead"><strong>The decoder works.</strong> All three types read from real-device photos; what is left is raising accuracy and speed. Each time below is <strong>one decode of one static photo taken on a real phone</strong> — not time to first lock or a live success rate.</p>
     <div class="table-scroll" style="margin-top:20px">
       <table>
         <thead>
-          <tr><th>Type</th><th>Real photos decoded</th><th>Decode time</th><th>Live scanning</th></tr>
+          <tr><th>Type</th><th>Real photos decoded</th><th>One static-photo decode</th><th>Live validation</th></tr>
         </thead>
         <tbody>
-          <!-- 실시간 스캔 배지는 «복호 시간 vs 0.3초 프레임 간격» 이라는 이 페이지 자신의
-               기준을 따른다. 배지를 손으로 고르지 말고 이 기준으로 판정할 것 —
-               한때 Y 가 0.85초인데 «쓸 만함» 이 붙어 있었다. 지금 Y 는 0.1초라 자격이 있다. -->
-          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.1 s</td><td><span class="badge ok">usable</span></td></tr>
-          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~1.8 s</td><td><span class="badge warn">improving</span></td></tr>
-          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge ok">3 / 3</span></td><td>~0.86 s</td><td><span class="badge warn">improving</span></td></tr>
-          <tr><td><strong>Centre-QR variant</strong> (all three types)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">improving</span></td></tr>
+          <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
+               텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
+          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.1 s</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~1.8 s</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge ok">3 / 3</span></td><td>~0.86 s</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Centre-QR variant</strong> (all three types)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">more data needed</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px"><strong>Type Y got faster; O and A got slower.</strong> Rebuilding the finder and adding a retry path to format reading <strong>bought accuracy with time</strong> — and it moved Type A from 2/3 to 3/3. For Y we then reshaped the cube path to <em>try the cheap route first and only sweep everything after a failure</em>, which made it faster than it had ever been. Applying the same shape to O and A is what comes next.</p>
-    <p class="dim">Decode time dominates how live scanning feels. The scanner looks at a frame roughly every 0.3 s, so when one read takes longer than that the frames in between are dropped — and regardless of accuracy it feels like <strong>“hold it there and wait”</strong>. <strong>Y is now under that interval</strong>; O and A are still above it. (Live scanning works on smaller frames, so it is faster in practice — on the 960 px versions of the same photos: Y 0.1 s, A 0.54 s, O 1.2 s.)</p>
+    <p class="dim" style="margin-top:16px"><strong>For one decode of one static photo</strong>, Type Y is shortest and O and A take longer. Finder and format retry work expanded the set of real photos that decode, at the cost of more work on some paths; Y now tries a cheap path first and performs one full sweep only after failure. These figures must not be read as live time to first lock.</p>
+    <p class="dim"><strong>One static-photo decode time does not predict how live scanning feels.</strong> In the first real-device lab trace, a fast frame could still lead to a slow first lock when many frames were needed before one succeeded, and the type ranking differed from this static-photo table. That trace covers one device and a small sample, so we do not assign live usability grades yet.</p>
     <p class="dim">Shooting conditions matter too. Measured, <strong>9 pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide 7.6 px failed / wide 9.1 px succeeded). That is why the scanner offers a lens picker.</p>
-    <p class="dim">In the <strong>centre-QR variant</strong> a QR block takes the place of the central finder. It was unreadable for a while because there was no entry point; a path that uses the QR’s own finder patterns as reference now handles it.</p>
+    <p class="dim">In the <strong>centre-QR variant</strong>, a QR block replaces the central finder. Its finder patterns provide the position and orientation entry point used to decode the surrounding TL body. The generator now uses this validated path by default for Types O and A. By default the QR remains a reader-link fallback; the payload stays in the TL body.</p>
     <p class="dim" style="margin-top:16px"><small>Measured 2026-08-13 · sample of 9 photos across three phone sensors (ultra-wide, wide, telephoto) · short side 1440 px. The sample is small — read this as a <em>current state</em>, not a success rate.</small></p>
   </section>
 

@@ -164,11 +164,13 @@ test('gen 정규화는 페이로드 내용을 버리고 config_id 를 붙인다'
   const body = normalizeGenBody({
     type: 'A', version: 1, ecc: 'L', tones: 3,
     finderPatternId: 'x', qrPosition: 'TL', bgMode: 'white', quietMode: 'none',
+    locatorProfile: 'hex-frame-v1',
     text: 'secret', payload: 'secret', url: 'https://evil.example/',
   });
   assert.deepEqual(Object.keys(body).sort(), [
-    'bgMode', 'config_id', 'ecc', 'finderPatternId', 'qrPosition', 'quietMode', 'tones', 'type', 'version',
+    'bgMode', 'config_id', 'ecc', 'finderPatternId', 'locatorProfile', 'qrPosition', 'quietMode', 'tones', 'type', 'version',
   ]);
+  assert.equal(body.locatorProfile, 'hex-frame-v1');
   assert.match(body.config_id, /^c[0-9a-f]{8}$/);
 });
 
@@ -290,8 +292,9 @@ test('안내 카드 3언어와 생성기 사전에 시험판 문구가 있다', 
   assert.match(strings, /Device and camera details, and shrunken frame images/);
   assert.match(strings, /端末・カメラ情報と、フレームの縮小画像/);
   const gen = read('index.html');
-  assert.match(gen, /"g512"/);
   assert.match(gen, /"g513"/);
-  assert.match(gen, /id="labNotice"/);
+  assert.match(gen, /id="finderExperimentBanner"/);
+  assert.match(gen, /id="labTelemetryDisclosure" hidden/);
+  assert.match(gen, /labTelemetryDisclosure && isLabPath\(\)/);
   assert.match(gen, /createLabTelemetry\(\{ site: 'gen' \}\)/);
 });

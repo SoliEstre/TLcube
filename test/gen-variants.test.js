@@ -54,12 +54,14 @@ test('정식 edition에 실험 기본값을 결합하면 빌드가 실패한다'
   }), /정식 생성기의 기본 파인더/);
 });
 
-test('두 빌드에 시험판/정식 상호 링크와 상시 시험 배너가 함께 들어간다', () => {
+test('두 빌드에 시험판/정식 상호 링크와 통합 시험 배너가 함께 들어간다', () => {
   const built = buildGeneratorVariants();
   for (const html of [built.official, built.experiment]) {
     assert.match(html, /href="https:\/\/tlcube\.estre\.so\/_shared\/gen-finder\.html"/);
     assert.match(html, /href="https:\/\/tlcube\.estre\.so\/"/);
     assert.match(html, /id="finderExperimentBanner"/);
+    assert.match(html, /id="labTelemetryDisclosure" hidden/);
+    assert.equal(html.match(/<aside class="experiment-banner/g)?.length, 1);
   }
 });
 
@@ -158,6 +160,19 @@ test('파인더/QR 결합은 정규화 뒤 한 번씩만 그리는 비재귀 경
   const renderSource = source.slice(renderStart, renderEnd);
   assert.match(renderSource, /renderWithErrorDisplay\(els\.error,/);
   assert.doesNotMatch(renderSource, /els\.error\.textContent\s*=/);
+});
+
+test('회전 한계 안내는 스캐너가 아니라 생성기 QR·파인더 선택 옆의 3언어 문구다', () => {
+  const source = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const scanner = readFileSync(path.join(ROOT, 'sites', 'tlscan', 'index.html'), 'utf8');
+  assert.match(source,
+    /id="qrLinkSection"[\s\S]*id="finderSection"[\s\S]*id="rotationGuidance"[^>]*data-i18n="g514"/,
+    'QR 링크 선택은 파인더보다 앞이고 회전 안내는 같은 생성기 설정 흐름에 있어야 한다');
+  assert.doesNotMatch(scanner, /rotationGuidance|scan-rotation-hint|guide\.rotation/,
+    '회전 안내를 스캐너 UI에 두지 않는다');
+  for (const marker of ['회전', 'rotated', '回転']) {
+    assert.ok(source.includes(marker), marker + ': 생성기 번역 누락');
+  }
 });
 
 test('실험 경고는 12종 후보 선택에만 연결되고 두 기준선에는 연결되지 않는다', () => {

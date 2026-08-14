@@ -865,6 +865,26 @@ test('중앙 QR 축: Type O/A 중앙 슬롯과 Type Y 윈도 β를 앞단이 복
   }
 });
 
+test('O/A 중앙 QR 기본 경로는 직각 회전 뒤에도 포맷 네임스페이스와 본문을 복호한다', {
+  timeout: 240_000,
+}, () => {
+  // 합성 직각 회전 계약만 고정한다. 실카메라의 모션 블러·원근·기울기 내성을 뜻하지 않으며,
+  // 그래서 생성기 UI는 배치 시 회전을 줄이라고 안내한다.
+  for (const type of ['O', 'A']) {
+    const text = 'center-qr-rotation-' + type;
+    const fixture = renderCenterQr(type, text);
+    for (const degrees of [90, 180, 270]) {
+      const result = decodeFrontend(distortImage(fixture.raster, {
+        rotation: degrees,
+        fill: FILL,
+      }));
+      assert.equal(result.ok, true, failureMessage(type + '-center-qr-rotation', degrees, result));
+      assert.equal(result.text, text, failureMessage(type + '-center-qr-rotation', degrees, result));
+      assert.equal(result.hypothesis.centerQr, true, type + '/' + degrees);
+    }
+  }
+});
+
 
 function renderCornerQr(type, text) {
   let encoded;

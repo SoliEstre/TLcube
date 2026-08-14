@@ -197,6 +197,13 @@
     main > .panel { order: 1; }
     main > #stage { order: 2; }
   }
+  /* 좌우 분할 뷰에서는 결과를 바로 저장할 수 있도록 내보내기 영역을 패널 맨 위에 둔다.
+     모바일 1열에서는 panel 을 block 으로 유지해 DOM 위치(설정 아래)를 그대로 따른다. */
+  @media (min-width: 761px) {
+    main > .panel { display: flex; flex-direction: column; }
+    .export-section { order: -1; margin-bottom: 14px; }
+    .export-section .export-heading { margin-top: 0; }
+  }
   .panel {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 10px; padding: 16px;
@@ -204,6 +211,12 @@
   }
   label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 4px; }
   label:first-child { margin-top: 0; }
+  .section-heading, .section-title {
+    display: block; margin: 18px 0 6px;
+    color: var(--text); font-size: 13px; font-weight: 700;
+    letter-spacing: .015em; line-height: 1.35;
+  }
+  .section-heading:first-child, .section-title:first-child { margin-top: 0; }
   textarea, select, input[type="text"], input[type="password"] {
     width: 100%; background: var(--bg); color: var(--text);
     border: 1px solid var(--line); border-radius: 6px;
@@ -265,8 +278,7 @@
   }
   .experiment-banner strong { display: block; color: var(--text); }
   .experiment-banner a { flex-shrink: 0; color: var(--warn); font-weight: 600; }
-  aside.lab-notice { display: flex; }
-  aside.lab-notice[hidden] { display: none !important; }
+  .lab-telemetry-disclosure[hidden] { display: none !important; }
 
   /* 중앙 파인더 카드 — 기존 card-row/toggle-card 관용구 위에 배치만 격자로 고정한다. */
   /* 정식 행이 3개일 땐 썸네일 옆에 글자를 두는 가로 배치가 넉넉했는데, 하이브리드가
@@ -423,6 +435,14 @@
     background: color-mix(in srgb, var(--accent) 12%, var(--bg));
   }
   .toggle-card.disabled { opacity: .35; pointer-events: none; }
+  /* 안전영역은 정확히 5개 선택지다. 이 행만 공용 64px 최소폭을 풀어 사이드바와
+     모바일 모두에서 다섯 버튼을 한 줄에 유지한다. */
+  #quietModeCards { flex-wrap: nowrap; gap: 6px; }
+  #quietModeCards .toggle-card { min-width: 0; padding-inline: 2px; font-size: 10px; }
+  @media (max-width: 420px) {
+    #quietModeCards { gap: 4px; }
+    #quietModeCards .toggle-card { padding-inline: 1px; font-size: 9px; }
+  }
 
   /* ── 용량 초과 하이라이트 (텍스트·URL 입력) ─────────────────────────
      입력 필드 뒤에 동일 메트릭 백드롭을 깔고, 수용 한계를 넘는 구간만
@@ -495,12 +515,6 @@
   input[type="range"] { width: 100%; accent-color: var(--accent); }
   .slider-value { font-size: 11px; color: var(--dim); margin-top: 2px; }
 
-  .section-title {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-    color: var(--dim); margin: 16px 0 4px;
-  }
-  .section-title:first-child { margin-top: 0; }
-
   /* 저장 확인은 모바일에서 손가락과 멀고, 스크린리더에도 같은 문구가 전달되는 Toast. */
   .download-toast {
     position: fixed; z-index: 100; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
@@ -554,16 +568,11 @@
     <button type="button" data-theme-choice="dark" data-i18n="g030">다크</button>
   </div>
 </header>
-<aside class="experiment-banner lab-notice" id="labNotice" hidden role="status">
-  <div>
-    <strong data-i18n="g512">시험판입니다</strong>
-    <span data-i18n="g513">이 주소는 시험판입니다. 기기 정보와 생성 설정(타입·버전 등)이 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 이런 전송을 하지 않습니다.</span>
-  </div>
-</aside>
 <aside class="experiment-banner finder-experiment-only" id="finderExperimentBanner" role="status">
   <div>
     <strong data-i18n="g478">시험판 — 실험 파인더 생성기</strong>
     <span data-i18n="g479">셀 파인더 코드는 공용 스캐너 경로를 사용해요. 실사진 보정은 아직 실험 단계입니다.</span>
+    <span class="lab-telemetry-disclosure" id="labTelemetryDisclosure" hidden><br><span data-i18n="g513">이 주소에서는 기기 정보와 생성 설정(타입·버전 등)이 실시간 전송됩니다. 페이로드 내용은 보내지 않으며, 안정판은 이런 전송을 하지 않습니다.</span></span>
   </div>
   <a href="https://tlcube.estre.so/" data-i18n="g477">정식 생성기로 돌아가기</a>
 </aside>
@@ -597,7 +606,7 @@
 
     <!-- ══════ 공용: 콘텐츠 (일반·고급 공통 — 사용자 지시 2026-08-09 "고급에도 일반 선택지 전부") ══════ -->
     <div id="sharedContent" data-state-keys="contentTab wifiSecurity">
-      <label data-i18n="g031">콘텐츠</label>
+      <label class="section-heading" data-i18n="g031">콘텐츠</label>
       <div class="card-row" id="contentTabs">
         <!-- URL 이 맨 앞 + 진입 기본 선택 (사용자 지시 2026-08-09) -->
         <div class="toggle-card active" data-tab="url">
@@ -677,9 +686,15 @@
       </div>
     </div>
 
+    <div class="capacity-section" id="capacitySection">
+      <div class="section-title" data-i18n="g073">용량</div>
+      <div class="gauge-track"><div class="gauge-fill" id="nGaugeFill"></div></div>
+      <div class="gauge-label" id="nGaugeLabel">–</div>
+    </div>
+
     <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
     <div id="panelNormal" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone">
-      <label data-i18n="g041">타입</label>
+      <label class="section-heading" data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 선택 = Y (사용자 지시 2026-08-09). -->
       <div class="card-row" id="typeCards">
         <div class="toggle-card" data-type="O" style="flex:1">
@@ -712,7 +727,7 @@
       </div>
 
       <div id="toneNormalSection" style="display:none">
-        <label data-i18n="g052">톤</label>
+        <label class="section-heading" data-i18n="g052">톤</label>
         <div class="card-row" id="toneCardsNormal">
           <div class="toggle-card" data-tone="2" style="flex:1">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
@@ -734,7 +749,7 @@
         </div>
       </div>
 
-      <label for="nPreset" data-i18n="g042">스타일</label>
+      <label class="section-heading" for="nPreset" data-i18n="g042">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
       <!-- 커스텀은 다음 줄 전폭 배치 — hue 바가 폭 전체를 쓴다 (사용자 지시 2026-08-09). -->
       <div class="card-row">
@@ -749,7 +764,7 @@
         <p class="slider-value" id="hueValue"></p>
       </div>
 
-      <label data-i18n="g044">해상도 (모듈 밀도)</label>
+      <label class="section-heading" data-i18n="g044">해상도 (모듈 밀도)</label>
       <!-- 사용자 지시 2026-08-09: 용량과 다른 축 — 버전(모듈 수) 3단 + 자동(기본).
            저 = 원거리·광고판(모듈 큼) / 중 = 1~3m 인쇄 / 고 = 근거리·대용량(모듈 작음).
            자동 조합 규칙: 해상도를 먼저 올리고, 최대에서도 안 들어가면 용량 단계(ECC)를
@@ -762,7 +777,7 @@
       </div>
       <p class="hint" id="resTierHint"></p>
 
-      <label data-i18n="g045">안정성 · 용량</label>
+      <label class="section-heading" data-i18n="g045">안정성 · 용량</label>
       <!-- 사용자 지시 2026-08-09: 보정 강화(용량↓)/표준/대용량 3단 + 자동(기본 —
            입력 크기에 따라 H→M→L 순서로 처음 들어가는 레벨 채택). -->
       <div class="card-row" id="eccTierCards">
@@ -776,7 +791,7 @@
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
     <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone faceGain qrText qrCornerToo">
-      <label for="codeType" data-i18n="g041">타입</label>
+      <label class="section-heading" for="codeType" data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
       <select id="codeType">
         <option value="O" data-i18n="g046">Type O (마름모 8면체 필드)</option>
@@ -825,7 +840,7 @@
 
 
       <fieldset class="typeOptions" id="optionsY" style="display:none">
-        <label data-i18n="g052">톤</label>
+        <label class="section-heading" data-i18n="g052">톤</label>
         <div class="card-row" id="toneCardsAdvanced">
           <div class="toggle-card" data-tone="2" style="flex:1">
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
@@ -854,7 +869,7 @@
       <label for="qrUrl" data-i18n="g056">QR 폴백 URL (고급)</label>
       <input type="text" id="qrUrl" spellcheck="false">
 
-      <label for="preset" data-i18n="g057">스타일 프리셋</label>
+      <label class="section-heading" for="preset" data-i18n="g057">스타일 프리셋</label>
       <select id="preset"></select>
       <div id="hueRowAdv" style="display:none">
         <label for="hueBarAdv" data-i18n="g058">커스텀 Hue</label>
@@ -867,7 +882,7 @@
     <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode">
       <!-- 사용자 지시 2026-08-09: 배경 3택(투명/흰색/검정), 기본 투명.
            투명은 미리보기에서 포토샵식 체커보드로 표시한다(테마별 색). -->
-      <label data-i18n="g059">배경</label>
+      <label class="section-heading" data-i18n="g059">배경</label>
       <div class="card-row" id="bgModeCards">
         <div class="toggle-card active" data-bg="transparent" title="배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음" data-i18n-attr="title:g010">
           <span class="swatch-mini checker"></span><span data-i18n="g201">투명</span></div>
@@ -882,7 +897,7 @@
            코드를 얹을 표면 사진을 깔고 드래그/휠 줌으로 위치를 맞춰, 실루엣 검출이
            될 자리인지 **인쇄 전에** 눈과 수치로 확인한다. 렌더 산출물에는 안 들어간다. -->
       <div id="backdropSection" style="display:none">
-        <label data-i18n="g060">배치 미리보기 (표면 이미지)</label>
+        <label class="section-heading" data-i18n="g060">배치 미리보기 (표면 이미지)</label>
         <div class="row">
           <div class="export-pair" style="flex:1">
             <button id="backdropPick" type="button" data-i18n="g061">이미지 선택…</button>
@@ -897,7 +912,7 @@
       </div>
 
       <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
-      <label data-i18n="g063">안전영역 (코드 주변 여백)</label>
+      <label class="section-heading" data-i18n="g063">안전영역 (코드 주변 여백)</label>
       <div class="card-row" id="quietModeCards">
         <div class="toggle-card active" data-quiet="auto" title="배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략" data-i18n-attr="title:g014"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3 2.4"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor" stroke="none"/></svg><span data-i18n="g028">자동</span></div>
         <div class="toggle-card" data-quiet="none" title="안전영역 없이 코드만" data-i18n-attr="title:g015"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/><path d="M4 20 L20 4"/></svg><span data-i18n="g036">없음</span></div>
@@ -907,8 +922,47 @@
       </div>
       <p class="hint" id="quietModeHint"></p>
 
+      <section id="qrLinkSection" aria-labelledby="qrLinkHeading">
+        <div class="section-heading" id="qrLinkHeading" data-i18n="g064">TL스캐너 QR링크 포함</div>
+        <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
+             (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
+        <div class="card-row" id="qrPositionCards">
+          <div class="toggle-card active" data-pos="TL">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <rect x="6.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
+            </svg><span data-i18n="g084">좌상</span></div>
+          <div class="toggle-card" data-pos="TR">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <rect x="12.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
+            </svg><span data-i18n="g085">우상</span></div>
+          <div class="toggle-card" data-pos="BL">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <rect x="6.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
+            </svg><span data-i18n="g086">좌하</span></div>
+          <div class="toggle-card" data-pos="BR">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <rect x="12.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
+            </svg><span data-i18n="g087">우하</span></div>
+          <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도)" data-i18n-attr="title:g017">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
+            </svg><span data-i18n="g204">안쪽</span></div>
+          <div class="toggle-card" data-pos="none" title="QR 링크 없이 코드만 내보내요" data-i18n-attr="title:g018">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <path d="M6.5 17.5 L17.5 6.5"/>
+            </svg><span data-i18n="g036">없음</span></div>
+        </div>
+        <p class="hint" data-i18n="g065">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
+      </section>
+
       <div id="finderSection" style="display:none">
-        <label data-i18n="g459">중앙 파인더 (Type O/A)</label>
+        <label class="section-heading" data-i18n="g459">중앙 파인더 (Type O/A)</label>
         <div class="finder-legacy-row card-row" id="finderLegacyRow"></div>
         <!-- 실험 후보 둘은 기본 접힘(사용자 지시 2026-08-13). 정식 4종만 펼쳐 두면
              카드 수가 15개에서 4개로 줄어 «무엇을 고르면 되는가» 가 바로 보인다. -->
@@ -941,48 +995,25 @@
         <strong data-i18n="g469">실험 — 셀 파인더 스캔 경로 연결됨</strong><br>
         <span data-i18n="g470">공용 마스크 검출기가 이 파인더를 읽어요. 실사진 보정은 아직 실험 단계이므로 비교·검증용으로 사용해 주세요.</span>
       </p>
+      <p class="hint" id="rotationGuidance" data-i18n="g514">실기기에서는 카메라나 코드를 회전시키면 인식이 떨어질 수 있어요. Type O/A는 방향 기준을 주는 중앙 QR(안쪽)을 기본으로 사용하지만, 회전 내성을 보장하지는 않아요. 생성·배치할 때 코드의 위쪽이 자연스럽게 위를 향하도록 두세요.</p>
 
-      <label data-i18n="g064">TL스캐너 QR링크 포함</label>
-      <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
-           (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
-      <div class="card-row" id="qrPositionCards">
-        <div class="toggle-card active" data-pos="TL">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <rect x="6.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg><span data-i18n="g084">좌상</span></div>
-        <div class="toggle-card" data-pos="TR">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <rect x="12.5" y="6.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg><span data-i18n="g085">우상</span></div>
-        <div class="toggle-card" data-pos="BL">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <rect x="6.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg><span data-i18n="g086">좌하</span></div>
-        <div class="toggle-card" data-pos="BR">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <rect x="12.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg><span data-i18n="g087">우하</span></div>
-        <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도)" data-i18n-attr="title:g017">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
-          </svg><span data-i18n="g204">안쪽</span></div>
-        <div class="toggle-card" data-pos="none" title="QR 링크 없이 코드만 내보내요" data-i18n-attr="title:g018">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <rect x="4" y="4" width="16" height="16" rx="2"/>
-            <path d="M6.5 17.5 L17.5 6.5"/>
-          </svg><span data-i18n="g036">없음</span></div>
+      <div id="yLocatorSection" hidden>
+        <label class="section-heading" data-i18n="g515">Y타입 검출기 옵션</label>
+        <div class="card-row" id="yLocatorCards">
+          <div class="toggle-card active" data-locator="off">
+            <span data-i18n="g516">끔 (기존)</span>
+          </div>
+          <div class="toggle-card" data-locator="hex-frame-v1">
+            <span data-i18n="g517">실험 프레임 β</span>
+          </div>
+        </div>
+        <p class="hint" id="yLocatorHint" data-i18n="g518">실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.</p>
       </div>
-      <p class="hint" data-i18n="g065">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
 
       <!-- Y + 안쪽 전용: 좌/우 면 배제영역 장식 이미지 (렌더 자유구역 — 데이터 계약 무관.
            사용자 지시 2026-08-09). -->
       <div id="decorSection" style="display:none">
-        <label data-i18n="g066">장식 이미지 (좌/우 빈 면 각각 — β)</label>
+        <label class="section-heading" data-i18n="g066">장식 이미지 (좌/우 빈 면 각각 — β)</label>
         <div class="row">
           <div class="export-pair" style="flex:1">
             <button id="decorPickL" type="button" data-i18n="g067">좌측 선택…</button>
@@ -1009,54 +1040,53 @@
         중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.
       </p>
 
-      <div class="section-title" data-i18n="g073">용량</div>
-      <div class="gauge-track"><div class="gauge-fill" id="nGaugeFill"></div></div>
-      <div class="gauge-label" id="nGaugeLabel">–</div>
     </div>
 
     <!-- ══════════════════════ 공통 ══════════════════════ -->
-    <div class="export-heading" id="exportHeading">
-      <svg class="export-dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 3v12"/>
-        <path d="M7 11l5 5 5-5"/>
-        <path d="M5 21h14"/>
-      </svg>
-      <span data-i18n="g074">다운로드와 복사</span>
-    </div>
-    <div class="row export-row" role="group" aria-labelledby="exportHeading">
-      <div class="export-pair">
-        <button id="exportPng" type="button" class="export-fmt">
-          <svg class="export-format-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="5" width="18" height="14" rx="2"/>
-            <circle cx="8.5" cy="10" r="1.6"/>
-            <path d="M21 16l-5.2-4.6-4.3 3.8L8 13l-5 4"/>
-          </svg>
-          PNG
-        </button>
-        <button id="copyPng" type="button" class="icon-btn" title="PNG를 클립보드에 복사" data-i18n-attr="title:g021">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
-            <rect x="8" y="8" width="12" height="12" rx="2"/>
-            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
-          </svg>
-        </button>
+    <section class="export-section" aria-labelledby="exportHeading">
+      <div class="export-heading" id="exportHeading">
+        <svg class="export-dl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"/>
+          <path d="M7 11l5 5 5-5"/>
+          <path d="M5 21h14"/>
+        </svg>
+        <span data-i18n="g074">TL큐브 다운로드 / 복사하기</span>
       </div>
-      <div class="export-pair">
-        <button id="exportSvg" type="button" class="export-fmt">
-          <svg class="export-format-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 16c3-8 5 6 8-2 3-8 5 6 8-2"/>
-            <circle cx="5" cy="15.2" r="1.1" fill="currentColor" stroke="none"/>
-            <circle cx="19" cy="12.8" r="1.1" fill="currentColor" stroke="none"/>
-          </svg>
-          SVG
-        </button>
-        <button id="copySvg" type="button" class="icon-btn" title="SVG 마크업을 클립보드에 복사" data-i18n-attr="title:g022">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
-            <rect x="8" y="8" width="12" height="12" rx="2"/>
-            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
-          </svg>
-        </button>
+      <div class="row export-row" role="group" aria-labelledby="exportHeading">
+        <div class="export-pair">
+          <button id="exportPng" type="button" class="export-fmt">
+            <svg class="export-format-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="2"/>
+              <circle cx="8.5" cy="10" r="1.6"/>
+              <path d="M21 16l-5.2-4.6-4.3 3.8L8 13l-5 4"/>
+            </svg>
+            PNG
+          </button>
+          <button id="copyPng" type="button" class="icon-btn" title="PNG를 클립보드에 복사" data-i18n-attr="title:g021">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+              <rect x="8" y="8" width="12" height="12" rx="2"/>
+              <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+            </svg>
+          </button>
+        </div>
+        <div class="export-pair">
+          <button id="exportSvg" type="button" class="export-fmt">
+            <svg class="export-format-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 16c3-8 5 6 8-2 3-8 5 6 8-2"/>
+              <circle cx="5" cy="15.2" r="1.1" fill="currentColor" stroke="none"/>
+              <circle cx="19" cy="12.8" r="1.1" fill="currentColor" stroke="none"/>
+            </svg>
+            SVG
+          </button>
+          <button id="copySvg" type="button" class="icon-btn" title="SVG 마크업을 클립보드에 복사" data-i18n-attr="title:g022">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+              <rect x="8" y="8" width="12" height="12" rx="2"/>
+              <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>
+            </svg>
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
     <div id="info"></div>
     <div id="error"></div>
   </div>
@@ -1178,7 +1208,7 @@ const GENERATOR_STRINGS = {
     "g071": "중앙 QR 과 코너 QR 병행 표시 (고급)",
     "g072": "중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.",
     "g073": "용량",
-    "g074": "다운로드와 복사",
+    "g074": "TL큐브 다운로드 / 복사하기",
     "g075": "저",
     "g076": "중",
     "g077": "고",
@@ -1315,8 +1345,14 @@ const GENERATOR_STRINGS = {
     "g509": "불스아이 속 큐브",
     "g510": "기준 미달 후보",
     "g511": "스캔 불가 후보",
-    "g512": "시험판입니다",
-    "g513": "이 주소는 시험판입니다. 기기 정보와 생성 설정(타입·버전 등)이 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 이런 전송을 하지 않습니다.",
+    "g514": "실기기에서는 카메라나 코드를 회전시키면 인식이 떨어질 수 있어요. Type O/A는 방향 기준을 주는 중앙 QR(안쪽)을 기본으로 사용하지만, 회전 내성을 보장하지는 않아요. 생성·배치할 때 코드의 위쪽이 자연스럽게 위를 향하도록 두세요.",
+    "g513": "이 주소에서는 기기 정보와 생성 설정(타입·버전 등)이 실시간 전송됩니다. 페이로드 내용은 보내지 않으며, 안정판은 이런 전송을 하지 않습니다.",
+    "g515": "Y타입 검출기 옵션",
+    "g516": "끔 (기존)",
+    "g517": "실험 프레임 β",
+    "g518": "실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.",
+    "g519": "표시를 넣지 않아요. 지금까지의 Type Y와 같아요.",
+    "g520": "육각 바깥에 이중 테두리와 가운데 허브를 더해요. 검출 실험용이며 성능을 약속하지 않아요.",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1392,7 +1428,7 @@ const GENERATOR_STRINGS = {
     "g071": "Show centre QR and corner QR together (advanced)",
     "g072": "The centre-QR variant puts a QR where the bullseye would be — printing at 13 cm code width or wider is recommended.",
     "g073": "Capacity",
-    "g074": "Download and copy",
+    "g074": "Download / copy TLcube",
     "g075": "Low",
     "g076": "Mid",
     "g077": "High",
@@ -1529,8 +1565,14 @@ const GENERATOR_STRINGS = {
     "g509": "Cube in bullseye",
     "g510": "Below-bar candidates",
     "g511": "Not scannable",
-    "g512": "This is the lab build",
-    "g513": "This is the lab generator. Device details and generation settings (type, version, and so on) are sent in real time. Payload contents are not sent. The stable generator does not send this.",
+    "g514": "Recognition can drop on real devices when the camera or code is rotated. Types O and A default to a centre QR (Inner) that supplies an orientation reference, but it does not guarantee rotation tolerance. Generate and place the code with its top naturally facing up.",
+    "g513": "On this address, device details and generation settings (type, version, and so on) are sent in real time. Payload contents are not sent, and the stable generator does not send this.",
+    "g515": "Type Y detector options",
+    "g516": "Off (legacy)",
+    "g517": "Experimental frame β",
+    "g518": "Experimental. Does not guarantee rotation, lighting, print, or live-scan performance.",
+    "g519": "No extra marks. Same as unmarked Type Y.",
+    "g520": "Adds a double hex border and a centre hub. For detection experiments only; performance is not promised.",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1606,7 +1648,7 @@ const GENERATOR_STRINGS = {
     "g071": "中央 QR とコーナー QR を併記（詳細）",
     "g072": "中央 QR 変種はブルズアイの代わりに中央へ QR を配置します — コード幅 13cm 以上での印刷を推奨します。",
     "g073": "容量",
-    "g074": "ダウンロードとコピー",
+    "g074": "TLcubeをダウンロード／コピー",
     "g075": "低",
     "g076": "中",
     "g077": "高",
@@ -1743,8 +1785,14 @@ const GENERATOR_STRINGS = {
     "g509": "ブルズアイの中のキューブ",
     "g510": "基準未達の候補",
     "g511": "スキャン不可の候補",
-    "g512": "試用版です",
-    "g513": "このアドレスは試用版です。端末情報と生成設定（タイプ・バージョンなど）がリアルタイムで送信されます。ペイロードの内容は送りません。安定版ではこの送信はありません。",
+    "g514": "実機ではカメラやコードを回転させると認識しにくくなることがあります。Type O/A は方向の基準になる中央 QR（内側）を標準にしますが、回転耐性を保証するものではありません。生成・配置時にはコードの上側が自然に上を向くようにしてください。",
+    "g513": "このアドレスでは、端末情報と生成設定（タイプ・バージョンなど）がリアルタイムで送信されます。ペイロードの内容は送らず、安定版ではこの送信を行いません。",
+    "g515": "Yタイプ検出オプション",
+    "g516": "オフ（従来）",
+    "g517": "実験フレーム β",
+    "g518": "実験用です。回転・照明・印刷・ライブスキャンの性能は保証しません。",
+    "g519": "追加マークなし。従来の Type Y と同じです。",
+    "g520": "六角の外側に二重枠と中央ハブを足します。検出実験用で、性能は約束しません。",
   },
 };
 
@@ -1765,7 +1813,7 @@ const GENERATOR_STRINGS = {
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
-  syncFaceGainLabel,
+  syncFaceGainLabel, syncYLocatorUi,
 ];
 
 const genI18n = createI18n(GENERATOR_STRINGS, {
@@ -1789,12 +1837,15 @@ import {
 } from './src/finder-patterns.js';
 import {
   CENTER_QR_FINDER_PATTERN_ID, commitFinderQrTransition,
-  selectFinderPattern, selectQrPosition,
+  selectFinderPattern, selectGeneratorType, selectQrPosition,
 } from './src/finder-selection.js';
 import {
   FINDER_CARD_GROUPS, wireFinderCardActivation,
 } from './src/finder-card-ui.js';
 import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
+import {
+  LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_OFF,
+} from './src/locatorY.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   createGeneratorState, resolutionTierForVersion, transitionGeneratorMode,
@@ -1854,6 +1905,8 @@ const els = {
   finderCenterOffset: $('finderCenterOffset'), finderCenterGate: $('finderCenterGate'),
   finderBaselineEvidence: $('finderBaselineEvidence'),
   finderExperimentalWarning: $('finderExperimentalWarning'),
+  yLocatorSection: $('yLocatorSection'), yLocatorCards: $('yLocatorCards'),
+  yLocatorHint: $('yLocatorHint'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
@@ -2773,7 +2826,9 @@ function syncFinderQrUi() {
 for (const card of els.typeCards.children) {
   card.addEventListener('click', () => {
     const type = card.dataset.type;
-    commitFinderQrUi({ ...generatorState, type }, type);
+    commitFinderQrUi(
+      selectGeneratorType(generatorState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
+    );
   });
 }
 
@@ -2995,6 +3050,19 @@ for (const card of els.quietModeCards.children) {
   });
 }
 syncQuietModeUi();
+
+if (els.yLocatorCards) {
+  for (const card of els.yLocatorCards.children) {
+    card.addEventListener('click', () => {
+      const next = card.dataset.locator;
+      generatorState.locatorProfileY = next === LOCATOR_PROFILE_HEX_FRAME_V1
+        ? LOCATOR_PROFILE_HEX_FRAME_V1
+        : LOCATOR_PROFILE_OFF;
+      syncYLocatorUi();
+      schedule();
+    });
+  }
+}
 
 // ── 배치 미리보기 (투명 배경 전용) ──────────────────────────────────────
 //
@@ -3390,11 +3458,34 @@ function syncTypeUi() {
   els.versionWrapY.style.display = isY ? '' : 'none';
   els.versionWrapA.style.display = isA ? '' : 'none';
   els.optionsY.style.display = isY ? '' : 'none';
+  syncYLocatorUi();
+}
+
+function syncYLocatorUi() {
+  const section = els.yLocatorSection;
+  if (!section) return;
+  const show = isLabPath() && generatorState.type === 'Y';
+  section.hidden = !show;
+  const profile = generatorState.locatorProfileY === LOCATOR_PROFILE_HEX_FRAME_V1
+    ? LOCATOR_PROFILE_HEX_FRAME_V1
+    : LOCATOR_PROFILE_OFF;
+  if (els.yLocatorCards) {
+    for (const card of els.yLocatorCards.children) {
+      card.classList.toggle('active', card.dataset.locator === profile);
+    }
+  }
+  if (els.yLocatorHint) {
+    els.yLocatorHint.textContent = profile === LOCATOR_PROFILE_HEX_FRAME_V1
+      ? t('g520')
+      : t('g519');
+  }
 }
 
 els.codeType.addEventListener('change', () => {
   const type = els.codeType.value;
-  commitFinderQrUi({ ...generatorState, type }, type);
+  commitFinderQrUi(
+    selectGeneratorType(generatorState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
+  );
 });
 for (const [select, key] of [
   [els.versionO, 'versionO'], [els.versionY, 'versionY'], [els.versionA, 'versionA'],
@@ -3648,6 +3739,9 @@ function renderTypeY(cfg) {
   const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
 
   const sceneOpts = { palette: paletteOf(cfg.presetName, cfg.faceGains) };
+  if (isLabPath() && generatorState.locatorProfileY === LOCATOR_PROFILE_HEX_FRAME_V1) {
+    sceneOpts.locatorProfile = LOCATOR_PROFILE_HEX_FRAME_V1;
+  }
   if (cfg.fallback.mode !== 'off') {
     sceneOpts.qrText = cfg.qrText;
     if (cfg.fallback.mode === 'corner') sceneOpts.qrCorner = cfg.fallback.corner;
@@ -3794,8 +3888,8 @@ function render() {
 }
 
 const lab = createLabTelemetry({ site: 'gen' });
-const labNotice = document.getElementById('labNotice');
-if (labNotice && isLabPath()) labNotice.hidden = false;
+const labTelemetryDisclosure = document.getElementById('labTelemetryDisclosure');
+if (labTelemetryDisclosure && isLabPath()) labTelemetryDisclosure.hidden = false;
 if (lab.enabled) {
   const uad = typeof navigator !== 'undefined' ? navigator.userAgentData : null;
   const brands = uad && uad.brands;
@@ -3823,6 +3917,7 @@ function emitLabGen(result, cfg) {
     qrPosition: generatorState.qrPosition,
     bgMode: generatorState.bgMode,
     quietMode: generatorState.quietMode,
+    locatorProfile: generatorState.locatorProfileY || LOCATOR_PROFILE_OFF,
   };
   const sig = JSON.stringify(body);
   if (sig === lastLabGen) return;
@@ -3856,7 +3951,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-14.02';
+const GENERATOR_BUILD = '2026-08-14.03';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

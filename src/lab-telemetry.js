@@ -27,10 +27,11 @@ export const CHAIN_STAGES = Object.freeze([
   'input-quality', 'proposal', 'finder', 'geometry', 'sample', 'format', 'body',
 ]);
 export const CONFIG_SIDE_KEYS = Object.freeze([
-  'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition',
+  'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile',
 ]);
 export const GEN_BODY_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'bgMode', 'quietMode',
+  'locatorProfile',
 ]);
 
 /** `/lab` 또는 `/lab/…` 만 시험판. `/label` 같은 접두 오탐을 막는다. */
@@ -204,6 +205,7 @@ export function emptyConfigSide() {
     tones: null,
     finderPatternId: null,
     qrPosition: null,
+    locatorProfile: null,
   };
 }
 
@@ -245,6 +247,11 @@ export function observedFromResult(result) {
   } else if (hyp && (hyp.source === 'center-qr' || hyp.source === 'bullseye')) {
     out.finderPatternId = hyp.source;
     if (hyp.source === 'center-qr') out.qrPosition = 'inner';
+  }
+  if (hyp && typeof hyp.locatorProfile === 'string' && hyp.locatorProfile) {
+    out.locatorProfile = hyp.locatorProfile;
+  } else if (hyp && typeof hyp.source === 'string' && hyp.source.startsWith('locator-')) {
+    out.locatorProfile = hyp.source.slice('locator-'.length);
   }
   return out;
 }
