@@ -17,6 +17,7 @@ import {
   POSTER_TL_TYPE,
   POSTER_TL_VERSION,
   POSTER_URL,
+  PRINT_PALETTE,
   QR_QUIET_MODULES,
   SYMBOL_BOX_CLASS,
   SYMBOL_BOX_MM,
@@ -188,6 +189,13 @@ test('컬러 인쇄 포스터는 Type Y 3톤 계약과 장식-코드 분리를 �
   assert.equal(POSTER_TL_TONES, 3);
   assert.match(POSTER, /--violet:\s*#6548e8/);
   assert.match(POSTER, /radial-gradient/);
+  assert.deepEqual(PRINT_PALETTE.levels, [
+    { r: 47, g: 23, b: 56 },
+    { r: 184, g: 66, b: 130 },
+    { r: 255, g: 209, b: 229 },
+  ]);
+  assert.match(POSTER, /\.card::before\s*\{[\s\S]*?var\(--violet\), var\(--cyan\)/);
+  assert.match(POSTER, /\.card--tlcube::before\s*\{[\s\S]*?var\(--pink\), #ff9a74/);
   assert.match(POSTER, /\.code-stage\s*\{[\s\S]*?background:\s*#ffffff/);
   assert.doesNotMatch(POSTER, /\.symbol-box\s*::(?:before|after)/);
 });

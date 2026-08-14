@@ -32,13 +32,13 @@ export const SYMBOL_BOX_TOKEN = '--symbol-box';
 export const SYMBOL_BOX_MM = 45;
 export const QR_QUIET_MODULES = 4;
 
-/** 컬러 인쇄용 3톤. RGB가 달라도 상대 휘도 간격은 크게 유지한다. */
+/** 컬러 인쇄용 마젠타 3톤. RGB가 달라도 상대 휘도 간격은 크게 유지한다. */
 export const PRINT_PALETTE = Object.freeze({
   background: Object.freeze({ r: 255, g: 255, b: 255 }),
   levels: Object.freeze([
-    Object.freeze({ r: 18, g: 22, b: 48 }),
-    Object.freeze({ r: 82, g: 68, b: 178 }),
-    Object.freeze({ r: 188, g: 226, b: 240 }),
+    Object.freeze({ r: 47, g: 23, b: 56 }),
+    Object.freeze({ r: 184, g: 66, b: 130 }),
+    Object.freeze({ r: 255, g: 209, b: 229 }),
   ]),
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
@@ -236,10 +236,10 @@ export function buildPrintPosterHtml() {
     position: absolute;
     inset: 0 0 auto;
     height: 3.2mm;
-    background: var(--pink);
+    background: linear-gradient(90deg, var(--violet), var(--cyan));
   }
   .card--tlcube::before {
-    background: linear-gradient(90deg, var(--violet), var(--cyan));
+    background: linear-gradient(90deg, var(--pink), #ff9a74);
   }
   .card-meta {
     align-self: stretch;
@@ -296,15 +296,15 @@ export function buildPrintPosterHtml() {
     margin-top: auto;
     padding: 1.7mm 4mm;
     border-radius: 999px;
-    background: #fff1f6;
-    color: #8f2450;
+    background: #e9faff;
+    color: #1f5d86;
     font-size: 12pt;
     font-weight: 800;
     letter-spacing: 0.08em;
   }
   .card--tlcube .dimension {
-    background: #eeeaff;
-    color: var(--violet-deep);
+    background: #fff1f6;
+    color: #8f2450;
   }
   .format-note {
     margin-top: 2.4mm;
