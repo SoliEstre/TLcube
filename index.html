@@ -264,6 +264,50 @@
     background: color-mix(in srgb, var(--warn) 8%, transparent);
     border-radius: 0 6px 6px 0; font-size: 11px; line-height: 1.5;
   }
+  #yCellEditorSection { max-width: 100%; min-width: 0; }
+  .y-cell-editor-legend {
+    display: flex; flex-wrap: wrap; gap: 8px 12px;
+    margin-top: 8px; font-size: 11px; color: var(--dim);
+  }
+  .y-cell-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .y-cell-swatch {
+    width: 12px; height: 12px; border-radius: 2px; flex: 0 0 auto;
+    border: 1px solid var(--line);
+  }
+  .y-cell-swatch-data { background: #8b93a7; }
+  .y-cell-swatch-detector {
+    background: #8b93a7;
+    background-image: repeating-linear-gradient(
+      45deg, rgba(226,59,59,.45) 0 2px, transparent 2px 5px);
+  }
+  .y-cell-swatch-fixed { background: #8b93a7; border: 2px solid #c9a227; }
+  .y-cell-editor-toolbar {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .y-cell-editor-toolbar button { flex: 1 1 72px; min-width: 0; }
+  .y-cell-editor-viewport {
+    width: 100%; max-width: 100%; overflow: auto;
+    touch-action: pan-x pan-y;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); margin-top: 8px;
+    max-height: min(70vh, 420px);
+    --y-cell-zoom: 1;
+  }
+  #yCellEditorSvg {
+    display: block;
+    width: calc(100% * var(--y-cell-zoom, 1));
+    height: auto;
+    min-width: 100%;
+  }
+  #yCellEditorSvg .y-cell-editor-cell:focus,
+  #yCellEditorSvg .y-cell-editor-cell:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  #yCellEditorJson {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 11px; line-height: 1.4; max-width: 100%;
+  }
   /* 같은 index.html 에서 정식/시험판을 빌드한다. edition 속성은 build-single 만 바꾼다. */
   .official-edition-only, .finder-experiment-only { display: none !important; }
   body[data-generator-edition="official"] .official-edition-only { display: inline-flex !important; }
@@ -1006,8 +1050,38 @@
           <div class="toggle-card" data-locator="hex-frame-v1">
             <span data-i18n="g517">실험 프레임 β</span>
           </div>
+          <div class="toggle-card" data-locator="cell-surface-v1">
+            <span data-i18n="g542">셀 표면 v1</span>
+          </div>
         </div>
         <p class="hint" id="yLocatorHint" data-i18n="g518">실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.</p>
+      </div>
+
+      <div id="yCellEditorSection" hidden>
+        <label class="section-heading" data-i18n="g521">Y타입 셀 편집기</label>
+        <p class="hint" data-i18n="g522">한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.</p>
+        <div class="card-row" id="yCellEditorModeCards">
+          <button type="button" class="toggle-card active" data-ycell-mode="tone" data-i18n="g523">톤 편집</button>
+          <button type="button" class="toggle-card" data-ycell-mode="mask" data-i18n="g524">데이터 영역 마스크</button>
+        </div>
+        <p class="hint" id="yCellEditorModeHint" data-i18n="g539">톤을 바꾸면 그 좌표는 세 면 모두 데이터에서 빠집니다.</p>
+        <div class="y-cell-editor-legend" id="yCellEditorLegend">
+          <span class="y-cell-legend-item"><span class="y-cell-swatch y-cell-swatch-data"></span><span data-i18n="g527">데이터</span></span>
+          <span class="y-cell-legend-item"><span class="y-cell-swatch y-cell-swatch-detector"></span><span data-i18n="g528">검출기/안전</span></span>
+          <span class="y-cell-legend-item"><span class="y-cell-swatch y-cell-swatch-fixed"></span><span data-i18n="g529">고정 reference/format</span></span>
+        </div>
+        <div class="y-cell-editor-toolbar">
+          <button type="button" id="yCellEditorZoomOut" data-i18n="g537">축소</button>
+          <button type="button" id="yCellEditorZoomIn" data-i18n="g538">확대</button>
+          <button type="button" id="yCellEditorReset" data-i18n="g525">초기화</button>
+          <button type="button" id="yCellEditorCopy" data-i18n="g526">설정값 복사</button>
+        </div>
+        <div class="y-cell-editor-viewport" id="yCellEditorViewport">
+          <svg id="yCellEditorSvg" xmlns="http://www.w3.org/2000/svg" role="group" focusable="true"></svg>
+        </div>
+        <p class="hint" id="yCellEditorStatus" role="status" aria-live="polite"></p>
+        <label for="yCellEditorJson" data-i18n="g532">설정 JSON</label>
+        <textarea id="yCellEditorJson" readonly rows="8" spellcheck="false"></textarea>
       </div>
 
       <!-- Y + 안쪽 전용: 좌/우 면 배제영역 장식 이미지 (렌더 자유구역 — 데이터 계약 무관.
@@ -1353,6 +1427,28 @@ const GENERATOR_STRINGS = {
     "g518": "실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.",
     "g519": "표시를 넣지 않아요. 지금까지의 Type Y와 같아요.",
     "g520": "육각 바깥에 이중 테두리와 가운데 허브를 더해요. 검출 실험용이며 성능을 약속하지 않아요.",
+    "g542": "셀 표면 v1",
+    "g541": "Y1/Y1T(n=21) 공용 시험판입니다. 셀 표면에 코너 패턴을 그립니다. 데이터 톤(2/3)은 그대로 씁니다. 성능을 보장하지 않아요.",
+    "g521": "Y타입 셀 편집기",
+    "g522": "한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
+    "g523": "톤 편집",
+    "g524": "데이터 영역 마스크",
+    "g525": "초기화",
+    "g526": "설정값 복사",
+    "g527": "데이터",
+    "g528": "검출기/안전",
+    "g529": "고정 reference/format",
+    "g530": "설정값을 복사했습니다.",
+    "g531": "복사에 실패했습니다. 아래 텍스트를 직접 선택하세요.",
+    "g532": "설정 JSON",
+    "g533": "면 {face}, 칸 ({i}, {j}), 톤 {tone}, {role}",
+    "g534": "어두움",
+    "g535": "중간",
+    "g536": "밝음",
+    "g537": "축소",
+    "g538": "확대",
+    "g539": "톤을 바꾸면 그 좌표는 세 면 모두 데이터에서 빠집니다.",
+    "g540": "색은 그대로 두고, 어느 면을 눌러도 같은 좌표의 데이터 포함/제외만 바꿉니다.",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1573,6 +1669,28 @@ const GENERATOR_STRINGS = {
     "g518": "Experimental. Does not guarantee rotation, lighting, print, or live-scan performance.",
     "g519": "No extra marks. Same as unmarked Type Y.",
     "g520": "Adds a double hex border and a centre hub. For detection experiments only; performance is not promised.",
+    "g542": "Cell surface v1",
+    "g541": "Shared Y1/Y1T (n=21) trial. Paints a corner pattern on the cell faces. Keeps the selected 2- or 3-tone data mode. Does not guarantee performance.",
+    "g521": "Type Y cell editor",
+    "g522": "Painting one face excludes that (i,j) data triple on T, L, and R. Edits are not applied to the current code output.",
+    "g523": "Tone edit",
+    "g524": "Data-area mask",
+    "g525": "Reset",
+    "g526": "Copy settings",
+    "g527": "Data",
+    "g528": "Detector / keep-out",
+    "g529": "Fixed reference/format",
+    "g530": "Settings copied.",
+    "g531": "Could not copy. Select the text below instead.",
+    "g532": "Settings JSON",
+    "g533": "Face {face}, cell ({i}, {j}), tone {tone}, {role}",
+    "g534": "dark",
+    "g535": "mid",
+    "g536": "bright",
+    "g537": "Zoom out",
+    "g538": "Zoom in",
+    "g539": "Changing a tone removes that coordinate from data on all three faces.",
+    "g540": "Colour stays the same. Clicking any face toggles data include/exclude for that coordinate.",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1793,6 +1911,28 @@ const GENERATOR_STRINGS = {
     "g518": "実験用です。回転・照明・印刷・ライブスキャンの性能は保証しません。",
     "g519": "追加マークなし。従来の Type Y と同じです。",
     "g520": "六角の外側に二重枠と中央ハブを足します。検出実験用で、性能は約束しません。",
+    "g542": "セル表面 v1",
+    "g541": "Y1/Y1T（n=21）共用の試験版です。セル表面にコーナーパターンを描きます。データの2/3トーンはそのまま使います。性能は保証しません。",
+    "g521": "Yタイプセル編集",
+    "g522": "1面だけ塗っても、その座標 (i,j) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
+    "g523": "トーン編集",
+    "g524": "データ領域マスク",
+    "g525": "初期化",
+    "g526": "設定値をコピー",
+    "g527": "データ",
+    "g528": "検出器/安全",
+    "g529": "固定 reference/format",
+    "g530": "設定値をコピーしました。",
+    "g531": "コピーに失敗しました。下のテキストを直接選択してください。",
+    "g532": "設定 JSON",
+    "g533": "面 {face}、マス ({i}, {j})、トーン {tone}、{role}",
+    "g534": "暗い",
+    "g535": "中間",
+    "g536": "明るい",
+    "g537": "縮小",
+    "g538": "拡大",
+    "g539": "トーンを変えると、その座標は3面ともデータから外れます。",
+    "g540": "色はそのままです。どの面を押しても、同じ座標のデータ含有/除外だけが切り替わります。",
   },
 };
 
@@ -1813,7 +1953,7 @@ const GENERATOR_STRINGS = {
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
-  syncFaceGainLabel, syncYLocatorUi,
+  syncFaceGainLabel, syncYLocatorUi, syncTypeYCellEditorUi,
 ];
 
 const genI18n = createI18n(GENERATOR_STRINGS, {
@@ -1828,7 +1968,15 @@ import { wireSelectAllOnActivate } from './src/input-select-all.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
-import { WINDOW_SUPPORTED_TONES as WINDOW_TONES } from './src/capacityY.js';
+import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capacityY.js';
+import { buildRoleSets } from './src/placementY.js';
+import { faceBasis, layoutForCube, moduleQuad, YFACES } from './src/ygrid.js';
+import {
+  CELL_EDITOR_MODE_MASK, TONE_BRIGHTEN, TONE_DARKEN,
+  applyCellEdit, cellTone, classifyCoord, createCellEditorStore,
+  dataBoundaryEdges, edgeEndpoints, editorStateForN, resetCellEditorState,
+  setEditorMode, stringifyCellEditor,
+} from './src/type-y-cell-editor.js';
 
 import { encodeA } from './src/encodeA.js';
 import {
@@ -1844,6 +1992,7 @@ import {
 } from './src/finder-card-ui.js';
 import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
 import {
+  LOCATOR_PROFILE_CELL_SURFACE_V1,
   LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_OFF,
 } from './src/locatorY.js';
 import {
@@ -1857,7 +2006,6 @@ import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, pres
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
 import { addQuietZone } from './src/quietzone.js';
-import { faceBasis } from './src/ygrid.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
 import { verifyRasterY } from './src/verifyY.js';
@@ -1907,6 +2055,12 @@ const els = {
   finderExperimentalWarning: $('finderExperimentalWarning'),
   yLocatorSection: $('yLocatorSection'), yLocatorCards: $('yLocatorCards'),
   yLocatorHint: $('yLocatorHint'),
+  yCellEditorSection: $('yCellEditorSection'), yCellEditorModeCards: $('yCellEditorModeCards'),
+  yCellEditorModeHint: $('yCellEditorModeHint'), yCellEditorViewport: $('yCellEditorViewport'),
+  yCellEditorSvg: $('yCellEditorSvg'), yCellEditorStatus: $('yCellEditorStatus'),
+  yCellEditorJson: $('yCellEditorJson'), yCellEditorReset: $('yCellEditorReset'),
+  yCellEditorCopy: $('yCellEditorCopy'), yCellEditorZoomIn: $('yCellEditorZoomIn'),
+  yCellEditorZoomOut: $('yCellEditorZoomOut'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
@@ -2876,10 +3030,16 @@ function syncResTierUi() {
   const type = currentType();
   const isO = type === 'O';
   const windowLocked = type === 'Y' && generatorState.qrPosition === 'inner';
-  const isOff = (res) => windowLocked && (res === 'low' || res === 'mid');
-  const selectedTier = resolutionTierForVersion(
-    type, generatorState[versionStateKey(type)],
-  );
+  const cellSurfaceLocked = type === 'Y'
+    && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1;
+  const isOff = (res) =>
+    (windowLocked && (res === 'low' || res === 'mid'))
+    || (cellSurfaceLocked && (res === 'low' || res === 'high'));
+  const selectedTier = cellSurfaceLocked
+    ? 'mid'
+    : resolutionTierForVersion(
+      type, generatorState[versionStateKey(type)],
+    );
   // Y 안쪽은 렌더에서 Y2를 강제하지만 저장값은 바꾸지 않는다. 윈도를 벗어나면
   // 기존 auto/저/중/고 선택이 그대로 복원되어야 하기 때문이다.
   for (const card of els.resTierCards.children) {
@@ -3055,14 +3215,271 @@ if (els.yLocatorCards) {
   for (const card of els.yLocatorCards.children) {
     card.addEventListener('click', () => {
       const next = card.dataset.locator;
-      generatorState.locatorProfileY = next === LOCATOR_PROFILE_HEX_FRAME_V1
-        ? LOCATOR_PROFILE_HEX_FRAME_V1
-        : LOCATOR_PROFILE_OFF;
+      if (next === LOCATOR_PROFILE_HEX_FRAME_V1) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_HEX_FRAME_V1;
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V1) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V1;
+      } else {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_OFF;
+      }
       syncYLocatorUi();
+      syncTypeUi();
       schedule();
     });
   }
 }
+
+const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
+let yCellEditorWired = false;
+let yCellEditorStore = null;
+let yCellEditorZoom = 1;
+let lastEncodedYn = 0;
+
+function selectedTypeYn() {
+  const v = generatorState.versionY;
+  if (v !== 'auto' && v !== undefined && v !== null && v !== '') {
+    return versionSpecY(Number(v), 2).n;
+  }
+  if (lastEncodedYn) return lastEncodedYn;
+  return versionSpecY(0, 2).n;
+}
+
+function currentYCellEditorState() {
+  return editorStateForN(yCellEditorStore, selectedTypeYn());
+}
+
+function yCellAria(face, i, j, tone, kind) {
+  const toneKey = tone === 0 ? 'g534' : tone === 1 ? 'g535' : 'g536';
+  const roleKey = kind === 'data' ? 'g527' : kind === 'detector' ? 'g528' : 'g529';
+  return tf('g533', { face, i, j, tone: t(toneKey), role: t(roleKey) });
+}
+
+function setYCellEditorZoom(next) {
+  yCellEditorZoom = Math.min(4, Math.max(1, next));
+  if (els.yCellEditorViewport) {
+    els.yCellEditorViewport.style.setProperty('--y-cell-zoom', String(yCellEditorZoom));
+  }
+}
+
+function paintTypeYCellEditor(state) {
+  const svg = els.yCellEditorSvg;
+  if (!svg || !state) return;
+  const n = state.n;
+  const sets = buildRoleSets(n);
+  const layout = layoutForCube(n, { size: 1, margin: 0.45 });
+  const ns = 'http://www.w3.org/2000/svg';
+  svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const defs = document.createElementNS(ns, 'defs');
+  const pattern = document.createElementNS(ns, 'pattern');
+  pattern.setAttribute('id', 'yCellHatch');
+  pattern.setAttribute('width', '0.18');
+  pattern.setAttribute('height', '0.18');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  pattern.setAttribute('patternTransform', 'rotate(45)');
+  const hatchRect = document.createElementNS(ns, 'rect');
+  hatchRect.setAttribute('width', '0.18');
+  hatchRect.setAttribute('height', '0.06');
+  hatchRect.setAttribute('fill', 'rgba(226,59,59,0.35)');
+  pattern.appendChild(hatchRect);
+  defs.appendChild(pattern);
+  svg.appendChild(defs);
+
+  for (const face of YFACES) {
+    for (let i = 0; i < n; i += 1) {
+      for (let j = 0; j < n; j += 1) {
+        const quad = moduleQuad(face, i, j, layout);
+        const points = quad.map((p) => `${p.x},${p.y}`).join(' ');
+        const kind = classifyCoord(state, i, j, sets);
+        const tone = cellTone(state, face, i, j);
+        const g = document.createElementNS(ns, 'g');
+        g.setAttribute('class', 'y-cell-editor-cell');
+        g.setAttribute('role', 'button');
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('data-face', face);
+        g.setAttribute('data-i', String(i));
+        g.setAttribute('data-j', String(j));
+        g.setAttribute('aria-label', yCellAria(face, i, j, tone, kind));
+        const poly = document.createElementNS(ns, 'polygon');
+        poly.setAttribute('points', points);
+        poly.setAttribute('fill', Y_CELL_TONE_FILL[tone]);
+        poly.setAttribute('stroke', kind === 'fixed' ? '#c9a227' : 'rgba(0,0,0,0.28)');
+        poly.setAttribute('stroke-width', kind === 'fixed' ? '0.06' : '0.02');
+        g.appendChild(poly);
+        if (kind === 'detector') {
+          const hatch = document.createElementNS(ns, 'polygon');
+          hatch.setAttribute('points', points);
+          hatch.setAttribute('fill', 'url(#yCellHatch)');
+          hatch.setAttribute('pointer-events', 'none');
+          g.appendChild(hatch);
+        }
+        svg.appendChild(g);
+      }
+    }
+  }
+
+  const boundary = document.createElementNS(ns, 'g');
+  boundary.setAttribute('class', 'y-cell-editor-boundary');
+  boundary.setAttribute('pointer-events', 'none');
+  for (const item of dataBoundaryEdges(state, sets)) {
+    const [a, b] = edgeEndpoints(item.face, item.i, item.j, item.edge, layout);
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', String(a.x));
+    line.setAttribute('y1', String(a.y));
+    line.setAttribute('x2', String(b.x));
+    line.setAttribute('y2', String(b.y));
+    line.setAttribute('stroke', '#e23b3b');
+    line.setAttribute('stroke-width', '1.35');
+    line.setAttribute('vector-effect', 'non-scaling-stroke');
+    line.setAttribute('stroke-linecap', 'butt');
+    boundary.appendChild(line);
+  }
+  svg.appendChild(boundary);
+
+  for (const face of YFACES) {
+    const tip = moduleQuad(face, n - 1, n - 1, layout);
+    const cx = (tip[0].x + tip[1].x + tip[2].x + tip[3].x) / 4;
+    const cy = (tip[0].y + tip[1].y + tip[2].y + tip[3].y) / 4;
+    const label = document.createElementNS(ns, 'text');
+    label.setAttribute('x', String(cx));
+    label.setAttribute('y', String(cy));
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.setAttribute('font-size', '0.7');
+    label.setAttribute('fill', 'rgba(255,255,255,0.85)');
+    label.setAttribute('pointer-events', 'none');
+    label.textContent = face;
+    svg.appendChild(label);
+  }
+
+  if (els.yCellEditorJson) els.yCellEditorJson.value = stringifyCellEditor(state, sets);
+}
+
+function yCellFromEvent(ev) {
+  const node = ev.target && ev.target.closest && ev.target.closest('.y-cell-editor-cell');
+  if (!node) return null;
+  return { face: node.dataset.face, i: Number(node.dataset.i), j: Number(node.dataset.j) };
+}
+
+function editYCell(face, i, j, direction, restoreFocus = false) {
+  const state = currentYCellEditorState();
+  applyCellEdit(state, face, i, j, direction, buildRoleSets(state.n));
+  paintTypeYCellEditor(state);
+  if (restoreFocus && els.yCellEditorSvg) {
+    const next = els.yCellEditorSvg.querySelector(
+      `.y-cell-editor-cell[data-face="${face}"][data-i="${i}"][data-j="${j}"]`,
+    );
+    if (next) next.focus({ preventScroll: true });
+  }
+}
+
+async function copyTypeYCellEditorJson() {
+  const state = currentYCellEditorState();
+  const text = stringifyCellEditor(state, buildRoleSets(state.n));
+  if (els.yCellEditorJson) els.yCellEditorJson.value = text;
+  const mark = (ok) => {
+    if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = ok ? t('g530') : t('g531');
+  };
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(text);
+      mark(true);
+      return;
+    }
+    throw new Error('clipboard');
+  } catch {
+    try {
+      if (els.yCellEditorJson) {
+        els.yCellEditorJson.focus();
+        els.yCellEditorJson.select();
+      }
+      const ok = typeof document.execCommand === 'function' && document.execCommand('copy');
+      mark(!!ok);
+    } catch {
+      mark(false);
+    }
+  }
+}
+
+function syncTypeYCellEditorUi() {
+  const section = els.yCellEditorSection;
+  if (!section) return;
+  const show = isLabPath() && generatorState.type === 'Y';
+  section.hidden = !show;
+  if (!show || !yCellEditorWired) return;
+  const state = currentYCellEditorState();
+  section.dataset.mode = state.mode;
+  if (els.yCellEditorModeCards) {
+    for (const card of els.yCellEditorModeCards.querySelectorAll('[data-ycell-mode]')) {
+      card.classList.toggle('active', card.dataset.ycellMode === state.mode);
+    }
+  }
+  if (els.yCellEditorModeHint) {
+    els.yCellEditorModeHint.textContent = state.mode === CELL_EDITOR_MODE_MASK
+      ? t('g540') : t('g539');
+  }
+  paintTypeYCellEditor(state);
+}
+
+function wireTypeYCellEditor() {
+  if (yCellEditorWired || !els.yCellEditorSection) return;
+  yCellEditorWired = true;
+  yCellEditorStore = createCellEditorStore();
+  if (els.yCellEditorModeCards) {
+    for (const card of els.yCellEditorModeCards.querySelectorAll('[data-ycell-mode]')) {
+      card.addEventListener('click', () => {
+        setEditorMode(yCellEditorStore, card.dataset.ycellMode);
+        syncTypeYCellEditorUi();
+      });
+    }
+  }
+  if (els.yCellEditorReset) {
+    els.yCellEditorReset.addEventListener('click', () => {
+      resetCellEditorState(currentYCellEditorState());
+      if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = '';
+      paintTypeYCellEditor(currentYCellEditorState());
+    });
+  }
+  if (els.yCellEditorCopy) {
+    els.yCellEditorCopy.addEventListener('click', () => { copyTypeYCellEditorJson(); });
+  }
+  if (els.yCellEditorZoomIn) {
+    els.yCellEditorZoomIn.addEventListener('click', () => {
+      setYCellEditorZoom(yCellEditorZoom * 5 / 4);
+    });
+  }
+  if (els.yCellEditorZoomOut) {
+    els.yCellEditorZoomOut.addEventListener('click', () => {
+      setYCellEditorZoom(yCellEditorZoom * 4 / 5);
+    });
+  }
+  const svg = els.yCellEditorSvg;
+  if (svg) {
+    svg.addEventListener('pointerdown', (ev) => {
+      const cell = yCellFromEvent(ev);
+      if (!cell) return;
+      if (ev.button === 1) return;
+      if (ev.button === 2) ev.preventDefault();
+      const direction = ev.button === 2 ? TONE_BRIGHTEN : TONE_DARKEN;
+      editYCell(cell.face, cell.i, cell.j, direction);
+    });
+    svg.addEventListener('contextmenu', (ev) => {
+      if (yCellFromEvent(ev)) ev.preventDefault();
+    });
+    svg.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      const cell = yCellFromEvent(ev);
+      if (!cell) return;
+      ev.preventDefault();
+      const direction = ev.shiftKey ? TONE_BRIGHTEN : TONE_DARKEN;
+      editYCell(cell.face, cell.i, cell.j, direction, true);
+    });
+  }
+  setYCellEditorZoom(1);
+}
+
+if (isLabPath()) wireTypeYCellEditor();
 
 // ── 배치 미리보기 (투명 배경 전용) ──────────────────────────────────────
 //
@@ -3438,11 +3855,12 @@ function syncTypeUi() {
   // Y + 안쪽(윈도 β)은 2톤 전용이다 — 해상도 티어와 같은 규약으로, 렌더가 강제하는 값을
   // 카드에도 그대로 비춰 준다. 안 그러면 3톤이 선택된 것처럼 보이는데 2톤이 그려진다.
   const toneLocked = isY && generatorState.qrPosition === 'inner';
+  const lockedTone = WINDOW_TONES;
   for (const toneCards of [els.toneCardsNormal, els.toneCardsAdvanced]) {
     for (const card of toneCards.children) {
       const tone = Number(card.dataset.tone);
-      card.classList.toggle('disabled', toneLocked && tone !== WINDOW_TONES);
-      card.classList.toggle('active', tone === (toneLocked ? WINDOW_TONES : generatorState.tone));
+      card.classList.toggle('disabled', toneLocked && tone !== lockedTone);
+      card.classList.toggle('active', tone === (toneLocked ? lockedTone : generatorState.tone));
     }
   }
   els.toneNormalSection.style.display = isY ? '' : 'none';
@@ -3459,6 +3877,7 @@ function syncTypeUi() {
   els.versionWrapA.style.display = isA ? '' : 'none';
   els.optionsY.style.display = isY ? '' : 'none';
   syncYLocatorUi();
+  syncTypeYCellEditorUi();
 }
 
 function syncYLocatorUi() {
@@ -3468,16 +3887,20 @@ function syncYLocatorUi() {
   section.hidden = !show;
   const profile = generatorState.locatorProfileY === LOCATOR_PROFILE_HEX_FRAME_V1
     ? LOCATOR_PROFILE_HEX_FRAME_V1
-    : LOCATOR_PROFILE_OFF;
+    : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1
+      ? LOCATOR_PROFILE_CELL_SURFACE_V1
+      : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
     for (const card of els.yLocatorCards.children) {
       card.classList.toggle('active', card.dataset.locator === profile);
     }
   }
   if (els.yLocatorHint) {
-    els.yLocatorHint.textContent = profile === LOCATOR_PROFILE_HEX_FRAME_V1
-      ? t('g520')
-      : t('g519');
+    els.yLocatorHint.textContent = profile === LOCATOR_PROFILE_CELL_SURFACE_V1
+      ? t('g541')
+      : profile === LOCATOR_PROFILE_HEX_FRAME_V1
+        ? t('g520')
+        : t('g519');
   }
 }
 
@@ -3607,9 +4030,11 @@ function buildConfig() {
     versionO: selectedVersion(generatorState.versionO),
     // Y 안쪽 윈도는 렌더 의미상 Y2 전용이다. 이 유효값은 저장된 versionY를
     // 덮지 않으므로 윈도/타입/모드 왕복 뒤 수동 또는 자동 선택이 복원된다.
-    versionY: fallback.mode === 'window'
-      ? 2
-      : selectedVersion(generatorState.versionY),
+    versionY: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1
+      ? 1
+      : fallback.mode === 'window'
+        ? 2
+        : selectedVersion(generatorState.versionY),
     versionA: selectedVersion(generatorState.versionA),
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
@@ -3672,7 +4097,12 @@ function encodeOptsFor(cfg) {
     // 두었을 때 tones 강제가 빠져 RangeError 로 렌더가 통째로 죽은 적이 있다.
     return {
       fn: encodeY,
-      opts: encodeOptionsForY({ tone: cfg.tone, versionY: cfg.versionY, fallback: cfg.fallback }),
+      opts: encodeOptionsForY({
+        tone: cfg.tone,
+        versionY: cfg.versionY,
+        fallback: cfg.fallback,
+        locatorProfileY: generatorState.locatorProfileY,
+      }),
     };
   }
   if (cfg.type === 'A') {
@@ -3742,6 +4172,9 @@ function renderTypeY(cfg) {
   if (isLabPath() && generatorState.locatorProfileY === LOCATOR_PROFILE_HEX_FRAME_V1) {
     sceneOpts.locatorProfile = LOCATOR_PROFILE_HEX_FRAME_V1;
   }
+  if (isLabPath() && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1) {
+    sceneOpts.locatorProfile = LOCATOR_PROFILE_CELL_SURFACE_V1;
+  }
   if (cfg.fallback.mode !== 'off') {
     sceneOpts.qrText = cfg.qrText;
     if (cfg.fallback.mode === 'corner') sceneOpts.qrCorner = cfg.fallback.corner;
@@ -3760,7 +4193,7 @@ function renderTypeY(cfg) {
     ? `<span class="badge ok">${tf('g447', { total: check.total, margin: marginLabel })}</span>`
     : `<span class="badge bad">${tf('g448', { n: check.mismatches.length, e: check.erasures.length })}</span>`;
   const info =
-    tf('g453', { ver: `Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}`, n: encoded.n, ecc: encoded.eccLevel, tones: encoded.tones }) +
+    tf('g453', { ver: `Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}${encoded.cellSurface ? '-CS' : ''}`, n: encoded.n, ecc: encoded.eccLevel, tones: encoded.tones }) +
     `${encoded.window ? t('g454') : ''}<br>` +
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     `${tf('g452', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym })}<br>` +
@@ -3847,6 +4280,11 @@ function render() {
     current = {
       type: result.type, encoded: result.encoded, scene: result.scene, faceGains: cfg.faceGains,
     };
+    if (result.type === 'Y' && result.encoded && result.encoded.n) {
+      const prevN = lastEncodedYn;
+      lastEncodedYn = result.encoded.n;
+      if (isLabPath() && prevN !== lastEncodedYn) syncTypeYCellEditorUi();
+    }
     emitLabGen(result, cfg);
     drawScene(result.scene, els.canvas, 26);
     if (decorActive(current)) {
@@ -3951,7 +4389,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-14.03';
+const GENERATOR_BUILD = '2026-08-14.04';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

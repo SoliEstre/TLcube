@@ -67,7 +67,12 @@ const server = createServer(async (req, res) => {
       await handleLumaDump(req, res, url);
       return;
     }
-    const rel = decodeURIComponent(url.pathname) === '/' ? '/index.html' : decodeURIComponent(url.pathname);
+    const pathname = decodeURIComponent(url.pathname);
+    const rel = pathname === '/'
+      ? '/index.html'
+      : (pathname === '/lab' || pathname === '/lab/'
+        ? '/sites/_shared/lab-gen.html'
+        : pathname);
     const path = normalize(join(ROOT, rel));
     if (!path.startsWith(normalize(ROOT + sep)) && path !== normalize(ROOT)) {
       res.writeHead(403).end('forbidden');

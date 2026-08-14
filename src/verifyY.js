@@ -29,6 +29,7 @@ import { discMedianLuminance } from './verify.js';
 import { YFACES, moduleSampleDisc } from './ygrid.js';
 import { referenceGroups } from './placementY.js';
 import { windowedReferenceGroupsY } from './capacityY.js';
+import { locatorCellsCellSurface } from './cellSurfaceY.js';
 import { digitToRanks, ranksToDigit } from './lehmer.js';
 import { relativeLuminance, DELTA_MIN_CONTRACT, getPreset, DEFAULT_PRESET } from './luminance.js';
 import { thetaFromAnchors, classifyTriple, digitToPattern } from './tonemap.js';
@@ -178,6 +179,13 @@ export function estimateFaceGains(raster, scene, encoded, options = {}) {
 
   for (const face of YFACES) {
     const pairs = [];
+    if (encoded.cellSurface === true) {
+      for (const cell of locatorCellsCellSurface()) {
+        const yKnown = yLevels[cell[face]];
+        const yObs = measureModuleMedian(raster, scene, face, cell.i, cell.j);
+        pairs.push({ i: cell.i, j: cell.j, yKnown, yObs });
+      }
+    } else {
     for (const group of referenceGroupsFor(encoded, tones)) {
       for (const cell of group.cells) {
         const entry = cellDigits.get(`${cell.i},${cell.j}`);
@@ -188,6 +196,7 @@ export function estimateFaceGains(raster, scene, encoded, options = {}) {
         const yObs = measureModuleMedian(raster, scene, face, cell.i, cell.j);
         pairs.push({ i: cell.i, j: cell.j, yKnown, yObs });
       }
+    }
     }
     const { gain, excluded: exc } = estimateGainFromPairs(pairs);
     gains[face] = gain;
@@ -287,6 +296,15 @@ export function estimateFaceThetas(raster, scene, encoded, gains) {
   for (const face of YFACES) {
     const lows = [];
     const highs = [];
+    if (encoded.cellSurface === true) {
+      for (const cell of locatorCellsCellSurface()) {
+        const yObs = measureModuleMedian(raster, scene, face, cell.i, cell.j);
+        const g = gains[face];
+        const normalized = Number.isFinite(g) && g > 0 ? yObs / g : yObs;
+        if (cell[face] === 2) highs.push(normalized);
+        else lows.push(normalized);
+      }
+    } else {
     for (const group of referenceGroupsFor(encoded, tones)) {
       for (const cell of group.cells) {
         const entry = cellDigits.get(`${cell.i},${cell.j}`);
@@ -298,6 +316,7 @@ export function estimateFaceThetas(raster, scene, encoded, gains) {
         if (bright) highs.push(normalized);
         else lows.push(normalized);
       }
+    }
     }
     const obsLo = median(lows);
     const obsHi = median(highs);
@@ -353,6 +372,7 @@ export function verifyRasterY(raster, scene, encoded, options = {}) {
   const theta = tones === 2 ? estimateFaceThetas(raster, scene, encoded, gains).theta : null;
 
   for (const [cellKey, { digit: expected, role }] of encoded.cellDigits) {
+    if (role === 'locator') continue;
     const [i, j] = cellKey.split(',').map(Number);
     const normalized = {};
     for (const face of YFACES) {

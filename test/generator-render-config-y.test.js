@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { encodeOptionsForY } from '../src/generator-render-config.js';
 import { encodeY } from '../src/encodeY.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from '../src/capacityY.js';
+import { CELL_SURFACE_PROFILE_ID } from '../src/cellSurfaceY.js';
 
 const TEXT = 'https://tl.estre.so';
 const windowState = (tone) => ({ tone, versionY: undefined, fallback: { mode: 'window' } });
@@ -42,6 +43,26 @@ test('윈도가 아니면 사용자가 고른 톤·해상도를 그대로 넘긴
   }
   const auto = encodeOptionsForY({ tone: 2, versionY: undefined, fallback: { mode: 'none' } });
   assert.equal('version' in auto, false, 'auto 해상도는 version 을 안 넘긴다');
+});
+
+test('셀 표면 v1 은 version=1 을 강제하되 사용자 톤을 보존하고 윈도보다 앞선다', () => {
+  for (const tone of [2, 3]) {
+    const opts = encodeOptionsForY({
+      tone,
+      versionY: 0,
+      fallback: { mode: 'window' },
+      locatorProfileY: CELL_SURFACE_PROFILE_ID,
+    });
+    assert.equal(opts.cellSurface, true);
+    assert.equal(opts.tones, tone);
+    assert.equal(opts.version, 1);
+    assert.equal(opts.window, undefined);
+    const encoded = encodeY('https://tl.estre.so', opts);
+    assert.equal(encoded.cellSurface, true);
+    assert.equal(encoded.tones, tone);
+    assert.equal(encoded.formatIndex, tone === 3 ? 14 : 12);
+    assert.equal(encoded.capacity.maxPayloadBytes, 85);
+  }
 });
 
 test('상태가 없거나 폴백이 빠지면 조용히 넘어가지 않는다', () => {

@@ -347,7 +347,7 @@ async function decodeFrame(imageData) {
       onStage: (stageName, phase) => clock.onStage(stageName, phase),
       // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너는 종전
       // 검출 계약과 프레임 비용을 그대로 유지한다.
-      bootstrap: { family: { cube: { enableLocatorY: isLabPath() } } },
+      bootstrap: { family: { cube: { enableLocatorY: isLabPath(), enableCellSurfaceY: isLabPath() } } },
     });
     const stage = classifyStage(result);
     const ms = fillFrameMs(nowMs() - t0, clock.snapshot());

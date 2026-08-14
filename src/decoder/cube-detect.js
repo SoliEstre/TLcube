@@ -55,6 +55,7 @@ import {
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_OFF,
 } from '../locatorY.js';
+import { evaluateCellSurfaceGeometry } from './cellSurfaceY-detect.js';
 
 function locatorShapesFromSilhouette(luma, shapes, options) {
   const extra = [];
@@ -2346,6 +2347,7 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
               : 'cube-silhouette-y-junction',
             locatorProfile: shape.locatorProfile || LOCATOR_PROFILE_OFF,
             locatorRoute: shape.locatorRoute || 'silhouette',
+            cellSurface: false,
             locatorPhase: shape.locatorPhase ? {
               ...shape.locatorPhase,
               used: seed.locatorPhaseUsed === true,
@@ -2357,6 +2359,43 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
             seamSupport: shape.seam.support,
             shapeDiagnostics: shape,
           };
+          if (options.enableCellSurfaceY === true && n === 21) {
+            const cellSurface = evaluateCellSurfaceGeometry(
+              base,
+              (i, j) => sampleCubeCell(luma, base, i, j, sampleOptions(options, cfg)),
+              options,
+            );
+            geometryReports.push({
+              n,
+              orientation,
+              geometrySeed: seed.id,
+              cellSurface: cellSurface.ok
+                ? cellSurface.diagnostics || cellSurface.scored && cellSurface.scored.diagnostics
+                : { reason: cellSurface.reason, detail: cellSurface.detail },
+            });
+            if (cellSurface.ok && cellSurface.accepted) {
+              const patches = cellSurface.hypothesisPatches
+                || (cellSurface.hypothesisPatch ? [cellSurface.hypothesisPatch] : []);
+              for (const patch of patches) {
+                hypotheses.push({
+                  ...base,
+                  ...patch,
+                  logicalHypothesisId: 'cube-n' + n
+                    + '-c' + shape.componentIndex
+                    + '-p' + shape.seamParity
+                    + '-o' + orientation
+                    + '-t' + patch.tones
+                    + '-cs',
+                  hypothesisId: 'cube-n' + n
+                    + '-c' + shape.componentIndex
+                    + '-p' + shape.seamParity
+                    + '-o' + orientation
+                    + '-t' + patch.tones
+                    + '-cs-g' + seed.id,
+                });
+              }
+            }
+          }
           const references = calibrateCubeReferences(luma, base, options);
           geometryReports.push({
             n,

@@ -24,6 +24,12 @@ import {
   windowExcludedCellsY,
 } from './capacityY.js';
 import {
+  capacityForCellSurfaceY,
+  dataCellsInScanOrderCellSurface,
+  isCellSurfaceFormatIndex,
+  tonesFromCellSurfaceFormatIndex,
+} from './cellSurfaceY.js';
+import {
   CHUNK_BYTES,
   decodeChunkInto,
   packCellDigitsToSymbols,
@@ -259,6 +265,45 @@ function resolveProfile(format) {
       throw new RangeError('Type Y n과 k가 다르다: ' + format.n + ' !== ' + format.k);
     }
     const requestedN = format.n === undefined ? format.k : format.n;
+    const window = format.window === undefined ? false : format.window;
+    if (typeof window !== 'boolean') {
+      throw new TypeError('Type Y format.window은 boolean이어야 한다: ' + window);
+    }
+    const cellSurface = format.cellSurface === true
+      || format.locatorProfile === 'cell-surface-v1';
+    if (cellSurface && window) {
+      throw new RangeError('Type Y cellSurface와 window를 함께 쓸 수 없다');
+    }
+    if (cellSurface) {
+      let cellSurfaceTones = suppliedTones;
+      if (format.formatIndex !== undefined) {
+        if (!isCellSurfaceFormatIndex(format.formatIndex)) {
+          throw new RangeError(
+            'cell-surface-v1 formatIndex는 12 또는 14 이어야 한다: ' + format.formatIndex,
+          );
+        }
+        const fromIndex = tonesFromCellSurfaceFormatIndex(format.formatIndex);
+        if (cellSurfaceTones !== undefined && cellSurfaceTones !== fromIndex) {
+          throw new RangeError(
+            'cell-surface-v1 tones=' + cellSurfaceTones
+            + ' 와 formatIndex=' + format.formatIndex + ' 가 어긋난다',
+          );
+        }
+        cellSurfaceTones = fromIndex;
+      } else {
+        cellSurfaceTones = cellSurfaceTones === undefined ? 2 : cellSurfaceTones;
+      }
+      const capacity = capacityForCellSurfaceY(eccLevel, cellSurfaceTones);
+      if (requestedN !== undefined) assertOptionalDimension(format.n, 'n', capacity.n);
+      if (format.k !== undefined) assertOptionalDimension(format.k, 'k', capacity.n);
+      return finishProfile({
+        type,
+        eccLevel,
+        capacity,
+        scan: dataCellsInScanOrderCellSurface(),
+        coordinates: (cell) => [cell.i, cell.j],
+      });
+    }
     const spec = selectVersionSpec({
       type,
       logicalSpec,
@@ -271,10 +316,6 @@ function resolveProfile(format) {
       version: format.version,
       formatIndex,
     });
-    const window = format.window === undefined ? false : format.window;
-    if (typeof window !== 'boolean') {
-      throw new TypeError('Type Y format.window은 boolean이어야 한다: ' + window);
-    }
     assertOptionalDimension(format.n, 'n', spec.n);
     assertOptionalDimension(format.k, 'k', spec.n);
 

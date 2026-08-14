@@ -2,6 +2,10 @@
 
 import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
+import {
+  CELL_SURFACE_PROFILE_ID,
+  CELL_SURFACE_VERSION,
+} from './cellSurfaceY.js';
 
 /**
  * Type Y 인코더 옵션 — UI 상태(톤·해상도·폴백)를 인코더가 받는 모양으로 바꾼다.
@@ -13,16 +17,23 @@ import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js
  * 강제는 **렌더 시점에만** 한다. 저장된 톤·해상도 선택은 그대로 두어야 윈도를 벗어났을 때
  * 사용자가 고른 값이 복원된다(해상도 티어가 이미 같은 규약을 쓴다).
  *
- * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}}} state
- * @returns {{tones: 2|3, version?: number, window?: true}}
+ * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string}} state
+ * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true}}
  */
 export function encodeOptionsForY(state) {
   if (state === null || typeof state !== 'object') {
     throw new TypeError('Type Y 생성기 상태가 필요하다');
   }
-  const { tone, versionY, fallback } = state;
+  const { tone, versionY, fallback, locatorProfileY } = state;
   if (fallback === null || typeof fallback !== 'object') {
     throw new TypeError('Y QR 폴백 상태가 필요하다');
+  }
+  if (locatorProfileY === CELL_SURFACE_PROFILE_ID) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      version: CELL_SURFACE_VERSION,
+      cellSurface: true,
+    };
   }
   if (fallback.mode === 'window') {
     return { tones: WINDOW_SUPPORTED_TONES, version: WINDOW_SUPPORTED_VERSION, window: true };

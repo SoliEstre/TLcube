@@ -73,9 +73,10 @@ test('스캔 가이드 아래에 TLcube 전용 범위를 세 언어로 알린다
 test('Type Y 강화 로케이터는 /lab/ 스캐너에서만 디코더에 켠다', () => {
   assert.match(
     SCANNER_JS,
-    /bootstrap:\s*\{\s*family:\s*\{\s*cube:\s*\{\s*enableLocatorY:\s*isLabPath\(\)\s*\}\s*\}\s*\}/,
+    /bootstrap:\s*\{\s*family:\s*\{\s*cube:\s*\{\s*enableLocatorY:\s*isLabPath\(\),\s*enableCellSurfaceY:\s*isLabPath\(\)\s*\}\s*\}\s*\}/,
   );
   assert.doesNotMatch(SCANNER_JS, /enableLocatorY:\s*true/);
+  assert.doesNotMatch(SCANNER_JS, /enableCellSurfaceY:\s*true/);
 });
 
 test('사진 스캔 실패 두 경로가 모두 토스트를 띄운다', () => {

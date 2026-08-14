@@ -22,10 +22,12 @@ import { digitToPattern, assertToneSeparation } from './tonemap.js';
 import { WINDOW_SIZE_Y, WINDOW_SUPPORTED_N } from './capacityY.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
+  LOCATOR_PROFILE_CELL_SURFACE_V1,
   assertLocatorProfileY,
   locatorMarginCells,
   locatorShapesY,
 } from './locatorY.js';
+import { locatorTone } from './cellSurfaceY.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -258,7 +260,7 @@ function assertEncoded(encoded) {
     throw new TypeError('encoded 는 객체여야 한다');
   }
   const {
-    n, cellDigits, tones, window,
+    n, cellDigits, tones, window, cellSurface,
   } = encoded;
   if (!Number.isInteger(n) || n < 1) {
     throw new RangeError(`encoded.n 은 1 이상의 정수여야 한다: ${n}`);
@@ -280,8 +282,12 @@ function assertEncoded(encoded) {
   if (resolvedWindow && n !== WINDOW_SUPPORTED_N) {
     throw new RangeError(`encoded.window 는 n=${WINDOW_SUPPORTED_N}(Y2) 에서만 지원한다: n=${n}`);
   }
+  const resolvedCellSurface = cellSurface === true;
+  if (resolvedCellSurface && (resolvedWindow || n !== 21 || (resolvedTones !== 2 && resolvedTones !== 3))) {
+    throw new RangeError('encoded.cellSurface 는 Y1/Y1T(n=21, 2톤 또는 3톤) 전용이다');
+  }
   return {
-    n, cellDigits, tones: resolvedTones, window: resolvedWindow,
+    n, cellDigits, tones: resolvedTones, window: resolvedWindow, cellSurface: resolvedCellSurface,
   };
 }
 
@@ -301,13 +307,13 @@ function assertPalette(palette) {
  * @param {{
  *   palette: {background:{r,g,b}, levels:[{r,g,b},{r,g,b},{r,g,b}], bullseyeDark:{r,g,b}, bullseyeLight:{r,g,b}, faceGains?:{T,L,R}},
  *   qrText?: string, cellSize?: number, margin?: number, qrCorner?: 'TL'|'TR'|'BL'|'BR',
- *   locatorProfile?: 'off'|'hex-frame-v1',
+ *   locatorProfile?: 'off'|'hex-frame-v1'|'cell-surface-v1',
  * }} [options]
  * @returns {{n:number, layout:object, width:number, height:number, background:{r,g,b}, shapes:Array}}
  */
 export function buildSceneY(encoded, options) {
   const {
-    n, cellDigits, tones, window,
+    n, cellDigits, tones, window, cellSurface,
   } = assertEncoded(encoded);
 
   const opts = options || {};
@@ -324,9 +330,14 @@ export function buildSceneY(encoded, options) {
   }
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
-  const locatorProfile = opts.locatorProfile === undefined
-    ? DEFAULT_LOCATOR_PROFILE_Y
+  const requestedLocator = opts.locatorProfile === undefined
+    ? (cellSurface ? LOCATOR_PROFILE_CELL_SURFACE_V1 : DEFAULT_LOCATOR_PROFILE_Y)
     : assertLocatorProfileY(opts.locatorProfile);
+  const locatorProfile = cellSurface
+    ? LOCATOR_PROFILE_CELL_SURFACE_V1
+    : requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1
+      ? DEFAULT_LOCATOR_PROFILE_Y
+      : requestedLocator;
   const requestedMargin = opts.margin === undefined
     ? DEFAULT_MARGIN_FACTOR * cellSize
     : opts.margin;
@@ -355,6 +366,17 @@ export function buildSceneY(encoded, options) {
       const key = `${i},${j}`;
       const entry = cellDigits.get(key);
       if (entry === undefined) continue;
+      if (cellSurface && entry.role === 'locator') {
+        for (const face of YFACES) {
+          const levelIndex = locatorTone(face, i, j);
+          shapes.push({
+            kind: 'polygon',
+            points: moduleQuad(face, i, j, layout),
+            color: gainedLevels[face][levelIndex],
+          });
+        }
+        continue;
+      }
       const ranks = tones === 3 ? digitToRanks(entry.digit) : null;
       const pattern = tones === 2 ? digitToPattern(entry.digit) : null;
       for (const face of YFACES) {

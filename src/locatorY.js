@@ -6,7 +6,8 @@
  *
  * 프로파일
  *   off            표시 없음. 안정판·기본값. 기존 Type Y 와 동일.
- *   hex-frame-v1   육각 실루엣 밖 가드된 이중 테두리 + 꼭짓점 L + 중앙 C형 3팔 허브.
+ *   hex-frame-v1     육각 실루엣 밖 가드된 이중 테두리 + 꼭짓점 L + 중앙 C형 3팔 허브.
+ *   cell-surface-v1  셀 표면 코너 패턴(Y1/Y1T 공용 locator). 이 모듈은 외곽 도형을 그리지 않는다.
  *
  * 회전 위상
  *   중앙 육각 고리의 오른쪽 변 하나를 열어 C형으로 만든다. 검출기는 이 갭을 60°
@@ -22,9 +23,11 @@ import { CORNER_UNIT_OFFSETS } from './hexgrid.js';
 
 export const LOCATOR_PROFILE_OFF = 'off';
 export const LOCATOR_PROFILE_HEX_FRAME_V1 = 'hex-frame-v1';
+export const LOCATOR_PROFILE_CELL_SURFACE_V1 = 'cell-surface-v1';
 export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_OFF,
   LOCATOR_PROFILE_HEX_FRAME_V1,
+  LOCATOR_PROFILE_CELL_SURFACE_V1,
 ]);
 export const DEFAULT_LOCATOR_PROFILE_Y = LOCATOR_PROFILE_OFF;
 
@@ -65,7 +68,7 @@ export function assertLocatorProfileY(value) {
 /** 실루엣 꼭짓점 밖으로 나가는 테두리+가드 두께(셀). */
 export function locatorOuterPaddingCells(profile) {
   const id = profile === undefined ? DEFAULT_LOCATOR_PROFILE_Y : assertLocatorProfileY(profile);
-  if (id === LOCATOR_PROFILE_OFF) return 0;
+  if (id === LOCATOR_PROFILE_OFF || id === LOCATOR_PROFILE_CELL_SURFACE_V1) return 0;
   const g = HEX_FRAME_V1;
   return g.guardIn + g.stroke + g.gap + g.stroke + g.guardOut;
 }
@@ -95,7 +98,7 @@ export function locatorOuterExtentCells(n) {
  */
 export function locatorHubClearsSampleDiscs(profile) {
   const id = profile === undefined ? DEFAULT_LOCATOR_PROFILE_Y : assertLocatorProfileY(profile);
-  if (id === LOCATOR_PROFILE_OFF) return true;
+  if (id === LOCATOR_PROFILE_OFF || id === LOCATOR_PROFILE_CELL_SURFACE_V1) return true;
   return HEX_FRAME_V1.hubGuard <= HUB_SAMPLE_CLEARANCE
     && HEX_FRAME_V1.hubRingOuter <= HUB_SAMPLE_CLEARANCE;
 }
@@ -170,7 +173,7 @@ function strokeAlongUnit(shapes, p0, p1, along, half, color) {
  */
 export function locatorShapesY(n, layout, palette, profile) {
   const id = profile === undefined ? DEFAULT_LOCATOR_PROFILE_Y : assertLocatorProfileY(profile);
-  if (id === LOCATOR_PROFILE_OFF) return [];
+  if (id === LOCATOR_PROFILE_OFF || id === LOCATOR_PROFILE_CELL_SURFACE_V1) return [];
   if (!Number.isInteger(n) || n <= 0) {
     throw new RangeError(`n 은 1 이상의 정수여야 한다: ${n}`);
   }

@@ -841,5 +841,6 @@ export function detectLocatorY(luma, options = {}) {
 
 export function locatorSourceId(profile) {
   if (profile === LOCATOR_PROFILE_HEX_FRAME_V1) return 'locator-hex-frame-v1';
+  if (profile === 'cell-surface-v1') return 'locator-cell-surface-v1';
   return 'cube-silhouette-y-junction';
 }

@@ -29,6 +29,18 @@ import { maskAdd } from './mask.js';
 import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { dataCellsInScanOrder, fillerCells } from './layoutY.js';
 import { referenceCellsAll, formatCells } from './placementY.js';
+import {
+  CELL_SURFACE_N,
+  CELL_SURFACE_PROFILE_ID,
+  CELL_SURFACE_VERSION,
+  assertCellSurfaceTones,
+  capacityForCellSurfaceY,
+  dataCellsInScanOrderCellSurface,
+  fillerCellsCellSurface,
+  formatCellsCellSurface,
+  formatIndexCellSurface,
+  locatorCellsCellSurface,
+} from './cellSurfaceY.js';
 
 function cellKey(i, j) {
   return `${i},${j}`;
@@ -104,10 +116,13 @@ export function chooseVersionY(text, eccLevel = 'M', tones = 2) {
  * Type Y 인코더 파이프라인 진입점 (SPEC §14). version 을 생략하면
  * `chooseVersionY` 로 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', tones?: 2|3, window?: boolean}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', tones?: 2|3, window?: boolean, cellSurface?: boolean}} [options]
  *   tones 기본 2(2톤 메인, ADR 0003 v3.1 §4b) — 3 은 Y-T 옵션. window 는 면 내 QR
  *   윈도 β(ADR 0003 D1 + [C7 Q7]) — version=2(Y2)·tones=2 에서만 허용(그 외 RangeError),
  *   version 생략 시 2 로 강제한다(윈도가 지원되는 유일한 버전이므로).
+ *   cellSurface 는 /lab/ 시험판 cell-surface-v1 — version=1(Y1/Y1T, n=21) 만
+ *   허용하고 tones 는 2|3(생략 시 기본 2). 같은 61셀 locator 를 공유하며 와이어는
+ *   formatIndex 로만 가른다. 기본 encodeY() 와이어를 바꾸지 않는다.
  * @returns {{
  *   version: number, n: number, eccLevel: 'L'|'M'|'H', tones: 2|3, formatIndex: number,
  *   window: boolean,
@@ -127,8 +142,21 @@ export function encodeY(text, options = {}) {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
   const {
-    version, eccLevel = 'M', tones = 2, window = false,
+    version, eccLevel = 'M', tones = 2, window = false, cellSurface = false,
   } = options;
+
+  if (cellSurface) {
+    if (window) {
+      throw new RangeError('cell-surface-v1 은 options.window 과 함께 쓸 수 없다');
+    }
+    assertCellSurfaceTones(tones);
+    if (version !== undefined && version !== CELL_SURFACE_VERSION) {
+      throw new RangeError(
+        'cell-surface-v1 은 version=' + CELL_SURFACE_VERSION + '(Y1/Y1T) 전용이다: version=' + version,
+      );
+    }
+    return encodeYCellSurface(text, eccLevel, tones);
+  }
 
   // 면 내 QR 윈도(ADR 0003 D1 조건 ②: n≥25 → Y2 만 가능, Y1 은 애초 불가) —
   // version=2/tones=2 이외의 명시 조합은 조용히 무시하지 않고 던진다.
@@ -256,6 +284,108 @@ export function encodeY(text, options = {}) {
     tones: spec.tones,
     formatIndex: spec.formatIndex,
     window,
+    capacity,
+    codewordSymbols,
+    dataDigits,
+    fillerDigits,
+    formatDigits,
+    cellDigits,
+  };
+}
+
+function encodeYCellSurface(text, eccLevel, tones) {
+  const capacity = capacityForCellSurfaceY(eccLevel, tones);
+  const n = CELL_SURFACE_N;
+  const framed = frame(text, capacity.dataBytes);
+  const symbols = bytesToSymbols(framed);
+  if (symbols.length !== capacity.dataSymbols) {
+    throw new RangeError(
+      '심볼 개수 불일치: bytesToSymbols() ' + symbols.length
+      + ' !== capacity.dataSymbols ' + capacity.dataSymbols,
+    );
+  }
+
+  const codewordSymbols = rsEncode(symbols, capacity.nsym);
+  if (codewordSymbols.length !== capacity.usedSymbols) {
+    throw new RangeError(
+      '코드워드 심볼 개수 불일치: rsEncode() ' + codewordSymbols.length
+      + ' !== capacity.usedSymbols ' + capacity.usedSymbols,
+    );
+  }
+
+  const preMaskDataDigits = unpackSymbolsToCellDigits(codewordSymbols);
+  const scanCells = dataCellsInScanOrderCellSurface();
+  if (scanCells.length !== capacity.dataCells) {
+    throw new RangeError(
+      'scan order-Y(cell-surface) 셀 수 불일치: '
+      + scanCells.length + ' !== capacity.dataCells ' + capacity.dataCells,
+    );
+  }
+  const dataCellCoords = scanCells.slice(0, preMaskDataDigits.length);
+  const dataDigits = new Uint8Array(preMaskDataDigits.length);
+  for (let i = 0; i < dataCellCoords.length; i += 1) {
+    const c = dataCellCoords[i];
+    dataDigits[i] = maskAdd(preMaskDataDigits[i], c.i, c.j);
+  }
+
+  const fillerCoords = fillerCellsCellSurface();
+  if (fillerCoords.length !== capacity.residualCells) {
+    throw new RangeError(
+      '필러 셀 수 불일치: fillerCellsCellSurface() '
+      + fillerCoords.length + ' !== capacity.residualCells ' + capacity.residualCells,
+    );
+  }
+  const fillerDigits = new Uint8Array(fillerCoords.length);
+  for (let i = 0; i < fillerCoords.length; i += 1) {
+    const c = fillerCoords[i];
+    fillerDigits[i] = maskAdd(0, c.i, c.j);
+  }
+
+  const eccLevelValue = ECC_LEVEL[eccLevel];
+  if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
+    throw new RangeError('알 수 없는 ECC 레벨: ' + eccLevel);
+  }
+  const formatIndex = formatIndexCellSurface(tones);
+  const formatReplicas = encodeReplicated({
+    version: formatIndex,
+    eccLevel: eccLevelValue,
+  });
+  const formatDigits = formatReplicas.flat();
+
+  const cellDigits = new Map();
+  for (const c of locatorCellsCellSurface()) {
+    cellDigits.set(cellKey(c.i, c.j), {
+      digit: null,
+      role: 'locator',
+      tones: { T: c.T, L: c.L, R: c.R },
+    });
+  }
+
+  const formatCoords = formatCellsCellSurface();
+  for (let i = 0; i < formatCoords.length; i += 1) {
+    const c = formatCoords[i];
+    cellDigits.set(cellKey(c.i, c.j), { digit: formatDigits[i], role: 'format' });
+  }
+
+  for (let i = 0; i < dataCellCoords.length; i += 1) {
+    const c = dataCellCoords[i];
+    cellDigits.set(cellKey(c.i, c.j), { digit: dataDigits[i], role: 'data' });
+  }
+
+  for (let i = 0; i < fillerCoords.length; i += 1) {
+    const c = fillerCoords[i];
+    cellDigits.set(cellKey(c.i, c.j), { digit: fillerDigits[i], role: 'filler' });
+  }
+
+  return {
+    version: CELL_SURFACE_VERSION,
+    n,
+    eccLevel,
+    tones,
+    formatIndex,
+    window: false,
+    cellSurface: true,
+    locatorProfile: CELL_SURFACE_PROFILE_ID,
     capacity,
     codewordSymbols,
     dataDigits,

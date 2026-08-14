@@ -21,6 +21,19 @@ import {
   formatCells as formatCellsY,
   layoutMapY,
 } from '../layoutY.js';
+import {
+  CELL_SURFACE_FORMAT_INDEX_2T,
+  CELL_SURFACE_FORMAT_INDEX_3T,
+  CELL_SURFACE_N,
+  CELL_SURFACE_VERSION,
+  dataCellsInScanOrderCellSurface,
+  formatCellsCellSurface,
+  formatIndexCellSurface,
+  isCellSurfaceFormatIndex,
+  layoutMapCellSurface,
+  nameCellSurface,
+  tonesFromCellSurfaceFormatIndex,
+} from '../cellSurfaceY.js';
 import { decodeCells } from '../decode.js';
 import { enumerateFormatProposals } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
@@ -361,6 +374,12 @@ function validVersionIndices(hypothesis) {
   if (hypothesis.family === 'tri') {
     return [profile.spec.formatIndex + (hypothesis.centerQr ? 2 : 0)];
   }
+  if (hypothesis.cellSurface === true) {
+    if (hypothesis.tones === 2 || hypothesis.tones === 3) {
+      return [formatIndexCellSurface(hypothesis.tones)];
+    }
+    return [CELL_SURFACE_FORMAT_INDEX_2T, CELL_SURFACE_FORMAT_INDEX_3T];
+  }
   return familyProfiles('cube')
     .filter((entry) => entry.dimension === hypothesis.n
       && (hypothesis.tones === undefined || entry.spec.tones === hypothesis.tones))
@@ -400,6 +419,23 @@ function formatIndexOwners(formatIndex) {
 }
 
 function profileForFormatCandidate(hypothesis, formatIndex) {
+  if (hypothesis && hypothesis.cellSurface === true
+    && isCellSurfaceFormatIndex(formatIndex)) {
+    const tones = tonesFromCellSurfaceFormatIndex(formatIndex);
+    if (hypothesis.tones !== undefined && hypothesis.tones !== tones) return undefined;
+    return {
+      family: 'cube',
+      dimension: CELL_SURFACE_N,
+      spec: {
+        name: nameCellSurface(tones),
+        version: CELL_SURFACE_VERSION,
+        n: CELL_SURFACE_N,
+        tones,
+        formatIndex,
+      },
+      formatIndices: [formatIndex],
+    };
+  }
   const dimension = hypothesis.family === 'cube' ? hypothesis.n : hypothesis.k;
   return familyProfiles(hypothesis.family).find((entry) =>
     entry.dimension === dimension && entry.formatIndices.includes(formatIndex));
@@ -1427,6 +1463,13 @@ function layoutForFamily(family, dimension, hypothesis) {
     };
   }
   if (family === 'cube') {
+    if (hypothesis && hypothesis.cellSurface === true) {
+      return {
+        map: layoutMapCellSurface(),
+        dataCells: dataCellsInScanOrderCellSurface(),
+        type: 'Y',
+      };
+    }
     if (hypothesis && hypothesis.window === true) {
       const dataCells = windowedDataCells(dimension, hypothesis.tones);
       const map = new Map(
@@ -2234,9 +2277,11 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
 
   const cube = hypothesis.family === 'cube';
   const cells = cube
-    ? hypothesis.window === true
-      ? windowedFormatCellsY(hypothesis.n)
-      : formatCellsY(hypothesis.n)
+    ? hypothesis.cellSurface === true
+      ? formatCellsCellSurface()
+      : hypothesis.window === true
+        ? windowedFormatCellsY(hypothesis.n)
+        : formatCellsY(hypothesis.n)
     : formatCells(hypothesis.k);
   const samples = [];
   const observedDigits = [];
@@ -2449,6 +2494,10 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         decodeFormat.n = dimension;
         decodeFormat.tones = hypothesis.tones;
         decodeFormat.window = hypothesis.window === true;
+        if (hypothesis.cellSurface === true) {
+          decodeFormat.cellSurface = true;
+          decodeFormat.locatorProfile = 'cell-surface-v1';
+        }
       } else {
         decodeFormat.k = dimension;
       }
