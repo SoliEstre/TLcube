@@ -19,6 +19,7 @@ import {
   POSTER_URL,
   QR_QUIET_MODULES,
   SYMBOL_BOX_CLASS,
+  SYMBOL_BOX_MM,
   SYMBOL_BOX_TOKEN,
   buildPrintPosterHtml,
 } from '../tools/build-print-poster.mjs';
@@ -143,6 +144,9 @@ test('두 심볼이 같은 CSS 박스 토큰을 쓰고 개별 크기 덮어쓰�
   assert.doesNotMatch(POSTER, /#qr-symbol\s*\{[^}]*height\s*:/);
   assert.doesNotMatch(POSTER, /#tlcube-symbol\s*\{[^}]*height\s*:/);
   assert.match(extractSvg(qr.inner), /class="quiet-zone"/);
+  assert.equal(SYMBOL_BOX_MM, 45);
+  assert.match(POSTER, new RegExp(`${SYMBOL_BOX_TOKEN}: ${SYMBOL_BOX_MM}mm`));
+  assert.match(POSTER, /\.code-stage\s*\{[\s\S]*?place-items:\s*center/);
 });
 
 test('A4 세로 인쇄 규칙과 오프라인 자급성', () => {
@@ -159,9 +163,14 @@ test('A4 세로 인쇄 규칙과 오프라인 자급성', () => {
 test('영어 카피에 금지 주장·CTA 가 없고 좌→우 라벨이 있다', () => {
   assert.match(POSTER, /<figcaption>QR<\/figcaption>/);
   assert.match(POSTER, /<figcaption>TLcube<\/figcaption>/);
-  assert.match(POSTER, />Familiar\.</);
+  assert.match(POSTER, />Familiar by design\.</);
   assert.match(POSTER, />Designed to live with your work\.</);
-  assert.match(POSTER, />then</);
+  assert.match(POSTER, />ONE LINK<strong>CHOOSE<br>YOUR WAY<\/strong>/);
+  assert.doesNotMatch(POSTER, />then</i);
+  assert.match(POSTER, /<div class="dimension">2D<\/div>/);
+  assert.match(POSTER, /<div class="dimension">2\.5D<\/div>/);
+  assert.match(POSTER, />TYPE Y · THREE-TONE</);
+  assert.doesNotMatch(POSTER, />TLCUBE</);
   const qrAt = POSTER.indexOf('id="qr-symbol"');
   const tlAt = POSTER.indexOf('id="tlcube-symbol"');
   assert.ok(qrAt >= 0 && tlAt > qrAt, 'QR 이 왼쪽, TLcube 가 오른쪽');
@@ -170,6 +179,15 @@ test('영어 카피에 금지 주장·CTA 가 없고 좌→우 라벨이 있다'
   assert.doesNotMatch(POSTER, /rotation[- ]tolerant|always scans|replaces QR|guaranteed/i);
   assert.doesNotMatch(POSTER, /0\.4\s*s|1\s*second|live speed|recognition rate/i);
   assert.match(POSTER, /2\.5D visual code/);
-  assert.match(POSTER, /Open source/);
+  assert.match(POSTER, /open[- ]source/i);
   assert.match(POSTER, /fallback QR/i);
+});
+
+test('컬러 인쇄 포스터는 Type Y 3톤 계약과 장식-코드 분리를 고정한다', () => {
+  assert.equal(POSTER_TL_TYPE, 'Y');
+  assert.equal(POSTER_TL_TONES, 3);
+  assert.match(POSTER, /--violet:\s*#6548e8/);
+  assert.match(POSTER, /radial-gradient/);
+  assert.match(POSTER, /\.code-stage\s*\{[\s\S]*?background:\s*#ffffff/);
+  assert.doesNotMatch(POSTER, /\.symbol-box\s*::(?:before|after)/);
 });
