@@ -2413,6 +2413,61 @@ function summarizeCellSurfaceProbe(options, geometryReports) {
   };
 }
 
+/**
+ * 하드체크(대각 동시성·Y 심)에서 떨어진 육각 후보를 셀 표면 평가 전용 shape 로 되살린다.
+ *
+ * 실사(2026-08-15, 142/174 프레임)에서 톤 커브 변화(인쇄 대비·조명·감마)가 전경 마스크를
+ * 일그러뜨려 실루엣 후보가 이 두 관문에서 전멸했고, 그 순간 셀 표면 평가는 **실행조차
+ * 되지 않았다**(no-geometry). 합성 감마 0.7 / S-커브에서 동일 재현. 셀 표면 평가는
+ * 자체 수용 게이트(agreement 0.78 · orientation margin 0.035 · tone span)가 있으므로,
+ * 기하만 그럴듯한 육각이면 평가 자체는 받게 한다 — 게이트 완화가 아니라 도달 복구다.
+ * lab(enableCellSurfaceY) 경로에서, 일반 후보의 CS 평가가 0회일 때만 돈다.
+ */
+function softCellSurfaceShapes(shapes) {
+  const rejections = shapes.diagnostics && Array.isArray(shapes.diagnostics.rejections)
+    ? shapes.diagnostics.rejections
+    : [];
+  const hexes = [];
+  for (const rejection of rejections) {
+    if (rejection.stage !== 'diagonal-concurrency' && rejection.stage !== 'y-junction') continue;
+    const measured = rejection.measured;
+    if (!measured || !Array.isArray(measured.vertices) || measured.vertices.length !== 6) continue;
+    const center = measured.center;
+    if (!center || !Number.isFinite(center.x) || !Number.isFinite(center.y)) continue;
+    const radius = Number(measured.radius);
+    if (!Number.isFinite(radius) || radius <= 0) continue;
+    hexes.push({ stage: rejection.stage, center, vertices: measured.vertices, radius });
+  }
+  // 큰 육각 = 코드 전체 실루엣일 확률이 높다. 상위 3개 × 두 패리티만 탐침한다.
+  hexes.sort((left, right) => right.radius - left.radius);
+  const out = [];
+  hexes.slice(0, 3).forEach((hex, index) => {
+    for (const parity of [0, 1]) {
+      out.push({
+        componentIndex: 1000 + index,
+        componentSource: 'cell-surface-soft-' + hex.stage,
+        center: hex.center,
+        vertices: hex.vertices,
+        seamParity: parity,
+        seamVertices: [0, 1, 2].map((k) => hex.vertices[(parity + 2 * k) % 6]),
+        radius: hex.radius,
+        maskFill: 0,
+        concurrencyResidual: 1,
+        seam: { contrast: 0, support: 0 },
+        hardChecks: {
+          hexSilhouette: false,
+          diagonalConcurrency: false,
+          yJunction: false,
+          all: false,
+        },
+        score: 0,
+        cellSurfaceOnly: true,
+      });
+    }
+  });
+  return out;
+}
+
 function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports) {
   for (const shape of shapes.candidates) {
     const center = liftPoint(shape.center, reduced.factor);
@@ -2516,6 +2571,9 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
               }
             }
           }
+          // 소프트 CS 탐침 shape 는 셀 표면 평가만 받는다 — 하드체크에서 떨어진
+          // 육각이라 일반 레퍼런스/정제 경로(일반 Y 가설 생산)에는 넣지 않는다.
+          if (shape.cellSurfaceOnly === true) continue;
           const references = calibrateCubeReferences(luma, base, options);
           geometryReports.push({
             n,
@@ -2816,6 +2874,7 @@ function detectCubeViaFinderFirst(luma, options) {
       finderSeed,
       detectPath: null,
       geometryStage: finderSeed && finderSeed.geometryStage ? finderSeed.geometryStage : null,
+      geometryReports: [],
     };
   }
 
@@ -2842,11 +2901,14 @@ function detectCubeViaFinderFirst(luma, options) {
   }
 
   if (hypotheses.length === 0) {
+    // 실패해도 이 경로에서 실행된 셀 표면 평가 기록은 버리지 않는다 — 실루엣 폴백까지
+    // 실패하면 프레임 진단이 «no-geometry(평가 미도달)» 로 오보되던 구멍 (2026-08-15 실사 142건).
     return {
       ok: false,
       finderSeed,
       detectPath: null,
       geometryStage: 'finder',
+      geometryReports,
     };
   }
 
@@ -2885,6 +2947,12 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       ...options,
       finderFirst: false,
     });
+    // 파인더 우선 경로가 실패해도 그 경로에서 실행된 셀 표면 평가 기록은 합쳐서
+    // 프레임 진단에 남긴다 — 안 그러면 실루엣까지 실패한 프레임이 전부
+    // «no-geometry(평가 미도달)» 로 오보된다 (2026-08-15 실사 142건의 정체).
+    const finderReports = finder && Array.isArray(finder.geometryReports)
+      ? finder.geometryReports
+      : [];
     const meta = {
       detectPath: silhouette.ok ? 'silhouette' : null,
       geometryStage: silhouette.ok
@@ -2897,14 +2965,35 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       finderCropReports: finder && finder.cropReports,
     };
     if (silhouette.ok) {
-      return ok({
-        ...silhouette,
-        diagnostics: { ...(silhouette.diagnostics || {}), ...meta, detectPath: 'silhouette' },
-      });
+      const diagnostics = {
+        ...(silhouette.diagnostics || {}), ...meta, detectPath: 'silhouette',
+      };
+      if (finderReports.length > 0) {
+        diagnostics.geometryReports = [
+          ...(Array.isArray(diagnostics.geometryReports) ? diagnostics.geometryReports : []),
+          ...finderReports,
+        ];
+        diagnostics.cellSurfaceProbe =
+          summarizeCellSurfaceProbe(options, diagnostics.geometryReports);
+      }
+      return ok({ ...silhouette, diagnostics });
     }
+    const failDiagnostics = silhouette.detail && silhouette.detail.diagnostics;
+    const mergedReports = finderReports.length > 0
+      ? [
+        ...((failDiagnostics && Array.isArray(failDiagnostics.geometryReports))
+          ? failDiagnostics.geometryReports
+          : []),
+        ...finderReports,
+      ]
+      : null;
     return attachDetectMeta(silhouette, {
       ...meta,
       geometryStage: meta.geometryStage || (finder && finder.geometryStage) || null,
+      ...(mergedReports ? {
+        geometryReports: mergedReports,
+        cellSurfaceProbe: summarizeCellSurfaceProbe(options, mergedReports),
+      } : {}),
     });
   }
   return detectCubeFromSilhouette(luma, yJunction, options);
@@ -2946,6 +3035,24 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
   let blockRecovery = null;
 
   hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports);
+
+  // 일반 후보가 셀 표면 평가에 한 번도 도달하지 못했다면(실사 톤 커브에서 하드체크
+  // 전멸이 전형), 거절된 육각을 CS 전용 shape 로 되살려 평가만 받게 한다.
+  if (options.enableCellSurfaceY === true
+    && !geometryReports.some((entry) => entry.attempted === true)) {
+    const soft = softCellSurfaceShapes(shapes);
+    if (soft.length > 0) {
+      hypothesesFromShapes(
+        luma,
+        reduced,
+        { candidates: soft },
+        options,
+        cfg,
+        hypotheses,
+        geometryReports,
+      );
+    }
+  }
 
   const hasConfirmedGrid = hypotheses.some((entry) =>
     entry.referenceCalibration
