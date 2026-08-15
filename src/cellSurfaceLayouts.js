@@ -9,8 +9,11 @@
  * 이며 선언값(v1r2 334 · v2 306)과 같아야 한다.
  *
  * formatIndex 는 cube 축의 빈 슬롯. 구 v1 CS 12/14 의미는 그대로 둔다.
- *   v1r2: 4 (2톤) / 6 (3톤)
- *   v2:   5 (2톤) / 7 (3톤)
+ *   v1r2d: 4 (2톤) / 6 (3톤)   ← 초안 와이어. 같은 기하의 **최종** v1r2 는 1/3 을 쓴다.
+ *   v2:    5 (2톤) / 7 (3톤)
+ *
+ * 2026-08-15 밤: v1r2 기하가 최종 라인업(cellSurfaceFinal.js)으로 승격되면서 이 모듈의
+ * id 는 'v1r2d' 로 분리됐다 — 여기 남은 것은 **소각된 와이어 슬롯 4/6 의 기록**이다.
  *
  * 런타임 의존성 0 · 순수 ESM.
  */
@@ -26,7 +29,13 @@ export const CELL_SURFACE_LAYOUT_VERSION = 1;
 export const CELL_SURFACE_LEGACY_REFERENCE = 12;
 export const CELL_SURFACE_LEGACY_FORMAT = 15;
 
-export const CELL_SURFACE_LAYOUT_V1R2 = 'v1r2';
+/**
+ * 초안 슬롯 id. 값이 'v1r2d' 인 이유 — 같은 기하가 2026-08-15 밤 **최종 라인업**에
+ * v1r2(formatIndex 1/3) 로 승격됐다(cellSurfaceFinal.js). 이 모듈은 배포된 와이어
+ * 슬롯 4/6 의 소각 기록이므로 id 를 분리해 두 경로가 서로를 가리지 않게 한다.
+ * 기하·톤·데이터 회계(80 painted · 334 data)는 최종 v1r2 와 바이트 동일하다.
+ */
+export const CELL_SURFACE_LAYOUT_V1R2 = 'v1r2d';
 export const CELL_SURFACE_LAYOUT_V2 = 'v2';
 export const CELL_SURFACE_LAYOUT_IDS = Object.freeze([
   CELL_SURFACE_LAYOUT_V1R2,

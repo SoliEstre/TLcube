@@ -53,6 +53,8 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   registrationStep2Cells: 0.125,
   v0RotationStepDeg: 3,
   v0RotationRefineDeg: 0.75,
+  // v1r2 패밀리 (n=21 A/B 후보). false 로 끄면 벤치에서 순수 v0/v2r2 기준선을 잰다.
+  v1r2Family: true,
 });
 
 const CANONICAL_LAYOUT = Object.freeze({ size: 1, originX: 0, originY: 0 });
@@ -533,32 +535,69 @@ function mergePatches(patches) {
   return { anchor: { x: sumX / points.length, y: sumY / points.length }, points };
 }
 
-function patchesForN(n) {
-  if (patchCache.has(n)) return patchCache.get(n);
-  const cells = locatorCellsCellSurfaceFinal(n);
-  const nearLimit = n === 13 ? 2 : 3;
-  const farLimit = n === 13 ? 10 : n - 7;
+/**
+ * 레이아웃별 블록 경계 — [중앙 블록 상한, 먼 코너 하한, 엣지 블록(있으면)].
+ * v0 · v1r2 는 네 코너 블록이라 NE(i 작음·j 큼)·SW(i 큼·j 작음) 엣지도 정본이고,
+ * 그 6 패치가 최소제곱 재적합의 스프레드를 넓힌다. v2r2 는 두 블록뿐이다.
+ */
+function blockLimitsFor(n, layoutId) {
+  if (layoutId === 'v1r2') {
+    return {
+      nearLimit: 4,
+      farLimit: 16,
+      edges: Object.freeze([
+        Object.freeze({ iMax: 3, jMin: 16 }),
+        Object.freeze({ iMin: 16, jMax: 3 }),
+      ]),
+    };
+  }
+  if (n === 13) {
+    return {
+      nearLimit: 2,
+      farLimit: 10,
+      edges: Object.freeze([
+        Object.freeze({ iMax: 1, jMin: 10 }),
+        Object.freeze({ iMin: 10, jMax: 1 }),
+      ]),
+    };
+  }
+  return { nearLimit: 3, farLimit: n - 7, edges: Object.freeze([]) };
+}
+
+function inEdgeBlock(cell, box) {
+  if (box.iMax !== undefined && cell.i > box.iMax) return false;
+  if (box.iMin !== undefined && cell.i < box.iMin) return false;
+  if (box.jMax !== undefined && cell.j > box.jMax) return false;
+  if (box.jMin !== undefined && cell.j < box.jMin) return false;
+  return true;
+}
+
+function patchesFor(n, layoutId = undefined) {
+  const key = (layoutId || 'default') + '@' + n;
+  if (patchCache.has(key)) return patchCache.get(key);
+  const cells = locatorCellsCellSurfaceFinal(n, layoutId);
+  const { nearLimit, farLimit, edges: edgeBoxes } = blockLimitsFor(n, layoutId);
   const centreParts = YFACE_LIST.map((face) =>
     buildPatch(cells, face, (cell) => cell.i <= nearLimit && cell.j <= nearLimit));
   const corners = YFACE_LIST.map((face) =>
     buildPatch(cells, face, (cell) => cell.i >= farLimit && cell.j >= farLimit));
-  // v0 는 NE(i 작음·j 큼)·SW(i 큼·j 작음) 엣지 블록도 정본이다 — 서브앵커 스프레드를
-  // 넓혀 재적합 정확도를 올린다 (v2r2 는 해당 블록이 없다).
-  const edges = n === 13
-    ? YFACE_LIST.flatMap((face) => [
-      buildPatch(cells, face, (cell) => cell.i <= 1 && cell.j >= 10),
-      buildPatch(cells, face, (cell) => cell.i >= 10 && cell.j <= 1),
-    ]).filter((patch) => patch !== null)
-    : [];
+  const edges = YFACE_LIST.flatMap((face) =>
+    edgeBoxes.map((box) => buildPatch(cells, face, (cell) => inEdgeBlock(cell, box))))
+    .filter((patch) => patch !== null);
   const built = {
     centre: mergePatches(centreParts),
     corners,
-    // 최소제곱 재적합용 서브앵커 — 면별 중앙 3 + 면별 먼 코너 3 (+ v0 엣지 6).
+    // 최소제곱 재적합용 서브앵커 — 면별 중앙 3 + 면별 먼 코너 3 (+ v0·v1r2 엣지 6).
     subPatches: [...centreParts, ...corners, ...edges],
     all: mergePatches(YFACE_LIST.map((face) => buildPatch(cells, face, () => true))),
   };
-  patchCache.set(n, built);
+  patchCache.set(key, built);
   return built;
+}
+
+/** 기존 호출 형태 유지 — n 의 **기본** 레이아웃 패치. */
+function patchesForN(n) {
+  return patchesFor(n, undefined);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -938,6 +977,66 @@ function assembleV2r2Poses(verified, fullLuma, factor, cfg) {
   return poses;
 }
 
+/**
+ * v1r2 조립 — **네 코너 블록 · 회전 스윕 없음.**
+ *
+ * 정본에서 실제로 «동심 코어» 를 내는 자리는 둘이다 (검산 완료):
+ *   · 중앙 = 세 면의 NW 5×5 합집합. 중심 통과 런렝스 [B1 D4 B1] (어두운 육각 r<2 +
+ *     밝은 링 2..3) — **v0 중앙과 같은 K3 서명**이라 verifyV0Cluster 가 그대로 잡는다.
+ *     v1r2 는 그 바깥에 링이 더 있다(어두움 3 · 밝음 4 → t3/t1 2.0 · t4/t1 2.5).
+ *   · 먼 꼭짓점 = **면 T 의 SE 5×5**. 어두운 2×2 (17..18)² 를 밝은 테두리가 감싸
+ *     4방향 전부 [B1 D2 B1] = K5 → verifyV2r2Cluster 가 'v2r2-corner' 로 낸다.
+ *     면 L·R 의 SE 는 코어가 1셀(D1)이라 K5 문턱을 넘지 못한다 — 그래서 **면 T 하나만**
+ *     코어를 내고, 그 사실이 곧 120° 회전 위상을 확정한다 (v0 의 360° 스윕 불필요).
+ *
+ * 시드는 중앙 + T먼코너 similarity 이고, 실제 **4앵커 직접 DLT** 는 재적합에서 돈다 —
+ * refineHomographyWithPatches 가 [중앙(3면 합집합), 먼코너 T/L/R] 4앵커를
+ * estimateHomography4 로 푼다. 3라운드는 네 코너 × 3면 = **12 서브앵커** 최소제곱
+ * (v2r2 는 6, v0 는 12).
+ *
+ * 기하 상수: 면 T SE 코어 중심은 셀 (17.5, 17.5) → canonical 거리 18.0·u
+ * (셀 (c,c) 중심의 원점 거리 = (c+0.5)·u — v2r2 의 (n−3.5) 와 같은 규칙).
+ */
+const V1R2_CORE_RADIUS_CELLS = 18;
+const V1R2_N = 21;
+
+function assembleV1r2Poses(verified, fullLuma, factor, cfg) {
+  const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
+  const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
+  const poses = [];
+  for (const centre of centres) {
+    for (const corner of corners) {
+      const dx = corner.x - centre.x;
+      const dy = corner.y - centre.y;
+      const distance = Math.hypot(dx, dy);
+      if (!(distance > 6 * centre.u)) continue;
+      // v0-center 의 u 는 셀 크기다 (t1 = 2셀 → u = t1/2).
+      const estimatedRadius = distance / Math.max(centre.u, EPSILON);
+      // 스냅 허용폭은 v2r2 와 같은 근거(마스크 침식이 u 를 부풀린다) — ±3.2 셀.
+      if (Math.abs(estimatedRadius - V1R2_CORE_RADIUS_CELLS) > 3.2) continue;
+      const centreFull = liftPoint(centre, factor);
+      const cornerFull = liftPoint(corner, factor);
+      const scale = Math.hypot(cornerFull.x - centreFull.x, cornerFull.y - centreFull.y)
+        / V1R2_CORE_RADIUS_CELLS;
+      // canonical 대각 (0,−1)·18 → 면 T 먼코너. R·(0,−1) = w 에서 cos=−wy, sin=wx.
+      const wx = (cornerFull.x - centreFull.x) / (scale * V1R2_CORE_RADIUS_CELLS);
+      const wy = (cornerFull.y - centreFull.y) / (scale * V1R2_CORE_RADIUS_CELLS);
+      const H0 = similarityHomography(centreFull, scale, -wy, wx);
+      const refined = refinePose(fullLuma, H0, patchesFor(V1R2_N, 'v1r2'), cfg);
+      if (!refined) continue;
+      poses.push({
+        family: 'v1r2',
+        layoutId: 'v1r2',
+        n: V1R2_N,
+        H: refined.H,
+        score: refined.meanCorrelation,
+        estimatedRadius,
+      });
+    }
+  }
+  return poses;
+}
+
 function rotationSweepScore(reducedLuma, template, centre, unit, angleCos, angleSin) {
   let count = 0;
   for (const point of template.points) {
@@ -1059,6 +1158,9 @@ function shapeFromPose(pose, index) {
     blockLocator: {
       family: pose.family,
       patchCorrelation: pose.score,
+      // n=21 은 후보가 둘이라 로케이터 패밀리가 어느 쪽을 세웠는지 남긴다.
+      // 수용은 여전히 CS 평가 게이트가 판정한다 (여기서 레이아웃을 못박지 않는다).
+      layoutId: pose.layoutId || null,
     },
   };
 }
@@ -1110,10 +1212,13 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
     || left.y - right.y || left.x - right.x);
 
   const posesV2r2 = assembleV2r2Poses(verified, luma, reduced.factor, cfg);
+  const posesV1r2 = cfg.v1r2Family === false
+    ? []
+    : assembleV1r2Poses(verified, luma, reduced.factor, cfg);
   const posesV0 = assembleV0Poses(verified, reduced.luma, luma, reduced.factor, cfg);
 
   const shapes = [];
-  for (const familyPoses of [posesV2r2, posesV0]) {
+  for (const familyPoses of [posesV2r2, posesV1r2, posesV0]) {
     familyPoses.sort((left, right) =>
       right.score - left.score || left.n - right.n);
     for (const pose of familyPoses.slice(0, cfg.maximumPosesPerFamily)) {
@@ -1137,7 +1242,11 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         score: hit.score,
         count: hit.count,
       })),
-      poseCount: { v2r2: posesV2r2.length, v0: posesV0.length },
+      poseCount: {
+        v2r2: posesV2r2.length,
+        v1r2: posesV1r2.length,
+        v0: posesV0.length,
+      },
       shapeCount: shapes.length,
     },
   };
@@ -1158,4 +1267,6 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   rayTransitions,
   recentreByRays,
   patchesForN,
+  patchesFor,
+  assembleV1r2Poses,
 });

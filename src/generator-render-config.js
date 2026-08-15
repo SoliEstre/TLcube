@@ -4,11 +4,13 @@ import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
   CELL_SURFACE_FINAL_V0,
+  CELL_SURFACE_FINAL_V1R2,
   CELL_SURFACE_FINAL_V2R2,
   assertCellSurfaceFinalId,
 } from './cellSurfaceFinal.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
 } from './locatorY.js';
 
@@ -23,7 +25,7 @@ import {
  * 사용자가 고른 값이 복원된다(해상도 티어가 이미 같은 규약을 쓴다).
  *
  * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string}} state
- * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'}}
+ * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'}}
  */
 export function encodeOptionsForY(state) {
   if (state === null || typeof state !== 'object') {
@@ -34,7 +36,8 @@ export function encodeOptionsForY(state) {
     throw new TypeError('Y QR 폴백 상태가 필요하다');
   }
   // 최종 라인업 (2026-08-15): v0 = Y0(n=13) 고정 · v2r2 = Y1/Y2(n=21/25).
-  // 초안(v1r2/v2)은 UI 에서 내렸다 — 이 경계는 최종 두 레이아웃만 만든다.
+  // 2026-08-15 밤 추가: v1r2 = Y1(n=21) 전용 A/B 후보 (네 코너 블록 80셀).
+  // 초안 v2 와 구 v1 CS 는 UI 에서 내린 채다.
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0) {
     return {
       tones: tone === 3 ? 3 : 2,
@@ -50,6 +53,15 @@ export function encodeOptionsForY(state) {
       version: versionY === 2 ? 2 : 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V2R2),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v1r2 는 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V1R2),
     };
   }
   if (fallback.mode === 'window') {

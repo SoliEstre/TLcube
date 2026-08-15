@@ -593,7 +593,7 @@ function chooseFinalN(text, eccLevel, tones, layoutId, version) {
   }
   const byteLength = payloadByteLength(text);
   for (const n of allowedNs) {
-    const capacity = capacityForCellSurfaceFinal(n, eccLevel, tones);
+    const capacity = capacityForCellSurfaceFinal(n, eccLevel, tones, layoutId);
     if (byteLength <= capacity.maxPayloadBytes) return n;
   }
   throw new RangeError(
@@ -604,8 +604,8 @@ function chooseFinalN(text, eccLevel, tones, layoutId, version) {
 
 function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
   const n = chooseFinalN(text, eccLevel, tones, layoutId, version);
-  const surface = cellSurfaceFinal(n);
-  const capacity = capacityForCellSurfaceFinal(n, eccLevel, tones);
+  const surface = cellSurfaceFinal(n, layoutId);
+  const capacity = capacityForCellSurfaceFinal(n, eccLevel, tones, layoutId);
   const framed = frame(text, capacity.dataBytes);
   const symbols = bytesToSymbols(framed);
   if (symbols.length !== capacity.dataSymbols) {
@@ -624,7 +624,7 @@ function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
   }
 
   const preMaskDataDigits = unpackSymbolsToCellDigits(codewordSymbols);
-  const scanCells = dataCellsInScanOrderCellSurfaceFinal(n);
+  const scanCells = dataCellsInScanOrderCellSurfaceFinal(n, layoutId);
   if (scanCells.length !== capacity.dataCells) {
     throw new RangeError(
       'scan order-Y(cell-surface-final) 셀 수 불일치: '
@@ -638,7 +638,7 @@ function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
     dataDigits[i] = maskAdd(preMaskDataDigits[i], c.i, c.j);
   }
 
-  const fillerCoords = fillerCellsCellSurfaceFinal(n);
+  const fillerCoords = fillerCellsCellSurfaceFinal(n, layoutId);
   if (fillerCoords.length !== capacity.residualCells) {
     throw new RangeError(
       '필러 셀 수 불일치: fillerCellsCellSurfaceFinal() '
@@ -663,7 +663,7 @@ function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
   const formatDigits = formatReplicas.flat();
 
   const cellDigits = new Map();
-  for (const c of locatorCellsCellSurfaceFinal(n)) {
+  for (const c of locatorCellsCellSurfaceFinal(n, layoutId)) {
     cellDigits.set(cellKey(c.i, c.j), {
       digit: null,
       role: 'locator',

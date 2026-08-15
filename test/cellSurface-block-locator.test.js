@@ -15,6 +15,9 @@
  *   5. 게이트 완화 없음 — 로케이터를 끄면(csBlockLocator:false) 감마 0.7 은 종전대로
  *      실패한다 (개선이 게이트가 아니라 기하 재정렬에서 왔다는 대조군).
  *   6. 정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터는 돌지 않는다.
+ *   7. (2026-08-15 밤) v1r2 패밀리 — 네 코너 블록. 회전 스윕 없이 중앙+면T 먼코너
+ *      similarity 시드 → 4앵커 직접 DLT → 12 서브앵커 최소제곱. S-커브에서
+ *      **body RS 복호까지** 가고 회전 슬롯 0/120/240 전수를 통과한다.
  */
 
 import { test } from 'node:test';
@@ -89,6 +92,7 @@ function decodeLab(frame, cube = {}) {
 
 const V0_FRAME = embed960(renderFinal('v0', 0, 17));
 const V2R2_FRAME = embed960(renderFinal('v2r2', 1, 15));
+const V1R2_FRAME = embed960(renderFinal('v1r2', 1, 15));
 
 test('v0 S-커브 — CS 수용을 넘어 body RS 복호까지 간다', { timeout: 300_000 }, () => {
   const frame = distortImage(V0_FRAME, { sCurve: 0.6, fill: FILL });
@@ -156,4 +160,75 @@ test('정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터�
   const text = JSON.stringify(diagnostics || {});
   assert.ok(!text.includes('cell-surface-block-locator'),
     '정식 경로 진단에 블록 로케이터 흔적이 있다');
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// v1r2 패밀리 (2026-08-15 밤) — 네 코너 블록 · 회전 스윕 없음.
+// ─────────────────────────────────────────────────────────────────────────
+
+test('v1r2 S-커브 — CS 수용을 넘어 body RS 복호까지 간다', { timeout: 300_000 }, () => {
+  const result = decodeLab(distortImage(V1R2_FRAME, { sCurve: 0.6, fill: FILL }));
+  assert.equal(result.ok, true, 'v1r2 S-커브 복호: ' + (result.reason || ''));
+  assert.equal(result.text, PAYLOAD);
+  assert.equal(result.hypothesis.cellSurfaceLayout, 'v1r2');
+});
+
+test('v1r2 감마 0.7/0.6 — 두 커브 모두 복호된다', { timeout: 300_000 }, () => {
+  for (const gamma of [0.7, 0.6]) {
+    const result = decodeLab(distortImage(V1R2_FRAME, { gamma, fill: FILL }));
+    assert.equal(result.ok, true, 'v1r2 감마 ' + gamma + ': ' + (result.reason || ''));
+    assert.equal(result.text, PAYLOAD);
+    assert.equal(result.hypothesis.cellSurfaceLayout, 'v1r2');
+  }
+});
+
+test('v1r2 회전 슬롯 0/120/240 전수 — 물리 회전은 H 가 흡수한다', { timeout: 600_000 }, () => {
+  for (const rotation of [0, 120, 240]) {
+    const result = decodeLab(distortImage(V1R2_FRAME, {
+      gamma: 0.7, rotation, fill: FILL,
+    }));
+    assert.equal(result.ok, true, 'v1r2 rot' + rotation + ': ' + (result.reason || ''));
+    assert.equal(result.text, PAYLOAD);
+    assert.equal(result.hypothesis.cellSurfaceLayout, 'v1r2');
+    // 로케이터가 회전을 H 로 흡수하므로 가설 슬롯은 항상 0 이다.
+    assert.equal(result.hypothesis.rotationDegrees, 0, 'v1r2 rot' + rotation + ' 슬롯');
+  }
+});
+
+test('v1r2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동일 산출', { timeout: 300_000 }, () => {
+  const luma = toRelativeLuminance(distortImage(V1R2_FRAME, { gamma: 0.7, fill: FILL }));
+  const first = detectCellSurfaceBlockShapes(luma);
+  const second = detectCellSurfaceBlockShapes(luma);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(second)),
+    JSON.parse(JSON.stringify(first)),
+  );
+  assert.ok(first.diagnostics.poseCount.v1r2 >= 1, 'v1r2 포즈 최소 1개');
+  const families = first.shapes.map((shape) => shape.blockLocator.family);
+  assert.ok(families.includes('v1r2'), 'v1r2 shape 가 없다: ' + families.join(','));
+});
+
+test('v1r2 패밀리를 끄면 v1r2 포즈가 사라진다 (패밀리 격리 대조군)', {
+  timeout: 300_000,
+}, () => {
+  const luma = toRelativeLuminance(distortImage(V1R2_FRAME, { gamma: 0.7, fill: FILL }));
+  const off = detectCellSurfaceBlockShapes(luma, {
+    calibration: { csBlockLocator: { v1r2Family: false } },
+  });
+  assert.equal(off.diagnostics.poseCount.v1r2, 0);
+  // v0·v2r2 패밀리는 같은 프레임에서 종전대로 돈다 (이 프레임엔 v2r2 코어가 없다).
+  assert.equal(off.diagnostics.poseCount.v2r2, 0);
+});
+
+test('회귀 — v0·v2r2 프레임에서 v1r2 패밀리가 포즈를 만들지 않는다', {
+  timeout: 300_000,
+}, () => {
+  for (const [frame, label] of [[V0_FRAME, 'v0'], [V2R2_FRAME, 'v2r2']]) {
+    const luma = toRelativeLuminance(distortImage(frame, { gamma: 0.7, fill: FILL }));
+    const detected = detectCellSurfaceBlockShapes(luma);
+    assert.equal(
+      detected.diagnostics.poseCount.v1r2, 0,
+      label + ' 프레임에서 v1r2 포즈가 생겼다: ' + JSON.stringify(detected.diagnostics.poseCount),
+    );
+  }
 });

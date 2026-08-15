@@ -30,6 +30,7 @@ import {
   tonesFromCellSurfaceFormatIndex,
 } from './cellSurfaceY.js';
 import {
+  CELL_SURFACE_LAYOUT_V1R2,
   capacityForCellSurfaceLayout,
   dataCellsInScanOrderCellSurfaceLayout,
   isCellSurfaceLayoutFormatIndex,
@@ -288,13 +289,21 @@ function resolveProfile(format) {
 
     // 최종 라인업 (cellSurfaceFinal.js, v0 · v2r2) — formatIndex 는 한 쌍(1/3)뿐이고
     // 레이아웃은 n 으로 정해진다. 디코더 앞단(bootstrap)은 항상 n 을 싣는다.
+    // 프로파일 힌트는 **와이어가 초안 슬롯(4/5/6/7)을 말하지 않을 때만** 쓴다 —
+    // 'cell-surface-v1r2' 는 최종 v1r2 와 소각된 초안 v1r2d 가 함께 쓰는 문자열이라,
+    // formatIndex 가 초안이면 초안 경로로 내려보내야 한다.
+    const draftIndexWire = format.formatIndex !== undefined
+      && isCellSurfaceLayoutFormatIndex(format.formatIndex);
+    const profileHintId = format.locatorProfile === 'cell-surface-v0'
+      ? 'v0'
+      : format.locatorProfile === 'cell-surface-v2r2'
+        ? 'v2r2'
+        : format.locatorProfile === 'cell-surface-v1r2'
+          ? 'v1r2'
+          : null;
     const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
       ? format.cellSurfaceLayout
-      : format.locatorProfile === 'cell-surface-v0'
-        ? 'v0'
-        : format.locatorProfile === 'cell-surface-v2r2'
-          ? 'v2r2'
-          : null;
+      : (profileHintId !== null && !draftIndexWire ? profileHintId : null);
     const finalRequested = finalIdHint !== null
       || (format.formatIndex !== undefined && isCellSurfaceFinalFormatIndex(format.formatIndex));
     if (finalRequested) {
@@ -320,6 +329,7 @@ function resolveProfile(format) {
       let finalN = requestedN;
       if (finalN === undefined) {
         if (finalIdHint === 'v0') finalN = 13;
+        else if (finalIdHint === 'v1r2') finalN = 21;
         else {
           throw new RangeError('신세대 셀 표면 v2r2 는 format.n(21|25) 이 필요하다');
         }
@@ -328,11 +338,13 @@ function resolveProfile(format) {
         throw new RangeError('신세대 셀 표면의 n 은 13|21|25 다: ' + finalN);
       }
       if (finalIdHint !== null) assertCellSurfaceFinalN(finalIdHint, finalN);
+      // n=21 은 후보가 둘 — 힌트가 없으면 기본(v2r2). 레이아웃 판별은 로케이터·평가 게이트가 한다.
+      const finalId = finalIdHint === null ? finalLayoutIdForN(finalN) : finalIdHint;
       return finishProfile({
         type,
         eccLevel,
-        capacity: capacityForCellSurfaceFinal(finalN, eccLevel, finalTones),
-        scan: dataCellsInScanOrderCellSurfaceFinal(finalN),
+        capacity: capacityForCellSurfaceFinal(finalN, eccLevel, finalTones, finalId),
+        scan: dataCellsInScanOrderCellSurfaceFinal(finalN, finalId),
         coordinates: (cell) => [cell.i, cell.j],
       });
     }
@@ -342,7 +354,7 @@ function resolveProfile(format) {
         ? layoutIdFromFormatIndex(format.formatIndex)
         : null)
       || (format.locatorProfile === 'cell-surface-v1r2'
-        ? 'v1r2'
+        ? CELL_SURFACE_LAYOUT_V1R2
         : format.locatorProfile === 'cell-surface-v2'
           ? 'v2'
           : null);

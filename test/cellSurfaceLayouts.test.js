@@ -69,10 +69,10 @@ test('선언 data 는 441 − painted − 12 − 15 와 같고 다시 깎지 않
     assert.equal(formatIndexCellSurfaceLayout(id, 2), fi[2]);
     assert.ok(isCellSurfaceLayoutFormatIndex(fi[2]));
   }
-  assert.equal(CELL_SURFACE_LAYOUT_DECLARED_DATA.v1r2, 334);
+  assert.equal(CELL_SURFACE_LAYOUT_DECLARED_DATA[CELL_SURFACE_LAYOUT_V1R2], 334);
   assert.equal(CELL_SURFACE_LAYOUT_DECLARED_DATA.v2, 306);
-  assert.equal(cellSurfaceLayout('v1r2').locatorCount, 80);
-  assert.equal(cellSurfaceLayout('v1r2').userNonDataCount, 62);
+  assert.equal(cellSurfaceLayout(CELL_SURFACE_LAYOUT_V1R2).locatorCount, 80);
+  assert.equal(cellSurfaceLayout(CELL_SURFACE_LAYOUT_V1R2).userNonDataCount, 62);
   assert.equal(cellSurfaceLayout('v2').locatorCount, 108);
   assert.equal(cellSurfaceLayout('v2').userNonDataCount, 88);
 });

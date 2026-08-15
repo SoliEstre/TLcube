@@ -32,6 +32,7 @@ import {
   CELL_SURFACE_FINAL_NS,
   CELL_SURFACE_FINAL_PROFILE,
   finalLayoutIdForN,
+  finalLayoutIdsForN,
   formatIndexCellSurfaceFinal,
   isCellSurfaceFinalId,
   locatorCellsCellSurfaceFinal,
@@ -285,7 +286,7 @@ function scoreOneArm(samples, cfg, arm) {
 function layoutLocatorsFor(layoutId, n) {
   if (isCellSurfaceFinalId(layoutId)) {
     if (!CELL_SURFACE_FINAL_NS[layoutId].includes(n)) return null;
-    return locatorCellsCellSurfaceFinal(n);
+    return locatorCellsCellSurfaceFinal(n, layoutId);
   }
   if (n !== CELL_SURFACE_N) return null;
   return cellSurfaceLayout(layoutId).locatorCells;
@@ -496,9 +497,13 @@ function sampleLocatorTable(sampleCell, locators) {
 }
 
 /**
- * 어떤 레이아웃들을 채점할지. 기본은 **n 별 최종 라인업**(n=13→v0 · n=21/25→v2r2) —
- * 초안(v1r2/v2)과 구 v1 CS 는 명시 옵션으로만 산다 (2026-08-15 라인업 확정,
- * 배포 출력물 법의학용 경로는 유지하되 기본 경로에서 내린다).
+ * 어떤 레이아웃들을 채점할지. 기본은 **n 별 최종 라인업 후보 전부** —
+ * n=13→[v0] · n=21→[v2r2, v1r2] · n=25→[v2r2]. n=21 만 후보가 둘이며
+ * (2026-08-15 밤 v1r2 부활, A/B 실사 비교용) 수용은 아래 기존 게이트가 판정한다:
+ * agreement ≥ 0.78 · orientation margin ≥ 0.035. 두 레이아웃이 다 통과하면
+ * ambiguous 로 남기고 agreement 가 높은 쪽(동률이면 기본 v2r2)을 고른다.
+ * 이 경로 전체가 lab 전용이다 — 스캐너는 `enableCellSurfaceY: isLabPath()` 로만 켠다.
+ * 초안(v1r2d/v2)과 구 v1 CS 는 명시 옵션으로만 산다 (배포 출력물 법의학 경로).
  */
 function resolveLayoutIds(options, n) {
   if (options.enableLegacyCellSurfaceV1 === true && !options.cellSurfaceLayout
@@ -511,11 +516,14 @@ function resolveLayoutIds(options, n) {
   if (Array.isArray(options.cellSurfaceLayouts) && options.cellSurfaceLayouts.length > 0) {
     return options.cellSurfaceLayouts;
   }
-  const finalId = finalLayoutIdForN(n);
-  return finalId ? [finalId] : [];
+  return [...finalLayoutIdsForN(n)];
 }
 
-function pickBetterLayout(left, right) {
+/**
+ * 동률 처리 — 수용 여부 → agreement → **선호 id**(그 n 의 기본 최종 레이아웃,
+ * 없으면 초안 기본) 순. 후보가 둘인 n=21 에서 «둘 다 같은 점수» 를 결정적으로 깬다.
+ */
+function pickBetterLayout(left, right, preferredId) {
   if (left.accepted !== right.accepted) return left.accepted ? left : right;
   const leftScore = left.best && left.best.agreement;
   const rightScore = right.best && right.best.agreement;
@@ -524,7 +532,10 @@ function pickBetterLayout(left, right) {
     if (!Number.isFinite(rightScore)) return left;
     return leftScore >= rightScore ? left : right;
   }
-  return left.layoutId === DEFAULT_CELL_SURFACE_LAYOUT ? left : right;
+  const preferred = preferredId || DEFAULT_CELL_SURFACE_LAYOUT;
+  if (left.layoutId === preferred) return left;
+  if (right.layoutId === preferred) return right;
+  return left;
 }
 
 export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}) {
@@ -556,28 +567,37 @@ export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}
     const scoredLayouts = {};
     let chosen = null;
     let chosenSamples = null;
+    let firstSampleFailure = null;
+    const sampledIds = [];
     for (const layoutId of layoutIds) {
       const locators = layoutLocatorsFor(layoutId, n);
       const sampled = sampleLocatorTable(sampleCell, locators);
-      if (!sampled.ok) return sampled;
+      if (!sampled.ok) {
+        // 후보 하나의 표본 실패가 다른 후보의 기회를 죽이지 않는다 — 전부 실패할
+        // 때만 첫 실패를 그대로 돌려준다 (후보가 하나뿐이면 종전과 동일).
+        if (firstSampleFailure === null) firstSampleFailure = sampled;
+        continue;
+      }
+      sampledIds.push(layoutId);
       const scored = scoreOneLayout(sampled.samples, cfg, layoutId, locators);
       scoredLayouts[layoutId] = scored;
       if (!chosen) {
         chosen = scored;
         chosenSamples = sampled.samples;
       } else {
-        const next = pickBetterLayout(chosen, scored);
+        const next = pickBetterLayout(chosen, scored, finalLayoutIdForN(n) || undefined);
         if (next === scored) chosenSamples = sampled.samples;
         chosen = next;
       }
     }
-    const bothAccepted = layoutIds.length > 1
-      && layoutIds.every((id) => scoredLayouts[id] && scoredLayouts[id].accepted);
+    if (chosen === null) return firstSampleFailure;
+    const bothAccepted = sampledIds.length > 1
+      && sampledIds.every((id) => scoredLayouts[id] && scoredLayouts[id].accepted);
     const accepted = chosen.accepted;
     const diagnostics = {
       ...chosen.diagnostics,
       ambiguous: bothAccepted,
-      layouts: Object.fromEntries(layoutIds.map((id) => [id, {
+      layouts: Object.fromEntries(sampledIds.map((id) => [id, {
         accepted: scoredLayouts[id].accepted,
         agreement: scoredLayouts[id].best.agreement,
         orientationMargin: scoredLayouts[id].orientationMargin,

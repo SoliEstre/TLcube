@@ -1506,8 +1506,10 @@ if (expectedLayoutRoot && isLabPath()) {
   for (const button of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
     button.addEventListener('click', () => {
       const next = button.dataset.expectedLayout;
-      // 최종 라인업(2026-08-15): v0 · v2r2 만 기대 레이아웃 후보다.
-      expectedLocatorLayout = next === 'v0' || next === 'v2r2' ? next : null;
+      // 최종 라인업(2026-08-15): v0 · v2r2 + (2026-08-15 밤) v1r2 = n=21 A/B 후보.
+      expectedLocatorLayout = next === 'v0' || next === 'v2r2' || next === 'v1r2'
+        ? next
+        : null;
       for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
         other.classList.toggle('active', other === button);
       }

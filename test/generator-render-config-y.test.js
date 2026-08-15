@@ -13,6 +13,7 @@ import { encodeY } from '../src/encodeY.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from '../src/capacityY.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
 } from '../src/locatorY.js';
 
@@ -99,4 +100,30 @@ test('셀 표면 v2r2 는 Y1 기본·Y2 명시 선택만 n=25 이고 사용자 �
 test('상태가 없거나 폴백이 빠지면 조용히 넘어가지 않는다', () => {
   assert.throws(() => encodeOptionsForY(null), TypeError);
   assert.throws(() => encodeOptionsForY({ tone: 3 }), TypeError);
+});
+
+test('셀 표면 v1r2 는 버전 선택과 무관하게 Y1(n=21) 이고 사용자 톤을 보존한다', () => {
+  // 2026-08-15 밤: 「실험 프레임 β」 자리를 대신하는 n=21 A/B 후보. n=25 가 없으므로
+  // 사용자가 Y2 를 골라도 Y1 로 고정한다 (조용히 v2r2 로 넘어가지 않는다).
+  for (const tone of [2, 3]) {
+    for (const versionY of [0, 1, 2, undefined]) {
+      const opts = encodeOptionsForY({
+        tone,
+        versionY,
+        fallback: { mode: 'window' },
+        locatorProfileY: LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+      });
+      assert.equal(opts.cellSurface, true);
+      assert.equal(opts.cellSurfaceLayout, 'v1r2');
+      assert.equal(opts.tones, tone);
+      assert.equal(opts.version, 1, 'versionY=' + versionY);
+      assert.equal(opts.window, undefined, '윈도보다 앞선다');
+      const encoded = encodeY(TEXT, opts);
+      assert.equal(encoded.cellSurfaceLayout, 'v1r2');
+      assert.equal(encoded.locatorProfile, 'cell-surface-v1r2');
+      assert.equal(encoded.n, 21);
+      assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+      assert.equal(encoded.capacity.dataCells, 334);
+    }
+  }
 });

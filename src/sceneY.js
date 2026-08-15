@@ -348,7 +348,7 @@ export function buildSceneY(encoded, options) {
         ? LOCATOR_PROFILE_CELL_SURFACE_V2R2
         : encoded.cellSurfaceLayout === 'v2'
           ? LOCATOR_PROFILE_CELL_SURFACE_V2
-          : encoded.cellSurfaceLayout === 'v1r2'
+          : (encoded.cellSurfaceLayout === 'v1r2' || encoded.cellSurfaceLayout === 'v1r2d')
             ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
             : LOCATOR_PROFILE_CELL_SURFACE_V1;
   const requestedLocator = opts.locatorProfile === undefined
@@ -395,7 +395,7 @@ export function buildSceneY(encoded, options) {
           if (entry.tones && Number.isInteger(entry.tones[face])) {
             levelIndex = entry.tones[face];
           } else if (isCellSurfaceFinalId(encoded.cellSurfaceLayout)) {
-            levelIndex = locatorToneCellSurfaceFinal(n, face, i, j);
+            levelIndex = locatorToneCellSurfaceFinal(n, face, i, j, encoded.cellSurfaceLayout);
           } else if (encoded.cellSurfaceLayout) {
             levelIndex = locatorToneCellSurfaceLayout(encoded.cellSurfaceLayout, face, i, j);
           } else {

@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v0 | cell-surface-v2r2 (구: -v1r2 | -v2)
     cs_arm       LowCardinality(String) DEFAULT '', -- 구 A/B. 신규는 비움
     cs_expected_arm LowCardinality(String) DEFAULT '', -- 구 기대 팔. 신규는 비움
-    cs_layout    LowCardinality(String) DEFAULT '', -- 관측 레이아웃 v0 | v2r2 (구: v1r2 | v2)
+    cs_layout    LowCardinality(String) DEFAULT '', -- 관측 레이아웃 v0 | v2r2 | v1r2 (구: v1r2d | v2)
     cs_expected_layout LowCardinality(String) DEFAULT '', -- 기대 레이아웃
     cs_orientation_gate LowCardinality(String) DEFAULT '', -- applied | waived
     cs_orientation_gate_applied UInt8 DEFAULT 0, -- 1=방향 게이트 적용. A 는 0

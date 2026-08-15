@@ -1,10 +1,16 @@
 /**
- * cellSurfaceFinal.js — Type Y 셀 표면 **최종 라인업** (v0 · v2r2).
+ * cellSurfaceFinal.js — Type Y 셀 표면 **최종 라인업** (v0 · v2r2 · v1r2).
  *
  * 운영자 확정 라인업 (2026-08-15):
  *   Y0 (n=13) → v0   — 네 코너 소형 블록 파인더 30셀 (정본: cellsurface-v0-editor.json)
  *   Y1 (n=21) → v2r2 — 원점 앵커 블록 A(4×4) + 먼 꼭짓점 앵커 블록 B(7×7) = 65셀
  *   Y2 (n=25) → v2r2 — 같은 앵커식 (블록 B 가 (n−7..n−1)² 로 평행이동)
+ *   Y1 (n=21) → v1r2 — 네 코너 블록 80셀 (v0 의 확장형). **A/B 후보**로 병행 등록
+ *                      (운영자 지시 2026-08-15 밤, 정본: cellsurface-v1r2-editor.json)
+ *
+ * n=21 은 후보가 둘이다 — 기본(default)은 v2r2 로 두고, 디코더 CS 평가가 두 레이아웃을
+ * 모두 채점해 기존 게이트(agreement · orientation margin)로 고른다. formatIndex 는
+ * 신설하지 않는다 — 레이아웃 판별은 «평가 게이트 + 로케이터 패밀리» 가 맡는다.
  *
  * v2r2 의 정본(cellsurface-v2r2-editor.json)은 n=11 편집 캔버스지만 **n 종속이 아니다**:
  * 블록 A 는 (0..3)² 원점 고정, 블록 B 는 (n−7..n−1)² 먼 꼭짓점 고정 — n=11 에서
@@ -42,30 +48,52 @@ import { placeReservedCells } from './autoplaceY.js';
 
 export const CELL_SURFACE_FINAL_V0 = 'v0';
 export const CELL_SURFACE_FINAL_V2R2 = 'v2r2';
+export const CELL_SURFACE_FINAL_V1R2 = 'v1r2';
 export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0,
   CELL_SURFACE_FINAL_V2R2,
+  CELL_SURFACE_FINAL_V1R2,
 ]);
 
 export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
   [CELL_SURFACE_FINAL_V0]: 'cell-surface-v0',
   [CELL_SURFACE_FINAL_V2R2]: 'cell-surface-v2r2',
+  [CELL_SURFACE_FINAL_V1R2]: 'cell-surface-v1r2',
 });
 
-/** 신세대 셀 표면 formatIndex — 한 쌍뿐. 레이아웃 구분은 n 이 한다. */
+/** 신세대 셀 표면 formatIndex — 한 쌍뿐. 세 레이아웃이 같이 쓴다(신설 금지). */
 export const CELL_SURFACE_FINAL_FORMAT_INDEX = Object.freeze({ 2: 1, 3: 3 });
 
-/** 레이아웃별 허용 n. v2r2 는 n=13 을 autoplace 가 거부한다(REF_QUADRANT). */
+/** 레이아웃별 허용 n. v2r2·v1r2 는 n=13 을 autoplace 가 거부한다(REF_QUADRANT). */
 export const CELL_SURFACE_FINAL_NS = Object.freeze({
   [CELL_SURFACE_FINAL_V0]: Object.freeze([13]),
   [CELL_SURFACE_FINAL_V2R2]: Object.freeze([21, 25]),
+  [CELL_SURFACE_FINAL_V1R2]: Object.freeze([21]),
 });
 
-/** n → 최종 레이아웃 id. 라인업 밖 n 은 null. */
+/**
+ * n → 그 n 의 **기본** 레이아웃 id. 라인업 밖 n 은 null.
+ * n=21 은 후보가 둘(v2r2·v1r2)이며 기본은 v2r2 — 기존 경로의 동작을 바꾸지 않는다.
+ */
 export function finalLayoutIdForN(n) {
   if (n === 13) return CELL_SURFACE_FINAL_V0;
   if (n === 21 || n === 25) return CELL_SURFACE_FINAL_V2R2;
   return null;
+}
+
+/**
+ * n → 그 n 에서 실재하는 레이아웃 **후보 전부** (기본이 맨 앞). 라인업 밖 n 은 [].
+ * 디코더 CS 평가의 병행 채점 입력이다 — 수용은 기존 게이트가 판정한다.
+ */
+export function finalLayoutIdsForN(n) {
+  const ids = [];
+  const preferred = finalLayoutIdForN(n);
+  if (preferred === null) return Object.freeze(ids);
+  ids.push(preferred);
+  for (const id of CELL_SURFACE_FINAL_IDS) {
+    if (id !== preferred && CELL_SURFACE_FINAL_NS[id].includes(n)) ids.push(id);
+  }
+  return Object.freeze(ids);
 }
 
 /** n → VERSIONS_Y 논리 버전 (Y0/Y1/Y2). */
@@ -76,8 +104,17 @@ export function versionForFinalN(n) {
   throw new RangeError('셀 표면 최종 라인업의 n 은 13 | 21 | 25 다: ' + n);
 }
 
-/** 회계 선언값 — n² − painted − 12 − 27+... = n² − painted − 27. 어긋나면 로드 시 throw. */
-const DECLARED_DATA_BY_N = Object.freeze({ 13: 112, 21: 349, 25: 533 });
+/**
+ * 회계 선언값 — n² − painted − 12(reference) − 15(format). 어긋나면 로드 시 throw.
+ * v1r2 는 편집기 정본이 counts.data 352 를 적지만 그것은 **편집기 자신의 고정 배치**
+ * (format/reference 27 중 18 이 칠한 블록 안) 기준이다. autoplace 계약에서는 27 이
+ * 파인더 밖으로 재유도되므로 441 − 80 − 27 = 334 가 맞다 (cellSurfaceLayouts.js 와 동일).
+ */
+const DECLARED_DATA = Object.freeze({
+  [CELL_SURFACE_FINAL_V0]: Object.freeze({ 13: 112 }),
+  [CELL_SURFACE_FINAL_V2R2]: Object.freeze({ 21: 349, 25: 533 }),
+  [CELL_SURFACE_FINAL_V1R2]: Object.freeze({ 21: 334 }),
+});
 
 const FACES = Object.freeze(['T', 'L', 'R']);
 
@@ -114,6 +151,38 @@ const V2R2_BASE_CELLS = Object.freeze([
   [9, 7, 2, 0, 2], [9, 8, 2, 2, 0], [9, 9, 2, 0, 0], [9, 10, 0, 0, 0], [10, 4, 2, 2, 2], [10, 5, 0, 0, 0],
   [10, 6, 0, 2, 0], [10, 7, 0, 0, 2], [10, 8, 0, 2, 0], [10, 9, 0, 0, 0], [10, 10, 0, 0, 0],
 ]);
+
+/**
+ * v1r2 정본 80셀 [i, j, T, L, R] — cellsurface-v1r2-editor.json (사용자 제공 2026-08-15)
+ * 컴팩트 전사, n=21 고정. 파인더 점유 = **toneOverrides 가 닿는 (i,j) 전체**다
+ * (userNonData 62 만 세면 편집기 고정 배치 위에 칠한 18 셀이 빠진다 — c0e7321 계약).
+ * 네 코너 블록: NW 5×5(25) · SE 5×5(25) · NE 계단(15) · SW 계단(15) — 코너별 비대칭.
+ * NW 는 세 면의 원점이 모여 렌더 **중심**이 되고, SE 는 면별 먼 꼭짓점이다.
+ */
+const V1R2_CELLS = Object.freeze([
+  [0, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 2, 2, 2, 2], [0, 3, 0, 0, 0], [0, 4, 2, 2, 2], [0, 16, 2, 2, 2],
+  [0, 17, 0, 0, 0], [0, 18, 0, 0, 0], [0, 19, 0, 0, 0], [0, 20, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 0, 0, 0],
+  [1, 2, 2, 2, 2], [1, 3, 0, 0, 2], [1, 4, 2, 2, 2], [1, 16, 2, 2, 2], [1, 17, 2, 2, 2], [1, 18, 2, 2, 2],
+  [1, 19, 2, 2, 2], [1, 20, 0, 0, 0], [2, 0, 2, 2, 2], [2, 1, 2, 2, 2], [2, 2, 2, 2, 2], [2, 3, 0, 0, 2],
+  [2, 4, 2, 2, 2], [2, 18, 2, 2, 2], [2, 19, 2, 2, 2], [2, 20, 0, 0, 0], [3, 0, 0, 0, 0], [3, 1, 2, 0, 0],
+  [3, 2, 2, 0, 0], [3, 3, 0, 0, 0], [3, 4, 2, 2, 2], [3, 19, 2, 2, 2], [3, 20, 2, 2, 2], [4, 0, 2, 2, 2],
+  [4, 1, 2, 2, 2], [4, 2, 2, 2, 2], [4, 3, 2, 2, 2], [4, 4, 2, 2, 2], [16, 0, 2, 2, 2], [16, 1, 2, 2, 2],
+  [16, 16, 2, 0, 0], [16, 17, 2, 0, 0], [16, 18, 2, 0, 0], [16, 19, 2, 0, 0], [16, 20, 2, 0, 0], [17, 0, 0, 0, 0],
+  [17, 1, 2, 2, 2], [17, 16, 2, 0, 0], [17, 17, 0, 2, 2], [17, 18, 0, 2, 2], [17, 19, 2, 2, 2], [17, 20, 0, 2, 2],
+  [18, 0, 0, 0, 0], [18, 1, 2, 2, 2], [18, 2, 2, 2, 2], [18, 16, 2, 0, 0], [18, 17, 0, 2, 2], [18, 18, 0, 0, 0],
+  [18, 19, 2, 2, 2], [18, 20, 0, 0, 0], [19, 0, 0, 0, 0], [19, 1, 2, 2, 2], [19, 2, 2, 2, 2], [19, 3, 2, 2, 2],
+  [19, 16, 2, 0, 0], [19, 17, 2, 2, 2], [19, 18, 2, 2, 2], [19, 19, 2, 2, 2], [19, 20, 0, 0, 0], [20, 0, 0, 0, 0],
+  [20, 1, 0, 0, 0], [20, 2, 0, 0, 0], [20, 3, 2, 2, 2], [20, 16, 2, 0, 0], [20, 17, 0, 2, 2], [20, 18, 0, 0, 0],
+  [20, 19, 0, 0, 0], [20, 20, 0, 0, 0],
+]);
+
+/** v1r2 네 코너 블록의 셀 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
+export const V1R2_BLOCKS = Object.freeze({
+  NW: Object.freeze({ iMax: 4, jMax: 4 }),
+  NE: Object.freeze({ iMax: 3, jMin: 16 }),
+  SW: Object.freeze({ iMin: 16, jMax: 3 }),
+  SE: Object.freeze({ iMin: 16, jMin: 16 }),
+});
 
 function cellKey(i, j) {
   return i + ',' + j;
@@ -209,12 +278,15 @@ function nsymTable(symbols) {
   return Object.freeze({ symbols, L, M, H });
 }
 
-function buildFinalSurface(n) {
-  const id = finalLayoutIdForN(n);
-  if (id === null) {
-    throw new RangeError('셀 표면 최종 라인업의 n 은 13 | 21 | 25 다: ' + n);
-  }
-  const rows = id === CELL_SURFACE_FINAL_V0 ? V0_CELLS : v2r2CellsForN(n);
+function canonicalRowsFor(id, n) {
+  if (id === CELL_SURFACE_FINAL_V0) return V0_CELLS;
+  if (id === CELL_SURFACE_FINAL_V1R2) return V1R2_CELLS;
+  return v2r2CellsForN(n);
+}
+
+function buildFinalSurface(id, n) {
+  assertCellSurfaceFinalN(id, n);
+  const rows = canonicalRowsFor(id, n);
   const locatorCells = buildLocatorCells(rows);
   const painted = locatorCells.map((cell) => ({ i: cell.i, j: cell.j }));
 
@@ -230,7 +302,7 @@ function buildFinalSurface(n) {
     }
   }
 
-  const declared = DECLARED_DATA_BY_N[n];
+  const declared = DECLARED_DATA[id][n];
   const dataCells = n * n - locatorCells.length - reference.length - format.length;
   if (dataCells !== declared) {
     throw new Error(
@@ -262,53 +334,62 @@ function buildFinalSurface(n) {
   });
 }
 
-const SURFACES = Object.freeze({
-  13: buildFinalSurface(13),
-  21: buildFinalSurface(21),
-  25: buildFinalSurface(25),
-});
+function surfaceKey(id, n) {
+  return id + '@' + n;
+}
 
-/** n → 최종 셀 표면 인스턴스 (동결 캐시 — autoplace 는 로드 시 1회). */
-export function cellSurfaceFinal(n) {
-  const surface = SURFACES[n];
+const SURFACES = Object.freeze(Object.fromEntries(
+  CELL_SURFACE_FINAL_IDS.flatMap((id) =>
+    CELL_SURFACE_FINAL_NS[id].map((n) => [surfaceKey(id, n), buildFinalSurface(id, n)])),
+));
+
+/**
+ * (n, id) → 최종 셀 표면 인스턴스 (동결 캐시 — autoplace 는 로드 시 1회).
+ * id 를 생략하면 그 n 의 **기본** 레이아웃 (13→v0 · 21|25→v2r2).
+ */
+export function cellSurfaceFinal(n, id = finalLayoutIdForN(n)) {
+  const surface = id === null ? undefined : SURFACES[surfaceKey(id, n)];
   if (!surface) {
-    throw new RangeError('셀 표면 최종 라인업의 n 은 13 | 21 | 25 다: ' + n);
+    throw new RangeError(
+      '셀 표면 최종 라인업에 없는 (레이아웃, n) 이다: ' + id + '@' + n,
+    );
   }
   return surface;
 }
 
-export function nameCellSurfaceFinal(n, tones) {
-  const surface = cellSurfaceFinal(n);
+export function nameCellSurfaceFinal(n, tones, id = undefined) {
+  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
   const suffix = assertCellSurfaceFinalTones(tones) === 3 ? 'T' : '';
   return 'Y' + surface.version + suffix + '-CS-' + surface.id.toUpperCase();
 }
 
-export function locatorCellsCellSurfaceFinal(n) {
-  return cellSurfaceFinal(n).locatorCells;
+export function locatorCellsCellSurfaceFinal(n, id = undefined) {
+  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).locatorCells;
 }
 
-export function paintedCellsCellSurfaceFinal(n) {
-  return cellSurfaceFinal(n).paintedCells;
+export function paintedCellsCellSurfaceFinal(n, id = undefined) {
+  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).paintedCells;
 }
 
-export function formatCellsCellSurfaceFinal(n) {
-  return cellSurfaceFinal(n).formatCells;
+export function formatCellsCellSurfaceFinal(n, id = undefined) {
+  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).formatCells;
 }
 
-export function referenceCellsCellSurfaceFinal(n) {
-  return cellSurfaceFinal(n).referenceCells;
+export function referenceCellsCellSurfaceFinal(n, id = undefined) {
+  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).referenceCells;
 }
 
-export function locatorToneCellSurfaceFinal(n, face, i, j) {
+export function locatorToneCellSurfaceFinal(n, face, i, j, id = undefined) {
   if (!FACES.includes(face)) throw new RangeError('면 라벨은 T | L | R 이어야 한다: ' + face);
-  for (const cell of cellSurfaceFinal(n).locatorCells) {
+  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
+  for (const cell of surface.locatorCells) {
     if (cell.i === i && cell.j === j) return cell[face];
   }
   return 1;
 }
 
-export function dataCellsInScanOrderCellSurfaceFinal(n) {
-  const surface = cellSurfaceFinal(n);
+export function dataCellsInScanOrderCellSurfaceFinal(n, id = undefined) {
+  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
   const blocked = new Set([
     ...surface.locatorCells.map((cell) => cellKey(cell.i, cell.j)),
     ...surface.formatCells.map((cell) => cellKey(cell.i, cell.j)),
@@ -329,14 +410,14 @@ export function dataCellsInScanOrderCellSurfaceFinal(n) {
   return out;
 }
 
-export function fillerCellsCellSurfaceFinal(n) {
-  const scan = dataCellsInScanOrderCellSurfaceFinal(n);
+export function fillerCellsCellSurfaceFinal(n, id = undefined) {
+  const scan = dataCellsInScanOrderCellSurfaceFinal(n, id);
   const residual = scan.length % 3;
   return residual === 0 ? [] : scan.slice(scan.length - residual);
 }
 
-export function layoutMapCellSurfaceFinal(n) {
-  const surface = cellSurfaceFinal(n);
+export function layoutMapCellSurfaceFinal(n, id = undefined) {
+  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
   const map = new Map();
   surface.locatorCells.forEach((cell, index) => {
     map.set(cellKey(cell.i, cell.j), { role: 'locator', index });
@@ -347,7 +428,7 @@ export function layoutMapCellSurfaceFinal(n) {
   surface.formatCells.forEach((cell, index) => {
     map.set(cellKey(cell.i, cell.j), { role: 'format', index });
   });
-  dataCellsInScanOrderCellSurfaceFinal(n).forEach((cell, index) => {
+  dataCellsInScanOrderCellSurfaceFinal(n, surface.id).forEach((cell, index) => {
     map.set(cellKey(cell.i, cell.j), { role: 'data', index });
   });
   return map;
@@ -361,14 +442,14 @@ function nsymForLevel(surface, level) {
   return nsym;
 }
 
-export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2) {
-  const surface = cellSurfaceFinal(n);
+export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = undefined) {
+  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
   const resolvedTones = assertCellSurfaceFinalTones(tones);
   const nsym = nsymForLevel(surface, level);
   const dataSymbols = surface.usedSymbols - nsym;
   const dataBytes = maxBytesForSymbols(dataSymbols);
   return {
-    name: nameCellSurfaceFinal(n, resolvedTones),
+    name: nameCellSurfaceFinal(n, resolvedTones, surface.id),
     version: surface.version,
     n: surface.n,
     tones: resolvedTones,
@@ -398,7 +479,7 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2) {
 // 모듈 로드 시점 자기검증 — 조용히 시프트하지 않는다.
 // ─────────────────────────────────────────────────────────────────────────
 {
-  // ① 정본 셀 수 — v0 30 · v2r2 65 (블록 A 16 + B 49).
+  // ① 정본 셀 수 — v0 30 · v2r2 65 (블록 A 16 + B 49) · v1r2 80 (25/15/15/25).
   if (V0_CELLS.length !== 30) throw new Error('v0 정본이 30셀이 아니다: ' + V0_CELLS.length);
   if (V2R2_BASE_CELLS.length !== 65) {
     throw new Error('v2r2 정본이 65셀이 아니다: ' + V2R2_BASE_CELLS.length);
@@ -412,6 +493,23 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2) {
     }
     if (inA !== 16 || inB !== 49) {
       throw new Error('v2r2 블록 분할이 A16/B49 가 아니다: A=' + inA + ' B=' + inB);
+    }
+  }
+  if (V1R2_CELLS.length !== 80) {
+    throw new Error('v1r2 정본이 80셀이 아니다: ' + V1R2_CELLS.length);
+  }
+  {
+    const counts = { NW: 0, NE: 0, SW: 0, SE: 0 };
+    for (const [i, j] of V1R2_CELLS) {
+      const quadrant = (i <= 4 ? 'N' : 'S') + (j <= 4 ? 'W' : 'E');
+      if (!(quadrant in counts)) throw new Error('v1r2 셀이 코너 밖이다: ' + i + ',' + j);
+      counts[quadrant] += 1;
+    }
+    if (counts.NW !== 25 || counts.NE !== 15 || counts.SW !== 15 || counts.SE !== 25) {
+      throw new Error(
+        'v1r2 코너 분할이 25/15/15/25 가 아니다: '
+        + [counts.NW, counts.NE, counts.SW, counts.SE].join('/'),
+      );
     }
   }
 
@@ -441,27 +539,32 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2) {
     }
   }
 
-  // ③ 세 인스턴스 회계 — 사용 심볼·잔여 셀이 확정 수치와 일치해야 한다.
+  // ③ 네 인스턴스 회계 — 사용 심볼·잔여 셀이 확정 수치와 일치해야 한다.
   const expected = {
-    13: { symbols: 37, residual: 1, locator: 30 },
-    21: { symbols: 116, residual: 1, locator: 65 },
-    25: { symbols: 177, residual: 2, locator: 65 },
+    'v0@13': { symbols: 37, residual: 1, locator: 30 },
+    'v2r2@21': { symbols: 116, residual: 1, locator: 65 },
+    'v2r2@25': { symbols: 177, residual: 2, locator: 65 },
+    'v1r2@21': { symbols: 111, residual: 1, locator: 80 },
   };
-  for (const n of [13, 21, 25]) {
-    const surface = cellSurfaceFinal(n);
-    const want = expected[n];
+  for (const [key, want] of Object.entries(expected)) {
+    const [id, raw] = key.split('@');
+    const n = Number(raw);
+    const surface = cellSurfaceFinal(n, id);
     if (surface.locatorCount !== want.locator) {
-      throw new Error('n=' + n + ' locator ' + surface.locatorCount + ' !== ' + want.locator);
+      throw new Error(key + ' locator ' + surface.locatorCount + ' !== ' + want.locator);
     }
     if (surface.usedSymbols !== want.symbols || surface.residualCells !== want.residual) {
       throw new Error(
-        'n=' + n + ' 회계 불일치: S=' + surface.usedSymbols + '/' + want.symbols
+        key + ' 회계 불일치: S=' + surface.usedSymbols + '/' + want.symbols
         + ' 잔여=' + surface.residualCells + '/' + want.residual,
       );
     }
-    const scan = dataCellsInScanOrderCellSurfaceFinal(n);
+    const scan = dataCellsInScanOrderCellSurfaceFinal(n, id);
     if (scan.length !== surface.declaredDataCells) {
-      throw new Error('n=' + n + ': data 선언과 scan 이 어긋난다');
+      throw new Error(key + ': data 선언과 scan 이 어긋난다');
     }
+  }
+  if (Object.keys(SURFACES).length !== Object.keys(expected).length) {
+    throw new Error('최종 라인업 인스턴스 수가 회계 표와 다르다');
   }
 }

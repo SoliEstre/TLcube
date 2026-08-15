@@ -469,7 +469,14 @@ function profileForFormatCandidate(hypothesis, formatIndex) {
       family: 'cube',
       dimension: hypothesis.n,
       spec: {
-        name: nameCellSurfaceFinal(hypothesis.n, tones),
+        name: nameCellSurfaceFinal(
+          hypothesis.n,
+          tones,
+          // 가설이 최종 레이아웃 id 를 실었을 때만 그 이름 — 아니면 n 기본값.
+          isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)
+            ? hypothesis.cellSurfaceLayout
+            : undefined,
+        ),
         version: versionForFinalN(hypothesis.n),
         n: hypothesis.n,
         tones,
@@ -1556,8 +1563,8 @@ function layoutForFamily(family, dimension, hypothesis) {
     if (hypothesis && hypothesis.cellSurface === true) {
       if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
         return {
-          map: layoutMapCellSurfaceFinal(dimension),
-          dataCells: dataCellsInScanOrderCellSurfaceFinal(dimension),
+          map: layoutMapCellSurfaceFinal(dimension, hypothesis.cellSurfaceLayout),
+          dataCells: dataCellsInScanOrderCellSurfaceFinal(dimension, hypothesis.cellSurfaceLayout),
           type: 'Y',
         };
       }
@@ -2400,7 +2407,7 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
   const cells = cube
     ? hypothesis.cellSurface === true
       ? (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)
-        ? formatCellsCellSurfaceFinal(hypothesis.n)
+        ? formatCellsCellSurfaceFinal(hypothesis.n, hypothesis.cellSurfaceLayout)
         : hypothesis.cellSurfaceLayout
           ? formatCellsCellSurfaceLayout(hypothesis.cellSurfaceLayout)
           : formatCellsCellSurface())

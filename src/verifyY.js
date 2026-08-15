@@ -80,7 +80,7 @@ function referenceGroupsFor(encoded, tones) {
 
 function locatorsForEncoded(encoded) {
   if (isCellSurfaceFinalId(encoded.cellSurfaceLayout)) {
-    return locatorCellsCellSurfaceFinal(encoded.n);
+    return locatorCellsCellSurfaceFinal(encoded.n, encoded.cellSurfaceLayout);
   }
   if (encoded.cellSurfaceLayout) {
     return locatorCellsCellSurfaceLayout(encoded.cellSurfaceLayout);
