@@ -17,8 +17,11 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   'hexgrid', 'ygrid', 'locatorY', 'finder-patterns', 'finder-editor-pattern',
   'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'header',
   'placement', 'bullseye', 'layout', 'capacity',
-  'placementA', 'layoutA', 'capacityA', 'encodeA',
-  'placementY', 'autoplaceY', 'type-y-cell-editor', 'layoutY', 'capacityY',
+  // O-CM/A-CM 코너 마커 (2026-08-16) — encodeA.js 가 markerA 를, markerA 가 markerO 를,
+  // markerO 가 autoplaceHex 를, autoplaceHex 가 autoplaceY(→placementY) 를 쓴다.
+  'placementY', 'autoplaceY', 'autoplaceHex', 'markerO',
+  'placementA', 'layoutA', 'capacityA', 'markerA', 'encodeA',
+  'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'encodeY',
   'luminance', 'export-filename', 'cell-editor-core',
 ]);

@@ -1,0 +1,529 @@
+/**
+ * corner-marker-detect.js — Type O 코너 마커(O-CM) 검증 · 방향 확정 · 호모그래피 보강.
+ *
+ * 설계 전제 (markerO.js 헤더가 근거):
+ *   · 마커는 **중앙 불스아이를 대체하지 않는다.** 불스아이가 준 중심·cellSize 로
+ *     만든 기저 H 에서 «예측된 코너 자리» 를 국소 탐색할 뿐이라, `bullseye-detect`
+ *     의 제안·검증·SPD 정제 파이프라인을 한 줄도 안 건드린다. 새 전역 제안기를
+ *     만들지 않으므로 실사 24/24 기준선에 영향이 없다.
+ *   · 마커 셀의 기대값은 **digit(3면 휘도 순위)** 이다. 절대 휘도가 아니라 셀 안의
+ *     상대 순서만 보므로 단조 톤 커브·면 게인에 불변이다 — `anchor-detect.js` 가
+ *     앵커 1셀에 쓰는 판정을 12셀로 넓힌 것이고, 표본기도 같은 `sampleHexCell` 이다.
+ *   · 60°/180°/300° 오가설과 변 중점 거울 3종에서 마커 자리로 되돌아오는 셀은
+ *     **0** 이다(markerO §1 실측). 즉 그 가설의 마커 예측 자리는 전부 데이터 셀이다.
+ *     ⚠ 다만 «그래서 agreement 가 우연값 ≈1/3 로 떨어진다» 고 말하면 **틀린다** —
+ *     코너별 국소 탐색(평행이동 × 배율)이 점수가 높은 자리를 적극적으로 찾아내기
+ *     때문에 실측값은 훨씬 높다 (O-CM V2 프레임, 2026-08-16 `_oak-bench-r2.mjs` §3b:
+ *     9가설 평균 agreement rot60 0.5988 · rot180 0.5895 · rot300 0.6142 · 거울 0.6235,
+ *     최고는 rot60 에서 0.8056 으로 **agreement 하한 0.78 을 넘긴다**).
+ *     이 클래스를 실제로 죽이는 것은 네 게이트의 **조합**이다 (rot60 은 confirm 이,
+ *     rot180·거울은 agreement + alive 가, rot300 은 agreement 가 잘랐다).
+ *
+ * 산출:
+ *   · `verifyCornerMarkers` — 주어진 (H, k) 에서 마커 12셀의 face agreement 와
+ *     코너별 국소 오프셋(= 보강된 코너 이미지 점).
+ *   · `findOCornerMarkerHypotheses` — (k × 방향 3) 전수 평가 후 통과 가설 목록.
+ *     첫 통과에서 멈추지 않는다 (anchor-detect 규약 승계).
+ *   · 통과 가설에는 **4점(중심 + 코너 3) DLT 로 재적합한 H** 가 실린다 — 기저 H 가
+ *     닮음/아핀이어도 원근을 흡수한다.
+ *
+ * 결정성: RNG 없음. 국소 탐색은 고정 격자 순회이고 동률은 (점수 desc, |오프셋| asc,
+ * dy asc, dx asc) 으로 깬다.
+ *
+ * 임계값은 전부 [미검증] 합성 실험값이며 `options` 로 덮을 수 있다.
+ */
+
+import {
+  FRONTEND_FAILURE,
+  HOMOGRAPHY_CANONICAL_SPACE,
+  assertHomography,
+  assertLumaField,
+  fail,
+  ok,
+} from './contracts.js';
+import { axialToPixel } from '../hexgrid.js';
+import { digitToRanks } from '../lehmer.js';
+import { markerCells, markerTetrads } from '../markerO.js';
+import { markerCellsA, markerGroupsA } from '../markerA.js';
+import { sampleHexCell } from './grid-sample.js';
+import { estimateHomography4 } from './homography.js';
+
+const FACE_NAMES = Object.freeze(['T', 'L', 'R']);
+const ORIENTATIONS = Object.freeze([0, 1, 2]);
+const EPSILON = 1e-9;
+
+/** [미검증] 마커 수용 하한 — 12셀 × 3면 = 36 슬롯의 face agreement 비율. */
+export const DEFAULT_MARKER_AGREEMENT = 0.78;
+/**
+ * [미검증] 코너 하나가 «살아 있다» 고 볼 최소 agreement (묶음당 12 슬롯 기준).
+ *
+ * ⚠ 이것은 «부차 조건» 이 아니라 **독립된 네 번째 게이트**다 — `accepted` 는
+ * `corners.every(c => c.alive)` 를 요구하므로, 전체 agreement 가 0.78 을 넘겨도
+ * 코너 하나가 0.75 미만이면 기각된다. 실측(2026-08-16, `_oak-bench-r2.mjs`)에서
+ * **이 게이트가 유일한 사살자인 케이스가 실재한다**: 레거시 O V3 프레임을
+ * rot120 한 뒤 k=6/방향1 가설은 전체 agreement 0.8056 으로 0.78 하한을 통과하고
+ * (여유 +0.0256) 반경 게이트도 통과하지만, alive 코너가 2/3 라 여기서 죽는다.
+ * 즉 «레거시 O 는 agreement 하한이 자른다» 는 서술은 틀렸다.
+ * 회귀 고정: `test/decoder-corner-marker.test.js` — «alive 게이트가 유일한 방벽».
+ */
+export const DEFAULT_CORNER_AGREEMENT = 0.75;
+/** [미검증] 국소 탐색 반경·간격 (셀 단위). */
+export const DEFAULT_SEARCH_CELLS = 1;
+export const DEFAULT_SEARCH_STEP_CELLS = 0.25;
+/**
+ * [미검증] 코너 국소 배율 탐색 폭·간격 (상대 배율).
+ *
+ * 왜 필요한가 — 실측이 정했다. 평행이동만 탐색하면 원근 g=0.0004 까지만 잡고
+ * g≥0.0008 에서 통째로 기각됐다. 그 지점에서 코너의 **국소 배율**이 20% 넘게 어긋나
+ * tetrad 의 먼 셀이 1셀 가까이 밀리기 때문이다 — 평행이동으로는 원리적으로 못 고친다.
+ * (`anchor-detect.js` 가 앵커 1점에서 `cellSizeSearch` 를 넣은 것과 같은 사유다.)
+ */
+export const DEFAULT_SCALE_SEARCH = 0.24;
+export const DEFAULT_SCALE_STEP = 0.06;
+/** [미검증] 세 코너 반경비 평균이 1 에서 벗어나도 되는 폭 (k 오가설 차단). */
+export const DEFAULT_MEAN_RADIUS_TOLERANCE = 0.12;
+/** [미검증] 재적합 H 로 «탐색 없이» 다시 잰 agreement 의 하한 (일관성 확인). */
+export const DEFAULT_CONFIRM_AGREEMENT = 0.78;
+/** [미검증] 면 순위의 최소 분리 (anchor-detect 와 같은 자). */
+export const DEFAULT_TIE_EPSILON = 0.02;
+export const DEFAULT_MIN_SAMPLE_COUNT = 3;
+export const DEFAULT_SAMPLE_RADIUS_FRACTION = 0.5;
+
+function finitePoint(p) {
+  return p && Number.isFinite(p.x) && Number.isFinite(p.y);
+}
+
+function multiply(left, right) {
+  const out = new Float64Array(9);
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      let acc = 0;
+      for (let i = 0; i < 3; i += 1) acc += left[row * 3 + i] * right[i * 3 + col];
+      out[row * 3 + col] = acc;
+    }
+  }
+  return out;
+}
+
+function rotationHomography(angle) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return new Float64Array([c, -s, 0, s, c, 0, 0, 0, 1]);
+}
+
+function translationHomography(dx, dy) {
+  return new Float64Array([1, 0, dx, 0, 1, dy, 0, 0, 1]);
+}
+
+function affineHomography(center, cellSize) {
+  return new Float64Array([cellSize, 0, center.x, 0, cellSize, center.y, 0, 0, 1]);
+}
+
+/** 캐노니컬 공간에서의 등방 배율 (중심 고정) — H 의 오른쪽에 곱한다. */
+function scaleHomography(s) {
+  return new Float64Array([s, 0, 0, 0, s, 0, 0, 0, 1]);
+}
+
+function applyH(H, point) {
+  const w = H[6] * point.x + H[7] * point.y + H[8];
+  if (!Number.isFinite(w) || Math.abs(w) <= EPSILON) return null;
+  const x = (H[0] * point.x + H[1] * point.y + H[2]) / w;
+  const y = (H[3] * point.x + H[4] * point.y + H[5]) / w;
+  return finitePoint({ x, y }) ? { x, y } : null;
+}
+
+function normalizeBullseye(bullseye, options) {
+  const source = bullseye && bullseye.ok === true
+    ? (bullseye.finder || bullseye.bullseye || bullseye)
+    : (bullseye || {});
+  const center = source.center || options.center;
+  const cellSize = source.cellSize === undefined ? source.cellSizePxAtCenter : source.cellSize;
+  if (!finitePoint(center) || !Number.isFinite(cellSize) || cellSize <= 0) return null;
+  return {
+    center: { x: center.x, y: center.y },
+    cellSize,
+    baseHomography: source.H || source.homography || source.transform || options.H,
+  };
+}
+
+function baseHomographyFor(normalized, orientation, options) {
+  const supplied = options.H || normalized.baseHomography;
+  const base = supplied === undefined
+    ? affineHomography(normalized.center, normalized.cellSize)
+    : assertHomography(supplied);
+  const sign = options.orientationSign === -1 ? -1 : 1;
+  return multiply(base, rotationHomography(sign * orientation * (2 * Math.PI / 3)));
+}
+
+/** 면 중앙값 3개 → 순위 digit (동률·비유한이면 null). anchor-detect 의 rankStat 동형. */
+function rankDigit(faces, tieEpsilon) {
+  const values = FACE_NAMES.map((f) => faces[f] && faces[f].median);
+  if (values.some((v) => !Number.isFinite(v))) return { digit: null, separation: NaN };
+  const order = [0, 1, 2].sort((a, b) => {
+    const d = values[a] - values[b];
+    return d === 0 ? a - b : d;
+  });
+  const sorted = order.map((i) => values[i]);
+  const separation = Math.min(sorted[1] - sorted[0], sorted[2] - sorted[1]);
+  if (separation < tieEpsilon) return { digit: null, separation };
+  const ranks = {};
+  for (let i = 0; i < order.length; i += 1) ranks[FACE_NAMES[order[i]]] = i;
+  return { ranks, separation };
+}
+
+/** 기대 digit 의 rank 와 관측 rank 를 면 단위로 비교 — 일치 면 수 0..3. */
+function faceAgreement(observedRanks, expectedDigit) {
+  if (!observedRanks) return 0;
+  const want = digitToRanks(expectedDigit);
+  let n = 0;
+  for (const f of FACE_NAMES) if (observedRanks[f] === want[f]) n += 1;
+  return n;
+}
+
+function sampleOptionsFrom(options) {
+  return {
+    discOptions: {
+      fraction: Number.isFinite(options.sampleRadiusFraction)
+        ? options.sampleRadiusFraction : DEFAULT_SAMPLE_RADIUS_FRACTION,
+      fractionOf: 'radius',
+    },
+    minSampleCount: Number.isInteger(options.minSampleCount)
+      ? options.minSampleCount : DEFAULT_MIN_SAMPLE_COUNT,
+    tieEpsilon: Number.isFinite(options.tieEpsilon) ? options.tieEpsilon : DEFAULT_TIE_EPSILON,
+  };
+}
+
+function scoreTetradAt(luma, H, cells, sampleOpts, tieEpsilon) {
+  let agree = 0;
+  let sampled = 0;
+  for (const cell of cells) {
+    const result = sampleHexCell(
+      luma,
+      { H, canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE },
+      cell.q,
+      cell.r,
+      sampleOpts,
+    );
+    if (!result.ok) continue;
+    sampled += 1;
+    const rank = rankDigit({ T: result.T, L: result.L, R: result.R }, tieEpsilon);
+    agree += faceAgreement(rank.ranks, cell.digit);
+  }
+  return { agree, sampled };
+}
+
+/** 국소 탐색 오프셋 격자 (셀 단위). 중심 우선, 반경 오름차순 — 결정적. */
+function offsetGrid(span, step, cx, cy) {
+  if (span === 0 || step <= 0) return [{ dx: cx, dy: cy }];
+  const steps = Math.max(1, Math.round(span / step));
+  const out = [];
+  for (let iy = -steps; iy <= steps; iy += 1) {
+    for (let ix = -steps; ix <= steps; ix += 1) {
+      out.push({ dx: cx + ix * step, dy: cy + iy * step });
+    }
+  }
+  out.sort((a, b) => {
+    const ra = (a.dx - cx) ** 2 + (a.dy - cy) ** 2;
+    const rb = (b.dx - cx) ** 2 + (b.dy - cy) ** 2;
+    return ra - rb || a.dy - b.dy || a.dx - b.dx;
+  });
+  return out;
+}
+
+/** 배율 후보 — 1 을 먼저, 그 다음 |Δ| 오름차순 (동률은 큰 배율이 먼저). */
+function scaleList(options) {
+  const span = Number.isFinite(options.scaleSearch) ? Math.max(0, options.scaleSearch)
+    : DEFAULT_SCALE_SEARCH;
+  const step = Number.isFinite(options.scaleStep) && options.scaleStep > 0
+    ? options.scaleStep : DEFAULT_SCALE_STEP;
+  if (span === 0) return [1];
+  const steps = Math.round(span / step);
+  const out = [1];
+  for (let i = 1; i <= steps; i += 1) out.push(1 + i * step, 1 - i * step);
+  return out;
+}
+
+/**
+ * 주어진 (H, k) 에서 코너 마커 12셀을 검증한다.
+ *
+ * @param {import('./contracts.js').LumaField} luma
+ * @param {{H: ArrayLike<number>, k: number, cellSize: number}} hypothesis
+ * @param {object} [options]
+ * @returns {{
+ *   agreement:number, slots:number, agree:number,
+ *   corners:{corner:number, agree:number, slots:number, offset:{dx:number,dy:number},
+ *            imagePoint:{x:number,y:number}|null, canonical:{x:number,y:number}}[],
+ *   accepted:boolean
+ * }}
+ */
+export function verifyCornerMarkers(luma, hypothesis, options = {}) {
+  assertLumaField(luma);
+  const H = assertHomography(hypothesis.H);
+  const { k } = hypothesis;
+  const cellSize = Number.isFinite(hypothesis.cellSize) && hypothesis.cellSize > 0
+    ? hypothesis.cellSize : 1;
+  const tieEpsilon = Number.isFinite(options.tieEpsilon)
+    ? options.tieEpsilon : DEFAULT_TIE_EPSILON;
+  const sampleOpts = sampleOptionsFrom(options);
+  const span = Number.isFinite(options.searchCells) ? Math.max(0, options.searchCells)
+    : DEFAULT_SEARCH_CELLS;
+  const fineStep = Number.isFinite(options.searchStepCells) && options.searchStepCells > 0
+    ? options.searchStepCells : DEFAULT_SEARCH_STEP_CELLS;
+  const coarseStep = fineStep * 2;
+  const scales = scaleList(options);
+  const cornerMin = Number.isFinite(options.minCornerAgreement)
+    ? options.minCornerAgreement : DEFAULT_CORNER_AGREEMENT;
+  const minAgreement = Number.isFinite(options.minAgreement)
+    ? options.minAgreement : DEFAULT_MARKER_AGREEMENT;
+
+  // 마커 묶음 공급자 — O 는 tetrad(기준점 = 코너 앵커 A), A 는 링(기준점 = 링 중심 Z).
+  // 검증·탐색·재적합 논리는 두 타입이 **완전히 같다**; 다른 것은 좌표 목록뿐이다.
+  const tetrads = options.groups || markerTetrads(k);
+  const corners = [];
+  let totalAgree = 0;
+  let totalSlots = 0;
+
+  for (const tetrad of tetrads) {
+    const anchorLabel = tetrad.anchorLabel || 'A';
+    const anchorCell = tetrad.cells.find((c) => c.label === anchorLabel);
+    const canonical = axialToPixel(anchorCell.q, anchorCell.r);
+    // 2단 탐색 — ① 전 배율 × 성긴 오프셋 ② 이긴 배율의 이웃 3개 × 촘촘한 오프셋.
+    // 한 번에 (배율 × 촘촘한 오프셋) 전수를 도는 것보다 표본 수가 한 자릿수 적고,
+    // 순회 순서가 고정이라 결정성은 그대로다.
+    const evaluate = (scale, offset) => {
+      const shifted = multiply(
+        translationHomography(offset.dx * cellSize, offset.dy * cellSize),
+        multiply(H, scaleHomography(scale)),
+      );
+      const scored = scoreTetradAt(luma, shifted, tetrad.cells, sampleOpts, tieEpsilon);
+      return { ...scored, offset, scale, shifted };
+    };
+    let best = null;
+    const better = (candidate) => {
+      if (best === null || candidate.agree > best.agree) best = candidate;
+    };
+    for (const scale of scales) {
+      for (const offset of offsetGrid(span, coarseStep, 0, 0)) better(evaluate(scale, offset));
+    }
+    const scaleIndex = scales.indexOf(best.scale);
+    const neighbourScales = [best.scale];
+    if (scaleIndex >= 0) {
+      for (const s of scales) {
+        if (Math.abs(s - best.scale) <= (scales.length > 1 ? Math.abs(scales[1] - 1) : 0) + EPSILON
+          && s !== best.scale) neighbourScales.push(s);
+      }
+    }
+    const coarseBest = best.offset;
+    for (const scale of neighbourScales) {
+      for (const offset of offsetGrid(coarseStep, fineStep, coarseBest.dx, coarseBest.dy)) {
+        better(evaluate(scale, offset));
+      }
+    }
+    const slots = tetrad.cells.length * 3;
+    const imagePoint = best ? applyH(best.shifted, canonical) : null;
+    corners.push({
+      corner: tetrad.corner,
+      agree: best ? best.agree : 0,
+      slots,
+      sampled: best ? best.sampled : 0,
+      offset: best ? best.offset : { dx: 0, dy: 0 },
+      scale: best ? best.scale : 1,
+      imagePoint,
+      canonical,
+      alive: best ? best.agree / slots >= cornerMin : false,
+    });
+    totalAgree += best ? best.agree : 0;
+    totalSlots += slots;
+  }
+
+  const agreement = totalSlots === 0 ? 0 : totalAgree / totalSlots;
+
+  // 반경 정합 게이트 — «코너 적합이 중심의 스케일과 모순되면 안 된다».
+  //
+  // 왜 필요한가 (실측이 넣게 했다): 코너별 배율 탐색을 켠 순간 **k 를 틀린 가설이
+  // 통과했다** (k=8 프레임에서 k=6 가설 agreement 0.944). 배율 자유도가 6→8 의
+  // 거리 차이를 흡수해 버리기 때문이다. 원근에서는 한 코너가 커지면 반대쪽이
+  // 작아져 **세 코너 반경비의 평균은 1 근처에 남는** 반면, k 를 틀리면 세 코너가
+  // 같은 배수로 어긋나 평균이 그 배수로 간다 — 그래서 «평균» 을 잰다.
+  const center = options.center || (options.bullseyeCenter);
+  let meanRadiusRatio = 1;
+  if (center && finitePoint(center)) {
+    const ratios = [];
+    for (const corner of corners) {
+      if (!corner.imagePoint) continue;
+      const expected = Math.hypot(corner.canonical.x, corner.canonical.y) * cellSize;
+      if (!(expected > 0)) continue;
+      ratios.push(Math.hypot(corner.imagePoint.x - center.x, corner.imagePoint.y - center.y) / expected);
+    }
+    meanRadiusRatio = ratios.length === 0
+      ? 0 : ratios.reduce((s, v) => s + v, 0) / ratios.length;
+  }
+  const radiusTolerance = Number.isFinite(options.meanRadiusTolerance)
+    ? options.meanRadiusTolerance : DEFAULT_MEAN_RADIUS_TOLERANCE;
+  const radiusOk = Math.abs(meanRadiusRatio - 1) <= radiusTolerance;
+
+  return {
+    k,
+    agree: totalAgree,
+    slots: totalSlots,
+    agreement,
+    corners,
+    meanRadiusRatio,
+    radiusOk,
+    aliveCorners: corners.filter((c) => c.alive).length,
+    accepted: agreement >= minAgreement && corners.every((c) => c.alive) && radiusOk,
+  };
+}
+
+/**
+ * 코너 3점 + 불스아이 중심으로 H 를 4점 DLT 재적합한다.
+ * 실패하면 null 을 돌려주고 호출자는 기저 H 를 계속 쓴다 (조용한 열화 금지 —
+ * 재적합 성패는 결과 객체에 실린다).
+ */
+export function refineHomographyFromCorners(centerImagePoint, verification) {
+  const canonicalPoints = [{ x: 0, y: 0 }];
+  const imagePoints = [centerImagePoint];
+  for (const corner of verification.corners) {
+    if (!corner.imagePoint) return null;
+    canonicalPoints.push(corner.canonical);
+    imagePoints.push(corner.imagePoint);
+  }
+  if (canonicalPoints.length !== 4) return null;
+  try {
+    return estimateHomography4(canonicalPoints, imagePoints);
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Type O 코너 마커 가설 전수 평가 — (k, 방향) 전 조합. 첫 통과에서 멈추지 않는다.
+ *
+ * @param {import('./contracts.js').LumaField} luma
+ * @param {import('./contracts.js').BullseyeCandidate} bullseye
+ * @param {number[]|number} ks
+ * @param {object} [options]
+ */
+function findMarkerHypotheses(luma, bullseye, ks, options, family, groupsFor, cellsFor) {
+  if (luma === null || luma === undefined) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, { message: 'luma 가 없다' });
+  }
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, { message: error.message });
+  }
+  const normalized = normalizeBullseye(bullseye, options);
+  if (!normalized) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { message: '불스아이 중심 또는 cellSize 가 없다' });
+  }
+  const list = Array.isArray(ks) ? ks : [ks];
+  const kList = Array.from(new Set(list.filter((v) => Number.isInteger(v) && v >= 4)))
+    .sort((a, b) => a - b);
+  if (kList.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_ANCHORS, { message: '검사할 양의 k 목록이 없다' });
+  }
+
+  const hypotheses = [];
+  const rejected = [];
+  for (const k of kList) {
+    let groups;
+    try {
+      cellsFor(k);
+      groups = groupsFor(k);
+    } catch (error) {
+      rejected.push({ k, reason: error.message });
+      continue;
+    }
+    for (const orientation of ORIENTATIONS) {
+      const H = baseHomographyFor(normalized, orientation, options);
+      const verification = verifyCornerMarkers(
+        luma,
+        { H, k, cellSize: normalized.cellSize },
+        { ...options, center: normalized.center, groups },
+      );
+      const refined = verification.accepted
+        ? refineHomographyFromCorners(normalized.center, verification)
+        : null;
+      // 일관성 확인 — 재적합 H 로 **탐색 없이** 다시 잰다. 코너별 국소 탐색이
+      // 서로 무관한 자리로 흩어져 얻은 점수라면 하나의 H 로는 재현되지 않는다.
+      const confirm = refined
+        ? verifyCornerMarkers(luma, { H: refined, k, cellSize: normalized.cellSize }, {
+          ...options,
+          center: normalized.center,
+          groups,
+          searchCells: 0,
+          scaleSearch: 0,
+        })
+        : null;
+      const minConfirm = Number.isFinite(options.minConfirmAgreement)
+        ? options.minConfirmAgreement : DEFAULT_CONFIRM_AGREEMENT;
+      const confirmed = confirm !== null && confirm.agreement >= minConfirm;
+      const record = {
+        family,
+        k,
+        orientation,
+        H,
+        refinedH: refined,
+        canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+        agreement: verification.agreement,
+        agree: verification.agree,
+        slots: verification.slots,
+        corners: verification.corners,
+        meanRadiusRatio: verification.meanRadiusRatio,
+        confirmAgreement: confirm ? confirm.agreement : 0,
+        hypothesisId: family + '-' + k + '-' + orientation,
+      };
+      if (verification.accepted && confirmed) hypotheses.push(record);
+      else {
+        rejected.push({
+          hypothesisId: record.hypothesisId,
+          k,
+          orientation,
+          agreement: verification.agreement,
+          confirmAgreement: confirm ? confirm.agreement : 0,
+          meanRadiusRatio: verification.meanRadiusRatio,
+          radiusOk: verification.radiusOk,
+          aliveCorners: verification.aliveCorners,
+        });
+      }
+    }
+  }
+
+  hypotheses.sort((a, b) => a.k - b.k || a.orientation - b.orientation);
+  const diagnostics = {
+    family,
+    testedKs: kList,
+    testedOrientations: ORIENTATIONS.slice(),
+    evaluatedCount: kList.length * ORIENTATIONS.length,
+    rejected,
+  };
+  if (hypotheses.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_ANCHORS, { ...diagnostics, hypotheses: [] });
+  }
+  return ok({ hypotheses, diagnostics });
+}
+
+/**
+ * Type O 코너 마커 가설 전수 평가 — (k, 방향) 전 조합. 첫 통과에서 멈추지 않는다.
+ *
+ * @param {import('./contracts.js').LumaField} luma
+ * @param {import('./contracts.js').BullseyeCandidate} bullseye
+ * @param {number[]|number} ks
+ * @param {object} [options]
+ */
+export function findOCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
+  return findMarkerHypotheses(
+    luma, bullseye, ks, options, 'hex-marker', markerTetrads, markerCells,
+  );
+}
+
+/**
+ * Type A 코너 마커 가설 전수 평가. 묶음의 기준점은 **링 중심**(라벨 Z)이다 —
+ * 꼭짓점 앵커가 아니라 마커 자신의 중심이라, A 의 꼭짓점 앵커 계약을 전혀 안 건드린다.
+ */
+export function findACornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
+  return findMarkerHypotheses(
+    luma, bullseye, ks, options, 'tri-marker', markerGroupsA, markerCellsA,
+  );
+}

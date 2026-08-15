@@ -23,6 +23,40 @@ import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { dataCellsInScanOrderA, fillerCellsA } from './layoutA.js';
 import { anchorCells, referenceCellsAll, formatCells, REFERENCE_DIGIT } from './placement.js';
 import { vertexAnchors, patchReferenceCells } from './placementA.js';
+import {
+  VERSIONS_ACM,
+  capacityForAMarker,
+  markerCellsA,
+  patchReferenceCellsAMarker,
+  dataCellsInScanOrderAMarker,
+  fillerCellsAMarker,
+} from './markerA.js';
+
+/**
+ * 레이아웃 공급자 — 레거시 A 와 A-CM(코너 마커)의 차이를 여기 한 곳에 모은다.
+ * 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 두 경로가 완전히 같다.
+ * encode.js(Type O)의 `layoutProviderFor` 와 같은 구조다.
+ */
+function layoutProviderForA(cornerMarker) {
+  if (!cornerMarker) {
+    return {
+      versions: VERSIONS_A,
+      capacity: capacityForA,
+      scan: dataCellsInScanOrderA,
+      filler: fillerCellsA,
+      patchReference: patchReferenceCells,
+      marker: () => [],
+    };
+  }
+  return {
+    versions: VERSIONS_ACM,
+    capacity: capacityForAMarker,
+    scan: dataCellsInScanOrderAMarker,
+    filler: fillerCellsAMarker,
+    patchReference: patchReferenceCellsAMarker,
+    marker: markerCellsA,
+  };
+}
 
 function cellKey(q, r) {
   return `${q},${r}`;
@@ -69,14 +103,28 @@ export function encodeA(text, options = {}) {
   if (typeof text !== 'string') {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
-  const { version, eccLevel = 'M', centerQr = false } = options;
+  const { version, eccLevel = 'M', centerQr = false, cornerMarker = false } = options;
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
   }
+  if (typeof cornerMarker !== 'boolean') {
+    throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
+  }
+  if (cornerMarker && centerQr) {
+    throw new RangeError('cornerMarker 와 centerQr 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
+  const provider = layoutProviderForA(cornerMarker);
 
-  const spec = version === undefined ? chooseVersionA(text, eccLevel) : versionSpecA(version);
+  const spec = version === undefined
+    ? (cornerMarker
+      ? provider.versions.find((v) => payloadByteLength(text) <= provider.capacity(v, eccLevel).maxPayloadBytes)
+      : chooseVersionA(text, eccLevel))
+    : provider.versions.find((v) => v.version === version);
+  if (!spec) {
+    throw new RangeError(`알 수 없는 Type A 버전 또는 용량 초과: ${version}`);
+  }
 
-  const capacity = capacityForA(spec, eccLevel);
+  const capacity = provider.capacity(spec, eccLevel);
   const { k } = spec;
 
   // 길이 헤더 + 0x00 패딩 (header.js) → base-211 심볼 (base211.js).
@@ -104,7 +152,7 @@ export function encodeA(text, options = {}) {
   // 나머지(residualCells 개, = `fillerCellsA(k)` 와 정확히 같은 셀)가 필러다
   // (layoutA.js `symbolCellGroupsA`/`fillerCellsA` 의 분할과 동일하게 슬라이스한다).
   const preMaskDataDigits = unpackSymbolsToCellDigits(codewordSymbols); // 길이 3S
-  const scanCells = dataCellsInScanOrderA(k);
+  const scanCells = provider.scan(k);
   if (scanCells.length !== capacity.dataCells) {
     throw new RangeError(
       `scan order-A 셀 수 불일치: dataCellsInScanOrderA() ${scanCells.length} !== capacity.dataCells ${capacity.dataCells}`,
@@ -118,7 +166,7 @@ export function encodeA(text, options = {}) {
   }
 
   // 잔여 셀 = 프리마스크 0 에 마스크 가산(§5.6 준용). scan order-A 의 꼬리와 동일 셀.
-  const fillerCoords = fillerCellsA(k);
+  const fillerCoords = provider.filler(k);
   if (fillerCoords.length !== capacity.residualCells) {
     throw new RangeError(
       `필러 셀 수 불일치: fillerCellsA() ${fillerCoords.length} !== capacity.residualCells ${capacity.residualCells}`,
@@ -152,9 +200,14 @@ export function encodeA(text, options = {}) {
   }
 
   // 레퍼런스 = 육각 2(k-2)셀 + 패치 레퍼런스(규칙 R, D4) — 전부 REFERENCE_DIGIT.
-  const references = [...referenceCellsAll(k), ...patchReferenceCells(k)];
+  const references = [...referenceCellsAll(k), ...provider.patchReference(k)];
   for (const c of references) {
     cellDigits.set(cellKey(c.q, c.r), { digit: REFERENCE_DIGIT, role: 'reference' });
+  }
+
+  // 코너 마커 21셀 (A-CM 에서만) — 고정 digit, 마스크 없음. 꼭짓점 앵커와 안 겹친다.
+  for (const c of provider.marker(k)) {
+    cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: 'marker' });
   }
 
   const formatCoords = formatCells(k); // 육각부 무수정 재사용(D7)
@@ -178,6 +231,7 @@ export function encodeA(text, options = {}) {
     k,
     eccLevel,
     centerQr,
+    cornerMarker,
     formatIndex,
     capacity,
     codewordSymbols,

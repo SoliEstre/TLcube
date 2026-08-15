@@ -56,7 +56,14 @@ const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
   'hexgrid', 'locatorY', 'finder-patterns', 'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity',
-  'placementA', 'layoutA', 'capacityA', 'encodeA',
+  // placementY·autoplaceY 는 **Type O 보다 앞**으로 왔다 (2026-08-16, O-CM 코너 마커).
+  // autoplaceHex 가 `AutoplaceError` 를 autoplaceY 에서 그대로 재사용하기 때문이다 —
+  // 소비자가 한 종류만 catch 하게 하려는 선택이고, 그 대가로 두 모듈이 여기서 앞당겨진다.
+  // 둘 다 로컬 의존이 없거나(placementY) placementY 하나뿐이라(autoplaceY) 위상 정렬은
+  // 그대로 성립한다. markerO 는 capacity·rs211·header·bullseye·placement·lehmer·
+  // autoplaceHex 를 쓰므로 그 전부의 뒤, encode 의 앞이다.
+  'placementY', 'autoplaceY', 'autoplaceHex', 'markerO',
+  'placementA', 'layoutA', 'capacityA', 'markerA', 'encodeA',
   'luminance',
   // gf256→rs→qr 체인은 **scene 앞**에 와야 한다. scene.js 가 폴백 QR 을 그리려고
   // './qr.js' 를 import 하기 때문이다 — 원래는 Type Y 전용이라 보고 뒤에 뒀는데(TY8),
@@ -67,7 +74,7 @@ const MODULE_ORDER = [
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   // cellSurfaceFinal(최종 라인업 v0·v2r2)은 capacityY·cellSurfaceY·cellSurfaceLayouts·
   // autoplaceY 를 import 하므로 그 넷 뒤에 온다.
-  'ygrid', 'placementY', 'autoplaceY', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'tonemap',
+  'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'tonemap',
   // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
   // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,
   // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.

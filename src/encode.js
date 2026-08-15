@@ -23,9 +23,49 @@ import {
   REFERENCE_DIGIT,
   formatCells,
 } from './placement.js';
+import {
+  VERSIONS_OCM,
+  capacityForOMarker,
+  markerCells,
+  formatCellsOMarker,
+  referenceCellsOMarker,
+  dataCellsInScanOrderOMarker,
+  fillerCellsOMarker,
+} from './markerO.js';
 
 function cellKey(q, r) {
   return `${q},${r}`;
+}
+
+/**
+ * 레이아웃 공급자 — 레거시 O 와 O-CM(코너 마커)의 차이를 여기 한 곳에 모은다.
+ * 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 두 경로가 완전히 같다.
+ */
+function layoutProviderFor(cornerMarker) {
+  if (!cornerMarker) {
+    return {
+      versions: VERSIONS,
+      capacity: capacityFor,
+      scan: dataCellsInScanOrder,
+      filler: fillerCells,
+      format: formatCells,
+      reference: referenceCellsAll,
+      // 레거시는 앵커 3셀만 — 마커 셀이 없다.
+      fixed: (k) => anchorCells(k).map((c) => ({ ...c, role: 'anchor' })),
+    };
+  }
+  return {
+    versions: VERSIONS_OCM,
+    capacity: capacityForOMarker,
+    scan: dataCellsInScanOrderOMarker,
+    filler: fillerCellsOMarker,
+    format: formatCellsOMarker,
+    reference: referenceCellsOMarker,
+    // 코너 마커 12셀 = 앵커 3(digit 5/0/0, 레거시 계약 그대로) + 마커 9.
+    fixed: (k) => markerCells(k).map((c) => ({
+      q: c.q, r: c.r, digit: c.digit, role: c.role,
+    })),
+  };
 }
 
 /**
@@ -35,15 +75,16 @@ function cellKey(q, r) {
  * @param {'L'|'M'|'H'} [eccLevel]
  * @returns {{version:number, k:number, overhead:number, symbolKey:string}} VERSIONS 원소
  */
-export function chooseVersion(text, eccLevel = 'M') {
+export function chooseVersion(text, eccLevel = 'M', cornerMarker = false) {
   const byteLength = payloadByteLength(text);
-  for (const spec of VERSIONS) {
-    const capacity = capacityFor(spec, eccLevel);
+  const provider = layoutProviderFor(cornerMarker);
+  for (const spec of provider.versions) {
+    const capacity = provider.capacity(spec, eccLevel);
     if (byteLength <= capacity.maxPayloadBytes) return spec;
   }
-  const last = VERSIONS[VERSIONS.length - 1];
+  const last = provider.versions[provider.versions.length - 1];
   throw new RangeError(
-    `페이로드 ${byteLength} B 는 V${last.version}(ECC-${eccLevel}) 용량을 초과한다`,
+    `페이로드 ${byteLength} B 는 V${last.version}${cornerMarker ? 'CM' : ''}(ECC-${eccLevel}) 용량을 초과한다`,
   );
 }
 
@@ -70,19 +111,30 @@ export function encode(text, options = {}) {
   if (typeof text !== 'string') {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
-  const { version, eccLevel = 'M', centerQr = false } = options;
+  const {
+    version, eccLevel = 'M', centerQr = false, cornerMarker = false,
+  } = options;
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
   }
+  if (typeof cornerMarker !== 'boolean') {
+    throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
+  }
+  // 코너 마커는 중앙 슬롯을 안 건드리지만, 중앙 QR 은 링3 을 먹고 마커는 링 k·k−1 을
+  // 먹는다 — 두 변형의 동시 사용은 배치 검증을 안 했으므로 조용히 허용하지 않는다.
+  if (cornerMarker && centerQr) {
+    throw new RangeError('cornerMarker 와 centerQr 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
+  const provider = layoutProviderFor(cornerMarker);
 
   const spec = version === undefined
-    ? chooseVersion(text, eccLevel)
-    : VERSIONS.find((v) => v.version === version);
+    ? chooseVersion(text, eccLevel, cornerMarker)
+    : provider.versions.find((v) => v.version === version);
   if (!spec) {
-    throw new RangeError(`알 수 없는 버전: ${version} (허용 ${VERSIONS.map((v) => v.version).join(', ')})`);
+    throw new RangeError(`알 수 없는 버전: ${version} (허용 ${provider.versions.map((v) => v.version).join(', ')})`);
   }
 
-  const capacity = capacityFor(spec, eccLevel);
+  const capacity = provider.capacity(spec, eccLevel);
   const { k } = spec;
 
   // 길이 헤더 + 0x00 패딩 (header.js) → base-211 심볼 (base211.js).
@@ -110,7 +162,7 @@ export function encode(text, options = {}) {
   // 나머지 (residualCells 개, = `fillerCells(k)` 와 정확히 같은 셀)가 필러다
   // (layout.js `symbolCellGroups`/`fillerCells` 의 분할과 동일하게 여기서도 슬라이스한다).
   const preMaskDataDigits = unpackSymbolsToCellDigits(codewordSymbols); // 길이 3S
-  const scanCells = dataCellsInScanOrder(k);
+  const scanCells = provider.scan(k);
   if (scanCells.length !== capacity.dataCells) {
     throw new RangeError(
       `scan order 셀 수 불일치: dataCellsInScanOrder() ${scanCells.length} !== capacity.dataCells ${capacity.dataCells}`,
@@ -124,7 +176,7 @@ export function encode(text, options = {}) {
   }
 
   // 잔여 셀 = 프리마스크 0 에 마스크 가산(§5.6 필러). scan order 의 꼬리와 동일 셀.
-  const fillerCoords = fillerCells(k);
+  const fillerCoords = provider.filler(k);
   if (fillerCoords.length !== capacity.residualCells) {
     throw new RangeError(
       `필러 셀 수 불일치: fillerCells() ${fillerCoords.length} !== capacity.residualCells ${capacity.residualCells}`,
@@ -151,17 +203,18 @@ export function encode(text, options = {}) {
   // 셀별 digit + role 맵 (불스아이 셀은 애초에 어느 목록에도 없으므로 자동 제외).
   const cellDigits = new Map();
 
-  const anchors = anchorCells(k); // 각 원소가 이미 {digit: 5 또는 0} 을 들고 있다 — 마스크 없음.
-  for (const c of anchors) {
-    cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: 'anchor' });
+  // 앵커(+O-CM 이면 마커 9셀). 각 원소가 이미 digit 을 들고 있다 — 마스크 없음.
+  const fixedCells = provider.fixed(k);
+  for (const c of fixedCells) {
+    cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: c.role });
   }
 
-  const references = referenceCellsAll(k); // 전부 REFERENCE_DIGIT — 마스크 없음.
+  const references = provider.reference(k); // 전부 REFERENCE_DIGIT — 마스크 없음.
   for (const c of references) {
     cellDigits.set(cellKey(c.q, c.r), { digit: REFERENCE_DIGIT, role: 'reference' });
   }
 
-  const formatCoords = formatCells(k);
+  const formatCoords = provider.format(k);
   for (let i = 0; i < formatCoords.length; i += 1) {
     const c = formatCoords[i];
     cellDigits.set(cellKey(c.q, c.r), { digit: formatDigits[i], role: 'format' });
@@ -182,6 +235,7 @@ export function encode(text, options = {}) {
     k,
     eccLevel,
     centerQr,
+    cornerMarker,
     capacity,
     codewordSymbols,
     dataDigits,

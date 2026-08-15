@@ -55,6 +55,16 @@ import {
 import { rsDecode } from './rs211.js';
 import { maskSub } from './mask.js';
 import { unframe } from './header.js';
+import {
+  VERSIONS_OCM,
+  capacityForOMarker,
+  dataCellsInScanOrderOMarker,
+} from './markerO.js';
+import {
+  VERSIONS_ACM,
+  capacityForAMarker,
+  dataCellsInScanOrderAMarker,
+} from './markerA.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderO } from './layout.js';
 import { dataCellsInScanOrderA } from './layoutA.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderY } from './layoutY.js';
@@ -224,6 +234,26 @@ function resolveProfile(format) {
   const rawExplicit = format.formatIndex !== undefined;
   const formatIndex = rawFormatIndex(format);
 
+  if (type === 'O' && format.cornerMarker === true) {
+    // O-CM (코너 마커) — formatIndex 는 레거시 O 와 같고(markerO.js §4: Y2W 와 같은
+    // «광학 검출 + 사후 RS/CRC» 계약), 갈리는 것은 회계와 scan order 뿐이다.
+    const spec = VERSIONS_OCM.find((entry) => entry.version === format.version);
+    if (!spec) {
+      throw new RangeError(
+        'O-CM 버전을 모른다: ' + format.version
+        + ' (허용 ' + VERSIONS_OCM.map((v) => v.version).join(', ') + ')',
+      );
+    }
+    assertOptionalDimension(format.k, 'k', spec.k);
+    return finishProfile({
+      type,
+      eccLevel,
+      capacity: capacityForOMarker(spec, eccLevel),
+      scan: dataCellsInScanOrderOMarker(spec.k),
+      coordinates: (cell) => [cell.q, cell.r],
+    });
+  }
+
   if (type === 'O') {
     const logicalSpec = VERSIONS.find((entry) => entry.version === format.version);
     const spec = selectVersionSpec({
@@ -243,6 +273,26 @@ function resolveProfile(format) {
       eccLevel,
       capacity: capacityFor(spec, eccLevel),
       scan: dataCellsInScanOrderO(spec.k),
+      coordinates: (cell) => [cell.q, cell.r],
+    });
+  }
+
+  if (type === 'A' && format.cornerMarker === true) {
+    // A-CM (코너 마커) — O-CM 과 같은 계약: formatIndex 는 레거시 A 와 같고
+    // 회계·scan order 만 갈린다 (markerA.js 헤더 참조).
+    const spec = VERSIONS_ACM.find((entry) => entry.version === format.version);
+    if (!spec) {
+      throw new RangeError(
+        'A-CM 버전을 모른다: ' + format.version
+        + ' (허용 ' + VERSIONS_ACM.map((v) => v.version).join(', ') + ')',
+      );
+    }
+    assertOptionalDimension(format.k, 'k', spec.k);
+    return finishProfile({
+      type,
+      eccLevel,
+      capacity: capacityForAMarker(spec, eccLevel),
+      scan: dataCellsInScanOrderAMarker(spec.k),
       coordinates: (cell) => [cell.q, cell.r],
     });
   }
