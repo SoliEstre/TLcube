@@ -17,14 +17,21 @@ import {
   formatIndexCellSurfaceLayout,
   isCellSurfaceLayoutFormatIndex,
   layoutIdFromFormatIndex,
+  locatorCellsCellSurfaceLayout,
   usedCubeFormatIndices,
 } from '../src/cellSurfaceLayouts.js';
 import { encodeY } from '../src/encodeY.js';
 import { decodeCells } from '../src/decode.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import {
+  UNVERIFIED_CELL_SURFACE_Y,
+  evaluateCellSurfaceGeometry,
+} from '../src/decoder/cellSurfaceY-detect.js';
+import { extractCellSurfaceProbe } from '../src/lab-telemetry.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
 import { verifyRasterY } from '../src/verifyY.js';
+import { layoutForCube, moduleCenter, YFACES } from '../src/ygrid.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
 } from '../src/luminance.js';
@@ -155,18 +162,178 @@ test('v1r2 frontend 왕복 (2톤 ppu10)', { timeout: 30_000 }, () => {
   assert.equal(result.hypothesis.cellSurfaceLayout, CELL_SURFACE_LAYOUT_V1R2);
 });
 
-test('v2 초안은 순위 셀이 적어 0° 합성도 방향 게이트에 걸릴 수 있다', { timeout: 30_000 }, () => {
-  const { raster } = renderLayout('fe-v2', CELL_SURFACE_LAYOUT_V2, 2);
+const PLUS120 = Object.freeze({ T: 'R', R: 'L', L: 'T' });
+
+function rankingCellsOf(id) {
+  return cellSurfaceLayout(id).locatorCells.filter((cell) =>
+    cell.T !== cell.L || cell.L !== cell.R || cell.T !== cell.R);
+}
+
+function finderClusterOf(id) {
+  return cellSurfaceLayout(id).locatorCells.filter((cell) => cell.i >= 14 && cell.j >= 14);
+}
+
+function occupancyHamming(cells) {
+  const occupancy = new Set();
+  for (const cell of cells) {
+    for (const face of YFACES) occupancy.add(face + ':' + cell.i + ',' + cell.j);
+  }
+  let ham = 0;
+  for (const cell of cells) {
+    for (const face of YFACES) {
+      if (!occupancy.has(PLUS120[face] + ':' + cell.i + ',' + cell.j)) ham += 1;
+    }
+  }
+  return ham;
+}
+
+function faceCycleFaceHamming(cells, cycle) {
+  let ham = 0;
+  for (const cell of cells) {
+    if (cell[cycle[0]] !== cell.T) ham += 1;
+    if (cell[cycle[1]] !== cell.L) ham += 1;
+    if (cell[cycle[2]] !== cell.R) ham += 1;
+  }
+  return ham;
+}
+
+function idealSampleCell(layoutId, cycle = ['T', 'L', 'R']) {
+  const table = locatorCellsCellSurfaceLayout(layoutId);
+  const byKey = new Map(table.map((cell) => [cell.i + ',' + cell.j, cell]));
+  return (i, j) => {
+    const cell = byKey.get(i + ',' + j);
+    if (!cell) return { i, j, ok: false };
+    return {
+      i,
+      j,
+      ok: true,
+      T: { median: cell[cycle[0]] === 0 ? 0.08 : 0.82 },
+      L: { median: cell[cycle[1]] === 0 ? 0.08 : 0.82 },
+      R: { median: cell[cycle[2]] === 0 ? 0.08 : 0.82 },
+    };
+  };
+}
+
+function rotatePoint(point, deg, origin) {
+  const rad = (deg * Math.PI) / 180;
+  const c = Math.cos(rad);
+  const s = Math.sin(rad);
+  const dx = point.x - origin.x;
+  const dy = point.y - origin.y;
+  return { x: origin.x + c * dx - s * dy, y: origin.y + s * dx + c * dy };
+}
+
+test('v2 파인더 배치는 120° 사상에서 세 회전이 같고 순위 게이트를 통과하지 못한다', () => {
+  const v2 = cellSurfaceLayout(CELL_SURFACE_LAYOUT_V2);
+  const ranking = rankingCellsOf(CELL_SURFACE_LAYOUT_V2);
+  const finder = finderClusterOf(CELL_SURFACE_LAYOUT_V2);
+  assert.equal(v2.locatorCount, 88);
+  assert.equal(ranking.length, 1);
+  assert.deepEqual(
+    ranking.map((cell) => [cell.i, cell.j, cell.T, cell.L, cell.R]),
+    [[0, 3, 0, 0, 2]],
+  );
+  assert.equal(
+    v2.locatorCells.some((cell) => cell.i === 1 && cell.j === 3),
+    false,
+    '(1,3) 은 로케이터가 아니다',
+  );
+  assert.equal(
+    v2.locatorCells.some((cell) => cell.i === 2 && cell.j === 3),
+    false,
+    '(2,3) 은 로케이터가 아니다',
+  );
+  assert.equal(finder.length, 42);
+  assert.ok(finder.every((cell) => cell.T === cell.L && cell.L === cell.R));
+  assert.equal(occupancyHamming(v2.locatorCells), 0);
+  assert.equal(occupancyHamming(finder), 0);
+  assert.equal(faceCycleFaceHamming(finder, ['L', 'R', 'T']), 0);
+  assert.equal(faceCycleFaceHamming(finder, ['R', 'T', 'L']), 0);
+  assert.equal(faceCycleFaceHamming(v2.locatorCells, ['L', 'R', 'T']), 2);
+  const margin = 2 / (v2.locatorCount * 3);
+  assert.ok(Math.abs(margin - 2 / 264) < 1e-12);
+  assert.ok(margin < UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin);
+
+  const cube = layoutForCube(21, { size: 1, margin: 0 });
+  const origin = { x: cube.originX, y: cube.originY };
+  const centroids = {};
+  for (const face of YFACES) {
+    let sx = 0;
+    let sy = 0;
+    for (const cell of finder) {
+      const point = moduleCenter(face, cell.i, cell.j, cube);
+      sx += point.x;
+      sy += point.y;
+    }
+    centroids[face] = { x: sx / finder.length, y: sy / finder.length };
+  }
+  const tToR = Math.hypot(
+    rotatePoint(centroids.T, 120, origin).x - centroids.R.x,
+    rotatePoint(centroids.T, 120, origin).y - centroids.R.y,
+  );
+  const rToL = Math.hypot(
+    rotatePoint(centroids.R, 120, origin).x - centroids.L.x,
+    rotatePoint(centroids.R, 120, origin).y - centroids.L.y,
+  );
+  const lToT = Math.hypot(
+    rotatePoint(centroids.L, 120, origin).x - centroids.T.x,
+    rotatePoint(centroids.L, 120, origin).y - centroids.T.y,
+  );
+  assert.ok(tToR < 1e-9 && rToL < 1e-9 && lToT < 1e-9);
+
+  const v1 = rankingCellsOf(CELL_SURFACE_LAYOUT_V1R2);
+  assert.equal(v1.length, 13);
+  const v1Margin = (13 * 2) / (62 * 3);
+  assert.ok(v1Margin >= UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin);
+});
+
+test('v2 이상적 표본은 정방향도 방향 게이트에 걸린다', () => {
+  const canon = evaluateCellSurfaceGeometry(
+    { n: 21 },
+    idealSampleCell(CELL_SURFACE_LAYOUT_V2),
+    { cellSurfaceLayout: CELL_SURFACE_LAYOUT_V2 },
+  );
+  assert.equal(canon.ok, true);
+  assert.equal(canon.accepted, false);
+  assert.equal(canon.diagnostics.rejectReason, 'orientation-margin');
+  assert.equal(canon.diagnostics.orientationGate, 'applied');
+  assert.equal(canon.diagnostics.agreement, 1);
+  assert.ok(canon.diagnostics.orientationMargin < UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin);
+
+  for (const cycle of [['L', 'R', 'T'], ['R', 'T', 'L']]) {
+    const wrong = evaluateCellSurfaceGeometry(
+      { n: 21 },
+      idealSampleCell(CELL_SURFACE_LAYOUT_V2, cycle),
+      { cellSurfaceLayout: CELL_SURFACE_LAYOUT_V2 },
+    );
+    assert.equal(wrong.accepted, false);
+    assert.equal(wrong.diagnostics.rejectReason, 'orientation-margin');
+    assert.ok(wrong.diagnostics.agreement >= UNVERIFIED_CELL_SURFACE_Y.minimumAgreement);
+  }
+
+  const v1 = evaluateCellSurfaceGeometry(
+    { n: 21 },
+    idealSampleCell(CELL_SURFACE_LAYOUT_V1R2),
+    { cellSurfaceLayout: CELL_SURFACE_LAYOUT_V1R2 },
+  );
+  assert.equal(v1.accepted, true);
+  assert.ok(v1.diagnostics.orientationMargin >= UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin);
+});
+
+test('v2 초안은 배치로 방향을 못 정하고 0° frontend 왕복에 실패한다', { timeout: 30_000 }, () => {
+  const text = 'fe-v2';
+  const { raster } = renderLayout(text, CELL_SURFACE_LAYOUT_V2, 2);
   const result = decodeFrontend(raster, {
     bootstrap: { family: { cube: { enableCellSurfaceY: true } } },
   });
-  if (result.ok === true) {
-    assert.equal(result.hypothesis.cellSurfaceLayout, CELL_SURFACE_LAYOUT_V2);
-    return;
-  }
-  assert.ok(
-    result.reason === 'frontend:no-format-candidate'
-    || result.reason === 'frontend:no-grid-hypothesis',
-    result.reason,
-  );
+  assert.equal(result.ok, false, 'v2 가 방향을 정하면 이 단언을 뒤집고 왕복을 고정하라');
+  assert.equal(result.reason, 'frontend:no-format-candidate');
+  const probe = extractCellSurfaceProbe(result);
+  assert.equal(probe.attempted, true);
+  assert.equal(probe.accepted, false);
+  assert.equal(probe.layoutId, CELL_SURFACE_LAYOUT_V2);
+  assert.equal(probe.reason, 'orientation-margin');
+  assert.equal(probe.orientationGate, 'applied');
+  assert.equal(probe.orientationGateApplied, true);
+  assert.equal(probe.score, 1);
 });
