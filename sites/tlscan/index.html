@@ -52,16 +52,78 @@
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background: #000;
     color: #fff;
+
+    /*
+     * ── r4 화면비 적응 배치 상수 (운영자 지시 2026-08-16) ──────────────────────
+     *
+     * scanner-zoom.js 의 동명 상수와 **한 쌍**이다 (SHELL_PAD_MIN · SHELL_GAP ·
+     * SPLIT_COLUMN_GAP · SPLIT_PANEL_MIN_WIDTH · UI_STACK_BUDGET_PARTS ·
+     * UI_BUDGET_CAP_FRACTION · SQUARE_MIN_SIDE · SQUARE_VIEW_FRACTION).
+     * 값이 갈리면 scanner-zoom.test.js 의 «CSS 와 같은 식» 가드가 잡는다 —
+     * 그 테스트는 이 선언들을 문자열로 재구성해 대조한다.
+     */
+    --tl-pad-t: max(10px, env(safe-area-inset-top));
+    --tl-pad-r: max(10px, env(safe-area-inset-right));
+    --tl-pad-b: max(10px, env(safe-area-inset-bottom));
+    --tl-pad-l: max(10px, env(safe-area-inset-left));
+    --tl-shell-gap: 10px;
+    --tl-split-gap: 14px;
+    --tl-avail-w: calc(100vw - var(--tl-pad-l) - var(--tl-pad-r));
+    --tl-avail-h: calc(100dvh - var(--tl-pad-t) - var(--tl-pad-b));
+    /* 시각 여백 상한 — squareViewSide()(0.92 × 뷰포트 짧은 변)와 같은 식. */
+    --tl-vmin-cap: min(92vw, 92dvh);
+    /* 세로 스택 UI 예산 = top 36 + guide 132 + status 34 + zoom 62 + photo 52
+       + footer 24 + gaps 76 = 416px. 분해 근거는 scanner-zoom.js 주석. */
+    --tl-ui-stack-h: calc(36px + 132px + 34px + 62px + 52px + 24px + 76px);
+    /* 예산이 화면의 52% 를 넘지 못하게 캡 — 작은 화면에서 정사각이 뷰 역할을
+       잃지 않게 한다. 캡이 걸리면 패널이 내부 스크롤을 갖는다(페이지는 여전히 0). */
+    --tl-ui-min-h: min(var(--tl-ui-stack-h), 52dvh);
+    /* 옆배치에서 패널 열이 요구하는 폭 — .photo-button/.zoom-controls 의
+       min(100%,360px)가 충분히 펴지는 300px. 세로 예산과 같은 이유로 화면 가로의
+       42% 로 캡한다 — 좁은 가로 화면에서 정사각이 하한까지 밀려 배치가 깨지는 것을
+       막는다 (캡이 걸리면 패널이 내부 스크롤을 갖는다). */
+    --tl-ui-min-w: min(300px, 42vw);
+    --tl-square-side: max(96px, min(var(--tl-vmin-cap), var(--tl-avail-w), calc(var(--tl-avail-h) - var(--tl-ui-min-h))));
+  }
+
+  /*
+   * 옆배치(정방·가로): 정사각을 한쪽 열에, 패널을 옆 열에. 적합 상한이 **가로**로
+   * 바뀐다. 경계 W/H ≥ 0.9 는 scanner-zoom.js SPLIT_MIN_ASPECT 와 짝이다.
+   */
+  @media (min-aspect-ratio: 9/10) {
+    :root {
+      --tl-square-side: max(96px, min(var(--tl-vmin-cap), var(--tl-avail-h), calc(var(--tl-avail-w) - var(--tl-ui-min-w) - var(--tl-split-gap))));
+    }
+  }
+
+  /*
+   * dvh 미지원(2022 이전) 폴백. 커스텀 속성은 «계산 시점 무효» 라서
+   * `width: A; width: B` 식의 선언 폴백이 듣지 않는다 — @supports 로 vh 판을 따로 준다.
+   * --tl-square-side 는 이 세 변수만 참조하므로 두 배치 모드 모두 자동으로 따라온다.
+   */
+  @supports not (height: 1dvh) {
+    :root {
+      --tl-avail-h: calc(100vh - var(--tl-pad-t) - var(--tl-pad-b));
+      --tl-vmin-cap: min(92vw, 92vh);
+      --tl-ui-min-h: min(var(--tl-ui-stack-h), 52vh);
+    }
   }
 
   * {
     box-sizing: border-box;
   }
 
+  /*
+   * 페이지 스크롤 0 불변식의 1층. 셸이 정확히 100dvh 이고 html/body 가 그보다
+   * 커질 수 없으므로, 어떤 화면비에서도 **문서 스크롤이 생기지 않는다**. 콘텐츠가
+   * 넘칠 때 잘리지 않게 하는 것은 2층(패널 내부 스크롤)의 몫이다.
+   */
   html,
   body {
-    min-height: 100%;
+    height: 100%;
     margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
     background: #000;
   }
 
@@ -96,14 +158,14 @@
   .scanner-app {
     position: relative;
     isolation: isolate;
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     background: #000;
   }
 
   /*
-   * r3 정사각 뷰 아키텍처 (운영자 지시 2026-08-16).
+   * r3 정사각 뷰 아키텍처 (운영자 지시 2026-08-16) + r4 화면비 적응 배치.
    *
    * 카메라를 화면 전체에 cover 로 깔지 않는다. 화면 중앙의 **정사각 컨테이너**에만
    * video 를 cover 로 넣는다 — 정사각 컨테이너 + cover 는 정확히 센서 중앙 정사각을
@@ -111,36 +173,80 @@
    * 구조적으로 동일하다. 가이드·오버레이는 이 컨테이너 좌표계에 직접 그린다 —
    * 역투영 수식(구 analysisSquareOnScreen)은 전부 폐기됐다.
    *
-   * 한 변 = min(92vw, 92dvh) — scanner-zoom.js `squareViewSide()`(0.92 × 뷰포트 짧은
-   * 변)와 같은 식이어야 한다. 8% 마진의 근거는 그 함수 주석에 있다. 셸 패딩은
-   * max(10px, safe-inset) ≤ 짧은 변의 4% (지원 최소 320px 에서 12.8px)라 정사각이
-   * 패딩과 충돌하지 않는다.
+   * r4 에서 바뀐 것은 **한 변을 정하는 식뿐**이다 (구조·좌표계는 그대로):
+   *   구: min(92vw, 92dvh)                     — 스택 높이를 전혀 안 봤다
+   *   신: var(--tl-square-side)                — 시각 여백 상한 ∧ 배치 적합 상한
+   * 정본은 scanner-zoom.js `scanLayout()`. `squareViewSide()` 는 그중 시각 여백 항
+   * (--tl-vmin-cap) 하나를 담당한다.
+   *
+   * ⚠ `min-height` 가 아니라 `height` 다. min-height 는 상한이 아니라서 자식 합이
+   *   100dvh 를 넘으면 셸이 그냥 길어졌고(그래서 flex-shrink 도 발동하지 않았고)
+   *   결국 페이지가 스크롤됐다 — r3 의 실제 결함이 이것이었다.
    */
   .scanner-shell {
     position: relative;
     z-index: 1;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    min-height: 100vh;
-    min-height: 100dvh;
-    padding:
-      max(10px, env(safe-area-inset-top))
-      max(10px, env(safe-area-inset-right))
-      max(10px, env(safe-area-inset-bottom))
-      max(10px, env(safe-area-inset-left));
+    gap: var(--tl-shell-gap);
+    height: 100vh;
+    height: 100dvh;
+    padding: var(--tl-pad-t) var(--tl-pad-r) var(--tl-pad-b) var(--tl-pad-l);
+    overflow: hidden;
+  }
+
+  /* 셸 자식의 shrink 정책 — 넘칠 때 **패널만** 줄어든다. 정사각·머리·꼬리는 고정. */
+  .scanner-top,
+  .site-footer {
+    flex: 0 0 auto;
   }
 
   .square-stage-wrap {
     display: grid;
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     min-height: 0;
     place-items: center;
   }
 
+  /*
+   * 페이지 스크롤 0 불변식의 2층: 안내·상태·컨트롤을 한 상자에 묶어 **이 상자만**
+   * 내부 스크롤을 갖게 한다. 예산(--tl-ui-min-h/-w)을 넘는 실제 콘텐츠는 여기서
+   * 흡수되고 문서로 새지 않는다. 자식은 flex: 0 0 auto — 줄어드는 대신 스크롤한다
+   * (기본 flex-shrink:1 이면 버튼이 눌려 찌그러진다).
+   */
+  .scanner-panels {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    gap: var(--tl-shell-gap);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .scanner-panels > * {
+    flex: 0 0 auto;
+  }
+
+  /*
+   * 패널 내부 스크롤 힌트 (r5). 잘림이 «설명 문구» 쪽으로 옮겨졌어도 **잘렸다는 사실
+   * 자체**는 보여야 한다 — 아니면 안내가 애초에 없는 화면처럼 읽힌다.
+   *
+   * 왜 순수 CSS 가 아닌가: 이 패널의 배경은 투명이고 뒤가 카메라 화면이다. 흔히 쓰는
+   * `background-attachment: local` 스크롤 그림자 기법은 **불투명한 덮개 레이어**로
+   * 그림자를 가리는 방식이라 여기서 성립하지 않고, `animation-timeline: scroll()` 은
+   * iOS Safari 에 없다. 그래서 «아래에 더 있나» 판정만 JS 가 하고(scanner.js
+   * syncPanelScrollHint — 관측 전용, 레이아웃 무변경·전송 0바이트) 그리는 것은 여기다.
+   * 마스크는 스크롤 컨테이너의 **박스** 기준이라 콘텐츠와 함께 흐르지 않는다.
+   */
+  .scanner-panels.has-more {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  }
+
   .square-stage {
     position: relative;
-    width: min(92vw, 92dvh);
+    width: var(--tl-square-side);
     aspect-ratio: 1 / 1;
     overflow: hidden;
     border: 1px solid rgb(255 255 255 / .2);
@@ -314,8 +420,10 @@
     color: #1a1408;
   }
 
+  /* ⚠ max-width 를 100vw 기준으로 잡으면 안 된다 — 옆배치에서는 패널 열이 300px 대라
+     뷰포트 기준 상한이 열을 넘겨 가로 넘침을 만든다. 부모(열) 기준으로 바꾼다. */
   .scan-guide-message {
-    max-width: calc(100vw - 40px);
+    max-width: 100%;
     margin: 0;
     padding: 8px 12px;
     border-radius: 999px;
@@ -330,7 +438,7 @@
   }
 
   .scan-scope-note {
-    max-width: calc(100vw - 48px);
+    max-width: 100%;
     margin: -8px 0 0;
     padding: 5px 9px;
     border: 1px solid rgb(214 242 255 / .3);
@@ -445,8 +553,15 @@
    * 시험판 상단 안내. 안정판에서는 hidden 이라 안 보인다.
    * 카메라 화면 위에 얹히므로 글자색은 고정 밝은 색이다.
    */
+  /* lab 안내는 길다 — 세로 34% 를 넘으면 자기 안에서 스크롤한다. 안 그러면 시험판
+     에서만 정사각·컨트롤이 밀려 안정판과 배치가 갈린다. */
   .lab-notice {
     pointer-events: auto;
+    flex: 0 1 auto;
+    max-height: 34vh;
+    max-height: 34dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     width: min(100%, 520px);
     margin: 0 auto 10px;
     padding: 10px 12px;
@@ -568,10 +683,14 @@
     text-shadow: 0 1px 6px #000;
   }
 
+  /* r5 재배열로 이제 `.scanner-panels` 의 직계 flex 자식이다 (구: .scanner-bottom 의
+     grid 아이템 — justify-items:center 가 가운데로 놨다). 열 flex 의 기본 stretch 를
+     끄지 않으면 왼쪽으로 붙는다. */
   .camera-picker {
     pointer-events: auto;
+    align-self: center;
     margin-top: 10px;
-    max-width: min(320px, 80vw);
+    max-width: min(320px, 100%);
     padding: 7px 10px;
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.28);
@@ -587,6 +706,8 @@
     color: #fff;
   }
 
+  /* 게이트 카드는 세로 320px 대 가로 화면에서 자기 높이(≈320px)를 못 담는다.
+     페이지가 스크롤될 수 없으므로(app overflow:hidden) 카드는 **자기 안에서** 스크롤한다. */
   .camera-gate {
     position: absolute;
     inset: 0;
@@ -594,6 +715,8 @@
     display: grid;
     place-items: center;
     padding: max(22px, env(safe-area-inset-top)) 22px max(22px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: rgb(0 0 0 / .7);
     backdrop-filter: blur(10px);
   }
@@ -849,45 +972,69 @@
     }
   }
 
-  /* 가로모드 — 정사각 뷰를 왼쪽에 고정하고 나머지 UI 를 오른쪽 열에 세운다.
-     r3 구조에선 정사각이 짧은 변(높이)을 거의 다 차지하므로, 세로 쌓기를 유지하면
-     문구·버튼·푸터가 화면 밖으로 밀린다 — 잔여 영역이 가로에 생기니 축을 바꾼다. */
-  @media (max-height: 620px) and (orientation: landscape) {
+  /*
+   * 옆배치 (정방·가로: 폴드 펼침·태블릿·폰 가로) — 정사각을 왼쪽 열에 고정하고
+   * 나머지 UI 를 오른쪽 열에 세운다.
+   *
+   * [의도적 갱신 2026-08-16, r4] 조건을 `(max-height: 620px) and (orientation:
+   * landscape)` 에서 **비율**로 바꿨다. 구 조건은 «높이 낮은 폰 가로» 전용이라
+   * 태블릿 가로(1024×768)·폴드 펼침 가로(2176×1812) 처럼 높이가 620 을 넘는 가로
+   * 화면이 전부 세로 스택으로 렌더돼 각각 329.6px · 246.1px 넘쳤다 (진단표).
+   * 새 경계 W/H ≥ 0.9 는 scanner-zoom.js SPLIT_MIN_ASPECT 와 짝이며, 정방에 가까운
+   * 세로(예: 폴드 펼침)도 옆배치로 흡수한다.
+   *
+   * 행 구성이 grid-template-areas 인 이유: `[hidden]{display:none}` 인 lab-notice 는
+   * 그리드 아이템이 아니어서 자동 배치를 쓰면 행이 밀린다. 명시 영역이면 비어 있어도
+   * 자리만 0 높이로 남는다.
+   */
+  @media (min-aspect-ratio: 9/10) {
     .scanner-shell {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+      grid-template-columns: auto minmax(var(--tl-ui-min-w), 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
       grid-template-areas:
         "stage top"
         "stage notice"
-        "stage center"
-        "stage actions"
+        "stage panels"
         "stage footer";
-      align-items: center;
-      column-gap: 14px;
+      align-content: center;
+      column-gap: var(--tl-split-gap);
+      row-gap: var(--tl-shell-gap);
     }
 
     .square-stage-wrap { grid-area: stage; align-self: center; }
     .scanner-top { grid-area: top; }
-    .lab-notice { grid-area: notice; }
+    .lab-notice { grid-area: notice; margin-bottom: 0; }
+
+    /* 옆배치에서도 넘침은 이 상자 안에서만 — 페이지 스크롤 0 은 배치와 무관한 불변식.
+       ⚠ `justify-content: center` 를 쓰지 않는다: column flex + overflow 조합에서
+          넘칠 때 위쪽 초과분이 스크롤로 **도달 불가**해지는 알려진 동작이 있다. */
+    .scanner-panels {
+      grid-area: panels;
+      min-height: 0;
+      overflow-y: auto;
+    }
 
     .scan-center {
-      grid-area: center;
       min-height: 0;
       padding: 4px 0;
     }
 
     .scanner-bottom {
-      grid-area: actions;
       justify-items: center;
       gap: 8px;
+      padding-top: 0;
     }
 
     .site-footer {
       grid-area: footer;
       align-self: end;
     }
+  }
 
+  /* 높이가 낮은 화면에서 게이트 카드 여백만 줄인다 (구 가로 쿼리에서 분리 — 이건
+     비율이 아니라 절대 높이의 문제라 배치 모드와 조건이 다르다). */
+  @media (max-height: 620px) {
     .camera-gate-card {
       padding: 20px;
     }
@@ -961,26 +1108,42 @@
       </div>
     </section>
 
-    <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">
-      <div class="scan-guide-wrap">
-        <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 점 가이드에 맞춰 주세요.</p>
-        <p class="scan-scope-note" data-i18n="guide.dots">코드 꼭짓점은 바깥 점에, O 실루엣 육각형은 중간 고리에, 중앙 큐브는 안쪽 점에 맞춰 주세요.</p>
-        <p class="scan-scope-note" data-i18n="guide.tlcubeOnly">QR 및 다른 바코드는 읽히지 않아요.</p>
-      </div>
-    </section>
+    <!-- r4: 안내·상태·컨트롤을 한 상자로 묶는다. 이 상자가 «넘침을 흡수하는 유일한
+         지점» 이다 — 예산(--tl-ui-min-h / --tl-ui-min-w)을 넘는 실제 콘텐츠는 여기서
+         내부 스크롤이 되고 문서로 새지 않는다 (페이지 스크롤 0 불변식).
 
-    <div class="scanner-bottom">
-      <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true" data-i18n="status.preparing">카메라를 준비하고 있어요.</p>
-      <div class="zoom-controls" id="zoom-controls" hidden>
-        <button type="button" id="zoom-out" data-i18n-attr="aria-label:zoom.out" aria-label="축소">−</button>
-        <input id="zoom-slider" type="range" min="1" max="8" step="0.1" value="1" data-i18n-attr="aria-label:zoom.slider" aria-label="확대 배율">
-        <button type="button" id="zoom-in" data-i18n-attr="aria-label:zoom.in" aria-label="확대">+</button>
-        <span class="zoom-value" id="zoom-value" aria-hidden="true">1×</span>
+         [의도적 갱신 2026-08-16, r5] 이 상자 **안의 순서**를 뒤집었다:
+         상태 → 줌 컨트롤 → 사진 버튼 → 안내 문구 → 기타.
+         r4 는 안내 문구가 앞이라, 예산 캡(52dvh)이 걸리는 짧은 폰(375×667·360×640)에서
+         «사진에서 스캔» 이 패널 가시 영역 밖으로 밀렸다 — 페이지는 안 스크롤됐지만
+         **도달성을 내준 것**이다. 순서를 뒤집으면 내부 오버플로가 잘라내는 것이
+         행동 컨트롤이 아니라 설명 문구가 된다.
+         ⚠ CSS `order` 가 아니라 DOM 순서로 바꿨다 — order 는 시각 순서만 바꾸고
+           초점·낭독 순서는 DOM 을 따라가서 둘이 갈린다. -->
+    <div class="scanner-panels" id="scanner-panels">
+      <div class="scanner-bottom">
+        <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true" data-i18n="status.preparing">카메라를 준비하고 있어요.</p>
+        <div class="zoom-controls" id="zoom-controls" hidden>
+          <button type="button" id="zoom-out" data-i18n-attr="aria-label:zoom.out" aria-label="축소">−</button>
+          <input id="zoom-slider" type="range" min="1" max="8" step="0.1" value="1" data-i18n-attr="aria-label:zoom.slider" aria-label="확대 배율">
+          <button type="button" id="zoom-in" data-i18n-attr="aria-label:zoom.in" aria-label="확대">+</button>
+          <span class="zoom-value" id="zoom-value" aria-hidden="true">1×</span>
+        </div>
+        <p class="zoom-error" id="zoom-error" role="status" hidden></p>
+        <button class="photo-button" id="choose-image" type="button" data-i18n="button.photo">사진에서 스캔</button>
       </div>
-      <p class="zoom-error" id="zoom-error" role="status" hidden></p>
-      <button class="photo-button" id="choose-image" type="button" data-i18n="button.photo">사진에서 스캔</button>
-      <!-- 렌즈가 2개 이상인 기기에서만 나타난다. 초광각이 잡히면 같은 거리에서 코드가
-           훨씬 작게 찍혀 셀당 픽셀이 복호 하한 아래로 내려간다. -->
+
+      <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">
+        <div class="scan-guide-wrap">
+          <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 점 가이드에 맞춰 주세요.</p>
+          <p class="scan-scope-note" data-i18n="guide.dots">코드 꼭짓점은 바깥 점에, O 실루엣 육각형은 중간 고리에, 중앙 큐브는 안쪽 점에 맞춰 주세요.</p>
+          <p class="scan-scope-note" data-i18n="guide.tlcubeOnly">QR 및 다른 바코드는 읽히지 않아요.</p>
+        </div>
+      </section>
+
+      <!-- 기타. 렌즈 선택은 2개 이상인 기기에서만 나타난다 — 초광각이 잡히면 같은
+           거리에서 코드가 훨씬 작게 찍혀 셀당 픽셀이 복호 하한 아래로 내려간다.
+           파일 입력은 항상 hidden 이라 자리를 먹지 않는다(버튼이 대신 연다). -->
       <select class="camera-picker" id="camera-picker" data-i18n-attr="aria-label:picker.label" aria-label="카메라 렌즈 선택" hidden></select>
       <input id="image-input" type="file" accept="image/*" data-i18n-attr="aria-label:input.label" aria-label="스캔할 사진 선택" hidden>
     </div>

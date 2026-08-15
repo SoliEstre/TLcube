@@ -128,13 +128,14 @@ const zoomOutButton = document.getElementById('zoom-out');
 const zoomValue = document.getElementById('zoom-value');
 const zoomErrorBox = document.getElementById('zoom-error');
 const dotLayer = document.getElementById('scan-dot-layer');
+const scannerPanels = document.getElementById('scanner-panels');
 
 if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTitle ||
     !cameraGateMessage || !startCameraButton || !chooseImageButton || !gateChooseImageButton ||
     !imageInput || !statusBox || !scanToast || !resultPanel || !resultTitle || !resultContent ||
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
     !closeResultSecondaryButton || !zoomControls || !zoomSlider || !zoomInButton ||
-    !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer) {
+    !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer || !scannerPanels) {
   throw new Error('TLcube scanner markup is incomplete.');
 }
 
@@ -1768,6 +1769,36 @@ cameraVideo.addEventListener('loadedmetadata', renderGuideDots);
 cameraVideo.addEventListener('resize', renderGuideDots);
 window.addEventListener('resize', renderGuideDots);
 window.addEventListener('orientationchange', renderGuideDots);
+
+/*
+ * 패널 내부 스크롤 힌트 (r5). r5 재배열로 잘리는 쪽이 «설명 문구» 가 됐는데, 잘렸다는
+ * 사실을 안 보여 주면 안내가 애초에 없는 화면처럼 읽힌다. 하단 페이드(index.html
+ * `.scanner-panels.has-more`)를 켤지 말지만 여기서 정한다.
+ *
+ * 판정은 «아래에 더 있나» 다. 스크롤 위치가 맨 위인 평상 상태에서는 이것이 곧
+ * `scrollHeight > clientHeight`(= 내부 오버플로) 이고, 끝까지 내리면 저절로 꺼진다 —
+ * 끝에서도 페이드가 남으면 «아직 더 있다» 는 거짓말이 된다.
+ *
+ * 관측 전용이다: 클래스 하나만 토글하고 레이아웃·전송·디코딩 경로는 건드리지 않는다.
+ */
+function syncPanelScrollHint() {
+  const more = scannerPanels.scrollTop + scannerPanels.clientHeight < scannerPanels.scrollHeight - 1;
+  scannerPanels.classList.toggle('has-more', more);
+}
+scannerPanels.addEventListener('scroll', syncPanelScrollHint, { passive: true });
+window.addEventListener('resize', syncPanelScrollHint);
+window.addEventListener('orientationchange', syncPanelScrollHint);
+/*
+ * ⚠ 패널 **자신**만 관찰하면 부족하다. 콘텐츠가 늘어나는 사건(줌 컨트롤 노출·렌즈
+ *   선택 등장·상태 문구 줄바꿈)은 이미 넘친 패널의 clientHeight 를 안 바꾸고
+ *   scrollHeight 만 늘리기 때문에 관찰자가 안 깨어난다. 자식까지 함께 본다.
+ */
+if (typeof ResizeObserver === 'function') {
+  const panelResizeObserver = new ResizeObserver(syncPanelScrollHint);
+  panelResizeObserver.observe(scannerPanels);
+  for (const panelChild of scannerPanels.children) panelResizeObserver.observe(panelChild);
+}
+syncPanelScrollHint();
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {

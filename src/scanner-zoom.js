@@ -195,6 +195,10 @@ export const SQUARE_VIEW_FRACTION = 0.92;
  * 짧은 변 하나로 결정된다. 이것이 r3 구조의 핵심: 프리뷰 컨테이너가 정사각이면
  * `object-fit: cover` 가 보여주는 것이 정확히 **센서 중앙 정사각** = cropWindow(crop=1)
  * 의 분석 영역이라, «가이드 ≠ 분석» 불일치가 좌표 변환 없이 구조적으로 소멸한다.
+ *
+ * ⚠ 이 함수는 «시각 여백 상한» 항 하나(CSS `--tl-vmin-cap`)만 준다. r4 부터 실제 뷰
+ * 한 변은 여기에 **배치 적합 상한**(스택: 가용 세로 − UI 예산 / 옆배치: 가용 가로 −
+ * 패널 최소폭)을 더 min 한 값이다 — `scanLayout()` 이 정본이다.
  */
 export function squareViewSide(availWidth, availHeight, fraction = SQUARE_VIEW_FRACTION) {
   const w = Number(availWidth);
@@ -202,6 +206,235 @@ export function squareViewSide(availWidth, availHeight, fraction = SQUARE_VIEW_F
   const f = Number(fraction);
   if (!(w > 0) || !(h > 0) || !(f > 0) || !(f <= 1)) return null;
   return Math.min(w, h) * f;
+}
+
+/*
+ * ── r4 화면비 적응 배치 (운영자 지시 2026-08-16) ──────────────────────────────
+ *
+ * 왜 필요했나: r3 는 정사각 변을 «뷰포트 짧은 변 92%» 하나로 정했다. 그런데 아래
+ * 스택(로고·안내·상태·줌·사진 버튼·푸터)의 높이는 화면이 커져도 거의 **상수**(≈390px)
+ * 라서, 세로 비율이 대략 0.58(H=844) 을 넘는 순간 스택이 화면 밖으로 밀려 페이지가
+ * 스크롤됐다. 태블릿 세로(768×1024)·태블릿 가로·폴드 펼침이 전부 여기 걸렸다.
+ * 기존 가로 대응(`max-height:620px and orientation:landscape`)은 높이 620 초과인
+ * 태블릿·폴드 가로를 아예 못 잡았다.
+ *
+ * 불변식: **페이지 스크롤 0**. 아래 상수와 `scanLayout()` 은 index.html 의 CSS 커스텀
+ * 속성과 **한 쌍**이며, scanner-zoom.test.js 가 CSS 문자열과 대조한다.
+ */
+
+/** 옆배치(정사각 | 패널) 로 넘어가는 뷰포트 비율 W/H. CSS `(min-aspect-ratio: 9/10)`. */
+export const SPLIT_MIN_ASPECT = 0.9;
+
+/** 셸 패딩의 인셋 없는 값 — CSS `max(10px, env(safe-area-inset-*))`. */
+export const SHELL_PAD_MIN = 10;
+
+/** 셸 자식 사이 간격 — CSS `--tl-shell-gap`. */
+export const SHELL_GAP = 10;
+
+/** 옆배치의 열 간격 — CSS `--tl-split-gap`. */
+export const SPLIT_COLUMN_GAP = 14;
+
+/** 옆배치에서 패널 열이 요구하는 폭 — CSS `--tl-ui-min-w` 의 `min(300px, …)` 항. */
+export const SPLIT_PANEL_MIN_WIDTH = 300;
+
+/**
+ * 패널 열 폭의 화면 비율 캡 — CSS `min(300px, 42vw)`.
+ * 세로의 `UI_BUDGET_CAP_FRACTION` 과 같은 이유다: 고정 300px 이면 좁은 가로 화면
+ * (예: 400×320)에서 정사각이 하한(96px)까지 밀려 배치가 성립하지 않는다.
+ */
+export const SPLIT_PANEL_CAP_FRACTION = 0.42;
+
+/**
+ * 정사각 변의 절대 하한 — CSS `--tl-square-side` 의 `max(96px, …)`.
+ * 산정: 96px 이면 가이드 바깥 링 지름이 51.8px 이라 조준은 가능하다. 이 하한이
+ * 걸리는 것은 짧은 변 240px 미만의 비현실적 뷰포트뿐이다(`body{min-width:320px}`).
+ * 하한이 없으면 극단 뷰포트에서 `width` 가 음수가 되어 선언 자체가 무효가 된다.
+ */
+export const SQUARE_MIN_SIDE = 96;
+
+/**
+ * 세로 스택 UI 예산의 분해. 각 값은 index.html 의 CSS 선언에서 산출한 것이다
+ * (진단표 참조). 합이 `--tl-ui-stack-h` 의 calc 항과 **문자 그대로** 같아야 한다.
+ *
+ *   top    36 = .brand-logo (8+8 padding + 1+1 border + 14px lh 1 = 32) + 여유 4
+ *   guide 132 = 메시지 2줄(16 + 2×21.6 = 59.2) + 안내1 2줄(4 + 2×16.2 = 36.4)
+ *               + 안내2 1줄(4 + 16.2 = 20.2) + .scan-guide-wrap grid gap 8×2 = 131.8
+ *   status 34 = .scan-status 1줄 (14 + 18.2 = 32.2) + 여유
+ *   zoom   62 = padding 8+8 + border 1+1 + 버튼 44
+ *   photo  52 = .photo-button min-height
+ *   footer 24 = padding-top 8 + 11px lh 1.35 (= 22.85) + 여유
+ *   gaps   76 = 셸 gap 10×3 + 패널 내부 gap 10 + .scanner-bottom (padding-top 12 + gap 12×2)
+ *
+ * 즉 예산은 «안내가 전부 최대 줄 수로 접힌 폰» 을 담는 값이다. 실제 콘텐츠가 이보다
+ * 크면 패널이 내부 스크롤을 갖고, 작으면 정사각이 그만큼 커진다 — 어느 쪽도 페이지를
+ * 스크롤시키지 않는다.
+ */
+export const UI_STACK_BUDGET_PARTS = Object.freeze({
+  top: 36,
+  guide: 132,
+  status: 34,
+  zoom: 62,
+  photo: 52,
+  footer: 24,
+  gaps: 76,
+});
+
+/** 세로 스택 UI 예산(px) = 위 분해의 합. CSS `--tl-ui-stack-h`. */
+export const UI_STACK_BUDGET = Object.values(UI_STACK_BUDGET_PARTS)
+  .reduce((sum, part) => sum + part, 0);
+
+/**
+ * UI 예산이 화면 높이에서 차지할 수 있는 상한 비율 — CSS `min(var(--tl-ui-stack-h), 52dvh)`.
+ *
+ * 왜 캡이 필요한가: 예산이 고정 `UI_STACK_BUDGET`(416px)이면 세로 568px 짜리 작은
+ * 화면에서 정사각이 132px(= 568 − 20 − 416)로 쪼그라들어 «카메라 뷰» 로서 기능을 잃는다.
+ * 화면의 52% 를 넘는 예산은 쓰지 않고, 대신 그 화면에서는 **패널이 내부 스크롤**을
+ * 갖는다 (페이지는 여전히 0). 52% 는 «정사각이 가용 세로의 절반 미만으로 내려가지
+ * 않는다» 를 뜻한다.
+ *
+ * [정정 2026-08-16, r5] 이 주석과 `scanLayout()` 주석이 근거를 **400px** 로 적고
+ * 있었다. 실제 상수는 416 이고, 그래서 예시 수치(148px)도 틀려 있었다. 산식은 처음부터
+ * 416 을 썼으므로 코드 동작은 무변경 — 틀린 것은 서술뿐이었다.
+ */
+export const UI_BUDGET_CAP_FRACTION = 0.52;
+
+/**
+ * `.scanner-bottom` 자신의 여백 — padding-top 12 + row gap 12×2. `gaps`(76) 항의 부분이다.
+ * (옆배치에서는 CSS 가 padding-top 0 · gap 8 로 줄이므로 이 값은 **보수적 상한**이다.)
+ */
+export const BOTTOM_STACK_CHROME = 36;
+
+/**
+ * 패널 위·아래에서 셸이 이미 가져가는 높이 — 로고 36 + 푸터 24 + 셸 gap 10×3 = 90.
+ * 패널의 **가시** 높이는 배치가 패널에 준 공간에서 이만큼을 뺀 값이다.
+ * 스택: 셸 자식이 top / stage / panels / footer (gap 3개).
+ * 옆배치: 패널 열의 grid 행이 top / notice / panels / footer (row-gap 3개, notice 는
+ *         hidden 이라 0 높이지만 gap 은 남는다) — 결과적으로 같은 식이다.
+ */
+export const PANEL_CHROME_HEIGHT = UI_STACK_BUDGET_PARTS.top
+  + UI_STACK_BUDGET_PARTS.footer + SHELL_GAP * 3;
+
+/**
+ * r5 재배열 후 패널 **맨 앞**에 오는 행동 컨트롤 3종의 높이(px) —
+ * `.scanner-bottom` 여백 36 + 상태 34 + 줌 62 + 사진 버튼 52 = 184.
+ * 줌 컨트롤이 노출된 «평상 상태» 기준이다 (줌 미지원 기기는 62 만큼 더 여유가 있다).
+ *
+ * 이 값이 `scanLayout().panelVisibleHeight` 이하여야 «사진에서 스캔» 이 스크롤 없이
+ * 보인다. r4 는 안내 문구(guide 132 + 패널 gap 10)가 앞에 있어 이 합이 326 이었고,
+ * 짧은 폰에서 가시 영역을 넘겼다 — 그것이 이번에 고친 회귀다.
+ */
+export const ACTION_CONTROLS_HEIGHT = BOTTOM_STACK_CHROME
+  + UI_STACK_BUDGET_PARTS.status + UI_STACK_BUDGET_PARTS.zoom + UI_STACK_BUDGET_PARTS.photo;
+
+/** 배치 모드 — `'stack'`(정사각 위 · 패널 아래) / `'split'`(정사각 옆 · 패널 옆). */
+export function layoutModeFor(viewportWidth, viewportHeight) {
+  const w = Number(viewportWidth);
+  const h = Number(viewportHeight);
+  if (!(w > 0) || !(h > 0)) return null;
+  return w / h >= SPLIT_MIN_ASPECT ? 'split' : 'stack';
+}
+
+/**
+ * 화면비 적응 배치의 **정본 산식**. CSS `--tl-square-side` 와 항·순서까지 같다.
+ *
+ *   stack: max(96px, min(0.92·min(W,H), availW, availH − uiBudget))
+ *   split: max(96px, min(0.92·min(W,H), availH, availW − uiBudget − colGap))
+ *
+ * where availW = W − padL − padR, availH = H − padT − padB,
+ *       uiBudget(stack) = min(416px, 0.52 × H)   ← dvh/vw 기준이라 avail 이 아니라 W·H.
+ *                         (416 = UI_STACK_BUDGET. [정정 r5] 여기 400 이라 적혀 있었다.)
+ *       uiBudget(split) = min(300px, 0.42 × W)
+ *
+ * 무스크롤 증명(하한이 안 걸리는 범위에서):
+ *   stack — side ≤ availH − uiBudget 이므로 side + uiBudget + padY ≤ H. 세로 OK.
+ *           side ≤ availW 이므로 side + padX ≤ W. 가로 OK.
+ *   split — side ≤ availW − panelMinW − colGap 이므로
+ *           side + colGap + panelMinW + padX ≤ W. 가로 OK.
+ *           side ≤ availH 이므로 side + padY ≤ H. 세로 OK.
+ * 하한(96px)이 걸리는 경우는 `fits` 가 false 로 돌아온다 — 테스트가 그 경계를 고정한다.
+ *
+ * ⚠ 무스크롤은 **페이지**의 성질이지 도달성의 보증이 아니다. 예산 캡이 걸린 화면에서는
+ *   패널이 내부 스크롤을 갖고, 그때 캡 밖으로 밀린 것은 «보이지 않는다». 그래서 무엇이
+ *   먼저 밀리는지가 배치의 일부다 — `panelVisibleHeight` 와 `ACTION_CONTROLS_HEIGHT`
+ *   가 그 경계를 수치로 준다 (r5 재배열의 근거).
+ */
+export function scanLayout({
+  viewportWidth,
+  viewportHeight,
+  safeAreaTop = 0,
+  safeAreaRight = 0,
+  safeAreaBottom = 0,
+  safeAreaLeft = 0,
+} = {}) {
+  const w = Number(viewportWidth);
+  const h = Number(viewportHeight);
+  if (!(w > 0) || !(h > 0)) return null;
+
+  const pad = (inset) => {
+    const n = Number(inset);
+    return Math.max(SHELL_PAD_MIN, Number.isFinite(n) && n > 0 ? n : 0);
+  };
+  const padTop = pad(safeAreaTop);
+  const padRight = pad(safeAreaRight);
+  const padBottom = pad(safeAreaBottom);
+  const padLeft = pad(safeAreaLeft);
+
+  const availWidth = w - padLeft - padRight;
+  const availHeight = h - padTop - padBottom;
+  const mode = layoutModeFor(w, h);
+  const visualCap = SQUARE_VIEW_FRACTION * Math.min(w, h); // CSS min(92vw, 92dvh)
+  const uiBudget = mode === 'stack'
+    ? Math.min(UI_STACK_BUDGET, UI_BUDGET_CAP_FRACTION * h)
+    : Math.min(SPLIT_PANEL_MIN_WIDTH, SPLIT_PANEL_CAP_FRACTION * w);
+  const crossCap = mode === 'stack' ? availWidth : availHeight;
+  const fitCap = mode === 'stack'
+    ? availHeight - uiBudget
+    : availWidth - uiBudget - SPLIT_COLUMN_GAP;
+
+  const unclamped = Math.min(visualCap, crossCap, fitCap);
+  const squareSide = Math.max(SQUARE_MIN_SIDE, unclamped);
+  const binding = squareSide > unclamped
+    ? 'floor'
+    : (unclamped === visualCap ? 'visual' : (unclamped === crossCap ? 'cross' : 'fit'));
+
+  const contentWidth = mode === 'stack'
+    ? squareSide + padLeft + padRight
+    : squareSide + SPLIT_COLUMN_GAP + uiBudget + padLeft + padRight;
+  const contentHeight = mode === 'stack'
+    ? squareSide + uiBudget + padTop + padBottom
+    : squareSide + padTop + padBottom;
+
+  return {
+    mode,
+    aspect: w / h,
+    padTop,
+    padRight,
+    padBottom,
+    padLeft,
+    availWidth,
+    availHeight,
+    visualCap,
+    crossCap,
+    fitCap,
+    uiBudget,
+    squareSide,
+    binding,
+    /** 패널이 받는 공간 — stack 은 높이, split 은 폭. */
+    panelExtent: mode === 'stack'
+      ? availHeight - squareSide
+      : availWidth - squareSide - SPLIT_COLUMN_GAP,
+    /**
+     * 패널의 **가시 높이**(px) — 스크롤 없이 실제로 보이는 세로. 로고·푸터·셸 gap 을
+     * 뺀 값이다(`PANEL_CHROME_HEIGHT`). 이 아래로 밀린 콘텐츠는 «있지만 안 보인다» —
+     * 페이지 무스크롤 불변식과 **다른 축**이고, r5 회귀가 난 축이 이쪽이었다.
+     */
+    panelVisibleHeight: (mode === 'stack' ? availHeight - squareSide : availHeight)
+      - PANEL_CHROME_HEIGHT,
+    contentWidth,
+    contentHeight,
+    /** 무스크롤 예산 충족 여부 (하한이 걸리면 false 가 될 수 있다). */
+    fits: contentWidth <= w + 1e-9 && contentHeight <= h + 1e-9,
+  };
 }
 
 /**

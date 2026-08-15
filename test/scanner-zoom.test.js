@@ -37,9 +37,22 @@ import {
   GUIDE_FINDER_RADIUS_CELLS,
   GUIDE_INNER_FRACTION,
   GUIDE_MIDDLE_FRACTION,
+  ACTION_CONTROLS_HEIGHT,
+  BOTTOM_STACK_CHROME,
   GUIDE_OUTER_FRACTION,
   GUIDE_PAIR_K,
+  PANEL_CHROME_HEIGHT,
+  SHELL_GAP,
+  SHELL_PAD_MIN,
+  SPLIT_COLUMN_GAP,
+  SPLIT_MIN_ASPECT,
+  SPLIT_PANEL_CAP_FRACTION,
+  SPLIT_PANEL_MIN_WIDTH,
+  SQUARE_MIN_SIDE,
   SQUARE_VIEW_FRACTION,
+  UI_BUDGET_CAP_FRACTION,
+  UI_STACK_BUDGET,
+  UI_STACK_BUDGET_PARTS,
   aimGuideMinFractions,
   applyTrackZoom,
   buttonStep,
@@ -49,9 +62,11 @@ import {
   guideDotPositions,
   guideOccupancyEstimates,
   kaApexRadiusCells,
+  layoutModeFor,
   parseZoomCapability,
   previewSourceWindow,
   resolveZoomPlan,
+  scanLayout,
   silhouetteRadiusCells,
   snapZoom,
   squareViewSide,
@@ -377,16 +392,23 @@ test('r3 정사각 뷰 — 프리뷰(cover+scale) ≡ 분석(cropWindow) 이 모
   assert.match(SCANNER_JS, /addEventListener\('loadedmetadata', renderGuideDots\)/);
   assert.match(SCANNER_JS, /syncPreviewTransform/);
   assert.match(SCANNER_HTML, /class="square-stage" id="camera-stage"/);
+  // r4 에서도 «0.92 × 뷰포트 짧은 변» 항은 그대로 살아 있다 — 다만 이제 --tl-vmin-cap
+  // 이라는 이름을 갖고, 배치 적합 상한과 min 된다 (아래 r4 CSS 동기화 테스트가 정본).
   assert.match(SCANNER_HTML, /min\(92vw, 92dvh\)/);
+  assert.match(SCANNER_HTML, /--tl-vmin-cap: min\(92vw, 92dvh\);/);
   assert.match(SCANNER_HTML, /aspect-ratio: 1 \/ 1/);
 });
 
 /*
  * r3 기기 매트릭스 수치 테스트 (작업 3): 뷰포트 폰 390×844 · 태블릿 1024×768 ·
  * 폴드 접힘 344×882 · 폴드 펼침 1812×2176 × 센서 1280×720 / 720×1280.
- * ⓐ 정사각 뷰 변 ⓑ 18점 전부 뷰 안 ⓒ 프리뷰≡분석 ⓓ 점유율·cell_px 표(JSON 산출).
+ * ⓐ **시각 여백 상한**(뷰 변의 상한 항) ⓑ 18점 전부 뷰 안 ⓒ 프리뷰≡분석
+ * ⓓ 점유율·cell_px 표(JSON 산출).
+ *
+ * [정정 2026-08-16, r5] ⓐ 를 «정사각 뷰 변» 이라 부르던 것을 «시각 여백 상한» 으로
+ * 되돌렸다 — r4 의 squareViewSide() 의미 축소와 같은 정정이다. 정본은 scanLayout().
  */
-test('r3 기기 매트릭스 — 뷰 변·18점 포함·프리뷰≡분석·cell_px 표', () => {
+test('r3 기기 매트릭스 — 시각 여백 상한·18점 포함·프리뷰≡분석·cell_px 표', () => {
   const VIEWPORTS = [
     { name: 'phone', w: 390, h: 844 },
     { name: 'tablet', w: 1024, h: 768 },
@@ -398,18 +420,39 @@ test('r3 기기 매트릭스 — 뷰 변·18점 포함·프리뷰≡분석·cell
     { name: 'sensor-portrait', w: 720, h: 1280 },
   ];
   assert.equal(SQUARE_VIEW_FRACTION, 0.92);
-  const matrix = { fraction: SQUARE_VIEW_FRACTION, viewports: [], sensors: [], cellPx: {} };
+  const matrix = {
+    fraction: SQUARE_VIEW_FRACTION,
+    // 산출물이 스스로를 설명하게 둔다 — 이 표를 읽는 사람이 «뷰 변» 으로 오독한 것이
+    // r5 에서 고친 결함이다.
+    viewSideCapMeaning:
+      'viewSideCap = 0.92 × 뷰포트 짧은 변 — 시각 여백 상한이지 실제 뷰 한 변이 아니다. '
+      + '실제 한 변은 scanLayout().squareSide (= 이 상한 ∧ 배치 적합 상한).',
+    viewports: [],
+    sensors: [],
+    cellPx: {},
+  };
 
   for (const vp of VIEWPORTS) {
-    // ⓐ 뷰 변 = 0.92 × 짧은 변 — 방향을 타지 않는다 (w/h 스왑 동일).
+    /*
+     * ⓐ **시각 여백 상한** = 0.92 × 짧은 변 — 방향을 타지 않는다 (w/h 스왑 동일).
+     *
+     * [정정 2026-08-16, r5] 이 필드 이름이 `squareSide` 였다. r4 부터 실제 뷰 한 변은
+     * 이 값에 **배치 적합 상한**을 더 min 한 것(`scanLayout().squareSide`)이라,
+     * 구 이름은 산출 JSON 에서 «뷰 변» 을 공표하는 거짓말이 돼 있었다 — 예컨대
+     * 태블릿 1024×768 의 실제 변은 690 인데 이 표는 706.56 을 실었다.
+     * 이름을 `viewSideCap` 으로 좁히고 의미를 «상한» 으로 되돌린다.
+     */
     const side = squareViewSide(vp.w, vp.h);
     assert.ok(Math.abs(side - 0.92 * Math.min(vp.w, vp.h)) < 1e-9);
     assert.equal(squareViewSide(vp.h, vp.w), side, vp.name + ': 방향 의존');
+    // 상한은 정본 산식의 결과 이상이어야 한다 — 이름이 뜻하는 관계를 여기서 고정한다.
+    assert.ok(scanLayout({ viewportWidth: vp.w, viewportHeight: vp.h }).squareSide <= side + 1e-9,
+      vp.name + ': viewSideCap 이 상한이 아니다');
     // ⓑ 18점 전부 뷰 안 (구조 불변식: 최대 반경 27% < 50%).
     const dots = guideDotPositions(side, side / 2, side / 2);
     assert.equal(dots.outer.length + dots.middle.length + dots.inner.length, 18);
     assert.deepEqual(dotsOutOfBounds(dots, side), [], vp.name + ': 점이 뷰를 벗어난다');
-    matrix.viewports.push({ ...vp, squareSide: Number(side.toFixed(2)) });
+    matrix.viewports.push({ ...vp, viewSideCap: Number(side.toFixed(2)) });
   }
 
   for (const sensor of SENSORS) {
@@ -690,4 +733,416 @@ test('확대·크롭이 복호 시간에 주는 영향을 잰다', () => {
   );
   assert.ok(report.uncrop.medianMs > 0);
   assert.ok(report.crop2.medianMs > 0);
+});
+
+/*
+ * ══ r4 화면비 적응 무스크롤 배치 (운영자 지시 2026-08-16) ═════════════════════
+ *
+ * 불변식: **페이지 스크롤 0**. 아래 세 층으로 나눠 고정한다.
+ *   ① 구조 — html/body/app/shell 이 뷰포트 높이에 묶여 있고 넘침 흡수 지점이 하나뿐.
+ *   ② 산식 — CSS 커스텀 속성이 scanner-zoom.js 상수에서 문자 그대로 재구성된다.
+ *   ③ 수치 — 기기 매트릭스에서 콘텐츠 폭·높이가 뷰포트 이하임을 계산으로 증명.
+ * 브라우저 실측은 통합자(retire)의 몫이다 — 여기서는 소스 단언 + 산식 대조만 한다.
+ */
+
+/** `--name: value;` 선언을 등장 순서대로 모은다 (미디어쿼리 재정의까지 전부). */
+function cssVarDeclarations(name) {
+  const re = new RegExp('--' + name + ':\\s*([^;]+);', 'g');
+  return [...SCANNER_HTML.matchAll(re)].map((m) => m[1].trim());
+}
+
+test('r4 ① 구조 — 페이지 스크롤이 생길 수 있는 경로가 소스에서 닫혀 있다', () => {
+  // html/body 가 뷰포트보다 커질 수 없다.
+  assert.match(SCANNER_HTML, /html,\s*\n\s*body \{[^}]*height: 100%;[^}]*overflow: hidden;/);
+  // app·shell 은 min-height 가 아니라 height 다. min-height 는 상한이 아니라서
+  // 자식 합이 넘치면 셸이 그냥 길어졌고(→ flex-shrink 미발동) 페이지가 스크롤됐다.
+  assert.match(SCANNER_HTML, /\.scanner-app \{[^}]*height: 100vh;\s*height: 100dvh;[^}]*overflow: hidden;/);
+  assert.match(SCANNER_HTML, /\.scanner-shell \{[^}]*height: 100vh;\s*height: 100dvh;[^}]*overflow: hidden;/);
+  assert.doesNotMatch(SCANNER_HTML, /min-height: 100dvh/,
+    'min-height 100dvh 가 남아 있다 — r3 스크롤 결함의 원인 그 자체다');
+  // 넘침 흡수 지점: 패널 상자 하나. 내부 스크롤 + 자식은 눌리지 않고 스크롤한다.
+  // [의도적 갱신 2026-08-16, r5] 이 상자에 id 가 붙었다 — scanner.js 가 내부 오버플로
+  // 힌트(하단 페이드)를 켜고 끄려면 이 요소를 잡아야 한다. 구조는 그대로다.
+  assert.match(SCANNER_HTML, /<div class="scanner-panels" id="scanner-panels">/);
+  assert.match(SCANNER_HTML, /\.scanner-panels \{[^}]*min-height: 0;[^}]*overflow-y: auto;/);
+  assert.match(SCANNER_HTML, /\.scanner-panels > \* \{\s*flex: 0 0 auto;\s*\}/);
+  // 정사각·머리·꼬리는 줄어들지 않는다 — 줄어들 곳이 패널뿐이어야 배치가 결정적이다.
+  assert.match(SCANNER_HTML, /\.square-stage-wrap \{[^}]*flex: 1 0 auto;/);
+  assert.match(SCANNER_HTML, /\.scanner-top,\s*\n\s*\.site-footer \{\s*flex: 0 0 auto;\s*\}/);
+  // 게이트 카드·lab 안내도 자기 안에서 스크롤한다 (페이지가 못 스크롤하므로).
+  assert.match(SCANNER_HTML, /\.camera-gate \{[^}]*overflow-y: auto;/);
+  assert.match(SCANNER_HTML, /\.lab-notice \{[^}]*overflow-y: auto;/);
+  // 뷰포트 기준 max-width 는 옆배치에서 열을 넘긴다 — 부모 기준으로 바뀌었는지.
+  assert.doesNotMatch(SCANNER_HTML, /max-width: calc\(100vw - 40px\)/);
+  assert.doesNotMatch(SCANNER_HTML, /max-width: calc\(100vw - 48px\)/);
+  assert.doesNotMatch(SCANNER_HTML, /max-width: min\(320px, 80vw\)/);
+});
+
+test('r4 ② 산식 — CSS 커스텀 속성이 scanner-zoom.js 상수와 문자 그대로 같다', () => {
+  const px = (n) => `${n}px`;
+  // 패딩·간격
+  for (const [suffix, side] of [['t', 'top'], ['r', 'right'], ['b', 'bottom'], ['l', 'left']]) {
+    assert.deepEqual(cssVarDeclarations('tl-pad-' + suffix),
+      [`max(${px(SHELL_PAD_MIN)}, env(safe-area-inset-${side}))`]);
+  }
+  assert.deepEqual(cssVarDeclarations('tl-shell-gap'), [px(SHELL_GAP)]);
+  assert.deepEqual(cssVarDeclarations('tl-split-gap'), [px(SPLIT_COLUMN_GAP)]);
+
+  // 가용 영역 (dvh 판 + @supports vh 폴백)
+  assert.deepEqual(cssVarDeclarations('tl-avail-w'),
+    ['calc(100vw - var(--tl-pad-l) - var(--tl-pad-r))']);
+  assert.deepEqual(cssVarDeclarations('tl-avail-h'), [
+    'calc(100dvh - var(--tl-pad-t) - var(--tl-pad-b))',
+    'calc(100vh - var(--tl-pad-t) - var(--tl-pad-b))',
+  ]);
+
+  // 시각 여백 상한 = squareViewSide() 의 0.92 × 짧은 변
+  const vminPct = Math.round(SQUARE_VIEW_FRACTION * 100);
+  assert.equal(vminPct, 92);
+  assert.deepEqual(cssVarDeclarations('tl-vmin-cap'),
+    [`min(${vminPct}vw, ${vminPct}dvh)`, `min(${vminPct}vw, ${vminPct}vh)`]);
+
+  // UI 예산 — calc 항이 UI_STACK_BUDGET_PARTS 의 선언 순서·값과 문자까지 같아야 한다.
+  const parts = Object.values(UI_STACK_BUDGET_PARTS).map(px).join(' + ');
+  assert.deepEqual(cssVarDeclarations('tl-ui-stack-h'), [`calc(${parts})`]);
+  assert.equal(UI_STACK_BUDGET, 416);
+  assert.equal(
+    Object.values(UI_STACK_BUDGET_PARTS).reduce((a, b) => a + b, 0),
+    UI_STACK_BUDGET,
+  );
+  const capPct = Math.round(UI_BUDGET_CAP_FRACTION * 100);
+  assert.deepEqual(cssVarDeclarations('tl-ui-min-h'), [
+    `min(var(--tl-ui-stack-h), ${capPct}dvh)`,
+    `min(var(--tl-ui-stack-h), ${capPct}vh)`,
+  ]);
+  const splitCapPct = Math.round(SPLIT_PANEL_CAP_FRACTION * 100);
+  assert.deepEqual(cssVarDeclarations('tl-ui-min-w'),
+    [`min(${px(SPLIT_PANEL_MIN_WIDTH)}, ${splitCapPct}vw)`]);
+
+  // 정사각 한 변 — 스택판(기본) + 옆배치판(미디어쿼리). 항의 순서까지 scanLayout() 과 같다.
+  assert.deepEqual(cssVarDeclarations('tl-square-side'), [
+    `max(${px(SQUARE_MIN_SIDE)}, min(var(--tl-vmin-cap), var(--tl-avail-w), ` +
+      'calc(var(--tl-avail-h) - var(--tl-ui-min-h))))',
+    `max(${px(SQUARE_MIN_SIDE)}, min(var(--tl-vmin-cap), var(--tl-avail-h), ` +
+      'calc(var(--tl-avail-w) - var(--tl-ui-min-w) - var(--tl-split-gap))))',
+  ]);
+  assert.match(SCANNER_HTML, /\.square-stage \{[^}]*width: var\(--tl-square-side\);/);
+
+  // 배치 모드 경계 — CSS 미디어쿼리와 SPLIT_MIN_ASPECT 가 같은 유리수여야 한다.
+  const num = Math.round(SPLIT_MIN_ASPECT * 10);
+  assert.equal(num / 10, SPLIT_MIN_ASPECT);
+  assert.ok(SCANNER_HTML.includes(`@media (min-aspect-ratio: ${num}/10)`));
+  // 구 가로 조건(높이 620 이하 + landscape)은 배치 조건에서 사라져야 한다 —
+  // 태블릿 가로·폴드 가로가 그 조건에 안 걸려 세로 스택으로 렌더된 것이 결함이었다.
+  assert.doesNotMatch(SCANNER_HTML, /max-height: 620px\) and \(orientation: landscape/);
+  assert.match(SCANNER_HTML, /@media \(max-height: 620px\) \{\s*\n\s*\.camera-gate-card/);
+});
+
+test('r4 ② 산식 — layoutModeFor 경계는 W/H = 0.9 에서 정확히 갈린다', () => {
+  assert.equal(SPLIT_MIN_ASPECT, 0.9);
+  assert.equal(layoutModeFor(900, 1000), 'split'); // 정확히 0.9 → 옆배치 (min-aspect-ratio 는 ≥)
+  assert.equal(layoutModeFor(899, 1000), 'stack');
+  assert.equal(layoutModeFor(1000, 900), 'split');
+  assert.equal(layoutModeFor(0, 100), null);
+  assert.equal(layoutModeFor(100, 0), null);
+  assert.equal(scanLayout({ viewportWidth: 0, viewportHeight: 100 }), null);
+});
+
+/*
+ * 기기 매트릭스 (브리프 작업 4). 무스크롤 증명은 «콘텐츠 폭·높이 ≤ 뷰포트» 이고,
+ * 여기서 콘텐츠는 **예산 기준**(정사각 + UI 예산)이다 — 실제 콘텐츠가 예산보다 크면
+ * 패널이 내부 스크롤을 갖고, 작으면 정사각이 커진다. 어느 쪽도 페이지를 못 늘린다.
+ *
+ * 내부 스크롤 여부는 별도로 «UI 실제 높이 모델»과 비교해 여유(px)를 기록한다.
+ * 이 모델은 CSS 선언값 산술이지 브라우저 실측이 아니다 — 가정은 modelStackUiHeight
+ * 주석에 명시돼 있고, 판정(assert)에는 쓰지 않는다.
+ */
+const R4_VIEWPORTS = [
+  { name: 'phone-390x844', w: 390, h: 844, mode: 'stack' },
+  { name: 'fold-closed-344x882', w: 344, h: 882, mode: 'stack' },
+  { name: 'tall-320x980', w: 320, h: 980, mode: 'stack' },
+  /*
+   * [추가 2026-08-16, r5] 짧은 폰 2종. 예산 캡(52dvh)이 실제로 걸리는 구간이라
+   * r4 표본(전부 h ≥ 844)에는 **이 구간이 없었다** — 그래서 「사진에서 스캔이 패널
+   * 가시 영역 밖으로 밀린다」 는 회귀를 매트릭스가 못 봤다. 표본이 없으면 단언도 없다.
+   */
+  { name: 'phone-short-375x667', w: 375, h: 667, mode: 'stack' },
+  { name: 'phone-short-360x640', w: 360, h: 640, mode: 'stack' },
+  { name: 'tablet-portrait-768x1024', w: 768, h: 1024, mode: 'stack' },
+  { name: 'tablet-landscape-1024x768', w: 1024, h: 768, mode: 'split' },
+  { name: 'fold-open-1812x2176', w: 1812, h: 2176, mode: 'stack' },
+  { name: 'fold-open-2176x1812', w: 2176, h: 1812, mode: 'split' },
+  // 브리프 표기(1812×2176)는 디바이스 픽셀로 보인다. DPR 2.625 환산 CSS 뷰포트도 함께 건다.
+  { name: 'fold-open-css-690x829', w: 690, h: 829, mode: 'stack' },
+  { name: 'phone-landscape-844x390', w: 844, h: 390, mode: 'split' },
+];
+
+/**
+ * 세로 스택에서 UI 가 실제로 차지하는 높이(px) — CSS 선언값 산술.
+ * 가정(브라우저 실측 아님): line-height normal = 1.2, 줄 수는 인자로 받는다.
+ *   .brand-logo 32 · .scan-guide-message 16 + n×lh · .scan-scope-note 4 + n×16.2
+ *   .scan-guide-wrap gap 8×2 · 패널 gap 10 · .scanner-bottom padding 12 + gap 12×n
+ *   .scan-status 14 + n×18.2 · .zoom-controls 62 · .photo-button 52
+ *   .site-footer 8 + n×14.85 · 셸 gap 10×3 + padding 10×2
+ */
+function modelStackUiHeight(width, {
+  messageLines = 1, noteLines = [1, 1], statusLines = 1, footerLines = 1, zoom = true,
+} = {}) {
+  const messageFont = Math.min(16, Math.max(14, 0.038 * width));
+  const center = (16 + messageLines * messageFont * 1.35) +
+    noteLines.reduce((sum, n) => sum + 4 + n * 12 * 1.35, 0) + 16;
+  const bottom = 12 + (14 + statusLines * 13 * 1.4) +
+    (zoom ? 12 + 62 : 0) + 12 + 52;
+  return 32 + center + SHELL_GAP + bottom + (8 + footerLines * 11 * 1.35) +
+    SHELL_GAP * 3 + SHELL_PAD_MIN * 2;
+}
+
+test('r4 ③ 수치 — 기기 매트릭스에서 콘텐츠 폭·높이가 뷰포트를 넘지 않는다 (무스크롤)', () => {
+  const rows = [];
+  for (const vp of R4_VIEWPORTS) {
+    const L = scanLayout({ viewportWidth: vp.w, viewportHeight: vp.h });
+    assert.equal(L.mode, vp.mode, vp.name + ': 배치 모드 판정');
+
+    // ⓒ 무스크롤 불변식 — 예산 기준 콘텐츠가 뷰포트 이하.
+    assert.ok(L.contentHeight <= vp.h + 1e-9,
+      `${vp.name}: 세로 초과 ${(L.contentHeight - vp.h).toFixed(2)}px`);
+    assert.ok(L.contentWidth <= vp.w + 1e-9,
+      `${vp.name}: 가로 초과 ${(L.contentWidth - vp.w).toFixed(2)}px`);
+    assert.equal(L.fits, true, vp.name + ': 하한(96px)이 걸려 예산이 성립하지 않는다');
+    assert.notEqual(L.binding, 'floor', vp.name + ': 정사각이 절대 하한까지 밀렸다');
+
+    // ⓐⓑ 정사각 변 — CSS min/max 체인과 같은 값인지 항별로 재계산해 대조.
+    const expected = Math.max(SQUARE_MIN_SIDE, Math.min(
+      SQUARE_VIEW_FRACTION * Math.min(vp.w, vp.h),
+      vp.mode === 'stack' ? L.availWidth : L.availHeight,
+      vp.mode === 'stack'
+        ? L.availHeight - Math.min(UI_STACK_BUDGET, UI_BUDGET_CAP_FRACTION * vp.h)
+        : L.availWidth - Math.min(SPLIT_PANEL_MIN_WIDTH, SPLIT_PANEL_CAP_FRACTION * vp.w)
+          - SPLIT_COLUMN_GAP,
+    ));
+    assert.ok(Math.abs(L.squareSide - expected) < 1e-9, vp.name + ': 정사각 변 산식 불일치');
+    // 정사각은 언제나 시각 여백 상한 이하 — squareViewSide() 와의 관계가 깨지지 않는다.
+    assert.ok(L.squareSide <= squareViewSide(vp.w, vp.h) + 1e-9);
+
+    // ⓓ 가이드 18점 — 뷰가 어떤 크기가 되든 전부 뷰 안 (구조 불변식: 최대 반경 27%).
+    const dots = guideDotPositions(L.squareSide, L.squareSide / 2, L.squareSide / 2);
+    assert.equal(dots.outer.length + dots.middle.length + dots.inner.length, 18);
+    assert.deepEqual(dotsOutOfBounds(dots, L.squareSide), [], vp.name + ': 점이 뷰를 벗어난다');
+
+    // 내부 스크롤 여유 — 판정이 아니라 기록. 스택만 모델이 있다.
+    const uiModel = vp.mode === 'stack' ? modelStackUiHeight(vp.w) : null;
+    rows.push({
+      viewport: vp.name,
+      w: vp.w,
+      h: vp.h,
+      aspect: Number(L.aspect.toFixed(3)),
+      mode: L.mode,
+      binding: L.binding,
+      squareSide: Number(L.squareSide.toFixed(2)),
+      uiBudget: Number(L.uiBudget.toFixed(2)),
+      panelExtent: Number(L.panelExtent.toFixed(2)),
+      // r5: 도달성 축. 가시 높이와, 행동 컨트롤 3종을 담고 남는 여유.
+      panelVisibleHeight: Number(L.panelVisibleHeight.toFixed(2)),
+      actionControlsHeadroom: Number((L.panelVisibleHeight - ACTION_CONTROLS_HEIGHT).toFixed(2)),
+      // 재배열 전 순서(안내 문구 선행)에서 사진 버튼 아래끝이 놓였던 자리.
+      legacyPhotoBottom: UI_STACK_BUDGET_PARTS.guide + SHELL_GAP + ACTION_CONTROLS_HEIGHT,
+      contentWidth: Number(L.contentWidth.toFixed(2)),
+      contentHeight: Number(L.contentHeight.toFixed(2)),
+      spareWidth: Number((vp.w - L.contentWidth).toFixed(2)),
+      spareHeight: Number((vp.h - L.contentHeight).toFixed(2)),
+      uiModelHeight: uiModel === null ? null : Number(uiModel.toFixed(2)),
+      panelHeadroom: uiModel === null ? null : Number((L.panelExtent - uiModel).toFixed(2)),
+      legacySquare: Number(squareViewSide(vp.w, vp.h).toFixed(2)),
+      legacyOverflow: Number(
+        (squareViewSide(vp.w, vp.h) + UI_STACK_BUDGET - vp.h).toFixed(2),
+      ),
+    });
+  }
+
+  mkdirSync(ROOT + 'test/output', { recursive: true });
+  writeFileSync(
+    ROOT + 'test/output/claude-scanui-responsive-matrix.json',
+    JSON.stringify({
+      constants: {
+        SQUARE_VIEW_FRACTION,
+        SQUARE_MIN_SIDE,
+        SPLIT_MIN_ASPECT,
+        SHELL_PAD_MIN,
+        SHELL_GAP,
+        SPLIT_COLUMN_GAP,
+        SPLIT_PANEL_MIN_WIDTH,
+        SPLIT_PANEL_CAP_FRACTION,
+        UI_STACK_BUDGET,
+        UI_STACK_BUDGET_PARTS,
+        UI_BUDGET_CAP_FRACTION,
+      },
+      viewports: rows,
+    }, null, 2) + '\n',
+  );
+});
+
+test('r4 ③ 수치 — 구 산식(0.92 × 짧은 변 단일항)이 실제로 넘쳤음을 회귀 증인으로 고정한다', () => {
+  // 구 배치는 정사각 아래에 스택을 그대로 쌓았고, 스택 높이(≈ UI_STACK_BUDGET)를
+  // 산식에 넣지 않았다. 아래 네 건이 진단표의 초과 케이스다.
+  for (const [w, h] of [[768, 1024], [1024, 768], [2176, 1812], [690, 829]]) {
+    const legacy = squareViewSide(w, h) + UI_STACK_BUDGET;
+    assert.ok(legacy > h, `${w}×${h}: 구 산식이 넘치지 않는다 — 회귀 증인이 무의미해졌다`);
+    const now = scanLayout({ viewportWidth: w, viewportHeight: h });
+    assert.ok(now.contentHeight <= h, `${w}×${h}: 새 산식이 여전히 넘친다`);
+  }
+  // 반대로 가늘고 긴 폰은 구 산식에서도 넘치지 않았다 — 결함이 «세로 전부» 가 아니라
+  // «비율» 의 문제였다는 진단을 고정한다.
+  for (const [w, h] of [[390, 844], [344, 882], [320, 980]]) {
+    assert.ok(squareViewSide(w, h) + UI_STACK_BUDGET <= h, `${w}×${h}: 진단 전제가 틀렸다`);
+  }
+});
+
+test('r4 ③ 수치 — safe-area 인셋이 있어도, 회전해도 무스크롤이 유지된다', () => {
+  const insets = { safeAreaTop: 59, safeAreaRight: 0, safeAreaBottom: 34, safeAreaLeft: 0 };
+  for (const vp of R4_VIEWPORTS) {
+    const L = scanLayout({ viewportWidth: vp.w, viewportHeight: vp.h, ...insets });
+    assert.ok(L.contentHeight <= vp.h + 1e-9, vp.name + ' (safe-area): 세로 초과');
+    assert.ok(L.contentWidth <= vp.w + 1e-9, vp.name + ' (safe-area): 가로 초과');
+    // 인셋은 정사각을 키우지 못한다 (가용 영역이 줄어드니까).
+    const bare = scanLayout({ viewportWidth: vp.w, viewportHeight: vp.h });
+    assert.ok(L.squareSide <= bare.squareSide + 1e-9);
+    // 회전 — 스왑해도 여전히 무스크롤이다.
+    const R = scanLayout({ viewportWidth: vp.h, viewportHeight: vp.w });
+    assert.ok(R.contentHeight <= vp.w + 1e-9, vp.name + ' (회전): 세로 초과');
+    assert.ok(R.contentWidth <= vp.h + 1e-9, vp.name + ' (회전): 가로 초과');
+  }
+});
+
+test('r4 ③ 수치 — 무스크롤 보증 범위와 하한(96px)이 걸리는 경계를 고정한다', () => {
+  // 스택: 세로 242px 이상 · 가로 116px 이상이면 하한이 안 걸리고 예산이 성립한다.
+  for (const [w, h] of [[320, 568], [320, 400], [320, 360], [116, 400]]) {
+    const L = scanLayout({ viewportWidth: w, viewportHeight: h });
+    if (L.mode !== 'stack') continue;
+    assert.equal(L.fits, true, `${w}×${h}: 스택 보증 범위인데 예산이 안 맞는다`);
+  }
+  // 옆배치: 가로 225px 이상 — fitCap = 0.58W − 34 ≥ 96. 패널 폭 캡(42vw) 덕에
+  // 고정 300px 이었다면 생겼을 «가로 430px 절벽» 이 없다.
+  for (const [w, h] of [[568, 320], [844, 390], [480, 320], [240, 240]]) {
+    const L = scanLayout({ viewportWidth: w, viewportHeight: h });
+    if (L.mode !== 'split') continue;
+    assert.equal(L.fits, true, `${w}×${h}: 옆배치 보증 범위인데 예산이 안 맞는다`);
+  }
+  // 보증 범위 밖(비현실적으로 작은 뷰포트)에서는 하한이 걸리고 fits=false 로 **드러난다** —
+  // 조용히 넘치지 않는다. body{min-width:320px} 이므로 실기기에는 없는 영역이다.
+  const tiny = scanLayout({ viewportWidth: 150, viewportHeight: 220 });
+  assert.equal(tiny.mode, 'stack');
+  assert.equal(tiny.binding, 'floor');
+  assert.equal(tiny.fits, false);
+});
+
+/*
+ * ══ r5 도달성 — 잘리는 것이 «행동» 이 아니라 «설명» 이어야 한다 ══════════════════
+ *
+ * r4 는 페이지 스크롤 0 을 구조로 만들었지만, 그 대가로 **패널 내부**에 잘림을 몰았다.
+ * 그런데 r4 의 패널 순서는 «안내 문구 → 상태·줌·사진 버튼» 이라, 예산 캡(52dvh)이
+ * 걸리는 짧은 폰에서 잘리는 쪽이 **사진에서 스캔 버튼**이었다. 페이지는 안 스크롤됐고
+ * 매트릭스도 초록이었다 — 재는 자(무스크롤)에 그 축이 없었기 때문이다.
+ *
+ * 그래서 여기서는 다른 축을 잰다: `panelVisibleHeight`(패널 가시 높이) 대비
+ * `ACTION_CONTROLS_HEIGHT`(상태+줌+사진). 그리고 DOM 순서 자체를 고정한다 —
+ * 수치만으로는 순서를 되돌린 회귀를 못 잡는다.
+ */
+
+/** `.scanner-panels` 안에서 요소가 나타나는 문자 위치. 못 찾으면 −1. */
+function panelOrderIndex(needle) {
+  const open = SCANNER_HTML.indexOf('<div class="scanner-panels"');
+  const close = SCANNER_HTML.indexOf('<footer class="site-footer">', open);
+  assert.ok(open > 0 && close > open, '.scanner-panels 블록을 못 찾았다');
+  const block = SCANNER_HTML.slice(open, close);
+  const at = block.indexOf(needle);
+  return at === -1 ? -1 : at;
+}
+
+test('r5 ① 순서 — 패널 안이 상태 → 줌 → 사진 버튼 → 안내 문구 → 기타 다', () => {
+  const status = panelOrderIndex('id="scan-status"');
+  const zoom = panelOrderIndex('id="zoom-controls"');
+  const photo = panelOrderIndex('id="choose-image"');
+  const guide = panelOrderIndex('class="scan-center"');
+  const picker = panelOrderIndex('id="camera-picker"');
+  for (const [name, at] of [['상태', status], ['줌', zoom], ['사진 버튼', photo],
+    ['안내 문구', guide], ['렌즈 선택', picker]]) {
+    assert.ok(at >= 0, name + ' 가 .scanner-panels 안에 없다');
+  }
+  assert.ok(status < zoom, '상태가 줌보다 뒤에 있다');
+  assert.ok(zoom < photo, '줌이 사진 버튼보다 뒤에 있다');
+  assert.ok(photo < guide,
+    '사진 버튼이 안내 문구보다 뒤에 있다 — 내부 오버플로가 행동 컨트롤을 자른다(r5 회귀)');
+  assert.ok(guide < picker, '기타(렌즈 선택)가 안내 문구보다 앞에 있다');
+
+  // 시각 순서는 DOM 순서로만 바꾼다. CSS order 는 초점·낭독 순서와 갈라진다.
+  assert.doesNotMatch(SCANNER_HTML, /\.scan(?:ner-bottom|-center)[^{]*\{[^}]*\border:\s*-?\d/,
+    'CSS order 로 순서를 흉내 냈다 — 접근성 순서가 시각 순서와 갈라진다');
+  // i18n 속성과 id 는 이동 중에 보존됐다.
+  assert.match(SCANNER_HTML, /id="choose-image" type="button" data-i18n="button\.photo"/);
+  assert.match(SCANNER_HTML, /id="scan-status"[^>]*data-i18n="status\.preparing"/);
+  assert.match(SCANNER_HTML, /id="camera-picker" data-i18n-attr="aria-label:picker\.label"/);
+});
+
+test('r5 ② 수치 — 평상 상태(줌 노출)의 상태+줌+사진이 패널 가시 영역 안에 들어간다', () => {
+  // 상수의 분해가 CSS 선언과 같은지부터 — 값이 갈리면 아래 판정이 의미를 잃는다.
+  assert.equal(PANEL_CHROME_HEIGHT, 90);   // 로고 36 + 푸터 24 + 셸 gap 10×3
+  assert.equal(BOTTOM_STACK_CHROME, 36);   // .scanner-bottom padding-top 12 + gap 12×2
+  assert.equal(ACTION_CONTROLS_HEIGHT, 184); // 36 + 34 + 62 + 52
+  assert.match(SCANNER_HTML, /\.scanner-bottom \{[^}]*gap: 12px;\s*padding-top: 12px;/);
+
+  for (const vp of R4_VIEWPORTS) {
+    const L = scanLayout({ viewportWidth: vp.w, viewportHeight: vp.h });
+    assert.ok(L.panelVisibleHeight >= ACTION_CONTROLS_HEIGHT,
+      `${vp.name}: 사진 버튼이 패널 가시 영역 밖 — 가시 ${L.panelVisibleHeight.toFixed(2)}px < `
+      + `필요 ${ACTION_CONTROLS_HEIGHT}px`);
+  }
+});
+
+test('r5 ② 수치 — 재배열 전 순서가 짧은 폰에서 실제로 밀렸음을 회귀 증인으로 고정한다', () => {
+  // 구 순서에서 사진 버튼 아래끝 = 안내 예산 132 + 패널 gap 10 + 컨트롤 184 = 326.
+  const legacyPhotoBottom = UI_STACK_BUDGET_PARTS.guide + SHELL_GAP + ACTION_CONTROLS_HEIGHT;
+  assert.equal(legacyPhotoBottom, 326);
+
+  // 브리프가 짚은 두 뷰포트: 구 순서면 밀렸고, 새 순서면 안 밀린다.
+  for (const [w, h] of [[375, 667], [360, 640]]) {
+    const L = scanLayout({ viewportWidth: w, viewportHeight: h });
+    assert.equal(L.binding, 'fit', `${w}×${h}: 예산 캡 구간이 아니다 — 증인 전제가 틀렸다`);
+    assert.ok(L.uiBudget < UI_STACK_BUDGET,
+      `${w}×${h}: 52dvh 캡이 안 걸린다 — 이 회귀가 나는 구간이 아니다`);
+    assert.ok(legacyPhotoBottom > L.panelVisibleHeight,
+      `${w}×${h}: 구 순서가 안 밀린다 — 회귀 증인이 무의미해졌다`);
+    assert.ok(ACTION_CONTROLS_HEIGHT <= L.panelVisibleHeight,
+      `${w}×${h}: 새 순서도 밀린다`);
+  }
+  // 반대로 긴 폰에서는 구 순서에서도 안 밀렸다 — 결함이 «세로 전부» 가 아니라
+  // «짧은 세로»(예산 캡이 걸리는 구간) 였다는 진단을 고정한다.
+  for (const [w, h] of [[390, 844], [344, 882], [320, 980]]) {
+    const L = scanLayout({ viewportWidth: w, viewportHeight: h });
+    assert.ok(legacyPhotoBottom <= L.panelVisibleHeight, `${w}×${h}: 진단 전제가 틀렸다`);
+  }
+});
+
+test('r5 ③ 힌트 — 패널이 내부 오버플로일 때만 하단 페이드가 켜진다', () => {
+  // 그리는 쪽 — 클래스가 붙었을 때만 마스크가 걸린다. 전송 바이트 0(외부 자원 없음).
+  assert.match(SCANNER_HTML,
+    /\.scanner-panels\.has-more \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - 28px\), transparent\);/);
+  // iOS 구버전용 접두사판도 함께 — 없으면 정작 대상 기기에서 안 걸린다.
+  assert.match(SCANNER_HTML, /-webkit-mask-image: linear-gradient\(to bottom, #000 calc\(100% - 28px\), transparent\);/);
+  assert.doesNotMatch(SCANNER_HTML, /\.scanner-panels\.has-more \{[^}]*url\(/,
+    '힌트가 외부 자원을 부른다 — 전송 0바이트 제약 위반');
+
+  // 판정하는 쪽 — «아래에 더 있나». 맨 위(평상 상태)에서는 곧 scrollHeight > clientHeight 고,
+  // 끝까지 내리면 꺼진다(끝에서 남는 페이드는 «더 있다» 는 거짓말이다).
+  assert.match(SCANNER_JS,
+    /scannerPanels\.scrollTop \+ scannerPanels\.clientHeight < scannerPanels\.scrollHeight - 1/);
+  assert.match(SCANNER_JS, /scannerPanels\.classList\.toggle\('has-more', more\)/);
+  // 재평가 트리거: 스크롤·리사이즈·회전 + 콘텐츠 변화(자식까지 관찰).
+  assert.match(SCANNER_JS, /scannerPanels\.addEventListener\('scroll', syncPanelScrollHint/);
+  assert.match(SCANNER_JS, /window\.addEventListener\('resize', syncPanelScrollHint\)/);
+  assert.match(SCANNER_JS, /window\.addEventListener\('orientationchange', syncPanelScrollHint\)/);
+  assert.match(SCANNER_JS, /for \(const panelChild of scannerPanels\.children\) panelResizeObserver\.observe\(panelChild\)/);
+  // ResizeObserver 미지원 환경에서도 죽지 않는다 (구형 WebView).
+  assert.match(SCANNER_JS, /if \(typeof ResizeObserver === 'function'\)/);
+  // 마크업이 없으면 조용히 지나가지 않고 즉시 터진다 — 나머지 요소와 같은 계약.
+  assert.match(SCANNER_JS, /!zoomErrorBox \|\| !dotLayer \|\| !scannerPanels\)/);
 });
