@@ -105,7 +105,7 @@ test('S-커브 왜곡 v0@13 — CS 평가가 도달하고 수용된다', { timeo
   const probe = extractCellSurfaceProbe(result);
   assert.equal(probe.attempted, true);
   // 수용 체인의 핵심 회귀 — 평가가 실행되고 v0 레이아웃으로 수용된다.
-  // (복호 성공까지는 요구하지 않는다 — 이 왜곡 강도에선 body RS 가 아직 실패한다.)
+  // (body RS 복호까지의 단언은 cellSurface-block-locator.test.js 가 고정한다.)
   assert.equal(probe.accepted, true, 'cs probe: ' + JSON.stringify(probe));
   assert.equal(probe.layoutId, 'v0');
 });

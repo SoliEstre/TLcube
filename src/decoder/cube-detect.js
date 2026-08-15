@@ -61,6 +61,9 @@ import { evaluateCellSurfaceGeometry } from './cellSurfaceY-detect.js';
 import {
   detectFinderSeeds,
 } from './finder-seed.js';
+import {
+  detectCellSurfaceBlockShapes,
+} from './cellsurface-block-detect.js';
 
 function locatorShapesFromSilhouette(luma, shapes, options) {
   const extra = [];
@@ -2475,7 +2478,8 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
     const seamVertices = shape.seamVertices.map((point) => liftPoint(point, reduced.factor));
     const radius = shape.radius * reduced.factor;
 
-    const candidateNs = shape.locatorProfile && SUPPORTED_N.includes(shape.estimatedN)
+    const candidateNs = (shape.locatorProfile || shape.cellSurfaceOnly === true)
+      && SUPPORTED_N.includes(shape.estimatedN)
       ? [shape.estimatedN]
       : SUPPORTED_N;
     for (const n of candidateNs) {
@@ -3036,10 +3040,37 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
 
   hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports);
 
+  // CS 파인더 블록 로케이터 — 마스크·실루엣 무의존으로 블록을 직접 찾아 기하를
+  // 재정렬한다 (강한 톤 시프트에서 hull 이 0.5셀+ 어긋나는 병목의 원리 해법).
+  // lab 전용. 산출 shape 는 cellSurfaceOnly 라 셀 표면 평가만 받고, 수용은
+  // 기존 CS 게이트가 그대로 결정한다.
+  const attemptedBeforeLocator = geometryReports.some((entry) => entry.attempted === true);
+  let blockLocator = null;
+  let locatorAccepted = false;
+  if (options.enableCellSurfaceY === true && options.csBlockLocator !== false) {
+    blockLocator = detectCellSurfaceBlockShapes(luma, options);
+    if (blockLocator.shapes.length > 0) {
+      const reportsBefore = geometryReports.length;
+      hypothesesFromShapes(
+        luma,
+        { factor: 1 },
+        { candidates: blockLocator.shapes },
+        options,
+        cfg,
+        hypotheses,
+        geometryReports,
+      );
+      locatorAccepted = geometryReports
+        .slice(reportsBefore)
+        .some((entry) => entry.accepted === true);
+    }
+  }
+
   // 일반 후보가 셀 표면 평가에 한 번도 도달하지 못했다면(실사 톤 커브에서 하드체크
   // 전멸이 전형), 거절된 육각을 CS 전용 shape 로 되살려 평가만 받게 한다.
-  if (options.enableCellSurfaceY === true
-    && !geometryReports.some((entry) => entry.attempted === true)) {
+  // 블록 로케이터가 수용 기하를 만든 프레임은 건너뛴다(발동 프레임 +~520ms 절약) —
+  // 로케이터가 시도만 하고 수용 못 한 프레임은 종전과 동일하게 탐침한다.
+  if (options.enableCellSurfaceY === true && !attemptedBeforeLocator && !locatorAccepted) {
     const soft = softCellSurfaceShapes(shapes);
     if (soft.length > 0) {
       hypothesesFromShapes(
@@ -3116,6 +3147,7 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
         cellSurfaceProbe,
         blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
         locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },
+        csBlockLocator: blockLocator && blockLocator.diagnostics,
         detectPath: 'silhouette',
         geometryStage,
       },
@@ -3134,6 +3166,7 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
       blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
       hypothesisCount: hypotheses.length,
       locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },
+      csBlockLocator: blockLocator && blockLocator.diagnostics,
       detectPath: 'silhouette',
       geometryStage: 'grid',
     },
