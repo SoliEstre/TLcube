@@ -295,7 +295,7 @@ test('Type Y low resolution ppu=8 and asymmetric references leave one orientatio
   assert.ok(detected.hypotheses.length >= 1);
   assert.deepEqual(
     Array.from(new Set(detected.hypotheses.map((entry) => entry.orientation))),
-    [1],
+    [0], // 0° 합성의 유일 방향. 꼭짓점 0 = C0(상단) 정합 후 home 은 0.
   );
   assert.ok(detected.hypotheses.every((entry) => entry.referenceAgreement === 1));
   assertYDecoded(decodeFrontend(fixture.raster), 'orientation', 0, 2);

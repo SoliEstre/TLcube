@@ -160,6 +160,7 @@ test('v1r2 frontend 왕복 (2톤 ppu10)', { timeout: 30_000 }, () => {
   assert.equal(result.ok, true, result.reason);
   assert.equal(result.text, text);
   assert.equal(result.hypothesis.cellSurfaceLayout, CELL_SURFACE_LAYOUT_V1R2);
+  assert.equal(result.hypothesis.rotationDegrees, 0, '0° 입력은 0° 로 보고해야 한다');
 });
 
 const PLUS120 = Object.freeze({ T: 'R', R: 'L', L: 'T' });

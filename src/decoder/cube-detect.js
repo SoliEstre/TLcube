@@ -752,6 +752,22 @@ function simplifyHullToHex(hull) {
   }
   if (points.length !== 6) return null;
   if (polygonArea(points) < 0) points.reverse();
+  // convexHull 은 x 최소(동률이면 y 최소)에서 시작한다. pointy-top 육각의
+  // 그 점은 C5(좌상) 이라, 시임 인덱스 0 이 정본 C1 이 아니라 C5 가 된다.
+  // orientation 1 이 항등이 되어 0° 화상이 120° 로 보고된다. 꼭짓점 0 을
+  // hexgrid/ygrid 와 같이 상단(C0, y 최소)으로 맞춰 시임 [C1,C3,C5] 가
+  // orientation 0 에 오게 한다.
+  let top = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    if (points[index].y < points[top].y
+      || (points[index].y === points[top].y && points[index].x < points[top].x)) {
+      top = index;
+    }
+  }
+  if (top !== 0) {
+    const rotated = points.slice(top).concat(points.slice(0, top));
+    for (let index = 0; index < points.length; index += 1) points[index] = rotated[index];
+  }
   return points;
 }
 
