@@ -887,6 +887,16 @@
           <button type="button" data-expected-layout="v2r2" data-i18n="lab.expectedLayout.v2r2">v2r2</button>
         </div>
       </div>
+      <!-- 기대 톤 — expected_tones 계측. 레이아웃 카드와 같은 배선 형태다.
+           이 카드가 없어서 expected_tones 가 전 행 NULL 이었다 (2026-08-15). -->
+      <div id="lab-expected-tones" class="lab-expected-arm">
+        <span data-i18n="lab.expectedTones.label">기대 톤</span>
+        <div class="lab-expected-arm-cards" role="group">
+          <button type="button" data-expected-tones="" class="active" data-i18n="lab.expectedTones.unknown">모름</button>
+          <button type="button" data-expected-tones="2" data-i18n="lab.expectedTones.two">2톤</button>
+          <button type="button" data-expected-tones="3" data-i18n="lab.expectedTones.three">3톤</button>
+        </div>
+      </div>
     </aside>
 
     <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">

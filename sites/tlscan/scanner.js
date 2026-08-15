@@ -78,7 +78,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-15.02';
+export const SCANNER_BUILD = '2026-08-15.03';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -381,6 +381,9 @@ function reportLabFrame(imageData, result, ms, stage) {
   const observed = observedFromResult(result);
   const expected = emptyConfigSide();
   if (expectedLocatorLayout) expected.locatorLayout = expectedLocatorLayout;
+  // 기대 톤 — 이 한 줄이 없어서 expected_tones 가 전 행 NULL 이었다 (2026-08-15).
+  // relay(protocol.mjs configSideNum)와 ClickHouse 컬럼은 처음부터 받고 있었다.
+  if (expectedTones != null) expected.tones = expectedTones;
   if (cellSurface && expectedLocatorLayout && !cellSurface.expectedLayout) {
     cellSurface.expectedLayout = expectedLocatorLayout;
   }
@@ -1506,6 +1509,21 @@ if (expectedLayoutRoot && isLabPath()) {
       // 최종 라인업(2026-08-15): v0 · v2r2 만 기대 레이아웃 후보다.
       expectedLocatorLayout = next === 'v0' || next === 'v2r2' ? next : null;
       for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
+        other.classList.toggle('active', other === button);
+      }
+    });
+  }
+}
+
+// 기대 톤 — 레이아웃 카드와 같은 배선. 2·3 만 유효, 그 외(모름 포함)는 null(미상)이다.
+let expectedTones = null;
+const expectedTonesRoot = document.getElementById('lab-expected-tones');
+if (expectedTonesRoot && isLabPath()) {
+  for (const button of expectedTonesRoot.querySelectorAll('[data-expected-tones]')) {
+    button.addEventListener('click', () => {
+      const next = Number(button.dataset.expectedTones);
+      expectedTones = next === 2 || next === 3 ? next : null;
+      for (const other of expectedTonesRoot.querySelectorAll('[data-expected-tones]')) {
         other.classList.toggle('active', other === button);
       }
     });

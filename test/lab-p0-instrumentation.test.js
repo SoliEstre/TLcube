@@ -444,6 +444,52 @@ test('relay/ClickHouse 컬럼과 client envelope 가 일치한다', () => {
   assert.equal(shot.cell_px, null);
 });
 
+/*
+ * 회귀 고정 — expected_tones 배선 (2026-08-15).
+ *
+ * 실기기 텔레메트리에서 expected_tones 가 전 행 NULL 이었다. relay(protocol.mjs)와
+ * ClickHouse 컬럼(002 마이그레이션)은 처음부터 받고 있었는데, 스캐너 쪽에 «넣는 입력»
+ * 자체가 없었다 — 기대 구성 패널이 레이아웃만 실었다. 아래 두 테스트가 구멍의 층을
+ * 각각 고정한다: ① 정규화·relay 행 조립이 tones 를 보존한다 ② 스캐너 소스에 선택 UI
+ * 배선이 실재한다 (텍스트 단언 — lab-telemetry.test.js 의 소스 매칭 기법과 동일.
+ * «호출이 적혀 있다» 까지 보증하고, 실기기 확인은 /lab/ 배포 후 ClickHouse 로 잰다).
+ */
+test('기대 톤 선택이 expected_tones 로 실린다', () => {
+  const body = normalizeFrameBody({
+    seq: 1, w: 8, h: 8, ok: false, reason: 'frontend:no-finder',
+    expected: { tones: '2', locatorLayout: 'v0' },
+  });
+  assert.equal(body.expected.tones, 2); // 문자열 '2' 도 숫자로 정규화된다
+  const parsed = parseEnvelope(JSON.stringify(makeEnvelope('s', 'scan', 'frame', body)));
+  assert.equal(parsed.ok, true, parsed.error);
+  const row = eventRow(parsed.event);
+  assert.equal(row.expected_tones, 2);
+  assert.equal(row.expected_locator_layout, 'v0');
+  const three = eventRow(makeEnvelope('s', 'scan', 'frame', normalizeFrameBody({
+    seq: 2, w: 8, h: 8, ok: false, reason: 'frontend:no-finder',
+    expected: { tones: 3 },
+  })));
+  assert.equal(three.expected_tones, 3);
+  // 미선택(모름)은 NULL 로 남는다 — 0 이나 '' 로 뭉개지 않는다.
+  const empty = eventRow(makeEnvelope('s', 'scan', 'frame', normalizeFrameBody({
+    seq: 3, w: 8, h: 8, ok: false, reason: 'frontend:no-finder',
+  })));
+  assert.equal(empty.expected_tones, null);
+});
+
+test('스캐너 lab 패널에 기대 톤 선택 배선이 실재한다', () => {
+  const scanner = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+  const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
+  assert.match(html, /id="lab-expected-tones"/);
+  assert.match(html, /data-expected-tones="2"/);
+  assert.match(html, /data-expected-tones="3"/);
+  assert.match(scanner, /getElementById\('lab-expected-tones'\)/);
+  // 선택값이 프레임 페이로드의 expected.tones 로 들어가는 그 한 줄.
+  assert.match(scanner, /expected\.tones = expectedTones/);
+  // 시험판 게이트 — 정식 `/` 에서는 이 배선도 잠긴다.
+  assert.match(scanner, /expectedTonesRoot && isLabPath\(\)/);
+});
+
 test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다', () => {
   assert.match(MIG, /ADD COLUMN IF NOT EXISTS attempt_id/);
   assert.match(MIG, /MODIFY COLUMN ms_proposal Nullable/);

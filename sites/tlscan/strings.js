@@ -119,6 +119,10 @@ export const SCANNER_STRINGS = {
     'lab.expectedLayout.unknown': '모름',
     'lab.expectedLayout.v0': 'v0',
     'lab.expectedLayout.v2r2': 'v2r2',
+    'lab.expectedTones.label': '기대 톤',
+    'lab.expectedTones.unknown': '모름',
+    'lab.expectedTones.two': '2톤',
+    'lab.expectedTones.three': '3톤',
   },
 
   en: {
@@ -225,6 +229,10 @@ export const SCANNER_STRINGS = {
     'lab.expectedLayout.unknown': 'Unknown',
     'lab.expectedLayout.v0': 'v0',
     'lab.expectedLayout.v2r2': 'v2r2',
+    'lab.expectedTones.label': 'Expected tones',
+    'lab.expectedTones.unknown': 'Unknown',
+    'lab.expectedTones.two': '2-tone',
+    'lab.expectedTones.three': '3-tone',
   },
 
   ja: {
@@ -331,5 +339,9 @@ export const SCANNER_STRINGS = {
     'lab.expectedLayout.unknown': '不明',
     'lab.expectedLayout.v0': 'v0',
     'lab.expectedLayout.v2r2': 'v2r2',
+    'lab.expectedTones.label': '期待トーン',
+    'lab.expectedTones.unknown': '不明',
+    'lab.expectedTones.two': '2トーン',
+    'lab.expectedTones.three': '3トーン',
   },
 };
