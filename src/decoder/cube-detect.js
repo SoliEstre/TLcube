@@ -1180,6 +1180,13 @@ function cubeGeometrySeeds(
   return seeds;
 }
 
+/**
+ * 레퍼런스 셀 정족수 — 이 비율보다 적게 표본되면 보정을 세우지 않는다.
+ * 게이트가 아니라 «보정을 계산할 재료가 있는가» 의 하한이다. 수용 게이트
+ * (referenceAgreement 0.78)는 이와 별개로 전체 레퍼런스 수를 분모로 유지한다.
+ */
+const REFERENCE_SAMPLE_QUORUM = 0.6;
+
 function sampleOptions(options, cfg) {
   const supplied = options && options.sample && typeof options.sample === 'object'
     ? options.sample
@@ -1240,20 +1247,45 @@ export function sampleCubeCell(luma, geometry, i, j, options = {}) {
   return ok({ ...faces, i, j });
 }
 
+/**
+ * 레퍼런스 셀 표본 지도. **프레임 밖으로 잘린 레퍼런스 셀 하나가 전체 보정을
+ * 죽이지 않게** 한다 — 잘린 셀은 지도에서 빠지고(관측 없음), 보정은 남은 셀로
+ * 세운다. 정족수는 `minimumReferenceQuorum` 이 지키고, **수용 게이트(0.78)의
+ * 분모는 여전히 전체 레퍼런스 수** 라서 게이트가 완화되지 않는다 — 못 읽은 셀은
+ * «불일치» 로 계산된다.
+ */
 function referenceSampleMap(luma, hypothesis, n, options, cfg) {
   const coordinates = [];
   for (const group of referenceGroups(n, 2)) {
     for (const cell of group.cells) coordinates.push(cell);
   }
   const map = new Map();
+  const missing = [];
+  let firstFailure = null;
+  const seen = new Set();
   for (const cell of coordinates) {
     const key = cell.i + ',' + cell.j;
-    if (map.has(key)) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const sample = sampleCubeCell(luma, hypothesis, cell.i, cell.j, sampleOptions(options, cfg));
-    if (!sample.ok) return sample;
+    if (!sample.ok) {
+      if (firstFailure === null) firstFailure = sample;
+      missing.push(key);
+      continue;
+    }
     map.set(key, sample);
   }
-  return ok({ samples: map });
+  const quorum = Math.ceil(seen.size * REFERENCE_SAMPLE_QUORUM);
+  if (map.size < quorum) {
+    // 남은 표본이 정족수에 못 미치면 «부분 완성» 이 아니라 그냥 관측 부족이다.
+    return firstFailure ?? fail(FRONTEND_FAILURE.SAMPLE_STARVED, {
+      stage: 'cube-reference',
+      cause: 'reference-quorum-not-met',
+      sampled: map.size,
+      required: quorum,
+    });
+  }
+  return ok({ samples: map, missingReferenceKeys: missing });
 }
 
 function knownReferenceDigits(n, tones) {
@@ -1325,6 +1357,25 @@ export function readCubeDigit(sample, calibrationResult) {
   };
 }
 
+/** 재료가 없어 보정을 세울 수 없을 때의 «정직한 실패» 보정본. 게이트는 당연히 못 넘는다. */
+function unreadableCalibration(tones, total, cause) {
+  return {
+    tones,
+    thresholds: {},
+    levelAnchors: {},
+    anchors: {},
+    agreement: 0,
+    total,
+    agreementRate: 0,
+    minimumRatio: 0,
+    minimumSpan: 0,
+    medianMargin: 0,
+    observations: [],
+    unreadableCause: cause,
+    hardChecks: { toneSeparation: false, referenceAgreement: false, all: false },
+  };
+}
+
 function buildToneCalibration(samples, n, tones, cfg) {
   const expected = knownReferenceDigits(n, tones);
   if (tones === 2) {
@@ -1337,8 +1388,12 @@ function buildToneCalibration(samples, n, tones, cfg) {
       const highs = [];
       for (const [key, digit] of expected) {
         const sample = samples.get(key);
+        if (sample === undefined) continue; // 프레임 밖 — 관측 없음
         const bright = TONE_PATTERNS[digit][TONE_FACE_INDEX[face]];
         (bright ? highs : lows).push(sample[face].median);
+      }
+      if (lows.length === 0 || highs.length === 0) {
+        return unreadableCalibration(tones, expected.size, 'tone-pool-empty');
       }
       const low = median(lows);
       const high = median(highs);
@@ -1395,8 +1450,13 @@ function buildToneCalibration(samples, n, tones, cfg) {
   for (const face of YFACES) {
     const byRank = [[], [], []];
     for (const [key, digit] of expected) {
+      const sample = samples.get(key);
+      if (sample === undefined) continue; // 프레임 밖 — 관측 없음
       const rank = digitToRanks(digit)[face];
-      byRank[rank].push(samples.get(key)[face].median);
+      byRank[rank].push(sample[face].median);
+    }
+    if (byRank.some((values) => values.length === 0)) {
+      return unreadableCalibration(tones, expected.size, 'tone-pool-empty');
     }
     const anchors = byRank.map((values) => median(values));
     levelAnchors[face] = anchors;
@@ -3387,20 +3447,45 @@ export function sampleCubeGrid(luma, geometry, layoutMap, options = {}) {
   if (!(layoutMap instanceof Map)) {
     throw new TypeError('layoutMapY는 Map이어야 한다');
   }
+  // options.collectUnsampled 는 옵트인이다. 켜면 표본을 못 만든 셀에서 즉시
+  // 실패하지 않고 그 셀을 unsampled 로 모아 계속 간다 — 프레임 밖으로 잘린 셀을
+  // RS 소거로 넘기기 위한 입력이다. 끄면(기본) 예전과 문자 그대로 같다.
+  const collectUnsampled = options && options.collectUnsampled === true;
   const cells = new Map();
+  const unsampled = [];
   for (const key of layoutMap.keys()) {
     const parts = key.split(',');
     const i = Number(parts[0]);
     const j = Number(parts[1]);
     const sampled = sampleCubeCell(luma, geometry, i, j, options);
     if (!sampled.ok) {
-      return fail(sampled.reason, {
-        stage: 'cube-grid-sampling',
-        cell: { i, j },
-        cause: sampled.detail,
-      });
+      if (!collectUnsampled) {
+        return fail(sampled.reason, {
+          stage: 'cube-grid-sampling',
+          cell: { i, j },
+          cause: sampled.detail,
+        });
+      }
+      unsampled.push({ key, i, j, reason: sampled.reason, cause: sampled.detail });
+      continue;
     }
     cells.set(key, sampled);
   }
-  return ok({ cells, sampledCellCount: cells.size });
+  if (collectUnsampled && cells.size === 0) {
+    // 한 셀도 못 읽었으면 소거로 구제할 대상 자체가 없다 — 예전과 같이 실패한다.
+    return fail(
+      unsampled.length > 0 ? unsampled[0].reason : FRONTEND_FAILURE.SAMPLE_STARVED,
+      {
+        stage: 'cube-grid-sampling',
+        cause: 'all-cells-unsampled',
+        unsampledCount: unsampled.length,
+      },
+    );
+  }
+  return ok({
+    cells,
+    sampledCellCount: cells.size,
+    unsampled,
+    unsampledCellCount: unsampled.length,
+  });
 }

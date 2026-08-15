@@ -14,7 +14,11 @@ import {
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
 import { encodeY } from '../src/encodeY.js';
-import { decodeCells, RS211_ERASURE_MODE } from '../src/decode.js';
+import {
+  decodeCells,
+  RS211_ERASURE_MODE,
+  RS211_ERASURE_MODE_LEGACY,
+} from '../src/decode.js';
 import { decode as decodeFormatInfo } from '../src/formatinfo.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderO } from '../src/layout.js';
 import { dataCellsInScanOrderA } from '../src/layoutA.js';
@@ -242,26 +246,291 @@ describe('RS error correction at the cell-digit boundary', () => {
   });
 });
 
-describe('illegal 211..215 symbol handling without RS erasure support', () => {
-  test('불법 triple은 일반 오류 fallback으로 정정하고 그 사실을 결과에 남긴다', () => {
+describe('illegal 211..215 symbol handling as RS erasure', () => {
+  test('불법 triple은 위치 지정 소거로 정정하고 그 사실을 결과에 남긴다', () => {
     const text = 'illegal symbol fallback';
     const encoded = encode(text, { version: 3, eccLevel: 'M' });
     const corrupted = encoded.dataDigits.slice();
     const target = Array.from(encoded.codewordSymbols).findIndex((symbol) => symbol !== 0);
-    assert.notEqual(target, -1, '0이 아닌 심볼이 있어야 fallback을 검증할 수 있다');
+    assert.notEqual(target, -1, '0이 아닌 심볼이 있어야 소거를 검증할 수 있다');
 
     setIllegalSymbol(corrupted, encoded, target);
     const result = decodeCells(corrupted, oFormat(encoded));
 
     assert.equal(result.ok, true, result.ok ? '' : result.reason);
     assert.equal(result.text, text);
-    assert.equal(result.corrected, 1);
-    assert.equal(result.crsDistance, 2);
+    // 소거는 위치를 알기 때문에 «위치 미상 오류» 로 세지 않는다. C_RS = 2u + e = 1.
+    assert.equal(result.corrected, 0);
+    assert.equal(result.crsDistance, 1);
     assert.deepEqual(result.erasureFallback, {
       mode: RS211_ERASURE_MODE,
       illegalSymbolIndices: [target],
+      erasureSymbolIndices: [target],
       placeholder: 0,
     });
+  });
+
+  test('legacy 모드(opt-out)는 소거 지원 이전 동작 — 일반 오류 2칸을 그대로 쓴다', () => {
+    const text = 'illegal symbol fallback';
+    const encoded = encode(text, { version: 3, eccLevel: 'M' });
+    const corrupted = encoded.dataDigits.slice();
+    const target = Array.from(encoded.codewordSymbols).findIndex((symbol) => symbol !== 0);
+
+    setIllegalSymbol(corrupted, encoded, target);
+    const result = decodeCells(corrupted, oFormat(encoded), {
+      erasureMode: RS211_ERASURE_MODE_LEGACY,
+    });
+
+    assert.equal(result.ok, true, result.ok ? '' : result.reason);
+    assert.equal(result.text, text);
+    assert.equal(result.corrected, 1);
+    assert.equal(result.crsDistance, 2);
+    assert.equal(result.erasureFallback.mode, RS211_ERASURE_MODE_LEGACY);
+  });
+
+  test('불법 심볼 nsym개 — 소거는 성공하고 legacy(오류 전용)는 실패한다', () => {
+    const text = 'erasure doubles the reach';
+    const encoded = encode(text, { version: 3, eccLevel: 'M' });
+    const nsym = encoded.capacity.nsym;
+    const t = encoded.capacity.errorCapacity;
+    assert.ok(nsym > t, '소거 이득이 존재하려면 nsym > t 여야 한다');
+
+    const corrupted = encoded.dataDigits.slice();
+    for (let symbolIndex = 0; symbolIndex < nsym; symbolIndex += 1) {
+      setIllegalSymbol(corrupted, encoded, symbolIndex);
+    }
+
+    const erasure = decodeCells(corrupted, oFormat(encoded));
+    assert.equal(erasure.ok, true, erasure.ok ? '' : erasure.reason);
+    assert.equal(erasure.text, text);
+    assert.equal(erasure.crsDistance, nsym);
+
+    const legacy = decodeCells(corrupted, oFormat(encoded), {
+      erasureMode: RS211_ERASURE_MODE_LEGACY,
+    });
+    assert.equal(legacy.ok, false, '오류 전용 경로는 nsym개를 고칠 수 없다');
+  });
+
+  // 이름 주의: 이 테스트가 치는 것은 «소거 개수 > nsym» 조기 반환 가드 **하나뿐**이다.
+  // ECC 한계 전반의 정직성을 주장하지 않는다 — s = nsym 절벽은 아래 describe 가 다룬다.
+  test('소거를 nsym+1개 선언하면 복호를 시도조차 하지 않는다 (한계 초과 조기 반환 가드)', () => {
+    const encoded = encode('honest limit', { version: 3, eccLevel: 'M' });
+    const nsym = encoded.capacity.nsym;
+    const corrupted = encoded.dataDigits.slice();
+    for (let symbolIndex = 0; symbolIndex < nsym + 1; symbolIndex += 1) {
+      setIllegalSymbol(corrupted, encoded, symbolIndex);
+    }
+    const result = decodeCells(corrupted, oFormat(encoded));
+    assert.equal(result.ok, false);
+    assert.match(result.reason, /^rs:/);
+    assert.match(result.reason, /소거 개수/, '가드가 «개수» 를 이유로 밝혀야 한다');
+  });
+});
+
+describe('s = nsym 절벽 — ECC 검출 마진이 0 인 지점에서는 상위층이 유일한 방어선이다', () => {
+  // rs211 은 s = nsym 에서 «틀렸다» 고 말할 능력이 구조적으로 없다
+  // (test/rs211.test.js «절벽 —» 참조: 조용한 오정정 100%). 그런데 §2.1 이 이득으로
+  // 내세우는 운용점(불법 심볼 nsym 개)이 정확히 그 지점이다. 따라서 종단 정직성은
+  // ECC 가 아니라 **페이로드 프레이밍**(base-211 범위 · 길이 헤더 · UTF-8 · 0 패딩)이
+  // 댄다. 그 사실을 주석이 아니라 단언으로 고정한다 — 프레이밍 검사를 느슨하게
+  // 만드는 변경이 있으면 여기서 먼저 빨개져야 한다.
+
+  /** 결정적 PRNG — 이 describe 안의 모든 표본은 시드 고정이다. */
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function pickSymbols(symbolCount, count, rnd) {
+    const chosen = new Set();
+    while (chosen.size < count) chosen.add(Math.floor(rnd() * symbolCount));
+    return [...chosen].sort((a, b) => a - b);
+  }
+
+  /**
+   * 소거 nsym 개를 «정확히» 선언하고, 선언하지 않은 오류를 1개 더 심는다.
+   * RS 로서는 2v + s = nsym + 2 rung 이고 잔여 패리티가 0 이다.
+   */
+  function overCliff(encoded, rnd) {
+    const nsym = encoded.capacity.nsym;
+    const symbolCount = encoded.capacity.usedSymbols;
+    const picked = pickSymbols(symbolCount, nsym + 1, rnd);
+    const erasureSymbols = picked.slice(0, nsym);
+    const undeclared = picked[nsym];
+
+    const digits = encoded.dataDigits.slice();
+    const erasureCells = [];
+    for (const symbolIndex of erasureSymbols) {
+      for (let offset = 0; offset < 3; offset += 1) {
+        erasureCells.push(symbolIndex * 3 + offset);
+        digits[symbolIndex * 3 + offset] = 0; // 프레임 밖 = 결정적 0
+      }
+    }
+    setOneSafeSymbolError(digits, encoded, undeclared);
+    return { digits, erasureCells };
+  }
+
+  test('RS 는 통과시키지만 상위층이 전부 막는다 — 종단 오수용 0', () => {
+    const cases = [
+      // 최대 페이로드와 짧은 페이로드 양쪽. 프레이밍 여유가 다르다.
+      { version: 3, eccLevel: 'M', text: 'A'.repeat(65) },
+      { version: 3, eccLevel: 'M', text: 'honest limit' },
+      { version: 3, eccLevel: 'H', text: 'cliff' },
+      { version: 2, eccLevel: 'M', text: 'short' },
+    ];
+    let total = 0;
+    let wrongAccept = 0;
+    let stoppedByRs = 0;
+    const stages = new Map();
+
+    for (const spec of cases) {
+      const encoded = encode(spec.text, { version: spec.version, eccLevel: spec.eccLevel });
+      const rnd = mulberry32(0x5c11ff + spec.version * 131 + spec.eccLevel.charCodeAt(0));
+      for (let trial = 0; trial < 40; trial += 1) {
+        const { digits, erasureCells } = overCliff(encoded, rnd);
+        const result = decodeCells(digits, oFormat(encoded), { erasureCells });
+        total += 1;
+        if (result.ok) {
+          // 종단에서 «성공» 이 나왔다면 최소한 값은 맞아야 한다.
+          if (result.text !== spec.text) wrongAccept += 1;
+          continue;
+        }
+        const stage = result.reason.split(':')[0];
+        stages.set(stage, (stages.get(stage) ?? 0) + 1);
+        if (stage === 'rs') stoppedByRs += 1;
+      }
+    }
+
+    assert.equal(total, 160);
+    assert.equal(wrongAccept, 0, '종단 오수용은 0 이어야 한다 — 이 줄이 무너지면 포맷이 거짓말을 한다');
+    assert.equal(
+      stoppedByRs, 0,
+      'RS 가 막았다면 절벽 전제가 깨진 것이다 — 이 테스트가 재는 대상이 아니게 된다',
+    );
+    // 실제로 막은 것은 전부 프레이밍 층이다. 이 집합 밖의 단계가 나오면 계약이 바뀐 것.
+    for (const stage of stages.keys()) {
+      assert.ok(
+        ['base211', 'header', 'utf8'].includes(stage),
+        `상위층 방어선이 아닌 단계가 막았다: ${stage}`,
+      );
+    }
+    // 세 갈래가 모두 실제로 쓰인다 — 한 갈래만 일하고 있으면 «3중 방어» 는 과장이다.
+    assert.deepEqual(
+      [...stages.keys()].sort(),
+      ['base211', 'header', 'utf8'],
+      `프레이밍 3층이 전부 동원돼야 한다: ${JSON.stringify(Object.fromEntries(stages))}`,
+    );
+    assert.equal(
+      [...stages.values()].reduce((sum, count) => sum + count, 0), total,
+      '한 건도 남김없이 정직 실패로 끝나야 한다',
+    );
+  });
+
+  test('절벽 지점의 crsDistance 는 예산 전액(nsym)을 정직하게 보고한다', () => {
+    // crsDistance 는 절대 게이트가 아니라 점수·타이브레이크다(bootstrap.js). 그래서
+    // «값이 크다» 는 것을 상위 소비자가 읽을 수 있게 하는 것이 최소 계약이다.
+    const encoded = encode('budget spent', { version: 3, eccLevel: 'M' });
+    const nsym = encoded.capacity.nsym;
+    const digits = encoded.dataDigits.slice();
+    const erasureCells = [];
+    for (let symbolIndex = 0; symbolIndex < nsym; symbolIndex += 1) {
+      for (let offset = 0; offset < 3; offset += 1) {
+        erasureCells.push(symbolIndex * 3 + offset);
+        digits[symbolIndex * 3 + offset] = 0;
+      }
+    }
+    const result = decodeCells(digits, oFormat(encoded), { erasureCells });
+    assert.equal(result.ok, true, result.ok ? '' : result.reason);
+    assert.equal(result.text, 'budget spent');
+    assert.equal(result.crsDistance, nsym, '소거 nsym 개 = 패리티 예산 전액');
+    assert.equal(result.corrected, 0, '위치를 아는 소거는 «위치 미상 오류» 로 세지 않는다');
+    assert.equal(result.erasureFallback.erasureSymbolIndices.length, nsym);
+  });
+});
+
+describe('unsampled (out-of-frame) cells map to RS erasures', () => {
+  /** scan-order 셀 인덱스를 «표본이 없었다» 로 만든다 — 값은 결정적 0. */
+  function blankCells(digits, cellIndices) {
+    const out = digits.slice();
+    for (const index of cellIndices) out[index] = 0;
+    return out;
+  }
+
+  test('프레임 밖 셀을 소거로 넘기면 오류 전용 한계를 넘어 복구한다', () => {
+    const text = 'out of frame cells';
+    const encoded = encode(text, { version: 3, eccLevel: 'M' });
+    const nsym = encoded.capacity.nsym;
+
+    // 심볼 nsym개 = 셀 3·nsym개가 프레임 밖이라 결정적 0으로 채워졌다.
+    const erasureCells = [];
+    for (let symbolIndex = 0; symbolIndex < nsym; symbolIndex += 1) {
+      erasureCells.push(symbolIndex * 3, symbolIndex * 3 + 1, symbolIndex * 3 + 2);
+    }
+    const starved = blankCells(encoded.dataDigits, erasureCells);
+
+    const blind = decodeCells(starved, oFormat(encoded));
+    const informed = decodeCells(starved, oFormat(encoded), { erasureCells });
+
+    assert.equal(informed.ok, true, informed.ok ? '' : informed.reason);
+    assert.equal(informed.text, text);
+    assert.equal(informed.crsDistance, nsym);
+    assert.equal(blind.ok, false, '위치를 모르면 같은 손상을 고칠 수 없어야 한다');
+  });
+
+  test('erasureSymbols 직접 지정도 같은 결과다', () => {
+    const text = 'symbol level erasure';
+    const encoded = encode(text, { version: 3, eccLevel: 'M' });
+    const nsym = encoded.capacity.nsym;
+    const symbols = Array.from({ length: nsym }, (unused, index) => index);
+    const cells = [];
+    for (const symbolIndex of symbols) {
+      cells.push(symbolIndex * 3, symbolIndex * 3 + 1, symbolIndex * 3 + 2);
+    }
+    const starved = blankCells(encoded.dataDigits, cells);
+
+    const viaCells = decodeCells(starved, oFormat(encoded), { erasureCells: cells });
+    const viaSymbols = decodeCells(starved, oFormat(encoded), { erasureSymbols: symbols });
+    assert.equal(viaSymbols.ok, true, viaSymbols.ok ? '' : viaSymbols.reason);
+    assert.equal(viaSymbols.text, viaCells.text);
+    assert.deepEqual(
+      viaSymbols.erasureFallback.erasureSymbolIndices,
+      viaCells.erasureFallback.erasureSymbolIndices,
+    );
+  });
+
+  test('filler 구간의 셀 인덱스는 코드워드가 아니므로 소거로 세지 않는다', () => {
+    const encoded = encode('filler tail', { version: 3, eccLevel: 'M' });
+    const capacity = encoded.capacity;
+    if (capacity.residualCells === 0) return; // 이 버전에 filler가 없으면 검사 대상이 없다
+    const fillerIndex = capacity.usedSymbols * 3;
+    const result = decodeCells(encoded.dataDigits, oFormat(encoded), {
+      erasureCells: [fillerIndex],
+    });
+    assert.equal(result.ok, true, result.ok ? '' : result.reason);
+    assert.equal(result.crsDistance, 0);
+    assert.equal(result.erasureFallback, undefined);
+  });
+
+  test('범위 밖 소거 인덱스는 조용히 버리지 않고 erasure 단계 실패로 보고한다', () => {
+    const encoded = encode('range check', { version: 3, eccLevel: 'M' });
+    const bad = decodeCells(encoded.dataDigits, oFormat(encoded), { erasureCells: [-1] });
+    assert.equal(bad.ok, false);
+    assert.match(bad.reason, /^erasure:/);
+  });
+
+  test('결정성 — 같은 소거 입력은 2회 호출에서 deepEqual', () => {
+    const encoded = encode('deterministic erasure', { version: 3, eccLevel: 'M' });
+    const cells = [0, 1, 2, 9, 10, 11];
+    const starved = blankCells(encoded.dataDigits, cells);
+    const first = decodeCells(starved, oFormat(encoded), { erasureCells: cells });
+    const second = decodeCells(starved, oFormat(encoded), { erasureCells: cells });
+    assert.deepEqual(first, second);
   });
 });
 

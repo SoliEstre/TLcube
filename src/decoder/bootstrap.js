@@ -2415,36 +2415,47 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
         ? windowedFormatCellsY(hypothesis.n)
         : formatCellsY(hypothesis.n)
     : formatCells(hypothesis.k);
+  // 포맷 15셀은 3중 복제다. 한 셀이 프레임 밖으로 잘려도 나머지 두 복제가
+  // 살아 있으면 읽을 수 있어야 한다 — 잘린 자리는 null(소거)로 표시해
+  // format-proposals 의 다수결 표에서 **빼고**, 0 으로 위장시키지 않는다.
   const samples = [];
   const observedDigits = [];
+  const erasedCells = [];
   for (const cell of cells) {
     const sampled = cube
       ? sampleCubeCell(luma, hypothesis, cell.i, cell.j, cubeSampleOptions(options))
       : sampleHexCell(luma, hypothesis, cell.q, cell.r, options.sample || {});
     samples.push(sampled);
     if (!sampled.ok) {
-      return fail(sampled.reason, {
-        stage: 'format-sampling',
-        hypothesisId: hypothesis.hypothesisId,
-        cell,
-        cause: sampled.detail,
-      });
+      observedDigits.push(null);
+      erasedCells.push({ cell, reason: sampled.reason, cause: 'unsampled-format-cell' });
+      continue;
     }
     if (cube) {
       const read = readCubeDigit(sampled, hypothesis.referenceCalibration);
       if (read === null) {
-        return fail(FRONTEND_FAILURE.NO_FORMAT_CANDIDATE, {
-          stage: 'format-sampling',
-          cause: 'illegal-two-tone-triple-or-unreadable-three-tone-rank',
-          hypothesisId: hypothesis.hypothesisId,
+        observedDigits.push(null);
+        erasedCells.push({
           cell,
-          tones: hypothesis.tones,
+          reason: FRONTEND_FAILURE.NO_FORMAT_CANDIDATE,
+          cause: 'illegal-two-tone-triple-or-unreadable-three-tone-rank',
         });
+        continue;
       }
       observedDigits.push(read.digit);
     } else {
       observedDigits.push(sampleToDigit(sampled));
     }
+  }
+  if (erasedCells.length === cells.length) {
+    // 15셀 전부가 소거면 포맷을 주장할 근거가 하나도 없다 — 예전처럼 실패한다.
+    return fail(erasedCells[0].reason, {
+      stage: 'format-sampling',
+      hypothesisId: hypothesis.hypothesisId,
+      cell: erasedCells[0].cell,
+      cause: 'all-format-cells-unsampled',
+      erasedFormatCells: erasedCells.length,
+    });
   }
   const reads = [0, 1, 2].map((replica) =>
     observedDigits.slice(replica * 5, replica * 5 + 5));
@@ -2459,6 +2470,7 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
       validVersionIndices: valid,
       reads,
       tones: hypothesis.tones,
+      erasedFormatCells: erasedCells.length,
       diagnostics: enumerated.diagnostics,
     });
   }
@@ -2466,6 +2478,7 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
     hypothesis,
     reads,
     samples,
+    erasedFormatCells: erasedCells,
     proposals: enumerated.proposals,
     formatCandidates,
     diagnostics: enumerated.diagnostics,
@@ -2580,9 +2593,15 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     const dimension = cube ? hypothesis.n : hypothesis.k;
     const layout = layoutForFamily(hypothesis.family, dimension, hypothesis);
     if (!layout) continue;
+    // 프레임 밖으로 잘린 셀에서 가설 전체를 죽이지 않는다 — 그 셀만 RS 소거로
+    // 넘긴다 (sample-starved 구제). 한 셀도 못 읽으면 여전히 실패한다.
     const grid = withStage(options, 'decode', () => (cube
-      ? sampleCubeGrid(luma, hypothesis, layout.map, cubeSampleOptions(options))
-      : sampleHexGrid(luma, hypothesis, layout.map, options.sample || {})));
+      ? sampleCubeGrid(luma, hypothesis, layout.map, {
+        ...cubeSampleOptions(options), collectUnsampled: true,
+      })
+      : sampleHexGrid(luma, hypothesis, layout.map, {
+        ...(options.sample || {}), collectUnsampled: true,
+      })));
     if (!grid.ok) {
       diagnostics.bodyFailures.push({
         hypothesisId: hypothesis.hypothesisId,
@@ -2594,16 +2613,28 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
 
     const digits = [];
     const cubeUnreadableCells = [];
+    const unsampledCells = [];
+    const erasureCells = [];
     for (const cell of layout.dataCells) {
       const key = cube ? cell.i + ',' + cell.j : cell.q + ',' + cell.r;
       const sample = grid.cells.get(key);
+      const scanIndex = digits.length;
+      if (sample === undefined) {
+        // 프레임 밖(또는 표본 기아)이라 이 셀은 관측 자체가 없다. 결정적 0을
+        // 넣되 **위치를 RS 소거로 넘겨** 패리티를 오류의 절반만 쓰게 한다.
+        digits.push(0);
+        unsampledCells.push({ cell, cause: 'unsampled-cell' });
+        erasureCells.push(scanIndex);
+        continue;
+      }
       if (cube) {
         const read = readCubeDigit(sample, hypothesis.referenceCalibration);
         if (read === null) {
           // 000/111은 Type Y 2톤 알파벳 밖이다. 위치를 보존한 결정적 0으로
-          // 넘기고 RS/header 검증이 이 기하 가설을 살릴지 최종 판정한다.
+          // 넘기고, 그 위치는 RS 소거로 표시한다.
           digits.push(0);
           cubeUnreadableCells.push({ cell, cause: 'illegal-tone-triple' });
+          erasureCells.push(scanIndex);
         } else {
           digits.push(read.digit);
         }
@@ -2637,7 +2668,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         decodeFormat.k = dimension;
       }
       const decoded = withStage(options, 'decode', () =>
-        decodeCells(digits, decodeFormat));
+        decodeCells(digits, decodeFormat, { erasureCells }));
       if (!decoded.ok) {
         diagnostics.bodyFailures.push({
           hypothesisId: hypothesis.hypothesisId,
@@ -2645,6 +2676,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
           eccLevel: formatCandidate.eccLevel,
           reason: decoded.reason,
           cubeUnreadableCount: cubeUnreadableCells.length,
+          unsampledCount: unsampledCells.length,
         });
         continue;
       }
@@ -2689,10 +2721,12 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         corrected: accepted.decoded.corrected,
         crsDistance: accepted.decoded.crsDistance,
         erasureFallback: accepted.decoded.erasureFallback,
-        cubeSamplingFallback: cubeUnreadableCells.length > 0
+        cubeSamplingFallback: cubeUnreadableCells.length > 0 || unsampledCells.length > 0
           ? {
-            mode: 'deterministic-zero-digit-rs-validation',
+            mode: 'deterministic-zero-digit-rs-erasure',
             cells: cubeUnreadableCells,
+            unsampledCells,
+            erasureCellCount: erasureCells.length,
           }
           : undefined,
         formatCandidate: accepted.formatCandidate,

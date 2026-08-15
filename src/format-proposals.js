@@ -18,6 +18,15 @@ import {
 const REPLICA_COUNT = 3;
 const FORMAT_DIGIT_COUNT = 5;
 
+/**
+ * `null` 은 "이 자리는 프레임 밖이라 관측이 없다"는 **소거** 표시다. 0..5 정수와
+ * 구분된다 — 0을 대신 넣으면 잘린 복제가 멀쩡한 관측인 척 다수결에 참여해서
+ * 나머지 두 복제를 이긴다. 이 구분이 no-format-candidate 구제의 전부다.
+ */
+function isErasedDigit(digit) {
+  return digit === null;
+}
+
 function assertReads(reads) {
   if (!Array.isArray(reads) || reads.length !== REPLICA_COUNT) {
     throw new TypeError('reads는 길이 3 배열이어야 한다');
@@ -30,6 +39,7 @@ function assertReads(reads) {
     }
     for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
       const digit = digits[digitIndex];
+      if (isErasedDigit(digit)) continue;
       if (!Number.isInteger(digit) || digit < 0 || digit > 5) {
         throw new RangeError(
           'digit 범위 위반 (replica ' + replicaIndex + ', 위치 ' + digitIndex + '): ' + digit,
@@ -55,33 +65,85 @@ function normalizeVersionIndices(validVersionIndices) {
   return allowed;
 }
 
+/**
+ * ### 신규 수용 표면 — 「**생존자 키메라**(survivor chimera)」
+ *
+ * 소거를 도입하면서 **이전에는 도달할 수 없던 후보 한 종류가 새로 생겼다.** 이름을
+ * 붙여 둔다 — 이름이 없으면 방어선도 없다.
+ *
+ * 자리마다 «살아남은 복제» 가 다를 수 있다. 위치 0 은 복제 0·1 이, 위치 1 은 복제
+ * 2 만 살아 있을 수 있다. 그러면 `majorityDigits` 는 **어느 한 복제에서도 통째로
+ * 관측된 적이 없는 5-digit 조합**이 된다 — 자리별 관측을 이어 붙인 키메라다.
+ * 변경 전에는 `readFormatForHypothesis` 가 첫 미표본 셀에서 죽었으므로 이 조합은
+ * 만들어질 수조차 없었다. **퇴행이 아니라 신규 표면이다.**
+ *
+ * 같은 파일이 «빈자리를 0 으로 메운 복제» 를 날조라며 개별 proposal 에서 빼는데,
+ * 키메라는 만든다. 그 비대칭이 정당한 근거는 하나뿐이다:
+ *
+ * 1. **자리별로는 전부 실관측이다.** 어떤 digit 도 지어내지 않는다 — 각 자리의 값은
+ *    그 자리에서 실제로 읽힌 값 중 하나이며, 유일 최다일 때만 채택된다
+ *    (`bestCount > runnerUpCount`). 0 으로 메우는 것과 여기서 갈린다.
+ * 2. **한 자리라도 관측이 0 이면 키메라를 만들지 않는다** (`known === 0` →
+ *    `noConsensus += 1` → 다수결 proposal 자체가 안 선다).
+ *
+ * 그 대가로 **키메라의 방어선은 ECC 가 아니라 CRC-6 하나다** — 5-digit 공간 7776 중
+ * 유효 64 개(약 0.82 %)만 통과하고, 소비자(`bootstrap.js`)는 `crcOk` 를 하드 게이트로
+ * 쓴다. 그 뒤는 본문 RS 가 받는다. 잘림·가림·skew 전 축(1331 ok 행)에서 오수용
+ * 실측 0 이지만 **«0 을 쟀다» 이지 «0 임을 증명했다» 가 아니다.** 이 표면을 넓히는
+ * 변경(예: 정족수 완화, `crcOk:false` 후보 승격)은 그 두 근거를 다시 세워야 한다.
+ * 계약은 `test/format-proposals.test.js` 의 생존자 키메라 테스트가 고정한다.
+ */
 function summarizeConsensus(reads) {
   const states = [];
   const majorityDigits = new Array(FORMAT_DIGIT_COUNT).fill(0);
   let threeOfThree = 0;
   let twoOfThree = 0;
   let noConsensus = 0;
+  let erasedPositions = 0;
+  let survivorDecided = 0;
 
   for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
     const counts = new Map();
-    for (const digits of reads) counts.set(digits[digitIndex], (counts.get(digits[digitIndex]) ?? 0) + 1);
+    let known = 0;
+    for (const digits of reads) {
+      const digit = digits[digitIndex];
+      if (isErasedDigit(digit)) continue;
+      known += 1;
+      counts.set(digit, (counts.get(digit) ?? 0) + 1);
+    }
 
-    let bestDigit = reads[0][digitIndex];
+    // 소거된 복제는 표에서 빠진다. 정족수는 «남은 관측» 기준으로 다시 센다.
+    let bestDigit = null;
     let bestCount = 0;
+    let runnerUpCount = 0;
     for (const [digit, count] of counts) {
       if (count > bestCount) {
+        runnerUpCount = bestCount;
         bestDigit = digit;
         bestCount = count;
+      } else if (count > runnerUpCount) {
+        runnerUpCount = count;
       }
     }
-    majorityDigits[digitIndex] = bestDigit;
+    majorityDigits[digitIndex] = bestDigit === null ? 0 : bestDigit;
 
-    if (bestCount === REPLICA_COUNT) {
+    if (known === 0) {
+      // 세 복제 모두 프레임 밖 — 이 자리는 어떤 값도 주장할 수 없다.
+      states.push('erased');
+      erasedPositions += 1;
+      noConsensus += 1;
+      continue;
+    }
+    if (known === REPLICA_COUNT && bestCount === REPLICA_COUNT) {
       states.push('3/3');
       threeOfThree += 1;
-    } else if (bestCount === REPLICA_COUNT - 1) {
+    } else if (known === REPLICA_COUNT && bestCount === REPLICA_COUNT - 1) {
       states.push('2/3');
       twoOfThree += 1;
+    } else if (bestCount > runnerUpCount) {
+      // 소거 뒤 남은 관측이 1~2개고 그중 최다가 유일 — 잘린 복제를 뺀 다수결이다.
+      states.push(bestCount + '/' + known);
+      survivorDecided += 1;
     } else {
       states.push('none');
       noConsensus += 1;
@@ -93,6 +155,8 @@ function summarizeConsensus(reads) {
     threeOfThree,
     twoOfThree,
     noConsensus,
+    erasedPositions,
+    survivorDecided,
     majorityDigits,
   };
 }
@@ -103,6 +167,8 @@ function copyConsensus(consensus) {
     threeOfThree: consensus.threeOfThree,
     twoOfThree: consensus.twoOfThree,
     noConsensus: consensus.noConsensus,
+    erasedPositions: consensus.erasedPositions,
+    survivorDecided: consensus.survivorDecided,
   };
 }
 
@@ -121,13 +187,24 @@ function collectRawProposals(reads, consensus) {
     if (replicaIndex !== undefined) candidate.replicaIndices.push(replicaIndex);
   };
 
-  // §5.1: 다섯 위치 모두에 2/3 이상 합의가 있을 때만 다수결 proposal을 만든다.
+  // §5.1: 다섯 위치 모두에 합의가 있을 때만 다수결 proposal을 만든다. 소거된
+  // 복제를 뺀 뒤의 정족수도 여기에 포함된다 (noConsensus가 그 판정을 담는다).
   if (consensus.noConsensus === 0) add(consensus.majorityDigits, 'majority');
 
   // 다수결 성공 여부와 무관하게 개별 복제를 보존한다. formatinfo.decode()의 fallback을
   // 잃지 않으면서도, 첫 CRC 성공이 아닌 후보 전체 평가를 가능하게 한다.
+  // 단 **소거 digit이 하나라도 있는 복제는 제외한다** — 그 복제는 5-digit 코드워드를
+  // 이룰 수 없고, 빈자리를 0으로 메운 값은 관측이 아니라 날조다.
   for (let replicaIndex = 0; replicaIndex < REPLICA_COUNT; replicaIndex += 1) {
-    add(reads[replicaIndex], 'replica-' + replicaIndex, replicaIndex);
+    const digits = reads[replicaIndex];
+    let complete = true;
+    for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
+      if (isErasedDigit(digits[digitIndex])) {
+        complete = false;
+        break;
+      }
+    }
+    if (complete) add(digits, 'replica-' + replicaIndex, replicaIndex);
   }
 
   return Array.from(byDigits.values());
@@ -170,10 +247,20 @@ export function enumerateFormatProposals(reads, { validVersionIndices } = {}) {
   const allowedVersions = normalizeVersionIndices(validVersionIndices);
   const consensus = summarizeConsensus(reads);
   const candidates = collectRawProposals(reads, consensus);
+  let erasedReplicas = 0;
+  for (let replicaIndex = 0; replicaIndex < REPLICA_COUNT; replicaIndex += 1) {
+    for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
+      if (isErasedDigit(reads[replicaIndex][digitIndex])) {
+        erasedReplicas += 1;
+        break;
+      }
+    }
+  }
   const diagnostics = {
     generated: {
       majority: consensus.noConsensus === 0 ? 1 : 0,
-      replicas: REPLICA_COUNT,
+      replicas: REPLICA_COUNT - erasedReplicas,
+      erasedReplicas,
       unique: candidates.length,
     },
     semanticRejected: {

@@ -821,7 +821,10 @@ export function sampleHexGrid(luma, geometry, layoutMap, options = {}) {
     });
   }
 
-  if (failures.length > 0) {
+  // options.collectUnsampled 옵트인: 실패 셀에서 즉시 죽지 않고 목록으로 모아
+  // 계속 간다 (프레임 밖 셀 → RS 소거). 끄면 예전 동작 그대로.
+  const collectUnsampled = options && options.collectUnsampled === true;
+  if (failures.length > 0 && (!collectUnsampled || cells.size === 0)) {
     const homographyOnly = failures.every(
       (entry) => entry.reason === FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE,
     );
@@ -847,5 +850,9 @@ export function sampleHexGrid(luma, geometry, layoutMap, options = {}) {
     cells,
     sampledCount: cells.size,
     skippedBullseyes,
+    unsampled: failures.map((entry) => ({
+      key: entry.key, q: entry.q, r: entry.r, reason: entry.reason, cause: entry.detail,
+    })),
+    unsampledCellCount: failures.length,
   });
 }

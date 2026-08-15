@@ -1034,7 +1034,7 @@ const BULLSEYE_REAL_PHOTO_DUMPS = listLumaDumps().filter((entry) =>
     || entry.name.startsWith('video-')
   ));
 
-test('기존 불스아이 실사진: 1440 기준 12/17 복호 성적을 유지', {
+test('기존 불스아이 실사진: 1440 기준 13/17 복호 성적을 유지', {
   timeout: 600_000,
   skip: BULLSEYE_REAL_PHOTO_DUMPS.length === 17
     ? false
@@ -1051,8 +1051,12 @@ test('기존 불스아이 실사진: 1440 기준 12/17 복호 성적을 유지',
    * (2026-08-13, `.agent/decoder/008`). 신규 3장은 텍스트·패밀리·버전·ECC 가 전부
    * 정답이라 오탐이 아니다. 개수를 못박은 이 단언 덕에 «집합이 바뀌었나» 를 확인하게 됐다 —
    * 숫자를 올릴 때는 **어느 장이 늘었는지** 를 확인하고 올린다.
+   *
+   * 12 → 13 (의도적 갱신, 2026-08-17 새벽 — RS 소거 복호 도입). 늘어난 장 =
+   * `video-t18.1440.luma` 단 하나, 기존 12장 전부 유지 (d055110 vs 적용본 장별 대조,
+   * scratchpad photo-before/after diff). 소거 복호가 실사진에서 이득을 낸 첫 실측이다.
    */
-  assert.equal(successes.length, 12, results.map(({ entry, result }) => ({
+  assert.equal(successes.length, 13, results.map(({ entry, result }) => ({
     name: entry.name,
     ok: result.ok,
     reason: result.reason,

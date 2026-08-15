@@ -70,11 +70,17 @@ import { dataCellsInScanOrderA } from './layoutA.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderY } from './layoutY.js';
 
 /**
- * rs211.js는 소거 위치를 받는 API를 제공하지 않는다. 불법 3-digit 조합은 아래
- * 모드에서 0으로 대체하여 "위치를 모르는 일반 심볼 오류"로만 취급한다. 따라서
- * 소거 복호의 2e+s 한계가 아니라 rsDecode의 일반 오류 한계 t가 적용된다.
+ * 기본 소거 모드. rs211.js가 소거 위치 목록을 받는 복호 경로를 갖게 되면서
+ * 불법 3-digit 조합과 "프레임 밖이라 표본이 없는 셀"은 **위치를 아는 소거**로
+ * 넘긴다. 한계가 2v ≤ nsym에서 2v + s ≤ nsym으로 넓어진다.
  */
-export const RS211_ERASURE_MODE = 'error-only-fallback';
+export const RS211_ERASURE_MODE = 'erasure';
+
+/**
+ * 옵트아웃 모드. rs211.js 소거 지원 이전의 동작 — 불법 심볼을 0으로 치환해
+ * "위치를 모르는 일반 오류"로만 취급한다. 회귀 비교용으로만 남긴다.
+ */
+export const RS211_ERASURE_MODE_LEGACY = 'error-only-fallback';
 
 const ILLEGAL_SYMBOL_PLACEHOLDER = 0;
 const ECC_LEVEL_BY_VALUE = Object.freeze({ 0: 'L', 1: 'M', 2: 'H' });
@@ -569,6 +575,53 @@ function decodeSymbolsToFramedBytes(symbols, byteLength) {
   return out;
 }
 
+/**
+ * 앞단이 "표본이 없다"고 판정한 scan-order 셀 인덱스 / 심볼 인덱스를 하나의
+ * 오름차순 심볼 소거 목록으로 모은다. filler 구간(심볼 digit 밖)의 셀은
+ * 코드워드가 아니므로 조용히 버리는 게 아니라 **소거 대상이 아님**이 정의다.
+ */
+function collectDeclaredErasures(options, profile, symbolCount) {
+  const out = new Set();
+  const cells = options.erasureCells;
+  if (cells !== undefined && cells !== null) {
+    if (!Array.isArray(cells) && !ArrayBuffer.isView(cells)) {
+      throw new TypeError('erasureCells는 배열이어야 한다');
+    }
+    for (let i = 0; i < cells.length; i += 1) {
+      const index = cells[i];
+      if (!Number.isInteger(index) || index < 0 || index >= profile.scan.length) {
+        throw new RangeError(
+          'erasureCells[' + i + ']는 0..' + (profile.scan.length - 1) + ' 정수여야 한다: ' + index,
+        );
+      }
+      if (index >= profile.symbolDigits) continue; // filler는 코드워드가 아니다
+      out.add(Math.floor(index / 3));
+    }
+  }
+  const symbols = options.erasureSymbols;
+  if (symbols !== undefined && symbols !== null) {
+    if (!Array.isArray(symbols) && !ArrayBuffer.isView(symbols)) {
+      throw new TypeError('erasureSymbols는 배열이어야 한다');
+    }
+    for (let i = 0; i < symbols.length; i += 1) {
+      const index = symbols[i];
+      if (!Number.isInteger(index) || index < 0 || index >= symbolCount) {
+        throw new RangeError(
+          'erasureSymbols[' + i + ']는 0..' + (symbolCount - 1) + ' 정수여야 한다: ' + index,
+        );
+      }
+      out.add(index);
+    }
+  }
+  return [...out].sort((left, right) => left - right);
+}
+
+function mergeSorted(left, right) {
+  const set = new Set(left);
+  for (const value of right) set.add(value);
+  return [...set].sort((a, b) => a - b);
+}
+
 function assertZeroPadding(framed, payloadLength) {
   const paddingStart = 1 + payloadLength;
   for (let i = paddingStart; i < framed.length; i += 1) {
@@ -588,6 +641,11 @@ function assertZeroPadding(framed, payloadLength) {
  * cellDigits는 실제 심볼 digit만(3S개) 또는 scan order 전체(3S + filler개) 모두
  * 허용한다. filler는 코드워드가 아니므로 전체 입력일 때도 꼬리에서 무시한다.
  *
+ * options.erasureCells는 "프레임 밖이라 표본이 없었다"고 앞단이 판정한 scan-order
+ * 셀 인덱스다. digit 3개가 심볼 1개이므로 셀 인덱스는 ⌊index/3⌋ 심볼 소거가 된다.
+ * 불법 211..215 심볼도 같은 소거 표에 합쳐진다. 소거는 오류와 달리 패리티를 1개만
+ * 쓰므로 한계가 2v ≤ nsym에서 2v + s ≤ nsym으로 넓어진다.
+ *
  * @param {Uint8Array|number[]} cellDigits
  * @param {{
  *   type?: 'O'|'A'|'Y',
@@ -599,19 +657,34 @@ function assertZeroPadding(framed, payloadLength) {
  *   tones?:2|3,
  *   window?:boolean,
  * }} format
+ * @param {{
+ *   erasureCells?:number[],
+ *   erasureSymbols?:number[],
+ *   erasureMode?:'erasure'|'error-only-fallback',
+ * }} [options]
  * @returns {{
  *   ok:true,
  *   text:string,
  *   corrected:number,
  *   crsDistance:number,
  *   erasureFallback?: {
- *     mode:'error-only-fallback',
+ *     mode:'erasure'|'error-only-fallback',
  *     illegalSymbolIndices:number[],
+ *     erasureSymbolIndices:number[],
  *     placeholder:number,
  *   },
  * } | {ok:false, reason:string}}
  */
-export function decodeCells(cellDigits, format) {
+export function decodeCells(cellDigits, format, options = {}) {
+  if (options === null || typeof options !== 'object') {
+    throw new TypeError('options는 객체여야 한다');
+  }
+  const erasureMode = options.erasureMode ?? RS211_ERASURE_MODE;
+  if (erasureMode !== RS211_ERASURE_MODE && erasureMode !== RS211_ERASURE_MODE_LEGACY) {
+    throw new RangeError('erasureMode는 ' + RS211_ERASURE_MODE + ' 또는 '
+      + RS211_ERASURE_MODE_LEGACY + '여야 한다: ' + erasureMode);
+  }
+
   let profile;
   try {
     profile = resolveProfile(format);
@@ -633,23 +706,39 @@ export function decodeCells(cellDigits, format) {
     return fail('symbol', cause);
   }
 
-  // rs211.js의 options는 fcr뿐이며 erasures를 받지 않는다. 211..215는 체 밖이라
-  // 그대로 rsDecode에 넣을 수 없으므로 0이라는 유효한 수신값으로 치환한다. 이는
-  // 위치를 아는 소거 복호가 아니라 평범한 오류 복호이며, 성공 결과에도 명시한다.
+  let declaredErasures;
+  try {
+    declaredErasures = collectDeclaredErasures(options, profile, packed.symbols.length);
+  } catch (cause) {
+    return fail('erasure', cause);
+  }
+
+  // 211..215는 체 밖이라 그대로 rsDecode에 넣을 수 없으므로 0이라는 유효한 수신값으로
+  // 치환한다. 치환값 자체는 소거 복호에서 의미가 없다 — 위치만 쓰인다.
   const received = packed.symbols.slice();
   for (const index of packed.illegalIndices) received[index] = ILLEGAL_SYMBOL_PLACEHOLDER;
+  for (const index of declaredErasures) received[index] = ILLEGAL_SYMBOL_PLACEHOLDER;
+
+  const erasureIndices = erasureMode === RS211_ERASURE_MODE
+    ? mergeSorted(packed.illegalIndices, declaredErasures)
+    : [];
 
   let rsResult;
   try {
-    rsResult = rsDecode(received, profile.capacity.nsym);
+    rsResult = erasureIndices.length > 0
+      ? rsDecode(received, profile.capacity.nsym, { erasures: erasureIndices })
+      : rsDecode(received, profile.capacity.nsym);
   } catch (cause) {
     return fail('rs', cause);
   }
   if (!rsResult.ok) {
-    const fallback = packed.illegalIndices.length === 0
+    const marked = packed.illegalIndices.length + declaredErasures.length;
+    const fallback = marked === 0
       ? ''
-      : '; 불법 심볼 ' + packed.illegalIndices.length
-        + '개는 rs211.js 소거 미지원으로 일반 오류(0 치환)로 처리했다';
+      : erasureMode === RS211_ERASURE_MODE
+        ? '; 소거 ' + erasureIndices.length + '개(불법 심볼 ' + packed.illegalIndices.length
+          + ' + 미표본 ' + declaredErasures.length + ')를 위치 지정 소거로 넘겼다'
+        : '; 표시된 심볼 ' + marked + '개는 legacy 모드라 일반 오류(0 치환)로 처리했다';
     return fail('rs', rsResult.reason + fallback);
   }
 
@@ -674,19 +763,20 @@ export function decodeCells(cellDigits, format) {
     return fail('header', cause);
   }
 
+  const erasureCount = rsResult.erasureCount ?? 0;
   const result = {
     ok: true,
     text: payload.text,
     corrected: rsResult.errorCount,
-    // rsResult.errorCount는 rs211.js가 실제 변경한 errorPositions 수, 즉 u다.
-    // C_RS = 2u + e. rs211.js는 아직 소거 복호가 없으므로 e=0이고, 불법 심볼도
-    // 일반 오류 fallback으로만 센다. 소거 지원 뒤에도 점수 계약은 이 필드를 그대로 쓴다.
-    crsDistance: 2 * rsResult.errorCount,
+    // rsResult.errorCount는 rs211.js가 고친 **위치 미상** 오류 수 u다.
+    // C_RS = 2u + e — 소거 e개는 패리티를 1개씩만 쓴다. 점수 계약은 이 필드를 쓴다.
+    crsDistance: 2 * rsResult.errorCount + erasureCount,
   };
-  if (packed.illegalIndices.length > 0) {
+  if (packed.illegalIndices.length > 0 || declaredErasures.length > 0) {
     result.erasureFallback = {
-      mode: RS211_ERASURE_MODE,
+      mode: erasureMode,
       illegalSymbolIndices: packed.illegalIndices.slice(),
+      erasureSymbolIndices: erasureIndices.slice(),
       placeholder: ILLEGAL_SYMBOL_PLACEHOLDER,
     };
   }

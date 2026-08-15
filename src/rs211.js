@@ -101,6 +101,26 @@ export function errorCapacity(nsym) {
   return Math.floor(nsym / 2);
 }
 
+/**
+ * 소거(erasure) 만 있을 때 정정 가능한 최대 심볼 수 = nsym.
+ * 위치를 아는 소거는 오류 1개당 패리티 1개만 쓴다 — 위치를 모르는 오류가
+ * 2개를 쓰는 것과 대비된다. 혼합 한계는 `2·v + s ≤ nsym` (v = 오류, s = 소거).
+ */
+export function erasureCapacity(nsym) {
+  validateNsym(nsym);
+  return nsym;
+}
+
+/** 소거 s 개가 이미 잡혔을 때 추가로 정정 가능한 (위치 미상) 오류 수 ⌊(nsym − s)/2⌋. */
+export function errorCapacityWithErasures(nsym, erasureCount) {
+  validateNsym(nsym);
+  if (!Number.isInteger(erasureCount) || erasureCount < 0) {
+    throw new RangeError(`erasureCount 는 0 이상 정수여야 한다: ${erasureCount}`);
+  }
+  if (erasureCount > nsym) return -1;
+  return Math.floor((nsym - erasureCount) / 2);
+}
+
 /** 주어진 nsym 에서 한 블록에 실을 수 있는 최대 데이터 심볼 수. n > 210 은 거부된다. */
 export function maxDataLen(nsym) {
   validateNsym(nsym);
@@ -333,6 +353,186 @@ function forney(synd, lambda, positions, n, fcr) {
   });
 }
 
+// ── 소거(erasure) 복호 내부 ─────────────────────────────────────────────
+
+/**
+ * 소거 위치 목록 정규화. 배열 인덱스(big-endian 코드워드 기준)를 오름차순
+ * 중복 제거해 돌려준다. 범위 밖/비정수는 던진다 — 조용히 버리면 «소거를
+ * 넣었는데 왜 못 고치지» 가 디버깅 불가능해진다.
+ */
+function normalizeErasurePositions(erasures, n) {
+  if (erasures === undefined || erasures === null) return [];
+  if (!Array.isArray(erasures) && !ArrayBuffer.isView(erasures)) {
+    throw new TypeError('erasures 는 배열이어야 한다');
+  }
+  const seen = new Set();
+  const out = [];
+  for (let i = 0; i < erasures.length; i++) {
+    const v = erasures[i];
+    if (!Number.isInteger(v) || v < 0 || v >= n) {
+      throw new RangeError(`erasures[${i}] 는 0..${n - 1} 정수여야 한다: ${v}`);
+    }
+    if (seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  out.sort((a, b) => a - b);
+  return out;
+}
+
+/**
+ * 소거 위치자 Γ(x) = ∏(1 − Z_m·x), Z_m = α^(n−1−j_m). little-endian.
+ * Chien 탐색이 Λ(X^-1) = 0 을 보는 규약과 같은 규약이다.
+ */
+function erasureLocator(positions, n) {
+  let gamma = [1];
+  for (const j of positions) {
+    const Z = alphaPow(n - 1 - j);
+    gamma = polyMulLE(gamma, [1, sub(0, Z)]);
+  }
+  return gamma;
+}
+
+/**
+ * Forney 신드롬. T(x) = S(x)·Γ(x) mod x^nsym 의 **계수 s..nsym−1** 를 돌려준다
+ * (길이 nsym − s). 이 잘라내기가 핵심이다: 앞의 s 개 계수에는 소거 항이
+ * 남아 있고, s 번째부터가 «소거를 제거한 신드롬열» 이라 BM 이 남은 오류만 본다.
+ *
+ * ⚠ GF(2^m) 구현(reedsolo 등)의 `f[j] = f[j]·X ^ f[j+1]` 을 그대로 베끼면 안 된다 —
+ * 표수 2 에서만 소거 항 (X + X_k) 가 소멸한다. 소수체에서는 **뺄셈** 이 실재해
+ * (X_k − X) 라야 소멸한다. 여기서는 Γ 곱셈으로 그 뺄셈을 자동으로 얻는다.
+ */
+function forneySyndromes(synd, gamma, erasureCount) {
+  const S = Array.from(synd);
+  const full = polyMulLE(S, gamma);
+  return full.slice(erasureCount, S.length);
+}
+
+/**
+ * RS 소거·오류 혼합 복호. `rsDecode(received, nsym, { erasures })` 의 본체다.
+ * 한계는 **2·v + s ≤ nsym** (v = 위치 미상 오류, s = 소거).
+ *
+ * ### 검출 마진 — 소거를 많이 선언할수록 «틀렸다고 말할 능력» 이 줄어든다
+ *
+ * 이 함수의 4중 관문(한계 검사 · 위치자 차수 · Chien 근수 · 정정 후 신드롬
+ * 재검산)은 **잔여 패리티 `nsym − s` 가 있을 때만** 검출력을 가진다. 한계를
+ * 넘긴 입력이 «조용한 오정정»(ok:true + 틀린 코드워드) 으로 나가는 비율은 실측상
+ * 잔여 패리티에만 의존한다 (2v+s = nsym+2 rung, nsym ∈ {7,11,14,22,23,37} × 300회):
+ *
+ * | 잔여 `nsym − s` | 0 | 2 | 4 | 6 | ≥ 8 |
+ * |---|---|---|---|---|---|
+ * | 조용한 오정정 | **100 %** | 약 19 % | 약 2~4 % | 0.3 % 이하 | 0 % |
+ *
+ * **`s = nsym` 은 확률이 아니라 절벽이다.** 소거 nsym 개면 신드롬 nsym 개와 미지수
+ * nsym 개가 정확히 결정계다 — 해가 유일하게 존재하고 그 해는 정의상 모든 신드롬을
+ * 0 으로 만든다. 그래서 미선언 오류가 하나라도 섞여 있으면 정정 결과는 «다른 유효
+ * 코드워드» 이고, 마지막 관문인 신드롬 재검산이 **구성상 반드시 통과한다**. 실측
+ * 3,500/3,500 조용한 오정정 · 정직 실패 0. RS 의 고유 한계이지 이 구현의 결함이
+ * 아니다 — 고칠 수 있는 종류가 아니다.
+ *
+ * 따라서 **`s` 가 nsym 에 붙는 운용점에서 ECC 는 방어선이 아니다.** 그 지점의
+ * 방어는 전적으로 상위층(`decode.js` 의 base-211 범위 · 길이 헤더 · UTF-8 유효성 ·
+ * 0 패딩) 몫이다. 호출부는 `erasureCount` 를 보고 «ECC 가 여기서 뭘 보증하는가» 를
+ * 판단해야 한다. 이 계약은 `test/rs211.test.js` 의 nsym+2 rung 과
+ * `test/decode.test.js` 의 상위층 방어선 테스트가 양쪽에서 고정한다.
+ */
+function rsDecodeErasures(cw, nsym, fcr, erasurePositions) {
+  const n = cw.length;
+  const s = erasurePositions.length;
+  const syndromes = rsSyndromes(cw, nsym, { fcr });
+
+  const fail = (reason) => ({
+    ok: false,
+    reason,
+    syndromes,
+    errorPositions: null,
+    erasurePositions: erasurePositions.slice(),
+    erasureCount: s,
+  });
+  const succeed = (out, changed) => {
+    const erased = new Set(erasurePositions);
+    const errorPositions = changed.filter((position) => !erased.has(position));
+    return {
+      ok: true,
+      codeword: out,
+      message: out.slice(0, n - nsym),
+      parity: out.slice(n - nsym),
+      errorPositions,
+      errorCount: errorPositions.length,
+      erasurePositions: erasurePositions.slice(),
+      erasureCount: s,
+      correctedPositions: changed.slice(),
+      syndromes,
+    };
+  };
+
+  if (s > nsym) {
+    return fail(`소거 개수(${s})가 패리티 심볼 수(${nsym})를 넘었다 — 원리적으로 복구 불가`);
+  }
+
+  let clean = true;
+  for (let i = 0; i < syndromes.length; i++) {
+    if (syndromes[i] !== 0) {
+      clean = false;
+      break;
+    }
+  }
+  // 신드롬이 전부 0 이면 수신어가 이미 유효 코드워드다. 소거로 «표시만» 됐을 뿐
+  // 값이 우연히 맞은 경우이므로 고칠 것이 없다.
+  if (clean) return succeed(cw.slice(), []);
+
+  const gamma = erasureLocator(erasurePositions, n);
+  const fsynd = forneySyndromes(syndromes, gamma, s);
+  const tRemaining = Math.floor((nsym - s) / 2);
+
+  const { lambda, L } = berlekampMassey(fsynd);
+  if (L > tRemaining) {
+    return fail(
+      `소거 ${s} 개를 제외하고도 오류가 한계를 넘었다 `
+      + `(Berlekamp-Massey deg Λ = ${L}, 잔여 t = ${tRemaining})`,
+    );
+  }
+  if (lambda.length - 1 !== L) {
+    return fail(`Λ 차수(${lambda.length - 1})와 LFSR 길이(${L})가 불일치 — 정정 불가`);
+  }
+
+  const psi = polyMulLE(lambda, gamma);
+  while (psi.length > 1 && psi[psi.length - 1] === 0) psi.pop();
+  const degree = psi.length - 1;
+  if (degree !== L + s) {
+    return fail(`errata 위치자 차수(${degree})가 오류 ${L} + 소거 ${s} 와 다르다 — 정정 불가`);
+  }
+
+  const positions = chienSearch(psi, n);
+  if (positions.length !== degree) {
+    return fail(
+      `Chien 탐색이 errata 위치자의 근을 전부 찾지 못했다 (${positions.length}/${degree}) — 정정 불가`,
+    );
+  }
+
+  const magnitudes = forney(syndromes, psi, positions, n, fcr);
+  if (magnitudes.some((m) => m === null)) {
+    return fail('Forney 분모 Ψ′(X^-1) = 0 — 정정 불가');
+  }
+
+  const out = cw.slice();
+  const changed = [];
+  for (let k = 0; k < positions.length; k++) {
+    if (magnitudes[k] === 0) continue;
+    out[positions[k]] = sub(out[positions[k]], magnitudes[k]);
+    changed.push(positions[k]);
+  }
+
+  const after = rsSyndromes(out, nsym, { fcr });
+  for (let i = 0; i < after.length; i++) {
+    if (after[i] !== 0) {
+      return fail('정정 후에도 신드롬이 0 이 아니다 — 2·오류 + 소거 가 nsym 을 넘었다');
+    }
+  }
+
+  return succeed(out, changed);
+}
+
 /**
  * RS 복호. t = ⌊nsym/2⌋ 개까지의 심볼 오류를 정정한다.
  *
@@ -342,15 +542,21 @@ function forney(synd, lambda, positions, n, fcr) {
  *   3. Chien 탐색이 찾은 근의 개수 ≠ L
  *   4. 정정 적용 후 신드롬 재검산이 0 이 아님
  *
+ * `options.erasures` 에 **배열 인덱스** 목록을 주면 소거 복호로 갈아탄다:
+ * 한계가 t = ⌊nsym/2⌋ 에서 **2·v + s ≤ nsym** 으로 넓어진다 (소거만이면 nsym 개).
+ * 인자를 생략하면 기존 경로와 코드가 문자 그대로 같다 — 소비자 옵트인이다.
+ *
  * @param {Uint8Array|number[]} received 수신 코드워드 (메시지 ‖ 패리티)
  * @param {number} nsym
- * @param {{fcr?: number}} [options]
+ * @param {{fcr?: number, erasures?: number[]|Uint8Array|Uint16Array}} [options]
  * @returns {{ok:true, codeword:Uint8Array, message:Uint8Array, parity:Uint8Array,
- *            errorPositions:number[], errorCount:number, syndromes:Uint8Array}
+ *            errorPositions:number[], errorCount:number, syndromes:Uint8Array,
+ *            erasurePositions?:number[], erasureCount?:number,
+ *            correctedPositions?:number[]}
  *         | {ok:false, reason:string, syndromes:Uint8Array, errorPositions:null}}
  */
 export function rsDecode(received, nsym, options = {}) {
-  const { fcr = DEFAULT_FCR } = options;
+  const { fcr = DEFAULT_FCR, erasures } = options;
   const cw = toSymbols(received, 'received');
   validateNsym(nsym);
   validateFcr(fcr);
@@ -359,6 +565,11 @@ export function rsDecode(received, nsym, options = {}) {
   }
   if (cw.length <= nsym) {
     throw new RangeError(`코드워드 길이(${cw.length})가 nsym(${nsym}) 이하다 — 메시지가 없다`);
+  }
+
+  const erasurePositions = normalizeErasurePositions(erasures, cw.length);
+  if (erasurePositions.length > 0) {
+    return rsDecodeErasures(cw, nsym, fcr, erasurePositions);
   }
 
   const n = cw.length;
@@ -420,6 +631,20 @@ export function rsDecode(received, nsym, options = {}) {
   }
 
   return succeed(out, changed);
+}
+
+/**
+ * 소거 복호 전용 진입점. `rsDecode(received, nsym, { ...options, erasures })` 와 같다.
+ * 소비자가 «소거를 쓰고 있다» 는 사실을 호출부에서 읽히게 하려고 따로 둔다.
+ * erasures 가 비면 일반 오류 복호로 그대로 내려간다.
+ *
+ * @param {Uint8Array|number[]} received
+ * @param {number} nsym
+ * @param {number[]|Uint8Array|Uint16Array} erasures 배열 인덱스 목록
+ * @param {{fcr?: number}} [options]
+ */
+export function rsDecodeWithErasures(received, nsym, erasures, options = {}) {
+  return rsDecode(received, nsym, { ...options, erasures });
 }
 
 /**
