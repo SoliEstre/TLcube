@@ -1,11 +1,15 @@
 /**
- * cellSurfaceFinal.test.js — 최종 라인업 (v0 n=13 · v2r2 n=21/25 · v1r2 n=21) 회계·배정·왕복.
+ * cellSurfaceFinal.test.js — 최종 라인업 (v0 n=13 · v2r2 n=21/25 · v1r2·v0X n=21)
+ * 회계·배정·왕복.
  *
  * 라인업 (운영자 확정 2026-08-15): Y0→v0 · Y1/Y2→v2r2. formatIndex 는 신세대
  * 셀 표면 한 쌍(2T=1 · 3T=3)뿐이다.
  * 2026-08-15 밤 추가: v1r2(n=21, 네 코너 블록 80셀)가 **A/B 후보**로 부활 — 같은
  * formatIndex 쌍을 쓰고, n=21 의 기본은 그대로 v2r2 다. 레이아웃 판별은 로케이터
  * 패밀리 + CS 평가 게이트가 한다.
+ * 2026-08-16 추가: v0X(id 'v0x', n=21, QR 파인더 문법 65셀)가 **3파전 후보**로 편입 —
+ * 같은 formatIndex 쌍을 쓰고 n=21 기본은 그대로 v2r2 다. 최종 라인업 중 유일하게
+ * mid(1) 면을 갖는다(4개) — 편집기 정본이 DEFAULT_TONE 을 생략하기 때문.
  */
 
 import { test } from 'node:test';
@@ -16,6 +20,7 @@ import {
   CELL_SURFACE_FINAL_IDS,
   CELL_SURFACE_FINAL_NS,
   CELL_SURFACE_FINAL_PROFILE,
+  V0X_BLOCKS,
   capacityForCellSurfaceFinal,
   cellSurfaceFinal,
   dataCellsInScanOrderCellSurfaceFinal,
@@ -94,16 +99,17 @@ test('formatIndex 배정 — 한 쌍 (2T=1 · 3T=3), cube 축 기사용 슬롯�
   }
 });
 
-test('n → 기본 레이아웃·버전 (13→v0/Y0 · 21→v2r2/Y1 · 25→v2r2/Y2), n=21 후보는 둘', () => {
+test('n → 기본 레이아웃·버전 (13→v0/Y0 · 21→v2r2/Y1 · 25→v2r2/Y2), n=21 후보는 셋', () => {
   // 2026-08-15 밤 운영자 지시로 v1r2 가 n=21 **A/B 후보**로 부활했다.
   // 기본(default)은 그대로 v2r2 — finalLayoutIdForN 의 반환은 바뀌지 않는다.
-  assert.deepEqual([...CELL_SURFACE_FINAL_IDS], ['v0', 'v2r2', 'v1r2']);
+  // 의도적 갱신 (2026-08-16): v0X 편입으로 n=21 후보가 셋이 됐다. 기본은 여전히 v2r2.
+  assert.deepEqual([...CELL_SURFACE_FINAL_IDS], ['v0', 'v2r2', 'v1r2', 'v0x']);
   assert.equal(finalLayoutIdForN(13), 'v0');
   assert.equal(finalLayoutIdForN(21), 'v2r2');
   assert.equal(finalLayoutIdForN(25), 'v2r2');
   assert.equal(finalLayoutIdForN(11), null);
   assert.deepEqual([...finalLayoutIdsForN(13)], ['v0']);
-  assert.deepEqual([...finalLayoutIdsForN(21)], ['v2r2', 'v1r2']);
+  assert.deepEqual([...finalLayoutIdsForN(21)], ['v2r2', 'v1r2', 'v0x']);
   assert.deepEqual([...finalLayoutIdsForN(25)], ['v2r2']);
   assert.deepEqual([...finalLayoutIdsForN(11)], []);
   assert.equal(versionForFinalN(13), 0);
@@ -112,10 +118,12 @@ test('n → 기본 레이아웃·버전 (13→v0/Y0 · 21→v2r2/Y1 · 25→v2r2
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0], [13]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v2r2], [21, 25]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v1r2], [21]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0x], [21]);
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v0, 'cell-surface-v0');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v2r2, 'cell-surface-v2r2');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v1r2, 'cell-surface-v1r2');
-  // formatIndex 신설 금지 — 세 레이아웃이 한 쌍(2T=1 · 3T=3)을 함께 쓴다.
+  assert.equal(CELL_SURFACE_FINAL_PROFILE.v0x, 'cell-surface-v0x');
+  // formatIndex 신설 금지 — 네 레이아웃이 한 쌍(2T=1 · 3T=3)을 함께 쓴다.
   assert.equal(formatIndexCellSurfaceFinal(2), 1);
   assert.equal(formatIndexCellSurfaceFinal(3), 3);
 });
@@ -410,6 +418,181 @@ test('v1r2 렌더 자체 검증 — verifyRasterY 전 셀 일치 (2톤·3톤)', 
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────
+// v0X (n=21 3파전 후보) — 2026-08-16 편입. QR 파인더 문법 차용 v0 확장.
+// 정본은 toneOverrides 셀 집합(65)에서 유도했다 — 손 좌표표 사본이 아니다.
+// ─────────────────────────────────────────────────────────────────────────
+
+test('v0X 회계 — 441 − 65 − 12 − 15 = 349 · S 116 · 잔여 1 (autoplace 유도)', () => {
+  const surface = cellSurfaceFinal(21, 'v0x');
+  assert.equal(surface.id, 'v0x');
+  assert.equal(surface.n, 21);
+  assert.equal(surface.version, 1);
+  assert.equal(surface.locatorCount, 65);
+  assert.equal(surface.declaredDataCells, 349);
+  assert.equal(surface.usedSymbols, 116);
+  assert.equal(surface.residualCells, 1);
+  assert.equal(surface.formatCells.length, 15);
+  assert.equal(surface.referenceCells.length, 12);
+  assert.equal(21 * 21, surface.locatorCount + 27 + surface.declaredDataCells);
+  assert.equal(dataCellsInScanOrderCellSurfaceFinal(21, 'v0x').length, 349);
+  assert.equal(fillerCellsCellSurfaceFinal(21, 'v0x').length, 1);
+  assert.deepEqual(surface.nsym, { symbols: 116, L: 14, M: 29, H: 46 });
+  // autoplace 하한 — 손 좌표표가 아니라 유도값이다.
+  assert.ok(surface.autoplace.dRef >= surface.autoplace.dRefMin);
+  assert.ok(surface.autoplace.sFmtMax >= surface.autoplace.sFmtMinRequired);
+  assert.equal(surface.autoplace.occupied, 65);
+  // 파인더 ∩ (format ∪ reference) = 0.
+  const painted = new Set(surface.locatorCells.map((c) => c.i + ',' + c.j));
+  for (const cell of [...surface.formatCells, ...surface.referenceCells]) {
+    assert.equal(painted.has(cell.i + ',' + cell.j), false, '겹침 ' + cell.i + ',' + cell.j);
+  }
+  // 349 는 편집기 정본의 counts.data 와 **일치**한다 — v0X 파인더는 편집기 고정 배치를
+  // 잠식하지 않는다 (v1r2 는 27 중 18 을 덮어 편집기 회계가 352 로 어긋났다).
+  for (const tones of [2, 3]) {
+    assert.equal(
+      capacityForCellSurfaceFinal(21, 'M', tones, 'v0x').name,
+      tones === 3 ? 'Y1T-CS-V0X' : 'Y1-CS-V0X',
+    );
+    assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v0x').formatIndex, tones === 3 ? 3 : 1);
+    assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v0x').dataCells, 349);
+  }
+  // 기본 경로는 건드리지 않았다 — id 를 안 주면 여전히 v2r2.
+  assert.equal(cellSurfaceFinal(21).id, 'v2r2');
+});
+
+test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 동일 35/36', () => {
+  const cells = locatorCellsCellSurfaceFinal(21, 'v0x');
+  assert.equal(cells.length, 65);
+  const inBox = (c, box) => (box.iMax === undefined || c.i <= box.iMax)
+    && (box.iMin === undefined || c.i >= box.iMin)
+    && (box.jMax === undefined || c.j <= box.jMax)
+    && (box.jMin === undefined || c.j >= box.jMin);
+  const counts = { NW: 0, NE: 0, SW: 0, SE: 0, SINGLE: 0 };
+  for (const cell of cells) {
+    let home = null;
+    for (const name of ['NW', 'NE', 'SW', 'SE']) if (inBox(cell, V0X_BLOCKS[name])) home = name;
+    if (home === null && cell.i === V0X_BLOCKS.SINGLE.i && cell.j === V0X_BLOCKS.SINGLE.j) {
+      home = 'SINGLE';
+    }
+    assert.ok(home !== null, '블록 밖 셀 ' + cell.i + ',' + cell.j);
+    counts[home] += 1;
+  }
+  assert.deepEqual(counts, { NW: 16, NE: 6, SW: 6, SE: 36, SINGLE: 1 });
+
+  // SE 6×6 은 QR 동심 사각 — 암 테두리 / 명 링 / 암 2×2 코어. 3면 동일 35/36
+  // ((19,19).R 만 mid). 이 «3면 동일» 이 로케이터 사각 링 서명의 근거다.
+  const se = cells.filter((c) => inBox(c, V0X_BLOCKS.SE));
+  assert.equal(se.filter((c) => c.T === c.L && c.L === c.R).length, 35);
+  const seT = new Map(se.map((c) => [c.i + ',' + c.j, c.T]));
+  const wantSE = ['000000', '022220', '020020', '020020', '022220', '000000'];
+  for (let i = 15; i <= 20; i += 1) {
+    const row = [];
+    for (let j = 15; j <= 20; j += 1) row.push(String(seT.get(i + ',' + j)));
+    assert.equal(row.join(''), wantSE[i - 15], 'SE 면 T 행 i=' + i);
+  }
+  // 중심 통과 런 D1 B1 D2 B1 D1 = 1:1:2:1:1 (K5 회문) — 행·열 양쪽에서 성립한다.
+  for (let j = 15; j <= 20; j += 1) {
+    const col = [];
+    for (let i = 15; i <= 20; i += 1) col.push(String(seT.get(i + ',' + j)));
+    assert.equal(col.join(''), wantSE[j - 15], 'SE 면 T 열 j=' + j);
+  }
+
+  // NW (0..3)² 는 v1r2 NW 의 같은 범위와 같다 — 공유 K3 중앙 계보 ((0,3).L mid 만 예외).
+  const nw = new Map(locatorCellsCellSurfaceFinal(21, 'v1r2')
+    .filter((c) => c.i <= 3 && c.j <= 3).map((c) => [c.i + ',' + c.j, c]));
+  assert.equal(nw.size, 16);
+  for (const cell of cells.filter((c) => inBox(c, V0X_BLOCKS.NW))) {
+    const want = nw.get(cell.i + ',' + cell.j);
+    assert.ok(want, 'v1r2 NW 에 없는 v0X NW 셀 ' + cell.i + ',' + cell.j);
+    for (const face of ['T', 'L', 'R']) {
+      if (cell[face] === 1) continue;
+      assert.equal(cell[face], want[face], 'NW ' + cell.i + ',' + cell.j + '.' + face);
+    }
+  }
+});
+
+test('v0X mid(1) 면 — 정확히 4개, 좌표·면이 정본과 일치하고 v0X 밖엔 없다', () => {
+  // 편집기 정본은 tone !== DEFAULT_TONE(=1) 만 직렬화한다 → 빠진 면은 mid 확정이다.
+  // (0,3).L · (14,20).L · (14,20).R · (19,19).R — 최종 라인업에서 v0X 만 갖는다.
+  const want = ['0,3:L', '14,20:L', '14,20:R', '19,19:R'];
+  const got = [];
+  for (const cell of locatorCellsCellSurfaceFinal(21, 'v0x')) {
+    for (const face of ['T', 'L', 'R']) {
+      if (cell[face] === 1) got.push(cell.i + ',' + cell.j + ':' + face);
+    }
+  }
+  assert.deepEqual(got.sort(), want.slice().sort());
+  for (const [id, n] of [['v0', 13], ['v2r2', 21], ['v2r2', 25], ['v1r2', 21]]) {
+    for (const cell of locatorCellsCellSurfaceFinal(n, id)) {
+      for (const face of ['T', 'L', 'R']) {
+        assert.notEqual(cell[face], 1, id + '@' + n + ' 에 mid 면이 생겼다 ' + cell.i + ',' + cell.j);
+      }
+    }
+  }
+  // (14,20) 은 T=2 · L=R=mid — 세 면 조합이 유일한 «단면 점» 이다.
+  const single = locatorCellsCellSurfaceFinal(21, 'v0x')
+    .find((c) => c.i === 14 && c.j === 20);
+  assert.deepEqual({ T: single.T, L: single.L, R: single.R }, { T: 2, L: 1, R: 1 });
+});
+
+test('v0X 인코더 왕복 — digit 레벨 decodeCells (2톤·3톤)', () => {
+  for (const tones of [2, 3]) {
+    const encoded = encodeY(PAYLOAD, {
+      cellSurfaceLayout: 'v0x', version: 1, tones, eccLevel: 'M',
+    });
+    assert.equal(encoded.n, 21);
+    assert.equal(encoded.cellSurfaceLayout, 'v0x');
+    assert.equal(encoded.locatorProfile, 'cell-surface-v0x');
+    assert.equal(encoded.formatIndex, tones === 3 ? 3 : 1);
+    const digits = dataCellsInScanOrderCellSurfaceFinal(21, 'v0x')
+      .map(({ i, j }) => encoded.cellDigits.get(i + ',' + j).digit);
+    const decoded = decodeCells(digits, {
+      type: 'Y', n: 21, formatIndex: encoded.formatIndex, eccLevel: 'M',
+      cellSurfaceLayout: 'v0x',
+    });
+    assert.equal(decoded.ok, true, 'v0x t' + tones + ': ' + decoded.reason);
+    assert.equal(decoded.text, PAYLOAD);
+    // 프로파일 힌트 경로 — 'cell-surface-v0x' 는 초안 슬롯이 없어 충돌하지 않는다.
+    const byProfile = decodeCells(digits, {
+      type: 'Y', n: 21, formatIndex: encoded.formatIndex, eccLevel: 'M',
+      locatorProfile: 'cell-surface-v0x',
+    });
+    assert.equal(byProfile.ok, true, 'v0x t' + tones + ' (profile): ' + byProfile.reason);
+    assert.equal(byProfile.text, PAYLOAD);
+    // n+formatIndex 만으론 기본(v2r2)으로 풀린다 — 기본 레이아웃 계약 불변.
+    const byIndexOnly = decodeCells(digits, {
+      type: 'Y', n: 21, formatIndex: encoded.formatIndex, eccLevel: 'M',
+    });
+    assert.notEqual(
+      byIndexOnly.ok && byIndexOnly.text, PAYLOAD,
+      'n+formatIndex 만으로 v0X 가 풀렸다 — 기본 레이아웃 계약이 깨졌다',
+    );
+  }
+});
+
+test('v0X 렌더 자체 검증 — verifyRasterY 전 셀 일치 (2톤·3톤, mid 면 포함)', () => {
+  for (const tones of [2, 3]) {
+    const encoded = encodeY(PAYLOAD, {
+      cellSurfaceLayout: 'v0x', version: 1, tones, eccLevel: 'M',
+    });
+    const scene = buildSceneY(encoded, { palette: PALETTE, margin: 16 });
+    const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
+    const report = verifyRasterY(raster, scene, encoded, { palette: PALETTE });
+    assert.equal(report.mismatches.length, 0, 'v0x t' + tones);
+    assert.equal(report.erasures.length, 0, 'v0x t' + tones);
+    assert.equal(scene.locatorProfile, 'cell-surface-v0x');
+  }
+});
+
+test('encodeY 버전 가드 — v0X 는 Y1(n=21) 전용', () => {
+  assert.throws(() => encodeY(PAYLOAD, { cellSurfaceLayout: 'v0x', version: 0, tones: 2 }), RangeError);
+  assert.throws(() => encodeY(PAYLOAD, { cellSurfaceLayout: 'v0x', version: 2, tones: 2 }), RangeError);
+  assert.equal(encodeY('short', { cellSurfaceLayout: 'v0x', tones: 2 }).n, 21);
+  // v0X 는 n=25 가 없으므로 Y1 용량을 넘으면 바로 거부다 (조용히 v2r2 로 넘어가지 않는다).
+  assert.throws(() => encodeY('x'.repeat(200), { cellSurfaceLayout: 'v0x', tones: 2 }), RangeError);
+});
+
 test('encodeY 버전 가드 — v1r2 는 Y1(n=21) 전용', () => {
   assert.throws(() => encodeY(PAYLOAD, { cellSurfaceLayout: 'v1r2', version: 0, tones: 2 }), RangeError);
   assert.throws(() => encodeY(PAYLOAD, { cellSurfaceLayout: 'v1r2', version: 2, tones: 2 }), RangeError);
@@ -446,9 +629,12 @@ function idealSampleCellForEncoded(encoded, cycle = ['T', 'L', 'R']) {
   };
 }
 
-test('n=21 병행 평가 — 두 후보를 다 채점하고 게이트가 고른다 (교차 오수용 없음)', () => {
+// 의도적 갱신 (2026-08-16): v0X 편입으로 n=21 후보가 셋 — 채점 대상·교차 오수용
+// 검사가 3-way 로 넓어진다. 게이트(0.78 / 0.035)는 그대로다.
+test('n=21 병행 평가 — 세 후보를 다 채점하고 게이트가 고른다 (교차 오수용 없음)', () => {
   const outcome = {};
-  for (const layout of ['v2r2', 'v1r2']) {
+  const N21 = ['v2r2', 'v1r2', 'v0x'];
+  for (const layout of N21) {
     const encoded = encodeY(PAYLOAD, {
       cellSurfaceLayout: layout, version: 1, tones: 2, eccLevel: 'M',
     });
@@ -457,25 +643,32 @@ test('n=21 병행 평가 — 두 후보를 다 채점하고 게이트가 고른�
     );
     assert.equal(scored.ok, true, layout + ' 평가 실패');
     // 후보 둘 다 실제로 채점됐다.
-    assert.deepEqual(Object.keys(scored.diagnostics.layouts).sort(), ['v1r2', 'v2r2']);
+    assert.deepEqual(Object.keys(scored.diagnostics.layouts).sort(), ['v0x', 'v1r2', 'v2r2']);
     assert.equal(scored.accepted, true, layout + ' 정답 레이아웃이 수용되지 않았다');
     assert.equal(scored.scored.layoutId, layout, layout + ' 이 아닌 레이아웃이 뽑혔다');
     assert.equal(scored.scored.profile, 'cell-surface-' + layout);
-    assert.equal(scored.diagnostics.layouts[layout].agreement, 1, layout + ' 정방향 완전 일치');
-    // **교차 오수용 금지** — 상대 레이아웃은 같은 프레임에서 게이트를 통과하면 안 된다.
-    const rival = layout === 'v2r2' ? 'v1r2' : 'v2r2';
+    // v0X 는 mid 면 4개가 **이 테스트의 이진 표본기**(:625 median 0.08/0.82 — mid 를
+    // bright 로 보냄)에서 어긋나 상한이 191/195 다. 이 상수는 이진 표본기 측정치이지
+    // 팔레트 측정치가 아니다 — 팔레트 경로는 mid 가 dark 쪽으로 가서 margin 이 다르다
+    // (이진 0.1282 vs 팔레트 0.1333, 적대 검증 실측). 정본 mid 4면을 0/2 로 확정해도
+    // 이 단언은 움직이지 않으니 그 결정의 자로 쓰지 말 것. 게이트 0.78 위 여유는 큼.
     assert.equal(
-      scored.diagnostics.layouts[rival].accepted,
-      false,
-      layout + ' 프레임이 ' + rival + ' 로도 수용됐다 (교차 오수용): '
-      + JSON.stringify(scored.diagnostics.layouts[rival]),
+      scored.diagnostics.layouts[layout].agreement,
+      layout === 'v0x' ? 191 / 195 : 1,
+      layout + ' 정방향 일치율',
     );
+    // **교차 오수용 금지** — 나머지 후보는 같은 프레임에서 게이트를 통과하면 안 된다.
+    for (const rival of N21) {
+      if (rival === layout) continue;
+      assert.equal(
+        scored.diagnostics.layouts[rival].accepted,
+        false,
+        layout + ' 프레임이 ' + rival + ' 로도 수용됐다 (교차 오수용): '
+        + JSON.stringify(scored.diagnostics.layouts[rival]),
+      );
+    }
     assert.equal(scored.diagnostics.ambiguous, false);
-    outcome[layout] = {
-      margin: scored.scored.orientationMargin,
-      rivalAgreement: scored.diagnostics.layouts[rival].agreement,
-      rivalReject: scored.diagnostics.layouts[rival].rejectReason,
-    };
+    outcome[layout] = { margin: scored.scored.orientationMargin };
     // 회전 오방향(±120°)도 거부한다.
     for (const cycle of [['L', 'R', 'T'], ['R', 'T', 'L']]) {
       const wrong = evaluateCellSurfaceGeometry(
@@ -486,7 +679,7 @@ test('n=21 병행 평가 — 두 후보를 다 채점하고 게이트가 고른�
   }
   // 방향 margin 은 게이트(0.035) 위여야 한다 — 수치는 회귀로 고정하지 않고 하한만 건다
   // (데이터 셀 패턴이 페이로드에 따라 달라지므로).
-  for (const layout of ['v2r2', 'v1r2']) {
+  for (const layout of N21) {
     assert.ok(
       outcome[layout].margin >= UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin,
       layout + ' margin ' + outcome[layout].margin,

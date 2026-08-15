@@ -42,12 +42,14 @@ const TONES = [
   ['gamma0.7+sCurve0.6', { gamma: 0.7, sCurve: 0.6 }],
 ];
 const ROTATIONS = [0, 90, 105, 120, 135, 150, 240];
+const TONE_FILTER = process.env.BENCH_TONES ? process.env.BENCH_TONES.split('|') : null;
 
 const TARGETS = {
   v0: { layout: 'v0', version: 0, ppu: 17 },
   'v2r2@21': { layout: 'v2r2', version: 1, ppu: 15 },
   'v2r2@25': { layout: 'v2r2', version: 2, ppu: 12 },
   v1r2: { layout: 'v1r2', version: 1, ppu: 15 },
+  v0x: { layout: 'v0x', version: 1, ppu: 15 },
 };
 
 function renderFinal(layout, version, pixelsPerUnit) {
@@ -122,6 +124,7 @@ for (const key of keys) {
   const crossPicks = [];
   const slotViolations = [];
   for (const [toneName, toneOpts] of TONES) {
+    if (TONE_FILTER && !TONE_FILTER.includes(toneName)) continue;
     let toneOk = 0;
     for (const rotation of ROTATIONS) {
       const frame = distortImage(base, { ...toneOpts, rotation, fill: FILL });

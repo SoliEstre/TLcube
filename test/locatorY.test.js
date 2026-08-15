@@ -54,12 +54,13 @@ function shapeHitsDisc(shape, disc) {
   return false;
 }
 
-test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v0/v2r2 이고 기본은 off', () => {
-  // v0 · v2r2 = 최종 라인업 (cellSurfaceFinal.js, 2026-08-15). v1/v1r2/v2 는
+test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v0/v2r2/v0x 이고 기본은 off', () => {
+  // v0 · v2r2 · v1r2 · v0x = 최종 라인업 (cellSurfaceFinal.js). v1/v2 는
   // 배포 출력물 법의학용으로 식별자만 유지한다.
+  // 의도적 갱신 (2026-08-16): v0X 편입으로 'cell-surface-v0x' 가 목록 끝에 붙었다.
   assert.deepEqual([...LOCATOR_PROFILES_Y], [
     'off', 'hex-frame-v1', 'cell-surface-v1', 'cell-surface-v1r2', 'cell-surface-v2',
-    'cell-surface-v0', 'cell-surface-v2r2',
+    'cell-surface-v0', 'cell-surface-v2r2', 'cell-surface-v0x',
   ]);
   assert.equal(DEFAULT_LOCATOR_PROFILE_Y, LOCATOR_PROFILE_OFF);
   assert.equal(assertLocatorProfileY('hex-frame-v1'), LOCATOR_PROFILE_HEX_FRAME_V1);
@@ -68,6 +69,7 @@ test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v
   assert.equal(locatorOuterPaddingCells('cell-surface-v1'), 0);
   assert.equal(locatorOuterPaddingCells('cell-surface-v0'), 0);
   assert.equal(locatorOuterPaddingCells('cell-surface-v2r2'), 0);
+  assert.equal(locatorOuterPaddingCells('cell-surface-v0x'), 0);
   assert.ok(locatorOuterPaddingCells('hex-frame-v1') > 1.8);
   assert.equal(locatorHubClearsSampleDiscs('hex-frame-v1'), true);
 });

@@ -26,6 +26,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   assertLocatorProfileY,
   isCellSurfaceLocatorProfileY,
@@ -344,13 +345,15 @@ export function buildSceneY(encoded, options) {
     ? encoded.locatorProfile
     : encoded.cellSurfaceLayout === 'v0'
       ? LOCATOR_PROFILE_CELL_SURFACE_V0
-      : encoded.cellSurfaceLayout === 'v2r2'
-        ? LOCATOR_PROFILE_CELL_SURFACE_V2R2
-        : encoded.cellSurfaceLayout === 'v2'
-          ? LOCATOR_PROFILE_CELL_SURFACE_V2
-          : (encoded.cellSurfaceLayout === 'v1r2' || encoded.cellSurfaceLayout === 'v1r2d')
-            ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
-            : LOCATOR_PROFILE_CELL_SURFACE_V1;
+      : encoded.cellSurfaceLayout === 'v0x'
+        ? LOCATOR_PROFILE_CELL_SURFACE_V0X
+        : encoded.cellSurfaceLayout === 'v2r2'
+          ? LOCATOR_PROFILE_CELL_SURFACE_V2R2
+          : encoded.cellSurfaceLayout === 'v2'
+            ? LOCATOR_PROFILE_CELL_SURFACE_V2
+            : (encoded.cellSurfaceLayout === 'v1r2' || encoded.cellSurfaceLayout === 'v1r2d')
+              ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
+              : LOCATOR_PROFILE_CELL_SURFACE_V1;
   const requestedLocator = opts.locatorProfile === undefined
     ? (cellSurface ? defaultCellSurfaceProfile : DEFAULT_LOCATOR_PROFILE_Y)
     : assertLocatorProfileY(opts.locatorProfile);

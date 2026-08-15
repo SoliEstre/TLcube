@@ -1043,13 +1043,17 @@
 
       <div id="yLocatorSection" hidden>
         <label class="section-heading" data-i18n="g515">Y타입 검출기 옵션</label>
-        <!-- 카드 순서 끔 → v0 → v1r2 → v2r2 (운영자 지시 2026-08-16) — 해상도 오름차순. -->
+        <!-- 카드 순서 끔 → v0 → v0X → v1r2 → v2r2 (운영자 지시 2026-08-16).
+             v0 계열(v0 · v0X)을 인접 배치한다 — v0X 는 v0 의 QR 파인더 문법 확장이다. -->
         <div class="card-row" id="yLocatorCards">
           <div class="toggle-card active" data-locator="off">
             <span data-i18n="g516">끔 (기존)</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v0">
             <span data-i18n="g542">셀 표면 v0 (Y0)</span>
+          </div>
+          <div class="toggle-card" data-locator="cell-surface-v0x">
+            <span data-i18n="g602">셀 표면 v0X (Y1)</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v1r2">
             <span data-i18n="g547">셀 표면 v1r2 (Y1)</span>
@@ -1439,6 +1443,8 @@ const GENERATOR_STRINGS = {
     "g546": "v2r2. 원점·먼 꼭짓점 앵커 블록 파인더 65셀. Y1(n=21) 기본, 고 해상도로 Y2(n=25). 성능을 보장하지 않아요.",
     "g547": "셀 표면 v1r2 (Y1)",
     "g548": "v1r2. 네 코너 블록 파인더 80셀 · 데이터 334. Y1(n=21) 전용. v0 확장형 A/B 후보이며 성능을 보장하지 않아요.",
+    "g602": "셀 표면 v0X (Y1)",
+    "g603": "v0X. QR 파인더 문법을 빌린 v0 확장 65셀 · 데이터 349. Y1(n=21) 전용. 3파전 후보이며 성능을 보장하지 않아요.",
     "g521": "Y타입 셀 편집기",
     "g522": "한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
     "g523": "톤 편집",
@@ -1688,6 +1694,8 @@ const GENERATOR_STRINGS = {
     "g546": "v2r2. Origin/far-corner anchored block finder, 65 cells. Y1 (n=21) by default, Y2 (n=25) at high resolution. Does not guarantee performance.",
     "g547": "Cell surface v1r2 (Y1)",
     "g548": "v1r2. Four-corner block finder, 80 cells, 334 data. Y1 (n=21) only. An A/B candidate extending v0; does not guarantee performance.",
+    "g602": "Cell surface v0X (Y1)",
+    "g603": "v0X. A v0 extension borrowing QR finder grammar, 65 cells, 349 data. Y1 (n=21) only. A three-way candidate; does not guarantee performance.",
     "g521": "Type Y cell editor",
     "g522": "Painting one face excludes that (i,j) data triple on T, L, and R. Edits are not applied to the current code output.",
     "g523": "Tone edit",
@@ -1937,6 +1945,8 @@ const GENERATOR_STRINGS = {
     "g546": "v2r2。原点・遠頂点アンカーのブロックファインダ 65セル。既定は Y1(n=21)、高解像度で Y2(n=25)。性能は保証しません。",
     "g547": "セル表面 v1r2 (Y1)",
     "g548": "v1r2。四隅ブロックファインダ 80セル・データ334。Y1(n=21) 専用。v0 の拡張版 A/B 候補で、性能は保証しません。",
+    "g602": "セル表面 v0X (Y1)",
+    "g603": "v0X。QR ファインダの文法を借りた v0 拡張 65セル・データ349。Y1(n=21) 専用。三つ巴の候補で、性能は保証しません。",
     "g521": "Yタイプセル編集",
     "g522": "1面だけ塗っても、その座標 (i,j) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
     "g523": "トーン編集",
@@ -2021,6 +2031,7 @@ import {
 import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_OFF,
@@ -3068,17 +3079,20 @@ function syncResTierUi() {
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0;
   const cellSurfaceV2r2 = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V2R2;
-  // v1r2 는 n=21 뿐이라 중(中) 한 단만 연다.
+  // v1r2 · v0X 는 n=21 뿐이라 중(中) 한 단만 연다.
   const cellSurfaceV1r2 = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2;
+  const cellSurfaceV0x = type === 'Y'
+    && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X;
   const isOff = (res) =>
     (windowLocked && (res === 'low' || res === 'mid'))
     || (cellSurfaceV0 && (res === 'mid' || res === 'high'))
     || (cellSurfaceV2r2 && res === 'low')
-    || (cellSurfaceV1r2 && (res === 'low' || res === 'high'));
+    || (cellSurfaceV1r2 && (res === 'low' || res === 'high'))
+    || (cellSurfaceV0x && (res === 'low' || res === 'high'));
   const selectedTier = cellSurfaceV0
     ? 'low'
-    : cellSurfaceV1r2
+    : (cellSurfaceV1r2 || cellSurfaceV0x)
       ? 'mid'
       : cellSurfaceV2r2
         ? (Number(generatorState[versionStateKey(type)]) === 2 ? 'high' : 'mid')
@@ -3265,6 +3279,8 @@ if (els.yLocatorCards) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_HEX_FRAME_V1;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V1R2;
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0X) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0X;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V2R2) {
@@ -4024,7 +4040,9 @@ function syncYLocatorUi() {
         ? LOCATOR_PROFILE_CELL_SURFACE_V2R2
         : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2
           ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
-          : LOCATOR_PROFILE_OFF;
+          : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X
+            ? LOCATOR_PROFILE_CELL_SURFACE_V0X
+            : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
     for (const card of els.yLocatorCards.children) {
       card.classList.toggle('active', card.dataset.locator === profile);
@@ -4035,11 +4053,13 @@ function syncYLocatorUi() {
       ? t('g546')
       : profile === LOCATOR_PROFILE_CELL_SURFACE_V1R2
         ? t('g548')
-        : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
-          ? t('g541')
-          : profile === LOCATOR_PROFILE_HEX_FRAME_V1
-            ? t('g520')
-            : t('g519');
+        : profile === LOCATOR_PROFILE_CELL_SURFACE_V0X
+          ? t('g603')
+          : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
+            ? t('g541')
+            : profile === LOCATOR_PROFILE_HEX_FRAME_V1
+              ? t('g520')
+              : t('g519');
   }
 }
 
@@ -4173,7 +4193,8 @@ function buildConfig() {
     // 셀 표면 최종 라인업: v0 = Y0 고정, v2r2 = Y1 기본·Y2 명시 선택 시 n=25.
     versionY: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0
       ? 0
-      : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+      : (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X)
         ? 1
         : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V2R2
           ? (selectedVersion(generatorState.versionY) === 2 ? 2 : 1)

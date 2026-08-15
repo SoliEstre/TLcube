@@ -1,14 +1,16 @@
 /**
- * cellSurfaceFinal.js — Type Y 셀 표면 **최종 라인업** (v0 · v2r2 · v1r2).
+ * cellSurfaceFinal.js — Type Y 셀 표면 **최종 라인업** (v0 · v2r2 · v1r2 · v0X).
  *
- * 운영자 확정 라인업 (2026-08-15, 중앙 개정 2026-08-16):
+ * 운영자 확정 라인업 (2026-08-15, 중앙 개정 2026-08-16, v0X 추가 2026-08-16):
  *   Y0 (n=13) → v0   — 네 코너 소형 블록 파인더 30셀 (정본: cellsurface-v0-editor.json)
  *   Y1 (n=21) → v2r2 — 중앙 블록 A(v1r2 NW 5×5 공유) + 먼 꼭짓점 앵커 블록 B(7×7) = 74셀
  *   Y2 (n=25) → v2r2 — 같은 앵커식 (블록 B 가 (n−7..n−1)² 로 평행이동)
  *   Y1 (n=21) → v1r2 — 네 코너 블록 80셀 (v0 의 확장형). **A/B 후보**로 병행 등록
  *                      (운영자 지시 2026-08-15 밤, 정본: cellsurface-v1r2-editor.json)
+ *   Y1 (n=21) → v0X  — QR 파인더 문법 차용 v0 확장 65셀. **n21 3파전 후보**
+ *                      (운영자 지시 2026-08-16, 정본: cellsurface-v0x-editor.json)
  *
- * n=21 은 후보가 둘이다 — 기본(default)은 v2r2 로 두고, 디코더 CS 평가가 두 레이아웃을
+ * n=21 은 후보가 셋이다 — 기본(default)은 v2r2 로 두고, 디코더 CS 평가가 세 레이아웃을
  * 모두 채점해 기존 게이트(agreement · orientation margin)로 고른다. formatIndex 는
  * 신설하지 않는다 — 레이아웃 판별은 «평가 게이트 + 로케이터 패밀리» 가 맡는다.
  *
@@ -41,6 +43,16 @@
  * 구 v1 CS(12/14)·v1r2(4/6)·v2(5/7) 초안은 **배포된 와이어 의미**라 슬롯을 소각 기록으로
  * 남긴다(모듈 로드 시점 충돌 검증의 대조군) — 이 모듈은 그 슬롯을 재사용하지 않는다.
  *
+ * **v0X (2026-08-16 추가)** — QR 파인더 문법을 차용한 v0 확장. 코드 안의 id 는
+ * 소문자 `'v0x'` 다 (형제 id v0/v1r2/v2r2 · 프로파일 문자열 `cell-surface-v0x` 와
+ * 같은 표기 규약). 운영자 정본의 표시 이름은 `v0X` 이며 UI 라벨·문서는 그쪽을 쓴다 —
+ * `nameCellSurfaceFinal` 은 어느 쪽이든 `Y1-CS-V0X` 를 낸다.
+ * 이 레이아웃은 **최종 라인업에서 처음으로 mid(tone 1) 면을 갖는다** — 편집기 정본
+ * `toneOverrides` 는 `tone !== DEFAULT_TONE(=1)` 인 항목만 실으므로(cell-editor-core.js
+ * §serializeUniversalEditor), 도색 셀에서 빠진 면은 «미지» 가 아니라 **mid 확정**이다.
+ * 그래서 buildLocatorCells 의 톤 가드는 v0X 에 한해 0/1/2 를 받는다 (v0·v1r2·v2r2 는
+ * 여전히 0/2 만 — 로드 시점 자기검증 ④ 가 강제한다).
+ *
  * 런타임 의존성 0 · 순수 ESM (node: API 금지, Math.random/Date 금지).
  */
 
@@ -61,16 +73,20 @@ import { placeReservedCells } from './autoplaceY.js';
 export const CELL_SURFACE_FINAL_V0 = 'v0';
 export const CELL_SURFACE_FINAL_V2R2 = 'v2r2';
 export const CELL_SURFACE_FINAL_V1R2 = 'v1r2';
+/** 표시 이름은 «v0X» — id 는 형제와 같은 소문자 표기다 (모듈 헤더 참조). */
+export const CELL_SURFACE_FINAL_V0X = 'v0x';
 export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0,
   CELL_SURFACE_FINAL_V2R2,
   CELL_SURFACE_FINAL_V1R2,
+  CELL_SURFACE_FINAL_V0X,
 ]);
 
 export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
   [CELL_SURFACE_FINAL_V0]: 'cell-surface-v0',
   [CELL_SURFACE_FINAL_V2R2]: 'cell-surface-v2r2',
   [CELL_SURFACE_FINAL_V1R2]: 'cell-surface-v1r2',
+  [CELL_SURFACE_FINAL_V0X]: 'cell-surface-v0x',
 });
 
 /** 신세대 셀 표면 formatIndex — 한 쌍뿐. 세 레이아웃이 같이 쓴다(신설 금지). */
@@ -81,11 +97,12 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
   [CELL_SURFACE_FINAL_V0]: Object.freeze([13]),
   [CELL_SURFACE_FINAL_V2R2]: Object.freeze([21, 25]),
   [CELL_SURFACE_FINAL_V1R2]: Object.freeze([21]),
+  [CELL_SURFACE_FINAL_V0X]: Object.freeze([21]),
 });
 
 /**
  * n → 그 n 의 **기본** 레이아웃 id. 라인업 밖 n 은 null.
- * n=21 은 후보가 둘(v2r2·v1r2)이며 기본은 v2r2 — 기존 경로의 동작을 바꾸지 않는다.
+ * n=21 은 후보가 셋(v2r2·v1r2·v0x)이며 기본은 v2r2 — 기존 경로의 동작을 바꾸지 않는다.
  */
 export function finalLayoutIdForN(n) {
   if (n === 13) return CELL_SURFACE_FINAL_V0;
@@ -127,6 +144,10 @@ const DECLARED_DATA = Object.freeze({
   // 2026-08-16 중앙 개정: painted 65→74 (+9) → data −9셀 (349→340 · 533→524).
   [CELL_SURFACE_FINAL_V2R2]: Object.freeze({ 21: 340, 25: 524 }),
   [CELL_SURFACE_FINAL_V1R2]: Object.freeze({ 21: 334 }),
+  // v0X 는 편집기 정본의 counts.data(349) 와 autoplace 재유도가 **일치**한다 —
+  // 이 파인더는 편집기 고정 배치(format/reference 27) 를 잠식하지 않기 때문이다
+  // (v1r2 는 27 중 18 을 덮어 편집기 회계가 352 로 어긋났다).
+  [CELL_SURFACE_FINAL_V0X]: Object.freeze({ 21: 349 }),
 });
 
 const FACES = Object.freeze(['T', 'L', 'R']);
@@ -189,6 +210,51 @@ const V1R2_CELLS = Object.freeze([
   [20, 1, 0, 0, 0], [20, 2, 0, 0, 0], [20, 3, 2, 2, 2], [20, 16, 2, 0, 0], [20, 17, 0, 2, 2], [20, 18, 0, 0, 0],
   [20, 19, 0, 0, 0], [20, 20, 0, 0, 0],
 ]);
+
+/**
+ * v0X 정본 65셀 [i, j, T, L, R] — cellsurface-v0x-editor.json (운영자 제공 2026-08-16)
+ * 컴팩트 전사, n=21 고정. 정본 painted 는 **toneOverrides 가 닿는 (i,j) 전체**다
+ * (userNonData 62 + 레거시 고정 위치 위 도색 3: (0,3)·(14,20)·(19,19)).
+ * 빠진 면은 **mid(1)** 로 채운다 — 편집기가 DEFAULT_TONE 을 직렬화에서 생략하기 때문
+ * (모듈 헤더 참조). 그래서 v0X 에만 mid 면이 4개 있다:
+ * (0,3).L · (14,20).L · (14,20).R · (19,19).R.
+ *
+ * 구조 (정본 실측, `_v0x-probe.mjs` 유도):
+ *   · NW (0..3)² 16셀 — v1r2 NW 5×5 의 (0..3)² 부분과 셀·톤이 같다((0,3).L 만 mid).
+ *     즉 v0·v1r2·v2r2 가 공유하는 **K3 불스아이 중앙과 같은 계보**다.
+ *   · SE (15..20)² 36셀 — QR 동심 사각. **3면 동일 톤 35/36** ((19,19).R 만 mid):
+ *     암 테두리(15·20) → 명 링(16..19) → 암 2×2 코어(17..18)². 중앙 라인 런
+ *     1:1:2:1:1 = K5 회문 → 기존 코어 스캐너 재사용 대상.
+ *   · NE (0..1)×(18..20) 6셀 · SW (18..20)×(0..1) 6셀 — 소형 마커(서브앵커).
+ *   · (14,20) 1셀 — 분류 밖 단독 «단면 점» (T=2 · L=R=mid).
+ */
+const V0X_CELLS = Object.freeze([
+  [0, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 2, 2, 2, 2], [0, 3, 0, 1, 0], [0, 18, 2, 2, 2],
+  [0, 19, 0, 2, 0], [0, 20, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 0, 0, 0], [1, 2, 2, 2, 2],
+  [1, 3, 0, 0, 2], [1, 18, 2, 0, 2], [1, 19, 2, 0, 2], [1, 20, 2, 0, 2], [2, 0, 2, 2, 2],
+  [2, 1, 2, 2, 2], [2, 2, 2, 2, 2], [2, 3, 0, 0, 2], [3, 0, 0, 0, 0], [3, 1, 2, 0, 0],
+  [3, 2, 2, 0, 0], [3, 3, 0, 0, 0], [14, 20, 2, 1, 1], [15, 15, 0, 0, 0], [15, 16, 0, 0, 0],
+  [15, 17, 0, 0, 0], [15, 18, 0, 0, 0], [15, 19, 0, 0, 0], [15, 20, 0, 0, 0], [16, 15, 0, 0, 0],
+  [16, 16, 2, 2, 2], [16, 17, 2, 2, 2], [16, 18, 2, 2, 2], [16, 19, 2, 2, 2], [16, 20, 0, 0, 0],
+  [17, 15, 0, 0, 0], [17, 16, 2, 2, 2], [17, 17, 0, 0, 0], [17, 18, 0, 0, 0], [17, 19, 2, 2, 2],
+  [17, 20, 0, 0, 0], [18, 0, 2, 2, 2], [18, 1, 2, 2, 0], [18, 15, 0, 0, 0], [18, 16, 2, 2, 2],
+  [18, 17, 0, 0, 0], [18, 18, 0, 0, 0], [18, 19, 2, 2, 2], [18, 20, 0, 0, 0], [19, 0, 0, 0, 2],
+  [19, 1, 2, 2, 0], [19, 15, 0, 0, 0], [19, 16, 2, 2, 2], [19, 17, 2, 2, 2], [19, 18, 2, 2, 2],
+  [19, 19, 2, 2, 1], [19, 20, 0, 0, 0], [20, 0, 0, 0, 0], [20, 1, 2, 2, 0], [20, 15, 0, 0, 0],
+  [20, 16, 0, 0, 0], [20, 17, 0, 0, 0], [20, 18, 0, 0, 0], [20, 19, 0, 0, 0], [20, 20, 0, 0, 0],
+]);
+
+/**
+ * v0X 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다.
+ * SINGLE 은 (14,20) 단독 셀이라 블록이 아니다 (패치로 쓸 수 없다 — Pearson 최소 6점).
+ */
+export const V0X_BLOCKS = Object.freeze({
+  NW: Object.freeze({ iMax: 3, jMax: 3 }),
+  NE: Object.freeze({ iMax: 1, jMin: 18 }),
+  SW: Object.freeze({ iMin: 18, jMax: 1 }),
+  SE: Object.freeze({ iMin: 15, jMin: 15 }),
+  SINGLE: Object.freeze({ i: 14, j: 20 }),
+});
 
 /** v1r2 네 코너 블록의 셀 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
 export const V1R2_BLOCKS = Object.freeze({
@@ -279,15 +345,25 @@ function v2r2CellsForN(n) {
   return [...V2R2_CENTER_CELLS, ...far];
 }
 
-function buildLocatorCells(rows) {
+/**
+ * mid(1) 면을 허용하는 레이아웃 — v0X 뿐이다. 나머지는 0/2 만 받는다(정의 불변).
+ * 편집기 정본이 DEFAULT_TONE 을 직렬화에서 생략하므로 mid 는 «미지» 가 아니라 확정값이다.
+ */
+const MID_TONE_LAYOUTS = Object.freeze([CELL_SURFACE_FINAL_V0X]);
+
+function buildLocatorCells(rows, allowMid = false) {
   const seen = new Set();
   const cells = rows.map(([i, j, T, L, R]) => {
     const key = cellKey(i, j);
     if (seen.has(key)) throw new Error('locator 좌표 중복: ' + key);
     seen.add(key);
     for (const tone of [T, L, R]) {
-      if (tone !== 0 && tone !== 2) {
+      if (tone === 1) {
+        if (allowMid) continue;
         throw new Error('locator 톤이 0/2 가 아니다: ' + key);
+      }
+      if (tone !== 0 && tone !== 2) {
+        throw new Error('locator 톤이 0/1/2 가 아니다: ' + key);
       }
     }
     return Object.freeze({ i, j, T, L, R });
@@ -307,13 +383,14 @@ function nsymTable(symbols) {
 function canonicalRowsFor(id, n) {
   if (id === CELL_SURFACE_FINAL_V0) return V0_CELLS;
   if (id === CELL_SURFACE_FINAL_V1R2) return V1R2_CELLS;
+  if (id === CELL_SURFACE_FINAL_V0X) return V0X_CELLS;
   return v2r2CellsForN(n);
 }
 
 function buildFinalSurface(id, n) {
   assertCellSurfaceFinalN(id, n);
   const rows = canonicalRowsFor(id, n);
-  const locatorCells = buildLocatorCells(rows);
+  const locatorCells = buildLocatorCells(rows, MID_TONE_LAYOUTS.includes(id));
   const painted = locatorCells.map((cell) => ({ i: cell.i, j: cell.j }));
 
   // format 15 · reference 12 는 autoplace 유도 — 손 좌표표 금지 (c0e7321 계약).
@@ -544,6 +621,59 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = unde
     }
   }
 
+  // ①-b v0X 정본 — 65셀 · 블록 분할 16/6/6/36 + 단독 1 · mid 면 정확히 4개.
+  if (V0X_CELLS.length !== 65) {
+    throw new Error('v0X 정본이 65셀이 아니다: ' + V0X_CELLS.length);
+  }
+  {
+    const inBox = (i, j, box) => (box.iMax === undefined || i <= box.iMax)
+      && (box.iMin === undefined || i >= box.iMin)
+      && (box.jMax === undefined || j <= box.jMax)
+      && (box.jMin === undefined || j >= box.jMin);
+    const counts = { NW: 0, NE: 0, SW: 0, SE: 0, SINGLE: 0 };
+    let midFaces = 0;
+    for (const [i, j, T, L, R] of V0X_CELLS) {
+      let home = null;
+      for (const name of ['NW', 'NE', 'SW', 'SE']) {
+        if (inBox(i, j, V0X_BLOCKS[name])) home = name;
+      }
+      if (home === null && i === V0X_BLOCKS.SINGLE.i && j === V0X_BLOCKS.SINGLE.j) {
+        home = 'SINGLE';
+      }
+      if (home === null) throw new Error('v0X 셀이 어느 블록에도 없다: ' + i + ',' + j);
+      counts[home] += 1;
+      for (const tone of [T, L, R]) if (tone === 1) midFaces += 1;
+    }
+    if (counts.NW !== 16 || counts.NE !== 6 || counts.SW !== 6
+      || counts.SE !== 36 || counts.SINGLE !== 1) {
+      throw new Error(
+        'v0X 블록 분할이 16/6/6/36+1 이 아니다: '
+        + [counts.NW, counts.NE, counts.SW, counts.SE, counts.SINGLE].join('/'),
+      );
+    }
+    if (midFaces !== 4) throw new Error('v0X mid 면이 4개가 아니다: ' + midFaces);
+  }
+  {
+    // v0X NW (0..3)² 는 v1r2 NW 의 같은 범위와 **셀·톤이 같다** ((0,3).L mid 만 예외).
+    // 셋(넷)의 중앙이 같은 K3 서명을 공유한다는 로케이터 전제를 여기서 못 박는다.
+    const nw = new Map(V1R2_CELLS
+      .filter(([i, j]) => i <= 3 && j <= 3)
+      .map(([i, j, T, L, R]) => [i + ',' + j, [T, L, R]]));
+    if (nw.size !== 16) throw new Error('v1r2 NW (0..3)² 가 16셀이 아니다: ' + nw.size);
+    for (const [i, j, T, L, R] of V0X_CELLS) {
+      if (i > 3 || j > 3) continue;
+      const want = nw.get(i + ',' + j);
+      if (!want) throw new Error('v0X NW 셀 (' + i + ',' + j + ') 이 v1r2 NW 에 없다');
+      const faces = [T, L, R];
+      for (let index = 0; index < 3; index += 1) {
+        if (faces[index] === 1) continue; // mid 는 정본이 v1r2 와 갈라지는 유일한 자리.
+        if (faces[index] !== want[index]) {
+          throw new Error('v0X NW 셀 (' + i + ',' + j + ') 톤이 v1r2 NW 와 다르다');
+        }
+      }
+    }
+  }
+
   // ② formatIndex 쌍 불변식 + cube 축 기사용 슬롯 전수 대조 (겹치면 로드 시 throw).
   if (CELL_SURFACE_FINAL_FORMAT_INDEX[3] !== CELL_SURFACE_FINAL_FORMAT_INDEX[2] + 2) {
     throw new Error('신세대 셀 표면 3톤 formatIndex 는 2톤 + 2 이어야 한다');
@@ -570,13 +700,30 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = unde
     }
   }
 
-  // ③ 네 인스턴스 회계 — 사용 심볼·잔여 셀이 확정 수치와 일치해야 한다.
+  // ④ mid 면은 v0X 전용 — v0·v1r2·v2r2 정의가 조용히 mid 를 얻으면 여기서 throw.
+  // (v2r2 중앙은 V1R2_CELLS 필터 유도라 V1R2_CELLS 행이 커버하지만, 명시로도 훑는다.)
+  for (const [id, rows] of [
+    [CELL_SURFACE_FINAL_V0, V0_CELLS],
+    [CELL_SURFACE_FINAL_V1R2, V1R2_CELLS],
+    [CELL_SURFACE_FINAL_V2R2, V2R2_FAR_BASE_CELLS],
+    [CELL_SURFACE_FINAL_V2R2, V2R2_CENTER_CELLS],
+  ]) {
+    for (const [i, j, T, L, R] of rows) {
+      for (const tone of [T, L, R]) {
+        if (tone === 1) throw new Error(id + ' 정본에 mid 면이 생겼다: ' + i + ',' + j);
+      }
+    }
+  }
+
+  // ③ 다섯 인스턴스 회계 — 사용 심볼·잔여 셀이 확정 수치와 일치해야 한다.
   // (v2r2 는 2026-08-16 중앙 개정 수치 — painted 74 · data 340/524.)
   const expected = {
     'v0@13': { symbols: 37, residual: 1, locator: 30 },
     'v2r2@21': { symbols: 113, residual: 1, locator: 74 },
     'v2r2@25': { symbols: 174, residual: 2, locator: 74 },
     'v1r2@21': { symbols: 111, residual: 1, locator: 80 },
+    // v0X — 441 − 65 − 12 − 15 = 349 · S=116 · 잔여 1 (정본 counts.data 와 일치).
+    'v0x@21': { symbols: 116, residual: 1, locator: 65 },
   };
   for (const [key, want] of Object.entries(expected)) {
     const [id, raw] = key.split('@');

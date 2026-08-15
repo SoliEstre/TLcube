@@ -29,6 +29,8 @@ export const LOCATOR_PROFILE_CELL_SURFACE_V2 = 'cell-surface-v2';
 /** 최종 라인업 (cellSurfaceFinal.js): v0 = Y0(n=13) 전용 · v2r2 = Y1/Y2(n=21/25). */
 export const LOCATOR_PROFILE_CELL_SURFACE_V0 = 'cell-surface-v0';
 export const LOCATOR_PROFILE_CELL_SURFACE_V2R2 = 'cell-surface-v2r2';
+/** v0X (표시 이름) = Y1(n=21) 3파전 후보. QR 파인더 문법 차용 v0 확장. */
+export const LOCATOR_PROFILE_CELL_SURFACE_V0X = 'cell-surface-v0x';
 export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_OFF,
   LOCATOR_PROFILE_HEX_FRAME_V1,
@@ -37,6 +39,7 @@ export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_CELL_SURFACE_V2,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
+  LOCATOR_PROFILE_CELL_SURFACE_V0X,
 ]);
 export const DEFAULT_LOCATOR_PROFILE_Y = LOCATOR_PROFILE_OFF;
 
@@ -66,7 +69,8 @@ export function isCellSurfaceLocatorProfileY(value) {
     || value === LOCATOR_PROFILE_CELL_SURFACE_V1R2
     || value === LOCATOR_PROFILE_CELL_SURFACE_V2
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0
-    || value === LOCATOR_PROFILE_CELL_SURFACE_V2R2;
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V2R2
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0X;
 }
 
 export function isLocatorProfileY(value) {

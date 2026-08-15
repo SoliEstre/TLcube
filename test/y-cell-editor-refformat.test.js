@@ -80,10 +80,13 @@ function locatorCardOrder(html) {
 
 // 신설 단언 — 기존에 카드 순서를 못 박는 테스트가 없었다 (운영자 지시 2026-08-16:
 // 끔 → v0 → v1r2 → v2r2, 해상도 오름차순).
-test('Y 검출기 옵션 카드 순서는 끔 → v0 → v1r2 → v2r2 다', () => {
-  assert.deepEqual(locatorCardOrder(INDEX), [
-    'off', 'cell-surface-v0', 'cell-surface-v1r2', 'cell-surface-v2r2',
-  ]);
+// 의도적 갱신 (2026-08-16): v0X 편입 — 운영자 지시로 v0 계열(v0 · v0X)을 인접
+// 배치해 끔 → v0 → v0X → v1r2 → v2r2 가 됐다.
+const LOCATOR_CARD_ORDER = Object.freeze([
+  'off', 'cell-surface-v0', 'cell-surface-v0x', 'cell-surface-v1r2', 'cell-surface-v2r2',
+]);
+test('Y 검출기 옵션 카드 순서는 끔 → v0 → v0X → v1r2 → v2r2 다', () => {
+  assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 
 test('셀 편집기 ref./format 는 선택 파인더 painted 셀의 autoplace 유도로 배선된다', () => {
@@ -195,9 +198,7 @@ test('생성기·셀 편집기 번들에 카드 순서와 유도 배선이 임�
   const lab = buildGeneratorLabHtml();
   const official = buildSingleHtml({ generatorEdition: OFFICIAL_GENERATOR_EDITION });
   for (const html of [lab, official]) {
-    assert.deepEqual(locatorCardOrder(html), [
-      'off', 'cell-surface-v0', 'cell-surface-v1r2', 'cell-surface-v2r2',
-    ]);
+    assert.deepEqual(locatorCardOrder(html), [...LOCATOR_CARD_ORDER]);
     assert.match(html, /yCellEditorContext/);
     assert.match(html, /g549/);
   }

@@ -300,7 +300,10 @@ function resolveProfile(format) {
         ? 'v2r2'
         : format.locatorProfile === 'cell-surface-v1r2'
           ? 'v1r2'
-          : null;
+          // 'cell-surface-v0x' 는 초안 슬롯이 없어 draftIndexWire 충돌이 없다.
+          : format.locatorProfile === 'cell-surface-v0x'
+            ? 'v0x'
+            : null;
     const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
       ? format.cellSurfaceLayout
       : (profileHintId !== null && !draftIndexWire ? profileHintId : null);
@@ -329,7 +332,7 @@ function resolveProfile(format) {
       let finalN = requestedN;
       if (finalN === undefined) {
         if (finalIdHint === 'v0') finalN = 13;
-        else if (finalIdHint === 'v1r2') finalN = 21;
+        else if (finalIdHint === 'v1r2' || finalIdHint === 'v0x') finalN = 21;
         else {
           throw new RangeError('신세대 셀 표면 v2r2 는 format.n(21|25) 이 필요하다');
         }

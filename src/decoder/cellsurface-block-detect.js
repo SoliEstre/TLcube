@@ -18,6 +18,9 @@
  *   · v2r2 면 T 블록 B((n−7..n−1)², QR 모티프 동심 사각): 회문 코어 (B,2D,B) = K5,
  *     교차거리 비 1:2(:3) 뒤 배경으로 열린다 → 'v2r2-corner'. 중앙에서 (n−3.5)셀.
  *   · v1r2 면 T SE 5×5: 같은 K5 코어 → 'v2r2-corner'. 중앙에서 18셀.
+ *   · v0X SE 6×6 (QR 동심 사각): **3면 톤이 같아** 세 면이 각각 같은 K5 코어를 낸다 →
+ *     'v2r2-corner' 가 **120° 간격 3개**, 전부 중앙에서 18셀. v1r2 는 하나뿐이라
+ *     이 «사각 링 동반자» 가 같은 반경을 쓰는 두 패밀리의 판별자다 (§6 상세).
  *   · 구 v2r2 중앙(동심 육각 링 스택, 닫힌 K5 1:2:3:4)은 **소각된 디자인**이다 —
  *     'legacy-v2r2-center' 로 분류만 남기고 어떤 포즈도 세우지 않는다(차단).
  *   동심 닮은꼴 다각형의 중심 통과 교차거리 비는 방향 무관(아핀 불변)이다.
@@ -27,6 +30,9 @@
  *     ±3.2셀)이 맞으면 **앵커드 패밀리** similarity → 패치 Pearson 정합 4앵커
  *     estimateHomography4 2라운드 → 6~12 서브앵커 최소제곱 DLT 재적합.
  *     v2r2@21·v1r2 는 거리로 안 갈라진다 — 둘 다 세우고 CS 게이트가 고른다.
+ *   · v0X 는 반경이 v1r2 와 같으므로(18.0) 거리 스냅에 더해 **사각 링 동반자 ≥ 1** 을
+ *     시딩 게이트로 요구한다. 세 후보 코너를 각각 «면 T 먼 코너» 로 가정해 시드하고
+ *     (120° 위상 3가설) 패치 Pearson 이 참 위상을 고른다.
  *   · 앵커드 포즈가 성립한 중앙은 v0 스윕 대상에서 빠진다. 앵커드 포즈가 없는
  *     중앙만 v0 경로: 30셀 전체 템플릿 회전×스케일 스윕(3°×4 → 0.75°) → 4앵커
  *     정합 2라운드 → 12 서브앵커(NW·SE + NE·SW 엣지) 최소제곱 재적합.
@@ -62,6 +68,14 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   v0RotationRefineDeg: 0.75,
   // v1r2 패밀리 (n=21 A/B 후보). false 로 끄면 벤치에서 순수 v0/v2r2 기준선을 잰다.
   v1r2Family: true,
+  // v0X 패밀리 (n=21 3파전 후보). false 로 끄면 v0X 편입 전 기준선을 잰다.
+  v0xFamily: true,
+  // v0X 시딩 게이트 — 사각 링 동반자(120° 회전 위치의 다른 K5 코어)를 요구한다.
+  // false 면 반경 스냅만으로 시드한다(게이트 실패 모드 비교용).
+  v0xRequireSquareRing: true,
+  // 사각 링 동반자 판정 허용폭 — 반경 비 ±18% · 120° 에서 ±18°.
+  squareRingRadiusTolerance: 0.18,
+  squareRingAngleToleranceDeg: 18,
 });
 
 const CANONICAL_LAYOUT = Object.freeze({ size: 1, originX: 0, originY: 0 });
@@ -519,6 +533,9 @@ function buildPatch(cells, face, filter) {
   let sumY = 0;
   for (const cell of cells) {
     if (!filter(cell)) continue;
+    // mid(1) 면은 이진 기대값이 없다 — 밝음/어두움 어느 쪽으로 눌러도 Pearson 을
+    // 편향시키므로 패치에서 뺀다. v0X 만 해당하고(면 4개), 나머지 정본은 영향 0.
+    if (cell[face] === 1) continue;
     const point = moduleCenter(face, cell.i, cell.j, CANONICAL_LAYOUT);
     const expected = cell[face] === 2 ? 1 : 0;
     points.push({ x: point.x, y: point.y, expected });
@@ -552,6 +569,21 @@ function mergePatches(patches) {
  * 그 6 패치가 최소제곱 재적합의 스프레드를 넓힌다. v2r2 는 두 블록뿐이다.
  */
 function blockLimitsFor(n, layoutId) {
+  if (layoutId === 'v0x') {
+    // NW (0..3)² 16 · SE (15..20)² 36 · NE (0..1)×(18..20) 6 · SW (18..20)×(0..1) 6.
+    // (14,20) 단독 셀은 패치가 아니다 — 1점 패치는 Pearson 최소 6점(registerPatch)을
+    // 못 채워 subPatch 경로가 null 이 되고, refineWithSubPatches 가 round-3 최소제곱
+    // 재적합 없이 base 포즈로 폴백한다 (포즈가 죽는 게 아니라 정밀도만 잃는다 —
+    // 적대 검증 실측: 1점 subPatch 주입 전후 poseCount·shapeCount 동일). 그래서 배제.
+    return {
+      nearLimit: 3,
+      farLimit: 15,
+      edges: Object.freeze([
+        Object.freeze({ iMax: 1, jMin: 18 }),
+        Object.freeze({ iMin: 18, jMax: 1 }),
+      ]),
+    };
+  }
   if (layoutId === 'v1r2') {
     return {
       nearLimit: 4,
@@ -966,6 +998,67 @@ const V2R2_RADII = Object.freeze([
   Object.freeze({ n: 25, radius: 21.5 }),
 ]);
 
+/**
+ * v0X — SE (15..20)² 동심 사각의 암 2×2 코어 중심은 셀 경계 (18,18) 이라 중앙에서
+ * **18.0셀**, v1r2 SE 5×5 코어와 같은 반경이다. 거리로는 안 갈라진다.
+ *
+ * **사각 링 서명 (측정, 2026-08-16)** — v0X SE 블록은 3면 톤이 같아(35/36) 세 면이
+ * 각각 같은 K5 회문 코어를 낸다. 그래서 클린 프레임에서 'v2r2-corner' 히트가
+ * **120° 간격 3개**로 뜬다 (실측 각 −90.2° · 30.1° · 150.3°, r/u 18.49~18.69).
+ * v1r2 는 면 T 만 그 서명을 갖고 L·R 은 다른 무늬라 히트가 **하나**다 (실측 −90.1°,
+ * r/u 18.07). 이 «동반자 수» 가 두 패밀리를 가르는 값싼 판별자다 — 중앙 서명(K3)은
+ * 네 레이아웃이 공유하므로 판별에 쓸 수 없다.
+ *
+ * 이 동반자 조건을 **v0X 시딩 게이트로 쓴다** (cfg.v0xRequireSquareRing). 게이트를
+ * 켜기 전에 실패 모드를 먼저 쟀다 — «저게인 면(R 0.52)의 코어가 먼저 죽어 동반자가
+ * 0 이 되면 v0X 가 통째로 죽는다» 가 유일한 위험인데, 합성 측정에서는 일어나지 않았다:
+ *   · 49-매트릭스(톤 7 × 회전 7) v0X 프레임 49/49 에서 동반자 쌍 ≥ 2 (최빈 4~8).
+ *   · cell_px 7·8·9·10·12·15 × 채널 3 × 회전 3 × 2·3톤 = 108 프레임에서도 **0 이 한 번도
+ *     없었다** (최소 3). cell_px 7 은 이미 복호 붕괴 문턱 아래인데도 신호는 남았다 —
+ *     동심 사각의 코어는 링보다 굵어서 마지막까지 버틴다.
+ * 반대편(게이트가 잡아 주는 것)도 쟀다 — 같은 하네스에서 v1r2 프레임의 헛 v0x 포즈
+ * 98개 중 94개, v2r2@21 162개 중 113개, Type O/A 프레임의 헛 포즈 **28개 전부**가
+ * 동반자 0 프레임에서 나왔다. 게이트가 없으면 n=21 프레임마다 refinePose 가 한 번씩
+ * 더 돌아 복호 중앙값이 10~19% 오른다 (실측, §벤치).
+ *
+ * 게이트를 통과한 뒤에는 세 후보 코너 각각을 «면 T 의 먼 코너» 로 가정해 시드하고
+ * (→ 120° 위상 3가설), 패치 Pearson 이 참 위상을 고른다.
+ */
+const V0X_CORE_RADIUS_CELLS = 18;
+const V0X_N = 21;
+
+/**
+ * 코너 하나에 대해, 같은 중앙 기준으로 ±120° 회전 위치에 다른 코너가 있는지 센다.
+ * 0..2. 결정성: corners 배열의 고정 순서로만 순회한다.
+ */
+function squareRingCompanions(centre, corner, corners, cfg) {
+  const baseX = corner.x - centre.x;
+  const baseY = corner.y - centre.y;
+  const baseR = Math.hypot(baseX, baseY);
+  if (!(baseR > EPSILON)) return 0;
+  const baseAngle = Math.atan2(baseY, baseX);
+  const angleTolerance = (cfg.squareRingAngleToleranceDeg * Math.PI) / 180;
+  let found = 0;
+  for (const turn of [1, -1]) {
+    const wantAngle = baseAngle + (turn * 2 * Math.PI) / 3;
+    for (const other of corners) {
+      if (other === corner) continue;
+      const dx = other.x - centre.x;
+      const dy = other.y - centre.y;
+      const r = Math.hypot(dx, dy);
+      if (!(r > EPSILON)) continue;
+      if (Math.abs(r - baseR) > cfg.squareRingRadiusTolerance * baseR) continue;
+      let delta = Math.atan2(dy, dx) - wantAngle;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      if (Math.abs(delta) > angleTolerance) continue;
+      found += 1;
+      break;
+    }
+  }
+  return found;
+}
+
 /** 중앙+원거리 쌍의 similarity 시드 — canonical 대각 (0,−1)·radius → 코너.
  *  R·(0,−1) = w 에서 cos = −wy, sin = wx. */
 function anchoredSimilaritySeed(centre, corner, factor, radiusCells) {
@@ -992,7 +1085,9 @@ function anchoredSimilaritySeed(centre, corner, factor, radiusCells) {
 function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
   const posesV2r2 = [];
   const posesV1r2 = [];
+  const posesV0x = [];
   const anchoredCentres = new Set();
+  let companionPairs = 0;
   for (let centreIndex = 0; centreIndex < centres.length; centreIndex += 1) {
     const centre = centres[centreIndex];
     for (const corner of corners) {
@@ -1043,9 +1138,31 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
           });
         }
       }
+      // v0X (n=21 3파전 후보) — v1r2 와 같은 반경 18.0 이라 거리로는 안 갈라진다.
+      // 가르는 것은 **사각 링 동반자**(3면 동일 SE 블록의 120° 쌍둥이 코어)다.
+      if (cfg.v0xFamily !== false
+        && Math.abs(estimatedRadius - V0X_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+        const companions = squareRingCompanions(centre, corner, corners, cfg);
+        if (companions > 0) companionPairs += 1;
+        if (companions === 0 && cfg.v0xRequireSquareRing !== false) continue;
+        const H0 = anchoredSimilaritySeed(centre, corner, factor, V0X_CORE_RADIUS_CELLS);
+        const refined = refinePose(fullLuma, H0, patchesFor(V0X_N, 'v0x'), cfg);
+        if (refined) {
+          anchoredCentres.add(centreIndex);
+          posesV0x.push({
+            family: 'v0x',
+            layoutId: 'v0x',
+            n: V0X_N,
+            H: refined.H,
+            score: refined.meanCorrelation,
+            estimatedRadius,
+            squareRingCompanions: companions,
+          });
+        }
+      }
     }
   }
-  return { posesV2r2, posesV1r2, anchoredCentres };
+  return { posesV2r2, posesV1r2, posesV0x, anchoredCentres, companionPairs };
 }
 
 function rotationSweepScore(reducedLuma, template, centre, unit, angleCos, angleSin) {
@@ -1265,17 +1382,19 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   // 비쌌다 (v1r2 클린 벤치 724→1620 ms). 상위 3/4 슬라이스가 사실상의 비용 캡이다.
   const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
   const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
-  const { posesV2r2, posesV1r2, anchoredCentres } = assembleAnchoredPoses(
-    centres, corners, luma, reduced.factor, cfg,
-  );
+  const {
+    posesV2r2, posesV1r2, posesV0x, anchoredCentres, companionPairs,
+  } = assembleAnchoredPoses(centres, corners, luma, reduced.factor, cfg);
   const posesV0 = assembleV0Poses(
     centres, anchoredCentres, reduced.luma, luma, reduced.factor, cfg,
   );
 
   const shapes = [];
-  for (const familyPoses of [posesV2r2, posesV1r2, posesV0]) {
+  for (const familyPoses of [posesV2r2, posesV1r2, posesV0x, posesV0]) {
     familyPoses.sort((left, right) =>
-      right.score - left.score || left.n - right.n);
+      // v0X 는 사각 링 동반자가 많은 포즈를 먼저 본다 (3면 동일 서명이 실재한다는 증거).
+      (right.squareRingCompanions || 0) - (left.squareRingCompanions || 0)
+      || right.score - left.score || left.n - right.n);
     for (const pose of dedupePosesByGeometry(familyPoses).slice(0, cfg.maximumPosesPerFamily)) {
       const shape = shapeFromPose(pose, shapes.length);
       if (shape) shapes.push(shape);
@@ -1300,8 +1419,12 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       poseCount: {
         v2r2: posesV2r2.length,
         v1r2: posesV1r2.length,
+        v0x: posesV0x.length,
         v0: posesV0.length,
       },
+      // 사각 링 서명 관측 — 120° 동반자를 가진 (중앙, 코너) 쌍의 수.
+      // v0X 프레임은 3면 동일 SE 블록이라 크고, v1r2·v2r2 프레임은 0 이 기대값이다.
+      squareRing: { companionPairs },
       // 조기 분기 관측 — 몇 개의 K3 중앙이 앵커드로 분기했고 몇 개가 v0 스윕으로
       // 내려갔는지 (swept = centres − anchored).
       earlyBranch: {
@@ -1331,4 +1454,5 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   patchesForN,
   patchesFor,
   assembleAnchoredPoses,
+  squareRingCompanions,
 });

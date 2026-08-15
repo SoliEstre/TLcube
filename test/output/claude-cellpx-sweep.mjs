@@ -39,11 +39,16 @@ const CELL_PX = process.env.CELLPX
   : [7, 8, 9, 10, 12, 15];
 const TONES = [2, 3];
 const ROTATIONS = [0, 105, 240];
-const TARGETS = [
+const ALL_TARGETS = [
   { layout: 'v0', version: 0, n: 13 },
   { layout: 'v1r2', version: 1, n: 21 },
   { layout: 'v2r2', version: 1, n: 21 },
+  // 2026-08-16 v0X 편입 — 같은 n=21 이라 cell_px 통제 축이 v1r2 와 동일하다.
+  { layout: 'v0x', version: 1, n: 21 },
 ];
+const TARGETS = process.env.SWEEP_LAYOUTS
+  ? ALL_TARGETS.filter((t) => process.env.SWEEP_LAYOUTS.split(',').includes(t.layout))
+  : ALL_TARGETS;
 const CHANNELS = [
   { id: 'clean', kind: 'none' },
   { id: 'sCurve0.6', kind: 'sCurve', amount: 0.6 },
