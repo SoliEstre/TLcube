@@ -28,7 +28,12 @@ import { rsEncode } from './rs211.js';
 import { maskAdd } from './mask.js';
 import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { dataCellsInScanOrder, fillerCells } from './layoutY.js';
-import { referenceCellsAll, formatCells } from './placementY.js';
+import {
+  REFERENCE_GROUP_DIGITS_2T,
+  REFERENCE_GROUP_DIGITS_3T,
+  referenceCellsAll,
+  formatCells,
+} from './placementY.js';
 import {
   CELL_SURFACE_N,
   CELL_SURFACE_PROFILE_ID,
@@ -496,7 +501,12 @@ function encodeYCellSurfaceLayout(text, eccLevel, tones, layoutId) {
     });
   }
 
-  const references = referenceCellsAll(n, tones);
+  const refDigits = tones === 3 ? REFERENCE_GROUP_DIGITS_3T : REFERENCE_GROUP_DIGITS_2T;
+  const references = layout.referenceCells.map((c, index) => ({
+    i: c.i,
+    j: c.j,
+    digit: refDigits[index % 3],
+  }));
   for (const c of references) {
     cellDigits.set(cellKey(c.i, c.j), { digit: c.digit, role: 'reference' });
   }

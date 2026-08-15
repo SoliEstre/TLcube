@@ -53,6 +53,7 @@ import {
   pushUndoSnapshot,
   redo,
   resetAllTones,
+  previewAutoplaceY,
   roleOfCoord,
   rotate120,
   serializeCellEditorFinderPattern,
@@ -130,6 +131,8 @@ const I18N = Object.freeze({
     pngSaved: 'PNG 이미지를 내보냈어요.',
     svgSaved: 'SVG 이미지를 내보냈어요.',
     dropperPicked: '{face}면 톤 {tone}을(를) 추출했어요.',
+    autoplaceOk: 'ref/format 자동 배치 · 점유 {occupied} · D_ref {dRef} · S_fmt {sFmt}',
+    autoplaceFail: 'ref/format 자동 배치 불가: {message}',
   }),
   en: Object.freeze({
     title: 'TLcube Cell & Finder Editor',
@@ -198,6 +201,8 @@ const I18N = Object.freeze({
     pngSaved: 'Exported PNG image.',
     svgSaved: 'Exported SVG image.',
     dropperPicked: 'Picked tone {tone} from {face} face.',
+    autoplaceOk: 'Auto-placed ref/format · occupied {occupied} · D_ref {dRef} · S_fmt {sFmt}',
+    autoplaceFail: 'Cannot auto-place ref/format: {message}',
   }),
   ja: Object.freeze({
     title: 'TLcube セル＆ファインダーエディター',
@@ -266,6 +271,8 @@ const I18N = Object.freeze({
     pngSaved: 'PNG画像を出力しました。',
     svgSaved: 'SVG画像を出力しました。',
     dropperPicked: '{face}面からトーン{tone}を取得しました。',
+    autoplaceOk: 'ref/format 自動配置 · 占有 {occupied} · D_ref {dRef} · S_fmt {sFmt}',
+    autoplaceFail: 'ref/format を自動配置できません: {message}',
   }),
 });
 
@@ -350,8 +357,11 @@ const elements = {
   exportSvgBtn: document.getElementById('exportSvgBtn'),
   jsonFileInput: document.getElementById('jsonFileInput'),
   statusBar: document.getElementById('statusBar'),
+  autoplaceHint: document.getElementById('autoplaceHint'),
   finderCopyContainer: document.getElementById('finderCopyContainer'),
 };
+
+let yPlacementPreview = null;
 
 function t(key, values = {}) {
   let text = I18N[currentLang][key] || I18N.ko[key] || key;
@@ -509,10 +519,14 @@ function renderCanvas() {
     const n = editorState.size;
     const margin = 24;
     const radius = (displaySize - margin * 2) / (Math.sqrt(3) * n * 1.05);
+    yPlacementPreview = previewAutoplaceY(editorState);
+    const yRoles = yPlacementPreview && yPlacementPreview.ok
+      ? yPlacementPreview.roles
+      : new Map();
 
     for (const c of cells) {
       const isDet = editorState.userNonData.has(coordKey('Y', c));
-      const role = roleOfCoord('Y', n, c);
+      const role = roleOfCoord('Y', n, c, { roles: yRoles });
 
       for (const face of YFACES) {
         const quad = moduleQuadY(face, c.i, c.j, { size: radius, originX: centerX, originY: centerY });
@@ -760,6 +774,30 @@ function updateUI() {
   elements.cntDetector.textContent = String(serialized.counts.detector);
   elements.cntFixed.textContent = String(serialized.counts.fixed);
 
+  if (elements.autoplaceHint) {
+    if (editorState.type === 'Y') {
+      yPlacementPreview = previewAutoplaceY(editorState);
+      if (yPlacementPreview.ok) {
+        const metrics = yPlacementPreview.placement.metrics;
+        elements.autoplaceHint.textContent = t('autoplaceOk', {
+          occupied: metrics.occupied,
+          dRef: metrics.dRef,
+          sFmt: metrics.sFmtMax,
+        });
+        elements.autoplaceHint.classList.remove('error');
+      } else {
+        elements.autoplaceHint.textContent = t('autoplaceFail', {
+          message: yPlacementPreview.message,
+        });
+        elements.autoplaceHint.classList.add('error');
+      }
+    } else {
+      yPlacementPreview = null;
+      elements.autoplaceHint.textContent = '';
+      elements.autoplaceHint.classList.remove('error');
+    }
+  }
+
   elements.undoBtn.disabled = editorState.undoStack.length === 0;
   elements.redoBtn.disabled = editorState.redoStack.length === 0;
 
@@ -868,7 +906,10 @@ function bindEvents() {
 
     hoveredElement = hit;
     if (hit) {
-      const role = roleOfCoord(editorState.type, editorState.size, hit.coord, { finderMode: editorState.finderMode });
+      const role = roleOfCoord(editorState.type, editorState.size, hit.coord, {
+        finderMode: editorState.finderMode,
+        roles: yPlacementPreview && yPlacementPreview.ok ? yPlacementPreview.roles : null,
+      });
       const coordStr = editorState.type === 'Y' ? `(${hit.coord.i}, ${hit.coord.j})` : `(${hit.coord.q}, ${hit.coord.r})`;
       const tone = getCellTone(editorState, hit.face, hit.coord);
       elements.tooltip.style.display = 'block';

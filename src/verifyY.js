@@ -30,6 +30,7 @@ import { YFACES, moduleSampleDisc } from './ygrid.js';
 import { referenceGroups } from './placementY.js';
 import { windowedReferenceGroupsY } from './capacityY.js';
 import { locatorCellsCellSurface } from './cellSurfaceY.js';
+import { locatorCellsCellSurfaceLayout } from './cellSurfaceLayouts.js';
 import { digitToRanks, ranksToDigit } from './lehmer.js';
 import { relativeLuminance, DELTA_MIN_CONTRACT, getPreset, DEFAULT_PRESET } from './luminance.js';
 import { thetaFromAnchors, classifyTriple, digitToPattern } from './tonemap.js';
@@ -74,6 +75,13 @@ function referenceGroupsFor(encoded, tones) {
   return resolveWindow(encoded)
     ? windowedReferenceGroupsY(encoded.n, tones)
     : referenceGroups(encoded.n, tones);
+}
+
+function locatorsForEncoded(encoded) {
+  if (encoded.cellSurfaceLayout) {
+    return locatorCellsCellSurfaceLayout(encoded.cellSurfaceLayout);
+  }
+  return locatorCellsCellSurface(encoded.locatorArm);
 }
 
 /** 결정적 median — 정렬 기반(Math.random 미사용). 빈 배열은 NaN. */
@@ -180,7 +188,7 @@ export function estimateFaceGains(raster, scene, encoded, options = {}) {
   for (const face of YFACES) {
     const pairs = [];
     if (encoded.cellSurface === true) {
-      for (const cell of locatorCellsCellSurface(encoded.locatorArm)) {
+      for (const cell of locatorsForEncoded(encoded)) {
         const yKnown = yLevels[cell[face]];
         const yObs = measureModuleMedian(raster, scene, face, cell.i, cell.j);
         pairs.push({ i: cell.i, j: cell.j, yKnown, yObs });
@@ -297,7 +305,7 @@ export function estimateFaceThetas(raster, scene, encoded, gains) {
     const lows = [];
     const highs = [];
     if (encoded.cellSurface === true) {
-      for (const cell of locatorCellsCellSurface(encoded.locatorArm)) {
+      for (const cell of locatorsForEncoded(encoded)) {
         const yObs = measureModuleMedian(raster, scene, face, cell.i, cell.j);
         const g = gains[face];
         const normalized = Number.isFinite(g) && g > 0 ? yObs / g : yObs;

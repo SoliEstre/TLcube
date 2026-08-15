@@ -33,6 +33,10 @@ import {
   roleOf as roleOfY,
 } from './placementY.js';
 import {
+  placeReservedCells,
+  roleMapFromPlacement,
+} from './autoplaceY.js';
+import {
   BULLSEYE_RADIUS,
   buildRoleSets as buildRoleSetsO,
   roleOf as roleOfO,
@@ -373,9 +377,56 @@ export function isCenterCell(type, c) {
   return hexDistance(c.q, c.r) <= BULLSEYE_RADIUS;
 }
 
+export function occupiedCellsY(state) {
+  if (state.type !== 'Y') return [];
+  const seen = new Set();
+  const cells = [];
+  const add = (i, j) => {
+    const key = i + ',' + j;
+    if (seen.has(key)) return;
+    seen.add(key);
+    cells.push({ i, j });
+  };
+  for (const key of state.tones.keys()) {
+    const parsed = parseToneKey('Y', key);
+    add(parsed.i, parsed.j);
+  }
+  for (const key of state.userNonData) {
+    const parsed = parseCoordKey('Y', key);
+    add(parsed.i, parsed.j);
+  }
+  cells.sort((a, b) => a.i - b.i || a.j - b.j);
+  return cells;
+}
+
+export function previewAutoplaceY(state) {
+  if (state.type !== 'Y') return null;
+  try {
+    const placement = placeReservedCells(state.size, occupiedCellsY(state));
+    return {
+      ok: true,
+      placement,
+      roles: roleMapFromPlacement(placement),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      code: error.code || error.name,
+      message: error.message,
+    };
+  }
+}
+
 export function roleOfCoord(type, size, c, options = {}) {
   const { finderMode = DEFAULT_FINDER_MODE } = options;
   if (type === 'Y') {
+    const roles = options.roles || (options.placement
+      ? roleMapFromPlacement(options.placement)
+      : null);
+    if (roles) {
+      const entry = roles.get(c.i + ',' + c.j);
+      return entry ? entry.role : 'data';
+    }
     return roleOfY(c.i, c.j, size);
   }
   if (type === 'O') {
@@ -642,9 +693,10 @@ export function applyBrush(state, face, c, options = {}) {
     }
   }
 
-  // 기본 모드에서는 변경 시 비데이터로 자동 등록
+  // Type Y 셀 표면은 칠한 셀이 곧 파인더 점유다. format/reference 는
+  // autoplace 가 비키므로 고정 역할이어도 userNonData 에 넣는다.
   const role = roleOfCoord(state.type, state.size, c, { finderMode: state.finderMode });
-  if (!isFixedRole(role)) {
+  if (state.type === 'Y' || !isFixedRole(role)) {
     const ck = coordKey(state.type, c);
     state.userNonData.add(ck);
   }
@@ -665,7 +717,7 @@ export function applyBucket(state, face, c, targetTone = state.activeTone, optio
     setCellToneDirect(state, current.face, current.coord, targetTone);
 
     const role = roleOfCoord(state.type, state.size, current.coord, { finderMode: state.finderMode });
-    if (!isFixedRole(role)) {
+    if (state.type === 'Y' || !isFixedRole(role)) {
       state.userNonData.add(coordKey(state.type, current.coord));
     }
 
@@ -712,7 +764,7 @@ export function applyEraser(state, face, c, options = {}) {
 
 export function applyMaskToggle(state, c) {
   const role = roleOfCoord(state.type, state.size, c, { finderMode: state.finderMode });
-  if (isFixedRole(role)) {
+  if (state.type !== 'Y' && isFixedRole(role)) {
     return { changed: false, reason: 'fixed' };
   }
   const ck = coordKey(state.type, c);
@@ -789,8 +841,28 @@ export function serializeUniversalEditor(state) {
   let dataCount = 0;
   let detectorCount = 0;
   let fixedCount = 0;
+  const yPreview = state.type === 'Y' ? previewAutoplaceY(state) : null;
+  const occupiedY = state.type === 'Y'
+    ? new Set(occupiedCellsY(state).map((cell) => cell.i + ',' + cell.j))
+    : null;
 
   for (const c of cells) {
+    if (state.type === 'Y') {
+      const ck = c.i + ',' + c.j;
+      if (occupiedY.has(ck)) {
+        detectorCount += 1;
+      } else if (yPreview && yPreview.ok) {
+        const entry = yPreview.roles.get(ck);
+        if (entry && (entry.role === 'reference' || entry.role === 'format')) {
+          fixedCount += 1;
+        } else {
+          dataCount += 1;
+        }
+      } else {
+        dataCount += 1;
+      }
+      continue;
+    }
     const role = roleOfCoord(state.type, state.size, c, { finderMode: state.finderMode });
     const ck = coordKey(state.type, c);
     if (isFixedRole(role)) {

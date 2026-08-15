@@ -64,7 +64,7 @@ const MODULE_ORDER = [
   // 터진다. 이 불변식은 이제 assertTopologicalOrder() 가 빌드 시점에 강제한다.
   'gf256', 'rs', 'qr', 'generator-state', 'export-filename',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
-  'ygrid', 'placementY', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'tonemap',
+  'ygrid', 'placementY', 'autoplaceY', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'tonemap',
   // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
   // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,
   // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.

@@ -63,7 +63,7 @@ test('셀 표면 v1r2 는 version=1 을 강제하되 사용자 톤을 보존하�
     assert.equal(encoded.cellSurfaceLayout, 'v1r2');
     assert.equal(encoded.tones, tone);
     assert.equal(encoded.formatIndex, tone === 3 ? 6 : 4);
-    assert.equal(encoded.capacity.dataCells, 352);
+    assert.equal(encoded.capacity.dataCells, 334);
   }
 });
 

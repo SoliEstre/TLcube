@@ -1,10 +1,12 @@
 /**
  * cellSurfaceLayouts.js — Type Y 셀 표면 레이아웃 2종 (v1r2 · v2).
  *
- * 정본 입력은 셀 편집기 export. userNonData 는 사용자가 데이터에서 뺀 셀만 담는다.
- * reference(12) · format(15) 는 여기 안 들어온다. 데이터 셀 수는
- *   441 − userNonData − 12 − 15
- * 이며 선언값(v1r2 352 · v2 326)과 같아야 한다. 이 수를 다시 깎지 않는다.
+ * 정본 입력은 셀 편집기 export. 파인더가 점유한 셀은 toneOverrides 가 닿는
+ * (i,j) 전체다. userNonData 만 세면 format/reference 위에 칠한 셀이 빠진다.
+ * reference(12) · format(15) 는 autoplaceY 가 그 점유 집합에서 유도한다.
+ * 데이터 셀 수는
+ *   441 − painted − 12 − 15
+ * 이며 선언값(v1r2 334 · v2 306)과 같아야 한다.
  *
  * formatIndex 는 cube 축의 빈 슬롯. 구 v1 CS 12/14 의미는 그대로 둔다.
  *   v1r2: 4 (2톤) / 6 (3톤)
@@ -17,10 +19,7 @@ import { maxBytesForSymbols } from './capacity.js';
 import { errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
 import { VERSIONS_Y } from './capacityY.js';
-import {
-  formatCells as legacyFormatCells,
-  referenceCellsAll,
-} from './placementY.js';
+import { placeReservedCells } from './autoplaceY.js';
 
 export const CELL_SURFACE_LAYOUT_N = 21;
 export const CELL_SURFACE_LAYOUT_VERSION = 1;
@@ -47,8 +46,8 @@ export const CELL_SURFACE_LAYOUT_FORMAT_INDEX = Object.freeze({
 });
 
 export const CELL_SURFACE_LAYOUT_DECLARED_DATA = Object.freeze({
-  [CELL_SURFACE_LAYOUT_V1R2]: 352,
-  [CELL_SURFACE_LAYOUT_V2]: 326,
+  [CELL_SURFACE_LAYOUT_V1R2]: 334,
+  [CELL_SURFACE_LAYOUT_V2]: 306,
 });
 
 const FACES = Object.freeze(['T', 'L', 'R']);
@@ -175,13 +174,30 @@ function toneMap(triples) {
   return Object.freeze(map);
 }
 
-function buildLocatorCells(user, tones) {
+function uniquePaintedCells(tones) {
+  const seen = new Set();
+  const cells = [];
+  for (const face of FACES) {
+    for (const triple of tones[face]) {
+      const i = triple[0];
+      const j = triple[1];
+      const key = cellKey(i, j);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cells.push({ i, j });
+    }
+  }
+  cells.sort((a, b) => a.i - b.i || a.j - b.j);
+  return cells;
+}
+
+function buildLocatorCells(painted, tones) {
   const tables = {
     T: toneMap(tones.T),
     L: toneMap(tones.L),
     R: toneMap(tones.R),
   };
-  const cells = user.map(([i, j]) => {
+  const cells = painted.map(({ i, j }) => {
     const key = cellKey(i, j);
     const T = tables.T[key];
     const L = tables.L[key];
@@ -205,19 +221,28 @@ function nsymTable(symbols) {
 
 function buildLayout(id, user, tones) {
   const n = CELL_SURFACE_LAYOUT_N;
-  const locatorCells = buildLocatorCells(user, tones);
+  const painted = uniquePaintedCells(tones);
+  const paintedKeys = new Set(painted.map((cell) => cellKey(cell.i, cell.j)));
+  for (const pair of user) {
+    const key = cellKey(pair[0], pair[1]);
+    if (!paintedKeys.has(key)) {
+      throw new Error(id + ': userNonData 가 톤 표에 없다: ' + key);
+    }
+  }
+  const locatorCells = buildLocatorCells(painted, tones);
+  const placed = placeReservedCells(n, painted);
+  const format = placed.formatCells;
+  const reference = placed.referenceCells;
   const locatorKeys = new Set(locatorCells.map((cell) => cellKey(cell.i, cell.j)));
-  const format = Object.freeze(legacyFormatCells(n).map((cell) => Object.freeze({ i: cell.i, j: cell.j })));
   const formatKeys = new Set(format.map((cell) => cellKey(cell.i, cell.j)));
-  const reference = Object.freeze(referenceCellsAll(n, 2).map((cell) => Object.freeze({ i: cell.i, j: cell.j })));
   const referenceKeys = new Set(reference.map((cell) => cellKey(cell.i, cell.j)));
 
   for (const key of locatorKeys) {
     if (formatKeys.has(key)) throw new Error(id + ': locator 가 format 과 겹친다: ' + key);
     if (referenceKeys.has(key)) throw new Error(id + ': locator 가 reference 와 겹친다: ' + key);
   }
-  if (locatorCells.length !== user.length) {
-    throw new Error(id + ': locator 수가 userNonData 와 다르다');
+  if (locatorCells.length !== painted.length) {
+    throw new Error(id + ': locator 수가 칠한 셀 수와 다르다');
   }
   if (format.length !== CELL_SURFACE_LEGACY_FORMAT) {
     throw new Error(id + ': format 15가 아니다: ' + format.length);
@@ -230,7 +255,7 @@ function buildLayout(id, user, tones) {
   const dataCells = n * n - locatorCells.length - reference.length - format.length;
   if (dataCells !== declared) {
     throw new Error(
-      id + ': 441 − userNonData − 12 − 15 = ' + dataCells
+      id + ': 441 − painted − 12 − 15 = ' + dataCells
       + ' 이 선언 data ' + declared + ' 와 다르다',
     );
   }
@@ -250,8 +275,12 @@ function buildLayout(id, user, tones) {
     version: CELL_SURFACE_LAYOUT_VERSION,
     locatorCells,
     locatorCount: locatorCells.length,
+    paintedCells: Object.freeze(painted.map((cell) => Object.freeze({ i: cell.i, j: cell.j }))),
+    paintedCount: painted.length,
+    userNonDataCount: user.length,
     formatCells: format,
     referenceCells: reference,
+    autoplace: placed.metrics,
     declaredDataCells: declared,
     usedSymbols,
     residualCells,
@@ -320,6 +349,10 @@ export function tonesFromCellSurfaceLayoutFormatIndex(index) {
 
 export function locatorCellsCellSurfaceLayout(id) {
   return cellSurfaceLayout(id).locatorCells;
+}
+
+export function paintedCellsCellSurfaceLayout(id) {
+  return cellSurfaceLayout(id).paintedCells;
 }
 
 export function formatCellsCellSurfaceLayout(id) {

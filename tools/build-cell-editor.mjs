@@ -17,7 +17,7 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'header',
   'placement', 'bullseye', 'layout', 'capacity',
   'placementA', 'layoutA', 'capacityA', 'encodeA',
-  'placementY', 'type-y-cell-editor', 'layoutY', 'capacityY',
+  'placementY', 'autoplaceY', 'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'encodeY',
   'luminance', 'export-filename', 'cell-editor-core',
 ]);

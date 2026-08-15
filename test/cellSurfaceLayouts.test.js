@@ -35,7 +35,6 @@ import { layoutForCube, moduleCenter, YFACES } from '../src/ygrid.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
 } from '../src/luminance.js';
-import { formatCells, referenceCellsAll } from '../src/placementY.js';
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -46,14 +45,15 @@ const PALETTE = Object.freeze({
   faceGains: DEFAULT_FACE_GAINS,
 });
 
-test('선언 data 는 441 − userNonData − 12 − 15 와 같고 다시 깎지 않는다', () => {
+test('선언 data 는 441 − painted − 12 − 15 와 같고 다시 깎지 않는다', () => {
   const used = usedCubeFormatIndices();
   for (const id of [CELL_SURFACE_LAYOUT_V1R2, CELL_SURFACE_LAYOUT_V2]) {
     const layout = cellSurfaceLayout(id);
     const declared = CELL_SURFACE_LAYOUT_DECLARED_DATA[id];
     assert.equal(layout.declaredDataCells, declared);
+    assert.equal(layout.paintedCount, layout.locatorCount);
     assert.equal(
-      21 * 21 - layout.locatorCount - CELL_SURFACE_LEGACY_REFERENCE - CELL_SURFACE_LEGACY_FORMAT,
+      21 * 21 - layout.paintedCount - CELL_SURFACE_LEGACY_REFERENCE - CELL_SURFACE_LEGACY_FORMAT,
       declared,
     );
     assert.equal(layout.referenceCells.length, 12);
@@ -69,20 +69,46 @@ test('선언 data 는 441 − userNonData − 12 − 15 와 같고 다시 깎지
     assert.equal(formatIndexCellSurfaceLayout(id, 2), fi[2]);
     assert.ok(isCellSurfaceLayoutFormatIndex(fi[2]));
   }
-  assert.equal(CELL_SURFACE_LAYOUT_DECLARED_DATA.v1r2, 352);
-  assert.equal(CELL_SURFACE_LAYOUT_DECLARED_DATA.v2, 326);
-  assert.equal(cellSurfaceLayout('v1r2').locatorCount, 62);
-  assert.equal(cellSurfaceLayout('v2').locatorCount, 88);
+  assert.equal(CELL_SURFACE_LAYOUT_DECLARED_DATA.v1r2, 334);
+  assert.equal(CELL_SURFACE_LAYOUT_DECLARED_DATA.v2, 306);
+  assert.equal(cellSurfaceLayout('v1r2').locatorCount, 80);
+  assert.equal(cellSurfaceLayout('v1r2').userNonDataCount, 62);
+  assert.equal(cellSurfaceLayout('v2').locatorCount, 108);
+  assert.equal(cellSurfaceLayout('v2').userNonDataCount, 88);
 });
 
-test('locator 는 reference/format 과 겹치지 않는다', () => {
-  const ref = new Set(referenceCellsAll(21, 2).map((c) => c.i + ',' + c.j));
-  const fmt = new Set(formatCells(21).map((c) => c.i + ',' + c.j));
+test('locator 는 유도된 reference/format 과 겹치지 않는다', () => {
   for (const id of [CELL_SURFACE_LAYOUT_V1R2, CELL_SURFACE_LAYOUT_V2]) {
-    for (const cell of cellSurfaceLayout(id).locatorCells) {
+    const layout = cellSurfaceLayout(id);
+    const ref = new Set(layout.referenceCells.map((c) => c.i + ',' + c.j));
+    const fmt = new Set(layout.formatCells.map((c) => c.i + ',' + c.j));
+    for (const cell of layout.locatorCells) {
       const key = cell.i + ',' + cell.j;
       assert.equal(ref.has(key), false, id + ' locator∩reference ' + key);
       assert.equal(fmt.has(key), false, id + ' locator∩format ' + key);
+    }
+  }
+});
+
+test('칠한 셀 전체가 cellDigits 에서 레이아웃 톤을 갖는다', () => {
+  for (const id of [CELL_SURFACE_LAYOUT_V1R2, CELL_SURFACE_LAYOUT_V2]) {
+    const layout = cellSurfaceLayout(id);
+    const encoded = encodeY('tone-guard-' + id, {
+      cellSurfaceLayout: id, tones: 2, eccLevel: 'M', version: 1,
+    });
+    assert.equal(layout.paintedCount, layout.locatorCount);
+    for (const cell of layout.paintedCells) {
+      const entry = encoded.cellDigits.get(cell.i + ',' + cell.j);
+      assert.ok(entry, id + ' missing ' + cell.i + ',' + cell.j);
+      assert.equal(entry.role, 'locator', id + ' role ' + cell.i + ',' + cell.j);
+      const locator = layout.locatorCells.find((item) => item.i === cell.i && item.j === cell.j);
+      assert.equal(entry.tones.T, locator.T);
+      assert.equal(entry.tones.L, locator.L);
+      assert.equal(entry.tones.R, locator.R);
+    }
+    for (const cell of layout.formatCells.concat(layout.referenceCells)) {
+      const entry = encoded.cellDigits.get(cell.i + ',' + cell.j);
+      assert.notEqual(entry.role, 'locator');
     }
   }
 });
@@ -228,31 +254,23 @@ test('v2 파인더 배치는 120° 사상에서 세 회전이 같고 순위 게�
   const v2 = cellSurfaceLayout(CELL_SURFACE_LAYOUT_V2);
   const ranking = rankingCellsOf(CELL_SURFACE_LAYOUT_V2);
   const finder = finderClusterOf(CELL_SURFACE_LAYOUT_V2);
-  assert.equal(v2.locatorCount, 88);
-  assert.equal(ranking.length, 1);
+  assert.equal(v2.locatorCount, 108);
+  assert.equal(ranking.length, 3);
   assert.deepEqual(
     ranking.map((cell) => [cell.i, cell.j, cell.T, cell.L, cell.R]),
-    [[0, 3, 0, 0, 2]],
+    [[0, 3, 0, 0, 2], [1, 3, 0, 0, 2], [2, 3, 0, 0, 2]],
   );
-  assert.equal(
-    v2.locatorCells.some((cell) => cell.i === 1 && cell.j === 3),
-    false,
-    '(1,3) 은 로케이터가 아니다',
-  );
-  assert.equal(
-    v2.locatorCells.some((cell) => cell.i === 2 && cell.j === 3),
-    false,
-    '(2,3) 은 로케이터가 아니다',
-  );
-  assert.equal(finder.length, 42);
+  assert.equal(v2.locatorCells.some((cell) => cell.i === 1 && cell.j === 3), true);
+  assert.equal(v2.locatorCells.some((cell) => cell.i === 2 && cell.j === 3), true);
+  assert.equal(finder.length, 49);
   assert.ok(finder.every((cell) => cell.T === cell.L && cell.L === cell.R));
   assert.equal(occupancyHamming(v2.locatorCells), 0);
   assert.equal(occupancyHamming(finder), 0);
   assert.equal(faceCycleFaceHamming(finder, ['L', 'R', 'T']), 0);
   assert.equal(faceCycleFaceHamming(finder, ['R', 'T', 'L']), 0);
-  assert.equal(faceCycleFaceHamming(v2.locatorCells, ['L', 'R', 'T']), 2);
-  const margin = 2 / (v2.locatorCount * 3);
-  assert.ok(Math.abs(margin - 2 / 264) < 1e-12);
+  assert.equal(faceCycleFaceHamming(v2.locatorCells, ['L', 'R', 'T']), 6);
+  const margin = 6 / (v2.locatorCount * 3);
+  assert.ok(Math.abs(margin - 6 / 324) < 1e-12);
   assert.ok(margin < UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin);
 
   const cube = layoutForCube(21, { size: 1, margin: 0 });
@@ -283,8 +301,8 @@ test('v2 파인더 배치는 120° 사상에서 세 회전이 같고 순위 게�
   assert.ok(tToR < 1e-9 && rToL < 1e-9 && lToT < 1e-9);
 
   const v1 = rankingCellsOf(CELL_SURFACE_LAYOUT_V1R2);
-  assert.equal(v1.length, 13);
-  const v1Margin = (13 * 2) / (62 * 3);
+  assert.equal(v1.length, 18);
+  const v1Margin = (18 * 2) / (cellSurfaceLayout(CELL_SURFACE_LAYOUT_V1R2).locatorCount * 3);
   assert.ok(v1Margin >= UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin);
 });
 

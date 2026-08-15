@@ -28,6 +28,7 @@ import {
   looksLikeCellEditorJson,
   normalizeFinderName,
   parseUniversalEditor,
+  previewAutoplaceY,
   pushUndoSnapshot,
   redo,
   resetAllTones,
@@ -412,6 +413,27 @@ test('붙여넣기용 JSON 판별과 공백 포함 문자열이 왕복한다', (
   assert.equal(getCellTone(parsed, 'T', { q: 3, r: 0 }), 0);
 });
 
+test('Type Y 미리보기는 칠한 셀에서 ref/format 을 비킨다', () => {
+  const state = createUniversalEditorState({ type: 'Y', size: 21 });
+  const empty = previewAutoplaceY(state);
+  assert.equal(empty.ok, true);
+  assert.equal(empty.placement.formatCells.length, 15);
+  assert.equal(empty.placement.referenceCells.length, 12);
+
+  applyBrush(state, 'T', { i: 2, j: 2 }, { allFaces: true, tone: 0 });
+  applyBrush(state, 'T', { i: 3, j: 2 }, { allFaces: true, tone: 0 });
+  applyBrush(state, 'T', { i: 2, j: 3 }, { allFaces: true, tone: 0 });
+  const preview = previewAutoplaceY(state);
+  assert.equal(preview.ok, true);
+  assert.equal(preview.roles.has('2,2'), false);
+  assert.equal(preview.roles.has('3,2'), false);
+  assert.equal(preview.roles.has('2,3'), false);
+  assert.equal(roleOfCoord('Y', 21, { i: 2, j: 2 }, { roles: preview.roles }), 'data');
+  const reserved = [...preview.roles.values()];
+  assert.equal(reserved.filter((entry) => entry.role === 'reference').length, 12);
+  assert.equal(reserved.filter((entry) => entry.role === 'format').length, 15);
+});
+
 test('독립 HTML 단일 번들이 정상적으로 빌드된다', () => {
   const html = buildCellEditorHtml();
   assert.match(html, /<!doctype html>/i);
@@ -429,6 +451,8 @@ test('독립 HTML 단일 번들이 정상적으로 빌드된다', () => {
   assert.match(html, /id="applyPasteJsonBtn"/);
   assert.match(html, /id="clipboardJsonBtn"/);
   assert.match(html, /id="finderNameInput"/);
+  assert.match(html, /id="autoplaceHint"/);
+  assert.match(html, /autoplaceY/);
   assert.match(html, /looksLikeCellEditorJson/);
   assert.doesNotMatch(html, /<!-- CELL_EDITOR_LOADER -->/);
 });

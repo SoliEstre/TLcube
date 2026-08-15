@@ -96,6 +96,8 @@ canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
   color: var(--muted); font-size: 12px; line-height: 1.5;
 }
 .legend-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 11px; }
+.autoplace-hint { margin-top: 4px; color: var(--ok); font-size: 11px; font-weight: 600; }
+.autoplace-hint.error { color: var(--bad); }
 .legend-item { display: inline-flex; align-items: center; gap: 5px; }
 .legend-dot { width: 9px; height: 9px; border-radius: 2px; }
 
@@ -230,6 +232,7 @@ textarea.json-io:focus-visible { outline: 2px solid var(--accent); outline-offse
       </div>
       <div id="stageHint">
         <span data-i18n="dragHint">드래그: 연속 채색 · Shift+드래그: 셀 3면 전체 · 우클릭: 톤 역순환</span>
+        <div id="autoplaceHint" class="autoplace-hint"></div>
       </div>
     </div>
   </article>
