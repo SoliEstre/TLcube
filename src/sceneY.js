@@ -25,12 +25,16 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V1,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2,
+  LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   assertLocatorProfileY,
+  isCellSurfaceLocatorProfileY,
   locatorMarginCells,
   locatorShapesY,
 } from './locatorY.js';
 import { locatorTone } from './cellSurfaceY.js';
 import { locatorToneCellSurfaceLayout } from './cellSurfaceLayouts.js';
+import { isCellSurfaceFinalId, locatorToneCellSurfaceFinal } from './cellSurfaceFinal.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -286,8 +290,11 @@ function assertEncoded(encoded) {
     throw new RangeError(`encoded.window 는 n=${WINDOW_SUPPORTED_N}(Y2) 에서만 지원한다: n=${n}`);
   }
   const resolvedCellSurface = cellSurface === true;
-  if (resolvedCellSurface && (resolvedWindow || n !== 21 || (resolvedTones !== 2 && resolvedTones !== 3))) {
-    throw new RangeError('encoded.cellSurface 는 Y1/Y1T(n=21, 2톤 또는 3톤) 전용이다');
+  // 최종 라인업(v0/v2r2)이 n=13·25 를 연다 — 구 v1 CS·초안은 여전히 n=21 뿐이지만
+  // 인코더가 n 을 이미 강제하므로 여기서는 라인업 전체 집합만 가드한다.
+  if (resolvedCellSurface
+    && (resolvedWindow || ![13, 21, 25].includes(n) || (resolvedTones !== 2 && resolvedTones !== 3))) {
+    throw new RangeError('encoded.cellSurface 는 n=13|21|25, 2톤 또는 3톤 전용이다');
   }
   return {
     n, cellDigits, tones: resolvedTones, window: resolvedWindow, cellSurface: resolvedCellSurface,
@@ -333,27 +340,25 @@ export function buildSceneY(encoded, options) {
   }
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
-  const defaultCellSurfaceProfile = encoded.locatorProfile === LOCATOR_PROFILE_CELL_SURFACE_V2
-    ? LOCATOR_PROFILE_CELL_SURFACE_V2
-    : encoded.locatorProfile === LOCATOR_PROFILE_CELL_SURFACE_V1R2
-      ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
-      : encoded.cellSurfaceLayout === 'v2'
-        ? LOCATOR_PROFILE_CELL_SURFACE_V2
-        : encoded.cellSurfaceLayout === 'v1r2'
-          ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
-          : LOCATOR_PROFILE_CELL_SURFACE_V1;
+  const defaultCellSurfaceProfile = isCellSurfaceLocatorProfileY(encoded.locatorProfile)
+    ? encoded.locatorProfile
+    : encoded.cellSurfaceLayout === 'v0'
+      ? LOCATOR_PROFILE_CELL_SURFACE_V0
+      : encoded.cellSurfaceLayout === 'v2r2'
+        ? LOCATOR_PROFILE_CELL_SURFACE_V2R2
+        : encoded.cellSurfaceLayout === 'v2'
+          ? LOCATOR_PROFILE_CELL_SURFACE_V2
+          : encoded.cellSurfaceLayout === 'v1r2'
+            ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
+            : LOCATOR_PROFILE_CELL_SURFACE_V1;
   const requestedLocator = opts.locatorProfile === undefined
     ? (cellSurface ? defaultCellSurfaceProfile : DEFAULT_LOCATOR_PROFILE_Y)
     : assertLocatorProfileY(opts.locatorProfile);
   const locatorProfile = cellSurface
-    ? (requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1
-      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1R2
-      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V2
+    ? (isCellSurfaceLocatorProfileY(requestedLocator)
       ? requestedLocator
       : defaultCellSurfaceProfile)
-    : requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1
-      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1R2
-      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V2
+    : isCellSurfaceLocatorProfileY(requestedLocator)
       ? DEFAULT_LOCATOR_PROFILE_Y
       : requestedLocator;
   const requestedMargin = opts.margin === undefined
@@ -389,6 +394,8 @@ export function buildSceneY(encoded, options) {
           let levelIndex;
           if (entry.tones && Number.isInteger(entry.tones[face])) {
             levelIndex = entry.tones[face];
+          } else if (isCellSurfaceFinalId(encoded.cellSurfaceLayout)) {
+            levelIndex = locatorToneCellSurfaceFinal(n, face, i, j);
           } else if (encoded.cellSurfaceLayout) {
             levelIndex = locatorToneCellSurfaceLayout(encoded.cellSurfaceLayout, face, i, j);
           } else {

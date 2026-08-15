@@ -177,16 +177,34 @@ test('v1r2 · v2 렌더 자체 검증', () => {
   }
 });
 
-test('v1r2 frontend 왕복 (2톤 ppu10)', { timeout: 30_000 }, () => {
+test('v1r2 frontend 왕복 (2톤 ppu10) — 명시 옵션(법의학 경로)으로만', { timeout: 30_000 }, () => {
+  // 2026-08-15 라인업 확정: 초안(v1r2/v2)은 디코더 기본 경로에서 내렸다.
+  // 배포 출력물 복호는 cellSurfaceLayout 명시 옵션으로 유지된다.
   const text = 'fe-v1r2';
   const { raster } = renderLayout(text, CELL_SURFACE_LAYOUT_V1R2, 2);
   const result = decodeFrontend(raster, {
-    bootstrap: { family: { cube: { enableCellSurfaceY: true } } },
+    bootstrap: {
+      family: {
+        cube: { enableCellSurfaceY: true, cellSurfaceLayout: CELL_SURFACE_LAYOUT_V1R2 },
+      },
+    },
   });
   assert.equal(result.ok, true, result.reason);
   assert.equal(result.text, text);
   assert.equal(result.hypothesis.cellSurfaceLayout, CELL_SURFACE_LAYOUT_V1R2);
   assert.equal(result.hypothesis.rotationDegrees, 0, '0° 입력은 0° 로 보고해야 한다');
+
+  // 기본 경로(옵션 없음)는 초안을 더 이상 수용하지 않는다.
+  const byDefault = decodeFrontend(raster, {
+    bootstrap: { family: { cube: { enableCellSurfaceY: true } } },
+  });
+  assert.notEqual(
+    byDefault.ok === true
+      && byDefault.hypothesis
+      && byDefault.hypothesis.cellSurfaceLayout === CELL_SURFACE_LAYOUT_V1R2,
+    true,
+    '기본 경로가 초안 v1r2 를 수용했다 — 라인업 차단이 풀렸다',
+  );
 });
 
 const PLUS120 = Object.freeze({ T: 'R', R: 'L', L: 'T' });
@@ -340,10 +358,16 @@ test('v2 이상적 표본은 정방향도 방향 게이트에 걸린다', () => 
 });
 
 test('v2 초안은 배치로 방향을 못 정하고 0° frontend 왕복에 실패한다', { timeout: 30_000 }, () => {
+  // 2026-08-15 라인업 확정 이후 초안은 명시 옵션으로만 산다 — 이 역사적 결함
+  // 기록(orientation-margin 거부)은 그 경로에서 그대로 재현돼야 한다.
   const text = 'fe-v2';
   const { raster } = renderLayout(text, CELL_SURFACE_LAYOUT_V2, 2);
   const result = decodeFrontend(raster, {
-    bootstrap: { family: { cube: { enableCellSurfaceY: true } } },
+    bootstrap: {
+      family: {
+        cube: { enableCellSurfaceY: true, cellSurfaceLayout: CELL_SURFACE_LAYOUT_V2 },
+      },
+    },
   });
   assert.equal(result.ok, false, 'v2 가 방향을 정하면 이 단언을 뒤집고 왕복을 고정하라');
   assert.equal(result.reason, 'frontend:no-format-candidate');

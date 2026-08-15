@@ -56,6 +56,7 @@ import {
   LOCATOR_PROFILE_OFF,
 } from '../locatorY.js';
 import { CELL_SURFACE_PROFILE_ID } from '../cellSurfaceY.js';
+import { finalLayoutIdForN } from '../cellSurfaceFinal.js';
 import { evaluateCellSurfaceGeometry } from './cellSurfaceY-detect.js';
 import {
   detectFinderSeeds,
@@ -2478,7 +2479,9 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
             seamSupport: shape.seam.support,
             shapeDiagnostics: shape,
           };
-          if (options.enableCellSurfaceY === true && n === 21) {
+          // 셀 표면 평가 — 최종 라인업이 n=13(v0)·21/25(v2r2) 전부를 연다.
+          // (구 v1 CS·초안 v1r2/v2 는 n=21 에서만 옵션으로 산다 — evaluate 쪽이 거른다.)
+          if (options.enableCellSurfaceY === true && finalLayoutIdForN(n) !== null) {
             const cellSurface = evaluateCellSurfaceGeometry(
               base,
               (i, j) => sampleCubeCell(luma, base, i, j, sampleOptions(options, cfg)),

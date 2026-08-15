@@ -77,10 +77,10 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     cs_accepted  UInt8 DEFAULT 0,                  -- 검출기가 가설을 수락했는가
     cs_score     Nullable(Float32),                -- 셀 표면 agreement. 미시도 NULL
     cs_reason    String DEFAULT '',                -- 거절 사유. 미시도 빈 문자열
-    cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v1r2 | cell-surface-v2
+    cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v0 | cell-surface-v2r2 (구: -v1r2 | -v2)
     cs_arm       LowCardinality(String) DEFAULT '', -- 구 A/B. 신규는 비움
     cs_expected_arm LowCardinality(String) DEFAULT '', -- 구 기대 팔. 신규는 비움
-    cs_layout    LowCardinality(String) DEFAULT '', -- 관측 레이아웃 v1r2 | v2
+    cs_layout    LowCardinality(String) DEFAULT '', -- 관측 레이아웃 v0 | v2r2 (구: v1r2 | v2)
     cs_expected_layout LowCardinality(String) DEFAULT '', -- 기대 레이아웃
     cs_orientation_gate LowCardinality(String) DEFAULT '', -- applied | waived
     cs_orientation_gate_applied UInt8 DEFAULT 0, -- 1=방향 게이트 적용. A 는 0

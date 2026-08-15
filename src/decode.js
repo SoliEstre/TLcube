@@ -37,6 +37,15 @@ import {
   tonesFromCellSurfaceLayoutFormatIndex,
 } from './cellSurfaceLayouts.js';
 import {
+  assertCellSurfaceFinalN,
+  capacityForCellSurfaceFinal,
+  dataCellsInScanOrderCellSurfaceFinal,
+  finalLayoutIdForN,
+  isCellSurfaceFinalFormatIndex,
+  isCellSurfaceFinalId,
+  tonesFromCellSurfaceFinalFormatIndex,
+} from './cellSurfaceFinal.js';
+import {
   CHUNK_BYTES,
   decodeChunkInto,
   packCellDigitsToSymbols,
@@ -276,6 +285,58 @@ function resolveProfile(format) {
     if (typeof window !== 'boolean') {
       throw new TypeError('Type Y format.window은 boolean이어야 한다: ' + window);
     }
+
+    // 최종 라인업 (cellSurfaceFinal.js, v0 · v2r2) — formatIndex 는 한 쌍(1/3)뿐이고
+    // 레이아웃은 n 으로 정해진다. 디코더 앞단(bootstrap)은 항상 n 을 싣는다.
+    const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
+      ? format.cellSurfaceLayout
+      : format.locatorProfile === 'cell-surface-v0'
+        ? 'v0'
+        : format.locatorProfile === 'cell-surface-v2r2'
+          ? 'v2r2'
+          : null;
+    const finalRequested = finalIdHint !== null
+      || (format.formatIndex !== undefined && isCellSurfaceFinalFormatIndex(format.formatIndex));
+    if (finalRequested) {
+      if (window) {
+        throw new RangeError('Type Y cellSurface와 window를 함께 쓸 수 없다');
+      }
+      let finalTones = suppliedTones;
+      if (format.formatIndex !== undefined) {
+        if (!isCellSurfaceFinalFormatIndex(format.formatIndex)) {
+          throw new RangeError('신세대 셀 표면 formatIndex 가 아니다: ' + format.formatIndex);
+        }
+        const fromIndex = tonesFromCellSurfaceFinalFormatIndex(format.formatIndex);
+        if (finalTones !== undefined && finalTones !== fromIndex) {
+          throw new RangeError(
+            '신세대 셀 표면 tones=' + finalTones
+            + ' 와 formatIndex=' + format.formatIndex + ' 가 어긋난다',
+          );
+        }
+        finalTones = fromIndex;
+      } else {
+        finalTones = finalTones === undefined ? 2 : finalTones;
+      }
+      let finalN = requestedN;
+      if (finalN === undefined) {
+        if (finalIdHint === 'v0') finalN = 13;
+        else {
+          throw new RangeError('신세대 셀 표면 v2r2 는 format.n(21|25) 이 필요하다');
+        }
+      }
+      if (finalLayoutIdForN(finalN) === null) {
+        throw new RangeError('신세대 셀 표면의 n 은 13|21|25 다: ' + finalN);
+      }
+      if (finalIdHint !== null) assertCellSurfaceFinalN(finalIdHint, finalN);
+      return finishProfile({
+        type,
+        eccLevel,
+        capacity: capacityForCellSurfaceFinal(finalN, eccLevel, finalTones),
+        scan: dataCellsInScanOrderCellSurfaceFinal(finalN),
+        coordinates: (cell) => [cell.i, cell.j],
+      });
+    }
+
     const layoutId = format.cellSurfaceLayout
       || (format.formatIndex !== undefined
         ? layoutIdFromFormatIndex(format.formatIndex)

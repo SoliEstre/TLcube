@@ -11,7 +11,10 @@ import assert from 'node:assert/strict';
 import { encodeOptionsForY } from '../src/generator-render-config.js';
 import { encodeY } from '../src/encodeY.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from '../src/capacityY.js';
-import { LOCATOR_PROFILE_CELL_SURFACE_V1R2 } from '../src/locatorY.js';
+import {
+  LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V2R2,
+} from '../src/locatorY.js';
 
 const TEXT = 'https://tl.estre.so';
 const windowState = (tone) => ({ tone, versionY: undefined, fallback: { mode: 'window' } });
@@ -45,25 +48,51 @@ test('윈도가 아니면 사용자가 고른 톤·해상도를 그대로 넘긴
   assert.equal('version' in auto, false, 'auto 해상도는 version 을 안 넘긴다');
 });
 
-test('셀 표면 v1r2 는 version=1 을 강제하되 사용자 톤을 보존하고 윈도보다 앞선다', () => {
+// 최종 라인업 (2026-08-15): v0 = Y0(n=13) 고정 · v2r2 = Y1 기본/Y2 명시. 초안
+// (v1r2/v2) 매핑은 UI 경계에서 내렸다 — 초안 인코딩은 encodeY 직접 옵션으로만 산다.
+test('셀 표면 v0 는 version=0 을 강제하되 사용자 톤을 보존하고 윈도보다 앞선다', () => {
   for (const tone of [2, 3]) {
     const opts = encodeOptionsForY({
       tone,
-      versionY: 0,
+      versionY: 1,
       fallback: { mode: 'window' },
-      locatorProfileY: LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+      locatorProfileY: LOCATOR_PROFILE_CELL_SURFACE_V0,
     });
     assert.equal(opts.cellSurface, true);
-    assert.equal(opts.cellSurfaceLayout, 'v1r2');
+    assert.equal(opts.cellSurfaceLayout, 'v0');
     assert.equal(opts.tones, tone);
-    assert.equal(opts.version, 1);
+    assert.equal(opts.version, 0);
     assert.equal(opts.window, undefined);
-    const encoded = encodeY('https://tl.estre.so', opts);
+    const encoded = encodeY('short', opts);
     assert.equal(encoded.cellSurface, true);
-    assert.equal(encoded.cellSurfaceLayout, 'v1r2');
+    assert.equal(encoded.cellSurfaceLayout, 'v0');
+    assert.equal(encoded.n, 13);
     assert.equal(encoded.tones, tone);
-    assert.equal(encoded.formatIndex, tone === 3 ? 6 : 4);
-    assert.equal(encoded.capacity.dataCells, 334);
+    assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+    assert.equal(encoded.capacity.dataCells, 112);
+  }
+});
+
+test('셀 표면 v2r2 는 Y1 기본·Y2 명시 선택만 n=25 이고 사용자 톤을 보존한다', () => {
+  for (const tone of [2, 3]) {
+    for (const [versionY, wantVersion, wantN] of [[0, 1, 21], [1, 1, 21], [2, 2, 25], [undefined, 1, 21]]) {
+      const opts = encodeOptionsForY({
+        tone,
+        versionY,
+        fallback: { mode: 'window' },
+        locatorProfileY: LOCATOR_PROFILE_CELL_SURFACE_V2R2,
+      });
+      assert.equal(opts.cellSurface, true);
+      assert.equal(opts.cellSurfaceLayout, 'v2r2');
+      assert.equal(opts.tones, tone);
+      assert.equal(opts.version, wantVersion, 'versionY=' + versionY);
+      assert.equal(opts.window, undefined);
+      const encoded = encodeY('https://tl.estre.so', opts);
+      assert.equal(encoded.cellSurfaceLayout, 'v2r2');
+      assert.equal(encoded.n, wantN, 'versionY=' + versionY);
+      assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+      assert.equal(encoded.capacity.dataCells, wantN === 25 ? 533 : 349);
+    }
   }
 });
 

@@ -46,6 +46,18 @@ import {
   nameCellSurfaceLayout,
   tonesFromCellSurfaceLayoutFormatIndex,
 } from '../cellSurfaceLayouts.js';
+import {
+  dataCellsInScanOrderCellSurfaceFinal,
+  finalLayoutIdForN,
+  formatCellsCellSurfaceFinal,
+  formatIndexCellSurfaceFinal,
+  isCellSurfaceFinalFormatIndex,
+  isCellSurfaceFinalId,
+  layoutMapCellSurfaceFinal,
+  nameCellSurfaceFinal,
+  tonesFromCellSurfaceFinalFormatIndex,
+  versionForFinalN,
+} from '../cellSurfaceFinal.js';
 import { decodeCells } from '../decode.js';
 import { enumerateFormatProposals } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
@@ -387,6 +399,13 @@ function validVersionIndices(hypothesis) {
     return [profile.spec.formatIndex + (hypothesis.centerQr ? 2 : 0)];
   }
   if (hypothesis.cellSurface === true) {
+    if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
+      // 최종 라인업 — 한 쌍(2T/3T)뿐, 레이아웃 구분은 n 이 이미 했다.
+      if (hypothesis.tones === 2 || hypothesis.tones === 3) {
+        return [formatIndexCellSurfaceFinal(hypothesis.tones)];
+      }
+      return [formatIndexCellSurfaceFinal(2), formatIndexCellSurfaceFinal(3)];
+    }
     if (hypothesis.cellSurfaceLayout) {
       if (hypothesis.tones === 2 || hypothesis.tones === 3) {
         return [formatIndexCellSurfaceLayout(hypothesis.cellSurfaceLayout, hypothesis.tones)];
@@ -440,6 +459,25 @@ function formatIndexOwners(formatIndex) {
 }
 
 function profileForFormatCandidate(hypothesis, formatIndex) {
+  if (hypothesis && hypothesis.cellSurface === true
+    && isCellSurfaceFinalFormatIndex(formatIndex)
+    && finalLayoutIdForN(hypothesis.n) !== null) {
+    // 최종 라인업 — formatIndex 는 한 쌍, 차원은 가설의 n 이 정한다.
+    const tones = tonesFromCellSurfaceFinalFormatIndex(formatIndex);
+    if (hypothesis.tones !== undefined && hypothesis.tones !== tones) return undefined;
+    return {
+      family: 'cube',
+      dimension: hypothesis.n,
+      spec: {
+        name: nameCellSurfaceFinal(hypothesis.n, tones),
+        version: versionForFinalN(hypothesis.n),
+        n: hypothesis.n,
+        tones,
+        formatIndex,
+      },
+      formatIndices: [formatIndex],
+    };
+  }
   if (hypothesis && hypothesis.cellSurface === true
     && isCellSurfaceLayoutFormatIndex(formatIndex)) {
     const tones = tonesFromCellSurfaceLayoutFormatIndex(formatIndex);
@@ -1516,6 +1554,13 @@ function layoutForFamily(family, dimension, hypothesis) {
   }
   if (family === 'cube') {
     if (hypothesis && hypothesis.cellSurface === true) {
+      if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
+        return {
+          map: layoutMapCellSurfaceFinal(dimension),
+          dataCells: dataCellsInScanOrderCellSurfaceFinal(dimension),
+          type: 'Y',
+        };
+      }
       if (hypothesis.cellSurfaceLayout) {
         return {
           map: layoutMapCellSurfaceLayout(hypothesis.cellSurfaceLayout),
@@ -2354,9 +2399,11 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
   const cube = hypothesis.family === 'cube';
   const cells = cube
     ? hypothesis.cellSurface === true
-      ? (hypothesis.cellSurfaceLayout
-        ? formatCellsCellSurfaceLayout(hypothesis.cellSurfaceLayout)
-        : formatCellsCellSurface())
+      ? (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)
+        ? formatCellsCellSurfaceFinal(hypothesis.n)
+        : hypothesis.cellSurfaceLayout
+          ? formatCellsCellSurfaceLayout(hypothesis.cellSurfaceLayout)
+          : formatCellsCellSurface())
       : hypothesis.window === true
         ? windowedFormatCellsY(hypothesis.n)
         : formatCellsY(hypothesis.n)

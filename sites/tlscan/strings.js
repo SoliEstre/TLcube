@@ -117,8 +117,8 @@ export const SCANNER_STRINGS = {
     'lab.expectedArm.b': 'B (신)',
     'lab.expectedLayout.label': '기대 레이아웃',
     'lab.expectedLayout.unknown': '모름',
-    'lab.expectedLayout.v1r2': 'v1r2',
-    'lab.expectedLayout.v2': 'v2',
+    'lab.expectedLayout.v0': 'v0',
+    'lab.expectedLayout.v2r2': 'v2r2',
   },
 
   en: {
@@ -223,8 +223,8 @@ export const SCANNER_STRINGS = {
     'lab.expectedArm.b': 'B (new)',
     'lab.expectedLayout.label': 'Expected layout',
     'lab.expectedLayout.unknown': 'Unknown',
-    'lab.expectedLayout.v1r2': 'v1r2',
-    'lab.expectedLayout.v2': 'v2',
+    'lab.expectedLayout.v0': 'v0',
+    'lab.expectedLayout.v2r2': 'v2r2',
   },
 
   ja: {
@@ -329,7 +329,7 @@ export const SCANNER_STRINGS = {
     'lab.expectedArm.b': 'B（新）',
     'lab.expectedLayout.label': '期待レイアウト',
     'lab.expectedLayout.unknown': '不明',
-    'lab.expectedLayout.v1r2': 'v1r2',
-    'lab.expectedLayout.v2': 'v2',
+    'lab.expectedLayout.v0': 'v0',
+    'lab.expectedLayout.v2r2': 'v2r2',
   },
 };

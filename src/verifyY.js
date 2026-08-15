@@ -31,6 +31,7 @@ import { referenceGroups } from './placementY.js';
 import { windowedReferenceGroupsY } from './capacityY.js';
 import { locatorCellsCellSurface } from './cellSurfaceY.js';
 import { locatorCellsCellSurfaceLayout } from './cellSurfaceLayouts.js';
+import { isCellSurfaceFinalId, locatorCellsCellSurfaceFinal } from './cellSurfaceFinal.js';
 import { digitToRanks, ranksToDigit } from './lehmer.js';
 import { relativeLuminance, DELTA_MIN_CONTRACT, getPreset, DEFAULT_PRESET } from './luminance.js';
 import { thetaFromAnchors, classifyTriple, digitToPattern } from './tonemap.js';
@@ -78,6 +79,9 @@ function referenceGroupsFor(encoded, tones) {
 }
 
 function locatorsForEncoded(encoded) {
+  if (isCellSurfaceFinalId(encoded.cellSurfaceLayout)) {
+    return locatorCellsCellSurfaceFinal(encoded.n);
+  }
   if (encoded.cellSurfaceLayout) {
     return locatorCellsCellSurfaceLayout(encoded.cellSurfaceLayout);
   }

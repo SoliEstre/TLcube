@@ -24,12 +24,19 @@ import {
   locatorCellsCellSurface,
 } from '../cellSurfaceY.js';
 import {
-  CELL_SURFACE_LAYOUT_IDS,
   DEFAULT_CELL_SURFACE_LAYOUT,
   cellSurfaceLayout,
   formatIndexCellSurfaceLayout,
-  locatorCellsCellSurfaceLayout,
 } from '../cellSurfaceLayouts.js';
+import {
+  CELL_SURFACE_FINAL_NS,
+  CELL_SURFACE_FINAL_PROFILE,
+  finalLayoutIdForN,
+  formatIndexCellSurfaceFinal,
+  isCellSurfaceFinalId,
+  locatorCellsCellSurfaceFinal,
+  versionForFinalN,
+} from '../cellSurfaceFinal.js';
 import { YFACES } from '../ygrid.js';
 import { FRONTEND_FAILURE, fail, ok } from './contracts.js';
 
@@ -271,11 +278,28 @@ function scoreOneArm(samples, cfg, arm) {
   });
 }
 
-function scoreOneLayout(samples, cfg, layoutId) {
-  const layout = cellSurfaceLayout(layoutId);
-  return scoreOnePattern(samples, cfg, layout.locatorCells, {
+/**
+ * 레이아웃 id + n → locator 표. 최종 라인업(v0/v2r2)은 n 에 맞는 인스턴스를,
+ * 초안(v1r2/v2)은 n=21 전용 표를 준다. id 가 그 n 을 지원하지 않으면 null.
+ */
+function layoutLocatorsFor(layoutId, n) {
+  if (isCellSurfaceFinalId(layoutId)) {
+    if (!CELL_SURFACE_FINAL_NS[layoutId].includes(n)) return null;
+    return locatorCellsCellSurfaceFinal(n);
+  }
+  if (n !== CELL_SURFACE_N) return null;
+  return cellSurfaceLayout(layoutId).locatorCells;
+}
+
+function layoutProfileFor(layoutId) {
+  if (isCellSurfaceFinalId(layoutId)) return CELL_SURFACE_FINAL_PROFILE[layoutId];
+  return cellSurfaceLayout(layoutId).profile;
+}
+
+function scoreOneLayout(samples, cfg, layoutId, locators) {
+  return scoreOnePattern(samples, cfg, locators, {
     layoutId,
-    profile: layout.profile,
+    profile: layoutProfileFor(layoutId),
     orientationGate: 'applied',
   });
 }
@@ -414,11 +438,12 @@ function calibrationForTones(best, scored, tones) {
   };
 }
 
-function hypothesisPatchForTones(best, scored, samples, tones) {
+function hypothesisPatchForTones(best, scored, samples, tones, n = CELL_SURFACE_N) {
   const layoutId = scored.layoutId || best.layoutId || null;
   const profile = scored.profile || best.profile || CELL_SURFACE_PROFILE_ID;
+  const isFinal = isCellSurfaceFinalId(layoutId);
   const formatIndex = layoutId
-    ? formatIndexCellSurfaceLayout(layoutId, tones)
+    ? (isFinal ? formatIndexCellSurfaceFinal(tones) : formatIndexCellSurfaceLayout(layoutId, tones))
     : formatIndexCellSurface(tones);
   return {
     cellSurface: true,
@@ -427,7 +452,7 @@ function hypothesisPatchForTones(best, scored, samples, tones) {
     locatorArm: scored.arm || best.arm || null,
     locatorRoute: 'cell-surface',
     source: layoutId ? 'locator-cell-surface-' + layoutId : 'locator-cell-surface-v1',
-    version: CELL_SURFACE_VERSION,
+    version: isFinal ? versionForFinalN(n) : CELL_SURFACE_VERSION,
     tones,
     formatIndex,
     facePhase: best.phase,
@@ -470,7 +495,12 @@ function sampleLocatorTable(sampleCell, locators) {
   return ok({ samples });
 }
 
-function resolveLayoutIds(options) {
+/**
+ * 어떤 레이아웃들을 채점할지. 기본은 **n 별 최종 라인업**(n=13→v0 · n=21/25→v2r2) —
+ * 초안(v1r2/v2)과 구 v1 CS 는 명시 옵션으로만 산다 (2026-08-15 라인업 확정,
+ * 배포 출력물 법의학용 경로는 유지하되 기본 경로에서 내린다).
+ */
+function resolveLayoutIds(options, n) {
   if (options.enableLegacyCellSurfaceV1 === true && !options.cellSurfaceLayout
     && !options.cellSurfaceLayouts) {
     return null;
@@ -481,7 +511,8 @@ function resolveLayoutIds(options) {
   if (Array.isArray(options.cellSurfaceLayouts) && options.cellSurfaceLayouts.length > 0) {
     return options.cellSurfaceLayouts;
   }
-  return [...CELL_SURFACE_LAYOUT_IDS];
+  const finalId = finalLayoutIdForN(n);
+  return finalId ? [finalId] : [];
 }
 
 function pickBetterLayout(left, right) {
@@ -497,25 +528,39 @@ function pickBetterLayout(left, right) {
 }
 
 export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}) {
-  if (!hypothesis || hypothesis.n !== CELL_SURFACE_N) {
+  const n = hypothesis && hypothesis.n;
+  if (!hypothesis || (n !== CELL_SURFACE_N && finalLayoutIdForN(n) === null)) {
     return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
       stage: 'cell-surface',
       cause: 'unsupported-n',
-      n: hypothesis && hypothesis.n,
+      n,
     });
   }
 
-  const layoutIds = resolveLayoutIds(options);
-  if (layoutIds) {
+  const requestedLayoutIds = resolveLayoutIds(options, n);
+  if (requestedLayoutIds) {
+    // 이 n 에서 실제 locator 표가 있는 레이아웃만 남긴다 (초안·구형은 n=21 전용,
+    // 최종 v0 는 n=13 · v2r2 는 n=21/25 전용).
+    const layoutIds = requestedLayoutIds.filter(
+      (layoutId) => layoutLocatorsFor(layoutId, n) !== null,
+    );
+    if (layoutIds.length === 0) {
+      return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+        stage: 'cell-surface',
+        cause: 'unsupported-n',
+        n,
+        requestedLayoutIds,
+      });
+    }
     const cfg = calibration(options);
     const scoredLayouts = {};
     let chosen = null;
     let chosenSamples = null;
     for (const layoutId of layoutIds) {
-      const locators = locatorCellsCellSurfaceLayout(layoutId);
+      const locators = layoutLocatorsFor(layoutId, n);
       const sampled = sampleLocatorTable(sampleCell, locators);
       if (!sampled.ok) return sampled;
-      const scored = scoreOneLayout(sampled.samples, cfg, layoutId);
+      const scored = scoreOneLayout(sampled.samples, cfg, layoutId, locators);
       scoredLayouts[layoutId] = scored;
       if (!chosen) {
         chosen = scored;
@@ -555,7 +600,7 @@ export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}
     };
     const best = packed.best;
     const hypothesisPatches = [2, 3].map((tones) =>
-      hypothesisPatchForTones(best, packed, chosenSamples, tones));
+      hypothesisPatchForTones(best, packed, chosenSamples, tones, n));
     return ok({
       accepted,
       samples: chosenSamples,
@@ -566,6 +611,14 @@ export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}
     });
   }
 
+  // 구 v1 CS 61-locator 경로 — n=21 전용 (enableLegacyCellSurfaceV1 명시 시에만 온다).
+  if (n !== CELL_SURFACE_N) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'cell-surface',
+      cause: 'unsupported-n',
+      n,
+    });
+  }
   const samples = [];
   for (const cell of locatorCellsCellSurface()) {
     const sampled = sampleCell(cell.i, cell.j);

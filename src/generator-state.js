@@ -18,8 +18,8 @@ import { DEFAULT_PRESET, PRESETS } from './luminance.js';
 import { TL_READER_URL } from './qr.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
-  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
-  LOCATOR_PROFILE_CELL_SURFACE_V2,
+  LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_OFF,
 } from './locatorY.js';
@@ -89,12 +89,14 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
     [TL_READER_URL, 'https://example.com/fallback']),
   qrCornerToo: field(false, ADVANCED, [false, true]),
   // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 보여 주지 않고 항상 off.
+  // 최종 라인업(2026-08-15): v0 · v2r2. 초안(v1r2/v2)은 허용값에서 내렸다 —
+  // 저장돼 있던 초안 값은 검증 실패로 기본(off)에 떨어진다.
   locatorProfileY: field(DEFAULT_LOCATOR_PROFILE_Y, INTERNAL,
     [
       LOCATOR_PROFILE_OFF,
       LOCATOR_PROFILE_HEX_FRAME_V1,
-      LOCATOR_PROFILE_CELL_SURFACE_V1R2,
-      LOCATOR_PROFILE_CELL_SURFACE_V2,
+      LOCATOR_PROFILE_CELL_SURFACE_V0,
+      LOCATOR_PROFILE_CELL_SURFACE_V2R2,
     ]),
 });
 
