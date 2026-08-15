@@ -1043,15 +1043,16 @@
 
       <div id="yLocatorSection" hidden>
         <label class="section-heading" data-i18n="g515">Y타입 검출기 옵션</label>
+        <!-- 카드 순서 끔 → v0 → v1r2 → v2r2 (운영자 지시 2026-08-16) — 해상도 오름차순. -->
         <div class="card-row" id="yLocatorCards">
           <div class="toggle-card active" data-locator="off">
             <span data-i18n="g516">끔 (기존)</span>
           </div>
-          <div class="toggle-card" data-locator="cell-surface-v1r2">
-            <span data-i18n="g547">셀 표면 v1r2 (Y1)</span>
-          </div>
           <div class="toggle-card" data-locator="cell-surface-v0">
             <span data-i18n="g542">셀 표면 v0 (Y0)</span>
+          </div>
+          <div class="toggle-card" data-locator="cell-surface-v1r2">
+            <span data-i18n="g547">셀 표면 v1r2 (Y1)</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v2r2">
             <span data-i18n="g543">셀 표면 v2r2 (Y1/Y2)</span>
@@ -1458,6 +1459,7 @@ const GENERATOR_STRINGS = {
     "g538": "확대",
     "g539": "톤을 바꾸면 그 좌표는 세 면 모두 데이터에서 빠집니다.",
     "g540": "색은 그대로 두고, 어느 면을 눌러도 같은 좌표의 데이터 포함/제외만 바꿉니다.",
+    "g549": "이 검출기 옵션에서는 reference/format 자동 배치를 유도할 수 없어요: {message}",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1706,6 +1708,7 @@ const GENERATOR_STRINGS = {
     "g538": "Zoom in",
     "g539": "Changing a tone removes that coordinate from data on all three faces.",
     "g540": "Colour stays the same. Clicking any face toggles data include/exclude for that coordinate.",
+    "g549": "Cannot derive the reference/format auto-placement for this detector option: {message}",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1954,6 +1957,7 @@ const GENERATOR_STRINGS = {
     "g538": "拡大",
     "g539": "トーンを変えると、その座標は3面ともデータから外れます。",
     "g540": "色はそのままです。どの面を押しても、同じ座標のデータ含有/除外だけが切り替わります。",
+    "g549": "この検出器オプションでは reference/format の自動配置を導出できません: {message}",
   },
 };
 
@@ -1990,13 +1994,16 @@ import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
 import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capacityY.js';
-import { buildRoleSets } from './src/placementY.js';
+// ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
+// placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
+import { placeReservedCells } from './src/autoplaceY.js';
+import { cellSurfaceFinal } from './src/cellSurfaceFinal.js';
 import { faceBasis, layoutForCube, moduleQuad, YFACES } from './src/ygrid.js';
 import {
   CELL_EDITOR_MODE_MASK, TONE_BRIGHTEN, TONE_DARKEN,
   applyCellEdit, cellTone, classifyCoord, createCellEditorStore,
   dataBoundaryEdges, edgeEndpoints, editorStateForN, resetCellEditorState,
-  setEditorMode, stringifyCellEditor,
+  setEditorMode, stringifyCellEditor, toneKey,
 } from './src/type-y-cell-editor.js';
 
 import { encodeA } from './src/encodeA.js';
@@ -3276,19 +3283,68 @@ const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
 let yCellEditorWired = false;
 let yCellEditorStore = null;
 let yCellEditorZoom = 1;
+let yCellEditorNoticeShown = false;
 let lastEncodedYn = 0;
 
-function selectedTypeYn() {
-  const v = generatorState.versionY;
-  if (v !== 'auto' && v !== undefined && v !== null && v !== '') {
-    return versionSpecY(Number(v), 2).n;
+const yOffPlacementByN = new Map();
+
+/** 끔(무검출기) = 빈 점유 유도. autoplaceY.test 가 레거시 placementY 와 바이트 동일을 단언한다. */
+function yOffPlacement(n) {
+  let placed = yOffPlacementByN.get(n);
+  if (!placed) {
+    placed = placeReservedCells(n, []);
+    yOffPlacementByN.set(n, placed);
   }
-  if (lastEncodedYn) return lastEncodedYn;
-  return versionSpecY(0, 2).n;
+  return placed;
 }
 
-function currentYCellEditorState() {
-  return editorStateForN(yCellEditorStore, selectedTypeYn());
+/**
+ * Y 셀 편집기 표시 컨텍스트 — ref./format 는 **선택한 검출기 옵션의 painted 셀을
+ * occupied 로 넣어 autoplaceY.placeReservedCells 가 유도한 배치**다. 셀 표면 옵션이면
+ * cellSurfaceFinal(정본, 내부에서 같은 함수로 유도·캐시)을 그대로 읽으므로 편집기
+ * 표시와 인코더·디코더가 쓰는 배치가 같은 곳에서 나온다 — 손 좌표표 금지 (c0e7321).
+ *
+ * n·레이아웃 강제는 인코더와 같은 encodeOptionsForY 배선을 그대로 따른다
+ * (v0=Y0(n13) · v1r2=Y1(n21) · v2r2=Y1 기본/Y2 명시 시 n25 · 윈도=Y2). 유도가
+ * 불가능하면(AutoplaceError 등) error 를 채워 돌려준다 — 조용한 빈 표시 금지.
+ */
+function yCellEditorContext() {
+  const encOpts = encodeOptionsForY({
+    tone: generatorState.tone,
+    versionY: generatorState.versionY === 'auto' ? undefined : Number(generatorState.versionY),
+    fallback: resolveFallback('Y', generatorState.qrPosition),
+    locatorProfileY: generatorState.locatorProfileY,
+  });
+  const n = encOpts.version !== undefined
+    ? versionSpecY(encOpts.version, 2).n
+    : (lastEncodedYn || versionSpecY(0, 2).n);
+  try {
+    const surface = encOpts.cellSurface ? cellSurfaceFinal(n, encOpts.cellSurfaceLayout) : null;
+    const placed = surface || yOffPlacement(n);
+    const occupiedCells = surface ? surface.paintedCells : [];
+    const occupiedTones = new Map();
+    if (surface) {
+      for (const cell of surface.locatorCells) {
+        for (const face of YFACES) occupiedTones.set(toneKey(face, cell.i, cell.j), cell[face]);
+      }
+    }
+    return {
+      n,
+      sets: {
+        reference: new Set(placed.referenceCells.map((c) => c.i + ',' + c.j)),
+        format: new Set(placed.formatCells.map((c) => c.i + ',' + c.j)),
+        occupied: new Set(occupiedCells.map((c) => c.i + ',' + c.j)),
+      },
+      occupiedTones,
+      error: null,
+    };
+  } catch (err) {
+    return { n, sets: null, occupiedTones: null, error: err };
+  }
+}
+
+function yCellEditorStateFor(ctx) {
+  return editorStateForN(yCellEditorStore, ctx.n);
 }
 
 function yCellAria(face, i, j, tone, kind) {
@@ -3304,11 +3360,26 @@ function setYCellEditorZoom(next) {
   }
 }
 
-function paintTypeYCellEditor(state) {
+function paintTypeYCellEditor(state, ctx) {
   const svg = els.yCellEditorSvg;
-  if (!svg || !state) return;
+  if (!svg || !state || !ctx) return;
+  if (ctx.error) {
+    // 배치 불가(AutoplaceError 등) — 조용한 빈 표시 금지, 표시 대신 명시적 안내.
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.removeAttribute('viewBox');
+    if (els.yCellEditorJson) els.yCellEditorJson.value = '';
+    if (els.yCellEditorStatus) {
+      els.yCellEditorStatus.textContent = tf('g549', { message: ctx.error.message });
+    }
+    yCellEditorNoticeShown = true;
+    return;
+  }
+  if (yCellEditorNoticeShown) {
+    if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = '';
+    yCellEditorNoticeShown = false;
+  }
   const n = state.n;
-  const sets = buildRoleSets(n);
+  const sets = ctx.sets;
   const layout = layoutForCube(n, { size: 1, margin: 0.45 });
   const ns = 'http://www.w3.org/2000/svg';
   svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
@@ -3335,7 +3406,13 @@ function paintTypeYCellEditor(state) {
         const quad = moduleQuad(face, i, j, layout);
         const points = quad.map((p) => `${p.x},${p.y}`).join(' ');
         const kind = classifyCoord(state, i, j, sets);
-        const tone = cellTone(state, face, i, j);
+        // 파인더 점유 셀은 사용자 덮어쓰기가 없으면 정본 로케이터 톤을 보여준다.
+        const tk = toneKey(face, i, j);
+        const tone = state.tones.has(tk)
+          ? state.tones.get(tk)
+          : ctx.occupiedTones.has(tk)
+            ? ctx.occupiedTones.get(tk)
+            : cellTone(state, face, i, j);
         const g = document.createElementNS(ns, 'g');
         g.setAttribute('class', 'y-cell-editor-cell');
         g.setAttribute('role', 'button');
@@ -3406,9 +3483,10 @@ function yCellFromEvent(ev) {
 }
 
 function editYCell(face, i, j, direction, restoreFocus = false) {
-  const state = currentYCellEditorState();
-  applyCellEdit(state, face, i, j, direction, buildRoleSets(state.n));
-  paintTypeYCellEditor(state);
+  const ctx = yCellEditorContext();
+  const state = yCellEditorStateFor(ctx);
+  if (!ctx.error) applyCellEdit(state, face, i, j, direction, ctx.sets);
+  paintTypeYCellEditor(state, ctx);
   if (restoreFocus && els.yCellEditorSvg) {
     const next = els.yCellEditorSvg.querySelector(
       `.y-cell-editor-cell[data-face="${face}"][data-i="${i}"][data-j="${j}"]`,
@@ -3418,8 +3496,16 @@ function editYCell(face, i, j, direction, restoreFocus = false) {
 }
 
 async function copyTypeYCellEditorJson() {
-  const state = currentYCellEditorState();
-  const text = stringifyCellEditor(state, buildRoleSets(state.n));
+  const ctx = yCellEditorContext();
+  const state = yCellEditorStateFor(ctx);
+  if (ctx.error) {
+    if (els.yCellEditorStatus) {
+      els.yCellEditorStatus.textContent = tf('g549', { message: ctx.error.message });
+    }
+    yCellEditorNoticeShown = true;
+    return;
+  }
+  const text = stringifyCellEditor(state, ctx.sets);
   if (els.yCellEditorJson) els.yCellEditorJson.value = text;
   const mark = (ok) => {
     if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = ok ? t('g530') : t('g531');
@@ -3451,7 +3537,8 @@ function syncTypeYCellEditorUi() {
   const show = isLabPath() && generatorState.type === 'Y';
   section.hidden = !show;
   if (!show || !yCellEditorWired) return;
-  const state = currentYCellEditorState();
+  const ctx = yCellEditorContext();
+  const state = yCellEditorStateFor(ctx);
   section.dataset.mode = state.mode;
   if (els.yCellEditorModeCards) {
     for (const card of els.yCellEditorModeCards.querySelectorAll('[data-ycell-mode]')) {
@@ -3462,7 +3549,7 @@ function syncTypeYCellEditorUi() {
     els.yCellEditorModeHint.textContent = state.mode === CELL_EDITOR_MODE_MASK
       ? t('g540') : t('g539');
   }
-  paintTypeYCellEditor(state);
+  paintTypeYCellEditor(state, ctx);
 }
 
 function wireTypeYCellEditor() {
@@ -3479,9 +3566,10 @@ function wireTypeYCellEditor() {
   }
   if (els.yCellEditorReset) {
     els.yCellEditorReset.addEventListener('click', () => {
-      resetCellEditorState(currentYCellEditorState());
+      const ctx = yCellEditorContext();
+      resetCellEditorState(yCellEditorStateFor(ctx));
       if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = '';
-      paintTypeYCellEditor(currentYCellEditorState());
+      paintTypeYCellEditor(yCellEditorStateFor(ctx), ctx);
     });
   }
   if (els.yCellEditorCopy) {
@@ -3967,6 +4055,7 @@ for (const [select, key] of [
   select.addEventListener('change', () => {
     generatorState[key] = select.value === 'auto' ? 'auto' : Number(select.value);
     syncResTierUi();
+    syncTypeYCellEditorUi(); // n 변경 즉시 셀 편집기 ref./format 재유도 (렌더 대기 없이)
     schedule();
   });
 }
