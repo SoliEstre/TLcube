@@ -85,6 +85,11 @@ function normalizeFill(fill) {
   if (source === null || typeof source !== 'object') {
     throw new TypeError('fill 은 {r,g,b,a} 객체여야 한다');
   }
+  // fill 을 줬는데 a 가 없으면 예전엔 0 으로 채워 투명 구멍이 됐다.
+  // 생략(DEFAULT_FILL.a=0)과 명시 a:0 은 그대로 두고, 빠진 a 만 거부한다.
+  if (fill !== undefined && source.a === undefined) {
+    throw new TypeError('fill.a 가 없다. 불투명은 a:255, 투명은 a:0 을 명시하라');
+  }
   const result = {
     r: source.r === undefined ? 0 : source.r,
     g: source.g === undefined ? 0 : source.g,

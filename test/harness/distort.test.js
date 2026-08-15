@@ -82,6 +82,43 @@ describe('기하 왜곡 — RGBA 계약과 경계값', () => {
     assert.throws(() => scaleImage(source, 2.001), RangeError);
   });
 
+  test('fill 객체에 a 가 없으면 TypeError 다', () => {
+    const source = makeImage();
+    assert.throws(
+      () => rotateImage(source, 45, { fill: { r: 14, g: 16, b: 24 } }),
+      (error) => error instanceof TypeError && /fill\.a/.test(error.message),
+    );
+    assert.throws(
+      () => distortImage(source, { rotation: 120, fill: { r: 14, g: 16, b: 24 } }),
+      TypeError,
+    );
+    assert.throws(
+      () => scaleImage(source, 0.5, { fill: { r: 0, g: 0, b: 0 } }),
+      TypeError,
+    );
+  });
+
+  test('fill 생략은 투명 흑, 명시 a:255 는 불투명, 명시 a:0 은 투명', () => {
+    const source = makeImage(17, 17);
+    const omitted = rotateImage(source, 45);
+    assert.equal(omitted.pixels[0], 0);
+    assert.equal(omitted.pixels[1], 0);
+    assert.equal(omitted.pixels[2], 0);
+    assert.equal(omitted.pixels[3], 0);
+
+    const opaque = rotateImage(source, 45, { fill: { r: 14, g: 16, b: 24, a: 255 } });
+    assert.equal(opaque.pixels[0], 14);
+    assert.equal(opaque.pixels[1], 16);
+    assert.equal(opaque.pixels[2], 24);
+    assert.equal(opaque.pixels[3], 255);
+
+    const explicitClear = rotateImage(source, 45, { fill: { r: 9, g: 8, b: 7, a: 0 } });
+    assert.equal(explicitClear.pixels[0], 9);
+    assert.equal(explicitClear.pixels[1], 8);
+    assert.equal(explicitClear.pixels[2], 7);
+    assert.equal(explicitClear.pixels[3], 0);
+  });
+
   test('bilinear 기하 변환도 alpha 를 포함한 4채널을 만들고 입력은 보존한다', () => {
     const source = makeImage();
     const before = Array.from(source.pixels);
