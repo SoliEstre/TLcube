@@ -185,10 +185,16 @@
     color: #b7e5ff;
   }
 
+  /*
+   * 문구는 세로 축 아래쪽에 몬다 — 12점 가이드가 화면 중앙(분석 프레임 위치)에
+   * 그려지므로, 예전처럼 가운데 정렬하면 문구가 조준 지점을 덮는다.
+   */
   .scan-center {
-    display: grid;
+    display: flex;
     flex: 1;
-    place-items: center;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
     padding: 42px 0 24px;
   }
 
@@ -198,65 +204,39 @@
     gap: 18px;
   }
 
-  .scan-guide {
-    position: relative;
-    width: min(72vw, 356px);
-    aspect-ratio: 1;
-    border: 2px solid rgb(255 255 255 / .44);
-    border-radius: 28px;
-    box-shadow:
-      0 0 0 1px rgb(0 0 0 / .18) inset,
-      0 18px 55px rgb(0 0 0 / .22);
-  }
-
   /*
-   * 안쪽 채움 칸. 960px 프레임에서 셀당 9px 하한이면 21셀(V3/Y1)은 한 변의 19.7%,
-   * Y2(25셀)는 23.4% 가 최소다. 여유를 둔 권장 40% = inset 30%.
+   * 12점 조준 가이드 — 두 동심 육각형 꼭짓점. 위치·크기는 scanner.js 가 분석
+   * 프레임의 화면 투영(S = min(vW,vH)·cover)에 정합시켜 매 기하 변화마다 계산한다.
+   * 사각 프레임(.scan-guide)·안쪽 칸(.scan-aim-fill)을 대체한다 (2026-08-15) —
+   * 그 사각형은 분석 크롭 경계와 어긋나 «맞추면 잘리는» 가이드였다.
    */
-  .scan-aim-fill {
+  .scan-dot-layer {
     position: absolute;
-    inset: 30%;
-    border: 2px dashed rgb(214 242 255 / .88);
-    border-radius: 16px;
-    box-shadow: 0 0 0 1px rgb(0 0 0 / .28);
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 180ms ease;
   }
 
-  .scan-corner {
-    position: absolute;
-    width: 38px;
-    height: 38px;
-    border-color: #d6f2ff;
-    border-style: solid;
-    filter: drop-shadow(0 1px 8px rgb(0 0 0 / .72));
+  .camera-backdrop.is-active ~ .scan-dot-layer {
+    opacity: 1;
   }
 
-  .scan-corner.top-left {
-    top: -3px;
-    left: -3px;
-    border-width: 4px 0 0 4px;
-    border-radius: 13px 0 0;
+  .scan-dot-layer .dot-outer {
+    fill: rgb(214 242 255 / .95);
+    stroke: rgb(0 0 0 / .5);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
   }
 
-  .scan-corner.top-right {
-    top: -3px;
-    right: -3px;
-    border-width: 4px 4px 0 0;
-    border-radius: 0 13px 0 0;
-  }
-
-  .scan-corner.bottom-right {
-    right: -3px;
-    bottom: -3px;
-    border-width: 0 4px 4px 0;
-    border-radius: 0 0 13px;
-  }
-
-  .scan-corner.bottom-left {
-    bottom: -3px;
-    left: -3px;
-    border-width: 0 0 4px 4px;
-    border-radius: 0 0 0 13px;
+  .scan-dot-layer .dot-inner {
+    fill: rgb(255 255 255 / .55);
+    stroke: rgb(214 242 255 / .9);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
   }
 
   .scan-guide-message {
@@ -835,13 +815,6 @@
       align-self: end;
     }
 
-    /* 우측 열이 폭을 가져가므로 가이드는 **높이 기준**으로 잡는다.
-       스캔 대상은 클수록 유리하므로 남는 세로 공간을 쓴다 — 다만 가이드 아래
-       안내 문구가 같은 열에 들어가므로 100% 를 채우지 않는다. */
-    .scan-guide {
-      width: min(56vh, 300px);
-    }
-
     .camera-gate-card {
       padding: 20px;
     }
@@ -865,6 +838,11 @@
   <div class="camera-backdrop" id="camera-stage">
     <video id="camera-preview" autoplay muted playsinline data-i18n-attr="aria-label:camera.label" aria-label="TLcube 코드를 비추는 카메라 화면"></video>
   </div>
+
+  <!-- 12점 조준 가이드. scanner.js renderGuideDots() 가 분석 프레임의 화면 투영에
+       정합시켜 <circle> 12개를 채운다. 순수 시각 보조라 aria-hidden 이다 — 문구 안내는
+       .scan-guide-wrap 이 맡는다. -->
+  <svg class="scan-dot-layer" id="scan-dot-layer" aria-hidden="true"></svg>
 
   <div class="scanner-overlay">
     <header class="scanner-top">
@@ -902,15 +880,8 @@
 
     <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">
       <div class="scan-guide-wrap">
-        <div class="scan-guide" aria-hidden="true">
-          <span class="scan-corner top-left"></span>
-          <span class="scan-corner top-right"></span>
-          <span class="scan-corner bottom-right"></span>
-          <span class="scan-corner bottom-left"></span>
-          <span class="scan-aim-fill"></span>
-        </div>
-        <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 프레임 안에 맞춰 주세요.</p>
-        <p class="scan-scope-note" data-i18n="guide.fill">안쪽 칸을 코드로 채워 주세요.</p>
+        <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 점 가이드에 맞춰 주세요.</p>
+        <p class="scan-scope-note" data-i18n="guide.dots">코드 꼭짓점은 바깥 점에, 중앙 육각형은 안쪽 점에 맞춰 주세요.</p>
         <p class="scan-scope-note" data-i18n="guide.tlcubeOnly">QR 및 다른 바코드는 읽히지 않아요.</p>
       </div>
     </section>

@@ -32,10 +32,12 @@ import {
   observedFromResult,
 } from '/src/lab-telemetry.js';
 import {
+  analysisSquareOnScreen,
   applyTrackZoom,
   buttonStep,
   cropWindow,
   DEFAULT_USER_ZOOM,
+  guideDotPositions,
   readTrackCapability,
   readTrackZoom,
   resolveZoomPlan,
@@ -78,7 +80,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-15.03';
+export const SCANNER_BUILD = '2026-08-15.04';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -86,6 +88,16 @@ export const SCANNER_BUILD = '2026-08-15.03';
  * 사용자는 무엇을 바꿔야 할지 알 수 없다.
  */
 const HINT_AFTER_FAILED_FRAMES = 24;
+
+/**
+ * 2면 이상 잘림(multi-clip)이 이 프레임 수만큼 **연속**이면 "조금 뒤로" 안내를 띄운다.
+ * 실측(f2dbb2b 이후 340프레임): multi-clip 구간 성공 0% (274/274) — 코드가 분석
+ * 프레임을 넘치면 절대 못 읽는데, 사용자에게는 아무 신호가 없었다.
+ * 판정은 프레임마다 이미 계산 가능한 extractGeometry().clipSide 를 재사용한다 —
+ * 기기 안 로컬 값이며 안정판 텔레메트리 0바이트 불변식과 무관하다.
+ * 3프레임 ≈ 1초(FRAME_INTERVAL_MS 320) — 스치는 잘림에는 침묵한다.
+ */
+const CLIP_HINT_AFTER_FRAMES = 3;
 
 const scannerApp = document.getElementById('scanner-app');
 const cameraStage = document.getElementById('camera-stage');
@@ -113,13 +125,14 @@ const zoomInButton = document.getElementById('zoom-in');
 const zoomOutButton = document.getElementById('zoom-out');
 const zoomValue = document.getElementById('zoom-value');
 const zoomErrorBox = document.getElementById('zoom-error');
+const dotLayer = document.getElementById('scan-dot-layer');
 
 if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTitle ||
     !cameraGateMessage || !startCameraButton || !chooseImageButton || !gateChooseImageButton ||
     !imageInput || !statusBox || !scanToast || !resultPanel || !resultTitle || !resultContent ||
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
     !closeResultSecondaryButton || !zoomControls || !zoomSlider || !zoomInButton ||
-    !zoomOutButton || !zoomValue || !zoomErrorBox) {
+    !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer) {
   throw new Error('TLcube scanner markup is incomplete.');
 }
 
@@ -136,6 +149,7 @@ let stoppedForVisibility = false;
 let activeUrl = '';
 let returnFocus = null;
 let consecutiveFailedFrames = 0;
+let clippedFrames = 0;
 let frameSeq = 0;
 let labEnvSent = false;
 let attemptId = '';
@@ -153,6 +167,8 @@ function resetFrameSeq() {
 
 function beginScanAttempt() {
   attemptId = makeAttemptId();
+  // 잘림 안내는 시도 단위 상태다 — 이전 세션의 스트릭이 새 카메라를 오염시키면 안 된다.
+  clippedFrames = 0;
   if (lab.beginAttempt) lab.beginAttempt(attemptId);
   return attemptId;
 }
@@ -221,6 +237,66 @@ function syncPreviewTransform() {
   const scale = zoomPlan.cropApplied > 1.001 ? zoomPlan.cropApplied : 1;
   cameraVideo.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
   cameraVideo.style.transformOrigin = 'center center';
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * 12점 조준 가이드를 분석 프레임 좌표에 정합시켜 그린다.
+ *
+ * 분석 정사각의 화면 투영 한 변 S = min(vW,vH)·max(eW/vW, eH/vH) — 유도와 크롭
+ * 배율 상쇄 증명은 scanner-zoom.js `analysisSquareOnScreen()` 주석에 있다. 두 크롭
+ * (분석 중앙 정사각·cover 표시 크롭)이 모두 중심 대칭이라 중심은 프리뷰 요소 중심
+ * 그대로다. 그래서 점 좌표는 레이어(뷰포트 전체) 중심 기준으로 계산한다 —
+ * 예전 사각 가이드는 헤더/푸터가 미는 **레이아웃 흐름 안**에 있어서 분석 영역과
+ * 어긋났다. 이번 사고의 본질이 그 «가이드 ≠ 분석 영역» 불일치다.
+ *
+ * 줌은 다시 그릴 필요가 없다: 트랙 zoom 은 소스가 바뀌고, 크롭 폴백은 CSS scale 이
+ * 정확히 상쇄해 S 가 불변이다. 다시 그리는 트리거는 기하가 실제로 바뀌는 사건뿐
+ * (메타데이터·프레임 크기 변화·뷰포트 리사이즈·회전).
+ */
+function renderGuideDots() {
+  if (!cameraStream) {
+    dotLayer.replaceChildren();
+    return;
+  }
+  // clientWidth 가 아니라 rect — SVG 루트의 clientWidth 는 브라우저별 이력이 지저분하고
+  // 주 사용 기기가 아이폰이다. 레이어는 inset:0 이라 rect = 프리뷰 요소 크기다.
+  const rect = dotLayer.getBoundingClientRect();
+  const eW = rect.width;
+  const eH = rect.height;
+  const side = analysisSquareOnScreen({
+    videoWidth: cameraVideo.videoWidth,
+    videoHeight: cameraVideo.videoHeight,
+    elementWidth: eW,
+    elementHeight: eH,
+  });
+  if (side == null) {
+    dotLayer.replaceChildren();
+    return;
+  }
+  const dots = guideDotPositions(side, eW / 2, eH / 2);
+  if (!dots) {
+    dotLayer.replaceChildren();
+    return;
+  }
+  dotLayer.setAttribute('viewBox', '0 0 ' + eW + ' ' + eH);
+  // 점 크기는 시각 표식일 뿐 기하가 아니다 — 프레임에 비례하되 4~9px 로 묶는다.
+  const outerR = Math.max(4, Math.min(9, side * 0.013));
+  const fragment = document.createDocumentFragment();
+  const ring = (points, className, radius) => {
+    for (const point of points) {
+      const circle = document.createElementNS(SVG_NS, 'circle');
+      circle.setAttribute('class', className);
+      circle.setAttribute('cx', String(point.x));
+      circle.setAttribute('cy', String(point.y));
+      circle.setAttribute('r', String(radius));
+      fragment.append(circle);
+    }
+  };
+  ring(dots.outer, 'dot-outer', outerR);
+  ring(dots.inner, 'dot-inner', outerR * 0.72);
+  dotLayer.replaceChildren(fragment);
 }
 
 function resetZoomState() {
@@ -523,7 +599,10 @@ async function decodeFrame(imageData) {
     if (result && result.ok === true && typeof result.text === 'string') {
       return { ok: true, payload: result.text, family: result.family, hypothesis: result.hypothesis };
     }
-    return { ok: false, reason: (result && result.reason) || 'decode-failed' };
+    // 잘림 안내용 clipSide. extractGeometry 는 순수 함수라 안정판(`/`)에서도 아무것도
+    // 전송하지 않는다 — 반환 객체는 이 셸의 handleDecodeResult 만 소비한다.
+    const clipSide = extractGeometry(result, imageData.width, imageData.height).clipSide;
+    return { ok: false, reason: (result && result.reason) || 'decode-failed', clipSide };
   } catch (error) {
     // 디코더가 던지면 스캐너 루프가 멈추면 안 된다 — 다음 프레임으로 넘어간다.
     const failed = {
@@ -650,6 +729,7 @@ function stopCamera() {
   cameraVideo.srcObject = null;
   setCameraStageActive(false);
   resetZoomState();
+  renderGuideDots();
 }
 
 function cameraFailure(error) {
@@ -910,6 +990,9 @@ function grabVideoFrame() {
       setZoomErrorVisible(t('zoom.failed'));
       showScanToast(t('zoom.failed'));
     }
+    // 크롭 폴백 해제 시 프리뷰의 CSS scale(crop) 잔존을 즉시 재동기화 —
+    // 안 하면 이 경로에서만 «가이드 = 분석 영역» 불변식이 화면상 깨진다.
+    syncPreviewTransform();
     return imageDataCenterSquare(
       cameraVideo,
       cameraVideo.videoWidth,
@@ -938,9 +1021,26 @@ function handleDecodeResult(result, source, session) {
   if (source === 'camera') {
     if (payload) {
       consecutiveFailedFrames = 0;
+      clippedFrames = 0;
     } else {
       consecutiveFailedFrames += 1;
-      if (consecutiveFailedFrames === HINT_AFTER_FAILED_FRAMES) {
+      // 잘림 안내 — multi-clip(2면 이상 잘림) 연속이면 «조금 뒤로». 실측에서 이
+      // 상태의 성공률이 0% 라 다른 어떤 힌트보다 우선한다. 해소되면 기본 조준
+      // 문구로 되돌린다(한 번 뜨고 눌러앉으면 이미 물러난 사용자를 계속 몬다).
+      if (result && result.clipSide === 'multi') {
+        clippedFrames += 1;
+        if (clippedFrames === CLIP_HINT_AFTER_FRAMES) {
+          setStatus(t('status.clipped'));
+        }
+      } else {
+        if (clippedFrames >= CLIP_HINT_AFTER_FRAMES) {
+          setStatus(t('status.aim'));
+        }
+        clippedFrames = 0;
+      }
+      if (consecutiveFailedFrames === HINT_AFTER_FAILED_FRAMES
+        && clippedFrames < CLIP_HINT_AFTER_FRAMES) {
+        // 잘림 안내가 떠 있는 동안 «더 가까이» 는 반대 지시라 억제한다.
         setStatus(t('status.closer'));
       }
     }
@@ -1052,6 +1152,7 @@ async function startCamera(options) {
 
     cameraRequestPending = false;
     setCameraStageActive(true);
+    renderGuideDots();
     hideCameraGate();
     setStatus(t('status.aim'));
     sendLabEnvOnce(stream);
@@ -1547,6 +1648,14 @@ openUrlLink.addEventListener('click', (event) => {
 resultPanel.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeResult();
 });
+
+// 12점 가이드는 기하가 실제로 바뀔 때만 다시 그린다 — 비디오 메타데이터 도착,
+// 프레임 크기 변화(HTMLVideoElement 'resize' — 회전 시 vW/vH 스왑), 뷰포트 리사이즈.
+// 줌 변화는 S 불변이라(scanner-zoom.js 증명) 트리거가 아니다.
+cameraVideo.addEventListener('loadedmetadata', renderGuideDots);
+cameraVideo.addEventListener('resize', renderGuideDots);
+window.addEventListener('resize', renderGuideDots);
+window.addEventListener('orientationchange', renderGuideDots);
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {

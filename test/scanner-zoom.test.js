@@ -21,20 +21,27 @@ import {
 } from '../src/lab-telemetry.js';
 import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
+import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
+import { getFinderPattern } from '../src/finder-patterns.js';
 import {
-  AIM_RECOMMEND,
-  AIM_RECOMMEND_MAX,
-  AIM_RECOMMEND_MIN,
   CELL_PX_FLOOR,
   DEFAULT_USER_ZOOM,
   FRAME_MAX_SIDE,
   GUIDE_CELLS_V3,
   GUIDE_CELLS_Y2,
-  aimGuideFractions,
+  GUIDE_FINDER_RADIUS_CELLS,
+  GUIDE_INNER_FRACTION,
+  GUIDE_OUTER_FRACTION,
+  GUIDE_REFERENCE_K,
+  GUIDE_SILHOUETTE_RADIUS_CELLS,
+  aimGuideMinFractions,
+  analysisSquareOnScreen,
   applyTrackZoom,
   buttonStep,
   cropWindow,
   effectiveMagnification,
+  guideDotPositions,
+  guideOccupancyEstimates,
   parseZoomCapability,
   resolveZoomPlan,
   snapZoom,
@@ -166,42 +173,114 @@ test('트랙 실패 시 같은 배율을 크롭으로 돌리고 오류 코드를
   assert.equal(cropOnly.trackRequested, 1);
 });
 
-test('조준 가이드 수치는 셀당 9px · 21셀 기준으로 다시 계산한다', () => {
-  const guide = aimGuideFractions();
-  assert.equal(guide.floorPx, CELL_PX_FLOOR);
-  assert.equal(guide.frameSide, FRAME_MAX_SIDE);
-  assert.equal(GUIDE_CELLS_V3 * CELL_PX_FLOOR, 189);
-  assert.equal(guide.minV3, 189 / 960);
-  assert.ok(Math.abs(guide.minV3 - 0.196875) < 1e-12);
-  assert.equal(guide.minY2, (GUIDE_CELLS_Y2 * CELL_PX_FLOOR) / 960);
-  assert.ok(guide.minY2 > guide.minV3);
-  assert.equal(guide.recommendMin, AIM_RECOMMEND_MIN);
-  assert.equal(guide.recommendMax, AIM_RECOMMEND_MAX);
-  assert.equal(guide.recommend, AIM_RECOMMEND);
-  assert.ok(guide.recommendMin > guide.minY2);
-  assert.equal(guide.innerInset, 0.3);
-  assert.match(SCANNER_HTML, /class="scan-aim-fill"/);
-  assert.match(SCANNER_HTML, /inset: 30%/);
-  assert.match(SCANNER_HTML, /data-i18n="guide\.fill"/);
+/*
+ * [의도적 갱신 2026-08-15] 구 사각 프레임(.scan-aim-fill · inset 30%) 검증을 12점
+ * 가이드 검증으로 교체했다 — 사각 가이드 폐기가 이번 의뢰의 목적이다.
+ */
+test('12점 가이드 — 방향은 정본(꼭짓점 0 = 상단 C0)이고 크기는 파인더 비율에서 유도된다', () => {
+  const dots = guideDotPositions(1000, 0, 0);
+  assert.equal(dots.outer.length, 6);
+  assert.equal(dots.inner.length, 6);
+  // 방향: CORNER_UNIT_OFFSETS 를 그대로 재사용 — 꼭짓점 0 = 상단(0, -1), 이후 시계방향.
+  for (let i = 0; i < 6; i += 1) {
+    const r = GUIDE_OUTER_FRACTION * 500;
+    assert.ok(Math.abs(dots.outer[i].x - CORNER_UNIT_OFFSETS[i].x * r) < 1e-9);
+    assert.ok(Math.abs(dots.outer[i].y - CORNER_UNIT_OFFSETS[i].y * r) < 1e-9);
+  }
+  assert.equal(dots.outer[0].x, 0);
+  assert.ok(dots.outer[0].y < 0, '꼭짓점 0 이 상단이 아니다');
+  // 안쪽 육각 = 대표 버전(O V3, k=10) 중앙 파인더 비율. 상수 사본이 정본과 갈리면 잡는다.
+  assert.equal(GUIDE_REFERENCE_K, 10);
+  assert.equal(GUIDE_FINDER_RADIUS_CELLS, getFinderPattern('central-cube-3tone').radiusCells);
+  assert.ok(Math.abs(GUIDE_SILHOUETTE_RADIUS_CELLS - Math.sqrt(3) * (10 + 2 / 3)) < 1e-12);
+  assert.ok(Math.abs(
+    GUIDE_INNER_FRACTION
+    - GUIDE_OUTER_FRACTION * (GUIDE_FINDER_RADIUS_CELLS / GUIDE_SILHOUETTE_RADIUS_CELLS),
+  ) < 1e-12);
+  assert.ok(GUIDE_INNER_FRACTION > 0.08 && GUIDE_INNER_FRACTION < 0.13);
+  // HTML 배선: 점 레이어가 있고, 구 사각 가이드 **마크업**은 남아 있지 않다
+  // (주석은 폐기 이력 설명으로 옛 이름을 언급해도 된다 — class 속성만 본다).
+  assert.match(SCANNER_HTML, /id="scan-dot-layer"/);
+  assert.match(SCANNER_HTML, /data-i18n="guide\.dots"/);
+  assert.doesNotMatch(SCANNER_HTML, /class="scan-aim-fill"|class="scan-corner|class="scan-guide"/);
+  assert.match(SCANNER_JS, /renderGuideDots/);
+  assert.match(SCANNER_JS, /guideDotPositions\(/);
 });
 
-test('기본 확대는 한 상수이고 2 이며 스캐너가 그 상수를 쓴다', () => {
-  assert.equal(DEFAULT_USER_ZOOM, 2);
+test('바깥 점 크기 — 채우면 점유율이 실측 성공 지대(0.15-0.3)에 들고 복호 하한을 지킨다', () => {
+  const occ = guideOccupancyEstimates();
+  // Y 육각·K 육망성: bbox = √3R×2R → (√3/2)f² · A 정삼각: √3R×1.5R → (3√3/8)f²
+  assert.ok(occ.hexagon >= 0.15 && occ.hexagon <= 0.3, 'Y/K 점유율 ' + occ.hexagon);
+  assert.ok(occ.triangle >= 0.15 && occ.triangle <= 0.3, 'A 점유율 ' + occ.triangle);
+  // 복호 하한: 바깥 점까지 채운 코드의 셀 px = (f·S/2)/n ≥ 9  ⇔  f ≥ 2·(n·9/S).
+  const min = aimGuideMinFractions();
+  assert.equal(min.floorPx, CELL_PX_FLOOR);
+  assert.equal(min.frameSide, FRAME_MAX_SIDE);
+  assert.equal(min.minV3, (GUIDE_CELLS_V3 * CELL_PX_FLOOR) / 960);
+  assert.equal(min.minY2, (GUIDE_CELLS_Y2 * CELL_PX_FLOOR) / 960);
+  assert.ok(GUIDE_OUTER_FRACTION >= 2 * min.minY2, 'Y2 가 하한 아래로 내려간다');
+  assert.ok(GUIDE_OUTER_FRACTION >= 2 * min.minV3, 'Y1 이 하한 아래로 내려간다');
+});
+
+test('1× 프리뷰(cover) ↔ 분석 정사각 정합 — 크롭 배율은 화면 투영에서 상쇄된다', () => {
+  // 세로 뷰포트 × 가로 센서: cover = eH/vH → S = vH·(eH/vH) = eH.
+  assert.equal(analysisSquareOnScreen({
+    videoWidth: 1920, videoHeight: 1080, elementWidth: 390, elementHeight: 844,
+  }), 844);
+  // 세로 뷰포트 × 세로 센서: cover = eH/vH → S = vW·cover.
+  assert.ok(Math.abs(analysisSquareOnScreen({
+    videoWidth: 1080, videoHeight: 1920, elementWidth: 390, elementHeight: 844,
+  }) - 1080 * (844 / 1920)) < 1e-9);
+  // 크롭 상쇄: 분석 변(min/crop) × 표시 배율(cover·crop) = min·cover — crop 무관.
+  for (const crop of [1, 2, 3.5]) {
+    const cover = Math.max(390 / 1920, 844 / 1080);
+    const sourceSide = cropWindow(1920, 1080, crop).sourceSide;
+    const projected = sourceSide * cover * crop;
+    assert.ok(Math.abs(projected - analysisSquareOnScreen({
+      videoWidth: 1920, videoHeight: 1080, elementWidth: 390, elementHeight: 844,
+    })) < 1e-9, 'crop ' + crop + ' 에서 투영이 어긋난다');
+  }
+  assert.equal(analysisSquareOnScreen({}), null);
+  // 셸 배선: 기하 트리거와 CSS scale 동기화가 실재한다.
+  assert.match(SCANNER_JS, /analysisSquareOnScreen\(/);
+  assert.match(SCANNER_JS, /addEventListener\('loadedmetadata', renderGuideDots\)/);
+  assert.match(SCANNER_JS, /syncPreviewTransform/);
+});
+
+test('잘림 안내 — multi-clip 연속이면 «조금 뒤로» 를 띄우고 새 전송 경로는 만들지 않는다', () => {
+  assert.match(SCANNER_JS, /CLIP_HINT_AFTER_FRAMES/);
+  assert.match(SCANNER_JS, /clipSide === 'multi'/);
+  assert.match(SCANNER_JS, /t\('status\.clipped'\)/);
+  // 판정은 프레임마다 이미 계산 가능한 extractGeometry 를 재사용한다 — 반환 객체에
+  // clipSide 를 동봉할 뿐, beacon/lab 호출을 새로 만들지 않는다(안정판 0바이트 불변식).
+  assert.match(SCANNER_JS, /extractGeometry\(result, imageData\.width, imageData\.height\)\.clipSide/);
+  assert.doesNotMatch(SCANNER_JS, /lab\.(frame|frameShot|env)\([^)]*clipSide/);
+});
+
+/*
+ * [의도적 갱신 2026-08-15] 기본 확대 2 → 1 복귀가 이번 의뢰의 목적이다 (운영자 지시).
+ * 실측(f2dbb2b 이후 340프레임): zoom 2 상시 크롭에서 가이드·분석 경계 불일치로
+ * multi-clip 구간 성공 0%. 확대 대신 가이드를 분석 좌표에 정합시키는 설계로 바꿨다.
+ */
+test('기본 확대는 한 상수이고 1 이며 스캐너가 그 상수를 쓴다', () => {
+  assert.equal(DEFAULT_USER_ZOOM, 1);
   assert.match(SCANNER_JS, /DEFAULT_USER_ZOOM/);
   assert.match(SCANNER_JS, /snapZoom\(DEFAULT_USER_ZOOM/);
   assert.match(SCANNER_JS, /userZoom: DEFAULT_USER_ZOOM/);
   assert.match(SCANNER_JS, /crop-failed|zoom\.failed/);
   const crop = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM, capability: null });
-  assert.equal(crop.cropApplied, 2);
+  assert.equal(crop.cropApplied, 1);
   assert.equal(crop.error, '');
   const track = resolveZoomPlan({
     userZoom: DEFAULT_USER_ZOOM,
     capability: { min: 1, max: 8, step: 0.1 },
-    trackApplied: 2,
+    trackApplied: 1,
   });
   assert.equal(track.mode, 'track');
-  assert.equal(track.trackApplied, 2);
+  assert.equal(track.trackApplied, 1);
   assert.equal(track.error, '');
+  // 수동 확대는 유지된다 — 컨트롤 상한은 여전히 8×.
+  assert.match(SCANNER_HTML, /id="zoom-slider"[^>]*max="8"/);
 });
 
 test('스캐너는 트랙 zoom 을 적용하고 실패를 토스트로 보여 준다', () => {
