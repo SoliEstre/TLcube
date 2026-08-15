@@ -16,6 +16,7 @@
 // 결정성: 타임스탬프, 해시, 환경 정보는 넣지 않는다. 같은 입력은 같은 바이트를 낸다.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readSourceLf } from './embed-source.mjs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -215,7 +216,7 @@ export function collectScannerModuleSources() {
     if (modules.has(id)) return;
 
     visiting.push(id);
-    const code = readFileSync(normalized, 'utf8');
+    const code = readSourceLf(normalized);
     const moduleSource = {
       id,
       filePath: normalized,

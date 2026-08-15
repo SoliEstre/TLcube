@@ -1,6 +1,7 @@
 // build-cell-editor.mjs — 다중 타입 셀 & 파인더 에디터를 독립 HTML로 빌드한다.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readSourceLf } from './embed-source.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -76,10 +77,10 @@ function buildLoaderScript(moduleSources, appSource) {
 
 export function buildCellEditorHtml() {
   const template = readFileSync(TEMPLATE_PATH, 'utf8');
-  const appSource = readFileSync(APP_PATH, 'utf8');
+  const appSource = readSourceLf(APP_PATH);
   const moduleSources = CELL_EDITOR_MODULE_ORDER.map((name) => [
     name,
-    readFileSync(path.join(SRC_DIR, name + '.js'), 'utf8'),
+    readSourceLf(path.join(SRC_DIR, name + '.js')),
   ]);
   assertTopologicalOrder(moduleSources);
   return replaceExactlyOnce(

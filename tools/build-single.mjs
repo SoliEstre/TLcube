@@ -10,6 +10,7 @@
 // 결정성: 생성물에 타임스탬프·해시·환경 정보를 넣지 않는다. 같은 입력 → 바이트 동일 출력.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readSourceLf } from './embed-source.mjs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -222,7 +223,7 @@ export function buildSingleHtml(options = {}) {
 
   const moduleSources = MODULE_ORDER.map((name) => {
     const filePath = path.join(SRC_DIR, `${name}.js`);
-    let code = readFileSync(filePath, 'utf8');
+    let code = readSourceLf(filePath);
     if (name === 'finder-patterns') {
       code = replaceExactlyOnce(
         code,

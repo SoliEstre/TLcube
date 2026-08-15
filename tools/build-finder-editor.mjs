@@ -1,6 +1,7 @@
 // build-finder-editor.mjs — 파인더 에디터 소스와 현재 src 모듈을 단일 HTML로 묶는다.
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { readSourceLf } from './embed-source.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -73,10 +74,10 @@ function buildLoaderScript(moduleSources, appSource) {
 
 export function buildFinderEditorHtml() {
   const template = readFileSync(TEMPLATE_PATH, 'utf8');
-  const appSource = readFileSync(APP_PATH, 'utf8');
+  const appSource = readSourceLf(APP_PATH);
   const moduleSources = FINDER_EDITOR_MODULE_ORDER.map((name) => [
     name,
-    readFileSync(path.join(SRC_DIR, name + '.js'), 'utf8'),
+    readSourceLf(path.join(SRC_DIR, name + '.js')),
   ]);
   assertTopologicalOrder(moduleSources);
   return replaceExactlyOnce(
