@@ -92,7 +92,9 @@ test('셀 표면 v2r2 는 Y1 기본·Y2 명시 선택만 n=25 이고 사용자 �
       assert.equal(encoded.cellSurfaceLayout, 'v2r2');
       assert.equal(encoded.n, wantN, 'versionY=' + versionY);
       assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
-      assert.equal(encoded.capacity.dataCells, wantN === 25 ? 533 : 349);
+      // 의도적 갱신 (2026-08-16): v2r2 중앙 블록 교체(painted 65→74)로 data 가
+      // 349→340 · 533→524 로 재산정됐다.
+      assert.equal(encoded.capacity.dataCells, wantN === 25 ? 524 : 340);
     }
   }
 });

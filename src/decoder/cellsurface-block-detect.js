@@ -11,20 +11,27 @@
  *     커브·면 게인에 불변. 2-D 창은 Y-심 근방에서 세 면 섹터를 섞어 쓰지 않는다.
  *   · 패치 정합 = Pearson 상관 — 국소 아핀 톤 변화에 불변.
  *
- * 검출 서명 (정본 cellSurfaceFinal.js 에서 유도, 3면 합집합 기준):
- *   · v2r2 중앙(블록 A (0..3)² × 3면): Y-심 동심 육각 링 — 중심 통과 직선 런렝스
- *     [B1 D1 B1 D2 B1 D1 B1] → 회문 코어 (B,2D,B) + 방향별 교차거리 비 1:2:3:4.
- *   · v2r2 면 T 블록 B((n−7..n−1)², QR 모티프 동심 사각): 같은 회문 코어,
- *     교차거리 비 1:2(:3) 뒤 배경으로 열린다. 중앙과 함께 «대각 2앵커»를 이룬다.
- *   · v0 중앙(NW 블록 (0..2)² × 3면): 어두운 육각 r<2 + 밝은 링 2..3 →
- *     런렝스 [B1 D4 B1], 교차거리 비 2:3.
+ * 검출 서명 (정본 cellSurfaceFinal.js 에서 유도, 3면 합집합 기준 · 2026-08-16 중앙 통일):
+ *   · **공유 K3 중앙** — v0(NW 3×3)·v1r2(NW 5×5)·v2r2(중앙 A = v1r2 NW 공유):
+ *     어두운 육각 + 밝은 링 → 중심 통과 런렝스 [B1 D4 B1], 교차거리 비 2:3.
+ *     세 패밀리의 중앙 서명이 같으므로 **중앙만으로는 패밀리를 판별하지 않는다.**
+ *   · v2r2 면 T 블록 B((n−7..n−1)², QR 모티프 동심 사각): 회문 코어 (B,2D,B) = K5,
+ *     교차거리 비 1:2(:3) 뒤 배경으로 열린다 → 'v2r2-corner'. 중앙에서 (n−3.5)셀.
+ *   · v1r2 면 T SE 5×5: 같은 K5 코어 → 'v2r2-corner'. 중앙에서 18셀.
+ *   · 구 v2r2 중앙(동심 육각 링 스택, 닫힌 K5 1:2:3:4)은 **소각된 디자인**이다 —
+ *     'legacy-v2r2-center' 로 분류만 남기고 어떤 포즈도 세우지 않는다(차단).
  *   동심 닮은꼴 다각형의 중심 통과 교차거리 비는 방향 무관(아핀 불변)이다.
  *
- * 기하 조립:
- *   · v2r2: 중앙 + T코너 similarity (회전 즉시 확정) → 패치 Pearson 정합 4앵커
- *     estimateHomography4 2라운드 → 6 서브앵커 최소제곱 DLT 재적합.
- *   · v0: 중앙 불스아이(위치·스케일) → 30셀 전체 템플릿 회전×스케일 스윕(3°×4 → 0.75°)
- *     → 4앵커 정합 2라운드 → 12 서브앵커(NW·SE + NE·SW 엣지) 최소제곱 재적합.
+ * 기하 조립 — **2차 앵커 조기 분기** (중앙 히트에서 세 패밀리 순차 시도 금지):
+ *   · K3 중앙 × K5 원거리 코어 쌍의 거리 스냅(v2r2@21 17.5 · v1r2 18 · v2r2@25 21.5,
+ *     ±3.2셀)이 맞으면 **앵커드 패밀리** similarity → 패치 Pearson 정합 4앵커
+ *     estimateHomography4 2라운드 → 6~12 서브앵커 최소제곱 DLT 재적합.
+ *     v2r2@21·v1r2 는 거리로 안 갈라진다 — 둘 다 세우고 CS 게이트가 고른다.
+ *   · 앵커드 포즈가 성립한 중앙은 v0 스윕 대상에서 빠진다. 앵커드 포즈가 없는
+ *     중앙만 v0 경로: 30셀 전체 템플릿 회전×스케일 스윕(3°×4 → 0.75°) → 4앵커
+ *     정합 2라운드 → 12 서브앵커(NW·SE + NE·SW 엣지) 최소제곱 재적합.
+ *     분기 조건이 «앵커 존재» 가 아니라 «앵커드 포즈 성립» 인 이유: 데이터 필드의
+ *     우연한 K5 코어가 v0 검출을 죽이면 안 되기 때문.
  *
  * 결정성: RNG 없음, 모든 순회·정렬 고정 순서, 동점은 (score desc, y, x) 으로 깬다.
  * 노출: cube-detect 의 lab 경로(enableCellSurfaceY)에서만 호출된다. 산출 shape 는
@@ -436,8 +443,11 @@ function verifyV2r2Cluster(luma, otsuCut, cluster, cfg) {
   const closed = full + ring3;
   if (ring2Ok < 5) return null;
   if (closed >= 5 && open <= 1) {
+    // 구 v2r2 중앙(닫힌 동심 육각 링 스택) — **소각된 디자인** (2026-08-16 중앙 개정).
+    // 분류는 법의학 진단용으로만 남긴다. 어떤 조립도 이 kind 를 소비하지 않으므로
+    // 구 디자인 인쇄물은 포즈 0 → 복호 불가로 차단된다.
     return {
-      kind: 'v2r2-center', x: center.x, y: center.y, u: t1Median,
+      kind: 'legacy-v2r2-center', x: center.x, y: center.y, u: t1Median,
       score: (2 * full + ring3) / 16, count: cluster.count,
     };
   }
@@ -481,7 +491,8 @@ function verifyV0Cluster(luma, otsuCut, cluster, cfg) {
     if (ray.transitions.length >= 2) {
       const ratio = ray.transitions[1] / t1;
       if (ratio >= 1.25 && ratio <= 1.78) ring2Bonus += 1;
-      // v2r2 중앙 링 스택(1:2:3)이 v0 불스아이(2:3)로 위장하는 것을 걸러낸다.
+      // 구(소각) v2r2 중앙 링 스택(1:2:3)이 K3 불스아이(2:3)로 위장하는 것을 걸러낸다 —
+      // 2026-08-16 중앙 통일 후에도 구 디자인 인쇄물 차단 가드로 유지한다.
       if (ratio >= 1.85 && ratio <= 2.35 && ray.transitions.length >= 3
         && ray.transitions[2] / t1 >= 2.6 && ray.transitions[2] / t1 <= 3.5) {
         v2r2Stack += 1;
@@ -561,7 +572,8 @@ function blockLimitsFor(n, layoutId) {
       ]),
     };
   }
-  return { nearLimit: 3, farLimit: n - 7, edges: Object.freeze([]) };
+  // v2r2 — 중앙 블록 A 가 v1r2 NW 5×5 공유로 개정(2026-08-16)돼 상한이 4 다.
+  return { nearLimit: 4, farLimit: n - 7, edges: Object.freeze([]) };
 }
 
 function inEdgeBlock(cell, box) {
@@ -886,7 +898,9 @@ function liftPoint(point, factor) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// 6. 조립 — v2r2 (중앙+코너 similarity), v0 (불스아이+회전 스윕).
+// 6. 조립 — 2차 앵커 조기 분기 (2026-08-16 중앙 통일):
+//    K3 중앙 × K5 원거리 코어 쌍 → 앵커드 패밀리(v2r2@21/25 · v1r2),
+//    앵커드 포즈가 없는 중앙만 v0 360° 회전 스윕.
 // ─────────────────────────────────────────────────────────────────────────
 
 /** 라운드 3 — 6 서브앵커(면별 중앙 3 + 코너 3) 정합 → 최소제곱 재적합. */
@@ -935,106 +949,103 @@ function refinePose(luma, H0, patches, cfg) {
   return round3.meanCorrelation >= base.meanCorrelation - 0.05 ? round3 : base;
 }
 
-function assembleV2r2Poses(verified, fullLuma, factor, cfg) {
-  const centres = verified.filter((hit) => hit.kind === 'v2r2-center').slice(0, 3);
-  const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
-  const poses = [];
-  for (const centre of centres) {
-    for (const corner of corners) {
-      const dx = corner.x - centre.x;
-      const dy = corner.y - centre.y;
-      const distance = Math.hypot(dx, dy);
-      if (!(distance > 6 * centre.u)) continue;
-      const estimatedN = distance / Math.max(centre.u, EPSILON) + 3.5;
-      let n = null;
-      // 마스크 침식이 u 를 부풀릴 수 있어 스냅 허용폭은 후보 간격(4)의 중간까지 연다.
-      for (const candidate of [21, 25]) {
-        if (Math.abs(estimatedN - candidate) <= 3.2
-          && (n === null || Math.abs(estimatedN - candidate) < Math.abs(estimatedN - n))) {
-          n = candidate;
-        }
-      }
-      if (n === null) continue;
-      const centreFull = liftPoint(centre, factor);
-      const cornerFull = liftPoint(corner, factor);
-      const scale = Math.hypot(cornerFull.x - centreFull.x, cornerFull.y - centreFull.y)
-        / (n - 3.5);
-      // canonical 대각 (0,−1)·(n−3.5) → 코너. R·(0,−1) = w 에서 cos=−wy, sin=wx.
-      const wx = (cornerFull.x - centreFull.x) / (scale * (n - 3.5));
-      const wy = (cornerFull.y - centreFull.y) / (scale * (n - 3.5));
-      const H0 = similarityHomography(centreFull, scale, -wy, wx);
-      const refined = refinePose(fullLuma, H0, patchesForN(n), cfg);
-      if (!refined) continue;
-      poses.push({
-        family: 'v2r2',
-        n,
-        H: refined.H,
-        score: refined.meanCorrelation,
-        estimatedN,
-      });
-    }
-  }
-  return poses;
+/**
+ * 앵커드 패밀리 후보표 — 중앙(K3)에서 K5 원거리 코어까지의 canonical 거리(셀).
+ *   · v2r2: 블록 B 7×7 코어 중심 = 셀 (n−4,n−4) 중심 → (n−3.5) — 21→17.5 · 25→21.5.
+ *   · v1r2: 면 T SE 5×5 코어 중심 = (17.5,17.5) → 18.0
+ *     (셀 (c,c) 중심의 원점 거리 = (c+0.5)·u — 같은 규칙).
+ * 스냅 허용폭 ±3.2셀 (마스크 침식이 u 를 부풀린다 — 종전 근거 유지).
+ * v2r2@21(17.5)과 v1r2(18.0)는 거리로 갈라지지 않는다 — 둘 다 후보 포즈를 세우고
+ * 수용은 CS 평가 게이트가 판정한다 (n=21 병행 평가 계약, formatIndex 불변).
+ */
+const ANCHOR_SNAP_CELLS = 3.2;
+const V1R2_CORE_RADIUS_CELLS = 18;
+const V1R2_N = 21;
+const V2R2_RADII = Object.freeze([
+  Object.freeze({ n: 21, radius: 17.5 }),
+  Object.freeze({ n: 25, radius: 21.5 }),
+]);
+
+/** 중앙+원거리 쌍의 similarity 시드 — canonical 대각 (0,−1)·radius → 코너.
+ *  R·(0,−1) = w 에서 cos = −wy, sin = wx. */
+function anchoredSimilaritySeed(centre, corner, factor, radiusCells) {
+  const centreFull = liftPoint(centre, factor);
+  const cornerFull = liftPoint(corner, factor);
+  const scale = Math.hypot(cornerFull.x - centreFull.x, cornerFull.y - centreFull.y)
+    / radiusCells;
+  const wx = (cornerFull.x - centreFull.x) / (scale * radiusCells);
+  const wy = (cornerFull.y - centreFull.y) / (scale * radiusCells);
+  return similarityHomography(centreFull, scale, -wy, wx);
 }
 
 /**
- * v1r2 조립 — **네 코너 블록 · 회전 스윕 없음.**
- *
- * 정본에서 실제로 «동심 코어» 를 내는 자리는 둘이다 (검산 완료):
- *   · 중앙 = 세 면의 NW 5×5 합집합. 중심 통과 런렝스 [B1 D4 B1] (어두운 육각 r<2 +
- *     밝은 링 2..3) — **v0 중앙과 같은 K3 서명**이라 verifyV0Cluster 가 그대로 잡는다.
- *     v1r2 는 그 바깥에 링이 더 있다(어두움 3 · 밝음 4 → t3/t1 2.0 · t4/t1 2.5).
- *   · 먼 꼭짓점 = **면 T 의 SE 5×5**. 어두운 2×2 (17..18)² 를 밝은 테두리가 감싸
- *     4방향 전부 [B1 D2 B1] = K5 → verifyV2r2Cluster 가 'v2r2-corner' 로 낸다.
- *     면 L·R 의 SE 는 코어가 1셀(D1)이라 K5 문턱을 넘지 못한다 — 그래서 **면 T 하나만**
- *     코어를 내고, 그 사실이 곧 120° 회전 위상을 확정한다 (v0 의 360° 스윕 불필요).
- *
- * 시드는 중앙 + T먼코너 similarity 이고, 실제 **4앵커 직접 DLT** 는 재적합에서 돈다 —
- * refineHomographyWithPatches 가 [중앙(3면 합집합), 먼코너 T/L/R] 4앵커를
- * estimateHomography4 로 푼다. 3라운드는 네 코너 × 3면 = **12 서브앵커** 최소제곱
- * (v2r2 는 6, v0 는 12).
- *
- * 기하 상수: 면 T SE 코어 중심은 셀 (17.5, 17.5) → canonical 거리 18.0·u
- * (셀 (c,c) 중심의 원점 거리 = (c+0.5)·u — v2r2 의 (n−3.5) 와 같은 규칙).
+ * 앵커드 조립 — 세 패밀리의 중앙이 같은 K3 서명을 공유하므로(2026-08-16 중앙 통일)
+ * 패밀리·n 판별은 **2차 앵커(K5 원거리 코어)의 존재/부재**가 맡는다. 중앙 히트
+ * 하나에서 세 패밀리를 순차 시도하지 않는다:
+ *   · 거리 스냅이 맞는 중앙×코너 쌍 → 앵커드 패밀리 포즈. 허용폭 안 후보는
+ *     **전부** 시드한다 (v2r2@21 · v2r2@25 · v1r2 각각 판정 — n=21 에선 보통 둘).
+ *   · 시드는 2앵커 similarity (면 T 원거리 코어가 120° 위상을 즉시 확정 — 스윕 없음),
+ *     4앵커 직접 DLT 는 refinePose 라운드 1·2, 6~12 서브앵커 최소제곱은 라운드 3.
+ * 반환의 anchoredCentres 는 **앵커드 포즈가 실제로 선** 중앙 인덱스다 — v0 스윕
+ * 조기 분기의 조건. 결정성: centres/corners 는 verified 정렬 순서로만 순회한다.
  */
-const V1R2_CORE_RADIUS_CELLS = 18;
-const V1R2_N = 21;
-
-function assembleV1r2Poses(verified, fullLuma, factor, cfg) {
-  const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
-  const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
-  const poses = [];
-  for (const centre of centres) {
+function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
+  const posesV2r2 = [];
+  const posesV1r2 = [];
+  const anchoredCentres = new Set();
+  for (let centreIndex = 0; centreIndex < centres.length; centreIndex += 1) {
+    const centre = centres[centreIndex];
     for (const corner of corners) {
-      const dx = corner.x - centre.x;
-      const dy = corner.y - centre.y;
-      const distance = Math.hypot(dx, dy);
+      const distance = Math.hypot(corner.x - centre.x, corner.y - centre.y);
       if (!(distance > 6 * centre.u)) continue;
       // v0-center 의 u 는 셀 크기다 (t1 = 2셀 → u = t1/2).
       const estimatedRadius = distance / Math.max(centre.u, EPSILON);
-      // 스냅 허용폭은 v2r2 와 같은 근거(마스크 침식이 u 를 부풀린다) — ±3.2 셀.
-      if (Math.abs(estimatedRadius - V1R2_CORE_RADIUS_CELLS) > 3.2) continue;
-      const centreFull = liftPoint(centre, factor);
-      const cornerFull = liftPoint(corner, factor);
-      const scale = Math.hypot(cornerFull.x - centreFull.x, cornerFull.y - centreFull.y)
-        / V1R2_CORE_RADIUS_CELLS;
-      // canonical 대각 (0,−1)·18 → 면 T 먼코너. R·(0,−1) = w 에서 cos=−wy, sin=wx.
-      const wx = (cornerFull.x - centreFull.x) / (scale * V1R2_CORE_RADIUS_CELLS);
-      const wy = (cornerFull.y - centreFull.y) / (scale * V1R2_CORE_RADIUS_CELLS);
-      const H0 = similarityHomography(centreFull, scale, -wy, wx);
-      const refined = refinePose(fullLuma, H0, patchesFor(V1R2_N, 'v1r2'), cfg);
-      if (!refined) continue;
-      poses.push({
-        family: 'v1r2',
-        layoutId: 'v1r2',
-        n: V1R2_N,
-        H: refined.H,
-        score: refined.meanCorrelation,
-        estimatedRadius,
-      });
+      // v2r2 — 허용폭 안 후보 **전부** 정합한다 (가장 가까운 n 단독 스냅 금지).
+      // 톤 커브가 밝은 링을 침식하면 u 가 부풀어 21↔25 겹침 구간(18.3~20.7셀)에서
+      // 오스냅되는데, 그때 진짜 n 포즈가 아예 시드되지 않아 프레임이 죽는다
+      // (S-커브 0.6 rot135 실측). 대신 **쌍마다 정합 점수 최고 n 하나만 채택**한다 —
+      // 잘못된 n 의 포즈는 CS 게이트가 어차피 기각하므로 순수한 하류 비용(shape 마다
+      // n² 표본 CS 평가)일 뿐이고, 같은 쌍에서는 참 n 이 패치 Pearson 을 이긴다.
+      // 동률은 앞선 후보(작은 n)가 이긴다 — 결정성.
+      let bestV2r2 = null;
+      for (const candidate of V2R2_RADII) {
+        if (Math.abs(estimatedRadius - candidate.radius) > ANCHOR_SNAP_CELLS) continue;
+        const H0 = anchoredSimilaritySeed(centre, corner, factor, candidate.radius);
+        const refined = refinePose(fullLuma, H0, patchesForN(candidate.n), cfg);
+        if (refined && (bestV2r2 === null || refined.meanCorrelation > bestV2r2.score)) {
+          bestV2r2 = { n: candidate.n, H: refined.H, score: refined.meanCorrelation };
+        }
+      }
+      if (bestV2r2 !== null) {
+        anchoredCentres.add(centreIndex);
+        posesV2r2.push({
+          family: 'v2r2',
+          n: bestV2r2.n,
+          H: bestV2r2.H,
+          score: bestV2r2.score,
+          estimatedRadius,
+        });
+      }
+      // v1r2 (n=21 A/B 후보) — cfg.v1r2Family === false 로 끄면 순수 기준선.
+      if (cfg.v1r2Family !== false
+        && Math.abs(estimatedRadius - V1R2_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+        const H0 = anchoredSimilaritySeed(centre, corner, factor, V1R2_CORE_RADIUS_CELLS);
+        const refined = refinePose(fullLuma, H0, patchesFor(V1R2_N, 'v1r2'), cfg);
+        if (refined) {
+          anchoredCentres.add(centreIndex);
+          posesV1r2.push({
+            family: 'v1r2',
+            layoutId: 'v1r2',
+            n: V1R2_N,
+            H: refined.H,
+            score: refined.meanCorrelation,
+            estimatedRadius,
+          });
+        }
+      }
     }
   }
-  return poses;
+  return { posesV2r2, posesV1r2, anchoredCentres };
 }
 
 function rotationSweepScore(reducedLuma, template, centre, unit, angleCos, angleSin) {
@@ -1055,11 +1066,17 @@ function rotationSweepScore(reducedLuma, template, centre, unit, angleCos, angle
 /** 마스크 침식이 불스아이 u 를 부풀리는 방향이라 스케일 스윕은 아래쪽을 더 연다. */
 const V0_SCALE_SWEEP = Object.freeze([0.72, 0.85, 1, 1.12]);
 
-function assembleV0Poses(verified, reducedLuma, fullLuma, factor, cfg) {
-  const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
+/**
+ * v0 조립 — 조기 분기의 **폴백 가지**: anchoredCentres 에 든 중앙(앵커드 포즈가 선
+ * 중앙)은 360°×4스케일 스윕을 건너뛴다. 세 패밀리 중앙 서명이 같아진 뒤(2026-08-16)
+ * v1r2·v2r2 프레임에서 이 스윕이 헛돌던 문제(claude-v1r2-revival.md §5-③)의 해소.
+ */
+function assembleV0Poses(centres, anchoredCentres, reducedLuma, fullLuma, factor, cfg) {
   const poses = [];
   const template = patchesForN(13).all;
-  for (const centre of centres) {
+  for (let centreIndex = 0; centreIndex < centres.length; centreIndex += 1) {
+    if (anchoredCentres.has(centreIndex)) continue;
+    const centre = centres[centreIndex];
     const sweep = [];
     for (const scale of V0_SCALE_SWEEP) {
       const unit = centre.u * scale;
@@ -1120,6 +1137,35 @@ function assembleV0Poses(verified, reducedLuma, fullLuma, factor, cfg) {
 // ─────────────────────────────────────────────────────────────────────────
 // 7. shape 합성 — cube-detect 의 shape 계약(cellSurfaceOnly)으로 출력.
 // ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * 같은 패밀리 안의 **기하 중복 포즈** 를 걷어낸다 — k3·k5 클러스터가 같은 물리 앵커를
+ * 겹으로 검증하면 사실상 같은 H 가 두 번 조립되고, 하류에서 shape 마다 CS 평가
+ * (n² 표본 × 후보 레이아웃)가 돌아 복호 시간이 곱절이 된다 (2026-08-16 실측).
+ * 판정: 같은 n 이고, 투영 원점과 투영 대각점(0,−10)이 각각 2셀 이내면 중복.
+ * 입력은 score 내림차순이라 자리당 최고점 포즈가 남는다. 회전이 다른 포즈는 대각점이
+ * 갈라져 살아남는다. 결정성: 고정 순서 순회.
+ */
+function dedupePosesByGeometry(poses) {
+  const kept = [];
+  const projected = [];
+  for (const pose of poses) {
+    const origin = projectPoint(pose.H, { x: 0, y: 0 });
+    const probe = projectPoint(pose.H, { x: 0, y: -10 });
+    const cellPx = localCellPx(pose.H);
+    if (!origin || !probe || !Number.isFinite(cellPx)) continue;
+    const isDuplicate = projected.some((seen, index) =>
+      kept[index].n === pose.n
+      && Math.hypot(seen.origin.x - origin.x, seen.origin.y - origin.y)
+        <= 2 * Math.max(seen.cellPx, cellPx)
+      && Math.hypot(seen.probe.x - probe.x, seen.probe.y - probe.y)
+        <= 2 * Math.max(seen.cellPx, cellPx));
+    if (isDuplicate) continue;
+    kept.push(pose);
+    projected.push({ origin, probe, cellPx });
+  }
+  return kept;
+}
 
 function shapeFromPose(pose, index) {
   const vertices = [];
@@ -1211,17 +1257,26 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
     right.score - left.score || right.count - left.count
     || left.y - right.y || left.x - right.x);
 
-  const posesV2r2 = assembleV2r2Poses(verified, luma, reduced.factor, cfg);
-  const posesV1r2 = cfg.v1r2Family === false
-    ? []
-    : assembleV1r2Poses(verified, luma, reduced.factor, cfg);
-  const posesV0 = assembleV0Poses(verified, reduced.luma, luma, reduced.factor, cfg);
+  // 조기 분기 (2026-08-16 중앙 통일): 공유 K3 중앙 × K5 원거리 코어 쌍으로 앵커드
+  // 패밀리를 먼저 세우고, 앵커드 포즈가 선 중앙은 v0 360° 스윕에서 뺀다.
+  // 주의 — 같은 자리 중복 히트(k3·k5 클러스터가 같은 앵커를 각각 검증)를 위치
+  // dedupe 로 걷어내는 안은 **측정으로 기각**했다: 중복이 차지하던 상위 슬롯에
+  // 데이터 필드의 우연 K3 가 들어와, 실패 정합 + v0 스윕 비용이 중복 성공 정합보다
+  // 비쌌다 (v1r2 클린 벤치 724→1620 ms). 상위 3/4 슬라이스가 사실상의 비용 캡이다.
+  const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
+  const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
+  const { posesV2r2, posesV1r2, anchoredCentres } = assembleAnchoredPoses(
+    centres, corners, luma, reduced.factor, cfg,
+  );
+  const posesV0 = assembleV0Poses(
+    centres, anchoredCentres, reduced.luma, luma, reduced.factor, cfg,
+  );
 
   const shapes = [];
   for (const familyPoses of [posesV2r2, posesV1r2, posesV0]) {
     familyPoses.sort((left, right) =>
       right.score - left.score || left.n - right.n);
-    for (const pose of familyPoses.slice(0, cfg.maximumPosesPerFamily)) {
+    for (const pose of dedupePosesByGeometry(familyPoses).slice(0, cfg.maximumPosesPerFamily)) {
       const shape = shapeFromPose(pose, shapes.length);
       if (shape) shapes.push(shape);
     }
@@ -1247,6 +1302,13 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         v1r2: posesV1r2.length,
         v0: posesV0.length,
       },
+      // 조기 분기 관측 — 몇 개의 K3 중앙이 앵커드로 분기했고 몇 개가 v0 스윕으로
+      // 내려갔는지 (swept = centres − anchored).
+      earlyBranch: {
+        centres: centres.length,
+        anchored: anchoredCentres.size,
+        swept: centres.length - anchoredCentres.size,
+      },
       shapeCount: shapes.length,
     },
   };
@@ -1268,5 +1330,5 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   recentreByRays,
   patchesForN,
   patchesFor,
-  assembleV1r2Poses,
+  assembleAnchoredPoses,
 });

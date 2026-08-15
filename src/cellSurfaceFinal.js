@@ -1,9 +1,9 @@
 /**
  * cellSurfaceFinal.js — Type Y 셀 표면 **최종 라인업** (v0 · v2r2 · v1r2).
  *
- * 운영자 확정 라인업 (2026-08-15):
+ * 운영자 확정 라인업 (2026-08-15, 중앙 개정 2026-08-16):
  *   Y0 (n=13) → v0   — 네 코너 소형 블록 파인더 30셀 (정본: cellsurface-v0-editor.json)
- *   Y1 (n=21) → v2r2 — 원점 앵커 블록 A(4×4) + 먼 꼭짓점 앵커 블록 B(7×7) = 65셀
+ *   Y1 (n=21) → v2r2 — 중앙 블록 A(v1r2 NW 5×5 공유) + 먼 꼭짓점 앵커 블록 B(7×7) = 74셀
  *   Y2 (n=25) → v2r2 — 같은 앵커식 (블록 B 가 (n−7..n−1)² 로 평행이동)
  *   Y1 (n=21) → v1r2 — 네 코너 블록 80셀 (v0 의 확장형). **A/B 후보**로 병행 등록
  *                      (운영자 지시 2026-08-15 밤, 정본: cellsurface-v1r2-editor.json)
@@ -12,10 +12,22 @@
  * 모두 채점해 기존 게이트(agreement · orientation margin)로 고른다. formatIndex 는
  * 신설하지 않는다 — 레이아웃 판별은 «평가 게이트 + 로케이터 패밀리» 가 맡는다.
  *
- * v2r2 의 정본(cellsurface-v2r2-editor.json)은 n=11 편집 캔버스지만 **n 종속이 아니다**:
- * 블록 A 는 (0..3)² 원점 고정, 블록 B 는 (n−7..n−1)² 먼 꼭짓점 고정 — n=11 에서
- * (4..10)² 였던 블록 B 를 (n−11) 만큼 평행이동해 일반 n 에 인스턴스화한다.
- * n=13 은 autoplace REF_QUADRANT 거부(블록이 사분면을 잠식) — 그래서 v0 가 있다.
+ * **중앙 블록 in-place 개정 (운영자 지시 2026-08-16)**: v2r2 의 구 중앙 블록 A
+ * ((0..3)² 16셀, 동심 육각 링 K5)는 v0·v1r2 의 불스아이형 중앙(K3)과 일관성이 맞지
+ * 않아 **v1r2 중앙 블록(NW 5×5 25셀, cellsurface-v1r2-editor.json 정본 그대로)으로
+ * 교체**했다. id 'v2r2' 는 유지한다(in-place). 구 디자인(16셀 링) 인쇄물은 실사 성공
+ * 이력이 없어 **소각** — 코드 어디에서도 구 블록 A 를 렌더·검출하지 않으며, 로케이터의
+ * 구 중앙 서명(닫힌 K5 링 스택)은 legacy 분류로만 남아 포즈를 만들지 않는다
+ * (cellsurface-block-detect.js 참조). 세 레이아웃의 중앙이 같은 K3 서명을 공유하므로
+ * 패밀리·n 판별은 2차 앵커(원거리 블록 B · 코너/엣지)의 존재/부재가 맡는다.
+ *
+ * v2r2 의 정본은 이제 두 파일에 걸친다: 중앙 블록 A = cellsurface-v1r2-editor.json 의
+ * NW 5×5(v1r2 와 **동일 배열을 공유**한다 — 전사 사본이 아니라 같은 상수) ·
+ * 블록 B = cellsurface-v2r2-editor.json 의 (4..10)² 49셀 (n=11 편집 캔버스).
+ * **n 종속이 아니다**: 블록 A 는 (0..4)² 원점 고정, 블록 B 는 (n−7..n−1)² 먼 꼭짓점
+ * 고정 — n=11 에서 (4..10)² 였던 블록 B 를 (n−11) 만큼 평행이동해 일반 n 에
+ * 인스턴스화한다. n=13 은 autoplace REF_QUADRANT 거부(블록이 사분면을 잠식) —
+ * 그래서 v0 가 있다.
  *
  * reference(12) · format(15) 는 **autoplaceY.placeReservedCells 로만 유도**한다 —
  * 손 좌표표 금지(c0e7321 계약: 편집기·인코더·디코더가 같은 함수를 쓴다).
@@ -112,7 +124,8 @@ export function versionForFinalN(n) {
  */
 const DECLARED_DATA = Object.freeze({
   [CELL_SURFACE_FINAL_V0]: Object.freeze({ 13: 112 }),
-  [CELL_SURFACE_FINAL_V2R2]: Object.freeze({ 21: 349, 25: 533 }),
+  // 2026-08-16 중앙 개정: painted 65→74 (+9) → data −9셀 (349→340 · 533→524).
+  [CELL_SURFACE_FINAL_V2R2]: Object.freeze({ 21: 340, 25: 524 }),
   [CELL_SURFACE_FINAL_V1R2]: Object.freeze({ 21: 334 }),
 });
 
@@ -134,14 +147,15 @@ const V0_CELLS = Object.freeze([
 const V2R2_BASE_N = 11;
 
 /**
- * v2r2 정본 65셀 [i, j, T, L, R] — cellsurface-v2r2-editor.json (사용자 제공 2026-08-15)
- * 컴팩트 전사, n=11 캔버스 좌표. 블록 A = (0..3)² 16셀 · 블록 B = (4..10)² 49셀.
- * 일반 n 인스턴스화: A 는 그대로, B 는 (i,j) → (i+n−11, j+n−11).
+ * v2r2 원거리 블록 B 정본 49셀 [i, j, T, L, R] — cellsurface-v2r2-editor.json
+ * (사용자 제공 2026-08-15) 의 (4..10)² 부분 컴팩트 전사, n=11 캔버스 좌표.
+ * 일반 n 인스턴스화: (i,j) → (i+n−11, j+n−11).
+ *
+ * 같은 JSON 의 구 블록 A((0..3)² 16셀, 동심 육각 링)는 **소각** — 2026-08-16 운영자
+ * 지시로 중앙 블록이 v1r2 NW 5×5 로 교체되면서 전사하지 않는다 (모듈 헤더 참조).
  */
-const V2R2_BASE_CELLS = Object.freeze([
-  [0, 0, 0, 0, 0], [0, 1, 2, 2, 2], [0, 2, 0, 0, 0], [0, 3, 2, 2, 2], [1, 0, 2, 2, 2], [1, 1, 2, 2, 2],
-  [1, 2, 0, 0, 2], [1, 3, 2, 2, 2], [2, 0, 0, 0, 0], [2, 1, 2, 0, 0], [2, 2, 0, 0, 0], [2, 3, 2, 2, 2],
-  [3, 0, 2, 2, 2], [3, 1, 2, 2, 2], [3, 2, 2, 2, 2], [3, 3, 2, 2, 2], [4, 4, 2, 2, 2], [4, 5, 2, 2, 2],
+const V2R2_FAR_BASE_CELLS = Object.freeze([
+  [4, 4, 2, 2, 2], [4, 5, 2, 2, 2],
   [4, 6, 2, 2, 2], [4, 7, 2, 2, 2], [4, 8, 2, 2, 2], [4, 9, 2, 2, 2], [4, 10, 2, 2, 2], [5, 4, 2, 2, 2],
   [5, 5, 0, 0, 0], [5, 6, 0, 0, 0], [5, 7, 0, 0, 2], [5, 8, 0, 2, 2], [5, 9, 0, 0, 0], [5, 10, 0, 0, 0],
   [6, 4, 2, 2, 2], [6, 5, 0, 0, 0], [6, 6, 2, 0, 0], [6, 7, 2, 0, 2], [6, 8, 2, 2, 2], [6, 9, 2, 2, 2],
@@ -184,13 +198,24 @@ export const V1R2_BLOCKS = Object.freeze({
   SE: Object.freeze({ iMin: 16, jMin: 16 }),
 });
 
+/**
+ * v2r2 중앙 블록 A = **v1r2 NW 5×5 와 같은 정본 공유** (2026-08-16 in-place 개정).
+ * 전사 사본이 아니라 V1R2_CELLS 에서 필터로 유도한다 — 두 레이아웃의 중앙이
+ * 문자 그대로 같은 배열에서 나오므로 어긋날 수 없다 (v0/v1r2/v2r2 K3 중앙 통일).
+ */
+const V2R2_CENTER_CELLS = Object.freeze(V1R2_CELLS.filter(
+  ([i, j]) => i <= V1R2_BLOCKS.NW.iMax && j <= V1R2_BLOCKS.NW.jMax,
+));
+
 function cellKey(i, j) {
   return i + ',' + j;
 }
 
 export function assertCellSurfaceFinalId(id) {
   if (!CELL_SURFACE_FINAL_IDS.includes(id)) {
-    throw new RangeError('셀 표면 최종 레이아웃은 v0 또는 v2r2 여야 한다: ' + id);
+    throw new RangeError(
+      '셀 표면 최종 레이아웃은 ' + CELL_SURFACE_FINAL_IDS.join(' | ') + ' 여야 한다: ' + id,
+    );
   }
   return id;
 }
@@ -240,17 +265,18 @@ export function assertCellSurfaceFinalN(id, n) {
   return n;
 }
 
-/** v2r2 파인더 65셀을 일반 n 좌표로 인스턴스화 (A 원점 고정 · B 먼 꼭짓점 고정). */
+/** v2r2 파인더 74셀을 일반 n 좌표로 인스턴스화 (A 원점 고정 · B 먼 꼭짓점 고정). */
 function v2r2CellsForN(n) {
   const shift = n - V2R2_BASE_N;
-  return V2R2_BASE_CELLS.map(([i, j, T, L, R]) => {
-    const inA = i <= 3 && j <= 3;
-    const inB = i >= 4 && j >= 4;
-    if (!inA && !inB) {
-      throw new Error('v2r2 정본 셀 (' + i + ',' + j + ') 이 블록 A/B 어느 쪽도 아니다');
+  const far = V2R2_FAR_BASE_CELLS.map(([i, j, T, L, R]) => {
+    if (i < 4 || j < 4) {
+      throw new Error('v2r2 원거리 정본 셀 (' + i + ',' + j + ') 이 블록 B 밖이다');
     }
-    return inA ? [i, j, T, L, R] : [i + shift, j + shift, T, L, R];
+    return [i + shift, j + shift, T, L, R];
   });
+  // 중앙 A(0..4)² 와 이동한 B(n−7..n−1)² 는 n ≥ 12 에서 분리된다 — 겹침은
+  // buildLocatorCells 의 좌표 중복 검사가 로드 시 throw 로 잡는다.
+  return [...V2R2_CENTER_CELLS, ...far];
 }
 
 function buildLocatorCells(rows) {
@@ -479,20 +505,25 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = unde
 // 모듈 로드 시점 자기검증 — 조용히 시프트하지 않는다.
 // ─────────────────────────────────────────────────────────────────────────
 {
-  // ① 정본 셀 수 — v0 30 · v2r2 65 (블록 A 16 + B 49) · v1r2 80 (25/15/15/25).
+  // ① 정본 셀 수 — v0 30 · v2r2 74 (중앙 A 25 = v1r2 NW 공유 + B 49) · v1r2 80 (25/15/15/25).
   if (V0_CELLS.length !== 30) throw new Error('v0 정본이 30셀이 아니다: ' + V0_CELLS.length);
-  if (V2R2_BASE_CELLS.length !== 65) {
-    throw new Error('v2r2 정본이 65셀이 아니다: ' + V2R2_BASE_CELLS.length);
+  if (V2R2_CENTER_CELLS.length !== 25) {
+    throw new Error('v2r2 중앙 블록(v1r2 NW 공유)이 25셀이 아니다: ' + V2R2_CENTER_CELLS.length);
+  }
+  if (V2R2_FAR_BASE_CELLS.length !== 49) {
+    throw new Error('v2r2 원거리 정본이 49셀이 아니다: ' + V2R2_FAR_BASE_CELLS.length);
   }
   {
-    let inA = 0;
-    let inB = 0;
-    for (const [i, j] of V2R2_BASE_CELLS) {
-      if (i <= 3 && j <= 3) inA += 1;
-      else if (i >= 4 && j >= 4) inB += 1;
-    }
-    if (inA !== 16 || inB !== 49) {
-      throw new Error('v2r2 블록 분할이 A16/B49 가 아니다: A=' + inA + ' B=' + inB);
+    // 중앙 개정(2026-08-16) 불변식 — v2r2 중앙은 v1r2 NW 5×5 와 **셀·톤이 전부 동일**해야
+    // 한다 (필터 유도라 구조적으로 같지만, 정본 배열이 조용히 시프트하면 여기서 잡는다).
+    const nwKeys = new Set(V1R2_CELLS
+      .filter(([i, j]) => i <= 4 && j <= 4)
+      .map(([i, j, T, L, R]) => i + ',' + j + ':' + T + L + R));
+    if (nwKeys.size !== 25) throw new Error('v1r2 NW 블록이 25셀이 아니다: ' + nwKeys.size);
+    for (const [i, j, T, L, R] of V2R2_CENTER_CELLS) {
+      if (!nwKeys.has(i + ',' + j + ':' + T + L + R)) {
+        throw new Error('v2r2 중앙 셀 (' + i + ',' + j + ') 이 v1r2 NW 정본과 다르다');
+      }
     }
   }
   if (V1R2_CELLS.length !== 80) {
@@ -540,10 +571,11 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = unde
   }
 
   // ③ 네 인스턴스 회계 — 사용 심볼·잔여 셀이 확정 수치와 일치해야 한다.
+  // (v2r2 는 2026-08-16 중앙 개정 수치 — painted 74 · data 340/524.)
   const expected = {
     'v0@13': { symbols: 37, residual: 1, locator: 30 },
-    'v2r2@21': { symbols: 116, residual: 1, locator: 65 },
-    'v2r2@25': { symbols: 177, residual: 2, locator: 65 },
+    'v2r2@21': { symbols: 113, residual: 1, locator: 74 },
+    'v2r2@25': { symbols: 174, residual: 2, locator: 74 },
     'v1r2@21': { symbols: 111, residual: 1, locator: 80 },
   };
   for (const [key, want] of Object.entries(expected)) {

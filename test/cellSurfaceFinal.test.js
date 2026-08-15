@@ -130,11 +130,13 @@ test('v2r2 파인더는 n=13 에서 autoplace REF_QUADRANT 거부다 — 그래�
   );
 });
 
-test('회계 — v0 169−30−27=112 · v2r2@21 441−65−27=349 · v2r2@25 625−65−27=533', () => {
+// 의도적 갱신 (2026-08-16, 운영자 지시): v2r2 중앙 블록 A 가 구 4×4 링(16셀)에서
+// v1r2 NW 5×5(25셀) 공유로 교체됐다 — painted 65→74, data 349→340 · 533→524.
+test('회계 — v0 169−30−27=112 · v2r2@21 441−74−27=340 · v2r2@25 625−74−27=524', () => {
   const want = {
     13: { locator: 30, data: 112, S: 37, residual: 1 },
-    21: { locator: 65, data: 349, S: 116, residual: 1 },
-    25: { locator: 65, data: 533, S: 177, residual: 2 },
+    21: { locator: 74, data: 340, S: 113, residual: 1 },
+    25: { locator: 74, data: 524, S: 174, residual: 2 },
   };
   for (const [n, w] of Object.entries(want).map(([k, v]) => [Number(k), v])) {
     const surface = cellSurfaceFinal(n);
@@ -265,10 +267,12 @@ function idealSampleCellFor(n, cycle = ['T', 'L', 'R']) {
   };
 }
 
-test('방향 margin — v0 0.311 · v2r2 0.246 (JSON 예측치와 일치), 게이트 통과', () => {
-  // margin = 1 − (오방향 최대 일치율). 검산 완료 수치(브리프): v0 오방향 68.9% →
-  // margin 0.311 · v2r2 margin 0.246. 코드 재계산이 그 예측과 일치해야 한다.
-  const wantMargin = { 13: 0.311, 21: 0.246, 25: 0.246 };
+test('방향 margin — v0 0.311 · v2r2 0.234 (중앙 개정 재검산치와 일치), 게이트 통과', () => {
+  // margin = 1 − (오방향 최대 일치율). v0 오방향 68.9% → margin 0.311.
+  // 의도적 갱신 (2026-08-16): v2r2 중앙이 v1r2 NW 5×5 공유로 교체되며 margin 이
+  // 0.2462 → 0.2342 로 재검산됐다 (공유 불스아이 중앙은 회전 대칭성이 높지만 블록 B
+  // 가 비대칭을 유지 — 게이트 0.035 의 6.7배로 여전히 여유). 게이트 완화 아님.
+  const wantMargin = { 13: 0.311, 21: 0.2342, 25: 0.2342 };
   for (const n of [13, 21, 25]) {
     const canon = evaluateCellSurfaceGeometry({ n }, idealSampleCellFor(n), {});
     assert.equal(canon.ok, true, 'n=' + n);

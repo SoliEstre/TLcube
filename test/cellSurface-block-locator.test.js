@@ -18,6 +18,10 @@
  *   7. (2026-08-15 밤) v1r2 패밀리 — 네 코너 블록. 회전 스윕 없이 중앙+면T 먼코너
  *      similarity 시드 → 4앵커 직접 DLT → 12 서브앵커 최소제곱. S-커브에서
  *      **body RS 복호까지** 가고 회전 슬롯 0/120/240 전수를 통과한다.
+ *   8. (2026-08-16 중앙 통일) 조기 분기 — 세 패밀리 중앙이 공유 K3 라 패밀리·n 판별은
+ *      2차 앵커(K5 원거리 코어)가 맡는다. n=21 에선 v2r2·v1r2 후보 포즈가 **둘 다**
+ *      서는 것이 새 기대(오수용 부재는 복호 결과로 고정), v0 프레임은 앵커드 포즈 0,
+ *      구 v2r2 중앙(닫힌 링 스택)은 legacy 분류만 남고 포즈 0 (소각 차단).
  */
 
 import { test } from 'node:test';
@@ -216,19 +220,80 @@ test('v1r2 패밀리를 끄면 v1r2 포즈가 사라진다 (패밀리 격리 대
     calibration: { csBlockLocator: { v1r2Family: false } },
   });
   assert.equal(off.diagnostics.poseCount.v1r2, 0);
-  // v0·v2r2 패밀리는 같은 프레임에서 종전대로 돈다 (이 프레임엔 v2r2 코어가 없다).
-  assert.equal(off.diagnostics.poseCount.v2r2, 0);
+  // 의도적 갱신 (2026-08-16, 중앙 통일): v1r2 프레임의 K3 중앙 + 면T SE 코어(18셀)는
+  // v2r2@21 스냅(17.5셀, ±3.2)에도 걸리므로 v2r2 **후보 포즈**가 서는 것이 정상이다.
+  // 레이아웃 확정은 CS 평가 게이트가 한다 — 아래 회귀 테스트가 오수용 부재를 고정한다.
+  assert.ok(off.diagnostics.poseCount.v2r2 >= 1,
+    'v1r2 프레임의 공유 중앙에서 v2r2 후보 포즈가 서야 한다: '
+    + JSON.stringify(off.diagnostics.poseCount));
 });
 
-test('회귀 — v0·v2r2 프레임에서 v1r2 패밀리가 포즈를 만들지 않는다', {
+test('회귀 — v0 프레임은 앵커드 패밀리 포즈 0, v2r2 프레임은 v1r2 후보가 서도 오수용 없음', {
   timeout: 300_000,
 }, () => {
-  for (const [frame, label] of [[V0_FRAME, 'v0'], [V2R2_FRAME, 'v2r2']]) {
-    const luma = toRelativeLuminance(distortImage(frame, { gamma: 0.7, fill: FILL }));
+  // v0 프레임: K5 원거리 코어가 없어(우연 코어는 정합에서 탈락) 앵커드 패밀리는 서지
+  // 않아야 하고, 조기 분기의 폴백(v0 스윕)만 산다.
+  {
+    const luma = toRelativeLuminance(distortImage(V0_FRAME, { gamma: 0.7, fill: FILL }));
     const detected = detectCellSurfaceBlockShapes(luma);
     assert.equal(
       detected.diagnostics.poseCount.v1r2, 0,
-      label + ' 프레임에서 v1r2 포즈가 생겼다: ' + JSON.stringify(detected.diagnostics.poseCount),
+      'v0 프레임에서 v1r2 포즈가 생겼다: ' + JSON.stringify(detected.diagnostics.poseCount),
     );
+    assert.equal(
+      detected.diagnostics.poseCount.v2r2, 0,
+      'v0 프레임에서 v2r2 포즈가 생겼다: ' + JSON.stringify(detected.diagnostics.poseCount),
+    );
+    assert.ok(detected.diagnostics.poseCount.v0 >= 1, 'v0 포즈가 없다');
   }
+  // 의도적 갱신 (2026-08-16, 중앙 통일): 개정 v2r2@21 프레임에서는 v1r2 후보 포즈가
+  // **서는 것이 새 기대**다 (중앙 공유 + 거리 17.5 vs 18 겹침). 진짜 불변식은
+  // 복호 결과의 교차 오수용 부재 — 프레임은 반드시 자기 레이아웃(v2r2)으로 풀린다.
+  {
+    const luma = toRelativeLuminance(distortImage(V2R2_FRAME, { gamma: 0.7, fill: FILL }));
+    const detected = detectCellSurfaceBlockShapes(luma);
+    assert.ok(
+      detected.diagnostics.poseCount.v1r2 >= 1,
+      'v2r2 프레임의 공유 중앙에서 v1r2 후보 포즈가 서야 한다: '
+      + JSON.stringify(detected.diagnostics.poseCount),
+    );
+    const result = decodeLab(distortImage(V2R2_FRAME, { gamma: 0.7, fill: FILL }));
+    assert.equal(result.ok, true, 'v2r2 프레임 복호: ' + (result.reason || ''));
+    assert.equal(result.text, PAYLOAD);
+    assert.equal(result.hypothesis.cellSurfaceLayout, 'v2r2', '교차 오수용 — v2r2 프레임이 다른 레이아웃으로 풀렸다');
+  }
+});
+
+test('구 v2r2 중앙(닫힌 링 스택)은 legacy 분류만 남고 포즈를 만들지 않는다 (소각 차단)', {
+  timeout: 300_000,
+}, () => {
+  // 소각된 구 디자인의 중앙 서명(동심 닮은꼴 링 스택, 교차거리 비 1:2:3:4)을 합성한다.
+  // 동심 닮은꼴 다각형은 중심 통과 교차거리 비가 방향 무관이므로 정사각 링으로 충분하다.
+  const W = 480;
+  const H = 480;
+  const u = 14; // 링 단위(px)
+  const cx = W / 2;
+  const cy = H / 2;
+  const pixels = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const r = Math.max(Math.abs(x - cx), Math.abs(y - cy)) / u;
+      // 닫힌 링 스택: 어두운 코어 r<1 · 밝음 1..2 · 어두움 2..3 · 밝음 3..4 · 어두움 4..5.
+      const dark = r < 1 || (r >= 2 && r < 3) || (r >= 4 && r < 5);
+      const value = dark ? 18 : 225;
+      const index = (y * W + x) * 4;
+      pixels[index] = value;
+      pixels[index + 1] = value;
+      pixels[index + 2] = value;
+      pixels[index + 3] = 255;
+    }
+  }
+  const luma = toRelativeLuminance({ width: W, height: H, pixels });
+  const detected = detectCellSurfaceBlockShapes(luma);
+  const kinds = detected.diagnostics.verified.map((hit) => hit.kind);
+  assert.ok(kinds.includes('legacy-v2r2-center'),
+    '구 중앙 서명이 legacy 로 분류되지 않았다: ' + kinds.join(','));
+  // 어떤 조립도 legacy 중앙을 소비하지 않는다 — 구 디자인 인쇄물은 포즈 0 으로 차단.
+  assert.deepEqual(detected.diagnostics.poseCount, { v2r2: 0, v1r2: 0, v0: 0 });
+  assert.equal(detected.shapes.length, 0);
 });
