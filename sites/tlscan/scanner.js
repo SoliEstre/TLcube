@@ -22,6 +22,7 @@ import {
   createStageClock,
   emptyConfigSide,
   extractCellSurfaceProbe,
+  extractCsAnchors,
   extractGeometry,
   familyToType,
   fillFrameMs,
@@ -32,11 +33,11 @@ import {
   observedFromResult,
 } from '/src/lab-telemetry.js';
 import {
-  analysisSquareOnScreen,
   applyTrackZoom,
   buttonStep,
   cropWindow,
   DEFAULT_USER_ZOOM,
+  dotsOutOfBounds,
   guideDotPositions,
   readTrackCapability,
   readTrackZoom,
@@ -45,6 +46,7 @@ import {
   zoomRangeFor,
   zoomTelemetry,
 } from '/src/scanner-zoom.js';
+import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 
 const FRAME_INTERVAL_MS = 320;
 
@@ -80,7 +82,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-15.04';
+export const SCANNER_BUILD = '2026-08-16.01';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -160,6 +162,20 @@ let zoomApplyToken = 0;
 let zoomApplyTimer = 0;
 
 const lab = createLabTelemetry({ site: 'scan' });
+
+/*
+ * lab 전용 디버그 오버레이 (작업 1). 안정판(`/`)에서는 enabled=false 라 팩토리가
+ * **어떤 DOM 도 만지지 않는 동결 no-op** 을 돌려준다 — 마크업의 hidden 이 그대로
+ * 남는다(불활성 계약, scanner-debug-overlay.test.js 가 기능적으로 단언).
+ * 표시는 decodeFrame 경로에 이미 있는 로컬 값의 재사용뿐이다 — 새 전송 경로 없음.
+ */
+const debugOverlay = createDebugOverlay({
+  enabled: isLabPath(),
+  layer: document.getElementById('lab-debug-layer'),
+  panel: document.getElementById('lab-debug-panel'),
+  toggleButton: document.getElementById('lab-debug-toggle'),
+  doc: document,
+});
 
 function resetFrameSeq() {
   frameSeq = 0;
@@ -242,47 +258,77 @@ function syncPreviewTransform() {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
- * 12점 조준 가이드를 분석 프레임 좌표에 정합시켜 그린다.
+ * 점 렌더 자가진단 상태 (작업 4). 레이아웃이 아직 0×0 인 프레임(폴드 전개 직후·
+ * loadedmetadata 가 레이아웃보다 이른 기기)에서 조용히 포기하지 않고 재시도를 예약한다
+ * — 실기기 «점이 안 보임» 후보 ①(S=0 렌더)·③(크기 오계산)의 방어선이다.
+ */
+const GUIDE_RETRY_LIMIT = 40; // rAF 기준 ≈ 0.7초 — 그 안에 레이아웃이 안 서면 다음 기하 이벤트에 맡긴다.
+let guideRetryCount = 0;
+let guideRetryScheduled = false;
+
+function scheduleGuideRetry() {
+  if (guideRetryScheduled || guideRetryCount >= GUIDE_RETRY_LIMIT) return;
+  guideRetryScheduled = true;
+  guideRetryCount += 1;
+  requestAnimationFrame(() => {
+    guideRetryScheduled = false;
+    renderGuideDots();
+  });
+}
+
+/**
+ * 점 레이어 스태킹 단언 (작업 4) — video 요소가 가이드를 덮는 회귀를 코드로 잡는다.
+ * 계약: 같은 정사각 스테이지 안에서 video 는 z-index auto, 점 레이어는 정수 z-index ≥ 1
+ * 이고 DOM 순서도 video 뒤다 (index.html .scan-dot-layer 주석과 짝).
+ */
+function assertDotLayerStacking() {
+  let problem = '';
+  if (dotLayer.parentElement !== cameraStage || cameraVideo.parentElement !== cameraStage) {
+    problem = 'dot-layer-not-in-stage';
+  } else if (!(cameraVideo.compareDocumentPosition(dotLayer) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+    problem = 'dot-layer-precedes-video';
+  } else {
+    const z = Number.parseInt(getComputedStyle(dotLayer).zIndex, 10);
+    if (!(z >= 1)) problem = 'dot-layer-zindex:' + getComputedStyle(dotLayer).zIndex;
+  }
+  if (problem) console.warn('[tlscan] guide dot stacking violated: ' + problem);
+  return problem === '';
+}
+
+/**
+ * 3링 18점 조준 가이드 — r3 정사각 뷰 좌표계에 직접 그린다.
  *
- * 분석 정사각의 화면 투영 한 변 S = min(vW,vH)·max(eW/vW, eH/vH) — 유도와 크롭
- * 배율 상쇄 증명은 scanner-zoom.js `analysisSquareOnScreen()` 주석에 있다. 두 크롭
- * (분석 중앙 정사각·cover 표시 크롭)이 모두 중심 대칭이라 중심은 프리뷰 요소 중심
- * 그대로다. 그래서 점 좌표는 레이어(뷰포트 전체) 중심 기준으로 계산한다 —
- * 예전 사각 가이드는 헤더/푸터가 미는 **레이아웃 흐름 안**에 있어서 분석 영역과
- * 어긋났다. 이번 사고의 본질이 그 «가이드 ≠ 분석 영역» 불일치다.
+ * 레이어가 정사각 스테이지(≡ 분석 정사각의 화면 표현) 안에 inset:0 으로 있으므로
+ * S = 스테이지 rect 한 변이 곧 분석 정사각 투영이다. 화면 투영 계산(구
+ * analysisSquareOnScreen)은 폐기됐다 — 프리뷰(cover) ≡ 분석(cropWindow crop=1)이
+ * 구조적으로 동일해 좌표 변환 자체가 없다 (scanner-zoom.js previewSourceWindow 증명).
  *
- * 줌은 다시 그릴 필요가 없다: 트랙 zoom 은 소스가 바뀌고, 크롭 폴백은 CSS scale 이
- * 정확히 상쇄해 S 가 불변이다. 다시 그리는 트리거는 기하가 실제로 바뀌는 사건뿐
- * (메타데이터·프레임 크기 변화·뷰포트 리사이즈·회전).
+ * 줌은 다시 그릴 필요가 없다: 트랙 zoom 은 소스가 바뀌고, 크롭 폴백의 CSS scale 은
+ * cover 와 함께 정확히 분석 크롭을 보여준다(위 증명). 다시 그리는 트리거는 기하가
+ * 실제로 바뀌는 사건뿐(메타데이터·프레임 크기 변화·뷰포트 리사이즈·회전·첫 grab 성공).
  */
 function renderGuideDots() {
   if (!cameraStream) {
     dotLayer.replaceChildren();
     return;
   }
-  // clientWidth 가 아니라 rect — SVG 루트의 clientWidth 는 브라우저별 이력이 지저분하고
-  // 주 사용 기기가 아이폰이다. 레이어는 inset:0 이라 rect = 프리뷰 요소 크기다.
-  const rect = dotLayer.getBoundingClientRect();
-  const eW = rect.width;
-  const eH = rect.height;
-  const side = analysisSquareOnScreen({
-    videoWidth: cameraVideo.videoWidth,
-    videoHeight: cameraVideo.videoHeight,
-    elementWidth: eW,
-    elementHeight: eH,
-  });
-  if (side == null) {
+  const rect = cameraStage.getBoundingClientRect();
+  const side = Math.min(rect.width, rect.height);
+  if (!(side > 0)) {
+    // 자가진단: 레이아웃 미확립 — 포기 대신 재시도 예약 (작업 4).
     dotLayer.replaceChildren();
+    scheduleGuideRetry();
     return;
   }
-  const dots = guideDotPositions(side, eW / 2, eH / 2);
+  guideRetryCount = 0;
+  const dots = guideDotPositions(side, side / 2, side / 2);
   if (!dots) {
     dotLayer.replaceChildren();
     return;
   }
-  dotLayer.setAttribute('viewBox', '0 0 ' + eW + ' ' + eH);
-  // 점 크기는 시각 표식일 뿐 기하가 아니다 — 프레임에 비례하되 4~9px 로 묶는다.
-  const outerR = Math.max(4, Math.min(9, side * 0.013));
+  dotLayer.setAttribute('viewBox', '0 0 ' + side + ' ' + side);
+  // 점 크기는 시각 표식일 뿐 기하가 아니다 — 뷰에 비례하되 4~9px 로 묶는다.
+  const outerR = Math.max(4, Math.min(9, side * 0.016));
   const fragment = document.createDocumentFragment();
   const ring = (points, className, radius) => {
     for (const point of points) {
@@ -295,8 +341,19 @@ function renderGuideDots() {
     }
   };
   ring(dots.outer, 'dot-outer', outerR);
+  ring(dots.middle, 'dot-middle', outerR * 0.85);
   ring(dots.inner, 'dot-inner', outerR * 0.72);
   dotLayer.replaceChildren(fragment);
+
+  // 자가진단 (작업 4): r3 불변식 — 점은 뷰 밖으로 나갈 수 없다(최대 반경 27% < 50%).
+  // 위반은 좌표계 회귀이므로 콘솔 경고 + lab 오버레이 표기.
+  const outOfBounds = dotsOutOfBounds(dots, side);
+  if (outOfBounds.length > 0) {
+    console.warn('[tlscan] guide dots out of square view:', outOfBounds);
+  }
+  debugOverlay.flagDotIssue(outOfBounds);
+  debugOverlay.setViewSide(side);
+  assertDotLayerStacking();
 }
 
 function resetZoomState() {
@@ -576,6 +633,7 @@ async function decodeFrame(imageData) {
   if (!imageData || !imageData.data || !imageData.width || !imageData.height) {
     const failed = { ok: false, reason: 'frame-invalid' };
     reportLabFrame(imageData, failed, fillFrameMs(0), 'proposal');
+    updateDebugOverlay(imageData, failed, 'proposal', fillFrameMs(0));
     return failed;
   }
 
@@ -595,6 +653,7 @@ async function decodeFrame(imageData) {
     const stage = classifyStage(result);
     const ms = fillFrameMs(nowMs() - t0, clock.snapshot());
     reportLabFrame(imageData, result, ms, stage);
+    updateDebugOverlay(imageData, result, stage, ms);
 
     if (result && result.ok === true && typeof result.text === 'string') {
       return { ok: true, payload: result.text, family: result.family, hypothesis: result.hypothesis };
@@ -609,9 +668,32 @@ async function decodeFrame(imageData) {
       ok: false,
       reason: 'decode-threw:' + (error && error.message ? error.message : 'unknown'),
     };
-    reportLabFrame(imageData, failed, fillFrameMs(nowMs() - t0), 'proposal');
+    const ms = fillFrameMs(nowMs() - t0);
+    reportLabFrame(imageData, failed, ms, 'proposal');
+    updateDebugOverlay(imageData, failed, 'proposal', ms);
     return failed;
   }
+}
+
+/**
+ * lab 디버그 오버레이 갱신 (작업 1). decodeFrame 경로에 이미 있는 순수 추출값만
+ * 재사용한다 — lab.enabled(텔레메트리 소켓)와 독립이고, 안정판에선 debugOverlay 가
+ * no-op 라 이 함수 전체가 불활성이다. 전송 0바이트.
+ */
+function updateDebugOverlay(imageData, result, stage, ms) {
+  if (!debugOverlay.enabled || !imageData) return;
+  debugOverlay.frame({
+    frameW: imageData.width,
+    frameH: imageData.height,
+    ms: ms && ms.total,
+    ok: Boolean(result && result.ok === true),
+    reason: (result && result.reason) || '',
+    stage,
+    geometry: extractGeometry(result, imageData.width, imageData.height),
+    cellSurface: extractCellSurfaceProbe(result),
+    anchors: extractCsAnchors(result),
+    zoom: currentZoomTelemetry(),
+  });
 }
 
 function setStatus(message) {
@@ -814,8 +896,26 @@ async function listRearCameras() {
  * 카메라 스트림을 연다.
  *
  * ⚠ 해상도 제약을 **반드시** 준다. 제약이 없으면 브라우저 기본값이 잡히는데 Android
- *    Chrome 의 기본은 640×480 이고, 그걸 1080p+ 화면에 `object-fit: cover` 로 채우면
- *    확대율이 2\~3배가 되어 눈에 띄게 흐려진다(실기기 확인, 2026-08-10).
+ *    Chrome 의 기본은 640×480 이고, 그걸 `object-fit: cover` 로 채우면 확대율이
+ *    2\~3배가 되어 눈에 띄게 흐려진다(실기기 확인, 2026-08-10).
+ *
+ * r3 화질 결정(2026-08-16): ideal 을 1920×1080 → **2560×1440** 으로 올린다.
+ *   · 근거: 승격 프레임(FRAME_ESCALATED_SIDE=1440)은 `min(1440, round(sourceSide))` 로
+ *     캡핑된다 — 1080p 스트림에선 승격해도 1080² 가 상한이라 «1440 승격» 이 이름뿐이었다.
+ *     1440p 스트림이면 승격이 실제 1440² 가 되어 셀 픽셀 1.33× (A2 8.36→12.5px 급).
+ *   · 기본 프레임 비용은 불변: 매 프레임 grab 은 여전히 960² 로 축소된다(아래 결정 참조)
+ *     — 스트림 해상도는 grab 의 **소스**만 바꾸지 복호 픽셀 수를 바꾸지 않는다.
+ *   · ideal 이라 미지원 기기는 조용히 1080p/720p 로 떨어진다 — 종전과 동일 동작.
+ *
+ * «target ≤ 960 사전 축소» 유지 결정: Node 실측(tools/probes/probe-square-timing.mjs,
+ * 2026-08-16 — 반복 실행 관측 범위) 1440² 이 960² 대비 **1.33\~2.09× 느림** (절대값은
+ * 부하에 따라 3배까지 요동해 범위로만 인용; 프로브가 test/output 에 있던 동안 스위트가
+ * 매번 재실행·덮어써 스냅샷이 부패했던 전력 — 그래서 tools/probes/ 로 격리했다).
+ * 실기기가 이미 프레임당 1.5\~2초대라 상시 1440 은 어떤 관측치로도 주기를 크게 미는
+ * 반면, 셀 픽셀은 이미 하한(9px) 위다(바깥 링 채움 시 Y1 12.3px). 그래서 흔한 경로는
+ * 960 으로 빠르게 돌리고, 연속 실패 5회마다 1440 승격 한 번(기존 경로)만 비싸게 본다.
+ * 이중 열화 여부: grab 은 센서 네이티브 정사각을 **한 번** 축소한다(크롭 → 즉시 960) —
+ * 축소 후 재축소 단계가 없어 이중 열화가 아니며, 승격 프레임은 축소 없이 1440² 그대로다.
  *
  * `ideal` 을 쓰고 `exact`·`min` 을 쓰지 않는다 — 후자는 못 맞추면 OverconstrainedError 로
  * 카메라 자체가 안 열린다. 다만 **deviceId 는 exact** 로 준다: 사용자가 고른 렌즈를
@@ -823,8 +923,8 @@ async function listRearCameras() {
  */
 async function requestCameraStream(deviceId) {
   const video = {
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: 2560 },
+    height: { ideal: 1440 },
     frameRate: { ideal: 30 },
   };
   if (deviceId) video.deviceId = { exact: deviceId };
@@ -1061,6 +1161,11 @@ function handleDecodeResult(result, source, session) {
 }
 
 function startFrameLoop(session) {
+  // 작업 4: 첫 프레임 grab 성공 시 가이드 재렌더. loadedmetadata 는 기기에 따라
+  // 레이아웃 확립보다 이르다 — grab 이 성공했다는 것은 videoWidth/Height 와 스테이지
+  // 레이아웃이 실재한다는 가장 강한 증거라, 그 시점에 한 번 더 그린다.
+  let firstGrabRendered = false;
+
   const nextFrame = (timestamp) => {
     if (session !== scanSession || !cameraStream || document.visibilityState === 'hidden') {
       return;
@@ -1070,6 +1175,10 @@ function startFrameLoop(session) {
       const imageData = grabVideoFrame();
 
       if (imageData) {
+        if (!firstGrabRendered) {
+          firstGrabRendered = true;
+          renderGuideDots();
+        }
         lastDecodeAt = timestamp;
         isDecoding = true;
 
@@ -1649,9 +1758,10 @@ resultPanel.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeResult();
 });
 
-// 12점 가이드는 기하가 실제로 바뀔 때만 다시 그린다 — 비디오 메타데이터 도착,
-// 프레임 크기 변화(HTMLVideoElement 'resize' — 회전 시 vW/vH 스왑), 뷰포트 리사이즈.
-// 줌 변화는 S 불변이라(scanner-zoom.js 증명) 트리거가 아니다.
+// 3링 가이드는 기하가 실제로 바뀔 때만 다시 그린다 — 비디오 메타데이터 도착,
+// 프레임 크기 변화(HTMLVideoElement 'resize' — 회전 시 vW/vH 스왑), 뷰포트 리사이즈,
+// 그리고 첫 grab 성공(startFrameLoop, 작업 4). 줌 변화는 정사각 뷰 크기와 무관해
+// 트리거가 아니다. 정사각 뷰 한 변은 뷰포트에만 의존하므로 window resize 로 충분하다.
 cameraVideo.addEventListener('loadedmetadata', renderGuideDots);
 cameraVideo.addEventListener('resize', renderGuideDots);
 window.addEventListener('resize', renderGuideDots);

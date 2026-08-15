@@ -1,13 +1,26 @@
 /**
- * scanner-zoom.js — 스캐너 확대·크롭·실효 배율 + 12점 조준 가이드 기하.
+ * scanner-zoom.js — 스캐너 확대·크롭·실효 배율 + 정사각 뷰 + 3링 조준 가이드 기하.
  *
  * 화면 CSS 확대는 디코더에 전달되지 않는다. 이 모듈은
  *   1) 트랙 `applyConstraints({ advanced: [{ zoom }] })` (지원 시)
  *   2) 원본 해상도에서 중앙 크롭 후 축소 (미지원·거부 시)
- * 두 경로의 수치만 맡는다. DOM 은 스캐너 셸이 소유한다.
+ * 두 경로의 수치와, **정사각 프리뷰 컨테이너 ≡ 분석 정사각** 구조(2026-08-16 운영자
+ * 지시)의 수치만 맡는다. DOM 은 스캐너 셸이 소유한다.
  */
 
 import { CORNER_UNIT_OFFSETS, SQRT3 } from './hexgrid.js';
+
+/**
+ * 변-중점(E) 방향 단위 벡터 — E_i = (C_i + C_{i+1}) / √3.
+ *
+ * |C_i + C_{i+1}| = 2·cos(30°) = √3 이므로 나누면 정확히 단위 벡터다. 삼각함수를
+ * 다시 돌리지 않고 CORNER_UNIT_OFFSETS(닫힌 형태 상수)에서만 유도한다 — C 링과의
+ * 30° 회전 관계가 **구성상** 보장된다. 가이드 중간 링(O 실루엣 목표)의 방향 정본.
+ */
+export const EDGE_UNIT_OFFSETS = Object.freeze(CORNER_UNIT_OFFSETS.map((u, i) => {
+  const v = CORNER_UNIT_OFFSETS[(i + 1) % 6];
+  return Object.freeze({ x: (u.x + v.x) / SQRT3, y: (u.y + v.y) / SQRT3 });
+}));
 
 /** 복호 하한(셀당 px). scanner.js 주석의 실측(2026-08-11)과 같다. */
 export const CELL_PX_FLOOR = 9;
@@ -18,12 +31,12 @@ export const FRAME_MAX_SIDE = 960;
 /**
  * 스캐너가 켤 때 쓰는 기본 배율. **한 곳에서만 바꾼다.**
  *
- * 2026-08-15 되돌림: 2 → 1. **기본값 변경이 이 변경(12점 가이드 의뢰)의 목적이다.**
+ * 2026-08-15 되돌림: 2 → 1 (12점 가이드 의뢰 때 확정, r3 정사각 뷰에서도 유지).
  * 실측(배포 f2dbb2b 이후 340프레임, ClickHouse 직조회): zoom 2 + 상시 크롭에서
  * 화면 가이드 사각형과 분석 크롭 경계가 어긋나, 가이드에 맞춘 구간(2면 이상 잘림)
  * 성공 0% (274/274) · 실루엣이 프레임 안에 온전한 구간 100% (34/34). 확대가 아니라
- * «가이드 ≠ 분석 영역» 불일치가 사고 원인이므로 기본을 1 로 되돌리고, 가이드를
- * 분석 프레임 좌표에 정합시킨다(아래 12점 가이드). 수동 확대는 그대로 유지한다.
+ * «가이드 ≠ 분석 영역» 불일치가 사고 원인이었다. r3 에서는 프리뷰 자체가 분석
+ * 정사각(정사각 컨테이너 + cover)이라 불일치가 구조적으로 소멸한다. 수동 확대 유지.
  */
 export const DEFAULT_USER_ZOOM = 1;
 
@@ -41,12 +54,24 @@ export const CROP_ZOOM_MAX = 8;
 export const CROP_ZOOM_STEP = 0.1;
 
 /*
- * ── 12점 조준 가이드 (운영자 설계 2026-08-15) ─────────────────────────────────
+ * ── 3링 18점 조준 가이드 (운영자 설계 2026-08-15, 12점의 재설계) ──────────────
  *
- * 사각 프레임 + 안쪽 칸을 **두 동심 pointy-top 육각형의 꼭짓점 12점**으로 바꾼다.
- *   · 바깥 6점 = 코드 외곽 목표 — Y 육각 꼭짓점·K 육망성 첨두(둘 다 C0~C5 전 방향),
- *     A 정삼각 꼭짓점(그중 C0·C2·C4)이 걸리는 자리.
- *   · 안쪽 6점 = 중앙 파인더 큐브(O·A·K 공통, pointy-top) 꼭짓점 목표.
+ * 동심 육각형 3개의 꼭짓점 18점. 세 링의 비율은 감이 아니라 **타입 간 관계**에서
+ * 코드 기하로 유도한다 (12점의 안쪽/바깥 갭은 단일 타입(O V3) 기준이라 폐기).
+ *
+ *   · 바깥 6점 (C0…C5 방향) = 코드 외곽 목표 — Y 육각 꼭짓점·K 육망성 첨두(전 방향),
+ *     A 정삼각 꼭짓점(그중 C0·C2·C4). K/A 실루엣 첨두 반경 = (3k+2)·s
+ *     (placementA 영역의 변 직선 — q=k 열 UR 꼭짓점열 — 연장 교점, 테스트가 좌표 검산).
+ *   · 중간 6점 (변-중점 E 방향 = C 에서 30° 회전) = **O 실루엣 목표 (신규)**.
+ *     K 를 바깥 점에 채우면 K 의 중앙 육각(두 삼각 교집합)이 정확히 여기 온다:
+ *       중앙 육각 반경 = (3k+2)s/√3 = √3(k+2/3)s — O 실루엣 공식과 **유리수 항등**.
+ *     따라서 r_outer/r_middle = √3 (k 무관, 정확), 방향은 30° 회전이 기하의 결과다.
+ *     같은 k 면 셀 크기도 같다(s = R_out/(3k+2) 양쪽 동일) — «O 를 그대로 같은 k 의
+ *     K 로 바꾸면 첨두가 바깥 점에 맞는다» (운영자 불변식, 짝: O V1↔A0 기하 k6 ·
+ *     O V2↔A1 k8 · O V3↔A2 k10 — 운영자 표기 «O1 - K1(A1)» 은 A 1-베이스 읽기).
+ *   · 안쪽 6점 (C 방향) = 짝 대표(GUIDE_PAIR_K=6, 운영자 지정 «O1»)의 O 코드가
+ *     **중간 링에 앉을 때**의 중앙 파인더 큐브 꼭짓점.
+ *
  * 방향 정본: 실루엣 꼭짓점 0 = 상단 C0 (decoder/cube-detect.js simplifyHullToHex ·
  * ygrid.js 헤더). hexgrid 의 CORNER_UNIT_OFFSETS 를 그대로 재사용한다 — 삼각함수
  * 재계산 금지(닫힌 형태 상수라야 결정적이다).
@@ -61,11 +86,12 @@ export const CROP_ZOOM_STEP = 0.1;
  *     A 정삼각      bbox = √3R × 1.5R → 점유율 (3√3/8)·f²
  *   0.15 ≤ 점유율 ≤ 0.3 을 두 형상 동시에 만족하는 f ∈ [0.481, 0.589].
  *   f = 0.54 → Y/K 0.253 · A 0.189 — 지대 안쪽, 상한 0.3 에 손떨림 여유.
- * cell px 검산(960px 프레임 기준 R = 259.2): Y1 12.3 · Y2 10.4 · O V3 14.0 ·
- * A0 13.6 · A1 10.4 · A2 8.36(<9). A2 는 프레임 승격이 받치되 **기기 조건부**다 —
- * 승격은 round(sourceSide)로 캡핑되므로 전형적 1080p 스트림에선 1080² → A2 ≈ 9.41px
- * (하한 9 대비 여유 4.5%). 12.5px 는 min side ≥ 1440 기기에서만이고,
- * min side < ~1033px 스트림은 승격해도 하한 미달이다.
+ * cell px 검산(960px 프레임 기준 R = 259.2, 첨두 반경 (3k+2)s 기준 — kaApexRadiusCells):
+ * Y1 12.3 · Y2 10.4 · O V3 14.0 · A0 13.0 · A1 10.0 · A2 8.10(<9).
+ * A2 는 프레임 승격이 받치되 **기기 조건부**다 — 승격은 round(sourceSide)로 캡핑되므로
+ * 전형적 1080p 스트림에선 1080² → A2 ≈ 9.11px (하한 9 대비 여유 1.2%).
+ * 12.15px 는 min side ≥ 1440 기기에서만이고, 그 미만 저해상도 스트림은 승격해도
+ * 하한 미달일 수 있다. (구 표기 8.36/9.41 은 ≈(3k+1) 반경 기준 — 폐기.)
  */
 export const GUIDE_OUTER_FRACTION = 0.54;
 
@@ -76,22 +102,50 @@ export const GUIDE_OUTER_FRACTION = 0.54;
  */
 export const GUIDE_FINDER_RADIUS_CELLS = 3.5;
 
-/** 가이드 대표 버전: Type O V3 (k=10). GUIDE_CELLS_V3 = 2k+1 과 같은 선택이다. */
-export const GUIDE_REFERENCE_K = 10;
+/**
+ * K/A 실루엣 첨두 반경(셀 단위) = (3k+2)·size.
+ * 유도: placementA 영역의 변 직선(q=k 열 UR 꼭짓점열, 기울기 √3)과 그 거울상의
+ * 교점 = (0, −(3k+2)s). 하변(r=k 행 하단 꼭짓점, y=(1.5k+1)s)과의 교점도 반경
+ * 2(1.5k+1)s = (3k+2)s — 정삼각형. K = A ∪ 반전A 라 첨두가 C0…C5 전 방향.
+ * scanner-zoom.test.js 가 placementA/cell-editor-core 좌표로 검산한다.
+ */
+export function kaApexRadiusCells(k) {
+  return 3 * k + 2;
+}
 
 /**
  * O 복합 실루엣(반경 k 육각 영역)의 단순화 육각 꼭짓점 반경 = √3·(k+2/3)·size.
  * 유도: 12각형 hull 의 긴 변 연장 교점 (k=2 전수 좌표 검산 — 8√3/3 일치).
+ * 꼭짓점 방향은 변-중점(E) — K 중앙 육각(두 삼각 교집합)과 같은 직선·같은 꼭짓점:
+ *   (3k+2)/√3 = √3(k+2/3)  (모든 k 에서 유리수 항등).
  */
-export const GUIDE_SILHOUETTE_RADIUS_CELLS = SQRT3 * (GUIDE_REFERENCE_K + 2 / 3);
+export function silhouetteRadiusCells(k) {
+  return SQRT3 * (k + 2 / 3);
+}
 
 /**
- * 안쪽 육각형 꼭짓점 지름 / 분석 프레임 한 변.
- * = «바깥 점까지 채운 대표 버전(O V3) 코드의 중앙 파인더 큐브» 크기.
- * 다른 버전(V1·V2, A 계열)은 비율이 달라 근사 목표다 — 가이드지 게이트가 아니다.
+ * 중간 육각형(E 방향) 꼭짓점 지름 / 정사각 뷰 한 변 = 바깥/√3.
+ *
+ * «같은 k 의 K 를 바깥 점까지 채우면 K 중앙 육각 = O 실루엣이 정확히 여기 온다»
+ * (운영자 불변식). r_outer/r_middle = (3k+2) ÷ (3k+2)/√3 = √3 — k 무관, 정확.
+ */
+export const GUIDE_MIDDLE_FRACTION = GUIDE_OUTER_FRACTION / SQRT3;
+
+/**
+ * 안쪽 링이 기준하는 O↔K(A) 버전 짝의 k. 운영자 지정 «O1 - K1(A1)» = 코드 명명
+ * O V1(k=6) ↔ A0 기하의 K. (같은 k 끼리만 불변식이 성립한다 — V2↔A1 은 k8,
+ * V3↔A2 는 k10. 운영자 표기는 A 를 1-베이스로 읽은 것.)
+ */
+export const GUIDE_PAIR_K = 6;
+
+/**
+ * 안쪽 육각형(C 방향) 꼭짓점 지름 / 정사각 뷰 한 변.
+ * = «짝 k=6 의 O 코드가 **중간 링**에 앉을 때의 중앙 파인더 큐브» 크기
+ *   (구 12점의 0.102299 = «O V3 가 바깥 링」 기준 단일 타입 유도 — 폐기).
+ * = MIDDLE × 3.5/(√3(6+2/3)) = OUTER × 3.5/(3·6+2) = 0.0945.
  */
 export const GUIDE_INNER_FRACTION =
-  GUIDE_OUTER_FRACTION * (GUIDE_FINDER_RADIUS_CELLS / GUIDE_SILHOUETTE_RADIUS_CELLS);
+  GUIDE_MIDDLE_FRACTION * (GUIDE_FINDER_RADIUS_CELLS / silhouetteRadiusCells(GUIDE_PAIR_K));
 
 /**
  * 코드를 바깥 점까지 채웠을 때의 예상 점유율(bbox / 분석 프레임).
@@ -107,48 +161,99 @@ export function guideOccupancyEstimates(fraction = GUIDE_OUTER_FRACTION) {
 }
 
 /**
- * 12점의 중심 기준 좌표. `screenSide` = 분석 정사각의 화면 투영 한 변(px).
- * 꼭짓점 순서 = CORNER_UNIT_OFFSETS 순서(0 = 상단, 이후 화면상 시계방향).
+ * 3링 18점의 중심 기준 좌표. `screenSide` = 정사각 뷰(≡ 분석 정사각 투영) 한 변(px).
+ * 바깥·안쪽 = C 방향(0 = 상단, 이후 화면상 시계방향), 중간 = E 방향(C 에서 30° 회전).
  */
 export function guideDotPositions(screenSide, centerX = 0, centerY = 0) {
   const side = Number(screenSide);
   if (!Number.isFinite(side) || side <= 0) return null;
-  const ring = (fraction) => CORNER_UNIT_OFFSETS.map((u) => ({
+  const ring = (offsets, fraction) => offsets.map((u) => ({
     x: centerX + u.x * fraction * (side / 2),
     y: centerY + u.y * fraction * (side / 2),
   }));
   return {
-    outer: ring(GUIDE_OUTER_FRACTION),
-    inner: ring(GUIDE_INNER_FRACTION),
+    outer: ring(CORNER_UNIT_OFFSETS, GUIDE_OUTER_FRACTION),
+    middle: ring(EDGE_UNIT_OFFSETS, GUIDE_MIDDLE_FRACTION),
+    inner: ring(CORNER_UNIT_OFFSETS, GUIDE_INNER_FRACTION),
   };
 }
 
 /**
- * 분석 정사각이 cover 프리뷰 위에서 차지하는 **화면 px 한 변**.
- *
- * 정합 증명(이 식이 곧 «가이드 = 분석 영역» 의 근거다):
- *   1) 분석 영역 = cropWindow() 의 중앙 정사각, 변 min(vW,vH)/crop (비디오 px).
- *   2) 프리뷰 = object-fit: cover(중심 정렬) → 표시 배율 cover = max(eW/vW, eH/vH).
- *   3) 크롭 폴백이면 셸이 CSS scale(crop)(원점 center)을 더한다 → 총 배율 cover·crop.
- *   4) 화면 투영 변 = (min(vW,vH)/crop)·cover·crop = min(vW,vH)·cover — crop 상쇄.
- *      트랙 zoom 경로는 소스 자체가 확대라(crop=1) 같은 식이다.
- *   5) 960 축소는 해상도만 바꾼다 — 영역·점유율 불변.
- * 두 크롭 모두 중심 대칭이므로 중심 = 프리뷰 요소 중심. 극단 화면비에서는 이
- * 정사각이 뷰포트 밖까지 이어질 수 있는데, 그것이 사실이므로 자르지 않는다.
+ * 정사각 뷰 한 변 / 가용 영역 짧은 변. 산정 근거:
+ *   · 상한: 링·점·테두리가 뷰 경계에 붙지 않을 시각 여유 + 노치/safe-area 인셋을
+ *     흡수할 양쪽 4% (합 8%). 가이드 최대 반경은 0.54/2 = 27% 라 어떤 비율 < 1 에서도
+ *     점 이탈은 없다 — 8% 는 순수 시각·인셋 마진이다.
+ *   · 하한: 뷰가 작을수록 같은 거리에서 코드가 프리뷰에 작게 보여 사용자가 과도하게
+ *     다가간다. 분석 해상도(grab)는 뷰 크기와 무관하므로(센서 중앙 정사각 그대로)
+ *     크게 잡는 쪽이 손해가 없다 → 마진을 뺀 최대 = 0.92.
+ * CSS `min(92vw, 92dvh)` 와 **같은 식**이어야 한다 — 갈리면 테스트가 잡는다.
  */
-export function analysisSquareOnScreen({
+export const SQUARE_VIEW_FRACTION = 0.92;
+
+/**
+ * 가용 영역(w×h)에서의 정사각 뷰 한 변(px). 방향(세로/가로/폴드)을 타지 않는다 —
+ * 짧은 변 하나로 결정된다. 이것이 r3 구조의 핵심: 프리뷰 컨테이너가 정사각이면
+ * `object-fit: cover` 가 보여주는 것이 정확히 **센서 중앙 정사각** = cropWindow(crop=1)
+ * 의 분석 영역이라, «가이드 ≠ 분석» 불일치가 좌표 변환 없이 구조적으로 소멸한다.
+ */
+export function squareViewSide(availWidth, availHeight, fraction = SQUARE_VIEW_FRACTION) {
+  const w = Number(availWidth);
+  const h = Number(availHeight);
+  const f = Number(fraction);
+  if (!(w > 0) || !(h > 0) || !(f > 0) || !(f <= 1)) return null;
+  return Math.min(w, h) * f;
+}
+
+/**
+ * 정사각 컨테이너(한 변 containerSide)의 `object-fit: cover` + (크롭 폴백 시)
+ * CSS `scale(cropZoom)` 이 **비디오 소스에서 실제로 보여주는 창**.
+ *
+ * 프리뷰 ≡ 분석 증명(이 함수가 그 증명의 실행형이다):
+ *   cover 배율 = containerSide / min(vW,vH) (정사각 컨테이너라 짧은 변이 항상 기준).
+ *   CSS scale(crop) 을 더하면 총 배율 = containerSide·crop / min(vW,vH).
+ *   보이는 소스 창 변 = containerSide ÷ 총 배율 = min(vW,vH)/crop
+ *                    = cropWindow(vW,vH,crop).sourceSide — **분석 크롭과 동일**.
+ *   중심 정렬(cover·scale 모두 중심 원점)이라 창 위치도 중앙 = 분석 크롭과 동일.
+ * 트랙 zoom 경로는 소스 자체가 확대라(crop=1) 같은 식이다. 960 축소는 해상도만
+ * 바꾼다 — 영역·점유율 불변. scanner-zoom.test.js 가 cropWindow 와 대조한다.
+ */
+export function previewSourceWindow({
   videoWidth,
   videoHeight,
-  elementWidth,
-  elementHeight,
+  containerSide,
+  cropZoom = 1,
 } = {}) {
   const vW = Number(videoWidth);
   const vH = Number(videoHeight);
-  const eW = Number(elementWidth);
-  const eH = Number(elementHeight);
-  if (!(vW > 0) || !(vH > 0) || !(eW > 0) || !(eH > 0)) return null;
-  const cover = Math.max(eW / vW, eH / vH);
-  return Math.min(vW, vH) * cover;
+  const side = Number(containerSide);
+  if (!(vW > 0) || !(vH > 0) || !(side > 0)) return null;
+  const crop = Math.max(1, Number(cropZoom) || 1);
+  const sourceSide = Math.min(vW, vH) / crop;
+  return {
+    sourceX: (vW - sourceSide) / 2,
+    sourceY: (vH - sourceSide) / 2,
+    sourceSide,
+  };
+}
+
+/**
+ * 뷰(0..side)를 벗어난 가이드 점 목록. r3 구조에서는 **항상 빈 배열**이어야 한다
+ * (최대 링 반경 0.27·side < 0.5·side). 위반은 좌표계 회귀다 — 셸이 콘솔 경고
+ * + 오버레이 표기로 올린다 (조용히 그리던 12점 시절의 실기기 불가시성 재발 방지).
+ */
+export function dotsOutOfBounds(dots, side) {
+  const s = Number(side);
+  if (!dots || !(s > 0)) return [];
+  const out = [];
+  for (const [ringName, points] of Object.entries(dots)) {
+    if (!Array.isArray(points)) continue;
+    points.forEach((p, i) => {
+      if (!p || !(p.x >= 0) || !(p.x <= s) || !(p.y >= 0) || !(p.y <= s)) {
+        out.push({ ring: ringName, index: i, x: p && p.x, y: p && p.y });
+      }
+    });
+  }
+  return out;
 }
 
 export function parseZoomCapability(capabilities) {
@@ -284,7 +389,7 @@ export function zoomTelemetry(state = {}) {
 
 /**
  * 프레임 한 변 `frameSide`(px)에서 복호 하한(셀당 9px)을 만족하는 최소 채움 비율.
- * 12점 가이드에서는 표시용이 아니라 검산용이다 — GUIDE_OUTER_FRACTION 이 이 하한
+ * 3링 가이드에서는 표시용이 아니라 검산용이다 — GUIDE_OUTER_FRACTION 이 이 하한
  * 위에 있는지 테스트가 대조한다.
  */
 export function aimGuideMinFractions(frameSide = FRAME_MAX_SIDE, cellPx = CELL_PX_FLOOR) {

@@ -725,6 +725,57 @@ function normalizeCellSurfaceProbe(src) {
   };
 }
 
+/**
+ * CS 블록 로케이터(csBlockLocator diagnostics)가 검증한 앵커(코어) 목록 —
+ * **분석 프레임 좌표(px)**. 진단 가방 어디에 실렸든(collectGeometryReports 와 같은
+ * 순회) 찾아낸다. 없으면 빈 배열.
+ *
+ * 소비자는 lab 디버그 오버레이(scanner-debug-overlay.js)다 — 순수 추출이라
+ * 안정판 텔레메트리 0바이트 불변식과 무관하다(아무것도 전송하지 않는다).
+ */
+export function extractCsAnchors(result) {
+  const { detail, diagnostics, geometry } = lookupDiagnostics(result || {});
+  const bootstrap = diagnostics && diagnostics.bootstrap;
+  const bags = [];
+  for (const cube of [
+    diagnostics && diagnostics.cube,
+    bootstrap && bootstrap.cube,
+    geometry && geometry.cube,
+  ]) {
+    const diag = cubeDiagnosticsOf(cube);
+    if (diag) bags.push(diag);
+  }
+  const cause = detail && detail.cause;
+  const failDiag = cubeDiagnosticsOf(cause && cause.cubeFailure);
+  if (failDiag) bags.push(failDiag);
+  // cube-detect 실패 진단이 detail.diagnostics 바로 아래로 실리는 형태도 받는다.
+  if (diagnostics && typeof diagnostics === 'object') bags.push(diagnostics);
+
+  for (const bag of bags) {
+    const locator = bag && bag.csBlockLocator;
+    const verified = locator && Array.isArray(locator.verified) ? locator.verified : null;
+    if (!verified || verified.length === 0) continue;
+    const out = [];
+    for (const hit of verified) {
+      const x = Number(hit && hit.x);
+      const y = Number(hit && hit.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const u = Number(hit && hit.u);
+      const score = Number(hit && hit.score);
+      out.push({
+        kind: typeof hit.kind === 'string' ? hit.kind : '',
+        x,
+        y,
+        u: Number.isFinite(u) ? u : null,
+        score: Number.isFinite(score) ? score : null,
+      });
+    }
+    // 같은 로케이터 진단이 여러 가방에서 중복 참조될 수 있다 — 처음 찾은 것만 쓴다.
+    if (out.length > 0) return out;
+  }
+  return [];
+}
+
 const GEOMETRY_STAGE_RANK = Object.freeze(Object.fromEntries(
   GEOMETRY_STAGES.map((name, index) => [name, index + 1]),
 ));

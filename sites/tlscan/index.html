@@ -102,25 +102,55 @@
     background: #000;
   }
 
-  .camera-backdrop {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
+  /*
+   * r3 정사각 뷰 아키텍처 (운영자 지시 2026-08-16).
+   *
+   * 카메라를 화면 전체에 cover 로 깔지 않는다. 화면 중앙의 **정사각 컨테이너**에만
+   * video 를 cover 로 넣는다 — 정사각 컨테이너 + cover 는 정확히 센서 중앙 정사각을
+   * 보여주고, 분석 크롭(cropWindow crop=1)도 같은 중앙 정사각이라 **프리뷰 ≡ 분석**이
+   * 구조적으로 동일하다. 가이드·오버레이는 이 컨테이너 좌표계에 직접 그린다 —
+   * 역투영 수식(구 analysisSquareOnScreen)은 전부 폐기됐다.
+   *
+   * 한 변 = min(92vw, 92dvh) — scanner-zoom.js `squareViewSide()`(0.92 × 뷰포트 짧은
+   * 변)와 같은 식이어야 한다. 8% 마진의 근거는 그 함수 주석에 있다. 셸 패딩은
+   * max(10px, safe-inset) ≤ 짧은 변의 4% (지원 최소 320px 에서 12.8px)라 정사각이
+   * 패딩과 충돌하지 않는다.
+   */
+  .scanner-shell {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      max(10px, env(safe-area-inset-right))
+      max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
+  }
+
+  .square-stage-wrap {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    place-items: center;
+  }
+
+  .square-stage {
+    position: relative;
+    width: min(92vw, 92dvh);
+    aspect-ratio: 1 / 1;
     overflow: hidden;
+    border: 1px solid rgb(255 255 255 / .2);
+    border-radius: 20px;
     background: #000;
   }
 
-  .camera-backdrop::after {
+  #camera-preview {
     position: absolute;
     inset: 0;
-    content: "";
-    pointer-events: none;
-    background:
-      linear-gradient(180deg, rgb(0 0 0 / .58), transparent 26%, transparent 64%, rgb(0 0 0 / .7)),
-      linear-gradient(90deg, rgb(0 0 0 / .18), transparent 22%, transparent 78%, rgb(0 0 0 / .18));
-  }
-
-  #camera-preview {
     display: block;
     width: 100%;
     height: 100%;
@@ -129,23 +159,8 @@
     transition: opacity 180ms ease;
   }
 
-  .camera-backdrop.is-active #camera-preview {
+  .square-stage.is-active #camera-preview {
     opacity: 1;
-  }
-
-  .scanner-overlay {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    min-height: 100dvh;
-    padding:
-      max(18px, env(safe-area-inset-top))
-      max(18px, env(safe-area-inset-right))
-      max(14px, env(safe-area-inset-bottom))
-      max(18px, env(safe-area-inset-left));
-    pointer-events: none;
   }
 
   .scanner-top,
@@ -185,35 +200,31 @@
     color: #b7e5ff;
   }
 
-  /*
-   * 문구는 세로 축 아래쪽에 몬다 — 12점 가이드가 화면 중앙(분석 프레임 위치)에
-   * 그려지므로, 예전처럼 가운데 정렬하면 문구가 조준 지점을 덮는다.
-   */
+  /* 안내 문구 — r3 에선 가이드가 정사각 뷰 안에 있으므로 문구는 그 아래 흐름에 온다. */
   .scan-center {
     display: flex;
-    flex: 1;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
-    padding: 42px 0 24px;
   }
 
   .scan-guide-wrap {
     display: grid;
     justify-items: center;
-    gap: 18px;
+    gap: 8px;
   }
 
   /*
-   * 12점 조준 가이드 — 두 동심 육각형 꼭짓점. 위치·크기는 scanner.js 가 분석
-   * 프레임의 화면 투영(S = min(vW,vH)·cover)에 정합시켜 매 기하 변화마다 계산한다.
-   * 사각 프레임(.scan-guide)·안쪽 칸(.scan-aim-fill)을 대체한다 (2026-08-15) —
-   * 그 사각형은 분석 크롭 경계와 어긋나 «맞추면 잘리는» 가이드였다.
+   * 3링 18점 조준 가이드 — 동심 육각형 3개의 꼭짓점. r3: 레이어가 정사각 뷰(≡ 분석
+   * 정사각) **안에** 있어서 점 좌표는 뷰 한 변의 비율 그 자체다 — 화면 투영 계산이
+   * 없고, 어떤 화면비에서도 점이 뷰 밖으로 나갈 수 없다(최대 반경 27% < 50%).
+   *
+   * ⚠ z-index 는 자가진단과 짝이다: video(auto) < 점 레이어(2) < 디버그(3·4).
+   *   scanner.js `assertDotLayerStacking()` 이 런타임에 단언한다 — 값을 바꾸면 같이.
    */
   .scan-dot-layer {
     position: absolute;
     inset: 0;
-    z-index: 1;
+    z-index: 2;
     width: 100%;
     height: 100%;
     pointer-events: none;
@@ -221,14 +232,23 @@
     transition: opacity 180ms ease;
   }
 
-  .camera-backdrop.is-active ~ .scan-dot-layer {
+  .square-stage.is-active .scan-dot-layer {
     opacity: 1;
   }
 
+  /* 세 링은 크기·채움을 다르게 — 혼동 방지(작업 2). 바깥=밝은 실점, 중간=고리(스트로크만),
+     안쪽=반투명 실점. */
   .scan-dot-layer .dot-outer {
     fill: rgb(214 242 255 / .95);
     stroke: rgb(0 0 0 / .5);
     stroke-width: 1.5;
+    filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
+  }
+
+  .scan-dot-layer .dot-middle {
+    fill: none;
+    stroke: rgb(183 229 255 / .9);
+    stroke-width: 2;
     filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
   }
 
@@ -237,6 +257,61 @@
     stroke: rgb(214 242 255 / .9);
     stroke-width: 1.5;
     filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
+  }
+
+  /*
+   * lab 디버그 오버레이 (작업 1) — 안정판(`/`)에서는 authored `hidden` 그대로다.
+   * scanner-debug-overlay.js 는 isLabPath() 가 아니면 이 요소들을 만지지 않는다.
+   */
+  .lab-debug-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .lab-debug-layer .lab-debug-anchor {
+    fill: none;
+    stroke: #ff5ccb;
+    stroke-width: 2;
+    filter: drop-shadow(0 0 4px rgb(0 0 0 / .8));
+  }
+
+  .lab-debug-panel {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    z-index: 4;
+    margin: 0;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: rgb(0 0 0 / .62);
+    color: #d9f2ff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+  }
+
+  .lab-debug-toggle {
+    margin-top: 8px;
+    padding: 4px 10px;
+    border: 1px solid rgb(255 200 80 / .42);
+    border-radius: 999px;
+    background: rgb(255 255 255 / .08);
+    color: #ffe7b0;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .lab-debug-toggle.active {
+    background: #ffe7b0;
+    color: #1a1408;
   }
 
   .scan-guide-message {
@@ -345,7 +420,8 @@
   }
 
   .site-footer {
-    padding-top: 14px;
+    margin-top: auto;
+    padding-top: 8px;
     color: rgb(255 255 255 / .72);
     font-size: 11px;
     line-height: 1.35;
@@ -773,45 +849,42 @@
     }
   }
 
-  /* 가로모드 — 세로 쌓기를 버리고 컨트롤을 우측 열로 옮긴다.
-     세로 축을 그대로 두면 로고·가이드·버튼·푸터가 \~390px 높이에 전부 쌓여
-     하단 버튼과 푸터가 화면 밖으로 잘린다(실기기 확인 2026-08-10).
-     가이드 크기만 줄이는 것으로는 부족했다 — 축을 바꿔야 한다. */
+  /* 가로모드 — 정사각 뷰를 왼쪽에 고정하고 나머지 UI 를 오른쪽 열에 세운다.
+     r3 구조에선 정사각이 짧은 변(높이)을 거의 다 차지하므로, 세로 쌓기를 유지하면
+     문구·버튼·푸터가 화면 밖으로 밀린다 — 잔여 영역이 가로에 생기니 축을 바꾼다. */
   @media (max-height: 620px) and (orientation: landscape) {
-    .scanner-overlay {
+    .scanner-shell {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr) auto auto;
       grid-template-areas:
-        "top     top"
-        "notice  notice"
-        "center  actions"
-        "center  footer";
+        "stage top"
+        "stage notice"
+        "stage center"
+        "stage actions"
+        "stage footer";
       align-items: center;
-      column-gap: 16px;
+      column-gap: 14px;
     }
 
+    .square-stage-wrap { grid-area: stage; align-self: center; }
     .scanner-top { grid-area: top; }
     .lab-notice { grid-area: notice; }
 
     .scan-center {
       grid-area: center;
       min-height: 0;
-      padding: 8px 0;
+      padding: 4px 0;
     }
 
-    /* 상태 문구 + "사진에서 스캔" 을 우측에 세로로 세운다. */
     .scanner-bottom {
       grid-area: actions;
-      flex-direction: column;
-      align-items: flex-end;
-      justify-content: center;
-      gap: 10px;
+      justify-items: center;
+      gap: 8px;
     }
 
     .site-footer {
       grid-area: footer;
-      justify-content: flex-end;
       align-self: end;
     }
 
@@ -835,16 +908,7 @@
      여기까지 live 로 두면 스크린리더가 **두 번** 읽는다. 이건 순수 시각 보조다. -->
 <div id="scan-toast" class="scan-toast" aria-hidden="true"></div>
 <main class="scanner-app" id="scanner-app" data-i18n-attr="aria-label:app.label" aria-label="TLcube 스캐너">
-  <div class="camera-backdrop" id="camera-stage">
-    <video id="camera-preview" autoplay muted playsinline data-i18n-attr="aria-label:camera.label" aria-label="TLcube 코드를 비추는 카메라 화면"></video>
-  </div>
-
-  <!-- 12점 조준 가이드. scanner.js renderGuideDots() 가 분석 프레임의 화면 투영에
-       정합시켜 <circle> 12개를 채운다. 순수 시각 보조라 aria-hidden 이다 — 문구 안내는
-       .scan-guide-wrap 이 맡는다. -->
-  <svg class="scan-dot-layer" id="scan-dot-layer" aria-hidden="true"></svg>
-
-  <div class="scanner-overlay">
+  <div class="scanner-shell">
     <header class="scanner-top">
       <a class="brand-logo" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n-attr="aria-label:brand.label" aria-label="TLcube 소개 홈페이지 (새 창)">TL<span>cube</span></a>
       <div class="lang-switch" id="lang-switch" role="group" data-i18n-attr="aria-label:lang.label" aria-label="언어">
@@ -876,12 +940,30 @@
           <button type="button" data-expected-tones="3" data-i18n="lab.expectedTones.three">3톤</button>
         </div>
       </div>
+      <!-- 디버그 오버레이 토글 (작업 1, lab 전용·기본 켬). authored hidden — 안정판에선
+           scanner-debug-overlay.js 가 아예 활성화되지 않아 이 hidden 이 그대로 남는다. -->
+      <button type="button" id="lab-debug-toggle" class="lab-debug-toggle" hidden aria-pressed="true" data-i18n="lab.debug.toggle">검출 오버레이</button>
     </aside>
+
+    <!-- r3 정사각 뷰: 프리뷰(cover) ≡ 분석 정사각(cropWindow crop=1). 가이드 3링과
+         디버그 오버레이는 이 컨테이너 좌표계에 직접 그린다. -->
+    <section class="square-stage-wrap">
+      <div class="square-stage" id="camera-stage">
+        <video id="camera-preview" autoplay muted playsinline data-i18n-attr="aria-label:camera.label" aria-label="TLcube 코드를 비추는 카메라 화면"></video>
+        <!-- 3링 18점 조준 가이드. scanner.js renderGuideDots() 가 <circle> 18개를 채운다.
+             순수 시각 보조라 aria-hidden 이다 — 문구 안내는 .scan-guide-wrap 이 맡는다. -->
+        <svg class="scan-dot-layer" id="scan-dot-layer" aria-hidden="true"></svg>
+        <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색
+             + 로케이터 앵커 마커. 안정판에선 hidden 그대로. -->
+        <svg class="lab-debug-layer" id="lab-debug-layer" aria-hidden="true" hidden></svg>
+        <pre class="lab-debug-panel" id="lab-debug-panel" aria-hidden="true" hidden></pre>
+      </div>
+    </section>
 
     <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">
       <div class="scan-guide-wrap">
         <p class="scan-guide-message" data-i18n="guide.message">TLcube 코드를 점 가이드에 맞춰 주세요.</p>
-        <p class="scan-scope-note" data-i18n="guide.dots">코드 꼭짓점은 바깥 점에, 중앙 육각형은 안쪽 점에 맞춰 주세요.</p>
+        <p class="scan-scope-note" data-i18n="guide.dots">코드 꼭짓점은 바깥 점에, O 실루엣 육각형은 중간 고리에, 중앙 큐브는 안쪽 점에 맞춰 주세요.</p>
         <p class="scan-scope-note" data-i18n="guide.tlcubeOnly">QR 및 다른 바코드는 읽히지 않아요.</p>
       </div>
     </section>
