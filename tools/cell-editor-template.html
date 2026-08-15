@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>TLcube 셀 & 파인더 편집기</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b0d13;
+  --panel: #141824;
+  --panel-2: #10131c;
+  --panel-3: #181d2c;
+  --line: #2a3042;
+  --line-light: #3a425a;
+  --text: #e7ebf5;
+  --muted: #929bb0;
+  --accent: #f0a35d;
+  --accent-soft: rgba(240,163,93,.16);
+  --accent-hover: #ffb877;
+  --ok: #70d7a2;
+  --bad: #ff8585;
+  --ref-blue: #4fa3e3;
+  --fmt-gold: #f2c037;
+  --anc-green: #5cdb95;
+  --det-red: #ff6b6b;
+  font-family: "Segoe UI", "Malgun Gothic", "Noto Sans", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); }
+button, select, input, textarea { font: inherit; }
+button, select, input {
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--text);
+}
+button { min-height: 36px; padding: 7px 12px; cursor: pointer; transition: all .15s ease; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+button:hover:not(:disabled), button:focus-visible { border-color: var(--accent); background: var(--panel-3); }
+button:disabled { opacity: .35; cursor: not-allowed; }
+button[aria-pressed="true"], button.active, .primary {
+  background: var(--accent); color: #1d1209; border-color: var(--accent);
+  font-weight: 700;
+}
+button[aria-pressed="true"]:hover, button.active:hover, .primary:hover {
+  background: var(--accent-hover); border-color: var(--accent-hover);
+}
+header {
+  min-height: 64px; padding: 12px 22px; border-bottom: 1px solid var(--line);
+  background: var(--panel); display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.brand { min-width: 0; }
+.brand-row { display: flex; align-items: center; gap: 9px; }
+h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+.subtitle { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.dev-badge, .chip {
+  border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 9px; color: var(--muted); font-size: 11px; white-space: nowrap;
+}
+.dev-badge { color: var(--accent); border-color: rgba(240,163,93,.42); background: var(--accent-soft); font-weight: 600; }
+.chip-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lang-switch { display: flex; gap: 4px; margin-left: auto; }
+.lang-switch button { min-height: 30px; padding: 4px 9px; font-size: 11px; }
+
+main {
+  width: min(1720px, 100%); margin: 0 auto; padding: 16px 20px 32px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 18px;
+}
+.stage-panel, .controls-panel {
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel);
+}
+.stage-panel { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.stage-head {
+  min-height: 52px; padding: 10px 14px; border-bottom: 1px solid var(--line);
+  background: var(--panel-2); display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.stage-head .spacer { flex: 1; }
+.canvas-stage {
+  flex: 1; min-height: 620px; padding: 16px; display: grid; place-items: center; position: relative;
+  background:
+    radial-gradient(circle at center, rgba(240,163,93,.025) 0%, transparent 70%),
+    linear-gradient(rgba(255,255,255,.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.015) 1px, transparent 1px),
+    #090b10;
+  background-size: 100% 100%, 28px 28px, 28px 28px, auto;
+  overflow: hidden;
+}
+canvas {
+  display: block; max-width: 100%; border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  touch-action: none; cursor: crosshair;
+}
+canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.stage-foot {
+  padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel-2);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  color: var(--muted); font-size: 12px; line-height: 1.5;
+}
+.legend-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 11px; }
+.legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.legend-dot { width: 9px; height: 9px; border-radius: 2px; }
+
+.controls-panel { padding: 16px; align-self: start; }
+section + section { border-top: 1px solid var(--line); margin-top: 15px; padding-top: 15px; }
+h2 {
+  margin: 0 0 10px; color: var(--muted); font-size: 11px;
+  letter-spacing: .1em; text-transform: uppercase; font-weight: 700;
+}
+label { display: block; margin: 10px 0 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
+select { width: 100%; min-height: 38px; padding: 7px 10px; }
+.segmented { display: grid; gap: 6px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.grid-4 button { padding-inline: 4px; font-size: 12px; }
+
+.tone-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px; }
+.tone-btn {
+  height: 42px; border-radius: 8px; font-weight: 700; font-size: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.tone-btn[data-tone="0"] { background: #1a1a1a; color: #f0f0f0; border-color: #333; }
+.tone-btn[data-tone="1"] { background: #666; color: #fff; border-color: #777; }
+.tone-btn[data-tone="2"] { background: #e0e0e0; color: #111; border-color: #fff; }
+.tone-btn[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tool-palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tool-btn { padding: 8px 4px; font-size: 12px; flex-direction: column; min-height: 52px; }
+.tool-btn .icon { font-size: 16px; margin-bottom: 2px; }
+
+.counts-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px;
+  background: var(--panel-2); padding: 10px; border-radius: 8px; border: 1px solid var(--line);
+}
+.count-item { text-align: center; }
+.count-num { font-size: 16px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.count-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+.payload-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: stretch; }
+.payload-box {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: #0b0e15; color: #bdc8e4; font: 12px/1.4 ui-monospace, Consolas, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+pre {
+  margin: 0; min-height: 80px; max-height: 140px; overflow: auto;
+  padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: #090b11; color: #cad5f2; font: 11px/1.5 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
+.status-bar {
+  min-height: 22px; margin-top: 10px; color: var(--ok);
+  font-size: 11px; line-height: 1.5; font-weight: 600;
+}
+.status-bar.error { color: var(--bad); }
+
+.tooltip {
+  position: absolute; pointer-events: none; padding: 6px 10px; border-radius: 6px;
+  background: rgba(14, 18, 28, 0.95); border: 1px solid var(--line-light); color: var(--text);
+  font-size: 11px; font-family: ui-monospace, Consolas, monospace; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  display: none; z-index: 100;
+}
+
+@media (max-width: 1020px) {
+  main { grid-template-columns: minmax(0, 1fr); padding-inline: 14px; }
+  .controls-panel { order: 1; }
+  .stage-panel { order: 2; }
+  .canvas-stage { min-height: 440px; }
+}
+@media (max-width: 580px) {
+  header { padding-inline: 14px; }
+  .subtitle { display: none; }
+  .lang-switch { width: 100%; margin-left: 0; }
+  .lang-switch button { flex: 1; }
+  main { padding-top: 12px; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .tool-palette { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="brand-row">
+      <h1 data-i18n="title">TLcube 셀 & 파인더 편집기</h1>
+      <span class="dev-badge" data-i18n="devBadge">엔드포인트 전용</span>
+    </div>
+    <p class="subtitle" data-i18n="subtitle">Type Y/O/A/K 셀 표면 검출기 및 중앙 파인더를 자유롭게 설계하고 검증해요.</p>
+  </div>
+  <div class="lang-switch" aria-label="Language">
+    <button type="button" data-lang="ko">KO</button>
+    <button type="button" data-lang="en">EN</button>
+    <button type="button" data-lang="ja">JA</button>
+  </div>
+</header>
+
+<main>
+  <!-- 왼쪽 인터랙티브 캔버스 뷰포트 -->
+  <article class="stage-panel">
+    <div class="stage-head">
+      <div class="chip-group">
+        <span class="chip" id="typeChip">Type Y (n=11)</span>
+        <span class="chip" id="modeChip" data-i18n="modeTone">톤 채색 모드</span>
+        <span class="chip" id="finderModeChip" data-i18n="fullSurface">전체 표면</span>
+        <span class="chip"><span id="dataCountChip">352</span> <span data-i18n="dataCells">데이터 셀</span></span>
+      </div>
+      <span class="spacer"></span>
+      <div class="chip-group">
+        <button type="button" id="undoBtn" title="되돌리기 (Ctrl+Z)"><span data-i18n="undo">되돌리기</span></button>
+        <button type="button" id="redoBtn" title="다시하기 (Ctrl+Shift+Z)"><span data-i18n="redo">다시하기</span></button>
+      </div>
+    </div>
+
+    <div class="canvas-stage" id="canvasStage">
+      <canvas id="cellCanvas" tabindex="0" aria-describedby="stageHint"></canvas>
+      <div class="tooltip" id="cellTooltip"></div>
+    </div>
+
+    <div class="stage-foot">
+      <div class="legend-bar">
+        <span class="legend-item"><span class="legend-dot" style="background:var(--ref-blue)"></span> <span data-i18n="refRole">레퍼런스</span></span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--fmt-gold)"></span> <span data-i18n="fmtRole">포맷</span></span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--anc-green)"></span> <span data-i18n="ancRole">앵커</span></span>
+        <span class="legend-item"><span class="legend-dot" style="background:var(--det-red)"></span> <span data-i18n="detRole">검출기(비데이터)</span></span>
+        <span class="legend-item"><span class="legend-dot" style="background:#555"></span> <span data-i18n="dataRole">데이터</span></span>
+      </div>
+      <div id="stageHint">
+        <span data-i18n="dragHint">드래그: 연속 채색 · Shift+드래그: 셀 3면 전체 · 우클릭: 톤 역순환</span>
+      </div>
+    </div>
+  </article>
+
+  <!-- 오른쪽 제어 패널 -->
+  <aside class="controls-panel">
+    <!-- 1. 문맥 & 타입 -->
+    <section>
+      <h2 data-i18n="typeSection">1. 코드 타입 & 해상도</h2>
+      <div class="grid-4" id="typeButtons">
+        <button type="button" id="typeBtnY" data-type="Y">Type Y</button>
+        <button type="button" id="typeBtnO" data-type="O">Type O</button>
+        <button type="button" id="typeBtnA" data-type="A">Type A</button>
+        <button type="button" id="typeBtnK" data-type="K">Type K <small style="opacity:.7">(초안)</small></button>
+      </div>
+
+      <div class="grid-2" style="margin-top:8px">
+        <div>
+          <label for="sizeSelect" data-i18n="sizeLabel">격자 크기</label>
+          <select id="sizeSelect"></select>
+        </div>
+        <div id="finderModeContainer">
+          <label for="finderModeSelect" data-i18n="finderModeLabel">파인더 영역</label>
+          <select id="finderModeSelect">
+            <option value="central-finder" data-i18n="optCentralFinder">중앙 파인더 (19셀)</option>
+            <option value="full-surface" data-i18n="optFullSurface">전체 셀 표면</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="finderStarterContainer" style="margin-top:8px">
+        <label for="starterSelect" data-i18n="starterLabel">중앙 파인더 프리셋</label>
+        <select id="starterSelect"></select>
+      </div>
+    </section>
+
+    <!-- 2. 편집 도구 & 톤 -->
+    <section>
+      <h2 data-i18n="toolsSection">2. 도구 & 톤 팔레트</h2>
+      <div class="tool-palette">
+        <button type="button" class="tool-btn active" id="toolBrush" data-tool="brush">
+          <span class="icon">🖌️</span>
+          <span data-i18n="toolBrush">붓 (드래그)</span>
+        </button>
+        <button type="button" class="tool-btn" id="toolBucket" data-tool="bucket">
+          <span class="icon">🪣</span>
+          <span data-i18n="toolBucket">페인트통</span>
+        </button>
+        <button type="button" class="tool-btn" id="toolEraser" data-tool="eraser">
+          <span class="icon">🧹</span>
+          <span data-i18n="toolEraser">지우개</span>
+        </button>
+        <button type="button" class="tool-btn" id="toolDropper" data-tool="dropper">
+          <span class="icon">🧪</span>
+          <span data-i18n="toolDropper">스포이드</span>
+        </button>
+      </div>
+
+      <label data-i18n="toneLabel">선택 톤 (Active Tone)</label>
+      <div class="tone-picker">
+        <button type="button" class="tone-btn" id="tone0" data-tone="0" aria-pressed="true">0 Dark</button>
+        <button type="button" class="tone-btn" id="tone1" data-tone="1" aria-pressed="false">1 Mid</button>
+        <button type="button" class="tone-btn" id="tone2" data-tone="2" aria-pressed="false">2 Bright</button>
+      </div>
+
+      <div class="grid-2" style="margin-top:8px">
+        <button type="button" id="modeToneBtn" class="active" data-i18n="modeTone">🎨 톤 편집</button>
+        <button type="button" id="modeMaskBtn" data-i18n="modeMask">🔲 데이터 마스크</button>
+      </div>
+
+      <div class="grid-3" style="margin-top:8px">
+        <button type="button" id="rotateBtn" data-i18n="rotate120">🔄 120° 회전</button>
+        <button type="button" id="invertBtn" data-i18n="invert">🌓 톤 반전</button>
+        <button type="button" id="resetBtn" data-i18n="reset">🗑️ 초기화</button>
+      </div>
+
+      <div class="counts-grid">
+        <div class="count-item">
+          <div class="count-num" id="cntData">0</div>
+          <div class="count-lbl" data-i18n="cntDataLbl">데이터 셀</div>
+        </div>
+        <div class="count-item">
+          <div class="count-num" id="cntDetector" style="color:var(--det-red)">0</div>
+          <div class="count-lbl" data-i18n="cntDetLbl">검출기 셀</div>
+        </div>
+        <div class="count-item">
+          <div class="count-num" id="cntFixed" style="color:var(--fmt-gold)">0</div>
+          <div class="count-lbl" data-i18n="cntFixLbl">고정 역할</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 실데이터 문맥 시뮬레이터 -->
+    <section>
+      <h2 data-i18n="simSection">3. 실제 인코딩 문맥 시뮬레이터</h2>
+      <div class="payload-row">
+        <div class="payload-box" id="simPayload">TL-SIM-CONTEXT-A19K4</div>
+        <button type="button" id="simRefreshBtn" data-i18n="simRefresh">새 무늬</button>
+      </div>
+    </section>
+
+    <!-- 4. 데이터 내보내기 / 가져오기 -->
+    <section>
+      <h2 data-i18n="exportSection">4. JSON & 이미지 내보내기</h2>
+      <pre id="jsonOutput"></pre>
+      <div class="grid-2" style="margin-top:8px">
+        <button type="button" class="primary" id="copyJsonBtn" data-i18n="copyJson">📋 JSON 복사</button>
+        <button type="button" id="downloadJsonBtn" data-i18n="downloadJson">💾 JSON 저장</button>
+      </div>
+      <div class="grid-2" style="margin-top:6px" id="finderCopyContainer">
+        <button type="button" id="copyFinderPatternBtn" data-i18n="copyFinderPattern">📐 파인더 패턴 복사</button>
+        <button type="button" id="importJsonBtn" data-i18n="importJson">📥 JSON 불러오기</button>
+      </div>
+      <div class="grid-2" style="margin-top:6px">
+        <button type="button" id="exportPngBtn" data-i18n="exportPng">🖼️ PNG 내보내기</button>
+        <button type="button" id="exportSvgBtn" data-i18n="exportSvg">📐 SVG 내보내기</button>
+      </div>
+      <input type="file" id="jsonFileInput" accept=".json,application/json" style="display:none">
+      <div class="status-bar" id="statusBar" role="status" aria-live="polite"></div>
+    </section>
+  </aside>
+</main>
+
+<!-- CELL_EDITOR_LOADER -->
+</body>
+</html>

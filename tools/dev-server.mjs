@@ -72,7 +72,9 @@ const server = createServer(async (req, res) => {
       ? '/index.html'
       : (pathname === '/lab' || pathname === '/lab/'
         ? '/sites/_shared/lab-gen.html'
-        : pathname);
+        : (pathname === '/celleditor' || pathname === '/celleditor/' || pathname === '/celleditor/index.html' || pathname === '/lab/cell-editor' || pathname === '/lab/cell-editor/'
+          ? '/sites/_shared/cell-editor.html'
+          : pathname));
     const path = normalize(join(ROOT, rel));
     if (!path.startsWith(normalize(ROOT + sep)) && path !== normalize(ROOT)) {
       res.writeHead(403).end('forbidden');
