@@ -10,9 +10,9 @@
 - [조사 1] 방향 정본 확인 (추측 아님, 코드 근거):
   - `src/hexgrid.js` `CORNER_UNIT_OFFSETS`: C0=(0,−1) 상단, 이후 화면상 시계방향 (pointy-top). 꼭짓점 각도 = −90°+60°·i (화면 좌표, +y 아래).
   - `src/decoder/cube-detect.js` `simplifyHullToHex()` (761-775행): 실루엣 꼭짓점 0 을 «상단(C0, y 최소)» 으로 정렬 — 디코더 정본과 렌더러 방향 일치 확인.
-  - `src/ygrid.js` 헤더: «큐브 실루엣 = pointy-top 정육각형. CORNER_UNIT_OFFSETS 재사용» — Y 실루엣 꼭짓점 = C0~C5 방향, 반지름 n·size.
+  - `src/ygrid.js` 헤더: «큐브 실루엣 = pointy-top 정육각형. CORNER_UNIT_OFFSETS 재사용» — Y 실루엣 꼭짓점 = C0\~C5 방향, 반지름 n·size.
   - `src/placementA.js` 헤더: Type A = 정삼각형 «△, 위 꼭짓점». 패치 방향 top/BL/BR → 꼭짓점 방향 = C0·C2·C4 (상·우하·좌하). 꼭짓점 셀 (k,−2k) 중심 = (0,−3ks) 로 정확히 수직 상단임을 좌표로 검산.
-  - `src/cell-editor-core.js` `isInRegionK`/`patchOfK`: K = A ∪ 반전A → 별꼭짓점 6개 = top/TR/BR/bottom/BL/TL = C0~C5 전부. TR 패치 극단 셀 (2k,−k) 중심 = (3√3/2, −1.5)·ks → 방향 (√3/2,−0.5) = C1 검산.
+  - `src/cell-editor-core.js` `isInRegionK`/`patchOfK`: K = A ∪ 반전A → 별꼭짓점 6개 = top/TR/BR/bottom/BL/TL = C0\~C5 전부. TR 패치 극단 셀 (2k,−k) 중심 = (3√3/2, −1.5)·ks → 방향 (√3/2,−0.5) = C1 검산.
   - 결론: **12점 가이드의 두 육각형 다 pointy-top(꼭짓점 0 = 상단), 각도 −90°+60°·i** — Y 육각·K 육망성 꼭짓점 6방향과 일치하고, A 정삼각은 그중 C0·C2·C4 에 걸린다. Type O 외곽(셀 복합 실루엣)은 flat-top 방향이라 바깥 점과 안 만나는데, 브리프도 바깥 점 목표를 Y/A/K 로만 명시했다. O 는 안쪽 6점(중앙 파인더)이 목표.
 - [조사 2] 분석 프레임 경로 확인: `src/scanner-zoom.js` `cropWindow()` — 분석 = 원본의 **중앙 정사각**(짧은 변/cropZoom), target ≤ 960. `sites/tlscan/scanner.js` `grabVideoFrame()` 이 매 프레임 호출. 프리뷰는 `#camera-preview` object-fit: cover + (크롭 폴백 시) `syncPreviewTransform()` 의 CSS scale(cropApplied).
 - [조사 3] 크기 산정 근거 확정:
@@ -30,7 +30,7 @@
 - 반지름: 분석 정사각 화면 투영 한 변 S 에 대해 R = fraction·S/2.
   - `GUIDE_OUTER_FRACTION = 0.54` (아래 3) 산정)
   - `GUIDE_INNER_FRACTION = 0.54 · 3.5/(√3·(10+2/3)) ≈ 0.1023` — «바깥 점까지 채운 O V3 코드의 중앙 파인더 큐브» 비율.
-- 목표 의미: 바깥 6점 = Y 육각 꼭짓점·K 육망성 6첨두(전부 C0~C5 방향), A 정삼각 꼭짓점(C0·C2·C4 3점에 걸림). 안쪽 6점 = O·A·K 중앙 파인더 큐브(pointy-top) 꼭짓점 목표.
+- 목표 의미: 바깥 6점 = Y 육각 꼭짓점·K 육망성 6첨두(전부 C0\~C5 방향), A 정삼각 꼭짓점(C0·C2·C4 3점에 걸림). 안쪽 6점 = O·A·K 중앙 파인더 큐브(pointy-top) 꼭짓점 목표.
 - 한계(가이드 성격): A2(k=10)는 «중앙 큐브↔안쪽 점» 과 «꼭짓점↔바깥 점» 을 동시에 만족 못 한다 (비율 31/3.5=8.86 vs 가이드 5.28). A0(k=6)는 5.43 으로 거의 일치. 게이트가 아니라 목표 표식이므로 허용 — 보고서 하단 «못 한 것» 참조.
 
 ### 2) 1× 프리뷰 ↔ 분석 정합 (증명 스케치 — 코드 근거)
