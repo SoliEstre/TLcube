@@ -11,7 +11,7 @@
  *
  * 기본 파이프라인은 distortImage(image, options) 이다.
  *
- *   geometry → gamma → S-curve → vignette → Gaussian noise → JPEG 근사
+ *   geometry → camera tilt → barrel → gamma → S-curve → vignette → Gaussian noise → JPEG 근사
  *
  * 개별 단계도 export 하므로 M1 매트릭스의 한 항목만 독립적으로 측정할 수 있다.
  * 기하 함수는 출력 캔버스를 입력과 같은 크기로 유지한다. 회전·확대는 가장자리
@@ -31,6 +31,8 @@
 
 const CHANNELS = 4;
 const MAX_TILT_DEGREES = 30;
+const MAX_CAMERA_TILT_DEGREES = 60;
+const DEFAULT_TILT_DISTANCE_RATIO = 4;
 const DEFAULT_S_CURVE_AMOUNT = 0.6;
 const DEFAULT_VIGNETTE_AMOUNT = 0.5;
 const DEFAULT_FILL = Object.freeze({ r: 0, g: 0, b: 0, a: 0 });
@@ -259,6 +261,152 @@ export function perspectiveImage(image, degrees, options = {}) {
  */
 export function scaleImage(image, factor, options = {}) {
   return geometricDistort(image, { rotation: 0, perspective: 0, scale: factor, fill: options.fill });
+}
+
+const TILT_AXIS_ANGLES = Object.freeze({
+  horizontal: 0,
+  vertical: 90,
+  diagonal: 45,
+});
+
+/**
+ * 카메라 기울기(원근) 왜곡 — 핀홀 카메라가 코드 평면을 θ° 기울여 보는 사영 워프.
+ *
+ * 모델 (스펙이자 자 검증 기준):
+ *   - 평면 점 p 를 이미지 중심 기준으로 축 성분 t = p·a, 수직 성분 w = p·n 으로 분해.
+ *     a = 회전축 단위벡터 (horizontal (1,0) · vertical (0,1) · diagonal 45°),
+ *     n = a 를 +90° 돌린 수직벡터.
+ *   - 축 둘레로 θ 회전: 평면 내 좌표 t·a + w·cosθ·n, 깊이 오프셋 w·sinθ.
+ *   - 카메라 거리 d = distanceRatio · E (E = min(반폭, 반높이) — 심볼 반폭 근사),
+ *     초점거리 f = d 로 두면 θ=0 이 항등이 된다. 사영:
+ *       forward:  q = (t·a + w·cosθ·n) / (1 + w·sinθ/d)
+ *   - 역매핑(dest→src, 리샘플에 쓰는 방향)은 닫힌 형태다:
+ *       w = q_w / (cosθ − q_w·sinθ/d),  t = q_t · (1 + w·sinθ/d)
+ *     분모 ≤ 0 은 수평선 너머 — fill 로 채운다.
+ *
+ * distanceRatio 는 원근 수렴(키스톤)의 세기다: 작을수록 광각 근접 촬영
+ * (기본 4 = 심볼 반폭의 4배 거리 ≈ 심볼이 프레임을 크게 채우는 폰 촬영,
+ * 심볼이 시야각 약 2·atan(1/4) ≈ 28° 를 차지). ∞ 면 순수 아핀 foreshortening.
+ *
+ * θ>0 에서 멀어지는 쪽: horizontal = 화면 아래(w=+y), vertical = 화면 왼쪽(w=−x),
+ * diagonal = 왼쪽-아래. 부호만 다른 대칭이므로 봉투 측정에는 영향이 없다.
+ *
+ * @param {ImageDataLike} image
+ * @param {number} degrees -60..60
+ * @param {{axis?: 'horizontal'|'vertical'|'diagonal', distanceRatio?: number, fill?: object}} [options]
+ * @returns {ImageDataLike}
+ */
+export function cameraTiltImage(image, degrees, options = {}) {
+  assertImage(image);
+  assertRange(degrees, -MAX_CAMERA_TILT_DEGREES, MAX_CAMERA_TILT_DEGREES, 'camera tilt degrees');
+  const opts = optionObject(options, 'cameraTilt');
+  const axis = opts.axis === undefined ? 'horizontal' : opts.axis;
+  if (!(axis in TILT_AXIS_ANGLES)) {
+    throw new RangeError('tilt axis 는 horizontal, vertical, diagonal 중 하나여야 한다: ' + axis);
+  }
+  const distanceRatio = opts.distanceRatio === undefined
+    ? DEFAULT_TILT_DISTANCE_RATIO
+    : opts.distanceRatio;
+  assertRange(distanceRatio, 1.5, 1000, 'tilt distanceRatio');
+  if (degrees === 0) return cloneImage(image);
+
+  const fill = normalizeFill(opts.fill);
+  const centerX = (image.width - 1) / 2;
+  const centerY = (image.height - 1) / 2;
+  const extent = Math.max(Math.min(centerX, centerY), 0.5);
+  const distance = distanceRatio * extent;
+  const phi = (TILT_AXIS_ANGLES[axis] * Math.PI) / 180;
+  const axisX = Math.cos(phi);
+  const axisY = Math.sin(phi);
+  const normalX = -Math.sin(phi);
+  const normalY = Math.cos(phi);
+  const theta = (degrees * Math.PI) / 180;
+  const cosTheta = Math.cos(theta);
+  const sinTheta = Math.sin(theta);
+
+  return resampleImage(image, (destinationX, destinationY) => {
+    const ux = destinationX - centerX;
+    const uy = destinationY - centerY;
+    const qt = ux * axisX + uy * axisY;
+    const qw = ux * normalX + uy * normalY;
+    const wDenominator = cosTheta - (qw * sinTheta) / distance;
+    if (wDenominator <= 1e-9) return { x: Number.NaN, y: Number.NaN };
+    const w = qw / wDenominator;
+    const denominator = 1 + (w * sinTheta) / distance;
+    if (denominator <= 1e-9) return { x: Number.NaN, y: Number.NaN };
+    const t = qt * denominator;
+    return {
+      x: centerX + t * axisX + w * normalX,
+      y: centerY + t * axisY + w * normalY,
+    };
+  }, fill);
+}
+
+/** 폰 광각 전형 k1 프리셋 (정규화 반경 = 반대각선 기준). */
+export const BARREL_PRESETS = Object.freeze({
+  phoneWideMild: 0.05,
+  phoneWide: 0.1,
+  phoneWideStrong: 0.15,
+});
+
+/**
+ * 방사(배럴) 렌즈 왜곡 — r' = r·(1 + k1·r² [+ k2·r⁴]) 역매핑 샘플링.
+ *
+ * 규약 (스펙이자 자 검증 기준):
+ *   - destination 픽셀의 정규화 반경 r 에서 source 를 r' = r·(1 + k1·r² + k2·r⁴) 에서
+ *     샘플한다 (dest→src 역매핑이 닫힌 형태 — 수치 반전 없음).
+ *   - 중심: 기본 이미지 중심 ((w−1)/2, (h−1)/2), options.center {x,y} 로 명시 가능.
+ *   - 정규화 반경: 기본 반대각선 hypot(반폭, 반높이) — 이미지 코너가 r=1.
+ *     options.radiusNorm 으로 명시 가능.
+ *   - k1 > 0 이 배럴이다: source 의 콘텐츠가 반경에 따라 점점 중심 쪽으로 당겨져
+ *     사각형 모서리가 안으로 말린다 (denominator 규약상 k<0 pincushion 은
+ *     비단조 위험이 있어 범위 밖 — 측정 대상 아님).
+ *   - forward(src→dest)는 3차식 반전이 필요하므로 여기서 제공하지 않는다 —
+ *     자 검증 테스트가 Newton 반복으로 독립 구현해 대조한다.
+ *
+ * @param {ImageDataLike} image
+ * @param {{k1?: number, k2?: number, center?: {x:number,y:number}, radiusNorm?: number, fill?: object}} [options]
+ * @returns {ImageDataLike}
+ */
+export function barrelDistortImage(image, options = {}) {
+  assertImage(image);
+  const opts = optionObject(options, 'barrelDistort');
+  const k1 = opts.k1 === undefined ? 0 : opts.k1;
+  const k2 = opts.k2 === undefined ? 0 : opts.k2;
+  assertRange(k1, 0, 0.6, 'barrel k1');
+  assertRange(k2, 0, 0.3, 'barrel k2');
+  if (k1 === 0 && k2 === 0) return cloneImage(image);
+
+  const fill = normalizeFill(opts.fill);
+  const defaultCenterX = (image.width - 1) / 2;
+  const defaultCenterY = (image.height - 1) / 2;
+  let centerX = defaultCenterX;
+  let centerY = defaultCenterY;
+  if (opts.center !== undefined) {
+    const center = optionObject(opts.center, 'barrel center');
+    assertFiniteNumber(center.x, 'barrel center.x');
+    assertFiniteNumber(center.y, 'barrel center.y');
+    centerX = center.x;
+    centerY = center.y;
+  }
+  const defaultRadius = Math.hypot(
+    Math.max(defaultCenterX, 0.5),
+    Math.max(defaultCenterY, 0.5),
+  );
+  const radiusNorm = opts.radiusNorm === undefined ? defaultRadius : opts.radiusNorm;
+  assertFiniteNumber(radiusNorm, 'barrel radiusNorm');
+  if (radiusNorm <= 0) throw new RangeError('barrel radiusNorm 은 양수여야 한다: ' + radiusNorm);
+
+  return resampleImage(image, (destinationX, destinationY) => {
+    const rx = (destinationX - centerX) / radiusNorm;
+    const ry = (destinationY - centerY) / radiusNorm;
+    const r2 = rx * rx + ry * ry;
+    const stretch = 1 + k1 * r2 + k2 * r2 * r2;
+    return {
+      x: centerX + rx * stretch * radiusNorm,
+      y: centerY + ry * stretch * radiusNorm,
+    };
+  }, fill);
 }
 
 /**
@@ -529,6 +677,31 @@ function readPerspectiveOption(value) {
   };
 }
 
+function readTiltOption(value) {
+  if (value === undefined) return { degrees: 0, axis: 'horizontal', distanceRatio: undefined };
+  if (typeof value === 'number') {
+    return { degrees: value, axis: 'horizontal', distanceRatio: undefined };
+  }
+  const object = optionObject(value, 'tilt');
+  return {
+    degrees: object.degrees === undefined ? 0 : object.degrees,
+    axis: object.axis === undefined ? 'horizontal' : object.axis,
+    distanceRatio: object.distanceRatio,
+  };
+}
+
+function readBarrelOption(value) {
+  if (value === undefined) return null;
+  if (typeof value === 'number') return { k1: value };
+  const object = optionObject(value, 'barrel');
+  return {
+    k1: object.k1 === undefined ? 0 : object.k1,
+    k2: object.k2 === undefined ? 0 : object.k2,
+    center: object.center,
+    radiusNorm: object.radiusNorm,
+  };
+}
+
 function readToneAmount(value, fallback, label) {
   if (value === undefined) return undefined;
   if (typeof value === 'number') return value;
@@ -543,6 +716,8 @@ function readToneAmount(value, fallback, label) {
  * @param {{
  *   rotation?: number,
  *   perspective?: number|{degrees?:number,angle?:number,axis?:string},
+ *   tilt?: number|{degrees?:number,axis?:'horizontal'|'vertical'|'diagonal',distanceRatio?:number},
+ *   barrel?: number|{k1?:number,k2?:number,center?:{x:number,y:number},radiusNorm?:number},
  *   scale?: number,
  *   fill?: {r:number,g:number,b:number,a:number},
  *   gamma?: number,
@@ -569,6 +744,20 @@ export function distortImage(image, options = {}) {
     scale,
     fill: opts.fill,
   });
+
+  // 카메라 포즈(tilt) → 렌즈(barrel) 순서 — 실제 촬영의 물리 순서와 같다.
+  const tilt = readTiltOption(opts.tilt);
+  if (tilt.degrees !== 0) {
+    result = cameraTiltImage(result, tilt.degrees, {
+      axis: tilt.axis,
+      distanceRatio: tilt.distanceRatio,
+      fill: opts.fill,
+    });
+  }
+  const barrelOptions = readBarrelOption(opts.barrel);
+  if (barrelOptions !== null && ((barrelOptions.k1 || 0) !== 0 || (barrelOptions.k2 || 0) !== 0)) {
+    result = barrelDistortImage(result, { ...barrelOptions, fill: opts.fill });
+  }
 
   if (opts.gamma !== undefined) result = applyGamma(result, opts.gamma);
 
@@ -619,6 +808,14 @@ export function perspective(image, degrees, options) {
 
 export function scale(image, factor, options) {
   return scaleImage(image, factor, options);
+}
+
+export function cameraTilt(image, degrees, options) {
+  return cameraTiltImage(image, degrees, options);
+}
+
+export function barrel(image, options) {
+  return barrelDistortImage(image, options);
 }
 
 export function gaussianNoise(image, sigma, options) {
