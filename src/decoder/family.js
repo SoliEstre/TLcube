@@ -664,7 +664,8 @@ function cubeTilingKeyMatches(entry, yJunction, cubeOptions) {
     && Object.is(entry.tones, cubeOptions.tones)
     && Object.is(entry.enableLocatorY, cubeOptions.enableLocatorY)
     && Object.is(entry.enableCellSurfaceY, cubeOptions.enableCellSurfaceY)
-    && Object.is(entry.exhaustiveBlockRecovery, cubeOptions.exhaustiveBlockRecovery);
+    && Object.is(entry.exhaustiveBlockRecovery, cubeOptions.exhaustiveBlockRecovery)
+    && Object.is(entry.finderFirst, cubeOptions.finderFirst);
 }
 
 function cachedCubeTiling(luma, yJunction, cubeOptions) {
@@ -687,6 +688,7 @@ function storeCubeTiling(luma, yJunction, cubeOptions, value) {
     enableLocatorY: cubeOptions.enableLocatorY,
     enableCellSurfaceY: cubeOptions.enableCellSurfaceY,
     exhaustiveBlockRecovery: cubeOptions.exhaustiveBlockRecovery,
+    finderFirst: cubeOptions.finderFirst,
     value,
   });
 }

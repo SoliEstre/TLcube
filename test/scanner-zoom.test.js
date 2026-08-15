@@ -26,6 +26,7 @@ import {
   AIM_RECOMMEND_MAX,
   AIM_RECOMMEND_MIN,
   CELL_PX_FLOOR,
+  DEFAULT_USER_ZOOM,
   FRAME_MAX_SIDE,
   GUIDE_CELLS_V3,
   GUIDE_CELLS_Y2,
@@ -182,6 +183,25 @@ test('조준 가이드 수치는 셀당 9px · 21셀 기준으로 다시 계산�
   assert.match(SCANNER_HTML, /class="scan-aim-fill"/);
   assert.match(SCANNER_HTML, /inset: 30%/);
   assert.match(SCANNER_HTML, /data-i18n="guide\.fill"/);
+});
+
+test('기본 확대는 한 상수이고 2 이며 스캐너가 그 상수를 쓴다', () => {
+  assert.equal(DEFAULT_USER_ZOOM, 2);
+  assert.match(SCANNER_JS, /DEFAULT_USER_ZOOM/);
+  assert.match(SCANNER_JS, /snapZoom\(DEFAULT_USER_ZOOM/);
+  assert.match(SCANNER_JS, /userZoom: DEFAULT_USER_ZOOM/);
+  assert.match(SCANNER_JS, /crop-failed|zoom\.failed/);
+  const crop = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM, capability: null });
+  assert.equal(crop.cropApplied, 2);
+  assert.equal(crop.error, '');
+  const track = resolveZoomPlan({
+    userZoom: DEFAULT_USER_ZOOM,
+    capability: { min: 1, max: 8, step: 0.1 },
+    trackApplied: 2,
+  });
+  assert.equal(track.mode, 'track');
+  assert.equal(track.trackApplied, 2);
+  assert.equal(track.error, '');
 });
 
 test('스캐너는 트랙 zoom 을 적용하고 실패를 토스트로 보여 준다', () => {

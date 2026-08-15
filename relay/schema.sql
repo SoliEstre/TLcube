@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     rotation_deg Nullable(Float32),                -- 가설 rotationDegrees, 시계 방향
     perspective Nullable(Float32),                 -- 네 모서리 대각선비 - 1. 미측정 NULL
     residual_px Nullable(Float32),                 -- 호모그래피 재투영 잔차(px)
+    geo_stage   LowCardinality(String) DEFAULT '', -- 실패해도 도달한 마지막 기하 단계. 미측정은 빈 문자열
+    detect_path LowCardinality(String) DEFAULT '', -- finder | silhouette. 미시도는 빈 문자열
     cs_attempted UInt8 DEFAULT 0,                  -- 셀 표면 검출기를 이 프레임에서 돌렸는가
     cs_accepted  UInt8 DEFAULT 0,                  -- 검출기가 가설을 수락했는가
     cs_score     Nullable(Float32),                -- 셀 표면 agreement. 미시도 NULL

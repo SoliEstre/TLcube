@@ -132,6 +132,10 @@ export function validateFrameBody(body) {
   if (body.geometry !== undefined && body.geometry !== null && !isPlainObject(body.geometry)) {
     return 'frame.geometry';
   }
+  if (isPlainObject(body.geometry)) {
+    if (!isNullableString(body.geometry.geometryStage)) return 'frame.geometry.geometryStage';
+    if (!isNullableString(body.geometry.detectPath)) return 'frame.geometry.detectPath';
+  }
   if (body.cellSurface !== undefined && body.cellSurface !== null) {
     if (!isPlainObject(body.cellSurface)) return 'frame.cellSurface';
     if (body.cellSurface.attempted !== undefined && typeof body.cellSurface.attempted !== 'boolean') {
@@ -284,6 +288,8 @@ export function eventRow(event) {
     rotation_deg: geometryField(body, 'rotation_deg'),
     perspective: geometryField(body, 'perspective'),
     residual_px: geometryField(body, 'residual_px'),
+    geo_stage: geometryString(body, 'geometryStage'),
+    detect_path: geometryString(body, 'detectPath'),
     cs_attempted: cellSurfaceFlag(body, 'attempted'),
     cs_accepted: cellSurfaceFlag(body, 'accepted'),
     cs_score: cellSurfaceScore(body),
@@ -296,6 +302,12 @@ export function eventRow(event) {
     cs_ambiguous: cellSurfaceFlag(body, 'ambiguous'),
     body: JSON.stringify(body),
   };
+}
+
+function geometryString(body, key) {
+  const geo = isPlainObject(body.geometry) ? body.geometry : null;
+  if (!geo || geo[key] == null) return '';
+  return String(geo[key]);
 }
 
 function cellSurfaceFlag(body, key) {

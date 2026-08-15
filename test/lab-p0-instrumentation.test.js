@@ -30,6 +30,7 @@ const SQL = readFileSync(ROOT + 'relay/schema.sql', 'utf8');
 const MIG = readFileSync(ROOT + 'deploy/estre-so/clickhouse/002_tl_lab_p0_instrumentation.sql', 'utf8');
 const MIG_AB = readFileSync(ROOT + 'deploy/estre-so/clickhouse/003_tl_lab_cellsurface_ab.sql', 'utf8');
 const MIG_ZOOM = readFileSync(ROOT + 'deploy/estre-so/clickhouse/004_tl_lab_zoom.sql', 'utf8');
+const MIG_GEO = readFileSync(ROOT + 'deploy/estre-so/clickhouse/005_tl_lab_fail_geometry.sql', 'utf8');
 
 function memoryStore() {
   const map = new Map();
@@ -200,6 +201,8 @@ test('bbox/corners/occupancy/rotation/perspective/cellPx 단위와 nullable 직�
   assert.equal(empty.perspective, null);
   assert.equal(empty.residualPx, null);
   assert.equal(empty.cellPx, null);
+  assert.equal(empty.geometryStage, null);
+  assert.equal(empty.detectPath, null);
 
   const corners = [
     { x: 10, y: 10 }, { x: 90, y: 12 }, { x: 88, y: 70 }, { x: 12, y: 68 },
@@ -241,6 +244,39 @@ test('bbox/corners/occupancy/rotation/perspective/cellPx 단위와 nullable 직�
     seq: 1, w: 8, h: 8, ok: false, reason: 'x', cellPx: 0,
   });
   assert.equal(zeroCell.cellPx, null);
+
+  const failedHex = extractGeometry({
+    ok: false,
+    reason: 'frontend:no-grid-hypothesis',
+    detail: {
+      cubeFailure: {
+        ok: false,
+        reason: 'frontend:no-grid-hypothesis',
+        detail: {
+          diagnostics: {
+            downsampleFactor: 1,
+            detectPath: 'silhouette',
+            geometryStage: 'y-junction',
+            shapeCandidates: [{
+              vertices: [
+                { x: 10, y: 20 }, { x: 80, y: 18 }, { x: 90, y: 70 },
+                { x: 70, y: 110 }, { x: 20, y: 108 }, { x: 8, y: 60 },
+              ],
+              radius: 48,
+              estimatedN: 21,
+            }],
+            shapes: { acceptedShapeCount: 1, rejectionCounts: {}, componentCount: 1 },
+          },
+        },
+      },
+    },
+  }, 200, 160);
+  assert.ok(failedHex.bbox, '실패여도 후보 bbox 를 남긴다');
+  assert.ok(failedHex.occupancy > 0 && failedHex.occupancy < 1);
+  assert.ok(failedHex.cellPx > 0);
+  assert.equal(failedHex.geometryStage, 'y-junction');
+  assert.equal(failedHex.detectPath, 'silhouette');
+  assert.notEqual(failedHex.cellPx, 0);
 });
 
 test('층화 샘플러는 첫 20장 편향·동일 reason 독점·성공 누락을 막고 상한을 지킨다', async () => {
@@ -376,6 +412,12 @@ test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다',
   assert.match(MIG_ZOOM, /ADD COLUMN IF NOT EXISTS effective_zoom/);
   assert.match(MIG_ZOOM, /ADD COLUMN IF NOT EXISTS zoom_error/);
   assert.doesNotMatch(MIG_ZOOM, /^clickhouse-client/m);
+  assert.match(SQL, /geo_stage\s+LowCardinality/);
+  assert.match(SQL, /detect_path\s+LowCardinality/);
+  assert.match(MIG_GEO, /ADD COLUMN IF NOT EXISTS geo_stage/);
+  assert.match(MIG_GEO, /ADD COLUMN IF NOT EXISTS detect_path/);
+  assert.match(MIG_GEO, /이 저장소에서는 실행하지 않는다/);
+  assert.doesNotMatch(MIG_GEO, /^clickhouse-client/m);
 });
 
 test('decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다', () => {

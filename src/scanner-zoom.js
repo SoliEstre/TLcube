@@ -14,6 +14,12 @@ export const CELL_PX_FLOOR = 9;
 export const FRAME_MAX_SIDE = 960;
 
 /**
+ * 스캐너가 켤 때 쓰는 기본 배율. **한 곳에서만 바꾼다.**
+ * 2 가 최적이라는 근거는 없다. 1배 성공률보다 낫다는 실측만 있다.
+ */
+export const DEFAULT_USER_ZOOM = 2;
+
+/**
  * 조준 가이드의 기준 셀 수.
  * Type O V3 는 k=10 → 2k+1 = 21. Type Y Y1 은 n=21.
  * Y2 는 n=25 이라 같은 9px 하한에서 더 큰 점유율이 필요하다 — aimGuideFractions 가 따로 계산한다.
@@ -198,14 +204,15 @@ export function resolveZoomPlan({
   const native = capability ? capability.min : 1;
 
   if (!capability) {
+    const cropApplied = wanted >= 1 ? wanted : 1;
     return {
       mode: 'crop',
       trackRequested: 1,
       trackApplied: 1,
       cropRequested: wanted,
-      cropApplied: wanted,
+      cropApplied,
       trackNative: 1,
-      error: '',
+      error: wanted > 1 && cropApplied <= 1 ? 'fallback-1x' : '',
     };
   }
 

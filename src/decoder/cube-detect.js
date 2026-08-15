@@ -57,6 +57,9 @@ import {
 } from '../locatorY.js';
 import { CELL_SURFACE_PROFILE_ID } from '../cellSurfaceY.js';
 import { evaluateCellSurfaceGeometry } from './cellSurfaceY-detect.js';
+import {
+  detectFinderSeeds,
+} from './finder-seed.js';
 
 function locatorShapesFromSilhouette(luma, shapes, options) {
   const extra = [];
@@ -2438,7 +2441,9 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
             },
             source: shape.locatorProfile
               ? locatorSourceId(shape.locatorProfile)
-              : 'cube-silhouette-y-junction',
+              : (shape.componentSource === 'finder-seed'
+                ? 'cube-finder-seed-y-spoke'
+                : 'cube-silhouette-y-junction'),
             locatorProfile: shape.locatorProfile || LOCATOR_PROFILE_OFF,
             locatorRoute: shape.locatorRoute || 'silhouette',
             cellSurface: false,
@@ -2701,6 +2706,146 @@ function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
   return { hypotheses, reports, diagnostics: proposals.diagnostics };
 }
 
+function inferGeometryStageFromShapes(shapes, hypotheses) {
+  if (Array.isArray(hypotheses) && hypotheses.length > 0) return 'grid';
+  if (!shapes || typeof shapes !== 'object') return null;
+  const candidates = Array.isArray(shapes.candidates)
+    ? shapes.candidates
+    : (Array.isArray(shapes.shapeCandidates) ? shapes.shapeCandidates : []);
+  if (candidates.length > 0) return 'y-junction';
+  const nested = shapes.shapes && typeof shapes.shapes === 'object' ? shapes.shapes : null;
+  const counts = (shapes.diagnostics && shapes.diagnostics.rejectionCounts)
+    || shapes.rejectionCounts
+    || (nested && nested.rejectionCounts)
+    || {};
+  if (Number(counts['y-junction']) > 0) return 'y-junction';
+  if (Number(counts['diagonal-concurrency']) > 0 || Number(counts['mask-fill']) > 0) {
+    return 'silhouette';
+  }
+  if (Number(counts['hull-not-hexagon']) > 0) return 'component';
+  const componentCount = Number(shapes.diagnostics && shapes.diagnostics.componentCount)
+    || Number(shapes.componentCount)
+    || Number(nested && nested.componentCount)
+    || 0;
+  if (componentCount > 0) return 'component';
+  const source = (shapes.diagnostics && shapes.diagnostics.foregroundSource)
+    || shapes.foregroundSource
+    || (nested && nested.foregroundSource);
+  if (source) return 'mask';
+  return null;
+}
+
+function attachDetectMeta(result, meta) {
+  if (!result || typeof result !== 'object') return result;
+  const diagnostics = result.ok
+    ? { ...(result.diagnostics || {}), ...meta }
+    : { ...((result.detail && result.detail.diagnostics) || {}), ...meta };
+  if (result.ok) return ok({ ...result, diagnostics });
+  return fail(result.reason, {
+    ...(result.detail || {}),
+    diagnostics,
+    geometryStage: meta.geometryStage,
+    detectPath: meta.detectPath,
+  });
+}
+
+function shapeFromYSpokeSeed(seed, parity, scale = 1) {
+  const n = Number.isFinite(seed.n) && seed.n > 0 ? seed.n : 21;
+  const cell = (Number.isFinite(seed.cellSize) && seed.cellSize > 0 ? seed.cellSize : 0) * scale;
+  const radius = cell * n;
+  const rad = ((Number(seed.rotationDeg) || 0) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const vertices = CORNER_UNIT_OFFSETS.map((unit) => ({
+    x: seed.center.x + (unit.x * cos - unit.y * sin) * radius,
+    y: seed.center.y + (unit.x * sin + unit.y * cos) * radius,
+  }));
+  return {
+    componentIndex: -1,
+    componentSource: 'finder-seed',
+    center: seed.center,
+    vertices,
+    seamParity: parity,
+    seamVertices: [0, 1, 2].map((index) => vertices[(parity + 2 * index) % 6]),
+    radius,
+    maskFill: 1,
+    concurrencyResidual: 0,
+    seam: { contrast: 1, support: 1 },
+    hardChecks: {
+      hexSilhouette: true,
+      diagonalConcurrency: true,
+      yJunction: true,
+      all: true,
+    },
+    score: seed.score,
+  };
+}
+
+function detectCubeViaFinderFirst(luma, options) {
+  const seeded = detectFinderSeeds(luma, {
+    qr11311: false,
+    ...(options.finderSeed || {}),
+  });
+  const finderSeed = seeded.ok ? seeded.diagnostics : (seeded.detail || { cause: seeded.reason });
+  if (!seeded.ok || !Array.isArray(seeded.seeds) || seeded.seeds.length === 0) {
+    return {
+      ok: false,
+      finderSeed,
+      detectPath: null,
+      geometryStage: finderSeed && finderSeed.geometryStage ? finderSeed.geometryStage : null,
+    };
+  }
+
+  const cfg = calibration(options);
+  const hypotheses = [];
+  const geometryReports = [];
+  const candidates = [];
+  for (const seed of seeded.seeds.slice(0, 2)) {
+    for (const scale of [0.88, 1, 1.14]) {
+      candidates.push(shapeFromYSpokeSeed(seed, 1, scale));
+      candidates.push(shapeFromYSpokeSeed(seed, 0, scale));
+    }
+  }
+  if (candidates.length > 0) {
+    hypothesesFromShapes(
+      luma,
+      { factor: 1 },
+      { candidates },
+      options,
+      cfg,
+      hypotheses,
+      geometryReports,
+    );
+  }
+
+  if (hypotheses.length === 0) {
+    return {
+      ok: false,
+      finderSeed,
+      detectPath: null,
+      geometryStage: 'finder',
+    };
+  }
+
+  hypotheses.sort((left, right) =>
+    (right.referenceAgreement || 0) - (left.referenceAgreement || 0)
+    || (right.shapeScore || 0) - (left.shapeScore || 0)
+    || (left.geometryResidual || 0) - (right.geometryResidual || 0));
+
+  return ok({
+    hypotheses,
+    diagnostics: {
+      source: 'finder-first-seed',
+      detectPath: 'finder',
+      geometryStage: 'grid',
+      finderSeed,
+      geometryReports,
+      hypothesisCount: hypotheses.length,
+      cellSurfaceProbe: summarizeCellSurfaceProbe(options, geometryReports),
+    },
+  });
+}
+
 export function detectCubeHypotheses(luma, yJunction, options = {}) {
   try {
     assertLumaField(luma);
@@ -2710,6 +2855,39 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       message: error.message,
     });
   }
+  if (options.finderFirst !== false) {
+    const finder = detectCubeViaFinderFirst(luma, options);
+    if (finder && finder.ok) return finder;
+    const silhouette = detectCubeFromSilhouette(luma, yJunction, {
+      ...options,
+      finderFirst: false,
+    });
+    const meta = {
+      detectPath: silhouette.ok ? 'silhouette' : null,
+      geometryStage: silhouette.ok
+        ? 'grid'
+        : inferGeometryStageFromShapes(
+          silhouette.detail && silhouette.detail.diagnostics,
+          [],
+        ),
+      finderSeed: finder && finder.finderSeed,
+      finderCropReports: finder && finder.cropReports,
+    };
+    if (silhouette.ok) {
+      return ok({
+        ...silhouette,
+        diagnostics: { ...(silhouette.diagnostics || {}), ...meta, detectPath: 'silhouette' },
+      });
+    }
+    return attachDetectMeta(silhouette, {
+      ...meta,
+      geometryStage: meta.geometryStage || (finder && finder.geometryStage) || null,
+    });
+  }
+  return detectCubeFromSilhouette(luma, yJunction, options);
+}
+
+function detectCubeFromSilhouette(luma, yJunction, options = {}) {
   const explicit = explicitCubeHypotheses(yJunction);
   if (explicit && explicit.length > 0) {
     return ok({
@@ -2789,11 +2967,17 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
   const cellSurfaceProbe = summarizeCellSurfaceProbe(options, geometryReports);
 
   if (hypotheses.length === 0) {
+    const geometryStage = inferGeometryStageFromShapes(
+      { diagnostics: shapes.diagnostics, candidates: shapes.candidates },
+      [],
+    );
     return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
       stage: 'cube-detect',
       cause: shapes.candidates.length === 0
         ? 'no-positive-hex-y-junction'
         : 'no-reference-supported-grid',
+      geometryStage,
+      detectPath: 'silhouette',
       diagnostics: {
         downsampleFactor: reduced.factor,
         shapes: shapes.diagnostics,
@@ -2802,6 +2986,8 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
         cellSurfaceProbe,
         blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
         locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },
+        detectPath: 'silhouette',
+        geometryStage,
       },
     });
   }
@@ -2818,6 +3004,8 @@ export function detectCubeHypotheses(luma, yJunction, options = {}) {
       blockReferenceRecovery: blockRecovery && blockRecovery.diagnostics,
       hypothesisCount: hypotheses.length,
       locator: locator.ok ? locator.diagnostics : { ok: false, reason: locator.reason },
+      detectPath: 'silhouette',
+      geometryStage: 'grid',
     },
   });
 }

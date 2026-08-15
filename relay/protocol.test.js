@@ -146,6 +146,42 @@ test('frame 확대 필드는 선택이고 요청값·적용값·크롭을 행으
   assert.equal(bad.ok, false);
 });
 
+test('실패 프레임 기하는 추정값만 남기고 거짓 0 을 넣지 않는다', () => {
+  const parsed = validateEnvelope(envelope({
+    body: frameBody({
+      cellPx: null,
+      geometry: {
+        bbox: { x: 4, y: 6, w: 80, h: 90 },
+        occupancy: 0.11,
+        cellPx: 9.4,
+        geometryStage: 'y-junction',
+        detectPath: 'silhouette',
+      },
+    }),
+  }));
+  assert.equal(parsed.ok, true, parsed.error);
+  const row = eventRow(parsed.event);
+  assert.equal(row.cell_px, 9.4);
+  assert.equal(row.bbox_x, 4);
+  assert.equal(row.occupancy, 0.11);
+  assert.equal(row.geo_stage, 'y-junction');
+  assert.equal(row.detect_path, 'silhouette');
+
+  const empty = eventRow(envelope({ body: frameBody({ cellPx: null }) }));
+  assert.equal(empty.cell_px, null);
+  assert.equal(empty.geo_stage, '');
+  assert.equal(empty.detect_path, '');
+  assert.equal(empty.bbox_x, null);
+  assert.equal(empty.occupancy, null);
+
+  const zeroRejected = validateEnvelope(envelope({
+    body: frameBody({
+      geometry: { geometryStage: 0, detectPath: 'silhouette' },
+    }),
+  }));
+  assert.equal(zeroRejected.ok, false);
+});
+
 test('frame.cellSurface 는 선택이고 시도/점수/사유를 행으로 편다', () => {
   const ok = validateEnvelope(envelope({
     body: frameBody({

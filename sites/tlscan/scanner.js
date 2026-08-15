@@ -35,6 +35,7 @@ import {
   applyTrackZoom,
   buttonStep,
   cropWindow,
+  DEFAULT_USER_ZOOM,
   readTrackCapability,
   readTrackZoom,
   resolveZoomPlan,
@@ -139,8 +140,8 @@ let frameSeq = 0;
 let labEnvSent = false;
 let attemptId = '';
 let zoomCapability = null;
-let userZoom = 1;
-let zoomPlan = resolveZoomPlan({ userZoom: 1 });
+let userZoom = DEFAULT_USER_ZOOM;
+let zoomPlan = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM });
 let zoomApplyToken = 0;
 let zoomApplyTimer = 0;
 
@@ -224,8 +225,8 @@ function syncPreviewTransform() {
 
 function resetZoomState() {
   zoomCapability = null;
-  userZoom = 1;
-  zoomPlan = resolveZoomPlan({ userZoom: 1 });
+  userZoom = DEFAULT_USER_ZOOM;
+  zoomPlan = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM });
   zoomApplyToken += 1;
   if (zoomApplyTimer) {
     clearTimeout(zoomApplyTimer);
@@ -886,13 +887,35 @@ const ESCALATE_EVERY = 5;
 function grabVideoFrame() {
   const escalate = consecutiveFailedFrames > 0
     && consecutiveFailedFrames % ESCALATE_EVERY === 0;
-  return imageDataCenterSquare(
+  const maxSide = escalate ? FRAME_ESCALATED_SIDE : FRAME_MAX_SIDE;
+  const grabbed = imageDataCenterSquare(
     cameraVideo,
     cameraVideo.videoWidth,
     cameraVideo.videoHeight,
-    escalate ? FRAME_ESCALATED_SIDE : FRAME_MAX_SIDE,
+    maxSide,
     zoomPlan.cropApplied,
   );
+  if (grabbed) return grabbed;
+  if (zoomPlan.cropApplied > 1.001) {
+    const previousError = zoomPlan.error;
+    zoomPlan = {
+      ...zoomPlan,
+      cropApplied: 1,
+      error: zoomPlan.error || 'crop-failed',
+    };
+    if (zoomPlan.error !== previousError) {
+      setZoomErrorVisible(t('zoom.failed'));
+      showScanToast(t('zoom.failed'));
+    }
+    return imageDataCenterSquare(
+      cameraVideo,
+      cameraVideo.videoWidth,
+      cameraVideo.videoHeight,
+      maxSide,
+      1,
+    );
+  }
+  return null;
 }
 
 function normalizePayload(result) {
@@ -1008,10 +1031,11 @@ async function startCamera(options) {
     selectedCameraId = activeDeviceIdOf(stream) || deviceId || '';
     tryContinuousFocus(stream);
     zoomCapability = readTrackCapability(activeVideoTrack());
-    userZoom = snapZoom(1, zoomRangeFor(zoomCapability));
+    userZoom = snapZoom(DEFAULT_USER_ZOOM, zoomRangeFor(zoomCapability));
     zoomPlan = resolveZoomPlan({ userZoom, capability: zoomCapability });
     revealZoomControls();
     syncPreviewTransform();
+    void commitUserZoom();
     // 권한 부여 뒤에야 label 이 채워지므로 여기서 렌즈 목록을 갱신한다.
     refreshCameraChoices().catch(() => {});
     cameraVideo.srcObject = stream;

@@ -570,6 +570,13 @@ function perspectiveFromCorners(corners) {
   return ratio - 1;
 }
 
+/** 실패 프레임이 도달한 마지막 기하 단계. 앞일수록 덜 갔다. */
+export const GEOMETRY_STAGES = Object.freeze([
+  'mask', 'component', 'silhouette', 'y-junction', 'finder', 'grid',
+]);
+
+export const DETECT_PATHS = Object.freeze(['finder', 'silhouette']);
+
 export function emptyGeometry() {
   return {
     bbox: null,
@@ -580,6 +587,8 @@ export function emptyGeometry() {
     perspective: null,
     residualPx: null,
     cellPx: null,
+    geometryStage: null,
+    detectPath: null,
   };
 }
 
@@ -703,9 +712,190 @@ function normalizeCellSurfaceProbe(src) {
   };
 }
 
+const GEOMETRY_STAGE_RANK = Object.freeze(Object.fromEntries(
+  GEOMETRY_STAGES.map((name, index) => [name, index + 1]),
+));
+
+function betterStage(current, next) {
+  const a = current && GEOMETRY_STAGE_RANK[current] ? GEOMETRY_STAGE_RANK[current] : 0;
+  const b = next && GEOMETRY_STAGE_RANK[next] ? GEOMETRY_STAGE_RANK[next] : 0;
+  return b > a ? next : current;
+}
+
+function liftReduced(point, factor) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  const f = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  return { x: point.x * f + (f - 1) / 2, y: point.y * f + (f - 1) / 2 };
+}
+
+function shapeCellPx(shape, factor) {
+  if (!shape) return null;
+  const radius = Number(shape.radius);
+  if (!Number.isFinite(radius) || !(radius > 0)) return null;
+  const n = Number.isFinite(Number(shape.estimatedN)) && Number(shape.estimatedN) > 0
+    ? Number(shape.estimatedN)
+    : 21;
+  const f = Number.isFinite(factor) && factor > 0 ? factor : 1;
+  const cellPx = (radius * f) / n;
+  return Number.isFinite(cellPx) && cellPx > 0 ? cellPx : null;
+}
+
+function collectCubeDiagBags(result) {
+  const bags = [];
+  const { detail, diagnostics, geometry } = lookupDiagnostics(result || {});
+  const bootstrap = diagnostics && diagnostics.bootstrap;
+  const cubes = [
+    diagnostics && diagnostics.cube,
+    bootstrap && bootstrap.cube,
+    geometry && geometry.cube,
+  ];
+  for (const cube of cubes) {
+    const diag = cubeDiagnosticsOf(cube);
+    if (diag) bags.push(diag);
+    if (cube && cube.diagnostics && cube.diagnostics !== diag) bags.push(cube.diagnostics);
+  }
+  const failSources = [
+    detail && detail.cubeFailure,
+    detail && detail.cause && detail.cause.cubeFailure,
+    result && result.detail && result.detail.cubeFailure,
+  ];
+  for (const fail of failSources) {
+    const diag = cubeDiagnosticsOf(fail);
+    if (diag) bags.push(diag);
+    if (fail && fail.detail && fail.detail.diagnostics) bags.push(fail.detail.diagnostics);
+    if (fail && fail.diagnostics) bags.push(fail.diagnostics);
+  }
+  if (diagnostics && typeof diagnostics === 'object') bags.push(diagnostics);
+  return bags.filter((bag) => bag && typeof bag === 'object');
+}
+
+function inferStageFromShapes(shapes) {
+  if (!shapes || typeof shapes !== 'object') return null;
+  if (Number(shapes.acceptedShapeCount) > 0) return 'y-junction';
+  const counts = shapes.rejectionCounts && typeof shapes.rejectionCounts === 'object'
+    ? shapes.rejectionCounts
+    : {};
+  if (Number(counts['y-junction']) > 0) return 'y-junction';
+  if (Number(counts['diagonal-concurrency']) > 0 || Number(counts['mask-fill']) > 0) {
+    return 'silhouette';
+  }
+  if (Number(counts['hull-not-hexagon']) > 0) return 'component';
+  const componentCount = Number(shapes.componentCount)
+    || Number(shapes.rawComponentCount)
+    || 0;
+  if (componentCount > 0) return 'component';
+  if (typeof shapes.foregroundSource === 'string' && shapes.foregroundSource) return 'mask';
+  return null;
+}
+
+/**
+ * 실패 프레임에서 추정 가능한 지점까지의 기하.
+ * 가설이 없어도 실루엣 후보·거부 기록·파인더 시드가 있으면 남긴다.
+ * 아무것도 없으면 필드를 null 로 둔다. 거짓 0 을 넣지 않는다.
+ */
+function extractPartialGeometry(result, width, height) {
+  const partial = {
+    bbox: null,
+    occupancy: null,
+    cellPx: null,
+    rotationDeg: null,
+    geometryStage: null,
+    detectPath: null,
+  };
+  if (!result || typeof result !== 'object') return partial;
+
+  const bags = collectCubeDiagBags(result);
+  let stage = null;
+  let detectPath = null;
+  let bestCell = null;
+  let bestBbox = null;
+
+  for (const bag of bags) {
+    if (typeof bag.detectPath === 'string' && DETECT_PATHS.includes(bag.detectPath)) {
+      detectPath = bag.detectPath;
+    }
+    if (typeof bag.geometryStage === 'string' && GEOMETRY_STAGE_RANK[bag.geometryStage]) {
+      stage = betterStage(stage, bag.geometryStage);
+    }
+    const factor = Number(bag.downsampleFactor);
+    const f = Number.isFinite(factor) && factor > 0 ? factor : 1;
+    const shapes = bag.shapes && typeof bag.shapes === 'object' ? bag.shapes : bag;
+    stage = betterStage(stage, inferStageFromShapes(shapes));
+
+    const candidates = Array.isArray(bag.shapeCandidates)
+      ? bag.shapeCandidates
+      : (Array.isArray(shapes.candidates) ? shapes.candidates : []);
+    for (const shape of candidates) {
+      if (!shape || typeof shape !== 'object') continue;
+      stage = betterStage(stage, 'y-junction');
+      const cellPx = shapeCellPx(shape, f);
+      if (cellPx != null && (bestCell == null || cellPx > bestCell)) bestCell = cellPx;
+      const vertices = Array.isArray(shape.vertices)
+        ? shape.vertices.map((point) => liftReduced(point, f)).filter(Boolean)
+        : null;
+      const bbox = vertices && vertices.length >= 3 ? bboxFromPoints(vertices) : null;
+      if (bbox && (!bestBbox || bbox.w * bbox.h > bestBbox.w * bestBbox.h)) bestBbox = bbox;
+      if (Number.isFinite(Number(shape.rotationDegrees)) && partial.rotationDeg == null) {
+        partial.rotationDeg = Number(shape.rotationDegrees);
+      }
+    }
+
+    const rejections = Array.isArray(shapes.rejections) ? shapes.rejections : [];
+    for (const rejection of rejections) {
+      if (!rejection || typeof rejection !== 'object') continue;
+      const measured = rejection.measured && typeof rejection.measured === 'object'
+        ? rejection.measured
+        : rejection;
+      if (rejection.stage === 'y-junction') stage = betterStage(stage, 'y-junction');
+      else if (rejection.stage === 'diagonal-concurrency' || rejection.stage === 'mask-fill') {
+        stage = betterStage(stage, 'silhouette');
+      } else if (rejection.stage === 'hull-not-hexagon') {
+        stage = betterStage(stage, 'component');
+      }
+      const cellPx = shapeCellPx(measured, f);
+      if (cellPx != null && (bestCell == null || cellPx > bestCell)) bestCell = cellPx;
+      const vertices = Array.isArray(measured.vertices)
+        ? measured.vertices.map((point) => liftReduced(point, f)).filter(Boolean)
+        : null;
+      const bbox = vertices && vertices.length >= 3 ? bboxFromPoints(vertices) : null;
+      if (bbox && (!bestBbox || bbox.w * bbox.h > bestBbox.w * bestBbox.h)) bestBbox = bbox;
+    }
+
+    const finder = bag.finderSeed && typeof bag.finderSeed === 'object' ? bag.finderSeed : bag;
+    if (Number(finder.ySpokeCount) > 0 || Number(finder.qrCount) > 0
+      || (Array.isArray(finder.seeds) && finder.seeds.length > 0)) {
+      stage = betterStage(stage, 'finder');
+      if (!detectPath) detectPath = 'finder';
+    }
+  }
+
+  if (result.hypothesis) stage = betterStage(stage, 'grid');
+  const { geometry } = lookupDiagnostics(result);
+  if (geometry && Number(geometry.geometryHypothesisCount) > 0) {
+    stage = betterStage(stage, 'grid');
+  }
+
+  if (bestBbox) {
+    partial.bbox = bestBbox;
+    if (width > 0 && height > 0) {
+      const occupancy = (bestBbox.w * bestBbox.h) / (width * height);
+      partial.occupancy = Number.isFinite(occupancy) && occupancy > 0 ? occupancy : null;
+    }
+  }
+  partial.cellPx = bestCell;
+  partial.geometryStage = stage;
+  if (!detectPath && (bestBbox || bestCell || stage === 'y-junction' || stage === 'silhouette'
+    || stage === 'component' || stage === 'mask')) {
+    detectPath = 'silhouette';
+  }
+  partial.detectPath = detectPath;
+  return partial;
+}
+
 /**
  * 신뢰할 수 있는 diagnostics 만 정규화한다. 측정되지 않으면 null.
  * 좌표는 이미지 픽셀, 원점 좌상단, +x 오른쪽, +y 아래.
+ * 실패 프레임도 추정 가능한 지점까지의 기하를 남긴다. 거짓 0 금지.
  */
 export function extractGeometry(result, width, height) {
   const geo = emptyGeometry();
@@ -731,8 +921,8 @@ export function extractGeometry(result, width, height) {
 
   if (bbox && w > 0 && h > 0) {
     const occupancy = (bbox.w * bbox.h) / (w * h);
-    geo.occupancy = Number.isFinite(occupancy) ? occupancy : null;
-  } else if (outline && Number.isFinite(outline.fillRatio)) {
+    geo.occupancy = Number.isFinite(occupancy) && occupancy > 0 ? occupancy : null;
+  } else if (outline && Number.isFinite(outline.fillRatio) && outline.fillRatio > 0) {
     geo.occupancy = outline.fillRatio;
   }
 
@@ -756,6 +946,21 @@ export function extractGeometry(result, width, height) {
     geo.cellPx = hypothesis.cellSizePx;
   }
   geo.perspective = perspectiveFromCorners(corners);
+
+  const partial = extractPartialGeometry(result, w, h);
+  if (!geo.bbox && partial.bbox) geo.bbox = partial.bbox;
+  if (geo.occupancy == null && partial.occupancy != null) geo.occupancy = partial.occupancy;
+  if (geo.cellPx == null && partial.cellPx != null) geo.cellPx = partial.cellPx;
+  if (geo.rotationDeg == null && partial.rotationDeg != null) geo.rotationDeg = partial.rotationDeg;
+  geo.geometryStage = hypothesis ? 'grid' : partial.geometryStage;
+  geo.detectPath = typeof (geometry && geometry.detectPath) === 'string'
+    && DETECT_PATHS.includes(geometry.detectPath)
+    ? geometry.detectPath
+    : partial.detectPath;
+  if (geo.bbox && geo.occupancy == null && w > 0 && h > 0) {
+    const occupancy = (geo.bbox.w * geo.bbox.h) / (w * h);
+    geo.occupancy = Number.isFinite(occupancy) && occupancy > 0 ? occupancy : null;
+  }
   return geo;
 }
 
@@ -772,6 +977,12 @@ export function normalizeGeometry(src) {
   geo.residualPx = finiteOrNull(src.residualPx);
   const cellPx = finiteOrNull(src.cellPx);
   geo.cellPx = cellPx != null && cellPx > 0 ? cellPx : null;
+  geo.geometryStage = typeof src.geometryStage === 'string' && src.geometryStage
+    ? src.geometryStage
+    : null;
+  geo.detectPath = typeof src.detectPath === 'string' && src.detectPath
+    ? src.detectPath
+    : null;
   return geo;
 }
 
