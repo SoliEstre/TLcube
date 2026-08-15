@@ -2311,6 +2311,7 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
       reason: cellSurface.reason || 'score-failed',
       profile: CELL_SURFACE_PROFILE_ID,
       arm: null,
+      layoutId: null,
       orientationGate: null,
       ambiguous: false,
     };
@@ -2334,6 +2335,7 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
     reason: cellSurface.accepted ? null : (diag.rejectReason || cellSurface.reason || 'rejected'),
     profile: diag.profile || (arm ? CELL_SURFACE_PROFILE_ID + '-' + arm : CELL_SURFACE_PROFILE_ID),
     arm,
+    layoutId: typeof diag.layoutId === 'string' ? diag.layoutId : (cellSurface.layoutId || null),
     orientationGate: typeof diag.orientationGate === 'string' ? diag.orientationGate : null,
     orientationGateApplied: diag.orientationGateApplied === true,
     ambiguous: diag.ambiguous === true || cellSurface.ambiguous === true,
@@ -2363,6 +2365,7 @@ function summarizeCellSurfaceProbe(options, geometryReports) {
       reason: 'no-geometry',
       profile: CELL_SURFACE_PROFILE_ID,
       arm: null,
+      layoutId: null,
       orientationGate: null,
       ambiguous: false,
     };
@@ -2386,6 +2389,7 @@ function summarizeCellSurfaceProbe(options, geometryReports) {
     reason: best.accepted ? null : (best.reason || 'rejected'),
     profile: best.profile || CELL_SURFACE_PROFILE_ID,
     arm: typeof best.arm === 'string' ? best.arm : null,
+    layoutId: typeof best.layoutId === 'string' ? best.layoutId : null,
     orientationGate: typeof best.orientationGate === 'string' ? best.orientationGate : null,
     orientationGateApplied: best.orientationGateApplied === true,
     ambiguous: best.ambiguous === true,

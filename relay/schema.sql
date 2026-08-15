@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     expected_finder  String DEFAULT '',
     expected_qr      String DEFAULT '',
     expected_locator String DEFAULT '',
-    expected_locator_arm LowCardinality(String) DEFAULT '', -- A | B. 셀 표면 로케이터 팔
+    expected_locator_arm LowCardinality(String) DEFAULT '', -- 구 A/B. 신규는 비움
+    expected_locator_layout LowCardinality(String) DEFAULT '', -- v1r2 | v2
     observed_type    LowCardinality(String) DEFAULT '',
     observed_version String DEFAULT '',
     observed_ecc     LowCardinality(String) DEFAULT '',
@@ -57,7 +58,8 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     observed_finder  String DEFAULT '',
     observed_qr      String DEFAULT '',
     observed_locator String DEFAULT '',
-    observed_locator_arm LowCardinality(String) DEFAULT '', -- 디코더가 고른 팔
+    observed_locator_arm LowCardinality(String) DEFAULT '', -- 구 A/B. 신규는 비움
+    observed_locator_layout LowCardinality(String) DEFAULT '', -- 관측 레이아웃 v1r2 | v2
     chain_json       String DEFAULT '',            -- 원인 사슬 JSON
     chain_failed     LowCardinality(String) DEFAULT '',
     bbox_x      Nullable(Float32),                 -- 이미지 픽셀, 원점 좌상단
@@ -75,9 +77,11 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     cs_accepted  UInt8 DEFAULT 0,                  -- 검출기가 가설을 수락했는가
     cs_score     Nullable(Float32),                -- 셀 표면 agreement. 미시도 NULL
     cs_reason    String DEFAULT '',                -- 거절 사유. 미시도 빈 문자열
-    cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v1-A | cell-surface-v1-B
-    cs_arm       LowCardinality(String) DEFAULT '', -- 관측 팔 A | B
-    cs_expected_arm LowCardinality(String) DEFAULT '', -- 기대 팔. 없으면 빈 문자열
+    cs_profile   LowCardinality(String) DEFAULT '', -- cell-surface-v1r2 | cell-surface-v2
+    cs_arm       LowCardinality(String) DEFAULT '', -- 구 A/B. 신규는 비움
+    cs_expected_arm LowCardinality(String) DEFAULT '', -- 구 기대 팔. 신규는 비움
+    cs_layout    LowCardinality(String) DEFAULT '', -- 관측 레이아웃 v1r2 | v2
+    cs_expected_layout LowCardinality(String) DEFAULT '', -- 기대 레이아웃
     cs_orientation_gate LowCardinality(String) DEFAULT '', -- applied | waived
     cs_orientation_gate_applied UInt8 DEFAULT 0, -- 1=방향 게이트 적용. A 는 0
     cs_ambiguous UInt8 DEFAULT 0,               -- 1=A·B 둘 다 맞아서 점수 높은 쪽을 택함

@@ -8,8 +8,11 @@ import { fileURLToPath } from 'node:url';
 
 import { eventRow, parseEnvelope, thumbnailRow } from '../relay/protocol.mjs';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import { detectCubeHypotheses } from '../src/decoder/cube-detect.js';
+import { toRelativeLuminance } from '../src/decoder/luma.js';
 import {
   MAX_SHOTS,
+  GEOMETRY_STAGES,
   buildCauseChain,
   createLabTelemetry,
   createShotSampler,
@@ -31,6 +34,7 @@ const MIG = readFileSync(ROOT + 'deploy/estre-so/clickhouse/002_tl_lab_p0_instru
 const MIG_AB = readFileSync(ROOT + 'deploy/estre-so/clickhouse/003_tl_lab_cellsurface_ab.sql', 'utf8');
 const MIG_ZOOM = readFileSync(ROOT + 'deploy/estre-so/clickhouse/004_tl_lab_zoom.sql', 'utf8');
 const MIG_GEO = readFileSync(ROOT + 'deploy/estre-so/clickhouse/005_tl_lab_fail_geometry.sql', 'utf8');
+const MIG_LAYOUT = readFileSync(ROOT + 'deploy/estre-so/clickhouse/006_tl_lab_cellsurface_layouts.sql', 'utf8');
 
 function memoryStore() {
   const map = new Map();
@@ -132,7 +136,7 @@ test('config ID 는 결정적이고 expected/observed 미상은 null', () => {
     expected: emptyConfigSide(),
     observed: observedFromResult({ ok: false, reason: 'frontend:no-finder' }),
   });
-  for (const key of ['type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile', 'locatorArm']) {
+  for (const key of ['type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile', 'locatorLayout']) {
     assert.equal(frame.expected[key], null);
     assert.equal(frame.observed[key], null);
   }
@@ -279,6 +283,60 @@ test('bbox/corners/occupancy/rotation/perspective/cellPx 단위와 nullable 직�
   assert.notEqual(failedHex.cellPx, 0);
 });
 
+function gradientRaster(w, h) {
+  const pixels = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const i = (y * w + x) * 4;
+      const v = Math.round(40 + (x / w) * 180);
+      pixels[i] = v;
+      pixels[i + 1] = v;
+      pixels[i + 2] = v;
+      pixels[i + 3] = 255;
+    }
+  }
+  return { width: w, height: h, pixels };
+}
+
+test('실패 프레임도 decodeFrontend 를 타면 geo_stage 가 비지 않는다', () => {
+  const raster = gradientRaster(128, 128);
+  const luma = toRelativeLuminance(raster);
+  const cube = detectCubeHypotheses(luma);
+  const cubeGeo = extractGeometry(cube, raster.width, raster.height);
+  assert.equal(cube.ok, false);
+  assert.ok(
+    cubeGeo.geometryStage && GEOMETRY_STAGES.includes(cubeGeo.geometryStage),
+    '검출기는 단계에 도달한다: ' + cubeGeo.geometryStage,
+  );
+
+  const front = decodeFrontend(raster);
+  assert.equal(front.ok, false);
+  const frontGeo = extractGeometry(front, raster.width, raster.height);
+  assert.ok(
+    frontGeo.geometryStage && GEOMETRY_STAGES.includes(frontGeo.geometryStage),
+    '프론트엔드 실패여도 geo_stage 가 비면 안 된다: ' + JSON.stringify({
+      reason: front.reason,
+      geometryStage: frontGeo.geometryStage,
+      detectPath: frontGeo.detectPath,
+      hasCubeFailure: Boolean(front.detail && (
+        front.detail.cubeFailure || (front.detail.cause && front.detail.cause.cubeFailure)
+      )),
+    }),
+  );
+  assert.ok(
+    frontGeo.detectPath === 'finder' || frontGeo.detectPath === 'silhouette',
+    'detect_path 도 비면 안 된다: ' + frontGeo.detectPath,
+  );
+  if (frontGeo.cellPx != null) assert.ok(frontGeo.cellPx > 0);
+  const body = normalizeFrameBody({
+    seq: 1, w: raster.width, h: raster.height, ok: false,
+    reason: front.reason, geometry: frontGeo, cellPx: frontGeo.cellPx,
+  });
+  assert.equal(body.geometry.geometryStage, frontGeo.geometryStage);
+  assert.notEqual(body.geometry.geometryStage, null);
+  assert.notEqual(body.geometry.detectPath, null);
+});
+
 test('층화 샘플러는 첫 20장 편향·동일 reason 독점·성공 누락을 막고 상한을 지킨다', async () => {
   const sampler = createShotSampler({ maxTotal: 20, maxPerReason: 3, lateReserve: 2 });
   let emitted = 0;
@@ -418,6 +476,14 @@ test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다',
   assert.match(MIG_GEO, /ADD COLUMN IF NOT EXISTS detect_path/);
   assert.match(MIG_GEO, /이 저장소에서는 실행하지 않는다/);
   assert.doesNotMatch(MIG_GEO, /^clickhouse-client/m);
+  assert.match(SQL, /expected_locator_layout\s+LowCardinality/);
+  assert.match(SQL, /observed_locator_layout\s+LowCardinality/);
+  assert.match(SQL, /cs_layout\s+LowCardinality/);
+  assert.match(SQL, /cs_expected_layout\s+LowCardinality/);
+  assert.match(MIG_LAYOUT, /ADD COLUMN IF NOT EXISTS expected_locator_layout/);
+  assert.match(MIG_LAYOUT, /ADD COLUMN IF NOT EXISTS cs_layout/);
+  assert.match(MIG_LAYOUT, /이 저장소에서는 실행하지 않는다/);
+  assert.doesNotMatch(MIG_LAYOUT, /^clickhouse-client/m);
 });
 
 test('decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다', () => {

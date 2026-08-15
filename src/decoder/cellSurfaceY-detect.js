@@ -23,6 +23,13 @@ import {
   formatIndexCellSurface,
   locatorCellsCellSurface,
 } from '../cellSurfaceY.js';
+import {
+  CELL_SURFACE_LAYOUT_IDS,
+  DEFAULT_CELL_SURFACE_LAYOUT,
+  cellSurfaceLayout,
+  formatIndexCellSurfaceLayout,
+  locatorCellsCellSurfaceLayout,
+} from '../cellSurfaceLayouts.js';
 import { YFACES } from '../ygrid.js';
 import { FRONTEND_FAILURE, fail, ok } from './contracts.js';
 
@@ -44,8 +51,8 @@ function cellKey(i, j) {
   return i + ',' + j;
 }
 
-function remappedLocators(cycle, arm) {
-  return locatorCellsCellSurface(arm).map((cell) => ({
+function remappedLocators(cycle, locators) {
+  return locators.map((cell) => ({
     i: cell.i,
     j: cell.j,
     T: cell[cycle[0]],
@@ -194,11 +201,11 @@ function scoreMappedSamples(samples, cfg, locators) {
   };
 }
 
-function scoreOneArm(samples, cfg, arm) {
+function scoreOnePattern(samples, cfg, locators, meta) {
   const phases = FACE_CYCLES.map((cycle, phase) => ({
     phase,
     cycle,
-    ...scoreMappedSamples(samples, cfg, remappedLocators(cycle, arm)),
+    ...scoreMappedSamples(samples, cfg, remappedLocators(cycle, locators)),
   }));
   const ranked = phases.slice().sort((left, right) =>
     right.agreement - left.agreement || left.phase - right.phase);
@@ -207,9 +214,7 @@ function scoreOneArm(samples, cfg, arm) {
   const orientationMargin = claimed.agreement - (rival ? rival.agreement : 0);
   const orientationOk = ranked[0].phase === 0
     && orientationMargin >= cfg.minimumOrientationMargin;
-  // A 는 거의 대칭이라 margin ≈ 0. 게이트를 그대로 쓰면 A/B 가
-  // 「A 가 고장났다」만 측정한다. 면제는 팔=톤과 별도 축으로 남긴다.
-  const orientationGate = arm === CELL_SURFACE_ARM_A ? 'waived' : 'applied';
+  const orientationGate = meta.orientationGate || 'applied';
   const orientationGateApplied = orientationGate === 'applied';
   const accepted = claimed.accepted
     && (orientationGateApplied ? orientationOk : true);
@@ -221,12 +226,15 @@ function scoreOneArm(samples, cfg, arm) {
     else if (orientationGateApplied && !orientationOk) rejectReason = 'orientation-margin';
     else rejectReason = 'rejected';
   }
-  const profile = cellSurfaceProfileId(arm);
+  const profile = meta.profile;
+  const arm = meta.arm || null;
+  const layoutId = meta.layoutId || null;
   return {
     arm,
+    layoutId,
     profile,
     accepted,
-    best: { ...claimed, accepted, arm, profile },
+    best: { ...claimed, accepted, arm, layoutId, profile },
     phases,
     orientationMargin,
     orientationOk,
@@ -235,6 +243,7 @@ function scoreOneArm(samples, cfg, arm) {
     diagnostics: {
       profile,
       arm,
+      layoutId,
       accepted,
       agreement: claimed.agreement,
       orientationMargin,
@@ -252,6 +261,23 @@ function scoreOneArm(samples, cfg, arm) {
       toneSeparation: claimed.toneSeparation,
     },
   };
+}
+
+function scoreOneArm(samples, cfg, arm) {
+  return scoreOnePattern(samples, cfg, locatorCellsCellSurface(arm), {
+    arm,
+    profile: cellSurfaceProfileId(arm),
+    orientationGate: arm === CELL_SURFACE_ARM_A ? 'waived' : 'applied',
+  });
+}
+
+function scoreOneLayout(samples, cfg, layoutId) {
+  const layout = cellSurfaceLayout(layoutId);
+  return scoreOnePattern(samples, cfg, layout.locatorCells, {
+    layoutId,
+    profile: layout.profile,
+    orientationGate: 'applied',
+  });
 }
 
 function pickBetterArm(left, right) {
@@ -389,17 +415,21 @@ function calibrationForTones(best, scored, tones) {
 }
 
 function hypothesisPatchForTones(best, scored, samples, tones) {
+  const layoutId = scored.layoutId || best.layoutId || null;
+  const profile = scored.profile || best.profile || CELL_SURFACE_PROFILE_ID;
+  const formatIndex = layoutId
+    ? formatIndexCellSurfaceLayout(layoutId, tones)
+    : formatIndexCellSurface(tones);
   return {
     cellSurface: true,
-    locatorProfile: CELL_SURFACE_PROFILE_ID,
-    locatorArm: scored.arm || best.arm || DEFAULT_CELL_SURFACE_ARM,
+    cellSurfaceLayout: layoutId,
+    locatorProfile: layoutId ? profile : CELL_SURFACE_PROFILE_ID,
+    locatorArm: scored.arm || best.arm || null,
     locatorRoute: 'cell-surface',
-    source: 'locator-cell-surface-v1',
+    source: layoutId ? 'locator-cell-surface-' + layoutId : 'locator-cell-surface-v1',
     version: CELL_SURFACE_VERSION,
     tones,
-    formatIndex: formatIndexCellSurface(tones),
-    n: CELL_SURFACE_N,
-    k: CELL_SURFACE_N,
+    formatIndex,
     facePhase: best.phase,
     faceCycle: best.cycle,
     cellSurfaceScore: best.agreement,
@@ -424,12 +454,115 @@ function hypothesisPatchForTones(best, scored, samples, tones) {
  * sampleCell(i,j) 는 cube-detect.sampleCubeCell 과 같은 모양을 돌려야 한다.
  * locator 는 dark/bright 만 쓰며, 2톤·3톤 데이터 가설을 둘 다 만든다.
  */
+function sampleLocatorTable(sampleCell, locators) {
+  const samples = [];
+  for (const cell of locators) {
+    const sampled = sampleCell(cell.i, cell.j);
+    if (!sampled || sampled.ok === false) {
+      return fail(sampled && sampled.reason ? sampled.reason : FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+        stage: 'cell-surface-sampling',
+        cell,
+        cause: sampled && sampled.detail,
+      });
+    }
+    samples.push(sampled);
+  }
+  return ok({ samples });
+}
+
+function resolveLayoutIds(options) {
+  if (options.enableLegacyCellSurfaceV1 === true && !options.cellSurfaceLayout
+    && !options.cellSurfaceLayouts) {
+    return null;
+  }
+  if (typeof options.cellSurfaceLayout === 'string' && options.cellSurfaceLayout) {
+    return [options.cellSurfaceLayout];
+  }
+  if (Array.isArray(options.cellSurfaceLayouts) && options.cellSurfaceLayouts.length > 0) {
+    return options.cellSurfaceLayouts;
+  }
+  return [...CELL_SURFACE_LAYOUT_IDS];
+}
+
+function pickBetterLayout(left, right) {
+  if (left.accepted !== right.accepted) return left.accepted ? left : right;
+  const leftScore = left.best && left.best.agreement;
+  const rightScore = right.best && right.best.agreement;
+  if (leftScore !== rightScore) {
+    if (!Number.isFinite(leftScore)) return right;
+    if (!Number.isFinite(rightScore)) return left;
+    return leftScore >= rightScore ? left : right;
+  }
+  return left.layoutId === DEFAULT_CELL_SURFACE_LAYOUT ? left : right;
+}
+
 export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}) {
   if (!hypothesis || hypothesis.n !== CELL_SURFACE_N) {
     return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
       stage: 'cell-surface',
       cause: 'unsupported-n',
       n: hypothesis && hypothesis.n,
+    });
+  }
+
+  const layoutIds = resolveLayoutIds(options);
+  if (layoutIds) {
+    const cfg = calibration(options);
+    const scoredLayouts = {};
+    let chosen = null;
+    let chosenSamples = null;
+    for (const layoutId of layoutIds) {
+      const locators = locatorCellsCellSurfaceLayout(layoutId);
+      const sampled = sampleLocatorTable(sampleCell, locators);
+      if (!sampled.ok) return sampled;
+      const scored = scoreOneLayout(sampled.samples, cfg, layoutId);
+      scoredLayouts[layoutId] = scored;
+      if (!chosen) {
+        chosen = scored;
+        chosenSamples = sampled.samples;
+      } else {
+        const next = pickBetterLayout(chosen, scored);
+        if (next === scored) chosenSamples = sampled.samples;
+        chosen = next;
+      }
+    }
+    const bothAccepted = layoutIds.length > 1
+      && layoutIds.every((id) => scoredLayouts[id] && scoredLayouts[id].accepted);
+    const accepted = chosen.accepted;
+    const diagnostics = {
+      ...chosen.diagnostics,
+      ambiguous: bothAccepted,
+      layouts: Object.fromEntries(layoutIds.map((id) => [id, {
+        accepted: scoredLayouts[id].accepted,
+        agreement: scoredLayouts[id].best.agreement,
+        orientationMargin: scoredLayouts[id].orientationMargin,
+        rejectReason: scoredLayouts[id].diagnostics.rejectReason,
+        profile: scoredLayouts[id].profile,
+      }])),
+    };
+    const packed = {
+      accepted,
+      best: chosen.best,
+      phases: chosen.phases,
+      orientationMargin: chosen.orientationMargin,
+      orientationGate: chosen.orientationGate,
+      orientationGateApplied: chosen.orientationGateApplied,
+      arm: null,
+      layoutId: chosen.layoutId,
+      profile: chosen.profile,
+      ambiguous: bothAccepted,
+      diagnostics,
+    };
+    const best = packed.best;
+    const hypothesisPatches = [2, 3].map((tones) =>
+      hypothesisPatchForTones(best, packed, chosenSamples, tones));
+    return ok({
+      accepted,
+      samples: chosenSamples,
+      scored: packed,
+      hypothesisPatches,
+      hypothesisPatch: hypothesisPatches[1],
+      diagnostics,
     });
   }
 

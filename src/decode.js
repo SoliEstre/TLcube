@@ -30,6 +30,13 @@ import {
   tonesFromCellSurfaceFormatIndex,
 } from './cellSurfaceY.js';
 import {
+  capacityForCellSurfaceLayout,
+  dataCellsInScanOrderCellSurfaceLayout,
+  isCellSurfaceLayoutFormatIndex,
+  layoutIdFromFormatIndex,
+  tonesFromCellSurfaceLayoutFormatIndex,
+} from './cellSurfaceLayouts.js';
+import {
   CHUNK_BYTES,
   decodeChunkInto,
   packCellDigitsToSymbols,
@@ -269,10 +276,51 @@ function resolveProfile(format) {
     if (typeof window !== 'boolean') {
       throw new TypeError('Type Y format.window은 boolean이어야 한다: ' + window);
     }
+    const layoutId = format.cellSurfaceLayout
+      || (format.formatIndex !== undefined
+        ? layoutIdFromFormatIndex(format.formatIndex)
+        : null)
+      || (format.locatorProfile === 'cell-surface-v1r2'
+        ? 'v1r2'
+        : format.locatorProfile === 'cell-surface-v2'
+          ? 'v2'
+          : null);
     const cellSurface = format.cellSurface === true
-      || format.locatorProfile === 'cell-surface-v1';
+      || format.locatorProfile === 'cell-surface-v1'
+      || Boolean(layoutId);
     if (cellSurface && window) {
       throw new RangeError('Type Y cellSurface와 window를 함께 쓸 수 없다');
+    }
+    if (cellSurface && layoutId) {
+      let cellSurfaceTones = suppliedTones;
+      if (format.formatIndex !== undefined) {
+        if (!isCellSurfaceLayoutFormatIndex(format.formatIndex)) {
+          throw new RangeError(
+            'cell-surface layout formatIndex 가 아니다: ' + format.formatIndex,
+          );
+        }
+        const fromIndex = tonesFromCellSurfaceLayoutFormatIndex(format.formatIndex);
+        if (cellSurfaceTones !== undefined && cellSurfaceTones !== fromIndex) {
+          throw new RangeError(
+            'cell-surface layout tones=' + cellSurfaceTones
+            + ' 와 formatIndex=' + format.formatIndex + ' 가 어긋난다',
+          );
+        }
+        cellSurfaceTones = fromIndex;
+      } else {
+        cellSurfaceTones = cellSurfaceTones === undefined ? 2 : cellSurfaceTones;
+      }
+      const resolvedLayout = layoutIdFromFormatIndex(format.formatIndex) || layoutId;
+      const capacity = capacityForCellSurfaceLayout(resolvedLayout, eccLevel, cellSurfaceTones);
+      if (requestedN !== undefined) assertOptionalDimension(format.n, 'n', capacity.n);
+      if (format.k !== undefined) assertOptionalDimension(format.k, 'k', capacity.n);
+      return finishProfile({
+        type,
+        eccLevel,
+        capacity,
+        scan: dataCellsInScanOrderCellSurfaceLayout(resolvedLayout),
+        coordinates: (cell) => [cell.i, cell.j],
+      });
     }
     if (cellSurface) {
       let cellSurfaceTones = suppliedTones;

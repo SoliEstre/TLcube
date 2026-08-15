@@ -47,6 +47,7 @@ function compactHypothesis(candidate) {
     source: hypothesis.source,
     locatorProfile: hypothesis.locatorProfile || null,
     locatorArm: hypothesis.locatorArm || null,
+    cellSurfaceLayout: hypothesis.cellSurfaceLayout || null,
     locatorRoute: hypothesis.locatorRoute || null,
     locatorPhase: hypothesis.locatorPhase || null,
     cellSurface: hypothesis.cellSurface === true,
@@ -68,12 +69,20 @@ function compactHypothesis(candidate) {
 
 function failureDetail(stage, result, diagnostics) {
   const cause = result && result.detail;
+  const lifted = diagnostics
+    || (result && result.diagnostics)
+    || (cause && cause.diagnostics)
+    || undefined;
   return {
     stage,
     pipelineStage: cause && cause.stage ? cause.stage : stage,
     pipelineCode: cause && cause.pipelineCode,
     cause,
-    diagnostics,
+    diagnostics: lifted,
+    cubeFailure: cause && cause.cubeFailure,
+    geometryDiagnostics: cause && cause.geometryDiagnostics,
+    geometryStage: cause && cause.geometryStage,
+    detectPath: cause && cause.detectPath,
   };
 }
 

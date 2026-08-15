@@ -59,7 +59,7 @@ function renderSurface(arm, tones, { pixelsPerUnit = 10, margin = 20 } = {}) {
 
 function decodeLab(raster) {
   return decodeFrontend(raster, {
-    bootstrap: { family: { cube: { enableLocatorY: true, enableCellSurfaceY: true } } },
+    bootstrap: { family: { cube: { enableLocatorY: true, enableCellSurfaceY: true, enableLegacyCellSurfaceV1: true } } },
   });
 }
 
@@ -192,35 +192,35 @@ test('A/B 회전 카나리아 — ppu 10 · 2톤 · 0/90/180/270', {
   }
 });
 
-test('gen·frame 텔레메트리에 기대/관측 팔이 남는다', () => {
+test('gen·frame 텔레메트리에 기대/관측 레이아웃이 남는다', () => {
   const gen = normalizeGenBody({
-    type: 'Y', version: 1, tones: 2, locatorProfile: 'cell-surface-v1', locatorArm: 'A',
+    type: 'Y', version: 1, tones: 2, locatorProfile: 'cell-surface-v1r2', locatorLayout: 'v1r2',
   });
-  assert.equal(gen.locatorArm, 'A');
+  assert.equal(gen.locatorLayout, 'v1r2');
   const parsedGen = parseEnvelope(JSON.stringify(makeEnvelope('s', 'gen', 'gen', gen)));
   assert.equal(parsedGen.ok, true, parsedGen.error);
-  assert.equal(parsedGen.event.body.locatorArm, 'A');
+  assert.equal(parsedGen.event.body.locatorLayout, 'v1r2');
 
   const frame = normalizeFrameBody({
     seq: 1, w: 10, h: 10, ok: true, reason: '',
-    expected: { locatorArm: 'A', locatorProfile: 'cell-surface-v1' },
-    observed: { locatorArm: 'B', locatorProfile: 'cell-surface-v1' },
+    expected: { locatorLayout: 'v1r2', locatorProfile: 'cell-surface-v1r2' },
+    observed: { locatorLayout: 'v2', locatorProfile: 'cell-surface-v2' },
     cellSurface: {
       attempted: true,
       accepted: true,
       score: 0.9,
-      profile: 'cell-surface-v1-B',
-      arm: 'B',
+      profile: 'cell-surface-v2',
+      layoutId: 'v2',
       orientationGate: 'applied',
       orientationGateApplied: true,
       ambiguous: true,
     },
   });
-  assert.equal(frame.expected.locatorArm, 'A');
-  assert.equal(frame.observed.locatorArm, 'B');
-  assert.equal(frame.cellSurface.arm, 'B');
-  assert.equal(frame.cellSurface.expectedArm, 'A');
-  assert.equal(frame.cellSurface.profile, 'cell-surface-v1-B');
+  assert.equal(frame.expected.locatorLayout, 'v1r2');
+  assert.equal(frame.observed.locatorLayout, 'v2');
+  assert.equal(frame.cellSurface.layoutId, 'v2');
+  assert.equal(frame.cellSurface.expectedLayout, 'v1r2');
+  assert.equal(frame.cellSurface.profile, 'cell-surface-v2');
   assert.equal(frame.cellSurface.orientationGate, 'applied');
   assert.equal(frame.cellSurface.ambiguous, true);
   const parsed = parseEnvelope(JSON.stringify(makeEnvelope('s', 'scan', 'frame', frame)));

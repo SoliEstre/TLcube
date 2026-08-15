@@ -28,11 +28,11 @@ export const CHAIN_STAGES = Object.freeze([
 ]);
 export const CONFIG_SIDE_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile',
-  'locatorArm',
+  'locatorLayout',
 ]);
 export const GEN_BODY_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'bgMode', 'quietMode',
-  'locatorProfile', 'locatorArm',
+  'locatorProfile', 'locatorLayout',
 ]);
 
 /** `/lab` 또는 `/lab/…` 만 시험판. `/label` 같은 접두 오탐을 막는다. */
@@ -207,7 +207,7 @@ export function emptyConfigSide() {
     finderPatternId: null,
     qrPosition: null,
     locatorProfile: null,
-    locatorArm: null,
+    locatorLayout: null,
   };
 }
 
@@ -255,6 +255,10 @@ export function observedFromResult(result) {
   } else if (hyp && typeof hyp.source === 'string' && hyp.source.startsWith('locator-')) {
     out.locatorProfile = hyp.source.slice('locator-'.length);
   }
+  if (hyp && typeof hyp.cellSurfaceLayout === 'string' && hyp.cellSurfaceLayout) {
+    out.locatorLayout = hyp.cellSurfaceLayout;
+    if (!out.locatorProfile) out.locatorProfile = 'cell-surface-' + hyp.cellSurfaceLayout;
+  }
   if (hyp && typeof hyp.locatorArm === 'string' && hyp.locatorArm) {
     out.locatorArm = hyp.locatorArm;
   }
@@ -291,19 +295,23 @@ function lookupDiagnostics(result) {
   const detail = result && result.detail && typeof result.detail === 'object'
     ? result.detail
     : {};
+  const cause = detail.cause && typeof detail.cause === 'object' ? detail.cause : null;
   const diagnostics = (result && result.diagnostics)
     || detail.diagnostics
+    || (cause && cause.diagnostics)
     || null;
   const bootstrap = diagnostics && diagnostics.bootstrap;
   const geometry = (bootstrap && bootstrap.geometry)
     || (diagnostics && diagnostics.geometry)
     || detail.geometryDiagnostics
+    || (cause && cause.geometryDiagnostics)
     || null;
   const validation = (bootstrap && bootstrap.validation)
     || (diagnostics && diagnostics.validation)
     || (detail.diagnostics && detail.diagnostics.validation)
+    || (cause && cause.diagnostics && cause.diagnostics.validation)
     || null;
-  return { detail, diagnostics, geometry, validation };
+  return { detail, diagnostics, geometry, validation, cause };
 }
 
 /**
@@ -600,7 +608,8 @@ export function emptyCellSurfaceProbe() {
     reason: null,
     profile: null,
     arm: null,
-    expectedArm: null,
+    layoutId: null,
+    expectedLayout: null,
     orientationGate: null,
     orientationGateApplied: null,
     ambiguous: false,
@@ -681,7 +690,9 @@ export function extractCellSurfaceProbe(result) {
     reason: typeof best.reason === 'string' && best.reason ? best.reason : null,
     profile: typeof best.profile === 'string' ? best.profile : null,
     arm: typeof best.arm === 'string' && best.arm ? best.arm : null,
-    expectedArm: typeof best.expectedArm === 'string' && best.expectedArm ? best.expectedArm : null,
+    layoutId: typeof best.layoutId === 'string' && best.layoutId ? best.layoutId : null,
+    expectedLayout: typeof best.expectedLayout === 'string' && best.expectedLayout
+      ? best.expectedLayout : null,
     orientationGate: typeof best.orientationGate === 'string' && best.orientationGate
       ? best.orientationGate : null,
     orientationGateApplied: best.orientationGateApplied === true
@@ -702,7 +713,9 @@ function normalizeCellSurfaceProbe(src) {
     reason: typeof src.reason === 'string' && src.reason ? src.reason : null,
     profile: typeof src.profile === 'string' && src.profile ? src.profile : null,
     arm: typeof src.arm === 'string' && src.arm ? src.arm : null,
-    expectedArm: typeof src.expectedArm === 'string' && src.expectedArm ? src.expectedArm : null,
+    layoutId: typeof src.layoutId === 'string' && src.layoutId ? src.layoutId : null,
+    expectedLayout: typeof src.expectedLayout === 'string' && src.expectedLayout
+      ? src.expectedLayout : null,
     orientationGate: typeof src.orientationGate === 'string' && src.orientationGate
       ? src.orientationGate : null,
     orientationGateApplied: src.orientationGateApplied === true
@@ -758,6 +771,7 @@ function collectCubeDiagBags(result) {
     detail && detail.cubeFailure,
     detail && detail.cause && detail.cause.cubeFailure,
     result && result.detail && result.detail.cubeFailure,
+    geometry && geometry.cube,
   ];
   for (const fail of failSources) {
     const diag = cubeDiagnosticsOf(fail);
@@ -809,6 +823,17 @@ function extractPartialGeometry(result, width, height) {
   let detectPath = null;
   let bestCell = null;
   let bestBbox = null;
+
+  const { detail, cause } = lookupDiagnostics(result);
+  for (const src of [detail, cause, result]) {
+    if (!src || typeof src !== 'object') continue;
+    if (typeof src.detectPath === 'string' && DETECT_PATHS.includes(src.detectPath)) {
+      detectPath = src.detectPath;
+    }
+    if (typeof src.geometryStage === 'string' && GEOMETRY_STAGE_RANK[src.geometryStage]) {
+      stage = betterStage(stage, src.geometryStage);
+    }
+  }
 
   for (const bag of bags) {
     if (typeof bag.detectPath === 'string' && DETECT_PATHS.includes(bag.detectPath)) {
@@ -1201,10 +1226,12 @@ export function normalizeFrameBody(body) {
 }
 
 function mergeExpectedArmIntoProbe(probe, expected) {
-  if (!probe || probe.expectedArm) return probe;
-  const arm = expected && typeof expected.locatorArm === 'string' ? expected.locatorArm : null;
-  if (!arm) return probe;
-  return { ...probe, expectedArm: arm };
+  if (!probe || probe.expectedLayout) return probe;
+  const layout = expected && typeof expected.locatorLayout === 'string'
+    ? expected.locatorLayout
+    : null;
+  if (!layout) return probe;
+  return { ...probe, expectedLayout: layout };
 }
 
 export function normalizeGenBody(body) {

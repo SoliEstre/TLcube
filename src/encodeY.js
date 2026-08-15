@@ -42,6 +42,17 @@ import {
   formatIndexCellSurface,
   locatorCellsCellSurface,
 } from './cellSurfaceY.js';
+import {
+  CELL_SURFACE_LAYOUT_VERSION,
+  assertCellSurfaceLayoutId,
+  assertCellSurfaceLayoutTones,
+  capacityForCellSurfaceLayout,
+  cellSurfaceLayout,
+  dataCellsInScanOrderCellSurfaceLayout,
+  fillerCellsCellSurfaceLayout,
+  formatIndexCellSurfaceLayout,
+  locatorCellsCellSurfaceLayout,
+} from './cellSurfaceLayouts.js';
 
 function cellKey(i, j) {
   return `${i},${j}`;
@@ -117,7 +128,7 @@ export function chooseVersionY(text, eccLevel = 'M', tones = 2) {
  * Type Y 인코더 파이프라인 진입점 (SPEC §14). version 을 생략하면
  * `chooseVersionY` 로 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', tones?: 2|3, window?: boolean, cellSurface?: boolean, locatorArm?: 'A'|'B'}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', tones?: 2|3, window?: boolean, cellSurface?: boolean, cellSurfaceLayout?: 'v1r2'|'v2', locatorArm?: 'A'|'B'}} [options]
  *   tones 기본 2(2톤 메인, ADR 0003 v3.1 §4b) — 3 은 Y-T 옵션. window 는 면 내 QR
  *   윈도 β(ADR 0003 D1 + [C7 Q7]) — version=2(Y2)·tones=2 에서만 허용(그 외 RangeError),
  *   version 생략 시 2 로 강제한다(윈도가 지원되는 유일한 버전이므로).
@@ -145,8 +156,23 @@ export function encodeY(text, options = {}) {
   }
   const {
     version, eccLevel = 'M', tones = 2, window = false, cellSurface = false,
+    cellSurfaceLayout: layoutId,
     locatorArm,
   } = options;
+
+  if (layoutId) {
+    if (window) {
+      throw new RangeError('cell-surface layout 은 options.window 과 함께 쓸 수 없다');
+    }
+    assertCellSurfaceLayoutTones(tones);
+    if (version !== undefined && version !== CELL_SURFACE_LAYOUT_VERSION) {
+      throw new RangeError(
+        'cell-surface layout 은 version=' + CELL_SURFACE_LAYOUT_VERSION
+        + '(Y1/Y1T) 전용이다: version=' + version,
+      );
+    }
+    return encodeYCellSurfaceLayout(text, eccLevel, tones, layoutId);
+  }
 
   if (cellSurface) {
     if (window) {
@@ -391,6 +417,122 @@ function encodeYCellSurface(text, eccLevel, tones, locatorArm) {
     cellSurface: true,
     locatorProfile: CELL_SURFACE_PROFILE_ID,
     locatorArm: arm,
+    capacity,
+    codewordSymbols,
+    dataDigits,
+    fillerDigits,
+    formatDigits,
+    cellDigits,
+  };
+}
+
+function encodeYCellSurfaceLayout(text, eccLevel, tones, layoutId) {
+  const id = assertCellSurfaceLayoutId(layoutId);
+  const layout = cellSurfaceLayout(id);
+  const capacity = capacityForCellSurfaceLayout(id, eccLevel, tones);
+  const n = layout.n;
+  const framed = frame(text, capacity.dataBytes);
+  const symbols = bytesToSymbols(framed);
+  if (symbols.length !== capacity.dataSymbols) {
+    throw new RangeError(
+      '심볼 개수 불일치: bytesToSymbols() ' + symbols.length
+      + ' !== capacity.dataSymbols ' + capacity.dataSymbols,
+    );
+  }
+
+  const codewordSymbols = rsEncode(symbols, capacity.nsym);
+  if (codewordSymbols.length !== capacity.usedSymbols) {
+    throw new RangeError(
+      '코드워드 심볼 개수 불일치: rsEncode() ' + codewordSymbols.length
+      + ' !== capacity.usedSymbols ' + capacity.usedSymbols,
+    );
+  }
+
+  const preMaskDataDigits = unpackSymbolsToCellDigits(codewordSymbols);
+  const scanCells = dataCellsInScanOrderCellSurfaceLayout(id);
+  if (scanCells.length !== capacity.dataCells) {
+    throw new RangeError(
+      'scan order-Y(cell-surface-layout) 셀 수 불일치: '
+      + scanCells.length + ' !== capacity.dataCells ' + capacity.dataCells,
+    );
+  }
+  const dataCellCoords = scanCells.slice(0, preMaskDataDigits.length);
+  const dataDigits = new Uint8Array(preMaskDataDigits.length);
+  for (let i = 0; i < dataCellCoords.length; i += 1) {
+    const c = dataCellCoords[i];
+    dataDigits[i] = maskAdd(preMaskDataDigits[i], c.i, c.j);
+  }
+
+  const fillerCoords = fillerCellsCellSurfaceLayout(id);
+  if (fillerCoords.length !== capacity.residualCells) {
+    throw new RangeError(
+      '필러 셀 수 불일치: fillerCellsCellSurfaceLayout() '
+      + fillerCoords.length + ' !== capacity.residualCells ' + capacity.residualCells,
+    );
+  }
+  const fillerDigits = new Uint8Array(fillerCoords.length);
+  for (let i = 0; i < fillerCoords.length; i += 1) {
+    const c = fillerCoords[i];
+    fillerDigits[i] = maskAdd(0, c.i, c.j);
+  }
+
+  const eccLevelValue = ECC_LEVEL[eccLevel];
+  if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
+    throw new RangeError('알 수 없는 ECC 레벨: ' + eccLevel);
+  }
+  const formatIndex = formatIndexCellSurfaceLayout(id, tones);
+  const formatReplicas = encodeReplicated({
+    version: formatIndex,
+    eccLevel: eccLevelValue,
+  });
+  const formatDigits = formatReplicas.flat();
+
+  const cellDigits = new Map();
+  for (const c of locatorCellsCellSurfaceLayout(id)) {
+    cellDigits.set(cellKey(c.i, c.j), {
+      digit: null,
+      role: 'locator',
+      tones: { T: c.T, L: c.L, R: c.R },
+    });
+  }
+
+  const references = referenceCellsAll(n, tones);
+  for (const c of references) {
+    cellDigits.set(cellKey(c.i, c.j), { digit: c.digit, role: 'reference' });
+  }
+
+  const formatCoords = layout.formatCells;
+  for (let i = 0; i < formatCoords.length; i += 1) {
+    const c = formatCoords[i];
+    cellDigits.set(cellKey(c.i, c.j), { digit: formatDigits[i], role: 'format' });
+  }
+
+  for (let i = 0; i < dataCellCoords.length; i += 1) {
+    const c = dataCellCoords[i];
+    cellDigits.set(cellKey(c.i, c.j), { digit: dataDigits[i], role: 'data' });
+  }
+
+  for (let i = 0; i < fillerCoords.length; i += 1) {
+    const c = fillerCoords[i];
+    cellDigits.set(cellKey(c.i, c.j), { digit: fillerDigits[i], role: 'filler' });
+  }
+
+  if (cellDigits.size !== n * n) {
+    throw new Error(
+      id + ': 셀 맵 ' + cellDigits.size + ' !== ' + (n * n),
+    );
+  }
+
+  return {
+    version: CELL_SURFACE_LAYOUT_VERSION,
+    n,
+    eccLevel,
+    tones,
+    formatIndex,
+    window: false,
+    cellSurface: true,
+    cellSurfaceLayout: id,
+    locatorProfile: layout.profile,
     capacity,
     codewordSymbols,
     dataDigits,

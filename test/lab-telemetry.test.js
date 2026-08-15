@@ -173,11 +173,11 @@ test('gen 정규화는 페이로드 내용을 버리고 config_id 를 붙인다'
     'bgMode', 'config_id', 'ecc', 'finderPatternId', 'locatorProfile', 'qrPosition', 'quietMode', 'tones', 'type', 'version',
   ]);
   assert.equal(body.locatorProfile, 'hex-frame-v1');
-  const withArm = normalizeGenBody({
-    type: 'Y', locatorProfile: 'cell-surface-v1', locatorArm: 'A',
+  const withLayout = normalizeGenBody({
+    type: 'Y', locatorProfile: 'cell-surface-v1r2', locatorLayout: 'v1r2',
   });
-  assert.equal(withArm.locatorArm, 'A');
-  assert.equal(withArm.locatorProfile, 'cell-surface-v1');
+  assert.equal(withLayout.locatorLayout, 'v1r2');
+  assert.equal(withLayout.locatorProfile, 'cell-surface-v1r2');
   assert.match(body.config_id, /^c[0-9a-f]{8}$/);
 });
 

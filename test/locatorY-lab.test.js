@@ -14,7 +14,8 @@ import {
 } from '../src/generator-state.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
-  LOCATOR_PROFILE_CELL_SURFACE_V1,
+  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+  LOCATOR_PROFILE_CELL_SURFACE_V2,
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_OFF,
 } from '../src/locatorY.js';
@@ -47,7 +48,12 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
   assert.equal(GENERATOR_STATE_SCHEMA.locatorProfileY.exposure, 'internal');
   assert.deepEqual(
     [...GENERATOR_STATE_SCHEMA.locatorProfileY.options],
-    [LOCATOR_PROFILE_OFF, LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_CELL_SURFACE_V1],
+    [
+      LOCATOR_PROFILE_OFF,
+      LOCATOR_PROFILE_HEX_FRAME_V1,
+      LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+      LOCATOR_PROFILE_CELL_SURFACE_V2,
+    ],
   );
   assert.equal(exposedGeneratorStateKeys('normal').includes('locatorProfileY'), false);
   assert.equal(exposedGeneratorStateKeys('advanced').includes('locatorProfileY'), false);
@@ -62,11 +68,12 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-i18n="g515"/);
   assert.match(INDEX, /data-locator="off"/);
   assert.match(INDEX, /data-locator="hex-frame-v1"/);
-  assert.match(INDEX, /data-locator="cell-surface-v1"/);
+  assert.match(INDEX, /data-locator="cell-surface-v1r2"/);
+  assert.match(INDEX, /data-locator="cell-surface-v2"/);
   assert.match(INDEX, /function syncYLocatorUi\(\)/);
   assert.match(INDEX, /isLabPath\(\) && generatorState\.type === 'Y'/);
   assert.match(INDEX, /isLabPath\(\) && generatorState\.locatorProfileY === LOCATOR_PROFILE_HEX_FRAME_V1/);
-  assert.match(INDEX, /isLabPath\(\) && generatorState\.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1/);
+  assert.match(INDEX, /isCellSurfaceLocatorProfileY\(generatorState\.locatorProfileY\)/);
   assert.match(INDEX, /locatorProfile: generatorState\.locatorProfileY/);
   assert.doesNotMatch(INDEX, /cellSurfaceLocked \? 3/);
   assert.doesNotMatch(INDEX, /toneLocked = isY && \(generatorState\.qrPosition === 'inner' \|\| cellSurfaceLocked\)/);
@@ -83,13 +90,11 @@ test('로케이터 문구는 ko/en/ja 가 같고 성능 보장을 하지 않는�
   assert.match(INDEX, /실험용입니다\. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요/);
   assert.match(INDEX, /Does not guarantee rotation, lighting, print, or live-scan performance/);
   assert.match(INDEX, /回転・照明・印刷・ライブスキャンの性能は保証しません/);
-  assert.match(INDEX, /data-locator="cell-surface-v1"[\s\S]*?data-i18n="g542">셀 표면 v1</);
-  assert.match(INDEX, /id="yLocatorArmSection"/);
-  assert.match(INDEX, /data-locator-arm="A"/);
-  assert.match(INDEX, /data-locator-arm="B"/);
-  assert.match(INDEX, /locatorArmY/);
-  assert.equal(GENERATOR_STATE_SCHEMA.locatorArmY.defaultValue, 'B');
-  assert.equal(GENERATOR_STATE_SCHEMA.locatorArmY.exposure, 'internal');
+  assert.match(INDEX, /data-locator="cell-surface-v1r2"[\s\S]*?data-i18n="g542">셀 표면 v1r2</);
+  assert.match(INDEX, /data-locator="cell-surface-v2"[\s\S]*?data-i18n="g543">셀 표면 v2</);
+  assert.doesNotMatch(INDEX, /id="yLocatorArmSection"/);
+  assert.doesNotMatch(INDEX, /data-locator-arm=/);
+  assert.equal(GENERATOR_STATE_SCHEMA.locatorArmY, undefined);
 });
 
 test('시험판 번들에는 섹션이 있고 안정판은 런타임에 숨긴다', () => {

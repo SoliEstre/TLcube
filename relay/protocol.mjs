@@ -152,6 +152,10 @@ export function validateFrameBody(body) {
     if (!isNullableString(body.cellSurface.profile)) return 'frame.cellSurface.profile';
     if (!isNullableString(body.cellSurface.arm)) return 'frame.cellSurface.arm';
     if (!isNullableString(body.cellSurface.expectedArm)) return 'frame.cellSurface.expectedArm';
+    if (!isNullableString(body.cellSurface.layoutId)) return 'frame.cellSurface.layoutId';
+    if (!isNullableString(body.cellSurface.expectedLayout)) {
+      return 'frame.cellSurface.expectedLayout';
+    }
     if (!isNullableString(body.cellSurface.orientationGate)) {
       return 'frame.cellSurface.orientationGate';
     }
@@ -269,6 +273,7 @@ export function eventRow(event) {
     expected_qr: configSide(expected, 'qrPosition'),
     expected_locator: configSide(expected, 'locatorProfile'),
     expected_locator_arm: configSide(expected, 'locatorArm'),
+    expected_locator_layout: configSide(expected, 'locatorLayout'),
     observed_type: configSide(observed, 'type'),
     observed_version: observed.version == null ? '' : String(observed.version),
     observed_ecc: configSide(observed, 'ecc'),
@@ -277,6 +282,7 @@ export function eventRow(event) {
     observed_qr: configSide(observed, 'qrPosition'),
     observed_locator: configSide(observed, 'locatorProfile'),
     observed_locator_arm: configSide(observed, 'locatorArm'),
+    observed_locator_layout: configSide(observed, 'locatorLayout'),
     chain_json: Object.keys(chain).length ? JSON.stringify(chain) : '',
     chain_failed: chain.failed == null ? '' : String(chain.failed),
     bbox_x: geometryField(body, 'bbox_x'),
@@ -297,6 +303,8 @@ export function eventRow(event) {
     cs_profile: cellSurfaceString(body, 'profile'),
     cs_arm: cellSurfaceString(body, 'arm'),
     cs_expected_arm: cellSurfaceString(body, 'expectedArm'),
+    cs_layout: cellSurfaceString(body, 'layoutId'),
+    cs_expected_layout: cellSurfaceString(body, 'expectedLayout'),
     cs_orientation_gate: cellSurfaceString(body, 'orientationGate'),
     cs_orientation_gate_applied: cellSurfaceFlag(body, 'orientationGateApplied'),
     cs_ambiguous: cellSurfaceFlag(body, 'ambiguous'),

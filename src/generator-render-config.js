@@ -3,11 +3,17 @@
 import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
-  CELL_SURFACE_PROFILE_ID,
   CELL_SURFACE_VERSION,
-  DEFAULT_CELL_SURFACE_ARM,
-  assertCellSurfaceArm,
 } from './cellSurfaceY.js';
+import {
+  CELL_SURFACE_LAYOUT_V1R2,
+  CELL_SURFACE_LAYOUT_V2,
+  assertCellSurfaceLayoutId,
+} from './cellSurfaceLayouts.js';
+import {
+  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+  LOCATOR_PROFILE_CELL_SURFACE_V2,
+} from './locatorY.js';
 
 /**
  * Type Y 인코더 옵션 — UI 상태(톤·해상도·폴백)를 인코더가 받는 모양으로 바꾼다.
@@ -19,23 +25,27 @@ import {
  * 강제는 **렌더 시점에만** 한다. 저장된 톤·해상도 선택은 그대로 두어야 윈도를 벗어났을 때
  * 사용자가 고른 값이 복원된다(해상도 티어가 이미 같은 규약을 쓴다).
  *
- * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string, locatorArmY?: string}} state
- * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, locatorArm?: 'A'|'B'}}
+ * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string}} state
+ * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v1r2'|'v2'}}
  */
 export function encodeOptionsForY(state) {
   if (state === null || typeof state !== 'object') {
     throw new TypeError('Type Y 생성기 상태가 필요하다');
   }
-  const { tone, versionY, fallback, locatorProfileY, locatorArmY } = state;
+  const { tone, versionY, fallback, locatorProfileY } = state;
   if (fallback === null || typeof fallback !== 'object') {
     throw new TypeError('Y QR 폴백 상태가 필요하다');
   }
-  if (locatorProfileY === CELL_SURFACE_PROFILE_ID) {
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+    || locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V2) {
+    const layout = locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V2
+      ? CELL_SURFACE_LAYOUT_V2
+      : CELL_SURFACE_LAYOUT_V1R2;
     return {
       tones: tone === 3 ? 3 : 2,
       version: CELL_SURFACE_VERSION,
       cellSurface: true,
-      locatorArm: assertCellSurfaceArm(locatorArmY || DEFAULT_CELL_SURFACE_ARM),
+      cellSurfaceLayout: assertCellSurfaceLayoutId(layout),
     };
   }
   if (fallback.mode === 'window') {

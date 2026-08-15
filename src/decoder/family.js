@@ -664,6 +664,8 @@ function cubeTilingKeyMatches(entry, yJunction, cubeOptions) {
     && Object.is(entry.tones, cubeOptions.tones)
     && Object.is(entry.enableLocatorY, cubeOptions.enableLocatorY)
     && Object.is(entry.enableCellSurfaceY, cubeOptions.enableCellSurfaceY)
+    && Object.is(entry.enableLegacyCellSurfaceV1, cubeOptions.enableLegacyCellSurfaceV1)
+    && Object.is(entry.cellSurfaceLayout, cubeOptions.cellSurfaceLayout)
     && Object.is(entry.exhaustiveBlockRecovery, cubeOptions.exhaustiveBlockRecovery)
     && Object.is(entry.finderFirst, cubeOptions.finderFirst);
 }
@@ -687,6 +689,8 @@ function storeCubeTiling(luma, yJunction, cubeOptions, value) {
     tones: cubeOptions.tones,
     enableLocatorY: cubeOptions.enableLocatorY,
     enableCellSurfaceY: cubeOptions.enableCellSurfaceY,
+    enableLegacyCellSurfaceV1: cubeOptions.enableLegacyCellSurfaceV1,
+    cellSurfaceLayout: cubeOptions.cellSurfaceLayout,
     exhaustiveBlockRecovery: cubeOptions.exhaustiveBlockRecovery,
     finderFirst: cubeOptions.finderFirst,
     value,

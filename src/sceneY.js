@@ -23,11 +23,14 @@ import { WINDOW_SIZE_Y, WINDOW_SUPPORTED_N } from './capacityY.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
   LOCATOR_PROFILE_CELL_SURFACE_V1,
+  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+  LOCATOR_PROFILE_CELL_SURFACE_V2,
   assertLocatorProfileY,
   locatorMarginCells,
   locatorShapesY,
 } from './locatorY.js';
 import { locatorTone } from './cellSurfaceY.js';
+import { locatorToneCellSurfaceLayout } from './cellSurfaceLayouts.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -330,12 +333,27 @@ export function buildSceneY(encoded, options) {
   }
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
+  const defaultCellSurfaceProfile = encoded.locatorProfile === LOCATOR_PROFILE_CELL_SURFACE_V2
+    ? LOCATOR_PROFILE_CELL_SURFACE_V2
+    : encoded.locatorProfile === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+      ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
+      : encoded.cellSurfaceLayout === 'v2'
+        ? LOCATOR_PROFILE_CELL_SURFACE_V2
+        : encoded.cellSurfaceLayout === 'v1r2'
+          ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
+          : LOCATOR_PROFILE_CELL_SURFACE_V1;
   const requestedLocator = opts.locatorProfile === undefined
-    ? (cellSurface ? LOCATOR_PROFILE_CELL_SURFACE_V1 : DEFAULT_LOCATOR_PROFILE_Y)
+    ? (cellSurface ? defaultCellSurfaceProfile : DEFAULT_LOCATOR_PROFILE_Y)
     : assertLocatorProfileY(opts.locatorProfile);
   const locatorProfile = cellSurface
-    ? LOCATOR_PROFILE_CELL_SURFACE_V1
+    ? (requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1
+      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V2
+      ? requestedLocator
+      : defaultCellSurfaceProfile)
     : requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1
+      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+      || requestedLocator === LOCATOR_PROFILE_CELL_SURFACE_V2
       ? DEFAULT_LOCATOR_PROFILE_Y
       : requestedLocator;
   const requestedMargin = opts.margin === undefined
@@ -368,7 +386,14 @@ export function buildSceneY(encoded, options) {
       if (entry === undefined) continue;
       if (cellSurface && entry.role === 'locator') {
         for (const face of YFACES) {
-          const levelIndex = locatorTone(face, i, j, encoded.locatorArm);
+          let levelIndex;
+          if (entry.tones && Number.isInteger(entry.tones[face])) {
+            levelIndex = entry.tones[face];
+          } else if (encoded.cellSurfaceLayout) {
+            levelIndex = locatorToneCellSurfaceLayout(encoded.cellSurfaceLayout, face, i, j);
+          } else {
+            levelIndex = locatorTone(face, i, j, encoded.locatorArm);
+          }
           shapes.push({
             kind: 'polygon',
             points: moduleQuad(face, i, j, layout),

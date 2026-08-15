@@ -24,10 +24,14 @@ import { CORNER_UNIT_OFFSETS } from './hexgrid.js';
 export const LOCATOR_PROFILE_OFF = 'off';
 export const LOCATOR_PROFILE_HEX_FRAME_V1 = 'hex-frame-v1';
 export const LOCATOR_PROFILE_CELL_SURFACE_V1 = 'cell-surface-v1';
+export const LOCATOR_PROFILE_CELL_SURFACE_V1R2 = 'cell-surface-v1r2';
+export const LOCATOR_PROFILE_CELL_SURFACE_V2 = 'cell-surface-v2';
 export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_OFF,
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_CELL_SURFACE_V1,
+  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+  LOCATOR_PROFILE_CELL_SURFACE_V2,
 ]);
 export const DEFAULT_LOCATOR_PROFILE_Y = LOCATOR_PROFILE_OFF;
 
@@ -52,6 +56,12 @@ export const HEX_FRAME_V1 = Object.freeze({
 
 const HUB_SAMPLE_CLEARANCE = 0.28;
 
+export function isCellSurfaceLocatorProfileY(value) {
+  return value === LOCATOR_PROFILE_CELL_SURFACE_V1
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V2;
+}
+
 export function isLocatorProfileY(value) {
   return LOCATOR_PROFILES_Y.includes(value);
 }
@@ -68,7 +78,12 @@ export function assertLocatorProfileY(value) {
 /** 실루엣 꼭짓점 밖으로 나가는 테두리+가드 두께(셀). */
 export function locatorOuterPaddingCells(profile) {
   const id = profile === undefined ? DEFAULT_LOCATOR_PROFILE_Y : assertLocatorProfileY(profile);
-  if (id === LOCATOR_PROFILE_OFF || id === LOCATOR_PROFILE_CELL_SURFACE_V1) return 0;
+  if (
+    id === LOCATOR_PROFILE_OFF
+    || id === LOCATOR_PROFILE_CELL_SURFACE_V1
+    || id === LOCATOR_PROFILE_CELL_SURFACE_V1R2
+    || id === LOCATOR_PROFILE_CELL_SURFACE_V2
+  ) return 0;
   const g = HEX_FRAME_V1;
   return g.guardIn + g.stroke + g.gap + g.stroke + g.guardOut;
 }
@@ -98,7 +113,7 @@ export function locatorOuterExtentCells(n) {
  */
 export function locatorHubClearsSampleDiscs(profile) {
   const id = profile === undefined ? DEFAULT_LOCATOR_PROFILE_Y : assertLocatorProfileY(profile);
-  if (id === LOCATOR_PROFILE_OFF || id === LOCATOR_PROFILE_CELL_SURFACE_V1) return true;
+  if (id === LOCATOR_PROFILE_OFF || isCellSurfaceLocatorProfileY(id)) return true;
   return HEX_FRAME_V1.hubGuard <= HUB_SAMPLE_CLEARANCE
     && HEX_FRAME_V1.hubRingOuter <= HUB_SAMPLE_CLEARANCE;
 }
@@ -173,7 +188,7 @@ function strokeAlongUnit(shapes, p0, p1, along, half, color) {
  */
 export function locatorShapesY(n, layout, palette, profile) {
   const id = profile === undefined ? DEFAULT_LOCATOR_PROFILE_Y : assertLocatorProfileY(profile);
-  if (id === LOCATOR_PROFILE_OFF || id === LOCATOR_PROFILE_CELL_SURFACE_V1) return [];
+  if (id === LOCATOR_PROFILE_OFF || isCellSurfaceLocatorProfileY(id)) return [];
   if (!Number.isInteger(n) || n <= 0) {
     throw new RangeError(`n 은 1 이상의 정수여야 한다: ${n}`);
   }

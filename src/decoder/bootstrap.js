@@ -34,6 +34,18 @@ import {
   nameCellSurface,
   tonesFromCellSurfaceFormatIndex,
 } from '../cellSurfaceY.js';
+import {
+  CELL_SURFACE_LAYOUT_N,
+  CELL_SURFACE_LAYOUT_VERSION,
+  dataCellsInScanOrderCellSurfaceLayout,
+  formatCellsCellSurfaceLayout,
+  formatIndexCellSurfaceLayout,
+  isCellSurfaceLayoutFormatIndex,
+  layoutIdFromFormatIndex,
+  layoutMapCellSurfaceLayout,
+  nameCellSurfaceLayout,
+  tonesFromCellSurfaceLayoutFormatIndex,
+} from '../cellSurfaceLayouts.js';
 import { decodeCells } from '../decode.js';
 import { enumerateFormatProposals } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
@@ -375,6 +387,15 @@ function validVersionIndices(hypothesis) {
     return [profile.spec.formatIndex + (hypothesis.centerQr ? 2 : 0)];
   }
   if (hypothesis.cellSurface === true) {
+    if (hypothesis.cellSurfaceLayout) {
+      if (hypothesis.tones === 2 || hypothesis.tones === 3) {
+        return [formatIndexCellSurfaceLayout(hypothesis.cellSurfaceLayout, hypothesis.tones)];
+      }
+      return [
+        formatIndexCellSurfaceLayout(hypothesis.cellSurfaceLayout, 2),
+        formatIndexCellSurfaceLayout(hypothesis.cellSurfaceLayout, 3),
+      ];
+    }
     if (hypothesis.tones === 2 || hypothesis.tones === 3) {
       return [formatIndexCellSurface(hypothesis.tones)];
     }
@@ -419,6 +440,24 @@ function formatIndexOwners(formatIndex) {
 }
 
 function profileForFormatCandidate(hypothesis, formatIndex) {
+  if (hypothesis && hypothesis.cellSurface === true
+    && isCellSurfaceLayoutFormatIndex(formatIndex)) {
+    const tones = tonesFromCellSurfaceLayoutFormatIndex(formatIndex);
+    if (hypothesis.tones !== undefined && hypothesis.tones !== tones) return undefined;
+    const layoutId = layoutIdFromFormatIndex(formatIndex);
+    return {
+      family: 'cube',
+      dimension: CELL_SURFACE_LAYOUT_N,
+      spec: {
+        name: nameCellSurfaceLayout(layoutId, tones),
+        version: CELL_SURFACE_LAYOUT_VERSION,
+        n: CELL_SURFACE_LAYOUT_N,
+        tones,
+        formatIndex,
+      },
+      formatIndices: [formatIndex],
+    };
+  }
   if (hypothesis && hypothesis.cellSurface === true
     && isCellSurfaceFormatIndex(formatIndex)) {
     const tones = tonesFromCellSurfaceFormatIndex(formatIndex);
@@ -1477,6 +1516,13 @@ function layoutForFamily(family, dimension, hypothesis) {
   }
   if (family === 'cube') {
     if (hypothesis && hypothesis.cellSurface === true) {
+      if (hypothesis.cellSurfaceLayout) {
+        return {
+          map: layoutMapCellSurfaceLayout(hypothesis.cellSurfaceLayout),
+          dataCells: dataCellsInScanOrderCellSurfaceLayout(hypothesis.cellSurfaceLayout),
+          type: 'Y',
+        };
+      }
       return {
         map: layoutMapCellSurface(),
         dataCells: dataCellsInScanOrderCellSurface(),
@@ -2051,6 +2097,7 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
         cause: 'supported-symbol-footprint-crosses-image-boundary',
         finderFailure: finderResult,
         cubeFailure: cubeResult,
+        qrFailure: qrResult,
         outline: outline && {
           area: outline.area,
           bounds: outline.bounds,
@@ -2059,7 +2106,23 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
         },
       });
     }
-    return finderResult;
+    // cube-detect 는 이미 돌았다. finder 실패만 돌려 주면 geo_stage/detect_path 가
+    // 프레임까지 전달되지 않는다(실기기 66프레임이 전부 빈 문자열이었던 구멍).
+    const cubeDetail = cubeResult && cubeResult.detail && typeof cubeResult.detail === 'object'
+      ? cubeResult.detail
+      : {};
+    const cubeDiag = (cubeDetail.diagnostics && typeof cubeDetail.diagnostics === 'object')
+      ? cubeDetail.diagnostics
+      : ((cubeResult && cubeResult.diagnostics) || {});
+    return fail(finderResult.reason || FRONTEND_FAILURE.NO_FINDER, {
+      ...(finderResult.detail || {}),
+      stage: (finderResult.detail && finderResult.detail.stage) || 'bootstrap-finder',
+      finderFailure: finderResult,
+      cubeFailure: cubeResult,
+      qrFailure: qrResult,
+      geometryStage: cubeDetail.geometryStage || cubeDiag.geometryStage || null,
+      detectPath: cubeDetail.detectPath || cubeDiag.detectPath || null,
+    });
   }
 
   const finders = finderResult.ok ? finderResult.finders : [];
@@ -2291,7 +2354,9 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
   const cube = hypothesis.family === 'cube';
   const cells = cube
     ? hypothesis.cellSurface === true
-      ? formatCellsCellSurface()
+      ? (hypothesis.cellSurfaceLayout
+        ? formatCellsCellSurfaceLayout(hypothesis.cellSurfaceLayout)
+        : formatCellsCellSurface())
       : hypothesis.window === true
         ? windowedFormatCellsY(hypothesis.n)
         : formatCellsY(hypothesis.n)
@@ -2509,7 +2574,10 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         decodeFormat.window = hypothesis.window === true;
         if (hypothesis.cellSurface === true) {
           decodeFormat.cellSurface = true;
-          decodeFormat.locatorProfile = 'cell-surface-v1';
+          decodeFormat.locatorProfile = hypothesis.locatorProfile || 'cell-surface-v1';
+          if (hypothesis.cellSurfaceLayout) {
+            decodeFormat.cellSurfaceLayout = hypothesis.cellSurfaceLayout;
+          }
         }
       } else {
         decodeFormat.k = dimension;

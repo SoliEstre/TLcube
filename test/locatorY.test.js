@@ -54,8 +54,10 @@ function shapeHitsDisc(shape, disc) {
   return false;
 }
 
-test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1 이고 기본은 off', () => {
-  assert.deepEqual([...LOCATOR_PROFILES_Y], ['off', 'hex-frame-v1', 'cell-surface-v1']);
+test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2 이고 기본은 off', () => {
+  assert.deepEqual([...LOCATOR_PROFILES_Y], [
+    'off', 'hex-frame-v1', 'cell-surface-v1', 'cell-surface-v1r2', 'cell-surface-v2',
+  ]);
   assert.equal(DEFAULT_LOCATOR_PROFILE_Y, LOCATOR_PROFILE_OFF);
   assert.equal(assertLocatorProfileY('hex-frame-v1'), LOCATOR_PROFILE_HEX_FRAME_V1);
   assert.throws(() => assertLocatorProfileY('unknown'), RangeError);

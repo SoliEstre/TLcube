@@ -145,7 +145,7 @@ function gaussianBlur(raster, sigma) {
 
 function decodeLab(raster) {
   return decodeFrontend(raster, {
-    bootstrap: { family: { cube: { enableLocatorY: true, enableCellSurfaceY: true } } },
+    bootstrap: { family: { cube: { enableLocatorY: true, enableCellSurfaceY: true, enableLegacyCellSurfaceV1: true } } },
   });
 }
 

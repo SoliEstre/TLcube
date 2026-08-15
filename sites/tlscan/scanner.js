@@ -380,9 +380,9 @@ function reportLabFrame(imageData, result, ms, stage) {
   const cellSurface = extractCellSurfaceProbe(result);
   const observed = observedFromResult(result);
   const expected = emptyConfigSide();
-  if (expectedLocatorArm) expected.locatorArm = expectedLocatorArm;
-  if (cellSurface && expectedLocatorArm && !cellSurface.expectedArm) {
-    cellSurface.expectedArm = expectedLocatorArm;
+  if (expectedLocatorLayout) expected.locatorLayout = expectedLocatorLayout;
+  if (cellSurface && expectedLocatorLayout && !cellSurface.expectedLayout) {
+    cellSurface.expectedLayout = expectedLocatorLayout;
   }
   const reason = ok ? '' : ((result && result.reason) || 'decode-failed');
   try {
@@ -1497,14 +1497,14 @@ if (!isLabPath()) {
 const labNotice = document.getElementById('lab-notice');
 if (labNotice && isLabPath()) labNotice.hidden = false;
 
-let expectedLocatorArm = null;
-const expectedArmRoot = document.getElementById('lab-expected-arm');
-if (expectedArmRoot && isLabPath()) {
-  for (const button of expectedArmRoot.querySelectorAll('[data-expected-arm]')) {
+let expectedLocatorLayout = null;
+const expectedLayoutRoot = document.getElementById('lab-expected-arm');
+if (expectedLayoutRoot && isLabPath()) {
+  for (const button of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
     button.addEventListener('click', () => {
-      const next = button.dataset.expectedArm;
-      expectedLocatorArm = next === 'A' || next === 'B' ? next : null;
-      for (const other of expectedArmRoot.querySelectorAll('[data-expected-arm]')) {
+      const next = button.dataset.expectedLayout;
+      expectedLocatorLayout = next === 'v1r2' || next === 'v2' ? next : null;
+      for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
         other.classList.toggle('active', other === button);
       }
     });
