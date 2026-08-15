@@ -47,6 +47,8 @@ import {
   invertAllTones,
   isCenterCell,
   listFinderStarters,
+  looksLikeCellEditorJson,
+  normalizeFinderName,
   parseUniversalEditor,
   pushUndoSnapshot,
   redo,
@@ -84,6 +86,8 @@ const I18N = Object.freeze({
     optCentralFinder: '중앙 파인더 (19셀)',
     optFullSurface: '전체 셀 표면 (커스텀)',
     starterLabel: '중앙 파인더 프리셋',
+    finderNameLabel: '파인더 이름',
+    finderNamePlaceholder: '이 파인더 패턴의 이름',
     toolsSection: '2. 도구 & 톤 팔레트',
     toolBrush: '붓 (드래그)',
     toolBucket: '페인트통',
@@ -102,7 +106,13 @@ const I18N = Object.freeze({
     copyJson: '📋 JSON 복사',
     downloadJson: '💾 JSON 저장',
     copyFinderPattern: '📐 파인더 패턴 복사',
-    importJson: '📥 JSON 불러오기',
+    importJson: '📥 JSON 파일',
+    pasteJsonLabel: 'JSON 붙여넣기',
+    pasteJsonPlaceholder: '여기에 셀·파인더 편집기 JSON을 붙여넣으세요',
+    applyPasteJson: '붙여넣은 JSON 적용',
+    clipboardJson: '클립보드에서 읽기',
+    pasteEmpty: '붙여넣을 JSON이 비어 있어요.',
+    pasteFailed: '클립보드를 읽지 못했어요: {message}',
     exportPng: '🖼️ PNG 내보내기',
     exportSvg: '📐 SVG 내보내기',
     ready: '도구를 선택하고 격자 셀을 클릭하거나 드래그해 편집하세요.',
@@ -144,6 +154,8 @@ const I18N = Object.freeze({
     optCentralFinder: 'Central Finder (19 cells)',
     optFullSurface: 'Full Cell Surface (Custom)',
     starterLabel: 'Finder Preset',
+    finderNameLabel: 'Finder name',
+    finderNamePlaceholder: 'Name of this finder pattern',
     toolsSection: '2. Tools & Tone Palette',
     toolBrush: 'Brush (Drag)',
     toolBucket: 'Paint Bucket',
@@ -162,7 +174,13 @@ const I18N = Object.freeze({
     copyJson: '📋 Copy JSON',
     downloadJson: '💾 Save JSON',
     copyFinderPattern: '📐 Copy Finder Code',
-    importJson: '📥 Import JSON',
+    importJson: '📥 JSON file',
+    pasteJsonLabel: 'Paste JSON',
+    pasteJsonPlaceholder: 'Paste cell/finder editor JSON here',
+    applyPasteJson: 'Apply pasted JSON',
+    clipboardJson: 'Read from clipboard',
+    pasteEmpty: 'There is no JSON to paste.',
+    pasteFailed: 'Could not read the clipboard: {message}',
     exportPng: '🖼️ Export PNG',
     exportSvg: '📐 Export SVG',
     ready: 'Select a tool and click or drag across grid cells to edit.',
@@ -204,6 +222,8 @@ const I18N = Object.freeze({
     optCentralFinder: '中央ファインダー (19セル)',
     optFullSurface: '全面セル表面 (カスタム)',
     starterLabel: 'ファインダープリセット',
+    finderNameLabel: 'ファインダー名',
+    finderNamePlaceholder: 'このファインダーパターンの名前',
     toolsSection: '2. ツール＆トーンパレット',
     toolBrush: 'ブラシ (ドラッグ)',
     toolBucket: '塗りつぶし',
@@ -222,7 +242,13 @@ const I18N = Object.freeze({
     copyJson: '📋 JSONコピー',
     downloadJson: '💾 JSON保存',
     copyFinderPattern: '📐 ファインダーコードコピー',
-    importJson: '📥 JSON読み込み',
+    importJson: '📥 JSONファイル',
+    pasteJsonLabel: 'JSON貼り付け',
+    pasteJsonPlaceholder: 'セル／ファインダー編集JSONをここに貼り付けてください',
+    applyPasteJson: '貼り付けたJSONを適用',
+    clipboardJson: 'クリップボードから読む',
+    pasteEmpty: '貼り付けるJSONが空です。',
+    pasteFailed: 'クリップボードを読めませんでした：{message}',
     exportPng: '🖼️ PNG出力',
     exportSvg: '📐 SVG出力',
     ready: 'ツールを選択し、セルをクリックまたはドラッグして編集してください。',
@@ -298,6 +324,8 @@ const elements = {
   finderModeSelect: document.getElementById('finderModeSelect'),
   finderStarterContainer: document.getElementById('finderStarterContainer'),
   starterSelect: document.getElementById('starterSelect'),
+  finderNameContainer: document.getElementById('finderNameContainer'),
+  finderNameInput: document.getElementById('finderNameInput'),
   toolButtons: document.querySelectorAll('.tool-btn'),
   toneButtons: document.querySelectorAll('.tone-btn'),
   modeToneBtn: document.getElementById('modeToneBtn'),
@@ -315,6 +343,9 @@ const elements = {
   downloadJsonBtn: document.getElementById('downloadJsonBtn'),
   copyFinderPatternBtn: document.getElementById('copyFinderPatternBtn'),
   importJsonBtn: document.getElementById('importJsonBtn'),
+  jsonPaste: document.getElementById('jsonPaste'),
+  applyPasteJsonBtn: document.getElementById('applyPasteJsonBtn'),
+  clipboardJsonBtn: document.getElementById('clipboardJsonBtn'),
   exportPngBtn: document.getElementById('exportPngBtn'),
   exportSvgBtn: document.getElementById('exportSvgBtn'),
   jsonFileInput: document.getElementById('jsonFileInput'),
@@ -339,6 +370,9 @@ function updateI18n() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');
     el.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
   });
 }
 
@@ -684,6 +718,33 @@ function applyToolAt(face, coord, isShift, isRightClick = false) {
   return changed;
 }
 
+function importEditorJson(text) {
+  const raw = typeof text === 'string' ? text.trim() : '';
+  if (!raw) {
+    notify('pasteEmpty', {}, true);
+    return false;
+  }
+  try {
+    const next = parseUniversalEditor(raw);
+    pushUndoSnapshot(editorState);
+    next.undoStack = editorState.undoStack;
+    next.redoStack = editorState.redoStack;
+    next.activeTool = editorState.activeTool;
+    next.activeTone = editorState.activeTone;
+    next.mode = editorState.mode;
+    editorState = next;
+    if (elements.jsonPaste) elements.jsonPaste.value = raw;
+    rebuildSizeOptions();
+    rebuildStarterOptions();
+    updateUI();
+    notify('imported');
+    return true;
+  } catch (err) {
+    notify('importFailed', { message: err.message }, true);
+    return false;
+  }
+}
+
 function updateUI() {
   const serialized = serializeUniversalEditor(editorState);
   elements.jsonOutput.textContent = JSON.stringify(serialized, null, 2);
@@ -728,12 +789,16 @@ function updateUI() {
   const showFinderControls = editorState.type !== 'Y';
   elements.finderModeContainer.style.display = showFinderControls ? 'block' : 'none';
   elements.finderStarterContainer.style.display = (showFinderControls && editorState.finderMode === 'central-finder') ? 'block' : 'none';
+  elements.finderNameContainer.style.display = 'block';
   elements.finderCopyContainer.style.display = (showFinderControls && editorState.finderMode === 'central-finder') ? 'grid' : 'none';
   if (showFinderControls) {
     elements.finderModeSelect.value = editorState.finderMode;
     if (editorState.finderStarter) {
       elements.starterSelect.value = editorState.finderStarter;
     }
+  }
+  if (document.activeElement !== elements.finderNameInput) {
+    elements.finderNameInput.value = editorState.finderName || '';
   }
 
   renderCanvas();
@@ -859,6 +924,7 @@ function bindEvents() {
       const next = createUniversalEditorState({
         type: newType,
         finderStarter: editorState.finderStarter || elements.starterSelect.value || DEFAULT_FINDER_STARTER,
+        finderName: editorState.finderName,
         mode: editorState.mode,
         activeTool: editorState.activeTool,
         activeTone: editorState.activeTone,
@@ -892,7 +958,24 @@ function bindEvents() {
   // Starter select
   elements.starterSelect.addEventListener('change', () => {
     pushUndoSnapshot(editorState);
+    const previousLabel = starterLabel(editorState.finderStarter);
     applyFinderStarter(editorState, elements.starterSelect.value);
+    if (!editorState.finderName || editorState.finderName === previousLabel) {
+      editorState.finderName = starterLabel(elements.starterSelect.value);
+    }
+    updateUI();
+  });
+
+  elements.finderNameInput.addEventListener('focus', () => {
+    pushUndoSnapshot(editorState);
+  });
+  elements.finderNameInput.addEventListener('input', () => {
+    editorState.finderName = normalizeFinderName(elements.finderNameInput.value);
+    elements.jsonOutput.textContent = JSON.stringify(serializeUniversalEditor(editorState), null, 2);
+  });
+  elements.finderNameInput.addEventListener('change', () => {
+    editorState.finderName = normalizeFinderName(elements.finderNameInput.value);
+    elements.finderNameInput.value = editorState.finderName;
     updateUI();
   });
 
@@ -991,20 +1074,41 @@ function bindEvents() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
-      try {
-        const text = e.target.result;
-        pushUndoSnapshot(editorState);
-        editorState = parseUniversalEditor(text);
-        rebuildSizeOptions();
-        rebuildStarterOptions();
-        updateUI();
-        notify('imported');
-      } catch (err) {
-        notify('importFailed', { message: err.message }, true);
-      }
+      importEditorJson(String(e.target.result || ''));
     };
     reader.readAsText(file);
     ev.target.value = '';
+  });
+
+  elements.applyPasteJsonBtn.addEventListener('click', () => {
+    importEditorJson(elements.jsonPaste.value);
+  });
+
+  elements.clipboardJsonBtn.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      elements.jsonPaste.value = text;
+      importEditorJson(text);
+    } catch (err) {
+      notify('pasteFailed', { message: err.message }, true);
+      elements.jsonPaste.focus();
+    }
+  });
+
+  elements.jsonPaste.addEventListener('paste', (ev) => {
+    const text = ev.clipboardData && ev.clipboardData.getData('text');
+    if (!looksLikeCellEditorJson(text)) return;
+    ev.preventDefault();
+    importEditorJson(text);
+  });
+
+  window.addEventListener('paste', (ev) => {
+    const tag = ev.target && ev.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const text = ev.clipboardData && ev.clipboardData.getData('text');
+    if (!looksLikeCellEditorJson(text)) return;
+    ev.preventDefault();
+    importEditorJson(text);
   });
 
   // PNG & SVG Export

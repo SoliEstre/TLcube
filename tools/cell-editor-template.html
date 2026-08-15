@@ -106,7 +106,7 @@ h2 {
   letter-spacing: .1em; text-transform: uppercase; font-weight: 700;
 }
 label { display: block; margin: 10px 0 5px; color: var(--muted); font-size: 11px; font-weight: 600; }
-select { width: 100%; min-height: 38px; padding: 7px 10px; }
+select, input[type="text"] { width: 100%; min-height: 38px; padding: 7px 10px; }
 .segmented { display: grid; gap: 6px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -141,12 +141,17 @@ select { width: 100%; min-height: 38px; padding: 7px 10px; }
   background: #0b0e15; color: #bdc8e4; font: 12px/1.4 ui-monospace, Consolas, monospace;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-pre {
+pre, textarea.json-io {
   margin: 0; min-height: 80px; max-height: 140px; overflow: auto;
   padding: 10px; border: 1px solid var(--line); border-radius: 8px;
   background: #090b11; color: #cad5f2; font: 11px/1.5 ui-monospace, Consolas, monospace;
   white-space: pre-wrap; word-break: break-word;
 }
+textarea.json-io {
+  width: 100%; resize: vertical; min-height: 96px; max-height: 220px;
+  color: var(--text);
+}
+textarea.json-io:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .status-bar {
   min-height: 22px; margin-top: 10px; color: var(--ok);
   font-size: 11px; line-height: 1.5; font-weight: 600;
@@ -259,6 +264,10 @@ pre {
         <label for="starterSelect" data-i18n="starterLabel">중앙 파인더 프리셋</label>
         <select id="starterSelect"></select>
       </div>
+      <div id="finderNameContainer" style="margin-top:8px">
+        <label for="finderNameInput" data-i18n="finderNameLabel">파인더 이름</label>
+        <input type="text" id="finderNameInput" maxlength="80" autocomplete="off" spellcheck="false" data-i18n-placeholder="finderNamePlaceholder" placeholder="이 파인더 패턴의 이름">
+      </div>
     </section>
 
     <!-- 2. 편집 도구 & 톤 -->
@@ -341,6 +350,12 @@ pre {
       <div class="grid-2" style="margin-top:6px">
         <button type="button" id="exportPngBtn" data-i18n="exportPng">🖼️ PNG 내보내기</button>
         <button type="button" id="exportSvgBtn" data-i18n="exportSvg">📐 SVG 내보내기</button>
+      </div>
+      <label for="jsonPaste" data-i18n="pasteJsonLabel">JSON 붙여넣기</label>
+      <textarea id="jsonPaste" class="json-io" rows="6" data-i18n-placeholder="pasteJsonPlaceholder" placeholder="여기에 셀·파인더 편집기 JSON을 붙여넣으세요" spellcheck="false"></textarea>
+      <div class="grid-2" style="margin-top:6px">
+        <button type="button" class="primary" id="applyPasteJsonBtn" data-i18n="applyPasteJson">붙여넣은 JSON 적용</button>
+        <button type="button" id="clipboardJsonBtn" data-i18n="clipboardJson">클립보드에서 읽기</button>
       </div>
       <input type="file" id="jsonFileInput" accept=".json,application/json" style="display:none">
       <div class="status-bar" id="statusBar" role="status" aria-live="polite"></div>

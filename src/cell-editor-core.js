@@ -102,6 +102,12 @@ export const DEFAULT_SIZE_HEX = 4;
 
 export const BULLSEYE_STARTER_ID = 'bullseye';
 export const DEFAULT_FINDER_STARTER = BULLSEYE_STARTER_ID;
+export const FINDER_NAME_MAX_LENGTH = 80;
+
+export function normalizeFinderName(value) {
+  if (value == null) return '';
+  return String(value).replace(/\s+/g, ' ').trim().slice(0, FINDER_NAME_MAX_LENGTH);
+}
 
 const FACE_ORDER = Object.freeze({ T: 0, L: 1, R: 2 });
 const CUBE_OVERLAY_KINDS = Object.freeze(['three-tone-cube', 'cube-bullseye']);
@@ -429,6 +435,7 @@ export function createUniversalEditorState(options = {}) {
     size,
     finderMode,
     finderStarter,
+    finderName: normalizeFinderName(options.finderName),
     mode,
     activeTool,
     activeTone,
@@ -448,6 +455,7 @@ export function cloneSnapshot(state) {
     size: state.size,
     finderMode: state.finderMode,
     finderStarter: state.finderStarter,
+    finderName: state.finderName || '',
     userNonData: new Set(state.userNonData),
     tones: new Map(state.tones),
     finderPattern: state.finderPattern ? cloneCellEditorFinderPattern(state.finderPattern) : null,
@@ -459,6 +467,9 @@ function restoreSnapshotFields(state, snapshot) {
   if (Number.isInteger(snapshot.size)) state.size = snapshot.size;
   if (snapshot.finderMode) state.finderMode = snapshot.finderMode;
   if (snapshot.finderStarter) state.finderStarter = snapshot.finderStarter;
+  if (Object.prototype.hasOwnProperty.call(snapshot, 'finderName')) {
+    state.finderName = normalizeFinderName(snapshot.finderName);
+  }
   state.userNonData = new Set(snapshot.userNonData);
   state.tones = new Map(snapshot.tones);
   state.finderPattern = snapshot.finderPattern
@@ -813,6 +824,7 @@ export function serializeUniversalEditor(state) {
     size: state.size,
     finderMode: state.finderMode,
     finderStarter: state.finderStarter || DEFAULT_FINDER_STARTER,
+    name: normalizeFinderName(state.finderName),
     toneLevels: { 0: 'dark', 1: 'mid', 2: 'bright' },
     counts: {
       total: cells.length,
@@ -829,11 +841,26 @@ export function serializeUniversalEditor(state) {
   } else {
     baseDoc.k = state.size;
     if (state.finderPattern) {
-      baseDoc.finderPattern = cloneCellEditorFinderPattern(state.finderPattern);
+      const pattern = cloneCellEditorFinderPattern(state.finderPattern);
+      if (baseDoc.name) pattern.name = baseDoc.name;
+      baseDoc.finderPattern = pattern;
     }
   }
 
   return baseDoc;
+}
+
+export function looksLikeCellEditorJson(input) {
+  try {
+    const obj = typeof input === 'string' ? JSON.parse(input) : input;
+    return Boolean(
+      obj
+      && typeof obj === 'object'
+      && (obj.schema === CELL_EDITOR_SCHEMA_V1 || obj.schema === CELL_EDITOR_SCHEMA_V2),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function parseUniversalEditor(input) {
@@ -851,11 +878,14 @@ export function parseUniversalEditor(input) {
   const type = obj.type || (isV1 ? 'Y' : 'O');
   const rawSize = obj.size ?? obj.n ?? obj.k;
   const size = Number.isInteger(rawSize) ? rawSize : defaultSizeForType(type);
+  const importedName = obj.name ?? obj.finderName
+    ?? (obj.finderPattern && obj.finderPattern.name);
   const state = createUniversalEditorState({
     type,
     size,
     finderMode: obj.finderMode || (type === 'Y' ? 'full-surface' : 'central-finder'),
     finderStarter: obj.finderStarter || DEFAULT_FINDER_STARTER,
+    finderName: importedName,
   });
 
   if (Array.isArray(obj.userNonData)) {

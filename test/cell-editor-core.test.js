@@ -25,6 +25,8 @@ import {
   isCenterCell,
   isInRegionK,
   listFinderStarters,
+  looksLikeCellEditorJson,
+  normalizeFinderName,
   parseUniversalEditor,
   pushUndoSnapshot,
   redo,
@@ -238,6 +240,44 @@ test('JSON 직렬화 및 역직렬화 왕복이 일치한다', () => {
   const parsedHybrid = parseUniversalEditor(jsonHybrid);
   assert.equal(parsedHybrid.finderPattern.renderKind, 'cube-bullseye');
   assert.equal(getCellTone(parsedHybrid, 'T', { q: 0, r: 0 }), 2);
+  assert.equal(jsonHybrid.name, '');
+});
+
+test('파인더 이름이 JSON name으로 왕복하고 공백을 정규화한다', () => {
+  assert.equal(normalizeFinderName('  내   바람개비  '), '내 바람개비');
+  assert.equal(normalizeFinderName('x'.repeat(100)).length, 80);
+
+  const state = createUniversalEditorState({
+    type: 'O',
+    finderStarter: 'pinwheel-3-0101-cw-missing-solid',
+    finderName: '  실험용 핀휠  ',
+  });
+  const json = serializeUniversalEditor(state);
+  assert.equal(json.name, '실험용 핀휠');
+  assert.equal(json.finderPattern.name, '실험용 핀휠');
+
+  const parsed = parseUniversalEditor(json);
+  assert.equal(parsed.finderName, '실험용 핀휠');
+
+  const fromAlias = parseUniversalEditor({
+    ...json,
+    name: undefined,
+    finderName: '별칭 이름',
+  });
+  assert.equal(fromAlias.finderName, '별칭 이름');
+
+  const fromPattern = parseUniversalEditor({
+    schema: json.schema,
+    type: 'O',
+    finderPattern: { ...json.finderPattern, name: '패턴 안 이름' },
+  });
+  assert.equal(fromPattern.finderName, '패턴 안 이름');
+
+  const stateY = createUniversalEditorState({ type: 'Y', finderName: 'Y 셀표면 초안' });
+  const jsonY = serializeUniversalEditor(stateY);
+  assert.equal(jsonY.schema, CELL_EDITOR_SCHEMA_V1);
+  assert.equal(jsonY.name, 'Y 셀표면 초안');
+  assert.equal(parseUniversalEditor(jsonY).finderName, 'Y 셀표면 초안');
 });
 
 test('중앙 파인더 프리셋(불스아이, 3톤 큐브 등) 선택에 따라 중앙 19셀 톤이 즉시 변경된다', () => {
@@ -358,6 +398,20 @@ test('타입 전환 스냅샷은 최소 크기 기본값을 되돌린다', () =>
   assert.equal(state.size, 11);
 });
 
+test('붙여넣기용 JSON 판별과 공백 포함 문자열이 왕복한다', () => {
+  const state = createUniversalEditorState({ type: 'O', finderStarter: 'cube-bullseye' });
+  applyBrush(state, 'T', { q: 3, r: 0 }, { tone: 0 });
+  const dumped = `  \n${JSON.stringify(serializeUniversalEditor(state), null, 2)}\n`;
+  assert.equal(looksLikeCellEditorJson(dumped), true);
+  assert.equal(looksLikeCellEditorJson('{ "not": "editor" }'), false);
+  assert.equal(looksLikeCellEditorJson('not json'), false);
+
+  const parsed = parseUniversalEditor(dumped);
+  assert.equal(parsed.type, 'O');
+  assert.equal(parsed.finderPattern.renderKind, 'cube-bullseye');
+  assert.equal(getCellTone(parsed, 'T', { q: 3, r: 0 }), 0);
+});
+
 test('독립 HTML 단일 번들이 정상적으로 빌드된다', () => {
   const html = buildCellEditorHtml();
   assert.match(html, /<!doctype html>/i);
@@ -371,5 +425,10 @@ test('독립 HTML 단일 번들이 정상적으로 빌드된다', () => {
   assert.match(html, /Type Y \(n=11\)/);
   assert.match(html, /applyFinderStarter/);
   assert.match(html, /cube-bullseye/);
+  assert.match(html, /id="jsonPaste"/);
+  assert.match(html, /id="applyPasteJsonBtn"/);
+  assert.match(html, /id="clipboardJsonBtn"/);
+  assert.match(html, /id="finderNameInput"/);
+  assert.match(html, /looksLikeCellEditorJson/);
   assert.doesNotMatch(html, /<!-- CELL_EDITOR_LOADER -->/);
 });
