@@ -39,6 +39,16 @@
  *     분기 조건이 «앵커 존재» 가 아니라 «앵커드 포즈 성립» 인 이유: 데이터 필드의
  *     우연한 K5 코어가 v0 검출을 죽이면 안 되기 때문.
  *
+ * 부분 앵커 포즈 (§6b, 2026-08-16) — **잘림 구제의 실병목이 여기였다.**
+ *   엄격 경로는 4 앵커 패치를 전부 정합해야 하고 registerPatch 는 투영점 80% 이상이
+ *   프레임 안일 때만 상관을 낸다. 코너가 5% 잘리면 한 면 코너 패치가 67% 로 떨어져
+ *   **참 기하가 아예 만들어지지 않는다**. 그래서 엄격 경로가 실패했고 **앵커가 실제로
+ *   프레임 밖으로 나갔을 때만** 부분 완성을 연다: 관측 앵커 ≥ 2 → similarity 최소제곱
+ *   (전단·뒤집힘 불가, 3점부터 과결정이라 잔차가 실재) → 빠진 앵커는 레이아웃 좌표로
+ *   외삽(프레임 밖 허용) → **상대 잔차 게이트**(외삽 앵커 이동 ≤ ratio × max(관측 잔차,
+ *   그 라운드 탐색 반경), 전부 셀 단위 — 절대 픽셀 금지). 정합 상관 문턱과 하류 CS
+ *   게이트(0.78/0.035)는 **한 값도 완화하지 않는다**.
+ *
  * 결정성: RNG 없음, 모든 순회·정렬 고정 순서, 동점은 (score desc, y, x) 으로 깬다.
  * 노출: cube-detect 의 lab 경로(enableCellSurfaceY)에서만 호출된다. 산출 shape 는
  * cellSurfaceOnly=true 라 셀 표면 평가만 받는다 — 수용은 기존 CS 게이트가 결정한다.
@@ -76,6 +86,18 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // 사각 링 동반자 판정 허용폭 — 반경 비 ±18% · 120° 에서 ±18°.
   squareRingRadiusTolerance: 0.18,
   squareRingAngleToleranceDeg: 18,
+  // ── 부분 앵커 포즈 (§7) — 프레임 밖으로 나간 앵커를 레이아웃 지식으로 외삽한다.
+  // false 로 끄면 잘림 도입 전(엄격 4앵커) 기준선을 그대로 잰다.
+  partialAnchorPose: true,
+  // 부분 정합을 시도할 최소 in-frame 비율. 이 아래면 «관측 없음»(외삽 대상)이다.
+  partialMinimumCoverage: 0.3,
+  // 완성 포즈를 세우는 데 필요한 **관측된** 앵커 최소 수 (중앙 + 코너, 서로 다른 자리).
+  partialMinimumAnchors: 2,
+  // 라운드 3 최소제곱에 필요한 관측 서브앵커 최소 수 / 호모그래피(8dof)로 올릴 문턱.
+  partialMinimumSubAnchors: 4,
+  partialHomographySubAnchors: 8,
+  // 외삽 앵커 이동 허용 배수 — 관측 잔차(또는 그 라운드의 탐색 반경) 대비 **상대값**.
+  partialResidualRatio: 1.5,
 });
 
 const CANONICAL_LAYOUT = Object.freeze({ size: 1, originX: 0, originY: 0 });
@@ -699,8 +721,19 @@ const scratchExpected = new Float64Array(256);
 /**
  * 패치를 현재 H 로 투영한 뒤 이미지 평면 오프셋 그리드에서 Pearson 최대를 찾는다.
  * 반환 offset 은 이미지 px — 포물선 보간으로 서브픽셀까지 간다.
+ *
+ * `options` 없이 부르면 **기존 계약 그대로**다 (커버리지 0.8 · 오프셋마다 표본 재계산).
+ * 부분 앵커 경로만 options 를 준다:
+ *   · `minCoverage` — in-frame 비율 하한을 낮춘다 (잘린 블록의 남은 조각으로 정합).
+ *   · `lockSubset`  — **표본 집합을 오프셋 전 구간에서 고정**한다. 이게 없으면 프레임
+ *     경계 근처에서 «안쪽으로 미는 오프셋일수록 점이 많다» 는 편향이 생겨 Pearson 이
+ *     오프셋끼리 비교 불가능해진다 (점이 적을수록 상관이 우연히 커진다). 고정 집합은
+ *     투영점이 탐색 반경 + 탭 만큼 여유를 두고 프레임 안에 있는 점들만 쓴다.
  */
-function registerPatch(luma, H, patch, rangePx, stepPx) {
+function registerPatch(luma, H, patch, rangePx, stepPx, options = null) {
+  const minCoverage = options && Number.isFinite(options.minCoverage)
+    ? options.minCoverage : 0.8;
+  const lockSubset = options ? options.lockSubset === true : false;
   const projected = [];
   for (const point of patch.points) {
     const image = projectPoint(H, point);
@@ -710,6 +743,17 @@ function registerPatch(luma, H, patch, rangePx, stepPx) {
   // 모듈당 5-탭(중심 + 십자 0.18셀) 평균 — 픽셀 격자 앨리어싱을 눌러 정합 봉우리를 안정화.
   const cellPx = localCellPx(H);
   const tap = Number.isFinite(cellPx) ? 0.18 * cellPx : 0;
+  let usable = projected;
+  if (lockSubset) {
+    const pad = rangePx + tap + 1;
+    usable = projected.filter((point) =>
+      point.x - pad >= 0 && point.y - pad >= 0
+      && point.x + pad < luma.width - 1 && point.y + pad < luma.height - 1);
+    if (usable.length < Math.max(6, Math.floor(projected.length * minCoverage))) return null;
+  }
+  const requiredCount = lockSubset
+    ? usable.length
+    : Math.max(6, Math.floor(projected.length * minCoverage));
   const steps = Math.max(1, Math.round(rangePx / stepPx));
   const size = 2 * steps + 1;
   const grid = new Float64Array(size * size).fill(-2);
@@ -721,7 +765,7 @@ function registerPatch(luma, H, patch, rangePx, stepPx) {
     for (let ix = 0; ix < size; ix += 1) {
       const ox = (ix - steps) * stepPx;
       let count = 0;
-      for (const point of projected) {
+      for (const point of usable) {
         const px = point.x + ox;
         const py = point.y + oy;
         const centre = bilinear(luma, px, py);
@@ -742,7 +786,7 @@ function registerPatch(luma, H, patch, rangePx, stepPx) {
         scratchExpected[count] = point.expected;
         count += 1;
       }
-      if (count < Math.max(6, Math.floor(projected.length * 0.8))) continue;
+      if (count < requiredCount) continue;
       const corr = pearson(scratchValues, scratchExpected, count);
       if (corr === null) continue;
       grid[iy * size + ix] = corr;
@@ -773,7 +817,13 @@ function registerPatch(luma, H, patch, rangePx, stepPx) {
       if (denom < -EPSILON) offsetY += 0.5 * ((up - down) / denom) * stepPx;
     }
   }
-  return { offsetX, offsetY, correlation: best };
+  return {
+    offsetX,
+    offsetY,
+    correlation: best,
+    coverage: projected.length > 0 ? usable.length / projected.length : 0,
+    usedPoints: usable.length,
+  };
 }
 
 /** 4앵커(중앙 + 3코너) 정합 → estimateHomography4 재적합. 실패 시 이전 H 유지. */
@@ -908,6 +958,61 @@ function homographyLeastSquares(canonicalPoints, imagePoints) {
   return out;
 }
 
+/**
+ * 2점 이상 최소제곱 **similarity** (회전 + 등방 스케일 + 평행이동, 4 dof).
+ *
+ * 부분 앵커 완성의 기본 모델이다. 이유 — 관측 앵커가 2~3개면 호모그래피(8 dof)는
+ * 미결정이고 아핀(6 dof)도 3점에서 **정확 적합**이라 잔차가 항등 0 이 된다. 잔차가
+ * 0 이면 «완성이 얼마나 억지인가» 를 잴 수가 없다. similarity 는 3점에서 6식 4미지수라
+ * **과결정**이고, 그래서 §7 의 상대 잔차 게이트가 실제로 값을 갖는다. 또 전단·뒤집힘이
+ * 구조적으로 불가능해 외삽이 «레이아웃을 회전·확대해 놓는 것» 이상을 못 한다.
+ */
+function similarityLeastSquares(canonicalPoints, imagePoints) {
+  const count = canonicalPoints.length;
+  if (count < 2 || imagePoints.length !== count) return null;
+  let meanCx = 0;
+  let meanCy = 0;
+  let meanIx = 0;
+  let meanIy = 0;
+  for (let k = 0; k < count; k += 1) {
+    meanCx += canonicalPoints[k].x;
+    meanCy += canonicalPoints[k].y;
+    meanIx += imagePoints[k].x;
+    meanIy += imagePoints[k].y;
+  }
+  meanCx /= count;
+  meanCy /= count;
+  meanIx /= count;
+  meanIy /= count;
+  let numeratorA = 0;
+  let numeratorB = 0;
+  let denominator = 0;
+  for (let k = 0; k < count; k += 1) {
+    const cx = canonicalPoints[k].x - meanCx;
+    const cy = canonicalPoints[k].y - meanCy;
+    const ix = imagePoints[k].x - meanIx;
+    const iy = imagePoints[k].y - meanIy;
+    numeratorA += cx * ix + cy * iy;
+    numeratorB += cx * iy - cy * ix;
+    denominator += cx * cx + cy * cy;
+  }
+  if (!(denominator > EPSILON)) return null;
+  const a = numeratorA / denominator;
+  const b = numeratorB / denominator;
+  if (!(Math.hypot(a, b) > EPSILON)) return null;
+  const out = new Float64Array(9);
+  out[0] = a;
+  out[1] = -b;
+  out[2] = meanIx - (a * meanCx - b * meanCy);
+  out[3] = b;
+  out[4] = a;
+  out[5] = meanIy - (b * meanCx + a * meanCy);
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = 1;
+  return out;
+}
+
 function similarityHomography(center, scale, angleCos, angleSin) {
   const H = new Float64Array(9);
   H[0] = scale * angleCos;
@@ -967,7 +1072,7 @@ function refineWithSubPatches(luma, H, patches, cfg) {
   };
 }
 
-function refinePose(luma, H0, patches, cfg) {
+function refinePoseStrict(luma, H0, patches, cfg) {
   const round1 = refineHomographyWithPatches(
     luma, H0, patches, cfg.registrationRangeCells, cfg.registrationStepCells,
   );
@@ -979,6 +1084,265 @@ function refinePose(luma, H0, patches, cfg) {
   const round3 = refineWithSubPatches(luma, base.H, patches, cfg);
   if (!round3) return base;
   return round3.meanCorrelation >= base.meanCorrelation - 0.05 ? round3 : base;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 6b. 부분 앵커 포즈 — 프레임 밖으로 나간 앵커를 레이아웃 지식으로 외삽한다.
+//
+// **왜 필요한가 (측정)**: 잘린 프레임에서 죽는 곳은 실루엣도 RS 도 아니고 여기다.
+// registerPatch 는 투영점의 80% 이상이 프레임 안에 있어야 상관을 내고,
+// refineHomographyWithPatches 는 4 앵커를 **전부** 정합해야 한다
+// (`if (!registered) return null`). 코너 하나가 5% 잘리면 그 면 코너 패치의 in-frame
+// 비율이 67% 로 떨어지고 → 패치 null → 포즈 null → 그 프레임의 참 기하가 아예
+// 만들어지지 않는다. 실측(v0X@21 corner-se, 시드 similarity 기준 커버리지):
+//   qz 100/100/100/100 · 5% 100/100/67/100 · 10% 100/100/33/100 · 15%·20% 100/100/0/100.
+// 잘림 축이 0/9 로 전멸하던 이유가 이 한 줄이다.
+//
+// **설계**
+//   ① 엄격 경로가 성공하면 그대로 쓴다 — 그 경우 동작은 한 비트도 바뀌지 않는다.
+//      («클린 프레임이면 안 바뀐다» 가 아니다. 클린 프레임에서도 데이터 필드의 헛
+//      시드는 엄격 경로를 실패시키고 앵커를 프레임 밖으로 던져 부분 가지를 연다 —
+//      실측 v0X 클린 attempted 7 · completed 2. 지켜지는 성질은 «가지가 안 열린다»
+//      가 아니라 «최종 판정이 같다» 이고, 그건 테스트가 on/off 로 단언한다.)
+//   ② 엄격 경로가 실패했고, **앵커 투영이 실제로 프레임 밖으로 나간 증거**가 있을 때만
+//      부분 경로를 연다. 저대비·오정합으로 죽은 패치는 여기 오지 않는다 (부분 경로는
+//      «잘림» 의 구제이지 정합 품질 완화가 아니다).
+//   ③ 관측 앵커 ≥ 2 (서로 다른 자리) → similarity 최소제곱. 빠진 앵커는 모델이
+//      **레이아웃 좌표로 예측**한다 — 프레임 밖 외삽 코너를 허용한다.
+//   ④ 상대 잔차 게이트(§ residualGate): 외삽 앵커가 완성 전 포즈에서 움직인 거리를
+//      **관측 잔차 대비 상대값**으로 잰다. 절대 픽셀은 쓰지 않는다.
+//   ⑤ 수용은 여전히 CS 게이트(0.78/0.035)가 결정한다 — 완화 0.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** 앵커 패치 투영이 프레임 밖으로 나갔는가 — 부분 경로의 발동 조건(잘림 증거). */
+function anchorsLeaveFrame(luma, H, patches) {
+  for (const patch of [patches.centre, ...patches.corners]) {
+    for (const point of patch.points) {
+      const image = projectPoint(H, point);
+      if (!image) return true;
+      if (image.x < 1 || image.y < 1
+        || image.x >= luma.width - 1 || image.y >= luma.height - 1) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 상대 잔차 게이트 — 외삽 앵커의 이동량을 **관측 잔차 대비**로 잰다.
+ *
+ * `observedResidual` = 완성 H 아래 관측 앵커의 RMS 재투영 잔차(셀 단위).
+ * `extrapolationDrift` = 외삽 앵커가 완성 전 H 대비 움직인 최대 거리(셀 단위).
+ * 바닥값은 **그 라운드의 탐색 반경**이다 — 정합이 원래 허용하는 이동 규모라
+ * 임의 상수가 아니고, 셀 단위라 cell_px 에 의존하지 않는다 (절대 픽셀 금지 조항).
+ *
+ * 관측 앵커가 2개면 similarity 가 정확 적합이라 관측 잔차가 0 이고, 그때는 바닥값
+ * 하나가 게이트를 쥔다. 3개 이상이면 과결정이라 잔차가 실제 값을 갖는다.
+ */
+function residualGate(observedResidual, extrapolationDrift, rangeCells, cfg) {
+  const scale = Math.max(observedResidual, rangeCells);
+  return extrapolationDrift <= cfg.partialResidualRatio * scale;
+}
+
+/**
+ * 앵커 패치들을 «관측 / 외삽» 으로 나눈다.
+ * 관측 = 엄격 정합 성공, 또는 `partialMinimumCoverage` 이상이 프레임 안에 남아
+ * 고정 표본 집합으로 정합에 성공한 것.
+ */
+function classifyPatchRegistrations(luma, H, patchList, rangePx, stepPx, cfg) {
+  const observed = [];
+  const extrapolated = [];
+  let correlationSum = 0;
+  let worst = Infinity;
+  let partialCount = 0;
+  for (const patch of patchList) {
+    let registered = registerPatch(luma, H, patch, rangePx, stepPx);
+    let partial = false;
+    if (!registered) {
+      registered = registerPatch(luma, H, patch, rangePx, stepPx, {
+        minCoverage: cfg.partialMinimumCoverage,
+        lockSubset: true,
+      });
+      partial = registered !== null;
+    }
+    const projectedAnchor = projectPoint(H, patch.anchor);
+    if (!projectedAnchor) return null;
+    if (!registered) {
+      extrapolated.push({ patch, seedImage: projectedAnchor });
+      continue;
+    }
+    if (partial) partialCount += 1;
+    observed.push({
+      patch,
+      seedImage: projectedAnchor,
+      image: {
+        x: projectedAnchor.x + registered.offsetX,
+        y: projectedAnchor.y + registered.offsetY,
+      },
+      correlation: registered.correlation,
+    });
+    correlationSum += registered.correlation;
+    worst = Math.min(worst, registered.correlation);
+  }
+  return { observed, extrapolated, correlationSum, worst, partialCount };
+}
+
+/** 관측 앵커의 RMS 재투영 잔차(셀 단위) — 완성 모델이 관측을 얼마나 못 맞췄나. */
+function observedResidualCells(H, observed, cellPx) {
+  if (observed.length === 0 || !(cellPx > 0)) return Infinity;
+  let sum = 0;
+  for (const entry of observed) {
+    const predicted = projectPoint(H, entry.patch.anchor);
+    if (!predicted) return Infinity;
+    sum += (predicted.x - entry.image.x) ** 2 + (predicted.y - entry.image.y) ** 2;
+  }
+  return Math.sqrt(sum / observed.length) / cellPx;
+}
+
+/** 외삽 앵커가 완성 전 포즈 대비 움직인 최대 거리(셀 단위). */
+function extrapolationDriftCells(H, extrapolated, cellPx) {
+  if (!(cellPx > 0)) return Infinity;
+  let worst = 0;
+  for (const entry of extrapolated) {
+    const predicted = projectPoint(H, entry.patch.anchor);
+    if (!predicted) return Infinity;
+    worst = Math.max(worst, Math.hypot(
+      predicted.x - entry.seedImage.x, predicted.y - entry.seedImage.y,
+    ) / cellPx);
+  }
+  return worst;
+}
+
+/** 관측 앵커가 서로 다른 자리를 차지하는가 — 한 점에 뭉친 2개는 포즈를 못 세운다. */
+function anchorsAreDistinct(observed) {
+  for (let a = 0; a < observed.length; a += 1) {
+    for (let b = a + 1; b < observed.length; b += 1) {
+      const left = observed[a].patch.anchor;
+      const right = observed[b].patch.anchor;
+      if (Math.hypot(left.x - right.x, left.y - right.y) > 1) return true;
+    }
+  }
+  return false;
+}
+
+/** 부분 앵커 라운드 — 4앵커(중앙 + 면별 먼 코너 3) 중 관측된 것만으로 완성한다. */
+function refineAnchorsPartial(luma, H, patches, rangeCells, stepCells, cfg) {
+  const cellPx = localCellPx(H);
+  if (!Number.isFinite(cellPx) || cellPx <= 0.5) return null;
+  const classified = classifyPatchRegistrations(
+    luma, H, [patches.centre, ...patches.corners],
+    rangeCells * cellPx, Math.max(0.5, stepCells * cellPx), cfg,
+  );
+  if (!classified) return null;
+  const { observed, extrapolated } = classified;
+  if (observed.length < cfg.partialMinimumAnchors) return null;
+  if (!anchorsAreDistinct(observed)) return null;
+  const canonicalPoints = observed.map((entry) => entry.patch.anchor);
+  const imagePoints = observed.map((entry) => entry.image);
+  const completed = extrapolated.length === 0
+    ? (observed.length === 4
+      ? estimateHomography4(canonicalPoints, imagePoints)
+      : similarityLeastSquares(canonicalPoints, imagePoints))
+    : similarityLeastSquares(canonicalPoints, imagePoints);
+  if (!completed) return null;
+  const residual = observedResidualCells(completed, observed, cellPx);
+  const drift = extrapolationDriftCells(completed, extrapolated, cellPx);
+  if (!residualGate(residual, drift, rangeCells, cfg)) return null;
+  return {
+    H: completed,
+    meanCorrelation: classified.correlationSum / observed.length,
+    worstCorrelation: classified.worst,
+    anchorCount: observed.length,
+    extrapolatedCount: extrapolated.length,
+    partialCount: classified.partialCount,
+    observedResidual: residual,
+    extrapolationDrift: drift,
+  };
+}
+
+/** 부분 앵커 라운드 3 — 서브앵커 중 관측된 것만으로 최소제곱 재적합. */
+function refineSubPatchesPartial(luma, H, patches, cfg) {
+  const cellPx = localCellPx(H);
+  if (!Number.isFinite(cellPx) || cellPx <= 0.5) return null;
+  const rangeCells = 0.5;
+  const classified = classifyPatchRegistrations(
+    luma, H, patches.subPatches, rangeCells * cellPx, Math.max(0.5, 0.125 * cellPx), cfg,
+  );
+  if (!classified) return null;
+  const { observed, extrapolated } = classified;
+  if (observed.length < cfg.partialMinimumSubAnchors) return null;
+  const canonicalPoints = observed.map((entry) => entry.patch.anchor);
+  const imagePoints = observed.map((entry) => entry.image);
+  // 관측 서브앵커가 충분히 많을 때만 8 dof 를 푼다. 적을 때 호모그래피를 풀면
+  // 원근 항이 관측 잡음을 그대로 먹어 외삽 코너가 크게 튄다 (전단·뒤집힘 가능).
+  const completed = observed.length >= cfg.partialHomographySubAnchors
+    ? (homographyLeastSquares(canonicalPoints, imagePoints)
+      || similarityLeastSquares(canonicalPoints, imagePoints))
+    : similarityLeastSquares(canonicalPoints, imagePoints);
+  if (!completed) return null;
+  const residual = observedResidualCells(completed, observed, cellPx);
+  const drift = extrapolationDriftCells(completed, extrapolated, cellPx);
+  if (!residualGate(residual, drift, rangeCells, cfg)) return null;
+  return {
+    H: completed,
+    meanCorrelation: classified.correlationSum / observed.length,
+    worstCorrelation: classified.worst,
+    anchorCount: observed.length,
+    extrapolatedCount: extrapolated.length,
+    observedResidual: residual,
+    extrapolationDrift: drift,
+  };
+}
+
+function refinePosePartial(luma, H0, patches, cfg) {
+  const round1 = refineAnchorsPartial(
+    luma, H0, patches, cfg.registrationRangeCells, cfg.registrationStepCells, cfg,
+  );
+  // 정합 품질 게이트는 엄격 경로와 **같은 값**을 쓴다 — 부분 경로는 잘림 구제이지
+  // 상관 문턱 완화가 아니다.
+  if (!round1 || round1.worstCorrelation < cfg.minimumPatchCorrelation) return null;
+  const round2 = refineAnchorsPartial(
+    luma, round1.H, patches, cfg.registrationRange2Cells, cfg.registrationStep2Cells, cfg,
+  );
+  const base = round2 && round2.meanCorrelation >= round1.meanCorrelation ? round2 : round1;
+  const round3 = refineSubPatchesPartial(luma, base.H, patches, cfg);
+  const chosen = round3 && round3.meanCorrelation >= base.meanCorrelation - 0.05
+    ? round3 : base;
+  return {
+    ...chosen,
+    partial: {
+      anchorCount: base.anchorCount,
+      extrapolatedCount: base.extrapolatedCount,
+      subAnchorCount: round3 ? round3.anchorCount : null,
+      observedResidual: chosen.observedResidual,
+      extrapolationDrift: chosen.extrapolationDrift,
+    },
+  };
+}
+
+/**
+ * 포즈 정제 — 엄격 4앵커 경로가 먼저다. 실패했고 **앵커가 프레임 밖으로 나갔을 때만**
+ * 부분 앵커 완성으로 내려간다.
+ *
+ * ⚠ «클린 프레임에서는 두 번째 가지가 아예 열리지 않는다» 고 적혀 있었으나 **거짓**이다
+ * (2026-08-16 정정). 데이터 필드의 헛 시드(예: n=25 반경으로 스냅된 쌍)는 스케일이 틀려
+ * 클린 이미지에서도 앵커를 프레임 밖으로 던진다 — 실측 v0X 클린 `attempted 7 ·
+ * completed 2`, v2r2 `2 · 2`, v0@13 `1 · 1`, v1r2 `0 · 0`. 그렇게 선 포즈들은 하류
+ * CS 게이트를 못 넘거나 패밀리 dedupe 에서 밀려 **최종 판정을 바꾸지 않는다**. 이 경로가
+ * 지키는 성질은 «시도 0» 이 아니라 «판정 불변» 이고, 그쪽이 테스트로 고정돼 있다.
+ */
+function refinePose(luma, H0, patches, cfg, telemetry = null) {
+  const strict = refinePoseStrict(luma, H0, patches, cfg);
+  if (strict) return strict;
+  if (cfg.partialAnchorPose === false) return null;
+  if (!anchorsLeaveFrame(luma, H0, patches)) return null;
+  if (telemetry) telemetry.attempted += 1;
+  const partial = refinePosePartial(luma, H0, patches, cfg);
+  if (telemetry && partial) {
+    telemetry.completed += 1;
+    telemetry.byAnchorCount[partial.partial.anchorCount] =
+      (telemetry.byAnchorCount[partial.partial.anchorCount] || 0) + 1;
+  }
+  return partial;
 }
 
 /**
@@ -1082,7 +1446,7 @@ function anchoredSimilaritySeed(centre, corner, factor, radiusCells) {
  * 반환의 anchoredCentres 는 **앵커드 포즈가 실제로 선** 중앙 인덱스다 — v0 스윕
  * 조기 분기의 조건. 결정성: centres/corners 는 verified 정렬 순서로만 순회한다.
  */
-function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
+function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetry = null) {
   const posesV2r2 = [];
   const posesV1r2 = [];
   const posesV0x = [];
@@ -1106,9 +1470,14 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
       for (const candidate of V2R2_RADII) {
         if (Math.abs(estimatedRadius - candidate.radius) > ANCHOR_SNAP_CELLS) continue;
         const H0 = anchoredSimilaritySeed(centre, corner, factor, candidate.radius);
-        const refined = refinePose(fullLuma, H0, patchesForN(candidate.n), cfg);
+        const refined = refinePose(fullLuma, H0, patchesForN(candidate.n), cfg, telemetry);
         if (refined && (bestV2r2 === null || refined.meanCorrelation > bestV2r2.score)) {
-          bestV2r2 = { n: candidate.n, H: refined.H, score: refined.meanCorrelation };
+          bestV2r2 = {
+            n: candidate.n,
+            H: refined.H,
+            score: refined.meanCorrelation,
+            partial: refined.partial || null,
+          };
         }
       }
       if (bestV2r2 !== null) {
@@ -1118,6 +1487,7 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
           n: bestV2r2.n,
           H: bestV2r2.H,
           score: bestV2r2.score,
+          partial: bestV2r2.partial,
           estimatedRadius,
         });
       }
@@ -1125,7 +1495,7 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
       if (cfg.v1r2Family !== false
         && Math.abs(estimatedRadius - V1R2_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const H0 = anchoredSimilaritySeed(centre, corner, factor, V1R2_CORE_RADIUS_CELLS);
-        const refined = refinePose(fullLuma, H0, patchesFor(V1R2_N, 'v1r2'), cfg);
+        const refined = refinePose(fullLuma, H0, patchesFor(V1R2_N, 'v1r2'), cfg, telemetry);
         if (refined) {
           anchoredCentres.add(centreIndex);
           posesV1r2.push({
@@ -1134,6 +1504,7 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
             n: V1R2_N,
             H: refined.H,
             score: refined.meanCorrelation,
+            partial: refined.partial || null,
             estimatedRadius,
           });
         }
@@ -1146,7 +1517,7 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
         if (companions > 0) companionPairs += 1;
         if (companions === 0 && cfg.v0xRequireSquareRing !== false) continue;
         const H0 = anchoredSimilaritySeed(centre, corner, factor, V0X_CORE_RADIUS_CELLS);
-        const refined = refinePose(fullLuma, H0, patchesFor(V0X_N, 'v0x'), cfg);
+        const refined = refinePose(fullLuma, H0, patchesFor(V0X_N, 'v0x'), cfg, telemetry);
         if (refined) {
           anchoredCentres.add(centreIndex);
           posesV0x.push({
@@ -1155,6 +1526,7 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg) {
             n: V0X_N,
             H: refined.H,
             score: refined.meanCorrelation,
+            partial: refined.partial || null,
             estimatedRadius,
             squareRingCompanions: companions,
           });
@@ -1188,7 +1560,9 @@ const V0_SCALE_SWEEP = Object.freeze([0.72, 0.85, 1, 1.12]);
  * 중앙)은 360°×4스케일 스윕을 건너뛴다. 세 패밀리 중앙 서명이 같아진 뒤(2026-08-16)
  * v1r2·v2r2 프레임에서 이 스윕이 헛돌던 문제(claude-v1r2-revival.md §5-③)의 해소.
  */
-function assembleV0Poses(centres, anchoredCentres, reducedLuma, fullLuma, factor, cfg) {
+function assembleV0Poses(
+  centres, anchoredCentres, reducedLuma, fullLuma, factor, cfg, telemetry = null,
+) {
   const poses = [];
   const template = patchesForN(13).all;
   for (let centreIndex = 0; centreIndex < centres.length; centreIndex += 1) {
@@ -1237,13 +1611,14 @@ function assembleV0Poses(centres, anchoredCentres, reducedLuma, fullLuma, factor
       const H0 = similarityHomography(
         centreFull, seed.unit * factor, Math.cos(radians), Math.sin(radians),
       );
-      const refined = refinePose(fullLuma, H0, patchesForN(13), cfg);
+      const refined = refinePose(fullLuma, H0, patchesForN(13), cfg, telemetry);
       if (!refined) continue;
       poses.push({
         family: 'v0',
         n: 13,
         H: refined.H,
         score: refined.meanCorrelation,
+        partial: refined.partial || null,
         sweepCorrelation: bestCorr,
       });
     }
@@ -1324,6 +1699,9 @@ function shapeFromPose(pose, index) {
       // n=21 은 후보가 둘이라 로케이터 패밀리가 어느 쪽을 세웠는지 남긴다.
       // 수용은 여전히 CS 평가 게이트가 판정한다 (여기서 레이아웃을 못박지 않는다).
       layoutId: pose.layoutId || null,
+      // 부분 앵커로 완성된 포즈면 그 사실과 근거 수치를 남긴다 (수용에는 관여하지
+      // 않는다 — CS 게이트가 그대로 판정한다).
+      partial: pose.partial || null,
     },
   };
 }
@@ -1382,11 +1760,12 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   // 비쌌다 (v1r2 클린 벤치 724→1620 ms). 상위 3/4 슬라이스가 사실상의 비용 캡이다.
   const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
   const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
+  const partialTelemetry = { attempted: 0, completed: 0, byAnchorCount: {} };
   const {
     posesV2r2, posesV1r2, posesV0x, anchoredCentres, companionPairs,
-  } = assembleAnchoredPoses(centres, corners, luma, reduced.factor, cfg);
+  } = assembleAnchoredPoses(centres, corners, luma, reduced.factor, cfg, partialTelemetry);
   const posesV0 = assembleV0Poses(
-    centres, anchoredCentres, reduced.luma, luma, reduced.factor, cfg,
+    centres, anchoredCentres, reduced.luma, luma, reduced.factor, cfg, partialTelemetry,
   );
 
   const shapes = [];
@@ -1432,6 +1811,13 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         anchored: anchoredCentres.size,
         swept: centres.length - anchoredCentres.size,
       },
+      // 부분 앵커 완성 관측 — attempted 는 «엄격 경로 실패 + 앵커가 프레임 밖» 인
+      // 시드 수, completed 는 그중 상대 잔차 게이트까지 통과한 수.
+      partialAnchor: {
+        attempted: partialTelemetry.attempted,
+        completed: partialTelemetry.completed,
+        byAnchorCount: partialTelemetry.byAnchorCount,
+      },
       shapeCount: shapes.length,
     },
   };
@@ -1455,4 +1841,9 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   patchesFor,
   assembleAnchoredPoses,
   squareRingCompanions,
+  similarityLeastSquares,
+  refineAnchorsPartial,
+  refineSubPatchesPartial,
+  anchorsLeaveFrame,
+  residualGate,
 });

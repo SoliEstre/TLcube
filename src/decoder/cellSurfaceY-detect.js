@@ -8,6 +8,15 @@
  * minimumOrientationMargin 을 hard gate 로 쓴다. A 는 거의 대칭이라
  * margin ≈ 0 이므로 그 게이트를 면제하되, 면제 사실을 진단에 남긴다.
  *
+ * **locator 셀 소거 (2026-08-16)** — 프레임 밖으로 잘린 locator 셀 하나가 표 전체를
+ * 죽이지 않는다 (`sampleLocatorTable`). 그 자리는 `ok:false` placeholder 로 인덱스를
+ * 지킨 채 남고, 이미 있던 «관측 없는 표본은 건너뛴다» 규칙이 처리한다. 이것은 소거
+ * 인프라 재사용이지 **게이트 완화가 아니다**: agreement 식(matches/total)과 문턱
+ * (0.78 · margin 0.035 · toneSpan · 면별 톤당 최소 표본 8)은 한 값도 안 바뀌었고,
+ * 잘린 셀은 분모에서 빠질 뿐 «불일치» 로도 «관측» 으로도 세지 않는다. 전량 소거면
+ * 예전처럼 실패한다. 관측이 적은 포즈를 막는 것은 **면별 톤당 정족수**이며, 그
+ * 정족수가 실제로 무는지는 `cellSurface-clip-partial.test.js` 가 단언한다.
+ *
  * 모든 임계값은 합성 실험용 [미검증]이며 options.calibration 으로 덮을 수 있다.
  */
 
@@ -464,7 +473,10 @@ function hypothesisPatchForTones(best, scored, samples, tones, n = CELL_SURFACE_
     orientationGateApplied: scored.orientationGateApplied !== false,
     cellSurfaceAmbiguous: scored.ambiguous === true,
     referenceCalibration: calibrationForTones(best, scored, tones),
-    referenceSamples: new Map(samples.map((sample) => [cellKey(sample.i, sample.j), sample])),
+    // 소거된(프레임 밖) 자리는 지도에서 뺀다 — 0 으로 위장한 «관측» 을 만들지 않는다.
+    referenceSamples: new Map(samples
+      .filter((sample) => sample && sample.ok !== false)
+      .map((sample) => [cellKey(sample.i, sample.j), sample])),
     referenceAgreement: best.agreement,
     referenceRefinement: {
       dx: 0,
@@ -480,20 +492,48 @@ function hypothesisPatchForTones(best, scored, samples, tones, n = CELL_SURFACE_
  * sampleCell(i,j) 는 cube-detect.sampleCubeCell 과 같은 모양을 돌려야 한다.
  * locator 는 dark/bright 만 쓰며, 2톤·3톤 데이터 가설을 둘 다 만든다.
  */
+/**
+ * locator 표를 표본한다. **프레임 밖으로 잘린 셀 하나가 표 전체를 죽이지 않는다** —
+ * 그 자리는 `ok:false` placeholder 로 **인덱스를 지킨 채** 남고, 채점기가 이미
+ * 갖고 있던 «관측 없는 표본은 건너뛴다» 규칙(scoreMappedSamples)이 그대로 처리한다.
+ * 소거 인프라 재사용이지 게이트 완화가 아니다:
+ *   · agreement 식은 `matches / total` 그대로이고 `total` 은 **관측된 표본만** 센다
+ *     (분모를 늘려 잘린 셀을 «불일치» 로 세지도, 줄여 점수를 부풀리지도 않는다).
+ *   · 수용 문턱 0.78 · orientation margin 0.035 · toneSpan · **면별 톤당 최소
+ *     표본 수(minimumSamplesPerTone 8)** 는 한 값도 바뀌지 않는다. 관측이 적은
+ *     포즈는 그 정족수에서 먼저 죽는다 — 이게 «몇 셀만 우연히 맞아 통과» 를 막는 방어선이다.
+ *   · **전부 잘리면** 예전처럼 실패한다 (`readFormatForHypothesis` 의 15셀 전 소거
+ *     계약과 같은 모양).
+ */
 function sampleLocatorTable(sampleCell, locators) {
   const samples = [];
+  let observed = 0;
+  let firstFailure = null;
   for (const cell of locators) {
     const sampled = sampleCell(cell.i, cell.j);
     if (!sampled || sampled.ok === false) {
-      return fail(sampled && sampled.reason ? sampled.reason : FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
-        stage: 'cell-surface-sampling',
-        cell,
-        cause: sampled && sampled.detail,
+      if (firstFailure === null) firstFailure = { cell, sampled };
+      samples.push({
+        ok: false,
+        i: cell.i,
+        j: cell.j,
+        reason: (sampled && sampled.reason) || FRONTEND_FAILURE.NO_GRID_HYPOTHESIS,
       });
+      continue;
     }
     samples.push(sampled);
+    observed += 1;
   }
-  return ok({ samples });
+  if (observed === 0) {
+    const sampled = firstFailure && firstFailure.sampled;
+    return fail(sampled && sampled.reason ? sampled.reason : FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'cell-surface-sampling',
+      cell: firstFailure && firstFailure.cell,
+      cause: sampled && sampled.detail,
+      erasedLocatorCells: locators.length,
+    });
+  }
+  return ok({ samples, observedLocatorCells: observed, erasedLocatorCells: samples.length - observed });
 }
 
 /**
@@ -569,6 +609,7 @@ export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}
     let chosenSamples = null;
     let firstSampleFailure = null;
     const sampledIds = [];
+    const erasure = {};
     for (const layoutId of layoutIds) {
       const locators = layoutLocatorsFor(layoutId, n);
       const sampled = sampleLocatorTable(sampleCell, locators);
@@ -579,6 +620,10 @@ export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}
         continue;
       }
       sampledIds.push(layoutId);
+      erasure[layoutId] = {
+        observed: sampled.observedLocatorCells,
+        erased: sampled.erasedLocatorCells,
+      };
       const scored = scoreOneLayout(sampled.samples, cfg, layoutId, locators);
       scoredLayouts[layoutId] = scored;
       if (!chosen) {
@@ -603,7 +648,12 @@ export function evaluateCellSurfaceGeometry(hypothesis, sampleCell, options = {}
         orientationMargin: scoredLayouts[id].orientationMargin,
         rejectReason: scoredLayouts[id].diagnostics.rejectReason,
         profile: scoredLayouts[id].profile,
+        // 프레임 밖으로 잘려 관측이 없던 locator 셀 수 — 수용에는 관여하지 않고
+        // (분모에서 빠질 뿐) «이 판정이 몇 셀 위에 서 있나» 를 읽게 남긴다.
+        observedLocatorCells: erasure[id] ? erasure[id].observed : null,
+        erasedLocatorCells: erasure[id] ? erasure[id].erased : null,
       }])),
+      locatorErasure: erasure[chosen.layoutId] || null,
     };
     const packed = {
       accepted,
