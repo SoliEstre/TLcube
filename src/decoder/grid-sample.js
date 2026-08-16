@@ -88,11 +88,6 @@ function configCacheKeySuffix(config) {
   return lastConfigKeySuffix;
 }
 
-function discCacheKey(disc, config) {
-  return cacheNumberKey(disc.x) + '|' + cacheNumberKey(disc.y) + '|'
-    + cacheNumberKey(disc.radius) + '|' + configCacheKeySuffix(config);
-}
-
 function successfulDiscCacheFor(luma, H) {
   let byHomography = successfulDiscSamplesByLuma.get(luma);
   if (byHomography === undefined) {
@@ -108,16 +103,66 @@ function successfulDiscCacheFor(luma, H) {
   return samples;
 }
 
-function cacheSuccessfulDiscSample(samples, key, result) {
-  samples.set(key, {
-    median: result.median,
-    mad: result.mad,
-    count: result.count,
-    opaqueCount: result.opaqueCount,
-    opaqueRatio: result.opaqueRatio,
-    projectedMinorDiameter: result.projectedMinorDiameter,
-    geometricCount: result.geometricCount,
-  });
+/*
+ * 원판 키는 **문자열이 아니라 중첩 Map**이다: config 접미사 → x → y → radius.
+ *
+ * 왜: 예전엔 원판마다 `String(x)+'|'+String(y)+'|'+String(radius)` 를 만들었는데,
+ * 배정밀도 → 문자열 변환이 원판 하나에 3번이고 원판 수는 레이아웃당 n²×3면이다.
+ * v0W 레인 CPU 프로파일에서 `cacheNumberKey` 가 자기시간 4.5 % 였다
+ * (`test/output/claude-v0w-program.md` §3). Map 조회는 문자열을 안 만든다.
+ *
+ * 값 의미 차이는 **하나뿐이고 무해하다**: Map 키는 SameValueZero 라 `-0` 과 `0` 이
+ * 같은 칸에 들어간다(문자열 키는 갈랐다). 원판 좌표에서 두 값은 이후 연산
+ * (`disc.x - disc.radius` · `canonical.x - disc.x` · `H[i]*x` 합)에서 **비트까지
+ * 같은 결과**를 내므로 같은 칸을 쓰는 것이 옳다. NaN 은 `validateDisc` 가 먼저 막는다.
+ */
+function lookupDiscSample(samples, disc, config) {
+  const byX = samples.get(configCacheKeySuffix(config));
+  if (byX === undefined) return undefined;
+  const byY = byX.get(disc.x);
+  if (byY === undefined) return undefined;
+  const byRadius = byY.get(disc.y);
+  if (byRadius === undefined) return undefined;
+  return byRadius.get(disc.radius);
+}
+
+function cacheSuccessfulDiscSample(samples, disc, config, entry) {
+  const configKey = configCacheKeySuffix(config);
+  let byX = samples.get(configKey);
+  if (byX === undefined) {
+    byX = new Map();
+    samples.set(configKey, byX);
+  }
+  let byY = byX.get(disc.x);
+  if (byY === undefined) {
+    byY = new Map();
+    byX.set(disc.x, byY);
+  }
+  let byRadius = byY.get(disc.y);
+  if (byRadius === undefined) {
+    byRadius = new Map();
+    byY.set(disc.y, byRadius);
+  }
+  byRadius.set(disc.radius, entry);
+}
+
+/*
+ * 캐시 항목 → 공개 결과. **매번 새 객체**를 만든다 (호출부가 결과를 들고 다니므로
+ * 공유 객체를 돌려주면 별칭 사고가 난다). 다만 `ok({...})` 의 전개 대신 고정 모양
+ * 리터럴로 만든다 — 전개는 제네릭 복사라 히든클래스가 단일화되지 않고, 프로파일에서
+ * `contracts.ok` 가 자기시간 3.2 % 였다. 필드 집합·순서·값은 종전과 같다.
+ */
+function wrapDiscSample(entry) {
+  return {
+    ok: true,
+    median: entry.median,
+    mad: entry.mad,
+    count: entry.count,
+    opaqueCount: entry.opaqueCount,
+    opaqueRatio: entry.opaqueRatio,
+    projectedMinorDiameter: entry.projectedMinorDiameter,
+    geometricCount: entry.geometricCount,
+  };
 }
 
 /*
@@ -380,6 +425,34 @@ function invertHomographyInternal(H) {
   ]);
 }
 
+/*
+ * 정규화 H 와 그 역행렬의 **H 객체 정체성** 메모이즈.
+ *
+ * 왜: 한 레이아웃 평가는 같은 H 로 원판을 n²×3면(예: 21² × 3 = 1,323) 표본한다.
+ * 그런데 `sampleProjectedDisc` 는 원판마다 `normalizeHomographyScale` +
+ * `invertHomographyInternal` 을 다시 돌리고 Float64Array 두 개를 새로 만들었다 —
+ * 둘 다 **H 만의 함수**인데도. v0W 레인 CPU 프로파일에서 이 둘이 자기시간
+ * 5.7 % + 5.5 % = **11.2 %** 였다 (`test/output/claude-v0w-program.md` §1.4).
+ *
+ * 결과는 한 비트도 안 바뀐다: 같은 H 객체면 같은 부동소수 연산의 같은 결과이고,
+ * 값이 같은 **다른** 객체는 각자 계산한다 (WeakMap 은 정체성 키).
+ * 전제는 **«H 는 만든 뒤 제자리 변경하지 않는다»** 이며, 바로 위
+ * `homographyCacheKeys` 가 이미 같은 전제 위에 서 있다 (문자열 키를 H 정체성으로
+ * 캐시한다 — H 를 고치면 그쪽이 먼저 틀린다).
+ */
+const projectionByHomography = new WeakMap();
+
+function projectionFor(H) {
+  const cached = projectionByHomography.get(H);
+  if (cached !== undefined) return cached;
+  const normalized = normalizeHomographyScale(H);
+  const entry = normalized === null
+    ? { normalized: null, inverse: null }
+    : { normalized, inverse: invertHomographyInternal(normalized) };
+  projectionByHomography.set(H, entry);
+  return entry;
+}
+
 function projectPoint(H, x, y) {
   const numeratorX = H[0] * x + H[1] * y + H[2];
   const numeratorY = H[3] * x + H[4] * y + H[5];
@@ -508,20 +581,21 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   assertHomography(H);
   validateDisc(disc);
   const config = samplingConfig(options);
-  // 조회와 저장이 같은 키·같은 Map 을 쓰도록 한 번만 만든다 (예전엔 두 번 만들었다).
+  // 조회와 저장이 같은 (config, x, y, radius) 경로를 쓴다 (§lookupDiscSample).
   const discSamples = successfulDiscCacheFor(luma, H);
-  const discKey = discCacheKey(disc, config);
-  const cached = discSamples.get(discKey);
-  if (cached !== undefined) return ok(cached);
+  const cached = lookupDiscSample(discSamples, disc, config);
+  if (cached !== undefined) return wrapDiscSample(cached);
 
-  const normalizedH = normalizeHomographyScale(H);
+  // 정규화·역행렬은 H 만의 함수라 H 정체성으로 메모이즈한다 (§projectionFor).
+  const projection = projectionFor(H);
+  const normalizedH = projection.normalized;
   if (normalizedH === null) {
     return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
       stage: 'sample-projected-disc',
       cause: 'zero-scale-homography',
     });
   }
-  const inverseH = invertHomographyInternal(normalizedH);
+  const inverseH = projection.inverse;
   if (inverseH === null) {
     return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
       stage: 'sample-projected-disc',
@@ -636,7 +710,7 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   }
 
   const sampleMedian = median(values, valueCount);
-  const result = ok({
+  const entry = {
     median: sampleMedian,
     mad: mad(values, valueCount, sampleMedian),
     count: opaqueCount,
@@ -644,9 +718,9 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
     opaqueRatio,
     projectedMinorDiameter: minorDiameter,
     geometricCount,
-  });
-  cacheSuccessfulDiscSample(discSamples, discKey, result);
-  return result;
+  };
+  cacheSuccessfulDiscSample(discSamples, disc, config, entry);
+  return wrapDiscSample(entry);
 }
 
 /**

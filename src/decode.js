@@ -41,10 +41,11 @@ import {
   assertCellSurfaceFinalN,
   capacityForCellSurfaceFinal,
   dataCellsInScanOrderCellSurfaceFinal,
-  finalLayoutIdForN,
+  hasFinalLayoutWireForN,
   isCellSurfaceFinalFormatIndex,
   isCellSurfaceFinalId,
   tonesFromCellSurfaceFinalFormatIndex,
+  wirePreferredFinalLayoutIdForN,
   CELL_SURFACE_FINAL_FORMAT_WIRE,
   CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
 } from './cellSurfaceFinal.js';
@@ -358,13 +359,18 @@ function resolveProfile(format) {
         ? 'v2r2'
         : format.locatorProfile === 'cell-surface-v1r2'
           ? 'v1r2'
-          // 'cell-surface-v0x' · 'cell-surface-v0xq' 는 초안 슬롯이 없어
-          // draftIndexWire 충돌이 없다.
+          // 'cell-surface-v0x' · 'cell-surface-v0xq' · 'cell-surface-v0w' ·
+          // 'cell-surface-v0wq' 는 초안 슬롯이 없어 draftIndexWire 충돌이 없다.
+          // ('cell-surface-v0wy' 라는 프로파일은 **없다** — v0WY 는 와이어가 v0W 다.)
           : format.locatorProfile === 'cell-surface-v0x'
             ? 'v0x'
             : format.locatorProfile === 'cell-surface-v0xq'
               ? 'v0xq'
-              : null;
+              : format.locatorProfile === 'cell-surface-v0w'
+                ? 'v0w'
+                : format.locatorProfile === 'cell-surface-v0wq'
+                  ? 'v0wq'
+                  : null;
     const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
       ? format.cellSurfaceLayout
       : (profileHintId !== null && !draftIndexWire ? profileHintId : null);
@@ -393,19 +399,25 @@ function resolveProfile(format) {
       let finalN = requestedN;
       if (finalN === undefined) {
         if (finalIdHint === 'v0') finalN = 13;
-        else if (finalIdHint === 'v1r2' || finalIdHint === 'v0x' || finalIdHint === 'v0xq') {
+        else if (finalIdHint === 'v1r2' || finalIdHint === 'v0x' || finalIdHint === 'v0xq'
+          || finalIdHint === 'v0w') {
           finalN = 21;
         }
         else {
           throw new RangeError('신세대 셀 표면 v2r2 는 format.n(21|25) 이 필요하다');
         }
       }
-      if (finalLayoutIdForN(finalN) === null) {
+      // **와이어** 질의다 — 라인업(finalLayoutIdForN)이 아니라 «읽을 수 있는 n 인가».
+      // v2r2 드랍으로 n=25 는 라인업에서 빠졌지만 발행된 v2r2@25 프레임은 여전히 읽는다.
+      if (!hasFinalLayoutWireForN(finalN)) {
         throw new RangeError('신세대 셀 표면의 n 은 13|21|25 다: ' + finalN);
       }
       if (finalIdHint !== null) assertCellSurfaceFinalN(finalIdHint, finalN);
-      // n=21 은 후보가 둘 — 힌트가 없으면 기본(v2r2). 레이아웃 판별은 로케이터·평가 게이트가 한다.
-      const finalId = finalIdHint === null ? finalLayoutIdForN(finalN) : finalIdHint;
+      // 힌트가 없으면 그 n 의 **와이어 선호** 레이아웃 (n=21·25 → v2r2). 드랍은 검출
+      // 라인업과 카드에만 걸리고, 힌트 없는 와이어 해소는 발행 이력을 그대로 따른다.
+      const finalId = finalIdHint === null
+        ? wirePreferredFinalLayoutIdForN(finalN)
+        : finalIdHint;
       // 포맷 세대 — 기본은 현행 v2(18셀). `formatWire: 1` 이면 **레거시 판독**(15셀)이라
       // 예약 셀이 3개 적고 데이터 scan 이 그만큼 길다(통합자 결정 A · 폴백 경로).
       const formatWire = format.formatWire === undefined

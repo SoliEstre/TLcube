@@ -21,10 +21,10 @@ import { DEFAULT_SHADING_MODE, SHADING_MODES } from './shading.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V0W,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
-  LOCATOR_PROFILE_CELL_SURFACE_V1R2,
-  LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_OFF,
 } from './locatorY.js';
@@ -63,8 +63,11 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   type: field('Y', BOTH, GENERATOR_TYPES),
   preset: field(DEFAULT_PRESET, BOTH, [...Object.keys(PRESETS), 'custom']),
   wifiSecurity: field('WPA', BOTH, ['WPA', 'WEP', 'nopass']),
+  // 'plane' = **큐브 바깥 면-평면 QR** (v0WY, 2026-08-16). 'inner'(윈도 β)와 달리
+  // 실루엣 **밖**에 앉아 데이터 셀을 한 칸도 안 먹는다 — 그래서 어떤 레이아웃과도
+  // 조합되고, v0W 와 붙인 것이 v0WY 다 (`sceneY.js` §renderOuterFaceQr).
   qrPosition: field(DEFAULT_OUTER_QR_POSITION, BOTH,
-    ['inner', 'TL', 'TR', 'BL', 'BR', 'none']),
+    ['inner', 'plane', 'TL', 'TR', 'BL', 'BR', 'none']),
   // 생성기 화면의 **초기 선택**은 하이브리드다(사용자 지시 2026-08-13). 실사진 12/12 ·
   // 285ms 로 순수 불스아이(24/24 · 603ms)와 같은 인식률에 절반 가까이 빠르고, 프로젝트
   // 정체성인 큐브가 코드에 실제로 보인다.
@@ -75,8 +78,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
     [LEGACY_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
   previousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
     [LEGACY_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
+  // 'plane'(v0WY) 도 **바깥 QR 위치**라 여기 들어간다 — 빠뜨리면 Y 에서 «면» 을 고른 뒤
+  // O/A 로 갔다 돌아올 때 복원값이 허용값 밖이 되어 조용히 기본으로 떨어진다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
-    ['TL', 'TR', 'BL', 'BR', 'none']),
+    ['TL', 'TR', 'BL', 'BR', 'plane', 'none']),
   // O/A는 회전 기준을 함께 주는 중앙 QR이 기본이고, Y는 종전 코너 QR 기본을 유지한다.
   // 공용 상태가 타입 사이로 새지 않게 타입군별 마지막 선택을 별도 보존한다.
   finderQrProfiles: field(DEFAULT_FINDER_QR_PROFILES, INTERNAL,
@@ -110,10 +115,14 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
     [TL_READER_URL, 'https://example.com/fallback']),
   qrCornerToo: field(false, ADVANCED, [false, true]),
   // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 보여 주지 않고 항상 off.
-  // 최종 라인업(2026-08-15): v0 · v2r2 · (2026-08-15 밤) v1r2 = n=21 A/B 후보
-  // · (2026-08-16) v0X = n=21 3파전 후보 · (2026-08-17) v0XQ = 중앙 QR 변형.
-  // 초안 v2 와 구 v1 CS 는 허용값에서 내린 채다 — 저장돼 있던 값은 검증 실패로
-  // 기본(off)에 떨어진다. hex-frame-v1 은 UI 카드만 내리고 값은 살려 둔다(차단·비삭제).
+  // 라인업(2026-08-16 드랍 + v0W 편입 반영): v0 = Y0(n=13) · v0X = Y1(n=21) ·
+  // v0XQ = Y1 중앙 QR · v0W = Y1 신설 (운영자 설계, 조건부 드랍 판정 대기).
+  //
+  // **v2r2 · v1r2 드랍 (운영자 확정 2026-08-16)** — 허용값에서 내린다. 초안 v2 ·
+  // 구 v1 CS 와 같은 처리이며, 저장돼 있던 값은 **검증 실패로 기본(off)에 떨어진다**.
+  // 와이어·정본·디코더 판독 능력은 그대로다 (`cellSurfaceFinal.js`
+  // §CELL_SURFACE_FINAL_DROPPED_IDS — 차단·비삭제).
+  // hex-frame-v1 은 그것대로 UI 카드만 내리고 값은 살려 둔 채다(다른 전례).
   locatorProfileY: field(DEFAULT_LOCATOR_PROFILE_Y, INTERNAL,
     [
       LOCATOR_PROFILE_OFF,
@@ -121,8 +130,8 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
       LOCATOR_PROFILE_CELL_SURFACE_V0,
       LOCATOR_PROFILE_CELL_SURFACE_V0X,
       LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
-      LOCATOR_PROFILE_CELL_SURFACE_V2R2,
-      LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+      LOCATOR_PROFILE_CELL_SURFACE_V0W,
+      LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
     ]),
 });
 

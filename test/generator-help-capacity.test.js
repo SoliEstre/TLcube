@@ -35,6 +35,7 @@ import {
   cellSurfaceFinal,
   dataCellsInScanOrderCellSurfaceFinal,
   finalLayoutIdForN,
+  wirePreferredFinalLayoutIdForN,
   locatorCellsCellSurfaceFinal,
   slotCellsCellSurfaceFinal,
 } from '../src/cellSurfaceFinal.js';
@@ -74,8 +75,15 @@ const payload = (n, id) => LEVELS.map(
 
 // ── ① 정본 실측 핀 ────────────────────────────────────────────────────────
 
-test('n=21 기본 레이아웃은 v2r2 다 — id 생략이 세 후보를 하나로 뭉갠다', () => {
-  assert.equal(finalLayoutIdForN(21), 'v2r2');
+test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 세 후보를 하나로 뭉갠다', () => {
+  // **의도적 갱신 «드랍 정본화» (2026-08-16)** — v2r2·v1r2 를 검출 라인업에서
+  // 내리면서 `finalLayoutIdForN(21)` 은 v0x 가 됐다. 하지만 이 테스트가 재는 사고는
+  // «용량 헬퍼에 id 를 안 넘기면 무엇으로 해소되나» 이고, 그 기본값은 라인업이
+  // 아니라 **와이어 선호**(`wirePreferredFinalLayoutIdForN`)로 고정했다 —
+  // 드랍이 발행된 프레임의 용량 회계를 조용히 바꾸면 안 되기 때문이다.
+  // 그래서 «id 생략 = v2r2» 라는 사고 자체는 그대로 살아 있고, 여기서 계속 잡는다.
+  assert.equal(wirePreferredFinalLayoutIdForN(21), 'v2r2');
+  assert.equal(finalLayoutIdForN(21), 'v0x', '라인업 기본은 드랍 뒤 v0x 다');
   // id 를 생략한 호출은 후보와 무관하게 전부 같은 값이 된다. 이것이 «세 후보 용량
   // 동일» 이라는 거짓 결론의 기계적 원인이다 — 재현해서 남겨 둔다.
   const omitted = LEVELS.map((level) => capacityForCellSurfaceFinal(21, level).maxPayloadBytes);

@@ -4,6 +4,8 @@ import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
   CELL_SURFACE_FINAL_V0,
+  CELL_SURFACE_FINAL_V0W,
+  CELL_SURFACE_FINAL_V0WQ,
   CELL_SURFACE_FINAL_V0X,
   CELL_SURFACE_FINAL_V0XQ,
   CELL_SURFACE_FINAL_V1R2,
@@ -12,6 +14,8 @@ import {
 } from './cellSurfaceFinal.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V0W,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
@@ -29,7 +33,7 @@ import {
  * 사용자가 고른 값이 복원된다(해상도 티어가 이미 같은 규약을 쓴다).
  *
  * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string}} state
- * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'|'v0xq'}}
+ * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'|'v0xq'|'v0w'}}
  */
 export function encodeOptionsForY(state) {
   if (state === null || typeof state !== 'object') {
@@ -39,11 +43,15 @@ export function encodeOptionsForY(state) {
   if (fallback === null || typeof fallback !== 'object') {
     throw new TypeError('Y QR 폴백 상태가 필요하다');
   }
-  // 최종 라인업 (2026-08-15): v0 = Y0(n=13) 고정 · v2r2 = Y1/Y2(n=21/25).
-  // 2026-08-15 밤 추가: v1r2 = Y1(n=21) 전용 A/B 후보 (네 코너 블록 80셀).
-  // 2026-08-16 추가: v0X = Y1(n=21) 전용 3파전 후보 (QR 파인더 문법 65셀).
-  // 2026-08-17 추가: v0XQ = Y1(n=21) 전용 중앙 QR 변형 (3코너 42셀 + 중앙 슬롯 81셀).
-  // 초안 v2 와 구 v1 CS 는 UI 에서 내린 채다.
+  // 카드 라인업 (2026-08-16 드랍 + v0W 편입 반영): v0 = Y0(n=13) · v0X = Y1(n=21) ·
+  // v0XQ = Y1 중앙 QR 변형 (3코너 42셀 + 중앙 슬롯 81셀) ·
+  // v0W = Y1 신설 (K3 중앙 25 + 심 꼭짓점 동심 사각 36 + v0 코너 위상 마커 9 = 70셀).
+  //
+  // **v2r2 · v1r2 는 카드에서 내려갔다** (`generator-state.js` 의 허용값에서 제거 —
+  // UI 로는 이 값이 더 이상 들어오지 않는다). 아래 두 분기는 **삭제하지 않는다**:
+  // 이미 발행된 출력물의 재생성·법의학·와이어 회귀 테스트가 이 함수를 직접 부른다
+  // (`cellSurfaceFinal.js` §CELL_SURFACE_FINAL_DROPPED_IDS — 차단·비삭제).
+  // 초안 v2 와 구 v1 CS 도 같은 이유로 UI 에서만 내린 채다.
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0) {
     return {
       tones: tone === 3 ? 3 : 2,
@@ -77,6 +85,24 @@ export function encodeOptionsForY(state) {
       version: 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0XQ),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v0W 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0W),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v0WQ 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0WQ),
     };
   }
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {

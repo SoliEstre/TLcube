@@ -2064,12 +2064,16 @@ if (expectedLayoutRoot && isLabPath()) {
   for (const button of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
     button.addEventListener('click', () => {
       const next = button.dataset.expectedLayout;
-      // 최종 라인업(2026-08-15): v0 · v2r2 + (2026-08-15 밤) v1r2 = n=21 A/B 후보
-      // + (2026-08-16) v0x = n=21 3파전 후보 + (2026-08-17) v0xq = 중앙 QR 변형.
+      // 라인업(2026-08-16 드랍 + v0W·v0WQ 편입): v0 = Y0 · v0x = Y1 ·
+      // v0xq = Y1 중앙 QR · v0w = Y1 신설 · v0wq = v0W 파생(중앙 QR).
+      // **v0wy 는 없다** — 큐브 바깥 QR 은 렌더 선택이고 와이어는 v0w 라서,
+      // 기대값으로 두면 디코더가 절대 돌려줄 수 없는 문자열이 된다.
+      // v2r2 · v1r2 는 검출 라인업에서 내려갔으므로 «기대» 로도 못 고른다 —
+      // 저장·URL 등으로 옛 값이 들어와도 여기서 null(모름)로 떨어진다.
       // 값은 레이아웃 id(소문자)와 같아야 한다 — 디코더가
       // hypothesis.cellSurfaceLayout 으로 돌려주는 문자열이 그것이다 (표시만 v0XQ).
-      expectedLocatorLayout = next === 'v0' || next === 'v2r2' || next === 'v1r2'
-        || next === 'v0x' || next === 'v0xq'
+      expectedLocatorLayout = next === 'v0' || next === 'v0x' || next === 'v0xq'
+        || next === 'v0w' || next === 'v0wq'
         ? next
         : null;
       for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {

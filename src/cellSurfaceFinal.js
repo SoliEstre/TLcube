@@ -63,6 +63,52 @@
  * 함수로 만들므로 mid 는 모듈 로드에서 먼저 죽는다. 자기검증 ④(다섯 정본 배열 전수)는
  * 그 뒤의 이중 방벽이다.
  *
+ * **v0W (2026-08-16 추가, 운영자 신설 설계)** — 코드 안의 id 는 소문자 `'v0w'`,
+ * 표시 이름은 `v0W`. 정본은 `cellsurface-v0w-editor.json`(컴팩트 팩)이지만 이 모듈은
+ * **그 팩을 전사하지 않는다** — 재검산 결과 세 블록이 전부 기존 정본에서 유도되기
+ * 때문이다 (`test/output/lanes/claude-v0w-derive.mjs`, 70/70 셀 완전 일치):
+ *   · NW (0..4)² 25셀 = **v1r2 NW 5×5 와 같은 배열**(= v2r2 중앙 블록 A). K3 불스아이.
+ *   · NE (0..5)×(15..20) 36셀 = **V0XQ_CORNER_CELLS 와 같은 배열**
+ *     (= v0X SE 동심 사각을 (i−15, j) 로 평행이동한 것). 3면 동일 톤 36/36.
+ *   · SE (18..20)² 9셀 = **v0 정본의 SE 3×3 먼 코너 블록**을 (+8, +8) 평행이동.
+ *     T=L 이고 R 만 다른 비대칭(위상 마커) — 120° 판별력을 혼자 짊어진다.
+ *
+ * 팩의 `_note` 는 「R면 SE 3×3 반전」이라 적었지만 실측은 «비트 반전» 이 아니다:
+ * T·L 은 상단행+좌열 L자(밝음 5), R 은 중앙 1점(밝음 1)이다. 그 무늬의 출처는
+ * **v0 의 SE 코너 블록 그대로**이고, 이 모듈은 측정한 쪽을 적는다.
+ *
+ * 팩의 `toneOverrides` 는 209항(T 70 · L 69 · R 70)이라 (0,4).L 한 면이 빠져
+ * DEFAULT_TONE(=1) 로 유도된다 — v0X 최초 편입본과 **같은 직렬화 함정**이다.
+ * 나머지 두 면이 (2,2) 로 일치하므로 `normalizeMidFaces` 가 결정적으로 2 를 채우고,
+ * 유도된 배열은 v1r2 NW 의 (0,4) = (2,2,2) 와 셀 하나까지 같다. 즉 **v0W 정본에도
+ * mid 면이 0개**이고, 손이 고른 값은 하나도 없다.
+ *
+ * 회계: 441 − 70 − 12 − 18 = **341** (편집기 팩 `counts.data` 와 일치하지만, 이 모듈이
+ * 쓰는 값은 팩의 회계가 아니라 autoplace 재산출이다 — v0X 전례, 손 좌표 금지).
+ * 레거시(포맷 v1) 세대는 **없다** — v0xq 와 같이 포맷 v2 전환 이후 신설이라
+ * v1 로 발행된 프레임이 세상에 없다 (§CELL_SURFACE_FINAL_LEGACY_IDS).
+ *
+ * **v0W 파생 2종 (2026-08-16, 운영자 지시)** — 「v0W 에 QR 채널을 어떻게 붙이나」의
+ * 두 답이고, **한쪽만 와이어에 새 id 를 만든다.**
+ *
+ *   · **v0WQ** (`'v0wq'`) — v0XQ 식 **중앙 QR 슬롯**. 중앙 K3 를 슬롯이 가져가므로
+ *     셀 집합이 실제로 달라진다 → 새 레이아웃 id. 정본은 또 유도다(손 좌표 0):
+ *     NE 동심 사각 36 = `V0XQ_CORNER_CELLS` **같은 배열** · SE 위상 마커 9 =
+ *     `V0W_PHASE_CELLS` **같은 배열**. 즉 **v0XQ 와 위상 마커 블록 하나만 다르다**
+ *     (v0xq = v0X SW 6셀 · v0wq = v0 SE 3×3 9셀) — 대조 실험이 설계로 붙어 있다.
+ *     회계: 441 − 45 − 64(슬롯 8²) − 12 − 18 = **302** · S=100 · 잔여 2.
+ *     슬롯은 **두 번 물어서** 정해졌다 — autoplace 상한 9 (`claude-v0wq-probe.mjs`:
+ *     m ≥ 10 은 `AUTOPLACE_REF_QUADRANT` 거부) · 그 안에서 **인코더 정합 ⑤ 가 9 를
+ *     거부**해 8 로 내려앉았다 (§CENTER_QR_SLOT_CELLS_V0WQ). 결과적으로 v0XQ 보다
+ *     data 가 **14셀 많고**(302 대 288) QR 모듈은 **더 잘다**(0.2759 대 0.3103셀).
+ *
+ *   · **v0WY** — 큐브 **바깥** 면-평면 QR (윈도 β 문법 재사용). **여기에 id 가 없다.**
+ *     QR 이 실루엣 밖에 앉아 셀을 한 칸도 안 먹으므로 셀 집합·회계·와이어가 v0W 와
+ *     **비트 동일**하기 때문이다. 새 id 를 만들면 (a) 디코더가 구분할 근거가 0 이라
+ *     교차 오수용이 100 % 로 설계되고 (b) n=21 CS 후보만 하나 더 늘어 프레임 시간을
+ *     먹는다. 그래서 v0WY 는 **렌더 선택**이다 — `qrPosition: 'plane'`
+ *     (`sceneY.js` §renderOuterFaceQr). 브리프의 «데이터 무손실» 이 곧 이 결론이다.
+ *
  * 런타임 의존성 0 · 순수 ESM (node: API 금지, Math.random/Date 금지).
  */
 
@@ -133,12 +179,27 @@ export const CELL_SURFACE_FINAL_V1R2 = 'v1r2';
 export const CELL_SURFACE_FINAL_V0X = 'v0x';
 /** 표시 이름은 «v0XQ» — 중앙 QR 변형. id 는 소문자 (형제 표기 규약). */
 export const CELL_SURFACE_FINAL_V0XQ = 'v0xq';
+/** 표시 이름은 «v0W» — 운영자 신설(2026-08-16). id 는 소문자 (형제 표기 규약). */
+export const CELL_SURFACE_FINAL_V0W = 'v0w';
+/** 표시 이름은 «v0WQ» — v0W 파생, 중앙 QR 슬롯 (2026-08-16). */
+export const CELL_SURFACE_FINAL_V0WQ = 'v0wq';
+/**
+ * 선언 순서가 곧 «n 별 후보 순서» 다 (`finalLayoutIdsForN`). v0W·v0WQ 를 **맨 뒤**에
+ * 둔다 — n=21 의 기본은 v0X 그대로이고, 둘은 세·네 번째 후보로 병행 채점된다.
+ * 기본을 바꾸는 것은 조건부 드랍(«v0W > v0X» · «v0WQ > v0XQ» 실기기 판정)의 몫이지
+ * 편입의 몫이 아니다.
+ *
+ * ⚠ **v0WY 는 여기 없다** — 셀 집합이 v0W 와 비트 동일한 «렌더 선택» 이라 와이어 id 가
+ * 아니다 (모듈 헤더 §v0W 파생 2종). id 를 만들면 교차 오수용이 100 % 로 설계된다.
+ */
 export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0,
   CELL_SURFACE_FINAL_V2R2,
   CELL_SURFACE_FINAL_V1R2,
   CELL_SURFACE_FINAL_V0X,
   CELL_SURFACE_FINAL_V0XQ,
+  CELL_SURFACE_FINAL_V0W,
+  CELL_SURFACE_FINAL_V0WQ,
 ]);
 
 export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
@@ -147,6 +208,8 @@ export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
   [CELL_SURFACE_FINAL_V1R2]: 'cell-surface-v1r2',
   [CELL_SURFACE_FINAL_V0X]: 'cell-surface-v0x',
   [CELL_SURFACE_FINAL_V0XQ]: 'cell-surface-v0xq',
+  [CELL_SURFACE_FINAL_V0W]: 'cell-surface-v0w',
+  [CELL_SURFACE_FINAL_V0WQ]: 'cell-surface-v0wq',
 });
 
 /** 신세대 셀 표면 formatIndex — 한 쌍뿐. 세 레이아웃이 같이 쓴다(신설 금지). */
@@ -159,29 +222,113 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
   [CELL_SURFACE_FINAL_V1R2]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0X]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0XQ]: Object.freeze([21]),
+  [CELL_SURFACE_FINAL_V0W]: Object.freeze([21]),
+  [CELL_SURFACE_FINAL_V0WQ]: Object.freeze([21]),
 });
 
 /**
- * n → 그 n 의 **기본** 레이아웃 id. 라인업 밖 n 은 null.
- * n=21 은 후보가 셋(v2r2·v1r2·v0x)이며 기본은 v2r2 — 기존 경로의 동작을 바꾸지 않는다.
+ * **실험판 드랍 (운영자 확정 2026-08-16) — 차단이지 삭제가 아니다.**
+ *
+ * 운영자 관측: 실기기 인식이 1\~5초 텀. v2r2 는 §P6(`test/output/claude-skew-real.md`)
+ * 에서 **평가 예산 47.4 % 를 먹고 수용 0회**였고, v1r2 는 같은 n=21 에서 v0X 와
+ * 반경이 같아 매 (중앙,코너) 쌍마다 refinePose 를 한 번 더 태우기만 했다.
+ * 둘을 **검출 라인업(블록 로케이터 패밀리 · CS 평가 후보)과 생성기 카드**에서 내린다.
+ *
+ * 내리지 **않는** 것 (hex-frame-v1 전례 — 카드만 내리고 값은 보존):
+ *   · 와이어 정의 — `CELL_SURFACE_FINAL_IDS` · `CELL_SURFACE_FINAL_NS` ·
+ *     `CELL_SURFACE_FINAL_PROFILE` · `DECLARED_DATA`(현행·레거시 둘 다) 는 그대로다.
+ *     `cellSurfaceFinal(21, 'v2r2')` 는 **여전히 만들어진다** — 발행된 프레임의
+ *     판독·법의학·테스트 픽스처가 거기 걸려 있다.
+ *   · 정본 배열(`V2R2_FAR_BASE_CELLS` · `V1R2_CELLS`) 과 자기검증.
+ *   · 로케이터 패밀리 코드 — `csBlockLocator` 캘리브레이션의 `v2r2Family` ·
+ *     `v1r2Family` 를 **false 기본**으로 내렸을 뿐이라, 교차 오수용 대조군은
+ *     옵션 한 줄로 되살아난다.
+ *
+ * **n=25 (Y2) 는 공백이 된다** — 그 슬롯을 채우던 것이 v2r2@25 뿐이었다.
+ * `finalLayoutIdsForN(25) === []` 이고 `finalLayoutIdForN(25) === null` 이다.
+ * 와이어 질의는 `hasFinalLayoutWireForN(25) === true` 로 계속 참이다.
  */
-export function finalLayoutIdForN(n) {
-  if (n === 13) return CELL_SURFACE_FINAL_V0;
-  if (n === 21 || n === 25) return CELL_SURFACE_FINAL_V2R2;
-  return null;
+export const CELL_SURFACE_FINAL_DROPPED_IDS = Object.freeze([
+  CELL_SURFACE_FINAL_V2R2,
+  CELL_SURFACE_FINAL_V1R2,
+]);
+
+/** 이 레이아웃이 검출 라인업·생성기 카드에서 내려갔는가 (와이어는 살아 있다). */
+export function isDroppedFinalLayout(id) {
+  return CELL_SURFACE_FINAL_DROPPED_IDS.includes(id);
+}
+
+/** 라인업에 살아 있는 id — 선언 순서 그대로. */
+export const CELL_SURFACE_FINAL_ACTIVE_IDS = Object.freeze(
+  CELL_SURFACE_FINAL_IDS.filter((id) => !CELL_SURFACE_FINAL_DROPPED_IDS.includes(id)),
+);
+
+/**
+ * n → **와이어** 선호 레이아웃 (드랍을 보지 않는다). 발행 이력의 기록이다 —
+ * 드랍 전 `finalLayoutIdForN` 이 돌려주던 값과 같다.
+ */
+const WIRE_PREFERRED_BY_N = Object.freeze({
+  13: CELL_SURFACE_FINAL_V0,
+  21: CELL_SURFACE_FINAL_V2R2,
+  25: CELL_SURFACE_FINAL_V2R2,
+});
+
+/**
+ * 와이어 수준으로 이 n 을 갖는 레이아웃이 하나라도 있는가 — **드랍 포함**.
+ * 「이 n 을 읽을 수 있나」 를 묻는 자리에 쓴다(`finalLayoutIdForN !== null` 은
+ * 「이 n 이 라인업에 있나」 라서 드랍 뒤 n=25 에서 갈라진다).
+ */
+export function hasFinalLayoutWireForN(n) {
+  return WIRE_PREFERRED_BY_N[n] !== undefined;
+}
+
+/** n → 와이어 선호 레이아웃 id (드랍 포함). 와이어 밖 n 은 null. */
+export function wirePreferredFinalLayoutIdForN(n) {
+  const id = WIRE_PREFERRED_BY_N[n];
+  return id === undefined ? null : id;
 }
 
 /**
- * n → 그 n 에서 실재하는 레이아웃 **후보 전부** (기본이 맨 앞). 라인업 밖 n 은 [].
- * 디코더 CS 평가의 병행 채점 입력이다 — 수용은 기존 게이트가 판정한다.
+ * n → 그 n 에서 **라인업에 살아 있는** 레이아웃 후보 전부 (기본이 맨 앞).
+ * 라인업 밖 n 은 []. 디코더 CS 평가의 병행 채점 입력이다 — 수용은 기존 게이트가 판정한다.
+ *
+ * 드랍 후: n=13 → [v0] · n=21 → [v0x, v0xq] · n=25 → **[]**.
  */
 export function finalLayoutIdsForN(n) {
   const ids = [];
-  const preferred = finalLayoutIdForN(n);
-  if (preferred === null) return Object.freeze(ids);
+  const preferred = WIRE_PREFERRED_BY_N[n];
+  if (preferred === undefined) return Object.freeze(ids);
+  if (!isDroppedFinalLayout(preferred)) ids.push(preferred);
+  for (const id of CELL_SURFACE_FINAL_IDS) {
+    if (id === preferred || isDroppedFinalLayout(id)) continue;
+    if (CELL_SURFACE_FINAL_NS[id].includes(n)) ids.push(id);
+  }
+  return Object.freeze(ids);
+}
+
+/**
+ * n → 그 n 의 **기본**(라인업에 살아 있는 첫) 레이아웃 id. 라인업 밖 n 은 null.
+ * 드랍 후 n=21 의 기본은 v0X 이고 n=25 는 null 이다 (Y2 공백).
+ */
+export function finalLayoutIdForN(n) {
+  const ids = finalLayoutIdsForN(n);
+  return ids.length > 0 ? ids[0] : null;
+}
+
+/**
+ * n → 그 n 의 **와이어** 레이아웃 후보 전부 — **드랍 포함** (와이어 선호가 맨 앞).
+ * 드랍 전 `finalLayoutIdsForN` 이 돌려주던 목록과 같다.
+ * 법의학·대조군 경로 전용이다 (`cellSurfaceY-detect.js` 의
+ * `includeDroppedCellSurfaceLayouts` 옵션 · 「차단·비삭제」의 증명).
+ */
+export function allFinalLayoutIdsForN(n) {
+  const ids = [];
+  const preferred = WIRE_PREFERRED_BY_N[n];
+  if (preferred === undefined) return Object.freeze(ids);
   ids.push(preferred);
   for (const id of CELL_SURFACE_FINAL_IDS) {
-    if (id !== preferred && CELL_SURFACE_FINAL_NS[id].includes(n)) ids.push(id);
+    if (id === preferred) continue;
+    if (CELL_SURFACE_FINAL_NS[id].includes(n)) ids.push(id);
   }
   return Object.freeze(ids);
 }
@@ -215,6 +362,14 @@ const DECLARED_DATA = Object.freeze({
     [CELL_SURFACE_FINAL_V0X]: Object.freeze({ 21: 346 }),
     // v0xq: 441 − 42(파인더) − 81(중앙 QR 슬롯) − 12 − 18 = 288.
     [CELL_SURFACE_FINAL_V0XQ]: Object.freeze({ 21: 288 }),
+    // v0w: 441 − 70(파인더 25+36+9) − 12 − 18 = 341. 편집기 팩 counts.data 와 같지만
+    // 이 값의 근거는 팩이 아니라 autoplace 재산출이다 (claude-v0w-derive.mjs §④).
+    [CELL_SURFACE_FINAL_V0W]: Object.freeze({ 21: 341 }),
+    // v0wq: 441 − 45(파인더 36+9) − 64(중앙 QR 슬롯 8²) − 12 − 18 = 302.
+    // 슬롯 8 은 v0xq 에서 베낀 값이 아니다 — autoplace 상한은 9 인데
+    // (`claude-v0wq-probe.mjs`) **인코더 정합 ⑤ 가 9 를 거부해** 8 로 내려앉았다
+    // (§CENTER_QR_SLOT_CELLS_V0WQ).
+    [CELL_SURFACE_FINAL_V0WQ]: Object.freeze({ 21: 302 }),
   }),
   // 레거시 세대 (포맷 v1 · 15셀) — **판독 전용**. 개정 전 발행 프레임의 회계다.
   [CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY]: Object.freeze({
@@ -235,6 +390,10 @@ const DECLARED_DATA = Object.freeze({
  * 없다(81 B → 84심볼 · 82 B → 86심볼). 그 불일치를 넘기려면 «인코더가 못 만드는
  * 용량 선언» 을 허용해야 하는데 그것이 바로 ⑤ 가 막는 것이다. 그래서 v0xq 에
  * `cellSurfaceFinal(n, 'v0xq', 1)` 은 **없는 조합**으로 거부된다.
+ *
+ * v0W · v0WQ 도 같다 — 2026-08-16 신설이라 포맷 v1 로 발행된 프레임이 존재하지 않는다.
+ * (v0W 는 ⑤ 예산에는 걸리지 않지만, 「읽을 프레임이 세상에 없는 코드를 유지하지
+ * 않는다」 는 같은 이유로 빠진다. 신설 레이아웃의 기본값은 «레거시 없음» 이다.)
  */
 export const CELL_SURFACE_FINAL_LEGACY_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0,
@@ -456,6 +615,27 @@ const V0XQ_CELLS = Object.freeze([...V0XQ_CORNER_CELLS, ...V0XQ_MARKER_CELLS]);
 export const CENTER_QR_SLOT_CELLS = 9;
 
 /**
+ * v0WQ 의 슬롯 한 변 — **8 이다. 9 가 아니다.**
+ *
+ * autoplace 상한은 v0xq 와 같은 9 로 나왔다 (`claude-v0wq-probe.mjs`: m ≤ 9 수용 ·
+ * m ≥ 10 `AUTOPLACE_REF_QUADRANT`). 그런데 m=9 는 **자기검증 ⑤(인코더 정합)에서
+ * 죽는다**: data 285 → S=95 → ECC-H 예산 57심볼인데, base-211 청크 패커에는
+ * 57심볼에 **정확히** 맞는 바이트 수가 없다 (54 B → 56심볼 · 55 B → 58심볼).
+ * `decode.finishProfile` 이 그 불일치를 «이 포맷은 현행 인코더가 생성할 수 없다» 로
+ * 거부하므로 — 그 게이트는 **손대지 않는다** — 슬롯을 한 칸 내려 예산을 옮긴다.
+ *
+ * m=8: data 302 · S=100 · 잔여 2 · ECC L/M/H 예산 88/75/60 전부 정합.
+ * 부수 효과 둘 (대조표에 그대로 실린다):
+ *   · payload 가 **늘어난다** — 84/72/57 B 대 v0XQ 의 80/67/54 B (data 302 vs 288).
+ *   · QR 모듈이 **작아진다** — 피치 8/29 = 0.2759셀 대 v0XQ 의 9/29 = 0.3103셀.
+ *     즉 «데이터를 더 싣고 중앙 QR 은 더 잘게» 가 v0WQ 의 자리다.
+ *
+ * 그래서 슬롯 상한은 여전히 autoplace 가 정하고(9), 그 안에서 **인코더 정합이
+ * 실제 값을 정한다**(8). 둘 중 어느 것도 이 레인이 고른 값이 아니다.
+ */
+export const CENTER_QR_SLOT_CELLS_V0WQ = 8;
+
+/**
  * 중앙 QR 모듈 기하 — **렌더러와 디코더가 같은 상수를 쓴다.** sceneY(그리는 쪽)와
  * cellsurface-block-detect(중앙 앵커를 읽는 쪽)가 각자 상수를 들면 조용히 어긋난다.
  * QR v1 고정(21×21, qr.js) · 콰이어트 4모듈(표준).
@@ -498,12 +678,30 @@ export function centerQrQuietFrameCells(slotCells = CENTER_QR_SLOT_CELLS) {
   return Object.freeze(cells);
 }
 
-/** 중앙 QR 슬롯 셀 (레이아웃별) — v0xq 뿐이다. 데이터도 파인더도 아닌 제3 역할. */
+/** 중앙 QR 슬롯을 갖는 레이아웃 — v0xq · v0wq. 데이터도 파인더도 아닌 제3 역할. */
+const CENTER_QR_SLOT_IDS = Object.freeze([
+  CELL_SURFACE_FINAL_V0XQ,
+  CELL_SURFACE_FINAL_V0WQ,
+]);
+
+/**
+ * 레이아웃 → 중앙 QR 슬롯 한 변(셀). 슬롯이 없으면 0.
+ * **렌더러(sceneY)·로케이터(block-detect)·회계가 전부 이 함수 하나를 본다** —
+ * 두 레이아웃이 서로 다른 m 을 쓰게 되면서 상수 하나로는 못 버틴다.
+ */
+export function centerQrSlotCellsFor(id) {
+  if (id === CELL_SURFACE_FINAL_V0XQ) return CENTER_QR_SLOT_CELLS;
+  if (id === CELL_SURFACE_FINAL_V0WQ) return CENTER_QR_SLOT_CELLS_V0WQ;
+  return 0;
+}
+
+/** 중앙 QR 슬롯 셀 (레이아웃별). 슬롯 없는 레이아웃은 빈 배열. */
 function slotCellsFor(id) {
-  if (id !== CELL_SURFACE_FINAL_V0XQ) return Object.freeze([]);
+  const side = centerQrSlotCellsFor(id);
+  if (side === 0) return Object.freeze([]);
   const cells = [];
-  for (let i = 0; i < CENTER_QR_SLOT_CELLS; i += 1) {
-    for (let j = 0; j < CENTER_QR_SLOT_CELLS; j += 1) {
+  for (let i = 0; i < side; i += 1) {
+    for (let j = 0; j < side; j += 1) {
       cells.push(Object.freeze({ i, j }));
     }
   }
@@ -536,6 +734,115 @@ export const V1R2_BLOCKS = Object.freeze({
 const V2R2_CENTER_CELLS = Object.freeze(V1R2_CELLS.filter(
   ([i, j]) => i <= V1R2_BLOCKS.NW.iMax && j <= V1R2_BLOCKS.NW.jMax,
 ));
+
+/**
+ * ── v0W (운영자 신설 설계 2026-08-16) ─────────────────────────────────────
+ *
+ * 세 블록이 **전부 기존 정본에서 유도**된다 (모듈 헤더 §v0W · 재검산 스크립트
+ * `test/output/lanes/claude-v0w-derive.mjs`). 손 좌표표가 한 줄도 없다:
+ *
+ * | 블록 | 셀 | 출처 (같은 배열/평행이동) | canonical 반경·방향 (면 T) |
+ * |---|---|---|---|
+ * | NW (0..4)²        | 25 | `V2R2_CENTER_CELLS` = v1r2 NW 5×5 **같은 배열** | 2.0셀 (중앙) |
+ * | NE (0..5)×(15..20)| 36 | `V0XQ_CORNER_CELLS` = v0X SE 를 (i−15, j) 평행이동 | 16.7033셀 · −141.1° |
+ * | SE (18..20)²      |  9 | v0 SE 3×3 을 (+8, +8) 평행이동 (n 차 21−13) | 19.0셀 · −90.0° |
+ *
+ * **역할 분담** (v0xq 와 정확히 뒤집힌 구성이다):
+ *   · 중앙 = K3 불스아이 → v0·v0X·v1r2·v2r2 와 **같은 중앙 서명**을 공유한다.
+ *     그래서 v0W 는 v0xq 와 달리 앵커드(중앙×원거리) 시딩 경로를 그대로 탄다.
+ *   · NE 동심 사각 = 3면 동일 톤이라 세 면이 같은 K5 회문 코어를 낸다 → **120°
+ *     쌍둥이 코어 3개**(v0X 의 «사각 링 동반자» 와 같은 신호). 위상 판별력은 0.
+ *   · SE 3×3 = T·L 이 상단행+좌열 L자, R 이 중앙 1점. **면 비대칭이라 120° 위상의
+ *     유일한 원천**이다. v0 의 코너 블록을 그대로 가져왔으므로 «작아도 읽히는»
+ *     이력이 붙어 있다.
+ *
+ * v0X 와의 차이는 **동심 사각이 어느 삼중점에 앉느냐**다. v0X 는 먼 꼭짓점
+ * (C0·C2·C4, r=18.0), v0W 는 심(seam) 꼭짓점 (C1·C3·C5, r=16.7033) 이다.
+ * 두 반경 차 1.30셀은 `ANCHOR_SNAP_CELLS`(3.2) 안이라 **거리로는 못 가른다** —
+ * 가르는 것은 패치 Pearson 과 CS 게이트다 (`cellsurface-block-detect.js` §v0W).
+ */
+const V0W_N = 21;
+/** v0 정본의 먼 코너 블록 하한 (n=13 캔버스) — `blockLimitsFor(13).farLimit` 와 같은 값. */
+const V0_FAR_MIN = 10;
+const V0_BASE_N = 13;
+const V0W_FAR_SHIFT = V0W_N - V0_BASE_N;
+
+/**
+ * K3 불스아이 중앙 정본. `V2R2_CENTER_CELLS` 와 **같은 참조**다 — 이름을 하나 더 두는
+ * 이유는 v2r2 가 드랍됐기 때문이다. v0W 중앙을 `V2R2_CENTER_CELLS` 로 부르면
+ * «드랍된 것에 기대는 것처럼» 읽히는데, 실제로는 v1r2 NW 5×5 라는 공유 정본이다.
+ */
+const K3_CENTRE_CELLS = V2R2_CENTER_CELLS;
+
+/** v0 SE 3×3 → v0W 위상 마커 (평행이동만 · 톤 변경 0). */
+const V0W_PHASE_CELLS = Object.freeze(V0_CELLS
+  .filter(([i, j]) => i >= V0_FAR_MIN && j >= V0_FAR_MIN)
+  .map(([i, j, T, L, R]) =>
+    Object.freeze([i + V0W_FAR_SHIFT, j + V0W_FAR_SHIFT, T, L, R])));
+
+const V0W_CELLS = Object.freeze([
+  ...K3_CENTRE_CELLS,
+  ...V0XQ_CORNER_CELLS,
+  ...V0W_PHASE_CELLS,
+]);
+
+/** v0W 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
+export const V0W_BLOCKS = Object.freeze({
+  /** K3 불스아이 중앙 (NW 사분면). */
+  NW: Object.freeze({ iMax: V1R2_BLOCKS.NW.iMax, jMax: V1R2_BLOCKS.NW.jMax }),
+  /** 3면 동일 동심 사각 (NE 사분면) — 심 꼭짓점 셋. */
+  NE: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
+  /** 위상 마커 (SE 사분면) — v0 코너 블록. T=L·R≠ 비대칭. */
+  SE: Object.freeze({ iMin: V0_FAR_MIN + V0W_FAR_SHIFT, jMin: V0_FAR_MIN + V0W_FAR_SHIFT }),
+});
+
+/**
+ * ── v0WQ (v0W 파생 ① — 중앙 QR 슬롯, 2026-08-16 운영자 지시) ────────────────
+ *
+ * **v0XQ 와 위상 마커 블록 하나만 다르다.** 셋을 나란히 놓으면 설계가 보인다:
+ *
+ * | | 중앙 | 동심 사각 (NE) | 위상 마커 | 파인더 | 슬롯 | data |
+ * |---|---|---|---|---|---|---|
+ * | v0W  | K3 불스아이 25 | 36 | **SE 3×3 (v0) 9** | 70 | 0 | 341 |
+ * | v0XQ | **QR 슬롯 9²** | 36 | SW (v0X) 6 | 42 | 81 | 288 |
+ * | v0WQ | **QR 슬롯 8²** | 36 | **SE 3×3 (v0) 9** | 45 | 64 | **302** |
+ *
+ * 즉 v0WQ = «v0W 의 위상 마커 × v0XQ 의 중앙». 중앙 K3 를 슬롯이 가져가므로
+ * v0W 의 앵커드(중앙 × 원거리) 시딩이 성립하지 않고, **v0xq 와 같은 코너 삼중점
+ * 경로**를 탄다 (`cellsurface-block-detect.js` §v0wq). 동심 사각이 같은 배열·같은
+ * 자리라 코어 반경도 √279 로 v0xq 와 **같다** — 두 패밀리를 가르는 것은 거리가
+ * 아니라 위상 마커 패치와 CS 게이트다 (v0X ↔ v0W 와 같은 구조).
+ *
+ * 정본은 또 **유도**다 (손 좌표표 0):
+ *   · NE 동심 사각 36 = `V0XQ_CORNER_CELLS` **같은 배열**
+ *   · SE 위상 마커 9 = `V0W_PHASE_CELLS` **같은 배열** (v0 SE 3×3 의 (+8,+8) 이동)
+ * 그래서 v0X SE 나 v0 SE 가 조용히 바뀌면 v0WQ 도 같이 터진다 (자기검증 ①-e).
+ *
+ * 회계: 441 − 45 − 64 − 12 − 18 = 302 · S=100 · 잔여 2.
+ * 슬롯은 **묻는 쪽이 둘**이다. ① autoplace 상한 — 점유 집합이 v0xq 와 다르므로 다시
+ * 물었고 m=4..9 수용 · m≥10 `AUTOPLACE_REF_QUADRANT` 거부였다
+ * (`test/output/lanes/claude-v0wq-probe.mjs`). 상한이 v0xq 와 같은 9 로 나온 것은
+ * 결과지 전제가 아니다 — 묶는 것이 NW 사분면 레퍼런스 L자 규칙이라 파인더 집합에
+ * 둔감하기 때문이다. ② **인코더 정합**(자기검증 ⑤) — m=9 의 S=95 는 ECC-H 예산
+ * 57심볼에 맞는 바이트 수가 없어 거부된다. 그래서 실제 값은 **8** 이다
+ * (§CENTER_QR_SLOT_CELLS_V0WQ).
+ */
+const V0WQ_CELLS = Object.freeze([
+  ...V0XQ_CORNER_CELLS,
+  ...V0W_PHASE_CELLS,
+]);
+
+/** v0WQ 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
+export const V0WQ_BLOCKS = Object.freeze({
+  /** 3면 동일 동심 사각 (NE 사분면) — v0xq 와 같은 블록. */
+  CORNER: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
+  /** 위상 마커 (SE 사분면) — v0W 와 같은 블록. */
+  MARKER: Object.freeze({ iMin: V0W_BLOCKS.SE.iMin, jMin: V0W_BLOCKS.SE.jMin }),
+  /** 중앙 QR 슬롯 (NW 사분면) — v0xq 보다 한 칸 작다 (§CENTER_QR_SLOT_CELLS_V0WQ). */
+  SLOT: Object.freeze({
+    iMax: CENTER_QR_SLOT_CELLS_V0WQ - 1, jMax: CENTER_QR_SLOT_CELLS_V0WQ - 1,
+  }),
+});
 
 function cellKey(i, j) {
   return i + ',' + j;
@@ -579,9 +886,9 @@ export function tonesFromCellSurfaceFinalFormatIndex(index) {
   );
 }
 
-/** 최종 라인업이 지원하는 n 인지. */
+/** 최종 셀 표면 **와이어**가 지원하는 n 인지 (13|21|25 — 드랍 포함). */
 export function isCellSurfaceFinalN(n) {
-  return finalLayoutIdForN(n) !== null;
+  return hasFinalLayoutWireForN(n);
 }
 
 /** id + n 정합 검사 — v0 는 13 만, v2r2 는 21|25 만. */
@@ -666,6 +973,8 @@ function canonicalRowsFor(id, n) {
   if (id === CELL_SURFACE_FINAL_V1R2) return V1R2_CELLS;
   if (id === CELL_SURFACE_FINAL_V0X) return V0X_CELLS;
   if (id === CELL_SURFACE_FINAL_V0XQ) return V0XQ_CELLS;
+  if (id === CELL_SURFACE_FINAL_V0W) return V0W_CELLS;
+  if (id === CELL_SURFACE_FINAL_V0WQ) return V0WQ_CELLS;
   return v2r2CellsForN(n);
 }
 
@@ -732,7 +1041,7 @@ function buildFinalSurface(id, n, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
     locatorCells,
     locatorCount: locatorCells.length,
     paintedCells: paintedFrozen,
-    /** 중앙 QR 슬롯 (v0xq 만 비어 있지 않다). 데이터·파인더 어느 쪽도 아니다. */
+    /** 중앙 QR 슬롯 (v0xq · v0wq 만 비어 있지 않다). 데이터·파인더 어느 쪽도 아니다. */
     slotCells: slot,
     slotCount: slot.length,
     /**
@@ -740,7 +1049,7 @@ function buildFinalSurface(id, n, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
      * 같아서 소비자들이 painted 를 점유로 써 왔다 — 슬롯이 생기며 그 등식이 깨졌다.
      * (§occupiedCellsCellSurfaceFinal 주석 참조.)
      *
-     * 슬롯이 없는 네 레이아웃은 `paintedCells` 와 **같은 배열 참조**다 — 편입 전
+     * 슬롯이 없는 레이아웃들은 `paintedCells` 와 **같은 배열 참조**다 — 편입 전
      * 동작이 바이트 불변임을 참조 동일성으로 못 박는다 (`cellSurfaceFinal.test.js`).
      */
     occupiedCells: slot.length === 0
@@ -789,12 +1098,17 @@ function surfaceCacheForWire(formatWire) {
 
 /**
  * (n, id) → 최종 셀 표면 인스턴스 (동결 캐시 — autoplace 는 로드 시 1회).
- * id 를 생략하면 그 n 의 **기본** 레이아웃 (13→v0 · 21|25→v2r2).
+ * id 를 생략하면 그 n 의 **와이어 선호** 레이아웃 (13→v0 · 21|25→v2r2).
+ *
+ * ⚠ 여기(와 아래 id 생략 헬퍼들)의 기본값은 **라인업이 아니라 와이어**다.
+ * v2r2·v1r2 드랍(2026-08-16)은 검출 라인업·생성기 카드에만 걸린다 — 용량 회계·
+ * 좌표표 헬퍼의 «id 생략» 의미까지 바꾸면 발행된 프레임의 숫자가 조용히 달라진다.
+ * 라인업 기본이 필요한 자리는 `finalLayoutIdForN` 을 **명시적으로** 부른다.
  * `formatWire` 를 생략하면 현행 세대(2) — 생성 경로는 이 기본값만 쓴다.
  * 1 을 주면 레거시 판독 세대(포맷 v1 · 15셀)를 돌려준다.
  */
 export function cellSurfaceFinal(
-  n, id = finalLayoutIdForN(n), formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
+  n, id = wirePreferredFinalLayoutIdForN(n), formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
 ) {
   const cache = surfaceCacheForWire(formatWire);
   const surface = id === null ? undefined : cache[surfaceKey(id, n)];
@@ -807,17 +1121,17 @@ export function cellSurfaceFinal(
 }
 
 export function nameCellSurfaceFinal(n, tones, id = undefined) {
-  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
+  const surface = cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id);
   const suffix = assertCellSurfaceFinalTones(tones) === 3 ? 'T' : '';
   return 'Y' + surface.version + suffix + '-CS-' + surface.id.toUpperCase();
 }
 
 export function locatorCellsCellSurfaceFinal(n, id = undefined) {
-  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).locatorCells;
+  return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).locatorCells;
 }
 
 export function paintedCellsCellSurfaceFinal(n, id = undefined) {
-  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).paintedCells;
+  return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).paintedCells;
 }
 
 /**
@@ -826,20 +1140,20 @@ export function paintedCellsCellSurfaceFinal(n, id = undefined) {
  * v0xq 전에는 «점유 = painted» 가 항상 참이라 소비자들이 `paintedCells` 를 그대로
  * 점유 입력으로 썼다. 슬롯이 생기면서 그 등식이 깨진다 — 슬롯 셀 위에 format 이
  * 앉으면 QR 이 포맷을 덮어 버린다. 셀 편집기·유도 검증은 **이 함수**를 써야 한다.
- * v0xq 외에는 paintedCells 와 셀 하나까지 같다 (기존 소비자 동작 불변).
+ * 슬롯 없는 레이아웃에서는 paintedCells 와 셀 하나까지 같다 (기존 소비자 동작 불변).
  */
 export function occupiedCellsCellSurfaceFinal(n, id = undefined) {
-  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).occupiedCells;
+  return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).occupiedCells;
 }
 
-/** 중앙 QR 슬롯 셀. v0xq 외에는 빈 배열이다. */
+/** 중앙 QR 슬롯 셀. v0xq · v0wq 외에는 빈 배열이다. */
 export function slotCellsCellSurfaceFinal(n, id = undefined) {
-  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).slotCells;
+  return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).slotCells;
 }
 
 /** 이 레이아웃이 중앙 QR 슬롯을 갖는가 (= 렌더러가 중앙 QR 을 그려야 하는가). */
 export function hasCenterQrSlot(id) {
-  return id === CELL_SURFACE_FINAL_V0XQ;
+  return CENTER_QR_SLOT_IDS.includes(id);
 }
 
 /**
@@ -849,17 +1163,17 @@ export function formatCellsCellSurfaceFinal(
   n, id = undefined, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
 ) {
   return cellSurfaceFinal(
-    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+    n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id, formatWire,
   ).formatCells;
 }
 
 export function referenceCellsCellSurfaceFinal(n, id = undefined) {
-  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).referenceCells;
+  return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).referenceCells;
 }
 
 export function locatorToneCellSurfaceFinal(n, face, i, j, id = undefined) {
   if (!FACES.includes(face)) throw new RangeError('면 라벨은 T | L | R 이어야 한다: ' + face);
-  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
+  const surface = cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id);
   for (const cell of surface.locatorCells) {
     if (cell.i === i && cell.j === j) return cell[face];
   }
@@ -870,7 +1184,7 @@ export function dataCellsInScanOrderCellSurfaceFinal(
   n, id = undefined, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
 ) {
   const surface = cellSurfaceFinal(
-    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+    n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id, formatWire,
   );
   const blocked = new Set([
     ...surface.locatorCells.map((cell) => cellKey(cell.i, cell.j)),
@@ -905,7 +1219,7 @@ export function layoutMapCellSurfaceFinal(
   n, id = undefined, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
 ) {
   const surface = cellSurfaceFinal(
-    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+    n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id, formatWire,
   );
   const map = new Map();
   surface.locatorCells.forEach((cell, index) => {
@@ -941,7 +1255,7 @@ export function capacityForCellSurfaceFinal(
   formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
 ) {
   const surface = cellSurfaceFinal(
-    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+    n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id, formatWire,
   );
   const resolvedTones = assertCellSurfaceFinalTones(tones);
   const nsym = nsymForLevel(surface, level);
@@ -1136,15 +1450,137 @@ export function capacityForCellSurfaceFinal(
     }
   }
   {
-    const slot = slotCellsFor(CELL_SURFACE_FINAL_V0XQ);
-    if (slot.length !== CENTER_QR_SLOT_CELLS * CENTER_QR_SLOT_CELLS) {
-      throw new Error('중앙 QR 슬롯 셀 수가 m² 가 아니다: ' + slot.length);
+    for (const id of CENTER_QR_SLOT_IDS) {
+      const side = centerQrSlotCellsFor(id);
+      if (side <= 0) throw new Error(id + ' 이 슬롯 목록에 있는데 한 변이 0 이다');
+      if (slotCellsFor(id).length !== side * side) {
+        throw new Error(id + ' 중앙 QR 슬롯 셀 수가 m² 가 아니다: ' + slotCellsFor(id).length);
+      }
+    }
+    // 슬롯 없는 레이아웃은 한 변도 0 이어야 한다 (두 질의가 갈리면 렌더러가 헛돈다).
+    for (const id of CELL_SURFACE_FINAL_IDS) {
+      if (CENTER_QR_SLOT_IDS.includes(id)) continue;
+      if (centerQrSlotCellsFor(id) !== 0) {
+        throw new Error(id + ' 이 슬롯 없는데 한 변이 0 이 아니다');
+      }
     }
     for (const id of CELL_SURFACE_FINAL_IDS) {
-      if (id === CELL_SURFACE_FINAL_V0XQ) continue;
+      if (CENTER_QR_SLOT_IDS.includes(id)) continue;
       if (slotCellsFor(id).length !== 0) {
-        throw new Error(id + ' 에 중앙 QR 슬롯이 생겼다 — v0xq 전용이다');
+        throw new Error(id + ' 에 중앙 QR 슬롯이 생겼다 — v0xq · v0wq 전용이다');
       }
+    }
+  }
+
+  // ①-d v0W 정본 — 70셀 (K3 중앙 25 + 동심 사각 36 + 위상 마커 9) · mid 면 0 · 슬롯 0.
+  //
+  // 이 블록이 «손 전사가 아니다» 의 증명이다. 세 출처 배열과 **참조/평행이동**으로
+  // 묶여 있으므로, 출처가 조용히 시프트하면 여기서 즉시 터진다.
+  if (V0W_CELLS.length !== 70) {
+    throw new Error('v0W 정본이 70셀이 아니다: ' + V0W_CELLS.length);
+  }
+  {
+    // 중앙은 v1r2 NW 5×5 **같은 배열**이어야 한다 (사본이면 참조가 갈린다).
+    if (K3_CENTRE_CELLS !== V2R2_CENTER_CELLS) {
+      throw new Error('v0W 중앙이 v1r2 NW 공유 배열이 아니다');
+    }
+    if (K3_CENTRE_CELLS.length !== 25) {
+      throw new Error('v0W 중앙이 25셀이 아니다: ' + K3_CENTRE_CELLS.length);
+    }
+    // 동심 사각도 v0xq CORNER **같은 배열**이어야 한다 (v0X SE 의 평행이동본).
+    if (V0W_CELLS.slice(25, 61).some((row, index) => row !== V0XQ_CORNER_CELLS[index])) {
+      throw new Error('v0W 동심 사각이 v0xq CORNER 공유 배열이 아니다');
+    }
+    // 위상 마커는 v0 SE 3×3 의 (+8,+8) 평행이동 — 좌표만 옮긴 완전 사본이다.
+    const v0Far = V0_CELLS.filter(([i, j]) => i >= V0_FAR_MIN && j >= V0_FAR_MIN);
+    if (v0Far.length !== 9) throw new Error('v0 SE 3×3 이 9셀이 아니다: ' + v0Far.length);
+    if (V0W_PHASE_CELLS.length !== 9) {
+      throw new Error('v0W 위상 마커가 9셀이 아니다: ' + V0W_PHASE_CELLS.length);
+    }
+    for (let index = 0; index < 9; index += 1) {
+      const [i, j, T, L, R] = v0Far[index];
+      const want = [i + V0W_FAR_SHIFT, j + V0W_FAR_SHIFT, T, L, R].join(',');
+      if (V0W_PHASE_CELLS[index].join(',') !== want) {
+        throw new Error('v0W 위상 마커가 v0 SE 정본의 평행이동본이 아니다: ' + index);
+      }
+    }
+    // 위상 판별력의 유일한 원천 — T=L 이고 R 이 다른 셀이 실재해야 한다.
+    // (동심 사각은 3면 동일이라 0, K3 중앙은 세 레이아웃이 공유하므로 패밀리 판별 0.)
+    if (!V0W_PHASE_CELLS.some(([, , T, L, R]) => T === L && R !== T)) {
+      throw new Error('v0W 위상 마커에 면 비대칭이 없다 — 120° 판별력 0');
+    }
+    // 블록 분할 25/36/9 — 세 블록 밖 셀이 없고, 서로 겹치지도 않는다.
+    const counts = { NW: 0, NE: 0, SE: 0 };
+    for (const [i, j] of V0W_CELLS) {
+      const homes = [];
+      if (i <= V0W_BLOCKS.NW.iMax && j <= V0W_BLOCKS.NW.jMax) homes.push('NW');
+      if (i <= V0W_BLOCKS.NE.iMax && j >= V0W_BLOCKS.NE.jMin) homes.push('NE');
+      if (i >= V0W_BLOCKS.SE.iMin && j >= V0W_BLOCKS.SE.jMin) homes.push('SE');
+      if (homes.length !== 1) {
+        throw new Error('v0W 셀 (' + i + ',' + j + ') 의 블록 소속이 ' + homes.length + '개다');
+      }
+      counts[homes[0]] += 1;
+    }
+    if (counts.NW !== 25 || counts.NE !== 36 || counts.SE !== 9) {
+      throw new Error(
+        'v0W 블록 분할이 25/36/9 가 아니다: '
+        + [counts.NW, counts.NE, counts.SE].join('/'),
+      );
+    }
+    // 동심 사각은 3면 동일 36/36 (120° 쌍둥이 코어 서명의 근거).
+    let neUniform = 0;
+    for (const [i, j, T, L, R] of V0W_CELLS) {
+      if (!(i <= V0W_BLOCKS.NE.iMax && j >= V0W_BLOCKS.NE.jMin)) continue;
+      if (T === L && L === R) neUniform += 1;
+    }
+    if (neUniform !== 36) throw new Error('v0W NE 3면 동일이 36/36 이 아니다: ' + neUniform);
+  }
+
+  // ①-e v0WQ 정본 — 45셀 (동심 사각 36 + 위상 마커 9) · mid 면 0 · 슬롯 81.
+  //
+  // v0WQ 는 «새 무늬» 가 아니라 **두 정본의 조합**이다. 그래서 여기서 재는 것은
+  // 톤 표가 아니라 **참조 동일성**이다 — 사본이면 출처가 시프트해도 안 터진다.
+  if (V0WQ_CELLS.length !== 45) {
+    throw new Error('v0WQ 정본이 45셀이 아니다: ' + V0WQ_CELLS.length);
+  }
+  {
+    if (V0WQ_CELLS.slice(0, 36).some((row, index) => row !== V0XQ_CORNER_CELLS[index])) {
+      throw new Error('v0WQ 동심 사각이 v0xq CORNER 공유 배열이 아니다');
+    }
+    if (V0WQ_CELLS.slice(36).some((row, index) => row !== V0W_PHASE_CELLS[index])) {
+      throw new Error('v0WQ 위상 마커가 v0W PHASE 공유 배열이 아니다');
+    }
+    // v0WQ 와 v0W 의 위상 마커는 **같은 배열**이어야 한다 — 그것이 이 파생의 정의다
+    // («v0W 의 위상 마커 × v0XQ 의 중앙»). 그리고 v0XQ 의 마커와는 **달라야** 한다,
+    // 그 차이가 두 레이아웃을 가르는 유일한 셀 축이기 때문이다.
+    const markerKey = (rows) => rows.map((row) => row.join(',')).join(' ');
+    if (markerKey(V0WQ_CELLS.slice(36)) !== markerKey([...V0W_PHASE_CELLS])) {
+      throw new Error('v0WQ 위상 마커가 v0W 와 다르다');
+    }
+    if (markerKey(V0WQ_CELLS.slice(36)) === markerKey([...V0XQ_MARKER_CELLS])) {
+      throw new Error('v0WQ 위상 마커가 v0XQ 와 같아졌다 — 두 레이아웃을 가를 축이 없다');
+    }
+    // 블록 분할 36/9 — 두 블록 밖 셀이 없고 서로 겹치지도 않는다. 그리고 슬롯과도.
+    const counts = { CORNER: 0, MARKER: 0 };
+    for (const [i, j] of V0WQ_CELLS) {
+      const homes = [];
+      if (i <= V0WQ_BLOCKS.CORNER.iMax && j >= V0WQ_BLOCKS.CORNER.jMin) homes.push('CORNER');
+      if (i >= V0WQ_BLOCKS.MARKER.iMin && j >= V0WQ_BLOCKS.MARKER.jMin) homes.push('MARKER');
+      if (homes.length !== 1) {
+        throw new Error('v0WQ 셀 (' + i + ',' + j + ') 의 블록 소속이 ' + homes.length + '개다');
+      }
+      counts[homes[0]] += 1;
+      if (i <= V0WQ_BLOCKS.SLOT.iMax && j <= V0WQ_BLOCKS.SLOT.jMax) {
+        throw new Error('v0WQ 파인더 셀 (' + i + ',' + j + ') 이 중앙 QR 슬롯 안이다');
+      }
+    }
+    if (counts.CORNER !== 36 || counts.MARKER !== 9) {
+      throw new Error('v0WQ 블록 분할이 36/9 가 아니다: '
+        + [counts.CORNER, counts.MARKER].join('/'));
+    }
+    // 위상 판별력의 유일한 원천 — 동심 사각은 3면 동일이라 0 이다.
+    if (!V0WQ_CELLS.slice(36).some(([, , T, L, R]) => T === L && R !== T)) {
+      throw new Error('v0WQ 위상 마커에 면 비대칭이 없다 — 120° 판별력 0');
     }
   }
 
@@ -1184,6 +1620,8 @@ export function capacityForCellSurfaceFinal(
     [CELL_SURFACE_FINAL_V1R2, V1R2_CELLS],
     [CELL_SURFACE_FINAL_V0X, V0X_CELLS],
     [CELL_SURFACE_FINAL_V0XQ, V0XQ_CELLS],
+    [CELL_SURFACE_FINAL_V0W, V0W_CELLS],
+    [CELL_SURFACE_FINAL_V0WQ, V0WQ_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_FAR_BASE_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_CENTER_CELLS],
   ]) {
@@ -1211,6 +1649,10 @@ export function capacityForCellSurfaceFinal(
     'v0x@21': { symbols: 115, residual: 1, locator: 65, legacy: { symbols: 116, residual: 1 } },
     //   v0xq@21 441 − 42 − 81(슬롯) − 12 − 18 = 288 · S=96 · 잔여 0 (v1: 291 · 97 · 0)
     'v0xq@21': { symbols: 96, residual: 0, locator: 42, legacy: null },
+    //   v0w@21  441 − 70 − 12 − 18 = 341 · S=113 · 잔여 2 (레거시 없음 — 신설)
+    'v0w@21': { symbols: 113, residual: 2, locator: 70, legacy: null },
+    //   v0wq@21 441 − 45 − 64(슬롯 8²) − 12 − 18 = 302 · S=100 · 잔여 2 (레거시 없음)
+    'v0wq@21': { symbols: 100, residual: 2, locator: 45, legacy: null },
   };
   for (const [key, want] of Object.entries(expected)) {
     const [id, raw] = key.split('@');

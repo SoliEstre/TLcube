@@ -392,10 +392,27 @@ describe('종단 — 레거시 프레임이 실제로 읽힌다', async () => {
     return out;
   }
 
+  /**
+   * 의도적 갱신 «드랍 정본화» (2026-08-16) — INSTANCES 에 v2r2@21/@25 · v1r2@21 이
+   * 들어 있다. 이 블록이 재는 것은 **포맷 세대 폴백**이지 라인업 소속이 아니므로
+   * 드랍 복원 스위치로 두 패밀리를 되살린 채 잰다 (차단·비삭제).
+   * 게이트(0.78 · 0.035 · CRC · RS)는 한 값도 안 건드렸다.
+   */
   function decodeLab(frame) {
     return decodeFrontend(
       { width: frame.width, height: frame.height, pixels: frame.pixels },
-      { bootstrap: { family: { cube: { enableLocatorY: true, enableCellSurfaceY: true } } } },
+      {
+        bootstrap: {
+          family: {
+            cube: {
+              enableLocatorY: true,
+              enableCellSurfaceY: true,
+              includeDroppedCellSurfaceLayouts: true,
+              calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true } },
+            },
+          },
+        },
+      },
     );
   }
 

@@ -155,11 +155,42 @@ function clipFrame(target, mode, level) {
 const V0X = { layout: 'v0x', version: 1, ppu: 15 };
 const V2R2 = { layout: 'v2r2', version: 1, ppu: 15 };
 
+/**
+ * **드랍 복원 스위치** (운영자 확정 2026-08-16 «v2r2 · v1r2 실험판 드랍»).
+ *
+ * 이 파일의 픽스처 절반이 v2r2 다. 이 파일이 재는 것은 «부분 앵커 포즈 · locator
+ * 셀 소거» 축이지 라인업 소속이 아니므로, 픽스처가 검출되도록 스위치로 되살린다
+ * (차단·비삭제 — 게이트 0.78 · 0.035 · CRC · RS 는 한 값도 안 건드렸다).
+ * 근거·측정: `test/output/claude-v0w-program.md`.
+ */
+const RESTORE_DROPPED = Object.freeze({
+  includeDroppedCellSurfaceLayouts: true,
+  v2r2Family: true,
+  v1r2Family: true,
+});
+
 function decodeLab(frame, cube = {}) {
   return decodeFrontend({
     width: frame.width, height: frame.height, pixels: frame.pixels,
   }, {
-    bootstrap: { family: { cube: { enableLocatorY: true, enableCellSurfaceY: true, ...cube } } },
+    bootstrap: {
+      family: {
+        cube: {
+          enableLocatorY: true,
+          enableCellSurfaceY: true,
+          includeDroppedCellSurfaceLayouts: RESTORE_DROPPED.includeDroppedCellSurfaceLayouts,
+          ...cube,
+          calibration: {
+            ...(cube.calibration || {}),
+            csBlockLocator: {
+              v2r2Family: RESTORE_DROPPED.v2r2Family,
+              v1r2Family: RESTORE_DROPPED.v1r2Family,
+              ...((cube.calibration || {}).csBlockLocator || {}),
+            },
+          },
+        },
+      },
+    },
   });
 }
 
@@ -387,11 +418,22 @@ test('anchorsLeaveFrame — 프레임 안 포즈는 false, 밖으로 나간 포�
 // cellsurface-block-detect.js 의 calibration() 이 options.calibration.csBlockLocator
 // 를 읽는다.) 아래 테스트들은 이 객체를 **프런트엔드와 검출기에 똑같이** 넘겨,
 // «이 객체가 정말 끄는 스위치인가» 를 매번 먼저 증명한 뒤에 판정을 비교한다.
-const ON_CUBE = Object.freeze({ enableLocatorY: true, enableCellSurfaceY: true });
+// 의도적 갱신 «드랍 정본화» (2026-08-16): 두 팔 모두 드랍 복원 스위치를 얹는다.
+// 이 파일의 픽스처에 v2r2 가 있어서다 — 두 팔이 **같은** 패밀리 집합 위에 서야
+// «부분 앵커 축만 다른» 비교가 성립한다.
+const ON_CUBE = Object.freeze({
+  enableLocatorY: true,
+  enableCellSurfaceY: true,
+  includeDroppedCellSurfaceLayouts: true,
+  calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true } },
+});
 const OFF_CUBE = Object.freeze({
   enableLocatorY: true,
   enableCellSurfaceY: true,
-  calibration: { csBlockLocator: { partialAnchorPose: false } },
+  includeDroppedCellSurfaceLayouts: true,
+  calibration: {
+    csBlockLocator: { v2r2Family: true, v1r2Family: true, partialAnchorPose: false },
+  },
 });
 
 /** 넘긴 옵션이 실제로 부분 경로를 끄는지 검출기로 직접 확인하고 시도 횟수를 돌려준다. */
@@ -543,8 +585,8 @@ test('잘린 프레임 복호는 결정적이다 — 2회 실행 동일', { time
   );
   const luma = toRelativeLuminance(frame);
   assert.deepEqual(
-    detectCellSurfaceBlockShapes(luma, {}).diagnostics,
-    detectCellSurfaceBlockShapes(luma, {}).diagnostics,
+    detectCellSurfaceBlockShapes(luma, ON_CUBE).diagnostics,
+    detectCellSurfaceBlockShapes(luma, ON_CUBE).diagnostics,
   );
 });
 
@@ -563,6 +605,9 @@ test('잘린 프레임을 다른 레이아웃으로 강제 주입하면 하나�
             cube: {
               enableLocatorY: true,
               enableCellSurfaceY: true,
+              // 드랍된 패밀리도 켠 채로 강제 주입한다 — 교차 오수용 대조군은
+              // 라인업이 아니라 «레이아웃끼리 서로를 수용하는가» 를 재는 것이다.
+              calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true } },
               cellSurfaceLayouts: [forced],
             },
           },

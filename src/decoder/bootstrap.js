@@ -48,7 +48,7 @@ import {
 } from '../cellSurfaceLayouts.js';
 import {
   dataCellsInScanOrderCellSurfaceFinal,
-  finalLayoutIdForN,
+  hasFinalLayoutWireForN,
   formatCellsCellSurfaceFinal,
   formatIndexCellSurfaceFinal,
   isCellSurfaceFinalFormatIndex,
@@ -466,7 +466,9 @@ function formatIndexOwners(formatIndex) {
 function profileForFormatCandidate(hypothesis, formatIndex) {
   if (hypothesis && hypothesis.cellSurface === true
     && isCellSurfaceFinalFormatIndex(formatIndex)
-    && finalLayoutIdForN(hypothesis.n) !== null) {
+    // **와이어** 질의다 (라인업 아님) — v2r2 드랍 뒤에도 n=25 가설이 어디선가
+    // 서면 그 포맷은 계속 읽는다. 드랍은 그런 가설을 «만들지 않는» 쪽에 걸린다.
+    && hasFinalLayoutWireForN(hypothesis.n)) {
     // 최종 라인업 — formatIndex 는 한 쌍, 차원은 가설의 n 이 정한다.
     const tones = tonesFromCellSurfaceFinalFormatIndex(formatIndex);
     if (hypothesis.tones !== undefined && hypothesis.tones !== tones) return undefined;

@@ -74,22 +74,40 @@ function embed960(raster) {
   return out;
 }
 
-function decodeLab(frame) {
+/**
+ * **드랍 복원 스위치** (운영자 확정 2026-08-16 «v2r2 · v1r2 실험판 드랍»).
+ * 이 파일이 재는 것은 «소프트 CS 탐침» 축이라 v2r2 픽스처를 스위치로 되살린다
+ * (차단·비삭제). 게이트는 한 값도 안 건드렸다.
+ */
+const RESTORE_DROPPED = Object.freeze({
+  includeDroppedCellSurfaceLayouts: true,
+  calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true } },
+});
+
+function decodeLab(frame, extra = undefined) {
   return decodeFrontend({
     width: frame.width, height: frame.height, pixels: frame.pixels,
   }, {
-    bootstrap: { family: { cube: { enableLocatorY: true, enableCellSurfaceY: true } } },
+    bootstrap: {
+      family: {
+        cube: {
+          enableLocatorY: true,
+          enableCellSurfaceY: true,
+          ...(extra === undefined ? {} : extra),
+        },
+      },
+    },
   });
 }
 
-test('S-커브 왜곡 v2r2@21 — 소프트 CS 탐침으로 수용·복호까지 간다', {
+test('S-커브 왜곡 v2r2@21 — 소프트 CS 탐침으로 수용·복호까지 간다 (드랍 복원)', {
   timeout: 300_000,
 }, () => {
   const frame = distortImage(
     embed960(renderFinal(PAYLOAD, { layout: 'v2r2', version: 1, pixelsPerUnit: 15 })),
     { sCurve: 0.6, fill: FILL },
   );
-  const result = decodeLab(frame);
+  const result = decodeLab(frame, RESTORE_DROPPED);
   assert.equal(result.ok, true, 'v2r2 S-커브 복호: ' + result.reason);
   assert.equal(result.text, PAYLOAD);
   assert.equal(result.hypothesis.cellSurface, true);
@@ -124,12 +142,17 @@ test('감마 0.7 v0@13 — no-geometry 오보가 사라지고 실제 거절 사�
   assert.notEqual(probe.reason, 'no-geometry', JSON.stringify(probe));
 });
 
-test('무왜곡 v0/v2r2 수용은 소프트 탐침 도입 후에도 그대로다', { timeout: 300_000 }, () => {
+test('무왜곡 v0/v2r2 수용은 소프트 탐침 도입 후에도 그대로다 (v2r2 는 드랍 복원)', {
+  timeout: 300_000,
+}, () => {
   for (const cfg of [
     { layout: 'v0', version: 0, pixelsPerUnit: 17 },
     { layout: 'v2r2', version: 1, pixelsPerUnit: 15 },
   ]) {
-    const result = decodeLab(embed960(renderFinal(PAYLOAD, cfg)));
+    const result = decodeLab(
+      embed960(renderFinal(PAYLOAD, cfg)),
+      cfg.layout === 'v2r2' ? RESTORE_DROPPED : undefined,
+    );
     assert.equal(result.ok, true, cfg.layout + ': ' + result.reason);
     assert.equal(result.text, PAYLOAD);
     assert.equal(result.hypothesis.cellSurfaceLayout, cfg.layout);

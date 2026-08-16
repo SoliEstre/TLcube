@@ -16,6 +16,8 @@ import {
   DEFAULT_LOCATOR_PROFILE_Y,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
+  LOCATOR_PROFILE_CELL_SURFACE_V0W,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
@@ -53,6 +55,17 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
   // + (의도적 갱신 2026-08-16) v0x = n=21 3파전 후보
   // + (의도적 갱신 2026-08-17) v0xq = n=21 중앙 QR 변형.
   // hex-frame-v1 은 UI 카드만 내렸고 **값은 살아 있다**(차단·비삭제).
+  //
+  // **의도적 갱신 «드랍 정본화» (운영자 확정 2026-08-16)** — v2r2 · v1r2 를 허용값에서
+  // 뺐다. 초안 v2 · 구 v1 CS 와 같은 처리이며, **저장돼 있던 값은 검증 실패로
+  // 기본(off)에 떨어진다** (아래 회귀가 그 폴백을 직접 건다).
+  // 와이어·정본·디코더 판독은 그대로다 (cellSurfaceFinal.js 의 DROPPED_IDS).
+  //
+  // **의도적 갱신 «v0W 편입» (운영자 신설 설계 2026-08-16)** — 허용값 맨 뒤에 v0W 를
+  // 더했다. 카드도 함께 났으므로 «값만 살아 있는» hex-frame-v1 과는 다른 처지다.
+  //
+  // **의도적 갱신 «v0W 파생 2종 편입» (2026-08-16)** — 맨 뒤에 v0WQ. **v0WY 는 여기
+  // 없다** — 로케이터 프로파일이 아니라 `qrPosition: 'plane'` 이라서다.
   assert.deepEqual(
     [...GENERATOR_STATE_SCHEMA.locatorProfileY.options],
     [
@@ -61,10 +74,20 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
       LOCATOR_PROFILE_CELL_SURFACE_V0,
       LOCATOR_PROFILE_CELL_SURFACE_V0X,
       LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
-      LOCATOR_PROFILE_CELL_SURFACE_V2R2,
-      LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+      LOCATOR_PROFILE_CELL_SURFACE_V0W,
+      LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
     ],
   );
+  // 허용값 밖이라는 사실 자체가 «저장된 옛 값 → 기본(off) 폴백» 의 근거다 —
+  // 상태 복원기는 이 `options` 목록으로 검증한다 (초안 v2 · 구 v1 CS 와 같은 경로).
+  for (const dropped of [
+    LOCATOR_PROFILE_CELL_SURFACE_V2R2, LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+  ]) {
+    assert.equal(
+      GENERATOR_STATE_SCHEMA.locatorProfileY.options.includes(dropped), false,
+      dropped + ' 가 아직 허용값에 있다 — 드랍이 안 걸렸다',
+    );
+  }
   assert.equal(exposedGeneratorStateKeys('normal').includes('locatorProfileY'), false);
   assert.equal(exposedGeneratorStateKeys('advanced').includes('locatorProfileY'), false);
 
@@ -78,9 +101,19 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-i18n="g515"/);
   assert.match(INDEX, /data-locator="off"/);
   assert.match(INDEX, /data-locator="cell-surface-v0"/);
-  assert.match(INDEX, /data-locator="cell-surface-v2r2"/);
-  // 2026-08-15 밤 운영자 지시: 「실험 프레임 β」 카드를 빼고 그 자리에 v1r2 카드.
-  assert.match(INDEX, /data-locator="cell-surface-v1r2"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0x"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0xq"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0w"/);
+  // 의도적 갱신 «v0W 파생 2종 편입» (2026-08-16): v0WQ 카드 신설. v0WY 는 **카드가
+  // 여기 없다** — QR 위치 카드('plane')로 붙었고, 아래 별도 단언이 그것을 고정한다.
+  assert.match(INDEX, /data-locator="cell-surface-v0wq"/);
+  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0wy"/);
+  assert.match(INDEX, /data-pos="plane"/);
+  // **의도적 갱신 «드랍 정본화» (2026-08-16)** — v2r2 · v1r2 카드를 내렸다.
+  // hex-frame-v1 전례와 같은 «카드만 내림» 이다: 사전 키(g543/g547/g945/g946)는
+  // 3언어 모두 남아 있고(아래 문구 테스트가 고정), 와이어·판독은 그대로다.
+  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v2r2"/);
+  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v1r2"/);
   assert.doesNotMatch(INDEX, /data-locator="hex-frame-v1"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v2"(?!r2)/);
   // 차단이지 삭제가 아니다 — hex-frame-v1 렌더·마진 경로는 소스에 그대로 있다.
@@ -106,8 +139,12 @@ test('로케이터 문구는 ko/en/ja 가 같고 성능 보장을 하지 않는�
   assert.match(INDEX, /Does not guarantee rotation, lighting, print, or live-scan performance/);
   assert.match(INDEX, /回転・照明・印刷・ライブスキャンの性能は保証しません/);
   assert.match(INDEX, /data-locator="cell-surface-v0"[\s\S]*?data-i18n="g542">셀 표면 v0 \(Y0\)</);
-  assert.match(INDEX, /data-locator="cell-surface-v2r2"[\s\S]*?data-i18n="g543">셀 표면 v2r2 \(Y1\/Y2\)</);
-  assert.match(INDEX, /data-locator="cell-surface-v1r2"[\s\S]*?data-i18n="g547">셀 표면 v1r2 \(Y1\)</);
+  assert.match(INDEX, /data-locator="cell-surface-v0x"[\s\S]*?data-i18n="g602">셀 표면 v0X \(Y1\)</);
+  // **의도적 갱신 «드랍 정본화» (2026-08-16)** — 카드는 내렸지만 **사전 항목은
+  // 3언어 모두 남긴다**. 되살릴 때 재번역하지 않기 위해서고, 위 키 순회
+  // (g543 · g547)가 그 보존을 이미 강제한다. 여기서는 사전 문자열 자체를 건다.
+  assert.match(INDEX, /"g543":\s*"셀 표면 v2r2 \(Y1\/Y2\)"/);
+  assert.match(INDEX, /"g547":\s*"셀 표면 v1r2 \(Y1\)"/);
   assert.match(INDEX, /Cell surface v1r2 \(Y1\)/);
   assert.match(INDEX, /セル表面 v1r2 \(Y1\)/);
   assert.doesNotMatch(INDEX, /id="yLocatorArmSection"/);

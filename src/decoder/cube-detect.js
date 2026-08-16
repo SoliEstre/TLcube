@@ -56,7 +56,7 @@ import {
   LOCATOR_PROFILE_OFF,
 } from '../locatorY.js';
 import { CELL_SURFACE_PROFILE_ID } from '../cellSurfaceY.js';
-import { finalLayoutIdForN } from '../cellSurfaceFinal.js';
+import { finalLayoutIdForN, hasFinalLayoutWireForN } from '../cellSurfaceFinal.js';
 import { evaluateCellSurfaceGeometry } from './cellSurfaceY-detect.js';
 import {
   detectFinderSeeds,
@@ -2598,9 +2598,15 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
             seamSupport: shape.seam.support,
             shapeDiagnostics: shape,
           };
-          // 셀 표면 평가 — 최종 라인업이 n=13(v0)·21/25(v2r2) 전부를 연다.
-          // (구 v1 CS·초안 v1r2/v2 는 n=21 에서만 옵션으로 산다 — evaluate 쪽이 거른다.)
-          if (options.enableCellSurfaceY === true && finalLayoutIdForN(n) !== null) {
+          // 셀 표면 평가 — **라인업** 질의다(와이어 아님). v2r2·v1r2 드랍(2026-08-16)
+          // 후 라인업은 n=13(v0) · n=21(v0x·v0xq·v0w) 뿐이라 **n=25 는 여기서 통째로
+          // 빠진다** — 실루엣 shape 의 n 루프가 3 → 2 로 준다 (Y2 공백).
+          // (구 v1 CS·초안 v1r2/v2·드랍된 둘은 n=21 에서 옵션으로만 산다.)
+          // 드랍 복원 스위치가 켜지면 와이어 질의로 되돌아간다 — 대조군·법의학.
+          const cellSurfaceLineupOpen = options.includeDroppedCellSurfaceLayouts === true
+            ? hasFinalLayoutWireForN(n)
+            : finalLayoutIdForN(n) !== null;
+          if (options.enableCellSurfaceY === true && cellSurfaceLineupOpen) {
             const cellSurface = evaluateCellSurfaceGeometry(
               base,
               (i, j) => sampleCubeCell(luma, base, i, j, sampleOptions(options, cfg)),

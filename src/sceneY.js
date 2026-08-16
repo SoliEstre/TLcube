@@ -31,6 +31,8 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0W,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   assertLocatorProfileY,
   isCellSurfaceLocatorProfileY,
@@ -41,7 +43,7 @@ import { locatorTone } from './cellSurfaceY.js';
 import { locatorToneCellSurfaceLayout } from './cellSurfaceLayouts.js';
 import {
   CENTER_QR_MODULE_GRID, CENTER_QR_QUIET_MODULES, CENTER_QR_SLOT_CELLS,
-  centerQrModulePitchCells, hasCenterQrSlot,
+  centerQrModulePitchCells, centerQrSlotCellsFor, hasCenterQrSlot,
   isCellSurfaceFinalId, locatorToneCellSurfaceFinal,
 } from './cellSurfaceFinal.js';
 
@@ -283,6 +285,95 @@ function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
   }
 }
 
+// ── 큐브 바깥 면-평면 QR (v0WY, 2026-08-16 운영자 지시) ─────────────────
+//
+// **v0WY 는 레이아웃이 아니라 QR 위치다.** 셀을 한 칸도 안 먹으므로 와이어는 v0W 와
+// 비트 동일하고 (`cellSurfaceFinal.js` 모듈 헤더 §v0W 파생 2종), 그래서 여기 렌더러
+// 하나가 v0WY 의 전부다. 어느 셀 표면 레이아웃과도 조합된다.
+//
+// **윈도 β 문법을 그대로 쓴다** — 다른 것은 «어디에» 뿐이다:
+//   · 좌표계 = T 면 파라메트릭 (a,b). 윈도 β 는 a,b ∈ [n−13, n] (면 **안쪽**),
+//     여기는 a,b ∈ [n+gap, n+gap+side] (**바깥쪽**). a=b=n 이 T 면의 먼 꼭짓점 C0 이므로
+//     그 너머는 실루엣 밖이다 — 데이터 셀도, 다른 면도 거기 없다.
+//   · QR 모듈 = 데이터 피치의 ½ (D1 과 같은 값) → 콰이어트 4 + 21 + 4 = 29모듈 = 14.5셀.
+//   · 방향 = 윈도 β 와 **같은 뒤집기** (정렬 패턴 코너가 큐브 쪽). 한 코드 안에서 두
+//     QR 이 다른 방향으로 눕는 것을 막는다.
+//   · T 면 단독 — L/R 필러가 **없다**. 윈도 β 의 필러는 «세 면 공통 배제 좌표의 구멍»
+//     을 메우는 것인데, 실루엣 밖에는 애초에 메울 면이 없다.
+//
+// 기하 (닫힌 형태 · cellSize=1 기준): 블록 네 꼭짓점은 (a,b) = (lo,lo)·(hi,lo)·(hi,hi)·
+// (lo,hi) 이고 T 기저 (e_i, e_j) 의 합이 (0,−1) 이라 화면에서는 **마름모**가 된다 —
+// 가로 대각 √3·side, 세로 폭 side, 중심 x 는 큐브 중심과 같다. 필요 여백:
+//   위쪽 (gap + side)·cellSize · 가로 (√3/2)·side·cellSize (큐브 halfW 안쪽이라 항상 여유)
+// 기본 margin 20셀 ≥ 1 + 14.5 = 15.5셀 이므로 기본값에서 항상 들어간다. 사용자가
+// margin 을 줄였을 때는 **조용히 잘리지 않도록 throw** 한다 (코너 QR 의 겹침 가드와
+// 같은 규율).
+const PLANE_QR_GAP_CELLS = 1;
+
+/** 면-평면 QR 블록 한 변 (셀) — 콰이어트 포함 29모듈 × ½피치. */
+const PLANE_QR_SIDE_CELLS = QR_BLOCK_MODULES * 0.5;
+
+/** v0WY 가 요구하는 최소 margin (셀). 큐브 먼 꼭짓점 위로 gap + 블록 한 변. */
+export const PLANE_QR_MARGIN_CELLS = PLANE_QR_GAP_CELLS + PLANE_QR_SIDE_CELLS;
+
+/**
+ * 큐브 바깥(T 면 평면 연장)에 QR 을 그린다 — v0WY.
+ * `renderWindowQr` 를 호출하지도 수정하지도 않는다 (renderCenterQr 과 같은 규율):
+ * 기하가 다르고, 기존 윈도 β 렌더 계약을 한 도형도 흔들지 않기 위해서다.
+ */
+function renderOuterFaceQr(shapes, n, layout, qrText, palette, faceGains, margin) {
+  const qr = qrMatrix(qrText);
+  if (qr.size !== QR_MODULE_GRID) {
+    throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
+  }
+  if (margin < PLANE_QR_MARGIN_CELLS * layout.size) {
+    throw new Error(
+      '면-평면 QR(v0WY)이 여백을 넘는다 — margin 이 최소 '
+      + PLANE_QR_MARGIN_CELLS + '·cellSize 여야 한다: margin=' + margin
+      + ', cellSize=' + layout.size,
+    );
+  }
+  const lo = n + PLANE_QR_GAP_CELLS;
+  const half = 0.5;
+
+  // ① 콰이어트 패치 — 블록 전체(마름모)를 밝게. 어두운 배경에서도 QR 리더가
+  // 콰이어트 존을 확보한다 (코너 QR 과 같은 계약, SPEC §14).
+  const quiet = applyFaceGain(palette.bullseyeLight, faceGains.T);
+  const dark = applyFaceGain(palette.bullseyeDark, faceGains.T);
+  const hi = lo + PLANE_QR_SIDE_CELLS;
+  shapes.push({
+    kind: 'polygon',
+    points: [
+      facePointFor('T', lo, lo, layout),
+      facePointFor('T', hi, lo, layout),
+      facePointFor('T', hi, hi, layout),
+      facePointFor('T', lo, hi, layout),
+    ],
+    color: quiet,
+  });
+
+  // ② 다크 모듈 — 윈도 β 와 **같은 뒤집기 매핑**.
+  for (let qy = 0; qy < qr.size; qy += 1) {
+    for (let qx = 0; qx < qr.size; qx += 1) {
+      if (qr.modules[qy * qr.size + qx] !== 1) continue;
+      const u = (QR_MODULE_GRID - 1 - qx) + QR_QUIET_MODULES;
+      const v = (QR_MODULE_GRID - 1 - qy) + QR_QUIET_MODULES;
+      const a0 = lo + u * half;
+      const b0 = lo + v * half;
+      shapes.push({
+        kind: 'polygon',
+        points: [
+          facePointFor('T', a0, b0, layout),
+          facePointFor('T', a0 + half, b0, layout),
+          facePointFor('T', a0 + half, b0 + half, layout),
+          facePointFor('T', a0, b0 + half, layout),
+        ],
+        color: dark,
+      });
+    }
+  }
+}
+
 // ── 중앙 QR (v0xq, 2026-08-17 운영자 분기 확정) ──────────────────────────
 //
 // **렌더 계약 = T면 단독** (운영자 확정). 3면 레플리카는 기각 — 2026-08-09 윈도 β
@@ -315,6 +406,8 @@ const LAYOUT_DEFAULT_LOCATOR_PROFILE = Object.freeze({
   v0: LOCATOR_PROFILE_CELL_SURFACE_V0,
   v0x: LOCATOR_PROFILE_CELL_SURFACE_V0X,
   v0xq: LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
+  v0w: LOCATOR_PROFILE_CELL_SURFACE_V0W,
+  v0wq: LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   v2r2: LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   v2: LOCATOR_PROFILE_CELL_SURFACE_V2,
   v1r2: LOCATOR_PROFILE_CELL_SURFACE_V1R2,
@@ -563,12 +656,15 @@ export function buildSceneY(encoded, options) {
   // 4/29 ≈ 1.24셀) 안에 들어오므로 심볼을 침범하지 않는다 (반폭 0.075셀 · 반지름
   // 0.18셀). 그 둘을 QR 위에 남겨 두는 이유는 Y-접합 서명(실루엣 검출기)을 지키기
   // 위해서다 — 중앙을 통째로 지우면 큐브 판별 근거가 사라진다.
+  // 슬롯 한 변은 **레이아웃마다 다르다** (v0xq 9 · v0wq 8 — 인코더 정합이 정한 값,
+  // `cellSurfaceFinal.js` §CENTER_QR_SLOT_CELLS_V0WQ). 상수 하나를 쓰면 v0wq 의 QR 이
+  // 슬롯 밖으로 삐져나가 데이터 셀을 덮는다.
   const centerQrSlot = cellSurface && hasCenterQrSlot(encoded.cellSurfaceLayout)
-    ? CENTER_QR_SLOT_CELLS : 0;
+    ? centerQrSlotCellsFor(encoded.cellSurfaceLayout) : 0;
   if (centerQrSlot > 0) {
     if (opts.qrText === undefined) {
       throw new RangeError(
-        'v0xq(중앙 QR 변형)는 qrText 없이 렌더할 수 없다 — 중앙 슬롯 '
+        '중앙 QR 변형(' + encoded.cellSurfaceLayout + ')은 qrText 없이 렌더할 수 없다 — 중앙 슬롯 '
         + centerQrSlot + '×' + centerQrSlot + '셀이 비어 버린다',
       );
     }
@@ -621,13 +717,20 @@ export function buildSceneY(encoded, options) {
   if (opts.cornerQr !== undefined && typeof opts.cornerQr !== 'boolean') {
     throw new TypeError(`opts.cornerQr 는 boolean 이어야 한다: ${opts.cornerQr}`);
   }
+  // v0WY — 큐브 바깥 면-평면 QR. 레이아웃과 무관한 **QR 위치 선택**이다.
+  if (opts.outerFaceQr !== undefined && typeof opts.outerFaceQr !== 'boolean') {
+    throw new TypeError(`opts.outerFaceQr 는 boolean 이어야 한다: ${opts.outerFaceQr}`);
+  }
+  const outerFaceQr = opts.outerFaceQr === true;
   // 기본값: 윈도 β 가 켜져 있으면 코너는 자동 억제("윗면에 하나만") — 병행이 필요한
   // 특수 용도만 cornerQr: true 로 명시 opt-in 한다.
   // v0xq 도 같은 규칙을 탄다 — 중앙 QR 이 이미 URL 을 싣는데 코너까지 그리면
   // 한 코드에 QR 둘이다 (2026-08-09 "윗면에 하나만" 판정의 연장). 병행이 필요한
   // 계측용으로만 cornerQr: true 로 명시 opt-in.
+  // 면-평면 QR 도 같은 규칙을 탄다 — 이미 URL 을 싣고 있으므로 코너는 자동 억제
+  // ("큐브 윗면에 하나만", 2026-08-09 육안 재판정의 연장).
   const cornerQr = opts.cornerQr === undefined
-    ? !(window || centerQrSlot > 0)
+    ? !(window || centerQrSlot > 0 || outerFaceQr)
     : opts.cornerQr;
   if (opts.qrText !== undefined && cornerQr) {
     const qr = qrMatrix(opts.qrText);
@@ -694,6 +797,12 @@ export function buildSceneY(encoded, options) {
   // 배타적이지 않다 — 둘 다 표시될 수 있다(내용은 항상 같은 opts.qrText).
   if (window && opts.qrText !== undefined) {
     renderWindowQr(shapes, n, layout, opts.qrText, palette, faceGains);
+  }
+
+  // ⑥ 큐브 바깥 면-평면 QR (v0WY) — 실루엣 **밖**이라 데이터 셀을 한 칸도 안 먹는다.
+  // 코너 QR 과 배타적이지 않다 (둘 다 켜면 둘 다 그린다 — 계측용).
+  if (outerFaceQr && opts.qrText !== undefined) {
+    renderOuterFaceQr(shapes, n, layout, opts.qrText, palette, faceGains, margin);
   }
 
   return {

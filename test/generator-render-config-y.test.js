@@ -189,3 +189,77 @@ test('셀 표면 v1r2 는 버전 선택과 무관하게 Y1(n=21) 이고 사용�
     }
   }
 });
+
+// v0W 파생 2종 (2026-08-16).
+//   · v0WQ — 새 프로파일. v0X·v0XQ·v0W 와 같은 «Y1 고정» 계약을 탄다.
+//   · v0WY — **프로파일이 아니다.** QR 위치(`qrPosition: 'plane'`)이므로 이 함수의
+//     입력에 나타나지 않는다. 아래 두 번째 테스트가 그 부재를 고정한다.
+test('셀 표면 v0WQ 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용자 톤을 보존한다', () => {
+  for (const tone of [2, 3]) {
+    for (const versionY of [0, 1, 2, undefined]) {
+      const opts = encodeOptionsForY({
+        tone,
+        versionY,
+        fallback: { mode: 'window' },
+        locatorProfileY: 'cell-surface-v0wq',
+      });
+      assert.equal(opts.cellSurface, true);
+      assert.equal(opts.cellSurfaceLayout, 'v0wq');
+      assert.equal(opts.tones, tone);
+      assert.equal(opts.version, 1, 'versionY=' + versionY);
+      assert.equal(opts.window, undefined, '셀 표면이 윈도보다 앞선다');
+      const encoded = encodeY('https://tl.estre.so', opts);
+      assert.equal(encoded.cellSurfaceLayout, 'v0wq');
+      assert.equal(encoded.n, 21);
+      assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+      // 441 − 45(파인더) − 64(중앙 QR 슬롯 8²) − 12 − 18 = 302.
+      assert.equal(encoded.capacity.dataCells, 302);
+    }
+  }
+});
+
+test('v0WY 는 인코더 옵션에 흔적이 없다 — QR 위치라 v0W 배선을 그대로 탄다', () => {
+  // 'cell-surface-v0wy' 라는 프로파일은 존재하지 않는다. 혹시 흘러들어도 이 함수는
+  // **셀 표면 분기를 하나도 타지 않고** 폴백 경로로 떨어져야 한다 (조용히 v0W 로
+  // 승격시키면, 사용자가 못 고른 레이아웃이 와이어에 실린다).
+  const stray = encodeOptionsForY({
+    tone: 2,
+    fallback: { mode: 'corner', corner: 'TL' },
+    locatorProfileY: 'cell-surface-v0wy',
+  });
+  assert.equal(stray.cellSurface, undefined);
+  assert.equal(stray.cellSurfaceLayout, undefined);
+  // 그리고 v0W 자체는 QR 위치와 무관하게 같은 옵션을 낸다 — v0WY 는 렌더에서만 갈린다.
+  const asPlane = encodeOptionsForY({
+    tone: 2, fallback: { mode: 'plane' }, locatorProfileY: 'cell-surface-v0w',
+  });
+  const asCorner = encodeOptionsForY({
+    tone: 2, fallback: { mode: 'corner', corner: 'TL' }, locatorProfileY: 'cell-surface-v0w',
+  });
+  assert.deepEqual(asPlane, asCorner);
+});
+
+// v0W 편입 (운영자 신설 설계 2026-08-16) — v0X·v0XQ 와 같은 «Y1 고정» 계약.
+test('셀 표면 v0W 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용자 톤을 보존한다', () => {
+  for (const tone of [2, 3]) {
+    for (const versionY of [0, 1, 2, undefined]) {
+      const opts = encodeOptionsForY({
+        tone,
+        versionY,
+        fallback: { mode: 'window' },
+        locatorProfileY: 'cell-surface-v0w',
+      });
+      assert.equal(opts.cellSurface, true);
+      assert.equal(opts.cellSurfaceLayout, 'v0w');
+      assert.equal(opts.tones, tone);
+      assert.equal(opts.version, 1, 'versionY=' + versionY);
+      assert.equal(opts.window, undefined, '셀 표면이 윈도보다 앞선다');
+      const encoded = encodeY('https://tl.estre.so', opts);
+      assert.equal(encoded.cellSurfaceLayout, 'v0w');
+      assert.equal(encoded.n, 21);
+      assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+      // 441 − 70(파인더) − 12(reference) − 18(format v2) = 341.
+      assert.equal(encoded.capacity.dataCells, 341);
+    }
+  }
+});
