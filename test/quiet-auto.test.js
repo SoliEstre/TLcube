@@ -199,7 +199,7 @@ test('되먹임 재렌더에 상한이 있다 (표면 휘도 ↔ 안전영역 �
   assert.match(INDEX, /quietColorAtRender = choice\.color;/);
 });
 
-test('g935·g904 가 «사진이 안전영역 색을 정한다» 는 사실을 3언어로 말한다', () => {
+test('g935·g904 가 «사진이 안전영역 색을 정한다» 는 사실을 여덟 언어로 말한다', () => {
   // 두 문구는 gen-ui 픽스에서 «반영되지 않아요» 로 좁혀졌던 자리다. 이제 반영되므로
   // 옛 부정 문구가 남아 있으면 그게 거짓말이 된다.
   assert.equal(INDEX.includes('아래 «안전영역» 의 옵션·색에도 반영되지 않아요'), false);
@@ -212,7 +212,10 @@ test('g935·g904 가 «사진이 안전영역 색을 정한다» 는 사실을 3
   assert.equal(INDEX.includes('언제나 이 한 단계로 정해져요'), false);
   assert.equal(INDEX.includes('that single step always settles it'), false);
   assert.equal(INDEX.includes('いつもこの一段階で決まります'), false);
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 사전이 ko/en/ja 3언어에서
+  //   ko/en/ja/fr/it/de/es/pt 8언어로 넓어졌다. 재는 것은 그대로 —
+  //   «이 키가 모든 언어에 있는가» — 이고 기대값만 언어 수를 따라간다.
   for (const key of ['g904', 'g935', 'g991']) {
-    assert.equal(INDEX.match(new RegExp(`"${key}":`, 'g'))?.length, 3, `${key} 3언어`);
+    assert.equal(INDEX.match(new RegExp(`"${key}":`, 'g'))?.length, 8, `${key} 8언어`);
   }
 });

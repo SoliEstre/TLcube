@@ -9,6 +9,11 @@
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
 <link rel="alternate" hreflang="ja" href="https://tl.estre.so/ja/">
+<link rel="alternate" hreflang="fr" href="https://tl.estre.so/fr/">
+<link rel="alternate" hreflang="it" href="https://tl.estre.so/it/">
+<link rel="alternate" hreflang="de" href="https://tl.estre.so/de/">
+<link rel="alternate" hreflang="es" href="https://tl.estre.so/es/">
+<link rel="alternate" hreflang="pt" href="https://tl.estre.so/pt/">
 <link rel="alternate" hreflang="x-default" href="https://tl.estre.so/">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta property="og:type" content="website">
@@ -20,6 +25,11 @@
 <meta property="og:locale" content="ja_JP">
 <meta property="og:locale:alternate" content="ko_KR">
 <meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="fr_FR">
+<meta property="og:locale:alternate" content="it_IT">
+<meta property="og:locale:alternate" content="de_DE">
+<meta property="og:locale:alternate" content="es_ES">
+<meta property="og:locale:alternate" content="pt_PT">
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">
 {
@@ -34,7 +44,12 @@
       "inLanguage": [
         "ko",
         "en",
-        "ja"
+        "ja",
+        "fr",
+        "it",
+        "de",
+        "es",
+        "pt"
       ]
     },
     {
@@ -90,6 +105,11 @@
           <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
           <a href="https://tl.estre.so/en/" hreflang="en" data-lang-pick="en">English</a>
           <a href="https://tl.estre.so/ja/" hreflang="ja" aria-current="true" data-lang-pick="ja">日本語</a>
+          <a href="https://tl.estre.so/fr/" hreflang="fr" data-lang-pick="fr">Français</a>
+          <a href="https://tl.estre.so/it/" hreflang="it" data-lang-pick="it">Italiano</a>
+          <a href="https://tl.estre.so/de/" hreflang="de" data-lang-pick="de">Deutsch</a>
+          <a href="https://tl.estre.so/es/" hreflang="es" data-lang-pick="es">Español</a>
+          <a href="https://tl.estre.so/pt/" hreflang="pt" data-lang-pick="pt">Português</a>
         </div>
       </div>
       <div class="theme-toggle" role="group" aria-label="テーマ">
@@ -236,10 +256,13 @@
        언어가 다르다는 이유로 루트로 끌려가면 공유한 링크가 무의미해진다. 자동 선택은
        기본 문서(루트)에 온 사람에게만 의미가 있다. */
     if (location.pathname !== '/' && location.pathname !== '/index.html') return;
+    /* 지원 목록은 languages 배열에서 찍어 낸다 — 손으로 적으면 언어판을 늘린 날
+       리다이렉트만 옛 3언어로 남아 «새 언어판이 있는데 아무도 못 간다» 가 된다. */
+    var supported = ["ko","en","ja","fr","it","de","es","pt"];
     var want = (navigator.languages || [navigator.language || 'ko'])
       .map(function (l) { return String(l).toLowerCase().split('-')[0]; })
-      .filter(function (l) { return l === 'ko' || l === 'en' || l === 'ja'; })[0];
-    /* 지원 밖 언어(fr·de 등)는 영어로 — ko 는 저작 언어지 국제 기본값이 아니다
+      .filter(function (l) { return supported.indexOf(l) >= 0; })[0];
+    /* 지원 밖 언어(nl·pl 등)는 영어로 — ko 는 저작 언어지 국제 기본값이 아니다
        (운영자 지시 2026-08-16). 생성기·스캐너의 i18n.js FALLBACK_LANGUAGE 와 동일 규약. */
     if (!want) want = 'en';
     if (want === here) return;

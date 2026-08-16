@@ -76,9 +76,12 @@ function stringLiterals(src) {
 }
 
 /** 언어 사전 객체들의 범위. 키가 `ko:` 든 `"ko":` 든 잡는다. */
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): fr·it·de·es·pt 를 넣는다.
+//   여기서 빠지면 새 사전 블록이 «사전 밖» 으로 잡혀, 그 안의 한국어(=번역 누락)가
+//   ALLOWED 예외 수에 섞여 들어간다 — 잡아야 할 결함이 다른 결함으로 위장된다.
 function dictRanges(src) {
   const ranges = [];
-  const re = /["']?(ko|en|ja)["']?\s*:\s*\{/g;
+  const re = /["']?(ko|en|ja|fr|it|de|es|pt)["']?\s*:\s*\{/g;
   let m;
   while ((m = re.exec(src))) {
     const open = m.index + m[0].length - 1;
@@ -134,7 +137,10 @@ for (const [rel, allowed] of Object.entries(ALLOWED)) {
   });
 }
 
-test('en·ja 사전에 한국어가 남아 있지 않다', () => {
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): dictRanges 가 8언어를 잡으므로
+//   이 테스트는 이름을 바꾸지 않아도 fr·it·de·es·pt 까지 함께 잰다. 이름이 주장보다
+//   작아지지 않게 제목만 맞춘다.
+test('ko 외 사전(en·ja·fr·it·de·es·pt)에 한국어가 남아 있지 않다', () => {
   for (const rel of ['index.html', 'sites/tlscan/strings.js']) {
     const { wrongLang } = analyze(rel, { htmlScripts: rel.endsWith('.html') });
     assert.deepEqual(wrongLang, [],
@@ -165,7 +171,7 @@ test('인자 없는 sync* 함수가 전부 TEXT_SYNCERS 에 등록돼 있다', (
     `TEXT_SYNCERS 에 없는 함수가 있다: ${unknown.join(', ')} — 이름이 바뀌었거나 인자를 받게 됐다`);
 });
 
-test('생성기 사전의 세 언어가 같은 키 집합을 갖는다', () => {
+test('생성기 사전의 여덟 언어가 같은 키 집합을 갖는다', () => {
   // 키가 빠지면 조용히 한국어로 폴백한다(i18n.js translate). 그게 이번 사고의
   // 증상과 똑같이 보이므로, 폴백에 기대지 말고 여기서 막는다.
   const raw = readFileSync(`${ROOT}index.html`, 'utf8');
@@ -185,7 +191,10 @@ test('생성기 사전의 세 언어가 같은 키 집합을 갖는다', () => {
     return new Set([...js.slice(open, end).matchAll(/"(g\d{3})"\s*:/g)].map((m) => m[1]));
   };
   const ko = keysOf('ko');
-  for (const lang of ['en', 'ja']) {
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): en·ja → 7개 대상 언어.
+  //   폴백(translate 의 ko 폴백)이 누락을 삼켜 «번역된 것처럼 보이는» 사고를 막는
+  //   자리라, 언어가 늘면 이 목록도 반드시 같이 는다.
+  for (const lang of ['en', 'ja', 'fr', 'it', 'de', 'es', 'pt']) {
     const other = keysOf(lang);
     const missing = [...ko].filter((k) => !other.has(k));
     const extra = [...other].filter((k) => !ko.has(k));

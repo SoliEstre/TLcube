@@ -150,15 +150,22 @@ test('되돌리기는 진행 중인 붓질을 끝낸다 (열린 스트로크가 
   assert.match(INDEX, /if \(ev\.buttons === 0\) \{\s*\n\s*cellEditorEndStroke\(\);/);
 });
 
-test('셀 편집기 문구는 ko/en/ja 키가 같고 우클릭·키보드·접근성 마크업이 있다', () => {
+test('셀 편집기 문구는 8언어 키가 같고 우클릭·키보드·접근성 마크업이 있다', () => {
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): ko/en/ja → 8언어.
   for (const key of I18N_KEYS) {
-    for (const lang of ['ko', 'en', 'ja']) {
+    for (const lang of ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt']) {
       assert.match(langBlock(lang), new RegExp('"' + key + '"\\s*:'), `${lang} 에 ${key} 가 없다`);
     }
   }
   // 개명(g521)은 **값까지** 못 박는다. 키 존재만 보면 «Y타입 셀 편집기» 로 조용히
   // 되돌아가도 초록이라 개명을 아무도 안 지킨다.
-  const RENAMED = { ko: '셀 편집기', en: 'Cell editor', ja: 'セル編集' };
+  // ⚠ 의도적 갱신 (2026-08-17): 새 5언어도 «셀 편집기» 역어를 값으로 박는다 —
+  //   «Y 타입» 이 다시 붙는 퇴행은 언어를 가리지 않는다.
+  const RENAMED = {
+    ko: '셀 편집기', en: 'Cell editor', ja: 'セル編集',
+    fr: 'Éditeur de cellules', it: 'Editor delle celle', de: 'Zelleneditor',
+    es: 'Editor de celdas', pt: 'Editor de células',
+  };
   for (const [lang, label] of Object.entries(RENAMED)) {
     assert.match(langBlock(lang), new RegExp(`"g521"\\s*:\\s*"${label}"`), `${lang} g521 개명`);
   }

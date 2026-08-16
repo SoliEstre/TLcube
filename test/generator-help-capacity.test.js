@@ -42,8 +42,22 @@ import {
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const INDEX = readFileSync(ROOT + 'index.html', 'utf8');
-const LANGS = ['ko', 'en', 'ja'];
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): ko/en/ja → 8언어.
+//   숫자는 언어를 타지 않으므로 이 목록을 늘리면 새 언어 사전도 같은 자로 재진다.
+const LANGS = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
 const LEVELS = ['L', 'M', 'H'];
+
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 숫자 옆에 오는 «단위 낱말» 은
+//   언어마다 다르다. 정규식에 언어별 낱말을 박아 두면 새 언어가 붙을 때마다 조용히
+//   통과해 버리므로(= 아무 것도 안 재는 패턴), 낱말을 여기 한 곳에 모아 둔다.
+//   낱말이 빠지면 그 언어 줄은 «못 찾았다» 로 **실패**한다 — 그게 의도다.
+const CELL_WORDS = '셀|cells?|セル|cellules?|celle|Zellen|celdas?|células?';
+/** «파인더 N셀» 을 라벨에 결합해 찾을 때의 앵커 낱말 (숫자까지 14자 이내). */
+const FINDER_WORDS = '파인더|finder|ファインダ|motif|pattern|Suchmuster|patrón|padrão';
+/** «슬롯 N셀» 앵커. */
+const SLOT_WORDS = '슬롯|slot|スロット|emplacement|ranura|ranhura';
+/** «데이터 N» 앵커 (뒤에 숫자가 오는 형태). */
+const DATA_WORDS = '데이터|データ|données|dati|Daten|datos|dados';
 
 function langBlock(lang) {
   const start = INDEX.indexOf('const GENERATOR_STRINGS = {');
@@ -148,7 +162,7 @@ test('나머지 두 칸(v0@13 · v2r2@25)도 문구와 같은 자로 잰다', ()
 
 // ── ② 사전 문구 ↔ 실측 대조 ──────────────────────────────────────────────
 
-test('g906 본문의 셀 수·payload 가 세 언어 모두 실측과 일치한다', () => {
+test('g906 본문의 셀 수·payload 가 여덟 언어 모두 실측과 일치한다', () => {
   const rows = [
     { label: 'v0', n: 13, id: 'v0' },
     { label: 'v0X', n: 21, id: 'v0x' },
@@ -171,14 +185,14 @@ test('g906 본문의 셀 수·payload 가 세 언어 모두 실측과 일치한�
       // 파인더↔슬롯 스왑을 못 잡는다 (스왑 돌연변이 초록 실증). 그 행만 라벨에 붙은
       // 숫자를 각각 재고, 슬롯 없는 행은 종전 형태를 유지한다 (라벨 표기가 없다).
       if (slot > 0) {
-        assert.match(line, new RegExp(`(파인더|finder|ファインダ)[^0-9]{0,14}${cells}\\s*(셀|cells?|セル)|${cells}\\s*cells? of finder`, 'i'),
+        assert.match(line, new RegExp(`(${FINDER_WORDS})[^0-9]{0,14}${cells}\\s*(${CELL_WORDS})|${cells}\\s*cells? of finder`, 'i'),
           `${lang}/g906 ${row.label}: 파인더 셀 수가 라벨 결합으로 실측(${cells})과 다르다`);
       } else {
-        assert.match(line, new RegExp(`\\b${cells}\\s*(셀|cells|セル)`),
+        assert.match(line, new RegExp(`\\b${cells}\\s*(${CELL_WORDS})`),
           `${lang}/g906 ${row.label}: 셀 수가 실측(${cells})과 다르다`);
       }
       if (slot > 0) {
-        assert.match(line, new RegExp(`(슬롯|slot|スロット)[^0-9]{0,14}${slot}\\s*(셀|セル)|${slot}(-cell)`, 'i'),
+        assert.match(line, new RegExp(`(${SLOT_WORDS})[^0-9]{0,14}${slot}\\s*(${CELL_WORDS})|${slot}(-cell)`, 'i'),
           `${lang}/g906 ${row.label}: 슬롯 셀 수가 실측(${slot})과 다르다`);
       }
       const [L, M, H] = payload(row.n, row.id);
@@ -193,7 +207,7 @@ test('g906 본문의 셀 수·payload 가 세 언어 모두 실측과 일치한�
   }
 });
 
-test('«세 후보 용량 동일» 이라는 거짓 주장이 세 언어 모두에서 사라졌다', () => {
+test('«세 후보 용량 동일» 이라는 거짓 주장이 여덟 언어 모두에서 사라졌다', () => {
   const falseClaims = [
     /담을 수 있는 양이 서로 같아요/,
     /hold the same payload/i,
@@ -217,7 +231,7 @@ test('«세 후보 용량 동일» 이라는 거짓 주장이 세 언어 모두�
 // 이 레인이 §11-2b 로 «측정만 하고 안 고쳤다» 고 남겨 둔 두 수치다. 통합 레인에서
 // 고쳤으므로 여기에 핀을 박는다 — 안 박으면 다음 세대 개정에서 똑같이 조용히 썩는다
 // (+3 은 포맷 블록이 레거시 15셀이던 시절 값이었다. 현행 와이어는 18셀).
-test('lab 로케이터 힌트의 «데이터 N» 이 정본 dataCells 와 일치한다 (3언어)', () => {
+test('lab 로케이터 힌트의 «데이터 N» 이 정본 dataCells 와 일치한다 (8언어)', () => {
   const rows = [
     { key: 'g541', n: 13, id: 'v0' },
     { key: 'g603', n: 21, id: 'v0x' },
@@ -230,7 +244,7 @@ test('lab 로케이터 힌트의 «데이터 N» 이 정본 dataCells 와 일치
     assert.equal(data, cellSurfaceFinal(row.n, row.id).declaredDataCells, `${row.id} dataCells`);
     for (const lang of LANGS) {
       const body = entry(lang, row.key);
-      assert.match(body, new RegExp(`(데이터|データ)\\s*${data}\\b|\\b${data} data\\b`),
+      assert.match(body, new RegExp(`(${DATA_WORDS})\\s*${data}\\b|\\b${data} data\\b`),
         `${lang}/${row.key}: 데이터 셀 수가 정본(${data})과 다르다`);
     }
   }
@@ -248,8 +262,8 @@ test('lab 로케이터 힌트 g546 의 셀 수가 정본과 일치한다', () =>
   assert.equal(cells, 74);
   for (const lang of LANGS) {
     const body = entry(lang, 'g546');
-    assert.match(body, new RegExp(`${cells}\\s*(셀|cells|セル)`),
+    assert.match(body, new RegExp(`${cells}\\s*(${CELL_WORDS})`),
       `${lang}/g546: v2r2 셀 수가 ${cells} 가 아니다`);
-    assert.doesNotMatch(body, /65\s*(셀|cells|セル)/, `${lang}/g546: 옛 65셀 표기가 남았다`);
+    assert.doesNotMatch(body, new RegExp(`65\\s*(${CELL_WORDS})`), `${lang}/g546: 옛 65셀 표기가 남았다`);
   }
 });

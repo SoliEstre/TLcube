@@ -1,16 +1,17 @@
 /**
- * build-hub.mjs — 소개 허브를 **한국어·영어·일본어 3벌**로 생성한다.
+ * build-hub.mjs — 소개 허브를 **여덟 언어**(ko·en·ja·fr·it·de·es·pt)로 생성한다.
  *
- * 왜 생성하나: 세 언어 HTML 을 손으로 들고 있으면 반드시 어긋난다. 특히 스캐너 현황
- * 표는 실측이 바뀔 때마다 갱신되는데, 세 벌을 따로 고치면 한 언어만 옛 숫자를 남긴다.
+ * 왜 생성하나: 언어별 HTML 을 손으로 들고 있으면 반드시 어긋난다. 특히 스캐너 현황
+ * 표는 실측이 바뀔 때마다 갱신되는데, 여러 벌을 따로 고치면 한 언어만 옛 숫자를 남긴다.
  * 문구·수치는 `tools/hub-content.mjs` 하나에만 두고 여기서 찍어 낸다.
+ * 3벌일 때도 그랬고, 8벌이 된 지금은 손으로 유지하는 선택지가 아예 없다(2026-08-17).
  *
  * 산출:
- *   sites/tl/index.html      (ko, 정본 URL `/`)
- *   sites/tl/en/index.html   (en, `/en/`)
- *   sites/tl/ja/index.html   (ja, `/ja/`)
+ *   sites/tl/index.html         (ko, 정본 URL `/`)
+ *   sites/tl/<code>/index.html  (나머지 7언어, `/en/` `/ja/` `/fr/` `/it/` `/de/` `/es/` `/pt/`)
+ *   sites/tl/sitemap.xml        (언어판 목록 — 문서 수만큼 자동으로 는다)
  *
- * SEO: 세 문서가 서로를 `hreflang` 로 가리키고 `x-default` 는 한국어(`/`)다.
+ * SEO: 모든 문서가 서로를 `hreflang` 로 가리키고 `x-default` 는 한국어(`/`)다.
  * 언어 자동 선택은 **첫 방문에만** 하고 선택을 기억한다 — 매번 튕기면 사용자가
  * 고른 언어로 돌아올 수 없다.
  *
@@ -51,14 +52,18 @@ function alternates() {
     .join('\n');
 }
 
-/* 언어 선택은 **접힌 레이어**다. 펼친 pill 3개로 두면 상단 바에서 자리를 너무 먹는다
-   — 내비 5 + 외부 링크 2 + 테마 3버튼이 이미 있어 좁은 화면에서 줄이 접혔다.
+/* 언어 선택은 **접힌 레이어**다. 펼친 pill 로 두면 상단 바에서 자리를 너무 먹는다
+   — 내비 5 + 외부 링크 2 + 테마 3버튼이 이미 있어 3언어일 때도 좁은 화면에서 줄이
+   접혔다. 8언어가 된 지금은 더 말할 것도 없다(2026-08-17).
    현재 언어를 토글에 적어 두면 접혀 있어도 «지금 무슨 언어인지»는 계속 보인다.
 
    ⚠ `role="menu"` 를 쓰지 않는다. ARIA 메뉴는 «명령» 을 담는 위젯이라 보조기술이
-   방향키 조작을 기대하고 Tab 을 건너뛴다. 여기 든 것은 그냥 **링크 3개**이므로
+   방향키 조작을 기대하고 Tab 을 건너뛴다. 여기 든 것은 그냥 **링크 목록**이므로
    disclosure(펼침) 패턴이 맞다 — 버튼의 `aria-expanded` + `aria-controls` 만으로 족하고
    Tab 이동이 그대로 산다.
+   ⚠ 생성기·스캐너는 같은 자리에 `<select>` 를 쓴다. 여기만 링크인 이유는 허브가
+   **언어별 URL 을 실제로 갖기** 때문이다 — 링크여야 크롤러가 언어판을 따라간다.
+   생성기·스캐너는 단일 파일 런타임 전환이라 따라갈 URL 자체가 없다.
    ⚠ 크롤러는 hreflang 을 보므로 메뉴가 `hidden` 이어도 색인에는 영향이 없다. */
 function langSwitch(current, t) {
   const items = languages.map((l) => {
@@ -129,10 +134,13 @@ const LANG_SCRIPT = `
        언어가 다르다는 이유로 루트로 끌려가면 공유한 링크가 무의미해진다. 자동 선택은
        기본 문서(루트)에 온 사람에게만 의미가 있다. */
     if (location.pathname !== '/' && location.pathname !== '/index.html') return;
+    /* 지원 목록은 languages 배열에서 찍어 낸다 — 손으로 적으면 언어판을 늘린 날
+       리다이렉트만 옛 3언어로 남아 «새 언어판이 있는데 아무도 못 간다» 가 된다. */
+    var supported = ${JSON.stringify(languages.map((l) => l.code))};
     var want = (navigator.languages || [navigator.language || 'ko'])
       .map(function (l) { return String(l).toLowerCase().split('-')[0]; })
-      .filter(function (l) { return l === 'ko' || l === 'en' || l === 'ja'; })[0];
-    /* 지원 밖 언어(fr·de 등)는 영어로 — ko 는 저작 언어지 국제 기본값이 아니다
+      .filter(function (l) { return supported.indexOf(l) >= 0; })[0];
+    /* 지원 밖 언어(nl·pl 등)는 영어로 — ko 는 저작 언어지 국제 기본값이 아니다
        (운영자 지시 2026-08-16). 생성기·스캐너의 i18n.js FALLBACK_LANGUAGE 와 동일 규약. */
     if (!want) want = 'en';
     if (want === here) return;
@@ -147,6 +155,9 @@ function render(lang) {
   const p = prefix(lang);
   const s = stats;
   const badge = (cls, text) => `<span class="badge ${cls}">${text}</span>`;
+  /* 복호 시간 표기는 언어별 맵에서 찾는다. 예전엔 ko/en/else 삼항이라 언어를 늘리면
+     새 언어가 조용히 일본어 표기를 물려받았다 — 맵이면 빠진 언어가 en 으로 떨어진다. */
+  const msOf = (type) => s.types[type].ms[lang.code] || s.types[type].ms.en;
 
   return `<!doctype html>
 <html lang="${lang.htmlLang}" prefix="og: https://ogp.me/ns#">
@@ -270,9 +281,9 @@ ${jsonLd(lang, t)}
         <tbody>
           <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
                텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
-          <tr><td>${t.rowYName}</td><td>${badge('ok', s.types.Y.decoded)}</td><td>${lang.code === 'ko' ? s.types.Y.ms : lang.code === 'en' ? s.types.Y.msEn : s.types.Y.msJa}</td><td>${badge('warn', t.badgePending)}</td></tr>
-          <tr><td>${t.rowOName}</td><td>${badge('ok', s.types.O.decoded)}</td><td>${lang.code === 'ko' ? s.types.O.ms : lang.code === 'en' ? s.types.O.msEn : s.types.O.msJa}</td><td>${badge('warn', t.badgePending)}</td></tr>
-          <tr><td>${t.rowAName}</td><td>${badge('ok', s.types.A.decoded)}</td><td>${lang.code === 'ko' ? s.types.A.ms : lang.code === 'en' ? s.types.A.msEn : s.types.A.msJa}</td><td>${badge('warn', t.badgePending)}</td></tr>
+          <tr><td>${t.rowYName}</td><td>${badge('ok', s.types.Y.decoded)}</td><td>${msOf('Y')}</td><td>${badge('warn', t.badgePending)}</td></tr>
+          <tr><td>${t.rowOName}</td><td>${badge('ok', s.types.O.decoded)}</td><td>${msOf('O')}</td><td>${badge('warn', t.badgePending)}</td></tr>
+          <tr><td>${t.rowAName}</td><td>${badge('ok', s.types.A.decoded)}</td><td>${msOf('A')}</td><td>${badge('warn', t.badgePending)}</td></tr>
           <tr><td>${t.rowCenterQr}</td><td>${badge('ok', s.centerQr.decoded)}</td><td>—</td><td>${badge('warn', t.badgePending)}</td></tr>
         </tbody>
       </table>
@@ -321,11 +332,47 @@ ${jsonLd(lang, t)}
 `;
 }
 
+/*
+ * sitemap 도 여기서 찍는다 (2026-08-17).
+ *
+ * 왜 손으로 두지 않나: 언어판이 3개일 때는 URL 3 × hreflang 4 = 12줄이라 손으로 버텼는데,
+ * 8개가 되면 8 × 9 = 72줄이다. 손으로 유지하면 언어를 늘린 날 sitemap 만 옛 목록으로
+ * 남고 — 그게 조용하다. 페이지는 살아 있는데 색인에는 없는 상태가 된다.
+ *
+ * ⚠ `LASTMOD` 는 **상수**다. 오늘 날짜를 쓰면 빌드를 돌릴 때마다 파일이 바뀌어
+ *   «동기화 가드» 테스트가 매번 깨진다. 내용이 실제로 바뀐 날에 손으로 올린다.
+ */
+const LASTMOD = '2026-08-17';
+
+function sitemap() {
+  const alts = languages
+    .map((l) => `    <xhtml:link rel="alternate" hreflang="${l.code}" href="${ORIGIN}/${l.dir}"/>`)
+    .concat(`    <xhtml:link rel="alternate" hreflang="x-default" href="${ORIGIN}/"/>`)
+    .join('\n');
+  const entries = languages.map((l) => [
+    '  <url>',
+    `    <loc>${ORIGIN}/${l.dir}</loc>`,
+    alts,
+    `    <lastmod>${LASTMOD}</lastmod>`,
+    // 갱신 빈도는 정본(루트)에만 적는다 — 언어판은 같은 문서의 번역이라 같은 주기다.
+    ...(l.dir === '' ? ['    <changefreq>weekly</changefreq>'] : []),
+    '  </url>',
+  ].join('\n')).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+${entries}
+</urlset>
+`;
+}
+
 for (const lang of languages) {
   const dir = ROOT + lang.dir;
   if (lang.dir) mkdirSync(dir, { recursive: true });
   const html = render(lang);
   writeFileSync(dir + 'index.html', html);
-  console.log(`${(lang.dir || './').padEnd(6)} ${lang.label.padEnd(8)} ${html.length.toLocaleString()} chars`);
+  console.log(`${(lang.dir || './').padEnd(6)} ${lang.label.padEnd(10)} ${html.length.toLocaleString()} chars`);
 }
+writeFileSync(`${ROOT}sitemap.xml`, sitemap());
+console.log(`${'sitemap'.padEnd(6)} ${String(languages.length).padEnd(10)} URLs`);
 console.log(`\n→ ${ROOT}`);

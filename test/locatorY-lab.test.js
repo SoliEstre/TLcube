@@ -112,7 +112,7 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-pos="plane"/);
   // **의도적 갱신 «드랍 정본화» (2026-08-16)** — v2r2 · v1r2 카드를 내렸다.
   // hex-frame-v1 전례와 같은 «카드만 내림» 이다: 사전 키(g543/g547/g945/g946)는
-  // 3언어 모두 남아 있고(아래 문구 테스트가 고정), 와이어·판독은 그대로다.
+  // 여덟 언어 모두 남아 있고(아래 문구 테스트가 고정), 와이어·판독은 그대로다.
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v2r2"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v1r2"/);
   assert.doesNotMatch(INDEX, /data-locator="hex-frame-v1"/);
@@ -130,9 +130,12 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.doesNotMatch(INDEX, /회전·조명·인쇄·라이브 스캔 성능을 보장해요/);
 });
 
-test('로케이터 문구는 ko/en/ja 가 같고 성능 보장을 하지 않는다', () => {
+test('로케이터 문구는 8언어가 같고 성능 보장을 하지 않는다', () => {
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): ko/en/ja → 8언어.
+  //   드랍된 후보(g543·g547)의 사전 보존을 강제하는 자리라, 새 언어에도 같은 보존이
+  //   적용돼야 한다 — 되살릴 때 5언어를 다시 번역하지 않기 위해서다.
   for (const key of ['g515', 'g516', 'g517', 'g518', 'g519', 'g520', 'g541', 'g542', 'g543', 'g544', 'g545', 'g546', 'g547', 'g548']) {
-    for (const lang of ['ko', 'en', 'ja']) {
+    for (const lang of ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt']) {
       assert.match(langBlock(lang), new RegExp('"' + key + '"\\s*:'), `${lang} 에 ${key} 가 없다`);
     }
   }
@@ -142,7 +145,7 @@ test('로케이터 문구는 ko/en/ja 가 같고 성능 보장을 하지 않는�
   assert.match(INDEX, /data-locator="cell-surface-v0"[\s\S]*?data-i18n="g542">셀 표면 v0 \(Y0\)</);
   assert.match(INDEX, /data-locator="cell-surface-v0x"[\s\S]*?data-i18n="g602">셀 표면 v0X \(Y1\)</);
   // **의도적 갱신 «드랍 정본화» (2026-08-16)** — 카드는 내렸지만 **사전 항목은
-  // 3언어 모두 남긴다**. 되살릴 때 재번역하지 않기 위해서고, 위 키 순회
+  // 여덟 언어 모두 남긴다**. 되살릴 때 재번역하지 않기 위해서고, 위 키 순회
   // (g543 · g547)가 그 보존을 이미 강제한다. 여기서는 사전 문자열 자체를 건다.
   assert.match(INDEX, /"g543":\s*"셀 표면 v2r2 \(Y1\/Y2\)"/);
   assert.match(INDEX, /"g547":\s*"셀 표면 v1r2 \(Y1\)"/);

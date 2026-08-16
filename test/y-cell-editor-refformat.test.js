@@ -126,8 +126,10 @@ test('셀 편집기 ref./format 는 선택 파인더 painted 셀의 autoplace �
   assert.match(INDEX, /tf\('g549', \{ message: ctx\.error\.message \}\)/);
 });
 
-test('배치 불가 안내 g549 는 ko/en/ja 세 언어에 있다', () => {
-  for (const lang of ['ko', 'en', 'ja']) {
+test('배치 불가 안내 g549 는 여덟 언어에 있다', () => {
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): ko/en/ja → 8언어.
+  //   {message} 치환 토큰 보존까지 함께 재므로 새 언어가 토큰을 빠뜨리면 여기서 깨진다.
+  for (const lang of ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt']) {
     assert.match(langBlock(lang), /"g549"\s*:/, `${lang} 에 g549 가 없다`);
     assert.match(langBlock(lang), /"g549"\s*:\s*"[^"]*\{message\}/, `${lang} g549 에 {message} 가 없다`);
   }

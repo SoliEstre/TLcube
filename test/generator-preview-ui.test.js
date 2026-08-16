@@ -9,7 +9,7 @@
  *       커스텀 카드 안 색 바가 hue 슬라이더로 바뀌었고 움직이면 커스텀이 선택되는가 ·
  *       슬라이더를 품은 카드가 role=button 이 아닌가 (ARIA presentational children)
  *   B-3 배치 버튼 — 미리보기 위 버튼이 패널 버튼과 **같은 동작·같은 라벨**을 쓰는가
- *   B-4 조작 안내 — 세 언어가 다 있고, 조작에서 사라지며, «핀치» 를 말하는 문구가
+ *   B-4 조작 안내 — 여덟 언어가 다 있고, 조작에서 사라지며, «핀치» 를 말하는 문구가
  *       실제 두 손가락 처리와 짝이 맞는가 (문구만 있고 코드가 없으면 거짓말이 된다)
  *
  * 파생 번들(dist·sites)에도 같은 규칙이 실려 나가는지 함께 본다 — 정본만 고치고
@@ -52,7 +52,8 @@ function stringFor(lang, key) {
   return JSON.parse(m[1]);
 }
 
-const LANGS = ['ko', 'en', 'ja'];
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): ko/en/ja → 8언어.
+const LANGS = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
 
 // ── B-1 미리보기 fit ──────────────────────────────────────────────────────
 
@@ -239,7 +240,10 @@ test('touch-action: none 이 있어야 핀치가 브라우저 기본 제스처�
 
 // ── i18n (g9xx 대역 — B 는 g960\~g962) ────────────────────────────────────
 
-test('신규 키 g960·g961·g962 가 ko/en/ja 에 다 있고 언어마다 다르다', () => {
+test('신규 키 g960·g961·g962 가 8언어에 다 있고 언어마다 다르다', () => {
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 3 → LANGS.length.
+  //   상수를 박아 두면 언어를 늘릴 때 «3 을 8 로 고쳤다» 로 끝나고, 두 언어가 같은
+  //   문자열이어도 초록이 될 수 있다. 목록 길이에 묶어 두면 그 구멍이 안 생긴다.
   for (const key of ['g960', 'g961', 'g962']) {
     const seen = new Set();
     for (const lang of LANGS) {
@@ -247,13 +251,20 @@ test('신규 키 g960·g961·g962 가 ko/en/ja 에 다 있고 언어마다 다�
       assert.ok(s.trim().length > 0, `${lang}/${key} 가 비어 있다`);
       seen.add(s);
     }
-    assert.equal(seen.size, 3, `${key} 가 세 언어에서 같은 문자열이다 (번역 누락)`);
+    assert.equal(seen.size, LANGS.length, `${key} 가 두 언어 이상에서 같은 문자열이다 (번역 누락)`);
   }
 });
 
-test('핀치를 구현했으므로 «휠만» 이라고 말하던 문구가 세 언어 모두 갱신됐다', () => {
-  const pinch = { ko: '핀치', en: 'pinch', ja: 'ピンチ' };
+test('핀치를 구현했으므로 «휠만» 이라고 말하던 문구가 8언어 모두 갱신됐다', () => {
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 새 5언어의 «핀치» 낱말을 추가한다.
+  //   낱말을 안 넣으면 `undefined` 로 includes 가 터져 조용히 넘어가지 않는다 —
+  //   아래 assert.ok(pinch[lang]) 가 그 사고를 앞에서 막는다.
+  const pinch = {
+    ko: '핀치', en: 'pinch', ja: 'ピンチ',
+    fr: 'pincement', it: 'pizzico', de: 'Pinch', es: 'pellizco', pt: 'pinça',
+  };
   for (const lang of LANGS) {
+    assert.ok(pinch[lang], `${lang}: 핀치 낱말이 이 표에 없다 — 언어를 늘렸으면 여기도 늘려라`);
     for (const key of ['g207', 'g300', 'g903', 'g962']) {
       assert.ok(stringFor(lang, key).includes(pinch[lang]),
         `${lang}/${key} 가 핀치를 말하지 않는다 — 구현과 문구가 어긋난다`);
@@ -279,7 +290,13 @@ test('단일 파일 번들과 사이트 파생본에도 같은 규칙이 실린�
     assert.match(html, /class="hue-bar in-card"/, `${name}: 카드 안 hue 바 누락`);
     // 번들은 사전을 **이스케이프된 JSON 문자열**로 심는다 (`g962\": \"…`) — 정본의
     // `"g962":` 형태를 그대로 찾으면 항상 실패한다.
-    for (const lang of ['드래그로 위치 이동', 'Drag to move', 'ドラッグで移動']) {
+    // ⚠ 의도적 갱신 (2026-08-17, i18n 5언어 확장): 새 5언어의 g962 머리도 함께 건다 —
+    //   빌더가 ko/en/ja 만 실어도 초록이던 구멍을 닫는다.
+    for (const lang of [
+      '드래그로 위치 이동', 'Drag to move', 'ドラッグで移動',
+      'Faire glisser pour déplacer', 'Trascinare per spostare',
+      'Ziehen zum Verschieben', 'Arrastrar para mover', 'Arrastar para mover',
+    ]) {
       assert.ok(html.includes(lang), `${name}: 신규 사전 값(${lang}) 누락`);
     }
   }

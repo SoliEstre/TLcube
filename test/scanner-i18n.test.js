@@ -2,7 +2,7 @@
  * scanner-i18n.test.js — 스캐너 문구 사전의 완전성.
  *
  * ⚠ 이 파일은 원래 «있다고 주석에 적혀 있었지만 실재하지 않았다**. `strings.js` 머리말이
- *   「키를 추가하면 세 언어 모두 채운다 — test/scanner-i18n.test.js 가 누락을 잡는다」고
+ *   「키를 추가하면 여덟 언어 모두 채운다 — test/scanner-i18n.test.js 가 누락을 잡는다」고
  *   단언하는데, 그 파일이 없었다(2026-08-12 발견). 주석이 약속한 방어는 실재해야 한다 —
  *   없으면 그 거짓말이 «이미 검사된다» 는 착각을 만들어 진짜 누락을 통과시킨다.
  *
@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
+import { SUPPORTED_LANGUAGES } from '../src/i18n.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SCANNER_JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
@@ -25,8 +26,12 @@ function keysOf(lang) {
   return Object.keys(SCANNER_STRINGS[lang]).sort();
 }
 
-test('세 언어 사전의 키 집합이 완전히 같다', () => {
-  assert.deepEqual(LANGS.sort(), ['en', 'ja', 'ko']);
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 3언어 → 8언어.
+//   이 배열은 «사전이 몇 언어인가» 를 못 박는 자리다. 넓히는 커밋과 사전을 채우는
+//   커밋이 갈리면 «키는 다 있는데 언어가 세 개» 인 상태가 통과해 버린다.
+//   목록은 `src/i18n.js` 의 `SUPPORTED_LANGUAGES` 와 같아야 한다 — 아래에서 그것도 잰다.
+test('여덟 언어 사전의 키 집합이 완전히 같다', () => {
+  assert.deepEqual(LANGS.sort(), ['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'pt']);
   const base = keysOf('ko');
   assert.ok(base.length > 40, '한국어 키가 ' + base.length + '개뿐 — 사전을 잘못 읽었다');
   for (const lang of LANGS) {
@@ -63,11 +68,26 @@ test('index.html 의 data-i18n 키가 전부 사전에 있다', () => {
   assert.deepEqual(unknown, [], '사전에 없는 키를 참조한다');
 });
 
-test('스캔 가이드 아래에 TLcube 전용 범위를 세 언어로 알린다', () => {
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 값 핀 3 → 8.
+//   이 안내는 «왜 내 QR 이 안 읽히나» 를 미리 막는 문구라, 한 언어라도 빠지면 그
+//   언어권에서만 지원 문의가 는다. 새 언어에 값이 있는지까지 확인한다.
+test('스캔 가이드 아래에 TLcube 전용 범위를 여덟 언어로 알린다', () => {
   assert.match(SCANNER_HTML, /class="scan-scope-note" data-i18n="guide\.tlcubeOnly"/);
   assert.equal(SCANNER_STRINGS.ko['guide.tlcubeOnly'], 'QR 및 다른 바코드는 읽히지 않아요.');
   assert.equal(SCANNER_STRINGS.en['guide.tlcubeOnly'], 'QR codes and other barcodes are not supported.');
   assert.equal(SCANNER_STRINGS.ja['guide.tlcubeOnly'], 'QR コードやその他のバーコードは読み取れません。');
+  assert.equal(SCANNER_STRINGS.fr['guide.tlcubeOnly'], 'Les codes QR et les autres codes-barres ne sont pas pris en charge.');
+  assert.equal(SCANNER_STRINGS.it['guide.tlcubeOnly'], 'I codici QR e gli altri codici a barre non sono supportati.');
+  assert.equal(SCANNER_STRINGS.de['guide.tlcubeOnly'], 'QR-Codes und andere Barcodes werden nicht gelesen.');
+  assert.equal(SCANNER_STRINGS.es['guide.tlcubeOnly'], 'Los códigos QR y otros códigos de barras no son compatibles.');
+  assert.equal(SCANNER_STRINGS.pt['guide.tlcubeOnly'], 'Os códigos QR e outros códigos de barras não são suportados.');
+});
+
+// 사전이 있는데 `SUPPORTED_LANGUAGES` 에 없으면 «드롭다운에 있는데 골라도 안 바뀐다» 가
+// 되고, 반대면 «고를 수는 있는데 화면 절반이 한국어» 가 된다. 둘 다 조용한 결함이라
+// 여기서 두 목록이 같은 집합인지 못 박는다.
+test('스캐너 사전 언어 목록 == src/i18n.js SUPPORTED_LANGUAGES', () => {
+  assert.deepEqual([...LANGS].sort(), [...SUPPORTED_LANGUAGES].sort());
 });
 
 test('Type Y 강화 로케이터는 /lab/ 스캐너에서만 디코더에 켠다', () => {

@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="pt" prefix="og: https://ogp.me/ns#">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TLcube — um código visual 2.5D que leva os dados na ordem de luminância</title>
+<meta name="description" content="Um código visual aberto que divide uma célula hexagonal em três faces em losango e leva os dados na ordem de luminância relativa dessas faces. A especificação e a implementação de referência estão publicadas sob Apache-2.0.">
+<link rel="canonical" href="https://tl.estre.so/pt/">
+<link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
+<link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
+<link rel="alternate" hreflang="ja" href="https://tl.estre.so/ja/">
+<link rel="alternate" hreflang="fr" href="https://tl.estre.so/fr/">
+<link rel="alternate" hreflang="it" href="https://tl.estre.so/it/">
+<link rel="alternate" hreflang="de" href="https://tl.estre.so/de/">
+<link rel="alternate" hreflang="es" href="https://tl.estre.so/es/">
+<link rel="alternate" hreflang="pt" href="https://tl.estre.so/pt/">
+<link rel="alternate" hreflang="x-default" href="https://tl.estre.so/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TLcube">
+<meta property="og:title" content="TLcube — um código visual 2.5D que leva os dados na ordem de luminância">
+<meta property="og:description" content="Os dados assentam na ordem das três faces, não no brilho absoluto. Enquanto a ordem sobreviver, o valor sobrevive.">
+<meta property="og:url" content="https://tl.estre.so/pt/">
+<meta property="og:image" content="https://tl.estre.so/assets/type-Y.png">
+<meta property="og:locale" content="pt_PT">
+<meta property="og:locale:alternate" content="ko_KR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="ja_JP">
+<meta property="og:locale:alternate" content="fr_FR">
+<meta property="og:locale:alternate" content="it_IT">
+<meta property="og:locale:alternate" content="de_DE">
+<meta property="og:locale:alternate" content="es_ES">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://tl.estre.so/#website",
+      "name": "TLcube",
+      "alternateName": "TrilLuminance (cube)",
+      "url": "https://tl.estre.so/",
+      "inLanguage": [
+        "ko",
+        "en",
+        "ja",
+        "fr",
+        "it",
+        "de",
+        "es",
+        "pt"
+      ]
+    },
+    {
+      "@type": "TechArticle",
+      "headline": "TLcube — um código visual 2.5D que leva os dados na ordem, não no brilho absoluto",
+      "description": "Um código visual aberto que divide uma célula hexagonal em três faces em losango e usa a sua ordem de luminância relativa (3! = 6) como um símbolo em base 6. Invariante a transformações tonais monótonas.",
+      "url": "https://tl.estre.so/pt/",
+      "inLanguage": "pt",
+      "isPartOf": {
+        "@id": "https://tl.estre.so/#website"
+      },
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "author": {
+        "@type": "Organization",
+        "name": "SoliEstre"
+      }
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "name": "TLcube reference implementation",
+      "codeRepository": "https://github.com/SoliEstre/TLcube",
+      "programmingLanguage": "JavaScript",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ]
+}
+</script>
+<link rel="icon" href="../../_shared/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../_shared/site.css?v=c922e48a">
+</head>
+<body data-site="hub">
+<div class="wrap">
+
+  <header class="bar">
+    <a class="brand" href="https://tl.estre.so/pt/">TL<span class="mark">cube</span></a>
+    <nav>
+      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
+           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
+           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
+      <a href="#why-now">Porquê agora</a>
+      <a href="#types">Tipos</a>
+      <a href="#what">Como funciona</a>
+      <a href="#scanner-status">Estado do scanner</a>
+      <a href="#spec">Especificação</a>
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Gerador</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">Scanner</a>
+      <div class="lang-drop" data-lang-drop>
+        <button type="button" class="lang-drop-toggle" aria-expanded="false" aria-controls="lang-menu" aria-label="Idioma">
+          <span class="lang-drop-current">Português</span>
+          <span class="lang-drop-caret" aria-hidden="true"></span>
+        </button>
+        <div class="lang-drop-menu" id="lang-menu" hidden>
+          <a href="https://tl.estre.so/" hreflang="ko" data-lang-pick="ko">한국어</a>
+          <a href="https://tl.estre.so/en/" hreflang="en" data-lang-pick="en">English</a>
+          <a href="https://tl.estre.so/ja/" hreflang="ja" data-lang-pick="ja">日本語</a>
+          <a href="https://tl.estre.so/fr/" hreflang="fr" data-lang-pick="fr">Français</a>
+          <a href="https://tl.estre.so/it/" hreflang="it" data-lang-pick="it">Italiano</a>
+          <a href="https://tl.estre.so/de/" hreflang="de" data-lang-pick="de">Deutsch</a>
+          <a href="https://tl.estre.so/es/" hreflang="es" data-lang-pick="es">Español</a>
+          <a href="https://tl.estre.so/pt/" hreflang="pt" aria-current="true" data-lang-pick="pt">Português</a>
+        </div>
+      </div>
+      <div class="theme-toggle" role="group" aria-label="Tema">
+        <button type="button" data-theme-choice="auto">Auto</button>
+        <button type="button" data-theme-choice="light">Claro</button>
+        <button type="button" data-theme-choice="dark">Escuro</button>
+      </div>
+    </nav>
+  </header>
+
+  <section id="hero">
+    <h1>O QR lê-se bem.<br>Só nunca foi <strong>bonito</strong></h1>
+    <p class="lead">Cartazes, embalagens, cartões de visita — o QR está em todo o lado, e pousar um quadrado a preto e branco sobre um design trabalhado durante semanas sempre custou. Mas o QR tem este aspeto por uma razão: é o que se constrói quando <strong>uma câmara e um processador de 1994</strong> têm de conseguir lê-lo.</p>
+    <p class="lead">Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Criar um código</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+  </section>
+
+
+  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
+       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
+       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
+       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
+  <section id="why-now">
+    <h2>Porquê agora</h2>
+    <p class="lead"><strong>O QR foi a resposta certa para o seu tempo.</strong> Dois valores, módulos quadrados, padrões localizadores grandes — cada uma dessas escolhas existia para que mesmo uma câmara fraca conseguisse ler. Com essas restrições, abdicar da estética era racional.</p>
+    <p class="lead"><strong>Essa premissa mudou.</strong> As câmaras dos telemóveis de hoje não se comparam, e o processamento de vídeo em tempo real corre dentro de um navegador. Essa folga podia ir para a densidade — ou podia ir para <strong>o aspeto</strong>. É por isso que este formato existe.</p>
+    <p class="lead"><strong>Em troca, abdicou-se da densidade.</strong> As células em losango aproveitam pior a área do que os módulos quadrados. Este formato não compete em densidade. Se for preciso levar muito, a ferramenta certa é o QR.</p>
+  </section>
+
+  <section id="types">
+    <h2>Três tipos</h2>
+    <p class="dim">Escolha consoante o sítio onde vai ficar. Os três partilham o mesmo contrato de dados e diferem apenas na silhueta. Todos os códigos abaixo contêm <code>https://tl.estre.so</code>.</p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card">
+        <img src="../assets/type-Y.png" alt="Type Y — cubo único">
+        <h3>Type Y — cubo único</h3>
+        <p class="dim">Três faces n×n. Uma marca de uma só peça, boa para sinalética e merchandising.</p>
+        <div class="meta">n = 13 / 21 / 25 · carga útil líquida 31 / 98 / 141 B</div>
+      </div>
+      <div class="card">
+        <img src="../assets/type-O.png" alt="Type O — campo hexagonal">
+        <h3>Type O — campo hexagonal</h3>
+        <p class="dim">A forma base. As células em losango estendem-se à volta de um padrão localizador central.</p>
+        <div class="meta">k = 6 / 8 / 10 · carga útil líquida 18 / 39 / 65 B</div>
+      </div>
+      <div class="card">
+        <img src="../assets/type-A.png" alt="Type A — silhueta triangular">
+        <h3>Type A — silhueta triangular</h3>
+        <p class="dim">Um núcleo hexagonal mais remendos de canto, formando um triângulo equilátero.</p>
+        <div class="meta">k = 6 / 8 / 10 · carga útil líquida 31 / 62 / 101 B</div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:16px">A carga útil líquida é para ECC-M. Os três tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.</p>
+  </section>
+
+  <section id="what">
+    <h2>Como funciona</h2>
+    <div class="grid">
+      <div class="card"><h3>1. Célula = três losangos</h3><p class="dim">Uma pavimentação rhombille divide cada célula hexagonal nas faces T, L e R.</p></div>
+      <div class="card"><h3>2. Ordem = símbolo</h3><p class="dim">Ordenar as três luminâncias dá 3! = 6 resultados — um dígito em base 6.</p></div>
+      <div class="card"><h3>3. 3 dígitos = 1 símbolo</h3><p class="dim">Reed–Solomon sobre o corpo primo GF(211) corrige os erros.</p></div>
+    </div>
+    <h2 style="margin-top:32px">O que isto liberta</h2>
+    <p class="lead"><strong>Invariante a transformações monótonas.</strong> As variações de iluminação global, o gama e o mapeamento tonal de uma impressora são monótonos: não conseguem trocar uma ordem. Se a ordem sobrevive, o valor sobrevive.</p>
+    <p class="lead"><strong>O renderizador fica livre.</strong> O contrato de dados é apenas «a ordem entre as faces, mais uma separação mínima». Dentro disso, a cor, a textura, os gradientes por face e a animação estão todos abertos. É essa liberdade que dá sentido ao formato.</p>
+    <p class="lead"><strong>Mas nada fica bonito sozinho.</strong> O que se abre é o contrato, não o resultado. O que desenhar lá dentro continua a ser trabalho seu.</p>
+  </section>
+
+  <section id="scanner-status">
+    <h2>Scanner — ponto de situação</h2>
+    <p class="lead"><strong>O descodificador funciona.</strong> Os três tipos leem-se a partir de fotos de dispositivos reais; falta subir a precisão e a velocidade. Cada tempo abaixo é <strong>uma descodificação de uma foto fixa tirada com um telemóvel real</strong>, não o tempo até à primeira fixação nem uma taxa de êxito ao vivo.</p>
+    <div class="table-scroll" style="margin-top:20px">
+      <table>
+        <thead>
+          <tr><th>Tipo</th><th>Fotos reais descodificadas</th><th>Uma descodificação em foto fixa</th><th>Validação ao vivo</th></tr>
+        </thead>
+        <tbody>
+          <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
+               텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
+          <tr><td><strong>Type Y</strong> — cubo único</td><td><span class="badge ok">3 / 3</span></td><td>≈ 0.1 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Type O</strong> — campo hexagonal</td><td><span class="badge ok">3 / 3</span></td><td>≈ 1.8 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Type A</strong> — silhueta triangular</td><td><span class="badge ok">3 / 3</span></td><td>≈ 0.86 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Variante de QR central</strong> (os três tipos)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="dim" style="margin-top:16px"><strong>No critério de uma descodificação de uma foto fixa</strong>, o Type Y é o mais curto e O e A demoram mais. A reformulação dos padrões localizadores e as novas tentativas de formato alargaram o conjunto de fotos reais que se descodificam, à custa de mais trabalho em alguns caminhos; o Y tenta primeiro um caminho barato e só faz uma varredura completa depois de falhar. Estes números não devem ser lidos como tempo até à primeira fixação ao vivo.</p>
+    <p class="dim"><strong>O tempo de uma descodificação em foto fixa não prevê a sensação da leitura ao vivo.</strong> Nas primeiras medições em dispositivo real, um fotograma rápido podia ainda assim dar uma primeira fixação lenta quando eram precisos muitos fotogramas antes de um bem-sucedido, e a ordem dos tipos diferia desta tabela de foto fixa. Esse registo abrange um só dispositivo e uma amostra pequena, pelo que ainda não atribuímos uma classificação de uso ao vivo.</p>
+    <p class="dim">As condições de captura também pesam. Na medição, <strong>9 píxeis por célula</strong> foi o limite inferior de descodificação e, à mesma distância, uma <strong>objetiva ultra grande-angular</strong> enquadra o código mais pequeno e desce abaixo dessa linha (ultra grande-angular 7.6 px falhou / grande-angular 9.1 px conseguiu). É por isso que o scanner oferece a escolha da objetiva.</p>
+    <p class="dim">Na <strong>variante de QR central</strong>, um bloco QR substitui o padrão localizador central. Os seus padrões dão o ponto de entrada de posição e orientação com que se descodifica o corpo TL em redor. O gerador usa agora este caminho validado por predefinição nos tipos O e A. Por predefinição, o QR continua a ser uma reserva com uma ligação para o leitor; a carga útil fica no corpo TL.</p>
+    <p class="dim" style="margin-top:16px"><small>Medido a 2026-08-13 · amostra de 9 fotos com três sensores de telemóvel (ultra grande-angular, grande-angular, teleobjetiva) · lado curto 1440 px. A amostra é pequena — leia isto como um <em>estado atual</em>, não como uma taxa de êxito.</small></p>
+  </section>
+
+  <section id="spec">
+    <h2>Especificação e implementação</h2>
+    <p class="lead">A especificação do formato e a implementação de referência estão publicadas sob a <strong>Licença Apache 2.0</strong>. JavaScript simples, sem cadeia de compilação, zero dependências em execução — funciona como um único ficheiro HTML.</p>
+    <p class="lead"><strong>Implementar apenas o descodificador já conta como implementação conforme.</strong> A adoção começa pelo lado que lê.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">Ler a especificação</a>
+      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">Implementação de referência</a>
+    </div>
+    <div class="table-scroll" style="margin-top:24px">
+      <table>
+        <thead><tr><th>Site</th><th>Papel</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">tlcube.estre.so</a></td><td>Gerador</td><td><span class="badge ok">ativo</span></td></tr>
+          <tr><td><a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">tlscan.estre.so</a></td><td>Scanner</td><td><a href="#scanner-status" style="color:inherit;text-decoration:none"><span class="badge ok">ativo — estado ›</span></a></td></tr>
+          <tr><td>tl.estre.so</td><td>Site de apresentação</td><td><span class="badge ok">está aqui</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Gerador</a>
+      <a href="https://tlscan.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlscan">Scanner</a>
+      <a href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    </div>
+    <div>QR Code is a registered trademark of DENSO WAVE INCORPORATED.</div>
+    <small class="copyright">© 2026 SoliEstre — TrilLuminance (cube) · nome de código Trilume</small>
+  </footer>
+
+</div>
+<script src="../../_shared/site.js?v=46a7d0f6"></script>
+<script>
+/* 언어 자동 선택 — **첫 방문에만** 한다.
+   매번 브라우저 언어로 튕기면 사용자가 고른 언어로 돌아올 수 없다. 그래서 링크를
+   누른 순간 선택을 저장하고, 저장된 선택이 있으면 자동 이동을 하지 않는다.
+   크롤러는 hreflang 을 보므로 이 스크립트에 의존하지 않는다. */
+(function () {
+  var KEY = 'tlcube-lang';
+  var here = document.documentElement.lang;
+  try {
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-lang-pick]');
+      if (a) localStorage.setItem(KEY, a.getAttribute('data-lang-pick'));
+    });
+    if (localStorage.getItem(KEY)) return;
+    /* 언어 URL 을 **직접 연 경우엔 튕기지 않는다.** /en/ 링크를 받은 사람이 브라우저
+       언어가 다르다는 이유로 루트로 끌려가면 공유한 링크가 무의미해진다. 자동 선택은
+       기본 문서(루트)에 온 사람에게만 의미가 있다. */
+    if (location.pathname !== '/' && location.pathname !== '/index.html') return;
+    /* 지원 목록은 languages 배열에서 찍어 낸다 — 손으로 적으면 언어판을 늘린 날
+       리다이렉트만 옛 3언어로 남아 «새 언어판이 있는데 아무도 못 간다» 가 된다. */
+    var supported = ["ko","en","ja","fr","it","de","es","pt"];
+    var want = (navigator.languages || [navigator.language || 'ko'])
+      .map(function (l) { return String(l).toLowerCase().split('-')[0]; })
+      .filter(function (l) { return supported.indexOf(l) >= 0; })[0];
+    /* 지원 밖 언어(nl·pl 등)는 영어로 — ko 는 저작 언어지 국제 기본값이 아니다
+       (운영자 지시 2026-08-16). 생성기·스캐너의 i18n.js FALLBACK_LANGUAGE 와 동일 규약. */
+    if (!want) want = 'en';
+    if (want === here) return;
+    localStorage.setItem(KEY, want);
+    location.replace(want === 'ko' ? '/' : '/' + want + '/');
+  } catch (err) { /* 저장소가 막혀 있으면 자동 선택을 포기한다 — 페이지는 그대로 쓴다. */ }
+})();
+</script>
+</body>
+</html>

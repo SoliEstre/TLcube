@@ -6,8 +6,8 @@
  *
  * ## 왜 허브(tl.estre.so)와 방식이 다른가
  *
- * 허브는 언어별 **HTML 3벌을 생성**한다(`tools/build-hub.mjs`). 문서라서 언어별 URL 이
- * SEO 상 유리하고, 정적 파일이라 나누는 비용이 없다.
+ * 허브는 언어별 **HTML 을 언어 수만큼 생성**한다(`tools/build-hub.mjs` — 2026-08-17 기준 8벌).
+ * 문서라서 언어별 URL 이 SEO 상 유리하고, 정적 파일이라 나누는 비용이 없다.
  *
  * 생성기·스캐너는 그렇게 못 한다. 둘 다 **단일 HTML 파일**로 배포되고(SPEC §8 — 생성기는
  * `file://` 로도 열려야 한다), 배포도 파일 하나를 index.html 로 마운트하는 구조다.
@@ -22,10 +22,35 @@
  * @module i18n
  */
 
-export const SUPPORTED_LANGUAGES = ['ko', 'en', 'ja'];
+/*
+ * 지원 언어 8종 (2026-08-17 확장 — ko/en/ja 에 fr·it·de·es·pt 를 더했다).
+ *
+ * ⚠ **이 배열은 사전이 아니라 «전환을 허용하는 목록» 이다.** `setLanguage` 가 이 목록으로
+ *   거르므로, 여기 없는 코드는 버튼·드롭다운에 있어도 눌리지 않는다. 반대로 여기 넣고
+ *   사전을 안 채우면 `translate` 가 ko 로 폴백해 «절반만 번역된 화면» 이 된다.
+ *   목록과 사전은 항상 같이 움직인다 (`test/i18n-coverage.test.js` · `test/scanner-i18n.test.js`).
+ */
+export const SUPPORTED_LANGUAGES = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
+/**
+ * 각 언어의 **자기 표기**(endonym). 언어 선택 드롭다운이 쓴다.
+ *
+ * 왜 자기 표기인가: 언어를 바꾸려는 사람은 «지금 화면 언어» 를 못 읽는 사람이다.
+ * 현재 언어로 번역한 언어명(예: 한국어 화면의 「프랑스어」)은 정작 그 언어 사용자가
+ * 못 읽는다 — 목록은 항상 «Français» 로 둔다.
+ */
+export const LANGUAGE_LABELS = {
+  ko: '한국어',
+  en: 'English',
+  ja: '日本語',
+  fr: 'Français',
+  it: 'Italiano',
+  de: 'Deutsch',
+  es: 'Español',
+  pt: 'Português',
+};
 /** 사전 미스키 폴백 — 저작 원본 언어. 사전은 ko 가 완본이므로 여기만 ko 를 쓴다. */
 export const DEFAULT_LANGUAGE = 'ko';
-/** 브라우저 언어가 지원 밖일 때(예: fr·de) 보여줄 언어 — 국제 기본값 (운영자 지시 2026-08-16). */
+/** 브라우저 언어가 지원 밖일 때(예: nl·pl) 보여줄 언어 — 국제 기본값 (운영자 지시 2026-08-16). */
 export const FALLBACK_LANGUAGE = 'en';
 const STORAGE_KEY = 'tlcube-lang';
 
@@ -142,11 +167,34 @@ export function createI18n(dictionaries, options = {}) {
 }
 
 /**
- * 언어 선택 버튼들을 붙인다. 컨테이너에 `<button data-lang="ko">` 들이 있다고 가정하고,
- * 현재 언어에 `aria-current` 를 세운다(허브의 링크판과 같은 표시 규약).
+ * 언어 선택 UI 를 붙인다. 두 모양을 모두 받는다.
+ *
+ * ① **드롭다운** — 컨테이너 안의 `<select data-lang-select>` (8언어 확장 2026-08-17).
+ *    버튼 8개를 늘어놓으면 상단 바가 넘쳐 접히고(생성기는 이미 4번째 토글에서 접혔다),
+ *    스캐너는 카메라 위에 얹히는 오버레이라 자리가 더 좁다. 네이티브 `select` 는
+ *    키보드·스크린리더·모바일 휠 피커를 공짜로 얻는다 — 직접 만든 팝업보다 접근성이 낫다.
+ * ② **버튼 나열** — `<button data-lang="ko">` (3언어 시절 모양). 남겨 두는 이유는
+ *    `tools/` 의 독립 에디터들이 아직 이 모양을 쓰기 때문이다.
+ *
+ * 어느 쪽이든 «지금 무슨 언어인지» 를 UI 가 스스로 말해야 한다 — select 는 `value`,
+ * 버튼은 `aria-current` 로 (허브의 링크판과 같은 표시 규약).
  */
 export function wireLanguageSwitch(container, i18n) {
   if (!container) return;
+  const select = container.tagName === 'SELECT'
+    ? container
+    : container.querySelector('select[data-lang-select]');
+  if (select) {
+    // ⚠ 반드시 `sync()` 로 되돌린다. `setLanguage` 는 지원 밖 코드를 조용히 무시하므로,
+    //   되돌리지 않으면 «드롭다운은 FR 인데 화면은 한국어» 인 거짓 표시가 남는다.
+    const sync = () => { select.value = i18n.lang; };
+    select.addEventListener('change', () => {
+      i18n.setLanguage(select.value);
+      sync();
+    });
+    sync();
+    return;
+  }
   const buttons = [...container.querySelectorAll('[data-lang]')];
   const sync = () => buttons.forEach((b) => {
     const on = b.getAttribute('data-lang') === i18n.lang;

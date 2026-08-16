@@ -647,31 +647,30 @@
     color: #1a1408;
   }
 
+  /* 언어 선택 = 드롭다운 (2026-08-17, 8언어). 버튼 나열은 3언어까지가 한계였다 —
+     여긴 카메라 위에 얹히는 오버레이라 가로 자리가 특히 귀하고, 8개를 펼치면 화면
+     절반을 덮는다. 네이티브 select 는 모바일에서 시스템 휠 피커로 열려 한 손 조작에도
+     맞는다. 어두운 카메라 화면 위라 배경·글자색을 명시한다(기본 흰 배경이면 눈이 아프다). */
   .lang-switch {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 2px;
-    padding: 2px;
-    border: 1px solid rgb(255 255 255 / .22);
-    border-radius: 999px;
-    background: rgb(0 0 0 / .42);
     pointer-events: auto;
   }
 
-  .lang-switch button {
-    padding: 5px 12px;
+  .lang-select {
+    max-width: 148px;
+    padding: 5px 10px;
+    border: 1px solid rgb(255 255 255 / .22);
     border-radius: 999px;
-    background: transparent;
-    color: rgb(255 255 255 / .72);
+    background: rgb(0 0 0 / .42);
+    color: rgb(255 255 255 / .92);
     font-size: 12px;
     cursor: pointer;
   }
 
-  .lang-switch button.active {
-    background: rgb(255 255 255 / .92);
-    color: #061117;
-    font-weight: 700;
+  /* 펼친 목록은 OS 위젯이라 위 규칙이 닿지 않는다 — 항목 자체에 색을 준다. */
+  .lang-select option {
+    background: #0b1620;
+    color: #eaf2f7;
   }
 
   .zoom-controls {
@@ -1122,10 +1121,22 @@
   <div class="scanner-shell">
     <header class="scanner-top">
       <a class="brand-logo" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer" data-i18n-attr="aria-label:brand.label" aria-label="TLcube 소개 홈페이지 (새 창)">TL<span>cube</span></a>
-      <div class="lang-switch" id="lang-switch" role="group" data-i18n-attr="aria-label:lang.label" aria-label="언어">
-        <button type="button" data-lang="ko">한국어</button>
-        <button type="button" data-lang="en">EN</button>
-        <button type="button" data-lang="ja">日本語</button>
+      <!-- 언어 선택 = **드롭다운** (2026-08-17, 8언어 확장 · 운영자 지시).
+           항목 라벨은 **각 언어의 자기 표기**다 — 언어를 바꾸려는 사람은 지금 화면
+           언어를 못 읽는 사람이라, 현재 언어로 번역한 언어명은 정작 그 사람이 못 읽는다.
+           (기구는 src/i18n.js 의 wireLanguageSwitch 가 `select[data-lang-select]` 로 잡는다.) -->
+      <div class="lang-switch" id="lang-switch">
+        <select id="lang-select" class="lang-select" data-lang-select
+                data-i18n-attr="aria-label:lang.label" aria-label="언어">
+          <option value="ko">한국어</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="fr">Français</option>
+          <option value="it">Italiano</option>
+          <option value="de">Deutsch</option>
+          <option value="es">Español</option>
+          <option value="pt">Português</option>
+        </select>
       </div>
     </header>
 
@@ -1139,7 +1150,7 @@
           <button type="button" data-expected-layout="v0" data-i18n="lab.expectedLayout.v0">v0</button>
           <!-- v2r2 · v1r2 버튼은 2026-08-16 실험판 드랍으로 내렸다. 검출 라인업에
                없는 레이아웃을 «기대» 로 고를 수 있으면 lab 텔레메트리가 영원히
-               미스로 남는다 (v0W 는 2026-08-16 편입으로 추가). 사전 키(lab.expectedLayout.v2r2/.v1r2)는 3언어 모두
+               미스로 남는다 (v0W 는 2026-08-16 편입으로 추가). 사전 키(lab.expectedLayout.v2r2/.v1r2)는 전 언어 (8언어)
                남겨 둔다 — 되살릴 때 재번역하지 않기 위해서다. -->
           <button type="button" data-expected-layout="v0x" data-i18n="lab.expectedLayout.v0x">v0X</button>
           <button type="button" data-expected-layout="v0xq" data-i18n="lab.expectedLayout.v0xq">v0XQ</button>

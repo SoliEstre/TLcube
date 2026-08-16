@@ -2,14 +2,14 @@
  * content.mjs — 소개 허브(tl.estre.so)의 **언어별 문구 단일 원본**.
  *
  * 왜 파일 하나로 모으나: 한국어·영어·일본어 HTML 을 각각 손으로 들고 있으면 반드시
- * 어긋난다. 특히 스캐너 현황 표는 실측이 바뀔 때마다 갱신되는데, 세 벌을 따로 고치면
+ * 어긋난다. 특히 스캐너 현황 표는 실측이 바뀔 때마다 갱신되는데, 여덟 벌을 따로 고치면
  * 한 언어만 옛 숫자를 남긴다 (AGENTS.md §9 인덱스 동기화 · §7 N-way sync 와 같은 위험).
- * 여기만 고치고 `node tools/build-hub.mjs` 를 돌리면 세 언어가 함께 간다.
+ * 여기만 고치고 `node tools/build-hub.mjs` 를 돌리면 여덟 언어가 함께 간다.
  *
  * ⚠ **숫자는 여기서만 바꾼다.** 문구에 숫자를 하드코딩하지 말고 `stats` 를 참조하라.
  */
 
-/** 실측 수치 — 세 언어가 공유한다. 값이 바뀌면 여기만 고친다. */
+/** 실측 수치 — 여덟 언어가 공유한다. 값이 바뀌면 여기만 고친다. */
 export const stats = {
   measuredOn: '2026-08-13',
   sampleCount: 9,
@@ -36,18 +36,57 @@ export const stats = {
   //   그 뒤 큐브 경로를 «낙관적 빠른 경로 + 실패 시 1회 전수 재시도» 로 바꿔 되돌렸다.
   //   ⚠ 옛 게시값과 직접 비교하지 마라 — O 는 옛 게시값(690ms)이 이 머신에서 재현되지
   //   않아(옛 코드 1273ms) **당시 O 수치 자체가 의심스럽다.** 근거는 짝지은 배수다.
+  //
+  // ⚠ `ms` 는 **언어별 표기 맵**이다 (2026-08-17, 8언어 확장 전에는 ms/msEn/msJa 세 필드였다).
+  //   언어가 늘 때마다 필드 이름을 하나씩 더하면 렌더 쪽 삼항 사슬이 같이 길어지고,
+  //   한 언어를 빠뜨려도 «undefined» 가 표에 그대로 찍힌다. 맵이면 렌더가 코드로 찾는다.
+  //   ⚠ **숫자 표기는 en 형태를 유지한다.** 소수점을 언어별로 쉼표로 바꾸면 같은 수치가
+  //     생성기 사전(`0.62`·`20/20 → 6/20`)과 다르게 보인다 — 수치는 번역 대상이 아니다.
   types: {
-    Y: { decoded: '3 / 3', ms: '약 0.1초', msEn: '~0.1 s', msJa: '約 0.1 秒' },
-    O: { decoded: '3 / 3', ms: '약 1.8초', msEn: '~1.8 s', msJa: '約 1.8 秒' },
-    A: { decoded: '3 / 3', ms: '약 0.86초', msEn: '~0.86 s', msJa: '約 0.86 秒' },
+    Y: {
+      decoded: '3 / 3',
+      ms: {
+        ko: '약 0.1초', en: '~0.1 s', ja: '約 0.1 秒',
+        fr: '≈ 0.1 s', it: '≈ 0.1 s', de: '≈ 0.1 s', es: '≈ 0.1 s', pt: '≈ 0.1 s',
+      },
+    },
+    O: {
+      decoded: '3 / 3',
+      ms: {
+        ko: '약 1.8초', en: '~1.8 s', ja: '約 1.8 秒',
+        fr: '≈ 1.8 s', it: '≈ 1.8 s', de: '≈ 1.8 s', es: '≈ 1.8 s', pt: '≈ 1.8 s',
+      },
+    },
+    A: {
+      decoded: '3 / 3',
+      ms: {
+        ko: '약 0.86초', en: '~0.86 s', ja: '約 0.86 秒',
+        fr: '≈ 0.86 s', it: '≈ 0.86 s', de: '≈ 0.86 s', es: '≈ 0.86 s', pt: '≈ 0.86 s',
+      },
+    },
   },
   centerQr: { decoded: '8 / 9' },
 };
 
+/*
+ * 언어판 목록 (2026-08-17: 3 → 8).
+ *
+ * ⚠ 이 배열이 **문서 수·hreflang·og:locale·언어 드롭다운·sitemap 을 한꺼번에 정한다.**
+ *   여기에만 더하면 나머지는 따라온다 — 손으로 따로 적는 자리를 만들지 마라.
+ * ⚠ `label` 은 각 언어의 **자기 표기**다. 언어를 바꾸려는 사람은 지금 화면 언어를 못
+ *   읽는 사람이라, 현재 언어로 번역한 언어명은 정작 그 사람이 못 읽는다.
+ * ⚠ pt 는 **pt-PT**(`pt_PT`)다. 생성기·스캐너 사전이 pt-PT 어휘로 나갔으므로
+ *   (`ecrã`·`câmara`·`definições`) 여기서 pt-BR 을 선언하면 세 표면이 갈린다.
+ */
 export const languages = [
   { code: 'ko', dir: '', label: '한국어', ogLocale: 'ko_KR', htmlLang: 'ko' },
   { code: 'en', dir: 'en/', label: 'English', ogLocale: 'en_US', htmlLang: 'en' },
   { code: 'ja', dir: 'ja/', label: '日本語', ogLocale: 'ja_JP', htmlLang: 'ja' },
+  { code: 'fr', dir: 'fr/', label: 'Français', ogLocale: 'fr_FR', htmlLang: 'fr' },
+  { code: 'it', dir: 'it/', label: 'Italiano', ogLocale: 'it_IT', htmlLang: 'it' },
+  { code: 'de', dir: 'de/', label: 'Deutsch', ogLocale: 'de_DE', htmlLang: 'de' },
+  { code: 'es', dir: 'es/', label: 'Español', ogLocale: 'es_ES', htmlLang: 'es' },
+  { code: 'pt', dir: 'pt/', label: 'Português', ogLocale: 'pt_PT', htmlLang: 'pt' },
 ];
 
 export const strings = {
@@ -261,5 +300,359 @@ export const strings = {
     stateWorking: '稼働中', stateHere: 'ここ', stateScanner: '稼働中 — 状況 ›',
     footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
     footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume',
+  },
+
+  /* fr — vouvoiement. 상표 고지(footerTrademark)는 법적 문구라 전 언어 영어 원문 유지. */
+  fr: {
+    title: 'TLcube — un code visuel 2.5D qui porte les données dans le rang de luminance',
+    description: 'Un code visuel ouvert qui divise une cellule hexagonale en trois faces en losange et porte les données dans l\'ordre de luminance relative de ces faces. La spécification et l\'implémentation de référence sont publiées sous Apache-2.0.',
+    ogTitle: 'TLcube — un code visuel 2.5D qui porte les données dans le rang de luminance',
+    ogDescription: 'Les données reposent sur l\'ordre des trois faces, pas sur la luminosité absolue. Tant que l\'ordre survit, la valeur survit.',
+    jsonHeadline: 'TLcube — un code visuel 2.5D qui porte les données dans le rang, non dans la luminosité absolue',
+    jsonDescription: 'Un code visuel ouvert qui divise une cellule hexagonale en trois faces en losange et utilise leur ordre de luminance relative (3! = 6) comme un symbole en base 6. Invariant par transformation tonale monotone.',
+
+    navWhyNow: 'Pourquoi maintenant',
+    navWhat: 'Fonctionnement', navTypes: 'Types', navStatus: 'État du scanner', navSpec: 'Spécification',
+    navGenerator: 'Générateur', navScanner: 'Scanner',
+    themeLabel: 'Thème', themeAuto: 'Auto', themeLight: 'Clair', themeDark: 'Sombre',
+    langLabel: 'Langue',
+
+    heroTitle: 'Le QR se lit bien.<br>Il n\'a simplement jamais été <strong>beau</strong>',
+    heroLead: 'Affiches, emballages, cartes de visite — le QR est partout, et poser un carré noir et blanc sur un design longuement travaillé a toujours laissé un regret. Mais s\'il a cette allure, c\'est pour une raison : c\'est ce qu\'on construit quand <strong>une caméra et un processeur de 1994</strong> doivent pouvoir le lire.',
+    heroLead2: 'Ces contraintes se sont largement levées. Les caméras de téléphone et la puissance de calcul ont de la marge. Alors, plutôt que de courir après la seule reconnaissance, nous avons dépensé cette marge du côté du <strong>plaisir des yeux</strong>. Il ne s\'agit pas de remplacer le QR, mais de lui <strong>ajouter un siège voisin</strong>.',
+    whyNowTitle: 'Pourquoi maintenant',
+    whyNow1: '<strong>Le QR était la bonne réponse à son époque.</strong> Deux valeurs, des modules carrés, de grands motifs de repérage — chacun de ces choix existait pour qu\'une caméra faible puisse tout de même lire. Sous ces contraintes, renoncer à l\'esthétique était rationnel.',
+    whyNow2: '<strong>Cette prémisse a changé.</strong> Les caméras de téléphone d\'aujourd\'hui n\'ont plus rien à voir, et le traitement vidéo en temps réel tourne dans un navigateur. Cette marge pouvait aller à la densité — ou à <strong>l\'apparence</strong>. C\'est la raison d\'être de ce format.',
+    whyNow3: '<strong>La densité, elle, a été sacrifiée.</strong> Les cellules en losange sont moins efficaces en surface que les modules carrés. Ce format ne concourt pas sur la densité. S\'il faut transporter beaucoup, le QR reste l\'outil adapté.',
+    ctaMake: 'Créer un code',
+
+    typesTitle: 'Trois types',
+    typesLead: 'Choisissez selon l\'endroit où il sera posé. Les trois partagent le même contrat de données et ne diffèrent que par la silhouette. Tous les codes ci-dessous encodent <code>https://tl.estre.so</code>.',
+    typeYName: 'Type Y — cube unique',
+    typeYDesc: 'Trois faces n×n. Une marque d\'un seul tenant, adaptée à la signalétique et aux objets.',
+    typeYMeta: 'n = 13 / 21 / 25 · charge utile nette 31 / 98 / 141 B',
+    typeOName: 'Type O — champ hexagonal',
+    typeODesc: 'La forme de base. Les cellules en losange se déploient autour d\'un repère central.',
+    typeOMeta: 'k = 6 / 8 / 10 · charge utile nette 18 / 39 / 65 B',
+    typeAName: 'Type A — silhouette triangulaire',
+    typeADesc: 'Un cœur hexagonal complété de pièces d\'angle, formant un triangle équilatéral.',
+    typeAMeta: 'k = 6 / 8 / 10 · charge utile nette 31 / 62 / 101 B',
+    typesFoot: 'La charge utile nette est donnée pour ECC-M. Les trois types peuvent porter un <strong>QR de secours</strong> à côté, si bien qu\'il reste un chemin là où un code TL ne peut pas être lu.',
+
+    howTitle: 'Fonctionnement',
+    how1Title: '1. Cellule = trois losanges', how1Desc: 'Un pavage rhombille divise chaque cellule hexagonale en faces T, L et R.',
+    how2Title: '2. Ordre = symbole', how2Desc: 'Classer les trois luminances donne 3! = 6 résultats — un chiffre en base 6.',
+    how3Title: '3. 3 chiffres = 1 symbole', how3Desc: 'Un Reed–Solomon sur le corps premier GF(211) corrige les erreurs.',
+    whyTitle: 'Ce que cela libère',
+    why1: '<strong>Invariant par transformation monotone.</strong> Les changements d\'éclairage global, le gamma et la table tonale d\'une imprimante sont monotones — ils ne peuvent pas changer un ordre. Si l\'ordre survit, la valeur survit.',
+    why2: '<strong>Le rendu reste libre.</strong> Le contrat de données se réduit à « l\'ordre entre les faces, plus un écart minimal ». À l\'intérieur, la couleur, la matière, les dégradés par face et l\'animation sont ouverts. Cette liberté est le cœur du format.',
+    why3: '<strong>Cela ne rend rien beau tout seul.</strong> Ce qui s\'ouvre, c\'est le contrat, pas le résultat. Ce que vous dessinez à l\'intérieur reste votre travail.',
+
+    statusTitle: 'Scanner — où nous en sommes',
+    statusLead: '<strong>Le décodeur fonctionne.</strong> Les trois types se lisent sur des photos prises avec de vrais appareils ; reste à faire monter la précision et la vitesse. Chaque temps ci-dessous correspond à <strong>un décodage d\'une photo fixe prise avec un vrai téléphone</strong> — ce n\'est ni un temps de premier accrochage ni un taux de réussite en direct.',
+    thType: 'Type', thDecoded: 'Photos réelles décodées', thTime: 'Un décodage sur photo fixe', thRealtime: 'Validation en direct',
+    rowYName: '<strong>Type Y</strong> — cube unique',
+    rowOName: '<strong>Type O</strong> — champ hexagonal',
+    rowAName: '<strong>Type A</strong> — silhouette triangulaire',
+    rowCenterQr: '<strong>Variante QR central</strong> (les trois types)',
+    badgePending: 'mesures en cours',
+    statusNote1: '<strong>Le temps d\'un décodage sur photo fixe ne prédit pas le ressenti d\'un scan en direct.</strong> Lors des premières mesures sur appareil réel, une image rapide pouvait tout de même donner un premier accrochage lent lorsqu\'il fallait beaucoup d\'images avant une réussite, et le classement des types différait de ce tableau sur photo fixe. Ces relevés portent sur un seul appareil et un petit échantillon : nous n\'attribuons donc pas encore de note d\'usage en direct.',
+    statusNote0: '<strong>Pour un décodage d\'une photo fixe</strong>, le Type Y est le plus court, O et A sont plus longs. La refonte des repères et les nouveaux essais de format ont élargi l\'ensemble des photos réelles qui se décodent, au prix de plus de travail sur certains chemins ; Y tente désormais un chemin bon marché d\'abord et ne balaie tout qu\'une fois, après échec. Ces chiffres ne doivent pas se lire comme un temps de premier accrochage en direct.',
+    statusNote2: `Les conditions de prise de vue comptent aussi. À la mesure, <strong>${stats.cellFloorPx} pixels par cellule</strong> était le plancher de décodage, et à distance égale un <strong>objectif ultra grand-angle</strong> cadre le code plus petit et passe sous cette ligne (ultra grand-angle ${stats.ultraWideFailPx} px en échec / grand-angle ${stats.wideOkPx} px en réussite). C\'est pourquoi le scanner propose un choix d\'objectif.`,
+    statusNote3: 'Dans la <strong>variante QR central</strong>, un bloc QR remplace le repère central. Ses motifs de repérage fournissent le point d\'entrée en position et en orientation qui sert à décoder le corps TL environnant. Le générateur utilise désormais ce chemin validé par défaut pour les types O et A. Par défaut, le QR reste un secours qui porte un lien de lecture ; la charge utile, elle, reste dans le corps TL.',
+    statusFoot: `Mesuré le ${stats.measuredOn} · échantillon de ${stats.sampleCount} photos prises avec trois capteurs de téléphone (ultra grand-angle, grand-angle, téléobjectif) · petit côté ${stats.shortSidePx} px. L\'échantillon est petit — lisez ceci comme un <em>état actuel</em>, pas comme un taux de réussite.`,
+
+    specTitle: 'Spécification et implémentation',
+    spec1: 'La spécification du format et l\'implémentation de référence sont publiées sous <strong>licence Apache 2.0</strong>. JavaScript vanilla, aucune chaîne de build, zéro dépendance à l\'exécution — cela tourne dans un seul fichier HTML.',
+    spec2: '<strong>N\'implémenter que le décodeur suffit à être une implémentation conforme.</strong> L\'adoption commence par le côté lecture.',
+    ctaSpec: 'Lire la spécification', ctaImpl: 'Implémentation de référence',
+    thSite: 'Site', thRole: 'Rôle', thState: 'État',
+    roleGenerator: 'Générateur', roleScanner: 'Scanner', roleHub: 'Site de présentation',
+    stateWorking: 'en ligne', stateHere: 'vous êtes ici', stateScanner: 'en ligne — état ›',
+    footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
+    footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · nom de code Trilume',
+  },
+
+  it: {
+    title: 'TLcube — un codice visivo 2.5D che porta i dati nel rango di luminanza',
+    description: 'Un codice visivo aperto che divide una cella esagonale in tre facce romboidali e porta i dati nell\'ordine di luminanza relativa di quelle facce. Specifica e implementazione di riferimento sono pubblicate con licenza Apache-2.0.',
+    ogTitle: 'TLcube — un codice visivo 2.5D che porta i dati nel rango di luminanza',
+    ogDescription: 'I dati poggiano sull\'ordine delle tre facce, non sulla luminosità assoluta. Finché sopravvive l\'ordine, sopravvive il valore.',
+    jsonHeadline: 'TLcube — un codice visivo 2.5D che porta i dati nel rango, non nella luminosità assoluta',
+    jsonDescription: 'Un codice visivo aperto che divide una cella esagonale in tre facce romboidali e usa il loro ordine di luminanza relativa (3! = 6) come un simbolo in base 6. Invariante rispetto alle trasformazioni tonali monotone.',
+
+    navWhyNow: 'Perché ora',
+    navWhat: 'Come funziona', navTypes: 'Tipi', navStatus: 'Stato dello scanner', navSpec: 'Specifica',
+    navGenerator: 'Generatore', navScanner: 'Scanner',
+    themeLabel: 'Tema', themeAuto: 'Auto', themeLight: 'Chiaro', themeDark: 'Scuro',
+    langLabel: 'Lingua',
+
+    heroTitle: 'Il QR si legge bene.<br>Non è mai stato <strong>bello</strong>',
+    heroLead: 'Manifesti, confezioni, biglietti da visita — il QR è ovunque, e mettere un quadrato in bianco e nero sopra un progetto curato per settimane è sempre stato un dispiacere. Ma il QR ha quell\'aspetto per un motivo: è ciò che si costruisce quando <strong>una fotocamera e un processore del 1994</strong> devono riuscire a leggerlo.',
+    heroLead2: 'Quei vincoli sono in gran parte caduti. Le fotocamere dei telefoni e la potenza di calcolo hanno margine. Così, invece di rincorrere solo il riconoscimento, quel margine è stato speso perché il codice <strong>valga la pena di essere guardato</strong>. Non è un sostituto del QR: è <strong>un posto accanto</strong>.',
+    whyNowTitle: 'Perché proprio ora',
+    whyNow1: '<strong>Il QR era la risposta giusta per il suo tempo.</strong> Due valori, moduli quadrati, grandi pattern di ricerca — ognuna di quelle scelte serviva a far leggere il codice anche a una fotocamera debole. Con quei vincoli, rinunciare all\'estetica era razionale.',
+    whyNow2: '<strong>Quella premessa è cambiata.</strong> Le fotocamere dei telefoni di oggi non hanno nulla a che vedere con quelle, e l\'elaborazione video in tempo reale gira dentro un browser. Quel margine poteva andare alla densità — oppure a <strong>come appare</strong>. È per questo che il formato esiste.',
+    whyNow3: '<strong>In cambio si è rinunciato alla densità.</strong> Le celle romboidali sono meno efficienti in superficie dei moduli quadrati. Questo formato non compete sulla densità. Se serve trasportare molto, lo strumento giusto resta il QR.',
+    ctaMake: 'Crea un codice',
+
+    typesTitle: 'Tre tipi',
+    typesLead: 'Scegli in base a dove verrà messo. Tutti e tre condividono lo stesso contratto dati e differiscono solo per la silhouette. Ogni codice qui sotto contiene <code>https://tl.estre.so</code>.',
+    typeYName: 'Type Y — cubo singolo',
+    typeYDesc: 'Tre facce n×n. Un segno compatto, adatto a insegne e gadget.',
+    typeYMeta: 'n = 13 / 21 / 25 · payload netto 31 / 98 / 141 B',
+    typeOName: 'Type O — campo esagonale',
+    typeODesc: 'La forma base. Le celle romboidali si dispongono attorno a un pattern di ricerca centrale.',
+    typeOMeta: 'k = 6 / 8 / 10 · payload netto 18 / 39 / 65 B',
+    typeAName: 'Type A — silhouette triangolare',
+    typeADesc: 'Un nucleo esagonale più le toppe d\'angolo, che formano un triangolo equilatero.',
+    typeAMeta: 'k = 6 / 8 / 10 · payload netto 31 / 62 / 101 B',
+    typesFoot: 'Il payload netto è riferito a ECC-M. Tutti e tre i tipi possono portare accanto un <strong>QR di riserva</strong>, così resta una via anche dove il codice TL non è leggibile.',
+
+    howTitle: 'Come funziona',
+    how1Title: '1. Cella = tre rombi', how1Desc: 'Una tassellatura rhombille divide ogni cella esagonale nelle facce T, L e R.',
+    how2Title: '2. Ordine = simbolo', how2Desc: 'Ordinare le tre luminanze dà 3! = 6 esiti — una cifra in base 6.',
+    how3Title: '3. 3 cifre = 1 simbolo', how3Desc: 'Un Reed–Solomon sul campo primo GF(211) corregge gli errori.',
+    whyTitle: 'Che cosa si libera',
+    why1: '<strong>Invariante rispetto alle trasformazioni monotone.</strong> Variazioni di luce globale, gamma e mappatura tonale della stampante sono monotone: non possono cambiare un ordinamento. Se l\'ordine sopravvive, il valore sopravvive.',
+    why2: '<strong>Il renderer resta libero.</strong> Il contratto dati è solo «l\'ordine fra le facce, più una separazione minima». Dentro quel vincolo, colore, texture, gradienti per faccia e animazione sono tutti aperti. Quella libertà è il senso del formato.',
+    why3: '<strong>Non rende però nulla bello da solo.</strong> Ciò che si apre è il contratto, non il risultato. Che cosa disegnare lì dentro resta lavoro di chi progetta.',
+
+    statusTitle: 'Scanner — a che punto siamo',
+    statusLead: '<strong>Il decoder funziona.</strong> Tutti e tre i tipi si leggono da foto scattate con dispositivi reali; resta da alzare precisione e velocità. Ogni tempo qui sotto è <strong>una decodifica di una singola foto statica scattata con un telefono reale</strong>, non il tempo del primo aggancio né un tasso di successo dal vivo.',
+    thType: 'Tipo', thDecoded: 'Foto reali decodificate', thTime: 'Una decodifica su foto statica', thRealtime: 'Verifica dal vivo',
+    rowYName: '<strong>Type Y</strong> — cubo singolo',
+    rowOName: '<strong>Type O</strong> — campo esagonale',
+    rowAName: '<strong>Type A</strong> — silhouette triangolare',
+    rowCenterQr: '<strong>Variante con QR centrale</strong> (tutti e tre i tipi)',
+    badgePending: 'altre misure in corso',
+    statusNote1: '<strong>Il tempo di una decodifica su foto statica non predice la sensazione della scansione dal vivo.</strong> Nelle prime misure su dispositivo reale, un fotogramma veloce poteva comunque portare a un primo aggancio lento quando servivano molti fotogrammi prima di uno riuscito, e la classifica dei tipi risultava diversa da questa tabella su foto statica. Quei rilievi riguardano un solo dispositivo e un campione piccolo, quindi non assegniamo ancora un giudizio d\'uso dal vivo.',
+    statusNote0: '<strong>Sul criterio di una decodifica di una foto statica</strong>, il Type Y è il più breve e O e A richiedono più tempo. La riprogettazione dei pattern di ricerca e i nuovi tentativi di formato hanno allargato l\'insieme di foto reali che si decodificano, al costo di più lavoro su alcuni percorsi; Y prova prima un percorso economico e fa una scansione completa solo dopo un fallimento. Questi numeri non vanno letti come tempo del primo aggancio dal vivo.',
+    statusNote2: `Contano molto anche le condizioni di ripresa. Alla misura, <strong>${stats.cellFloorPx} pixel per cella</strong> era il limite inferiore di decodifica e, a parità di distanza, un <strong>obiettivo ultragrandangolare</strong> inquadra il codice più piccolo e scende sotto quella soglia (ultragrandangolare ${stats.ultraWideFailPx} px fallito / grandangolare ${stats.wideOkPx} px riuscito). Per questo lo scanner offre la scelta dell\'obiettivo.`,
+    statusNote3: 'Nella <strong>variante con QR centrale</strong> un blocco QR sostituisce il pattern di ricerca centrale. I suoi pattern forniscono il punto d\'ingresso di posizione e orientamento con cui si decodifica il corpo TL circostante. Il generatore usa ora questo percorso verificato come impostazione predefinita per i tipi O e A. Per impostazione predefinita il QR resta una riserva che porta un link al lettore; il payload vero rimane nel corpo TL.',
+    statusFoot: `Misurato il ${stats.measuredOn} · campione di ${stats.sampleCount} foto scattate con tre sensori di telefono (ultragrandangolare, grandangolare, teleobiettivo) · lato corto ${stats.shortSidePx} px. Il campione è piccolo: da leggere come <em>stato attuale</em>, non come tasso di successo.`,
+
+    specTitle: 'Specifica e implementazione',
+    spec1: 'La specifica del formato e l\'implementazione di riferimento sono pubblicate con <strong>licenza Apache 2.0</strong>. JavaScript puro, nessuna toolchain di build, zero dipendenze a runtime — funziona come un singolo file HTML.',
+    spec2: '<strong>Implementare solo il decoder basta a essere un\'implementazione conforme.</strong> La diffusione parte da chi legge.',
+    ctaSpec: 'Leggi la specifica', ctaImpl: 'Implementazione di riferimento',
+    thSite: 'Sito', thRole: 'Ruolo', thState: 'Stato',
+    roleGenerator: 'Generatore', roleScanner: 'Scanner', roleHub: 'Sito di presentazione',
+    stateWorking: 'attivo', stateHere: 'sei qui', stateScanner: 'attivo — stato ›',
+    footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
+    footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · nome in codice Trilume',
+  },
+
+  /* de — Siezen. 명사는 대문자, 합성어는 붙여 쓰거나 하이픈으로 잇는다. */
+  de: {
+    title: 'TLcube — ein 2.5D-Bildcode, der Daten im Luminanzrang trägt',
+    description: 'Ein offener Bildcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und die Daten in der relativen Luminanzreihenfolge dieser Flächen trägt. Spezifikation und Referenzimplementierung sind unter Apache-2.0 veröffentlicht.',
+    ogTitle: 'TLcube — ein 2.5D-Bildcode, der Daten im Luminanzrang trägt',
+    ogDescription: 'Die Daten liegen in der Reihenfolge der drei Flächen, nicht in der absoluten Helligkeit. Solange die Reihenfolge überlebt, überlebt der Wert.',
+    jsonHeadline: 'TLcube — ein 2.5D-Bildcode, der Daten im Rang statt in absoluter Helligkeit trägt',
+    jsonDescription: 'Ein offener Bildcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und deren relative Luminanzreihenfolge (3! = 6) als ein Symbol zur Basis 6 nutzt. Invariant gegenüber monotonen Tonwertänderungen.',
+
+    navWhyNow: 'Warum jetzt',
+    navWhat: 'Funktionsweise', navTypes: 'Typen', navStatus: 'Stand des Scanners', navSpec: 'Spezifikation',
+    navGenerator: 'Generator', navScanner: 'Scanner',
+    themeLabel: 'Design', themeAuto: 'Auto', themeLight: 'Hell', themeDark: 'Dunkel',
+    langLabel: 'Sprache',
+
+    heroTitle: 'QR liest sich gut.<br>Es war nur nie <strong>schön</strong>',
+    heroLead: 'Plakate, Verpackungen, Visitenkarten — QR ist überall, und ein Schwarz-Weiß-Quadrat auf ein wochenlang gestaltetes Layout zu setzen, hat immer wehgetan. Doch QR sieht so aus, weil es so aussehen musste: So baut man einen Code, wenn <strong>eine Kamera und ein Prozessor von 1994</strong> ihn überhaupt lesen sollen.',
+    heroLead2: 'Diese Beschränkungen sind weitgehend gefallen. Handykameras und Rechenleistung haben Luft. Statt allein der Erkennung nachzujagen, ist diese Luft hier darin gelandet, dass der Code <strong>sehenswert</strong> ist. Das ist kein Ersatz für QR — es ist <strong>ein Platz daneben</strong>.',
+    whyNowTitle: 'Warum jetzt',
+    whyNow1: '<strong>QR war die richtige Antwort seiner Zeit.</strong> Zwei Werte, quadratische Module, große Suchmuster — jede dieser Entscheidungen gab es, damit auch eine schwache Kamera lesen konnte. Unter diesen Bedingungen war der Verzicht auf Ästhetik vernünftig.',
+    whyNow2: '<strong>Diese Voraussetzung hat sich geändert.</strong> Heutige Handykameras sind damit nicht zu vergleichen, und Echtzeit-Videoverarbeitung läuft im Browser. Der gewonnene Spielraum konnte in Dichte fließen — oder in <strong>das Aussehen</strong>. Deshalb gibt es dieses Format.',
+    whyNow3: '<strong>Dafür wurde die Dichte aufgegeben.</strong> Rautenzellen nutzen die Fläche schlechter als quadratische Module. Dieses Format tritt nicht im Wettbewerb um Dichte an. Wer viel unterbringen muss, ist mit QR richtig.',
+    ctaMake: 'Code erstellen',
+
+    typesTitle: 'Drei Typen',
+    typesLead: 'Wählen Sie danach, wo der Code sitzen soll. Alle drei teilen denselben Datenvertrag und unterscheiden sich nur in der Silhouette. Jeder Code unten enthält <code>https://tl.estre.so</code>.',
+    typeYName: 'Type Y — einzelner Würfel',
+    typeYDesc: 'Drei n×n-Flächen. Ein geschlossenes Zeichen, gut für Beschilderung und Merchandise.',
+    typeYMeta: 'n = 13 / 21 / 25 · Nutzdaten netto 31 / 98 / 141 B',
+    typeOName: 'Type O — Sechseckfeld',
+    typeODesc: 'Die Grundform. Rautenzellen legen sich um ein zentrales Suchmuster nach außen.',
+    typeOMeta: 'k = 6 / 8 / 10 · Nutzdaten netto 18 / 39 / 65 B',
+    typeAName: 'Type A — dreieckige Silhouette',
+    typeADesc: 'Ein sechseckiger Kern plus Eckflächen ergibt ein gleichseitiges Dreieck.',
+    typeAMeta: 'k = 6 / 8 / 10 · Nutzdaten netto 31 / 62 / 101 B',
+    typesFoot: 'Die Netto-Nutzdaten gelten für ECC-M. Alle drei Typen können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann.',
+
+    howTitle: 'Funktionsweise',
+    how1Title: '1. Zelle = drei Rauten', how1Desc: 'Eine Rhombille-Parkettierung teilt jede sechseckige Zelle in die Flächen T, L und R.',
+    how2Title: '2. Reihenfolge = Symbol', how2Desc: 'Das Ordnen der drei Luminanzen ergibt 3! = 6 Fälle — eine Ziffer zur Basis 6.',
+    how3Title: '3. 3 Ziffern = 1 Symbol', how3Desc: 'Reed–Solomon über dem Primkörper GF(211) korrigiert Fehler.',
+    whyTitle: 'Was dadurch frei wird',
+    why1: '<strong>Invariant gegenüber monotonen Transformationen.</strong> Globale Lichtwechsel, Gamma und die Tonwertabbildung eines Druckers sind monoton — sie können eine Reihenfolge nicht umstellen. Überlebt die Reihenfolge, überlebt der Wert.',
+    why2: '<strong>Das Rendering bleibt frei.</strong> Der Datenvertrag lautet nur „die Reihenfolge zwischen den Flächen plus ein Mindestabstand“. Darin sind Farbe, Textur, Verläufe je Fläche und Animation offen. Genau diese Freiheit ist der Sinn des Formats.',
+    why3: '<strong>Schön wird davon aber nichts von allein.</strong> Frei wird der Vertrag, nicht das Ergebnis. Was Sie darin zeichnen, bleibt Ihre Arbeit.',
+
+    statusTitle: 'Scanner — Stand der Dinge',
+    statusLead: '<strong>Der Decoder funktioniert.</strong> Alle drei Typen werden auf Fotos echter Geräte gelesen; offen sind Genauigkeit und Tempo. Jede Zeit unten ist <strong>eine Dekodierung eines Standfotos von einem echten Telefon</strong> — weder die Zeit bis zum ersten Treffer noch eine Erfolgsquote im Livebetrieb.',
+    thType: 'Typ', thDecoded: 'Echte Fotos dekodiert', thTime: 'Eine Dekodierung, Standfoto', thRealtime: 'Live-Prüfung',
+    rowYName: '<strong>Type Y</strong> — einzelner Würfel',
+    rowOName: '<strong>Type O</strong> — Sechseckfeld',
+    rowAName: '<strong>Type A</strong> — dreieckige Silhouette',
+    rowCenterQr: '<strong>Variante mit zentralem QR</strong> (alle drei Typen)',
+    badgePending: 'weitere Messungen nötig',
+    statusNote1: '<strong>Die Zeit einer Dekodierung auf einem Standfoto sagt nichts darüber, wie sich Live-Scannen anfühlt.</strong> In der ersten Messreihe auf einem echten Gerät konnte ein schnelles Einzelbild trotzdem zu einem späten ersten Treffer führen, wenn viele Bilder nötig waren, und die Reihenfolge der Typen wich von dieser Standfoto-Tabelle ab. Diese Reihe umfasst ein Gerät und eine kleine Stichprobe — deshalb vergeben wir noch keine Live-Bewertung.',
+    statusNote0: '<strong>Für eine Dekodierung eines Standfotos</strong> ist Type Y am kürzesten, O und A brauchen länger. Der Umbau der Suchmuster und die Format-Wiederholversuche haben die Menge lesbarer echter Fotos vergrößert, um den Preis von mehr Arbeit auf einzelnen Pfaden; Y versucht jetzt zuerst einen billigen Pfad und durchsucht erst nach einem Fehlschlag einmal vollständig. Diese Werte dürfen nicht als Live-Zeit bis zum ersten Treffer gelesen werden.',
+    statusNote2: `Auch die Aufnahmebedingungen wirken stark. Gemessen war <strong>${stats.cellFloorPx} Pixel je Zelle</strong> die Untergrenze der Dekodierung, und bei gleichem Abstand fasst ein <strong>Ultraweitwinkel</strong> den Code kleiner und fällt unter diese Linie (Ultraweitwinkel ${stats.ultraWideFailPx} px gescheitert / Weitwinkel ${stats.wideOkPx} px erfolgreich). Deshalb bietet der Scanner eine Objektivwahl an.`,
+    statusNote3: 'In der <strong>Variante mit zentralem QR</strong> ersetzt ein QR-Block das zentrale Suchmuster. Dessen Suchmuster liefern den Einstieg für Position und Ausrichtung, mit dem der umgebende TL-Körper dekodiert wird. Der Generator nutzt diesen geprüften Weg jetzt standardmäßig für die Typen O und A. Standardmäßig bleibt der QR ein Ersatz mit einem Leser-Link; die Nutzdaten selbst bleiben im TL-Körper.',
+    statusFoot: `Gemessen am ${stats.measuredOn} · Stichprobe von ${stats.sampleCount} Fotos aus drei Telefonsensoren (Ultraweitwinkel, Weitwinkel, Tele) · kurze Seite ${stats.shortSidePx} px. Die Stichprobe ist klein — lesen Sie das als <em>aktuellen Stand</em>, nicht als Erfolgsquote.`,
+
+    specTitle: 'Spezifikation und Implementierung',
+    spec1: 'Formatspezifikation und Referenzimplementierung sind unter der <strong>Apache License 2.0</strong> veröffentlicht. Reines JavaScript, keine Build-Toolchain, null Laufzeitabhängigkeiten — es läuft als einzelne HTML-Datei.',
+    spec2: '<strong>Nur den Decoder zu implementieren gilt bereits als konforme Implementierung.</strong> Verbreitung beginnt auf der Leseseite.',
+    ctaSpec: 'Spezifikation lesen', ctaImpl: 'Referenzimplementierung',
+    thSite: 'Site', thRole: 'Rolle', thState: 'Status',
+    roleGenerator: 'Generator', roleScanner: 'Scanner', roleHub: 'Übersichtsseite',
+    stateWorking: 'aktiv', stateHere: 'Sie sind hier', stateScanner: 'aktiv — Stand ›',
+    footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
+    footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · Codename Trilume',
+  },
+
+  /* es — usted (3인칭 단수 명령/직설). */
+  es: {
+    title: 'TLcube — un código visual 2.5D que lleva los datos en el rango de luminancia',
+    description: 'Un código visual abierto que divide una celda hexagonal en tres caras romboidales y lleva los datos en el orden de luminancia relativa de esas caras. La especificación y la implementación de referencia se publican bajo Apache-2.0.',
+    ogTitle: 'TLcube — un código visual 2.5D que lleva los datos en el rango de luminancia',
+    ogDescription: 'Los datos viajan en el orden de las tres caras, no en el brillo absoluto. Mientras el orden sobreviva, el valor sobrevive.',
+    jsonHeadline: 'TLcube — un código visual 2.5D que lleva los datos en el rango, no en el brillo absoluto',
+    jsonDescription: 'Un código visual abierto que divide una celda hexagonal en tres caras romboidales y usa su orden de luminancia relativa (3! = 6) como un símbolo en base 6. Invariante ante transformaciones tonales monótonas.',
+
+    navWhyNow: 'Por qué ahora',
+    navWhat: 'Cómo funciona', navTypes: 'Tipos', navStatus: 'Estado del escáner', navSpec: 'Especificación',
+    navGenerator: 'Generador', navScanner: 'Escáner',
+    themeLabel: 'Tema', themeAuto: 'Auto', themeLight: 'Claro', themeDark: 'Oscuro',
+    langLabel: 'Idioma',
+
+    heroTitle: 'El QR se lee bien.<br>Solo que nunca ha sido <strong>bonito</strong>',
+    heroLead: 'Carteles, envases, tarjetas de visita — el QR está en todas partes, y colocar un cuadrado en blanco y negro sobre un diseño trabajado durante semanas siempre ha dolido. Pero el QR tiene ese aspecto por una razón: es lo que se construye cuando <strong>una cámara y un procesador de 1994</strong> tienen que poder leerlo.',
+    heroLead2: 'Esas restricciones se han levantado en buena parte. Las cámaras de los teléfonos y la potencia de cálculo van sobradas. Así que, en lugar de perseguir solo el reconocimiento, ese margen se ha gastado en que <strong>merezca la pena mirarlo</strong>. No es un sustituto del QR: es <strong>un asiento a su lado</strong>.',
+    whyNowTitle: 'Por qué ahora',
+    whyNow1: '<strong>El QR fue la respuesta correcta para su momento.</strong> Dos valores, módulos cuadrados, patrones localizadores grandes — cada una de esas decisiones existía para que una cámara débil pudiera leerlo igualmente. Con esas restricciones, renunciar a la estética era razonable.',
+    whyNow2: '<strong>Esa premisa ha cambiado.</strong> Las cámaras de los teléfonos de hoy no se parecen en nada a aquellas, y el procesado de vídeo en tiempo real corre dentro de un navegador. Ese margen podía ir a la densidad — o podía ir a <strong>cómo se ve</strong>. Por eso existe este formato.',
+    whyNow3: '<strong>A cambio se renunció a la densidad.</strong> Las celdas romboidales aprovechan peor la superficie que los módulos cuadrados. Este formato no compite en densidad. Si hay que llevar mucho, la herramienta adecuada es el QR.',
+    ctaMake: 'Crear un código',
+
+    typesTitle: 'Tres tipos',
+    typesLead: 'Elija según dónde vaya a ir. Los tres comparten el mismo contrato de datos y solo se diferencian en la silueta. Todos los códigos de abajo contienen <code>https://tl.estre.so</code>.',
+    typeYName: 'Type Y — cubo único',
+    typeYDesc: 'Tres caras n×n. Una marca de una sola pieza, buena para rotulación y merchandising.',
+    typeYMeta: 'n = 13 / 21 / 25 · carga útil neta 31 / 98 / 141 B',
+    typeOName: 'Type O — campo hexagonal',
+    typeODesc: 'La forma base. Las celdas romboidales se extienden alrededor de un patrón localizador central.',
+    typeOMeta: 'k = 6 / 8 / 10 · carga útil neta 18 / 39 / 65 B',
+    typeAName: 'Type A — silueta triangular',
+    typeADesc: 'Un núcleo hexagonal más parches de esquina, que forman un triángulo equilátero.',
+    typeAMeta: 'k = 6 / 8 / 10 · carga útil neta 31 / 62 / 101 B',
+    typesFoot: 'La carga útil neta es con ECC-M. Los tres tipos pueden llevar al lado un <strong>QR de respaldo</strong>, de modo que quede una vía donde un código TL no se pueda leer.',
+
+    howTitle: 'Cómo funciona',
+    how1Title: '1. Celda = tres rombos', how1Desc: 'Un teselado rhombille divide cada celda hexagonal en las caras T, L y R.',
+    how2Title: '2. Orden = símbolo', how2Desc: 'Ordenar las tres luminancias da 3! = 6 resultados — un dígito en base 6.',
+    how3Title: '3. 3 dígitos = 1 símbolo', how3Desc: 'Reed–Solomon sobre el cuerpo primo GF(211) corrige los errores.',
+    whyTitle: 'Qué se libera',
+    why1: '<strong>Invariante ante transformaciones monótonas.</strong> Los cambios de iluminación global, el gamma y el mapeo tonal de una impresora son monótonos: no pueden alterar un orden. Si el orden sobrevive, el valor sobrevive.',
+    why2: '<strong>El renderizador queda libre.</strong> El contrato de datos es solo «el orden entre las caras, más una separación mínima». Dentro de eso, el color, la textura, los degradados por cara y la animación están abiertos. Esa libertad es el sentido del formato.',
+    why3: '<strong>Pero nada se vuelve bonito por sí solo.</strong> Lo que se abre es el contrato, no el resultado. Lo que dibuje dentro sigue siendo su trabajo.',
+
+    statusTitle: 'Escáner — dónde estamos',
+    statusLead: '<strong>El decodificador funciona.</strong> Los tres tipos se leen en fotos de dispositivos reales; queda subir la precisión y la velocidad. Cada tiempo de abajo es <strong>una decodificación de una foto fija tomada con un teléfono real</strong>, no el tiempo hasta el primer enganche ni una tasa de acierto en directo.',
+    thType: 'Tipo', thDecoded: 'Fotos reales decodificadas', thTime: 'Una decodificación en foto fija', thRealtime: 'Validación en directo',
+    rowYName: '<strong>Type Y</strong> — cubo único',
+    rowOName: '<strong>Type O</strong> — campo hexagonal',
+    rowAName: '<strong>Type A</strong> — silueta triangular',
+    rowCenterQr: '<strong>Variante de QR central</strong> (los tres tipos)',
+    badgePending: 'faltan más medidas',
+    statusNote1: '<strong>El tiempo de una decodificación en foto fija no predice cómo se siente el escaneo en directo.</strong> En las primeras medidas sobre un dispositivo real, un fotograma rápido podía dar aun así un primer enganche lento cuando hacían falta muchos fotogramas antes de uno acertado, y el orden de los tipos difería de esta tabla de foto fija. Esa traza cubre un solo dispositivo y una muestra pequeña, así que todavía no asignamos una nota de uso en directo.',
+    statusNote0: '<strong>Con el criterio de una decodificación de una foto fija</strong>, el Type Y es el más corto y O y A tardan más. El rediseño de los patrones localizadores y los reintentos de formato ampliaron el conjunto de fotos reales que se decodifican, a costa de más trabajo en algunos caminos; Y prueba primero un camino barato y solo hace un barrido completo tras un fallo. Estas cifras no deben leerse como tiempo hasta el primer enganche en directo.',
+    statusNote2: `Las condiciones de captura también pesan. En la medición, <strong>${stats.cellFloorPx} píxeles por celda</strong> fue el suelo de decodificación y, a la misma distancia, un <strong>objetivo ultra gran angular</strong> encuadra el código más pequeño y baja de esa línea (ultra gran angular ${stats.ultraWideFailPx} px falló / gran angular ${stats.wideOkPx} px acertó). Por eso el escáner ofrece un selector de objetivo.`,
+    statusNote3: 'En la <strong>variante de QR central</strong>, un bloque QR sustituye al patrón localizador central. Sus patrones aportan el punto de entrada de posición y orientación con el que se decodifica el cuerpo TL de alrededor. El generador usa ya esta vía validada de forma predeterminada para los tipos O y A. Por defecto el QR sigue siendo un respaldo con un enlace al lector; la carga útil se queda en el cuerpo TL.',
+    statusFoot: `Medido el ${stats.measuredOn} · muestra de ${stats.sampleCount} fotos con tres sensores de teléfono (ultra gran angular, gran angular, teleobjetivo) · lado corto ${stats.shortSidePx} px. La muestra es pequeña: léalo como un <em>estado actual</em>, no como una tasa de acierto.`,
+
+    specTitle: 'Especificación e implementación',
+    spec1: 'La especificación del formato y la implementación de referencia se publican bajo la <strong>Licencia Apache 2.0</strong>. JavaScript puro, sin cadena de compilación, cero dependencias en ejecución — funciona como un único archivo HTML.',
+    spec2: '<strong>Implementar solo el decodificador ya cuenta como implementación conforme.</strong> La adopción empieza por el lado que lee.',
+    ctaSpec: 'Leer la especificación', ctaImpl: 'Implementación de referencia',
+    thSite: 'Sitio', thRole: 'Función', thState: 'Estado',
+    roleGenerator: 'Generador', roleScanner: 'Escáner', roleHub: 'Sitio de presentación',
+    stateWorking: 'activo', stateHere: 'está aquí', stateScanner: 'activo — estado ›',
+    footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
+    footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · nombre en clave Trilume',
+  },
+
+  /* pt — pt-PT 어휘 (ecrã·câmara·ficheiro·predefinição). 스캐너 사전과 같은 계열. */
+  pt: {
+    title: 'TLcube — um código visual 2.5D que leva os dados na ordem de luminância',
+    description: 'Um código visual aberto que divide uma célula hexagonal em três faces em losango e leva os dados na ordem de luminância relativa dessas faces. A especificação e a implementação de referência estão publicadas sob Apache-2.0.',
+    ogTitle: 'TLcube — um código visual 2.5D que leva os dados na ordem de luminância',
+    ogDescription: 'Os dados assentam na ordem das três faces, não no brilho absoluto. Enquanto a ordem sobreviver, o valor sobrevive.',
+    jsonHeadline: 'TLcube — um código visual 2.5D que leva os dados na ordem, não no brilho absoluto',
+    jsonDescription: 'Um código visual aberto que divide uma célula hexagonal em três faces em losango e usa a sua ordem de luminância relativa (3! = 6) como um símbolo em base 6. Invariante a transformações tonais monótonas.',
+
+    navWhyNow: 'Porquê agora',
+    navWhat: 'Como funciona', navTypes: 'Tipos', navStatus: 'Estado do scanner', navSpec: 'Especificação',
+    navGenerator: 'Gerador', navScanner: 'Scanner',
+    themeLabel: 'Tema', themeAuto: 'Auto', themeLight: 'Claro', themeDark: 'Escuro',
+    langLabel: 'Idioma',
+
+    heroTitle: 'O QR lê-se bem.<br>Só nunca foi <strong>bonito</strong>',
+    heroLead: 'Cartazes, embalagens, cartões de visita — o QR está em todo o lado, e pousar um quadrado a preto e branco sobre um design trabalhado durante semanas sempre custou. Mas o QR tem este aspeto por uma razão: é o que se constrói quando <strong>uma câmara e um processador de 1994</strong> têm de conseguir lê-lo.',
+    heroLead2: 'Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>.',
+    whyNowTitle: 'Porquê agora',
+    whyNow1: '<strong>O QR foi a resposta certa para o seu tempo.</strong> Dois valores, módulos quadrados, padrões localizadores grandes — cada uma dessas escolhas existia para que mesmo uma câmara fraca conseguisse ler. Com essas restrições, abdicar da estética era racional.',
+    whyNow2: '<strong>Essa premissa mudou.</strong> As câmaras dos telemóveis de hoje não se comparam, e o processamento de vídeo em tempo real corre dentro de um navegador. Essa folga podia ir para a densidade — ou podia ir para <strong>o aspeto</strong>. É por isso que este formato existe.',
+    whyNow3: '<strong>Em troca, abdicou-se da densidade.</strong> As células em losango aproveitam pior a área do que os módulos quadrados. Este formato não compete em densidade. Se for preciso levar muito, a ferramenta certa é o QR.',
+    ctaMake: 'Criar um código',
+
+    typesTitle: 'Três tipos',
+    typesLead: 'Escolha consoante o sítio onde vai ficar. Os três partilham o mesmo contrato de dados e diferem apenas na silhueta. Todos os códigos abaixo contêm <code>https://tl.estre.so</code>.',
+    typeYName: 'Type Y — cubo único',
+    typeYDesc: 'Três faces n×n. Uma marca de uma só peça, boa para sinalética e merchandising.',
+    typeYMeta: 'n = 13 / 21 / 25 · carga útil líquida 31 / 98 / 141 B',
+    typeOName: 'Type O — campo hexagonal',
+    typeODesc: 'A forma base. As células em losango estendem-se à volta de um padrão localizador central.',
+    typeOMeta: 'k = 6 / 8 / 10 · carga útil líquida 18 / 39 / 65 B',
+    typeAName: 'Type A — silhueta triangular',
+    typeADesc: 'Um núcleo hexagonal mais remendos de canto, formando um triângulo equilátero.',
+    typeAMeta: 'k = 6 / 8 / 10 · carga útil líquida 31 / 62 / 101 B',
+    typesFoot: 'A carga útil líquida é para ECC-M. Os três tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.',
+
+    howTitle: 'Como funciona',
+    how1Title: '1. Célula = três losangos', how1Desc: 'Uma pavimentação rhombille divide cada célula hexagonal nas faces T, L e R.',
+    how2Title: '2. Ordem = símbolo', how2Desc: 'Ordenar as três luminâncias dá 3! = 6 resultados — um dígito em base 6.',
+    how3Title: '3. 3 dígitos = 1 símbolo', how3Desc: 'Reed–Solomon sobre o corpo primo GF(211) corrige os erros.',
+    whyTitle: 'O que isto liberta',
+    why1: '<strong>Invariante a transformações monótonas.</strong> As variações de iluminação global, o gama e o mapeamento tonal de uma impressora são monótonos: não conseguem trocar uma ordem. Se a ordem sobrevive, o valor sobrevive.',
+    why2: '<strong>O renderizador fica livre.</strong> O contrato de dados é apenas «a ordem entre as faces, mais uma separação mínima». Dentro disso, a cor, a textura, os gradientes por face e a animação estão todos abertos. É essa liberdade que dá sentido ao formato.',
+    why3: '<strong>Mas nada fica bonito sozinho.</strong> O que se abre é o contrato, não o resultado. O que desenhar lá dentro continua a ser trabalho seu.',
+
+    statusTitle: 'Scanner — ponto de situação',
+    statusLead: '<strong>O descodificador funciona.</strong> Os três tipos leem-se a partir de fotos de dispositivos reais; falta subir a precisão e a velocidade. Cada tempo abaixo é <strong>uma descodificação de uma foto fixa tirada com um telemóvel real</strong>, não o tempo até à primeira fixação nem uma taxa de êxito ao vivo.',
+    thType: 'Tipo', thDecoded: 'Fotos reais descodificadas', thTime: 'Uma descodificação em foto fixa', thRealtime: 'Validação ao vivo',
+    rowYName: '<strong>Type Y</strong> — cubo único',
+    rowOName: '<strong>Type O</strong> — campo hexagonal',
+    rowAName: '<strong>Type A</strong> — silhueta triangular',
+    rowCenterQr: '<strong>Variante de QR central</strong> (os três tipos)',
+    badgePending: 'faltam mais medições',
+    statusNote1: '<strong>O tempo de uma descodificação em foto fixa não prevê a sensação da leitura ao vivo.</strong> Nas primeiras medições em dispositivo real, um fotograma rápido podia ainda assim dar uma primeira fixação lenta quando eram precisos muitos fotogramas antes de um bem-sucedido, e a ordem dos tipos diferia desta tabela de foto fixa. Esse registo abrange um só dispositivo e uma amostra pequena, pelo que ainda não atribuímos uma classificação de uso ao vivo.',
+    statusNote0: '<strong>No critério de uma descodificação de uma foto fixa</strong>, o Type Y é o mais curto e O e A demoram mais. A reformulação dos padrões localizadores e as novas tentativas de formato alargaram o conjunto de fotos reais que se descodificam, à custa de mais trabalho em alguns caminhos; o Y tenta primeiro um caminho barato e só faz uma varredura completa depois de falhar. Estes números não devem ser lidos como tempo até à primeira fixação ao vivo.',
+    statusNote2: `As condições de captura também pesam. Na medição, <strong>${stats.cellFloorPx} píxeis por célula</strong> foi o limite inferior de descodificação e, à mesma distância, uma <strong>objetiva ultra grande-angular</strong> enquadra o código mais pequeno e desce abaixo dessa linha (ultra grande-angular ${stats.ultraWideFailPx} px falhou / grande-angular ${stats.wideOkPx} px conseguiu). É por isso que o scanner oferece a escolha da objetiva.`,
+    statusNote3: 'Na <strong>variante de QR central</strong>, um bloco QR substitui o padrão localizador central. Os seus padrões dão o ponto de entrada de posição e orientação com que se descodifica o corpo TL em redor. O gerador usa agora este caminho validado por predefinição nos tipos O e A. Por predefinição, o QR continua a ser uma reserva com uma ligação para o leitor; a carga útil fica no corpo TL.',
+    statusFoot: `Medido a ${stats.measuredOn} · amostra de ${stats.sampleCount} fotos com três sensores de telemóvel (ultra grande-angular, grande-angular, teleobjetiva) · lado curto ${stats.shortSidePx} px. A amostra é pequena — leia isto como um <em>estado atual</em>, não como uma taxa de êxito.`,
+
+    specTitle: 'Especificação e implementação',
+    spec1: 'A especificação do formato e a implementação de referência estão publicadas sob a <strong>Licença Apache 2.0</strong>. JavaScript simples, sem cadeia de compilação, zero dependências em execução — funciona como um único ficheiro HTML.',
+    spec2: '<strong>Implementar apenas o descodificador já conta como implementação conforme.</strong> A adoção começa pelo lado que lê.',
+    ctaSpec: 'Ler a especificação', ctaImpl: 'Implementação de referência',
+    thSite: 'Site', thRole: 'Papel', thState: 'Estado',
+    roleGenerator: 'Gerador', roleScanner: 'Scanner', roleHub: 'Site de apresentação',
+    stateWorking: 'ativo', stateHere: 'está aqui', stateScanner: 'ativo — estado ›',
+    footerTrademark: 'QR Code is a registered trademark of DENSO WAVE INCORPORATED.',
+    footerCopyright: '© 2026 SoliEstre — TrilLuminance (cube) · nome de código Trilume',
   },
 };

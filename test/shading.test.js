@@ -473,12 +473,15 @@ test('배경이 검정이 아닐 때 음영에 실측 경고가 붙는다 (막�
   assert.match(INDEX, /els\.shadingHint\.style\.color = risky \? 'var\(--warn\)' : '';/);
   // 배경 모드를 바꾸면 이 경고가 다시 계산돼야 한다 (안 하면 옛 배경 기준으로 굳는다).
   assert.match(INDEX, /generatorState\.bgMode = card\.dataset\.bg;[\s\S]{0,400}syncShadingUi\(\);/);
-  assert.equal(INDEX.match(/"g992":/g)?.length, 3);
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 3언어 → 8언어.
+  assert.equal(INDEX.match(/"g992":/g)?.length, 8);
 });
 
-test('음영 문구 3언어가 다 있다', () => {
+test('음영 문구 8언어가 다 있다', () => {
+  // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): fr·it·de·es·pt 가 붙어
+  //   ko/en/ja 3언어 → 8언어다. 계약(«음영 문구는 전 언어에 있다»)은 그대로다.
   for (const key of ['g981', 'g982', 'g983', 'g984', 'g985', 'g986', 'g987', 'g988', 'g989', 'g990', 'g992']) {
     const hits = INDEX.match(new RegExp(`"${key}":`, 'g'));
-    assert.equal(hits?.length, 3, `${key} 가 3언어에 다 있어야 한다 (실제 ${hits?.length})`);
+    assert.equal(hits?.length, 8, `${key} 가 8언어에 다 있어야 한다 (실제 ${hits?.length})`);
   }
 });

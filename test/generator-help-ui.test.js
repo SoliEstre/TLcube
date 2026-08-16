@@ -2,9 +2,9 @@
  * generator-help-ui.test.js — 생성기 UI 대개편 (운영자 지시 2026-08-16) 의 계약.
  *
  * 무엇을 지키나:
- *   A-1 섹션 개명 — 세 언어가 같이 바뀌었는가 (한 언어만 바뀌면 «번역 누락» 으로 보인다)
+ *   A-1 섹션 개명 — 전 언어가 같이 바뀌었는가 (한 언어만 바뀌면 «번역 누락» 으로 보인다)
  *   A-2 «?» 도움말 — 버튼이 button 요소이고 aria-expanded 를 갖고, 가리키는 사전 키가
- *       세 언어 모두에 있는가. 팝오버는 **문서에 하나**인가 (복제되면 열림 상태가 갈린다)
+ *       여덟 언어 모두에 있는가. 팝오버는 **문서에 하나**인가 (복제되면 열림 상태가 갈린다)
  *   A-3 부제·아이콘 — 카드 안 부제가 사전을 거치는가
  *   A-5 섹션 마진 — 래퍼 div 가 위 여백을 지우던 `:first-child` 리셋이 사라졌는가
  *   A-6 입력 지우기 — i18n aria-label 을 가진 button 인가
@@ -47,7 +47,10 @@ function langBlock(lang) {
   throw new Error(`${lang} 사전이 닫히지 않는다`);
 }
 
-const LANGS = ['ko', 'en', 'ja'];
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): ko/en/ja → 8언어.
+//   이 목록을 늘리는 것만으로 아래 순회 단언 전부가 새 언어까지 잰다 — 그게 목적이다
+//   (한 언어만 갱신되는 «번역 누락» 을 여기서 잡는 것이 이 파일의 계약이다).
+const LANGS = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
 
 // ── A-2 위치 보정 (순수 함수) ─────────────────────────────────────────────
 
@@ -222,7 +225,7 @@ test('안전영역 — 문턱 타이브레이크는 프리셋 전부에서 죽�
 
 // ── A-2 «?» 도움말 배선 ───────────────────────────────────────────────────
 
-test('«?» 버튼은 button 요소 + aria-expanded 이고 사전 키가 세 언어에 있다', () => {
+test('«?» 버튼은 button 요소 + aria-expanded 이고 사전 키가 여덟 언어에 있다', () => {
   const dots = [...INDEX.matchAll(/<button type="button" class="help-dot" data-help="(g\d{3})"([^>]*)>/g)];
   assert.ok(dots.length >= 7, `«?» 버튼이 너무 적다 (${dots.length}) — 섹션 이관이 덜 됐다`);
   for (const [, key, rest] of dots) {
@@ -428,6 +431,8 @@ test('O/A 파인더 도움말은 그 섹션에 실재하는 것만 설명한다'
   for (const lang of LANGS) {
     const body = new RegExp('"g907": "((?:[^"\\\\]|\\\\.)*)"').exec(langBlock(lang));
     assert.ok(body, `${lang} 에 g907 이 없다`);
+    // ⚠ 의도적 갱신 (2026-08-17, i18n 5언어 확장): 새 5언어는 «자동» 을 전부 Auto 로
+    //   옮겼으므로 `Auto =` 한 패턴이 fr·it·de·es·pt 를 함께 덮는다.
     assert.ok(!/자동 =|Auto =|自動 =/.test(body[1]),
       `${lang}/g907: 없는 «자동» 카드를 설명한다`);
   }

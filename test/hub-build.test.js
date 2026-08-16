@@ -1,4 +1,4 @@
-// hub-build.test.js — 소개 허브 3언어 산출물이 생성기와 어긋나지 않는지 지킨다.
+// hub-build.test.js — 소개 허브 8언어 산출물이 생성기와 어긋나지 않는지 지킨다.
 //
 // 왜 필요한가: `sites/tl/**/index.html` 은 **생성물**인데 손으로 고치기 쉬운 모양(그냥
 // HTML)이다. 손으로 고치면 다음 `node tools/build-hub.mjs` 에 조용히 덮여 사라지고,
@@ -19,7 +19,9 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const pagePath = (lang) => `${ROOT}sites/tl/${lang.dir}index.html`;
 const read = (lang) => readFileSync(pagePath(lang), 'utf8');
 
-test('동기화: build-hub.mjs 를 다시 돌려도 3언어 산출물이 바뀌지 않는다', () => {
+// ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 3 → 8언어. languages 를 순회하므로
+//   이 테스트는 언어가 늘면 자동으로 넓어진다 — 제목만 주장에 맞춘다.
+test('동기화: build-hub.mjs 를 다시 돌려도 8언어 산출물이 바뀌지 않는다', () => {
   const before = languages.map((l) => read(l));
   execFileSync(process.execPath, [`${ROOT}tools/build-hub.mjs`], { stdio: 'pipe' });
   const after = languages.map((l) => read(l));
@@ -29,12 +31,12 @@ test('동기화: build-hub.mjs 를 다시 돌려도 3언어 산출물이 바뀌�
   });
 });
 
-test('3언어 모두 자기 언어·정본 URL·hreflang 을 갖는다', () => {
+test('8언어 모두 자기 언어·정본 URL·hreflang 을 갖는다', () => {
   for (const lang of languages) {
     const html = read(lang);
     assert.match(html, new RegExp(`<html lang="${lang.htmlLang}"`), `${lang.code}: html lang`);
     assert.match(html, new RegExp(`<link rel="canonical" href="https://tl\\.estre\\.so/${lang.dir}">`), `${lang.code}: canonical`);
-    // 세 언어 + x-default = 4개. 하나라도 빠지면 검색엔진이 언어판을 중복으로 본다.
+    // 언어 수 + x-default. 하나라도 빠지면 검색엔진이 언어판을 중복으로 본다.
     assert.equal((html.match(/rel="alternate" hreflang=/g) || []).length, languages.length + 1, `${lang.code}: hreflang 개수`);
     assert.match(html, /hreflang="x-default"/, `${lang.code}: x-default`);
   }
@@ -66,7 +68,7 @@ test('공유 자산 URL 에 내용 해시 버전이 붙는다 (캐시 스큐 방
   }
 });
 
-test('실측 수치는 세 언어가 같은 값을 쓴다 (한 언어만 옛 숫자로 남지 않게)', () => {
+test('실측 수치는 여덟 언어가 같은 값을 쓴다 (한 언어만 옛 숫자로 남지 않게)', () => {
   for (const lang of languages) {
     const html = read(lang);
     for (const type of ['Y', 'O', 'A']) {
@@ -113,7 +115,7 @@ test('상단 내비의 앵커 순서가 본문 섹션 순서와 같다', () => {
   }
 });
 
-// 언어 선택은 접힌 레이어다. 접혀 있어도 ① 지금 무슨 언어인지 보이고 ② 세 언어 링크가
+// 언어 선택은 접힌 레이어다. 접혀 있어도 ① 지금 무슨 언어인지 보이고 ② 모든 언어 링크가
 // 문서에 남아야 한다 — 링크가 사라지면 크롤러의 언어판 연결이 끊긴다.
 test('언어 선택이 닫힌 드롭다운이고 현재 언어를 토글에 드러낸다', () => {
   for (const lang of languages) {
@@ -164,12 +166,43 @@ test('JSON-LD 가 파싱되고 문서 언어를 선언한다', () => {
   }
 });
 
-test('번역 키가 세 언어에 빠짐없이 있다', () => {
+test('번역 키가 여덟 언어에 빠짐없이 있다', () => {
   const keys = Object.keys(strings.ko);
   for (const lang of languages) {
     const missing = keys.filter((k) => !(k in strings[lang.code]));
     assert.deepEqual(missing, [], `${lang.code}: 누락된 키`);
     const empty = keys.filter((k) => String(strings[lang.code][k]).trim() === '');
     assert.deepEqual(empty, [], `${lang.code}: 빈 문자열`);
+  }
+});
+
+// sitemap 은 사람이 안 보는 표면이라 조용히 낡는다 — 언어판을 늘린 날 여기만 옛
+// 목록으로 남으면 페이지는 살아 있는데 색인에는 없는 상태가 된다. 그래서 sitemap 도
+// build-hub.mjs 가 찍고(2026-08-17), 여기서 «언어 수만큼 있는가» 를 잰다.
+test('sitemap.xml 이 모든 언어판을 싣고 서로를 hreflang 으로 가리킨다', () => {
+  const xml = readFileSync(`${ROOT}sites/tl/sitemap.xml`, 'utf8');
+  const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  assert.deepEqual(locs, languages.map((l) => `https://tl.estre.so/${l.dir}`));
+  for (const lang of languages) {
+    const links = (xml.match(new RegExp(`hreflang="${lang.code}"`, 'g')) || []).length;
+    assert.equal(links, languages.length,
+      `${lang.code}: 모든 url 항목이 ${lang.code} 대체본을 가리켜야 한다`);
+  }
+  assert.equal((xml.match(/hreflang="x-default"/g) || []).length, languages.length);
+});
+
+// 시간 표기가 언어별 맵으로 바뀌었다(2026-08-17). 맵에 빠진 언어가 있으면 그 언어만
+// 영어 표기를 물려받아 조용히 섞이므로, 언어 수와 맵 크기가 같은지 본다.
+test('복호 시간 표기가 언어 수만큼 있고 페이지에 그대로 실린다', () => {
+  for (const type of ['Y', 'O', 'A']) {
+    assert.deepEqual(Object.keys(stats.types[type].ms).sort(),
+      languages.map((l) => l.code).sort(), `Type ${type}: ms 언어 맵`);
+  }
+  for (const lang of languages) {
+    const html = read(lang);
+    for (const type of ['Y', 'O', 'A']) {
+      assert.ok(html.includes(`<td>${stats.types[type].ms[lang.code]}</td>`),
+        `${lang.code}: Type ${type} 시간 표기(${stats.types[type].ms[lang.code]})가 표에 없다`);
+    }
   }
 });
