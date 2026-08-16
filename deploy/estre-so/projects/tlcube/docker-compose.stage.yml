@@ -1,0 +1,46 @@
+# TLcube 스테이징 스캐너 — 선택 오버레이 (운영자 지시 2026-08-17).
+#
+# 목적: 정식 배포본과 **동일한 내용** (dist/tlscan.html — 수집 0바이트) 을 별도 체크아웃
+#   에서 서빙해, ① lab(수집 있음) 대비 속도를 실기기로 분리 진단하고 ② 후보 빌드를
+#   프로덕션 승격 전에 실기기로 평가한다 (스테이징 = 최종 배포 판단 관문).
+#
+# 승격 흐름:
+#   git -C /srv/tlcube-stage pull && docker restart estreso-tlcube-stage-1   # 후보 → 스테이징
+#   (운영자 실기기 판정 후)
+#   git -C /srv/tlcube pull && docker restart estreso-tlcube-scan-1 ...      # 승격 → 프로덕션
+#
+# ingest 분리 전례를 따라 별도 파일이다 — 본 3사이트 compose 는 손대지 않는다.
+# 인증서·DNS: `*.estre.so` 와일드카드가 tlstage 도 이미 덮는다 (certresolver 불요,
+#   CT 로그 노출 없음 — 본 compose 머리주석의 설계 의도 그대로).
+#
+# 올리기:
+#   git clone https://github.com/SoliEstre/TLcube /srv/tlcube-stage
+#   docker compose --env-file ~/.secrets/estre.so.env \
+#     -f compose.yml -f projects/tlcube/docker-compose.yml \
+#     -f projects/tlcube/docker-compose.stage.yml up -d tlcube-stage
+#
+# ⚠ 단일 파일 bind mount 는 inode 에 묶인다 — pull 후 restart 필수 (본 compose 와 동일).
+
+services:
+  tlcube-stage:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ${TLCUBE_STAGE_SRC:-/srv/tlcube-stage}/dist/tlscan.html:/usr/share/nginx/html/index.html:ro
+      - ${TLCUBE_STAGE_SRC:-/srv/tlcube-stage}/sites/_shared:/srv/_shared:ro
+      - ${TLCUBE_STAGE_SRC:-/srv/tlcube-stage}/src:/srv/src:ro
+      # conf 도 스테이징 체크아웃에서 마운트 — 스테이징 rev 를 따라간다.
+      - ${TLCUBE_STAGE_SRC:-/srv/tlcube-stage}/deploy/estre-so/projects/tlcube/static-stage.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - edge
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.tlcube-stage.rule: "Host(`tlstage.${ROOT_DOMAIN}`)"
+      traefik.http.routers.tlcube-stage.entrypoints: websecure
+      traefik.http.routers.tlcube-stage.tls: "true"
+      traefik.http.services.tlcube-stage.loadbalancer.server.port: "80"
+
+networks:
+  edge:
+    external: true
+    name: edge

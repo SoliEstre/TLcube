@@ -49,6 +49,28 @@ docker compose --env-file ~/.secrets/estre.so.env \
   -f compose.yml -f projects/tlcube/docker-compose.yml restart tlcube-gen tlcube-scan
 ```
 
+### 스테이징 (tlstage — 선택, 운영자 지시 2026-08-17)
+
+정식과 **동일한 내용** (dist/tlscan.html — 수집 0) 을 별도 체크아웃 `/srv/tlcube-stage`
+에서 서빙한다. 목적: ① lab(수집) 대비 속도 분리 진단 ② 후보 빌드의 프로덕션 승격 전
+실기기 평가. 구성은 `projects/tlcube/docker-compose.stage.yml` (ingest 분리 전례).
+
+```bash
+# 최초 1회
+git clone https://github.com/SoliEstre/TLcube /srv/tlcube-stage
+docker compose --env-file ~/.secrets/estre.so.env \
+  -f compose.yml -f projects/tlcube/docker-compose.yml \
+  -f projects/tlcube/docker-compose.stage.yml up -d tlcube-stage
+
+# 후보 → 스테이징 (프로덕션은 그대로)
+git -C /srv/tlcube-stage pull && docker restart estreso-tlcube-stage-1
+# 운영자 실기기 판정 후 → 프로덕션 승격 (기존 갱신 절차)
+```
+
+⚠ compose 오버레이 파일 자체는 `/opt/estre.so/projects/tlcube/` 로 복사해야 CLI 가
+읽는다 (기존 3파일과 동일한 배치 방식). conf 는 스테이징 체크아웃에서 마운트되므로
+스테이징 rev 를 따라간다.
+
 ⚠ **`tlcube-gen` 과 `tlcube-scan` 은 반드시 restart 해야 한다.** 둘 다 안정판 HTML과 nginx
 conf 를 단일 파일로 bind mount 한다. Docker 의 단일 파일 bind mount 는 **inode 에 묶이고**,
 `git pull` 은 제자리 수정이 아니라 새로 쓰고 rename 하므로 inode 가 바뀐다 → 컨테이너는
