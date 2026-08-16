@@ -8,8 +8,11 @@
  * formatIndex 쌍을 쓰고, n=21 의 기본은 그대로 v2r2 다. 레이아웃 판별은 로케이터
  * 패밀리 + CS 평가 게이트가 한다.
  * 2026-08-16 추가: v0X(id 'v0x', n=21, QR 파인더 문법 65셀)가 **3파전 후보**로 편입 —
- * 같은 formatIndex 쌍을 쓰고 n=21 기본은 그대로 v2r2 다. 최종 라인업 중 유일하게
- * mid(1) 면을 갖는다(4개) — 편집기 정본이 DEFAULT_TONE 을 생략하기 때문.
+ * 같은 formatIndex 쌍을 쓰고 n=21 기본은 그대로 v2r2 다.
+ * 2026-08-16 정규화(운영자 승인): 편입 당시 v0X 에만 있던 mid(1) 면 4개
+ * ((0,3).L · (14,20).L/R · (19,19).R)를 정본이 도색 다수 톤으로 확정했다
+ * ((0,3)L=0 · (14,20)L/R=2 · (19,19)R=2). **이제 최종 라인업 전 정본에 mid 면이 없다** —
+ * 톤 가드가 «전 정본 0/2» 로 단순해졌고 v0X 정방향 일치율이 195/195 가 됐다.
  */
 
 import { test } from 'node:test';
@@ -468,7 +471,10 @@ test('v0X 회계 — 441 − 65 − 12 − 18 = 346 · S 115 · 잔여 1 (autopl
   assert.equal(cellSurfaceFinal(21).id, 'v2r2');
 });
 
-test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 동일 35/36', () => {
+// 의도적 갱신 (정본 정규화 2026-08-16): SE 3면 동일이 35/36 → **36/36**,
+// NW 는 v1r2 와 예외 없이 동일, (14,20) 은 (2,1,1) → (2,2,2). 전부 «넓힌» 단언이다
+// (SE 면 격자 대조는 T 하나에서 T·L·R 세 면 전부로 확대).
+test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 동일 36/36', () => {
   const cells = locatorCellsCellSurfaceFinal(21, 'v0x');
   assert.equal(cells.length, 65);
   const inBox = (c, box) => (box.iMax === undefined || c.i <= box.iMax)
@@ -487,25 +493,39 @@ test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 �
   }
   assert.deepEqual(counts, { NW: 16, NE: 6, SW: 6, SE: 36, SINGLE: 1 });
 
-  // SE 6×6 은 QR 동심 사각 — 암 테두리 / 명 링 / 암 2×2 코어. 3면 동일 35/36
-  // ((19,19).R 만 mid). 이 «3면 동일» 이 로케이터 사각 링 서명의 근거다.
+  // SE 6×6 은 QR 동심 사각 — 암 테두리 / 명 링 / 암 2×2 코어. 정규화로 **36/36**
+  // 전부 3면 동일이 됐다. 이 «3면 동일» 이 로케이터 사각 링 서명(120° 3코어)의 근거다.
   const se = cells.filter((c) => inBox(c, V0X_BLOCKS.SE));
-  assert.equal(se.filter((c) => c.T === c.L && c.L === c.R).length, 35);
-  const seT = new Map(se.map((c) => [c.i + ',' + c.j, c.T]));
+  assert.equal(se.filter((c) => c.T === c.L && c.L === c.R).length, 36);
   const wantSE = ['000000', '022220', '020020', '020020', '022220', '000000'];
-  for (let i = 15; i <= 20; i += 1) {
-    const row = [];
-    for (let j = 15; j <= 20; j += 1) row.push(String(seT.get(i + ',' + j)));
-    assert.equal(row.join(''), wantSE[i - 15], 'SE 면 T 행 i=' + i);
-  }
-  // 중심 통과 런 D1 B1 D2 B1 D1 = 1:1:2:1:1 (K5 회문) — 행·열 양쪽에서 성립한다.
-  for (let j = 15; j <= 20; j += 1) {
-    const col = [];
-    for (let i = 15; i <= 20; i += 1) col.push(String(seT.get(i + ',' + j)));
-    assert.equal(col.join(''), wantSE[j - 15], 'SE 면 T 열 j=' + j);
+  // T 면만 보던 것을 **세 면 전부**로 넓힌다 — (19,19).R 복원으로 R 면도 완전해졌다.
+  for (const face of ['T', 'L', 'R']) {
+    const grid = new Map(se.map((c) => [c.i + ',' + c.j, c[face]]));
+    for (let i = 15; i <= 20; i += 1) {
+      const row = [];
+      for (let j = 15; j <= 20; j += 1) row.push(String(grid.get(i + ',' + j)));
+      assert.equal(row.join(''), wantSE[i - 15], 'SE ' + face + ' 면 행 i=' + i);
+    }
+    // 중심 통과 런 D1 B1 D2 B1 D1 = 1:1:2:1:1 (K5 회문) — 행·열 양쪽에서 성립한다.
+    for (let j = 15; j <= 20; j += 1) {
+      const col = [];
+      for (let i = 15; i <= 20; i += 1) col.push(String(grid.get(i + ',' + j)));
+      assert.equal(col.join(''), wantSE[j - 15], 'SE ' + face + ' 면 열 j=' + j);
+    }
+    // 대각·반대각도 회문이다 (정규화 전에는 R 면 주대각이 (19,19) 에서 깨졌다).
+    const diag = [];
+    const anti = [];
+    for (let k = 0; k <= 5; k += 1) {
+      diag.push(String(grid.get((15 + k) + ',' + (15 + k))));
+      anti.push(String(grid.get((15 + k) + ',' + (20 - k))));
+    }
+    for (const [name, line] of [['대각', diag.join('')], ['반대각', anti.join('')]]) {
+      assert.equal(line, [...line].reverse().join(''), 'SE ' + face + ' 면 ' + name + ' 회문');
+    }
   }
 
-  // NW (0..3)² 는 v1r2 NW 의 같은 범위와 같다 — 공유 K3 중앙 계보 ((0,3).L mid 만 예외).
+  // NW (0..3)² 는 v1r2 NW 의 같은 범위와 **예외 없이** 같다 — 공유 K3 중앙 계보.
+  // (정규화로 (0,3).L 예외가 사라져 mid 건너뛰기 없이 전 면을 대조한다.)
   const nw = new Map(locatorCellsCellSurfaceFinal(21, 'v1r2')
     .filter((c) => c.i <= 3 && c.j <= 3).map((c) => [c.i + ',' + c.j, c]));
   assert.equal(nw.size, 16);
@@ -513,34 +533,47 @@ test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 �
     const want = nw.get(cell.i + ',' + cell.j);
     assert.ok(want, 'v1r2 NW 에 없는 v0X NW 셀 ' + cell.i + ',' + cell.j);
     for (const face of ['T', 'L', 'R']) {
-      if (cell[face] === 1) continue;
       assert.equal(cell[face], want[face], 'NW ' + cell.i + ',' + cell.j + '.' + face);
     }
   }
 });
 
-test('v0X mid(1) 면 — 정확히 4개, 좌표·면이 정본과 일치하고 v0X 밖엔 없다', () => {
-  // 편집기 정본은 tone !== DEFAULT_TONE(=1) 만 직렬화한다 → 빠진 면은 mid 확정이다.
-  // (0,3).L · (14,20).L · (14,20).R · (19,19).R — 최종 라인업에서 v0X 만 갖는다.
-  const want = ['0,3:L', '14,20:L', '14,20:R', '19,19:R'];
-  const got = [];
-  for (const cell of locatorCellsCellSurfaceFinal(21, 'v0x')) {
-    for (const face of ['T', 'L', 'R']) {
-      if (cell[face] === 1) got.push(cell.i + ',' + cell.j + ':' + face);
-    }
-  }
-  assert.deepEqual(got.sort(), want.slice().sort());
-  for (const [id, n] of [['v0', 13], ['v2r2', 21], ['v2r2', 25], ['v1r2', 21]]) {
+// 의도적 갱신 (정본 정규화 2026-08-16): 이 테스트는 원래 «v0X 에만 mid 4면이 있다» 를
+// 고정했다. 정본이 그 4면을 도색 다수 톤으로 확정하면서 주장이 **뒤집혔다** —
+// 이제 «전 정본에 mid 가 없다» 가 불변식이다. 약화가 아니라 강화다: 예외 목록이
+// 사라지고 다섯 인스턴스 전부가 같은 규칙(0/2)에 걸린다. 정규화된 4면의 새 값도
+// 좌표·면 단위로 못 박아, 정본이 다시 흔들리면 여기서 잡히게 한다.
+test('전 정본 mid(1) 금지 — 다섯 인스턴스 어디에도 mid 면이 없다 (v0X 정규화 4면 고정)', () => {
+  const instances = [['v0', 13], ['v2r2', 21], ['v2r2', 25], ['v1r2', 21], ['v0x', 21]];
+  let faces = 0;
+  for (const [id, n] of instances) {
     for (const cell of locatorCellsCellSurfaceFinal(n, id)) {
       for (const face of ['T', 'L', 'R']) {
         assert.notEqual(cell[face], 1, id + '@' + n + ' 에 mid 면이 생겼다 ' + cell.i + ',' + cell.j);
+        faces += 1;
       }
     }
   }
-  // (14,20) 은 T=2 · L=R=mid — 세 면 조합이 유일한 «단면 점» 이다.
-  const single = locatorCellsCellSurfaceFinal(21, 'v0x')
-    .find((c) => c.i === 14 && c.j === 20);
-  assert.deepEqual({ T: single.T, L: single.L, R: single.R }, { T: 2, L: 1, R: 1 });
+  assert.equal(faces, (30 + 74 + 74 + 80 + 65) * 3, '훑은 면 수가 파인더 총계와 다르다');
+
+  // 정규화된 네 자리의 새 값 — (0,3)L=0 · (14,20)L/R=2 · (19,19)R=2.
+  const v0x = new Map(locatorCellsCellSurfaceFinal(21, 'v0x').map((c) => [c.i + ',' + c.j, c]));
+  assert.equal(v0x.get('0,3').L, 0, '(0,3).L 은 정규화로 0');
+  assert.deepEqual(
+    { T: v0x.get('14,20').T, L: v0x.get('14,20').L, R: v0x.get('14,20').R },
+    { T: 2, L: 2, R: 2 },
+    '(14,20) 은 정규화로 3면 동일 밝음 — 면 위상 큐가 아니라 점화 점이다',
+  );
+  assert.equal(v0x.get('19,19').R, 2, '(19,19).R 은 정규화로 2 — SE R 면 회문 복원');
+
+  // 톤 가드 자체도 확인 — locatorTone 은 0/2 만 낸다.
+  for (const [id, n] of instances) {
+    for (const cell of locatorCellsCellSurfaceFinal(n, id)) {
+      for (const face of ['T', 'L', 'R']) {
+        assert.ok(cell[face] === 0 || cell[face] === 2, id + '@' + n + ' 톤이 0/2 가 아니다');
+      }
+    }
+  }
 });
 
 test('v0X 인코더 왕복 — digit 레벨 decodeCells (2톤·3톤)', () => {
@@ -578,7 +611,7 @@ test('v0X 인코더 왕복 — digit 레벨 decodeCells (2톤·3톤)', () => {
   }
 });
 
-test('v0X 렌더 자체 검증 — verifyRasterY 전 셀 일치 (2톤·3톤, mid 면 포함)', () => {
+test('v0X 렌더 자체 검증 — verifyRasterY 전 셀 일치 (2톤·3톤, 정규화 정본)', () => {
   for (const tones of [2, 3]) {
     const encoded = encodeY(PAYLOAD, {
       cellSurfaceLayout: 'v0x', version: 1, tones, eccLevel: 'M',
@@ -654,15 +687,13 @@ test('n=21 병행 평가 — 세 후보를 다 채점하고 게이트가 고른�
     assert.equal(scored.accepted, true, layout + ' 정답 레이아웃이 수용되지 않았다');
     assert.equal(scored.scored.layoutId, layout, layout + ' 이 아닌 레이아웃이 뽑혔다');
     assert.equal(scored.scored.profile, 'cell-surface-' + layout);
-    // v0X 는 mid 면 4개가 **이 테스트의 이진 표본기**(:625 median 0.08/0.82 — mid 를
-    // bright 로 보냄)에서 어긋나 상한이 191/195 다. 이 상수는 이진 표본기 측정치이지
-    // 팔레트 측정치가 아니다 — 팔레트 경로는 mid 가 dark 쪽으로 가서 margin 이 다르다
-    // (이진 0.1282 vs 팔레트 0.1333, 적대 검증 실측). 정본 mid 4면을 0/2 로 확정해도
-    // 이 단언은 움직이지 않으니 그 결정의 자로 쓰지 말 것. 게이트 0.78 위 여유는 큼.
+    // 의도적 갱신 (정본 정규화 2026-08-16): v0X 상한이 **191/195 → 195/195** 가 됐다.
+    // 예전 상수는 mid 면 4개가 이 테스트의 이진 표본기(:625 median 0.08/0.82 — mid 를
+    // bright 로 보냄)에서 어긋난 값이었다. 정본이 그 4면을 0/2 로 확정하면서 세 후보
+    // 전부 정방향 1.0000 이 됐고 레이아웃 분기가 사라졌다 — **상수 완화가 아니라
+    // 예외 소멸**이다(느슨해진 쪽은 없다). 게이트 0.78 은 그대로.
     assert.equal(
-      scored.diagnostics.layouts[layout].agreement,
-      layout === 'v0x' ? 191 / 195 : 1,
-      layout + ' 정방향 일치율',
+      scored.diagnostics.layouts[layout].agreement, 1, layout + ' 정방향 일치율',
     );
     // **교차 오수용 금지** — 나머지 후보는 같은 프레임에서 게이트를 통과하면 안 된다.
     for (const rival of N21) {

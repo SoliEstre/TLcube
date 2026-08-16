@@ -53,11 +53,15 @@
  * 소문자 `'v0x'` 다 (형제 id v0/v1r2/v2r2 · 프로파일 문자열 `cell-surface-v0x` 와
  * 같은 표기 규약). 운영자 정본의 표시 이름은 `v0X` 이며 UI 라벨·문서는 그쪽을 쓴다 —
  * `nameCellSurfaceFinal` 은 어느 쪽이든 `Y1-CS-V0X` 를 낸다.
- * 이 레이아웃은 **최종 라인업에서 처음으로 mid(tone 1) 면을 갖는다** — 편집기 정본
- * `toneOverrides` 는 `tone !== DEFAULT_TONE(=1)` 인 항목만 실으므로(cell-editor-core.js
- * §serializeUniversalEditor), 도색 셀에서 빠진 면은 «미지» 가 아니라 **mid 확정**이다.
- * 그래서 buildLocatorCells 의 톤 가드는 v0X 에 한해 0/1/2 를 받는다 (v0·v1r2·v2r2 는
- * 여전히 0/2 만 — 로드 시점 자기검증 ④ 가 강제한다).
+ * **정규화 (정본 2026-08-16 운영자 승인)** — 최초 편입본의 v0X 는 편집기 정본이
+ * `tone !== DEFAULT_TONE(=1)` 항목만 직렬화하는 탓에(cell-editor-core.js
+ * §serializeUniversalEditor) 항목이 빠진 면 4개가 **mid(1) 확정**으로 유도됐다
+ * ((0,3).L · (14,20).L/R · (19,19).R). 운영자가 그 4면을 «도색 다수 톤» 으로 정규화해
+ * 정본이 갱신됐고((0,3)L=0 · (14,20)L/R=2 · (19,19)R=2), **이제 최종 라인업 전 정본에
+ * mid 면이 없다**. 그래서 buildLocatorCells 의 톤 가드는 레이아웃 구분 없이 0/2 만
+ * 받는다. 강제 주체는 buildLocatorCells 자신이다 — SURFACES 초기화가 전 정본을 이
+ * 함수로 만들므로 mid 는 모듈 로드에서 먼저 죽는다. 자기검증 ④(다섯 정본 배열 전수)는
+ * 그 뒤의 이중 방벽이다.
  *
  * 런타임 의존성 0 · 순수 ESM (node: API 금지, Math.random/Date 금지).
  */
@@ -276,35 +280,39 @@ const V1R2_CELLS = Object.freeze([
 ]);
 
 /**
- * v0X 정본 65셀 [i, j, T, L, R] — cellsurface-v0x-editor.json (운영자 제공 2026-08-16)
- * 컴팩트 전사, n=21 고정. 정본 painted 는 **toneOverrides 가 닿는 (i,j) 전체**다
+ * v0X 정본 65셀 [i, j, T, L, R] — cellsurface-v0x-editor.json
+ * (운영자 제공 2026-08-16 · **정규화 2026-08-16 승인**) 컴팩트 전사, n=21 고정.
+ * 정본 painted 는 **toneOverrides 가 닿는 (i,j) 전체**다
  * (userNonData 62 + 레거시 고정 위치 위 도색 3: (0,3)·(14,20)·(19,19)).
- * 빠진 면은 **mid(1)** 로 채운다 — 편집기가 DEFAULT_TONE 을 직렬화에서 생략하기 때문
- * (모듈 헤더 참조). 그래서 v0X 에만 mid 면이 4개 있다:
- * (0,3).L · (14,20).L · (14,20).R · (19,19).R.
+ * 정규화본은 `toneOverrides` 195 항목 = 65셀 × 3면을 **전부** 실으므로 DEFAULT_TONE
+ * 보충이 한 번도 일어나지 않는다 — **mid(1) 면 0개**. 유도는
+ * `test/output/lanes/claude-v0xnorm-derive.mjs` (정본 → 이 배열, 손 좌표 없음).
  *
- * 구조 (정본 실측, `_v0x-probe.mjs` 유도):
- *   · NW (0..3)² 16셀 — v1r2 NW 5×5 의 (0..3)² 부분과 셀·톤이 같다((0,3).L 만 mid).
- *     즉 v0·v1r2·v2r2 가 공유하는 **K3 불스아이 중앙과 같은 계보**다.
- *   · SE (15..20)² 36셀 — QR 동심 사각. **3면 동일 톤 35/36** ((19,19).R 만 mid):
+ * 구조 (정본 실측):
+ *   · NW (0..3)² 16셀 — v1r2 NW 5×5 의 (0..3)² 부분과 **셀·톤이 완전히 같다**
+ *     (정규화로 (0,3).L 예외가 사라졌다). 즉 v0·v1r2·v2r2 가 공유하는
+ *     **K3 불스아이 중앙과 같은 계보**다.
+ *   · SE (15..20)² 36셀 — QR 동심 사각. **3면 동일 톤 36/36** ((19,19).R 복원):
  *     암 테두리(15·20) → 명 링(16..19) → 암 2×2 코어(17..18)². 중앙 라인 런
- *     1:1:2:1:1 = K5 회문 → 기존 코어 스캐너 재사용 대상.
+ *     1:1:2:1:1 = K5 회문 → 기존 코어 스캐너 재사용 대상. 세 면 각각 행 6/6 · 열 6/6
+ *     · 대각 · 반대각 전부 회문이다 (정규화 전에는 R 면이 19행·19열·주대각에서 깨졌다).
  *   · NE (0..1)×(18..20) 6셀 · SW (18..20)×(0..1) 6셀 — 소형 마커(서브앵커).
- *   · (14,20) 1셀 — 분류 밖 단독 «단면 점» (T=2 · L=R=mid).
+ *   · (14,20) 1셀 — 분류 밖 단독 점. 정규화로 **3면 동일 (2,2,2)** 이 됐다 —
+ *     면 위상(120°) 판별력은 0 이 됐고 단면 큐가 아니라 «점화 점» 이다.
  */
 const V0X_CELLS = Object.freeze([
-  [0, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 2, 2, 2, 2], [0, 3, 0, 1, 0], [0, 18, 2, 2, 2],
+  [0, 0, 0, 0, 0], [0, 1, 0, 0, 0], [0, 2, 2, 2, 2], [0, 3, 0, 0, 0], [0, 18, 2, 2, 2],
   [0, 19, 0, 2, 0], [0, 20, 0, 0, 0], [1, 0, 0, 0, 0], [1, 1, 0, 0, 0], [1, 2, 2, 2, 2],
   [1, 3, 0, 0, 2], [1, 18, 2, 0, 2], [1, 19, 2, 0, 2], [1, 20, 2, 0, 2], [2, 0, 2, 2, 2],
   [2, 1, 2, 2, 2], [2, 2, 2, 2, 2], [2, 3, 0, 0, 2], [3, 0, 0, 0, 0], [3, 1, 2, 0, 0],
-  [3, 2, 2, 0, 0], [3, 3, 0, 0, 0], [14, 20, 2, 1, 1], [15, 15, 0, 0, 0], [15, 16, 0, 0, 0],
+  [3, 2, 2, 0, 0], [3, 3, 0, 0, 0], [14, 20, 2, 2, 2], [15, 15, 0, 0, 0], [15, 16, 0, 0, 0],
   [15, 17, 0, 0, 0], [15, 18, 0, 0, 0], [15, 19, 0, 0, 0], [15, 20, 0, 0, 0], [16, 15, 0, 0, 0],
   [16, 16, 2, 2, 2], [16, 17, 2, 2, 2], [16, 18, 2, 2, 2], [16, 19, 2, 2, 2], [16, 20, 0, 0, 0],
   [17, 15, 0, 0, 0], [17, 16, 2, 2, 2], [17, 17, 0, 0, 0], [17, 18, 0, 0, 0], [17, 19, 2, 2, 2],
   [17, 20, 0, 0, 0], [18, 0, 2, 2, 2], [18, 1, 2, 2, 0], [18, 15, 0, 0, 0], [18, 16, 2, 2, 2],
   [18, 17, 0, 0, 0], [18, 18, 0, 0, 0], [18, 19, 2, 2, 2], [18, 20, 0, 0, 0], [19, 0, 0, 0, 2],
   [19, 1, 2, 2, 0], [19, 15, 0, 0, 0], [19, 16, 2, 2, 2], [19, 17, 2, 2, 2], [19, 18, 2, 2, 2],
-  [19, 19, 2, 2, 1], [19, 20, 0, 0, 0], [20, 0, 0, 0, 0], [20, 1, 2, 2, 0], [20, 15, 0, 0, 0],
+  [19, 19, 2, 2, 2], [19, 20, 0, 0, 0], [20, 0, 0, 0, 0], [20, 1, 2, 2, 0], [20, 15, 0, 0, 0],
   [20, 16, 0, 0, 0], [20, 17, 0, 0, 0], [20, 18, 0, 0, 0], [20, 19, 0, 0, 0], [20, 20, 0, 0, 0],
 ]);
 
@@ -410,24 +418,21 @@ function v2r2CellsForN(n) {
 }
 
 /**
- * mid(1) 면을 허용하는 레이아웃 — v0X 뿐이다. 나머지는 0/2 만 받는다(정의 불변).
- * 편집기 정본이 DEFAULT_TONE 을 직렬화에서 생략하므로 mid 는 «미지» 가 아니라 확정값이다.
+ * 파인더 면 톤은 **전 정본에서 0/2 뿐**이다 (v0X 정규화 2026-08-16 이후).
+ * 예전에는 v0X 에 한해 mid(1) 를 받았는데, 그건 편집기가 DEFAULT_TONE 을 직렬화에서
+ * 생략해 4면이 mid 로 유도됐기 때문이다 — 정본이 그 4면을 도색 다수 톤으로 확정하면서
+ * 레이아웃별 예외가 사라졌다. 예외를 되살리지 말 것: mid 면은 이진 기대값이 없어
+ * 로케이터 패치·CS 채점 양쪽에서 특수 처리를 강요한다.
  */
-const MID_TONE_LAYOUTS = Object.freeze([CELL_SURFACE_FINAL_V0X]);
-
-function buildLocatorCells(rows, allowMid = false) {
+function buildLocatorCells(rows) {
   const seen = new Set();
   const cells = rows.map(([i, j, T, L, R]) => {
     const key = cellKey(i, j);
     if (seen.has(key)) throw new Error('locator 좌표 중복: ' + key);
     seen.add(key);
     for (const tone of [T, L, R]) {
-      if (tone === 1) {
-        if (allowMid) continue;
-        throw new Error('locator 톤이 0/2 가 아니다: ' + key);
-      }
       if (tone !== 0 && tone !== 2) {
-        throw new Error('locator 톤이 0/1/2 가 아니다: ' + key);
+        throw new Error('locator 톤이 0/2 가 아니다: ' + key);
       }
     }
     return Object.freeze({ i, j, T, L, R });
@@ -475,7 +480,7 @@ function buildFinalSurface(id, n, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
   assertCellSurfaceFinalN(id, n);
   const blockLength = formatBlockLengthForWire(formatWire);
   const rows = canonicalRowsFor(id, n);
-  const locatorCells = buildLocatorCells(rows, MID_TONE_LAYOUTS.includes(id));
+  const locatorCells = buildLocatorCells(rows);
   const painted = locatorCells.map((cell) => ({ i: cell.i, j: cell.j }));
 
   // format 18(v2) | 15(v1 레거시 판독) · reference 12 는 autoplace 유도 —
@@ -762,7 +767,7 @@ export function capacityForCellSurfaceFinal(
     }
   }
 
-  // ①-b v0X 정본 — 65셀 · 블록 분할 16/6/6/36 + 단독 1 · mid 면 정확히 4개.
+  // ①-b v0X 정본 — 65셀 · 블록 분할 16/6/6/36 + 단독 1 · SE 3면 동일 36/36.
   if (V0X_CELLS.length !== 65) {
     throw new Error('v0X 정본이 65셀이 아니다: ' + V0X_CELLS.length);
   }
@@ -772,7 +777,7 @@ export function capacityForCellSurfaceFinal(
       && (box.jMax === undefined || j <= box.jMax)
       && (box.jMin === undefined || j >= box.jMin);
     const counts = { NW: 0, NE: 0, SW: 0, SE: 0, SINGLE: 0 };
-    let midFaces = 0;
+    let seUniform = 0;
     for (const [i, j, T, L, R] of V0X_CELLS) {
       let home = null;
       for (const name of ['NW', 'NE', 'SW', 'SE']) {
@@ -783,7 +788,7 @@ export function capacityForCellSurfaceFinal(
       }
       if (home === null) throw new Error('v0X 셀이 어느 블록에도 없다: ' + i + ',' + j);
       counts[home] += 1;
-      for (const tone of [T, L, R]) if (tone === 1) midFaces += 1;
+      if (home === 'SE' && T === L && L === R) seUniform += 1;
     }
     if (counts.NW !== 16 || counts.NE !== 6 || counts.SW !== 6
       || counts.SE !== 36 || counts.SINGLE !== 1) {
@@ -792,10 +797,13 @@ export function capacityForCellSurfaceFinal(
         + [counts.NW, counts.NE, counts.SW, counts.SE, counts.SINGLE].join('/'),
       );
     }
-    if (midFaces !== 4) throw new Error('v0X mid 면이 4개가 아니다: ' + midFaces);
+    // 정규화 이후 SE 는 **36/36 전부 3면 동일**이다 — 사각 링 동반자(120° 3코어)
+    // 서명의 근거이므로 여기서 못 박는다 (정규화 전에는 (19,19).R 이 mid 라 35/36).
+    if (seUniform !== 36) throw new Error('v0X SE 3면 동일이 36/36 이 아니다: ' + seUniform);
   }
   {
-    // v0X NW (0..3)² 는 v1r2 NW 의 같은 범위와 **셀·톤이 같다** ((0,3).L mid 만 예외).
+    // v0X NW (0..3)² 는 v1r2 NW 의 같은 범위와 **셀·톤이 완전히 같다** (예외 없음 —
+    // 정규화로 (0,3).L 이 0 이 되면서 마지막 예외가 사라졌다).
     // 셋(넷)의 중앙이 같은 K3 서명을 공유한다는 로케이터 전제를 여기서 못 박는다.
     const nw = new Map(V1R2_CELLS
       .filter(([i, j]) => i <= 3 && j <= 3)
@@ -807,7 +815,6 @@ export function capacityForCellSurfaceFinal(
       if (!want) throw new Error('v0X NW 셀 (' + i + ',' + j + ') 이 v1r2 NW 에 없다');
       const faces = [T, L, R];
       for (let index = 0; index < 3; index += 1) {
-        if (faces[index] === 1) continue; // mid 는 정본이 v1r2 와 갈라지는 유일한 자리.
         if (faces[index] !== want[index]) {
           throw new Error('v0X NW 셀 (' + i + ',' + j + ') 톤이 v1r2 NW 와 다르다');
         }
@@ -841,11 +848,14 @@ export function capacityForCellSurfaceFinal(
     }
   }
 
-  // ④ mid 면은 v0X 전용 — v0·v1r2·v2r2 정의가 조용히 mid 를 얻으면 여기서 throw.
-  // (v2r2 중앙은 V1R2_CELLS 필터 유도라 V1R2_CELLS 행이 커버하지만, 명시로도 훑는다.)
+  // ④ **전 정본 mid 금지** — 어느 레이아웃 정의든 조용히 mid 를 얻으면 여기서 throw.
+  // (v0X 정규화 2026-08-16 로 레이아웃별 예외가 사라졌다. buildLocatorCells 도 같은
+  // 규칙이지만 그쪽은 인스턴스화된 rows 만 보므로, 여기서 원시 배열도 명시로 훑는다.
+  // v2r2 중앙은 V1R2_CELLS 필터 유도라 중복이지만 명시로 남긴다.)
   for (const [id, rows] of [
     [CELL_SURFACE_FINAL_V0, V0_CELLS],
     [CELL_SURFACE_FINAL_V1R2, V1R2_CELLS],
+    [CELL_SURFACE_FINAL_V0X, V0X_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_FAR_BASE_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_CENTER_CELLS],
   ]) {

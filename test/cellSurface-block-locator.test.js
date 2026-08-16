@@ -377,6 +377,68 @@ test('v0X 패밀리를 끄면 v0x 포즈가 사라진다 (패밀리 격리 대�
     + JSON.stringify(off.diagnostics.poseCount));
 });
 
+// 신규 (정본 정규화 2026-08-16): **구 인쇄물 호환**.
+// 정규화 전에 인쇄된 v0X 는 4면이 mid(1) 로 칠해져 있고 현재 정의는 그 자리를 0/2 로
+// 기대한다. 호환은 코드 분기가 아니라 **수용 게이트(agreement ≥ 0.78)에 위임**돼 있다.
+// 수치 (실측, test/output/lanes/claude-v0xnorm-oldprint.mjs — 기본 프리셋 slate 로 그린
+// 구 프레임을 현재 CS 채점기에 통과시킨 값):
+//   · 실측 agreement **192/195 = 0.9846** — mid 레벨이 dark/bright 앵커 사이 0.257 자리라
+//     classifyTone(midFraction 0.28 → 경계 0.36)이 dark 로 보낸다. 기대 0 인 (0,3).L 은
+//     그래서 오히려 **맞고**, 기대 2 인 나머지 3면만 어긋난다.
+//   · mid 를 mid 로 읽는 최악의 표본기를 가정해도 4/195 = 0.9795 — 여전히 게이트 위
+//     여유 0.1995. 「최악에서도 통과」가 위임의 근거다.
+// 이 테스트가 그 위임을 실물 프레임으로 확인한다. 위임이 깨지면(게이트 상향·채점 변경)
+// 여기가 빨개진다.
+//
+// 구 프레임은 encoded.cellDigits 의 locator tones 를 정규화 **전** 값으로 되돌려 만든다
+// (sceneY 가 entry.tones 를 우선 색인한다 — 레이아웃 정의는 건드리지 않는다).
+const PRE_NORMALIZE_V0X_MID = Object.freeze([
+  ['0,3', 'L'], ['14,20', 'L'], ['14,20', 'R'], ['19,19', 'R'],
+]);
+
+test('구 인쇄물 호환 — 정규화 전 v0X 프레임(mid 4면)이 현재 디코더로 복호된다', {
+  timeout: 600_000,
+}, () => {
+  const encoded = encodeY(PAYLOAD, {
+    cellSurfaceLayout: 'v0x', version: 1, tones: 2, eccLevel: 'M',
+  });
+  let reverted = 0;
+  for (const [key, face] of PRE_NORMALIZE_V0X_MID) {
+    const entry = encoded.cellDigits.get(key);
+    assert.ok(entry && entry.role === 'locator', '구 프레임 대상 셀이 파인더가 아니다: ' + key);
+    assert.notEqual(entry.tones[face], 1, key + '.' + face + ' 가 이미 mid 다 — 정본이 되돌아갔나?');
+    entry.tones[face] = 1; // 정규화 전 값 = DEFAULT_TONE(mid)
+    reverted += 1;
+  }
+  assert.equal(reverted, 4, '되돌린 면이 4개가 아니다');
+
+  const legacyFrame = embed960(rasterize(
+    buildSceneY(encoded, { palette: PALETTE, margin: 4 }),
+    { pixelsPerUnit: 15, supersample: 2 },
+  ));
+  // 구 프레임과 현행 프레임은 실제로 다른 그림이어야 한다 (자 검증 — 같으면 이 테스트가
+  // 아무것도 재지 않는다).
+  let differing = 0;
+  for (let index = 0; index < legacyFrame.pixels.length; index += 4) {
+    if (legacyFrame.pixels[index] !== V0X_FRAME.pixels[index]) differing += 1;
+  }
+  assert.ok(differing > 0, '구/신 프레임이 픽셀 단위로 같다 — mid 되돌리기가 렌더에 안 먹었다');
+
+  for (const [label, distortion] of [
+    ['클린', {}],
+    ['감마 0.7', { gamma: 0.7 }],
+    ['회전 120°', { rotation: 120 }],
+  ]) {
+    const frame = Object.keys(distortion).length
+      ? distortImage(legacyFrame, { ...distortion, fill: FILL }) : legacyFrame;
+    const result = decodeLab(frame);
+    assert.equal(result.ok, true, '구 인쇄물 ' + label + ': ' + (result.reason || ''));
+    assert.equal(result.text, PAYLOAD, '구 인쇄물 ' + label + ' 페이로드');
+    assert.equal(result.hypothesis.cellSurfaceLayout, 'v0x',
+      '구 인쇄물 ' + label + ' 이 다른 레이아웃으로 풀렸다');
+  }
+});
+
 test('⚠ 사각 링 게이트 효과 대조군 — v1r2 프레임에서는 잠들었다 (켜도 꺼도 v0x 0)', {
   timeout: 300_000,
 }, () => {
