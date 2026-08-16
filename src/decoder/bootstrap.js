@@ -94,6 +94,7 @@ import { FINDER_CELL_MASK_PATTERNS } from '../finder-patterns.js';
 import { classifyFamily, scoreCubeTiling } from './family.js';
 import {
   UNVERIFIED_CUBE_DETECTION,
+  calibrateCubeReferences,
   detectCentralCubeFinders,
   readCubeDigit,
   sampleCubeCell,
@@ -2850,6 +2851,231 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     );
   }
   return ok({ candidates: bodyValid, diagnostics });
+}
+
+/*
+ * ── 가이드-사전(prior) 포즈 주입 (운영자 요청 2026-08-16) ─────────────────────────
+ *
+ * 「안정 유지 트리거」(`src/scan-steady.js`)가 걸리면, 코드가 조준 가이드에 어느 정도
+ * 맞았다고 전제할 수 있다. 그러면 상 안에서의 위치·크기·방향은 가이드 기하가 이미
+ * 말해 주므로(`src/scan-guide-prior.js`), **탐색(finder / cube-detect / QR triple)을
+ * 건너뛰고** 그 포즈를 곧장 후보로 넣는다.
+ *
+ * ⚠ 이 경로는 **후보 추가일 뿐 검증 면제가 아니다.** 여기서 만든 가설도 그대로
+ *   `validateGridHypotheses()` 로 들어가 **포맷 CRC → 본문 RS → payload 검증**을
+ *   전부 통과해야 한다 (hex/tri 는 레퍼런스가 거절 조건이 아니라 점수 항이다 —
+ *   `referenceReportFor` 가 non-hex 에 unsupported 를 돌려준다). Type Y 는 그 전에
+ *   `calibrateCubeReferences()` 의 하드체크
+ *   (referenceAgreement 0.78 · toneSpan)를 통과해야 톤·보정을 얻는다 — 이 값들은
+ *   **한 자리도 완화하지 않았다**. 완화 여부는 `test/scan-guide-prior.test.js` 의
+ *   오정렬 거부 실측이 지킨다.
+ */
+
+/** 사전 포즈 후보 상한 — 프레임 예산 가드(호출자가 이미 자르지만 여기서도 막는다). */
+export const PRIOR_POSE_HARD_LIMIT = 768;
+
+/**
+ * 사전 포즈 평가 배치 크기.
+ *
+ * 포즈 목록은 「가이드에 정확히 맞았다」 에 가까운 순서(오프셋 0 → 배율 1 → 레이아웃·
+ * 회전)로 정렬돼 온다. 그래서 앞쪽 배치에서 body-valid 후보가 나오면 뒤를 볼 이유가 없다
+ * — **성공하는 흔한 경우의 비용을 전량 평가의 1/8 안팎으로 줄인다.**
+ *
+ * ⚠ 수치 정정 (2026-08-16): 이전 주석은 「전량 877ms → 1/15」 였는데, 그 둘은 **서로 다른
+ *   부하 상태에서 잰 두 수를 나눈 것**이었다. 같은 프로세스에서 워밍업 뒤 교대 측정하면
+ *   전량 중앙값 \~226\~322ms vs 조기 종료 \~29\~36ms → **7\~9×** 다(실행마다 흔들린다).
+ *   절대 ms 로 비율을 말하지 말 것 — 배수는 교대 측정으로만.
+ *   (`tools/probes/probe-guide-prior.mjs` earlyExit. 그 프로브는 «정말 720개를 봤는가» 를
+ *    `posesEvaluated` 로 자가 검증한다 — `priorBatchSize` 를 최상위 옵션으로 주면 조용히
+ *    무시돼 같은 경로를 두 번 재게 되고, 그때 나온 배수는 1.03 이었다.)
+ *
+ * 48 = 8 레이아웃 × 6 회전 — 즉 첫 배치는 「배율·중심 오차 0」 가정 전체다.
+ *
+ * ⚠ 조기 종료의 대가: 뒤 배치까지 봤다면 cube 방향 모호(`CUBE_DIRECTION_AMBIGUOUS`)로
+ *   닫혔을 조합을 앞 배치에서 먼저 채택할 수 있다. 다만 서로 다른 text 로 갈리려면
+ *   두 후보가 **각각** 포맷 CRC + 본문 RS + payload 검증을 통과해야 하고 (Y 는 앞서
+ *   레퍼런스 하드체크도), 같은 코드의
+ *   지터 변형들은 같은 text 라 같은 키로 묶인다. 연속 스캔 경로는 이 배치를 쓰지 않는다.
+ */
+export const PRIOR_POSE_BATCH = 48;
+
+function priorHypothesisId(pose, suffix) {
+  return 'prior-' + pose.id + (suffix ? '-' + suffix : '');
+}
+
+/**
+ * 포즈 하나 → 디코더 기하 가설. cube 는 톤 보정이 필요하므로 0..N 개가 나온다.
+ * (hex/tri 는 언제나 0 또는 1 개.)
+ */
+function priorHypothesesForPose(luma, pose, options) {
+  if (!pose || !(pose.H instanceof Float64Array) || pose.H.length !== 9) return [];
+  const rotationDegrees = Number(pose.rotationDegrees) || 0;
+  /*
+   * orientation 라벨 — 탐색 경로와 **같은 뜻**을 유지한다.
+   *
+   * ⚠ 정정 (2026-08-16 적대 검증): 이전 식 `floor(rot/120) % 3` 은 rot 0 과 rot 60 을
+   *   똑같이 0 으로 찍었다. 그런데 60° 는 3면 마름모 타일링의 대칭이 아니다 — 두 포즈는
+   *   서로 다른 기하다. 오늘 무해했던 것은 이 값이 정렬과 `CUBE_DIRECTION_AMBIGUOUS` 의
+   *   보고용 orientations 목록에만 쓰이고(모호 판정 키는 tones·formatIndex·ecc·text),
+   *   표본 추출은 H 가 전담하기 때문이지 라벨이 맞아서가 아니었다. 라벨이 틀리면
+   *   진단이 사람을 속인다.
+   *
+   * 규약: **0\~2 = 탐색 경로와 동일한 120° 클래스**(rot/120). 탐색 경로가 절대 만들지
+   * 않는 60° 오프셋 계열은 **3\~5** 로 따로 둔다 — 정수라 모호 회계에 그대로 참여하고
+   * (게이트 약화 0), 0\~2 의 뜻을 오염시키지 않는다.
+   */
+  const sixth = Math.round(((rotationDegrees % 360) + 360) % 360 / 60) % 6;
+  const orientation = sixth % 2 === 0 ? sixth / 2 : 3 + (sixth - 1) / 2;
+  const shared = {
+    rotationDegrees,
+    orientation,
+    centerQr: false,
+    H: pose.H,
+    canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+    source: 'guide-prior',
+    priorPoseId: pose.id,
+    priorLayoutId: pose.layoutId,
+    priorScale: pose.scale,
+    priorCellPx: pose.cellPx,
+  };
+
+  if (pose.family === 'hex' || pose.family === 'tri') {
+    const k = Number(pose.k);
+    if (!uniqueDimensions(pose.family).includes(k)) return [];
+    return [{
+      ...shared,
+      family: pose.family,
+      k,
+      hypothesisId: priorHypothesisId(pose),
+    }];
+  }
+
+  if (pose.family !== 'cube') return [];
+  const n = Number(pose.n);
+  if (!uniqueDimensions('cube').includes(n)) return [];
+  const base = {
+    ...shared,
+    family: 'cube',
+    finderKind: 'guide-prior',
+    gridKind: 'three-face-nxn',
+    n,
+    k: n,
+    cellSurface: false,
+    window: false,
+    hypothesisId: priorHypothesisId(pose),
+  };
+  const references = calibrateCubeReferences(luma, base, options);
+  if (!references.ok) return [];
+  // hardChecks.all = referenceAgreement 0.78 + toneSpan. 완화 없이 그대로 쓴다.
+  return references.accepted.map((calibrationEntry) => ({
+    ...base,
+    tones: calibrationEntry.tones,
+    referenceCalibration: calibrationEntry,
+    referenceSamples: references.samples,
+    referenceAnchors: references.anchors,
+    referenceAgreement: calibrationEntry.agreementRate,
+    hypothesisId: priorHypothesisId(pose, 't' + calibrationEntry.tones),
+  }));
+}
+
+/**
+ * 가이드-사전 포즈만으로 복호를 시도한다. 탐색 단계는 아예 돌지 않는다.
+ *
+ * 실패해도 **어떤 포즈가 포맷 CRC 까지 갔는지**(`admittedPoses`)를 돌려준다 —
+ * 호출자는 그 포즈 주변에만 지터를 펼쳐 2단계를 던진다(전수 곱 폭발 방지).
+ *
+ * @param {object} luma toRelativeLuminance 결과
+ * @param {Array<object>} poses scan-guide-prior.js 의 포즈 목록
+ * @param {object} [options] 나머지는 bootstrap 공통 옵션과 같다
+ */
+export function enumeratePriorGridHypotheses(luma, poses, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, { stage: 'prior', message: error.message });
+  }
+  if (!Array.isArray(poses) || poses.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'prior',
+      pipelineCode: 'NO_VALID_HYPOTHESIS',
+      cause: 'no-prior-poses',
+    });
+  }
+
+  const limited = poses.slice(0, PRIOR_POSE_HARD_LIMIT);
+  const batchSize = Number.isInteger(options.priorBatchSize) && options.priorBatchSize > 0
+    ? options.priorBatchSize
+    : PRIOR_POSE_BATCH;
+
+  const priorDiagnostics = {
+    poseCount: limited.length,
+    truncated: poses.length > limited.length,
+    batchSize,
+    posesEvaluated: 0,
+    batchesEvaluated: 0,
+    hypothesisCount: 0,
+    admittedPoses: [],
+  };
+
+  const evaluatedHypotheses = [];
+  const admitted = new Set();
+  let lastFailure = null;
+
+  for (let start = 0; start < limited.length; start += batchSize) {
+    const batch = limited.slice(start, start + batchSize);
+    // 배치 전체를 한 번만 감싼다 — 포즈마다 감싸면 stage 훅이 720쌍 불려 계측 자체가
+    // 노이즈가 된다(값은 같고 호출만 늘어난다).
+    const hypotheses = withStage(options, 'proposal', () => {
+      const built = [];
+      for (const pose of batch) built.push(...priorHypothesesForPose(luma, pose, options));
+      return built;
+    });
+    priorDiagnostics.posesEvaluated += batch.length;
+    priorDiagnostics.batchesEvaluated += 1;
+    priorDiagnostics.hypothesisCount += hypotheses.length;
+    evaluatedHypotheses.push(...hypotheses);
+    if (hypotheses.length === 0) continue;
+
+    const validated = validateGridHypotheses(luma, hypotheses, options);
+    const validationDiagnostics = validated.ok
+      ? validated.diagnostics
+      : (validated.detail && validated.detail.diagnostics);
+    const formatFailed = new Set(
+      ((validationDiagnostics && validationDiagnostics.formatFailures) || [])
+        .map((entry) => entry.hypothesisId),
+    );
+    for (const hypothesis of hypotheses) {
+      if (!formatFailed.has(hypothesis.hypothesisId)) admitted.add(hypothesis.priorPoseId);
+    }
+    priorDiagnostics.admittedPoses = Array.from(admitted);
+
+    if (validated.ok) {
+      return ok({
+        hypotheses: evaluatedHypotheses,
+        candidates: validated.candidates,
+        diagnostics: {
+          geometry: { source: 'guide-prior', geometryHypothesisCount: hypotheses.length },
+          validation: validated.diagnostics,
+          prior: priorDiagnostics,
+        },
+      });
+    }
+    lastFailure = validated;
+  }
+
+  if (lastFailure === null) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'prior',
+      pipelineCode: 'NO_VALID_HYPOTHESIS',
+      cause: 'prior-poses-built-no-hypothesis',
+      prior: priorDiagnostics,
+    });
+  }
+  return fail(lastFailure.reason, {
+    ...(lastFailure.detail || {}),
+    stage: 'prior-validation',
+    prior: priorDiagnostics,
+  });
 }
 
 

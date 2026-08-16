@@ -7,6 +7,7 @@
 
 import {
   enumerateGridHypotheses,
+  enumeratePriorGridHypotheses,
   selectGridHypothesis,
 } from './bootstrap.js';
 import {
@@ -79,6 +80,9 @@ function failureDetail(stage, result, diagnostics) {
     pipelineCode: cause && cause.pipelineCode,
     cause,
     diagnostics: lifted,
+    // 가이드-사전 경로는 «어느 포즈가 포맷까지 갔나» 를 2단계 지터의 씨앗으로 쓴다.
+    // detail.cause 안에 묻어 두면 호출자가 내부 구조를 알아야 하므로 위로 올린다.
+    prior: cause && cause.prior,
     cubeFailure: cause && cause.cubeFailure,
     geometryDiagnostics: cause && cause.geometryDiagnostics,
     geometryStage: cause && cause.geometryStage,
@@ -116,16 +120,25 @@ export function decodeFrontend(raster, options = {}) {
   if (typeof options.onStage === 'function' && typeof bootstrapOptions.onStage !== 'function') {
     bootstrapOptions.onStage = options.onStage;
   }
+  /*
+   * 가이드-사전 경로 (운영자 요청 2026-08-16). `priorPoses` 가 있으면 **탐색 단계를
+   * 돌지 않고** 그 포즈만 후보로 넣는다. 수용 게이트는 하나도 건너뛰지 않는다 —
+   * bootstrap 의 `enumeratePriorGridHypotheses` 가 같은 `validateGridHypotheses` 로
+   * 들어간다. 기존 연속 스캔 경로는 이 옵션이 없을 때 **바이트 단위로 종전과 같다.**
+   */
+  const priorPoses = Array.isArray(options.priorPoses) ? options.priorPoses : null;
   let enumerated;
   try {
-    enumerated = enumerateGridHypotheses(
-      luma,
-      options.familyEvidence,
-      bootstrapOptions,
-    );
+    enumerated = priorPoses
+      ? enumeratePriorGridHypotheses(luma, priorPoses, bootstrapOptions)
+      : enumerateGridHypotheses(
+        luma,
+        options.familyEvidence,
+        bootstrapOptions,
+      );
   } catch (error) {
     return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
-      stage: 'bootstrap',
+      stage: priorPoses ? 'prior' : 'bootstrap',
       pipelineCode: 'NO_VALID_HYPOTHESIS',
       message: error instanceof Error ? error.message : String(error),
     });
@@ -133,7 +146,7 @@ export function decodeFrontend(raster, options = {}) {
   if (!enumerated.ok) {
     return fail(
       enumerated.reason || FRONTEND_FAILURE.NO_GRID_HYPOTHESIS,
-      failureDetail('bootstrap', enumerated),
+      failureDetail(priorPoses ? 'prior' : 'bootstrap', enumerated),
     );
   }
 

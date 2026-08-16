@@ -1144,5 +1144,10 @@ test('r5 ③ 힌트 — 패널이 내부 오버플로일 때만 하단 페이드
   // ResizeObserver 미지원 환경에서도 죽지 않는다 (구형 WebView).
   assert.match(SCANNER_JS, /if \(typeof ResizeObserver === 'function'\)/);
   // 마크업이 없으면 조용히 지나가지 않고 즉시 터진다 — 나머지 요소와 같은 계약.
-  assert.match(SCANNER_JS, /!zoomErrorBox \|\| !dotLayer \|\| !scannerPanels\)/);
+  // (2026-08-16: 안정 게이지가 뒤에 붙어 조건이 한 줄 늘었다. 꼬리를 통째로 못박는 대신
+  //  «scannerPanels 가 필수 목록에 있다» + «조건이 throw 로 닫힌다» 를 따로 단언한다 —
+  //  요소가 늘 때마다 깨지되 검사가 약해지지는 않는 형태.)
+  assert.match(SCANNER_JS, /!zoomErrorBox \|\| !dotLayer \|\| !scannerPanels\b/);
+  assert.match(SCANNER_JS,
+    /!steadyMeter \|\| !steadyMeterFill\) \{\n  throw new Error\('TLcube scanner markup is incomplete\.'\);/);
 });

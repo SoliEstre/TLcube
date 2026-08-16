@@ -47,6 +47,16 @@ import {
   zoomTelemetry,
 } from '/src/scanner-zoom.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
+import {
+  createSteadyTracker,
+  motionAttachPlan,
+  requestMotionPermission,
+} from '/src/scan-steady.js';
+import {
+  guidePriorPoses,
+  priorPoseBudget,
+  refineSeedsFrom,
+} from '/src/scan-guide-prior.js';
 
 const FRAME_INTERVAL_MS = 320;
 
@@ -129,13 +139,16 @@ const zoomValue = document.getElementById('zoom-value');
 const zoomErrorBox = document.getElementById('zoom-error');
 const dotLayer = document.getElementById('scan-dot-layer');
 const scannerPanels = document.getElementById('scanner-panels');
+const steadyMeter = document.getElementById('steady-meter');
+const steadyMeterFill = document.getElementById('steady-meter-fill');
 
 if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTitle ||
     !cameraGateMessage || !startCameraButton || !chooseImageButton || !gateChooseImageButton ||
     !imageInput || !statusBox || !scanToast || !resultPanel || !resultTitle || !resultContent ||
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
     !closeResultSecondaryButton || !zoomControls || !zoomSlider || !zoomInButton ||
-    !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer || !scannerPanels) {
+    !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer || !scannerPanels ||
+    !steadyMeter || !steadyMeterFill) {
   throw new Error('TLcube scanner markup is incomplete.');
 }
 
@@ -177,6 +190,54 @@ const debugOverlay = createDebugOverlay({
   toggleButton: document.getElementById('lab-debug-toggle'),
   doc: document,
 });
+
+/*
+ * ── 안정 유지 트리거 + 가이드-사전 스캔 (운영자 요청 2026-08-16) ─────────────────
+ *
+ * 손떨림 범위 안에서 같은 뷰가 1.5초 유지되면 「코드를 가이드에 어느 정도 맞췄다」 로
+ * 보고, 가이드 기하에서 유도한 기대 포즈만 디코더에 넣어 한 프레임을 다시 본다.
+ *
+ * 배선 원칙:
+ *   · **기존 연속 스캔 경로는 무회귀.** 사전 시도는 트리거가 걸린 그 한 프레임 슬롯만
+ *     차지하고(중복 실행 아님), 나머지 프레임은 종전 `decodeFrame()` 이 그대로 돈다.
+ *     한 슬롯을 «두 번» 돌리면 발동 프레임 비용이 두 배가 되므로 대체를 택했다 —
+ *     발동은 최대 1.5초에 한 번이라 연속 경로가 잃는 것은 4\~5 프레임 중 한 장이다.
+ *   · 게이트 완화 0. 사전 포즈는 후보 추가일 뿐이고 수용은 디코더가 그대로 결정한다.
+ *   · 텔레메트리 0바이트 불변식 불변 — 안정도 계산은 전부 기기 안 로컬이고, 새 전송
+ *     경로를 만들지 않는다(lab 오버레이 표시는 기존 로컬 값 재사용과 같은 성질).
+ */
+const steady = createSteadyTracker();
+
+/** 사전 스캔이 진행 중인가 (프레임 루프가 겹쳐 던지지 않게 한다). */
+let priorInFlight = false;
+/** 마지막 사전 시도 요약 — lab 오버레이 표시용. */
+let lastPriorSummary = null;
+/** 상태 문구를 사전 스캔이 바꿨나 (실패 시 되돌리기 위해). */
+let statusOwnedBySteady = false;
+/** DeviceMotion 리스너를 이미 붙였나 (중복 부착 금지 — 카운터가 부풀고 계산이 겹친다). */
+let motionListenerAttached = false;
+/** 권한 요청이 지금 진행 중인가 (버튼 연타 방지 — `await` 뒤에 플래그를 세우면 늦다). */
+let motionRequestInFlight = false;
+/** 다음 제스처에 붙이기로 예약해 뒀나 (iOS 자동 시작 경로). */
+let motionGestureArmed = false;
+/**
+ * 부착 상태 문자열 — **lab 오버레이에 그대로 찍는다.**
+ * 「센서가 켜져 있다」 를 문서가 단정하고 코드가 안 켜던 것이 이번 정정의 출발점이다.
+ * 화면이 실제 상태를 말하지 않으면 같은 착각이 다시 자란다.
+ */
+let motionAttachState = 'idle';
+
+/**
+ * 발동 예산 — 문서·오버레이가 같은 수를 말하게 한다.
+ *
+ * ⚠ **지연 생성**이다. 모듈 로드 시 만들면 오버레이 숫자 하나 때문에 정식 `/` 에서도
+ *   720 포즈를 전량 만든다(lab 전용 표시인데). 실제로 필요해질 때 한 번만 만든다.
+ */
+let priorBudgetCache = null;
+function priorBudget() {
+  if (!priorBudgetCache) priorBudgetCache = priorPoseBudget({ frameSide: FRAME_MAX_SIDE });
+  return priorBudgetCache;
+}
 
 function resetFrameSeq() {
   frameSeq = 0;
@@ -630,7 +691,7 @@ async function refreshCameraChoices() {
  * @param {ImageData} imageData 카메라 또는 업로드 이미지에서 얻은 프레임
  * @returns {Promise<{ ok: boolean, payload?: string, reason?: string }>}
  */
-async function decodeFrame(imageData) {
+async function decodeFrame(imageData, settings = {}) {
   if (!imageData || !imageData.data || !imageData.width || !imageData.height) {
     const failed = { ok: false, reason: 'frame-invalid' };
     reportLabFrame(imageData, failed, fillFrameMs(0), 'proposal');
@@ -650,19 +711,46 @@ async function decodeFrame(imageData) {
       // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너는 종전
       // 검출 계약과 프레임 비용을 그대로 유지한다.
       bootstrap: { family: { cube: { enableLocatorY: isLabPath(), enableCellSurfaceY: isLabPath() } } },
+      // 가이드-사전 포즈. 없으면 이 객체 키 자체가 안 생겨 종전 경로와 동일하다.
+      ...(Array.isArray(settings.priorPoses) ? { priorPoses: settings.priorPoses } : {}),
     });
     const stage = classifyStage(result);
     const ms = fillFrameMs(nowMs() - t0, clock.snapshot());
-    reportLabFrame(imageData, result, ms, stage);
-    updateDebugOverlay(imageData, result, stage, ms);
+    /*
+     * 사전 스캔은 카메라 프레임 **한 장**에 decodeFrame 을 두 번 부른다(coarse → refine).
+     * 그대로 보고하면 lab 프레임 행이 2건 생기고 frameSeq 가 +2 라 프레임 시간·레이트
+     * 통계가 트리거 프레임을 겹쳐 센다. 그래서 사전 경로는 보고를 호출자에게 미루고
+     * (`deferReport`) 마지막에 **한 프레임 = 한 행**으로 합쳐 낸다.
+     */
+    const report = settings.deferReport ? { result, ms, stage } : null;
+    if (!settings.deferReport) {
+      reportLabFrame(imageData, result, ms, stage);
+      updateDebugOverlay(imageData, result, stage, ms);
+    }
 
     if (result && result.ok === true && typeof result.text === 'string') {
-      return { ok: true, payload: result.text, family: result.family, hypothesis: result.hypothesis };
+      return {
+        ok: true,
+        payload: result.text,
+        family: result.family,
+        hypothesis: result.hypothesis,
+        ms: ms && ms.total,
+        report,
+      };
     }
     // 잘림 안내용 clipSide. extractGeometry 는 순수 함수라 안정판(`/`)에서도 아무것도
     // 전송하지 않는다 — 반환 객체는 이 셸의 handleDecodeResult 만 소비한다.
     const clipSide = extractGeometry(result, imageData.width, imageData.height).clipSide;
-    return { ok: false, reason: (result && result.reason) || 'decode-failed', clipSide };
+    return {
+      ok: false,
+      reason: (result && result.reason) || 'decode-failed',
+      clipSide,
+      // 2단계 지터의 씨앗 — 「포맷 CRC 까지 간」 사전 포즈 id 들.
+      admittedPoses: (result && result.detail && result.detail.prior
+        && result.detail.prior.admittedPoses) || [],
+      ms: ms && ms.total,
+      report,
+    };
   } catch (error) {
     // 디코더가 던지면 스캐너 루프가 멈추면 안 된다 — 다음 프레임으로 넘어간다.
     const failed = {
@@ -674,6 +762,103 @@ async function decodeFrame(imageData) {
     updateDebugOverlay(imageData, failed, 'proposal', ms);
     return failed;
   }
+}
+
+/**
+ * 가이드-사전 스캔 한 번 (2단계).
+ *
+ *   1단계 coarse — 8 레이아웃 × 6 회전 × 3 배율 × 5 오프셋(십자). 「가이드에 정확히
+ *                  맞았다」 에 가까운 순서로 정렬돼 있고, 디코더가 48개 배치마다
+ *                  끊어 평가하다 body-valid 가 나오면 즉시 멈춘다.
+ *   2단계 refine — 1단계에서 **포맷 CRC 까지 간** 포즈(최대 4개) 주변으로 배율만
+ *                  ±3.6% 정제. 오프셋 축은 1단계가 이미 덮는다(실측: 2단계 오프셋의
+ *                  추가 회수 0, 비용 3\~6×).
+ *
+ * 두 단계 모두 수용은 디코더의 기존 게이트가 결정한다 — 완화 없음.
+ */
+/*
+ * 포즈 목록은 프레임 한 변에만 의존하는 순수 함수 결과다 — 발동마다 720개를 다시
+ * 만들 이유가 없다.
+ *
+ * ⚠ 캐시는 **1칸**이고 프레임 한 변은 평상 960 · 실패 승격 1440 **두 값이 번갈아** 온다
+ *   — 즉 1칸 캐시의 최악 케이스다(교대하면 매번 빗나간다). 그래도 두는 이유는 실비용이
+ *   무시할 수준이기 때문이지(720 포즈 생성 ≈ 1ms, 발동은 1.5초에 한 번) 「두 값뿐이라
+ *   1칸이면 충분」 해서가 아니다 — 근거를 뒤집어 적어 두면 나중에 칸 수를 늘릴 판단이
+ *   막힌다. (2026-08-16 정정)
+ */
+let cachedPriorPoses = null;
+let cachedPriorFrameSide = 0;
+
+function coarsePosesFor(frameSide) {
+  if (cachedPriorPoses && cachedPriorFrameSide === frameSide) return cachedPriorPoses;
+  cachedPriorPoses = guidePriorPoses({ frameSide });
+  cachedPriorFrameSide = frameSide;
+  return cachedPriorPoses;
+}
+
+/**
+ * 미뤄 둔 사전 프레임 보고를 **한 번만** 낸다 (F7 — 프레임 한 장 = lab 행 한 개).
+ * ms 는 두 패스의 합으로 낸다 — 그것이 이 카메라 프레임의 실제 비용이다.
+ */
+function flushPriorReport(imageData, report, extraMs) {
+  if (!report) return;
+  const total = (report.ms && report.ms.total ? report.ms.total : 0) + (extraMs || 0);
+  const ms = extraMs ? fillFrameMs(total) : report.ms;
+  reportLabFrame(imageData, report.result, ms, report.stage);
+  updateDebugOverlay(imageData, report.result, report.stage, ms);
+}
+
+async function attemptGuidePriorScan(imageData) {
+  const frameSide = Math.min(imageData.width, imageData.height);
+  const coarse = coarsePosesFor(frameSide);
+  if (coarse.length === 0) return { ok: false, reason: 'prior-no-poses' };
+
+  const first = await decodeFrame(imageData, { priorPoses: coarse, deferReport: true });
+  if (first.ok) {
+    lastPriorSummary = { stage: 'coarse', poses: coarse.length, ok: true, ms: first.ms };
+    flushPriorReport(imageData, first.report, 0);
+    return first;
+  }
+
+  const refine = refineSeedsFrom(coarse, first.admittedPoses || [], { frameSide });
+  if (refine.length === 0) {
+    lastPriorSummary = {
+      stage: 'coarse',
+      poses: coarse.length,
+      ok: false,
+      admitted: 0,
+      ms: first.ms,
+    };
+    flushPriorReport(imageData, first.report, 0);
+    return first;
+  }
+  const second = await decodeFrame(imageData, { priorPoses: refine, deferReport: true });
+  lastPriorSummary = {
+    stage: 'refine',
+    poses: coarse.length + refine.length,
+    ok: Boolean(second.ok),
+    admitted: (first.admittedPoses || []).length,
+    ms: (first.ms || 0) + (second.ms || 0),
+  };
+  // 요약을 먼저 세운 뒤 보고한다 — 순서가 뒤바뀌면 오버레이가 **직전 발동**의 요약을 찍는다.
+  flushPriorReport(imageData, second.report, first.ms || 0);
+  return second;
+}
+
+/**
+ * 안정 게이지 표시. 정식 화면의 유일한 추가 UI 이고, 값은 전부 기기 안 로컬이다.
+ * (lab 오버레이 표기는 `updateDebugOverlay` 가 같은 스냅샷을 한 번 더 쓴다.)
+ */
+function renderSteadyMeter(snapshot) {
+  const progress = snapshot && Number.isFinite(snapshot.progress) ? snapshot.progress : 0;
+  steadyMeterFill.style.width = (progress * 100).toFixed(1) + '%';
+  steadyMeter.classList.toggle('visible', progress > 0);
+  steadyMeter.classList.toggle('armed', Boolean(snapshot && snapshot.armed));
+}
+
+function clearSteadyMeter() {
+  steadyMeterFill.style.width = '0%';
+  steadyMeter.classList.remove('visible', 'armed');
 }
 
 /**
@@ -694,6 +879,19 @@ function updateDebugOverlay(imageData, result, stage, ms) {
     cellSurface: extractCellSurfaceProbe(result),
     anchors: extractCsAnchors(result),
     zoom: currentZoomTelemetry(),
+    // 안정 게이지·트리거 상태 (lab 전용 표시). 스냅샷은 프레임 루프가 이미 만든
+    // 로컬 값이고 새 전송 경로가 없다 — 안정판에선 debugOverlay 가 no-op 다.
+    // holdMs 는 **추적기가 실제로 쓰는 값**을 넘긴다 (모듈 상수를 넘기면 옵션으로
+    // 만드는 날 게이지가 거짓말을 한다).
+    steady: {
+      ...steady.snapshot(nowMs()),
+      holdMs: steady.holdMs,
+      // 센서 부착 상태를 정직하게 — 「표본이 오는가」 와 「왜 안 오는가」 는 다른 정보다.
+      attach: motionAttachState,
+    },
+    prior: lastPriorSummary
+      ? { ...lastPriorSummary, budget: priorBudget().coarseCount }
+      : { budget: priorBudget().coarseCount },
   });
 }
 
@@ -812,6 +1010,13 @@ function stopCamera() {
   cameraVideo.srcObject = null;
   setCameraStageActive(false);
   resetZoomState();
+  // 안정 유지는 스트림 수명에 묶인다 — 이전 세션의 유지 시간이 새 카메라로 새면
+  // 켜자마자 트리거가 걸려 「맞췄다」 는 전제가 거짓이 된다.
+  steady.reset();
+  priorInFlight = false;
+  statusOwnedBySteady = false;
+  lastPriorSummary = null;
+  clearSteadyMeter();
   renderGuideDots();
 }
 
@@ -1183,8 +1388,37 @@ function startFrameLoop(session) {
         lastDecodeAt = timestamp;
         isDecoding = true;
 
-        decodeFrame(imageData)
-          .then((result) => handleDecodeResult(result, 'camera', session))
+        /*
+         * 안정 유지 판정 — 복호보다 **먼저** 한다. 복호는 수백 ms 걸리므로 그 뒤에
+         * 재면 프레임 사이 간격이 복호 시간에 오염된다(같은 뷰인데 「움직였다」 가 된다).
+         * 서명 만들기는 stride 4 다운샘플이라 프레임 grab 비용에 묻힌다.
+         */
+        const steadyState = steady.observeFrame({ frame: imageData, timeMs: timestamp });
+        renderSteadyMeter(steadyState);
+        const usePrior = steadyState.trigger && !priorInFlight;
+        if (usePrior) {
+          steady.markTriggered(timestamp);
+          priorInFlight = true;
+          if (!statusOwnedBySteady) {
+            statusOwnedBySteady = true;
+            setStatus(t('status.steadyScan'));
+          }
+        }
+
+        const attempt = usePrior
+          ? attemptGuidePriorScan(imageData)
+          : decodeFrame(imageData);
+
+        attempt
+          .then((result) => {
+            if (usePrior && !result.ok && session === scanSession && statusOwnedBySteady) {
+              // 사전이 실패하면 원래 조준 안내로 되돌린다 — 「시도 중」 이 눌러앉으면
+              // 사용자는 무엇을 바꿔야 할지 모른 채 기다리게 된다.
+              statusOwnedBySteady = false;
+              setStatus(t('status.aim'));
+            }
+            handleDecodeResult(result, 'camera', session);
+          })
           .catch(() => {
             if (session !== scanSession) return;
             stopCamera();
@@ -1192,6 +1426,7 @@ function startFrameLoop(session) {
             showSupportedStartGate(t('status.restart'));
           })
           .finally(() => {
+            if (usePrior) priorInFlight = false;
             if (session === scanSession) isDecoding = false;
           });
       }
@@ -1207,6 +1442,14 @@ async function startCamera(options) {
   const settings = options || {};
   const automatic = Boolean(settings.automatic);
   const deviceId = settings.deviceId || selectedCameraId;
+
+  /*
+   * 센서 부착은 **모든 시작 경로**에 걸린다 (자동 시작 · 시작 버튼 · 재스캔 · 렌즈 변경).
+   * 여기 두는 이유: 스캔 시작점이 하나로 모이는 자리이고, `await` **이전**이라 제스처
+   * 경로에서는 아직 사용자 제스처 안이다(iOS `requestPermission()` 요건).
+   * `automatic` 은 「제스처 없이 열린 경로」 와 동의어다 — 그 경우 판정이 지연 부착으로 간다.
+   */
+  void attachMotionAssist({ userGesture: !automatic });
 
   if (!isSecureForCamera()) {
     setStatus(t('status.noHttps'));
@@ -1654,7 +1897,109 @@ async function initialiseCamera() {
   await startCamera({ automatic: true });
 }
 
+/**
+ * DeviceMotion 보조 신호 연결.
+ *
+ * ⚠ **정정 (2026-08-16 적대 검증 F2):** 이전 배선은 이 함수를 **스캔 시작 버튼 클릭
+ *    한 곳**에서만 불렀다. 그런데 이 스캐너의 주 동선은 「카메라 권한이 이미 허용된
+ *    아이폰 → 접속 → `initialiseCamera()` → `startCamera({automatic:true})`」 라 그 버튼을
+ *    아예 거치지 않는다. 즉 센서가 가장 중요한 기기에서 **영원히 off** 였고, 게이트가
+ *    떠서 사용자가 버튼을 누른 «실패 경로» 에서만 켜졌다. 문서는 그걸 모른 채
+ *    `sensor:on` 을 정상 상태로 서술했다.
+ *
+ * 그래서 부착 시도를 **모든 시작 경로**(자동 시작 · 시작 버튼 · 재스캔 · 렌즈 변경)에
+ * 건다. 경로마다 제스처 유무가 다르므로 판정은 순수 함수 `motionAttachPlan()` 이 한다:
+ *
+ *   · `no-gate`(Android Chrome 등)     → 로드/자동 시작 시점에 **즉시** 부착.
+ *   · `gesture-required`(iOS) + 제스처  → 그 자리에서 `requestPermission()`.
+ *   · `gesture-required` + 제스처 없음  → **지연 부착**. 제스처 밖에서 부르면 권한만
+ *     소진되므로, 다음 아무 제스처(pointerdown/keydown)에 한 번 붙는다.
+ *   · `unsupported`                     → 시각 단독. 정상 경로다.
+ *
+ * 거부·미지원·예외는 전부 무시한다. 센서가 없으면 `observeMotion` 이 한 번도 안 불리고,
+ * 추적기의 거부권은 발동 자체를 못 하므로 **시각 단독 동작과 완전히 같다** (기능 저하 0).
+ * 실패는 오류가 아니라 정상 갈래라 사용자에게 보여줄 것이 없다 — 대신 상태 문자열을
+ * lab 오버레이에 그대로 찍어 «지금 켜져 있나» 를 화면이 말하게 한다.
+ */
+function bindMotionListener(state) {
+  motionAttachState = state;
+  if (motionListenerAttached) return;
+  motionListenerAttached = true;
+  window.addEventListener('devicemotion', (event) => {
+    if (!cameraStream) return;
+    steady.observeMotion({
+      rotationRate: event.rotationRate,
+      acceleration: event.acceleration,
+      accelerationIncludingGravity: event.accelerationIncludingGravity,
+      timeMs: nowMs(),
+    });
+  }, { passive: true });
+}
+
+/**
+ * 다음 제스처 한 번에 부착을 재시도하도록 예약한다 (iOS 자동 시작 경로).
+ *
+ * **아무 탭이 아니라 «컨트롤 조작»에만** 건다. 빈 화면을 스치듯 누른 것에까지 권한
+ * 프롬프트를 띄우면, 사용자는 자기가 요청하지 않은 대화상자를 보게 된다 — 조준 중에
+ * 그 팝업이 뜨는 것이 센서 보조로 얻는 것보다 나쁘다. 버튼·선택기·링크는 «지금 이
+ * 화면을 조작하고 있다» 는 분명한 신호라 그때 물어보는 것이 자연스럽다.
+ */
+const MOTION_GESTURE_SELECTOR = 'button, select, input, a, [role="button"]';
+function armMotionGestureRetry() {
+  if (motionGestureArmed || motionListenerAttached) return;
+  motionGestureArmed = true;
+  const disarm = () => {
+    document.removeEventListener('pointerdown', onGesture, true);
+    document.removeEventListener('keydown', onGesture, true);
+    motionGestureArmed = false;
+  };
+  const onGesture = (event) => {
+    const target = event.target;
+    if (event.type === 'pointerdown'
+      && !(target && typeof target.closest === 'function'
+        && target.closest(MOTION_GESTURE_SELECTOR))) {
+      return;
+    }
+    disarm();
+    void attachMotionAssist({ userGesture: true });
+  };
+  document.addEventListener('pointerdown', onGesture, true);
+  document.addEventListener('keydown', onGesture, true);
+}
+
+async function attachMotionAssist(options = {}) {
+  if (motionListenerAttached) return;
+  // ⚠ in-flight 가드. 예전에는 `motionListenerAttached = true` 가 **await 뒤**라
+  //    시작 버튼을 연타하면 devicemotion 리스너가 두 개 붙었다(카운터 부풀림·중복 계산).
+  if (motionRequestInFlight) return;
+
+  const plan = motionAttachPlan({ scope: window, userGesture: Boolean(options.userGesture) });
+  if (plan.action === 'skip') {
+    motionAttachState = 'off:unsupported';
+    return;
+  }
+  if (plan.action === 'defer') {
+    motionAttachState = 'off:wait-gesture';
+    armMotionGestureRetry();
+    return;
+  }
+
+  motionRequestInFlight = true;
+  try {
+    const permission = await requestMotionPermission(window);
+    if (!permission.granted) {
+      motionAttachState = 'off:' + permission.reason;
+      return;
+    }
+    bindMotionListener('on:' + plan.gate);
+  } finally {
+    motionRequestInFlight = false;
+  }
+}
+
 startCameraButton.addEventListener('click', () => {
+  // 제스처 안에서 먼저 부른다 — await 뒤로 미루면 iOS 가 제스처를 잃는다.
+  void attachMotionAssist({ userGesture: true });
   void startCamera({ automatic: false });
 });
 chooseImageButton.addEventListener('click', openImagePicker);
@@ -1663,6 +2008,8 @@ chooseImageButton.addEventListener('click', openImagePicker);
 const cameraPicker = document.getElementById('camera-picker');
 if (cameraPicker) {
   cameraPicker.addEventListener('change', () => {
+    // 렌즈 변경도 사용자 제스처다 — 자동 시작으로 지연됐던 센서를 여기서 붙일 수 있다.
+    void attachMotionAssist({ userGesture: true });
     selectedCameraId = cameraPicker.value || '';
     stopCamera();
     startCamera({ deviceId: selectedCameraId }).catch(() => {});
@@ -1751,6 +2098,9 @@ imageInput.addEventListener('change', () => {
   void decodeImageFile(imageInput.files && imageInput.files[0]);
 });
 rescanButton.addEventListener('click', () => {
+  // 재스캔도 제스처 경로다 (결과 화면에서 돌아오는 흐름 — 자동 시작으로 센서가 지연됐다면
+  // 여기가 그 다음 기회다).
+  void attachMotionAssist({ userGesture: true });
   hideResult({ restoreFocus: false });
   void startCamera({ automatic: false });
 });

@@ -366,6 +366,52 @@
   }
 
   /*
+   * 안정 유지 게이지 (2026-08-16). 정식 화면의 최소 인디케이터 — 뷰 하단 2px 선.
+   * z-index 는 점 레이어(2)와 같은 층에 두되 하단 가장자리라 겹치지 않는다.
+   * ⚠ 폭은 JS 가 인라인 `width` 로만 준다(0%\~100%). transition 은 게이지가 프레임
+   *   주기(320ms)로 갱신되므로 그보다 짧게 — 아니면 항상 뒤처져 보인다.
+   */
+  .steady-meter {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    bottom: 6px;
+    z-index: 2;
+    height: 2px;
+    border-radius: 2px;
+    background: rgb(255 255 255 / .10);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+
+  .square-stage.is-active .steady-meter.visible {
+    opacity: 1;
+  }
+
+  .steady-meter-fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: 2px;
+    background: rgb(183 229 255 / .85);
+    transition: width 220ms linear;
+  }
+
+  /* 발동 순간만 짧게 밝아진다 — 「지금 정밀 인식을 시도한다」 의 유일한 시각 신호. */
+  .steady-meter.armed .steady-meter-fill {
+    background: rgb(214 242 255 / 1);
+    box-shadow: 0 0 6px rgb(183 229 255 / .9);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .steady-meter,
+    .steady-meter-fill {
+      transition: none;
+    }
+  }
+
+  /*
    * lab 디버그 오버레이 (작업 1) — 안정판(`/`)에서는 authored `hidden` 그대로다.
    * scanner-debug-overlay.js 는 isLabPath() 가 아니면 이 요소들을 만지지 않는다.
    */
@@ -1109,6 +1155,13 @@
         <!-- 3링 18점 조준 가이드. scanner.js renderGuideDots() 가 <circle> 18개를 채운다.
              순수 시각 보조라 aria-hidden 이다 — 문구 안내는 .scan-guide-wrap 이 맡는다. -->
         <svg class="scan-dot-layer" id="scan-dot-layer" aria-hidden="true"></svg>
+        <!-- 안정 유지 게이지 (2026-08-16). 정식 화면의 **유일한** 추가 UI 이고, 표시는
+             뷰 하단 2px 선 하나다 — 조준을 방해하지 않는 최소치. 유지 0 이면 폭 0 이라
+             사실상 없는 것과 같다. 값은 기기 안 로컬 계산이며 전송 경로가 없다.
+             장식이라 aria-hidden — 상태 문구(.scan-status)가 낭독을 맡는다. -->
+        <div class="steady-meter" id="steady-meter" aria-hidden="true">
+          <span class="steady-meter-fill" id="steady-meter-fill"></span>
+        </div>
         <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색
              + 로케이터 앵커 마커. 안정판에선 hidden 그대로. -->
         <svg class="lab-debug-layer" id="lab-debug-layer" aria-hidden="true" hidden></svg>

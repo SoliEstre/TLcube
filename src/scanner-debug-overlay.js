@@ -54,8 +54,19 @@ export function projectFramePoint(point, frameW, frameH, viewSide) {
   return { x: (x / w) * side, y: (y / h) * side };
 }
 
+/**
+ * 표시용 수 포맷 — 소수부의 꼬리 0 만 지운다.
+ *
+ * ⚠ [수정 2026-08-16] 구현이 `toFixed(digits).replace(/\.?0+$/, '')` 였다. 소수점이
+ *   **없는** 문자열에도 그 정규식이 걸려서 정수의 꼬리 0 을 먹었다:
+ *     fmt(1200, 0) → '12'   ·  fmt(340, 0) → '34'  ·  fmt(0, 0) → ''
+ *   즉 프레임 시간 340ms 가 오버레이에 «34ms» 로 찍히고 있었다 (기존 테스트 표본이
+ *   342.4 라 꼬리 0 이 없어 통과했다). 소수점이 있을 때만 자른다.
+ */
 function fmt(value, digits = 2) {
-  return Number.isFinite(value) ? Number(value).toFixed(digits).replace(/\.?0+$/, '') : '—';
+  if (!Number.isFinite(value)) return '—';
+  const text = Number(value).toFixed(digits);
+  return text.includes('.') ? text.replace(/\.?0+$/, '') : text;
 }
 
 /**
@@ -73,6 +84,8 @@ export function summarizeFrameDebug({
   cellSurface,
   anchors,
   zoom,
+  steady,
+  prior,
 } = {}) {
   const geo = geometry || {};
   const cs = cellSurface || {};
@@ -106,7 +119,60 @@ export function summarizeFrameDebug({
     'stage ' + (stage || '—')
     + (ok ? ' · OK' : (reason ? ' · ' + reason : '')),
   );
+  if (steady) lines.push(steadyLine(steady, prior));
   return lines;
+}
+
+/** 게이지 막대 — 폭 10칸. 「1.5s 가 얼마나 찼나」 를 한눈에. */
+function gaugeBar(progress, width = 10) {
+  const value = Number(progress);
+  const filled = Number.isFinite(value)
+    ? Math.max(0, Math.min(width, Math.round(value * width)))
+    : 0;
+  return '[' + '#'.repeat(filled) + '·'.repeat(width - filled) + ']';
+}
+
+/**
+ * 안정 유지 + 가이드-사전 상태 한 줄 (lab 전용).
+ * 표시 항목은 전부 프레임 루프가 이미 만든 로컬 값이다 — 새 전송 경로 없음.
+ *
+ * ⚠ 센서 표기는 **두 가지 사실을 분리해서** 낸다 (2026-08-16 정정).
+ *   · `sensor:on|off|VETO` — 지금 **표본이 실제로 오고 있나** (`sensorActive` 는 전 필드
+ *     null 인 이벤트를 세지 않는다).
+ *   · 괄호 안 `attach` — **왜** 안 오는가 / 어떤 경로로 붙었나
+ *     (`off:wait-gesture` = iOS 자동 시작이라 다음 제스처까지 지연, `off:unsupported`,
+ *      `off:denied`, `on:no-gate`, `on:gesture-required`).
+ *   이 둘을 한 글자로 합치면 「센서가 켜져 있다」 는 착각이 화면에서부터 자란다 —
+ *   실제로 정식 주 경로에서 센서가 한 번도 안 붙던 것을 문서가 못 본 원인이 그것이다.
+ */
+export function steadyLine(steady, prior) {
+  const s = steady || {};
+  const p = prior || {};
+  const sensor = 'sensor:' + (s.sensorActive
+    ? (s.motionVetoed ? 'VETO' : 'on')
+    : 'off')
+    + (s.attach ? '(' + s.attach + ')' : '');
+  const held = fmt(Number(s.heldMs), 0) + '/' + fmt(Number(s.holdMs), 0) + 'ms'
+    // 표본 수 — 「1.5초」 가 표본 몇 장으로 만들어졌나. 복호가 느려 표본이 드물면
+    // 캡(sampleCapMs) 때문에 시간이 천천히 찬다는 것을 화면이 설명해야 한다.
+    + (Number.isFinite(Number(s.holdSamples)) ? '(n' + fmt(Number(s.holdSamples), 0) + ')' : '');
+  const parts = [
+    'steady ' + gaugeBar(s.progress),
+    held,
+    'd ' + fmt(Number(s.delta), 3) + '/' + fmt(Number(s.tolerance), 3),
+    'a ' + fmt(Number(s.anchorDelta), 3) + '/' + fmt(Number(s.anchorTolerance), 3),
+    s.armed ? 'ARMED' : (s.stable ? 'hold' : 'move'),
+    sensor,
+  ];
+  if (p.stage) {
+    parts.push('prior ' + p.stage + ':' + (p.ok ? 'OK' : 'fail')
+      + ' n' + fmt(Number(p.poses), 0)
+      + (Number.isFinite(Number(p.admitted)) ? ' adm' + fmt(Number(p.admitted), 0) : '')
+      + ' ' + fmt(Number(p.ms), 0) + 'ms');
+  } else if (Number.isFinite(Number(p.budget))) {
+    parts.push('prior budget ' + fmt(Number(p.budget), 0));
+  }
+  return parts.join(' · ');
 }
 
 const INERT_OVERLAY = Object.freeze({

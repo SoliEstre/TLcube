@@ -57,6 +57,9 @@ export const SCANNER_STRINGS = {
     'status.aim': '코드를 점 가이드에 맞춰 주세요.',
     'status.closer': '코드가 화면에 더 크게 보이도록 가까이 가져가 보세요.',
     'status.clipped': '조금 뒤로 — 코드가 잘려요.',
+    // 안정 유지 트리거 (2026-08-16): 1.5초 유지가 채워져 가이드-사전 포즈로 다시 읽는 중.
+    // 실패하면 곧바로 status.aim 으로 되돌린다 — 이 문구가 눌러앉으면 안내가 아니라 소음이다.
+    'status.steadyScan': '화면이 안정됐어요 — 가이드 기준으로 정밀하게 읽어볼게요.',
     'status.tapToStart': '카메라를 시작하려면 화면을 탭해 주세요.',
     'status.noHttps': 'HTTPS 연결이 아니어서 카메라를 사용할 수 없어요.',
     'status.unsupported': '이 브라우저에서는 카메라를 사용할 수 없어요.',
@@ -175,6 +178,7 @@ export const SCANNER_STRINGS = {
     'status.aim': 'Fit the code to the dot guide.',
     'status.closer': 'Move closer so the code appears larger on screen.',
     'status.clipped': 'Move back a little — the code is getting cut off.',
+    'status.steadyScan': 'The view is steady — reading precisely against the guide.',
     'status.tapToStart': 'Tap the screen to start the camera.',
     'status.noHttps': 'The camera is unavailable because this is not an HTTPS connection.',
     'status.unsupported': 'This browser cannot use the camera.',
@@ -290,6 +294,7 @@ export const SCANNER_STRINGS = {
     'status.aim': 'コードを点ガイドに合わせてください。',
     'status.closer': 'コードが大きく写るように近づけてみてください。',
     'status.clipped': '少し離れてください — コードが切れています。',
+    'status.steadyScan': '画面が安定しました — ガイド基準で精密に読み取ります。',
     'status.tapToStart': '画面をタップするとカメラが起動します。',
     'status.noHttps': 'HTTPS 接続ではないため、カメラを使えません。',
     'status.unsupported': 'このブラウザではカメラを使えません。',
