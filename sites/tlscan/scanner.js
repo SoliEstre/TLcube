@@ -92,7 +92,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-17.01';
+export const SCANNER_BUILD = '2026-08-17.02';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -141,6 +141,8 @@ const dotLayer = document.getElementById('scan-dot-layer');
 const scannerPanels = document.getElementById('scanner-panels');
 const steadyMeter = document.getElementById('steady-meter');
 const steadyMeterFill = document.getElementById('steady-meter-fill');
+// 처리 fps 배지 — 없는 변형 페이지가 있어도 스캐너는 살아야 하므로 하드 가드 밖.
+const procFpsEl = document.getElementById('proc-fps');
 
 if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTitle ||
     !cameraGateMessage || !startCameraButton || !chooseImageButton || !gateChooseImageButton ||
@@ -939,6 +941,39 @@ function isSecureForCamera() {
 
 function setCameraStageActive(active) {
   cameraStage.classList.toggle('is-active', active);
+  resetProcFps(active);
+}
+
+/*
+ * 처리 fps (운영자 지시 2026-08-17) — «초당 몇 프레임을 복호 시도하는가».
+ * 카메라 프레임률이 아니라 **복호 완료 기준**이다: 수집·복호 오버헤드가 그대로
+ * 반영되므로 시험판(수집 있음)과 정식·스테이징(수집 없음)의 체감 차이를 이 수치로
+ * 직접 비교할 수 있다. 5초 롤링 창 · 표시 500ms 스로틀 · 표본 2개 전에는 «—».
+ */
+const PROC_FPS_WINDOW_MS = 5000;
+const procFpsTimes = [];
+let procFpsShownAt = 0;
+
+function noteFrameProcessed() {
+  if (!procFpsEl) return;
+  const now = performance.now();
+  procFpsTimes.push(now);
+  while (procFpsTimes.length > 0 && now - procFpsTimes[0] > PROC_FPS_WINDOW_MS) {
+    procFpsTimes.shift();
+  }
+  if (procFpsTimes.length < 2 || now - procFpsShownAt < 500) return;
+  procFpsShownAt = now;
+  const spanSec = (now - procFpsTimes[0]) / 1000;
+  const fps = spanSec > 0 ? (procFpsTimes.length - 1) / spanSec : 0;
+  procFpsEl.textContent = fps.toFixed(1) + ' fps';
+}
+
+function resetProcFps(visible) {
+  if (!procFpsEl) return;
+  procFpsTimes.length = 0;
+  procFpsShownAt = 0;
+  procFpsEl.textContent = '—';
+  procFpsEl.hidden = !visible;
 }
 
 function showCameraGate(settings) {
@@ -1428,6 +1463,7 @@ function startFrameLoop(session) {
           .finally(() => {
             if (usePrior) priorInFlight = false;
             if (session === scanSession) isDecoding = false;
+            noteFrameProcessed();
           });
       }
     }

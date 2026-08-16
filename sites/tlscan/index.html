@@ -505,6 +505,17 @@
     padding-top: 12px;
   }
 
+  .proc-fps {
+    margin: 0;
+    padding: 2px 9px;
+    border-radius: 8px;
+    color: rgb(255 255 255 / .72);
+    background: rgb(0 0 0 / .4);
+    font-size: 11px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+  }
+
   .scan-status {
     max-width: min(100%, 460px);
     margin: 0;
@@ -1190,6 +1201,10 @@
     <div class="scanner-panels" id="scanner-panels">
       <div class="scanner-bottom">
         <p class="scan-status" id="scan-status" role="status" aria-live="polite" aria-atomic="true" data-i18n="status.preparing">카메라를 준비하고 있어요.</p>
+        <!-- 처리 fps (운영자 지시 2026-08-17): 초당 복호 시도 수. 수집 오버헤드 진단과
+             실사용자 피드백 («몇 fps 나오나요») 을 위한 상시 표시 — 카메라 활성 중에만.
+             aria-hidden: 초당 갱신되는 수치라 낭독하면 소음이다. -->
+        <span class="proc-fps" id="proc-fps" hidden aria-hidden="true" data-i18n-attr="title:fps.title" title="초당 처리 프레임 (복호 시도)">—</span>
         <div class="zoom-controls" id="zoom-controls" hidden>
           <button type="button" id="zoom-out" data-i18n-attr="aria-label:zoom.out" aria-label="축소">−</button>
           <input id="zoom-slider" type="range" min="1" max="8" step="0.1" value="1" data-i18n-attr="aria-label:zoom.slider" aria-label="확대 배율">
