@@ -16,6 +16,8 @@ import {
 } from './finder-selection.js';
 import { DEFAULT_PRESET, PRESETS } from './luminance.js';
 import { TL_READER_URL } from './qr.js';
+import { DEFAULT_RENDER_PROFILE, RENDER_PROFILE_IDS } from './render-profile.js';
+import { DEFAULT_SHADING_MODE, SHADING_MODES } from './shading.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
@@ -87,6 +89,22 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
   quietMode: field('auto', BOTH, ['auto', 'none', 'white', 'black', 'contrast']),
   tone: field(3, BOTH, [2, 3]),
+  // 렌더 프로파일 (과업 #16) — 면 게인 묶음. 정식은 화면용·출력물용 2종이고
+  // «오리지널» 은 lab 카드로만 뜬다. 허용값에는 셋 다 넣는다 — lab 에서 고른 값이
+  // 정식 화면으로 돌아왔을 때 «알 수 없는 값» 으로 죽으면 안 되기 때문이다
+  // (locatorProfileY 와 같은 규약). 노출은 BOTH — 일반 모드에도 카드가 뜬다.
+  renderProfile: field(DEFAULT_RENDER_PROFILE, BOTH, [...RENDER_PROFILE_IDS]),
+  // 입체 음영 (과업 #17) — 좌상단 조명 전제의 그림자·반사광 띠. 셀에는 절대 안 닿고
+  // 안전영역 + 배경 영역에만 그린다 (shading.js 계약). 기본 **끔**: 새 옵션이고,
+  // 켜면 렌더 픽셀이 바뀌므로 «아무것도 안 골랐는데 그림이 달라졌다» 가 안 되게 한다.
+  shading: field(DEFAULT_SHADING_MODE, BOTH, [...SHADING_MODES]),
+  // ② T면 엣지 아웃라인 — **별도 서브옵션**이다 (운영자 «효과 미지수» 표명).
+  // 위쪽 실루엣(=T면 쪽)에 얇은 반사광/그림자 아웃라인을 더한다. shading 이 꺼져
+  // 있으면 이 값은 그림에 아무 영향이 없다 (UI 도 그때는 비활성으로 보인다).
+  shadingRim: field(false, BOTH, [false, true]),
+  // ⚠ faceGain 슬라이더는 «절대 게인» 이 아니라 **선택한 프로파일까지의 보간 강도**다
+  //   (0 = 3면 평면, 100 = 프로파일 게인 그대로). 출력물용은 프로파일 자체가 동률이라
+  //   슬라이더를 움직여도 그림이 안 바뀐다 — 그게 정의상 옳다.
   faceGain: field(100, ADVANCED, [100, 41]),
   qrText: field(TL_READER_URL, ADVANCED,
     [TL_READER_URL, 'https://example.com/fallback']),

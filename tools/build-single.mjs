@@ -70,7 +70,14 @@ const MODULE_ORDER = [
   // Type O 의 scene 이 그걸 쓰게 되면서 전방 참조가 됐다. 등록 순서 = 치환 가능 순서라
   // 전방 참조는 치환이 조용히 건너뛰어지고, 브라우저에서 blob: base 상대 해석 실패로
   // 터진다. 이 불변식은 이제 assertTopologicalOrder() 가 빌드 시점에 강제한다.
-  'gf256', 'rs', 'qr', 'generator-state', 'export-filename',
+  // render-profile 은 의존이 0 인 잎 모듈(면 게인 표만 든다)이라 어디에 놓아도 위상
+  // 정렬이 성립한다. 소비자가 generator-state(UI 상태)와 sceneY(렌더 코어) 양쪽이라
+  // **둘보다 앞**이기만 하면 된다 — 여기가 그 자리다.
+  // quietzone(의존 0) → shading(quietzone 만) → generator-state 순서가 필요해졌다
+  // (2026-08-16, 과업 #17). generator-state 가 음영 모드 허용값을 shading.js 에서
+  // 가져오기 때문이다 — 상수를 복제하면 «UI 는 켜지는데 렌더는 모르는 값» 이 된다.
+  // quietzone 은 원래 목록 끝에 있었고, 의존이 0 이라 앞으로 당겨도 위상 정렬은 그대로다.
+  'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'generator-state', 'export-filename',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   // cellSurfaceFinal(최종 라인업 v0·v2r2)은 capacityY·cellSurfaceY·cellSurfaceLayouts·
   // autoplaceY 를 import 하므로 그 넷 뒤에 온다.
@@ -80,8 +87,6 @@ const MODULE_ORDER = [
   // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.
   'generator-render-config',
   'encodeY', 'sceneY', 'verifyY',
-  // quietzone 은 순수 기하 모듈이라 의존이 없다 — 끝에 붙여도 위상 정렬이 성립한다.
-  'quietzone',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
   'i18n',
   // beacon 도 의존이 없다 — 네트워크 전송과 오프라인 큐만 담는다.

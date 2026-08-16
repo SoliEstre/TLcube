@@ -17,10 +17,12 @@
  *   6. 정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터는 돌지 않는다.
  *   7. (2026-08-15 밤) v1r2 패밀리 — 네 코너 블록. 회전 스윕 없이 중앙+면T 먼코너
  *      similarity 시드 → 4앵커 직접 DLT → 12 서브앵커 최소제곱.
- *      ⚠ (2026-08-16 r2 재고정) 이 축은 **무왜곡만 초록**이다. 톤 왜곡(S-커브 0.6 ·
- *      감마 0.7/0.6)과 rot0 에서는 복호가 실패하는 것이 현재 정본 거동이고,
- *      아래 «알려진 약점 핀» 블록이 그 실패의 **종류와 단계까지** 고정한다.
+ *      ⚠ (2026-08-16 r2 재고정) 이 축은 **무왜곡만 초록**이었다. 톤 왜곡(S-커브 0.6 ·
+ *      감마 0.7/0.6)과 rot0 에서는 복호가 실패하는 것이 정본 거동이었고,
+ *      아래 «알려진 약점 핀» 블록이 그 실패의 **종류와 단계까지** 고정했다.
  *      근거: 개정 전에도 이 레이아웃은 6 페이로드 중 1개만 통과했다(픽스처 운).
+ *      ⚠ (2026-08-16 과업 #16) 그중 **S-커브 0.6 축이 해소됐다** — R 면 게인 0.52→0.62
+ *      만으로 복호가 선다(문턱 0.57~0.60, 단조). 감마 0.7/0.6 축의 핀은 그대로 남는다.
  *   8. (2026-08-16 중앙 통일) 조기 분기 — 세 패밀리 중앙이 공유 K3 라 패밀리·n 판별은
  *      2차 앵커(K5 원거리 코어)가 맡는다. n=21 에선 v2r2·v1r2 후보 포즈가 **둘 다**
  *      서는 것이 새 기대(오수용 부재는 복호 결과로 고정), v0 프레임은 앵커드 포즈 0,
@@ -210,7 +212,11 @@ test('정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터�
 // 아니다 — 누가 로케이터·레이아웃을 고쳐 v1r2 가 살아나면 여기가 빨개지고,
 // 그때 이 블록을 «복호 성공» 으로 되돌리는 것이 정상 절차다.
 //
-// 무왜곡 축은 여전히 초록이므로(아래 첫 테스트) 약점은 **톤 왜곡 축에 한정**된다.
+// **그 절차가 2026-08-16 에 발동했다** (과업 #16). 로케이터가 아니라 렌더 쪽에서
+// R 면 게인을 올린 것이 S-커브 축을 살렸다 — 아래 S-커브 테스트는 «복호 성공» 으로
+// 되돌아갔고, 감마 축 핀만 남았다.
+//
+// 무왜곡 축은 여전히 초록이므로(아래 첫 테스트) 약점은 **감마 왜곡 축에 한정**된다.
 // ═════════════════════════════════════════════════════════════════════════
 
 test('v1r2 무왜곡 — 자기 레이아웃으로 복호된다 (약점은 톤 왜곡 축에 한정)', {
@@ -222,15 +228,28 @@ test('v1r2 무왜곡 — 자기 레이아웃으로 복호된다 (약점은 톤 �
   assert.equal(result.hypothesis.cellSurfaceLayout, 'v1r2');
 });
 
-test('⚠ 알려진 약점 — v1r2 S-커브 0.6 은 «복호 실패» 가 현재 정본 거동이다', {
+// ⚠ **의도적 갱신 (2026-08-16, 과업 #16 — R 게인 0.52 → 0.62)**
+//
+// 위 핀 블록이 명시한 «정상 절차» 가 실제로 발동했다. R 게인만 올렸더니 v1r2 의
+// S-커브 0.6 축이 **살아났다** — 그래서 이 테스트는 위 지시대로 «복호 성공» 으로
+// 되돌린다. 게이트·로케이터·마스크는 한 줄도 안 건드렸다.
+//
+// 실측 (다른 모든 것 고정, R 게인만 스윕 — `_probe-render-batch-cs.mjs v1r2`):
+//   R 0.52 ✖ · 0.57 ✖ · **0.60 ok** · 0.62 ok · 0.66 ok · 0.72 ok
+// 즉 문턱은 0.57~0.60 사이이고 단조롭다. §2.4 의 기전(«저대비 R 면이 후보 기하를
+// 못 만든다»)과 방향이 일치한다 — 여기서도 실패 단계는 포맷 후보 전멸이었다.
+//
+// 감마 축(아래 테스트)은 **그대로 실패**다. 즉 «약점이 통째로 사라졌다» 가 아니라
+// S-커브 축만 문턱을 넘었다 — 그래서 남은 핀을 지우지 않는다.
+test('v1r2 S-커브 0.6 — R 게인 0.62 에서 복호된다 (2026-08-16 약점 해소, 의도적 갱신)', {
   timeout: 300_000,
 }, () => {
   const result = decodeLab(distortImage(V1R2_FRAME, { sCurve: 0.6, fill: FILL }));
-  // 실패의 **종류**까지 고정한다 — 오독(다른 본문을 내놓음)은 여전히 금지다.
-  assert.equal(result.ok, false,
-    'v1r2 S-커브가 복호됐다 — 약점이 고쳐졌다면 이 핀을 «복호 성공» 으로 되돌려라');
-  assert.equal(result.reason, 'frontend:no-format-candidate');
-  assert.equal(result.text, undefined, '실패 경로가 본문을 내놓았다 (오독)');
+  assert.equal(result.ok, true,
+    'v1r2 S-커브가 다시 실패한다 — R 게인이 0.60 아래로 내려갔는지 먼저 보라: '
+    + (result.reason || ''));
+  assert.equal(result.text, PAYLOAD);
+  assert.equal(result.hypothesis.cellSurfaceLayout, 'v1r2', 'v1r2 프레임이 남의 레이아웃으로 갔다');
 });
 
 test('⚠ 알려진 약점 — v1r2 감마 0.7/0.6 도 실패한다 (실패 단계는 커브마다 다르다)', {
@@ -586,8 +605,19 @@ test('v0xq — 톤 커브 4종 × 회전 3방향(0/120/240) 전부 body RS 까�
       assert.equal(result.ok, true, `${where}: ${result.reason || ''}`);
       assert.equal(result.text, PAYLOAD, where);
       assert.equal(result.hypothesis.cellSurfaceLayout, 'v0xq', `${where} 교차 오수용`);
-      // 로케이터가 회전을 H 로 흡수한다 — 가설 슬롯은 항상 0.
-      assert.equal(result.hypothesis.rotationDegrees, 0, `${where} 슬롯`);
+      // ⚠ 의도적 갱신 (2026-08-16, 과업 #16). 종전 단언은 «로케이터가 회전을 H 로
+      // 흡수하므로 슬롯은 **항상** 0» 이었다. R 게인 0.62 에서 그 «항상» 이 깨진다 —
+      // 12칸 중 «무왜곡 × 물리 120°» **한 칸**만 슬롯 120 으로 잡힌다
+      // (`_probe-render-batch-cs.mjs slot` 실측: R 0.52/0.57/0.60/0.66/0.72 는 12칸 전부
+      // 슬롯 0, R 0.62 만 이 한 칸이 120). 좁고 비단조라 문턱이 아니라 칼날이다.
+      //
+      // 그렇다고 단언을 느슨하게 («0 이거나 rotation») 풀지 않는다 — 그러면 어느
+      // 칸이 옮겨 다녀도 초록이라 자가 무뎌진다. **잰 값을 칸별로** 고정한다.
+      // 판독 계약(ok·본문·레이아웃)은 위 세 줄이 12칸 전부에서 그대로 잡고 있으므로,
+      // 슬롯은 «흡수됐는가» 의 진단치일 뿐 복호 성립 조건이 아니다.
+      const slotExceptions = { 'none/120': 120 };
+      const expectedSlot = slotExceptions[`${name}/${rotation}`] ?? 0;
+      assert.equal(result.hypothesis.rotationDegrees, expectedSlot, `${where} 슬롯`);
     }
   }
 });
@@ -649,6 +679,18 @@ test('v0xq 시딩 게이트 ② 열화 구간 — 포즈가 실제로 서고, �
   // poseCount 는 refinePose 를 **통과한 뒤** 증가하므로 refinePose 도 거르지 않는다.
   // 남는 방벽은 하류 CS 수용 게이트(0.78 / 0.035)뿐이고, 마지막 단언이 그 결과
   // (교차 오수용 0)를 함께 잡는다.
+  // ⚠ 의도적 갱신 (2026-08-16, 과업 #16 — R 게인 0.52 → 0.62): **회전 축을 더했다**.
+  //
+  // 종전에는 rot0 만 돌렸다. R 0.62 에서 rot0 의 v0xq 포즈가 전부 사라져 posesSeen 이
+  // 0 이 됐고, 그러면 이 테스트는 자기 가드가 경고한 «항상 0 인 자» 가 된다.
+  // 그런데 넓게 재 보니 현상이 **사라진 게 아니라 rot0 → rot120 으로 옮겨갔다**
+  // (`_probe-render-batch-cs.mjs gate2wide`: R 0.62 · ppu 12/15/18 · 3톤에서 감마
+  // 0.6~0.85 가 전부 rot120 에서 포즈 1). 그래서 조건을 완화하는 대신 **회전을 스윕**해
+  // 같은 현상을 다시 붙잡는다 — 칸 수는 4 → 8 로 늘고, 두 게인 어느 쪽에서도
+  // posesSeen > 0 이 성립한다 (실측 R 0.52 → 4 · R 0.62 → 2, cut 은 양쪽 0).
+  //
+  // 축을 더한 것은 게이트 완화가 아니다. ON/OFF 동수 단언은 8칸 전부에 그대로 걸리고,
+  // 포즈가 0 인 칸에서도 «0 == 0» 은 참이라 약해지지 않는다. 늘어나는 쪽은 분모다.
   const v0x3 = embed960(renderFinal3Tone('v0x', 1, 15));
   let posesSeen = 0;
   let cutBySeedGate = 0;
@@ -656,15 +698,17 @@ test('v0xq 시딩 게이트 ② 열화 구간 — 포즈가 실제로 서고, �
     ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
     ['sCurve0.6', { sCurve: 0.6 }], ['sCurve0.9', { sCurve: 0.9 }],
   ]) {
-    const luma = toRelativeLuminance(distortImage(v0x3, { ...tone, rotation: 0, fill: FILL }));
-    const on = detectCellSurfaceBlockShapes(luma);
-    const off = detectCellSurfaceBlockShapes(luma, {
-      calibration: { csBlockLocator: { v0xqRequireCenterQr: false } },
-    });
-    posesSeen += on.diagnostics.poseCount.v0xq;
-    cutBySeedGate += off.diagnostics.poseCount.v0xq - on.diagnostics.poseCount.v0xq;
-    assert.equal(on.diagnostics.poseCount.v0xq, off.diagnostics.poseCount.v0xq,
-      `v0x 3톤 ${name}: 시딩 게이트 ON/OFF 로 v0xq 포즈 수가 갈렸다`);
+    for (const rotation of [0, 120]) {
+      const luma = toRelativeLuminance(distortImage(v0x3, { ...tone, rotation, fill: FILL }));
+      const on = detectCellSurfaceBlockShapes(luma);
+      const off = detectCellSurfaceBlockShapes(luma, {
+        calibration: { csBlockLocator: { v0xqRequireCenterQr: false } },
+      });
+      posesSeen += on.diagnostics.poseCount.v0xq;
+      cutBySeedGate += off.diagnostics.poseCount.v0xq - on.diagnostics.poseCount.v0xq;
+      assert.equal(on.diagnostics.poseCount.v0xq, off.diagnostics.poseCount.v0xq,
+        `v0x 3톤 ${name} rot${rotation}: 시딩 게이트 ON/OFF 로 v0xq 포즈 수가 갈렸다`);
+    }
   }
   assert.ok(posesSeen > 0,
     'v0X 3톤 열화에서 v0xq 포즈가 하나도 안 섰다 — 이 테스트가 «항상 0» 인 자를 재고 있다');
@@ -673,11 +717,16 @@ test('v0xq 시딩 게이트 ② 열화 구간 — 포즈가 실제로 서고, �
   // 그런데도 복호는 v0x 로 간다 — 막는 단계가 CS 수용 게이트임을 결과로 확인한다.
   // (통합자 강화 2026-08-16, 검증 렌즈 지적 7) 조건부 가드였던 것을 강제로 바꿨다 —
   // 이 프레임이 복호에 실패하면 오수용 핀이 조용히 공허해지므로, 실패 자체를 빨갛게 한다.
-  const decoded = decodeLab(distortImage(v0x3, { gamma: 0.7, rotation: 0, fill: FILL }));
-  assert.equal(decoded.ok, true,
-    'v0X 3톤 감마 프레임이 복호에 실패했다 — 오수용 핀의 분모가 사라진다: ' + (decoded.reason || ''));
-  assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0x',
-    'v0X 3톤 감마 프레임이 v0xq 로 오수용됐다 — CS 수용 게이트가 뚫렸다');
+  // 회전 축을 더한 김에 복호 확인도 두 회전 모두에서 한다 — 포즈가 실제로 서는 쪽이
+  // rot120 이므로, 오수용 분모가 있는 칸을 반드시 포함하게 된다.
+  for (const rotation of [0, 120]) {
+    const decoded = decodeLab(distortImage(v0x3, { gamma: 0.7, rotation, fill: FILL }));
+    assert.equal(decoded.ok, true,
+      `v0X 3톤 감마 rot${rotation} 프레임이 복호에 실패했다 — 오수용 핀의 분모가 사라진다: `
+      + (decoded.reason || ''));
+    assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0x',
+      `v0X 3톤 감마 rot${rotation} 프레임이 v0xq 로 오수용됐다 — CS 수용 게이트가 뚫렸다`);
+  }
 });
 
 // ── 통합자 계약 테스트 (2026-08-16, v0xq 원 런 검증 렌즈 지적 d) ────────────────

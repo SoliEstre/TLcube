@@ -17,6 +17,9 @@ import {
 import { CORNER_UNIT_OFFSETS } from './hexgrid.js';
 import { digitToRanks } from './lehmer.js';
 import { srgbChannelToLinear, relativeLuminance } from './luminance.js';
+import {
+  DEFAULT_RENDER_PROFILE, RENDER_PROFILE_IDS, faceGainsForRenderProfile,
+} from './render-profile.js';
 import { qrMatrix } from './qr.js';
 import { digitToPattern, assertToneSeparation } from './tonemap.js';
 import { WINDOW_SIZE_Y, WINDOW_SUPPORTED_N } from './capacityY.js';
@@ -44,8 +47,21 @@ import {
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
-/** 기본 면 게인. T=1(기준면), L·R 은 어둡게(입체감) — γ = max/min ≈ 1.923 ≤ 2. */
-export const DEFAULT_FACE_GAINS = Object.freeze({ T: 1, L: 0.72, R: 0.52 });
+/**
+ * 기본 면 게인 = **화면용 렌더 프로파일**의 게인. T=1(기준면), L·R 은 어둡게(입체감).
+ * γ = max/min = 1/0.62 ≈ 1.613 ≤ 2.
+ *
+ * ⚠ 2026-08-16 (과업 #16): R 0.52 → **0.62** (γ 1.923 → 1.613). 합성 절제 88쌍에서
+ *   통과율 80 % → 93 % (+13pp, McNemar p ≈ 0.0042)이고, R0.52 실패 18건 중 14건이
+ *   `no-grid-hypothesis` — 저대비 R 면이 후보 기하 자체를 못 만들게 하는 것이 기전이다.
+ *   0.72 로 더 올려도 이득이 없어(93 % 포화) γ 여유를 다 쓰지 않는다. 실사 확증은 없다.
+ *   정본: `test/output/claude-skew-real.md` §2.4 · `src/render-profile.js` 머리주석.
+ *
+ * 값 자체는 `render-profile.js` 가 소유한다 — 같은 표를 생성기 UI 도 읽으므로 상수를
+ * 두 벌 두면 «화면은 바뀌었는데 렌더는 안 바뀐» 상태가 만들어진다. 여기서는 재수출만
+ * 한다(기존 임베더 계약 유지 — 30건 넘는 테스트가 이 이름으로 import 한다).
+ */
+export const DEFAULT_FACE_GAINS = faceGainsForRenderProfile(DEFAULT_RENDER_PROFILE);
 
 function gainRatio(gains) {
   const vals = [gains.T, gains.L, gains.R];
@@ -53,11 +69,12 @@ function gainRatio(gains) {
 }
 
 // 모듈 로드 시 단언 — 기본값 자체가 SPEC §14 렌더러 의무(γ≤2)를 어기면 여기서
-// 즉시 터진다(런타임 호출 전에 잡는다).
-{
-  const ratio = gainRatio(DEFAULT_FACE_GAINS);
+// 즉시 터진다(런타임 호출 전에 잡는다). 프로파일이 셋으로 늘었으므로 **전 프로파일**을
+// 건다 — 기본값만 보면 «출력물용을 고르면 게이트를 넘는» 구멍이 남는다.
+for (const profile of RENDER_PROFILE_IDS) {
+  const ratio = gainRatio(faceGainsForRenderProfile(profile));
   if (!(ratio <= 2)) {
-    throw new Error(`DEFAULT_FACE_GAINS 게인비 γ=${ratio} 가 SPEC §14 렌더러 의무(γ≤2)를 위반한다`);
+    throw new Error(`렌더 프로파일 '${profile}' 게인비 γ=${ratio} 가 SPEC §14 렌더러 의무(γ≤2)를 위반한다`);
   }
 }
 

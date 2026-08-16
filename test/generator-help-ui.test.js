@@ -24,6 +24,7 @@ import {
   HELP_POPOVER_EDGE, HELP_POPOVER_GAP, positionHelpPopover,
 } from '../src/help-popover.js';
 import { PRESETS, getPreset, relativeLuminance } from '../src/luminance.js';
+import { decideQuietColor } from '../src/quiet-auto.js';
 import { buildSingleHtml } from '../tools/build-single.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -150,15 +151,19 @@ test('검출기 섹션은 O/A·Y 양쪽이 같은 «검출기 선택» 이름을
 });
 
 test('배치 미리보기 안내는 도달 가능한 동작만 주장한다', () => {
-  // 이 문장은 두 번 좁혔다.
-  //   ① 운영자 초안 «안전영역 옵션을 자동 선택해 준다» — 그런 경로가 없다.
-  //   ② 대체본 «표면 밝기가 흰/검정 색 판단에 반영된다» — 그것도 사실이 아니었다.
-  //      타이브레이크는 |sepW − sepB| ≤ 0.02 에서만 도는데 어떤 팔레트도 거기 못 간다
-  //      (아래 «죽은 분기» 테스트가 실측으로 고정한다).
+  // ⚠ **의도적 갱신** (2026-08-16, 과업 #18). 이 문장은 두 번 좁혔다가 이번에 **다시
+  //   넓혔다** — 좁힌 이유가 사라졌기 때문이다.
+  //     ① 운영자 초안 «안전영역 옵션을 자동 선택해 준다» — 그런 경로가 없었다.
+  //     ② 대체본 «표면 밝기가 흰/검정 판단에 반영된다» — 그것도 아니었다. 타이브레이크가
+  //        |sepW − sepB| ≤ 0.02 뒤에 있었는데 어떤 팔레트도 거기 못 갔다.
+  //     ③ 과업 #18 이 그 입력을 1급으로 올렸다 (src/quiet-auto.js). 문턱은 그대로 두고
+  //        **순서**를 바꿨다 — 이제 사진이 실제로 흰/검을 정한다.
+  //   그래서 이 테스트가 지키는 계약은 «주장하지 마라» 에서 **«주장한 대로 동작하는지»**
+  //   로 옮겨간다. 아래 doesNotMatch 목록은 그대로 둔다 — ①② 시절의 **옛 문구**가
+  //   되살아나는 것은 여전히 결함이다 (그 문구들은 지금 규칙도 잘못 설명한다).
   assert.match(INDEX, /id="backdropQuietNote"[^>]*data-i18n="g935"/);
   assert.doesNotMatch(INDEX, /안전영역 옵션을 삽입할 곳 여건에 맞춰 자동 선택해 줍니다/);
-  assert.match(langBlock('ko'), /"g935": "\* 넣은 표면 이미지는 미리보기에서/);
-  // 세 언어 모두에서 «표면 밝기가 색을 가른다» 류 주장이 사라져야 한다.
+  assert.match(langBlock('ko'), /"g935": "\* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서/);
   const deadClaims = [
     /밝기는[^"]*흰\/검정[^"]*판단에 반영/,          // ko
     /brightness[^"]*feeds[^"]*colour choice/i,      // en
@@ -170,18 +175,21 @@ test('배치 미리보기 안내는 도달 가능한 동작만 주장한다', ()
   for (const lang of LANGS) {
     const block = langBlock(lang);
     for (const claim of deadClaims) {
-      assert.doesNotMatch(block, claim, `${lang}: 도달 불가한 타이브레이크 설명이 남았다`);
+      assert.doesNotMatch(block, claim, `${lang}: 옛 타이브레이크 설명이 되살아났다`);
     }
   }
-  // 코드의 분기 자체는 남아 있다 (팔레트가 늘면 되살아날 규칙이라 지우지 않았다).
-  // 문구에서만 뺐다는 것을 여기서 고정한다 — «지웠나 안 지웠나» 가 헷갈리면 안 된다.
-  assert.match(INDEX, /Math\.abs\(sepW - sepB\) > 0\.02/);
-  assert.match(INDEX, /현재 도달 불가한 죽은 분기/);
+  // 그리고 «죽은 분기» 라고 적어 둔 주석·인라인 규칙은 **없어야** 한다 — 규칙이
+  // 모듈로 옮겨갔는데 그 설명이 남아 있으면 어느 쪽이 진짜인지 화면이 대답 못 한다.
+  assert.doesNotMatch(INDEX, /현재 도달 불가한 죽은 분기/);
+  assert.doesNotMatch(INDEX, /function highContrastQuietColor/);
+  assert.match(INDEX, /resolveQuietZoneChoice/);
 });
 
 test('안전영역 타이브레이크는 등록 프리셋 전부에서 도달 불가다 (실측)', () => {
-  // 문구가 다시 «표면 밝기로 가른다» 로 돌아가려면 이 수치부터 바뀌어야 한다.
-  // 여기서 재지 않으면 «죽은 분기» 라는 판단이 그냥 주장으로 남는다.
+  // ⚠ **의도적 갱신** (2026-08-16, 과업 #18): 재는 것은 그대로, **결론이 바뀌었다**.
+  //   종전 결론은 «그러니 문구에서 빼라» 였다. 지금 결론은 «그러니 문턱이 아니라
+  //   순서를 바꿔라» 다 — 아래 수치가 바로 그 근거다. 문턱을 0 까지 내려도 표면은
+  //   결정을 못 뒤집는다(셀 분리 차가 압도적이라). 수치 핀은 유지한다.
   const white = { r: 255, g: 255, b: 255 };
   const black = { r: 0, g: 0, b: 0 };
   const sep = (levels, color) => {
@@ -203,6 +211,12 @@ test('안전영역 타이브레이크는 등록 프리셋 전부에서 도달 �
   // 어디로 돌려도 slate 근처(0.1629~0.1764)에 머문다. 그 구조를 소스에서 확인한다.
   assert.match(INDEX, /const base = getPreset\('slate'\);/);
   assert.match(INDEX, /colorAtLuminance\(hue, CUSTOM_SATS\.levels\[i\], relativeLuminance\(lvl\)\)/);
+  // 그리고 «순서를 바꾸면 살아난다» 는 여기서 한 번 실증한다 — 같은 수치 그대로,
+  // 새 규칙에서는 표면 밝기가 실제로 답을 가른다. (규칙 전수 검증은 quiet-auto.test.js.)
+  const slate = getPreset('slate').levels;
+  const input = { sepWhite: sep(slate, white), sepBlack: sep(slate, black), separationFloor: 0.05 };
+  assert.equal(decideQuietColor({ ...input, surfaceLuminance: 0.05 }).color, 'white');
+  assert.equal(decideQuietColor({ ...input, surfaceLuminance: 0.95 }).color, 'black');
 });
 
 // ── A-2 «?» 도움말 배선 ───────────────────────────────────────────────────

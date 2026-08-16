@@ -75,6 +75,28 @@ function pointInShape(x, y, shape) {
 }
 
 /**
+ * 음영 띠(`scene.shading`)의 점 (x,y) 에서의 알파.
+ *
+ * **SVG 선형 그라데이션 정의 그대로**다 (`spreadMethod="pad"`): 축 (x1,y1)→(x2,y2) 위로의
+ * 정사영 t 를 [0,1] 로 자르고 a1 → a2 를 선형 보간한다. 프로젝트 고유 규약이 아니라
+ * 공개 스펙이라, SVG 백엔드(선언형 `<linearGradient>`)와 여기(명령형)가 각각 구현해도
+ * 같은 그림이 나온다 — 그 «같음» 은 test/shading.test.js 가 표본 대조로 확인한다.
+ *
+ * 삼각함수·hypot 을 쓰지 않는다 (이 파일의 결정성 계약).
+ */
+function shadingAlphaAt(x, y, band) {
+  const g = band.gradient;
+  const dx = g.x2 - g.x1;
+  const dy = g.y2 - g.y1;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return g.a1;
+  let t = ((x - g.x1) * dx + (y - g.y1) * dy) / len2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  return g.a1 + (g.a2 - g.a1) * t;
+}
+
+/**
  * scene 을 RGBA 픽셀 버퍼로 굽는다.
  *
  * 알고리즘: 출력 해상도의 `supersample`배(ss) 되는 서브픽셀 격자를 배경색으로
@@ -91,7 +113,12 @@ function pointInShape(x, y, shape) {
  * 보증할 수 없다** — 실효 배경이 코드가 놓이는 표면이 되기 때문이다. 소비자
  * (생성기 UI)가 그 사실을 사용자에게 알린다.
  *
- * @param {{width: number, height: number, background: {r,g,b}|null, shapes: Array}} scene
+ * **음영 레이어** (`scene.shading`, 선택): 도형 위에 얹히는 반투명 선형 그라데이션 띠
+ * 목록이다 (`src/shading.js`). 있으면 알파 누산 경로를 타고, **없으면 위 설명 그대로**
+ * 종전 경로가 그대로 돈다 — 출력 바이트가 안 바뀐다.
+ *
+ * @param {{width: number, height: number, background: {r,g,b}|null, shapes: Array,
+ *          shading?: Array}} scene
  * @param {{pixelsPerUnit?: number, supersample?: number}} [options]
  * @returns {{width: number, height: number, pixelsPerUnit: number, supersample: number, pixels: Uint8ClampedArray}}
  */
@@ -177,6 +204,57 @@ export function rasterize(scene, options) {
     }
   }
 
+  // ── 음영 레이어 (scene.shading) ────────────────────────────────────────
+  //
+  // **없으면 아래 두 블록이 통째로 건너뛰어진다** — 종전 경로의 출력이 한 바이트도
+  // 안 바뀌게 하려는 것이다. 음영은 반투명이라 «덮였다/안 덮였다» 이진 커버리지로는
+  // 표현이 안 되고, 알파 누산이 필요하다. 그 누산기를 항상 돌리면 부동소수 합산 순서
+  // 때문에 기존 결정성 핀(SHA)이 통째로 흔들린다.
+  const shading = Array.isArray(scene.shading) ? scene.shading : null;
+  const alpha = shading && shading.length > 0 ? new Float32Array(ssWidth * ssHeight) : null;
+  if (alpha !== null) {
+    if (cov === null) alpha.fill(1);
+    else for (let i = 0; i < ssWidth * ssHeight; i += 1) alpha[i] = cov[i];
+
+    for (const band of shading) {
+      const pts = band.points;
+      let minX = pts[0].x; let maxX = pts[0].x; let minY = pts[0].y; let maxY = pts[0].y;
+      for (const p of pts) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      const sxMin = Math.max(0, Math.floor(minX * ssPixelsPerUnit));
+      const sxMax = Math.min(ssWidth - 1, Math.ceil(maxX * ssPixelsPerUnit));
+      const syMin = Math.max(0, Math.floor(minY * ssPixelsPerUnit));
+      const syMax = Math.min(ssHeight - 1, Math.ceil(maxY * ssPixelsPerUnit));
+      const cr = band.color.r;
+      const cg = band.color.g;
+      const cb = band.color.b;
+      for (let sy = syMin; sy <= syMax; sy += 1) {
+        const sceneY = (sy + 0.5) / ssPixelsPerUnit;
+        for (let sx = sxMin; sx <= sxMax; sx += 1) {
+          const sceneX = (sx + 0.5) / ssPixelsPerUnit;
+          if (!pointInPolygon(sceneX, sceneY, pts)) continue;
+          const a = shadingAlphaAt(sceneX, sceneY, band);
+          if (a <= 0) continue;
+          const i = sy * ssWidth + sx;
+          const o = i * 3;
+          const dstA = alpha[i];
+          const keep = dstA * (1 - a);
+          const outA = a + keep;
+          if (outA <= 0) continue;
+          sub[o] = Math.round((cr * a + sub[o] * keep) / outA);
+          sub[o + 1] = Math.round((cg * a + sub[o + 1] * keep) / outA);
+          sub[o + 2] = Math.round((cb * a + sub[o + 2] * keep) / outA);
+          alpha[i] = outA;
+          if (cov !== null) cov[i] = 1;
+        }
+      }
+    }
+  }
+
   // 다운샘플: ss×ss 서브픽셀 블록을 채널별 산술평균 → 출력 픽셀.
   // 투명 경로는 **덮인 서브픽셀만** 평균한다 — 배경(RGB 0)까지 섞으면 가장자리가
   // 검게 번지는 전형적 프리멀티플라이드 헤일로가 생긴다.
@@ -188,6 +266,7 @@ export function rasterize(scene, options) {
       let sumG = 0;
       let sumB = 0;
       let covered = 0;
+      let sumA = 0;
       for (let dy = 0; dy < ss; dy += 1) {
         const sy = py * ss + dy;
         for (let dx = 0; dx < ss; dx += 1) {
@@ -195,19 +274,35 @@ export function rasterize(scene, options) {
           const i = sy * ssWidth + sx;
           if (cov !== null && cov[i] === 0) continue;
           const o = i * 3;
-          sumR += sub[o];
-          sumG += sub[o + 1];
-          sumB += sub[o + 2];
+          if (alpha !== null) {
+            // 알파 가중(프리멀티플라이드) 누산 — 반투명 띠가 섞이면 «덮인 것끼리 균등
+            // 평균» 은 틀린다. 알파가 전부 1 인 블록에서는 아래 나눗셈이 균등평균과
+            // 같은 값을 준다.
+            const w = alpha[i];
+            sumR += sub[o] * w;
+            sumG += sub[o + 1] * w;
+            sumB += sub[o + 2] * w;
+            sumA += w;
+          } else {
+            sumR += sub[o];
+            sumG += sub[o + 1];
+            sumB += sub[o + 2];
+          }
           covered += 1;
         }
       }
       const o = (py * width + px) * 4;
-      if (covered === 0) {
+      if (covered === 0 || (alpha !== null && sumA <= 0)) {
         // 투명 경로에서만 도달한다(불투명 경로는 항상 ssArea 개가 덮인 것으로 센다).
         pixels[o] = 0;
         pixels[o + 1] = 0;
         pixels[o + 2] = 0;
         pixels[o + 3] = 0;
+      } else if (alpha !== null) {
+        pixels[o] = Math.round(sumR / sumA);
+        pixels[o + 1] = Math.round(sumG / sumA);
+        pixels[o + 2] = Math.round(sumB / sumA);
+        pixels[o + 3] = cov === null ? 255 : Math.round((sumA / ssArea) * 255);
       } else {
         pixels[o] = Math.round(sumR / covered);
         pixels[o + 1] = Math.round(sumG / covered);

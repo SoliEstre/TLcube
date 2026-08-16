@@ -86,7 +86,12 @@ if (basename(process.argv[1]) === 'claude-skew-real-rgain.mjs') {
   for (const ppu of [10, 12]) {
     for (const tones of [3, 2]) {
       for (const sigma of [0.02, 0.04]) {
-        for (const rGain of [0.52, 0.62, 0.72]) {
+        // 2026-08-16 (과업 #16): 스윕 값을 env 로 열었다. 원 실험은 0.52/0.62/0.72 3수준
+        // 이었는데, 그 사이(0.57\~0.60)가 다른 축에서 더 나아 보여 **같은 격자**로 확인해야
+        // 했다. 미지정 시 원래 3수준 그대로라 기존 재현은 안 깨진다.
+        for (const rGain of (process.env.RGAINS
+          ? process.env.RGAINS.split(',').map(Number)
+          : [0.52, 0.62, 0.72])) {
           for (const theta of [0, 20, 29, 40, 45, 51]) {
             for (const axis of ['horizontal', 'vertical']) {
               if (theta === 0 && axis !== 'horizontal') continue;

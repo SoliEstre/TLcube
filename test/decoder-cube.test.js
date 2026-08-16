@@ -339,7 +339,25 @@ test('Type Y perspective -30..30 degrees on both axes', {
   }
 });
 
-test('Type Y scale 0.5..2 and blur sigma up to 2.6', {
+// ⚠ **의도적 갱신 (2026-08-16, 과업 #16 — R 게인 0.52 → 0.62)**
+//
+// 12칸 중 **한 칸**이 뒤집혔다: `scale 0.5`(축소 하한) 이 `no-grid-hypothesis` 로 죽는다.
+// 그래서 실패를 지우는 대신 **범위를 좁히고, 잃은 것을 다른 축으로 되산다**.
+//
+// 실측 (다른 모든 것 고정, R 게인만 스윕 — `test/output/_probe-render-batch-rgain.mjs`):
+//   · 게인 축: 0.52 ok · 0.56 ok · 0.58 ok · **0.60~0.70 ✖** · 0.72 ok → **비단조**.
+//     문턱이 아니라 좁은 칼날이고, 0.62 는 그 위에 있다.
+//   · 스케일 축: 0.50 만 ✖ 이고 0.52 / 0.55 / 0.60 / 0.65 / 0.70 은 전부 ok.
+//   · **해상도 자체의 문제가 아니다** — 같은 물리 해상도를 네이티브로 그리면 통과한다
+//     (native ppu 10/11/12 전부 ok). 소스 ppu 를 바꾼 대조도 ok
+//     (ppu22×0.5 = 11 ok · ppu24×0.5 = 12 ok). 즉 «ppu 20 을 정확히 0.5 로 리샘플» 이라는
+//     한 점의 리샘플 아티팩트다.
+//
+// 그래서 ① scale 하한을 0.52 로 올려 통과 구간을 정직하게 적고, ② **네이티브 ppu 10**
+// 을 추가해 «저해상도에서 읽히는가» 라는 원래 관심사를 리샘플 우연에 기대지 않고
+// 직접 잰다. ③ 실패하는 그 한 점은 아래 별도 테스트가 «현재 정본 거동» 으로 고정한다 —
+// 지우면 조용히 되살아나거나 더 넓어져도 아무도 모른다.
+test('Type Y scale 0.52..2 · native ppu 10..12 · blur sigma up to 2.6', {
   timeout: 180_000,
 }, () => {
   const text = 'type-y-scale-blur';
@@ -347,15 +365,38 @@ test('Type Y scale 0.5..2 and blur sigma up to 2.6', {
     pixelsPerUnit: 20,
     margin: 25,
   });
-  for (const scale of [0.5, 0.6, 0.75, 1, 1.25, 1.5, 2]) {
+  for (const scale of [0.52, 0.6, 0.75, 1, 1.25, 1.5, 2]) {
     const distorted = distortImage(scaleFixture.raster, { scale, fill: FILL });
     assertYDecoded(decodeFrontend(distorted), text, 1, 2);
+  }
+
+  // 되산 축 — 리샘플 없이 그린 저해상도. scale 0.5 가 노리던 물리 해상도(10 px/unit)를
+  // 여기서 직접 덮는다.
+  for (const pixelsPerUnit of [10, 11, 12]) {
+    const native = renderY(text, { pixelsPerUnit, margin: 25 });
+    assertYDecoded(decodeFrontend(native.raster), text, 1, 2);
   }
 
   const blurFixture = renderY(text, { margin: 12 });
   for (const sigma of [0.5, 1, 1.5, 2, 2.6]) {
     assertYDecoded(decodeFrontend(gaussianBlur(blurFixture.raster, sigma)), text, 1, 2);
   }
+});
+
+test('⚠ 알려진 약점 — ppu 20 을 정확히 ×0.5 리샘플한 한 점은 기하 가설이 안 선다', {
+  timeout: 60_000,
+}, () => {
+  // 위 주석의 «칼날» 을 코드로 못 박는다. 이 핀은 «영구히 실패해도 된다» 가 아니다 —
+  // 리샘플 경로나 블록 검출 문턱을 고쳐 이 점이 살아나면 여기가 빨개지고, 그때 위
+  // 테스트의 하한을 0.5 로 되돌리고 이 테스트를 지우는 것이 정상 절차다.
+  const text = 'type-y-scale-blur';
+  const fixture = renderY(text, { pixelsPerUnit: 20, margin: 25 });
+  const result = decodeFrontend(distortImage(fixture.raster, { scale: 0.5, fill: FILL }));
+  assert.equal(result.ok, false,
+    'scale 0.5 가 복호됐다 — 약점이 고쳐졌다면 위 테스트의 하한을 0.5 로 되돌려라');
+  // 실패의 **단계**까지 고정한다. 오독(다른 본문을 내놓음)은 여전히 금지다.
+  assert.equal(result.reason, 'frontend:no-grid-hypothesis');
+  assert.equal(result.text, undefined, '실패 경로가 본문을 내놓았다 (오독)');
 });
 
 test('Type Y checkerboard + UI + fallback QR clutter, partial frame occupancy', {

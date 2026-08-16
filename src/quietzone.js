@@ -290,6 +290,35 @@ function selfQuietShapeIndices(shapes, selfQuietColors) {
 }
 
 /**
+ * 마크 덩어리별 **볼록 껍질**. 안전영역(`quietZonePolygons`)과 입체 음영(`shading.js`)이
+ * 같은 껍질에서 출발하도록 여기 한 번만 만든다 — 두 레이어가 서로 다른 껍질을 쓰면
+ * 그림자가 안전영역 밖으로 새거나 안쪽으로 파고드는 날이 온다.
+ *
+ * @param {{shapes:Array}} scene
+ * @param {number} clusterGap 덩어리 묶음 간격 (scene 단위)
+ * @param {{r:number,g:number,b:number}[]} [selfQuietColors] 이 색들로만 이뤄진 **연결
+ *   덩어리**는 제외한다 (폴백 QR 블록 — 자체 콰이어트 존이 있다). 생략하면 제외 없음.
+ * @returns {{x:number,y:number}[][]} 껍질(정점 3개 이상)만
+ */
+export function markHulls(scene, clusterGap, selfQuietColors) {
+  const excluded = selfQuietShapeIndices(scene.shapes, selfQuietColors);
+  const kept = [];
+  for (let i = 0; i < scene.shapes.length; i += 1) {
+    if (excluded.has(i)) continue;
+    kept.push(scene.shapes[i]);
+  }
+
+  const out = [];
+  for (const idx of clusterShapes(kept, clusterGap)) {
+    const pts = [];
+    for (const i of idx) pts.push(...shapePoints(kept[i]));
+    const hull = convexHull(pts);
+    if (hull.length >= 3) out.push(hull);
+  }
+  return out;
+}
+
+/**
  * 안전영역 폴리곤들을 만든다 — 클러스터별 볼록 껍질 + 바깥 오프셋 + 캔버스 클립.
  * @param {{width:number, height:number, shapes:Array}} scene
  * @param {number} margin 오프셋 거리 (scene 단위 — 셀 크기 1 기준 "셀 몇 개분")
@@ -301,21 +330,8 @@ export function quietZonePolygons(scene, margin, selfQuietColors) {
   // 제외 판정을 **먼저** 한다 — 연결성 간격 기준으로. 그 다음 남은 도형만 마진으로
   // 묶어 hull 을 만든다. 순서를 반대로 하면 마진이 QR 과 코드를 한 덩어리로 붙여
   // 제외가 무력화된다(그 결과가 QR 과 코드를 잇는 대각선 안전영역이다).
-  const excluded = selfQuietShapeIndices(scene.shapes, selfQuietColors);
-  const kept = [];
-  const keptIndex = [];
-  for (let i = 0; i < scene.shapes.length; i += 1) {
-    if (excluded.has(i)) continue;
-    kept.push(scene.shapes[i]);
-    keptIndex.push(i);
-  }
-
   const out = [];
-  for (const idx of clusterShapes(kept, margin)) {
-    const pts = [];
-    for (const i of idx) pts.push(...shapePoints(kept[i]));
-    const hull = convexHull(pts);
-    if (hull.length < 3) continue;
+  for (const hull of markHulls(scene, margin, selfQuietColors)) {
     const poly = clipToRect(offsetConvex(hull, margin), scene.width, scene.height);
     if (poly.length >= 3) out.push(poly);
   }

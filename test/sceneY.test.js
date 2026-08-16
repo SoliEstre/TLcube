@@ -150,7 +150,10 @@ describe('buildSceneY — 면 게인 적용 (tones=2, 2톤 메인 기본값)', (
     // rank 순서(0<1<2)와 일치하는지 실측한다. cellSize=1 이므로 모든 셀의 면별
     // 게인 색은 동일 팔레트에서 나오므로, 각 face 별로 3개 색(levels 게인판)의
     // 상대휘도가 오름차순인지만 확인하면 충분하다(§4.4 median=색 자체 상대휘도 전제 승계).
-    const gainOf = { T: 1, L: 0.72, R: 0.52 };
+    // 의도적 갱신 (2026-08-16, 과업 #16): 하드코딩된 {1,.72,.52} 를 기본값에서 읽도록
+    // 바꾼다 — 이 테스트가 검사하는 것은 «면 내 rank 순서 보존» 이지 특정 게인 값이
+    // 아니다. 값을 베껴 두면 기본값이 바뀔 때마다 무관한 테스트가 같이 빨개진다.
+    const gainOf = DEFAULT_FACE_GAINS;
     for (const face of YFACES) {
       const g = gainOf[face];
       const ys = PALETTE.levels.map((rgb) => {
@@ -241,11 +244,16 @@ describe('buildSceneY — U17 2톤 분리 계약 게이트', () => {
 });
 
 describe('buildSceneY — γ ≤ 2 단언', () => {
-  test('DEFAULT_FACE_GAINS 의 γ = 1/0.52 ≈ 1.923 <= 2', () => {
+  // 의도적 갱신 (2026-08-16, 과업 #16): R 0.52 → 0.62 이므로 γ 1.923 → 1.613 이다.
+  // 근거는 R 게인 단독 절제(합성 88쌍 80 %→93 %, McNemar p ≈ 0.0042 — claude-skew-real.md
+  // §2.4). 숫자를 상수로 다시 적지 않고 **기본값에서 유도**해 두 곳이 갈라지지 않게 한다.
+  test('DEFAULT_FACE_GAINS 의 γ = 1/R = 1/0.62 ≈ 1.613 <= 2', () => {
     const ratio = Math.max(DEFAULT_FACE_GAINS.T, DEFAULT_FACE_GAINS.L, DEFAULT_FACE_GAINS.R)
       / Math.min(DEFAULT_FACE_GAINS.T, DEFAULT_FACE_GAINS.L, DEFAULT_FACE_GAINS.R);
     assert.ok(ratio <= 2, `γ=${ratio}`);
-    assert.ok(Math.abs(ratio - 1 / 0.52) < 1e-9);
+    assert.equal(DEFAULT_FACE_GAINS.R, 0.62, '기본 R 게인이 바뀌었다 — 근거 문서와 함께 갱신하라');
+    assert.ok(Math.abs(ratio - 1 / DEFAULT_FACE_GAINS.R) < 1e-9);
+    assert.ok(Math.abs(ratio - 1.6129032258064515) < 1e-9, `γ=${ratio}`);
   });
 
   test('커스텀 faceGains 로 γ > 2 를 넘기면 throw', () => {

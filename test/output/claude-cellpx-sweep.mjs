@@ -23,12 +23,20 @@ import { TL_READER_URL } from '../../src/qr.js';
 import { BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset } from '../../src/luminance.js';
 
 const PRESET = getPreset(DEFAULT_PRESET);
+// 2026-08-16 (과업 #16): R 면 게인 기본값이 0.52 → 0.62 로 바뀌었다. 이 스윕의 기존
+// 공표 수치는 전부 R 0.52 로 잰 것이라 **기준선이 끊긴다**. 전후를 같은 코드로 재려고
+// 게인 오버라이드를 뒀다 — `RGAIN=0.52 node …` 가 옛 기준선 재현이다. 미지정이면
+// 현재 기본값(= 화면용 프로파일)을 쓴다.
+const R_GAIN = process.env.RGAIN ? Number(process.env.RGAIN) : DEFAULT_FACE_GAINS.R;
+const FACE_GAINS = Object.freeze({ T: 1, L: DEFAULT_FACE_GAINS.L, R: R_GAIN });
+// 전후 두 팔을 **동시에** 돌릴 때 서로의 부분결과를 덮지 않도록 출력 파일명을 뗀다.
+const OUT_NAME = process.env.SWEEP_OUT || './claude-cellpx-sweep.json';
 const PALETTE = Object.freeze({
   background: PRESET.background,
   levels: PRESET.levels,
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
-  faceGains: DEFAULT_FACE_GAINS,
+  faceGains: FACE_GAINS,
 });
 /** 회전 채움은 반드시 불투명 — a 누락은 normalizeFill 이 던진다(의도된 가드). */
 const FILL = Object.freeze({ ...PRESET.background, a: 255 });
@@ -245,7 +253,7 @@ for (const cellPx of CELL_PX) {
     }
   }
   writeFileSync(
-    new URL('./claude-cellpx-sweep.json', import.meta.url),
+    new URL(OUT_NAME, import.meta.url),
     JSON.stringify({ partial: true, cellPxDone: cellPx, rows }, null, 2) + '\n',
   );
 }
@@ -315,7 +323,7 @@ const out = {
   rows,
 };
 writeFileSync(
-  new URL('./claude-cellpx-sweep.json', import.meta.url),
+  new URL(OUT_NAME, import.meta.url),
   JSON.stringify(out, null, 2) + '\n',
 );
 process.stdout.write(JSON.stringify({ elapsedMs: out.elapsedMs, byCellPxLayout }, null, 2) + '\n');

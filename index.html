@@ -271,6 +271,10 @@
     font-size: 12px; color: var(--text);
   }
   .check-row input { width: auto; margin: 0; }
+  /* 상위 옵션이 꺼져 있어 «눌러도 그림이 안 바뀌는» 서브옵션 (입체 음영 ②).
+     disabled 만으로는 브라우저마다 표시가 제각각이라 흐림을 여기서 정한다. */
+  .check-row.dim { opacity: 0.45; }
+  .check-row.dim label { cursor: default; }
   .hint { font-size: 11px; color: var(--dim); margin: 4px 0 0; line-height: 1.5; }
 
   /* ── 섹션 도움말 «?» + 플로팅 창 (2026-08-16 운영자 지시 A-2) ────────────
@@ -647,6 +651,11 @@
     background: color-mix(in srgb, var(--accent) 12%, var(--bg));
   }
   .toggle-card.disabled { opacity: .35; pointer-events: none; }
+  /* ⚠ 이 줄이 없으면 `card.hidden = true` 가 **안 듣는다.** `[hidden]` 의 display:none 은
+     UA 스타일시트에 있고, 위 `.toggle-card { display: flex }` 는 저작자 규칙이라 언제나
+     이긴다. lab 전용 카드(렌더 프로파일 «오리지널»)를 정식 화면에서 감추는 유일한
+     장치가 hidden 이므로 여기서 명시적으로 되돌린다. */
+  .toggle-card[hidden] { display: none; }
   /* 안전영역은 정확히 5개 선택지다. 이 행만 공용 64px 최소폭을 풀어 사이드바와
      모바일 모두에서 다섯 버튼을 한 줄에 유지한다. */
   #quietModeCards { flex-wrap: nowrap; gap: 6px; }
@@ -1216,7 +1225,107 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode">
+    <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode renderProfile shading shadingRim">
+      <!-- 렌더 프로파일 (과업 #16) — «이 코드를 어디에 쓸 것인가» 를 먼저 묻는다.
+           그 답이 세 면의 밝기 비(면 게인)를 정하고, 아래 배경색·안전영역 선택의 전제가 된다.
+           **Type Y 전용 섹션**이다 — 면 게인을 소비하는 렌더 경로가 buildSceneY 뿐이다
+           (Type O/A 의 scene.js 는 팔레트 레벨 색을 그대로 쓴다). O/A 로 바꾸면 숨는다.
+           #finderSection(비-Y) · #yLocatorSection(Y·lab) 과 같은 규약이다.
+           카드는 정식 2종(화면용·출력물용)이고 «오리지널» 은 lab 에서만 앞에 붙는다 —
+           DOM 에는 셋 다 있고 `syncRenderProfileUi()` 가 lab 이 아니면 감춘다. -->
+      <div id="renderProfileSection" hidden>
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g970">렌더 프로파일</label>
+          <button type="button" class="help-dot" data-help="g971" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+        <div class="card-row" id="renderProfileCards">
+          <!-- 오리지널 = 되돌림 화살표(역사) — 구 기본값으로 되돌린 대조군이라는 뜻. -->
+          <div class="toggle-card" data-profile="original" id="renderProfileOriginalCard">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3.4 12a8.6 8.6 0 1 0 8.6-8.6 9.3 9.3 0 0 0-6.4 2.6L3.4 8.4"/>
+              <path d="M3.4 3.4v5h5"/>
+              <path d="M12 7.6V12l3.8 1.9"/>
+            </svg>
+            <span data-i18n="g976">오리지널</span>
+            <span class="card-sub" data-i18n="g977">구 기본값 · 대조군</span>
+          </div>
+          <!-- 화면용 = 모니터. -->
+          <div class="toggle-card active" data-profile="screen">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="2.6" y="3.6" width="18.8" height="13" rx="2"/>
+              <path d="M12 16.6v3.8"/>
+              <path d="M8.4 20.4h7.2"/>
+            </svg>
+            <span data-i18n="g972">화면용</span>
+            <span class="card-sub" data-i18n="g973">화면 · 촬영</span>
+          </div>
+          <!-- 출력물용 = 프린터. -->
+          <div class="toggle-card" data-profile="print">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6.6 9V2.8h10.8V9"/>
+              <path d="M6.6 18H4.4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h15.2a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2.2"/>
+              <rect x="6.6" y="14" width="10.8" height="7.2" rx="1"/>
+            </svg>
+            <span data-i18n="g974">출력물용</span>
+            <span class="card-sub" data-i18n="g975">인쇄 · 잉크</span>
+          </div>
+        </div>
+        <p class="hint" id="renderProfileHint"></p>
+      </div>
+
+      <!-- 입체 음영 (과업 #17) — 좌상단 조명 전제의 그림자·반사광 띠.
+           **Type Y 전용**이다. 조명 방향을 새로 정한 게 아니라 면 게인 표(T 1 · L .72 ·
+           R .52~.62)가 이미 말하고 있는 방향을 기하로 옮긴 것이라(shading.js 상단),
+           그 게인을 소비하는 렌더 경로가 없는 O/A 에서는 근거가 사라진다.
+           그리는 자리는 **안전영역 + 배경 영역**뿐이고 셀에는 안 닿는다 — 그 무접촉은
+           주장이 아니라 test/shading.test.js 의 SAT 교차 0 검사로 고정돼 있다. -->
+      <div id="shadingSection" hidden>
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g981">입체 음영</label>
+          <button type="button" class="help-dot" data-help="g982" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+        <div class="card-row" id="shadingCards">
+          <!-- 없음 = 평평한 사각 + 사선(끔). -->
+          <div class="toggle-card active" data-shading="off">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="5" y="5" width="14" height="14" rx="2"/>
+              <path d="M4 20 L20 4"/>
+            </svg>
+            <span data-i18n="g983">없음</span>
+            <span class="card-sub" data-i18n="g984">평면 그대로</span>
+          </div>
+          <!-- 켬 = 큐브 + 우하 그림자 덩어리 (조명은 좌상단). -->
+          <div class="toggle-card" data-shading="on">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z"/>
+              <path d="M4 7.4 12 12l8-4.6M12 12v9.2"/>
+              <path d="M15.6 20.6a7 7 0 0 0 4.6-4.6" stroke-width="2.6" stroke-linecap="round" opacity="0.55"/>
+            </svg>
+            <span data-i18n="g985">그림자·반사광</span>
+            <span class="card-sub" data-i18n="g986">좌상단 조명</span>
+          </div>
+        </div>
+        <!-- ② 서브옵션. 카드가 아니라 체크박스인 이유: ① 을 고른 **뒤에** 얹는 축이라
+             카드 3택으로 만들면 «없음/기본/기본+엣지» 처럼 보여 두 축이 하나로 뭉갠다. -->
+        <div class="check-row" id="shadingRimRow">
+          <input type="checkbox" id="shadingRim">
+          <label for="shadingRim" style="margin:0;color:var(--text)" data-i18n="g987">윗면 엣지 아웃라인</label>
+        </div>
+        <p class="hint" id="shadingHint"></p>
+      </div>
+
       <!-- 사용자 지시 2026-08-09: 배경 3택(투명/흰색/검정), 기본 투명.
            투명은 미리보기에서 포토샵식 체커보드로 표시한다(테마별 색). -->
       <div class="section-heading-row">
@@ -1266,20 +1375,18 @@
         <input type="file" id="backdropFile" accept="image/*" style="display:none">
         <p class="hint" id="backdropHint" data-i18n-html="g300">코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.
           미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠 또는 핀치로 확대/축소</b><span data-i18n="g083">할 수 있어요. 내보내는 파일에는 안 들어가요.</span></p>
-        <!-- ⚠ 이 줄은 두 번 좁혔다.
-             ① 운영자 초안은 «안전영역 옵션을 여건에 맞춰 자동으로 골라 준다» 였다 —
-                그런 경로가 없다. generatorState.quietMode 를 쓰는 곳은 카드 클릭
-                하나뿐이다.
-             ② 그래서 «색 판단에는 반영된다» 로 적었는데, 그것도 사실이 아니었다
-                (2026-08-16 적대 검증 ⑤). `highContrastQuietColor()` 가 표면 휘도
-                (`lastBackdropLuminance`)를 보는 것은 |sepW − sepB| ≤ 0.02 일 때뿐인데,
-                **UI 로 만들 수 있는 모든 팔레트가 그 문턱 밖**이다 — 실측
-                slate 0.1689 · ember 0.2507 · mono 0.0257 · 커스텀 hue 0~359 는
-                0.1629~0.1764 (makeCustomPalette 가 slate 의 상대휘도를 타깃해서 만든다).
-                즉 그 타이브레이크 분기는 화면에서 **한 번도 실행되지 않는다**.
-             문턱을 조정해 분기를 살릴지는 운영자 판단으로 남겼다 (보고서 §11-1).
-             지금 화면에는 «실제로 일어나는 일» 만 적는다. -->
-        <p class="hint" id="backdropQuietNote" data-i18n="g935">* 넣은 표면 이미지는 미리보기에서 표면과 셀 색의 분리를 실측하는 데만 써요. 내보내는 PNG·SVG 에도, 아래 «안전영역» 의 옵션·색에도 반영되지 않아요.</p>
+        <!-- 이 줄은 두 번 좁혔다가 **다시 넓혔다** — 이번엔 사실이 됐기 때문이다.
+             ① 운영자 초안 «안전영역을 여건에 맞춰 자동으로 골라 준다» → 그 경로가 없었다.
+             ② «색 판단에는 반영된다» → 그것도 아니었다 (2026-08-16 적대 검증 ⑤).
+                표면 휘도를 보는 분기가 |sepW − sepB| ≤ 0.02 뒤에 있었는데 UI 로 만들 수
+                있는 팔레트가 전부 그 문턱 밖이라(slate 0.1689 · ember 0.2507 ·
+                mono 0.0257 · 커스텀 0.1629~0.1764) **한 번도 실행되지 않았다**.
+             ③ 과업 #18 에서 그 입력을 1급으로 올렸다 (src/quiet-auto.js). 문턱 0.02 는
+                그대로 두고 **순서**를 바꿨다 — 셀 분리 바닥(BG_SEPARATION_MIN)을 둘 다
+                넘으면 표면 밝기가 흰/검을 **결정한다**. 실측 slate 기준 표면 휘도
+                0.5 를 넘으면 검정으로 뒤집힌다. 즉 이제 «반영된다» 가 참이다.
+             여전히 참이 아닌 것 하나는 그대로 적는다 — 사진은 **내보내는 파일에 안 들어간다**. -->
+        <p class="hint" id="backdropQuietNote" data-i18n="g935">* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, 아래 «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.</p>
         <p class="hint" id="backdropVerdict" style="display:none"></p>
       </div>
 
@@ -1864,7 +1971,7 @@ const GENERATOR_STRINGS = {
     "g901": "오류정정(ECC) 비중을 정하는 축이에요. 정정에 자리를 많이 줄수록 담을 양이 줄어요.\n보정 우선 = ECC H(≈40%) · 표준 = ECC M(25%) · 대용량 = ECC L(≈12%).\n자동은 입력 크기에 맞춰 H → M → L 순서로 처음 들어가는 레벨을 골라요.\n아래 자체검증 뱃지는 지금 설정으로 실제 렌더한 그림을 되읽은 결과예요 — 인쇄·촬영 조건이 아니라 «렌더가 자기 계약을 지켰는가» 만 봐요.",
     "g902": "투명 = 배경 없이 코드만. PNG 는 알파 채널, SVG 는 배경 요소가 아예 없어요.\n흰색 = 밝은 인쇄물·문서 위에 얹을 때. 검정 = 어두운 지면·화면에 얹을 때.\n투명을 고르면 실효 배경이 «코드를 얹는 표면» 이 돼요 — 그 표면과 셀 색의 분리는 생성 시점에 보증할 수 없으니 아래 «TL 배치 미리보기» 로 실측해 보세요.",
     "g903": "코드를 실제로 얹을 자리의 사진을 넣으면 미리보기 뒤에 깔려요.\n미리보기에서 드래그로 이동, 휠 또는 핀치로 확대/축소해 위치를 맞춰 보세요.\n코드 둘레의 표면 휘도와 셀 레벨의 분리를 실측해서, 인쇄 전에 «여기 놓으면 읽히는가» 를 수치로 알려줘요.\n내보내는 PNG·SVG 에는 이 사진이 안 들어가요.",
-    "g904": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\n자동 = 배경이 투명이면 고대비 색을 깔고, 불투명이면 배경이 이미 안전영역이라 생략해요.\n없음 = 여백 없이 코드만. 흰색·검정 = 그 색으로 고정.\n고대비 = 셀 색과의 상대휘도 분리가 큰 쪽(흰색 또는 검정)을 골라요. 지금 고를 수 있는 색 스타일에서는 언제나 이 한 단계로 정해져요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
+    "g904": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\n자동 = 배경이 투명이면 고대비 색을 깔고, 불투명이면 배경이 이미 안전영역이라 생략해요.\n없음 = 여백 없이 코드만. 흰색·검정 = 그 색으로 고정.\n고대비 = 흰색·검정 중에서 골라요. ① 셀 색과 너무 가까운 쪽을 먼저 떨어뜨려요 — 여백이 코드에 들러붙으면 실루엣이 코드보다 커져요. ② 둘 다 통과하면 «TL 배치 미리보기» 사진에서 잰 표면 밝기와 더 멀리 떨어진 쪽을 골라요. 밝은 표면이면 검정, 어두운 표면이면 흰색이에요.\n사진을 안 넣었으면 ② 를 못 하니 셀 색과 더 멀리 떨어진 쪽으로 정해요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
     "g905": "TL스캐너로 스캔이 안 될 때 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.\n좌상·우상·좌하·우하 = 코드 바깥 네 모서리 중 한 곳.\n안쪽 = Type O/A 는 중앙 QR, Type Y 는 Y2 윈도 β.\n없음 = QR 없이 코드만 내보내요.\n중앙 QR 변형은 코드 폭 13 cm 이상 인쇄를 권장해요.",
     "g906": "스캐너가 Type Y 코드의 위치·방향을 먼저 찾는 데 쓰는 셀 표면 로케이터예요.\n자동 = 지금 설정에서 권장하는 것을 씁니다. 정식 승격된 Y 검출기가 아직 없어서 현재 «자동» 은 «끔» 과 같은 결과예요.\n후보별 점유 셀 수와 최대 payload L / M / H (정본 cellSurfaceFinal.js):\n· v0 — 30셀 (n=13) · 29 / 25 / 20 B\n· v0X — 65셀 (n=21) · 96 / 81 / 65 B\n· v0XQ — 파인더 42셀 + 중앙 QR 슬롯 81셀 (n=21) · 80 / 67 / 54 B\n· v1r2 — 80셀 (n=21) · 92 / 77 / 62 B\n· v2r2 — 74셀 (n=21) · 94 / 79 / 63 B (n=25 에서는 145 / 124 / 99 B)\n점유 셀이 적을수록 데이터에 쓸 심볼이 많이 남아요 — n=21 에서는 v0X 가 가장 많이 담고 v0XQ 가 가장 적어요. 슬롯이 없는 세 후보끼리는 차이가 L 기준 4 B 라 용량으로 고를 만한 폭이 아니지만, v0XQ 는 중앙 QR 슬롯에 81셀을 내주느라 v0X 보다 L 기준 16 B 적어요 — 그 대신 스캐너가 못 읽어도 중앙 QR 이 폴백 URL 을 싣습니다.\n실험 항목이라 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.",
     "g907": "Type O/A 코드 한가운데에 넣는 표식이에요 — 스캐너가 코드의 위치·방향을 여기서 먼저 잡아요.\n중앙 QR = 기본값. 폴백 QR 을 파인더 자리에 넣어 방향 기준까지 겸해요 (아래 «TL스캐너 QR링크 포함» 의 «안쪽» 과 같은 자리예요).\n불스아이 = 동심원 표식 · 불스아이 속 큐브 = 링 안에 큐브를 넣은 하이브리드 · 3톤 큐브 = 셀 색 세 톤만으로 만든 표식.\n«고급» 모드에서는 비교용 실험 후보 묶음(«기준 미달 후보» · «스캔 불가 후보»)도 함께 펼쳐져요.\n아래 점수판은 모형 점수예요 — 인식률 예측이 아니에요.",
@@ -1882,7 +1989,7 @@ const GENERATOR_STRINGS = {
     "g931": "설명 보기",
     "g932": "설명 닫기",
     "g934": "어두운 지면",
-    "g935": "* 넣은 표면 이미지는 미리보기에서 표면과 셀 색의 분리를 실측하는 데만 써요. 내보내는 PNG·SVG 에도, 아래 «안전영역» 의 옵션·색에도 반영되지 않아요.",
+    "g935": "* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, 아래 «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.",
     "g941": "권장값 자동",
     "g942": "검출기 없음",
     "g943": "코너 4블록",
@@ -1897,6 +2004,29 @@ const GENERATOR_STRINGS = {
     "g960": "커스텀 색상 (Hue)",
     "g961": "TL 배치 미리보기",
     "g962": "드래그로 위치 이동 · 휠 또는 핀치로 확대/축소",
+    "g970": "렌더 프로파일",
+    "g971": "코드를 어디에 쓸지 먼저 고르면, 세 면의 밝기 차이를 그 쓰임에 맞춰 잡아요 (Type Y 전용).\n화면용 = 모니터·앱 화면에 띄우거나 그 화면을 촬영해 읽는 경우. 입체감을 살린 기본값이에요.\n출력물용 = 종이·스티커·간판처럼 인쇄해서 쓰는 경우. 세 면을 같은 밝기로 그려요 — 잉크와 종이가 어두운 면을 한 번 더 깎는 것을 피해요.\n어느 쪽을 골라도 읽는 방식은 그대로예요. 스캐너는 면마다 밝기 기준을 다시 잡기 때문에, 세 면이 같은 밝기여도 순서를 읽어내요.\n인쇄물을 화면용으로 내보내도 대개 읽히지만, 인쇄 조건이 나쁠수록(저품질 인쇄·어두운 조명) 출력물용이 유리해요.",
+    "g972": "화면용",
+    "g973": "화면 · 촬영",
+    "g974": "출력물용",
+    "g975": "인쇄 · 잉크",
+    "g976": "오리지널",
+    "g977": "구 기본값 · 대조군",
+    "g978": "화면용 — 세 면의 밝기 차이를 살려요. 화면·촬영 경로 기본값이에요.",
+    "g979": "출력물용 — 세 면을 같은 밝기로 그려요. 인쇄 손실을 줄이고, 판독은 그대로예요.",
+    "g980": "오리지널 — 시험판 전용 대조군이에요. R면 게인을 올리기 전 값이라 A/B 재스캔에만 쓰세요.",
+    "g981": "입체 음영",
+    "g982": "코드 왼쪽 위에 조명이 있다고 보고, 코드 **바깥**에 그림자와 반사광을 둘러요.\n오른쪽 아래(R면 쪽)에는 그림자를, 왼쪽 아래(L면 쪽)에는 반사광을 깔아요. 어느 쪽에 무엇이 오는지는 세 면의 밝기(T가 가장 밝고 R이 가장 어두움)에서 그대로 따라 나와요.\n셀에는 절대 안 닿아요 — 안전영역과 배경 영역에만 그리고, 코드 도형과 겹치는 넓이가 0 이 되게 만들어요.\n배경이 투명이면 이 음영도 함께 내보내져서, 코드를 얹은 자리 위에 그대로 얹혀요.\n윗면 엣지 아웃라인은 별도 선택이에요 — 코드 위쪽 테두리에 얇은 반사광·그림자 선을 더해요. 인식률에 미치는 영향이 아직 확실하지 않아 기본은 꺼져 있어요.",
+    "g983": "없음",
+    "g984": "평면 그대로",
+    "g985": "그림자·반사광",
+    "g986": "좌상단 조명",
+    "g987": "윗면 엣지 아웃라인",
+    "g988": "음영 없이 코드만 그려요. 내보내는 그림이 지금까지와 똑같아요.",
+    "g989": "코드 바깥 여백에 오른쪽 아래 그림자와 왼쪽 아래 반사광을 둘러요. 셀에는 안 닿아요.",
+    "g990": "아래쪽 그림자·반사광에 더해 위쪽 테두리에도 얇은 아웃라인을 그려요. 인식률 영향이 아직 확실하지 않은 선택이에요.",
+    "g991": " (배치 사진의 표면 밝기 {mean} 까지 보고 골랐어요) ",
+    "g992": " ⚠ 배경이 «검정»이 아니면 음영이 스캔을 방해할 수 있어요 — 흰 배경에서 복호가 20/20 → 6/20, 투명 배경을 중간 밝기 표면에 얹었을 때 10/10 → 0/10 으로 떨어졌어요. 전시용이면 그대로 쓰고, 스캔이 목적이면 배경을 검정으로 두거나 음영을 끄세요.",
     "g453": "타입 <b>Y</b> · 버전 <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · 톤 <b>{tones}</b>",
     "g454": " · 윈도 <b>β</b>",
     "g455": "용량 초과 — 내용 뒤쪽 {n} B 가 잘린 채로 렌더링 중이에요 (빨간 구간이 잘리는 부분).",
@@ -2151,7 +2281,7 @@ const GENERATOR_STRINGS = {
     "g901": "This axis sets how much room goes to error correction (ECC). More correction means less payload.\nCorrection first = ECC H (≈40%) · Standard = ECC M (25%) · High capacity = ECC L (≈12%).\nAuto walks H → M → L and takes the first level the content fits into.\nThe self-check badge below re-reads the image this setting actually rendered. It judges whether the render kept its own contract — not how a print or a camera will behave.",
     "g902": "Transparent = code only. PNG keeps an alpha channel; SVG has no background element at all.\nWhite = for light prints and documents. Black = for dark stock or screens.\nWith transparent, the effective background becomes the surface you put the code on. That separation cannot be guaranteed at generation time, so measure it with the TL placement preview below.",
     "g903": "Drop in a photo of the spot where the code will actually go; it sits behind the preview.\nDrag to move and use the wheel (or pinch on touch) to zoom until the placement matches.\nThe preview measures the surface luminance around the code against the cell levels, so you get a number for “will this spot read?” before printing.\nThe photo never goes into the exported PNG or SVG.",
-    "g904": "The margin around the code — the equivalent of a QR quiet zone.\nAuto = lays down a high-contrast colour when the background is transparent, and skips it when the background is opaque (the background is already the quiet zone).\nNone = no margin. White / Black = fixed to that colour.\nHigh contrast = picks whichever of white or black separates further in relative luminance from the cell levels. With the colour styles you can choose today, that single step always settles it.\nThe fallback QR block is excluded — it carries its own quiet zone.",
+    "g904": "The margin around the code — the equivalent of a QR quiet zone.\nAuto = lays down a high-contrast colour when the background is transparent, and skips it when the background is opaque (the background is already the quiet zone).\nNone = no margin. White / Black = fixed to that colour.\nHigh contrast = chooses between white and black. (1) A colour that sits too close to the cell levels is dropped first — a margin that blends into the code makes the silhouette larger than the code. (2) If both pass, it picks the one further from the surface brightness measured in the placement preview: black on a bright surface, white on a dark one.\nWith no photo loaded step (2) cannot run, so it falls back to whichever colour separates further from the cell levels.\nThe fallback QR block is excluded — it carries its own quiet zone.",
     "g905": "Prints a QR alongside the code as a fallback route when the TL scanner cannot read it.\nTop-left / top-right / bottom-left / bottom-right = one of the four outer corners.\nInner = a centre QR on Type O/A, the Y2 window β on Type Y.\nNone = export the code alone, without a QR.\nThe centre-QR variant is meant for prints at least 13 cm wide.",
     "g906": "The cell-surface locator a scanner uses to find where a Type Y code is and which way it faces.\nAuto = use whatever is recommended for the current settings. No Y detector has been promoted to production yet, so today Auto resolves to the same thing as Off.\nCells occupied and max payload L / M / H per candidate (source: cellSurfaceFinal.js):\n· v0 — 30 cells (n=13) · 29 / 25 / 20 B\n· v0X — 65 cells (n=21) · 96 / 81 / 65 B\n· v0XQ — 42 cells of finder plus an 81-cell centre QR slot (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 cells (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 cells (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B at n=25)\nFewer occupied cells leave more symbols for data — at n=21, v0X holds the most and v0XQ the least. Among the three slotless candidates the spread is only 4 B at L, so capacity is not a reason to pick one; v0XQ gives up 81 cells to the centre QR slot and so holds 16 B less than v0X at L — in exchange, the centre QR carries a fallback URL when the scanner cannot read the code.\nThese are experimental: rotation, lighting, print, and live-scan performance are not guaranteed.",
     "g907": "The marker placed at the centre of a Type O/A code — this is where a scanner locks on to position and orientation.\nCentre QR = the default. It puts the fallback QR in the finder slot so it doubles as the orientation reference (the same slot as “Inside” under “Include TL scanner QR link” below).\nBullseye = concentric rings · Cube in bullseye = a cube inside the ring · Three-tone cube = built from the three cell tones alone.\nAdvanced mode also unfolds the experimental groups kept for comparison (“Below-bar candidates” · “Not scannable”).\nThe panel below reports model scores — not a prediction of read rate.",
@@ -2169,7 +2299,7 @@ const GENERATOR_STRINGS = {
     "g931": "Show explanation",
     "g932": "Close explanation",
     "g934": "Dark stock",
-    "g935": "* The surface photo is only used to measure how far the surface separates from the cell colours in the preview. It goes into neither the exported PNG/SVG nor the Safe area option or colour below.",
+    "g935": "* The surface photo measures the brightness around the code and feeds the Safe area choice below — it is what decides whether Auto and High contrast lay down white or black. The photo itself never goes into the exported PNG or SVG.",
     "g941": "Auto pick",
     "g942": "No detector",
     "g943": "4 corner blocks",
@@ -2184,6 +2314,29 @@ const GENERATOR_STRINGS = {
     "g960": "Custom colour (hue)",
     "g961": "TL placement preview",
     "g962": "Drag to move · scroll or pinch to zoom",
+    "g970": "Render profile",
+    "g971": "Pick where the code will be used and the brightness difference between the three faces is tuned for it (Type Y only).\nScreen = shown on a monitor or app screen, or read by photographing that screen. This is the default and keeps the 3D look.\nPrint = paper, stickers, signage. All three faces are drawn at the same brightness, so ink and paper do not darken the dim face a second time.\nEither choice reads the same way. The scanner re-anchors brightness per face, so it still recovers the order when the faces match.\nA printed code exported with the screen profile usually still scans, but the worse the printing conditions (low-quality print, dim light) the more the print profile helps.",
+    "g972": "Screen",
+    "g973": "Display · photo",
+    "g974": "Print",
+    "g975": "Paper · ink",
+    "g976": "Original",
+    "g977": "Former default · control",
+    "g978": "Screen — keeps the brightness difference between faces. Default for display and photo capture.",
+    "g979": "Print — draws all three faces at the same brightness. Less print loss, same decoding.",
+    "g980": "Original — trial-build control only. This is the R-face gain before it was raised; use it for A/B rescans only.",
+    "g981": "3D shading",
+    "g982": "Assumes a light source at the top left and wraps shadow and reflected light **outside** the code.\nA shadow goes to the lower right (the R-face side) and reflected light to the lower left (the L-face side). Which side gets which follows directly from the three face brightnesses — T is brightest, R is darkest.\nIt never touches the cells: it is drawn only on the safe area and the background, with zero overlap area against the code shapes.\nWith a transparent background the shading is exported too, so it lands on whatever surface the code is placed on.\nThe top-edge outline is a separate choice — a thin reflected-light and shadow line along the upper border. Its effect on scan rate is not yet settled, so it is off by default.",
+    "g983": "None",
+    "g984": "Flat",
+    "g985": "Shadow · reflection",
+    "g986": "Light from top left",
+    "g987": "Top-edge outline",
+    "g988": "Draws the code with no shading. The exported image is exactly what it has always been.",
+    "g989": "Wraps a lower-right shadow and a lower-left reflection around the code, outside the cells.",
+    "g990": "Adds a thin outline along the upper border on top of the lower shadow and reflection. Its effect on scan rate is not yet settled.",
+    "g991": " (also weighing the surface brightness {mean} from the placement photo) ",
+    "g992": " ⚠ Unless the background is black, the shading can get in the way of scanning — on a white background decoding went 20/20 → 6/20, and a transparent export placed on a mid-brightness surface went 10/10 → 0/10. Fine for display use; if scanning matters, set the background to black or turn the shading off.",
     "g453": "Type <b>Y</b> · version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tones <b>{tones}</b>",
     "g454": " · window <b>β</b>",
     "g455": "Over capacity — the last {n} B of your content are cut in this render (the red span marks what gets dropped).",
@@ -2438,7 +2591,7 @@ const GENERATOR_STRINGS = {
     "g901": "誤り訂正（ECC）の割合を決める軸です。訂正に多く割くほど、入るデータ量は減ります。\n訂正優先 = ECC H（≈40%）· 標準 = ECC M（25%）· 大容量 = ECC L（≈12%）。\n自動は H → M → L の順で、最初に収まるレベルを選びます。\n下の自己検証バッジは、この設定で実際にレンダリングした画像を読み直した結果です。印刷や撮影の条件ではなく「レンダリングが自分の契約を守ったか」だけを見ます。",
     "g902": "透明 = コードだけ。PNG はアルファチャンネル、SVG は背景要素そのものがありません。\n白 = 明るい印刷物・文書の上に置くとき。黒 = 暗い紙面・画面に置くとき。\n透明を選ぶと実効的な背景は「コードを貼る面」になります。その面とセル色の分離は生成時点では保証できないので、下の「TL 配置プレビュー」で実測してください。",
     "g903": "コードを実際に置く場所の写真を入れると、プレビューの背後に敷かれます。\nプレビュー上でドラッグして移動、ホイールまたはピンチで拡大／縮小して位置を合わせてください。\nコード周囲の面の輝度とセルレベルの分離を実測し、印刷前に「ここに置いて読めるか」を数値で示します。\n書き出す PNG・SVG にはこの写真は入りません。",
-    "g904": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\n自動 = 背景が透明なら高コントラスト色を敷き、不透明なら背景がすでに安全領域なので省略します。\nなし = 余白なし。白・黒 = その色に固定。\n高コントラスト = セル色との相対輝度の分離が大きい方（白か黒）を選びます。今選べる色スタイルでは、いつもこの一段階で決まります。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
+    "g904": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\n自動 = 背景が透明なら高コントラスト色を敷き、不透明なら背景がすでに安全領域なので省略します。\nなし = 余白なし。白・黒 = その色に固定。\n高コントラスト = 白と黒から選びます。① セル色に近すぎる方をまず落とします — 余白がコードに貼り付くとシルエットがコードより大きくなります。② 両方通れば「TL 配置プレビュー」写真で測った面の明るさから遠い方を選びます。明るい面なら黒、暗い面なら白です。\n写真を入れていない場合は ② ができないので、セル色から遠い方に決めます。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
     "g905": "TL スキャナで読めなかったときの代替経路になる QR を、コードと一緒に印刷します。\n左上・右上・左下・右下 = コード外側の四隅のいずれか。\n内側 = Type O/A は中央 QR、Type Y は Y2 ウィンドウ β。\nなし = QR を付けずコードだけ書き出します。\n中央 QR 版はコード幅 13 cm 以上の印刷を推奨します。",
     "g906": "スキャナが Type Y コードの位置と向きを最初に見つけるためのセル表面ロケータです。\n自動 = 現在の設定で推奨されるものを使います。正式採用された Y 検出器がまだないため、今の「自動」は「オフ」と同じ結果です。\n候補ごとの占有セル数と最大 payload L / M / H（正典 cellSurfaceFinal.js）:\n· v0 — 30セル（n=13）· 29 / 25 / 20 B\n· v0X — 65セル（n=21）· 96 / 81 / 65 B\n· v0XQ — ファインダ 42セル + 中央 QR スロット 81セル（n=21）· 80 / 67 / 54 B\n· v1r2 — 80セル（n=21）· 92 / 77 / 62 B\n· v2r2 — 74セル（n=21）· 94 / 79 / 63 B（n=25 では 145 / 124 / 99 B）\n占有セルが少ないほどデータに使えるシンボルが多く残ります — n=21 では v0X が最も多く入り、v0XQ が最も少ないです。スロットのない3候補どうしの差は L 基準で 4 B なので容量で選ぶほどの幅ではありませんが、v0XQ は中央 QR スロットに 81セルを割くため v0X より L 基準で 16 B 少なくなります — その代わり、スキャナが読めないときは中央 QR がフォールバック URL を担います。\n実験項目のため、回転・照明・印刷・ライブスキャンの性能は保証しません。",
     "g907": "Type O/A コードの中央に置く目印です — スキャナはここで位置と向きを最初に捉えます。\n中央QR = 既定値。フォールバック QR をファインダーの位置に置き、向きの基準も兼ねます（下の「TL スキャナ QR リンクを含める」の「内側」と同じ位置です）。\nブルズアイ = 同心円の目印 · ブルズアイの中のキューブ = リングの中にキューブを入れたハイブリッド · 3トーンキューブ = セルの3トーンだけで作った目印。\n「詳細」モードでは比較用の実験候補（「基準未達の候補」・「スキャン不可の候補」）も一緒に展開されます。\n下のスコア板は模型スコアです — 認識率の予測ではありません。",
@@ -2456,7 +2609,7 @@ const GENERATOR_STRINGS = {
     "g931": "説明を表示",
     "g932": "説明を閉じる",
     "g934": "暗い紙面",
-    "g935": "* 入れた表面画像は、プレビューで面とセル色の分離を実測するためだけに使います。書き出す PNG・SVG にも、下の「安全領域」のオプション・色にも反映されません。",
+    "g935": "* 入れた表面画像はコード周囲の面の明るさを測り、下の「安全領域」の「自動」「高コントラスト」が白と黒のどちらを敷くかを決めるのに使います。写真そのものは書き出す PNG・SVG には入りません。",
     "g941": "推奨を自動",
     "g942": "検出器なし",
     "g943": "四隅4ブロック",
@@ -2471,6 +2624,29 @@ const GENERATOR_STRINGS = {
     "g960": "カスタム色（Hue）",
     "g961": "TL 配置プレビュー",
     "g962": "ドラッグで移動・ホイールまたはピンチで拡大縮小",
+    "g970": "レンダープロファイル",
+    "g971": "コードをどこで使うかを先に選ぶと、3面の明るさの差をその用途に合わせます（Type Y 専用）。\n画面用 = モニターやアプリの画面に表示する、またはその画面を撮影して読む場合。立体感を残した既定値です。\n印刷用 = 紙・シール・看板など印刷して使う場合。3面を同じ明るさで描き、インクと紙が暗い面をさらに沈ませるのを避けます。\nどちらを選んでも読み取り方は同じです。スキャナーは面ごとに明るさの基準を取り直すので、3面が同じ明るさでも順序を読み取れます。\n印刷物を画面用のまま書き出しても多くは読めますが、印刷条件が悪いほど（低品質印刷・暗い照明）印刷用が有利です。",
+    "g972": "画面用",
+    "g973": "画面・撮影",
+    "g974": "印刷用",
+    "g975": "印刷・インク",
+    "g976": "オリジナル",
+    "g977": "旧既定値・対照",
+    "g978": "画面用 — 3面の明るさの差を残します。画面・撮影経路の既定値です。",
+    "g979": "印刷用 — 3面を同じ明るさで描きます。印刷での損失を減らし、読み取りは変わりません。",
+    "g980": "オリジナル — 試験版専用の対照群です。R面ゲインを上げる前の値なので A/B 再スキャンにのみ使ってください。",
+    "g981": "立体陰影",
+    "g982": "コードの左上に光源があるとみなして、コードの**外側**に影と反射光を回します。\n右下（R面側）に影を、左下（L面側）に反射光を敷きます。どちら側に何が来るかは、3面の明るさ（Tが最も明るくRが最も暗い）からそのまま導かれます。\nセルには決して触れません — 安全領域と背景領域だけに描き、コード図形との重なり面積が 0 になるように作ります。\n背景が透明ならこの陰影も一緒に書き出され、コードを置いた面の上にそのまま重なります。\n上辺エッジのアウトラインは別の選択です — コード上側の縁に細い反射光・影の線を足します。読み取り率への影響がまだ確かでないため既定はオフです。",
+    "g983": "なし",
+    "g984": "平面のまま",
+    "g985": "影・反射光",
+    "g986": "左上からの光",
+    "g987": "上辺エッジのアウトライン",
+    "g988": "陰影なしでコードだけを描きます。書き出す絵はこれまでと同じです。",
+    "g989": "コードの外側の余白に、右下の影と左下の反射光を回します。セルには触れません。",
+    "g990": "下側の影・反射光に加えて、上側の縁にも細いアウトラインを描きます。読み取り率への影響がまだ確かでない選択です。",
+    "g991": "（配置写真の面の明るさ {mean} も見て選びました） ",
+    "g992": " ⚠ 背景が「黒」以外のときは陰影がスキャンを妨げることがあります — 白背景では復号が 20/20 → 6/20、透明で書き出して中間の明るさの面に載せた場合は 10/10 → 0/10 に落ちました。展示用ならそのままで、スキャンが目的なら背景を黒にするか陰影を切ってください。",
     "g453": "タイプ <b>Y</b> · バージョン <b>{ver}</b>（n={n}）· ECC <b>{ecc}</b> · トーン <b>{tones}</b>",
     "g454": " · ウィンドウ <b>β</b>",
     "g455": "容量超過 — 内容の後ろ {n} B が切り詰められた状態で描画されています（赤い区間が切れる部分です）。",
@@ -2611,7 +2787,8 @@ let detectorAutoY = false;
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
-  syncFaceGainLabel, syncYLocatorUi, syncTypeYCellEditorUi, syncHelpPopover,
+  syncFaceGainLabel, syncRenderProfileUi, syncShadingUi, syncYLocatorUi, syncTypeYCellEditorUi,
+  syncHelpPopover,
 ];
 
 const genI18n = createI18n(GENERATOR_STRINGS, {
@@ -2697,8 +2874,14 @@ import { FACES, facePolygon } from './src/hexgrid.js';
 import { maxSafeRadius } from './src/bullseye.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance, DELTA_MIN_CONTRACT } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
-import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
+import { buildSceneY } from './src/sceneY.js';
+import {
+  RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_PRINT, RENDER_PROFILE_SCREEN,
+  faceGainsForRenderProfile, isLabOnlyRenderProfile, renderProfilesForSurface,
+} from './src/render-profile.js';
 import { addQuietZone } from './src/quietzone.js';
+import { SHADING_ON, addShading } from './src/shading.js';
+import { resolveQuietZoneChoice } from './src/quiet-auto.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
 import { verifyRasterY } from './src/verifyY.js';
@@ -2729,6 +2912,11 @@ const els = {
   decorFileL: $('decorFileL'), decorFileR: $('decorFileR'), decorSwap: $('decorSwap'),
   eccTierCards: $('eccTierCards'), eccTierHint: $('eccTierHint'),
   resTierCards: $('resTierCards'), resTierHint: $('resTierHint'),
+  renderProfileSection: $('renderProfileSection'),
+  renderProfileCards: $('renderProfileCards'), renderProfileHint: $('renderProfileHint'),
+  shadingSection: $('shadingSection'), shadingCards: $('shadingCards'),
+  shadingRimRow: $('shadingRimRow'), shadingRim: $('shadingRim'),
+  shadingHint: $('shadingHint'),
   bgModeCards: $('bgModeCards'), bgModeHint: $('bgModeHint'),
   quietModeCards: $('quietModeCards'), quietModeHint: $('quietModeHint'),
   canvasWrap: $('canvasWrap'), backdropCanvas: $('backdropCanvas'),
@@ -2862,6 +3050,11 @@ const backdrop = { bitmap: null, name: null };
 const backdropView = { x: 0, y: 0, scale: 1 };
 /** 마지막으로 실측한 배치 표면의 대표 상대휘도 — 고대비 권장색의 2순위 근거. */
 let lastBackdropLuminance = null;
+/** 지금 미리보기·내보내기 그림에 실제로 구워진 안전영역 색 ('white'|'black'|'none').
+ *  표면 휘도 되먹임(maybeRerenderForQuietAuto)이 «그린 색 ↔ 지금 규칙의 색» 을 비교한다. */
+let quietColorAtRender = null;
+/** 되먹임 재렌더 횟수 (진동 상한). 색이 수렴하면 0 으로 되돌아간다. */
+let quietAutoRerenders = 0;
 /** 배치 사진이 미리보기에 «떠 있었는가» — 조작 안내(B-4)의 에지 검출용. */
 let backdropWasShowing = false;
 
@@ -2901,11 +3094,30 @@ function exportFinderLabel(cur) {
   return cur.finderPatternId || 'bullseye';
 }
 
+/** 렌더 프로파일 파일명 꼬리표. 기본(화면용)은 **안 붙인다** — 기존 파일명이 그대로
+ *  유지되고, 꼬리표가 붙어 있으면 «기본이 아니다» 가 이름만 보고 바로 읽힌다.
+ *  A/B 재스캔은 같은 심볼을 프로파일만 바꿔 내보내므로 이 구분이 파일명에 있어야 한다. */
+function exportProfileTag() {
+  if (current.type !== 'Y') return ''; // 면 게인은 Type Y 렌더 경로만 소비한다.
+  if (generatorState.renderProfile === RENDER_PROFILE_PRINT) return '-print';
+  if (generatorState.renderProfile === RENDER_PROFILE_ORIGINAL) return '-orig';
+  return '';
+}
+
+/** 입체 음영 파일명 꼬리표. 끔은 **안 붙인다** — 프로파일 꼬리표와 같은 규약이고,
+ *  음영 on/off A/B 재스캔은 같은 심볼을 두 벌 내보내므로 이름으로 갈려야 한다.
+ *  `-sh` = 아래쪽 그림자·반사광 · `-shr` = 거기에 윗면 엣지 아웃라인까지. */
+function exportShadingTag() {
+  if (current.type !== 'Y') return ''; // 음영도 Type Y 전용 (섹션 주석).
+  if (generatorState.shading !== SHADING_ON) return '';
+  return generatorState.shadingRim ? '-shr' : '-sh';
+}
+
 function exportFilename(extension) {
   const { type, encoded } = current;
-  const version = type === 'Y'
+  const version = (type === 'Y'
     ? 'Y' + encoded.version + (encoded.tones === 3 ? 'T' : '')
-    : type + encoded.version + (encoded.centerQr ? 'Q' : '');
+    : type + encoded.version + (encoded.centerQr ? 'Q' : '')) + exportProfileTag() + exportShadingTag();
   return nextExportFilename({
     extension,
     type,
@@ -3213,18 +3425,22 @@ for (const card of document.querySelectorAll('.toggle-card')) {
 
 /**
  * @param {string} name 프리셋 이름
- * @param {{T:number,L:number,R:number}} [faceGains] Type Y 면 게인 (생략 시 기본값)
+ * @param {{T:number,L:number,R:number}} [faceGains] Type Y 면 게인 (생략 시 현재 프로파일)
  *
  * 배경은 프리셋 값이 아니라 **배경 3택**이 결정한다 (사용자 지시 2026-08-09).
  * 프리셋의 background 는 레벨 설계의 기준점으로만 남는다 — 색 스타일과 배경은
  * 직교 축이다.
+ *
+ * 게인 생략 시 폴백은 `DEFAULT_FACE_GAINS`(= 화면용 고정)가 아니라 **선택된 렌더
+ * 프로파일**이다. 상수로 폴백하면 «출력물용을 골랐는데 어떤 경로만 화면용으로 그려진»
+ * 조용한 갈림이 생긴다 — O/A 는 어차피 이 필드를 안 읽으므로 실질 소비자는 Y 뿐이다.
  */
 function paletteOf(name, faceGains) {
   const p = name === 'custom' ? makeCustomPalette(generatorState.customHue) : getPreset(name);
   return {
     background: BG_MODE_COLORS[generatorState.bgMode], levels: p.levels,
     bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
-    faceGains: faceGains === undefined ? DEFAULT_FACE_GAINS : faceGains,
+    faceGains: faceGains === undefined ? profileFaceGains() : faceGains,
   };
 }
 
@@ -3268,6 +3484,35 @@ function drawScene(scene, canvas, ppu) {
       ctx.fill();
     }
   }
+  paintShading(ctx, scene);
+}
+
+/**
+ * 음영 띠를 canvas 에 그린다 — SVG `<linearGradient>` · raster 의 알파 보간과 **같은 식**이다
+ * (축 위 정사영을 [0,1] 로 자르고 알파 선형 보간, 색은 상수). 셋이 각자 구현이지만
+ * 정의가 공개 스펙 하나라 결과가 같고, 그 «같음» 은 test/shading.test.js 가 확인한다.
+ *
+ * stroke 를 안 준다 — 도형 루프의 심 커버(동일색 얇은 스트로크)는 인접 불투명 도형용이고,
+ * 반투명 띠에 주면 그 선만 두 번 칠해져 테두리로 남는다.
+ */
+function paintShading(ctx, scene) {
+  if (!Array.isArray(scene.shading) || scene.shading.length === 0) return;
+  const prevAlpha = ctx.globalAlpha;
+  ctx.globalAlpha = 1;
+  for (const band of scene.shading) {
+    const g = band.gradient;
+    const grad = ctx.createLinearGradient(g.x1, g.y1, g.x2, g.y2);
+    const { r, g: gg, b } = band.color;
+    grad.addColorStop(0, `rgba(${r},${gg},${b},${g.a1})`);
+    grad.addColorStop(1, `rgba(${r},${gg},${b},${g.a2})`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(band.points[0].x, band.points[0].y);
+    for (let i = 1; i < band.points.length; i += 1) ctx.lineTo(band.points[i].x, band.points[i].y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.globalAlpha = prevAlpha;
 }
 
 /**
@@ -3963,6 +4208,8 @@ for (const card of els.bgModeCards.children) {
     syncBgModeUi();
     syncQuietModeUi();
     syncBackdropUi();
+    // 음영 힌트의 경고가 배경 모드에 걸려 있다 (투명 배경 + 음영 = 실측 위험 조합).
+    syncShadingUi();
     schedule();
   });
 }
@@ -3992,38 +4239,38 @@ function separationFromLevels(color) {
 }
 
 /**
- * 고대비 권장색 — "큐브 컬러 및 큐브 주변에 따른 권장색"(사용자 지시).
- * 1순위: 셀 레벨과의 분리가 큰 쪽 (실루엣이 살아야 한다).
- * 2순위(동점 근처): 배치 표면 휘도와 **다른** 쪽 — 마크가 표면에 묻히지 않게.
+ * 안전영역 결정의 **입력 한 묶음**. 규칙 자체는 `src/quiet-auto.js` 에 있다 —
+ * 순수 함수로 떼어 놓아야 휘도 스윕을 단위 테스트로 돌릴 수 있다 (과업 #18).
  *
- * ⚠ 2순위는 **현재 도달 불가한 죽은 분기**다 (실측 2026-08-16). UI 로 만들 수 있는
- *   팔레트의 |sepW − sepB| 는 slate 0.1689 · ember 0.2507 · mono 0.0257 · 커스텀
- *   hue 0~359 는 0.1629~0.1764 — 전부 0.02 문턱 밖이다 (makeCustomPalette 가 slate 의
- *   상대휘도를 그대로 타깃해서 만들기 때문에 커스텀도 slate 근처에 머문다).
- *   분기를 지우지 않은 이유: 팔레트가 늘면 되살아날 수 있는 정당한 규칙이고, 지우면
- *   «동점일 때 무엇을 고르나» 가 다시 미정이 된다. 대신 **화면 문구에서는 뺐다** —
- *   일어나지 않는 일을 설명하면 그게 거짓말이 된다 (g904 · g935).
- *   문턱을 올려 이 분기를 살릴지는 운영자 판단 대기 (보고서 §11-1).
+ * 표면 휘도(`lastBackdropLuminance`)는 배치 미리보기 사진의 **코드 주변 국소** 평균이고
+ * (measureBackdrop), 이제 «죽은 타이브레이크» 가 아니라 **1급 입력**이다: 흰·검 둘 다
+ * 셀 분리 바닥(BG_SEPARATION_MIN)을 넘으면 표면과 더 멀리 떨어진 쪽이 뽑힌다.
+ * 바닥을 못 넘는 색은 안전영역이 코드에 들러붙는 쪽이라 먼저 탈락시킨다.
  */
-function highContrastQuietColor() {
-  const sepW = separationFromLevels(QUIET_WHITE);
-  const sepB = separationFromLevels(QUIET_BLACK);
-  if (Math.abs(sepW - sepB) > 0.02) return sepW > sepB ? QUIET_WHITE : QUIET_BLACK;
-  const surfaceY = lastBackdropLuminance;
-  if (surfaceY === null) return sepW >= sepB ? QUIET_WHITE : QUIET_BLACK;
-  return Math.abs(1 - surfaceY) >= surfaceY ? QUIET_WHITE : QUIET_BLACK;
+function quietChoiceInput() {
+  return {
+    quietMode: generatorState.quietMode,
+    bgMode: generatorState.bgMode,
+    sepWhite: separationFromLevels(QUIET_WHITE),
+    sepBlack: separationFromLevels(QUIET_BLACK),
+    surfaceLuminance: lastBackdropLuminance,
+    // 바닥은 이 화면이 이미 사용자에게 보여 주고 있는 계약값이다. 두 곳에 다른 수가
+    // 적히지 않도록 상수를 **넘겨준다** (quiet-auto.js 는 폴백만 들고 있다).
+    separationFloor: BG_SEPARATION_MIN,
+  };
+}
+
+/** 현재 설정의 안전영역 선택 — 색 이름 + 어느 갈림에서 정해졌는지. */
+function quietChoice() {
+  return resolveQuietZoneChoice(quietChoiceInput());
 }
 
 /** 현재 설정의 안전영역 색 — null 이면 안전영역을 안 넣는다. */
 function resolveQuietColor() {
-  switch (generatorState.quietMode) {
-    case 'none': return null;
-    case 'white': return QUIET_WHITE;
-    case 'black': return QUIET_BLACK;
-    case 'contrast': return highContrastQuietColor();
-    default: // 'auto'
-      return generatorState.bgMode === 'transparent' ? highContrastQuietColor() : null;
-  }
+  const choice = quietChoice();
+  if (choice.color === 'white') return QUIET_WHITE;
+  if (choice.color === 'black') return QUIET_BLACK;
+  return null;
 }
 
 /**
@@ -4035,10 +4282,33 @@ function resolveQuietColor() {
  * 불스아이도 같은 두 색이지만 코드 셀과 한 클러스터라 걸리지 않는다.
  */
 function withQuietZone(scene) {
+  const choice = quietChoice();
+  // 이 프레임이 실제로 구운 색을 기억한다 — 표면 휘도가 나중에(그린 뒤에) 갱신되므로,
+  // «지금 그림에 든 색» 과 «지금 규칙이 고르는 색» 을 비교할 자리가 필요하다
+  // (maybeRerenderForQuietAuto).
+  quietColorAtRender = choice.color;
   return addQuietZone(scene, {
-    color: resolveQuietColor(),
+    color: choice.color === 'white' ? QUIET_WHITE : choice.color === 'black' ? QUIET_BLACK : null,
     margin: QUIET_MARGIN_CELLS,
     selfQuietColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
+  });
+}
+
+/**
+ * 입체 음영을 얹는다 (과업 #17). **반드시 안전영역보다 먼저** 부른다 — 껍질을
+ * 원본 도형에서 잡아야 하고, 안전영역 폴리곤이 도형 목록에 들어온 뒤에 잡으면
+ * 띠가 안전영역 껍질을 따라 한 겹 더 바깥으로 밀려난다.
+ *
+ * 음영은 **Type Y 전용**이다 (섹션 주석 참조 — 조명 방향의 근거가 면 게인 표다).
+ * `shading: 'off'` 면 `addShading` 이 입력 scene 을 그대로 돌려주므로, 끈 상태의
+ * 산출물은 이 함수를 통과해도 바이트 한 개 안 바뀐다.
+ */
+function withShading(scene, type) {
+  if (type !== 'Y') return scene;
+  return addShading(scene, {
+    mode: generatorState.shading,
+    rim: generatorState.shadingRim === true,
+    clusterGap: QUIET_MARGIN_CELLS,
   });
 }
 
@@ -4046,7 +4316,8 @@ function syncQuietModeUi() {
   for (const card of els.quietModeCards.children) {
     card.classList.toggle('active', card.dataset.quiet === generatorState.quietMode);
   }
-  const color = resolveQuietColor();
+  const choice = quietChoice();
+  const color = choice.color === 'white' ? QUIET_WHITE : choice.color === 'black' ? QUIET_BLACK : null;
   if (!color) {
     els.quietModeHint.textContent = generatorState.quietMode === 'none'
       ? t('g413')
@@ -4057,7 +4328,13 @@ function syncQuietModeUi() {
   const sep = separationFromLevels(color);
   const picked = generatorState.quietMode === 'white' || generatorState.quietMode === 'black'
     ? '' : tf('g434', { color: isWhite ? t('g415') : t('g416') });
+  // 사진이 실제로 결정을 갈랐을 때만 그렇게 적는다 — «사진을 넣었다» 가 아니라
+  // «사진이 이 색을 골랐다» 일 때만이다 (reason 이 그 사실을 들고 온다).
+  const bySurface = choice.reason === 'surface-separation'
+    ? tf('g991', { mean: lastBackdropLuminance === null ? '—' : lastBackdropLuminance.toFixed(3) })
+    : '';
   els.quietModeHint.innerHTML = tf('g435', { cells: QUIET_MARGIN_CELLS, picked })
+    + bySurface
     + t('g417')
     + tf('g436', { sep: sep.toFixed(3), warn: sep >= BG_SEPARATION_MIN ? '' : t('g428') })
     + t('g418');
@@ -5078,17 +5355,48 @@ function measureBackdrop() {
   return { minSep, meanY: sumY / n, samples: n, belowRatio: below / n };
 }
 
+/*
+ * ── 표면 휘도 → 안전영역 색 되먹임 (과업 #18) ──────────────────────────────
+ *
+ * 순서 문제가 하나 있다. 표면 휘도는 **그려진 캔버스**에서 재고(`measureBackdrop` 은
+ * 코드가 안 덮은 픽셀만 본다), 그 휘도가 이제 안전영역 색을 **정한다**. 즉
+ *
+ *   render() → drawScene() → syncBackdropLayer() → 휘도 → 색이 바뀜
+ *
+ * 이 되어, 사진을 처음 넣은 그 프레임은 옛 휘도로 고른 색을 그린 상태다. 그래서 색이
+ * 실제로 달라졌으면 한 번 더 그린다.
+ *
+ * ⚠ 되먹임 고리라 **반드시 멈춰야 한다**. 안전영역을 깔면 표면이 보이는 면적이 줄어
+ * 휘도가 조금 움직이고, 그게 색을 되돌리면 A→B→A 로 진동할 수 있다. 그래서
+ *   · 색이 그대로면 카운터를 0 으로 되돌리고 (수렴),
+ *   · 다르면 **최대 2회**까지만 다시 그린다 (진동이면 거기서 멈춘다).
+ * 멈춘 자리의 그림도 정상 산출물이다 — 두 색 다 계약을 만족하는 근방이라 진동이 난다.
+ */
+const QUIET_AUTO_RERENDER_LIMIT = 2;
+
+function maybeRerenderForQuietAuto() {
+  const now = quietChoice().color;
+  if (now === quietColorAtRender) { quietAutoRerenders = 0; return; }
+  if (quietAutoRerenders >= QUIET_AUTO_RERENDER_LIMIT) return;
+  quietAutoRerenders += 1;
+  schedule();
+}
+
 /** drawScene 직후에 호출 — 배경 레이어 크기·그리기·판정을 한 번에 맞춘다. */
 function syncBackdropLayer() {
   syncBackdropUi();
   if (generatorState.bgMode !== 'transparent' || !backdrop.bitmap) {
     lastBackdropLuminance = null;
+    maybeRerenderForQuietAuto();
     return;
   }
   drawBackdrop();
   const m = measureBackdrop();
   if (!m) { els.backdropVerdict.style.display = 'none'; return; }
   lastBackdropLuminance = m.meanY;
+  // 힌트는 지금 값으로 다시 쓴다 — 사진이 색을 갈랐다는 사실이 화면에 남아야 한다.
+  syncQuietModeUi();
+  maybeRerenderForQuietAuto();
   const quiet = resolveQuietColor();
   els.backdropVerdict.style.display = '';
   if (quiet) {
@@ -5446,6 +5754,8 @@ function syncTypeUi() {
   els.versionWrapY.style.display = isY ? '' : 'none';
   els.versionWrapA.style.display = isA ? '' : 'none';
   els.optionsY.style.display = isY ? '' : 'none';
+  syncRenderProfileUi(); // 렌더 프로파일 섹션도 Y 에서만 열린다 (면 게인 소비자가 Y 뿐).
+  syncShadingUi();       // 입체 음영도 같은 이유로 Y 전용이다.
   syncYLocatorUi();
   syncTypeYCellEditorUi();
 }
@@ -5542,12 +5852,23 @@ els.qrCornerToo.addEventListener('change', () => {
 });
 syncTypeUi();
 
-// ── 고급 모드: 면 게인 슬라이더 (Type Y — 1.0(평면) ~ DEFAULT_FACE_GAINS(기본) 보간) ──
+// ── 렌더 프로파일 + 면 게인 슬라이더 (Type Y) ──────────────────────────────
+//
+// 두 축이 곱해진다. **프로파일**이 목표 게인을 정하고(화면용 {1,.72,.62} · 출력물용
+// {1,1,1} · lab 오리지널 {1,.72,.52}), 고급 모드의 **슬라이더**는 «3면 평면(1.0)에서
+// 그 목표까지» 의 보간 강도다. 슬라이더가 절대 게인이던 시절의 상수 폴백
+// (DEFAULT_FACE_GAINS)을 그대로 두면 프로파일을 바꿔도 그림이 안 바뀐다.
+
+/** 지금 선택된 프로파일의 목표 게인. */
+function profileFaceGains() {
+  return faceGainsForRenderProfile(generatorState.renderProfile);
+}
 
 function currentFaceGains() {
+  const base = profileFaceGains();
   const t = Number(generatorState.faceGain) / 100; // 0..1
-  const L = 1 + t * (DEFAULT_FACE_GAINS.L - 1);
-  const R = 1 + t * (DEFAULT_FACE_GAINS.R - 1);
+  const L = 1 + t * (base.L - 1);
+  const R = 1 + t * (base.R - 1);
   return { T: 1, L, R };
 }
 function gainRatio(g) { return Math.max(g.T, g.L, g.R) / Math.min(g.T, g.L, g.R); }
@@ -5559,6 +5880,111 @@ function syncFaceGainLabel() {
     `T ${g.T.toFixed(2)} · L ${g.L.toFixed(2)} · R ${g.R.toFixed(2)} · γ=${ratio.toFixed(3)} (≤ 2)`;
 }
 syncFaceGainLabel();
+
+/** 카드 하단 게인 수치 — **lab 에서만** 붙인다 (정식 화면은 내부 수치를 안 보여 준다). */
+function renderProfileGainText(profile) {
+  const g = faceGainsForRenderProfile(profile);
+  return `T ${g.T.toFixed(2)} · L ${g.L.toFixed(2)} · R ${g.R.toFixed(2)}`;
+}
+
+function syncRenderProfileUi() {
+  const section = els.renderProfileSection;
+  if (!section) return;
+  const lab = isLabPath();
+  // 면 게인을 소비하는 렌더 경로가 buildSceneY 뿐이라 Y 에서만 연다 (섹션 주석 참조).
+  section.hidden = generatorState.type !== 'Y';
+  const visible = renderProfilesForSurface(lab);
+  for (const card of els.renderProfileCards.children) {
+    const id = card.dataset.profile;
+    // lab 전용 카드는 정식 화면에서 **DOM 째로 숨긴다** — 클래스만 흐리면 키보드
+    // 순회로 여전히 닿는다.
+    card.hidden = !visible.includes(id);
+    card.classList.toggle('active', id === generatorState.renderProfile);
+    let gainLine = card.querySelector('.card-gains');
+    if (lab) {
+      if (!gainLine) {
+        gainLine = document.createElement('span');
+        gainLine.className = 'card-sub card-gains';
+        card.append(gainLine);
+      }
+      gainLine.textContent = renderProfileGainText(id);
+    } else if (gainLine) {
+      gainLine.remove();
+    }
+  }
+  if (els.renderProfileHint) {
+    els.renderProfileHint.textContent = generatorState.renderProfile === RENDER_PROFILE_PRINT
+      ? t('g979')
+      : generatorState.renderProfile === RENDER_PROFILE_ORIGINAL
+        ? t('g980')
+        : t('g978');
+  }
+}
+
+for (const card of els.renderProfileCards.children) {
+  card.addEventListener('click', () => {
+    const id = card.dataset.profile;
+    // 정식 화면에서 lab 전용 카드가 눌리는 경로는 없어야 하지만, 저장 상태·확장
+    // 프로그램이 끼어들 수 있으니 여기서도 막는다 (차단은 한 겹으로 두지 않는다).
+    if (!isLabPath() && isLabOnlyRenderProfile(id)) return;
+    generatorState.renderProfile = id;
+    syncRenderProfileUi();
+    syncFaceGainLabel();
+    schedule();
+  });
+}
+// 저장/복원이나 lab→정식 이동으로 «정식 화면 + 오리지널» 조합이 만들어질 수 있다.
+// 그 상태를 그대로 두면 화면에는 아무 카드도 안 켜져 있는데 렌더는 구 게인이다.
+if (!isLabPath() && isLabOnlyRenderProfile(generatorState.renderProfile)) {
+  generatorState.renderProfile = RENDER_PROFILE_SCREEN;
+}
+syncRenderProfileUi();
+
+// ── 입체 음영 (과업 #17) ────────────────────────────────────────────────────
+//
+// 두 축이다. **카드**가 음영 자체(끔/켬)를 정하고, **체크박스**가 ② 윗면 엣지
+// 아웃라인을 얹는다. 체크박스를 카드에 합쳐 3택으로 만들지 않은 이유는 섹션 주석에.
+function syncShadingUi() {
+  const section = els.shadingSection;
+  if (!section) return;
+  // 렌더 프로파일과 같은 게이트 — 조명 방향의 근거가 면 게인 표라 Y 에서만 연다.
+  section.hidden = generatorState.type !== 'Y';
+  for (const card of els.shadingCards.children) {
+    card.classList.toggle('active', card.dataset.shading === generatorState.shading);
+  }
+  const on = generatorState.shading === SHADING_ON;
+  els.shadingRim.checked = generatorState.shadingRim === true;
+  // 음영이 꺼져 있으면 서브옵션은 그림에 아무 영향이 없다. 누를 수 있게 두면
+  // «체크했는데 아무 일도 안 일어난다» 가 된다.
+  els.shadingRim.disabled = !on;
+  els.shadingRimRow.classList.toggle('dim', !on);
+  // ⚠ 실측 경고 (§2.5 ②③ — 보고서 `claude-render-batch.md`).
+  //   음영은 **배경 대비 잘 보일수록 해롭다** — 그림자 띠가 실루엣 바로 밖을 메워
+  //   전경 마스크가 마크보다 커진다. 실측:
+  //     흰 배경 20/20 → **6/20** · 투명 + 중간·밝은 표면 10/10 → **0/10**
+  //     검정 배경 20/20 → 20/20 (검은 그림자가 검은 바탕에서 안 보인다)
+  //   그래서 조건이 «투명일 때» 가 아니라 **«검정이 아닐 때»** 다.
+  //   옵션을 막지는 않는다 (전시용 선택을 금지하는 것은 과하다) — 그 자리에서 알린다.
+  const risky = on && generatorState.bgMode !== 'black';
+  els.shadingHint.textContent = (!on
+    ? t('g988')
+    : (generatorState.shadingRim ? t('g990') : t('g989'))) + (risky ? t('g992') : '');
+  els.shadingHint.style.color = risky ? 'var(--warn)' : '';
+}
+
+for (const card of els.shadingCards.children) {
+  card.addEventListener('click', () => {
+    generatorState.shading = card.dataset.shading;
+    syncShadingUi();
+    schedule();
+  });
+}
+els.shadingRim.addEventListener('change', () => {
+  generatorState.shadingRim = els.shadingRim.checked;
+  syncShadingUi();
+  schedule();
+});
+syncShadingUi();
 
 // ── 페이로드 조립 ───────────────────────────────────────────────────────
 
@@ -5854,7 +6280,9 @@ function renderTypeY(cfg) {
     `${encoded.window ? t('g454') : ''}<br>` +
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     tf('g452', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym });
-  return { type: 'Y', encoded, scene: withQuietZone(scene), info, selfCheck };
+  return {
+    type: 'Y', encoded, scene: withQuietZone(withShading(scene, 'Y')), info, selfCheck,
+  };
 }
 
 function updateGauge(type, encoded, text) {
@@ -6025,6 +6453,22 @@ function emitLabGen(result, cfg) {
     qrPosition: generatorState.qrPosition,
     bgMode: generatorState.bgMode,
     quietMode: generatorState.quietMode,
+    // 렌더 프로파일은 A/B 재스캔에서 **가장 먼저 알아야 하는 축**이다 (같은 심볼이
+    // 다른 게인으로 나가므로). 프로파일 이름만 싣는다 — 게인 수치는 이 이름의 함수다.
+    // ⚠ 이 두 줄(그리고 위 renderProfile)은 **지금 전송되지 않는다.**
+    //   `lab-telemetry.js` 의 `GEN_BODY_KEYS` 가 화이트리스트이고 거기 이 키들이 없어서
+    //   `canonicalGenConfig` 이 조용히 버린다 (2026-08-16 실측 — 과업 #16 이 이미 같은
+    //   함정에 빠져 있었다). 고치는 한 줄은 그 배열에 키를 더하는 것뿐인데, 그 파일이
+    //   **스캐너 번들에도 들어가서** 렌더 레인의 «SCANNER_BUILD·스캐너 번들 무접촉»
+    //   제약을 넘는다. 그래서 여기서는 봉투에 실어만 두고, 화이트리스트 수정은 텔레메트리
+    //   소유 레인에 넘긴다 (보고서 §2.8). 실어 두는 이유: 화이트리스트가 고쳐지는 순간
+    //   생성기 쪽 손질 없이 바로 흐른다.
+    renderProfile: generatorState.renderProfile,
+    // 음영도 렌더 픽셀을 바꾸는 축이라 A/B 재스캔에서 같이 봐야 한다. 두 값을 따로
+    // 싣는다 — ② 서브옵션은 «효과 미지수» 라 ① 과 분리해서 세야 답이 나온다.
+    // 끔이면 키를 안 싣는다 — 기본 상태의 config_id 가 변하지 않게.
+    shading: generatorState.shading === SHADING_ON ? SHADING_ON : undefined,
+    shadingRim: generatorState.shadingRim === true ? true : undefined,
     locatorProfile: generatorState.locatorProfileY || LOCATOR_PROFILE_OFF,
     locatorLayout: isCellSurfaceLocatorProfileY(generatorState.locatorProfileY)
       ? generatorState.locatorProfileY.replace('cell-surface-', '')
