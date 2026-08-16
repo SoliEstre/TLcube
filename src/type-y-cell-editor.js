@@ -370,6 +370,29 @@ function readTone(entry) {
   throw new TypeError('toneOverrides 항목은 {face,i,j,tone} 또는 [face,i,j,tone] 여야 한다');
 }
 
+/**
+ * `toneOverrides` 의 면 키 방언 `{"T":[[i,j,tone],…],"L":…,"R":…}` → 평평한 목록.
+ *
+ * 정본 규칙은 cell-editor-core.js `normalizeToneOverrideList` 다. 이 모듈은 스캐너
+ * 번들(lab-scan)에 실리므로 core 를 끌어들이지 않고 규칙만 복제한다 (F6 해소 —
+ * 2026-08-17 스캐너 스탬프 상승과 동반). 두 구현이 갈라지면
+ * cell-editor-core.test.js 가 같은 문서로 양쪽 파서를 묶어 잡는다.
+ */
+function normalizeToneOverrides(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (raw === null || typeof raw !== 'object') return [];
+  const flat = [];
+  for (const face of Object.keys(raw)) {
+    const entries = raw[face];
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (Array.isArray(entry)) flat.push([face, ...entry]);
+      else if (entry !== null && typeof entry === 'object') flat.push({ face, ...entry });
+    }
+  }
+  return flat;
+}
+
 export function parseCellEditor(input) {
   const obj = typeof input === 'string' ? JSON.parse(input) : input;
   if (!obj || typeof obj !== 'object') {
@@ -388,7 +411,7 @@ export function parseCellEditor(input) {
     if (isFixedNonData(i, j, state.n, sets)) continue;
     state.userNonData.add(coordKey(i, j));
   }
-  const rawTones = Array.isArray(obj.toneOverrides) ? obj.toneOverrides : [];
+  const rawTones = normalizeToneOverrides(obj.toneOverrides);
   for (const entry of rawTones) {
     const item = readTone(entry);
     if (!Object.prototype.hasOwnProperty.call(FACE_ORDER, item.face)) continue;

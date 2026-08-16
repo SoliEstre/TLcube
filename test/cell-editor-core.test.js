@@ -288,11 +288,21 @@ test('손으로 정본화한 면 키 toneOverrides 방언도 읽는다 (조용�
     '두 방언이 같은 문서로 수렴해야 한다',
   );
 
-  // ⚠ 미해소로 남긴 것: Y 전용 엔진 파서(type-y-cell-editor.parseCellEditor)는 아직
-  // 배열 방언만 받는다. 붙여넣기 경로(독립 편집기)는 위 파서를 쓰므로 사용자 손실은
-  // 닫혔지만, 그 모듈을 고치면 lab-scan.html 바이트가 바뀐다 — 스캐너 번들은 스탬프
-  // 상승과 함께 움직여야 하는 별도 표면이라 이 레인에서 건드리지 않는다.
-  assert.equal(parseCellEditor({ ...doc, schema: CELL_EDITOR_SCHEMA_V1 }).tones.size, 0);
+  // (해소 2026-08-17 — 스캐너 스탬프 상승과 동반) Y 전용 엔진 파서도 면 키 방언을
+  // 받는다. 규칙은 core 정본의 **복제**다 (스캐너 번들에 core 를 끌어들이지 않는
+  // 대가) — 두 구현이 갈라지면 이 수렴 단언이 잡는다.
+  const engineFaceKey = parseCellEditor({ ...doc, schema: CELL_EDITOR_SCHEMA_V1 });
+  assert.equal(engineFaceKey.tones.size, 4, 'Y 엔진 파서가 면 키 방언 톤을 소실했다');
+  const engineFlat = parseCellEditor({
+    ...doc,
+    schema: CELL_EDITOR_SCHEMA_V1,
+    toneOverrides: [['T', 0, 0, 0], ['T', 0, 1, 2], ['L', 0, 0, 2], ['R', 0, 1, 0]],
+  });
+  assert.deepEqual(
+    [...engineFaceKey.tones.entries()].sort(),
+    [...engineFlat.tones.entries()].sort(),
+    'Y 엔진 파서에서 두 방언이 같은 상태로 수렴해야 한다',
+  );
 });
 
 test('컴팩트 JSON 출력은 undefined 를 만나도 유효한 JSON 이다', () => {
