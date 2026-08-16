@@ -314,6 +314,9 @@ for (const cellPx of CELL_PX) {
 const out = {
   note: 'cell_px 통제 합성 스윕. 결정적(RNG 없음). 실기기 결론 아님 — 합성 렌더+합성 왜곡.',
   cellPxDefinition: 'cell_px = rasterize pixelsPerUnit = 육각 셀 외접원 반지름(px). 셀 가로폭 = √3·cell_px, 세로 = 2·cell_px.',
+  // 게인 팔 식별이 파일명에만 실리면 파일을 옮기는 순간 되찾을 길이 없다 (검증 렌즈 권고).
+  rGain: R_GAIN,
+  faceGains: FACE_GAINS,
   payload: PAYLOAD,
   marginCells: MARGIN_CELLS,
   fill: FILL,
