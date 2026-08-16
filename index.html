@@ -2030,6 +2030,7 @@ const GENERATOR_STRINGS = {
     "g948": "중앙 + 3겹사각",
     "g949": "중앙 QR + 코너 L",
     "g963": "면",
+    "g964": "셀 표면 로케이터가 해상도와 연동돼요 — 저 = v0 · 중 = v0W (QR 안쪽 배치면 v0WQ). 다른 단을 고르면 로케이터도 함께 바뀌어요.",
     "g950": "사용가능",
     "g951": "인식곤란",
     "g952": "사용불가",
@@ -2347,6 +2348,7 @@ const GENERATOR_STRINGS = {
     "g948": "Centre + 3 squares",
     "g949": "Centre QR + corner L",
     "g963": "Face",
+    "g964": "The cell-surface locator is linked to resolution — Low = v0, Mid = v0W (v0WQ when the QR sits inside). Picking another tier switches the locator too.",
     "g950": "usable",
     "g951": "hard to read",
     "g952": "not usable",
@@ -2664,6 +2666,7 @@ const GENERATOR_STRINGS = {
     "g948": "中央＋3二重四角",
     "g949": "中央QR＋コーナーL",
     "g963": "面",
+    "g964": "セル表面ロケータは解像度と連動します — 低 = v0・中 = v0W（QR が内側配置なら v0WQ）。別の段を選ぶとロケータも切り替わります。",
     "g950": "使用可能",
     "g951": "認識困難",
     "g952": "使用不可",
@@ -4174,13 +4177,16 @@ function syncResTierUi() {
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W;
   const cellSurfaceV0wq = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ;
+  // #22 (운영자 지시 2026-08-16): v0 계열은 해상도를 «잠그지» 않고 **연동**한다 —
+  // v0 에서 «중» 을 고르면 v0W (QR 안쪽 배치면 v0WQ) 로, v0W/v0WQ 에서 «저» 를
+  // 고르면 v0 로 돌아온다 (대칭 복귀). «고» 는 Y2 셀 표면이 공백이라 계속 잠근다.
+  // 셀 표면 잠금이 windowLocked 보다 우선한다 — selectedTier 계산과 같은 우선순위.
   const isOff = (res) =>
-    (windowLocked && (res === 'low' || res === 'mid'))
-    || (cellSurfaceV0 && (res === 'mid' || res === 'high'))
-    || (cellSurfaceV0x && (res === 'low' || res === 'high'))
-    || (cellSurfaceV0xq && (res === 'low' || res === 'high'))
-    || (cellSurfaceV0w && (res === 'low' || res === 'high'))
-    || (cellSurfaceV0wq && (res === 'low' || res === 'high'));
+    cellSurfaceV0 ? res === 'high'
+      : (cellSurfaceV0x || cellSurfaceV0xq) ? (res === 'low' || res === 'high')
+        : (cellSurfaceV0w || cellSurfaceV0wq) ? res === 'high'
+          : windowLocked ? (res === 'low' || res === 'mid')
+            : false;
   const selectedTier = cellSurfaceV0
     ? 'low'
     : (cellSurfaceV0x || cellSurfaceV0xq || cellSurfaceV0w || cellSurfaceV0wq)
@@ -4195,19 +4201,47 @@ function syncResTierUi() {
     card.classList.toggle('disabled', isOff(res));
     card.classList.toggle('active', res === selectedTier);
   }
-  els.resTierHint.textContent = windowLocked
-    ? t('g408')
-    : isO
-      ? t('g409')
-      : type === 'Y'
-        ? t('g410')
-        : t('g411');
+  els.resTierHint.textContent =
+    (cellSurfaceV0 || cellSurfaceV0w || cellSurfaceV0wq)
+      ? t('g964')
+      : windowLocked
+        ? t('g408')
+        : isO
+          ? t('g409')
+          : type === 'Y'
+            ? t('g410')
+            : t('g411');
 }
 
 for (const card of els.resTierCards.children) {
   card.addEventListener('click', () => {
     if (card.classList.contains('disabled')) return;
     const type = currentType();
+    // #22: v0 계열의 해상도 선택은 로케이터 전환이다 — versionY 저장값은 건드리지
+    // 않는다 (로케이터가 버전을 강제하는 기존 규약 그대로, 연동 문구는 g964).
+    if (type === 'Y') {
+      const locator = generatorState.locatorProfileY;
+      const res = card.dataset.res;
+      if (locator === LOCATOR_PROFILE_CELL_SURFACE_V0 && res === 'mid') {
+        generatorState.locatorProfileY = generatorState.qrPosition === 'inner'
+          ? LOCATOR_PROFILE_CELL_SURFACE_V0WQ
+          : LOCATOR_PROFILE_CELL_SURFACE_V0W;
+        syncYLocatorUi();
+        syncTypeUi();
+        syncResTierUi();
+        schedule();
+        return;
+      }
+      if ((locator === LOCATOR_PROFILE_CELL_SURFACE_V0W
+        || locator === LOCATOR_PROFILE_CELL_SURFACE_V0WQ) && res === 'low') {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
+        syncYLocatorUi();
+        syncTypeUi();
+        syncResTierUi();
+        schedule();
+        return;
+      }
+    }
     generatorState[versionStateKey(type)] = versionForResolutionTier(type, card.dataset.res);
     syncTypeUi();
     syncResTierUi();
@@ -4438,13 +4472,16 @@ if (els.yLocatorCards) {
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
       // v1r2 · v2r2 분기는 2026-08-16 드랍으로 내렸다. 카드가 없어 `next` 가
-      // 그 값이 될 수 없고, 상태 스키마의 허용값에서도 빠졌다 (옛 저장값은
-      // 검증 실패로 off 에 떨어진다).
+      // 그 값이 될 수 없고, 상태 스키마의 허용값에서도 빠졌다 (생성기 상태는
+      // 저장되지 않으므로 «옛 저장값 폴백» 은 해당 없음 — 검증 렌즈 정정).
       } else {
         generatorState.locatorProfileY = LOCATOR_PROFILE_OFF;
       }
       syncYLocatorUi();
       syncTypeUi();
+      // #22 연동: 로케이터가 해상도 단의 잠금·활성·힌트(g964)를 정하므로 여기서도
+      // 재동기화한다 — 안 부르면 «중» 이 열렸는데 화면은 잠긴 채로 남는다 (실측).
+      syncResTierUi();
       schedule();
     });
   }

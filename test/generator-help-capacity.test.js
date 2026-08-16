@@ -75,7 +75,7 @@ const payload = (n, id) => LEVELS.map(
 
 // ── ① 정본 실측 핀 ────────────────────────────────────────────────────────
 
-test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 세 후보를 하나로 뭉갠다', () => {
+test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 후보 전부를 하나로 뭉갠다', () => {
   // **의도적 갱신 «드랍 정본화» (2026-08-16)** — v2r2·v1r2 를 검출 라인업에서
   // 내리면서 `finalLayoutIdForN(21)` 은 v0x 가 됐다. 하지만 이 테스트가 재는 사고는
   // «용량 헬퍼에 id 를 안 넘기면 무엇으로 해소되나» 이고, 그 기본값은 라인업이
@@ -91,6 +91,9 @@ test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 세 후�
   assert.notDeepEqual(omitted, payload(21, 'v0x'), 'id 를 넘기면 값이 달라져야 한다');
   assert.notDeepEqual(omitted, payload(21, 'v1r2'), 'id 를 넘기면 값이 달라져야 한다');
   assert.notDeepEqual(omitted, payload(21, 'v0xq'), 'id 를 넘기면 값이 달라져야 한다');
+  // v0W 프로그램 편입 후에도 같은 사고가 같은 방식으로 잡힌다 (후보 4→6).
+  assert.notDeepEqual(omitted, payload(21, 'v0w'), 'id 를 넘기면 값이 달라져야 한다');
+  assert.notDeepEqual(omitted, payload(21, 'v0wq'), 'id 를 넘기면 값이 달라져야 한다');
 });
 
 test('n=21 네 후보의 로케이터 셀 수와 최대 payload (L/M/H) 실측 핀', () => {

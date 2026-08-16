@@ -550,3 +550,17 @@ test('출력물용(3면 동률)에서는 면 게인 슬라이더를 잠근다 �
   assert.match(INDEX, /els\.faceGainRow\.classList\.toggle\('dim', flat\)/);
   assert.match(INDEX, /#faceGainRow\.dim \{ opacity: 0\.45; \}/);
 });
+
+test('#22 — v0 계열 해상도는 로케이터와 연동된다 (v0 ↔ v0W/v0WQ · g964)', () => {
+  // 운영자 지시 (2026-08-16): v0 에서 «중» 을 고르면 v0W (QR 안쪽이면 v0WQ),
+  // v0W/v0WQ 에서 «저» 를 고르면 v0 복귀. 스위트는 클릭을 못 누르므로 배선을
+  // 소스 앵커로 고정한다.
+  assert.match(INDEX, /locator === LOCATOR_PROFILE_CELL_SURFACE_V0 && res === 'mid'/);
+  assert.match(INDEX, /generatorState\.qrPosition === 'inner'\s*\?\s*LOCATOR_PROFILE_CELL_SURFACE_V0WQ\s*:\s*LOCATOR_PROFILE_CELL_SURFACE_V0W/);
+  assert.match(INDEX, /\|\| locator === LOCATOR_PROFILE_CELL_SURFACE_V0WQ\) && res === 'low'/);
+  // 잠금이 아니라 연동이다 — v0 는 «고» 만 잠긴다 (중 열림).
+  assert.match(INDEX, /cellSurfaceV0 \? res === 'high'/);
+  for (const lang of LANGS) {
+    assert.match(langBlock(lang), /"g964": "/, lang + ': 연동 문구 g964 누락');
+  }
+});
