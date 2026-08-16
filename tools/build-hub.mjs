@@ -132,7 +132,10 @@ const LANG_SCRIPT = `
     var want = (navigator.languages || [navigator.language || 'ko'])
       .map(function (l) { return String(l).toLowerCase().split('-')[0]; })
       .filter(function (l) { return l === 'ko' || l === 'en' || l === 'ja'; })[0];
-    if (!want || want === here) return;
+    /* 지원 밖 언어(fr·de 등)는 영어로 — ko 는 저작 언어지 국제 기본값이 아니다
+       (운영자 지시 2026-08-16). 생성기·스캐너의 i18n.js FALLBACK_LANGUAGE 와 동일 규약. */
+    if (!want) want = 'en';
+    if (want === here) return;
     localStorage.setItem(KEY, want);
     location.replace(want === 'ko' ? '/' : '/' + want + '/');
   } catch (err) { /* 저장소가 막혀 있으면 자동 선택을 포기한다 — 페이지는 그대로 쓴다. */ }

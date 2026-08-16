@@ -1015,6 +1015,13 @@
       overflow-y: auto;
     }
 
+    /* 옆배치 우측 항목 하단 정렬 (운영자 지시 2026-08-16). `justify-content: flex-end`
+       는 위 경고와 같은 도달 불가 함정이 있어 auto 마진으로 민다 — 내용이 넘치면
+       마진이 0 으로 접혀 스크롤이 정상 동작한다. 스택(폰) 배치는 자연 하단이라 무변경. */
+    .scanner-panels > :first-child {
+      margin-top: auto;
+    }
+
     .scan-center {
       min-height: 0;
       padding: 4px 0;

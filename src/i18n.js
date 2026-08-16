@@ -23,7 +23,10 @@
  */
 
 export const SUPPORTED_LANGUAGES = ['ko', 'en', 'ja'];
+/** 사전 미스키 폴백 — 저작 원본 언어. 사전은 ko 가 완본이므로 여기만 ko 를 쓴다. */
 export const DEFAULT_LANGUAGE = 'ko';
+/** 브라우저 언어가 지원 밖일 때(예: fr·de) 보여줄 언어 — 국제 기본값 (운영자 지시 2026-08-16). */
+export const FALLBACK_LANGUAGE = 'en';
 const STORAGE_KEY = 'tlcube-lang';
 
 /** 저장소가 막혀 있어도(사파리 프라이빗 등) 페이지는 그대로 동작해야 한다. */
@@ -46,6 +49,8 @@ function writeStored(lang) {
 
 /**
  * 브라우저가 선호하는 언어 중 지원하는 첫 번째. 지역 부호는 버린다(`en-US` → `en`).
+ * 지원 언어가 하나도 없으면 **영어**로 폴백한다 — ko 는 저작 언어지 국제 기본값이
+ * 아니다 (미스키 폴백 DEFAULT_LANGUAGE 와 역할이 다르다).
  * @param {string[]} [preferred] 주입 가능 — 테스트에서 `navigator` 없이 쓴다.
  */
 export function detectLanguage(preferred) {
@@ -57,7 +62,7 @@ export function detectLanguage(preferred) {
     const code = String(raw).toLowerCase().split('-')[0];
     if (SUPPORTED_LANGUAGES.includes(code)) return code;
   }
-  return DEFAULT_LANGUAGE;
+  return FALLBACK_LANGUAGE;
 }
 
 /** 저장된 선택이 있으면 그것, 없으면 브라우저 언어. */
