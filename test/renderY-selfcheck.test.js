@@ -22,7 +22,8 @@ import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
 import { verifyRasterY } from '../src/verifyY.js';
 import { capacityTableY, versionSpecY } from '../src/capacityY.js';
-import { TL_READER_URL } from '../src/qr.js';
+import { TL_READER_URL, qrMatrix } from '../src/qr.js';
+import { faceBasis } from '../src/ygrid.js';
 
 function paletteOf() {
   const p = getPreset(DEFAULT_PRESET);
@@ -114,6 +115,96 @@ test('용량 생성표와 인코더 정합 (Y1/Y2/Y1T/Y2T × M — tones 별로)
 test('결정성 — 동일 입력 → 동일 픽셀 (QR 블록 포함, tones=2 기본값)', () => {
   const run = () => {
     const encoded = encodeY('결정성 Y', { version: 1, eccLevel: 'M' });
+    const scene = buildSceneY(encoded, { palette: paletteOf(), qrText: TL_READER_URL });
+    const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
+    return createHash('sha256').update(Buffer.from(raster.pixels.buffer)).digest('hex');
+  };
+  assert.equal(run(), run());
+});
+
+// ── v0XQ (중앙 QR 변형) e2e + 렌더 계약 ──────────────────────────────────────
+//
+// 2026-08-17 운영자 분기: ① 코너 좌표는 실루엣 기준(좌상·우상·하단 = 심 꼭짓점 셋)
+// ② 중앙 QR 은 **T면 단독**. 슬롯 81셀은 데이터도 파인더도 아닌 제3 역할('slot')이라
+// 자체검증 대상에서 빠지고 폴리곤도 안 그린다 — 그 자리를 중앙 QR 이 덮는다.
+
+function darkModuleCount(text) {
+  const qr = qrMatrix(text);
+  let dark = 0;
+  for (const value of qr.modules) if (value === 1) dark += 1;
+  return dark;
+}
+
+for (const tones of [2, 3]) {
+  test(`v0XQ e2e 자체검증 (${tones}톤) — 데이터 288셀 100% · erasure 0 · 슬롯은 대상 밖`, () => {
+    const encoded = encodeY('https://tl.estre.so', {
+      cellSurfaceLayout: 'v0xq', version: 1, tones, eccLevel: 'M',
+    });
+    assert.equal(encoded.n, 21);
+    assert.equal(encoded.cellSurfaceLayout, 'v0xq');
+    // 셀 맵은 n² 를 다 채우되 슬롯 81셀은 digit 이 없다.
+    assert.equal(encoded.cellDigits.size, 21 * 21);
+    const roles = {};
+    for (const entry of encoded.cellDigits.values()) {
+      roles[entry.role] = (roles[entry.role] || 0) + 1;
+    }
+    assert.deepEqual(roles, {
+      locator: 42, slot: 81, reference: 12, format: 18, data: 288,
+    });
+    const scene = buildSceneY(encoded, { palette: paletteOf(), qrText: TL_READER_URL });
+    const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
+    const report = verifyRasterY(raster, scene, encoded);
+    assert.equal(report.ok, true, JSON.stringify(report.mismatches));
+    assert.equal(report.erasures.length, 0);
+    // 검증 대상 = 슬롯·파인더를 뺀 나머지 (288 + 12 + 18).
+    assert.equal(report.total, 288 + 12 + 18);
+  });
+}
+
+test('v0XQ 렌더 계약 — 슬롯 폴리곤 없음 · 중앙 QR 은 T면 단독 · 코너 QR 자동 억제', () => {
+  const encoded = encodeY('https://tl.estre.so', {
+    cellSurfaceLayout: 'v0xq', version: 1, tones: 2, eccLevel: 'M',
+  });
+  const scene = buildSceneY(encoded, { palette: paletteOf(), qrText: TL_READER_URL, margin: 4 });
+  // 3·(441 − 81 슬롯) 셀 면 + 심 3선 + 중심 도트 1
+  //   + 중앙 QR(T 콰이어트 1 + 다크 D + L/R 필러 2). 코너 QR 블록은 **없다**.
+  const cellFaces = 3 * (21 * 21 - 81);
+  const centerQrShapes = 1 + darkModuleCount(TL_READER_URL) + 2;
+  assert.equal(scene.shapes.length, cellFaces + 3 + 1 + centerQrShapes);
+
+  // 콰이어트 패치는 T 면 슬롯 전체 (파라메트릭 (0,0)-(9,9)) 를 정확히 덮는다.
+  const { ei, ej } = faceBasis('T');
+  const at = (a, b) => ({
+    x: scene.layout.originX + (a * ei.x + b * ej.x) * scene.layout.size,
+    y: scene.layout.originY + (a * ei.y + b * ej.y) * scene.layout.size,
+  });
+  const want = [at(0, 0), at(9, 0), at(9, 9), at(0, 9)];
+  const quiet = scene.shapes.find((shape) => shape.kind === 'polygon'
+    && shape.points.length === 4
+    && shape.points.every((p, index) => Math.abs(p.x - want[index].x) < 1e-9
+      && Math.abs(p.y - want[index].y) < 1e-9));
+  assert.ok(quiet, '중앙 QR 콰이어트 패치를 T 면 슬롯 좌표에서 못 찾았다');
+
+  // 코너 QR 을 명시 opt-in 하면 블록이 생긴다 (억제가 «못 그린다» 가 아니라 «기본 끔»).
+  const withCorner = buildSceneY(encoded, {
+    palette: paletteOf(), qrText: TL_READER_URL, cornerQr: true,
+  });
+  assert.ok(withCorner.shapes.length > scene.shapes.length,
+    '코너 QR opt-in 이 아무것도 더하지 않았다');
+});
+
+test('v0XQ 는 qrText 없이 렌더할 수 없다 — 슬롯이 레이아웃 정의라서', () => {
+  const encoded = encodeY('https://tl.estre.so', {
+    cellSurfaceLayout: 'v0xq', version: 1, tones: 2, eccLevel: 'M',
+  });
+  assert.throws(() => buildSceneY(encoded, { palette: paletteOf() }), RangeError);
+});
+
+test('v0XQ 결정성 — 동일 입력 → 동일 픽셀', () => {
+  const run = () => {
+    const encoded = encodeY('결정성 v0XQ', {
+      cellSurfaceLayout: 'v0xq', version: 1, tones: 2, eccLevel: 'M',
+    });
     const scene = buildSceneY(encoded, { palette: paletteOf(), qrText: TL_READER_URL });
     const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
     return createHash('sha256').update(Buffer.from(raster.pixels.buffer)).digest('hex');

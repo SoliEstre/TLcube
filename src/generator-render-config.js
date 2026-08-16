@@ -5,6 +5,7 @@ import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js
 import {
   CELL_SURFACE_FINAL_V0,
   CELL_SURFACE_FINAL_V0X,
+  CELL_SURFACE_FINAL_V0XQ,
   CELL_SURFACE_FINAL_V1R2,
   CELL_SURFACE_FINAL_V2R2,
   assertCellSurfaceFinalId,
@@ -12,6 +13,7 @@ import {
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
+  LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
 } from './locatorY.js';
@@ -27,7 +29,7 @@ import {
  * 사용자가 고른 값이 복원된다(해상도 티어가 이미 같은 규약을 쓴다).
  *
  * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string}} state
- * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'}}
+ * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'|'v0xq'}}
  */
 export function encodeOptionsForY(state) {
   if (state === null || typeof state !== 'object') {
@@ -40,6 +42,7 @@ export function encodeOptionsForY(state) {
   // 최종 라인업 (2026-08-15): v0 = Y0(n=13) 고정 · v2r2 = Y1/Y2(n=21/25).
   // 2026-08-15 밤 추가: v1r2 = Y1(n=21) 전용 A/B 후보 (네 코너 블록 80셀).
   // 2026-08-16 추가: v0X = Y1(n=21) 전용 3파전 후보 (QR 파인더 문법 65셀).
+  // 2026-08-17 추가: v0XQ = Y1(n=21) 전용 중앙 QR 변형 (3코너 42셀 + 중앙 슬롯 81셀).
   // 초안 v2 와 구 v1 CS 는 UI 에서 내린 채다.
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0) {
     return {
@@ -65,6 +68,15 @@ export function encodeOptionsForY(state) {
       version: 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0X),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0XQ) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v0XQ 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0XQ),
     };
   }
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {

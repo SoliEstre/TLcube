@@ -1718,9 +1718,11 @@ if (expectedLayoutRoot && isLabPath()) {
     button.addEventListener('click', () => {
       const next = button.dataset.expectedLayout;
       // 최종 라인업(2026-08-15): v0 · v2r2 + (2026-08-15 밤) v1r2 = n=21 A/B 후보
-      // + (2026-08-16) v0x = n=21 3파전 후보. 값은 레이아웃 id(소문자)와 같아야 한다 —
-      // 디코더가 hypothesis.cellSurfaceLayout 으로 돌려주는 문자열이 그것이다.
-      expectedLocatorLayout = next === 'v0' || next === 'v2r2' || next === 'v1r2' || next === 'v0x'
+      // + (2026-08-16) v0x = n=21 3파전 후보 + (2026-08-17) v0xq = 중앙 QR 변형.
+      // 값은 레이아웃 id(소문자)와 같아야 한다 — 디코더가
+      // hypothesis.cellSurfaceLayout 으로 돌려주는 문자열이 그것이다 (표시만 v0XQ).
+      expectedLocatorLayout = next === 'v0' || next === 'v2r2' || next === 'v1r2'
+        || next === 'v0x' || next === 'v0xq'
         ? next
         : null;
       for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {

@@ -57,7 +57,9 @@ import {
   nameCellSurfaceFinal,
   tonesFromCellSurfaceFinalFormatIndex,
   versionForFinalN,
+  CELL_SURFACE_FINAL_FORMAT_WIRE,
   CELL_SURFACE_FINAL_FORMAT_WIRES,
+  hasLegacyFormatWire,
 } from '../cellSurfaceFinal.js';
 import { decodeCells } from '../decode.js';
 import { DIGIT_COUNT_V2 } from '../formatinfo.js';
@@ -2527,6 +2529,11 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
     && isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
     let firstAttempt = null;
     for (const wire of CELL_SURFACE_FINAL_FORMAT_WIRES) {
+      // 레거시 세대가 **없는** 레이아웃(v0xq — 포맷 v2 이후 신설)은 건너뛴다.
+      // 건너뛰지 않으면 formatCellsCellSurfaceFinal 이 «없는 조합» RangeError 를
+      // 던져 가설 전체가 죽는다 (v0xq 편입 첫 실측에서 실제로 그랬다).
+      if (wire !== CELL_SURFACE_FINAL_FORMAT_WIRE
+        && !hasLegacyFormatWire(hypothesis.cellSurfaceLayout)) continue;
       const attempt = readFormatWithCells(
         luma, hypothesis, options, valid,
         formatCellsCellSurfaceFinal(hypothesis.n, hypothesis.cellSurfaceLayout, wire),

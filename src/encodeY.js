@@ -72,6 +72,7 @@ import {
   formatIndexCellSurfaceFinal,
   isCellSurfaceFinalId,
   locatorCellsCellSurfaceFinal,
+  slotCellsCellSurfaceFinal,
   versionForFinalN,
 } from './cellSurfaceFinal.js';
 
@@ -687,6 +688,11 @@ function encodeYCellSurfaceFinal(
       role: 'locator',
       tones: { T: c.T, L: c.L, R: c.R },
     });
+  }
+  // 중앙 QR 슬롯 (v0xq) — digit 도 tones 도 없다. 셀 맵 n² 계약을 지키려고 싣고,
+  // sceneY 는 이 role 을 만나면 폴리곤을 건너뛴 뒤 중앙 QR 을 대신 그린다.
+  for (const c of slotCellsCellSurfaceFinal(n, layoutId)) {
+    cellDigits.set(cellKey(c.i, c.j), { digit: null, role: 'slot' });
   }
 
   const refDigits = tones === 3 ? REFERENCE_GROUP_DIGITS_3T : REFERENCE_GROUP_DIGITS_2T;

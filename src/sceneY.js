@@ -27,6 +27,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V2,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
+  LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   assertLocatorProfileY,
   isCellSurfaceLocatorProfileY,
@@ -35,7 +36,11 @@ import {
 } from './locatorY.js';
 import { locatorTone } from './cellSurfaceY.js';
 import { locatorToneCellSurfaceLayout } from './cellSurfaceLayouts.js';
-import { isCellSurfaceFinalId, locatorToneCellSurfaceFinal } from './cellSurfaceFinal.js';
+import {
+  CENTER_QR_MODULE_GRID, CENTER_QR_QUIET_MODULES, CENTER_QR_SLOT_CELLS,
+  centerQrModulePitchCells, hasCenterQrSlot,
+  isCellSurfaceFinalId, locatorToneCellSurfaceFinal,
+} from './cellSurfaceFinal.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -261,6 +266,116 @@ function renderWindowQr(shapes, n, layout, qrText, palette, faceGains) {
   }
 }
 
+// ── 중앙 QR (v0xq, 2026-08-17 운영자 분기 확정) ──────────────────────────
+//
+// **렌더 계약 = T면 단독** (운영자 확정). 3면 레플리카는 기각 — 2026-08-09 윈도 β
+// 판정("큐브 윗면에 하나만")과 같은 결론이고, 한 코드에 QR 셋은 과잉이다.
+// L/R 면의 슬롯은 renderWindowQr 과 **같은 규약**으로 필러 톤을 채운다 (비워 두면
+// 배경 노출 구멍으로 실루엣이 깨진다). 이 함수는 renderWindowQr 을 호출하지도
+// 수정하지도 않는다 — 기하가 다르다(윈도는 T 면 **먼 꼭짓점**, 여기는 **Y-심**).
+//
+// scene.js 의 Type O centerQr 에서 가져온 자산:
+//   · 보호 사각 개념 (심볼 + 콰이어트를 셀 침범 없이 담는 정사각) — 여기서는
+//     이분탐색이 필요 없다. 슬롯이 이미 셀 격자에 정렬된 m×m 이라 피치가 닫힌
+//     형태로 떨어진다: `pitch = m / (21 + 2·quiet)` (셀 단위).
+//   · 콰이어트 패치를 먼저 깔고 다크 모듈을 얹는 painter 순서.
+//   · «QR 은 데이터 셀보다 먼저» 는 여기선 **불필요**하다 — 슬롯 셀은 애초에
+//     cellDigits 에 role 'slot' 으로만 있고 폴리곤을 안 그린다(①에서 skip).
+//
+// ⚠ **조정 여지 (운영자 «인식률 봐서 조정»)** — 셋 다 여기 상수 하나로 모아 뒀다:
+//   ① CENTER_QR_QUIET_MODULES (cellSurfaceFinal.js) — 4(표준) → 2 면 모듈 1.16×.
+//   ② CENTER_QR_SLOT_CELLS (cellSurfaceFinal.js) — 슬롯 한 변. autoplace 상한 9.
+//   ③ CENTER_QR_SIDE_FILL — L/R 슬롯 면의 톤. 'data-dark' 가 기본(윈도 β 와 동일),
+//      'quiet' 로 바꾸면 심 너머까지 밝아져 QR 콰이어트가 두 변 더 넓어진다.
+//      기본을 'data-dark' 로 둔 이유: 밝은 중앙 덩어리는 로케이터의 동심 코어
+//      스캐너에 가짜 후보를 만들 수 있고, 실루엣의 큐브 인상도 깨진다.
+
+/**
+ * 셀 표면 레이아웃 id → 기본 로케이터 프로파일. 목록에 없으면 cell-surface-v1
+ * (구 초안 폴백) — 개정 전 중첩 삼항의 마지막 가지와 같은 값이다.
+ */
+const LAYOUT_DEFAULT_LOCATOR_PROFILE = Object.freeze({
+  v0: LOCATOR_PROFILE_CELL_SURFACE_V0,
+  v0x: LOCATOR_PROFILE_CELL_SURFACE_V0X,
+  v0xq: LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
+  v2r2: LOCATOR_PROFILE_CELL_SURFACE_V2R2,
+  v2: LOCATOR_PROFILE_CELL_SURFACE_V2,
+  v1r2: LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+  v1r2d: LOCATOR_PROFILE_CELL_SURFACE_V1R2,
+});
+
+/** L/R 슬롯 면 채움 — 'data-dark'(기본, 윈도 β 와 동일) | 'quiet'. §조정 여지 ③. */
+const CENTER_QR_SIDE_FILL = 'data-dark';
+
+/**
+ * 중앙 QR 을 T 면 파라메트릭 좌표에 그린다 (Y-심 앵커).
+ *
+ * 방향 규약: QR 행렬 (qx,qy) → 면 (a,b) = (quiet + qx, quiet + qy) · pitch.
+ * 즉 QR 의 **좌상단 파인더가 Y-심 쪽**에 온다 — 윈도 β 는 정렬 패턴(파인더 없는
+ * 코너)을 안쪽으로 뒤집었지만, 중앙 QR 은 파인더 셋이 중앙에 모이는 편이 낫다:
+ * 세 파인더가 만드는 직각 삼중점이 그대로 **중앙 앵커**가 되기 때문이다
+ * (detectQrFinderTriples 가 kind 'window' 로 잡는 120° 투영 서명).
+ */
+function renderCenterQr(shapes, layout, qrText, palette, faceGains, slotCells) {
+  const qr = qrMatrix(qrText);
+  if (qr.size !== QR_MODULE_GRID) {
+    throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
+  }
+  if (CENTER_QR_MODULE_GRID !== QR_MODULE_GRID) {
+    // 두 상수는 같은 사실(qr.js v1 고정)을 두 모듈이 각각 적은 것이다 — 어긋나면
+    // 슬롯 피치와 실제 심볼 크기가 조용히 갈린다.
+    throw new Error('중앙 QR 모듈 격자 상수 불일치: '
+      + CENTER_QR_MODULE_GRID + ' vs ' + QR_MODULE_GRID);
+  }
+  const pitch = centerQrModulePitchCells(slotCells);
+
+  // ① T 면: 콰이어트 패치(슬롯 전체) + QR 다크 모듈.
+  const quiet = applyFaceGain(palette.bullseyeLight, faceGains.T);
+  const dark = applyFaceGain(palette.bullseyeDark, faceGains.T);
+  shapes.push({
+    kind: 'polygon',
+    points: [
+      facePointFor('T', 0, 0, layout),
+      facePointFor('T', slotCells, 0, layout),
+      facePointFor('T', slotCells, slotCells, layout),
+      facePointFor('T', 0, slotCells, layout),
+    ],
+    color: quiet,
+  });
+  for (let qy = 0; qy < qr.size; qy += 1) {
+    for (let qx = 0; qx < qr.size; qx += 1) {
+      if (qr.modules[qy * qr.size + qx] !== 1) continue;
+      const a0 = (CENTER_QR_QUIET_MODULES + qx) * pitch;
+      const b0 = (CENTER_QR_QUIET_MODULES + qy) * pitch;
+      shapes.push({
+        kind: 'polygon',
+        points: [
+          facePointFor('T', a0, b0, layout),
+          facePointFor('T', a0 + pitch, b0, layout),
+          facePointFor('T', a0 + pitch, b0 + pitch, layout),
+          facePointFor('T', a0, b0 + pitch, layout),
+        ],
+        color: dark,
+      });
+    }
+  }
+
+  // ② L/R 면: 슬롯 채움 (면당 폴리곤 1개).
+  for (const face of ['L', 'R']) {
+    const base = CENTER_QR_SIDE_FILL === 'quiet' ? palette.bullseyeLight : palette.levels[0];
+    shapes.push({
+      kind: 'polygon',
+      points: [
+        facePointFor(face, 0, 0, layout),
+        facePointFor(face, slotCells, 0, layout),
+        facePointFor(face, slotCells, slotCells, layout),
+        facePointFor(face, 0, slotCells, layout),
+      ],
+      color: applyFaceGain(base, faceGains[face]),
+    });
+  }
+}
+
 // ── 검증 ────────────────────────────────────────────────────────────────
 
 function assertEncoded(encoded) {
@@ -341,19 +456,18 @@ export function buildSceneY(encoded, options) {
   }
 
   const cellSize = opts.cellSize === undefined ? 1 : opts.cellSize;
+  // 레이아웃 id → 기본 로케이터 프로파일. 중첩 삼항이 6단이 되면서 들여쓰기가
+  // 의미를 잃어 표로 폈다 (값은 개정 전과 **바이트 동일** — v0xq 한 줄만 추가).
+  // own-property 조회 — 'constructor'·'toString' 같은 레이아웃 id 가 흘러들어도
+  // 프로토타입 체인의 값을 프로파일로 오인하지 않는다 (표는 freeze 된 리터럴이라
+  // 실사고는 아니지만, 조회 대상이 «외부에서 온 문자열» 이므로 규율로 둔다).
   const defaultCellSurfaceProfile = isCellSurfaceLocatorProfileY(encoded.locatorProfile)
     ? encoded.locatorProfile
-    : encoded.cellSurfaceLayout === 'v0'
-      ? LOCATOR_PROFILE_CELL_SURFACE_V0
-      : encoded.cellSurfaceLayout === 'v0x'
-        ? LOCATOR_PROFILE_CELL_SURFACE_V0X
-        : encoded.cellSurfaceLayout === 'v2r2'
-          ? LOCATOR_PROFILE_CELL_SURFACE_V2R2
-          : encoded.cellSurfaceLayout === 'v2'
-            ? LOCATOR_PROFILE_CELL_SURFACE_V2
-            : (encoded.cellSurfaceLayout === 'v1r2' || encoded.cellSurfaceLayout === 'v1r2d')
-              ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
-              : LOCATOR_PROFILE_CELL_SURFACE_V1;
+    : (Object.prototype.hasOwnProperty.call(
+      LAYOUT_DEFAULT_LOCATOR_PROFILE, encoded.cellSurfaceLayout,
+    )
+      ? LAYOUT_DEFAULT_LOCATOR_PROFILE[encoded.cellSurfaceLayout]
+      : LOCATOR_PROFILE_CELL_SURFACE_V1);
   const requestedLocator = opts.locatorProfile === undefined
     ? (cellSurface ? defaultCellSurfaceProfile : DEFAULT_LOCATOR_PROFILE_Y)
     : assertLocatorProfileY(opts.locatorProfile);
@@ -392,6 +506,8 @@ export function buildSceneY(encoded, options) {
       const key = `${i},${j}`;
       const entry = cellDigits.get(key);
       if (entry === undefined) continue;
+      // 중앙 QR 슬롯 — 폴리곤을 그리지 않는다. ①½ 의 중앙 QR 이 세 면을 모두 덮는다.
+      if (entry.role === 'slot') continue;
       if (cellSurface && entry.role === 'locator') {
         for (const face of YFACES) {
           let levelIndex;
@@ -423,6 +539,23 @@ export function buildSceneY(encoded, options) {
         });
       }
     }
+  }
+
+  // ①½ 중앙 QR (v0xq) — 슬롯 셀 자리에 T면 QR + L/R 필러. 셀 폴리곤 **다음**,
+  // Y-심 3선·중심 도트 **앞**이다. 심선·도트는 QR 의 안쪽 콰이어트(4모듈 = 슬롯의
+  // 4/29 ≈ 1.24셀) 안에 들어오므로 심볼을 침범하지 않는다 (반폭 0.075셀 · 반지름
+  // 0.18셀). 그 둘을 QR 위에 남겨 두는 이유는 Y-접합 서명(실루엣 검출기)을 지키기
+  // 위해서다 — 중앙을 통째로 지우면 큐브 판별 근거가 사라진다.
+  const centerQrSlot = cellSurface && hasCenterQrSlot(encoded.cellSurfaceLayout)
+    ? CENTER_QR_SLOT_CELLS : 0;
+  if (centerQrSlot > 0) {
+    if (opts.qrText === undefined) {
+      throw new RangeError(
+        'v0xq(중앙 QR 변형)는 qrText 없이 렌더할 수 없다 — 중앙 슬롯 '
+        + centerQrSlot + '×' + centerQrSlot + '셀이 비어 버린다',
+      );
+    }
+    renderCenterQr(shapes, layout, opts.qrText, palette, faceGains, centerQrSlot);
   }
 
   // ② Y-심 3선 — 중심(Y-심 = layout 원점) → C1·C3·C5 방향, 반폭 0.075·cellSize
@@ -473,7 +606,12 @@ export function buildSceneY(encoded, options) {
   }
   // 기본값: 윈도 β 가 켜져 있으면 코너는 자동 억제("윗면에 하나만") — 병행이 필요한
   // 특수 용도만 cornerQr: true 로 명시 opt-in 한다.
-  const cornerQr = opts.cornerQr === undefined ? !window : opts.cornerQr;
+  // v0xq 도 같은 규칙을 탄다 — 중앙 QR 이 이미 URL 을 싣는데 코너까지 그리면
+  // 한 코드에 QR 둘이다 (2026-08-09 "윗면에 하나만" 판정의 연장). 병행이 필요한
+  // 계측용으로만 cornerQr: true 로 명시 opt-in.
+  const cornerQr = opts.cornerQr === undefined
+    ? !(window || centerQrSlot > 0)
+    : opts.cornerQr;
   if (opts.qrText !== undefined && cornerQr) {
     const qr = qrMatrix(opts.qrText);
     if (qr.size !== QR_MODULE_GRID) {

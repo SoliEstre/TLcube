@@ -16,6 +16,7 @@ import {
   DEFAULT_LOCATOR_PROFILE_Y,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
+  LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   LOCATOR_PROFILE_HEX_FRAME_V1,
@@ -49,7 +50,8 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
   assert.equal(state.locatorProfileY, LOCATOR_PROFILE_OFF);
   assert.equal(GENERATOR_STATE_SCHEMA.locatorProfileY.exposure, 'internal');
   // 최종 라인업(2026-08-15) v0 · v2r2 + (2026-08-15 밤) v1r2 = n=21 A/B 후보
-  // + (의도적 갱신 2026-08-16) v0x = n=21 3파전 후보.
+  // + (의도적 갱신 2026-08-16) v0x = n=21 3파전 후보
+  // + (의도적 갱신 2026-08-17) v0xq = n=21 중앙 QR 변형.
   // hex-frame-v1 은 UI 카드만 내렸고 **값은 살아 있다**(차단·비삭제).
   assert.deepEqual(
     [...GENERATOR_STATE_SCHEMA.locatorProfileY.options],
@@ -58,6 +60,7 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
       LOCATOR_PROFILE_HEX_FRAME_V1,
       LOCATOR_PROFILE_CELL_SURFACE_V0,
       LOCATOR_PROFILE_CELL_SURFACE_V0X,
+      LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
       LOCATOR_PROFILE_CELL_SURFACE_V2R2,
       LOCATOR_PROFILE_CELL_SURFACE_V1R2,
     ],

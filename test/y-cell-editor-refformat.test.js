@@ -19,6 +19,7 @@ import {
   CELL_SURFACE_FINAL_IDS,
   CELL_SURFACE_FINAL_NS,
   cellSurfaceFinal,
+  occupiedCellsCellSurfaceFinal,
   paintedCellsCellSurfaceFinal,
 } from '../src/cellSurfaceFinal.js';
 import {
@@ -82,10 +83,13 @@ function locatorCardOrder(html) {
 // 끔 → v0 → v1r2 → v2r2, 해상도 오름차순).
 // 의도적 갱신 (2026-08-16): v0X 편입 — 운영자 지시로 v0 계열(v0 · v0X)을 인접
 // 배치해 끔 → v0 → v0X → v1r2 → v2r2 가 됐다.
+// 의도적 갱신 (2026-08-17): v0XQ(중앙 QR 변형) 편입 — 운영자 지시로 v0 계열
+// (v0 · v0X · v0XQ)을 인접 배치해 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 가 됐다.
 const LOCATOR_CARD_ORDER = Object.freeze([
-  'off', 'cell-surface-v0', 'cell-surface-v0x', 'cell-surface-v1r2', 'cell-surface-v2r2',
+  'off', 'cell-surface-v0', 'cell-surface-v0x', 'cell-surface-v0xq',
+  'cell-surface-v1r2', 'cell-surface-v2r2',
 ]);
-test('Y 검출기 옵션 카드 순서는 끔 → v0 → v0X → v1r2 → v2r2 다', () => {
+test('Y 검출기 옵션 카드 순서는 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 다', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 
@@ -95,7 +99,10 @@ test('셀 편집기 ref./format 는 선택 파인더 painted 셀의 autoplace �
   assert.match(INDEX, /encodeOptionsForY\(\{\s*tone: generatorState\.tone,/);
   assert.match(INDEX, /locatorProfileY: generatorState\.locatorProfileY,/);
   assert.match(INDEX, /cellSurfaceFinal\(n, encOpts\.cellSurfaceLayout\)/);
-  assert.match(INDEX, /surface\.paintedCells/);
+  // 의도적 갱신 (2026-08-17): 점유 = 파인더 ∪ 중앙 QR 슬롯. v0XQ 전에는 둘이
+  // 같았지만 슬롯이 생기며 갈렸다 — painted 만 넣으면 슬롯이 데이터로 세어진다.
+  assert.match(INDEX, /surface\.occupiedCells/);
+  assert.doesNotMatch(INDEX, /surface\.paintedCells/);
   // 끔(무검출기) = 빈 점유 유도.
   assert.match(INDEX, /placeReservedCells\(n, \[\]\)/);
   // 손 좌표표·레거시 고정 배치 직접 참조 금지 — 표시용 별도 계산 경로가 없어야 한다.
@@ -117,10 +124,17 @@ test('배치 불가 안내 g549 는 ko/en/ja 세 언어에 있다', () => {
 
 // 의도적 갱신 (2026-08-16, 포맷 v2): 신세대 셀 표면은 포맷 6 digit(18셀)이므로 유도
 // 호출도 같은 세대를 넘긴다. 계약(«정본 = autoplace 유도») 은 그대로다.
-test('정합: cellSurfaceFinal 의 ref/format == painted 점유 autoplace 유도 (deepEqual)', () => {
+// 의도적 갱신 (2026-08-17, v0xq): 점유 입력이 painted → painted ∪ 중앙 QR 슬롯 으로
+// 넓어졌다. 슬롯 없는 네 레이아웃은 두 집합이 셀 하나까지 같아 단언이 불변이다.
+test('정합: cellSurfaceFinal 의 ref/format == 점유(파인더∪슬롯) autoplace 유도 (deepEqual)', () => {
   for (const [id, n] of finalPairs()) {
     const surface = cellSurfaceFinal(n, id);
-    const placed = placeReservedCells(n, paintedCellsCellSurfaceFinal(n, id), {
+    const occupied = occupiedCellsCellSurfaceFinal(n, id);
+    const painted = paintedCellsCellSurfaceFinal(n, id);
+    assert.equal(
+      occupied.length, painted.length + surface.slotCount, `${id}@${n} 점유 = painted + slot`,
+    );
+    const placed = placeReservedCells(n, occupied, {
       formatBlockLength: FORMAT_BLOCK_LENGTH_V2,
     });
     assert.equal(surface.formatCells.length, 18, `${id}@${n} format 18`);
@@ -148,11 +162,11 @@ test('occupied roleSets — 파인더 점유는 detector 이고 데이터·경�
     const sets = {
       reference: new Set(surface.referenceCells.map(key)),
       format: new Set(surface.formatCells.map(key)),
-      occupied: new Set(surface.paintedCells.map(key)),
+      occupied: new Set(surface.occupiedCells.map(key)),
     };
     const state = createCellEditorState(n);
 
-    const occ = surface.paintedCells[0];
+    const occ = surface.occupiedCells[0];
     assert.equal(classifyCoord(state, occ.i, occ.j, sets), 'detector', `${id}@${n}`);
     assert.equal(isDataCoord(state, occ.i, occ.j, sets), false);
     const toggled = applyMaskToggle(state, occ.i, occ.j, sets);
@@ -165,12 +179,12 @@ test('occupied roleSets — 파인더 점유는 detector 이고 데이터·경�
 
     // 회계: data 가 인코더 선언값(declaredDataCells)과 일치 — 표시와 실제가 같은 수.
     const counts = countEditorCoords(state, sets);
-    assert.equal(counts.occupied, surface.paintedCells.length, `${id}@${n} occupied`);
+    assert.equal(counts.occupied, surface.occupiedCells.length, `${id}@${n} occupied`);
     assert.equal(counts.userNonData, 0);
     assert.equal(counts.data, surface.declaredDataCells, `${id}@${n} data`);
     const doc = serializeCellEditor(state, sets);
     assert.equal(doc.counts.data, surface.declaredDataCells);
-    assert.equal(doc.counts.occupied, surface.paintedCells.length);
+    assert.equal(doc.counts.occupied, surface.occupiedCells.length);
 
     // 데이터 경계: 점유 셀은 데이터 합집합 밖 — 경계 변이 점유 셀 위에 있지 않다.
     const edges = dataBoundaryEdges(state, sets);
@@ -186,7 +200,7 @@ test('occupied roleSets — 파인더 점유는 detector 이고 데이터·경�
 test('독립 /celleditor/ previewAutoplaceY 도 정본 painted 입력에서 cellSurfaceFinal 과 일치한다', () => {
   for (const [id, n] of finalPairs()) {
     const state = createUniversalEditorState({ type: 'Y', size: n });
-    for (const cell of paintedCellsCellSurfaceFinal(n, id)) {
+    for (const cell of occupiedCellsCellSurfaceFinal(n, id)) {
       state.userNonData.add(coreCoordKey('Y', cell));
     }
     const preview = previewAutoplaceY(state);

@@ -1043,8 +1043,9 @@
 
       <div id="yLocatorSection" hidden>
         <label class="section-heading" data-i18n="g515">Y타입 검출기 옵션</label>
-        <!-- 카드 순서 끔 → v0 → v0X → v1r2 → v2r2 (운영자 지시 2026-08-16).
-             v0 계열(v0 · v0X)을 인접 배치한다 — v0X 는 v0 의 QR 파인더 문법 확장이다. -->
+        <!-- 카드 순서 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 (운영자 지시 2026-08-16·17).
+             v0 계열(v0 · v0X · v0XQ)을 인접 배치한다 — v0X 는 v0 의 QR 파인더 문법
+             확장이고, v0XQ 는 그 문법을 3코너로 옮기고 중앙에 QR 을 넣은 변형이다. -->
         <div class="card-row" id="yLocatorCards">
           <div class="toggle-card active" data-locator="off">
             <span data-i18n="g516">끔 (기존)</span>
@@ -1054,6 +1055,9 @@
           </div>
           <div class="toggle-card" data-locator="cell-surface-v0x">
             <span data-i18n="g602">셀 표면 v0X (Y1)</span>
+          </div>
+          <div class="toggle-card" data-locator="cell-surface-v0xq">
+            <span data-i18n="g604">셀 표면 v0XQ · 중앙 QR (Y1)</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v1r2">
             <span data-i18n="g547">셀 표면 v1r2 (Y1)</span>
@@ -1445,6 +1449,8 @@ const GENERATOR_STRINGS = {
     "g548": "v1r2. 네 코너 블록 파인더 80셀 · 데이터 334. Y1(n=21) 전용. v0 확장형 A/B 후보이며 성능을 보장하지 않아요.",
     "g602": "셀 표면 v0X (Y1)",
     "g603": "v0X. QR 파인더 문법을 빌린 v0 확장 65셀 · 데이터 346. Y1(n=21) 전용. 3파전 후보이며 성능을 보장하지 않아요.",
+    "g604": "셀 표면 v0XQ · 중앙 QR (Y1)",
+    "g605": "v0XQ. 좌상·우상·하단 3코너 동심 사각 42셀 + 중앙 QR 슬롯 81셀 · 데이터 288. 중앙 QR 이 폴백 URL 을 싣고 코너 QR 은 자동으로 꺼져요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g521": "Y타입 셀 편집기",
     "g522": "한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
     "g523": "톤 편집",
@@ -1696,6 +1702,8 @@ const GENERATOR_STRINGS = {
     "g548": "v1r2. Four-corner block finder, 80 cells, 334 data. Y1 (n=21) only. An A/B candidate extending v0; does not guarantee performance.",
     "g602": "Cell surface v0X (Y1)",
     "g603": "v0X. A v0 extension borrowing QR finder grammar, 65 cells, 346 data. Y1 (n=21) only. A three-way candidate; does not guarantee performance.",
+    "g604": "Cell surface v0XQ · center QR (Y1)",
+    "g605": "v0XQ. Three concentric-square corners (upper-left, upper-right, bottom) in 42 cells plus an 81-cell center QR slot, 288 data. The center QR carries the fallback URL, so the corner QR is suppressed. Y1 (n=21) only; does not guarantee performance.",
     "g521": "Type Y cell editor",
     "g522": "Painting one face excludes that (i,j) data triple on T, L, and R. Edits are not applied to the current code output.",
     "g523": "Tone edit",
@@ -1947,6 +1955,8 @@ const GENERATOR_STRINGS = {
     "g548": "v1r2。四隅ブロックファインダ 80セル・データ334。Y1(n=21) 専用。v0 の拡張版 A/B 候補で、性能は保証しません。",
     "g602": "セル表面 v0X (Y1)",
     "g603": "v0X。QR ファインダの文法を借りた v0 拡張 65セル・データ346。Y1(n=21) 専用。三つ巴の候補で、性能は保証しません。",
+    "g604": "セル表面 v0XQ・中央 QR (Y1)",
+    "g605": "v0XQ。左上・右上・下の3コーナー同心四角 42セル + 中央 QR スロット 81セル・データ288。中央 QR がフォールバック URL を担うのでコーナー QR は自動で切れます。Y1(n=21) 専用で、性能は保証しません。",
     "g521": "Yタイプセル編集",
     "g522": "1面だけ塗っても、その座標 (i,j) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
     "g523": "トーン編集",
@@ -2007,7 +2017,7 @@ import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capa
 // ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
 // placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
 import { placeReservedCells } from './src/autoplaceY.js';
-import { cellSurfaceFinal } from './src/cellSurfaceFinal.js';
+import { CELL_SURFACE_FINAL_V0XQ, cellSurfaceFinal } from './src/cellSurfaceFinal.js';
 import { faceBasis, layoutForCube, moduleQuad, YFACES } from './src/ygrid.js';
 import {
   CELL_EDITOR_MODE_MASK, TONE_BRIGHTEN, TONE_DARKEN,
@@ -2032,6 +2042,7 @@ import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-con
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
+  LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
   LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_OFF,
@@ -3079,20 +3090,23 @@ function syncResTierUi() {
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0;
   const cellSurfaceV2r2 = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V2R2;
-  // v1r2 · v0X 는 n=21 뿐이라 중(中) 한 단만 연다.
+  // v1r2 · v0X · v0XQ 는 n=21 뿐이라 중(中) 한 단만 연다.
   const cellSurfaceV1r2 = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2;
   const cellSurfaceV0x = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X;
+  const cellSurfaceV0xq = type === 'Y'
+    && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0XQ;
   const isOff = (res) =>
     (windowLocked && (res === 'low' || res === 'mid'))
     || (cellSurfaceV0 && (res === 'mid' || res === 'high'))
     || (cellSurfaceV2r2 && res === 'low')
     || (cellSurfaceV1r2 && (res === 'low' || res === 'high'))
-    || (cellSurfaceV0x && (res === 'low' || res === 'high'));
+    || (cellSurfaceV0x && (res === 'low' || res === 'high'))
+    || (cellSurfaceV0xq && (res === 'low' || res === 'high'));
   const selectedTier = cellSurfaceV0
     ? 'low'
-    : (cellSurfaceV1r2 || cellSurfaceV0x)
+    : (cellSurfaceV1r2 || cellSurfaceV0x || cellSurfaceV0xq)
       ? 'mid'
       : cellSurfaceV2r2
         ? (Number(generatorState[versionStateKey(type)]) === 2 ? 'high' : 'mid')
@@ -3281,6 +3295,8 @@ if (els.yLocatorCards) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V1R2;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0X) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0X;
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0XQ) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0XQ;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V2R2) {
@@ -3337,7 +3353,9 @@ function yCellEditorContext() {
   try {
     const surface = encOpts.cellSurface ? cellSurfaceFinal(n, encOpts.cellSurfaceLayout) : null;
     const placed = surface || yOffPlacement(n);
-    const occupiedCells = surface ? surface.paintedCells : [];
+    // 점유 = 파인더 ∪ 중앙 QR 슬롯. v0XQ 전에는 둘이 같았지만 슬롯이 생기면서
+    // 갈렸다 — painted 만 넣으면 편집기가 슬롯 81셀을 데이터로 세어 회계가 어긋난다.
+    const occupiedCells = surface ? surface.occupiedCells : [];
     const occupiedTones = new Map();
     if (surface) {
       for (const cell of surface.locatorCells) {
@@ -4042,7 +4060,9 @@ function syncYLocatorUi() {
           ? LOCATOR_PROFILE_CELL_SURFACE_V1R2
           : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X
             ? LOCATOR_PROFILE_CELL_SURFACE_V0X
-            : LOCATOR_PROFILE_OFF;
+            : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0XQ
+              ? LOCATOR_PROFILE_CELL_SURFACE_V0XQ
+              : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
     for (const card of els.yLocatorCards.children) {
       card.classList.toggle('active', card.dataset.locator === profile);
@@ -4055,11 +4075,13 @@ function syncYLocatorUi() {
         ? t('g548')
         : profile === LOCATOR_PROFILE_CELL_SURFACE_V0X
           ? t('g603')
-          : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
-            ? t('g541')
-            : profile === LOCATOR_PROFILE_HEX_FRAME_V1
-              ? t('g520')
-              : t('g519');
+          : profile === LOCATOR_PROFILE_CELL_SURFACE_V0XQ
+            ? t('g605')
+            : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
+              ? t('g541')
+              : profile === LOCATOR_PROFILE_HEX_FRAME_V1
+                ? t('g520')
+                : t('g519');
   }
 }
 
@@ -4194,7 +4216,8 @@ function buildConfig() {
     versionY: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0
       ? 0
       : (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2
-        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X)
+        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X
+        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0XQ)
         ? 1
         : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V2R2
           ? (selectedVersion(generatorState.versionY) === 2 ? 2 : 1)
@@ -4346,6 +4369,12 @@ function renderTypeY(cfg) {
     if (cfg.fallback.mode === 'corner') sceneOpts.qrCorner = cfg.fallback.corner;
     // 안쪽(윈도 β) = 상단면 QR 단독 — 코너 QR 병행 억제 (사용자 재판정 2026-08-09).
     if (useWindow) sceneOpts.cornerQr = false;
+  }
+  // v0XQ(중앙 QR 변형)는 슬롯 81셀이 **레이아웃 정의**라 QR 이 선택 사항이 아니다.
+  // 폴백 «끔» 이어도 텍스트를 넘겨야 한다 — 안 넘기면 sceneY 가 «슬롯이 비어 버린다»
+  // 로 던진다. 코너 QR 은 sceneY 가 알아서 억제한다(윈도 β 와 같은 규칙).
+  if (opts.cellSurfaceLayout === CELL_SURFACE_FINAL_V0XQ && sceneOpts.qrText === undefined) {
+    sceneOpts.qrText = cfg.qrText;
   }
   const scene = buildSceneY(encoded, sceneOpts);
 

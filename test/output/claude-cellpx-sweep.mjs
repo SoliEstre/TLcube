@@ -19,6 +19,7 @@ import { extractCellSurfaceProbe } from '../../src/lab-telemetry.js';
 import { toRelativeLuminance } from '../../src/decoder/luma.js';
 import { detectCellSurfaceBlockShapes } from '../../src/decoder/cellsurface-block-detect.js';
 import { distortImage, applyGamma, applySCurve } from '../harness/distort.mjs';
+import { TL_READER_URL } from '../../src/qr.js';
 import { BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset } from '../../src/luminance.js';
 
 const PRESET = getPreset(DEFAULT_PRESET);
@@ -45,6 +46,9 @@ const ALL_TARGETS = [
   { layout: 'v2r2', version: 1, n: 21 },
   // 2026-08-16 v0X 편입 — 같은 n=21 이라 cell_px 통제 축이 v1r2 와 동일하다.
   { layout: 'v0x', version: 1, n: 21 },
+  // 2026-08-17 v0xq 편입 — 같은 n=21. **중앙 QR 모듈은 셀보다 작다**(피치 9/29 셀)
+  // 이라 이 축에서 가장 먼저 죽을 후보다. 그 문턱을 재는 것이 이 열의 목적이다.
+  { layout: 'v0xq', version: 1, n: 21 },
 ];
 const TARGETS = process.env.SWEEP_LAYOUTS
   ? ALL_TARGETS.filter((t) => process.env.SWEEP_LAYOUTS.split(',').includes(t.layout))
@@ -137,7 +141,12 @@ function render(target, tones, cellPx) {
     tones,
     eccLevel: 'M',
   });
-  const scene = buildSceneY(encoded, { palette: PALETTE, margin: MARGIN_CELLS });
+  // v0xq 는 중앙 QR 이 레이아웃의 일부라 qrText 가 필수다 (코너 QR 은 자동 억제).
+  const scene = buildSceneY(encoded, {
+    palette: PALETTE,
+    margin: MARGIN_CELLS,
+    ...(target.layout === 'v0xq' ? { qrText: TL_READER_URL } : {}),
+  });
   const raster = rasterize(scene, { pixelsPerUnit: cellPx, supersample: 2 });
   return { raster, embedded: embedSquare(raster) };
 }

@@ -28,6 +28,9 @@
  *   9. (2026-08-16) v0X 패밀리 — SE 6×6 동심 사각이 **3면 동일 톤**이라 K5 원거리
  *      코어가 120° 간격 **셋** 뜬다(v1r2·v2r2 는 면 T 하나뿐). 이 «사각 링 동반자»
  *      가 반경 18.0 을 공유하는 v1r2 와 v0X 를 가르는 시딩 게이트다.
+ *  10. (2026-08-17) v0xq 패밀리 — **K3 중앙이 없다**(중앙 QR 슬롯). 3코너 삼중점이
+ *      중앙·스케일·위상을 주고 중앙 QR 블록이 4번째 앵커다. 코너 검증은 별도 순회라
+ *      다른 패밀리의 poseCount 가 흔들리지 않아야 한다 (§10 대조군 3종).
  */
 
 import { test } from 'node:test';
@@ -37,11 +40,13 @@ import { encodeY } from '../src/encodeY.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import { detectQrFinderTriples } from '../src/decoder/bootstrap.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
 } from '../src/luminance.js';
 import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { detectCellSurfaceBlockShapes } from '../src/decoder/cellsurface-block-detect.js';
+import { TL_READER_URL } from '../src/qr.js';
 import { distortImage } from './harness/distort.mjs';
 
 const PRESET = getPreset(DEFAULT_PRESET);
@@ -98,6 +103,15 @@ function decodeLab(frame, cube = {}) {
       },
     },
   });
+}
+
+/** 3톤 변형 — 톤 열화 구간에서 v0xq 시딩 게이트의 실효 단계를 재는 데 쓴다. */
+function renderFinal3Tone(layout, version, pixelsPerUnit) {
+  const encoded = encodeY(PAYLOAD, {
+    cellSurfaceLayout: layout, version, tones: 3, eccLevel: 'M',
+  });
+  const scene = buildSceneY(encoded, { palette: PALETTE, margin: 4 });
+  return rasterize(scene, { pixelsPerUnit, supersample: 2 });
 }
 
 const V0_FRAME = embed960(renderFinal('v0', 0, 17));
@@ -266,7 +280,7 @@ test('v1r2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동�
   // ⚠ 알려진 약점 핀: 이 프레임·이 왜곡에서 앵커드 패밀리는 하나도 서지 않고
   // v0 스윕 폴백만 산다. 개정 전에는 v1r2 포즈가 섰다(적대 검증 F3 대조표).
   assert.deepEqual(first.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0: 6,
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0: 6,
   }, '포즈 분포가 잰 값과 다르다 — 약점이 움직였으면 §6 을 재측정하고 핀을 갱신하라');
   const families = first.shapes.map((shape) => shape.blockLocator.family);
   assert.ok(!families.includes('v1r2'), 'v1r2 shape 가 살아났다 — 핀을 되돌려라');
@@ -286,7 +300,7 @@ test('v1r2 패밀리 격리 대조군 — 끄면 v1r2 포즈 0 (⚠ 현재는 �
   // 즉 포맷 v2 −3셀은 이 프레임에서 **앵커드 포즈 예산 전체**를 깎았다
   // (적대 검증 F3: v2r2@21 도 ppu12 6→4 · ppu15 4→2 · ppu17 6→4).
   assert.deepEqual(off.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0: 6,
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0: 6,
   }, '격리 대조군의 전제가 움직였다 — 재측정하고 핀을 갱신하라');
 });
 
@@ -530,6 +544,198 @@ test('구 v2r2 중앙(닫힌 링 스택)은 legacy 분류만 남고 포즈를 �
   // 의도적 갱신 (2026-08-16): v0x 키가 늘었고 **값은 0 이어야 한다**. v0X 의 SE 동심
   // 사각은 구 중앙과 서명이 닮았으므로(둘 다 닫힌 동심 링) 이 단언이 「v0X 편입이 소각
   // 디자인을 되살리지 않았다」를 지키는 자리다.
-  assert.deepEqual(detected.diagnostics.poseCount, { v2r2: 0, v1r2: 0, v0x: 0, v0: 0 });
+  // 의도적 갱신 (2026-08-17): v0xq 키가 늘었고 **값은 0 이어야 한다**. v0xq 는 코너
+  // 동심 사각 삼중점으로 시드하므로 중앙 링 스택 하나로는 서지 못한다 — 이 0 이
+  // 「중앙 QR 변형 편입도 소각 디자인을 되살리지 않았다」를 지킨다.
+  assert.deepEqual(detected.diagnostics.poseCount, {
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0: 0,
+  });
   assert.equal(detected.shapes.length, 0);
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// v0xq 패밀리 (2026-08-17) — 3코너 동심 사각(NE 사분면) + 중앙 QR.
+//
+// 최종 라인업에서 **처음으로 K3 불스아이 중앙이 없다** (그 자리를 QR 슬롯이 가져갔다).
+// 그래서 «K3 중앙 × K5 원거리» 앵커드 시딩이 통째로 성립하지 않고, 코너 동심 사각
+// 3개의 120° 삼중점이 중앙·스케일·위상을 동시에 준다. 중앙 QR 블록 자체가 제4 앵커다.
+// ─────────────────────────────────────────────────────────────────────────
+
+function renderV0xq(pixelsPerUnit) {
+  const encoded = encodeY(PAYLOAD, {
+    cellSurfaceLayout: 'v0xq', version: 1, tones: 2, eccLevel: 'M',
+  });
+  const scene = buildSceneY(encoded, {
+    palette: PALETTE, margin: 4, qrText: TL_READER_URL,
+  });
+  return rasterize(scene, { pixelsPerUnit, supersample: 2 });
+}
+
+const V0XQ_FRAME = embed960(renderV0xq(15));
+
+test('v0xq — 톤 커브 4종 × 회전 3방향(0/120/240) 전부 body RS 까지 복호된다', {
+  timeout: 600_000,
+}, () => {
+  for (const [name, tone] of [
+    ['none', {}], ['sCurve0.6', { sCurve: 0.6 }],
+    ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
+  ]) {
+    for (const rotation of [0, 120, 240]) {
+      const result = decodeLab(distortImage(V0XQ_FRAME, { ...tone, rotation, fill: FILL }));
+      const where = `v0xq ${name} rot${rotation}`;
+      assert.equal(result.ok, true, `${where}: ${result.reason || ''}`);
+      assert.equal(result.text, PAYLOAD, where);
+      assert.equal(result.hypothesis.cellSurfaceLayout, 'v0xq', `${where} 교차 오수용`);
+      // 로케이터가 회전을 H 로 흡수한다 — 가설 슬롯은 항상 0.
+      assert.equal(result.hypothesis.rotationDegrees, 0, `${where} 슬롯`);
+    }
+  }
+});
+
+test('v0xq 교차 — 다른 레이아웃 프레임에서 v0xq 포즈가 서지 않는다', {
+  timeout: 600_000,
+}, () => {
+  for (const [name, frame] of [
+    ['v0x', V0X_FRAME], ['v2r2', V2R2_FRAME], ['v1r2', V1R2_FRAME], ['v0', V0_FRAME],
+  ]) {
+    for (const rotation of [0, 120]) {
+      const luma = toRelativeLuminance(distortImage(frame, { rotation, fill: FILL }));
+      const detected = detectCellSurfaceBlockShapes(luma);
+      assert.equal(detected.diagnostics.poseCount.v0xq, 0,
+        `${name} rot${rotation} 프레임에 v0xq 포즈가 섰다`);
+      assert.ok(!detected.shapes.some((shape) => shape.blockLocator.family === 'v0xq'),
+        `${name} rot${rotation} 에 v0xq shape 가 생겼다`);
+    }
+  }
+  // 반대 방향 — v0xq 프레임에서는 실제로 선다 (대조군이 «항상 0» 인 자를 재는 게
+  // 아님을 여기서 못 박는다).
+  const own = detectCellSurfaceBlockShapes(
+    toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL })),
+  );
+  assert.ok(own.diagnostics.poseCount.v0xq > 0, 'v0xq 프레임에서도 포즈가 0 이다 — 자가 죽었다');
+});
+
+test('v0xq 시딩 게이트 — 중앙 QR 정합이 남의 프레임 삼중점을 시드 전에 자른다', {
+  timeout: 600_000,
+}, () => {
+  const luma = toRelativeLuminance(distortImage(V0X_FRAME, { rotation: 0, fill: FILL }));
+  const on = detectCellSurfaceBlockShapes(luma);
+  const off = detectCellSurfaceBlockShapes(luma, {
+    calibration: { csBlockLocator: { v0xqRequireCenterQr: false } },
+  });
+  // v0X 의 SE 동심 사각도 120° 삼중점을 만든다 — 게이트가 **시드 단계에서** 자른다.
+  assert.ok(on.diagnostics.centerQr.centreRejected > 0,
+    'v0X 프레임에서 중앙 QR 게이트가 아무것도 자르지 않았다 — 게이트가 잠들었으면 주석을 고쳐라');
+  // ⚠ 잰 값: **이 프레임(2톤·무왜곡)에서는** 게이트를 꺼도 포즈가 0 이다 — 여기서는
+  // 시드가 refinePose 를 못 넘는다. 이것이 참인 구간은 여기까지이고, 3톤 + 톤 열화
+  // 구간은 다르다 (아래 «시딩 게이트 ② 열화 구간» 이 그쪽을 잰다). 두 테스트를
+  // 함께 읽어야 cfg 주석의 «막는 주체는 CS 수용 게이트» 가 성립한다.
+  assert.equal(off.diagnostics.poseCount.v0xq, 0);
+  assert.equal(on.diagnostics.poseCount.v0xq, 0);
+  // 패밀리 스위치는 살아 있다 — 끄면 자기 프레임에서도 0.
+  const ownOff = detectCellSurfaceBlockShapes(
+    toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL })),
+    { calibration: { csBlockLocator: { v0xqFamily: false } } },
+  );
+  assert.equal(ownOff.diagnostics.poseCount.v0xq, 0, 'v0xqFamily:false 가 듣지 않는다');
+});
+
+test('v0xq 시딩 게이트 ② 열화 구간 — 포즈가 실제로 서고, 게이트는 그것을 한 개도 못 자른다', {
+  timeout: 900_000,
+}, () => {
+  // 통합 리허설(2026-08-16) 재측정의 코드 고정. 위 테스트의 «꺼도 포즈 0» 은
+  // 2톤·무왜곡에서만 참이다. v0X **3톤 + 톤 열화** 에서는 v0xq 포즈가 실제로 서고,
+  // 그때 ON/OFF 가 한 자리도 같다 — 즉 이 게이트는 «살아남는 포즈» 를 자르지 못한다.
+  // poseCount 는 refinePose 를 **통과한 뒤** 증가하므로 refinePose 도 거르지 않는다.
+  // 남는 방벽은 하류 CS 수용 게이트(0.78 / 0.035)뿐이고, 마지막 단언이 그 결과
+  // (교차 오수용 0)를 함께 잡는다.
+  const v0x3 = embed960(renderFinal3Tone('v0x', 1, 15));
+  let posesSeen = 0;
+  let cutBySeedGate = 0;
+  for (const [name, tone] of [
+    ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
+    ['sCurve0.6', { sCurve: 0.6 }], ['sCurve0.9', { sCurve: 0.9 }],
+  ]) {
+    const luma = toRelativeLuminance(distortImage(v0x3, { ...tone, rotation: 0, fill: FILL }));
+    const on = detectCellSurfaceBlockShapes(luma);
+    const off = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { v0xqRequireCenterQr: false } },
+    });
+    posesSeen += on.diagnostics.poseCount.v0xq;
+    cutBySeedGate += off.diagnostics.poseCount.v0xq - on.diagnostics.poseCount.v0xq;
+    assert.equal(on.diagnostics.poseCount.v0xq, off.diagnostics.poseCount.v0xq,
+      `v0x 3톤 ${name}: 시딩 게이트 ON/OFF 로 v0xq 포즈 수가 갈렸다`);
+  }
+  assert.ok(posesSeen > 0,
+    'v0X 3톤 열화에서 v0xq 포즈가 하나도 안 섰다 — 이 테스트가 «항상 0» 인 자를 재고 있다');
+  assert.equal(cutBySeedGate, 0, '시딩 게이트가 살아남는 포즈를 잘랐다 — cfg 주석을 고쳐라');
+
+  // 그런데도 복호는 v0x 로 간다 — 막는 단계가 CS 수용 게이트임을 결과로 확인한다.
+  // (통합자 강화 2026-08-16, 검증 렌즈 지적 7) 조건부 가드였던 것을 강제로 바꿨다 —
+  // 이 프레임이 복호에 실패하면 오수용 핀이 조용히 공허해지므로, 실패 자체를 빨갛게 한다.
+  const decoded = decodeLab(distortImage(v0x3, { gamma: 0.7, rotation: 0, fill: FILL }));
+  assert.equal(decoded.ok, true,
+    'v0X 3톤 감마 프레임이 복호에 실패했다 — 오수용 핀의 분모가 사라진다: ' + (decoded.reason || ''));
+  assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0x',
+    'v0X 3톤 감마 프레임이 v0xq 로 오수용됐다 — CS 수용 게이트가 뚫렸다');
+});
+
+// ── 통합자 계약 테스트 (2026-08-16, v0xq 원 런 검증 렌즈 지적 d) ────────────────
+// v0xq 로케이터는 detectQrFinderTriples(bootstrap, 이미지 탐색)를 부르지 않고 같은
+// 신호를 buildCenterQrPatch(모델 공간)로 재구현한다 (import 순환 — claude-v0xq.md §4).
+// 두 독립 구현을 묶는 계약이 없으면 한쪽만 바뀌어도 조용히 갈라진다. 이 테스트가 그
+// 계약이다: v0xq 렌더의 중앙 QR 은 이미지 쪽 검출기에서도 window-kind 삼중점으로
+// 실제로 잡혀야 하고, 코너 cosine 은 window 서명(−0.5, 60°/120° 전단)에 붙어야 한다.
+test('계약 — v0xq 중앙 QR 이 이미지 공간 detectQrFinderTriples 에서도 window 삼중점으로 잡힌다', {
+  timeout: 300_000,
+}, () => {
+  const luma = toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL }));
+  const result = detectQrFinderTriples(luma, {});
+  assert.equal(result.ok, true, 'QR 삼중점 검출 실패: ' + (result.reason || ''));
+  const windows = result.candidates.filter((candidate) => candidate.kind === 'window');
+  assert.ok(windows.length > 0,
+    'window-kind 삼중점 0개 — 모델 공간 가정과 이미지 검출기가 갈라졌다');
+  const best = windows[0];
+  assert.ok(Math.abs(best.cosine - (-0.5)) < 0.06,
+    `window 코너 cosine 이 서명(−0.5)에서 벗어났다: ${best.cosine}`);
+});
+
+// ── v0xq 추가 회귀 (같은 레인, 위 블록과 겹치지 않는 두 축) ────────────────
+//   · 결정성 — 삼중점 순회·중앙 QR 사전 게이트에 부동 자유도가 없다.
+//   · **비침습성** — 코너 검증이 별도 순회라 다른 패밀리의 관측이 안 흔들린다.
+
+test('v0xq 로케이터는 결정적이다 — 같은 프레임 두 번 → 동일 산출', {
+  timeout: 300_000,
+}, () => {
+  const luma = toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL }));
+  const first = detectCellSurfaceBlockShapes(luma);
+  const second = detectCellSurfaceBlockShapes(luma);
+  assert.deepEqual(first.diagnostics, second.diagnostics);
+  assert.deepEqual(
+    first.shapes.map((shape) => shape.center),
+    second.shapes.map((shape) => shape.center),
+  );
+});
+
+test('v0xq 편입 비침습성 — 다른 프레임의 verified·poseCount 가 on/off 로 동일하다', {
+  timeout: 600_000,
+}, () => {
+  // 코너 검증을 **별도 순회 + 별도 occupied** 로 둔 이유가 이것이다. 기존 순회에
+  // 끼워 넣었다면 검증된 자리가 늘어 다른 패밀리의 클러스터 선택이 밀렸을 것이다.
+  for (const [name, frame] of [
+    ['v0x', V0X_FRAME], ['v2r2', V2R2_FRAME], ['v1r2', V1R2_FRAME], ['v0', V0_FRAME],
+  ]) {
+    const luma = toRelativeLuminance(distortImage(frame, { rotation: 0, fill: FILL }));
+    const on = detectCellSurfaceBlockShapes(luma);
+    const off = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { v0xqFamily: false } },
+    });
+    assert.deepEqual(on.diagnostics.verified, off.diagnostics.verified,
+      name + ' verified 가 흔들렸다');
+    for (const family of ['v2r2', 'v1r2', 'v0x', 'v0']) {
+      assert.equal(on.diagnostics.poseCount[family], off.diagnostics.poseCount[family],
+        name + ' ' + family + ' poseCount 변동');
+    }
+    assert.equal(off.diagnostics.centerQr.corners, 0, name + ' 끈 쪽에서 코너 검증이 돌았다');
+  }
 });

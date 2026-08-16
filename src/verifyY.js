@@ -385,6 +385,9 @@ export function verifyRasterY(raster, scene, encoded, options = {}) {
 
   for (const [cellKey, { digit: expected, role }] of encoded.cellDigits) {
     if (role === 'locator') continue;
+    // 중앙 QR 슬롯 (v0xq) — digit 이 없다. QR 모듈은 셀 격자에 정렬되지도 않아
+    // 모듈 median 으로 잴 대상이 아니다 (파인더와 같은 이유로 제외).
+    if (role === 'slot') continue;
     const [i, j] = cellKey.split(',').map(Number);
     const normalized = {};
     for (const face of YFACES) {

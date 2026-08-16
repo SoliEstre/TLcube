@@ -57,8 +57,12 @@
  */
 
 import { CORNER_UNIT_OFFSETS } from '../hexgrid.js';
-import { moduleCenter } from '../ygrid.js';
-import { locatorCellsCellSurfaceFinal } from '../cellSurfaceFinal.js';
+import { faceBasis, moduleCenter } from '../ygrid.js';
+import {
+  CENTER_QR_FINDER_MODULES, CENTER_QR_QUIET_MODULES, CENTER_QR_SLOT_CELLS,
+  V0XQ_BLOCKS, centerQrModulePitchCells, centerQrQuietFrameCells,
+  locatorCellsCellSurfaceFinal,
+} from '../cellSurfaceFinal.js';
 import { estimateHomography4, projectPoint } from './homography.js';
 import { downsampleLumaForSeed, otsuThreshold } from './finder-seed.js';
 
@@ -86,6 +90,43 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // 사각 링 동반자 판정 허용폭 — 반경 비 ±18% · 120° 에서 ±18°.
   squareRingRadiusTolerance: 0.18,
   squareRingAngleToleranceDeg: 18,
+  // v0xq 패밀리 (중앙 QR 변형). false 로 끄면 v0xq 편입 전 기준선을 잰다.
+  v0xqFamily: true,
+  // v0xq 시딩 게이트 — 시드 H 에서 **중앙 QR 블록 패치**가 먼저 정합돼야 한다.
+  // v0xq 는 K3 중앙이 없어 코너 삼중점만으로 시드되므로, 이 게이트가 없으면
+  // v0X·v1r2·v2r2 의 K5 코너 삼중점이 v0xq 후보로 새어 들어온다.
+  // false 면 삼중점 기하만으로 시드한다(게이트 효과 대조군).
+  //
+  // ⚠ **실효는 정확도가 아니라 비용이다** — 단, 그 이유는 «refinePose 가 거르기
+  // 때문» 이 **아니다** (2026-08-16 통합 리허설 재측정, ppu15 · rot0/120 ·
+  // 톤 채널 5종 × 2·3톤 20 프레임, `test/output/_v0xq-gate2.mjs`):
+  //   · v0X **2톤** 프레임에서는 켜든 끄든 v0xq 포즈 0 이다. 여기서는 시드가
+  //     refinePose 를 못 넘는다 — 위 문장이 참인 유일한 구간이고, 아래 대조군
+  //     테스트의 기본 프레임이 여기 속한다.
+  //   · v0X **3톤 + 톤 열화**(gamma 0.7/0.6 · sCurve 0.6/0.9, rot0)에서는
+  //     **v0xq 포즈가 실제로 선다** — 그리고 **ON/OFF 가 프레임마다 한 자리도
+  //     같다** (20 프레임 전부 onPose === offPose). 즉 이 구간에서 게이트는
+  //     «살아남는 포즈» 를 한 개도 자르지 못한다. poseCount 는 refinePose 를
+  //     **통과한 뒤** 증가하므로 refinePose 도 거르지 않는다.
+  //   · 그 포즈를 실제로 막는 단계는 하류 **CS 수용 게이트**
+  //     (`cellSurfaceY-detect.js` minimumAgreement 0.78 · minimumOrientationMargin
+  //     0.035)다 — 교차 오수용 0 은 거기서 나온다.
+  // 그래서 이 게이트의 실효는 여전히 «막을 것을 더 싸게 막는다» 이지만, 막는
+  // 주체는 refinePose 가 아니라 CS 수용 게이트다. 대조군 테스트
+  // cellSurface-block-locator.test.js «v0xq 시딩 게이트» 가 두 구간을 함께 고정한다.
+  v0xqRequireCenterQr: true,
+  // 중앙 QR 블록 패치 사전 게이트의 상관 하한. refinePose 안의
+  // minimumPatchCorrelation(0.25)과 **같은 값** — 사전 게이트가 사후 판정보다
+  // 느슨하지도 엄격하지도 않게 둔다 (게이트 완화 0 · 비용만 앞당긴다).
+  v0xqCentreMinCorrelation: 0.25,
+  // 코너 삼중점 허용폭 — 반경 비 ±18% · 120° 에서 ±18° (사각 링과 같은 자).
+  v0xqTripleRadiusTolerance: 0.18,
+  v0xqTripleAngleToleranceDeg: 18,
+  // v0xq 코너 검증 — 링 비 계급을 만족한 레이 최소 수 (8중 5, v2r2 코너와 같은 값).
+  v0xqMinimumRing2: 5,
+  // v0xq 코너 검증에 훑을 k5 클러스터 상한 (count 내림차순). 참 코너는 count 50+ 라
+  // 상위권에 있고, 이 상한이 «클러스터 500개 × 레이 8» 비용을 막는다.
+  v0xqMaxInspectedClusters: 24,
   // ── 부분 앵커 포즈 (§7) — 프레임 밖으로 나간 앵커를 레이아웃 지식으로 외삽한다.
   // false 로 끄면 잘림 도입 전(엄격 4앵커) 기준선을 그대로 잰다.
   partialAnchorPose: true,
@@ -497,6 +538,59 @@ function verifyV2r2Cluster(luma, otsuCut, cluster, cfg) {
 }
 
 /**
+ * v0xq 3코너 동심 사각 검증 — **`verifyV2r2Cluster` 를 못 쓴다** (실측으로 확인).
+ *
+ * v0X 의 SE 블록은 면의 **먼 꼭짓점**에 있어 두 변이 실루엣 경계다: 암 테두리 바깥이
+ * 곧 배경(어두움)이라 t3/t4 전이가 안 생기고 «open» 으로 분류된다. v0xq 의 같은
+ * 무늬는 **NE 사분면**에 있어 바깥이 데이터 셀·심이라 전이가 더 생긴다. 실측
+ * (클린 프레임, 8레이):
+ *   v0X   T open 3 closed 2 · L open 4 closed 4 · R open 3 closed 2  → 셋 다 corner ✓
+ *   v0xq  T open 2 closed 4 · L open 2 closed 5 · R open 5 closed 2  → **R 만** corner
+ * open ≥ 3 문턱에 T·L 이 2 로 걸려 3코너 중 하나만 선다 → 삼중점이 성립하지 않는다.
+ *
+ * 그렇다고 `verifyV2r2Cluster` 의 문턱을 내리지 않는다 — 그 함수는 «소각된 구 v2r2
+ * 중앙(닫힌 링)» 과 «v2r2/v0X 코너(열린 링)» 를 가르는 자이고, 문턱을 만지면 네
+ * 레이아웃의 분류가 동시에 바뀐다(소각 차단이 풀릴 수 있다). 대신 **덧붙이는**
+ * 검증기를 따로 둔다:
+ *   · 별도 순회 · 별도 occupied — 기존 `verified` 배열과 분류에 **한 비트도** 닿지 않는다.
+ *   · open/closed 를 아예 안 본다. 동심 사각의 불변식(암 코어 → 명 링, r2 ≈ 2)만 센다.
+ *   · 느슨해진 만큼은 **위쪽에서** 다시 조인다 — v0xq 시드는 (a) 120° 삼중점 +
+ *     (b) 같은 반경 + (c) 중앙 QR 블록 패치 정합을 전부 통과해야 열린다.
+ *     복호 수용 게이트(0.78 / 0.035)는 그대로다.
+ */
+function verifyV0xqCornerCluster(luma, otsuCut, cluster, cfg) {
+  const maxR = cluster.u * 7;
+  const center = recentreByRays(luma, otsuCut, cluster, maxR);
+  if (Math.hypot(center.x - cluster.x, center.y - cluster.y) > 2.5 * cluster.u) return null;
+  const rays = RAY_DIRECTIONS.map((dir) =>
+    rayTransitions(luma, otsuCut, center.x, center.y, dir, maxR));
+  if (rays.filter((ray) => ray.centerDark).length < 6) return null;
+  const t1List = [];
+  for (const ray of rays) {
+    if (!ray.centerDark || ray.transitions.length === 0) continue;
+    const t1 = ray.transitions[0];
+    if (t1 >= 0.4 * cluster.u && t1 <= 2.2 * cluster.u) t1List.push(t1);
+  }
+  if (t1List.length < 5) return null;
+  const t1Median = median(t1List);
+  let ring2Ok = 0;
+  for (const ray of rays) {
+    if (!ray.centerDark || ray.transitions.length < 2) continue;
+    const t1 = ray.transitions[0];
+    if (!(t1 >= 0.72 * t1Median && t1 <= 1.38 * t1Median)) continue;
+    const r2 = ray.transitions[1] / t1;
+    // v2r2/v0X 코너와 **같은** 링 비 계급 — 하한 1.6 이 v0 불스아이(1.5)를 배제한다.
+    if (!(r2 >= 1.6 && r2 <= 2.55)) continue;
+    ring2Ok += 1;
+  }
+  if (ring2Ok < cfg.v0xqMinimumRing2) return null;
+  return {
+    kind: 'v0xq-corner', x: center.x, y: center.y, u: t1Median,
+    score: ring2Ok / 8, count: cluster.count,
+  };
+}
+
+/**
  * v0 불스아이 검증 — 밝은 링(2..3)의 바깥 경계는 인접 데이터 셀과 병합될 수 있어
  * 신뢰할 수 없다. 항상 성립하는 것은 어두운 코어 경계(t1 ≈ 2u)뿐이므로,
  * t1 의 방향 간 중앙값 일관성으로 검증한다 (심선 방향 레이는 t1 이 크게 이탈 → 자연 탈락).
@@ -641,9 +735,98 @@ function inEdgeBlock(cell, box) {
   return true;
 }
 
+/**
+ * v0xq 중앙 앵커 — **중앙 QR 블록 자체**가 4번째 앵커다.
+ *
+ * v0xq 는 최종 라인업에서 처음으로 K3 불스아이 중앙이 **없다** (그 자리를 QR 슬롯이
+ * 가져갔다). 그래서 기존 «K3 중앙 × K5 원거리» 시딩이 통째로 성립하지 않고,
+ * 중앙 앵커를 중앙 QR 에서 얻어야 한다 — 브리프의 «detectQrFinderTriples 를 중앙
+ * 앵커 공급자로 (제4 앵커)».
+ *
+ * ⚠ **`detectQrFinderTriples` 를 여기서 직접 부를 수 없다** — import 순환이다:
+ *   bootstrap.js → cube-detect.js → cellsurface-block-detect.js → (bootstrap.js).
+ * 그 함수를 별 모듈로 추출하면 풀리지만 3,688줄 파일의 570줄 이동이라 이 레인의
+ * 배제 목록(기존 경로 무수정)에 가깝다. 대신 **같은 신호를 모델 공간에서** 잡는다:
+ *   ① 콰이어트 프레임 (T 면, 밝음 32셀) — 심볼이 닿지 않는 슬롯 테두리.
+ *   ② L/R 슬롯 채움 (어두움 162셀) — 중앙 QR 변형에만 있는 큰 무늬.
+ *   ③ QR 파인더 3개의 암 코어 (T 면, 어두움 3점) — 내용 무관 고정 구조이자
+ *      **직각 이등변**이라 120° 위상까지 깬다 (동심 사각 3코너는 3중 대칭이라 못 깬다).
+ * detectQrFinderTriples 가 kind 'window' 로 잡는 것과 같은 삼중점이고, 여기서는
+ * 이미지 탐색 없이 canonical 좌표로 바로 쓴다 (탐색 비용 0 · 결정적).
+ */
+function buildCenterQrPatch(slotCells = CENTER_QR_SLOT_CELLS) {
+  const pitch = centerQrModulePitchCells(slotCells);
+  const points = [];
+  const push = (face, a, b, expected) => {
+    const { ei, ej } = faceBasis(face);
+    points.push({
+      x: (a * ei.x + b * ej.x) * CANONICAL_LAYOUT.size,
+      y: (a * ei.y + b * ej.y) * CANONICAL_LAYOUT.size,
+      expected,
+    });
+  };
+  for (const cell of centerQrQuietFrameCells(slotCells)) {
+    push('T', cell.i + 0.5, cell.j + 0.5, 1);
+  }
+  for (const face of ['L', 'R']) {
+    for (let i = 0; i < slotCells; i += 1) {
+      for (let j = 0; j < slotCells; j += 1) push(face, i + 0.5, j + 0.5, 0);
+    }
+  }
+  for (const finder of CENTER_QR_FINDER_MODULES) {
+    push('T', (CENTER_QR_QUIET_MODULES + finder.qx + 0.5) * pitch,
+      (CENTER_QR_QUIET_MODULES + finder.qy + 0.5) * pitch, 0);
+  }
+  let sumX = 0;
+  let sumY = 0;
+  for (const point of points) { sumX += point.x; sumY += point.y; }
+  return { anchor: { x: sumX / points.length, y: sumY / points.length }, points };
+}
+
+/**
+ * v0xq 패치 — 중앙 = 중앙 QR 블록, 코너 3 = 면별 동심 사각(NE 사분면),
+ * 서브앵커 = 코너 3 + 위상 마커 3 (SW 사분면, T=L·R≠ 비대칭이라 120° 판별의 원천).
+ */
+/**
+ * ⚠ 중앙 QR 패치는 `CENTER_QR_SLOT_CELLS` 에서 점 수가 파생된다 (m=9 → 197점).
+ * `registerPatch` 의 스크래치는 **고정 256**이고, 타입배열은 범위 밖 쓰기를 조용히
+ * 버린다 — 넘치면 Pearson 이 잘린 표본으로 계산되고 아무도 모른다. 로드 시점에 막는다.
+ */
+function assertCentrePatchFits(patch) {
+  if (patch.points.length > scratchValues.length) {
+    throw new Error(
+      '중앙 QR 패치 ' + patch.points.length + '점이 스크래치 '
+      + scratchValues.length + ' 을 넘는다 — CENTER_QR_SLOT_CELLS 를 올렸다면 '
+      + 'scratchValues/scratchExpected 도 같이 키워야 한다',
+    );
+  }
+  return patch;
+}
+
+function patchesForV0xq(n) {
+  const cells = locatorCellsCellSurfaceFinal(n, 'v0xq');
+  const inCorner = (cell) => cell.i <= V0XQ_BLOCKS.CORNER.iMax && cell.j >= V0XQ_BLOCKS.CORNER.jMin;
+  const inMarker = (cell) => cell.i >= V0XQ_BLOCKS.MARKER.iMin && cell.j <= V0XQ_BLOCKS.MARKER.jMax;
+  const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
+  const markers = YFACE_LIST.map((face) => buildPatch(cells, face, inMarker))
+    .filter((patch) => patch !== null);
+  const centre = assertCentrePatchFits(buildCenterQrPatch());
+  return {
+    centre,
+    corners,
+    subPatches: [...corners, ...markers],
+    all: mergePatches([...corners, ...markers]),
+  };
+}
+
 function patchesFor(n, layoutId = undefined) {
   const key = (layoutId || 'default') + '@' + n;
   if (patchCache.has(key)) return patchCache.get(key);
+  if (layoutId === 'v0xq') {
+    const builtV0xq = patchesForV0xq(n);
+    patchCache.set(key, builtV0xq);
+    return builtV0xq;
+  }
   const cells = locatorCellsCellSurfaceFinal(n, layoutId);
   const { nearLimit, farLimit, edges: edgeBoxes } = blockLimitsFor(n, layoutId);
   const centreParts = YFACE_LIST.map((face) =>
@@ -1549,6 +1732,110 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
   return { posesV2r2, posesV1r2, posesV0x, anchoredCentres, companionPairs };
 }
 
+/**
+ * v0xq — 3코너 동심 사각의 암 2×2 코어 중심은 블록 (0..5)×(15..20) 의 **정중앙**
+ * (a,b) = (3,18) 이다 (동심 사각이 i·j 양방향 대칭이라 블록 무게중심 = 코어 중심).
+ * 중심 거리는 닫힌 형태로 떨어진다 — 두 기저의 사잇각이 120° 이므로
+ *   r² = a² + b² − a·b = 9 + 324 − 54 = 279 → r = √279 = 16.7033셀.
+ * v0X·v1r2 의 18.0 과 1.30셀 차이라 ANCHOR_SNAP_CELLS(3.2) 안에서 **거리로는 못
+ * 가른다**. 가르는 것은 중앙이다 — v0xq 만 중앙이 QR 이고 나머지는 K3 불스아이다.
+ */
+const V0XQ_CORE_RADIUS_CELLS = Math.sqrt(279);
+const V0XQ_N = 21;
+
+/** 단위 벡터 u 를 v 로 보내는 회전의 (cos, sin). 삼각함수 없이 내적·외적으로. */
+function rotationBetween(ux, uy, vx, vy) {
+  return { cos: ux * vx + uy * vy, sin: ux * vy - uy * vx };
+}
+
+/**
+ * v0xq 조립 — K3 중앙이 없으므로 **코너 삼중점**이 중앙·스케일·위상을 동시에 준다.
+ *
+ * 세 코너가 120° 간격 같은 반경이면 그 무게중심이 곧 큐브 중심이다 (canonical 에서
+ * 세 면 코너 앵커의 합이 정확히 0 이라 — 세 면이 서로 120° 회전이기 때문).
+ * 위상은 3가설(«이 코너가 T 면») 로 열고 패치 Pearson 이 고른다. 그다음
+ * refinePose 의 4앵커 DLT 가 중앙 QR 블록을 4번째 앵커로 써서 원근까지 올린다.
+ *
+ * 결정성: corners 는 verified 정렬 순서로만 순회하고 조합도 고정 순서다.
+ */
+function assembleV0xqPoses(corners, fullLuma, factor, cfg, telemetry = null) {
+  const poses = [];
+  if (corners.length < 3) return { poses, tripleCount: 0, centreRejected: 0 };
+  const patches = patchesFor(V0XQ_N, 'v0xq');
+  const canonical = patches.corners[0].anchor; // YFACE_LIST[0] = 'T'
+  const canonicalR = Math.hypot(canonical.x, canonical.y);
+  const angleTolerance = (cfg.v0xqTripleAngleToleranceDeg * Math.PI) / 180;
+  let tripleCount = 0;
+  let centreRejected = 0;
+  for (let a = 0; a < corners.length; a += 1) {
+    for (let b = a + 1; b < corners.length; b += 1) {
+      for (let c = b + 1; c < corners.length; c += 1) {
+        const triple = [corners[a], corners[b], corners[c]];
+        const centre = {
+          x: (triple[0].x + triple[1].x + triple[2].x) / 3,
+          y: (triple[0].y + triple[1].y + triple[2].y) / 3,
+        };
+        const radii = triple.map((hit) => Math.hypot(hit.x - centre.x, hit.y - centre.y));
+        const rMin = Math.min(...radii);
+        const rMax = Math.max(...radii);
+        if (!(rMin > EPSILON)) continue;
+        if (rMax - rMin > cfg.v0xqTripleRadiusTolerance * rMax) continue;
+        // 120° 간격 검사 — 정렬된 각도의 이웃 차가 전부 120° ± tol.
+        const angles = triple
+          .map((hit) => Math.atan2(hit.y - centre.y, hit.x - centre.x))
+          .sort((left, right) => left - right);
+        let spaced = true;
+        for (let k = 0; k < 3; k += 1) {
+          let delta = angles[(k + 1) % 3] - angles[k];
+          if (delta < 0) delta += 2 * Math.PI;
+          if (Math.abs(delta - (2 * Math.PI) / 3) > angleTolerance) spaced = false;
+        }
+        if (!spaced) continue;
+        tripleCount += 1;
+        const centreFull = liftPoint(centre, factor);
+        const estimatedRadius = ((rMin + rMax) / 2) / Math.max(triple[0].u, EPSILON);
+        for (const corner of triple) {
+          const cornerFull = liftPoint(corner, factor);
+          const dx = cornerFull.x - centreFull.x;
+          const dy = cornerFull.y - centreFull.y;
+          const d = Math.hypot(dx, dy);
+          if (!(d > EPSILON)) continue;
+          const rot = rotationBetween(
+            canonical.x / canonicalR, canonical.y / canonicalR, dx / d, dy / d,
+          );
+          const scale = d / canonicalR;
+          const H0 = similarityHomography(centreFull, scale, rot.cos, rot.sin);
+          if (cfg.v0xqRequireCenterQr !== false) {
+            const cellPx = localCellPx(H0);
+            if (!Number.isFinite(cellPx) || cellPx <= 0.5) continue;
+            const probe = registerPatch(
+              fullLuma, H0, patches.centre,
+              cfg.registrationRangeCells * cellPx,
+              Math.max(0.5, cfg.registrationStepCells * cellPx),
+            );
+            if (!probe || probe.correlation < cfg.v0xqCentreMinCorrelation) {
+              centreRejected += 1;
+              continue;
+            }
+          }
+          const refined = refinePose(fullLuma, H0, patches, cfg, telemetry);
+          if (!refined) continue;
+          poses.push({
+            family: 'v0xq',
+            layoutId: 'v0xq',
+            n: V0XQ_N,
+            H: refined.H,
+            score: refined.meanCorrelation,
+            partial: refined.partial || null,
+            estimatedRadius,
+          });
+        }
+      }
+    }
+  }
+  return { poses, tripleCount, centreRejected };
+}
+
 function rotationSweepScore(reducedLuma, template, centre, unit, angleCos, angleSin) {
   let count = 0;
   for (const point of template.points) {
@@ -1779,9 +2066,35 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   const posesV0 = assembleV0Poses(
     centres, anchoredCentres, reduced.luma, luma, reduced.factor, cfg, partialTelemetry,
   );
+  // v0xq — K3 중앙이 없어 위 앵커드 경로를 아예 못 탄다. 코너 삼중점으로 따로 세운다.
+  // 코너 검증도 **별도 순회**다 (verifyV0xqCornerCluster 주석 참조) — 위 `verified`
+  // 배열·분류·occupied 에 닿지 않으므로 다른 패밀리의 동작은 한 비트도 안 바뀐다.
+  const v0xqCorners = [];
+  if (cfg.v0xqFamily !== false) {
+    const v0xqOccupied = [];
+    let inspected = 0;
+    for (const cluster of clusters) {
+      if (cluster.kind !== 'k5') continue;
+      if (inspected >= cfg.v0xqMaxInspectedClusters) break;
+      inspected += 1;
+      if (v0xqOccupied.some((hit) => Math.hypot(hit.x - cluster.x, hit.y - cluster.y)
+        <= 2.2 * Math.max(hit.u, cluster.u))) continue;
+      const hit = verifyV0xqCornerCluster(reduced.luma, globalCut, cluster, cfg);
+      if (!hit) continue;
+      v0xqCorners.push(hit);
+      v0xqOccupied.push(hit);
+    }
+    v0xqCorners.sort((left, right) =>
+      right.score - left.score || right.count - left.count
+      || left.y - right.y || left.x - right.x);
+  }
+  const v0xq = cfg.v0xqFamily === false
+    ? { poses: [], tripleCount: 0, centreRejected: 0 }
+    : assembleV0xqPoses(v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry);
+  const posesV0xq = v0xq.poses;
 
   const shapes = [];
-  for (const familyPoses of [posesV2r2, posesV1r2, posesV0x, posesV0]) {
+  for (const familyPoses of [posesV2r2, posesV1r2, posesV0x, posesV0xq, posesV0]) {
     familyPoses.sort((left, right) =>
       // v0X 는 사각 링 동반자가 많은 포즈를 먼저 본다 (3면 동일 서명이 실재한다는 증거).
       (right.squareRingCompanions || 0) - (left.squareRingCompanions || 0)
@@ -1811,7 +2124,16 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         v2r2: posesV2r2.length,
         v1r2: posesV1r2.length,
         v0x: posesV0x.length,
+        v0xq: posesV0xq.length,
         v0: posesV0.length,
+      },
+      // v0xq 관측 — 120° 코너 삼중점 수와, 그중 중앙 QR 게이트가 자른 시드 수.
+      // v0X·v1r2·v2r2 프레임에서도 삼중점은 뜬다(K5 코너가 120°) — 게이트가
+      // 자르는 것이 그쪽이고, 그 사실이 centreRejected 로 보인다.
+      centerQr: {
+        corners: v0xqCorners.length,
+        tripleCount: v0xq.tripleCount,
+        centreRejected: v0xq.centreRejected,
       },
       // 사각 링 서명 관측 — 120° 동반자를 가진 (중앙, 코너) 쌍의 수.
       // v0X 프레임은 3면 동일 SE 블록이라 크고, v1r2·v2r2 프레임은 0 이 기대값이다.
@@ -1847,6 +2169,8 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   clusterCores,
   verifyV2r2Cluster,
   verifyV0Cluster,
+  verifyV0xqCornerCluster,
+  assembleV0xqPoses,
   rayTransitions,
   recentreByRays,
   patchesForN,
