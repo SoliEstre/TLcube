@@ -1,0 +1,23 @@
+{
+ "cells": 64,
+ "frameMedianMs": {
+  "pre": 1482,
+  "sealed": 1536.6
+ },
+ "locatorMedianMs": {
+  "pre": 149.88,
+  "sealed": 146.2
+ },
+ "pairedFrameDeltaMs": {
+  "medianMs": -12.5,
+  "positiveCells": 25,
+  "cells": 64
+ },
+ "pairedLocatorDeltaMs": {
+  "medianMs": -0.28,
+  "positiveCells": 30,
+  "cells": 64
+ },
+ "framePercent": -0.8,
+ "locatorPercent": -0.2
+}

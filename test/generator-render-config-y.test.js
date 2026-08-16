@@ -218,6 +218,32 @@ test('셀 표면 v0WQ 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용
   }
 });
 
+// v0W 파생 ② (2026-08-17) — v0W2. 같은 «Y1 고정» 계약이고, 데이터 셀은 314 다
+// (441 − 97 − 12 − 18). 파인더가 27셀 커진 만큼 v0W(341) 보다 작다.
+test('셀 표면 v0W2 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용자 톤을 보존한다', () => {
+  for (const tone of [2, 3]) {
+    for (const versionY of [0, 1, 2, undefined]) {
+      const opts = encodeOptionsForY({
+        tone,
+        versionY,
+        fallback: { mode: 'window' },
+        locatorProfileY: 'cell-surface-v0w2',
+      });
+      assert.equal(opts.cellSurface, true);
+      assert.equal(opts.cellSurfaceLayout, 'v0w2');
+      assert.equal(opts.tones, tone);
+      assert.equal(opts.version, 1, 'versionY=' + versionY);
+      assert.equal(opts.window, undefined, '셀 표면이 윈도보다 앞선다');
+      const encoded = encodeY('https://tl.estre.so', opts);
+      assert.equal(encoded.cellSurfaceLayout, 'v0w2');
+      assert.equal(encoded.n, 21);
+      assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+      // 441 − 97(파인더 25+36+36) − 12 − 18 = 314. 중앙 QR 슬롯은 없다.
+      assert.equal(encoded.capacity.dataCells, 314);
+    }
+  }
+});
+
 test('v0WY 는 인코더 옵션에 흔적이 없다 — QR 위치라 v0W 배선을 그대로 탄다', () => {
   // 'cell-surface-v0wy' 라는 프로파일은 존재하지 않는다. 혹시 흘러들어도 이 함수는
   // **셀 표면 분기를 하나도 타지 않고** 폴백 경로로 떨어져야 한다 (조용히 v0W 로

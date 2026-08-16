@@ -297,11 +297,16 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // 의도적 갱신 «v0W 편입» (2026-08-16): v0W 카드가 들어와 5 → 6 이다 (부제 g948).
   // **의도적 갱신 «v0W 파생 2종 편입» (2026-08-16)**: v0WQ 카드가 들어와 6 → 7 이다
   // (부제 g949). v0WY 는 여기서 세지 않는다 — QR 위치 카드라 이 블록 밖이다.
+  // **의도적 갱신 «v0XQ 드랍» (운영자 실기기 확정 2026-08-17)**: v0XQ 카드를 내려
+  // 7 → 6 이다. 부제 키 g947(v0XQ)은 **사전에 그대로 남는다** — v1r2·v2r2 와 같은
+  // 규약이고, locatorY-lab.test.js 가 그 보존을 고정한다.
+  // **의도적 갱신 «v0W2 편입» (운영자 신설 설계 2026-08-17)**: v0W2 카드가 들어와
+  // 6 → 7 이다 (부제 g954). 아이콘은 v0W 문법 + 우하 대형 겹사각이다.
   const cardCount = (block.match(/class="toggle-card[^"]*" data-locator=/g) || []).length;
   assert.equal(cardCount, 7, '검출기 카드는 자동·끔 + v0 계열 5종 = 7 이다');
   assert.equal((block.match(/<svg /g) || []).length, cardCount,
     '검출기 카드 전부가 파인더 기하 아이콘을 가져야 한다');
-  const subKeys = ['g941', 'g942', 'g943', 'g944', 'g947', 'g948', 'g949'];
+  const subKeys = ['g941', 'g942', 'g943', 'g944', 'g948', 'g949', 'g954'];
   assert.equal(subKeys.length, cardCount, '부제 키 수가 카드 수와 다르다');
   for (const key of subKeys) {
     assert.match(block, new RegExp(`class="card-sub" data-i18n="${key}"`), `검출기 부제 ${key} 누락`);

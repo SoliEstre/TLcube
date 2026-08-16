@@ -55,6 +55,15 @@ import { toRelativeLuminance } from '../src/decoder/luma.js';
 import {
   CS_BLOCK_LOCATOR_INTERNALS, detectCellSurfaceBlockShapes,
 } from '../src/decoder/cellsurface-block-detect.js';
+// §14 봉합 회귀 — 셰이프 정점에서 그 포즈의 H 를 되돌려 판별기를 직접 잰다.
+import { estimateHomography4 } from '../src/decoder/homography.js';
+import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
+// §13 v0XQ 드랍 회귀가 쓰는 정본 질의 — 라인업(드랍 반영) vs 와이어(드랍 무관).
+import {
+  V0WQ_BLOCKS, V0W_BLOCKS, V0W2_BLOCKS, V0XQ_BLOCKS,
+  allFinalLayoutIdsForN, cellSurfaceFinal, finalLayoutIdsForN,
+  locatorCellsCellSurfaceFinal,
+} from '../src/cellSurfaceFinal.js';
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
 import { buildScene } from '../src/scene.js';
@@ -127,17 +136,25 @@ function renderFinal3Tone(layout, version, pixelsPerUnit) {
 }
 
 /**
- * **드랍 복원 스위치** (운영자 확정 2026-08-16 «v2r2 · v1r2 실험판 드랍»).
+ * **드랍 복원 스위치** (운영자 확정 2026-08-16 «v2r2 · v1r2 실험판 드랍»
+ * · 2026-08-17 «v0XQ 실기기 드랍»).
  *
- * 드랍은 «차단» 이지 «삭제» 가 아니다. 아래 v2r2 · v1r2 축의 회귀는 그대로 살려
- * 두되, 검출 라인업이 아니라 이 스위치로 켠다:
- *   · `calibration.csBlockLocator.{v2r2Family, v1r2Family}` → 블록 로케이터 패밀리
+ * 드랍은 «차단» 이지 «삭제» 가 아니다. 아래 v2r2 · v1r2 · **v0xq** 축의 회귀는
+ * 그대로 살려 두되, 검출 라인업이 아니라 이 스위치로 켠다:
+ *   · `calibration.csBlockLocator.{v2r2Family, v1r2Family, v0xqFamily}`
+ *     → 블록 로케이터 패밀리
  *   · `includeDroppedCellSurfaceLayouts` → CS 평가 후보 (decodeLab 경로에서만 필요)
  * 게이트(0.78 · 0.035 · CRC · RS)는 한 값도 안 건드렸다.
- * 근거·측정: `test/output/claude-v0w-program.md`.
+ * 근거·측정: `test/output/claude-v0w-program.md` · `claude-v0w2-program.md`.
+ *
+ * ⚠ **v0xqFamily 를 여기 넣는 것은 «v0wq 를 켜는 것» 이 아니다.** v0wq 는 드랍
+ * 대상이 아니라 기본 on 이고, 코너 수집만 v0xq 와 공유한다. 그 독립성 자체를
+ * 아래 §«v0XQ 드랍» 회귀가 매 실행 증명한다.
  */
 const RESTORE_DROPPED_LOCATOR = Object.freeze({
-  calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true } },
+  calibration: {
+    csBlockLocator: { v2r2Family: true, v1r2Family: true, v0xqFamily: true },
+  },
 });
 const RESTORE_DROPPED = Object.freeze({
   includeDroppedCellSurfaceLayouts: true,
@@ -349,8 +366,10 @@ test('v1r2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동�
   // 의도적 갱신 «v0W 편입» (2026-08-16): v0w 키가 늘었고 **값은 0 이어야 한다**.
   // v0W 의 NE 동심 사각은 v1r2 의 코너와 서명 계보가 다르므로(3면 동일 K5 vs 면 T
   // 단독) 이 0 이 「v0W 편입이 v1r2 프레임에 헛 포즈를 만들지 않았다」를 지킨다.
+  // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 키가 늘었고 값도 0 이다 — v0W 와
+  // 같은 앵커드 쌍을 쓰므로 v0W 가 0 인 프레임에서는 구조적으로 0 이다 (실측 확인).
   assert.deepEqual(first.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0: 6,
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0: 6,
   }, '포즈 분포가 잰 값과 다르다 — 약점이 움직였으면 §6 을 재측정하고 핀을 갱신하라');
   const families = first.shapes.map((shape) => shape.blockLocator.family);
   assert.ok(!families.includes('v1r2'), 'v1r2 shape 가 살아났다 — 핀을 되돌려라');
@@ -378,8 +397,9 @@ test('v1r2 패밀리 격리 대조군 — 끄면 v1r2 포즈 0 (⚠ 현재는 �
   // (적대 검증 F3: v2r2@21 도 ppu12 6→4 · ppu15 4→2 · ppu17 6→4).
   // 의도적 갱신 «v0W 파생 2종 편입» (2026-08-16): v0wq 키가 늘었고 값도 0 이다.
   // 의도적 갱신 «v0W 편입» (2026-08-16): v0w 키가 늘었고 값은 0 이다 (위와 같은 이유).
+  // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 키가 늘었고 값도 0 이다.
   assert.deepEqual(off.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0: 6,
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0: 6,
   }, '격리 대조군의 전제가 움직였다 — 재측정하고 핀을 갱신하라');
 });
 
@@ -646,8 +666,10 @@ test('구 v2r2 중앙(닫힌 링 스택)은 legacy 분류만 남고 포즈를 �
   // 의도적 갱신 «v0W 편입» (2026-08-16): v0w 키가 늘었고 **값은 0 이어야 한다**.
   // v0W 는 K3 중앙 × K5 원거리 쌍이 필요한데 이 프레임에는 구 중앙 링 스택뿐이라
   // 쌍이 성립하지 않는다 — 이 0 이 「v0W 편입도 소각 디자인을 되살리지 않았다」다.
+  // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 키가 늘었고 값도 0 이다 (같은 이유 —
+  // v0W2 도 K3 중앙 × K5 원거리 쌍을 요구한다).
   assert.deepEqual(detected.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0: 0,
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0: 0,
   });
   assert.equal(detected.shapes.length, 0);
 });
@@ -672,15 +694,21 @@ function renderV0xq(pixelsPerUnit) {
 
 const V0XQ_FRAME = embed960(renderV0xq(15));
 
-test('v0xq — 톤 커브 4종 × 회전 3방향(0/120/240) 전부 body RS 까지 복호된다', {
+test('v0xq — 톤 커브 4종 × 회전 3방향(0/120/240) 전부 body RS 까지 복호된다 (드랍 복원)', {
   timeout: 600_000,
 }, () => {
+  // **의도적 갱신 «v0XQ 드랍» (운영자 실기기 확정 2026-08-17)** — 이 12칸은 한 값도
+  // 안 바뀐다. 바뀐 것은 «기본 라인업에서 도는가» 뿐이라, v2r2·v1r2 축과 **같은
+  // 방식으로** 복원 스위치를 통해 계속 잰다 (RESTORE_DROPPED). 판정 게이트는 무접촉 —
+  // 스위치를 켠 세계의 결과가 드랍 전과 바이트 동일하다는 것이 이 테스트의 내용이다.
   for (const [name, tone] of [
     ['none', {}], ['sCurve0.6', { sCurve: 0.6 }],
     ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
   ]) {
     for (const rotation of [0, 120, 240]) {
-      const result = decodeLab(distortImage(V0XQ_FRAME, { ...tone, rotation, fill: FILL }));
+      const result = decodeLab(
+        distortImage(V0XQ_FRAME, { ...tone, rotation, fill: FILL }), RESTORE_DROPPED,
+      );
       const where = `v0xq ${name} rot${rotation}`;
       assert.equal(result.ok, true, `${where}: ${result.reason || ''}`);
       assert.equal(result.text, PAYLOAD, where);
@@ -702,15 +730,20 @@ test('v0xq — 톤 커브 4종 × 회전 3방향(0/120/240) 전부 body RS 까�
   }
 });
 
-test('v0xq 교차 — 다른 레이아웃 프레임에서 v0xq 포즈가 서지 않는다', {
+test('v0xq 교차 — 다른 레이아웃 프레임에서 v0xq 포즈가 서지 않는다 (드랍 복원)', {
   timeout: 600_000,
 }, () => {
+  // **의도적 갱신 «v0XQ 드랍» (2026-08-17)** — 대조군을 폐기하지 않는다.
+  // 기본 cfg 에서는 v0xq 포즈가 «어디서도 0» 이라 이 표가 통째로 공허해진다
+  // (자기 프레임 포함 — 아래 반대 방향 단언이 그 사실을 스스로 잡는다).
+  // 그래서 **복원 스위치를 켠 세계에서** 종전과 같은 값을 계속 잰다.
+  const restore = RESTORE_DROPPED_LOCATOR;
   for (const [name, frame] of [
     ['v0x', V0X_FRAME], ['v2r2', V2R2_FRAME], ['v1r2', V1R2_FRAME], ['v0', V0_FRAME],
   ]) {
     for (const rotation of [0, 120]) {
       const luma = toRelativeLuminance(distortImage(frame, { rotation, fill: FILL }));
-      const detected = detectCellSurfaceBlockShapes(luma);
+      const detected = detectCellSurfaceBlockShapes(luma, restore);
       assert.equal(detected.diagnostics.poseCount.v0xq, 0,
         `${name} rot${rotation} 프레임에 v0xq 포즈가 섰다`);
       assert.ok(!detected.shapes.some((shape) => shape.blockLocator.family === 'v0xq'),
@@ -720,7 +753,7 @@ test('v0xq 교차 — 다른 레이아웃 프레임에서 v0xq 포즈가 서지 
   // 반대 방향 — v0xq 프레임에서는 실제로 선다 (대조군이 «항상 0» 인 자를 재는 게
   // 아님을 여기서 못 박는다).
   const own = detectCellSurfaceBlockShapes(
-    toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL })),
+    toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL })), restore,
   );
   assert.ok(own.diagnostics.poseCount.v0xq > 0, 'v0xq 프레임에서도 포즈가 0 이다 — 자가 죽었다');
 });
@@ -728,14 +761,36 @@ test('v0xq 교차 — 다른 레이아웃 프레임에서 v0xq 포즈가 서지 
 test('v0xq 시딩 게이트 — 중앙 QR 정합이 남의 프레임 삼중점을 시드 전에 자른다', {
   timeout: 600_000,
 }, () => {
+  // **의도적 갱신 «v0XQ 드랍» (2026-08-17)** — 두 팔 모두 `v0xqFamily: true` 를 깐다.
+  // 게이트 값(0.25 상관 하한)은 안 건드렸고, 재는 대상이 «기본 라인업» 에서
+  // «복원 스위치를 켠 세계» 로 옮겼을 뿐이다. 안 옮기면 centreRejected 가 구조적으로
+  // 0 이 되어 이 자가 «항상 0» 을 재게 된다.
+  // **의도적 갱신 «교차 누수 봉합» (2026-08-17)** — 상관 게이트가 «무엇을 자르나» 를
+  // 재려면 그 **앞에 선 두 조건**(불스아이 거부권 · QR 다움)을 두 팔 모두에서 꺼야
+  // 한다. 안 그러면 거부권이 삼중점을 먼저 걷어가 centreRejected 가 0 이 되고,
+  // 이 자는 자기가 겨냥한 것을 못 잰다. 게이트 값(0.25)은 여전히 무접촉이다.
+  const SEAL_OFF = { centreQrBullseyeVeto: false, centreQrRequireFinderContrast: false };
   const luma = toRelativeLuminance(distortImage(V0X_FRAME, { rotation: 0, fill: FILL }));
-  const on = detectCellSurfaceBlockShapes(luma);
+  const on = detectCellSurfaceBlockShapes(luma, {
+    calibration: {
+      ...RESTORE_DROPPED_LOCATOR.calibration,
+      csBlockLocator: { ...RESTORE_DROPPED_LOCATOR.calibration.csBlockLocator, ...SEAL_OFF },
+    },
+  });
   const off = detectCellSurfaceBlockShapes(luma, {
-    calibration: { csBlockLocator: { v0xqRequireCenterQr: false } },
+    calibration: {
+      csBlockLocator: { v0xqFamily: true, v0xqRequireCenterQr: false, ...SEAL_OFF },
+    },
   });
   // v0X 의 SE 동심 사각도 120° 삼중점을 만든다 — 게이트가 **시드 단계에서** 자른다.
   assert.ok(on.diagnostics.centerQr.centreRejected > 0,
     'v0X 프레임에서 중앙 QR 게이트가 아무것도 자르지 않았다 — 게이트가 잠들었으면 주석을 고쳐라');
+  // ★ 신설 (같은 프레임, 봉합 **켠** 팔) — 거부권이 그 삼중점을 상관 게이트보다
+  // 먼저 걷어간다. 이것이 «가짜를 더 잘 거른다» 의 코드 고정이다.
+  const sealed = detectCellSurfaceBlockShapes(luma, RESTORE_DROPPED_LOCATOR);
+  assert.ok(sealed.diagnostics.centerQr.bullseyeVetoed > 0,
+    'v0X 프레임에서 중앙 불스아이 거부권이 삼중점을 하나도 안 걷었다');
+  assert.equal(sealed.diagnostics.poseCount.v0xq, 0);
   // ⚠ 잰 값: **이 프레임(2톤·무왜곡)에서는** 게이트를 꺼도 포즈가 0 이다 — 여기서는
   // 시드가 refinePose 를 못 넘는다. 이것이 참인 구간은 여기까지이고, 3톤 + 톤 열화
   // 구간은 다르다 (아래 «시딩 게이트 ② 열화 구간» 이 그쪽을 잰다). 두 테스트를
@@ -771,20 +826,41 @@ test('v0xq 시딩 게이트 ② 열화 구간 — 포즈가 실제로 서고, �
   //
   // 축을 더한 것은 게이트 완화가 아니다. ON/OFF 동수 단언은 8칸 전부에 그대로 걸리고,
   // 포즈가 0 인 칸에서도 «0 == 0» 은 참이라 약해지지 않는다. 늘어나는 쪽은 분모다.
+  // ⚠ **의도적 갱신 «교차 누수 봉합» (2026-08-17)** — 이 자가 재는 명제
+  // («상관 게이트는 살아남는 포즈를 한 개도 못 자른다»)는 **여전히 참이고 그대로
+  // 잰다**. 다만 두 팔 모두에서 봉합 두 조건을 꺼야 그 명제를 잴 수 있다 —
+  // 봉합이 켜지면 삼중점 자체가 걷혀 양쪽 다 0 이 되고, 자가 무뎌지기 때문이다.
+  // 그리고 **세 번째 팔**을 새로 더한다: 봉합을 켠 팔에서 같은 포즈가 실제로
+  // 사라지는가. 그것이 이 레인이 고친 것의 코드 고정이다.
+  const SEAL_OFF2 = { centreQrBullseyeVeto: false, centreQrRequireFinderContrast: false };
   const v0x3 = embed960(renderFinal3Tone('v0x', 1, 15));
   let posesSeen = 0;
   let cutBySeedGate = 0;
+  let posesAfterSeal = 0;
   for (const [name, tone] of [
     ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
     ['sCurve0.6', { sCurve: 0.6 }], ['sCurve0.9', { sCurve: 0.9 }],
   ]) {
     for (const rotation of [0, 120]) {
+      // 의도적 갱신 «v0XQ 드랍» (2026-08-17) — 위 테스트와 같은 이유로 두 팔에
+      // `v0xqFamily: true` 를 깐다 (게이트 값 무접촉).
       const luma = toRelativeLuminance(distortImage(v0x3, { ...tone, rotation, fill: FILL }));
-      const on = detectCellSurfaceBlockShapes(luma);
-      const off = detectCellSurfaceBlockShapes(luma, {
-        calibration: { csBlockLocator: { v0xqRequireCenterQr: false } },
+      const on = detectCellSurfaceBlockShapes(luma, {
+        calibration: {
+          ...RESTORE_DROPPED_LOCATOR.calibration,
+          csBlockLocator: {
+            ...RESTORE_DROPPED_LOCATOR.calibration.csBlockLocator, ...SEAL_OFF2,
+          },
+        },
       });
+      const off = detectCellSurfaceBlockShapes(luma, {
+        calibration: {
+          csBlockLocator: { v0xqFamily: true, v0xqRequireCenterQr: false, ...SEAL_OFF2 },
+        },
+      });
+      const sealed = detectCellSurfaceBlockShapes(luma, RESTORE_DROPPED_LOCATOR);
       posesSeen += on.diagnostics.poseCount.v0xq;
+      posesAfterSeal += sealed.diagnostics.poseCount.v0xq;
       cutBySeedGate += off.diagnostics.poseCount.v0xq - on.diagnostics.poseCount.v0xq;
       assert.equal(on.diagnostics.poseCount.v0xq, off.diagnostics.poseCount.v0xq,
         `v0x 3톤 ${name} rot${rotation}: 시딩 게이트 ON/OFF 로 v0xq 포즈 수가 갈렸다`);
@@ -793,6 +869,10 @@ test('v0xq 시딩 게이트 ② 열화 구간 — 포즈가 실제로 서고, �
   assert.ok(posesSeen > 0,
     'v0X 3톤 열화에서 v0xq 포즈가 하나도 안 섰다 — 이 테스트가 «항상 0» 인 자를 재고 있다');
   assert.equal(cutBySeedGate, 0, '시딩 게이트가 살아남는 포즈를 잘랐다 — cfg 주석을 고쳐라');
+  // ★ 신설 — 상관 게이트가 못 자르던 그 포즈들을 봉합이 **전부** 자른다.
+  assert.equal(posesAfterSeal, 0,
+    `봉합(불스아이 거부권 + QR 다움)이 v0X 프레임의 가짜 v0xq 포즈를 남겼다: ${posesAfterSeal}`
+    + ` (봉합 전 ${posesSeen})`);
 
   // 그런데도 복호는 v0x 로 간다 — 막는 단계가 CS 수용 게이트임을 결과로 확인한다.
   // (통합자 강화 2026-08-16, 검증 렌즈 지적 7) 조건부 가드였던 것을 강제로 바꿨다 —
@@ -836,9 +916,11 @@ test('계약 — v0xq 중앙 QR 이 이미지 공간 detectQrFinderTriples 에�
 test('v0xq 로케이터는 결정적이다 — 같은 프레임 두 번 → 동일 산출', {
   timeout: 300_000,
 }, () => {
+  // 의도적 갱신 «v0XQ 드랍» (2026-08-17) — 복원 스위치를 켠 세계에서 잰다.
+  // (기본 cfg 에서도 결정적이지만, 그때는 v0xq 경로가 아예 안 돌아 자가 무뎌진다.)
   const luma = toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL }));
-  const first = detectCellSurfaceBlockShapes(luma);
-  const second = detectCellSurfaceBlockShapes(luma);
+  const first = detectCellSurfaceBlockShapes(luma, RESTORE_DROPPED_LOCATOR);
+  const second = detectCellSurfaceBlockShapes(luma, RESTORE_DROPPED_LOCATOR);
   assert.deepEqual(first.diagnostics, second.diagnostics);
   assert.deepEqual(
     first.shapes.map((shape) => shape.center),
@@ -851,20 +933,35 @@ test('v0xq 편입 비침습성 — 다른 프레임의 verified·poseCount 가 o
 }, () => {
   // 코너 검증을 **별도 순회 + 별도 occupied** 로 둔 이유가 이것이다. 기존 순회에
   // 끼워 넣었다면 검증된 자리가 늘어 다른 패밀리의 클러스터 선택이 밀렸을 것이다.
+  //
+  // **의도적 갱신 «v0XQ 드랍» (2026-08-17)** — on/off 의 «on» 이 기본값이 아니라
+  // **복원 스위치를 켠 쪽**이 됐다 (기본이 off 로 뒤집혔으므로). 재는 명제는 그대로다:
+  // «v0xq 패밀리를 켜고 끄는 것이 다른 패밀리의 관측을 한 자리도 안 흔든다».
   for (const [name, frame] of [
     ['v0x', V0X_FRAME], ['v2r2', V2R2_FRAME], ['v1r2', V1R2_FRAME], ['v0', V0_FRAME],
   ]) {
     const luma = toRelativeLuminance(distortImage(frame, { rotation: 0, fill: FILL }));
-    const on = detectCellSurfaceBlockShapes(luma);
+    const on = detectCellSurfaceBlockShapes(luma, RESTORE_DROPPED_LOCATOR);
     // **의도적 갱신 «v0W 파생 2종 편입» (2026-08-16)** — 코너 검증 순회는 이제
     // v0xq·v0wq 가 **공유**한다 (같은 동심 사각 블록이라 두 번 훑을 이유가 없다).
     // 그래서 «코너 검증이 안 돈다» 를 보려면 **두 패밀리를 다 꺼야** 한다.
     // v0xq 하나만 끈 쪽은 여전히 코너를 훑는다 — 그것이 침습이 아니라 공유다.
     const off = detectCellSurfaceBlockShapes(luma, {
-      calibration: { csBlockLocator: { v0xqFamily: false } },
+      calibration: {
+        ...RESTORE_DROPPED_LOCATOR.calibration,
+        csBlockLocator: {
+          ...RESTORE_DROPPED_LOCATOR.calibration.csBlockLocator, v0xqFamily: false,
+        },
+      },
     });
     const offBoth = detectCellSurfaceBlockShapes(luma, {
-      calibration: { csBlockLocator: { v0xqFamily: false, v0wqFamily: false } },
+      calibration: {
+        ...RESTORE_DROPPED_LOCATOR.calibration,
+        csBlockLocator: {
+          ...RESTORE_DROPPED_LOCATOR.calibration.csBlockLocator,
+          v0xqFamily: false, v0wqFamily: false,
+        },
+      },
     });
     assert.deepEqual(on.diagnostics.verified, off.diagnostics.verified,
       name + ' verified 가 흔들렸다');
@@ -877,8 +974,24 @@ test('v0xq 편입 비침습성 — 다른 프레임의 verified·poseCount 가 o
         name + ' ' + family + ' poseCount 변동 (둘 다 끔)');
     }
     assert.equal(off.diagnostics.poseCount.v0xq, 0, name + ' 끈 쪽에 v0xq 포즈가 있다');
-    assert.equal(offBoth.diagnostics.centerQr.corners, 0,
-      name + ' 둘 다 껐는데 코너 검증이 돌았다');
+    // **의도적 갱신 «중앙 불스아이 확증 조립» (2026-08-17)** — 느슨한 코너 순회의
+    // 소비자가 셋이 됐다 (v0xq 삼중점 · v0wq 삼중점 · **불스아이 확증 조립**).
+    // 그래서 «코너 검증이 안 돈다» 를 보려면 **셋을 다 꺼야** 한다.
+    // 근거 실측: 셋 중 하나만 켜도 corners > 0 (이 프레임 5개) — 공유이지 침습이 아니다.
+    // 비침습성 명제 자체는 위 verified·poseCount 단언이 그대로 지키고 있다.
+    const offAllThree = detectCellSurfaceBlockShapes(luma, {
+      calibration: {
+        ...RESTORE_DROPPED_LOCATOR.calibration,
+        csBlockLocator: {
+          ...RESTORE_DROPPED_LOCATOR.calibration.csBlockLocator,
+          v0xqFamily: false, v0wqFamily: false, centreBullseyeConfirmedPoses: false,
+        },
+      },
+    });
+    assert.equal(offAllThree.diagnostics.centerQr.corners, 0,
+      name + ' 셋 다 껐는데 코너 검증이 돌았다');
+    assert.equal(offBoth.diagnostics.centerQr.corners, on.diagnostics.centerQr.corners,
+      name + ' 확증 조립만 켠 쪽의 코너 수가 갈렸다 — 공유 순회가 끊겼다');
   }
 });
 
@@ -923,14 +1036,36 @@ const V0W_FRAME = embed960(renderFinal('v0w', 1, 15));
  * 그건 «틀린 위상을 더 받는» 변경이다. 이 레인의 배제 목록 1번이다.
  * 조건부 드랍(«v0W > v0X») 판단 재료는 test/output/claude-v0w-program.md §12 대조표.
  */
+/**
+ * **의도적 갱신 «v0W2 편입» (2026-08-17) — 약점 2칸이 사라졌다.**
+ *
+ * 위 주석이 «약점이 사라졌으면 재측정하고 핀을 갱신하라» 고 적어 둔 그 일이 일어났다.
+ * 실측: 기본 cfg 에서 v0W 는 이제 **12/12** 다 (gamma0.7·gamma0.6 × rot0 포함).
+ *
+ * 원인은 게이트가 아니다 — 이 레인은 0.78·0.035·CRC·RS 를 한 값도 안 건드렸다.
+ * 원인은 **포즈 다양성**이다: v0W2 패밀리가 같은 (중앙, 코너) 쌍에서 자기 패치로
+ * 한 번 더 refinePose 를 돌리고, 그 포즈가 셰이프 목록에 들어가면서 v0W **레이아웃**
+ * 채점이 더 나은 기하 위에서 이뤄진다. 아래 두 번째 팔이 그 귀속을 증명한다 —
+ * `v0w2Family: false` 로 되돌리면 **옛 실패가 좌표까지 그대로 재현된다**
+ * (frontend:no-grid-hypothesis / BODY_RS_FAILED / v0w 포즈는 살아 있음).
+ *
+ * 그래서 옛 핀을 **폐기하지 않고 대조군으로 옮겼다**. 폐기하면 «v0W2 를 내렸을 때
+ * v0W 가 어디로 돌아가는가» 를 다시는 못 재게 된다.
+ */
 const V0W_TONE_PINS = Object.freeze([
   ['clean', {}, [0, 120, 240], []],
   ['sCurve0.6', { sCurve: 0.6 }, [0, 120, 240], []],
-  ['gamma0.7', { gamma: 0.7 }, [120, 240], [0]],
-  ['gamma0.6', { gamma: 0.6 }, [120, 240], [0]],
+  ['gamma0.7', { gamma: 0.7 }, [0, 120, 240], []],
+  ['gamma0.6', { gamma: 0.6 }, [0, 120, 240], []],
 ]);
 
-test('v0W 자기 복호 — 톤 커브 4종 × 회전 3방향 (⚠ rot0 × 강한 톤 열화 2칸은 약점 핀)', {
+/** v0W2 편입 **전**의 v0W 핀 — 아래 대조군 팔이 이 좌표를 그대로 재현해야 한다. */
+const V0W_TONE_PINS_BEFORE_V0W2 = Object.freeze([
+  ['gamma0.7', { gamma: 0.7 }, [0]],
+  ['gamma0.6', { gamma: 0.6 }, [0]],
+]);
+
+test('v0W 자기 복호 — 톤 커브 4종 × 회전 3방향 (v0W2 편입으로 rot0 약점 2칸 해소)', {
   timeout: 900_000,
 }, () => {
   for (const [label, distort, wantOk, wantFail] of V0W_TONE_PINS) {
@@ -949,7 +1084,6 @@ test('v0W 자기 복호 — 톤 커브 4종 × 회전 3방향 (⚠ rot0 × 강�
       assert.equal(decoded.ok, false,
         `${where} 이 초록이 됐다 — 약점이 사라졌으면 재측정하고 핀을 갱신하라`);
       assert.equal(decoded.reason, 'frontend:no-grid-hypothesis', where + ' 실패 이유');
-      // 죽는 단계는 **로케이터가 아니다** — 포즈는 선다. 그 사실을 함께 못 박는다.
       const detected = detectCellSurfaceBlockShapes(toRelativeLuminance(frame));
       assert.ok(detected.diagnostics.poseCount.v0w >= 1,
         `${where} 에서 v0w 포즈까지 죽었다 — 약점의 귀속이 바뀌었다`);
@@ -960,19 +1094,52 @@ test('v0W 자기 복호 — 톤 커브 4종 × 회전 3방향 (⚠ rot0 × 강�
   }
 });
 
+test('v0W 약점 2칸의 귀속 — v0W2 패밀리를 끄면 옛 실패가 그대로 재현된다 (대조군 보존)', {
+  timeout: 900_000,
+}, () => {
+  // 이 테스트가 없으면 위 «12/12» 는 «게이트가 느슨해졌나?» 와 구별되지 않는다.
+  // 끄는 것은 **패밀리 하나**이고 게이트는 어느 값도 안 만진다.
+  const NO_V0W2 = { calibration: { csBlockLocator: { v0w2Family: false } } };
+  for (const [label, distort, rotations] of V0W_TONE_PINS_BEFORE_V0W2) {
+    for (const rotation of rotations) {
+      const frame = distortImage(V0W_FRAME, { ...distort, rotation, fill: FILL });
+      const where = `v0W ${label} rot${rotation} (v0w2 off)`;
+      const decoded = decodeLab(frame, NO_V0W2);
+      assert.equal(decoded.ok, false,
+        `${where} 이 초록이다 — 약점 해소의 귀속이 v0W2 가 아니다`);
+      assert.equal(decoded.reason, 'frontend:no-grid-hypothesis', where + ' 실패 이유');
+      assert.equal(decoded.detail.pipelineCode, 'BODY_RS_FAILED', where + ' 실패 단계');
+      // 죽는 단계는 **로케이터가 아니다** — v0w 포즈는 그대로 선다 (옛 핀과 같은 귀속).
+      const detected = detectCellSurfaceBlockShapes(
+        toRelativeLuminance(frame), NO_V0W2,
+      );
+      assert.ok(detected.diagnostics.poseCount.v0w >= 1, where + ' 에서 v0w 포즈까지 죽었다');
+      assert.equal(detected.diagnostics.poseCount.v0w2, 0, where + ' 에서 v0w2 포즈가 섰다');
+      // 그리고 같은 칸이 기본 cfg 에서는 초록이다 — 두 팔의 차이가 곧 귀속이다.
+      const on = decodeLab(frame);
+      assert.equal(on.ok, true, `${where} 의 기본 팔이 실패했다: ${on.reason || ''}`);
+      assert.equal(on.hypothesis.cellSurfaceLayout, 'v0w');
+    }
+  }
+});
+
 test('v0W 교차 오수용 0 — 양방향 전수 (v0 · v0X · v0XQ · v0W)', {
   timeout: 900_000,
 }, () => {
   // «남의 프레임이 v0W 로 복호되지 않는다» 와 «v0W 프레임이 남으로 복호되지 않는다» 를
   // 같은 표에서 잰다. 한쪽만 재면 A/B 가 다른 축을 가린다.
-  for (const [name, frame, wantLayout] of [
-    ['v0', V0_FRAME, 'v0'],
-    ['v0x', V0X_FRAME, 'v0x'],
-    ['v0xq', V0XQ_FRAME, 'v0xq'],
-    ['v0w', V0W_FRAME, 'v0w'],
+  //
+  // **의도적 갱신 «v0XQ 드랍» (2026-08-17)** — v0XQ 행만 복원 스위치를 깐다.
+  // 대조군을 폐기하지 않는 것이 요점이다: 드랍된 레이아웃을 표에서 빼면
+  // «v0XQ ↔ v0W 가 서로 새는가» 를 다시는 못 재게 된다.
+  for (const [name, frame, wantLayout, extra] of [
+    ['v0', V0_FRAME, 'v0', {}],
+    ['v0x', V0X_FRAME, 'v0x', {}],
+    ['v0xq', V0XQ_FRAME, 'v0xq', RESTORE_DROPPED],
+    ['v0w', V0W_FRAME, 'v0w', {}],
   ]) {
     for (const rotation of [0, 120, 240]) {
-      const decoded = decodeLab(distortImage(frame, { rotation, fill: FILL }));
+      const decoded = decodeLab(distortImage(frame, { rotation, fill: FILL }), extra);
       assert.equal(decoded.ok, true,
         `${name} rot${rotation} 이 복호되지 않았다: ${decoded.reason || ''}`);
       assert.equal(decoded.text, PAYLOAD, `${name} rot${rotation}`);
@@ -1134,15 +1301,21 @@ test('v0WQ 교차 오수용 0 — 양방향 전수 (v0 · v0X · v0XQ · v0W · 
 }, () => {
   // v0XQ ↔ v0WQ 가 이 표의 핵심 칸이다 — 코너·중앙 시드가 같으므로, 여기가 새면
   // 두 레이아웃은 서로의 프레임을 읽어 버린다.
-  for (const [name, frame, wantLayout] of [
-    ['v0', V0_FRAME, 'v0'],
-    ['v0x', V0X_FRAME, 'v0x'],
-    ['v0xq', V0XQ_FRAME, 'v0xq'],
-    ['v0w', V0W_FRAME, 'v0w'],
-    ['v0wq', V0WQ_FRAME, 'v0wq'],
+  //
+  // **의도적 갱신 «v0XQ 드랍» (2026-08-17)** — v0XQ 행에만 복원 스위치를 깐다.
+  // 이 행이 표에서 빠지면 «드랍 뒤에도 v0WQ 가 v0XQ 프레임을 안 먹는가» 를 못 재게
+  // 되고, 그것이야말로 드랍이 만들 수 있는 새 결함이다. 나머지 네 행은 무접촉이므로
+  // «남의 프레임이 v0XQ 로 오수용되는가» 는 **기본 라인업에서** 계속 잰다
+  // (드랍 뒤엔 v0xq 후보 자체가 없어 오수용이 구조적으로 불가능해진다 — 그것도 결과다).
+  for (const [name, frame, wantLayout, extra] of [
+    ['v0', V0_FRAME, 'v0', {}],
+    ['v0x', V0X_FRAME, 'v0x', {}],
+    ['v0xq', V0XQ_FRAME, 'v0xq', RESTORE_DROPPED],
+    ['v0w', V0W_FRAME, 'v0w', {}],
+    ['v0wq', V0WQ_FRAME, 'v0wq', {}],
   ]) {
     for (const rotation of [0, 120, 240]) {
-      const decoded = decodeLab(distortImage(frame, { rotation, fill: FILL }));
+      const decoded = decodeLab(distortImage(frame, { rotation, fill: FILL }), extra);
       assert.equal(decoded.ok, true,
         `${name} rot${rotation} 이 복호되지 않았다: ${decoded.reason || 'unknown'}`);
       assert.equal(decoded.text, PAYLOAD, `${name} rot${rotation}`);
@@ -1201,13 +1374,22 @@ test('v0WQ 패밀리 격리 대조군 — 끄면 v0wq 포즈 0, 켜면 자기 �
 test('v0WQ 편입 비침습성 — 기존 패밀리 poseCount 가 on/off 로 동일', {
   timeout: 600_000,
 }, () => {
+  // **의도적 갱신 «v0XQ 드랍» (2026-08-17)** — 마지막 «삼중점 공유» 단언은 두
+  // 패밀리가 **둘 다 도는 세계**에서만 의미가 있다 (드랍된 쪽은 조립을 아예 안 하므로
+  // tripleCount 가 구조적으로 0 이 된다). 그래서 이 테스트의 기준 팔을 복원 스위치
+  // 위로 올린다 — 재는 명제(«v0wq 를 켜고 꺼도 남이 안 흔들린다»)는 그대로다.
   for (const [name, frame] of [
     ['v0x', V0X_FRAME], ['v0xq', V0XQ_FRAME], ['v0w', V0W_FRAME], ['v0', V0_FRAME],
   ]) {
     const luma = toRelativeLuminance(distortImage(frame, { rotation: 0, fill: FILL }));
-    const on = detectCellSurfaceBlockShapes(luma);
+    const on = detectCellSurfaceBlockShapes(luma, RESTORE_DROPPED_LOCATOR);
     const off = detectCellSurfaceBlockShapes(luma, {
-      calibration: { csBlockLocator: { v0wqFamily: false } },
+      calibration: {
+        ...RESTORE_DROPPED_LOCATOR.calibration,
+        csBlockLocator: {
+          ...RESTORE_DROPPED_LOCATOR.calibration.csBlockLocator, v0wqFamily: false,
+        },
+      },
     });
     for (const family of ['v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0']) {
       assert.equal(on.diagnostics.poseCount[family], off.diagnostics.poseCount[family],
@@ -1257,4 +1439,528 @@ test('v0WY 는 렌더 선택이다 — 와이어는 v0W 이고 데이터가 한 
     'v0wy 포즈 키가 생겼다 — v0WY 는 로케이터 패밀리가 아니다');
   assert.ok(detected.diagnostics.poseCount.v0w >= 1,
     'v0WY 프레임에서 v0w 포즈가 0 이다');
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// §13 (2026-08-17) **v0XQ 드랍** — 운영자 실기기 확정.
+//
+// 조건부 드랍 규칙 «v0WQ > v0XQ» 가 성립했다 (실기기 인식 순위
+// v0WQ ≫ v0XQ > v0X ≈ v0W). v1r2·v2r2 와 **같은 규약**으로 내린다 — 차단이지
+// 삭제가 아니다. 이 블록이 그 규약 세 가지를 매 실행 증명한다:
+//   ① 드랍이 실제로 듣는다 (기본 cfg 에서 v0xq 포즈·후보·복호가 전부 사라진다)
+//   ② ⚠ **함정 1** — v0wq 는 v0xq 의 코너 삼중점 경로를 **공유**하는데도 온전하다
+//      (코너 수집 게이트가 `(v0xqFamily !== false || v0wqFamily !== false)` 라서)
+//   ③ 복원 스위치를 켜면 드랍 전 동작이 그대로 돌아온다 (와이어·정본 무손실)
+// ─────────────────────────────────────────────────────────────────────────
+
+test('v0XQ 드랍 ① — 기본 라인업에서 v0xq 포즈·CS 후보·복호가 전부 사라진다', {
+  timeout: 600_000,
+}, () => {
+  // 포즈 — 자기 프레임에서조차 0 이다 (v1r2 드랍과 같은 모양의 증명).
+  const luma = toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL }));
+  const dropped = detectCellSurfaceBlockShapes(luma);
+  assert.equal(dropped.diagnostics.poseCount.v0xq, 0,
+    '드랍했는데 자기 프레임에서 v0xq 포즈가 섰다');
+  assert.ok(!dropped.shapes.some((shape) => shape.blockLocator.layoutId === 'v0xq'),
+    '드랍했는데 v0xq shape 가 생겼다');
+  // CS 평가 후보 — 라인업에서 빠졌다.
+  assert.ok(!finalLayoutIdsForN(21).includes('v0xq'),
+    'finalLayoutIdsForN(21) 에 v0xq 가 남아 있다');
+  // 복호 — 기본 경로로는 v0XQ 프레임을 못 읽는다. **읽히면 안 되는 것이 아니라
+  // «라인업에 없으니 후보가 없다»** 이고, 그 사실을 실패 사유로 못 박는다.
+  const decoded = decodeLab(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL }));
+  assert.equal(decoded.ok, false, '드랍했는데 기본 경로가 v0XQ 를 읽었다');
+  // 남의 레이아웃으로 새어 읽히면 그것은 오수용이다 — 그쪽이 더 나쁘다.
+  if (decoded.ok) {
+    assert.notEqual(decoded.hypothesis.cellSurfaceLayout, 'v0xq');
+  }
+});
+
+test('v0XQ 드랍 ② ⚠ 함정 1 — 코너 경로를 공유하는 v0WQ 검출은 온전하다', {
+  timeout: 900_000,
+}, () => {
+  // v0wq 는 v0xq 와 **같은 코너 히트·같은 삼중점**에서 출발한다. 코너 수집이
+  // `(cfg.v0xqFamily !== false || cfg.v0wqFamily !== false)` 게이트 뒤에 있으므로
+  // v0xq 만 내려도 순회는 그대로 돈다. 그 성질이 깨지면 v0WQ 가 통째로 죽는다 —
+  // 실기기 1위 레이아웃이므로 이 회귀가 이 레인에서 가장 비싼 자다.
+  const luma = toRelativeLuminance(distortImage(V0WQ_FRAME, { rotation: 0, fill: FILL }));
+  const dropped = detectCellSurfaceBlockShapes(luma);
+  // (a) 코너 수집이 돌았다 — v0xq 를 껐는데도 코너가 잡힌다.
+  assert.ok(dropped.diagnostics.centerQr.corners > 0,
+    'v0xq 를 내렸더니 코너 수집 자체가 멈췄다 — 게이트가 AND 로 바뀌었다');
+  // (b) 삼중점도 v0wq 쪽에서 그대로 센다 (v0xq 쪽은 조립을 안 하므로 0 이 정상).
+  assert.ok(dropped.diagnostics.centerQr.v0wqTripleCount > 0,
+    'v0wq 삼중점이 0 이다 — 공유 경로가 끊겼다');
+  assert.equal(dropped.diagnostics.centerQr.tripleCount, 0,
+    'v0xq 를 내렸는데 v0xq 삼중점 조립이 돌았다');
+  // (c) 포즈·shape 가 선다.
+  assert.ok(dropped.diagnostics.poseCount.v0wq >= 1,
+    'v0xq 드랍이 v0wq 포즈까지 죽였다: ' + JSON.stringify(dropped.diagnostics.poseCount));
+  assert.ok(dropped.shapes.some((shape) => shape.blockLocator.layoutId === 'v0wq'),
+    'v0wq shape 가 사라졌다');
+  // (d) 그리고 실제로 복호된다 — 톤 커브 4종 × 회전 3방향 전수, **기본 라인업**에서.
+  for (const [name, tone] of [
+    ['none', {}], ['sCurve0.6', { sCurve: 0.6 }],
+    ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
+  ]) {
+    for (const rotation of [0, 120, 240]) {
+      const where = `v0wq ${name} rot${rotation} (v0xq 드랍 후)`;
+      const decoded = decodeLab(distortImage(V0WQ_FRAME, { ...tone, rotation, fill: FILL }));
+      assert.equal(decoded.ok, true, `${where}: ${decoded.reason || 'unknown'}`);
+      assert.equal(decoded.text, PAYLOAD, where);
+      assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0wq', where);
+    }
+  }
+});
+
+test('v0XQ 드랍 ③ — 복원 스위치를 켜면 드랍 전 동작이 그대로 돌아온다 (차단·비삭제)', {
+  timeout: 900_000,
+}, () => {
+  const luma = toRelativeLuminance(distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL }));
+  const restored = detectCellSurfaceBlockShapes(luma, RESTORE_DROPPED_LOCATOR);
+  assert.ok(restored.diagnostics.poseCount.v0xq >= 1,
+    '복원 스위치를 켰는데 v0xq 포즈가 0 이다 — 드랍이 «삭제» 가 됐다');
+  assert.ok(restored.shapes.some((shape) => shape.blockLocator.layoutId === 'v0xq'),
+    '복원 스위치를 켰는데 v0xq shape 가 없다');
+  // 그리고 복호까지 — 와이어·정본·회계가 한 비트도 안 사라졌다는 증명.
+  const decoded = decodeLab(
+    distortImage(V0XQ_FRAME, { rotation: 0, fill: FILL }), RESTORE_DROPPED,
+  );
+  assert.equal(decoded.ok, true, '복원 복호 실패: ' + (decoded.reason || 'unknown'));
+  assert.equal(decoded.text, PAYLOAD);
+  assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0xq');
+  // 복원은 **v0wq 를 흔들지 않는다** — 두 스위치가 독립이라는 반대 방향 증명.
+  const wqLuma = toRelativeLuminance(distortImage(V0WQ_FRAME, { rotation: 0, fill: FILL }));
+  const wqDropped = detectCellSurfaceBlockShapes(wqLuma);
+  const wqRestored = detectCellSurfaceBlockShapes(wqLuma, RESTORE_DROPPED_LOCATOR);
+  assert.equal(wqDropped.diagnostics.poseCount.v0wq, wqRestored.diagnostics.poseCount.v0wq,
+    'v0xq 복원이 v0wq 포즈 수를 바꿨다 — 두 패밀리가 서로를 흔든다');
+});
+
+test('v0XQ 드랍 ④ — 정본 배열은 한 줄도 안 지웠다 (v0W·v0WQ 가 그 배열에서 유도된다)', () => {
+  // ⚠ **함정 2** — `V0XQ_CORNER_CELLS` 는 v0W(NE 36셀) · v0WQ(CORNER 36셀) 의
+  // **원천 배열**이다. 드랍을 «정본 삭제» 로 오해하면 두 레이아웃이 같이 죽는다.
+  // 참조 동일성까지 요구하는 자기검증은 cellSurfaceFinal.test.js §①-d/①-e 가 잡고,
+  // 여기서는 «드랍 뒤에도 세 레이아웃의 그 블록이 셀 단위로 같다» 를 잡는다.
+  const cornerOf = (id, blocks) => locatorCellsCellSurfaceFinal(21, id)
+    .filter((cell) => cell.i <= blocks.iMax && cell.j >= blocks.jMin)
+    .map((cell) => [cell.i, cell.j, cell.T, cell.L, cell.R]);
+  const fromV0xq = cornerOf('v0xq', V0XQ_BLOCKS.CORNER);
+  assert.equal(fromV0xq.length, 36, 'v0xq 동심 사각이 36셀이 아니다');
+  assert.deepEqual(cornerOf('v0w', V0W_BLOCKS.NE), fromV0xq,
+    'v0W NE 가 v0xq 동심 사각과 갈라졌다');
+  assert.deepEqual(cornerOf('v0wq', V0WQ_BLOCKS.CORNER), fromV0xq,
+    'v0WQ CORNER 가 v0xq 동심 사각과 갈라졌다');
+  // 와이어 질의도 살아 있다 — 드랍은 라인업만 건드린다.
+  assert.equal(cellSurfaceFinal(21, 'v0xq').id, 'v0xq');
+  assert.ok(allFinalLayoutIdsForN(21).includes('v0xq'));
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// §14 (2026-08-17) **v0W2 편입** — v0W 파생 ②, 운영자 신설 설계.
+//
+// 실기기 판정에서 v0W 가 진 두 자리를 고친 물건이다:
+//   ① SE 부 파인더 3×3 이 실기기에서 **미검출** → 6×6 (면당 9점 → 36점)
+//   ② 주 파인더가 다 잡힌 프레임에서도 인식이 샜다 → NW·NE 를 3면 대칭으로 눕혀
+//      **검출 전용**으로 돌리고 120° 위상은 SE 하나가 전담
+//
+// 로케이터 관점의 요점은 **v0W 와 시드가 같다**는 것이다 — NE 동심 사각이 같은
+// 배열·같은 자리라 코어 반경이 √279 로 같고, 사각 링 동반자도 양쪽 다 참이다.
+// 그래서 세 패밀리(v0X · v0W · v0W2)는 서로의 프레임에서 서로 시드되고, 여기서
+// 재는 본론도 «포즈 0» 이 아니라 **«복호 오수용 0»** 이다.
+//
+// 추가로 §26 F6 지표(rot0 슬롯 위반)를 v0W 와 나란히 잰다 — 그것이 실기기 실패의
+// 정량 대리 지표였기 때문이다.
+// ─────────────────────────────────────────────────────────────────────────
+
+const V0W2_FRAME = embed960(renderFinal('v0w2', 1, 15));
+
+/**
+ * ⚠ **알려진 약점 핀** — v0W2 도 «rot0 × 강한 감마» 2칸에서 죽는다 (10/12).
+ *
+ * 이 핀이 중요한 이유는 **귀속을 뒤집기 때문**이다. v0W 의 같은 2칸은
+ * «위상 margin 이 얇아서» 로 귀속돼 있었는데(v0W 프로그램 §26 F9 · F5),
+ * v0W2 는 margin 이 0.0952 → **0.1512 (+58.8 %)** 로 두꺼워졌는데도 **같은 2칸**이
+ * 같은 단계(BODY_RS_FAILED)에서 죽는다. 즉 그 2칸의 원인은 위상 margin 이 아니다.
+ *
+ * 이 레인이 한 가장 싼 반증 실험 (`test/output/lanes/claude-v0w2-probe.mjs` 경로):
+ *   · v0w 패밀리 off · v0x 패밀리 off · 둘 다 off · maximumPosesPerFamily 4
+ *     → **네 팔 모두 같은 자리에서 같은 코드로 실패**. 즉 «경쟁 포즈가 훔쳐 간다» 도,
+ *       «포즈 예산이 모자라다» 도 아니다.
+ * 남는 후보는 rot0 프레임의 본문 샘플링(실루엣 전처리 · sampleProjectedDisc) 쪽이고,
+ * 그것은 이 레인의 과업 밖이라 **핀으로만 남긴다**.
+ *
+ * 게이트는 한 값도 안 건드렸다 — 0.035 를 내리면 이 2칸이 초록이 되겠지만
+ * 그건 «틀린 위상을 더 받는» 변경이고 이 레인의 배제 목록 1번이다.
+ */
+const V0W2_TONE_PINS = Object.freeze([
+  ['clean', {}, [0, 120, 240], []],
+  ['sCurve0.6', { sCurve: 0.6 }, [0, 120, 240], []],
+  ['gamma0.7', { gamma: 0.7 }, [120, 240], [0]],
+  ['gamma0.6', { gamma: 0.6 }, [120, 240], [0]],
+]);
+
+test('v0W2 자기 복호 — 톤 커브 4종 × 회전 3방향 (⚠ rot0 × 강한 감마 2칸은 약점 핀)', {
+  timeout: 900_000,
+}, () => {
+  for (const [label, distort, wantOk, wantFail] of V0W2_TONE_PINS) {
+    for (const rotation of wantOk) {
+      const decoded = decodeLab(distortImage(V0W2_FRAME, { ...distort, rotation, fill: FILL }));
+      const where = `v0W2 ${label} rot${rotation}`;
+      assert.equal(decoded.ok, true, `${where}: ${decoded.reason || ''}`);
+      assert.equal(decoded.text, PAYLOAD, where);
+      assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0w2',
+        `${where} 이 남의 레이아웃으로 복호됐다: ` + decoded.hypothesis.cellSurfaceLayout);
+    }
+    for (const rotation of wantFail) {
+      const frame = distortImage(V0W2_FRAME, { ...distort, rotation, fill: FILL });
+      const decoded = decodeLab(frame);
+      const where = `v0W2 ${label} rot${rotation}`;
+      assert.equal(decoded.ok, false,
+        `${where} 이 초록이 됐다 — 약점이 사라졌으면 재측정하고 핀을 갱신하라`);
+      assert.equal(decoded.reason, 'frontend:no-grid-hypothesis', where + ' 실패 이유');
+      // 죽는 단계는 **로케이터가 아니다** — 포즈는 선다. 귀속을 함께 못 박는다.
+      const detected = detectCellSurfaceBlockShapes(toRelativeLuminance(frame));
+      assert.ok(detected.diagnostics.poseCount.v0w2 >= 1,
+        `${where} 에서 v0w2 포즈까지 죽었다 — 약점의 귀속이 바뀌었다`);
+      assert.equal(decoded.detail.pipelineCode, 'BODY_RS_FAILED', where + ' 실패 단계');
+    }
+  }
+});
+
+test('v0W2 교차 오수용 0 — 양방향 전수 (v0 · v0X · v0XQ · v0W · v0WQ · v0W2)', {
+  timeout: 900_000,
+}, () => {
+  // v0W ↔ v0W2 가 이 표의 핵심 칸이다 — 코어 반경·NE 블록·시드가 문자 그대로 같고,
+  // v0W2 의 SE 는 T·L 두 면에서 **v0X SE 와 같은 동심 사각**이라 v0X 축도 위험하다.
+  // 여기가 새면 세 레이아웃이 서로의 프레임을 읽어 버린다.
+  // v0XQ 행에만 복원 스위치를 깐다 (드랍 대조군 폐기 금지 — §13 과 같은 규약).
+  for (const [name, frame, wantLayout, extra] of [
+    ['v0', V0_FRAME, 'v0', {}],
+    ['v0x', V0X_FRAME, 'v0x', {}],
+    ['v0xq', V0XQ_FRAME, 'v0xq', RESTORE_DROPPED],
+    ['v0w', V0W_FRAME, 'v0w', {}],
+    ['v0wq', V0WQ_FRAME, 'v0wq', {}],
+    ['v0w2', V0W2_FRAME, 'v0w2', {}],
+  ]) {
+    for (const rotation of [0, 120, 240]) {
+      const decoded = decodeLab(distortImage(frame, { rotation, fill: FILL }), extra);
+      assert.equal(decoded.ok, true,
+        `${name} rot${rotation} 이 복호되지 않았다: ${decoded.reason || 'unknown'}`);
+      assert.equal(decoded.text, PAYLOAD, `${name} rot${rotation}`);
+      assert.equal(decoded.hypothesis.cellSurfaceLayout, wantLayout,
+        `${name} rot${rotation} 이 ${decoded.hypothesis.cellSurfaceLayout} 로 오수용됐다`);
+    }
+  }
+});
+
+test('v0W2 교차 — Type O · A 프레임에서 v0W2 shape 가 서지 않는다', {
+  timeout: 600_000,
+}, () => {
+  // cube 축 밖(hex 실루엣) — K3 중앙 자체가 없으므로 앵커드 쌍이 성립하지 않는다.
+  const oFrame = embed960(rasterize(
+    buildScene(encode(PAYLOAD, { version: 2, eccLevel: 'M' }), { palette: PALETTE, margin: 20 }),
+    { pixelsPerUnit: 12, supersample: 2 },
+  ));
+  const aFrame = embed960(rasterize(
+    buildScene(encodeA(PAYLOAD, { version: 1, eccLevel: 'M' }), { palette: PALETTE, margin: 20 }),
+    { pixelsPerUnit: 12, supersample: 2 },
+  ));
+  for (const [name, frame] of [['O', oFrame], ['A', aFrame]]) {
+    for (const rotation of [0, 120]) {
+      const luma = toRelativeLuminance(distortImage(frame, { rotation, fill: FILL }));
+      const detected = detectCellSurfaceBlockShapes(luma);
+      assert.ok(!detected.shapes.some((shape) => shape.blockLocator.layoutId === 'v0w2'),
+        `Type ${name} rot${rotation} 에 v0w2 shape 가 섰다`);
+      assert.equal(detected.diagnostics.poseCount.v0w2, 0,
+        `Type ${name} rot${rotation} 에 v0w2 포즈가 섰다`);
+    }
+  }
+});
+
+test('v0W2 패밀리 격리 대조군 — 끄면 v0w2 포즈 0, 켜면 자기 프레임에서 선다', {
+  timeout: 300_000,
+}, () => {
+  const luma = toRelativeLuminance(distortImage(V0W2_FRAME, { rotation: 0, fill: FILL }));
+  const on = detectCellSurfaceBlockShapes(luma);
+  assert.ok(on.diagnostics.poseCount.v0w2 >= 1,
+    'v0W2 프레임에서 v0w2 포즈가 0 이다: ' + JSON.stringify(on.diagnostics.poseCount));
+  const off = detectCellSurfaceBlockShapes(luma, {
+    calibration: { csBlockLocator: { v0w2Family: false } },
+  });
+  assert.equal(off.diagnostics.poseCount.v0w2, 0, '패밀리를 껐는데 v0w2 포즈가 섰다');
+  // 그리고 v0w 를 끄는 것과 **독립**이어야 한다 — 같은 (중앙, 코너) 쌍을 쓰지만
+  // 시딩 게이트 실패가 서로를 자르면 안 된다 (v0X ↔ v0W 에서 고친 결합).
+  const noV0w = detectCellSurfaceBlockShapes(luma, {
+    calibration: { csBlockLocator: { v0wFamily: false } },
+  });
+  assert.ok(noV0w.diagnostics.poseCount.v0w2 >= 1,
+    'v0w 를 껐더니 v0w2 까지 죽었다 — 두 패밀리가 한 게이트에 묶였다');
+  assert.equal(noV0w.diagnostics.poseCount.v0w, 0);
+});
+
+test('v0W2 편입 비침습성 — 기존 패밀리 poseCount 와 verified 가 on/off 로 동일', {
+  timeout: 900_000,
+}, () => {
+  // v0W2 는 기존 앵커드 순회 **안에** 산다 (v0xq 처럼 별도 순회가 아니다). 그래서
+  // 클러스터 검증 단계는 손대지 않았음을 verified 동일성으로 못 박고, 기존 패밀리
+  // poseCount 도 흔들리지 않는지 본다.
+  //
+  // ⚠ 이것은 «복호 결과가 안 바뀐다» 는 뜻이 **아니다** — v0W2 포즈가 셰이프 목록에
+  // 들어가면 하류가 더 나은 기하를 얻어 v0W 의 약점 2칸이 구제된다 (위 §11
+  // «v0W 약점 2칸의 귀속» 대조군이 그 사실을 따로 잰다). 여기서 재는 것은
+  // **로케이터 단계의 비침습성**이다.
+  for (const [name, frame] of [
+    ['v0x', V0X_FRAME], ['v0xq', V0XQ_FRAME], ['v0w', V0W_FRAME],
+    ['v0wq', V0WQ_FRAME], ['v0', V0_FRAME], ['v2r2', V2R2_FRAME], ['v1r2', V1R2_FRAME],
+  ]) {
+    const luma = toRelativeLuminance(distortImage(frame, { rotation: 0, fill: FILL }));
+    const on = detectCellSurfaceBlockShapes(luma);
+    const off = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { v0w2Family: false } },
+    });
+    assert.deepEqual(on.diagnostics.verified, off.diagnostics.verified,
+      name + ' verified 가 흔들렸다');
+    for (const family of ['v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0']) {
+      assert.equal(on.diagnostics.poseCount[family], off.diagnostics.poseCount[family],
+        `${name}: v0w2 on/off 로 ${family} poseCount 가 갈렸다`);
+    }
+    assert.equal(off.diagnostics.poseCount.v0w2, 0, `${name}: 끈 쪽에 v0w2 포즈가 있다`);
+  }
+});
+
+test('v0W2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동일 산출', {
+  timeout: 300_000,
+}, () => {
+  const luma = toRelativeLuminance(distortImage(V0W2_FRAME, { gamma: 0.7, fill: FILL }));
+  const first = detectCellSurfaceBlockShapes(luma);
+  const second = detectCellSurfaceBlockShapes(luma);
+  assert.deepEqual(first.diagnostics, second.diagnostics);
+  assert.deepEqual(
+    first.shapes.map((shape) => shape.center),
+    second.shapes.map((shape) => shape.center),
+  );
+});
+
+test('v0W2 시드 기하 — v0W 과 같은 코너 앵커(√279 · −141.1°)를 공유한다', () => {
+  // 이 값이 갈리면 «두 패밀리가 같은 쌍에서 시드된다» 는 §14 서두의 전제가 깨진다.
+  const v0w = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0w').corners[0].anchor;
+  const v0w2 = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0w2').corners[0].anchor;
+  assert.ok(Math.abs(v0w.x - v0w2.x) < 1e-9 && Math.abs(v0w.y - v0w2.y) < 1e-9,
+    'v0W2 코너 앵커가 v0W 와 다르다');
+  assert.ok(Math.abs(Math.hypot(v0w2.x, v0w2.y) - Math.sqrt(279)) < 1e-9,
+    'v0W2 코너 반경이 √279 가 아니다');
+  // 중앙 패치는 **다르다** — 3면 대칭화로 네 셀이 눕었기 때문이다. 그 차이가
+  // 두 패밀리를 refinePose 단계에서 가르는 축의 하나다.
+  const centreV0w = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0w').centre;
+  const centreV0w2 = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0w2').centre;
+  assert.equal(centreV0w.points.length, centreV0w2.points.length, '중앙 패치 점 수가 다르다');
+  assert.notDeepEqual(centreV0w2.points.map((p) => p.expected), centreV0w.points.map((p) => p.expected),
+    'v0W2 중앙 패치가 v0W 과 같다 — 3면 대칭화가 패치에 안 반영됐다');
+  // 그리고 서브앵커는 **더 두껍다** — SE 가 9점에서 36점이 됐다 (실기기 미검출 대책).
+  const subV0w = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0w').subPatches;
+  const subV0w2 = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0w2').subPatches;
+  const points = (list) => list.reduce((sum, patch) => sum + patch.points.length, 0);
+  assert.equal(points(subV0w2) - points(subV0w), 81,
+    'v0W2 서브앵커 점 수가 v0W 보다 81(=27셀×3면) 많지 않다');
+});
+
+test('v0W2 rot0 슬롯 위반 — §26 F6 지표를 v0W 과 나란히 잰다', {
+  timeout: 900_000,
+}, () => {
+  // **무엇을 재나**: 물리 회전 0° 프레임인데 가설이 120/240 슬롯을 주장하는 건수.
+  // v0W 프로그램 §26 F6 이 «실기기 실패의 정량 대리 지표» 로 지목한 값이다.
+  // 실측 (톤 4종 × rot0): v0W **3/4 위반** · v0W2 **1/4 위반**
+  // (v0W2 는 gamma 두 칸이 복호 자체를 못 해 분모가 2 다 — 그 2칸은 위 약점 핀 몫).
+  //
+  // ⚠ 이 테스트는 **개선을 주장하지 않는다** — 두 수를 나란히 고정할 뿐이다.
+  // 어느 쪽이 움직이면 실기기 판정의 대리 지표가 움직인 것이므로 재측정 신호다.
+  const TONE_ARMS = [
+    ['clean', {}], ['sCurve0.6', { sCurve: 0.6 }],
+    ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
+  ];
+  const count = (frame) => {
+    let violations = 0;
+    let decoded = 0;
+    for (const [, tone] of TONE_ARMS) {
+      const out = decodeLab(distortImage(frame, { ...tone, rotation: 0, fill: FILL }));
+      if (!out.ok) continue;
+      decoded += 1;
+      if (out.hypothesis.rotationDegrees !== 0) violations += 1;
+    }
+    return { violations, decoded };
+  };
+  assert.deepEqual(count(V0W_FRAME), { violations: 3, decoded: 4 },
+    'v0W 의 rot0 슬롯 위반 수가 잰 값과 다르다 — F6 지표를 재측정하라');
+  assert.deepEqual(count(V0W2_FRAME), { violations: 1, decoded: 2 },
+    'v0W2 의 rot0 슬롯 위반 수가 잰 값과 다르다 — F6 지표를 재측정하라');
+});
+
+test('v0W2 정본 블록은 로케이터 패치와 같은 정의를 쓴다 (블록 범위 공유)', () => {
+  // 정본(cellSurfaceFinal)과 검출기(cellsurface-block-detect)가 **다른 상수**로
+  // 같은 블록을 말하기 시작하면 조용히 어긋난다. 여기서 한 번 묶어 둔다.
+  const cells = locatorCellsCellSurfaceFinal(21, 'v0w2');
+  const nw = cells.filter((c) => c.i <= V0W2_BLOCKS.NW.iMax && c.j <= V0W2_BLOCKS.NW.jMax);
+  const ne = cells.filter((c) => c.i <= V0W2_BLOCKS.NE.iMax && c.j >= V0W2_BLOCKS.NE.jMin);
+  const se = cells.filter((c) => c.i >= V0W2_BLOCKS.SE.iMin && c.j >= V0W2_BLOCKS.SE.jMin);
+  assert.deepEqual([nw.length, ne.length, se.length], [25, 36, 36]);
+  assert.equal(nw.length + ne.length + se.length, cells.length, '분류 밖 셀이 있다');
+  // NE 블록은 v0W·v0WQ 와 **같은 범위**여야 한다 (같은 배열에서 유도되므로).
+  assert.deepEqual(V0W2_BLOCKS.NE, V0W_BLOCKS.NE);
+  assert.deepEqual(V0W2_BLOCKS.NE, V0WQ_BLOCKS.CORNER);
+  // 로케이터 패치도 같은 셀을 본다 (중앙3 + 코너3 + 마커3 = 서브앵커 9장).
+  const patches = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0w2');
+  assert.equal(patches.subPatches.length, 9, 'v0W2 서브앵커가 9장이 아니다 (중앙3+코너3+마커3)');
+  assert.equal(patches.corners.length, 3);
+  assert.equal(patches.centre.points.length, 75, 'v0W2 중앙 패치가 25셀×3면이 아니다');
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// §14. 교차 누수 봉합 + 중앙 불스아이 확증 (2026-08-17, 과업 3)
+//
+// 실기기 관찰: v0X·v0W 프레임에서 주 파인더 전부 검출 → **v0WQ 류 후보로 인식이
+// 새서 실패**. 합성 재현으로 확정한 기전 (`test/output/claude-v0w2-program.md` §21):
+//   ① 코너 동심 사각은 다섯 레이아웃이 **문자 그대로 같은 셀**을 쓴다 → 불스아이
+//      중앙 프레임에서도 120° 삼중점이 그대로 선다.
+//   ② 유일한 방벽이던 중앙 QR 상관 게이트(0.25)는 사실상 **면 게인 음영**만 재고
+//      있었다 — 진짜 0.9998 / 가짜 0.28\~0.42 로 문턱을 넘는다.
+//   ③ 같은 칸에서 엄격 코너 검증기는 1\~2개만 내고 느슨한 쪽은 3\~4개를 낸다.
+//      그래서 사각 링 게이트가 구조적으로 0 이 되어 **자기 패밀리 포즈가 아예 안 선다**.
+// 봉합은 문턱을 내리지 않는다 — 가짜만 떨어뜨리는 조건 둘 + 이미 있는 신호(중앙
+// 불스아이)를 인가에 쓰는 조립 하나다. 아래가 그 셋의 회귀다.
+// ─────────────────────────────────────────────────────────────────────────
+
+const SEAL_ALL_OFF = Object.freeze({
+  centreQrBullseyeVeto: false,
+  centreQrRequireFinderContrast: false,
+  centreBullseyeConfirmedPoses: false,
+});
+
+test('봉합 ① 중앙 불스아이 거부권 — 불스아이 중앙 프레임에서 v0wq 포즈가 사라진다', {
+  timeout: 900_000,
+}, () => {
+  // 대조군을 함께 잰다: 봉합 전에는 실제로 **섰다**. 안 그러면 이 자는 «항상 0» 을
+  // 재는 자가 된다 (직전 레인 §26 이 붙잡힌 함정).
+  let before = 0;
+  let after = 0;
+  let vetoed = 0;
+  for (const [name, frame] of [['v0x', V0X_FRAME], ['v0w', V0W_FRAME], ['v0w2', V0W2_FRAME]]) {
+    for (const tone of [{}, { gamma: 0.7 }, { sCurve: 0.6 }]) {
+      for (const rotation of [0, 120]) {
+        const luma = toRelativeLuminance(distortImage(frame, { ...tone, rotation, fill: FILL }));
+        const pre = detectCellSurfaceBlockShapes(luma, {
+          calibration: { csBlockLocator: SEAL_ALL_OFF },
+        });
+        const post = detectCellSurfaceBlockShapes(luma, {});
+        before += pre.diagnostics.poseCount.v0wq;
+        after += post.diagnostics.poseCount.v0wq;
+        vetoed += post.diagnostics.centerQr.v0wqBullseyeVetoed;
+        assert.equal(post.diagnostics.poseCount.v0wq, 0,
+          `${name} ${JSON.stringify(tone)} rot${rotation}: 봉합 후에도 v0wq 포즈가 남았다`);
+      }
+    }
+  }
+  assert.ok(before > 0,
+    '봉합 전에도 v0wq 포즈가 0 이었다 — 이 테스트가 «항상 0» 인 자를 재고 있다');
+  assert.equal(after, 0);
+  assert.ok(vetoed > 0, '거부권이 한 개도 안 걷었는데 포즈가 0 이다 — 자른 주체가 다르다');
+});
+
+test('봉합 ② QR 다움 판별 — 진짜 중앙 QR 과 불스아이 중앙을 정규화 대비가 가른다', {
+  timeout: 600_000,
+}, () => {
+  // 판별기 자체를 직접 잰다 (조립을 거치지 않는다 — 문턱의 근거가 이 수치다).
+  const patch = CS_BLOCK_LOCATOR_INTERNALS.patchesFor(21, 'v0wq').centre;
+  const scores = {};
+  for (const [name, frame] of [
+    ['v0wq', V0WQ_FRAME], ['v0w', V0W_FRAME], ['v0x', V0X_FRAME], ['v0w2', V0W2_FRAME],
+  ]) {
+    const luma = toRelativeLuminance(distortImage(frame, { rotation: 0, fill: FILL }));
+    const detected = detectCellSurfaceBlockShapes(luma, {});
+    const shape = detected.shapes.find((entry) => entry.blockLocator.family === name)
+      || detected.shapes[0];
+    assert.ok(shape, name + ' 프레임에 셰이프가 하나도 없다');
+    // 셰이프 정점 → 4점 DLT 로 그 포즈의 H 를 되돌린다 (조립과 같은 캐노니컬 공간).
+    const canonical = CORNER_UNIT_OFFSETS.slice(0, 4).map((corner) => ({
+      x: corner.x * 21, y: corner.y * 21,
+    }));
+    const H = estimateHomography4(canonical, shape.vertices.slice(0, 4));
+    assert.ok(H, name + ' H 복원 실패');
+    scores[name] = CS_BLOCK_LOCATOR_INTERNALS.centreQrFinderContrast(luma, H, patch, 0, 0);
+  }
+  assert.ok(scores.v0wq > 0.9,
+    `진짜 v0WQ 의 QR 다움이 낮다: ${scores.v0wq} — 문턱 0.6 의 여유가 사라졌다`);
+  for (const name of ['v0w', 'v0x', 'v0w2']) {
+    assert.ok(scores[name] < 0.5,
+      `${name}(불스아이 중앙)의 QR 다움이 높다: ${scores[name]} — 판별기가 무뎌졌다`);
+  }
+});
+
+test('봉합 ③ 중앙 불스아이 확증 — 사각 링 게이트가 구조적으로 0 이 되는 칸을 구제한다', {
+  timeout: 900_000,
+}, () => {
+  // 잰 자리: v0W **3톤 + 감마 0.7 + JPEG 45 + 노이즈 σ8** (실사진 근사 — 이 조합이
+  // 공유 하네스만으로 그 조건을 재현한다). 엄격 코너가 1\~2개라 사각 링 동반자가 0 이
+  // 되고 v0w 포즈가 아예 안 섰다 (`claude-v0w2-anchored.mjs`: 죽은 13칸 중 12칸이
+  // 이 단계에서 죽는다 — 거리·반경 스냅·패치 정합은 한 칸도 안 죽였다).
+  // 감마만으로는 재현되지 않는다 (그 팔은 6/4/6 포즈로 멀쩡하다) — 노이즈·압축이
+  // 엄격 검증기의 open/closed 분류를 무너뜨리는 것이 조건이다.
+  const v0w3 = embed960(renderFinal3Tone('v0w', 1, 15));
+  let rescuedCells = 0;
+  let deadBefore = 0;
+  for (const rotation of [0, 120, 240]) {
+    const distort = {
+      gamma: 0.7, jpegQuality: 45, noise: { sigma: 8, seed: 7 }, rotation, fill: FILL,
+    };
+    const luma = toRelativeLuminance(distortImage(v0w3, distort));
+    const pre = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { centreBullseyeConfirmedPoses: false } },
+    });
+    const post = detectCellSurfaceBlockShapes(luma, {});
+    if (pre.diagnostics.poseCount.v0w === 0) {
+      deadBefore += 1;
+      if (post.diagnostics.poseCount.v0w > 0) rescuedCells += 1;
+    }
+    // 확증 경로가 선 칸은 진단에 근거를 남긴다.
+    if (post.diagnostics.bullseyeConfirmed.poses > 0) {
+      assert.ok(post.diagnostics.bullseyeConfirmed.triples > 0,
+        `rot${rotation}: 확증 포즈가 있는데 확증 삼중점이 0 이다`);
+    }
+    // 그리고 복호가 실제로 v0w 로 간다 (포즈가 서는 것과 읽히는 것은 다른 문제다).
+    const decoded = decodeLab(distortImage(v0w3, distort));
+    assert.equal(decoded.ok, true,
+      `v0W 3톤 감마 rot${rotation} 복호 실패: ${decoded.reason || ''}`);
+    assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0w',
+      `v0W 3톤 감마 rot${rotation} 이 ${decoded.hypothesis.cellSurfaceLayout} 로 갔다`);
+  }
+  assert.ok(deadBefore > 0,
+    '확증 전에도 v0w 포즈가 살아 있었다 — 이 테스트가 구제 대상이 없는 자를 재고 있다');
+  assert.equal(rescuedCells, deadBefore,
+    `확증 조립이 구제하지 못한 칸이 있다: ${deadBefore - rescuedCells}/${deadBefore}`);
+});
+
+test('봉합 무회귀 — v0WQ·v0WY 프레임의 복호가 봉합 on/off 로 한 자리도 안 바뀐다', {
+  timeout: 900_000,
+}, () => {
+  // 봉합은 «가짜를 더 잘 거른다» 이지 «진짜를 덜 받는다» 가 아니다. 진짜 중앙 QR
+  // 프레임에서 결과가 한 칸이라도 움직이면 그것은 봉합이 아니라 손실이다.
+  for (const [name, frame] of [['v0wq', V0WQ_FRAME], ['v0w2', V0W2_FRAME], ['v0x', V0X_FRAME]]) {
+    for (const tone of [{}, { gamma: 0.7 }, { gamma: 1.4 }, { sCurve: 0.6 }]) {
+      for (const rotation of [0, 120, 240]) {
+        const distort = { ...tone, rotation, fill: FILL };
+        const pre = decodeLab(distortImage(frame, distort), {
+          calibration: { csBlockLocator: SEAL_ALL_OFF },
+        });
+        const post = decodeLab(distortImage(frame, distort));
+        const label = `${name} ${JSON.stringify(tone)} rot${rotation}`;
+        if (pre.ok) {
+          assert.equal(post.ok, true, `${label}: 봉합이 복호를 죽였다 (${post.reason || ''})`);
+          assert.equal(post.text, pre.text, `${label}: 봉합이 payload 를 바꿨다`);
+          assert.equal(post.hypothesis.cellSurfaceLayout, pre.hypothesis.cellSurfaceLayout,
+            `${label}: 봉합이 수용 레이아웃을 바꿨다`);
+        }
+        // pre 가 실패한 칸은 «봉합이 고쳤을» 수 있다 — 그쪽은 손실이 아니므로 열어 둔다.
+      }
+    }
+  }
 });

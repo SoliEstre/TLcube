@@ -54,7 +54,7 @@ function shapeHitsDisc(shape, disc) {
   return false;
 }
 
-test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v0/v2r2/v0x/v0xq/v0w 이고 기본은 off', () => {
+test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v0/v2r2/v0x/v0xq/v0w/v0wq/v0w2 이고 기본은 off', () => {
   // v0 · v2r2 · v1r2 · v0x · v0xq · v0w = 최종 라인업 (cellSurfaceFinal.js). v1/v2 는
   // 배포 출력물 법의학용으로 식별자만 유지한다.
   // 의도적 갱신 (2026-08-16): v0X 편입으로 'cell-surface-v0x' 가 목록 끝에 붙었다.
@@ -64,10 +64,14 @@ test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v
   // 붙었다. **'cell-surface-v0wy' 는 없다** — v0WY 는 로케이터가 아니라 QR 위치
   // (`qrPosition: 'plane'`) 이고, 와이어는 v0W 그대로다. 프로파일을 만들면 디코더가
   // 절대 돌려줄 수 없는 값이 목록에 남는다.
+  // **의도적 갱신 «v0W2 편입» (2026-08-17)**: 'cell-surface-v0w2' 가 뒤에 붙었다
+  // (v0W 파생 ② — SE 부 파인더 6×6 확대 + NW·NE 3면 대칭 통일). 근거 실측은
+  // `test/output/lanes/claude-v0w2-derive.mjs`(정본 유도) ·
+  // `claude-v0w2-render.mjs`(래스터 291면 불일치 0) · `claude-v0w2-probe.mjs`.
   assert.deepEqual([...LOCATOR_PROFILES_Y], [
     'off', 'hex-frame-v1', 'cell-surface-v1', 'cell-surface-v1r2', 'cell-surface-v2',
     'cell-surface-v0', 'cell-surface-v2r2', 'cell-surface-v0x', 'cell-surface-v0xq',
-    'cell-surface-v0w', 'cell-surface-v0wq',
+    'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2',
   ]);
   assert.ok(!LOCATOR_PROFILES_Y.includes('cell-surface-v0wy'),
     'v0WY 는 로케이터 프로파일이 아니다 (QR 위치다)');

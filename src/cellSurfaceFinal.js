@@ -109,6 +109,25 @@
  *     먹는다. 그래서 v0WY 는 **렌더 선택**이다 — `qrPosition: 'plane'`
  *     (`sceneY.js` §renderOuterFaceQr). 브리프의 «데이터 무손실» 이 곧 이 결론이다.
  *
+ * **v0W 파생 ③ — v0W2 (2026-08-17, 운영자 신설 설계)** — 실기기 판정 라운드에서
+ * v0W 가 진 두 자리를 정면으로 고친 물건이다. QR 채널이 아니라 **파인더 자체의 개정**
+ * 이라 위 두 파생과 성격이 다르다.
+ *
+ *   · **v0W2** (`'v0w2'`) — ① SE 부 파인더 3×3 → **6×6**(실기기 미검출 해소)
+ *     ② NW·NE 를 **3면 완전 대칭**으로 통일해 검출 전용으로 돌리고, 120° 위상은
+ *     SE 대형 마커 하나가 전담. 그래서 면 비대칭 셀 22개가 **전부 SE 안**에 있다
+ *     (v0W 은 10개가 NW 4 + SE 6 으로 흩어져 있었다).
+ *     정본은 또 유도다 — NW = `K3_CENTRE_CELLS` 의 **3면 다수결 대칭화**(4셀만 눕는다) ·
+ *     NE = `V0XQ_CORNER_CELLS` **같은 배열** · SE 의 T·L = **v0X SE 톤(같은 좌표)**.
+ *     손 표는 **SE 의 R 면 36값 하나뿐**이다 (§V0W2_MARKER_R).
+ *     회계: 441 − 97 − 12 − 18 = **314** · S=104 · 잔여 2. 슬롯 없음.
+ *     설계가 실제로 들었는지의 지표는 **방향 margin** 이다 — 0.0952 → **0.1512**
+ *     (+58.8 %, 실측 44/291 면). 재검산: `test/output/lanes/claude-v0w2-derive.mjs`
+ *     (팩 → 계수 → 정규화 → 유도 대조) · `claude-v0w2-render.mjs`(실제 래스터 291면
+ *     분류, 불일치 0) · `claude-v0w2-probe.mjs`(margin·교차·슬롯 위반).
+ *     팩의 (0,4).L 미도색은 v0W·v0X 와 **같은 편집기 함정**이고, 나머지 두 면이 (2,2)
+ *     라 다수 톤 정규화가 결정적으로 2 를 준다 — mid 면 0.
+ *
  * 런타임 의존성 0 · 순수 ESM (node: API 금지, Math.random/Date 금지).
  */
 
@@ -184,10 +203,22 @@ export const CELL_SURFACE_FINAL_V0W = 'v0w';
 /** 표시 이름은 «v0WQ» — v0W 파생, 중앙 QR 슬롯 (2026-08-16). */
 export const CELL_SURFACE_FINAL_V0WQ = 'v0wq';
 /**
+ * 표시 이름은 «v0W2» — v0W 파생 ② (운영자 신설 2026-08-17, 실기기 판정 라운드).
+ * v0W 의 실기기 약점 둘을 정면으로 고친다 — ① SE 부 파인더 3×3 → **6×6** (실기기
+ * 미검출 해소) ② NW·NE 를 **3면 완전 대칭**으로 통일해 검출 전용으로 돌리고 위상
+ * 판별은 SE 대형 마커 하나가 전담한다 (§V0W2_CELLS).
+ */
+export const CELL_SURFACE_FINAL_V0W2 = 'v0w2';
+/**
  * 선언 순서가 곧 «n 별 후보 순서» 다 (`finalLayoutIdsForN`). v0W·v0WQ 를 **맨 뒤**에
  * 둔다 — n=21 의 기본은 v0X 그대로이고, 둘은 세·네 번째 후보로 병행 채점된다.
  * 기본을 바꾸는 것은 조건부 드랍(«v0W > v0X» · «v0WQ > v0XQ» 실기기 판정)의 몫이지
  * 편입의 몫이 아니다.
+ *
+ * **2026-08-17 실기기 판정** — 순위 v0WQ ≫ v0XQ > v0X ≈ v0W. 「v0WQ > v0XQ」 는
+ * 성립해 v0xq 가 드랍됐고(§CELL_SURFACE_FINAL_DROPPED_IDS), 「v0W > v0X」 는
+ * **성립하지 않아**(≈) v0X 가 남는다. 이 배열은 **와이어 선언**이라 드랍이 여기서
+ * 항목을 빼지 않는다 — 빼는 것은 `CELL_SURFACE_FINAL_ACTIVE_IDS` 쪽이다.
  *
  * ⚠ **v0WY 는 여기 없다** — 셀 집합이 v0W 와 비트 동일한 «렌더 선택» 이라 와이어 id 가
  * 아니다 (모듈 헤더 §v0W 파생 2종). id 를 만들면 교차 오수용이 100 % 로 설계된다.
@@ -200,6 +231,7 @@ export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0XQ,
   CELL_SURFACE_FINAL_V0W,
   CELL_SURFACE_FINAL_V0WQ,
+  CELL_SURFACE_FINAL_V0W2,
 ]);
 
 export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
@@ -210,6 +242,7 @@ export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
   [CELL_SURFACE_FINAL_V0XQ]: 'cell-surface-v0xq',
   [CELL_SURFACE_FINAL_V0W]: 'cell-surface-v0w',
   [CELL_SURFACE_FINAL_V0WQ]: 'cell-surface-v0wq',
+  [CELL_SURFACE_FINAL_V0W2]: 'cell-surface-v0w2',
 });
 
 /** 신세대 셀 표면 formatIndex — 한 쌍뿐. 세 레이아웃이 같이 쓴다(신설 금지). */
@@ -224,6 +257,7 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
   [CELL_SURFACE_FINAL_V0XQ]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0W]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0WQ]: Object.freeze([21]),
+  [CELL_SURFACE_FINAL_V0W2]: Object.freeze([21]),
 });
 
 /**
@@ -247,10 +281,38 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
  * **n=25 (Y2) 는 공백이 된다** — 그 슬롯을 채우던 것이 v2r2@25 뿐이었다.
  * `finalLayoutIdsForN(25) === []` 이고 `finalLayoutIdForN(25) === null` 이다.
  * 와이어 질의는 `hasFinalLayoutWireForN(25) === true` 로 계속 참이다.
+ *
+ * ── **v0XQ 드랍 (운영자 실기기 확정 2026-08-17)** ────────────────────────────
+ *
+ * v0W 편입 때 걸어 둔 **조건부 드랍 규칙**(«v0WQ > v0XQ» 이면 v0XQ 를 내린다)이
+ * 실기기 판정으로 성립했다 — 관측 인식 순위 **v0WQ ≫ v0XQ > v0X ≈ v0W**.
+ * 두 레이아웃은 «중앙 QR 슬롯 × 3코너 동심 사각» 이라는 같은 문법의 대조 실험이고
+ * (위상 마커 블록 하나만 다르다 — §V0WQ_CELLS), 이긴 쪽이 정해졌으므로 진 쪽을
+ * 검출 라인업·생성기 카드·스캐너 lab 패널에서 내린다. **차단이지 삭제가 아니다** —
+ * 위 v2r2·v1r2 와 **같은 규약**이다.
+ *
+ * 내리지 **않는** 것 (v0xq 에만 있는 추가 항목):
+ *   · `V0XQ_CORNER_CELLS` — v0W · v0WQ 의 NE 동심 사각이 **이 배열 자체**다
+ *     (전사 사본이 아니라 같은 참조 — 자기검증 ①-d/①-e 가 참조 동일성으로 못 박는다).
+ *     드랍은 «라인업에서 내린다» 이지 «정본을 지운다» 가 아니므로 이 배열은 물론이고
+ *     그 원천인 `V0X_CELLS`·`V0X_BLOCKS`·`V0XQ_BLOCKS` 도 한 줄도 안 건드린다.
+ *   · `CENTER_QR_SLOT_CELLS`(=9) · `centerQrSlotCellsFor` — v0xq 와이어 회계의 근거다.
+ *   · `CELL_SURFACE_FINAL_LEGACY_IDS` 는 애초에 v0xq 를 안 갖는다 (포맷 v2 이후 신설).
+ *
+ * **n=21 의 기본은 v0X 그대로다.** 드랍은 후보 목록에서 한 항목을 빼는 것이지 순위를
+ * 다시 매기는 것이 아니다 — `finalLayoutIdsForN(21)` 이 `[v0x, v0xq, v0w, v0wq]` 에서
+ * `[v0x, v0w, v0wq]` 로 줄고 `finalLayoutIdForN(21)` 은 `v0x` 로 불변이다.
+ *
+ * ⚠ **v0WQ 는 v0XQ 의 코너 삼중점 경로를 공유한다.** 로케이터에서 v0xq 패밀리를
+ * 내려도 v0wq 검출은 온전해야 한다 — 코너 수집 게이트가
+ * `(cfg.v0xqFamily !== false || cfg.v0wqFamily !== false)` 라 한쪽만 꺼도 돈다
+ * (`cellsurface-block-detect.js` §v0xqCorners). 그 성질을 회귀로 고정한 것이
+ * `cellSurface-block-locator.test.js` §v0XQ 드랍이다.
  */
 export const CELL_SURFACE_FINAL_DROPPED_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V2R2,
   CELL_SURFACE_FINAL_V1R2,
+  CELL_SURFACE_FINAL_V0XQ,
 ]);
 
 /** 이 레이아웃이 검출 라인업·생성기 카드에서 내려갔는가 (와이어는 살아 있다). */
@@ -292,7 +354,8 @@ export function wirePreferredFinalLayoutIdForN(n) {
  * n → 그 n 에서 **라인업에 살아 있는** 레이아웃 후보 전부 (기본이 맨 앞).
  * 라인업 밖 n 은 []. 디코더 CS 평가의 병행 채점 입력이다 — 수용은 기존 게이트가 판정한다.
  *
- * 드랍 후: n=13 → [v0] · n=21 → [v0x, v0xq] · n=25 → **[]**.
+ * 드랍 후(2026-08-17 v0XQ 포함): n=13 → [v0] · n=21 → **[v0x, v0w, v0wq]** ·
+ * n=25 → **[]**.
  */
 export function finalLayoutIdsForN(n) {
   const ids = [];
@@ -370,6 +433,10 @@ const DECLARED_DATA = Object.freeze({
     // (`claude-v0wq-probe.mjs`) **인코더 정합 ⑤ 가 9 를 거부해** 8 로 내려앉았다
     // (§CENTER_QR_SLOT_CELLS_V0WQ).
     [CELL_SURFACE_FINAL_V0WQ]: Object.freeze({ 21: 302 }),
+    // v0w2: 441 − 97(파인더 25+36+36) − 12 − 18 = 314. 편집기 팩 counts.data 와 같은
+    // 값이지만 이 값의 근거는 팩이 아니라 autoplace 재산출이다
+    // (`test/output/lanes/claude-v0w2-derive.mjs` §⑥ · 자기검증 ①-f).
+    [CELL_SURFACE_FINAL_V0W2]: Object.freeze({ 21: 314 }),
   }),
   // 레거시 세대 (포맷 v1 · 15셀) — **판독 전용**. 개정 전 발행 프레임의 회계다.
   [CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY]: Object.freeze({
@@ -844,6 +911,108 @@ export const V0WQ_BLOCKS = Object.freeze({
   }),
 });
 
+/**
+ * ── v0W2 (v0W 파생 ② — 운영자 신설 2026-08-17, 실기기 판정 라운드) ──────────
+ *
+ * **왜 생겼나.** 실기기 판정에서 v0W 는 ① SE **부 파인더 3×3 이 아예 안 잡히고**
+ * ② 주 파인더(중앙 + NE 동심 사각)가 다 잡힌 프레임에서도 인식이 다른 후보로
+ * 새서 실패했다. v0W2 는 그 둘을 정면으로 고친 설계다:
+ *
+ *   ① **SE 3×3 → 6×6** — 부 파인더가 v0W 의 9셀에서 36셀이 된다. 면당 36점이라
+ *      Pearson 서브앵커로도, 독립 블록 검출로도 훨씬 두껍다.
+ *   ② **NW·NE 를 3면 완전 대칭으로 통일** — v0W 의 NW(K3 불스아이)는 4셀이 면마다
+ *      달라서 «검출 블록인데 위상도 조금 안다» 는 어중간한 물건이었다. v0W2 는 그
+ *      4셀을 3면 다수결로 눕혀 **NW·NE 를 순수 검출 전용**으로 만들고, 120° 위상
+ *      판별을 **SE 대형 마커 하나에 몰아 준다**. 그래서 v0W2 의 면 비대칭 셀은
+ *      **22개가 전부 SE 안**에 있다 (v0W 은 10개가 NW 4 + SE 6 으로 흩어져 있었다).
+ *
+ * | 블록 | 셀 | 출처 | 3면 |
+ * |---|---|---|---|
+ * | NW (0..4)²         | 25 | `K3_CENTRE_CELLS` 의 **3면 다수결 대칭화** (4셀만 바뀐다) | 동일 |
+ * | NE (0..5)×(15..20) | 36 | `V0XQ_CORNER_CELLS` **같은 배열** (v0X SE 를 (i−15,j) 이동) | 동일 |
+ * | SE (15..20)²       | 36 | T·L = **v0X SE 동심 사각 톤 (같은 좌표)** · R = 독자 무늬 | **비대칭 22** |
+ *
+ * 즉 손 좌표표는 **SE 의 R 면 36값 하나뿐**이다 (`V0W2_MARKER_R`). 나머지 61셀 ·
+ * 그리고 SE 의 T·L 면까지 전부 기존 정본에서 유도된다. 재검산은
+ * `test/output/lanes/claude-v0w2-derive.mjs` (팩 → 계수 → 정규화 → 유도 대조)와
+ * `claude-v0w2-render.mjs` (실제 래스터 → 면별 휘도 분류 → 불일치 0).
+ *
+ * **로케이터 관점** — NE 동심 사각이 v0W·v0WQ 와 같은 배열·같은 자리라 코어 반경도
+ * √279 로 같다. 중앙에 K3 불스아이가 있으므로 v0W 와 **같은 앵커드(중앙×원거리)
+ * 경로**를 탄다 (`cellsurface-block-detect.js` §v0w2). 세 패밀리를 가르는 것은
+ * 거리가 아니라 패치 Pearson 과 손대지 않은 CS 게이트다.
+ *
+ * ⚠ **SE 블록의 T·L 면은 v0X SE 와 좌표·톤이 완전히 같다.** 그래서 v0W2 프레임은
+ * v0X 의 «먼 꼭짓점 동심 사각»(r=18.0) 을 T·L 두 면에서 그대로 보여 준다 —
+ * v0X 패밀리가 v0W2 프레임에서 시드되는 것은 **정상**이고, 가르는 것은 하류 CS
+ * 게이트다. 교차 오수용 0 은 거기서 나온다 (`cellSurface-block-locator.test.js`).
+ *
+ * 회계: 441 − 97 − 12 − 18 = **314** (v0W 341 보다 27 적다 — SE 가 27셀 커진 값 그대로).
+ */
+const V0W2_N = 21;
+
+/** 세 면 중 다수 톤. 톤이 0|2 뿐이라 «둘 이상» 은 항상 존재한다 (mid 를 만들지 않는다). */
+function majorityTone(T, L, R) {
+  if (T === L || T === R) return T;
+  if (L === R) return L;
+  throw new Error('세 면이 전부 다르다 — 다수 톤이 없다: ' + [T, L, R].join(','));
+}
+
+/**
+ * K3 불스아이 중앙의 **3면 다수결 대칭화**. v0W 의 NW 는 (1,3)·(2,3)·(3,1)·(3,2)
+ * 네 셀이 면마다 달랐다 — v0W2 는 그 4셀을 다수 톤(전부 0)으로 눕혀 NW 를 순수
+ * 검출 블록으로 만든다. 나머지 21셀은 원본과 **바이트 동일**하다.
+ */
+const K3_CENTRE_SYMMETRIC_CELLS = Object.freeze(K3_CENTRE_CELLS.map(([i, j, T, L, R]) => {
+  const tone = majorityTone(T, L, R);
+  return Object.freeze([i, j, tone, tone, tone]);
+}));
+
+/**
+ * v0W2 SE 대형 마커의 **R 면 36값** — 이 레이아웃의 유일한 손 표다 (운영자 도안).
+ * 행 i = 15..20 · 열 j = 15..20. T·L 은 v0X SE 동심 사각(같은 좌표)에서 유도하므로
+ * 여기 없다. R 이 T·L 과 다른 셀이 22개이고, 그 22개가 v0W2 의 **120° 위상 판별력
+ * 전부**다.
+ *
+ * 무늬 자체는 «밝은 6×6 − 어두운 3×3 창(16..18)² − 먼 코너 계단
+ * {(19,20),(20,19),(20,20)}» 이다. 동심 사각(T·L)과 링 위상이 어긋나 있어야 위상
+ * margin 이 서는데, 그 어긋남이 이 표의 전부다.
+ */
+const V0W2_MARKER_R = Object.freeze([
+  Object.freeze([2, 2, 2, 2, 2, 2]),
+  Object.freeze([2, 0, 0, 0, 2, 2]),
+  Object.freeze([2, 0, 0, 0, 2, 2]),
+  Object.freeze([2, 0, 0, 0, 2, 2]),
+  Object.freeze([2, 2, 2, 2, 2, 0]),
+  Object.freeze([2, 2, 2, 2, 0, 0]),
+]);
+
+/** v0W2 SE 대형 마커 — T·L 은 v0X SE 톤(같은 좌표), R 은 위 표. */
+const V0W2_MARKER_CELLS = Object.freeze(V0X_CELLS
+  .filter(([i, j]) => i >= V0X_BLOCKS.SE.iMin && j >= V0X_BLOCKS.SE.jMin)
+  .map(([i, j, T, L, R]) => {
+    if (!(T === L && L === R)) {
+      throw new Error('v0W2 마커 유도 실패 — v0X SE (' + i + ',' + j + ') 이 3면 동일이 아니다');
+    }
+    return Object.freeze([i, j, T, T, V0W2_MARKER_R[i - V0X_BLOCKS.SE.iMin][j - V0X_BLOCKS.SE.jMin]]);
+  }));
+
+const V0W2_CELLS = Object.freeze([
+  ...K3_CENTRE_SYMMETRIC_CELLS,
+  ...V0XQ_CORNER_CELLS,
+  ...V0W2_MARKER_CELLS,
+]);
+
+/** v0W2 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
+export const V0W2_BLOCKS = Object.freeze({
+  /** K3 불스아이 중앙 (NW 사분면) — 3면 대칭화본. */
+  NW: Object.freeze({ iMax: V1R2_BLOCKS.NW.iMax, jMax: V1R2_BLOCKS.NW.jMax }),
+  /** 3면 동일 동심 사각 (NE 사분면) — v0W·v0WQ 와 같은 블록. */
+  NE: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
+  /** 대형 위상 마커 (SE 사분면) — v0X SE 와 같은 자리의 6×6. */
+  SE: Object.freeze({ iMin: V0X_BLOCKS.SE.iMin, jMin: V0X_BLOCKS.SE.jMin }),
+});
+
 function cellKey(i, j) {
   return i + ',' + j;
 }
@@ -975,6 +1144,7 @@ function canonicalRowsFor(id, n) {
   if (id === CELL_SURFACE_FINAL_V0XQ) return V0XQ_CELLS;
   if (id === CELL_SURFACE_FINAL_V0W) return V0W_CELLS;
   if (id === CELL_SURFACE_FINAL_V0WQ) return V0WQ_CELLS;
+  if (id === CELL_SURFACE_FINAL_V0W2) return V0W2_CELLS;
   return v2r2CellsForN(n);
 }
 
@@ -1584,6 +1754,94 @@ export function capacityForCellSurfaceFinal(
     }
   }
 
+  // ①-f v0W2 정본 — 97셀 (K3 대칭 중앙 25 + 동심 사각 36 + 대형 마커 36) · mid 0 · 슬롯 0.
+  //
+  // v0W2 도 «새 무늬» 가 아니다 — 손 표는 SE 의 **R 면 36값 하나뿐**이고 나머지는
+  // 전부 유도다. 여기서 재는 것은 ⓐ 참조/유도의 무결성 ⓑ 설계 의도 두 개
+  // («NW·NE 는 검출 전용 = 3면 대칭» · «위상 비대칭은 전부 SE 안») 이다.
+  if (V0W2_CELLS.length !== 97) {
+    throw new Error('v0W2 정본이 97셀이 아니다: ' + V0W2_CELLS.length);
+  }
+  {
+    // 중앙 25 = K3 의 3면 다수결 대칭화. 좌표는 원본과 같고, 톤이 갈리는 셀은
+    // 정확히 «면마다 달랐던» 셀뿐이며 그 값은 다수 톤이다.
+    if (K3_CENTRE_SYMMETRIC_CELLS.length !== 25) {
+      throw new Error('v0W2 중앙이 25셀이 아니다: ' + K3_CENTRE_SYMMETRIC_CELLS.length);
+    }
+    let flattened = 0;
+    for (let index = 0; index < 25; index += 1) {
+      const [i, j, T, L, R] = K3_CENTRE_CELLS[index];
+      const [i2, j2, T2, L2, R2] = K3_CENTRE_SYMMETRIC_CELLS[index];
+      if (i !== i2 || j !== j2) throw new Error('v0W2 중앙 좌표가 K3 와 다르다: ' + index);
+      if (!(T2 === L2 && L2 === R2)) {
+        throw new Error('v0W2 중앙 (' + i + ',' + j + ') 이 3면 동일이 아니다');
+      }
+      if (T2 !== majorityTone(T, L, R)) {
+        throw new Error('v0W2 중앙 (' + i + ',' + j + ') 이 다수 톤이 아니다');
+      }
+      if (!(T === L && L === R)) flattened += 1;
+    }
+    if (flattened !== 4) {
+      throw new Error('v0W2 중앙 대칭화가 4셀이 아니다 (K3 비대칭 셀 수): ' + flattened);
+    }
+    // 동심 사각 36 = v0xq CORNER **같은 배열** (v0W·v0WQ 와 공유하는 그 배열).
+    if (V0W2_CELLS.slice(25, 61).some((row, index) => row !== V0XQ_CORNER_CELLS[index])) {
+      throw new Error('v0W2 동심 사각이 v0xq CORNER 공유 배열이 아니다');
+    }
+    // 대형 마커 36 — 좌표·T·L 은 v0X SE 에서 유도, R 은 손 표.
+    const v0xSe = V0X_CELLS.filter(([i, j]) =>
+      i >= V0X_BLOCKS.SE.iMin && j >= V0X_BLOCKS.SE.jMin);
+    if (v0xSe.length !== 36) throw new Error('v0X SE 가 36셀이 아니다: ' + v0xSe.length);
+    if (V0W2_MARKER_CELLS.length !== 36) {
+      throw new Error('v0W2 대형 마커가 36셀이 아니다: ' + V0W2_MARKER_CELLS.length);
+    }
+    let asymmetric = 0;
+    for (let index = 0; index < 36; index += 1) {
+      const [i, j, T] = v0xSe[index];
+      const [i2, j2, T2, L2, R2] = V0W2_MARKER_CELLS[index];
+      if (i !== i2 || j !== j2) throw new Error('v0W2 마커 좌표가 v0X SE 와 다르다: ' + index);
+      if (T2 !== T || L2 !== T) {
+        throw new Error('v0W2 마커 (' + i + ',' + j + ') 의 T·L 이 v0X SE 톤이 아니다');
+      }
+      if (R2 !== 0 && R2 !== 2) {
+        throw new Error('v0W2 마커 (' + i + ',' + j + ') 의 R 이 0|2 가 아니다: ' + R2);
+      }
+      if (R2 !== T2) asymmetric += 1;
+    }
+    // 설계 의도 ② — 면 비대칭은 **전부 SE 안**이고, v0W(10) 보다 두껍다.
+    if (asymmetric !== 22) {
+      throw new Error('v0W2 마커의 면 비대칭 셀이 22가 아니다: ' + asymmetric);
+    }
+    // 블록 분할 25/36/36 — 세 블록 밖 셀 0, 겹침 0.
+    const counts = { NW: 0, NE: 0, SE: 0 };
+    let asymOutsideSe = 0;
+    for (const [i, j, T, L, R] of V0W2_CELLS) {
+      const homes = [];
+      if (i <= V0W2_BLOCKS.NW.iMax && j <= V0W2_BLOCKS.NW.jMax) homes.push('NW');
+      if (i <= V0W2_BLOCKS.NE.iMax && j >= V0W2_BLOCKS.NE.jMin) homes.push('NE');
+      if (i >= V0W2_BLOCKS.SE.iMin && j >= V0W2_BLOCKS.SE.jMin) homes.push('SE');
+      if (homes.length !== 1) {
+        throw new Error('v0W2 셀 (' + i + ',' + j + ') 의 블록 소속이 ' + homes.length + '개다');
+      }
+      counts[homes[0]] += 1;
+      if (T === 1 || L === 1 || R === 1) {
+        throw new Error('v0W2 정본에 mid 면이 있다: (' + i + ',' + j + ')');
+      }
+      if (!(T === L && L === R) && homes[0] !== 'SE') asymOutsideSe += 1;
+    }
+    if (counts.NW !== 25 || counts.NE !== 36 || counts.SE !== 36) {
+      throw new Error('v0W2 블록 분할이 25/36/36 이 아니다: '
+        + [counts.NW, counts.NE, counts.SE].join('/'));
+    }
+    // 설계 의도 ① — NW·NE 는 **검출 전용**이다 (면 비대칭 0).
+    if (asymOutsideSe !== 0) {
+      throw new Error('v0W2 의 SE 밖에 면 비대칭 셀이 있다: ' + asymOutsideSe);
+    }
+    if (slotCellsFor(CELL_SURFACE_FINAL_V0W2).length !== 0) {
+      throw new Error('v0W2 에 중앙 QR 슬롯이 생겼다 — v0xq · v0wq 전용이다');
+    }
+  }
+
   // ② formatIndex 쌍 불변식 + cube 축 기사용 슬롯 전수 대조 (겹치면 로드 시 throw).
   if (CELL_SURFACE_FINAL_FORMAT_INDEX[3] !== CELL_SURFACE_FINAL_FORMAT_INDEX[2] + 2) {
     throw new Error('신세대 셀 표면 3톤 formatIndex 는 2톤 + 2 이어야 한다');
@@ -1622,6 +1880,7 @@ export function capacityForCellSurfaceFinal(
     [CELL_SURFACE_FINAL_V0XQ, V0XQ_CELLS],
     [CELL_SURFACE_FINAL_V0W, V0W_CELLS],
     [CELL_SURFACE_FINAL_V0WQ, V0WQ_CELLS],
+    [CELL_SURFACE_FINAL_V0W2, V0W2_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_FAR_BASE_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_CENTER_CELLS],
   ]) {
@@ -1653,6 +1912,8 @@ export function capacityForCellSurfaceFinal(
     'v0w@21': { symbols: 113, residual: 2, locator: 70, legacy: null },
     //   v0wq@21 441 − 45 − 64(슬롯 8²) − 12 − 18 = 302 · S=100 · 잔여 2 (레거시 없음)
     'v0wq@21': { symbols: 100, residual: 2, locator: 45, legacy: null },
+    //   v0w2@21 441 − 97 − 12 − 18 = 314 · S=104 · 잔여 2 (레거시 없음 — 신설)
+    'v0w2@21': { symbols: 104, residual: 2, locator: 97, legacy: null },
   };
   for (const [key, want] of Object.entries(expected)) {
     const [id, raw] = key.split('@');

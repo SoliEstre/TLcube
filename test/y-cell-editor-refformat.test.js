@@ -96,11 +96,18 @@ function locatorCardOrder(html) {
 // 순서는 `CELL_SURFACE_FINAL_IDS` 의 선언 순서와 같다 (기본은 여전히 v0X).
 // **의도적 갱신 «v0W 파생 2종 편입» (2026-08-16)** — v0WQ 카드가 v0W 뒤에 붙었다.
 // v0WY 카드는 **여기 없다**: QR 위치 카드 쪽('plane')이 그 자리다.
+// **의도적 갱신 «v0XQ 드랍» (운영자 실기기 확정 2026-08-17)** — 조건부 드랍 규칙
+// «v0WQ > v0XQ» 가 성립해(순위 v0WQ ≫ v0XQ > v0X ≈ v0W) v0XQ 카드를 내렸다.
+// v1r2·v2r2 와 같은 «카드만 내림» 이다 — 사전 키(g604/g947)는 3언어 모두 남아 있고
+// 와이어·정본·판독은 그대로다 (cellSurfaceFinal.js §CELL_SURFACE_FINAL_DROPPED_IDS).
+// 남는 중앙 QR 카드는 v0WQ 하나다.
+// **의도적 갱신 «v0W2 편입» (운영자 신설 설계 2026-08-17)** — v0W2 카드가 v0WQ 뒤에
+// 붙었다 (`CELL_SURFACE_FINAL_IDS` 선언 순서 그대로). 기본은 여전히 v0X 다.
 const LOCATOR_CARD_ORDER = Object.freeze([
-  'auto', 'off', 'cell-surface-v0', 'cell-surface-v0x', 'cell-surface-v0xq',
-  'cell-surface-v0w', 'cell-surface-v0wq',
+  'auto', 'off', 'cell-surface-v0', 'cell-surface-v0x',
+  'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2',
 ]);
-test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0X → v0XQ → v0W → v0WQ 다 (v0 계열만)', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0X → v0W → v0WQ → v0W2 다 (v0 계열만)', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 

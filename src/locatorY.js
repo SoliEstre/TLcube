@@ -37,6 +37,8 @@ export const LOCATOR_PROFILE_CELL_SURFACE_V0XQ = 'cell-surface-v0xq';
 export const LOCATOR_PROFILE_CELL_SURFACE_V0W = 'cell-surface-v0w';
 /** v0W 파생 ① — 중앙 QR 슬롯 (v0WY 는 프로파일이 아니라 QR 위치다: qrPosition 'plane'). */
 export const LOCATOR_PROFILE_CELL_SURFACE_V0WQ = 'cell-surface-v0wq';
+/** v0W 파생 ② — SE 부 파인더 6×6 확대 + NW·NE 3면 대칭 통일 (2026-08-17). */
+export const LOCATOR_PROFILE_CELL_SURFACE_V0W2 = 'cell-surface-v0w2';
 export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_OFF,
   LOCATOR_PROFILE_HEX_FRAME_V1,
@@ -49,6 +51,7 @@ export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0W2,
 ]);
 export const DEFAULT_LOCATOR_PROFILE_Y = LOCATOR_PROFILE_OFF;
 
@@ -82,7 +85,8 @@ export function isCellSurfaceLocatorProfileY(value) {
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0X
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0XQ
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0W
-    || value === LOCATOR_PROFILE_CELL_SURFACE_V0WQ;
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0W2;
 }
 
 export function isLocatorProfileY(value) {

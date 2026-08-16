@@ -48,11 +48,14 @@ const LINEUP = Object.freeze([
 // 의도적 갱신 «v0W 파생 2종 편입» (2026-08-16): v0wq 가 n=21 네 번째 후보로 들어왔다.
 // v0WY 는 **여기 없다** — 와이어가 v0W 라 이 표에서는 v0w 행이 곧 v0WY 의 왕복이다
 // (그 사실 자체는 cellSurface-block-locator.test.js 의 «v0WY 는 렌더 선택이다» 가 잰다).
+// 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 가 n=21 다섯 번째 후보로 들어왔다.
+// 기본(`finalLayoutIdForN(21)`)은 여전히 v0x 다 — 편입은 순위를 정하지 않는다.
 const ACTIVE_LINEUP = Object.freeze([
   { layout: 'v0', version: 0, n: 13 },
   { layout: 'v0x', version: 1, n: 21 },
   { layout: 'v0w', version: 1, n: 21 },
   { layout: 'v0wq', version: 1, n: 21 },
+  { layout: 'v0w2', version: 1, n: 21 },
 ]);
 
 function renderFinal(text, {

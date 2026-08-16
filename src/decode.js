@@ -360,7 +360,8 @@ function resolveProfile(format) {
         : format.locatorProfile === 'cell-surface-v1r2'
           ? 'v1r2'
           // 'cell-surface-v0x' · 'cell-surface-v0xq' · 'cell-surface-v0w' ·
-          // 'cell-surface-v0wq' 는 초안 슬롯이 없어 draftIndexWire 충돌이 없다.
+          // 'cell-surface-v0wq' · 'cell-surface-v0w2' 는 초안 슬롯이 없어
+          // draftIndexWire 충돌이 없다.
           // ('cell-surface-v0wy' 라는 프로파일은 **없다** — v0WY 는 와이어가 v0W 다.)
           : format.locatorProfile === 'cell-surface-v0x'
             ? 'v0x'
@@ -370,7 +371,9 @@ function resolveProfile(format) {
                 ? 'v0w'
                 : format.locatorProfile === 'cell-surface-v0wq'
                   ? 'v0wq'
-                  : null;
+                  : format.locatorProfile === 'cell-surface-v0w2'
+                    ? 'v0w2'
+                    : null;
     const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
       ? format.cellSurfaceLayout
       : (profileHintId !== null && !draftIndexWire ? profileHintId : null);

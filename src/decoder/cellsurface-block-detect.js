@@ -60,7 +60,7 @@ import { CORNER_UNIT_OFFSETS } from '../hexgrid.js';
 import { faceBasis, moduleCenter } from '../ygrid.js';
 import {
   CENTER_QR_FINDER_MODULES, CENTER_QR_QUIET_MODULES, CENTER_QR_SLOT_CELLS,
-  V0W_BLOCKS, V0WQ_BLOCKS, V0XQ_BLOCKS,
+  V0W_BLOCKS, V0W2_BLOCKS, V0WQ_BLOCKS, V0XQ_BLOCKS,
   centerQrModulePitchCells, centerQrQuietFrameCells, centerQrSlotCellsFor,
   locatorCellsCellSurfaceFinal,
 } from '../cellSurfaceFinal.js';
@@ -105,8 +105,32 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // v0W 시딩 게이트 — v0X 와 **같은 사각 링 동반자 조건**이다. v0W 의 NE 동심 사각도
   // 3면 동일이라 120° 쌍둥이 코어를 내기 때문이다. false 면 반경 스냅만으로 시드한다.
   v0wRequireSquareRing: true,
-  // v0xq 패밀리 (중앙 QR 변형). false 로 끄면 v0xq 편입 전 기준선을 잰다.
-  v0xqFamily: true,
+  // v0W2 패밀리 (v0W 파생 ② — SE 6×6 대형 마커, 2026-08-17). false 로 끄면 v0W2
+  // 편입 전 기준선을 잰다.
+  //
+  // ⚠ **v0W 와 코어 반경(√279)·NE 동심 사각이 같다** — 같은 배열·같은 자리라
+  // 거리로도, 사각 링 게이트로도 안 갈라진다. 두 패밀리는 서로의 프레임에서 서로
+  // 시드된다 (v0X ↔ v0W 와 같은 구조). 가르는 것은 (a) 패치 Pearson — v0W2 는
+  // 중앙이 3면 대칭이고 SE 서브앵커가 6×6 이라 v0W 의 3×3 과 겹치는 자리가
+  // 다르다 (b) 손대지 않은 CS 게이트(0.78 · 0.035) 다.
+  v0w2Family: true,
+  // v0W2 시딩 게이트 — v0X·v0W 와 **같은 사각 링 동반자 조건**. v0W2 의 NE 도
+  // 3면 동일 동심 사각이라 120° 쌍둥이 코어를 낸다.
+  v0w2RequireSquareRing: true,
+  // ── v0XQ 드랍 (운영자 실기기 확정 2026-08-17) — 차단이지 삭제가 아니다 ──────
+  // v0xq 패밀리 (중앙 QR 변형). **기본 off.**
+  // 근거: 실기기 인식 순위 v0WQ ≫ v0XQ > v0X ≈ v0W — v0W 편입 때 걸어 둔 조건부
+  // 드랍 규칙 «v0WQ > v0XQ» 가 성립했다. 두 레이아웃은 같은 문법의 대조 실험이라
+  // (중앙 QR 슬롯 × 같은 동심 사각, 위상 마커만 다르다) 진 쪽을 라인업에서 내린다.
+  // true 로 켜면 드랍 전 기준선·교차 오수용 대조군이 그대로 돌아온다
+  // (`cellSurfaceFinal.js` §CELL_SURFACE_FINAL_DROPPED_IDS — 같은 규약).
+  //
+  // ⚠ **v0wq 는 이 스위치에 딸려 내려가지 않는다.** 아래 코너 수집 게이트가
+  // `(cfg.v0xqFamily !== false || cfg.v0wqFamily !== false)` 라 한쪽만 꺼도
+  // `verifyV0xqCornerCluster` 순회가 그대로 돌고, 삼중점 조립만 v0xq 쪽이 빈다.
+  // 즉 **드랍의 절감분은 «코너 재탐색» 이 아니라 «삼중점당 중앙 게이트 +
+  // refinePose 한 벌»** 이다 — 벤치가 재는 것이 그 값이다 (v0WQ 편입 비용의 역).
+  v0xqFamily: false,
   // v0wq 패밀리 (v0W 파생 — 중앙 QR 슬롯). false 로 끄면 v0WQ 편입 전 기준선을 잰다.
   //
   // ⚠ v0wq 는 **코너 블록·코어 반경·중앙 QR 게이트가 v0xq 와 같다** (동심 사각이
@@ -150,6 +174,47 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // v0xq 코너 검증에 훑을 k5 클러스터 상한 (count 내림차순). 참 코너는 count 50+ 라
   // 상위권에 있고, 이 상한이 «클러스터 500개 × 레이 8» 비용을 막는다.
   v0xqMaxInspectedClusters: 24,
+  // ── 교차 누수 봉합 (2026-08-17) — «가짜 후보를 더 잘 거른다» 방향 ──────────
+  //
+  // 왜 필요한가 (실측, `test/output/claude-v0w2-program.md` §21\~§22):
+  // 코너 동심 사각은 v0X·v0W·v0W2·v0XQ·v0WQ 가 **문자 그대로 같은 셀**을 쓴다
+  // (`V0W_BLOCKS.NE === V0XQ_BLOCKS.CORNER === V0WQ_BLOCKS.CORNER === V0W2_BLOCKS.NE`).
+  // 그래서 불스아이 중앙 레이아웃의 프레임에서도 120° 삼중점이 그대로 서고, 위
+  // `v0xqRequireCenterQr` 상관 게이트(0.25)는 그것을 **못 자른다** — 잰 값:
+  //   진짜 v0WQ 프레임 상관 0.9996\~0.9999 / 가짜(v0X·v0W 3톤) 0.28\~0.42.
+  // 게이트가 실제로 재는 것은 «QR 다움» 이 아니라 **면 게인 음영**(T 밝음 대 L·R
+  // 어두움)이라 큐브면 무엇이든 통과한다. 48칸 중 18칸이 가짜인데 통과했다.
+  //
+  // 아래 둘은 **문턱을 내리지 않는다** — 가짜만 떨어뜨리는 방향의 **추가** 조건이고,
+  // 보호 게이트 5종(agreement 0.78 · orientationMargin 0.035 · CRC · RS · 인코더 정합)
+  // 에는 닿지 않는다. 각각 false 로 끄면 봉합 전 세계가 그대로 돌아온다 (A/B 대조군).
+  //
+  // ① **중앙 불스아이 거부권** — 코너 삼중점의 무게중심에 **이미 검증된 K3 불스아이**
+  //    (`verifyV0Cluster` 의 `v0-center`)가 앉아 있으면 그 중앙은 QR 슬롯이 아니다.
+  //    소스가 이미 그렇게 선언해 놓고(§V0XQ_CORE_RADIUS_CELLS 주석 «가르는 것은
+  //    중앙이다 — v0xq 만 중앙이 QR 이고 나머지는 K3 불스아이다») 구현하지 않았던
+  //    조건이다. 값은 **삼중점 반경 R 로 정규화**한 거리 (실측 256칸):
+  //      가짜 0.000\~0.054 · 진짜 0.108\~1.000 → 문턱 0.075 (양쪽 \~1.4× 여유).
+  //    비용 0 — centres 는 이미 계산돼 있다.
+  centreQrBullseyeVeto: true,
+  centreQrBullseyeVetoRadiusRatio: 0.075,
+  // ② **QR 다움 판별** — 중앙 QR 패치가 정합된 자리에서 파인더 암코어 3점이
+  //    콰이어트 프레임보다 얼마나 어두운지를 **패치 자신의 동적 범위(p95−p5)로
+  //    정규화**해 잰다. 정규화가 톤 커브·노출·면 게인을 나눠 없앤다.
+  //    실측 (검증 렌즈 정정 2026-08-17): 자기 패밀리 포즈 기준 (n=62) 진짜
+  //    0.995\~1.084 · 가짜 −0.477\~0.411 → 문턱 0.60 (진짜 최소의 1.66× 아래).
+  //    무필터 분포는 −0.269 까지 내려가나 그 2칸은 삼중점 0 이라 게이트가 안 울린다.
+  //    (불스아이가 검출 안 된 프레임에서도 듣는다 — ① 과 같은 술어의 양면이 아니라
+  //    별개 신호다. ① 과 ③ 은 같은 술어의 양면 — 참이면 둘 다, 거짓이면 둘 다 아님.)
+  centreQrRequireFinderContrast: true,
+  centreQrMinFinderContrast: 0.6,
+  // ③ **중앙 불스아이 확증 조립** (과업 3 ③) — 같은 일치를 **인가**에 쓴다.
+  //    느슨한 코너(`verifyV0xqCornerCluster`)의 120° 삼중점 중심에 검증된 K3
+  //    불스아이가 앉아 있으면, 그 중앙에서 v0X·v0W·v0W2 를 시드한다.
+  //    엄격 코너가 3개 미만이라 사각 링 게이트가 **구조적으로** 0 이 되는 칸의 구제다
+  //    (실측: v0W 48칸 중 자기 포즈 0 인 13칸 → 12칸이 그 게이트에서 죽었다).
+  //    false 로 끄면 확증 조립 전 세계가 그대로 돌아온다.
+  centreBullseyeConfirmedPoses: true,
   // ── 부분 앵커 포즈 (§7) — 프레임 밖으로 나간 앵커를 레이아웃 지식으로 외삽한다.
   // false 로 끄면 잘림 도입 전(엄격 4앵커) 기준선을 그대로 잰다.
   partialAnchorPose: true,
@@ -780,25 +845,28 @@ function inEdgeBlock(cell, box) {
 function buildCenterQrPatch(slotCells = CENTER_QR_SLOT_CELLS) {
   const pitch = centerQrModulePitchCells(slotCells);
   const points = [];
-  const push = (face, a, b, expected) => {
+  // `role` 은 «QR 다움» 판별(§centreQrRequireFinderContrast)이 읽는다. registerPatch 는
+  // x·y·expected 만 보므로 필드를 더해도 정합 계산은 한 비트도 안 바뀐다.
+  const push = (face, a, b, expected, role) => {
     const { ei, ej } = faceBasis(face);
     points.push({
       x: (a * ei.x + b * ej.x) * CANONICAL_LAYOUT.size,
       y: (a * ei.y + b * ej.y) * CANONICAL_LAYOUT.size,
       expected,
+      role,
     });
   };
   for (const cell of centerQrQuietFrameCells(slotCells)) {
-    push('T', cell.i + 0.5, cell.j + 0.5, 1);
+    push('T', cell.i + 0.5, cell.j + 0.5, 1, 'quiet');
   }
   for (const face of ['L', 'R']) {
     for (let i = 0; i < slotCells; i += 1) {
-      for (let j = 0; j < slotCells; j += 1) push(face, i + 0.5, j + 0.5, 0);
+      for (let j = 0; j < slotCells; j += 1) push(face, i + 0.5, j + 0.5, 0, 'slot');
     }
   }
   for (const finder of CENTER_QR_FINDER_MODULES) {
     push('T', (CENTER_QR_QUIET_MODULES + finder.qx + 0.5) * pitch,
-      (CENTER_QR_QUIET_MODULES + finder.qy + 0.5) * pitch, 0);
+      (CENTER_QR_QUIET_MODULES + finder.qy + 0.5) * pitch, 0, 'finder');
   }
   let sumX = 0;
   let sumY = 0;
@@ -871,6 +939,32 @@ function patchesForV0w(n) {
 }
 
 /**
+ * v0W2 패치 — 중앙 = K3 불스아이(NW 5×5, **3면 대칭화본**), 코너 3 = 면별 동심 사각
+ * (NE 사분면, v0W 와 같은 블록), 서브앵커 = 중앙 3 + 코너 3 + **대형 마커 3 (SE 6×6)**.
+ *
+ * v0W 와 형태는 같고 두 곳이 다르다:
+ *   · 중앙 패치가 3면 대칭이라 **면 사이 판별력이 0** 이다 — 위상은 전적으로 SE 가 준다.
+ *   · SE 서브앵커가 9점 → **36점**. `registerPatch` 의 Pearson 최소 6점 대비 6배라,
+ *     실기기에서 «부 파인더가 아예 안 잡힌다» 던 v0W 의 약점을 이 두께로 친다.
+ */
+function patchesForV0w2(n) {
+  const cells = locatorCellsCellSurfaceFinal(n, 'v0w2');
+  const inCentre = (cell) => cell.i <= V0W2_BLOCKS.NW.iMax && cell.j <= V0W2_BLOCKS.NW.jMax;
+  const inCorner = (cell) => cell.i <= V0W2_BLOCKS.NE.iMax && cell.j >= V0W2_BLOCKS.NE.jMin;
+  const inMarker = (cell) => cell.i >= V0W2_BLOCKS.SE.iMin && cell.j >= V0W2_BLOCKS.SE.jMin;
+  const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
+  const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
+  const markers = YFACE_LIST.map((face) => buildPatch(cells, face, inMarker))
+    .filter((patch) => patch !== null);
+  return {
+    centre: mergePatches(centreParts),
+    corners,
+    subPatches: [...centreParts, ...corners, ...markers],
+    all: mergePatches(YFACE_LIST.map((face) => buildPatch(cells, face, () => true))),
+  };
+}
+
+/**
  * v0WQ 패치 — 중앙 = 중앙 QR 블록(슬롯 8), 코너 3 = 면별 동심 사각(NE, v0xq 와 같은 블록),
  * 서브앵커 = 코너 3 + 위상 마커 3 (SE 3×3, v0W 와 같은 블록).
  *
@@ -911,6 +1005,11 @@ function patchesFor(n, layoutId = undefined) {
     const builtV0w = patchesForV0w(n);
     patchCache.set(key, builtV0w);
     return builtV0w;
+  }
+  if (layoutId === 'v0w2') {
+    const builtV0w2 = patchesForV0w2(n);
+    patchCache.set(key, builtV0w2);
+    return builtV0w2;
   }
   const cells = locatorCellsCellSurfaceFinal(n, layoutId);
   const { nearLimit, farLimit, edges: edgeBoxes } = blockLimitsFor(n, layoutId);
@@ -1695,6 +1794,14 @@ const V0W_CORE_RADIUS_CELLS = Math.sqrt(279);
 const V0W_N = 21;
 
 /**
+ * v0W2 — NE 동심 사각이 v0W 와 **같은 배열·같은 자리**라 코어 반경도 같은 √279 다.
+ * 그래서 v0W2 는 v0W 바로 뒤에 같은 (중앙, 코너) 쌍에서 시드된다. 두 패밀리를 가르는
+ * 것은 거리가 아니라 refinePose 의 패치 Pearson 과 하류 CS 게이트다.
+ */
+const V0W2_CORE_RADIUS_CELLS = V0W_CORE_RADIUS_CELLS;
+const V0W2_N = 21;
+
+/**
  * 코너 하나에 대해, 같은 중앙 기준으로 ±120° 회전 위치에 다른 코너가 있는지 센다.
  * 0..2. 결정성: corners 배열의 고정 순서로만 순회한다.
  */
@@ -1787,6 +1894,7 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
   const posesV1r2 = [];
   const posesV0x = [];
   const posesV0w = [];
+  const posesV0w2 = [];
   const anchoredCentres = new Set();
   let companionPairs = 0;
   for (let centreIndex = 0; centreIndex < centres.length; centreIndex += 1) {
@@ -1909,9 +2017,173 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
           }
         }
       }
+      // v0W2 (v0W 파생 ②, 2026-08-17) — 반경도 NE 블록도 v0W 와 **같다**. 그래서
+      // 같은 쌍에서 한 번 더 시드하고, 가르는 것은 refinePose 의 패치 Pearson 과
+      // 하류 CS 게이트다. v0W 브랜치와 **독립**이다 (게이트 실패가 서로를 안 자른다 —
+      // v0X ↔ v0W 에서 고친 것과 같은 결합을 여기서 만들지 않는다).
+      if (cfg.v0w2Family !== false
+        && Math.abs(estimatedRadius - V0W2_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+        const companions = squareRingCompanions(centre, corner, corners, cfg);
+        if (companions !== 0 || cfg.v0w2RequireSquareRing === false) {
+          const patches = patchesFor(V0W2_N, 'v0w2');
+          // YFACE_LIST[0] = 'T' — 면 T 의 동심 사각 무게중심이 canonical 앵커다
+          // (v0W 과 같은 블록이라 같은 방향 −141.1°).
+          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
+          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
+          if (refined) {
+            anchoredCentres.add(centreIndex);
+            posesV0w2.push({
+              family: 'v0w2',
+              layoutId: 'v0w2',
+              n: V0W2_N,
+              H: refined.H,
+              score: refined.meanCorrelation,
+              partial: refined.partial || null,
+              estimatedRadius,
+              squareRingCompanions: companions,
+            });
+          }
+        }
+      }
     }
   }
-  return { posesV2r2, posesV1r2, posesV0x, posesV0w, anchoredCentres, companionPairs };
+  return {
+    posesV2r2, posesV1r2, posesV0x, posesV0w, posesV0w2, anchoredCentres, companionPairs,
+  };
+}
+
+/**
+ * ★ 중앙 불스아이 확증 조립 (2026-08-17, 과업 3 ③) — «주 파인더 + 중앙» 이중 확인의
+ * **양의 방향**. 위 `centreQrBullseyeVeto` 가 같은 일치를 **거부**에 쓴다면, 여기서는
+ * 같은 일치를 **인가**에 쓴다.
+ *
+ * 왜 필요한가 (실측, 48칸 v0W 열화 사다리 — `claude-v0w2-anchored.mjs`):
+ * v0W 자기 포즈가 0 이 된 13칸 중 **12칸이 사각 링 동반자 게이트에서 죽는다**
+ * (거리·반경 스냅·패치 정합은 한 칸도 안 죽였다). 원인은 게이트 자체가 아니라
+ * **코너 목록이 다르다**는 것이다 — 같은 물리 블록을 두 검증기가 본다:
+ *   · 앵커드 경로: `verifyV2r2Cluster` (open/closed 분류까지 요구) → 3톤 열화에서 1\~2개
+ *   · 중앙 QR 경로: `verifyV0xqCornerCluster` (링 비만 요구)          → 같은 칸에서 3\~4개
+ * 코너가 3개 미만이면 120° 쌍둥이가 없어 사각 링 게이트가 구조적으로 0 이 된다.
+ * 즉 **가짜(v0WQ) 후보는 더 큰 그물로 같은 물고기를 잡고 있었다.**
+ *
+ * 여기서 하는 일: 느슨한 코너로 만든 **120° 삼중점의 중심에 검증된 K3 불스아이가
+ * 앉아 있으면**, 그 프레임의 중앙은 불스아이이고 세 면 코너가 실재한다는 것이
+ * 이미 증명된 것이다 — 사각 링 게이트가 «동반자 1개» 로 찾던 증거보다 **강한** 증거다.
+ * 그때만 (불스아이 중앙 × 삼중점 코너) 로 앵커드 패밀리를 시드한다.
+ *
+ * 완화가 아니라 **증거 치환**이다:
+ *   · 엄격 경로가 이미 포즈를 세운 중앙(`anchoredCentres`)은 **건드리지 않는다** —
+ *     그 프레임의 동작은 한 비트도 안 바뀐다.
+ *   · refinePose·CS 수용 게이트(0.78 / 0.035)는 그대로 통과해야 한다.
+ *   · v0WQ 프레임에서는 **구조적으로 발동하지 않는다** — 진짜 중앙 QR 삼중점의
+ *     중심에는 불스아이가 없다 (실측 최소 0.108 R, 문턱 0.075 R).
+ */
+function assembleBullseyeConfirmedPoses(
+  centres, anchoredCentres, looseCorners, fullLuma, factor, cfg, telemetry = null,
+) {
+  const posesV0x = [];
+  const posesV0w = [];
+  const posesV0w2 = [];
+  const confirmed = new Set();
+  let tripleCount = 0;
+  if (looseCorners.length < 3 || centres.length === 0) {
+    return {
+      posesV0x, posesV0w, posesV0w2, confirmedCentres: confirmed, tripleCount,
+    };
+  }
+  const angleTolerance = (cfg.v0xqTripleAngleToleranceDeg * Math.PI) / 180;
+  for (let a = 0; a < looseCorners.length; a += 1) {
+    for (let b = a + 1; b < looseCorners.length; b += 1) {
+      for (let c = b + 1; c < looseCorners.length; c += 1) {
+        const triple = [looseCorners[a], looseCorners[b], looseCorners[c]];
+        const centre = {
+          x: (triple[0].x + triple[1].x + triple[2].x) / 3,
+          y: (triple[0].y + triple[1].y + triple[2].y) / 3,
+        };
+        const radii = triple.map((hit) => Math.hypot(hit.x - centre.x, hit.y - centre.y));
+        const rMin = Math.min(...radii);
+        const rMax = Math.max(...radii);
+        if (!(rMin > EPSILON)) continue;
+        if (rMax - rMin > cfg.v0xqTripleRadiusTolerance * rMax) continue;
+        const angles = triple
+          .map((hit) => Math.atan2(hit.y - centre.y, hit.x - centre.x))
+          .sort((left, right) => left - right);
+        let spaced = true;
+        for (let k = 0; k < 3; k += 1) {
+          let delta = angles[(k + 1) % 3] - angles[k];
+          if (delta < 0) delta += 2 * Math.PI;
+          if (Math.abs(delta - (2 * Math.PI) / 3) > angleTolerance) spaced = false;
+        }
+        if (!spaced) continue;
+        // 이 삼중점의 중심에 앉은 불스아이를 찾는다 — 거부권과 **같은 자**(같은 비율).
+        const snapRadius = cfg.centreQrBullseyeVetoRadiusRatio * ((rMin + rMax) / 2);
+        let centreIndex = -1;
+        for (let index = 0; index < centres.length; index += 1) {
+          const hit = centres[index];
+          if (Math.hypot(hit.x - centre.x, hit.y - centre.y) <= snapRadius) {
+            centreIndex = index;
+            break;
+          }
+        }
+        if (centreIndex < 0) continue;
+        // 엄격 경로가 이미 세운 중앙은 손대지 않는다 (무회귀의 근거).
+        if (anchoredCentres.has(centreIndex)) continue;
+        tripleCount += 1;
+        const anchor = centres[centreIndex];
+        for (const corner of triple) {
+          const distance = Math.hypot(corner.x - anchor.x, corner.y - anchor.y);
+          if (!(distance > 6 * anchor.u)) continue;
+          const estimatedRadius = distance / Math.max(anchor.u, EPSILON);
+          if (cfg.v0xFamily !== false
+            && Math.abs(estimatedRadius - V0X_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+            const H0 = anchoredSimilaritySeed(anchor, corner, factor, V0X_CORE_RADIUS_CELLS);
+            const refined = refinePose(fullLuma, H0, patchesFor(V0X_N, 'v0x'), cfg, telemetry);
+            if (refined) {
+              confirmed.add(centreIndex);
+              posesV0x.push({
+                family: 'v0x',
+                layoutId: 'v0x',
+                n: V0X_N,
+                H: refined.H,
+                score: refined.meanCorrelation,
+                partial: refined.partial || null,
+                estimatedRadius,
+                bullseyeConfirmed: true,
+              });
+            }
+          }
+          for (const spec of [
+            { on: cfg.v0wFamily !== false, id: 'v0w', n: V0W_N, radius: V0W_CORE_RADIUS_CELLS, out: posesV0w },
+            { on: cfg.v0w2Family !== false, id: 'v0w2', n: V0W2_N, radius: V0W2_CORE_RADIUS_CELLS, out: posesV0w2 },
+          ]) {
+            if (!spec.on) continue;
+            if (Math.abs(estimatedRadius - spec.radius) > ANCHOR_SNAP_CELLS) continue;
+            const patches = patchesFor(spec.n, spec.id);
+            const H0 = anchoredSimilaritySeedTo(
+              anchor, corner, factor, patches.corners[0].anchor,
+            );
+            const refined = H0 === null
+              ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
+            if (!refined) continue;
+            confirmed.add(centreIndex);
+            spec.out.push({
+              family: spec.id,
+              layoutId: spec.id,
+              n: spec.n,
+              H: refined.H,
+              score: refined.meanCorrelation,
+              partial: refined.partial || null,
+              estimatedRadius,
+              bullseyeConfirmed: true,
+            });
+          }
+        }
+      }
+    }
+  }
+  return {
+    posesV0x, posesV0w, posesV0w2, confirmedCentres: confirmed, tripleCount,
+  };
 }
 
 /**
@@ -1931,6 +2203,48 @@ function rotationBetween(ux, uy, vx, vy) {
 }
 
 /**
+ * 중앙 QR 시그니처 — **«QR 다움» 을 상관이 아니라 직접** 잰다 (2026-08-17 봉합 ②).
+ *
+ * 왜 Pearson 으로는 안 되나: 중앙 QR 패치의 기대 벡터는 «T 콰이어트 = 밝음 · L·R
+ * 슬롯 = 어두움 · 파인더 암코어 3 = 어두움» 인데 점 수가 **슬롯에 압도적으로 쏠려**
+ * 있다 (실측: v0wq 159점 = 콰이어트 28 + 슬롯 128 + 파인더 3 → 슬롯이 80.5 % ·
+ * v0xq 197점 = 32 + 162 + 3 → 82.2 %). 그래서 상관은 사실상 **면 게인 음영**
+ * (T 1.0 > L > R 0.62)만 재고, 큐브면 무엇이든 0.28\~0.42 를 낸다 — 문턱 0.25 를
+ * 그냥 넘는다.
+ * 오직 QR 에만 있는 것은 «콰이어트 프레임 안에 박힌 3개의 암 코어» 다.
+ *
+ * 반환값은 (콰이어트 평균 − 파인더 암코어 평균) / (패치 표본 p95 − p5).
+ * 분모가 **패치 자신의 동적 범위**라 톤 커브·노출·면 게인이 약분된다.
+ * 실측(256칸 열화 사다리, 검증 렌즈 정정 2026-08-17): 자기 패밀리 포즈 기준 (n=62)
+ * 진짜 v0WQ 0.995\~1.084 · 가짜 −0.477\~0.411 (무필터 최소 −0.269 는 삼중점 0 칸).
+ *
+ * offsetX/offsetY 는 `registerPatch` 가 찾은 최적 정합 위치다 — 시드 H 가 조금
+ * 어긋나 있어도 **정합된 자리에서** 판별하도록.
+ */
+function centreQrFinderContrast(luma, H, patch, offsetX, offsetY) {
+  const values = [];
+  const quiet = [];
+  const finder = [];
+  for (const point of patch.points) {
+    const image = projectPoint(H, point);
+    if (!image) continue;
+    const value = bilinear(luma, image.x + offsetX, image.y + offsetY);
+    if (value === null) continue;
+    values.push(value);
+    if (point.role === 'quiet') quiet.push(value);
+    else if (point.role === 'finder') finder.push(value);
+  }
+  // 표본이 모자라면 «판별 불가» 다 — null 을 «통과» 로 읽지 않는다(호출부가 거절).
+  if (values.length < 20 || quiet.length < 6 || finder.length < 3) return null;
+  values.sort((left, right) => left - right);
+  const pick = (q) => values[Math.min(values.length - 1, Math.floor(q * values.length))];
+  const span = pick(0.95) - pick(0.05);
+  if (!(span > EPSILON)) return null;
+  const mean = (list) => list.reduce((sum, value) => sum + value, 0) / list.length;
+  return (mean(quiet) - mean(finder)) / span;
+}
+
+/**
  * v0xq 조립 — K3 중앙이 없으므로 **코너 삼중점**이 중앙·스케일·위상을 동시에 준다.
  *
  * 세 코너가 120° 간격 같은 반경이면 그 무게중심이 곧 큐브 중심이다 (canonical 에서
@@ -1940,9 +2254,17 @@ function rotationBetween(ux, uy, vx, vy) {
  *
  * 결정성: corners 는 verified 정렬 순서로만 순회하고 조합도 고정 순서다.
  */
-function assembleCentreQrPoses(layoutId, corners, fullLuma, factor, cfg, telemetry = null) {
+function assembleCentreQrPoses(
+  layoutId, corners, fullLuma, factor, cfg, telemetry = null, centres = [],
+) {
   const poses = [];
-  if (corners.length < 3) return { poses, tripleCount: 0, centreRejected: 0 };
+  let bullseyeVetoed = 0;
+  let finderContrastRejected = 0;
+  if (corners.length < 3) {
+    return {
+      poses, tripleCount: 0, centreRejected: 0, bullseyeVetoed, finderContrastRejected,
+    };
+  }
   const patches = patchesFor(V0XQ_N, layoutId);
   const canonical = patches.corners[0].anchor; // YFACE_LIST[0] = 'T'
   const canonicalR = Math.hypot(canonical.x, canonical.y);
@@ -1974,6 +2296,19 @@ function assembleCentreQrPoses(layoutId, corners, fullLuma, factor, cfg, telemet
         }
         if (!spaced) continue;
         tripleCount += 1;
+        // ★ 중앙 불스아이 거부권 — 이 삼중점의 중심에 **이미 검증된 K3 불스아이**가
+        // 앉아 있으면 그 중앙은 QR 슬롯이 아니다 (§centreQrBullseyeVeto).
+        // 삼중점 반경으로 정규화해 스케일 무관하게 잰다. centres 는 이 함수 밖에서
+        // 이미 계산된 배열이라 추가 이미지 연산이 0 이다.
+        if (cfg.centreQrBullseyeVeto !== false && centres.length > 0) {
+          const vetoRadius = cfg.centreQrBullseyeVetoRadiusRatio * ((rMin + rMax) / 2);
+          const occupiedByBullseye = centres.some((hit) =>
+            Math.hypot(hit.x - centre.x, hit.y - centre.y) <= vetoRadius);
+          if (occupiedByBullseye) {
+            bullseyeVetoed += 1;
+            continue;
+          }
+        }
         const centreFull = liftPoint(centre, factor);
         const estimatedRadius = ((rMin + rMax) / 2) / Math.max(triple[0].u, EPSILON);
         for (const corner of triple) {
@@ -1999,6 +2334,18 @@ function assembleCentreQrPoses(layoutId, corners, fullLuma, factor, cfg, telemet
               centreRejected += 1;
               continue;
             }
+            // ★ QR 다움 판별 — 상관이 통과해도 «파인더 암코어 3점» 이 실제로 어둡지
+            // 않으면 그 중앙은 QR 이 아니다 (§centreQrRequireFinderContrast).
+            // 상관 게이트가 재는 것은 면 게인 음영이고, 이것이 재는 것이 QR 구조다.
+            if (cfg.centreQrRequireFinderContrast !== false) {
+              const contrast = centreQrFinderContrast(
+                fullLuma, H0, patches.centre, probe.offsetX, probe.offsetY,
+              );
+              if (contrast === null || contrast < cfg.centreQrMinFinderContrast) {
+                finderContrastRejected += 1;
+                continue;
+              }
+            }
           }
           const refined = refinePose(fullLuma, H0, patches, cfg, telemetry);
           if (!refined) continue;
@@ -2015,15 +2362,17 @@ function assembleCentreQrPoses(layoutId, corners, fullLuma, factor, cfg, telemet
       }
     }
   }
-  return { poses, tripleCount, centreRejected };
+  return {
+    poses, tripleCount, centreRejected, bullseyeVetoed, finderContrastRejected,
+  };
 }
 
 /**
  * v0xq 조립 — 일반형의 특수화. **호출 형태를 바꾸지 않는다** (기존 테스트·내부 노출이
  * 이 이름으로 걸려 있다). v0wq 는 `assembleV0wqPoses` 를 쓴다.
  */
-function assembleV0xqPoses(corners, fullLuma, factor, cfg, telemetry = null) {
-  return assembleCentreQrPoses('v0xq', corners, fullLuma, factor, cfg, telemetry);
+function assembleV0xqPoses(corners, fullLuma, factor, cfg, telemetry = null, centres = []) {
+  return assembleCentreQrPoses('v0xq', corners, fullLuma, factor, cfg, telemetry, centres);
 }
 
 /**
@@ -2031,8 +2380,8 @@ function assembleV0xqPoses(corners, fullLuma, factor, cfg, telemetry = null) {
  * 결과를 재사용한다 — 다시 훑지 않는다). 갈리는 곳은 ① 중앙 QR 패치(슬롯 8) ②
  * 위상 마커 서브패치(SE 9셀) 둘뿐이고, 그 둘이 refinePose 의 Pearson 을 가른다.
  */
-function assembleV0wqPoses(corners, fullLuma, factor, cfg, telemetry = null) {
-  return assembleCentreQrPoses('v0wq', corners, fullLuma, factor, cfg, telemetry);
+function assembleV0wqPoses(corners, fullLuma, factor, cfg, telemetry = null, centres = []) {
+  return assembleCentreQrPoses('v0wq', corners, fullLuma, factor, cfg, telemetry, centres);
 }
 
 function rotationSweepScore(reducedLuma, template, centre, unit, angleCos, angleSin) {
@@ -2259,17 +2608,14 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
   const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
   const partialTelemetry = { attempted: 0, completed: 0, byAnchorCount: {} };
-  const {
-    posesV2r2, posesV1r2, posesV0x, posesV0w, anchoredCentres, companionPairs,
-  } = assembleAnchoredPoses(centres, corners, luma, reduced.factor, cfg, partialTelemetry);
-  const posesV0 = assembleV0Poses(
-    centres, anchoredCentres, reduced.luma, luma, reduced.factor, cfg, partialTelemetry,
-  );
-  // v0xq — K3 중앙이 없어 위 앵커드 경로를 아예 못 탄다. 코너 삼중점으로 따로 세운다.
-  // 코너 검증도 **별도 순회**다 (verifyV0xqCornerCluster 주석 참조) — 위 `verified`
-  // 배열·분류·occupied 에 닿지 않으므로 다른 패밀리의 동작은 한 비트도 안 바뀐다.
+  // 느슨한 코너 순회 (`verifyV0xqCornerCluster`) — **별도 순회**다 (그 함수 주석 참조):
+  // 위 `verified` 배열·분류·occupied 에 닿지 않으므로 다른 패밀리의 동작은 한 비트도
+  // 안 바뀐다. 2026-08-17 부터 소비자가 셋이라 앵커드 조립 **앞으로** 옮겼다:
+  //   ① v0xq 삼중점 ② v0wq 삼중점 ③ **중앙 불스아이 확증 조립**(§과업 3 ③).
+  // 순서를 옮겨도 이 루프는 위 결과에 의존하지 않으므로 산출은 같다.
   const v0xqCorners = [];
-  if (cfg.v0xqFamily !== false || cfg.v0wqFamily !== false) {
+  if (cfg.v0xqFamily !== false || cfg.v0wqFamily !== false
+    || cfg.centreBullseyeConfirmedPoses !== false) {
     const v0xqOccupied = [];
     let inspected = 0;
     for (const cluster of clusters) {
@@ -2287,9 +2633,41 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       right.score - left.score || right.count - left.count
       || left.y - right.y || left.x - right.x);
   }
+
+  // 조기 분기 (2026-08-16 중앙 통일): 공유 K3 중앙 × K5 원거리 코어 쌍으로 앵커드
+  // 패밀리를 세운다.
+  const {
+    posesV2r2, posesV1r2, posesV0x, posesV0w, posesV0w2, anchoredCentres, companionPairs,
+  } = assembleAnchoredPoses(centres, corners, luma, reduced.factor, cfg, partialTelemetry);
+  // ★ 중앙 불스아이 확증 (과업 3 ③) — 엄격 코너가 3개를 못 채워 사각 링 게이트가
+  // 구조적으로 0 이 된 중앙만 구제한다. 엄격 경로가 이미 세운 중앙은 건드리지 않는다.
+  const confirmed = cfg.centreBullseyeConfirmedPoses === false
+    ? {
+      posesV0x: [], posesV0w: [], posesV0w2: [], confirmedCentres: new Set(), tripleCount: 0,
+    }
+    : assembleBullseyeConfirmedPoses(
+      centres, anchoredCentres, v0xqCorners.slice(0, 4), luma, reduced.factor, cfg,
+      partialTelemetry,
+    );
+  posesV0x.push(...confirmed.posesV0x);
+  posesV0w.push(...confirmed.posesV0w);
+  posesV0w2.push(...confirmed.posesV0w2);
+  // 확증 경로로 포즈가 선 중앙도 v0 360° 스윕에서 뺀다 (조기 분기와 같은 이유).
+  const sweptExclusions = new Set(anchoredCentres);
+  for (const index of confirmed.confirmedCentres) sweptExclusions.add(index);
+  const posesV0 = assembleV0Poses(
+    centres, sweptExclusions, reduced.luma, luma, reduced.factor, cfg, partialTelemetry,
+  );
+  // ⚠ `centres` 를 넘긴다 — 중앙 불스아이 거부권(§centreQrBullseyeVeto)의 입력이다.
+  // 이미 검증된 배열이라 이미지 연산은 늘지 않는다.
+  const emptyCentreQr = {
+    poses: [], tripleCount: 0, centreRejected: 0, bullseyeVetoed: 0, finderContrastRejected: 0,
+  };
   const v0xq = cfg.v0xqFamily === false
-    ? { poses: [], tripleCount: 0, centreRejected: 0 }
-    : assembleV0xqPoses(v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry);
+    ? emptyCentreQr
+    : assembleV0xqPoses(
+      v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry, centres,
+    );
   const posesV0xq = v0xq.poses;
   // v0wq — v0xq 와 **같은 코너 히트**를 쓴다. 코너 검증(verifyV0xqCornerCluster)은 한 번만
   // 돌고, 삼중점 탐색도 같은 배열에서 다시 돈다. 즉 편입 비용은 «코너 재탐색» 이 아니라
@@ -2298,15 +2676,17 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   // ⚠ v0xqFamily 를 꺼도 v0wq 는 산다 (코너 수집은 두 패밀리 중 하나라도 켜져 있으면
   // 돈다). 두 패밀리를 각각 격리해서 재려면 스위치도 각각 꺼야 한다.
   const v0wq = cfg.v0wqFamily === false
-    ? { poses: [], tripleCount: 0, centreRejected: 0 }
-    : assembleV0wqPoses(v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry);
+    ? emptyCentreQr
+    : assembleV0wqPoses(
+      v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry, centres,
+    );
   const posesV0wq = v0wq.poses;
 
   const shapes = [];
   // 순서 = 셰이프 후보 순서. v0W 는 **v0X 뒤**다 — 라인업 기본이 v0X 인 것과 같은
   // 이유이고, `cellSurfaceFinal.CELL_SURFACE_FINAL_IDS` 의 선언 순서와 맞춘다.
   for (const familyPoses of [
-    posesV2r2, posesV1r2, posesV0x, posesV0xq, posesV0w, posesV0wq, posesV0,
+    posesV2r2, posesV1r2, posesV0x, posesV0xq, posesV0w, posesV0wq, posesV0w2, posesV0,
   ]) {
     familyPoses.sort((left, right) =>
       // v0X 는 사각 링 동반자가 많은 포즈를 먼저 본다 (3면 동일 서명이 실재한다는 증거).
@@ -2340,6 +2720,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         v0xq: posesV0xq.length,
         v0w: posesV0w.length,
         v0wq: posesV0wq.length,
+        v0w2: posesV0w2.length,
         v0: posesV0.length,
       },
       // v0xq 관측 — 120° 코너 삼중점 수와, 그중 중앙 QR 게이트가 자른 시드 수.
@@ -2353,6 +2734,13 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         // (다르면 둘 중 하나가 코너 배열을 몰래 건드린 것이다).
         v0wqTripleCount: v0wq.tripleCount,
         v0wqCentreRejected: v0wq.centreRejected,
+        // 교차 누수 봉합 관측 (2026-08-17) — 두 새 조건이 각각 몇 개를 잘랐나.
+        // 불스아이 중앙 레이아웃 프레임(v0X·v0W·v0W2)에서 bullseyeVetoed 가 곧
+        // «샐 뻔한 삼중점» 의 수다. tripleCount 는 자르기 **전** 값이라 분모로 읽는다.
+        bullseyeVetoed: v0xq.bullseyeVetoed,
+        finderContrastRejected: v0xq.finderContrastRejected,
+        v0wqBullseyeVetoed: v0wq.bullseyeVetoed,
+        v0wqFinderContrastRejected: v0wq.finderContrastRejected,
       },
       // 사각 링 서명 관측 — 120° 동반자를 가진 (중앙, 코너) 쌍의 수.
       // v0X 프레임은 3면 동일 SE 블록이라 크고, v1r2·v2r2 프레임은 0 이 기대값이다.
@@ -2362,7 +2750,16 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       earlyBranch: {
         centres: centres.length,
         anchored: anchoredCentres.size,
-        swept: centres.length - anchoredCentres.size,
+        swept: centres.length - sweptExclusions.size,
+      },
+      // 중앙 불스아이 확증 관측 (2026-08-17) — 엄격 경로가 못 세운 중앙을 몇 개
+      // 구제했나. triples 는 «불스아이가 중심에 앉은 느슨한 삼중점» 의 수(분모),
+      // centres 는 그중 실제로 포즈까지 간 중앙 수, poses 는 세운 포즈 수.
+      bullseyeConfirmed: {
+        triples: confirmed.tripleCount,
+        centres: confirmed.confirmedCentres.size,
+        poses: confirmed.posesV0x.length + confirmed.posesV0w.length
+          + confirmed.posesV0w2.length,
       },
       // 부분 앵커 완성 관측 — attempted 는 «엄격 경로 실패 + 앵커가 프레임 밖» 인
       // 시드 수, completed 는 그중 상대 잔차 게이트까지 통과한 수.
@@ -2391,12 +2788,14 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   verifyV0xqCornerCluster,
   assembleV0xqPoses,
   assembleV0wqPoses,
+  centreQrFinderContrast,
   patchesForV0wq,
   rayTransitions,
   recentreByRays,
   patchesForN,
   patchesFor,
   assembleAnchoredPoses,
+  assembleBullseyeConfirmedPoses,
   anchoredSimilaritySeed,
   anchoredSimilaritySeedTo,
   squareRingCompanions,

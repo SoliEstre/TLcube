@@ -560,8 +560,9 @@ function resolveLayoutIds(options, n) {
   if (Array.isArray(options.cellSurfaceLayouts) && options.cellSurfaceLayouts.length > 0) {
     return options.cellSurfaceLayouts;
   }
-  // 드랍 복원 스위치 (대조군·법의학) — 드랍된 v2r2·v1r2 를 후보로 되돌린다.
-  // 블록 로케이터 쪽 짝은 `calibration.csBlockLocator.{v2r2Family,v1r2Family}` 다.
+  // 드랍 복원 스위치 (대조군·법의학) — 드랍된 v2r2·v1r2·**v0xq**(2026-08-17) 를
+  // 후보로 되돌린다. 블록 로케이터 쪽 짝은
+  // `calibration.csBlockLocator.{v2r2Family,v1r2Family,v0xqFamily}` 다.
   // 둘을 함께 켜면 드랍 전 검출이 그대로 돌아온다 (게이트는 한 값도 안 바뀌었다).
   if (options.includeDroppedCellSurfaceLayouts === true) return [...allFinalLayoutIdsForN(n)];
   return [...finalLayoutIdsForN(n)];
