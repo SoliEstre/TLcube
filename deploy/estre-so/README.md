@@ -49,11 +49,23 @@ docker compose --env-file ~/.secrets/estre.so.env \
   -f compose.yml -f projects/tlcube/docker-compose.yml restart tlcube-gen tlcube-scan
 ```
 
+### 표면 우선순위 (운영자 정정 2026-08-17)
+
+**시험판 (/lab/) 이 항상 최신이다 — 스테이징·정식보다 우선.** 세 표면의 갱신 기전:
+
+| 표면 | 마운트 | 갱신 | 역할 |
+|---|---|---|---|
+| 시험판 (`/lab/`) | 디렉터리 | **`git -C /srv/tlcube pull` 만으로 즉시** | 실험 검출기 인식 테스트 (정식은 `enableCellSurfaceY: isLabPath()` 게이트로 꺼져 있다 — scanner.js:715) |
+| 정식 (`/`) | 단일 파일 (inode) | pull 후 **restart 해야** 반영 = **판정 후 승격** | 실사용자 |
+| 스테이징 (tlstage) | 별도 체크아웃 | stage pull + restart | `/` = 무수집 정식 동일본 · `/lab/` = **무수집 시험판** (WS 부재 — 속도 A/B 대조군) |
+
+즉 «pull 만 / restart 까지» 가 시험판·정식의 승격 분리 스위치다.
+
 ### 스테이징 (tlstage — 선택, 운영자 지시 2026-08-17)
 
-정식과 **동일한 내용** (dist/tlscan.html — 수집 0) 을 별도 체크아웃 `/srv/tlcube-stage`
-에서 서빙한다. 목적: ① lab(수집) 대비 속도 분리 진단 ② 후보 빌드의 프로덕션 승격 전
-실기기 평가. 구성은 `projects/tlcube/docker-compose.stage.yml` (ingest 분리 전례).
+별도 체크아웃 `/srv/tlcube-stage` 를 서빙한다. 목적: ① 시험판(수집) 대비 속도 분리
+진단 (`tlstage/lab/` = 같은 빌드·무수집) ② 후보 빌드의 프로덕션 승격 전 실기기 평가.
+구성은 `projects/tlcube/docker-compose.stage.yml` (ingest 분리 전례).
 
 ```bash
 # 최초 1회
