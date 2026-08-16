@@ -275,6 +275,8 @@
      disabled 만으로는 브라우저마다 표시가 제각각이라 흐림을 여기서 정한다. */
   .check-row.dim { opacity: 0.45; }
   .check-row.dim label { cursor: default; }
+  #faceGainRow.dim { opacity: 0.45; }
+  #faceGainRow.dim label { cursor: default; }
   .hint { font-size: 11px; color: var(--dim); margin: 4px 0 0; line-height: 1.5; }
 
   /* ── 섹션 도움말 «?» + 플로팅 창 (2026-08-16 운영자 지시 A-2) ────────────
@@ -1207,9 +1209,11 @@
           </div>
         </div>
 
-        <label for="faceGain" data-i18n="g055">면 게인 강도 (1.0 평면 ~ 기본)</label>
-        <input type="range" id="faceGain" min="0" max="100" value="100" step="1">
-        <p class="slider-value" id="faceGainValue"></p>
+        <div id="faceGainRow">
+          <label for="faceGain" data-i18n="g055">면 게인 강도 (1.0 평면 ~ 프로파일)</label>
+          <input type="range" id="faceGain" min="0" max="100" value="100" step="1">
+          <p class="slider-value" id="faceGainValue"></p>
+        </div>
       </fieldset>
 
       <label for="qrUrl" data-i18n="g056">QR 폴백 URL (고급)</label>
@@ -1373,8 +1377,9 @@
           <button id="backdropFit" type="button" style="display:none" data-i18n="g062">위치 초기화</button>
         </div>
         <input type="file" id="backdropFile" accept="image/*" style="display:none">
-        <p class="hint" id="backdropHint" data-i18n-html="g300">코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.
-          미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠 또는 핀치로 확대/축소</b><span data-i18n="g083">할 수 있어요. 내보내는 파일에는 안 들어가요.</span></p>
+        <!-- #21 (운영자 지시): 다중행 설명은 «?»(g903) 로 이관 완료 — 여기엔 조작 단서
+             한 줄만 남긴다. «내보내는 파일에 안 들어가요» 는 바로 아래 g935 가 정본. -->
+        <p class="hint" id="backdropHint" data-i18n-html="g300">미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠 또는 핀치로 확대/축소</b><span data-i18n="g083">할 수 있어요.</span></p>
         <!-- 이 줄은 두 번 좁혔다가 **다시 넓혔다** — 이번엔 사실이 됐기 때문이다.
              ① 운영자 초안 «안전영역을 여건에 맞춰 자동으로 골라 준다» → 그 경로가 없었다.
              ② «색 판단에는 반영된다» → 그것도 아니었다 (2026-08-16 적대 검증 ⑤).
@@ -1870,7 +1875,7 @@ const GENERATOR_STRINGS = {
     "g052": "톤",
     "g053": "2톤",
     "g054": "3톤 (기본)",
-    "g055": "면 게인 강도 (1.0 평면 ~ 기본)",
+    "g055": "면 게인 강도 (1.0 평면 ~ 선택한 프로파일)",
     "g056": "QR 폴백 URL (고급)",
     "g057": "스타일 프리셋",
     "g058": "커스텀 Hue",
@@ -1898,7 +1903,7 @@ const GENERATOR_STRINGS = {
     "g080": "대용량",
     "g081": "고대비",
     "g082": "명함",
-    "g083": "할 수 있어요. 내보내는 파일에는 안 들어가요.",
+    "g083": "할 수 있어요.",
     "g084": "좌상",
     "g085": "우상",
     "g086": "좌하",
@@ -1909,7 +1914,7 @@ const GENERATOR_STRINGS = {
     "g204": "안쪽",
     "g206": "드래그로 이동",
     "g207": "휠 또는 핀치로 확대/축소",
-    "g300": "코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.\n          미리보기에서 <b>드래그로 이동</b>, <b>휠 또는 핀치로 확대/축소</b><span>할 수 있어요. 내보내는 파일에는 안 들어가요.</span>",
+    "g300": "미리보기에서 <b>드래그로 이동</b>, <b>휠 또는 핀치로 확대/축소</b><span>할 수 있어요.</span>",
     "g301": "동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume",
 
@@ -2016,7 +2021,7 @@ const GENERATOR_STRINGS = {
     "g979": "출력물용 — 세 면을 같은 밝기로 그려요. 인쇄 손실을 줄이고, 판독은 그대로예요.",
     "g980": "오리지널 — 시험판 전용 대조군이에요. R면 게인을 올리기 전 값이라 A/B 재스캔에만 쓰세요.",
     "g981": "입체 음영",
-    "g982": "코드 왼쪽 위에 조명이 있다고 보고, 코드 **바깥**에 그림자와 반사광을 둘러요.\n오른쪽 아래(R면 쪽)에는 그림자를, 왼쪽 아래(L면 쪽)에는 반사광을 깔아요. 어느 쪽에 무엇이 오는지는 세 면의 밝기(T가 가장 밝고 R이 가장 어두움)에서 그대로 따라 나와요.\n셀에는 절대 안 닿아요 — 안전영역과 배경 영역에만 그리고, 코드 도형과 겹치는 넓이가 0 이 되게 만들어요.\n배경이 투명이면 이 음영도 함께 내보내져서, 코드를 얹은 자리 위에 그대로 얹혀요.\n윗면 엣지 아웃라인은 별도 선택이에요 — 코드 위쪽 테두리에 얇은 반사광·그림자 선을 더해요. 인식률에 미치는 영향이 아직 확실하지 않아 기본은 꺼져 있어요.",
+    "g982": "코드 왼쪽 위에 조명이 있다고 보고, 코드 바깥에 그림자와 반사광을 둘러요.\n오른쪽 아래(R면 쪽)에는 그림자를, 왼쪽 아래(L면 쪽)에는 반사광을 깔아요. 어느 쪽에 무엇이 오는지는 세 면의 밝기(T가 가장 밝고 R이 가장 어두움)에서 그대로 따라 나와요.\n셀에는 절대 안 닿아요 — 안전영역과 배경 영역에만 그리고, 코드 도형과 겹치는 넓이가 0 이 되게 만들어요.\n배경이 투명이면 이 음영도 함께 내보내져서, 코드를 얹은 자리 위에 그대로 얹혀요.\n윗면 엣지 아웃라인은 별도 선택이에요 — 코드 위쪽 테두리에 얇은 반사광·그림자 선을 더해요. 인식률에 미치는 영향이 아직 확실하지 않아 기본은 꺼져 있어요.",
     "g983": "없음",
     "g984": "평면 그대로",
     "g985": "그림자·반사광",
@@ -2180,7 +2185,7 @@ const GENERATOR_STRINGS = {
     "g052": "Tones",
     "g053": "2 tones",
     "g054": "3 tones (default)",
-    "g055": "Face gain (1.0 = flat, default)",
+    "g055": "Face gain (1.0 = flat, up to the selected profile)",
     "g056": "QR fallback URL (advanced)",
     "g057": "Style preset",
     "g058": "Custom hue",
@@ -2208,7 +2213,7 @@ const GENERATOR_STRINGS = {
     "g080": "High capacity",
     "g081": "High contrast",
     "g082": "Contact card",
-    "g083": " in the preview. It is not included in the exported file.",
+    "g083": " in the preview.",
     "g084": "Top left",
     "g085": "Top right",
     "g086": "Bottom left",
@@ -2219,7 +2224,7 @@ const GENERATOR_STRINGS = {
     "g204": "Inside",
     "g206": "drag to move",
     "g207": "scroll or pinch to zoom",
-    "g300": "Add a photo of the surface you will place the code on and it appears behind the preview. You can <b>drag to move</b> and <b>scroll or pinch to zoom</b><span> in the preview. It is not included in the exported file.</span>",
+    "g300": "You can <b>drag to move</b> and <b>scroll or pinch to zoom</b><span> in the preview.</span>",
     "g301": "Same input → deterministic output · the data contract is only SPEC §4.4 (disc median order + Δmin) / §14 (Type Y)",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume",
 
@@ -2326,7 +2331,7 @@ const GENERATOR_STRINGS = {
     "g979": "Print — draws all three faces at the same brightness. Less print loss, same decoding.",
     "g980": "Original — trial-build control only. This is the R-face gain before it was raised; use it for A/B rescans only.",
     "g981": "3D shading",
-    "g982": "Assumes a light source at the top left and wraps shadow and reflected light **outside** the code.\nA shadow goes to the lower right (the R-face side) and reflected light to the lower left (the L-face side). Which side gets which follows directly from the three face brightnesses — T is brightest, R is darkest.\nIt never touches the cells: it is drawn only on the safe area and the background, with zero overlap area against the code shapes.\nWith a transparent background the shading is exported too, so it lands on whatever surface the code is placed on.\nThe top-edge outline is a separate choice — a thin reflected-light and shadow line along the upper border. Its effect on scan rate is not yet settled, so it is off by default.",
+    "g982": "Assumes a light source at the top left and wraps shadow and reflected light outside the code.\nA shadow goes to the lower right (the R-face side) and reflected light to the lower left (the L-face side). Which side gets which follows directly from the three face brightnesses — T is brightest, R is darkest.\nIt never touches the cells: it is drawn only on the safe area and the background, with zero overlap area against the code shapes.\nWith a transparent background the shading is exported too, so it lands on whatever surface the code is placed on.\nThe top-edge outline is a separate choice — a thin reflected-light and shadow line along the upper border. Its effect on scan rate is not yet settled, so it is off by default.",
     "g983": "None",
     "g984": "Flat",
     "g985": "Shadow · reflection",
@@ -2490,7 +2495,7 @@ const GENERATOR_STRINGS = {
     "g052": "トーン",
     "g053": "2トーン",
     "g054": "3トーン（標準）",
-    "g055": "面ゲイン強度（1.0 で平面・標準）",
+    "g055": "面ゲイン強度（1.0 で平面 ~ 選択したプロファイル）",
     "g056": "QR フォールバック URL（詳細）",
     "g057": "スタイルプリセット",
     "g058": "カスタム Hue",
@@ -2518,7 +2523,7 @@ const GENERATOR_STRINGS = {
     "g080": "大容量",
     "g081": "高コントラスト",
     "g082": "名刺",
-    "g083": "できます。書き出すファイルには含まれません。",
+    "g083": "できます。",
     "g084": "左上",
     "g085": "右上",
     "g086": "左下",
@@ -2529,7 +2534,7 @@ const GENERATOR_STRINGS = {
     "g204": "内側",
     "g206": "ドラッグで移動",
     "g207": "ホイールまたはピンチで拡大縮小",
-    "g300": "コードを実際に載せる面の写真を入れるとプレビューの背面に敷かれます。プレビューでは <b>ドラッグで移動</b>、<b>ホイールまたはピンチで拡大縮小</b><span>できます。書き出すファイルには含まれません。</span>",
+    "g300": "プレビューでは <b>ドラッグで移動</b>、<b>ホイールまたはピンチで拡大縮小</b><span>できます。</span>",
     "g301": "同じ入力 → 決定的な出力 · データ契約は SPEC §4.4（円板 median の順序 + Δmin）/ §14（Type Y）のみ",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume",
 
@@ -2636,7 +2641,7 @@ const GENERATOR_STRINGS = {
     "g979": "印刷用 — 3面を同じ明るさで描きます。印刷での損失を減らし、読み取りは変わりません。",
     "g980": "オリジナル — 試験版専用の対照群です。R面ゲインを上げる前の値なので A/B 再スキャンにのみ使ってください。",
     "g981": "立体陰影",
-    "g982": "コードの左上に光源があるとみなして、コードの**外側**に影と反射光を回します。\n右下（R面側）に影を、左下（L面側）に反射光を敷きます。どちら側に何が来るかは、3面の明るさ（Tが最も明るくRが最も暗い）からそのまま導かれます。\nセルには決して触れません — 安全領域と背景領域だけに描き、コード図形との重なり面積が 0 になるように作ります。\n背景が透明ならこの陰影も一緒に書き出され、コードを置いた面の上にそのまま重なります。\n上辺エッジのアウトラインは別の選択です — コード上側の縁に細い反射光・影の線を足します。読み取り率への影響がまだ確かでないため既定はオフです。",
+    "g982": "コードの左上に光源があるとみなして、コードの外側に影と反射光を回します。\n右下（R面側）に影を、左下（L面側）に反射光を敷きます。どちら側に何が来るかは、3面の明るさ（Tが最も明るくRが最も暗い）からそのまま導かれます。\nセルには決して触れません — 安全領域と背景領域だけに描き、コード図形との重なり面積が 0 になるように作ります。\n背景が透明ならこの陰影も一緒に書き出され、コードを置いた面の上にそのまま重なります。\n上辺エッジのアウトラインは別の選択です — コード上側の縁に細い反射光・影の線を足します。読み取り率への影響がまだ確かでないため既定はオフです。",
     "g983": "なし",
     "g984": "平面のまま",
     "g985": "影・反射光",
@@ -2902,7 +2907,7 @@ const els = {
   ecc: $('ecc'), preset: $('preset'),
   optionsY: $('optionsY'), toneNormalSection: $('toneNormalSection'),
   toneCardsNormal: $('toneCardsNormal'), toneCardsAdvanced: $('toneCardsAdvanced'),
-  faceGain: $('faceGain'), faceGainValue: $('faceGainValue'),
+  faceGain: $('faceGain'), faceGainValue: $('faceGainValue'), faceGainRow: $('faceGainRow'),
   qrUrl: $('qrUrl'),
   // 공용 컨트롤 (QR 위치 6택 + 병행 표시 + 게이지 + 장식 이미지)
   cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
@@ -5387,12 +5392,21 @@ function syncBackdropLayer() {
   syncBackdropUi();
   if (generatorState.bgMode !== 'transparent' || !backdrop.bitmap) {
     lastBackdropLuminance = null;
+    // 사진이 빠진 프레임에 힌트도 같이 되돌린다 — 안 그러면 이미 지운 사진의 휘도를
+    // 근거로 «검정» 을 계속 주장해 화면이 산출물과 모순된다 (검증 렌즈 실측 결함).
+    syncQuietModeUi();
     maybeRerenderForQuietAuto();
     return;
   }
   drawBackdrop();
   const m = measureBackdrop();
-  if (!m) { els.backdropVerdict.style.display = 'none'; return; }
+  if (!m) {
+    lastBackdropLuminance = null;
+    syncQuietModeUi();
+    maybeRerenderForQuietAuto();
+    els.backdropVerdict.style.display = 'none';
+    return;
+  }
   lastBackdropLuminance = m.meanY;
   // 힌트는 지금 값으로 다시 쓴다 — 사진이 색을 갈랐다는 사실이 화면에 남아야 한다.
   syncQuietModeUi();
@@ -5878,6 +5892,12 @@ function syncFaceGainLabel() {
   const ratio = gainRatio(g);
   els.faceGainValue.textContent =
     `T ${g.T.toFixed(2)} · L ${g.L.toFixed(2)} · R ${g.R.toFixed(2)} · γ=${ratio.toFixed(3)} (≤ 2)`;
+  // 출력물용 {1,1,1} 은 보간 양끝이 같아 슬라이더가 무동작이다 — shadingRim 과 같은
+  // 원칙으로 잠근다 («움직였는데 아무 일도 안 일어난다» 를 만들지 않는다).
+  const base = profileFaceGains();
+  const flat = base.L === 1 && base.R === 1;
+  els.faceGain.disabled = flat;
+  els.faceGainRow.classList.toggle('dim', flat);
 }
 syncFaceGainLabel();
 

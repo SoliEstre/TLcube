@@ -53,7 +53,9 @@
  *   quietMode 'auto'  + 배경 흰/검          → 없음 (불투명 배경이 이미 분리를 준다)
  *
  *   decide(sepW, sepB, surfaceY):
- *     사진 없음(surfaceY = null) → |sepW − sepB| > 0.02 ? 큰 쪽 : 흰색
+ *     사진 없음(surfaceY = null) → 셀 분리가 큰 쪽 (완전 동점이면 흰색 — 종전
+ *                                 highContrastQuietColor 와 동일; 문턱은 이 가지에
+ *                                 관여하지 않는다)
  *     사진 있음                  → okW = sepW ≥ 0.05 · okB = sepB ≥ 0.05
  *                                 okW ≠ okB          → 통과한 쪽
  *                                 둘 다 탈락          → 셀 분리가 큰 쪽

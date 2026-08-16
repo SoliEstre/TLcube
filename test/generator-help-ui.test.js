@@ -159,8 +159,9 @@ test('배치 미리보기 안내는 도달 가능한 동작만 주장한다', ()
   //     ③ 과업 #18 이 그 입력을 1급으로 올렸다 (src/quiet-auto.js). 문턱은 그대로 두고
   //        **순서**를 바꿨다 — 이제 사진이 실제로 흰/검을 정한다.
   //   그래서 이 테스트가 지키는 계약은 «주장하지 마라» 에서 **«주장한 대로 동작하는지»**
-  //   로 옮겨간다. 아래 doesNotMatch 목록은 그대로 둔다 — ①② 시절의 **옛 문구**가
-  //   되살아나는 것은 여전히 결함이다 (그 문구들은 지금 규칙도 잘못 설명한다).
+  //   로 옮겨간다. 아래 doesNotMatch 목록은 그대로 둔다 — 일부는 지금 규칙에서 참인
+  //   문장이 됐지만, 정본 문구는 g935 한 곳이어야 한다. 같은 사실을 다른 문장으로
+  //   두 번 적으면 다음 규칙 변경 때 한쪽만 고쳐진다.
   assert.match(INDEX, /id="backdropQuietNote"[^>]*data-i18n="g935"/);
   assert.doesNotMatch(INDEX, /안전영역 옵션을 삽입할 곳 여건에 맞춰 자동 선택해 줍니다/);
   assert.match(langBlock('ko'), /"g935": "\* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서/);
@@ -185,7 +186,7 @@ test('배치 미리보기 안내는 도달 가능한 동작만 주장한다', ()
   assert.match(INDEX, /resolveQuietZoneChoice/);
 });
 
-test('안전영역 타이브레이크는 등록 프리셋 전부에서 도달 불가다 (실측)', () => {
+test('안전영역 — 문턱 타이브레이크는 프리셋 전부에서 죽지만, 새 규칙(순서 교체)에선 표면 밝기가 답을 가른다 (실측)', () => {
   // ⚠ **의도적 갱신** (2026-08-16, 과업 #18): 재는 것은 그대로, **결론이 바뀌었다**.
   //   종전 결론은 «그러니 문구에서 빼라» 였다. 지금 결론은 «그러니 문턱이 아니라
   //   순서를 바꿔라» 다 — 아래 수치가 바로 그 근거다. 문턱을 0 까지 내려도 표면은
@@ -509,4 +510,37 @@ test('번들에도 도움말 모듈과 3태 뱃지가 임베드된다', () => {
   assert.match(bundle, /SELFCHECK_TIGHT_RATIO/);
   assert.match(bundle, /selfCheckVerdict/);
   assert.match(bundle, /"help-popover"/);
+});
+
+// ── 검증 렌즈 봉합 (2026-08-16 render-batch retire) ───────────────────────
+
+test('배치 사진이 빠지면 안전영역 힌트도 같은 프레임에 되돌린다 (낡은 근거 금지)', () => {
+  // 검증 렌즈 실측 결함: 사진 제거·배경 전환 뒤에도 힌트가 «이미 지운 사진의 휘도»
+  // 를 근거로 검정을 주장했다 — 실제 산출물은 흰색인데. 스위트는 순수 함수만 재므로
+  // 이 배선은 소스 앵커로 고정한다. 가지 슬라이스를 잘라 검사한다 — 느슨한 정규식은
+  // 가지 밖의 호출에 걸려 거짓 통과가 된다.
+  const fn = INDEX.slice(
+    INDEX.indexOf('function syncBackdropLayer()'),
+    INDEX.indexOf('els.backdropPick.addEventListener'),
+  );
+  assert.ok(fn.length > 0, 'syncBackdropLayer 를 못 찾았다');
+  const early = fn.slice(fn.indexOf("!backdrop.bitmap) {"), fn.indexOf('drawBackdrop();'));
+  assert.ok(early.includes('lastBackdropLuminance = null;'), '이른 반환 가지가 휘도를 안 지운다');
+  assert.ok(early.includes('syncQuietModeUi();'), '이른 반환 가지가 힌트를 재동기화하지 않는다');
+  const noMeasure = fn.slice(fn.indexOf('if (!m) {'), fn.indexOf('lastBackdropLuminance = m.meanY;'));
+  assert.ok(noMeasure.includes('lastBackdropLuminance = null;'), '측정 실패 가지가 휘도를 안 지운다');
+  assert.ok(noMeasure.includes('syncQuietModeUi();'), '측정 실패 가지가 힌트를 재동기화하지 않는다');
+});
+
+test('사전 값에 마크다운 강조(**)가 없다 — 팝오버는 textContent 렌더다', () => {
+  for (const lang of LANGS) {
+    assert.ok(!langBlock(lang).includes('**'),
+      `${lang}: 사전 값에 ** 가 남았다 (별표가 화면에 그대로 보인다)`);
+  }
+});
+
+test('출력물용(3면 동률)에서는 면 게인 슬라이더를 잠근다 — 살아 있는 무동작 컨트롤 금지', () => {
+  assert.match(INDEX, /els\.faceGain\.disabled = flat;/);
+  assert.match(INDEX, /els\.faceGainRow\.classList\.toggle\('dim', flat\)/);
+  assert.match(INDEX, /#faceGainRow\.dim \{ opacity: 0\.45; \}/);
 });
