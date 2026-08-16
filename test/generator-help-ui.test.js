@@ -564,3 +564,13 @@ test('#22 — v0 계열 해상도는 로케이터와 연동된다 (v0 ↔ v0W/v0
     assert.match(langBlock(lang), /"g964": "/, lang + ': 연동 문구 g964 누락');
   }
 });
+
+test('«면» QR 과 중앙 QR 검출기는 겹치지 않는다 — 전환·억제 (운영자 판정 2026-08-17)', () => {
+  // 실기기 스크린샷 결함: v0XQ (중앙 QR) + 면 QR 이 동시에 렌더돼 QR 이 두 개.
+  // ① 면 클릭 시 중앙 QR 검출기는 비-QR 짝으로 전환된다.
+  assert.match(INDEX, /card\.dataset\.pos === 'plane'/);
+  assert.match(INDEX, /LOCATOR_PROFILE_CELL_SURFACE_V0WQ\) \{\s*generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;/);
+  assert.match(INDEX, /LOCATOR_PROFILE_CELL_SURFACE_V0XQ\) \{\s*generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0X;/);
+  // ② 반대 방향은 렌더 급 억제 — 중앙 QR 레이아웃이면 outerFaceQr 를 안 켠다.
+  assert.match(INDEX, /fallback\.mode === 'plane'\s*&& opts\.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0XQ\s*&& opts\.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0WQ/);
+});

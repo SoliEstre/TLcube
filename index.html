@@ -4125,6 +4125,19 @@ for (const card of els.typeCards.children) {
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     const type = currentType();
+    // 정합 (운영자 판정 2026-08-17): «면»(v0WY) QR 과 중앙 QR 검출기 (v0XQ/v0WQ) 를
+    // 함께 두면 QR 이 두 개가 된다. 면을 고른 것은 «QR 은 면-평면으로» 라는 뜻이므로
+    // 검출기를 비-QR 짝으로 바꾼다 (v0wq→v0w · v0xq→v0x). 반대 방향 (중앙 QR 검출기
+    // 선택 시) 은 buildScene 이 코너 QR 과 같은 규칙으로 면 QR 을 억제한다.
+    if (type === 'Y' && card.dataset.pos === 'plane') {
+      if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;
+        syncYLocatorUi();
+      } else if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0XQ) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0X;
+        syncYLocatorUi();
+      }
+    }
     commitFinderQrUi(
       selectQrPosition(generatorState, card.dataset.pos, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
     );
@@ -6371,7 +6384,11 @@ function renderTypeY(cfg) {
     // '면'(v0WY) — 큐브 바깥 면-평면 QR. 코너 억제는 sceneY 가 같은 규칙으로 한다.
     // margin 은 sceneY 가 요구치(15.5셀)를 스스로 검사하고, 여기서는 그 값을 넘긴다:
     // 기본 margin(20셀)이 이미 충분하므로 평소에는 아무것도 안 바뀐다.
-    if (cfg.fallback.mode === 'plane') sceneOpts.outerFaceQr = true;
+    // 중앙 QR 레이아웃 (v0XQ/v0WQ) 에서는 면 QR 을 코너 QR 과 같은 규칙으로 억제한다
+    // — 안 그러면 QR 이 두 개가 된다 (운영자 판정 2026-08-17, 실기기 스크린샷).
+    if (cfg.fallback.mode === 'plane'
+      && opts.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0XQ
+      && opts.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0WQ) sceneOpts.outerFaceQr = true;
   }
   // v0XQ(중앙 QR 변형)는 슬롯 81셀이 **레이아웃 정의**라 QR 이 선택 사항이 아니다.
   // 폴백 «끔» 이어도 텍스트를 넘겨야 한다 — 안 넘기면 sceneY 가 «슬롯이 비어 버린다»
