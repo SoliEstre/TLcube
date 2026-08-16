@@ -71,7 +71,8 @@ test('셀 표면 v0 는 version=0 을 강제하되 사용자 톤을 보존하고
     assert.equal(encoded.n, 13);
     assert.equal(encoded.tones, tone);
     assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
-    assert.equal(encoded.capacity.dataCells, 112);
+    // 의도적 갱신 (2026-08-16, 포맷 v2): 포맷 15→18 → data 112→109.
+    assert.equal(encoded.capacity.dataCells, 109);
   }
 });
 
@@ -95,7 +96,8 @@ test('셀 표면 v2r2 는 Y1 기본·Y2 명시 선택만 n=25 이고 사용자 �
       assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
       // 의도적 갱신 (2026-08-16): v2r2 중앙 블록 교체(painted 65→74)로 data 가
       // 349→340 · 533→524 로 재산정됐다.
-      assert.equal(encoded.capacity.dataCells, wantN === 25 ? 524 : 340);
+      // 의도적 갱신 (2026-08-16, 포맷 v2): data 340→337 · 524→521.
+      assert.equal(encoded.capacity.dataCells, wantN === 25 ? 521 : 337);
     }
   }
 });
@@ -126,8 +128,9 @@ test('셀 표면 v0X 는 버전 선택과 무관하게 Y1(n=21) 이고 사용자
       assert.equal(encoded.locatorProfile, 'cell-surface-v0x');
       assert.equal(encoded.n, 21);
       assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
-      // v0X 는 파인더가 65셀이라 v1r2(334)·v2r2(340) 보다 데이터가 많다.
-      assert.equal(encoded.capacity.dataCells, 349);
+      // v0X 는 파인더가 65셀이라 v1r2(331)·v2r2(337) 보다 데이터가 많다.
+      // 의도적 갱신 (2026-08-16, 포맷 v2): 349→346.
+      assert.equal(encoded.capacity.dataCells, 346);
     }
   }
 });
@@ -153,7 +156,8 @@ test('셀 표면 v1r2 는 버전 선택과 무관하게 Y1(n=21) 이고 사용�
       assert.equal(encoded.locatorProfile, 'cell-surface-v1r2');
       assert.equal(encoded.n, 21);
       assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
-      assert.equal(encoded.capacity.dataCells, 334);
+      // 의도적 갱신 (2026-08-16, 포맷 v2): 334→331.
+      assert.equal(encoded.capacity.dataCells, 331);
     }
   }
 });

@@ -45,6 +45,8 @@ import {
   isCellSurfaceFinalFormatIndex,
   isCellSurfaceFinalId,
   tonesFromCellSurfaceFinalFormatIndex,
+  CELL_SURFACE_FINAL_FORMAT_WIRE,
+  CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
 } from './cellSurfaceFinal.js';
 import {
   CHUNK_BYTES,
@@ -53,7 +55,7 @@ import {
   symbolCountForByteLength,
 } from './base211.js';
 import { rsDecode } from './rs211.js';
-import { maskSub } from './mask.js';
+import { maskSub, DEFAULT_MASK_INDEX, assertMaskIndex } from './mask.js';
 import { unframe } from './header.js';
 import {
   VERSIONS_OCM,
@@ -153,7 +155,7 @@ function finishProfile(profile) {
       + ' — 이 포맷은 현행 인코더가 생성할 수 없다',
     );
   }
-  return { ...profile, symbolDigits };
+  return { ...profile, symbolDigits, maskIndex: profile.maskIndex ?? DEFAULT_MASK_INDEX };
 }
 
 /**
@@ -399,12 +401,35 @@ function resolveProfile(format) {
       if (finalIdHint !== null) assertCellSurfaceFinalN(finalIdHint, finalN);
       // n=21 은 후보가 둘 — 힌트가 없으면 기본(v2r2). 레이아웃 판별은 로케이터·평가 게이트가 한다.
       const finalId = finalIdHint === null ? finalLayoutIdForN(finalN) : finalIdHint;
+      // 포맷 세대 — 기본은 현행 v2(18셀). `formatWire: 1` 이면 **레거시 판독**(15셀)이라
+      // 예약 셀이 3개 적고 데이터 scan 이 그만큼 길다(통합자 결정 A · 폴백 경로).
+      const formatWire = format.formatWire === undefined
+        ? CELL_SURFACE_FINAL_FORMAT_WIRE
+        : format.formatWire;
+      if (formatWire !== CELL_SURFACE_FINAL_FORMAT_WIRE
+        && formatWire !== CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY) {
+        throw new RangeError('포맷 와이어 세대는 2(현행) 또는 1(레거시): ' + formatWire);
+      }
+      // 포맷 v2 — 마스크 index 는 포맷 워드에서 읽어 온 값이 여기로 들어온다.
+      // 생략하면 0(개정 전 고정 마스크)이라 기존 호출부의 동작이 바뀌지 않는다.
+      // 레거시 v1 워드에는 마스크 필드 자체가 없으므로 index 는 **0 고정**이다.
+      const requestedMaskIndex = assertMaskIndex(
+        format.maskIndex === undefined ? DEFAULT_MASK_INDEX : format.maskIndex,
+      );
+      if (formatWire === CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY
+        && requestedMaskIndex !== DEFAULT_MASK_INDEX) {
+        throw new RangeError(
+          '레거시 포맷 v1 은 마스크 index 필드가 없다 — 0 이어야 한다: ' + requestedMaskIndex,
+        );
+      }
       return finishProfile({
         type,
         eccLevel,
-        capacity: capacityForCellSurfaceFinal(finalN, eccLevel, finalTones, finalId),
-        scan: dataCellsInScanOrderCellSurfaceFinal(finalN, finalId),
+        capacity: capacityForCellSurfaceFinal(finalN, eccLevel, finalTones, finalId, formatWire),
+        scan: dataCellsInScanOrderCellSurfaceFinal(finalN, finalId, formatWire),
         coordinates: (cell) => [cell.i, cell.j],
+        maskIndex: requestedMaskIndex,
+        formatWire,
       });
     }
 
@@ -544,7 +569,9 @@ function unmaskSymbolDigits(cellDigits, profile) {
       throw new RangeError('digit 범위 위반 (scan index ' + i + '): ' + digit + ' (허용 0..5)');
     }
     const [x, y] = profile.coordinates(profile.scan[i]);
-    out[i] = maskSub(digit, x, y);
+    // maskIndex 는 포맷 v2(신세대 셀 표면)만 0 이 아닐 수 있다 — 다른 경로는
+    // profile.maskIndex 가 0 이라 개정 전과 동일한 연산이다.
+    out[i] = maskSub(digit, x, y, profile.maskIndex);
   }
   return out;
 }
@@ -690,6 +717,14 @@ export function decodeCells(cellDigits, format, options = {}) {
     profile = resolveProfile(format);
   } catch (cause) {
     return fail('format', cause);
+  }
+
+  // 마스크 index 를 «조용히 무시» 하지 않는다 — 포맷 v2(신세대 셀 표면) 이외의
+  // 경로에 0 이 아닌 index 가 오면 호출자가 경로를 착각한 것이다.
+  if (format.maskIndex !== undefined && format.maskIndex !== profile.maskIndex) {
+    return fail('format', new RangeError(
+      'maskIndex=' + format.maskIndex + ' 는 이 경로(포맷 v1)가 쓰지 않는다',
+    ));
   }
 
   let unmasked;

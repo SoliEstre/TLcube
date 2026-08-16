@@ -16,8 +16,11 @@
  *      실패한다 (개선이 게이트가 아니라 기하 재정렬에서 왔다는 대조군).
  *   6. 정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터는 돌지 않는다.
  *   7. (2026-08-15 밤) v1r2 패밀리 — 네 코너 블록. 회전 스윕 없이 중앙+면T 먼코너
- *      similarity 시드 → 4앵커 직접 DLT → 12 서브앵커 최소제곱. S-커브에서
- *      **body RS 복호까지** 가고 회전 슬롯 0/120/240 전수를 통과한다.
+ *      similarity 시드 → 4앵커 직접 DLT → 12 서브앵커 최소제곱.
+ *      ⚠ (2026-08-16 r2 재고정) 이 축은 **무왜곡만 초록**이다. 톤 왜곡(S-커브 0.6 ·
+ *      감마 0.7/0.6)과 rot0 에서는 복호가 실패하는 것이 현재 정본 거동이고,
+ *      아래 «알려진 약점 핀» 블록이 그 실패의 **종류와 단계까지** 고정한다.
+ *      근거: 개정 전에도 이 레이아웃은 6 페이로드 중 1개만 통과했다(픽스처 운).
  *   8. (2026-08-16 중앙 통일) 조기 분기 — 세 패밀리 중앙이 공유 K3 라 패밀리·n 판별은
  *      2차 앵커(K5 원거리 코어)가 맡는다. n=21 에선 v2r2·v1r2 후보 포즈가 **둘 다**
  *      서는 것이 새 기대(오수용 부재는 복호 결과로 고정), v0 프레임은 앵커드 포즈 0,
@@ -170,28 +173,73 @@ test('정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터�
     '정식 경로 진단에 블록 로케이터 흔적이 있다');
 });
 
-// ─────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════
 // v1r2 패밀리 (2026-08-15 밤) — 네 코너 블록 · 회전 스윕 없음.
-// ─────────────────────────────────────────────────────────────────────────
+//
+// ⚠ **알려진 약점 핀 (2026-08-16 r2 픽스 라운드 · 운영자 결정 D)**
+//
+// 아래 테스트들은 «되기를 바라는 것» 이 아니라 **잰 것**을 고정한다. 포맷 v2
+// 전환(포맷 셀 15→18)이 이 고정 프레임에서 v1r2 포즈 경로를 무너뜨렸다:
+// `poseCount = {v2r2:0, v1r2:0, v0x:0, v0:6}` — 기하 가설이 n=13 으로 잡힌다.
+//
+// 왜 «테스트를 고쳐 통과시키지» 않았나 (근거는 `test/output/claude-mask-select.md`):
+//  · §6.3 대조군 — 개정 **전** 트리에서 같은 12-페이로드 코퍼스 앞 6개를 재면
+//    v2r2@21 은 6/6, **v1r2@21 은 1/6** 이었다. 이 레이아웃의 왜곡 강건성은
+//    개정 전에도 6분의 1이었고, 초록이던 이 테스트는 **픽스처 페이로드 하나가
+//    운 좋게 맞았던 것**이다. 포맷 v2 는 그 운을 다른 자리로 옮겼을 뿐이다.
+//  · 통과하는 마스크(m2)를 픽스처에 못 박거나 페이로드를 바꾸면 «테스트를
+//    통과시키는 값» 을 고르는 과적합이다 — 금지 항목(운영자 결정 D).
+//  · §4.5 실측대로 현행 §5.3 페널티는 왜곡 통과의 대리가 아니라 이 축을 못 고른다
+//    (오라클 4/6 vs 페널티 선택 0/6). 가중치 튜닝으로도 복구되지 않는다.
+//
+// 그래서 **측정된 진실을 단언**한다. 이 핀들은 «영구히 실패해도 된다» 는 면허가
+// 아니다 — 누가 로케이터·레이아웃을 고쳐 v1r2 가 살아나면 여기가 빨개지고,
+// 그때 이 블록을 «복호 성공» 으로 되돌리는 것이 정상 절차다.
+//
+// 무왜곡 축은 여전히 초록이므로(아래 첫 테스트) 약점은 **톤 왜곡 축에 한정**된다.
+// ═════════════════════════════════════════════════════════════════════════
 
-test('v1r2 S-커브 — CS 수용을 넘어 body RS 복호까지 간다', { timeout: 300_000 }, () => {
-  const result = decodeLab(distortImage(V1R2_FRAME, { sCurve: 0.6, fill: FILL }));
-  assert.equal(result.ok, true, 'v1r2 S-커브 복호: ' + (result.reason || ''));
+test('v1r2 무왜곡 — 자기 레이아웃으로 복호된다 (약점은 톤 왜곡 축에 한정)', {
+  timeout: 300_000,
+}, () => {
+  const result = decodeLab(V1R2_FRAME);
+  assert.equal(result.ok, true, 'v1r2 무왜곡 복호: ' + (result.reason || ''));
   assert.equal(result.text, PAYLOAD);
   assert.equal(result.hypothesis.cellSurfaceLayout, 'v1r2');
 });
 
-test('v1r2 감마 0.7/0.6 — 두 커브 모두 복호된다', { timeout: 300_000 }, () => {
+test('⚠ 알려진 약점 — v1r2 S-커브 0.6 은 «복호 실패» 가 현재 정본 거동이다', {
+  timeout: 300_000,
+}, () => {
+  const result = decodeLab(distortImage(V1R2_FRAME, { sCurve: 0.6, fill: FILL }));
+  // 실패의 **종류**까지 고정한다 — 오독(다른 본문을 내놓음)은 여전히 금지다.
+  assert.equal(result.ok, false,
+    'v1r2 S-커브가 복호됐다 — 약점이 고쳐졌다면 이 핀을 «복호 성공» 으로 되돌려라');
+  assert.equal(result.reason, 'frontend:no-format-candidate');
+  assert.equal(result.text, undefined, '실패 경로가 본문을 내놓았다 (오독)');
+});
+
+test('⚠ 알려진 약점 — v1r2 감마 0.7/0.6 도 실패한다 (실패 단계는 커브마다 다르다)', {
+  timeout: 300_000,
+}, () => {
+  // 감마 0.7 은 포맷 후보 전멸, 감마 0.6 은 그보다 앞 단계(앵커)에서 죽는다.
+  // 실패 단계가 다르다는 사실 자체가 «한 가지 병목» 이 아니라는 진단 자료다.
+  const expected = { 0.7: 'frontend:no-format-candidate', 0.6: 'frontend:no-anchors' };
   for (const gamma of [0.7, 0.6]) {
     const result = decodeLab(distortImage(V1R2_FRAME, { gamma, fill: FILL }));
-    assert.equal(result.ok, true, 'v1r2 감마 ' + gamma + ': ' + (result.reason || ''));
-    assert.equal(result.text, PAYLOAD);
-    assert.equal(result.hypothesis.cellSurfaceLayout, 'v1r2');
+    assert.equal(result.ok, false, 'v1r2 감마 ' + gamma + ' 가 복호됐다 — 핀을 되돌려라');
+    assert.equal(result.reason, expected[gamma], 'v1r2 감마 ' + gamma + ' 실패 단계');
+    assert.equal(result.text, undefined, '실패 경로가 본문을 내놓았다 (오독)');
   }
 });
 
-test('v1r2 회전 슬롯 0/120/240 전수 — 물리 회전은 H 가 흡수한다', { timeout: 600_000 }, () => {
-  for (const rotation of [0, 120, 240]) {
+test('v1r2 회전 슬롯 — 감마 0.7 에서 120/240 은 복호되고 ⚠ rot0 만 실패한다', {
+  timeout: 600_000,
+}, () => {
+  // 물리 회전이 오히려 산다는 것이 핵심 관측이다: 약점은 «v1r2 패밀리 전반» 이
+  // 아니라 이 프레임의 **특정 자세**에서 진짜 앵커가 예산에서 밀리는 것이다
+  // (정본 §3.1 «mimic 의 실질 피해 = 진짜 앵커가 슬라이스 예산에서 밀려남»).
+  for (const rotation of [120, 240]) {
     const result = decodeLab(distortImage(V1R2_FRAME, {
       gamma: 0.7, rotation, fill: FILL,
     }));
@@ -201,22 +249,30 @@ test('v1r2 회전 슬롯 0/120/240 전수 — 물리 회전은 H 가 흡수한�
     // 로케이터가 회전을 H 로 흡수하므로 가설 슬롯은 항상 0 이다.
     assert.equal(result.hypothesis.rotationDegrees, 0, 'v1r2 rot' + rotation + ' 슬롯');
   }
+  const rot0 = decodeLab(distortImage(V1R2_FRAME, { gamma: 0.7, rotation: 0, fill: FILL }));
+  assert.equal(rot0.ok, false, 'v1r2 rot0 이 복호됐다 — 핀을 되돌려라');
+  assert.equal(rot0.reason, 'frontend:no-format-candidate');
 });
 
 test('v1r2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동일 산출', { timeout: 300_000 }, () => {
   const luma = toRelativeLuminance(distortImage(V1R2_FRAME, { gamma: 0.7, fill: FILL }));
   const first = detectCellSurfaceBlockShapes(luma);
   const second = detectCellSurfaceBlockShapes(luma);
+  // 결정성은 약점과 무관하게 유지돼야 하는 계약이다 — 여기가 이 테스트의 본론.
   assert.deepEqual(
     JSON.parse(JSON.stringify(second)),
     JSON.parse(JSON.stringify(first)),
   );
-  assert.ok(first.diagnostics.poseCount.v1r2 >= 1, 'v1r2 포즈 최소 1개');
+  // ⚠ 알려진 약점 핀: 이 프레임·이 왜곡에서 앵커드 패밀리는 하나도 서지 않고
+  // v0 스윕 폴백만 산다. 개정 전에는 v1r2 포즈가 섰다(적대 검증 F3 대조표).
+  assert.deepEqual(first.diagnostics.poseCount, {
+    v2r2: 0, v1r2: 0, v0x: 0, v0: 6,
+  }, '포즈 분포가 잰 값과 다르다 — 약점이 움직였으면 §6 을 재측정하고 핀을 갱신하라');
   const families = first.shapes.map((shape) => shape.blockLocator.family);
-  assert.ok(families.includes('v1r2'), 'v1r2 shape 가 없다: ' + families.join(','));
+  assert.ok(!families.includes('v1r2'), 'v1r2 shape 가 살아났다 — 핀을 되돌려라');
 });
 
-test('v1r2 패밀리를 끄면 v1r2 포즈가 사라진다 (패밀리 격리 대조군)', {
+test('v1r2 패밀리 격리 대조군 — 끄면 v1r2 포즈 0 (⚠ 현재는 켜도 0)', {
   timeout: 300_000,
 }, () => {
   const luma = toRelativeLuminance(distortImage(V1R2_FRAME, { gamma: 0.7, fill: FILL }));
@@ -224,12 +280,14 @@ test('v1r2 패밀리를 끄면 v1r2 포즈가 사라진다 (패밀리 격리 대
     calibration: { csBlockLocator: { v1r2Family: false } },
   });
   assert.equal(off.diagnostics.poseCount.v1r2, 0);
-  // 의도적 갱신 (2026-08-16, 중앙 통일): v1r2 프레임의 K3 중앙 + 면T SE 코어(18셀)는
-  // v2r2@21 스냅(17.5셀, ±3.2)에도 걸리므로 v2r2 **후보 포즈**가 서는 것이 정상이다.
-  // 레이아웃 확정은 CS 평가 게이트가 한다 — 아래 회귀 테스트가 오수용 부재를 고정한다.
-  assert.ok(off.diagnostics.poseCount.v2r2 >= 1,
-    'v1r2 프레임의 공유 중앙에서 v2r2 후보 포즈가 서야 한다: '
-    + JSON.stringify(off.diagnostics.poseCount));
+  // ⚠ 알려진 약점 핀 — 이 대조군은 **잠들었다**. 스위치를 켜도 이 프레임에서
+  // v1r2 포즈가 0 이므로(위 결정성 핀) «끄면 사라진다» 를 관측할 수 없다.
+  // 함께 잰 것: 중앙 공유로 서던 v2r2 후보 포즈도 같이 0 이 됐다 —
+  // 즉 포맷 v2 −3셀은 이 프레임에서 **앵커드 포즈 예산 전체**를 깎았다
+  // (적대 검증 F3: v2r2@21 도 ppu12 6→4 · ppu15 4→2 · ppu17 6→4).
+  assert.deepEqual(off.diagnostics.poseCount, {
+    v2r2: 0, v1r2: 0, v0x: 0, v0: 6,
+  }, '격리 대조군의 전제가 움직였다 — 재측정하고 핀을 갱신하라');
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -319,16 +377,26 @@ test('v0X 패밀리를 끄면 v0x 포즈가 사라진다 (패밀리 격리 대�
     + JSON.stringify(off.diagnostics.poseCount));
 });
 
-test('사각 링 게이트를 끄면 v1r2 프레임에도 v0x 헛포즈가 선다 (게이트 효과 대조군)', {
+test('⚠ 사각 링 게이트 효과 대조군 — v1r2 프레임에서는 잠들었다 (켜도 꺼도 v0x 0)', {
   timeout: 300_000,
 }, () => {
   const luma = toRelativeLuminance(distortImage(V1R2_FRAME, { gamma: 0.7, fill: FILL }));
+  const gated = detectCellSurfaceBlockShapes(luma);
   const ungated = detectCellSurfaceBlockShapes(luma, {
     calibration: { csBlockLocator: { v0xRequireSquareRing: false } },
   });
-  assert.ok(ungated.diagnostics.poseCount.v0x >= 1,
-    '게이트를 꺼도 헛포즈가 없다면 이 대조군의 전제가 바뀐 것: '
+  // ⚠ 알려진 약점 핀 (2026-08-16 r2, 운영자 결정 D). 이 대조군은 «게이트를 끄면
+  // v0x 헛포즈가 선다» 를 보여 게이트가 값을 한다는 증거였다. 포맷 v2 전환 뒤
+  // 이 프레임에서는 **어떤 앵커드 패밀리도 시딩되지 않아**(위 v1r2 핀) 게이트를
+  // 꺼도 켜도 v0x 가 0 이다 — 게이트가 약해진 것이 아니라 관측 대상이 사라졌다.
+  // 게이트의 실효 증거는 v0X 프레임 쪽 테스트들(동반자 ≥2 · 자기 레이아웃 복호)이
+  // 계속 들고 있다. v1r2 포즈가 살아나면 이 핀이 빨개지고 원래 대조군으로 되돌린다.
+  assert.equal(gated.diagnostics.poseCount.v0x, 0);
+  assert.equal(ungated.diagnostics.poseCount.v0x, 0,
+    '게이트를 끄니 헛포즈가 섰다 — 대조군이 깨어났으니 원래 단언으로 되돌려라: '
     + JSON.stringify(ungated.diagnostics.poseCount));
+  assert.deepEqual(ungated.diagnostics.poseCount, gated.diagnostics.poseCount,
+    '게이트 on/off 로 포즈 분포가 달라졌다 — 대조군을 되살릴 수 있다');
 });
 
 test('회귀 — v0 프레임은 앵커드 패밀리 포즈 0, v2r2 프레임은 v1r2 후보가 서도 오수용 없음', {

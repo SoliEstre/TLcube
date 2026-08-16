@@ -25,8 +25,10 @@ import {
 import { frame, payloadByteLength } from './header.js';
 import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
 import { rsEncode } from './rs211.js';
-import { maskAdd } from './mask.js';
-import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
+import { maskAdd, DEFAULT_MASK_INDEX, assertMaskIndex } from './mask.js';
+import {
+  encodeReplicated, encodeReplicatedV2, FORMAT_CELLS_V2, ECC_LEVEL,
+} from './formatinfo.js';
 import { dataCellsInScanOrder, fillerCells } from './layoutY.js';
 import {
   REFERENCE_GROUP_DIGITS_2T,
@@ -184,9 +186,12 @@ export function encodeY(text, options = {}) {
       throw new RangeError('cell-surface layout 은 options.window 과 함께 쓸 수 없다');
     }
     if (isCellSurfaceFinalId(layoutId)) {
-      // 최종 라인업 (v0 · v2r2) — 레이아웃은 n(=version)으로 정해진다.
+      // 최종 라인업 (v0 · v0x · v1r2 · v2r2) — 레이아웃은 n(=version)으로 정해진다.
+      // 포맷 v2(6 digit)라 마스크 index 를 와이어에 싣는다 (기본 0 = 개정 전 마스크).
       assertCellSurfaceFinalTones(tones);
-      return encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version);
+      return encodeYCellSurfaceFinal(
+        text, eccLevel, tones, layoutId, version, options.maskIndex,
+      );
     }
     assertCellSurfaceLayoutTones(tones);
     if (version !== undefined && version !== CELL_SURFACE_LAYOUT_VERSION) {
@@ -602,7 +607,12 @@ function chooseFinalN(text, eccLevel, tones, layoutId, version) {
   );
 }
 
-function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
+function encodeYCellSurfaceFinal(
+  text, eccLevel, tones, layoutId, version, maskIndexOption,
+) {
+  const maskIndex = assertMaskIndex(
+    maskIndexOption === undefined ? DEFAULT_MASK_INDEX : maskIndexOption,
+  );
   const n = chooseFinalN(text, eccLevel, tones, layoutId, version);
   const surface = cellSurfaceFinal(n, layoutId);
   const capacity = capacityForCellSurfaceFinal(n, eccLevel, tones, layoutId);
@@ -635,7 +645,7 @@ function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
   const dataDigits = new Uint8Array(preMaskDataDigits.length);
   for (let i = 0; i < dataCellCoords.length; i += 1) {
     const c = dataCellCoords[i];
-    dataDigits[i] = maskAdd(preMaskDataDigits[i], c.i, c.j);
+    dataDigits[i] = maskAdd(preMaskDataDigits[i], c.i, c.j, maskIndex);
   }
 
   const fillerCoords = fillerCellsCellSurfaceFinal(n, layoutId);
@@ -648,7 +658,7 @@ function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
   const fillerDigits = new Uint8Array(fillerCoords.length);
   for (let i = 0; i < fillerCoords.length; i += 1) {
     const c = fillerCoords[i];
-    fillerDigits[i] = maskAdd(0, c.i, c.j);
+    fillerDigits[i] = maskAdd(0, c.i, c.j, maskIndex);
   }
 
   const eccLevelValue = ECC_LEVEL[eccLevel];
@@ -656,11 +666,19 @@ function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
     throw new RangeError('알 수 없는 ECC 레벨: ' + eccLevel);
   }
   const formatIndex = formatIndexCellSurfaceFinal(tones);
-  const formatReplicas = encodeReplicated({
+  // 포맷 v2 — 6 digit × 3복제 = 18. 마스크 index 가 6번째 digit 쪽 필드에 실린다.
+  const formatReplicas = encodeReplicatedV2({
     version: formatIndex,
     eccLevel: eccLevelValue,
+    maskIndex,
   });
   const formatDigits = formatReplicas.flat();
+  if (formatDigits.length !== FORMAT_CELLS_V2 || surface.formatCells.length !== FORMAT_CELLS_V2) {
+    throw new Error(
+      layoutId + '@n=' + n + ': 포맷 v2 셀 수 불일치 — digits '
+      + formatDigits.length + ' / cells ' + surface.formatCells.length,
+    );
+  }
 
   const cellDigits = new Map();
   for (const c of locatorCellsCellSurfaceFinal(n, layoutId)) {
@@ -705,6 +723,8 @@ function encodeYCellSurfaceFinal(text, eccLevel, tones, layoutId, version) {
     eccLevel,
     tones,
     formatIndex,
+    maskIndex,
+    formatWireVersion: 2,
     window: false,
     cellSurface: true,
     cellSurfaceLayout: layoutId,

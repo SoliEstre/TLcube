@@ -413,12 +413,18 @@ test('붙여넣기용 JSON 판별과 공백 포함 문자열이 왕복한다', (
   assert.equal(getCellTone(parsed, 'T', { q: 3, r: 0 }), 0);
 });
 
+// 의도적 갱신 (2026-08-16, 포맷 v2): Y 편집기는 신세대 셀 표면 정본을 그리는 도구라
+// 미리보기도 포맷 v2(18셀)로 유도한다. v1(15셀)은 옵션으로만 남는다.
 test('Type Y 미리보기는 칠한 셀에서 ref/format 을 비킨다', () => {
   const state = createUniversalEditorState({ type: 'Y', size: 21 });
   const empty = previewAutoplaceY(state);
   assert.equal(empty.ok, true);
-  assert.equal(empty.placement.formatCells.length, 15);
+  assert.equal(empty.placement.formatCells.length, 18);
+  assert.equal(empty.placement.formatBlockLength, 6);
   assert.equal(empty.placement.referenceCells.length, 12);
+  // 세대를 명시하면 레거시 15셀 유도도 그대로 나온다.
+  const legacy = previewAutoplaceY(state, { formatBlockLength: 5 });
+  assert.equal(legacy.placement.formatCells.length, 15);
 
   applyBrush(state, 'T', { i: 2, j: 2 }, { allFaces: true, tone: 0 });
   applyBrush(state, 'T', { i: 3, j: 2 }, { allFaces: true, tone: 0 });
@@ -431,7 +437,7 @@ test('Type Y 미리보기는 칠한 셀에서 ref/format 을 비킨다', () => {
   assert.equal(roleOfCoord('Y', 21, { i: 2, j: 2 }, { roles: preview.roles }), 'data');
   const reserved = [...preview.roles.values()];
   assert.equal(reserved.filter((entry) => entry.role === 'reference').length, 12);
-  assert.equal(reserved.filter((entry) => entry.role === 'format').length, 15);
+  assert.equal(reserved.filter((entry) => entry.role === 'format').length, 18);
 });
 
 test('독립 HTML 단일 번들이 정상적으로 빌드된다', () => {

@@ -2,8 +2,23 @@
  * autoplaceY.js — 셀 표면 경로의 format · reference 좌표를 파인더 점유에서 유도.
  *
  * 입력은 n 과 파인더가 점유한 셀 집합(toneOverrides 가 닿는 (i,j) 전체)이다.
- * 출력은 format 15셀(3복제×5) · reference 12셀(4조×L자 3셀). 같은 입력은
- * 바이트 동일 출력을 낸다 — 집합 순회 순서·부동소수·동률 자유도가 없다.
+ * 출력은 format **3복제 × formatBlockLength 셀** (v1=15 · v2=18) · reference 12셀
+ * (4조×L자 3셀). 같은 입력은 바이트 동일 출력을 낸다 — 집합 순회 순서·부동소수·
+ * 동률 자유도가 없다.
+ *
+ * **포맷 세대 (2026-08-16 마스크 선택 개정)**: 포맷 v2 는 6번째 digit 을 더해
+ * 복제당 6셀 = **18셀**이 된다(`formatinfo.js` FORMAT_CELLS_V2). 어느 세대를 쓰는지는
+ * 레이아웃이 정하므로 `placeReservedCells(n, occupied, { formatBlockLength })` 로 받는다 —
+ * 기본값은 5(v1)라 **호출부를 안 고친 경로는 바이트 동일**하다. 신세대 셀 표면
+ * (cellSurfaceFinal.js: v0 · v0x · v1r2 · v2r2)만 6 을 넘긴다. 초안·소각 와이어
+ * (cellSurfaceLayouts.js: v1r2d · v2)와 레거시 Y 는 5 그대로다.
+ * 디코더는 **두 세대를 다 유도한다** — v2 프레임과 개정 전 v1 프레임을 같은 함수로
+ * 읽기 위해서다(레거시 판독 공존, cellSurfaceFinal.js CELL_SURFACE_FINAL_FORMAT_WIRES).
+ *
+ * ⚠ **반환 형태 변경 (같은 개정)**: 동결 반환 객체에 `formatBlockLength` 키가 **생겼다**.
+ * v1 기본 호출의 `formatCells` · `referenceCells` · `metrics` 값은 개정 전과 바이트
+ * 동일하지만 **객체 자체는 키가 하나 더 많다** — 반환값을 통째로 deep-equal 하는
+ * 소비자가 있으면 거기서 깨진다(적대 검증 F5). 값 동일 ≠ 형태 동일.
  *
  * 셀 표면 경로 전용. 일반 Y·Y0·Y2 비 셀표면은 placementY.js 가 그대로 담당한다.
  *
@@ -16,6 +31,13 @@ import {
   formatCells as legacyFormatCells,
   referenceAnchors,
 } from './placementY.js';
+import { DIGIT_COUNT_V2 } from './formatinfo.js';
+
+/** 포맷 v1 복제 길이 (5). 옵션을 안 주면 이것이 기본 — 기존 경로 불변. */
+export const FORMAT_BLOCK_LENGTH_V1 = FORMAT_BLOCK_LENGTH;
+
+/** 포맷 v2 복제 길이 (6). 신세대 셀 표면 전용. */
+export const FORMAT_BLOCK_LENGTH_V2 = DIGIT_COUNT_V2;
 
 export const AUTOPLACE_MIN_N = 11;
 export const REFERENCE_GROUP_COUNT = 4;
@@ -310,8 +332,7 @@ function runCentroidDoubled(orient, startI, startJ, length) {
   return { x: 2 * startI, y: 2 * startJ + (length - 1) };
 }
 
-function pickBestRun(n, blocked, slot) {
-  const length = FORMAT_BLOCK_LENGTH;
+function pickBestRun(n, blocked, slot, length) {
   let best = null;
   const orients = ['h', 'v'];
   for (const orient of orients) {
@@ -342,16 +363,16 @@ function pickBestRun(n, blocked, slot) {
   return best;
 }
 
-function placeFormatReplicas(n, blocked) {
+function placeFormatReplicas(n, blocked, length) {
   const slots = idealFormatSlots(n);
   const replicas = [];
   for (const slot of slots) {
-    const picked = pickBestRun(n, blocked, slot);
+    const picked = pickBestRun(n, blocked, slot, length);
     if (!picked) {
       throw new AutoplaceError(
         AUTOPLACE_FORMAT_SLOT,
-        '포맷 복제 ' + slot.id + ' 에 연속 5셀을 둘 자리가 없다',
-        { slot },
+        '포맷 복제 ' + slot.id + ' 에 연속 ' + length + '셀을 둘 자리가 없다',
+        { slot, formatBlockLength: length },
       );
     }
     replicas.push({
@@ -359,7 +380,7 @@ function placeFormatReplicas(n, blocked) {
       orient: picked.orient,
       start: { i: picked.i, j: picked.j },
       cells: picked.cells.map((cell) => ({ i: cell.i, j: cell.j })),
-      centroid: runCentroidDoubled(picked.orient, picked.i, picked.j, FORMAT_BLOCK_LENGTH),
+      centroid: runCentroidDoubled(picked.orient, picked.i, picked.j, length),
     });
     addCells(blocked, picked.cells);
   }
@@ -370,16 +391,18 @@ function placeFormatReplicas(n, blocked) {
     for (let b = a + 1; b < replicas.length; b += 1) {
       const dx = replicas[a].centroid.x - replicas[b].centroid.x;
       const dy = replicas[a].centroid.y - replicas[b].centroid.y;
-      // 중심은 2배 좌표라 실제 거리² = (dx²+dy²)/4
-      const actual = (dx * dx + dy * dy);
-      if (actual % 4 !== 0) {
-        throw new AutoplaceError(
-          AUTOPLACE_COLLISION,
-          '포맷 중심 좌표가 정수 거리² 로 떨어지지 않는다',
-          { a, b, actual },
-        );
-      }
-      const d2 = actual / 4;
+      // 중심은 2배 좌표라 실제 거리² = (dx²+dy²)/4.
+      //
+      // ⚠ **가드 삭제 사유 (2026-08-16 · 적대 검증 F5 지적 반영)**. 개정 전에는
+      // `(dx²+dy²) % 4 !== 0` 이면 AUTOPLACE_COLLISION 을 던졌다. 그 «정수 강제» 는
+      // 복제 길이가 **홀수**(v1=5)일 때만 성립하던 우연이다 — 홀수 길이면 런 중심의
+      // 2배 좌표가 항상 짝수라 나눗셈이 정수로 떨어진다. **짝수**(v2=6)에서는 h 런과
+      // v 런의 중심이 반 칸씩 어긋나 1/4 단위가 남고(실측 sFmtMin 40.5 · 84.5 · 60.5),
+      // 참인 배치가 가드에 걸린다. 그래서 길이 조건부로 남기지 않고 **통째로 지웠다** —
+      // v1 경로도 이제 가드가 없다. 값은 그대로다(v1 5 인스턴스 전부 정수로 떨어짐을
+      // 회귀가 단언). 게이트가 실제로 쓰는 것은 `sFmtMax ≥ sFmtMinRequired` 쪽이고
+      // 그 비교는 1/4 단위에서도 성립하므로 어떤 하한도 완화되지 않았다.
+      const d2 = (dx * dx + dy * dy) / 4;
       if (d2 > maxSep) maxSep = d2;
       if (d2 < minSep) minSep = d2;
     }
@@ -399,25 +422,40 @@ function freezeCells(cells) {
   return Object.freeze(cells.map((cell) => Object.freeze({ i: cell.i, j: cell.j })));
 }
 
+function assertFormatBlockLength(length) {
+  if (length !== FORMAT_BLOCK_LENGTH_V1 && length !== FORMAT_BLOCK_LENGTH_V2) {
+    throw new RangeError(
+      'formatBlockLength 는 ' + FORMAT_BLOCK_LENGTH_V1 + '(v1) 또는 '
+      + FORMAT_BLOCK_LENGTH_V2 + '(v2) 여야 한다: ' + length,
+    );
+  }
+  return length;
+}
+
 /**
- * n 과 파인더 점유 셀에서 format 15 · reference 12 를 유도한다.
+ * n 과 파인더 점유 셀에서 format(3복제 × blockLength) · reference 12 를 유도한다.
  * @param {number} n
  * @param {Iterable} occupied
+ * @param {{formatBlockLength?:number}} [options] 생략 시 v1(5) — 기존 경로 불변.
  * @returns {{
  *   n:number,
+ *   formatBlockLength:number,
  *   formatCells:{i:number,j:number}[],
  *   referenceCells:{i:number,j:number}[],
  *   referenceGroups:{anchor:{i:number,j:number}, cells:{i:number,j:number}[]}[],
  *   metrics:{dRef:number, dRefMin:number, sFmtMax:number, sFmtMin:number, sFmtMinRequired:number, occupied:number}
  * }}
  */
-export function placeReservedCells(n, occupied) {
+export function placeReservedCells(n, occupied, options = {}) {
   const size = assertN(n);
+  const blockLength = assertFormatBlockLength(
+    options.formatBlockLength === undefined ? FORMAT_BLOCK_LENGTH_V1 : options.formatBlockLength,
+  );
   const normalized = normalizeOccupied(size, occupied);
   const blocked = new Set(normalized.keys);
 
   const refs = placeReferenceGroups(size, blocked);
-  const fmts = placeFormatReplicas(size, blocked);
+  const fmts = placeFormatReplicas(size, blocked, blockLength);
 
   const formatCells = [];
   for (const replica of fmts.replicas) {
@@ -428,10 +466,10 @@ export function placeReservedCells(n, occupied) {
     for (const cell of group.cells) referenceCells.push(cell);
   }
 
-  if (formatCells.length !== FORMAT_REPLICAS * FORMAT_BLOCK_LENGTH) {
+  if (formatCells.length !== FORMAT_REPLICAS * blockLength) {
     throw new AutoplaceError(
       AUTOPLACE_COLLISION,
-      'format 셀 수가 15 가 아니다: ' + formatCells.length,
+      'format 셀 수가 ' + (FORMAT_REPLICAS * blockLength) + ' 가 아니다: ' + formatCells.length,
     );
   }
   if (referenceCells.length !== REFERENCE_GROUP_COUNT * 3) {
@@ -458,6 +496,7 @@ export function placeReservedCells(n, occupied) {
 
   return Object.freeze({
     n: size,
+    formatBlockLength: blockLength,
     formatCells: freezeCells(formatCells),
     referenceCells: freezeCells(referenceCells),
     referenceGroups: Object.freeze(refs.groups.map((group) => Object.freeze({

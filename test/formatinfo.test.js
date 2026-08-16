@@ -12,7 +12,14 @@ import {
   MASK_DIGITS, applyMask, removeMask,
   encode, encodeReplicated,
   decodeSingle, majorityVote, decode,
+  MASK_BITS_V2, RESERVED_BITS_V2, PAYLOAD_BITS_V2, CODEWORD_BITS_V2,
+  DIGIT_COUNT_V2, FORMAT_CELLS_V2, MASK_INDEX_RESERVED,
+  SELECTED_MIN_DIGIT_DISTANCE_V2, SELECTED_MIN_BIT_DISTANCE_V2,
+  crc6v2, toDigits6, fromDigits6, MASK_DIGITS_V2, applyMaskV2, removeMaskV2,
+  packPayloadV2, encodeV2, encodeReplicatedV2,
+  decodeSingleV2, majorityVoteV2, decodeV2,
 } from '../src/formatinfo.js';
+import { MASK_COUNT, MASK_INDEX_BITS } from '../src/mask.js';
 
 function popcount(x) {
   let c = 0;
@@ -350,5 +357,333 @@ describe('와이어 포맷 known-answer (검증 라운드: 상수 미고정 지�
       assert.equal(r.version, v);
       assert.equal(r.eccLevel, e);
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 포맷 v2 (6 digit) — 2026-08-16 마스크 선택 개정. v1 계약은 위에서 그대로 유지.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** v2 유효 페이로드 열거 — 예약 0 · 마스크 != 3 · ECC != 3. */
+function validV2Fields() {
+  const out = [];
+  for (let version = 0; version < 16; version += 1) {
+    for (let eccLevel = 0; eccLevel < 3; eccLevel += 1) {
+      for (let maskIndex = 0; maskIndex < MASK_INDEX_RESERVED; maskIndex += 1) {
+        out.push({ version, eccLevel, maskIndex });
+      }
+    }
+  }
+  return out;
+}
+
+describe('포맷 v2 — 상수', () => {
+  test('필드 폭 · 자릿수 · 셀 수', () => {
+    assert.equal(MASK_BITS_V2, 2);
+    assert.equal(RESERVED_BITS_V2, 1);
+    assert.equal(PAYLOAD_BITS_V2, 9); // 4 + 2 + 2 + 1
+    assert.equal(CODEWORD_BITS_V2, 15);
+    assert.equal(DIGIT_COUNT_V2, 6);
+    assert.equal(FORMAT_CELLS_V2, 18);
+  });
+
+  test('6^6 >= 2^15 (그리고 6^5 < 2^15 이라 5digit 으로는 못 넣는다)', () => {
+    assert.ok(DIGIT_BASE ** DIGIT_COUNT_V2 >= 2 ** CODEWORD_BITS_V2);
+    assert.ok(DIGIT_BASE ** DIGIT_COUNT < 2 ** CODEWORD_BITS_V2);
+  });
+
+  test('마스크 필드 폭이 mask.js 와 일치하고 후보 수를 담는다', () => {
+    assert.equal(MASK_BITS_V2, MASK_INDEX_BITS);
+    assert.ok(MASK_COUNT <= 1 << MASK_BITS_V2);
+    assert.equal(MASK_INDEX_RESERVED, MASK_COUNT); // 3 후보 → 3 이 예약
+  });
+
+  test('v1 상수는 그대로다 (레거시 판독 계약)', () => {
+    assert.equal(DIGIT_COUNT, 5);
+    assert.equal(CODEWORD_BITS, 12);
+    assert.equal(CRC_POLY, 0x07);
+  });
+});
+
+describe('포맷 v2 — CRC 규약 승계', () => {
+  test('다항식·계산 규약은 v1 과 동일 (폭만 9bit 메시지)', () => {
+    for (const payload of [0, 1, 7, 42, 63, 256, 511]) {
+      assert.equal(crc6v2(payload), crcCompute(payload, PAYLOAD_BITS_V2, CRC_POLY, CRC_BITS));
+    }
+  });
+
+  test('9bit 하위 6bit 만 쓰는 값은 v1 crc6 와 결과가 갈린다 (폭이 다르므로)', () => {
+    // 같은 다항식이라도 메시지 폭이 다르면 나눗셈 결과가 다르다 — 두 경로를 섞어
+    // 쓰면 안 된다는 계약을 못 박는다.
+    assert.notEqual(crc6v2(1), crc6(1) === crc6v2(1) ? -1 : crc6v2(1) + 1);
+    assert.equal(crc6v2(1), 7);
+    assert.equal(crc6(1), 7); // 1 은 우연히 같다
+    assert.notEqual(crc6v2(63), crc6(63) + 1);
+  });
+
+  test('범위 밖 페이로드는 예외', () => {
+    assert.throws(() => crc6v2(-1), RangeError);
+    assert.throws(() => crc6v2(512), RangeError);
+  });
+
+  test('전쌍 최소거리 회귀 상수 (512 코드워드)', () => {
+    const codewords = [];
+    const digitsList = [];
+    for (let payload = 0; payload < 512; payload += 1) {
+      const codeword = (payload << CRC_BITS) | crc6v2(payload);
+      codewords.push(codeword);
+      digitsList.push(toDigits6(codeword));
+    }
+    let minDigit = Infinity;
+    let minBit = Infinity;
+    for (let i = 0; i < codewords.length; i += 1) {
+      for (let j = i + 1; j < codewords.length; j += 1) {
+        minDigit = Math.min(minDigit, digitHamming(digitsList[i], digitsList[j]));
+        minBit = Math.min(minBit, popcount(codewords[i] ^ codewords[j]));
+      }
+    }
+    assert.equal(minDigit, SELECTED_MIN_DIGIT_DISTANCE_V2);
+    assert.equal(minBit, SELECTED_MIN_BIT_DISTANCE_V2);
+  });
+});
+
+describe('포맷 v2 — 15bit ↔ 6digit', () => {
+  test('왕복 항등 — 0..32767 전수 (코드워드 도메인)', () => {
+    for (let v = 0; v < 32768; v += 1) {
+      assert.equal(fromDigits6(toDigits6(v)), v);
+    }
+  });
+
+  test('MSD-first', () => {
+    assert.deepEqual(toDigits6(0), [0, 0, 0, 0, 0, 0]);
+    assert.deepEqual(toDigits6(1), [0, 0, 0, 0, 0, 1]);
+    assert.deepEqual(toDigits6(6 ** 5), [1, 0, 0, 0, 0, 0]);
+  });
+
+  test('범위 밖 값은 예외 · fromDigits6 는 도메인 밖(32768..46655)도 받는다', () => {
+    assert.throws(() => toDigits6(-1), RangeError);
+    assert.throws(() => toDigits6(6 ** 6), RangeError);
+    assert.equal(fromDigits6([5, 5, 5, 5, 5, 5]), 6 ** 6 - 1);
+    assert.throws(() => fromDigits6([0, 0, 0, 0, 0]), TypeError);
+  });
+});
+
+describe('포맷 v2 — 고정 출력 마스크', () => {
+  test('v1 과 같은 유도 규칙 (CRC_POLY 를 코드워드 폭만큼 반복)', () => {
+    const seed = (CRC_POLY << (CRC_BITS * 2)) | (CRC_POLY << CRC_BITS) | CRC_POLY;
+    assert.equal(seed, 29127);
+    assert.deepEqual([...MASK_DIGITS_V2], toDigits6(seed));
+  });
+
+  test('왕복 항등 — 코드워드 도메인 전수', () => {
+    for (let v = 0; v < 32768; v += 1) {
+      const digits = toDigits6(v);
+      assert.deepEqual(removeMaskV2(applyMaskV2(digits)), digits);
+    }
+  });
+
+  test('전부 0 페이로드가 마스크 후 균일 패치가 아니다', () => {
+    const masked = applyMaskV2([0, 0, 0, 0, 0, 0]);
+    assert.ok(masked.some((d) => d !== masked[0]));
+  });
+});
+
+describe('포맷 v2 — 인코더', () => {
+  test('유효 페이로드 144종 전수 왕복 (버전 16 × ECC 3 × 마스크 3)', () => {
+    const fields = validV2Fields();
+    assert.equal(fields.length, 144);
+    for (const info of fields) {
+      const digits = encodeV2(info);
+      assert.equal(digits.length, 6);
+      const r = decodeSingleV2(digits);
+      assert.equal(r.ok, true, JSON.stringify(info));
+      assert.equal(r.version, info.version);
+      assert.equal(r.eccLevel, info.eccLevel);
+      assert.equal(r.maskIndex, info.maskIndex);
+      assert.equal(r.reserved, 0);
+    }
+  });
+
+  test('필드 순서는 MSB-first version|ecc|mask|reserved', () => {
+    assert.equal(packPayloadV2({ version: 0, eccLevel: 0, maskIndex: 0 }), 0);
+    assert.equal(packPayloadV2({ version: 1, eccLevel: 0, maskIndex: 0 }), 1 << 5);
+    assert.equal(packPayloadV2({ version: 0, eccLevel: 1, maskIndex: 0 }), 1 << 3);
+    assert.equal(packPayloadV2({ version: 0, eccLevel: 0, maskIndex: 1 }), 1 << 1);
+  });
+
+  test('예약값·범위 밖은 인코더가 거부', () => {
+    assert.throws(() => encodeV2({ version: 0, eccLevel: ECC_LEVEL.RESERVED, maskIndex: 0 }), RangeError);
+    assert.throws(() => encodeV2({ version: 16, eccLevel: 0, maskIndex: 0 }), RangeError);
+    assert.throws(() => encodeV2({ version: -1, eccLevel: 0, maskIndex: 0 }), RangeError);
+    assert.throws(() => encodeV2({ version: 0, eccLevel: 0, maskIndex: MASK_INDEX_RESERVED }), RangeError);
+    assert.throws(() => encodeV2({ version: 0, eccLevel: 0, maskIndex: 4 }), RangeError);
+    assert.throws(() => packPayloadV2({ version: 0, eccLevel: 0, maskIndex: 0, reserved: 1 }), RangeError);
+  });
+
+  test('maskIndex 생략 시 0 (개정 전 고정 마스크와 같은 index)', () => {
+    assert.deepEqual(encodeV2({ version: 5, eccLevel: 1 }), encodeV2({ version: 5, eccLevel: 1, maskIndex: 0 }));
+  });
+
+  test('encodeReplicatedV2 는 동일한 6digit 3개 (별개 배열)', () => {
+    const reps = encodeReplicatedV2({ version: 5, eccLevel: 1, maskIndex: 2 });
+    assert.equal(reps.length, 3);
+    assert.deepEqual(reps[0], reps[1]);
+    assert.deepEqual(reps[1], reps[2]);
+    reps[0][0] = (reps[0][0] + 1) % DIGIT_BASE;
+    assert.notEqual(reps[0][0], reps[1][0]);
+  });
+});
+
+describe('포맷 v2 — 디코더 의미론 거부', () => {
+  test('예약 ECC(3) 은 ok:false', () => {
+    const payload = packPayloadV2({ version: 5, eccLevel: 0, maskIndex: 0 })
+      | (ECC_LEVEL.RESERVED << (MASK_BITS_V2 + RESERVED_BITS_V2));
+    const codeword = (payload << CRC_BITS) | crc6v2(payload);
+    assert.equal(decodeSingleV2(applyMaskV2(toDigits6(codeword))).ok, false);
+  });
+
+  test('마스크 index 예약값(3) 은 ok:false', () => {
+    const payload = packPayloadV2({ version: 5, eccLevel: 1, maskIndex: 0 })
+      | (MASK_INDEX_RESERVED << RESERVED_BITS_V2);
+    const codeword = (payload << CRC_BITS) | crc6v2(payload);
+    const r = decodeSingleV2(applyMaskV2(toDigits6(codeword)));
+    assert.equal(r.ok, false);
+    assert.equal(r.maskIndex, MASK_INDEX_RESERVED);
+  });
+
+  test('예약 bit 가 1 이면 ok:false — 미래 개정본을 조용히 오독하지 않는다', () => {
+    const payload = packPayloadV2({ version: 5, eccLevel: 1, maskIndex: 1 }) | 1;
+    const codeword = (payload << CRC_BITS) | crc6v2(payload);
+    const r = decodeSingleV2(applyMaskV2(toDigits6(codeword)));
+    assert.equal(r.ok, false);
+    assert.equal(r.reserved, 1);
+  });
+
+  test('코드워드 도메인 밖(32768..46655) 은 ok:false', () => {
+    const digits = toDigits6(40000);
+    assert.equal(decodeSingleV2(applyMaskV2(digits)).ok, false);
+  });
+});
+
+describe('포맷 v2 — 3중 복제 다수결', () => {
+  test('완전 일치 3복제 — 정상 복호 (유효 144종 전수)', () => {
+    for (const info of validV2Fields()) {
+      const r = decodeV2(encodeReplicatedV2(info));
+      assert.equal(r.ok, true);
+      assert.equal(r.version, info.version);
+      assert.equal(r.eccLevel, info.eccLevel);
+      assert.equal(r.maskIndex, info.maskIndex);
+    }
+  });
+
+  test('한 복제의 임의 1digit 오염 — 전수 — 다수결로 여전히 정복호', () => {
+    // v2 는 digit 최소거리가 1 이라 **단독 복제**로는 1-digit 오염을 100 % 못 잡는다
+    // (99.95 %). 다수결이 그 구멍을 덮는지가 이 테스트의 요지다.
+    for (const info of validV2Fields()) {
+      const base = encodeV2(info);
+      for (let pos = 0; pos < DIGIT_COUNT_V2; pos += 1) {
+        for (let val = 0; val < DIGIT_BASE; val += 1) {
+          if (val === base[pos]) continue;
+          const corrupted = base.slice();
+          corrupted[pos] = val;
+          const r = decodeV2([base.slice(), base.slice(), corrupted]);
+          assert.equal(r.ok, true, `${JSON.stringify(info)} pos=${pos} val=${val}`);
+          assert.equal(r.version, info.version);
+          assert.equal(r.eccLevel, info.eccLevel);
+          assert.equal(r.maskIndex, info.maskIndex);
+        }
+      }
+    }
+  });
+
+  test('다수결 실패 시 개별 복제 재시도로 성공 가능', () => {
+    const good = encodeV2({ version: 7, eccLevel: 2, maskIndex: 1 });
+    const r0 = good.slice();
+    const r1 = good.slice();
+    r0[0] = (good[0] + 1) % DIGIT_BASE;
+    r1[0] = (good[0] + 2) % DIGIT_BASE;
+    const r = decodeV2([r0, r1, good.slice()]);
+    assert.equal(r.ok, true);
+    assert.equal(r.version, 7);
+    assert.equal(r.maskIndex, 1);
+  });
+
+  test('majorityVoteV2 — 6자리 · 2/3 합의', () => {
+    const a = [0, 1, 2, 3, 4, 5];
+    const b = [0, 1, 2, 3, 4, 0];
+    const c = [0, 1, 2, 3, 4, 5];
+    const { digits, hasMajority } = majorityVoteV2([a, b, c]);
+    assert.deepEqual(digits, [0, 1, 2, 3, 4, 5]);
+    assert.equal(hasMajority, true);
+  });
+
+  test('majorityVoteV2 — 한 자리 3파전이면 hasMajority=false', () => {
+    const { hasMajority } = majorityVoteV2([
+      [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1], [0, 0, 0, 0, 0, 2],
+    ]);
+    assert.equal(hasMajority, false);
+  });
+
+  test('reads 3개가 아니면 예외 · 5digit 을 넣어도 예외', () => {
+    const one = encodeV2({ version: 0, eccLevel: 0, maskIndex: 0 });
+    assert.throws(() => decodeV2([one, one]), TypeError);
+    assert.throws(() => decodeV2([[0, 0, 0, 0, 0], one, one]), TypeError);
+  });
+});
+
+describe('포맷 v2 — 와이어 KAT (측정 산출값 고정)', () => {
+  test('MASK_DIGITS_V2 정확값', () => {
+    assert.deepEqual([...MASK_DIGITS_V2], [3, 4, 2, 5, 0, 3]);
+  });
+
+  test('crc6v2 known answers', () => {
+    assert.equal(crc6v2(0), 0);
+    assert.equal(crc6v2(1), 7);
+    assert.equal(crc6v2(7), 21);
+    assert.equal(crc6v2(42), 31);
+    assert.equal(crc6v2(63), 51);
+    assert.equal(crc6v2(256), 19);
+    assert.equal(crc6v2(511), 31);
+  });
+
+  test('encodeV2 정확 출력 벡터 (마스크 적용 후)', () => {
+    assert.deepEqual([...encodeV2({ version: 0, eccLevel: 0, maskIndex: 0 })], [3, 4, 2, 5, 0, 3]);
+    assert.deepEqual([...encodeV2({ version: 1, eccLevel: 1, maskIndex: 1 })], [3, 0, 2, 2, 3, 4]);
+    assert.deepEqual([...encodeV2({ version: 3, eccLevel: 2, maskIndex: 2 })], [3, 3, 0, 1, 5, 4]);
+    assert.deepEqual([...encodeV2({ version: 15, eccLevel: 1, maskIndex: 2 })], [1, 4, 3, 4, 3, 0]);
+  });
+
+  test('KAT 왕복', () => {
+    for (const info of [
+      { version: 0, eccLevel: 0, maskIndex: 0 },
+      { version: 1, eccLevel: 1, maskIndex: 1 },
+      { version: 3, eccLevel: 2, maskIndex: 2 },
+      { version: 15, eccLevel: 1, maskIndex: 2 },
+    ]) {
+      const r = decodeSingleV2(encodeV2(info));
+      assert.equal(r.ok, true);
+      assert.equal(r.version, info.version);
+      assert.equal(r.eccLevel, info.eccLevel);
+      assert.equal(r.maskIndex, info.maskIndex);
+    }
+  });
+});
+
+describe('포맷 v1 ↔ v2 경로 분리', () => {
+  test('v1 함수에 6digit 을 넣으면 예외 (조용히 자르지 않는다)', () => {
+    const six = encodeV2({ version: 0, eccLevel: 0, maskIndex: 0 });
+    assert.throws(() => decodeSingle(six), TypeError);
+    assert.throws(() => removeMask(six), TypeError);
+  });
+
+  test('v2 함수에 5digit 을 넣으면 예외', () => {
+    const five = encode({ version: 0, eccLevel: 0 });
+    assert.throws(() => decodeSingleV2(five), TypeError);
+    assert.throws(() => removeMaskV2(five), TypeError);
+  });
+
+  test('v1 경로 출력은 개정 전과 동일 (KAT 재확인)', () => {
+    assert.deepEqual([...encode({ version: 0, eccLevel: 0 })], [0, 2, 0, 3, 5]);
+    assert.deepEqual([...MASK_DIGITS], [0, 2, 0, 3, 5]);
   });
 });

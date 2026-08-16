@@ -35,6 +35,7 @@ import {
 import {
   placeReservedCells,
   roleMapFromPlacement,
+  FORMAT_BLOCK_LENGTH_V2,
 } from './autoplaceY.js';
 import {
   BULLSEYE_RADIUS,
@@ -399,10 +400,18 @@ export function occupiedCellsY(state) {
   return cells;
 }
 
-export function previewAutoplaceY(state) {
+/**
+ * Y 편집기 미리보기 배치. **포맷 v2(18셀)** 로 유도한다 — 이 편집기의 Y 모드가
+ * 만드는 산출물은 신세대 셀 표면 정본(cellSurfaceFinal.js)이고 그 라인업은 전부 v2 다.
+ * 다른 세대를 그리려면 `options.formatBlockLength` 로 명시한다.
+ */
+export function previewAutoplaceY(state, options = {}) {
   if (state.type !== 'Y') return null;
+  const formatBlockLength = options.formatBlockLength === undefined
+    ? FORMAT_BLOCK_LENGTH_V2
+    : options.formatBlockLength;
   try {
-    const placement = placeReservedCells(state.size, occupiedCellsY(state));
+    const placement = placeReservedCells(state.size, occupiedCellsY(state), { formatBlockLength });
     return {
       ok: true,
       placement,

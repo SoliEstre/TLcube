@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { placeReservedCells } from '../src/autoplaceY.js';
+import { placeReservedCells, FORMAT_BLOCK_LENGTH_V2 } from '../src/autoplaceY.js';
 import { buildRoleSets } from '../src/placementY.js';
 import {
   CELL_SURFACE_FINAL_IDS,
@@ -115,10 +115,15 @@ test('배치 불가 안내 g549 는 ko/en/ja 세 언어에 있다', () => {
   }
 });
 
+// 의도적 갱신 (2026-08-16, 포맷 v2): 신세대 셀 표면은 포맷 6 digit(18셀)이므로 유도
+// 호출도 같은 세대를 넘긴다. 계약(«정본 = autoplace 유도») 은 그대로다.
 test('정합: cellSurfaceFinal 의 ref/format == painted 점유 autoplace 유도 (deepEqual)', () => {
   for (const [id, n] of finalPairs()) {
     const surface = cellSurfaceFinal(n, id);
-    const placed = placeReservedCells(n, paintedCellsCellSurfaceFinal(n, id));
+    const placed = placeReservedCells(n, paintedCellsCellSurfaceFinal(n, id), {
+      formatBlockLength: FORMAT_BLOCK_LENGTH_V2,
+    });
+    assert.equal(surface.formatCells.length, 18, `${id}@${n} format 18`);
     assert.deepEqual(
       surface.formatCells.map(key), placed.formatCells.map(key), `${id}@${n} format`,
     );

@@ -35,6 +35,8 @@ import {
   nameCellSurfaceFinal,
   tonesFromCellSurfaceFinalFormatIndex,
   versionForFinalN,
+  CELL_SURFACE_FINAL_FORMAT_WIRE,
+  CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
 } from '../src/cellSurfaceFinal.js';
 import { VERSIONS_Y } from '../src/capacityY.js';
 import {
@@ -46,6 +48,7 @@ import {
   CELL_SURFACE_LAYOUT_IDS,
 } from '../src/cellSurfaceLayouts.js';
 import { AutoplaceError, placeReservedCells } from '../src/autoplaceY.js';
+import { rsDecode, rsEncode } from '../src/rs211.js';
 import { encodeY } from '../src/encodeY.js';
 import { decodeCells } from '../src/decode.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
@@ -140,11 +143,13 @@ test('v2r2 파인더는 n=13 에서 autoplace REF_QUADRANT 거부다 — 그래�
 
 // 의도적 갱신 (2026-08-16, 운영자 지시): v2r2 중앙 블록 A 가 구 4×4 링(16셀)에서
 // v1r2 NW 5×5(25셀) 공유로 교체됐다 — painted 65→74, data 349→340 · 533→524.
-test('회계 — v0 169−30−27=112 · v2r2@21 441−74−27=340 · v2r2@25 625−74−27=524', () => {
+// 의도적 갱신 (2026-08-16, 포맷 v2 일괄 전환): 포맷 셀 15→18 (마스크 index 2bit 를
+// 싣는 6번째 digit). 예약 27→30, data −3 — v0 112→109 · v2r2@21 340→337 · @25 524→521.
+test('회계 — v0 169−30−30=109 · v2r2@21 441−74−30=337 · v2r2@25 625−74−30=521', () => {
   const want = {
-    13: { locator: 30, data: 112, S: 37, residual: 1 },
-    21: { locator: 74, data: 340, S: 113, residual: 1 },
-    25: { locator: 74, data: 524, S: 174, residual: 2 },
+    13: { locator: 30, data: 109, S: 36, residual: 1 },
+    21: { locator: 74, data: 337, S: 112, residual: 1 },
+    25: { locator: 74, data: 521, S: 173, residual: 2 },
   };
   for (const [n, w] of Object.entries(want).map(([k, v]) => [Number(k), v])) {
     const surface = cellSurfaceFinal(n);
@@ -152,13 +157,13 @@ test('회계 — v0 169−30−27=112 · v2r2@21 441−74−27=340 · v2r2@25 62
     assert.equal(surface.declaredDataCells, w.data, 'n=' + n + ' data');
     assert.equal(surface.usedSymbols, w.S, 'n=' + n + ' S');
     assert.equal(surface.residualCells, w.residual, 'n=' + n + ' 잔여');
-    assert.equal(surface.formatCells.length, 15);
+    assert.equal(surface.formatCells.length, 18);
     assert.equal(surface.referenceCells.length, 12);
     assert.equal(dataCellsInScanOrderCellSurfaceFinal(n).length, w.data);
     assert.equal(fillerCellsCellSurfaceFinal(n).length, w.residual);
     assert.equal(
       n * n,
-      surface.locatorCount + 27 + w.data,
+      surface.locatorCount + 30 + w.data,
       'n=' + n + ' 총합 회계',
     );
     // autoplace 하한 충족 (placeReservedCells 가 로드 시 throw 로 이미 강제하지만
@@ -315,19 +320,20 @@ test('encodeY 버전·레이아웃 정합 가드 — v0 는 Y0 만, v2r2 는 Y1/
 // v1r2 (n=21 A/B 후보) — 2026-08-15 밤 부활. 기하는 v2r2 와 같은 계약으로 세웠다.
 // ─────────────────────────────────────────────────────────────────────────
 
-test('v1r2 회계 — 441 − 80 − 12 − 15 = 334 · S 111 · 잔여 1 (autoplace 유도)', () => {
+// 의도적 갱신 (2026-08-16, 포맷 v2): 포맷 15→18 → data 334→331 · S 111→110.
+test('v1r2 회계 — 441 − 80 − 12 − 18 = 331 · S 110 · 잔여 1 (autoplace 유도)', () => {
   const surface = cellSurfaceFinal(21, 'v1r2');
   assert.equal(surface.id, 'v1r2');
   assert.equal(surface.n, 21);
   assert.equal(surface.version, 1);
   assert.equal(surface.locatorCount, 80);
-  assert.equal(surface.declaredDataCells, 334);
-  assert.equal(surface.usedSymbols, 111);
+  assert.equal(surface.declaredDataCells, 331);
+  assert.equal(surface.usedSymbols, 110);
   assert.equal(surface.residualCells, 1);
-  assert.equal(surface.formatCells.length, 15);
+  assert.equal(surface.formatCells.length, 18);
   assert.equal(surface.referenceCells.length, 12);
-  assert.equal(21 * 21, surface.locatorCount + 27 + surface.declaredDataCells);
-  assert.equal(dataCellsInScanOrderCellSurfaceFinal(21, 'v1r2').length, 334);
+  assert.equal(21 * 21, surface.locatorCount + 30 + surface.declaredDataCells);
+  assert.equal(dataCellsInScanOrderCellSurfaceFinal(21, 'v1r2').length, 331);
   assert.equal(fillerCellsCellSurfaceFinal(21, 'v1r2').length, 1);
   // autoplace 하한 — 손 좌표표가 아니라 유도값이다.
   assert.ok(surface.autoplace.dRef >= surface.autoplace.dRefMin);
@@ -350,7 +356,7 @@ test('v1r2 회계 — 441 − 80 − 12 − 15 = 334 · S 111 · 잔여 1 (autop
       tones === 3 ? 'Y1T-CS-V1R2' : 'Y1-CS-V1R2',
     );
     assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v1r2').formatIndex, tones === 3 ? 3 : 1);
-    assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v1r2').dataCells, 334);
+    assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v1r2').dataCells, 331);
   }
   // 기본 경로는 건드리지 않았다 — id 를 안 주면 여전히 v2r2.
   assert.equal(cellSurfaceFinal(21).id, 'v2r2');
@@ -367,7 +373,7 @@ test('v1r2 인코더 왕복 — digit 레벨 decodeCells (2톤·3톤)', () => {
     assert.equal(encoded.cellSurfaceLayout, 'v1r2');
     assert.equal(encoded.locatorProfile, 'cell-surface-v1r2');
     assert.equal(encoded.formatIndex, tones === 3 ? 3 : 1);
-    assert.equal(encoded.capacity.dataCells, 334);
+    assert.equal(encoded.capacity.dataCells, 331);
     assert.equal(encoded.cellDigits.size, 441);
     // 칠한 80셀 전부 role=locator + 레이아웃 톤.
     let locatorCount = 0;
@@ -423,21 +429,22 @@ test('v1r2 렌더 자체 검증 — verifyRasterY 전 셀 일치 (2톤·3톤)', 
 // 정본은 toneOverrides 셀 집합(65)에서 유도했다 — 손 좌표표 사본이 아니다.
 // ─────────────────────────────────────────────────────────────────────────
 
-test('v0X 회계 — 441 − 65 − 12 − 15 = 349 · S 116 · 잔여 1 (autoplace 유도)', () => {
+// 의도적 갱신 (2026-08-16, 포맷 v2): 포맷 15→18 → data 349→346 · S 116→115.
+test('v0X 회계 — 441 − 65 − 12 − 18 = 346 · S 115 · 잔여 1 (autoplace 유도)', () => {
   const surface = cellSurfaceFinal(21, 'v0x');
   assert.equal(surface.id, 'v0x');
   assert.equal(surface.n, 21);
   assert.equal(surface.version, 1);
   assert.equal(surface.locatorCount, 65);
-  assert.equal(surface.declaredDataCells, 349);
-  assert.equal(surface.usedSymbols, 116);
+  assert.equal(surface.declaredDataCells, 346);
+  assert.equal(surface.usedSymbols, 115);
   assert.equal(surface.residualCells, 1);
-  assert.equal(surface.formatCells.length, 15);
+  assert.equal(surface.formatCells.length, 18);
   assert.equal(surface.referenceCells.length, 12);
-  assert.equal(21 * 21, surface.locatorCount + 27 + surface.declaredDataCells);
-  assert.equal(dataCellsInScanOrderCellSurfaceFinal(21, 'v0x').length, 349);
+  assert.equal(21 * 21, surface.locatorCount + 30 + surface.declaredDataCells);
+  assert.equal(dataCellsInScanOrderCellSurfaceFinal(21, 'v0x').length, 346);
   assert.equal(fillerCellsCellSurfaceFinal(21, 'v0x').length, 1);
-  assert.deepEqual(surface.nsym, { symbols: 116, L: 14, M: 29, H: 46 });
+  assert.deepEqual(surface.nsym, { symbols: 115, L: 14, M: 29, H: 46 });
   // autoplace 하한 — 손 좌표표가 아니라 유도값이다.
   assert.ok(surface.autoplace.dRef >= surface.autoplace.dRefMin);
   assert.ok(surface.autoplace.sFmtMax >= surface.autoplace.sFmtMinRequired);
@@ -447,15 +454,15 @@ test('v0X 회계 — 441 − 65 − 12 − 15 = 349 · S 116 · 잔여 1 (autopl
   for (const cell of [...surface.formatCells, ...surface.referenceCells]) {
     assert.equal(painted.has(cell.i + ',' + cell.j), false, '겹침 ' + cell.i + ',' + cell.j);
   }
-  // 349 는 편집기 정본의 counts.data 와 **일치**한다 — v0X 파인더는 편집기 고정 배치를
-  // 잠식하지 않는다 (v1r2 는 27 중 18 을 덮어 편집기 회계가 352 로 어긋났다).
+  // 편집기 정본의 counts.data(349) 는 **포맷 v1 기준**이었다 — v0X 파인더가 편집기
+  // 고정 배치를 잠식하지 않아 v1 에서는 일치했고, v2 로 3셀이 더 빠져 346 이 된다.
   for (const tones of [2, 3]) {
     assert.equal(
       capacityForCellSurfaceFinal(21, 'M', tones, 'v0x').name,
       tones === 3 ? 'Y1T-CS-V0X' : 'Y1-CS-V0X',
     );
     assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v0x').formatIndex, tones === 3 ? 3 : 1);
-    assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v0x').dataCells, 349);
+    assert.equal(capacityForCellSurfaceFinal(21, 'M', tones, 'v0x').dataCells, 346);
   }
   // 기본 경로는 건드리지 않았다 — id 를 안 주면 여전히 v2r2.
   assert.equal(cellSurfaceFinal(21).id, 'v2r2');
@@ -685,4 +692,146 @@ test('n=21 병행 평가 — 세 후보를 다 채점하고 게이트가 고른�
       layout + ' margin ' + outcome[layout].margin,
     );
   }
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// RS 파라미터 전수 회귀 (2026-08-16 r2 · 통합자 결정 C)
+//
+// 왜 생겼나 — **조용히 지나간 사고가 있었다.** 포맷 v2 전환(S 가 1 줄어듦)이
+// `nsymTable` 의 **비율 기반** 반올림 문턱을 넘겨 세 조합에서 정정능력을 1심볼
+// 깎았는데(v2r2@21-L 7→6 · v2r2@25-M 22→21 · v2r2@25-H 35→34), 스위트 전체에서
+// `nsym` 을 단언하는 곳이 `v0x@21` 한 줄뿐이라 아무도 못 봤다(적대 검증 F2).
+// 왜곡 강건성을 노린 개정이 정정능력을 깎았는데 테스트는 초록이었다.
+//
+// 그래서 **(레이아웃 × ECC) 15조합 × {nsym, errorCapacity, dataSymbols, dataBytes,
+// maxPayloadBytes}** 를 전수 단언한다. 값은 «맞아야 할 값» 이 아니라 **실측값**이다 —
+// 여기가 빨개지면 그것은 버그 신호가 아니라 «공표 수치를 다시 재라» 는 신호다
+// (SPEC §5.5 용량표 · §6 ECC 파라미터가 이 표를 승계한다).
+//
+// 두 세대를 다 건다: 현행(포맷 v2)과 레거시(포맷 v1, 판독 전용). 레거시 열은
+// 개정 전 트리(04fdff4)에서 뜬 값 그대로이므로 폴백 복호의 RS 파라미터가
+// 조용히 어긋나는 것도 여기서 잡힌다.
+// ═════════════════════════════════════════════════════════════════════════
+
+/** 15조합 실측표 — [nsym, errorCapacity, dataSymbols, dataBytes, maxPayloadBytes]. */
+const RS_TABLE = Object.freeze({
+  2: Object.freeze({ // 현행 세대 (포맷 v2 · 18셀)
+    'v0@13': { S: 36, L: [4, 2, 32, 30, 29], M: [9, 4, 27, 26, 25], H: [14, 7, 22, 21, 20] },
+    'v2r2@21': { S: 112, L: [13, 6, 99, 95, 94], M: [29, 14, 83, 80, 79], H: [45, 22, 67, 64, 63] },
+    'v2r2@25': { S: 173, L: [21, 10, 152, 146, 145], M: [43, 21, 130, 125, 124], H: [69, 34, 104, 100, 99] },
+    'v1r2@21': { S: 110, L: [13, 6, 97, 93, 92], M: [29, 14, 81, 78, 77], H: [44, 22, 66, 63, 62] },
+    'v0x@21': { S: 115, L: [14, 7, 101, 97, 96], M: [29, 14, 86, 82, 81], H: [46, 23, 69, 66, 65] },
+  }),
+  1: Object.freeze({ // 레거시 세대 (포맷 v1 · 15셀) — 개정 전 트리와 동일
+    'v0@13': { S: 37, L: [4, 2, 33, 31, 30], M: [9, 4, 28, 27, 26], H: [15, 7, 22, 21, 20] },
+    'v2r2@21': { S: 113, L: [14, 7, 99, 95, 94], M: [29, 14, 84, 81, 80], H: [45, 22, 68, 65, 64] },
+    'v2r2@25': { S: 174, L: [21, 10, 153, 147, 146], M: [45, 22, 129, 124, 123], H: [70, 35, 104, 100, 99] },
+    'v1r2@21': { S: 111, L: [13, 6, 98, 94, 93], M: [29, 14, 82, 79, 78], H: [44, 22, 67, 64, 63] },
+    'v0x@21': { S: 116, L: [14, 7, 102, 98, 97], M: [29, 14, 87, 83, 82], H: [46, 23, 70, 67, 66] },
+  }),
+});
+
+test('RS 파라미터 전수 — 15조합 × {nsym, errorCapacity, dataSymbols, dataBytes, payload} (현행 세대)', () => {
+  let combos = 0;
+  for (const [key, want] of Object.entries(RS_TABLE[CELL_SURFACE_FINAL_FORMAT_WIRE])) {
+    const [id, raw] = key.split('@');
+    const n = Number(raw);
+    const surface = cellSurfaceFinal(n, id);
+    assert.equal(surface.usedSymbols, want.S, key + ' S');
+    assert.deepEqual(surface.nsym, {
+      symbols: want.S, L: want.L[0], M: want.M[0], H: want.H[0],
+    }, key + ' nsym 표');
+    for (const level of ['L', 'M', 'H']) {
+      const [nsym, ec, dataSymbols, dataBytes, payload] = want[level];
+      const capacity = capacityForCellSurfaceFinal(n, level, 2, id);
+      assert.equal(capacity.nsym, nsym, key + '-' + level + ' nsym');
+      assert.equal(capacity.errorCapacity, ec, key + '-' + level + ' errorCapacity');
+      assert.equal(capacity.dataSymbols, dataSymbols, key + '-' + level + ' dataSymbols');
+      assert.equal(capacity.dataBytes, dataBytes, key + '-' + level + ' dataBytes');
+      assert.equal(capacity.maxPayloadBytes, payload, key + '-' + level + ' maxPayloadBytes');
+      // nsym 은 «데이터 + 패리티 = S» 회계와 항상 맞아야 한다.
+      assert.equal(capacity.dataSymbols + capacity.nsym, want.S, key + '-' + level + ' 합계');
+      combos += 1;
+    }
+  }
+  assert.equal(combos, 15, '조합 수가 15 가 아니다 — 라인업이 늘었으면 표를 갱신하라');
+});
+
+test('RS 파라미터 전수 — 레거시(포맷 v1) 세대도 개정 전 값 그대로다', () => {
+  let combos = 0;
+  for (const [key, want] of Object.entries(RS_TABLE[CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY])) {
+    const [id, raw] = key.split('@');
+    const n = Number(raw);
+    const surface = cellSurfaceFinal(n, id, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY);
+    assert.equal(surface.usedSymbols, want.S, key + ' S(v1)');
+    for (const level of ['L', 'M', 'H']) {
+      const [nsym, ec, dataSymbols, dataBytes, payload] = want[level];
+      const capacity = capacityForCellSurfaceFinal(
+        n, level, 2, id, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
+      );
+      assert.equal(capacity.nsym, nsym, key + '-' + level + ' nsym(v1)');
+      assert.equal(capacity.errorCapacity, ec, key + '-' + level + ' errorCapacity(v1)');
+      assert.equal(capacity.dataSymbols, dataSymbols, key + '-' + level + ' dataSymbols(v1)');
+      assert.equal(capacity.dataBytes, dataBytes, key + '-' + level + ' dataBytes(v1)');
+      assert.equal(capacity.maxPayloadBytes, payload, key + '-' + level + ' payload(v1)');
+      combos += 1;
+    }
+  }
+  assert.equal(combos, 15);
+});
+
+test('세대 전환의 대가 — 정정능력 −1 이 세 조합, payload 는 «전부 −1 B» 가 아니다', () => {
+  // ⚠ **운영자 재가 대기 항목**. 이 테스트는 «좋다» 고 말하지 않는다 —
+  // 포맷 v2 가 무엇을 얼마나 깎았는지를 **수치로 고정**해 다음 사람이 모르고
+  // 지나가지 못하게 한다. 재가 전까지 이 표는 SPEC §7.5 «불변» 행을 대체한다.
+  const eccLoss = [];
+  const payloadDelta = {};
+  for (const key of Object.keys(RS_TABLE[2])) {
+    const [id, raw] = key.split('@');
+    const n = Number(raw);
+    for (const level of ['L', 'M', 'H']) {
+      const now = capacityForCellSurfaceFinal(n, level, 2, id);
+      const legacy = capacityForCellSurfaceFinal(
+        n, level, 2, id, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
+      );
+      if (now.errorCapacity !== legacy.errorCapacity) {
+        eccLoss.push(key + '-' + level + ' ' + legacy.errorCapacity + '→' + now.errorCapacity);
+      }
+      payloadDelta[key + '-' + level] = now.maxPayloadBytes - legacy.maxPayloadBytes;
+    }
+  }
+  // 정정능력이 움직인 조합은 정확히 셋이고 전부 v2r2 (n=21·25 기본 레이아웃)다.
+  assert.deepEqual(eccLoss, [
+    'v2r2@21-L 7→6',
+    'v2r2@25-M 22→21',
+    'v2r2@25-H 35→34',
+  ], '정정능력 변동 집합이 달라졌다 — 운영자 재가 표(§7.5)를 갱신하라');
+  // «전 레이아웃 payload −1 B» 는 거짓이다 — 15조합 중 4개가 반례(0 셋 · +1 하나).
+  const counts = { '-1': 0, 0: 0, 1: 0 };
+  for (const delta of Object.values(payloadDelta)) counts[String(delta)] += 1;
+  assert.deepEqual(counts, { '-1': 11, 0: 3, 1: 1 }, 'payload 델타 분포');
+  assert.equal(payloadDelta['v2r2@25-M'], 1,
+    'v2r2@25-M 은 payload 가 **늘어난다**(123→124) — nsym 45→43 이 −1심볼을 덮는다');
+});
+
+test('errorCapacity 는 실제 정정 한계와 일치한다 — RS 훼손 실험 (v2r2@25-M)', () => {
+  // 장부상 수치가 아니라 실제라는 것을 한 조합에서 실측으로 못 박는다
+  // (적대 검증 F2 가 쓴 방법 그대로: nsym/2 개까지 복구, 그 위는 실패).
+  const capacity = capacityForCellSurfaceFinal(25, 'M', 2, 'v2r2');
+  assert.equal(capacity.errorCapacity, 21);
+  const data = new Uint8Array(capacity.dataSymbols);
+  for (let i = 0; i < data.length; i += 1) data[i] = (i * 7 + 3) % 211;
+  const codeword = rsEncode(data, capacity.nsym);
+  const corrupt = (count) => {
+    const copy = Uint8Array.from(codeword);
+    for (let i = 0; i < count; i += 1) copy[i] = (copy[i] + 1) % 211;
+    return rsDecode(copy, capacity.nsym);
+  };
+  const atLimit = corrupt(21);
+  assert.equal(atLimit.ok, true, '정정 한계 21 에서 복구 실패: ' + (atLimit.reason || ''));
+  assert.deepEqual(Array.from(atLimit.message), Array.from(data), '21 훼손 복구값이 다르다');
+  const overLimit = corrupt(22);
+  const recovered = overLimit.ok
+    && Array.from(overLimit.message).every((v, i) => v === data[i]);
+  assert.equal(recovered, false, '한계 초과(22)에서 복구됐다 — errorCapacity 선언이 낮다');
 });

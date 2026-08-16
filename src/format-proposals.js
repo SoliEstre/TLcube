@@ -13,6 +13,14 @@ import {
   crc6,
   fromDigits5,
   removeMask,
+  CODEWORD_BITS_V2,
+  DIGIT_COUNT_V2,
+  MASK_BITS_V2,
+  RESERVED_BITS_V2,
+  MASK_INDEX_RESERVED,
+  crc6v2,
+  fromDigits6,
+  removeMaskV2,
 } from './formatinfo.js';
 
 const REPLICA_COUNT = 3;
@@ -22,22 +30,43 @@ const FORMAT_DIGIT_COUNT = 5;
  * `null` 은 "이 자리는 프레임 밖이라 관측이 없다"는 **소거** 표시다. 0..5 정수와
  * 구분된다 — 0을 대신 넣으면 잘린 복제가 멀쩡한 관측인 척 다수결에 참여해서
  * 나머지 두 복제를 이긴다. 이 구분이 no-format-candidate 구제의 전부다.
+ *
+ * **세대 무관**이다. v1(5 digit) · v2(6 digit) 어느 쪽 워드를 읽든 잘린 자리는
+ * 같은 `null` 로 표시되고, 아래 함수들은 전부 `digitCount` 를 받아 두 세대에서
+ * 같은 소거 규칙을 돌린다. 세대별로 소거 규칙이 갈리면 폴백 경로(v2 → v1)에서
+ * 한쪽만 구제되는 비대칭이 생긴다.
  */
 function isErasedDigit(digit) {
   return digit === null;
 }
 
-function assertReads(reads) {
+/** 한 자리라도 소거가 있는 복제 수. 그 복제는 개별 proposal 이 될 수 없다. */
+function countErasedReplicas(reads, digitCount) {
+  let erasedReplicas = 0;
+  for (let replicaIndex = 0; replicaIndex < REPLICA_COUNT; replicaIndex += 1) {
+    for (let digitIndex = 0; digitIndex < digitCount; digitIndex += 1) {
+      if (isErasedDigit(reads[replicaIndex][digitIndex])) {
+        erasedReplicas += 1;
+        break;
+      }
+    }
+  }
+  return erasedReplicas;
+}
+
+function assertReads(reads, digitCount = FORMAT_DIGIT_COUNT) {
   if (!Array.isArray(reads) || reads.length !== REPLICA_COUNT) {
     throw new TypeError('reads는 길이 3 배열이어야 한다');
   }
   for (let replicaIndex = 0; replicaIndex < REPLICA_COUNT; replicaIndex += 1) {
     const digits = reads[replicaIndex];
     if (!digits || typeof digits.length !== 'number' || typeof digits === 'string'
-      || digits.length !== FORMAT_DIGIT_COUNT) {
-      throw new TypeError('각 복제는 길이 5 digit 배열이어야 한다: replica ' + replicaIndex);
+      || digits.length !== digitCount) {
+      throw new TypeError(
+        '각 복제는 길이 ' + digitCount + ' digit 배열이어야 한다: replica ' + replicaIndex,
+      );
     }
-    for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
+    for (let digitIndex = 0; digitIndex < digitCount; digitIndex += 1) {
       const digit = digits[digitIndex];
       if (isErasedDigit(digit)) continue;
       if (!Number.isInteger(digit) || digit < 0 || digit > 5) {
@@ -73,7 +102,7 @@ function normalizeVersionIndices(validVersionIndices) {
  *
  * 자리마다 «살아남은 복제» 가 다를 수 있다. 위치 0 은 복제 0·1 이, 위치 1 은 복제
  * 2 만 살아 있을 수 있다. 그러면 `majorityDigits` 는 **어느 한 복제에서도 통째로
- * 관측된 적이 없는 5-digit 조합**이 된다 — 자리별 관측을 이어 붙인 키메라다.
+ * 관측된 적이 없는 digitCount-digit 조합**이 된다 — 자리별 관측을 이어 붙인 키메라다.
  * 변경 전에는 `readFormatForHypothesis` 가 첫 미표본 셀에서 죽었으므로 이 조합은
  * 만들어질 수조차 없었다. **퇴행이 아니라 신규 표면이다.**
  *
@@ -86,23 +115,30 @@ function normalizeVersionIndices(validVersionIndices) {
  * 2. **한 자리라도 관측이 0 이면 키메라를 만들지 않는다** (`known === 0` →
  *    `noConsensus += 1` → 다수결 proposal 자체가 안 선다).
  *
- * 그 대가로 **키메라의 방어선은 ECC 가 아니라 CRC-6 하나다** — 5-digit 공간 7776 중
- * 유효 64 개(약 0.82 %)만 통과하고, 소비자(`bootstrap.js`)는 `crcOk` 를 하드 게이트로
- * 쓴다. 그 뒤는 본문 RS 가 받는다. 잘림·가림·skew 전 축(1331 ok 행)에서 오수용
- * 실측 0 이지만 **«0 을 쟀다» 이지 «0 임을 증명했다» 가 아니다.** 이 표면을 넓히는
- * 변경(예: 정족수 완화, `crcOk:false` 후보 승격)은 그 두 근거를 다시 세워야 한다.
- * 계약은 `test/format-proposals.test.js` 의 생존자 키메라 테스트가 고정한다.
+ * 그 대가로 **키메라의 방어선은 ECC 가 아니라 CRC-6 하나다** — v1 은 5-digit 공간
+ * 7776 중 CRC 유효 64 개(약 0.82 %), v2 는 6-digit 공간 46656 중 CRC 유효 512 개
+ * (약 1.10 %)만 통과한다. v2 는 예약 필드 3종(ECC 3 · 마스크 index 3 · 예약 bit)을
+ * CRC 보다 **먼저** 거부하므로 실제로 남는 것은 144 개(약 0.31 %)다. 소비자
+ * (`bootstrap.js`)는 두 세대 모두 `crcOk` 를 하드 게이트로 쓴다. 그 뒤는 본문 RS 가
+ * 받는다. 잘림·가림·skew 전 축(1331 ok 행)에서 오수용 실측 0 이지만 **«0 을 쟀다»
+ * 이지 «0 임을 증명했다» 가 아니다.** 이 표면을 넓히는 변경(예: 정족수 완화,
+ * `crcOk:false` 후보 승격)은 그 두 근거를 다시 세워야 한다. 계약은
+ * `test/format-proposals.test.js` (v1) 와 `test/format-erasure-generations.test.js`
+ * (v2 + 폴백) 의 생존자 키메라 테스트가 고정한다.
+ *
+ * **세대 무관**: v2(6 digit)도 같은 함수를 `digitCount = 6` 으로 돈다. 키메라의
+ * 자릿수만 늘 뿐 ①②의 근거는 그대로다.
  */
-function summarizeConsensus(reads) {
+function summarizeConsensus(reads, digitCount = FORMAT_DIGIT_COUNT) {
   const states = [];
-  const majorityDigits = new Array(FORMAT_DIGIT_COUNT).fill(0);
+  const majorityDigits = new Array(digitCount).fill(0);
   let threeOfThree = 0;
   let twoOfThree = 0;
   let noConsensus = 0;
   let erasedPositions = 0;
   let survivorDecided = 0;
 
-  for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
+  for (let digitIndex = 0; digitIndex < digitCount; digitIndex += 1) {
     const counts = new Map();
     let known = 0;
     for (const digits of reads) {
@@ -172,7 +208,7 @@ function copyConsensus(consensus) {
   };
 }
 
-function collectRawProposals(reads, consensus) {
+function collectRawProposals(reads, consensus, digitCount = FORMAT_DIGIT_COUNT) {
   const byDigits = new Map();
 
   const add = (maskedDigits, source, replicaIndex) => {
@@ -187,18 +223,20 @@ function collectRawProposals(reads, consensus) {
     if (replicaIndex !== undefined) candidate.replicaIndices.push(replicaIndex);
   };
 
-  // §5.1: 다섯 위치 모두에 합의가 있을 때만 다수결 proposal을 만든다. 소거된
-  // 복제를 뺀 뒤의 정족수도 여기에 포함된다 (noConsensus가 그 판정을 담는다).
+  // §5.1: 모든 위치에 합의가 있을 때만 다수결 proposal을 만든다 (v1 다섯 · v2 여섯).
+  // 소거된 복제를 뺀 뒤의 정족수도 여기에 포함된다 (noConsensus가 그 판정을 담는다).
   if (consensus.noConsensus === 0) add(consensus.majorityDigits, 'majority');
 
   // 다수결 성공 여부와 무관하게 개별 복제를 보존한다. formatinfo.decode()의 fallback을
   // 잃지 않으면서도, 첫 CRC 성공이 아닌 후보 전체 평가를 가능하게 한다.
-  // 단 **소거 digit이 하나라도 있는 복제는 제외한다** — 그 복제는 5-digit 코드워드를
+  // 단 **소거 digit이 하나라도 있는 복제는 제외한다** — 그 복제는 온전한 코드워드를
   // 이룰 수 없고, 빈자리를 0으로 메운 값은 관측이 아니라 날조다.
+  // `digitCount` 를 반드시 세대에 맞춰 받아야 한다. 5 로 고정하면 v2 의 6번째 자리만
+  // 소거된 복제가 «온전» 으로 통과해 `null` 이 `fromDigits6` 에 흘러든다.
   for (let replicaIndex = 0; replicaIndex < REPLICA_COUNT; replicaIndex += 1) {
     const digits = reads[replicaIndex];
     let complete = true;
-    for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
+    for (let digitIndex = 0; digitIndex < digitCount; digitIndex += 1) {
       if (isErasedDigit(digits[digitIndex])) {
         complete = false;
         break;
@@ -245,17 +283,9 @@ function collectRawProposals(reads, consensus) {
 export function enumerateFormatProposals(reads, { validVersionIndices } = {}) {
   assertReads(reads);
   const allowedVersions = normalizeVersionIndices(validVersionIndices);
-  const consensus = summarizeConsensus(reads);
-  const candidates = collectRawProposals(reads, consensus);
-  let erasedReplicas = 0;
-  for (let replicaIndex = 0; replicaIndex < REPLICA_COUNT; replicaIndex += 1) {
-    for (let digitIndex = 0; digitIndex < FORMAT_DIGIT_COUNT; digitIndex += 1) {
-      if (isErasedDigit(reads[replicaIndex][digitIndex])) {
-        erasedReplicas += 1;
-        break;
-      }
-    }
-  }
+  const consensus = summarizeConsensus(reads, FORMAT_DIGIT_COUNT);
+  const candidates = collectRawProposals(reads, consensus, FORMAT_DIGIT_COUNT);
+  const erasedReplicas = countErasedReplicas(reads, FORMAT_DIGIT_COUNT);
   const diagnostics = {
     generated: {
       majority: consensus.noConsensus === 0 ? 1 : 0,
@@ -305,6 +335,103 @@ export function enumerateFormatProposals(reads, { validVersionIndices } = {}) {
     proposals.push({
       versionIndex,
       eccLevel,
+      crcOk,
+      consensus: copyConsensus(consensus),
+      source: candidate.sources.includes('majority') ? 'majority' : candidate.sources[0],
+      sources: candidate.sources.slice(),
+      replicaIndices: candidate.replicaIndices.slice(),
+      maskedDigits: candidate.maskedDigits.slice(),
+    });
+  }
+
+  return { proposals, diagnostics };
+}
+
+/**
+ * 포맷 **v2**(6 digit) 판. 구조·순서·진단 필드는 v1 과 같고 바뀐 것은 셋뿐이다:
+ * digit 수 6 · 코드워드 15bit · proposal 에 `maskIndex` 가 붙는다.
+ *
+ * **소거 인지 다수결은 v1 과 같은 코드다** — `assertReads` · `summarizeConsensus` ·
+ * `collectRawProposals` 를 `digitCount = 6` 으로 공유한다. 즉 `null`(프레임 밖) digit
+ * 은 v2 에서도 다수결 표에서 빠지고, 소거가 있는 복제는 개별 proposal 이 되지 않으며,
+ * 생존자 키메라의 방어선(①자리별 실관측 ②동수면 포기 ③CRC 하드 게이트 ④관측 0 이면
+ * 포기)도 그대로 승계된다. 세대별로 갈리면 폴백 경로(v2 → v1)에서 한쪽만 구제된다.
+ *
+ * @param {Array<Array<number|null>>} reads 마스크 적용된 3복제 × 6 digit 읽기값
+ *   (`null` = 소거)
+ * @param {{validVersionIndices: Iterable<number>}} options
+ * @returns {{proposals:Array<object>, diagnostics:object}} v1 과 같은 모양 +
+ *   `proposals[].maskIndex` · `diagnostics.semanticRejected.reservedMask` ·
+ *   `diagnostics.semanticRejected.reservedBitSet`
+ */
+export function enumerateFormatProposalsV2(reads, { validVersionIndices } = {}) {
+  assertReads(reads, DIGIT_COUNT_V2);
+  const allowedVersions = normalizeVersionIndices(validVersionIndices);
+  const consensus = summarizeConsensus(reads, DIGIT_COUNT_V2);
+  const candidates = collectRawProposals(reads, consensus, DIGIT_COUNT_V2);
+  const erasedReplicas = countErasedReplicas(reads, DIGIT_COUNT_V2);
+  const diagnostics = {
+    generated: {
+      majority: consensus.noConsensus === 0 ? 1 : 0,
+      replicas: REPLICA_COUNT - erasedReplicas,
+      erasedReplicas,
+      unique: candidates.length,
+    },
+    semanticRejected: {
+      codewordOutOfRange: 0,
+      reservedEcc: 0,
+      versionOutsideFamily: 0,
+      reservedMask: 0,
+      reservedBitSet: 0,
+    },
+    crcChecked: 0,
+    crcOk: 0,
+    crcFailed: 0,
+  };
+  const proposals = [];
+
+  for (const candidate of candidates) {
+    const codeword = fromDigits6(removeMaskV2(candidate.maskedDigits));
+    if (codeword >= (1 << CODEWORD_BITS_V2)) {
+      diagnostics.semanticRejected.codewordOutOfRange += 1;
+      continue;
+    }
+
+    const payload = codeword >> CRC_BITS;
+    const crcField = codeword & ((1 << CRC_BITS) - 1);
+    const reserved = payload & ((1 << RESERVED_BITS_V2) - 1);
+    const maskIndex = (payload >> RESERVED_BITS_V2) & ((1 << MASK_BITS_V2) - 1);
+    const eccLevel = (payload >> (RESERVED_BITS_V2 + MASK_BITS_V2)) & ((1 << ECC_BITS) - 1);
+    const versionIndex = payload >> (RESERVED_BITS_V2 + MASK_BITS_V2 + ECC_BITS);
+
+    // 값싼 의미론 reject 는 CRC 보다 먼저 (v1 §5.2 규약 승계).
+    if (eccLevel === ECC_LEVEL.RESERVED) {
+      diagnostics.semanticRejected.reservedEcc += 1;
+      continue;
+    }
+    if (maskIndex === MASK_INDEX_RESERVED) {
+      diagnostics.semanticRejected.reservedMask += 1;
+      continue;
+    }
+    if (reserved !== 0) {
+      diagnostics.semanticRejected.reservedBitSet += 1;
+      continue;
+    }
+    if (!allowedVersions.has(versionIndex)) {
+      diagnostics.semanticRejected.versionOutsideFamily += 1;
+      continue;
+    }
+
+    diagnostics.crcChecked += 1;
+    const crcOk = crc6v2(payload) === crcField;
+    if (crcOk) diagnostics.crcOk += 1;
+    else diagnostics.crcFailed += 1;
+
+    proposals.push({
+      versionIndex,
+      eccLevel,
+      maskIndex,
+      reserved,
       crcOk,
       consensus: copyConsensus(consensus),
       source: candidate.sources.includes('majority') ? 'majority' : candidate.sources[0],

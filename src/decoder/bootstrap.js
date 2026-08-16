@@ -57,9 +57,11 @@ import {
   nameCellSurfaceFinal,
   tonesFromCellSurfaceFinalFormatIndex,
   versionForFinalN,
+  CELL_SURFACE_FINAL_FORMAT_WIRES,
 } from '../cellSurfaceFinal.js';
 import { decodeCells } from '../decode.js';
-import { enumerateFormatProposals } from '../format-proposals.js';
+import { DIGIT_COUNT_V2 } from '../formatinfo.js';
+import { enumerateFormatProposals, enumerateFormatProposalsV2 } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
 import { ranksToDigit } from '../lehmer.js';
 import {
@@ -1544,7 +1546,11 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
   });
 }
 
-function layoutForFamily(family, dimension, hypothesis) {
+/**
+ * @param {number} [formatWire] 신세대 셀 표면에서만 의미가 있다 — 2(현행 18셀) 기본,
+ *   1 이면 레거시 판독 세대(15셀). 예약 셀이 3개 적으므로 **데이터 좌표까지** 달라진다.
+ */
+function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
   if (family === 'hex') {
     return {
       map: layoutMap(dimension),
@@ -1563,8 +1569,10 @@ function layoutForFamily(family, dimension, hypothesis) {
     if (hypothesis && hypothesis.cellSurface === true) {
       if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
         return {
-          map: layoutMapCellSurfaceFinal(dimension, hypothesis.cellSurfaceLayout),
-          dataCells: dataCellsInScanOrderCellSurfaceFinal(dimension, hypothesis.cellSurfaceLayout),
+          map: layoutMapCellSurfaceFinal(dimension, hypothesis.cellSurfaceLayout, formatWire),
+          dataCells: dataCellsInScanOrderCellSurfaceFinal(
+            dimension, hypothesis.cellSurfaceLayout, formatWire,
+          ),
           type: 'Y',
         };
       }
@@ -2388,6 +2396,110 @@ export function cubeSampleOptions(options) {
   };
 }
 
+/**
+ * 한 세대(포맷 셀 목록)로 포맷 워드를 실제로 읽는다. 세대 선택은 호출측이 한다.
+ */
+function readFormatWithCells(luma, hypothesis, options, valid, cells, formatWireVersion) {
+  const cube = hypothesis.family === 'cube';
+  const digitCount = formatWireVersion === 2 ? DIGIT_COUNT_V2 : 5;
+  if (cells.length !== digitCount * 3) {
+    return fail(FRONTEND_FAILURE.NO_FORMAT_CANDIDATE, {
+      stage: 'format',
+      cause: 'format-cell-count-mismatch',
+      hypothesisId: hypothesis.hypothesisId,
+      cells: cells.length,
+      expected: digitCount * 3,
+      formatWireVersion,
+    });
+  }
+  // 포맷 셀은 **세대 무관** 3중 복제다 (v1 5×3 = 15 · v2 6×3 = 18). 한 셀이 프레임
+  // 밖으로 잘려도 나머지 두 복제가 살아 있으면 읽을 수 있어야 한다 — 잘린 자리는
+  // null(소거)로 표시해 format-proposals 의 다수결 표에서 **빼고**, 0 으로
+  // 위장시키지 않는다. 세대 분기는 위의 `digitCount` 하나뿐이고, 소거 규칙은
+  // 두 세대가 같은 코드를 탄다.
+  const samples = [];
+  const observedDigits = [];
+  const erasedCells = [];
+  for (const cell of cells) {
+    const sampled = cube
+      ? sampleCubeCell(luma, hypothesis, cell.i, cell.j, cubeSampleOptions(options))
+      : sampleHexCell(luma, hypothesis, cell.q, cell.r, options.sample || {});
+    samples.push(sampled);
+    if (!sampled.ok) {
+      observedDigits.push(null);
+      erasedCells.push({
+        cell,
+        reason: sampled.reason,
+        cause: 'unsampled-format-cell',
+        detail: sampled.detail,
+        formatWireVersion,
+      });
+      continue;
+    }
+    if (cube) {
+      const read = readCubeDigit(sampled, hypothesis.referenceCalibration);
+      if (read === null) {
+        observedDigits.push(null);
+        erasedCells.push({
+          cell,
+          reason: FRONTEND_FAILURE.NO_FORMAT_CANDIDATE,
+          cause: 'illegal-two-tone-triple-or-unreadable-three-tone-rank',
+          tones: hypothesis.tones,
+          formatWireVersion,
+        });
+        continue;
+      }
+      observedDigits.push(read.digit);
+    } else {
+      observedDigits.push(sampleToDigit(sampled));
+    }
+  }
+  if (erasedCells.length === cells.length) {
+    // 포맷 셀 전부(v1 15 · v2 18)가 소거면 포맷을 주장할 근거가 하나도 없다 —
+    // 예전처럼 실패한다. 이 실패는 `stage: 'format-sampling'` 이라 세대 폴백을
+    // 발동시키지 않는다: 기하가 통째로 프레임 밖이면 세대를 바꿔도 같은 자리에서
+    // 다시 깨진다(폴백으로 기하를 구제하지 않는다).
+    return fail(erasedCells[0].reason, {
+      stage: 'format-sampling',
+      hypothesisId: hypothesis.hypothesisId,
+      cell: erasedCells[0].cell,
+      cause: 'all-format-cells-unsampled',
+      erasedFormatCells: erasedCells.length,
+      formatWireVersion,
+    });
+  }
+  const reads = [0, 1, 2].map((replica) =>
+    observedDigits.slice(replica * digitCount, replica * digitCount + digitCount));
+  const enumerated = formatWireVersion === 2
+    ? enumerateFormatProposalsV2(reads, { validVersionIndices: valid })
+    : enumerateFormatProposals(reads, { validVersionIndices: valid });
+  const formatCandidates = enumerated.proposals.filter((proposal) => proposal.crcOk);
+  if (formatCandidates.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_FORMAT_CANDIDATE, {
+      stage: 'format',
+      hypothesisId: hypothesis.hypothesisId,
+      validVersionIndices: valid,
+      reads,
+      tones: hypothesis.tones,
+      erasedFormatCells: erasedCells.length,
+      diagnostics: enumerated.diagnostics,
+      formatWireVersion,
+    });
+  }
+  return ok({
+    hypothesis,
+    reads,
+    samples,
+    erasedFormatCells: erasedCells,
+    digitCount,
+    formatWireVersion,
+    proposals: enumerated.proposals,
+    formatCandidates,
+    diagnostics: enumerated.diagnostics,
+    validVersionIndices: valid,
+  });
+}
+
 function readFormatForHypothesis(luma, hypothesis, options = {}) {
   try {
     assertLumaField(luma);
@@ -2404,86 +2516,41 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
   }
 
   const cube = hypothesis.family === 'cube';
+  // ── 신세대 셀 표면 — 두 세대를 다 읽는다 (통합자 결정 A) ────────────────────
+  //
+  // v2(18셀) 로 먼저 읽고, **포맷 CRC 후보가 전멸했을 때만** v1(15셀)로 한 번 더
+  // 읽는다. 두 좌표 집합은 같은 autoplace 를 세대 파라미터만 바꿔 돌린 것이라
+  // 손 좌표표가 없다. 폴백은 «순서» 로 안전한 게 아니라 CRC + 버전 필드(패밀리) +
+  // 본문 RS 3중으로 안전하다 — v1 워드에는 마스크 필드가 없어 index 0 고정이고,
+  // 오독 방어는 실측 스윕(test/format-legacy-fallback.test.js)이 회귀로 고정한다.
+  if (cube && hypothesis.cellSurface === true
+    && isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
+    let firstAttempt = null;
+    for (const wire of CELL_SURFACE_FINAL_FORMAT_WIRES) {
+      const attempt = readFormatWithCells(
+        luma, hypothesis, options, valid,
+        formatCellsCellSurfaceFinal(hypothesis.n, hypothesis.cellSurfaceLayout, wire),
+        wire,
+      );
+      if (attempt.ok) return attempt;
+      if (firstAttempt === null) firstAttempt = attempt;
+      // 폴백 조건은 «CRC 전멸» 한 가지다. 샘플링이 깨진 기하는 세대를 바꿔도
+      // 같은 셀에서 다시 깨지므로 여기서 멈춘다(폴백으로 기하를 구제하지 않는다).
+      if (!attempt.detail || attempt.detail.stage !== 'format') break;
+    }
+    return firstAttempt;
+  }
+
   const cells = cube
     ? hypothesis.cellSurface === true
-      ? (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)
-        ? formatCellsCellSurfaceFinal(hypothesis.n, hypothesis.cellSurfaceLayout)
-        : hypothesis.cellSurfaceLayout
-          ? formatCellsCellSurfaceLayout(hypothesis.cellSurfaceLayout)
-          : formatCellsCellSurface())
+      ? (hypothesis.cellSurfaceLayout
+        ? formatCellsCellSurfaceLayout(hypothesis.cellSurfaceLayout)
+        : formatCellsCellSurface())
       : hypothesis.window === true
         ? windowedFormatCellsY(hypothesis.n)
         : formatCellsY(hypothesis.n)
     : formatCells(hypothesis.k);
-  // 포맷 15셀은 3중 복제다. 한 셀이 프레임 밖으로 잘려도 나머지 두 복제가
-  // 살아 있으면 읽을 수 있어야 한다 — 잘린 자리는 null(소거)로 표시해
-  // format-proposals 의 다수결 표에서 **빼고**, 0 으로 위장시키지 않는다.
-  const samples = [];
-  const observedDigits = [];
-  const erasedCells = [];
-  for (const cell of cells) {
-    const sampled = cube
-      ? sampleCubeCell(luma, hypothesis, cell.i, cell.j, cubeSampleOptions(options))
-      : sampleHexCell(luma, hypothesis, cell.q, cell.r, options.sample || {});
-    samples.push(sampled);
-    if (!sampled.ok) {
-      observedDigits.push(null);
-      erasedCells.push({ cell, reason: sampled.reason, cause: 'unsampled-format-cell' });
-      continue;
-    }
-    if (cube) {
-      const read = readCubeDigit(sampled, hypothesis.referenceCalibration);
-      if (read === null) {
-        observedDigits.push(null);
-        erasedCells.push({
-          cell,
-          reason: FRONTEND_FAILURE.NO_FORMAT_CANDIDATE,
-          cause: 'illegal-two-tone-triple-or-unreadable-three-tone-rank',
-        });
-        continue;
-      }
-      observedDigits.push(read.digit);
-    } else {
-      observedDigits.push(sampleToDigit(sampled));
-    }
-  }
-  if (erasedCells.length === cells.length) {
-    // 15셀 전부가 소거면 포맷을 주장할 근거가 하나도 없다 — 예전처럼 실패한다.
-    return fail(erasedCells[0].reason, {
-      stage: 'format-sampling',
-      hypothesisId: hypothesis.hypothesisId,
-      cell: erasedCells[0].cell,
-      cause: 'all-format-cells-unsampled',
-      erasedFormatCells: erasedCells.length,
-    });
-  }
-  const reads = [0, 1, 2].map((replica) =>
-    observedDigits.slice(replica * 5, replica * 5 + 5));
-  const enumerated = enumerateFormatProposals(reads, {
-    validVersionIndices: valid,
-  });
-  const formatCandidates = enumerated.proposals.filter((proposal) => proposal.crcOk);
-  if (formatCandidates.length === 0) {
-    return fail(FRONTEND_FAILURE.NO_FORMAT_CANDIDATE, {
-      stage: 'format',
-      hypothesisId: hypothesis.hypothesisId,
-      validVersionIndices: valid,
-      reads,
-      tones: hypothesis.tones,
-      erasedFormatCells: erasedCells.length,
-      diagnostics: enumerated.diagnostics,
-    });
-  }
-  return ok({
-    hypothesis,
-    reads,
-    samples,
-    erasedFormatCells: erasedCells,
-    proposals: enumerated.proposals,
-    formatCandidates,
-    diagnostics: enumerated.diagnostics,
-    validVersionIndices: valid,
-  });
+  return readFormatWithCells(luma, hypothesis, options, valid, cells, 1);
 }
 
 /**
@@ -2591,7 +2658,11 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
 
     const cube = hypothesis.family === 'cube';
     const dimension = cube ? hypothesis.n : hypothesis.k;
-    const layout = layoutForFamily(hypothesis.family, dimension, hypothesis);
+    // 포맷 읽기가 확정한 세대로 본문 레이아웃도 유도한다 — 레거시 폴백(15셀)에서는
+    // 데이터 좌표가 3셀 더 많다. 세대를 안 넘기면 v2 좌표로 v1 프레임을 읽게 된다.
+    const layout = layoutForFamily(
+      hypothesis.family, dimension, hypothesis, formatRead.formatWireVersion,
+    );
     if (!layout) continue;
     // 프레임 밖으로 잘린 셀에서 가설 전체를 죽이지 않는다 — 그 셀만 RS 소거로
     // 넘긴다 (sample-starved 구제). 한 셀도 못 읽으면 여전히 실패한다.
@@ -2663,6 +2734,14 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
           if (hypothesis.cellSurfaceLayout) {
             decodeFormat.cellSurfaceLayout = hypothesis.cellSurfaceLayout;
           }
+          // 포맷 v2 — 데이터 언마스크에 쓸 index 는 방금 읽은 포맷 워드에서 온다.
+          // 레거시 폴백(v1)은 마스크 필드가 없으므로 index 를 넘기지 않는다(=0 고정).
+          if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
+            decodeFormat.formatWire = formatRead.formatWireVersion;
+          }
+          if (formatRead.formatWireVersion === 2) {
+            decodeFormat.maskIndex = formatCandidate.maskIndex;
+          }
         }
       } else {
         decodeFormat.k = dimension;
@@ -2682,17 +2761,20 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       }
 
       let matchingFormatDigits = 0;
+      const formatDigitCount = formatRead.digitCount || 5;
       for (let index = 0; index < formatRead.samples.length; index += 1) {
-        const observed = formatRead.reads[Math.floor(index / 5)][index % 5];
+        const observed = formatRead.reads[Math.floor(index / formatDigitCount)][index % formatDigitCount];
         const confident = cube || !formatRead.samples[index].tie;
-        if (confident && observed === formatCandidate.maskedDigits[index % 5]) {
+        if (confident && observed === formatCandidate.maskedDigits[index % formatDigitCount]) {
           matchingFormatDigits += 1;
         }
       }
       acceptedForHypothesis.push({
         decoded,
         formatCandidate,
-        formatAgreement: matchingFormatDigits / 15,
+        // 분모는 **실제 포맷 셀 수**다. v1 은 15, 포맷 v2 는 18 —
+        // 15 로 고정하면 v2 경로에서 agreement 가 1 을 넘어 점수가 부풀려진다.
+        formatAgreement: matchingFormatDigits / formatRead.samples.length,
       });
     }
     if (acceptedForHypothesis.length === 0) continue;

@@ -31,8 +31,14 @@
  * 인스턴스화한다. n=13 은 autoplace REF_QUADRANT 거부(블록이 사분면을 잠식) —
  * 그래서 v0 가 있다.
  *
- * reference(12) · format(15) 는 **autoplaceY.placeReservedCells 로만 유도**한다 —
+ * reference(12) · format(**18**) 는 **autoplaceY.placeReservedCells 로만 유도**한다 —
  * 손 좌표표 금지(c0e7321 계약: 편집기·인코더·디코더가 같은 함수를 쓴다).
+ *
+ * **포맷 v2 일괄 전환 (2026-08-16, 운영자 승인 개정)**: 마스크 선택 index 2bit 를
+ * 실으려고 포맷이 6 digit 이 됐다(`formatinfo.js` 헤더 «포맷 v2»). 이 모듈의 네
+ * 레이아웃(v0 · v0x · v1r2 · v2r2)은 **전부** v2 다 — 포맷 셀 15 → 18, 데이터 셀 −3,
+ * payload −1 B. 초안·소각 와이어(cellSurfaceLayouts.js v1r2d · v2)와 레거시 Y 는 v1
+ * 그대로다. 구 디코더는 포맷 셀 좌표 자체가 달라져 CRC 에서 떨어진다(깨끗한 거부).
  *
  * formatIndex 는 «신세대 셀 표면» **한 쌍만** 쓴다 — 2톤 1 · 3톤 3 (3T = 2T + 2,
  * ADR 0006 D3-5 쌍 불변식). 레이아웃은 와이어가 아니라 **n 으로 정해진다** — 디코더는
@@ -57,6 +63,7 @@
  */
 
 import { maxBytesForSymbols } from './capacity.js';
+import { symbolCountForByteLength } from './base211.js';
 import { errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
 import { VERSIONS_Y } from './capacityY.js';
@@ -68,7 +75,52 @@ import {
   CELL_SURFACE_LAYOUT_FORMAT_INDEX as DRAFT_LAYOUT_FORMAT_INDEX,
   CELL_SURFACE_LAYOUT_IDS as DRAFT_LAYOUT_IDS,
 } from './cellSurfaceLayouts.js';
-import { placeReservedCells } from './autoplaceY.js';
+import {
+  placeReservedCells, FORMAT_BLOCK_LENGTH_V1, FORMAT_BLOCK_LENGTH_V2,
+} from './autoplaceY.js';
+import { FORMAT_CELLS_V2 } from './formatinfo.js';
+
+/**
+ * 이 라인업이 **생성**하는 포맷 세대. 신세대 셀 표면은 전부 v2(6 digit · 18셀).
+ * autoplace 에 넘기는 유일한 스위치다 — 손 좌표표 금지 계약은 그대로다.
+ */
+export const CELL_SURFACE_FINAL_FORMAT_BLOCK_LENGTH = FORMAT_BLOCK_LENGTH_V2;
+
+/** 이 라인업의 포맷 셀 수 (3복제 × 6). */
+export const CELL_SURFACE_FINAL_FORMAT_CELLS = FORMAT_CELLS_V2;
+
+/** 현행(생성) 포맷 와이어 세대. */
+export const CELL_SURFACE_FINAL_FORMAT_WIRE = 2;
+
+/** 레거시(판독 전용) 포맷 와이어 세대 — 개정 전에 발행된 프레임. */
+export const CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY = 1;
+
+/**
+ * 디코더가 시도하는 세대 순서 — **v2 우선, v1 폴백**.
+ *
+ * ── 왜 두 세대를 다 읽나 (2026-08-16 통합자 결정 A) ─────────────────────────
+ * 포맷 v2 는 포맷 셀을 15 → 18 로 늘리므로 **데이터 셀 좌표까지** 달라진다. 세대
+ * 비트는 와이어에 없고(§7.2) 레이아웃이 세대를 정하는 구조라, 개정 전에 발행된
+ * v0 · v0x · v1r2 · v2r2 프레임은 신 디코더에서 영구히 안 읽히게 된다(적대 검증 F3).
+ * 두 세대의 예약 셀 위치는 **같은 autoplace 함수의 세대 파라미터**로 계산되므로
+ * (손 좌표표 없음) 디코더가 v2 로 먼저 읽고, 포맷 CRC 후보가 **전멸**했을 때만
+ * v1(15셀 · 데이터 마스크 index 0 고정)로 한 번 더 읽는다.
+ *
+ * 오독 방어는 «순서» 가 아니라 **CRC + 버전 필드 + 본문 RS** 3중이다 — 폴백은
+ * v2 후보가 0개일 때만 돌고, v1 워드에는 마스크 필드가 없으므로 index 는 0 으로
+ * 고정된다. 실측(§r2 오독 스윕)이 이 계약을 회귀로 고정한다.
+ */
+export const CELL_SURFACE_FINAL_FORMAT_WIRES = Object.freeze([
+  CELL_SURFACE_FINAL_FORMAT_WIRE,
+  CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
+]);
+
+/** 세대 → autoplace 복제 길이. 다른 값은 없다. */
+export function formatBlockLengthForWire(formatWire) {
+  if (formatWire === CELL_SURFACE_FINAL_FORMAT_WIRE) return FORMAT_BLOCK_LENGTH_V2;
+  if (formatWire === CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY) return FORMAT_BLOCK_LENGTH_V1;
+  throw new RangeError('포맷 와이어 세대는 2(현행) 또는 1(레거시): ' + formatWire);
+}
 
 export const CELL_SURFACE_FINAL_V0 = 'v0';
 export const CELL_SURFACE_FINAL_V2R2 = 'v2r2';
@@ -134,20 +186,32 @@ export function versionForFinalN(n) {
 }
 
 /**
- * 회계 선언값 — n² − painted − 12(reference) − 15(format). 어긋나면 로드 시 throw.
+ * 회계 선언값 — n² − painted − 12(reference) − **18**(format v2). 어긋나면 로드 시 throw.
  * v1r2 는 편집기 정본이 counts.data 352 를 적지만 그것은 **편집기 자신의 고정 배치**
- * (format/reference 27 중 18 이 칠한 블록 안) 기준이다. autoplace 계약에서는 27 이
- * 파인더 밖으로 재유도되므로 441 − 80 − 27 = 334 가 맞다 (cellSurfaceLayouts.js 와 동일).
+ * (format/reference 27 중 18 이 칠한 블록 안) 기준이다. autoplace 계약에서는 30 이
+ * 파인더 밖으로 재유도되므로 441 − 80 − 30 = 331 이 맞다.
+ *
+ * **포맷 v2 전환 전후** (data −3 전파, payload −1 B):
+ *   v0@13   112 → 109 · v0x@21 349 → 346 · v1r2@21 334 → 331
+ *   v2r2@21 340 → 337 · v2r2@25 524 → 521
  */
 const DECLARED_DATA = Object.freeze({
-  [CELL_SURFACE_FINAL_V0]: Object.freeze({ 13: 112 }),
-  // 2026-08-16 중앙 개정: painted 65→74 (+9) → data −9셀 (349→340 · 533→524).
-  [CELL_SURFACE_FINAL_V2R2]: Object.freeze({ 21: 340, 25: 524 }),
-  [CELL_SURFACE_FINAL_V1R2]: Object.freeze({ 21: 334 }),
-  // v0X 는 편집기 정본의 counts.data(349) 와 autoplace 재유도가 **일치**한다 —
-  // 이 파인더는 편집기 고정 배치(format/reference 27) 를 잠식하지 않기 때문이다
-  // (v1r2 는 27 중 18 을 덮어 편집기 회계가 352 로 어긋났다).
-  [CELL_SURFACE_FINAL_V0X]: Object.freeze({ 21: 349 }),
+  // 현행 세대 (포맷 v2 · 18셀).
+  [CELL_SURFACE_FINAL_FORMAT_WIRE]: Object.freeze({
+    [CELL_SURFACE_FINAL_V0]: Object.freeze({ 13: 109 }),
+    // 2026-08-16 중앙 개정: painted 65→74 (+9) → data −9셀. 이어서 포맷 v2 −3.
+    [CELL_SURFACE_FINAL_V2R2]: Object.freeze({ 21: 337, 25: 521 }),
+    [CELL_SURFACE_FINAL_V1R2]: Object.freeze({ 21: 331 }),
+    // v0X 는 편집기 정본의 counts.data(349) 가 포맷 v1 기준이었다 — v2 에서 346.
+    [CELL_SURFACE_FINAL_V0X]: Object.freeze({ 21: 346 }),
+  }),
+  // 레거시 세대 (포맷 v1 · 15셀) — **판독 전용**. 개정 전 발행 프레임의 회계다.
+  [CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY]: Object.freeze({
+    [CELL_SURFACE_FINAL_V0]: Object.freeze({ 13: 112 }),
+    [CELL_SURFACE_FINAL_V2R2]: Object.freeze({ 21: 340, 25: 524 }),
+    [CELL_SURFACE_FINAL_V1R2]: Object.freeze({ 21: 334 }),
+    [CELL_SURFACE_FINAL_V0X]: Object.freeze({ 21: 349 }),
+  }),
 });
 
 const FACES = Object.freeze(['T', 'L', 'R']);
@@ -380,6 +444,26 @@ function nsymTable(symbols) {
   return Object.freeze({ symbols, L, M, H });
 }
 
+/**
+ * 심볼 예산으로 **실제 패킹 가능한** 최대 바이트.
+ *
+ * `capacity.maxBytesForSymbols` 는 211^S 를 통째로 보고 floor(S·log2 211 / 8) 을 낸다.
+ * 그런데 실제 인코더(`base211.bytesToSymbols`)는 **27B ↔ 28심볼 청크**로 나눠 담으므로
+ * 꼬리 청크에서 손실이 나 어떤 S 에서는 그 값이 1 B 과대 선언이 된다(S=1..400 중 64개).
+ * 그런 조합은 `decode.finishProfile` 이 «이 포맷은 현행 인코더가 생성할 수 없다» 로
+ * 이미 거부하고 있었다 — 즉 **선언이 틀린 것이지 게이트가 느슨한 것이 아니다.**
+ *
+ * 포맷 v2 전환으로 v0X@21 의 S 가 116 → 115 가 되면서 ECC-M 의 dataSymbols 가
+ * 하필 그 86 에 떨어졌다(dataBytes 83 을 선언하는데 인코더는 87심볼을 요구). 여기서
+ * 청크 정합 값으로 **낮춰** 선언한다 — 절대 올리지 않으므로 어떤 게이트도 완화하지 않고,
+ * 나머지 14개 (레이아웃 × 레벨) 조합의 값은 개정 전과 **바이트 동일**하다.
+ */
+function packableBytesForSymbols(dataSymbols) {
+  let bytes = maxBytesForSymbols(dataSymbols);
+  while (bytes > 0 && symbolCountForByteLength(bytes) > dataSymbols) bytes -= 1;
+  return bytes;
+}
+
 function canonicalRowsFor(id, n) {
   if (id === CELL_SURFACE_FINAL_V0) return V0_CELLS;
   if (id === CELL_SURFACE_FINAL_V1R2) return V1R2_CELLS;
@@ -387,16 +471,24 @@ function canonicalRowsFor(id, n) {
   return v2r2CellsForN(n);
 }
 
-function buildFinalSurface(id, n) {
+function buildFinalSurface(id, n, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
   assertCellSurfaceFinalN(id, n);
+  const blockLength = formatBlockLengthForWire(formatWire);
   const rows = canonicalRowsFor(id, n);
   const locatorCells = buildLocatorCells(rows, MID_TONE_LAYOUTS.includes(id));
   const painted = locatorCells.map((cell) => ({ i: cell.i, j: cell.j }));
 
-  // format 15 · reference 12 는 autoplace 유도 — 손 좌표표 금지 (c0e7321 계약).
-  const placed = placeReservedCells(n, painted);
+  // format 18(v2) | 15(v1 레거시 판독) · reference 12 는 autoplace 유도 —
+  // 손 좌표표 금지 (c0e7321 계약). 세대는 blockLength 하나로만 갈린다.
+  const placed = placeReservedCells(n, painted, { formatBlockLength: blockLength });
   const format = placed.formatCells;
   const reference = placed.referenceCells;
+  if (format.length !== blockLength * 3) {
+    throw new Error(
+      id + '@n=' + n + ': format 셀이 ' + (blockLength * 3)
+      + ' 가 아니다: ' + format.length,
+    );
+  }
 
   const locatorKeys = new Set(painted.map((cell) => cellKey(cell.i, cell.j)));
   for (const cell of [...format, ...reference]) {
@@ -405,11 +497,12 @@ function buildFinalSurface(id, n) {
     }
   }
 
-  const declared = DECLARED_DATA[id][n];
+  const declared = DECLARED_DATA[formatWire][id][n];
   const dataCells = n * n - locatorCells.length - reference.length - format.length;
   if (dataCells !== declared) {
     throw new Error(
-      id + '@n=' + n + ': ' + n + '² − painted(' + locatorCells.length + ') − 12 − 15 = '
+      id + '@n=' + n + ': ' + n + '² − painted(' + locatorCells.length + ') − '
+      + reference.length + ' − ' + format.length + ' = '
       + dataCells + ' 이 선언 data ' + declared + ' 와 다르다',
     );
   }
@@ -434,6 +527,7 @@ function buildFinalSurface(id, n) {
     residualCells,
     nsym: nsymTable(usedSymbols),
     formatIndex: CELL_SURFACE_FINAL_FORMAT_INDEX,
+    formatWire,
   });
 }
 
@@ -447,11 +541,35 @@ const SURFACES = Object.freeze(Object.fromEntries(
 ));
 
 /**
+ * 레거시(포맷 v1 · 15셀) 세대 캐시 — **판독 전용**. 생성 경로는 절대 여기를 안 본다.
+ * autoplace 를 세대 파라미터만 바꿔 다시 돌린 것이라 개정 전 좌표와 바이트 동일하다
+ * (테스트가 §3.1 v1 좌표표로 단언).
+ */
+const SURFACES_LEGACY = Object.freeze(Object.fromEntries(
+  CELL_SURFACE_FINAL_IDS.flatMap((id) =>
+    CELL_SURFACE_FINAL_NS[id].map((n) => [
+      surfaceKey(id, n),
+      buildFinalSurface(id, n, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY),
+    ])),
+));
+
+function surfaceCacheForWire(formatWire) {
+  if (formatWire === CELL_SURFACE_FINAL_FORMAT_WIRE) return SURFACES;
+  if (formatWire === CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY) return SURFACES_LEGACY;
+  throw new RangeError('포맷 와이어 세대는 2(현행) 또는 1(레거시): ' + formatWire);
+}
+
+/**
  * (n, id) → 최종 셀 표면 인스턴스 (동결 캐시 — autoplace 는 로드 시 1회).
  * id 를 생략하면 그 n 의 **기본** 레이아웃 (13→v0 · 21|25→v2r2).
+ * `formatWire` 를 생략하면 현행 세대(2) — 생성 경로는 이 기본값만 쓴다.
+ * 1 을 주면 레거시 판독 세대(포맷 v1 · 15셀)를 돌려준다.
  */
-export function cellSurfaceFinal(n, id = finalLayoutIdForN(n)) {
-  const surface = id === null ? undefined : SURFACES[surfaceKey(id, n)];
+export function cellSurfaceFinal(
+  n, id = finalLayoutIdForN(n), formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
+) {
+  const cache = surfaceCacheForWire(formatWire);
+  const surface = id === null ? undefined : cache[surfaceKey(id, n)];
   if (!surface) {
     throw new RangeError(
       '셀 표면 최종 라인업에 없는 (레이아웃, n) 이다: ' + id + '@' + n,
@@ -474,8 +592,15 @@ export function paintedCellsCellSurfaceFinal(n, id = undefined) {
   return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).paintedCells;
 }
 
-export function formatCellsCellSurfaceFinal(n, id = undefined) {
-  return cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id).formatCells;
+/**
+ * 포맷 셀 좌표. `formatWire` 1 을 주면 레거시(15셀) 좌표 — 디코더 폴백 전용이다.
+ */
+export function formatCellsCellSurfaceFinal(
+  n, id = undefined, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
+) {
+  return cellSurfaceFinal(
+    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+  ).formatCells;
 }
 
 export function referenceCellsCellSurfaceFinal(n, id = undefined) {
@@ -491,8 +616,12 @@ export function locatorToneCellSurfaceFinal(n, face, i, j, id = undefined) {
   return 1;
 }
 
-export function dataCellsInScanOrderCellSurfaceFinal(n, id = undefined) {
-  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
+export function dataCellsInScanOrderCellSurfaceFinal(
+  n, id = undefined, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
+) {
+  const surface = cellSurfaceFinal(
+    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+  );
   const blocked = new Set([
     ...surface.locatorCells.map((cell) => cellKey(cell.i, cell.j)),
     ...surface.formatCells.map((cell) => cellKey(cell.i, cell.j)),
@@ -513,14 +642,20 @@ export function dataCellsInScanOrderCellSurfaceFinal(n, id = undefined) {
   return out;
 }
 
-export function fillerCellsCellSurfaceFinal(n, id = undefined) {
-  const scan = dataCellsInScanOrderCellSurfaceFinal(n, id);
+export function fillerCellsCellSurfaceFinal(
+  n, id = undefined, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
+) {
+  const scan = dataCellsInScanOrderCellSurfaceFinal(n, id, formatWire);
   const residual = scan.length % 3;
   return residual === 0 ? [] : scan.slice(scan.length - residual);
 }
 
-export function layoutMapCellSurfaceFinal(n, id = undefined) {
-  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
+export function layoutMapCellSurfaceFinal(
+  n, id = undefined, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
+) {
+  const surface = cellSurfaceFinal(
+    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+  );
   const map = new Map();
   surface.locatorCells.forEach((cell, index) => {
     map.set(cellKey(cell.i, cell.j), { role: 'locator', index });
@@ -531,7 +666,7 @@ export function layoutMapCellSurfaceFinal(n, id = undefined) {
   surface.formatCells.forEach((cell, index) => {
     map.set(cellKey(cell.i, cell.j), { role: 'format', index });
   });
-  dataCellsInScanOrderCellSurfaceFinal(n, surface.id).forEach((cell, index) => {
+  dataCellsInScanOrderCellSurfaceFinal(n, surface.id, formatWire).forEach((cell, index) => {
     map.set(cellKey(cell.i, cell.j), { role: 'data', index });
   });
   return map;
@@ -545,12 +680,17 @@ function nsymForLevel(surface, level) {
   return nsym;
 }
 
-export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = undefined) {
-  const surface = cellSurfaceFinal(n, id === undefined ? finalLayoutIdForN(n) : id);
+export function capacityForCellSurfaceFinal(
+  n, level = 'M', tones = 2, id = undefined,
+  formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE,
+) {
+  const surface = cellSurfaceFinal(
+    n, id === undefined ? finalLayoutIdForN(n) : id, formatWire,
+  );
   const resolvedTones = assertCellSurfaceFinalTones(tones);
   const nsym = nsymForLevel(surface, level);
   const dataSymbols = surface.usedSymbols - nsym;
-  const dataBytes = maxBytesForSymbols(dataSymbols);
+  const dataBytes = packableBytesForSymbols(dataSymbols);
   return {
     name: nameCellSurfaceFinal(n, resolvedTones, surface.id),
     version: surface.version,
@@ -575,6 +715,7 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = unde
     dataBytes,
     maxPayloadBytes: maxPayloadFor(dataBytes),
     headerBytes: HEADER_BYTES,
+    formatWire: surface.formatWire,
   };
 }
 
@@ -716,14 +857,20 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = unde
   }
 
   // ③ 다섯 인스턴스 회계 — 사용 심볼·잔여 셀이 확정 수치와 일치해야 한다.
-  // (v2r2 는 2026-08-16 중앙 개정 수치 — painted 74 · data 340/524.)
+  // (v2r2 는 2026-08-16 중앙 개정 수치 — painted 74. 포맷 v2 전환으로 data −3 전파.)
+  //   v0@13   169 − 30 − 12 − 18 = 109 · S=36  · 잔여 1  (v1: 112 · 37 · 1)
+  //   v2r2@21 441 − 74 − 12 − 18 = 337 · S=112 · 잔여 1  (v1: 340 · 113 · 1)
+  //   v2r2@25 625 − 74 − 12 − 18 = 521 · S=173 · 잔여 2  (v1: 524 · 174 · 2)
+  //   v1r2@21 441 − 80 − 12 − 18 = 331 · S=110 · 잔여 1  (v1: 334 · 111 · 1)
+  //   v0x@21  441 − 65 − 12 − 18 = 346 · S=115 · 잔여 1  (v1: 349 · 116 · 1)
+  // 레거시 세대(포맷 v1 · 15셀)는 **판독 전용**이지만 회계는 같은 자로 잰다 —
+  // 폴백이 조용히 다른 좌표를 쓰면 여기서 잡는다.
   const expected = {
-    'v0@13': { symbols: 37, residual: 1, locator: 30 },
-    'v2r2@21': { symbols: 113, residual: 1, locator: 74 },
-    'v2r2@25': { symbols: 174, residual: 2, locator: 74 },
-    'v1r2@21': { symbols: 111, residual: 1, locator: 80 },
-    // v0X — 441 − 65 − 12 − 15 = 349 · S=116 · 잔여 1 (정본 counts.data 와 일치).
-    'v0x@21': { symbols: 116, residual: 1, locator: 65 },
+    'v0@13': { symbols: 36, residual: 1, locator: 30, legacy: { symbols: 37, residual: 1 } },
+    'v2r2@21': { symbols: 112, residual: 1, locator: 74, legacy: { symbols: 113, residual: 1 } },
+    'v2r2@25': { symbols: 173, residual: 2, locator: 74, legacy: { symbols: 174, residual: 2 } },
+    'v1r2@21': { symbols: 110, residual: 1, locator: 80, legacy: { symbols: 111, residual: 1 } },
+    'v0x@21': { symbols: 115, residual: 1, locator: 65, legacy: { symbols: 116, residual: 1 } },
   };
   for (const [key, want] of Object.entries(expected)) {
     const [id, raw] = key.split('@');
@@ -742,8 +889,49 @@ export function capacityForCellSurfaceFinal(n, level = 'M', tones = 2, id = unde
     if (scan.length !== surface.declaredDataCells) {
       throw new Error(key + ': data 선언과 scan 이 어긋난다');
     }
+    const legacy = cellSurfaceFinal(n, id, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY);
+    if (legacy.formatCells.length !== 15) {
+      throw new Error(key + ' 레거시 포맷 셀이 15 가 아니다: ' + legacy.formatCells.length);
+    }
+    if (legacy.usedSymbols !== want.legacy.symbols
+      || legacy.residualCells !== want.legacy.residual) {
+      throw new Error(
+        key + ' 레거시 회계 불일치: S=' + legacy.usedSymbols + '/' + want.legacy.symbols
+        + ' 잔여=' + legacy.residualCells + '/' + want.legacy.residual,
+      );
+    }
+    // 두 세대는 파인더·reference 가 **같아야** 한다 — 달라지면 폴백이 다른 프레임을 읽는다.
+    if (legacy.locatorCount !== surface.locatorCount) {
+      throw new Error(key + ': 세대 간 파인더 셀 수가 다르다');
+    }
+    const refKey = (cells) => cells.map((cell) => cell.i + ',' + cell.j).join(' ');
+    if (refKey(legacy.referenceCells) !== refKey(surface.referenceCells)) {
+      throw new Error(key + ': 세대 간 reference 좌표가 다르다');
+    }
   }
-  if (Object.keys(SURFACES).length !== Object.keys(expected).length) {
+  if (Object.keys(SURFACES).length !== Object.keys(expected).length
+    || Object.keys(SURFACES_LEGACY).length !== Object.keys(expected).length) {
     throw new Error('최종 라인업 인스턴스 수가 회계 표와 다르다');
+  }
+
+  // ⑤ 인코더 정합 — (레이아웃 × ECC 레벨) 15조합 전부가 실제로 인코딩 가능해야 한다.
+  // 선언 dataBytes 를 base-211 청크 패커에 되물어 dataSymbols 와 정확히 맞는지 본다.
+  // (포맷 v2 전환에서 v0X@21 ECC-M 이 여기 걸렸고 packableBytesForSymbols 로 고쳤다.)
+  // 레거시 세대도 같이 훑는다 — 폴백 복호가 RS 파라미터를 스스로 유도하기 때문이다.
+  for (const key of Object.keys(SURFACES)) {
+    const [id, raw] = key.split('@');
+    const n = Number(raw);
+    for (const level of ['L', 'M', 'H']) {
+      for (const wire of CELL_SURFACE_FINAL_FORMAT_WIRES) {
+        const capacity = capacityForCellSurfaceFinal(n, level, 2, id, wire);
+        const need = symbolCountForByteLength(capacity.dataBytes);
+        if (need !== capacity.dataSymbols) {
+          throw new Error(
+            key + ' ECC-' + level + ' (포맷 v' + wire + '): dataBytes ' + capacity.dataBytes
+            + ' 는 ' + need + ' 심볼을 요구하는데 예산은 ' + capacity.dataSymbols + ' 다',
+          );
+        }
+      }
+    }
   }
 }

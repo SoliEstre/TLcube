@@ -10,7 +10,11 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { regionCells, hexDistance } from '../src/hexgrid.js';
-import { CANDIDATES, CHOSEN, maskValue, maskAdd, maskSub } from '../src/mask.js';
+import {
+  CANDIDATES, CHOSEN, maskValue, maskAdd, maskSub,
+  MASK_CANDIDATES, MASK_COUNT, MASK_INDEX_BITS, MASK_SEEDS, DEFAULT_MASK_INDEX,
+  assertMaskIndex,
+} from '../src/mask.js';
 
 const VERSIONS = [
   { version: 1, k: 6 },
@@ -122,6 +126,92 @@ describe('mask — 선정 규칙 ①③ 재확인 (확정 공식)', () => {
 describe('mask — 대조군 (affine) 은 의도대로 ③에서 FAIL', () => {
   test('아핀 후보는 축 방향 짧은 주기를 가진다 (선형 mod-6 필연)', () => {
     assert.equal(hasShortPeriod(CANDIDATES.affine), true);
+  });
+});
+
+describe('mask — 후보 3종 (2026-08-16 마스크 선택 개정)', () => {
+  test('후보 수·필드 폭·기본 index', () => {
+    assert.equal(MASK_COUNT, 3);
+    assert.equal(MASK_CANDIDATES.length, MASK_COUNT);
+    assert.equal(MASK_SEEDS.length, MASK_COUNT);
+    assert.equal(MASK_INDEX_BITS, 2);
+    assert.ok(MASK_COUNT <= 1 << MASK_INDEX_BITS);
+    assert.equal(DEFAULT_MASK_INDEX, 0);
+  });
+
+  test('와이어 보존 — index 0 은 개정 전 hash 와 전 좌표에서 동일', () => {
+    for (let q = -25; q <= 25; q += 1) {
+      for (let r = -25; r <= 25; r += 1) {
+        assert.equal(maskValue(q, r, 0), CANDIDATES.hash(q, r));
+        assert.equal(maskValue(q, r), CANDIDATES.hash(q, r)); // 인자 생략 = index 0
+      }
+    }
+  });
+
+  test('index 범위 밖은 예외', () => {
+    assert.throws(() => assertMaskIndex(MASK_COUNT), RangeError);
+    assert.throws(() => assertMaskIndex(-1), RangeError);
+    assert.throws(() => maskValue(0, 0, 3), RangeError);
+    assert.throws(() => maskValue(0, 0, 1.5), RangeError);
+  });
+
+  for (let index = 0; index < 3; index += 1) {
+    test(`후보 ${index} — 값역 0..5 · 결정성`, () => {
+      for (let q = -20; q <= 20; q += 1) {
+        for (let r = -20; r <= 20; r += 1) {
+          const v = MASK_CANDIDATES[index](q, r);
+          assert.ok(Number.isInteger(v) && v >= 0 && v <= 5, `m${index}(${q},${r})=${v}`);
+          assert.equal(v, maskValue(q, r, index));
+        }
+      }
+    });
+
+    for (const { version, k } of VERSIONS) {
+      test(`후보 ${index} — ① 카이제곱 균등성 V${version}(k=${k})`, () => {
+        const values = dataCells(k).map((c) => MASK_CANDIDATES[index](c.q, c.r));
+        const { chi2 } = chiSquareUniform(values);
+        assert.ok(
+          chi2 <= CHI2_CRIT_DF5_ALPHA01,
+          `후보 ${index} chi2=${chi2} > 임계 ${CHI2_CRIT_DF5_ALPHA01} (V${version})`,
+        );
+      });
+    }
+
+    test(`후보 ${index} — ③ 세 격자축에 주기<=6 없음`, () => {
+      assert.equal(hasShortPeriod(MASK_CANDIDATES[index]), false);
+    });
+
+    test(`후보 ${index} — maskAdd ↔ maskSub 왕복 항등`, () => {
+      for (const { q, r } of dataCells(6)) {
+        for (let digit = 0; digit <= 5; digit += 1) {
+          assert.equal(maskSub(maskAdd(digit, q, r, index), q, r, index), digit);
+        }
+      }
+    });
+  }
+
+  test('후보끼리 서로 다른 필드다 (평행이동/재라벨링이 아니다)', () => {
+    // 같은 digit 비율이 무상관 기대 1/6 부근이어야 한다. 완전 일치(1.0)나
+    // 상수 오프셋(어떤 c 에 대해 항상 m_b = m_a + c)이면 여기서 잡힌다.
+    for (let a = 0; a < MASK_COUNT; a += 1) {
+      for (let b = a + 1; b < MASK_COUNT; b += 1) {
+        let same = 0;
+        let total = 0;
+        const offsets = new Set();
+        for (let i = 0; i < 21; i += 1) {
+          for (let j = 0; j < 21; j += 1) {
+            const va = MASK_CANDIDATES[a](i, j);
+            const vb = MASK_CANDIDATES[b](i, j);
+            if (va === vb) same += 1;
+            offsets.add(((vb - va) % 6 + 6) % 6);
+            total += 1;
+          }
+        }
+        const rate = same / total;
+        assert.ok(rate > 0.08 && rate < 0.26, `후보 ${a}↔${b} 일치율 ${rate}`);
+        assert.ok(offsets.size > 1, `후보 ${a}↔${b} 가 상수 mod-6 오프셋이다`);
+      }
+    }
   });
 });
 
