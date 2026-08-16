@@ -210,13 +210,27 @@
     align-self: start;
   }
   label { display: block; font-size: 12px; color: var(--dim); margin: 12px 0 4px; }
-  label:first-child { margin-top: 0; }
+  /* .section-heading 도 label 이라 이 리셋에 걸린다 — 아래 «섹션 마진 단일 규칙» 이
+     래퍼 div 안 첫 헤딩의 위 여백을 살려야 하므로 여기서 명시적으로 제외한다. */
+  label:not(.section-heading):first-child { margin-top: 0; }
   .section-heading, .section-title {
     display: block; margin: 18px 0 6px;
     color: var(--text); font-size: 13px; font-weight: 700;
     letter-spacing: .015em; line-height: 1.35;
   }
-  .section-heading:first-child, .section-title:first-child { margin-top: 0; }
+  /* ── 섹션 마진 단일 규칙 (2026-08-16 운영자 지시 A-5) ───────────────────
+     옵션 영역의 세로 리듬은 «헤딩 위 18px · 아래 6px» **하나뿐**이다.
+     이전에는 `.section-heading:first-child { margin-top: 0 }` 때문에 래퍼 div
+     (#toneNormalSection · #backdropSection · #finderSection · #yLocatorSection ·
+     #decorSection · #panelNormal …) 안의 첫 헤딩만 위 여백이 0 이 되어, 화면상
+     18px 과 0px 이 섞였다 — «어떤 섹션은 붙어 있고 어떤 섹션은 떨어져 있다» 의
+     원인이 «그 섹션이 div 로 감싸져 있는가» 라는, 사용자가 알 수 없는 사정이었다.
+     예외는 하나뿐이다: 패널 최상단(콘텐츠) — 패널 padding 과 겹치므로 0. */
+  .section-heading-row { display: flex; align-items: center; gap: 6px; margin: 18px 0 6px; }
+  .section-heading-row > .section-heading,
+  .section-heading-row > .section-title { margin: 0; }
+  .panel > *:first-child > .section-heading:first-child,
+  .panel > .section-heading:first-child { margin-top: 0; }
   textarea, select, input[type="text"], input[type="password"] {
     width: 100%; background: var(--bg); color: var(--text);
     border: 1px solid var(--line); border-radius: 6px;
@@ -258,6 +272,67 @@
   }
   .check-row input { width: auto; margin: 0; }
   .hint { font-size: 11px; color: var(--dim); margin: 4px 0 0; line-height: 1.5; }
+
+  /* ── 섹션 도움말 «?» + 플로팅 창 (2026-08-16 운영자 지시 A-2) ────────────
+     섹션마다 있던 여러 줄 `.hint` 와 카드마다 있던 `title=` 을 하나로 모은다.
+     네이티브 `title=` 은 모바일에서 아예 안 뜨고 줄바꿈도 안 된다 — 부연 설명을
+     거기 두면 «폰에서는 설명이 없는 UI» 가 된다. */
+  .help-dot {
+    flex: 0 0 auto; width: 16px; height: 16px; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 50%;
+    background: transparent; color: var(--dim); cursor: help;
+  }
+  .help-dot svg { width: 11px; height: 11px; }
+  .help-dot:hover, .help-dot[aria-expanded="true"] {
+    color: var(--accent); border-color: var(--accent);
+  }
+  .help-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .help-popover {
+    position: fixed; z-index: 60; max-width: min(320px, calc(100vw - 16px));
+    padding: 10px 12px; border-radius: 8px;
+    background: var(--panel); border: 1px solid var(--line);
+    box-shadow: 0 8px 24px rgba(0,0,0,.28);
+    font-size: 11.5px; line-height: 1.6; color: var(--text);
+  }
+  .help-popover[hidden] { display: none; }
+  .help-popover.pinned { border-color: var(--accent); }
+  .help-popover .help-popover-line { margin: 0 0 6px; }
+  .help-popover .help-popover-line:last-child { margin-bottom: 0; }
+  .help-popover.pinned .help-popover-body { padding-right: 18px; }
+  .help-popover-close {
+    position: absolute; top: 4px; right: 4px;
+    width: 22px; height: 22px; padding: 0; border: none; border-radius: 6px;
+    background: transparent; color: var(--dim);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .help-popover-close:hover { color: var(--accent); border-color: transparent; }
+  .help-popover-close svg { width: 12px; height: 12px; }
+
+  /* 토글 카드 안 1~3단어 부제 — 카드마다 붙어 있던 `title=` 설명의 대체물. */
+  .card-sub {
+    display: block; font-size: 9.5px; line-height: 1.3; color: var(--dim);
+    opacity: .85; word-break: keep-all;
+  }
+  .toggle-card.active .card-sub { color: var(--text); opacity: .75; }
+
+  /* 콘텐츠 입력란 지우기 «×» — 내용이 있을 때만 나타난다. */
+  .input-clear {
+    position: absolute; z-index: 2; top: 6px; right: 6px;
+    width: 20px; height: 20px; padding: 0; border-radius: 5px;
+    border: 1px solid transparent; background: transparent; color: var(--dim);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .input-clear[hidden] { display: none; }
+  .input-clear:hover { color: var(--bad); border-color: var(--line); }
+  .input-clear svg { width: 11px; height: 11px; }
+
+  /* 자체검증 3태 뱃지 자리 — «안정성 ⇄ 용량» 바로 아래. */
+  .selfcheck-row { margin: 8px 0 0; font-size: 11px; line-height: 1.6; }
+  .selfcheck-row:empty { display: none; }
+  .badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+  .selfcheck-detail { display: block; margin-top: 3px; color: var(--dim); font-size: 10.5px; }
+
   .experimental-warning {
     margin: 7px 0 0; padding: 7px 9px;
     color: var(--warn); border-left: 3px solid var(--warn);
@@ -417,33 +492,126 @@
   .badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
   .badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
   #error { color: var(--bad); font-size: 12px; margin-top: 10px; white-space: pre-wrap; }
+  /* ── 미리보기 영역 (2026-08-16 운영자 지시 B-1) ─────────────────────────
+   *
+   * 옛 배치가 왜 어긋났나 (실측, 1440×900):
+   *   ① `drawScene` 이 캔버스에 **인라인 px 크기**(scene 단위 × 26)를 박았다.
+   *      그 크기가 열 폭보다 작으면(타입 O + 안쪽 QR = 870px < 975px) 캔버스가
+   *      `#canvasWrap`(width:100%) 안에서 **왼쪽에 붙었다** — gapL 55 / gapR 160.
+   *   ② 작지 않을 땐 `max-width:100%` 와 `max-height:calc(100vh-180px)` 가 **따로**
+   *      잘라서 요소 박스의 종횡비가 그림의 종횡비와 달라졌다. `object-fit: contain`
+   *      이 그 박스 **안에서** 다시 레터박스를 만들었고, 그래서 요소 박스(= .checker
+   *      배경 · 드래그 히트영역 · 포인터 좌표 기준)가 실제 그림과 어긋났다.
+   *   ③ `#stage` 는 그리드 행에 늘어나는 아이템이라 높이가 **컨트롤 패널**(2000\~2500px)
+   *      을 따라갔다. 코드는 720px 로 잘려 위아래로 650\~890px 씩 빈 칸이 남았다.
+   *
+   * 새 규칙: 무대는 «뷰포트 한 판» 으로 고정하고(데스크톱은 sticky 라 스크롤을 따라온다),
+   * 그림 상자는 **폭 = min(가용폭, 가용높이 × 종횡비)** 로 잡는다. 폭이 정해지면
+   * `aspect-ratio` 가 높이를 만들므로 종횡비가 깨질 수 없고, 두 축 중 하나는 항상
+   * 100% 를 채운다(= 왜곡 없는 최대치 = contain). 내부 해상도(canvas.width/height)는
+   * 건드리지 않는다 — CSS 표시 크기만 바뀐다.
+   */
   #stage {
     display: flex; align-items: center; justify-content: center;
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
     padding: 20px; min-height: 420px;
+    position: relative;
     /* overflow:auto 제거 — 캔버스가 공간에 맞춰 스케일되므로 스크롤이 생기지 않는다. */
   }
-  /* 미리보기 자동 확대/축소: 캔버스 내부 해상도(drawScene 픽셀)는 그대로 두고 CSS 로
-     열 폭에 맞춘다. max-height 로 세로도 뷰포트 안에 가두고, object-fit: contain 이
-     종횡비를 보존한다 (canvas 는 replaced element 라 object-fit 적용 가능). */
-  /* 배치 미리보기 레이어 — backdrop 은 view 뒤에 정확히 겹친다. */
-  #canvasWrap { position: relative; display: block; width: 100%; touch-action: none; }
+  /* 가용 높이는 «무대 높이 − 패딩 40 − 테두리 2». 아래 두 미디어 쿼리가 무대 높이와
+     이 값을 **같이** 정의한다 — 한쪽만 고치면 다시 레터박스가 생기니 붙여 둔다. */
+  @media (min-width: 761px) {
+    main > #stage {
+      align-self: start;
+      position: sticky; top: 12px;
+      height: max(420px, calc(100vh - 80px));
+    }
+    #canvasWrap { --fit-h: max(378px, calc(100vh - 122px)); }
+  }
+  @media (max-width: 760px) {
+    /* 1열에서는 무대가 내용을 감싼다(높이 고정 없음). --fit-h 는 «세로로 이 이상은
+       차지하지 않는다» 는 상한일 뿐이라 무대 높이와 순환하지 않는다.
+       min-height 도 420 → 240 으로 낮춘다: 폰에서는 폭이 제약이라 세로로 긴 최소
+       높이를 강제하면 가로로 넓은 코드에서 위아래 빈 칸이 그대로 남는다. */
+    #stage { min-height: 240px; }
+    #canvasWrap { --fit-h: calc(100vh - 220px); }
+  }
+  /* 배치 미리보기 레이어 — backdrop 은 view 뒤에 **정확히** 겹친다 (같은 상자). */
+  #canvasWrap {
+    position: relative; touch-action: none;
+    aspect-ratio: var(--code-aspect, 1);
+    width: min(100%, calc(var(--fit-h, 60vh) * var(--code-aspect, 1)));
+    flex: 0 0 auto; min-width: 0; min-height: 0; margin: auto;
+  }
   #canvasWrap.pannable { cursor: grab; }
   #canvasWrap.panning { cursor: grabbing; }
-  #backdropCanvas {
-    position: absolute; left: 0; top: 0; display: none;
-    width: 100%; height: 100%; object-fit: contain; border-radius: 4px;
-  }
+  #backdropCanvas { display: none; }
   #backdropCanvas.on { display: block; }
-  #view { position: relative; z-index: 1; }
+  #view { z-index: 1; }
   canvas {
-    display: block; border-radius: 4px;
-    width: 100%; height: auto;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%; border-radius: 4px;
     /* min-width 0: flex/grid 의 min-width:auto(=고유 해상도)가 축소를 막는 것을 해제 —
        이게 없으면 캔버스 고유 폭(수천 px)이 #stage·그리드 열을 밀어내 가로 오버플로가 난다. */
-    min-width: 0; min-height: 0; max-width: 100%;
-    max-height: calc(100vh - 180px);
+    min-width: 0; min-height: 0;
+    /* 상자 종횡비 == 그림 종횡비라 contain 은 실질적으로 항등이다. 반올림 1px 로
+       어긋날 때 늘어나지 않게 남겨 둔 안전장치. */
     object-fit: contain;
+  }
+
+  /* ── 미리보기 위 오버레이 (B-3 배치 버튼 · B-4 조작 안내) ────────────────
+     무대(=미리보기 영역)의 패딩 박스 위쪽에 한 줄. 캔버스 상자에 붙이지 않은 이유:
+     상자는 코드 종횡비에 따라 폭이 바뀌어서 세로로 긴 코드에서는 안내 문구가 들어갈
+     자리가 없다. 오버레이 자체는 포인터를 먹지 않는다 — 배경 드래그가 막히면 안 된다. */
+  .stage-overlay {
+    position: absolute; left: 14px; right: 14px; top: 14px; z-index: 3;
+    display: flex; align-items: flex-start; gap: 10px;
+    pointer-events: none;
+  }
+  .stage-overlay > * { pointer-events: auto; }
+  .stage-overlay .spacer { flex: 1 1 auto; min-width: 0; pointer-events: none; }
+  .stage-overlay-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px; font-size: 12px; border-radius: 8px;
+    background: color-mix(in srgb, var(--panel) 86%, transparent);
+    border: 1px solid var(--line); color: var(--text);
+    backdrop-filter: blur(3px);
+    max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .stage-overlay-btn svg { flex: 0 0 auto; width: 16px; height: 16px; }
+  /* 말줄임은 **span 쪽**에 걸어야 한다 — flex 컨테이너의 text-overflow 는 넘치는
+     flex 아이템에 적용되지 않아서, 파일명이 길면 잘린 채 말줄임 없이 사라졌다. */
+  .stage-overlay-btn > span {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .stage-overlay-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* 조작 안내 — «어느 정도 눈에 띄는» 글자 크기(13\~14px, 굵게) + 사진 위에서도 읽히도록
+     반투명 판. 조작이 시작되면 사라진다(.faded) — visibility 를 opacity 뒤에 지연시켜
+     페이드가 끝난 뒤에야 접근성 트리에서 빠진다. */
+  .stage-hint {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 12px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; line-height: 1.3;
+    color: var(--text);
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+    backdrop-filter: blur(3px);
+    pointer-events: none;
+    transition: opacity .45s ease, visibility 0s linear 0s;
+  }
+  .stage-hint svg { flex: 0 0 auto; width: 17px; height: 17px; color: var(--accent); }
+  .stage-hint.faded {
+    opacity: 0; visibility: hidden;
+    transition: opacity .45s ease, visibility 0s linear .45s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stage-hint { transition: opacity .01s linear, visibility 0s linear 0s; }
+    .stage-hint.faded { transition: opacity .01s linear, visibility 0s linear .01s; }
+  }
+  @media (max-width: 760px) {
+    .stage-overlay { left: 10px; right: 10px; top: 10px; gap: 6px; }
+    .stage-hint { font-size: 12px; padding: 6px 10px; }
+    .stage-overlay-btn { max-width: 48%; }
   }
   footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; text-align: center; }
   footer .copyright { display: block; margin-top: 4px; font-size: 10px; opacity: .75; }
@@ -502,6 +670,10 @@
     color: transparent; pointer-events: none;
     white-space: pre-wrap; overflow-wrap: break-word;
   }
+  /* 지우기 «×» 자리를 비운다 — 입력과 백드롭이 **같은 패딩**이어야 절단 하이라이트
+     구간이 글자와 어긋나지 않는다 (두 요소가 같은 메트릭을 공유하는 게 이 장치의 전제). */
+  .hl-wrap > textarea, .hl-wrap > input[type="text"] { padding-right: 30px; }
+  .hl-backdrop { padding-right: 30px; }
   .hl-backdrop.single { white-space: pre; }
   .hl-backdrop .over {
     background: color-mix(in srgb, var(--bad) 45%, transparent);
@@ -525,6 +697,14 @@
     width: 16px; height: 16px; border-radius: 50%;
     background: #fff; border: 2px solid rgba(0,0,0,.55); cursor: pointer;
   }
+  /* 커스텀 카드 **안**의 hue 바 (2026-08-16 운영자 지시 B-2) — 프리셋 카드의
+     `.swatch-bg` 가 앉던 자리를 그대로 물려받는다. 그래서 폭 100% · 위 margin 2px 로
+     세 프리셋 카드와 같은 높이에 줄이 맞는다. 트랙은 8px 로 얇게, thumb 은 14px 로
+     줄여 카드를 밀지 않게 한다. */
+  .hue-bar.in-card { height: 8px; margin: 2px 0 0; }
+  .hue-bar.in-card::-webkit-slider-thumb { width: 14px; height: 14px; }
+  .hue-bar.in-card::-moz-range-thumb { width: 12px; height: 12px; }
+  .hue-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .toggle-card.active svg { color: var(--accent); }
   .toggle-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -691,6 +871,12 @@
         <div class="hl-wrap">
           <div class="hl-backdrop single" id="nUrlBackdrop" aria-hidden="true"></div>
           <input type="text" id="nUrlPayload" value="tl.estre.so" spellcheck="false">
+          <button type="button" class="input-clear" id="nUrlClear" hidden
+                  aria-label="입력한 내용 지우기" data-i18n-attr="aria-label:g930">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+              <path d="M5 5 L19 19 M19 5 L5 19"/>
+            </svg>
+          </button>
         </div>
         <p class="hint" data-i18n="g032">http(s):// 가 없으면 https:// 를 자동으로 붙여요.</p>
       </div>
@@ -700,6 +886,12 @@
         <div class="hl-wrap">
           <div class="hl-backdrop" id="nTextBackdrop" aria-hidden="true"></div>
           <textarea id="nTextPayload" spellcheck="false">Trilume ✦ 텍스트 예시</textarea>
+          <button type="button" class="input-clear" id="nTextClear" hidden
+                  aria-label="입력한 내용 지우기" data-i18n-attr="aria-label:g930">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+              <path d="M5 5 L19 19 M19 5 L5 19"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -795,42 +987,140 @@
 
       <label class="section-heading" for="nPreset" data-i18n="g042">스타일</label>
       <div class="card-row" id="presetSwatches"></div>
-      <!-- 커스텀은 다음 줄 전폭 배치 — hue 바가 폭 전체를 쓴다 (사용자 지시 2026-08-09). -->
+      <!-- 커스텀은 다음 줄 전폭 배치 — hue 바가 폭 전체를 쓴다 (사용자 지시 2026-08-09).
+           2026-08-16 (B-2): hue 바를 **카드 안**으로 넣었다. 프리셋 카드에서 색 바가
+           앉던 자리(.swatch-bg)를 슬라이더가 그대로 차지한다 — 커스텀 카드만 «색 바가
+           고정색» 이던 비대칭이 사라지고, 바를 움직이는 것 자체가 커스텀 선택이 된다.
+           카드 밖 #hueRow 에는 수치 문구만 남는다(커스텀일 때만 노출). -->
       <div class="card-row">
-        <div class="toggle-card swatch-card" id="customStyleCard" data-preset="custom" style="flex:1">
+        <div class="toggle-card swatch-card" id="customStyleCard" data-preset="custom" style="flex:1"
+             aria-labelledby="customStyleCardLabel">
           <div class="swatch-chips" id="customChips"></div>
-          <div class="swatch-bg" id="customBg"></div>
-          <div data-i18n="g043">커스텀 (Hue)</div>
+          <input type="range" id="hueBar" class="hue-bar in-card" min="0" max="359" step="1" value="210"
+                 aria-label="커스텀 색상 (Hue)" data-i18n-attr="aria-label:g960">
+          <div id="customStyleCardLabel" data-i18n="g043">커스텀 (Hue)</div>
         </div>
       </div>
       <div id="hueRow" style="display:none">
-        <input type="range" id="hueBar" class="hue-bar" min="0" max="359" step="1" value="210">
         <p class="slider-value" id="hueValue"></p>
       </div>
 
-      <label class="section-heading" data-i18n="g044">해상도 (모듈 밀도)</label>
+      <div class="section-heading-row">
+        <label class="section-heading" data-i18n="g044">해상도 (모듈 밀도 = 용량)</label>
+        <button type="button" class="help-dot" data-help="g900" aria-expanded="false"
+                aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+            <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
       <!-- 사용자 지시 2026-08-09: 용량과 다른 축 — 버전(모듈 수) 3단 + 자동(기본).
            저 = 원거리·광고판(모듈 큼) / 중 = 1~3m 인쇄 / 고 = 근거리·대용량(모듈 작음).
            자동 조합 규칙: 해상도를 먼저 올리고, 최대에서도 안 들어가면 용량 단계(ECC)를
-           내린다 — encodeWithEcc 의 H→M→L × 버전 최소적합 순서가 정확히 이 격자다. -->
+           내린다 — encodeWithEcc 의 H→M→L × 버전 최소적합 순서가 정확히 이 격자다.
+
+           아이콘 (운영자 지시 2026-08-16 A-3): **같은 크기 실루엣 + 파인더 원판 비례**.
+           파인더는 셀 수가 고정이고 실루엣만 커지므로, 해상도가 오를수록 실루엣 대비
+           파인더가 작아진다 — 이게 «해상도» 축의 실제 기하이고, 아이콘은 그것만 그린다
+           (예: Type O 셀 수 3k²+3k+1 = V1 127 · V2 217 · V3 331, 불스아이는 고정). -->
       <div class="card-row" id="resTierCards">
-        <div class="toggle-card active" data-res="auto" title="내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합" data-i18n-attr="title:g002" data-i18n="g028">자동</div>
-        <div class="toggle-card" data-res="low" title="원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식" data-i18n-attr="title:g003" data-i18n="g075">저</div>
-        <div class="toggle-card" data-res="mid" title="1~3m 거리 — 어느 정도 크게 인쇄된 포스터급" data-i18n-attr="title:g004" data-i18n="g076">중</div>
-        <div class="toggle-card" data-res="high" title="근거리·대용량 — 모듈이 작아 가까운 거리에서 인식" data-i18n-attr="title:g005" data-i18n="g077">고</div>
+        <div class="toggle-card active" data-res="auto">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12 L16 5.1 L8 5.1 L4 12 L8 18.9 L16 18.9 Z"/>
+            <circle cx="12" cy="12" r="3.6" stroke-dasharray="2.4 2"/>
+            <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/>
+          </svg>
+          <span data-i18n="g028">자동</span>
+          <span class="card-sub" data-i18n="g920">내용에 맞춰</span>
+        </div>
+        <div class="toggle-card" data-res="low">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12 L16 5.1 L8 5.1 L4 12 L8 18.9 L16 18.9 Z"/>
+            <circle cx="12" cy="12" r="5.1"/>
+            <circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none"/>
+          </svg>
+          <span data-i18n="g075">저</span>
+          <span class="card-sub" data-i18n="g921">먼 거리</span>
+        </div>
+        <div class="toggle-card" data-res="mid">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12 L16 5.1 L8 5.1 L4 12 L8 18.9 L16 18.9 Z"/>
+            <circle cx="12" cy="12" r="3.4"/>
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+          </svg>
+          <span data-i18n="g076">중</span>
+          <span class="card-sub" data-i18n="g922">포스터 거리</span>
+        </div>
+        <div class="toggle-card" data-res="high">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12 L16 5.1 L8 5.1 L4 12 L8 18.9 L16 18.9 Z"/>
+            <circle cx="12" cy="12" r="2"/>
+            <circle cx="12" cy="12" r="0.85" fill="currentColor" stroke="none"/>
+          </svg>
+          <span data-i18n="g077">고</span>
+          <span class="card-sub" data-i18n="g923">가까운 거리</span>
+        </div>
       </div>
       <p class="hint" id="resTierHint"></p>
 
-      <label class="section-heading" data-i18n="g045">안정성 · 용량</label>
+      <div class="section-heading-row">
+        <label class="section-heading" data-i18n="g045">안정성 ⇄ 용량</label>
+        <button type="button" class="help-dot" data-help="g901" aria-expanded="false"
+                aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+            <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
       <!-- 사용자 지시 2026-08-09: 보정 강화(용량↓)/표준/대용량 3단 + 자동(기본 —
-           입력 크기에 따라 H→M→L 순서로 처음 들어가는 레벨 채택). -->
+           입력 크기에 따라 H→M→L 순서로 처음 들어가는 레벨 채택).
+           아이콘 (2026-08-16 A-3): 자동 = 순환 화살표 · 보정 우선 = 방패(꽉 찬)
+           · 표준 = 저울(반반) · 대용량 = 가득 찬 데이터 스택. -->
       <div class="card-row" id="eccTierCards">
-        <div class="toggle-card active" data-tier="auto" title="입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택" data-i18n-attr="title:g006" data-i18n="g028">자동</div>
-        <div class="toggle-card" data-tier="H" title="ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대" data-i18n-attr="title:g007" data-i18n="g078">보정 우선</div>
-        <div class="toggle-card" data-tier="M" title="ECC M (25%) — 기본 균형" data-i18n-attr="title:g008" data-i18n="g079">표준</div>
-        <div class="toggle-card" data-tier="L" title="ECC L (≈12%) — 최대 용량" data-i18n-attr="title:g009" data-i18n="g080">대용량</div>
+        <div class="toggle-card active" data-tier="auto">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-2.34-5.66"/>
+            <path d="M20 4.2v4.4h-4.4"/>
+          </svg>
+          <span data-i18n="g028">자동</span>
+          <span class="card-sub" data-i18n="g924">내용에 맞춰</span>
+        </div>
+        <div class="toggle-card" data-tier="H">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3 L19.5 6.1 V12 c0 4.3-3.1 7.5-7.5 9-4.4-1.5-7.5-4.7-7.5-9V6.1 Z" fill="currentColor" opacity=".82" stroke="none"/>
+            <path d="M12 3 L19.5 6.1 V12 c0 4.3-3.1 7.5-7.5 9-4.4-1.5-7.5-4.7-7.5-9V6.1 Z"/>
+          </svg>
+          <span data-i18n="g078">보정 우선</span>
+          <span class="card-sub" data-i18n="g925">손상에 강함</span>
+        </div>
+        <div class="toggle-card" data-tier="M">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 4.2v15.2M6.5 19.4h11"/>
+            <path d="M4 8.4h16"/>
+            <path d="M4 8.4 L1.9 13.4h4.2 Z" fill="currentColor" opacity=".7" stroke="none"/>
+            <path d="M20 8.4 L17.9 13.4h4.2 Z" fill="currentColor" opacity=".7" stroke="none"/>
+            <path d="M4 8.4 L1.9 13.4h4.2 Z M20 8.4 L17.9 13.4h4.2 Z"/>
+          </svg>
+          <span data-i18n="g079">표준</span>
+          <span class="card-sub" data-i18n="g926">균형</span>
+        </div>
+        <div class="toggle-card" data-tier="L">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="2.5"/>
+            <rect x="6.4" y="6.4" width="11.2" height="2.6" rx="1" fill="currentColor" stroke="none"/>
+            <rect x="6.4" y="10.7" width="11.2" height="2.6" rx="1" fill="currentColor" stroke="none"/>
+            <rect x="6.4" y="15" width="11.2" height="2.6" rx="1" fill="currentColor" stroke="none"/>
+          </svg>
+          <span data-i18n="g080">대용량</span>
+          <span class="card-sub" data-i18n="g927">많이 담기</span>
+        </div>
       </div>
       <p class="hint" id="eccTierHint"></p>
+      <!-- 자체검증 3태 뱃지 — 운영자 지시 2026-08-16 A-7 «안정성 ⇄ 용량 바로 아래».
+           고급 모드에는 이 섹션이 없으므로 #selfCheckHostAdvanced 로 옮겨 붙인다. -->
+      <div id="selfCheckHostNormal"><div id="selfCheckRow" class="selfcheck-row" role="status" aria-live="polite"></div></div>
     </div>
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
@@ -881,6 +1171,9 @@
           </select>
         </div>
       </div>
+      <!-- 고급 모드에는 «안정성 ⇄ 용량» 카드 행이 없다 — 그 자리에 대응하는 것이
+           위의 버전·ECC 행이므로 자체검증 뱃지도 여기로 옮겨 붙인다 (setMode). -->
+      <div id="selfCheckHostAdvanced"></div>
 
 
       <fieldset class="typeOptions" id="optionsY" style="display:none">
@@ -926,14 +1219,26 @@
     <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode">
       <!-- 사용자 지시 2026-08-09: 배경 3택(투명/흰색/검정), 기본 투명.
            투명은 미리보기에서 포토샵식 체커보드로 표시한다(테마별 색). -->
-      <label class="section-heading" data-i18n="g059">배경</label>
+      <div class="section-heading-row">
+        <label class="section-heading" data-i18n="g059">배경색</label>
+        <button type="button" class="help-dot" data-help="g902" aria-expanded="false"
+                aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+            <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
       <div class="card-row" id="bgModeCards">
-        <div class="toggle-card active" data-bg="transparent" title="배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음" data-i18n-attr="title:g010">
-          <span class="swatch-mini checker"></span><span data-i18n="g201">투명</span></div>
-        <div class="toggle-card" data-bg="white" title="흰색 배경 — 밝은 인쇄물·문서에 얹을 때" data-i18n-attr="title:g011">
-          <span class="swatch-mini" style="background:#fff"></span><span data-i18n="g202">흰색</span></div>
-        <div class="toggle-card" data-bg="black" title="검정 배경 — 어두운 지면·화면에 얹을 때" data-i18n-attr="title:g012">
-          <span class="swatch-mini" style="background:#000"></span><span data-i18n="g203">검정</span></div>
+        <div class="toggle-card active" data-bg="transparent">
+          <span class="swatch-mini checker"></span><span data-i18n="g201">투명</span>
+          <span class="card-sub" data-i18n="g928">표면 그대로</span></div>
+        <div class="toggle-card" data-bg="white">
+          <span class="swatch-mini" style="background:#fff"></span><span data-i18n="g202">흰색</span>
+          <span class="card-sub" data-i18n="g929">밝은 지면</span></div>
+        <div class="toggle-card" data-bg="black">
+          <span class="swatch-mini" style="background:#000"></span><span data-i18n="g203">검정</span>
+          <span class="card-sub" data-i18n="g934">어두운 지면</span></div>
       </div>
       <p class="hint" id="bgModeHint"></p>
 
@@ -941,7 +1246,16 @@
            코드를 얹을 표면 사진을 깔고 드래그/휠 줌으로 위치를 맞춰, 실루엣 검출이
            될 자리인지 **인쇄 전에** 눈과 수치로 확인한다. 렌더 산출물에는 안 들어간다. -->
       <div id="backdropSection" style="display:none">
-        <label class="section-heading" data-i18n="g060">배치 미리보기 (표면 이미지)</label>
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g060">TL 배치 미리보기 (TL 삽입할 곳 이미지 넣어서 미리 배치해보기)</label>
+          <button type="button" class="help-dot" data-help="g903" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
         <div class="row">
           <div class="export-pair" style="flex:1">
             <button id="backdropPick" type="button" data-i18n="g061">이미지 선택…</button>
@@ -951,23 +1265,58 @@
         </div>
         <input type="file" id="backdropFile" accept="image/*" style="display:none">
         <p class="hint" id="backdropHint" data-i18n-html="g300">코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.
-          미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠로 확대/축소</b><span data-i18n="g083">할 수 있어요. 내보내는 파일에는 안 들어가요.</span></p>
+          미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠 또는 핀치로 확대/축소</b><span data-i18n="g083">할 수 있어요. 내보내는 파일에는 안 들어가요.</span></p>
+        <!-- ⚠ 이 줄은 두 번 좁혔다.
+             ① 운영자 초안은 «안전영역 옵션을 여건에 맞춰 자동으로 골라 준다» 였다 —
+                그런 경로가 없다. generatorState.quietMode 를 쓰는 곳은 카드 클릭
+                하나뿐이다.
+             ② 그래서 «색 판단에는 반영된다» 로 적었는데, 그것도 사실이 아니었다
+                (2026-08-16 적대 검증 ⑤). `highContrastQuietColor()` 가 표면 휘도
+                (`lastBackdropLuminance`)를 보는 것은 |sepW − sepB| ≤ 0.02 일 때뿐인데,
+                **UI 로 만들 수 있는 모든 팔레트가 그 문턱 밖**이다 — 실측
+                slate 0.1689 · ember 0.2507 · mono 0.0257 · 커스텀 hue 0~359 는
+                0.1629~0.1764 (makeCustomPalette 가 slate 의 상대휘도를 타깃해서 만든다).
+                즉 그 타이브레이크 분기는 화면에서 **한 번도 실행되지 않는다**.
+             문턱을 조정해 분기를 살릴지는 운영자 판단으로 남겼다 (보고서 §11-1).
+             지금 화면에는 «실제로 일어나는 일» 만 적는다. -->
+        <p class="hint" id="backdropQuietNote" data-i18n="g935">* 넣은 표면 이미지는 미리보기에서 표면과 셀 색의 분리를 실측하는 데만 써요. 내보내는 PNG·SVG 에도, 아래 «안전영역» 의 옵션·색에도 반영되지 않아요.</p>
         <p class="hint" id="backdropVerdict" style="display:none"></p>
       </div>
 
       <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
-      <label class="section-heading" data-i18n="g063">안전영역 (코드 주변 여백)</label>
+      <div class="section-heading-row">
+        <label class="section-heading" data-i18n="g063">안전영역 (코드 주변 여백)</label>
+        <button type="button" class="help-dot" data-help="g904" aria-expanded="false"
+                aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+            <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
+      <!-- 이 행만은 부제를 안 단다 — 선택지가 정확히 다섯이고 한 줄 유지가 계약이다
+           (아래 #quietModeCards nowrap 규칙 + generator-export-ui 테스트). 카드마다
+           있던 `title=` 설명은 위 «?» 로 옮겼다. -->
       <div class="card-row" id="quietModeCards">
-        <div class="toggle-card active" data-quiet="auto" title="배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략" data-i18n-attr="title:g014"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3 2.4"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor" stroke="none"/></svg><span data-i18n="g028">자동</span></div>
-        <div class="toggle-card" data-quiet="none" title="안전영역 없이 코드만" data-i18n-attr="title:g015"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/><path d="M4 20 L20 4"/></svg><span data-i18n="g036">없음</span></div>
+        <div class="toggle-card active" data-quiet="auto"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3" stroke-dasharray="3 2.4"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor" stroke="none"/></svg><span data-i18n="g028">자동</span></div>
+        <div class="toggle-card" data-quiet="none"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/><path d="M4 20 L20 4"/></svg><span data-i18n="g036">없음</span></div>
         <div class="toggle-card" data-quiet="white"><span class="swatch-mini" style="background:#fff"></span><span data-i18n="g202">흰색</span></div>
         <div class="toggle-card" data-quiet="black"><span class="swatch-mini" style="background:#000"></span><span data-i18n="g203">검정</span></div>
-        <div class="toggle-card" data-quiet="contrast" title="셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름" data-i18n-attr="title:g016"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3 A9 9 0 0 1 12 21 Z" fill="currentColor" stroke="none"/></svg><span data-i18n="g081">고대비</span></div>
+        <div class="toggle-card" data-quiet="contrast"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3 A9 9 0 0 1 12 21 Z" fill="currentColor" stroke="none"/></svg><span data-i18n="g081">고대비</span></div>
       </div>
       <p class="hint" id="quietModeHint"></p>
 
       <section id="qrLinkSection" aria-labelledby="qrLinkHeading">
+        <div class="section-heading-row">
         <div class="section-heading" id="qrLinkHeading" data-i18n="g064">TL스캐너 QR링크 포함</div>
+        <button type="button" class="help-dot" data-help="g905" aria-expanded="false"
+                aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+            <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+        </div>
         <!-- 아이콘 = 코드 bbox(외곽 사각) + QR 도트 위치. 안쪽 = 중앙 도트, 없음 = 슬래시.
              (사용자 지시 2026-08-09: 위치가 직관적으로 보이는 아이콘 병기 + '없음' 추가) -->
         <div class="card-row" id="qrPositionCards">
@@ -991,12 +1340,12 @@
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <rect x="12.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
             </svg><span data-i18n="g087">우하</span></div>
-          <div class="toggle-card" data-pos="inner" id="qrPosInner" title="안쪽 (O/A: 중앙 QR · Y: Y2 윈도)" data-i18n-attr="title:g017">
+          <div class="toggle-card" data-pos="inner" id="qrPosInner">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
             </svg><span data-i18n="g204">안쪽</span></div>
-          <div class="toggle-card" data-pos="none" title="QR 링크 없이 코드만 내보내요" data-i18n-attr="title:g018">
+          <div class="toggle-card" data-pos="none">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <path d="M6.5 17.5 L17.5 6.5"/>
@@ -1005,8 +1354,32 @@
         <p class="hint" data-i18n="g065">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
       </section>
 
+      <!-- 검출기 선택 (운영자 지시 2026-08-16 A-4) — 타입별로 다른 두 섹션
+           (#finderSection = O/A 중앙 파인더 · #yLocatorSection = Y 셀 표면 로케이터)이
+           **동시에 보이는 일이 없다**. 그래서 DOM 을 합치는 대신 두 제목을 같은
+           «검출기 선택» 으로 맞춘다 — 사용자 쪽에서는 타입을 바꿔도 같은 이름의 한
+           섹션이 자리를 지킨다. DOM 합치기를 안 하는 이유는 #finderSection 이
+           점수 패널·접힘 후보군을 함께 들고 있어(별도 태스크 소관) 구조를 흔들면
+           그쪽 계약이 같이 흔들리기 때문이다. -->
       <div id="finderSection" style="display:none">
-        <label class="section-heading" data-i18n="g459">중앙 파인더 (Type O/A)</label>
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g459">검출기 선택</label>
+          <!-- ⚠ 도움말 키는 두 섹션이 **공유하면 안 된다** (2026-08-16 적대 검증 ③).
+               제목만 «검출기 선택» 으로 같을 뿐, 내용물은 완전히 다른 목록이다.
+               게이트도 다르다 — 이쪽(#finderSection)은 `currentType() !== 'Y'` 뿐이라
+               **정식 화면**에 뜨고, #yLocatorSection 은 `isLabPath()` 가 걸려 lab 전용이다.
+               한 키를 공유하면 lab 전용 본문(내부 후보명·정본 파일명·여기 없는 «자동»
+               카드 설명)이 정식 화면으로 그대로 샌다. 그래서 g907 = O/A 중앙 파인더,
+               g906 = Y 셀 표면 로케이터로 쪼갠다. 부재는 테스트로 고정
+               (test/generator-help-ui.test.js «정식 화면 도움말에 내부 명칭이 없다»). -->
+          <button type="button" class="help-dot" data-help="g907" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
         <div class="finder-legacy-row card-row" id="finderLegacyRow"></div>
         <!-- 실험 후보 둘은 기본 접힘(사용자 지시 2026-08-13). 정식 4종만 펼쳐 두면
              카드 수가 15개에서 4개로 줄어 «무엇을 고르면 되는가» 가 바로 보인다. -->
@@ -1042,28 +1415,110 @@
       <p class="hint" id="rotationGuidance" data-i18n="g514">실기기에서는 카메라나 코드를 회전시키면 인식이 떨어질 수 있어요. Type O/A는 방향 기준을 주는 중앙 QR(안쪽)을 기본으로 사용하지만, 회전 내성을 보장하지는 않아요. 생성·배치할 때 코드의 위쪽이 자연스럽게 위를 향하도록 두세요.</p>
 
       <div id="yLocatorSection" hidden>
-        <label class="section-heading" data-i18n="g515">Y타입 검출기 옵션</label>
-        <!-- 카드 순서 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 (운영자 지시 2026-08-16·17).
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g515">검출기 선택</label>
+          <button type="button" class="help-dot" data-help="g906" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+        <!-- 카드 순서 자동 → 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 (운영자 지시 2026-08-16·17).
              v0 계열(v0 · v0X · v0XQ)을 인접 배치한다 — v0X 는 v0 의 QR 파인더 문법
-             확장이고, v0XQ 는 그 문법을 3코너로 옮기고 중앙에 QR 을 넣은 변형이다. -->
+             확장이고, v0XQ 는 그 문법을 3코너로 옮기고 중앙에 QR 을 넣은 변형이다.
+             이 섹션은 `/lab/` 에서만 열리므로 내부 명칭(v0 · Y0 …) 병기는 여기서만 한다.
+
+             아이콘 = **실제 파인더 기하의 미니 도면**이다 (운영자 지시 A-4).
+             큰 사각 = n×n 셀 캔버스, 안의 채운 블록 = 로케이터 블록의 위치·상대 크기.
+             **점선 사각 = 중앙 QR 슬롯**이다 (v0XQ 뿐) — 파인더도 데이터도 아닌 제3
+             역할이라 실선 블록과 다른 획으로 그린다 (cellSurfaceFinal.js §slotCells).
+             출처는 cellSurfaceFinal.js 정본:
+               v0   n=13 · 로케이터 30셀 — 네 코너 소형 블록
+               v0X  n=21 · 65셀 — QR 파인더 문법(겹 사각) 코너 3 + 소형 1
+               v0XQ n=21 · 파인더 42셀 + 중앙 QR 슬롯 81셀 — 겹 사각 코너 3 + 중앙 슬롯
+               v1r2 n=21 · 80셀 — 네 코너 블록(= v0 확장)
+               v2r2 n=21·25 · 74셀 — 원점 5×5 중앙 블록 A + 먼 꼭짓점 7×7 앵커 블록 B -->
         <div class="card-row" id="yLocatorCards">
+          <div class="toggle-card" data-locator="auto">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <path d="M17.5 12a5.5 5.5 0 1 1-1.6-3.9"/>
+              <path d="M17.8 6.6v3h-3"/>
+            </svg>
+            <span data-i18n="g028">자동</span>
+            <span class="card-sub" data-i18n="g941">권장값 자동</span>
+          </div>
           <div class="toggle-card active" data-locator="off">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2" stroke-dasharray="3 2.4"/>
+              <path d="M7 17 L17 7" stroke-linecap="round"/>
+            </svg>
             <span data-i18n="g516">끔 (기존)</span>
+            <span class="card-sub" data-i18n="g942">검출기 없음</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v0">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5.4" y="5.4" width="4" height="4" rx=".8" fill="currentColor" stroke="none"/>
+              <rect x="14.6" y="5.4" width="4" height="4" rx=".8" fill="currentColor" stroke="none"/>
+              <rect x="5.4" y="14.6" width="4" height="4" rx=".8" fill="currentColor" stroke="none"/>
+              <rect x="14.6" y="14.6" width="4" height="4" rx=".8" fill="currentColor" stroke="none"/>
+            </svg>
             <span data-i18n="g542">셀 표면 v0 (Y0)</span>
+            <span class="card-sub" data-i18n="g943">코너 4블록</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v0x">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5.2" y="5.2" width="5" height="5" rx=".6"/>
+              <rect x="6.8" y="6.8" width="1.8" height="1.8" fill="currentColor" stroke="none"/>
+              <rect x="13.8" y="5.2" width="5" height="5" rx=".6"/>
+              <rect x="15.4" y="6.8" width="1.8" height="1.8" fill="currentColor" stroke="none"/>
+              <rect x="5.2" y="13.8" width="5" height="5" rx=".6"/>
+              <rect x="6.8" y="15.4" width="1.8" height="1.8" fill="currentColor" stroke="none"/>
+              <rect x="15" y="15" width="3" height="3" rx=".6" fill="currentColor" stroke="none"/>
+            </svg>
             <span data-i18n="g602">셀 표면 v0X (Y1)</span>
+            <span class="card-sub" data-i18n="g944">QR형 코너</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v0xq">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5.2" y="5.2" width="4" height="4" rx=".6"/>
+              <rect x="6.5" y="6.5" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
+              <rect x="14.8" y="5.2" width="4" height="4" rx=".6"/>
+              <rect x="16.1" y="6.5" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
+              <rect x="5.2" y="14.8" width="4" height="4" rx=".6"/>
+              <rect x="6.5" y="16.1" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
+              <rect x="9.4" y="9.4" width="5.2" height="5.2" rx=".6" stroke-dasharray="1.8 1.4"/>
+              <rect x="10.5" y="10.5" width="1.5" height="1.5" fill="currentColor" stroke="none"/>
+              <rect x="12.4" y="12.4" width="1.5" height="1.5" fill="currentColor" stroke="none"/>
+            </svg>
             <span data-i18n="g604">셀 표면 v0XQ · 중앙 QR (Y1)</span>
+            <span class="card-sub" data-i18n="g947">3코너 + 중앙 QR</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v1r2">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5.2" y="5.2" width="5.6" height="5.6" rx=".8" fill="currentColor" stroke="none"/>
+              <rect x="13.2" y="5.2" width="5.6" height="5.6" rx=".8" fill="currentColor" stroke="none"/>
+              <rect x="5.2" y="13.2" width="5.6" height="5.6" rx=".8" fill="currentColor" stroke="none"/>
+              <rect x="13.2" y="13.2" width="5.6" height="5.6" rx=".8" fill="currentColor" stroke="none"/>
+            </svg>
             <span data-i18n="g547">셀 표면 v1r2 (Y1)</span>
+            <span class="card-sub" data-i18n="g945">코너 4블록 확장</span>
           </div>
           <div class="toggle-card" data-locator="cell-surface-v2r2">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5" y="5" width="5.4" height="5.4" rx=".8" fill="currentColor" stroke="none"/>
+              <rect x="12.6" y="12.6" width="6.4" height="6.4" rx=".8" fill="currentColor" stroke="none"/>
+              <path d="M10.7 10.7 L12.3 12.3" stroke-linecap="round" stroke-dasharray="1.6 1.4"/>
+            </svg>
             <span data-i18n="g543">셀 표면 v2r2 (Y1/Y2)</span>
+            <span class="card-sub" data-i18n="g946">중앙 + 원거리 앵커</span>
           </div>
         </div>
         <p class="hint" id="yLocatorHint" data-i18n="g518">실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.</p>
@@ -1196,8 +1651,45 @@
       <canvas id="backdropCanvas"></canvas>
       <canvas id="view"></canvas>
     </div>
+    <!-- 미리보기 위 오버레이 한 줄 (2026-08-16 운영자 지시 B-3·B-4).
+         왼쪽 = 배경 사진을 넣었을 때만 뜨는 조작 안내, 오른쪽 = 투명 배경일 때 뜨는
+         «TL 배치 미리보기» 버튼. 버튼은 패널의 #backdropPick 과 **같은 동작·같은 라벨**
+         이고 상태는 syncBackdropUi 한 곳에서 함께 갱신한다. -->
+    <div class="stage-overlay" id="stageOverlay">
+      <div class="stage-hint faded" id="backdropGestureHint" role="status" aria-live="polite" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3.5 L12 20.5 M3.5 12 L20.5 12"/>
+          <path d="M9 6.5 L12 3.5 L15 6.5 M9 17.5 L12 20.5 L15 17.5"/>
+          <path d="M6.5 9 L3.5 12 L6.5 15 M17.5 9 L20.5 12 L17.5 15"/>
+        </svg>
+        <span data-i18n="g962">드래그로 위치 이동 · 휠 또는 핀치로 확대/축소</span>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="stage-overlay-btn" id="stageBackdropPick" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="15" rx="2.5"/>
+          <path d="M3 16 L8.5 10.5 L13 15"/>
+          <path d="M13.5 13.5 L16.5 10.5 L21 15"/>
+          <circle cx="15.5" cy="8.6" r="1.5" fill="currentColor" stroke="none"/>
+        </svg>
+        <span id="stageBackdropPickLabel" data-i18n="g961">TL 배치 미리보기</span>
+      </button>
+    </div>
   </div>
 </main>
+<!-- 섹션 도움말 «?» 의 **공용** 플로팅 창 — 섹션마다 복제하지 않는다 (src/help-popover.js).
+     position:fixed 라 DOM 위치는 자유롭고, 뷰포트 보정은 positionHelpPopover 가 한다. -->
+<div id="helpPopover" class="help-popover" role="tooltip" hidden>
+  <button type="button" class="help-popover-close" id="helpPopoverClose" hidden
+          aria-label="설명 닫기" data-i18n-attr="aria-label:g932">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true">
+      <path d="M5 5 L19 19 M19 5 L5 19"/>
+    </svg>
+  </button>
+  <div class="help-popover-body" id="helpPopoverBody"></div>
+</div>
 <footer>
   <span data-i18n="g301">동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐</span>
   <span class="copyright">
@@ -1234,23 +1726,7 @@ function tf(key, vars) {
 const GENERATOR_STRINGS = {
   ko: {
     "g001": "페이지 테마 (코드 렌더와 무관)",
-    "g002": "내용 크기에 맞춰 해상도 → 용량 순으로 자동 조합",
-    "g003": "원거리·대형 인쇄 (광고판) — 모듈이 커서 멀리서도 폰 인식",
-    "g004": "1~3m 거리 — 어느 정도 크게 인쇄된 포스터급",
-    "g005": "근거리·대용량 — 모듈이 작아 가까운 거리에서 인식",
-    "g006": "입력 크기에 맞춰 보정 우선 → 표준 → 대용량 순으로 자동 선택",
-    "g007": "ECC H (≈40%) — 담는 양은 줄지만 손상 내성 최대",
-    "g008": "ECC M (25%) — 기본 균형",
-    "g009": "ECC L (≈12%) — 최대 용량",
-    "g010": "배경 없이 코드만 — PNG 는 알파 채널, SVG 는 배경 요소 없음",
-    "g011": "흰색 배경 — 밝은 인쇄물·문서에 얹을 때",
-    "g012": "검정 배경 — 어두운 지면·화면에 얹을 때",
     "g013": "배경 이미지 제거",
-    "g014": "배경이 투명이면 고대비 색으로 자동, 불투명이면 배경이 이미 안전영역이라 생략",
-    "g015": "안전영역 없이 코드만",
-    "g016": "셀 색과 주변 표면을 보고 흰색/검정 중 권장색을 고름",
-    "g017": "안쪽 (O/A: 중앙 QR · Y: Y2 윈도 β)",
-    "g018": "QR 링크 없이 코드만 내보내요",
     "g019": "좌측 이미지 제거",
     "g020": "우측 이미지 제거",
     "g021": "PNG를 클립보드에 복사",
@@ -1276,8 +1752,8 @@ const GENERATOR_STRINGS = {
     "g041": "타입",
     "g042": "스타일",
     "g043": "커스텀 (Hue)",
-    "g044": "해상도 (모듈 밀도)",
-    "g045": "안정성 · 용량",
+    "g044": "해상도 (모듈 밀도 = 용량)",
+    "g045": "안정성 ⇄ 용량",
     "g046": "Type O (마름모 8면체 필드)",
     "g047": "Type A (삼각 실루엣 확장)",
     "g048": "Type Y (단일 큐브)",
@@ -1291,8 +1767,8 @@ const GENERATOR_STRINGS = {
     "g056": "QR 폴백 URL (고급)",
     "g057": "스타일 프리셋",
     "g058": "커스텀 Hue",
-    "g059": "배경",
-    "g060": "배치 미리보기 (표면 이미지)",
+    "g059": "배경색",
+    "g060": "TL 배치 미리보기 (TL 삽입할 곳 이미지 넣어서 미리 배치해보기)",
     "g061": "이미지 선택…",
     "g062": "위치 초기화",
     "g063": "안전영역 (코드 주변 여백)",
@@ -1325,8 +1801,8 @@ const GENERATOR_STRINGS = {
     "g203": "검정",
     "g204": "안쪽",
     "g206": "드래그로 이동",
-    "g207": "휠로 확대/축소",
-    "g300": "코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.\n          미리보기에서 <b>드래그로 이동</b>, <b>휠로 확대/축소</b><span>할 수 있어요. 내보내는 파일에는 안 들어가요.</span>",
+    "g207": "휠 또는 핀치로 확대/축소",
+    "g300": "코드를 실제로 얹을 표면 사진을 넣으면 미리보기 뒤에 깔려요.\n          미리보기에서 <b>드래그로 이동</b>, <b>휠 또는 핀치로 확대/축소</b><span>할 수 있어요. 내보내는 파일에는 안 들어가요.</span>",
     "g301": "동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume",
 
@@ -1374,23 +1850,60 @@ const GENERATOR_STRINGS = {
     "g442": "좌: {name}",
     "g443": "우: {name}",
     "g444": "장식 이미지를 읽지 못했어요: {msg}",
-    "g445": "자체검증 ✓ {total}셀 · Δmin {delta}",
-    "g446": "자체검증 ✗ 불일치 {n}건",
-    "g447": "자체검증 ✓ {total}셀 · {margin}",
-    "g448": "자체검증 ✗ 불일치 {n}건 · 소거 {e}건",
+    "g445": "자체검증 ✓ - {state} · {total}셀 · Δmin {delta}",
+    "g446": "자체검증 ✗ - {state} · 불일치 {n}건",
+    "g447": "자체검증 ✓ - {state} · {total}셀 · {margin}",
+    "g448": "자체검증 ✗ - {state} · 불일치 {n}건 · 소거 {e}건",
     "g449": "타입 <b>{type}</b> · 버전 <b>{ver}</b> (k={k}) · ECC <b>{ecc}</b>",
     "g450": "페이로드 <b>{bytes}</b> / {max} B · ",
     "g451": "심볼 {d}+{n} · 프리셋 Δmin {delta}",
     "g452": "심볼 {d}+{n}",
     "g600": "새 버전이 준비됐어요.",
     "g601": "지금 적용",
+    "g900": "모듈(셀) 개수를 정하는 축이에요. 개수가 늘면 담을 수 있는 양도 같이 늘어요.\n같은 인쇄 크기에서 해상도가 높을수록 모듈 하나가 작아져서, 더 가까이서 찍어야 읽혀요.\n저 = 원거리·대형 인쇄(광고판) · 중 = 1~3 m 포스터급 · 고 = 근거리·대용량.\n자동은 내용 크기에 맞춰 해상도를 먼저 올리고, 최대에서도 안 들어가면 «안정성 ⇄ 용량» 단계를 내려요.\n카드 그림은 실루엣 대비 검출기 크기예요 — 검출기 셀 수는 고정이라 해상도가 오를수록 상대적으로 작아져요.",
+    "g901": "오류정정(ECC) 비중을 정하는 축이에요. 정정에 자리를 많이 줄수록 담을 양이 줄어요.\n보정 우선 = ECC H(≈40%) · 표준 = ECC M(25%) · 대용량 = ECC L(≈12%).\n자동은 입력 크기에 맞춰 H → M → L 순서로 처음 들어가는 레벨을 골라요.\n아래 자체검증 뱃지는 지금 설정으로 실제 렌더한 그림을 되읽은 결과예요 — 인쇄·촬영 조건이 아니라 «렌더가 자기 계약을 지켰는가» 만 봐요.",
+    "g902": "투명 = 배경 없이 코드만. PNG 는 알파 채널, SVG 는 배경 요소가 아예 없어요.\n흰색 = 밝은 인쇄물·문서 위에 얹을 때. 검정 = 어두운 지면·화면에 얹을 때.\n투명을 고르면 실효 배경이 «코드를 얹는 표면» 이 돼요 — 그 표면과 셀 색의 분리는 생성 시점에 보증할 수 없으니 아래 «TL 배치 미리보기» 로 실측해 보세요.",
+    "g903": "코드를 실제로 얹을 자리의 사진을 넣으면 미리보기 뒤에 깔려요.\n미리보기에서 드래그로 이동, 휠 또는 핀치로 확대/축소해 위치를 맞춰 보세요.\n코드 둘레의 표면 휘도와 셀 레벨의 분리를 실측해서, 인쇄 전에 «여기 놓으면 읽히는가» 를 수치로 알려줘요.\n내보내는 PNG·SVG 에는 이 사진이 안 들어가요.",
+    "g904": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\n자동 = 배경이 투명이면 고대비 색을 깔고, 불투명이면 배경이 이미 안전영역이라 생략해요.\n없음 = 여백 없이 코드만. 흰색·검정 = 그 색으로 고정.\n고대비 = 셀 색과의 상대휘도 분리가 큰 쪽(흰색 또는 검정)을 골라요. 지금 고를 수 있는 색 스타일에서는 언제나 이 한 단계로 정해져요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
+    "g905": "TL스캐너로 스캔이 안 될 때 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.\n좌상·우상·좌하·우하 = 코드 바깥 네 모서리 중 한 곳.\n안쪽 = Type O/A 는 중앙 QR, Type Y 는 Y2 윈도 β.\n없음 = QR 없이 코드만 내보내요.\n중앙 QR 변형은 코드 폭 13 cm 이상 인쇄를 권장해요.",
+    "g906": "스캐너가 Type Y 코드의 위치·방향을 먼저 찾는 데 쓰는 셀 표면 로케이터예요.\n자동 = 지금 설정에서 권장하는 것을 씁니다. 정식 승격된 Y 검출기가 아직 없어서 현재 «자동» 은 «끔» 과 같은 결과예요.\n후보별 점유 셀 수와 최대 payload L / M / H (정본 cellSurfaceFinal.js):\n· v0 — 30셀 (n=13) · 29 / 25 / 20 B\n· v0X — 65셀 (n=21) · 96 / 81 / 65 B\n· v0XQ — 파인더 42셀 + 중앙 QR 슬롯 81셀 (n=21) · 80 / 67 / 54 B\n· v1r2 — 80셀 (n=21) · 92 / 77 / 62 B\n· v2r2 — 74셀 (n=21) · 94 / 79 / 63 B (n=25 에서는 145 / 124 / 99 B)\n점유 셀이 적을수록 데이터에 쓸 심볼이 많이 남아요 — n=21 에서는 v0X 가 가장 많이 담고 v0XQ 가 가장 적어요. 슬롯이 없는 세 후보끼리는 차이가 L 기준 4 B 라 용량으로 고를 만한 폭이 아니지만, v0XQ 는 중앙 QR 슬롯에 81셀을 내주느라 v0X 보다 L 기준 16 B 적어요 — 그 대신 스캐너가 못 읽어도 중앙 QR 이 폴백 URL 을 싣습니다.\n실험 항목이라 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.",
+    "g907": "Type O/A 코드 한가운데에 넣는 표식이에요 — 스캐너가 코드의 위치·방향을 여기서 먼저 잡아요.\n중앙 QR = 기본값. 폴백 QR 을 파인더 자리에 넣어 방향 기준까지 겸해요 (아래 «TL스캐너 QR링크 포함» 의 «안쪽» 과 같은 자리예요).\n불스아이 = 동심원 표식 · 불스아이 속 큐브 = 링 안에 큐브를 넣은 하이브리드 · 3톤 큐브 = 셀 색 세 톤만으로 만든 표식.\n«고급» 모드에서는 비교용 실험 후보 묶음(«기준 미달 후보» · «스캔 불가 후보»)도 함께 펼쳐져요.\n아래 점수판은 모형 점수예요 — 인식률 예측이 아니에요.",
+    "g920": "내용에 맞춰",
+    "g921": "먼 거리",
+    "g922": "포스터 거리",
+    "g923": "가까운 거리",
+    "g924": "내용에 맞춰",
+    "g925": "손상에 강함",
+    "g926": "균형",
+    "g927": "많이 담기",
+    "g928": "표면 그대로",
+    "g929": "밝은 지면",
+    "g930": "입력한 내용 지우기",
+    "g931": "설명 보기",
+    "g932": "설명 닫기",
+    "g934": "어두운 지면",
+    "g935": "* 넣은 표면 이미지는 미리보기에서 표면과 셀 색의 분리를 실측하는 데만 써요. 내보내는 PNG·SVG 에도, 아래 «안전영역» 의 옵션·색에도 반영되지 않아요.",
+    "g941": "권장값 자동",
+    "g942": "검출기 없음",
+    "g943": "코너 4블록",
+    "g944": "QR형 코너",
+    "g945": "코너 4블록 확장",
+    "g946": "중앙 + 원거리 앵커",
+    "g947": "3코너 + 중앙 QR",
+    "g950": "사용가능",
+    "g951": "인식곤란",
+    "g952": "사용불가",
+    "g953": "게이트 여유 {pct}% — {tight}% 미만이면 «인식곤란»",
+    "g960": "커스텀 색상 (Hue)",
+    "g961": "TL 배치 미리보기",
+    "g962": "드래그로 위치 이동 · 휠 또는 핀치로 확대/축소",
     "g453": "타입 <b>Y</b> · 버전 <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · 톤 <b>{tones}</b>",
     "g454": " · 윈도 <b>β</b>",
     "g455": "용량 초과 — 내용 뒤쪽 {n} B 가 잘린 채로 렌더링 중이에요 (빨간 구간이 잘리는 부분).",
     "g456": "자동 판정({bits}) → {ver} · ECC {ecc} ({tier})",
     "g457": "TLcube 생성기 — TrilLuminance (cube) 코드 만들기",
     "g458": "TLcube 생성",
-    "g459": "중앙 파인더 (Type O/A)",
+    "g459": "검출기 선택",
     "g460": "불스아이",
     "g461": "면 나선",
     "g462": "솔리드 중심",
@@ -1445,20 +1958,20 @@ const GENERATOR_STRINGS = {
     "g511": "스캔 불가 후보",
     "g514": "실기기에서는 카메라나 코드를 회전시키면 인식이 떨어질 수 있어요. Type O/A는 방향 기준을 주는 중앙 QR(안쪽)을 기본으로 사용하지만, 회전 내성을 보장하지는 않아요. 생성·배치할 때 코드의 위쪽이 자연스럽게 위를 향하도록 두세요.",
     "g513": "이 주소에서는 기기 정보와 생성 설정(타입·버전 등)이 실시간 전송됩니다. 페이로드 내용은 보내지 않으며, 안정판은 이런 전송을 하지 않습니다.",
-    "g515": "Y타입 검출기 옵션",
+    "g515": "검출기 선택",
     "g516": "끔 (기존)",
     "g517": "실험 프레임 β",
     "g518": "실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.",
     "g519": "표시를 넣지 않아요. 지금까지의 Type Y와 같아요.",
     "g520": "육각 바깥에 이중 테두리와 가운데 허브를 더해요. 검출 실험용이며 성능을 약속하지 않아요.",
     "g542": "셀 표면 v0 (Y0)",
-    "g541": "v0. Y0(n=13) 전용 네 코너 소형 파인더 30셀 · 데이터 112. 성능을 보장하지 않아요.",
+    "g541": "v0. Y0(n=13) 전용 네 코너 소형 파인더 30셀 · 데이터 109. 성능을 보장하지 않아요.",
     "g543": "셀 표면 v2r2 (Y1/Y2)",
     "g544": "A (구·대칭)",
     "g545": "B (신·비대칭)",
-    "g546": "v2r2. 원점·먼 꼭짓점 앵커 블록 파인더 65셀. Y1(n=21) 기본, 고 해상도로 Y2(n=25). 성능을 보장하지 않아요.",
+    "g546": "v2r2. 원점·먼 꼭짓점 앵커 블록 파인더 74셀. Y1(n=21) 기본, 고 해상도로 Y2(n=25). 성능을 보장하지 않아요.",
     "g547": "셀 표면 v1r2 (Y1)",
-    "g548": "v1r2. 네 코너 블록 파인더 80셀 · 데이터 334. Y1(n=21) 전용. v0 확장형 A/B 후보이며 성능을 보장하지 않아요.",
+    "g548": "v1r2. 네 코너 블록 파인더 80셀 · 데이터 331. Y1(n=21) 전용. v0 확장형 A/B 후보이며 성능을 보장하지 않아요.",
     "g602": "셀 표면 v0X (Y1)",
     "g603": "v0X. QR 파인더 문법을 빌린 v0 확장 65셀 · 데이터 346. Y1(n=21) 전용. 3파전 후보이며 성능을 보장하지 않아요.",
     "g604": "셀 표면 v0XQ · 중앙 QR (Y1)",
@@ -1500,23 +2013,7 @@ const GENERATOR_STRINGS = {
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
-    "g002": "Automatically combines resolution then capacity to fit your content",
-    "g003": "Long range, large print (billboards) — big modules read from far away",
-    "g004": "1–3 m range — poster-sized print",
-    "g005": "Close range, high capacity — small modules, read up close",
-    "g006": "Automatically picks error-correction first, then standard, then high capacity",
-    "g007": "ECC H (≈40%) — least capacity, most damage tolerance",
-    "g008": "ECC M (25%) — the default balance",
-    "g009": "ECC L (≈12%) — maximum capacity",
-    "g010": "Code only, no background — alpha channel in PNG, no background element in SVG",
-    "g011": "White background — for light print and documents",
-    "g012": "Black background — for dark surfaces and screens",
     "g013": "Remove background image",
-    "g014": "Automatic high-contrast colour on a transparent background; skipped on an opaque one, where the background already acts as the quiet zone",
-    "g015": "Code only, no quiet zone",
-    "g016": "Picks white or black based on the cell colours and the surrounding surface",
-    "g017": "Inside (O/A: centre QR · Y: Y2 window β)",
-    "g018": "Export the code only, without a QR link",
     "g019": "Remove left image",
     "g020": "Remove right image",
     "g021": "Copy PNG to clipboard",
@@ -1542,8 +2039,8 @@ const GENERATOR_STRINGS = {
     "g041": "Type",
     "g042": "Style",
     "g043": "Custom (Hue)",
-    "g044": "Resolution (module density)",
-    "g045": "Robustness · capacity",
+    "g044": "Resolution (module density = capacity)",
+    "g045": "Robustness ⇄ capacity",
     "g046": "Type O (rhombic field)",
     "g047": "Type A (triangular silhouette)",
     "g048": "Type Y (single cube)",
@@ -1557,8 +2054,8 @@ const GENERATOR_STRINGS = {
     "g056": "QR fallback URL (advanced)",
     "g057": "Style preset",
     "g058": "Custom hue",
-    "g059": "Background",
-    "g060": "Placement preview (surface photo)",
+    "g059": "Background colour",
+    "g060": "TL placement preview (drop in a photo of the spot and try the placement)",
     "g061": "Choose image…",
     "g062": "Reset position",
     "g063": "Quiet zone (margin around the code)",
@@ -1591,8 +2088,8 @@ const GENERATOR_STRINGS = {
     "g203": "Black",
     "g204": "Inside",
     "g206": "drag to move",
-    "g207": "scroll to zoom",
-    "g300": "Add a photo of the surface you will place the code on and it appears behind the preview. You can <b>drag to move</b> and <b>scroll to zoom</b><span> in the preview. It is not included in the exported file.</span>",
+    "g207": "scroll or pinch to zoom",
+    "g300": "Add a photo of the surface you will place the code on and it appears behind the preview. You can <b>drag to move</b> and <b>scroll or pinch to zoom</b><span> in the preview. It is not included in the exported file.</span>",
     "g301": "Same input → deterministic output · the data contract is only SPEC §4.4 (disc median order + Δmin) / §14 (Type Y)",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume",
 
@@ -1640,23 +2137,60 @@ const GENERATOR_STRINGS = {
     "g442": "L: {name}",
     "g443": "R: {name}",
     "g444": "Could not read the decoration image: {msg}",
-    "g445": "self-check ✓ {total} cells · Δmin {delta}",
-    "g446": "self-check ✗ {n} mismatches",
-    "g447": "self-check ✓ {total} cells · {margin}",
-    "g448": "self-check ✗ {n} mismatches · {e} erasures",
+    "g445": "self-check ✓ - {state} · {total} cells · Δmin {delta}",
+    "g446": "self-check ✗ - {state} · {n} mismatches",
+    "g447": "self-check ✓ - {state} · {total} cells · {margin}",
+    "g448": "self-check ✗ - {state} · {n} mismatches · {e} erasures",
     "g449": "Type <b>{type}</b> · version <b>{ver}</b> (k={k}) · ECC <b>{ecc}</b>",
     "g450": "Payload <b>{bytes}</b> / {max} B · ",
     "g451": "symbols {d}+{n} · preset Δmin {delta}",
     "g452": "symbols {d}+{n}",
     "g600": "A new version is ready.",
     "g601": "Apply now",
+    "g900": "This axis sets the number of modules (cells). More modules, more capacity.\nAt the same printed size, higher resolution makes each module smaller, so the camera has to come closer.\nLow = long range, large prints (billboards) · Mid = poster range, 1-3 m · High = close range, high capacity.\nAuto raises resolution first, and steps “Robustness ⇄ capacity” down only if the content still does not fit at maximum.\nThe card art shows detector size against the silhouette — the detector uses a fixed cell count, so it shrinks in relative terms as resolution rises.",
+    "g901": "This axis sets how much room goes to error correction (ECC). More correction means less payload.\nCorrection first = ECC H (≈40%) · Standard = ECC M (25%) · High capacity = ECC L (≈12%).\nAuto walks H → M → L and takes the first level the content fits into.\nThe self-check badge below re-reads the image this setting actually rendered. It judges whether the render kept its own contract — not how a print or a camera will behave.",
+    "g902": "Transparent = code only. PNG keeps an alpha channel; SVG has no background element at all.\nWhite = for light prints and documents. Black = for dark stock or screens.\nWith transparent, the effective background becomes the surface you put the code on. That separation cannot be guaranteed at generation time, so measure it with the TL placement preview below.",
+    "g903": "Drop in a photo of the spot where the code will actually go; it sits behind the preview.\nDrag to move and use the wheel (or pinch on touch) to zoom until the placement matches.\nThe preview measures the surface luminance around the code against the cell levels, so you get a number for “will this spot read?” before printing.\nThe photo never goes into the exported PNG or SVG.",
+    "g904": "The margin around the code — the equivalent of a QR quiet zone.\nAuto = lays down a high-contrast colour when the background is transparent, and skips it when the background is opaque (the background is already the quiet zone).\nNone = no margin. White / Black = fixed to that colour.\nHigh contrast = picks whichever of white or black separates further in relative luminance from the cell levels. With the colour styles you can choose today, that single step always settles it.\nThe fallback QR block is excluded — it carries its own quiet zone.",
+    "g905": "Prints a QR alongside the code as a fallback route when the TL scanner cannot read it.\nTop-left / top-right / bottom-left / bottom-right = one of the four outer corners.\nInner = a centre QR on Type O/A, the Y2 window β on Type Y.\nNone = export the code alone, without a QR.\nThe centre-QR variant is meant for prints at least 13 cm wide.",
+    "g906": "The cell-surface locator a scanner uses to find where a Type Y code is and which way it faces.\nAuto = use whatever is recommended for the current settings. No Y detector has been promoted to production yet, so today Auto resolves to the same thing as Off.\nCells occupied and max payload L / M / H per candidate (source: cellSurfaceFinal.js):\n· v0 — 30 cells (n=13) · 29 / 25 / 20 B\n· v0X — 65 cells (n=21) · 96 / 81 / 65 B\n· v0XQ — 42 cells of finder plus an 81-cell centre QR slot (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 cells (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 cells (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B at n=25)\nFewer occupied cells leave more symbols for data — at n=21, v0X holds the most and v0XQ the least. Among the three slotless candidates the spread is only 4 B at L, so capacity is not a reason to pick one; v0XQ gives up 81 cells to the centre QR slot and so holds 16 B less than v0X at L — in exchange, the centre QR carries a fallback URL when the scanner cannot read the code.\nThese are experimental: rotation, lighting, print, and live-scan performance are not guaranteed.",
+    "g907": "The marker placed at the centre of a Type O/A code — this is where a scanner locks on to position and orientation.\nCentre QR = the default. It puts the fallback QR in the finder slot so it doubles as the orientation reference (the same slot as “Inside” under “Include TL scanner QR link” below).\nBullseye = concentric rings · Cube in bullseye = a cube inside the ring · Three-tone cube = built from the three cell tones alone.\nAdvanced mode also unfolds the experimental groups kept for comparison (“Below-bar candidates” · “Not scannable”).\nThe panel below reports model scores — not a prediction of read rate.",
+    "g920": "Fits content",
+    "g921": "Long range",
+    "g922": "Poster range",
+    "g923": "Close range",
+    "g924": "Fits content",
+    "g925": "Damage tolerant",
+    "g926": "Balanced",
+    "g927": "Holds more",
+    "g928": "Surface shows",
+    "g929": "Light stock",
+    "g930": "Clear the entered content",
+    "g931": "Show explanation",
+    "g932": "Close explanation",
+    "g934": "Dark stock",
+    "g935": "* The surface photo is only used to measure how far the surface separates from the cell colours in the preview. It goes into neither the exported PNG/SVG nor the Safe area option or colour below.",
+    "g941": "Auto pick",
+    "g942": "No detector",
+    "g943": "4 corner blocks",
+    "g944": "QR-style corners",
+    "g945": "Wider corner blocks",
+    "g946": "Centre + far anchor",
+    "g947": "3 corners + centre QR",
+    "g950": "usable",
+    "g951": "hard to read",
+    "g952": "not usable",
+    "g953": "Gate headroom {pct}% — under {tight}% reads as “hard to read”",
+    "g960": "Custom colour (hue)",
+    "g961": "TL placement preview",
+    "g962": "Drag to move · scroll or pinch to zoom",
     "g453": "Type <b>Y</b> · version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tones <b>{tones}</b>",
     "g454": " · window <b>β</b>",
     "g455": "Over capacity — the last {n} B of your content are cut in this render (the red span marks what gets dropped).",
     "g456": "Auto ({bits}) → {ver} · ECC {ecc} ({tier})",
     "g457": "TLcube generator — make TrilLuminance (cube) codes",
     "g458": "TLcube gen",
-    "g459": "Centre finder (Type O/A)",
+    "g459": "Detector",
     "g460": "Bullseye",
     "g461": "Face swirl",
     "g462": "Solid centre",
@@ -1711,20 +2245,20 @@ const GENERATOR_STRINGS = {
     "g511": "Not scannable",
     "g514": "Recognition can drop on real devices when the camera or code is rotated. Types O and A default to a centre QR (Inner) that supplies an orientation reference, but it does not guarantee rotation tolerance. Generate and place the code with its top naturally facing up.",
     "g513": "On this address, device details and generation settings (type, version, and so on) are sent in real time. Payload contents are not sent, and the stable generator does not send this.",
-    "g515": "Type Y detector options",
+    "g515": "Detector",
     "g516": "Off (legacy)",
     "g517": "Experimental frame β",
     "g518": "Experimental. Does not guarantee rotation, lighting, print, or live-scan performance.",
     "g519": "No extra marks. Same as unmarked Type Y.",
     "g520": "Adds a double hex border and a centre hub. For detection experiments only; performance is not promised.",
     "g542": "Cell surface v0 (Y0)",
-    "g541": "v0. Y0-only (n=13) four-corner compact finder, 30 cells, 112 data. Does not guarantee performance.",
+    "g541": "v0. Y0-only (n=13) four-corner compact finder, 30 cells, 109 data. Does not guarantee performance.",
     "g543": "Cell surface v2r2 (Y1/Y2)",
     "g544": "A (old, symmetric)",
     "g545": "B (new, asymmetric)",
-    "g546": "v2r2. Origin/far-corner anchored block finder, 65 cells. Y1 (n=21) by default, Y2 (n=25) at high resolution. Does not guarantee performance.",
+    "g546": "v2r2. Origin/far-corner anchored block finder, 74 cells. Y1 (n=21) by default, Y2 (n=25) at high resolution. Does not guarantee performance.",
     "g547": "Cell surface v1r2 (Y1)",
-    "g548": "v1r2. Four-corner block finder, 80 cells, 334 data. Y1 (n=21) only. An A/B candidate extending v0; does not guarantee performance.",
+    "g548": "v1r2. Four-corner block finder, 80 cells, 331 data. Y1 (n=21) only. An A/B candidate extending v0; does not guarantee performance.",
     "g602": "Cell surface v0X (Y1)",
     "g603": "v0X. A v0 extension borrowing QR finder grammar, 65 cells, 346 data. Y1 (n=21) only. A three-way candidate; does not guarantee performance.",
     "g604": "Cell surface v0XQ · center QR (Y1)",
@@ -1766,23 +2300,7 @@ const GENERATOR_STRINGS = {
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
-    "g002": "内容の大きさに合わせて解像度→容量の順に自動で組み合わせます",
-    "g003": "遠距離・大型印刷（看板）— モジュールが大きく遠くからでも読めます",
-    "g004": "1〜3m の距離 — ポスター程度の印刷",
-    "g005": "近距離・大容量 — モジュールが小さく近くで読みます",
-    "g006": "入力の大きさに合わせて誤り訂正優先→標準→大容量の順に自動選択します",
-    "g007": "ECC H（約40%）— 容量は減りますが破損耐性は最大です",
-    "g008": "ECC M（25%）— 標準のバランス",
-    "g009": "ECC L（約12%）— 最大容量",
-    "g010": "背景なしでコードのみ — PNG はアルファチャンネル、SVG は背景要素なし",
-    "g011": "白背景 — 明るい印刷物や書類に載せるとき",
-    "g012": "黒背景 — 暗い紙面や画面に載せるとき",
     "g013": "背景画像を削除",
-    "g014": "背景が透明なら高コントラスト色を自動で選び、不透明なら背景自体がクワイエットゾーンになるため省略します",
-    "g015": "クワイエットゾーンなしでコードのみ",
-    "g016": "セルの色と周囲の面を見て白・黒から推奨色を選びます",
-    "g017": "内側（O/A: 中央 QR · Y: Y2 ウィンドウ β）",
-    "g018": "QR リンクなしでコードのみ書き出します",
     "g019": "左の画像を削除",
     "g020": "右の画像を削除",
     "g021": "PNG をクリップボードにコピー",
@@ -1808,8 +2326,8 @@ const GENERATOR_STRINGS = {
     "g041": "タイプ",
     "g042": "スタイル",
     "g043": "カスタム（Hue）",
-    "g044": "解像度（モジュール密度）",
-    "g045": "安定性・容量",
+    "g044": "解像度（モジュール密度 = 容量）",
+    "g045": "安定性 ⇄ 容量",
     "g046": "Type O（菱形フィールド）",
     "g047": "Type A（三角シルエット拡張）",
     "g048": "Type Y（単一キューブ）",
@@ -1823,8 +2341,8 @@ const GENERATOR_STRINGS = {
     "g056": "QR フォールバック URL（詳細）",
     "g057": "スタイルプリセット",
     "g058": "カスタム Hue",
-    "g059": "背景",
-    "g060": "配置プレビュー（表面画像）",
+    "g059": "背景色",
+    "g060": "TL 配置プレビュー（TL を入れる場所の画像を入れて事前に配置してみる）",
     "g061": "画像を選択…",
     "g062": "位置をリセット",
     "g063": "クワイエットゾーン（コード周囲の余白）",
@@ -1857,8 +2375,8 @@ const GENERATOR_STRINGS = {
     "g203": "黒",
     "g204": "内側",
     "g206": "ドラッグで移動",
-    "g207": "ホイールで拡大縮小",
-    "g300": "コードを実際に載せる面の写真を入れるとプレビューの背面に敷かれます。プレビューでは <b>ドラッグで移動</b>、<b>ホイールで拡大縮小</b><span>できます。書き出すファイルには含まれません。</span>",
+    "g207": "ホイールまたはピンチで拡大縮小",
+    "g300": "コードを実際に載せる面の写真を入れるとプレビューの背面に敷かれます。プレビューでは <b>ドラッグで移動</b>、<b>ホイールまたはピンチで拡大縮小</b><span>できます。書き出すファイルには含まれません。</span>",
     "g301": "同じ入力 → 決定的な出力 · データ契約は SPEC §4.4（円板 median の順序 + Δmin）/ §14（Type Y）のみ",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume",
 
@@ -1906,23 +2424,60 @@ const GENERATOR_STRINGS = {
     "g442": "左: {name}",
     "g443": "右: {name}",
     "g444": "装飾画像を読み込めませんでした: {msg}",
-    "g445": "自己検証 ✓ {total} セル · Δmin {delta}",
-    "g446": "自己検証 ✗ 不一致 {n} 件",
-    "g447": "自己検証 ✓ {total} セル · {margin}",
-    "g448": "自己検証 ✗ 不一致 {n} 件 · 消去 {e} 件",
+    "g445": "自己検証 ✓ - {state} · {total} セル · Δmin {delta}",
+    "g446": "自己検証 ✗ - {state} · 不一致 {n} 件",
+    "g447": "自己検証 ✓ - {state} · {total} セル · {margin}",
+    "g448": "自己検証 ✗ - {state} · 不一致 {n} 件 · 消去 {e} 件",
     "g449": "タイプ <b>{type}</b> · バージョン <b>{ver}</b>（k={k}）· ECC <b>{ecc}</b>",
     "g450": "ペイロード <b>{bytes}</b> / {max} B · ",
     "g451": "シンボル {d}+{n} · プリセット Δmin {delta}",
     "g452": "シンボル {d}+{n}",
     "g600": "新しいバージョンが利用できます。",
     "g601": "今すぐ適用",
+    "g900": "モジュール（セル）の数を決める軸です。数が増えれば入る量も増えます。\n同じ印刷サイズなら解像度が高いほど 1 モジュールが小さくなり、より近づいて撮る必要があります。\n低 = 遠距離・大型印刷（看板）· 中 = 1〜3 m のポスター級 · 高 = 近距離・大容量。\n自動はまず解像度を上げ、最大でも入らないときに「安定性 ⇄ 容量」を下げます。\nカードの図はシルエットに対する検出器の大きさです — 検出器のセル数は固定なので、解像度が上がるほど相対的に小さくなります。",
+    "g901": "誤り訂正（ECC）の割合を決める軸です。訂正に多く割くほど、入るデータ量は減ります。\n訂正優先 = ECC H（≈40%）· 標準 = ECC M（25%）· 大容量 = ECC L（≈12%）。\n自動は H → M → L の順で、最初に収まるレベルを選びます。\n下の自己検証バッジは、この設定で実際にレンダリングした画像を読み直した結果です。印刷や撮影の条件ではなく「レンダリングが自分の契約を守ったか」だけを見ます。",
+    "g902": "透明 = コードだけ。PNG はアルファチャンネル、SVG は背景要素そのものがありません。\n白 = 明るい印刷物・文書の上に置くとき。黒 = 暗い紙面・画面に置くとき。\n透明を選ぶと実効的な背景は「コードを貼る面」になります。その面とセル色の分離は生成時点では保証できないので、下の「TL 配置プレビュー」で実測してください。",
+    "g903": "コードを実際に置く場所の写真を入れると、プレビューの背後に敷かれます。\nプレビュー上でドラッグして移動、ホイールまたはピンチで拡大／縮小して位置を合わせてください。\nコード周囲の面の輝度とセルレベルの分離を実測し、印刷前に「ここに置いて読めるか」を数値で示します。\n書き出す PNG・SVG にはこの写真は入りません。",
+    "g904": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\n自動 = 背景が透明なら高コントラスト色を敷き、不透明なら背景がすでに安全領域なので省略します。\nなし = 余白なし。白・黒 = その色に固定。\n高コントラスト = セル色との相対輝度の分離が大きい方（白か黒）を選びます。今選べる色スタイルでは、いつもこの一段階で決まります。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
+    "g905": "TL スキャナで読めなかったときの代替経路になる QR を、コードと一緒に印刷します。\n左上・右上・左下・右下 = コード外側の四隅のいずれか。\n内側 = Type O/A は中央 QR、Type Y は Y2 ウィンドウ β。\nなし = QR を付けずコードだけ書き出します。\n中央 QR 版はコード幅 13 cm 以上の印刷を推奨します。",
+    "g906": "スキャナが Type Y コードの位置と向きを最初に見つけるためのセル表面ロケータです。\n自動 = 現在の設定で推奨されるものを使います。正式採用された Y 検出器がまだないため、今の「自動」は「オフ」と同じ結果です。\n候補ごとの占有セル数と最大 payload L / M / H（正典 cellSurfaceFinal.js）:\n· v0 — 30セル（n=13）· 29 / 25 / 20 B\n· v0X — 65セル（n=21）· 96 / 81 / 65 B\n· v0XQ — ファインダ 42セル + 中央 QR スロット 81セル（n=21）· 80 / 67 / 54 B\n· v1r2 — 80セル（n=21）· 92 / 77 / 62 B\n· v2r2 — 74セル（n=21）· 94 / 79 / 63 B（n=25 では 145 / 124 / 99 B）\n占有セルが少ないほどデータに使えるシンボルが多く残ります — n=21 では v0X が最も多く入り、v0XQ が最も少ないです。スロットのない3候補どうしの差は L 基準で 4 B なので容量で選ぶほどの幅ではありませんが、v0XQ は中央 QR スロットに 81セルを割くため v0X より L 基準で 16 B 少なくなります — その代わり、スキャナが読めないときは中央 QR がフォールバック URL を担います。\n実験項目のため、回転・照明・印刷・ライブスキャンの性能は保証しません。",
+    "g907": "Type O/A コードの中央に置く目印です — スキャナはここで位置と向きを最初に捉えます。\n中央QR = 既定値。フォールバック QR をファインダーの位置に置き、向きの基準も兼ねます（下の「TL スキャナ QR リンクを含める」の「内側」と同じ位置です）。\nブルズアイ = 同心円の目印 · ブルズアイの中のキューブ = リングの中にキューブを入れたハイブリッド · 3トーンキューブ = セルの3トーンだけで作った目印。\n「詳細」モードでは比較用の実験候補（「基準未達の候補」・「スキャン不可の候補」）も一緒に展開されます。\n下のスコア板は模型スコアです — 認識率の予測ではありません。",
+    "g920": "内容に合わせて",
+    "g921": "遠距離",
+    "g922": "ポスター距離",
+    "g923": "近距離",
+    "g924": "内容に合わせて",
+    "g925": "損傷に強い",
+    "g926": "バランス",
+    "g927": "多く入る",
+    "g928": "面をそのまま",
+    "g929": "明るい紙面",
+    "g930": "入力内容を消去",
+    "g931": "説明を表示",
+    "g932": "説明を閉じる",
+    "g934": "暗い紙面",
+    "g935": "* 入れた表面画像は、プレビューで面とセル色の分離を実測するためだけに使います。書き出す PNG・SVG にも、下の「安全領域」のオプション・色にも反映されません。",
+    "g941": "推奨を自動",
+    "g942": "検出器なし",
+    "g943": "四隅4ブロック",
+    "g944": "QR型の隅",
+    "g945": "隅ブロック拡張",
+    "g946": "中央＋遠方アンカー",
+    "g947": "3コーナー＋中央QR",
+    "g950": "使用可能",
+    "g951": "認識困難",
+    "g952": "使用不可",
+    "g953": "ゲート余裕 {pct}% — {tight}% 未満は「認識困難」",
+    "g960": "カスタム色（Hue）",
+    "g961": "TL 配置プレビュー",
+    "g962": "ドラッグで移動・ホイールまたはピンチで拡大縮小",
     "g453": "タイプ <b>Y</b> · バージョン <b>{ver}</b>（n={n}）· ECC <b>{ecc}</b> · トーン <b>{tones}</b>",
     "g454": " · ウィンドウ <b>β</b>",
     "g455": "容量超過 — 内容の後ろ {n} B が切り詰められた状態で描画されています（赤い区間が切れる部分です）。",
     "g456": "自動判定（{bits}）→ {ver} · ECC {ecc}（{tier}）",
     "g457": "TLcube ジェネレータ — TrilLuminance (cube) コードを作る",
     "g458": "TLcube 生成",
-    "g459": "中央ファインダー（Type O/A）",
+    "g459": "検出器の選択",
     "g460": "ブルズアイ",
     "g461": "フェイス・スワール",
     "g462": "中心塗り",
@@ -1977,20 +2532,20 @@ const GENERATOR_STRINGS = {
     "g511": "スキャン不可の候補",
     "g514": "実機ではカメラやコードを回転させると認識しにくくなることがあります。Type O/A は方向の基準になる中央 QR（内側）を標準にしますが、回転耐性を保証するものではありません。生成・配置時にはコードの上側が自然に上を向くようにしてください。",
     "g513": "このアドレスでは、端末情報と生成設定（タイプ・バージョンなど）がリアルタイムで送信されます。ペイロードの内容は送らず、安定版ではこの送信を行いません。",
-    "g515": "Yタイプ検出オプション",
+    "g515": "検出器の選択",
     "g516": "オフ（従来）",
     "g517": "実験フレーム β",
     "g518": "実験用です。回転・照明・印刷・ライブスキャンの性能は保証しません。",
     "g519": "追加マークなし。従来の Type Y と同じです。",
     "g520": "六角の外側に二重枠と中央ハブを足します。検出実験用で、性能は約束しません。",
     "g542": "セル表面 v0 (Y0)",
-    "g541": "v0。Y0(n=13) 専用の四隅小型ファインダ 30セル・データ112。性能は保証しません。",
+    "g541": "v0。Y0(n=13) 専用の四隅小型ファインダ 30セル・データ109。性能は保証しません。",
     "g543": "セル表面 v2r2 (Y1/Y2)",
     "g544": "A（旧・対称）",
     "g545": "B（新・非対称）",
-    "g546": "v2r2。原点・遠頂点アンカーのブロックファインダ 65セル。既定は Y1(n=21)、高解像度で Y2(n=25)。性能は保証しません。",
+    "g546": "v2r2。原点・遠頂点アンカーのブロックファインダ 74セル。既定は Y1(n=21)、高解像度で Y2(n=25)。性能は保証しません。",
     "g547": "セル表面 v1r2 (Y1)",
-    "g548": "v1r2。四隅ブロックファインダ 80セル・データ334。Y1(n=21) 専用。v0 の拡張版 A/B 候補で、性能は保証しません。",
+    "g548": "v1r2。四隅ブロックファインダ 80セル・データ331。Y1(n=21) 専用。v0 の拡張版 A/B 候補で、性能は保証しません。",
     "g602": "セル表面 v0X (Y1)",
     "g603": "v0X。QR ファインダの文法を借りた v0 拡張 65セル・データ346。Y1(n=21) 専用。三つ巴の候補で、性能は保証しません。",
     "g604": "セル表面 v0XQ・中央 QR (Y1)",
@@ -2046,10 +2601,17 @@ const GENERATOR_STRINGS = {
  * 인자를 받는 updateOverflowHighlight·updateGauge 는 제외한다 — render() 가 현재 인코딩
  * 결과와 함께 부르는 것들이고, 아래 render() 호출이 그걸 덮는다.
  */
+/** 섹션 도움말 «?» 컨트롤러 — els 가 만들어진 뒤에 채워진다 (아래 createHelpPopover). */
+let helpPopoverCtl = null;
+
+/** 검출기 «자동» 카드가 켜져 있는가 (UI 정책 플래그 — 와이어 값이 아니다).
+ *  syncYLocatorUi 가 초기화 도중 읽을 수 있어 선언을 여기 맨 앞에 둔다 (TDZ 회피). */
+let detectorAutoY = false;
+
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
-  syncFaceGainLabel, syncYLocatorUi, syncTypeYCellEditorUi,
+  syncFaceGainLabel, syncYLocatorUi, syncTypeYCellEditorUi, syncHelpPopover,
 ];
 
 const genI18n = createI18n(GENERATOR_STRINGS, {
@@ -2061,6 +2623,7 @@ const genI18n = createI18n(GENERATOR_STRINGS, {
 import { createBeacon } from './src/beacon.js';
 import { createLabTelemetry, isLabPath } from './src/lab-telemetry.js';
 import { wireSelectAllOnActivate } from './src/input-select-all.js';
+import { createHelpPopover } from './src/help-popover.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
@@ -2132,7 +2695,7 @@ import {
 } from './src/generator-state.js';
 import { FACES, facePolygon } from './src/hexgrid.js';
 import { maxSafeRadius } from './src/bullseye.js';
-import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance } from './src/luminance.js';
+import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance, DELTA_MIN_CONTRACT } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from './src/sceneY.js';
 import { addQuietZone } from './src/quietzone.js';
@@ -2144,7 +2707,7 @@ import { rasterToPng } from './src/png.js';
 import { sceneToSvg } from './src/svg.js';
 import { TL_READER_URL } from './src/qr.js';
 import { wifiPayload, cardPayload } from './src/payloadform.js';
-import { renderWithErrorDisplay } from './src/render-status.js';
+import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js';
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 const $ = (id) => document.getElementById(id);
@@ -2169,10 +2732,18 @@ const els = {
   bgModeCards: $('bgModeCards'), bgModeHint: $('bgModeHint'),
   quietModeCards: $('quietModeCards'), quietModeHint: $('quietModeHint'),
   canvasWrap: $('canvasWrap'), backdropCanvas: $('backdropCanvas'),
+  stageBackdropPick: $('stageBackdropPick'), stageBackdropPickLabel: $('stageBackdropPickLabel'),
+  backdropGestureHint: $('backdropGestureHint'),
   backdropSection: $('backdropSection'), backdropPick: $('backdropPick'),
   backdropClear: $('backdropClear'), backdropFit: $('backdropFit'),
   backdropFile: $('backdropFile'), backdropVerdict: $('backdropVerdict'),
-  customStyleCard: $('customStyleCard'), customChips: $('customChips'), customBg: $('customBg'),
+  // 섹션 도움말 «?» + 자체검증 3태 뱃지 + 콘텐츠 지우기
+  helpPopover: $('helpPopover'), helpPopoverBody: $('helpPopoverBody'),
+  helpPopoverClose: $('helpPopoverClose'),
+  selfCheckRow: $('selfCheckRow'),
+  selfCheckHostNormal: $('selfCheckHostNormal'), selfCheckHostAdvanced: $('selfCheckHostAdvanced'),
+  nUrlClear: $('nUrlClear'), nTextClear: $('nTextClear'),
+  customStyleCard: $('customStyleCard'), customChips: $('customChips'),
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
@@ -2215,6 +2786,57 @@ const els = {
 
 wireSelectAllOnActivate(els.nUrlPayload);
 
+/*
+ * ── 섹션 도움말 «?» (운영자 지시 2026-08-16 A-2) ─────────────────────────
+ *
+ * 섹션마다 있던 여러 줄 `.hint` 와 카드마다 있던 `title=` 을 여기 하나로 모은다.
+ * 팝오버는 **문서에 하나뿐**이고(#helpPopover), 버튼은 `data-help="<i18n 키>"` 로
+ * 자기 본문만 가리킨다 — 섹션이 늘어도 배선은 이 루프 하나다.
+ *
+ * 본문은 사전 문자열을 `\n` 으로 끊어 줄 단위 `<p>` 로 그린다 (textContent — 사전이라도
+ * innerHTML 경로를 열지 않는다).
+ */
+helpPopoverCtl = createHelpPopover({
+  popover: els.helpPopover,
+  body: els.helpPopoverBody,
+  closeButton: els.helpPopoverClose,
+  linesFor: (button) => t(button.dataset.help).split('\n'),
+});
+for (const button of document.querySelectorAll('.help-dot[data-help]')) {
+  helpPopoverCtl.attach(button);
+}
+
+/** 언어 전환 시 열려 있는 도움말 본문을 다시 그린다. */
+function syncHelpPopover() {
+  if (helpPopoverCtl) helpPopoverCtl.refresh();
+}
+
+/*
+ * ── 콘텐츠 입력란 지우기 «×» (운영자 지시 2026-08-16 A-6) ─────────────────
+ * 내용이 있을 때만 보인다. 지운 뒤 입력에 포커스를 돌려준다 — 지우기가 «다시 쓰기»
+ * 의 첫 동작인 경우가 대부분이라 커서를 되찾으러 한 번 더 클릭하게 두지 않는다.
+ */
+const CLEAR_PAIRS = [
+  [els.nUrlPayload, els.nUrlClear],
+  [els.nTextPayload, els.nTextClear],
+];
+function refreshInputClearButtons() {
+  for (const [input, button] of CLEAR_PAIRS) {
+    if (input && button) button.hidden = input.value.length === 0;
+  }
+}
+for (const [input, button] of CLEAR_PAIRS) {
+  if (!input || !button) continue;
+  input.addEventListener('input', refreshInputClearButtons);
+  button.addEventListener('click', () => {
+    input.value = '';
+    refreshInputClearButtons();
+    input.focus();
+    schedule();
+  });
+}
+refreshInputClearButtons();
+
 /** 생성기 선택의 단일 상태 — 모드는 이 객체의 노출 범위만 바꾼다. */
 let mode = 'normal';
 const generatorState = createGeneratorState();
@@ -2240,6 +2862,8 @@ const backdrop = { bitmap: null, name: null };
 const backdropView = { x: 0, y: 0, scale: 1 };
 /** 마지막으로 실측한 배치 표면의 대표 상대휘도 — 고대비 권장색의 2순위 근거. */
 let lastBackdropLuminance = null;
+/** 배치 사진이 미리보기에 «떠 있었는가» — 조작 안내(B-4)의 에지 검출용. */
+let backdropWasShowing = false;
 
 /** 장식 이미지 (Y+안쪽 전용, 렌더 자유구역 — L/R 배제영역 데칼). 면별 슬롯
  *  (사용자 지시 2026-08-09: 좌/우 각각 + 교환). 각 원소 {bitmap, dataUrl, name} | null */
@@ -2438,6 +3062,29 @@ els.qrUrl.value = generatorState.qrText;
 
 function rgbCss(c) { return `rgb(${c.r},${c.g},${c.b})`; }
 
+/**
+ * 프리셋 카드 가운데 색 바의 색 = «그 프리셋 색의 진한 셰이드» (2026-08-16 B-2).
+ *
+ * 옛 바는 `preset.background` 를 그렸다. 그런데 세 프리셋의 배경은 전부 near-black
+ * (slate 14,16,24 · ember 18,11,7 · mono 16,16,16)이라 **세 카드의 바가 사실상 같은
+ * 검정**이었다 — 프리셋을 구분해 주는 일을 전혀 못 했다.
+ *
+ * 대신 중간 레벨(levels[1])을 0.62 배로 낮춘 색을 쓴다. levels[1] 은 그 프리셋의
+ * 색상을 가장 강하게 들고 있는 색이고, sRGB 성분에 같은 계수를 곱하면 색상·채도비는
+ * 유지된 채 명도만 내려간다 → 정의 그대로 «그 프리셋 색의 진한 셰이드».
+ * 결과: slate rgb(68,84,118) · ember rgb(124,74,25) · mono rgb(93,93,93) — 라이트·다크
+ * 양쪽 카드 배경에서 서로, 그리고 배경과 구분된다.
+ */
+const DEEP_SHADE_K = 0.62;
+function presetDeepShade(palette) {
+  const c = palette.levels[1];
+  return {
+    r: Math.round(c.r * DEEP_SHADE_K),
+    g: Math.round(c.g * DEEP_SHADE_K),
+    b: Math.round(c.b * DEEP_SHADE_K),
+  };
+}
+
 for (const name of Object.keys(PRESETS)) {
   const p = PRESETS[name];
   const card = document.createElement('div');
@@ -2453,7 +3100,7 @@ for (const name of Object.keys(PRESETS)) {
   }
   const bgStrip = document.createElement('div');
   bgStrip.className = 'swatch-bg';
-  bgStrip.style.background = rgbCss(p.background);
+  bgStrip.style.background = rgbCss(presetDeepShade(p));
   const labelEl = document.createElement('div');
   labelEl.dataset.i18n = PRESET_LABEL_KEYS[name];
   labelEl.textContent = p.label || name;
@@ -2492,13 +3139,14 @@ function syncStyleUi() {
     c.classList.toggle('active', c.dataset.preset === generatorState.preset);
   }
   els.customStyleCard.classList.toggle('active', generatorState.preset === 'custom');
+  // 카드 안 hue 바는 **항상** 보인다 — 그 바를 움직이는 것 자체가 «커스텀 선택» 이라
+  // 커스텀이 아닐 때 숨기면 그 진입로가 사라진다. #hueRow(수치 문구)만 커스텀 전용.
   els.hueRow.style.display = generatorState.preset === 'custom' ? '' : 'none';
   els.hueRowAdv.style.display = generatorState.preset === 'custom' ? '' : 'none';
   const hue = generatorState.customHue;
   const p = makeCustomPalette(hue);
   const chips = els.customChips.children;
   for (let i = 0; i < 3; i += 1) chips[i].style.background = rgbCss(p.levels[i]);
-  els.customBg.style.background = rgbCss(p.background);
   els.hueBar.value = hue;
   els.hueBarAdv.value = hue;
   els.hueValue.textContent = tf('g431', { hue });
@@ -2513,12 +3161,27 @@ els.customStyleCard.addEventListener('click', () => {
   schedule();
 });
 for (const bar of [els.hueBar, els.hueBarAdv]) {
+  // hue 를 움직이면 **커스텀이 자동 선택된다** (2026-08-16 B-2). 바를 끌었는데
+  // 미리보기가 그대로면 «왜 안 되지» 가 되고, 그때 카드를 따로 눌러야 한다는 걸
+  // 화면 어디에도 안 써 뒀었다. 마우스 드래그·터치·방향키(range 기본 동작) 전부
+  // 같은 `input` 이벤트로 들어오므로 키보드에서도 동일하게 선택된다.
   bar.addEventListener('input', () => {
     generatorState.customHue = Number(bar.value);
+    generatorState.preset = 'custom';
     syncStyleUi();
     schedule();
   });
 }
+// 슬라이더에 포커스가 있을 때 Enter/Space = «hue 를 안 바꾸고 커스텀만 고른다».
+// 방향키(값 변경)는 위 input 핸들러가 이미 커스텀을 켜므로, 이 둘로 키보드만으로도
+// 마우스와 같은 두 갈래를 다 쓸 수 있다.
+els.hueBar.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  ev.preventDefault();
+  generatorState.preset = 'custom';
+  syncStyleUi();
+  schedule();
+});
 els.preset.addEventListener('change', () => {
   generatorState.preset = els.preset.value;
   syncStyleUi();
@@ -2528,7 +3191,16 @@ syncStyleUi();
 
 // 카드 토글 UI 키보드 접근성 — 클릭 핸들러는 위에서 이미 붙었으니 Enter/Space 로
 // 같은 click 을 재사용한다(동적 생성된 스와치 카드까지 포함해 한 번에 처리).
+//
+// ⚠ 커스텀 스타일 카드는 **제외**한다 (2026-08-16 B-2). 그 안에는 hue 슬라이더가
+//    들어 있는데, ARIA 규격상 `role="button"` 의 자손은 presentational children 이라
+//    보조기술 트리에서 **슬라이더가 통째로 사라진다**. 카드를 그룹으로 두고 포커스는
+//    슬라이더가 받는다 — 위 keydown/input 이 «커스텀 선택» 두 갈래를 다 제공한다.
 for (const card of document.querySelectorAll('.toggle-card')) {
+  if (card === els.customStyleCard) {
+    card.setAttribute('role', 'group');
+    continue;
+  }
   card.setAttribute('role', 'button');
   card.setAttribute('tabindex', '0');
   card.addEventListener('keydown', (ev) => {
@@ -2561,8 +3233,12 @@ function drawScene(scene, canvas, ppu) {
   const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(scene.width * ppu * dpr);
   canvas.height = Math.round(scene.height * ppu * dpr);
-  canvas.style.width = `${Math.round(scene.width * ppu)}px`;
-  canvas.style.height = `${Math.round(scene.height * ppu)}px`;
+  // ⚠ 표시 크기(style.width/height)는 **여기서 정하지 않는다** (2026-08-16 B-1).
+  //    예전엔 `scene.width * ppu` px 를 인라인으로 박았는데, 그 값은 미리보기 영역
+  //    크기와 아무 관계가 없어서 ① 영역보다 작으면 캔버스가 왼쪽에 붙고 ② 크면
+  //    max-width/max-height 가 따로 잘라 요소 박스와 그림이 어긋났다. 이제 표시
+  //    크기는 `#canvasWrap` 의 `--code-aspect` + CSS contain 식이 정한다 (applyPreviewFit).
+  //    내보내기용 오프스크린 캔버스는 style 을 쓰지 않으므로 산출물은 그대로다.
   const ctx = canvas.getContext('2d');
   ctx.setTransform(ppu * dpr, 0, 0, ppu * dpr, 0, 0);
   // 투명 배경은 지우기만 한다 — 캔버스 뒤의 .checker 패턴이 비쳐 보이는 게 표시 규약이다.
@@ -2594,6 +3270,21 @@ function drawScene(scene, canvas, ppu) {
   }
 }
 
+/**
+ * 미리보기 상자의 종횡비를 CSS 에 넘긴다 (B-1).
+ *
+ * 값의 출처는 **그려진 픽셀**(canvas.width/height)이지 scene 단위가 아니다 —
+ * drawScene 이 `Math.round` 로 반올림하므로 반올림 **뒤** 비율을 써야 상자와 그림이
+ * 어긋나지 않는다. 상자 폭은 CSS 가 `min(100%, --fit-h × --code-aspect)` 로 잡고
+ * 높이는 `aspect-ratio` 가 만든다 → 종횡비는 정의상 보존되고, 두 축 중 하나는 항상
+ * 가용 공간을 100% 채운다(왜곡 없는 최대치).
+ */
+function applyPreviewFit() {
+  const c = els.canvas;
+  const aspect = c.width > 0 && c.height > 0 ? c.width / c.height : 1;
+  els.canvasWrap.style.setProperty('--code-aspect', String(aspect));
+}
+
 // ── 모드 전환 ───────────────────────────────────────────────────────────
 
 function setMode(next) {
@@ -2603,6 +3294,14 @@ function setMode(next) {
   els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
   els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
   els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
+  // 자체검증 뱃지는 «안정성 ⇄ 용량» 바로 아래에 있어야 한다(A-7). 고급 모드에는 그
+  // 카드 행이 없으므로 대응 위치(버전·ECC 행 아래)로 **같은 요소를 옮긴다** — 두 벌을
+  // 두면 어느 쪽이 최신인지가 화면마다 갈린다.
+  const selfCheckHost = mode === 'advanced'
+    ? els.selfCheckHostAdvanced : els.selfCheckHostNormal;
+  if (selfCheckHost && els.selfCheckRow.parentElement !== selfCheckHost) {
+    selfCheckHost.appendChild(els.selfCheckRow);
+  }
   syncTypeUi();
   syncStyleUi();
   syncResTierUi();
@@ -3296,6 +3995,15 @@ function separationFromLevels(color) {
  * 고대비 권장색 — "큐브 컬러 및 큐브 주변에 따른 권장색"(사용자 지시).
  * 1순위: 셀 레벨과의 분리가 큰 쪽 (실루엣이 살아야 한다).
  * 2순위(동점 근처): 배치 표면 휘도와 **다른** 쪽 — 마크가 표면에 묻히지 않게.
+ *
+ * ⚠ 2순위는 **현재 도달 불가한 죽은 분기**다 (실측 2026-08-16). UI 로 만들 수 있는
+ *   팔레트의 |sepW − sepB| 는 slate 0.1689 · ember 0.2507 · mono 0.0257 · 커스텀
+ *   hue 0~359 는 0.1629~0.1764 — 전부 0.02 문턱 밖이다 (makeCustomPalette 가 slate 의
+ *   상대휘도를 그대로 타깃해서 만들기 때문에 커스텀도 slate 근처에 머문다).
+ *   분기를 지우지 않은 이유: 팔레트가 늘면 되살아날 수 있는 정당한 규칙이고, 지우면
+ *   «동점일 때 무엇을 고르나» 가 다시 미정이 된다. 대신 **화면 문구에서는 뺐다** —
+ *   일어나지 않는 일을 설명하면 그게 거짓말이 된다 (g904 · g935).
+ *   문턱을 올려 이 분기를 살릴지는 운영자 판단 대기 (보고서 §11-1).
  */
 function highContrastQuietColor() {
   const sepW = separationFromLevels(QUIET_WHITE);
@@ -3364,11 +4072,31 @@ for (const card of els.quietModeCards.children) {
 }
 syncQuietModeUi();
 
+/*
+ * ── 검출기 «자동» (운영자 지시 2026-08-16 A-4, 정식 반영 대비) ─────────────
+ *
+ * **자동의 현재 의미**: «지금 설정에서 권장되는 검출기를 쓴다». 그런데 정식 승격된
+ * Y 검출기가 아직 없으므로 (v0 · v0X · v1r2 · v2r2 전부 lab 실험 항목, g518 이 그
+ * 사실을 말한다) 권장값은 결정적으로 **끔**이다 — 끔만이 스펙이 보증하는 경로다.
+ * 그래서 지금의 자동은 «끔» 과 **바이트 동일한 결과**를 낸다. 인코딩·게이트 경로는
+ * 손대지 않고, 이 함수 하나가 그 정책의 유일한 자리다. 승격이 일어나면 여기만 바뀐다.
+ *
+ * 상태는 generatorState 에 넣지 않는다 — locatorProfileY 의 옵션 집합은 «와이어에
+ * 실리는 값» 이고, 자동은 그 값을 고르는 **UI 정책**이지 값이 아니다. 그래서 화면
+ * 표시용 플래그(detectorAutoY)만 모듈 안에 둔다.
+ */
+function resolveAutoLocatorProfileY() {
+  return LOCATOR_PROFILE_OFF;
+}
+
 if (els.yLocatorCards) {
   for (const card of els.yLocatorCards.children) {
     card.addEventListener('click', () => {
       const next = card.dataset.locator;
-      if (next === LOCATOR_PROFILE_HEX_FRAME_V1) {
+      detectorAutoY = next === 'auto';
+      if (next === 'auto') {
+        generatorState.locatorProfileY = resolveAutoLocatorProfileY();
+      } else if (next === LOCATOR_PROFILE_HEX_FRAME_V1) {
         // 카드는 내렸지만(차단·비삭제) 값·렌더·검출 경로는 그대로 살아 있다.
         generatorState.locatorProfileY = LOCATOR_PROFILE_HEX_FRAME_V1;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {
@@ -4225,6 +4953,56 @@ function syncBackdropUi() {
   els.canvasWrap.classList.toggle('pannable', on && has);
   els.backdropCanvas.classList.toggle('on', on && has);
   if (!(on && has)) els.backdropVerdict.style.display = 'none';
+
+  // ── 미리보기 위 오버레이 (B-3·B-4) — 상태 출처는 여기 **한 곳**이다 ──────────
+  // 배경이 투명일 때만 배치 미리보기가 의미를 가지므로(불투명 배경은 표면이 안 보인다)
+  // 노출 조건은 패널 섹션과 같은 `on` 을 쓴다. 라벨도 패널 버튼과 같은 문자열을 쓴다 —
+  // 두 버튼이 서로 다른 말을 하면 어느 쪽이 현재 상태인지 화면이 대답하지 못한다.
+  els.stageBackdropPick.hidden = !on;
+  els.stageBackdropPickLabel.textContent = has ? tf('g437', { name: backdrop.name }) : t('g961');
+  els.stageBackdropPick.title = has ? tf('g437', { name: backdrop.name }) : t('g961');
+
+  // ⚠ syncBackdropUi 는 렌더·드래그 종료·휠 정지마다 돈다. 안내를 여기서 무조건
+  //    띄우면 **조작을 멈출 때마다 다시 떠오른다** — 페이드의 의미가 없어진다.
+  //    그래서 «안 보임 → 보임» 으로 넘어간 순간(에지)에만 띄운다.
+  const showing = on && has;
+  if (showing && !backdropWasShowing) showGestureHint();
+  if (!showing) hideGestureHint(true);
+  backdropWasShowing = showing;
+}
+
+/* ── 조작 안내 오버레이 (B-4) ──────────────────────────────────────────────
+ *
+ * 왜 «조작 시작 시 페이드» 인가: 이 안내가 가리는 것은 **지금 판단하려는 그 표면
+ * 사진**이다. 안내를 계속 띄워 두면 배치 미리보기의 목적 자체를 방해한다. 그래서
+ * 필요한 순간(사진을 막 넣었고 아직 아무것도 안 해 본 순간)에만 띄우고,
+ *   ① 첫 조작(pointerdown · wheel)에서 사라진다 — 안내가 전달된 게 증명된 시점이다.
+ *   ② 아무 조작이 없어도 IDLE_MS 뒤에 사라진다 — 조작할 생각이 없는 사용자에게
+ *      영구 가림막이 되지 않게. (읽는 데 필요한 시간보다 넉넉히 잡았다.)
+ *   ③ 새 사진을 넣거나 «위치 초기화» 를 누르면 다시 뜬다 — 배치를 처음부터 다시
+ *      하는 순간이라 같은 안내가 다시 유효하다.
+ * 사라지는 건 안내뿐이고 같은 내용이 패널 힌트(g300)와 «?»(g903)에 남아 있다.
+ */
+const GESTURE_HINT_IDLE_MS = 7000;
+let gestureHintTimer = 0;
+function showGestureHint() {
+  clearTimeout(gestureHintTimer);
+  els.backdropGestureHint.hidden = false;
+  // hidden 해제와 같은 스타일 계산 안에서 클래스를 빼면 전이가 생략된다. 강제 리플로로
+  // «opacity 0 인 상태» 를 한 번 확정시킨 뒤 클래스를 뺀다.
+  // ⚠ requestAnimationFrame 을 쓰면 안 된다 — 탭이 백그라운드면 프레임이 안 돌아서
+  //    콜백이 밀리고, 그 사이 IDLE 타이머가 먼저 지나면 «숨긴 뒤에 다시 보이는» 순서가
+  //    뒤집힌다. 리플로는 프레임과 무관하게 지금 일어난다.
+  void els.backdropGestureHint.offsetWidth;
+  els.backdropGestureHint.classList.remove('faded');
+  gestureHintTimer = setTimeout(() => hideGestureHint(false), GESTURE_HINT_IDLE_MS);
+}
+/** @param {boolean} immediate 전이 없이 즉시 감춘다 (배경 제거·배경색 전환 등). */
+function hideGestureHint(immediate) {
+  clearTimeout(gestureHintTimer);
+  gestureHintTimer = 0;
+  els.backdropGestureHint.classList.add('faded');
+  if (immediate) els.backdropGestureHint.hidden = true;
 }
 
 /** 캔버스를 덮도록(cover) 맞추고 가운데 정렬. */
@@ -4326,6 +5104,9 @@ function syncBackdropLayer() {
 }
 
 els.backdropPick.addEventListener('click', () => els.backdropFile.click());
+// 미리보기 위 버튼(B-3) — 패널 버튼과 **같은 한 줄**을 부른다. 별도 경로를 만들면
+// 둘 중 하나만 고쳐지는 날이 온다.
+els.stageBackdropPick.addEventListener('click', () => els.backdropFile.click());
 els.backdropFile.addEventListener('change', async () => {
   const file = els.backdropFile.files && els.backdropFile.files[0];
   els.backdropFile.value = '';
@@ -4340,6 +5121,9 @@ els.backdropFile.addEventListener('change', async () => {
     els.error.textContent = tf('g441', { msg: e.message });
   }
   syncBackdropUi();
+  // 새 사진을 넣은 순간은 «배치를 처음부터» 라 안내를 다시 띄운다. 같은 파일을 다시
+  // 골라도 마찬가지 — 에지 검출만으로는 이 경우가 안 잡힌다.
+  if (backdrop.bitmap) showGestureHint();
   schedule();
 });
 els.backdropClear.addEventListener('click', () => {
@@ -4349,66 +5133,127 @@ els.backdropClear.addEventListener('click', () => {
   syncBackdropUi();
   schedule();
 });
-els.backdropFit.addEventListener('click', () => { fitBackdrop(); drawBackdrop(); syncBackdropLayer(); });
+els.backdropFit.addEventListener('click', () => {
+  fitBackdrop(); drawBackdrop(); syncBackdropLayer();
+  showGestureHint(); // 위치를 되돌린 = 다시 맞출 참이다
+});
 
-// 드래그로 이동 · 휠로 확대/축소 (커서 아래 지점을 고정한 채 줌).
+// 드래그로 이동 · 휠/핀치로 확대/축소 (커서·두 손가락 중점 아래 지점을 고정한 채 줌).
+//
+// 2026-08-16 (B-4): 두 손가락 핀치를 **실제로** 추가했다. 안내 문구(g962)가 «휠 또는
+// 핀치» 를 말하는데 코드에 휠밖에 없으면 그 문구가 거짓이 된다. 터치 기기에서는 휠
+// 이벤트가 없으므로, 핀치 없이는 폰에서 확대/축소 경로가 아예 없었다.
+// `#canvasWrap { touch-action: none }` 이 이미 걸려 있어 브라우저 기본 제스처와
+// 다투지 않는다.
 {
+  /** 눌려 있는 포인터들 (pointerId → 마지막 clientX/Y). 2개가 되면 핀치로 넘어간다. */
+  const points = new Map();
   let dragging = false;
-  let lastX = 0;
-  let lastY = 0;
+  let pinch = null; // { dist, cx, cy } — 직전 프레임의 두 점 거리·중점 (클라이언트 좌표)
   const active = () => generatorState.bgMode === 'transparent' && backdrop.bitmap !== null;
-  /** CSS 픽셀 → 캔버스 픽셀 배율 (미리보기가 축소돼 있어도 이동량이 어긋나지 않게). */
+  /** CSS 픽셀 → 캔버스 픽셀 배율 (미리보기가 축소돼 있어도 이동량이 어긋나지 않게).
+   *  B-1 이후 요소 박스 == 그려진 그림이라 이 비율이 실제 표시 배율과 정확히 같다.
+   *  (그 전에는 레터박스 때문에 최대 45% 어긋났다 — 드래그가 그만큼 덜 따라왔다.) */
   const ratio = () => {
     const rect = els.canvas.getBoundingClientRect();
     return rect.width > 0 ? els.canvas.width / rect.width : 1;
   };
+  /** 클라이언트 좌표 → 캔버스 픽셀 좌표. */
+  const toCanvas = (clientX, clientY) => {
+    const rect = els.canvas.getBoundingClientRect();
+    const k = ratio();
+    return { x: (clientX - rect.left) * k, y: (clientY - rect.top) * k };
+  };
+  /** 한 점(캔버스 좌표)을 고정한 채 배율을 next 로 바꾼다 — 휠·핀치 공용. */
+  const zoomAt = (cx, cy, next) => {
+    const clamped = Math.min(20, Math.max(0.05, next));
+    const r = clamped / backdropView.scale;
+    backdropView.x = cx - (cx - backdropView.x) * r;
+    backdropView.y = cy - (cy - backdropView.y) * r;
+    backdropView.scale = clamped;
+  };
+  const twoPoints = () => {
+    const it = points.values();
+    return [it.next().value, it.next().value];
+  };
+  const beginPinch = () => {
+    const [a, b] = twoPoints();
+    pinch = {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      cx: (a.x + b.x) / 2,
+      cy: (a.y + b.y) / 2,
+    };
+    dragging = false;
+    els.canvasWrap.classList.remove('panning');
+  };
 
   els.canvasWrap.addEventListener('pointerdown', (e) => {
     if (!active()) return;
-    dragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    els.canvasWrap.classList.add('panning');
-    // 포인터 캡처는 실패해도(합성 이벤트·구형 브라우저) 드래그 자체는 살아야 한다.
+    points.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    hideGestureHint(false); // 조작이 시작됐다 → 서서히 사라진다
     try { els.canvasWrap.setPointerCapture(e.pointerId); } catch { /* 캡처 없이 진행 */ }
+    if (points.size >= 2) { beginPinch(); return; }
+    dragging = true;
+    els.canvasWrap.classList.add('panning');
   });
   els.canvasWrap.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
+    const prev = points.get(e.pointerId);
+    if (!prev) return;
+    const dx = e.clientX - prev.x;
+    const dy = e.clientY - prev.y;
+    prev.x = e.clientX;
+    prev.y = e.clientY;
     const k = ratio();
-    backdropView.x += (e.clientX - lastX) * k;
-    backdropView.y += (e.clientY - lastY) * k;
-    lastX = e.clientX;
-    lastY = e.clientY;
+    if (points.size >= 2 && pinch) {
+      const [a, b] = twoPoints();
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const cx = (a.x + b.x) / 2;
+      const cy = (a.y + b.y) / 2;
+      // 중점 이동 = 팬, 거리 비 = 줌. 둘을 같은 프레임에 적용해야 «손가락 아래가
+      // 따라온다» 는 감각이 유지된다.
+      backdropView.x += (cx - pinch.cx) * k;
+      backdropView.y += (cy - pinch.cy) * k;
+      if (pinch.dist > 0 && dist > 0) {
+        const anchor = toCanvas(cx, cy);
+        zoomAt(anchor.x, anchor.y, backdropView.scale * (dist / pinch.dist));
+      }
+      pinch = { dist, cx, cy };
+      drawBackdrop();
+      return;
+    }
+    if (!dragging) return;
+    backdropView.x += dx * k;
+    backdropView.y += dy * k;
     drawBackdrop();
   });
-  const endDrag = (e) => {
-    if (!dragging) return;
+  const endPointer = (e) => {
+    if (!points.has(e.pointerId)) return;
+    points.delete(e.pointerId);
+    try {
+      if (els.canvasWrap.hasPointerCapture(e.pointerId)) els.canvasWrap.releasePointerCapture(e.pointerId);
+    } catch { /* 캡처가 없었으면 해제할 것도 없다 */ }
+    if (points.size >= 2) { beginPinch(); return; }
+    pinch = null;
+    if (points.size === 1) {
+      // 두 손가락 중 하나만 떼면 남은 손가락으로 팬을 이어받는다.
+      dragging = true;
+      els.canvasWrap.classList.add('panning');
+      return;
+    }
     dragging = false;
     els.canvasWrap.classList.remove('panning');
-    try {
-      if (e && e.pointerId !== undefined && els.canvasWrap.hasPointerCapture(e.pointerId)) {
-        els.canvasWrap.releasePointerCapture(e.pointerId);
-      }
-    } catch { /* 캡처가 없었으면 해제할 것도 없다 */ }
-    syncBackdropLayer(); // 이동이 끝난 자리에서만 재판정 (드래그 중 매 프레임 측정은 과하다)
+    syncBackdropLayer(); // 손을 뗀 자리에서만 재판정 (조작 중 매 프레임 측정은 과하다)
   };
-  els.canvasWrap.addEventListener('pointerup', endDrag);
-  els.canvasWrap.addEventListener('pointercancel', endDrag);
+  els.canvasWrap.addEventListener('pointerup', endPointer);
+  els.canvasWrap.addEventListener('pointercancel', endPointer);
 
   let wheelTimer = null;
   els.canvasWrap.addEventListener('wheel', (e) => {
     if (!active()) return;
     e.preventDefault();
-    const rect = els.canvas.getBoundingClientRect();
-    const k = ratio();
-    const cx = (e.clientX - rect.left) * k;
-    const cy = (e.clientY - rect.top) * k;
-    const factor = Math.exp(-e.deltaY * 0.0015);
-    const next = Math.min(20, Math.max(0.05, backdropView.scale * factor));
-    const r = next / backdropView.scale;
-    backdropView.x = cx - (cx - backdropView.x) * r;
-    backdropView.y = cy - (cy - backdropView.y) * r;
-    backdropView.scale = next;
+    hideGestureHint(false);
+    const a = toCanvas(e.clientX, e.clientY);
+    zoomAt(a.x, a.y, backdropView.scale * Math.exp(-e.deltaY * 0.0015));
     drawBackdrop();
     if (wheelTimer) clearTimeout(wheelTimer);
     wheelTimer = setTimeout(syncBackdropLayer, 120);
@@ -4624,8 +5469,14 @@ function syncYLocatorUi() {
               ? LOCATOR_PROFILE_CELL_SURFACE_V0XQ
               : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
+    // 자동은 «끔» 과 같은 값을 내지만 카드는 배타적으로 켠다 — 자동을 고른 사용자에게
+    // 끔이 함께 켜져 보이면 «둘 중 뭐가 적용된 건가» 가 생긴다.
     for (const card of els.yLocatorCards.children) {
-      card.classList.toggle('active', card.dataset.locator === profile);
+      const isAutoCard = card.dataset.locator === 'auto';
+      card.classList.toggle(
+        'active',
+        detectorAutoY ? isAutoCard : (!isAutoCard && card.dataset.locator === profile),
+      );
     }
   }
   if (els.yLocatorHint) {
@@ -4864,6 +5715,53 @@ function encodeOptsFor(cfg) {
   return { fn: encode, opts };
 }
 
+/*
+ * ── 자체검증 3태 (운영자 지시 2026-08-16 A-7) ─────────────────────────────
+ *
+ * 판정 규칙 자체는 `src/render-status.js` 의 `selfCheckVerdict` 가 갖는다 — 순수
+ * 함수라 세 갈래(usable · marginal · unusable)를 합성 입력으로 단위 검증할 수 있다
+ * (test/self-check-verdict.test.js). 여기 남는 것은 «화면 문구로 옮기는 일» 뿐이다.
+ *
+ * ⚠ 라벨은 «렌더가 자기 계약을 얼마나 여유 있게 지켰는가» 다. 라이브 인식률 예측이
+ *   아니다 — 그 주장에는 실측 근거가 없다 (파인더 점수판의 g492 와 같은 규율).
+ */
+const SELFCHECK_STATE_LABEL = Object.freeze({
+  usable: { key: 'g950', cls: 'ok' },
+  marginal: { key: 'g951', cls: 'warn' },
+  unusable: { key: 'g952', cls: 'bad' },
+});
+
+/** 2톤 θ 마진의 이상치 — ½·ln(y_hi / y_lo). 팔레트가 압축되면 같이 줄어든다. */
+function idealLogMarginY() {
+  const levels = currentLevels();
+  if (!levels || levels.length < 3) return NaN;
+  const lo = relativeLuminance(levels[0]);
+  const hi = relativeLuminance(levels[2]);
+  if (!(lo > 0) || !(hi > 0) || hi <= lo) return NaN;
+  return 0.5 * Math.log(hi / lo);
+}
+
+/** 뱃지 + 여유 % 한 줄. `#selfCheckRow` (안정성 ⇄ 용량 바로 아래)에 들어간다. */
+function selfCheckMarkup(check, okKey, okVars, failKey, failVars) {
+  const verdict = selfCheckVerdict(check, {
+    deltaMinContract: DELTA_MIN_CONTRACT,
+    idealLogMargin: idealLogMarginY(),
+  });
+  const label = SELFCHECK_STATE_LABEL[verdict.state];
+  const state = t(label.key);
+  const body = check.ok
+    ? tf(okKey, { state, ...okVars })
+    : tf(failKey, { state, ...failVars });
+  // 문턱 %는 판정이 들고 온 값을 그대로 쓴다 — 문구에 20 을 박으면 띠 폭을 옮기는 날
+  // 뱃지와 설명이 서로 다른 숫자를 말한다.
+  const detail = verdict.headroomPercent === null
+    ? ''
+    : `<span class="selfcheck-detail">${tf('g953', {
+      pct: verdict.headroomPercent, tight: verdict.tightPercent,
+    })}</span>`;
+  return `<span class="badge ${label.cls}">${body}</span>${detail}`;
+}
+
 function renderTypeO(cfg) {
   const centerQr = cfg.fallback.mode === 'center';
   const { fn, opts } = encodeOptsFor(cfg);
@@ -4874,16 +5772,17 @@ function renderTypeO(cfg) {
   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
   const check = verifyRaster(raster, scene, encoded);
   const bytes = payloadByteLength(cfg.text);
-  const badge = check.ok
-    ? `<span class="badge ok">${tf('g445', { total: check.total, delta: check.minDelta.toFixed(3) })}</span>`
-    : `<span class="badge bad">${tf('g446', { n: check.mismatches.length })}</span>`;
+  const selfCheck = selfCheckMarkup(
+    check,
+    'g445', { total: check.total, delta: check.minDelta.toFixed(3) },
+    'g446', { n: check.mismatches.length },
+  );
   const info =
     `${tf('g449', { type: 'O', ver: `V${encoded.version}${encoded.centerQr ? 'Q' : ''}`, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
-    `${tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) })}<br>` +
-    badge;
+    tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
   return {
-    type: 'O', encoded, scene: withQuietZone(scene), info,
+    type: 'O', encoded, scene: withQuietZone(scene), info, selfCheck,
     finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : cfg.finderPatternId,
   };
 }
@@ -4898,16 +5797,17 @@ function renderTypeA(cfg) {
   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
   const check = verifyRaster(raster, scene, encoded);
   const bytes = payloadByteLength(cfg.text);
-  const badge = check.ok
-    ? `<span class="badge ok">${tf('g445', { total: check.total, delta: check.minDelta.toFixed(3) })}</span>`
-    : `<span class="badge bad">${tf('g446', { n: check.mismatches.length })}</span>`;
+  const selfCheck = selfCheckMarkup(
+    check,
+    'g445', { total: check.total, delta: check.minDelta.toFixed(3) },
+    'g446', { n: check.mismatches.length },
+  );
   const info =
     `${tf('g449', { type: 'A', ver: `A${encoded.version}${encoded.centerQr ? 'Q' : ''}`, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
-    `${tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) })}<br>` +
-    badge;
+    tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
   return {
-    type: 'A', encoded, scene: withQuietZone(scene), info,
+    type: 'A', encoded, scene: withQuietZone(scene), info, selfCheck,
     finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : cfg.finderPatternId,
   };
 }
@@ -4944,16 +5844,17 @@ function renderTypeY(cfg) {
   const marginLabel = cfg.tone === 2
     ? `logMargin ${check.logMargin.toFixed(3)}`
     : `Δmin-Y ${check.minDeltaY.toFixed(3)}`;
-  const badge = check.ok
-    ? `<span class="badge ok">${tf('g447', { total: check.total, margin: marginLabel })}</span>`
-    : `<span class="badge bad">${tf('g448', { n: check.mismatches.length, e: check.erasures.length })}</span>`;
+  const selfCheck = selfCheckMarkup(
+    check,
+    'g447', { total: check.total, margin: marginLabel },
+    'g448', { n: check.mismatches.length, e: check.erasures.length },
+  );
   const info =
     tf('g453', { ver: `Y${encoded.version}${encoded.tones === 3 ? 'T' : ''}${encoded.cellSurface ? '-CS' : ''}`, n: encoded.n, ecc: encoded.eccLevel, tones: encoded.tones }) +
     `${encoded.window ? t('g454') : ''}<br>` +
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
-    `${tf('g452', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym })}<br>` +
-    badge;
-  return { type: 'Y', encoded, scene: withQuietZone(scene), info };
+    tf('g452', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym });
+  return { type: 'Y', encoded, scene: withQuietZone(scene), info, selfCheck };
 }
 
 function updateGauge(type, encoded, text) {
@@ -5050,6 +5951,8 @@ function render() {
     }
     emitLabGen(result, cfg);
     drawScene(result.scene, els.canvas, 26);
+    // 표시 상자는 그린 픽셀의 종횡비를 따라간다 (B-1) — drawScene 직후, 배경 레이어보다 먼저.
+    applyPreviewFit();
     if (decorActive(current)) {
       const ctx = els.canvas.getContext('2d');
       const dpr = window.devicePixelRatio || 1;
@@ -5060,6 +5963,9 @@ function render() {
     syncBackdropLayer();
     els.info.innerHTML = result.info
       + (keptPayload !== null ? ` <span class="badge bad">${t('g425')}</span>` : '');
+    // 자체검증 뱃지는 «안정성 ⇄ 용량» 바로 아래 (운영자 지시 2026-08-16 A-7) —
+    // 사전 문자열 + 자체검증 수치만 들어가므로 사용자 입력이 섞이지 않는다.
+    els.selfCheckRow.innerHTML = result.selfCheck || '';
     updateGauge(result.type, result.encoded, fullText); // 게이지는 원본 분량 기준 (초과 시 빨강)
     let renderMessage = '';
     if (keptPayload !== null) {
@@ -5082,6 +5988,7 @@ function render() {
     keptPayload = null;
     current = null;
     els.info.innerHTML = '';
+    els.selfCheckRow.innerHTML = '';
     updateGauge(null, null, '');
     els.eccTierHint.textContent = '';
     updateOverflowHighlight(null);

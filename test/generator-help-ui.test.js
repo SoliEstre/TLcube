@@ -1,0 +1,498 @@
+/**
+ * generator-help-ui.test.js — 생성기 UI 대개편 (운영자 지시 2026-08-16) 의 계약.
+ *
+ * 무엇을 지키나:
+ *   A-1 섹션 개명 — 세 언어가 같이 바뀌었는가 (한 언어만 바뀌면 «번역 누락» 으로 보인다)
+ *   A-2 «?» 도움말 — 버튼이 button 요소이고 aria-expanded 를 갖고, 가리키는 사전 키가
+ *       세 언어 모두에 있는가. 팝오버는 **문서에 하나**인가 (복제되면 열림 상태가 갈린다)
+ *   A-3 부제·아이콘 — 카드 안 부제가 사전을 거치는가
+ *   A-5 섹션 마진 — 래퍼 div 가 위 여백을 지우던 `:first-child` 리셋이 사라졌는가
+ *   A-6 입력 지우기 — i18n aria-label 을 가진 button 인가
+ *   A-7 자체검증 3태 — 라벨 3종과 판정 상수가 소스에 있고, 뱃지가 «안정성 ⇄ 용량»
+ *       섹션 바로 아래(#selfCheckRow)로 갔는가
+ *
+ * 순수 함수 `positionHelpPopover` 는 DOM 없이 뷰포트 가장자리 보정을 고정한다 —
+ * 이게 없으면 «화면 끝에서 창이 잘린다» 를 손으로만 확인하게 된다.
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+import {
+  HELP_POPOVER_EDGE, HELP_POPOVER_GAP, positionHelpPopover,
+} from '../src/help-popover.js';
+import { PRESETS, getPreset, relativeLuminance } from '../src/luminance.js';
+import { buildSingleHtml } from '../tools/build-single.mjs';
+
+const ROOT = fileURLToPath(new URL('../', import.meta.url));
+const INDEX = readFileSync(ROOT + 'index.html', 'utf8');
+
+function langBlock(lang) {
+  const start = INDEX.indexOf('const GENERATOR_STRINGS = {');
+  assert.ok(start >= 0, 'GENERATOR_STRINGS 를 못 찾았다');
+  const at = INDEX.indexOf(`  ${lang}: {`, start);
+  assert.ok(at > start, `${lang} 사전을 못 찾았다`);
+  const open = INDEX.indexOf('{', at);
+  let depth = 0;
+  for (let i = open; i < INDEX.length; i += 1) {
+    if (INDEX[i] === '{') depth += 1;
+    else if (INDEX[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return INDEX.slice(open, i + 1);
+    }
+  }
+  throw new Error(`${lang} 사전이 닫히지 않는다`);
+}
+
+const LANGS = ['ko', 'en', 'ja'];
+
+// ── A-2 위치 보정 (순수 함수) ─────────────────────────────────────────────
+
+const VIEWPORT = { width: 400, height: 600 };
+const SIZE = { width: 200, height: 100 };
+
+test('도움말 창은 기본으로 앵커 아래 중앙에 선다', () => {
+  const at = positionHelpPopover(
+    { left: 180, top: 100, width: 16, height: 16, bottom: 116 }, SIZE, VIEWPORT,
+  );
+  assert.equal(at.placement, 'below');
+  assert.equal(at.top, 116 + HELP_POPOVER_GAP);
+  assert.equal(at.left, 180 + 8 - 100);
+});
+
+test('오른쪽 끝에서는 잘리지 않게 가장자리 여백까지 밀어 넣는다', () => {
+  const at = positionHelpPopover(
+    { left: 390, top: 100, width: 16, height: 16, bottom: 116 }, SIZE, VIEWPORT,
+  );
+  assert.equal(at.left, VIEWPORT.width - SIZE.width - HELP_POPOVER_EDGE);
+});
+
+test('왼쪽 끝에서도 가장자리 여백을 지킨다', () => {
+  const at = positionHelpPopover(
+    { left: 0, top: 100, width: 16, height: 16, bottom: 116 }, SIZE, VIEWPORT,
+  );
+  assert.equal(at.left, HELP_POPOVER_EDGE);
+});
+
+test('아래가 모자라면 앵커 위로 뒤집는다', () => {
+  const at = positionHelpPopover(
+    { left: 180, top: 540, width: 16, height: 16, bottom: 556 }, SIZE, VIEWPORT,
+  );
+  assert.equal(at.placement, 'above');
+  assert.equal(at.top, 540 - HELP_POPOVER_GAP - SIZE.height);
+});
+
+test('위아래 어디도 안 되면 세로도 뷰포트 안으로 가둔다', () => {
+  const tall = { width: 200, height: 560 };
+  const at = positionHelpPopover(
+    { left: 180, top: 300, width: 16, height: 16, bottom: 316 }, tall, VIEWPORT,
+  );
+  assert.equal(at.placement, 'clamped');
+  assert.ok(at.top >= HELP_POPOVER_EDGE);
+  assert.ok(at.top + tall.height <= VIEWPORT.height);
+});
+
+// 회귀 — 실브라우저에서 잡은 결함(2026-08-16): 앵커가 뷰포트 **아래로** 벗어난 채
+// 위치를 다시 잡으면 `above` 가 큰 양수라 «위로 뒤집기» 분기를 통과하고, 창이 화면
+// 아래로 삐져나갔다 (top 795 · 높이 206 · 뷰포트 812). 분기 조건이 «above 가 위쪽
+// 여백보다 큰가» 였고 «아래로 안 넘치는가» 를 안 봤다.
+test('앵커가 뷰포트 밖(아래)이어도 창은 화면 안에 남는다', () => {
+  const at = positionHelpPopover(
+    { left: 134, top: 1009, width: 16, height: 16, bottom: 1025 },
+    { width: 320, height: 206 },
+    { width: 375, height: 812 },
+  );
+  assert.equal(at.placement, 'clamped');
+  assert.ok(at.top >= HELP_POPOVER_EDGE, `top ${at.top} 이 위로 벗어난다`);
+  assert.ok(at.top + 206 <= 812, `top ${at.top} + 206 이 아래로 벗어난다`);
+});
+
+// ── A-1 섹션 개명 ─────────────────────────────────────────────────────────
+
+test('개명한 섹션 이름이 ko/en/ja 세 언어에 같이 반영됐다', () => {
+  const expected = {
+    ko: {
+      g044: '해상도 (모듈 밀도 = 용량)',
+      g045: '안정성 ⇄ 용량',
+      g059: '배경색',
+      g060: 'TL 배치 미리보기 (TL 삽입할 곳 이미지 넣어서 미리 배치해보기)',
+    },
+    en: { g044: 'Resolution (module density = capacity)', g045: 'Robustness ⇄ capacity' },
+    ja: { g044: '解像度（モジュール密度 = 容量）', g045: '安定性 ⇄ 容量', g059: '背景色' },
+  };
+  for (const [lang, table] of Object.entries(expected)) {
+    const block = langBlock(lang);
+    for (const [key, value] of Object.entries(table)) {
+      assert.ok(block.includes(`"${key}": ${JSON.stringify(value)}`),
+        `${lang}/${key} 가 «${value}» 가 아니다`);
+    }
+  }
+  // 정적 DOM 의 기본 문구도 같이 바뀌어야 한다 — 사전만 바꾸면 첫 페인트가 옛 문구다.
+  assert.match(INDEX, /data-i18n="g044">해상도 \(모듈 밀도 = 용량\)</);
+  assert.match(INDEX, /data-i18n="g045">안정성 ⇄ 용량</);
+  assert.match(INDEX, /data-i18n="g059">배경색</);
+  assert.doesNotMatch(INDEX, /data-i18n="g045">안정성 · 용량</);
+});
+
+test('검출기 섹션은 O/A·Y 양쪽이 같은 «검출기 선택» 이름을 쓴다', () => {
+  // 두 섹션은 타입에 따라 배타적으로 보인다 — 이름을 맞추면 사용자 쪽에서는 한 섹션이다.
+  assert.match(INDEX, /data-i18n="g459">검출기 선택</);
+  assert.match(INDEX, /data-i18n="g515">검출기 선택</);
+  for (const lang of LANGS) {
+    const block = langBlock(lang);
+    const g459 = /"g459": "([^"]*)"/.exec(block);
+    const g515 = /"g515": "([^"]*)"/.exec(block);
+    assert.ok(g459 && g515, `${lang}: g459/g515 를 못 찾았다`);
+    assert.equal(g459[1], g515[1], `${lang}: 두 검출기 섹션 이름이 다르다`);
+  }
+});
+
+test('배치 미리보기 안내는 도달 가능한 동작만 주장한다', () => {
+  // 이 문장은 두 번 좁혔다.
+  //   ① 운영자 초안 «안전영역 옵션을 자동 선택해 준다» — 그런 경로가 없다.
+  //   ② 대체본 «표면 밝기가 흰/검정 색 판단에 반영된다» — 그것도 사실이 아니었다.
+  //      타이브레이크는 |sepW − sepB| ≤ 0.02 에서만 도는데 어떤 팔레트도 거기 못 간다
+  //      (아래 «죽은 분기» 테스트가 실측으로 고정한다).
+  assert.match(INDEX, /id="backdropQuietNote"[^>]*data-i18n="g935"/);
+  assert.doesNotMatch(INDEX, /안전영역 옵션을 삽입할 곳 여건에 맞춰 자동 선택해 줍니다/);
+  assert.match(langBlock('ko'), /"g935": "\* 넣은 표면 이미지는 미리보기에서/);
+  // 세 언어 모두에서 «표면 밝기가 색을 가른다» 류 주장이 사라져야 한다.
+  const deadClaims = [
+    /밝기는[^"]*흰\/검정[^"]*판단에 반영/,          // ko
+    /brightness[^"]*feeds[^"]*colour choice/i,      // en
+    /明るさ[^"]*白／黒[^"]*判断に反映/,             // ja
+    /배치 미리보기의 표면 밝기로 흰색\/검정을 갈라요/,
+    /surface brightness from the placement preview to break the tie/i,
+    /配置プレビューの面の明るさで白／黒を決めます/,
+  ];
+  for (const lang of LANGS) {
+    const block = langBlock(lang);
+    for (const claim of deadClaims) {
+      assert.doesNotMatch(block, claim, `${lang}: 도달 불가한 타이브레이크 설명이 남았다`);
+    }
+  }
+  // 코드의 분기 자체는 남아 있다 (팔레트가 늘면 되살아날 규칙이라 지우지 않았다).
+  // 문구에서만 뺐다는 것을 여기서 고정한다 — «지웠나 안 지웠나» 가 헷갈리면 안 된다.
+  assert.match(INDEX, /Math\.abs\(sepW - sepB\) > 0\.02/);
+  assert.match(INDEX, /현재 도달 불가한 죽은 분기/);
+});
+
+test('안전영역 타이브레이크는 등록 프리셋 전부에서 도달 불가다 (실측)', () => {
+  // 문구가 다시 «표면 밝기로 가른다» 로 돌아가려면 이 수치부터 바뀌어야 한다.
+  // 여기서 재지 않으면 «죽은 분기» 라는 판단이 그냥 주장으로 남는다.
+  const white = { r: 255, g: 255, b: 255 };
+  const black = { r: 0, g: 0, b: 0 };
+  const sep = (levels, color) => {
+    const y = relativeLuminance(color);
+    return Math.min(...levels.map((lvl) => Math.abs(relativeLuminance(lvl) - y)));
+  };
+  const measured = {};
+  for (const name of Object.keys(PRESETS)) {
+    const { levels } = getPreset(name);
+    measured[name] = Math.abs(sep(levels, white) - sep(levels, black));
+    assert.ok(measured[name] > 0.02,
+      `${name}: |sepW−sepB| ${measured[name].toFixed(4)} 가 0.02 이하 — 분기가 살아났다`);
+  }
+  // 실측값 고정 (2026-08-16). 팔레트를 손대면 여기서 먼저 걸린다.
+  assert.equal(measured.slate.toFixed(4), '0.1689');
+  assert.equal(measured.ember.toFixed(4), '0.2507');
+  assert.equal(measured.mono.toFixed(4), '0.0257');
+  // 커스텀 팔레트는 slate 의 **상대휘도를 그대로 타깃**해서 만든다 — 그래서 hue 를
+  // 어디로 돌려도 slate 근처(0.1629~0.1764)에 머문다. 그 구조를 소스에서 확인한다.
+  assert.match(INDEX, /const base = getPreset\('slate'\);/);
+  assert.match(INDEX, /colorAtLuminance\(hue, CUSTOM_SATS\.levels\[i\], relativeLuminance\(lvl\)\)/);
+});
+
+// ── A-2 «?» 도움말 배선 ───────────────────────────────────────────────────
+
+test('«?» 버튼은 button 요소 + aria-expanded 이고 사전 키가 세 언어에 있다', () => {
+  const dots = [...INDEX.matchAll(/<button type="button" class="help-dot" data-help="(g\d{3})"([^>]*)>/g)];
+  assert.ok(dots.length >= 7, `«?» 버튼이 너무 적다 (${dots.length}) — 섹션 이관이 덜 됐다`);
+  for (const [, key, rest] of dots) {
+    assert.match(rest, /aria-expanded="false"/, `${key}: aria-expanded 기본값이 없다`);
+    assert.match(rest, /data-i18n-attr="aria-label:g931"/, `${key}: aria-label 이 사전을 안 거친다`);
+    for (const lang of LANGS) {
+      assert.match(langBlock(lang), new RegExp(`"${key}":`), `${lang} 에 ${key} 도움말이 없다`);
+    }
+  }
+  // 키는 **전부 유일**해야 한다. 예전 주석은 «검출기 O/A·Y 는 키를 공유해도 된다» 고
+  // 썼지만 그 허용은 이미 철회됐다 — 아래 «정식 화면 도움말» 테스트가 lab 키와 정식
+  // 키의 공유를 실패로 잰다(g906 이 O/A 로 새던 결함). 두 주장이 남아 있으면 느슨한
+  // 쪽(`size >= len - 1`)이 «한 쌍은 겹쳐도 된다» 는 구멍을 계속 열어 둔다.
+  const keys = dots.map((m) => m[1]);
+  assert.equal(new Set(keys).size, keys.length,
+    `도움말 키가 겹친다: ${keys.filter((k, i) => keys.indexOf(k) !== i).join(', ')}`);
+});
+
+test('도움말 창은 문서에 하나뿐이고 닫기 버튼과 role 을 갖는다', () => {
+  assert.equal(INDEX.match(/id="helpPopover"/g)?.length, 1);
+  assert.match(INDEX, /<div id="helpPopover" class="help-popover" role="tooltip" hidden>/);
+  assert.match(INDEX, /id="helpPopoverClose"[\s\S]{0,140}data-i18n-attr="aria-label:g932"/);
+  assert.match(INDEX, /createHelpPopover\(\{/);
+  assert.match(INDEX, /linesFor: \(button\) => t\(button\.dataset\.help\)\.split\('\\n'\)/);
+  // 언어 전환 시 열려 있는 본문도 다시 그려야 한다.
+  assert.match(INDEX, /syncHelpPopover/);
+});
+
+test('카드마다 있던 native title= 설명은 «?» 로 옮겨졌다', () => {
+  for (const row of ['resTierCards', 'eccTierCards', 'bgModeCards', 'quietModeCards']) {
+    const start = INDEX.indexOf(`id="${row}"`);
+    assert.ok(start >= 0, `${row} 를 못 찾았다`);
+    const block = INDEX.slice(start, INDEX.indexOf('</div>\n      <p', start) + 1);
+    assert.doesNotMatch(block, /data-i18n-attr="title:/,
+      `${row}: 카드 title= 설명이 남아 있다 — 모바일에서는 안 보이는 설명이다`);
+  }
+});
+
+// ── A-3 부제·아이콘 ───────────────────────────────────────────────────────
+
+test('해상도·안정성 카드는 사전을 거친 부제와 인라인 SVG 를 갖는다', () => {
+  const subs = ['g920', 'g921', 'g922', 'g923', 'g924', 'g925', 'g926', 'g927'];
+  for (const key of subs) {
+    assert.match(INDEX, new RegExp(`class="card-sub" data-i18n="${key}"`), `부제 ${key} 누락`);
+    for (const lang of LANGS) {
+      assert.match(langBlock(lang), new RegExp(`"${key}":`), `${lang} 에 ${key} 없음`);
+    }
+  }
+  // 아이콘은 인라인 SVG + currentColor (외부 자산·PNG 금지).
+  const resStart = INDEX.indexOf('id="resTierCards"');
+  const resBlock = INDEX.slice(resStart, INDEX.indexOf('id="resTierHint"', resStart));
+  assert.equal((resBlock.match(/<svg /g) || []).length, 4, '해상도 카드 4개 모두 아이콘이어야 한다');
+  assert.doesNotMatch(resBlock, /<img |\.png/);
+  assert.match(resBlock, /stroke="currentColor"/);
+});
+
+// 카드 «순서» 는 y-cell-editor-refformat.test.js 의 LOCATOR_CARD_ORDER deepEqual 이
+// 잰다 — 여기는 존재·아이콘·부제만 본다 (이름이 단언보다 커지지 않게, 통합 렌즈 B).
+test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 항목이 존재한다', () => {
+  const start = INDEX.indexOf('id="yLocatorCards"');
+  const block = INDEX.slice(start, INDEX.indexOf('id="yLocatorHint"', start));
+  assert.match(block, /data-locator="auto"/);
+  // 카드 수와 아이콘 수를 **따로 세지 않고 서로 맞춘다** — 상수를 박아 두면 카드가
+  // 늘 때 «6 을 7 로 고쳤다» 로 끝나고, 새 카드가 아이콘 없이 들어와도 초록이 된다.
+  // (실제로 v0XQ 카드가 아이콘·부제 없이 들어와 있었다 — 2026-08-17 3-way 통합.)
+  const cardCount = (block.match(/class="toggle-card[^"]*" data-locator=/g) || []).length;
+  assert.equal(cardCount, 7, '검출기 카드는 자동·끔 + 후보 5종 = 7 이다');
+  assert.equal((block.match(/<svg /g) || []).length, cardCount,
+    '검출기 카드 전부가 파인더 기하 아이콘을 가져야 한다');
+  const subKeys = ['g941', 'g942', 'g943', 'g944', 'g947', 'g945', 'g946'];
+  assert.equal(subKeys.length, cardCount, '부제 키 수가 카드 수와 다르다');
+  for (const key of subKeys) {
+    assert.match(block, new RegExp(`class="card-sub" data-i18n="${key}"`), `검출기 부제 ${key} 누락`);
+    for (const lang of LANGS) {
+      assert.match(langBlock(lang), new RegExp(`"${key}":`), `${lang} 에 검출기 부제 ${key} 없음`);
+    }
+  }
+  // 자동의 «현재 의미» 는 코드에 한 자리로 있어야 한다 — 화면 문구와 어긋나면 거짓말이 된다.
+  assert.match(INDEX, /function resolveAutoLocatorProfileY\(\)\s*\{\s*\n\s*return LOCATOR_PROFILE_OFF;/);
+  for (const lang of LANGS) {
+    assert.match(langBlock(lang), /"g906":/, `${lang} 에 검출기 도움말 g906 이 없다`);
+  }
+});
+
+// ── 내부 명칭이 정식 화면으로 새지 않는가 ────────────────────────────────
+//
+// ⚠ 여기 있던 옛 테스트는 이름이 «lab 전용 섹션 안에만 있다» 였는데, 실제로는 lab
+//   블록이 그 명칭을 **포함**하는지만 봤다. 부재(absence)를 한 번도 안 재서, O/A 파인더
+//   섹션이 lab 전용 도움말 키(g906)를 공유하는 동안에도 초록이었다 — 테스트 이름이
+//   테스트보다 큰 주장을 하고 있었다 (2026-08-16 적대 검증 ③).
+//   지금은 «lab 안에 있다» 와 «lab 밖에는 없다» 를 **둘 다** 잰다.
+
+/**
+ * 정식 화면에 절대 나오면 안 되는 내부 표기 = **레이아웃 후보 id 와 정본 소스 이름**.
+ * (Y0·Y1·Y2 는 제외 — 그건 공개 버전 라벨이다. 정식 해상도 목록이 «Y1 (n=21 · 98 B)»
+ *  로 쓰고 g905 도 «Y2 윈도 β» 를 말한다.)
+ */
+const INTERNAL_TOKENS = [
+  'v0X', 'v0x', 'v1r2', 'v2r2',
+  'cellSurfaceFinal', 'cell-surface-', 'hex-frame', 'locatorProfileY',
+];
+
+/** lab 전용으로 게이트된 정적 컨테이너 (id → 닫는 지점을 찾을 앵커). */
+const LAB_ONLY_SECTIONS = ['yLocatorSection', 'yCellEditorSection'];
+
+/** id 로 시작하는 요소의 바깥 HTML 을 태그 깊이로 잘라 낸다. */
+function outerHtmlById(html, id) {
+  const at = html.indexOf(`id="${id}"`);
+  assert.ok(at >= 0, `${id} 를 못 찾았다`);
+  const start = html.lastIndexOf('<', at);
+  let depth = 0;
+  const tagRe = /<(\/?)([a-zA-Z][\w-]*)[^>]*?(\/?)>/g;
+  tagRe.lastIndex = start;
+  let m;
+  while ((m = tagRe.exec(html))) {
+    const [, closing, tag, selfClose] = m;
+    if (selfClose || ['br', 'img', 'input', 'hr', 'meta', 'link'].includes(tag)) continue;
+    depth += closing ? -1 : 1;
+    if (depth === 0) return html.slice(start, tagRe.lastIndex);
+  }
+  throw new Error(`${id} 가 닫히지 않는다`);
+}
+
+test('lab 전용 섹션은 isLabPath 게이트를 실제로 갖는다', () => {
+  // 게이트를 **세지 않고 섹션에 묶는다**. 예전 판은 `const show = isLabPath() &&
+  // generatorState.type === 'Y';` 라는 한 줄의 **개수**만 셌는데, 그 줄에는 두 가지가
+  // 섞여 있다 — ⓐ lab 게이트(isLabPath)와 ⓑ 어떤 타입에서 열리는가. 셀 편집기가
+  // Y/O/A 로 넓어지며 ⓑ 가 `CELL_EDITOR_TYPES.includes(...)` 로 바뀌자 개수가 2→1 이
+  // 됐고, ⓐ 는 멀쩡한데 테스트가 깨졌다 (2026-08-17 3-way 통합에서 실제로 났다).
+  // 지금은 «각 섹션이 자기 isLabPath 게이트로 hidden 을 정하는가» 만 잰다 — 타입 조건은
+  // 각 섹션의 소관이라 여기서 안 박는다.
+  for (const id of LAB_ONLY_SECTIONS) {
+    const at = INDEX.indexOf(`els.${id};`);
+    assert.ok(at > 0, `${id}: sync 함수에서 섹션을 집는 자리를 못 찾았다`);
+    const body = INDEX.slice(at, at + 400);
+    assert.match(body, /const show = isLabPath\(\) &&/,
+      `${id}: 표시 조건이 isLabPath 로 시작하지 않는다`);
+    assert.match(body, /section\.hidden = !show;/,
+      `${id}: 그 조건으로 hidden 을 정하지 않는다`);
+  }
+  const block = outerHtmlById(INDEX, 'yLocatorSection');
+  assert.match(block, /셀 표면 v0 \(Y0\)/, 'lab 섹션에는 내부 명칭 병기가 남아 있어야 한다');
+});
+
+test('정식 화면의 정적 DOM 에는 내부 후보명이 없다', () => {
+  // lab 전용 컨테이너를 통째로 도려낸 나머지 = 정식 화면에서 볼 수 있는 마크업.
+  // (사전 블록과 <script> 는 별도 테스트가 본다 — 여기서는 눈에 보이는 마크업만.)
+  let markup = INDEX.slice(0, INDEX.indexOf('const GENERATOR_STRINGS = {'));
+  for (const id of LAB_ONLY_SECTIONS) {
+    markup = markup.split(outerHtmlById(INDEX, id)).join('');
+  }
+  // 주석은 개발자용이라 제외한다 (화면에 안 나간다).
+  markup = markup.replace(/<!--[\s\S]*?-->/g, '');
+  for (const token of INTERNAL_TOKENS) {
+    assert.ok(!markup.includes(token),
+      `정식 화면 마크업에 내부 명칭 «${token}» 이 있다`);
+  }
+});
+
+test('정식 화면에서 열 수 있는 도움말 본문에는 내부 후보명이 없다', () => {
+  // 이게 실제로 샜던 자리다 — #finderSection(O/A, isLabPath 게이트 **없음**)이
+  // lab 전용 Y 로케이터 본문(g906)을 가리키고 있었다.
+  const labBlock = outerHtmlById(INDEX, 'yLocatorSection');
+  const labKeys = new Set([...labBlock.matchAll(/data-help="(g\d{3})"/g)].map((m) => m[1]));
+  const allKeys = [...INDEX.matchAll(/data-help="(g\d{3})"/g)].map((m) => m[1]);
+  const publicKeys = [...new Set(allKeys.filter((k) => !labKeys.has(k)))];
+  assert.ok(publicKeys.length >= 6, `정식 도움말 키가 너무 적다 (${publicKeys.length})`);
+
+  // 같은 키를 lab 과 정식이 **공유하면** 이 분리 자체가 무의미해진다.
+  for (const key of labKeys) {
+    assert.ok(!publicKeys.includes(key), `${key} 를 lab 과 정식 화면이 공유한다`);
+  }
+  assert.ok(labKeys.has('g906'), 'g906 은 lab 전용 Y 로케이터 본문이어야 한다');
+  assert.ok(publicKeys.includes('g907'), 'g907 은 정식 O/A 파인더 본문이어야 한다');
+
+  for (const lang of LANGS) {
+    const dict = langBlock(lang);
+    for (const key of publicKeys) {
+      const body = new RegExp(`"${key}": "((?:[^"\\\\]|\\\\.)*)"`).exec(dict);
+      assert.ok(body, `${lang}: ${key} 본문을 못 찾았다`);
+      for (const token of INTERNAL_TOKENS) {
+        assert.ok(!body[1].includes(token),
+          `${lang}/${key}: 정식 화면 도움말에 내부 명칭 «${token}» 이 있다`);
+      }
+      // 정본 소스 파일명도 사용자에게 보일 이유가 없다.
+      assert.ok(!/\.js\b/.test(body[1]), `${lang}/${key}: 도움말에 소스 파일명이 있다`);
+    }
+  }
+});
+
+test('O/A 파인더 도움말은 그 섹션에 실재하는 것만 설명한다', () => {
+  // g906 을 공유하던 시절에는 O/A 섹션에 없는 «자동» 카드 설명이 정식 화면에 떴다.
+  const finder = outerHtmlById(INDEX, 'finderSection');
+  const finderKeys = [...finder.matchAll(/data-help="(g\d{3})"/g)].map((m) => m[1]);
+  assert.deepEqual(finderKeys, ['g907'], '#finderSection 의 도움말 키가 g907 하나가 아니다');
+  assert.ok(!finder.includes('data-locator="auto"'), 'O/A 섹션에는 «자동» 카드가 없다');
+  for (const lang of LANGS) {
+    const body = new RegExp('"g907": "((?:[^"\\\\]|\\\\.)*)"').exec(langBlock(lang));
+    assert.ok(body, `${lang} 에 g907 이 없다`);
+    assert.ok(!/자동 =|Auto =|自動 =/.test(body[1]),
+      `${lang}/g907: 없는 «자동» 카드를 설명한다`);
+  }
+  // 반대로 «자동» 설명은 그 카드가 실재하는 Y 쪽(g906)에 남아 있어야 한다.
+  assert.match(langBlock('ko'), /"g906": "[^"]*자동 = /);
+});
+
+// ── A-5 섹션 마진 ─────────────────────────────────────────────────────────
+
+test('섹션 마진은 단일 규칙이고 래퍼 div 가 위 여백을 지우지 않는다', () => {
+  assert.match(INDEX, /\.section-heading-row \{ display: flex; align-items: center; gap: 6px; margin: 18px 0 6px; \}/);
+  // 옛 규칙: 래퍼 안 첫 헤딩이면 무조건 margin-top:0 → 18px 과 0px 이 섞였다.
+  assert.doesNotMatch(INDEX, /\.section-heading:first-child, \.section-title:first-child \{ margin-top: 0; \}/);
+  // 예외는 패널 최상단 하나뿐.
+  assert.match(INDEX, /\.panel > \*:first-child > \.section-heading:first-child,/);
+  // label 리셋이 섹션 헤딩을 다시 0 으로 되돌리지 않아야 한다 (specificity 함정).
+  assert.match(INDEX, /label:not\(\.section-heading\):first-child \{ margin-top: 0; \}/);
+});
+
+// ── A-6 콘텐츠 지우기 ─────────────────────────────────────────────────────
+
+test('콘텐츠 입력 지우기 버튼은 내용이 있을 때만 보이고 aria-label 이 사전을 거친다', () => {
+  for (const id of ['nUrlClear', 'nTextClear']) {
+    assert.match(INDEX, new RegExp(`<button type="button" class="input-clear" id="${id}" hidden`));
+    assert.match(INDEX, new RegExp(`id="${id}"[\\s\\S]{0,120}data-i18n-attr="aria-label:g930"`));
+  }
+  assert.match(INDEX, /function refreshInputClearButtons\(\)/);
+  assert.match(INDEX, /button\.hidden = input\.value\.length === 0;/);
+  for (const lang of LANGS) {
+    assert.match(langBlock(lang), /"g930":/, `${lang} 에 g930 이 없다`);
+  }
+});
+
+// ── A-7 자체검증 3태 ──────────────────────────────────────────────────────
+
+test('자체검증 뱃지는 3태이고 판정이 게이트 여유에서 유도된다', () => {
+  for (const key of ['g950', 'g951', 'g952', 'g953']) {
+    for (const lang of LANGS) {
+      assert.match(langBlock(lang), new RegExp(`"${key}":`), `${lang} 에 ${key} 가 없다`);
+    }
+  }
+  assert.equal(langBlock('ko').includes('"g950": "사용가능"'), true);
+  assert.equal(langBlock('ko').includes('"g951": "인식곤란"'), true);
+  assert.equal(langBlock('ko').includes('"g952": "사용불가"'), true);
+  // 임의 라벨 금지 — 판정은 순수 함수(src/render-status.js)에 있고 세 갈래가 전부
+  // 기존 자체검증 신호에서 나온다. 규칙 자체의 단위 검증은 self-check-verdict.test.js.
+  assert.match(INDEX, /selfCheckVerdict \} from '\.\/src\/render-status\.js'/);
+  assert.match(INDEX, /deltaMinContract: DELTA_MIN_CONTRACT,/);
+  assert.match(INDEX, /idealLogMargin: idealLogMarginY\(\),/);
+  assert.match(INDEX, /usable: \{ key: 'g950', cls: 'ok' \}/);
+  assert.match(INDEX, /marginal: \{ key: 'g951', cls: 'warn' \}/);
+  assert.match(INDEX, /unusable: \{ key: 'g952', cls: 'bad' \}/);
+  // 뱃지 3태 색이 CSS 에 실제로 있어야 한다 — warn 이 없으면 «인식곤란» 이 기본색으로 뜬다.
+  assert.match(INDEX, /\.badge\.warn \{ color: var\(--warn\)/);
+  // 뱃지 문구 자체도 {state} 를 받는 형식으로 바뀌었다 (체크 표시 우측).
+  assert.match(langBlock('ko'), /"g445": "자체검증 ✓ - \{state\} ·/);
+  assert.match(langBlock('ko'), /"g447": "자체검증 ✓ - \{state\} ·/);
+  // 문턱 %도 사전에 박지 않고 판정에서 받아 온다 — 띠 폭을 옮기면 문구가 따라와야 한다.
+  for (const lang of LANGS) {
+    assert.match(langBlock(lang), /"g953": "[^"]*\{tight\}%/, `${lang}: g953 이 문턱을 박아 뒀다`);
+    assert.doesNotMatch(langBlock(lang), /"g953": "[^"]*20%[^"]*20%/, `${lang}: g953 에 20 이 박혀 있다`);
+  }
+  assert.match(INDEX, /pct: verdict\.headroomPercent, tight: verdict\.tightPercent,/);
+  assert.match(INDEX, /selfCheckTightPercent|verdict\.tightPercent/);
+});
+
+test('자체검증 뱃지는 «안정성 ⇄ 용량» 바로 아래에 있고 모드 전환 때 따라간다', () => {
+  const ecc = INDEX.indexOf('id="eccTierCards"');
+  const hint = INDEX.indexOf('id="eccTierHint"', ecc);
+  const row = INDEX.indexOf('id="selfCheckRow"');
+  assert.ok(ecc >= 0 && hint > ecc && row > hint, '뱃지가 ECC 힌트 뒤에 있어야 한다');
+  // #info 에 남아 있으면 «두 곳에 표시» 가 된다.
+  assert.doesNotMatch(INDEX, /`<span class="badge ok">\$\{tf\('g44[57]'/);
+  assert.equal(INDEX.match(/id="selfCheckRow"/g)?.length, 1);
+  assert.match(INDEX, /selfCheckHost\.appendChild\(els\.selfCheckRow\)/);
+  assert.match(INDEX, /els\.selfCheckRow\.innerHTML = result\.selfCheck \|\| '';/);
+});
+
+// ── 번들 ──────────────────────────────────────────────────────────────────
+
+test('번들에도 도움말 모듈과 3태 뱃지가 임베드된다', () => {
+  const bundle = buildSingleHtml();
+  assert.match(bundle, /positionHelpPopover/);
+  assert.match(bundle, /id="helpPopover"/);
+  assert.match(bundle, /id="selfCheckRow"/);
+  assert.match(bundle, /SELFCHECK_TIGHT_RATIO/);
+  assert.match(bundle, /selfCheckVerdict/);
+  assert.match(bundle, /"help-popover"/);
+});

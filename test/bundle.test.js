@@ -15,7 +15,7 @@ const ROOT = path.resolve(__dirname, '..');
 const DIST_FILE = path.join(ROOT, 'dist', 'trilume.html');
 const SRC_DIR = path.join(ROOT, 'src');
 
-// tools/build-single.mjs 의 MODULE_ORDER 와 반드시 동기 — Type A(ADR 0005) 4개
+// tools/build-single.mjs 의 MODULE_ORDER 의 **부분집합 검사** (전체 동기 아님 — help-popover·cell-editor 계열 등 미등재, 통합 렌즈 D 실측. 여기 있는 이름의 존재만 강제) — Type A(ADR 0005) 4개
 // 추가: placementA·layoutA·capacityA·encodeA ('capacity' 뒤, 위상 순서).
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',

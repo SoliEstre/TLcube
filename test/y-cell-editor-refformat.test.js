@@ -83,13 +83,17 @@ function locatorCardOrder(html) {
 // 끔 → v0 → v1r2 → v2r2, 해상도 오름차순).
 // 의도적 갱신 (2026-08-16): v0X 편입 — 운영자 지시로 v0 계열(v0 · v0X)을 인접
 // 배치해 끔 → v0 → v0X → v1r2 → v2r2 가 됐다.
+// 의도적 갱신 (2026-08-16, 생성기 UI 대개편 A-4): «검출기 선택» 통합 개명과 함께
+// **자동**(정식 반영 대비 항목)이 맨 앞에 붙었다. 자동은 와이어 값이 아니라 UI
+// 정책이고, 현재는 resolveAutoLocatorProfileY() 가 결정적으로 «끔» 을 돌려준다 —
+// 그래서 순서상 «끔» 바로 앞이 제자리다.
 // 의도적 갱신 (2026-08-17): v0XQ(중앙 QR 변형) 편입 — 운영자 지시로 v0 계열
-// (v0 · v0X · v0XQ)을 인접 배치해 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 가 됐다.
+// (v0 · v0X · v0XQ)을 인접 배치해 자동 → 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 가 됐다.
 const LOCATOR_CARD_ORDER = Object.freeze([
-  'off', 'cell-surface-v0', 'cell-surface-v0x', 'cell-surface-v0xq',
+  'auto', 'off', 'cell-surface-v0', 'cell-surface-v0x', 'cell-surface-v0xq',
   'cell-surface-v1r2', 'cell-surface-v2r2',
 ]);
-test('Y 검출기 옵션 카드 순서는 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 다', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0X → v0XQ → v1r2 → v2r2 다', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 
