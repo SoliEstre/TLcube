@@ -92,6 +92,10 @@ const MODULE_ORDER = [
   'lab-telemetry',
   // URL 칸 전체 선택. 의존 없음. 앱만 쓴다.
   'input-select-all',
+  // 셀 편집기 (다중 타입 Y/O/A) — /lab/ 섹션이 독립 편집기와 같은 코어를 쓴다.
+  // cell-editor-core 는 hexgrid·bullseye·placement*·autoplaceY·finder-patterns·
+  // finder-editor-pattern·cell-editor-history 를 전부 앞에 요구하므로 맨 끝이다.
+  'finder-editor-pattern', 'cell-editor-history', 'cell-editor-core',
 ];
 
 /**

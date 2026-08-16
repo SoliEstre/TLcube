@@ -12,7 +12,8 @@
  *   - Bucket (페인트통): 연결된 동일 톤/상태 영역 플러드 필
  *   - Eraser (지우개): 기본 톤(1: mid) 복원 및 비데이터 해제
  *   - Eyedropper (스포이드): 대상 톤 추출
- *   - Undo / Redo: 전체 히스토리 스택 관리 (Ctrl+Z / Ctrl+Shift+Z)
+ *   - Undo / Redo: 유한 히스토리 스택 + 드래그 스트로크 코얼레싱
+ *     (규칙은 cell-editor-history.js 한 곳에 있다 — 생성기 섹션 편집기와 공유)
  *   - 120° 회전 및 톤 반전
  *   - tlcube-y-cell-editor/v1 및 tlcube-cell-editor/v2 스키마 양방향 직렬화
  *
@@ -60,6 +61,21 @@ import {
   cloneFinderEditorPattern,
   serializeFinderEditorPattern,
 } from './finder-editor-pattern.js';
+import {
+  CELL_EDITOR_HISTORY_LIMIT,
+  armStrokeOnBucket,
+  beginStrokeOnBucket,
+  canRedoBucket,
+  canUndoBucket,
+  commitEditOnBucket,
+  endStrokeOnBucket,
+  isStrokeArmedOnBucket,
+  recordOnBucket,
+  redoOnBucket,
+  undoOnBucket,
+} from './cell-editor-history.js';
+
+export { CELL_EDITOR_HISTORY_LIMIT };
 
 export function bullseyeCellMasks() {
   const radii = bandRadii(1);
@@ -504,6 +520,9 @@ export function createUniversalEditorState(options = {}) {
     finderPattern: null,
     undoStack: [],
     redoStack: [],
+    strokeOpen: false,
+    // 예약된 스트로크 스냅샷 (armEditStroke). 첫 실제 편집에서 확정된다.
+    pendingStroke: null,
   };
   applyFinderStarter(state, finderStarter);
   return state;
@@ -537,29 +556,70 @@ function restoreSnapshotFields(state, snapshot) {
     : null;
 }
 
+/**
+ * 상태 객체 자체가 히스토리 버킷이다 (`undoStack`/`redoStack`/`strokeOpen`).
+ * 스택 규칙은 cell-editor-history.js 가 소유한다 — 여기서 다시 구현하지 않는다.
+ */
 export function pushUndoSnapshot(state) {
-  const snapshot = cloneSnapshot(state);
-  state.undoStack.push(snapshot);
-  if (state.undoStack.length > 50) {
-    state.undoStack.shift();
-  }
-  state.redoStack.length = 0; // 새 변경 시 redo 초기화
+  return recordOnBucket(state, cloneSnapshot(state), CELL_EDITOR_HISTORY_LIMIT);
+}
+
+/**
+ * 드래그 도색 시작. 이 사이의 `pushUndoSnapshot` 은 전부 코얼레싱된다 —
+ * **연속 도색 한 번 = 되돌리기 한 스텝**(셀 단위가 아니다).
+ */
+export function beginEditStroke(state) {
+  return beginStrokeOnBucket(state, cloneSnapshot(state), CELL_EDITOR_HISTORY_LIMIT);
+}
+
+/**
+ * 드래그 **예약**. `beginEditStroke` 와 달리 누른 순간에는 스텝을 만들지 않고,
+ * 첫 실제 편집(`commitCellEdit`)에서 확정한다 — 잠긴 셀 클릭·무동작 도구(스포이드)가
+ * 빈 되돌리기 스텝을 남기지 않게 한다.
+ */
+export function armEditStroke(state) {
+  return armStrokeOnBucket(state, cloneSnapshot(state));
+}
+
+export function isEditStrokeArmed(state) {
+  return isStrokeArmedOnBucket(state);
+}
+
+/**
+ * 편집 한 번 — 스냅샷 → `apply()` → **바뀐 경우에만** 기록.
+ * `apply()` 는 «바뀌었나» 를 boolean 이나 `{changed}` 로 돌려줘야 한다.
+ * @returns {{changed: boolean, recorded: boolean, outcome: *}}
+ */
+export function commitCellEdit(state, apply) {
+  return commitEditOnBucket(state, {
+    snapshot: () => cloneSnapshot(state),
+    apply,
+    limit: CELL_EDITOR_HISTORY_LIMIT,
+  });
+}
+
+export function endEditStroke(state) {
+  return endStrokeOnBucket(state);
+}
+
+export function canUndo(state) {
+  return canUndoBucket(state);
+}
+
+export function canRedo(state) {
+  return canRedoBucket(state);
 }
 
 export function undo(state) {
-  if (state.undoStack.length === 0) return false;
-  const currentSnapshot = cloneSnapshot(state);
-  state.redoStack.push(currentSnapshot);
-  const prev = state.undoStack.pop();
+  const prev = undoOnBucket(state, cloneSnapshot(state));
+  if (prev === null) return false;
   restoreSnapshotFields(state, prev);
   return true;
 }
 
 export function redo(state) {
-  if (state.redoStack.length === 0) return false;
-  const currentSnapshot = cloneSnapshot(state);
-  state.undoStack.push(currentSnapshot);
-  const next = state.redoStack.pop();
+  const next = redoOnBucket(state, cloneSnapshot(state), CELL_EDITOR_HISTORY_LIMIT);
+  if (next === null) return false;
   restoreSnapshotFields(state, next);
   return true;
 }
@@ -707,7 +767,12 @@ export function applyBrush(state, face, c, options = {}) {
   const role = roleOfCoord(state.type, state.size, c, { finderMode: state.finderMode });
   if (state.type === 'Y' || !isFixedRole(role)) {
     const ck = coordKey(state.type, c);
-    state.userNonData.add(ck);
+    // 데이터 제외가 새로 생기는 것도 «바뀐 것» 이다 — 톤이 그대로여도 그렇다.
+    // 반환값이 여기서 거짓말을 하면 되돌리기 스텝이 통째로 안 만들어진다(commitCellEdit).
+    if (!state.userNonData.has(ck)) {
+      state.userNonData.add(ck);
+      changed = true;
+    }
   }
 
   return changed;
@@ -931,6 +996,112 @@ export function serializeUniversalEditor(state) {
   return baseDoc;
 }
 
+/**
+ * 좌표·톤 항목을 **컴팩트 튜플** 로 다시 싼다.
+ * `{q,r}` → `[q, r]` · `{face,q,r,tone}` → `["T", q, r, 2]` (Y 는 i/j).
+ *
+ * 왜: 큰 격자의 편집 결과를 `JSON.stringify(doc, null, 2)` 로 뽑으면 항목 하나가
+ * 네댓 줄로 부풀어 2000줄짜리 파일이 나온다 — 정본화할 때 사람이 못 읽는다.
+ * `parseUniversalEditor` 는 원래부터 튜플을 받으므로 왕복이 보장된다.
+ */
+export function packUniversalEditorTuples(doc) {
+  if (doc === null || typeof doc !== 'object') {
+    throw new TypeError('직렬화된 편집기 문서가 필요하다');
+  }
+  const type = doc.type || 'Y';
+  const packed = { ...doc };
+  if (Array.isArray(doc.userNonData)) {
+    packed.userNonData = doc.userNonData.map((c) => (
+      Array.isArray(c) ? c : (type === 'Y' ? [c.i, c.j] : [c.q, c.r])
+    ));
+  }
+  if (Array.isArray(doc.toneOverrides)) {
+    packed.toneOverrides = doc.toneOverrides.map((o) => (
+      Array.isArray(o) ? o : (type === 'Y'
+        ? [o.face, o.i, o.j, o.tone]
+        : [o.face, o.q, o.r, o.tone])
+    ));
+  }
+  return packed;
+}
+
+function isPrimitiveArray(value) {
+  return Array.isArray(value)
+    && value.every((item) => item === null || typeof item !== 'object');
+}
+
+/**
+ * 원소가 전부 원시값인 배열만 한 줄로 붙이는 JSON 출력. 결정적이다.
+ *
+ * `undefined`(와 함수)는 `JSON.stringify` 와 **같은 규칙**으로 다룬다 — 객체 키는
+ * 통째로 빼고 배열 원소는 `null` 로 적는다. 직접 적으면 `{"a": undefined}` ·
+ * `[1, , 3]` 같은 무효 JSON 이 나온다 (스키마에 옵셔널 필드가 하나 붙는 순간 export 가
+ * 깨진다 — 지금은 도달 불가라도 파서 계약을 문서 스키마에 인질로 잡히지 않게 둔다).
+ */
+export function stringifyCompactJson(value, indentLevel = 0) {
+  const pad = '  '.repeat(indentLevel);
+  const padInner = '  '.repeat(indentLevel + 1);
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    if (isPrimitiveArray(value)) {
+      return '[' + value.map((item) => jsonScalar(item)).join(', ') + ']';
+    }
+    return '[\n'
+      + value.map((item) => padInner + stringifyCompactJson(item, indentLevel + 1)).join(',\n')
+      + '\n' + pad + ']';
+  }
+  if (value !== null && typeof value === 'object') {
+    const keys = Object.keys(value).filter((k) => isJsonValue(value[k]));
+    if (keys.length === 0) return '{}';
+    return '{\n'
+      + keys.map((k) => padInner + JSON.stringify(k) + ': '
+        + stringifyCompactJson(value[k], indentLevel + 1)).join(',\n')
+      + '\n' + pad + '}';
+  }
+  return jsonScalar(value);
+}
+
+/** JSON 에 실을 수 있는 값인가 (undefined·함수·심볼은 아니다). */
+function isJsonValue(value) {
+  return value !== undefined && typeof value !== 'function' && typeof value !== 'symbol';
+}
+
+/** 배열 원소 자리의 `undefined` 는 `null` 이다 — JSON.stringify 와 같은 규칙. */
+function jsonScalar(value) {
+  return isJsonValue(value) ? JSON.stringify(value) : 'null';
+}
+
+/** 편집기 상태 → 컴팩트 튜플 팩 JSON 문자열. `parseUniversalEditor` 로 되읽힌다. */
+export function stringifyUniversalEditorCompact(state) {
+  return stringifyCompactJson(packUniversalEditorTuples(serializeUniversalEditor(state)));
+}
+
+/**
+ * `toneOverrides` 방언 정규화 → 평평한 목록.
+ *
+ * 두 방언이 실재한다:
+ *   ① 편집기 export — `[["T", i, j, tone], …]` (또는 `{face,i,j,tone}` 객체)
+ *   ② **손으로 정본화한 문서** — 면 키 객체 `{"T": [[i,j,tone], …], "L": …, "R": …}`
+ *
+ * ②를 못 읽으면 `looksLikeCellEditorJson` 이 true 라 붙여넣기는 «성공» 한 것처럼
+ * 보이면서 톤이 **전부 소실**된다 (조용한 데이터 손실). 그래서 파서가 둘 다 받는다.
+ * 같은 규칙을 `type-y-cell-editor.js` 의 파서도 쓴다 (거기 주석 참조).
+ */
+export function normalizeToneOverrideList(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (raw === null || typeof raw !== 'object') return [];
+  const flat = [];
+  for (const face of Object.keys(raw)) {
+    const entries = raw[face];
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (Array.isArray(entry)) flat.push([face, ...entry]);
+      else if (entry !== null && typeof entry === 'object') flat.push({ face, ...entry });
+    }
+  }
+  return flat;
+}
+
 export function looksLikeCellEditorJson(input) {
   try {
     const obj = typeof input === 'string' ? JSON.parse(input) : input;
@@ -978,16 +1149,14 @@ export function parseUniversalEditor(input) {
     }
   }
 
-  if (Array.isArray(obj.toneOverrides)) {
-    for (const item of obj.toneOverrides) {
-      const c = Array.isArray(item)
-        ? (type === 'Y'
-          ? { face: item[0], i: item[1], j: item[2], tone: item[3] }
-          : { face: item[0], q: item[1], r: item[2], tone: item[3] })
-        : item;
-      if (c.tone !== DEFAULT_TONE) {
-        state.tones.set(toneKey(type, c.face, c), c.tone);
-      }
+  for (const item of normalizeToneOverrideList(obj.toneOverrides)) {
+    const c = Array.isArray(item)
+      ? (type === 'Y'
+        ? { face: item[0], i: item[1], j: item[2], tone: item[3] }
+        : { face: item[0], q: item[1], r: item[2], tone: item[3] })
+      : item;
+    if (c.tone !== DEFAULT_TONE) {
+      state.tones.set(toneKey(type, c.face, c), c.tone);
     }
   }
 

@@ -4,6 +4,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import {
   CELL_EDITOR_SCHEMA_V1,
@@ -36,11 +38,15 @@ import {
   rotate120,
   serializeUniversalEditor,
   setCellToneDirect,
+  stringifyCompactJson,
   undo,
 } from '../src/cell-editor-core.js';
+import { parseCellEditor } from '../src/type-y-cell-editor.js';
 import { FACES } from '../src/hexgrid.js';
 import { FINDER_CELL_ORDER } from '../src/finder-patterns.js';
 import { buildCellEditorHtml } from '../tools/build-cell-editor.mjs';
+
+const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
 test('모든 지원 타입(Y, O, A, K)의 셀 개수와 좌표 기하가 정확하다', () => {
   // Type Y: n x n
@@ -242,6 +248,64 @@ test('JSON 직렬화 및 역직렬화 왕복이 일치한다', () => {
   assert.equal(parsedHybrid.finderPattern.renderKind, 'cube-bullseye');
   assert.equal(getCellTone(parsedHybrid, 'T', { q: 0, r: 0 }), 2);
   assert.equal(jsonHybrid.name, '');
+});
+
+test('손으로 정본화한 면 키 toneOverrides 방언도 읽는다 (조용한 톤 소실 금지)', () => {
+  // 정본 문서(.agent/decoder/data/cellsurface-*-editor.json)는 편집기 export 를 사람이
+  // 컴팩트하게 옮긴 것이라 톤을 **면 키 객체**로 적는다. 배열만 받던 시절엔
+  // looksLikeCellEditorJson 이 true 라 붙여넣기가 «성공» 하면서 톤이 전부 사라졌다.
+  const doc = {
+    schema: CELL_EDITOR_SCHEMA_V1,
+    n: 13,
+    size: 13,
+    finderMode: 'full-surface',
+    userNonData: [[0, 0], [0, 1]],
+    toneOverrides: {
+      T: [[0, 0, 0], [0, 1, 2]],
+      L: [[0, 0, 2]],
+      R: [[0, 1, 0]],
+    },
+  };
+  const parsed = parseUniversalEditor(doc);
+  assert.equal(parsed.type, 'Y');
+  assert.equal(parsed.tones.size, 4, '면 키 세 갈래의 톤이 전부 살아야 한다');
+  assert.equal(getCellTone(parsed, 'T', { i: 0, j: 0 }), 0);
+  assert.equal(getCellTone(parsed, 'T', { i: 0, j: 1 }), 2);
+  assert.equal(getCellTone(parsed, 'L', { i: 0, j: 0 }), 2);
+  assert.equal(getCellTone(parsed, 'R', { i: 0, j: 1 }), 0);
+  assert.equal(parsed.userNonData.size, 2);
+
+  // 빈 객체 방언(톤 오버라이드 없음)도 그냥 통과한다.
+  assert.equal(parseUniversalEditor({ ...doc, toneOverrides: {} }).tones.size, 0);
+
+  // 평평한 배열 방언(편집기 export)은 그대로다 — 두 방언이 같은 상태를 만든다.
+  const flat = parseUniversalEditor({
+    ...doc,
+    toneOverrides: [['T', 0, 0, 0], ['T', 0, 1, 2], ['L', 0, 0, 2], ['R', 0, 1, 0]],
+  });
+  assert.deepEqual(
+    serializeUniversalEditor(flat), serializeUniversalEditor(parsed),
+    '두 방언이 같은 문서로 수렴해야 한다',
+  );
+
+  // ⚠ 미해소로 남긴 것: Y 전용 엔진 파서(type-y-cell-editor.parseCellEditor)는 아직
+  // 배열 방언만 받는다. 붙여넣기 경로(독립 편집기)는 위 파서를 쓰므로 사용자 손실은
+  // 닫혔지만, 그 모듈을 고치면 lab-scan.html 바이트가 바뀐다 — 스캐너 번들은 스탬프
+  // 상승과 함께 움직여야 하는 별도 표면이라 이 레인에서 건드리지 않는다.
+  assert.equal(parseCellEditor({ ...doc, schema: CELL_EDITOR_SCHEMA_V1 }).tones.size, 0);
+});
+
+test('컴팩트 JSON 출력은 undefined 를 만나도 유효한 JSON 이다', () => {
+  // JSON.stringify 와 같은 규칙 — 객체 키는 빼고 배열 원소는 null.
+  assert.equal(stringifyCompactJson({ a: undefined }), '{}');
+  assert.equal(stringifyCompactJson({ a: 1, b: undefined, c: 2 }), '{\n  "a": 1,\n  "c": 2\n}');
+  assert.equal(stringifyCompactJson([1, undefined, 3]), '[1, null, 3]');
+  for (const value of [{ a: undefined }, { a: 1, b: undefined }, [1, undefined, 3]]) {
+    assert.deepEqual(
+      JSON.parse(stringifyCompactJson(value)), JSON.parse(JSON.stringify(value)),
+      'JSON.stringify 와 같은 결과여야 한다',
+    );
+  }
 });
 
 test('파인더 이름이 JSON name으로 왕복하고 공백을 정규화한다', () => {
@@ -461,4 +525,27 @@ test('독립 HTML 단일 번들이 정상적으로 빌드된다', () => {
   assert.match(html, /autoplaceY/);
   assert.match(html, /looksLikeCellEditorJson/);
   assert.doesNotMatch(html, /<!-- CELL_EDITOR_LOADER -->/);
+});
+
+test('독립 편집기도 «실제 변경 없으면 스텝 없음»·붓질 자가 치유·수식키 가드를 쓴다', () => {
+  const app = readFileSync(ROOT + 'tools/cell-editor-app.js', 'utf8');
+  // 예약 → 첫 실제 편집에서 확정. 누른 순간 무조건 스텝을 쌓던 배선 금지.
+  assert.match(app, /armEditStroke\(editorState\)/);
+  assert.doesNotMatch(app, /beginEditStroke\(/);
+  // 도구 실행은 전부 commitCellEdit 를 지난다 (마스크·우클릭·버킷·지우개·붓).
+  assert.ok(
+    (app.match(/commitCellEdit\(/g) || []).length >= 6,
+    '도구 경로가 commit 을 안 지나면 빈 스텝·미기록이 다시 생긴다',
+  );
+  // 창 밖에서 버튼을 떼도 스트로크가 열린 채 남지 않는다.
+  assert.match(app, /if \(isPointerDown && ev\.buttons === 0\) stopPointerStroke\(\);/);
+  assert.match(app, /function stopPointerStroke\(\)/);
+  // 되돌리기/다시하기는 진행 중인 붓질을 먼저 끝낸다 (버튼·단축키 양쪽).
+  assert.ok(
+    (app.match(/stopPointerStroke\(\);\s*\n\s*if \((undo|redo)\(editorState\)\)/g) || []).length
+      === 4,
+    'undo/redo 네 경로(버튼 2 · 단축키 2)가 모두 붓질을 끝내야 한다',
+  );
+  // 도구 단축키는 수식키 없는 맨 키에서만 — Ctrl+B/Ctrl+E/Cmd+I 가로채기 금지.
+  assert.match(app, /if \(ev\.ctrlKey \|\| ev\.metaKey \|\| ev\.altKey\) return;/);
 });

@@ -1069,9 +1069,18 @@
         <p class="hint" id="yLocatorHint" data-i18n="g518">실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.</p>
       </div>
 
-      <div id="yCellEditorSection" hidden>
-        <label class="section-heading" data-i18n="g521">Y타입 셀 편집기</label>
-        <p class="hint" data-i18n="g522">한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.</p>
+      <!-- 셀 편집기 — Y/O/A 다중 타입 (운영자 지시 2026-08-16). K 는 제외다:
+           렌더러 계약(육망성 실루엣)이 아직 안 넓어졌다 — 태스크 #11 몫. -->
+      <div id="yCellEditorSection" hidden tabindex="-1">
+        <label class="section-heading" data-i18n="g521">셀 편집기</label>
+        <p class="hint" id="yCellEditorScopeHint" data-i18n="g522">한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.</p>
+        <label class="section-heading" data-i18n="g550">편집 타입</label>
+        <div class="card-row" id="yCellEditorTypeCards">
+          <button type="button" class="toggle-card active" data-ycell-type="Y" data-i18n="g551">타입 Y (큐브 격자)</button>
+          <button type="button" class="toggle-card" data-ycell-type="O" data-i18n="g552">타입 O (육각)</button>
+          <button type="button" class="toggle-card" data-ycell-type="A" data-i18n="g553">타입 A (삼각)</button>
+        </div>
+        <p class="hint" data-i18n="g554">타입 K는 렌더러 계약이 넓어진 뒤에 붙일게요 (아직 편집할 수 없어요).</p>
         <div class="card-row" id="yCellEditorModeCards">
           <button type="button" class="toggle-card active" data-ycell-mode="tone" data-i18n="g523">톤 편집</button>
           <button type="button" class="toggle-card" data-ycell-mode="mask" data-i18n="g524">데이터 영역 마스크</button>
@@ -1080,14 +1089,17 @@
         <div class="y-cell-editor-legend" id="yCellEditorLegend">
           <span class="y-cell-legend-item"><span class="y-cell-swatch y-cell-swatch-data"></span><span data-i18n="g527">데이터</span></span>
           <span class="y-cell-legend-item"><span class="y-cell-swatch y-cell-swatch-detector"></span><span data-i18n="g528">검출기/안전</span></span>
-          <span class="y-cell-legend-item"><span class="y-cell-swatch y-cell-swatch-fixed"></span><span data-i18n="g529">고정 reference/format</span></span>
+          <span class="y-cell-legend-item"><span class="y-cell-swatch y-cell-swatch-fixed"></span><span id="yCellEditorFixedLabel" data-i18n="g529">고정 reference/format</span></span>
         </div>
         <div class="y-cell-editor-toolbar">
+          <button type="button" id="yCellEditorUndo" data-i18n="g555" disabled>되돌리기</button>
+          <button type="button" id="yCellEditorRedo" data-i18n="g556" disabled>다시하기</button>
           <button type="button" id="yCellEditorZoomOut" data-i18n="g537">축소</button>
           <button type="button" id="yCellEditorZoomIn" data-i18n="g538">확대</button>
           <button type="button" id="yCellEditorReset" data-i18n="g525">초기화</button>
           <button type="button" id="yCellEditorCopy" data-i18n="g526">설정값 복사</button>
         </div>
+        <p class="hint" data-i18n="g557">단축키 — Ctrl/Cmd+Z 되돌리기 · Ctrl+Shift+Z 또는 Ctrl+Y 다시하기. 편집기에 포커스가 있을 때만 동작하고, 글상자 안에서는 브라우저 기본 동작을 씁니다. 드래그로 이어 칠한 한 번은 되돌리기도 한 번이에요.</p>
         <div class="y-cell-editor-viewport" id="yCellEditorViewport">
           <svg id="yCellEditorSvg" xmlns="http://www.w3.org/2000/svg" role="group" focusable="true"></svg>
         </div>
@@ -1451,7 +1463,7 @@ const GENERATOR_STRINGS = {
     "g603": "v0X. QR 파인더 문법을 빌린 v0 확장 65셀 · 데이터 346. Y1(n=21) 전용. 3파전 후보이며 성능을 보장하지 않아요.",
     "g604": "셀 표면 v0XQ · 중앙 QR (Y1)",
     "g605": "v0XQ. 좌상·우상·하단 3코너 동심 사각 42셀 + 중앙 QR 슬롯 81셀 · 데이터 288. 중앙 QR 이 폴백 URL 을 싣고 코너 QR 은 자동으로 꺼져요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
-    "g521": "Y타입 셀 편집기",
+    "g521": "셀 편집기",
     "g522": "한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
     "g523": "톤 편집",
     "g524": "데이터 영역 마스크",
@@ -1472,6 +1484,19 @@ const GENERATOR_STRINGS = {
     "g539": "톤을 바꾸면 그 좌표는 세 면 모두 데이터에서 빠집니다.",
     "g540": "색은 그대로 두고, 어느 면을 눌러도 같은 좌표의 데이터 포함/제외만 바꿉니다.",
     "g549": "이 검출기 옵션에서는 reference/format 자동 배치를 유도할 수 없어요: {message}",
+    "g550": "편집 타입",
+    "g551": "타입 Y (큐브 격자)",
+    "g552": "타입 O (육각)",
+    "g553": "타입 A (삼각)",
+    "g554": "타입 K는 렌더러 계약이 넓어진 뒤에 붙일게요 (아직 편집할 수 없어요).",
+    "g555": "되돌리기",
+    "g556": "다시하기",
+    "g557": "단축키 — Ctrl/Cmd+Z 되돌리기 · Ctrl+Shift+Z 또는 Ctrl+Y 다시하기. 편집기에 포커스가 있을 때만 동작하고, 글상자 안에서는 브라우저 기본 동작을 씁니다. 드래그로 이어 칠한 한 번은 되돌리기도 한 번이에요.",
+    "g558": "고정 파인더/앵커/ref/format",
+    "g559": "한 면만 칠해도 그 셀 (q,r)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
+    "g560": "면 {face}, 셀 ({q}, {r}), 톤 {tone}, {role}",
+    "g561": "한 단계 되돌렸어요.",
+    "g562": "한 단계 다시 적용했어요.",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -1704,7 +1729,7 @@ const GENERATOR_STRINGS = {
     "g603": "v0X. A v0 extension borrowing QR finder grammar, 65 cells, 346 data. Y1 (n=21) only. A three-way candidate; does not guarantee performance.",
     "g604": "Cell surface v0XQ · center QR (Y1)",
     "g605": "v0XQ. Three concentric-square corners (upper-left, upper-right, bottom) in 42 cells plus an 81-cell center QR slot, 288 data. The center QR carries the fallback URL, so the corner QR is suppressed. Y1 (n=21) only; does not guarantee performance.",
-    "g521": "Type Y cell editor",
+    "g521": "Cell editor",
     "g522": "Painting one face excludes that (i,j) data triple on T, L, and R. Edits are not applied to the current code output.",
     "g523": "Tone edit",
     "g524": "Data-area mask",
@@ -1725,6 +1750,19 @@ const GENERATOR_STRINGS = {
     "g539": "Changing a tone removes that coordinate from data on all three faces.",
     "g540": "Colour stays the same. Clicking any face toggles data include/exclude for that coordinate.",
     "g549": "Cannot derive the reference/format auto-placement for this detector option: {message}",
+    "g550": "Edit type",
+    "g551": "Type Y (cube grid)",
+    "g552": "Type O (hex)",
+    "g553": "Type A (triangle)",
+    "g554": "Type K arrives once the renderer contract widens (not editable yet).",
+    "g555": "Undo",
+    "g556": "Redo",
+    "g557": "Shortcuts — Ctrl/Cmd+Z undo, Ctrl+Shift+Z or Ctrl+Y redo. They only fire while the editor has focus, and text fields keep the browser default. One continuous drag counts as one undo step.",
+    "g558": "Fixed finder/anchor/ref/format",
+    "g559": "Painting one face excludes that (q,r) data triple on T, L, and R. Edits are not applied to the current code output.",
+    "g560": "Face {face}, cell ({q}, {r}), tone {tone}, {role}",
+    "g561": "Stepped back one edit.",
+    "g562": "Reapplied one edit.",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -1957,7 +1995,7 @@ const GENERATOR_STRINGS = {
     "g603": "v0X。QR ファインダの文法を借りた v0 拡張 65セル・データ346。Y1(n=21) 専用。三つ巴の候補で、性能は保証しません。",
     "g604": "セル表面 v0XQ・中央 QR (Y1)",
     "g605": "v0XQ。左上・右上・下の3コーナー同心四角 42セル + 中央 QR スロット 81セル・データ288。中央 QR がフォールバック URL を担うのでコーナー QR は自動で切れます。Y1(n=21) 専用で、性能は保証しません。",
-    "g521": "Yタイプセル編集",
+    "g521": "セル編集",
     "g522": "1面だけ塗っても、その座標 (i,j) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
     "g523": "トーン編集",
     "g524": "データ領域マスク",
@@ -1978,6 +2016,19 @@ const GENERATOR_STRINGS = {
     "g539": "トーンを変えると、その座標は3面ともデータから外れます。",
     "g540": "色はそのままです。どの面を押しても、同じ座標のデータ含有/除外だけが切り替わります。",
     "g549": "この検出器オプションでは reference/format の自動配置を導出できません: {message}",
+    "g550": "編集タイプ",
+    "g551": "タイプY (キューブ格子)",
+    "g552": "タイプO (六角)",
+    "g553": "タイプA (三角)",
+    "g554": "タイプKはレンダラ契約が広がってから追加します (まだ編集できません)。",
+    "g555": "元に戻す",
+    "g556": "やり直す",
+    "g557": "ショートカット — Ctrl/Cmd+Z で元に戻す・Ctrl+Shift+Z または Ctrl+Y でやり直す。編集器にフォーカスがあるときだけ効き、テキスト欄ではブラウザ既定の動作になります。ドラッグで続けて塗った一連は、元に戻すも一回分です。",
+    "g558": "固定 ファインダ/アンカー/ref/format",
+    "g559": "1面だけ塗っても、そのセル (q,r) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
+    "g560": "面 {face}、セル ({q}, {r})、トーン {tone}、{role}",
+    "g561": "1段階戻しました。",
+    "g562": "1段階やり直しました。",
   },
 };
 
@@ -2014,6 +2065,9 @@ import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
 import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capacityY.js';
+// 셀 편집기가 여는 O/A 격자 반경 k — 버전 표에서 읽는다 (편집기용 상수 복제 금지).
+import { VERSIONS as VERSIONS_O_TABLE } from './src/capacity.js';
+import { VERSIONS_A as VERSIONS_A_TABLE } from './src/capacityA.js';
 // ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
 // placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
 import { placeReservedCells } from './src/autoplaceY.js';
@@ -2025,6 +2079,29 @@ import {
   dataBoundaryEdges, edgeEndpoints, editorStateForN, resetCellEditorState,
   setEditorMode, stringifyCellEditor, toneKey,
 } from './src/type-y-cell-editor.js';
+// 다중 타입(O/A) 격자·역할·직렬화는 독립 편집기와 **같은 코어**를 쓴다 — 표시 규칙이
+// 두 편집기에서 갈라지지 않게 하려는 선택이다 (기하는 placement/placementA 원본 그대로).
+import {
+  cycleCellTone as cycleCoreTone,
+  enumerateCells as enumerateCoreCells,
+  coordKey as coreCoordKey,
+  createUniversalEditorState,
+  getCellTone as coreCellTone,
+  isFixedRole,
+  applyMaskToggle as coreMaskToggle,
+  roleOfCoord,
+  setCellToneDirect as setCoreCellTone,
+  stringifyUniversalEditorCompact,
+} from './src/cell-editor-core.js';
+import {
+  CELL_EDITOR_HISTORY_LIMIT,
+  HISTORY_SHORTCUT_REDO, HISTORY_SHORTCUT_UNDO,
+  armStroke as armHistoryStroke, canRedo as canRedoHistory,
+  canUndo as canUndoHistory, classifyHistoryShortcut,
+  commitEdit as commitHistoryEdit, createHistoryStore,
+  editUnitKey, endStroke as endHistoryStroke, historyKey,
+  redoSnapshot, undoSnapshot,
+} from './src/cell-editor-history.js';
 
 import { encodeA } from './src/encodeA.js';
 import {
@@ -2116,6 +2193,9 @@ const els = {
   yCellEditorJson: $('yCellEditorJson'), yCellEditorReset: $('yCellEditorReset'),
   yCellEditorCopy: $('yCellEditorCopy'), yCellEditorZoomIn: $('yCellEditorZoomIn'),
   yCellEditorZoomOut: $('yCellEditorZoomOut'),
+  yCellEditorTypeCards: $('yCellEditorTypeCards'), yCellEditorScopeHint: $('yCellEditorScopeHint'),
+  yCellEditorFixedLabel: $('yCellEditorFixedLabel'),
+  yCellEditorUndo: $('yCellEditorUndo'), yCellEditorRedo: $('yCellEditorRedo'),
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
@@ -3312,11 +3392,42 @@ if (els.yLocatorCards) {
 }
 
 const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
+
+/**
+ * 셀 편집기가 여는 타입. **K 는 빠져 있다** — 육망성 실루엣은 렌더러 계약이 아직
+ * 안 넓어졌다(태스크 #11 «K 꼭짓점 회계 실험» 이 앵커/마커를 정하기 전까지 표시할
+ * 정본 역할표가 없다). 코어(cell-editor-core.js)는 K 를 알지만 여기선 안 연다.
+ */
+const CELL_EDITOR_TYPES = Object.freeze(['Y', 'O', 'A']);
+
 let yCellEditorWired = false;
 let yCellEditorStore = null;
 let yCellEditorZoom = 1;
 let yCellEditorNoticeShown = false;
 let lastEncodedYn = 0;
+let lastEncodedKO = 0;
+let lastEncodedKA = 0;
+
+/** 편집 대상 타입. 생성기 타입을 따라가되 카드로 갈아탈 수 있다. */
+let cellEditorType = 'Y';
+/** 생성기 타입 추종용 — 생성기가 바뀐 순간에만 편집 타입을 끌어온다. */
+let cellEditorFollowedType = null;
+/** O/A 상태는 (타입,k) 별로 산다 — cell-editor-core 상태 그대로다. */
+const cellEditorHexStates = new Map();
+/** 되돌리기 스택 (버킷 = 타입·크기). 규칙은 cell-editor-history.js 가 소유. */
+let cellEditorHistory = null;
+/** 포인터를 누르고 있는 동안 true. 아직 아무것도 안 바꿨을 수도 있다. */
+let cellEditorStrokeActive = false;
+/** 이번 스트로크의 버킷 키. 예약(arm)·확정 여부는 히스토리 모듈이 들고 있다. */
+let cellEditorStrokeKey = null;
+/**
+ * 이번 스트로크에서 이미 편집한 **단위** — 드래그가 같은 것을 두 번 건드리지 않게 한다.
+ * 단위는 모드가 정한다(`editUnitKey`): 톤은 면, 마스크는 좌표.
+ */
+const cellEditorStrokePainted = new Set();
+/** 스트로크가 시작될 때의 편집 모드. 중복 방지 «단위» 를 정한다 (모드는 스트로크 중 불변). */
+let cellEditorStrokeMode = null;
+let cellEditorRepaintQueued = false;
 
 const yOffPlacementByN = new Map();
 
@@ -3381,6 +3492,137 @@ function yCellEditorStateFor(ctx) {
   return editorStateForN(yCellEditorStore, ctx.n);
 }
 
+// ── 다중 타입 (O·A) ─────────────────────────────────────────────────────────
+//
+// 역할 표시는 **생성기가 실제로 인코딩하는 배치**를 따른다. 지금 생성기는 O·A 를
+// `cornerMarker` 없이 부르므로(encodeOptsFor) 정본 역할표는 placement.roleOf /
+// placementA.roleOfA 다 — cell-editor-core.roleOfCoord 가 그 둘을 그대로 부른다.
+// O-CM/A-CM(markerO·markerA)이 UI 에 붙는 날 여기 한 줄이 같이 바뀌어야 한다.
+
+/** 편집할 격자 반경 k. 버전 선택이 auto 면 마지막으로 인코딩된 k 를 쓴다. */
+function cellEditorHexSize(type) {
+  const table = type === 'A' ? VERSIONS_A_TABLE : VERSIONS_O_TABLE;
+  const chosen = type === 'A' ? generatorState.versionA : generatorState.versionO;
+  const lastK = type === 'A' ? lastEncodedKA : lastEncodedKO;
+  if (chosen !== undefined && chosen !== 'auto') {
+    const spec = table.find((item) => item.version === Number(chosen));
+    if (spec) return spec.k;
+  }
+  return lastK || table[0].k;
+}
+
+function cellEditorHexState(type, k) {
+  const key = historyKey(type, k);
+  let state = cellEditorHexStates.get(key);
+  if (!state) {
+    state = createUniversalEditorState({ type, size: k });
+    cellEditorHexStates.set(key, state);
+  }
+  if (yCellEditorStore) state.mode = yCellEditorStore.mode; // 모드 카드는 타입 공통이다
+  return state;
+}
+
+/** 현재 편집 대상의 컨텍스트. Y 는 파인더 유도 배치까지, O/A 는 격자 크기만 든다. */
+function cellEditorContext() {
+  if (cellEditorType === 'Y') {
+    const ctx = yCellEditorContext();
+    return { type: 'Y', size: ctx.n, y: ctx, error: ctx.error };
+  }
+  return { type: cellEditorType, size: cellEditorHexSize(cellEditorType), y: null, error: null };
+}
+
+function cellEditorStateFor(ctx) {
+  return ctx.type === 'Y' ? yCellEditorStateFor(ctx.y) : cellEditorHexState(ctx.type, ctx.size);
+}
+
+function cellEditorBucketKey(ctx) {
+  return historyKey(ctx.type, ctx.size);
+}
+
+/**
+ * 스냅샷. 두 엔진(type-y-cell-editor · cell-editor-core)이 마침 같은 두 필드
+ * (`userNonData: Set` · `tones: Map`)에 편집 결과를 담으므로 한 쌍으로 족하다.
+ * O/A 의 중앙 파인더 패턴은 이 편집기가 건드리지 않으니 스냅샷에 넣지 않는다.
+ */
+function cellEditorSnapshot(state) {
+  return { userNonData: new Set(state.userNonData), tones: new Map(state.tones) };
+}
+
+function restoreCellEditorSnapshot(state, snapshot) {
+  state.userNonData = new Set(snapshot.userNonData);
+  state.tones = new Map(snapshot.tones);
+}
+
+/**
+ * 편집 한 번 — 스냅샷 → `apply()` → **실제로 바뀐 경우에만** 스텝. 규칙 자체는
+ * cell-editor-history 가 소유한다(`commitEdit`), 여기서는 스냅샷 만드는 법만 준다.
+ *
+ * 왜 «누른 순간» 이 아니라 «첫 실제 편집» 인가: 잠긴 셀(중앙 파인더 · reference/format ·
+ * 파인더 점유)이나 무동작 클릭에도 스텝이 생기면 Ctrl+Z 가 아무것도 안 하는 것처럼
+ * 보이고, 반복 클릭이 상한 50 스택을 밀어내 **되돌릴 수 있었던 진짜 편집을 잃는다**.
+ * (실기: Y 마스크 모드에서 잠긴 셀 55회 클릭 → 직전 실편집이 복구 불가였다.)
+ */
+function cellEditorCommit(key, state, apply) {
+  return commitHistoryEdit(cellEditorHistory, key, {
+    snapshot: () => cellEditorSnapshot(state),
+    apply,
+  });
+}
+
+function cellEditorBeginStroke(ctx, state) {
+  cellEditorStrokeActive = true;
+  cellEditorStrokeKey = cellEditorBucketKey(ctx);
+  // 모드는 스트로크 안에서 바뀌지 않는다 — 중복 방지 단위를 여기서 굳힌다.
+  cellEditorStrokeMode = state.mode;
+  // 예약만 한다. 실제 편집이 하나라도 일어나야 스텝이 생긴다.
+  armHistoryStroke(cellEditorHistory, cellEditorStrokeKey, cellEditorSnapshot(state));
+  cellEditorStrokePainted.clear();
+}
+
+function cellEditorEndStroke() {
+  if (!cellEditorStrokeActive) return;
+  cellEditorStrokeActive = false;
+  if (cellEditorStrokeKey !== null) {
+    endHistoryStroke(cellEditorHistory, cellEditorStrokeKey); // 남은 예약도 함께 버린다
+    cellEditorStrokeKey = null;
+  }
+  cellEditorStrokeMode = null;
+  cellEditorStrokePainted.clear();
+  // 미뤄둔 rAF 가 (숨은 탭 등으로) 안 돌아도 표시가 굳지 않게 플래그를 푼다.
+  cellEditorRepaintQueued = false;
+  const ctx = cellEditorContext();
+  paintCellEditor(cellEditorStateFor(ctx), ctx); // 스트로크 중 미뤄둔 표시를 맞춘다
+  refreshCellEditorHistoryButtons();
+}
+
+function refreshCellEditorHistoryButtons() {
+  if (!cellEditorHistory) return;
+  const key = cellEditorBucketKey(cellEditorContext());
+  if (els.yCellEditorUndo) els.yCellEditorUndo.disabled = !canUndoHistory(cellEditorHistory, key);
+  if (els.yCellEditorRedo) els.yCellEditorRedo.disabled = !canRedoHistory(cellEditorHistory, key);
+}
+
+function cellEditorStepHistory(direction) {
+  // 되돌리기는 진행 중인 붓질을 **끝낸다**. 열린 채로 두면 스냅샷만 빠져나가고 스택은
+  // 잠긴 상태라 남은 드래그가 통째로 기록에서 사라진다 (히스토리 모듈도 같이 닫는다).
+  cellEditorEndStroke();
+  const ctx = cellEditorContext();
+  const state = cellEditorStateFor(ctx);
+  const key = cellEditorBucketKey(ctx);
+  const snapshot = cellEditorSnapshot(state);
+  const restored = direction === HISTORY_SHORTCUT_UNDO
+    ? undoSnapshot(cellEditorHistory, key, snapshot)
+    : redoSnapshot(cellEditorHistory, key, snapshot);
+  if (restored === null) return false;
+  restoreCellEditorSnapshot(state, restored);
+  paintCellEditor(state, ctx);
+  refreshCellEditorHistoryButtons();
+  if (els.yCellEditorStatus) {
+    els.yCellEditorStatus.textContent = direction === HISTORY_SHORTCUT_UNDO ? t('g561') : t('g562');
+  }
+  return true;
+}
+
 function yCellAria(face, i, j, tone, kind) {
   const toneKey = tone === 0 ? 'g534' : tone === 1 ? 'g535' : 'g536';
   const roleKey = kind === 'data' ? 'g527' : kind === 'detector' ? 'g528' : 'g529';
@@ -3419,20 +3661,7 @@ function paintTypeYCellEditor(state, ctx) {
   svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-  const defs = document.createElementNS(ns, 'defs');
-  const pattern = document.createElementNS(ns, 'pattern');
-  pattern.setAttribute('id', 'yCellHatch');
-  pattern.setAttribute('width', '0.18');
-  pattern.setAttribute('height', '0.18');
-  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
-  pattern.setAttribute('patternTransform', 'rotate(45)');
-  const hatchRect = document.createElementNS(ns, 'rect');
-  hatchRect.setAttribute('width', '0.18');
-  hatchRect.setAttribute('height', '0.06');
-  hatchRect.setAttribute('fill', 'rgba(226,59,59,0.35)');
-  pattern.appendChild(hatchRect);
-  defs.appendChild(pattern);
-  svg.appendChild(defs);
+  svg.appendChild(makeHatchDefs(ns)); // 검출기 셀 빗금 — O/A 그리기와 같은 정의를 쓴다
 
   for (const face of YFACES) {
     for (let i = 0; i < n; i += 1) {
@@ -3510,17 +3739,195 @@ function paintTypeYCellEditor(state, ctx) {
   if (els.yCellEditorJson) els.yCellEditorJson.value = stringifyCellEditor(state, sets);
 }
 
+// ── O·A 격자 그리기 (SVG) ───────────────────────────────────────────────────
+
+const cellEditorHexViews = new Map();
+
+/**
+ * 단위 크기 격자의 **실제 꼭짓점 범위**에서 viewBox 를 뽑는다. 반경으로 계산하지
+ * 않는 이유는 Type A 다 — 코너 패치가 육각 반경 바깥으로 나가서 반경 기반 bbox 는
+ * 패치를 잘라 먹는다.
+ */
+function cellEditorHexView(type, k) {
+  const cacheKey = historyKey(type, k);
+  const cached = cellEditorHexViews.get(cacheKey);
+  if (cached) return cached;
+  const layout = { size: 1, originX: 0, originY: 0 };
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const c of enumerateCoreCells(type, k)) {
+    for (const face of FACES) {
+      for (const point of facePolygon(c.q, c.r, face, layout)) {
+        if (point.x < minX) minX = point.x;
+        if (point.x > maxX) maxX = point.x;
+        if (point.y < minY) minY = point.y;
+        if (point.y > maxY) maxY = point.y;
+      }
+    }
+  }
+  const margin = 0.45;
+  const view = {
+    layout,
+    minX: minX - margin,
+    minY: minY - margin,
+    width: (maxX - minX) + margin * 2,
+    height: (maxY - minY) + margin * 2,
+  };
+  cellEditorHexViews.set(cacheKey, view);
+  return view;
+}
+
+/**
+ * 역할표는 (타입, k, 파인더 모드) 만의 함수다 — 편집으로 바뀌지 않는다. 그런데
+ * `roleOfCoord` 는 O/A 경로에서 호출마다 역할 Set 을 새로 만든다(placement 계약).
+ * 셀마다 그걸 부르면 다시 그릴 때마다 수십만 연산이라 드래그가 끊긴다. 한 번 만들어 둔다.
+ */
+const cellEditorRoleCache = new Map();
+
+function hexRoleMap(type, k, finderMode) {
+  const cacheKey = `${type}:${k}:${finderMode}`;
+  const cached = cellEditorRoleCache.get(cacheKey);
+  if (cached) return cached;
+  const roles = new Map();
+  for (const c of enumerateCoreCells(type, k)) {
+    roles.set(coreCoordKey(type, c), roleOfCoord(type, k, c, { finderMode }));
+  }
+  cellEditorRoleCache.set(cacheKey, roles);
+  return roles;
+}
+
+function hexRoleOf(type, k, state, c) {
+  return hexRoleMap(type, k, state.finderMode).get(coreCoordKey(type, c)) || 'data';
+}
+
+function hexCellKind(type, k, state, c) {
+  if (isFixedRole(hexRoleOf(type, k, state, c))) return 'fixed';
+  return state.userNonData.has(coreCoordKey(type, c)) ? 'detector' : 'data';
+}
+
+function hexCellAria(face, c, tone, kind) {
+  const toneName = tone === 0 ? 'g534' : tone === 1 ? 'g535' : 'g536';
+  const roleName = kind === 'data' ? 'g527' : kind === 'detector' ? 'g528' : 'g558';
+  return tf('g560', { face, q: c.q, r: c.r, tone: t(toneName), role: t(roleName) });
+}
+
+function makeHatchDefs(ns) {
+  const defs = document.createElementNS(ns, 'defs');
+  const pattern = document.createElementNS(ns, 'pattern');
+  pattern.setAttribute('id', 'yCellHatch');
+  pattern.setAttribute('width', '0.18');
+  pattern.setAttribute('height', '0.18');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  pattern.setAttribute('patternTransform', 'rotate(45)');
+  const hatchRect = document.createElementNS(ns, 'rect');
+  hatchRect.setAttribute('width', '0.18');
+  hatchRect.setAttribute('height', '0.06');
+  hatchRect.setAttribute('fill', 'rgba(226,59,59,0.35)');
+  pattern.appendChild(hatchRect);
+  defs.appendChild(pattern);
+  return defs;
+}
+
+function paintHexCellEditor(state, ctx) {
+  const svg = els.yCellEditorSvg;
+  if (!svg || !state) return;
+  if (yCellEditorNoticeShown) {
+    if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = '';
+    yCellEditorNoticeShown = false;
+  }
+  const k = ctx.size;
+  const view = cellEditorHexView(ctx.type, k);
+  const ns = 'http://www.w3.org/2000/svg';
+  svg.setAttribute('viewBox', `${view.minX} ${view.minY} ${view.width} ${view.height}`);
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  svg.appendChild(makeHatchDefs(ns));
+
+  for (const c of enumerateCoreCells(ctx.type, k)) {
+    const kind = hexCellKind(ctx.type, k, state, c);
+    for (const face of FACES) {
+      const points = facePolygon(c.q, c.r, face, view.layout)
+        .map((p) => `${p.x},${p.y}`).join(' ');
+      const tone = coreCellTone(state, face, c);
+      const g = document.createElementNS(ns, 'g');
+      g.setAttribute('class', 'y-cell-editor-cell');
+      g.setAttribute('role', 'button');
+      g.setAttribute('tabindex', '0');
+      g.setAttribute('data-face', face);
+      g.setAttribute('data-q', String(c.q));
+      g.setAttribute('data-r', String(c.r));
+      g.setAttribute('aria-label', hexCellAria(face, c, tone, kind));
+      const poly = document.createElementNS(ns, 'polygon');
+      poly.setAttribute('points', points);
+      poly.setAttribute('fill', Y_CELL_TONE_FILL[tone]);
+      poly.setAttribute('stroke', kind === 'fixed' ? '#c9a227' : 'rgba(0,0,0,0.28)');
+      poly.setAttribute('stroke-width', kind === 'fixed' ? '0.06' : '0.02');
+      g.appendChild(poly);
+      if (kind === 'detector') {
+        const hatch = document.createElementNS(ns, 'polygon');
+        hatch.setAttribute('points', points);
+        hatch.setAttribute('fill', 'url(#yCellHatch)');
+        hatch.setAttribute('pointer-events', 'none');
+        g.appendChild(hatch);
+      }
+      svg.appendChild(g);
+    }
+  }
+
+  if (els.yCellEditorJson) els.yCellEditorJson.value = stringifyUniversalEditorCompact(state);
+}
+
+function paintCellEditor(state, ctx) {
+  if (ctx.type === 'Y') {
+    paintTypeYCellEditor(state, ctx.y);
+    return;
+  }
+  paintHexCellEditor(state, ctx);
+}
+
+/**
+ * 드래그 중에는 프레임당 한 번만 다시 그린다. 한 번 그릴 때 면 노드를 수천 개
+ * 만들기 때문에 pointermove 마다 그리면 손이 그림보다 앞선다.
+ */
+function queueCellEditorRepaint() {
+  if (cellEditorRepaintQueued) return;
+  cellEditorRepaintQueued = true;
+  requestAnimationFrame(() => {
+    cellEditorRepaintQueued = false;
+    const ctx = cellEditorContext();
+    paintCellEditor(cellEditorStateFor(ctx), ctx);
+    refreshCellEditorHistoryButtons();
+  });
+}
+
 function yCellFromEvent(ev) {
   const node = ev.target && ev.target.closest && ev.target.closest('.y-cell-editor-cell');
   if (!node) return null;
-  return { face: node.dataset.face, i: Number(node.dataset.i), j: Number(node.dataset.j) };
+  if (node.dataset.i !== undefined) {
+    return { face: node.dataset.face, i: Number(node.dataset.i), j: Number(node.dataset.j) };
+  }
+  return { face: node.dataset.face, q: Number(node.dataset.q), r: Number(node.dataset.r) };
 }
 
 function editYCell(face, i, j, direction, restoreFocus = false) {
   const ctx = yCellEditorContext();
   const state = yCellEditorStateFor(ctx);
-  if (!ctx.error) applyCellEdit(state, face, i, j, direction, ctx.sets);
-  paintTypeYCellEditor(state, ctx);
+  if (!ctx.error) {
+    // 스트로크가 열려 있으면 코얼레싱된다 — 드래그 한 번 = 되돌리기 한 스텝.
+    // 마스크 모드의 reference/format(fixed) · 파인더 점유(occupied) 셀은 applyCellEdit 가
+    // {changed:false} 로 무동작을 알리고, 그때는 스텝이 생기지 않는다 (O/A 와 같은 규칙).
+    cellEditorCommit(
+      historyKey('Y', ctx.n), state,
+      () => applyCellEdit(state, face, i, j, direction, ctx.sets),
+    );
+  }
+  if (cellEditorStrokeActive) {
+    queueCellEditorRepaint();
+  } else {
+    paintTypeYCellEditor(state, ctx);
+    refreshCellEditorHistoryButtons();
+  }
   if (restoreFocus && els.yCellEditorSvg) {
     const next = els.yCellEditorSvg.querySelector(
       `.y-cell-editor-cell[data-face="${face}"][data-i="${i}"][data-j="${j}"]`,
@@ -3529,9 +3936,66 @@ function editYCell(face, i, j, direction, restoreFocus = false) {
   }
 }
 
+/**
+ * O/A 한 면 편집. 중앙 파인더(19셀)는 **잠근다** — 파인더 패턴 설계는 독립
+ * `/celleditor/` 의 몫이고, 여기서 반쪽 UI 로 건드리면 두 편집기의 파인더 상태가
+ * 갈라진다. 나머지 고정 역할(앵커·ref/format)은 톤만 바꾸고 데이터 제외는 안 한다.
+ */
+function editHexCell(face, c, direction, restoreFocus = false) {
+  const ctx = cellEditorContext();
+  const state = cellEditorStateFor(ctx);
+  const role = hexRoleOf(ctx.type, ctx.size, state, c);
+  const key = cellEditorBucketKey(ctx);
+  if (role !== 'finder') {
+    if (state.mode === CELL_EDITOR_MODE_MASK) {
+      // 고정 역할(앵커·ref/format)의 데이터 제외 차단은 **코어가 판정한다** —
+      // {changed:false} 를 돌려주므로 스텝도 생기지 않는다 (판정 자리 하나).
+      cellEditorCommit(key, state, () => coreMaskToggle(state, c));
+    } else {
+      cellEditorCommit(key, state, () => {
+        setCoreCellTone(state, face, c, cycleCoreTone(coreCellTone(state, face, c), direction));
+        if (!isFixedRole(role)) state.userNonData.add(coreCoordKey(ctx.type, c));
+        return true; // 톤 순환은 언제나 바뀐다
+      });
+    }
+  }
+  if (cellEditorStrokeActive) {
+    queueCellEditorRepaint();
+  } else {
+    paintHexCellEditor(state, ctx);
+    refreshCellEditorHistoryButtons();
+  }
+  if (restoreFocus && els.yCellEditorSvg) {
+    const next = els.yCellEditorSvg.querySelector(
+      `.y-cell-editor-cell[data-face="${face}"][data-q="${c.q}"][data-r="${c.r}"]`,
+    );
+    if (next) next.focus({ preventScroll: true });
+  }
+}
+
+/**
+ * 포인터/키보드가 집은 면 하나를 편집한다. 스트로크 안에서는 **편집 단위당 한 번만**.
+ *
+ * 단위를 면으로 고정하면 안 된다 — 마스크 토글의 단위는 좌표라, 한 셀의 T·L·R 을
+ * 스치는 드래그가 같은 좌표를 세 번 뒤집어 «아무 일도 안 한» 결과가 된다(2회면 원복).
+ * 판정은 `editUnitKey` 한 곳이 소유한다.
+ */
+function editCellFromHit(cell, direction, restoreFocus = false) {
+  if (cellEditorStrokeActive) {
+    const mark = editUnitKey(cell, cellEditorStrokeMode);
+    if (cellEditorStrokePainted.has(mark)) return;
+    cellEditorStrokePainted.add(mark);
+  }
+  if (cell.i === undefined) {
+    editHexCell(cell.face, { q: cell.q, r: cell.r }, direction, restoreFocus);
+  } else {
+    editYCell(cell.face, cell.i, cell.j, direction, restoreFocus);
+  }
+}
+
 async function copyTypeYCellEditorJson() {
-  const ctx = yCellEditorContext();
-  const state = yCellEditorStateFor(ctx);
+  const ctx = cellEditorContext();
+  const state = cellEditorStateFor(ctx);
   if (ctx.error) {
     if (els.yCellEditorStatus) {
       els.yCellEditorStatus.textContent = tf('g549', { message: ctx.error.message });
@@ -3539,7 +4003,10 @@ async function copyTypeYCellEditorJson() {
     yCellEditorNoticeShown = true;
     return;
   }
-  const text = stringifyCellEditor(state, ctx.sets);
+  // O/A 는 컴팩트 튜플 팩 — indent 2 객체 나열이면 k=10 에서 수천 줄이 된다.
+  const text = ctx.type === 'Y'
+    ? stringifyCellEditor(state, ctx.y.sets)
+    : stringifyUniversalEditorCompact(state);
   if (els.yCellEditorJson) els.yCellEditorJson.value = text;
   const mark = (ok) => {
     if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = ok ? t('g530') : t('g531');
@@ -3568,28 +4035,69 @@ async function copyTypeYCellEditorJson() {
 function syncTypeYCellEditorUi() {
   const section = els.yCellEditorSection;
   if (!section) return;
-  const show = isLabPath() && generatorState.type === 'Y';
+  // 편집기가 여는 타입은 Y·O·A 다 (K 제외 — CELL_EDITOR_TYPES 주석 참조).
+  const show = isLabPath() && CELL_EDITOR_TYPES.includes(generatorState.type);
   section.hidden = !show;
   if (!show || !yCellEditorWired) return;
-  const ctx = yCellEditorContext();
-  const state = yCellEditorStateFor(ctx);
+  // 생성기 타입이 **바뀐 순간**에만 편집 타입을 끌어온다. 그 뒤엔 카드 선택이 이긴다.
+  if (cellEditorFollowedType !== generatorState.type) {
+    cellEditorFollowedType = generatorState.type;
+    if (CELL_EDITOR_TYPES.includes(generatorState.type)) cellEditorType = generatorState.type;
+  }
+  if (!CELL_EDITOR_TYPES.includes(cellEditorType)) cellEditorType = 'Y';
+  const ctx = cellEditorContext();
+  const state = cellEditorStateFor(ctx);
   section.dataset.mode = state.mode;
+  section.dataset.cellType = ctx.type;
+  if (els.yCellEditorTypeCards) {
+    for (const card of els.yCellEditorTypeCards.querySelectorAll('[data-ycell-type]')) {
+      const on = card.dataset.ycellType === ctx.type;
+      card.classList.toggle('active', on);
+      card.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
   if (els.yCellEditorModeCards) {
     for (const card of els.yCellEditorModeCards.querySelectorAll('[data-ycell-mode]')) {
-      card.classList.toggle('active', card.dataset.ycellMode === state.mode);
+      // 같은 툴바에서 타입 카드만 aria-pressed 를 달면 보조기술이 모드 카드의 «켜짐» 을
+      // 못 읽는다 — 두 카드 묶음이 같은 표기를 쓴다.
+      const on = card.dataset.ycellMode === state.mode;
+      card.classList.toggle('active', on);
+      card.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
   }
   if (els.yCellEditorModeHint) {
     els.yCellEditorModeHint.textContent = state.mode === CELL_EDITOR_MODE_MASK
       ? t('g540') : t('g539');
   }
-  paintTypeYCellEditor(state, ctx);
+  if (els.yCellEditorScopeHint) {
+    els.yCellEditorScopeHint.textContent = ctx.type === 'Y' ? t('g522') : t('g559');
+  }
+  if (els.yCellEditorFixedLabel) {
+    els.yCellEditorFixedLabel.textContent = ctx.type === 'Y' ? t('g529') : t('g558');
+  }
+  paintCellEditor(state, ctx);
+  refreshCellEditorHistoryButtons();
 }
 
 function wireTypeYCellEditor() {
   if (yCellEditorWired || !els.yCellEditorSection) return;
   yCellEditorWired = true;
   yCellEditorStore = createCellEditorStore();
+  cellEditorHistory = createHistoryStore({ limit: CELL_EDITOR_HISTORY_LIMIT });
+  if (els.yCellEditorTypeCards) {
+    for (const card of els.yCellEditorTypeCards.querySelectorAll('[data-ycell-type]')) {
+      card.addEventListener('click', () => {
+        const nextType = card.dataset.ycellType;
+        if (!CELL_EDITOR_TYPES.includes(nextType) || nextType === cellEditorType) return;
+        // 타입 전환은 스트로크를 닫고 **히스토리를 갈아탄다** — 비우지 않는다.
+        // 버킷이 (타입,크기) 라서 Y 로 돌아오면 Y 히스토리가 그대로 있다.
+        cellEditorEndStroke();
+        cellEditorType = nextType;
+        if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = '';
+        syncTypeYCellEditorUi();
+      });
+    }
+  }
   if (els.yCellEditorModeCards) {
     for (const card of els.yCellEditorModeCards.querySelectorAll('[data-ycell-mode]')) {
       card.addEventListener('click', () => {
@@ -3598,12 +4106,35 @@ function wireTypeYCellEditor() {
       });
     }
   }
+  if (els.yCellEditorUndo) {
+    els.yCellEditorUndo.addEventListener('click', () => {
+      cellEditorStepHistory(HISTORY_SHORTCUT_UNDO);
+    });
+  }
+  if (els.yCellEditorRedo) {
+    els.yCellEditorRedo.addEventListener('click', () => {
+      cellEditorStepHistory(HISTORY_SHORTCUT_REDO);
+    });
+  }
   if (els.yCellEditorReset) {
     els.yCellEditorReset.addEventListener('click', () => {
-      const ctx = yCellEditorContext();
-      resetCellEditorState(yCellEditorStateFor(ctx));
+      const ctx = cellEditorContext();
+      const state = cellEditorStateFor(ctx);
+      // 초기화도 되돌릴 수 있어야 한다. 단 이미 처녀 상태면 바뀌는 게 없으니 스텝도
+      // 없다 — «실제 변경 없으면 스텝 없음» 은 버튼 경로에도 그대로 적용된다.
+      cellEditorCommit(cellEditorBucketKey(ctx), state, () => {
+        const dirty = state.tones.size > 0 || state.userNonData.size > 0;
+        if (ctx.type === 'Y') {
+          resetCellEditorState(state);
+        } else {
+          state.tones.clear();
+          state.userNonData.clear();
+        }
+        return dirty;
+      });
       if (els.yCellEditorStatus) els.yCellEditorStatus.textContent = '';
-      paintTypeYCellEditor(yCellEditorStateFor(ctx), ctx);
+      paintCellEditor(state, ctx);
+      refreshCellEditorHistoryButtons();
     });
   }
   if (els.yCellEditorCopy) {
@@ -3626,8 +4157,26 @@ function wireTypeYCellEditor() {
       if (!cell) return;
       if (ev.button === 1) return;
       if (ev.button === 2) ev.preventDefault();
+      // 단축키는 «편집기에 포커스가 있을 때만» 이라 포인터로 칠했으면 포커스를 준다.
+      if (els.yCellEditorSection && typeof els.yCellEditorSection.focus === 'function') {
+        els.yCellEditorSection.focus({ preventScroll: true });
+      }
       const direction = ev.button === 2 ? TONE_BRIGHTEN : TONE_DARKEN;
-      editYCell(cell.face, cell.i, cell.j, direction);
+      const ctx = cellEditorContext();
+      cellEditorBeginStroke(ctx, cellEditorStateFor(ctx));
+      editCellFromHit(cell, direction);
+    });
+    // 드래그 도색. 포인터 캡처를 걸지 않으므로 이동 중 target 이 그때그때의 면이다.
+    svg.addEventListener('pointermove', (ev) => {
+      if (!cellEditorStrokeActive) return;
+      if (ev.buttons === 0) {
+        cellEditorEndStroke();
+        return;
+      }
+      const cell = yCellFromEvent(ev);
+      if (!cell) return;
+      const direction = (ev.buttons & 2) !== 0 ? TONE_BRIGHTEN : TONE_DARKEN;
+      editCellFromHit(cell, direction);
     });
     svg.addEventListener('contextmenu', (ev) => {
       if (yCellFromEvent(ev)) ev.preventDefault();
@@ -3638,9 +4187,20 @@ function wireTypeYCellEditor() {
       if (!cell) return;
       ev.preventDefault();
       const direction = ev.shiftKey ? TONE_BRIGHTEN : TONE_DARKEN;
-      editYCell(cell.face, cell.i, cell.j, direction, true);
+      if (cell.i === undefined) editHexCell(cell.face, { q: cell.q, r: cell.r }, direction, true);
+      else editYCell(cell.face, cell.i, cell.j, direction, true);
     });
+    window.addEventListener('pointerup', cellEditorEndStroke);
+    window.addEventListener('pointercancel', cellEditorEndStroke);
   }
+  // 단축키는 **섹션 안에 포커스가 있을 때만** 잡는다. 글상자(설정 JSON) 안에서는
+  // classifyHistoryShortcut 이 null 을 돌려주므로 브라우저 기본 동작이 그대로 산다.
+  els.yCellEditorSection.addEventListener('keydown', (ev) => {
+    const shortcut = classifyHistoryShortcut(ev);
+    if (shortcut === null) return;
+    ev.preventDefault();
+    cellEditorStepHistory(shortcut);
+  });
   setYCellEditorZoom(1);
 }
 
@@ -4479,6 +5039,14 @@ function render() {
       const prevN = lastEncodedYn;
       lastEncodedYn = result.encoded.n;
       if (isLabPath() && prevN !== lastEncodedYn) syncTypeYCellEditorUi();
+    }
+    // O/A 도 같은 이유로 붙잡는다 — 버전이 auto 면 편집기가 열 격자 반경 k 를
+    // 실제로 인코딩된 값에서만 알 수 있다.
+    if ((result.type === 'O' || result.type === 'A') && result.encoded && result.encoded.k) {
+      const prevK = result.type === 'A' ? lastEncodedKA : lastEncodedKO;
+      if (result.type === 'A') lastEncodedKA = result.encoded.k;
+      else lastEncodedKO = result.encoded.k;
+      if (isLabPath() && prevK !== result.encoded.k) syncTypeYCellEditorUi();
     }
     emitLabGen(result, cfg);
     drawScene(result.scene, els.canvas, 26);

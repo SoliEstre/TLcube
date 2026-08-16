@@ -1,5 +1,13 @@
 /**
- * type-y-cell-editor-lab.test.js — /lab/ + Type Y 전용 노출·i18n·접근성·번들.
+ * type-y-cell-editor-lab.test.js — /lab/ 셀 편집기 노출·i18n·접근성·번들.
+ *
+ * 의도적 갱신 (2026-08-16, 운영자 지시): 섹션이 «Y타입 셀 편집기» → «셀 편집기» 로
+ * 개명되고 타입 O·A 를 함께 연다. 그래서 옛 게이트 단언
+ * (`isLabPath() && generatorState.type === 'Y'`) 은 **주어가 바뀌었다**.
+ *
+ * ⚠ 그 단언을 그냥 두면 통과는 하는데 아무것도 안 지킨다 — 같은 문자열이
+ * `syncYLocatorUi()`(Y 로케이터 옵션, 진짜 Y 전용)에도 있어서 그쪽을 물기 때문이다.
+ * 그래서 «편집기 게이트» 와 «로케이터 게이트» 를 각각 함수 이름에 앵커해 둘로 나눴다.
  */
 
 import test from 'node:test';
@@ -17,6 +25,10 @@ const I18N_KEYS = [
   'g521', 'g522', 'g523', 'g524', 'g525', 'g526', 'g527', 'g528', 'g529',
   'g530', 'g531', 'g532', 'g533', 'g534', 'g535', 'g536', 'g537', 'g538',
   'g539', 'g540',
+  // 다중 타입 · undo/redo · 단축키 확장 대역 (2026-08-16). 한 대역으로 몰아 잡는다 —
+  // 다른 레인이 같은 사전에 키를 붙이고 있어서 번호가 흩어지면 병합 때 엉킨다.
+  'g550', 'g551', 'g552', 'g553', 'g554', 'g555', 'g556', 'g557', 'g558',
+  'g559', 'g560', 'g561', 'g562',
 ];
 
 function langBlock(lang) {
@@ -35,15 +47,107 @@ function langBlock(lang) {
   throw new Error(`${lang} 사전이 닫히지 않는다`);
 }
 
-test('/lab/ + Type Y 에서만 섹션을 열고 정식·O/A 에서는 숨긴다', () => {
+test('/lab/ + Y·O·A 에서 섹션을 열고 정식판에서는 숨긴다 (K 는 아예 없다)', () => {
   assert.match(INDEX, /id="yCellEditorSection"/);
   assert.match(INDEX, /data-i18n="g521"/);
   assert.match(INDEX, /function syncTypeYCellEditorUi\(\)/);
-  assert.match(INDEX, /isLabPath\(\) && generatorState\.type === 'Y'/);
+  // 편집기 게이트 — 타입 목록으로 열린다. 목록 자체도 못 박는다 (K 편입 사고 방지).
+  // 함수 이름에 앵커한다: 문자열만 물면 다른 함수의 같은 표현을 물어 «아무것도 안
+  // 지키는» 단언이 된다 (아래 로케이터 게이트와 실제로 그런 사고가 났다).
+  assert.match(INDEX, /const CELL_EDITOR_TYPES = Object\.freeze\(\['Y', 'O', 'A'\]\)/);
+  assert.match(
+    INDEX,
+    /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(generatorState\.type\);/,
+  );
+  // 로케이터 게이트 — 이쪽은 여전히 Y 전용이다 (편집기 게이트와 주어가 다르다).
+  assert.match(
+    INDEX,
+    /function syncYLocatorUi\(\)[\s\S]{0,200}isLabPath\(\) && generatorState\.type === 'Y'/,
+  );
   assert.match(INDEX, /if \(isLabPath\(\)\) wireTypeYCellEditor\(\)/);
   assert.match(INDEX, /section\.hidden = !show/);
   assert.doesNotMatch(INDEX, /applyToneEdit\([^)]*current/);
   assert.doesNotMatch(INDEX, /stringifyCellEditor\([^)]*encodeY/);
+});
+
+test('타입 선택은 Y/O/A 셋뿐이고 O/A 기하는 공용 코어·hexgrid 를 재사용한다', () => {
+  for (const type of ['Y', 'O', 'A']) {
+    assert.match(INDEX, new RegExp(`data-ycell-type="${type}"`), `${type} 카드가 없다`);
+  }
+  // K 제외 — 렌더러 계약 확장 대기 (태스크 #11). 카드도 사유 안내도 함께 있어야 한다.
+  assert.doesNotMatch(INDEX, /data-ycell-type="K"/);
+  assert.match(INDEX, /data-i18n="g554"/);
+  // 편집기 전용 기하·역할표 복제 금지 — 코어(placement/placementA)와 hexgrid 를 쓴다.
+  assert.match(INDEX, /from '\.\/src\/cell-editor-core\.js'/);
+  assert.match(INDEX, /facePolygon\(c\.q, c\.r, face, view\.layout\)/);
+  assert.match(INDEX, /roleOfCoord\(type, k, c, \{ finderMode \}\)/);
+  assert.match(INDEX, /enumerateCoreCells\(ctx\.type, k\)/);
+  // O/A export 는 컴팩트 튜플 팩 (k=10 에서 indent 2 객체 나열이면 수천 줄이 된다).
+  assert.match(INDEX, /stringifyUniversalEditorCompact\(state\)/);
+});
+
+test('undo/redo 는 순수 모듈 위임 + 스트로크 코얼레싱 + 섹션 스코프 단축키다', () => {
+  assert.match(INDEX, /from '\.\/src\/cell-editor-history\.js'/);
+  assert.match(INDEX, /id="yCellEditorUndo"/);
+  assert.match(INDEX, /id="yCellEditorRedo"/);
+  // 상한은 모듈 상수를 그대로 쓴다 (편집기에서 숫자를 다시 적지 않는다).
+  assert.match(INDEX, /createHistoryStore\(\{ limit: CELL_EDITOR_HISTORY_LIMIT \}\)/);
+  assert.doesNotMatch(INDEX, /createHistoryStore\(\{ limit: \d+ \}\)/);
+  // 드래그 = 한 스텝: pointerdown 에서 열고 pointerup/cancel 에서 닫는다.
+  assert.match(INDEX, /cellEditorBeginStroke\(ctx, cellEditorStateFor\(ctx\)\)/);
+  assert.match(INDEX, /window\.addEventListener\('pointerup', cellEditorEndStroke\)/);
+  assert.match(INDEX, /window\.addEventListener\('pointercancel', cellEditorEndStroke\)/);
+  // 단축키는 **섹션 안에 포커스가 있을 때만** — window 전역 청취 금지.
+  // (서식에 결합하지 않는다: 이 파일 전체에서 window keydown 리스너 자체를 금지한다.
+  //  옛 단언은 화살표 함수 한 가지 표기만 막아 재서식이면 그냥 통과했다.)
+  assert.match(INDEX, /els\.yCellEditorSection\.addEventListener\('keydown'/);
+  assert.match(INDEX, /const shortcut = classifyHistoryShortcut\(ev\);/);
+  assert.doesNotMatch(INDEX, /window\.addEventListener\(\s*['"]keydown['"]/);
+  // 안내 노출 + 불가 시 비활성.
+  assert.match(INDEX, /data-i18n="g557"/);
+  assert.match(INDEX, /els\.yCellEditorUndo\.disabled = !canUndoHistory\(/);
+  assert.match(INDEX, /els\.yCellEditorRedo\.disabled = !canRedoHistory\(/);
+});
+
+test('스텝은 «실제로 바뀐 뒤» 에만 쌓인다 — 편집 경로가 전부 commitEdit 를 지난다', () => {
+  // 회귀 (2026-08-16): editYCell 이 ctx.error 만 보고 무조건 기록해서, 마스크 모드의
+  // 잠긴 셀(reference/format·파인더 점유) 클릭이 빈 undo 스텝을 쌓았다 — 반복 클릭이
+  // 상한 50 스택을 밀어내 진짜 편집을 잃었다. 규칙은 히스토리 모듈이 소유한다.
+  assert.match(INDEX, /commitEdit as commitHistoryEdit/);
+  assert.match(INDEX, /function cellEditorCommit\(key, state, apply\)/);
+  assert.match(INDEX, /commitHistoryEdit\(cellEditorHistory, key, \{/);
+  // 예약 → 첫 실제 편집에서 확정 (누른 순간에는 스텝을 만들지 않는다).
+  assert.match(INDEX, /armHistoryStroke\(cellEditorHistory, cellEditorStrokeKey,/);
+  assert.doesNotMatch(INDEX, /beginHistoryStroke\(/);
+  // Y 도 O/A 와 **같은 함수**를 지난다 — 한쪽만 고치는 사고가 이 결함의 원인이었다.
+  assert.match(
+    INDEX,
+    /function editYCell\([\s\S]{0,600}cellEditorCommit\(\s*historyKey\('Y', ctx\.n\), state,/,
+  );
+  assert.match(
+    INDEX,
+    /function editHexCell\([\s\S]{0,900}cellEditorCommit\(key, state, \(\) => coreMaskToggle\(state, c\)\)/,
+  );
+  // «기록 → 편집» 순서(무조건 기록)로 되돌아가지 못하게 옛 헬퍼 이름을 금지한다.
+  assert.doesNotMatch(INDEX, /cellEditorNoteEdit\(/);
+  assert.doesNotMatch(INDEX, /cellEditorRecord\(/);
+});
+
+test('드래그 중복 방지 키는 **편집 단위**를 쓴다 (마스크는 좌표, 톤은 면)', () => {
+  // 회귀 (2026-08-16): 키가 face:coord 고정이라 마스크 모드에서 한 셀의 두 면을 스치면
+  // 좌표 토글이 두 번 일어나 드래그가 «아무 일도 안 한» 결과가 됐다.
+  assert.match(INDEX, /editUnitKey,/);
+  assert.match(INDEX, /const mark = editUnitKey\(cell, cellEditorStrokeMode\);/);
+  assert.match(INDEX, /cellEditorStrokeMode = state\.mode;/);
+  assert.doesNotMatch(INDEX, /const mark = cell\.i === undefined/);
+});
+
+test('되돌리기는 진행 중인 붓질을 끝낸다 (열린 스트로크가 남으면 편집이 삼켜진다)', () => {
+  assert.match(
+    INDEX,
+    /function cellEditorStepHistory\(direction\) \{[\s\S]{0,400}cellEditorEndStroke\(\);/,
+  );
+  assert.match(INDEX, /if \(ev\.buttons === 0\) \{\s*\n\s*cellEditorEndStroke\(\);/);
 });
 
 test('셀 편집기 문구는 ko/en/ja 키가 같고 우클릭·키보드·접근성 마크업이 있다', () => {
@@ -52,6 +156,15 @@ test('셀 편집기 문구는 ko/en/ja 키가 같고 우클릭·키보드·접�
       assert.match(langBlock(lang), new RegExp('"' + key + '"\\s*:'), `${lang} 에 ${key} 가 없다`);
     }
   }
+  // 개명(g521)은 **값까지** 못 박는다. 키 존재만 보면 «Y타입 셀 편집기» 로 조용히
+  // 되돌아가도 초록이라 개명을 아무도 안 지킨다.
+  const RENAMED = { ko: '셀 편집기', en: 'Cell editor', ja: 'セル編集' };
+  for (const [lang, label] of Object.entries(RENAMED)) {
+    assert.match(langBlock(lang), new RegExp(`"g521"\\s*:\\s*"${label}"`), `${lang} g521 개명`);
+  }
+  assert.match(INDEX, /data-i18n="g521">셀 편집기</, '정적 폴백 텍스트도 개명본이다');
+  // 두 카드 묶음이 같은 접근성 표기를 쓴다 (타입만 aria-pressed 이던 것 정정).
+  assert.match(INDEX, /card\.setAttribute\('aria-pressed', on \? 'true' : 'false'\)/);
   assert.match(INDEX, /contextmenu/);
   assert.match(INDEX, /preventDefault\(\)/);
   assert.match(INDEX, /closest\('\.y-cell-editor-cell'\)/);
@@ -75,7 +188,25 @@ test('시험판 번들에도 섹션이 있고 안정판은 런타임에 숨기�
   assert.match(lab, /data-i18n="g521"/);
   assert.match(official, /id="yCellEditorSection"/);
   assert.match(official, /if \(isLabPath\(\)\) wireTypeYCellEditor\(\)/);
-  assert.match(official, /isLabPath\(\) && generatorState\.type === 'Y'/);
+  // 정정 (2026-08-16): 여기 있던 `isLabPath() && generatorState.type === 'Y'` 단언은
+  // **편집기 게이트를 안 물었다** — 같은 문자열이 syncYLocatorUi() 에도 있어서 그쪽으로
+  // 통과했고, 편집기 게이트를 통째로 지워도 초록이었다. 첫 테스트에서 갈라낸 오진을
+  // 번들 테스트가 그대로 하고 있었다. 이제 게이트마다 함수 이름에 앵커한다.
+  assert.match(
+    official,
+    /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(generatorState\.type\);/,
+  );
+  assert.match(
+    official,
+    /function syncYLocatorUi\(\)[\s\S]{0,200}isLabPath\(\) && generatorState\.type === 'Y'/,
+  );
   assert.match(lab, /\["type-y-cell-editor"/);
   assert.match(official, /\["type-y-cell-editor"/);
+  // 다중 타입 코어와 히스토리 모듈도 함께 임베드돼야 한다 — 빠지면 /lab/ 에서
+  // 섹션이 통째로 죽는다(모듈 해석 실패). 순서는 빌더의 위상 정렬이 강제한다.
+  for (const html of [lab, official]) {
+    assert.match(html, /\["cell-editor-history"/);
+    assert.match(html, /\["cell-editor-core"/);
+    assert.match(html, /\["finder-editor-pattern"/);
+  }
 });

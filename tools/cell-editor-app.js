@@ -38,7 +38,10 @@ import {
   applyEraser,
   applyFinderStarter,
   applyMaskToggle,
+  armEditStroke,
+  commitCellEdit,
   coordKey,
+  endEditStroke,
   createUniversalEditorState,
   cycleCellTone,
   enumerateCells,
@@ -61,6 +64,12 @@ import {
   setCellToneDirect,
   undo,
 } from './cell-editor-core.js';
+import {
+  HISTORY_SHORTCUT_REDO,
+  HISTORY_SHORTCUT_UNDO,
+  classifyHistoryShortcut,
+  isTextEntryTarget,
+} from './cell-editor-history.js';
 import { createExportFilenameFactory } from './export-filename.js';
 
 const I18N = Object.freeze({
@@ -314,6 +323,17 @@ let isPointerDown = false;
 let pointerStrokeChanged = false;
 let hoveredElement = null; // { face, coord }
 let simSeed = 42;
+
+/**
+ * 진행 중인 붓질을 끝낸다. 버튼을 뗐을 때뿐 아니라 **되돌리기/다시하기 직전**에도
+ * 부른다 — 스트로크를 연 채로 스냅샷만 팝하면 남은 드래그가 코얼레싱돼 통째로 기록에서
+ * 사라진다 (히스토리 모듈도 undo/redo 에서 같은 규칙으로 스트로크를 닫는다).
+ */
+function stopPointerStroke() {
+  isPointerDown = false;
+  pointerStrokeChanged = false;
+  endEditStroke(editorState);
+}
 
 const elements = {
   canvas: document.getElementById('cellCanvas'),
@@ -681,21 +701,24 @@ function hitTest(canvasX, canvasY) {
 // 도구 실행 및 상태 갱신
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * 도구 한 번. 스텝은 `commitCellEdit` 가 **실제로 바뀐 뒤에만** 만든다 —
+ * 잠긴 셀 마스크 토글·스포이드·이미 같은 톤인 셀 클릭이 빈 되돌리기 스텝을 남기면
+ * 상한 50 스택이 밀려 진짜 편집을 잃는다 (생성기 섹션 편집기와 같은 규칙).
+ */
 function applyToolAt(face, coord, isShift, isRightClick = false) {
   if (editorState.mode === 'mask') {
-    pushUndoSnapshot(editorState);
-    const res = applyMaskToggle(editorState, coord);
-    if (res.changed) {
-      updateUI();
-    }
-    return res.changed;
+    const { changed } = commitCellEdit(editorState, () => applyMaskToggle(editorState, coord));
+    if (changed) updateUI();
+    return changed;
   }
 
   if (isRightClick) {
-    pushUndoSnapshot(editorState);
-    const curTone = getCellTone(editorState, face, coord);
-    const nextTone = cycleCellTone(curTone, -1);
-    setCellToneDirect(editorState, face, coord, nextTone);
+    commitCellEdit(editorState, () => {
+      const curTone = getCellTone(editorState, face, coord);
+      setCellToneDirect(editorState, face, coord, cycleCellTone(curTone, -1));
+      return true; // 톤 순환은 언제나 바뀐다
+    });
     updateUI();
     return true;
   }
@@ -711,23 +734,28 @@ function applyToolAt(face, coord, isShift, isRightClick = false) {
   }
 
   if (editorState.activeTool === 'bucket') {
-    pushUndoSnapshot(editorState);
-    const changed = applyBucket(editorState, face, coord, editorState.activeTone);
+    const { changed } = commitCellEdit(
+      editorState,
+      () => applyBucket(editorState, face, coord, editorState.activeTone),
+    );
     if (changed) updateUI();
     return changed;
   }
 
   if (editorState.activeTool === 'eraser') {
-    const changed = applyEraser(editorState, face, coord, { allFaces: isShift });
+    const { changed } = commitCellEdit(
+      editorState,
+      () => applyEraser(editorState, face, coord, { allFaces: isShift }),
+    );
     if (changed) updateUI();
     return changed;
   }
 
   // Brush
-  const changed = applyBrush(editorState, face, coord, {
+  const { changed } = commitCellEdit(editorState, () => applyBrush(editorState, face, coord, {
     allFaces: isShift,
     tone: editorState.activeTone,
-  });
+  }));
   if (changed) updateUI();
   return changed;
 }
@@ -743,6 +771,7 @@ function importEditorJson(text) {
     pushUndoSnapshot(editorState);
     next.undoStack = editorState.undoStack;
     next.redoStack = editorState.redoStack;
+    next.strokeOpen = editorState.strokeOpen === true;
     next.activeTool = editorState.activeTool;
     next.activeTone = editorState.activeTone;
     next.mode = editorState.mode;
@@ -807,9 +836,20 @@ function updateUI() {
     btn.setAttribute('aria-pressed', btn.dataset.type === editorState.type ? 'true' : 'false');
   });
 
-  // Mode buttons
-  elements.modeToneBtn.classList.toggle('active', editorState.mode === 'tone');
-  elements.modeMaskBtn.classList.toggle('active', editorState.mode === 'mask');
+  // Mode buttons — 다른 카드 묶음과 같은 접근성 표기를 쓴다.
+  for (const [btn, mode] of [[elements.modeToneBtn, 'tone'], [elements.modeMaskBtn, 'mask']]) {
+    const on = editorState.mode === mode;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  // 크기 드롭다운도 상태를 따라간다 — 되돌리기가 크기를 바꿔 놓으면 표시가 어긋난다.
+  // (select 안에서 Ctrl+Z 가 죽어 있던 동안에는 이 어긋남이 보이지 않았다.)
+  const sizeValue = String(editorState.size);
+  if (elements.sizeSelect.value !== sizeValue
+    && [...elements.sizeSelect.options].some((opt) => opt.value === sizeValue)) {
+    elements.sizeSelect.value = sizeValue;
+  }
 
   // Tool buttons
   elements.toolButtons.forEach((btn) => {
@@ -891,7 +931,11 @@ function bindEvents() {
 
     if (hit) {
       isPointerDown = true;
-      pushUndoSnapshot(editorState);
+      // 스트로크 **예약**. 이 안의 편집은 코얼레싱되므로 드래그 도색 한 번이 되돌리기
+      // 한 스텝이다 (예전엔 pointerdown + applyToolAt 이 두 번 쌓아서 클릭 한 번에
+      // Ctrl+Z 를 두 번 눌러야 했다). 예약이라 **아무것도 안 바뀌면 스텝도 없다** —
+      // 잠긴 셀 클릭·스포이드가 빈 스텝을 남기지 않는다.
+      armEditStroke(editorState);
       const isRight = ev.button === 2;
       applyToolAt(hit.face, hit.coord, ev.shiftKey, isRight);
       pointerStrokeChanged = true;
@@ -899,6 +943,10 @@ function bindEvents() {
   });
 
   canvas.addEventListener('pointermove', (ev) => {
+    // 창 밖에서 버튼을 뗐으면 pointerup 이 안 온다 — 스트로크가 열린 채로 남으면
+    // 그 뒤의 편집이 전부 코얼레싱돼 기록에서 사라진다. 버튼 상태로 자가 치유한다
+    // (생성기 섹션 편집기에 있던 장치를 여기에도 붙인다).
+    if (isPointerDown && ev.buttons === 0) stopPointerStroke();
     const rect = canvas.getBoundingClientRect();
     const x = ev.clientX - rect.left;
     const y = ev.clientY - rect.top;
@@ -921,35 +969,35 @@ function bindEvents() {
     }
 
     if (isPointerDown && hit && editorState.activeTool === 'brush') {
-      applyBrush(editorState, hit.face, hit.coord, {
+      // 드래그 도색도 commit 을 지난다 — pointerdown 이 아무것도 안 바꿔 예약만 남은
+      // 경우(같은 톤 셀에서 시작) 여기서 스트로크가 확정돼야 드래그를 되돌릴 수 있다.
+      commitCellEdit(editorState, () => applyBrush(editorState, hit.face, hit.coord, {
         allFaces: ev.shiftKey,
         tone: editorState.activeTone,
-      });
+      }));
       updateUI();
     } else {
       renderCanvas();
     }
   });
 
-  const stopPointer = () => {
-    isPointerDown = false;
-    pointerStrokeChanged = false;
-  };
-  window.addEventListener('pointerup', stopPointer);
-  window.addEventListener('pointercancel', stopPointer);
+  window.addEventListener('pointerup', stopPointerStroke);
+  window.addEventListener('pointercancel', stopPointerStroke);
 
   canvas.addEventListener('contextmenu', (ev) => {
     ev.preventDefault();
   });
 
-  // Undo / Redo 버튼
+  // Undo / Redo 버튼 — 진행 중인 붓질을 먼저 끝낸다 (stopPointerStroke 주석 참조).
   elements.undoBtn.addEventListener('click', () => {
+    stopPointerStroke();
     if (undo(editorState)) {
       notify('undoDone');
       updateUI();
     }
   });
   elements.redoBtn.addEventListener('click', () => {
+    stopPointerStroke();
     if (redo(editorState)) {
       notify('redoDone');
       updateUI();
@@ -1193,21 +1241,33 @@ function bindEvents() {
 
   // 단축키 (Keyboard Shortcuts)
   window.addEventListener('keydown', (ev) => {
-    if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA') return;
+    // 글상자(이름·붙여넣기) 안에서는 브라우저 기본 동작을 그대로 둔다 — 판정은
+    // cell-editor-history.js 한 곳이 소유한다 (생성기 섹션 편집기와 같은 규칙).
+    if (isTextEntryTarget(ev.target)) return;
+    const shortcut = classifyHistoryShortcut(ev);
 
-    if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && ev.key.toLowerCase() === 'z') {
+    if (shortcut === HISTORY_SHORTCUT_UNDO) {
       ev.preventDefault();
+      stopPointerStroke();
       if (undo(editorState)) {
         notify('undoDone');
         updateUI();
       }
-    } else if ((ev.ctrlKey || ev.metaKey) && ((ev.shiftKey && ev.key.toLowerCase() === 'z') || ev.key.toLowerCase() === 'y')) {
+      return;
+    }
+    if (shortcut === HISTORY_SHORTCUT_REDO) {
       ev.preventDefault();
+      stopPointerStroke();
       if (redo(editorState)) {
         notify('redoDone');
         updateUI();
       }
-    } else if (ev.key === '0' || ev.key === '1' || ev.key === '2') {
+      return;
+    }
+    // 도구·톤 단축키는 **수식키 없는 맨 키** 일 때만. 안 그러면 Ctrl+B(북마크) ·
+    // Ctrl+E · Cmd+I 같은 브라우저 단축키가 도구를 바꿔 버린다.
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.key === '0' || ev.key === '1' || ev.key === '2') {
       editorState.activeTone = Number(ev.key);
       updateUI();
     } else if (ev.key.toLowerCase() === 'b') {

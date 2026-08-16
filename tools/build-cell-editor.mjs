@@ -23,7 +23,7 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   'placementA', 'layoutA', 'capacityA', 'markerA', 'encodeA',
   'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'encodeY',
-  'luminance', 'export-filename', 'cell-editor-core',
+  'luminance', 'export-filename', 'cell-editor-history', 'cell-editor-core',
 ]);
 
 function replaceExactlyOnce(source, needle, replacement, label) {
