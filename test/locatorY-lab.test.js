@@ -19,6 +19,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WY,
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
@@ -91,6 +92,12 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
       LOCATOR_PROFILE_CELL_SURFACE_V0W,
       LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
       LOCATOR_PROFILE_CELL_SURFACE_V0W2,
+      // **의도적 갱신 «v0WY 편입» (운영자 재설계 2026-08-17)** — 허용값 맨 뒤에 v0WY.
+      // 위 «v0W 파생 2종» 문단이 「v0WY 는 여기 없다 — 로케이터 프로파일이 아니라
+      // qrPosition: 'plane' 이라서다」 라고 적었던 것은 **허공 마름모 설계**의
+      // 서술이고, QR 이 실루엣 안쪽 먼 코너로 들어오면서 뒤집혔다. 지금은 카드도
+      // 프로파일도 실재하고, «면» 카드는 그 프로파일로 **전환하는 스위치**다.
+      LOCATOR_PROFILE_CELL_SURFACE_V0WY,
     ],
   );
   // 이 단언이 지키는 것은 «허용값 목록에 없다» 는 사실 자체다. 상태 복원기는
@@ -123,7 +130,12 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-locator="cell-surface-v0wq"/);
   // 의도적 갱신 «v0W2 편입» (2026-08-17): v0W2 카드 신설 (부제 g954).
   assert.match(INDEX, /data-locator="cell-surface-v0w2"/);
-  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0wy"/);
+  // **의도적 갱신 «v0WY 편입» (2026-08-17 재설계)** — 여기 있던 `doesNotMatch` 를
+  // **뒤집는다**. 그 부재 단언은 허공 마름모 v0WY 가 «QR 위치일 뿐 레이아웃이
+  // 아니다» 를 지키던 자였는데, 재설계로 v0WY 가 진짜 레이아웃이 되면서 그 명제
+  // 자체가 거짓이 됐다. 지금 지킬 것은 **카드가 실재하고 «면» 카드와 이어져 있다** 다.
+  assert.match(INDEX, /data-locator="cell-surface-v0wy"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0wy"[\s\S]{0,900}?data-i18n="g966"/);
   assert.match(INDEX, /data-pos="plane"/);
   // **운영자 제기 (2026-08-17)**: «면» 카드를 v0WY 라는 이름으로 찾다 못 찾았다.
   // 그래서 부제에 병기했다 — 3언어 모두 «v0WY» 문자열을 갖는다 (아래 문구 테스트).
@@ -186,6 +198,17 @@ test('로케이터 문구는 8언어가 같고 성능 보장을 하지 않는다
       assert.match(langBlock(lang), new RegExp('"' + key + '"\s*:'), `${lang} 에 ${key} 가 없다`);
     }
   }
+  // **의도적 갱신 «v0WY 편입» (2026-08-17)** — 신규 키 g966(라벨) · g967(부제) ·
+  // g968(힌트) 은 **8언어 전부** 있어야 한다 (신규 키의 기본 규약 — 3언어가 아니다).
+  // 그리고 g965(«면» 카드 부제)는 값이 «면-평면» → «먼 코너» 로 바뀌었다:
+  // 허공 마름모가 사라졌으므로 그 낱말이 남아 있으면 화면이 거짓말을 한다.
+  for (const key of ['g966', 'g967', 'g968']) {
+    for (const lang of ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt']) {
+      assert.match(langBlock(lang), new RegExp('"' + key + '"\s*:'), `${lang} 에 ${key} 가 없다`);
+    }
+  }
+  assert.match(INDEX, /"g965":\s*"먼 코너 \(v0WY\)"/);
+  assert.doesNotMatch(INDEX, /"g965":\s*"면-평면/);
   assert.match(INDEX, /data-locator="cell-surface-v0w2"[\s\S]*?data-i18n="g610">셀 표면 v0W2 \(Y1\)</);
   // 운영자가 «v0WY» 로 찾을 수 있어야 한다 — 3언어 부제에 그 문자열이 실제로 있다.
   for (const lang of ['ko', 'en', 'ja']) {

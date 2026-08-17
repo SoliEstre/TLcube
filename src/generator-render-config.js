@@ -6,6 +6,7 @@ import {
   CELL_SURFACE_FINAL_V0,
   CELL_SURFACE_FINAL_V0W,
   CELL_SURFACE_FINAL_V0W2,
+  CELL_SURFACE_FINAL_V0WY,
   CELL_SURFACE_FINAL_V0WQ,
   CELL_SURFACE_FINAL_V0X,
   CELL_SURFACE_FINAL_V0XQ,
@@ -17,6 +18,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WY,
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
@@ -121,6 +123,15 @@ export function encodeOptionsForY(state) {
       version: 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0W2),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WY) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v0WY 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0WY),
     };
   }
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {

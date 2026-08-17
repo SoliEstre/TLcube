@@ -95,7 +95,8 @@ function locatorCardOrder(html) {
 // **의도적 갱신 «v0W 편입» (2026-08-16)** — v0W 카드가 v0XQ 뒤에 붙었다.
 // 순서는 `CELL_SURFACE_FINAL_IDS` 의 선언 순서와 같다 (기본은 여전히 v0X).
 // **의도적 갱신 «v0W 파생 2종 편입» (2026-08-16)** — v0WQ 카드가 v0W 뒤에 붙었다.
-// v0WY 카드는 **여기 없다**: QR 위치 카드 쪽('plane')이 그 자리다.
+// (당시 서술: v0WY 카드는 여기 없다 — QR 위치 카드 쪽('plane')이 그 자리다.
+//  2026-08-17 재설계로 뒤집혔다 — 아래 «v0WY 편입» 문단 참조.)
 // **의도적 갱신 «v0XQ 드랍» (운영자 실기기 확정 2026-08-17)** — 조건부 드랍 규칙
 // «v0WQ > v0XQ» 가 성립해(순위 v0WQ ≫ v0XQ > v0X ≈ v0W) v0XQ 카드를 내렸다.
 // v1r2·v2r2 와 같은 «카드만 내림» 이다 — 사전 키(g604/g947)는 3언어 모두 남아 있고
@@ -106,11 +107,16 @@ function locatorCardOrder(html) {
 // **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드)** —
 // v0X 카드를 내려 일곱 → 여섯이 됐고, 이제 Y1 카드는 **전부 v0W 계열**이다.
 // 사전 키(g602/g603/g944)는 여덟 언어 모두 보존된다 (locatorY-lab.test.js 가 고정).
+// **의도적 갱신 «v0WY 편입» (운영자 재설계 2026-08-17)** — v0WY 카드가 v0W2 뒤에
+// 붙어 여섯 → 일곱이 됐다 (`CELL_SURFACE_FINAL_IDS` 선언 순서 그대로). 위 문단의
+// 「v0WY 카드는 여기 없다」 는 허공 마름모 설계의 서술이고, QR 이 실루엣 안쪽 먼
+// 코너로 들어오면서 진짜 레이아웃이 돼 뒤집혔다. QR 위치 카드 «면» 은 그대로 있고
+// 이제 그 카드가 이 검출기 카드로 **전환**시킨다 (index.html §qrPositionCards).
 const LOCATOR_CARD_ORDER = Object.freeze([
   'auto', 'off', 'cell-surface-v0',
-  'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2',
+  'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2', 'cell-surface-v0wy',
 ]);
-test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0W → v0WQ → v0W2 다 (v0 계열만)', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0W → v0WQ → v0W2 → v0WY 다 (v0 계열만)', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 

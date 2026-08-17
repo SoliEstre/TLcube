@@ -192,8 +192,9 @@ test('셀 표면 v1r2 는 버전 선택과 무관하게 Y1(n=21) 이고 사용�
 
 // v0W 파생 2종 (2026-08-16).
 //   · v0WQ — 새 프로파일. v0X·v0XQ·v0W 와 같은 «Y1 고정» 계약을 탄다.
-//   · v0WY — **프로파일이 아니다.** QR 위치(`qrPosition: 'plane'`)이므로 이 함수의
-//     입력에 나타나지 않는다. 아래 두 번째 테스트가 그 부재를 고정한다.
+//   · v0WY — **2026-08-17 재설계로 프로파일이 됐다.** 구 v0WY(허공 마름모 QR)는
+//     렌더 선택이라 이 함수의 입력에 안 나타났지만, QR 이 실루엣 안쪽 먼 코너로
+//     들어오면서 셀 집합이 달라졌다. 아래 두 번째 테스트가 그 **존재**를 고정한다.
 test('셀 표면 v0WQ 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용자 톤을 보존한다', () => {
   for (const tone of [2, 3]) {
     for (const versionY of [0, 1, 2, undefined]) {
@@ -244,18 +245,37 @@ test('셀 표면 v0W2 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용
   }
 });
 
-test('v0WY 는 인코더 옵션에 흔적이 없다 — QR 위치라 v0W 배선을 그대로 탄다', () => {
-  // 'cell-surface-v0wy' 라는 프로파일은 존재하지 않는다. 혹시 흘러들어도 이 함수는
-  // **셀 표면 분기를 하나도 타지 않고** 폴백 경로로 떨어져야 한다 (조용히 v0W 로
-  // 승격시키면, 사용자가 못 고른 레이아웃이 와이어에 실린다).
-  const stray = encodeOptionsForY({
-    tone: 2,
-    fallback: { mode: 'corner', corner: 'TL' },
-    locatorProfileY: 'cell-surface-v0wy',
-  });
-  assert.equal(stray.cellSurface, undefined);
-  assert.equal(stray.cellSurfaceLayout, undefined);
-  // 그리고 v0W 자체는 QR 위치와 무관하게 같은 옵션을 낸다 — v0WY 는 렌더에서만 갈린다.
+test('셀 표면 v0WY 는 versionY 와 무관하게 Y1(n=21) 고정 — 데이터 280 (재설계)', () => {
+  // ⚠ **의도적 갱신 (2026-08-17 운영자 재설계).** 이 자리의 회귀는
+  // 「v0WY 는 인코더 옵션에 흔적이 없다 — QR 위치라 v0W 배선을 그대로 탄다」 였다.
+  // 그 명제는 **허공 마름모 v0WY** 에 대해 참이었고, QR 이 실루엣 안쪽 먼 코너로
+  // 들어오면서 거짓이 됐다 (슬롯 64셀 + 위상 마커 SE→SW). 지금 재는 것은
+  // v0WQ·v0W2 와 **같은 «Y1 고정» 계약**이다.
+  for (const tone of [2, 3]) {
+    for (const versionY of [0, 1, 2, undefined]) {
+      const opts = encodeOptionsForY({
+        tone,
+        versionY,
+        fallback: { mode: 'window' },
+        locatorProfileY: 'cell-surface-v0wy',
+      });
+      assert.equal(opts.cellSurface, true);
+      assert.equal(opts.cellSurfaceLayout, 'v0wy');
+      assert.equal(opts.tones, tone);
+      assert.equal(opts.version, 1, 'versionY=' + versionY);
+      assert.equal(opts.window, undefined, '셀 표면이 윈도보다 앞선다');
+      const encoded = encodeY('https://tl.estre.so', opts);
+      assert.equal(encoded.cellSurfaceLayout, 'v0wy');
+      assert.equal(encoded.n, 21);
+      assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+      // 441 − 67(파인더 25+36+6) − 64(먼 코너 QR 슬롯 8²) − 12 − 18 = 280.
+      assert.equal(encoded.capacity.dataCells, 280);
+    }
+  }
+  // 그리고 **v0W 는 QR 위치와 무관하게 같은 옵션을 낸다** — 이 등식은 살아 있다.
+  // (예전엔 «면 QR 은 렌더에서만 갈린다» 의 근거였고, 지금은 «QR 위치는 레이아웃을
+  //  바꾸지 않는다 — 바꾸는 것은 UI 의 연동이고 이 함수는 상태를 그대로 읽는다»
+  //  의 근거다. 입력이 같으면 산출도 같아야 한다.)
   const asPlane = encodeOptionsForY({
     tone: 2, fallback: { mode: 'plane' }, locatorProfileY: 'cell-surface-v0w',
   });
