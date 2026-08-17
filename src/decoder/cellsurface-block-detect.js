@@ -3373,4 +3373,9 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   refineSubPatchesPartial,
   anchorsLeaveFrame,
   residualGate,
+  // 진단 전용 추가 (2026-08-17, 고립점 앵커 타당성 계측). 런타임 경로 무접촉 —
+  // 「A 블록 고립점 삼중점을 시드로 써도 refinePose 가 참 포즈로 수렴하는가」 를
+  // 재려면 정련기 자체를 불러야 한다 (`claude-dot-seed-feasibility.mjs`).
+  refinePose,
+  localCellPx,
 });
