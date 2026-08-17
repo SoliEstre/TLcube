@@ -1,0 +1,9 @@
+layout ecc  ppu=9   ppu=8   ppu=7   ppu=6   ppu=5     (OK / 실패사유)
+v0t    L    OK      OK      BODY_RS_FAILED(p6) NO_FORMAT_CANDIDATE(p6) NO_FORMAT_CANDIDATE(p4)
+v0t    M    OK      OK      BODY_RS_FAILED(p6) NO_FORMAT_CANDIDATE(p6) NO_FORMAT_CANDIDATE(p4)
+v0t    H    OK      OK      OK      BODY_RS_FAILED(p6) NO_FORMAT_CANDIDATE(p6)
+v0ty   L    OK      OK      BODY_RS_FAILED(p2) NO_FORMAT_CANDIDATE(p2) NO_FORMAT_CANDIDATE(p2)
+v0ty   M    OK      OK      OK      NO_FORMAT_CANDIDATE(p2) NO_FORMAT_CANDIDATE(p1)
+v0ty   H    OK      OK      OK      NO_FORMAT_CANDIDATE(p2) NO_FORMAT_CANDIDATE(p1)
+
+판독: 같은 layout 에서 ECC 를 올려 더 낮은 ppu 가 초록이 되면 ③ 은 **오류 예산** 문제다 (손잡이 = ECC). 안 바뀌면 포즈 정확도를 의심한다.

@@ -1,0 +1,24 @@
+
+══ v0t ══
+ppu=9  pose v0t=6 v0ty=0 v0=1  → OK v0t/n21
+ppu=8  pose v0t=6 v0ty=0 v0=1  → OK v0t/n21
+ppu=7  pose v0t=6 v0ty=0 v0=0  → 실패 frontend:no-grid-hypothesis
+     (CS 평가 진단이 실패 detail 에 안 실림 — 상류에서 끊긴 것)
+     stage=bootstrap cause={"stage":"bootstrap-validation","pipelineCode":"BODY_RS_FAILED","diagnostics":{"hypothesisCount":12,"formatProposalCount":6,"formatCandidateCount":6,"bodyValidC
+ppu=6  pose v0t=6 v0ty=0 v0=0  → 실패 frontend:no-format-candidate
+     (CS 평가 진단이 실패 detail 에 안 실림 — 상류에서 끊긴 것)
+     stage=bootstrap cause={"stage":"bootstrap-validation","pipelineCode":"NO_FORMAT_CANDIDATE","diagnostics":{"hypothesisCount":254,"formatProposalCount":0,"formatCandidateCount":0,"body
+ppu=5  pose v0t=4 v0ty=0 v0=0  → 실패 frontend:no-format-candidate
+     (CS 평가 진단이 실패 detail 에 안 실림 — 상류에서 끊긴 것)
+     stage=bootstrap cause={"stage":"bootstrap-validation","pipelineCode":"NO_FORMAT_CANDIDATE","diagnostics":{"hypothesisCount":256,"formatProposalCount":0,"formatCandidateCount":0,"body
+
+══ v0ty ══
+ppu=9  pose v0t=4 v0ty=2 v0=1  → OK v0ty/n21
+ppu=8  pose v0t=4 v0ty=2 v0=1  → OK v0ty/n21
+ppu=7  pose v0t=4 v0ty=2 v0=1  → OK v0ty/n21
+ppu=6  pose v0t=4 v0ty=2 v0=1  → 실패 frontend:no-format-candidate
+     (CS 평가 진단이 실패 detail 에 안 실림 — 상류에서 끊긴 것)
+     stage=bootstrap cause={"stage":"bootstrap-validation","pipelineCode":"NO_FORMAT_CANDIDATE","diagnostics":{"hypothesisCount":230,"formatProposalCount":0,"formatCandidateCount":0,"body
+ppu=5  pose v0t=3 v0ty=1 v0=2  → 실패 frontend:no-format-candidate
+     (CS 평가 진단이 실패 detail 에 안 실림 — 상류에서 끊긴 것)
+     stage=bootstrap cause={"stage":"bootstrap-validation","pipelineCode":"NO_FORMAT_CANDIDATE","diagnostics":{"hypothesisCount":218,"formatProposalCount":0,"formatCandidateCount":0,"body
