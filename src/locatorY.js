@@ -53,6 +53,14 @@ export const LOCATOR_PROFILE_CELL_SURFACE_V0W2 = 'cell-surface-v0w2';
  * 생성기의 QR 위치 «면» 카드는 그 프로파일로 **전환**하는 스위치다.
  */
 export const LOCATOR_PROFILE_CELL_SURFACE_V0WY = 'cell-surface-v0wy';
+/**
+ * v0T (표시 이름) = **Type Y 최종 파인더** (운영자 확정 2026-08-17). v0W 계열 전체
+ * (v0W · v0WQ · v0W2 · v0WY)를 대체 — 넷은 같은 날 드랍됐다 (상수는 위에 그대로
+ * 산다 — 발행분 재생성·법의학 경로. `cellSurfaceFinal.js` §CELL_SURFACE_FINAL_DROPPED_IDS).
+ */
+export const LOCATOR_PROFILE_CELL_SURFACE_V0T = 'cell-surface-v0t';
+/** v0T 파생 — **먼 코너 QR 슬롯** (v0WY 와 같은 역할·같은 슬롯 8×8, far 앵커). */
+export const LOCATOR_PROFILE_CELL_SURFACE_V0TY = 'cell-surface-v0ty';
 export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_OFF,
   LOCATOR_PROFILE_HEX_FRAME_V1,
@@ -67,6 +75,8 @@ export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
   LOCATOR_PROFILE_CELL_SURFACE_V0WY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0T,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TY,
 ]);
 export const DEFAULT_LOCATOR_PROFILE_Y = LOCATOR_PROFILE_OFF;
 
@@ -102,7 +112,9 @@ export function isCellSurfaceLocatorProfileY(value) {
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0W
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0W2
-    || value === LOCATOR_PROFILE_CELL_SURFACE_V0WY;
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0WY
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0T
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TY;
 }
 
 export function isLocatorProfileY(value) {

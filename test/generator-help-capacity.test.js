@@ -100,8 +100,11 @@ test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 후보 �
   // **의도적 갱신 «v0X 드랍» (2026-08-17, 판정 3라운드)** — 라인업 기본이
   // v0x → **v0w** 로 승계됐다. 이 테스트가 잡는 사고(«id 생략 = 와이어 선호»)는
   // 그대로고, 두 값이 **서로 다르다**는 사실 자체가 이 테스트의 전제라 함께 재산한다.
+  // **의도적 갱신 «v0T 편입 + v0W 계열 전체 드랍» (2026-08-17)** — 라인업 기본이
+  // v0w → **v0t** 로 승계됐다. 이 테스트가 잡는 사고(«id 생략 = 와이어 선호»)는
+  // 그대로다 — 와이어 선호는 여전히 v2r2 고, 두 값이 서로 다르다.
   assert.equal(wirePreferredFinalLayoutIdForN(21), 'v2r2');
-  assert.equal(finalLayoutIdForN(21), 'v0w', '라인업 기본은 v0X 드랍 뒤 v0w 다');
+  assert.equal(finalLayoutIdForN(21), 'v0t', '라인업 기본은 v0W 계열 드랍 뒤 v0t 다');
   assert.notEqual(wirePreferredFinalLayoutIdForN(21), finalLayoutIdForN(21),
     '와이어 선호와 라인업 기본이 같아졌다 — 이 테스트의 전제가 사라졌다');
   // id 를 생략한 호출은 후보와 무관하게 전부 같은 값이 된다. 이것이 «세 후보 용량
@@ -115,6 +118,9 @@ test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 후보 �
   // v0X 드랍 뒤에도 마찬가지다 — 드랩은 용량 회계를 한 자리도 안 바꿋다.
   assert.notDeepEqual(omitted, payload(21, 'v0w'), 'id 를 넘기면 값이 달라져야 한다');
   assert.notDeepEqual(omitted, payload(21, 'v0wq'), 'id 를 넘기면 값이 달라져야 한다');
+  // v0T 편입 뒤에도 마찬가지다 (2026-08-17) — 새 활성 둘도 와이어 선호와 다르다.
+  assert.notDeepEqual(omitted, payload(21, 'v0t'), 'id 를 넘기면 값이 달라져야 한다');
+  assert.notDeepEqual(omitted, payload(21, 'v0ty'), 'id 를 넘기면 값이 달라져야 한다');
 });
 
 test('n=21 네 후보의 로케이터 셀 수와 최대 payload (L/M/H) 실측 핀', () => {

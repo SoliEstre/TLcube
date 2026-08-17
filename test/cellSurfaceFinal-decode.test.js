@@ -54,17 +54,30 @@ const LINEUP = Object.freeze([
 // v0x 행을 **활성 표에서 드랍 보존 표로 옮긴다** (값·버전·n 무변경).
 // 이 파일에서 두 표를 가르는 기준은 «스위치 없이 도는가» 하나다 — 드랍된
 // 레이아웃은 정의상 스위치가 있어야 돌고, 그것이 «차단» 의 증명이다.
-// 그래서 활성 표는 v0 · v0W 계열 셋이 되고, 기본은 **v0w** 로 승계된다.
+//
+// **의도적 갱신 «v0T 편입 + v0W 계열 전체 드랍» (운영자 확정 2026-08-17)** —
+// v0T 가 Type Y 최종 파인더로 확정되면서 v0w · v0wq · v0w2 행이 드랍 보존 표로
+// 옮겨 가고, 활성 표는 v0 · v0t · v0ty 가 된다. 기본은 **v0t** 로 승계된다
+// (v0w → v0t). 값·버전·n 은 어느 행도 안 바뀐다.
+//
+// ⚠ **v0wy 행은 여기 없다** — 드랍 전에도 이 파일의 활성 표에 없었고, 그 왕복
+// 회귀는 `cellSurface-block-locator.test.js` 가 자기 조건(ppu 15 · embed960)으로
+// 잰다. 실측 (`claude-v0t-wy-restore-debug.out.txt`): 이 파일의 조건(ppu 10)에서는
+// v0wy 가 복원 스위치를 다 켜도 안 돌고, ppu 15 에서는 돈다 — 즉 여기 행을
+// 신설하면 «드랍 때문» 이 아닌 실패를 드랍 회귀로 오인하게 된다 (행별 조건은
+// 드랍 전 그대로 보존한다는 이 표의 규약).
 const ACTIVE_LINEUP = Object.freeze([
   { layout: 'v0', version: 0, n: 13 },
-  { layout: 'v0w', version: 1, n: 21 },
-  { layout: 'v0wq', version: 1, n: 21 },
-  { layout: 'v0w2', version: 1, n: 21 },
+  { layout: 'v0t', version: 1, n: 21 },
+  { layout: 'v0ty', version: 1, n: 21 },
 ]);
 
 /** 드랍 보존 팔 — 복원 스위치 위에서만 돌고, 값은 드랍 전과 같다. */
 const DROPPED_N21_LINEUP = Object.freeze([
   { layout: 'v0x', version: 1, n: 21 },
+  { layout: 'v0w', version: 1, n: 21 },
+  { layout: 'v0wq', version: 1, n: 21 },
+  { layout: 'v0w2', version: 1, n: 21 },
 ]);
 
 function renderFinal(text, {
@@ -112,7 +125,7 @@ function decodeLab(raster, extra = undefined) {
   });
 }
 
-test('활성 라인업 왕복 — v0(n=13)·v0W 계열(n=21) × 2톤/3톤 (스위치 없음)', {
+test('활성 라인업 왕복 — v0(n=13)·v0T 계열(n=21) × 2톤/3톤 (스위치 없음)', {
   timeout: 300_000,
 }, () => {
   for (const { layout, version, n } of ACTIVE_LINEUP) {
@@ -129,14 +142,19 @@ test('활성 라인업 왕복 — v0(n=13)·v0W 계열(n=21) × 2톤/3톤 (스�
   }
 });
 
-test('드랍 n=21 왕복 (복원 스위치) — v0X × 2톤/3톤', {
-  timeout: 300_000,
+test('드랍 n=21 왕복 (복원 스위치) — v0X · v0W 계열 4종 × 2톤/3톤', {
+  timeout: 600_000,
 }, () => {
   // «차단이지 삭제가 아니다» 의 증명 — 스위치를 켤때 왕복이 둘 다 살아 있고,
   // 안 켰을 때는 복호 자체가 안 된다 (두 팔을 함께 재야 드랍이 실제로 걸렸다고 말할 수 있다).
   const restore = {
     includeDroppedCellSurfaceLayouts: true,
-    calibration: { csBlockLocator: { v0xFamily: true } },
+    calibration: {
+      csBlockLocator: {
+        v0xFamily: true,
+        v0wFamily: true, v0wqFamily: true, v0w2Family: true, v0wyFamily: true,
+      },
+    },
   };
   for (const { layout, version, n } of DROPPED_N21_LINEUP) {
     for (const tones of [2, 3]) {

@@ -1,0 +1,23 @@
+✔ cellDigits 단독 복호 왕복 V1/M — 배열 경유 없이 맵에서만 (12.3224ms)
+✔ cellDigits ↔ dataDigits/fillerDigits 대응 일치 V1/M (1.4647ms)
+✔ cellDigits 단독 복호 왕복 V2/L — 배열 경유 없이 맵에서만 (3.0965ms)
+✔ cellDigits ↔ dataDigits/fillerDigits 대응 일치 V2/L (3.7137ms)
+✔ cellDigits 단독 복호 왕복 V3/H — 배열 경유 없이 맵에서만 (4.5852ms)
+✔ cellDigits ↔ dataDigits/fillerDigits 대응 일치 V3/H (2.9709ms)
+✔ encode — 비문자열 페이로드는 version 명시 여부와 무관하게 TypeError (1.3222ms)
+✔ 여덟 언어 사전의 키 집합이 완전히 같다 (4.4152ms)
+✔ 빈 문구가 없다 — 빠진 번역은 조용히 빈 화면이 된다 (7.1249ms)
+✔ scanner.js 가 부르는 t() 키가 전부 사전에 있다 (0.7049ms)
+✔ index.html 의 data-i18n 키가 전부 사전에 있다 (0.7935ms)
+✔ 스캔 가이드 아래에 TLcube 전용 범위를 여덟 언어로 알린다 (0.5508ms)
+✔ 스캐너 사전 언어 목록 == src/i18n.js SUPPORTED_LANGUAGES (0.2171ms)
+✔ Type Y 강화 로케이터는 /lab/ 스캐너에서만 디코더에 켠다 (0.6498ms)
+✔ 사진 스캔 실패 두 경로가 모두 토스트를 띄운다 (0.4519ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 238.8601

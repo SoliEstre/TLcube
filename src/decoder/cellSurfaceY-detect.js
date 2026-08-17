@@ -541,8 +541,8 @@ function sampleLocatorTable(sampleCell, locators) {
 /**
  * 어떤 레이아웃들을 채점할지. 기본은 **n 별 최종 라인업 후보 전부** —
  * v2r2·v1r2 드랍 + v0W 편입(2026-08-16) · v0XQ 드랍 + v0W2 편입 ·
- * **v0X 드랍(2026-08-17 3라운드) 후**:
- * n=13→[v0] · n=21→[**v0w**, v0wq, v0w2] · n=25→**[]**.
+ * v0X 드랍(2026-08-17 3라운드) · **v0T 편입 + v0W 계열 전체 드랍(2026-08-17) 후**:
+ * n=13→[v0] · n=21→[**v0t**, v0ty] · n=25→**[]**.
  * 수용은 아래 기존 게이트가 판정한다 (한 값도 안 바뀌었다):
  * agreement ≥ 0.78 · orientation margin ≥ 0.035. 두 레이아웃이 다 통과하면
  * ambiguous 로 남기고 agreement 가 높은 쪽(동률이면 그 n 의 기본)을 고른다.
@@ -561,9 +561,10 @@ function resolveLayoutIds(options, n) {
   if (Array.isArray(options.cellSurfaceLayouts) && options.cellSurfaceLayouts.length > 0) {
     return options.cellSurfaceLayouts;
   }
-  // 드랍 복원 스위치 (대조군·법의학) — 드랍된 v2r2·v1r2·**v0xq·v0x**(2026-08-17) 를
-  // 후보로 되돌린다. 블록 로케이터 쪽 짝은
-  // `calibration.csBlockLocator.{v2r2Family,v1r2Family,v0xqFamily,v0xFamily}` 다.
+  // 드랍 복원 스위치 (대조군·법의학) — 드랍된 v2r2·v1r2·v0xq·v0x 와
+  // **v0w 계열 넷**(2026-08-17 v0T 편입 라운드) 을 후보로 되돌린다.
+  // 블록 로케이터 쪽 짝은 `calibration.csBlockLocator.{v2r2Family,v1r2Family,
+  // v0xqFamily,v0xFamily,v0wFamily,v0wqFamily,v0w2Family,v0wyFamily}` 다.
   // 둘을 함께 켜면 드랍 전 검출이 그대로 돌아온다 (게이트는 한 값도 안 바뀌었다).
   if (options.includeDroppedCellSurfaceLayouts === true) return [...allFinalLayoutIdsForN(n)];
   return [...finalLayoutIdsForN(n)];

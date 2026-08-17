@@ -1158,12 +1158,16 @@
                이유다 — 검출 라인업에 없는 레이아웃을 «기대» 로 고르면 lab
                텔레메트리가 영원히 미스로 남는다. 사전 키
                (lab.expectedLayout.v0x / .v0xq)는 여덟 언어 모두 남겨 둔다. -->
-          <button type="button" data-expected-layout="v0w" data-i18n="lab.expectedLayout.v0w">v0W</button>
-          <!-- v0WQ = v0W 파생 ① (중앙 QR 슬롯). v0WY 는 **버튼이 없다** — 와이어가
-               v0W 라 디코더가 v0W 로 돌려주고, 별도 «기대» 로 두면 영원한 미스가 된다. -->
-          <button type="button" data-expected-layout="v0wq" data-i18n="lab.expectedLayout.v0wq">v0WQ</button>
-          <!-- v0W2 = v0W 파생 ② (SE 부 파인더 6×6 확대 · 2026-08-17 편입). -->
-          <button type="button" data-expected-layout="v0w2" data-i18n="lab.expectedLayout.v0w2">v0W2</button>
+          <!-- v0W · v0WQ · v0W2 버튼은 2026-08-17 v0T 편입 라운드에 내렸다 —
+               운영자 확정 «v0T 가 Type Y 최종 파인더» 로 v0W 계열 전체가 검출
+               라인업에서 드랍됐다 (차단·비삭제). 같은 이유다 — 라인업에 없는
+               레이아웃을 «기대» 로 고르면 lab 텔레메트리가 영원히 미스로 남는다.
+               사전 키(lab.expectedLayout.v0w / .v0wq / .v0w2)는 여덟 언어 모두
+               남겨 둔다 — 되살릴 때 재번역하지 않기 위해서다. -->
+          <button type="button" data-expected-layout="v0t" data-i18n="lab.expectedLayout.v0t">v0T</button>
+          <!-- v0TY = v0T 파생 (먼 코너 QR 슬롯 8×8 · 2026-08-17 편입). v0WY 와 달리
+               **진짜 와이어 id** 라 버튼이 있다 — 디코더가 v0ty 를 돌려준다. -->
+          <button type="button" data-expected-layout="v0ty" data-i18n="lab.expectedLayout.v0ty">v0TY</button>
         </div>
       </div>
       <!-- 기대 톤 — expected_tones 계측. 레이아웃 카드와 같은 배선 형태다.

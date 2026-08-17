@@ -54,7 +54,7 @@ function shapeHitsDisc(shape, disc) {
   return false;
 }
 
-test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v0/v2r2/v0x/v0xq/v0w/v0wq/v0w2 이고 기본은 off', () => {
+test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v0/v2r2/v0x/v0xq/v0w/v0wq/v0w2/v0wy/v0t/v0ty 이고 기본은 off', () => {
   // v0 · v2r2 · v1r2 · v0x · v0xq · v0w = 최종 라인업 (cellSurfaceFinal.js). v1/v2 는
   // 배포 출력물 법의학용으로 식별자만 유지한다.
   // 의도적 갱신 (2026-08-16): v0X 편입으로 'cell-surface-v0x' 가 목록 끝에 붙었다.
@@ -74,13 +74,21 @@ test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v
   // 먹으면서 셀 집합·회계·와이어가 v0W 와 갈렸고, 그래서 프로파일이 실재한다.
   // 그 문단이 걱정하던 «디코더가 절대 돌려줄 수 없는 값» 도 해소됐다 — 디코더에
   // `v0wy` 패밀리가 있고 `cellSurface-block-locator.test.js` 가 그 산출을 고정한다.
+  // **의도적 갱신 «v0T 편입» (운영자 확정 2026-08-17)** — 'cell-surface-v0t' ·
+  // 'cell-surface-v0ty' 가 뒤에 붙었다 (v0T = Type Y 최종 파인더 · v0TY = 먼 코너
+  // QR 파생). v0W 계열 넷은 같은 날 드랍됐지만 **프로파일 상수는 그대로다** —
+  // 발행분 재생성·법의학 경로가 이 값을 쓴다 (v1r2·v2r2·v0x·v0xq 전례).
   assert.deepEqual([...LOCATOR_PROFILES_Y], [
     'off', 'hex-frame-v1', 'cell-surface-v1', 'cell-surface-v1r2', 'cell-surface-v2',
     'cell-surface-v0', 'cell-surface-v2r2', 'cell-surface-v0x', 'cell-surface-v0xq',
     'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2', 'cell-surface-v0wy',
+    'cell-surface-v0t', 'cell-surface-v0ty',
   ]);
   assert.ok(LOCATOR_PROFILES_Y.includes('cell-surface-v0wy'),
     'v0WY 는 이제 로케이터 프로파일이다 (2026-08-17 재설계)');
+  assert.ok(LOCATOR_PROFILES_Y.includes('cell-surface-v0t')
+    && LOCATOR_PROFILES_Y.includes('cell-surface-v0ty'),
+    'v0T·v0TY 프로파일이 없다 (2026-08-17 편입)');
   assert.equal(DEFAULT_LOCATOR_PROFILE_Y, LOCATOR_PROFILE_OFF);
   assert.equal(assertLocatorProfileY('hex-frame-v1'), LOCATOR_PROFILE_HEX_FRAME_V1);
   assert.throws(() => assertLocatorProfileY('unknown'), RangeError);

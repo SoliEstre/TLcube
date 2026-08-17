@@ -112,11 +112,15 @@ function locatorCardOrder(html) {
 // 「v0WY 카드는 여기 없다」 는 허공 마름모 설계의 서술이고, QR 이 실루엣 안쪽 먼
 // 코너로 들어오면서 진짜 레이아웃이 돼 뒤집혔다. QR 위치 카드 «면» 은 그대로 있고
 // 이제 그 카드가 이 검출기 카드로 **전환**시킨다 (index.html §qrPositionCards).
+//
+// **의도적 갱신 «v0T 편입 + v0W 계열 전체 드랍» (운영자 확정 2026-08-17)** —
+// v0W 계열 카드 넷이 내려가고 v0T · v0TY 카드가 섰다 (일곱 → 다섯). QR 위치
+// 카드 «면» 은 이제 v0TY 로 전환한다 (같은 문법 — 대상만 바뀌었다).
 const LOCATOR_CARD_ORDER = Object.freeze([
   'auto', 'off', 'cell-surface-v0',
-  'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2', 'cell-surface-v0wy',
+  'cell-surface-v0t', 'cell-surface-v0ty',
 ]);
-test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0W → v0WQ → v0W2 → v0WY 다 (v0 계열만)', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T → v0TY 다 (v0 계열만)', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 

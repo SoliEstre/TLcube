@@ -4,6 +4,8 @@ import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
   CELL_SURFACE_FINAL_V0,
+  CELL_SURFACE_FINAL_V0T,
+  CELL_SURFACE_FINAL_V0TY,
   CELL_SURFACE_FINAL_V0W,
   CELL_SURFACE_FINAL_V0W2,
   CELL_SURFACE_FINAL_V0WY,
@@ -16,6 +18,8 @@ import {
 } from './cellSurfaceFinal.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V0T,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TY,
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
   LOCATOR_PROFILE_CELL_SURFACE_V0WY,
@@ -37,7 +41,7 @@ import {
  * 사용자가 고른 값이 복원된다(해상도 티어가 이미 같은 규약을 쓴다).
  *
  * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string}} state
- * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'|'v0xq'|'v0w'|'v0wq'|'v0w2'}}
+ * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'|'v0xq'|'v0w'|'v0wq'|'v0w2'|'v0wy'|'v0t'|'v0ty'}}
  */
 export function encodeOptionsForY(state) {
   if (state === null || typeof state !== 'object') {
@@ -47,16 +51,15 @@ export function encodeOptionsForY(state) {
   if (fallback === null || typeof fallback !== 'object') {
     throw new TypeError('Y QR 폴백 상태가 필요하다');
   }
-  // 카드 라인업 (2026-08-17 v0XQ·v0X 드랍까지 반영) — **전부 v0W 계열이다**:
+  // 카드 라인업 (2026-08-17 v0T 편입·v0W 계열 전체 드랍까지 반영):
   // v0 = Y0(n=13) ·
-  // v0W = Y1 신설 (K3 중앙 25 + 심 꼭짓점 동심 사각 36 + v0 코너 위상 마커 9 = 70셀) ·
-  // v0WQ = v0W 파생 ① (위상 마커 9 + 동심 사각 36 + 중앙 슬롯 8² = 파인더 45 · 슬롯 64) ·
-  // v0W2 = v0W 파생 ② (K3 대칭 중앙 25 + 동심 사각 36 + SE 대형 마커 36 = 97셀 · 데이터 314).
+  // v0T = **Y1 최종 파인더** (NW 16 + A 9 + N팔 10 + NE 36 + W 24 + SE 9 = 104셀 · 데이터 307) ·
+  // v0TY = v0T 파생 (먼 코너 QR 슬롯 8² — 파인더 95 · 슬롯 64 · 데이터 252).
   //
-  // **v2r2 · v1r2 (2026-08-16) · v0XQ · v0X (2026-08-17) 는 카드에서 내려갔다**
-  // (`generator-state.js` 의 허용값에서 제거 — UI 로는 이 값이 더 이상 들어오지
-  // 않는다). 아래 **네 분기는 삭제하지 않는다**: 이미 발행된 출력물의 재생성·
-  // 법의학·와이어 회귀 테스트가 이 함수를 직접 부른다
+  // **v2r2 · v1r2 (2026-08-16) · v0XQ · v0X · v0W · v0WQ · v0W2 · v0WY (2026-08-17)
+  // 는 카드에서 내려갔다** (`generator-state.js` 의 허용값에서 제거 — UI 로는 이
+  // 값이 더 이상 들어오지 않는다). 아래 **드랍 분기들은 삭제하지 않는다**: 이미
+  // 발행된 출력물의 재생성·법의학·와이어 회귀 테스트가 이 함수를 직접 부른다
   // (`cellSurfaceFinal.js` §CELL_SURFACE_FINAL_DROPPED_IDS — 차단·비삭제).
   // 초안 v2 와 구 v1 CS 도 같은 이유로 UI 에서만 내린 채다.
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0) {
@@ -132,6 +135,24 @@ export function encodeOptionsForY(state) {
       version: 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0WY),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0T) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v0T 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0T),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v0TY 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TY),
     };
   }
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {

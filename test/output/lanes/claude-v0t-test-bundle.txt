@@ -1,0 +1,31 @@
+✔ 소스: sites/tlscan 의 모듈은 src 를 절대 경로로만 import 한다 (4.5001ms)
+✔ 결정성: buildScannerHtml()을 2회 호출해도 바이트가 동일하다 (325.1707ms)
+✔ 구조: 산출물에 상대 .js import와 외부 scanner.js script가 남지 않는다 (189.2469ms)
+✔ 위상 정렬 가드: scanner.js를 선두로 옮긴 뮤테이션은 빌드를 실패시킨다 (102.3214ms)
+✔ 동기화: buildScannerHtml() 결과가 dist/tlscan.html과 바이트 동일하다 (202.0031ms)
+✔ 동기화: buildSingleHtml() 결과가 dist/trilume.html 과 바이트 동일하다 (99.2056ms)
+✔ 구조: 전 모듈 이름이 정확히 1회씩 등장한다 (135.3184ms)
+✔ 구조: 각 src 파일 원문이 JSON.stringify 된 문자열로 출력에 포함된다 (120.0725ms)
+✔ 구조: app 코드에 './src/' specifier 가 남아있지 않다 (84.1759ms)
+✔ 구조: <script type="module"> 블록이 정확히 1개다 (95.6719ms)
+✔ 결정성: buildSingleHtml() 을 2회 호출해도 동일한 문자열이 나온다 (194.7178ms)
+✔ attempt ID 는 한 시도에서 안정적이고 다음 시도에서 바뀐다 (53.177ms)
+✔ config ID 는 결정적이고 expected/observed 미상은 null (2.2251ms)
+✔ 기존 reason 호환 + 원인 사슬 순서·미상 (2.6134ms)
+✔ 단계 시간은 total 복사본이 아니며 합·경계가 계약에 맞다 (0.7424ms)
+✔ bbox/corners/occupancy/rotation/perspective/cellPx 단위와 nullable 직렬화 (4.8076ms)
+✔ 실패 프레임도 decodeFrontend 를 타면 geo_stage 가 비지 않는다 (632.8217ms)
+✔ 층화 샘플러는 첫 20장 편향·동일 reason 독점·성공 누락을 막고 상한을 지킨다 (53.2311ms)
+✔ relay/ClickHouse 컬럼과 client envelope 가 일치한다 (4.2069ms)
+✔ 기대 톤 선택이 expected_tones 로 실린다 (1.3366ms)
+✔ 스캐너 lab 패널에 기대 톤 선택 배선이 실재한다 (3.2256ms)
+✔ live migration 파일은 idempotent ALTER 이고 실행 명령이 없다 (1.506ms)
+✔ decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다 (0.615ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1342.7234

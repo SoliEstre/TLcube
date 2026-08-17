@@ -2100,17 +2100,15 @@ if (expectedLayoutRoot && isLabPath()) {
   for (const button of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
     button.addEventListener('click', () => {
       const next = button.dataset.expectedLayout;
-      // 라인업(2026-08-17 v0XQ·v0X 드랍·v0W2 편입까지): v0 = Y0 ·
-      // v0w = Y1 기본 · v0wq = v0W 파생 ①(중앙 QR) · v0w2 = v0W 파생 ②(SE 6×6 대형 마커).
-      // **v0wy 는 없다** — 큐브 바깥 QR 은 렌더 선택이고 와이어는 v0w 라서,
-      // 기대값으로 두면 디코더가 절대 돌려줄 수 없는 문자열이 된다.
-      // v2r2 · v1r2 (2026-08-16) · **v0xq · v0x (2026-08-17)** 는 검출 라인업에서
-      // 내려갔으므로 «기대» 로도 못 고른다 — 저장·URL 등으로 옛 값이 들어와도
-      // 여기서 null(모름)로 떨어진다.
+      // 라인업(2026-08-17 v0T 편입·v0W 계열 전체 드랍까지): v0 = Y0 ·
+      // v0t = **Y1 최종 파인더** · v0ty = v0T 파생(먼 코너 QR 슬롯).
+      // v2r2 · v1r2 (2026-08-16) · v0xq · v0x · **v0w · v0wq · v0w2 · v0wy
+      // (2026-08-17)** 는 검출 라인업에서 내려갔으므로 «기대» 로도 못 고른다 —
+      // 저장·URL 등으로 옛 값이 들어와도 여기서 null(모름)로 떨어진다.
       // 값은 레이아웃 id(소문자)와 같아야 한다 — 디코더가
-      // hypothesis.cellSurfaceLayout 으로 돌려주는 문자열이 그것이다 (표시만 v0WQ).
+      // hypothesis.cellSurfaceLayout 으로 돌려주는 문자열이 그것이다 (표시만 v0T).
       expectedLocatorLayout = next === 'v0'
-        || next === 'v0w' || next === 'v0wq' || next === 'v0w2'
+        || next === 'v0t' || next === 'v0ty'
         ? next
         : null;
       for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {

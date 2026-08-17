@@ -379,7 +379,13 @@ function resolveProfile(format) {
                     ? 'v0w2'
                     : format.locatorProfile === 'cell-surface-v0wy'
                       ? 'v0wy'
-                      : null;
+                      // v0T 편입 (2026-08-17) — 'cell-surface-v0t' · 'cell-surface-v0ty'
+                      // 도 초안 슬롯이 없어 draftIndexWire 충돌이 없다.
+                      : format.locatorProfile === 'cell-surface-v0t'
+                        ? 'v0t'
+                        : format.locatorProfile === 'cell-surface-v0ty'
+                          ? 'v0ty'
+                          : null;
     const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
       ? format.cellSurfaceLayout
       : (profileHintId !== null && !draftIndexWire ? profileHintId : null);
@@ -409,7 +415,7 @@ function resolveProfile(format) {
       if (finalN === undefined) {
         if (finalIdHint === 'v0') finalN = 13;
         else if (finalIdHint === 'v1r2' || finalIdHint === 'v0x' || finalIdHint === 'v0xq'
-          || finalIdHint === 'v0w') {
+          || finalIdHint === 'v0w' || finalIdHint === 'v0t' || finalIdHint === 'v0ty') {
           finalN = 21;
         }
         else {

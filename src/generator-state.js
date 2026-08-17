@@ -21,13 +21,13 @@ import { DEFAULT_SHADING_MODE, SHADING_MODES } from './shading.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
-  LOCATOR_PROFILE_CELL_SURFACE_V0W,
-  LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
-  LOCATOR_PROFILE_CELL_SURFACE_V0W2,
-  LOCATOR_PROFILE_CELL_SURFACE_V0WY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0T,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TY,
   // ⚠ `LOCATOR_PROFILE_CELL_SURFACE_V0XQ`(2026-08-17 2라운드) 와
-  //   `LOCATOR_PROFILE_CELL_SURFACE_V0X`(2026-08-17 3라운드) 는 드랍으로 여기서
-  //   빠졌다 (v1r2·v2r2 와 같은 전례 — 상수 자체는 `locatorY.js` 에 그대로 산다).
+  //   `LOCATOR_PROFILE_CELL_SURFACE_V0X`(2026-08-17 3라운드),
+  //   그리고 **v0W 계열 넷**(`..._V0W`·`..._V0WQ`·`..._V0W2`·`..._V0WY`,
+  //   2026-08-17 v0T 편입 라운드) 은 드랍으로 여기서 빠졌다
+  //   (v1r2·v2r2 와 같은 전례 — 상수 자체는 `locatorY.js` 에 그대로 산다).
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_OFF,
 } from './locatorY.js';
@@ -66,12 +66,13 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   type: field('Y', BOTH, GENERATOR_TYPES),
   preset: field(DEFAULT_PRESET, BOTH, [...Object.keys(PRESETS), 'custom']),
   wifiSecurity: field('WPA', BOTH, ['WPA', 'WEP', 'nopass']),
-  // 'plane' = **먼 코너 QR** (v0WY). ⚠ **의도적 갱신 (2026-08-17 재설계)** —
-  // 이 자리에는 「큐브 바깥 면-평면 QR · 실루엣 밖이라 데이터 셀을 한 칸도 안
-  // 먹고 어떤 레이아웃과도 조합된다」 가 적혀 있었다. 운영자가 그 설계를 폐기하고
-  // «윈도 β 식 안쪽 배치» 로 재설계했다 — 지금의 'plane' 은 **레이아웃 선택**이다
-  // (locatorProfileY 를 v0wy 로 전환한다, index.html §qrPositionCards).
-  // 그래서 더 이상 «어떤 레이아웃과도 조합» 이 아니고 64셀을 먹는다.
+  // 'plane' = **먼 코너 QR** (v0TY — 2026-08-17 v0T 편입 라운드부터. 그 전에는
+  // v0WY 였고, v0W 계열 드랍으로 전환 대상만 바뀌었다). ⚠ **의도적 갱신
+  // (2026-08-17 재설계)** — 이 자리에는 「큐브 바깥 면-평면 QR · 실루엣 밖이라
+  // 데이터 셀을 한 칸도 안 먹고 어떤 레이아웃과도 조합된다」 가 적혀 있었다.
+  // 운영자가 그 설계를 폐기하고 «윈도 β 식 안쪽 배치» 로 재설계했다 — 지금의
+  // 'plane' 은 **레이아웃 선택**이다 (locatorProfileY 를 v0ty 로 전환한다,
+  // index.html §qrPositionCards). 그래서 «어떤 레이아웃과도 조합» 이 아니고 64셀을 먹는다.
   qrPosition: field(DEFAULT_OUTER_QR_POSITION, BOTH,
     ['inner', 'plane', 'TL', 'TR', 'BL', 'BR', 'none']),
   // 생성기 화면의 **초기 선택**은 하이브리드다(사용자 지시 2026-08-13). 실사진 12/12 ·
@@ -121,8 +122,8 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
     [TL_READER_URL, 'https://example.com/fallback']),
   qrCornerToo: field(false, ADVANCED, [false, true]),
   // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 보여 주지 않고 항상 off.
-  // 라인업(2026-08-17 v0XQ·v0X 드랍까지 반영): v0 = Y0(n=13) ·
-  // v0W = Y1 신설 · v0WQ = v0W 파생 ①(중앙 QR) · v0W2 = v0W 파생 ②(SE 6×6 대형 마커).
+  // 라인업(2026-08-17 v0T 편입·v0W 계열 전체 드랍까지 반영): v0 = Y0(n=13) ·
+  // v0T = **Y1 최종 파인더** · v0TY = v0T 파생(먼 코너 QR 슬롯).
   //
   // **v2r2 · v1r2 드랍 (운영자 확정 2026-08-16)** — 허용값에서 내린다. 효과는 UI
   // 카드 소멸 + 허용값 목록 이탈이다. (생성기 상태는 어디에도 저장되지 않으므로
@@ -131,28 +132,29 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //
   // **v0XQ 드랍 (운영자 실기기 확정 2026-08-17, 2라운드)** — 같은 규약으로 허용값에서
   // 내린다. 조건부 드랍 규칙 «v0WQ > v0XQ» 가 실기기 순위(v0WQ ≫ v0XQ > v0X ≈ v0W)로
-  // 성립했다. 남는 중앙 QR 카드는 v0WQ 하나다.
+  // 성립했다.
   //
   // **v0X 드랍 (운영자 실기기 확정 2026-08-17, 3라운드)** — 또 같은 규약이다.
-  // 관측 「파인더 인식 다 해놓고도 잘 못 읽음」 + 「v0 과 혼선 자주」. 남는 Y1 카드는
-  // v0W 계열 셋(v0W · v0WQ · v0W2)뿐이고, 이제 카드 라인업이 **전부 v0W 계열**이다.
+  // 관측 「파인더 인식 다 해놓고도 잘 못 읽음」 + 「v0 과 혼선 자주」.
+  //
+  // **v0W 계열 전체 드랍 (운영자 확정 2026-08-17, v0T 편입 라운드)** — v0T 가
+  // Type Y 최종 파인더로 확정되면서 v0W · v0WQ · v0W2 · v0WY 넷을 같은 규약으로
+  // 내린다. 남는 Y1 카드는 v0T · v0TY 둘이다. QR 위치 «면» 카드는 이제 v0TY 로
+  // 전환한다 (index.html §qrPositionCards — v0WY 시절과 같은 문법).
   //
   // 와이어·정본·디코더 판독 능력은 그대로다 (`cellSurfaceFinal.js`
   // §CELL_SURFACE_FINAL_DROPPED_IDS — 차단·비삭제). `encodeOptionsForY` 의
-  // v0XQ·**v0X** 분기도 **남긴다** — 이미 발행된 출력물의 재생성 경로다.
+  // 드랍 분기들도 **남긴다** — 이미 발행된 출력물의 재생성 경로다.
   // hex-frame-v1 은 그것대로 UI 카드만 내리고 값은 살려 둔 채다(다른 전례).
   locatorProfileY: field(DEFAULT_LOCATOR_PROFILE_Y, INTERNAL,
     [
       LOCATOR_PROFILE_OFF,
       LOCATOR_PROFILE_HEX_FRAME_V1,
       LOCATOR_PROFILE_CELL_SURFACE_V0,
-      LOCATOR_PROFILE_CELL_SURFACE_V0W,
-      LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
-      LOCATOR_PROFILE_CELL_SURFACE_V0W2,
-      // v0WY — 2026-08-17 재설계로 **진짜 레이아웃 id 가 됐다** (구 «면-평면 QR
-      // 렌더 선택» 은 폐기). 사용자는 QR 위치 «면» 카드로 이 값으로 오고,
-      // 다른 QR 위치를 고르면 v0W 로 돌아간다 (index.html §qrPositionCards).
-      LOCATOR_PROFILE_CELL_SURFACE_V0WY,
+      LOCATOR_PROFILE_CELL_SURFACE_V0T,
+      // v0TY — 사용자는 QR 위치 «면» 카드로 이 값으로 오고, 다른 QR 위치를 고르면
+      // v0T 로 돌아간다 (v0WY 시절과 같은 문법 — index.html §qrPositionCards).
+      LOCATOR_PROFILE_CELL_SURFACE_V0TY,
     ]),
 });
 

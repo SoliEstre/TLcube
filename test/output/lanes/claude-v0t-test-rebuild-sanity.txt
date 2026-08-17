@@ -1,0 +1,22 @@
+✔ 동기화: buildSingleHtml() 결과가 dist/trilume.html 과 바이트 동일하다 (250.675ms)
+✔ 구조: 전 모듈 이름이 정확히 1회씩 등장한다 (366.2567ms)
+✔ 구조: 각 src 파일 원문이 JSON.stringify 된 문자열로 출력에 포함된다 (256.9126ms)
+✔ 구조: app 코드에 './src/' specifier 가 남아있지 않다 (185.6003ms)
+✔ 구조: <script type="module"> 블록이 정확히 1개다 (174.9149ms)
+✔ 결정성: buildSingleHtml() 을 2회 호출해도 동일한 문자열이 나온다 (383.4398ms)
+✔ Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T → v0TY 다 (v0 계열만) (14.6417ms)
+✔ 셀 편집기 ref./format 는 선택 파인더 painted 셀의 autoplace 유도로 배선된다 (8.4572ms)
+✔ 배치 불가 안내 g549 는 여덟 언어에 있다 (45.34ms)
+✔ 정합: cellSurfaceFinal 의 ref/format == 점유(파인더∪슬롯) autoplace 유도 (deepEqual) (57.3491ms)
+✔ 끔(빈 점유) 유도는 레거시 placementY roleSets 와 동일하다 (15.2128ms)
+✔ occupied roleSets — 파인더 점유는 detector 이고 데이터·경계·마스크 토글에서 빠진다 (74.1065ms)
+✔ 독립 /celleditor/ previewAutoplaceY 도 정본 painted 입력에서 cellSurfaceFinal 과 일치한다 (68.3834ms)
+✔ 생성기·셀 편집기 번들에 카드 순서와 유도 배선이 임베드된다 (459.6972ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2099.739
