@@ -7,8 +7,10 @@
  *   Y2 (n=25) → v2r2 — 같은 앵커식 (블록 B 가 (n−7..n−1)² 로 평행이동)
  *   Y1 (n=21) → v1r2 — 네 코너 블록 80셀 (v0 의 확장형). **A/B 후보**로 병행 등록
  *                      (운영자 지시 2026-08-15 밤, 정본: cellsurface-v1r2-editor.json)
- *   Y1 (n=21) → v0X  — QR 파인더 문법 차용 v0 확장 65셀. **n21 3파전 후보**
- *                      (운영자 지시 2026-08-16, 정본: cellsurface-v0x-editor.json)
+ *   Y1 (n=21) → v0X  — QR 파인더 문법 차용 v0 확장 65셀. 편입 당시 n21 3파전 후보
+ *                      (운영자 지시 2026-08-16, 정본: cellsurface-v0x-editor.json).
+ *                      **2026-08-17 드랍** — 라인업에서 내려갔고 정본은 그대로다
+ *                      (§CELL_SURFACE_FINAL_DROPPED_IDS).
  *
  * n=21 은 후보가 셋이다 — 기본(default)은 v2r2 로 두고, 디코더 CS 평가가 세 레이아웃을
  * 모두 채점해 기존 게이트(agreement · orientation margin)로 고른다. formatIndex 는
@@ -211,14 +213,23 @@ export const CELL_SURFACE_FINAL_V0WQ = 'v0wq';
 export const CELL_SURFACE_FINAL_V0W2 = 'v0w2';
 /**
  * 선언 순서가 곧 «n 별 후보 순서» 다 (`finalLayoutIdsForN`). v0W·v0WQ 를 **맨 뒤**에
- * 둔다 — n=21 의 기본은 v0X 그대로이고, 둘은 세·네 번째 후보로 병행 채점된다.
- * 기본을 바꾸는 것은 조건부 드랍(«v0W > v0X» · «v0WQ > v0XQ» 실기기 판정)의 몫이지
- * 편입의 몫이 아니다.
+ * 둔 것은 편입 시점의 규약이었다 — 당시 n=21 의 기본은 v0X 였고, 둘은 세·네 번째
+ * 후보로 병행 채점됐다. 기본을 바꾸는 것은 조건부 드랍(«v0W > v0X» · «v0WQ > v0XQ»
+ * 실기기 판정)의 몫이지 편입의 몫이 아니다.
  *
- * **2026-08-17 실기기 판정** — 순위 v0WQ ≫ v0XQ > v0X ≈ v0W. 「v0WQ > v0XQ」 는
+ * **지금(2026-08-17 3라운드 이후) n=21 의 기본은 v0W 다** — v0X 가 드랍되면서 이
+ * 선언 순서의 다음 항목이 그대로 승계했다. 규약이 바뀐 것이 아니라 규약대로 된 것이다.
+ *
+ * **2026-08-17 실기기 판정 (2라운드)** — 순위 v0WQ ≫ v0XQ > v0X ≈ v0W. 「v0WQ > v0XQ」 는
  * 성립해 v0xq 가 드랍됐고(§CELL_SURFACE_FINAL_DROPPED_IDS), 「v0W > v0X」 는
- * **성립하지 않아**(≈) v0X 가 남는다. 이 배열은 **와이어 선언**이라 드랍이 여기서
+ * **성립하지 않아**(≈) v0X 가 남았다. 이 배열은 **와이어 선언**이라 드랍이 여기서
  * 항목을 빼지 않는다 — 빼는 것은 `CELL_SURFACE_FINAL_ACTIVE_IDS` 쪽이다.
+ *
+ * **2026-08-17 실기기 판정 (3라운드) — v0X 드랍 확정.** 2라운드의 «≈» 는 v0W2 가
+ * 없던 판정이었다. 3라운드 관측은 v0X 를 **단독 결함**으로 지목한다:
+ * 「파인더 인식 다 해놓고도 잘 못 읽음」 + 「v0 과 혼선 자주」. 앞은 «포즈는 서는데
+ * 하류 CS/RS 가 못 넘긴다», 뒤는 «n=13 v0 와 n=21 v0X 가 서로로 잡힌다» 는 말이다.
+ * 그래서 v0x 도 §CELL_SURFACE_FINAL_DROPPED_IDS 에 든다 — 같은 «차단·비삭제» 규약.
  *
  * ⚠ **v0WY 는 여기 없다** — 셀 집합이 v0W 와 비트 동일한 «렌더 선택» 이라 와이어 id 가
  * 아니다 (모듈 헤더 §v0W 파생 2종). id 를 만들면 교차 오수용이 100 % 로 설계된다.
@@ -275,8 +286,8 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
  *     판독·법의학·테스트 픽스처가 거기 걸려 있다.
  *   · 정본 배열(`V2R2_FAR_BASE_CELLS` · `V1R2_CELLS`) 과 자기검증.
  *   · 로케이터 패밀리 코드 — `csBlockLocator` 캘리브레이션의 `v2r2Family` ·
- *     `v1r2Family` 를 **false 기본**으로 내렸을 뿐이라, 교차 오수용 대조군은
- *     옵션 한 줄로 되살아난다.
+ *     `v1r2Family`(그리고 뒤이어 `v0xqFamily` · `v0xFamily`)를 **false 기본**으로
+ *     내렸을 뿐이라, 교차 오수용 대조군은 옵션 한 줄로 되살아난다.
  *
  * **n=25 (Y2) 는 공백이 된다** — 그 슬롯을 채우던 것이 v2r2@25 뿐이었다.
  * `finalLayoutIdsForN(25) === []` 이고 `finalLayoutIdForN(25) === null` 이다.
@@ -299,20 +310,55 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
  *   · `CENTER_QR_SLOT_CELLS`(=9) · `centerQrSlotCellsFor` — v0xq 와이어 회계의 근거다.
  *   · `CELL_SURFACE_FINAL_LEGACY_IDS` 는 애초에 v0xq 를 안 갖는다 (포맷 v2 이후 신설).
  *
- * **n=21 의 기본은 v0X 그대로다.** 드랍은 후보 목록에서 한 항목을 빼는 것이지 순위를
- * 다시 매기는 것이 아니다 — `finalLayoutIdsForN(21)` 이 `[v0x, v0xq, v0w, v0wq]` 에서
- * `[v0x, v0w, v0wq]` 로 줄고 `finalLayoutIdForN(21)` 은 `v0x` 로 불변이다.
+ * **(당시) n=21 의 기본은 v0X 그대로였다.** 드랍은 후보 목록에서 한 항목을 빼는
+ * 것이지 순위를 다시 매기는 것이 아니다 — `finalLayoutIdsForN(21)` 이
+ * `[v0x, v0xq, v0w, v0wq]` 에서 `[v0x, v0w, v0wq]` 로 줄고 `finalLayoutIdForN(21)` 은
+ * `v0x` 로 불변이었다. (그 v0x 도 같은 날 3라운드에서 드랍된다 — 아래 §v0X 드랍.)
  *
  * ⚠ **v0WQ 는 v0XQ 의 코너 삼중점 경로를 공유한다.** 로케이터에서 v0xq 패밀리를
  * 내려도 v0wq 검출은 온전해야 한다 — 코너 수집 게이트가
  * `(cfg.v0xqFamily !== false || cfg.v0wqFamily !== false)` 라 한쪽만 꺼도 돈다
  * (`cellsurface-block-detect.js` §v0xqCorners). 그 성질을 회귀로 고정한 것이
  * `cellSurface-block-locator.test.js` §v0XQ 드랍이다.
+ *
+ * ── **v0X 드랍 (운영자 실기기 확정 2026-08-17, 판정 3라운드)** ────────────────
+ *
+ * 관측 두 줄이 근거다 — 「파인더 인식 다 해놓고도 잘 못 읽음」 · 「v0 과 혼선 자주」.
+ * 2라운드에서 «v0W > v0X» 가 «≈» 로 미결이었던 것은 **v0W2 가 없던 판정**이기
+ * 때문이고, v0W2 편입(방향 margin 0.1512 = 활성 최고, v0X 0.1231 의 1.23배)으로
+ * n=21 자리는 채워졌다. 진 후보를 검출 라인업·생성기 카드·스캐너 lab 패널에서
+ * 내린다 — **차단이지 삭제가 아니다** (v2r2·v1r2·v0xq 와 **같은 규약**).
+ *
+ * 내리지 **않는** 것 (v0x 에만 있는 추가 항목 — 여기가 이 드랍의 함정이다):
+ *   · `V0X_CELLS` · `V0X_BLOCKS` — **v0W2 SE(T/L) 유도의 원천 배열**이다.
+ *     v0W2 의 SE 6×6 은 T·L 두 면에서 v0X SE 톤을 **같은 좌표로** 쓴다
+ *     (§V0W2_CELLS · 자기검증 ①-h). 즉 v0x 정본을 한 줄이라도 지우면 **활성
+ *     레이아웃 v0W2 가 무너진다.** 드랍은 «라인업에서 내린다» 이지 «정본을
+ *     지운다» 가 아니다 — 상수·유도·참조 동일성 자기검증 전부 그대로 산다.
+ *   · `V0XQ_CORNER_CELLS` — v0X SE 를 평행이동한 배열이고 v0W·v0WQ·v0W2 의 NE 가
+ *     **그 배열 자체**다. v0xq 드랍에서 이미 같은 이유로 보존했다.
+ *   · `DECLARED_DATA` 의 v0x 행(현행·레거시 둘 다) · `CELL_SURFACE_FINAL_NS` ·
+ *     `CELL_SURFACE_FINAL_PROFILE` · `encodeOptionsForY` 의 v0X 분기 —
+ *     `cellSurfaceFinal(21, 'v0x')` 는 **여전히 만들어진다**.
+ *
+ * **n=21 의 기본이 바뀐다 — 이 드랍만 그렇다.** 앞선 세 드랍은 기본이 아닌 후보를
+ * 뺐지만 v0x 는 n=21 의 **기본**이었다. `finalLayoutIdsForN(21)` 이
+ * `[v0x, v0w, v0wq, v0w2]` → `[v0w, v0wq, v0w2]` 로 줄고 `finalLayoutIdForN(21)` 은
+ * **v0w** 로 승계된다 (선언 순서가 곧 후보 순서라 자동으로 그렇게 된다).
+ * 운영자 순위·생성기 #22 연동의 «중 = v0W» 와 이 승계가 같은 값을 가리킨다.
+ * `wirePreferredFinalLayoutIdForN(21)` 은 **v2r2 그대로** — 와이어는 발행 이력의
+ * 기록이라 드랍을 보지 않는다.
+ *
+ * ⚠ **v0X 를 끄는 것은 v0W·v0W2 를 끄는 것이 아니다.** 셋은 앵커드 순회에서 서로
+ * 독립한 `if` 로 시드된다 (`cfg.v0xFamily` 실패가 뒤 브랜치를 안 자르도록 2026-08-16
+ * 에 `continue` 를 걷어낸 그 자리다 — §assembleAnchoredPoses). 그 독립성을 회귀로
+ * 고정한 것이 `cellSurface-block-locator.test.js` §v0X 드랍이다.
  */
 export const CELL_SURFACE_FINAL_DROPPED_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V2R2,
   CELL_SURFACE_FINAL_V1R2,
   CELL_SURFACE_FINAL_V0XQ,
+  CELL_SURFACE_FINAL_V0X,
 ]);
 
 /** 이 레이아웃이 검출 라인업·생성기 카드에서 내려갔는가 (와이어는 살아 있다). */
@@ -354,7 +400,7 @@ export function wirePreferredFinalLayoutIdForN(n) {
  * n → 그 n 에서 **라인업에 살아 있는** 레이아웃 후보 전부 (기본이 맨 앞).
  * 라인업 밖 n 은 []. 디코더 CS 평가의 병행 채점 입력이다 — 수용은 기존 게이트가 판정한다.
  *
- * 드랍 후(2026-08-17 v0XQ 포함): n=13 → [v0] · n=21 → **[v0x, v0w, v0wq]** ·
+ * 드랍 후(2026-08-17 v0XQ·**v0X** 포함): n=13 → [v0] · n=21 → **[v0w, v0wq, v0w2]** ·
  * n=25 → **[]**.
  */
 export function finalLayoutIdsForN(n) {
@@ -371,7 +417,10 @@ export function finalLayoutIdsForN(n) {
 
 /**
  * n → 그 n 의 **기본**(라인업에 살아 있는 첫) 레이아웃 id. 라인업 밖 n 은 null.
- * 드랍 후 n=21 의 기본은 v0X 이고 n=25 는 null 이다 (Y2 공백).
+ *
+ * **v0X 드랍(2026-08-17 3라운드) 후 n=21 의 기본은 v0W 다** — 드랍은 순위를 다시
+ * 매기지 않지만 이번엔 **기본 자체가 빠져** 선언 순서의 다음(v0w)이 승계했다.
+ * 앞선 세 드랍과 다른 점이 그것 하나다. n=25 는 계속 null 이다 (Y2 공백).
  */
 export function finalLayoutIdForN(n) {
   const ids = finalLayoutIdsForN(n);

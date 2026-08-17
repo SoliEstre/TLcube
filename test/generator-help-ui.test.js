@@ -302,11 +302,16 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // 규약이고, locatorY-lab.test.js 가 그 보존을 고정한다.
   // **의도적 갱신 «v0W2 편입» (운영자 신설 설계 2026-08-17)**: v0W2 카드가 들어와
   // 6 → 7 이다 (부제 g954). 아이콘은 v0W 문법 + 우하 대형 겹사각이다.
+  // **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드)**: v0X
+  // 카드를 내려 7 → 6 이다 («파인더 인식 다 해놓고도 잘 못 읽음 + v0 과 혼선 자주»).
+  // 부제 키 g944(v0X)는 **사전에 그대로 남는다** — v1r2·v2r2·v0XQ 와 같은 규약이고,
+  // locatorY-lab.test.js 가 그 보존을 여덟 언어로 고정한다. 남은 여섯은
+  // 자동·끔 + v0 + **v0W 계열 셋**이다.
   const cardCount = (block.match(/class="toggle-card[^"]*" data-locator=/g) || []).length;
-  assert.equal(cardCount, 7, '검출기 카드는 자동·끔 + v0 계열 5종 = 7 이다');
+  assert.equal(cardCount, 6, '검출기 카드는 자동·끔 + v0 + v0W 계열 3종 = 6 이다');
   assert.equal((block.match(/<svg /g) || []).length, cardCount,
     '검출기 카드 전부가 파인더 기하 아이콘을 가져야 한다');
-  const subKeys = ['g941', 'g942', 'g943', 'g944', 'g948', 'g949', 'g954'];
+  const subKeys = ['g941', 'g942', 'g943', 'g948', 'g949', 'g954'];
   assert.equal(subKeys.length, cardCount, '부제 키 수가 카드 수와 다르다');
   for (const key of subKeys) {
     assert.match(block, new RegExp(`class="card-sub" data-i18n="${key}"`), `검출기 부제 ${key} 누락`);
@@ -580,7 +585,33 @@ test('«면» QR 과 중앙 QR 검출기는 겹치지 않는다 — 전환·억�
   // ① 면 클릭 시 중앙 QR 검출기는 비-QR 짝으로 전환된다.
   assert.match(INDEX, /card\.dataset\.pos === 'plane'/);
   assert.match(INDEX, /LOCATOR_PROFILE_CELL_SURFACE_V0WQ\) \{\s*generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;/);
-  assert.match(INDEX, /LOCATOR_PROFILE_CELL_SURFACE_V0XQ\) \{\s*generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0X;/);
+  // **의도적 갱신 «v0X 드랍» (2026-08-17, 판정 3라운드)** — 여기 있던
+  // `v0xq → v0x` 분기 단언을 **부재 단언으로 뒤집는다.**
+  //
+  // 그 분기는 죽은 코드가 아니라 **살아 있는 결함이었다**: v0XQ 드랍(2라운드)이
+  // import 목록에서 `LOCATOR_PROFILE_CELL_SURFACE_V0XQ` 를 뺐는데 비교식은 남아,
+  // 상태가 v0WQ 가 **아닌** 모든 경우(off·v0·v0W·v0X…)에 둘째 비교식을 평가하며
+  // `ReferenceError: … is not defined` 로 «면» 카드 클릭 전체를 죽였다.
+  // 재현: `test/output/lanes/claude-v0wy-refbug.mjs` (·.out.txt).
+  // 두 끝점이 모두 드랍된 지금은 분기가 무의미하므로 통째로 걷어냈다.
+  //
+  // 아래 단언이 지키는 것은 «index.html 의 모듈 스코프에 바인딩 없는 자유
+  // 식별자를 두지 않는다» 이다 — 이 파일에서 그것을 잴 수 있는 유일한 자리다.
+  // ⚠ **주석은 빼고 잰다.** 두 이름은 «왜 없앴는가» 를 적은 주석에 계속 등장하고
+  //   주석은 평가되지 않는다. 주석까지 세면 이 자는 «문서를 못 쓰게 하는 자» 가 된다.
+  const code = INDEX
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split('\n')
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+  assert.doesNotMatch(code, /LOCATOR_PROFILE_CELL_SURFACE_V0XQ/,
+    'index.html 코드에 바인딩 없는 V0XQ 식별자가 다시 생겼다 — 클릭 시 ReferenceError 다');
+  assert.doesNotMatch(code, /LOCATOR_PROFILE_CELL_SURFACE_V0X(?![A-Z0-9_])/,
+    'index.html 코드에 바인딩 없는 V0X 식별자가 남았다 (드랍으로 import 에서 빠졌다)');
+  // 자 검증 — 이 자가 실제로 무언가를 볼 수 있는가. 살아 있는 형제 이름은 잡혀야 한다.
+  assert.match(code, /LOCATOR_PROFILE_CELL_SURFACE_V0WQ/,
+    '주석 제거가 코드까지 지웠다 — 이 자는 «항상 통과» 다');
+
   // ② 반대 방향은 렌더 급 억제 — 중앙 QR 레이아웃이면 outerFaceQr 를 안 켠다.
   assert.match(INDEX, /fallback\.mode === 'plane'\s*&& opts\.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0XQ\s*&& opts\.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0WQ/);
 });

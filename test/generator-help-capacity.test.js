@@ -96,8 +96,14 @@ test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 후보 �
   // 아니라 **와이어 선호**(`wirePreferredFinalLayoutIdForN`)로 고정했다 —
   // 드랍이 발행된 프레임의 용량 회계를 조용히 바꾸면 안 되기 때문이다.
   // 그래서 «id 생략 = v2r2» 라는 사고 자체는 그대로 살아 있고, 여기서 계속 잡는다.
+  //
+  // **의도적 갱신 «v0X 드랍» (2026-08-17, 판정 3라운드)** — 라인업 기본이
+  // v0x → **v0w** 로 승계됐다. 이 테스트가 잡는 사고(«id 생략 = 와이어 선호»)는
+  // 그대로고, 두 값이 **서로 다르다**는 사실 자체가 이 테스트의 전제라 함께 재산한다.
   assert.equal(wirePreferredFinalLayoutIdForN(21), 'v2r2');
-  assert.equal(finalLayoutIdForN(21), 'v0x', '라인업 기본은 드랍 뒤 v0x 다');
+  assert.equal(finalLayoutIdForN(21), 'v0w', '라인업 기본은 v0X 드랍 뒤 v0w 다');
+  assert.notEqual(wirePreferredFinalLayoutIdForN(21), finalLayoutIdForN(21),
+    '와이어 선호와 라인업 기본이 같아졌다 — 이 테스트의 전제가 사라졌다');
   // id 를 생략한 호출은 후보와 무관하게 전부 같은 값이 된다. 이것이 «세 후보 용량
   // 동일» 이라는 거짓 결론의 기계적 원인이다 — 재현해서 남겨 둔다.
   const omitted = LEVELS.map((level) => capacityForCellSurfaceFinal(21, level).maxPayloadBytes);
@@ -106,6 +112,7 @@ test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 후보 �
   assert.notDeepEqual(omitted, payload(21, 'v1r2'), 'id 를 넘기면 값이 달라져야 한다');
   assert.notDeepEqual(omitted, payload(21, 'v0xq'), 'id 를 넘기면 값이 달라져야 한다');
   // v0W 프로그램 편입 후에도 같은 사고가 같은 방식으로 잡힌다 (후보 4→6).
+  // v0X 드랍 뒤에도 마찬가지다 — 드랩은 용량 회계를 한 자리도 안 바꿋다.
   assert.notDeepEqual(omitted, payload(21, 'v0w'), 'id 를 넘기면 값이 달라져야 한다');
   assert.notDeepEqual(omitted, payload(21, 'v0wq'), 'id 를 넘기면 값이 달라져야 한다');
 });

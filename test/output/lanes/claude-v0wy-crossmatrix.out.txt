@@ -1,0 +1,21 @@
+# n=21 교차 수용 행렬 (이상 표본기 · 2톤 · rot0)
+# 행 = 프레임 레이아웃 / 열 = 채점 후보. A=accepted · a=agreement · o=관측 로케이터 셀
+
+frame   v2r2                    v1r2                    v0x                     v0xq                    v0w                     v0wq                    v0w2                    
+v2r2    A a1 o74                . a0.6958 o80           . a0.7795 o65           . a0 o42                . a0.6952 o70           . a0.1852 o45           . a0.4777 o97             → picked v2r2
+v1r2    . a0.7207 o74           A a1 o80                . a0.7077 o65           . a0.627 o42            . a0.7667 o70           . a0.637 o45            . a0.7079 o97             → picked v1r2
+v0x     . a0.7117 o74           . a0.6375 o80           A a1 o65                . a0.2143 o42           . a0.419 o70            . a0.2074 o45           . a0.4708 o97             → picked v0x
+v0xq    . a0.2109 o49           . a0.5576 o55           . a0.5578 o49           A a1 o42                . a0.9037 o45           . a0.9037 o45           . a0.75 o72               → picked v0xq
+v0w     . a0.7162 o74           . a0.7292 o80           . a0.6667 o65           . a0.9286 o42           A a1 o70                A a1 o45                . a0.8213 o97             → picked v0w
+v0wq    . a0.1973 o49           . a0.6121 o55           . a0.1837 o49           . a0.9365 o42           A a1 o45                A a1 o45                . a0.7407 o72             → picked v0w
+v0w2    . a0.7297 o74           . a0.7583 o80           . a0.7744 o65           . a0.9286 o42           . a0.9238 o70           . a0.9111 o45           A a1 o97                  → picked v0w2
+
+# 교차 수용(자기 아닌 후보가 accepted) 목록 — rot0
+  v0w 프레임 → v0wq accepted (agreement 1 · margin 0.0889 · 관측 45셀)
+  v0wq 프레임 → v0w accepted (agreement 1 · margin 0.0889 · 관측 45셀)
+  총 2 칸
+
+# 회전 오방향 수용 (면 순환 ±120°) — 후보 전수
+  v0wq 프레임 LRT → v0w2 accepted (agreement 0.8241 · margin 0.0556 · 관측 72셀)  ← 이것이 «뽑힌» 후보
+  !! v0wq LRT: 최종 accepted 로 뽑혔다 (v0w2)
+  총 1 칸 (후보 단위)

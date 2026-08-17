@@ -49,13 +49,22 @@ const LINEUP = Object.freeze([
 // v0WY 는 **여기 없다** — 와이어가 v0W 라 이 표에서는 v0w 행이 곧 v0WY 의 왕복이다
 // (그 사실 자체는 cellSurface-block-locator.test.js 의 «v0WY 는 렌더 선택이다» 가 잰다).
 // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 가 n=21 다섯 번째 후보로 들어왔다.
-// 기본(`finalLayoutIdForN(21)`)은 여전히 v0x 다 — 편입은 순위를 정하지 않는다.
+//
+// **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드)** —
+// v0x 행을 **활성 표에서 드랍 보존 표로 옮긴다** (값·버전·n 무변경).
+// 이 파일에서 두 표를 가르는 기준은 «스위치 없이 도는가» 하나다 — 드랍된
+// 레이아웃은 정의상 스위치가 있어야 돌고, 그것이 «차단» 의 증명이다.
+// 그래서 활성 표는 v0 · v0W 계열 셋이 되고, 기본은 **v0w** 로 승계된다.
 const ACTIVE_LINEUP = Object.freeze([
   { layout: 'v0', version: 0, n: 13 },
-  { layout: 'v0x', version: 1, n: 21 },
   { layout: 'v0w', version: 1, n: 21 },
   { layout: 'v0wq', version: 1, n: 21 },
   { layout: 'v0w2', version: 1, n: 21 },
+]);
+
+/** 드랍 보존 팔 — 복원 스위치 위에서만 돌고, 값은 드랍 전과 같다. */
+const DROPPED_N21_LINEUP = Object.freeze([
+  { layout: 'v0x', version: 1, n: 21 },
 ]);
 
 function renderFinal(text, {
@@ -103,7 +112,7 @@ function decodeLab(raster, extra = undefined) {
   });
 }
 
-test('활성 라인업 왕복 — v0(n=13)·v0X·v0W(n=21) × 2톤/3톤 (스위치 없음)', {
+test('활성 라인업 왕복 — v0(n=13)·v0W 계열(n=21) × 2톤/3톤 (스위치 없음)', {
   timeout: 300_000,
 }, () => {
   for (const { layout, version, n } of ACTIVE_LINEUP) {
@@ -116,6 +125,32 @@ test('활성 라인업 왕복 — v0(n=13)·v0X·v0W(n=21) × 2톤/3톤 (스위�
       assert.equal(result.text, PAYLOAD);
       assert.equal(result.hypothesis.cellSurfaceLayout, layout);
       assert.equal(result.hypothesis.n, n);
+    }
+  }
+});
+
+test('드랍 n=21 왕복 (복원 스위치) — v0X × 2톤/3톤', {
+  timeout: 300_000,
+}, () => {
+  // «차단이지 삭제가 아니다» 의 증명 — 스위치를 켤때 왕복이 둘 다 살아 있고,
+  // 안 켰을 때는 복호 자체가 안 된다 (두 팔을 함께 재야 드랍이 실제로 걸렸다고 말할 수 있다).
+  const restore = {
+    includeDroppedCellSurfaceLayouts: true,
+    calibration: { csBlockLocator: { v0xFamily: true } },
+  };
+  for (const { layout, version, n } of DROPPED_N21_LINEUP) {
+    for (const tones of [2, 3]) {
+      const fixture = renderFinal(PAYLOAD, { layout, version, tones });
+      const restored = decodeLab(fixture.raster, restore);
+      assert.equal(restored.ok, true, JSON.stringify({
+        layout, n, tones, reason: restored.reason,
+      }));
+      assert.equal(restored.text, PAYLOAD);
+      assert.equal(restored.hypothesis.cellSurfaceLayout, layout);
+      assert.equal(restored.hypothesis.n, n);
+      const blocked = decodeLab(fixture.raster);
+      assert.equal(blocked.ok, false,
+        layout + ' t' + tones + ' 이 스위치 없이도 복호됐다 — 드랍이 안 걸렸다');
     }
   }
 });
