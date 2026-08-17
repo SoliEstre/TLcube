@@ -30,7 +30,7 @@ import { VERSIONS_A } from '../src/capacityA.js';
 import {
   CELL_PX_FLOOR,
   AUTO_CROP_LADDER,
-  AUTO_CROP_STEP_FRAMES,
+  AUTO_CROP_STEP_MS,
   autoCropRung,
   autoCropZoomFor,
   DEFAULT_USER_ZOOM,
@@ -1171,15 +1171,20 @@ test('자동 크롭 사다리 — 실패가 쌓이면 오르고, 잘림·수동�
   assert.deepEqual([...AUTO_CROP_LADDER], [1, 1.5, 2.2]);
   // 성공(0) 과 문턱 미만은 개입 없음.
   assert.equal(autoCropRung(0), 0);
-  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES - 1), 0);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS - 1), 0);
   // 한 단씩 오르고 상한에서 멈춘다.
-  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES), 1);
-  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 2), 2);
-  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 99), AUTO_CROP_LADDER.length - 1);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS), 1);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 2), 2);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 99), AUTO_CROP_LADDER.length - 1);
   // 잘림은 «너무 가깝다» — 확대는 정반대 처방이라 개입 금지.
-  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 3, { clipped: true }), 0);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 3, { clipped: true }), 0);
   // 사용자가 확대를 직접 건드렸으면 자동은 물러난다.
-  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 3, { manual: true }), 0);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 3, { manual: true }), 0);
+  // ⚠ 문턱은 **시간**이다 — 프레임 수로 잡으면 fps 가 낮을 때 체감이 무너진다
+  //   (2026-08-18 실기기: 0.5fps 에서 8프레임 = 16초).
+  assert.ok(AUTO_CROP_STEP_MS <= 3000, '한 단 오르는 데 3초를 넘기면 사용자가 먼저 포기한다');
+  assert.match(SCANNER_JS, /failStreakSince/);
+  assert.match(SCANNER_JS, /Date\.now\(\) - failStreakSince/);
   // 배율 조회는 범위 밖을 양끝으로 물린다.
   assert.equal(autoCropZoomFor(-5), 1);
   assert.equal(autoCropZoomFor(99), 2.2);
@@ -1190,5 +1195,5 @@ test('자동 크롭 사다리 — 실패가 쌓이면 오르고, 잘림·수동�
   assert.match(SCANNER_JS, /function effectiveCropZoom\(\)/);
   assert.match(SCANNER_JS, /maxSide,\s*\n\s*effectiveCropZoom\(\),/);
   assert.match(SCANNER_JS, /const scale = effectiveCropZoom\(\);/);
-  assert.match(SCANNER_JS, /autoCropRung\(consecutiveFailedFrames/);
+  assert.match(SCANNER_JS, /autoCropRung\(failStreakSince/);
 });

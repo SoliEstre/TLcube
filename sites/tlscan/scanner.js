@@ -182,6 +182,8 @@ let zoomPlan = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM });
  * «가이드 ≠ 분석» 사고가 재현된다.
  */
 let autoCropIndex = 0;
+/** 연속 실패가 시작된 시각(ms). 사다리는 프레임 수가 아니라 **시간**으로 오른다. */
+let failStreakSince = 0;
 let zoomApplyToken = 0;
 let zoomApplyTimer = 0;
 
@@ -1384,8 +1386,10 @@ function handleDecodeResult(result, source, session) {
     if (payload) {
       consecutiveFailedFrames = 0;
       clippedFrames = 0;
+      failStreakSince = 0;
     } else {
       consecutiveFailedFrames += 1;
+      if (failStreakSince === 0) failStreakSince = Date.now();
       // 잘림 안내 — multi-clip(2면 이상 잘림) 연속이면 «조금 뒤로». 실측에서 이
       // 상태의 성공률이 0% 라 다른 어떤 힌트보다 우선한다. 해소되면 기본 조준
       // 문구로 되돌린다(한 번 뜨고 눌러앉으면 이미 물러난 사용자를 계속 몬다).
@@ -1409,7 +1413,7 @@ function handleDecodeResult(result, source, session) {
     // 자동 크롭 사다리 — 실패가 쌓이면 한 단씩 올리고 성공하면 위에서 0 으로
     // 돌아간다. 잘림(«너무 가깝다») 이면 올리지 않는다 — 확대가 정반대 처방이다.
     // 사용자가 확대를 직접 건드렸으면 개입하지 않는다.
-    const nextRung = autoCropRung(consecutiveFailedFrames, {
+    const nextRung = autoCropRung(failStreakSince === 0 ? 0 : Date.now() - failStreakSince, {
       clipped: clippedFrames >= CLIP_HINT_AFTER_FRAMES
         || (result && result.clipSide === 'multi'),
       manual: userZoom !== DEFAULT_USER_ZOOM,

@@ -80,24 +80,32 @@ export const CROP_ZOOM_STEP = 0.1;
  * CELL_PX_FLOOR(9) 에 닿는다. 그 이상은 크롭 창이 좁아져 조준이 어려워진다.
  */
 export const AUTO_CROP_LADDER = Object.freeze([1, 1.5, 2.2]);
-/** 한 단 올리는 데 필요한 연속 실패 프레임 수. */
-export const AUTO_CROP_STEP_FRAMES = 8;
+/**
+ * 한 단 올리는 데 필요한 **연속 실패 시간(ms)**.
+ *
+ * ⚠ **정정 (2026-08-18 실기기 1차)**: 처음엔 «연속 실패 8프레임» 으로 짰는데 틀렸다.
+ * 운영자 관측 — 「확대는 일어나는데 fps 가 안 되니까 확대된 타이밍을 검출 루프가
+ * 못 잡고 넘겨버린다」. 당시 fps 가 0.5 라 8프레임 = **16초**였다. 사용자가 기다리는
+ * 것은 **시간**이지 프레임이 아니고, fps 가 변하면 같은 프레임 수가 전혀 다른 체감이
+ * 된다. 시간 기준으로 바꾸면 fps 가 개선될수록 같은 시간에 더 많은 프레임을 쓴다.
+ */
+export const AUTO_CROP_STEP_MS = 2000;
 
 /**
- * 연속 실패 수 → 사다리 인덱스. 순수 함수라 테스트가 직접 잰다.
+ * 연속 실패 **지속 시간** → 사다리 인덱스. 순수 함수라 테스트가 직접 잰다.
  *
- * @param {number} failedFrames 연속 실패 프레임 수
+ * @param {number} failedMs 연속 실패가 이어진 시간(ms)
  * @param {boolean} clipped 잘림(«너무 가깝다») 신호가 서 있는가
  * @param {boolean} manual 사용자가 확대를 직접 건드렸는가
  * @returns {number} AUTO_CROP_LADDER 인덱스 (0 = 개입 없음)
  */
-export function autoCropRung(failedFrames, { clipped = false, manual = false } = {}) {
+export function autoCropRung(failedMs, { clipped = false, manual = false } = {}) {
   if (clipped || manual) return 0;
-  const n = Number(failedFrames);
-  if (!Number.isFinite(n) || n < AUTO_CROP_STEP_FRAMES) return 0;
+  const ms = Number(failedMs);
+  if (!Number.isFinite(ms) || ms < AUTO_CROP_STEP_MS) return 0;
   return Math.min(
     AUTO_CROP_LADDER.length - 1,
-    Math.floor(n / AUTO_CROP_STEP_FRAMES),
+    Math.floor(ms / AUTO_CROP_STEP_MS),
   );
 }
 
