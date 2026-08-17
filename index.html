@@ -1480,15 +1480,17 @@
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
             </svg><span data-i18n="g204">안쪽</span></div>
-          <!-- '면' = 큐브 **바깥** 면-평면 QR (v0WY, 2026-08-16). 아이콘은 마름모 —
-               축 정렬 사각(코너 QR)과 달리 T 면과 같은 기울기로 눕는다는 사실이 곧
-               이 선택지의 정의다. -->
+          <!-- '면' = **먼 코너 QR** (v0WY). ⚠ 의도적 갱신 (2026-08-17 재설계):
+               예전 아이콘은 코드 bbox **위쪽 바깥**의 마름모였다 — QR 이 실루엣 밖
+               허공에 뜨던 시절의 그림이다. 지금은 QR 이 코드 **안쪽 먼 코너**로
+               들어왔으므로 마름모를 bbox 안 위쪽 꼭짓점 자리에 넣는다. 기울어진
+               마름모라는 점은 그대로다 (T 면과 같은 기울기 = 코너 QR 과의 차이). -->
           <div class="toggle-card" data-pos="plane">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-              <rect x="4" y="9" width="16" height="11" rx="2"/>
-              <path d="M12 2.5 L18.5 6 L12 7.5 L5.5 6 Z" fill="currentColor" stroke="none"/>
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+              <path d="M12 6 L17 8.7 L12 11.4 L7 8.7 Z" fill="currentColor" stroke="none"/>
             </svg><span data-i18n="g963">면</span>
-            <span class="card-sub" data-i18n="g965">면-평면 (v0WY)</span></div>
+            <span class="card-sub" data-i18n="g965">먼 코너 (v0WY)</span></div>
           <div class="toggle-card" data-pos="none">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
@@ -1679,6 +1681,25 @@
             </svg>
             <span data-i18n="g610">셀 표면 v0W2 (Y1)</span>
             <span class="card-sub" data-i18n="g954">중앙 + 대형 마커</span>
+          </div>
+          <!-- v0WY — v0W 파생 ③ (2026-08-17 재설계). 아이콘은 v0W 문법(중앙 불스아이 +
+               3겹사각)을 그대로 쓰되 두 곳이 다르다: ① 우하(먼 코너)에 **점선 사각**
+               = QR 슬롯 ② 좌하 L자 = 위상 마커가 SE 에서 SW 로 옮겨 갔다는 사실.
+               그 둘이 v0W 과의 유일한 셀 차이이고, 곧 이 카드의 정의다. -->
+          <div class="toggle-card" data-locator="cell-surface-v0wy">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5" y="5" width="4.4" height="4.4" rx=".6"/>
+              <rect x="6.4" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <rect x="14.6" y="5" width="4.4" height="4.4" rx=".6"/>
+              <rect x="16" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="12" r="2.5"/>
+              <circle cx="12" cy="12" r=".9" fill="currentColor" stroke="none"/>
+              <path d="M5 15.4 v3.6 h3.6" stroke-linecap="round"/>
+              <rect x="13.2" y="13.2" width="6" height="6" rx=".6" stroke-dasharray="1.4 1.1"/>
+            </svg>
+            <span data-i18n="g966">셀 표면 v0WY · 먼 코너 QR (Y1)</span>
+            <span class="card-sub" data-i18n="g967">중앙 + 먼 코너 QR</span>
           </div>
           <!-- v1r2(g547/g945) · v2r2(g543/g946) 카드는 2026-08-16 드랍으로 내렸다.
                i18n 키는 전 언어 (8언어) 남겨 둔다 — 되살릴 때 문자열을 다시 번역하지
@@ -2057,7 +2078,7 @@ const GENERATOR_STRINGS = {
     "g949": "중앙 QR + 코너 L",
     "g954": "중앙 + 대형 마커",
     "g963": "면",
-    "g965": "면-평면 (v0WY)",
+    "g965": "먼 코너 (v0WY)",
     "g964": "셀 표면 로케이터가 해상도와 연동돼요 — 저 = v0 · 중 = v0W (QR 안쪽 배치면 v0WQ). 다른 단을 고르면 로케이터도 함께 바뀌어요.",
     "g950": "사용가능",
     "g951": "인식곤란",
@@ -2173,6 +2194,9 @@ const GENERATOR_STRINGS = {
     "g608": "셀 표면 v0WQ · 중앙 QR (Y1)",
     "g609": "v0WQ. v0W 의 위상 마커(상단·좌하·우하 9셀)에 v0XQ 식 중앙 QR 슬롯(8×8셀)을 얹은 파생이에요. 파인더 45셀 · 데이터 302 로 v0XQ 보다 데이터가 14셀 많고 중앙 QR 모듈은 더 잘아요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g610": "셀 표면 v0W2 (Y1)",
+    "g966": "셀 표면 v0WY · 먼 코너 QR (Y1)",
+    "g967": "중앙 + 먼 코너 QR",
+    "g968": "v0WY. v0W 파생 ③ — QR 을 큐브 안쪽 먼 코너(T면 위 꼭짓점)에 8×8셀 슬롯으로 묻고, v0W 이 그 자리에 두던 위상 마커는 좌하 코너로 옮겼어요. 파인더 67셀 · 슬롯 64셀 · 데이터 280 이고 방향 여유(margin)는 0.080 이에요. QR 위치에서 «면» 을 고르면 이 검출기로 바뀌어요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g611": "v0W2. v0W 파생 ② — 부 파인더를 3×3 에서 6×6 대형 마커로 키우고, K3 불스아이 중앙 25셀과 3코너 동심 사각 36셀은 3면 대칭으로 통일해 검출 전용으로 돌렸어요. 120° 위상 판별은 대형 마커 하나가 전담해요. 파인더 97셀 · 데이터 314 이고 방향 여유(margin)는 0.151 로 v0W(0.095) 보다 두꺼워요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g521": "셀 편집기",
     "g522": "한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
@@ -2380,7 +2404,7 @@ const GENERATOR_STRINGS = {
     "g949": "Centre QR + corner L",
     "g954": "Centre + large marker",
     "g963": "Face",
-    "g965": "Face plane (v0WY)",
+    "g965": "Far corner (v0WY)",
     "g964": "The cell-surface locator is linked to resolution — Low = v0, Mid = v0W (v0WQ when the QR sits inside). Picking another tier switches the locator too.",
     "g950": "usable",
     "g951": "hard to read",
@@ -2496,6 +2520,9 @@ const GENERATOR_STRINGS = {
     "g608": "Cell surface v0WQ · centre QR (Y1)",
     "g609": "v0WQ. A derivative that puts a v0XQ-style centre QR slot (8x8 cells) on v0W's phase markers (top, lower-left, lower-right; 9 cells). 45 finder cells and 302 data cells — 14 more data cells than v0XQ, with finer centre-QR modules. Y1 (n=21) only; does not guarantee performance.",
     "g610": "Cell surface v0W2 (Y1)",
+    "g966": "Cell surface v0WY · far-corner QR (Y1)",
+    "g967": "Centre + far-corner QR",
+    "g968": "v0WY. The third v0W derivative — the QR is buried inside the cube at the far corner (the top vertex of the T face) in an 8×8-cell slot, and the phase marker that v0W kept there moves to the lower-left corner. 67 finder cells, a 64-cell slot, 280 data, and an orientation margin of 0.080. Choosing \"Face\" for the QR position switches to this detector. Y1 (n=21) only; does not guarantee performance.",
     "g611": "v0W2. The second v0W derivative — the secondary finder grows from 3x3 to a 6x6 large marker, while the K3 bullseye centre (25 cells) and the three concentric-square corners (36 cells) are flattened to be identical on all three faces, making them detection-only. A single large marker now carries all of the 120 degree phase discrimination. 97 finder cells, 314 data cells, and an orientation margin of 0.151 — thicker than v0W (0.095). Y1 (n=21) only; does not guarantee performance.",
     "g521": "Cell editor",
     "g522": "Painting one face excludes that (i,j) data triple on T, L, and R. Edits are not applied to the current code output.",
@@ -2703,7 +2730,7 @@ const GENERATOR_STRINGS = {
     "g949": "中央QR＋コーナーL",
     "g954": "中央＋大型マーカー",
     "g963": "面",
-    "g965": "面平面 (v0WY)",
+    "g965": "遠コーナー (v0WY)",
     "g964": "セル表面ロケータは解像度と連動します — 低 = v0・中 = v0W（QR が内側配置なら v0WQ）。別の段を選ぶとロケータも切り替わります。",
     "g950": "使用可能",
     "g951": "認識困難",
@@ -2819,6 +2846,9 @@ const GENERATOR_STRINGS = {
     "g608": "セル表面 v0WQ・中央QR (Y1)",
     "g609": "v0WQ。v0W の位相マーカー(上・左下・右下の9セル)に v0XQ 式の中央QRスロット(8×8セル)を載せた派生です。ファインダー45セル・データ302 で、v0XQ よりデータが14セル多く、中央QRのモジュールはより細かくなります。Y1(n=21) 専用で、性能は保証しません。",
     "g610": "セル表面 v0W2 (Y1)",
+    "g966": "セル表面 v0WY・遠コーナーQR (Y1)",
+    "g967": "中央＋遠コーナーQR",
+    "g968": "v0WY。v0W 派生③ — QR をキューブ内側の遠コーナー（T面の上頂点）に 8×8 セルのスロットとして埋め、v0W がそこに置いていた位相マーカーは左下コーナーへ移しました。ファインダ 67 セル・スロット 64 セル・データ 280 で、方向余裕（margin）は 0.080 です。QR 位置で「面」を選ぶとこの検出器に切り替わります。Y1 (n=21) 専用で、性能を保証しません。",
     "g611": "v0W2。v0W 派生②——副ファインダーを 3×3 から 6×6 の大型マーカーへ拡大し、K3 ブルズアイ中央 25セルと3コーナー同心四角 36セルは3面対称に統一して検出専用にしました。120° の位相判別は大型マーカー1つが担います。ファインダー97セル・データ314、方向マージンは 0.151 で v0W(0.095) より厚いです。Y1(n=21) 専用で、性能は保証しません。",
     "g521": "セル編集",
     "g522": "1面だけ塗っても、その座標 (i,j) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
@@ -3025,7 +3055,7 @@ const GENERATOR_STRINGS = {
     "g949": "QR central + L d'angle",
     "g954": "Centre + grand marqueur",
     "g963": "Face",
-    "g965": "Plan de la face (v0WY)",
+    "g965": "Coin éloigné (v0WY)",
     "g964": "Le localisateur de surface de cellules est lié à la résolution — Basse = v0, Moyenne = v0W (v0WQ si le QR est à l'intérieur). Choisir un autre échelon change aussi le localisateur.",
     "g950": "utilisable",
     "g951": "lecture difficile",
@@ -3141,6 +3171,9 @@ const GENERATOR_STRINGS = {
     "g608": "Surface de cellules v0WQ · QR central (Y1)",
     "g609": "v0WQ. Une variante qui pose un emplacement QR central de type v0XQ (8×8 cellules) sur les marqueurs de phase de v0W (haut, bas gauche, bas droit ; 9 cellules). 45 cellules de repère · données 302 — 14 cellules de données de plus que v0XQ, avec des modules de QR central plus fins. Réservé à Y1 (n=21) ; ne garantit pas les performances.",
     "g610": "Surface de cellules v0W2 (Y1)",
+    "g966": "Surface de cellules v0WY · QR au coin éloigné (Y1)",
+    "g967": "Centre + QR au coin éloigné",
+    "g968": "v0WY. Troisième dérivé de v0W — le QR est enfoui dans le cube, au coin éloigné (le sommet supérieur de la face T), dans un emplacement de 8×8 cellules ; le marqueur de phase que v0W y plaçait passe au coin inférieur gauche. 67 cellules de motif, un emplacement de 64 cellules, 280 données, et une marge d'orientation de 0,080. Si vous choisissez « Face » comme position du QR, ce détecteur est activé. Y1 (n=21) uniquement ; les performances ne sont pas garanties.",
     "g611": "v0W2. Deuxième dérivé de v0W — le motif secondaire passe de 3×3 à un grand marqueur 6×6, tandis que le centre en cible K3 (25 cellules) et les trois carrés concentriques d'angle (36 cellules) sont rendus identiques sur les trois faces, donc réservés à la détection. Un seul grand marqueur porte désormais toute la discrimination de phase à 120°. 97 cellules de motif · 314 cellules de données, marge d'orientation 0.151 — plus épaisse que v0W (0.095). Réservé à Y1 (n=21) ; les performances ne sont pas garanties.",
     "g521": "Éditeur de cellules",
     "g522": "Peindre une seule face exclut le triplet de données (i,j) sur T, L et R. Les modifications ne sont pas appliquées à la sortie du code actuel.",
@@ -3347,7 +3380,7 @@ const GENERATOR_STRINGS = {
     "g949": "QR centrale + L d'angolo",
     "g954": "Centro + marcatore grande",
     "g963": "Faccia",
-    "g965": "Piano della faccia (v0WY)",
+    "g965": "Angolo lontano (v0WY)",
     "g964": "Il localizzatore di superficie a celle è legato alla risoluzione — Bassa = v0, Media = v0W (v0WQ se il QR sta all'interno). Scegliere un altro gradino cambia anche il localizzatore.",
     "g950": "utilizzabile",
     "g951": "lettura difficile",
@@ -3463,6 +3496,9 @@ const GENERATOR_STRINGS = {
     "g608": "Superficie a celle v0WQ · QR centrale (Y1)",
     "g609": "v0WQ. Una derivazione che appoggia uno slot QR centrale in stile v0XQ (8×8 celle) sui marcatori di fase di v0W (in alto, in basso a sinistra, in basso a destra; 9 celle). 45 celle di pattern · dati 302 — 14 celle di dati in più rispetto a v0XQ, con moduli del QR centrale più fini. Riservato a Y1 (n=21); non garantisce le prestazioni.",
     "g610": "Superficie a celle v0W2 (Y1)",
+    "g966": "Superficie a celle v0WY · QR nell’angolo lontano (Y1)",
+    "g967": "Centro + QR nell’angolo lontano",
+    "g968": "v0WY. Terzo derivato di v0W — il QR è sepolto dentro il cubo nell’angolo lontano (il vertice superiore della faccia T) in uno slot di 8×8 celle, e il marcatore di fase che v0W teneva lì passa all’angolo in basso a sinistra. 67 celle di pattern, uno slot di 64 celle, 280 dati e un margine di orientamento di 0,080. Se scegli «Faccia» come posizione del QR, passi a questo rilevatore. Solo Y1 (n=21); le prestazioni non sono garantite.",
     "g611": "v0W2. Secondo derivato di v0W — il pattern secondario cresce da 3×3 a un marcatore grande 6×6, mentre il centro a bersaglio K3 (25 celle) e i tre quadrati concentrici d’angolo (36 celle) diventano identici sulle tre facce, quindi riservati al rilevamento. Un solo marcatore grande porta ora tutta la discriminazione di fase a 120°. 97 celle di pattern · 314 celle di dati, margine di orientamento 0.151 — più spesso di v0W (0.095). Solo Y1 (n=21); le prestazioni non sono garantite.",
     "g521": "Editor delle celle",
     "g522": "Dipingere una sola faccia esclude la tripla di dati (i,j) su T, L e R. Le modifiche non vengono applicate all'output del codice corrente.",
@@ -3669,7 +3705,7 @@ const GENERATOR_STRINGS = {
     "g949": "Zentraler QR + Eck-L",
     "g954": "Mitte + großer Marker",
     "g963": "Fläche",
-    "g965": "Flächenebene (v0WY)",
+    "g965": "Ferne Ecke (v0WY)",
     "g964": "Der Zellflächen-Lokator ist an die Auflösung gekoppelt — Niedrig = v0, Mittel = v0W (v0WQ, wenn der QR innen sitzt). Eine andere Stufe wechselt auch den Lokator.",
     "g950": "nutzbar",
     "g951": "schwer lesbar",
@@ -3785,6 +3821,9 @@ const GENERATOR_STRINGS = {
     "g608": "Zellfläche v0WQ · zentraler QR (Y1)",
     "g609": "v0WQ. Eine Ableitung, die einen zentralen QR-Slot nach Art von v0XQ (8×8 Zellen) auf die Phasenmarker von v0W legt (oben, unten links, unten rechts; 9 Zellen). 45 Suchmusterzellen · Daten 302 — 14 Datenzellen mehr als v0XQ, mit feineren Modulen im zentralen QR. Nur für Y1 (n=21); Leistung wird nicht zugesichert.",
     "g610": "Zellfläche v0W2 (Y1)",
+    "g966": "Zellfläche v0WY · QR in der fernen Ecke (Y1)",
+    "g967": "Mitte + QR in der fernen Ecke",
+    "g968": "v0WY. Die dritte v0W-Ableitung — der QR liegt im Würfel in der fernen Ecke (dem oberen Scheitel der T-Fläche) in einem Slot von 8×8 Zellen, und der Phasenmarker, den v0W dort hielt, wandert in die untere linke Ecke. 67 Suchmuster-Zellen, ein Slot mit 64 Zellen, 280 Daten und ein Ausrichtungsspielraum von 0,080. Wenn Sie als QR-Position „Fläche“ wählen, wird auf diesen Detektor umgeschaltet. Nur Y1 (n=21); die Leistung wird nicht garantiert.",
     "g611": "v0W2. Zweites v0W-Derivat — das sekundäre Suchmuster wächst von 3×3 auf einen großen 6×6-Marker, während die K3-Zielscheiben-Mitte (25 Zellen) und die drei konzentrischen Eckquadrate (36 Zellen) auf allen drei Flächen identisch gemacht und damit rein der Erkennung überlassen werden. Die gesamte 120°-Phasenunterscheidung trägt jetzt ein einziger großer Marker. 97 Suchmuster-Zellen · 314 Datenzellen, Orientierungsmarge 0.151 — dicker als bei v0W (0.095). Nur Y1 (n=21); Leistung wird nicht garantiert.",
     "g521": "Zelleneditor",
     "g522": "Auch wenn Sie nur eine Fläche einfärben, fällt das Datentripel dieser Koordinate (i,j) auf T, L und R zusammen weg. Die Bearbeitung wirkt sich nicht auf die aktuelle Codeausgabe aus.",
@@ -3991,7 +4030,7 @@ const GENERATOR_STRINGS = {
     "g949": "QR central + L de esquina",
     "g954": "Centro + marcador grande",
     "g963": "Cara",
-    "g965": "Plano de la cara (v0WY)",
+    "g965": "Esquina lejana (v0WY)",
     "g964": "El localizador de superficie de celdas va ligado a la resolución — Baja = v0, Media = v0W (v0WQ si el QR va dentro). Elegir otro escalón cambia también el localizador.",
     "g950": "utilizable",
     "g951": "lectura difícil",
@@ -4107,6 +4146,9 @@ const GENERATOR_STRINGS = {
     "g608": "Superficie de celdas v0WQ · QR central (Y1)",
     "g609": "v0WQ. Una derivación que apoya una ranura de QR central al estilo v0XQ (8×8 celdas) sobre los marcadores de fase de v0W (arriba, abajo izquierda, abajo derecha; 9 celdas). 45 celdas de patrón · datos 302 — 14 celdas de datos más que v0XQ, con módulos de QR central más finos. Exclusivo de Y1 (n=21); no garantiza el rendimiento.",
     "g610": "Superficie de celdas v0W2 (Y1)",
+    "g966": "Superficie de celdas v0WY · QR en la esquina lejana (Y1)",
+    "g967": "Centro + QR en la esquina lejana",
+    "g968": "v0WY. El tercer derivado de v0W — el QR queda enterrado dentro del cubo en la esquina lejana (el vértice superior de la cara T) en una ranura de 8×8 celdas, y el marcador de fase que v0W mantenía allí pasa a la esquina inferior izquierda. 67 celdas de patrón, una ranura de 64 celdas, 280 datos y un margen de orientación de 0,080. Si elige «Cara» como posición del QR, se cambia a este detector. Solo Y1 (n=21); no se garantiza el rendimiento.",
     "g611": "v0W2. Segundo derivado de v0W — el patrón secundario crece de 3×3 a un marcador grande de 6×6, mientras que el centro de diana K3 (25 celdas) y los tres cuadrados concéntricos de esquina (36 celdas) se hacen idénticos en las tres caras, quedando solo para la detección. Un único marcador grande lleva ahora toda la discriminación de fase de 120°. 97 celdas de patrón · 314 celdas de datos, margen de orientación 0.151 — más grueso que el de v0W (0.095). Solo Y1 (n=21); no garantiza el rendimiento.",
     "g521": "Editor de celdas",
     "g522": "Pintar una sola cara excluye el triplete de datos (i,j) en T, L y R. Las ediciones no se aplican a la salida del código actual.",
@@ -4313,7 +4355,7 @@ const GENERATOR_STRINGS = {
     "g949": "QR central + L de canto",
     "g954": "Centro + marcador grande",
     "g963": "Face",
-    "g965": "Plano da face (v0WY)",
+    "g965": "Canto distante (v0WY)",
     "g964": "O localizador de superfície de células está ligado à resolução — Baixa = v0, Média = v0W (v0WQ se o QR ficar por dentro). Escolher outro degrau muda também o localizador.",
     "g950": "utilizável",
     "g951": "leitura difícil",
@@ -4429,6 +4471,9 @@ const GENERATOR_STRINGS = {
     "g608": "Superfície de células v0WQ · QR central (Y1)",
     "g609": "v0WQ. Uma derivação que assenta uma ranhura de QR central ao estilo v0XQ (8×8 células) sobre os marcadores de fase do v0W (topo, inferior esquerdo, inferior direito; 9 células). 45 células de padrão · dados 302 — mais 14 células de dados do que o v0XQ, com módulos de QR central mais finos. Exclusivo de Y1 (n=21); não garante o desempenho.",
     "g610": "Superfície de células v0W2 (Y1)",
+    "g966": "Superfície de células v0WY · QR no canto distante (Y1)",
+    "g967": "Centro + QR no canto distante",
+    "g968": "v0WY. O terceiro derivado do v0W — o QR fica enterrado dentro do cubo no canto distante (o vértice superior da face T) numa ranhura de 8×8 células, e o marcador de fase que o v0W mantinha aí passa para o canto inferior esquerdo. 67 células de padrão, uma ranhura de 64 células, 280 dados e uma margem de orientação de 0,080. Se escolher «Face» como posição do QR, passa para este detetor. Apenas Y1 (n=21); o desempenho não é garantido.",
     "g611": "v0W2. Segundo derivado do v0W — o padrão secundário cresce de 3×3 para um marcador grande de 6×6, enquanto o centro de alvo K3 (25 células) e os três quadrados concêntricos de canto (36 células) ficam idênticos nas três faces, reservados só à deteção. Um único marcador grande passa a assumir toda a discriminação de fase de 120°. 97 células de padrão · 314 células de dados, margem de orientação 0.151 — mais espessa que a do v0W (0.095). Apenas Y1 (n=21); não garante o desempenho.",
     "g521": "Editor de células",
     "g522": "Pintar apenas uma face exclui o triplo de dados (i,j) em T, L e R. As edições não são aplicadas à saída do código atual.",
@@ -4516,8 +4561,11 @@ import { VERSIONS_A as VERSIONS_A_TABLE } from './src/capacityA.js';
 // ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
 // placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
 import { placeReservedCells } from './src/autoplaceY.js';
-import { CELL_SURFACE_FINAL_V0XQ,
-  CELL_SURFACE_FINAL_V0WQ, cellSurfaceFinal } from './src/cellSurfaceFinal.js';
+// ⚠ 슬롯 레이아웃 id 를 손으로 나열하던 두 import (`CELL_SURFACE_FINAL_V0XQ` ·
+//   `CELL_SURFACE_FINAL_V0WQ`) 는 2026-08-17 v0WY 편입에서 `hasCenterQrSlot` 정본
+//   질의로 대체됐다 — 슬롯 레이아웃이 셋이 되면서 «id 를 여기 또 적는» 방식이
+//   빠뜨리기 쉬운 자리가 됐기 때문이다 (상수 자체는 cellSurfaceFinal.js 에 그대로 산다).
+import { cellSurfaceFinal, hasCenterQrSlot } from './src/cellSurfaceFinal.js';
 import { faceBasis, layoutForCube, moduleQuad, YFACES } from './src/ygrid.js';
 import {
   CELL_EDITOR_MODE_MASK, TONE_BRIGHTEN, TONE_DARKEN,
@@ -4573,6 +4621,7 @@ import {
   //   비교가 남아 실제로 그랬다. 2026-08-17 v0X 드랍 레인에서 함께 걷어냈다).
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WY,
   LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_OFF,
   isCellSurfaceLocatorProfileY,
 } from './src/locatorY.js';
@@ -5781,20 +5830,31 @@ for (const card of els.typeCards.children) {
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     const type = currentType();
-    // 정합 (운영자 판정 2026-08-17): «면»(v0WY) QR 과 중앙 QR 검출기 (v0WQ) 를
-    // 함께 두면 QR 이 두 개가 된다. 면을 고른 것은 «QR 은 면-평면으로» 라는 뜻이므로
-    // 검출기를 비-QR 짝으로 바꾼다 (v0wq→v0w). 반대 방향 (중앙 QR 검출기
-    // 선택 시) 은 buildScene 이 코너 QR 과 같은 규칙으로 면 QR 을 억제한다.
+    // ── QR 위치 «면» ↔ 로케이터 v0WY 연동 (2026-08-17 재설계) ─────────────
     //
-    // ⚠ **여기 있던 `v0xq → v0x` 분기는 죽은 코드가 아니라 살아 있는 결함이었다**
-    //   (2026-08-17 v0X 드랍 레인 발견). v0XQ 드랍이 import 에서
-    //   `LOCATOR_PROFILE_CELL_SURFACE_V0XQ` 를 뺐는데 이 비교식은 남아, 상태가
-    //   v0WQ 가 **아닌** 모든 경우(off·v0·v0W·v0X…)에 둘째 비교식을 평가하며
-    //   `ReferenceError: … is not defined` 로 «면» 카드 클릭 전체를 죽였다
-    //   (재현: `test/output/lanes/claude-v0wy-refbug.mjs`). 두 끝점(v0xq·v0x)이 모두
-    //   드랍된 지금은 분기 자체가 무의미하므로 통째로 걷어낸다.
-    if (type === 'Y' && card.dataset.pos === 'plane') {
-      if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ) {
+    // ⚠ **의도적 갱신** — 여기 있던 코드는 «면을 고르면 v0WQ 검출기를 v0W 로 되돌린다»
+    // 였다. 그때의 «면» 은 실루엣 밖 허공 QR 이라 레이아웃과 무관한 **렌더 선택**이었고,
+    // 유일한 문제가 «중앙 QR 과 겹치면 QR 이 둘» 이었기 때문이다.
+    // 지금의 «면» 은 **레이아웃 v0WY 자체**다 (먼 코너 슬롯 64셀). 그래서 이 핸들러가
+    // 하는 일이 «충돌 회피» 에서 **«레이아웃 전환»** 으로 바뀐다.
+    //
+    // 전환 규칙 (#22 해상도 연동과 같은 관용구 — 사용자가 고른 축 하나만 움직인다):
+    //   · 면 선택 + 현재 v0W 계열(v0w·v0wq·v0w2) → **v0wy**
+    //   · 면 해제(다른 QR 위치) + 현재 v0wy       → **v0w** 로 복귀
+    //   · v0(n=13)·off·hex 는 **안 건드린다** — 그 자리에 v0WY 가 없다 (n=21 전용).
+    //     이때 «면» 은 레이아웃을 못 바꾸므로 QR 도 안 실린다 (fallback 이 그대로 off).
+    if (type === 'Y') {
+      const V0W_FAMILY = [
+        LOCATOR_PROFILE_CELL_SURFACE_V0W,
+        LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
+        LOCATOR_PROFILE_CELL_SURFACE_V0W2,
+      ];
+      if (card.dataset.pos === 'plane') {
+        if (V0W_FAMILY.includes(generatorState.locatorProfileY)) {
+          generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0WY;
+          syncYLocatorUi();
+        }
+      } else if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WY) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;
         syncYLocatorUi();
       }
@@ -5857,19 +5917,26 @@ function syncResTierUi() {
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W;
   const cellSurfaceV0wq = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ;
+  // v0WY 도 n=21 전용이라 «중» 한 단만 열린다. **#22 연동(저 ↔ 중) 에는
+  // 넣지 않는다** — v0W2 와 같은 이유이고, v0WY 에는 이유가 하나 더 있다:
+  // 이 레이아웃은 **QR 위치 카드«면»** 으로 고르는 물건이라, 해상도 카드가
+  // v0WY 로 가거나 v0WY 에서 나가게 만들면 **해상도를 고르다가 QR 위치가 같이
+  // 바뀌는** 숨은 결합이 생긴다 (축 하나만 움직인다 — #22 관용구).
+  const cellSurfaceV0wy = type === 'Y'
+    && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WY;
   // #22 (운영자 지시 2026-08-16): v0 계열은 해상도를 «잠그지» 않고 **연동**한다 —
   // v0 에서 «중» 을 고르면 v0W (QR 안쪽 배치면 v0WQ) 로, v0W/v0WQ 에서 «저» 를
   // 고르면 v0 로 돌아온다 (대칭 복귀). «고» 는 Y2 셀 표면이 공백이라 계속 잠근다.
   // 셀 표면 잠금이 windowLocked 보다 우선한다 — selectedTier 계산과 같은 우선순위.
   const isOff = (res) =>
     cellSurfaceV0 ? res === 'high'
-      : cellSurfaceV0w2 ? (res === 'low' || res === 'high')
+      : (cellSurfaceV0w2 || cellSurfaceV0wy) ? (res === 'low' || res === 'high')
         : (cellSurfaceV0w || cellSurfaceV0wq) ? res === 'high'
           : windowLocked ? (res === 'low' || res === 'mid')
             : false;
   const selectedTier = cellSurfaceV0
     ? 'low'
-    : (cellSurfaceV0w || cellSurfaceV0wq || cellSurfaceV0w2)
+    : (cellSurfaceV0w || cellSurfaceV0wq || cellSurfaceV0w2 || cellSurfaceV0wy)
       ? 'mid'
       : resolutionTierForVersion(
         type, generatorState[versionStateKey(type)],
@@ -6147,6 +6214,16 @@ if (els.yLocatorCards) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0WQ;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0W2) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W2;
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0WY) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0WY;
+        // «먼 코너 QR» 은 슬롯이 레이아웃 정의라 QR 이 선택 사항이 아니다 —
+        // QR 위치가 «없음» · «안쪽» 이면 슬롯이 비거나 윈도 β 와 겁친다.
+        // 사용자가 검출기 카드로 들어온 경로도 QR 위치를 «면» 으로 맞춰 준다
+        // (반대 방향 연동은 §qrPositionCards 에 있다).
+        if (generatorState.qrPosition !== 'plane') {
+          generatorState.qrPosition = 'plane';
+          renderQrPositionUi();
+        }
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
       // v1r2 · v2r2 분기는 2026-08-16 드랍으로, **v0XQ(2라운드) · v0X(3라운드)
@@ -7555,7 +7632,9 @@ function syncYLocatorUi() {
           ? LOCATOR_PROFILE_CELL_SURFACE_V0WQ
           : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W2
             ? LOCATOR_PROFILE_CELL_SURFACE_V0W2
-            : LOCATOR_PROFILE_OFF;
+            : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WY
+              ? LOCATOR_PROFILE_CELL_SURFACE_V0WY
+              : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
     // 자동은 «끔» 과 같은 값을 내지만 카드는 배타적으로 켠다 — 자동을 고른 사용자에게
     // 끔이 함께 켜져 보이면 «둘 중 뭐가 적용된 건가» 가 생긴다.
@@ -7577,6 +7656,8 @@ function syncYLocatorUi() {
         ? t('g609')
         : profile === LOCATOR_PROFILE_CELL_SURFACE_V0W2
           ? t('g611')
+          : profile === LOCATOR_PROFILE_CELL_SURFACE_V0WY
+            ? t('g968')
           : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
             ? t('g541')
             : profile === LOCATOR_PROFILE_HEX_FRAME_V1
@@ -7847,7 +7928,8 @@ function buildConfig() {
       ? 0
       : (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W
         || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
-        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W2)
+        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W2
+        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WY)
         ? 1
         : fallback.mode === 'window'
           ? 2
@@ -8046,22 +8128,22 @@ function renderTypeY(cfg) {
     if (cfg.fallback.mode === 'corner') sceneOpts.qrCorner = cfg.fallback.corner;
     // 안쪽(윈도 β) = 상단면 QR 단독 — 코너 QR 병행 억제 (사용자 재판정 2026-08-09).
     if (useWindow) sceneOpts.cornerQr = false;
-    // '면'(v0WY) — 큐브 바깥 면-평면 QR. 코너 억제는 sceneY 가 같은 규칙으로 한다.
-    // margin 은 sceneY 가 요구치(15.5셀)를 스스로 검사하고, 여기서는 그 값을 넘긴다:
-    // 기본 margin(20셀)이 이미 충분하므로 평소에는 아무것도 안 바뀐다.
-    // 중앙 QR 레이아웃 (v0XQ/v0WQ) 에서는 면 QR 을 코너 QR 과 같은 규칙으로 억제한다
-    // — 안 그러면 QR 이 두 개가 된다 (운영자 판정 2026-08-17, 실기기 스크린샷).
-    if (cfg.fallback.mode === 'plane'
-      && opts.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0XQ
-      && opts.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0WQ) sceneOpts.outerFaceQr = true;
+    // ⚠ **의도적 갱신 (2026-08-17 v0WY 재설계)** — 여기에는
+    //   `if (cfg.fallback.mode === 'plane' && …) sceneOpts.outerFaceQr = true;`
+    // 가 있었다. 큐브 **밖** 허공에 마름모를 그리는 렌더 스위치였고, 그래서
+    // «중앙 QR 레이아웃에서는 QR 이 둘이 되니 억제한다» 는 예외까지 달려 있었다.
+    // 지금의 «면» 은 **레이아웃 v0WY 자체**라 켜고 끌 스위치가 없다 — QR 은 슬롯이
+    // 요구하고, 아래 슬롯 qrText 가드가 레이아웃 하나만 보고 처리한다.
+    // (`sceneY.js` 는 `opts.outerFaceQr` 가 오면 **던진다** — 조용히 무시하지 않는다.)
   }
-  // 중앙 QR 변형(v0XQ · v0WQ)은 슬롯이 **레이아웃 정의**라 QR 이 선택 사항이 아니다.
-  // v0XQ 는 2026-08-17 카드 드랍으로 UI 에서 못 고르지만 이 가드는 **레이아웃 id 로**
-  // 걸려 있다 — 조건을 지우면 카드를 되살리는 날 «슬롯이 비어 버린다» 로 죽는다.
+  // QR 슬롯 변형(v0XQ · v0WQ · **v0WY**)은 슬롯이 **레이아웃 정의**라 QR 이 선택
+  // 사항이 아니다. 예전에는 두 id 를 손으로 적었는데, v0WY 가 붙으면서 **정본 질의**
+  // (`hasCenterQrSlot`)로 바꿨다 — 네 번째 슬롯 레이아웃이 생기는 날 여기를 잊으면
+  // «슬롯이 비어 버린다» 로 죽는다. 드랍된 v0XQ 도 그 질의에 그대로 들어 있어
+  // 카드를 되살리는 날 자동으로 산다.
   // 폴백 «끔» 이어도 텍스트를 넘겨야 한다 — 안 넘기면 sceneY 가 «슬롯이 비어 버린다»
   // 로 던진다. 코너 QR 은 sceneY 가 알아서 억제한다(윈도 β 와 같은 규칙).
-  if ((opts.cellSurfaceLayout === CELL_SURFACE_FINAL_V0XQ
-    || opts.cellSurfaceLayout === CELL_SURFACE_FINAL_V0WQ)
+  if (opts.cellSurface === true && hasCenterQrSlot(opts.cellSurfaceLayout)
     && sceneOpts.qrText === undefined) {
     sceneOpts.qrText = cfg.qrText;
   }

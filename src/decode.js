@@ -360,9 +360,13 @@ function resolveProfile(format) {
         : format.locatorProfile === 'cell-surface-v1r2'
           ? 'v1r2'
           // 'cell-surface-v0x' · 'cell-surface-v0xq' · 'cell-surface-v0w' ·
-          // 'cell-surface-v0wq' · 'cell-surface-v0w2' 는 초안 슬롯이 없어
-          // draftIndexWire 충돌이 없다.
-          // ('cell-surface-v0wy' 라는 프로파일은 **없다** — v0WY 는 와이어가 v0W 다.)
+          // 'cell-surface-v0wq' · 'cell-surface-v0w2' · 'cell-surface-v0wy' 는
+          // 초안 슬롯이 없어 draftIndexWire 충돌이 없다.
+          //
+          // ⚠ **의도적 갱신 (2026-08-17 v0WY 재설계)** — 이 자리에는
+          // 「'cell-surface-v0wy' 라는 프로파일은 없다 — v0WY 는 와이어가 v0W 다」
+          // 가 적혀 있었다. 구 v0WY(허공 마름모 QR)의 서술이고, QR 이 실루엣
+          // 안쪽 먼 코너로 들어오면서 셀 집합·회계가 달라져 진짜 레이아웃이 됐다.
           : format.locatorProfile === 'cell-surface-v0x'
             ? 'v0x'
             : format.locatorProfile === 'cell-surface-v0xq'
@@ -373,7 +377,9 @@ function resolveProfile(format) {
                   ? 'v0wq'
                   : format.locatorProfile === 'cell-surface-v0w2'
                     ? 'v0w2'
-                    : null;
+                    : format.locatorProfile === 'cell-surface-v0wy'
+                      ? 'v0wy'
+                      : null;
     const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
       ? format.cellSurfaceLayout
       : (profileHintId !== null && !draftIndexWire ? profileHintId : null);

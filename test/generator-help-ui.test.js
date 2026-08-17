@@ -307,11 +307,16 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // 부제 키 g944(v0X)는 **사전에 그대로 남는다** — v1r2·v2r2·v0XQ 와 같은 규약이고,
   // locatorY-lab.test.js 가 그 보존을 여덟 언어로 고정한다. 남은 여섯은
   // 자동·끔 + v0 + **v0W 계열 셋**이다.
+  // **의도적 갱신 «v0WY 편입» (운영자 재설계 2026-08-17)**: v0WY 카드가 들어와
+  // 6 → 7 이다 (부제 g967). 바로 위 「v0WY 는 여기서 세지 않는다 — QR 위치 카드라
+  // 이 블록 밖이다」 는 **허공 마름모 설계**의 서술이었고, QR 이 실루엣 안쪽 먼
+  // 코너로 들어오면서 v0WY 가 진짜 레이아웃이 돼 뒤집혔다. QR 위치 카드 «면» 은
+  // 그대로 있고, 이제 그 카드가 **이 검출기 카드로 전환**시킨다 (아래 §«면» 회귀).
   const cardCount = (block.match(/class="toggle-card[^"]*" data-locator=/g) || []).length;
-  assert.equal(cardCount, 6, '검출기 카드는 자동·끔 + v0 + v0W 계열 3종 = 6 이다');
+  assert.equal(cardCount, 7, '검출기 카드는 자동·끔 + v0 + v0W 계열 4종 = 7 이다');
   assert.equal((block.match(/<svg /g) || []).length, cardCount,
     '검출기 카드 전부가 파인더 기하 아이콘을 가져야 한다');
-  const subKeys = ['g941', 'g942', 'g943', 'g948', 'g949', 'g954'];
+  const subKeys = ['g941', 'g942', 'g943', 'g948', 'g949', 'g954', 'g967'];
   assert.equal(subKeys.length, cardCount, '부제 키 수가 카드 수와 다르다');
   for (const key of subKeys) {
     assert.match(block, new RegExp(`class="card-sub" data-i18n="${key}"`), `검출기 부제 ${key} 누락`);
@@ -580,11 +585,20 @@ test('#22 — v0 계열 해상도는 로케이터와 연동된다 (v0 ↔ v0W/v0
   }
 });
 
-test('«면» QR 과 중앙 QR 검출기는 겹치지 않는다 — 전환·억제 (운영자 판정 2026-08-17)', () => {
-  // 실기기 스크린샷 결함: v0XQ (중앙 QR) + 면 QR 이 동시에 렌더돼 QR 이 두 개.
-  // ① 면 클릭 시 중앙 QR 검출기는 비-QR 짝으로 전환된다.
+test('«면» QR 카드 ↔ v0WY 로케이터 양방향 연동 (운영자 재설계 2026-08-17)', () => {
+  // ⚠ **의도적 갱신 (2026-08-17 v0WY 재설계).** 이 회귀는 원래 «충돌 회피» 를 쟀다 —
+  // 「v0XQ(중앙 QR) + 면 QR 이 동시에 렌더돼 QR 이 두 개」 라는 실기기 결함 때문에,
+  // 면을 고르면 중앙 QR 검출기를 비-QR 짝(v0wq→v0w)으로 되돌리는 배선이었다.
+  // 지금의 «면» 은 **레이아웃 v0WY 자체**라 그 충돌이 구조적으로 없다 (QR 이 슬롯
+  // 하나에만 산다). 그래서 재는 명제가 «충돌 회피» 에서 **«양방향 전환»** 으로 바뀐다.
+  //
+  // ① 면 클릭 → v0W 계열이면 v0WY 로 전환.
   assert.match(INDEX, /card\.dataset\.pos === 'plane'/);
-  assert.match(INDEX, /LOCATOR_PROFILE_CELL_SURFACE_V0WQ\) \{\s*generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;/);
+  assert.match(INDEX, /generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0WY;/);
+  // ①-b 다른 QR 위치 클릭 → v0WY 였으면 v0W 로 복귀 (한쪽만 있으면 갇힌다).
+  assert.match(INDEX, /=== LOCATOR_PROFILE_CELL_SURFACE_V0WY\) \{\s*generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;/);
+  // ①-c 검출기 카드로 v0WY 를 고르면 QR 위치도 «면» 으로 맞춰진다 (반대 방향).
+  assert.match(INDEX, /generatorState\.qrPosition !== 'plane'\) \{\s*generatorState\.qrPosition = 'plane';/);
   // **의도적 갱신 «v0X 드랍» (2026-08-17, 판정 3라운드)** — 여기 있던
   // `v0xq → v0x` 분기 단언을 **부재 단언으로 뒤집는다.**
   //
@@ -612,6 +626,12 @@ test('«면» QR 과 중앙 QR 검출기는 겹치지 않는다 — 전환·억�
   assert.match(code, /LOCATOR_PROFILE_CELL_SURFACE_V0WQ/,
     '주석 제거가 코드까지 지웠다 — 이 자는 «항상 통과» 다');
 
-  // ② 반대 방향은 렌더 급 억제 — 중앙 QR 레이아웃이면 outerFaceQr 를 안 켠다.
-  assert.match(INDEX, /fallback\.mode === 'plane'\s*&& opts\.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0XQ\s*&& opts\.cellSurfaceLayout !== CELL_SURFACE_FINAL_V0WQ/);
+  // ② **부재 단언 — `outerFaceQr` 는 폐기됐다.** 구 v0WY(허공 마름모)의 렌더
+  //    스위치였고, 지금은 sceneY 가 그 옵션을 받으면 **던진다**. index.html 코드에
+  //    남아 있으면 «면» 을 고를 때마다 렌더가 죽는다.
+  assert.doesNotMatch(code, /sceneOpts\.outerFaceQr/,
+    'index.html 코드에 폐기된 outerFaceQr 배선이 남았다 — sceneY 가 던진다');
+  // ③ 슬롯 qrText 는 **정본 질의**로 걸린다 (id 를 손으로 나열하면 새 슬롯을 빠뜨린다).
+  assert.match(code, /hasCenterQrSlot\(opts\.cellSurfaceLayout\)/,
+    '슬롯 qrText 가드가 hasCenterQrSlot 정본 질의를 안 쓴다');
 });

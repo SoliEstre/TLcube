@@ -104,12 +104,12 @@
  *     거부**해 8 로 내려앉았다 (§CENTER_QR_SLOT_CELLS_V0WQ). 결과적으로 v0XQ 보다
  *     data 가 **14셀 많고**(302 대 288) QR 모듈은 **더 잘다**(0.2759 대 0.3103셀).
  *
- *   · **v0WY** — 큐브 **바깥** 면-평면 QR (윈도 β 문법 재사용). **여기에 id 가 없다.**
- *     QR 이 실루엣 밖에 앉아 셀을 한 칸도 안 먹으므로 셀 집합·회계·와이어가 v0W 와
- *     **비트 동일**하기 때문이다. 새 id 를 만들면 (a) 디코더가 구분할 근거가 0 이라
- *     교차 오수용이 100 % 로 설계되고 (b) n=21 CS 후보만 하나 더 늘어 프레임 시간을
- *     먹는다. 그래서 v0WY 는 **렌더 선택**이다 — `qrPosition: 'plane'`
- *     (`sceneY.js` §renderOuterFaceQr). 브리프의 «데이터 무손실» 이 곧 이 결론이다.
+ *   · **v0WY** — **2026-08-17 재설계로 진짜 와이어 id 가 됐다** (§CELL_SURFACE_FINAL_V0WY).
+ *     최초 편입(2026-08-16)의 v0WY 는 큐브 **바깥** 면-평면 QR («허공 마름모») 이라
+ *     셀을 한 칸도 안 먹었고, 그래서 셀 집합·회계·와이어가 v0W 와 **비트 동일**한
+ *     «렌더 선택» 이었다. 실기기 3라운드 뒤 운영자가 그 설계를 **폐기**하고
+ *     «윈도 β 식 안쪽 배치 + v0WQ 와 같은 크기의 슬롯» 으로 재설계했다 —
+ *     QR 이 실루엣 **안**으로 들어와 64셀을 먹으므로 이제 셀 집합이 실제로 다르다.
  *
  * **v0W 파생 ③ — v0W2 (2026-08-17, 운영자 신설 설계)** — 실기기 판정 라운드에서
  * v0W 가 진 두 자리를 정면으로 고친 물건이다. QR 채널이 아니라 **파인더 자체의 개정**
@@ -212,6 +212,58 @@ export const CELL_SURFACE_FINAL_V0WQ = 'v0wq';
  */
 export const CELL_SURFACE_FINAL_V0W2 = 'v0w2';
 /**
+ * 표시 이름은 «v0WY» — v0W 파생 ③ (운영자 **재설계** 2026-08-17, 실기기 판정 3라운드).
+ *
+ * **최초 편입본(2026-08-16)과 다른 물건이다.** 그때의 v0WY 는 큐브 바깥 허공에 뜬
+ * 면-평면 QR («마름모») 이라 셀을 한 칸도 안 먹었고 — 그래서 와이어 id 가 없는
+ * «렌더 선택» 이었다. 운영자가 그 설계를 폐기하고 다음으로 확정했다:
+ *
+ *   · QR 을 실루엣 **안**으로 — «윈도 β 식 안쪽 배치» = 초기 타입 Y 안쪽 QR 과 같은
+ *     자리, **T 면 먼 코너 C0** (L 면 좌하 C4 · R 면 우하 C2) 에 묻힌다.
+ *   · 슬롯 크기는 **v0WQ 와 동일** — 8×8 = 64셀 (§CENTER_QR_SLOT_CELLS_V0WY).
+ *
+ * 그래서 셀 집합이 실제로 달라졌고 (슬롯 64셀 + 위상 마커 이전), **이제 진짜 와이어
+ * id 다**. 「v0WY 는 와이어 id 가 아니다」 는 옛 설계의 서술이고 이 개정으로 뒤집혔다.
+ *
+ * ── 겹침 해소 (이 편입의 1차 설계 결정) ──────────────────────────────────
+ * 먼 코너 슬롯 [13,20]² 는 v0W 의 SE 위상 마커 (18..20)² 와 **9셀 전부 겹친다**.
+ * 세 후보를 실측 비교했다 (`test/output/lanes/claude-v0wy-design.mjs`):
+ *
+ * | 후보 | 파인더 | 슬롯 | data | 방향 margin | 인코더 정합 ⑤ | 먼 코너 C0 |
+ * |---|---|---|---|---|---|---|
+ * | (a) SE 를 슬롯에 내주고 NW 비대칭에 의존 | 61 | [13,20]² | 286 | 0.0437 | **거부** | 닿음 |
+ * | (b) 슬롯을 안쪽으로 밀어 SE 유지 | 70 | [10,17]² | 277 | 0.0952 | ok | **안 닿음** |
+ * | **(c) SE 마커를 SW 로 이전** | **67** | **[13,20]²** | **280** | **0.0796** | **ok** | **닿음** |
+ *
+ * (a) 는 **손대지 않은 게이트가 죽인다** — data 286 → S=95 → ECC-H 예산 57심볼에
+ * 정확히 맞는 바이트 수가 없다 (54 B → 56심볼). v0WQ 슬롯을 9 → 8 로 내린 그
+ * 자기검증 ⑤ 와 **같은 자, 같은 S 값**이다. 게다가 파인더가 v0W 의 **진부분집합**이라
+ * (내 셀 중 v0W 에 없는 것 0 · 톤 충돌 0) 교차 별칭이 설계로 100 % 가 된다.
+ *
+ * (b) 는 브리프 문안(«[12,19]² 로 한 칸 안쪽»)으로는 **겹침이 안 풀린다** (4셀 잔존:
+ * (18,18)·(18,19)·(19,18)·(19,19)). 실제로 푸는 최소 후퇴는 [10,17]² 인데 그러면
+ * 슬롯이 먼 코너 C0 에 안 닿아 **운영자 스펙을 어긴다**. 그리고 파인더가 v0W 와
+ * **셀·톤까지 완전히 같아져** («내 셀 중 상대에 없음 0 · 상대 셀 중 내게 없음 0»)
+ * 브리프가 경고한 «최대 지뢰» 가 문자 그대로 실현된다.
+ *
+ * (c) 만이 세 조건을 다 만족한다 — 스펙(먼 코너 C0 · 64셀) · ⑤ · **셀 수준 판별력**.
+ * 대가는 margin 0.0952 → 0.0796 (−16.4 %, 마커가 9셀 → 6셀) 인데 게이트 0.035 의
+ * **2.27배**이고 편입 이력이 있는 v0XQ(0.0635)보다 두껍다. 게이트는 무접촉이다.
+ *
+ * 구성 (전부 유도 — 손 좌표표 0):
+ *   · NW (0..4)²          25 = `K3_CENTRE_CELLS` **같은 배열** (v0W 와 동일한 중앙)
+ *   · NE (0..5)×(15..20)  36 = `V0XQ_CORNER_CELLS` **같은 배열**
+ *   · SW (18..20)×(0..1)   6 = `V0XQ_MARKER_CELLS` **같은 배열**
+ *        (= v0X SW = **v0 정본 SW 3×2 블록의 (+8, 0) 평행이동** — 실측 6/6 완전 일치.
+ *         v0W 의 SE 마커가 v0 SE 3×3 의 (+8,+8) 인 것과 **같은 계보의 형제 블록**이다.
+ *         즉 «마커를 SW 로 옮긴다» 는 새 무늬를 그리는 일이 아니라 v0 의 이웃 코너
+ *         블록을 같은 규칙으로 쓰는 일이다.)
+ *   · SLOT [13,20]²       64 = 먼 코너 QR (§CENTER_QR_SLOT_CELLS_V0WY)
+ *
+ * 회계: 441 − 67 − 64 − 12 − 18 = **280** · S=93 · 잔여 1.
+ */
+export const CELL_SURFACE_FINAL_V0WY = 'v0wy';
+/**
  * 선언 순서가 곧 «n 별 후보 순서» 다 (`finalLayoutIdsForN`). v0W·v0WQ 를 **맨 뒤**에
  * 둔 것은 편입 시점의 규약이었다 — 당시 n=21 의 기본은 v0X 였고, 둘은 세·네 번째
  * 후보로 병행 채점됐다. 기본을 바꾸는 것은 조건부 드랍(«v0W > v0X» · «v0WQ > v0XQ»
@@ -231,8 +283,13 @@ export const CELL_SURFACE_FINAL_V0W2 = 'v0w2';
  * 하류 CS/RS 가 못 넘긴다», 뒤는 «n=13 v0 와 n=21 v0X 가 서로로 잡힌다» 는 말이다.
  * 그래서 v0x 도 §CELL_SURFACE_FINAL_DROPPED_IDS 에 든다 — 같은 «차단·비삭제» 규약.
  *
- * ⚠ **v0WY 는 여기 없다** — 셀 집합이 v0W 와 비트 동일한 «렌더 선택» 이라 와이어 id 가
- * 아니다 (모듈 헤더 §v0W 파생 2종). id 를 만들면 교차 오수용이 100 % 로 설계된다.
+ * ⚠ **의도적 갱신 (2026-08-17 재설계) — v0WY 가 여기 들어왔다.** 이 자리에는
+ * 「v0WY 는 셀 집합이 v0W 와 비트 동일한 «렌더 선택» 이라 와이어 id 가 아니다」 가
+ * 적혀 있었다. 그 문장은 **허공 마름모 설계**의 서술이었고, 운영자가 QR 을 실루엣
+ * 안쪽 먼 코너로 옮기면서 셀 집합이 실제로 달라졌다 (슬롯 64 + 마커 SE→SW).
+ * 지금은 v0W 와 파인더 셀이 **양방향으로** 다르다 (내 SW 6 ↔ 상대 SE 9) — 그 문장이
+ * 걱정하던 «구분할 근거 0» 이 해소됐다. 근거·후보 비교는 §CELL_SURFACE_FINAL_V0WY.
+ * 맨 뒤에 두는 것은 편입 규약 그대로다 — n=21 기본(v0w)은 안 바뀐다.
  */
 export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0,
@@ -243,6 +300,7 @@ export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0W,
   CELL_SURFACE_FINAL_V0WQ,
   CELL_SURFACE_FINAL_V0W2,
+  CELL_SURFACE_FINAL_V0WY,
 ]);
 
 export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
@@ -254,6 +312,7 @@ export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
   [CELL_SURFACE_FINAL_V0W]: 'cell-surface-v0w',
   [CELL_SURFACE_FINAL_V0WQ]: 'cell-surface-v0wq',
   [CELL_SURFACE_FINAL_V0W2]: 'cell-surface-v0w2',
+  [CELL_SURFACE_FINAL_V0WY]: 'cell-surface-v0wy',
 });
 
 /** 신세대 셀 표면 formatIndex — 한 쌍뿐. 세 레이아웃이 같이 쓴다(신설 금지). */
@@ -269,6 +328,7 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
   [CELL_SURFACE_FINAL_V0W]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0WQ]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0W2]: Object.freeze([21]),
+  [CELL_SURFACE_FINAL_V0WY]: Object.freeze([21]),
 });
 
 /**
@@ -486,6 +546,10 @@ const DECLARED_DATA = Object.freeze({
     // 값이지만 이 값의 근거는 팩이 아니라 autoplace 재산출이다
     // (`test/output/lanes/claude-v0w2-derive.mjs` §⑥ · 자기검증 ①-f).
     [CELL_SURFACE_FINAL_V0W2]: Object.freeze({ 21: 314 }),
+    // v0wy: 441 − 67(파인더 25+36+6) − 64(먼 코너 QR 슬롯 8²) − 12 − 18 = 280.
+    // 슬롯 8 은 운영자 스펙(«v0WQ 슬롯과 동일 크기»)이 정한 값이고, 그 값에서
+    // 파인더 구성을 고른 것이 §CELL_SURFACE_FINAL_V0WY 의 후보 (c) 다.
+    [CELL_SURFACE_FINAL_V0WY]: Object.freeze({ 21: 280 }),
   }),
   // 레거시 세대 (포맷 v1 · 15셀) — **판독 전용**. 개정 전 발행 프레임의 회계다.
   [CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY]: Object.freeze({
@@ -752,6 +816,17 @@ export const CENTER_QR_SLOT_CELLS = 9;
 export const CENTER_QR_SLOT_CELLS_V0WQ = 8;
 
 /**
+ * v0WY 의 슬롯 한 변 — **운영자 스펙이 «v0WQ 와 동일 크기» 로 못 박았다** (8×8 = 64셀).
+ * 그래서 이 값은 유도가 아니라 **v0WQ 값의 참조**다 (숫자 8 을 다시 적으면 v0WQ 가
+ * 바뀔 때 조용히 갈린다). 자기검증 ①-g 가 두 값의 동일성을 못 박는다.
+ *
+ * autoplace 를 다시 물을 필요는 있었다 — 점유 집합이 v0WQ 와 다르기 때문이다
+ * (슬롯이 NW 사분면이 아니라 **먼 코너**라 레퍼런스 L자 규칙에 걸리는 자리가 다르고,
+ * 파인더도 25+36+6 으로 다르다). 실측 수용 (`claude-v0wy-design.mjs`).
+ */
+export const CENTER_QR_SLOT_CELLS_V0WY = CENTER_QR_SLOT_CELLS_V0WQ;
+
+/**
  * 중앙 QR 모듈 기하 — **렌더러와 디코더가 같은 상수를 쓴다.** sceneY(그리는 쪽)와
  * cellsurface-block-detect(중앙 앵커를 읽는 쪽)가 각자 상수를 들면 조용히 어긋난다.
  * QR v1 고정(21×21, qr.js) · 콰이어트 4모듈(표준).
@@ -794,31 +869,92 @@ export function centerQrQuietFrameCells(slotCells = CENTER_QR_SLOT_CELLS) {
   return Object.freeze(cells);
 }
 
-/** 중앙 QR 슬롯을 갖는 레이아웃 — v0xq · v0wq. 데이터도 파인더도 아닌 제3 역할. */
+/** QR 슬롯을 갖는 레이아웃 — v0xq · v0wq · **v0wy**. 데이터도 파인더도 아닌 제3 역할. */
 const CENTER_QR_SLOT_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0XQ,
   CELL_SURFACE_FINAL_V0WQ,
+  CELL_SURFACE_FINAL_V0WY,
 ]);
 
 /**
- * 레이아웃 → 중앙 QR 슬롯 한 변(셀). 슬롯이 없으면 0.
+ * 레이아웃 → QR 슬롯 한 변(셀). 슬롯이 없으면 0.
  * **렌더러(sceneY)·로케이터(block-detect)·회계가 전부 이 함수 하나를 본다** —
- * 두 레이아웃이 서로 다른 m 을 쓰게 되면서 상수 하나로는 못 버틴다.
+ * 세 레이아웃이 서로 다른 m 을 쓸 수 있으므로 상수 하나로는 못 버틴다.
  */
 export function centerQrSlotCellsFor(id) {
   if (id === CELL_SURFACE_FINAL_V0XQ) return CENTER_QR_SLOT_CELLS;
   if (id === CELL_SURFACE_FINAL_V0WQ) return CENTER_QR_SLOT_CELLS_V0WQ;
+  if (id === CELL_SURFACE_FINAL_V0WY) return CENTER_QR_SLOT_CELLS_V0WY;
   return 0;
 }
 
-/** 중앙 QR 슬롯 셀 (레이아웃별). 슬롯 없는 레이아웃은 빈 배열. */
-function slotCellsFor(id) {
+/**
+ * QR 슬롯의 **앵커와 방향 규약** — v0WY 편입(2026-08-17)으로 «중앙 QR» 이 더 이상
+ * 유일한 배치가 아니게 됐다. 렌더러와 디코더가 이 표 하나를 본다 (둘이 각자 적으면
+ * 조용히 어긋난다 — v0WQ 슬롯 8 을 상수 하나로 쓰다 깨진 그 자리와 같은 함정).
+ *
+ * | 앵커 | 슬롯 원점 | 실루엣 위치 (T·L·R) | 뒤집기 |
+ * |---|---|---|---|
+ * | `seam` (v0xq·v0wq) | (0,0) | 전부 **중앙**(Y-심) | 없음 — 파인더 셋이 중앙에 모인다 |
+ * | `far` (v0wy) | (n−m, n−m) | T 상단 C0 · L 좌하 C4 · R 우하 C2 | **있음** — 윈도 β 규약 |
+ *
+ * 뒤집기 규약의 근거는 서로 다르다:
+ *   · `seam` 은 «파인더 셋이 중앙에 모이는 편이 낫다» — 그 직각 삼중점이 그대로
+ *     중앙 앵커가 되기 때문이다 (`sceneY.js` §renderCenterQr).
+ *   · `far` 는 **윈도 β 와 같은 뒤집기** (정렬 패턴 코너가 큐브 안쪽 = Y-심 쪽).
+ *     운영자 스펙이 «윈도 β 식» 이라고 지정했고, 한 코드 안에서 두 QR 이 다른 방향으로
+ *     눕는 것을 막는다 (ADR 0003 D1 방향 확정의 연장).
+ */
+const CENTER_QR_SLOT_PLACEMENT = Object.freeze({
+  [CELL_SURFACE_FINAL_V0XQ]: Object.freeze({ anchor: 'seam', flip: false }),
+  [CELL_SURFACE_FINAL_V0WQ]: Object.freeze({ anchor: 'seam', flip: false }),
+  [CELL_SURFACE_FINAL_V0WY]: Object.freeze({ anchor: 'far', flip: true }),
+});
+
+/** 레이아웃 → 슬롯 배치 규약. 슬롯 없는 레이아웃은 null. */
+export function centerQrSlotPlacementFor(id) {
+  const placement = CENTER_QR_SLOT_PLACEMENT[id];
+  return placement === undefined ? null : placement;
+}
+
+/**
+ * 레이아웃 → 슬롯 원점 (셀 인덱스). 슬롯 없는 레이아웃은 null.
+ * `far` 앵커는 **n 종속**이다 — 먼 코너 고정이라 (n−m, n−m) 이다.
+ */
+export function centerQrSlotOriginFor(id, n) {
+  const placement = centerQrSlotPlacementFor(id);
+  if (placement === null) return null;
+  if (placement.anchor === 'seam') return Object.freeze({ i: 0, j: 0 });
+  const side = centerQrSlotCellsFor(id);
+  return Object.freeze({ i: n - side, j: n - side });
+}
+
+/**
+ * QR 파인더 3개의 **암 코어** 슬롯-로컬 (a,b) 파라메트릭 좌표 (셀 단위).
+ * 렌더러가 그리는 자리와 디코더가 재는 자리를 **같은 함수**에서 낸다 — 뒤집기 규약이
+ * 한쪽에만 반영되면 «QR 다움» 판별이 조용히 엉뚱한 3점을 보게 된다.
+ */
+export function centerQrFinderCoreCells(slotCells, flip = false) {
+  const pitch = centerQrModulePitchCells(slotCells);
+  return Object.freeze(CENTER_QR_FINDER_MODULES.map(({ qx, qy }) => {
+    const u = flip ? (CENTER_QR_MODULE_GRID - 1 - qx) : qx;
+    const v = flip ? (CENTER_QR_MODULE_GRID - 1 - qy) : qy;
+    return Object.freeze({
+      a: (CENTER_QR_QUIET_MODULES + u + 0.5) * pitch,
+      b: (CENTER_QR_QUIET_MODULES + v + 0.5) * pitch,
+    });
+  }));
+}
+
+/** QR 슬롯 셀 (레이아웃별 · 절대 셀 인덱스). 슬롯 없는 레이아웃은 빈 배열. */
+function slotCellsFor(id, n) {
   const side = centerQrSlotCellsFor(id);
   if (side === 0) return Object.freeze([]);
+  const origin = centerQrSlotOriginFor(id, n);
   const cells = [];
   for (let i = 0; i < side; i += 1) {
     for (let j = 0; j < side; j += 1) {
-      cells.push(Object.freeze({ i, j }));
+      cells.push(Object.freeze({ i: origin.i + i, j: origin.j + j }));
     }
   }
   return Object.freeze(cells);
@@ -1062,6 +1198,54 @@ export const V0W2_BLOCKS = Object.freeze({
   SE: Object.freeze({ iMin: V0X_BLOCKS.SE.iMin, jMin: V0X_BLOCKS.SE.jMin }),
 });
 
+/**
+ * ── v0WY (v0W 파생 ③ — 먼 코너 QR, 운영자 **재설계** 2026-08-17) ────────────
+ *
+ * 셋을 나란히 놓으면 이 파생의 자리가 보인다 (v0WQ 표의 연장):
+ *
+ * | | 중앙 | 동심 사각 (NE) | 위상 마커 | 파인더 | 슬롯 | 슬롯 자리 | data |
+ * |---|---|---|---|---|---|---|---|
+ * | v0W  | K3 불스아이 25 | 36 | SE 3×3 (v0 SE) 9 | 70 | 0 | — | 341 |
+ * | v0WQ | **QR 슬롯 8²** | 36 | SE 3×3 (v0 SE) 9 | 45 | 64 | **Y-심(중앙)** | 302 |
+ * | **v0WY** | **K3 불스아이 25** | 36 | **SW 3×2 (v0 SW) 6** | **67** | **64** | **먼 코너 C0** | **280** |
+ *
+ * 즉 v0WY 는 «v0W 의 중앙을 지키면서 QR 을 먼 코너에 묻은 것» 이고, v0WQ 와 정확히
+ * **반대 교환**을 한다 — v0WQ 는 중앙을 QR 에 내주고 위상 마커를 지켰고, v0WY 는
+ * 중앙(= 앵커드 시딩의 근거)을 지키고 위상 마커를 SW 로 옮겼다.
+ *
+ * **로케이터 관점** — 중앙 K3 + NE 동심 사각이 v0W 와 **같은 배열·같은 자리**라
+ * 코어 반경도 같고 **앵커드(중앙×원거리) 경로를 그대로 탄다**. 새 시드 기하가 없다.
+ * 가르는 것은 (a) refinePose 패치 — SW 마커 3개와 **먼 코너 QR 패치**가 v0W 프레임에서
+ * 어긋난다 (b) 하류 CS 수용 게이트 (c) 코너 슬롯의 **QR 다움 판별** (봉합 ② 재사용,
+ * `cellsurface-block-detect.js` §v0wy). 게이트 값은 한 자리도 안 건드렸다.
+ *
+ * ⚠ **v0XQ 와의 관계** — v0WY 파인더 67 은 v0XQ 파인더 42 (CORNER 36 + MARKER 6) 를
+ * **통째로 포함**한다 (같은 배열 참조). 그래서 이상 표본기에서는 v0XQ ↔ v0WY 가
+ * v0W ↔ v0WQ 와 **같은 부분집합 별칭**을 만든다. v0XQ 는 드랍 상태라 라인업 밖이고,
+ * 실물 래스터에서는 슬롯 자리 픽셀이 갈라 준다 (교차 전수가 그 판정기다).
+ */
+const V0WY_N = 21;
+
+const V0WY_CELLS = Object.freeze([
+  ...K3_CENTRE_CELLS,
+  ...V0XQ_CORNER_CELLS,
+  ...V0XQ_MARKER_CELLS,
+]);
+
+/** v0WY 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
+export const V0WY_BLOCKS = Object.freeze({
+  /** K3 불스아이 중앙 (NW 사분면) — v0W 와 같은 블록. */
+  NW: Object.freeze({ iMax: V1R2_BLOCKS.NW.iMax, jMax: V1R2_BLOCKS.NW.jMax }),
+  /** 3면 동일 동심 사각 (NE 사분면) — v0W·v0WQ·v0W2 와 같은 블록. */
+  NE: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
+  /** 위상 마커 (SW 사분면) — v0XQ 와 같은 블록 (= v0 SW 3×2 의 (+8,0)). */
+  SW: Object.freeze({ iMin: V0XQ_BLOCKS.MARKER.iMin, jMax: V0XQ_BLOCKS.MARKER.jMax }),
+  /** 먼 코너 QR 슬롯 (SE 사분면) — [n−m, n−1]². n=21·m=8 에서 [13,20]². */
+  SLOT: Object.freeze({
+    iMin: V0WY_N - CENTER_QR_SLOT_CELLS_V0WY, jMin: V0WY_N - CENTER_QR_SLOT_CELLS_V0WY,
+  }),
+});
+
 function cellKey(i, j) {
   return i + ',' + j;
 }
@@ -1194,6 +1378,7 @@ function canonicalRowsFor(id, n) {
   if (id === CELL_SURFACE_FINAL_V0W) return V0W_CELLS;
   if (id === CELL_SURFACE_FINAL_V0WQ) return V0WQ_CELLS;
   if (id === CELL_SURFACE_FINAL_V0W2) return V0W2_CELLS;
+  if (id === CELL_SURFACE_FINAL_V0WY) return V0WY_CELLS;
   return v2r2CellsForN(n);
 }
 
@@ -1204,9 +1389,10 @@ function buildFinalSurface(id, n, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
   const locatorCells = buildLocatorCells(rows);
   const painted = locatorCells.map((cell) => ({ i: cell.i, j: cell.j }));
 
-  // 중앙 QR 슬롯 — 데이터도 파인더도 아니다. autoplace 에는 **점유**로 넘기고
+  // QR 슬롯 — 데이터도 파인더도 아니다. autoplace 에는 **점유**로 넘기고
   // (예약 셀이 QR 위로 올라오면 안 된다) 회계에서는 별도 항으로 뺀다.
-  const slot = slotCellsFor(id);
+  // 슬롯 원점은 레이아웃마다 다르다 (v0xq·v0wq Y-심 · v0wy 먼 코너) — §centerQrSlotOriginFor.
+  const slot = slotCellsFor(id, n);
   const paintedKeys0 = new Set(painted.map((cell) => cellKey(cell.i, cell.j)));
   for (const cell of slot) {
     if (paintedKeys0.has(cellKey(cell.i, cell.j))) {
@@ -1260,7 +1446,7 @@ function buildFinalSurface(id, n, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
     locatorCells,
     locatorCount: locatorCells.length,
     paintedCells: paintedFrozen,
-    /** 중앙 QR 슬롯 (v0xq · v0wq 만 비어 있지 않다). 데이터·파인더 어느 쪽도 아니다. */
+    /** QR 슬롯 (v0xq · v0wq · v0wy 만 비어 있지 않다). 데이터·파인더 어느 쪽도 아니다. */
     slotCells: slot,
     slotCount: slot.length,
     /**
@@ -1365,12 +1551,12 @@ export function occupiedCellsCellSurfaceFinal(n, id = undefined) {
   return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).occupiedCells;
 }
 
-/** 중앙 QR 슬롯 셀. v0xq · v0wq 외에는 빈 배열이다. */
+/** QR 슬롯 셀 (절대 좌표). v0xq · v0wq · v0wy 외에는 빈 배열이다. */
 export function slotCellsCellSurfaceFinal(n, id = undefined) {
   return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).slotCells;
 }
 
-/** 이 레이아웃이 중앙 QR 슬롯을 갖는가 (= 렌더러가 중앙 QR 을 그려야 하는가). */
+/** 이 레이아웃이 QR 슬롯을 갖는가 (= 렌더러가 슬롯 QR 을 그려야 하는가). */
 export function hasCenterQrSlot(id) {
   return CENTER_QR_SLOT_IDS.includes(id);
 }
@@ -1672,8 +1858,16 @@ export function capacityForCellSurfaceFinal(
     for (const id of CENTER_QR_SLOT_IDS) {
       const side = centerQrSlotCellsFor(id);
       if (side <= 0) throw new Error(id + ' 이 슬롯 목록에 있는데 한 변이 0 이다');
-      if (slotCellsFor(id).length !== side * side) {
-        throw new Error(id + ' 중앙 QR 슬롯 셀 수가 m² 가 아니다: ' + slotCellsFor(id).length);
+      for (const n of CELL_SURFACE_FINAL_NS[id]) {
+        if (slotCellsFor(id, n).length !== side * side) {
+          throw new Error(id + ' QR 슬롯 셀 수가 m² 가 아니다: ' + slotCellsFor(id, n).length);
+        }
+      }
+      // 배치 규약이 없는 슬롯 레이아웃은 렌더러·디코더가 원점을 못 정한다.
+      const placement = centerQrSlotPlacementFor(id);
+      if (placement === null) throw new Error(id + ' 에 슬롯 배치 규약이 없다');
+      if (placement.anchor !== 'seam' && placement.anchor !== 'far') {
+        throw new Error(id + ' 슬롯 앵커가 seam|far 가 아니다: ' + placement.anchor);
       }
     }
     // 슬롯 없는 레이아웃은 한 변도 0 이어야 한다 (두 질의가 갈리면 렌더러가 헛돈다).
@@ -1682,11 +1876,29 @@ export function capacityForCellSurfaceFinal(
       if (centerQrSlotCellsFor(id) !== 0) {
         throw new Error(id + ' 이 슬롯 없는데 한 변이 0 이 아니다');
       }
+      if (centerQrSlotPlacementFor(id) !== null) {
+        throw new Error(id + ' 이 슬롯 없는데 배치 규약이 있다');
+      }
     }
     for (const id of CELL_SURFACE_FINAL_IDS) {
       if (CENTER_QR_SLOT_IDS.includes(id)) continue;
-      if (slotCellsFor(id).length !== 0) {
-        throw new Error(id + ' 에 중앙 QR 슬롯이 생겼다 — v0xq · v0wq 전용이다');
+      for (const n of CELL_SURFACE_FINAL_NS[id]) {
+        if (slotCellsFor(id, n).length !== 0) {
+          throw new Error(id + ' 에 QR 슬롯이 생겼다 — v0xq · v0wq · v0wy 전용이다');
+        }
+      }
+    }
+    // 파인더 코어 3점은 뒤집기에 따라 **실제로 달라야** 한다 — 두 규약이 같은 값을
+    // 내면 v0WY 의 «윈도 β 식 방향» 이 이름뿐이고 QR 다움 판별이 엉뚱한 자리를 잰다.
+    {
+      const key = (cores) => cores.map((c) => c.a.toFixed(6) + ':' + c.b.toFixed(6)).join(' ');
+      const straight = centerQrFinderCoreCells(CENTER_QR_SLOT_CELLS_V0WY, false);
+      const flipped = centerQrFinderCoreCells(CENTER_QR_SLOT_CELLS_V0WY, true);
+      if (key(straight) === key(flipped)) {
+        throw new Error('QR 파인더 코어가 뒤집기에 무반응이다 — 방향 규약이 무의미해진다');
+      }
+      if (straight.length !== 3 || flipped.length !== 3) {
+        throw new Error('QR 파인더 코어가 3점이 아니다');
       }
     }
   }
@@ -1886,8 +2098,101 @@ export function capacityForCellSurfaceFinal(
     if (asymOutsideSe !== 0) {
       throw new Error('v0W2 의 SE 밖에 면 비대칭 셀이 있다: ' + asymOutsideSe);
     }
-    if (slotCellsFor(CELL_SURFACE_FINAL_V0W2).length !== 0) {
-      throw new Error('v0W2 에 중앙 QR 슬롯이 생겼다 — v0xq · v0wq 전용이다');
+    if (slotCellsFor(CELL_SURFACE_FINAL_V0W2, V0W2_N).length !== 0) {
+      throw new Error('v0W2 에 QR 슬롯이 생겼다 — v0xq · v0wq · v0wy 전용이다');
+    }
+  }
+
+  // ①-g v0WY 정본 — 67셀 (K3 중앙 25 + 동심 사각 36 + SW 위상 마커 6) · mid 0 · 슬롯 64.
+  //
+  // v0WY 도 «새 무늬» 가 0 이다 — 세 블록이 전부 **기존 배열 참조**이고 슬롯 크기는
+  // v0WQ 값의 참조다. 그래서 여기서 재는 것은 톤 표가 아니라 ⓐ 참조 동일성
+  // ⓑ 겹침 해소가 실제로 됐는가 ⓒ **v0W 와 셀 수준으로 갈라지는가** (양방향) 다.
+  // ⓒ 가 이 편입의 존재 이유다 — 브리프의 «최대 지뢰» 를 회귀로 못 박는 자리.
+  if (V0WY_CELLS.length !== 67) {
+    throw new Error('v0WY 정본이 67셀이 아니다: ' + V0WY_CELLS.length);
+  }
+  {
+    if (V0WY_CELLS.slice(0, 25).some((row, index) => row !== K3_CENTRE_CELLS[index])) {
+      throw new Error('v0WY 중앙이 K3 공유 배열이 아니다');
+    }
+    if (V0WY_CELLS.slice(25, 61).some((row, index) => row !== V0XQ_CORNER_CELLS[index])) {
+      throw new Error('v0WY 동심 사각이 v0xq CORNER 공유 배열이 아니다');
+    }
+    if (V0WY_CELLS.slice(61).some((row, index) => row !== V0XQ_MARKER_CELLS[index])) {
+      throw new Error('v0WY 위상 마커가 v0xq MARKER(=v0X SW) 공유 배열이 아니다');
+    }
+    // 마커 계보 — v0X SW 는 **v0 정본 SW 3×2 의 (+8, 0) 평행이동**이다. v0W 의 SE 가
+    // v0 SE 의 (+8,+8) 인 것과 같은 규칙이라, «마커를 SW 로 옮긴다» 가 새 도안이
+    // 아니라 **형제 블록 선택**임을 값으로 못 박는다.
+    const v0Sw = V0_CELLS.filter(([i, j]) => i >= V0_FAR_MIN && j <= 1);
+    if (v0Sw.length !== 6) throw new Error('v0 SW 3×2 가 6셀이 아니다: ' + v0Sw.length);
+    for (let index = 0; index < 6; index += 1) {
+      const [i, j, T, L, R] = v0Sw[index];
+      const want = [i + V0W_FAR_SHIFT, j, T, L, R].join(',');
+      if (V0XQ_MARKER_CELLS[index].join(',') !== want) {
+        throw new Error('v0WY 마커가 v0 SW 정본의 (+8,0) 평행이동본이 아니다: ' + index);
+      }
+    }
+    // 슬롯 규약 — 크기는 v0WQ 와 **같아야** 한다 (운영자 스펙) 이고 자리는 **달라야**
+    // 한다 (같으면 v0WQ 와 셀 집합이 겹쳐 버린다).
+    if (CENTER_QR_SLOT_CELLS_V0WY !== CENTER_QR_SLOT_CELLS_V0WQ) {
+      throw new Error('v0WY 슬롯 한 변이 v0WQ 와 다르다 — 운영자 스펙은 «동일 크기» 다');
+    }
+    const wyOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0WY, V0WY_N);
+    const wqOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0WQ, V0WY_N);
+    if (wyOrigin.i === wqOrigin.i && wyOrigin.j === wqOrigin.j) {
+      throw new Error('v0WY 슬롯이 v0WQ 와 같은 자리다 — 먼 코너 배치가 아니다');
+    }
+    if (wyOrigin.i !== V0WY_N - CENTER_QR_SLOT_CELLS_V0WY) {
+      throw new Error('v0WY 슬롯이 먼 코너에 앵커되지 않았다: ' + wyOrigin.i);
+    }
+    // 블록 분할 25/36/6 — 세 블록 밖 셀 0 · 겹침 0 · **슬롯과의 겹침 0**
+    // (이 마지막 항이 겹침 해소 결정의 회귀다: SE 마커를 그대로 뒀다면 여기서 터진다).
+    const counts = { NW: 0, NE: 0, SW: 0 };
+    for (const [i, j, T, L, R] of V0WY_CELLS) {
+      const homes = [];
+      if (i <= V0WY_BLOCKS.NW.iMax && j <= V0WY_BLOCKS.NW.jMax) homes.push('NW');
+      if (i <= V0WY_BLOCKS.NE.iMax && j >= V0WY_BLOCKS.NE.jMin) homes.push('NE');
+      if (i >= V0WY_BLOCKS.SW.iMin && j <= V0WY_BLOCKS.SW.jMax) homes.push('SW');
+      if (homes.length !== 1) {
+        throw new Error('v0WY 셀 (' + i + ',' + j + ') 의 블록 소속이 ' + homes.length + '개다');
+      }
+      counts[homes[0]] += 1;
+      if (T === 1 || L === 1 || R === 1) {
+        throw new Error('v0WY 정본에 mid 면이 있다: (' + i + ',' + j + ')');
+      }
+      if (i >= V0WY_BLOCKS.SLOT.iMin && j >= V0WY_BLOCKS.SLOT.jMin) {
+        throw new Error('v0WY 파인더 셀 (' + i + ',' + j + ') 이 먼 코너 QR 슬롯 안이다');
+      }
+    }
+    if (counts.NW !== 25 || counts.NE !== 36 || counts.SW !== 6) {
+      throw new Error('v0WY 블록 분할이 25/36/6 이 아니다: '
+        + [counts.NW, counts.NE, counts.SW].join('/'));
+    }
+    // 위상 판별력의 유일한 원천 — 중앙 K3 도 4셀 비대칭이지만 그것만으로는
+    // margin 0.0437 (게이트의 1.25배) 이라 후보 (a) 가 탈락했다. SW 마커가 있어야 한다.
+    if (!V0XQ_MARKER_CELLS.some(([, , T, L, R]) => T === L && R !== T)) {
+      throw new Error('v0WY 위상 마커에 면 비대칭이 없다 — 120° 판별력이 K3 4셀뿐이 된다');
+    }
+    // ⓒ **v0W 와 양방향으로 갈라진다** — 이것이 편입의 존재 이유다. 어느 한쪽이라도
+    // 0 이 되면 «파인더가 같은 두 레이아웃» 이 돼 교차 오수용이 설계로 들어온다.
+    const wyKeys = new Set(V0WY_CELLS.map(([i, j]) => cellKey(i, j)));
+    const wKeys = new Set(V0W_CELLS.map(([i, j]) => cellKey(i, j)));
+    const mineOnly = [...wyKeys].filter((key) => !wKeys.has(key));
+    const theirsOnly = [...wKeys].filter((key) => !wyKeys.has(key));
+    if (mineOnly.length !== 6 || theirsOnly.length !== 9) {
+      throw new Error(
+        'v0WY ↔ v0W 파인더 차이가 6/9 가 아니다: '
+        + mineOnly.length + '/' + theirsOnly.length,
+      );
+    }
+    // 그리고 v0W 의 SE 마커 9셀은 **전부 v0WY 슬롯 안**이어야 한다 — 그 포함이
+    // «먼 코너를 QR 이 가져갔다» 의 정의다.
+    const slotKeys = new Set(slotCellsFor(CELL_SURFACE_FINAL_V0WY, V0WY_N)
+      .map((cell) => cellKey(cell.i, cell.j)));
+    if (!theirsOnly.every((key) => slotKeys.has(key))) {
+      throw new Error('v0W SE 마커가 v0WY 슬롯 안에 다 들어 있지 않다');
     }
   }
 
@@ -1930,6 +2235,7 @@ export function capacityForCellSurfaceFinal(
     [CELL_SURFACE_FINAL_V0W, V0W_CELLS],
     [CELL_SURFACE_FINAL_V0WQ, V0WQ_CELLS],
     [CELL_SURFACE_FINAL_V0W2, V0W2_CELLS],
+    [CELL_SURFACE_FINAL_V0WY, V0WY_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_FAR_BASE_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_CENTER_CELLS],
   ]) {
@@ -1963,6 +2269,8 @@ export function capacityForCellSurfaceFinal(
     'v0wq@21': { symbols: 100, residual: 2, locator: 45, legacy: null },
     //   v0w2@21 441 − 97 − 12 − 18 = 314 · S=104 · 잔여 2 (레거시 없음 — 신설)
     'v0w2@21': { symbols: 104, residual: 2, locator: 97, legacy: null },
+    //   v0wy@21 441 − 67 − 64(먼 코너 슬롯 8²) − 12 − 18 = 280 · S=93 · 잔여 1 (레거시 없음)
+    'v0wy@21': { symbols: 93, residual: 1, locator: 67, legacy: null },
   };
   for (const [key, want] of Object.entries(expected)) {
     const [id, raw] = key.split('@');

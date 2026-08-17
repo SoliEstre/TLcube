@@ -39,7 +39,10 @@ import {
   capacityForCellSurfaceFinal,
   centerQrModulePitchCells,
   centerQrQuietFrameCells,
+  centerQrFinderCoreCells,
   centerQrSlotCellsFor,
+  centerQrSlotOriginFor,
+  centerQrSlotPlacementFor,
   hasCenterQrSlot,
   hasLegacyFormatWire,
   occupiedCellsCellSurfaceFinal,
@@ -187,16 +190,25 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0w/Y1 · 25→**공백
   // = v2r2)는 한 줄도 안 바뀐다. 정본 배열도 그대로다 — `V0X_CELLS` 는 활성
   // 레이아웃 **v0W2 의 SE(T/L) 유도 원천**이라 지우면 v0W2 가 무너진다.
   // 근거·측정: `test/output/claude-v0wy-program.md`.
+  //
+  // **의도적 갱신 «v0WY 편입» (운영자 재설계 2026-08-17)** — 맨 뒤에 `v0wy` 를 더했다.
+  // n=21 후보가 넷이 되고 **기본은 여전히 v0w** 다 (편입은 순위를 안 정한다 — v0W2
+  // 편입과 같은 규약). 위 «v0W 파생 2종» 문단이 「v0WY 는 여기 없다 — 셀 집합이
+  // v0W 와 비트 동일한 렌더 선택이라 와이어 id 가 아니다」 라고 적었던 것은
+  // **허공 마름모 설계**의 서술이고, QR 이 실루엣 안쪽 먼 코너로 들어오면서 뒤집혔다:
+  // 슬롯 64셀 + 위상 마커 SE→SW 이동으로 셀 집합이 실제로 달라졌고, v0W 와
+  // **양방향으로** 갈린다 (내 SW 6 ↔ 상대 SE 9). 아래 «v0WY 는 진짜 와이어 id 다»
+  // 회귀가 그 등식들을 값으로 고정한다.
   assert.deepEqual([...CELL_SURFACE_FINAL_IDS],
-    ['v0', 'v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2']);
+    ['v0', 'v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2', 'v0wy']);
   assert.deepEqual([...CELL_SURFACE_FINAL_DROPPED_IDS], ['v2r2', 'v1r2', 'v0xq', 'v0x']);
-  assert.deepEqual([...CELL_SURFACE_FINAL_ACTIVE_IDS], ['v0', 'v0w', 'v0wq', 'v0w2']);
+  assert.deepEqual([...CELL_SURFACE_FINAL_ACTIVE_IDS], ['v0', 'v0w', 'v0wq', 'v0w2', 'v0wy']);
   assert.equal(finalLayoutIdForN(13), 'v0');
   assert.equal(finalLayoutIdForN(21), 'v0w');
   assert.equal(finalLayoutIdForN(25), null);
   assert.equal(finalLayoutIdForN(11), null);
   assert.deepEqual([...finalLayoutIdsForN(13)], ['v0']);
-  assert.deepEqual([...finalLayoutIdsForN(21)], ['v0w', 'v0wq', 'v0w2']);
+  assert.deepEqual([...finalLayoutIdsForN(21)], ['v0w', 'v0wq', 'v0w2', 'v0wy']);
   assert.deepEqual([...finalLayoutIdsForN(25)], []);
   assert.deepEqual([...finalLayoutIdsForN(11)], []);
   // 와이어 질의는 드랍을 보지 않는다 — 발행된 v2r2@21/@25 · v0xq@21 · **v0x@21**
@@ -204,7 +216,7 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0w/Y1 · 25→**공백
   assert.equal(cellSurfaceFinal(21, 'v0xq').id, 'v0xq');
   assert.equal(cellSurfaceFinal(21, 'v0x').id, 'v0x');
   assert.deepEqual([...allFinalLayoutIdsForN(21)],
-    ['v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2']);
+    ['v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2', 'v0wy']);
   assert.equal(hasFinalLayoutWireForN(13), true);
   assert.equal(hasFinalLayoutWireForN(21), true);
   assert.equal(hasFinalLayoutWireForN(25), true);
@@ -225,12 +237,14 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0w/Y1 · 25→**공백
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0x], [21]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0xq], [21]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0w], [21]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0wy], [21]);
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v0, 'cell-surface-v0');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v2r2, 'cell-surface-v2r2');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v1r2, 'cell-surface-v1r2');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v0x, 'cell-surface-v0x');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v0xq, 'cell-surface-v0xq');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v0w, 'cell-surface-v0w');
+  assert.equal(CELL_SURFACE_FINAL_PROFILE.v0wy, 'cell-surface-v0wy');
   // formatIndex 신설 금지 — 네 레이아웃이 한 쌍(2T=1 · 3T=3)을 함께 쓴다.
   assert.equal(formatIndexCellSurfaceFinal(2), 1);
   assert.equal(formatIndexCellSurfaceFinal(3), 3);
@@ -419,11 +433,22 @@ test('방향 margin — 활성 4종 + 드랍 5행 전수 (활성 v0 0.311 · v0w
   // 연장이다). 두 팔을 나눠 두면 «활성 최소 margin» 을 사람이 눈으로 읽을 수
   // 있다 — 지금 활성 최소는 v0wq 0.0889 (게이트 0.035 의 2.54배)이고,
   // v0X 가 있던 시절 활성 최고였던 0.1231 은 이제 v0W2 의 0.1512 로 대체됐다.
+  //
+  // **의도적 갱신 «v0WY 편입» (2026-08-17 재설계)** — 기존 네 행은 **한 자리도
+  // 안 바뀐다**. 새 행 v0wy 의 값 **0.0796 = 16/201** 은 퍼인더 67셀 중 면 비대칭
+  // 8셀에서 나온다 (K3 중앙 4 + SW 마커 4). 이제 **활성 최소가 v0wq 0.0889 에서
+  // v0wy 0.0796 으로 내려간다** — 그래도 게이트 0.035 의 **2.27배**이고, 편입 이력이
+  // 있는 v0XQ(0.0635 = 1.81배) 보다 두꾸다. 게이트는 한 값도 안 건드렸다.
+  //
+  // 그리고 이 값이 **겹침 해소 선택의 영수증**이다 — 후보 (a)(SE 마커를
+  // 슬롯에 내주고 NW 비대칭에만 의존) 는 0.0437(1.25배) 이었고, 그 후보는
+  // 인코더 정합 ⑤ 에서 독립적으로 또 죽었다 (`claude-v0wy-design.mjs`).
   const WANT_MARGIN_ACTIVE = [
     { n: 13, id: 'v0', margin: 0.3111 },
     { n: 21, id: 'v0w', margin: 0.0952 },
     { n: 21, id: 'v0wq', margin: 0.0889 },
     { n: 21, id: 'v0w2', margin: 0.1512 },
+    { n: 21, id: 'v0wy', margin: 0.0796 },
   ];
   // 드랍 보존 팔 — 차단이지 삭제가 아니므로 값이 그대로 살아 있어야 한다.
   const WANT_MARGIN_DROPPED = [
@@ -712,12 +737,12 @@ test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 �
 // 팩의 (0,4).L 미도색을 **다수 톤 정규화**로 메워 mid 를 만들지 않는다 — v0X 정규화와
 // 같은 규칙이고, 그 사실이 여기서 매 실행 확인된다
 // (`test/output/lanes/claude-v0w2-derive.mjs` §② 가 «mid 0» 을 실측한 그 값).
-test('전 정본 mid(1) 금지 — 아홉 인스턴스 어디에도 mid 면이 없다 (v0X 정규화 4면 고정)', () => {
+test('전 정본 mid(1) 금지 — 열 인스턴스 어디에도 mid 면이 없다 (v0X 정규화 4면 고정)', () => {
   // ⚠ 이 목록은 `CELL_SURFACE_FINAL_IDS × NS` 전수여야 한다 — 하나라도 빠지면
   // 그 레이아웃만 규칙 밖으로 샌다 (v0xq 편입 때 실제로 빠져 있었다).
   const instances = [
     ['v0', 13], ['v2r2', 21], ['v2r2', 25], ['v1r2', 21], ['v0x', 21], ['v0xq', 21],
-    ['v0w', 21], ['v0wq', 21], ['v0w2', 21],
+    ['v0w', 21], ['v0wq', 21], ['v0w2', 21], ['v0wy', 21],
   ];
   const enumerated = CELL_SURFACE_FINAL_IDS
     .flatMap((id) => CELL_SURFACE_FINAL_NS[id].map((n) => id + '@' + n)).sort();
@@ -732,7 +757,9 @@ test('전 정본 mid(1) 금지 — 아홉 인스턴스 어디에도 mid 면이 �
       }
     }
   }
-  assert.equal(faces, (30 + 74 + 74 + 80 + 65 + 42 + 70 + 45 + 97) * 3,
+  // 의도적 갱신 «v0WY 편입» — 항 하나(67)가 늘었다. 값 자체는 파인더 셀 수의 합이라
+  // 새 레이아웃이 붙으면 반드시 움직인다 (게이트가 아니라 회계다).
+  assert.equal(faces, (30 + 74 + 74 + 80 + 65 + 42 + 70 + 45 + 97 + 67) * 3,
     '훑은 면 수가 파인더 총계와 다르다');
 
   // 정규화된 네 자리의 새 값 — (0,3)L=0 · (14,20)L/R=2 · (19,19)R=2.
@@ -956,9 +983,9 @@ test('n=21 병행 평가 — 드랍 4후보를 다 채점하고 게이트가 고
  * 않는다. v0 ↔ n=21 축(운영자 «v0 과 혼선»)은 **기하 가설 단계**라 같은 래스터
  * 테스트가 맡는다. 게이트(0.78 · 0.035)는 한 값도 안 건드렸다.
  */
-test('n=21 활성 라인업 교차 수용 — 별칭은 v0w↔v0wq 한 쌍뿐이고 원인이 구조적이다', () => {
+test('n=21 활성 라인업 교차 수용 — 별칭 셋의 원인이 구조적이고 v0WY 는 한 방향뿐이다', () => {
   const ACTIVE21 = [...finalLayoutIdsForN(21)];
-  assert.deepEqual(ACTIVE21, ['v0w', 'v0wq', 'v0w2'],
+  assert.deepEqual(ACTIVE21, ['v0w', 'v0wq', 'v0w2', 'v0wy'],
     '활성 n=21 라인업이 바뀌었다 — 이 표를 재산정하라');
 
   // ① 별칭의 **원인**을 먼저 못 박는다 (증상보다 기전을 잠근다).
@@ -982,10 +1009,41 @@ test('n=21 활성 라인업 교차 수용 — 별칭은 v0w↔v0wq 한 쌍뿐이
     'v0w 의 나머지 로케이터 셀이 v0wq 슬롯 안에 전부 들어가지 않는다 — 별칭 기전이 바뀌었다',
   );
 
+  // ①-b **v0WY 쪽 기전 — 여기가 비대칭의 근거다.**
+  //   · v0W 의 SE 9셀은 v0WY 슬롯 안이다 → v0WY 프레임을 v0W 로 채점하면 분모에서 빠진다.
+  //   · v0WY 의 SW 6셀은 v0W 파인더에 **없다** → v0W 프레임에서는 데이터라 실제로 어긋난다.
+  //   이 두 줄이 «별칭이 한 방향뿐» 의 전부이고, 겹침 해소 선택의 영수증이다.
+  const v0wyLoc = locatorCellsCellSurfaceFinal(21, 'v0wy');
+  const v0wySlot = new Set(slotCellsCellSurfaceFinal(21, 'v0wy').map(cellKey));
+  const v0wyByKey = new Map(v0wyLoc.map((c) => [cellKey(c), c]));
+  const v0wOnly = v0wLoc.filter((c) => !v0wyByKey.has(cellKey(c)));
+  assert.equal(v0wOnly.length, 9, 'v0W 에만 있는 파인더 셀이 9(SE 마커)가 아니다');
+  assert.ok(v0wOnly.every((c) => v0wySlot.has(cellKey(c))),
+    'v0W 의 SE 마커가 v0WY 슬롯 안에 다 들어 있지 않다 — 한 방향 별칭의 전제가 깨졌다');
+  const v0wyOnly = v0wyLoc.filter((c) => !v0wByKey.has(cellKey(c)));
+  assert.equal(v0wyOnly.length, 6, 'v0WY 에만 있는 파인더 셀이 6(SW 마커)이 아니다');
+  assert.ok(v0wyOnly.every((c) => c.i >= 18 && c.j <= 1),
+    'v0WY 단독 셀이 SW 블록 밖이다');
+  // 그리고 공유 61셀은 **톤까지 같아야** 한다 (같은 배열에서 유도되므로).
+  const shared = v0wyLoc.filter((c) => v0wByKey.has(cellKey(c)));
+  assert.equal(shared.length, 61);
+  assert.ok(shared.every((c) => toneKey(v0wByKey.get(cellKey(c))) === toneKey(c)),
+    'v0WY 와 v0W 의 공유 61셀 톤이 갈렸다 — 유도 계보가 끊겼다');
+
   // ② 별칭 목록 자체 — 실측한 값을 그대로 핀한다 («0» 이라고 적으면 거짓말이 된다).
   //    측정: `test/output/lanes/claude-v0wy-crossmatrix.mjs` (드랍 전 7후보 전수와
   //    드랍 후 3후보가 **같은 칸**을 낸다 — 드랍이 만든 것이 아니다).
-  const ALIASED_UPRIGHT = ['v0w|v0wq', 'v0wq|v0w'];
+  // **의도적 갱신 «v0WY 편입» (2026-08-17)** — 별칭이 둘에서 **셋**이 됐다.
+  // 새로 붙는 것은 `v0wy|v0w` **하나뿐**이고 그 방향이 이 편입의 설계 결정이다:
+  //   · `v0wy|v0w` — v0WY 프레임을 v0W 로 채점하면 v0W 의 SE 9셀이 v0WY 슬롯 안이라
+  //     분모에서 빠지고 나머지 61셀이 전부 맞아 agreement 1.0 이 된다.
+  //   · `v0w|v0wy` 는 **없다** — v0WY 의 SW 6셀이 v0W 프레임에서는 데이터라
+  //     실제 관측이 있고 어긋난다. 즉 이상 표본기에서도 **한 방향만** 샌다.
+  // 겹침 해소 후보 (b)(슬롯을 안쪽으로 밀어 SE 마커를 살린다)를 골랐다면 파인더가
+  // v0W 와 셀·톤까지 같아져 **양방향 전부** 별칭이 됐을 것이다 — 그 차이가 여기 보인다.
+  // 측정: `test/output/lanes/claude-v0wy-crossmatrix.mjs` (3후보 대조군을 함께 돌려
+  // 기존 두 칸이 그대로임을 확인했다).
+  const ALIASED_UPRIGHT = ['v0w|v0wq', 'v0wq|v0w', 'v0wy|v0w'];
   // ⚠ **회전 별칭 핀** — v0WQ 프레임을 면 순환 L→R→T 로 돌리면 v0W2 가
   //    agreement 0.8241 (관측 72셀) 로 수용되고 **뽑히기까지 한다**. 원인은 위 ①
   //    과 같다: v0w2 로케이터 97셀 중 25셀이 v0wq 슬롯 안이라 분모에서 빠진다.
@@ -993,6 +1051,9 @@ test('n=21 활성 라인업 교차 수용 — 별칭은 v0w↔v0wq 한 쌍뿐이
   //    (`cellSurface-block-locator.test.js` §«v0WQ 교차 오수용 0 — 양방향 전수» 가
   //    rot 0/120/240 을 실제 이미지로 돌려 v0wq 로 복호되는 것을 고정한다).
   //    **이 핀은 완화가 아니라 결함의 좌표다** — 초록이 되면 그것도 재측정 신호다.
+  // (v0WY 편입으로 **회전 별칭은 안 늘었다** — 3후보 대조군과 같은 한 칸이다.
+  //  실측 agreement 는 0.8194 다. 위 주석의 «0.8241» 은 v0W2 편입 당시 표기이고,
+  //  이 레인의 재측정값이 0.8194 이다 — 핀은 키 문자열이라 값 자체는 안 걸려 있다.)
   const ALIASED_ROTATED = ['v0wq|LRT|v0w2'];
   const scoreAll = { cellSurfaceLayouts: ACTIVE21 };
   const seenUpright = [];
@@ -1821,17 +1882,54 @@ test('v0WQ 용량 — v0XQ 보다 payload 가 크다 (슬롯이 한 칸 작아�
     < capacityForCellSurfaceFinal(21, 'M', 2, 'v0w').dataBytes);
 });
 
-test('v0WY 는 와이어 id 가 아니다 — v0W 와 회계가 비트 동일하다', () => {
-  // 이 회귀의 요점은 **부재**다. v0WY 가 id 를 얻으면 (a) 셀 집합이 같아 디코더가
-  // 구분할 근거가 0 이고 (b) n=21 CS 후보만 하나 더 늘어 프레임 시간을 먹는다.
-  assert.ok(!CELL_SURFACE_FINAL_IDS.includes('v0wy'));
-  assert.ok(!finalLayoutIdsForN(21).includes('v0wy'));
-  assert.equal(isCellSurfaceFinalId('v0wy'), false);
-  assert.throws(() => cellSurfaceFinal(21, 'v0wy'), RangeError);
-  // v0WY 의 회계 = v0W 의 회계. «데이터 무손실» 이 이 등식이다.
+test('v0WY 는 **진짜 와이어 id** 다 — 먼 코너 슬롯 64셀 · 데이터 280 (재설계)', () => {
+  // ⚠ **의도적 갱신 (2026-08-17 운영자 재설계).** 이 회귀는 원래 «부재» 를 재고
+  // 있었다 — 「v0WY 가 id 를 얻으면 셀 집합이 같아 디코더가 구분할 근거가 0 이다」.
+  // 그 문장은 **허공 마름모 v0WY** 에 대해 참이었고, 지금은 거짓이다:
+  // QR 이 실루엣 안쪽 먼 코너 [13,20]² 로 들어오면서 64셀을 먹고, 위상 마커가
+  // SE → SW 로 옮겨 갔다. 그래서 «구분할 근거» 가 실재한다 — 아래가 그 값들이다.
+  // 근거·후보 비교: `cellSurfaceFinal.js` §CELL_SURFACE_FINAL_V0WY ·
+  // `test/output/lanes/claude-v0wy-design.mjs`.
+  assert.ok(CELL_SURFACE_FINAL_IDS.includes('v0wy'));
+  assert.ok(finalLayoutIdsForN(21).includes('v0wy'));
+  assert.equal(isCellSurfaceFinalId('v0wy'), true);
+  assert.equal(CELL_SURFACE_FINAL_PROFILE.v0wy, 'cell-surface-v0wy');
+
+  const v0wy = cellSurfaceFinal(21, 'v0wy');
+  assert.equal(v0wy.locatorCount, 67, '파인더 = K3 25 + 동심 사각 36 + SW 마커 6');
+  assert.equal(v0wy.slotCount, 64, '슬롯 = 8×8 (운영자 스펙: v0WQ 와 동일 크기)');
+  assert.equal(v0wy.declaredDataCells, 280, '441 − 67 − 64 − 12 − 18');
+  assert.equal(v0wy.usedSymbols, 93);
+  assert.equal(v0wy.residualCells, 1);
+  assert.equal(hasCenterQrSlot('v0wy'), true);
+  assert.equal(centerQrSlotCellsFor('v0wy'), centerQrSlotCellsFor('v0wq'),
+    '운영자 스펙은 «v0WQ 슬롯과 동일 크기» 다');
+
+  // 슬롯 자리 — **먼 코너**여야 한다. v0WQ 와 크기는 같고 자리가 다르다는 것이
+  // 이 파생의 전부이므로, 둘을 나란히 잰다.
+  const wyOrigin = centerQrSlotOriginFor('v0wy', 21);
+  const wqOrigin = centerQrSlotOriginFor('v0wq', 21);
+  assert.deepEqual({ ...wyOrigin }, { i: 13, j: 13 }, 'v0WY 슬롯 원점이 (n−m, n−m) 이 아니다');
+  assert.deepEqual({ ...wqOrigin }, { i: 0, j: 0 }, 'v0WQ 슬롯 원점이 Y-심이 아니다');
+  const slot = v0wy.slotCells;
+  assert.ok(slot.every((c) => c.i >= 13 && c.i <= 20 && c.j >= 13 && c.j <= 20));
+  assert.ok(slot.some((c) => c.i === 20 && c.j === 20), '슬롯이 먼 코너 셀 (20,20) 을 안 덮는다');
+
+  // 배치 규약 — 앵커와 뒤집기가 렌더러·디코더의 **공유 정본**이다.
+  assert.deepEqual({ ...centerQrSlotPlacementFor('v0wy') }, { anchor: 'far', flip: true });
+  assert.deepEqual({ ...centerQrSlotPlacementFor('v0wq') }, { anchor: 'seam', flip: false });
+  assert.equal(centerQrSlotPlacementFor('v0w'), null, '슬롯 없는 레이아웃에 배치 규약이 있다');
+
+  // 뒤집기가 실제로 다른 3점을 낸다 — 이름만 «윈도 β 식» 이면 QR 다움 판별이
+  // 엉뚱한 자리를 잰다 (모듈 로드 자기검증과 같은 명제를 밖에서 한 번 더).
+  const key = (cores) => cores.map((c) => c.a.toFixed(6) + ':' + c.b.toFixed(6)).join(' ');
+  assert.notEqual(key(centerQrFinderCoreCells(8, true)), key(centerQrFinderCoreCells(8, false)));
+  assert.equal(centerQrFinderCoreCells(8, true).length, 3);
+
+  // v0W 는 **안 바뀐다** — 편입은 형제를 건드리지 않는다.
   const v0w = cellSurfaceFinal(21, 'v0w');
   assert.equal(v0w.declaredDataCells, 341);
-  assert.equal(v0w.slotCount, 0, 'v0W 에 슬롯이 생기면 v0WY 의 무손실 전제가 깨진다');
+  assert.equal(v0w.slotCount, 0);
   assert.equal(hasCenterQrSlot('v0w'), false);
   assert.equal(centerQrSlotCellsFor('v0w'), 0);
 });

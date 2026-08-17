@@ -24,6 +24,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
+  LOCATOR_PROFILE_CELL_SURFACE_V0WY,
   // ⚠ `LOCATOR_PROFILE_CELL_SURFACE_V0XQ`(2026-08-17 2라운드) 와
   //   `LOCATOR_PROFILE_CELL_SURFACE_V0X`(2026-08-17 3라운드) 는 드랍으로 여기서
   //   빠졌다 (v1r2·v2r2 와 같은 전례 — 상수 자체는 `locatorY.js` 에 그대로 산다).
@@ -65,9 +66,12 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   type: field('Y', BOTH, GENERATOR_TYPES),
   preset: field(DEFAULT_PRESET, BOTH, [...Object.keys(PRESETS), 'custom']),
   wifiSecurity: field('WPA', BOTH, ['WPA', 'WEP', 'nopass']),
-  // 'plane' = **큐브 바깥 면-평면 QR** (v0WY, 2026-08-16). 'inner'(윈도 β)와 달리
-  // 실루엣 **밖**에 앉아 데이터 셀을 한 칸도 안 먹는다 — 그래서 어떤 레이아웃과도
-  // 조합되고, v0W 와 붙인 것이 v0WY 다 (`sceneY.js` §renderOuterFaceQr).
+  // 'plane' = **먼 코너 QR** (v0WY). ⚠ **의도적 갱신 (2026-08-17 재설계)** —
+  // 이 자리에는 「큐브 바깥 면-평면 QR · 실루엣 밖이라 데이터 셀을 한 칸도 안
+  // 먹고 어떤 레이아웃과도 조합된다」 가 적혀 있었다. 운영자가 그 설계를 폐기하고
+  // «윈도 β 식 안쪽 배치» 로 재설계했다 — 지금의 'plane' 은 **레이아웃 선택**이다
+  // (locatorProfileY 를 v0wy 로 전환한다, index.html §qrPositionCards).
+  // 그래서 더 이상 «어떤 레이아웃과도 조합» 이 아니고 64셀을 먹는다.
   qrPosition: field(DEFAULT_OUTER_QR_POSITION, BOTH,
     ['inner', 'plane', 'TL', 'TR', 'BL', 'BR', 'none']),
   // 생성기 화면의 **초기 선택**은 하이브리드다(사용자 지시 2026-08-13). 실사진 12/12 ·
@@ -145,6 +149,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
       LOCATOR_PROFILE_CELL_SURFACE_V0W,
       LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
       LOCATOR_PROFILE_CELL_SURFACE_V0W2,
+      // v0WY — 2026-08-17 재설계로 **진짜 레이아웃 id 가 됐다** (구 «면-평면 QR
+      // 렌더 선택» 은 폐기). 사용자는 QR 위치 «면» 카드로 이 값으로 오고,
+      // 다른 QR 위치를 고르면 v0W 로 돌아간다 (index.html §qrPositionCards).
+      LOCATOR_PROFILE_CELL_SURFACE_V0WY,
     ]),
 });
 

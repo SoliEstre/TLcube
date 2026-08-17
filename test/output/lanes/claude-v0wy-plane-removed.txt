@@ -1,0 +1,89 @@
+// ── 큐브 바깥 면-평면 QR (v0WY, 2026-08-16 운영자 지시) ─────────────────
+//
+// **v0WY 는 레이아웃이 아니라 QR 위치다.** 셀을 한 칸도 안 먹으므로 와이어는 v0W 와
+// 비트 동일하고 (`cellSurfaceFinal.js` 모듈 헤더 §v0W 파생 2종), 그래서 여기 렌더러
+// 하나가 v0WY 의 전부다. 어느 셀 표면 레이아웃과도 조합된다.
+//
+// **윈도 β 문법을 그대로 쓴다** — 다른 것은 «어디에» 뿐이다:
+//   · 좌표계 = T 면 파라메트릭 (a,b). 윈도 β 는 a,b ∈ [n−13, n] (면 **안쪽**),
+//     여기는 a,b ∈ [n+gap, n+gap+side] (**바깥쪽**). a=b=n 이 T 면의 먼 꼭짓점 C0 이므로
+//     그 너머는 실루엣 밖이다 — 데이터 셀도, 다른 면도 거기 없다.
+//   · QR 모듈 = 데이터 피치의 ½ (D1 과 같은 값) → 콰이어트 4 + 21 + 4 = 29모듈 = 14.5셀.
+//   · 방향 = 윈도 β 와 **같은 뒤집기** (정렬 패턴 코너가 큐브 쪽). 한 코드 안에서 두
+//     QR 이 다른 방향으로 눕는 것을 막는다.
+//   · T 면 단독 — L/R 필러가 **없다**. 윈도 β 의 필러는 «세 면 공통 배제 좌표의 구멍»
+//     을 메우는 것인데, 실루엣 밖에는 애초에 메울 면이 없다.
+//
+// 기하 (닫힌 형태 · cellSize=1 기준): 블록 네 꼭짓점은 (a,b) = (lo,lo)·(hi,lo)·(hi,hi)·
+// (lo,hi) 이고 T 기저 (e_i, e_j) 의 합이 (0,−1) 이라 화면에서는 **마름모**가 된다 —
+// 가로 대각 √3·side, 세로 폭 side, 중심 x 는 큐브 중심과 같다. 필요 여백:
+//   위쪽 (gap + side)·cellSize · 가로 (√3/2)·side·cellSize (큐브 halfW 안쪽이라 항상 여유)
+// 기본 margin 20셀 ≥ 1 + 14.5 = 15.5셀 이므로 기본값에서 항상 들어간다. 사용자가
+// margin 을 줄였을 때는 **조용히 잘리지 않도록 throw** 한다 (코너 QR 의 겹침 가드와
+// 같은 규율).
+const PLANE_QR_GAP_CELLS = 1;
+
+/** 면-평면 QR 블록 한 변 (셀) — 콰이어트 포함 29모듈 × ½피치. */
+const PLANE_QR_SIDE_CELLS = QR_BLOCK_MODULES * 0.5;
+
+/** v0WY 가 요구하는 최소 margin (셀). 큐브 먼 꼭짓점 위로 gap + 블록 한 변. */
+export const PLANE_QR_MARGIN_CELLS = PLANE_QR_GAP_CELLS + PLANE_QR_SIDE_CELLS;
+
+/**
+ * 큐브 바깥(T 면 평면 연장)에 QR 을 그린다 — v0WY.
+ * `renderWindowQr` 를 호출하지도 수정하지도 않는다 (renderCenterQr 과 같은 규율):
+ * 기하가 다르고, 기존 윈도 β 렌더 계약을 한 도형도 흔들지 않기 위해서다.
+ */
+function renderOuterFaceQr(shapes, n, layout, qrText, palette, faceGains, margin) {
+  const qr = qrMatrix(qrText);
+  if (qr.size !== QR_MODULE_GRID) {
+    throw new Error(`qrMatrix().size(${qr.size}) 가 예상(${QR_MODULE_GRID}) 과 다르다`);
+  }
+  if (margin < PLANE_QR_MARGIN_CELLS * layout.size) {
+    throw new Error(
+      '면-평면 QR(v0WY)이 여백을 넘는다 — margin 이 최소 '
+      + PLANE_QR_MARGIN_CELLS + '·cellSize 여야 한다: margin=' + margin
+      + ', cellSize=' + layout.size,
+    );
+  }
+  const lo = n + PLANE_QR_GAP_CELLS;
+  const half = 0.5;
+
+  // ① 콰이어트 패치 — 블록 전체(마름모)를 밝게. 어두운 배경에서도 QR 리더가
+  // 콰이어트 존을 확보한다 (코너 QR 과 같은 계약, SPEC §14).
+  const quiet = applyFaceGain(palette.bullseyeLight, faceGains.T);
+  const dark = applyFaceGain(palette.bullseyeDark, faceGains.T);
+  const hi = lo + PLANE_QR_SIDE_CELLS;
+  shapes.push({
+    kind: 'polygon',
+    points: [
+      facePointFor('T', lo, lo, layout),
+      facePointFor('T', hi, lo, layout),
+      facePointFor('T', hi, hi, layout),
+      facePointFor('T', lo, hi, layout),
+    ],
+    color: quiet,
+  });
+
+  // ② 다크 모듈 — 윈도 β 와 **같은 뒤집기 매핑**.
+  for (let qy = 0; qy < qr.size; qy += 1) {
+    for (let qx = 0; qx < qr.size; qx += 1) {
+      if (qr.modules[qy * qr.size + qx] !== 1) continue;
+      const u = (QR_MODULE_GRID - 1 - qx) + QR_QUIET_MODULES;
+      const v = (QR_MODULE_GRID - 1 - qy) + QR_QUIET_MODULES;
+      const a0 = lo + u * half;
+      const b0 = lo + v * half;
+      shapes.push({
+        kind: 'polygon',
+        points: [
+          facePointFor('T', a0, b0, layout),
+          facePointFor('T', a0 + half, b0, layout),
+          facePointFor('T', a0 + half, b0 + half, layout),
+          facePointFor('T', a0, b0 + half, layout),
+        ],
+        color: dark,
+      });
+    }
+  }
+}
+

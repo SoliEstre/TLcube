@@ -68,13 +68,19 @@ test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v
   // (v0W 파생 ② — SE 부 파인더 6×6 확대 + NW·NE 3면 대칭 통일). 근거 실측은
   // `test/output/lanes/claude-v0w2-derive.mjs`(정본 유도) ·
   // `claude-v0w2-render.mjs`(래스터 291면 불일치 0) · `claude-v0w2-probe.mjs`.
+  // ⚠ **의도적 갱신 «v0WY 편입» (2026-08-17 운영자 재설계)** — 위 「'cell-surface-v0wy'
+  // 는 없다 — v0WY 는 로케이터가 아니라 QR 위치이고 와이어는 v0W 그대로다」 는
+  // **허공 마름모 설계**의 서술이었다. QR 이 실루엣 안쪽 먼 코너로 들어와 64셀을
+  // 먹으면서 셀 집합·회계·와이어가 v0W 와 갈렸고, 그래서 프로파일이 실재한다.
+  // 그 문단이 걱정하던 «디코더가 절대 돌려줄 수 없는 값» 도 해소됐다 — 디코더에
+  // `v0wy` 패밀리가 있고 `cellSurface-block-locator.test.js` 가 그 산출을 고정한다.
   assert.deepEqual([...LOCATOR_PROFILES_Y], [
     'off', 'hex-frame-v1', 'cell-surface-v1', 'cell-surface-v1r2', 'cell-surface-v2',
     'cell-surface-v0', 'cell-surface-v2r2', 'cell-surface-v0x', 'cell-surface-v0xq',
-    'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2',
+    'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2', 'cell-surface-v0wy',
   ]);
-  assert.ok(!LOCATOR_PROFILES_Y.includes('cell-surface-v0wy'),
-    'v0WY 는 로케이터 프로파일이 아니다 (QR 위치다)');
+  assert.ok(LOCATOR_PROFILES_Y.includes('cell-surface-v0wy'),
+    'v0WY 는 이제 로케이터 프로파일이다 (2026-08-17 재설계)');
   assert.equal(DEFAULT_LOCATOR_PROFILE_Y, LOCATOR_PROFILE_OFF);
   assert.equal(assertLocatorProfileY('hex-frame-v1'), LOCATOR_PROFILE_HEX_FRAME_V1);
   assert.throws(() => assertLocatorProfileY('unknown'), RangeError);

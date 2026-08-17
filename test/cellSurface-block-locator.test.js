@@ -374,7 +374,9 @@ test('v1r2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동�
   // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 키가 늘었고 값도 0 이다 — v0W 와
   // 같은 앵커드 쌍을 쓰므로 v0W 가 0 인 프레임에서는 구조적으로 0 이다 (실측 확인).
   assert.deepEqual(first.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0: 6,
+    // 의도적 갱신 «v0WY 편입» (2026-08-17) — 키가 하나 늘었다. **값은 0** 이므로
+    // 이 프레임에서 새 패밀리가 아무것도 세우지 않는다는 사실까지 함께 고정된다.
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0, v0: 6,
   }, '포즈 분포가 잰 값과 다르다 — 약점이 움직였으면 §6 을 재측정하고 핀을 갱신하라');
   const families = first.shapes.map((shape) => shape.blockLocator.family);
   assert.ok(!families.includes('v1r2'), 'v1r2 shape 가 살아났다 — 핀을 되돌려라');
@@ -404,7 +406,9 @@ test('v1r2 패밀리 격리 대조군 — 끄면 v1r2 포즈 0 (⚠ 현재는 �
   // 의도적 갱신 «v0W 편입» (2026-08-16): v0w 키가 늘었고 값은 0 이다 (위와 같은 이유).
   // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 키가 늘었고 값도 0 이다.
   assert.deepEqual(off.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0: 6,
+    // 의도적 갱신 «v0WY 편입» (2026-08-17) — 키가 하나 늘었다. **값은 0** 이므로
+    // 이 프레임에서 새 패밀리가 아무것도 세우지 않는다는 사실까지 함께 고정된다.
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0, v0: 6,
   }, '격리 대조군의 전제가 움직였다 — 재측정하고 핀을 갱신하라');
 });
 
@@ -705,7 +709,8 @@ test('구 v2r2 중앙(닫힌 링 스택)은 legacy 분류만 남고 포즈를 �
   // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 키가 늘었고 값도 0 이다 (같은 이유 —
   // v0W2 도 K3 중앙 × K5 원거리 쌍을 요구한다).
   assert.deepEqual(detected.diagnostics.poseCount, {
-    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0: 0,
+    // 의도적 갱신 «v0WY 편입» (2026-08-17) — 키 하나 추가, 값 0.
+    v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0, v0: 0,
   });
   assert.equal(detected.shapes.length, 0);
 });
@@ -1293,9 +1298,17 @@ test('v0W 시드 기하 — canonical 앵커 방향이 (0,−1) 이 아니라서
 // 패치와 CS 수용 게이트다. 그래서 여기서 재는 본론도 «포즈 0» 이 아니라 **«복호
 // 오수용 0»** 이다 (양방향 전수).
 //
-// **v0WY** — 큐브 바깥 면-평면 QR. **와이어가 v0W 와 비트 동일**하다 (셀을 한 칸도
-// 안 먹는다). 그래서 새 레이아웃 id 도, 새 로케이터 패밀리도 없고, 회귀가 재는 것은
-// «그 동일성이 실제로 성립하는가» 다 — payload 동일 · 복호 레이아웃 v0w · 새 패밀리 0.
+// **v0WY** — ⚠ **2026-08-17 운영자 재설계로 물건이 바뀌었다.** 구 v0WY 는 큐브 바깥
+// 허공의 면-평면 QR 이라 와이어가 v0W 와 비트 동일했고, 그래서 새 id 도 새 패밀리도
+// 없었다. 지금의 v0WY 는 QR 이 실루엣 **안쪽 먼 코너** [13,20]² 에 8×8 슬롯으로
+// 묻히고 위상 마커가 SE → SW 로 옮겨 간 **진짜 레이아웃**이다 (파인더 67 · 데이터 280).
+//
+// 그래서 이 파일에서 재는 것도 «동일성» 에서 **«구별»** 로 뒤집힌다. 그리고 v0WY 는
+// 중앙 K3 도 NE 동심 사각도 v0W 와 **같은 배열·같은 자리**라 시드 기하가 문자 그대로
+// 같다 — v0X ↔ v0W 보다 한 단계 더 붙어 있다. 가르는 것은 셋이다:
+//   ⓐ 위상 마커 자리 (SE 9 ↔ SW 6) — refinePose 의 Pearson 서브앵커
+//   ⓑ 먼 코너 슬롯의 **QR 다움** (`v0wyRequireSlotQr` — 봉합 ② 인프라 재사용)
+//   ⓒ 하류 CS 수용 게이트 (0.78 · 0.035, **무접촉**)
 
 function renderV0wq(pixelsPerUnit) {
   const encoded = encodeY(PAYLOAD, {
@@ -1307,19 +1320,23 @@ function renderV0wq(pixelsPerUnit) {
   return rasterize(scene, { pixelsPerUnit, supersample: 2 });
 }
 
-/** v0WY — 같은 v0W 인코딩 위에 바깥 면-평면 QR 만 얹는다. margin 은 sceneY 요구치. */
-function renderV0wy(pixelsPerUnit, margin = 16) {
+/**
+ * v0WY — **자기 레이아웃으로** 인코드한다 (구 판본은 v0W 인코딩 위에 허공 QR 만
+ * 얹었다 — 그때는 그것이 v0WY 의 전부였기 때문이다). 슬롯이 레이아웃 정의라
+ * qrText 가 필수다.
+ */
+function renderV0wy(pixelsPerUnit) {
   const encoded = encodeY(PAYLOAD, {
-    cellSurfaceLayout: 'v0w', version: 1, tones: 2, eccLevel: 'M',
+    cellSurfaceLayout: 'v0wy', version: 1, tones: 2, eccLevel: 'M',
   });
   const scene = buildSceneY(encoded, {
-    palette: PALETTE, margin, qrText: TL_READER_URL, outerFaceQr: true,
+    palette: PALETTE, margin: 4, qrText: TL_READER_URL,
   });
   return rasterize(scene, { pixelsPerUnit, supersample: 2 });
 }
 
 const V0WQ_FRAME = embed960(renderV0wq(15));
-const V0WY_FRAME = embed960(renderV0wy(13));
+const V0WY_FRAME = embed960(renderV0wy(15));
 
 test('v0WQ 자기 복호 — 톤 커브 4종 × 회전 3방향(0/120/240)', {
   timeout: 900_000,
@@ -1390,7 +1407,8 @@ test('v0WQ 교차 — Type O · A 프레임에서 v0W 계열 shape 가 서지 �
     for (const rotation of [0, 120]) {
       const luma = toRelativeLuminance(distortImage(frame, { rotation, fill: FILL }));
       const detected = detectCellSurfaceBlockShapes(luma);
-      for (const layoutId of ['v0w', 'v0wq']) {
+      // 의도적 갱신 «v0WY 편입» (2026-08-17) — 새 패밀리도 cube 축 밖에서 0 이어야 한다.
+      for (const layoutId of ['v0w', 'v0wq', 'v0wy']) {
         assert.ok(!detected.shapes.some((shape) => shape.blockLocator.layoutId === layoutId),
           `Type ${name} rot${rotation} 에 ${layoutId} shape 가 섰다`);
       }
@@ -1461,30 +1479,108 @@ test('v0WQ 로케이터는 결정적이다 — 같은 프레임 두 번 → 동�
   );
 });
 
-test('v0WY 는 렌더 선택이다 — 와이어는 v0W 이고 데이터가 한 칸도 안 준다', {
-  timeout: 600_000,
+test('v0WY 자기 복호 + 슬롯 QR 확증 — 톤 4 × 회전 3, 그리고 v0W 프레임의 가짜 차단', {
+  timeout: 900_000,
 }, () => {
-  // ① 인코딩이 문자 그대로 v0W 다.
-  const plain = encodeY(PAYLOAD, {
+  // ⚠ **의도적 갱신 (2026-08-17 운영자 재설계).** 이 회귀는 「v0WY 는 렌더 선택이다 —
+  // 와이어는 v0W 이고 데이터가 한 칸도 안 준다」 였고, 세 가지를 재고 있었다:
+  // ① 인코딩이 v0W ② 복호가 v0w ③ `poseCount.v0wy` 가 **없다**.
+  // 셋 다 **허공 마름모 설계**에 대해 참이었고 지금은 전부 거짓이다 — QR 이 실루엣
+  // 안쪽으로 들어와 64셀을 먹으면서 별도 레이아웃·별도 패밀리가 됐다.
+  // 지금 재는 것은 «구별이 실제로 서는가» 다.
+
+  // ① 인코딩이 v0wy 이고 회계가 v0W 와 다르다.
+  const encoded = encodeY(PAYLOAD, {
+    cellSurfaceLayout: 'v0wy', version: 1, tones: 2, eccLevel: 'M',
+  });
+  assert.equal(encoded.cellSurfaceLayout, 'v0wy');
+  assert.equal(encoded.capacity.dataCells, 280);
+
+  // ② 자기 복호 — 톤 4 × 회전 3.
+  for (const [name, tone] of [
+    ['none', {}], ['sCurve0.6', { sCurve: 0.6 }],
+    ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
+  ]) {
+    for (const rotation of [0, 120, 240]) {
+      const where = `v0wy ${name} rot${rotation}`;
+      const decoded = decodeLab(distortImage(V0WY_FRAME, { ...tone, rotation, fill: FILL }));
+      assert.equal(decoded.ok, true, `${where}: ${decoded.reason || 'unknown'}`);
+      assert.equal(decoded.text, PAYLOAD, where);
+      assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0wy',
+        `${where} 이 남의 레이아웃으로 복호됐다: ` + decoded.hypothesis.cellSurfaceLayout);
+    }
+  }
+
+  // ③ **새 패밀리가 실재한다** — 그리고 v0W 프레임에서는 슬롯 확증이 그것을 자른다.
+  //    이 대조가 이 편입의 핵심이다: 시드 기하가 v0W 와 같으므로, 확증을 끄면
+  //    v0W 프레임에도 v0wy 포즈가 선다. 켜면 0 이다.
+  const wyLuma = toRelativeLuminance(distortImage(V0WY_FRAME, { rotation: 0, fill: FILL }));
+  const wyDetected = detectCellSurfaceBlockShapes(wyLuma);
+  assert.ok(wyDetected.diagnostics.poseCount.v0wy >= 1,
+    'v0WY 프레임에서 v0wy 포즈가 0 이다 — 패밀리가 안 돈다');
+
+  const wLuma = toRelativeLuminance(distortImage(V0W_FRAME, { rotation: 0, fill: FILL }));
+  const wOn = detectCellSurfaceBlockShapes(wLuma);
+  const wOff = detectCellSurfaceBlockShapes(wLuma, {
+    calibration: { csBlockLocator: { v0wyRequireSlotQr: false } },
+  });
+  // ★ 대조군 동반 — «항상 0 인 자» 를 막는다. 확증을 끄면 실제로 서야 한다.
+  assert.ok(wOff.diagnostics.poseCount.v0wy > 0,
+    '슬롯 확증을 꺼도 v0W 프레임에 v0wy 포즈가 안 선다 — 이 게이트가 겨냥한 것이 없다');
+  assert.equal(wOn.diagnostics.poseCount.v0wy, 0,
+    'v0W 프레임에 가짜 v0wy 포즈가 남았다 — 슬롯 QR 확증이 안 듣는다');
+  assert.equal(wOn.diagnostics.slotQr.rejected, wOff.diagnostics.poseCount.v0wy,
+    '거절 수가 «확증 없이 섰을 포즈 수» 와 다르다 — 두 값이 같은 것을 세지 않는다');
+  // 그리고 확증은 **다른 패밀리를 한 자리도 안 건드린다** (비침습성).
+  for (const family of ['v0w', 'v0w2', 'v0', 'v0wq']) {
+    assert.equal(wOn.diagnostics.poseCount[family], wOff.diagnostics.poseCount[family],
+      `슬롯 확증이 ${family} 포즈 수를 바꿨다`);
+  }
+});
+
+test('구 v0WY(허공 면-평면 QR)는 폐기됐다 — outerFaceQr 는 조용히 무시되지 않고 던진다', () => {
+  // «렌더러를 지웠다» 를 소스 부재로만 재면, 남아 있는 호출자가 QR 없는 코드를
+  // 성공적으로 뽑아 낸다 (사용자는 폴백 QR 이 사라진 줄 모른다). 그래서 sceneY 는
+  // 그 옵션을 받으면 **던진다** — 이 회귀가 그 계약이다.
+  const encoded = encodeY(PAYLOAD, {
     cellSurfaceLayout: 'v0w', version: 1, tones: 2, eccLevel: 'M',
   });
-  assert.equal(plain.cellSurfaceLayout, 'v0w');
-  // ② 바깥 QR 을 얹어도 복호는 v0w 로 떨어지고 payload 가 같다.
-  for (const rotation of [0, 120, 240]) {
-    const decoded = decodeLab(distortImage(V0WY_FRAME, { rotation, fill: FILL }));
-    const where = `v0wy rot${rotation}`;
-    assert.equal(decoded.ok, true, `${where}: ${decoded.reason || 'unknown'}`);
-    assert.equal(decoded.text, PAYLOAD, where);
-    assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0w',
-      `${where} 이 v0w 가 아닌 것으로 복호됐다: ` + decoded.hypothesis.cellSurfaceLayout);
+  assert.throws(
+    () => buildSceneY(encoded, {
+      palette: PALETTE, margin: 16, qrText: TL_READER_URL, outerFaceQr: true,
+    }),
+    TypeError,
+  );
+  // false 도 «구 배선이 살아 있다» 는 신호이므로 같이 던진다 (조용한 통과 금지).
+  assert.throws(
+    () => buildSceneY(encoded, { palette: PALETTE, margin: 16, outerFaceQr: false }),
+    TypeError,
+  );
+});
+
+test('v0WY 교차 오수용 0 — 양방향 전수 (v0 · v0W · v0WQ · v0W2 · v0WY + 드랍 v0X·v0XQ)', {
+  timeout: 900_000,
+}, () => {
+  // v0W ↔ v0WY 가 이 표의 핵심 칸이다 — 중앙·코너 시드가 **문자 그대로 같으므로**,
+  // 여기가 새면 두 레이아웃은 서로의 프레임을 읽어 버린다.
+  for (const [name, frame, wantLayout, extra] of [
+    ['v0', V0_FRAME, 'v0', {}],
+    ['v0x', V0X_FRAME, 'v0x', RESTORE_DROPPED],
+    ['v0xq', V0XQ_FRAME, 'v0xq', RESTORE_DROPPED],
+    ['v0w', V0W_FRAME, 'v0w', {}],
+    ['v0wq', V0WQ_FRAME, 'v0wq', {}],
+    ['v0w2', V0W2_FRAME, 'v0w2', {}],
+    ['v0wy', V0WY_FRAME, 'v0wy', {}],
+  ]) {
+    for (const rotation of [0, 120, 240]) {
+      const decoded = decodeLab(distortImage(frame, { rotation, fill: FILL }), extra);
+      assert.equal(decoded.ok, true,
+        `${name} rot${rotation} 이 복호되지 않았다: ${decoded.reason || 'unknown'}`);
+      assert.equal(decoded.text, PAYLOAD, `${name} rot${rotation}`);
+      assert.equal(decoded.hypothesis.cellSurfaceLayout, wantLayout,
+        `${name} rot${rotation} 이 ${decoded.hypothesis.cellSurfaceLayout} 로 오수용됐다`);
+    }
   }
-  // ③ 그리고 **새 패밀리가 생기지 않았다** — v0wy 라는 포즈 키가 존재하면 안 된다.
-  const luma = toRelativeLuminance(distortImage(V0WY_FRAME, { rotation: 0, fill: FILL }));
-  const detected = detectCellSurfaceBlockShapes(luma);
-  assert.equal(detected.diagnostics.poseCount.v0wy, undefined,
-    'v0wy 포즈 키가 생겼다 — v0WY 는 로케이터 패밀리가 아니다');
-  assert.ok(detected.diagnostics.poseCount.v0w >= 1,
-    'v0WY 프레임에서 v0w 포즈가 0 이다');
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1996,7 +2092,7 @@ test('봉합 ③ 중앙 불스아이 확증 — 사각 링 게이트가 구조�
     `확증 조립이 구제하지 못한 칸이 있다: ${deadBefore - rescuedCells}/${deadBefore}`);
 });
 
-test('봉합 무회귀 — v0WQ·v0WY 프레임의 복호가 봉합 on/off 로 한 자리도 안 바뀐다', {
+test('봉합 무회귀 — v0WQ·v0W2·v0WY·v0X 프레임의 복호가 봉합 on/off 로 안 바뀐다', {
   timeout: 900_000,
 }, () => {
   // 봉합은 «가짜를 더 잘 거른다» 이지 «진짜를 덜 받는다» 가 아니다. 진짜 중앙 QR
@@ -2005,9 +2101,15 @@ test('봉합 무회귀 — v0WQ·v0WY 프레임의 복호가 봉합 on/off 로 �
   // **의도적 갱신 «v0X 드랍» (2026-08-17)** — v0x 행은 **두 팔 모두** 복원 스위치
   // 위에서 잰다. 안 그러면 드랍 뒤 pre 가 통째로 실패해 `if (pre.ok)` 가 조용히
   // 건너뛰고, 이 행이 «아무것도 안 재는 행» 으로 바뀐다 (초록인 채로).
+  //
+  // **의도적 갱신 «v0WY 편입» (2026-08-17)** — v0wy 행을 더한다. v0WY 는 슬롯 QR
+  // 확증이라는 **네 번째** 조건을 갖는데, 그것이 봉합 3처방과 서로를 방해하지
+  // 않는지가 여기서 처음 잰다 (v0WY 는 불스아이 중앙이 있어 거부권·확증 조립의
+  // 대상이기도 하기 때문이다).
   for (const [name, frame, restore] of [
     ['v0wq', V0WQ_FRAME, {}],
     ['v0w2', V0W2_FRAME, {}],
+    ['v0wy', V0WY_FRAME, {}],
     ['v0x', V0X_FRAME, RESTORE_DROPPED],
   ]) {
     for (const tone of [{}, { gamma: 0.7 }, { gamma: 1.4 }, { sCurve: 0.6 }]) {
