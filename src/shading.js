@@ -57,8 +57,12 @@ export const SHADING_OFF = 'off';
 export const SHADING_ON = 'on';
 /** 상태 스키마 허용값. */
 export const SHADING_MODES = Object.freeze([SHADING_OFF, SHADING_ON]);
-/** 기본값. 새 옵션이므로 **끔** — 켜는 것은 사용자의 선택이다. */
-export const DEFAULT_SHADING_MODE = SHADING_OFF;
+/**
+ * 기본값 = **켬** (운영자 확정 2026-08-17 — 음영 3종 개정 (QR 제외·10×·발산 협소화)
+ * 확인 후). 도입기의 «새 옵션은 끔» 정책은 그 확인으로 역할을 다했다. 끄면 산출물이
+ * 음영 도입 전과 바이트 동일한 성질은 그대로다 (addShading off 경로).
+ */
+export const DEFAULT_SHADING_MODE = SHADING_ON;
 
 /**
  * 빛의 진행 방향 (화면 좌표, y 는 아래가 +). = R 면 바깥 법선.
