@@ -168,6 +168,40 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // 않는다 (배제 목록). 값은 같은 0.6 이지만 근거는 이 레인의 자체 실측이다
   // (`test/output/lanes/claude-v0wy-probe.mjs` §③).
   v0wySlotQrMinContrast: 0.6,
+  // v0WY 확증 프로브의 상관 하한 — 봉합 ②의 **호출부 패턴을 마저 가져온다**
+  // (2026-08-17 결함 B 수리). 원 호출부(§assembleCentreQrPoses)는 registerPatch
+  // 프로브를 상관 하한(0.25)으로 게이트한 **뒤에야** contrast 를 읽는데, v0WY
+  // 재사용은 그 게이트를 빠뜨렸다. 그래서 빈 슬롯(무늬가 없어 Pearson 이 설 자리가
+  // 없다)에서 프로브가 상관 0.15\~0.17 짜리 쓰레기 offset(탐색 격자 모서리 +7.5px)을
+  // 물어 오고, 그 어긋난 자리에서 span(p95−p5)이 0.056 으로 무너져 contrast 가
+  // 2.06 으로 폭발했다 — 정답 H 위의 contrast 는 0.0000 인데 게이트는 다른 H 를
+  // 보고 있었다 (`test/output/lanes/claude-slotqr-probe.out.txt` 실측).
+  // 정합이 서지 않은 자리의 contrast 는 판별이 아니다 — 거절한다.
+  //
+  // 문턱은 **새 키**다 — 봉합 ②의 `v0xqCentreMinCorrelation`(0.25) 을 건드리지
+  // 않는다 (`v0wySlotQrMinContrast` 와 같은 규약). 값 0.25 는 원 게이트와 같고,
+  // 방향은 엄격화뿐이다 (이 조건으로 새로 통과하는 것은 없다). 진짜 QR 의 실측
+  // 프로브 상관은 0.9996 이라 3.99× 여유다 (톤 사다리 전체에서 ≥ 0.9968).
+  v0wySlotQrMinCorrelation: 0.25,
+  // v0WY 확증 조건 ③ — **span 상응성** (2026-08-17 결함 B 수리 ②/②).
+  //
+  // 상관 하한만으로는 안 닫힌다: Pearson 도 contrast 도 **눈금 없는(scale-free)** 자라,
+  // 무늬 없는 슬롯(구멍·단색)의 **면 게인 음영 잔재**(진폭 0.1 급 기울기)가 회전 위상
+  // 후보에서 상관 0.25\~0.59 를 만들고, 무너진 span(p95−p5 ≈ 0.04\~0.06) 이 contrast 를
+  // 1.67\~2.58 로 폭발시킨다 — 소스가 봉합 ② 설계에서 경고한 바로 그 실패 모드
+  // («상관은 사실상 면 게인 음영만 잰다»)가 먼 코너 재사용에서 재발한 것이다.
+  //
+  // 그래서 눈금을 단다: 슬롯 패치의 동적 범위(span, 프로브 offset 위)가 **같은 포즈의
+  // 중앙 K3 불스아이 패치의 동적 범위**(같은 H · 같은 프레임 · 같은 톤 커브) 에
+  // 상응해야 한다. 분자·분모가 같은 광학을 지나므로 톤 커브·노출·면 게인이 약분된다
+  // (봉합 ②의 정규화와 같은 원리 — 무차원). QR 이 실제로 있으면 콰이어트 밝음 ↔
+  // 모듈 어두움이 불스아이 명암과 같은 급이고, 빈 슬롯이면 span 이 0 으로 무너진다.
+  // 실측 (`test/output/lanes/claude-slotqr-phase.out.txt`):
+  //   진짜 (톤 사다리 clean·sCurve0.6·gamma0.7·gamma0.6): 비 1.1702\~1.5559
+  //   빈 슬롯 위상 누수 전부:                              비 0.0536\~0.0865
+  // → 문턱 0.35 (진짜 최소의 3.34× 아래 · 누수 최대의 4.05× 위).
+  // ⚠ 실사진 검증은 이 체크아웃에서 불가(휘도 덤프 없음) — 통합자 확인 항목.
+  v0wySlotQrMinSpanRatio: 0.35,
   // ── v0XQ 드랍 (운영자 실기기 확정 2026-08-17) — 차단이지 삭제가 아니다 ──────
   // v0xq 패밀리 (중앙 QR 변형). **기본 off.**
   // 근거: 실기기 인식 순위 v0WQ ≫ v0XQ > v0X ≈ v0W — v0W 편입 때 걸어 둔 조건부
@@ -1905,6 +1939,26 @@ const V0WY_CORE_RADIUS_CELLS = V0W_CORE_RADIUS_CELLS;
 const V0WY_N = 21;
 
 /**
+ * 패치의 동적 범위 (p95−p5) — §v0wySlotQrMinSpanRatio (span 상응성) 의 재료.
+ * `centreQrFinderContrast` 의 분모와 같은 식이되 role 무관 전 표본이다.
+ * 표본 부족은 null — 호출부가 거절로 읽는다 (null 을 «통과» 로 읽지 않는다).
+ */
+function patchSpan(luma, H, patch, offsetX, offsetY) {
+  const values = [];
+  for (const point of patch.points) {
+    const image = projectPoint(H, point);
+    if (!image) continue;
+    const value = bilinear(luma, image.x + offsetX, image.y + offsetY);
+    if (value === null) continue;
+    values.push(value);
+  }
+  if (values.length < 20) return null;
+  values.sort((left, right) => left - right);
+  const pick = (q) => values[Math.min(values.length - 1, Math.floor(q * values.length))];
+  return pick(0.95) - pick(0.05);
+}
+
+/**
  * ★ v0WY 슬롯 QR 확증 — 봉합 ② (`centreQrFinderContrast`) 를 **먼 코너 패치에 재사용**.
  *
  * 부르는 자리가 다르다: 봉합 ②는 «가짜 삼중점» 을 시드 단계에서 잘랐지만, v0WY 는
@@ -1926,7 +1980,17 @@ function slotQrConfirmsPose(fullLuma, H, patches, cfg) {
     cfg.registrationRange2Cells * cellPx,
     Math.max(0.5, cfg.registrationStepCells * cellPx),
   );
-  if (!probe) return false;
+  // 상관 하한 (§v0wySlotQrMinCorrelation) — 정합이 실제로 선 프로브만 신뢰한다.
+  // 이것이 없으면 무늬 없는 슬롯에서 쓰레기 offset 이 contrast 판별을 어긋난 H 위로
+  // 끌고 가, span 붕괴로 값이 폭발한다 (결함 B — 확증이 열리는 쪽으로 실패했다).
+  if (!probe || probe.correlation < cfg.v0wySlotQrMinCorrelation) return false;
+  // span 상응성 (§v0wySlotQrMinSpanRatio) — contrast 는 눈금 없는 자라, 분모(슬롯
+  // 패치 자신의 동적 범위)가 무너지면 무늬 없는 슬롯의 잔재 기울기로도 폭발한다.
+  // 같은 포즈의 중앙 불스아이가 눈금이다 — 같은 H·같은 프레임이라 톤·게인이 약분된다.
+  const slotSpan = patchSpan(fullLuma, H, patches.slotQr, probe.offsetX, probe.offsetY);
+  const centreSpan = patchSpan(fullLuma, H, patches.centre, 0, 0);
+  if (slotSpan === null || centreSpan === null || !(centreSpan > EPSILON)
+    || slotSpan < cfg.v0wySlotQrMinSpanRatio * centreSpan) return false;
   const contrast = centreQrFinderContrast(
     fullLuma, H, patches.slotQr, probe.offsetX, probe.offsetY,
   );
@@ -2261,9 +2325,13 @@ function assembleBullseyeConfirmedPoses(
   const posesV0wy = [];
   const confirmed = new Set();
   let tripleCount = 0;
+  // 슬롯 QR 확증이 이 경로에서 자른 v0wy 후보 수 — 앵커드 경로의 `slotQrRejected` 와
+  // **따로** 센다 (합계만 내보내면 어느 경로가 샜는지 되볼 수 없다 — 2026-08-17 수리).
+  let slotQrRejected = 0;
   if (looseCorners.length < 3 || centres.length === 0) {
     return {
       posesV0x, posesV0w, posesV0w2, posesV0wy, confirmedCentres: confirmed, tripleCount,
+      slotQrRejected,
     };
   }
   const angleTolerance = (cfg.v0xqTripleAngleToleranceDeg * Math.PI) / 180;
@@ -2344,7 +2412,12 @@ function assembleBullseyeConfirmedPoses(
             const refined = H0 === null
               ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
             if (!refined) continue;
-            if (spec.slotQr && !slotQrConfirmsPose(fullLuma, refined.H, patches, cfg)) continue;
+            // 거절도 **계수**한다 — 예전에는 여기서 조용히 `continue` 만 해서
+            // `diagnostics.slotQr.rejected` (회귀 대조군) 가 이 경로의 실패를 못 셌다.
+            if (spec.slotQr && !slotQrConfirmsPose(fullLuma, refined.H, patches, cfg)) {
+              slotQrRejected += 1;
+              continue;
+            }
             confirmed.add(centreIndex);
             spec.out.push({
               family: spec.id,
@@ -2363,6 +2436,7 @@ function assembleBullseyeConfirmedPoses(
   }
   return {
     posesV0x, posesV0w, posesV0w2, posesV0wy, confirmedCentres: confirmed, tripleCount,
+    slotQrRejected,
   };
 }
 
@@ -2830,6 +2904,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       posesV0wy: [],
       confirmedCentres: new Set(),
       tripleCount: 0,
+      slotQrRejected: 0,
     }
     : assembleBullseyeConfirmedPoses(
       centres, anchoredCentres, v0xqCorners.slice(0, 4), luma, reduced.factor, cfg,
@@ -2915,7 +2990,17 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       // v0WY 관측 — refinePose 를 통과하고도 **먼 코너에 QR 이 없어** 잘린 포즈 수.
       // v0W 프레임에서 이 값이 0 이면 «슬롯 확증이 살아 있는가» 를 못 재는 것이다
       // (회귀가 대조군으로 이 수치를 함께 본다).
-      slotQr: { rejected: slotQrRejected },
+      //
+      // 확증을 부르는 조립 경로는 **둘**이다 — 앵커드(§assembleAnchoredPoses)와
+      // 중앙 불스아이 구제(§assembleBullseyeConfirmedPoses). 2026-08-17 수리 전에는
+      // 구제 경로의 거절이 계수되지 않아 이 대조군이 거절의 절반을 놓쳤다.
+      // `rejected` 는 두 경로의 **합**이고 (기존 소비자 무접촉), 경로별 값이 따로 선다
+      // — 불변식: rejected === rejectedAnchored + rejectedBullseye.
+      slotQr: {
+        rejected: slotQrRejected + confirmed.slotQrRejected,
+        rejectedAnchored: slotQrRejected,
+        rejectedBullseye: confirmed.slotQrRejected,
+      },
       // v0xq 관측 — 120° 코너 삼중점 수와, 그중 중앙 QR 게이트가 자른 시드 수.
       // v0X·v1r2·v2r2 프레임에서도 삼중점은 뜬다(K5 코너가 120°) — 게이트가
       // 자르는 것이 그쪽이고, 그 사실이 centreRejected 로 보인다.

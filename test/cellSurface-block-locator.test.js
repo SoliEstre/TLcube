@@ -61,9 +61,12 @@ import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
 // §13 v0XQ 드랍 회귀가 쓰는 정본 질의 — 라인업(드랍 반영) vs 와이어(드랍 무관).
 import {
   V0WQ_BLOCKS, V0W_BLOCKS, V0W2_BLOCKS, V0XQ_BLOCKS,
-  allFinalLayoutIdsForN, cellSurfaceFinal, finalLayoutIdForN, finalLayoutIdsForN,
+  allFinalLayoutIdsForN, cellSurfaceFinal, centerQrSlotCellsFor, centerQrSlotOriginFor,
+  finalLayoutIdForN, finalLayoutIdsForN,
   isDroppedFinalLayout, locatorCellsCellSurfaceFinal,
 } from '../src/cellSurfaceFinal.js';
+// 슬롯 QR 확증 회귀(2026-08-17)가 빈 슬롯 팔을 만들 때 면 기저가 필요하다.
+import { faceBasis } from '../src/ygrid.js';
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
 import { buildScene } from '../src/scene.js';
@@ -1536,6 +1539,119 @@ test('v0WY 자기 복호 + 슬롯 QR 확증 — 톤 4 × 회전 3, 그리고 v0W
     assert.equal(wOn.diagnostics.poseCount[family], wOff.diagnostics.poseCount[family],
       `슬롯 확증이 ${family} 포즈 수를 바꿨다`);
   }
+});
+
+test('슬롯 QR 거절 계수기 — 두 확증 경로가 각각 계수되고 총수 = 경로별 합', {
+  timeout: 900_000,
+}, () => {
+  // **결함 A 수리 회귀 (2026-08-17).** 확증(§slotQrConfirmsPose)의 호출부는 **둘**이다
+  // — 앵커드 조립과 중앙 불스아이 구제 조립. 수리 전에는 구제 경로가 조용히
+  // `continue` 해서, «회귀 대조군» 으로 못박힌 `slotQr.rejected` 가 거절의 절반을
+  // 못 셌다 (v0WY 프레임 실측: 확증 off 3 → on 1 인데 rejected 0). 못박는 것 셋:
+  //   ① rejected === rejectedAnchored + rejectedBullseye  (총수 = 경로별 합)
+  //   ② 각 경로가 실제로 한 번은 올라간다 — 앵커드는 v0W 프레임(실측 8)이,
+  //      구제는 v0WY 프레임(실측 2)이 각각의 실증 프레임이다. 한쪽이 0 이 되면
+  //      그 경로의 자가 죽은 것이다 (합계만 맞추면 어느 쪽이 샜는지 다시 못 본다).
+  //   ③ rejected === «확증 없이 섰을 포즈 수 − 선 포즈 수»  (전수 계수)
+  for (const [name, frame, wantPath] of [
+    ['v0w', V0W_FRAME, 'rejectedAnchored'],
+    ['v0wy', V0WY_FRAME, 'rejectedBullseye'],
+  ]) {
+    const luma = toRelativeLuminance(distortImage(frame, { rotation: 0, fill: FILL }));
+    const on = detectCellSurfaceBlockShapes(luma);
+    const off = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { v0wyRequireSlotQr: false } },
+    });
+    const sq = on.diagnostics.slotQr;
+    assert.equal(sq.rejected, sq.rejectedAnchored + sq.rejectedBullseye,
+      `${name}: 거절 총수가 경로별 합과 다르다 — ` + JSON.stringify(sq));
+    assert.ok(sq[wantPath] >= 1,
+      `${name}: ${wantPath} 가 0 이다 — 그 경로의 계수기가 죽었다: ` + JSON.stringify(sq));
+    assert.equal(sq.rejected,
+      off.diagnostics.poseCount.v0wy - on.diagnostics.poseCount.v0wy,
+      `${name}: rejected 가 확증이 실제로 자른 수와 다르다`);
+  }
+});
+
+test('슬롯 QR 확증 — 슬롯에 QR 이 없으면 v0wy 포즈가 0 이다 (구멍·단색 어두움)', {
+  timeout: 900_000,
+}, () => {
+  // **결함 B 수리 회귀 (2026-08-17).** 수리 전 실측: 빈 슬롯 팔에서 v0wy 포즈 **2** 가
+  // 통과했다 — 정답 H 위 contrast 는 0.0000 인데, 게이트가 실제로 본 H (프로브 offset
+  // 보행 · 120° 회전 위상)에서는 눈금 없는 두 자(Pearson·contrast)가 면 게인 음영
+  // 잔재에 속았다: span(p95−p5)이 0.04\~0.06 으로 무너지며 contrast 가 1.67\~2.58 로
+  // 폭발했다 (`test/output/lanes/claude-slotqr-phase.out.txt`). 수리는 **추가 조건 둘**
+  // — 프로브 상관 하한(§v0wySlotQrMinCorrelation — 봉합 ② 호출부 패턴 완성)과
+  // span 상응성(§v0wySlotQrMinSpanRatio — 같은 포즈의 중앙 불스아이가 눈금).
+  // 기존 문턱(0.6)·확증 구조는 무접촉이다.
+  const scene = buildSceneY(encodeY(PAYLOAD, {
+    cellSurfaceLayout: 'v0wy', version: 1, tones: 2, eccLevel: 'M',
+  }), { palette: PALETTE, margin: 4, qrText: TL_READER_URL });
+  const m = centerQrSlotCellsFor('v0wy');
+  const og = centerQrSlotOriginFor('v0wy', 21);
+  const { ei, ej } = faceBasis('T');
+  const fp = (a, b) => ({
+    x: scene.layout.originX + (a * ei.x + b * ej.x) * scene.layout.size,
+    y: scene.layout.originY + (a * ei.y + b * ej.y) * scene.layout.size,
+  });
+  const quad = [fp(og.i, og.j), fp(og.i + m, og.j), fp(og.i + m, og.j + m), fp(og.i, og.j + m)];
+  const inQuad = (pt) => {
+    let sign = 0;
+    for (let k = 0; k < 4; k += 1) {
+      const p = quad[k]; const q = quad[(k + 1) % 4];
+      const cross = (q.x - p.x) * (pt.y - p.y) - (q.y - p.y) * (pt.x - p.x);
+      if (Math.abs(cross) < 1e-9) continue;
+      const s = cross > 0 ? 1 : -1;
+      if (sign === 0) sign = s; else if (sign !== s) return false;
+    }
+    return true;
+  };
+  let first = -1; let last = -1; let count = 0;
+  for (let k = 0; k < scene.shapes.length; k += 1) {
+    const s = scene.shapes[k];
+    if (s.kind !== 'polygon' || s.points.length !== 4) continue;
+    let sx = 0; let sy = 0;
+    for (const p of s.points) { sx += p.x; sy += p.y; }
+    if (!inQuad({ x: sx / s.points.length, y: sy / s.points.length })) continue;
+    if (first < 0) first = k;
+    last = k; count += 1;
+  }
+  assert.ok(first >= 0 && count === last - first + 1, '슬롯 구간을 못 찾았다 — 팔 구성 무효');
+  const gain = DEFAULT_FACE_GAINS.T;
+  const dark = {
+    r: BULLSEYE_DARK.r * gain, g: BULLSEYE_DARK.g * gain, b: BULLSEYE_DARK.b * gain,
+  };
+  const holeShapes = [...scene.shapes.slice(0, first), ...scene.shapes.slice(last + 1)];
+  const darkShapes = [...scene.shapes.slice(0, first), {
+    kind: 'polygon',
+    points: [fp(og.i, og.j), fp(og.i + m, og.j), fp(og.i + m, og.j + m), fp(og.i, og.j + m)],
+    color: dark,
+  }, ...scene.shapes.slice(last + 1)];
+  for (const [name, shapes] of [['구멍', holeShapes], ['단색 어두움', darkShapes]]) {
+    const frame = embed960(rasterize({ ...scene, shapes }, { pixelsPerUnit: 15, supersample: 2 }));
+    const luma = toRelativeLuminance(frame);
+    const on = detectCellSurfaceBlockShapes(luma);
+    const off = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { v0wyRequireSlotQr: false } },
+    });
+    // ★ 대조군 동반 — «항상 0 인 자» 를 막는다. 확증을 끄면 후보가 실제로 서야 한다.
+    assert.ok(off.diagnostics.poseCount.v0wy >= 1,
+      `${name}: 확증 없이도 v0wy 후보가 없다 — 이 게이트가 겨냥한 것이 없다`);
+    assert.equal(on.diagnostics.poseCount.v0wy, 0,
+      `${name}: 슬롯에 QR 이 없는데 v0wy 포즈가 섰다 — 확증이 열리는 쪽으로 실패한다`);
+    assert.equal(on.diagnostics.slotQr.rejected, off.diagnostics.poseCount.v0wy,
+      `${name}: 잘린 후보가 전부 계수되지 않았다`);
+    // 확증은 다른 패밀리를 한 자리도 안 건드린다 (비침습성).
+    for (const family of ['v0w', 'v0w2', 'v0', 'v0wq']) {
+      assert.equal(on.diagnostics.poseCount[family], off.diagnostics.poseCount[family],
+        `${name}: 슬롯 확증이 ${family} 포즈 수를 바꿨다`);
+    }
+  }
+  // 그리고 진짜 QR 프레임은 여전히 선다 («전부 자르는 자» 방지) — 수리 전후 회계 동일.
+  const realLuma = toRelativeLuminance(distortImage(V0WY_FRAME, { rotation: 0, fill: FILL }));
+  const real = detectCellSurfaceBlockShapes(realLuma);
+  assert.ok(real.diagnostics.poseCount.v0wy >= 1,
+    '수리가 진짜 v0WY 포즈까지 잘랐다: ' + JSON.stringify(real.diagnostics.poseCount));
 });
 
 test('구 v0WY(허공 면-평면 QR)는 폐기됐다 — outerFaceQr 는 조용히 무시되지 않고 던진다', () => {
