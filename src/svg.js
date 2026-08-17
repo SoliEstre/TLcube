@@ -107,6 +107,19 @@ export function sceneToSvg(scene, options = {}) {
     );
   }
 
+  // 음영은 **도형 아래**다 (재배치 — 운영자 지시 2026-08-17). 그림자는 물체 뒤에
+  // 있는 것이고, 길이 10× + QR 껍질 제외로 띠가 QR 블록 영역을 지나게 됐으므로
+  // painter 순서로 QR·셀이 자연히 가리게 한다. 투명 배경으로 내보내면 이 레이어가
+  // 남아 삽입 배경 위에 얹히는 성질은 그대로다.
+  // stroke 를 안 준다 — 심 커버는 인접 동일색 도형용이고, 여기 stroke 를 주면 그
+  // 선만 그라데이션 없이 진하게 남는다.
+  if (shading !== null) {
+    for (let i = 0; i < shading.length; i += 1) {
+      const pts = shading[i].points.map((p) => `${n(p.x)},${n(p.y)}`).join(' ');
+      lines.push(`<polygon points="${pts}" fill="url(#tlsh${i})"/>`);
+    }
+  }
+
   for (const s of scene.shapes) {
     const fill = colorToHex(s.color);
     if (s.kind === 'polygon') {
@@ -121,17 +134,6 @@ export function sceneToSvg(scene, options = {}) {
       lines.push(`<circle cx="${n(s.cx)}" cy="${n(s.cy)}" r="${n(s.r)}" fill="${fill}"/>`);
     } else {
       throw new RangeError(`알 수 없는 shape kind: ${s.kind}`);
-    }
-  }
-
-  // 음영은 **맨 위**다. 셀과 교차가 0 이라(shading.js 계약) 위에 놓아도 데이터를 못
-  // 가리고, 투명 배경으로 내보내면 이 레이어가 남아 삽입 배경 위에 그대로 얹힌다.
-  // stroke 를 안 준다 — 심 커버는 인접 동일색 도형용이고, 여기 stroke 를 주면 그
-  // 선만 그라데이션 없이 진하게 남는다.
-  if (shading !== null) {
-    for (let i = 0; i < shading.length; i += 1) {
-      const pts = shading[i].points.map((p) => `${n(p.x)},${n(p.y)}`).join(' ');
-      lines.push(`<polygon points="${pts}" fill="url(#tlsh${i})"/>`);
     }
   }
 

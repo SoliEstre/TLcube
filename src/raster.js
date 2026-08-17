@@ -182,39 +182,21 @@ export function rasterize(scene, options) {
     }
   }
 
-  for (const shape of scene.shapes) {
-    const b = shapeBounds(shape);
-    const sxMin = Math.max(0, Math.floor(b.minX * ssPixelsPerUnit));
-    const sxMax = Math.min(ssWidth - 1, Math.ceil(b.maxX * ssPixelsPerUnit));
-    const syMin = Math.max(0, Math.floor(b.minY * ssPixelsPerUnit));
-    const syMax = Math.min(ssHeight - 1, Math.ceil(b.maxY * ssPixelsPerUnit));
-
-    for (let sy = syMin; sy <= syMax; sy += 1) {
-      const sceneY = (sy + 0.5) / ssPixelsPerUnit;
-      for (let sx = sxMin; sx <= sxMax; sx += 1) {
-        const sceneX = (sx + 0.5) / ssPixelsPerUnit;
-        if (!pointInShape(sceneX, sceneY, shape)) continue;
-        const i = sy * ssWidth + sx;
-        const o = i * 3;
-        sub[o] = shape.color.r;
-        sub[o + 1] = shape.color.g;
-        sub[o + 2] = shape.color.b;
-        if (cov !== null) cov[i] = 1;
-      }
-    }
-  }
-
-  // ── 음영 레이어 (scene.shading) ────────────────────────────────────────
+  // ── 음영 레이어 (scene.shading) — **도형보다 먼저** ──────────────────────
   //
-  // **없으면 아래 두 블록이 통째로 건너뛰어진다** — 종전 경로의 출력이 한 바이트도
-  // 안 바뀌게 하려는 것이다. 음영은 반투명이라 «덮였다/안 덮였다» 이진 커버리지로는
-  // 표현이 안 되고, 알파 누산이 필요하다. 그 누산기를 항상 돌리면 부동소수 합산 순서
-  // 때문에 기존 결정성 핀(SHA)이 통째로 흔들린다.
+  // 재배치 (운영자 지시 2026-08-17): 그림자는 물체 **뒤**에 있다. 종전에는 띠가
+  // 도형과 교차 0 이라 위에 얹어도 같았지만, 길이 10× + QR 껍질 제외로 띠가 QR
+  // 블록 영역을 지나게 됐다 — 아래에 깔면 QR·셀이 painter 순서로 자연히 가린다.
+  //
+  // **없으면 이 블록과 아래 alpha 참조가 통째로 건너뛰어진다** — 종전 경로의 출력이
+  // 한 바이트도 안 바뀌게 하려는 것이다. 음영은 반투명이라 «덮였다/안 덮였다» 이진
+  // 커버리지로는 표현이 안 되고, 알파 누산이 필요하다. 그 누산기를 항상 돌리면
+  // 부동소수 합산 순서 때문에 기존 결정성 핀(SHA)이 통째로 흔들린다.
   const shading = Array.isArray(scene.shading) ? scene.shading : null;
   const alpha = shading && shading.length > 0 ? new Float32Array(ssWidth * ssHeight) : null;
   if (alpha !== null) {
+    // 도형이 아직 없다 — 배경 위에서 시작한다 (불투명 = 1, 투명 = 0).
     if (cov === null) alpha.fill(1);
-    else for (let i = 0; i < ssWidth * ssHeight; i += 1) alpha[i] = cov[i];
 
     for (const band of shading) {
       const pts = band.points;
@@ -251,6 +233,30 @@ export function rasterize(scene, options) {
           alpha[i] = outA;
           if (cov !== null) cov[i] = 1;
         }
+      }
+    }
+  }
+
+  for (const shape of scene.shapes) {
+    const b = shapeBounds(shape);
+    const sxMin = Math.max(0, Math.floor(b.minX * ssPixelsPerUnit));
+    const sxMax = Math.min(ssWidth - 1, Math.ceil(b.maxX * ssPixelsPerUnit));
+    const syMin = Math.max(0, Math.floor(b.minY * ssPixelsPerUnit));
+    const syMax = Math.min(ssHeight - 1, Math.ceil(b.maxY * ssPixelsPerUnit));
+
+    for (let sy = syMin; sy <= syMax; sy += 1) {
+      const sceneY = (sy + 0.5) / ssPixelsPerUnit;
+      for (let sx = sxMin; sx <= sxMax; sx += 1) {
+        const sceneX = (sx + 0.5) / ssPixelsPerUnit;
+        if (!pointInShape(sceneX, sceneY, shape)) continue;
+        const i = sy * ssWidth + sx;
+        const o = i * 3;
+        sub[o] = shape.color.r;
+        sub[o + 1] = shape.color.g;
+        sub[o + 2] = shape.color.b;
+        if (cov !== null) cov[i] = 1;
+        // 도형은 불투명이다 — 음영 위에 덮이면 그 서브픽셀은 완전 불투명이 된다.
+        if (alpha !== null) alpha[i] = 1;
       }
     }
   }

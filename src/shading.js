@@ -28,9 +28,12 @@
  * 것은 띠를 «껍질에서 밀어낸 사변형» 으로만 만들기 때문이고, 그래서 이 모듈은 그 형태를
  * 벗어나지 않는다. (테스트가 SAT 로 다시 확인한다 — 증명은 주장이고 측정이 사실이다.)
  *
- * 껍질은 **모든 도형**을 포함해 묶는다. 안전영역은 폴백 QR 블록을 제외하지만(자체 콰이어트
- * 존이 있으니까) 음영은 그러면 안 된다 — 그림자는 «물체 하나» 가 지는 것이고, QR 을
- * 빼면 그 자리에 그림자가 얹혀 교차 0 이 깨진다.
+ * 껍질은 **QR 블록을 제외하고** 묶는다 (운영자 판정 2026-08-17 — 안전영역과 같은
+ * `selfQuietColors` 제외 규칙). 처음엔 «그림자는 물체 하나가 진다» 논지로 QR 을
+ * 포함했는데, 검증 렌즈 실측이 그 결과를 반증했다: QR 이 별도 껍질이 되어 안전영역
+ * 없는 자기 음영 링을 두르고 (흰 배경 코너 QR 에서 10/10 → 0/10 전멸), 미학적으로도
+ * 보조 표식이 본체와 같은 무게의 그림자를 갖는 것이 어색하다. 제외해도 «셀 무접촉»
+ * 증명은 그대로다 — QR 자리는 띠가 아예 안 나므로 교차할 것이 없다.
  *
  * ## 렌더 백엔드 계약
  *
@@ -65,10 +68,21 @@ export const LIGHT_DIRECTION = Object.freeze({ x: 0.8660254037844386, y: 0.5 });
 
 /** 껍질 ↔ 띠 안쪽 모서리 사이 여유 (scene 단위 = 셀 1). 셀 무접촉의 폭이 이 값이다. */
 export const SHADING_GAP = 0.12;
-/** 아래쪽 띠 두께. */
-export const SHADING_LOWER_DEPTH = 1.1;
-/** 위쪽 띠(T면 엣지 아웃라인) 두께 — «아웃라인» 이라 얇다. */
+/**
+ * 아래쪽 띠 두께. 운영자 지시 (2026-08-17) 로 1.1 → **11 (10×)** — 길고 자연스러운
+ * 그림자. Y 기본 margin 20셀 > gap + depth = 11.12 라 기본 캔버스에 항상 들어간다.
+ */
+export const SHADING_LOWER_DEPTH = 11;
+/** 위쪽 띠(T면 엣지 아웃라인) 두께 — «아웃라인» 이라 얇다. 10× 대상 아님. */
 export const SHADING_UPPER_DEPTH = 0.3;
+
+/**
+ * 발산 집중 지수 (운영자 지시 2026-08-17 — «광원이 z축으로 나와 그림자 발산이
+ * 좁아져야»). 아래쪽 띠의 알파에 정렬도^FOCUS 를 걸어 빛 축에서 벗어난 변일수록
+ * 급감시키고, 그라데이션 도달 거리도 정렬도에 비례시킨다 (quad 는 전깊이 —
+ * 그라데이션 종점 뒤는 pad 로 투명이라 기하 이음새 없이 변마다 길이가 준다).
+ */
+export const SHADING_FOCUS = 2;
 
 /** 최대 알파 (실제 알파는 여기에 면 방향 세기 |n·d| 를 곱한 값이다). */
 export const SHADING_SHADOW_ALPHA = 0.34;
@@ -182,7 +196,10 @@ function bandsForHull(hull, opts) {
 
     const dot = nrm.nx * LIGHT_DIRECTION.x + nrm.ny * LIGHT_DIRECTION.y;
     const shadow = dot > 0;
-    const strength = shadow ? dot : -dot;
+    const raw = shadow ? dot : -dot;
+    // 발산 협소화 (SHADING_FOCUS 주석 참조) — 아래쪽 띠만. 위쪽 아웃라인은 «윤곽»
+    // 이라 균등한 것이 맞다.
+    const strength = group === 'lower' ? raw ** SHADING_FOCUS : raw;
     const alpha = (shadow ? shadowAlpha : reflectAlpha) * strength;
     // 8bit 로 굽히면 사라지는 띠는 **아예 안 낸다** — 빛과 거의 평행한 변에서 나온다.
     // 내 봐야 SVG defs 만 늘고 그림은 한 픽셀도 안 바뀐다.
@@ -195,7 +212,9 @@ function bandsForHull(hull, opts) {
     const quad = clipToRect([a, b, c, d2], width, height);
     if (quad.length < 3) continue;
 
-    // 그라데이션 축 = 변 중점에서 법선 방향으로 depth 만큼. 안쪽이 진하고 바깥이 0.
+    // 그라데이션 축 = 변 중점에서 법선 방향. 도달 거리 = depth × 정렬도 (아래쪽 띠) —
+    // 빛 축에 정렬된 변은 전깊이, 벗어난 변은 짧게. 종점 뒤는 pad 라 투명하다.
+    const reach = group === 'lower' ? depth * raw : depth;
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2;
     bands.push({
@@ -206,8 +225,8 @@ function bandsForHull(hull, opts) {
       gradient: {
         x1: mx,
         y1: my,
-        x2: mx + nrm.nx * depth,
-        y2: my + nrm.ny * depth,
+        x2: mx + nrm.nx * reach,
+        y2: my + nrm.ny * reach,
         a1: alpha,
         a2: 0,
       },
@@ -238,9 +257,9 @@ export function shadingBands(scene, opts = {}) {
   const lowerDepth = opts.lowerDepth === undefined ? SHADING_LOWER_DEPTH : opts.lowerDepth;
   const upperDepth = opts.upperDepth === undefined ? SHADING_UPPER_DEPTH : opts.upperDepth;
 
-  // 껍질은 **모든 도형**을 묶는다 (모듈 상단 «셀 무접촉» 참조 — QR 을 빼면 그 자리에
-  // 그림자가 얹힌다).
-  const hulls = markHulls(scene, clusterGap);
+  // 껍질은 QR 블록을 제외하고 묶는다 (모듈 상단 주석 — 운영자 판정 2026-08-17,
+  // 안전영역과 같은 selfQuietColors 규칙).
+  const hulls = markHulls(scene, clusterGap, opts.selfQuietColors);
   const bands = [];
   for (const hull of hulls) {
     bands.push(...bandsForHull(hull, {

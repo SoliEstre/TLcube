@@ -134,21 +134,82 @@ const CASES = [
   { name: 'Y1 CS v0x', opts: { version: 1, tones: 3, layout: 'v0x' } },
 ];
 
+// ⚠ **의도적 갱신 (2026-08-17, 운영자 지시 — 길이 10×·QR 제외·발산 협소화)**:
+//   길어진 띠는 QR 블록 «영역» 을 지날 수 있다. 계약이 바뀐 것이지 풀린 것이 아니다 —
+//   ① 코드 본체 도형과의 기하 무접촉은 그대로 전수 검사하고 ② QR 패치 색으로만 이뤄진
+//   도형은 기하 검사에서 빼되, 렌더 순서가 도형 **아래**라 QR 이 가린다는 사실을 아래
+//   «가림 실증» 픽셀 테스트가 잰다. 같은 두 색을 쓰는 불스아이는 코드 껍질 안에 있어
+//   띠가 애초에 못 닿는다 — 빼도 잃는 검사가 없다.
+const QR_PATCH_COLORS = [PALETTE.bullseyeLight, PALETTE.bullseyeDark];
+const isQrColored = (shape) => QR_PATCH_COLORS.some(
+  (c) => c.r === shape.color.r && c.g === shape.color.g && c.b === shape.color.b,
+);
+
 for (const { name, opts } of CASES) {
-  test(`셀 무접촉 — ${name}: 음영 폴리곤이 어떤 도형과도 안 겹친다`, () => {
+  test(`셀 무접촉 — ${name}: 음영 폴리곤이 코드 본체 도형과 안 겹친다`, () => {
     const scene = sceneFor(opts);
-    const bands = shadingBands(scene, { mode: SHADING_ON, rim: true, clusterGap: 2 });
+    // 프로덕션 호출 (index.html withShading) 과 동일하게 QR 클러스터를 껍질에서 제외.
+    const bands = shadingBands(scene, {
+      mode: SHADING_ON, rim: true, clusterGap: 2, selfQuietColors: QR_PATCH_COLORS,
+    });
     assert.ok(bands.length >= 4, `띠가 너무 적다(${bands.length}) — 껍질 계산이 죽었을 수 있다`);
     const shapes = scene.shapes.map(shapePolygon);
     for (const band of bands) {
       for (let i = 0; i < shapes.length; i += 1) {
+        if (isQrColored(scene.shapes[i])) continue;
         assert.equal(polygonsIntersect(band.points, shapes[i]), false,
           `${name}: ${band.group}/${band.role} 띠가 shape[${i}](${scene.shapes[i].kind}) 와 겹친다 — `
-          + '음영은 안전영역 + 배경 영역에만 그려야 한다');
+          + '음영은 코드 본체에 닿으면 안 된다');
       }
     }
   });
 }
+
+test('가림 실증 — 음영은 도형 아래라 QR 블록 픽셀이 음영을 켜도 안 변한다', () => {
+  const scene = sceneFor({ version: 1, tones: 3, qr: true, qrCorner: 'TL' });
+  const shaded = addShading(scene, {
+    mode: SHADING_ON, rim: true, clusterGap: 2, selfQuietColors: QR_PATCH_COLORS,
+  });
+  const plain = rasterize(scene, { pixelsPerUnit: 4, supersample: 1 });
+  const withBands = rasterize(shaded, { pixelsPerUnit: 4, supersample: 1 });
+  // QR 블록의 콰이어트 패치 = 가장 넓은 QR-밝은색 폴리곤. 그 bbox 안은 전부 패치가
+  // 덮으므로 (다크 모듈은 그 위) 모든 픽셀이 «도형이 그린 자리» 다 — 배경 픽셀이
+  // 섞이면 밴드가 정당하게 보이는 자리까지 비교해 거짓 실패가 난다 (초판 실수).
+  let best = null; let bestArea = -1;
+  for (const s of scene.shapes) {
+    if (s.kind !== 'polygon') continue;
+    const c = PALETTE.bullseyeLight;
+    if (!(s.color.r === c.r && s.color.g === c.g && s.color.b === c.b)) continue;
+    let bxMin = Infinity; let byMin = Infinity; let bxMax = -Infinity; let byMax = -Infinity;
+    for (const p of s.points) {
+      if (p.x < bxMin) bxMin = p.x;
+      if (p.y < byMin) byMin = p.y;
+      if (p.x > bxMax) bxMax = p.x;
+      if (p.y > byMax) byMax = p.y;
+    }
+    const area = (bxMax - bxMin) * (byMax - byMin);
+    if (area > bestArea) { bestArea = area; best = { bxMin, byMin, bxMax, byMax }; }
+  }
+  assert.ok(best, 'QR 콰이어트 패치를 못 찾았다');
+  const minX = best.bxMin; const minY = best.byMin;
+  const maxX = best.bxMax; const maxY = best.byMax;
+  assert.ok(minX < maxX, 'QR 패치 bbox 가 비었다');
+  const ppu = 4;
+  let checked = 0;
+  for (let py = Math.ceil(minY * ppu) + 1; py < Math.floor(maxY * ppu) - 1; py += 1) {
+    for (let px = Math.ceil(minX * ppu) + 1; px < Math.floor(maxX * ppu) - 1; px += 1) {
+      const o = (py * plain.width + px) * 4;
+      // 도형이 실제로 덮은 픽셀만 비교한다 (bbox 안 빈틈은 띠가 정당하게 채운다).
+      if (plain.pixels[o + 3] === 0) continue;
+      for (let ch = 0; ch < 4; ch += 1) {
+        assert.equal(withBands.pixels[o + ch], plain.pixels[o + ch],
+          `(${px},${py}) ch${ch}: 도형 픽셀이 음영으로 변했다 — 렌더 순서가 위로 돌아갔다`);
+      }
+      checked += 1;
+    }
+  }
+  assert.ok(checked > 100, `비교한 픽셀이 너무 적다 (${checked})`);
+});
 
 test('셀 무접촉의 폭은 SHADING_GAP 이다 — 껍질 변마다 분리축이 산다', () => {
   const scene = sceneFor({ version: 1, tones: 3 });
