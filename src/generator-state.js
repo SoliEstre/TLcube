@@ -24,9 +24,9 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
-  LOCATOR_PROFILE_CELL_SURFACE_V0X,
-  // ⚠ `LOCATOR_PROFILE_CELL_SURFACE_V0XQ` 는 2026-08-17 드랍으로 여기서 빠졌다
-  //   (v1r2·v2r2 와 같은 전례 — 상수 자체는 `locatorY.js` 에 그대로 산다).
+  // ⚠ `LOCATOR_PROFILE_CELL_SURFACE_V0XQ`(2026-08-17 2라운드) 와
+  //   `LOCATOR_PROFILE_CELL_SURFACE_V0X`(2026-08-17 3라운드) 는 드랍으로 여기서
+  //   빠졌다 (v1r2·v2r2 와 같은 전례 — 상수 자체는 `locatorY.js` 에 그대로 산다).
   LOCATOR_PROFILE_HEX_FRAME_V1,
   LOCATOR_PROFILE_OFF,
 } from './locatorY.js';
@@ -117,7 +117,7 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
     [TL_READER_URL, 'https://example.com/fallback']),
   qrCornerToo: field(false, ADVANCED, [false, true]),
   // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 보여 주지 않고 항상 off.
-  // 라인업(2026-08-17 v0XQ 드랍까지 반영): v0 = Y0(n=13) · v0X = Y1(n=21) ·
+  // 라인업(2026-08-17 v0XQ·v0X 드랍까지 반영): v0 = Y0(n=13) ·
   // v0W = Y1 신설 · v0WQ = v0W 파생 ①(중앙 QR) · v0W2 = v0W 파생 ②(SE 6×6 대형 마커).
   //
   // **v2r2 · v1r2 드랍 (운영자 확정 2026-08-16)** — 허용값에서 내린다. 효과는 UI
@@ -125,20 +125,23 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // «저장값 폴백» 은 해당 없음 — 이 목록의 소비자는 현재 테스트뿐이다. 검증 렌즈
   // 2026-08-17 정정: 복원기가 생기는 날 이 목록이 그 검증 기준이 된다.)
   //
-  // **v0XQ 드랍 (운영자 실기기 확정 2026-08-17)** — 같은 규약으로 허용값에서 내린다.
-  // 조건부 드랍 규칙 «v0WQ > v0XQ» 가 실기기 순위(v0WQ ≫ v0XQ > v0X ≈ v0W)로
+  // **v0XQ 드랍 (운영자 실기기 확정 2026-08-17, 2라운드)** — 같은 규약으로 허용값에서
+  // 내린다. 조건부 드랍 규칙 «v0WQ > v0XQ» 가 실기기 순위(v0WQ ≫ v0XQ > v0X ≈ v0W)로
   // 성립했다. 남는 중앙 QR 카드는 v0WQ 하나다.
+  //
+  // **v0X 드랍 (운영자 실기기 확정 2026-08-17, 3라운드)** — 또 같은 규약이다.
+  // 관측 「파인더 인식 다 해놓고도 잘 못 읽음」 + 「v0 과 혼선 자주」. 남는 Y1 카드는
+  // v0W 계열 셋(v0W · v0WQ · v0W2)뿐이고, 이제 카드 라인업이 **전부 v0W 계열**이다.
   //
   // 와이어·정본·디코더 판독 능력은 그대로다 (`cellSurfaceFinal.js`
   // §CELL_SURFACE_FINAL_DROPPED_IDS — 차단·비삭제). `encodeOptionsForY` 의
-  // v0XQ 분기도 **남긴다** — 이미 발행된 출력물의 재생성 경로다.
+  // v0XQ·**v0X** 분기도 **남긴다** — 이미 발행된 출력물의 재생성 경로다.
   // hex-frame-v1 은 그것대로 UI 카드만 내리고 값은 살려 둔 채다(다른 전례).
   locatorProfileY: field(DEFAULT_LOCATOR_PROFILE_Y, INTERNAL,
     [
       LOCATOR_PROFILE_OFF,
       LOCATOR_PROFILE_HEX_FRAME_V1,
       LOCATOR_PROFILE_CELL_SURFACE_V0,
-      LOCATOR_PROFILE_CELL_SURFACE_V0X,
       LOCATOR_PROFILE_CELL_SURFACE_V0W,
       LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
       LOCATOR_PROFILE_CELL_SURFACE_V0W2,

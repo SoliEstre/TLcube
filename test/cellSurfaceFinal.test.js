@@ -134,7 +134,7 @@ test('formatIndex 배정 — 한 쌍 (2T=1 · 3T=3), cube 축 기사용 슬롯�
   }
 });
 
-test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0x/Y1 · 25→**공백**), 와이어는 보존', () => {
+test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0w/Y1 · 25→**공백**), 와이어는 보존', () => {
   // ── 갱신 이력 (아래 단언이 정본이고, 이 줄들은 «어떻게 여기까지 왔나» 다) ──
   //   2026-08-15 밤: v1r2 가 n=21 A/B 후보로 부활 — 기본은 v2r2 유지.
   //   2026-08-16:    v0X 편입으로 n=21 후보 셋 — 기본은 v2r2 유지.
@@ -174,20 +174,35 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0x/Y1 · 25→**공백
   // (손 표는 SE 의 R 면 36값 하나뿐 — `cellSurfaceFinal.js` §V0W2_CELLS).
   // 근거·측정: `test/output/claude-v0w2-program.md` ·
   // `test/output/lanes/claude-v0w2-{derive,render,probe}.mjs`.
+  //
+  // **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드)** —
+  // 관측 「파인더 인식 다 해놓고도 잘 못 읽음」 + 「v0 과 혼선 자주」. 2라운드의
+  // «v0W ≈ v0X» 는 v0W2 가 없던 판정이었고, v0W2 편입(margin 0.1512 = 활성 최고)
+  // 으로 그 자리가 채워졌다. 그래서 `CELL_SURFACE_FINAL_DROPPED_IDS` 에 `v0x` 가
+  // 붙고 — **이 드랍만 기본을 바꾼다**:
+  //   · `finalLayoutIdsForN(21)` = **[v0w, v0wq, v0w2]** (넷 → 셋)
+  //   · `finalLayoutIdForN(21)` = **v0w**  ← 앞선 세 드랍과 달리 «기본 자체» 가
+  //     빠져서, 선언 순서의 다음(v0w)이 승계한다. 순위 재산정이 아니라 승계다.
+  // 와이어(`CELL_SURFACE_FINAL_IDS` 여덟 · `wirePreferredFinalLayoutIdForN(21)`
+  // = v2r2)는 한 줄도 안 바뀐다. 정본 배열도 그대로다 — `V0X_CELLS` 는 활성
+  // 레이아웃 **v0W2 의 SE(T/L) 유도 원천**이라 지우면 v0W2 가 무너진다.
+  // 근거·측정: `test/output/claude-v0wy-program.md`.
   assert.deepEqual([...CELL_SURFACE_FINAL_IDS],
     ['v0', 'v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2']);
-  assert.deepEqual([...CELL_SURFACE_FINAL_DROPPED_IDS], ['v2r2', 'v1r2', 'v0xq']);
-  assert.deepEqual([...CELL_SURFACE_FINAL_ACTIVE_IDS], ['v0', 'v0x', 'v0w', 'v0wq', 'v0w2']);
+  assert.deepEqual([...CELL_SURFACE_FINAL_DROPPED_IDS], ['v2r2', 'v1r2', 'v0xq', 'v0x']);
+  assert.deepEqual([...CELL_SURFACE_FINAL_ACTIVE_IDS], ['v0', 'v0w', 'v0wq', 'v0w2']);
   assert.equal(finalLayoutIdForN(13), 'v0');
-  assert.equal(finalLayoutIdForN(21), 'v0x');
+  assert.equal(finalLayoutIdForN(21), 'v0w');
   assert.equal(finalLayoutIdForN(25), null);
   assert.equal(finalLayoutIdForN(11), null);
   assert.deepEqual([...finalLayoutIdsForN(13)], ['v0']);
-  assert.deepEqual([...finalLayoutIdsForN(21)], ['v0x', 'v0w', 'v0wq', 'v0w2']);
+  assert.deepEqual([...finalLayoutIdsForN(21)], ['v0w', 'v0wq', 'v0w2']);
   assert.deepEqual([...finalLayoutIdsForN(25)], []);
   assert.deepEqual([...finalLayoutIdsForN(11)], []);
-  // 와이어 질의는 드랍을 보지 않는다 — 발행된 v2r2@21/@25 · v0xq@21 프레임의 판독 경로다.
+  // 와이어 질의는 드랍을 보지 않는다 — 발행된 v2r2@21/@25 · v0xq@21 · **v0x@21**
+  // 프레임의 판독 경로다.
   assert.equal(cellSurfaceFinal(21, 'v0xq').id, 'v0xq');
+  assert.equal(cellSurfaceFinal(21, 'v0x').id, 'v0x');
   assert.deepEqual([...allFinalLayoutIdsForN(21)],
     ['v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2']);
   assert.equal(hasFinalLayoutWireForN(13), true);
@@ -370,7 +385,7 @@ function idealSampleCellFor(n, cycle = ['T', 'L', 'R'], id = undefined) {
   };
 }
 
-test('방향 margin — 활성 4종 + 드랍 2종 전수 (v0 0.311 · v0x 0.123 · v0xq 0.064 · v0w 0.095 · v0wq 0.089)', () => {
+test('방향 margin — 활성 4종 + 드랍 5행 전수 (활성 v0 0.311 · v0w 0.095 · v0wq 0.089 · v0w2 0.151)', () => {
   // margin = 1 − (오방향 최대 일치율). v0 오방향 68.9% → margin 0.311.
   // 의도적 갱신 (2026-08-16): v2r2 중앙이 v1r2 NW 5×5 공유로 교체되며 margin 이
   // 0.2462 → 0.2342 로 재검산됐다 (공유 불스아이 중앙은 회전 대칭성이 높지만 블록 B
@@ -397,17 +412,39 @@ test('방향 margin — 활성 4종 + 드랍 2종 전수 (v0 0.311 · v0x 0.123 
   // 가장 두껍고 게이트 0.035 의 4.3배다. 게이트는 한 값도 안 건드렸다 —
   // 두꺼워진 것은 문턱이 아니라 **정본의 비대칭 셀 수**다.
   // 측정: `test/output/lanes/claude-v0w2-probe.mjs` §①.
-  const wantMargin = [
+  //
+  // **의도적 갱신 «v0X 드랍» (2026-08-17, 판정 3라운드)** — **값은 한 자리도 안
+  // 바뀐다.** 바뀐 것은 소속뿐이라 v0x 행을 «드랍 보존» 팔로 옮긴다 (margin 은
+  // 레이아웃 고유의 기하 성질이지 라인업 소속이 아니라는 위 2026-08-16 판단의
+  // 연장이다). 두 팔을 나눠 두면 «활성 최소 margin» 을 사람이 눈으로 읽을 수
+  // 있다 — 지금 활성 최소는 v0wq 0.0889 (게이트 0.035 의 2.54배)이고,
+  // v0X 가 있던 시절 활성 최고였던 0.1231 은 이제 v0W2 의 0.1512 로 대체됐다.
+  const WANT_MARGIN_ACTIVE = [
     { n: 13, id: 'v0', margin: 0.3111 },
+    { n: 21, id: 'v0w', margin: 0.0952 },
+    { n: 21, id: 'v0wq', margin: 0.0889 },
+    { n: 21, id: 'v0w2', margin: 0.1512 },
+  ];
+  // 드랍 보존 팔 — 차단이지 삭제가 아니므로 값이 그대로 살아 있어야 한다.
+  const WANT_MARGIN_DROPPED = [
     { n: 21, id: 'v2r2', margin: 0.2342 },
     { n: 25, id: 'v2r2', margin: 0.2342 },
     { n: 21, id: 'v1r2', margin: 0.1500 },
     { n: 21, id: 'v0x', margin: 0.1231 },
     { n: 21, id: 'v0xq', margin: 0.0635 },
-    { n: 21, id: 'v0w', margin: 0.0952 },
-    { n: 21, id: 'v0wq', margin: 0.0889 },
-    { n: 21, id: 'v0w2', margin: 0.1512 },
   ];
+  // 두 팔의 id 집합이 실제 라인업과 어긋나면 이 표가 조용히 낡는다 — 함께 잰다.
+  assert.deepEqual(
+    [...new Set(WANT_MARGIN_ACTIVE.map((row) => row.id))].sort(),
+    [...CELL_SURFACE_FINAL_ACTIVE_IDS].sort(),
+    '활성 팔이 CELL_SURFACE_FINAL_ACTIVE_IDS 와 어긋난다',
+  );
+  assert.deepEqual(
+    [...new Set(WANT_MARGIN_DROPPED.map((row) => row.id))].sort(),
+    [...CELL_SURFACE_FINAL_DROPPED_IDS].sort(),
+    '드랍 팔이 CELL_SURFACE_FINAL_DROPPED_IDS 와 어긋난다',
+  );
+  const wantMargin = [...WANT_MARGIN_ACTIVE, ...WANT_MARGIN_DROPPED];
   for (const { n, id, margin: want } of wantMargin) {
     const label = id + '@' + n;
     const canon = evaluateCellSurfaceGeometry(
@@ -551,7 +588,8 @@ test('v1r2 렌더 자체 검증 — verifyRasterY 전 셀 일치 (2톤·3톤)', 
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// v0X (n=21 3파전 후보) — 2026-08-16 편입. QR 파인더 문법 차용 v0 확장.
+// v0X — 2026-08-16 편입(당시 n=21 3파전 후보) · **2026-08-17 드랍**(판정 3라운드).
+// 아래 회계·구조·왕복 회귀는 드랍 뒤에도 그대로다 — 차단이지 삭제가 아니다.
 // 정본은 toneOverrides 셀 집합(65)에서 유도했다 — 손 좌표표 사본이 아니다.
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -821,12 +859,19 @@ function idealSampleCellForEncoded(encoded, cycle = ['T', 'L', 'R']) {
 // 검사가 3-way 로 넓어진다. 게이트(0.78 / 0.035)는 그대로다.
 // 의도적 갱신 (2026-08-17): v0XQ 편입으로 **4-way**. v0XQ 는 파인더 42셀뿐이라
 // 표본이 가장 적은 후보다 — 교차 오수용 검사가 특히 중요하다.
-test('n=21 병행 평가 — 네 후보를 다 채점하고 게이트가 고른다 (교차 오수용 없음)', () => {
+test('n=21 병행 평가 — 드랍 4후보를 다 채점하고 게이트가 고른다 (교차 오수용 없음)', () => {
   // **의도적 갱신 «드랍 정본화» (2026-08-16)** — v2r2·v1r2 가 라인업에서 내려가
   // 기본 후보는 [v0x, v0xq] 둘이다. 이 테스트의 값은 «네 레이아웃이 서로를
   // 오수용하지 않는다» 는 **교차 오수용 대조군**이라 넷을 그대로 유지한다 —
   // 라인업 대신 `cellSurfaceLayouts` **명시 옵션**으로 넷을 채점시킨다
   // (법의학·대조군 경로. 게이트 0.78 · margin 0.035 는 한 값도 안 건드렸다).
+  //
+  // **의도적 갱신 «v0X 드랍» (2026-08-17, 판정 3라운드)** — 이제 이 네 후보가
+  // **전부 드랍 상태**다. 그래도 한 줄도 안 지운다 (대조군 폐기 금지): 발행된
+  // 프레임의 법의학 경로이고, «드랍된 것들끼리도 서로 안 새는가» 는 여전히
+  // 참이어야 하는 명제다. 활성 라인업(v0w·v0wq·v0w2)의 같은 검사는 **아래
+  // 별도 테스트**가 맡는다 — 둘을 한 테스트에 합치면 어느 쪽이 깨졌는지
+  // 이름으로 못 읽는다.
   const outcome = {};
   const N21 = ['v2r2', 'v1r2', 'v0x', 'v0xq'];
   const scoreAll = { cellSurfaceLayouts: N21 };
@@ -880,6 +925,130 @@ test('n=21 병행 평가 — 네 후보를 다 채점하고 게이트가 고른�
       outcome[layout].margin >= UNVERIFIED_CELL_SURFACE_Y.minimumOrientationMargin,
       layout + ' margin ' + outcome[layout].margin,
     );
+  }
+});
+
+/**
+ * **v0X 드랍 후 남은 라인업의 교차 수용 전수 재확인** (2026-08-17, 판정 3라운드).
+ *
+ * 왜 위 4-way 로 안 되나: 위 표는 **드랍된 넷**끼리의 대조군이라, 오늘 실제로
+ * 스캐너가 채점하는 조합을 한 칸도 안 잰다. 운영자 관측 「v0 과 혼선 자주」 는
+ * «라인업 안에서 서로 샌다» 는 신고이므로, 드랍 뒤 남은 조합을 **라인업에서 직접
+ * 유도해** 다시 건다 (목록을 손으로 적으면 다음 편입에서 조용히 낡는다).
+ *
+ * ⚠ **이 테스트는 «교차 0» 이라고 주장하지 않는다 — 그러면 거짓말이 된다.**
+ * 이 파일의 표본기(`idealSampleCellForEncoded`)는 슬롯 셀을 «관측 없음» 으로
+ * 돌리는데, v0WQ 의 슬롯 64셀 안에 **v0W 로케이터 25셀(NW K3)이 통째로 들어간다**.
+ * 그래서 이 모델에서는 v0W ↔ v0WQ 가 **서로 agreement 1.0 으로 수용된다** —
+ * 실측 (`test/output/lanes/claude-v0wy-crossmatrix.mjs`):
+ *   · locator(v0wq) 45셀은 locator(v0w) 70셀의 **부분집합이고 톤까지 45/45 일치**
+ *   · 남는 25셀은 전부 v0wq 슬롯 안 → 분모에서 빠짐 → 양쪽 다 1.0
+ * 이것은 **드랍이 만든 것이 아니다** (드랍 전 7후보 전수에서도 같은 두 칸이고,
+ * 그 두 칸이 전부다). 모델의 성질이지 포맷의 성질이 아니므로, 실물 판정은 실제
+ * 래스터를 쓰는 `cellSurface-block-locator.test.js` §«v0W2 교차 오수용 0 — 양방향
+ * 전수» 가 한다 — 거기서는 슬롯 자리에 진짜 픽셀(QR 모듈·필러)이 있어 v0W 의
+ * NW 기대가 실제로 어긋난다.
+ *
+ * 그래서 여기서 잠그는 것은 **«별칭 쌍이 정확히 그 하나뿐이고 원인이 구조적으로
+ * 고정돼 있다»** 이다. 새 레이아웃이 또 하나의 부분집합 별칭을 만들면 여기서 빨개진다.
+ *
+ * n=13 의 v0 는 여기 못 들어온다 — 격자 크기가 달라 같은 프레임에서 경쟁하지
+ * 않는다. v0 ↔ n=21 축(운영자 «v0 과 혼선»)은 **기하 가설 단계**라 같은 래스터
+ * 테스트가 맡는다. 게이트(0.78 · 0.035)는 한 값도 안 건드렸다.
+ */
+test('n=21 활성 라인업 교차 수용 — 별칭은 v0w↔v0wq 한 쌍뿐이고 원인이 구조적이다', () => {
+  const ACTIVE21 = [...finalLayoutIdsForN(21)];
+  assert.deepEqual(ACTIVE21, ['v0w', 'v0wq', 'v0w2'],
+    '활성 n=21 라인업이 바뀌었다 — 이 표를 재산정하라');
+
+  // ① 별칭의 **원인**을 먼저 못 박는다 (증상보다 기전을 잠근다).
+  const cellKey = (c) => c.i + ',' + c.j;
+  const toneKey = (c) => cellKey(c) + ':' + c.T + c.L + c.R;
+  const v0wLoc = locatorCellsCellSurfaceFinal(21, 'v0w');
+  const v0wqLoc = locatorCellsCellSurfaceFinal(21, 'v0wq');
+  const v0wByKey = new Map(v0wLoc.map((c) => [cellKey(c), c]));
+  assert.equal(
+    v0wqLoc.filter((c) => {
+      const twin = v0wByKey.get(cellKey(c));
+      return twin !== undefined && toneKey(twin) === toneKey(c);
+    }).length,
+    v0wqLoc.length,
+    'v0wq 로케이터가 v0w 로케이터의 «톤까지 같은» 부분집합이 아니다 — 별칭 기전이 바뀌었다',
+  );
+  const slotKeys = new Set(slotCellsCellSurfaceFinal(21, 'v0wq').map(cellKey));
+  assert.equal(
+    v0wLoc.filter((c) => slotKeys.has(cellKey(c))).length,
+    v0wLoc.length - v0wqLoc.length,
+    'v0w 의 나머지 로케이터 셀이 v0wq 슬롯 안에 전부 들어가지 않는다 — 별칭 기전이 바뀌었다',
+  );
+
+  // ② 별칭 목록 자체 — 실측한 값을 그대로 핀한다 («0» 이라고 적으면 거짓말이 된다).
+  //    측정: `test/output/lanes/claude-v0wy-crossmatrix.mjs` (드랍 전 7후보 전수와
+  //    드랍 후 3후보가 **같은 칸**을 낸다 — 드랍이 만든 것이 아니다).
+  const ALIASED_UPRIGHT = ['v0w|v0wq', 'v0wq|v0w'];
+  // ⚠ **회전 별칭 핀** — v0WQ 프레임을 면 순환 L→R→T 로 돌리면 v0W2 가
+  //    agreement 0.8241 (관측 72셀) 로 수용되고 **뽑히기까지 한다**. 원인은 위 ①
+  //    과 같다: v0w2 로케이터 97셀 중 25셀이 v0wq 슬롯 안이라 분모에서 빠진다.
+  //    실물 래스터에서는 그 자리에 진짜 QR 모듈·필러 픽셀이 있어 재현되지 않는다
+  //    (`cellSurface-block-locator.test.js` §«v0WQ 교차 오수용 0 — 양방향 전수» 가
+  //    rot 0/120/240 을 실제 이미지로 돌려 v0wq 로 복호되는 것을 고정한다).
+  //    **이 핀은 완화가 아니라 결함의 좌표다** — 초록이 되면 그것도 재측정 신호다.
+  const ALIASED_ROTATED = ['v0wq|LRT|v0w2'];
+  const scoreAll = { cellSurfaceLayouts: ACTIVE21 };
+  const seenUpright = [];
+  const seenRotated = [];
+  for (const layout of ACTIVE21) {
+    const encoded = encodeY(PAYLOAD, {
+      cellSurfaceLayout: layout, version: 1, tones: 2, eccLevel: 'M',
+    });
+    const scored = evaluateCellSurfaceGeometry(
+      { n: 21 }, idealSampleCellForEncoded(encoded), scoreAll,
+    );
+    assert.equal(scored.ok, true, layout + ' 평가 실패');
+    assert.deepEqual(Object.keys(scored.diagnostics.layouts).sort(), [...ACTIVE21].sort());
+    assert.equal(scored.accepted, true, layout + ' 정답 레이아웃이 수용되지 않았다');
+    assert.equal(scored.diagnostics.layouts[layout].agreement, 1, layout + ' 정방향 일치율');
+    for (const rival of ACTIVE21) {
+      if (rival === layout) continue;
+      if (scored.diagnostics.layouts[rival].accepted) seenUpright.push(layout + '|' + rival);
+    }
+    for (const cycle of [['L', 'R', 'T'], ['R', 'T', 'L']]) {
+      const wrong = evaluateCellSurfaceGeometry(
+        { n: 21 }, idealSampleCellForEncoded(encoded, cycle), scoreAll,
+      );
+      for (const rival of ACTIVE21) {
+        if (wrong.diagnostics.layouts[rival].accepted) {
+          seenRotated.push(layout + '|' + cycle.join('') + '|' + rival);
+        }
+      }
+    }
+    // ③ 드랍된 v0X 가 «채점 대상» 으로 조용히 돌아오지 않았는가 — 기본 라인업 경로.
+    const lineup = evaluateCellSurfaceGeometry(
+      { n: 21 }, idealSampleCellForEncoded(encoded), {},
+    );
+    assert.deepEqual(Object.keys(lineup.diagnostics.layouts).sort(), [...ACTIVE21].sort(),
+      layout + ': 기본 라인업 채점 대상이 활성 3후보가 아니다');
+  }
+  assert.deepEqual(seenUpright.sort(), [...ALIASED_UPRIGHT].sort(),
+    '정방향 별칭이 v0w↔v0wq 한 쌍이 아니다 — 새 별칭이 생겼거나 옛 별칭이 사라졌다');
+  assert.deepEqual(seenRotated.sort(), [...ALIASED_ROTATED].sort(),
+    '회전 별칭 집합이 바뀌었다 — 위 «회전 별칭 핀» 주석을 실측으로 갱신하라');
+
+  // ④ 드랍이 **타이브레이크를 바꿨다** — 그 사실 자체를 고정한다.
+  //    `pickBetterLayout` 은 accepted·agreement 동률이면 «그 n 의 기본» 을 고른다.
+  //    기본이 v0x 였던 시절 별칭 쌍(v0w·v0wq)에는 기본이 없어 **후보 목록 순서**가
+  //    결정했고, 지금은 기본이 v0w 라 **순서와 무관하게** v0w 가 이긴다.
+  //    실제 라인업 순서에서는 결과가 같지만(v0w 가 앞), 결정 근거가 «순서» 에서
+  //    «기본» 으로 옮겨 왔으므로 재정렬에 흔들리지 않는다.
+  const v0wqFrame = encodeY(PAYLOAD, {
+    cellSurfaceLayout: 'v0wq', version: 1, tones: 2, eccLevel: 'M',
+  });
+  for (const order of [['v0w', 'v0wq', 'v0w2'], ['v0wq', 'v0w', 'v0w2'], ['v0w2', 'v0wq', 'v0w']]) {
+    const picked = evaluateCellSurfaceGeometry(
+      { n: 21 }, idealSampleCellForEncoded(v0wqFrame), { cellSurfaceLayouts: order },
+    ).scored.layoutId;
+    assert.equal(picked, 'v0w',
+      '후보 순서 [' + order.join(',') + '] 에서 타이브레이크가 기본(v0w)을 안 따랐다');
   }
 });
 

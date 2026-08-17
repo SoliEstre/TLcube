@@ -103,11 +103,14 @@ function locatorCardOrder(html) {
 // 남는 중앙 QR 카드는 v0WQ 하나다.
 // **의도적 갱신 «v0W2 편입» (운영자 신설 설계 2026-08-17)** — v0W2 카드가 v0WQ 뒤에
 // 붙었다 (`CELL_SURFACE_FINAL_IDS` 선언 순서 그대로). 기본은 여전히 v0X 다.
+// **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드)** —
+// v0X 카드를 내려 일곱 → 여섯이 됐고, 이제 Y1 카드는 **전부 v0W 계열**이다.
+// 사전 키(g602/g603/g944)는 여덟 언어 모두 보존된다 (locatorY-lab.test.js 가 고정).
 const LOCATOR_CARD_ORDER = Object.freeze([
-  'auto', 'off', 'cell-surface-v0', 'cell-surface-v0x',
+  'auto', 'off', 'cell-surface-v0',
   'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2',
 ]);
-test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0X → v0W → v0WQ → v0W2 다 (v0 계열만)', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0W → v0WQ → v0W2 다 (v0 계열만)', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 

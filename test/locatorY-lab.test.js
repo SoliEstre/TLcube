@@ -76,13 +76,18 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
   //
   // **의도적 갱신 «v0W2 편입» (운영자 신설 설계 2026-08-17)** — 허용값 맨 뒤에
   // v0W2. 카드도 함께 났다 (아래 `data-locator="cell-surface-v0w2"` 단언).
+  //
+  // **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드)** —
+  // v2r2·v1r2·v0XQ 와 같은 규약으로 허용값에서 뺐다 («파인더 인식 다 해놓고도 잘
+  // 못 읽음 + v0 과 혼선 자주»). 그래서 **남은 셀 표면 카드는 전부 v0W 계열**이다.
+  // 상수는 `locatorY.js` 에 그대로 살아 있고 `encodeOptionsForY` 의 v0X 분기도
+  // 남아 있다 — 발행분 재생성 경로다.
   assert.deepEqual(
     [...GENERATOR_STATE_SCHEMA.locatorProfileY.options],
     [
       LOCATOR_PROFILE_OFF,
       LOCATOR_PROFILE_HEX_FRAME_V1,
       LOCATOR_PROFILE_CELL_SURFACE_V0,
-      LOCATOR_PROFILE_CELL_SURFACE_V0X,
       LOCATOR_PROFILE_CELL_SURFACE_V0W,
       LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
       LOCATOR_PROFILE_CELL_SURFACE_V0W2,
@@ -92,7 +97,7 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
   // 현재 존재하지 않는다 — 생기는 날 이 목록이 검증 기준이 된다.
   for (const dropped of [
     LOCATOR_PROFILE_CELL_SURFACE_V2R2, LOCATOR_PROFILE_CELL_SURFACE_V1R2,
-    LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
+    LOCATOR_PROFILE_CELL_SURFACE_V0XQ, LOCATOR_PROFILE_CELL_SURFACE_V0X,
   ]) {
     assert.equal(
       GENERATOR_STATE_SCHEMA.locatorProfileY.options.includes(dropped), false,
@@ -112,7 +117,6 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-i18n="g515"/);
   assert.match(INDEX, /data-locator="off"/);
   assert.match(INDEX, /data-locator="cell-surface-v0"/);
-  assert.match(INDEX, /data-locator="cell-surface-v0x"/);
   assert.match(INDEX, /data-locator="cell-surface-v0w"/);
   // 의도적 갱신 «v0W 파생 2종 편입» (2026-08-16): v0WQ 카드 신설. v0WY 는 **카드가
   // 여기 없다** — QR 위치 카드('plane')로 붙었고, 아래 별도 단언이 그것을 고정한다.
@@ -129,9 +133,15 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   // 여덟 언어 모두 남아 있고(아래 문구 테스트가 고정), 와이어·판독은 그대로다.
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v2r2"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v1r2"/);
-  // **의도적 갱신 «v0XQ 드랍» (운영자 실기기 확정 2026-08-17)** — 같은 규약이다.
-  // 사전 키(g604/g605/g947)는 3언어 모두 남는다 (아래 문구 테스트가 고정).
+  // **의도적 갱신 «v0XQ 드랍» (운영자 실기기 확정 2026-08-17, 2라운드)** — 같은 규약이다.
+  // 사전 키(g604/g605/g947)는 여덟 언어 모두 남는다 (아래 문구 테스트가 고정).
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0xq"/);
+  // **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 3라운드)** — 또 같은
+  // 규약. 사전 키(g602/g603/g944)는 여덟 언어 모두 남는다.
+  //   ⚠ 정규식에 닫는 따옴표가 필요하다 — `cell-surface-v0x` 는
+  //     `cell-surface-v0xq` 의 접두사라, 없으면 이 단언이 v0xq 행에 걸려 «항상 참»
+  //     이 되거나 반대로 «항상 거짓» 이 된다.
+  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0x"/);
   assert.doesNotMatch(INDEX, /data-locator="hex-frame-v1"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v2"(?!r2)/);
   // 차단이지 삭제가 아니다 — hex-frame-v1 렌더·마진 경로는 소스에 그대로 있다.
@@ -160,7 +170,15 @@ test('로케이터 문구는 8언어가 같고 성능 보장을 하지 않는다
   assert.match(INDEX, /Does not guarantee rotation, lighting, print, or live-scan performance/);
   assert.match(INDEX, /回転・照明・印刷・ライブスキャンの性能は保証しません/);
   assert.match(INDEX, /data-locator="cell-surface-v0"[\s\S]*?data-i18n="g542">셀 표면 v0 \(Y0\)</);
-  assert.match(INDEX, /data-locator="cell-surface-v0x"[\s\S]*?data-i18n="g602">셀 표면 v0X \(Y1\)</);
+  // 의도적 갱신 «v0X 드랍» (2026-08-17): 카드가 없어졌으므로 **사전 보존**만 잰다
+  // (v1r2/v2r2 전례 — 아래 g543/g547 문자열 단언과 같은 모양).
+  assert.match(INDEX, /"g602":\s*"셀 표면 v0X \(Y1\)"/);
+  for (const lang of ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt']) {
+    for (const key of ['g602', 'g603', 'g944']) {
+      assert.match(langBlock(lang), new RegExp('"' + key + '"\s*:'),
+        `${lang} 에 드랍 보존 키 ${key} 가 없다`);
+    }
+  }
   // 의도적 갱신 «v0W2 편입» (2026-08-17) — 신규 키 g610(라벨) · g611(힌트) ·
   // g954(부제) · g965(«면» 카드 부제, v0WY 병기) 는 **3언어 전부** 있어야 한다.
   for (const key of ['g610', 'g611', 'g954', 'g965']) {

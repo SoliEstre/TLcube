@@ -92,8 +92,23 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // v0X 와 코어 반경이 같아(18.0셀) 거리로 안 갈라지고, 쌍마다 refinePose 를 한 번
   // 더 태우기만 했다. true 로 켜면 A/B 대조군이 돌아온다.
   v1r2Family: false,
-  // v0X 패밀리 (n=21 3파전 후보). false 로 끄면 v0X 편입 전 기준선을 잰다.
-  v0xFamily: true,
+  // ── v0X 드랍 (운영자 실기기 확정 2026-08-17, 판정 3라운드) — 차단·비삭제 ──────
+  // v0X 패밀리. **기본 off.**
+  // 근거: 실기기 관측 「파인더 인식 다 해놓고도 잘 못 읽음」 + 「v0 과 혼선 자주」.
+  // 앞 줄이 이 스위치가 사는 층을 정확히 가리킨다 — **포즈는 서는데 하류가 못 넘긴다**
+  // 는 뜻이라, 절감분은 «코너/중앙 재탐색» 이 아니라 **(중앙, 코너) 쌍마다 붙던
+  // refinePose 한 벌 + 그 포즈가 끌고 가는 CS 평가 한 벌**이다 (v0XQ 드랍과 같은 회계).
+  // true 로 켜면 드랍 전 기준선·교차 오수용 대조군이 그대로 돌아온다
+  // (`cellSurfaceFinal.js` §CELL_SURFACE_FINAL_DROPPED_IDS — 같은 규약).
+  //
+  // ⚠ **v0W·v0W2 는 이 스위치에 딸려 내려가지 않는다.** 셋은 같은 (중앙, 코너) 쌍을
+  // 보지만 `assembleAnchoredPoses` 안에서 **서로 독립한 `if`** 다 — v0X 게이트 실패가
+  // 뒤 브랜치를 자르던 `continue` 는 2026-08-16 에 이미 걷어냈다. `v0xFamily: false`
+  // 는 그 세 블록 중 첫 번째만 건너뛴다.
+  // ⚠ **정본 배열은 한 줄도 안 내려간다.** `V0X_CELLS`(SE 톤)는 **활성 레이아웃
+  // v0W2 의 SE(T/L) 유도 원천**이고 `V0XQ_CORNER_CELLS`(= v0X SE 평행이동)는
+  // v0W·v0WQ·v0W2 의 NE **그 자체**다 (참조 동일성 자기검증이 매 로드 증명한다).
+  v0xFamily: false,
   // v0X 시딩 게이트 — 사각 링 동반자(120° 회전 위치의 다른 K5 코어)를 요구한다.
   // false 면 반경 스냅만으로 시드한다(게이트 실패 모드 비교용).
   v0xRequireSquareRing: true,
@@ -210,7 +225,8 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   centreQrMinFinderContrast: 0.6,
   // ③ **중앙 불스아이 확증 조립** (과업 3 ③) — 같은 일치를 **인가**에 쓴다.
   //    느슨한 코너(`verifyV0xqCornerCluster`)의 120° 삼중점 중심에 검증된 K3
-  //    불스아이가 앉아 있으면, 그 중앙에서 v0X·v0W·v0W2 를 시드한다.
+  //    불스아이가 앉아 있으면, 그 중앙에서 v0W·v0W2 를 시드한다 (v0X 브랜치도
+  //    있지만 2026-08-17 드랍으로 `v0xFamily` 가 기본 off 라 안 돈다 — 켜면 돈다).
   //    엄격 코너가 3개 미만이라 사각 링 게이트가 **구조적으로** 0 이 되는 칸의 구제다
   //    (실측: v0W 48칸 중 자기 포즈 0 인 13칸 → 12칸이 그 게이트에서 죽었다).
   //    false 로 끄면 확증 조립 전 세계가 그대로 돌아온다.
@@ -1881,9 +1897,10 @@ function anchoredSimilaritySeedTo(centre, corner, factor, canonicalPoint) {
  * 패밀리·n 판별은 **2차 앵커(K5 원거리 코어)의 존재/부재**가 맡는다. 중앙 히트
  * 하나에서 세 패밀리를 순차 시도하지 않는다:
  *   · 거리 스냅이 맞는 중앙×코너 쌍 → 앵커드 패밀리 포즈. 허용폭 안 후보는
- *     **전부** 시드한다. **드랍(2026-08-16) 후 기본으로 남은 앵커드 패밀리는
- *     v0X 하나**다 — v2r2(@21·@25)·v1r2 는 cfg 스위치가 off 라 쌍당 refinePose 가
- *     4회 → 1회로 준다. 스위치를 켜면 넷이 그대로 돌아온다.
+ *     **전부** 시드한다. 드랍(2026-08-16 v2r2·v1r2 · 2026-08-17 v0X)으로 기본
+ *     앵커드 패밀리는 **v0W · v0W2 둘**이다 — v2r2(@21·@25)·v1r2·v0X 는 cfg
+ *     스위치가 off 라 쌍당 refinePose 가 6회 → 2회로 준다. 스위치를 켜면 여섯이
+ *     그대로 돌아온다 (대조군·법의학).
  *   · 시드는 2앵커 similarity (면 T 원거리 코어가 120° 위상을 즉시 확정 — 스윕 없음),
  *     4앵커 직접 DLT 는 refinePose 라운드 1·2, 6~12 서브앵커 최소제곱은 라운드 3.
  * 반환의 anchoredCentres 는 **앵커드 포즈가 실제로 선** 중앙 인덱스다 — v0 스윕
@@ -1958,8 +1975,10 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
           });
         }
       }
-      // v0X (n=21 3파전 후보) — v1r2 와 같은 반경 18.0 이라 거리로는 안 갈라진다.
-      // 가르는 것은 **사각 링 동반자**(3면 동일 SE 블록의 120° 쌍둥이 코어)다.
+      // v0X — **드랍(2026-08-17)으로 기본 off**. cfg.v0xFamily === true 로 켜면
+      // 아래 로직이 드랍 전 그대로 돈다 (대조군·법의학).
+      // v1r2 와 같은 반경 18.0 이라 거리로는 안 갈라진다. 가르는 것은
+      // **사각 링 동반자**(3면 동일 SE 블록의 120° 쌍둥이 코어)다.
       if (cfg.v0xFamily !== false
         && Math.abs(estimatedRadius - V0X_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);

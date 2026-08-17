@@ -1,0 +1,5 @@
+상태=v0wq : ok
+상태=off              : ReferenceError: LOCATOR_PROFILE_CELL_SURFACE_V0XQ is not defined
+상태=cell-surface-v0  : ReferenceError: LOCATOR_PROFILE_CELL_SURFACE_V0XQ is not defined
+상태=cell-surface-v0w : ReferenceError: LOCATOR_PROFILE_CELL_SURFACE_V0XQ is not defined
+상태=cell-surface-v0x : ReferenceError: LOCATOR_PROFILE_CELL_SURFACE_V0XQ is not defined

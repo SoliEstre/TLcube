@@ -1570,11 +1570,14 @@
             </svg>
           </button>
         </div>
-        <!-- 카드 순서 자동 → 끔 → v0 → v0X → v0W → v0WQ → v0W2 (운영자 지시 2026-08-16·17).
+        <!-- 카드 순서 자동 → 끔 → v0 → v0W → v0WQ → v0W2 (운영자 지시 2026-08-16·17).
              **v1r2 · v2r2 카드는 내려갔다** (실험판 드랍, 운영자 확정 2026-08-16) —
              남은 것은 v0 계열뿐이다. **v0XQ 카드도 내려갔다** (실기기 드랍, 운영자
-             확정 2026-08-17 — 조건부 규칙 «v0WQ > v0XQ» 성립). 와이어·정본·판독은
-             그대로 산다 (cellSurfaceFinal.js §CELL_SURFACE_FINAL_DROPPED_IDS).
+             확정 2026-08-17 2라운드 — 조건부 규칙 «v0WQ > v0XQ» 성립).
+             **v0X 카드도 내려갔다** (실기기 드랍, 운영자 확정 2026-08-17 3라운드 —
+             «파인더 인식 다 해놓고도 잘 못 읽음 + v0 과 혼선 자주»). 그래서 이제 Y1
+             카드는 **전부 v0W 계열**이다. 와이어·정본·판독은 그대로 산다
+             (cellSurfaceFinal.js §CELL_SURFACE_FINAL_DROPPED_IDS).
              이 섹션은 `/lab/` 에서만 열리므로 내부 명칭(v0 · Y0 …) 병기는 여기서만 한다.
 
              아이콘 = **실제 파인더 기하의 미니 도면**이다 (운영자 지시 A-4).
@@ -1584,7 +1587,6 @@
              (cellSurfaceFinal.js §slotCells).
              출처는 cellSurfaceFinal.js 정본:
                v0   n=13 · 로케이터 30셀 — 네 코너 소형 블록
-               v0X  n=21 · 65셀 — QR 파인더 문법(겹 사각) 코너 3 + 소형 1
                v0W  n=21 · 70셀 — K3 불스아이 중앙 + 심 꼭짓점 겹 사각 3 + 먼 꼭짓점 마커 3
                v0WQ n=21 · 파인더 45셀 + 중앙 QR 슬롯 64셀 — 겹 사각 3 + 코너 L + 중앙 슬롯
                v0W2 n=21 · 97셀 — K3 대칭 중앙 25 + 심 꼭짓점 겹 사각 36 + **대형 마커 36** -->
@@ -1617,23 +1619,13 @@
             <span data-i18n="g542">셀 표면 v0 (Y0)</span>
             <span class="card-sub" data-i18n="g943">코너 4블록</span>
           </div>
-          <div class="toggle-card" data-locator="cell-surface-v0x">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
-              <rect x="5.2" y="5.2" width="5" height="5" rx=".6"/>
-              <rect x="6.8" y="6.8" width="1.8" height="1.8" fill="currentColor" stroke="none"/>
-              <rect x="13.8" y="5.2" width="5" height="5" rx=".6"/>
-              <rect x="15.4" y="6.8" width="1.8" height="1.8" fill="currentColor" stroke="none"/>
-              <rect x="5.2" y="13.8" width="5" height="5" rx=".6"/>
-              <rect x="6.8" y="15.4" width="1.8" height="1.8" fill="currentColor" stroke="none"/>
-              <rect x="15" y="15" width="3" height="3" rx=".6" fill="currentColor" stroke="none"/>
-            </svg>
-            <span data-i18n="g602">셀 표면 v0X (Y1)</span>
-            <span class="card-sub" data-i18n="g944">QR형 코너</span>
-          </div>
-          <!-- v0XQ(g604/g947) 카드는 2026-08-17 실기기 드랍으로 내렸다 — 조건부 드랍
+          <!-- v0X(g602/g603/g944) 카드는 2026-08-17 실기기 드랍(판정 3라운드)으로
+               내렸다 — «파인더 인식 다 해놓고도 잘 못 읽음 + v0 과 혼선 자주».
+               v0XQ(g604/g605/g947) 카드는 같은 날 2라운드 드랍이다 — 조건부 드랍
                규칙 «v0WQ > v0XQ» 성립 (순위 v0WQ ≫ v0XQ > v0X ≈ v0W). 남는 중앙 QR
-               카드는 아래 v0WQ 하나다. i18n 키는 3언어 모두 남겨 둔다 (v1r2·v2r2 전례). -->
+               카드는 아래 v0WQ 하나이고, Y1 카드는 전부 v0W 계열이 됐다.
+               i18n 키는 여덟 언어 모두 남겨 둔다 (v1r2·v2r2 전례 — 되살릴 때
+               재번역하지 않기 위해서다). -->
           <div class="toggle-card" data-locator="cell-surface-v0w">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
               <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
@@ -4573,9 +4565,12 @@ import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-con
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
-  LOCATOR_PROFILE_CELL_SURFACE_V0X,
-  // v0XQ 프로파일 상수는 2026-08-17 드랍으로 여기서 빠졌다 (v1r2·v2r2 전례).
-  // `locatorY.js` · `generator-render-config.js` 쪽에는 그대로 살아 있다.
+  // v0XQ(2라운드) · v0X(3라운드) 프로파일 상수는 2026-08-17 드랍으로 여기서 빠졌다
+  // (v1r2·v2r2 전례). `locatorY.js` · `generator-render-config.js` 쪽에는 그대로
+  // 살아 있다 — 발행분 재생성 경로다.
+  // ⚠ 여기서 뺀 이름은 **이 파일 어디에서도 참조하면 안 된다** (자유 식별자는
+  //   평가되는 순간 ReferenceError 다 — v0XQ 드랍 때 «면» QR 카드 핸들러에 죽은
+  //   비교가 남아 실제로 그랬다. 2026-08-17 v0X 드랍 레인에서 함께 걷어냈다).
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
   LOCATOR_PROFILE_HEX_FRAME_V1, LOCATOR_PROFILE_OFF,
@@ -5786,16 +5781,21 @@ for (const card of els.typeCards.children) {
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     const type = currentType();
-    // 정합 (운영자 판정 2026-08-17): «면»(v0WY) QR 과 중앙 QR 검출기 (v0XQ/v0WQ) 를
+    // 정합 (운영자 판정 2026-08-17): «면»(v0WY) QR 과 중앙 QR 검출기 (v0WQ) 를
     // 함께 두면 QR 이 두 개가 된다. 면을 고른 것은 «QR 은 면-평면으로» 라는 뜻이므로
-    // 검출기를 비-QR 짝으로 바꾼다 (v0wq→v0w · v0xq→v0x). 반대 방향 (중앙 QR 검출기
+    // 검출기를 비-QR 짝으로 바꾼다 (v0wq→v0w). 반대 방향 (중앙 QR 검출기
     // 선택 시) 은 buildScene 이 코너 QR 과 같은 규칙으로 면 QR 을 억제한다.
+    //
+    // ⚠ **여기 있던 `v0xq → v0x` 분기는 죽은 코드가 아니라 살아 있는 결함이었다**
+    //   (2026-08-17 v0X 드랍 레인 발견). v0XQ 드랍이 import 에서
+    //   `LOCATOR_PROFILE_CELL_SURFACE_V0XQ` 를 뺐는데 이 비교식은 남아, 상태가
+    //   v0WQ 가 **아닌** 모든 경우(off·v0·v0W·v0X…)에 둘째 비교식을 평가하며
+    //   `ReferenceError: … is not defined` 로 «면» 카드 클릭 전체를 죽였다
+    //   (재현: `test/output/lanes/claude-v0wy-refbug.mjs`). 두 끝점(v0xq·v0x)이 모두
+    //   드랍된 지금은 분기 자체가 무의미하므로 통째로 걷어낸다.
     if (type === 'Y' && card.dataset.pos === 'plane') {
       if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;
-        syncYLocatorUi();
-      } else if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0XQ) {
-        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0X;
         syncYLocatorUi();
       }
     }
@@ -5842,14 +5842,15 @@ function syncResTierUi() {
   // v2r2(Y1/Y2 중·고)·v1r2 잠금은 카드와 함께 내려갔다 — **Y2 는 이제 공백**이다.
   const cellSurfaceV0 = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0;
-  // v0X · v0W · v0WQ · v0W2 는 n=21 뿐이라 중(中) 한 단만 연다.
-  // (v0XQ 는 2026-08-17 드랍 — 카드도 허용값도 없어 여기서 물을 것이 없다.)
+  // v0W · v0WQ · v0W2 는 n=21 뿐이라 중(中) 한 단만 연다.
+  // (v0XQ 는 2026-08-17 2라운드 드랍, **v0X 는 같은 날 3라운드 드랍** — 카드도
+  //  허용값도 없어 여기서 물을 것이 없다.)
   //
   // ⚠ **v0W2 는 #22 연동(저 ↔ 중) 매핑에 들어가지 않는다** — «중 = v0W» 를
-  // 유지한다 (운영자 지시 2026-08-17: 실기기 승자 판정 뒤에 교체). 그래서 v0W2 는
-  // v0X 와 **같은 규칙**(중 한 단 잠금·연동 없음)을 쓴다.
-  const cellSurfaceV0x = type === 'Y'
-    && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X;
+  // 유지한다 (운영자 지시 2026-08-17: 실기기 승자 판정 뒤에 교체). v0X 가 쓰던
+  // «중 한 단 잠금·연동 없음» 규칙을 이제 v0W2 혼자 쓴다. 그리고 v0X 드랍으로
+  // `finalLayoutIdForN(21)` 이 **v0w** 로 승계되면서, 라인업 기본과 이 «중 = v0W»
+  // 가 처음으로 **같은 값**을 가리키게 됐다 (전에는 라인업 기본만 v0X 였다).
   const cellSurfaceV0w2 = type === 'Y'
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W2;
   const cellSurfaceV0w = type === 'Y'
@@ -5862,13 +5863,13 @@ function syncResTierUi() {
   // 셀 표면 잠금이 windowLocked 보다 우선한다 — selectedTier 계산과 같은 우선순위.
   const isOff = (res) =>
     cellSurfaceV0 ? res === 'high'
-      : (cellSurfaceV0x || cellSurfaceV0w2) ? (res === 'low' || res === 'high')
+      : cellSurfaceV0w2 ? (res === 'low' || res === 'high')
         : (cellSurfaceV0w || cellSurfaceV0wq) ? res === 'high'
           : windowLocked ? (res === 'low' || res === 'mid')
             : false;
   const selectedTier = cellSurfaceV0
     ? 'low'
-    : (cellSurfaceV0x || cellSurfaceV0w || cellSurfaceV0wq || cellSurfaceV0w2)
+    : (cellSurfaceV0w || cellSurfaceV0wq || cellSurfaceV0w2)
       ? 'mid'
       : resolutionTierForVersion(
         type, generatorState[versionStateKey(type)],
@@ -6120,7 +6121,7 @@ syncQuietModeUi();
  * ── 검출기 «자동» (운영자 지시 2026-08-16 A-4, 정식 반영 대비) ─────────────
  *
  * **자동의 현재 의미**: «지금 설정에서 권장되는 검출기를 쓴다». 그런데 정식 승격된
- * Y 검출기가 아직 없으므로 (v0 · v0X · v1r2 · v2r2 전부 lab 실험 항목, g518 이 그
+ * Y 검출기가 아직 없으므로 (v0 · v0W 계열 전부 lab 실험 항목, g518 이 그
  * 사실을 말한다) 권장값은 결정적으로 **끔**이다 — 끔만이 스펙이 보증하는 경로다.
  * 그래서 지금의 자동은 «끔» 과 **바이트 동일한 결과**를 낸다. 인코딩·게이트 경로는
  * 손대지 않고, 이 함수 하나가 그 정책의 유일한 자리다. 승격이 일어나면 여기만 바뀐다.
@@ -6143,8 +6144,6 @@ if (els.yLocatorCards) {
       } else if (next === LOCATOR_PROFILE_HEX_FRAME_V1) {
         // 카드는 내렸지만(차단·비삭제) 값·렌더·검출 경로는 그대로 살아 있다.
         generatorState.locatorProfileY = LOCATOR_PROFILE_HEX_FRAME_V1;
-      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0X) {
-        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0X;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0W) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0WQ) {
@@ -6153,7 +6152,8 @@ if (els.yLocatorCards) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0W2;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
-      // v1r2 · v2r2 분기는 2026-08-16 드랍으로, **v0XQ 분기는 2026-08-17 드랍으로**
+      // v1r2 · v2r2 분기는 2026-08-16 드랍으로, **v0XQ(2라운드) · v0X(3라운드)
+      // 분기는 2026-08-17 드랍으로**
       // 내렸다. 카드가 없어 `next` 가 그 값이 될 수 없고, 상태 스키마의 허용값에서도
       // 빠졌다 (생성기 상태는 저장되지 않으므로 «옛 저장값 폴백» 은 해당 없음 —
       // 검증 렌즈 정정). 옛 값이 어떤 경로로 들어와도 아래 else 가 «끔» 으로 떨군다.
@@ -7552,15 +7552,13 @@ function syncYLocatorUi() {
     ? LOCATOR_PROFILE_HEX_FRAME_V1
     : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0
       ? LOCATOR_PROFILE_CELL_SURFACE_V0
-      : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X
-        ? LOCATOR_PROFILE_CELL_SURFACE_V0X
-        : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W
-          ? LOCATOR_PROFILE_CELL_SURFACE_V0W
-          : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
-            ? LOCATOR_PROFILE_CELL_SURFACE_V0WQ
-            : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W2
-              ? LOCATOR_PROFILE_CELL_SURFACE_V0W2
-              : LOCATOR_PROFILE_OFF;
+      : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W
+        ? LOCATOR_PROFILE_CELL_SURFACE_V0W
+        : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
+          ? LOCATOR_PROFILE_CELL_SURFACE_V0WQ
+          : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W2
+            ? LOCATOR_PROFILE_CELL_SURFACE_V0W2
+            : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
     // 자동은 «끔» 과 같은 값을 내지만 카드는 배타적으로 켠다 — 자동을 고른 사용자에게
     // 끔이 함께 켜져 보이면 «둘 중 뭐가 적용된 건가» 가 생긴다.
@@ -7574,16 +7572,15 @@ function syncYLocatorUi() {
   }
   if (els.yLocatorHint) {
     // v2r2(g546) · v1r2(g548) 힌트는 2026-08-16 드랍으로, **v0XQ(g605) 힌트는
-    // 2026-08-17 드랍으로** 내려갔다 (사전 키는 3언어 모두 보존).
-    els.yLocatorHint.textContent = profile === LOCATOR_PROFILE_CELL_SURFACE_V0X
-      ? t('g603')
-      : profile === LOCATOR_PROFILE_CELL_SURFACE_V0W
-        ? t('g607')
-        : profile === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
-          ? t('g609')
-          : profile === LOCATOR_PROFILE_CELL_SURFACE_V0W2
-            ? t('g611')
-            : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
+    // 2026-08-17 2라운드 드랍으로, v0X(g603) 힌트는 같은 날 3라운드 드랍으로**
+    // 내려갔다 (사전 키는 여덟 언어 모두 보존).
+    els.yLocatorHint.textContent = profile === LOCATOR_PROFILE_CELL_SURFACE_V0W
+      ? t('g607')
+      : profile === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
+        ? t('g609')
+        : profile === LOCATOR_PROFILE_CELL_SURFACE_V0W2
+          ? t('g611')
+          : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
             ? t('g541')
             : profile === LOCATOR_PROFILE_HEX_FRAME_V1
               ? t('g520')
@@ -7845,14 +7842,13 @@ function buildConfig() {
     versionO: selectedVersion(generatorState.versionO),
     // Y 안쪽 윈도는 렌더 의미상 Y2 전용이다. 이 유효값은 저장된 versionY를
     // 덮지 않으므로 윈도/타입/모드 왕복 뒤 수동 또는 자동 선택이 복원된다.
-    // 셀 표면 라인업 (2026-08-17 v0XQ 드랍·v0W2 편입까지):
-    // v0 = Y0 고정 · v0X/v0W/v0WQ/v0W2 = Y1 고정.
+    // 셀 표면 라인업 (2026-08-17 v0XQ·v0X 드랍·v0W2 편입까지):
+    // v0 = Y0 고정 · v0W/v0WQ/v0W2 = Y1 고정.
     // v2r2 가 유일한 Y2(n=25) 경로였으므로 **셀 표면으로는 Y2 를 못 만든다**
     // (윈도 β 의 Y2 는 셀 표면이 아니라 그대로 산다).
     versionY: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0
       ? 0
-      : (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X
-        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W
+      : (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W
         || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0WQ
         || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0W2)
         ? 1

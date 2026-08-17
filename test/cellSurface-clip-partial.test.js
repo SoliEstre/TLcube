@@ -167,6 +167,10 @@ const RESTORE_DROPPED = Object.freeze({
   includeDroppedCellSurfaceLayouts: true,
   v2r2Family: true,
   v1r2Family: true,
+  // 의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드):
+  // 이 파일의 나머지 절반이 v0X 픽스처다. 같은 이유로 스위치에 더한다 —
+  // 재는 축은 «부분 앵커 포즈·locator 셀 소거» 이지 라인업 소속이 아니다.
+  v0xFamily: true,
 });
 
 function decodeLab(frame, cube = {}) {
@@ -185,6 +189,7 @@ function decodeLab(frame, cube = {}) {
             csBlockLocator: {
               v2r2Family: RESTORE_DROPPED.v2r2Family,
               v1r2Family: RESTORE_DROPPED.v1r2Family,
+              v0xFamily: RESTORE_DROPPED.v0xFamily,
               ...((cube.calibration || {}).csBlockLocator || {}),
             },
           },
@@ -425,14 +430,16 @@ const ON_CUBE = Object.freeze({
   enableLocatorY: true,
   enableCellSurfaceY: true,
   includeDroppedCellSurfaceLayouts: true,
-  calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true } },
+  calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true, v0xFamily: true } },
 });
 const OFF_CUBE = Object.freeze({
   enableLocatorY: true,
   enableCellSurfaceY: true,
   includeDroppedCellSurfaceLayouts: true,
   calibration: {
-    csBlockLocator: { v2r2Family: true, v1r2Family: true, partialAnchorPose: false },
+    csBlockLocator: {
+      v2r2Family: true, v1r2Family: true, v0xFamily: true, partialAnchorPose: false,
+    },
   },
 });
 
@@ -607,7 +614,9 @@ test('잘린 프레임을 다른 레이아웃으로 강제 주입하면 하나�
               enableCellSurfaceY: true,
               // 드랍된 패밀리도 켠 채로 강제 주입한다 — 교차 오수용 대조군은
               // 라인업이 아니라 «레이아웃끼리 서로를 수용하는가» 를 재는 것이다.
-              calibration: { csBlockLocator: { v2r2Family: true, v1r2Family: true } },
+              calibration: {
+                csBlockLocator: { v2r2Family: true, v1r2Family: true, v0xFamily: true },
+              },
               cellSurfaceLayouts: [forced],
             },
           },

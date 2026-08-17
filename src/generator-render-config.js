@@ -45,14 +45,15 @@ export function encodeOptionsForY(state) {
   if (fallback === null || typeof fallback !== 'object') {
     throw new TypeError('Y QR 폴백 상태가 필요하다');
   }
-  // 카드 라인업 (2026-08-17 v0XQ 드랍까지 반영): v0 = Y0(n=13) · v0X = Y1(n=21) ·
+  // 카드 라인업 (2026-08-17 v0XQ·v0X 드랍까지 반영) — **전부 v0W 계열이다**:
+  // v0 = Y0(n=13) ·
   // v0W = Y1 신설 (K3 중앙 25 + 심 꼭짓점 동심 사각 36 + v0 코너 위상 마커 9 = 70셀) ·
   // v0WQ = v0W 파생 ① (위상 마커 9 + 동심 사각 36 + 중앙 슬롯 8² = 파인더 45 · 슬롯 64) ·
   // v0W2 = v0W 파생 ② (K3 대칭 중앙 25 + 동심 사각 36 + SE 대형 마커 36 = 97셀 · 데이터 314).
   //
-  // **v2r2 · v1r2 (2026-08-16) · v0XQ (2026-08-17) 는 카드에서 내려갔다**
+  // **v2r2 · v1r2 (2026-08-16) · v0XQ · v0X (2026-08-17) 는 카드에서 내려갔다**
   // (`generator-state.js` 의 허용값에서 제거 — UI 로는 이 값이 더 이상 들어오지
-  // 않는다). 아래 **세 분기는 삭제하지 않는다**: 이미 발행된 출력물의 재생성·
+  // 않는다). 아래 **네 분기는 삭제하지 않는다**: 이미 발행된 출력물의 재생성·
   // 법의학·와이어 회귀 테스트가 이 함수를 직접 부른다
   // (`cellSurfaceFinal.js` §CELL_SURFACE_FINAL_DROPPED_IDS — 차단·비삭제).
   // 초안 v2 와 구 v1 CS 도 같은 이유로 UI 에서만 내린 채다.
@@ -73,6 +74,8 @@ export function encodeOptionsForY(state) {
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V2R2),
     };
   }
+  // v0X — 2026-08-17 드랍(차단·비삭제, 판정 3라운드). 카드가 없어 UI 로는 안
+  // 들어오지만, 발행분 재생성·법의학 호출이 이 분기를 직접 쓴다.
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0X) {
     return {
       tones: tone === 3 ? 3 : 2,
