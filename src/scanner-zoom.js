@@ -53,6 +53,60 @@ export const CROP_ZOOM_MIN = 1;
 export const CROP_ZOOM_MAX = 8;
 export const CROP_ZOOM_STEP = 0.1;
 
+/**
+ * ── 연속 실패 시 자동 크롭 사다리 (2026-08-18) ─────────────────────────────
+ *
+ * 왜: 실사진 역산(`test/output/lanes/claude-scanner-cellpx.out.txt`)에서 운영자의
+ * 실패 거리가 **셀당 3.7\~5.9px**, 「되기 시작하는」 경계가 **6.1\~6.3px** 였다.
+ * 합성 사다리의 벽(ppu 7 본문 RS · ≤6 포맷 불가)과 같은 자리다. 즉 그 거리에서는
+ * 프레임이 느린 게 아니라 **셀 픽셀이 모자라서** 어떤 알고리즘도 못 읽는다.
+ * (운영자 확인: 줌 1 · 기본 광각 — 광각이라 코드가 더 작게 잡힌다.)
+ *
+ * ⚠ **기본 확대는 건드리지 않는다.** `DEFAULT_USER_ZOOM = 1` 은 2026-08-15
+ * **운영자 지시**로 2 → 1 복귀한 값이다 (당시 사고 원인은 확대 자체가 아니라
+ * «가이드 ≠ 분석 크롭» 불일치, 성공 0%/274). 그 전제는 r3 에서 소멸했지만
+ * 되돌리는 것은 운영자 판정이지 이 변경의 몫이 아니다.
+ *
+ * 대신 **실패가 쌓인 구간만** 친다: 연속 실패가 한 단씩 쌓일 때 크롭을 올리고,
+ * 성공하면 즉시 1 로 복귀한다. 세 가지가 안전장치다.
+ *   ① **끈적하다** — 프레임마다 오르내리지 않는다. 매 프레임 흔들면 프리뷰가
+ *      출렁이고, 프리뷰를 안 따라가게 하면 2026-08-15 의 «가이드 ≠ 분석» 을
+ *      그대로 재현한다. 분석과 프리뷰는 **같은 값**을 쓴다.
+ *   ② **잘림이면 올리지 않는다** — clipSide==='multi' 는 «너무 가깝다» 는 뜻이라
+ *      확대는 정반대 처방이다. 그 신호가 오면 사다리를 0 으로 되돌린다.
+ *   ③ **사용자가 손대면 멈춘다** — 수동 확대가 기본값과 다르면 자동은 개입하지 않는다.
+ *
+ * 상한 2.2 인 이유: 실패 세트 3.7\~5.9px × 2.2 = 8.1\~13.0px 로 벽(6\~7)을 넘고
+ * CELL_PX_FLOOR(9) 에 닿는다. 그 이상은 크롭 창이 좁아져 조준이 어려워진다.
+ */
+export const AUTO_CROP_LADDER = Object.freeze([1, 1.5, 2.2]);
+/** 한 단 올리는 데 필요한 연속 실패 프레임 수. */
+export const AUTO_CROP_STEP_FRAMES = 8;
+
+/**
+ * 연속 실패 수 → 사다리 인덱스. 순수 함수라 테스트가 직접 잰다.
+ *
+ * @param {number} failedFrames 연속 실패 프레임 수
+ * @param {boolean} clipped 잘림(«너무 가깝다») 신호가 서 있는가
+ * @param {boolean} manual 사용자가 확대를 직접 건드렸는가
+ * @returns {number} AUTO_CROP_LADDER 인덱스 (0 = 개입 없음)
+ */
+export function autoCropRung(failedFrames, { clipped = false, manual = false } = {}) {
+  if (clipped || manual) return 0;
+  const n = Number(failedFrames);
+  if (!Number.isFinite(n) || n < AUTO_CROP_STEP_FRAMES) return 0;
+  return Math.min(
+    AUTO_CROP_LADDER.length - 1,
+    Math.floor(n / AUTO_CROP_STEP_FRAMES),
+  );
+}
+
+/** 사다리 인덱스 → 크롭 배율. 범위 밖은 양끝으로 물린다. */
+export function autoCropZoomFor(rung) {
+  const index = Math.max(0, Math.min(AUTO_CROP_LADDER.length - 1, Math.trunc(Number(rung) || 0)));
+  return AUTO_CROP_LADDER[index];
+}
+
 /*
  * ── 3링 18점 조준 가이드 (운영자 설계 2026-08-15, 12점의 재설계) ──────────────
  *

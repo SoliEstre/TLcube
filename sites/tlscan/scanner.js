@@ -34,6 +34,8 @@ import {
 } from '/src/lab-telemetry.js';
 import {
   applyTrackZoom,
+  autoCropRung,
+  autoCropZoomFor,
   buttonStep,
   cropWindow,
   DEFAULT_USER_ZOOM,
@@ -174,6 +176,12 @@ let attemptId = '';
 let zoomCapability = null;
 let userZoom = DEFAULT_USER_ZOOM;
 let zoomPlan = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM });
+/**
+ * 연속 실패 자동 크롭 사다리의 현재 단 (§scanner-zoom.autoCropRung).
+ * 0 = 개입 없음. 분석 크롭과 프리뷰가 **같은 값**을 쓴다 — 어긋나면 2026-08-15 의
+ * «가이드 ≠ 분석» 사고가 재현된다.
+ */
+let autoCropIndex = 0;
 let zoomApplyToken = 0;
 let zoomApplyTimer = 0;
 
@@ -313,9 +321,19 @@ function refreshZoomChrome() {
   }
 }
 
+/**
+ * 실제로 자를 배율 — 사용자 계획 × 자동 사다리. **분석과 프리뷰의 유일한 출처**다.
+ * 둘이 다른 값을 쓰면 «가이드 ≠ 분석» 이 되어 2026-08-15 사고(성공 0%/274)가
+ * 재현되므로, 여기 말고 다른 곳에서 크롭 배율을 계산하지 않는다.
+ */
+function effectiveCropZoom() {
+  const base = zoomPlan.cropApplied > 1.001 ? zoomPlan.cropApplied : 1;
+  return base * autoCropZoomFor(autoCropIndex);
+}
+
 function syncPreviewTransform() {
-  const scale = zoomPlan.cropApplied > 1.001 ? zoomPlan.cropApplied : 1;
-  cameraVideo.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
+  const scale = effectiveCropZoom();
+  cameraVideo.style.transform = scale <= 1.001 ? '' : 'scale(' + scale + ')';
   cameraVideo.style.transformOrigin = 'center center';
 }
 
@@ -1317,10 +1335,13 @@ function grabVideoFrame() {
     cameraVideo.videoWidth,
     cameraVideo.videoHeight,
     maxSide,
-    zoomPlan.cropApplied,
+    effectiveCropZoom(),
   );
   if (grabbed) return grabbed;
-  if (zoomPlan.cropApplied > 1.001) {
+  if (effectiveCropZoom() > 1.001) {
+    // 크롭 실패 폴백은 자동 사다리도 함께 내린다 — 안 내리면 다음 프레임이 같은
+    // 배율로 또 실패한다.
+    autoCropIndex = 0;
     const previousError = zoomPlan.error;
     zoomPlan = {
       ...zoomPlan,
@@ -1384,6 +1405,19 @@ function handleDecodeResult(result, source, session) {
         // 잘림 안내가 떠 있는 동안 «더 가까이» 는 반대 지시라 억제한다.
         setStatus(t('status.closer'));
       }
+    }
+    // 자동 크롭 사다리 — 실패가 쌓이면 한 단씩 올리고 성공하면 위에서 0 으로
+    // 돌아간다. 잘림(«너무 가깝다») 이면 올리지 않는다 — 확대가 정반대 처방이다.
+    // 사용자가 확대를 직접 건드렸으면 개입하지 않는다.
+    const nextRung = autoCropRung(consecutiveFailedFrames, {
+      clipped: clippedFrames >= CLIP_HINT_AFTER_FRAMES
+        || (result && result.clipSide === 'multi'),
+      manual: userZoom !== DEFAULT_USER_ZOOM,
+    });
+    if (nextRung !== autoCropIndex) {
+      autoCropIndex = nextRung;
+      // 프리뷰를 같은 값으로 즉시 맞춘다 (§effectiveCropZoom 의 불변식).
+      syncPreviewTransform();
     }
   }
 

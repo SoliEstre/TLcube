@@ -29,6 +29,10 @@ import { VERSIONS } from '../src/capacity.js';
 import { VERSIONS_A } from '../src/capacityA.js';
 import {
   CELL_PX_FLOOR,
+  AUTO_CROP_LADDER,
+  AUTO_CROP_STEP_FRAMES,
+  autoCropRung,
+  autoCropZoomFor,
   DEFAULT_USER_ZOOM,
   EDGE_UNIT_OFFSETS,
   FRAME_MAX_SIDE,
@@ -1150,4 +1154,41 @@ test('r5 ③ 힌트 — 패널이 내부 오버플로일 때만 하단 페이드
   assert.match(SCANNER_JS, /!zoomErrorBox \|\| !dotLayer \|\| !scannerPanels\b/);
   assert.match(SCANNER_JS,
     /!steadyMeter \|\| !steadyMeterFill\) \{\n  throw new Error\('TLcube scanner markup is incomplete\.'\);/);
+});
+
+/*
+ * ── 연속 실패 자동 크롭 사다리 (2026-08-18) ───────────────────────────────
+ *
+ * 근거 (실사진 역산 `test/output/lanes/claude-scanner-cellpx.out.txt`):
+ * 운영자의 실패 거리가 셀당 3.7\~5.9px, 「되기 시작하는」 경계가 6.1\~6.3px 로
+ * 합성 벽(ppu 7 본문 RS · ≤6 포맷 불가)과 같은 자리였다. 그 구간은 속도가 아니라
+ * **셀 픽셀**이 모자란 것이라 어떤 알고리즘도 못 읽는다.
+ *
+ * ⚠ 기본 확대(DEFAULT_USER_ZOOM=1, 운영자 지시)는 **건드리지 않는다** — 위 핀이
+ * 그대로 살아 있다. 실패가 쌓인 구간만 친다.
+ */
+test('자동 크롭 사다리 — 실패가 쌓이면 오르고, 잘림·수동·성공이면 개입하지 않는다', () => {
+  assert.deepEqual([...AUTO_CROP_LADDER], [1, 1.5, 2.2]);
+  // 성공(0) 과 문턱 미만은 개입 없음.
+  assert.equal(autoCropRung(0), 0);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES - 1), 0);
+  // 한 단씩 오르고 상한에서 멈춘다.
+  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES), 1);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 2), 2);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 99), AUTO_CROP_LADDER.length - 1);
+  // 잘림은 «너무 가깝다» — 확대는 정반대 처방이라 개입 금지.
+  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 3, { clipped: true }), 0);
+  // 사용자가 확대를 직접 건드렸으면 자동은 물러난다.
+  assert.equal(autoCropRung(AUTO_CROP_STEP_FRAMES * 3, { manual: true }), 0);
+  // 배율 조회는 범위 밖을 양끝으로 물린다.
+  assert.equal(autoCropZoomFor(-5), 1);
+  assert.equal(autoCropZoomFor(99), 2.2);
+  // 상한 2.2 의 근거 — 실패 세트 3.7~5.9px 를 벽(6~7) 위로 올린다.
+  assert.ok(3.7 * AUTO_CROP_LADDER[AUTO_CROP_LADDER.length - 1] > 7);
+  // 스캐너가 실제로 이 사다리를 쓰고, 분석·프리뷰가 **같은 출처**를 쓴다
+  // (어긋나면 2026-08-15 «가이드 ≠ 분석» 사고 재현 — 성공 0%/274).
+  assert.match(SCANNER_JS, /function effectiveCropZoom\(\)/);
+  assert.match(SCANNER_JS, /maxSide,\s*\n\s*effectiveCropZoom\(\),/);
+  assert.match(SCANNER_JS, /const scale = effectiveCropZoom\(\);/);
+  assert.match(SCANNER_JS, /autoCropRung\(consecutiveFailedFrames/);
 });
