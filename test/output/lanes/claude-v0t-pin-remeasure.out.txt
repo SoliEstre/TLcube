@@ -1,0 +1,30 @@
+
+=== v0t ===
+  clean rot  0  OK   layout=v0t  reason=-  poseV0t=3 v0ty=0 conf=1/2
+  clean rot120  OK   layout=v0t  reason=-  poseV0t=4 v0ty=0 conf=0/0
+  clean rot240  OK   layout=v0t  reason=-  poseV0t=6 v0ty=0 conf=0/0
+  sCurve0.6 rot  0  OK   layout=v0t  reason=-  poseV0t=3 v0ty=0 conf=1/2
+  sCurve0.6 rot120  OK   layout=v0t  reason=-  poseV0t=4 v0ty=0 conf=0/0
+  sCurve0.6 rot240  OK   layout=v0t  reason=-  poseV0t=6 v0ty=0 conf=0/0
+  gamma0.7 rot  0  OK   layout=v0t  reason=-  poseV0t=3 v0ty=0 conf=1/2
+  gamma0.7 rot120  OK   layout=v0t  reason=-  poseV0t=4 v0ty=0 conf=0/0
+  gamma0.7 rot240  OK   layout=v0t  reason=-  poseV0t=6 v0ty=0 conf=0/0
+  gamma0.6 rot  0  OK   layout=v0t  reason=-  poseV0t=3 v0ty=0 conf=1/2
+  gamma0.6 rot120  OK   layout=v0t  reason=-  poseV0t=4 v0ty=0 conf=0/0
+  gamma0.6 rot240  OK   layout=v0t  reason=-  poseV0t=6 v0ty=0 conf=0/0
+  → 12/12
+
+=== v0ty ===
+  clean rot  0  OK   layout=v0ty  reason=-  poseV0t=4 v0ty=2 conf=0/0
+  clean rot120  OK   layout=v0ty  reason=-  poseV0t=3 v0ty=1 conf=1/2
+  clean rot240  OK   layout=v0ty  reason=-  poseV0t=4 v0ty=2 conf=0/0
+  sCurve0.6 rot  0  OK   layout=v0ty  reason=-  poseV0t=6 v0ty=2 conf=0/0
+  sCurve0.6 rot120  OK   layout=v0ty  reason=-  poseV0t=3 v0ty=1 conf=1/2
+  sCurve0.6 rot240  OK   layout=v0ty  reason=-  poseV0t=6 v0ty=2 conf=0/0
+  gamma0.7 rot  0  OK   layout=v0ty  reason=-  poseV0t=4 v0ty=2 conf=0/0
+  gamma0.7 rot120  OK   layout=v0ty  reason=-  poseV0t=4 v0ty=2 conf=0/0
+  gamma0.7 rot240  OK   layout=v0ty  reason=-  poseV0t=6 v0ty=2 conf=0/0
+  gamma0.6 rot  0  OK   layout=v0ty  reason=-  poseV0t=4 v0ty=2 conf=0/0
+  gamma0.6 rot120  OK   layout=v0ty  reason=-  poseV0t=4 v0ty=2 conf=0/0
+  gamma0.6 rot240  OK   layout=v0ty  reason=-  poseV0t=3 v0ty=1 conf=0/0
+  → 12/12

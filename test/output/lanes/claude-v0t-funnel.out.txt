@@ -1,0 +1,37 @@
+v0t	ppu=15	k3=14 k5=3 loose=7	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=6	shapes=2 {"13":2}	→ OK v0t/n21	1250ms
+v0t	ppu=13	k3=12 k5=4 loose=8	anch=2 swept=1	conf=0/0	pose v0t=6 v0ty=0 v0=0	shapes=2 {"21:v0t":2}	→ OK v0t/n21	1276ms
+v0t	ppu=11	k3=13 k5=2 loose=8	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=5	shapes=2 {"13":2}	→ OK v0t/n21	970ms
+v0t	ppu= 9	k3=17 k5=6 loose=6	anch=2 swept=1	conf=0/0	pose v0t=6 v0ty=0 v0=1	shapes=3 {"13":1,"21:v0t":2}	→ OK v0t/n21	1047ms
+v0t	ppu= 8	k3=15 k5=4 loose=8	anch=2 swept=1	conf=0/0	pose v0t=6 v0ty=0 v0=1	shapes=3 {"13":1,"21:v0t":2}	→ OK v0t/n21	916ms
+v0t	ppu= 7	k3=19 k5=3 loose=7	anch=2 swept=1	conf=0/0	pose v0t=6 v0ty=0 v0=0	shapes=2 {"21:v0t":2}	→ 실패 frontend:no-grid-hypothesis	1522ms
+v0t	ppu= 6	k3=21 k5=3 loose=4	anch=2 swept=1	conf=0/0	pose v0t=6 v0ty=0 v0=0	shapes=2 {"21:v0t":2}	→ 실패 frontend:no-format-candidate	1465ms
+v0t	ppu= 5	k3=19 k5=2 loose=6	anch=2 swept=1	conf=0/0	pose v0t=4 v0ty=0 v0=0	shapes=2 {"21:v0t":2}	→ 실패 frontend:no-format-candidate	1155ms
+v0t	ppu= 4	k3=11 k5=1 loose=2	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=4	shapes=2 {"13":2}	→ 실패 frontend:no-format-candidate	944ms
+v0ty	ppu=15	k3=19 k5=3 loose=6	anch=2 swept=1	conf=0/0	pose v0t=4 v0ty=2 v0=1	shapes=4 {"13":1,"21:v0t":2,"21:v0ty":1}	→ OK v0ty/n21	1228ms
+v0ty	ppu=13	k3=19 k5=6 loose=6	anch=2 swept=1	conf=0/0	pose v0t=6 v0ty=0 v0=0	shapes=2 {"21:v0t":2}	→ OK v0ty/n21	1424ms
+v0ty	ppu=11	k3=25 k5=4 loose=8	anch=2 swept=1	conf=0/0	pose v0t=6 v0ty=2 v0=1	shapes=4 {"13":1,"21:v0t":2,"21:v0ty":1}	→ OK v0ty/n21	1041ms
+v0ty	ppu= 9	k3=18 k5=3 loose=6	anch=2 swept=1	conf=0/0	pose v0t=4 v0ty=2 v0=1	shapes=4 {"13":1,"21:v0t":2,"21:v0ty":1}	→ OK v0ty/n21	1058ms
+v0ty	ppu= 8	k3=17 k5=3 loose=6	anch=2 swept=1	conf=0/0	pose v0t=4 v0ty=2 v0=1	shapes=4 {"13":1,"21:v0t":2,"21:v0ty":1}	→ OK v0ty/n21	1126ms
+v0ty	ppu= 7	k3=19 k5=2 loose=7	anch=2 swept=1	conf=0/0	pose v0t=4 v0ty=2 v0=1	shapes=4 {"13":1,"21:v0t":2,"21:v0ty":1}	→ OK v0ty/n21	864ms
+v0ty	ppu= 6	k3=19 k5=2 loose=5	anch=2 swept=1	conf=0/0	pose v0t=4 v0ty=2 v0=1	shapes=4 {"13":1,"21:v0t":2,"21:v0ty":1}	→ 실패 frontend:no-format-candidate	1264ms
+v0ty	ppu= 5	k3=17 k5=3 loose=7	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=4	shapes=2 {"13":2}	→ 실패 frontend:no-format-candidate	1192ms
+v0ty	ppu= 4	k3=0 k5=0 loose=0	anch=0 swept=0	conf=0/0	pose v0t=0 v0ty=0 v0=0	shapes=0 {}	→ 실패 frontend:luma-degenerate	37ms
+v0	ppu=15	k3=12 k5=0 loose=0	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=2	shapes=2 {"13":2}	→ OK v0/n13	893ms
+v0	ppu=13	k3=10 k5=2 loose=2	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=3	shapes=2 {"13":2}	→ OK v0/n13	892ms
+v0	ppu=11	k3=10 k5=3 loose=2	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=3	shapes=2 {"13":2}	→ OK v0/n13	855ms
+v0	ppu= 9	k3=11 k5=1 loose=2	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=3	shapes=2 {"13":2}	→ OK v0/n13	824ms
+v0	ppu= 8	k3=6 k5=1 loose=1	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=2	shapes=2 {"13":2}	→ OK v0/n13	799ms
+v0	ppu= 7	k3=6 k5=1 loose=2	anch=0 swept=3	conf=0/0	pose v0t=0 v0ty=0 v0=2	shapes=2 {"13":2}	→ 실패 frontend:no-grid-hypothesis	1083ms
+v0	ppu= 6	k3=0 k5=0 loose=0	anch=0 swept=0	conf=0/0	pose v0t=0 v0ty=0 v0=0	shapes=0 {}	→ 실패 frontend:luma-degenerate	23ms
+v0	ppu= 5	k3=0 k5=0 loose=0	anch=0 swept=0	conf=0/0	pose v0t=0 v0ty=0 v0=0	shapes=0 {}	→ 실패 frontend:luma-degenerate	31ms
+v0	ppu= 4	k3=0 k5=0 loose=0	anch=0 swept=0	conf=0/0	pose v0t=0 v0ty=0 v0=0	shapes=0 {}	→ 실패 frontend:luma-degenerate	24ms
+
+=== 요약 ===
+v0t: 마지막 성공 ppu=8 · 첫 실패 ppu=7
+  ★ 중앙만 살아 v0 스윕으로 내려간 칸: ppu=4
+  ★ v0T 포즈는 섰는데 하류에서 죽은 칸: ppu=7,6,5
+v0ty: 마지막 성공 ppu=7 · 첫 실패 ppu=6
+  ★ 중앙만 살아 v0 스윕으로 내려간 칸: ppu=5
+  ★ v0T 포즈는 섰는데 하류에서 죽은 칸: ppu=6
+v0: 마지막 성공 ppu=8 · 첫 실패 ppu=7
+  ★ 중앙만 살아 v0 스윕으로 내려간 칸: ppu=7

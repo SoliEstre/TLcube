@@ -2596,11 +2596,21 @@ test('v0X 드랍 ④ — 정본 배열은 한 줄도 안 내려갔다 (v0W2·v0W
 // `cellSurfaceFinal-decode.test.js` 가 잰다. 여기서 잠그는 것은 **블록 로케이터
 // 층의 사실 네 가지**다 (측정: `test/output/lanes/claude-v0t-{toneladder,
 // detect-debug,family-interplay}.out.txt`):
-//   ① v0T·v0TY 자기 복호가 톤 사다리에서 서고, **v0T 의 rot0 × 강한 감마 2칸**은
-//      약점으로 핀한다 — v0W(v0W2 편입 전)·v0W2 가 가졌던 것과 같은 좌표의 약점이고,
-//      기전이 다르다: v0T 의 W 블록(3면 회문 팔레트)이 중앙 유사 서명을 내서
-//      `centres` 상위 3 슬라이스에서 진짜 중앙을 밀어낸다 (anchored 0 — 감마가
-//      실루엣 경로까지 죽이는 칸에서만 겉으로 드러난다).
+//   ① v0T·v0TY 자기 복호가 톤 사다리에서 **12/12** 선다.
+//
+//      ⚠ **정정 (2026-08-17 링 수리)** — 여기에는 «v0T 의 rot0 × 강한 감마 2칸은
+//      약점 핀» 이 있었고, 기전을 «W 블록의 중앙 유사 서명이 `centres` 상위 3
+//      슬라이스에서 진짜 중앙을 밀어낸다» 로 귀속했다. **그 귀속은 틀렸다** —
+//      실측하니 진짜 중앙의 점수 순위는 전 칸 1\~2위로 상위 3 에 늘 든다
+//      (`test/output/lanes/claude-v0t-centre-rank.out.txt`). 중앙은 무죄였다.
+//
+//      진짜 기전은 **코너 쪽**이었다: v0T 프레임에는 120° 링이 둘 있고
+//      (진짜 NE r≈17.8셀 · W 블록 r≈13.4셀), 코너 후보가 «점수순 상위 4» 로
+//      **기하 게이트보다 먼저** 잘려 진짜 링의 세 번째 멤버가 5위로 밀려났다.
+//      자르기를 싼 필터 **뒤로** 옮기니(§bullseyeConfirmedCornerPool ·
+//      §squareRingUsesFullCornerPool) 두 칸이 살아 12/12 가 됐다 —
+//      근거: `test/output/claude-v0t-misclassify.md` · `.agent/_lessons/008`.
+//      게이트는 한 값도 안 내렸다.
 //   ② v0TY 는 12/12 다 — 남은 비대칭 A 블록 하나로 세 방향이 전부 선다
 //      (**의도된 비대칭 이중화**의 블록 로케이터 층 실증).
 //   ③ 패밀리 스위치가 실재하고 서로 독립이다 (v0tFamily · v0tyFamily).
@@ -2622,40 +2632,38 @@ function renderV0ty(pixelsPerUnit) {
 const V0T_FRAME = embed960(renderFinal('v0t', 1, 15));
 const V0TY_FRAME = embed960(renderV0ty(15));
 
-test('v0T 자기 복호 — 톤 4 × 회전 3 (⚠ rot0 × 강한 감마 2칸은 약점 핀 — W 블록 중앙 유사 서명)', {
+test('v0T 자기 복호 — 톤 4 × 회전 3 전부 (링 수리로 rot0 × 강한 감마 2칸 회수)', {
   timeout: 900_000,
 }, () => {
-  // 실측 (claude-v0t-toneladder.out.txt): 10/12 — gamma0.7·gamma0.6 × rot0 두 칸이
-  // frontend:no-format-candidate 로 죽는다. v0W2 의 약점 핀과 같은 좌표·같은 회계다
-  // (v0W2 도 그 두 칸이 죽은 채 편입됐다). 초록이 되면 재측정 신호다.
+  // 실측 (`claude-v0t-pin-remeasure.out.txt`, 2026-08-17 링 수리 후): **12/12**.
+  // 종전 10/12 였고 죽던 두 칸이 gamma0.7·gamma0.6 × rot0 다 — 지금은 셋 다 산다.
+  // 회수의 기전은 **불스아이 확증 구제 경로**다: 그 칸들의 진단이 전부
+  // `conf = 1/2` 이고 `poseCount.v0t = 3` 이다 (수리 전에는 conf 0/0 · 포즈 0).
+  // 그래서 아래는 «복호된다» 뿐 아니라 **무엇이 나르는지**까지 잠근다 — 이 값이
+  // 0 으로 돌아가면 캡이 다시 게이트 앞으로 간 것이다 (`.agent/_lessons/008`).
   const PINS = [
-    ['clean', {}, [0, 120, 240], []],
-    ['sCurve0.6', { sCurve: 0.6 }, [0, 120, 240], []],
-    ['gamma0.7', { gamma: 0.7 }, [120, 240], [0]],
-    ['gamma0.6', { gamma: 0.6 }, [120, 240], [0]],
+    ['clean', {}],
+    ['sCurve0.6', { sCurve: 0.6 }],
+    ['gamma0.7', { gamma: 0.7 }],
+    ['gamma0.6', { gamma: 0.6 }],
   ];
-  for (const [label, tone, wantOk, wantFail] of PINS) {
-    for (const rotation of wantOk) {
-      const decoded = decodeLab(distortImage(V0T_FRAME, { ...tone, rotation, fill: FILL }));
+  // 종전 약점 좌표 — 여기서는 «구제 경로가 실제로 날랐다» 를 추가로 단언한다.
+  const RESCUED = new Set(['gamma0.7 rot0', 'gamma0.6 rot0']);
+  for (const [label, tone] of PINS) {
+    for (const rotation of [0, 120, 240]) {
+      const frame = distortImage(V0T_FRAME, { ...tone, rotation, fill: FILL });
+      const decoded = decodeLab(frame);
       const where = `v0T ${label} rot${rotation}`;
       assert.equal(decoded.ok, true, `${where}: ${decoded.reason || ''}`);
       assert.equal(decoded.text, PAYLOAD, where);
       assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0t',
         `${where} 이 남의 레이아웃으로 복호됐다: ` + decoded.hypothesis.cellSurfaceLayout);
-    }
-    for (const rotation of wantFail) {
-      const frame = distortImage(V0T_FRAME, { ...tone, rotation, fill: FILL });
-      const decoded = decodeLab(frame);
-      const where = `v0T ${label} rot${rotation}`;
-      assert.equal(decoded.ok, false,
-        `${where} 이 초록이 됐다 — 약점이 사라졌으면 재측정하고 핀을 갱신하라`);
-      // 기전 좌표 — 블록 로케이터가 자기 프레임에서 v0t 포즈를 못 세운다
-      // (W 블록의 중앙 유사 서명이 상위 3 슬라이스를 채워 anchored 0 —
-      //  claude-v0t-detect-debug.out.txt). 실루엣 경로가 함께 죽는 감마 칸에서만
-      //  겉으로 드러난다. 이 값이 움직이면 기전 귀속을 다시 재라.
+      if (!RESCUED.has(`${label} rot${rotation}`)) continue;
       const detected = detectCellSurfaceBlockShapes(toRelativeLuminance(frame));
-      assert.equal(detected.diagnostics.poseCount.v0t, 0,
-        `${where}: v0t 포즈가 섰는데 복호가 죽었다 — 약점의 기전이 바뀌었다`);
+      assert.ok(detected.diagnostics.poseCount.v0t > 0,
+        `${where}: v0t 포즈가 0 이다 — 링 수리가 되돌아갔나 (lessons/008)`);
+      assert.ok(detected.diagnostics.bullseyeConfirmed.centres > 0,
+        `${where}: 구제 경로가 안 돌았다 — 이 칸을 나르던 것이 사라졌다`);
     }
   }
 });

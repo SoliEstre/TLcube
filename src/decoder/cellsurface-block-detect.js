@@ -304,6 +304,36 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // v0xq 코너 검증에 훑을 k5 클러스터 상한 (count 내림차순). 참 코너는 count 50+ 라
   // 상위권에 있고, 이 상한이 «클러스터 500개 × 레이 8» 비용을 막는다.
   v0xqMaxInspectedClusters: 24,
+  // ── 링 두 개 문제 (2026-08-17 v0T 오분류 규명, `_lessons/008`) ───────────────
+  //
+  // v0T 파인더에는 **120° 링이 두 개** 있다 — 진짜 NE 블록(r≈17.8셀)과 보조
+  // 블록(ARM/W 계열, r≈13.4셀). 둘 다 3면 복제라 둘 다 코너 검증을 통과한다.
+  // 코너 후보를 **점수순 상위 4** 로 먼저 자르면 두 링이 슬롯을 나눠 가져
+  // 진짜 링의 세 번째 멤버가 5위로 밀린다. 그러면 사각 링 동반자 게이트가 0 을
+  // 돌리고(→ 앵커드 시드 실패), 남은 조합은 전부 링 혼합이라 반경 허용폭 0.18 에서
+  // 전멸한다(실측 0.20/0.54/0.65/0.66 → 확증 경로 tripleCount 전 칸 0). 포즈가
+  // 하나도 안 서면 중앙이 v0 360° 스윕으로 내려가 **n=13** 이 되고 CS 평가는
+  // v0 만 채점한다 — 운영자가 본 «파인더 다 잡고도 v0 으로 분류».
+  //
+  // 실측 확증 (`test/output/claude-v0t-misclassify.md`): 같은 게이트를 코너 **전체**
+  // 에 돌리면 12칸 중 10칸에서 통과 삼중점이 나오고 **전부 5위 멤버를 필요로 한다**.
+  // 정보는 있었고 자르기가 버렸다.
+  //
+  // 수리 방향은 «게이트 완화» 가 아니라 **«싼 필터를 캡보다 앞으로»** 다. 삼중점의
+  // 기하 검사(반경비·120°·중심 불스아이)는 세 점 산술이라 사실상 공짜고, 비싼 것은
+  // 그 뒤의 `refinePose` 다. 그래서 **후보 풀은 넓히고 «시딩까지 가는 삼중점 수» 를
+  // 캡한다** — 비용 지평(refinePose 호출 수)은 종전과 같다.
+  /** 불스아이 확증 경로가 보는 느슨 코너 풀. 4 로 되돌리면 종전 동작. */
+  bullseyeConfirmedCornerPool: 8,
+  /** 그중 **시딩까지 가는** 삼중점 상한. 종전 유효 천장 C(4,3)=4 를 그대로 둔다. */
+  bullseyeConfirmedMaxTriples: 4,
+  /**
+   * 사각 링 동반자 게이트가 **잘리지 않은** 엄격 코너 목록을 본다. 이 게이트는
+   * 순수 산술이라(«같은 반경의 120° 쌍둥이가 있나») 목록을 넓혀도 refinePose 는
+   * 한 번도 늘지 않는다 — 늘어나는 것은 «증거가 있다» 판정뿐이고, 수용은 여전히
+   * 하류 CS 게이트(agreement 0.78 · margin 0.035)가 한다. false 면 종전 동작.
+   */
+  squareRingUsesFullCornerPool: true,
   // ── 교차 누수 봉합 (2026-08-17) — «가짜 후보를 더 잘 거른다» 방향 ──────────
   //
   // 왜 필요한가 (실측, `test/output/claude-v0w2-program.md` §21\~§22):
@@ -2166,6 +2196,25 @@ function squareRingCompanions(centre, corner, corners, cfg) {
   return found;
 }
 
+/**
+ * 사각 링 동반자 — **게이트용** 값. 넓은 풀(`ringPool`)까지 훑는다.
+ *
+ * ⚠ 왜 `companions` 와 **따로** 두는가 (2026-08-17 회귀에서 배운 것):
+ * `squareRingCompanions` 는 게이트일 뿐 아니라 **정렬 키**다 —
+ * `familyPoses.sort` 의 첫 항목이 `squareRingCompanions` 이고, 그 뒤
+ * `maximumPosesPerFamily(2)` 로 잘린다. 풀만 넓혀서 이 값을 키웠더니 포즈 **순위**가
+ * 바뀌어 옳은 포즈가 상위 2 밖으로 밀렸고, v0T·v0W2 자기 복호가 깨졌다
+ * (스위트 fail 1 → 5). 그래서 **포즈에 싣는 값·telemetry 는 종전(캡된 목록) 그대로**
+ * 두고, 여기 값은 «증거가 있나» 라는 **불리언 판정에만** 쓴다.
+ *
+ * 풀이 같으면(스위치 off) 재계산 없이 종전 값을 그대로 돌려준다 — 비트 동일.
+ */
+function companionsForGate(centre, corner, corners, ringPool, cfg, companions) {
+  if (ringPool === corners) return companions;
+  if (companions !== 0) return companions;
+  return squareRingCompanions(centre, corner, ringPool, cfg);
+}
+
 /** 중앙+원거리 쌍의 similarity 시드 — canonical 대각 (0,−1)·radius → 코너.
  *  R·(0,−1) = w 에서 cos = −wy, sin = wx. */
 function anchoredSimilaritySeed(centre, corner, factor, radiusCells) {
@@ -2223,7 +2272,14 @@ function anchoredSimilaritySeedTo(centre, corner, factor, canonicalPoint) {
  * 반환의 anchoredCentres 는 **앵커드 포즈가 실제로 선** 중앙 인덱스다 — v0 스윕
  * 조기 분기의 조건. 결정성: centres/corners 는 verified 정렬 순서로만 순회한다.
  */
-function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetry = null) {
+function assembleAnchoredPoses(
+  centres, corners, fullLuma, factor, cfg, telemetry = null, companionPool = null,
+) {
+  // 사각 링 동반자 게이트만 **잘리지 않은** 코너 목록을 본다 (§squareRingUsesFullCornerPool).
+  // 쌍 순회(= refinePose 예산)는 여전히 캡된 `corners` 위에서 돈다 — 비용 불변.
+  const ringPool = cfg.squareRingUsesFullCornerPool !== false && Array.isArray(companionPool)
+    ? companionPool
+    : corners;
   const posesV2r2 = [];
   const posesV1r2 = [];
   const posesV0x = [];
@@ -2303,12 +2359,13 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
       if (cfg.v0xFamily !== false
         && Math.abs(estimatedRadius - V0X_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
+        const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (companions > 0) companionPairs += 1;
         // 게이트 실패는 **v0X 시딩만** 건너뛴다. 예전에는 `continue` 로 코너 반복
         // 자체를 끊었는데, 그때는 뒤에 아무 패밀리도 없어 결과가 같았다. v0W 가
         // 뒤에 붙으면서 «v0X 게이트가 v0W 를 대신 자르는» 결합이 생기므로 끊는다
         // (기존 패밀리 동작은 비트 단위로 동일 — 뒤에 코드가 없던 자리의 형태 변경).
-        if (companions !== 0 || cfg.v0xRequireSquareRing === false) {
+        if (gateCompanions !== 0 || cfg.v0xRequireSquareRing === false) {
           const H0 = anchoredSimilaritySeed(centre, corner, factor, V0X_CORE_RADIUS_CELLS);
           const refined = refinePose(fullLuma, H0, patchesFor(V0X_N, 'v0x'), cfg, telemetry);
           if (refined) {
@@ -2337,7 +2394,8 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
       if (cfg.v0wFamily !== false
         && Math.abs(estimatedRadius - V0W_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
-        if (companions !== 0 || cfg.v0wRequireSquareRing === false) {
+        const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
+        if (gateCompanions !== 0 || cfg.v0wRequireSquareRing === false) {
           const patches = patchesFor(V0W_N, 'v0w');
           // YFACE_LIST[0] = 'T' — 면 T 의 동심 사각 무게중심이 canonical 앵커다.
           const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
@@ -2364,7 +2422,8 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
       if (cfg.v0w2Family !== false
         && Math.abs(estimatedRadius - V0W2_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
-        if (companions !== 0 || cfg.v0w2RequireSquareRing === false) {
+        const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
+        if (gateCompanions !== 0 || cfg.v0w2RequireSquareRing === false) {
           const patches = patchesFor(V0W2_N, 'v0w2');
           // YFACE_LIST[0] = 'T' — 면 T 의 동심 사각 무게중심이 canonical 앵커다
           // (v0W 과 같은 블록이라 같은 방향 −141.1°).
@@ -2393,7 +2452,8 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
       if (cfg.v0wyFamily !== false
         && Math.abs(estimatedRadius - V0WY_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
-        if (companions !== 0 || cfg.v0wyRequireSquareRing === false) {
+        const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
+        if (gateCompanions !== 0 || cfg.v0wyRequireSquareRing === false) {
           const patches = patchesFor(V0WY_N, 'v0wy');
           const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
           const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
@@ -2421,7 +2481,8 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
       if (cfg.v0tFamily !== false
         && Math.abs(estimatedRadius - V0T_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
-        if (companions !== 0 || cfg.v0tRequireSquareRing === false) {
+        const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
+        if (gateCompanions !== 0 || cfg.v0tRequireSquareRing === false) {
           const patches = patchesFor(V0T_N, 'v0t');
           const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
           const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
@@ -2445,7 +2506,8 @@ function assembleAnchoredPoses(centres, corners, fullLuma, factor, cfg, telemetr
       if (cfg.v0tyFamily !== false
         && Math.abs(estimatedRadius - V0TY_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
-        if (companions !== 0 || cfg.v0tyRequireSquareRing === false) {
+        const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
+        if (gateCompanions !== 0 || cfg.v0tyRequireSquareRing === false) {
           const patches = patchesFor(V0TY_N, 'v0ty');
           const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
           const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
@@ -2569,6 +2631,13 @@ function assembleBullseyeConfirmedPoses(
         // 엄격 경로가 이미 세운 중앙은 손대지 않는다 (무회귀의 근거).
         if (anchoredCentres.has(centreIndex)) continue;
         tripleCount += 1;
+        // 시딩까지 가는 삼중점 수를 여기서 캡한다 (§bullseyeConfirmedMaxTriples).
+        // 위 기하 검사(반경비·120°·중심 불스아이)는 세 점 산술이라 사실상 공짜고
+        // 비싼 것은 아래 refinePose 다 — **캡을 싼 필터 뒤에 둔다**는 것이 이번
+        // 수리의 요지다 (`_lessons/008`: 자르기가 게이트보다 앞이면 정답이 버려진다).
+        // `tripleCount` 는 캡 **앞**에서 세므로 «유효 삼중점이 몇 개 있었나» 의
+        // 정직한 분모로 남는다 (종전엔 풀이 4라 이 값이 늘 0\~4 였다).
+        if (tripleCount > cfg.bullseyeConfirmedMaxTriples) continue;
         const anchor = centres[centreIndex];
         for (const corner of triple) {
           const distance = Math.hypot(corner.x - anchor.x, corner.y - anchor.y);
@@ -3096,7 +3165,11 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   const {
     posesV2r2, posesV1r2, posesV0x, posesV0w, posesV0w2, posesV0wy, posesV0t, posesV0ty,
     anchoredCentres, companionPairs, slotQrRejected,
-  } = assembleAnchoredPoses(centres, corners, luma, reduced.factor, cfg, partialTelemetry);
+  } = assembleAnchoredPoses(
+    centres, corners, luma, reduced.factor, cfg, partialTelemetry,
+    // 동반자 게이트 전용 풀 — 잘리지 않은 엄격 코너 전체 (§squareRingUsesFullCornerPool).
+    verified.filter((hit) => hit.kind === 'v2r2-corner'),
+  );
   // ★ 중앙 불스아이 확증 (과업 3 ③) — 엄격 코너가 3개를 못 채워 사각 링 게이트가
   // 구조적으로 0 이 된 중앙만 구제한다. 엄격 경로가 이미 세운 중앙은 건드리지 않는다.
   const confirmed = cfg.centreBullseyeConfirmedPoses === false
@@ -3112,7 +3185,11 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       slotQrRejected: 0,
     }
     : assembleBullseyeConfirmedPoses(
-      centres, anchoredCentres, v0xqCorners.slice(0, 4), luma, reduced.factor, cfg,
+      centres, anchoredCentres,
+      // 풀을 넓힌다 (종전 4). 링이 둘이면 진짜 링의 세 번째 멤버가 5위로 밀려
+      // 잘려 나갔다 — 실측 근거는 §bullseyeConfirmedCornerPool 주석.
+      v0xqCorners.slice(0, cfg.bullseyeConfirmedCornerPool),
+      luma, reduced.factor, cfg,
       partialTelemetry,
     );
   posesV0x.push(...confirmed.posesV0x);
