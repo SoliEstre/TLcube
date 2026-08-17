@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>v0t 사진 크롭 덤프</title>
+<!--
+  crop-dump.html — 책상 전체를 담은 문서 샷을 **스캐너가 보는 프레이밍**으로 잘라
+  휘도 덤프를 다시 굽는다.
+
+  왜: 운영자가 준 v0T 실패 사진은 3000×4000 방 전체 샷이라, 960/1440 로 줄이면
+  큐브가 셀당 ~3px 이 된다. 스캐너는 큐브에 프레이밍하므로 그 조건이 아니다.
+  같은 광학(화면 모아레·백라이트·시야각·카메라 ISP)을 유지한 채 **배율만** 실제에
+  맞춘다.
+
+  크롭 상자: 두 장을 눈으로 확인해 큐브 중심이 (0.46W, 0.50H) 근처, 큐브 폭이
+  0.16~0.24W 였다. 넉넉히 0.55W × 0.41H 로 잡으면 둘 다 여유 있게 들어간다.
+  ⚠ 이건 추정이므로 아래가 **자기검증**한다 — 크롭 안의 휘도 분산이 원본보다
+  뚜렷이 커야 «코드를 담았다» 는 뜻이다. 아니면 그 장은 표시하고 건너뛴다.
+-->
+<body style="font:13px system-ui;padding:12px">
+<button id="go">크롭 덤프 실행</button>
+<span id="status"></span>
+<pre id="log" style="white-space:pre-wrap"></pre>
+<script>
+const CX = 0.46, CY = 0.50, BW = 0.55, BH = 0.41;
+const log = (s) => { document.getElementById('log').textContent += s + '\n'; };
+
+function loadImage(src) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('load ' + src));
+    img.src = src;
+  });
+}
+
+function lumaOf(ctx, w, h) {
+  const { data } = ctx.getImageData(0, 0, w, h);
+  const out = new Float64Array(w * h);
+  for (let i = 0; i < w * h; i += 1) {
+    // sRGB → 상대휘도 (decoder/luma.js 와 같은 계수·같은 선형화).
+    const lin = (v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+    out[i] = 0.2126 * lin(data[i * 4]) + 0.7152 * lin(data[i * 4 + 1]) + 0.0722 * lin(data[i * 4 + 2]);
+  }
+  return out;
+}
+
+function variance(a) {
+  let m = 0; for (const v of a) m += v; m /= a.length;
+  let s = 0; for (const v of a) s += (v - m) * (v - m);
+  return s / a.length;
+}
+
+async function dump(name, canvas, maxSide) {
+  const w = canvas.width, h = canvas.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const data = lumaOf(ctx, w, h);
+  const out = new Uint8Array(12 + w * h * 2);
+  const view = new DataView(out.buffer);
+  out.set([0x54, 0x4c, 0x4c, 0x32], 0);
+  view.setUint32(4, w, true); view.setUint32(8, h, true);
+  for (let i = 0; i < w * h; i += 1) {
+    view.setUint16(12 + i * 2, Math.max(0, Math.min(65535, Math.round(data[i] * 65535))), true);
+  }
+  const target = `test/output/photos/luma/${name}.${maxSide}.luma`;
+  const res = await fetch('/__luma?path=' + encodeURIComponent(target), { method: 'PUT', body: out });
+  if (!res.ok) throw new Error('PUT ' + res.status);
+  return { target, w, h, variance: variance(data) };
+}
+
+document.getElementById('go').addEventListener('click', async () => {
+  const base = '/test/output/photos/';
+  const names = (await (await fetch(base + 'manifest.json')).json())
+    .filter((n) => n.includes('20260817_231239674'));
+  log('대상 ' + names.length + '장');
+  for (const name of names) {
+    const img = await loadImage(base + name.split('/').map(encodeURIComponent).join('/'));
+    const W = img.naturalWidth, H = img.naturalHeight;
+    // 원본 전체의 휘도 분산 (대조군) — 축소본으로 싸게 잰다.
+    const full = document.createElement('canvas');
+    full.width = 240; full.height = Math.round(240 * H / W);
+    full.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, full.width, full.height);
+    const fullVar = variance(lumaOf(full.getContext('2d', { willReadFrequently: true }), full.width, full.height));
+
+    const sx = Math.round(CX * W - BW * W / 2), sy = Math.round(CY * H - BH * H / 2);
+    const sw = Math.round(BW * W), sh = Math.round(BH * H);
+    for (const maxSide of [960, 1440]) {
+      const scale = maxSide / Math.max(sw, sh);
+      const c = document.createElement('canvas');
+      c.width = Math.round(sw * scale); c.height = Math.round(sh * scale);
+      c.getContext('2d', { willReadFrequently: true })
+        .drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+      const short = name.replace(/^.*\//, '').replace(/\.[^.]+$/, '');
+      const info = await dump('v0t-crop-20260817/' + short, c, maxSide);
+      const ratio = info.variance / fullVar;
+      log(`${short} @${maxSide}  ${info.w}×${info.h}`
+        + `  분산비 ${ratio.toFixed(2)}  ${ratio > 1.2 ? 'ok' : '★크롭이 코드를 못 담았을 수 있다'}`);
+    }
+  }
+  document.getElementById('status').textContent = '완료';
+});
+</script>
+</body>

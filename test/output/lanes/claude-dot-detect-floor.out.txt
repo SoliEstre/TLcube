@@ -1,0 +1,22 @@
+layout ppu | 참 점 분리폭(T/L/R, clean=+) | 탐색 상위3 오차(셀) | NE링 코너 | 판정
+v0t 12 | 0.21-/0.21-/0.09-    | 0.40 0.32 0.22     (적중 3/3) | 2 | 둘 다 산다
+v0t 10 | 0.20-/0.36-/0.11-    | 없음                 (적중 0/3) | 2 | ★NE 만 산다
+v0t  9 | 0.19-/0.22-/0.16+    | 0.53 0.23 0.31     (적중 3/3) | 3 | 둘 다 산다
+v0t  8 | 0.17-/0.28-/0.20+    | 0.44 0.35 0.15     (적중 3/3) | 3 | 둘 다 산다
+v0t  7 | 0.15-/0.22-/0.18+    | 0.64 0.46 0.23     (적중 3/3) | 3 | 둘 다 산다
+v0t  6 | 0.17-/0.25-/0.16+    | 0.66 0.55 0.11     (적중 3/3) | 3 | 둘 다 산다
+v0t  5 | 0.20-/0.15-/0.18+    | 0.45               (적중 1/3) | 1 | ★점만 산다 (NE 링 부족)
+
+file:///C:/Dev/TrilLuminanceCube/TLcube/src/sceneY.js:625
+      throw new RangeError(
+            ^
+
+RangeError: QR 슬롯 변형(v0ty)은 qrText 없이 렌더할 수 없다 — 슬롯 8×8셀이 비어 버린다
+    at buildSceneY (file:///C:/Dev/TrilLuminanceCube/TLcube/src/sceneY.js:625:13)
+    at build (file:///C:/Dev/TrilLuminanceCube/TLcube/test/output/lanes/claude-dot-detect-floor.mjs:64:17)
+    at file:///C:/Dev/TrilLuminanceCube/TLcube/test/output/lanes/claude-dot-detect-floor.mjs:124:34
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+
+Node.js v24.14.1
