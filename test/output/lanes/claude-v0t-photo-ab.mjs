@@ -34,7 +34,7 @@ const labOptions = (csBlockLocator) => ({
   },
 });
 
-const dumps = listLumaDumps().filter((d) => d.name.includes('20260817_231239674'));
+const dumps = listLumaDumps().filter((d) => d.name.includes('20260817_23'));
 if (!dumps.length) {
   console.log('★ v0t-20260817 덤프가 없다 — photo-probe.html 로 먼저 구워라.');
   process.exit(1);

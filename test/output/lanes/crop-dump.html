@@ -69,7 +69,7 @@ async function dump(name, canvas, maxSide) {
 document.getElementById('go').addEventListener('click', async () => {
   const base = '/test/output/photos/';
   const names = (await (await fetch(base + 'manifest.json')).json())
-    .filter((n) => n.includes('20260817_231239674'));
+    .filter((n) => n.includes('20260817_23'));
   log('대상 ' + names.length + '장');
   for (const name of names) {
     const img = await loadImage(base + name.split('/').map(encodeURIComponent).join('/'));
