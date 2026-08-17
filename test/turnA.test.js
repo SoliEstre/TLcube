@@ -1,0 +1,99 @@
+// turnA.test.js — 턴A 배정 표 회귀 (oak ⑦ · 015 §16 운영자 확정의 코드 고정)
+//
+// 고정하는 것: ① 표 값 그 자체 (표가 유일한 진실 — 조용한 재배정을 막는다),
+// ② (값,k) 무경합 — hex(O)·tri(A) 공유축 전점유 대비, ③ 균일 오프셋 4bit 넘침
+// (표 주도 배정이 «필수»인 이유의 실측), ④ 회계 — 최악 소요 6값이 사용 가능
+// 공간 안에 든다, ⑤ K1 예약(7)·cube 축(8..11) 무침범.
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  CUBE_AXIS_FORMAT_INDEXES,
+  K1_RESERVED_FORMAT_INDEX,
+  TURN_A_FORMAT_INDEX,
+  hexTriAxisOccupancy,
+  turnASpec,
+  turnASpecFromFormatIndex,
+} from '../src/turnA.js';
+import { VERSIONS_A } from '../src/capacityA.js';
+import { VERSION_BITS } from '../src/formatinfo.js';
+import { encodeA } from '../src/encodeA.js';
+
+test('표 값 고정 — 배정은 표 그 자체다', () => {
+  const table = TURN_A_FORMAT_INDEX.map((e) => [e.name, e.formatIndex, e.k, e.centerQr]);
+  assert.deepEqual(table, [
+    ['A0T', 2, 6, false],
+    ['A0TQ', 5, 6, true],
+    ['A1T', 4, 8, false],
+    ['A1TQ', 6, 8, true],
+    ['A2T', 0, 10, false],
+    ['A2TQ', 3, 10, true],
+  ]);
+});
+
+test('(값,k) 무경합 — hex·tri 공유축 전점유 + 턴A 6항목 전수', () => {
+  const seen = new Map();
+  const claim = (owner, formatIndex, k) => {
+    const key = formatIndex + '|' + k;
+    assert.ok(!seen.has(key),
+      owner + ' 와 ' + seen.get(key) + ' 이 (' + formatIndex + ', k' + k + ') 경합');
+    seen.set(key, owner);
+  };
+  for (const occ of hexTriAxisOccupancy()) claim(occ.owner, occ.formatIndex, occ.k);
+  for (const entry of TURN_A_FORMAT_INDEX) claim(entry.name, entry.formatIndex, entry.k);
+  // 현행 점유가 실제 인코더와 같은지 — encodeA 실호출 교차 검증 (A0Q 실재 포함)
+  for (const spec of VERSIONS_A) {
+    for (const centerQr of [false, true]) {
+      const enc = encodeA('x', { version: spec.version, eccLevel: 'M', centerQr });
+      const expected = spec.formatIndex + (centerQr ? 2 : 0);
+      assert.equal(enc.formatIndex, expected,
+        spec.name + (centerQr ? 'Q' : '') + ' 실점유가 표와 다르다');
+    }
+  }
+});
+
+test('균일 오프셋은 4bit 를 넘친다 — 표 주도가 필수인 이유 (실측)', () => {
+  assert.equal(VERSION_BITS, 4);
+  const a1 = VERSIONS_A.find((v) => v.name === 'A1');
+  const a2 = VERSIONS_A.find((v) => v.name === 'A2');
+  // 어떤 균일 오프셋 off ≥ 1 도 A2Q(=15) 를 넘친다. «+2 짝» 관례를 턴A 에
+  // 이으려 해도 A1Q=14 → 16 이라 즉시 넘친다.
+  assert.ok(a1.formatIndex + 2 + 2 > 15, 'A1Q + 2 = ' + (a1.formatIndex + 4));
+  assert.ok(a2.formatIndex + 2 + 1 > 15, 'A2Q + 1 = ' + (a2.formatIndex + 3));
+});
+
+test('회계 — 최악 소요 6값 ≤ 사용 가능 공간 (7·8..11 제외, k 공유 포함)', () => {
+  // 최악 소요 = T × {기본, Q} × 3버전 = 6 (A0Q 가 실재하므로 A0TQ 도 소요에 든다)
+  assert.equal(TURN_A_FORMAT_INDEX.length, 6);
+  // 사용 가능 공간: k 별로 «(값,k) 미점유 ∧ 값 ∉ {7, 8..11}» 를 센다
+  const occupied = new Set(hexTriAxisOccupancy().map((o) => o.formatIndex + '|' + o.k));
+  const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES]);
+  for (const k of [6, 8, 10]) {
+    let free = 0;
+    for (let v = 0; v <= 15; v += 1) {
+      if (banned.has(v)) continue;
+      if (occupied.has(v + '|' + k)) continue;
+      free += 1;
+    }
+    const need = TURN_A_FORMAT_INDEX.filter((e) => e.k === k).length;
+    assert.ok(need <= free, 'k' + k + ': 소요 ' + need + ' > 여유 ' + free);
+  }
+});
+
+test('K1 예약·cube 축 무침범 + 기저 k 일치', () => {
+  for (const entry of TURN_A_FORMAT_INDEX) {
+    assert.notEqual(entry.formatIndex, K1_RESERVED_FORMAT_INDEX, entry.name);
+    assert.ok(!CUBE_AXIS_FORMAT_INDEXES.includes(entry.formatIndex), entry.name);
+    const base = VERSIONS_A.find((v) => v.version === entry.version);
+    assert.equal(entry.k, base.k, entry.name + ' k 불일치');
+  }
+});
+
+test('조회 함수 — 정방향·역방향 왕복', () => {
+  for (const entry of TURN_A_FORMAT_INDEX) {
+    assert.equal(turnASpec(entry.version, { centerQr: entry.centerQr }), entry);
+    assert.equal(turnASpecFromFormatIndex(entry.formatIndex, entry.k), entry);
+  }
+  assert.equal(turnASpecFromFormatIndex(7, 6), null);
+  assert.throws(() => turnASpec(3), RangeError);
+});
