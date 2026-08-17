@@ -1,0 +1,18 @@
+덤프                      전체ms | 단계별 ms (호출수)
+231239674_01              2356   | proposal 2313(1)  decode 15(8)  format 2(8)  verify 0(4)
+231239674_02              3628   | proposal 3542(2)  format 30(246)  decode 19(16)  verify 0(8)
+231239674_03              624    | proposal 586(1)  decode 20(12)  format 2(12)  verify 0(6)
+231239674_04              2172   | proposal 2137(1)  decode 15(12)  format 2(12)  verify 0(6)
+231239674_05              2523   | proposal 2467(1)  decode 34(20)  format 3(20)  verify 0(10)
+231239674                 1952   | proposal 1924(1)  decode 9(8)  format 1(8)  verify 0(4)
+232739735_01              1569   | proposal 1531(1)  decode 22(12)  format 2(16)  verify 0(6)
+232739735                 1874   | proposal 1844(1)  decode 13(8)  format 1(8)  verify 0(4)
+
+=== 단계 총합 ===
+  proposal     16344ms  (98%)  호출 9회  평균 1816.0ms
+  decode         147ms  (1%)  호출 96회  평균 1.5ms
+  format          43ms  (0%)  호출 330회  평균 0.1ms
+  verify           0ms  (0%)  호출 48회  평균 0.0ms
+  (합계)         16698ms
+
+판독: 「호출 수 × 평균」 중 어느 쪽이 큰지가 처방을 가른다 — 호출이 많으면 후보 가지치기, 평균이 크면 그 단계 자체의 최적화(또는 WASM).

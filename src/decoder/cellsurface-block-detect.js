@@ -585,7 +585,15 @@ function scanConcentricCores(luma, otsuCut, cfg, out = []) {
   return out;
 }
 
-function clusterCores(candidates, cfg) {
+/**
+ * 군집화 **선형 참조판** — 2026-08-18 격자판 이전의 원본 그대로다.
+ *
+ * 런타임은 쓰지 않는다. 존재 이유는 하나 — 격자판이 실사진에서 **같은 클러스터를
+ * 내는지** 테스트가 직접 검산하기 위해서다. 어제 실사진 A/B(개선 13 · 회귀 0)가
+ * 이 함수의 출력 위에 서 있으므로, 최적화가 결과를 한 톨이라도 바꾸면 그 검증이
+ * 통째로 무효가 된다. 지우지 말 것.
+ */
+function clusterCoresLinear(candidates, cfg) {
   const byKind = new Map();
   for (const candidate of candidates) {
     if (!byKind.has(candidate.kind)) byKind.set(candidate.kind, []);
@@ -599,24 +607,142 @@ function clusterCores(candidates, cfg) {
     for (const candidate of list) {
       let home = null;
       for (const cluster of kindClusters) {
-        const meanX = cluster.sumX / cluster.count;
-        const meanY = cluster.sumY / cluster.count;
-        const meanU = cluster.sumU / cluster.count;
-        // reach 는 좁게 — 데이터 필드의 이웃 우연 코어가 평균을 끌고 가지 않게 한다.
-        const reach = 1.2 * Math.max(meanU, candidate.u, 2);
-        const dx = candidate.x - meanX;
-        const dy = candidate.y - meanY;
-        // u 가 크게 다른 코어는 같은 앵커가 아니다 — 체인 스미어 방지.
-        const uCompatible = candidate.u >= 0.5 * meanU && candidate.u <= 2.0 * meanU;
-        if (uCompatible && dx * dx + dy * dy <= reach * reach) {
-          home = cluster;
-          break;
-        }
+        if (clusterAccepts(cluster, candidate)) { home = cluster; break; }
       }
       if (!home) {
         home = { kind, count: 0, sumX: 0, sumY: 0, sumU: 0 };
         kindClusters.push(home);
       }
+      home.count += 1;
+      home.sumX += candidate.x;
+      home.sumY += candidate.y;
+      home.sumU += candidate.u;
+    }
+    for (const cluster of kindClusters) {
+      if (cluster.count < cfg.minimumClusterSupport) continue;
+      clusters.push({
+        kind,
+        count: cluster.count,
+        x: cluster.sumX / cluster.count,
+        y: cluster.sumY / cluster.count,
+        u: cluster.sumU / cluster.count,
+      });
+    }
+  }
+  clusters.sort((left, right) =>
+    right.count - left.count || left.y - right.y || left.x - right.x);
+  return clusters;
+}
+
+/**
+ * 후보 하나가 들어갈 클러스터를 찾는 술어 — 선형판과 격자판이 **같은 식**을 쓴다.
+ * 둘이 갈라지면 등가가 깨지므로 여기 말고 다른 곳에서 이 조건을 쓰지 않는다.
+ */
+function clusterAccepts(cluster, candidate) {
+  const meanX = cluster.sumX / cluster.count;
+  const meanY = cluster.sumY / cluster.count;
+  const meanU = cluster.sumU / cluster.count;
+  // reach 는 좁게 — 데이터 필드의 이웃 우연 코어가 평균을 끌고 가지 않게 한다.
+  const reach = 1.2 * Math.max(meanU, candidate.u, 2);
+  const dx = candidate.x - meanX;
+  const dy = candidate.y - meanY;
+  // u 가 크게 다른 코어는 같은 앵커가 아니다 — 체인 스미어 방지.
+  const uCompatible = candidate.u >= 0.5 * meanU && candidate.u <= 2.0 * meanU;
+  return uCompatible && dx * dx + dy * dy <= reach * reach;
+}
+
+/**
+ * 후보를 받을 수 있는 클러스터가 존재할 수 있는 **최대 거리**.
+ *
+ * u 호환 조건이 `candidate.u <= 2·meanU` 를 요구하므로 매치 가능한 클러스터는
+ * `meanU >= candidate.u / 2` 이고, 동시에 `candidate.u >= 0.5·meanU` 이므로
+ * `meanU <= 2·candidate.u` 다. 따라서 reach = 1.2·max(meanU, u, 2) 의 상한이
+ * **후보만으로** 정해진다 — 이 사실이 격자 탐색의 정확성 근거다.
+ */
+function clusterSearchRadius(candidate) {
+  return 1.2 * Math.max(2 * candidate.u, 2);
+}
+
+/** 격자 버킷 한 변 (축소 좌표 px). 탐색 반경 대비 너무 작으면 버킷 수가, 크면 후보 수가 는다. */
+const CLUSTER_BUCKET_PX = 16;
+
+/**
+ * 코어 군집화 — **공간 격자판** (2026-08-18).
+ *
+ * 왜 고쳤나: 실사진 비용 프로파일(`test/output/lanes/claude-cost-profile.out.txt`)에서
+ * 로케이터 시간의 **87 %** 가 이 함수였다. 후보마다 기존 클러스터를 **전부** 훑어
+ * O(후보 × 클러스터) 다 — 코어 6095 → 14 ms 인데 63587 → 2570 ms 로 **초선형**
+ * (코어 10.4배에 시간 183배). fps 를 막고 있던 것이 이것이다.
+ *
+ * ⚠ **출력은 선형판과 비트 동일해야 한다** — 어제 실사진 A/B(개선 13·회귀 0)가
+ * 그 위에 서 있다. 선형판은 «삽입 순서상 처음 매치하는 클러스터» 를 고르므로
+ * (`break`), 격자판도 후보 버킷 이웃에서 모은 매치 중 **삽입 인덱스가 가장 작은**
+ * 것을 고른다. 두 판이 같은 술어(`clusterAccepts`)와 같은 반경 상한
+ * (`clusterSearchRadius`)을 쓰고, `clusterCoresLinear` 를 INTERNALS 로 노출해
+ * 테스트가 실사진에서 **동일성을 직접 검산**한다.
+ */
+function clusterCores(candidates, cfg) {
+  const byKind = new Map();
+  for (const candidate of candidates) {
+    if (!byKind.has(candidate.kind)) byKind.set(candidate.kind, []);
+    byKind.get(candidate.kind).push(candidate);
+  }
+  const clusters = [];
+  for (const kind of ['k5', 'k3']) {
+    const list = byKind.get(kind) || [];
+    list.sort((left, right) => left.y - right.y || left.x - right.x || left.u - right.u);
+    const kindClusters = [];
+    // 버킷키 → 그 버킷에 mean 이 든 클러스터의 삽입 인덱스 배열.
+    const buckets = new Map();
+    const bucketOf = (x, y) => (Math.floor(x / CLUSTER_BUCKET_PX) * 100003)
+      + Math.floor(y / CLUSTER_BUCKET_PX);
+    const place = (index, x, y) => {
+      const key = bucketOf(x, y);
+      const slot = buckets.get(key);
+      if (slot) slot.push(index); else buckets.set(key, [index]);
+      return key;
+    };
+    for (const candidate of list) {
+      const radius = clusterSearchRadius(candidate);
+      // +1 은 부동소수·버킷 경계 여유다. 등가가 정확성의 전부라 인색하게 굴지 않는다.
+      const span = Math.ceil(radius / CLUSTER_BUCKET_PX) + 1;
+      const bx = Math.floor(candidate.x / CLUSTER_BUCKET_PX);
+      const by = Math.floor(candidate.y / CLUSTER_BUCKET_PX);
+      // 삽입 순서상 **처음** 매치를 고른다 — 선형판의 break 와 같은 선택.
+      let bestIndex = -1;
+      for (let gx = bx - span; gx <= bx + span; gx += 1) {
+        for (let gy = by - span; gy <= by + span; gy += 1) {
+          const slot = buckets.get((gx * 100003) + gy);
+          if (!slot) continue;
+          for (const index of slot) {
+            if (bestIndex >= 0 && index > bestIndex) continue;
+            if (clusterAccepts(kindClusters[index], candidate)) bestIndex = index;
+          }
+        }
+      }
+      let home;
+      if (bestIndex >= 0) {
+        home = kindClusters[bestIndex];
+        // 평균이 움직이면 버킷도 옮긴다 (드물다 — reach 안에서만 흡수하므로).
+        const beforeKey = home.bucketKey;
+        home.count += 1;
+        home.sumX += candidate.x;
+        home.sumY += candidate.y;
+        home.sumU += candidate.u;
+        const afterKey = bucketOf(home.sumX / home.count, home.sumY / home.count);
+        if (afterKey !== beforeKey) {
+          const old = buckets.get(beforeKey);
+          if (old) {
+            const at = old.indexOf(bestIndex);
+            if (at >= 0) old.splice(at, 1);
+          }
+          home.bucketKey = place(bestIndex, home.sumX / home.count, home.sumY / home.count);
+        }
+        continue;
+      }
+      home = { kind, count: 0, sumX: 0, sumY: 0, sumU: 0, bucketKey: 0 };
+      kindClusters.push(home);
+      home.bucketKey = place(kindClusters.length - 1, candidate.x, candidate.y);
       home.count += 1;
       home.sumX += candidate.x;
       home.sumY += candidate.y;
@@ -3352,6 +3478,8 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   homographyLeastSquares,
   scanConcentricCores,
   clusterCores,
+  // 격자판 등가 검산용 선형 참조판 (§clusterCoresLinear). 런타임 경로는 안 쓴다.
+  clusterCoresLinear,
   verifyV2r2Cluster,
   verifyV0Cluster,
   verifyV0xqCornerCluster,
