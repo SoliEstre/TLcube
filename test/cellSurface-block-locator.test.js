@@ -208,7 +208,12 @@ const RESTORE_V0W_SERIES = Object.freeze({
   calibration: {
     csBlockLocator: {
       v0wFamily: true, v0wqFamily: true, v0w2Family: true, v0wyFamily: true,
-      v0tFamily: false, v0tyFamily: false,
+      // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — v0tr·v0trq 도 함께 끔는다.
+      // 아래 «격리 복원» 주석이 적은 기전이 **그대로 재현됐다** — 켜 둔 채로 돌리면
+      // v0tr 포즈의 다양성이 v0W2 의 rot0 감마 약점 핀을 구제해 gamma0.7 rot0 이
+      // 초록이 되고, v0W 의 F6 슬롯 위반이 3 → 4 로 움직인다 (실측).
+      // «복원 = 드랩 전 동작 그대로» 를 재려면 신설 패밀리를 전부 꿐야 한다.
+      v0tFamily: false, v0tyFamily: false, v0trFamily: false, v0trqFamily: false,
     },
   },
 });
@@ -224,7 +229,12 @@ const RESTORE_V0W_SERIES_ISOLATED_LOCATOR = Object.freeze({
   calibration: {
     csBlockLocator: {
       v0wFamily: true, v0wqFamily: true, v0w2Family: true, v0wyFamily: true,
-      v0tFamily: false, v0tyFamily: false,
+      // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — v0tr·v0trq 도 함께 끔는다.
+      // 아래 «격리 복원» 주석이 적은 기전이 **그대로 재현됐다** — 켜 둔 채로 돌리면
+      // v0tr 포즈의 다양성이 v0W2 의 rot0 감마 약점 핀을 구제해 gamma0.7 rot0 이
+      // 초록이 되고, v0W 의 F6 슬롯 위반이 3 → 4 로 움직인다 (실측).
+      // «복원 = 드랩 전 동작 그대로» 를 재려면 신설 패밀리를 전부 꿐야 한다.
+      v0tFamily: false, v0tyFamily: false, v0trFamily: false, v0trqFamily: false,
     },
   },
 });
@@ -454,7 +464,7 @@ test('v1r2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동�
     // 의도적 갱신 «v0T 편입» (2026-08-17) — v0t·v0ty 키가 늘었고 **값은 0** 이다
     // (같은 앵커드 쌍 요구 — 이 프레임에서 앵커드 포즈가 하나도 안 서므로 구조적 0).
     v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0,
-    v0t: 0, v0ty: 0, v0: 6,
+    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0: 6,
   }, '포즈 분포가 잰 값과 다르다 — 약점이 움직였으면 §6 을 재측정하고 핀을 갱신하라');
   const families = first.shapes.map((shape) => shape.blockLocator.family);
   assert.ok(!families.includes('v1r2'), 'v1r2 shape 가 살아났다 — 핀을 되돌려라');
@@ -489,7 +499,7 @@ test('v1r2 패밀리 격리 대조군 — 끄면 v1r2 포즈 0 (⚠ 현재는 �
     // 의도적 갱신 «v0T 편입» (2026-08-17) — v0t·v0ty 키가 늘었고 **값은 0** 이다
     // (같은 앵커드 쌍 요구 — 이 프레임에서 앵커드 포즈가 하나도 안 서므로 구조적 0).
     v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0,
-    v0t: 0, v0ty: 0, v0: 6,
+    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0: 6,
   }, '격리 대조군의 전제가 움직였다 — 재측정하고 핀을 갱신하라');
 });
 
@@ -794,7 +804,7 @@ test('구 v2r2 중앙(닫힌 링 스택)은 legacy 분류만 남고 포즈를 �
     // 의도적 갱신 «v0T 편입» (2026-08-17) — v0t·v0ty 키 추가, 값 0 (같은 이유 —
     // 소각 디자인 프레임에는 K3 중앙 × K5 원거리 쌍이 성립하지 않는다).
     v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0,
-    v0t: 0, v0ty: 0, v0: 0,
+    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0: 0,
   });
   assert.equal(detected.shapes.length, 0);
 });
@@ -1109,16 +1119,19 @@ test('v0xq 편입 비침습성 — 다른 프레임의 verified·poseCount 가 o
     // 그래서 «코너 검증이 안 돈다» 를 보려면 **셋을 다 꺼야** 한다.
     // 근거 실측: 셋 중 하나만 켜도 corners > 0 (이 프레임 5개) — 공유이지 침습이 아니다.
     // 비침습성 명제 자체는 위 verified·poseCount 단언이 그대로 지키고 있다.
-    const offAllThree = detectCellSurfaceBlockShapes(luma, {
+    // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — 소비자가 **넷**이 됐다
+    // (+ v0trq 삼중점). 그래서 «안 돌는다» 를 보려면 **넷을 다** 꺼야 한다.
+    const offAllFour = detectCellSurfaceBlockShapes(luma, {
       calibration: {
         ...RESTORE_DROPPED_LOCATOR.calibration,
         csBlockLocator: {
           ...RESTORE_DROPPED_LOCATOR.calibration.csBlockLocator,
           v0xqFamily: false, v0wqFamily: false, centreBullseyeConfirmedPoses: false,
+          v0trqFamily: false,
         },
       },
     });
-    assert.equal(offAllThree.diagnostics.centerQr.corners, 0,
+    assert.equal(offAllFour.diagnostics.centerQr.corners, 0,
       name + ' 셋 다 껐는데 코너 검증이 돌았다');
     assert.equal(offBoth.diagnostics.centerQr.corners, on.diagnostics.centerQr.corners,
       name + ' 확증 조립만 켠 쪽의 코너 수가 갈렸다 — 공유 순회가 끊겼다');

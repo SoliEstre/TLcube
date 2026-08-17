@@ -17,6 +17,8 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0T,
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
@@ -98,6 +100,8 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
       LOCATOR_PROFILE_CELL_SURFACE_V0,
       LOCATOR_PROFILE_CELL_SURFACE_V0T,
       LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+      LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+      LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
     ],
   );
   // 이 단언이 지키는 것은 «허용값 목록에 없다» 는 사실 자체다. 상태 복원기는
@@ -133,6 +137,13 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-locator="cell-surface-v0ty"/);
   assert.match(INDEX, /data-locator="cell-surface-v0t"[\s\S]{0,1200}?data-i18n="g993"/);
   assert.match(INDEX, /data-locator="cell-surface-v0ty"[\s\S]{0,1200}?data-i18n="g996"/);
+  // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — 카드 둘이 더 섬 (v0T 계열은
+  // 그대로 있다 — 드랩 없는 편입). i18n 키는 사전의 빈 슬롯을 썼다 (g955·g958) —
+  // 4자리 키를 만들면 i18n-coverage 의 3자리 파서가 그 키를 조용히 놓친다.
+  assert.match(INDEX, /data-locator="cell-surface-v0tr"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0trq"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0tr"[\s\S]{0,1200}?data-i18n="g955"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0trq"[\s\S]{0,1200}?data-i18n="g958"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0wq"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w2"/);

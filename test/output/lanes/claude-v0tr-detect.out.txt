@@ -1,0 +1,26 @@
+=== ① 코너 후보 수 (verifyV0xqCornerCluster · centerQr.corners) ===
+  [v0t   ] 느슨한 코너 8 · v0xq 삼중점 0 · **v0trq 삼중점 5** (예산 6)
+  [v0ty  ] 느슨한 코너 6 · v0xq 삼중점 0 · **v0trq 삼중점 5** (예산 6)
+  [v0tr  ] 느슨한 코너 7 · v0xq 삼중점 0 · **v0trq 삼중점 2** (예산 6)
+  [v0trq ] 느슨한 코너 6 · v0xq 삼중점 0 · **v0trq 삼중점 2** (예산 6)
+
+=== ② v0trqCornerBudget A/B — 삼중점이 슬라이스에 살아남는가 ===
+  예산 3 → 삼중점/포즈  v0t:1/0  v0ty:1/0  v0tr:0/0  v0trq:0/0
+  예산 4 → 삼중점/포즈  v0t:1/0  v0ty:1/0  v0tr:0/0  v0trq:0/0
+  예산 5 → 삼중점/포즈  v0t:3/0  v0ty:3/0  v0tr:1/0  v0trq:1/1
+  예산 6 → 삼중점/포즈  v0t:5/0  v0ty:5/0  v0tr:2/0  v0trq:2/1
+  예산 8 → 삼중점/포즈  v0t:7/0  v0ty:5/0  v0tr:2/0  v0trq:2/1
+
+=== ③ 레이아웃별 poseCount (기본 cfg) ===
+  [v0t   ] v0=4  (shape 2)
+  [v0ty  ] v0t=6 · v0tr=6 · v0=2  (shape 6)
+  [v0tr  ] v0t=6 · v0tr=6  (shape 4)
+  [v0trq ] v0trq=1 · v0=2  (shape 3)
+
+=== ④ 편입 전/후 대조 (v0tr·v0trq 패밀리 off ↔ on) ===
+  | 프레임 | 편입 전 ms | 편입 후 ms | 증가 | 편입 전 shape | 편입 후 shape |
+  |---|---|---|---|---|---|
+  | v0t | 159.1 | 168.5 | 5.9% | 2 | 2 |
+  | v0ty | 303.8 | 400.2 | 31.7% | 4 | 6 |
+  | v0tr | 332.1 | 356.0 | 7.2% | 2 | 4 |
+  | v0trq | 148.6 | 233.1 | 56.9% | 2 | 3 |

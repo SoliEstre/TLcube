@@ -316,11 +316,16 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // v0W 계열 카드 넷(g948·g949·g954·g967)이 내려가고 v0T(g995) · v0TY(g998) 카드가
   // 서서 7 → 5 다. 내린 부제 키들은 사전에 그대로 남는다 (v1r2·v2r2·v0X·v0XQ 전례 —
   // locatorY-lab.test.js 가 보존을 고정한다).
+  // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)**: v0TR(g957) · v0TRQ(g969)
+  // 카드 둘이 서서 5 → **7** 이다. 내려간 카드는 없다 — v0T·v0TY 는 그대로고
+  // 드랩 판정은 실기기 재스캔 뒤 운영자 몴이다. 부제 키는 사전의 빈 슬롯을
+  // 썼다 (g957·g969) — 4자리 키를 만들면 i18n-coverage 파서가 그 키를 못 본다.
   const cardCount = (block.match(/class="toggle-card[^"]*" data-locator=/g) || []).length;
-  assert.equal(cardCount, 5, '검출기 카드는 자동·끔 + v0 + v0T 계열 2종 = 5 다');
+  assert.equal(cardCount, 7,
+    '검출기 카드는 자동·끔 + v0 + v0T 계열 2종 + v0TR 계열 2종 = 7 다');
   assert.equal((block.match(/<svg /g) || []).length, cardCount,
     '검출기 카드 전부가 파인더 기하 아이콘을 가져야 한다');
-  const subKeys = ['g941', 'g942', 'g943', 'g995', 'g998'];
+  const subKeys = ['g941', 'g942', 'g943', 'g995', 'g998', 'g957', 'g969'];
   assert.equal(subKeys.length, cardCount, '부제 키 수가 카드 수와 다르다');
   for (const key of subKeys) {
     assert.match(block, new RegExp(`class="card-sub" data-i18n="${key}"`), `검출기 부제 ${key} 누락`);

@@ -142,6 +142,37 @@ test('활성 라인업 왕복 — v0(n=13)·v0T 계열(n=21) × 2톤/3톤 (스�
   }
 });
 
+/**
+ * **v0TR 계열 왕복** (편입 2026-08-17) — 위 «활성 라인업» 바로 옆에 **따로** 둔다.
+ *
+ * 옆에 붙이는 이유: 위 테스트는 드랩 이력을 지나온 **기존 핀**이라, 새 계열을
+ * 그 안으로 넣으면 실패했을 때 «어느 쪽이 깨졌는가» 를 바로 못 읽는다.
+ *
+ * 재는 것은 셀 표면의 전 구간이다 — 인코드 → 렌더 → 블록 로케이터 → refinePose
+ * → CS 게이트(0.78 / 0.035) → RS → 페이로드. 게이트는 한 값도 안 건드렸다.
+ *
+ * ⚠ **레이아웃 id 까지 단언한다.** v0tr ↔ v0trq 는 이상 표본기에서 구조적
+ * 별칭이지만(§cellSurfaceFinal.test.js), 실물 래스터에서는 슬롯 자리에 진짜 픽셀
+ * (QR 모듈·필러)이 있어 갈리는지를 여기서 재는 것이 본론이다.
+ */
+test('v0TR 계열 왕복 — v0tr · v0trq (n=21) × 2톤/3톤 (스위치 없음)', {
+  timeout: 300_000,
+}, () => {
+  for (const layout of ['v0tr', 'v0trq']) {
+    for (const tones of [2, 3]) {
+      const fixture = renderFinal(PAYLOAD, { layout, version: 1, tones });
+      const result = decodeLab(fixture.raster);
+      assert.equal(result.ok, true, JSON.stringify({
+        layout, tones, reason: result.reason,
+      }));
+      assert.equal(result.text, PAYLOAD);
+      assert.equal(result.hypothesis.cellSurfaceLayout, layout,
+        layout + '@' + tones + '톤 이 ' + result.hypothesis.cellSurfaceLayout + ' 로 읽혔다');
+      assert.equal(result.hypothesis.n, 21);
+    }
+  }
+});
+
 test('드랍 n=21 왕복 (복원 스위치) — v0X · v0W 계열 4종 × 2톤/3톤', {
   timeout: 600_000,
 }, () => {

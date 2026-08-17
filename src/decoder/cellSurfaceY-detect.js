@@ -542,7 +542,8 @@ function sampleLocatorTable(sampleCell, locators) {
  * 어떤 레이아웃들을 채점할지. 기본은 **n 별 최종 라인업 후보 전부** —
  * v2r2·v1r2 드랍 + v0W 편입(2026-08-16) · v0XQ 드랍 + v0W2 편입 ·
  * v0X 드랍(2026-08-17 3라운드) · **v0T 편입 + v0W 계열 전체 드랍(2026-08-17) 후**:
- * n=13→[v0] · n=21→[**v0t**, v0ty] · n=25→**[]**.
+ * **v0TR 계열 편입(2026-08-17)** 후:
+ * n=13→[v0] · n=21→[**v0t**, v0ty, v0tr, v0trq] · n=25→**[]**.
  * 수용은 아래 기존 게이트가 판정한다 (한 값도 안 바뀌었다):
  * agreement ≥ 0.78 · orientation margin ≥ 0.035. 두 레이아웃이 다 통과하면
  * ambiguous 로 남기고 agreement 가 높은 쪽(동률이면 그 n 의 기본)을 고른다.

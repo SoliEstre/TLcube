@@ -2600,7 +2600,7 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
           };
           // 셀 표면 평가 — **라인업** 질의다(와이어 아님). v2r2·v1r2 드랍(2026-08-16)
           // + v0xq·v0x 드랍 + **v0T 편입·v0W 계열 전체 드랍**(2026-08-17) 후 라인업은
-          // n=13(v0) · n=21(v0t·v0ty) 뿐이라
+          // n=13(v0) · n=21(v0t·v0ty·**v0tr·v0trq** — 2026-08-17 편입) 뿐이라
           // **n=25 는 여기서 통째로 빠진다** — 실루엣 shape 의 n 루프가 3 → 2 로 준다
           // (Y2 공백).
           // (구 v1 CS·초안 v1r2/v2·드랍된 둘은 n=21 에서 옵션으로만 산다.)

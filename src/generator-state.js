@@ -23,6 +23,8 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0T,
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
   // ⚠ `LOCATOR_PROFILE_CELL_SURFACE_V0XQ`(2026-08-17 2라운드) 와
   //   `LOCATOR_PROFILE_CELL_SURFACE_V0X`(2026-08-17 3라운드),
   //   그리고 **v0W 계열 넷**(`..._V0W`·`..._V0WQ`·`..._V0W2`·`..._V0WY`,
@@ -155,6 +157,11 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
       // v0TY — 사용자는 QR 위치 «면» 카드로 이 값으로 오고, 다른 QR 위치를 고르면
       // v0T 로 돌아간다 (v0WY 시절과 같은 문법 — index.html §qrPositionCards).
       LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+      // **v0TR 계열 편입 (2026-08-17)** — v0T 의 거리 약점 대응 재설계다. 카드가
+      // 둘 는다: v0TR(파인더) · v0TRQ(중앙 QR 슬롯). v0T·v0TY 는 **그대로 남는다** —
+      // 드랍 판정은 실기기 재스캔 뒤 운영자 몫이지 편입의 몫이 아니다.
+      LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+      LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
     ]),
 });
 

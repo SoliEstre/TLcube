@@ -1,0 +1,21 @@
+✔ 일반 노출 선택은 전부 고급에도 있고 실제 패널 메타데이터가 스키마와 같다 (5.9248ms)
+✔ 일반 티어와 고급 정확 버전은 모든 타입에서 같은 canonical 값으로 왕복한다 (1.0476ms)
+✔ 모드·타입 혼합 왕복이 모든 상태 키를 항목별로 보존한다 (1.2761ms)
+✔ buildConfig은 모드나 고급 DOM이 아니라 단일 generatorState만 소비한다 (1.0441ms)
+✔ Type Y 톤은 일반·고급 카드가 같은 단일 상태를 쓰고 기본값은 3톤이다 (3.6765ms)
+✔ Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T · v0TY → v0TR · v0TRQ 다 (2.8657ms)
+✔ 셀 편집기 ref./format 는 선택 파인더 painted 셀의 autoplace 유도로 배선된다 (4.5334ms)
+✔ 배치 불가 안내 g549 는 여덟 언어에 있다 (16.4606ms)
+✔ 정합: cellSurfaceFinal 의 ref/format == 점유(파인더∪슬롯) autoplace 유도 (deepEqual) (29.4934ms)
+✔ 끔(빈 점유) 유도는 레거시 placementY roleSets 와 동일하다 (4.6882ms)
+✔ occupied roleSets — 파인더 점유는 detector 이고 데이터·경계·마스크 토글에서 빠진다 (32.3809ms)
+✔ 독립 /celleditor/ previewAutoplaceY 도 정본 painted 입력에서 cellSurfaceFinal 과 일치한다 (31.913ms)
+✔ 생성기·셀 편집기 번들에 카드 순서와 유도 배선이 임베드된다 (174.7779ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 726.4538

@@ -116,11 +116,18 @@ function locatorCardOrder(html) {
 // **의도적 갱신 «v0T 편입 + v0W 계열 전체 드랍» (운영자 확정 2026-08-17)** —
 // v0W 계열 카드 넷이 내려가고 v0T · v0TY 카드가 섰다 (일곱 → 다섯). QR 위치
 // 카드 «면» 은 이제 v0TY 로 전환한다 (같은 문법 — 대상만 바뀌었다).
+//
+// **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — v0TR · v0TRQ 카드가 v0TY 뒤에
+// 붙어 다섯 → **일곱**이 됐다 (`CELL_SURFACE_FINAL_IDS` 선언 순서 그대로).
+// **내려간 카드는 없다** — v0T·v0TY 는 그대로고, 드랩 판정은 실기기 재스캔
+// 뒤 운영자 몴이지 편입의 몴이 아니다. QR 위치 카드 «면» 은 여전히 v0TY 로
+// 전환한다 — v0TRQ 의 슬롯은 **중앙(Y-심)** 이라 그 축과 같은 자리가 아니다.
 const LOCATOR_CARD_ORDER = Object.freeze([
   'auto', 'off', 'cell-surface-v0',
   'cell-surface-v0t', 'cell-surface-v0ty',
+  'cell-surface-v0tr', 'cell-surface-v0trq',
 ]);
-test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T → v0TY 다 (v0 계열만)', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T · v0TY → v0TR · v0TRQ 다', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 

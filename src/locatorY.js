@@ -61,6 +61,14 @@ export const LOCATOR_PROFILE_CELL_SURFACE_V0WY = 'cell-surface-v0wy';
 export const LOCATOR_PROFILE_CELL_SURFACE_V0T = 'cell-surface-v0t';
 /** v0T 파생 — **먼 코너 QR 슬롯** (v0WY 와 같은 역할·같은 슬롯 8×8, far 앵커). */
 export const LOCATOR_PROFILE_CELL_SURFACE_V0TY = 'cell-surface-v0ty';
+/**
+ * v0TR (표시 이름) = v0T 재설계 (운영자 2026-08-17) — NE 동심 사각을 **둘**로
+ * (바깥 = v0T 자리 · 안쪽 = 그 (i+2, j−5) 평행이동) 두고 A·N팔·W 블록을 비웠다.
+ * 최종 라인업에서 **코어 반경이 갈라지는 첫 프로파일**이다 (√129 대 √279).
+ */
+export const LOCATOR_PROFILE_CELL_SURFACE_V0TR = 'cell-surface-v0tr';
+/** v0TR 파생 — **중앙(Y-심) QR 슬롯** 8×8. v0xq·v0wq 와 같은 seam 앵커. */
+export const LOCATOR_PROFILE_CELL_SURFACE_V0TRQ = 'cell-surface-v0trq';
 export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_OFF,
   LOCATOR_PROFILE_HEX_FRAME_V1,
@@ -77,6 +85,8 @@ export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_CELL_SURFACE_V0WY,
   LOCATOR_PROFILE_CELL_SURFACE_V0T,
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
 ]);
 export const DEFAULT_LOCATOR_PROFILE_Y = LOCATOR_PROFILE_OFF;
 
@@ -114,7 +124,9 @@ export function isCellSurfaceLocatorProfileY(value) {
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0W2
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0WY
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0T
-    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TY;
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TY
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TR
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;
 }
 
 export function isLocatorProfileY(value) {

@@ -1674,6 +1674,43 @@
             <span data-i18n="g996">셀 표면 v0TY · 먼 코너 QR (Y1)</span>
             <span class="card-sub" data-i18n="g998">전면 + 먼 코너 QR</span>
           </div>
+          <!-- v0TR — v0T 재설계 (2026-08-17). 아이콘은 **겹사각 둘 + SE L자** 다:
+               우상 겹사각 = NE 바깥 동심 사각(v0T 자리 그대로) · 그 좌하로 살짝 안쪽에
+               놓인 두 번째 겹사각 = **NE 안쪽 동심 사각**(이 계열의 코어 앵커, 반경 √129) ·
+               우하 L자 = SE 위상 마커(유일한 방향 판별자) · 좌상 겹사각 = K3 계보 중앙.
+               v0T 아이콘에 있던 A 솔리드 블록 · N팔 바 · W 세로 블록이 **없는 것**이
+               이 카드의 정의다 (그래서 방향 여유가 v0T 의 절반 아래로 내려간다). -->
+          <div class="toggle-card" data-locator="cell-surface-v0tr">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5" y="5" width="3.6" height="3.6" rx=".5"/>
+              <rect x="6.1" y="6.1" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
+              <rect x="14.6" y="5" width="4.4" height="4.4" rx=".6"/>
+              <rect x="16" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <rect x="10.2" y="8.2" width="4.4" height="4.4" rx=".6"/>
+              <rect x="11.6" y="9.6" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <path d="M15.4 19 h3.6 v-3.6" stroke-linecap="round"/>
+            </svg>
+            <span data-i18n="g955">셀 표면 v0TR (Y1)</span>
+            <span class="card-sub" data-i18n="g957">겹사각 2 + 마커</span>
+          </div>
+          <!-- v0TRQ — v0TR 파생 (중앙 QR 슬롯). 아이콘은 v0TR 문법 그대로에서 좌상
+               K3 중앙이 **점선 사각(QR 슬롯)** 으로 바뀐 것 — 그 한 곳이 v0TR 과의
+               유일한 셀 차이이고, 곧 이 카드의 정의다. 슬롯이 Y-심(중앙)에 있으므로
+               v0TY 의 점선 사각(우하 = 먼 코너)과 **자리가 다르다.** -->
+          <div class="toggle-card" data-locator="cell-surface-v0trq">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="4.8" y="4.8" width="6" height="6" rx=".6" stroke-dasharray="1.4 1.1"/>
+              <rect x="14.6" y="5" width="4.4" height="4.4" rx=".6"/>
+              <rect x="16" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <rect x="11.4" y="11.4" width="4.4" height="4.4" rx=".6"/>
+              <rect x="12.8" y="12.8" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <path d="M15.4 19 h3.6 v-3.6" stroke-linecap="round"/>
+            </svg>
+            <span data-i18n="g958">셀 표면 v0TRQ · 중앙 QR (Y1)</span>
+            <span class="card-sub" data-i18n="g969">겹사각 2 + 중앙 QR</span>
+          </div>
           <!-- v1r2(g547/g945) · v2r2(g543/g946) 카드는 2026-08-16 드랍으로 내렸다.
                i18n 키는 전 언어 (8언어) 남겨 둔다 — 되살릴 때 문자열을 다시 번역하지
                않기 위해서다 (하드코딩 금지 규약과 충돌하지 않는다: 참조가 없을 뿐). -->
@@ -2176,6 +2213,12 @@ const GENERATOR_STRINGS = {
     "g996": "셀 표면 v0TY · 먼 코너 QR (Y1)",
     "g997": "v0TY. v0T 파생 — QR 을 큐브 안쪽 먼 코너(T면 위 꼭짓점)에 8×8셀 슬롯으로 묻어요. 슬롯이 v0T 의 먼 코너 위상 마커 9셀을 덮지만, 안쪽 비대칭 블록 9셀이 남아 방향을 줘요 — 두 방향 블록은 그러라고 둔 의도된 이중화예요. 파인더 95셀 · 슬롯 64셀 · 데이터 252 예요. QR 위치에서 «면» 을 고르면 이 검출기로 바뀌어요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g998": "전면 + 먼 코너 QR",
+    "g955": "셀 표면 v0TR (Y1)",
+    "g956": "v0TR. v0T 재설계예요 — 3코너 동심 사각을 둘로 두었어요 (바깥 = v0T 자리, 안쪽 = 그것을 큰브 안쪽으로 옮긴 사본). K3 계보 중앙 16셀 + 동심 사각 68셀 + 먼 코너 위상 마커 9셀 = 93셀 · 데이터 318 이에요. 대신 v0T 의 안쪽 비대칭 블록·북쪽 팔·서쪽 블록이 없어서 방향 판별 블록이 하나뿐이고, 방향 여유(margin)가 0.043 으로 라인업에서 가장 얇어요 (게이트의 1.23배). 안쪽 동심 사각의 반경이 다른 계열과 5.3셀 떨어져 있어 검출기가 거리만으로 계열을 갈라요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
+    "g957": "겹사각 2 + 마커",
+    "g958": "셀 표면 v0TRQ · 중앙 QR (Y1)",
+    "g959": "v0TRQ. v0TR 파생 — QR 을 큰브 중앙(Y-심)에 8×8셀 슬롯으로 묻어요. 슬롯이 v0TR 의 K3 계보 중앙 16셀을 덮고, 먼 코너 위상 마커 6셀이 방향을 줘요. 파인더 77셀 · 슬롯 64셀 · 데이터 270 이에요. 같은 중앙 슬롯을 v0T 에 내려던 시도(v0TQ)는 배치기가 포맷 복제 이격으로 거부했는데, v0TR 은 서쪽이 비어 있어 통과해요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
+    "g969": "겹사각 2 + 중앙 QR",
     "g611": "v0W2. v0W 파생 ② — 부 파인더를 3×3 에서 6×6 대형 마커로 키우고, K3 불스아이 중앙 25셀과 3코너 동심 사각 36셀은 3면 대칭으로 통일해 검출 전용으로 돌렸어요. 120° 위상 판별은 대형 마커 하나가 전담해요. 파인더 97셀 · 데이터 314 이고 방향 여유(margin)는 0.151 로 v0W(0.095) 보다 두꺼워요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g521": "셀 편집기",
     "g522": "한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
@@ -2508,6 +2551,12 @@ const GENERATOR_STRINGS = {
     "g996": "Cell surface v0TY · far-corner QR (Y1)",
     "g997": "v0TY. The v0T derivative — the QR is buried inside the cube at the far corner (the top vertex of the T face) in an 8×8-cell slot. The slot covers v0T’s far-corner phase marker (9 cells), but the inner asymmetric block (9 cells) remains and gives the orientation — the two orientation blocks are an intentional redundancy for exactly this. 95 finder cells, a 64-cell slot, 252 data. Choosing \"Face\" for the QR position switches to this detector. Y1 (n=21) only; does not guarantee performance.",
     "g998": "Full surface + far-corner QR",
+    "g955": "Cell surface v0TR (Y1)",
+    "g956": "v0TR. The v0T redesign — it carries two sets of three-corner concentric squares (the outer one where v0T had it, the inner one the same square moved toward the cube centre). A K3-lineage centre (16 cells), the concentric squares (68 cells) and a far-corner phase marker (9 cells) — 93 cells, 318 data. In exchange v0T’s inner asymmetric block, north arm and west block are gone, so there is only one orientation block and the orientation margin drops to 0.043 — the thinnest in the lineup (1.23× the gate). The inner square’s radius sits 5.3 cells away from every other family, so the detector separates the families by distance alone. Y1 (n=21) only; does not guarantee performance.",
+    "g957": "Two squares + marker",
+    "g958": "Cell surface v0TRQ · centre QR (Y1)",
+    "g959": "v0TRQ. The v0TR derivative — the QR is buried at the cube centre (the Y seam) in an 8×8-cell slot. The slot covers v0TR’s K3-lineage centre (16 cells) and the far-corner phase marker (6 cells) gives the orientation. 77 finder cells, a 64-cell slot, 270 data. The same centre slot on v0T (v0TQ) was refused by the placer over format-replica separation; v0TR passes because its west side is empty. Y1 (n=21) only; does not guarantee performance.",
+    "g969": "Two squares + centre QR",
     "g611": "v0W2. The second v0W derivative — the secondary finder grows from 3x3 to a 6x6 large marker, while the K3 bullseye centre (25 cells) and the three concentric-square corners (36 cells) are flattened to be identical on all three faces, making them detection-only. A single large marker now carries all of the 120 degree phase discrimination. 97 finder cells, 314 data cells, and an orientation margin of 0.151 — thicker than v0W (0.095). Y1 (n=21) only; does not guarantee performance.",
     "g521": "Cell editor",
     "g522": "Painting one face excludes that (i,j) data triple on T, L, and R. Edits are not applied to the current code output.",
@@ -2840,6 +2889,12 @@ const GENERATOR_STRINGS = {
     "g996": "セル表面 v0TY・遠コーナーQR (Y1)",
     "g997": "v0TY。v0T 派生 — QR をキューブ内側の遠コーナー（T面の上頂点）に 8×8 セルのスロットとして埋めます。スロットは v0T の遠コーナー位相マーカー 9 セルを覆いますが、内側の非対称ブロック 9 セルが残って方向を与えます — 2 つの方向ブロックはそのための意図的な二重化です。ファインダ 95 セル・スロット 64 セル・データ 252。QR 位置で「面」を選ぶとこの検出器に切り替わります。Y1 (n=21) 専用で、性能を保証しません。",
     "g998": "全面＋遠コーナーQR",
+    "g955": "セル表面 v0TR (Y1)",
+    "g956": "v0TR。v0T の再設計です — 3コーナー同心四角を2組置きました（外側は v0T と同じ位置、内側はそれをキューブ中心寄りに移した写し）。K3 系譜の中央 16セル + 同心四角 68セル + 遠コーナー位相マーカ 9セル = 93セル・データ318。代わりに v0T の内側非対称ブロック・北の腕・西ブロックが無く、方向判別ブロックが1つだけになり、方向余裕（margin）は 0.043 とラインナップ最薄です（ゲートの1.23倍）。内側同心四角の半径は他系列と 5.3セル離れているため、検出器は距離だけで系列を分けます。Y1 (n=21) 専用で、性能は保証しません。",
+    "g957": "同心四角2+マーカ",
+    "g958": "セル表面 v0TRQ・中央QR (Y1)",
+    "g959": "v0TRQ。v0TR 派生 — QR をキューブ中央（Y継ぎ目）に 8×8 セルのスロットとして埋めます。スロットが v0TR の K3 系譜中央 16セルを覆い、遠コーナー位相マーカ 6セルが方向を与えます。ファインダ 77セル・スロット 64セル・データ270。同じ中央スロットを v0T に置く試み（v0TQ）は配置器がフォーマット複製の離隔で拒否しましたが、v0TR は西側が空いているため通ります。Y1 (n=21) 専用で、性能は保証しません。",
+    "g969": "同心四角2+中央QR",
     "g611": "v0W2。v0W 派生②——副ファインダーを 3×3 から 6×6 の大型マーカーへ拡大し、K3 ブルズアイ中央 25セルと3コーナー同心四角 36セルは3面対称に統一して検出専用にしました。120° の位相判別は大型マーカー1つが担います。ファインダー97セル・データ314、方向マージンは 0.151 で v0W(0.095) より厚いです。Y1(n=21) 専用で、性能は保証しません。",
     "g521": "セル編集",
     "g522": "1面だけ塗っても、その座標 (i,j) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
@@ -3171,6 +3226,12 @@ const GENERATOR_STRINGS = {
     "g996": "Surface de cellules v0TY · QR au coin éloigné (Y1)",
     "g997": "v0TY. Dérivé de v0T — le QR est enfoui dans le cube, au coin éloigné (le sommet supérieur de la face T), dans un emplacement de 8×8 cellules. L'emplacement couvre le marqueur de phase du coin éloigné de v0T (9 cellules), mais le bloc asymétrique intérieur (9 cellules) reste et donne l'orientation — les deux blocs d'orientation sont une redondance voulue, exactement pour cela. 95 cellules de motif, un emplacement de 64 cellules, 252 données. Si vous choisissez « Face » comme position du QR, ce détecteur est activé. Y1 (n=21) uniquement ; les performances ne sont pas garanties.",
     "g998": "Pleine surface + QR au coin éloigné",
+    "g955": "Surface de cellules v0TR (Y1)",
+    "g956": "v0TR. La refonte de v0T — elle porte deux jeux de carrés concentriques à trois coins (l’extérieur là où v0T l’avait, l’intérieur étant le même carré déplacé vers le centre du cube). Un centre de lignée K3 (16 cellules), les carrés concentriques (68 cellules) et un marqueur de phase au coin éloigné (9 cellules) — 93 cellules, 318 données. En contrepartie, le bloc asymétrique intérieur, le bras nord et le bloc ouest de v0T ont disparu : il ne reste qu’un seul bloc d’orientation et la marge d’orientation tombe à 0,043, la plus fine de la gamme (1,23× le seuil). Le rayon du carré intérieur se situe à 5,3 cellules de toutes les autres familles, si bien que le détecteur les sépare par la seule distance. Y1 (n=21) uniquement ; les performances ne sont pas garanties.",
+    "g957": "Deux carrés + marqueur",
+    "g958": "Surface de cellules v0TRQ · QR central (Y1)",
+    "g959": "v0TRQ. Dérivé de v0TR — le QR est enfoui au centre du cube (la couture Y) dans un emplacement de 8×8 cellules. L’emplacement couvre le centre de lignée K3 de v0TR (16 cellules) et le marqueur de phase du coin éloigné (6 cellules) donne l’orientation. 77 cellules de motif, un emplacement de 64 cellules, 270 données. Le même emplacement central sur v0T (v0TQ) avait été refusé par le placeur pour cause d’écart entre répliques de format ; v0TR passe parce que son côté ouest est vide. Y1 (n=21) uniquement ; les performances ne sont pas garanties.",
+    "g969": "Deux carrés + QR central",
     "g611": "v0W2. Deuxième dérivé de v0W — le motif secondaire passe de 3×3 à un grand marqueur 6×6, tandis que le centre en cible K3 (25 cellules) et les trois carrés concentriques d'angle (36 cellules) sont rendus identiques sur les trois faces, donc réservés à la détection. Un seul grand marqueur porte désormais toute la discrimination de phase à 120°. 97 cellules de motif · 314 cellules de données, marge d'orientation 0.151 — plus épaisse que v0W (0.095). Réservé à Y1 (n=21) ; les performances ne sont pas garanties.",
     "g521": "Éditeur de cellules",
     "g522": "Peindre une seule face exclut le triplet de données (i,j) sur T, L et R. Les modifications ne sont pas appliquées à la sortie du code actuel.",
@@ -3502,6 +3563,12 @@ const GENERATOR_STRINGS = {
     "g996": "Superficie a celle v0TY · QR nell’angolo lontano (Y1)",
     "g997": "v0TY. Derivato di v0T — il QR è sepolto dentro il cubo nell’angolo lontano (il vertice superiore della faccia T) in uno slot di 8×8 celle. Lo slot copre il marcatore di fase dell’angolo lontano di v0T (9 celle), ma il blocco asimmetrico interno (9 celle) resta e dà l’orientamento — i due blocchi di orientamento sono una ridondanza voluta, esattamente per questo. 95 celle di pattern, uno slot di 64 celle, 252 dati. Se scegli «Faccia» come posizione del QR, passi a questo rilevatore. Solo Y1 (n=21); le prestazioni non sono garantite.",
     "g998": "Piena superficie + QR angolo lontano",
+    "g955": "Superficie a celle v0TR (Y1)",
+    "g956": "v0TR. La riprogettazione di v0T — porta due serie di quadrati concentrici a tre angoli (quello esterno dove stava in v0T, quello interno è lo stesso quadrato spostato verso il centro del cubo). Un centro di stirpe K3 (16 celle), i quadrati concentrici (68 celle) e un marcatore di fase nell’angolo lontano (9 celle) — 93 celle, 318 dati. In cambio spariscono il blocco asimmetrico interno, il braccio nord e il blocco ovest di v0T: resta un solo blocco di orientamento e il margine di orientamento scende a 0,043, il più sottile della gamma (1,23× la soglia). Il raggio del quadrato interno dista 5,3 celle da ogni altra famiglia, così il rilevatore le separa con la sola distanza. Solo Y1 (n=21); le prestazioni non sono garantite.",
+    "g957": "Due quadrati + marcatore",
+    "g958": "Superficie a celle v0TRQ · QR centrale (Y1)",
+    "g959": "v0TRQ. Derivato di v0TR — il QR è sepolto al centro del cubo (la cucitura Y) in uno slot di 8×8 celle. Lo slot copre il centro di stirpe K3 di v0TR (16 celle) e il marcatore di fase dell’angolo lontano (6 celle) dà l’orientamento. 77 celle di pattern, uno slot di 64 celle, 270 dati. Lo stesso slot centrale su v0T (v0TQ) era stato rifiutato dal collocatore per la distanza fra repliche di formato; v0TR passa perché il suo lato ovest è vuoto. Solo Y1 (n=21); le prestazioni non sono garantite.",
+    "g969": "Due quadrati + QR centrale",
     "g611": "v0W2. Secondo derivato di v0W — il pattern secondario cresce da 3×3 a un marcatore grande 6×6, mentre il centro a bersaglio K3 (25 celle) e i tre quadrati concentrici d’angolo (36 celle) diventano identici sulle tre facce, quindi riservati al rilevamento. Un solo marcatore grande porta ora tutta la discriminazione di fase a 120°. 97 celle di pattern · 314 celle di dati, margine di orientamento 0.151 — più spesso di v0W (0.095). Solo Y1 (n=21); le prestazioni non sono garantite.",
     "g521": "Editor delle celle",
     "g522": "Dipingere una sola faccia esclude la tripla di dati (i,j) su T, L e R. Le modifiche non vengono applicate all'output del codice corrente.",
@@ -3833,6 +3900,12 @@ const GENERATOR_STRINGS = {
     "g996": "Zellfläche v0TY · QR in der fernen Ecke (Y1)",
     "g997": "v0TY. Das v0T-Derivat — der QR liegt im Würfel an der fernen Ecke (der oberen Spitze der T-Fläche) in einem Slot von 8×8 Zellen. Der Slot deckt v0Ts Phasenmarker an der fernen Ecke (9 Zellen) ab, aber der innere asymmetrische Block (9 Zellen) bleibt und gibt die Orientierung — die zwei Orientierungsblöcke sind genau dafür eine gewollte Redundanz. 95 Finder-Zellen, ein 64-Zellen-Slot, 252 Daten. Wird als QR-Position „Fläche“ gewählt, schaltet dieser Detektor ein. Nur für Y1 (n=21); Leistung wird nicht zugesichert.",
     "g998": "Volle Fläche + QR ferne Ecke",
+    "g955": "Zellfläche v0TR (Y1)",
+    "g956": "v0TR. Die Neuauslegung von v0T — sie trägt zwei Sätze konzentrischer Quadrate an drei Ecken (das äußere dort, wo v0T es hatte, das innere ist dasselbe Quadrat, zur Würfelmitte verschoben). Ein Zentrum der K3-Linie (16 Zellen), die konzentrischen Quadrate (68 Zellen) und ein Phasenmarker an der fernen Ecke (9 Zellen) — 93 Zellen, 318 Daten. Dafür fehlen v0Ts innerer asymmetrischer Block, Nordarm und Westblock: es bleibt nur ein Orientierungsblock, und die Orientierungsmarge sinkt auf 0,043 — die dünnste der Reihe (1,23× die Schwelle). Der Radius des inneren Quadrats liegt 5,3 Zellen von jeder anderen Familie entfernt, sodass der Detektor die Familien allein über die Distanz trennt. Nur für Y1 (n=21); Leistung wird nicht zugesichert.",
+    "g957": "Zwei Quadrate + Marker",
+    "g958": "Zellfläche v0TRQ · QR in der Mitte (Y1)",
+    "g959": "v0TRQ. Das v0TR-Derivat — der QR liegt in der Würfelmitte (der Y-Naht) in einem Slot von 8×8 Zellen. Der Slot deckt v0TRs Zentrum der K3-Linie (16 Zellen) ab, und der Phasenmarker an der fernen Ecke (6 Zellen) gibt die Orientierung. 77 Finder-Zellen, ein 64-Zellen-Slot, 270 Daten. Derselbe Mittelslot auf v0T (v0TQ) wurde vom Platzierer wegen des Abstands der Formatrepliken abgelehnt; v0TR kommt durch, weil seine Westseite leer ist. Nur für Y1 (n=21); Leistung wird nicht zugesichert.",
+    "g969": "Zwei Quadrate + QR Mitte",
     "g611": "v0W2. Zweites v0W-Derivat — das sekundäre Suchmuster wächst von 3×3 auf einen großen 6×6-Marker, während die K3-Zielscheiben-Mitte (25 Zellen) und die drei konzentrischen Eckquadrate (36 Zellen) auf allen drei Flächen identisch gemacht und damit rein der Erkennung überlassen werden. Die gesamte 120°-Phasenunterscheidung trägt jetzt ein einziger großer Marker. 97 Suchmuster-Zellen · 314 Datenzellen, Orientierungsmarge 0.151 — dicker als bei v0W (0.095). Nur Y1 (n=21); Leistung wird nicht garantiert.",
     "g521": "Zelleneditor",
     "g522": "Auch wenn Sie nur eine Fläche einfärben, fällt das Datentripel dieser Koordinate (i,j) auf T, L und R zusammen weg. Die Bearbeitung wirkt sich nicht auf die aktuelle Codeausgabe aus.",
@@ -4164,6 +4237,12 @@ const GENERATOR_STRINGS = {
     "g996": "Superficie de celdas v0TY · QR en la esquina lejana (Y1)",
     "g997": "v0TY. El derivado de v0T — el QR queda enterrado dentro del cubo en la esquina lejana (el vértice superior de la cara T) en una ranura de 8×8 celdas. La ranura tapa el marcador de fase de la esquina lejana de v0T (9 celdas), pero el bloque asimétrico interior (9 celdas) queda y da la orientación — los dos bloques de orientación son una redundancia intencionada exactamente para esto. 95 celdas de patrón, una ranura de 64 celdas, 252 datos. Si elige «Cara» como posición del QR, se cambia a este detector. Solo Y1 (n=21); no se garantiza el rendimiento.",
     "g998": "Superficie completa + QR esquina lejana",
+    "g955": "Superficie de celdas v0TR (Y1)",
+    "g956": "v0TR. El rediseño de v0T — lleva dos juegos de cuadrados concéntricos en tres esquinas (el exterior donde lo tenía v0T, el interior es ese mismo cuadrado desplazado hacia el centro del cubo). Un centro de linaje K3 (16 celdas), los cuadrados concéntricos (68 celdas) y un marcador de fase en la esquina lejana (9 celdas) — 93 celdas, 318 datos. A cambio desaparecen el bloque asimétrico interior, el brazo norte y el bloque oeste de v0T: queda un solo bloque de orientación y el margen de orientación baja a 0,043, el más fino de la gama (1,23× el umbral). El radio del cuadrado interior queda a 5,3 celdas de cualquier otra familia, así que el detector las separa solo por distancia. Solo Y1 (n=21); no se garantiza el rendimiento.",
+    "g957": "Dos cuadrados + marcador",
+    "g958": "Superficie de celdas v0TRQ · QR central (Y1)",
+    "g959": "v0TRQ. El derivado de v0TR — el QR queda enterrado en el centro del cubo (la costura Y) en una ranura de 8×8 celdas. La ranura tapa el centro de linaje K3 de v0TR (16 celdas) y el marcador de fase de la esquina lejana (6 celdas) da la orientación. 77 celdas de patrón, una ranura de 64 celdas, 270 datos. La misma ranura central sobre v0T (v0TQ) fue rechazada por el colocador por la separación entre réplicas de formato; v0TR pasa porque su lado oeste está vacío. Solo Y1 (n=21); no se garantiza el rendimiento.",
+    "g969": "Dos cuadrados + QR central",
     "g611": "v0W2. Segundo derivado de v0W — el patrón secundario crece de 3×3 a un marcador grande de 6×6, mientras que el centro de diana K3 (25 celdas) y los tres cuadrados concéntricos de esquina (36 celdas) se hacen idénticos en las tres caras, quedando solo para la detección. Un único marcador grande lleva ahora toda la discriminación de fase de 120°. 97 celdas de patrón · 314 celdas de datos, margen de orientación 0.151 — más grueso que el de v0W (0.095). Solo Y1 (n=21); no garantiza el rendimiento.",
     "g521": "Editor de celdas",
     "g522": "Pintar una sola cara excluye el triplete de datos (i,j) en T, L y R. Las ediciones no se aplican a la salida del código actual.",
@@ -4495,6 +4574,12 @@ const GENERATOR_STRINGS = {
     "g996": "Superfície de células v0TY · QR no canto distante (Y1)",
     "g997": "v0TY. O derivado do v0T — o QR fica enterrado dentro do cubo no canto distante (o vértice superior da face T) numa ranhura de 8×8 células. A ranhura cobre o marcador de fase do canto distante do v0T (9 células), mas o bloco assimétrico interior (9 células) permanece e dá a orientação — os dois blocos de orientação são uma redundância intencional exatamente para isso. 95 células de padrão, uma ranhura de 64 células, 252 dados. Se escolher «Face» como posição do QR, passa para este detetor. Apenas Y1 (n=21); o desempenho não é garantido.",
     "g998": "Superfície completa + QR canto distante",
+    "g955": "Superfície de células v0TR (Y1)",
+    "g956": "v0TR. A reformulação do v0T — leva dois conjuntos de quadrados concêntricos em três cantos (o exterior onde o v0T o tinha, o interior é esse mesmo quadrado deslocado para o centro do cubo). Um centro de linhagem K3 (16 células), os quadrados concêntricos (68 células) e um marcador de fase no canto distante (9 células) — 93 células, 318 dados. Em troca desaparecem o bloco assimétrico interior, o braço norte e o bloco oeste do v0T: fica um só bloco de orientação e a margem de orientação desce para 0,043 — a mais fina da gama (1,23× o limiar). O raio do quadrado interior fica a 5,3 células de qualquer outra família, pelo que o detetor as separa apenas pela distância. Apenas Y1 (n=21); o desempenho não é garantido.",
+    "g957": "Dois quadrados + marcador",
+    "g958": "Superfície de células v0TRQ · QR central (Y1)",
+    "g959": "v0TRQ. O derivado do v0TR — o QR fica enterrado no centro do cubo (a costura Y) numa ranhura de 8×8 células. A ranhura cobre o centro de linhagem K3 do v0TR (16 células) e o marcador de fase do canto distante (6 células) dá a orientação. 77 células de padrão, uma ranhura de 64 células, 270 dados. A mesma ranhura central sobre o v0T (v0TQ) foi recusada pelo colocador por causa da separação entre réplicas de formato; o v0TR passa porque o seu lado oeste está vazio. Apenas Y1 (n=21); o desempenho não é garantido.",
+    "g969": "Dois quadrados + QR central",
     "g611": "v0W2. Segundo derivado do v0W — o padrão secundário cresce de 3×3 para um marcador grande de 6×6, enquanto o centro de alvo K3 (25 células) e os três quadrados concêntricos de canto (36 células) ficam idênticos nas três faces, reservados só à deteção. Um único marcador grande passa a assumir toda a discriminação de fase de 120°. 97 células de padrão · 314 células de dados, margem de orientação 0.151 — mais espessa que a do v0W (0.095). Apenas Y1 (n=21); não garante o desempenho.",
     "g521": "Editor de células",
     "g522": "Pintar apenas uma face exclui o triplo de dados (i,j) em T, L e R. As edições não são aplicadas à saída do código atual.",
@@ -4635,6 +4720,8 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0T,
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
   // v0XQ(2라운드) · v0X(3라운드) 프로파일 상수는 2026-08-17 드랍으로 여기서 빠졌고,
   // **v0W 계열 넷(V0W·V0WQ·V0W2·V0WY)도 같은 날 v0T 편입 라운드 드랍으로 빠졌다**
   // (v1r2·v2r2 전례). `locatorY.js` · `generator-render-config.js` 쪽에는 그대로
@@ -6231,6 +6318,15 @@ if (els.yLocatorCards) {
           generatorState.qrPosition = 'plane';
           renderQrPositionUi();
         }
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TR) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ) {
+        // ⚠ v0TY 와 달리 **QR 위치를 건드리지 않는다.** v0TY 의 «면» 연동은 그 카드가
+        // 곧 «먼 코너 슬롯» 이라는 레이아웃 선택이기 때문인데, v0TRQ 의 슬롯은
+        // **중앙(Y-심)** 이라 QR 위치 카드 여섯 중 어느 것과도 같은 축이 아니다.
+        // 두 QR 이 그려질 걱정도 없다 — 슬롯 레이아웃이면 sceneY 가 코너 QR 을
+        // 억제하고, 슬롯 qrText 가드도 `hasCenterQrSlot` 정본 질의로 걸린다.
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
       // v1r2 · v2r2 분기는 2026-08-16 드랍으로, v0XQ(2라운드) · v0X(3라운드) 분기는
@@ -7638,7 +7734,11 @@ function syncYLocatorUi() {
         ? LOCATOR_PROFILE_CELL_SURFACE_V0T
         : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY
           ? LOCATOR_PROFILE_CELL_SURFACE_V0TY
-          : LOCATOR_PROFILE_OFF;
+          : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TR
+            ? LOCATOR_PROFILE_CELL_SURFACE_V0TR
+            : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ
+              ? LOCATOR_PROFILE_CELL_SURFACE_V0TRQ
+              : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
     // 자동은 «끔» 과 같은 값을 내지만 카드는 배타적으로 켠다 — 자동을 고른 사용자에게
     // 끔이 함께 켜져 보이면 «둘 중 뭐가 적용된 건가» 가 생긴다.
@@ -7658,7 +7758,11 @@ function syncYLocatorUi() {
       ? t('g994')
       : profile === LOCATOR_PROFILE_CELL_SURFACE_V0TY
         ? t('g997')
-        : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
+        : profile === LOCATOR_PROFILE_CELL_SURFACE_V0TR
+          ? t('g956')
+          : profile === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ
+            ? t('g959')
+            : profile === LOCATOR_PROFILE_CELL_SURFACE_V0
           ? t('g541')
           : profile === LOCATOR_PROFILE_HEX_FRAME_V1
             ? t('g520')

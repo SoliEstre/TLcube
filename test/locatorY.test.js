@@ -74,6 +74,9 @@ test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v
   // 먹으면서 셀 집합·회계·와이어가 v0W 와 갈렸고, 그래서 프로파일이 실재한다.
   // 그 문단이 걱정하던 «디코더가 절대 돌려줄 수 없는 값» 도 해소됐다 — 디코더에
   // `v0wy` 패밀리가 있고 `cellSurface-block-locator.test.js` 가 그 산출을 고정한다.
+  // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — 'cell-surface-v0tr' ·
+  // 'cell-surface-v0trq' 가 맨 뒤에 붙었다. 둔 다 외곽 패딩이 0 이라
+  // `locatorOuterPaddingCells` 분기는 안 늘어난다 (셀 표면 계보 공통).
   // **의도적 갱신 «v0T 편입» (운영자 확정 2026-08-17)** — 'cell-surface-v0t' ·
   // 'cell-surface-v0ty' 가 뒤에 붙었다 (v0T = Type Y 최종 파인더 · v0TY = 먼 코너
   // QR 파생). v0W 계열 넷은 같은 날 드랍됐지만 **프로파일 상수는 그대로다** —
@@ -83,7 +86,11 @@ test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v
     'cell-surface-v0', 'cell-surface-v2r2', 'cell-surface-v0x', 'cell-surface-v0xq',
     'cell-surface-v0w', 'cell-surface-v0wq', 'cell-surface-v0w2', 'cell-surface-v0wy',
     'cell-surface-v0t', 'cell-surface-v0ty',
+    'cell-surface-v0tr', 'cell-surface-v0trq',
   ]);
+  assert.ok(LOCATOR_PROFILES_Y.includes('cell-surface-v0tr')
+    && LOCATOR_PROFILES_Y.includes('cell-surface-v0trq'),
+    'v0TR·v0TRQ 프로파일이 없다 (2026-08-17 편입)');
   assert.ok(LOCATOR_PROFILES_Y.includes('cell-surface-v0wy'),
     'v0WY 는 이제 로케이터 프로파일이다 (2026-08-17 재설계)');
   assert.ok(LOCATOR_PROFILES_Y.includes('cell-surface-v0t')
