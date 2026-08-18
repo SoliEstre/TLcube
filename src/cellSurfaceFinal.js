@@ -344,7 +344,7 @@ export const CELL_SURFACE_FINAL_V0TY = 'v0ty';
  * 최종 라인업에서 **코어 반경으로 갈라지는 첫 계열**이고, 그래서 순수 v0T·v0TY
  * 프레임에는 v0TR 브랜치가 아예 안 뜬다 (기존 라인업의 쌍당 비용 증가 0).
  *
- * 회계 (`claude-v0tr-measure.mjs` 실측): 441 − 93 − 12 − 18 = **318** · S=106 ·
+ * 회계 (A 블록 편입 후, 2026-08-18): 441 − 102 − 12 − 18 = **309** · S=103 ·
  * 잔여 0 · payload L/M/H = 89/76/61 B · ⑤ 인코더 정합 전 레벨 통과 ·
  * autoplace 수용 (S_fmt 388 ≥ 289).
  */
@@ -719,10 +719,10 @@ const DECLARED_DATA = Object.freeze({
     // 슬롯 8 은 운영자 스펙(«v0WQ·v0WY 와 동일 크기») — autoplace 수용 상한도 8 이라
     // 두 자가 같은 값을 가리킨다 (`claude-v0tqty-probe.mjs` §①).
     [CELL_SURFACE_FINAL_V0TY]: Object.freeze({ 21: 252 }),
-    // v0tr: 441 − 93(파인더 16 + NE 68 + SE 9) − 12 − 18 = 318. 근거는 팩이 아니라
+    // v0tr: 441 − 102(파인더 16 + A 9 + NE 68 + SE 9) − 12 − 18 = 309. 근거는 팩이 아니라
     // autoplace 재산출이다 (`claude-v0tr-measure.mjs` ⓓ — S=106 · 잔여 0).
-    [CELL_SURFACE_FINAL_V0TR]: Object.freeze({ 21: 318 }),
-    // v0trq: 441 − 77(파인더 93−중앙 16) − 64(중앙 QR 슬롯 8²) − 12 − 18 = 270.
+    [CELL_SURFACE_FINAL_V0TR]: Object.freeze({ 21: 309 }),
+    // v0trq: 441 − 77(파인더 102 − 중앙 16 − A 9) − 64(중앙 QR 슬롯 8²) − 12 − 18 = 270.
     // 팩 counts.data 와 같은 값이지만 근거는 팩이 아니라 autoplace 재산출이다.
     [CELL_SURFACE_FINAL_V0TRQ]: Object.freeze({ 21: 270 }),
   }),
@@ -1598,8 +1598,23 @@ const V0TR_NE_CELLS = Object.freeze([
     !(i <= V0XQ_BLOCKS.CORNER.iMax && j >= V0XQ_BLOCKS.CORNER.jMin)),
 ]);
 
+/**
+ * ⚠ **A 블록 편입 (운영자 지적 2026-08-18)** — 최초 v0TR 정본에는 «불스아이 주변
+ * 보조 파인더»(A 블록)가 빠져 있었다. 그러면 비대칭이 SE 6셀뿐이고, **v0TRY 는
+ * 슬롯이 그 SE 를 삼키므로 방향 판별자가 0 이 된다.**
+ *
+ * v0TY 가 SE 를 잃고도 세 방향이 서는 이유가 정확히 A 블록의 L-반전 9셀이다
+ * (§CELL_SURFACE_FINAL_V0TY «의도된 비대칭 이중화»). v0TR 계열도 같은 이중화를
+ * 가져야 파생(v0TRY)이 성립한다. 덤으로 A 블록 중앙 `(5,4)` 는 파인더 전체에서
+ * **유일한 고립점**이다 (8이웃이 전부 파인더 셀 — `claude-isolated-dot-census.out.txt`).
+ *
+ * **`V0T_A_CELLS` 를 그대로 참조한다** — 새 배열을 만들지 않는다. v0T 와 문자 그대로
+ * 같은 셀·같은 톤이라 손 좌표가 0 이고 전사 오류가 원리적으로 불가능하다
+ * (이 파일의 «정본 의존» 규약 그대로).
+ */
 const V0TR_CELLS = Object.freeze([
   ...V0T_CENTRE_CELLS,
+  ...V0T_A_CELLS,
   ...V0TR_NE_CELLS,
   ...V0W_PHASE_CELLS,
 ]);
@@ -1608,6 +1623,12 @@ const V0TR_CELLS = Object.freeze([
 export const V0TR_BLOCKS = Object.freeze({
   /** K3 계보 중앙 (0..3)² — v0T 와 같은 배열이라 서명도 같다 (v0tr 만). */
   NW: V0T_BLOCKS.NW,
+  /**
+   * A 블록 — **L 반전 비대칭 9셀**. v0T 와 같은 범위·같은 배열 (2026-08-18 편입).
+   * v0TRY 에서 슬롯이 SE 를 삼킨 뒤 **남는 유일한 방향 판별자**다. 중앙 (5,4) 는
+   * 파인더 전체의 유일한 고립점이기도 하다.
+   */
+  A: V0T_BLOCKS.A,
   /** NE **바깥** 동심 사각 — v0T·v0W 계열과 문자 그대로 같은 자리 (반경 √279). */
   NE_OUTER: Object.freeze({
     iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin,
@@ -2723,13 +2744,16 @@ export function capacityForCellSurfaceFinal(
     }
   }
 
-  // ①-j v0TR 정본 — 93셀 (중앙 16 + NE 68 + SE 9) · mid 0 · 비대칭 6 · 슬롯 0.
+  // ①-j v0TR 정본 — 102셀 (중앙 16 + **A 9** + NE 68 + SE 9) · mid 0 · 비대칭 15 · 슬롯 0.
+  //
+  // A 블록은 2026-08-18 운영자 지적으로 편입됐다 (최초 정본에 빠져 있었다).
+  // 없으면 v0TRY 에서 슬롯이 SE 를 삼킨 뒤 방향 판별자가 0 이 된다 (§V0TR_CELLS).
   //
   // 전사가 한 줄도 없는 구조라 여기서 재는 것은 «유도가 실제로 정본 배열을 물고
   // 있는가» 다: 중앙·바깥 사각·SE 는 **행 참조 동일성**으로, 안쪽 사각은
   // **평행이동 사상**으로 못 박는다. 물린 배열이 조용히 바뀌면 여기서 터진다.
-  if (V0TR_CELLS.length !== 93) {
-    throw new Error('v0TR 정본이 93셀이 아니다: ' + V0TR_CELLS.length);
+  if (V0TR_CELLS.length !== 102) {
+    throw new Error('v0TR 정본이 102셀이 아니다: ' + V0TR_CELLS.length);
   }
   {
     // ⓐ 중앙 16 = V0T_CENTRE_CELLS 행 참조 그대로 (새 배열 신설 금지 규약).
@@ -2737,8 +2761,14 @@ export function capacityForCellSurfaceFinal(
       .some((row, index) => row !== V0T_CENTRE_CELLS[index])) {
       throw new Error('v0TR 중앙이 V0T_CENTRE_CELLS 행 참조가 아니다');
     }
+    // ⓐ' A 9 = V0T_A_CELLS 행 참조 그대로 (v0T 와 문자 그대로 같은 셀·같은 톤).
+    const aStart = V0T_CENTRE_CELLS.length;
+    if (V0TR_CELLS.slice(aStart, aStart + V0T_A_CELLS.length)
+      .some((row, index) => row !== V0T_A_CELLS[index])) {
+      throw new Error('v0TR A 블록이 V0T_A_CELLS 행 참조가 아니다');
+    }
     // ⓑ NE 바깥 36 = V0XQ_CORNER_CELLS 행 참조 그대로 (= v0T NE 와 같은 배열).
-    const outerStart = V0T_CENTRE_CELLS.length;
+    const outerStart = V0T_CENTRE_CELLS.length + V0T_A_CELLS.length;
     if (V0TR_CELLS.slice(outerStart, outerStart + V0XQ_CORNER_CELLS.length)
       .some((row, index) => row !== V0XQ_CORNER_CELLS[index])) {
       throw new Error('v0TR NE 바깥 사각이 V0XQ_CORNER_CELLS 행 참조가 아니다');
@@ -2778,12 +2808,14 @@ export function capacityForCellSurfaceFinal(
         throw new Error('v0TR 안쪽 사각이 바깥 사각의 평행이동이 아니다: ' + cellKey(i, j));
       }
     }
-    // ⓕ 블록 상자 전수 — 93셀이 정확히 네 상자(NW·NE 바깥·NE 안쪽·SE) 안에 있고,
-    //    상자마다 기대 셀 수를 갖는가. 상자 밖 셀이 하나라도 있으면 터진다.
-    const box = { NW: 0, NE_OUTER: 0, NE_INNER: 0, SE: 0 };
+    // ⓕ 블록 상자 전수 — 102셀이 정확히 다섯 상자(NW·A·NE 바깥·NE 안쪽·SE) 안에
+    //    있고, 상자마다 기대 셀 수를 갖는가. 상자 밖 셀이 하나라도 있으면 터진다.
+    const box = { NW: 0, A: 0, NE_OUTER: 0, NE_INNER: 0, SE: 0 };
     for (const [i, j] of V0TR_CELLS) {
       const homes = [];
       if (i <= V0TR_BLOCKS.NW.iMax && j <= V0TR_BLOCKS.NW.jMax) homes.push('NW');
+      if (i >= V0TR_BLOCKS.A.iMin && i <= V0TR_BLOCKS.A.iMax
+        && j >= V0TR_BLOCKS.A.jMin && j <= V0TR_BLOCKS.A.jMax) homes.push('A');
       if (i <= V0TR_BLOCKS.NE_OUTER.iMax && j >= V0TR_BLOCKS.NE_OUTER.jMin) homes.push('NE_OUTER');
       if (i >= V0TR_BLOCKS.NE_INNER.iMin && i <= V0TR_BLOCKS.NE_INNER.iMax
         && j >= V0TR_BLOCKS.NE_INNER.jMin && j <= V0TR_BLOCKS.NE_INNER.jMax) {
@@ -2795,23 +2827,38 @@ export function capacityForCellSurfaceFinal(
       }
       for (const home of homes) box[home] += 1;
     }
-    if (box.NW !== 16 || box.NE_OUTER !== 36 || box.NE_INNER !== 36 || box.SE !== 9) {
-      throw new Error('v0TR 블록 분할이 16/36/36/9 가 아니다: ' + JSON.stringify(box));
+    if (box.NW !== 16 || box.A !== 9 || box.NE_OUTER !== 36
+      || box.NE_INNER !== 36 || box.SE !== 9) {
+      throw new Error('v0TR 블록 분할이 16/9/36/36/9 가 아니다: ' + JSON.stringify(box));
     }
-    // ⓖ 비대칭은 SE 6셀뿐 — **A 블록이 없다** 는 사실을 회귀로 못 박는다
-    //    (보충 블록을 만들지 않았다는 것의 정본. 만들면 여기서 터진다).
+    // ⓖ 비대칭 15 = A 9 (L 반전) + SE 6 (R 반전) — **의도된 이중화**를 못 박는다.
+    //
+    // ⚠ **정정 (2026-08-18)**: 여기에는 «비대칭은 SE 6셀뿐 — A 블록이 없다는 사실을
+    // 회귀로 못 박는다» 가 있었다. 그건 레인이 규약을 어긴 게 아니라 **내 브리프가
+    // «보충 블록 신설 금지» 를 지시한 결과**였다 — 레인은 그대로 지켰고 부재를
+    // 정직하게 잠가 뒀다. 그러나 그 상태로는 v0TRY 가 성립하지 않는다(슬롯이 SE 를
+    // 삼키면 판별자 0). 운영자 지적으로 A 를 편입하며 이 회귀도 뒤집는다.
+    // A 는 «신설» 이 아니라 v0T 정본의 **행 참조 재사용**이라 금지 규약과도 맞는다.
     const asym = V0TR_CELLS.filter(([, , T, L, R]) => !(T === L && L === R));
-    if (asym.length !== 6 || asym.some((row) => !V0W_PHASE_CELLS.includes(row))) {
-      throw new Error('v0TR 의 비대칭이 SE 6셀만이 아니다: ' + asym.length);
+    const asymA = asym.filter((row) => V0T_A_CELLS.includes(row));
+    const asymSe = asym.filter((row) => V0W_PHASE_CELLS.includes(row));
+    if (asym.length !== 15 || asymA.length !== 9 || asymSe.length !== 6) {
+      throw new Error('v0TR 비대칭이 A 9 + SE 6 이 아니다: '
+        + JSON.stringify({ total: asym.length, A: asymA.length, SE: asymSe.length }));
     }
     if (slotCellsFor(CELL_SURFACE_FINAL_V0TR, V0TR_N).length !== 0) {
       throw new Error('v0TR 에 QR 슬롯이 생겼다 — 슬롯은 v0trq 쪽이다');
     }
   }
 
-  // ①-k v0TRQ 정본 — 77셀 (v0TR − 중앙 16) · 슬롯 64 · 비대칭 6.
+  // ①-k v0TRQ 정본 — 77셀 (v0TR − 중앙 16 − A 9) · 슬롯 64 · 비대칭 6.
   // v0TY 와 같은 규약: 정의가 곧 유도(슬롯 박스 필터)이므로 여기서 재는 것은
-  // ⓐ 필터가 정확히 중앙 16 만 걷어냈는가 ⓑ 행 참조가 유지되는가 ⓒ 슬롯 규약이다.
+  // ⓐ 필터가 정확히 중앙 16 + A 9 를 걷어냈는가 ⓑ 행 참조 유지 ⓒ 슬롯 규약이다.
+  //
+  // ⚠ A 블록 (4..6)×(3..5) 은 중앙 슬롯 상자 (0..7)² **안에 완전히 들어간다** —
+  // 즉 v0TRQ 에서는 A 가 QR 밑에 깔려 셀 수·비대칭이 A 편입 전과 **같다**.
+  // 방향은 SE 6 이 준다 (중앙이 QR 이므로 «안쪽이든 면 코너든 하나는 가려도 된다»
+  // 는 운영자 이중화 설계 그대로다). v0TRY 는 반대로 SE 를 잃고 A 가 남는다.
   if (V0TRQ_CELLS.length !== 77) {
     throw new Error('v0TRQ 정본이 77셀이 아니다: ' + V0TRQ_CELLS.length);
   }
@@ -2822,9 +2869,11 @@ export function capacityForCellSurfaceFinal(
       }
     }
     const removed = V0TR_CELLS.filter((row) => !V0TRQ_CELLS.includes(row));
-    if (removed.length !== 16
-      || removed.some((row, index) => row !== V0T_CENTRE_CELLS[index])) {
-      throw new Error('v0TRQ 필터가 걷어낸 것이 v0T 중앙 16행이 아니다');
+    const expectedRemoved = [...V0T_CENTRE_CELLS, ...V0T_A_CELLS];
+    if (removed.length !== expectedRemoved.length
+      || removed.some((row, index) => row !== expectedRemoved[index])) {
+      throw new Error('v0TRQ 필터가 걷어낸 것이 v0T 중앙 16 + A 9 행이 아니다: '
+        + removed.length);
     }
     const slotKeys = new Set(slotCellsFor(CELL_SURFACE_FINAL_V0TRQ, V0TRQ_N)
       .map((cell) => cellKey(cell.i, cell.j)));
@@ -2941,8 +2990,8 @@ export function capacityForCellSurfaceFinal(
     'v0t@21': { symbols: 102, residual: 1, locator: 104, legacy: null },
     //   v0ty@21 441 − 95 − 64(먼 코너 슬롯 8²) − 12 − 18 = 252 · S=84 · 잔여 0 (레거시 없음)
     'v0ty@21': { symbols: 84, residual: 0, locator: 95, legacy: null },
-    //   v0tr@21  441 − 93 − 12 − 18 = 318 · S=106 · 잔여 0 (레거시 없음 — 신설)
-    'v0tr@21': { symbols: 106, residual: 0, locator: 93, legacy: null },
+    //   v0tr@21  441 − 102 − 12 − 18 = 309 · S=103 · 잔여 0 (레거시 없음 — 신설)
+    'v0tr@21': { symbols: 103, residual: 0, locator: 102, legacy: null },
     //   v0trq@21 441 − 77 − 64(중앙 슬롯 8²) − 12 − 18 = 270 · S=90 · 잔여 0 (레거시 없음)
     'v0trq@21': { symbols: 90, residual: 0, locator: 77, legacy: null },
   };

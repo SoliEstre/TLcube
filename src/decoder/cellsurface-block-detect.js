@@ -1446,9 +1446,13 @@ function patchesForV0tr(n) {
   const inOuter = (cell) => cell.i <= V0TR_BLOCKS.NE_OUTER.iMax
     && cell.j >= V0TR_BLOCKS.NE_OUTER.jMin;
   const inPhase = (cell) => cell.i >= V0TR_BLOCKS.SE.iMin && cell.j >= V0TR_BLOCKS.SE.jMin;
+  // A 블록 (2026-08-18 편입) — v0T 와 같은 자리·같은 배열. 정련의 방향 판별자다.
+  // 빠뜨리면 정본에는 들어왔는데 정련이 안 쓰는 «반쪽 편입» 이 된다.
+  const inA = (cell) => cell.i >= V0TR_BLOCKS.A.iMin && cell.i <= V0TR_BLOCKS.A.iMax
+    && cell.j >= V0TR_BLOCKS.A.jMin && cell.j <= V0TR_BLOCKS.A.jMax;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inOuter));
-  const extras = [inInner, inPhase]
+  const extras = [inA, inInner, inPhase]
     .flatMap((filter) => YFACE_LIST.map((face) => buildPatch(cells, face, filter)))
     .filter((patch) => patch !== null);
   return {
