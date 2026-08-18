@@ -1538,6 +1538,15 @@
           <summary data-i18n="g511">스캔 불가 후보</summary>
           <div id="finderUserCards"></div>
         </details>
+        <!-- O/A/K 후보 (2026-08-18) — 위 두 서랍 어느 쪽에도 안 넣는다.
+             «기준 미달» 이 아니다: 6축 채점 하네스로 잰 적이 없다 (계보가 다르다).
+             «스캔 불가» 도 아니다: 라운드트립 회귀가 검출·게이트 통과를 증명한다
+             (test/finder-oak-patterns.test.js ③). 없는 사실을 라벨로 주장하지 않으려고
+             자기 서랍을 준다. -->
+        <details class="finder-collapse" id="finderOak">
+          <summary data-i18n="g564">O/A/K 후보 (편집기 계보)</summary>
+          <div id="finderOakCards"></div>
+        </details>
         <div class="finder-score-panel" id="finderScorePanel" aria-live="polite" aria-label="선택 파인더 특성" data-i18n-attr="aria-label:g496">
           <div class="finder-score-heading">
             <strong id="finderScoreName"></strong>
@@ -2174,6 +2183,11 @@ const GENERATOR_STRINGS = {
     "g504": "사용자 손그림 개선안",
     "g505": "3톤 큐브",
     "g506": "촬영 강건성",
+    "g564": "O/A/K 후보 (편집기 계보)",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "미측정 (다른 계보)",
     "g507": "{filename}으로 다운로드되었습니다.",
     "g508": "파인더 에디터",
     "g509": "불스아이 속 큐브",
@@ -2512,6 +2526,11 @@ const GENERATOR_STRINGS = {
     "g504": "Refined hand-drawn designs",
     "g505": "Three-tone cube",
     "g506": "Capture robustness",
+    "g564": "O/A/K candidates (editor lineage)",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "Not measured (different lineage)",
     "g507": "Downloaded as {filename}.",
     "g508": "Finder editor",
     "g509": "Cube in bullseye",
@@ -2850,6 +2869,11 @@ const GENERATOR_STRINGS = {
     "g504": "手描きデザイン改良案",
     "g505": "3トーンキューブ",
     "g506": "撮影堅牢性",
+    "g564": "O/A/K 候補（エディタ系譜）",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "未計測（別系譜）",
     "g507": "{filename} としてダウンロードしました。",
     "g508": "ファインダーエディタ",
     "g509": "ブルズアイの中のキューブ",
@@ -3187,6 +3211,11 @@ const GENERATOR_STRINGS = {
     "g504": "Dessins à main levée affinés",
     "g505": "Cube trois tons",
     "g506": "Robustesse à la prise de vue",
+    "g564": "Candidats O/A/K (lignée éditeur)",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "Non mesuré (autre lignée)",
     "g507": "Téléchargé sous le nom {filename}.",
     "g508": "Éditeur de repères",
     "g509": "Cube dans la cible",
@@ -3524,6 +3553,11 @@ const GENERATOR_STRINGS = {
     "g504": "Disegni a mano libera rifiniti",
     "g505": "Cubo a tre toni",
     "g506": "Robustezza in ripresa",
+    "g564": "Candidati O/A/K (linea editor)",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "Non misurato (altra linea)",
     "g507": "Scaricato come {filename}.",
     "g508": "Editor dei pattern",
     "g509": "Cubo nel bersaglio",
@@ -3861,6 +3895,11 @@ const GENERATOR_STRINGS = {
     "g504": "Handzeichnungen überarbeitet",
     "g505": "Dreiton-Würfel",
     "g506": "Aufnahmerobustheit",
+    "g564": "O/A/K-Kandidaten (Editor-Linie)",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "Nicht gemessen (andere Linie)",
     "g507": "Als {filename} heruntergeladen.",
     "g508": "Suchmuster-Editor",
     "g509": "Würfel in der Zielscheibe",
@@ -4198,6 +4237,11 @@ const GENERATOR_STRINGS = {
     "g504": "Dibujos a mano alzada refinados",
     "g505": "Cubo de tres tonos",
     "g506": "Robustez de captura",
+    "g564": "Candidatos O/A/K (linaje del editor)",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "Sin medir (otro linaje)",
     "g507": "Descargado como {filename}.",
     "g508": "Editor de patrones",
     "g509": "Cubo en la diana",
@@ -4535,6 +4579,11 @@ const GENERATOR_STRINGS = {
     "g504": "Desenhos à mão aperfeiçoados",
     "g505": "Cubo de três tons",
     "g506": "Robustez de captura",
+    "g564": "Candidatos O/A/K (linhagem do editor)",
+    "g565": "Nitrogen r2",
+    "g566": "Aspirin",
+    "g567": "Benzene",
+    "g568": "Não medido (outra linhagem)",
     "g507": "Transferido como {filename}.",
     "g508": "Editor de padrões",
     "g509": "Cubo no alvo",
@@ -4708,6 +4757,7 @@ import {
   FINDER_BASELINE_SCORES, LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
 } from './src/finder-patterns.js';
+import { getOakFinderPattern, isOakFinderPatternId } from './src/finder-oak-patterns.js';
 import {
   CENTER_QR_FINDER_PATTERN_ID, commitFinderQrTransition,
   selectFinderPattern, selectGeneratorType, selectQrPosition,
@@ -4804,6 +4854,7 @@ const els = {
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
   finderPatternCards: $('finderPatternCards'),
   finderUserCards: $('finderUserCards'),
+  finderOakCards: $('finderOakCards'),
   finderScorePanel: $('finderScorePanel'), finderScoreRows: $('finderScoreRows'),
   finderScoreName: $('finderScoreName'), finderGateBadge: $('finderGateBadge'),
   finderCenterOffset: $('finderCenterOffset'), finderCenterGate: $('finderCenterGate'),
@@ -5436,7 +5487,7 @@ function setMode(next) {
  */
 function applyFinderExperimentVisibility() {
   const show = mode === 'advanced';
-  for (const id of ['finderBelowBar', 'finderUnscannable']) {
+  for (const id of ['finderBelowBar', 'finderUnscannable', 'finderOak']) {
     const block = document.getElementById(id);
     if (block) {
       block.style.display = show ? '' : 'none';
@@ -5547,6 +5598,10 @@ const FINDER_LABEL_KEYS = Object.freeze({
   'cats-refined-h3': 'g503',
   'central-cube-3tone': 'g505',
   'cube-bullseye': 'g509',
+  // OAK 후보 (2026-08-18) — 이름은 분자명 체계(운영자 명명)라 언어별로 안 옮긴다.
+  'oak-nitrogen-r2': 'g565',
+  'oak-aspirin': 'g566',
+  'oak-benzene': 'g567',
 });
 
 const FINDER_FAMILY_KEYS = Object.freeze({
@@ -5558,6 +5613,7 @@ const FINDER_FAMILY_KEYS = Object.freeze({
   'three-tone-cube': 'g506',
   // 하이브리드도 «촬영 강건성» 묶음이다 — 두 큐브 선택지가 같은 목적으로 존재한다.
   'cube-bullseye': 'g506',
+  oak: 'g564',
 });
 const FINDER_SCORE_AXES = Object.freeze([
   Object.freeze({ id: 'rotation', labelKey: 'g482', evidenceKey: 'g489', evidenceClass: 'measured' }),
@@ -5628,13 +5684,21 @@ function finderMaskThumbnail(pattern) {
   //   (renderKind·toneRanks·radiusCells)가 공존하고, 앞으로도 늘 수 있다.
   //   여기서 cellMasks 를 «있다고 가정» 해서 라이브가 죽었다(2026-08-12) —
   //   scene.js 는 고쳤는데 이 썸네일이 남아 있었다. 표현을 늘릴 땐 이 분기도 같이 본다.
-  if (!Array.isArray(pattern.cellMasks)) return finderCubeThumbnail(pattern);
+  // OAK 후보(2026-08-18)는 면당 3레벨(cellLevels)이라 cellMasks 가 **없다**.
+  // 위 경고가 말하는 «표현이 늘었다» 가 실제로 일어난 자리다 — 여기서 안 받으면
+  // finderCubeThumbnail 로 떨어져 toneRanks 가 없어 죽는다.
+  const levels = Array.isArray(pattern.cellLevels) ? pattern.cellLevels : null;
+  if (!levels && !Array.isArray(pattern.cellMasks)) return finderCubeThumbnail(pattern);
+  const FACE_LEVEL_INDEX = { T: 0, L: 1, R: 2 };
   for (let cellIndex = 0; cellIndex < FINDER_CELL_ORDER.length; cellIndex += 1) {
     const cell = FINDER_CELL_ORDER[cellIndex];
-    const mask = pattern.cellMasks[cellIndex];
+    const mask = levels ? 0 : pattern.cellMasks[cellIndex];
     for (const face of FACES) {
       const polygon = facePolygon(cell.q, cell.r, face, layout);
-      faces.push({ polygon, light: Boolean(mask & FINDER_FACE_BITS[face]) });
+      const level = levels
+        ? levels[cellIndex][FACE_LEVEL_INDEX[face]]
+        : (mask & FINDER_FACE_BITS[face] ? 2 : 0);
+      faces.push({ polygon, light: level === 2, mid: level === 1 });
       points.push(...polygon);
     }
   }
@@ -5651,7 +5715,11 @@ function finderMaskThumbnail(pattern) {
   for (const face of faces) {
     svg.append(finderSvgElement('polygon', {
       points: face.polygon.map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
-      fill: face.light ? 'currentColor' : 'var(--bg)',
+      // 중간톤은 썸네일에서 반투명 currentColor 로 낸다 — 카드가 테마를 따르므로
+      // 고정색을 쓰면 다크/라이트 한쪽에서 안 보인다. 실제 렌더의 BULLSEYE_MID 와
+      // 값이 같을 필요는 없다 (여긴 식별용 축소도이지 검출 대상이 아니다).
+      fill: face.light ? 'currentColor' : face.mid ? 'currentColor' : 'var(--bg)',
+      'fill-opacity': face.mid ? 0.45 : 1,
       stroke: 'var(--line)',
       'stroke-width': 0.35,
       'vector-effect': 'non-scaling-stroke',
@@ -5781,7 +5849,7 @@ function makeFinderCard(id, pattern) {
 function ensureFinderCards() {
   ensureFinderScoreRows();
   if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount
-    || els.finderUserCards.childElementCount) return;
+    || els.finderUserCards.childElementCount || els.finderOakCards.childElementCount) return;
 
   // 정식 선택지: 불스아이 → 3톤 큐브 → 중앙 QR. 큐브는 cell-mask 행에 섞지 않는다.
   els.finderLegacyRow.append(
@@ -5823,6 +5891,24 @@ function ensureFinderCards() {
     family.append(heading, cards);
     els.finderUserCards.append(family);
   }
+
+  // O/A/K 후보 (2026-08-18) — 손그림 개선안과 **다른 줄**이다. 계보가 다르고
+  // (탐색 산출물 vs 편집기 export) 표현도 다르다(면당 3레벨). 같은 줄에 섞으면
+  // 카드만 보고 어느 계보인지 못 읽는다.
+  const oakPatterns = FINDER_CARD_GROUPS.oak;
+  if (oakPatterns && oakPatterns.length) {
+    const family = document.createElement('div');
+    family.className = 'finder-family finder-user-family';
+    family.dataset.finderFamily = 'oak';
+    const cards = document.createElement('div');
+    cards.className = 'finder-user-patterns';
+    cards.append(...oakPatterns.map(({ id, pattern }) => makeFinderCard(id, pattern)));
+    // 패밀리 제목을 안 붙인다 — 이 서랍은 OAK 하나뿐이라 summary(g564)가 이미 그
+    // 말을 한다. 위 두 서랍은 안에 패밀리가 여럿이라 제목이 필요한 것이고, 여기서
+    // 흉내내면 같은 문장이 두 줄 나온다 (브라우저 확인 2026-08-18).
+    family.append(cards);
+    els.finderOakCards.append(family);
+  }
 }
 
 // Type O/A 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
@@ -5833,8 +5919,13 @@ function renderFinderUi() {
   // 초기 로드에도 걸려야 한다 — setMode 안에만 두면 모드를 한 번 눌러야 적용됐다.
   applyFinderExperimentVisibility();
 
-  for (const heading of els.finderPatternCards.querySelectorAll('[data-finder-family-key]')) {
-    heading.textContent = t(heading.dataset.finderFamilyKey);
+  // ⚠ 예전엔 finderPatternCards 만 돌아서 **손그림·OAK 서랍의 패밀리 제목이 공백**
+  //   이었다 (2026-08-18 브라우저 확인에서 발견 — 회귀는 카드 수만 세고 있었다).
+  //   서랍 셋을 다 돈다.
+  for (const container of [els.finderPatternCards, els.finderUserCards, els.finderOakCards]) {
+    for (const heading of container.querySelectorAll('[data-finder-family-key]')) {
+      heading.textContent = t(heading.dataset.finderFamilyKey);
+    }
   }
   for (const card of document.querySelectorAll('[data-finder-id]')) {
     const active = card.dataset.finderId === generatorState.finderPatternId;
@@ -5847,8 +5938,41 @@ function renderFinderUi() {
   const selectedPattern = FINDER_PATTERNS.find(
     (pattern) => pattern.id === generatorState.finderPatternId,
   );
+  // OAK 후보(2026-08-18)는 **6축 점수가 없다.** 없는 것이지 0 인 것이 아니다 —
+  // 그 하네스는 이진 비트 위에서 돌고(tools/finder-score.mjs), OAK 는 계보도
+  // 표현도 다르다. 여기서 0 이나 대체값을 지어내면 카드가 «측정됐는데 나쁘다» 로
+  // 읽힌다. 그래서 패널을 **접고** 이유를 적는다.
+  //
+  // ⚠ 2026-08-18 브라우저 확인에서 실제로 터진 자리다: 아래 throw 가 OAK 선택마다
+  //   발생해 renderFinderUi 가 중간에 죽었고, 카드 class 만 바뀌고 패널은 이전
+  //   선택에 멈춰 있었다. 회귀가 «카드 수» 만 세고 **선택 동작**을 안 재고 있었다.
+  if (isOakFinderPatternId(generatorState.finderPatternId)) {
+    const oakPattern = getOakFinderPattern(generatorState.finderPatternId);
+    els.finderScorePanel.classList.remove('gate-rejected');
+    els.finderScorePanel.classList.add('finder-score-unmeasured');
+    els.finderScoreName.textContent = tf('g480', { name: oakPattern.name });
+    els.finderGateBadge.className = 'finder-gate-badge';
+    els.finderGateBadge.textContent = t('g568');
+    els.finderScoreRows.style.display = 'none';
+    els.finderCenterOffset.textContent = '—';
+    els.finderCenterGate.className = 'finder-gate-badge';
+    els.finderCenterGate.textContent = t('g568');
+    // ⚠ 조기 return 은 **아래 정리 코드를 건너뛴다.** 그래서 이전 선택이 남긴 것을
+    //   여기서 직접 지운다 — 안 지우면 «실측 복호율 89%» 같은 남의 수치가 OAK 카드
+    //   밑에 그대로 붙어 있다 (2026-08-18 브라우저 확인에서 실제로 그랬다).
+    //   OAK 는 실측 복호율도 없다 — 실기기 라운드를 아직 안 돌았다.
+    els.finderBaselineEvidence.textContent = '';
+    els.finderBaselineEvidence.style.display = 'none';
+    // 실험 후보 경고는 유지한다 — OAK 도 후보이지 정식 선택지가 아니다.
+    els.finderExperimentalWarning.style.display =
+      (visible || document.body.dataset.generatorEdition === 'finder-experiment') ? '' : 'none';
+    return;
+  }
+  els.finderScorePanel.classList.remove('finder-score-unmeasured');
+  els.finderScoreRows.style.display = '';
   const scoreRecord = selectedPattern || FINDER_BASELINE_SCORES[generatorState.finderPatternId];
   if (!scoreRecord) throw new Error('finder score record missing: ' + generatorState.finderPatternId);
+  // OAK 는 위에서 이미 return 했다 — 여기 오는 id 는 반드시 라벨 키가 있다.
   const selectedLabelKey = FINDER_LABEL_KEYS[generatorState.finderPatternId];
   if (!selectedLabelKey) throw new Error('finder label key missing: ' + generatorState.finderPatternId);
   const gateKey = scoreRecord.centerBalanceGatePassed ? 'g493' : 'g494';

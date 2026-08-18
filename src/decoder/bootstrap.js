@@ -90,6 +90,21 @@ import {
 import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
 import { detectBullseyes, pyramidLevelsForImage, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
+import { OAK_FINDER_PATTERNS } from '../finder-oak-patterns.js';
+
+/**
+ * 중앙 19셀 파인더 검출 라인업 = 생성·손그림 이진 11종 + OAK 후보 3종 (2026-08-18).
+ *
+ * 왜 합성인가 — `FINDER_CELL_MASK_PATTERNS` 는 `finder-patterns.js` (생성 도구
+ * 산출물)의 필터라 OAK 를 담을 수 없다. 출처가 다른 표를 억지로 한 파일에 합치는
+ * 대신 **소비 지점에서 합친다**. 순서는 «기존 → OAK» 로 고정한다: 후보 정렬은
+ * fit 우선이라 순서가 결과를 안 바꾸지만, 완전 동점에서 기존 후보가 이름을
+ * 유지하는 편이 이미 발행된 프레임의 판독 이름을 안 흔든다.
+ */
+const CELL_FINDER_LINEUP = Object.freeze([
+  ...FINDER_CELL_MASK_PATTERNS,
+  ...OAK_FINDER_PATTERNS,
+]);
 import { FINDER_CELL_MASK_PATTERNS } from '../finder-patterns.js';
 import { classifyFamily, scoreCubeTiling } from './family.js';
 import {
@@ -824,7 +839,7 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
   const cellSizeSeeds = radiusSeeds
     ? radiusSeeds.map((radius) => radius / Math.sqrt(13))
     : undefined;
-  let detected = detectCellFinders(reduced.luma, FINDER_CELL_MASK_PATTERNS, {
+  let detected = detectCellFinders(reduced.luma, CELL_FINDER_LINEUP, {
     centerSeeds,
     cellSizeSeeds,
     ...overrides,
@@ -834,7 +849,7 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
     'cellSizeSeeds',
   );
   if (!detected.ok && cellSizeSeeds !== undefined && !callerFixedScaleSearch) {
-    detected = detectCellFinders(reduced.luma, FINDER_CELL_MASK_PATTERNS, {
+    detected = detectCellFinders(reduced.luma, CELL_FINDER_LINEUP, {
       centerSeeds,
       ...overrides,
     });

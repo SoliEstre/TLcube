@@ -14,7 +14,10 @@ const OUTPUT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html'
 const LOADER_TOKEN = '<!-- FINDER_EDITOR_LOADER -->';
 
 export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
-  'hexgrid', 'finder-patterns', 'finder-editor-pattern', 'lehmer', 'gfp', 'rs211', 'base211',
+  // finder-oak-lineup/-patterns 는 scene.js 가 OAK 후보를 렌더하려고 쓴다 (2026-08-18).
+  // finder-patterns 뒤 · scene 앞이어야 한다.
+  'hexgrid', 'finder-patterns', 'finder-oak-lineup', 'finder-oak-patterns',
+  'finder-editor-pattern', 'lehmer', 'gfp', 'rs211', 'base211',
   'mask', 'formatinfo', 'header', 'placement', 'bullseye', 'layout', 'capacity',
   // O-CM/A-CM 코너 마커 (2026-08-16) — encode.js·encodeA.js 가 markerO/markerA 를 쓰므로
   // 그 앞에 온다. autoplaceHex 는 autoplaceY 의 AutoplaceError 를 재사용하고 autoplaceY 는

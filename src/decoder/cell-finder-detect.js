@@ -68,6 +68,41 @@ function assertMasks(cellMasks, label = 'cellMasks') {
   }
   return cellMasks;
 }
+/**
+ * 면당 3레벨 파인더 (2026-08-18, OAK 편입) — 기존 `cellMasks` 는 면당 1비트라
+ * 중간톤을 못 담는다. O/A/K 후보 정본(편집기 export)은 Nitrogen r2 5면 · Aspirin
+ * 2면을 중간톤으로 쓰므로, 그 후보들은 비트 표현으로는 **표현 자체가 불가능**하다.
+ *
+ * 그래서 `cellLevels` 를 **선택적 대체 표현**으로 더한다: 19개 `[T, L, R]` 삼중
+ * (각 0|1|2). 목표값은 level/2 = 0 · 0.5 · 1 이다.
+ *
+ * **이진 경로는 한 값도 안 바뀐다** — 아래 `centeredExpected` 의 lightCount 정의를
+ * «값의 합» 에서 «중심화 후 양수인 면의 수» 로 바꿨는데, 이진에서 두 값은 항상
+ * 같다 (평균이 0과 1 사이에 엄격히 들어가므로 값 1인 면이 정확히 양수). 그리고
+ * 그 식은 `scoreTemplate` 이 실제로 밝음/어두움을 가르는 식(`expected[i] > 0`)과
+ * **같은 식**이라, 3레벨에서도 분모와 분할이 어긋나지 않는다. 동치는 회귀가 잡는다
+ * (test/finder-3tone-levels.test.js — 기존 11패턴 전수 비트 동일).
+ */
+const LEVEL_TARGETS = Object.freeze([0, 0.5, 1]);
+const FACE_LEVEL_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
+
+function assertLevels(cellLevels, label = 'cellLevels') {
+  if (!Array.isArray(cellLevels) || cellLevels.length !== FINDER_CELL_ORDER.length) {
+    throw new RangeError(label + '는 19개 [T,L,R] 삼중 배열이어야 한다');
+  }
+  for (const triple of cellLevels) {
+    if (!Array.isArray(triple) || triple.length !== 3) {
+      throw new RangeError(label + ' 항목은 [T,L,R] 삼중이어야 한다: ' + JSON.stringify(triple));
+    }
+    for (const level of triple) {
+      if (level !== 0 && level !== 1 && level !== 2) {
+        throw new RangeError(label + ' 톤 레벨은 0|1|2 여야 한다: ' + level);
+      }
+    }
+  }
+  return cellLevels;
+}
+
 function normalizePatterns(input, options) {
   const source = input === undefined ? FINDER_CELL_MASK_PATTERNS : input;
   if (Array.isArray(source) && source.length === 19 && source.every(Number.isInteger)) {
@@ -76,29 +111,44 @@ function normalizePatterns(input, options) {
   if (!Array.isArray(source) || source.length === 0) {
     throw new TypeError('patterns는 cellMasks 또는 패턴 객체 배열이어야 한다');
   }
-  const cellPatterns = source.filter((pattern) => pattern && Array.isArray(pattern.cellMasks));
+  const cellPatterns = source.filter((pattern) => pattern
+    && (Array.isArray(pattern.cellMasks) || Array.isArray(pattern.cellLevels)));
   if (cellPatterns.length === 0) {
-    throw new TypeError('patterns에 이진 cellMasks 후보가 없다');
+    throw new TypeError('patterns에 cellMasks/cellLevels 후보가 없다');
   }
-  return cellPatterns.map((pattern, index) => ({
-    ...pattern,
-    id: typeof pattern.id === 'string' ? pattern.id : 'cell-mask-' + index,
-    cellMasks: assertMasks(pattern.cellMasks, 'patterns[' + index + '].cellMasks'),
-  }));
+  return cellPatterns.map((pattern, index) => {
+    const label = 'patterns[' + index + ']';
+    // 둘 다 있으면 **레벨이 이긴다** — 레벨이 더 표현력이 크므로 마스크는 그 후보의
+    // 이진 근사일 수밖에 없고, 근사를 정본으로 쓰면 조용히 틀린다.
+    if (Array.isArray(pattern.cellLevels)) {
+      return {
+        ...pattern,
+        id: typeof pattern.id === 'string' ? pattern.id : 'cell-level-' + index,
+        cellLevels: assertLevels(pattern.cellLevels, label + '.cellLevels'),
+      };
+    }
+    return {
+      ...pattern,
+      id: typeof pattern.id === 'string' ? pattern.id : 'cell-mask-' + index,
+      cellMasks: assertMasks(pattern.cellMasks, label + '.cellMasks'),
+    };
+  });
 }
 function centeredExpected(values) {
   const expected = Float64Array.from(values);
   let mean = 0;
-  let lightCount = 0;
-  for (const value of expected) {
-    mean += value;
-    lightCount += value;
-  }
+  for (const value of expected) mean += value;
   mean /= expected.length;
   let norm2 = 0;
+  // lightCount 는 **scoreTemplate 의 분할 식과 같은 식**으로 센다 (`expected[i] > 0`).
+  // 이진에서는 «값의 합» 과 항상 일치하므로 (평균이 0과 1 사이에 엄격히 들어가
+  // 값 1인 면이 정확히 양수) 기존 거동이 보존되고, 3레벨에서는 중간톤 면이 평균
+  // 어느 쪽에 떨어지든 분모와 분할이 같은 규칙을 쓴다.
+  let lightCount = 0;
   for (let i = 0; i < expected.length; i += 1) {
     expected[i] -= mean;
     norm2 += expected[i] * expected[i];
+    if (expected[i] > 0) lightCount += 1;
   }
   if (!(norm2 > 0) || lightCount === 0 || lightCount === expected.length) return null;
   return {
@@ -109,8 +159,11 @@ function centeredExpected(values) {
 function templateOf(pattern) {
   const coarseValues = [];
   const detailedValues = [];
+  const levels = pattern.cellLevels;
   for (const sample of FACE_SAMPLES) {
-    const value = pattern.cellMasks[sample.cellIndex] & sample.bit ? 1 : 0;
+    const value = levels
+      ? LEVEL_TARGETS[levels[sample.cellIndex][FACE_LEVEL_INDEX[sample.face]]]
+      : (pattern.cellMasks[sample.cellIndex] & sample.bit ? 1 : 0);
     coarseValues.push(value);
     for (let i = 0; i < sample.detailPoints.length; i += 1) detailedValues.push(value);
   }
@@ -430,7 +483,9 @@ function finishCandidate(luma, refined, templates, span, cfg) {
     - geometryModelPenalty(final.params));
   return {
     finderKind: 'cell-mask', kind: 'cell-mask', patternId: best.template.id,
+    // 레벨 후보는 cellMasks 가 없다 — 이진 근사를 지어내지 않고 undefined 로 둔다.
     cellMasks: best.template.pattern.cellMasks,
+    cellLevels: best.template.pattern.cellLevels,
     center: { x: final.params.centerX, y: final.params.centerY },
     cellSize, score, correlation: best.correlation, contrast: best.contrast,
     contrastRatio: best.contrastRatio,

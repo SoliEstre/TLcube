@@ -14,7 +14,9 @@ const OUTPUT_SHARED_PATH = path.join(ROOT, 'sites', '_shared', 'cell-editor.html
 const LOADER_TOKEN = '<!-- CELL_EDITOR_LOADER -->';
 
 export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
-  'hexgrid', 'ygrid', 'locatorY', 'finder-patterns', 'finder-editor-pattern',
+  // finder-oak-lineup/-patterns: scene.js 의 OAK 렌더 경로 (2026-08-18).
+  'hexgrid', 'ygrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup',
+  'finder-oak-patterns', 'finder-editor-pattern',
   'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'header',
   'placement', 'bullseye', 'layout', 'capacity',
   // O-CM/A-CM 코너 마커 (2026-08-16) — encodeA.js 가 markerA 를, markerA 가 markerO 를,

@@ -24,7 +24,13 @@ import {
   FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
 } from './finder-patterns.js';
 import { digitToRanks } from './lehmer.js';
-import { FINDER_CUBE_TONES } from './luminance.js';
+import { BULLSEYE_MID, FINDER_CUBE_TONES } from './luminance.js';
+import { getOakFinderPattern } from './finder-oak-patterns.js';
+
+// `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
+// FACE_LEVEL_INDEX)와 **같은 표**여야 하며, `FACES` 배열의 나열 순서에 기대지
+// 않는다 — 지금은 우연히 같지만 그 우연에 기대면 조용히 뒤집힌다.
+const FINDER_LEVEL_FACE_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
 import { qrMatrix } from './qr.js';
 
 /** 콰이어트 존 기본 배수 — margin 미지정 시 `cellSize · DEFAULT_MARGIN_FACTOR`. */
@@ -66,6 +72,10 @@ export function resolveSceneFinderPatternId(
 function resolveFinderRenderPattern(id) {
   if (id === LEGACY_FINDER_PATTERN_ID) return { id, renderKind: 'bullseye' };
   if (id === CENTER_QR_FINDER_PATTERN_ID) return { id, renderKind: 'center-qr' };
+  // OAK 후보(2026-08-18)는 생성 도구 산출물이 아니라 별도 표라 PATTERN_BY_ID 에
+  // 없다. 여기서 먼저 풀고, 아니면 기존 조회가 «알 수 없는 id» 로 정확히 죽는다.
+  const oak = getOakFinderPattern(id);
+  if (oak) return oak;
   return getFinderPattern(id);
 }
 
@@ -492,16 +502,30 @@ export function buildScene(encoded, options) {
       });
     }
   } else if (finderPattern.renderKind === 'cell-mask') {
+    // 3레벨 후보(OAK, 2026-08-18)는 `cellLevels` 를, 기존 이진 실험 파인더는
+    // `cellMasks` 를 든다. 둘 다 있으면 **레벨이 이긴다** — 검출기의
+    // normalizePatterns 와 같은 우선순위여야 그린 것과 읽는 것이 안 갈린다.
+    const levels = Array.isArray(finderPattern.cellLevels) ? finderPattern.cellLevels : null;
     for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
-      // 기존 이진 실험 파인더 — 예약 19셀을 regionCells(2) 순서로 칠한다.
+      // 예약 19셀을 regionCells(2) 순서로 칠한다.
       const cell = FINDER_CELL_ORDER[ci];
-      const mask = finderPattern.cellMasks[ci];
+      const mask = levels ? 0 : finderPattern.cellMasks[ci];
       for (const face of FACES) {
+        // 중간톤은 팔레트가 아니라 **고정 상수**다 — 이유는 FINDER_CUBE_TONES 주석
+        // (파인더는 검출 기구라 프리셋을 안 따른다). dark/light 는 팔레트 경유가
+        // 이미 관례라 그대로 두고, 세 번째 값만 상수로 든다.
+        let color;
+        if (levels) {
+          const level = levels[ci][FINDER_LEVEL_FACE_INDEX[face]];
+          color = level === 2 ? palette.bullseyeLight
+            : level === 1 ? BULLSEYE_MID : palette.bullseyeDark;
+        } else {
+          color = mask & FINDER_FACE_BITS[face] ? palette.bullseyeLight : palette.bullseyeDark;
+        }
         shapes.push({
           kind: 'polygon',
           points: facePolygon(cell.q, cell.r, face, layout),
-          color: mask & FINDER_FACE_BITS[face]
-            ? palette.bullseyeLight : palette.bullseyeDark,
+          color,
         });
       }
     }

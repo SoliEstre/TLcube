@@ -172,7 +172,14 @@ test('정식 파인더 카드 행은 불스아이 → 하이브리드 → 3톤 �
     'central-cube-3tone',
     CENTER_QR_FINDER_PATTERN_ID,
   ]);
-  assert.equal(ids.length, 15);
+  // **의도적 갱신 (2026-08-18, OAK 편입)** — 15 → 18. 정식 4 + 생성 8 + 손그림 3 에
+  // O/A/K 후보 3(Nitrogen r2 · Aspirin · Benzene)이 별도 줄로 붙었다. 세 후보는
+  // 계보(편집기 export)도 표현(면당 3레벨)도 앞의 것들과 달라서 같은 줄에 안 섞는다
+  // — 카드만 보고 계보를 읽을 수 있어야 한다 (finder-oak-patterns.js 헤더).
+  assert.equal(ids.length, 18);
+  assert.deepEqual(ids.slice(-3),
+    ['oak-nitrogen-r2', 'oak-aspirin', 'oak-benzene'],
+    'OAK 카드가 맨 뒤 세 자리가 아니다');
   assert.equal(new Set(ids).size, ids.length);
 });
 
@@ -256,5 +263,39 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
     assert.equal(harness.errors.length, 0, type + ': 빠른 연속 클릭 렌더 오류');
     assert.equal(harness.pendingRenderCancelled, cards.length * 2);
     assert.equal(harness.renderCount, cards.length * 2, type + ': 카드 전환마다 렌더는 정확히 한 번이어야 한다');
+  }
+});
+
+/**
+ * 점수 패널이 **모든 카드 id 를 감당하는가** (2026-08-18, OAK 편입 때 실제로 터짐).
+ *
+ * 왜 생겼나 — OAK 카드를 붙였더니 카드 수·순서 회귀는 전부 초록인데 브라우저에서
+ * 카드를 **고르는 순간** `finder score record missing: oak-aspirin` 으로
+ * `renderFinderUi` 가 중간에 죽었다. 카드 class 만 바뀌고 점수 패널은 이전 선택에
+ * 멈춰 있어서, 남의 «실측 복호율 89%» 가 OAK 카드 밑에 붙어 있었다.
+ *
+ * 회귀가 **카드 수만 세고 선택 동작을 안 재고 있었다.** 이 검사는 그 구멍을 막는다:
+ * 카드로 나오는 모든 id 는 ⓐ 점수 레코드가 있거나 ⓑ 미측정 분기가 받아야 한다.
+ * index.html 의 실제 분기 조건과 **같은 술어**(isOakFinderPatternId)로 잰다 —
+ * 다른 술어로 재면 이 검사가 초록인 채로 UI 만 다시 죽는다.
+ */
+test('모든 파인더 카드 id 는 점수 레코드가 있거나 미측정 분기가 받는다', async () => {
+  const { FINDER_BASELINE_SCORES, FINDER_PATTERNS } = await import('../src/finder-patterns.js');
+  const { isOakFinderPatternId } = await import('../src/finder-oak-patterns.js');
+  const scored = new Set([
+    ...FINDER_PATTERNS.map((pattern) => pattern.id),
+    ...Object.keys(FINDER_BASELINE_SCORES),
+  ]);
+  const ids = Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id);
+  assert.ok(ids.length >= 18, '카드가 18개 미만이다 — 그룹이 비었는지 보라');
+  const orphans = ids.filter((id) => !scored.has(id) && !isOakFinderPatternId(id));
+  assert.deepEqual(orphans, [],
+    '점수 레코드도 없고 미측정 분기도 안 받는 카드: ' + JSON.stringify(orphans)
+    + ' — 고르는 순간 renderFinderUi 가 throw 한다');
+  // 반대 방향도 잠근다: 미측정으로 처리되는 카드가 **점수를 갖고 있으면** 안 된다.
+  // 있는데 안 보여주면 그건 숨기는 것이지 «미측정» 이 아니다.
+  for (const id of ids.filter(isOakFinderPatternId)) {
+    assert.equal(scored.has(id), false,
+      id + ' 는 점수가 있는데 미측정으로 표시된다 — 라벨이 사실이 아니다');
   }
 });

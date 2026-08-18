@@ -11,6 +11,7 @@ import {
   getFinderPattern,
 } from './finder-patterns.js';
 import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
 
 function descriptor(id, pattern) {
   return Object.freeze({ id, pattern });
@@ -32,6 +33,10 @@ if (cubeBullseyePatterns.length !== 1
   throw new Error('하이브리드(링+큐브) 파인더가 정확히 하나 필요하다');
 }
 
+// ⚠ OAK 후보(2026-08-18)는 `FINDER_PATTERNS` 에 **없다** — 생성 도구 산출물이
+// 아니라 별도 표다(finder-oak-patterns.js 헤더). 그래서 이 필터는 예전과 같은
+// 8개를 그대로 집는다. 만약 언젠가 OAK 가 생성 도구로 흡수되면 여기 8이 먼저
+// 터지고, 그때는 «흡수했으니 필터를 좁혀라» 가 정답이다.
 const generatedPatterns = FINDER_PATTERNS.filter(
   (pattern) => pattern.renderKind === 'cell-mask' && pattern.family !== 'user-refined',
 );
@@ -46,6 +51,10 @@ if (refinedPatterns.length !== 3) {
   throw new Error('사용자 개선 파인더 카드가 3개여야 한다: ' + refinedPatterns.length);
 }
 
+if (OAK_FINDER_PATTERNS.length === 0) {
+  throw new Error('OAK 파인더 카드가 비었다 — 편입했는데 표가 없다');
+}
+
 export const FINDER_CARD_GROUPS = Object.freeze({
   // 사용자 지시 2026-08-13: 하이브리드를 두 번째로 — 실사진에서 실제로 읽히는 큐브
   // 선택지가 이쪽이고, 순수 3톤 큐브는 정지 사진 0/6 이라 뒤로 민다.
@@ -57,6 +66,11 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   ]),
   generated: Object.freeze(generatedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
   refined: Object.freeze(refinedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
+  // O/A/K 후보 (2026-08-18) — 운영자 편집기 export 계보. 이진 후보들과 **다른 줄**에
+  // 두는 이유: 출처가 다르고(탐색 산출물 vs 손작업), 표현이 다르며(면당 3레벨),
+  // 지위 관리도 별도 명부(finder-oak-lineup.js)가 한다. 한 줄에 섞으면 «이 카드가
+  // 어느 계보인가» 를 이름으로 못 읽는다.
+  oak: Object.freeze(OAK_FINDER_PATTERNS.map((pattern) => descriptor(pattern.id, pattern))),
 });
 
 /**
