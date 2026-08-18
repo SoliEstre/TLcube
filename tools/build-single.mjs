@@ -55,12 +55,18 @@ const DEFAULT_FINDER_DECLARATION =
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
   'hexgrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup', 'finder-oak-patterns',
+  // **의도적 이동 (2026-08-19, daehan UI 편입)**: `placement` 와 `finder-daehan` 이
+  // `finder-card-ui` **앞**으로 왔다. 카드 그룹 정본(finder-card-ui)이 daehan 대표
+  // 템플릿을 집으려고 finder-daehan 을 import 하게 됐기 때문이다. 옮기는 값은 싸다 —
+  // placement 는 hexgrid 하나만, finder-daehan 은 hexgrid·placement 만 쓴다(로컬 의존
+  // 전부가 이미 앞에 있다). 안 옮기면 이 파일의 assertTopologicalOrder 가 빌드를
+  // 막는다: specifier 치환이 조용히 건너뛰어져 **브라우저에서만** 터지기 때문이다.
+  'placement', 'finder-daehan',
   'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
-  'header', 'placement', 'bullseye', 'layout', 'capacity',
-  // daehan (2026-08-18) — finder-daehan 은 hexgrid·placement 만 쓰고 scene.js 가
-  // 렌더에 쓴다. capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의
-  // 뒤여야 하고 encode/decode 의 앞이다.
-  'finder-daehan', 'capacityDaehan',
+  'header', 'bullseye', 'layout', 'capacity',
+  // capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의 뒤여야 하고
+  // encode/decode 의 앞이다.
+  'capacityDaehan',
   // placementY·autoplaceY 는 **Type O 보다 앞**으로 왔다 (2026-08-16, O-CM 코너 마커).
   // autoplaceHex 가 `AutoplaceError` 를 autoplaceY 에서 그대로 재사용하기 때문이다 —
   // 소비자가 한 종류만 catch 하게 하려는 선택이고, 그 대가로 두 모듈이 여기서 앞당겨진다.

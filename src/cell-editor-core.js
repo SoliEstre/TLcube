@@ -58,6 +58,10 @@ import {
   getFinderPattern,
 } from './finder-patterns.js';
 import {
+  OAK_LEVEL_FACE_INDEX,
+  getOakFinderPattern,
+} from './finder-oak-patterns.js';
+import {
   cloneFinderEditorPattern,
   serializeFinderEditorPattern,
 } from './finder-editor-pattern.js';
@@ -165,6 +169,16 @@ export function cloneCellEditorFinderPattern(pattern) {
       toneRanks: { T: pattern.toneRanks.T, L: pattern.toneRanks.L, R: pattern.toneRanks.R },
     };
   }
+  // 3레벨 후보(OAK)는 `cellMasks` 가 없고 `cellLevels`(면당 0/1/2)를 든다. 우선순위는
+  // scene.js:512 «둘 다 있으면 레벨이 이긴다» · cell-finder-detect.js normalizePatterns 와
+  // 같아야 «그린 것» 과 «편집기가 보여 주는 것» 이 안 갈린다. 정본 표는 frozen 이라
+  // 삼중까지 깊게 뜬다 — 얕게 뜨면 편집이 정본을 오염시키거나 조용히 무시된다.
+  if (renderKind === 'cell-mask' && Array.isArray(pattern.cellLevels)) {
+    if (pattern.cellLevels.length !== FINDER_CELL_ORDER.length) {
+      throw new RangeError('cellLevels는 19개여야 한다');
+    }
+    return { renderKind, cellLevels: pattern.cellLevels.map((triple) => [...triple]) };
+  }
   return cloneFinderEditorPattern(pattern);
 }
 
@@ -204,7 +218,12 @@ export function resolveFinderStarter(starterId) {
     };
   }
   try {
-    const patternDef = getFinderPattern(id);
+    // OAK 후보(2026-08-18)는 생성 도구 산출물이 아니라 별도 표라 PATTERN_BY_ID 에
+    // 없다 — scene.js resolveFinderRenderPattern 과 **같은 조회 순서**로 먼저 푼다.
+    // 안 그러면 아래 getFinderPattern 이 던지고 이 try 의 catch 가 «모르는 파인더» 를
+    // 조용히 불스아이로 되돌린다. 그 침묵이 §6.1 증상(생성기에서 OAK 를 골라도
+    // 아래 편집기는 계속 불스아이)의 절반이었다.
+    const patternDef = getOakFinderPattern(id) || getFinderPattern(id);
     const pattern = cloneCellEditorFinderPattern(patternDef);
     return { id, renderKind: pattern.renderKind, pattern };
   } catch {
@@ -244,6 +263,28 @@ export function rotateFinderPattern120(pattern) {
       R: pattern.toneRanks.T,
       L: pattern.toneRanks.R,
     };
+    return copy;
+  }
+  // 레벨 패턴(OAK)도 같은 좌표 사상을 타되 면은 값째로 돈다: T→R · R→L · L→T
+  // (rotateMaskBits120 과 같은 사상). 이 갈래가 없으면 copy.cellMasks[i] 에서
+  // TypeError 가 난다 — clone 이 레벨을 통과시키게 된 이상 짝으로 있어야 한다.
+  if (Array.isArray(copy.cellLevels)) {
+    const newLevels = new Array(FINDER_CELL_ORDER.length);
+    for (let i = 0; i < FINDER_CELL_ORDER.length; i += 1) {
+      const cell = FINDER_CELL_ORDER[i];
+      const rotated = rotate120Axial(cell.q, cell.r);
+      const dest = FINDER_CELL_ORDER.findIndex(
+        (candidate) => candidate.q === rotated.q && candidate.r === rotated.r,
+      );
+      if (dest < 0) continue;
+      const src = copy.cellLevels[i];
+      const next = [];
+      next[OAK_LEVEL_FACE_INDEX.R] = src[OAK_LEVEL_FACE_INDEX.T];
+      next[OAK_LEVEL_FACE_INDEX.L] = src[OAK_LEVEL_FACE_INDEX.R];
+      next[OAK_LEVEL_FACE_INDEX.T] = src[OAK_LEVEL_FACE_INDEX.L];
+      newLevels[dest] = next;
+    }
+    copy.cellLevels = newLevels;
     return copy;
   }
   const newMasks = new Array(FINDER_CELL_ORDER.length);
@@ -641,6 +682,11 @@ export function getCellTone(state, face, c) {
         (cell) => cell.q === c.q && cell.r === c.r,
       );
       if (cellIndex < 0) return DEFAULT_TONE;
+      // 레벨이 이긴다 — scene.js 렌더 분기와 같은 우선순위. 이 갈래가 없으면
+      // OAK 패턴에서 `cellMasks[cellIndex]` 가 undefined 라 TypeError 로 죽는다.
+      if (Array.isArray(state.finderPattern.cellLevels)) {
+        return state.finderPattern.cellLevels[cellIndex][OAK_LEVEL_FACE_INDEX[face]];
+      }
       const mask = state.finderPattern.cellMasks[cellIndex];
       const faceBit = FINDER_FACE_BITS[face];
       return (mask & faceBit) !== 0 ? 2 : 0;
@@ -671,6 +717,15 @@ export function setCellToneDirect(state, face, c, tone) {
       const cellIndex = FINDER_CELL_ORDER.findIndex(
         (cell) => cell.q === c.q && cell.r === c.r,
       );
+      // 레벨 패턴은 면 값을 그대로 쓴다(마스크 비트가 아니다). index.html 의 생성기
+      // 편집기는 중앙 19셀을 role 'finder' 로 잠가 여기 못 오지만, 독립 편집기
+      // (/celleditor/)는 온다 — 위 clone 갈래가 통과시킨 패턴을 여기서 받아야 한다.
+      if (Array.isArray(state.finderPattern.cellLevels)) {
+        if (cellIndex >= 0) {
+          state.finderPattern.cellLevels[cellIndex][OAK_LEVEL_FACE_INDEX[face]] = tone;
+        }
+        return;
+      }
       if (cellIndex >= 0) {
         const bit = FINDER_FACE_BITS[face];
         let mask = state.finderPattern.cellMasks[cellIndex];

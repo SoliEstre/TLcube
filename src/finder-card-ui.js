@@ -12,6 +12,7 @@ import {
 } from './finder-patterns.js';
 import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
 import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
+import { DAEHAN_FINDER_PATTERNS } from './finder-daehan.js';
 
 function descriptor(id, pattern) {
   return Object.freeze({ id, pattern });
@@ -55,6 +56,12 @@ if (OAK_FINDER_PATTERNS.length === 0) {
   throw new Error('OAK 파인더 카드가 비었다 — 편입했는데 표가 없다');
 }
 
+// daehan 대표 템플릿 — 79셀 정본(k=10). 위 자기검증들과 같은 관례로 로드 시점에 죽는다.
+const DAEHAN_K10 = DAEHAN_FINDER_PATTERNS.find((pattern) => pattern.k === 10);
+if (!DAEHAN_K10 || !Array.isArray(DAEHAN_K10.finderCells) || DAEHAN_K10.finderCells.length !== 79) {
+  throw new Error('daehan k10 정본(79셀)이 없다 — 표가 바뀌었으면 카드 대표도 같이 정해라');
+}
+
 export const FINDER_CARD_GROUPS = Object.freeze({
   // 사용자 지시 2026-08-13: 하이브리드를 두 번째로 — 실사진에서 실제로 읽히는 큐브
   // 선택지가 이쪽이고, 순수 3톤 큐브는 정지 사진 0/6 이라 뒤로 민다.
@@ -71,6 +78,12 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   // 지위 관리도 별도 명부(finder-oak-lineup.js)가 한다. 한 줄에 섞으면 «이 카드가
   // 어느 계보인가» 를 이름으로 못 읽는다.
   oak: Object.freeze(OAK_FINDER_PATTERNS.map((pattern) => descriptor(pattern.id, pattern))),
+  // daehan (2026-08-19 UI 편입) — **카드는 한 장**이다. 표에는 k=6/8/10 세 템플릿이
+  // 있지만 그건 잘림본이고(k6 ⊂ k8 ⊂ k10), 어느 것을 그릴지는 **버전이 정한다**
+  // (V1↔k6 · V2↔k8 · V3↔k10). 카드를 셋으로 쪼개면 사용자가 버전과 모순되는 k 를
+  // 고를 수 있게 된다. 대표 id 는 79셀 정본인 k10 — 직전 라운드 측정들이 이미 쓰는
+  // 문자열이라 바꾸면 그 측정들과의 대조가 끊긴다 (finder-daehan.js §56-58).
+  daehan: Object.freeze([descriptor(DAEHAN_K10.id, DAEHAN_K10)]),
 });
 
 /**

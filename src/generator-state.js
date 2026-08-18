@@ -98,6 +98,18 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   eccLevel: field('auto', BOTH, ['auto', 'H', 'M', 'L']),
   versionO: field('auto', BOTH, ['auto', 1, 2, 3]),
   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
+  // 턴A (역삼각 Type A, 2026-08-19 UI 편입) — Type A 전용. `INTERNAL` 인 이유는
+  // locatorProfileY 와 같다: **아직 lab 게이트 뒤**라 정식 화면의 노출 대조
+  // (index.html `data-state-keys`)에 들어가면 안 된다.
+  //
+  // ⚠ 왜 lab 뒤인가 (실측 2026-08-19): `encodeA(turnA:true)` 로 만든 코드는
+  //   라이브 경로(decodeFrontend)가 **0/3 으로 못 읽는다** (대조군 turnA:false 는
+  //   3/3). 인코더가 아직 역삼각 «기하» 를 안 내고(셀 좌표 집합이 정삼각과 동일,
+  //   format 15셀만 다르다) 검출기의 turn 신호도 배선돼 있지 않다. 즉 이 스위치는
+  //   «와이어 값만 바꾸는 실험 장치» 이지 실루엣 전환이 아니다.
+  //   안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
+  //   배선이 끝나고 왕복이 서는 날이다.
+  turnA: field(false, INTERNAL, [false, true]),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),

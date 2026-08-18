@@ -120,7 +120,12 @@ function analyze(rel, { htmlScripts = false } = {}) {
 
 // 화면에 안 나가는 정당한 예외. 늘리려면 «정말 화면에 안 나가나?» 를 먼저 답할 것.
 const ALLOWED = {
-  'index.html': 7, // JSON-LD 구조화 데이터 (name·description·featureList)
+  // **의도적 갱신 (2026-08-19, §6.1 편집기 파인더 동기화)**: 7 → 8.
+  // 더해진 1종은 `syncCellEditorFinderFromGenerator` 의 `console.warn` 이다 —
+  // 개발자 콘솔 전용이라 화면에 안 나간다(위 헤더의 «내부 불변식 throw» 와 같은 부류).
+  // 이 경고가 필요한 이유: resolveFinderStarter 는 모르는 id 를 catch 로 삼켜 조용히
+  // 불스아이로 되돌린다. 그 침묵이 §6.1 증상의 절반이었으므로 침묵만은 남기지 않는다.
+  'index.html': 8, // JSON-LD 구조화 데이터 7 + 편집기 파인더 폴백 console.warn 1
   'sites/tlscan/scanner.js': 0,
   'src/luminance.js': 7, // 프리셋 표시명 3 + 내부 불변식 throw 4
   'src/capacity.js': 9, // 전부 내부 불변식 throw

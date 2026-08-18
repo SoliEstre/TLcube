@@ -86,7 +86,12 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
   assert.match(source, /className = 'toggle-card finder-card'/);
   assert.match(source, /pattern\.cellMasks\[cellIndex\]/);
   assert.match(source, /facePolygon\(cell\.q, cell\.r, face, layout\)/);
-  assert.match(source, /'data-mask-cells': FINDER_CELL_ORDER\.length/);
+  // **의도적 갱신 (2026-08-19, daehan UI 편입)**: 발자국을 19셀로 못 박던 자리를
+  // «패턴이 정한다» 로 옮겼다. daehan 은 finderCells 39/59/79 셀이라 19를 가정하면
+  // 정본 앞 19톤이 엉뚱한 불스아이 좌표에 찍히고 **길이가 남아서 죽지도 않는다**
+  // (조용히 틀린 그림). 그래서 잠그는 명제를 «19다» 에서 «패턴 발자국을 쓴다» 로 바꾼다.
+  assert.match(source, /Array\.isArray\(pattern\.finderCells\) \? pattern\.finderCells : FINDER_CELL_ORDER/);
+  assert.match(source, /'data-mask-cells': footprint\.length/);
   assert.match(source, /function finderCubeThumbnail\(pattern\)/);
   assert.match(source, /pattern\.renderKind === 'three-tone-cube'/);
   assert.match(cardUiSource, /threeTonePatterns\[0\]\.renderKind !== 'three-tone-cube'/);

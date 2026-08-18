@@ -1,0 +1,1163 @@
+diff --git a/index.html b/index.html
+index 9374344..2aeb74e 100644
+--- a/index.html
++++ b/index.html
+@@ -1547,6 +1547,21 @@
+           <summary data-i18n="g564">O/A/K 후보 (편집기 계보)</summary>
+           <div id="finderOakCards"></div>
+         </details>
++        <!-- daehan (2026-08-19) — OAK 서랍에 **안 넣는다.** 계보는 같지만(같은 편집기
++             export) 갈리는 것은 **회계**다: 이 후보만 불스아이 밖으로 60셀을 더 먹어
++             용량을 깎는다 (V3 65 B → 46 B). OAK 3장은 용량 불변이라 같은 줄에 두면
++             «같은 종류의 선택» 이라는 거짓 함의가 생긴다. 기계적 이유도 있다 —
++             daehan 은 Type O 전용(encodeA 에 daehanFinder 가 없다)이라 A 에서 서랍째
++             숨겨야 하는데, applyFinderExperimentVisibility 는 컨테이너 id 단위라
++             OAK 와 공유하면 OAK 3장까지 같이 사라진다.
++             ⚠ **고급 전용을 유지한다** — 왕복 실측(2026-08-19): 이 코드는 스캐너의
++             `cellFinderDaehan` 옵트인이 **꺼져 있으면 0/3, 켜면 3/3** 으로 읽힌다.
++             그 옵트인은 오늘 /lab/ 토글에만 있다. 그래서 summary 가 그 사실을 말한다. -->
++        <details class="finder-collapse" id="finderDaehan">
++          <summary data-i18n="g570">전면 파인더 (용량 감소 · 시험판 스캐너 전용)</summary>
++          <div id="finderDaehanCards"></div>
++          <p class="hint" data-i18n="g571">코드 표면 전체에 파인더가 깔려요. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 'daehan 파인더'를 켰을 때만 읽혀요.</p>
++        </details>
+         <div class="finder-score-panel" id="finderScorePanel" aria-live="polite" aria-label="선택 파인더 특성" data-i18n-attr="aria-label:g496">
+           <div class="finder-score-heading">
+             <strong id="finderScoreName"></strong>
+@@ -1727,6 +1742,36 @@
+         <p class="hint" id="yLocatorHint" data-i18n="g518">실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.</p>
+       </div>
+ 
++      <!-- 턴A (역삼각 Type A) — Type A + lab 전용. #yLocatorSection 과 같은 게이트
++           문법이다(hidden 속성 + sync 함수가 isLabPath() 로 연다).
++           ⚠ **실측 (2026-08-19)**: `encodeA(turnA:true)` 로 만든 코드는 라이브 경로
++           (decodeFrontend)가 **0/3 으로 못 읽는다** — 대조군(turnA:false)은 3/3 이다.
++           인코더가 아직 역삼각 «기하» 를 안 내고(셀 좌표 집합이 정삼각과 동일하고
++           format 15셀만 다르다) 검출기의 turn 신호도 배선돼 있지 않다. 그래서 이
++           카드는 «와이어 값만 바꾸는 실험 스위치» 이지 실루엣 전환이 아니고,
++           **정식 화면에 내보내지 않는다**. 힌트 문구가 그 사실을 그대로 말한다 —
++           라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
++           안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
++           배선이 끝나고 왕복이 서는 날이다. -->
++      <div id="turnASection" hidden>
++        <label class="section-heading" data-i18n="g572">실루엣 방향 (실험)</label>
++        <div class="card-row" id="turnACards">
++          <div class="toggle-card active" data-turna="off">
++            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
++              <path d="M12 3 L21 19 L3 19 Z"/>
++            </svg>
++            <span data-i18n="g573">정삼각 (기본)</span>
++          </div>
++          <div class="toggle-card" data-turna="on">
++            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
++              <path d="M12 21 L3 5 L21 5 Z"/>
++            </svg>
++            <span data-i18n="g574">역삼각 (턴A)</span>
++          </div>
++        </div>
++        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.</p>
++      </div>
++
+       <!-- 셀 편집기 — Y/O/A 다중 타입 (운영자 지시 2026-08-16). K 는 제외다:
+            렌더러 계약(육망성 실루엣)이 아직 안 넓어졌다 — 태스크 #11 몫. -->
+       <div id="yCellEditorSection" hidden tabindex="-1">
+@@ -2188,6 +2233,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "미측정 (다른 계보)",
++    "g569": "daehan (전면 79셀)",
++    "g570": "전면 파인더 (용량 감소 · 시험판 스캐너 전용)",
++    "g571": "코드 표면 전체에 파인더가 깔려요. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 'daehan 파인더'를 켰을 때만 읽혀요.",
++    "g572": "실루엣 방향 (실험)",
++    "g573": "정삼각 (기본)",
++    "g574": "역삼각 (턴A)",
++    "g575": "실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.",
+     "g507": "{filename}으로 다운로드되었습니다.",
+     "g508": "파인더 에디터",
+     "g509": "불스아이 속 큐브",
+@@ -2531,6 +2583,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "Not measured (different lineage)",
++    "g569": "daehan (79-cell full surface)",
++    "g570": "Full-surface finder (lower capacity · trial scanner only)",
++    "g571": "The finder covers the whole code surface. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when 'daehan finder' is enabled in the trial scanner (/lab/).",
++    "g572": "Silhouette direction (experimental)",
++    "g573": "Upright triangle (default)",
++    "g574": "Inverted triangle (turnA)",
++    "g575": "Experimental. For now only the format information changes — the drawn silhouette stays the same, and codes made in this state cannot be read by the scanner.",
+     "g507": "Downloaded as {filename}.",
+     "g508": "Finder editor",
+     "g509": "Cube in bullseye",
+@@ -2874,6 +2933,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "未計測（別系譜）",
++    "g569": "daehan（全面79セル）",
++    "g570": "全面ファインダー（容量減少・試験版スキャナ専用）",
++    "g571": "コード表面全体にファインダーが敷かれます。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）で「daehan ファインダー」を有効にしたときだけ読み取れます。",
++    "g572": "シルエット方向（実験）",
++    "g573": "正三角（既定）",
++    "g574": "逆三角（turnA）",
++    "g575": "実験用です。現在はフォーマット情報だけが変わり、描かれるシルエットはそのままです — この状態で作ったコードはスキャナで読み取れません。",
+     "g507": "{filename} としてダウンロードしました。",
+     "g508": "ファインダーエディタ",
+     "g509": "ブルズアイの中のキューブ",
+@@ -3216,6 +3282,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "Non mesuré (autre lignée)",
++    "g569": "daehan (79 cellules, pleine surface)",
++    "g570": "Détecteur pleine surface (capacité réduite · scanner d'essai uniquement)",
++    "g571": "Le détecteur couvre toute la surface du code. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec « détecteur daehan » activé dans le scanner d'essai (/lab/).",
++    "g572": "Orientation de la silhouette (expérimental)",
++    "g573": "Triangle droit (par défaut)",
++    "g574": "Triangle inversé (turnA)",
++    "g575": "Expérimental. Pour l'instant, seules les informations de format changent — la silhouette dessinée reste identique, et les codes créés dans cet état ne sont pas lisibles par le scanner.",
+     "g507": "Téléchargé sous le nom {filename}.",
+     "g508": "Éditeur de repères",
+     "g509": "Cube dans la cible",
+@@ -3558,6 +3631,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "Non misurato (altra linea)",
++    "g569": "daehan (79 celle, superficie intera)",
++    "g570": "Rilevatore a superficie intera (capacità ridotta · solo scanner di prova)",
++    "g571": "Il rilevatore copre l'intera superficie del codice. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando «rilevatore daehan» nello scanner di prova (/lab/).",
++    "g572": "Direzione della sagoma (sperimentale)",
++    "g573": "Triangolo dritto (predefinito)",
++    "g574": "Triangolo invertito (turnA)",
++    "g575": "Sperimentale. Per ora cambiano solo le informazioni di formato — la sagoma disegnata resta uguale e i codici creati in questo stato non sono leggibili dallo scanner.",
+     "g507": "Scaricato come {filename}.",
+     "g508": "Editor dei pattern",
+     "g509": "Cubo nel bersaglio",
+@@ -3900,6 +3980,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "Nicht gemessen (andere Linie)",
++    "g569": "daehan (79 Zellen, ganze Fläche)",
++    "g570": "Vollflächiger Finder (geringere Kapazität · nur Test-Scanner)",
++    "g571": "Der Finder bedeckt die gesamte Codefläche. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn im Test-Scanner (/lab/) „daehan-Finder“ aktiviert ist.",
++    "g572": "Silhouettenrichtung (experimentell)",
++    "g573": "Aufrechtes Dreieck (Standard)",
++    "g574": "Umgekehrtes Dreieck (turnA)",
++    "g575": "Experimentell. Derzeit ändern sich nur die Formatinformationen — die gezeichnete Silhouette bleibt gleich, und in diesem Zustand erzeugte Codes kann der Scanner nicht lesen.",
+     "g507": "Als {filename} heruntergeladen.",
+     "g508": "Suchmuster-Editor",
+     "g509": "Würfel in der Zielscheibe",
+@@ -4242,6 +4329,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "Sin medir (otro linaje)",
++    "g569": "daehan (79 celdas, superficie completa)",
++    "g570": "Detector de superficie completa (menor capacidad · solo escáner de prueba)",
++    "g571": "El detector cubre toda la superficie del código. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con «detector daehan» activado en el escáner de prueba (/lab/).",
++    "g572": "Orientación de la silueta (experimental)",
++    "g573": "Triángulo recto (predeterminado)",
++    "g574": "Triángulo invertido (turnA)",
++    "g575": "Experimental. Por ahora solo cambia la información de formato — la silueta dibujada sigue igual y los códigos creados en este estado no los puede leer el escáner.",
+     "g507": "Descargado como {filename}.",
+     "g508": "Editor de patrones",
+     "g509": "Cubo en la diana",
+@@ -4584,6 +4678,13 @@ const GENERATOR_STRINGS = {
+     "g566": "Aspirin",
+     "g567": "Benzene",
+     "g568": "Não medido (outra linhagem)",
++    "g569": "daehan (79 células, superfície inteira)",
++    "g570": "Detector de superfície inteira (menor capacidade · apenas leitor de teste)",
++    "g571": "O detector cobre toda a superfície do código. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com «detector daehan» ativado no leitor de teste (/lab/).",
++    "g572": "Orientação da silhueta (experimental)",
++    "g573": "Triângulo para cima (padrão)",
++    "g574": "Triângulo invertido (turnA)",
++    "g575": "Experimental. Por agora só a informação de formato muda — a silhueta desenhada continua igual, e códigos criados neste estado não são lidos pelo leitor.",
+     "g507": "Transferido como {filename}.",
+     "g508": "Editor de padrões",
+     "g509": "Cubo no alvo",
+@@ -4692,7 +4793,8 @@ let detectorAutoY = false;
+ const TEXT_SYNCERS = [
+   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
+   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
+-  syncFaceGainLabel, syncRenderProfileUi, syncShadingUi, syncYLocatorUi, syncTypeYCellEditorUi,
++  syncFaceGainLabel, syncRenderProfileUi, syncShadingUi, syncYLocatorUi, syncTurnAUi,
++  syncTypeYCellEditorUi,
+   syncHelpPopover,
+ ];
+ 
+@@ -4731,6 +4833,7 @@ import {
+ // 다중 타입(O/A) 격자·역할·직렬화는 독립 편집기와 **같은 코어**를 쓴다 — 표시 규칙이
+ // 두 편집기에서 갈라지지 않게 하려는 선택이다 (기하는 placement/placementA 원본 그대로).
+ import {
++  applyFinderStarter,
+   cycleCellTone as cycleCoreTone,
+   enumerateCells as enumerateCoreCells,
+   coordKey as coreCoordKey,
+@@ -4758,6 +4861,10 @@ import {
+   FINDER_CELL_ORDER, FINDER_FACE_BITS, FINDER_PATTERNS,
+ } from './src/finder-patterns.js';
+ import { getOakFinderPattern, isOakFinderPatternId } from './src/finder-oak-patterns.js';
++// daehan (2026-08-19 UI 편입) — OAK 와 같은 이유로 **별도 표**라 여기서 직접 푼다.
++import {
++  daehanPatternId, getDaehanFinderPattern, isDaehanFinderPatternId,
++} from './src/finder-daehan.js';
+ import {
+   CENTER_QR_FINDER_PATTERN_ID, commitFinderQrTransition,
+   selectFinderPattern, selectGeneratorType, selectQrPosition,
+@@ -4855,12 +4962,14 @@ const els = {
+   finderPatternCards: $('finderPatternCards'),
+   finderUserCards: $('finderUserCards'),
+   finderOakCards: $('finderOakCards'),
++  finderDaehanCards: $('finderDaehanCards'), finderDaehan: $('finderDaehan'),
+   finderScorePanel: $('finderScorePanel'), finderScoreRows: $('finderScoreRows'),
+   finderScoreName: $('finderScoreName'), finderGateBadge: $('finderGateBadge'),
+   finderCenterOffset: $('finderCenterOffset'), finderCenterGate: $('finderCenterGate'),
+   finderBaselineEvidence: $('finderBaselineEvidence'),
+   finderExperimentalWarning: $('finderExperimentalWarning'),
+   yLocatorSection: $('yLocatorSection'), yLocatorCards: $('yLocatorCards'),
++  turnASection: $('turnASection'), turnACards: $('turnACards'),
+   yLocatorHint: $('yLocatorHint'),
+   yLocatorArmSection: $('yLocatorArmSection'), yLocatorArmCards: $('yLocatorArmCards'),
+   yLocatorArmHint: $('yLocatorArmHint'),
+@@ -5484,10 +5593,18 @@ function setMode(next) {
+  *
+  * ⚠ 숨기기만 한다. 이미 그 파인더를 고른 상태(저장값·URL 복원)를 강제로 바꾸지 않는다 —
+  *   모드는 «노출만» 바꾼다는 이 파일의 규약을 지킨다.
++ *
++ * ⚠ **`finderOak` 는 이 목록에서 빠져 있다** (운영자 지시 2026-08-19). OAK 는 위 두
++ *   묶음과 처지가 다르다 — «기준 미달» 도 «스캔 불가» 도 아니고, 라운드트립 회귀가
++ *   검출·게이트 통과를 증명한다(test/finder-oak-patterns.test.js ③). 그래서 새로
++ *   편입된 셀 표면 파인더는 **일반 모드에서도** 고를 수 있어야 한다. 서랍이 접혀 있는
++ *   것(details 기본 닫힘)은 그대로 두므로 카드 수는 여전히 4개로 보인다.
++ *   지시는 «새로 추가된 셀 표면 파인더» 한정이라 나머지 두 서랍은 고급 전용을 유지한다.
++ *   `finderDaehan` 도 고급 전용이다 — 그쪽은 시험판 스캐너에서만 읽힌다(실측, 아래 서랍 주석).
+  */
+ function applyFinderExperimentVisibility() {
+   const show = mode === 'advanced';
+-  for (const id of ['finderBelowBar', 'finderUnscannable', 'finderOak']) {
++  for (const id of ['finderBelowBar', 'finderUnscannable', 'finderDaehan']) {
+     const block = document.getElementById(id);
+     if (block) {
+       block.style.display = show ? '' : 'none';
+@@ -5602,6 +5719,9 @@ const FINDER_LABEL_KEYS = Object.freeze({
+   'oak-nitrogen-r2': 'g565',
+   'oak-aspirin': 'g566',
+   'oak-benzene': 'g567',
++  // daehan (2026-08-19) — 카드는 **하나**다. id 는 79셀 정본인 k10 을 쓰고, 실제로
++  // 그려지는 템플릿은 버전이 정한 k 에서 renderTypeO 가 daehanPatternId 로 고른다.
++  'oak-daehan-k10': 'g569',
+ });
+ 
+ const FINDER_FAMILY_KEYS = Object.freeze({
+@@ -5690,8 +5810,13 @@ function finderMaskThumbnail(pattern) {
+   const levels = Array.isArray(pattern.cellLevels) ? pattern.cellLevels : null;
+   if (!levels && !Array.isArray(pattern.cellMasks)) return finderCubeThumbnail(pattern);
+   const FACE_LEVEL_INDEX = { T: 0, L: 1, R: 2 };
+-  for (let cellIndex = 0; cellIndex < FINDER_CELL_ORDER.length; cellIndex += 1) {
+-    const cell = FINDER_CELL_ORDER[cellIndex];
++  // 발자국은 **패턴이 정한다**. daehan(2026-08-19)은 `finderCells` 를 들고 39/59/79 셀이다
++  // — 여기서 19셀을 가정하면 정본 앞 19개 톤이 **엉뚱한 불스아이 좌표** 위에 찍히고,
++  // 길이가 남아서 죽지도 않는다(조용히 틀린 그림). scene.js 의 발자국 선택과 같은
++  // 규칙이어야 «카드에서 본 것» 과 «코드에 찍히는 것» 이 안 갈린다.
++  const footprint = Array.isArray(pattern.finderCells) ? pattern.finderCells : FINDER_CELL_ORDER;
++  for (let cellIndex = 0; cellIndex < footprint.length; cellIndex += 1) {
++    const cell = footprint[cellIndex];
+     const mask = levels ? 0 : pattern.cellMasks[cellIndex];
+     for (const face of FACES) {
+       const polygon = facePolygon(cell.q, cell.r, face, layout);
+@@ -5710,7 +5835,7 @@ function finderMaskThumbnail(pattern) {
+   const svg = finderSvgElement('svg', {
+     viewBox: [minX - pad, minY - pad, maxX - minX + 2 * pad, maxY - minY + 2 * pad].join(' '),
+     'aria-hidden': 'true',
+-    'data-mask-cells': FINDER_CELL_ORDER.length,
++    'data-mask-cells': footprint.length,
+   });
+   for (const face of faces) {
+     svg.append(finderSvgElement('polygon', {
+@@ -5849,7 +5974,8 @@ function makeFinderCard(id, pattern) {
+ function ensureFinderCards() {
+   ensureFinderScoreRows();
+   if (els.finderLegacyRow.childElementCount || els.finderPatternCards.childElementCount
+-    || els.finderUserCards.childElementCount || els.finderOakCards.childElementCount) return;
++    || els.finderUserCards.childElementCount || els.finderOakCards.childElementCount
++    || els.finderDaehanCards.childElementCount) return;
+ 
+   // 정식 선택지: 불스아이 → 3톤 큐브 → 중앙 QR. 큐브는 cell-mask 행에 섞지 않는다.
+   els.finderLegacyRow.append(
+@@ -5909,6 +6035,21 @@ function ensureFinderCards() {
+     family.append(cards);
+     els.finderOakCards.append(family);
+   }
++
++  // daehan (2026-08-19) — **카드 한 장**이다. k 는 카드가 아니라 버전이 정한다
++  // (V1↔k6 · V2↔k8 · V3↔k10 — capacity.js VERSIONS 와 DAEHAN_RADII 가 같은 표다).
++  // 카드 셋으로 쪼개면 사용자가 버전과 모순되는 k 를 고를 수 있게 된다.
++  const daehanPatterns = FINDER_CARD_GROUPS.daehan;
++  if (daehanPatterns && daehanPatterns.length) {
++    const family = document.createElement('div');
++    family.className = 'finder-family finder-user-family';
++    family.dataset.finderFamily = 'daehan';
++    const cards = document.createElement('div');
++    cards.className = 'finder-user-patterns';
++    cards.append(...daehanPatterns.map(({ id, pattern }) => makeFinderCard(id, pattern)));
++    family.append(cards);
++    els.finderDaehanCards.append(family);
++  }
+ }
+ 
+ // Type O/A 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
+@@ -5922,7 +6063,9 @@ function renderFinderUi() {
+   // ⚠ 예전엔 finderPatternCards 만 돌아서 **손그림·OAK 서랍의 패밀리 제목이 공백**
+   //   이었다 (2026-08-18 브라우저 확인에서 발견 — 회귀는 카드 수만 세고 있었다).
+   //   서랍 셋을 다 돈다.
+-  for (const container of [els.finderPatternCards, els.finderUserCards, els.finderOakCards]) {
++  for (const container of [
++    els.finderPatternCards, els.finderUserCards, els.finderOakCards, els.finderDaehanCards,
++  ]) {
+     for (const heading of container.querySelectorAll('[data-finder-family-key]')) {
+       heading.textContent = t(heading.dataset.finderFamilyKey);
+     }
+@@ -5946,11 +6089,17 @@ function renderFinderUi() {
+   // ⚠ 2026-08-18 브라우저 확인에서 실제로 터진 자리다: 아래 throw 가 OAK 선택마다
+   //   발생해 renderFinderUi 가 중간에 죽었고, 카드 class 만 바뀌고 패널은 이전
+   //   선택에 멈춰 있었다. 회귀가 «카드 수» 만 세고 **선택 동작**을 안 재고 있었다.
+-  if (isOakFinderPatternId(generatorState.finderPatternId)) {
+-    const oakPattern = getOakFinderPattern(generatorState.finderPatternId);
++  // ⚠ 술어를 «접두사» 로 쓰면 안 된다 — `isOakFinderPatternId('oak-daehan-k10')` 은
++  //   **false** 다 (OAK_BY_ID 는 세 id 만 든 Map 이다). daehan 도 6축 점수가 없으므로
++  //   같은 미측정 분기가 받아야 하고, 안 넓히면 카드를 **고르는 순간**
++  //   `finder score record missing` 으로 renderFinderUi 가 중간에 죽는다
++  //   (2026-08-18 OAK 편입 때 실제로 터진 자리다).
++  const unmeasuredPattern = getOakFinderPattern(generatorState.finderPatternId)
++    || getDaehanFinderPattern(generatorState.finderPatternId);
++  if (unmeasuredPattern) {
+     els.finderScorePanel.classList.remove('gate-rejected');
+     els.finderScorePanel.classList.add('finder-score-unmeasured');
+-    els.finderScoreName.textContent = tf('g480', { name: oakPattern.name });
++    els.finderScoreName.textContent = tf('g480', { name: unmeasuredPattern.name });
+     els.finderGateBadge.className = 'finder-gate-badge';
+     els.finderGateBadge.textContent = t('g568');
+     els.finderScoreRows.style.display = 'none';
+@@ -6472,6 +6621,18 @@ if (els.yLocatorCards) {
+   }
+ }
+ 
++// 턴A 카드 배선 — yLocatorCards 와 같은 형태·같은 자리. schedule() 로 재렌더를
++// 태워야 formatIndex 변경이 화면 코드에 반영된다.
++if (els.turnACards) {
++  for (const card of els.turnACards.children) {
++    card.addEventListener('click', () => {
++      generatorState.turnA = card.dataset.turna === 'on';
++      syncTurnAUi();
++      schedule();
++    });
++  }
++}
++
+ const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
+ 
+ /**
+@@ -6616,6 +6777,35 @@ function cellEditorStateFor(ctx) {
+   return ctx.type === 'Y' ? yCellEditorStateFor(ctx.y) : cellEditorHexState(ctx.type, ctx.size);
+ }
+ 
++/**
++ * 생성기 → 편집기 **단방향** 파인더 동기화 (운영자 지적 §6.1, 2026-08-19).
++ *
++ * 증상: 생성기에서 OAK 후보를 골라도 아래 셀 편집기는 계속 불스아이를 그렸다.
++ * 원인은 `cellEditorHexState` 가 `createUniversalEditorState` 를 파인더 인자 없이
++ * 불러 편집기 상태의 `finderStarter` 가 **언제나 기본값**이었기 때문이다. 조회 쪽
++ * 구멍(OAK 는 PATTERN_BY_ID 에 없어 조용히 불스아이로 폴백)은 cell-editor-core 에서
++ * 같이 닫았다.
++ *
++ * 방향은 한쪽뿐이다 — 편집기에서 고친 것이 생성기를 바꾸지는 않는다. 덮어쓰기가
++ * 사용자 편집을 지울 걱정도 없다: 이 편집기는 중앙 19셀을 role 'finder' 로 잠근다
++ * (editHexCell 의 `if (role !== 'finder')` 가드).
++ */
++function syncCellEditorFinderFromGenerator(state, ctx) {
++  if (ctx.type === 'Y') return; // Y 는 중앙 파인더 슬롯이 없다 (셀 표면 로케이터를 쓴다)
++  const wanted = generatorState.finderPatternId;
++  // 중앙 QR 은 셀이 아니라 QR 모듈 블록이라 편집기에 대응 표현이 없다. 불스아이로
++  // 되돌려 그리면 «편집기가 보여 주는 것 = 코드가 그리는 것» 이라는 이 동기화의
++  // 전제가 거짓말이 된다 — 그래서 건드리지 않고 지난다.
++  if (wanted === CENTER_QR_FINDER_PATTERN_ID) return;
++  if (state.finderStarter === wanted) return;
++  applyFinderStarter(state, wanted);
++  // 조용한 불스아이 되돌림 금지 — resolveFinderStarter 는 모르는 id 를 catch 로
++  // 삼킨다. 삼켜졌다는 사실만이라도 남긴다 (그 침묵이 이번 증상의 절반이었다).
++  if (state.finderStarter !== wanted) {
++    console.warn('[cell-editor] 편집기가 못 태우는 파인더 id — 불스아이로 되돌아갔다: ' + wanted);
++  }
++}
++
+ function cellEditorBucketKey(ctx) {
+   return historyKey(ctx.type, ctx.size);
+ }
+@@ -7128,6 +7318,7 @@ function syncTypeYCellEditorUi() {
+   if (!CELL_EDITOR_TYPES.includes(cellEditorType)) cellEditorType = 'Y';
+   const ctx = cellEditorContext();
+   const state = cellEditorStateFor(ctx);
++  syncCellEditorFinderFromGenerator(state, ctx);
+   section.dataset.mode = state.mode;
+   section.dataset.cellType = ctx.type;
+   if (els.yCellEditorTypeCards) {
+@@ -7842,9 +8033,22 @@ function syncTypeUi() {
+   syncRenderProfileUi(); // 렌더 프로파일 섹션도 Y 에서만 열린다 (면 게인 소비자가 Y 뿐).
+   syncShadingUi();       // 입체 음영도 같은 이유로 Y 전용이다.
+   syncYLocatorUi();
++  syncTurnAUi();
+   syncTypeYCellEditorUi();
+ }
+ 
++/** 턴A 카드 — Type A + lab 에서만 연다 (#yLocatorSection 과 같은 게이트 문법). */
++function syncTurnAUi() {
++  const section = els.turnASection;
++  if (!section) return;
++  section.hidden = !(isLabPath() && generatorState.type === 'A');
++  if (!els.turnACards) return;
++  const on = generatorState.turnA === true;
++  for (const card of els.turnACards.children) {
++    card.classList.toggle('active', (card.dataset.turna === 'on') === on);
++  }
++}
++
+ function syncYLocatorUi() {
+   const section = els.yLocatorSection;
+   if (!section) return;
+@@ -8161,6 +8365,8 @@ function buildConfig() {
+           ? 2
+           : selectedVersion(generatorState.versionY),
+     versionA: selectedVersion(generatorState.versionA),
++    // 턴A 는 Type A 전용이다 — 다른 타입에서 켜진 채 남아 있어도 여기서 죽인다.
++    turnA: type === 'A' && generatorState.turnA === true,
+     tone: generatorState.tone,
+     qrText: generatorState.qrText.trim() === ''
+       ? TL_READER_URL : generatorState.qrText.trim(),
+@@ -8233,10 +8439,22 @@ function encodeOptsFor(cfg) {
+   if (cfg.type === 'A') {
+     const opts = { centerQr: cfg.fallback.mode === 'center' };
+     if (cfg.versionA !== undefined) opts.version = cfg.versionA;
++    // ⚠ turnA 는 **true 일 때만** 싣는다. cornerMarker 와 상호배제라 encodeA 가
++    //   던지는데(src/encodeA.js:113), 지금 이 경로는 cornerMarker 를 아예 안 주므로
++    //   충돌이 실재하지 않는다 — O-CM/A-CM 이 UI 에 붙는 날 여기가 같이 바뀐다.
++    //   false 로도 안 채우는 이유: cfg.turnA 는 A 분기에서만 쓰이고 O/Y 인코더는
++    //   이 키를 모른다. 「true 일 때만」이면 비-A 옵션 표면이 한 비트도 안 넓어진다.
++    if (cfg.turnA === true) opts.turnA = true;
+     return { fn: encodeA, opts };
+   }
+   const opts = { centerQr: cfg.fallback.mode === 'center' };
+   if (cfg.versionO !== undefined) opts.version = cfg.versionO;
++  // daehan(2026-08-19)은 파인더가 불스아이 밖으로 60셀을 더 먹는다 — **회계가 갈리므로**
++  // 인코더에 알려야 한다. 이 한 줄이 provider.capacity 를 capacityForDaehan 으로 바꾸고,
++  // 화면의 모든 용량 표시(정보줄·게이지·절단 프로브)는 encoded.capacity 를 그대로 읽으므로
++  // 자동으로 따라온다. 이 줄이 없으면 79셀을 그려 놓고 legacy 용량(18/39/65 B)을 표시하며
++  // data 셀 위에 파인더를 덧칠한다.
++  if (isDaehanFinderPatternId(cfg.finderPatternId)) opts.daehanFinder = true;
+   return { fn: encode, opts };
+ }
+ 
+@@ -8292,7 +8510,15 @@ function renderTypeO(cfg) {
+   const { fn, opts } = encodeOptsFor(cfg);
+   const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
+ 
+-  const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
++  // 카드는 하나(`oak-daehan-k10`)지만 **그리는 템플릿의 k 는 버전이 정한다.** 픽셀은
++  // 재사상 없이도 맞다 — scene.js 의 반경 가드가 k10 패턴을 k=6/8 로 자르면 좌표·톤이
++  // 잘림본과 같다. 재사상하는 이유는 아래 `finderPatternId` 가 스캔·텔레메트리 라벨로
++  // 기록되기 때문이다 — k=6 프레임을 «k10 템플릿» 이라 적어 두면 나중 대조가 끊긴다.
++  const renderedFinderPatternId = encoded.daehanFinder
++    ? daehanPatternId(encoded.k) : cfg.finderPatternId;
++  const sceneCfg = encoded.daehanFinder
++    ? { ...cfg, finderPatternId: renderedFinderPatternId } : cfg;
++  const scene = buildScene(encoded, sceneOptsForOA(sceneCfg, centerQr));
+ 
+   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
+   const check = verifyRaster(raster, scene, encoded);
+@@ -8302,13 +8528,16 @@ function renderTypeO(cfg) {
+     'g445', { total: check.total, delta: check.minDelta.toFixed(3) },
+     'g446', { n: check.mismatches.length },
+   );
++  // 버전 이름에 D 를 넣는다 — 인코더가 이미 그 이름을 쓴다(capacityDaehan.js `V*D`).
++  // 화면만 «V3» 라고 쓰면 65 B 를 기대하는 사람이 46 B 짜리 코드를 들고 간다.
++  const verLabel = `V${encoded.version}${encoded.daehanFinder ? 'D' : ''}${encoded.centerQr ? 'Q' : ''}`;
+   const info =
+-    `${tf('g449', { type: 'O', ver: `V${encoded.version}${encoded.centerQr ? 'Q' : ''}`, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
++    `${tf('g449', { type: 'O', ver: verLabel, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
+     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
+     tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
+   return {
+     type: 'O', encoded, scene: withQuietZone(scene), info, selfCheck,
+-    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : cfg.finderPatternId,
++    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : renderedFinderPatternId,
+   };
+ }
+ 
+@@ -8317,7 +8546,17 @@ function renderTypeA(cfg) {
+   const { fn, opts } = encodeOptsFor(cfg);
+   const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
+ 
+-  const scene = buildScene(encoded, sceneOptsForOA(cfg, centerQr));
++  // daehan 은 **Type O 전용**이다 — encodeA 에 daehanFinder 옵션이 아예 없다. 그런데
++  // O·A 는 파인더 상태 프로필을 공유하므로(finder-selection.js `profileFamily`) O 에서
++  // 고른 daehan 이 A 로 그대로 넘어온다. 서랍을 숨기는 것만으로는 «이미 고른 상태» 를
++  // 못 막는다 (모드·타입은 «노출만» 바꾼다는 이 파일의 규약). 그냥 두면 legacy 회계
++  // 위에 79셀 파인더를 덧칠하고 verifyRaster 만 조용히 나빠진다.
++  const aFinderPatternId = isDaehanFinderPatternId(cfg.finderPatternId)
++    ? GENERATOR_DEFAULT_FINDER_PATTERN_ID : cfg.finderPatternId;
++  const scene = buildScene(encoded, sceneOptsForOA(
++    aFinderPatternId === cfg.finderPatternId ? cfg : { ...cfg, finderPatternId: aFinderPatternId },
++    centerQr,
++  ));
+ 
+   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
+   const check = verifyRaster(raster, scene, encoded);
+@@ -8333,7 +8572,7 @@ function renderTypeA(cfg) {
+     tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
+   return {
+     type: 'A', encoded, scene: withQuietZone(scene), info, selfCheck,
+-    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : cfg.finderPatternId,
++    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : aFinderPatternId,
+   };
+ }
+ 
+@@ -8412,7 +8651,7 @@ function updateGauge(type, encoded, text) {
+   els.nGaugeFill.classList.toggle('bad', pct >= 90);
+   // 버전 라벨은 타입 접두 (O→V, A→A, Y→Y — export 파일명 규약과 동일 계열).
+   const prefix = type === 'O' ? 'V' : type;
+-  const suffix = `${encoded.tones === 3 ? 'T' : ''}${encoded.centerQr ? 'Q' : ''}${encoded.window ? 'W' : ''}`;
++  const suffix = `${encoded.tones === 3 ? 'T' : ''}${encoded.daehanFinder ? 'D' : ''}${encoded.centerQr ? 'Q' : ''}${encoded.window ? 'W' : ''}`;
+   els.nGaugeLabel.textContent = `${bytes} B / ${max} B (${prefix}${encoded.version}${suffix})`;
+ }
+ 
+diff --git a/src/cell-editor-core.js b/src/cell-editor-core.js
+index 5c02dd6..d7d2982 100644
+--- a/src/cell-editor-core.js
++++ b/src/cell-editor-core.js
+@@ -57,6 +57,10 @@ import {
+   FINDER_PATTERNS,
+   getFinderPattern,
+ } from './finder-patterns.js';
++import {
++  OAK_LEVEL_FACE_INDEX,
++  getOakFinderPattern,
++} from './finder-oak-patterns.js';
+ import {
+   cloneFinderEditorPattern,
+   serializeFinderEditorPattern,
+@@ -165,6 +169,16 @@ export function cloneCellEditorFinderPattern(pattern) {
+       toneRanks: { T: pattern.toneRanks.T, L: pattern.toneRanks.L, R: pattern.toneRanks.R },
+     };
+   }
++  // 3레벨 후보(OAK)는 `cellMasks` 가 없고 `cellLevels`(면당 0/1/2)를 든다. 우선순위는
++  // scene.js:512 «둘 다 있으면 레벨이 이긴다» · cell-finder-detect.js normalizePatterns 와
++  // 같아야 «그린 것» 과 «편집기가 보여 주는 것» 이 안 갈린다. 정본 표는 frozen 이라
++  // 삼중까지 깊게 뜬다 — 얕게 뜨면 편집이 정본을 오염시키거나 조용히 무시된다.
++  if (renderKind === 'cell-mask' && Array.isArray(pattern.cellLevels)) {
++    if (pattern.cellLevels.length !== FINDER_CELL_ORDER.length) {
++      throw new RangeError('cellLevels는 19개여야 한다');
++    }
++    return { renderKind, cellLevels: pattern.cellLevels.map((triple) => [...triple]) };
++  }
+   return cloneFinderEditorPattern(pattern);
+ }
+ 
+@@ -204,7 +218,12 @@ export function resolveFinderStarter(starterId) {
+     };
+   }
+   try {
+-    const patternDef = getFinderPattern(id);
++    // OAK 후보(2026-08-18)는 생성 도구 산출물이 아니라 별도 표라 PATTERN_BY_ID 에
++    // 없다 — scene.js resolveFinderRenderPattern 과 **같은 조회 순서**로 먼저 푼다.
++    // 안 그러면 아래 getFinderPattern 이 던지고 이 try 의 catch 가 «모르는 파인더» 를
++    // 조용히 불스아이로 되돌린다. 그 침묵이 §6.1 증상(생성기에서 OAK 를 골라도
++    // 아래 편집기는 계속 불스아이)의 절반이었다.
++    const patternDef = getOakFinderPattern(id) || getFinderPattern(id);
+     const pattern = cloneCellEditorFinderPattern(patternDef);
+     return { id, renderKind: pattern.renderKind, pattern };
+   } catch {
+@@ -246,6 +265,28 @@ export function rotateFinderPattern120(pattern) {
+     };
+     return copy;
+   }
++  // 레벨 패턴(OAK)도 같은 좌표 사상을 타되 면은 값째로 돈다: T→R · R→L · L→T
++  // (rotateMaskBits120 과 같은 사상). 이 갈래가 없으면 copy.cellMasks[i] 에서
++  // TypeError 가 난다 — clone 이 레벨을 통과시키게 된 이상 짝으로 있어야 한다.
++  if (Array.isArray(copy.cellLevels)) {
++    const newLevels = new Array(FINDER_CELL_ORDER.length);
++    for (let i = 0; i < FINDER_CELL_ORDER.length; i += 1) {
++      const cell = FINDER_CELL_ORDER[i];
++      const rotated = rotate120Axial(cell.q, cell.r);
++      const dest = FINDER_CELL_ORDER.findIndex(
++        (candidate) => candidate.q === rotated.q && candidate.r === rotated.r,
++      );
++      if (dest < 0) continue;
++      const src = copy.cellLevels[i];
++      const next = [];
++      next[OAK_LEVEL_FACE_INDEX.R] = src[OAK_LEVEL_FACE_INDEX.T];
++      next[OAK_LEVEL_FACE_INDEX.L] = src[OAK_LEVEL_FACE_INDEX.R];
++      next[OAK_LEVEL_FACE_INDEX.T] = src[OAK_LEVEL_FACE_INDEX.L];
++      newLevels[dest] = next;
++    }
++    copy.cellLevels = newLevels;
++    return copy;
++  }
+   const newMasks = new Array(FINDER_CELL_ORDER.length);
+   for (let i = 0; i < FINDER_CELL_ORDER.length; i += 1) {
+     const cell = FINDER_CELL_ORDER[i];
+@@ -641,6 +682,11 @@ export function getCellTone(state, face, c) {
+         (cell) => cell.q === c.q && cell.r === c.r,
+       );
+       if (cellIndex < 0) return DEFAULT_TONE;
++      // 레벨이 이긴다 — scene.js 렌더 분기와 같은 우선순위. 이 갈래가 없으면
++      // OAK 패턴에서 `cellMasks[cellIndex]` 가 undefined 라 TypeError 로 죽는다.
++      if (Array.isArray(state.finderPattern.cellLevels)) {
++        return state.finderPattern.cellLevels[cellIndex][OAK_LEVEL_FACE_INDEX[face]];
++      }
+       const mask = state.finderPattern.cellMasks[cellIndex];
+       const faceBit = FINDER_FACE_BITS[face];
+       return (mask & faceBit) !== 0 ? 2 : 0;
+@@ -671,6 +717,15 @@ export function setCellToneDirect(state, face, c, tone) {
+       const cellIndex = FINDER_CELL_ORDER.findIndex(
+         (cell) => cell.q === c.q && cell.r === c.r,
+       );
++      // 레벨 패턴은 면 값을 그대로 쓴다(마스크 비트가 아니다). index.html 의 생성기
++      // 편집기는 중앙 19셀을 role 'finder' 로 잠가 여기 못 오지만, 독립 편집기
++      // (/celleditor/)는 온다 — 위 clone 갈래가 통과시킨 패턴을 여기서 받아야 한다.
++      if (Array.isArray(state.finderPattern.cellLevels)) {
++        if (cellIndex >= 0) {
++          state.finderPattern.cellLevels[cellIndex][OAK_LEVEL_FACE_INDEX[face]] = tone;
++        }
++        return;
++      }
+       if (cellIndex >= 0) {
+         const bit = FINDER_FACE_BITS[face];
+         let mask = state.finderPattern.cellMasks[cellIndex];
+diff --git a/src/finder-card-ui.js b/src/finder-card-ui.js
+index acf84a3..b2ec7e6 100644
+--- a/src/finder-card-ui.js
++++ b/src/finder-card-ui.js
+@@ -12,6 +12,7 @@ import {
+ } from './finder-patterns.js';
+ import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+ import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
++import { DAEHAN_FINDER_PATTERNS } from './finder-daehan.js';
+ 
+ function descriptor(id, pattern) {
+   return Object.freeze({ id, pattern });
+@@ -55,6 +56,12 @@ if (OAK_FINDER_PATTERNS.length === 0) {
+   throw new Error('OAK 파인더 카드가 비었다 — 편입했는데 표가 없다');
+ }
+ 
++// daehan 대표 템플릿 — 79셀 정본(k=10). 위 자기검증들과 같은 관례로 로드 시점에 죽는다.
++const DAEHAN_K10 = DAEHAN_FINDER_PATTERNS.find((pattern) => pattern.k === 10);
++if (!DAEHAN_K10 || !Array.isArray(DAEHAN_K10.finderCells) || DAEHAN_K10.finderCells.length !== 79) {
++  throw new Error('daehan k10 정본(79셀)이 없다 — 표가 바뀌었으면 카드 대표도 같이 정해라');
++}
++
+ export const FINDER_CARD_GROUPS = Object.freeze({
+   // 사용자 지시 2026-08-13: 하이브리드를 두 번째로 — 실사진에서 실제로 읽히는 큐브
+   // 선택지가 이쪽이고, 순수 3톤 큐브는 정지 사진 0/6 이라 뒤로 민다.
+@@ -71,6 +78,12 @@ export const FINDER_CARD_GROUPS = Object.freeze({
+   // 지위 관리도 별도 명부(finder-oak-lineup.js)가 한다. 한 줄에 섞으면 «이 카드가
+   // 어느 계보인가» 를 이름으로 못 읽는다.
+   oak: Object.freeze(OAK_FINDER_PATTERNS.map((pattern) => descriptor(pattern.id, pattern))),
++  // daehan (2026-08-19 UI 편입) — **카드는 한 장**이다. 표에는 k=6/8/10 세 템플릿이
++  // 있지만 그건 잘림본이고(k6 ⊂ k8 ⊂ k10), 어느 것을 그릴지는 **버전이 정한다**
++  // (V1↔k6 · V2↔k8 · V3↔k10). 카드를 셋으로 쪼개면 사용자가 버전과 모순되는 k 를
++  // 고를 수 있게 된다. 대표 id 는 79셀 정본인 k10 — 직전 라운드 측정들이 이미 쓰는
++  // 문자열이라 바꾸면 그 측정들과의 대조가 끊긴다 (finder-daehan.js §56-58).
++  daehan: Object.freeze([descriptor(DAEHAN_K10.id, DAEHAN_K10)]),
+ });
+ 
+ /**
+diff --git a/src/generator-state.js b/src/generator-state.js
+index ea4aa92..58a89f2 100644
+--- a/src/generator-state.js
++++ b/src/generator-state.js
+@@ -98,6 +98,18 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
+   eccLevel: field('auto', BOTH, ['auto', 'H', 'M', 'L']),
+   versionO: field('auto', BOTH, ['auto', 1, 2, 3]),
+   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
++  // 턴A (역삼각 Type A, 2026-08-19 UI 편입) — Type A 전용. `INTERNAL` 인 이유는
++  // locatorProfileY 와 같다: **아직 lab 게이트 뒤**라 정식 화면의 노출 대조
++  // (index.html `data-state-keys`)에 들어가면 안 된다.
++  //
++  // ⚠ 왜 lab 뒤인가 (실측 2026-08-19): `encodeA(turnA:true)` 로 만든 코드는
++  //   라이브 경로(decodeFrontend)가 **0/3 으로 못 읽는다** (대조군 turnA:false 는
++  //   3/3). 인코더가 아직 역삼각 «기하» 를 안 내고(셀 좌표 집합이 정삼각과 동일,
++  //   format 15셀만 다르다) 검출기의 turn 신호도 배선돼 있지 않다. 즉 이 스위치는
++  //   «와이어 값만 바꾸는 실험 장치» 이지 실루엣 전환이 아니다.
++  //   안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
++  //   배선이 끝나고 왕복이 서는 날이다.
++  turnA: field(false, INTERNAL, [false, true]),
+   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
+   customHue: field(210, BOTH, [210, 37]),
+   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
+diff --git a/test/gen-variants.test.js b/test/gen-variants.test.js
+index c525982..3e75192 100644
+--- a/test/gen-variants.test.js
++++ b/test/gen-variants.test.js
+@@ -86,7 +86,12 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
+   assert.match(source, /className = 'toggle-card finder-card'/);
+   assert.match(source, /pattern\.cellMasks\[cellIndex\]/);
+   assert.match(source, /facePolygon\(cell\.q, cell\.r, face, layout\)/);
+-  assert.match(source, /'data-mask-cells': FINDER_CELL_ORDER\.length/);
++  // **의도적 갱신 (2026-08-19, daehan UI 편입)**: 발자국을 19셀로 못 박던 자리를
++  // «패턴이 정한다» 로 옮겼다. daehan 은 finderCells 39/59/79 셀이라 19를 가정하면
++  // 정본 앞 19톤이 엉뚱한 불스아이 좌표에 찍히고 **길이가 남아서 죽지도 않는다**
++  // (조용히 틀린 그림). 그래서 잠그는 명제를 «19다» 에서 «패턴 발자국을 쓴다» 로 바꾼다.
++  assert.match(source, /Array\.isArray\(pattern\.finderCells\) \? pattern\.finderCells : FINDER_CELL_ORDER/);
++  assert.match(source, /'data-mask-cells': footprint\.length/);
+   assert.match(source, /function finderCubeThumbnail\(pattern\)/);
+   assert.match(source, /pattern\.renderKind === 'three-tone-cube'/);
+   assert.match(cardUiSource, /threeTonePatterns\[0\]\.renderKind !== 'three-tone-cube'/);
+diff --git a/test/generator-finder-dom.test.js b/test/generator-finder-dom.test.js
+index 53f768d..195c4d9 100644
+--- a/test/generator-finder-dom.test.js
++++ b/test/generator-finder-dom.test.js
+@@ -12,6 +12,9 @@ import assert from 'node:assert/strict';
+ import test from 'node:test';
+ 
+ import { encode } from '../src/encode.js';
++import {
++  daehanPatternId, getDaehanFinderPattern, isDaehanFinderPatternId,
++} from '../src/finder-daehan.js';
+ import { encodeA } from '../src/encodeA.js';
+ import {
+   FINDER_CARD_GROUPS,
+@@ -87,11 +90,18 @@ function appendFinderCards(root) {
+     for (const { id } of group) root.append(new DomCardFallback(id));
+   }
+ }
+-function encodeFor(type, centerQr) {
++/**
++ * 인코더 호출은 **index.html 의 `encodeOptsFor` 와 같은 규칙**이어야 한다.
++ * daehan 은 파인더가 불스아이 밖으로 60셀을 더 먹어 회계가 갈리므로 인코더에
++ * 알려야 하고, 안 알리면 79셀 파인더가 data 셀 위에 덧칠돼 verifyRaster 가 깨진다
++ * (2026-08-19 이 하네스에서 실제로 그렇게 터졌다 — 제품 결함이 아니라 하네스가
++ * 제품 규칙을 안 따라간 것이었다). Type A 는 daehanFinder 옵션 자체가 없다.
++ */
++function encodeFor(type, centerQr, finderPatternId) {
+   const options = { eccLevel: 'H', centerQr };
+-  return type === 'A'
+-    ? encodeA('https://example.com/trilume', options)
+-    : encode('https://example.com/trilume', options);
++  if (type === 'A') return encodeA('https://example.com/trilume', options);
++  if (isDaehanFinderPatternId(finderPatternId)) options.daehanFinder = true;
++  return encode('https://example.com/trilume', options);
+ }
+ 
+ function fallbackFor(state) {
+@@ -119,10 +129,16 @@ function makeUiHarness(type) {
+     renderCount += 1;
+     const fallback = fallbackFor(state);
+     const centerQr = fallback.mode === 'center';
+-    const encoded = encodeFor(type, centerQr);
++    const encoded = encodeFor(type, centerQr, state.finderPatternId);
++    // Type A 는 daehan 을 못 그린다 — index.html renderTypeA 의 가드와 같은 규칙이다
++    // (O·A 가 파인더 프로필을 공유해 O 에서 고른 daehan 이 A 로 새어 온다).
++    // 그리는 k 도 버전이 정한다 — renderTypeO 의 daehanPatternId 재사상과 같다.
++    const finderPatternId = isDaehanFinderPatternId(state.finderPatternId)
++      ? (type === 'A' ? DEFAULT_FINDER_PATTERN_ID : daehanPatternId(encoded.k))
++      : state.finderPatternId;
+     const scene = buildScene(encoded, sceneOptionsForOA({
+       fallback,
+-      finderPatternId: state.finderPatternId,
++      finderPatternId,
+       palette: PALETTE,
+       qrText: 'HTTPS://TLSCAN.ESTRE.SO',
+       type,
+@@ -176,10 +192,14 @@ test('정식 파인더 카드 행은 불스아이 → 하이브리드 → 3톤 
+   // O/A/K 후보 3(Nitrogen r2 · Aspirin · Benzene)이 별도 줄로 붙었다. 세 후보는
+   // 계보(편집기 export)도 표현(면당 3레벨)도 앞의 것들과 달라서 같은 줄에 안 섞는다
+   // — 카드만 보고 계보를 읽을 수 있어야 한다 (finder-oak-patterns.js 헤더).
+-  assert.equal(ids.length, 18);
+-  assert.deepEqual(ids.slice(-3),
++  // **의도적 갱신 (2026-08-19, daehan 편입)** — 18 → 19. daehan 은 **한 장**이다
++  // (k=6/8/10 은 잘림본이고 어느 것을 그릴지는 버전이 정한다). OAK 와도 다른 줄에
++  // 두는 이유는 회계다 — 이 후보만 용량을 깎는다 (V3 65 B → 46 B).
++  assert.equal(ids.length, 19);
++  assert.deepEqual(ids.slice(-4, -1),
+     ['oak-nitrogen-r2', 'oak-aspirin', 'oak-benzene'],
+-    'OAK 카드가 맨 뒤 세 자리가 아니다');
++    'OAK 카드가 daehan 앞 세 자리가 아니다');
++  assert.equal(ids.at(-1), 'oak-daehan-k10', 'daehan 카드가 맨 뒤가 아니다');
+   assert.equal(new Set(ids).size, ids.length);
+ });
+ 
+@@ -248,6 +268,31 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
+         assert.equal(harness.state.qrPosition, 'inner');
+         assert.equal(harness.rendered.finderPatternId, 'centerQr');
+       }
++      // «카드가 있다» 가 아니라 «누르면 인코딩이 바뀐다» 를 잰다 (2026-08-19 브리프 §4).
++      // daehan 은 파인더가 60셀을 더 먹어 **용량이 준다** — 그게 이 카드의 실제 효과다.
++      if (isDaehanFinderPatternId(card.dataset.finderId)) {
++        if (type === 'O') {
++          assert.equal(harness.rendered.encoded.daehanFinder, true,
++            'daehan 카드를 눌렀는데 인코더가 daehan 회계로 안 갔다');
++          assert.equal(harness.rendered.finderPatternId,
++            daehanPatternId(harness.rendered.encoded.k),
++            '그려진 템플릿 id 가 버전이 정한 k 와 안 맞는다');
++          // ⚠ **같은 버전끼리** 비교해야 한다. 자동 버전 선택이 daehan 에서 한 단
++          //   올라가므로(V2→V3) auto 끼리 재면 31 vs 32 로 «늘었다» 는 엉뚱한 답이
++          //   나온다 — 대상이 아니라 자가 틀린 것이다 (실측 2026-08-19).
++          const sameVersionLegacy = encode('https://example.com/trilume', {
++            eccLevel: 'H', centerQr: false, version: harness.rendered.encoded.version,
++          }).capacity.maxPayloadBytes;
++          assert.ok(harness.rendered.encoded.capacity.maxPayloadBytes < sameVersionLegacy,
++            `daehan 을 눌렀는데 같은 버전 용량이 안 줄었다 (`
++            + `${harness.rendered.encoded.capacity.maxPayloadBytes} vs ${sameVersionLegacy} B)`
++            + ' — 표시가 legacy 회계를 말하고 있다');
++        } else {
++          // Type A 는 daehan 을 못 그린다 — 조용히 legacy 회계 위에 덧칠하면 안 된다.
++          assert.notEqual(harness.rendered.finderPatternId, card.dataset.finderId,
++            'Type A 가 daehan 을 그대로 그렸다 — encodeA 에 daehanFinder 가 없다');
++        }
++      }
+       if (card.dataset.finderId === 'central-cube-3tone') {
+         assert.equal(harness.rendered.finderPatternId, 'central-cube-3tone');
+         assert.equal(
+@@ -276,25 +321,30 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
+  *
+  * 회귀가 **카드 수만 세고 선택 동작을 안 재고 있었다.** 이 검사는 그 구멍을 막는다:
+  * 카드로 나오는 모든 id 는 ⓐ 점수 레코드가 있거나 ⓑ 미측정 분기가 받아야 한다.
+- * index.html 의 실제 분기 조건과 **같은 술어**(isOakFinderPatternId)로 잰다 —
++ * index.html 의 실제 분기 조건과 **같은 술어**(getOakFinderPattern ‖ getDaehanFinderPattern)로 잰다 —
+  * 다른 술어로 재면 이 검사가 초록인 채로 UI 만 다시 죽는다.
+  */
+ test('모든 파인더 카드 id 는 점수 레코드가 있거나 미측정 분기가 받는다', async () => {
+   const { FINDER_BASELINE_SCORES, FINDER_PATTERNS } = await import('../src/finder-patterns.js');
+-  const { isOakFinderPatternId } = await import('../src/finder-oak-patterns.js');
++  const { getOakFinderPattern } = await import('../src/finder-oak-patterns.js');
+   const scored = new Set([
+     ...FINDER_PATTERNS.map((pattern) => pattern.id),
+     ...Object.keys(FINDER_BASELINE_SCORES),
+   ]);
+   const ids = Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id);
+   assert.ok(ids.length >= 18, '카드가 18개 미만이다 — 그룹이 비었는지 보라');
+-  const orphans = ids.filter((id) => !scored.has(id) && !isOakFinderPatternId(id));
++  // ⚠ 술어를 **index.html 의 실제 분기와 같은 모양**으로 쓴다. 2026-08-19 에 여기서
++  //   한 번 걸렸다: `isOakFinderPatternId('oak-daehan-k10')` 은 **false** 다 —
++  //   OAK_BY_ID 가 세 id 만 든 Map 이라 `oak-` 접두사는 계보를 말해 주지 않는다.
++  //   index.html 은 `getOakFinderPattern(id) || getDaehanFinderPattern(id)` 로 받는다.
++  const unmeasured = (id) => Boolean(getOakFinderPattern(id) || getDaehanFinderPattern(id));
++  const orphans = ids.filter((id) => !scored.has(id) && !unmeasured(id));
+   assert.deepEqual(orphans, [],
+     '점수 레코드도 없고 미측정 분기도 안 받는 카드: ' + JSON.stringify(orphans)
+     + ' — 고르는 순간 renderFinderUi 가 throw 한다');
+   // 반대 방향도 잠근다: 미측정으로 처리되는 카드가 **점수를 갖고 있으면** 안 된다.
+   // 있는데 안 보여주면 그건 숨기는 것이지 «미측정» 이 아니다.
+-  for (const id of ids.filter(isOakFinderPatternId)) {
++  for (const id of ids.filter(unmeasured)) {
+     assert.equal(scored.has(id), false,
+       id + ' 는 점수가 있는데 미측정으로 표시된다 — 라벨이 사실이 아니다');
+   }
+diff --git a/test/generator-ui-wiring.test.js b/test/generator-ui-wiring.test.js
+new file mode 100644
+index 0000000..a0dd4d3
+--- /dev/null
++++ b/test/generator-ui-wiring.test.js
+@@ -0,0 +1,259 @@
++/**
++ * generator-ui-wiring.test.js — 「코드는 섰는데 누를 자리가 없다」 를 막는 회귀.
++ *
++ * 2026-08-19 운영자 지적 3라운드에서 나온 구멍들을 잠근다. 배경: 인코더·디코더·
++ * 테스트가 다 초록인데 생성기 UI 에 그 기능을 켤 자리가 없거나, 켜도 아래 편집기가
++ * 안 따라오거나, 고급 모드에 숨어 있어서 못 찾는 상태가 반복됐다.
++ *
++ * ⚠ **명제를 잠근다, 모양을 잠그지 않는다.** 2026-08-18 에 `bootstrap` 객체의 모양
++ *   전체를 정규식으로 잠근 핀이 형제 키 하나 추가로 깨졌다. 여기서는 «어느 서랍이
++ *   모드 게이트를 받는가» · «편집기가 생성기 선택을 태우는가» 처럼 술어만 잰다.
++ *
++ * ⚠ **일부 테스트는 «아직 안 된다» 를 잠근다** (§5). 그것이 목적이다 — 지금 조용히
++ *   실패 중인 왕복을 누군가 배선하면 그 테스트가 **빨개져서** 사실이 드러난다.
++ *   빨개지면 고칠 것은 제품이 아니라 이 파일의 기대값이다.
++ */
++
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import { readFileSync } from 'node:fs';
++import { fileURLToPath } from 'node:url';
++
++import { encode } from '../src/encode.js';
++import { encodeA } from '../src/encodeA.js';
++import { buildScene } from '../src/scene.js';
++import { rasterize } from '../src/raster.js';
++import { decodeFrontend } from '../src/decoder/frontend.js';
++import {
++  BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
++} from '../src/luminance.js';
++import { FINDER_CARD_GROUPS } from '../src/finder-card-ui.js';
++import { CENTER_QR_FINDER_PATTERN_ID } from '../src/finder-selection.js';
++import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
++import { GENERATOR_STATE_SCHEMA, createGeneratorState } from '../src/generator-state.js';
++import {
++  applyFinderStarter, createUniversalEditorState, getCellTone,
++} from '../src/cell-editor-core.js';
++import { OAK_FINDER_PATTERNS, OAK_LEVEL_FACE_INDEX } from '../src/finder-oak-patterns.js';
++import { FINDER_CELL_ORDER } from '../src/finder-patterns.js';
++
++const ROOT = fileURLToPath(new URL('../', import.meta.url));
++const INDEX = readFileSync(ROOT + 'index.html', 'utf8');
++
++const PRESET = getPreset(DEFAULT_PRESET);
++const PALETTE = Object.freeze({
++  background: PRESET.background,
++  levels: PRESET.levels,
++  bullseyeDark: BULLSEYE_DARK,
++  bullseyeLight: BULLSEYE_LIGHT,
++});
++
++// ── §6.2 — 새 셀 표면 파인더는 일반 모드에서도 보인다 ────────────────────────
++
++/** `applyFinderExperimentVisibility` 가 **모드로 가리는 서랍 id 집합**을 뽑는다. */
++function modeGatedDrawerIds() {
++  const at = INDEX.indexOf('function applyFinderExperimentVisibility()');
++  assert.notEqual(at, -1, 'applyFinderExperimentVisibility 가 사라졌다');
++  const body = INDEX.slice(at, INDEX.indexOf('\n}', at));
++  const list = body.match(/for \(const id of \[([^\]]*)\]\)/);
++  assert.ok(list, '모드 게이트 대상 목록을 못 읽었다 — 배열 리터럴이 아니게 바뀌었나');
++  return new Set([...list[1].matchAll(/'([^']+)'/g)].map((m) => m[1]));
++}
++
++test('§6.2 OAK 서랍은 모드 게이트를 안 받고, 기준 미달·스캔 불가 두 서랍은 받는다', () => {
++  const gated = modeGatedDrawerIds();
++  // 운영자 지시 2026-08-19: «새로 추가된 셀 표면 파인더» 한정으로 일반 모드 노출.
++  assert.equal(gated.has('finderOak'), false,
++    'finderOak 이 다시 고급 전용이 됐다 — 일반 모드에서 OAK 를 못 고른다');
++  assert.equal(gated.has('finderBelowBar'), true, '기준 미달 서랍이 일반 모드로 샜다');
++  assert.equal(gated.has('finderUnscannable'), true, '스캔 불가 서랍이 일반 모드로 샜다');
++  // 서랍이 실재하는지도 함께 — 목록에서 빼는 것과 서랍을 지우는 것은 다르다.
++  for (const id of ['finderOak', 'finderBelowBar', 'finderUnscannable']) {
++    assert.ok(INDEX.includes(`id="${id}"`), id + ' 서랍이 마크업에 없다');
++  }
++});
++
++test('§6.2 daehan 서랍은 고급 전용이다 — 시험판 스캐너에서만 읽히기 때문', () => {
++  // 근거는 §5 의 왕복 실측이다. 그 사실이 바뀌면 이 기대값도 같이 움직여야 한다.
++  assert.equal(modeGatedDrawerIds().has('finderDaehan'), true,
++    'daehan 이 일반 모드로 샜다 — 안정판 스캐너가 못 읽는 코드를 기본 노출하게 된다');
++});
++
++// ── §6.1 — 생성기 파인더 선택이 아래 셀 편집기에 반영된다 ────────────────────
++
++test('§6.1 편집기는 생성기가 고를 수 있는 파인더 id 를 조용한 폴백 없이 태운다', () => {
++  const cardIds = Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id);
++  const notRepresentable = new Set([
++    CENTER_QR_FINDER_PATTERN_ID, // QR 모듈 블록이라 셀 표현이 없다 (동기화가 건너뛴다)
++  ]);
++  const swallowed = [];
++  for (const id of cardIds) {
++    if (notRepresentable.has(id)) continue;
++    // daehan 은 39/59/79 셀이라 중앙 19셀 편집기 표현이 아직 없다 — 그 사실 자체를
++    // 여기서 드러낸다(조용한 폴백이 아니라 알려진 예외로).
++    const state = createUniversalEditorState({ type: 'O', size: 6 });
++    applyFinderStarter(state, id);
++    if (state.finderStarter !== id) swallowed.push(id);
++  }
++  assert.deepEqual(swallowed, cardIds.filter(isDaehanFinderPatternId),
++    '편집기가 조용히 불스아이로 되돌리는 파인더가 늘었다: ' + JSON.stringify(swallowed)
++    + ' — resolveFinderStarter 의 조회 순서를 보라 (OAK·daehan 은 별도 표다)');
++});
++
++test('§6.1 편집기 톤이 OAK 정본 cellLevels 와 19셀×3면 전부 일치한다', () => {
++  for (const pattern of OAK_FINDER_PATTERNS) {
++    const state = createUniversalEditorState({ type: 'O', size: 6 });
++    applyFinderStarter(state, pattern.id);
++    const mismatches = [];
++    for (let i = 0; i < FINDER_CELL_ORDER.length; i += 1) {
++      const cell = FINDER_CELL_ORDER[i];
++      for (const face of ['T', 'L', 'R']) {
++        const got = getCellTone(state, face, { q: cell.q, r: cell.r });
++        const want = pattern.cellLevels[i][OAK_LEVEL_FACE_INDEX[face]];
++        if (got !== want) mismatches.push(`${pattern.id}[${i}].${face} ${got}!=${want}`);
++      }
++    }
++    assert.deepEqual(mismatches, [],
++      pattern.id + ': 편집기가 그리는 톤이 정본과 다르다 (면당 3레벨을 못 읽고 있나)');
++  }
++});
++
++test('§6.1 정본 OAK 표는 편집으로 오염되지 않는다', () => {
++  const before = JSON.stringify(OAK_FINDER_PATTERNS.map((p) => p.cellLevels));
++  const state = createUniversalEditorState({ type: 'O', size: 6 });
++  applyFinderStarter(state, OAK_FINDER_PATTERNS[0].id);
++  state.finderPattern.cellLevels[0][0] = (state.finderPattern.cellLevels[0][0] + 1) % 3;
++  assert.equal(JSON.stringify(OAK_FINDER_PATTERNS.map((p) => p.cellLevels)), before,
++    '편집기 사본이 얕아서 정본 표를 건드렸다');
++});
++
++test('§6.1 편집기 동기화가 실제로 호출된다 (함수만 있고 호출이 없으면 무의미하다)', () => {
++  assert.match(INDEX, /function syncCellEditorFinderFromGenerator\(/);
++  const at = INDEX.indexOf('function syncTypeYCellEditorUi()');
++  assert.notEqual(at, -1, 'syncTypeYCellEditorUi 가 사라졌다');
++  const body = INDEX.slice(at, at + 4000);
++  assert.match(body, /syncCellEditorFinderFromGenerator\(state, ctx\)/,
++    '편집기 UI 동기화 경로에서 파인더 동기화를 안 부른다');
++});
++
++// ── §3.2 — daehan 카드는 «누르면 인코딩이 바뀐다» ───────────────────────────
++
++test('§3.2 daehan 을 고르면 인코더 회계가 실제로 바뀐다 (용량이 준다)', () => {
++  // V1D 15/11/7 · V2D 32/26/18 · V3D 57/46/32 B (ECC L/M/H) — 브리프 §5-4 의 표.
++  const expected = {
++    1: { L: 15, M: 11, H: 7 },
++    2: { L: 32, M: 26, H: 18 },
++    3: { L: 57, M: 46, H: 32 },
++  };
++  for (const version of [1, 2, 3]) {
++    for (const eccLevel of ['L', 'M', 'H']) {
++      const daehan = encode('TL', { version, eccLevel, daehanFinder: true });
++      const legacy = encode('TL', { version, eccLevel });
++      assert.equal(daehan.capacity.maxPayloadBytes, expected[version][eccLevel],
++        `V${version}D/${eccLevel} 용량이 표와 다르다`);
++      assert.ok(daehan.capacity.maxPayloadBytes < legacy.capacity.maxPayloadBytes,
++        `V${version}D/${eccLevel}: daehan 이 legacy 보다 용량이 안 줄었다 — 파인더가 60셀을 더 먹는데도?`);
++    }
++  }
++});
++
++test('§3.2 생성기 옵션 배선이 daehan id 를 인코더 옵션으로 옮긴다', () => {
++  // encodeOptsFor 의 O 분기가 파인더 id 를 보고 daehanFinder 를 세우는가.
++  // 이 한 줄이 없으면 79셀을 그려 놓고 legacy 용량을 표시한다.
++  assert.match(INDEX, /isDaehanFinderPatternId\(cfg\.finderPatternId\)\) opts\.daehanFinder = true/);
++  // 그리는 템플릿의 k 는 버전이 정한다 — 카드는 하나여야 한다.
++  assert.equal(FINDER_CARD_GROUPS.daehan.length, 1,
++    'daehan 카드가 하나가 아니다 — k 는 사용자가 고르는 축이 아니다');
++  assert.match(INDEX, /daehanPatternId\(encoded\.k\)/);
++});
++
++test('§3.2 V1/V2/V3 ↔ k 6/8/10 대응이 두 표에서 같다', () => {
++  // 「카드 하나 + 코드가 k 를 고른다」 규약이 서는 근거. 어긋나면 조용히 맞추지 말 것.
++  for (const [version, k] of [[1, 6], [2, 8], [3, 10]]) {
++    const encoded = encode('TL', { version, eccLevel: 'M', daehanFinder: true });
++    assert.equal(encoded.k, k, `V${version} 의 k 가 ${k} 가 아니다`);
++    assert.equal(daehanPatternId(encoded.k), `oak-daehan-k${k}`);
++  }
++});
++
++// ── §3.1 — turnA 토글은 «누르면 와이어가 바뀐다», 그리고 lab 뒤에 있다 ──────
++
++test('§3.1 turnA 를 켜면 발행되는 formatIndex 가 실제로 바뀐다', () => {
++  // 정본 표(turnA.js)의 6벡터. 켜도 version·k·용량은 안 바뀐다 — 바뀌는 것은 와이어다.
++  const table = [[0, 1, 2], [1, 12, 4], [2, 13, 0]];
++  for (const [version, plain, turned] of table) {
++    const off = encodeA('TL', { version, eccLevel: 'M' });
++    const on = encodeA('TL', { version, eccLevel: 'M', turnA: true });
++    assert.equal(off.formatIndex, plain, `A${version} 기본 formatIndex`);
++    assert.equal(on.formatIndex, turned, `A${version} turnA formatIndex`);
++    assert.notEqual(on.formatIndex, off.formatIndex, '토글이 와이어를 안 바꾼다');
++    assert.equal(on.k, off.k, 'turnA 가 k 를 바꾸면 UI 버전 라벨도 같이 움직여야 한다');
++    assert.equal(on.capacity.maxPayloadBytes, off.capacity.maxPayloadBytes,
++      'turnA 가 용량을 바꾸면 버전 카드 라벨(31/62/101 B)도 같이 움직여야 한다');
++  }
++});
++
++test('§3.1 turnA 는 Type A + lab 게이트 뒤에 있고 상태는 INTERNAL 이다', () => {
++  assert.equal(GENERATOR_STATE_SCHEMA.turnA.defaultValue, false, 'turnA 기본값이 켬이다');
++  assert.equal(createGeneratorState().turnA, false);
++  const at = INDEX.indexOf('function syncTurnAUi()');
++  assert.notEqual(at, -1, 'syncTurnAUi 가 없다');
++  const body = INDEX.slice(at, INDEX.indexOf('\n}', at));
++  assert.match(body, /isLabPath\(\)/, 'turnA 섹션이 lab 게이트를 안 받는다');
++  assert.match(body, /generatorState\.type === 'A'/, 'turnA 섹션이 Type A 게이트를 안 받는다');
++  // 다른 타입에서 켜진 채 남아도 인코더까지 안 간다.
++  assert.match(INDEX, /turnA: type === 'A' && generatorState\.turnA === true/);
++});
++
++// ── §5 — 오늘의 «아직 안 된다» 를 잠근다 (배선되면 빨개진다) ────────────────
++
++function render(encoded, options = {}) {
++  const scene = buildScene(encoded, {
++    palette: PALETTE,
++    margin: options.margin,
++    ...(options.finderPatternId ? { finderPatternId: options.finderPatternId } : {}),
++  });
++  return rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
++}
++
++test('§5 대조군: 평범한 O/A 는 라이브 경로로 왕복한다 (자를 먼저 잰다)', () => {
++  assert.equal(decodeFrontend(render(encode('TLcube', { version: 1, eccLevel: 'M' }))).text,
++    'TLcube', 'Type O 대조군이 깨졌다 — 아래 실패들은 대상이 아니라 자 탓일 수 있다');
++  assert.equal(
++    decodeFrontend(render(encodeA('TLcube', { version: 0, eccLevel: 'M' }), { margin: 20 })).text,
++    'TLcube', 'Type A 대조군이 깨졌다');
++});
++
++test('§5 daehan 은 스캐너 옵트인이 켜져야 읽힌다 — 꺼짐은 실패, 켬은 성공', () => {
++  const encoded = encode('TLcube', { version: 1, eccLevel: 'M', daehanFinder: true });
++  const raster = render(encoded, { finderPatternId: daehanPatternId(encoded.k) });
++  // 이 두 줄이 daehan 서랍을 고급 전용으로 두는 **유일한** 근거다.
++  assert.equal(decodeFrontend(raster).ok, false,
++    'daehan 이 옵트인 없이도 읽힌다 — 그렇다면 서랍을 일반 모드로 올려도 된다');
++  assert.equal(decodeFrontend(raster, { bootstrap: { cellFinderDaehan: true } }).text, 'TLcube',
++    'daehan 이 옵트인을 켜도 안 읽힌다 — 카드를 붙일 근거가 사라졌다');
++});
++
++test('§5 turnA 로 만든 코드는 아직 라이브 경로가 못 읽는다 (그래서 lab 뒤에 둔다)', () => {
++  const result = decodeFrontend(render(encodeA('TLcube', { version: 0, eccLevel: 'M', turnA: true }), { margin: 20 }));
++  assert.equal(result.ok, false,
++    'turnA 왕복이 서기 시작했다 — 축하한다. 이제 이 카드를 lab 게이트 밖으로 내보내고'
++    + ' index.html 의 «못 읽어요» 힌트(g575)와 turnASection 주석을 같이 고쳐라.');
++});
++
++test('§5 cornerMarker 로 만든 코드는 아직 라이브 경로가 못 읽는다 (그래서 UI 가 없다)', () => {
++  // 검출기 모듈(src/decoder/corner-marker-detect.js)은 있고 그 단위 테스트도 초록인데,
++  // 라이브 파이프라인(frontend → bootstrap)이 그것을 안 부른다. 본문 scan order 도
++  // 레거시라 포즈·포맷은 서는데 본문 RS 가 터진다.
++  for (const [label, result] of [
++    ['O-CM', decodeFrontend(render(encode('TLcube', { version: 1, eccLevel: 'M', cornerMarker: true })))],
++    ['A-CM', decodeFrontend(render(encodeA('TLcube', { version: 0, eccLevel: 'M', cornerMarker: true }), { margin: 20 }))],
++  ]) {
++    assert.equal(result.ok, false,
++      label + ' 왕복이 서기 시작했다 — 이제 생성기 UI 를 붙일 근거가 생겼다 (브리프 §3.3).');
++  }
++  assert.equal(
++    readFileSync(ROOT + 'src/decoder/bootstrap.js', 'utf8').includes('corner-marker-detect'),
++    false, 'bootstrap 이 코너 마커 검출기를 배선했다 — 위 기대값을 다시 재라');
++});
+diff --git a/test/i18n-coverage.test.js b/test/i18n-coverage.test.js
+index 1e28c5b..f685e60 100644
+--- a/test/i18n-coverage.test.js
++++ b/test/i18n-coverage.test.js
+@@ -120,7 +120,12 @@ function analyze(rel, { htmlScripts = false } = {}) {
+ 
+ // 화면에 안 나가는 정당한 예외. 늘리려면 «정말 화면에 안 나가나?» 를 먼저 답할 것.
+ const ALLOWED = {
+-  'index.html': 7, // JSON-LD 구조화 데이터 (name·description·featureList)
++  // **의도적 갱신 (2026-08-19, §6.1 편집기 파인더 동기화)**: 7 → 8.
++  // 더해진 1종은 `syncCellEditorFinderFromGenerator` 의 `console.warn` 이다 —
++  // 개발자 콘솔 전용이라 화면에 안 나간다(위 헤더의 «내부 불변식 throw» 와 같은 부류).
++  // 이 경고가 필요한 이유: resolveFinderStarter 는 모르는 id 를 catch 로 삼켜 조용히
++  // 불스아이로 되돌린다. 그 침묵이 §6.1 증상의 절반이었으므로 침묵만은 남기지 않는다.
++  'index.html': 8, // JSON-LD 구조화 데이터 7 + 편집기 파인더 폴백 console.warn 1
+   'sites/tlscan/scanner.js': 0,
+   'src/luminance.js': 7, // 프리셋 표시명 3 + 내부 불변식 throw 4
+   'src/capacity.js': 9, // 전부 내부 불변식 throw
+diff --git a/tools/build-single.mjs b/tools/build-single.mjs
+index a174ea9..e991329 100644
+--- a/tools/build-single.mjs
++++ b/tools/build-single.mjs
+@@ -55,12 +55,18 @@ const DEFAULT_FINDER_DECLARATION =
+ const MODULE_ORDER = [
+   'vendor/jcodd', 'payloadform',
+   'hexgrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup', 'finder-oak-patterns',
++  // **의도적 이동 (2026-08-19, daehan UI 편입)**: `placement` 와 `finder-daehan` 이
++  // `finder-card-ui` **앞**으로 왔다. 카드 그룹 정본(finder-card-ui)이 daehan 대표
++  // 템플릿을 집으려고 finder-daehan 을 import 하게 됐기 때문이다. 옮기는 값은 싸다 —
++  // placement 는 hexgrid 하나만, finder-daehan 은 hexgrid·placement 만 쓴다(로컬 의존
++  // 전부가 이미 앞에 있다). 안 옮기면 이 파일의 assertTopologicalOrder 가 빌드를
++  // 막는다: specifier 치환이 조용히 건너뛰어져 **브라우저에서만** 터지기 때문이다.
++  'placement', 'finder-daehan',
+   'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+-  'header', 'placement', 'bullseye', 'layout', 'capacity',
+-  // daehan (2026-08-18) — finder-daehan 은 hexgrid·placement 만 쓰고 scene.js 가
+-  // 렌더에 쓴다. capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의
+-  // 뒤여야 하고 encode/decode 의 앞이다.
+-  'finder-daehan', 'capacityDaehan',
++  'header', 'bullseye', 'layout', 'capacity',
++  // capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의 뒤여야 하고
++  // encode/decode 의 앞이다.
++  'capacityDaehan',
+   // placementY·autoplaceY 는 **Type O 보다 앞**으로 왔다 (2026-08-16, O-CM 코너 마커).
+   // autoplaceHex 가 `AutoplaceError` 를 autoplaceY 에서 그대로 재사용하기 때문이다 —
+   // 소비자가 한 종류만 catch 하게 하려는 선택이고, 그 대가로 두 모듈이 여기서 앞당겨진다.
