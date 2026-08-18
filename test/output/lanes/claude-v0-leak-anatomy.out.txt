@@ -1,0 +1,43 @@
+덤프                                        n=21셰이프 n=13셰이프  판정            분류
+orig 231239674_01.1440.luma                 0          2          실패 no-format-candidate-
+orig 231239674_01.960.luma                  0          2          실패 symbol-clipped-
+orig 231239674_02.1440.luma                 0          2          실패 symbol-clipped-
+orig 231239674_02.960.luma                  0          2          실패 symbol-clipped-
+orig 231239674_03.1440.luma                 0          2          실패 symbol-clipped-
+orig 231239674_03.960.luma                  0          2          실패 symbol-clipped-
+orig 231239674_04.1440.luma                 0          2          실패 symbol-clipped-
+orig 231239674_04.960.luma                  0          2          실패 symbol-clipped-
+orig 231239674_05.1440.luma                 0          2          실패 symbol-clipped-
+orig 231239674_05.960.luma                  0          2          실패 symbol-clipped-
+orig 231239674.1440.luma                    0          2          실패 symbol-clipped-
+orig 231239674.960.luma                     0          2          실패 symbol-clipped-
+crop 231239674_01.1440.luma                 4          2          OK n21          v0t
+crop 231239674_01.960.luma                  4          2          OK n21          v0t
+crop 231239674_02.1440.luma                 4          2          OK n21          v0t
+crop 231239674_02.960.luma                  4          2          실패 no-grid-hypothesis-
+crop 231239674_03.1440.luma                 5          2          OK n21          v0ty
+crop 231239674_03.960.luma                  5          2          OK n21          v0ty
+crop 231239674_04.1440.luma                 5          2          OK n21          v0ty
+crop 231239674_04.960.luma                  5          2          OK n21          v0ty
+crop 231239674_05.1440.luma                 5          2          OK n21          v0ty
+crop 231239674_05.960.luma                  5          2          OK n21          v0ty
+crop 231239674.1440.luma                    4          2          OK n21          v0t
+crop 231239674.960.luma                     4          2          OK n21          v0t
+crop 232739735_01.1440.luma                 5          2          OK n21          v0ty
+crop 232739735_01.960.luma                  5          2          OK n21          v0ty
+crop 232739735.1440.luma                    4          2          OK n21          v0t
+crop 232739735.960.luma                     4          2          OK n21          v0t
+
+=== 회계 ===
+전체 28덤프
+  v0(n=13)으로 복호된 프레임      : 0
+    그중 n=21 셰이프도 있었던 것  : 0  ← ⓐ (순서 문제)
+    n=21 셰이프가 아예 없던 것    : 0  ← ⓑ (포즈 문제)
+  실패 프레임                     : 13
+    n=21 셰이프 있음 / 없음       : 1 / 12
+
+n=21 셰이프가 선 프레임: 16/28
+
+판독:
+  ⓐ 가 크면 «n=21 먼저» 순서 변경이 듣는다 (운영자 제안대로).
+  ⓑ 가 크면 순서는 무의미하다 — n=21 포즈가 서게 만드는 것이 표적이다.
