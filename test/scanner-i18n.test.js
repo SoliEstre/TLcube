@@ -91,10 +91,15 @@ test('스캐너 사전 언어 목록 == src/i18n.js SUPPORTED_LANGUAGES', () => 
 });
 
 test('Type Y 강화 로케이터는 /lab/ 스캐너에서만 디코더에 켠다', () => {
-  assert.match(
-    SCANNER_JS,
-    /bootstrap:\s*\{\s*family:\s*\{\s*cube:\s*\{\s*enableLocatorY:\s*isLabPath\(\),\s*enableCellSurfaceY:\s*isLabPath\(\)\s*\}\s*\}\s*\}/,
-  );
+  // **의도적 갱신 (2026-08-18)** — 예전 정규식은 `bootstrap` 객체의 **모양 전체**를
+  // 한 덩어리로 잠갔다. 그래서 같은 객체에 형제 키를 하나 더하는 것만으로 깨졌다
+  // (daehan 옵트인 `cellFinderDaehan`). 이 핀이 지키려는 명제는 «두 스위치가
+  // isLabPath() 에 매여 있다» 이지 «bootstrap 에 다른 키가 없다» 가 아니다.
+  // 그래서 **명제만** 잠근다 — 모양을 잠그면 확장할 때마다 거짓 경보가 난다.
+  assert.match(SCANNER_JS, /enableLocatorY:\s*isLabPath\(\)/);
+  assert.match(SCANNER_JS, /enableCellSurfaceY:\s*isLabPath\(\)/);
+  // 그 둘이 여전히 cube 패밀리 아래에 있다 (다른 데로 새지 않았다).
+  assert.match(SCANNER_JS, /family:\s*\{\s*cube:\s*\{\s*enableLocatorY:/);
   assert.doesNotMatch(SCANNER_JS, /enableLocatorY:\s*true/);
   assert.doesNotMatch(SCANNER_JS, /enableCellSurfaceY:\s*true/);
 });

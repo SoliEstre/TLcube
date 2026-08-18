@@ -732,7 +732,15 @@ async function decodeFrame(imageData, settings = {}) {
       onStage: (stageName, phase) => clock.onStage(stageName, phase),
       // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너는 종전
       // 검출 계약과 프레임 비용을 그대로 유지한다.
-      bootstrap: { family: { cube: { enableLocatorY: isLabPath(), enableCellSurfaceY: isLabPath() } } },
+      // ⚠ cellFinderDaehan 은 **bootstrap 아래**여야 한다. decodeFrontend 는
+      //   `options.bootstrap` 만 추려서 넘기고(frontend.js:117), 라인업을 고르는
+      //   discoverCellFinders 가 받는 options 는 그 bootstrapOptions 다
+      //   (bootstrap.js:849·884). 최상위에 두면 조용히 무시된다 — 토글을 눌러도
+      //   아무 일이 안 일어나고, 그게 «daehan 이 효과가 없다» 로 오독된다.
+      bootstrap: {
+        cellFinderDaehan,
+        family: { cube: { enableLocatorY: isLabPath(), enableCellSurfaceY: isLabPath() } },
+      },
       // 가이드-사전 포즈. 없으면 이 객체 키 자체가 안 생겨 종전 경로와 동일하다.
       ...(Array.isArray(settings.priorPoses) ? { priorPoses: settings.priorPoses } : {}),
     });
@@ -2156,6 +2164,36 @@ if (expectedLayoutRoot && isLabPath()) {
       }
     });
   }
+}
+
+// daehan 파인더 옵트인 (2026-08-18) — 시험판 전용 즉석 토글.
+//
+// 왜 토글이 필요한가: daehan 은 «기본 라인업에 올리면 셀 24px 부근에서 레거시
+// 5칸을 가져간다» 는 실측 때문에 옵트인으로 들어왔다. 그런데 그 판정을 뒤집으려면
+// **실기기에서 켜 보는 수밖에 없다** — 합성 프레임만으로는 실제 촬영 배율 분포를
+// 모른다. 코드에만 있는 플래그는 실기기 판정을 못 만든다.
+//
+// localStorage 에 남기는 이유: 실기기 비교 측정은 앱을 껐다 켜며 하게 되는데,
+// 매번 다시 눌러야 하면 «껐다고 생각했는데 켜져 있던» 프레임이 섞인다.
+const DAEHAN_TOGGLE_KEY = 'tlscan.lab.daehanFinder';
+let cellFinderDaehan = false;
+try {
+  cellFinderDaehan = isLabPath() && window.localStorage.getItem(DAEHAN_TOGGLE_KEY) === '1';
+} catch { /* 저장소 접근 불가(사생활 모드 등)는 스캔을 막지 않는다 — 기본 꺼짐 */ }
+const daehanToggle = document.getElementById('lab-daehan-toggle');
+if (daehanToggle && isLabPath()) {
+  daehanToggle.hidden = false;
+  const paint = () => {
+    daehanToggle.setAttribute('aria-pressed', String(cellFinderDaehan));
+    daehanToggle.classList.toggle('active', cellFinderDaehan);
+  };
+  paint();
+  daehanToggle.addEventListener('click', () => {
+    cellFinderDaehan = !cellFinderDaehan;
+    try { window.localStorage.setItem(DAEHAN_TOGGLE_KEY, cellFinderDaehan ? '1' : '0'); }
+    catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
+    paint();
+  });
 }
 
 // 기대 톤 — 레이아웃 카드와 같은 배선. 2·3 만 유효, 그 외(모름 포함)는 null(미상)이다.

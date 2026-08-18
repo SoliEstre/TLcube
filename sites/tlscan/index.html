@@ -1193,6 +1193,12 @@
       <!-- 디버그 오버레이 토글 (작업 1, lab 전용·기본 켬). authored hidden — 안정판에선
            scanner-debug-overlay.js 가 아예 활성화되지 않아 이 hidden 이 그대로 남는다. -->
       <button type="button" id="lab-debug-toggle" class="lab-debug-toggle" hidden aria-pressed="true" data-i18n="lab.debug.toggle">검출 오버레이</button>
+      <!-- daehan 파인더 옵트인 (2026-08-18). 기본 **꺼짐** — 셀 24px 부근에서 기존
+           14후보 중 5칸을 가져가고 그중 3칸이 «검출 실패 → 게이트를 통과하는 틀린
+           이름» 이 된다. 그 구멍을 메우기 전까지는 실기기 판정용으로만 켠다.
+           선택은 localStorage 에 남는다 — 실기기에서 앱을 껐다 켜도 유지돼야
+           비교 측정이 된다. -->
+      <button type="button" id="lab-daehan-toggle" class="lab-debug-toggle" hidden aria-pressed="false" data-i18n="lab.daehan.toggle">daehan 파인더</button>
     </aside>
 
     <!-- r3 정사각 뷰: 프리뷰(cover) ≡ 분석 정사각(cropWindow crop=1). 가이드 3링과
