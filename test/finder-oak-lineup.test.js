@@ -164,3 +164,36 @@ test('정본 대조 — daehan 편입 수치가 정본 JSON 에서 재현된다'
   assert.ok(physical < 0.78 && integratorConvention < 0.78,
     '거울 톤 기각은 두 관례 모두에서 성립해야 한다');
 });
+
+/*
+ * ── 명부 ↔ 파인더 패턴 레지스트리 결속 (2026-08-18, 첫 배선) ────────────────
+ *
+ * `finder-oak-lineup.js` 는 지금까지 **아무도 import 하지 않는 고아 모듈**이었다
+ * (grep 확인). 테스트가 초록이어도 런타임은 한 비트도 안 바뀌는 상태였다
+ * ([[green-tests-are-not-a-working-ui]]).
+ *
+ * 첫 배선은 «명부가 실재하는 어휘를 쓴다» 를 잠그는 것이다. 명부의 `finderStarter`
+ * 는 `finder-patterns.js` 의 패턴 id 와 **같은 문자열 공간**을 쓰는데, 지금은 아무도
+ * 대조하지 않아 오타가 나도 조용히 통과한다. 여기서 묶으면 한쪽이 바뀔 때 다른 쪽이
+ * 터진다 — 그게 결속의 값어치다.
+ *
+ * ⚠ 이 테스트는 **검출 라인업 편입이 아니다.** O/A/K 후보가 실제로 스캔되려면
+ * 채점기(orientation-scorer)와 타입별 검출 경로가 더 붙어야 한다. 여기서 잠그는
+ * 것은 «명부가 거짓말하지 않는다» 까지다.
+ */
+test('명부의 finderStarter 는 전부 finder-patterns 의 실재 id 다', async () => {
+  const patterns = await import('../src/finder-patterns.js');
+  const known = new Set(Object.values(patterns).filter((v) => typeof v === 'string'));
+  // 레지스트리가 이 셋을 갖고 있다는 것 자체도 못 박는다 (한쪽만 바뀌는 것 방지).
+  for (const id of ['bullseye', 'cube-bullseye', 'central-cube-3tone']) {
+    assert.ok(known.has(id), 'finder-patterns 에 ' + id + ' 가 없다');
+  }
+  for (const entry of OAK_LINEUP) {
+    assert.ok(known.has(entry.finderStarter),
+      entry.name + ' 의 finderStarter «' + entry.finderStarter + '» 가 레지스트리에 없다');
+  }
+  // 살아있는 후보가 하나도 없으면 명부가 무의미하다 — 전부 dead/dropped 로 흘러가는
+  // 것을 막는 하한이다 (드랍은 차단이지 삭제가 아니라는 규약의 회귀).
+  assert.ok(liveOakCandidates().length >= 5,
+    '살아있는 O/A/K 후보가 5 미만이다: ' + liveOakCandidates().map((c) => c.name).join(','));
+});

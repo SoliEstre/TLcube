@@ -242,3 +242,50 @@ test('보조 사상 — rot60 두 번은 rotate120, mirror 는 대합', () => {
   assert.equal(a.outside, layout.length * 3, 'O-CM 60° 는 전 슬롯이 집합 밖이어야 한다');
   assert.equal(a.agreement, 0);
 });
+
+/*
+ * ── Type Y 등가 결속 (2026-08-18, 배선 2단계) ──────────────────────────────
+ *
+ * 이 채점기는 «좌표 회전 ∘ 면 순환» 합성 사상을 가설로 받는다 (O/A/K 대비).
+ * 기존 `cellSurfaceY-detect` 는 **면 순환만** 쓴다 (좌표 항등). Type Y 에서는
+ * 좌표 회전이 항등이므로 **두 경로가 같은 답을 내야 한다** — 그게 이 모듈을 Y
+ * 경로에 붙여도 안전하다는 증명이고, 안 맞으면 붙이는 순간 v0T/v0TR 이득이 흔들린다.
+ *
+ * ⚠ 판정 축은 **절대 agreement 가 아니라 margin** 이다. 회전 상의 agreement 는
+ * 0.90\~0.95 로 게이트 0.78 을 넘지만, 그건 «뚫렸다» 가 아니다 —
+ * `margin = 항등 − 최고 라이벌` 이고 1 − 0.9038 = 0.0962 가 v0t 의 정본 margin 이다.
+ * (측정 1차에서 이 축을 오독해 «게이트를 넘는다» 로 읽었다. 기록해 둔다.)
+ */
+test('Type Y 에서 새 채점기의 margin 이 정본 값과 같다 — 붙여도 결론이 안 바뀐다', async () => {
+  const { locatorCellsCellSurfaceFinal, finalLayoutIdsForN } =
+    await import('../src/cellSurfaceFinal.js');
+  // 정본 margin (cellSurfaceFinal.test.js 의 방향 margin 핀과 같은 값).
+  const EXPECTED = { v0t: 0.0962, v0ty: 0.0632, v0tr: 0.0980, v0trq: 0.0519 };
+  for (const id of finalLayoutIdsForN(21)) {
+    const layout = locatorCellsCellSurfaceFinal(21, id).map((c) => ({
+      key: c.i + ',' + c.j,
+      tones: { T: c.T, L: c.L, R: c.R },
+    }));
+    const identity = idealAgreement(layout,
+      { id: 'id', faceMap: FACE_IDENTITY, mapKey: (k) => k });
+    assert.equal(identity.agreement, 1, id + ' 정방향 agreement 가 1 이 아니다');
+    let worstMargin = Infinity;
+    for (const faceMap of [FACE_CYCLE_CW, FACE_CYCLE_CW2]) {
+      const rival = idealAgreement(layout, { id: 'r', faceMap, mapKey: (k) => k });
+      worstMargin = Math.min(worstMargin, identity.agreement - rival.agreement);
+    }
+    assert.ok(Math.abs(worstMargin - EXPECTED[id]) < 5e-4,
+      id + ' margin ' + worstMargin.toFixed(4) + ' 이 정본 ' + EXPECTED[id] + ' 와 다르다');
+    assert.ok(worstMargin >= UNVERIFIED_ORIENTATION_SCORER.minimumOrientationMargin,
+      id + ' margin 이 게이트 미만이다');
+  }
+});
+
+test('게이트 상수가 cellSurfaceY-detect 와 동일 계승이다 — 주석의 주장이 사실인가', async () => {
+  const y = await import('../src/decoder/cellSurfaceY-detect.js');
+  assert.ok(y.UNVERIFIED_CELL_SURFACE_Y, 'Y 채점기가 캘리브레이션을 안 내보낸다');
+  for (const key of Object.keys(UNVERIFIED_ORIENTATION_SCORER)) {
+    assert.equal(UNVERIFIED_ORIENTATION_SCORER[key], y.UNVERIFIED_CELL_SURFACE_Y[key],
+      key + ' 가 Y 채점기와 다르다 — «완화 아님, 동일 계승» 주석이 거짓이 된다');
+  }
+});
