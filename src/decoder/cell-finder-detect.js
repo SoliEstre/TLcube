@@ -82,6 +82,86 @@ function footprintOf(pattern) {
   return Array.isArray(pattern.finderCells) ? pattern.finderCells : FINDER_CELL_ORDER;
 }
 
+/* ── 발자국 → 조대 탐색 파라미터 ────────────────────────────────────────
+ * 조대 탐색의 상수(각도 보폭 15° · 조대 8개 · 정교화 1개 · 분산 창 4.1셀 ·
+ * 분산 보폭 0.65셀)는 전부 **19셀 발자국 하나를 전제로** 손으로 맞춘 값이다.
+ * daehan(79셀) 처럼 발자국이 커지면 같은 상수가 그 발자국에는 너무 성글다.
+ *
+ * ▸ **왜 «반경» 이 아니라 «도달거리» 인가.**
+ *   직관은 「각도 오차 δ 가 hex 거리 R 인 셀을 R·√3·cellPx·δ 만큼 민다」 지만,
+ *   계수 √3 은 «hex 거리 R 인 셀 중 가장 먼 것» 을 가정한 값이다. 실제 발자국은
+ *   그 원을 다 안 채운다 — daehan 의 거리 10 셀들은 육각 «모서리» 방향에 몰려
+ *   있어 계수가 1.539 다 (√3 대비 12% 과대). R 의 함수로 쓰면 반경 2 에서 현재
+ *   상수의 재현이 어긋난다. 그래서 발자국의 **표본점에서 직접 재는**
+ *   reach (표본점의 최대 원점거리, 셀 단위) 를 쓴다. 기존 19셀에서 4.2673.
+ *
+ * ▸ **허용 이동량 κ 의 유도.**
+ *   조대 격자의 최대 각도 오차는 반스텝이므로 「가장 먼 표본점의 이동 ≤ κ 셀」은
+ *       (step/2)·(π/180)·reach ≤ κ    ⇔    step ≤ 360·κ / (π·reach)
+ *   κ 를 «현재 기본값이 기존 19셀에서 사는 만큼» 으로 고정하면
+ *       κ = (15/2)·(π/180)·4.2673 = 0.5586 셀
+ *   즉 현재의 15° 가 담고 있는 조건은 «가장 먼 표본점이 반 셀 남짓 안에서
+ *   움직인다» 이다. 이 κ 를 반경과 무관하게 유지하라는 요구가 곧 step ∝ 1/ρ 다.
+ *
+ * ▸ **ρ = 1 에서 한 값도 안 바뀐다.** 나눗셈·곱셈의 피연산자가 정확히 1.0 이므로
+ *   부동소수 오차도 없다 (키별 Object.is 동일).
+ */
+function footprintReach(faceSamples) {
+  let out = 0;
+  for (const sample of faceSamples) {
+    for (const point of sample.detailPoints) {
+      const d = Math.hypot(point.x, point.y);
+      if (d > out) out = d;
+    }
+  }
+  return out;
+}
+/** 기존 19셀 발자국의 도달거리 = 4.267317658670374. 모든 ρ 의 분모다. */
+const BASE_REACH = footprintReach(FACE_SAMPLES);
+/** 발자국의 상대 도달거리. 기존 19셀 = 1 · derived-r6 = 2.4579 · daehan-79 = 3.8134. */
+function footprintRho(faceSamples) { return footprintReach(faceSamples) / BASE_REACH; }
+
+/**
+ * 기본 지수. angle·count·window 는 위 유도값(정확히 1)이고, step 만 실측이 골랐다.
+ *
+ * step (분산 씨앗 격자의 보폭) 은 «씨앗이 정교화의 중심 보정 예산 안에 들어오게»
+ * 하는 조건에 답한다. 그 예산은 (0.34+0.12+0.04+0.012)·cellSize ≈ 0.51 셀로
+ * **발자국 반경과 무관**하므로 유도는 지수 0 을 가리킨다. 그런데 실측은 다르다 —
+ * daehan 8자세에서 s=0 은 «이동» 을 닫고 «복합» 을 열며, s=1 은 그 반대다.
+ * 둘 다 닫는 지점이 s=0.25 였다. **유도는 «1보다 작다» 까지만 좁혔고 0.25 는
+ * 실측이 고른 값이다** — 이 줄을 「유도했다」 고 쓰면 거짓이다.
+ *
+ * window 와 step 을 한 지수로 묶으면 안 된다. 창은 «분산의 봉우리가 발자국
+ * 중심에 서게» 하는 조건(→ ρ 비례)이고 보폭은 위 조건(→ ρ 무관 근처)이다.
+ * 묶으면 큰 발자국에서 씨앗 격자가 성글어져 이동 자세를 영영 못 잡는다.
+ *
+ * `varianceCentersPerScale` 은 이 법칙 밖이다 — 기본값이 0(기능 꺼짐)이라
+ * 곱셈 법칙으로는 절대 켜지지 않는다. 큰 발자국에서 켤지는 **스위치 결정**이지
+ * 유도가 아니므로 여기서 정하지 않고 calibration 에 맡긴다.
+ */
+const FOOTPRINT_SEARCH_LAW = Object.freeze({
+  angleExponent: 1, countExponent: 1, windowExponent: 1, stepExponent: 0.25,
+});
+
+/**
+ * 발자국별 조대 탐색 파라미터. **cfg 와 키 집합이 같은 객체**를 돌려준다
+ * (진단용 여분 키를 붙이지 않는다 — ρ=1 동일성 검사를 키별로 돌릴 수 있게).
+ * law 가 null 이면 cfg 를 그대로 복사한다.
+ */
+function searchParamsFor(cfg, faceSamples, law) {
+  if (!law) return { ...cfg };
+  const rho = footprintRho(faceSamples);
+  if (rho === 1) return { ...cfg };
+  return {
+    ...cfg,
+    coarseAngleStepDegrees: cfg.coarseAngleStepDegrees / Math.pow(rho, law.angleExponent),
+    maxCoarseCandidates: Math.max(1, Math.round(cfg.maxCoarseCandidates * Math.pow(rho, law.countExponent))),
+    maxRefinedCandidates: Math.max(1, Math.round(cfg.maxRefinedCandidates * Math.pow(rho, law.countExponent))),
+    varianceWindowRadiusCells: cfg.varianceWindowRadiusCells * Math.pow(rho, law.windowExponent),
+    varianceStepCells: cfg.varianceStepCells * Math.pow(rho, law.stepExponent),
+  };
+}
+
 function clamp01(value) { return value <= 0 ? 0 : value >= 1 ? 1 : value; }
 function cfgFor(options) {
   return {
@@ -608,48 +688,83 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
   }
   const templates = normalizePatterns(patternInput, options).map(templateOf);
   const cfg = cfgFor(options);
+  // options.footprintSearchLaw: null 이면 법칙을 끈다 (전부 cfg 상수 그대로).
+  // 객체면 기본 지수를 덮어쓴다 — 파레토 위를 움직이는 손잡이다.
+  const law = options.footprintSearchLaw === null ? null
+    : { ...FOOTPRINT_SEARCH_LAW, ...(options.footprintSearchLaw || {}) };
   const percentiles = robustPercentiles(luma, [0.01, 0.99]);
   const span = percentiles ? percentiles[1] - percentiles[0] : 0;
   if (!(span > EPSILON)) return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-search', cause: 'luma-span-degenerate' });
-  const integrals = cfg.varianceCentersPerScale > 0 ? integralsOf(luma) : null;
-  const scales = scaleSeeds(luma, options, cfg);
-  const coarse = [];
+  // 조대 탐색을 **발자국 그룹별로** 돈다. 그래야 큰 발자국이 자기 격자를 제대로
+  // 훑어도 작은 발자국의 파라미터·연산량이 한 값도 안 늘어난다 (그리고 큰 발자국이
+  // 공유 조대 목록에서 작은 발자국의 자리를 뺏는 일도 사라진다).
+  // 발자국이 하나뿐인 라인업(= 지금까지의 전부)에서는 그룹도 하나라 아래 흐름이
+  // 예전과 한 줄도 다르지 않다.
+  let integrals = null;
   let evaluatedGeometry = 0;
-  for (const cellSize of scales) {
-    const variance = integrals ? varianceCenters(luma, integrals, cellSize, cfg) : [];
-    const centers = centerSeeds(luma, variance, options.centerSeeds);
-    for (const center of centers) {
-      for (let angle = 0; angle < 360; angle += cfg.coarseAngleStepDegrees) {
-        const params = {
-          centerX: center.x, centerY: center.y, logScale: Math.log(cellSize),
-          rotation: angle * Math.PI / 180, anisotropy: 0, shear: 0,
-          projectiveX: 0, projectiveY: 0,
-        };
-        const H = HFrom(params);
-        const scored = scoreBest(luma, H, templates, span, false);
-        evaluatedGeometry += 1;
-        if (scored && scored.fit > 0) insertTop(coarse, { ...scored, params, H }, cfg.maxCoarseCandidates);
+  let evaluatedCoarse = 0;
+  let scaleCount = 0;
+  const groups = [];
+  for (const [faceSamples, group] of groupByFootprint(templates)) {
+    const gcfg = searchParamsFor(cfg, faceSamples, law);
+    if (gcfg.varianceCentersPerScale > 0 && !integrals) integrals = integralsOf(luma);
+    const scales = scaleSeeds(luma, options, gcfg);
+    if (scales.length > scaleCount) scaleCount = scales.length;
+    const coarse = [];
+    for (const cellSize of scales) {
+      const variance = (gcfg.varianceCentersPerScale > 0 && integrals)
+        ? varianceCenters(luma, integrals, cellSize, gcfg) : [];
+      const centers = centerSeeds(luma, variance, options.centerSeeds);
+      for (const center of centers) {
+        for (let angle = 0; angle < 360; angle += gcfg.coarseAngleStepDegrees) {
+          const params = {
+            centerX: center.x, centerY: center.y, logScale: Math.log(cellSize),
+            rotation: angle * Math.PI / 180, anisotropy: 0, shear: 0,
+            projectiveX: 0, projectiveY: 0,
+          };
+          const H = HFrom(params);
+          const scored = scoreBest(luma, H, group, span, false);
+          evaluatedGeometry += 1;
+          if (scored && scored.fit > 0) insertTop(coarse, { ...scored, params, H }, gcfg.maxCoarseCandidates);
+        }
       }
     }
+    evaluatedCoarse += coarse.length;
+    groups.push({ coarse, gcfg });
   }
-  const refined = coarse.slice(0, cfg.maxRefinedCandidates)
+  const refined = groups.flatMap(({ coarse, gcfg }) => coarse.slice(0, gcfg.maxRefinedCandidates)
     .flatMap((candidate) => [
       refine(luma, candidate, span, 'affine'),
       refine(luma, candidate, span, 'projective'),
-    ]).filter(Boolean);
+    ]).filter(Boolean));
+  // 완성·게이트·NMS 는 발자국을 다시 섞어 **전 후보를 한자리에서** 겨룬다 —
+  // 그룹 분리는 탐색 단계에만 걸린다.
   const candidates = nms(refined.map((entry) => finishCandidate(luma, entry, templates, span, cfg))
     .filter((entry) => entry && entry.hardChecksPassed), cfg.maxOutputCandidates);
   if (candidates.length === 0) {
     const best = refined[0];
     return fail(FRONTEND_FAILURE.NO_FINDER, {
-      stage: 'cell-finder-search', evaluatedGeometry, evaluatedCoarse: coarse.length,
+      stage: 'cell-finder-search', evaluatedGeometry, evaluatedCoarse,
       evaluatedRefined: refined.length, bestScore: best?.fit,
       bestPatternId: best?.template?.id, bestCorrelation: best?.correlation,
       bestContrastRatio: best?.contrastRatio,
     });
   }
   return ok({ candidates, diagnostics: {
-    matcher: 'cell-mask-ncc', patternCount: templates.length, scaleCount: scales.length,
-    evaluatedGeometry, evaluatedCoarse: coarse.length, evaluatedRefined: refined.length,
+    matcher: 'cell-mask-ncc', patternCount: templates.length, scaleCount,
+    evaluatedGeometry, evaluatedCoarse, evaluatedRefined: refined.length,
+    footprintGroups: groups.map(({ gcfg }) => ({
+      coarseAngleStepDegrees: gcfg.coarseAngleStepDegrees,
+      maxCoarseCandidates: gcfg.maxCoarseCandidates,
+      maxRefinedCandidates: gcfg.maxRefinedCandidates,
+      varianceWindowRadiusCells: gcfg.varianceWindowRadiusCells,
+      varianceStepCells: gcfg.varianceStepCells,
+    })),
   } });
 }
+
+/* 반경 법칙의 실측·회귀 검사가 쓰는 진입점. 런타임 경로는 위 detectCellFinders 다. */
+export const FOOTPRINT_SEARCH_INTERNALS = Object.freeze({
+  footprintReach, footprintRho, searchParamsFor,
+  FACE_SAMPLES, BASE_REACH, FOOTPRINT_SEARCH_LAW,
+});
