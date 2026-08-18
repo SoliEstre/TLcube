@@ -63,39 +63,52 @@ export function maxBytesForSymbols(symbolCount) {
 
 /**
  * 한 버전의 용량 전체.
- * @param {{version: number, k: number, overhead: number, symbolKey: string}} spec
+ *
+ * @param {{version: number, k: number, overhead: number, symbolKey: string, name?: string}} spec
  * @param {'L'|'M'|'H'} [level]
+ * @param {{table: object, tableName: string}} [nsymSource] 변형용 nsym 표.
+ *   **생략하면 본표(`NSYM_TABLE`) 그대로다 — 기존 호출은 한 값도 안 바뀐다.**
+ *
+ *   ▸ 왜 인자를 하나 더 받는가 (2026-08-18 daehan 편입): 변형 회계가 본표 회계와
+ *     **완전히 동형**이다 — 총셀·오버헤드·⌊C/3⌋·nsym·K 유도가 한 줄도 안 다르고
+ *     오직 「어느 nsym 표를 보는가」만 다르다. `markerO.js` 는 이 함수 본문을 통째로
+ *     베껴 `capacityForOMarker` 를 만들었는데, 그 사본은 이제 이 함수와 **따로 썩는다**
+ *     (실제로 이미 `spec.name` 라벨 하나가 갈려 있다). 세 번째 사본을 만드는 대신
+ *     표만 주입한다. 기본값이 본표이므로 레거시 경로의 산출은 비트 동일이다
+ *     (회귀: `test/capacity.test.js` + `test/capacity-daehan.test.js` 의 대조).
  */
-export function capacityFor(spec, level = 'M') {
+export function capacityFor(spec, level = 'M', nsymSource) {
+  const tables = nsymSource || { table: NSYM_TABLE, tableName: 'NSYM_TABLE' };
+  const label = spec.name || `V${spec.version}`;
   const totalCells = cellCount(spec.k);
   const dataCells = totalCells - spec.overhead;
   if (dataCells <= 0) {
-    throw new RangeError(`V${spec.version}: 오버헤드 ${spec.overhead} 가 총 셀 ${totalCells} 이상이다`);
+    throw new RangeError(`${label}: 오버헤드 ${spec.overhead} 가 총 셀 ${totalCells} 이상이다`);
   }
 
   const usedSymbols = Math.floor(dataCells / 3);
   const residualCells = dataCells - usedSymbols * 3;
 
-  const table = NSYM_TABLE[spec.symbolKey];
+  const table = tables.table[spec.symbolKey];
   if (!table) {
-    throw new RangeError(`V${spec.version}: rs211.js NSYM_TABLE 에 키 ${spec.symbolKey} 가 없다`);
+    throw new RangeError(`${label}: rs211.js ${tables.tableName} 에 키 ${spec.symbolKey} 가 없다`);
   }
   if (table.symbols !== usedSymbols) {
     // 표가 전제한 심볼 수와 실계산이 어긋난다 — 오버헤드·k 가 표와 따로 놀고 있다는
     // 신호다. 조용히 맞추지 않고 여기서 던진다(과제 지침 절대 규칙 6).
     throw new RangeError(
-      `V${spec.version}: 실계산 사용 심볼 ${usedSymbols} 이 NSYM_TABLE.${spec.symbolKey}.symbols `
+      `${label}: 실계산 사용 심볼 ${usedSymbols} 이 ${tables.tableName}.${spec.symbolKey}.symbols `
       + `(${table.symbols}) 과 어긋난다 — overhead(${spec.overhead})/k(${spec.k}) 와 표가 불일치한다`,
     );
   }
 
   const nsym = table[level];
   if (!Number.isInteger(nsym)) {
-    throw new RangeError(`V${spec.version}: NSYM_TABLE.${spec.symbolKey} 에 레벨 ${level} 이 없다`);
+    throw new RangeError(`${label}: ${tables.tableName}.${spec.symbolKey} 에 레벨 ${level} 이 없다`);
   }
   const dataSymbols = usedSymbols - nsym;
   if (dataSymbols <= 0) {
-    throw new RangeError(`V${spec.version}/${level}: nsym ${nsym} 이 사용 심볼 ${usedSymbols} 이상이다`);
+    throw new RangeError(`${label}/${level}: nsym ${nsym} 이 사용 심볼 ${usedSymbols} 이상이다`);
   }
 
   const dataBytes = maxBytesForSymbols(dataSymbols);

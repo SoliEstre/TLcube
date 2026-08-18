@@ -32,16 +32,33 @@ import {
   dataCellsInScanOrderOMarker,
   fillerCellsOMarker,
 } from './markerO.js';
+import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
+import { daehanReservedCells } from './finder-daehan.js';
 
 function cellKey(q, r) {
   return `${q},${r}`;
 }
 
 /**
- * 레이아웃 공급자 — 레거시 O 와 O-CM(코너 마커)의 차이를 여기 한 곳에 모은다.
- * 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 두 경로가 완전히 같다.
+ * 레이아웃 공급자 — 레거시 O · O-CM(코너 마커) · daehan(전면 파인더)의 차이를
+ * 여기 한 곳에 모은다. 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 세 경로가
+ * 완전히 같다.
  */
-function layoutProviderFor(cornerMarker) {
+function layoutProviderFor(cornerMarker, daehanFinder = false) {
+  if (daehanFinder) {
+    // daehan (2026-08-18) — anchor/format/reference 좌표는 **레거시와 같다**
+    // (예약 60셀이 그 셋과 하나도 안 겹치는 것이 전 k 에서 실측 확인됐다).
+    // 갈리는 것은 「어떤 셀이 data 가 아닌가」 하나뿐이라 layout.js 의 선택 인자로 준다.
+    return {
+      versions: VERSIONS_DAEHAN,
+      capacity: capacityForDaehan,
+      scan: (k) => dataCellsInScanOrder(k, daehanReservedCells(k)),
+      filler: (k) => fillerCells(k, daehanReservedCells(k)),
+      format: formatCells,
+      reference: referenceCellsAll,
+      fixed: (k) => anchorCells(k).map((c) => ({ ...c, role: 'anchor' })),
+    };
+  }
   if (!cornerMarker) {
     return {
       versions: VERSIONS,
@@ -75,16 +92,17 @@ function layoutProviderFor(cornerMarker) {
  * @param {'L'|'M'|'H'} [eccLevel]
  * @returns {{version:number, k:number, overhead:number, symbolKey:string}} VERSIONS 원소
  */
-export function chooseVersion(text, eccLevel = 'M', cornerMarker = false) {
+export function chooseVersion(text, eccLevel = 'M', cornerMarker = false, daehanFinder = false) {
   const byteLength = payloadByteLength(text);
-  const provider = layoutProviderFor(cornerMarker);
+  const provider = layoutProviderFor(cornerMarker, daehanFinder);
   for (const spec of provider.versions) {
     const capacity = provider.capacity(spec, eccLevel);
     if (byteLength <= capacity.maxPayloadBytes) return spec;
   }
   const last = provider.versions[provider.versions.length - 1];
+  const suffix = daehanFinder ? 'D' : cornerMarker ? 'CM' : '';
   throw new RangeError(
-    `페이로드 ${byteLength} B 는 V${last.version}${cornerMarker ? 'CM' : ''}(ECC-${eccLevel}) 용량을 초과한다`,
+    `페이로드 ${byteLength} B 는 V${last.version}${suffix}(ECC-${eccLevel}) 용량을 초과한다`,
   );
 }
 
@@ -112,7 +130,7 @@ export function encode(text, options = {}) {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
   const {
-    version, eccLevel = 'M', centerQr = false, cornerMarker = false,
+    version, eccLevel = 'M', centerQr = false, cornerMarker = false, daehanFinder = false,
   } = options;
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
@@ -120,15 +138,26 @@ export function encode(text, options = {}) {
   if (typeof cornerMarker !== 'boolean') {
     throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
   }
+  if (typeof daehanFinder !== 'boolean') {
+    throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
+  }
   // 코너 마커는 중앙 슬롯을 안 건드리지만, 중앙 QR 은 링3 을 먹고 마커는 링 k·k−1 을
   // 먹는다 — 두 변형의 동시 사용은 배치 검증을 안 했으므로 조용히 허용하지 않는다.
   if (cornerMarker && centerQr) {
     throw new RangeError('cornerMarker 와 centerQr 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
-  const provider = layoutProviderFor(cornerMarker);
+  // daehan 은 중앙 19셀을 **포함해** 79셀을 먹는다 — 중앙 QR(링3 점유)과도, 코너
+  // 마커(링 k·k−1 점유)와도 겹친다. 조합 검증을 안 했으므로 조용히 허용하지 않는다.
+  if (daehanFinder && centerQr) {
+    throw new RangeError('daehanFinder 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯을 둘 다 먹는다');
+  }
+  if (daehanFinder && cornerMarker) {
+    throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
+  const provider = layoutProviderFor(cornerMarker, daehanFinder);
 
   const spec = version === undefined
-    ? chooseVersion(text, eccLevel, cornerMarker)
+    ? chooseVersion(text, eccLevel, cornerMarker, daehanFinder)
     : provider.versions.find((v) => v.version === version);
   if (!spec) {
     throw new RangeError(`알 수 없는 버전: ${version} (허용 ${provider.versions.map((v) => v.version).join(', ')})`);
@@ -236,6 +265,7 @@ export function encode(text, options = {}) {
     eccLevel,
     centerQr,
     cornerMarker,
+    daehanFinder,
     capacity,
     codewordSymbols,
     dataDigits,

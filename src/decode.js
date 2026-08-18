@@ -69,6 +69,8 @@ import {
   capacityForAMarker,
   dataCellsInScanOrderAMarker,
 } from './markerA.js';
+import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
+import { daehanReservedCells } from './finder-daehan.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderO } from './layout.js';
 import { dataCellsInScanOrderA } from './layoutA.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderY } from './layoutY.js';
@@ -263,6 +265,35 @@ function resolveProfile(format) {
   const eccLevel = normalizeEccLevel(format.eccLevel);
   const rawExplicit = format.formatIndex !== undefined;
   const formatIndex = rawFormatIndex(format);
+
+  if (type === 'O' && format.daehanFinder === true) {
+    // daehan (전면 파인더, 2026-08-18) — O-CM 과 **같은 와이어 계약**이다:
+    // formatIndex 는 레거시 O 와 같고(`capacityDaehan.js` 헤더 §와이어), 갈리는 것은
+    // 회계와 scan order 뿐이다. 판별 정보는 와이어가 아니라 **파인더 검출 결과**로
+    // 온다 — `bootstrap.js` 가 patternId(`oak-daehan-k*`)를 이 플래그로 바꾼다.
+    //
+    // ⚠ `format.version` 이 아니라 **k** 로 찾는다. daehan 의 version 은 기존과 같은
+    //   1/2/3 이지만, 이 경로로 들어오는 신호(patternId)가 직접 말하는 것은 k 다.
+    //   version 으로 찾으면 「k 는 6 인데 version 은 3」 같은 모순을 조용히 통과시킨다.
+    const wantK = format.k === undefined ? undefined : format.k;
+    const spec = wantK === undefined
+      ? VERSIONS_DAEHAN.find((entry) => entry.version === format.version)
+      : VERSIONS_DAEHAN.find((entry) => entry.k === wantK);
+    if (!spec) {
+      throw new RangeError(
+        'daehan 버전을 모른다: k=' + format.k + ' version=' + format.version
+        + ' (허용 k ' + VERSIONS_DAEHAN.map((v) => v.k).join(', ') + ')',
+      );
+    }
+    assertOptionalDimension(format.k, 'k', spec.k);
+    return finishProfile({
+      type,
+      eccLevel,
+      capacity: capacityForDaehan(spec, eccLevel),
+      scan: dataCellsInScanOrderO(spec.k, daehanReservedCells(spec.k)),
+      coordinates: (cell) => [cell.q, cell.r],
+    });
+  }
 
   if (type === 'O' && format.cornerMarker === true) {
     // O-CM (코너 마커) — formatIndex 는 레거시 O 와 같고(markerO.js §4: Y2W 와 같은

@@ -91,20 +91,62 @@ import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
 import { detectBullseyes, pyramidLevelsForImage, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
 import { OAK_FINDER_PATTERNS } from '../finder-oak-patterns.js';
+import {
+  DAEHAN_FINDER_PATTERNS, DAEHAN_RADII, daehanReservedCells, isDaehanFinderPatternId,
+} from '../finder-daehan.js';
 
 /**
- * 중앙 19셀 파인더 검출 라인업 = 생성·손그림 이진 11종 + OAK 후보 3종 (2026-08-18).
+ * 중앙 파인더 검출 라인업 = 생성·손그림 이진 11종 + OAK 후보 3종 + daehan 3종 (2026-08-18).
  *
  * 왜 합성인가 — `FINDER_CELL_MASK_PATTERNS` 는 `finder-patterns.js` (생성 도구
  * 산출물)의 필터라 OAK 를 담을 수 없다. 출처가 다른 표를 억지로 한 파일에 합치는
- * 대신 **소비 지점에서 합친다**. 순서는 «기존 → OAK» 로 고정한다: 후보 정렬은
- * fit 우선이라 순서가 결과를 안 바꾸지만, 완전 동점에서 기존 후보가 이름을
+ * 대신 **소비 지점에서 합친다**. 순서는 «기존 → OAK → daehan» 으로 고정한다: 후보
+ * 정렬은 fit 우선이라 순서가 결과를 안 바꾸지만, 완전 동점에서 기존 후보가 이름을
  * 유지하는 편이 이미 발행된 프레임의 판독 이름을 안 흔든다.
+ *
+ * ⚠ daehan 이 셋인 이유는 **발자국이 해상도마다 다르기 때문**이다 (k=6 39셀 ·
+ *   k=8 59셀 · k=10 79셀 — 반경 밖이 잘린다). 하나로 합칠 수 없고, 합치면 k=6
+ *   프레임에서 없는 40셀 자리의 데이터 셀을 파인더로 읽는다. 검출된 이름이 곧
+ *   k 가설이 된다 (`daehanKForPatternId`).
+ *
+ * ⚠ **비용**: 검출 비용의 지배항은 «후보 하나 더» 가 아니라 «발자국 하나 더» 다
+ *   (cell-finder-detect.js 헤더 — 발자국별로 표본을 따로 뜬다). 반경 법칙(e389c29)
+ *   이 반경 10 발자국에 촘촘한 각도 격자를 주므로 daehan 셋을 얹는 비용은 크다.
+ *   실측은 `test/output/lanes/daehan-impl-report.md` §비용.
  */
 const CELL_FINDER_LINEUP = Object.freeze([
   ...FINDER_CELL_MASK_PATTERNS,
   ...OAK_FINDER_PATTERNS,
 ]);
+
+/**
+ * daehan 을 얹은 라인업 — **기본이 아니다. 옵트인이다** (`options.cellFinderDaehan === true`).
+ *
+ * 왜 기본이 아닌가 (2026-08-18 이 라운드 실측, 둘 다 실재):
+ *  ① **레거시 오수용.** `tristar-refined-h3` 를 그린 프레임에서 라인업 14 는
+ *     «검출 실패» 인데 라인업 17 은 `oak-daehan-k6` 을 내고 게이트 3개를 전부
+ *     통과한다 — 실패가 «조용히 틀린 답» 으로 바뀐다. 이건 radius10-search 보고서
+ *     §4 가 이미 «게이트를 통과하는 오수용» 으로 적어 둔 계열이고, 그 처방
+ *     («차원이 다른 검사가 하나 더 필요하다», §6.4-4)은 아직 구현되지 않았다.
+ *  ② **비용.** 검출의 지배항은 발자국 수다. 레거시 프레임에서 14 → 17 이
+ *     **×16.6** (16.1 ms → 267.4 ms). 반경 법칙이 반경 10 발자국에 촘촘한 각도
+ *     격자를 주는 대가이고, 실기기 연속 스캔에는 그대로 못 얹는다.
+ *
+ * 그래서 이 라운드는 **배선을 완성하고 기본값은 안 건드린다.** 옵트인 경로가
+ * 왕복 18/18 을 통과하므로(§claude-di-roundtrip) 경로의 실재는 증명돼 있고,
+ * 기본 라인업이 그대로라 실사진 149장은 **정의상** 한 장도 안 바뀐다.
+ */
+const CELL_FINDER_LINEUP_DAEHAN = Object.freeze([
+  ...FINDER_CELL_MASK_PATTERNS,
+  ...OAK_FINDER_PATTERNS,
+  ...DAEHAN_FINDER_PATTERNS,
+]);
+
+/** 이 호출이 daehan 을 라인업에 얹는가. 기본 false — 레거시 경로는 비트 동일이다. */
+function cellFinderLineupFor(options) {
+  return options && options.cellFinderDaehan === true
+    ? CELL_FINDER_LINEUP_DAEHAN : CELL_FINDER_LINEUP;
+}
 import { FINDER_CELL_MASK_PATTERNS } from '../finder-patterns.js';
 import { classifyFamily, scoreCubeTiling } from './family.js';
 import {
@@ -839,7 +881,8 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
   const cellSizeSeeds = radiusSeeds
     ? radiusSeeds.map((radius) => radius / Math.sqrt(13))
     : undefined;
-  let detected = detectCellFinders(reduced.luma, CELL_FINDER_LINEUP, {
+  const lineup = cellFinderLineupFor(options);
+  let detected = detectCellFinders(reduced.luma, lineup, {
     centerSeeds,
     cellSizeSeeds,
     ...overrides,
@@ -849,7 +892,7 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
     'cellSizeSeeds',
   );
   if (!detected.ok && cellSizeSeeds !== undefined && !callerFixedScaleSearch) {
-    detected = detectCellFinders(reduced.luma, CELL_FINDER_LINEUP, {
+    detected = detectCellFinders(reduced.luma, lineup, {
       centerSeeds,
       ...overrides,
     });
@@ -1413,7 +1456,18 @@ function cellFinderHypotheses(luma, finder, family) {
   const patternFinder = finder.finderKind === 'cell-mask'
     || finder.finderKind === 'three-tone-cube';
   if (!H || !patternFinder || !['hex', 'tri'].includes(family)) return [];
-  return uniqueDimensions(family).map((k) => ({
+  // daehan 은 tri 로 가지 않는다 — 정본 `_placement` 가 «A/K 타입의 외곽 영역으로는
+  // 넘어가지 않고 중앙 육각형 셀 영역 안에서만» 이라고 못 박았다.
+  //
+  // ⚠ **k 는 좁히지 않는다.** patternId 가 `oak-daehan-k6` 이라고 해서 k=6 만 보면
+  //   안 된다: daehan 은 절대 좌표라 k6 ⊂ k8 ⊂ k10 **포함 사슬**이고, k=8 프레임
+  //   위에서 k6 템플릿이 «정당하게» 상관 1.0000 을 낸다 (실측 §claude-di-nesting).
+  //   즉 **파인더는 «daehan 이다» 까지만 말할 수 있고 «어느 k 인가» 는 못 말한다.**
+  //   k 는 기존대로 전 후보를 열거해 RS/CRC 가 고른다 — 그게 이 편입이 택한
+  //   «광학 검출 + 사후 RS/CRC» 계약 그대로다 (`capacityDaehan.js` 헤더 §와이어).
+  const dimensions = isDaehanFinderPatternId(finder.patternId) && family !== 'hex'
+    ? [] : uniqueDimensions(family);
+  return dimensions.map((k) => ({
     family,
     k,
     orientation: finder.orientation,
@@ -1567,11 +1621,40 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
 }
 
 /**
+ * 이 가설의 파인더가 daehan 계열이면 **가설 차원 기준** 예약 셀 목록을, 아니면 null.
+ *
+ * 예약 셀은 `daehanReservedCells(dimension)` 이지 `daehanReservedCells(패턴의 k)` 가
+ * **아니다.** 패턴 id 의 k 는 «검출기가 어느 잘림본으로 맞췄나» 일 뿐이고, 포함
+ * 사슬 때문에 그것이 프레임의 k 와 다를 수 있다 (k=8 프레임을 k6 템플릿이 정당하게
+ * 맞춘다 — §claude-di-nesting). 프레임의 k 를 정하는 것은 RS/CRC 다.
+ */
+function daehanReservedCellsFor(hypothesis, dimension) {
+  const patternId = hypothesis && hypothesis.finder && hypothesis.finder.patternId;
+  if (!isDaehanFinderPatternId(patternId)) return null;
+  if (!DAEHAN_RADII.includes(dimension)) return null;
+  return daehanReservedCells(dimension);
+}
+
+/**
  * @param {number} [formatWire] 신세대 셀 표면에서만 의미가 있다 — 2(현행 18셀) 기본,
  *   1 이면 레거시 판독 세대(15셀). 예약 셀이 3개 적으므로 **데이터 좌표까지** 달라진다.
  */
 function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
   if (family === 'hex') {
+    // daehan (2026-08-18) — 파인더가 불스아이 밖으로 셀을 더 먹으므로 data 셀이
+    // 줄어든다. 판별 신호는 **검출기가 뽑은 patternId** 하나이고, 그것이 여기까지
+    // 실제로 도달한다: detectCellFinders → cellFinderHypotheses(hypothesis.finder)
+    // → validateGridHypotheses → 이 함수. 전용 formatIndex 를 안 만드는 근거가 이
+    // 경로의 실재다 (`capacityDaehan.js` 헤더 §와이어).
+    const reserved = daehanReservedCellsFor(hypothesis, dimension);
+    if (reserved) {
+      return {
+        map: layoutMap(dimension, reserved),
+        dataCells: dataCellsInScanOrder(dimension, reserved),
+        type: 'O',
+        daehanFinder: true,
+      };
+    }
     return {
       map: layoutMap(dimension),
       dataCells: dataCellsInScanOrder(dimension),
@@ -2770,6 +2853,10 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         }
       } else {
         decodeFormat.k = dimension;
+        // daehan 은 와이어에 자기 인덱스가 없다 — 회계를 가르는 신호는 광학 검출이다
+        // (`capacityDaehan.js` 헤더 §와이어). 레이아웃이 이미 그 판정을 했으므로
+        // 여기서는 같은 판정을 decode.js 에 그대로 옮긴다.
+        if (layout.daehanFinder === true) decodeFormat.daehanFinder = true;
       }
       const decoded = withStage(options, 'decode', () =>
         decodeCells(digits, decodeFormat, { erasureCells }));

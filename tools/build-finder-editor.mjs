@@ -19,6 +19,9 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   'hexgrid', 'finder-patterns', 'finder-oak-lineup', 'finder-oak-patterns',
   'finder-editor-pattern', 'lehmer', 'gfp', 'rs211', 'base211',
   'mask', 'formatinfo', 'header', 'placement', 'bullseye', 'layout', 'capacity',
+  // daehan (2026-08-18) — scene.js 가 finder-daehan 을, encode.js 가 capacityDaehan 을
+  // 쓴다. 둘 다 capacity 뒤 · encode/scene 앞.
+  'finder-daehan', 'capacityDaehan',
   // O-CM/A-CM 코너 마커 (2026-08-16) — encode.js·encodeA.js 가 markerO/markerA 를 쓰므로
   // 그 앞에 온다. autoplaceHex 는 autoplaceY 의 AutoplaceError 를 재사용하고 autoplaceY 는
   // placementY 만 쓴다. markerA 는 layoutA·capacityA·markerO 전부의 뒤여야 한다.

@@ -872,11 +872,19 @@ export function sampleHexGrid(luma, geometry, layoutMap, options = {}) {
   const cells = new Map();
   const failures = [];
   let skippedBullseyes = 0;
+  let skippedFinders = 0;
 
   for (const entry of layoutEntries(layoutMap)) {
     const parsed = parseLayoutEntry(entry);
     if (parsed.metadata && parsed.metadata.role === 'bullseye') {
       skippedBullseyes += 1;
+      continue;
+    }
+    // 파인더 예약 셀(2026-08-18 daehan) — 불스아이와 같은 이유로 건너뛴다. 그 자리엔
+    // digit 이 아니라 파인더 톤이 그려져 있어 표본을 떠 봐야 아무도 안 읽는다.
+    // 기존 layoutMap 은 이 역할을 만들지 않으므로 레거시 경로에서 이 분기는 절대 안 탄다.
+    if (parsed.metadata && parsed.metadata.role === 'finder') {
+      skippedFinders += 1;
       continue;
     }
 
@@ -915,6 +923,7 @@ export function sampleHexGrid(luma, geometry, layoutMap, options = {}) {
         stage: 'sample-hex-grid',
         sampledCount: cells.size,
         skippedBullseyes,
+        skippedFinders,
         failures,
       },
     );
@@ -924,6 +933,7 @@ export function sampleHexGrid(luma, geometry, layoutMap, options = {}) {
     cells,
     sampledCount: cells.size,
     skippedBullseyes,
+    skippedFinders,
     unsampled: failures.map((entry) => ({
       key: entry.key, q: entry.q, r: entry.r, reason: entry.reason, cause: entry.detail,
     })),

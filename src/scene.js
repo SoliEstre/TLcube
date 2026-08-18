@@ -26,6 +26,7 @@ import {
 import { digitToRanks } from './lehmer.js';
 import { BULLSEYE_MID, FINDER_CUBE_TONES } from './luminance.js';
 import { getOakFinderPattern } from './finder-oak-patterns.js';
+import { getDaehanFinderPattern } from './finder-daehan.js';
 
 // `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
 // FACE_LEVEL_INDEX)와 **같은 표**여야 하며, `FACES` 배열의 나열 순서에 기대지
@@ -76,6 +77,9 @@ function resolveFinderRenderPattern(id) {
   // 없다. 여기서 먼저 풀고, 아니면 기존 조회가 «알 수 없는 id» 로 정확히 죽는다.
   const oak = getOakFinderPattern(id);
   if (oak) return oak;
+  // daehan(2026-08-18)도 별도 표다. k 마다 발자국이 다르므로 id 가 셋이다.
+  const daehan = getDaehanFinderPattern(id);
+  if (daehan) return daehan;
   return getFinderPattern(id);
 }
 
@@ -506,9 +510,17 @@ export function buildScene(encoded, options) {
     // `cellMasks` 를 든다. 둘 다 있으면 **레벨이 이긴다** — 검출기의
     // normalizePatterns 와 같은 우선순위여야 그린 것과 읽는 것이 안 갈린다.
     const levels = Array.isArray(finderPattern.cellLevels) ? finderPattern.cellLevels : null;
-    for (let ci = 0; ci < FINDER_CELL_ORDER.length; ci += 1) {
-      // 예약 19셀을 regionCells(2) 순서로 칠한다.
-      const cell = FINDER_CELL_ORDER[ci];
+    // 발자국 — 기본은 예약 19셀(regionCells(2) 순서). daehan(2026-08-18)처럼
+    // `finderCells` 를 든 패턴은 그 목록을 그대로 쓴다. **검출기의 footprintOf 와
+    // 같은 규칙**이어야 한다 (cell-finder-detect.js) — 갈리면 그린 것과 읽는 것이 갈린다.
+    const footprint = Array.isArray(finderPattern.finderCells)
+      ? finderPattern.finderCells : FINDER_CELL_ORDER;
+    for (let ci = 0; ci < footprint.length; ci += 1) {
+      const cell = footprint[ci];
+      // 반경 k 밖은 그리지 않는다 (운영자 확정: 절대 좌표를 모든 해상도에서 그대로
+      // 쓰고 밖은 잘린다). daehan 은 k 별 패턴이 이미 잘려 있으므로 이 가드는 보통
+      // 안 걸리지만, 걸리면 **캔버스 밖 침묵 소실**이 되므로 여기서 막는다.
+      if (hexDistance(cell.q, cell.r) > k) continue;
       const mask = levels ? 0 : finderPattern.cellMasks[ci];
       for (const face of FACES) {
         // 중간톤은 팔레트가 아니라 **고정 상수**다 — 이유는 FINDER_CUBE_TONES 주석

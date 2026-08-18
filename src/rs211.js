@@ -55,6 +55,38 @@ export const NSYM_TABLE = Object.freeze({
   V3: Object.freeze({ symbols: 92, L: 11, M: 23, H: 37 }),
 });
 
+/**
+ * daehan 파인더(79셀 전면) 변형의 nsym 표 — **2026-08-18 운영자 확정**.
+ *
+ * daehan 은 불스아이 19셀 **밖으로 파인더 셀을 더 쓰는 첫 후보**라 데이터 셀을
+ * 실제로 깎는다 (k=6 −20 · k=8 −40 · k=10 −60). 그래서 사용 심볼 S 가 본표와 다르다:
+ * 27 → **20** · 56 → **42** · 92 → **72**.
+ *
+ * **nsym 은 현행 동명 버전의 값을 그대로 승계한다** — 즉 정정능력 t 를 지금과 같게
+ * 유지하는 선택이고, 비율(패리티율)이 아니라 **절대 정정능력**을 보존한 것이다.
+ * 심볼이 줄었으므로 패리티율은 자동으로 올라간다 (V1D/M = 7/20 = 35.0%, 본표 V1/M
+ * 7/27 = 25.9%). 이는 의도된 결과다: 파인더가 커진 만큼 남은 본문이 짧아지므로
+ * 같은 t 라도 상대적 보호는 더 두꺼워야 한다.
+ *
+ * ⚠ **함정 — 절대 본표를 고쳐 재사용하지 마라.**
+ *   V1D 의 nsym (3 / 7 / 11) 은 현행 `V1` 과 **문자 그대로 같다**. 그래서 «V1 행에서
+ *   symbols 만 27 → 20 으로 고치면 되겠네» 로 읽기 쉽다. 그러면 **이미 발행된 V1
+ *   프레임이 전부 깨진다** — `capacityFor` 가 symbols 불일치로 던지거나(운 좋은 경우),
+ *   던지지 않으면 데이터 심볼 수가 달라져 조용히 다른 코드가 된다. 별도 키
+ *   (`V1D`/`V2D`/`V3D`)로 분리해 둔 이유가 이것이고, 본표 `NSYM_TABLE` 은 daehan
+ *   편입으로 **한 값도 바뀌지 않았다**.
+ *
+ * 결과 순 페이로드 (실측 — `capacityDaehan.js` 가 산출하고 테스트가 값으로 잠근다):
+ *   V1D  L 15 B · M 11 B · H 7 B
+ *   V2D  L 32 B · M 26 B · H 18 B
+ *   V3D  L 57 B · M 46 B · H 32 B
+ */
+export const NSYM_TABLE_DAEHAN = Object.freeze({
+  V1D: Object.freeze({ symbols: 20, L: 3, M: 7, H: 11 }),
+  V2D: Object.freeze({ symbols: 42, L: 7, M: 14, H: 22 }),
+  V3D: Object.freeze({ symbols: 72, L: 11, M: 23, H: 37 }),
+});
+
 /** 복호 실패 예외. `reason` / `syndromes` 를 함께 싣는다. */
 export class RSDecodeError extends Error {
   constructor(message, details = {}) {

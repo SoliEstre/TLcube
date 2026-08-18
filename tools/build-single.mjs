@@ -57,6 +57,10 @@ const MODULE_ORDER = [
   'hexgrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup', 'finder-oak-patterns',
   'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'placement', 'bullseye', 'layout', 'capacity',
+  // daehan (2026-08-18) — finder-daehan 은 hexgrid·placement 만 쓰고 scene.js 가
+  // 렌더에 쓴다. capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의
+  // 뒤여야 하고 encode/decode 의 앞이다.
+  'finder-daehan', 'capacityDaehan',
   // placementY·autoplaceY 는 **Type O 보다 앞**으로 왔다 (2026-08-16, O-CM 코너 마커).
   // autoplaceHex 가 `AutoplaceError` 를 autoplaceY 에서 그대로 재사용하기 때문이다 —
   // 소비자가 한 종류만 catch 하게 하려는 선택이고, 그 대가로 두 모듈이 여기서 앞당겨진다.
