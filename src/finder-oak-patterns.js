@@ -79,7 +79,11 @@ function defineOakPattern(pattern) {
 export const OAK_FINDER_PATTERNS = Object.freeze([
   defineOakPattern({
     id: 'oak-nitrogen-r2',
-    name: 'Nitrogen r2',
+    // **정식 표시명 = Niteogen** (운영자 확정 2026-08-18). `lineupName` 은 그대로
+    // 'Nitrogen r2' 다 — 그건 표시가 아니라 **정본 JSON 의 조회 키**이고, 정본을
+    // 안 건드린 채 이름만 바꾸면 대조가 끊긴다. id 도 안 바꾼다: 이미 라이브에
+    // 나갔고(09532c8) 저장된 선택·URL·텔레메트리가 그 문자열을 들고 있다.
+    name: 'Niteogen',
     lineupName: 'Nitrogen r2',
     params: { candidate: 'O-1r2-central3tone', type: 'O', finderStarter: 'central-cube-3tone' },
     cellLevels: [

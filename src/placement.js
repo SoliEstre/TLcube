@@ -297,12 +297,22 @@ export function referenceCellsAll(k) {
  * @param {number} k
  * @returns {{bullseye: Set<string>, anchor: Set<string>, format: Set<string>, reference: Set<string>}}
  */
-export function buildRoleSets(k) {
+export function buildRoleSets(k, finderReserved) {
   assertRadius(k);
   const anchor = anchorPositionSet(k);
   const format = new Set(formatCells(k).map((c) => key(c.q, c.r)));
   const reference = new Set(referenceCellsAll(k).map((c) => key(c.q, c.r)));
-  return { anchor, format, reference };
+  // 파인더 예약 (2026-08-18, daehan 편입) — **불스아이 19셀 밖**에 셀을 더 쓰는
+  // 파인더가 처음 생겼다. 기본은 빈 집합이라 이 인자를 안 넘기면 예전과 완전히 같다.
+  //
+  // ⚠ 이 셀들은 현재 전부 role 'data' 다 (실측: claude-daehan-cost.mjs). 즉 이 예약은
+  //   **용량을 실제로 깎는다** — anchor/format/reference 와 겹쳐 «공짜로» 얻는 게
+  //   아니다. 그래서 capacity.js 가 별도 스펙 행을 들어야 하고, 그냥 여기만 고치면
+  //   NSYM_TABLE 심볼 수와 어긋나 capacityFor 가 던진다 (일부러 그렇게 돼 있다).
+  const finder = finderReserved instanceof Set
+    ? finderReserved
+    : new Set((finderReserved || []).map((c) => key(c.q, c.r)));
+  return { anchor, format, reference, finder };
 }
 
 /**
@@ -319,6 +329,11 @@ export function roleOf(q, r, k, roleSets) {
   if (d <= BULLSEYE_RADIUS) return 'bullseye';
   const sets = roleSets || buildRoleSets(k);
   const kk = key(q, r);
+  // 파인더 예약을 anchor 보다 **먼저** 본다. 지금 daehan 의 12셀은 anchor/format/
+  // reference 와 하나도 안 겹치므로(실측) 순서가 결과를 안 바꾸지만, 겹치는 날
+  // «파인더가 이긴다» 가 맞다 — 파인더는 검출 기구라 다른 역할이 그 위에 그려지면
+  // 검출 자체가 깨진다. 그 규약을 순서로 못 박아 둔다.
+  if (sets.finder && sets.finder.has(kk)) return 'finder';
   if (sets.anchor.has(kk)) return 'anchor';
   if (sets.format.has(kk)) return 'format';
   if (sets.reference.has(kk)) return 'reference';
@@ -334,18 +349,24 @@ export function roleOf(q, r, k, roleSets) {
  * **대조만** 한다 — 이 함수는 capacity.js 를 읽지도 쓰지도 않는다.
  * @param {number} k
  */
-export function overheadBreakdown(k) {
+export function overheadBreakdown(k, finderReservedCount = 0) {
   assertRadius(k);
+  if (!Number.isInteger(finderReservedCount) || finderReservedCount < 0) {
+    throw new RangeError('파인더 예약 셀 수는 0 이상 정수여야 한다: ' + finderReservedCount);
+  }
   const bullseye = 3 * BULLSEYE_RADIUS * BULLSEYE_RADIUS + 3 * BULLSEYE_RADIUS + 1; // cellCount(2)
   const anchor = ANCHOR_CORNER_INDICES.length;
   const format = FORMAT_BLOCK_LENGTH * FORMAT_REPLICAS;
   const reference = 2 * (k - FORMAT_RING + 1); // 링 FORMAT_RING..k, 링당 2개
+  // 파인더 예약 (2026-08-18) — 기본 0 이라 인자를 안 넘기면 예전 값 그대로다.
+  // 여기 세는 것은 «불스아이 19셀 **밖**» 의 파인더 셀만이다 (안쪽은 bullseye 가 이미 셌다).
   return {
     k,
     bullseye,
     anchor,
     format,
     reference,
-    total: bullseye + anchor + format + reference,
+    finder: finderReservedCount,
+    total: bullseye + anchor + format + reference + finderReservedCount,
   };
 }

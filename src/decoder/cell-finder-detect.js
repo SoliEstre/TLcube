@@ -31,7 +31,18 @@ export const UNVERIFIED_CELL_FINDER_CALIBRATION = Object.freeze({
 const REFINED_FACE_FRACTIONS = Object.freeze([0.10, 0.90]);
 const TURN_RADIANS = 2 * Math.PI / 3;
 const EPSILON = 1e-12;
-const FACE_SAMPLES = Object.freeze(FINDER_CELL_ORDER.flatMap((cell, cellIndex) =>
+/**
+ * 발자국(셀 목록) → 면 표본. 2026-08-18 daehan 편입으로 **발자국이 하나가 아니게**
+ * 됐다 (기존 19셀 + daehan 31셀).
+ *
+ * ⚠ 이 모듈의 원래 설계는 «휘도를 한 번 떠서 모든 템플릿이 공유» 다. 발자국이
+ * 섞이면 그 공유가 깨진다 — 서로 다른 셀에서 뜬 관측을 같은 벡터로 비교하게 된다.
+ * 그래서 **발자국별로 표본을 따로 뜨고 그 안에서만 비교**한다 (아래 groupByFootprint).
+ * 비용은 발자국 수에 비례해 늘어난다 — 표본 뜨기가 이 단계의 지배항이므로
+ * «후보 하나 더» 보다 «발자국 하나 더» 가 훨씬 비싸다. 실측으로 관리한다.
+ */
+function buildFaceSamples(cells) {
+  return Object.freeze(cells.flatMap((cell, cellIndex) =>
   FACES.map((face) => {
     const layout = { size: 1, originX: 0, originY: 0 };
     const point = faceCentroid(cell.q, cell.r, face, layout);
@@ -49,6 +60,27 @@ const FACE_SAMPLES = Object.freeze(FINDER_CELL_ORDER.flatMap((cell, cellIndex) =
       detailPoints: Object.freeze(detailPoints),
     });
   })));
+}
+
+/** 기본 19셀 발자국의 표본 — 이 상수의 값·순서는 예전과 **한 값도 다르지 않다**. */
+const FACE_SAMPLES = buildFaceSamples(FINDER_CELL_ORDER);
+
+// 발자국 배열 → 표본. 같은 배열 객체면 재계산하지 않는다 (패턴이 자기 발자국
+// 배열을 얼려서 들고 있으므로 참조 동일성이 성립한다).
+const FACE_SAMPLE_CACHE = new WeakMap();
+function faceSamplesFor(cells) {
+  if (!cells || cells === FINDER_CELL_ORDER) return FACE_SAMPLES;
+  const cached = FACE_SAMPLE_CACHE.get(cells);
+  if (cached) return cached;
+  const built = buildFaceSamples(cells);
+  FACE_SAMPLE_CACHE.set(cells, built);
+  return built;
+}
+
+/** 패턴의 발자국 — 없으면 기본 19셀. */
+function footprintOf(pattern) {
+  return Array.isArray(pattern.finderCells) ? pattern.finderCells : FINDER_CELL_ORDER;
+}
 
 function clamp01(value) { return value <= 0 ? 0 : value >= 1 ? 1 : value; }
 function cfgFor(options) {
@@ -86,9 +118,10 @@ function assertMasks(cellMasks, label = 'cellMasks') {
 const LEVEL_TARGETS = Object.freeze([0, 0.5, 1]);
 const FACE_LEVEL_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
 
-function assertLevels(cellLevels, label = 'cellLevels') {
-  if (!Array.isArray(cellLevels) || cellLevels.length !== FINDER_CELL_ORDER.length) {
-    throw new RangeError(label + '는 19개 [T,L,R] 삼중 배열이어야 한다');
+function assertLevels(cellLevels, label = 'cellLevels', expected = FINDER_CELL_ORDER.length) {
+  if (!Array.isArray(cellLevels) || cellLevels.length !== expected) {
+    throw new RangeError(label + '는 ' + expected + '개 [T,L,R] 삼중 배열이어야 한다'
+      + ' (받은 것 ' + (Array.isArray(cellLevels) ? cellLevels.length : typeof cellLevels) + ')');
   }
   for (const triple of cellLevels) {
     if (!Array.isArray(triple) || triple.length !== 3) {
@@ -121,10 +154,12 @@ function normalizePatterns(input, options) {
     // 둘 다 있으면 **레벨이 이긴다** — 레벨이 더 표현력이 크므로 마스크는 그 후보의
     // 이진 근사일 수밖에 없고, 근사를 정본으로 쓰면 조용히 틀린다.
     if (Array.isArray(pattern.cellLevels)) {
+      // 발자국이 있으면 레벨 배열 길이는 **그 발자국의 길이**여야 한다 (daehan 31).
+      const cells = Array.isArray(pattern.finderCells) ? pattern.finderCells : FINDER_CELL_ORDER;
       return {
         ...pattern,
         id: typeof pattern.id === 'string' ? pattern.id : 'cell-level-' + index,
-        cellLevels: assertLevels(pattern.cellLevels, label + '.cellLevels'),
+        cellLevels: assertLevels(pattern.cellLevels, label + '.cellLevels', cells.length),
       };
     }
     return {
@@ -160,7 +195,9 @@ function templateOf(pattern) {
   const coarseValues = [];
   const detailedValues = [];
   const levels = pattern.cellLevels;
-  for (const sample of FACE_SAMPLES) {
+  const cells = footprintOf(pattern);
+  const faceSamples = faceSamplesFor(cells);
+  for (const sample of faceSamples) {
     const value = levels
       ? LEVEL_TARGETS[levels[sample.cellIndex][FACE_LEVEL_INDEX[sample.face]]]
       : (pattern.cellMasks[sample.cellIndex] & sample.bit ? 1 : 0);
@@ -173,7 +210,7 @@ function templateOf(pattern) {
     throw new RangeError(pattern.id + ': 밝음/어두움 양쪽 면이 필요하다');
   }
   return {
-    id: pattern.id, pattern,
+    id: pattern.id, pattern, cells, faceSamples,
     ...coarse,
     detailedExpected: detailed.expected,
     detailedExpectedNorm: detailed.expectedNorm,
@@ -203,14 +240,14 @@ function project(H, x, y) {
   const py = (H[3] * x + H[4] * y + H[5]) / w;
   return Number.isFinite(px) && Number.isFinite(py) ? { x: px, y: py } : null;
 }
-function observationsAt(luma, H, detailed) {
+function observationsAt(luma, H, detailed, faceSamples = FACE_SAMPLES) {
   const sampleCount = detailed
-    ? FACE_SAMPLES.reduce((sum, sample) => sum + sample.detailPoints.length, 0)
-    : FACE_SAMPLES.length;
+    ? faceSamples.reduce((sum, sample) => sum + sample.detailPoints.length, 0)
+    : faceSamples.length;
   const values = new Float64Array(sampleCount);
   let mean = 0;
   let index = 0;
-  for (const canonical of FACE_SAMPLES) {
+  for (const canonical of faceSamples) {
     const samplePoints = detailed ? canonical.detailPoints : [canonical];
     for (const samplePoint of samplePoints) {
       const point = project(H, samplePoint.x, samplePoint.y);
@@ -248,23 +285,42 @@ function scoreTemplate(sampled, template, span) {
   const fit = Math.max(0, correlation) * clamp01(contrastRatio / 0.45);
   return { correlation, contrast, contrastRatio, lightMean, darkMean, fit };
 }
+/**
+ * 템플릿을 **발자국별로** 묶는다. 발자국이 하나뿐인 흔한 경우(=기존 전부)에는
+ * 그룹도 하나라 예전과 같은 «한 번 뜨고 전부 비교» 가 된다.
+ */
+function groupByFootprint(templates) {
+  const groups = new Map();
+  for (const template of templates) {
+    const key = template.faceSamples;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(template);
+    else groups.set(key, [template]);
+  }
+  return groups;
+}
 function scoreAll(luma, H, templates, span, detailed) {
-  const sampled = observationsAt(luma, H, detailed);
-  if (!sampled) return [];
-  return templates.map((template) => ({ template, ...scoreTemplate(sampled, template, span) }))
-    .sort((a, b) => b.fit - a.fit || b.correlation - a.correlation
-      || a.template.id.localeCompare(b.template.id));
+  const out = [];
+  for (const [faceSamples, group] of groupByFootprint(templates)) {
+    const sampled = observationsAt(luma, H, detailed, faceSamples);
+    if (!sampled) continue;   // 그 발자국이 화면 밖 — 다른 발자국은 살 수 있다
+    for (const template of group) out.push({ template, ...scoreTemplate(sampled, template, span) });
+  }
+  return out.sort((a, b) => b.fit - a.fit || b.correlation - a.correlation
+    || a.template.id.localeCompare(b.template.id));
 }
 function scoreBest(luma, H, templates, span, detailed) {
-  const sampled = observationsAt(luma, H, detailed);
-  if (!sampled) return null;
   let best = null;
-  for (const template of templates) {
-    const scored = { template, ...scoreTemplate(sampled, template, span) };
-    if (!best || scored.fit > best.fit
-      || (scored.fit === best.fit && (scored.correlation > best.correlation
-        || (scored.correlation === best.correlation
-          && scored.template.id.localeCompare(best.template.id) < 0)))) best = scored;
+  for (const [faceSamples, group] of groupByFootprint(templates)) {
+    const sampled = observationsAt(luma, H, detailed, faceSamples);
+    if (!sampled) continue;
+    for (const template of group) {
+      const scored = { template, ...scoreTemplate(sampled, template, span) };
+      if (!best || scored.fit > best.fit
+        || (scored.fit === best.fit && (scored.correlation > best.correlation
+          || (scored.correlation === best.correlation
+            && scored.template.id.localeCompare(best.template.id) < 0)))) best = scored;
+    }
   }
   return best;
 }
