@@ -1168,6 +1168,16 @@
           <!-- v0TY = v0T 파생 (먼 코너 QR 슬롯 8×8 · 2026-08-17 편입). v0WY 와 달리
                **진짜 와이어 id** 라 버튼이 있다 — 디코더가 v0ty 를 돌려준다. -->
           <button type="button" data-expected-layout="v0ty" data-i18n="lab.expectedLayout.v0ty">v0TY</button>
+          <!-- v0TR 계열 (2026-08-18 편입) — v0T 의 NE 를 안쪽으로 옮기고 SW 를 비운
+               새 기하. v0TRQ 는 **n=21 에서 처음 성립하는 중앙 QR 변형**이다
+               (v0TQ 는 포맷 복제 이격 S_fmt 241 < 289 로 구조적 불가였다).
+               둘 다 활성 라인업이라 버튼이 있다 — 위 규약 그대로다.
+               ⚠ 문자열(lab.expectedLayout.v0tr / .v0trq)은 레인이 여덟 언어에 이미
+               넣었는데 **버튼만 빠져 있었다** (운영자 지적 2026-08-18). 이런 누락은
+               테스트에 안 걸리므로 아래 generator-help-ui 계열이 라인업↔버튼 대조를
+               하도록 함께 잠갔다. -->
+          <button type="button" data-expected-layout="v0tr" data-i18n="lab.expectedLayout.v0tr">v0TR</button>
+          <button type="button" data-expected-layout="v0trq" data-i18n="lab.expectedLayout.v0trq">v0TRQ</button>
         </div>
       </div>
       <!-- 기대 톤 — expected_tones 계측. 레이아웃 카드와 같은 배선 형태다.
