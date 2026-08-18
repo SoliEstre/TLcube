@@ -15,6 +15,7 @@
 
 import { VERSIONS, capacityFor } from './capacity.js';
 import { VERSIONS_A, capacityForA } from './capacityA.js';
+import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from './turnA.js';
 import {
   VERSIONS_Y,
   capacityForY,
@@ -217,8 +218,28 @@ function typeOSpecFromFormatIndex(index) {
   return VERSIONS.find((spec) => spec.version === version);
 }
 
-function typeASpecFromFormatIndex(index) {
+/**
+ * formatIndex → Type A 버전 스펙.
+ *
+ * 두 규약을 본다 (2026-08-18 턴A 편입):
+ *   ⓐ 기본 A (정삼각): 산술 유도 `spec.formatIndex (+2 면 centerQr)`. **발행 규약**이다.
+ *   ⓑ 턴A (역삼각):    `src/turnA.js` 의 **표**. 산술이 원리적으로 불가능하다
+ *      (A1=12 에 균일 오프셋 +4 면 16 — 4bit 넘침).
+ *
+ * ⚠ `turn` 은 **검출이 정한다** — `family.js` 의 tri 점수가 실루엣 방향을 가르고
+ * (정삼각 ↔ 역삼각 패치가 100% 배타적이라 확실히 갈린다) 그 결과가 여기로 온다.
+ * 방향을 모르면(`turn` 미지정) 기본 A 로 본다 — 종전 동작 그대로다.
+ *
+ * 이 분리가 있어야 `A2TQ(3)` 과 기본 `A0Q(3)` 이 같은 값을 써도 서로를 안 먹는다.
+ */
+function typeASpecFromFormatIndex(index, turn = false) {
   if (!Number.isInteger(index)) return undefined;
+  if (turn === true) {
+    // 턴A 표는 (formatIndex, k) 쌍으로 유일하다. k 를 모르면 formatIndex 만으로 찾는다.
+    const entry = TURN_A_FORMAT_INDEX.find((row) => row.formatIndex === index);
+    if (!entry) return undefined;
+    return VERSIONS_A.find((spec) => spec.version === entry.version);
+  }
   return VERSIONS_A.find(
     (spec) => spec.formatIndex === index || spec.formatIndex + 2 === index,
   );
@@ -311,7 +332,7 @@ function resolveProfile(format) {
     const spec = selectVersionSpec({
       type,
       logicalSpec,
-      rawSpec: typeASpecFromFormatIndex(formatIndex),
+      rawSpec: typeASpecFromFormatIndex(formatIndex, format.turn === true),
       rawExplicit,
       dimension: 'k',
       dimensionName: 'k',

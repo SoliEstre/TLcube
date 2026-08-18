@@ -72,3 +72,44 @@ test('검출기가 방향 가설을 만들고 결과에 실어 보낸다', async
   assert.match(source, /Array\.isArray\(options\.patchCells\) \? \[false\] : \[false, true\]/,
     '명시 patchCells 경로에서 방향 열거를 끄지 않는다');
 });
+
+/*
+ * ── 디코더 해석 배선 (2026-08-18, 마지막 연결) ─────────────────────────────
+ *
+ * `typeASpecFromFormatIndex(index, turn)` 이 방향을 받아 규약을 고른다:
+ *   turn=false → 기본 A 산술 유도 (발행 규약) · turn=true → 턴A 표.
+ * 방향은 `family.js` 의 tri 점수가 정한다 (패치 100% 배타 — 위 테스트).
+ *
+ * ⚠ **자의 한계를 적어 둔다.** 해석 층만 떼어 잴 공개 API 가 없어서
+ * (`resolveProfile` 은 비공개) 여기서는 ⓐ 소스에 분기·전달이 실재하는가와
+ * ⓑ 두 표가 같은 값에 **다른 k** 를 준다는 사실을 잰다. «디코더가 실제로 k=10 을
+ * 골랐다» 를 직접 관측하지는 못한다 — 픽셀 왕복 테스트가 생기면 그때 좁힌다.
+ */
+test('디코더가 방향을 받아 규약을 고른다 — 분기와 전달이 실재한다', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../src/decode.js', import.meta.url), 'utf8');
+  assert.match(source, /function typeASpecFromFormatIndex\(index, turn = false\)/,
+    '해석기가 방향 인자를 안 받는다');
+  assert.match(source, /if \(turn === true\)/, '턴A 분기가 없다');
+  assert.match(source, /TURN_A_FORMAT_INDEX/, '해석기가 턴A 표를 안 쓴다');
+  assert.match(source, /typeASpecFromFormatIndex\(formatIndex, format\.turn === true\)/,
+    '호출부가 방향을 안 넘긴다');
+});
+
+test('같은 formatIndex 가 방향에 따라 다른 k 로 간다 — 판별이 필수인 이유', async () => {
+  const { TURN_A_FORMAT_INDEX } = await import('../src/turnA.js');
+  const { VERSIONS_A } = await import('../src/capacityA.js');
+  const shared = TURN_A_FORMAT_INDEX.filter((entry) => VERSIONS_A.some(
+    (spec) => spec.formatIndex === entry.formatIndex || spec.formatIndex + 2 === entry.formatIndex,
+  ));
+  assert.ok(shared.length > 0, '공유 formatIndex 가 없다 — 이 테스트의 전제가 사라졌다');
+  for (const entry of shared) {
+    const plain = VERSIONS_A.find(
+      (spec) => spec.formatIndex === entry.formatIndex || spec.formatIndex + 2 === entry.formatIndex,
+    );
+    // 실측 2026-08-18: fmtIdx 3 → 턴A A2TQ(k=10) vs 기본 A0Q(k=6).
+    assert.notEqual(entry.k, plain.k,
+      entry.name + '(k=' + entry.k + ') 와 기본 A(k=' + plain.k + ') 의 k 가 같다'
+      + ' — 그렇다면 방향 판별 없이도 무해했다는 뜻이니 이 편입의 근거를 재검토하라');
+  }
+});
