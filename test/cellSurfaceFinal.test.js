@@ -137,7 +137,7 @@ test('formatIndex 배정 — 한 쌍 (2T=1 · 3T=3), cube 축 기사용 슬롯�
   }
 });
 
-test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0t/Y1 · 25→**공백**), 와이어는 보존', () => {
+test('n → 라인업 기본·버전 (13→v0/Y0 · 21→**v0tr**/Y1 · 25→**공백**), 와이어는 보존', () => {
   // ── 갱신 이력 (아래 단언이 정본이고, 이 줄들은 «어떻게 여기까지 왔나» 다) ──
   //   2026-08-15 밤: v1r2 가 n=21 A/B 후보로 부활 — 기본은 v2r2 유지.
   //   2026-08-16:    v0X 편입으로 n=21 후보 셋 — 기본은 v2r2 유지.
@@ -224,19 +224,35 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0t/Y1 · 25→**공백
   // **v0TRQ 는 있다** — v0TQ 를 막던 포맷 복제 이격이 v0TR 에서 풀린다
   // (S_fmt 340 ≥ 289 · 실측 `claude-v0tr-measure.mjs` ⓓ). **v0TRY 는 안 만들었다** —
   // 먼 코너 슬롯 자리는 실기기에서 잘 동작하는 v0TY 가 지킨다 (운영자 옵션).
+  // **의도적 갱신 «n=21 기본 v0t → v0tr» (운영자 실기기 판정 2026-08-18)** — 바로 위
+  // 편입 문단이 «드랍 판정은 실기기 재스캔 뒤 운영자 몫» 이라고 미뤄 둔 그 판정이
+  // 왔다 (운영자: 「v0T/v0TR 계열 인식 괜찮고, v0TR 우선순위를 가장 높여달라」).
+  // **드랍은 여전히 하나도 없다** — v0t·v0ty 는 활성 그대로고, 바뀐 것은 선언
+  // 순서뿐이다: `v0tr` 이 `v0t` **앞으로** 옮겨졌다. 그래서
+  //   · `CELL_SURFACE_FINAL_IDS` 의 꼬리 = [… v0wy, **v0tr, v0t**, v0ty, v0trq]
+  //   · `finalLayoutIdForN(21)` = **v0tr**
+  // 이 순서가 관여하는 곳은 `pickBetterLayout` 의 **마지막 동점 처리 한 자리뿐**이다
+  // (accepted → agreement → 선언 순서). agreement 가 다르면 순서와 무관하게 높은
+  // 쪽이 이기므로, 이 변경은 «v0tr 을 더 잘 잡게» 만드는 것이 아니라 «비겼을 때
+  // v0tr 로 부른다» 는 뜻이다 — 인식률 주장으로 읽으면 안 된다.
   assert.deepEqual([...CELL_SURFACE_FINAL_IDS],
-    ['v0', 'v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2', 'v0wy', 'v0t', 'v0ty',
-      'v0tr', 'v0trq']);
+    ['v0', 'v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2', 'v0wy', 'v0tr', 'v0t',
+      'v0ty', 'v0trq']);
   assert.deepEqual([...CELL_SURFACE_FINAL_DROPPED_IDS],
     ['v2r2', 'v1r2', 'v0xq', 'v0x', 'v0w', 'v0wq', 'v0w2', 'v0wy']);
   assert.deepEqual([...CELL_SURFACE_FINAL_ACTIVE_IDS],
-    ['v0', 'v0t', 'v0ty', 'v0tr', 'v0trq']);
+    ['v0', 'v0tr', 'v0t', 'v0ty', 'v0trq']);
   assert.equal(finalLayoutIdForN(13), 'v0');
-  assert.equal(finalLayoutIdForN(21), 'v0t');
+  // **의도적 갱신 (운영자 실기기 판정 2026-08-18)** — n=21 기본이 v0t → **v0tr**.
+  // 편입 때 «기본을 바꾸는 것은 실기기 판정의 몫» 이라고 규약에 적어 뒀고 지금이
+  // 그 시점이다 (운영자: 「v0T/v0TR 계열 인식 괜찮고, v0TR 우선순위를 가장 높여달라」).
+  // 순서는 pickBetterLayout 의 **동점 처리**에만 관여한다 — agreement 가 다르면
+  // 순서와 무관하게 높은 쪽이 이긴다.
+  assert.equal(finalLayoutIdForN(21), 'v0tr');
   assert.equal(finalLayoutIdForN(25), null);
   assert.equal(finalLayoutIdForN(11), null);
   assert.deepEqual([...finalLayoutIdsForN(13)], ['v0']);
-  assert.deepEqual([...finalLayoutIdsForN(21)], ['v0t', 'v0ty', 'v0tr', 'v0trq']);
+  assert.deepEqual([...finalLayoutIdsForN(21)], ['v0tr', 'v0t', 'v0ty', 'v0trq']);
   assert.deepEqual([...finalLayoutIdsForN(25)], []);
   assert.deepEqual([...finalLayoutIdsForN(11)], []);
   // 와이어 질의는 드랍을 보지 않는다 — 발행된 v2r2@21/@25 · v0xq@21 · v0x@21 ·
@@ -247,9 +263,11 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→v0t/Y1 · 25→**공백
   assert.equal(cellSurfaceFinal(21, 'v0wq').id, 'v0wq');
   assert.equal(cellSurfaceFinal(21, 'v0w2').id, 'v0w2');
   assert.equal(cellSurfaceFinal(21, 'v0wy').id, 'v0wy');
+  // 와이어 질의도 **선언 순서**를 그대로 따른다 — 2026-08-18 v0tr 우선순위 변경이
+  // 여기까지 비친다 (드랍 포함 전수라는 사실은 그대로다).
   assert.deepEqual([...allFinalLayoutIdsForN(21)],
-    ['v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2', 'v0wy', 'v0t', 'v0ty',
-      'v0tr', 'v0trq']);
+    ['v2r2', 'v1r2', 'v0x', 'v0xq', 'v0w', 'v0wq', 'v0w2', 'v0wy', 'v0tr', 'v0t',
+      'v0ty', 'v0trq']);
   assert.equal(hasFinalLayoutWireForN(13), true);
   assert.equal(hasFinalLayoutWireForN(21), true);
   assert.equal(hasFinalLayoutWireForN(25), true);
@@ -1069,8 +1087,11 @@ test('n=21 활성 라인업 교차 수용 — 별칭 두 방향의 원인이 구
   // 드랩은 없다 (v0t·v0ty 그대로). 새 쌍 v0tr↔v0trq 는 v0t↔v0ty 와 **같은 기전의
   // 구조적 별칭**이고, 그 밖에 **새 종류의 쌍 둘**이 더 생겼다 (v0t↔v0tr ·
   // v0t↔v0trq). 아래 ② 가 넷 쌍을 전부 실측값으로 핀하고 기전을 적는다.
+  // **의도적 갱신 (2026-08-18)** — 순서만 바뀌었다 (v0tr 이 맨 앞). **집합은 그대로**
+  // 이므로 아래 ①②의 별칭 기전·실측값은 재산정 대상이 아니다 — 별칭은 레이아웃
+  // **쌍**의 기하에서 나오지 라인업 순서에서 나오지 않는다.
   const ACTIVE21 = [...finalLayoutIdsForN(21)];
-  assert.deepEqual(ACTIVE21, ['v0t', 'v0ty', 'v0tr', 'v0trq'],
+  assert.deepEqual(ACTIVE21, ['v0tr', 'v0t', 'v0ty', 'v0trq'],
     '활성 n=21 라인업이 바뀌었다 — 이 표를 재산정하라');
 
   // ① 별칭의 **원인**을 먼저 못 박는다 (증상보다 기전을 잠근다).
@@ -1227,28 +1248,58 @@ test('n=21 활성 라인업 교차 수용 — 별칭 두 방향의 원인이 구
   assert.deepEqual(seenRotated.sort(), [...ALIASED_ROTATED].sort(),
     '회전 별칭 집합이 바뀌었다 (기대 0) — 실측으로 갱신하라');
 
-  // ④ 타이브레이크 — agreement 동률(양방향 1.0)이면 `pickBetterLayout` 이 «그 n 의
-  //    기본»(v0t)을 고른다. 그래서 **이상 표본기에서는 v0ty 프레임도 v0t 로 뽑힌다**
-  //    — 후보 순서와 무관하게. 이것은 결함이 아니라 이상 표본기의 좌표다: 실물
-  //    래스터에서는 슬롯 자리 픽셀이 v0t 채점을 어긋내 agreement 가 갈리고, 블록
-  //    로케이터의 슬롯 QR 확증이 층 하나를 더 댄다 (실사진 검증은 이 체크아웃에서
-  //    불가 — 통합자 확인 항목).
+  // ④ 타이브레이크 — `pickBetterLayout` 의 동률 해소는 **두 단계**다 (모듈 실독):
+  //      accepted → agreement → **기본 id(그 n 의 preferred)** → 그래도 동률이면 left.
+  //    즉 ⓐ 기본이 후보에 끼면 **순서 무관**하게 기본이 이기고, ⓑ 안 끼면 **앞선
+  //    후보**가 이긴다.
+  //
+  //    **의도적 갱신 (2026-08-18, n=21 기본 v0t → v0tr)** — 예전 이 핀은 두 규칙을
+  //    «기본을 따른다» 한 문장으로 뭉쳐 놨다. 기본(v0t)이 **마침 선언 순서 1위**라
+  //    ⓐ와 ⓑ가 같은 답을 내서 구분이 안 됐던 것이다 — 기본을 옮기자 그 융합이
+  //    깨졌다. 이제 v0t·v0ty 쌍에는 기본이 없으므로 **ⓑ(앞선 후보)** 가 가른다.
+  //    거동을 고친 게 아니라 **핀이 덜 재고 있던 축을 드러낸 것**이므로, 두 순서를
+  //    각각 다른 기대값으로 잠근다 (한 값으로 묶으면 그 축이 다시 숨는다).
+  //
+  //    이상 표본기에서 v0ty 프레임이 v0t 로도 뽑히는 것은 결함이 아니라 좌표다:
+  //    실물 래스터에서는 슬롯 자리 픽셀이 v0t 채점을 어긋내 agreement 가 갈리고,
+  //    블록 로케이터의 슬롯 QR 확증이 층 하나를 더 댄다 (실사진 검증은 이
+  //    체크아웃에서 불가 — 통합자 확인 항목).
   const v0tyFrame = encodeY(PAYLOAD, {
     cellSurfaceLayout: 'v0ty', version: 1, tones: 2, eccLevel: 'M',
   });
-  for (const order of [['v0t', 'v0ty'], ['v0ty', 'v0t']]) {
+  for (const [order, expected] of [[['v0t', 'v0ty'], 'v0t'], [['v0ty', 'v0t'], 'v0ty']]) {
     const picked = evaluateCellSurfaceGeometry(
       { n: 21 }, idealSampleCellForEncoded(v0tyFrame), { cellSurfaceLayouts: order },
     ).scored.layoutId;
-    assert.equal(picked, 'v0t',
-      '후보 순서 [' + order.join(',') + '] 에서 타이브레이크가 기본(v0t)을 안 따랐다');
+    assert.equal(picked, expected,
+      '후보 순서 [' + order.join(',') + '] 에서 동률 타이브레이크가 앞선 후보를 안 골랐다'
+      + ' — 기본(' + finalLayoutIdForN(21) + ')은 이 쌍에 없으므로 left 가 이겨야 한다');
   }
-  // ④-b **v0TR 계열은 좌표가 다르다** (2026-08-17, 실측으로 정정) — 타이브레이크가
-  //    견는 우선 id 는 `pickBetterLayout` 의 **«그 n 의 기본» 하나뿐**이고 그것은
-  //    v0t 다. v0tr↔v0trq 는 둘 다 기본이 아니므로 동률 1.0 에서 **후보 순서가
-  //    가른다** (앞선 쪽이 이긴다). 거동을 바꾸지 않고 **그 사실을 핀**한다 —
-  //    우선 id 를 계열별로 늘리는 것은 공유 선택기를 고치는 일이라 이 레인의
-  //    몴이 아니고, 실제 라인업 순회(④-c)는 선언 순서라 v0tr 이 이긴다.
+  // ④-a **기본이 낀 쌍은 순서가 안 통한다** — 2026-08-18 변경의 «실제로 달라지는
+  //    자리»가 여기다. 다만 이상 표본기에서 v0tr↔v0t 는 애초에 동률이 아니라
+  //    (v0tr 프레임: v0tr 1.000 vs v0t 0.827) agreement 단계에서 갈린다. 그래서
+  //    **전체 라인업 판정은 변경 전후가 같다** — 이 변경은 «실물 래스터에서 둘이
+  //    정확히 동률로 붙는 순간»에만 보인다. 인식률 개선으로 읽으면 안 된다.
+  //    (실측: `test/output/lanes/claude-tiebreak-v0tr.mjs` — 네 프레임 × 일곱 후보조합)
+  const v0trFrame = encodeY(PAYLOAD, {
+    cellSurfaceLayout: 'v0tr', version: 1, tones: 2, eccLevel: 'M',
+  });
+  for (const order of [['v0tr', 'v0trq'], ['v0trq', 'v0tr']]) {
+    const picked = evaluateCellSurfaceGeometry(
+      { n: 21 }, idealSampleCellForEncoded(v0trFrame), { cellSurfaceLayouts: order },
+    ).scored.layoutId;
+    assert.equal(picked, 'v0tr',
+      '기본(v0tr)이 낀 동률 쌍 [' + order.join(',') + '] 에서 순서가 기본을 이겼다');
+  }
+  // ④-b **우선 id 는 여전히 하나뿐이다** — `pickBetterLayout` 이 보는 것은 «그 n 의
+  //    기본» 단 하나이고, 2026-08-17 판에서는 그것이 v0t 였기에 v0tr↔v0trq 동률은
+  //    후보 순서가 갈랐다. **2026-08-18 로 기본이 v0tr 이 되면서 그 쌍은 순서를
+  //    잃었다** — 이제 v0trq 프레임도 두 순서 모두 v0tr 로 뽑힌다.
+  //    두 가지를 분명히 해 둔다:
+  //      · 잃은 것은 «순서가 가른다» 는 **관측 축**이지 거동의 정확도가 아니다.
+  //        그 축은 위 ④(v0t↔v0ty, 기본이 안 낀 쌍)가 이어받아 계속 잰다.
+  //      · 우선 id 를 계열별로 늘리는 것은 공유 선택기를 고치는 일이라 여전히
+  //        이 레인의 몫이 아니다 — 순서 변경만으로 원하는 결과가 나왔다.
   const v0trqFrame = encodeY(PAYLOAD, {
     cellSurfaceLayout: 'v0trq', version: 1, tones: 2, eccLevel: 'M',
   });
@@ -1256,8 +1307,8 @@ test('n=21 활성 라인업 교차 수용 — 별칭 두 방향의 원인이 구
     const picked = evaluateCellSurfaceGeometry(
       { n: 21 }, idealSampleCellForEncoded(v0trqFrame), { cellSurfaceLayouts: order },
     ).scored.layoutId;
-    assert.equal(picked, order[0],
-      '후보 순서 [' + order.join(',') + '] 에서 동률 타이브레이크가 앞선 후보를 안 골랐다');
+    assert.equal(picked, 'v0tr',
+      '후보 순서 [' + order.join(',') + '] 에서 기본(v0tr)이 동률을 못 가져갔다');
   }
   // ④-c **넷 프레임 전부 자기 계열이 뽑힌다** — ②ⓒ 의 새 별칭(v0t↔v0tr)이
   //    «같이 수용됨» 일 뿐 «오분류» 가 아니라는 것의 증거다. 슬롯 변형은

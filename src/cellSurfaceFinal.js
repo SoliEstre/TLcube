@@ -413,11 +413,19 @@ export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0WQ,
   CELL_SURFACE_FINAL_V0W2,
   CELL_SURFACE_FINAL_V0WY,
+  // ⭐ **v0TR 이 n=21 기본이다 (운영자 실기기 판정 2026-08-18)** — 편입 때 맨 뒤에
+  // 두면서 «기본을 바꾸는 것은 실기기 판정의 몫이지 편입의 몫이 아니다» 라고 적어
+  // 뒀고, 지금이 그 시점이다. 운영자 관측: 「v0T/v0TR 계열 인식은 괜찮고, v0TR
+  // 우선순위를 가장 높여주면 도움이 될 것 같다」. 규약대로 한 것이다.
+  //
+  // 근거 보강 — A 블록 편입(00936ce) 후 v0tr 의 방향 margin 은 **0.0980** 으로
+  // v0t(0.0962)보다 높다. 동점에서 선호되는 쪽이 더 두꺼운 여유를 갖는 편이 낫다.
+  // 그리고 순서는 pickBetterLayout 의 **동점 처리**에만 관여한다 — agreement 가
+  // 다르면 순서와 무관하게 높은 쪽이 이긴다. 즉 이 변경은 «틀린 답을 고르게»
+  // 만들 수 없다. 바꾸는 것은 «둘 다 똑같이 맞을 때 누구 이름으로 부르나» 뿐이다.
+  CELL_SURFACE_FINAL_V0TR,
   CELL_SURFACE_FINAL_V0T,
   CELL_SURFACE_FINAL_V0TY,
-  // v0TR 계열 (2026-08-17 편입) — 맨 뒤에 둔다. **n=21 기본은 v0t 그대로다**
-  // (선언 순서 승계 규약 — 기본을 바꾸는 것은 실기기 판정의 몫이지 편입의 몫이 아니다).
-  CELL_SURFACE_FINAL_V0TR,
   CELL_SURFACE_FINAL_V0TRQ,
 ]);
 

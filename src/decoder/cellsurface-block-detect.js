@@ -2809,10 +2809,18 @@ function assembleAnchoredPoses(
           }
         }
       }
-      // v0TR (v0T 재설계, 2026-08-17) — **여기만 반경이 다르다** (√129 = 11.3578).
-      // 위 브랜치들과 **독립**이다 (게이트 실패가 서로를 안 자른다 — v0X ↔ v0W 에서
-      // 고친 결합을 다시 만들지 않는다). 반경이 3.2셀 밖이므로 v0T·v0TY 프레임에서는
-      // 이 `if` 가 첫 줄에서 끝난다 = 편입 비용이 그 프레임들에는 붙지 않는다.
+      // v0TR (v0T 재설계, 2026-08-17) — 위 브랜치들과 **독립**이다 (게이트 실패가
+      // 서로를 안 자른다 — v0X ↔ v0W 에서 고친 결합을 다시 만들지 않는다).
+      //
+      // ⚠ **정정 (2026-08-18, v0TRY 레인 지적)**: 여기에 «여기만 반경이 다르다
+      // (√129 = 11.3578) · 3.2셀 밖이라 v0T·v0TY 프레임에서는 이 if 가 첫 줄에서
+      // 끝난다 = 비용이 안 붙는다» 고 적혀 있었다. **둘 다 사실이 아니다.**
+      // `V0TR_CORE_RADIUS_CELLS` 는 **√279 = 16.7033** 으로 v0T 계열과 **같다** —
+      // 코너 앵커가 바깥 동심 사각이기 때문이다(§V0TR_BLOCKS 및 위 §1426 주석:
+      // «안쪽을 코너 앵커로» 는 실물에서 엄격 코너 검증이 안 돼 기각됐다).
+      // 반경이 같으므로 이 `if` 는 v0T·v0TY 프레임에서도 **매번 열리고**, 그래서
+      // 편입 비용이 그 프레임들에도 붙는다 — 실측 **+17\~28 %** (v0TRY 레인 §①ⓖ).
+      // 낡은 주석을 믿고 «비용이 안 붙는다» 로 설계 판단을 하면 안 된다.
       if (cfg.v0trFamily !== false
         && Math.abs(estimatedRadius - V0TR_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
         // ⚠ 리베이스 화해 (2026-08-18): 이 브랜치는 `fd37c9c` 기준 레인에서 왔고
@@ -2987,7 +2995,10 @@ function assembleBullseyeConfirmedPoses(
             { on: cfg.v0tFamily !== false, id: 'v0t', n: V0T_N, radius: V0T_CORE_RADIUS_CELLS, out: posesV0t },
             { on: cfg.v0tyFamily !== false, id: 'v0ty', n: V0TY_N, radius: V0TY_CORE_RADIUS_CELLS, out: posesV0ty, slotQr: true, slotQrEnabled: cfg.v0tyRequireSlotQr },
             // v0TR (2026-08-17) — 중앙이 v0T 와 같은 K3 계보 16셀이라 같은 구제 대상이다.
-            // 다만 **반경만 다르다** (√129) — 이 표에서 반경이 v0X/√279 가 아닌 유일한 행이다.
+            // ⚠ **정정 (2026-08-18)**: «반경만 다르다 (√129) — 이 표에서 √279 가 아닌
+            // 유일한 행» 이라고 적혀 있었으나 **틀렸다.** `V0TR_CORE_RADIUS_CELLS` 는
+            // √279 = 16.7033 으로 이 표의 다른 행과 **같다** (코너 앵커가 바깥 사각).
+            // 같은 오류가 앵커드 브랜치 주석에도 있었다 — 함께 고쳤다.
             { on: cfg.v0trFamily !== false, id: 'v0tr', n: V0TR_N, radius: V0TR_CORE_RADIUS_CELLS, out: posesV0tr },
           ]) {
             if (!spec.on) continue;
