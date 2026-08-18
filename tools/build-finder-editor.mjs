@@ -20,7 +20,8 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // 그 앞에 온다. autoplaceHex 는 autoplaceY 의 AutoplaceError 를 재사용하고 autoplaceY 는
   // placementY 만 쓴다. markerA 는 layoutA·capacityA·markerO 전부의 뒤여야 한다.
   'placementY', 'autoplaceY', 'autoplaceHex', 'markerO',
-  'placementA', 'layoutA', 'capacityA', 'markerA', 'encodeA', 'luminance', 'export-filename',
+  // turnA 는 encodeA 앞 (2026-08-18 턴A 편입 — encodeA 가 표를 조회한다).
+  'placementA', 'layoutA', 'capacityA', 'markerA', 'turnA', 'encodeA', 'luminance', 'export-filename',
   'gf256', 'rs', 'qr', 'encode', 'scene', 'raster', 'png',
 ]);
 

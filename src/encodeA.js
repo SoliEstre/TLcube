@@ -15,6 +15,7 @@
 // 오버헤드·용량 수치는 centerQr 무관 동일하다(19셀 슬롯 기하 동일, D5 근거).
 
 import { VERSIONS_A, capacityForA, versionSpecA } from './capacityA.js';
+import { turnASpec } from './turnA.js';
 import { frame, payloadByteLength } from './header.js';
 import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
 import { rsEncode } from './rs211.js';
@@ -103,7 +104,15 @@ export function encodeA(text, options = {}) {
   if (typeof text !== 'string') {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
-  const { version, eccLevel = 'M', centerQr = false, cornerMarker = false } = options;
+  const {
+    version, eccLevel = 'M', centerQr = false, cornerMarker = false, turnA = false,
+  } = options;
+  if (typeof turnA !== 'boolean') {
+    throw new TypeError(`turnA 는 boolean 이어야 한다: ${typeof turnA}`);
+  }
+  if (turnA && cornerMarker) {
+    throw new RangeError('turnA 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
   }
@@ -186,7 +195,25 @@ export function encodeA(text, options = {}) {
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
-  const formatIndex = spec.formatIndex + (centerQr ? 2 : 0);
+  /*
+   * formatIndex 산출 — 두 규약이 공존한다.
+   *
+   * ⓐ 정삼각 A (기본): `spec.formatIndex + centerQr*2` **산술 유도**.
+   *    이것이 **발행 규약**이다 (A0 1 · A0Q 3 · A1 12 · A1Q 14 · A2 13 · A2Q 15).
+   *    이미 돌아다니는 A 코드가 이 값으로 읽히므로 **한 자리도 못 바꾼다** —
+   *    `test/turnA-wire-regression.test.js` 가 6벡터를 고정한다.
+   *
+   * ⓑ 턴A (역삼각 옵션): **표 주도**(`src/turnA.js`). 산술이 원리적으로 불가능하다 —
+   *    A1=12 에 균일 오프셋 +4 를 주면 16 이라 4bit 를 넘친다. 그래서 표가 전부다.
+   *
+   * 두 규약이 충돌하지 않는 이유: formatIndex 는 **타입 안에서만** 유일하면 되고
+   *    (`decode.js` 의 typeO/typeA/typeY 별 해석 함수), 턴A 는 역삼각 실루엣이라
+   *    정삼각 A 와 기하로 먼저 갈린다. 운영자 확정 — «별도 타입처럼 취급하되
+   *    UI 상에만 같은 타입» (2026-08-18).
+   */
+  const formatIndex = turnA
+    ? turnASpec(spec.version, { centerQr }).formatIndex
+    : spec.formatIndex + (centerQr ? 2 : 0);
   const formatReplicas = encodeReplicated({ version: formatIndex, eccLevel: eccLevelValue });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(k) 순서와 정합
 
@@ -232,6 +259,7 @@ export function encodeA(text, options = {}) {
     eccLevel,
     centerQr,
     cornerMarker,
+    turnA,
     formatIndex,
     capacity,
     codewordSymbols,

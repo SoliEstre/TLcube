@@ -113,6 +113,28 @@ export function regionCellsA(k) {
   return [...hexPart, ...top, ...br, ...bl];
 }
 
+/**
+ * ── 턴A 영역 (역삼각 옵션, 2026-08-18) ─────────────────────────────────────
+ *
+ * 턴A 는 별도 타입이 아니라 **타입 A 의 옵션**이고 (운영자 확정 015 §16),
+ * 실루엣만 역삼각이다. 그래서 정의가 곧 유도다 — **영역 A 를 축좌표 180° 돌린 것**:
+ *   (q, r) → (−q, −r)
+ * 육각 코어는 180° 대칭이라 **제자리**이고, 세 패치만 반대편으로 간다.
+ *
+ * 판별력 (k=6 실측): 190셀 중 육각 코어 127 은 두 방향이 공유하고 **각각 63셀이
+ * 배타적**이다. 정삼각 프레임에서 역삼각 셀을 재면 «코드 밖 배경» 을 읽으므로
+ * 두 가설이 126셀에서 갈린다 — 디코더가 방향을 가를 근거가 여기서 나온다.
+ *
+ * 손 좌표 0 · 새 상수 0 — `regionCellsA` 의 사상일 뿐이다. 셀 수·코어 공유는
+ * 로드 시점 자기검증이 확인한다 (아래).
+ *
+ * @param {number} k
+ * @returns {{q:number, r:number}[]} `regionCellsA(k)` 와 같은 길이·같은 순서의 180° 상
+ */
+export function regionCellsTurnA(k) {
+  return regionCellsA(k).map((cell) => ({ q: -cell.q, r: -cell.r }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 꼭짓점 앵커 3셀 (D2)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -232,4 +254,36 @@ export function roleOfA(q, r, k, roleSets) {
   if (sets.format.has(kk)) return 'format';
   if (sets.reference.has(kk)) return 'reference';
   return 'data';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 턴A 영역 자기검증 (2026-08-18) — 유도가 주장대로인지 로드 시점에 못 박는다.
+// 「180° 상이다 · 육각 코어는 제자리다 · 패치만 배타적이다」 셋이 이 편입의 근거고,
+// 하나라도 깨지면 방향 판별이 조용히 무의미해진다.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const key = (c) => c.q + ',' + c.r;
+  for (const k of [4, 6, 8, 10]) {
+    const up = regionCellsA(k);
+    const down = regionCellsTurnA(k);
+    if (up.length !== down.length) {
+      throw new Error('turnA: 영역 길이가 다르다 k=' + k);
+    }
+    const upSet = new Set(up.map(key));
+    const shared = down.filter((c) => upSet.has(key(c)));
+    const hexOnly = regionCells(k);
+    if (shared.length !== hexOnly.length) {
+      throw new Error('turnA: 공유 셀이 육각 코어와 다르다 k=' + k
+        + ' — 공유 ' + shared.length + ' vs 코어 ' + hexOnly.length);
+    }
+    // 공유 = 정확히 육각 코어여야 한다 (집합 동일성까지).
+    const coreSet = new Set(hexOnly.map(key));
+    for (const c of shared) {
+      if (!coreSet.has(key(c))) throw new Error('turnA: 공유 셀이 코어 밖이다 ' + key(c));
+    }
+    // 배타 셀이 없으면 방향을 못 가른다 — 판별력의 하한이다.
+    if (up.length - shared.length <= 0) {
+      throw new Error('turnA: 배타 셀이 없다 k=' + k + ' — 방향 판별 불가');
+    }
+  }
 }

@@ -31,7 +31,7 @@ import {
   hexDistance,
   regionCells,
 } from '../hexgrid.js';
-import { regionCellsA } from '../placementA.js';
+import { regionCellsA, regionCellsTurnA } from '../placementA.js';
 
 /*
  * 패밀리 점수의 임계값·가중치는 설계에서 M1 calibration 전 [미검증]이다.
@@ -328,14 +328,26 @@ function listCells(k, options) {
   }
 }
 
-function patchCells(k, options) {
+/**
+ * 코어 밖 패치 셀 — 실루엣 **방향**별로 낸다 (2026-08-18 턴A 편입).
+ *
+ * `turn: false` = 정삼각(기존 A) · `turn: true` = 역삼각(턴A). 육각 코어는 180°
+ * 대칭이라 두 방향이 공유하고, **패치만 배타적**이다 (k=6 에서 각 63셀).
+ * 그래서 방향 판별의 근거가 전부 이 함수의 산출에 있다.
+ *
+ * ⚠ 기본값이 정삼각이라 **기존 호출은 한 비트도 안 바뀐다.**
+ * `options.patchCells` 명시 경로도 종전 그대로다 (방향을 무시한다 — 호출자가
+ * 이미 좌표를 정한 것이므로).
+ */
+function patchCells(k, options, turn = false) {
   if (Array.isArray(options.patchCells)) {
     return options.patchCells
       .filter((cell) => cell && Number.isInteger(cell.q) && Number.isInteger(cell.r))
       .map((cell) => ({ q: cell.q, r: cell.r }));
   }
   try {
-    return regionCellsA(k)
+    const region = turn ? regionCellsTurnA(k) : regionCellsA(k);
+    return region
       .filter((cell) => hexDistance(cell.q, cell.r) > k)
       .map((cell) => ({ q: cell.q, r: cell.r }));
   } catch (error) {
@@ -544,32 +556,54 @@ function scoreTriInternal(luma, finderInput, options = {}) {
   }
   const orientations = normalizeOrientation(options);
   const measurements = [];
+  /*
+   * 실루엣 방향 가설 (2026-08-18 턴A 편입) — 정삼각(false) · 역삼각(true).
+   *
+   * 육각 코어는 180° 대칭이라 두 방향이 공유하고 **패치만 배타적**이다
+   * (k=6 에서 각 63셀 · placementA 자기검증이 확인). 그래서 코어 측정은 방향당
+   * 재계산할 필요가 없고, **패치만** 두 벌 잰다 — 비용은 패치 측정 한 벌 추가다.
+   *
+   * ⚠ 기존 A 프레임에서는 정삼각이 이겨야 한다 (역삼각 패치는 코드 밖 배경을
+   * 읽으므로 strictRate 가 낮다). 그 사실이 «동작 무변경» 의 근거이고
+   * `test/turnA-detect.test.js` 가 그것을 잰다.
+   *
+   * `options.patchCells` 를 명시한 호출자는 방향 열거를 끄고 종전 그대로 간다 —
+   * 좌표를 이미 정한 것이므로 방향을 추측하지 않는다.
+   */
+  const turnCandidates = Array.isArray(options.patchCells) ? [false] : [false, true];
   for (const k of ks) {
     const core = listCells(k, options);
-    const patches = patchCells(k, options);
+    const patchesByTurn = turnCandidates.map((turn) => patchCells(k, options, turn));
     for (const orientation of orientations) {
       const coreMeasured = measureCells(luma, finder, k, orientation, core, options);
-      const patchMeasured = measurePatch(luma, finder, k, orientation, patches, options);
       const coreRate = coreMeasured.strictRate;
-      const patchRate = patchMeasured.strictRate;
-      const score = TRI_SCORE_WEIGHTS.patch * patchRate
-        + TRI_SCORE_WEIGHTS.core * coreRate
-        + TRI_SCORE_WEIGHTS.finder * finder.score;
-      measurements.push({
-        k,
-        orientation,
-        score,
-        coreRate,
-        patchRate,
-        core: coreMeasured,
-        patch: patchMeasured,
-      });
+      for (let t = 0; t < turnCandidates.length; t += 1) {
+        const turn = turnCandidates[t];
+        const patchMeasured = measurePatch(
+          luma, finder, k, orientation, patchesByTurn[t], options,
+        );
+        const patchRate = patchMeasured.strictRate;
+        const score = TRI_SCORE_WEIGHTS.patch * patchRate
+          + TRI_SCORE_WEIGHTS.core * coreRate
+          + TRI_SCORE_WEIGHTS.finder * finder.score;
+        measurements.push({
+          k,
+          orientation,
+          turn,
+          score,
+          coreRate,
+          patchRate,
+          core: coreMeasured,
+          patch: patchMeasured,
+        });
+      }
     }
   }
   const ordered = sortMeasurements(measurements);
   const best = ordered[0] || {
     k: undefined,
     orientation: undefined,
+    turn: false,
     score: 0,
     coreRate: 0,
     patchRate: 0,
@@ -591,6 +625,8 @@ function scoreTriInternal(luma, finderInput, options = {}) {
     gridKind: 'hex-core-tri-patch',
     k: best.k,
     orientation: best.orientation,
+    /** 실루엣 방향 — false = 정삼각(기존 A) · true = 역삼각(턴A). */
+    turn: best.turn === true,
     score: clamp01(best.score),
     hardChecks: {
       finder: finderCheck,
@@ -607,9 +643,10 @@ function scoreTriInternal(luma, finderInput, options = {}) {
       },
       lumaSpan: stats.span,
       sizeScores: ordered,
-      selectedSize: { k: best.k, orientation: best.orientation },
+      selectedSize: { k: best.k, orientation: best.orientation, turn: best.turn === true },
     },
-    hypothesisId: 'tri-' + best.k + '-' + best.orientation,
+    hypothesisId: 'tri-' + best.k + '-' + best.orientation
+      + (best.turn === true ? '-turn' : ''),
   });
 }
 

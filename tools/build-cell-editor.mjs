@@ -20,7 +20,8 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // O-CM/A-CM 코너 마커 (2026-08-16) — encodeA.js 가 markerA 를, markerA 가 markerO 를,
   // markerO 가 autoplaceHex 를, autoplaceHex 가 autoplaceY(→placementY) 를 쓴다.
   'placementY', 'autoplaceY', 'autoplaceHex', 'markerO',
-  'placementA', 'layoutA', 'capacityA', 'markerA', 'encodeA',
+  // turnA 는 encodeA 앞 (2026-08-18 턴A 편입 — encodeA 가 표를 조회한다).
+  'placementA', 'layoutA', 'capacityA', 'markerA', 'turnA', 'encodeA',
   'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'encodeY',
   'luminance', 'export-filename', 'cell-editor-history', 'cell-editor-core',
