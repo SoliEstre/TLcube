@@ -266,6 +266,16 @@ function observationsAt(luma, H, detailed, faceSamples = FACE_SAMPLES) {
 function scoreTemplate(sampled, template, span) {
   const expected = sampled.detailed ? template.detailedExpected : template.expected;
   const expectedNorm = sampled.detailed ? template.detailedExpectedNorm : template.expectedNorm;
+  // **길이 불일치를 조용히 삼키지 않는다** (2026-08-18 사고 재발 방지).
+  // 아래 루프는 `sampled.values.length` 까지만 돈다. 관측과 기대의 길이가 다르면
+  // «기대의 앞부분만» 비교되고, 그건 **다른 발자국을 비교하는 것**인데도
+  // 그럴듯한 상관값이 나온다 — 검출 실패가 아니라 «조용히 틀린 답» 이라
+  // 원인 추적에 하루가 걸렸다. 회귀보다 이 단언이 싸다.
+  if (expected.length !== sampled.values.length) {
+    throw new RangeError('발자국 불일치: 관측 ' + sampled.values.length
+      + ' vs 기대 ' + expected.length + ' (' + template.id + ')'
+      + ' — observationsAt 에 template.faceSamples 를 넘겼는지 보라');
+  }
   const lightCount = sampled.detailed ? template.detailedLightCount : template.lightCount;
   const darkCount = sampled.detailed ? template.detailedDarkCount : template.darkCount;
   let dot = 0;
@@ -459,7 +469,15 @@ function geometryModelPenalty(params) {
 }
 function scoreParams(luma, params, template, span) {
   const H = HFrom(params);
-  const sampled = observationsAt(luma, H, true);
+  // ⚠ **넷째 인자를 빠뜨리면 조용히 틀린다** (2026-08-18 실제 사고).
+  //   발자국 파라미터화가 scoreAll·scoreBest 까지 배선됐는데 이 정교화 경로만
+  //   빠져 있었다. 그러면 언제나 기본 19셀 표본을 뜨고, scoreTemplate 은
+  //   `sampled.values.length` 까지만 돌므로 **길이 불일치가 조용히 잘려**
+  //   «발자국 배열의 앞 19셀» 만 비교된다. 증상은 «검출 실패» 가 아니라
+  //   «배열 순서에 따라 답이 달라짐» 이라 알아채기가 아주 어렵다 —
+  //   daehan 79셀에서 중앙19를 앞에 두면 1.0000, 정본 순서면 0.6058 이었다.
+  //   회귀: test/finder-footprint-refine.test.js (순서 무관성을 값으로 잠근다).
+  const sampled = observationsAt(luma, H, true, template.faceSamples);
   if (!sampled) return null;
   const scored = scoreTemplate(sampled, template, span);
   return { H, ...scored, objective: scored.fit - geometryModelPenalty(params) };
