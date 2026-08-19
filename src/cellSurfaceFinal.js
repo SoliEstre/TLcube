@@ -371,10 +371,45 @@ export const CELL_SURFACE_FINAL_V0TR = 'v0tr';
  * 슬롯 한 변 8 은 **v0WQ 값의 참조**다 (v0WY·v0TY 와 같은 참조 사슬 — 숫자 8 을 다시
  * 적지 않는다). 앵커는 `seam` — v0xq·v0wq 와 같은 Y-심 중앙 배치이고 뒤집기는 없다.
  *
- * ⚠ **`v0try`(먼 코너 슬롯 파생) 는 만들지 않았다** — 그 자리는 실기기에서 잘 동작하는
- * v0TY 가 지킨다 (운영자 옵션 «v0TY만 쓰고 나머지 v0TR 계열로»).
+ * ⚠ **의도적 갱신 (2026-08-18)** — 여기에 「`v0try`(먼 코너 슬롯 파생) 는 만들지
+ * 않았다」 가 적혀 있었다. v0TR 에 A 블록이 편입되며(`00936ce`) 그 파생이 원리적으로
+ * 성립하게 됐고, 운영자 지시로 편입했다 — §CELL_SURFACE_FINAL_V0TRY.
  */
 export const CELL_SURFACE_FINAL_V0TRQ = 'v0trq';
+/**
+ * 표시 이름은 «v0TRY» — v0TR 파생, **먼 코너 QR 슬롯** (운영자 2026-08-18).
+ * v0TY 가 v0T 에서 만들어진 것과 **정확히 같은 방식**의 유도다:
+ *
+ * ```
+ * v0try = V0TR_CELLS − [n−m, n−1]²   (n=21 · m = CENTER_QR_SLOT_CELLS_V0TY = 8 → [13,20]²)
+ * ```
+ *
+ * 슬롯 [13,20]² 가 v0TR 의 SE 블록 (18..20)² 를 **9/9 전부** 삼킨다 (계측
+ * `claude-v0try-measure.mjs` ⓐ — 삼킨 9셀 중 비대칭 6). 남는 방향 판별자는
+ * **A 블록의 L 반전 9셀**이고, 그것은 v0TY 가 SE 를 잃고도 세 방향이 서는 이유와
+ * 문자 그대로 같은 구조다 — «의도된 비대칭 이중화» 의 두 번째 실증이다.
+ *
+ * ⚠ **이 파생은 A 블록 편입(`00936ce`) 없이는 성립하지 않았다.** A 가 없던 v0TR
+ * (93셀 · 비대칭 SE 6) 에서는 슬롯이 SE 를 삼키는 순간 비대칭이 **0** 이 되어
+ * 방향 판별자가 사라진다. 순서가 그래서 중요했다.
+ *
+ * 회계 (실측 `claude-v0try-measure.mjs` ⓓ): 파인더 **93** · 슬롯 64 · detector **157** ·
+ * 441 − 93 − 64 − 12 − 18 = **254** · S=84 · **잔여 2** · payload L/M/H = 71/60/48 B ·
+ * ⑤ 인코더 정합 전 레벨 통과 · autoplace 수용 (S_fmt 333 ≥ 289 · dRef 72 ≥ 64).
+ * 방향 margin **0.0645** (18/279 · 게이트 0.035 의 **1.84배**) — v0TY(0.0632)와 분자가
+ * 같고(A 9셀 × 2 = 18 miss) 분모만 작다. v0TY·v0TRQ 와 같은 이유로 이 자는 **슬롯 QR
+ * 자신의 파인더 패턴이 주는 방향 정보를 못 세므로** 과소평가값이다.
+ *
+ * ⚠ **잔여 2 는 라인업에서 두 번째 사례다** (v0t@21 잔여 1). 254 = 3×84 + 2 라
+ * 심볼로 못 쓰는 셀이 2개 남는다 — 게이트가 아니라 회계 사실이라 그대로 선언한다.
+ * payload 는 S 가 v0TY 와 같아 한 바이트도 다르지 않다.
+ *
+ * 슬롯 한 변·앵커·뒤집기는 **v0TY 의 값을 그대로 재사용**한다 (새 상수 신설 0 —
+ * `centerQrSlotCellsFor` 가 `CENTER_QR_SLOT_CELLS_V0TY` 를 가리키고 배치는
+ * `far` / `flip: true`). 코어 반경은 v0TR 과 **같다** (√279 = 16.7033, Δ = 0.000000) —
+ * 슬롯이 SE 쪽이라 NE 코너 앵커가 한 셀도 안 움직인다.
+ */
+export const CELL_SURFACE_FINAL_V0TRY = 'v0try';
 /**
  * 선언 순서가 곧 «n 별 후보 순서» 다 (`finalLayoutIdsForN`). v0W·v0WQ 를 **맨 뒤**에
  * 둔 것은 편입 시점의 규약이었다 — 당시 n=21 의 기본은 v0X 였고, 둘은 세·네 번째
@@ -423,10 +458,23 @@ export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   // 그리고 순서는 pickBetterLayout 의 **동점 처리**에만 관여한다 — agreement 가
   // 다르면 순서와 무관하게 높은 쪽이 이긴다. 즉 이 변경은 «틀린 답을 고르게»
   // 만들 수 없다. 바꾸는 것은 «둘 다 똑같이 맞을 때 누구 이름으로 부르나» 뿐이다.
+  // **의도적 갱신 «v0TRQ 를 v0T 앞으로» (운영자 실기기 판정 2026-08-19)** —
+  // 정식 스캐너 실기기 인식률 관측이 **v0 > v0TR > v0TRQ > v0T > v0TY** 로 왔다.
+  // 종전 순서는 v0TRQ 가 맨 뒤여서 관측과 어긋나 있었다. **드랍은 없다** —
+  // 바뀐 것은 선언 순서 하나이고, 그 순서는 `pickBetterLayout` 의 **동점 처리
+  // 한 자리**에만 관여한다 (accepted → agreement → 선언 순서). agreement 가 다르면
+  // 순서와 무관하게 높은 쪽이 이기므로 «틀린 답을 고르게» 만들 수 없다 —
+  // 바뀌는 것은 «둘 다 똑같이 맞을 때 누구 이름으로 부르나» 뿐이다.
+  // n=21 기본은 첫 원소인 **v0tr 그대로**다 (이 변경이 안 건드린다).
   CELL_SURFACE_FINAL_V0TR,
+  CELL_SURFACE_FINAL_V0TRQ,
   CELL_SURFACE_FINAL_V0T,
   CELL_SURFACE_FINAL_V0TY,
-  CELL_SURFACE_FINAL_V0TRQ,
+  // v0TRY (2026-08-18 편입 · 2026-08-19 통합) — v0TR 의 먼 코너 QR 파생.
+  // **맨 뒤**에 둔다: 편입 규약이기도 하고, 위 실기기 순위에 **이 후보만 없다**
+  // (당시 미배포라 못 찍혔다). 즉 «가장 낮다» 가 아니라 «아직 안 재봤다» 라서
+  // 뒤인 것이고, 실기기 관측이 오면 그때 자리를 다시 정한다.
+  CELL_SURFACE_FINAL_V0TRY,
 ]);
 
 export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
@@ -443,6 +491,7 @@ export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
   [CELL_SURFACE_FINAL_V0TY]: 'cell-surface-v0ty',
   [CELL_SURFACE_FINAL_V0TR]: 'cell-surface-v0tr',
   [CELL_SURFACE_FINAL_V0TRQ]: 'cell-surface-v0trq',
+  [CELL_SURFACE_FINAL_V0TRY]: 'cell-surface-v0try',
 });
 
 /** 신세대 셀 표면 formatIndex — 한 쌍뿐. 세 레이아웃이 같이 쓴다(신설 금지). */
@@ -463,6 +512,7 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
   [CELL_SURFACE_FINAL_V0TY]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0TR]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0TRQ]: Object.freeze([21]),
+  [CELL_SURFACE_FINAL_V0TRY]: Object.freeze([21]),
 });
 
 /**
@@ -733,6 +783,10 @@ const DECLARED_DATA = Object.freeze({
     // v0trq: 441 − 77(파인더 102 − 중앙 16 − A 9) − 64(중앙 QR 슬롯 8²) − 12 − 18 = 270.
     // 팩 counts.data 와 같은 값이지만 근거는 팩이 아니라 autoplace 재산출이다.
     [CELL_SURFACE_FINAL_V0TRQ]: Object.freeze({ 21: 270 }),
+    // v0try: 441 − 93(파인더 102 − SE 9) − 64(먼 코너 슬롯 8²) − 12 − 18 = 254.
+    // **잔여 2** (254 = 3×84 + 2) — v0t@21 잔여 1 에 이은 두 번째 사례다.
+    // 근거는 autoplace 재산출 (`claude-v0try-measure.mjs` ⓓ — S=84 · S_fmt 333 ≥ 289).
+    [CELL_SURFACE_FINAL_V0TRY]: Object.freeze({ 21: 254 }),
   }),
   // 레거시 세대 (포맷 v1 · 15셀) — **판독 전용**. 개정 전 발행 프레임의 회계다.
   [CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY]: Object.freeze({
@@ -1076,7 +1130,7 @@ export function centerQrQuietFrameCells(slotCells = CENTER_QR_SLOT_CELLS) {
 }
 
 /**
- * QR 슬롯을 갖는 레이아웃 — v0xq · v0wq · v0wy · **v0ty** · **v0trq**.
+ * QR 슬롯을 갖는 레이아웃 — v0xq · v0wq · v0wy · **v0ty** · **v0trq** · **v0try**.
  * 데이터도 파인더도 아닌 제3 역할.
  */
 const CENTER_QR_SLOT_IDS = Object.freeze([
@@ -1085,6 +1139,7 @@ const CENTER_QR_SLOT_IDS = Object.freeze([
   CELL_SURFACE_FINAL_V0WY,
   CELL_SURFACE_FINAL_V0TY,
   CELL_SURFACE_FINAL_V0TRQ,
+  CELL_SURFACE_FINAL_V0TRY,
 ]);
 
 /**
@@ -1098,6 +1153,10 @@ export function centerQrSlotCellsFor(id) {
   if (id === CELL_SURFACE_FINAL_V0WY) return CENTER_QR_SLOT_CELLS_V0WY;
   if (id === CELL_SURFACE_FINAL_V0TY) return CENTER_QR_SLOT_CELLS_V0TY;
   if (id === CELL_SURFACE_FINAL_V0TRQ) return CENTER_QR_SLOT_CELLS_V0TRQ;
+  // v0TRY 는 **v0TY 의 값을 그대로 재사용**한다 — 새 상수를 만들지 않는다
+  // (운영자 지시 «슬롯 크기·뒤집기 규약은 v0TY 와 동일하게 재사용, 새 상수 신설 금지»).
+  // 같은 먼 코너 슬롯 8×8 이므로 참조가 곧 규약이다.
+  if (id === CELL_SURFACE_FINAL_V0TRY) return CENTER_QR_SLOT_CELLS_V0TY;
   return 0;
 }
 
@@ -1126,6 +1185,10 @@ const CENTER_QR_SLOT_PLACEMENT = Object.freeze({
   [CELL_SURFACE_FINAL_V0TY]: Object.freeze({ anchor: 'far', flip: true }),
   // v0TRQ — v0xq·v0wq 와 같은 Y-심 중앙 배치. 정본 팩의 슬롯 origin 이 (0,0) 이다.
   [CELL_SURFACE_FINAL_V0TRQ]: Object.freeze({ anchor: 'seam', flip: false }),
+  // v0TRY — v0WY·v0TY 와 **같은 행**이다 (먼 코너 · 윈도 β 뒤집기). 값을 새로 고르지
+  // 않고 v0TY 규약을 그대로 재사용한 것이다 (한 코드 안에서 두 QR 이 다른 방향으로
+  // 눕는 것을 막는 ADR 0003 D1 의 연장).
+  [CELL_SURFACE_FINAL_V0TRY]: Object.freeze({ anchor: 'far', flip: true }),
 });
 
 /** 레이아웃 → 슬롯 배치 규약. 슬롯 없는 레이아웃은 null. */
@@ -1677,6 +1740,34 @@ export const V0TRQ_BLOCKS = Object.freeze({
   SLOT: Object.freeze({ iMax: V0TRQ_SLOT_MAX, jMax: V0TRQ_SLOT_MAX }),
 });
 
+/**
+ * ── v0TRY (v0TR 파생 — **먼 코너** QR 슬롯, 운영자 2026-08-18) ────────────────
+ *
+ * 슬롯 [13,20]² 가 v0TR 의 SE 블록 (18..20)² 를 9/9 삼킨다 — 정의가 곧 유도다:
+ * **V0TR_CELLS 에서 슬롯 박스 필터로 만든다** (행 참조 유지 · 손 좌표 0).
+ * `V0TY_CELLS = V0T_CELLS.filter(...)` 와 **문자 그대로 같은 꼴**이고, 슬롯 상자도
+ * v0TY 의 것을 그대로 쓴다 (`V0TY_SLOT_MIN` 참조 — 숫자 13 을 다시 적지 않는다).
+ *
+ * 남은 방향 판별자는 A 블록 (L 반전 9셀) 하나 — v0TY 와 같은 «의도된 이중화» 실증이다
+ * (§CELL_SURFACE_FINAL_V0TRY — 보충 블록 신설·마커 이전 없음).
+ */
+const V0TRY_N = 21;
+/** v0TY 와 **같은 상자**를 쓴다 — 슬롯 규약 재사용 (새 상수 신설 금지, 운영자 지시). */
+const V0TRY_SLOT_MIN = V0TY_SLOT_MIN;
+
+const V0TRY_CELLS = Object.freeze(V0TR_CELLS
+  .filter(([i, j]) => !(i >= V0TRY_SLOT_MIN && j >= V0TRY_SLOT_MIN)));
+
+/** v0TRY 블록 범위 — v0TR 에서 SE 가 슬롯으로 바뀐 것 (NW·A·NE 는 그대로). */
+export const V0TRY_BLOCKS = Object.freeze({
+  NW: V0TR_BLOCKS.NW,
+  A: V0TR_BLOCKS.A,
+  NE_OUTER: V0TR_BLOCKS.NE_OUTER,
+  NE_INNER: V0TR_BLOCKS.NE_INNER,
+  /** 먼 코너 QR 슬롯 — [n−m, n−1]². n=21·m=8 에서 [13,20]² (v0TY 와 같은 상자). */
+  SLOT: Object.freeze({ iMin: V0TRY_SLOT_MIN, jMin: V0TRY_SLOT_MIN }),
+});
+
 function cellKey(i, j) {
   return i + ',' + j;
 }
@@ -1814,6 +1905,7 @@ function canonicalRowsFor(id, n) {
   if (id === CELL_SURFACE_FINAL_V0TY) return V0TY_CELLS;
   if (id === CELL_SURFACE_FINAL_V0TR) return V0TR_CELLS;
   if (id === CELL_SURFACE_FINAL_V0TRQ) return V0TRQ_CELLS;
+  if (id === CELL_SURFACE_FINAL_V0TRY) return V0TRY_CELLS;
   return v2r2CellsForN(n);
 }
 
@@ -2915,6 +3007,73 @@ export function capacityForCellSurfaceFinal(
     }
   }
 
+  // ①-l v0TRY 정본 — 93셀 (v0TR − SE 9) · 슬롯 64 · **비대칭 9 = A 블록**.
+  //
+  // v0TY 와 같은 규약: 정의가 곧 유도(슬롯 박스 필터)이므로 여기서 재는 것은
+  // ⓐ 필터가 정확히 SE 9 를 걷어냈는가 ⓑ 행 참조 유지 ⓒ 슬롯 규약 ⓓ **판별자 잔존**.
+  //
+  // ⚠ ⓓ 가 이 블록의 존재 이유다. A 블록 편입(`00936ce`) 전 v0TR 이었다면 여기서
+  // 비대칭 0 이 나와 터졌을 것이다 — «슬롯이 SE 를 삼키면 방향 판별자가 사라진다» 를
+  // 회귀가 아니라 **로드 시**에 잠근다. 나중에 누가 A 를 다시 빼면 여기서 즉사한다.
+  if (V0TRY_CELLS.length !== 93) {
+    throw new Error('v0TRY 정본이 93셀이 아니다: ' + V0TRY_CELLS.length);
+  }
+  {
+    for (const row of V0TRY_CELLS) {
+      if (!V0TR_CELLS.includes(row)) {
+        throw new Error('v0TRY 에 v0TR 밖 행이 있다 — 필터 유도가 아니다');
+      }
+    }
+    const removed = V0TR_CELLS.filter((row) => !V0TRY_CELLS.includes(row));
+    if (removed.length !== V0W_PHASE_CELLS.length
+      || removed.some((row, index) => row !== V0W_PHASE_CELLS[index])) {
+      throw new Error('v0TRY 필터가 걷어낸 것이 SE 9행(V0W_PHASE_CELLS)이 아니다: '
+        + removed.length);
+    }
+    const slotKeys = new Set(slotCellsFor(CELL_SURFACE_FINAL_V0TRY, V0TRY_N)
+      .map((cell) => cellKey(cell.i, cell.j)));
+    if (slotKeys.size !== 64) {
+      throw new Error('v0TRY 슬롯이 64셀이 아니다: ' + slotKeys.size);
+    }
+    if (!removed.every(([i, j]) => slotKeys.has(cellKey(i, j)))) {
+      throw new Error('v0TR SE 9셀이 v0TRY 슬롯 안에 다 들어 있지 않다');
+    }
+    for (const [i, j] of V0TRY_CELLS) {
+      if (i >= V0TRY_BLOCKS.SLOT.iMin && j >= V0TRY_BLOCKS.SLOT.jMin) {
+        throw new Error('v0TRY 파인더 셀 (' + i + ',' + j + ') 이 먼 코너 QR 슬롯 안이다');
+      }
+    }
+    // ⓓ 남은 방향 판별자 = A 블록 9셀뿐. **0 이면 이 파생 자체가 성립하지 않는다.**
+    const asym = V0TRY_CELLS.filter(([, , T, L, R]) => !(T === L && L === R));
+    if (asym.length !== 9 || asym.some((row) => !V0T_A_CELLS.includes(row))) {
+      throw new Error('v0TRY 의 비대칭이 A 블록 9셀만이 아니다: ' + asym.length);
+    }
+    // 슬롯 규약 — 크기·앵커·뒤집기 **전부 v0TY 재사용** (새 상수 신설 0).
+    if (centerQrSlotCellsFor(CELL_SURFACE_FINAL_V0TRY)
+      !== centerQrSlotCellsFor(CELL_SURFACE_FINAL_V0TY)) {
+      throw new Error('v0TRY 슬롯 한 변이 v0TY 와 다르다 — 같은 값을 재사용해야 한다');
+    }
+    const tryOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0TRY, V0TRY_N);
+    if (tryOrigin.i !== V0TRY_SLOT_MIN || tryOrigin.i !== tryOrigin.j) {
+      throw new Error('v0TRY 슬롯이 먼 코너 (13,13) 에 앵커되지 않았다: '
+        + tryOrigin.i + ',' + tryOrigin.j);
+    }
+    const tryPlacement = centerQrSlotPlacementFor(CELL_SURFACE_FINAL_V0TRY);
+    const tyPlacement = centerQrSlotPlacementFor(CELL_SURFACE_FINAL_V0TY);
+    if (tryPlacement.anchor !== tyPlacement.anchor || tryPlacement.flip !== tyPlacement.flip) {
+      throw new Error('v0TRY 슬롯 배치 규약이 v0TY 와 다르다 — 재사용이어야 한다');
+    }
+    // 코어 반경 불변 — 슬롯은 SE 쪽이라 NE 바깥 사각이 한 셀도 안 줄어야 한다.
+    const outerBefore = V0TR_CELLS.filter(([i, j]) => i <= V0TR_BLOCKS.NE_OUTER.iMax
+      && j >= V0TR_BLOCKS.NE_OUTER.jMin).length;
+    const outerAfter = V0TRY_CELLS.filter(([i, j]) => i <= V0TR_BLOCKS.NE_OUTER.iMax
+      && j >= V0TR_BLOCKS.NE_OUTER.jMin).length;
+    if (outerBefore !== outerAfter) {
+      throw new Error('v0TRY 슬롯이 NE 바깥 사각을 건드렸다 — 코어 반경이 갈린다: '
+        + outerBefore + ' → ' + outerAfter);
+    }
+  }
+
   // ② formatIndex 쌍 불변식 + cube 축 기사용 슬롯 전수 대조 (겹치면 로드 시 throw).
   if (CELL_SURFACE_FINAL_FORMAT_INDEX[3] !== CELL_SURFACE_FINAL_FORMAT_INDEX[2] + 2) {
     throw new Error('신세대 셀 표면 3톤 formatIndex 는 2톤 + 2 이어야 한다');
@@ -2959,6 +3118,7 @@ export function capacityForCellSurfaceFinal(
     [CELL_SURFACE_FINAL_V0TY, V0TY_CELLS],
     [CELL_SURFACE_FINAL_V0TR, V0TR_CELLS],
     [CELL_SURFACE_FINAL_V0TRQ, V0TRQ_CELLS],
+    [CELL_SURFACE_FINAL_V0TRY, V0TRY_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_FAR_BASE_CELLS],
     [CELL_SURFACE_FINAL_V2R2, V2R2_CENTER_CELLS],
   ]) {
@@ -3002,6 +3162,9 @@ export function capacityForCellSurfaceFinal(
     'v0tr@21': { symbols: 103, residual: 0, locator: 102, legacy: null },
     //   v0trq@21 441 − 77 − 64(중앙 슬롯 8²) − 12 − 18 = 270 · S=90 · 잔여 0 (레거시 없음)
     'v0trq@21': { symbols: 90, residual: 0, locator: 77, legacy: null },
+    //   v0try@21 441 − 93 − 64(먼 코너 슬롯 8²) − 12 − 18 = 254 · S=84 · **잔여 2**
+    //   (레거시 없음 — 신설). 잔여 2 는 v0w·v0wq·v0w2 와 같은 값이고 라인업에 전례가 있다.
+    'v0try@21': { symbols: 84, residual: 2, locator: 93, legacy: null },
   };
   for (const [key, want] of Object.entries(expected)) {
     const [id, raw] = key.split('@');

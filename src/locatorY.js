@@ -69,6 +69,11 @@ export const LOCATOR_PROFILE_CELL_SURFACE_V0TY = 'cell-surface-v0ty';
 export const LOCATOR_PROFILE_CELL_SURFACE_V0TR = 'cell-surface-v0tr';
 /** v0TR 파생 — **중앙(Y-심) QR 슬롯** 8×8. v0xq·v0wq 와 같은 seam 앵커. */
 export const LOCATOR_PROFILE_CELL_SURFACE_V0TRQ = 'cell-surface-v0trq';
+/**
+ * v0TR 파생 — **먼 코너 QR 슬롯** 8×8 (2026-08-18). v0wy·v0ty 와 같은 far 앵커·
+ * 같은 뒤집기 규약. 슬롯이 SE 마커를 삼키고 A 블록이 방향을 준다.
+ */
+export const LOCATOR_PROFILE_CELL_SURFACE_V0TRY = 'cell-surface-v0try';
 export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_OFF,
   LOCATOR_PROFILE_HEX_FRAME_V1,
@@ -87,6 +92,7 @@ export const LOCATOR_PROFILES_Y = Object.freeze([
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
   LOCATOR_PROFILE_CELL_SURFACE_V0TR,
   LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
 ]);
 export const DEFAULT_LOCATOR_PROFILE_Y = LOCATOR_PROFILE_OFF;
 
@@ -126,7 +132,8 @@ export function isCellSurfaceLocatorProfileY(value) {
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0T
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0TY
     || value === LOCATOR_PROFILE_CELL_SURFACE_V0TR
-    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ
+    || value === LOCATOR_PROFILE_CELL_SURFACE_V0TRY;
 }
 
 export function isLocatorProfileY(value) {

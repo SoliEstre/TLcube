@@ -1178,6 +1178,14 @@
                하도록 함께 잠갔다. -->
           <button type="button" data-expected-layout="v0tr" data-i18n="lab.expectedLayout.v0tr">v0TR</button>
           <button type="button" data-expected-layout="v0trq" data-i18n="lab.expectedLayout.v0trq">v0TRQ</button>
+          <!-- v0TRY (2026-08-19 통합) — **같은 누락이 또 났다.** 원격 레인이 사전 키
+               (`lab.expectedLayout.v0try` × 8언어)는 넣었는데 이 버튼은 안 넣었다
+               (그 레인의 패치 파일 목록에 이 파일이 아예 없다). 위 2026-08-18 지적
+               때 만든 라인업↔버튼 대조 테스트가 그대로 잡아 줬다 —
+               `test/lab-expected-layout-ui.test.js`. 방어가 일했다.
+               ⚠ 이 목록이 **손으로 적는 것**인 한 누락은 계속 난다. 테스트는 사후에
+               잡을 뿐이다. 라인업에서 유도하는 것이 근본 해법이고 아직 안 했다. -->
+          <button type="button" data-expected-layout="v0try" data-i18n="lab.expectedLayout.v0try">v0TRY</button>
         </div>
       </div>
       <!-- 기대 «중앙 파인더» (축 ②, 2026-08-19 운영자 지시) — 위 「기대 레이아웃」과

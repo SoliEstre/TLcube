@@ -213,7 +213,9 @@ const RESTORE_V0W_SERIES = Object.freeze({
       // v0tr 포즈의 다양성이 v0W2 의 rot0 감마 약점 핀을 구제해 gamma0.7 rot0 이
       // 초록이 되고, v0W 의 F6 슬롯 위반이 3 → 4 로 움직인다 (실측).
       // «복원 = 드랩 전 동작 그대로» 를 재려면 신설 패밀리를 전부 꿐야 한다.
+      // **의도적 갱신 «v0TRY 편입» (2026-08-18)** — 같은 규약으로 v0try 도 끈다.
       v0tFamily: false, v0tyFamily: false, v0trFamily: false, v0trqFamily: false,
+      v0tryFamily: false,
     },
   },
 });
@@ -234,7 +236,9 @@ const RESTORE_V0W_SERIES_ISOLATED_LOCATOR = Object.freeze({
       // v0tr 포즈의 다양성이 v0W2 의 rot0 감마 약점 핀을 구제해 gamma0.7 rot0 이
       // 초록이 되고, v0W 의 F6 슬롯 위반이 3 → 4 로 움직인다 (실측).
       // «복원 = 드랩 전 동작 그대로» 를 재려면 신설 패밀리를 전부 꿐야 한다.
+      // **의도적 갱신 «v0TRY 편입» (2026-08-18)** — 같은 규약으로 v0try 도 끈다.
       v0tFamily: false, v0tyFamily: false, v0trFamily: false, v0trqFamily: false,
+      v0tryFamily: false,
     },
   },
 });
@@ -492,7 +496,7 @@ test('v1r2 로케이터는 결정적이다 — 같은 프레임 두 번 → 동�
     // 의도적 갱신 «v0T 편입» (2026-08-17) — v0t·v0ty 키가 늘었고 **값은 0** 이다
     // (같은 앵커드 쌍 요구 — 이 프레임에서 앵커드 포즈가 하나도 안 서므로 구조적 0).
     v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0,
-    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0: 6,
+    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0try: 0, v0: 6,
   }, '포즈 분포가 잰 값과 다르다 — 약점이 움직였으면 §6 을 재측정하고 핀을 갱신하라');
   const families = first.shapes.map((shape) => shape.blockLocator.family);
   assert.ok(!families.includes('v1r2'), 'v1r2 shape 가 살아났다 — 핀을 되돌려라');
@@ -527,7 +531,7 @@ test('v1r2 패밀리 격리 대조군 — 끄면 v1r2 포즈 0 (⚠ 현재는 �
     // 의도적 갱신 «v0T 편입» (2026-08-17) — v0t·v0ty 키가 늘었고 **값은 0** 이다
     // (같은 앵커드 쌍 요구 — 이 프레임에서 앵커드 포즈가 하나도 안 서므로 구조적 0).
     v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0,
-    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0: 6,
+    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0try: 0, v0: 6,
   }, '격리 대조군의 전제가 움직였다 — 재측정하고 핀을 갱신하라');
 });
 
@@ -832,7 +836,7 @@ test('구 v2r2 중앙(닫힌 링 스택)은 legacy 분류만 남고 포즈를 �
     // 의도적 갱신 «v0T 편입» (2026-08-17) — v0t·v0ty 키 추가, 값 0 (같은 이유 —
     // 소각 디자인 프레임에는 K3 중앙 × K5 원거리 쌍이 성립하지 않는다).
     v2r2: 0, v1r2: 0, v0x: 0, v0xq: 0, v0w: 0, v0wq: 0, v0w2: 0, v0wy: 0,
-    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0: 0,
+    v0t: 0, v0ty: 0, v0tr: 0, v0trq: 0, v0try: 0, v0: 0,
   });
   assert.equal(detected.shapes.length, 0);
 });
@@ -2765,4 +2769,91 @@ test('v0T 계열 패밀리 스위치 — 기본 on · 끄면 0 · 서로 독립 
   });
   assert.equal(wyOff.diagnostics.poseCount.v0ty, base.diagnostics.poseCount.v0ty,
     'v0wyRequireSlotQr 스위치가 v0ty 확증까지 껐다 — 스위치 독립이 깨졌다');
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// v0TRY (2026-08-18 편입) — v0TR 의 **먼 코너 QR 파생**. v0T → v0TY 와 같은 변형이다.
+//
+// 여기서 재는 것 셋:
+//   ① 자기 복호 — 톤 커브 × 회전에서 **레이아웃 id 까지** 맞는가.
+//      ⚠ 이것이 §6 판단의 실물 근거다. 이상 표본기에서는 v0try 프레임이 v0tr 로
+//      뽑히지만(동률 1.0 · 부모 승), 그것은 v0ty→v0t · v0trq→v0tr 과 **같은 좌표**이고
+//      실물 래스터에서는 슬롯 자리의 진짜 픽셀이 갈라 준다.
+//   ② 패밀리 스위치가 실재하고 v0TR·v0TY 와 **서로 독립**인가.
+//   ③ 슬롯 QR 확증 스위치가 v0WY·v0TY 와 **독립**인가 (인프라는 공유, 스위치는 별개).
+// 게이트(0.78 · 0.035 · CRC · RS · 슬롯 QR 문턱 3종)는 한 값도 안 건드렸다.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** v0TRY — 슬롯이 레이아웃 정의라 qrText 가 필수다 (renderV0ty 와 같은 이유). */
+function renderV0try(pixelsPerUnit) {
+  const encoded = encodeY(PAYLOAD, {
+    cellSurfaceLayout: 'v0try', version: 1, tones: 2, eccLevel: 'M',
+  });
+  const scene = buildSceneY(encoded, {
+    palette: PALETTE, margin: 4, qrText: TL_READER_URL,
+  });
+  return rasterize(scene, { pixelsPerUnit, supersample: 2 });
+}
+
+const V0TRY_FRAME = embed960(renderV0try(15));
+
+test('v0TRY 자기 복호 — 톤 4 × 회전 3 전부 (슬롯이 SE 를 삼켜도 A 블록이 세 방향을 준다)', {
+  timeout: 900_000,
+}, () => {
+  for (const [label, tone] of [
+    ['clean', {}], ['sCurve0.6', { sCurve: 0.6 }],
+    ['gamma0.7', { gamma: 0.7 }], ['gamma0.6', { gamma: 0.6 }],
+  ]) {
+    for (const rotation of [0, 120, 240]) {
+      const decoded = decodeLab(distortImage(V0TRY_FRAME, { ...tone, rotation, fill: FILL }));
+      const where = 'v0try ' + label + ' rot' + rotation;
+      assert.equal(decoded.ok, true, where + ' 복호: ' + (decoded.reason || ''));
+      assert.equal(decoded.text, PAYLOAD, where + ' 페이로드');
+      assert.equal(decoded.hypothesis.cellSurfaceLayout, 'v0try',
+        where + ' 가 ' + decoded.hypothesis.cellSurfaceLayout + ' 로 읽혔다');
+    }
+  }
+});
+
+test('v0TRY 패밀리 스위치 — 기본 on · 끄면 0 · v0TR·v0TY 와 독립 (슬롯 확증 포함)', {
+  timeout: 600_000,
+}, () => {
+  // 계측 기준은 **v0TRY 자기 프레임**이다 — 이 파일의 조건(ppu 15 · margin 4 ·
+  // embed960)에서 v0try 2 · v0ty 2 · v0tr 4 · v0t 4 가 **함께** 서므로 네 스위치의
+  // 독립을 한 프레임에서 잴 수 있다 (실측 `claude-v0try-poseprobe.out.txt`).
+  //
+  // ⚠ 조건이 바뀌면 값도 바뀐다 — 레인 하네스(`claude-v0try-detect.mjs`, embed960
+  // **없음**)에서는 같은 레이아웃의 v0try 포즈가 0 이고 v0T 프레임에서만 1 이 선다.
+  // v0TY 도 그 하네스에서 자기 포즈가 0 이다 (v0TR 라운드 산출에 같은 값이 찍혀
+  // 있다). 즉 이것은 v0TRY 의 성질이 아니라 «먼 코너 슬롯 확증 × 프레임 조건» 의
+  // 성질이다. 복호는 두 조건 모두에서 12/12 · 10/10 으로 선다.
+  const luma = toRelativeLuminance(distortImage(V0TRY_FRAME, { rotation: 0, fill: FILL }));
+  const base = detectCellSurfaceBlockShapes(luma);
+  assert.ok(base.diagnostics.poseCount.v0try >= 1,
+    'v0TRY 프레임에서 v0try 포즈가 0 이다: ' + JSON.stringify(base.diagnostics.poseCount));
+  const off = detectCellSurfaceBlockShapes(luma, {
+    calibration: { csBlockLocator: { v0tryFamily: false } },
+  });
+  assert.equal(off.diagnostics.poseCount.v0try, 0, 'v0tryFamily off 인데 v0try 포즈가 섰다');
+  // 독립 — v0try 를 꺼도 v0tr·v0ty·v0t 는 한 자리도 안 움직인다.
+  for (const family of ['v0t', 'v0ty', 'v0tr', 'v0trq', 'v0']) {
+    assert.equal(off.diagnostics.poseCount[family], base.diagnostics.poseCount[family],
+      'v0try 를 껐더니 ' + family + ' poseCount 가 움직였다 — 스위치가 묶였다');
+  }
+  // 반대 방향 — v0tr·v0ty 를 꺼도 v0try 는 산다.
+  for (const other of ['v0trFamily', 'v0tyFamily']) {
+    const otherOff = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { [other]: false } },
+    });
+    assert.ok(otherOff.diagnostics.poseCount.v0try >= 1,
+      other + ' 를 껐더니 v0try 까지 죽었다 — 패밀리가 한 스위치에 묶였다');
+  }
+  // 슬롯 QR 확증 스위치 독립 — v0wy·v0ty 확증을 꺼도 v0try 확증은 그대로 돈다.
+  for (const other of ['v0wyRequireSlotQr', 'v0tyRequireSlotQr']) {
+    const otherOff = detectCellSurfaceBlockShapes(luma, {
+      calibration: { csBlockLocator: { [other]: false } },
+    });
+    assert.equal(otherOff.diagnostics.poseCount.v0try, base.diagnostics.poseCount.v0try,
+      other + ' 스위치가 v0try 확증까지 건드렸다 — 스위치 독립이 깨졌다');
+  }
 });

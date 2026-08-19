@@ -1,0 +1,89 @@
+조건: ppu 15 · margin 4 · supersample 2 · embed960 (블록 로케이터 회귀와 동일)
+
+=== poseCount — 프레임 × 톤 × 회전 (v0try 가 서는 칸을 찾는다) ===
+  [v0t    clean     rot0] v0t=3 · v0tr=3 · v0=4
+  [v0t    clean     rot120] v0t=4 · v0tr=4 · v0=2
+  [v0t    clean     rot240] v0t=6 · v0tr=6 · v0=2
+  [v0t    sCurve0.6 rot0] v0t=3 · v0tr=3 · v0=2
+  [v0t    sCurve0.6 rot120] v0t=4 · v0tr=4 · v0=2
+  [v0t    sCurve0.6 rot240] v0t=6 · v0tr=6 · v0=2
+  [v0t    gamma0.7  rot0] v0t=3 · v0tr=3 · v0=4
+  [v0t    gamma0.7  rot120] v0t=4 · v0tr=4 · v0=2
+  [v0t    gamma0.7  rot240] v0t=6 · v0tr=6
+  [v0t    gamma0.6  rot0] v0t=3 · v0tr=3 · v0=4
+  [v0t    gamma0.6  rot120] v0t=4 · v0tr=4 · v0=2
+  [v0t    gamma0.6  rot240] v0t=6 · v0tr=6
+  [v0ty   clean     rot0] v0t=4 · v0ty=2 · v0tr=4 · v0try=2 · v0=1  ★ v0try 선다
+  [v0ty   clean     rot120] v0t=3 · v0ty=1 · v0tr=3 · v0try=1 · v0=4  ★ v0try 선다
+  [v0ty   clean     rot240] v0t=4 · v0ty=2 · v0tr=4 · v0try=2  ★ v0try 선다
+  [v0ty   sCurve0.6 rot0] v0t=6 · v0ty=2 · v0tr=6 · v0try=2 · v0=2  ★ v0try 선다
+  [v0ty   sCurve0.6 rot120] v0t=3 · v0ty=1 · v0tr=3 · v0try=1 · v0=4  ★ v0try 선다
+  [v0ty   sCurve0.6 rot240] v0t=6 · v0ty=2 · v0tr=6 · v0try=2 · v0=1  ★ v0try 선다
+  [v0ty   gamma0.7  rot0] v0t=4 · v0ty=2 · v0tr=4 · v0try=2 · v0=2  ★ v0try 선다
+  [v0ty   gamma0.7  rot120] v0t=4 · v0ty=2 · v0tr=4 · v0try=2  ★ v0try 선다
+  [v0ty   gamma0.7  rot240] v0t=6 · v0ty=2 · v0tr=6 · v0try=2 · v0=1  ★ v0try 선다
+  [v0ty   gamma0.6  rot0] v0t=4 · v0ty=2 · v0tr=4 · v0try=2 · v0=2  ★ v0try 선다
+  [v0ty   gamma0.6  rot120] v0t=4 · v0ty=2 · v0tr=4 · v0try=2  ★ v0try 선다
+  [v0ty   gamma0.6  rot240] v0t=3 · v0ty=1 · v0tr=3 · v0try=1 · v0=2  ★ v0try 선다
+  [v0tr   clean     rot0] v0t=3 · v0tr=3 · v0=2
+  [v0tr   clean     rot120] v0t=3 · v0tr=3 · v0=3
+  [v0tr   clean     rot240] v0t=3 · v0tr=3 · v0=4
+  [v0tr   sCurve0.6 rot0] v0t=3 · v0tr=3 · v0=2
+  [v0tr   sCurve0.6 rot120] v0t=3 · v0tr=3 · v0=2
+  [v0tr   sCurve0.6 rot240] v0t=4 · v0tr=4 · v0=2
+  [v0tr   gamma0.7  rot0] v0t=3 · v0tr=3 · v0=2
+  [v0tr   gamma0.7  rot120] v0t=3 · v0tr=3 · v0=4
+  [v0tr   gamma0.7  rot240] v0t=4 · v0tr=4 · v0=2
+  [v0tr   gamma0.6  rot0] v0t=3 · v0tr=3 · v0=2
+  [v0tr   gamma0.6  rot120] v0t=4 · v0ty=1 · v0tr=4 · v0=1
+  [v0tr   gamma0.6  rot240] v0t=4 · v0tr=4 · v0=2
+  [v0trq  clean     rot0] v0trq=1 · v0=2
+  [v0trq  clean     rot120] v0trq=1 · v0=2
+  [v0trq  clean     rot240] v0trq=1 · v0=4
+  [v0trq  sCurve0.6 rot0] v0trq=1 · v0=2
+  [v0trq  sCurve0.6 rot120] v0trq=1 · v0=4
+  [v0trq  sCurve0.6 rot240] v0trq=1 · v0=4
+  [v0trq  gamma0.7  rot0] v0trq=1 · v0=2
+  [v0trq  gamma0.7  rot120] v0trq=1 · v0=2
+  [v0trq  gamma0.7  rot240] v0trq=1 · v0=2
+  [v0trq  gamma0.6  rot0] v0trq=1 · v0=2
+  [v0trq  gamma0.6  rot120] v0trq=1 · v0=1
+  [v0trq  gamma0.6  rot240] v0trq=1 · v0=2
+  [v0try  clean     rot0] v0t=4 · v0ty=2 · v0tr=4 · v0try=2  ★ v0try 선다
+  [v0try  clean     rot120] v0t=4 · v0ty=2 · v0tr=4 · v0try=2 · v0=1  ★ v0try 선다
+  [v0try  clean     rot240] v0t=3 · v0ty=1 · v0tr=3 · v0try=1 · v0=2  ★ v0try 선다
+  [v0try  sCurve0.6 rot0] v0t=6 · v0ty=2 · v0tr=6 · v0try=2  ★ v0try 선다
+  [v0try  sCurve0.6 rot120] v0t=4 · v0ty=2 · v0tr=4 · v0try=2 · v0=1  ★ v0try 선다
+  [v0try  sCurve0.6 rot240] v0t=3 · v0ty=1 · v0tr=3 · v0try=1 · v0=3  ★ v0try 선다
+  [v0try  gamma0.7  rot0] v0t=4 · v0ty=2 · v0tr=4 · v0try=2  ★ v0try 선다
+  [v0try  gamma0.7  rot120] v0t=3 · v0ty=1 · v0tr=3 · v0try=1 · v0=2  ★ v0try 선다
+  [v0try  gamma0.7  rot240] v0t=3 · v0ty=1 · v0tr=3 · v0try=1 · v0=3  ★ v0try 선다
+  [v0try  gamma0.6  rot0] v0t=4 · v0ty=2 · v0tr=4 · v0try=2  ★ v0try 선다
+  [v0try  gamma0.6  rot120] v0t=6 · v0ty=2 · v0tr=6 · v0try=2  ★ v0try 선다
+  [v0try  gamma0.6  rot240] v0t=4 · v0ty=2 · v0tr=4 · v0try=2 · v0=1  ★ v0try 선다
+
+=== v0try 포즈가 서는 칸 ===
+  v0ty · clean · rot0 → v0try=2
+  v0ty · clean · rot120 → v0try=1
+  v0ty · clean · rot240 → v0try=2
+  v0ty · sCurve0.6 · rot0 → v0try=2
+  v0ty · sCurve0.6 · rot120 → v0try=1
+  v0ty · sCurve0.6 · rot240 → v0try=2
+  v0ty · gamma0.7 · rot0 → v0try=2
+  v0ty · gamma0.7 · rot120 → v0try=2
+  v0ty · gamma0.7 · rot240 → v0try=2
+  v0ty · gamma0.6 · rot0 → v0try=2
+  v0ty · gamma0.6 · rot120 → v0try=2
+  v0ty · gamma0.6 · rot240 → v0try=1
+  v0try · clean · rot0 → v0try=2
+  v0try · clean · rot120 → v0try=2
+  v0try · clean · rot240 → v0try=1
+  v0try · sCurve0.6 · rot0 → v0try=2
+  v0try · sCurve0.6 · rot120 → v0try=2
+  v0try · sCurve0.6 · rot240 → v0try=1
+  v0try · gamma0.7 · rot0 → v0try=2
+  v0try · gamma0.7 · rot120 → v0try=1
+  v0try · gamma0.7 · rot240 → v0try=1
+  v0try · gamma0.6 · rot0 → v0try=2
+  v0try · gamma0.6 · rot120 → v0try=2
+  v0try · gamma0.6 · rot240 → v0try=2

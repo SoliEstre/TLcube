@@ -60,7 +60,7 @@ import { CORNER_UNIT_OFFSETS } from '../hexgrid.js';
 import { faceBasis, moduleCenter } from '../ygrid.js';
 import {
   CENTER_QR_SLOT_CELLS,
-  V0T_BLOCKS, V0TR_BLOCKS, V0TRQ_BLOCKS, V0TY_BLOCKS,
+  V0T_BLOCKS, V0TR_BLOCKS, V0TRQ_BLOCKS, V0TRY_BLOCKS, V0TY_BLOCKS,
   V0W_BLOCKS, V0W2_BLOCKS, V0WQ_BLOCKS, V0WY_BLOCKS, V0XQ_BLOCKS,
   centerQrFinderCoreCells, centerQrQuietFrameCells, centerQrSlotCellsFor,
   centerQrSlotOriginFor, centerQrSlotPlacementFor,
@@ -279,6 +279,24 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   // 삼중점이 구조적으로 못 선다. 그래서 이 패밀리에만 6 을 준다.
   // 다른 패밀리의 슬라이스는 **한 자리도 안 건드린다** (그쪽 비용·거동 불변).
   v0trqCornerBudget: 6,
+  // v0TRY 패밀리 (v0TR 파생 — **먼 코너 QR 슬롯**, 운영자 2026-08-18).
+  // false 로 끄면 v0TRY 편입 전 기준선을 잰다.
+  //
+  // v0T → v0TY 와 같은 변형이라 같은 구조의 지뢰다 — 중앙·NE 가 v0TR 과 같은 배열이라
+  // 시드 기하로는 v0TR 과 안 갈라진다 (코어 반경도 √279 로 **동일** — 슬롯이 SE 쪽이라
+  // NE 코너가 안 움직인다). 가르는 것: ⓐ SE 마커 자리 (v0TR 은 R 반전 9셀 · v0TRY 는
+  // QR 슬롯) ⓑ A 블록은 **둘 다 있다** (v0TY 와 같은 이중화 — 위상 판별자가 슬롯 밖에
+  // 남는 설계) ⓒ 하류 CS 게이트 (무접촉). ⓐ 를 Pearson 에만 맡기지 않고 직접 재는 것이
+  // 슬롯 QR 확증이다 (아래 `v0tryRequireSlotQr`).
+  v0tryFamily: true,
+  // v0TRY 시딩 게이트 ① — v0TR 과 같은 사각 링 동반자 조건.
+  v0tryRequireSquareRing: true,
+  // v0TRY 시딩 게이트 ② — **v0WY·v0TY 의 슬롯 QR 확증을 그대로 재사용**한다
+  // (`slotQrConfirmsPose` — 같은 far 앵커 · 같은 슬롯 8² · 같은 뒤집기 규약).
+  // 문턱 셋(`v0wySlotQrMinContrast` 0.6 · `v0wySlotQrMinCorrelation` 0.25 ·
+  // `v0wySlotQrMinSpanRatio` 0.35)은 **먼 코너 슬롯 경로의 파라미터**이므로 그대로
+  // 공유한다 (새 문턱 0 · 완화 0). 이 스위치는 확증 **호출 여부**만 가른다.
+  v0tryRequireSlotQr: true,
   // ── v0XQ 드랍 (운영자 실기기 확정 2026-08-17) — 차단이지 삭제가 아니다 ──────
   // v0xq 패밀리 (중앙 QR 변형). **기본 off.**
   // 근거: 실기기 인식 순위 v0WQ ≫ v0XQ > v0X ≈ v0W — v0W 편입 때 걸어 둔 조건부
@@ -1496,9 +1514,58 @@ function patchesForV0trq(n) {
   };
 }
 
+/**
+ * v0TRY 패치 — v0TR 에서 SE 마커가 빠지고 **먼 코너 QR 패치**가 들어온 것.
+ * v0T → v0TY 의 변형과 **문자 그대로 같은 꼴**이다 (그쪽도 SE 가 슬롯에 삼켜진다).
+ *
+ * 중앙 = K3 계보 (0..3)² 16셀 (v0TR 과 같은 배열), 코너 3 = 면별 **바깥** 동심 사각
+ * (v0TR 과 같은 블록 · 반경 √279 — 슬롯이 SE 쪽이라 코너가 안 움직인다),
+ * 서브앵커 = 중앙 3 + 코너 3 + A 3 + 안쪽 사각 3 + 슬롯 QR.
+ *
+ * ⚠ **A 블록이 여기서 유일한 위상 판별자다** (SE 가 슬롯에 먹혔다). 정련이 A 를 안
+ * 쓰면 방향을 줄 패치가 하나도 없다 — `patchesForV0tr` 이 A 를 넣은 이유와 같은 자리,
+ * 더 강한 형태다. slotQr 는 v0WY·v0TY 와 같은 규약으로 따로 내보낸다.
+ *
+ * 네 블록 전부 `registerPatch` 의 Pearson 최소 6점을 넘는다 (중앙 16 · 바깥 36 ·
+ * A 9 · 안쪽 36).
+ */
+function patchesForV0try(n) {
+  const cells = locatorCellsCellSurfaceFinal(n, 'v0try');
+  const inCentre = (cell) => cell.i <= V0TRY_BLOCKS.NW.iMax && cell.j <= V0TRY_BLOCKS.NW.jMax;
+  const inA = (cell) => cell.i >= V0TRY_BLOCKS.A.iMin && cell.i <= V0TRY_BLOCKS.A.iMax
+    && cell.j >= V0TRY_BLOCKS.A.jMin && cell.j <= V0TRY_BLOCKS.A.jMax;
+  const inInner = (cell) => cell.i >= V0TRY_BLOCKS.NE_INNER.iMin
+    && cell.i <= V0TRY_BLOCKS.NE_INNER.iMax
+    && cell.j >= V0TRY_BLOCKS.NE_INNER.jMin && cell.j <= V0TRY_BLOCKS.NE_INNER.jMax;
+  const inOuter = (cell) => cell.i <= V0TRY_BLOCKS.NE_OUTER.iMax
+    && cell.j >= V0TRY_BLOCKS.NE_OUTER.jMin;
+  const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
+  const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inOuter));
+  const extras = [inA, inInner]
+    .flatMap((filter) => YFACE_LIST.map((face) => buildPatch(cells, face, filter)))
+    .filter((patch) => patch !== null);
+  const placement = centerQrSlotPlacementFor('v0try');
+  const slotQr = assertCentrePatchFits(buildCenterQrPatch(
+    centerQrSlotCellsFor('v0try'), centerQrSlotOriginFor('v0try', n), placement.flip,
+  ));
+  return {
+    centre: mergePatches(centreParts),
+    corners,
+    slotQr,
+    subPatches: [...centreParts, ...corners, ...extras, slotQr],
+    // ⚠ v0TR 과 같은 이유로 블록 패치를 합치면 안 된다 — 두 동심 사각이 4셀을 공유한다.
+    all: mergePatches(YFACE_LIST.map((face) => buildPatch(cells, face, () => true))),
+  };
+}
+
 function patchesFor(n, layoutId = undefined) {
   const key = (layoutId || 'default') + '@' + n;
   if (patchCache.has(key)) return patchCache.get(key);
+  if (layoutId === 'v0try') {
+    const builtV0try = patchesForV0try(n);
+    patchCache.set(key, builtV0try);
+    return builtV0try;
+  }
   if (layoutId === 'v0tr') {
     const builtV0tr = patchesForV0tr(n);
     patchCache.set(key, builtV0tr);
@@ -2380,6 +2447,17 @@ const V0TR_CORE_RADIUS_CELLS = (() => {
 })();
 /** v0TRQ — 코너가 v0TR 과 같은 배열(안쪽 사각)이라 삼중점 반경도 같다. */
 const V0TRQ_N = 21;
+/**
+ * v0TRY — 코너가 v0TR 과 **같은 배열**(NE 바깥 사각)이다. 슬롯이 SE 쪽이라 NE 를 한
+ * 셀도 안 건드리므로 반경이 v0TR 과 **같다** (실측 Δ = 0.000000 —
+ * `claude-v0try-measure.mjs` ⓔ). v0T ↔ v0TY 와 같은 관계다.
+ * 값은 여기서도 손으로 적지 않고 **같은 경로**에서 뽑는다.
+ */
+const V0TRY_N = 21;
+const V0TRY_CORE_RADIUS_CELLS = (() => {
+  const anchor = patchesFor(V0TRY_N, 'v0try').corners[0].anchor;
+  return Math.hypot(anchor.x, anchor.y);
+})();
 
 /**
  * 패치의 동적 범위 (p95−p5) — §v0wySlotQrMinSpanRatio (span 상응성) 의 재료.
@@ -2568,6 +2646,7 @@ function assembleAnchoredPoses(
   const posesV0t = [];
   const posesV0ty = [];
   const posesV0tr = [];
+  const posesV0try = [];
   const anchoredCentres = new Set();
   let companionPairs = 0;
   let slotQrRejected = 0;
@@ -2849,6 +2928,39 @@ function assembleAnchoredPoses(
           }
         }
       }
+      // v0TRY (v0TR 파생 — 먼 코너 QR 슬롯, 2026-08-18) — 시드 기하가 v0TR 과 같다
+      // (반경 √279 동일). 마지막에 **슬롯 QR 확증**이 붙는다 (v0WY·v0TY 와 같은 확증 —
+      // 스위치만 독립, §v0tryRequireSlotQr). 위 브랜치들과 **독립**이다.
+      if (cfg.v0tryFamily !== false
+        && Math.abs(estimatedRadius - V0TRY_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+        // ⚠ 게이트값 ≠ 정렬값 — 다른 일곱 브랜치와 **같은 형태**로 쓴다
+        // (§companionsForGate · `.agent/_lessons/008` · 링 수리 3c2bfa0).
+        // `squareRingCompanions` 만으로 게이트를 판정하면 캡된 목록으로 판정하게 되어
+        // 거리에서 시드가 죽는다 — v0TR 리베이스에서 통합자가 손으로 고친 그 자리다.
+        const companions = squareRingCompanions(centre, corner, corners, cfg);
+        const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
+        if (gateCompanions !== 0 || cfg.v0tryRequireSquareRing === false) {
+          const patches = patchesFor(V0TRY_N, 'v0try');
+          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
+          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
+          if (refined
+            && slotQrConfirmsPose(fullLuma, refined.H, patches, cfg, cfg.v0tryRequireSlotQr)) {
+            anchoredCentres.add(centreIndex);
+            posesV0try.push({
+              family: 'v0try',
+              layoutId: 'v0try',
+              n: V0TRY_N,
+              H: refined.H,
+              score: refined.meanCorrelation,
+              partial: refined.partial || null,
+              estimatedRadius,
+              squareRingCompanions: companions,
+            });
+          } else if (refined) {
+            slotQrRejected += 1;
+          }
+        }
+      }
     }
   }
   return {
@@ -2861,6 +2973,7 @@ function assembleAnchoredPoses(
     posesV0t,
     posesV0ty,
     posesV0tr,
+    posesV0try,
     anchoredCentres,
     companionPairs,
     slotQrRejected,
@@ -2903,6 +3016,7 @@ function assembleBullseyeConfirmedPoses(
   const posesV0t = [];
   const posesV0ty = [];
   const posesV0tr = [];
+  const posesV0try = [];
   const confirmed = new Set();
   let tripleCount = 0;
   // 슬롯 QR 확증이 이 경로에서 자른 v0wy·v0ty 후보 수 — 앵커드 경로의 `slotQrRejected`
@@ -2910,7 +3024,7 @@ function assembleBullseyeConfirmedPoses(
   let slotQrRejected = 0;
   if (looseCorners.length < 3 || centres.length === 0) {
     return {
-      posesV0x, posesV0w, posesV0w2, posesV0wy, posesV0t, posesV0ty, posesV0tr,
+      posesV0x, posesV0w, posesV0w2, posesV0wy, posesV0t, posesV0ty, posesV0tr, posesV0try,
       confirmedCentres: confirmed, tripleCount,
       slotQrRejected,
     };
@@ -3000,6 +3114,9 @@ function assembleBullseyeConfirmedPoses(
             // √279 = 16.7033 으로 이 표의 다른 행과 **같다** (코너 앵커가 바깥 사각).
             // 같은 오류가 앵커드 브랜치 주석에도 있었다 — 함께 고쳤다.
             { on: cfg.v0trFamily !== false, id: 'v0tr', n: V0TR_N, radius: V0TR_CORE_RADIUS_CELLS, out: posesV0tr },
+            // v0TRY (2026-08-18) — v0TR 과 같은 중앙 K3 16셀·같은 코너 반경이라 같은
+            // 구제 대상이다. 슬롯 QR 확증 스위치는 v0WY·v0TY 와 독립이다.
+            { on: cfg.v0tryFamily !== false, id: 'v0try', n: V0TRY_N, radius: V0TRY_CORE_RADIUS_CELLS, out: posesV0try, slotQr: true, slotQrEnabled: cfg.v0tryRequireSlotQr },
           ]) {
             if (!spec.on) continue;
             if (Math.abs(estimatedRadius - spec.radius) > ANCHOR_SNAP_CELLS) continue;
@@ -3034,7 +3151,7 @@ function assembleBullseyeConfirmedPoses(
     }
   }
   return {
-    posesV0x, posesV0w, posesV0w2, posesV0wy, posesV0t, posesV0ty, posesV0tr,
+    posesV0x, posesV0w, posesV0w2, posesV0wy, posesV0t, posesV0ty, posesV0tr, posesV0try,
     confirmedCentres: confirmed, tripleCount,
     slotQrRejected,
   };
@@ -3514,7 +3631,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   // 패밀리를 세운다.
   const {
     posesV2r2, posesV1r2, posesV0x, posesV0w, posesV0w2, posesV0wy, posesV0t, posesV0ty,
-    posesV0tr,
+    posesV0tr, posesV0try,
     anchoredCentres, companionPairs, slotQrRejected,
   } = assembleAnchoredPoses(
     centres, corners, luma, reduced.factor, cfg, partialTelemetry,
@@ -3532,6 +3649,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       posesV0t: [],
       posesV0ty: [],
       posesV0tr: [],
+      posesV0try: [],
       confirmedCentres: new Set(),
       tripleCount: 0,
       slotQrRejected: 0,
@@ -3551,6 +3669,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   posesV0t.push(...confirmed.posesV0t);
   posesV0ty.push(...confirmed.posesV0ty);
   posesV0tr.push(...confirmed.posesV0tr);
+  posesV0try.push(...confirmed.posesV0try);
   // 확증 경로로 포즈가 선 중앙도 v0 360° 스윕에서 뺀다 (조기 분기와 같은 이유).
   const sweptExclusions = new Set(anchoredCentres);
   for (const index of confirmed.confirmedCentres) sweptExclusions.add(index);
@@ -3599,9 +3718,9 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   for (const familyPoses of [
     posesV2r2, posesV1r2, posesV0x, posesV0xq, posesV0w, posesV0wq, posesV0w2, posesV0wy,
     posesV0t, posesV0ty,
-    // v0TR 계열 (2026-08-17 편입) — 선언 순서대로 v0TY 뒤에 선다
+    // v0TR 계열 (2026-08-17 편입 · v0try 는 2026-08-18) — 선언 순서대로 v0TY 뒤에 선다
     // (`cellSurfaceFinal.CELL_SURFACE_FINAL_IDS` 와 같은 순서 — n=21 기본은 v0t 그대로).
-    posesV0tr, posesV0trq,
+    posesV0tr, posesV0trq, posesV0try,
     posesV0,
   ]) {
     familyPoses.sort((left, right) =>
@@ -3642,6 +3761,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         v0ty: posesV0ty.length,
         v0tr: posesV0tr.length,
         v0trq: posesV0trq.length,
+        v0try: posesV0try.length,
         v0: posesV0.length,
       },
       // v0WY 관측 — refinePose 를 통과하고도 **먼 코너에 QR 이 없어** 잘린 포즈 수.
@@ -3707,7 +3827,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
         poses: confirmed.posesV0x.length + confirmed.posesV0w.length
           + confirmed.posesV0w2.length + confirmed.posesV0wy.length
           + confirmed.posesV0t.length + confirmed.posesV0ty.length
-          + confirmed.posesV0tr.length,
+          + confirmed.posesV0tr.length + confirmed.posesV0try.length,
       },
       // 부분 앵커 완성 관측 — attempted 는 «엄격 경로 실패 + 앵커가 프레임 밖» 인
       // 시드 수, completed 는 그중 상대 잔차 게이트까지 통과한 수.

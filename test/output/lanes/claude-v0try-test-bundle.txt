@@ -1,0 +1,13 @@
+✔ 소스: sites/tlscan 의 모듈은 src 를 절대 경로로만 import 한다 (5.4337ms)
+✔ 결정성: buildScannerHtml()을 2회 호출해도 바이트가 동일하다 (310.9548ms)
+✔ 구조: 산출물에 상대 .js import와 외부 scanner.js script가 남지 않는다 (155.3713ms)
+✔ 위상 정렬 가드: scanner.js를 선두로 옮긴 뮤테이션은 빌드를 실패시킨다 (63.4174ms)
+✔ 동기화: buildScannerHtml() 결과가 dist/tlscan.html과 바이트 동일하다 (149.0152ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 913.0105

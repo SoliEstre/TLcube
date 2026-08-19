@@ -40,6 +40,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
   LOCATOR_PROFILE_CELL_SURFACE_V0TR,
   LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
   // ⚠ `LOCATOR_PROFILE_CELL_SURFACE_V0XQ`(2026-08-17 2라운드) 와
   //   `LOCATOR_PROFILE_CELL_SURFACE_V0X`(2026-08-17 3라운드),
   //   그리고 **v0W 계열 넷**(`..._V0W`·`..._V0WQ`·`..._V0W2`·`..._V0WY`,
@@ -207,6 +208,9 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
       // 드랍 판정은 실기기 재스캔 뒤 운영자 몫이지 편입의 몫이 아니다.
       LOCATOR_PROFILE_CELL_SURFACE_V0TR,
       LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+      // **v0TRY 편입 (2026-08-18)** — v0TR 의 «면»(먼 코너) QR 파생. v0TY 가 v0T 의
+      // QR 위치 카드로 오는 것과 같은 문법이다 (index.html §qrPositionCards).
+      LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
     ]),
 });
 

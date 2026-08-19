@@ -320,12 +320,15 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // 카드 둘이 서서 5 → **7** 이다. 내려간 카드는 없다 — v0T·v0TY 는 그대로고
   // 드랩 판정은 실기기 재스캔 뒤 운영자 몴이다. 부제 키는 사전의 빈 슬롯을
   // 썼다 (g957·g969) — 4자리 키를 만들면 i18n-coverage 파서가 그 키를 못 본다.
+  // **의도적 갱신 «v0TRY 편입» (2026-08-18)**: v0TRY(g937) 카드가 서서 7 → **8** 이다.
+  // 내려간 카드는 없다 — v0TR 계열 전체가 그대로고 드랍 판정은 실기기 재스캔 뒤
+  // 운영자 몫이다. 부제 키는 사전의 빈 슬롯 g937 을 썼다 (같은 3자리 규약).
   const cardCount = (block.match(/class="toggle-card[^"]*" data-locator=/g) || []).length;
-  assert.equal(cardCount, 7,
-    '검출기 카드는 자동·끔 + v0 + v0T 계열 2종 + v0TR 계열 2종 = 7 다');
+  assert.equal(cardCount, 8,
+    '검출기 카드는 자동·끔 + v0 + v0T 계열 2종 + v0TR 계열 3종 = 8 다');
   assert.equal((block.match(/<svg /g) || []).length, cardCount,
     '검출기 카드 전부가 파인더 기하 아이콘을 가져야 한다');
-  const subKeys = ['g941', 'g942', 'g943', 'g995', 'g998', 'g957', 'g969'];
+  const subKeys = ['g941', 'g942', 'g943', 'g995', 'g998', 'g957', 'g969', 'g937'];
   assert.equal(subKeys.length, cardCount, '부제 키 수가 카드 수와 다르다');
   for (const key of subKeys) {
     assert.match(block, new RegExp(`class="card-sub" data-i18n="${key}"`), `검출기 부제 ${key} 누락`);

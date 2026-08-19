@@ -2173,6 +2173,7 @@ if (expectedLayoutRoot && isLabPath()) {
       // 라인업(2026-08-17 v0T 편입·v0W 계열 전체 드랍까지): v0 = Y0 ·
       // v0t = **Y1 기본** · v0ty = v0T 파생(먼 코너 QR 슬롯) ·
       // **v0tr · v0trq (2026-08-17 v0TR 계열 편입)** — v0T 재설계와 그 중앙 QR 파생.
+      // **v0try (2026-08-18)** — v0TR 의 먼 코너 QR 파생 (v0TY 와 같은 슬롯 규약).
       // v2r2 · v1r2 (2026-08-16) · v0xq · v0x · **v0w · v0wq · v0w2 · v0wy
       // (2026-08-17)** 는 검출 라인업에서 내려갔으므로 «기대» 로도 못 고른다 —
       // 저장·URL 등으로 옛 값이 들어와도 여기서 null(모름)로 떨어진다.
@@ -2180,7 +2181,7 @@ if (expectedLayoutRoot && isLabPath()) {
       // hypothesis.cellSurfaceLayout 으로 돌려주는 문자열이 그것이다 (표시만 v0T).
       expectedLocatorLayout = next === 'v0'
         || next === 'v0t' || next === 'v0ty'
-        || next === 'v0tr' || next === 'v0trq'
+        || next === 'v0tr' || next === 'v0trq' || next === 'v0try'
         ? next
         : null;
       for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {

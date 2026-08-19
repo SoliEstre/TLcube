@@ -442,7 +442,10 @@ function resolveProfile(format) {
                             ? 'v0tr'
                             : format.locatorProfile === 'cell-surface-v0trq'
                               ? 'v0trq'
-                              : null;
+                              // v0TRY (2026-08-18) — v0TR 의 먼 코너 QR 파생.
+                              : format.locatorProfile === 'cell-surface-v0try'
+                                ? 'v0try'
+                                : null;
     const finalIdHint = isCellSurfaceFinalId(format.cellSurfaceLayout)
       ? format.cellSurfaceLayout
       : (profileHintId !== null && !draftIndexWire ? profileHintId : null);
@@ -473,7 +476,8 @@ function resolveProfile(format) {
         if (finalIdHint === 'v0') finalN = 13;
         else if (finalIdHint === 'v1r2' || finalIdHint === 'v0x' || finalIdHint === 'v0xq'
           || finalIdHint === 'v0w' || finalIdHint === 'v0t' || finalIdHint === 'v0ty'
-          || finalIdHint === 'v0tr' || finalIdHint === 'v0trq') {
+          || finalIdHint === 'v0tr' || finalIdHint === 'v0trq'
+          || finalIdHint === 'v0try') {
           finalN = 21;
         }
         else {

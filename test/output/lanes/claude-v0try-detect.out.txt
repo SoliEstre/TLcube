@@ -1,0 +1,42 @@
+활성 n=21 라인업: [v0t, v0ty, v0tr, v0trq, v0try]
+
+=== ① 레이아웃별 poseCount (기본 cfg) ===
+  [v0t   ] v0t=6 · v0ty=1 · v0tr=6 · v0try=1 · v0=2  (shape 8 · slotQr 거절 10)
+  [v0ty  ] v0t=6 · v0tr=6 · v0=2  (shape 6 · slotQr 거절 12)
+  [v0tr  ] v0t=6 · v0tr=6 · v0=1  (shape 5 · slotQr 거절 12)
+  [v0trq ] v0trq=1 · v0=2  (shape 3 · slotQr 거절 0)
+  [v0try ] v0t=6 · v0tr=6 · v0=1  (shape 5 · slotQr 거절 12)
+
+=== ①-b 편입 **전** poseCount (v0tryFamily: false) — 대조군 ===
+  [v0t   ] v0t=6 · v0ty=1 · v0tr=6 · v0=2  (shape 7 · slotQr 거절 5)
+  [v0ty  ] v0t=6 · v0tr=6 · v0=2  (shape 6 · slotQr 거절 6)
+  [v0tr  ] v0t=6 · v0tr=6 · v0=1  (shape 5 · slotQr 거절 6)
+  [v0trq ] v0trq=1 · v0=2  (shape 3 · slotQr 거절 0)
+  [v0try ] v0t=6 · v0tr=6 · v0=1  (shape 5 · slotQr 거절 6)
+
+=== ② 왕복 복호 — **레이아웃 id 까지** (§6 판단의 실물 근거) ===
+  | 프레임 | 톤 | 복호 | 페이로드 일치 | **판정 레이아웃** | n |
+  | v0t    | 2 | ok | ok | **v0t** | undefined |
+  | v0t    | 3 | ok | ok | **v0t** | undefined |
+  | v0ty   | 2 | ok | ok | **v0ty** | undefined |
+  | v0ty   | 3 | ok | ok | **v0ty** | undefined |
+  | v0tr   | 2 | ok | ok | **v0tr** | undefined |
+  | v0tr   | 3 | ok | ok | **v0tr** | undefined |
+  | v0trq  | 2 | ok | ok | **v0trq** | undefined |
+  | v0trq  | 3 | ok | ok | **v0trq** | undefined |
+  | v0try  | 2 | ok | ok | **v0try** | undefined |
+  | v0try  | 3 | ok | ok | **v0try** | undefined |
+  → 불일치 0 건 (0 기대 — 하나라도 있으면 §6 탈출구 검토)
+
+=== ③ 편입 전/후 대조 (v0tryFamily off ↔ on) ===
+  | 프레임 | 편입 전 ms | 편입 후 ms | 증가 | 편입 전 shape | 편입 후 shape |
+  |---|---|---|---|---|---|
+  | v0t | 301.9 | 385.7 | 27.8% | 7 | 8 |
+  | v0ty | 331.1 | 402.0 | 21.4% | 6 | 6 |
+  | v0tr | 298.4 | 370.2 | 24.1% | 5 | 5 |
+  | v0trq | 142.5 | 139.9 | -1.8% | 3 | 3 |
+  | v0try | 309.6 | 363.0 | 17.2% | 5 | 5 |
+
+=== ④ 슬롯 QR 확증 A/B (v0tryRequireSlotQr) ===
+  확증 켬 (기본) → v0try 포즈  v0t:1  v0ty:0  v0tr:0  v0trq:0  v0try:0 (거절 계수는 slotQr.rejected)
+  확증 끔       → v0try 포즈  v0t:6  v0ty:6  v0tr:6  v0trq:0  v0try:6 (거절 계수는 slotQr.rejected)

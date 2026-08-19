@@ -260,7 +260,15 @@ test('Type Y 에서 새 채점기의 margin 이 정본 값과 같다 — 붙여�
   const { locatorCellsCellSurfaceFinal, finalLayoutIdsForN } =
     await import('../src/cellSurfaceFinal.js');
   // 정본 margin (cellSurfaceFinal.test.js 의 방향 margin 핀과 같은 값).
-  const EXPECTED = { v0t: 0.0962, v0ty: 0.0632, v0tr: 0.0980, v0trq: 0.0519 };
+  //
+  // **v0try 0.0645 추가 (2026-08-19 통합)** — 이 값은 A 블록 편입 커밋 `00936ce` 가
+  // 파생을 만들기 **전에 예측한 값과 정확히 같다** (「v0try 예측: 비대칭 9 (= A) ·
+  // margin 0.0645 (1.84배) → 성립한다」). 예측이 맞았다는 사실 자체가 유도가 옳다는
+  // 증거라 여기 적어 둔다 — 값만 박아 두면 다음 사람은 «어디서 나온 숫자인가» 를
+  // 다시 물어야 한다.
+  const EXPECTED = {
+    v0t: 0.0962, v0ty: 0.0632, v0tr: 0.0980, v0trq: 0.0519, v0try: 0.0645,
+  };
   for (const id of finalLayoutIdsForN(21)) {
     const layout = locatorCellsCellSurfaceFinal(21, id).map((c) => ({
       key: c.i + ',' + c.j,

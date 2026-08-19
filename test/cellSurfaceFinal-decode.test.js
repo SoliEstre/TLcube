@@ -173,6 +173,34 @@ test('v0TR 계열 왕복 — v0tr · v0trq (n=21) × 2톤/3톤 (스위치 없음
   }
 });
 
+/**
+ * **v0TRY 왕복** (편입 2026-08-18) — 위 v0TR 계열 테스트 **바로 옆**에 따로 둔다
+ * (같은 이유: 실패했을 때 «어느 파생이 깨졌는가» 를 바로 읽어야 한다).
+ *
+ * ⚠ 이 테스트가 이번 편입의 **§6 판단 근거**다. 이상 표본기
+ * (`cellSurfaceFinal.test.js` §교차 수용 ④-c)에서는 v0try 프레임이 **v0tr 로**
+ * 뽑힌다 — 동률 1.0 에서 기반이 이기는 구조다. 그런데 그것은 v0ty 프레임이 v0t 로,
+ * v0trq 프레임이 v0tr 로 뽑히는 것과 **문자 그대로 같은 좌표**이고 (두 파생 모두
+ * 이미 배포돼 있다), 실물 래스터에서는 슬롯 자리에 진짜 픽셀(QR 모듈·필러)이 있어
+ * 갈린다. **그 «갈린다» 를 값으로 재는 것이 여기다** — 레이아웃 id 까지 단언한다.
+ * 실측 대조: `test/output/lanes/claude-v0try-detect.mjs` ② (10/10 정확).
+ */
+test('v0TRY 왕복 — v0try (n=21) × 2톤/3톤 (스위치 없음)', {
+  timeout: 300_000,
+}, () => {
+  for (const tones of [2, 3]) {
+    const fixture = renderFinal(PAYLOAD, { layout: 'v0try', version: 1, tones });
+    const result = decodeLab(fixture.raster);
+    assert.equal(result.ok, true, JSON.stringify({
+      layout: 'v0try', tones, reason: result.reason,
+    }));
+    assert.equal(result.text, PAYLOAD);
+    assert.equal(result.hypothesis.cellSurfaceLayout, 'v0try',
+      'v0try@' + tones + '톤 이 ' + result.hypothesis.cellSurfaceLayout + ' 로 읽혔다');
+    assert.equal(result.hypothesis.n, 21);
+  }
+});
+
 test('드랍 n=21 왕복 (복원 스위치) — v0X · v0W 계열 4종 × 2톤/3톤', {
   timeout: 600_000,
 }, () => {

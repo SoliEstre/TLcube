@@ -19,6 +19,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
   LOCATOR_PROFILE_CELL_SURFACE_V0TR,
   LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0WQ,
@@ -102,6 +103,9 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
       LOCATOR_PROFILE_CELL_SURFACE_V0TY,
       LOCATOR_PROFILE_CELL_SURFACE_V0TR,
       LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+      // **의도적 갱신 «v0TRY 편입» (2026-08-18)** — 허용값 맨 뒤에 v0TRY. 카드도
+      // 함께 났다 (아래 `data-locator="cell-surface-v0try"` 단언). 드랍은 0 이다.
+      LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
     ],
   );
   // 이 단언이 지키는 것은 «허용값 목록에 없다» 는 사실 자체다. 상태 복원기는
@@ -144,6 +148,10 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-locator="cell-surface-v0trq"/);
   assert.match(INDEX, /data-locator="cell-surface-v0tr"[\s\S]{0,1200}?data-i18n="g955"/);
   assert.match(INDEX, /data-locator="cell-surface-v0trq"[\s\S]{0,1200}?data-i18n="g958"/);
+  // **의도적 갱신 «v0TRY 편입» (2026-08-18)** — 카드 하나가 더 선다 (드랍 0).
+  // i18n 키도 사전의 빈 슬롯을 썼다 (g936·g937·g938 — 같은 3자리 규약).
+  assert.match(INDEX, /data-locator="cell-surface-v0try"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0try"[\s\S]{0,1200}?data-i18n="g936"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0wq"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w2"/);

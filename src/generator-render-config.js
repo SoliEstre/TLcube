@@ -8,6 +8,7 @@ import {
   CELL_SURFACE_FINAL_V0TY,
   CELL_SURFACE_FINAL_V0TR,
   CELL_SURFACE_FINAL_V0TRQ,
+  CELL_SURFACE_FINAL_V0TRY,
   CELL_SURFACE_FINAL_V0W,
   CELL_SURFACE_FINAL_V0W2,
   CELL_SURFACE_FINAL_V0WY,
@@ -24,6 +25,7 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V0TY,
   LOCATOR_PROFILE_CELL_SURFACE_V0TR,
   LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
   LOCATOR_PROFILE_CELL_SURFACE_V0W,
   LOCATOR_PROFILE_CELL_SURFACE_V0W2,
   LOCATOR_PROFILE_CELL_SURFACE_V0WY,
@@ -45,7 +47,7 @@ import {
  * 사용자가 고른 값이 복원된다(해상도 티어가 이미 같은 규약을 쓴다).
  *
  * @param {{tone: 2|3, versionY?: number, fallback: {mode: string}, locatorProfileY?: string}} state
- * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'|'v0xq'|'v0w'|'v0wq'|'v0w2'|'v0wy'|'v0t'|'v0ty'|'v0tr'|'v0trq'}}
+ * @returns {{tones: 2|3, version?: number, window?: true, cellSurface?: true, cellSurfaceLayout?: 'v0'|'v2r2'|'v1r2'|'v0x'|'v0xq'|'v0w'|'v0wq'|'v0w2'|'v0wy'|'v0t'|'v0ty'|'v0tr'|'v0trq'|'v0try'}}
  */
 export function encodeOptionsForY(state) {
   if (state === null || typeof state !== 'object') {
@@ -175,6 +177,15 @@ export function encodeOptionsForY(state) {
       version: 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TRQ),
+    };
+  }
+  if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TRY) {
+    return {
+      tones: tone === 3 ? 3 : 2,
+      // v0TRY 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      version: 1,
+      cellSurface: true,
+      cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TRY),
     };
   }
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V1R2) {
