@@ -311,23 +311,51 @@ test('대조군 — 로케이터를 끄면 감마 0.7 은 종전대로 실패한
   assert.equal(result.ok, false, '로케이터 없이 감마 0.7 이 복호되면 이 테스트의 전제가 바뀐 것');
 });
 
-test('정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터가 돌지 않는다', {
+/*
+ * ⚠ **핀 뒤집기 (2026-08-19 · 운영자 결정)** — 이 자리에 있던 테스트는
+ * 「정식 경로 불변 — enableCellSurfaceY 미설정이면 로케이터가 돌지 않는다」였다.
+ * 그 명제는 **셀 표면이 시험판 전용이라는 전제** 위에 서 있었고, 그 전제가 뒤집혔다:
+ * 인쇄 포스터의 TL 이 v0 셀 표면이 되면서 «레퍼런스 기본값이 우리 대표 인쇄물을
+ * 못 읽는» 상태를 없애야 했고, `enableCellSurfaceY` 의 **기본값이 켜짐**으로 올라갔다.
+ *
+ * **지우지 않고 뒤집는다.** 지우면 「정식 경로가 무엇을 수용하는가」를 아무도 안 재게
+ * 되고, 그건 원래 이 핀이 막던 사고(계열이 조용히 정식으로 새는 것)를 **반대 방향으로**
+ * 다시 여는 것이다. 오늘은 «샌» 게 아니라 «의도적으로 옮긴» 것이므로, 핀도 그 새 경계를
+ * 재게 고쳐 적는다.
+ *
+ * 실측으로 갈린 것 (`test/output/claude-cs-blocklocator-split.mjs`, 실사진 195장):
+ * 이 플래그 하나가 **가격표가 정반대인 두 기능**을 켠다 —
+ *   · 셀 표면 **라인업**: 비용 +39% · 실사진 회복 **+1** (그러나 **포스터가 이걸 요구**한다)
+ *   · **블록 로케이터**: 비용 +4% 추가 · 실사진 회복 **+16**
+ * 그래서 둘 다 켠 채로 둔다. 근거가 서로 다를 뿐이다.
+ */
+test('정식 경로가 이제 **블록 로케이터를 돌린다** (기본값 전환 후)', {
   timeout: 300_000,
 }, () => {
   const frame = distortImage(V0_FRAME, { sCurve: 0.6, fill: FILL });
   const result = decodeFrontend({
     width: frame.width, height: frame.height, pixels: frame.pixels,
   }, {});
-  // 정식 경로는 CS 를 켜지 않는다 — CS 계열로 복호되면 안 된다.
-  if (result.ok) {
-    assert.notEqual(result.hypothesis.cellSurface, true, '정식 경로가 CS 를 수용했다');
-  }
+  assert.equal(result.ok, true,
+    '정식 경로가 S커브 0.6 v0 를 못 읽는다: ' + JSON.stringify(result.reason));
+  assert.equal(result.text, PAYLOAD);
+  assert.equal(result.hypothesis.cellSurface, true, '정식 경로가 CS 로 안 읽었다');
+});
+
+test('그래도 `csBlockLocator: false` 는 **여전히 끈다** (스위치가 살아 있다)', {
+  timeout: 300_000,
+}, () => {
+  // 기본값이 켜졌다고 해서 스위치가 사라지면 안 된다 — 비용을 못 물리게 되고,
+  // 위 테스트가 「무엇 덕에 읽히는지」를 구분하지 못하게 된다.
+  const frame = distortImage(V0_FRAME, { sCurve: 0.6, fill: FILL });
+  const result = decodeFrontend({
+    width: frame.width, height: frame.height, pixels: frame.pixels,
+  }, { bootstrap: { family: { cube: { csBlockLocator: false } } } });
   const diagnostics = result.ok
     ? result.diagnostics
     : (result.detail && result.detail.diagnostics);
-  const text = JSON.stringify(diagnostics || {});
-  assert.ok(!text.includes('cell-surface-block-locator'),
-    '정식 경로 진단에 블록 로케이터 흔적이 있다');
+  assert.ok(!JSON.stringify(diagnostics || {}).includes('cell-surface-block-locator'),
+    'csBlockLocator: false 인데 진단에 블록 로케이터 흔적이 있다');
 });
 
 // ═════════════════════════════════════════════════════════════════════════

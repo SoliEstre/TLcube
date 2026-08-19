@@ -3003,7 +3003,42 @@ function detectCubeViaFinderFirst(luma, options) {
   });
 }
 
-export function detectCubeHypotheses(luma, yJunction, options = {}) {
+/**
+ * `enableCellSurfaceY` 를 **켜짐 기본**으로 접는다 (운영자 결정 2026-08-19).
+ *
+ * 왜 기본값이 바뀌었나 — 인쇄용 포스터의 TL 이 v0 셀 표면 로케이터로 바뀌면서,
+ * **레퍼런스 디코더가 기본 옵션으로 우리 포스터를 못 읽는** 상태가 됐다
+ * (실측: 종전 심볼은 기본/옵트인 둘 다 OK, v0 는 옵트인만 OK). 포맷을 공개하면서
+ * 그 포맷의 대표 인쇄물을 기본값이 못 읽는 것은 앞뒤가 안 맞는다.
+ *
+ * 실사진 195장 왕복 실측 (`test/output/claude-cellsurface-default-cost.mjs`):
+ *   복호 성공 **94 → 110** · 회복 17 · 손실 1 · **원문 바뀜 0** · 시간 ×1.57
+ *
+ * 손실 1건은 Type O(hex) 프레임이 cube 셀표면 가설로 오인돼, `bootstrap.js` 의
+ * 「cube 양성이면 파인더 경로를 안 돈다」 단축 때문에 맞는 hex 판독이 경쟁도 못
+ * 해보고 버려진 것이다. `alwaysCompareFinders: true` 로 그 단축을 끄면 그 1건은
+ * 살지만 **cube 6건이 죽는다** (전수 실측: on 110 vs on+compare 105). 그래서
+ * 단축은 그대로 두고 손실 1건을 받는다 — 기각 기록이지 미측정이 아니다.
+ *
+ * ⚠ **왜 읽는 쪽 5군데를 `!== false` 로 바꾸지 않고 여기서 접는가**:
+ * `family.js` 의 타일링 캐시가 옵션을 `Object.is` 로 비교한다. 읽는 쪽에서만
+ * 접으면 «켜짐» 을 뜻하는 값이 `undefined` 와 `true` **둘**이 되어, 뜻이 같은데
+ * 캐시는 다르다고 답한다 — 같은 계산이 서너 번 도는 것을 막으려고 만든 캐시가
+ * 조용히 무력해진다. **답이 틀리는 게 아니라 느려지기만 하므로 테스트가 전부
+ * 초록이다.** 그래서 캐시 키에 닿기 전에 값을 하나로 만든다.
+ *
+ * 이 함수가 유일한 진입점이라 여기 한 곳이면 족하다 —
+ * `detectCubeViaFinderFirst`/`detectCubeFromSilhouette` 는 여기서만 불린다
+ * (3016·3018·3071) 그리고 다른 모듈은 그 둘을 직접 안 부른다.
+ */
+export function normalizeCubeSurfaceDefault(options) {
+  return options.enableCellSurfaceY === undefined
+    ? { ...options, enableCellSurfaceY: true }
+    : options;
+}
+
+export function detectCubeHypotheses(luma, yJunction, rawOptions = {}) {
+  const options = normalizeCubeSurfaceDefault(rawOptions);
   try {
     assertLumaField(luma);
   } catch (error) {

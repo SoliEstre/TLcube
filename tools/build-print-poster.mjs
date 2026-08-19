@@ -19,6 +19,9 @@ import { encodeY } from '../src/encodeY.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import { sceneToSvg } from '../src/svg.js';
 import { BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src/luminance.js';
+import {
+  RENDER_PROFILE_PRINT, faceGainsForRenderProfile,
+} from '../src/render-profile.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -29,6 +32,23 @@ export const POSTER_TL_TYPE = 'Y';
 export const POSTER_TL_VERSION = 0;
 export const POSTER_TL_TONES = 3;
 export const POSTER_TL_ECC = 'M';
+/**
+ * 포스터 TL 의 **셀 표면 레이아웃** (운영자 지시 2026-08-19).
+ *
+ * 왜 명시가 필요했나 — `encodeY` 는 `cellSurface` 를 안 주면 셀 표면 로케이터를
+ * **안 넣는다**. 포스터 빌더가 그걸 안 넘겨서, n=13 인데도 셀 역할이
+ * reference/format/data/filler 뿐이고 **locator 가 0셀**이었다 — 즉 오늘 스캐너가
+ * 가장 잘 잡는 축(셀 표면)을 포스터가 안 쓰고 있었다.
+ *
+ * 값은 생성기와 **같은 계약**을 쓴다 (`generator-render-config.js` 의
+ * `encodeOptionsForY` 중 LOCATOR_PROFILE_CELL_SURFACE_V0 분기와 동형):
+ *   { version: 0, cellSurface: true, cellSurfaceLayout: 'v0' }
+ *
+ * n=13 의 활성 레이아웃은 v0 하나뿐이지만(`finalLayoutIdsForN(13)`), **기본값에
+ * 기대지 않고 명시**한다 — 라인업이 바뀌는 날 인쇄물이 조용히 따라가면 안 된다.
+ * 인쇄물은 한 번 찍으면 못 고치므로, 여기서는 «묵시적 기본» 이 특히 비싸다.
+ */
+export const POSTER_TL_CELL_SURFACE_LAYOUT = 'v0';
 export const SYMBOL_BOX_CLASS = 'symbol-box';
 export const SYMBOL_BOX_TOKEN = '--symbol-box';
 export const SYMBOL_BOX_MM = 45;
@@ -44,7 +64,12 @@ export const PRINT_PALETTE = Object.freeze({
   ]),
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
-  faceGains: DEFAULT_FACE_GAINS,
+  // **출력물용 면 게인** (운영자 지시 2026-08-19 · 백로그 #23).
+  // 화면용 기본은 T1/L0.72/R0.62 로 R 면을 일부러 어둡게 해 입체감을 준다.
+  // 그런데 인쇄에서는 잉크 번짐·용지 흡수가 **저게인 면을 한 번 더 깎아**
+  // Δmin 계약을 위협한다. RENDER_PROFILE_PRINT 는 그 상황을 위해 만들어 둔
+  // 3면 동률(1/1/1) 프로파일인데 포스터가 안 쓰고 있었다.
+  faceGains: faceGainsForRenderProfile(RENDER_PROFILE_PRINT),
 });
 
 /** 흑백 프린터용 3톤. 채널을 완전히 같게 두어 컬러 관리 없이 명도만 남긴다. */
@@ -57,7 +82,12 @@ export const PRINT_PALETTE_BW = Object.freeze({
   ]),
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
-  faceGains: DEFAULT_FACE_GAINS,
+  // **출력물용 면 게인** (운영자 지시 2026-08-19 · 백로그 #23).
+  // 화면용 기본은 T1/L0.72/R0.62 로 R 면을 일부러 어둡게 해 입체감을 준다.
+  // 그런데 인쇄에서는 잉크 번짐·용지 흡수가 **저게인 면을 한 번 더 깎아**
+  // Δmin 계약을 위협한다. RENDER_PROFILE_PRINT 는 그 상황을 위해 만들어 둔
+  // 3면 동률(1/1/1) 프로파일인데 포스터가 안 쓰고 있었다.
+  faceGains: faceGainsForRenderProfile(RENDER_PROFILE_PRINT),
 });
 
 function qrToSvg(matrix, quiet = QR_QUIET_MODULES) {
@@ -84,6 +114,8 @@ function tlcubeToSvg(palette = PRINT_PALETTE) {
     version: POSTER_TL_VERSION,
     tones: POSTER_TL_TONES,
     eccLevel: POSTER_TL_ECC,
+    cellSurface: true,
+    cellSurfaceLayout: POSTER_TL_CELL_SURFACE_LAYOUT,
   });
   const scene = buildSceneY(encoded, {
     palette,

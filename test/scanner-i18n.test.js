@@ -93,15 +93,27 @@ test('스캐너 사전 언어 목록 == src/i18n.js SUPPORTED_LANGUAGES', () => 
 test('Type Y 강화 로케이터는 /lab/ 스캐너에서만 디코더에 켠다', () => {
   // **의도적 갱신 (2026-08-18)** — 예전 정규식은 `bootstrap` 객체의 **모양 전체**를
   // 한 덩어리로 잠갔다. 그래서 같은 객체에 형제 키를 하나 더하는 것만으로 깨졌다
-  // (daehan 옵트인 `cellFinderDaehan`). 이 핀이 지키려는 명제는 «두 스위치가
+  // (daehan 옵트인 `cellFinderDaehan`). 이 핀이 지키려는 명제는 «스위치가
   // isLabPath() 에 매여 있다» 이지 «bootstrap 에 다른 키가 없다» 가 아니다.
   // 그래서 **명제만** 잠근다 — 모양을 잠그면 확장할 때마다 거짓 경보가 난다.
+  //
+  // **의도적 축소 (2026-08-19)** — 예전엔 `enableCellSurfaceY` 도 여기서 같이 잠갔다.
+  // 그 축은 **디코더 기본값이 켜짐으로 올라가면서** 이 핀의 대상이 아니게 됐다
+  // (운영자 결정: 인쇄 포스터가 v0 셀 표면이 되어, 레퍼런스 기본값이 우리 포스터를
+  // 못 읽는 상태를 없애야 했다). 스캐너는 이제 그 키를 **아예 안 적는다** — 같은 뜻을
+  // 두 곳에 적으면 언젠가 한쪽만 바뀐다.
+  //
+  // ⚠ 핀을 **지운 게 아니라 옮겼다.** 새 자리는 아래 두 개다:
+  //   · 「셀 표면 검출은 **디코더 기본값**으로 켜져 있다」
+  //   · 「포스터 TL 이 **기본 옵션 디코더**로 복호된다」
+  //   둘 다 `test/print-poster-v0.test.js` 에 있다 — 거동으로 재야 하는 명제라
+  //   렌더 파이프라인이 필요하고, 이 파일(사전 완전성)에 두면 자리가 안 맞는다.
+  //   지우면서 «기본값이니까 괜찮다» 로 넘어가면, 기본값이 되돌아가는 날 아무도 못 잡는다.
   assert.match(SCANNER_JS, /enableLocatorY:\s*isLabPath\(\)/);
-  assert.match(SCANNER_JS, /enableCellSurfaceY:\s*isLabPath\(\)/);
-  // 그 둘이 여전히 cube 패밀리 아래에 있다 (다른 데로 새지 않았다).
   assert.match(SCANNER_JS, /family:\s*\{\s*cube:\s*\{\s*enableLocatorY:/);
   assert.doesNotMatch(SCANNER_JS, /enableLocatorY:\s*true/);
-  assert.doesNotMatch(SCANNER_JS, /enableCellSurfaceY:\s*true/);
+  // 스캐너가 셀표면 축을 **다시 명시하지 않는다** — 기본값이 유일한 정본이다.
+  assert.doesNotMatch(SCANNER_JS, /enableCellSurfaceY:/);
 });
 
 test('사진 스캔 실패 두 경로가 모두 토스트를 띄운다', () => {

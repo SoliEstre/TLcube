@@ -94,7 +94,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-19.01';
+export const SCANNER_BUILD = '2026-08-19.02';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -739,7 +739,21 @@ async function decodeFrame(imageData, settings = {}) {
       //   아무 일이 안 일어나고, 그게 «daehan 이 효과가 없다» 로 오독된다.
       bootstrap: {
         cellFinderDaehan,
-        family: { cube: { enableLocatorY: isLabPath(), enableCellSurfaceY: isLabPath() } },
+        // **셀 표면 검출을 정식에서도 켠다** (운영자 확정 2026-08-19).
+        //
+        // 왜 지금인가 — 인쇄용 포스터를 v0(셀 표면)로 바꾸려는데, 이 스위치가
+        // 시험판 전용이라 **정식 스캐너가 그 포스터를 못 읽는다**(실측: 컬러·흑백
+        // × ppu 4종 = 0/8 `no-finder`, 시험판 조건에선 8/8 원문 일치).
+        // 인쇄물은 한 번 찍으면 못 고치므로 순서를 뒤집을 수 없다 —
+        // 스캐너가 먼저 읽을 수 있어야 포스터를 바꾼다.
+        //
+        // enableLocatorY 는 **그대로 시험판 전용**이다. 둘은 다른 축이고,
+        // 한 줄에 있다고 해서 같이 움직일 이유가 없다.
+        // `enableCellSurfaceY` 는 **디코더 기본값이 켜짐**이라 여기서 안 적는다
+        // (2026-08-19). 같은 뜻을 두 곳에 적으면 언젠가 한쪽만 바뀐다.
+        // `enableLocatorY` 는 여전히 시험판 전용이다 — 둘은 다른 축이고, 한 줄에
+        // 있었다고 해서 같이 움직일 이유가 없다.
+        family: { cube: { enableLocatorY: isLabPath() } },
       },
       // 가이드-사전 포즈. 없으면 이 객체 키 자체가 안 생겨 종전 경로와 동일하다.
       ...(Array.isArray(settings.priorPoses) ? { priorPoses: settings.priorPoses } : {}),

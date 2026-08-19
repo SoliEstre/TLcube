@@ -251,16 +251,52 @@ test('직각 회전 왕복 — v0@13 (활성) · v2r2@21 (드랍 복원, 2톤)',
   }
 });
 
-test('정식 경로(enableCellSurfaceY 없음)는 최종 라인업을 수용하지 않는다', {
+/*
+ * ⚠ **핀 뒤집기 (2026-08-19 · 운영자 결정)** — 이 자리에 있던 테스트는
+ * 「정식 경로(enableCellSurfaceY 없음)는 최종 라인업을 **수용하지 않는다**」였다.
+ * 셀 표면이 시험판 전용이라는 전제 위의 명제였고, 그 전제가 뒤집혔다 —
+ * 인쇄 포스터가 v0 셀 표면이 되면서 `enableCellSurfaceY` 기본값이 켜짐으로 올라갔다.
+ * (같은 계열의 핀이 `test/cellSurface-block-locator.test.js` 에도 있었고 함께 뒤집었다.)
+ *
+ * **지우지 않고 뒤집는다.** 이 핀이 원래 막던 것은 «계열이 조용히 정식으로 새는 것»
+ * 인데, 지워 버리면 그 감시가 반대 방향으로 사라진다. 오늘은 샌 게 아니라 옮긴 것이다.
+ *
+ * ⚠ **뒤집으면서 하마터면 잃을 뻔한 것** — 이 한 테스트가 사실 **두 명제**를 겹쳐
+ * 지키고 있었다:
+ *   ① 「셀 표면은 시험판 전용이다」        ← 오늘 뒤집혔다
+ *   ② 「**드랍된** 와이어는 스위치 없이 안 산다」 ← **그대로 유효하다**
+ * 처음엔 `LINEUP` 전체가 정식에서 수용된다고 통째로 뒤집었다가 `v2r2` 에서 깨졌다.
+ * `LINEUP` 은 **드랍된** 와이어 표(v2r2@21 · v2r2@25)고, 드랍은
+ * `includeDroppedCellSurfaceLayouts` 라는 **다른 축**이라 오늘 결정과 무관하다.
+ * 그래서 아래를 둘로 갈라 적는다 — 겹쳐 있던 것을 갈라 놓는 것이 이 수정의 요점이다.
+ *
+ * 이 핀이 함께 지키던 세 번째 성질(「정식 경로가 아무거나 CS 로 오수용하지 않는다」)은
+ * 아래 「기존 일반 Y 는 최종 셀 표면으로 오수용되지 않는다」가 계속 잰다 — 확인했다.
+ */
+test('정식 경로가 이제 **활성** 셀 표면을 수용한다 (기본값 전환 후)', {
   timeout: 120_000,
 }, () => {
-  for (const { layout, version } of LINEUP) {
+  // 활성 = 드랍 안 된 것. 오늘 바뀐 축은 이쪽이다.
+  const fixture = renderFinal(PAYLOAD, { layout: 'v0', version: 0, tones: 2 });
+  const official = decodeFrontend(fixture.raster, {});
+  assert.equal(official.ok, true,
+    'v0 가 정식 경로에서 안 읽힌다: ' + JSON.stringify(official.reason));
+  assert.equal(official.text, PAYLOAD);
+  assert.equal(official.hypothesis.cellSurface, true, 'v0 가 정식 경로에서 CS 로 안 읽혔다');
+});
+
+test('**드랍된** 와이어는 기본값이 켜져도 스위치 없이는 안 산다', {
+  timeout: 120_000,
+}, () => {
+  // 드랍은 `enableCellSurfaceY` 와 **다른 축**이다. 기본값이 켜졌다고 드랍이 풀리면,
+  // 「드랍한다」는 결정이 조용히 무효가 된다.
+  for (const { layout, version } of LINEUP.filter((row) => row.layout === 'v2r2')) {
     const fixture = renderFinal(PAYLOAD, { layout, version, tones: 2 });
     const official = decodeFrontend(fixture.raster, {});
     assert.notEqual(
       official.ok === true && official.hypothesis && official.hypothesis.cellSurface === true,
       true,
-      layout + ' 가 정식 경로에서 수용됐다',
+      layout + '@' + version + ' (드랍) 이 스위치 없이 정식 경로에서 수용됐다',
     );
   }
 });

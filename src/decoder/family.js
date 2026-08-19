@@ -22,7 +22,7 @@ import {
   fail,
   ok,
 } from './contracts.js';
-import { detectCubeHypotheses } from './cube-detect.js';
+import { detectCubeHypotheses, normalizeCubeSurfaceDefault } from './cube-detect.js';
 import {
   CORNER_UNIT_OFFSETS,
   FACE_SPINE_CORNER,
@@ -662,9 +662,12 @@ export function scoreTriTiling(luma, finder, options = {}) {
  * 검출 실패를 불스아이 경로와 연결하지 않으며, tone/n/orientation 전 가설을 보존한다.
  */
 export function scoreCubeTiling(luma, yJunction, options = {}) {
-  const cubeOptions = options.cube && typeof options.cube === 'object'
+  // ⚠ **캐시 키를 만들기 전에** 정규화한다. `cubeTilingKeyMatches` 가 옵션을
+  //   `Object.is` 로 비교하므로, 여기서 접지 않으면 «켜짐» 을 뜻하는 값이
+  //   `undefined` 와 `true` 둘이 되어 같은 계산인데 캐시가 매번 빗나간다.
+  const cubeOptions = normalizeCubeSurfaceDefault(options.cube && typeof options.cube === 'object'
     ? options.cube
-    : options;
+    : options);
   const cached = cachedCubeTiling(luma, yJunction, cubeOptions);
   if (cached !== undefined) return cached;
   const computed = computeCubeTiling(luma, yJunction, cubeOptions);
