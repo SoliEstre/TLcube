@@ -35,6 +35,35 @@ function cellPxFromH(H) {
   return (sx + sy) / 2;
 }
 
+/**
+ * **어느 중앙 파인더로 잡혔는가** — 관측된 파인더의 이름 (2026-08-19).
+ *
+ * 왜 필요한가: 운영자 순위 보고(«QR > 불스아이속큐브 > 불스아이 > 3톤큐브 > 그 외»)를
+ * 계측으로 확인하려면 프레임마다 «무엇으로 잡혔나» 가 나와야 하는데, 지금까지 이 값이
+ * 결과 밖으로 안 나갔다. `lab-telemetry.js` 의 `observedFromResult` 는 그래서
+ * `hyp.source === 'bullseye'` 같은 **한 번도 생기지 않는 문자열**을 보고 있었고
+ * (실제 source 는 `anchor-detector`·`cell-finder`·`central-cube-finder`… 다),
+ * 그 결과 `observed_finder` 컬럼은 center-qr 말고는 영원히 빈칸이었다.
+ * 즉 「셀 표면 파인더가 안 잡힌다」는 신고를 **잴 계기 자체가 없었다.**
+ *
+ * 규칙 — 지어내지 않고 검출기가 실제로 남긴 것만 읽는다:
+ *   · `finder.patternId` — cell-mask 11종 · OAK 3종 · daehan · `central-cube-3tone`.
+ *     이 필드를 쓰는 검출기는 `cell-finder-detect.js` 와 3톤 큐브뿐이다.
+ *   · `innerBandsReplaced` — 불스아이 후보만 갖는다. >0 이면 안쪽 두 밴드가 큐브인
+ *     하이브리드(= 운영자가 말한 «불스아이속큐브»), 0 이면 순수 링.
+ *   · 그 밖에는 null. **모르는 것을 'bullseye' 로 채우지 않는다** — 빈칸은 「안 쟀다」고
+ *     읽히지만 틀린 이름은 순위표를 조용히 오염시킨다.
+ */
+function finderPatternIdOf(hypothesis) {
+  const finder = hypothesis.finder;
+  if (finder && typeof finder.patternId === 'string' && finder.patternId) {
+    return finder.patternId;
+  }
+  const replaced = finder && finder.innerBandsReplaced;
+  if (Number.isFinite(replaced)) return replaced > 0 ? 'cube-bullseye' : 'bullseye';
+  return null;
+}
+
 function compactHypothesis(candidate) {
   const hypothesis = candidate.hypothesis;
   return {
@@ -46,6 +75,7 @@ function compactHypothesis(candidate) {
     rotationDegrees: hypothesis.rotationDegrees,
     centerQr: hypothesis.centerQr,
     source: hypothesis.source,
+    finderPatternId: finderPatternIdOf(hypothesis),
     locatorProfile: hypothesis.locatorProfile || null,
     locatorArm: hypothesis.locatorArm || null,
     cellSurfaceLayout: hypothesis.cellSurfaceLayout || null,

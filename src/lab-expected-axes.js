@@ -1,0 +1,76 @@
+/**
+ * lab-expected-axes.js — 시험판 「기대」 선택의 **축 정본** (2026-08-19, 운영자 지시).
+ *
+ * ─ 왜 생겼나 ───────────────────────────────────────────────────────────────
+ * 시험판의 「기대 레이아웃」은 한 줄뿐이었고 그 한 줄이 **셀 표면 레이아웃 한 축**만
+ * 담았다 (`CELL_SURFACE_FINAL_ACTIVE_IDS` 와 양방향으로 묶여 있다 —
+ * `test/lab-expected-layout-ui.test.js`). 그런데 운영자 신고는 그 축의 이야기가 아니었다:
+ *
+ *   · 「신규 3개 셀 표면 파인더(Niteogen·Aspirin·Benzene) 전부 인식 안 됨」 → **중앙 파인더 축**
+ *   · 「외곽 파인더는 별도 선택이어야 함」                                  → **외곽 축**
+ *
+ * 한 축에 몰아넣으면 「무엇이 안 잡혔는가」를 못 가른다. 그래서 축을 셋으로 나눈다:
+ *
+ *   | 축 | 무엇 | 텔레메트리 필드 | 정본 |
+ *   |---|---|---|---|
+ *   | ① 셀 표면 레이아웃 | v0 · v0t · v0ty · v0tr · v0trq | `locatorLayout` | `CELL_SURFACE_FINAL_ACTIVE_IDS` |
+ *   | ② 중앙 파인더 | 불스아이 · 속큐브 · 3톤큐브 · QR · cell-mask 11 · OAK 3 | `finderPatternId` | **이 파일** |
+ *   | ③ 외곽/코너 | 없음 · daehan 사괘 · A-CM · O-CM | `outerFinderId` | **이 파일** |
+ *
+ * ①의 정본과 의미는 **한 값도 안 바뀐다.** 기존 회귀가 그 명제를 잠그고 있고,
+ * 이 파일은 ①을 아예 언급하지 않는다.
+ *
+ * ─ 규약 (①의 것을 그대로 물려받는다) ─────────────────────────────────────
+ * **검출 라인업에 있는 것만 버튼이 있다.** 라인업에 없는 것을 «기대» 로 고를 수 있으면
+ * 그 프레임의 텔레메트리는 영원히 미스로 남는다 — 즉 계기가 눈이 먼다.
+ * 그래서 ②의 목록을 손으로 적지 않고 **검출기가 실제로 쓰는 표에서 유도한다**
+ * (`bootstrap.js` 의 `CELL_FINDER_LINEUP` 과 같은 출처·같은 순서).
+ *
+ * ⚠ daehan(`oak-daehan-k6/k8/k10`)은 ②가 아니라 ③이다. 구현상 셀 파인더 라인업에
+ *   옵트인으로 얹히지만 (`cellFinderDaehan`), 운영자에게 그것은 «외곽 사괘» 이고
+ *   고르는 자리도 거기다. 그리고 k 는 검출로 못 가른다 (포함 사슬 —
+ *   `bootstrap.js` cellFinderHypotheses 주석) 이므로 k별 버튼도 두지 않는다.
+ */
+
+import {
+  CUBE_BULLSEYE_FINDER_PATTERN_ID,
+  FINDER_CELL_MASK_PATTERNS,
+  LEGACY_FINDER_PATTERN_ID,
+  THREE_TONE_CUBE_FINDER_PATTERN_ID,
+} from './finder-patterns.js';
+import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
+
+/**
+ * ② 중앙 파인더의 활성 라인업. 순서는 «운영자가 순위로 부른 넷 → cell-mask → OAK» 다
+ * (신고문이 그 순서로 왔다 — 화면에서 찾는 순서와 같게 둔다).
+ */
+export const LAB_CENTRAL_FINDER_IDS = Object.freeze([
+  LEGACY_FINDER_PATTERN_ID,
+  CUBE_BULLSEYE_FINDER_PATTERN_ID,
+  THREE_TONE_CUBE_FINDER_PATTERN_ID,
+  CENTER_QR_FINDER_PATTERN_ID,
+  ...FINDER_CELL_MASK_PATTERNS.map((pattern) => pattern.id),
+  ...OAK_FINDER_PATTERNS.map((pattern) => pattern.id),
+]);
+
+/**
+ * ③ 외곽/코너 파인더.
+ *
+ * `none` 은 «모름» 과 **다른 값**이다 — 「외곽 파인더가 없는 코드를 찍고 있다」는
+ * 적극적 관측이고, 「안 골랐다」와 섞으면 그 구분이 사라진다.
+ *
+ * `a-cm`/`o-cm` 은 아직 시험판 UI 에서 고를 일이 드물지만 **자리를 지금 잡아 둔다** —
+ * 나중에 값을 더하면 그 전 프레임들이 「미상」과 「없음」 사이에서 애매해진다.
+ */
+export const LAB_OUTER_FINDER_IDS = Object.freeze(['none', 'daehan', 'a-cm', 'o-cm']);
+
+/** 시험판 버튼이 넘겨온 값이 축 ②의 유효 값인가. 아니면 null(모름). */
+export function normalizeCentralFinderId(value) {
+  return LAB_CENTRAL_FINDER_IDS.includes(value) ? value : null;
+}
+
+/** 시험판 버튼이 넘겨온 값이 축 ③의 유효 값인가. 아니면 null(모름). */
+export function normalizeOuterFinderId(value) {
+  return LAB_OUTER_FINDER_IDS.includes(value) ? value : null;
+}

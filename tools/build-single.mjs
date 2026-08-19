@@ -92,8 +92,12 @@ const MODULE_ORDER = [
   // (2026-08-16, 과업 #17). generator-state 가 음영 모드 허용값을 shading.js 에서
   // 가져오기 때문이다 — 상수를 복제하면 «UI 는 켜지는데 렌더는 모르는 값» 이 된다.
   // quietzone 은 원래 목록 끝에 있었고, 의존이 0 이라 앞으로 당겨도 위상 정렬은 그대로다.
-  'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'generator-state', 'export-filename',
-  'encode', 'scene', 'raster', 'verify', 'svg', 'png',
+  // dither(의존 0)·export-options(render-profile·dither만)는 generator-state 앞이어야
+  // 한다 (2026-08-19 내보내기 옵션 4종) — generator-state 가 옵션 도메인·기본값을
+  // export-options 에서 가져온다 (상수 복제 금지 — «UI 는 아는데 규칙은 모르는 값» 방지).
+  'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'dither', 'export-options', 'generator-state', 'export-filename',
+  // export-render 는 raster·svg·png·dither 전부의 뒤다 (내보내기 파이프라인 — 앱만 쓴다).
+  'encode', 'scene', 'raster', 'verify', 'svg', 'png', 'export-render',
   // cellSurfaceFinal(최종 라인업 v0·v2r2)은 capacityY·cellSurfaceY·cellSurfaceLayouts·
   // autoplaceY 를 import 하므로 그 넷 뒤에 온다.
   'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'tonemap',

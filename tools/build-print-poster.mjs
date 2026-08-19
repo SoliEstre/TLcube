@@ -20,7 +20,7 @@ import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import { sceneToSvg } from '../src/svg.js';
 import { BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src/luminance.js';
 import {
-  RENDER_PROFILE_PRINT, faceGainsForRenderProfile,
+  RENDER_PROFILE_SOFT, faceGainsForRenderProfile,
 } from '../src/render-profile.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,6 +53,17 @@ export const SYMBOL_BOX_CLASS = 'symbol-box';
 export const SYMBOL_BOX_TOKEN = '--symbol-box';
 export const SYMBOL_BOX_MM = 45;
 export const QR_QUIET_MODULES = 4;
+/**
+ * 포스터의 «인쇄용 300ppi» 선언 (운영자 확정 2026-08-19 — «인쇄용 300 + 입체감 약»).
+ *
+ * ⚠ 이 포스터의 심볼은 **HTML 인라인 SVG** 라 ppi 가 픽셀 수를 정하지 않는다 — 벡터는
+ * 인쇄기 해상도로 래스터화된다. 여기서 300 은 (a) 이 포스터가 «인쇄용» 프로파일
+ * 계열(생성기 ③ 출력 최적화의 인쇄용 기본값)로 발행된다는 선언이고, (b) 물리 환산의
+ * 기준이다: 45 mm 박스 × 300 ppi ≈ 531 dot — 셀 표면 v0(scene 약 19 단위)에서 셀당
+ * ≈ 28 dot 로, 복호 실측 하한(Y:v0 = 7.5 px/셀, export-options.js)의 3.7 배 여유다.
+ * PNG 로 내보낼 때만 이 값이 pHYs 메타데이터가 된다 (png.js).
+ */
+export const POSTER_PPI = 300;
 
 /** 컬러 인쇄용 마젠타 3톤. RGB가 달라도 상대 휘도 간격은 크게 유지한다. */
 export const PRINT_PALETTE = Object.freeze({
@@ -64,12 +75,15 @@ export const PRINT_PALETTE = Object.freeze({
   ]),
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
-  // **출력물용 면 게인** (운영자 지시 2026-08-19 · 백로그 #23).
-  // 화면용 기본은 T1/L0.72/R0.62 로 R 면을 일부러 어둡게 해 입체감을 준다.
-  // 그런데 인쇄에서는 잉크 번짐·용지 흡수가 **저게인 면을 한 번 더 깎아**
-  // Δmin 계약을 위협한다. RENDER_PROFILE_PRINT 는 그 상황을 위해 만들어 둔
-  // 3면 동률(1/1/1) 프로파일인데 포스터가 안 쓰고 있었다.
-  faceGains: faceGainsForRenderProfile(RENDER_PROFILE_PRINT),
+  // **«약(soft)» 면 게인** (운영자 확정 2026-08-19 — «인쇄용 300 + 큐브 입체감 약»).
+  // 종전에는 출력물용 3면 동률(1/1/1)이었다 — 잉크·용지가 저게인 면을 한 번 더
+  // 깎는 것을 피하는 선택이지만, 입체감이라는 정체성을 완전히 버린다. «약»
+  // (T1/L0.85/R0.78)은 그 사이의 실측 균형점이다: 합성 왕복은 컬러·흑백 ×
+  // ppu {10,14,20,28} + 치우침 2·6셀 전수 통과 (12/12 — 보고서 §2.1).
+  // ⚠ 유보: 이 컬러 팔레트의 R 면 **원시** Δmin 은 0.1107 로 렌더 계약 0.12 를
+  // 밑돈다 (흑백은 0.1193). 디코더의 면별 앵커 재고정 덕에 왕복은 서지만, 실인쇄
+  // 잉크 손실 마진은 동률 대비 얇다 — 인쇄 강행 전 실기기 확증 권고 (보고서 §2.1).
+  faceGains: faceGainsForRenderProfile(RENDER_PROFILE_SOFT),
 });
 
 /** 흑백 프린터용 3톤. 채널을 완전히 같게 두어 컬러 관리 없이 명도만 남긴다. */
@@ -82,12 +96,8 @@ export const PRINT_PALETTE_BW = Object.freeze({
   ]),
   bullseyeDark: BULLSEYE_DARK,
   bullseyeLight: BULLSEYE_LIGHT,
-  // **출력물용 면 게인** (운영자 지시 2026-08-19 · 백로그 #23).
-  // 화면용 기본은 T1/L0.72/R0.62 로 R 면을 일부러 어둡게 해 입체감을 준다.
-  // 그런데 인쇄에서는 잉크 번짐·용지 흡수가 **저게인 면을 한 번 더 깎아**
-  // Δmin 계약을 위협한다. RENDER_PROFILE_PRINT 는 그 상황을 위해 만들어 둔
-  // 3면 동률(1/1/1) 프로파일인데 포스터가 안 쓰고 있었다.
-  faceGains: faceGainsForRenderProfile(RENDER_PROFILE_PRINT),
+  // **«약(soft)» 면 게인** — 위 컬러 팔레트와 같은 확정·같은 유보 (보고서 §2.1).
+  faceGains: faceGainsForRenderProfile(RENDER_PROFILE_SOFT),
 });
 
 function qrToSvg(matrix, quiet = QR_QUIET_MODULES) {

@@ -53,9 +53,13 @@ export function colorToHex(c) {
  * scene → 완결된 SVG 문서 문자열.
  *
  * @param {object} scene buildScene() 산출물
- * @param {{pixelsPerUnit?: number, precision?: number}} [options]
+ * @param {{pixelsPerUnit?: number, precision?: number, widthPx?: number, heightPx?: number}} [options]
  *   pixelsPerUnit 은 width/height 픽셀 속성에만 쓰인다 — 좌표계는 scene 단위
  *   viewBox 그대로라 확대·축소에 무손실이다.
+ *   widthPx/heightPx (2026-08-19, «고정 이미지 크기»): 주면 width/height 속성을 이 값
+ *   그대로 쓴다(둘 다 필요). viewBox 비율과 다르면 SVG 기본 preserveAspectRatio
+ *   (xMidYMid meet)가 **contain** 배치를 해 준다 — 그래서 별도 letterbox 계산이 없다.
+ *   안 주면 종전과 바이트 동일하다 (결정성 핀이 SVG 전문에 걸려 있다).
  * @returns {string}
  */
 export function sceneToSvg(scene, options = {}) {
@@ -67,9 +71,17 @@ export function sceneToSvg(scene, options = {}) {
   if (!Number.isInteger(precision) || precision < 1 || precision > 8) {
     throw new RangeError(`precision 은 1..8 정수여야 한다: ${precision}`);
   }
+  if ((options.widthPx === undefined) !== (options.heightPx === undefined)) {
+    throw new RangeError('widthPx/heightPx 는 함께 줘야 한다 — 한쪽만 주면 비율이 이중으로 정의된다');
+  }
+  for (const [label, v] of [['widthPx', options.widthPx], ['heightPx', options.heightPx]]) {
+    if (v !== undefined && (!Number.isInteger(v) || v <= 0)) {
+      throw new RangeError(`${label} 는 1 이상의 정수여야 한다: ${v}`);
+    }
+  }
   const n = (v) => num(v, precision);
-  const pxW = Math.round(scene.width * ppu);
-  const pxH = Math.round(scene.height * ppu);
+  const pxW = options.widthPx === undefined ? Math.round(scene.width * ppu) : options.widthPx;
+  const pxH = options.heightPx === undefined ? Math.round(scene.height * ppu) : options.heightPx;
 
   // 음영 띠(scene.shading) — 없으면 defs 자체를 안 낸다. 이 «없으면 아무것도 안 낸다» 가
   // 종전 산출물의 바이트 동일성을 지킨다 (결정성 핀이 SVG 전문에 걸려 있다).

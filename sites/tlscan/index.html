@@ -1180,6 +1180,58 @@
           <button type="button" data-expected-layout="v0trq" data-i18n="lab.expectedLayout.v0trq">v0TRQ</button>
         </div>
       </div>
+      <!-- 기대 «중앙 파인더» (축 ②, 2026-08-19 운영자 지시) — 위 「기대 레이아웃」과
+           **독립된 축**이다. 위 줄은 셀 표면 레이아웃(v0 계열) 한 축만 담고 있어서
+           「신규 3개 셀 표면 파인더(Nitrogen·Aspirin·Benzene)가 전부 인식 안 된다」는
+           신고를 **고를 자리조차 없었다** — 즉 그 신고를 계측으로 확인할 수가 없었다.
+           값은 파인더 패턴 id 와 같아야 한다: 디코더가
+           hypothesis.finderPatternId 로 돌려주는 문자열이 그것이다 (표시만 짧게 쓴다).
+           정본은 src/lab-expected-axes.js 의 LAB_CENTRAL_FINDER_IDS 이고,
+           그 목록은 bootstrap.js 의 CELL_FINDER_LINEUP 과 같은 표에서 유도된다 —
+           «검출 라인업에 있는 것만 버튼이 있다» 는 레이아웃 카드의 규약 그대로다.
+           회귀: test/lab-expected-finder-ui.test.js -->
+      <div id="lab-expected-finder" class="lab-expected-arm">
+        <span data-i18n="lab.expectedFinder.label">기대 중앙 파인더</span>
+        <div class="lab-expected-arm-cards" role="group">
+          <button type="button" data-expected-finder="" class="active" data-i18n="lab.expectedFinder.unknown">모름</button>
+          <button type="button" data-expected-finder="bullseye" data-i18n="lab.expectedFinder.bullseye">불스아이</button>
+          <button type="button" data-expected-finder="cube-bullseye" data-i18n="lab.expectedFinder.cube-bullseye">속큐브</button>
+          <button type="button" data-expected-finder="central-cube-3tone" data-i18n="lab.expectedFinder.central-cube-3tone">3톤큐브</button>
+          <button type="button" data-expected-finder="center-qr" data-i18n="lab.expectedFinder.center-qr">QR</button>
+          <button type="button" data-expected-finder="pinwheel-3-0101-cw-missing-solid" data-i18n="lab.expectedFinder.pinwheel-3-0101-cw-missing-solid">pinwheel</button>
+          <button type="button" data-expected-finder="gap-ring-01-2-1-solid" data-i18n="lab.expectedFinder.gap-ring-01-2-1-solid">gap-ring</button>
+          <button type="button" data-expected-finder="flower-7-0020-coprime-offset" data-i18n="lab.expectedFinder.flower-7-0020-coprime-offset">flower</button>
+          <button type="button" data-expected-finder="swirl-2-200" data-i18n="lab.expectedFinder.swirl-2-200">swirl</button>
+          <button type="button" data-expected-finder="pinwheel-c2-2-1100-cw" data-i18n="lab.expectedFinder.pinwheel-c2-2-1100-cw">pinwheel-c2</button>
+          <button type="button" data-expected-finder="gap-ring-01-2-1-open" data-i18n="lab.expectedFinder.gap-ring-01-2-1-open">gap-ring-open</button>
+          <button type="button" data-expected-finder="flower-7-1020-coprime-offset" data-i18n="lab.expectedFinder.flower-7-1020-coprime-offset">flower-1020</button>
+          <button type="button" data-expected-finder="swirl-c2-5-5-11-both" data-i18n="lab.expectedFinder.swirl-c2-5-5-11-both">swirl-c2</button>
+          <button type="button" data-expected-finder="tristar-refined-h3" data-i18n="lab.expectedFinder.tristar-refined-h3">tristar</button>
+          <button type="button" data-expected-finder="tree-refined-h3" data-i18n="lab.expectedFinder.tree-refined-h3">tree</button>
+          <button type="button" data-expected-finder="cats-refined-h3" data-i18n="lab.expectedFinder.cats-refined-h3">cats</button>
+          <button type="button" data-expected-finder="oak-nitrogen-r2" data-i18n="lab.expectedFinder.oak-nitrogen-r2">Nitrogen</button>
+          <button type="button" data-expected-finder="oak-aspirin" data-i18n="lab.expectedFinder.oak-aspirin">Aspirin</button>
+          <button type="button" data-expected-finder="oak-benzene" data-i18n="lab.expectedFinder.oak-benzene">Benzene</button>
+        </div>
+      </div>
+      <!-- 기대 «외곽/코너 파인더» (축 ③, 2026-08-19 운영자 지시 «외곽 파인더는 별도
+           선택이어야 함»). 중앙 파인더와 독립이다 — 같은 중앙 파인더에 외곽만 다른
+           코드가 실재하므로 한 줄에 섞으면 조합을 표현할 수 없다.
+           ⚠ 「없음」은 「모름」과 **다른 값**이다: 「외곽이 없는 코드를 찍고 있다」는
+             적극적 관측이고, 「안 골랐다」와 섞으면 그 구분이 사라진다.
+           A-CM/O-CM 은 아직 고를 일이 드물지만 자리를 지금 잡아 둔다 — 나중에 값을
+           더하면 그 전 프레임들이 「미상」과 「없음」 사이에서 애매해진다.
+           정본: src/lab-expected-axes.js 의 LAB_OUTER_FINDER_IDS -->
+      <div id="lab-expected-outer" class="lab-expected-arm">
+        <span data-i18n="lab.expectedOuter.label">기대 외곽 파인더</span>
+        <div class="lab-expected-arm-cards" role="group">
+          <button type="button" data-expected-outer="" class="active" data-i18n="lab.expectedOuter.unknown">모름</button>
+          <button type="button" data-expected-outer="none" data-i18n="lab.expectedOuter.none">없음</button>
+          <button type="button" data-expected-outer="daehan" data-i18n="lab.expectedOuter.daehan">daehan 사괘</button>
+          <button type="button" data-expected-outer="a-cm" data-i18n="lab.expectedOuter.a-cm">A-CM</button>
+          <button type="button" data-expected-outer="o-cm" data-i18n="lab.expectedOuter.o-cm">O-CM</button>
+        </div>
+      </div>
       <!-- 기대 톤 — expected_tones 계측. 레이아웃 카드와 같은 배선 형태다.
            이 카드가 없어서 expected_tones 가 전 행 NULL 이었다 (2026-08-15). -->
       <div id="lab-expected-tones" class="lab-expected-arm">

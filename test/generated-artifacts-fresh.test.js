@@ -28,7 +28,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -120,18 +120,43 @@ test('산출물이 소스와 일치한다 — sites/_shared/scan-new.html (선�
     'scan-new.html 에 버전 선택 바가 없다 — 주입 단계가 빠졌다');
 });
 
-test('표가 실제 산출물을 빠짐없이 덮는다', () => {
-  // 이 테스트가 지키는 것은 «표에 있는 것이 맞다» 가 아니라 «빠진 것이 없다» 다.
-  // 표에 없는 산출물은 조용히 stale 이 된다 — 그게 이 파일이 생긴 이유다.
-  const covered = new Set(ARTIFACTS.map((a) => a.rel));
-  covered.add('sites/_shared/scan-new.html');   // 바로 위 테스트가 따로 잠근다
-  for (const expected of [
-    'dist/tlscan.html',
-    'sites/_shared/lab-scan.html',
-    'sites/_shared/lab-gen.html',
-    'sites/_shared/scan-new.html',
-  ]) {
-    assert.ok(covered.has(expected),
-      expected + ' 가 ARTIFACTS 표에 없다 — 안 잠기면 조용히 stale 이 된다');
+/**
+ * 다른 테스트가 이미 자기 산출물의 신선도를 잠그는 빌더들.
+ *
+ * ⚠ 이 목록은 **면제부가 아니라 청구서**다. 여기 이름을 올리려면 그 테스트가 실제로
+ * «커밋된 바이트 == 지금 빌드» 를 재야 한다. 아래 테스트가 그 파일들을 실제로 실행해
+ * 확인하므로, 거짓으로 올리면 잡힌다.
+ */
+const COVERED_ELSEWHERE = Object.freeze({
+  'build-cell-editor.mjs': 'test/finder-editor.test.js',
+  'build-finder-editor.mjs': 'test/finder-editor.test.js',
+  'build-gen-variants.mjs': 'test/gen-variants.test.js',
+  'build-hub.mjs': 'test/hub-build.test.js',
+  'build-single.mjs': 'test/gen-variants.test.js',
+});
+
+test('**모든 빌더**가 어딘가에서 신선도로 잠긴다', () => {
+  // ⚠ 이 테스트는 원래 내가 손으로 적은 이름 4개만 확인했다. 그러고 나서 전체 스위트가
+  //   `build-cell-editor` · `build-gen-variants` 산출물의 stale 로 **2건 빨개졌다** —
+  //   즉 이 «커버리지» 테스트 자신이 커버리지 구멍을 갖고 있었다. 오늘 세 번째로 같은
+  //   모양이다 (교훈 009 · stale 번들 · 조합 미검사). 그래서 목록을 **손으로 적지 않고
+  //   `tools/` 에서 유도**한다 — 빌더가 새로 생기면 여기서 자동으로 걸린다.
+  const builders = readdirSync(path.join(ROOT, 'tools'))
+    .filter((f) => f.startsWith('build-') && f.endsWith('.mjs'));
+  assert.ok(builders.length >= 9, '빌더를 ' + builders.length + '개밖에 못 찾았다 — 경로가 바뀌었나');
+
+  const mine = new Set(ARTIFACTS.map((a) => path.basename(a.command.split(' ').pop())));
+  mine.add('build-scan-variants.mjs');            // scan-new.html 을 위 테스트가 따로 잠근다
+  mine.add('build-print-poster.mjs');             // test/print-poster.test.js:92 가 잠근다
+
+  const orphans = builders.filter((b) => !mine.has(b) && !COVERED_ELSEWHERE[b]);
+  assert.deepEqual(orphans, [],
+    '이 빌더들의 산출물을 아무도 신선도로 안 잠근다 — 조용히 stale 이 된다: '
+    + orphans.join(', '));
+
+  // 청구서 회수: COVERED_ELSEWHERE 가 가리키는 테스트 파일이 **실재**해야 한다.
+  for (const [builder, testFile] of Object.entries(COVERED_ELSEWHERE)) {
+    assert.ok(existsSync(path.join(ROOT, testFile)),
+      builder + ' 를 잠근다고 적힌 ' + testFile + ' 가 없다 — 주석이 거짓이 된다');
   }
 });

@@ -250,6 +250,25 @@ export function filterScanlines(pixels, width, height, channels = BYTES_PER_PIXE
   return out;
 }
 
+/** 1 inch = 25.4 mm — pHYs 는 미터당 픽셀 정수라 ppi → ppm 반올림 환산이 필요하다. */
+const MM_PER_INCH = 25.4;
+
+/**
+ * pHYs 청크 데이터 (9바이트): ppmX u32 · ppmY u32 · unit 1(미터).
+ * ppm = round(ppi × 1000 / 25.4). 96ppi → 3780, 300ppi → 11811 (표준 환산값).
+ */
+function physChunkData(ppi) {
+  if (!Number.isFinite(ppi) || ppi <= 0) {
+    throw new RangeError(`ppi 는 유한한 양수여야 한다: ${ppi}`);
+  }
+  const ppm = Math.round((ppi * 1000) / MM_PER_INCH);
+  const data = new Uint8Array(9);
+  writeU32BE(data, 0, ppm);
+  writeU32BE(data, 4, ppm);
+  data[8] = 1; // 단위: 미터
+  return data;
+}
+
 /**
  * 래스터(rasterize() 산출물) → PNG 파일 바이트. 완전 결정적.
  *
@@ -257,10 +276,16 @@ export function filterScanlines(pixels, width, height, channels = BYTES_PER_PIXE
  * 255 미만이면 색 타입 6(RGBA). 불투명 래스터의 출력 바이트는 알파 지원 이전과
  * 완전히 동일하다(기존 KAT·해시 스냅샷 유효).
  *
+ * **ppi 옵션** (내보내기 «출력 최적화», 2026-08-19): 주면 IHDR 뒤에 pHYs(물리 밀도)
+ * 청크를 넣는다. **안 주면 종전과 바이트 동일하다** — 결정성 핀(KAT·해시)이 PNG
+ * 전문에 걸려 있으므로, 옵션 부재 = 청크 부재로 고정한다. 같은 ppi 입력은 같은
+ * 바이트를 낸다(반올림 포함 결정적).
+ *
  * @param {{width:number, height:number, pixels:Uint8ClampedArray}} raster
+ * @param {{ppi?: number}} [options]
  * @returns {Uint8Array}
  */
-export function rasterToPng(raster) {
+export function rasterToPng(raster, options = {}) {
   const { width, height, pixels } = raster;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
     throw new RangeError(`래스터 크기가 유효하지 않다: ${width}×${height}`);
@@ -289,6 +314,8 @@ export function rasterToPng(raster) {
   const parts = [
     Uint8Array.from(PNG_SIGNATURE),
     chunk('IHDR', ihdr),
+    // pHYs 는 IDAT 앞이어야 한다 (PNG 규격 — 배치 제약이 있는 보조 청크).
+    ...(options.ppi === undefined ? [] : [chunk('pHYs', physChunkData(options.ppi))]),
     chunk('IDAT', idat),
     chunk('IEND', new Uint8Array(0)),
   ];

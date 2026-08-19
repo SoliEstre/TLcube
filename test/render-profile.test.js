@@ -1,14 +1,18 @@
 /**
- * render-profile.test.js — 렌더 프로파일 (과업 #16) 계약.
+ * render-profile.test.js — 렌더 프로파일 → «큐브 입체감» (과업 #16 → 내보내기 옵션 ④) 계약.
  *
  * 이 테스트가 지키는 것은 네 가지다.
- *   1. 표 자체 — 세 프로파일의 게인 값과 SPEC §14 의 γ ≤ 2 의무.
- *   2. **단일 진실** — sceneY 의 DEFAULT_FACE_GAINS 와 «화면용» 프로파일이 같은 것.
+ *   1. 표 자체 — 네 프로파일의 게인 값과 SPEC §14 의 γ ≤ 2 의무.
+ *   2. **단일 진실** — sceneY 의 DEFAULT_FACE_GAINS 와 «중(화면용)» 프로파일이 같은 것.
  *      (여기가 갈리면 «화면에서 고른 값» 과 «렌더가 쓴 값» 이 조용히 달라진다.)
- *   3. **게인 비의존 복호** — 출력물용(3면 동률)에서도 왕복이 성립한다. 디코더가 면별
- *      앵커를 다시 잡는다는 주장의 실증이고, 이게 거짓이면 «출력물용» 카드는 사용자를
+ *   3. **게인 비의존 복호** — 평면(3면 동률)에서도 왕복이 성립한다. 디코더가 면별
+ *      앵커를 다시 잡는다는 주장의 실증이고, 이게 거짓이면 «평면» 카드는 사용자를
  *      못 읽는 코드로 안내하는 함정이 된다.
- *   4. UI 노출 — 정식 화면은 2종, lab 은 «오리지널» 을 맨 앞에 더한 3종.
+ *   4. UI 노출 — 카드 자동-강-중-약-평면, «강(오리지널)» 은 lab 전용, «자동» 은 항상.
+ *
+ * ⚠ **의도적 갱신 (2026-08-19, 내보내기 옵션 라운드)**: «약(soft)» 신설 + «자동» 선택값
+ *   도입 + 카드 5장 개편에 맞춰 라인업·기본값·DOM 기대값을 함께 갱신했다. 근거 실측은
+ *   test/output/lanes/export-options-report.md §2.1(약) · §2.2(자동 조합표).
  */
 
 import test from 'node:test';
@@ -18,13 +22,17 @@ import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_RENDER_PROFILE,
+  DEFAULT_RENDER_PROFILE_CHOICE,
   LAB_RENDER_PROFILES,
   OFFICIAL_RENDER_PROFILES,
+  RENDER_PROFILE_AUTO,
+  RENDER_PROFILE_CHOICES,
   RENDER_PROFILE_FACE_GAINS,
   RENDER_PROFILE_IDS,
   RENDER_PROFILE_ORIGINAL,
   RENDER_PROFILE_PRINT,
   RENDER_PROFILE_SCREEN,
+  RENDER_PROFILE_SOFT,
   assertRenderProfile,
   faceGainsForRenderProfile,
   isLabOnlyRenderProfile,
@@ -54,9 +62,12 @@ function paletteFor(profile) {
   };
 }
 
-test('세 프로파일의 게인 값이 정본과 일치한다', () => {
+test('네 프로파일의 게인 값이 정본과 일치한다', () => {
   assert.deepEqual(RENDER_PROFILE_FACE_GAINS[RENDER_PROFILE_ORIGINAL], { T: 1, L: 0.72, R: 0.52 });
   assert.deepEqual(RENDER_PROFILE_FACE_GAINS[RENDER_PROFILE_SCREEN], { T: 1, L: 0.72, R: 0.62 });
+  // «약» — 2026-08-19 신설. 재측정 근거: export-options-report.md §2.1 (왕복 78/78 ·
+  // slate R 원시 Δmin 0.1415 ≥ 계약 0.12).
+  assert.deepEqual(RENDER_PROFILE_FACE_GAINS[RENDER_PROFILE_SOFT], { T: 1, L: 0.85, R: 0.78 });
   assert.deepEqual(RENDER_PROFILE_FACE_GAINS[RENDER_PROFILE_PRINT], { T: 1, L: 1, R: 1 });
   // T 는 기준면이라 언제나 1 이다 — 아니면 같은 그림을 두 가지 수로 쓰게 된다.
   for (const profile of RENDER_PROFILE_IDS) {
@@ -69,8 +80,9 @@ test('전 프로파일이 SPEC §14 렌더러 의무 γ ≤ 2 를 지킨다', ()
     const ratio = renderProfileGainRatio(profile);
     assert.ok(ratio <= 2, profile + ' γ=' + ratio);
   }
-  // 잰 값 고정 — 화면용은 1/0.62, 출력물용은 동률이라 정확히 1.
+  // 잰 값 고정 — 중은 1/0.62, 약은 1/0.78, 평면은 동률이라 정확히 1.
   assert.ok(Math.abs(renderProfileGainRatio(RENDER_PROFILE_SCREEN) - 1 / 0.62) < 1e-12);
+  assert.ok(Math.abs(renderProfileGainRatio(RENDER_PROFILE_SOFT) - 1 / 0.78) < 1e-12);
   assert.equal(renderProfileGainRatio(RENDER_PROFILE_PRINT), 1);
   assert.ok(Math.abs(renderProfileGainRatio(RENDER_PROFILE_ORIGINAL) - 1 / 0.52) < 1e-12);
 });
@@ -85,27 +97,38 @@ test('DEFAULT_FACE_GAINS 는 «화면용» 프로파일과 같은 객체다 (단
 test('알 수 없는 프로파일은 조용히 기본값으로 떨어지지 않고 던진다', () => {
   assert.throws(() => assertRenderProfile('poster'), RangeError);
   assert.throws(() => faceGainsForRenderProfile(undefined), RangeError);
+  // «자동» 은 게인 행이 아니다 — 자동을 풀지 않고 게인 표를 읽는 배선은 결함이므로
+  // 조용히 기본 게인으로 떨어지면 안 된다 (resolveRenderProfile 을 먼저 거쳐야 한다).
+  assert.throws(() => faceGainsForRenderProfile(RENDER_PROFILE_AUTO), RangeError);
+  assert.throws(() => isLabOnlyRenderProfile(RENDER_PROFILE_AUTO), RangeError);
 });
 
-test('정식 화면은 2종, lab 은 «오리지널» 을 맨 앞에 더한 3종', () => {
-  assert.deepEqual(OFFICIAL_RENDER_PROFILES, [RENDER_PROFILE_SCREEN, RENDER_PROFILE_PRINT]);
+test('정식 화면은 중-약-평면 3종, lab 은 «강(오리지널)» 을 맨 앞에 더한 4종', () => {
+  assert.deepEqual(OFFICIAL_RENDER_PROFILES,
+    [RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT, RENDER_PROFILE_PRINT]);
   assert.deepEqual(LAB_RENDER_PROFILES,
-    [RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_SCREEN, RENDER_PROFILE_PRINT]);
+    [RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT, RENDER_PROFILE_PRINT]);
   assert.deepEqual(renderProfilesForSurface(false), OFFICIAL_RENDER_PROFILES);
   assert.deepEqual(renderProfilesForSurface(true), LAB_RENDER_PROFILES);
   assert.equal(isLabOnlyRenderProfile(RENDER_PROFILE_ORIGINAL), true);
   assert.equal(isLabOnlyRenderProfile(RENDER_PROFILE_SCREEN), false);
+  assert.equal(isLabOnlyRenderProfile(RENDER_PROFILE_SOFT), false);
   assert.equal(isLabOnlyRenderProfile(RENDER_PROFILE_PRINT), false);
+  // 선택값 목록 = 자동 + 구체 전부 — 상태 스키마가 이 목록으로 검증한다.
+  assert.deepEqual([...RENDER_PROFILE_CHOICES], [RENDER_PROFILE_AUTO, ...RENDER_PROFILE_IDS]);
 });
 
-test('생성기 상태에 프로파일 필드가 있고 기본값은 화면용이다', () => {
+test('생성기 상태에 프로파일 필드가 있고 기본 선택값은 «자동» 이다', () => {
   const state = createGeneratorState();
-  assert.equal(state.renderProfile, RENDER_PROFILE_SCREEN);
+  // 자동은 인쇄용·디더링 문맥이 없으면 «중» 으로 풀리므로 (export-options.js
+  // resolveRenderProfile), 아무것도 안 고른 사용자의 렌더 픽셀은 개편 전과 같다.
+  assert.equal(DEFAULT_RENDER_PROFILE_CHOICE, RENDER_PROFILE_AUTO);
+  assert.equal(state.renderProfile, RENDER_PROFILE_AUTO);
   const descriptor = GENERATOR_STATE_SCHEMA.renderProfile;
   assert.ok(descriptor, 'generator-state 에 renderProfile 이 없다');
-  // 허용값에는 lab 전용까지 들어간다 — lab 에서 고른 값이 정식 화면에서 «알 수 없는
-  // 값» 으로 죽으면 안 된다 (locatorProfileY 와 같은 규약).
-  assert.deepEqual([...descriptor.options], [...RENDER_PROFILE_IDS]);
+  // 허용값에는 자동 + lab 전용까지 들어간다 — lab 에서 고른 값이 정식 화면에서
+  // «알 수 없는 값» 으로 죽으면 안 된다 (locatorProfileY 와 같은 규약).
+  assert.deepEqual([...descriptor.options], [...RENDER_PROFILE_CHOICES]);
   assert.equal(descriptor.exposure, 'both', '일반 모드에도 카드가 떠야 한다');
 });
 
@@ -159,7 +182,7 @@ test('프로파일이 실제로 렌더 픽셀을 가른다 — 출력물용은 �
   }
 });
 
-test('index.html — 프로파일 카드 3종이 lab 순서대로 있고 아이콘은 인라인 SVG 다', () => {
+test('index.html — 입체감 카드 5장이 자동-강-중-약-평면 순서고 아이콘은 인라인 SVG 다', () => {
   const start = INDEX_SOURCE.indexOf('<div class="card-row" id="renderProfileCards">');
   assert.ok(start >= 0, 'renderProfileCards 카드 행을 못 찾았다');
   const end = INDEX_SOURCE.indexOf('</div>\n        <p class="hint" id="renderProfileHint">', start);
@@ -167,20 +190,20 @@ test('index.html — 프로파일 카드 3종이 lab 순서대로 있고 아이�
   const row = INDEX_SOURCE.slice(start, end);
 
   const order = [...row.matchAll(/data-profile="([a-z]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(order, [...LAB_RENDER_PROFILES],
-    'DOM 카드 순서가 lab 라인업과 다르다 — 오리지널이 맨 앞이어야 한다');
+  assert.deepEqual(order, [RENDER_PROFILE_AUTO, ...LAB_RENDER_PROFILES],
+    'DOM 카드 순서가 자동-강-중-약-평면이 아니다 (§1.1 운영자 지정 순서)');
 
   // 아이콘은 전부 인라인 SVG + currentColor (외부 자산·이모지 금지 — 테마를 따라야 한다).
   const icons = [...row.matchAll(/<svg[\s\S]*?<\/svg>/g)].map((m) => m[0]);
-  assert.equal(icons.length, 3, '카드마다 아이콘 하나여야 한다');
+  assert.equal(icons.length, 5, '카드마다 아이콘 하나여야 한다');
   for (const icon of icons) {
     assert.match(icon, /stroke="currentColor"/, '아이콘이 currentColor 를 안 쓴다');
     assert.doesNotMatch(icon, /<image|xlink:href|url\(/, '아이콘에 외부 자산이 섞였다');
   }
 
   // 카드 부제(card-sub)와 ? 도움말이 gen-ui 관용구대로 붙어 있다.
-  assert.equal((row.match(/class="card-sub"/g) || []).length, 3);
-  assert.match(INDEX_SOURCE, /id="renderProfileSection"[\s\S]{0,600}data-help="g971"/);
+  assert.equal((row.match(/class="card-sub"/g) || []).length, 5);
+  assert.match(INDEX_SOURCE, /id="renderProfileSection"[\s\S]{0,600}data-help="g736"/);
   assert.match(INDEX_SOURCE,
     /<div id="sharedControls" data-state-keys="[^"]*\brenderProfile\b/);
 });
@@ -197,8 +220,13 @@ test('index.html — 카드가 실제로 배선돼 있다 (있기만 한 카드 
   assert.match(handler, /isLabOnlyRenderProfile\(id\)/, '정식 화면에서 lab 전용 카드 차단이 없다');
 
   // 렌더 경로가 프로파일을 실제로 소비한다 — 상수 폴백으로 돌아가면 안 된다.
+  // 2026-08-19 개편: «자동» 이 끼면서 상태값 직접 소비가 아니라 **해석 경유**가 계약이
+  // 됐다 (faceGainsForRenderProfile 은 'auto' 를 거부한다 — 해석 없이 부르면 죽는다).
   assert.match(INDEX_SOURCE,
-    /function profileFaceGains\(\)\s*\{\s*return faceGainsForRenderProfile\(generatorState\.renderProfile\);/);
+    /function profileFaceGains\(\)\s*\{\s*return faceGainsForRenderProfile\(resolvedRenderProfile\(\)\);/);
+  assert.match(INDEX_SOURCE,
+    /function resolvedRenderProfile\(\)\s*\{\s*return resolveRenderProfile\(generatorState\.renderProfile,/,
+    '자동 해석이 export-options.resolveRenderProfile 단일 정의를 안 탄다');
   assert.match(INDEX_SOURCE, /faceGains: faceGains === undefined \? profileFaceGains\(\) : faceGains,/);
   assert.match(INDEX_SOURCE, /const base = profileFaceGains\(\);/,
     '면 게인 슬라이더가 프로파일까지의 보간이 아니다');
@@ -229,8 +257,9 @@ test('index.html — .toggle-card[hidden] 이 CSS 로 실제로 감춰진다', (
   // 화면에 그대로 보인다 — DOM 만 검사하는 테스트로는 절대 안 잡힌다.
   assert.match(INDEX_SOURCE, /\.toggle-card\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
   // 그리고 lab 전용 카드를 감추는 장치가 실제로 hidden 이어야 한다(클래스만 흐리면
-  // 키보드 순회로 여전히 닿는다).
-  assert.match(INDEX_SOURCE, /card\.hidden = !visible\.includes\(id\);/);
+  // 키보드 순회로 여전히 닿는다). «자동» 카드는 게인 행이 아니라 항상 뜬다 (2026-08-19).
+  assert.match(INDEX_SOURCE,
+    /card\.hidden = id !== RENDER_PROFILE_AUTO && !visible\.includes\(id\);/);
 });
 
 test('index.html — 내부 게인 수치는 lab 에서만 붙는다', () => {

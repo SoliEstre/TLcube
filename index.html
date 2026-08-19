@@ -286,6 +286,8 @@
   #faceGainRow.dim { opacity: 0.45; }
   #faceGainRow.dim label { cursor: default; }
   .hint { font-size: 11px; color: var(--dim); margin: 4px 0 0; line-height: 1.5; }
+  /* ③ 물리 크기 경고 상태 (§3) — syncExportPpiHint 가 토글한다. */
+  .hint.warn { color: var(--warn); }
 
   /* ── 섹션 도움말 «?» + 플로팅 창 (2026-08-16 운영자 지시 A-2) ────────────
      섹션마다 있던 여러 줄 `.hint` 와 카드마다 있던 `title=` 을 하나로 모은다.
@@ -1158,7 +1160,7 @@
     </div>
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
-    <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone faceGain qrText qrCornerToo">
+    <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone faceGain qrText qrCornerToo exportDither exportPpiDetail">
       <label class="section-heading" for="codeType" data-i18n="g041">타입</label>
       <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
       <select id="codeType">
@@ -1252,18 +1254,20 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode renderProfile shading shadingRim">
-      <!-- 렌더 프로파일 (과업 #16) — «이 코드를 어디에 쓸 것인가» 를 먼저 묻는다.
-           그 답이 세 면의 밝기 비(면 게인)를 정하고, 아래 배경색·안전영역 선택의 전제가 된다.
-           **Type Y 전용 섹션**이다 — 면 게인을 소비하는 렌더 경로가 buildSceneY 뿐이다
-           (Type O/A 의 scene.js 는 팔레트 레벨 색을 그대로 쓴다). O/A 로 바꾸면 숨는다.
-           #finderSection(비-Y) · #yLocatorSection(Y·lab) 과 같은 규약이다.
-           카드는 정식 2종(화면용·출력물용)이고 «오리지널» 은 lab 에서만 앞에 붙는다 —
-           DOM 에는 셋 다 있고 `syncRenderProfileUi()` 가 lab 이 아니면 감춘다. -->
-      <div id="renderProfileSection" hidden>
+    <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
+      <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
+           도메인·자동 규칙은 전부 src/export-options.js 단일 정의를 소비한다 — UI 인라인
+           재구현 금지 (교훈 .agent/_lessons/009: 손으로 적은 규칙은 테스트가 못 잠근다).
+           ①②③ 은 타입 무관(모든 타입), ④ 는 Y 전용. ② 전체와 ③ 의 세부 select 는
+           고급 전용 — 가시성은 syncExportOptionsUi() 가 모드에서 계산한다. -->
+
+      <!-- ① 고정 이미지 크기 — 픽셀 수는 언제나 여기서 정해진다 (③ 의 ppi 는 PNG 물리
+           밀도 메타데이터일 뿐 픽셀을 늘리지 않는다 — export-options.js 상단 계약).
+           정사각·contain 규칙은 resolveExportSize 가 안다 — UI 는 값만 왕복한다. -->
+      <div id="exportSizeSection">
         <div class="section-heading-row">
-          <label class="section-heading" data-i18n="g970">렌더 프로파일</label>
-          <button type="button" class="help-dot" data-help="g971" aria-expanded="false"
+          <label class="section-heading" for="exportSize" data-i18n="g700">고정 이미지 크기</label>
+          <button type="button" class="help-dot" data-help="g701" aria-expanded="false"
                   aria-label="설명 보기" data-i18n-attr="aria-label:g931">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
@@ -1271,36 +1275,195 @@
             </svg>
           </button>
         </div>
-        <div class="card-row" id="renderProfileCards">
-          <!-- 오리지널 = 되돌림 화살표(역사) — 구 기본값으로 되돌린 대조군이라는 뜻. -->
-          <div class="toggle-card" data-profile="original" id="renderProfileOriginalCard">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3.4 12a8.6 8.6 0 1 0 8.6-8.6 9.3 9.3 0 0 0-6.4 2.6L3.4 8.4"/>
-              <path d="M3.4 3.4v5h5"/>
-              <path d="M12 7.6V12l3.8 1.9"/>
-            </svg>
-            <span data-i18n="g976">오리지널</span>
-            <span class="card-sub" data-i18n="g977">구 기본값 · 대조군</span>
+        <select id="exportSize">
+          <option value="auto-min" data-i18n="g702">자동 (하한 최저)</option>
+          <option value="auto-fit" selected data-i18n="g703">자동 (최적 용량 · 기본)</option>
+          <option value="auto-high" data-i18n="g704">자동 (고품질)</option>
+          <option value="192">192 × 192 px</option>
+          <option value="512">512 × 512 px</option>
+          <option value="1024">1024 × 1024 px</option>
+          <option value="2048">2048 × 2048 px</option>
+          <option value="4096">4096 × 4096 px</option>
+          <option value="custom" data-i18n="g705">커스텀 (직접 입력)</option>
+        </select>
+        <!-- 커스텀일 때만 보인다. .row 는 display:flex 라 hidden 속성이 안 먹는다
+             (.toggle-card[hidden] 과 같은 함정) — style.display 로 끈다. -->
+        <div class="row" id="exportSizeCustomRow" style="display:none">
+          <div>
+            <label for="exportWidth" data-i18n="g706">폭 (px)</label>
+            <input type="number" id="exportWidth" min="16" max="16384" step="1" value="1024">
           </div>
-          <!-- 화면용 = 모니터. -->
-          <div class="toggle-card active" data-profile="screen">
+          <div>
+            <label for="exportHeight" data-i18n="g707">높이 (px)</label>
+            <input type="number" id="exportHeight" min="16" max="16384" step="1" value="1024">
+          </div>
+        </div>
+        <div class="check-row">
+          <input type="checkbox" id="exportTrim">
+          <label for="exportTrim" style="margin:0;color:var(--text)" data-i18n="g708">여백 없음</label>
+          <!-- 비권장 배지 (운영자 결정 — 수리 §2): 배치 편의용으로 제공하되, 고르기 **전에**
+               보이는 자리에서 비권장임을 말한다. 고른 뒤 결과로 알게 되면 늦다. -->
+          <span class="badge warn" data-i18n="g750">비권장</span>
+        </div>
+        <p class="hint" data-i18n="g709">자동은 스캔이 성립하는 최소 크기 실측에서 출발해요. «여백 없음»(비권장)은 여백 폭만 실측 최소로 줄여요 — 안전영역 판은 유지되고, Y 의 입체 음영 띠는 빠지고, 코너 QR 이 있으면 QR 이 사는 여백까지만 줄어요. Type O 는 기본 여백이 이미 최소라 변화가 없어요.</p>
+      </div>
+
+      <!-- ② 적은 색상 화면 최적화 (디더링) — **고급 전용** (일반 모드는 기본값 = 양자화
+           없음). 「입력 힌트」가 아니라 실제로 그 비트깊이로 양자화·디더링해 내보낸다
+           (src/dither.js — 무너지는 깊이를 정직하게 드러내는 장치). -->
+      <div id="exportDitherSection" hidden>
+        <div class="section-heading-row">
+          <label class="section-heading" for="exportDither" data-i18n="g710">적은 색상 화면 최적화 (디더링)</label>
+          <button type="button" class="help-dot" data-help="g711" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+        <select id="exportDither">
+          <option value="auto" selected data-i18n="g712">자동 (양자화 없음)</option>
+          <option value="24" data-i18n="g713">24비트 (트루컬러)</option>
+          <option value="16" data-i18n="g714">16비트 (RGB565)</option>
+          <option value="8" data-i18n="g715">8비트 (256색)</option>
+          <option value="4" data-i18n="g716">4비트 (16색)</option>
+          <option value="2" data-i18n="g717">2비트 (4계조 흑백)</option>
+        </select>
+        <p class="hint" data-i18n="g718">자동 = 양자화 없음 (원본 그대로). 낮은 비트깊이는 3면 밝기 순위를 뭉갤 수 있어요 — 내보낸 뒤 꼭 스캔해 확인하세요.</p>
+      </div>
+
+      <!-- ③ 출력 최적화 (고PPI) — **PNG 전용** (SVG 는 벡터라 ppi 무의미. 내보내기 포맷이
+           버튼 단위라 상태로는 못 가린다 — 라벨·힌트에 PNG 전용을 표기한다).
+           일반 모드 = 갈래 카드 2장(화면용 144 · 인쇄용 300 자동), 고급 = 세부 select 추가.
+           «인쇄용» 갈래는 ④ «자동» 을 «약» 으로 트는 해석 문맥이기도 하다. -->
+      <div id="exportPpiSection">
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g719">출력 최적화 (고PPI · PNG 전용)</label>
+          <button type="button" class="help-dot" data-help="g720" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+        <div class="card-row" id="exportPpiCards">
+          <!-- 화면용 = 모니터 (구 렌더 프로파일 카드의 아이콘 관용구 계승). -->
+          <div class="toggle-card active" data-purpose="screen">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="2.6" y="3.6" width="18.8" height="13" rx="2"/>
               <path d="M12 16.6v3.8"/>
               <path d="M8.4 20.4h7.2"/>
             </svg>
-            <span data-i18n="g972">화면용</span>
-            <span class="card-sub" data-i18n="g973">화면 · 촬영</span>
+            <span data-i18n="g721">화면용</span>
+            <span class="card-sub" data-i18n="g722">모니터 · 144 ppi</span>
           </div>
-          <!-- 출력물용 = 프린터. -->
-          <div class="toggle-card" data-profile="print">
+          <!-- 인쇄용 = 프린터. -->
+          <div class="toggle-card" data-purpose="print">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M6.6 9V2.8h10.8V9"/>
               <path d="M6.6 18H4.4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h15.2a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2.2"/>
               <rect x="6.6" y="14" width="10.8" height="7.2" rx="1"/>
             </svg>
-            <span data-i18n="g974">출력물용</span>
-            <span class="card-sub" data-i18n="g975">인쇄 · 잉크</span>
+            <span data-i18n="g723">인쇄용</span>
+            <span class="card-sub" data-i18n="g724">종이 · 300 ppi</span>
+          </div>
+        </div>
+        <!-- 세부 select — 고급 전용 (syncExportOptionsUi 가 모드로 끈다). -->
+        <div id="exportPpiDetailRow" style="display:none">
+          <label for="exportPpiDetail" data-i18n="g726">세부 PPI (고급)</label>
+          <select id="exportPpiDetail">
+            <option value="auto" selected data-i18n="g727">자동 (갈래 기본값)</option>
+            <option value="72" data-i18n="g728">기본 (웹) 72 ppi</option>
+            <option value="96" data-i18n="g729">권장 (윈도우) 96 ppi</option>
+            <option value="144" data-i18n="g730">2x (레티나) 144 ppi</option>
+            <option value="192" data-i18n="g731">HiDPI (배율 200%) 192 ppi</option>
+            <option value="300" data-i18n="g732">인쇄 일반 300 ppi</option>
+            <option value="450" data-i18n="g733">인쇄 1.5배 450 ppi</option>
+            <option value="600" data-i18n="g734">인쇄 2배 600 ppi</option>
+            <!-- 4배 1200 — 운영자 추가 (사무실 프린터 1200dpi 모드). 픽셀 수는 ①이
+                 정하므로 효과는 pHYs 밀도 선언뿐이다 (export-options.js PRINT_PPI_TIERS). -->
+            <option value="1200" data-i18n="g749">인쇄 4배 1200 ppi</option>
+          </select>
+        </div>
+        <!-- id 가 필요하다 — syncExportPpiHint 가 인쇄용 물리 폭이 작을 때(< 15mm) 이
+             문구를 경고로 갈아 끼운다 (§3 수리). data-i18n 은 기본 문구로 남는다:
+             언어 전환 시 applyTranslations 가 먼저 채우고 sync 가 덮는 순서다. -->
+        <p class="hint" id="exportPpiHint" data-i18n="g725">화면용 144 ppi · 인쇄용 300 ppi 가 자동 적용돼요. PNG 메타데이터에만 실려요 — SVG 는 벡터라 무관해요.</p>
+      </div>
+
+      <!-- ④ 큐브 입체감 (구 «렌더 프로파일», 2026-08-19 개편) — 세 면의 밝기 비(면 게인)
+           묶음을 «입체감 세기» 축으로 고른다. **Type Y 전용 섹션**이다 — 면 게인을
+           소비하는 렌더 경로가 buildSceneY 뿐이다 (Type O/A 의 scene.js 는 팔레트 레벨
+           색을 그대로 쓴다). O/A 로 바꾸면 숨는다. #finderSection(비-Y) 과 같은 규약.
+           카드는 자동-강-중-약-평면 5장 — «자동» 은 게인 행이 아니라 해석 규칙이라 항상
+           뜨고 (resolveRenderProfile 이 ③ 갈래·② 비트깊이 문맥으로 푼다), «강(오리지널)»
+           은 lab 에서만 보인다 — DOM 에는 다 있고 syncRenderProfileUi() 가 감춘다. -->
+      <div id="renderProfileSection" hidden>
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g735">큐브 입체감</label>
+          <button type="button" class="help-dot" data-help="g736" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+        <!-- 아이콘 언어: 큐브의 L/R 면 채움 농도 = 입체감 세기. 자동은 점선(규칙),
+             평면은 채움 없는 와이어프레임(3면 동률). 전부 인라인 SVG + currentColor. -->
+        <div class="card-row" id="renderProfileCards">
+          <!-- 자동 = 점선 큐브 (게인 행이 아니라 해석 규칙이라는 뜻). -->
+          <div class="toggle-card active" data-profile="auto">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z" stroke-dasharray="2.6 2"/>
+              <path d="M4 7.4 12 12l8-4.6M12 12v9.2" stroke-dasharray="2.6 2"/>
+            </svg>
+            <span data-i18n="g737">자동</span>
+            <span class="card-sub" data-i18n="g738">쓰임에 맞춰</span>
+          </div>
+          <!-- 강 = 오리지널 (구 기본값 · lab 전용 대조군) — 가장 짙은 면 대비. -->
+          <div class="toggle-card" data-profile="original" id="renderProfileOriginalCard">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z"/>
+              <path d="M4 7.4 12 12l8-4.6M12 12v9.2"/>
+              <path d="M12 12 20 7.4v9.2L12 21.2Z" fill="currentColor" stroke="none" opacity="0.85"/>
+              <path d="M12 12 4 7.4v9.2l8 4.6Z" fill="currentColor" stroke="none" opacity="0.45"/>
+            </svg>
+            <span data-i18n="g739">강</span>
+            <span class="card-sub" data-i18n="g740">오리지널 · 시험판</span>
+          </div>
+          <!-- 중 = 화면·촬영 기본값. -->
+          <div class="toggle-card" data-profile="screen">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z"/>
+              <path d="M4 7.4 12 12l8-4.6M12 12v9.2"/>
+              <path d="M12 12 20 7.4v9.2L12 21.2Z" fill="currentColor" stroke="none" opacity="0.55"/>
+              <path d="M12 12 4 7.4v9.2l8 4.6Z" fill="currentColor" stroke="none" opacity="0.3"/>
+            </svg>
+            <span data-i18n="g741">중</span>
+            <span class="card-sub" data-i18n="g742">화면 · 촬영</span>
+          </div>
+          <!-- 약 = 얕은 입체감 (인쇄 손실을 감안해도 순위가 서는 가장 얕은 게인). -->
+          <div class="toggle-card" data-profile="soft">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z"/>
+              <path d="M4 7.4 12 12l8-4.6M12 12v9.2"/>
+              <path d="M12 12 20 7.4v9.2L12 21.2Z" fill="currentColor" stroke="none" opacity="0.28"/>
+              <path d="M12 12 4 7.4v9.2l8 4.6Z" fill="currentColor" stroke="none" opacity="0.15"/>
+            </svg>
+            <span data-i18n="g743">약</span>
+            <span class="card-sub" data-i18n="g744">얕은 입체 · 인쇄 겸용</span>
+          </div>
+          <!-- 평면 = 3면 동률 (와이어프레임 — 면 채움 없음). -->
+          <div class="toggle-card" data-profile="print">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4Z"/>
+              <path d="M4 7.4 12 12l8-4.6M12 12v9.2"/>
+            </svg>
+            <span data-i18n="g745">평면</span>
+            <span class="card-sub" data-i18n="g746">3면 동률 · 인쇄</span>
           </div>
         </div>
         <p class="hint" id="renderProfileHint"></p>
@@ -2151,6 +2314,58 @@ const GENERATOR_STRINGS = {
     "g960": "커스텀 색상 (Hue)",
     "g961": "TL 배치 미리보기",
     "g962": "드래그로 위치 이동 · 휠 또는 핀치로 확대/축소",
+    "g700": "고정 이미지 크기",
+    "g701": "내보내는 PNG·SVG 의 픽셀 크기를 정해요 (미리보기와는 무관해요).\n자동 3종은 «스캔 왕복이 성립하는 최소 크기» 실측을 뿌리로 해요 — 하한 최저 = 그 최소 그대로, 최적 용량(기본) = 1.5배, 고품질 = 2.5배.\n고정·커스텀 크기는 코드를 비율 그대로(contain) 캔버스에 담아요. 커스텀 외에는 정사각형이에요.\n«여백 없음»(비권장)은 여백 폭만 실측 최소로 줄여요 — 안전영역 판은 유지되지만 여유가 얇아지므로, 어둡거나 복잡한 표면에 얹을 때는 주의하세요.",
+    "g702": "자동 (하한 최저)",
+    "g703": "자동 (최적 용량 · 기본)",
+    "g704": "자동 (고품질)",
+    "g705": "커스텀 (직접 입력)",
+    "g706": "폭 (px)",
+    "g707": "높이 (px)",
+    "g708": "여백 없음",
+    "g709": "자동은 스캔이 성립하는 최소 크기 실측에서 출발해요. «여백 없음»(비권장)은 여백 폭만 실측 최소로 줄여요 — 안전영역 판은 유지되고, Y 의 입체 음영 띠는 빠지고, 코너 QR 이 있으면 QR 이 사는 여백까지만 줄어요. Type O 는 기본 여백이 이미 최소라 변화가 없어요.",
+    "g710": "적은 색상 화면 최적화 (디더링)",
+    "g711": "전자잉크처럼 표시 색이 적은 화면에 코드를 띄울 때, 그 비트깊이로 실제로 양자화·디더링해서 내보내요.\n«그 화면에서 어떻게 보일지» 를 내보내기 전에 그대로 확인할 수 있어요.\n낮은 비트깊이는 서로 다른 면 밝기를 같은 값으로 뭉갤 수 있어요 — 순위가 무너지면 코드가 안 읽혀요. 내보낸 이미지를 꼭 스캔해 확인하세요.",
+    "g712": "자동 (양자화 없음)",
+    "g713": "24비트 (트루컬러)",
+    "g714": "16비트 (RGB565)",
+    "g715": "8비트 (256색)",
+    "g716": "4비트 (16색)",
+    "g717": "2비트 (4계조 흑백)",
+    "g718": "자동 = 양자화 없음 (원본 그대로). 낮은 비트깊이는 3면 밝기 순위를 뭉갤 수 있어요 — 내보낸 뒤 꼭 스캔해 확인하세요.",
+    "g719": "출력 최적화 (고PPI · PNG 전용)",
+    "g720": "PNG 에 물리 밀도(ppi) 메타데이터를 실어요 — 인쇄·배치 프로그램이 실제 크기를 올바르게 잡아요.\n화면용 = 144 ppi (레티나 2x 기준) · 인쇄용 = 300 ppi 가 자동 적용돼요.\n픽셀 수는 위 «고정 이미지 크기» 가 정해요 — 이 옵션은 픽셀을 늘리지 않아요.\nSVG 는 벡터라 ppi 가 무의미해요 (PNG 내보내기에만 적용).",
+    "g721": "화면용",
+    "g722": "모니터 · 144 ppi",
+    "g723": "인쇄용",
+    "g724": "종이 · 300 ppi",
+    "g725": "화면용 144 ppi · 인쇄용 300 ppi 가 자동 적용돼요. PNG 메타데이터에만 실려요 — SVG 는 벡터라 무관해요.",
+    "g726": "세부 PPI (고급)",
+    "g727": "자동 (갈래 기본값)",
+    "g728": "기본 (웹) 72 ppi",
+    "g729": "권장 (윈도우) 96 ppi",
+    "g730": "2x (레티나) 144 ppi",
+    "g731": "HiDPI (배율 200%) 192 ppi",
+    "g732": "인쇄 일반 300 ppi",
+    "g733": "인쇄 1.5배 450 ppi",
+    "g734": "인쇄 2배 600 ppi",
+    "g749": "인쇄 4배 1200 ppi",
+    "g750": "비권장",
+    "g751": "지금 설정이면 인쇄 실물 폭이 약 {mm}mm 예요 ({px}px ÷ {ppi}ppi) — 스탬프 수준이에요. 고 ppi 는 큰 고정 크기와 함께 쓰세요 (예: 2048px + 1200ppi ≈ 43mm).",
+    "g735": "큐브 입체감",
+    "g736": "세 면의 밝기 차이(입체감)를 얼마나 줄지 골라요 (Type Y 전용).\n자동 = 다른 내보내기 옵션에 맞춰 골라요 — 인쇄용이면 «약», 그 외에는 «중».\n강 = 구 기본값이에요 (시험판 전용 대조군).\n중 = 화면·촬영 경로 기본값 — 입체감을 살려요.\n약 = 얕은 입체감 — 인쇄 손실을 감안해도 순위가 서는 가장 얕은 게인이에요.\n평면 = 세 면을 같은 밝기로 그려요 — 잉크·용지 손실을 피해요.\n어느 쪽이든 읽는 방식은 같아요 — 스캐너는 면마다 밝기 기준을 다시 잡아요.",
+    "g737": "자동",
+    "g738": "쓰임에 맞춰",
+    "g739": "강",
+    "g740": "오리지널 · 시험판",
+    "g741": "중",
+    "g742": "화면 · 촬영",
+    "g743": "약",
+    "g744": "얕은 입체 · 인쇄 겸용",
+    "g745": "평면",
+    "g746": "3면 동률 · 인쇄",
+    "g747": "자동: 지금 설정에서는 «{profile}» 로 그려요.",
+    "g748": "약 — 얕은 입체감이에요. 인쇄 손실을 감안해도 순위가 서는 가장 얕은 게인이에요.",
     "g970": "렌더 프로파일",
     "g971": "코드를 어디에 쓸지 먼저 고르면, 세 면의 밝기 차이를 그 쓰임에 맞춰 잡아요 (Type Y 전용).\n화면용 = 모니터·앱 화면에 띄우거나 그 화면을 촬영해 읽는 경우. 입체감을 살린 기본값이에요.\n출력물용 = 종이·스티커·간판처럼 인쇄해서 쓰는 경우. 세 면을 같은 밝기로 그려요 — 잉크와 종이가 어두운 면을 한 번 더 깎는 것을 피해요.\n어느 쪽을 골라도 읽는 방식은 그대로예요. 스캐너는 면마다 밝기 기준을 다시 잡기 때문에, 세 면이 같은 밝기여도 순서를 읽어내요.\n인쇄물을 화면용으로 내보내도 대개 읽히지만, 인쇄 조건이 나쁠수록(저품질 인쇄·어두운 조명) 출력물용이 유리해요.",
     "g972": "화면용",
@@ -2501,6 +2716,58 @@ const GENERATOR_STRINGS = {
     "g960": "Custom colour (hue)",
     "g961": "TL placement preview",
     "g962": "Drag to move · scroll or pinch to zoom",
+    "g700": "Fixed image size",
+    "g701": "Sets the pixel size of the exported PNG/SVG (independent of the preview).\nThe three automatic modes are rooted in the measured minimum size at which a scan round-trip holds — lowest = that minimum as-is, optimal (default) = ×1.5, high quality = ×2.5.\nFixed and custom sizes fit the code into the canvas with its aspect ratio preserved (contain). All but custom are square.\n«No margin» (not recommended) only shrinks the margin to the measured minimum — the quiet-zone plate is kept but the buffer gets thin, so take care when placing on dark or busy surfaces.",
+    "g702": "Auto (lowest safe)",
+    "g703": "Auto (optimal size · default)",
+    "g704": "Auto (high quality)",
+    "g705": "Custom (enter size)",
+    "g706": "Width (px)",
+    "g707": "Height (px)",
+    "g708": "No margin",
+    "g709": "Auto starts from the measured minimum size at which scanning holds. «No margin» (not recommended) only shrinks the margin to the measured minimum — the quiet-zone plate is kept, Y's shading bands are dropped, and with a corner QR the margin only shrinks to where the QR lives. Type O already has a minimal margin, so nothing changes.",
+    "g710": "Low-color display optimization (dithering)",
+    "g711": "When the code will be shown on a low-color display such as e-ink, the export is actually quantized and dithered at that bit depth.\nYou see exactly how it will look on that display before exporting.\nLow bit depths can collapse different face brightness levels into the same value — if the ranking breaks, the code stops reading. Always scan the exported image to verify.",
+    "g712": "Auto (no quantization)",
+    "g713": "24-bit (true color)",
+    "g714": "16-bit (RGB565)",
+    "g715": "8-bit (256 colors)",
+    "g716": "4-bit (16 colors)",
+    "g717": "2-bit (4-level grayscale)",
+    "g718": "Auto = no quantization (as rendered). Low bit depths can flatten the three-face brightness ranking — always scan the export to verify.",
+    "g719": "Output optimization (high PPI · PNG only)",
+    "g720": "Embeds physical density (ppi) metadata in the PNG — print and layout software then sizes it correctly.\nScreen = 144 ppi (retina 2x) and print = 300 ppi are applied automatically.\nPixel count is decided by «Fixed image size» above — this option does not add pixels.\nSVG is vector, so ppi is meaningless there (PNG export only).",
+    "g721": "For screen",
+    "g722": "display · 144 ppi",
+    "g723": "For print",
+    "g724": "paper · 300 ppi",
+    "g725": "Screen applies 144 ppi and print 300 ppi automatically. Stored only as PNG metadata — SVG is vector, so it does not apply.",
+    "g726": "PPI detail (advanced)",
+    "g727": "Auto (purpose default)",
+    "g728": "Basic (web) 72 ppi",
+    "g729": "Recommended (Windows) 96 ppi",
+    "g730": "2x (Retina) 144 ppi",
+    "g731": "HiDPI (200% scale) 192 ppi",
+    "g732": "Print standard 300 ppi",
+    "g733": "Print 1.5× 450 ppi",
+    "g734": "Print 2× 600 ppi",
+    "g749": "Print 4× 1200 ppi",
+    "g750": "Not recommended",
+    "g751": "At the current settings the printed width is about {mm} mm ({px}px ÷ {ppi}ppi) — stamp-sized. Pair high ppi with a large fixed size (e.g. 2048px + 1200ppi ≈ 43 mm).",
+    "g735": "Cube depth",
+    "g736": "Choose how much brightness difference (depth) the three faces get (Type Y only).\nAuto = follows your other export options — «subtle» for print purpose, otherwise «medium».\nStrong = the old default (trial-build control group).\nMedium = default for screen and photo capture — keeps the depth look.\nSubtle = shallow depth — the shallowest gain at which the ranking still holds despite print loss.\nFlat = all three faces at the same brightness — avoids ink and paper loss.\nDecoding is the same either way — the scanner re-anchors brightness per face.",
+    "g737": "Auto",
+    "g738": "match usage",
+    "g739": "Strong",
+    "g740": "original · lab",
+    "g741": "Medium",
+    "g742": "screen · capture",
+    "g743": "Subtle",
+    "g744": "shallow depth · print-safe",
+    "g745": "Flat",
+    "g746": "equal faces · print",
+    "g747": "Auto: with the current settings this draws as «{profile}».",
+    "g748": "Subtle — shallow depth. The shallowest gain at which the ranking still holds despite print loss.",
     "g970": "Render profile",
     "g971": "Pick where the code will be used and the brightness difference between the three faces is tuned for it (Type Y only).\nScreen = shown on a monitor or app screen, or read by photographing that screen. This is the default and keeps the 3D look.\nPrint = paper, stickers, signage. All three faces are drawn at the same brightness, so ink and paper do not darken the dim face a second time.\nEither choice reads the same way. The scanner re-anchors brightness per face, so it still recovers the order when the faces match.\nA printed code exported with the screen profile usually still scans, but the worse the printing conditions (low-quality print, dim light) the more the print profile helps.",
     "g972": "Screen",
@@ -2851,6 +3118,58 @@ const GENERATOR_STRINGS = {
     "g960": "カスタム色（Hue）",
     "g961": "TL 配置プレビュー",
     "g962": "ドラッグで移動・ホイールまたはピンチで拡大縮小",
+    "g700": "固定画像サイズ",
+    "g701": "書き出す PNG・SVG のピクセルサイズを決めます(プレビューとは無関係です)。\n自動3種は「スキャン往復が成立する最小サイズ」の実測が基準です — 下限=その最小のまま、最適容量(既定)=1.5倍、高品質=2.5倍。\n固定・カスタムサイズはコードを比率そのまま(contain)でキャンバスに収めます。カスタム以外は正方形です。\n「余白なし」(非推奨)は余白の幅だけを実測最小まで縮めます — 安全領域の板は残りますが余裕が薄くなるため、暗い面や複雑な面に載せるときは注意してください。",
+    "g702": "自動(下限)",
+    "g703": "自動(最適容量・既定)",
+    "g704": "自動(高品質)",
+    "g705": "カスタム(直接入力)",
+    "g706": "幅 (px)",
+    "g707": "高さ (px)",
+    "g708": "余白なし",
+    "g709": "自動はスキャンが成立する最小サイズの実測から始まります。「余白なし」(非推奨)は余白の幅だけを実測最小まで縮めます — 安全領域の板は残り、Y の立体陰影の帯は外れ、コーナー QR がある場合は QR が収まる余白までしか縮みません。Type O は既定の余白がすでに最小のため変化はありません。",
+    "g710": "少色画面向け最適化(ディザリング)",
+    "g711": "電子インクのような少色画面にコードを表示する場合、そのビット深度で実際に量子化・ディザリングして書き出します。\n「その画面でどう見えるか」を書き出す前にそのまま確認できます。\n低いビット深度は異なる面の明るさを同じ値に潰すことがあります — 順位が崩れると読めません。書き出した画像を必ずスキャンして確認してください。",
+    "g712": "自動(量子化なし)",
+    "g713": "24ビット(トゥルーカラー)",
+    "g714": "16ビット(RGB565)",
+    "g715": "8ビット(256色)",
+    "g716": "4ビット(16色)",
+    "g717": "2ビット(4階調グレー)",
+    "g718": "自動=量子化なし(そのまま)。低いビット深度は3面の明るさ順位を潰すことがあります — 書き出し後に必ずスキャンして確認してください。",
+    "g719": "出力最適化(高PPI・PNG専用)",
+    "g720": "PNG に物理密度(ppi)メタデータを載せます — 印刷・レイアウトソフトが実寸を正しく扱えます。\n画面用=144 ppi(レティナ2x)・印刷用=300 ppi が自動適用されます。\nピクセル数は上の「固定画像サイズ」が決めます — このオプションはピクセルを増やしません。\nSVG はベクターなので ppi は無意味です(PNG 書き出しのみ)。",
+    "g721": "画面用",
+    "g722": "モニター · 144 ppi",
+    "g723": "印刷用",
+    "g724": "紙 · 300 ppi",
+    "g725": "画面用は 144 ppi、印刷用は 300 ppi が自動適用されます。PNG メタデータにのみ載ります — SVG はベクターのため対象外です。",
+    "g726": "PPI 詳細(高度)",
+    "g727": "自動(用途の既定値)",
+    "g728": "基本(ウェブ)72 ppi",
+    "g729": "推奨(Windows)96 ppi",
+    "g730": "2x(Retina)144 ppi",
+    "g731": "HiDPI(200%表示)192 ppi",
+    "g732": "印刷 標準 300 ppi",
+    "g733": "印刷 1.5倍 450 ppi",
+    "g734": "印刷 2倍 600 ppi",
+    "g749": "印刷 4倍 1200 ppi",
+    "g750": "非推奨",
+    "g751": "現在の設定では印刷実寸の幅が約 {mm}mm です({px}px ÷ {ppi}ppi)— スタンプ程度です。高 ppi は大きな固定サイズと組み合わせてください(例: 2048px + 1200ppi ≈ 43mm)。",
+    "g735": "キューブの立体感",
+    "g736": "3面の明るさの差(立体感)をどれだけ付けるかを選びます(Type Y 専用)。\n自動=ほかの書き出しオプションに合わせます — 印刷用なら「弱」、それ以外は「中」。\n強=旧既定値です(試験版専用の対照群)。\n中=画面・撮影経路の既定値 — 立体感を残します。\n弱=浅い立体感 — 印刷での損失を見込んでも順位が成立する最も浅いゲインです。\n平面=3面を同じ明るさで描きます — インク・用紙の損失を避けます。\nどれを選んでも読み取り方式は同じです — スキャナーは面ごとに明るさ基準を取り直します。",
+    "g737": "自動",
+    "g738": "用途に合わせる",
+    "g739": "強",
+    "g740": "オリジナル · 試験版",
+    "g741": "中",
+    "g742": "画面 · 撮影",
+    "g743": "弱",
+    "g744": "浅い立体 · 印刷兼用",
+    "g745": "平面",
+    "g746": "3面同率 · 印刷",
+    "g747": "自動:現在の設定では「{profile}」で描きます。",
+    "g748": "弱 — 浅い立体感です。印刷での損失を見込んでも順位が成立する最も浅いゲインです。",
     "g970": "レンダープロファイル",
     "g971": "コードをどこで使うかを先に選ぶと、3面の明るさの差をその用途に合わせます（Type Y 専用）。\n画面用 = モニターやアプリの画面に表示する、またはその画面を撮影して読む場合。立体感を残した既定値です。\n印刷用 = 紙・シール・看板など印刷して使う場合。3面を同じ明るさで描き、インクと紙が暗い面をさらに沈ませるのを避けます。\nどちらを選んでも読み取り方は同じです。スキャナーは面ごとに明るさの基準を取り直すので、3面が同じ明るさでも順序を読み取れます。\n印刷物を画面用のまま書き出しても多くは読めますが、印刷条件が悪いほど（低品質印刷・暗い照明）印刷用が有利です。",
     "g972": "画面用",
@@ -3200,6 +3519,58 @@ const GENERATOR_STRINGS = {
     "g960": "Couleur personnalisée (teinte)",
     "g961": "Aperçu de placement TL",
     "g962": "Faire glisser pour déplacer · zoomer à la molette ou par pincement",
+    "g700": "Taille d'image fixe",
+    "g701": "Définit la taille en pixels du PNG/SVG exporté (indépendante de l'aperçu).\nLes trois modes automatiques reposent sur la taille minimale mesurée à laquelle un aller-retour de scan tient — minimum = cette taille telle quelle, optimal (défaut) = ×1,5, haute qualité = ×2,5.\nLes tailles fixes et personnalisées placent le code dans le canevas en conservant ses proportions (contain). Toutes sauf la personnalisée sont carrées.\n« Sans marge » (déconseillé) ne réduit que la largeur de marge au minimum mesuré — la plaque de zone de silence est conservée mais la réserve s'amincit ; prudence sur les surfaces sombres ou chargées.",
+    "g702": "Auto (minimum)",
+    "g703": "Auto (optimal · défaut)",
+    "g704": "Auto (haute qualité)",
+    "g705": "Personnalisé (saisie)",
+    "g706": "Largeur (px)",
+    "g707": "Hauteur (px)",
+    "g708": "Sans marge",
+    "g709": "Auto part de la taille minimale mesurée où le scan tient. « Sans marge » (déconseillé) ne réduit que la largeur de marge au minimum mesuré — la plaque de zone de silence est conservée, les bandes d'ombrage de Y sont retirées, et avec un QR de coin la marge ne se réduit que jusqu'à l'emplacement du QR. Le Type O a déjà une marge minimale : rien ne change.",
+    "g710": "Optimisation écrans à couleurs réduites (tramage)",
+    "g711": "Si le code sera affiché sur un écran à couleurs réduites (encre électronique, etc.), l'export est réellement quantifié et tramé à cette profondeur de bits.\nVous voyez exactement le rendu sur cet écran avant d'exporter.\nLes faibles profondeurs peuvent fusionner des luminosités de faces différentes — si l'ordre casse, le code ne se lit plus. Scannez toujours l'image exportée pour vérifier.",
+    "g712": "Auto (sans quantification)",
+    "g713": "24 bits (couleurs vraies)",
+    "g714": "16 bits (RGB565)",
+    "g715": "8 bits (256 couleurs)",
+    "g716": "4 bits (16 couleurs)",
+    "g717": "2 bits (4 niveaux de gris)",
+    "g718": "Auto = sans quantification (rendu tel quel). Les faibles profondeurs de bits peuvent aplatir l'ordre de luminosité des trois faces — scannez toujours l'export pour vérifier.",
+    "g719": "Optimisation de sortie (PPI élevé · PNG uniquement)",
+    "g720": "Intègre la densité physique (ppi) en métadonnée du PNG — les logiciels d'impression et de mise en page dimensionnent alors correctement.\nÉcran = 144 ppi (Retina 2x) et impression = 300 ppi s'appliquent automatiquement.\nLe nombre de pixels est décidé par « Taille d'image fixe » ci-dessus — cette option n'ajoute pas de pixels.\nLe SVG est vectoriel : le ppi n'y a pas de sens (export PNG uniquement).",
+    "g721": "Écran",
+    "g722": "moniteur · 144 ppi",
+    "g723": "Impression",
+    "g724": "papier · 300 ppi",
+    "g725": "Écran : 144 ppi · impression : 300 ppi appliqués automatiquement. Stocké en métadonnée PNG uniquement — le SVG est vectoriel, non concerné.",
+    "g726": "PPI détaillé (avancé)",
+    "g727": "Auto (défaut du mode)",
+    "g728": "Base (web) 72 ppi",
+    "g729": "Recommandé (Windows) 96 ppi",
+    "g730": "2x (Retina) 144 ppi",
+    "g731": "HiDPI (échelle 200 %) 192 ppi",
+    "g732": "Impression standard 300 ppi",
+    "g733": "Impression 1,5× 450 ppi",
+    "g734": "Impression 2× 600 ppi",
+    "g749": "Impression 4× 1200 ppi",
+    "g750": "Déconseillé",
+    "g751": "Avec les réglages actuels, la largeur imprimée est d'environ {mm} mm ({px}px ÷ {ppi}ppi) — format timbre. Associez un ppi élevé à une grande taille fixe (ex. 2048px + 1200ppi ≈ 43 mm).",
+    "g735": "Relief du cube",
+    "g736": "Choisissez l'écart de luminosité (relief) entre les trois faces (Type Y uniquement).\nAuto = suit vos autres options d'export — « léger » pour l'impression, sinon « moyen ».\nFort = l'ancienne valeur par défaut (témoin réservé aux versions d'essai).\nMoyen = défaut pour écran et prise de vue — conserve le relief.\nLéger = relief peu marqué — le gain le plus faible auquel l'ordre tient malgré les pertes d'impression.\nPlat = les trois faces à la même luminosité — évite les pertes d'encre et de papier.\nLe décodage est identique dans tous les cas — le scanner recale la luminosité face par face.",
+    "g737": "Auto",
+    "g738": "selon l'usage",
+    "g739": "Fort",
+    "g740": "original · labo",
+    "g741": "Moyen",
+    "g742": "écran · prise de vue",
+    "g743": "Léger",
+    "g744": "relief léger · imprimable",
+    "g745": "Plat",
+    "g746": "faces égales · impression",
+    "g747": "Auto : avec les réglages actuels, rendu en « {profile} ».",
+    "g748": "Léger — relief peu marqué. Le gain le plus faible auquel l'ordre tient malgré les pertes d'impression.",
     "g970": "Profil de rendu",
     "g971": "Choisissez d'abord l'usage du code : l'écart de luminosité entre les trois faces est alors réglé pour cet usage (Type Y uniquement).\nÉcran = affiché sur un moniteur ou dans une application, ou lu en photographiant cet écran. C'est la valeur par défaut, qui conserve l'effet de relief.\nImpression = papier, autocollants, enseignes. Les trois faces sont dessinées à la même luminosité, pour que l'encre et le papier n'assombrissent pas une deuxième fois la face la plus sombre.\nLa lecture reste la même dans les deux cas : le scanner recale la luminosité face par face et retrouve donc l'ordre même quand les trois faces sont identiques.\nUn imprimé exporté avec le profil écran se lit généralement quand même, mais plus les conditions d'impression sont mauvaises (impression de faible qualité, lumière faible), plus le profil impression aide.",
     "g972": "Écran",
@@ -3549,6 +3920,58 @@ const GENERATOR_STRINGS = {
     "g960": "Colore personalizzato (tinta)",
     "g961": "Posizionamento TL",
     "g962": "Trascinare per spostare · zoomare con rotella o pizzico",
+    "g700": "Dimensione immagine fissa",
+    "g701": "Imposta la dimensione in pixel del PNG/SVG esportato (indipendente dall'anteprima).\nLe tre modalità automatiche partono dalla dimensione minima misurata a cui regge un ciclo di scansione — minimo = quella dimensione così com'è, ottimale (predefinita) = ×1,5, alta qualità = ×2,5.\nLe dimensioni fisse e personalizzate inseriscono il codice nel canvas mantenendone le proporzioni (contain). Tutte tranne la personalizzata sono quadrate.\n«Senza margine» (sconsigliato) riduce solo la larghezza del margine al minimo misurato — la lastra della zona di rispetto resta ma la riserva si assottiglia: attenzione sulle superfici scure o complesse.",
+    "g702": "Auto (minimo)",
+    "g703": "Auto (ottimale · predefinito)",
+    "g704": "Auto (alta qualità)",
+    "g705": "Personalizzato (inserimento)",
+    "g706": "Larghezza (px)",
+    "g707": "Altezza (px)",
+    "g708": "Senza margine",
+    "g709": "Auto parte dalla dimensione minima misurata a cui la scansione regge. «Senza margine» (sconsigliato) riduce solo la larghezza del margine al minimo misurato — la lastra della zona di rispetto resta, le bande di ombreggiatura di Y vengono tolte e con un QR d'angolo il margine si riduce solo fino a dove vive il QR. Il Type O ha già un margine minimo: nulla cambia.",
+    "g710": "Ottimizzazione per schermi a pochi colori (dithering)",
+    "g711": "Se il codice verrà mostrato su uno schermo a pochi colori (come l'e-ink), l'export viene realmente quantizzato e sottoposto a dithering a quella profondità di bit.\nVedi esattamente come apparirà su quello schermo prima di esportare.\nProfondità basse possono fondere luminosità di facce diverse nello stesso valore — se l'ordine si rompe, il codice non si legge più. Scansiona sempre l'immagine esportata per verificare.",
+    "g712": "Auto (senza quantizzazione)",
+    "g713": "24 bit (true color)",
+    "g714": "16 bit (RGB565)",
+    "g715": "8 bit (256 colori)",
+    "g716": "4 bit (16 colori)",
+    "g717": "2 bit (4 livelli di grigio)",
+    "g718": "Auto = senza quantizzazione (resa originale). Profondità di bit basse possono appiattire l'ordine di luminosità delle tre facce — scansiona sempre l'export per verificare.",
+    "g719": "Ottimizzazione dell'output (PPI alto · solo PNG)",
+    "g720": "Inserisce la densità fisica (ppi) nei metadati del PNG — i programmi di stampa e impaginazione dimensionano così correttamente.\nSchermo = 144 ppi (Retina 2x) e stampa = 300 ppi si applicano automaticamente.\nIl numero di pixel lo decide «Dimensione immagine fissa» qui sopra — questa opzione non aggiunge pixel.\nL'SVG è vettoriale: il ppi lì non ha senso (solo export PNG).",
+    "g721": "Schermo",
+    "g722": "monitor · 144 ppi",
+    "g723": "Stampa",
+    "g724": "carta · 300 ppi",
+    "g725": "Schermo: 144 ppi · stampa: 300 ppi applicati automaticamente. Salvato solo nei metadati PNG — l'SVG è vettoriale, non è interessato.",
+    "g726": "PPI dettagliato (avanzate)",
+    "g727": "Auto (predefinito del ramo)",
+    "g728": "Base (web) 72 ppi",
+    "g729": "Consigliato (Windows) 96 ppi",
+    "g730": "2x (Retina) 144 ppi",
+    "g731": "HiDPI (scala 200%) 192 ppi",
+    "g732": "Stampa standard 300 ppi",
+    "g733": "Stampa 1,5× 450 ppi",
+    "g734": "Stampa 2× 600 ppi",
+    "g749": "Stampa 4× 1200 ppi",
+    "g750": "Sconsigliato",
+    "g751": "Con le impostazioni attuali la larghezza stampata è di circa {mm} mm ({px}px ÷ {ppi}ppi) — formato francobollo. Abbina un ppi alto a una grande dimensione fissa (es. 2048px + 1200ppi ≈ 43 mm).",
+    "g735": "Rilievo del cubo",
+    "g736": "Scegli quanta differenza di luminosità (rilievo) dare alle tre facce (solo Type Y).\nAuto = segue le altre opzioni di export — «leggero» per la stampa, altrimenti «medio».\nForte = il vecchio valore predefinito (gruppo di controllo solo per versioni di prova).\nMedio = predefinito per schermo e ripresa — mantiene il rilievo.\nLeggero = rilievo lieve — il guadagno più basso a cui l'ordine regge nonostante le perdite di stampa.\nPiatto = le tre facce alla stessa luminosità — evita le perdite di inchiostro e carta.\nLa decodifica è identica in ogni caso — lo scanner riancora la luminosità faccia per faccia.",
+    "g737": "Auto",
+    "g738": "secondo l'uso",
+    "g739": "Forte",
+    "g740": "originale · lab",
+    "g741": "Medio",
+    "g742": "schermo · ripresa",
+    "g743": "Leggero",
+    "g744": "rilievo lieve · adatto alla stampa",
+    "g745": "Piatto",
+    "g746": "facce uguali · stampa",
+    "g747": "Auto: con le impostazioni attuali disegna come «{profile}».",
+    "g748": "Leggero — rilievo lieve. Il guadagno più basso a cui l'ordine regge nonostante le perdite di stampa.",
     "g970": "Profilo di rendering",
     "g971": "Scegli prima dove userai il codice: la differenza di luminosità fra le tre facce viene tarata su quell'uso (solo Tipo Y).\nSchermo = mostrato su monitor o nello schermo di un'app, oppure letto fotografando quello schermo. È il valore predefinito e mantiene l'effetto tridimensionale.\nStampa = carta, adesivi, insegne. Le tre facce vengono disegnate con la stessa luminosità, così inchiostro e carta non scuriscono una seconda volta la faccia più scura.\nIn entrambi i casi la lettura non cambia: lo scanner rifissa il riferimento di luminosità faccia per faccia, quindi recupera l'ordine anche quando le tre facce coincidono.\nUno stampato esportato con il profilo schermo di solito si legge lo stesso, ma peggiori sono le condizioni di stampa (stampa di bassa qualità, luce scarsa) più il profilo stampa aiuta.",
     "g972": "Schermo",
@@ -3898,6 +4321,58 @@ const GENERATOR_STRINGS = {
     "g960": "Eigene Farbe (Farbton)",
     "g961": "TL-Platzierungsvorschau",
     "g962": "Ziehen zum Verschieben · Mausrad oder Pinch-Geste zum Zoomen",
+    "g700": "Feste Bildgröße",
+    "g701": "Legt die Pixelgröße des exportierten PNG/SVG fest (unabhängig von der Vorschau).\nDie drei Automatikmodi fußen auf der gemessenen Mindestgröße, bei der ein Scan-Roundtrip besteht — Untergrenze = dieses Minimum unverändert, optimal (Standard) = ×1,5, hohe Qualität = ×2,5.\nFeste und benutzerdefinierte Größen setzen den Code mit erhaltenem Seitenverhältnis (contain) in die Leinwand. Alle außer benutzerdefiniert sind quadratisch.\n„Ohne Rand“ (nicht empfohlen) verkleinert nur die Randbreite auf das gemessene Minimum — die Ruhezonen-Platte bleibt, doch der Puffer wird dünn; Vorsicht auf dunklen oder unruhigen Flächen.",
+    "g702": "Auto (Untergrenze)",
+    "g703": "Auto (optimal · Standard)",
+    "g704": "Auto (hohe Qualität)",
+    "g705": "Benutzerdefiniert (Eingabe)",
+    "g706": "Breite (px)",
+    "g707": "Höhe (px)",
+    "g708": "Ohne Rand",
+    "g709": "Auto geht von der gemessenen Mindestgröße aus, bei der der Scan besteht. „Ohne Rand“ (nicht empfohlen) verkleinert nur die Randbreite auf das gemessene Minimum — die Ruhezonen-Platte bleibt, Ys Schattierungsbänder entfallen, und mit einem Ecken-QR schrumpft der Rand nur bis zum QR. Type O hat bereits einen minimalen Rand: nichts ändert sich.",
+    "g710": "Optimierung für farbarme Displays (Dithering)",
+    "g711": "Wird der Code auf einem farbarmen Display wie E-Ink gezeigt, wird der Export tatsächlich mit dieser Bittiefe quantisiert und gedithert.\nSie sehen vor dem Export genau, wie er auf diesem Display aussieht.\nNiedrige Bittiefen können unterschiedliche Flächenhelligkeiten auf denselben Wert zusammenfallen lassen — bricht die Rangfolge, ist der Code unlesbar. Scannen Sie das exportierte Bild immer zur Kontrolle.",
+    "g712": "Auto (keine Quantisierung)",
+    "g713": "24 Bit (True Color)",
+    "g714": "16 Bit (RGB565)",
+    "g715": "8 Bit (256 Farben)",
+    "g716": "4 Bit (16 Farben)",
+    "g717": "2 Bit (4 Graustufen)",
+    "g718": "Auto = keine Quantisierung (wie gerendert). Niedrige Bittiefen können die Helligkeitsrangfolge der drei Flächen einebnen — Export immer per Scan prüfen.",
+    "g719": "Ausgabeoptimierung (hohe PPI · nur PNG)",
+    "g720": "Bettet die physische Dichte (ppi) als Metadatum ins PNG ein — Druck- und Layoutsoftware bemisst dann korrekt.\nBildschirm = 144 ppi (Retina 2x) und Druck = 300 ppi werden automatisch angewendet.\nDie Pixelzahl bestimmt „Feste Bildgröße“ oben — diese Option fügt keine Pixel hinzu.\nSVG ist vektorbasiert, ppi ist dort bedeutungslos (nur PNG-Export).",
+    "g721": "Bildschirm",
+    "g722": "Monitor · 144 ppi",
+    "g723": "Druck",
+    "g724": "Papier · 300 ppi",
+    "g725": "Bildschirm: 144 ppi · Druck: 300 ppi automatisch. Nur als PNG-Metadatum gespeichert — SVG ist vektorbasiert und nicht betroffen.",
+    "g726": "PPI-Detail (erweitert)",
+    "g727": "Auto (Zweck-Standard)",
+    "g728": "Basis (Web) 72 ppi",
+    "g729": "Empfohlen (Windows) 96 ppi",
+    "g730": "2x (Retina) 144 ppi",
+    "g731": "HiDPI (200 % Skalierung) 192 ppi",
+    "g732": "Druck Standard 300 ppi",
+    "g733": "Druck 1,5× 450 ppi",
+    "g734": "Druck 2× 600 ppi",
+    "g749": "Druck 4× 1200 ppi",
+    "g750": "Nicht empfohlen",
+    "g751": "Mit den aktuellen Einstellungen beträgt die Druckbreite etwa {mm} mm ({px}px ÷ {ppi}ppi) — Briefmarkenformat. Kombinieren Sie hohe ppi mit einer großen festen Größe (z. B. 2048px + 1200ppi ≈ 43 mm).",
+    "g735": "Würfeltiefe",
+    "g736": "Wählen Sie, wie viel Helligkeitsunterschied (Tiefe) die drei Flächen erhalten (nur Type Y).\nAuto = folgt Ihren übrigen Exportoptionen — „schwach“ bei Druckzweck, sonst „mittel“.\nStark = der alte Standard (Kontrollgruppe nur für Testversionen).\nMittel = Standard für Bildschirm und Aufnahme — erhält den Tiefeneindruck.\nSchwach = flacher Effekt — die flachste Verstärkung, bei der die Rangfolge trotz Druckverlust besteht.\nFlach = alle drei Flächen gleich hell — vermeidet Tinten- und Papierverlust.\nDie Dekodierung ist stets gleich — der Scanner verankert die Helligkeit je Fläche neu.",
+    "g737": "Auto",
+    "g738": "nach Verwendung",
+    "g739": "Stark",
+    "g740": "Original · Lab",
+    "g741": "Mittel",
+    "g742": "Bildschirm · Aufnahme",
+    "g743": "Schwach",
+    "g744": "flacher Effekt · druckfest",
+    "g745": "Flach",
+    "g746": "gleiche Flächen · Druck",
+    "g747": "Auto: Mit den aktuellen Einstellungen wird als „{profile}“ gezeichnet.",
+    "g748": "Schwach — flacher Effekt. Die flachste Verstärkung, bei der die Rangfolge trotz Druckverlust besteht.",
     "g970": "Renderprofil",
     "g971": "Wählen Sie zuerst den Einsatzzweck des Codes, dann wird der Helligkeitsunterschied der drei Flächen darauf abgestimmt (nur Typ Y).\nBildschirm = auf einem Monitor oder in einer App gezeigt oder durch Abfotografieren dieses Bildschirms gelesen. Das ist der Standard und erhält die räumliche Wirkung.\nDruck = Papier, Aufkleber, Schilder. Alle drei Flächen werden gleich hell gezeichnet, damit Tinte und Papier die dunkle Fläche nicht ein zweites Mal abdunkeln.\nGelesen wird in beiden Fällen gleich: Der Scanner setzt die Helligkeitsreferenz je Fläche neu an und findet die Reihenfolge auch dann, wenn alle drei Flächen gleich hell sind.\nEin Druck, der mit dem Bildschirmprofil exportiert wurde, wird meist trotzdem gelesen — je schlechter die Druckbedingungen (geringe Druckqualität, wenig Licht), desto mehr hilft aber das Druckprofil.",
     "g972": "Bildschirm",
@@ -4247,6 +4722,58 @@ const GENERATOR_STRINGS = {
     "g960": "Color personalizado (matiz)",
     "g961": "Colocación TL",
     "g962": "Arrastrar para mover · rueda o pellizco para hacer zoom",
+    "g700": "Tamaño de imagen fijo",
+    "g701": "Define el tamaño en píxeles del PNG/SVG exportado (independiente de la vista previa).\nLos tres modos automáticos parten del tamaño mínimo medido con el que se sostiene un ciclo de escaneo — mínimo = ese tamaño tal cual, óptimo (predeterminado) = ×1,5, alta calidad = ×2,5.\nLos tamaños fijos y personalizados encajan el código en el lienzo conservando su proporción (contain). Todos salvo el personalizado son cuadrados.\n«Sin margen» (no recomendado) solo reduce el ancho del margen al mínimo medido — la placa de la zona de silencio se conserva pero la reserva se adelgaza; cuidado sobre superficies oscuras o complejas.",
+    "g702": "Auto (mínimo)",
+    "g703": "Auto (óptimo · predeterminado)",
+    "g704": "Auto (alta calidad)",
+    "g705": "Personalizado (introducir)",
+    "g706": "Ancho (px)",
+    "g707": "Alto (px)",
+    "g708": "Sin margen",
+    "g709": "Auto parte del tamaño mínimo medido con el que el escaneo funciona. «Sin margen» (no recomendado) solo reduce el ancho del margen al mínimo medido — la placa de la zona de silencio se conserva, las bandas de sombreado de Y se quitan y, con un QR de esquina, el margen solo se reduce hasta donde vive el QR. El Type O ya tiene un margen mínimo: nada cambia.",
+    "g710": "Optimización para pantallas de pocos colores (tramado)",
+    "g711": "Si el código se mostrará en una pantalla de pocos colores (como tinta electrónica), la exportación se cuantiza y se trama realmente a esa profundidad de bits.\nVes exactamente cómo se verá en esa pantalla antes de exportar.\nLas profundidades bajas pueden fundir brillos de caras distintas en el mismo valor — si el orden se rompe, el código deja de leerse. Escanea siempre la imagen exportada para verificar.",
+    "g712": "Auto (sin cuantización)",
+    "g713": "24 bits (color verdadero)",
+    "g714": "16 bits (RGB565)",
+    "g715": "8 bits (256 colores)",
+    "g716": "4 bits (16 colores)",
+    "g717": "2 bits (4 niveles de gris)",
+    "g718": "Auto = sin cuantización (tal como se renderiza). Las profundidades de bits bajas pueden aplanar el orden de brillo de las tres caras — escanea siempre la exportación para verificar.",
+    "g719": "Optimización de salida (PPI alto · solo PNG)",
+    "g720": "Incrusta la densidad física (ppi) como metadato del PNG — los programas de impresión y maquetación dimensionan entonces correctamente.\nPantalla = 144 ppi (Retina 2x) e impresión = 300 ppi se aplican automáticamente.\nEl número de píxeles lo decide «Tamaño de imagen fijo» arriba — esta opción no añade píxeles.\nEl SVG es vectorial: el ppi no tiene sentido ahí (solo exportación PNG).",
+    "g721": "Pantalla",
+    "g722": "monitor · 144 ppi",
+    "g723": "Impresión",
+    "g724": "papel · 300 ppi",
+    "g725": "Pantalla: 144 ppi · impresión: 300 ppi aplicados automáticamente. Se guarda solo como metadato PNG — el SVG es vectorial y no le afecta.",
+    "g726": "PPI detallado (avanzado)",
+    "g727": "Auto (predeterminado del modo)",
+    "g728": "Básico (web) 72 ppi",
+    "g729": "Recomendado (Windows) 96 ppi",
+    "g730": "2x (Retina) 144 ppi",
+    "g731": "HiDPI (escala 200 %) 192 ppi",
+    "g732": "Impresión estándar 300 ppi",
+    "g733": "Impresión 1,5× 450 ppi",
+    "g734": "Impresión 2× 600 ppi",
+    "g749": "Impresión 4× 1200 ppi",
+    "g750": "No recomendado",
+    "g751": "Con la configuración actual, el ancho impreso es de unos {mm} mm ({px}px ÷ {ppi}ppi) — tamaño de sello. Combine un ppi alto con un tamaño fijo grande (p. ej., 2048px + 1200ppi ≈ 43 mm).",
+    "g735": "Relieve del cubo",
+    "g736": "Elige cuánta diferencia de brillo (relieve) reciben las tres caras (solo Type Y).\nAuto = sigue tus demás opciones de exportación — «suave» para impresión, si no «medio».\nFuerte = el antiguo valor predeterminado (grupo de control solo de versiones de prueba).\nMedio = predeterminado para pantalla y captura — conserva el relieve.\nSuave = relieve leve — la ganancia más baja con la que el orden se mantiene pese a las pérdidas de impresión.\nPlano = las tres caras con el mismo brillo — evita pérdidas de tinta y papel.\nLa decodificación es igual en todos los casos — el escáner reancla el brillo cara por cara.",
+    "g737": "Auto",
+    "g738": "según el uso",
+    "g739": "Fuerte",
+    "g740": "original · lab",
+    "g741": "Medio",
+    "g742": "pantalla · captura",
+    "g743": "Suave",
+    "g744": "relieve leve · apto impresión",
+    "g745": "Plano",
+    "g746": "caras iguales · impresión",
+    "g747": "Auto: con la configuración actual se dibuja como «{profile}».",
+    "g748": "Suave — relieve leve. La ganancia más baja con la que el orden se mantiene pese a las pérdidas de impresión.",
     "g970": "Perfil de renderizado",
     "g971": "Elija primero dónde se usará el código y la diferencia de brillo entre las tres caras se ajustará a ese uso (solo Tipo Y).\nPantalla = mostrado en un monitor o en la pantalla de una aplicación, o leído fotografiando esa pantalla. Es el valor predeterminado y mantiene el efecto de relieve.\nImpresión = papel, pegatinas, rótulos. Las tres caras se dibujan con el mismo brillo, para que la tinta y el papel no oscurezcan una segunda vez la cara más apagada.\nSe lee igual en ambos casos: el escáner vuelve a fijar la referencia de brillo cara por cara, así que recupera el orden aunque las tres caras coincidan.\nUn impreso exportado con el perfil de pantalla suele leerse igualmente, pero cuanto peores son las condiciones de impresión (impresión de baja calidad, poca luz), más ayuda el perfil de impresión.",
     "g972": "Pantalla",
@@ -4596,6 +5123,58 @@ const GENERATOR_STRINGS = {
     "g960": "Cor personalizada (matiz)",
     "g961": "Posicionamento TL",
     "g962": "Arrastar para mover · roda ou pinça para ampliar",
+    "g700": "Tamanho de imagem fixo",
+    "g701": "Define o tamanho em píxeis do PNG/SVG exportado (independente da pré-visualização).\nOs três modos automáticos partem do tamanho mínimo medido em que um ciclo de leitura se mantém — mínimo = esse tamanho tal e qual, ótimo (predefinição) = ×1,5, alta qualidade = ×2,5.\nOs tamanhos fixos e personalizados encaixam o código na tela preservando a proporção (contain). Todos exceto o personalizado são quadrados.\n«Sem margem» (não recomendado) reduz apenas a largura da margem ao mínimo medido — a placa da zona de silêncio é mantida mas a folga fica fina; cuidado em superfícies escuras ou complexas.",
+    "g702": "Auto (mínimo)",
+    "g703": "Auto (ótimo · predefinição)",
+    "g704": "Auto (alta qualidade)",
+    "g705": "Personalizado (inserir)",
+    "g706": "Largura (px)",
+    "g707": "Altura (px)",
+    "g708": "Sem margem",
+    "g709": "Auto parte do tamanho mínimo medido em que a leitura se mantém. «Sem margem» (não recomendado) reduz apenas a largura da margem ao mínimo medido — a placa da zona de silêncio é mantida, as faixas de sombreado de Y são retiradas e, com um QR de canto, a margem só encolhe até onde vive o QR. O Type O já tem uma margem mínima: nada muda.",
+    "g710": "Otimização para ecrãs de poucas cores (dithering)",
+    "g711": "Se o código for mostrado num ecrã de poucas cores (como tinta eletrónica), a exportação é realmente quantizada e submetida a dithering nessa profundidade de bits.\nVê exatamente como ficará nesse ecrã antes de exportar.\nProfundidades baixas podem fundir brilhos de faces diferentes no mesmo valor — se a ordem quebrar, o código deixa de ser lido. Digitalize sempre a imagem exportada para verificar.",
+    "g712": "Auto (sem quantização)",
+    "g713": "24 bits (cor verdadeira)",
+    "g714": "16 bits (RGB565)",
+    "g715": "8 bits (256 cores)",
+    "g716": "4 bits (16 cores)",
+    "g717": "2 bits (4 níveis de cinzento)",
+    "g718": "Auto = sem quantização (tal como renderizado). Profundidades de bits baixas podem achatar a ordem de brilho das três faces — digitalize sempre a exportação para verificar.",
+    "g719": "Otimização de saída (PPI alto · apenas PNG)",
+    "g720": "Incorpora a densidade física (ppi) como metadado do PNG — os programas de impressão e paginação dimensionam então corretamente.\nEcrã = 144 ppi (Retina 2x) e impressão = 300 ppi aplicam-se automaticamente.\nO número de píxeis é decidido por «Tamanho de imagem fixo» acima — esta opção não acrescenta píxeis.\nO SVG é vetorial: o ppi não tem sentido aí (apenas exportação PNG).",
+    "g721": "Ecrã",
+    "g722": "monitor · 144 ppi",
+    "g723": "Impressão",
+    "g724": "papel · 300 ppi",
+    "g725": "Ecrã: 144 ppi · impressão: 300 ppi aplicados automaticamente. Guardado apenas como metadado PNG — o SVG é vetorial e não é afetado.",
+    "g726": "PPI detalhado (avançado)",
+    "g727": "Auto (predefinição do modo)",
+    "g728": "Básico (web) 72 ppi",
+    "g729": "Recomendado (Windows) 96 ppi",
+    "g730": "2x (Retina) 144 ppi",
+    "g731": "HiDPI (escala 200 %) 192 ppi",
+    "g732": "Impressão padrão 300 ppi",
+    "g733": "Impressão 1,5× 450 ppi",
+    "g734": "Impressão 2× 600 ppi",
+    "g749": "Impressão 4× 1200 ppi",
+    "g750": "Não recomendado",
+    "g751": "Com as definições atuais, a largura impressa é de cerca de {mm} mm ({px}px ÷ {ppi}ppi) — tamanho de selo. Combine um ppi alto com um tamanho fixo grande (p. ex., 2048px + 1200ppi ≈ 43 mm).",
+    "g735": "Relevo do cubo",
+    "g736": "Escolha quanta diferença de brilho (relevo) as três faces recebem (apenas Type Y).\nAuto = segue as suas outras opções de exportação — «suave» para impressão, caso contrário «médio».\nForte = a antiga predefinição (grupo de controlo apenas das versões de ensaio).\nMédio = predefinição para ecrã e captura — mantém o relevo.\nSuave = relevo leve — o ganho mais raso com que a ordem se mantém apesar das perdas de impressão.\nPlano = as três faces com o mesmo brilho — evita perdas de tinta e papel.\nA descodificação é igual em qualquer caso — o leitor reancora o brilho face a face.",
+    "g737": "Auto",
+    "g738": "conforme o uso",
+    "g739": "Forte",
+    "g740": "original · lab",
+    "g741": "Médio",
+    "g742": "ecrã · captura",
+    "g743": "Suave",
+    "g744": "relevo leve · seguro p/ impressão",
+    "g745": "Plano",
+    "g746": "faces iguais · impressão",
+    "g747": "Auto: com as definições atuais desenha como «{profile}».",
+    "g748": "Suave — relevo leve. O ganho mais raso com que a ordem se mantém apesar das perdas de impressão.",
     "g970": "Perfil de renderização",
     "g971": "Escolha primeiro onde o código vai ser usado e a diferença de brilho entre as três faces passa a ser afinada para esse uso (apenas Tipo Y).\nEcrã = mostrado num monitor ou no ecrã de uma aplicação, ou lido fotografando esse ecrã. É o valor predefinido e mantém o efeito de relevo.\nImpressão = papel, autocolantes, sinalética. As três faces são desenhadas com o mesmo brilho, para que a tinta e o papel não escureçam uma segunda vez a face mais apagada.\nA leitura é a mesma nos dois casos: o leitor volta a fixar a referência de brilho face a face, por isso recupera a ordem mesmo quando as três faces coincidem.\nUm impresso exportado com o perfil de ecrã costuma ler-se na mesma, mas quanto piores forem as condições de impressão (impressão de baixa qualidade, pouca luz) mais o perfil de impressão ajuda.",
     "g972": "Ecrã",
@@ -4793,7 +5372,8 @@ let detectorAutoY = false;
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
-  syncFaceGainLabel, syncRenderProfileUi, syncShadingUi, syncYLocatorUi, syncTurnAUi,
+  syncFaceGainLabel, syncRenderProfileUi, syncExportOptionsUi, syncExportPpiHint,
+  syncShadingUi, syncYLocatorUi, syncTurnAUi,
   syncTypeYCellEditorUi,
   syncHelpPopover,
 ];
@@ -4900,9 +5480,20 @@ import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, pres
 import { buildScene } from './src/scene.js';
 import { buildSceneY } from './src/sceneY.js';
 import {
-  RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_PRINT, RENDER_PROFILE_SCREEN,
+  RENDER_PROFILE_AUTO, RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_PRINT,
+  RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT,
   faceGainsForRenderProfile, isLabOnlyRenderProfile, renderProfilesForSurface,
 } from './src/render-profile.js';
+// 내보내기 옵션 ①②③④ 의 도메인·자동 규칙 — UI 는 이 단일 정의만 소비한다
+// (교훈 .agent/_lessons/009: UI 인라인 재구현은 테스트가 못 잠근다).
+import {
+  EXPORT_DITHER_AUTO, EXPORT_MARGIN_INCLUDE, EXPORT_MARGIN_TRIM,
+  EXPORT_MIN_COMFORT_PRINT_MM, EXPORT_PPI_DETAIL_AUTO, EXPORT_PPI_PRINT,
+  EXPORT_SIZE_CUSTOM, exportPhysicalWidthMm,
+  minRoundtripPpu, resolveExportPpi, resolveExportSize, resolveRenderProfile,
+  trimExportMargin,
+} from './src/export-options.js';
+import { buildTrimmedScene, renderExportPng, renderExportSvg } from './src/export-render.js';
 import { addQuietZone } from './src/quietzone.js';
 import { SHADING_ON, addShading } from './src/shading.js';
 import { resolveQuietZoneChoice } from './src/quiet-auto.js';
@@ -4910,7 +5501,8 @@ import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
 import { verifyRasterY } from './src/verifyY.js';
 import { payloadByteLength } from './src/header.js';
-import { rasterToPng } from './src/png.js';
+// rasterToPng 직접 호출은 2026-08-19 내보내기 옵션 배선에서 사라졌다 — PNG 조립은
+// export-render.renderExportPng 가 맡는다 (png.js 는 그 안에서 소비된다).
 import { sceneToSvg } from './src/svg.js';
 import { TL_READER_URL } from './src/qr.js';
 import { wifiPayload, cardPayload } from './src/payloadform.js';
@@ -4938,6 +5530,14 @@ const els = {
   resTierCards: $('resTierCards'), resTierHint: $('resTierHint'),
   renderProfileSection: $('renderProfileSection'),
   renderProfileCards: $('renderProfileCards'), renderProfileHint: $('renderProfileHint'),
+  // 내보내기 옵션 ①②③ (운영자 지시 2026-08-19)
+  exportSizeSection: $('exportSizeSection'), exportSize: $('exportSize'),
+  exportSizeCustomRow: $('exportSizeCustomRow'),
+  exportWidth: $('exportWidth'), exportHeight: $('exportHeight'), exportTrim: $('exportTrim'),
+  exportDitherSection: $('exportDitherSection'), exportDither: $('exportDither'),
+  exportPpiSection: $('exportPpiSection'), exportPpiCards: $('exportPpiCards'),
+  exportPpiDetailRow: $('exportPpiDetailRow'), exportPpiDetail: $('exportPpiDetail'),
+  exportPpiHint: $('exportPpiHint'),
   shadingSection: $('shadingSection'), shadingCards: $('shadingCards'),
   shadingRimRow: $('shadingRimRow'), shadingRim: $('shadingRim'),
   shadingHint: $('shadingHint'),
@@ -5121,13 +5721,17 @@ function exportFinderLabel(cur) {
   return cur.finderPatternId || 'bullseye';
 }
 
-/** 렌더 프로파일 파일명 꼬리표. 기본(화면용)은 **안 붙인다** — 기존 파일명이 그대로
+/** 렌더 프로파일 파일명 꼬리표. 기본(중 = screen)은 **안 붙인다** — 기존 파일명이 그대로
  *  유지되고, 꼬리표가 붙어 있으면 «기본이 아니다» 가 이름만 보고 바로 읽힌다.
- *  A/B 재스캔은 같은 심볼을 프로파일만 바꿔 내보내므로 이 구분이 파일명에 있어야 한다. */
+ *  A/B 재스캔은 같은 심볼을 프로파일만 바꿔 내보내므로 이 구분이 파일명에 있어야 한다.
+ *  «자동» 은 해석된 구체 프로파일 기준이다 (2026-08-19 개편) — 자동이 인쇄 문맥에서
+ *  «약» 으로 풀리면 -soft 가 붙는다. 그래야 파일명이 실제 게인과 거짓말을 안 한다. */
 function exportProfileTag() {
   if (current.type !== 'Y') return ''; // 면 게인은 Type Y 렌더 경로만 소비한다.
-  if (generatorState.renderProfile === RENDER_PROFILE_PRINT) return '-print';
-  if (generatorState.renderProfile === RENDER_PROFILE_ORIGINAL) return '-orig';
+  const resolved = resolvedRenderProfile();
+  if (resolved === RENDER_PROFILE_PRINT) return '-print';
+  if (resolved === RENDER_PROFILE_ORIGINAL) return '-orig';
+  if (resolved === RENDER_PROFILE_SOFT) return '-soft';
   return '';
 }
 
@@ -5174,9 +5778,65 @@ function svgMarkup(cur) {
   return svg;
 }
 
+/**
+ * 내보내기 계획 — UI 상태를 export-options/export-render **프로덕션 함수**의 입력으로
+ * 푼다 (교훈 .agent/_lessons/009 — 배선을 잠그려면 UI 가 프로덕션 함수를 타야 한다.
+ * 크기·contain·하한·ppi 규칙을 여기서 재구현하지 않는다).
+ *
+ * 여백 없음(trim)은 scene 을 **최소 안전 margin** 으로 재생성한다 (통합 감사 수리 §9):
+ *   · 시작값은 trimExportMargin — Y 1 · O 2 · **A 는 버전 의존 {10, 13, 16}** (일률
+ *     10 이 A1/A2 를 렌더 불능으로 만들었다), **코너 QR 구성은 20** (QR 블록이 여백에
+ *     사는 기능 요소다 — 그 여백은 장식이 아니다).
+ *   · buildTrimmedScene 이 시작값에서 +1 씩 올려 **처음 성립하는 margin** 을 쓴다 —
+ *     표가 모르는 기하에서도 내부 throw 가 사용자에게 새지 않는다 (조용한 전체 폴백이
+ *     아니라 최소 양보).
+ *   · 재생성본에도 **안전영역(quiet zone) 층은 다시 얹는다** — 투명 배경에서는 그 링이
+ *     quiet zone 그 자체라, 떨구면 «quiet zone 유지» 라는 trim 의 정의가 거짓이 된다
+ *     (실측: O2 투명 trim 링 없음 = 직접/어두움 전멸 → 링 재적용 = 회복, §9).
+ *     입체 음영은 장식이라 계속 안 얹는다 — 포함 경로와의 차이는 «여백 폭» 뿐이다.
+ */
+function exportPlanFor(format) {
+  const ditherBits = exportDitherBits();
+  let scene = current.scene;
+  if (generatorState.exportMargin === EXPORT_MARGIN_TRIM) {
+    const startMargin = trimExportMargin(current.type, {
+      version: current.encoded.version,
+      cornerQr: current.sceneOpts.qrCorner !== undefined,
+    });
+    scene = withQuietZone(buildTrimmedScene(
+      current.type === 'Y' ? buildSceneY : buildScene,
+      current.encoded, current.sceneOpts, startMargin,
+    ).scene);
+  }
+  const minPpu = minRoundtripPpu({
+    type: current.type,
+    version: current.encoded.version,
+    cellSurfaceLayout: current.encoded.cellSurfaceLayout || null,
+    ditherBits,
+  });
+  const size = resolveExportSize({
+    mode: generatorState.exportSize,
+    customWidth: generatorState.exportWidth | 0,
+    customHeight: generatorState.exportHeight | 0,
+    sceneWidth: scene.width,
+    sceneHeight: scene.height,
+    minPpu,
+  });
+  const ppi = format === 'png'
+    ? resolveExportPpi({
+      purpose: generatorState.exportPpi,
+      detail: generatorState.exportPpiDetail,
+      ditherBits,
+    })
+    : undefined;
+  return { scene, plan: { ...size, ditherBits, ppi } };
+}
+
 els.exportPng.addEventListener('click', async () => {
   if (!current) return;
   if (decorActive(current)) {
+    // 장식(β) 경로는 **현행 유지** — 캔버스 파이프라인이라 바이트 결정성 계약 밖이고,
+    // 내보내기 옵션 4종 배선(2026-08-19)의 범위 밖이다.
     try {
       const blob = await decoratedPngBlob(current, 32);
       download(new Uint8Array(await blob.arrayBuffer()), 'image/png', exportFilename('png'));
@@ -5185,13 +5845,30 @@ els.exportPng.addEventListener('click', async () => {
     }
     return;
   }
-  const raster = rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 });
-  download(rasterToPng(raster), 'image/png', exportFilename('png'));
+  try {
+    const { scene, plan } = exportPlanFor('png');
+    download(renderExportPng(scene, plan), 'image/png', exportFilename('png'));
+  } catch (err) {
+    // 커스텀 크기 오입력 등 resolveExportSize/renderExportPng 의 RangeError 를
+    // 기존 에러 표시 관행대로 보여 준다.
+    els.error.textContent = String(err && err.message ? err.message : err);
+  }
 });
 
 els.exportSvg.addEventListener('click', () => {
   if (!current) return;
-  download(new TextEncoder().encode(svgMarkup(current)), 'image/svg+xml', exportFilename('svg'));
+  if (decorActive(current)) {
+    // 장식(β) SVG 경로도 현행 유지 (svgMarkup 이 장식 조각을 주입한다 — 범위 밖).
+    download(new TextEncoder().encode(svgMarkup(current)), 'image/svg+xml', exportFilename('svg'));
+    return;
+  }
+  try {
+    const { scene, plan } = exportPlanFor('svg');
+    download(new TextEncoder().encode(renderExportSvg(scene, { width: plan.width, height: plan.height })),
+      'image/svg+xml', exportFilename('svg'));
+  } catch (err) {
+    els.error.textContent = String(err && err.message ? err.message : err);
+  }
 });
 
 // ── 클립보드 복사 (다운로드와 동일 파이프라인 — PNG 는 이미지, SVG 는 마크업 텍스트) ──
@@ -5204,9 +5881,13 @@ function flashCopied(btn) {
 $('copyPng').addEventListener('click', async () => {
   if (!current) return;
   try {
-    const blob = decorActive(current)
-      ? await decoratedPngBlob(current, 32)
-      : new Blob([rasterToPng(rasterize(current.scene, { pixelsPerUnit: 32, supersample: 2 }))], { type: 'image/png' });
+    let blob;
+    if (decorActive(current)) {
+      blob = await decoratedPngBlob(current, 32); // 장식(β) — 현행 유지 (범위 밖)
+    } else {
+      const { scene, plan } = exportPlanFor('png');
+      blob = new Blob([renderExportPng(scene, plan)], { type: 'image/png' });
+    }
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
     flashCopied($('copyPng'));
   } catch (err) {
@@ -5217,7 +5898,14 @@ $('copyPng').addEventListener('click', async () => {
 $('copySvg').addEventListener('click', async () => {
   if (!current) return;
   try {
-    await navigator.clipboard.writeText(svgMarkup(current));
+    let markup;
+    if (decorActive(current)) {
+      markup = svgMarkup(current); // 장식(β) — 현행 유지 (범위 밖)
+    } else {
+      const { scene, plan } = exportPlanFor('svg');
+      markup = renderExportSvg(scene, { width: plan.width, height: plan.height });
+    }
+    await navigator.clipboard.writeText(markup);
     flashCopied($('copySvg'));
   } catch (err) {
     els.error.textContent = tf('g430', { msg: err && err.message ? err.message : err });
@@ -5581,6 +6269,8 @@ function setMode(next) {
   renderQrPositionUi();
   renderFinderUi();
   syncFaceGainLabel();
+  // 내보내기 옵션의 고급 전용 가시성(② 전체 · ③ 세부 select)은 모드에서 계산한다.
+  syncExportOptionsUi();
 }
 
 /*
@@ -8151,9 +8841,24 @@ syncTypeUi();
 // 그 목표까지» 의 보간 강도다. 슬라이더가 절대 게인이던 시절의 상수 폴백
 // (DEFAULT_FACE_GAINS)을 그대로 두면 프로파일을 바꿔도 그림이 안 바뀐다.
 
-/** 지금 선택된 프로파일의 목표 게인. */
+/** ② 의 상태값 → resolveRenderProfile/resolveExportPpi 가 받는 ditherBits (자동 = null). */
+function exportDitherBits() {
+  return generatorState.exportDither === EXPORT_DITHER_AUTO ? null : generatorState.exportDither;
+}
+
+/** ④ «자동» 을 포함한 선택값 → 구체 프로파일. 해석 문맥은 ③ 갈래(인쇄용이면 «약») 와
+ *  ② 비트깊이(조합표) 다 — 규칙은 export-options.resolveRenderProfile 단일 정의. */
+function resolvedRenderProfile() {
+  return resolveRenderProfile(generatorState.renderProfile, {
+    printPurpose: generatorState.exportPpi === EXPORT_PPI_PRINT,
+    ditherBits: exportDitherBits(),
+  });
+}
+
+/** 지금 선택의 목표 게인 — «자동» 을 포함해 항상 **해석 후** 게인이다 (2026-08-19 개편).
+ *  faceGainsForRenderProfile 은 'auto' 를 거부하므로 해석 없이 부르면 던진다 — 그게 계약이다. */
 function profileFaceGains() {
-  return faceGainsForRenderProfile(generatorState.renderProfile);
+  return faceGainsForRenderProfile(resolvedRenderProfile());
 }
 
 function currentFaceGains() {
@@ -8185,6 +8890,26 @@ function renderProfileGainText(profile) {
   return `T ${g.T.toFixed(2)} · L ${g.L.toFixed(2)} · R ${g.R.toFixed(2)}`;
 }
 
+/** 카드 라벨 키 (구체 프로파일 → «강/중/약/평면») — 자동 힌트가 해석 결과를 이 이름으로 부른다. */
+function renderProfileCardLabelKey(profile) {
+  return {
+    [RENDER_PROFILE_ORIGINAL]: 'g739',
+    [RENDER_PROFILE_SCREEN]: 'g741',
+    [RENDER_PROFILE_SOFT]: 'g743',
+    [RENDER_PROFILE_PRINT]: 'g745',
+  }[profile];
+}
+
+/** 명시 선택의 힌트 키 (자동은 g747 별도 — 해석 결과가 들어간다). */
+function renderProfileHintKey(profile) {
+  return {
+    [RENDER_PROFILE_SCREEN]: 'g978',
+    [RENDER_PROFILE_SOFT]: 'g748',
+    [RENDER_PROFILE_PRINT]: 'g979',
+    [RENDER_PROFILE_ORIGINAL]: 'g980',
+  }[profile];
+}
+
 function syncRenderProfileUi() {
   const section = els.renderProfileSection;
   if (!section) return;
@@ -8194,12 +8919,14 @@ function syncRenderProfileUi() {
   const visible = renderProfilesForSurface(lab);
   for (const card of els.renderProfileCards.children) {
     const id = card.dataset.profile;
-    // lab 전용 카드는 정식 화면에서 **DOM 째로 숨긴다** — 클래스만 흐리면 키보드
-    // 순회로 여전히 닿는다.
-    card.hidden = !visible.includes(id);
+    // «자동» 카드는 항상 뜬다 — 게인 행이 아니라 해석 규칙이다. lab 전용 카드는 정식
+    // 화면에서 **DOM 째로 숨긴다** — 클래스만 흐리면 키보드 순회로 여전히 닿는다.
+    card.hidden = id !== RENDER_PROFILE_AUTO && !visible.includes(id);
     card.classList.toggle('active', id === generatorState.renderProfile);
     let gainLine = card.querySelector('.card-gains');
-    if (lab) {
+    // 게인 수치는 lab + 구체 프로파일 카드만 — «자동» 은 게인 행이 없다
+    // (faceGainsForRenderProfile 이 'auto' 를 거부하는 계약 그대로).
+    if (lab && id !== RENDER_PROFILE_AUTO) {
       if (!gainLine) {
         gainLine = document.createElement('span');
         gainLine.className = 'card-sub card-gains';
@@ -8211,11 +8938,11 @@ function syncRenderProfileUi() {
     }
   }
   if (els.renderProfileHint) {
-    els.renderProfileHint.textContent = generatorState.renderProfile === RENDER_PROFILE_PRINT
-      ? t('g979')
-      : generatorState.renderProfile === RENDER_PROFILE_ORIGINAL
-        ? t('g980')
-        : t('g978');
+    // 자동 카드 활성 시 «지금은 X 로 동작» — 해석 문맥(③ 갈래·② 비트깊이)이 바뀌면
+    // 이 함수가 다시 돌아야 한다 (내보내기 옵션 핸들러들이 부른다).
+    els.renderProfileHint.textContent = generatorState.renderProfile === RENDER_PROFILE_AUTO
+      ? tf('g747', { profile: t(renderProfileCardLabelKey(resolvedRenderProfile())) })
+      : t(renderProfileHintKey(generatorState.renderProfile));
   }
 }
 
@@ -8224,7 +8951,8 @@ for (const card of els.renderProfileCards.children) {
     const id = card.dataset.profile;
     // 정식 화면에서 lab 전용 카드가 눌리는 경로는 없어야 하지만, 저장 상태·확장
     // 프로그램이 끼어들 수 있으니 여기서도 막는다 (차단은 한 겹으로 두지 않는다).
-    if (!isLabPath() && isLabOnlyRenderProfile(id)) return;
+    // «자동» 은 lab 검사 대상이 아니다 — isLabOnlyRenderProfile 이 'auto' 를 거부한다.
+    if (!isLabPath() && id !== RENDER_PROFILE_AUTO && isLabOnlyRenderProfile(id)) return;
     generatorState.renderProfile = id;
     syncRenderProfileUi();
     syncFaceGainLabel();
@@ -8233,7 +8961,8 @@ for (const card of els.renderProfileCards.children) {
 }
 // 저장/복원이나 lab→정식 이동으로 «정식 화면 + 오리지널» 조합이 만들어질 수 있다.
 // 그 상태를 그대로 두면 화면에는 아무 카드도 안 켜져 있는데 렌더는 구 게인이다.
-if (!isLabPath() && isLabOnlyRenderProfile(generatorState.renderProfile)) {
+if (!isLabPath() && generatorState.renderProfile !== RENDER_PROFILE_AUTO
+  && isLabOnlyRenderProfile(generatorState.renderProfile)) {
   generatorState.renderProfile = RENDER_PROFILE_SCREEN;
 }
 syncRenderProfileUi();
@@ -8283,6 +9012,116 @@ els.shadingRim.addEventListener('change', () => {
   schedule();
 });
 syncShadingUi();
+
+// ── 내보내기 옵션 ①②③ (운영자 지시 2026-08-19) ─────────────────────────────
+//
+// 도메인·자동 규칙은 export-options.js 단일 정의를 소비한다 — 여기는 상태 ↔ DOM 왕복과
+// 모드 가시성만 한다. ② 비트깊이와 ③ 갈래는 ④ «자동» 의 해석 문맥이라, 바뀌면
+// syncRenderProfileUi()(자동 힌트) 와 schedule()(면 게인 재해석 렌더)이 함께 돌아야 한다.
+// ①(크기·여백) 과 ③ 세부 ppi 는 내보내기 시점에만 소비되므로 미리보기 재렌더가 없다.
+
+/**
+ * ③ 물리 크기 힌트 (§3 수리 — «미결 9» 구현): 인쇄용 갈래에서 지금 설정(실효 ppi ×
+ * 실효 크기)의 물리 폭이 15mm 미만이면, 고르기 **전에** 경고 문구로 갈아 끼운다 —
+ * 기본 자동 크기 + 1200ppi 는 7.6mm 스탬프가 된다 (§8.2 실측). 차단이 아니라 안내다.
+ * 실패(커스텀 오입력 등)는 조용히 기본 문구로 — 그 오류는 내보내기 시점의
+ * resolveExportSize 가 정식으로 표출한다 (규칙을 두 곳에 두지 않는다).
+ */
+function syncExportPpiHint() {
+  if (!els.exportPpiHint) return;
+  let warn = null;
+  if (current && generatorState.exportPpi === EXPORT_PPI_PRINT) {
+    try {
+      const ditherBits = exportDitherBits();
+      const ppi = resolveExportPpi({
+        purpose: generatorState.exportPpi, detail: generatorState.exportPpiDetail, ditherBits,
+      });
+      const size = resolveExportSize({
+        mode: generatorState.exportSize,
+        customWidth: generatorState.exportWidth | 0,
+        customHeight: generatorState.exportHeight | 0,
+        sceneWidth: current.scene.width, sceneHeight: current.scene.height,
+        minPpu: minRoundtripPpu({
+          type: current.type, version: current.encoded.version,
+          cellSurfaceLayout: current.encoded.cellSurfaceLayout || null, ditherBits,
+        }),
+      });
+      const mm = exportPhysicalWidthMm(size.width, ppi);
+      if (mm < EXPORT_MIN_COMFORT_PRINT_MM) {
+        warn = tf('g751', { mm: mm.toFixed(1), ppi: String(ppi), px: String(size.width) });
+      }
+    } catch { /* 내보내기 시점에 드러난다 — 여기선 기본 문구 유지 */ }
+  }
+  els.exportPpiHint.textContent = warn === null ? t('g725') : warn;
+  els.exportPpiHint.classList.toggle('warn', warn !== null);
+}
+
+function syncExportOptionsUi() {
+  const advanced = mode === 'advanced';
+  // ② 전체는 고급 전용 — 일반 모드는 기본값(자동 = 양자화 없음)으로 동작한다.
+  els.exportDitherSection.hidden = !advanced;
+  // ③ 의 세부 select 도 고급 전용 (일반 모드는 갈래 카드 2장만).
+  els.exportPpiDetailRow.style.display = advanced ? '' : 'none';
+  // ① 크기 — 커스텀일 때만 폭·높이 입력이 보인다 (.row 는 display:flex 라 style 로 끈다).
+  els.exportSize.value = String(generatorState.exportSize);
+  els.exportSizeCustomRow.style.display =
+    generatorState.exportSize === EXPORT_SIZE_CUSTOM ? '' : 'none';
+  els.exportWidth.value = String(generatorState.exportWidth);
+  els.exportHeight.value = String(generatorState.exportHeight);
+  els.exportTrim.checked = generatorState.exportMargin === EXPORT_MARGIN_TRIM;
+  // ②③ — 문구는 data-i18n 이 채우므로 여기서는 값·활성만 왕복한다.
+  els.exportDither.value = String(generatorState.exportDither);
+  for (const card of els.exportPpiCards.children) {
+    card.classList.toggle('active', card.dataset.purpose === generatorState.exportPpi);
+  }
+  els.exportPpiDetail.value = String(generatorState.exportPpiDetail);
+  syncExportPpiHint();
+}
+
+els.exportSize.addEventListener('change', () => {
+  const v = els.exportSize.value;
+  // 고정 프리셋은 숫자 상태다 (EXPORT_SIZE_CHOICES 의 타입 그대로) — 문자열로 두면
+  // 상태 왕복 테스트의 허용값 검사와 resolveExportSize 분기가 어긋난다.
+  generatorState.exportSize = /^\d+$/.test(v) ? Number(v) : v;
+  syncExportOptionsUi();
+});
+for (const input of [els.exportWidth, els.exportHeight]) {
+  input.addEventListener('input', () => {
+    // 검증은 내보내기 시점의 resolveExportSize(16..16384 정수)가 한다 — 여기서 막으면
+    // 규칙이 두 곳이 된다. 숫자가 아니면 0 으로 저장돼 내보내기에서 RangeError 로 드러난다.
+    const n = Math.trunc(Number(input.value));
+    const key = input === els.exportWidth ? 'exportWidth' : 'exportHeight';
+    generatorState[key] = Number.isFinite(n) ? n : 0;
+    // 값 왕복(syncExportOptionsUi)은 타이핑 중 커서를 튕기므로 힌트만 갱신한다.
+    syncExportPpiHint();
+  });
+}
+els.exportTrim.addEventListener('change', () => {
+  generatorState.exportMargin = els.exportTrim.checked ? EXPORT_MARGIN_TRIM : EXPORT_MARGIN_INCLUDE;
+});
+els.exportDither.addEventListener('change', () => {
+  const v = els.exportDither.value;
+  generatorState.exportDither = v === EXPORT_DITHER_AUTO ? EXPORT_DITHER_AUTO : Number(v);
+  // ④ «자동» 의 해석 문맥이 바뀐다 — 자동 힌트 + 면 게인 재해석 렌더를 함께 갱신한다.
+  syncExportOptionsUi();
+  syncRenderProfileUi();
+  schedule();
+});
+for (const card of els.exportPpiCards.children) {
+  card.addEventListener('click', () => {
+    generatorState.exportPpi = card.dataset.purpose;
+    // «인쇄용» 은 ④ «자동» 을 «약» 으로 트는 해석 문맥이다 — 위 ② 와 같은 갱신 묶음.
+    syncExportOptionsUi();
+    syncRenderProfileUi();
+    schedule();
+  });
+}
+els.exportPpiDetail.addEventListener('change', () => {
+  const v = els.exportPpiDetail.value;
+  generatorState.exportPpiDetail = v === EXPORT_PPI_DETAIL_AUTO ? EXPORT_PPI_DETAIL_AUTO : Number(v);
+  syncExportOptionsUi();
+});
+syncExportOptionsUi();
 
 // ── 페이로드 조립 ───────────────────────────────────────────────────────
 
@@ -8518,7 +9357,10 @@ function renderTypeO(cfg) {
     ? daehanPatternId(encoded.k) : cfg.finderPatternId;
   const sceneCfg = encoded.daehanFinder
     ? { ...cfg, finderPatternId: renderedFinderPatternId } : cfg;
-  const scene = buildScene(encoded, sceneOptsForOA(sceneCfg, centerQr));
+  // scene 옵션을 붙잡아 둔다 — 내보내기의 «여백 없음» 이 최소 안전 margin
+  // (trimExportMargin)으로 scene 을 재생성해야 해서다 (exportPlanFor 가 읽는다).
+  const sceneOpts = sceneOptsForOA(sceneCfg, centerQr);
+  const scene = buildScene(encoded, sceneOpts);
 
   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
   const check = verifyRaster(raster, scene, encoded);
@@ -8536,7 +9378,7 @@ function renderTypeO(cfg) {
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
   return {
-    type: 'O', encoded, scene: withQuietZone(scene), info, selfCheck,
+    type: 'O', encoded, scene: withQuietZone(scene), info, selfCheck, sceneOpts,
     finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : renderedFinderPatternId,
   };
 }
@@ -8553,10 +9395,12 @@ function renderTypeA(cfg) {
   // 위에 79셀 파인더를 덧칠하고 verifyRaster 만 조용히 나빠진다.
   const aFinderPatternId = isDaehanFinderPatternId(cfg.finderPatternId)
     ? GENERATOR_DEFAULT_FINDER_PATTERN_ID : cfg.finderPatternId;
-  const scene = buildScene(encoded, sceneOptsForOA(
+  // renderTypeO 와 같은 이유로 scene 옵션을 붙잡는다 (내보내기 «여백 없음» 재생성용).
+  const sceneOpts = sceneOptsForOA(
     aFinderPatternId === cfg.finderPatternId ? cfg : { ...cfg, finderPatternId: aFinderPatternId },
     centerQr,
-  ));
+  );
+  const scene = buildScene(encoded, sceneOpts);
 
   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
   const check = verifyRaster(raster, scene, encoded);
@@ -8571,7 +9415,7 @@ function renderTypeA(cfg) {
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
   return {
-    type: 'A', encoded, scene: withQuietZone(scene), info, selfCheck,
+    type: 'A', encoded, scene: withQuietZone(scene), info, selfCheck, sceneOpts,
     finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : aFinderPatternId,
   };
 }
@@ -8631,7 +9475,9 @@ function renderTypeY(cfg) {
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     tf('g452', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym });
   return {
-    type: 'Y', encoded, scene: withQuietZone(withShading(scene, 'Y')), info, selfCheck,
+    // sceneOpts — 내보내기 «여백 없음» 이 최소 안전 margin 으로 재생성할 때 쓰는 원본
+    // 옵션 (exportPlanFor). 음영·안전영역은 여백 공간의 층이라 재생성본에는 안 얹는다.
+    type: 'Y', encoded, scene: withQuietZone(withShading(scene, 'Y')), info, selfCheck, sceneOpts,
   };
 }
 
@@ -8713,7 +9559,11 @@ function render() {
     }
     current = {
       type: result.type, encoded: result.encoded, scene: result.scene, faceGains: cfg.faceGains,
+      // 내보내기 «여백 없음» 의 최소 안전 margin 재생성 입력 (exportPlanFor 가 소비한다).
+      sceneOpts: result.sceneOpts,
     };
+    // ③ 물리 크기 힌트는 scene 치수·타입에 의존한다 — 새 렌더마다 재계산 (§3 수리).
+    syncExportPpiHint();
     if (result.type === 'Y' && result.encoded && result.encoded.n) {
       const prevN = lastEncodedYn;
       lastEncodedYn = result.encoded.n;

@@ -23,7 +23,7 @@ import { decodeFrontend } from '../src/decoder/frontend.js';
 import { encodeY } from '../src/encodeY.js';
 import { buildSceneY } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
-import { RENDER_PROFILE_PRINT, faceGainsForRenderProfile } from '../src/render-profile.js';
+import { RENDER_PROFILE_SOFT, faceGainsForRenderProfile } from '../src/render-profile.js';
 import {
   POSTER_URL, POSTER_TL_VERSION, POSTER_TL_TONES, POSTER_TL_ECC,
   POSTER_TL_CELL_SURFACE_LAYOUT, PRINT_PALETTE, PRINT_PALETTE_BW,
@@ -59,11 +59,15 @@ test('포스터 TL 은 셀 표면 로케이터를 **실제로** 들고 있다', 
     'URL ' + POSTER_URL.length + 'B 가 용량 ' + enc.capacity.maxPayloadBytes + 'B 를 넘는다');
 });
 
-test('두 팔레트 모두 **출력물용 면 게인**(3면 동률)을 쓴다', () => {
-  const print = faceGainsForRenderProfile(RENDER_PROFILE_PRINT);
+test('두 팔레트 모두 **«약(soft)» 면 게인**을 쓴다', () => {
+  // ⚠ **의도적 갱신 (2026-08-19, 내보내기 옵션 라운드)**: 출력물용 동률(1/1/1) →
+  //   «약»(T1/L0.85/R0.78). 운영자 확정 «인쇄용 300 + 큐브 입체감 약» 이고, 근거
+  //   실측(합성 왕복 12/12 + 원시 Δ 유보)은 build-print-poster.mjs 팔레트 주석과
+  //   test/output/lanes/export-options-report.md §2.1 에 있다.
+  const soft = faceGainsForRenderProfile(RENDER_PROFILE_SOFT);
   for (const [label, palette] of [['컬러', PRINT_PALETTE], ['흑백', PRINT_PALETTE_BW]]) {
-    assert.deepEqual({ ...palette.faceGains }, { ...print },
-      label + ' 팔레트가 출력물용 게인이 아니다 — 잉크가 저게인 면을 한 번 더 깎는다');
+    assert.deepEqual({ ...palette.faceGains }, { ...soft },
+      label + ' 팔레트가 «약» 게인이 아니다 — 운영자 확정(인쇄용 300 + 약)에서 벗어났다');
   }
 });
 
@@ -92,8 +96,8 @@ test('빌더가 encodeY 에 cellSurface 를 **실제로 넘긴다** (소스 계�
     '빌더가 encodeY 에 cellSurface 를 안 넘긴다 — locator 0셀 포스터가 찍힌다');
   assert.match(source, /cellSurfaceLayout:\s*POSTER_TL_CELL_SURFACE_LAYOUT/,
     '빌더가 레이아웃을 명시하지 않는다 — 라인업이 바뀌면 인쇄물이 조용히 따라간다');
-  assert.match(source, /faceGains:\s*faceGainsForRenderProfile\(RENDER_PROFILE_PRINT\)/,
-    '빌더가 출력물용 면 게인을 안 쓴다');
+  assert.match(source, /faceGains:\s*faceGainsForRenderProfile\(RENDER_PROFILE_SOFT\)/,
+    '빌더가 «약» 면 게인을 안 쓴다 — 운영자 확정(인쇄용 300 + 약)에서 벗어났다');
 });
 
 test('셀 표면 검출이 **디코더 기본값**으로 켜져 있다 (포스터의 전제 조건)', () => {

@@ -50,6 +50,10 @@ import {
 } from '/src/scanner-zoom.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import {
+  normalizeCentralFinderId,
+  normalizeOuterFinderId,
+} from '/src/lab-expected-axes.js';
+import {
   createSteadyTracker,
   motionAttachPlan,
   requestMotionPermission,
@@ -601,6 +605,12 @@ function reportLabFrame(imageData, result, ms, stage) {
   // 기대 톤 — 이 한 줄이 없어서 expected_tones 가 전 행 NULL 이었다 (2026-08-15).
   // relay(protocol.mjs configSideNum)와 ClickHouse 컬럼은 처음부터 받고 있었다.
   if (expectedTones != null) expected.tones = expectedTones;
+  // 축 ②·③ (2026-08-19). ②는 **이미 있던** expected.finderPatternId 를 기대 쪽에서
+  // 처음 쓰는 것이라 relay(expected_finder)·ClickHouse 가 그대로 받는다 — 스키마 변경
+  // 없음. ③(outerFinderId)만 새 필드이고, relay 는 모르는 키를 조용히 버리므로 와이어는
+  // 안 깨지지만 **ClickHouse 에 컬럼이 생기기 전까지는 저장되지 않는다.**
+  if (expectedCentralFinder) expected.finderPatternId = expectedCentralFinder;
+  if (expectedOuterFinder) expected.outerFinderId = expectedOuterFinder;
   if (cellSurface && expectedLocatorLayout && !cellSurface.expectedLayout) {
     cellSurface.expectedLayout = expectedLocatorLayout;
   }
@@ -2174,6 +2184,43 @@ if (expectedLayoutRoot && isLabPath()) {
         ? next
         : null;
       for (const other of expectedLayoutRoot.querySelectorAll('[data-expected-layout]')) {
+        other.classList.toggle('active', other === button);
+      }
+    });
+  }
+}
+
+/*
+ * 축 ② 중앙 파인더 · 축 ③ 외곽 파인더 (2026-08-19, 운영자 지시).
+ *
+ * 위 「기대 레이아웃」과 **독립된 축**이다. 한 축에 몰아넣으면 「무엇이 안 잡혔는가」를
+ * 못 가른다 — 그게 이번 라운드 신고의 핵심이었다 («신규 3개 셀 표면 파인더 전부 인식
+ * 안 됨» 을 고를 자리가 없었고, 그래서 아무도 그 신고를 계측으로 확인하지 못했다).
+ *
+ * 유효 값 판정은 `src/lab-expected-axes.js` 가 갖는다 — 검출 라인업에서 유도되므로
+ * 라인업이 바뀌면 여기 손 안 대고 따라간다. 라인업 밖 값(저장·URL 등으로 들어온 옛 값
+ * 포함)은 null(모름)로 떨어진다. 레이아웃 카드와 같은 배선이다.
+ */
+let expectedCentralFinder = null;
+const expectedFinderRoot = document.getElementById('lab-expected-finder');
+if (expectedFinderRoot && isLabPath()) {
+  for (const button of expectedFinderRoot.querySelectorAll('[data-expected-finder]')) {
+    button.addEventListener('click', () => {
+      expectedCentralFinder = normalizeCentralFinderId(button.dataset.expectedFinder);
+      for (const other of expectedFinderRoot.querySelectorAll('[data-expected-finder]')) {
+        other.classList.toggle('active', other === button);
+      }
+    });
+  }
+}
+
+let expectedOuterFinder = null;
+const expectedOuterRoot = document.getElementById('lab-expected-outer');
+if (expectedOuterRoot && isLabPath()) {
+  for (const button of expectedOuterRoot.querySelectorAll('[data-expected-outer]')) {
+    button.addEventListener('click', () => {
+      expectedOuterFinder = normalizeOuterFinderId(button.dataset.expectedOuter);
+      for (const other of expectedOuterRoot.querySelectorAll('[data-expected-outer]')) {
         other.classList.toggle('active', other === button);
       }
     });

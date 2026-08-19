@@ -43,28 +43,58 @@
  * @module render-profile
  */
 
-/** 화면·촬영용 (기본). 입체감 유지 + R 면 대비 보강. */
+/** 화면·촬영용 (기본). 입체감 유지 + R 면 대비 보강. UI 라벨 «중». */
 export const RENDER_PROFILE_SCREEN = 'screen';
-/** 인쇄물용. 3면 동률 — 잉크·용지가 저게인 면을 한 번 더 깎는 것을 피한다. */
+/**
+ * 약한 입체감 (2026-08-19 신설, «큐브 입체감» 개편). 인쇄물에서 3면 동률(평면)은
+ * 입체감이라는 정체성을 완전히 버리는 선택이라, 잉크·용지의 저게인 면 손실을
+ * 감안하고도 순위 판독이 서는 **가장 얕은 게인**을 따로 둔다. UI 라벨 «약».
+ * 게인 값 근거는 직전 레인 실측 + 이 레인 재측정 — `test/output/lanes/export-options-report.md` §2.1.
+ */
+export const RENDER_PROFILE_SOFT = 'soft';
+/** 인쇄물용. 3면 동률 — 잉크·용지가 저게인 면을 한 번 더 깎는 것을 피한다. UI 라벨 «평면». */
 export const RENDER_PROFILE_PRINT = 'print';
-/** 구 기본값 (lab 전용 A/B 대조군). */
+/** 구 기본값 (lab 전용 A/B 대조군). UI 라벨 «강». */
 export const RENDER_PROFILE_ORIGINAL = 'original';
 
-/** 정식 라인업 — 화면용·출력물용 2종. 카드 순서가 이 순서다. */
+/**
+ * UI 전용 선택값 «자동» — **게인 행이 아니다.** 상태에는 저장되지만 렌더 직전에
+ * `export-options.js` 의 resolveRenderProfile() 이 구체 프로파일로 푼다.
+ * assertRenderProfile / faceGainsForRenderProfile 은 이 값을 **거부한다** — 자동을
+ * 풀지 않고 게인 표를 읽으려는 호출은 배선 결함이므로 조용히 기본값으로 떨어지면 안 된다.
+ */
+export const RENDER_PROFILE_AUTO = 'auto';
+
+/** 정식 라인업 — 중(화면)·약·평면 3종. 카드 순서가 이 순서다 (§1.1 자동-강-중-약-평면). */
 export const OFFICIAL_RENDER_PROFILES = Object.freeze([
-  RENDER_PROFILE_SCREEN, RENDER_PROFILE_PRINT,
+  RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT, RENDER_PROFILE_PRINT,
 ]);
 
-/** lab 라인업 — «오리지널» 이 **맨 앞**이다 (A/B 재스캔에서 대조군을 먼저 집는다). */
+/** lab 라인업 — «오리지널(강)» 이 **맨 앞**이다 (A/B 재스캔에서 대조군을 먼저 집는다). */
 export const LAB_RENDER_PROFILES = Object.freeze([
   RENDER_PROFILE_ORIGINAL, ...OFFICIAL_RENDER_PROFILES,
 ]);
 
-/** 상태 스키마가 허용하는 값 = lab 라인업 (저장된 lab 선택이 정식에서 죽지 않는다). */
+/** 게인 표가 있는 구체 프로파일 전부 = lab 라인업 (저장된 lab 선택이 정식에서 죽지 않는다). */
 export const RENDER_PROFILE_IDS = LAB_RENDER_PROFILES;
 
-/** 기본 프로파일. `DEFAULT_FACE_GAINS` 가 이 프로파일의 게인이다. */
+/**
+ * 상태 스키마가 허용하는 **선택값** = «자동» + 구체 프로파일. 저장·복원은 이 목록으로
+ * 검증하고, 렌더 경로는 자동을 푼 뒤 RENDER_PROFILE_IDS 세계에서만 산다.
+ */
+export const RENDER_PROFILE_CHOICES = Object.freeze([
+  RENDER_PROFILE_AUTO, ...RENDER_PROFILE_IDS,
+]);
+
+/** 기본 프로파일(구체). `DEFAULT_FACE_GAINS` 가 이 프로파일의 게인이다. */
 export const DEFAULT_RENDER_PROFILE = RENDER_PROFILE_SCREEN;
+
+/**
+ * 생성기 상태의 기본 **선택값**은 «자동» 이다 (운영자 지시 2026-08-19 §1.1).
+ * 자동은 인쇄용·디더링 문맥이 없으면 «중(screen)» 으로 풀리므로, 아무것도 안 고른
+ * 사용자의 렌더 픽셀은 이 개편 전과 동일하다.
+ */
+export const DEFAULT_RENDER_PROFILE_CHOICE = RENDER_PROFILE_AUTO;
 
 /**
  * 프로파일별 면 게인. T 는 언제나 1(기준면)이다 — 게인은 «T 대비 얼마나 어두운가» 라서
@@ -73,6 +103,9 @@ export const DEFAULT_RENDER_PROFILE = RENDER_PROFILE_SCREEN;
 export const RENDER_PROFILE_FACE_GAINS = Object.freeze({
   [RENDER_PROFILE_ORIGINAL]: Object.freeze({ T: 1, L: 0.72, R: 0.52 }),
   [RENDER_PROFILE_SCREEN]: Object.freeze({ T: 1, L: 0.72, R: 0.62 }),
+  // «약» — 평면(1/1/1)과 중(0.72/0.62) 사이. R 게인 재측정은
+  // test/output/lanes/export-options-report.md §2.1 (왕복·Δmin 계약 확인 포함).
+  [RENDER_PROFILE_SOFT]: Object.freeze({ T: 1, L: 0.85, R: 0.78 }),
   [RENDER_PROFILE_PRINT]: Object.freeze({ T: 1, L: 1, R: 1 }),
 });
 

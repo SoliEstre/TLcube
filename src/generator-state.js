@@ -16,7 +16,22 @@ import {
 } from './finder-selection.js';
 import { DEFAULT_PRESET, PRESETS } from './luminance.js';
 import { TL_READER_URL } from './qr.js';
-import { DEFAULT_RENDER_PROFILE, RENDER_PROFILE_IDS } from './render-profile.js';
+import {
+  DEFAULT_RENDER_PROFILE_CHOICE, RENDER_PROFILE_CHOICES,
+} from './render-profile.js';
+import {
+  DEFAULT_EXPORT_CUSTOM_PX,
+  DEFAULT_EXPORT_DITHER,
+  DEFAULT_EXPORT_MARGIN,
+  DEFAULT_EXPORT_PPI_PURPOSE,
+  DEFAULT_EXPORT_SIZE,
+  EXPORT_DITHER_CHOICES,
+  EXPORT_MARGIN_MODES,
+  EXPORT_PPI_DETAIL_AUTO,
+  EXPORT_PPI_DETAIL_CHOICES,
+  EXPORT_PPI_PURPOSES,
+  EXPORT_SIZE_CHOICES,
+} from './export-options.js';
 import { DEFAULT_SHADING_MODE, SHADING_MODES } from './shading.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
@@ -115,11 +130,29 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
   quietMode: field('auto', BOTH, ['auto', 'none', 'white', 'black', 'contrast']),
   tone: field(3, BOTH, [2, 3]),
-  // 렌더 프로파일 (과업 #16) — 면 게인 묶음. 정식은 화면용·출력물용 2종이고
-  // «오리지널» 은 lab 카드로만 뜬다. 허용값에는 셋 다 넣는다 — lab 에서 고른 값이
-  // 정식 화면으로 돌아왔을 때 «알 수 없는 값» 으로 죽으면 안 되기 때문이다
-  // (locatorProfileY 와 같은 규약). 노출은 BOTH — 일반 모드에도 카드가 뜬다.
-  renderProfile: field(DEFAULT_RENDER_PROFILE, BOTH, [...RENDER_PROFILE_IDS]),
+  // 큐브 입체감 (구 «렌더 프로파일», 2026-08-19 개편 — 과업 #16 → 내보내기 옵션 ④).
+  // 카드는 자동-강-중-약-평면 순서이고 «강(오리지널)» 은 lab 카드로만 뜬다. 허용값에는
+  // 자동 + 구체 프로파일 전부를 넣는다 — lab 에서 고른 값이 정식 화면으로 돌아왔을 때
+  // «알 수 없는 값» 으로 죽으면 안 되기 때문이다 (locatorProfileY 와 같은 규약).
+  // 기본값은 «자동» — 인쇄용·디더링 문맥이 없으면 «중» 으로 풀리므로 종전 픽셀과 같다
+  // (export-options.resolveRenderProfile). 노출은 BOTH — 일반 모드에도 카드가 뜬다.
+  renderProfile: field(DEFAULT_RENDER_PROFILE_CHOICE, BOTH, [...RENDER_PROFILE_CHOICES]),
+  // ── 내보내기 옵션 ①②③ (2026-08-19 신설 — 도메인·자동 규칙은 export-options.js 가
+  //    단일 정의다. 여기는 상태 슬롯과 노출만 등록한다.) ──────────────────────────
+  // ① 고정 이미지 크기 — 커스텀 외 정사각·contain. 자동 3종은 복호 실측 하한에서 온다.
+  exportSize: field(DEFAULT_EXPORT_SIZE, BOTH, [...EXPORT_SIZE_CHOICES]),
+  // 커스텀 폭·높이 (px). 자유 숫자 입력이다 — options 는 customHue·qrText 전례대로
+  // «상태 왕복 테스트 선택지» 이고, 실제 검증은 export-options.resolveExportSize 가
+  // 한다 (16..16384 정수).
+  exportWidth: field(DEFAULT_EXPORT_CUSTOM_PX, BOTH, [DEFAULT_EXPORT_CUSTOM_PX, 640]),
+  exportHeight: field(DEFAULT_EXPORT_CUSTOM_PX, BOTH, [DEFAULT_EXPORT_CUSTOM_PX, 768]),
+  // 여백 포함(기본)/없음 — «없음» 이 quiet zone 을 깎는지의 실측·경고는 보고서 §2.4.
+  exportMargin: field(DEFAULT_EXPORT_MARGIN, BOTH, [...EXPORT_MARGIN_MODES]),
+  // ② 적은 색상 화면 최적화 — **고급 전용.** 일반 모드는 기본값(자동 = 양자화 없음).
+  exportDither: field(DEFAULT_EXPORT_DITHER, ADVANCED, [...EXPORT_DITHER_CHOICES]),
+  // ③ 출력 최적화 (PNG 전용) — 일반 모드는 갈래(화면용/인쇄용)만, 세부 7종은 고급 전용.
+  exportPpi: field(DEFAULT_EXPORT_PPI_PURPOSE, BOTH, [...EXPORT_PPI_PURPOSES]),
+  exportPpiDetail: field(EXPORT_PPI_DETAIL_AUTO, ADVANCED, [...EXPORT_PPI_DETAIL_CHOICES]),
   // 입체 음영 (과업 #17) — 좌상단 조명 전제의 그림자·반사광 띠. 셀에는 절대 안 닿고
   // 안전영역 + 배경 영역에만 그린다 (shading.js 계약). 기본 **끔**: 새 옵션이고,
   // 켜면 렌더 픽셀이 바뀌므로 «아무것도 안 골랐는데 그림이 달라졌다» 가 안 되게 한다.

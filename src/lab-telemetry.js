@@ -26,9 +26,23 @@ export const TIMING_STAGES = Object.freeze(['proposal', 'verify', 'format', 'dec
 export const CHAIN_STAGES = Object.freeze([
   'input-quality', 'proposal', 'finder', 'geometry', 'sample', 'format', 'body',
 ]);
+/**
+ * 시험판 「기대」 는 **축이 셋이고 서로 독립**이다 (2026-08-19, 운영자 지시).
+ *   ① 셀 표면 레이아웃 — `locatorLayout` (v0 · v0t · v0ty · v0tr · v0trq)
+ *   ② 중앙 파인더     — `finderPatternId` (bullseye · cube-bullseye ·
+ *                        central-cube-3tone · center-qr · cell-mask 11 · OAK 3)
+ *   ③ 외곽/코너 파인더 — `outerFinderId` (none · daehan · a-cm · o-cm)
+ *
+ * 한 축에 몰아넣으면 「무엇이 안 잡혔는가」를 못 가른다 — 그래서 필드를 나눈다.
+ * ①의 의미는 **한 값도 안 바뀐다** (기존 회귀 `lab-expected-layout-ui.test.js` 가
+ * 그 명제를 잠그고 있다). ②는 이미 있던 `finderPatternId` 를 **기대 쪽에서 처음
+ * 쓰는** 것이라 relay·ClickHouse 가 그대로 받는다(`expected_finder` 컬럼).
+ * ③만 새 필드다 — relay 는 모르는 키를 조용히 버리므로 와이어는 안 깨지지만,
+ * ClickHouse 에 컬럼이 생기기 전까지 값은 **저장되지 않는다.**
+ */
 export const CONFIG_SIDE_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile',
-  'locatorLayout',
+  'locatorLayout', 'outerFinderId',
 ]);
 export const GEN_BODY_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'bgMode', 'quietMode',
@@ -208,6 +222,7 @@ export function emptyConfigSide() {
     qrPosition: null,
     locatorProfile: null,
     locatorLayout: null,
+    outerFinderId: null,
   };
 }
 
@@ -243,9 +258,23 @@ export function observedFromResult(result) {
   if (typeof result.eccLevel === 'string' && result.eccLevel) out.ecc = result.eccLevel;
   if (Number.isFinite(result.tones)) out.tones = result.tones;
   const hyp = result.hypothesis;
+  /*
+   * 관측된 **중앙 파인더 이름** (2026-08-19). `frontend.js` 의 `finderPatternIdOf` 가
+   * 검출기가 실제로 남긴 것만 골라 올려 준다.
+   *
+   * ⚠ 아래 옛 분기(`hyp.source === 'bullseye'` / `'center-qr'`)는 **한 번도 참이 된 적이
+   *   없다** — 실제 source 문자열은 `anchor-detector`·`cell-finder`·`center-qr-finder` 등이다.
+   *   그래서 `observed_finder` 컬럼은 centerQr 경로 말고는 영영 빈칸이었고, 운영자 순위
+   *   («QR > 불스아이속큐브 > 불스아이 > 3톤큐브 > 그 외»)를 계측으로 확인할 수가 없었다.
+   *   옛 분기는 **지우지 않는다** — 옛 결과 모양(hypothesis 에 finderPatternId 가 없는
+   *   호출자)에서 종전과 한 값도 다르지 않게 남는다.
+   */
+  if (hyp && typeof hyp.finderPatternId === 'string' && hyp.finderPatternId) {
+    out.finderPatternId = hyp.finderPatternId;
+  }
   if (hyp && hyp.centerQr === true) {
     out.qrPosition = 'inner';
-    out.finderPatternId = 'center-qr';
+    if (!out.finderPatternId) out.finderPatternId = 'center-qr';
   } else if (hyp && (hyp.source === 'center-qr' || hyp.source === 'bullseye')) {
     out.finderPatternId = hyp.source;
     if (hyp.source === 'center-qr') out.qrPosition = 'inner';
