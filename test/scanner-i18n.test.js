@@ -90,7 +90,7 @@ test('스캐너 사전 언어 목록 == src/i18n.js SUPPORTED_LANGUAGES', () => 
   assert.deepEqual([...LANGS].sort(), [...SUPPORTED_LANGUAGES].sort());
 });
 
-test('Type Y 강화 로케이터는 /lab/ 스캐너에서만 디코더에 켠다', () => {
+test('enableLocatorY 만 /lab/ 전용으로 남는다 (셀표면은 이제 기본값)', () => {
   // **의도적 갱신 (2026-08-18)** — 예전 정규식은 `bootstrap` 객체의 **모양 전체**를
   // 한 덩어리로 잠갔다. 그래서 같은 객체에 형제 키를 하나 더하는 것만으로 깨졌다
   // (daehan 옵트인 `cellFinderDaehan`). 이 핀이 지키려는 명제는 «스위치가
