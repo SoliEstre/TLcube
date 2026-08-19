@@ -86,13 +86,17 @@ function patchDataTail(k, roleSets) {
  * 데이터 셀을 캐노니컬 scan order-A(T3) 로. 육각부 접두(`layout.
  * dataCellsInScanOrder(k)`, 바이트 동일) + 패치 꼬리(top→BR→BL, boustrophedon,
  * role=='data' 만).
+ *
+ * `finderReserved` 는 육각부 접두에만 전달한다 — daehan 셀은 패치에 0개 (실측).
+ * 인자를 안 넘기면 예전과 완전히 같다.
  * @param {number} k
+ * @param {Iterable<{q:number,r:number}>|Set<string>} [finderReserved]
  * @returns {{q:number, r:number}[]} 길이 = 데이터 셀 수 (A1(k=8) → 267 · A2(k=10) → 431)
  */
-export function dataCellsInScanOrderA(k) {
+export function dataCellsInScanOrderA(k, finderReserved) {
   assertRadius(k);
-  const hexPrefix = hexDataCellsInScanOrder(k);
-  const roleSets = buildRoleSetsA(k);
+  const hexPrefix = hexDataCellsInScanOrder(k, finderReserved);
+  const roleSets = buildRoleSetsA(k, finderReserved);
   const tail = patchDataTail(k, roleSets);
   return [...hexPrefix, ...tail];
 }
@@ -103,8 +107,8 @@ export function dataCellsInScanOrderA(k) {
  * @param {number} k
  * @returns {{q:number, r:number}[][]}
  */
-export function symbolCellGroupsA(k) {
-  const scan = dataCellsInScanOrderA(k);
+export function symbolCellGroupsA(k, finderReserved) {
+  const scan = dataCellsInScanOrderA(k, finderReserved);
   const groupCount = Math.floor(scan.length / 3);
   const groups = [];
   for (let i = 0; i < groupCount; i += 1) {
@@ -119,8 +123,8 @@ export function symbolCellGroupsA(k) {
  * @param {number} k
  * @returns {{q:number, r:number}[]}
  */
-export function fillerCellsA(k) {
-  const scan = dataCellsInScanOrderA(k);
+export function fillerCellsA(k, finderReserved) {
+  const scan = dataCellsInScanOrderA(k, finderReserved);
   const residual = scan.length % 3;
   return residual === 0 ? [] : scan.slice(scan.length - residual);
 }
@@ -145,11 +149,14 @@ export function fillerCellsA(k) {
  * @param {number} k
  * @returns {Map<string, {role: 'bullseye'|'anchor'|'format'|'reference'|'data', index: number}>}
  */
-export function layoutMapA(k) {
+export function layoutMapA(k, finderReserved) {
   assertRadius(k);
   const map = new Map();
 
   occupiedCells().forEach((c, i) => map.set(key(c.q, c.r), { role: 'bullseye', index: i }));
+  if (finderReserved) {
+    Array.from(finderReserved).forEach((c, i) => map.set(key(c.q, c.r), { role: 'finder', index: i }));
+  }
 
   const anchors = [...anchorCells(k), ...vertexAnchors(k)];
   anchors.forEach((c, i) => map.set(key(c.q, c.r), { role: 'anchor', index: i }));
@@ -159,7 +166,7 @@ export function layoutMapA(k) {
   const references = [...referenceCellsAll(k), ...patchReferenceCells(k)];
   references.forEach((c, i) => map.set(key(c.q, c.r), { role: 'reference', index: i }));
 
-  dataCellsInScanOrderA(k).forEach((c, i) => map.set(key(c.q, c.r), { role: 'data', index: i }));
+  dataCellsInScanOrderA(k, finderReserved).forEach((c, i) => map.set(key(c.q, c.r), { role: 'data', index: i }));
 
   return map;
 }

@@ -222,17 +222,21 @@ export function patchReferenceCells(k) {
  * 반경 k 영역 전체(육각부 + 패치)의 역할 분류표. 육각부는 `placement.
  * buildRoleSets(k)` 를 그대로 재사용(D2 안 1 계약 — 바이트 동일)하고, 꼭짓점
  * 앵커·패치 레퍼런스만 그 위에 얹는다.
+ *
+ * `finderReserved` 는 육각부로만 전달한다 — daehan 좌표는 전 k 에서 패치에 0개
+ * (실측 2026-08-19). 인자를 안 넘기면 예전과 완전히 같다.
  * @param {number} k
- * @returns {{anchor: Set<string>, format: Set<string>, reference: Set<string>}}
+ * @param {Iterable<{q:number,r:number}>|Set<string>} [finderReserved]
+ * @returns {{anchor: Set<string>, format: Set<string>, reference: Set<string>, finder: Set<string>}}
  */
-export function buildRoleSetsA(k) {
+export function buildRoleSetsA(k, finderReserved) {
   assertRadius(k);
-  const hexSets = buildRoleSets(k);
+  const hexSets = buildRoleSets(k, finderReserved);
   const anchor = new Set(hexSets.anchor);
   for (const c of vertexAnchors(k)) anchor.add(key(c.q, c.r));
   const reference = new Set(hexSets.reference);
   for (const c of patchReferenceCells(k)) reference.add(key(c.q, c.r));
-  return { anchor, format: hexSets.format, reference };
+  return { anchor, format: hexSets.format, reference, finder: hexSets.finder };
 }
 
 /**
@@ -250,6 +254,7 @@ export function roleOfA(q, r, k, roleSets) {
   if (d <= BULLSEYE_RADIUS) return 'bullseye';
   const sets = roleSets || buildRoleSetsA(k);
   const kk = key(q, r);
+  if (sets.finder && sets.finder.has(kk)) return 'finder';
   if (sets.anchor.has(kk)) return 'anchor';
   if (sets.format.has(kk)) return 'format';
   if (sets.reference.has(kk)) return 'reference';

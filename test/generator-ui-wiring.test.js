@@ -206,6 +206,26 @@ test('§3.1 turnA 는 Type A + lab 게이트 뒤에 있고 상태는 INTERNAL �
   assert.match(INDEX, /turnA: type === 'A' && generatorState\.turnA === true/);
 });
 
+test('§3.1 turnA 섹션은 타입 선택(#codeType) 바로 아래이고 sync 는 id 로 찾는다', () => {
+  // 운영자 2026-08-19: 옵션 하단이 아니라 타입 선택 아래로. 게이트는 그대로.
+  const typeAt = INDEX.indexOf('id="codeType"');
+  const typeClose = INDEX.indexOf('</select>', typeAt);
+  const turnA = INDEX.indexOf('id="turnASection"');
+  const version = INDEX.indexOf('id="versionWrapO"');
+  assert.ok(typeAt !== -1 && turnA !== -1 && version !== -1);
+  assert.ok(typeClose < turnA && turnA < version,
+    'turnASection 이 #codeType </select> 와 #versionWrapO 사이에 없다 — 다시 하단으로 내려갔나');
+  // 사이에 다른 섹션 id 가 끼면 «바로 아래»가 아니다.
+  const between = INDEX.slice(typeClose, turnA);
+  assert.equal((between.match(/id="/g) || []).length, 0,
+    '타입 선택과 실루엣 카드 사이에 다른 id 가 끼었다');
+  const at = INDEX.indexOf('function syncTurnAUi()');
+  const body = INDEX.slice(at, INDEX.indexOf('\n}', at));
+  assert.match(body, /els\.turnASection/, 'sync 가 id 조회가 아니라 형제 순서에 기대면 이동이 깨진다');
+  assert.match(body, /section\.hidden = !\(isLabPath\(\) && generatorState\.type === 'A'\)/);
+  assert.match(INDEX, /id="turnASection" hidden/);
+});
+
 // ── §5 — 오늘의 «아직 안 된다» 를 잠근다 (배선되면 빨개진다) ────────────────
 
 function render(encoded, options = {}) {
@@ -233,6 +253,15 @@ test('§5 daehan 은 스캐너 옵트인이 켜져야 읽힌다 — 꺼짐은 �
     'daehan 이 옵트인 없이도 읽힌다 — 그렇다면 서랍을 일반 모드로 올려도 된다');
   assert.equal(decodeFrontend(raster, { bootstrap: { cellFinderDaehan: true } }).text, 'TLcube',
     'daehan 이 옵트인을 켜도 안 읽힌다 — 카드를 붙일 근거가 사라졌다');
+});
+
+test('§5 Type A + daehan 도 옵트인 왕복이 선다 (검출만이 아니라 decodeFrontend)', () => {
+  const encoded = encodeA('TLcube', { version: 0, eccLevel: 'M', daehanFinder: true });
+  const raster = render(encoded, { finderPatternId: daehanPatternId(encoded.k), margin: 20 });
+  assert.equal(decodeFrontend(raster).ok, false,
+    'A daehan 이 옵트인 없이도 읽힌다');
+  assert.equal(decodeFrontend(raster, { bootstrap: { cellFinderDaehan: true } }).text, 'TLcube',
+    'A daehan 이 옵트인을 켜도 안 읽힌다 — 배선이 검출에서 끊겼거나 회계가 갈린다');
 });
 
 test('§5 turnA 로 만든 코드는 아직 라이브 경로가 못 읽는다 (그래서 lab 뒤에 둔다)', () => {

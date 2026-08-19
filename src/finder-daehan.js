@@ -177,6 +177,9 @@ function definePattern(k) {
     family: 'daehan',
     k,
     params: Object.freeze({
+      // type: 'O' 은 **출처**(육각 코어에서 그린 후보)이지 타입 잠금이 아니다.
+      // A 의 육각 코어는 O 와 좌표가 같고, 이 셀들은 패치에 0개다 (실측 2026-08-19).
+      // 런타임 게이트는 이 필드가 아니라 encodeA/bootstrap/decode 배선이다.
       candidate: 'O-daehan-k10-fullsurface', type: 'O', finderStarter: 'bullseye',
     }),
     finderCells: cells,

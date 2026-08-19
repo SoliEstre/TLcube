@@ -1169,6 +1169,37 @@
         <option value="Y" selected data-i18n="g048">Type Y (단일 큐브)</option>
       </select>
 
+      <!-- 턴A (역삼각 Type A) — Type A + lab 전용. #yLocatorSection 과 같은 게이트
+           문법이다(hidden 속성 + sync 함수가 isLabPath() 로 연다).
+           ⚠ **실측 (2026-08-19)**: `encodeA(turnA:true)` 로 만든 코드는 라이브 경로
+           (decodeFrontend)가 **0/3 으로 못 읽는다** — 대조군(turnA:false)은 3/3 이다.
+           인코더가 아직 역삼각 «기하» 를 안 내고(셀 좌표 집합이 정삼각과 동일하고
+           format 15셀만 다르다) 검출기의 turn 신호도 배선돼 있지 않다. 그래서 이
+           카드는 «와이어 값만 바꾸는 실험 스위치» 이지 실루엣 전환이 아니고,
+           **정식 화면에 내보내지 않는다**. 힌트 문구가 그 사실을 그대로 말한다 —
+           라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
+           안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
+           배선이 끝나고 왕복이 서는 날이다.
+           위치 (2026-08-19): 타입 선택(#codeType) 바로 아래. 게이트는 그대로다. -->
+      <div id="turnASection" hidden>
+        <label class="section-heading" data-i18n="g572">실루엣 방향 (실험)</label>
+        <div class="card-row" id="turnACards">
+          <div class="toggle-card active" data-turna="off">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L21 19 L3 19 Z"/>
+            </svg>
+            <span data-i18n="g573">정삼각 (기본)</span>
+          </div>
+          <div class="toggle-card" data-turna="on">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 21 L3 5 L21 5 Z"/>
+            </svg>
+            <span data-i18n="g574">역삼각 (턴A)</span>
+          </div>
+        </div>
+        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.</p>
+      </div>
+
       <div class="row">
         <div id="versionWrapO">
           <label for="versionO" data-i18n="g049">버전</label>
@@ -1712,11 +1743,10 @@
         </details>
         <!-- daehan (2026-08-19) — OAK 서랍에 **안 넣는다.** 계보는 같지만(같은 편집기
              export) 갈리는 것은 **회계**다: 이 후보만 불스아이 밖으로 60셀을 더 먹어
-             용량을 깎는다 (V3 65 B → 46 B). OAK 3장은 용량 불변이라 같은 줄에 두면
-             «같은 종류의 선택» 이라는 거짓 함의가 생긴다. 기계적 이유도 있다 —
-             daehan 은 Type O 전용(encodeA 에 daehanFinder 가 없다)이라 A 에서 서랍째
-             숨겨야 하는데, applyFinderExperimentVisibility 는 컨테이너 id 단위라
-             OAK 와 공유하면 OAK 3장까지 같이 사라진다.
+             용량을 깎는다 (V3 65 B → 46 B · A2 101 B → 80 B). OAK 3장은 용량 불변이라
+             같은 줄에 두면 «같은 종류의 선택» 이라는 거짓 함의가 생긴다.
+             Type A 도 쓴다 — 육각 코어가 O 와 좌표 동일하고 패치에는 안 들어간다
+             (실측 2026-08-19). Type K 는 인코더가 없어 아직 안 연다.
              ⚠ **고급 전용을 유지한다** — 왕복 실측(2026-08-19): 이 코드는 스캐너의
              `cellFinderDaehan` 옵트인이 **꺼져 있으면 0/3, 켜면 3/3** 으로 읽힌다.
              그 옵트인은 오늘 /lab/ 토글에만 있다. 그래서 summary 가 그 사실을 말한다. -->
@@ -1923,36 +1953,6 @@
                않기 위해서다 (하드코딩 금지 규약과 충돌하지 않는다: 참조가 없을 뿐). -->
         </div>
         <p class="hint" id="yLocatorHint" data-i18n="g518">실험용입니다. 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.</p>
-      </div>
-
-      <!-- 턴A (역삼각 Type A) — Type A + lab 전용. #yLocatorSection 과 같은 게이트
-           문법이다(hidden 속성 + sync 함수가 isLabPath() 로 연다).
-           ⚠ **실측 (2026-08-19)**: `encodeA(turnA:true)` 로 만든 코드는 라이브 경로
-           (decodeFrontend)가 **0/3 으로 못 읽는다** — 대조군(turnA:false)은 3/3 이다.
-           인코더가 아직 역삼각 «기하» 를 안 내고(셀 좌표 집합이 정삼각과 동일하고
-           format 15셀만 다르다) 검출기의 turn 신호도 배선돼 있지 않다. 그래서 이
-           카드는 «와이어 값만 바꾸는 실험 스위치» 이지 실루엣 전환이 아니고,
-           **정식 화면에 내보내지 않는다**. 힌트 문구가 그 사실을 그대로 말한다 —
-           라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
-           안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
-           배선이 끝나고 왕복이 서는 날이다. -->
-      <div id="turnASection" hidden>
-        <label class="section-heading" data-i18n="g572">실루엣 방향 (실험)</label>
-        <div class="card-row" id="turnACards">
-          <div class="toggle-card active" data-turna="off">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 3 L21 19 L3 19 Z"/>
-            </svg>
-            <span data-i18n="g573">정삼각 (기본)</span>
-          </div>
-          <div class="toggle-card" data-turna="on">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 21 L3 5 L21 5 Z"/>
-            </svg>
-            <span data-i18n="g574">역삼각 (턴A)</span>
-          </div>
-        </div>
-        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.</p>
       </div>
 
       <!-- 셀 편집기 — Y/O/A 다중 타입 (운영자 지시 2026-08-16). K 는 제외다:
@@ -9351,7 +9351,11 @@ function encodeOptsFor(cfg) {
     //   충돌이 실재하지 않는다 — O-CM/A-CM 이 UI 에 붙는 날 여기가 같이 바뀐다.
     //   false 로도 안 채우는 이유: cfg.turnA 는 A 분기에서만 쓰이고 O/Y 인코더는
     //   이 키를 모른다. 「true 일 때만」이면 비-A 옵션 표면이 한 비트도 안 넓어진다.
-    if (cfg.turnA === true) opts.turnA = true;
+    if (isDaehanFinderPatternId(cfg.finderPatternId)) {
+      opts.daehanFinder = true;
+    } else if (cfg.turnA === true) {
+      opts.turnA = true;
+    }
     return { fn: encodeA, opts };
   }
   const opts = { centerQr: cfg.fallback.mode === 'center' };
@@ -9456,18 +9460,14 @@ function renderTypeA(cfg) {
   const { fn, opts } = encodeOptsFor(cfg);
   const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
 
-  // daehan 은 **Type O 전용**이다 — encodeA 에 daehanFinder 옵션이 아예 없다. 그런데
-  // O·A 는 파인더 상태 프로필을 공유하므로(finder-selection.js `profileFamily`) O 에서
-  // 고른 daehan 이 A 로 그대로 넘어온다. 서랍을 숨기는 것만으로는 «이미 고른 상태» 를
-  // 못 막는다 (모드·타입은 «노출만» 바꾼다는 이 파일의 규약). 그냥 두면 legacy 회계
-  // 위에 79셀 파인더를 덧칠하고 verifyRaster 만 조용히 나빠진다.
-  const aFinderPatternId = isDaehanFinderPatternId(cfg.finderPatternId)
-    ? GENERATOR_DEFAULT_FINDER_PATTERN_ID : cfg.finderPatternId;
+  // daehan (2026-08-19) — Type A 도 육각 코어에 쓴다. 카드는 하나고 그리는 템플릿의
+  // k 는 버전이 정한다 (renderTypeO 와 같다).
+  const renderedFinderPatternId = encoded.daehanFinder
+    ? daehanPatternId(encoded.k) : cfg.finderPatternId;
+  const sceneCfg = encoded.daehanFinder
+    ? { ...cfg, finderPatternId: renderedFinderPatternId } : cfg;
   // renderTypeO 와 같은 이유로 scene 옵션을 붙잡는다 (내보내기 «여백 없음» 재생성용).
-  const sceneOpts = sceneOptsForOA(
-    aFinderPatternId === cfg.finderPatternId ? cfg : { ...cfg, finderPatternId: aFinderPatternId },
-    centerQr,
-  );
+  const sceneOpts = sceneOptsForOA(sceneCfg, centerQr);
   const scene = buildScene(encoded, sceneOpts);
 
   const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
@@ -9478,13 +9478,14 @@ function renderTypeA(cfg) {
     'g445', { total: check.total, delta: check.minDelta.toFixed(3) },
     'g446', { n: check.mismatches.length },
   );
+  const verLabel = `A${encoded.version}${encoded.daehanFinder ? 'D' : ''}${encoded.centerQr ? 'Q' : ''}`;
   const info =
-    `${tf('g449', { type: 'A', ver: `A${encoded.version}${encoded.centerQr ? 'Q' : ''}`, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
+    `${tf('g449', { type: 'A', ver: verLabel, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
   return {
     type: 'A', encoded, scene: withQuietZone(scene), info, selfCheck, sceneOpts,
-    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : aFinderPatternId,
+    finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : renderedFinderPatternId,
   };
 }
 

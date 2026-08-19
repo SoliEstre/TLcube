@@ -14,7 +14,7 @@
 // +2 오프셋(14=A1Q·15=A2Q) — 중앙 QR 파인더 변형(ADR 0004 §1-3 규약 승계, D7).
 // 오버헤드·용량 수치는 centerQr 무관 동일하다(19셀 슬롯 기하 동일, D5 근거).
 
-import { VERSIONS_A, capacityForA, versionSpecA } from './capacityA.js';
+import { VERSIONS_A, VERSIONS_A_DAEHAN, capacityForA, capacityForADaehan, versionSpecA } from './capacityA.js';
 import { turnASpec } from './turnA.js';
 import { frame, payloadByteLength } from './header.js';
 import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
@@ -22,6 +22,7 @@ import { rsEncode } from './rs211.js';
 import { maskAdd } from './mask.js';
 import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { dataCellsInScanOrderA, fillerCellsA } from './layoutA.js';
+import { daehanReservedCells } from './finder-daehan.js';
 import { anchorCells, referenceCellsAll, formatCells, REFERENCE_DIGIT } from './placement.js';
 import { vertexAnchors, patchReferenceCells } from './placementA.js';
 import {
@@ -38,7 +39,19 @@ import {
  * 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 두 경로가 완전히 같다.
  * encode.js(Type O)의 `layoutProviderFor` 와 같은 구조다.
  */
-function layoutProviderForA(cornerMarker) {
+function layoutProviderForA(cornerMarker, daehanFinder = false) {
+  if (daehanFinder) {
+    // daehan (2026-08-19) — 육각 코어는 Type O 와 좌표가 같고, 예약 셀은 패치에
+    // 0개다 (실측). 그래서 layoutA 의 선택 인자로 넘기면 패치 꼬리는 그대로다.
+    return {
+      versions: VERSIONS_A_DAEHAN,
+      capacity: capacityForADaehan,
+      scan: (k) => dataCellsInScanOrderA(k, daehanReservedCells(k)),
+      filler: (k) => fillerCellsA(k, daehanReservedCells(k)),
+      patchReference: patchReferenceCells,
+      marker: () => [],
+    };
+  }
   if (!cornerMarker) {
     return {
       versions: VERSIONS_A,
@@ -86,9 +99,9 @@ export function chooseVersionA(text, eccLevel = 'M') {
  * Type A 인코더 파이프라인 진입점. version 을 생략하면 `chooseVersionA` 로
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, daehanFinder?: boolean}} [options]
  * @returns {{
- *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, formatIndex: number,
+ *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, daehanFinder: boolean, formatIndex: number,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
  *   dataDigits: Uint8Array,
@@ -106,12 +119,19 @@ export function encodeA(text, options = {}) {
   }
   const {
     version, eccLevel = 'M', centerQr = false, cornerMarker = false, turnA = false,
+    daehanFinder = false,
   } = options;
   if (typeof turnA !== 'boolean') {
     throw new TypeError(`turnA 는 boolean 이어야 한다: ${typeof turnA}`);
   }
+  if (typeof daehanFinder !== 'boolean') {
+    throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
+  }
   if (turnA && cornerMarker) {
     throw new RangeError('turnA 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
+  if (turnA && daehanFinder) {
+    throw new RangeError('turnA 와 daehanFinder 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
@@ -122,15 +142,28 @@ export function encodeA(text, options = {}) {
   if (cornerMarker && centerQr) {
     throw new RangeError('cornerMarker 와 centerQr 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
-  const provider = layoutProviderForA(cornerMarker);
+  if (daehanFinder && centerQr) {
+    throw new RangeError('daehanFinder 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯을 둘 다 먹는다');
+  }
+  if (daehanFinder && cornerMarker) {
+    throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
+  const provider = layoutProviderForA(cornerMarker, daehanFinder);
 
-  const spec = version === undefined
-    ? (cornerMarker
-      ? provider.versions.find((v) => payloadByteLength(text) <= provider.capacity(v, eccLevel).maxPayloadBytes)
-      : chooseVersionA(text, eccLevel))
-    : provider.versions.find((v) => v.version === version);
-  if (!spec) {
-    throw new RangeError(`알 수 없는 Type A 버전 또는 용량 초과: ${version}`);
+  let spec;
+  if (version === undefined) {
+    spec = provider.versions.find((v) => payloadByteLength(text) <= provider.capacity(v, eccLevel).maxPayloadBytes);
+    if (!spec) {
+      const last = provider.versions[provider.versions.length - 1];
+      throw new RangeError(
+        `페이로드 ${payloadByteLength(text)} B 는 ${last.name}(ECC-${eccLevel}) 용량을 초과한다`,
+      );
+    }
+  } else {
+    spec = provider.versions.find((v) => v.version === version);
+    if (!spec) {
+      throw new RangeError(`알 수 없는 Type A 버전 또는 용량 초과: ${version}`);
+    }
   }
 
   const capacity = provider.capacity(spec, eccLevel);
@@ -260,6 +293,7 @@ export function encodeA(text, options = {}) {
     centerQr,
     cornerMarker,
     turnA,
+    daehanFinder,
     formatIndex,
     capacity,
     codewordSymbols,

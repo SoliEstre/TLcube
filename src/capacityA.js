@@ -54,23 +54,30 @@ import { HEADER_BYTES, maxPayloadFor } from './header.js';
 import { occupiedCells } from './bullseye.js';
 import { anchorCells, formatCells, referenceCellsAll } from './placement.js';
 import { vertexAnchors, patchReferenceCells } from './placementA.js';
+import { daehanReservedCells } from './finder-daehan.js';
 
 /**
  * Type A 오버헤드 실계산(불스아이 19 + 포맷 15 + 앵커 6 + 육각 레퍼런스 2(k−2) +
  * 패치 레퍼런스). 하드코딩이 아니라 placement.js/placementA.js 실계산 합이다.
  * @param {number} k
+ * @param {number} [finderReservedCount=0] 불스아이 밖 파인더 예약 셀 수 (daehan).
+ *   기본 0 — 인자를 안 넘기면 예전 54/58/65 그대로다.
  * @returns {{k:number, bullseye:number, anchor:number, format:number,
- *            hexReference:number, patchReference:number, total:number}}
+ *            hexReference:number, patchReference:number, finder:number, total:number}}
  */
-export function overheadBreakdownA(k) {
+export function overheadBreakdownA(k, finderReservedCount = 0) {
+  if (!Number.isInteger(finderReservedCount) || finderReservedCount < 0) {
+    throw new RangeError('파인더 예약 셀 수는 0 이상 정수여야 한다: ' + finderReservedCount);
+  }
   const bullseye = occupiedCells().length; // 19 (hexDistance<=2, k 무관)
   const anchor = anchorCells(k).length + vertexAnchors(k).length; // 3 + 3 = 6
   const format = formatCells(k).length; // 15 (k 무관)
   const hexReference = referenceCellsAll(k).length; // 2(k-2)
   const patchReference = patchReferenceCells(k).length; // 규칙 R, D4
-  const total = bullseye + anchor + format + hexReference + patchReference;
+  const total = bullseye + anchor + format + hexReference + patchReference + finderReservedCount;
   return {
-    k, bullseye, anchor, format, hexReference, patchReference, total,
+    k, bullseye, anchor, format, hexReference, patchReference,
+    finder: finderReservedCount, total,
   };
 }
 
@@ -144,7 +151,7 @@ export function versionSpecA(version) {
  * @param {{version:number, k:number, overhead:number, symbolKey:string}} spec
  * @param {'L'|'M'|'H'} [level]
  */
-export function capacityForA(spec, level = 'M') {
+export function capacityForA(spec, level = 'M', nsymTable = NSYM_TABLE_A) {
   const label = spec.name || `A${spec.version}`;
   const totalCells = (3 * spec.k + 1) * (3 * spec.k + 2) / 2;
   // hexgrid.cellCount(k) + 패치 3·k(k+1)/2 와 항등이어야 한다(placementA.test.js 가
@@ -157,22 +164,23 @@ export function capacityForA(spec, level = 'M') {
   const usedSymbols = Math.floor(dataCells / 3);
   const residualCells = dataCells - usedSymbols * 3;
 
-  const table = NSYM_TABLE_A[spec.symbolKey];
+  const table = nsymTable[spec.symbolKey];
+  const tableName = nsymTable === NSYM_TABLE_A_DAEHAN ? 'NSYM_TABLE_A_DAEHAN' : 'NSYM_TABLE_A';
   if (!table) {
-    throw new RangeError(`${label}: NSYM_TABLE_A 에 키 ${spec.symbolKey} 가 없다`);
+    throw new RangeError(`${label}: ${tableName} 에 키 ${spec.symbolKey} 가 없다`);
   }
   if (table.symbols !== usedSymbols) {
     // 표가 전제한 심볼 수와 실계산이 어긋난다 — 조용히 맞추지 않고 던진다
     // (capacity.js `capacityFor` 와 동일한 규약 · 과제 지침 절대 규칙 6).
     throw new RangeError(
-      `${label}: 실계산 사용 심볼 ${usedSymbols} 이 NSYM_TABLE_A.${spec.symbolKey}.symbols `
+      `${label}: 실계산 사용 심볼 ${usedSymbols} 이 ${tableName}.${spec.symbolKey}.symbols `
       + `(${table.symbols}) 과 어긋난다 — overhead(${spec.overhead})/k(${spec.k}) 와 표가 불일치한다`,
     );
   }
 
   const nsym = table[level];
   if (!Number.isInteger(nsym)) {
-    throw new RangeError(`${label}: NSYM_TABLE_A.${spec.symbolKey} 에 레벨 ${level} 이 없다`);
+    throw new RangeError(`${label}: ${tableName}.${spec.symbolKey} 에 레벨 ${level} 이 없다`);
   }
   const dataSymbols = usedSymbols - nsym;
   if (dataSymbols <= 0) {
@@ -216,6 +224,81 @@ export function capacityForA(spec, level = 'M') {
  */
 export function capacityTableA(level = 'M') {
   return VERSIONS_A.map((v) => capacityForA(v, level));
+}
+
+/**
+ * Type A + daehan nsym 표.
+ *
+ * O daehan 과 같은 정책: **절대 정정능력(부모 버전의 nsym)을 승계**한다.
+ * A0D/A1D 는 부모 값 그대로 청크 정렬이다. A2D/M 만 부모 37 이 비정렬이라
+ * A2/H 전례(57→59, +2 · 홀수)를 따라 **39** 로 올렸다 — t 를 줄이지 않는다.
+ * 실측 (2026-08-19, measure-daehan-a.mjs): A0D 38심볼 · A1D 75 · A2D 123.
+ */
+export const NSYM_TABLE_A_DAEHAN = Object.freeze({
+  A0D: Object.freeze({ symbols: 38, L: 5, M: 11, H: 18 }),
+  A1D: Object.freeze({ symbols: 75, L: 11, M: 23, H: 36 }),
+  A2D: Object.freeze({ symbols: 123, L: 17, M: 39, H: 59 }),
+});
+
+/**
+ * Type A daehan 버전. formatIndex 는 레거시 A 와 같다 (전용 와이어를 안 만든다 —
+ * O daehan `capacityDaehan.js` 헤더 §와이어와 같은 계약). version 도 A0/A1/A2 의
+ * 0/1/2 를 공유하므로 **이 배열을 VERSIONS_A 와 합치면 안 된다.**
+ */
+export const VERSIONS_A_DAEHAN = Object.freeze([
+  Object.freeze({
+    name: 'A0D', version: 0, k: 6, formatIndex: 1,
+    overhead: overheadBreakdownA(6, daehanReservedCells(6).length).total,
+    symbolKey: 'A0D',
+  }),
+  Object.freeze({
+    name: 'A1D', version: 1, k: 8, formatIndex: 12,
+    overhead: overheadBreakdownA(8, daehanReservedCells(8).length).total,
+    symbolKey: 'A1D',
+  }),
+  Object.freeze({
+    name: 'A2D', version: 2, k: 10, formatIndex: 13,
+    overhead: overheadBreakdownA(10, daehanReservedCells(10).length).total,
+    symbolKey: 'A2D',
+  }),
+]);
+
+export function capacityForADaehan(spec, level = 'M') {
+  const base = capacityForA(spec, level, NSYM_TABLE_A_DAEHAN);
+  return { ...base, daehanFinder: true };
+}
+
+export function capacityTableADaehan(level = 'M') {
+  return VERSIONS_A_DAEHAN.map((v) => capacityForADaehan(v, level));
+}
+
+{
+  const EXPECT = {
+    A0D: { k: 6, overhead: 74, dataCells: 116, symbols: 38, payload: { L: 30, M: 25, H: 18 } },
+    A1D: { k: 8, overhead: 98, dataCells: 227, symbols: 75, payload: { L: 60, M: 49, H: 36 } },
+    A2D: { k: 10, overhead: 125, dataCells: 371, symbols: 123, payload: { L: 101, M: 80, H: 60 } },
+  };
+  for (const spec of VERSIONS_A_DAEHAN) {
+    const want = EXPECT[spec.name];
+    if (!want) throw new Error('capacityA daehan: 기대표에 없는 키 ' + spec.name);
+    if (spec.k !== want.k || spec.overhead !== want.overhead) {
+      throw new Error(spec.name + ': k/오버헤드가 확정값과 다르다 — k=' + spec.k
+        + ' overhead=' + spec.overhead);
+    }
+    for (const level of ['L', 'M', 'H']) {
+      const cap = capacityForADaehan(spec, level);
+      if (cap.dataCells !== want.dataCells || cap.usedSymbols !== want.symbols) {
+        throw new Error(spec.name + '/' + level + ': 데이터 셀·심볼이 확정값과 다르다');
+      }
+      if (cap.maxPayloadBytes !== want.payload[level]) {
+        throw new Error(spec.name + '/' + level + ': 순 페이로드 ' + cap.maxPayloadBytes
+          + ' B 가 확정값 ' + want.payload[level] + ' B 와 다르다');
+      }
+      if (cap.chunkAligned !== true) {
+        throw new Error(spec.name + '/' + level + ': 청크 비정렬 — 생산 불가');
+      }
+    }
+  }
 }
 
 /**

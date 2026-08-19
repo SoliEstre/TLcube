@@ -14,7 +14,7 @@
 // 여기서 재구성한다. 나머지 타입은 각 layout 모듈의 canonical scan 함수를 쓴다.
 
 import { VERSIONS, capacityFor } from './capacity.js';
-import { VERSIONS_A, capacityForA } from './capacityA.js';
+import { VERSIONS_A, VERSIONS_A_DAEHAN, capacityForA, capacityForADaehan } from './capacityA.js';
 import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from './turnA.js';
 import {
   VERSIONS_Y,
@@ -334,6 +334,30 @@ function resolveProfile(format) {
       eccLevel,
       capacity: capacityFor(spec, eccLevel),
       scan: dataCellsInScanOrderO(spec.k),
+      coordinates: (cell) => [cell.q, cell.r],
+    });
+  }
+
+  if (type === 'A' && format.daehanFinder === true) {
+    // Type A + daehan (2026-08-19) — O daehan 과 같은 와이어 계약: formatIndex 는
+    // 레거시 A 와 같고, 갈리는 것은 회계와 scan order 뿐이다. 육각 코어가 O 와
+    // 좌표 동일하고 예약 셀은 패치에 0개라 daehan 좌표를 그대로 재사용한다.
+    const wantK = format.k === undefined ? undefined : format.k;
+    const spec = wantK === undefined
+      ? VERSIONS_A_DAEHAN.find((entry) => entry.version === format.version)
+      : VERSIONS_A_DAEHAN.find((entry) => entry.k === wantK);
+    if (!spec) {
+      throw new RangeError(
+        'A daehan 버전을 모른다: k=' + format.k + ' version=' + format.version
+        + ' (허용 k ' + VERSIONS_A_DAEHAN.map((v) => v.k).join(', ') + ')',
+      );
+    }
+    assertOptionalDimension(format.k, 'k', spec.k);
+    return finishProfile({
+      type,
+      eccLevel,
+      capacity: capacityForADaehan(spec, eccLevel),
+      scan: dataCellsInScanOrderA(spec.k, daehanReservedCells(spec.k)),
       coordinates: (cell) => [cell.q, cell.r],
     });
   }

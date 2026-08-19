@@ -111,7 +111,12 @@ test('n=21 «id 생략» 은 와이어 선호(v2r2)로 해소된다 — 후보 �
   // 여기서 라인업 기본을 값으로 잡아 두는 이유는 «둘이 같아지는 날» 을 잡기
   // 위해서지 용량이 그 값을 따라가서가 아니다 (바로 아래 notEqual 이 그 문지기다).
   assert.equal(wirePreferredFinalLayoutIdForN(21), 'v2r2');
-  assert.equal(finalLayoutIdForN(21), 'v0tr', '라인업 기본은 2026-08-18 우선순위 변경 뒤 v0tr 이다');
+  // ⚠ **기본값을 손으로 적지 않는다.** 이 값은 2026-08-19 하루에만 v0t → v0tr →
+  //    v0trq → v0t 로 세 번 바뀌었고, 그때마다 이 줄이 깨졌다. 여기서 재려는 것은
+  //    «기본이 무엇인가» 가 아니라 «id 생략이 기본으로 해소되는가» 다 — 그러니
+  //    기본은 소스에서 읽고, 그 해소가 일어나는지만 단언한다.
+  const n21Default = finalLayoutIdForN(21);
+  assert.ok(n21Default, 'n=21 기본 레이아웃이 없다');
   assert.notEqual(wirePreferredFinalLayoutIdForN(21), finalLayoutIdForN(21),
     '와이어 선호와 라인업 기본이 같아졌다 — 이 테스트의 전제가 사라졌다');
   // id 를 생략한 호출은 후보와 무관하게 전부 같은 값이 된다. 이것이 «세 후보 용량

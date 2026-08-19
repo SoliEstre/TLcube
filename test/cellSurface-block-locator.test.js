@@ -2519,7 +2519,7 @@ test('v0X 드랍 ① — 기본 cfg 에서 v0x 포즈 0 이고 CS 라인업에�
   //  드랍으로 **v0t** 가 됐다 — 두 번의 «기본 승계» 가 겹친 값이다.)
   assert.equal(finalLayoutIdsForN(21).includes('v0x'), false, 'CS 라인업에 v0x 가 남았다');
   // 의도적 갱신 (2026-08-18 운영자 실기기 판정) — 기본이 v0tr 로 바뀌었다.
-  assert.equal(finalLayoutIdForN(21), 'v0tr', 'n=21 기본이 v0tr 이 아니다');
+  assert.equal(finalLayoutIdForN(21), 'v0t', 'n=21 기본이 v0t 이 아니다');
   assert.equal(allFinalLayoutIdsForN(21).includes('v0x'), true,
     '와이어 질의에서까지 v0x 가 사라졌다 — 삭제가 됐다');
 });

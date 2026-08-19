@@ -1456,8 +1456,9 @@ function cellFinderHypotheses(luma, finder, family) {
   const patternFinder = finder.finderKind === 'cell-mask'
     || finder.finderKind === 'three-tone-cube';
   if (!H || !patternFinder || !['hex', 'tri'].includes(family)) return [];
-  // daehan 은 tri 로 가지 않는다 — 정본 `_placement` 가 «A/K 타입의 외곽 영역으로는
-  // 넘어가지 않고 중앙 육각형 셀 영역 안에서만» 이라고 못 박았다.
+  // daehan 은 A/K **패치(외곽)로 넘어가지 않는다** — 중앙 육각 안에서만. 그 육각
+  // 코어는 Type A 와 Type O 가 좌표까지 같다 (실측 2026-08-19: prefix 전수 일치,
+  // 패치 침범 0). 그래서 tri 가설도 연다. cube 만 닫는다.
   //
   // ⚠ **k 는 좁히지 않는다.** patternId 가 `oak-daehan-k6` 이라고 해서 k=6 만 보면
   //   안 된다: daehan 은 절대 좌표라 k6 ⊂ k8 ⊂ k10 **포함 사슬**이고, k=8 프레임
@@ -1465,8 +1466,7 @@ function cellFinderHypotheses(luma, finder, family) {
   //   즉 **파인더는 «daehan 이다» 까지만 말할 수 있고 «어느 k 인가» 는 못 말한다.**
   //   k 는 기존대로 전 후보를 열거해 RS/CRC 가 고른다 — 그게 이 편입이 택한
   //   «광학 검출 + 사후 RS/CRC» 계약 그대로다 (`capacityDaehan.js` 헤더 §와이어).
-  const dimensions = isDaehanFinderPatternId(finder.patternId) && family !== 'hex'
-    ? [] : uniqueDimensions(family);
+  const dimensions = uniqueDimensions(family);
   return dimensions.map((k) => ({
     family,
     k,
@@ -1662,6 +1662,15 @@ function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
     };
   }
   if (family === 'tri') {
+    const reserved = daehanReservedCellsFor(hypothesis, dimension);
+    if (reserved) {
+      return {
+        map: layoutMapA(dimension, reserved),
+        dataCells: dataCellsInScanOrderA(dimension, reserved),
+        type: 'A',
+        daehanFinder: true,
+      };
+    }
     return {
       map: layoutMapA(dimension),
       dataCells: dataCellsInScanOrderA(dimension),

@@ -458,23 +458,28 @@ export const CELL_SURFACE_FINAL_IDS = Object.freeze([
   // 그리고 순서는 pickBetterLayout 의 **동점 처리**에만 관여한다 — agreement 가
   // 다르면 순서와 무관하게 높은 쪽이 이긴다. 즉 이 변경은 «틀린 답을 고르게»
   // 만들 수 없다. 바꾸는 것은 «둘 다 똑같이 맞을 때 누구 이름으로 부르나» 뿐이다.
-  // **의도적 갱신 «v0TRQ 를 v0T 앞으로» (운영자 실기기 판정 2026-08-19)** —
-  // 정식 스캐너 실기기 인식률 관측이 **v0 > v0TR > v0TRQ > v0T > v0TY** 로 왔다.
-  // 종전 순서는 v0TRQ 가 맨 뒤여서 관측과 어긋나 있었다. **드랍은 없다** —
-  // 바뀐 것은 선언 순서 하나이고, 그 순서는 `pickBetterLayout` 의 **동점 처리
-  // 한 자리**에만 관여한다 (accepted → agreement → 선언 순서). agreement 가 다르면
-  // 순서와 무관하게 높은 쪽이 이기므로 «틀린 답을 고르게» 만들 수 없다 —
-  // 바뀌는 것은 «둘 다 똑같이 맞을 때 누구 이름으로 부르나» 뿐이다.
-  // n=21 기본은 첫 원소인 **v0tr 그대로**다 (이 변경이 안 건드린다).
-  CELL_SURFACE_FINAL_V0TR,
-  CELL_SURFACE_FINAL_V0TRQ,
+  // **의도적 갱신 — 실기기 순위 (운영자 2026-08-19 밤, v0TRY 배포 후 재측정)**
+  //
+  // 관측 부분순서: `v0 > v0TR > v0TRY > v0TRQ` · `v0T > v0TY` · `v0T > v0TR` ·
+  // `v0TRY > v0TRQ > v0TY`. 위상정렬하면 n=21 계열은
+  //   **v0T > v0TR > v0TRY > v0TRQ > v0TY**
+  //
+  // ⚠ **이것이 세 번째 순서다.** 앞의 둘을 뒤집는다:
+  //   · 08-18 「v0TR 우선순위를 가장 높여달라」 → v0tr 맨 앞
+  //   · 08-19 낮 「v0TRQ 를 v0T 앞으로」      → v0trq 를 v0t 앞
+  // 운영자 자신이 「전체적으로 **오락가락** 하지만 원거리 인식률을 높게 쳤을 때 기준」
+  // 이라고 단서를 달았다. **그러니 이 표를 «확정된 서열» 로 읽지 마라** — 가장 최근
+  // 관측일 뿐이고 다음 측정에서 또 바뀔 수 있다.
+  //
+  // 그래도 갱신하는 이유: 순서는 `pickBetterLayout` 의 **동점 처리 한 자리**에만
+  // 관여한다 (accepted → agreement → 선언 순서). agreement 가 다르면 순서와 무관하게
+  // 높은 쪽이 이기므로 «틀린 답을 고르게» 만들 수 없다. 즉 **틀려도 복호가 안 망가진다** —
+  // 되돌리기도 싸다. n=21 기본은 첫 원소가 되는 **v0t** 로 바뀐다.
   CELL_SURFACE_FINAL_V0T,
-  CELL_SURFACE_FINAL_V0TY,
-  // v0TRY (2026-08-18 편입 · 2026-08-19 통합) — v0TR 의 먼 코너 QR 파생.
-  // **맨 뒤**에 둔다: 편입 규약이기도 하고, 위 실기기 순위에 **이 후보만 없다**
-  // (당시 미배포라 못 찍혔다). 즉 «가장 낮다» 가 아니라 «아직 안 재봤다» 라서
-  // 뒤인 것이고, 실기기 관측이 오면 그때 자리를 다시 정한다.
+  CELL_SURFACE_FINAL_V0TR,
   CELL_SURFACE_FINAL_V0TRY,
+  CELL_SURFACE_FINAL_V0TRQ,
+  CELL_SURFACE_FINAL_V0TY,
 ]);
 
 export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({

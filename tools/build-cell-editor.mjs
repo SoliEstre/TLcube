@@ -23,7 +23,11 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // markerO 가 autoplaceHex 를, autoplaceHex 가 autoplaceY(→placementY) 를 쓴다.
   'placementY', 'autoplaceY', 'autoplaceHex', 'markerO',
   // turnA 는 encodeA 앞 (2026-08-18 턴A 편입 — encodeA 가 표를 조회한다).
-  'placementA', 'layoutA', 'capacityA', 'markerA', 'turnA', 'encodeA',
+  // finder-daehan 은 capacityA 앞 (2026-08-19 daehan × Type A 지원 — capacityA 와
+  // encodeA 가 daehan 표를 조회한다). ⚠ 이 줄이 빠져서 빌더의 위상 검사가
+  // 「capacityA -> finder-daehan (missing)」으로 죽었다 — **검사가 일했다.**
+  // 새 의존을 추가하는 레인은 번들 위상표도 같이 봐야 한다.
+  'finder-daehan', 'placementA', 'layoutA', 'capacityA', 'markerA', 'turnA', 'encodeA',
   'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'encodeY',
   'luminance', 'export-filename', 'cell-editor-history', 'cell-editor-core',
