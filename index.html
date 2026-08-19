@@ -1200,6 +1200,38 @@
         <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.</p>
       </div>
 
+      <!-- 코너 마커 (O-CM / A-CM) — Type O·A + lab 전용. #turnASection 과 같은 게이트 문법.
+           ⚠ **실측 (2026-08-20)**: 이 옵션은 turnA 와 달리 **왕복이 선다.**
+           `decoder/corner-marker-detect.js` 를 `bootstrap.directAnchorHypotheses` 에
+           배선했고(앵커가 0일 때만 열리는 fallback), 합성 원근 실측에서 앵커 한계
+           g=0.0001 → 코너 마커 g=0.0008 로 **약 8배** 늘었다
+           (test/decoder-corner-marker-wiring.test.js ②, 변이 검증 완료).
+           ⚠ turnA 와 **상호배제**다 — `encodeA` 가 둘 다 참이면 던진다(src/encodeA.js).
+           그래서 이 카드를 켜면 syncCornerMarkerUi 가 turnA 를 끄고 그 카드를 잠근다.
+           조용히 떨구지 않는다: 잠긴 이유를 힌트가 말한다.
+           Type Y 는 대상이 아니다 — Y 는 자기 로케이터 문법(v0 계열)을 쓴다. -->
+      <div id="cornerMarkerSection" hidden>
+        <label class="section-heading" data-i18n="g576">코너 마커 (실험)</label>
+        <div class="card-row" id="cornerMarkerCards">
+          <div class="toggle-card active" data-cornermarker="off">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/>
+            </svg>
+            <span data-i18n="g577">없음 (기본)</span>
+          </div>
+          <div class="toggle-card" data-cornermarker="on">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/>
+              <circle cx="12" cy="2.6" r="1.6" fill="currentColor" stroke="none"/>
+              <circle cx="21" cy="17" r="1.6" fill="currentColor" stroke="none"/>
+              <circle cx="3" cy="7" r="1.6" fill="currentColor" stroke="none"/>
+            </svg>
+            <span data-i18n="g578">교대 코너 3곳</span>
+          </div>
+        </div>
+        <p class="hint" id="cornerMarkerHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어드는데, 지금은 이 상태로 만든 코드를 스캐너가 못 읽어요 — 표식이 있다는 걸 알리는 자리가 코드 안에 아직 없거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
+      </div>
+
       <div class="row">
         <div id="versionWrapO">
           <label for="versionO" data-i18n="g049">버전</label>
@@ -2475,6 +2507,10 @@ const GENERATOR_STRINGS = {
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
     "g575": "실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.",
+    "g576": "코너 마커 (실험)",
+    "g577": "없음 (기본)",
+    "g578": "교대 코너 3곳",
+    "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어드는데, 지금은 이 상태로 만든 코드를 스캐너가 못 읽어요 — 표식이 있다는 걸 알리는 자리가 코드 안에 아직 없거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.",
     "g507": "{filename}으로 다운로드되었습니다.",
     "g508": "파인더 에디터",
     "g509": "불스아이 속 큐브",
@@ -2880,6 +2916,10 @@ const GENERATOR_STRINGS = {
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
     "g575": "Experimental. For now only the format information changes — the drawn silhouette stays the same, and codes made in this state cannot be read by the scanner.",
+    "g576": "Corner markers (experimental)",
+    "g577": "None (default)",
+    "g578": "Three alternating corners",
+    "g579": "Experimental. It adds helper marks at three alternating corners and lowers capacity, but codes made this way cannot be read by the scanner yet — the code has no place to announce that the marks are there. Cannot be combined with silhouette direction (turnA).",
     "g507": "Downloaded as {filename}.",
     "g508": "Finder editor",
     "g509": "Cube in bullseye",
@@ -3285,6 +3325,10 @@ const GENERATOR_STRINGS = {
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
     "g575": "実験用です。現在はフォーマット情報だけが変わり、描かれるシルエットはそのままです — この状態で作ったコードはスキャナで読み取れません。",
+    "g576": "コーナーマーカー（実験）",
+    "g577": "なし（既定）",
+    "g578": "交互の3隅",
+    "g579": "実験用です。交互の3隅に補助マークを入れ容量も減りますが、今はこの状態で作ったコードをスキャナが読み取れません — マークがあると伝える場所がコード内にまだありません。シルエット方向（turnA）とは併用できません。",
     "g507": "{filename} としてダウンロードしました。",
     "g508": "ファインダーエディタ",
     "g509": "ブルズアイの中のキューブ",
@@ -3689,6 +3733,10 @@ const GENERATOR_STRINGS = {
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
     "g575": "Expérimental. Pour l'instant, seules les informations de format changent — la silhouette dessinée reste identique, et les codes créés dans cet état ne sont pas lisibles par le scanner.",
+    "g576": "Marqueurs d'angle (expérimental)",
+    "g577": "Aucun (par défaut)",
+    "g578": "Trois angles alternés",
+    "g579": "Expérimental. Ajoute des repères à trois angles alternés et réduit la capacité, mais les codes créés ainsi ne sont pas encore lisibles par le scanner — le code n'a pas de champ pour signaler la présence des repères. Incompatible avec le sens de la silhouette (turnA).",
     "g507": "Téléchargé sous le nom {filename}.",
     "g508": "Éditeur de repères",
     "g509": "Cube dans la cible",
@@ -4093,6 +4141,10 @@ const GENERATOR_STRINGS = {
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
     "g575": "Sperimentale. Per ora cambiano solo le informazioni di formato — la sagoma disegnata resta uguale e i codici creati in questo stato non sono leggibili dallo scanner.",
+    "g576": "Marcatori d'angolo (sperimentale)",
+    "g577": "Nessuno (predefinito)",
+    "g578": "Tre angoli alternati",
+    "g579": "Sperimentale. Aggiunge riferimenti su tre angoli alternati e riduce la capacità, ma i codici creati così non sono ancora leggibili dallo scanner — il codice non ha un campo per segnalare che i riferimenti ci sono. Non si può combinare con la direzione della sagoma (turnA).",
     "g507": "Scaricato come {filename}.",
     "g508": "Editor dei pattern",
     "g509": "Cubo nel bersaglio",
@@ -4497,6 +4549,10 @@ const GENERATOR_STRINGS = {
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
     "g575": "Experimentell. Derzeit ändern sich nur die Formatinformationen — die gezeichnete Silhouette bleibt gleich, und in diesem Zustand erzeugte Codes kann der Scanner nicht lesen.",
+    "g576": "Eckmarker (experimentell)",
+    "g577": "Keine (Standard)",
+    "g578": "Drei abwechselnde Ecken",
+    "g579": "Experimentell. Setzt Hilfsmarken an drei abwechselnde Ecken und senkt die Kapazität, aber so erzeugte Codes kann der Scanner noch nicht lesen — im Code fehlt die Stelle, die das Vorhandensein der Marken meldet. Nicht zusammen mit der Silhouettenrichtung (turnA) nutzbar.",
     "g507": "Als {filename} heruntergeladen.",
     "g508": "Suchmuster-Editor",
     "g509": "Würfel in der Zielscheibe",
@@ -4901,6 +4957,10 @@ const GENERATOR_STRINGS = {
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
     "g575": "Experimental. Por ahora solo cambia la información de formato — la silueta dibujada sigue igual y los códigos creados en este estado no los puede leer el escáner.",
+    "g576": "Marcadores de esquina (experimental)",
+    "g577": "Ninguno (predeterminado)",
+    "g578": "Tres esquinas alternas",
+    "g579": "Experimental. Añade marcas de apoyo en tres esquinas alternas y reduce la capacidad, pero los códigos creados así todavía no los puede leer el escáner — el código no tiene dónde avisar de que las marcas están. No se puede combinar con la dirección de la silueta (turnA).",
     "g507": "Descargado como {filename}.",
     "g508": "Editor de patrones",
     "g509": "Cubo en la diana",
@@ -5305,6 +5365,10 @@ const GENERATOR_STRINGS = {
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
     "g575": "Experimental. Por agora só a informação de formato muda — a silhueta desenhada continua igual, e códigos criados neste estado não são lidos pelo leitor.",
+    "g576": "Marcadores de canto (experimental)",
+    "g577": "Nenhum (padrão)",
+    "g578": "Três cantos alternados",
+    "g579": "Experimental. Acrescenta marcas de apoio em três cantos alternados e reduz a capacidade, mas códigos criados assim ainda não são lidos pelo leitor — o código não tem onde avisar que as marcas existem. Não pode ser combinado com a direção da silhueta (turnA).",
     "g507": "Transferido como {filename}.",
     "g508": "Editor de padrões",
     "g509": "Cubo no alvo",
@@ -5417,7 +5481,7 @@ const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
   syncFaceGainLabel, syncRenderProfileUi, syncExportOptionsUi, syncExportPpiHint,
-  syncShadingUi, syncYLocatorUi, syncTurnAUi,
+  syncShadingUi, syncYLocatorUi, syncTurnAUi, syncCornerMarkerUi,
   syncTypeYCellEditorUi,
   syncHelpPopover,
 ];
@@ -5615,6 +5679,8 @@ const els = {
   finderExperimentalWarning: $('finderExperimentalWarning'),
   yLocatorSection: $('yLocatorSection'), yLocatorCards: $('yLocatorCards'),
   turnASection: $('turnASection'), turnACards: $('turnACards'),
+  cornerMarkerSection: $('cornerMarkerSection'), cornerMarkerCards: $('cornerMarkerCards'),
+  cornerMarkerHint: $('cornerMarkerHint'),
   yLocatorHint: $('yLocatorHint'),
   yLocatorArmSection: $('yLocatorArmSection'), yLocatorArmCards: $('yLocatorArmCards'),
   yLocatorArmHint: $('yLocatorArmHint'),
@@ -7387,6 +7453,20 @@ if (els.turnACards) {
   }
 }
 
+if (els.cornerMarkerCards) {
+  for (const card of els.cornerMarkerCards.children) {
+    card.addEventListener('click', () => {
+      generatorState.cornerMarker = card.dataset.cornermarker === 'on';
+      // 상호배제를 **여기서** 해소한다 — encodeOptsFor 가 조용히 떨구면 화면의
+      // 턴A 카드는 켜진 채로 남아 «켰는데 안 먹는» 상태가 된다.
+      if (generatorState.cornerMarker) generatorState.turnA = false;
+      syncCornerMarkerUi();
+      syncTurnAUi();
+      schedule();
+    });
+  }
+}
+
 const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
 
 /**
@@ -8788,6 +8868,7 @@ function syncTypeUi() {
   syncShadingUi();       // 입체 음영도 같은 이유로 Y 전용이다.
   syncYLocatorUi();
   syncTurnAUi();
+  syncCornerMarkerUi();
   syncTypeYCellEditorUi();
 }
 
@@ -8798,8 +8879,29 @@ function syncTurnAUi() {
   section.hidden = !(isLabPath() && generatorState.type === 'A');
   if (!els.turnACards) return;
   const on = generatorState.turnA === true;
+  // 코너 마커와 상호배제 — 잠긴 이유를 보이게 한다. 조용히 무시하면
+  // 「켰는데 안 먹는」 카드가 되고, 그건 회귀보다 먼저 사람을 속인다.
+  const locked = generatorState.cornerMarker === true;
   for (const card of els.turnACards.children) {
     card.classList.toggle('active', (card.dataset.turna === 'on') === on);
+    card.classList.toggle('disabled', locked);
+  }
+}
+
+/**
+ * 코너 마커 카드 — Type O·A + lab 에서만 연다.
+ *
+ * Y 를 뺀 이유: Y 는 코너 마커가 아니라 자기 로케이터 문법(v0 계열)을 쓴다.
+ * `encodeY` 는 이 키를 아예 모르므로 넘기면 조용히 무시되거나 던진다.
+ */
+function syncCornerMarkerUi() {
+  const section = els.cornerMarkerSection;
+  if (!section) return;
+  section.hidden = !(isLabPath() && (generatorState.type === 'O' || generatorState.type === 'A'));
+  if (!els.cornerMarkerCards) return;
+  const on = generatorState.cornerMarker === true;
+  for (const card of els.cornerMarkerCards.children) {
+    card.classList.toggle('active', (card.dataset.cornermarker === 'on') === on);
   }
 }
 
@@ -9274,6 +9376,8 @@ function buildConfig() {
     versionA: selectedVersion(generatorState.versionA),
     // 턴A 는 Type A 전용이다 — 다른 타입에서 켜진 채 남아 있어도 여기서 죽인다.
     turnA: type === 'A' && generatorState.turnA === true,
+    // 코너 마커는 O·A 전용이다 (Y 는 자기 로케이터 문법을 쓴다). 같은 규약으로 죽인다.
+    cornerMarker: (type === 'O' || type === 'A') && generatorState.cornerMarker === true,
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
       ? TL_READER_URL : generatorState.qrText.trim(),
@@ -9353,6 +9457,11 @@ function encodeOptsFor(cfg) {
     //   이 키를 모른다. 「true 일 때만」이면 비-A 옵션 표면이 한 비트도 안 넓어진다.
     if (isDaehanFinderPatternId(cfg.finderPatternId)) {
       opts.daehanFinder = true;
+    } else if (cfg.cornerMarker === true) {
+      // 코너 마커가 turnA 를 이긴다 — UI 가 이미 turnA 를 꺼 두므로 여기 오는
+      // cfg 는 둘 다 참일 수 없다. 그래도 else-if 로 두는 이유: URL·저장 상태로
+      // 옛 조합이 들어와도 `encodeA` 의 던짐(src/encodeA.js) 대신 정의된 쪽이 이긴다.
+      opts.cornerMarker = true;
     } else if (cfg.turnA === true) {
       opts.turnA = true;
     }
@@ -9366,6 +9475,9 @@ function encodeOptsFor(cfg) {
   // 자동으로 따라온다. 이 줄이 없으면 79셀을 그려 놓고 legacy 용량(18/39/65 B)을 표시하며
   // data 셀 위에 파인더를 덧칠한다.
   if (isDaehanFinderPatternId(cfg.finderPatternId)) opts.daehanFinder = true;
+  // daehan 과 코너 마커는 둘 다 layoutProviderFor 를 갈아끼운다(src/encode.js:47) —
+  // 같이 주면 회계가 두 번 갈린다. daehan 이 파인더 선택에서 오므로 그쪽을 우선한다.
+  else if (cfg.cornerMarker === true) opts.cornerMarker = true;
   return { fn: encode, opts };
 }
 

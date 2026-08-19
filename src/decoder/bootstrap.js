@@ -87,6 +87,10 @@ import {
   findAAnchorHypotheses,
   findOAnchorHypotheses,
 } from './anchor-detect.js';
+import {
+  findACornerMarkerHypotheses,
+  findOCornerMarkerHypotheses,
+} from './corner-marker-detect.js';
 import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
 import { detectBullseyes, pyramidLevelsForImage, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
@@ -1451,6 +1455,65 @@ function weakAnchorHypotheses(luma, finder, family, options) {
   return hypotheses;
 }
 
+/*
+ * 코너 마커(O-CM / A-CM) 가설 — `corner-marker-detect.js` 배선.
+ *
+ * 왜 «앵커가 0일 때만» 인가: 코너 마커는 앵커와 **같은 자리를 겨루는 가설**이라,
+ * 무조건 합치면 지금 통과하는 프레임의 선택이 바뀔 수 있다. 그건 이득이 아니라
+ * 교환이고, 교환은 실측 없이 하지 않는다. 앵커가 하나도 없을 때만 열면
+ * **현재 성공분의 결과는 정의상 불변**이고 순증만 남는다.
+ * (합집합 배선은 실사진 census 로 이득/손실을 재고 나서 판단한다.)
+ *
+ * 코너 마커 자체는 약한 가설이 아니다 — `verifyCornerMarkers` 의 agreement 게이트를
+ * 통과하고, **재적합 H 로 탐색 없이 다시 재는 confirm** 까지 통과한 것만 온다.
+ * 그래서 weak fallback 보다 **앞에** 놓고 strict 로 센다.
+ */
+function cornerMarkerHypotheses(luma, finder, family, options) {
+  const detector = family === 'tri' ? findACornerMarkerHypotheses
+    : family === 'hex' ? findOCornerMarkerHypotheses
+      : null;
+  if (!detector) return { hypotheses: [], diagnostics: { skipped: 'family-unsupported' } };
+
+  const result = detector(luma, finder, uniqueDimensions(family), options.cornerMarker || {});
+  if (!result.ok) return { hypotheses: [], diagnostics: result.detail };
+
+  const hypotheses = [];
+  for (const record of result.hypotheses) {
+    // 확정 H 를 쓴다 — refine 이 성공했을 때만 confirm 을 통과하므로 항상 있다.
+    const H = record.refinedH || record.H;
+    const canonicalAnchors = anchorCells(record.k).map((cell) => ({ q: cell.q, r: cell.r }));
+    const anchors = canonicalAnchors.map((cell) =>
+      projectPoint(H, canonicalCenter(cell.q, cell.r)));
+    // 앵커를 못 투영하면 하류(정렬·진단)가 null 을 만난다. 버린다.
+    if (anchors.some((point) => point === null)) continue;
+    hypotheses.push({
+      family,                                   // 'hex-marker' 가 아니라 파이프라인 계보로
+      k: record.k,
+      orientation: record.orientation,
+      rotationDegrees: record.orientation * 120,
+      centerQr: Boolean(finder.centerQr),
+      anchors,
+      canonicalAnchors,
+      H,
+      canonicalSpace: record.canonicalSpace,
+      geometryResidual: 0,
+      // 정렬 키다(게이트 아님). 코너 마커의 확신도를 그대로 싣는다 —
+      // 앵커 margin 과 «같은 척도인 척» 하지 않으려고 별도 필드도 남긴다.
+      anchorMargin: record.confirmAgreement,
+      anchorEvidence: {
+        mode: 'corner-marker',
+        agreement: record.agreement,
+        confirmAgreement: record.confirmAgreement,
+        meanRadiusRatio: record.meanRadiusRatio,
+        sampledAnchorCount: Array.isArray(record.corners) ? record.corners.length : null,
+      },
+      hardChecks: { sampleCount: true, rankSeparation: false, expectedPattern: false, all: false },
+      hypothesisId: family + '-' + record.k + '-' + record.orientation + '-cm',
+    });
+  }
+  return { hypotheses, diagnostics: result.diagnostics };
+}
+
 function cellFinderHypotheses(luma, finder, family) {
   const H = finderTransform(finder);
   const patternFinder = finder.finderKind === 'cell-mask'
@@ -1495,6 +1558,25 @@ export function directAnchorHypotheses(luma, finder, family, options) {
   const detector = family === 'tri' ? findAAnchorHypotheses : findOAnchorHypotheses;
   const result = detector(luma, finder, dimensions, options.anchor || {});
   if (!result.ok) {
+    // 코너 마커를 weak fallback **앞에** 둔다 — agreement + confirm 을 통과한
+    // 가설이라 「약한 경계 fallback」보다 강하다. 앵커가 없을 때만 열리므로
+    // 현재 통과하는 프레임에는 도달하지 않는다.
+    if (result.reason === FRONTEND_FAILURE.NO_ANCHORS) {
+      const marker = cornerMarkerHypotheses(luma, finder, family, options);
+      if (marker.hypotheses.length > 0) {
+        return {
+          hypotheses: marker.hypotheses.map((raw) => ({
+            ...raw,
+            finder,
+            source: 'corner-marker',
+            luma,
+          })),
+          strictCount: marker.hypotheses.length,
+          fallbackCount: 0,
+          diagnostics: marker.diagnostics,
+        };
+      }
+    }
     const fallback = options.allowWeakAnchorFallback === true
       && result.reason === FRONTEND_FAILURE.NO_ANCHORS
       ? weakAnchorHypotheses(luma, finder, family, options)

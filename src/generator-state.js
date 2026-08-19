@@ -126,6 +126,14 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //   안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
   //   배선이 끝나고 왕복이 서는 날이다.
   turnA: field(false, INTERNAL, [false, true]),
+  // 코너 마커 (O-CM / A-CM, 2026-08-20 UI 편입) — Type O·A 전용, lab 게이트 뒤.
+  // turnA 와 같은 `INTERNAL` 이지만 **이유가 다르다**: turnA 는 왕복이 안 서서
+  // lab 에 갇혀 있고, 코너 마커는 왕복이 선다 (합성 원근에서 앵커 한계 g=0.0001 →
+  // 코너 마커 g=0.0008, test/decoder-corner-marker-wiring.test.js ②).
+  // lab 에 두는 이유는 **실기기 라운드를 아직 안 돌았기** 때문이다 — 합성만으로
+  // 정식 노출을 정하지 않는다는 이 저장소의 규약 그대로다.
+  // ⚠ turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
+  cornerMarker: field(false, INTERNAL, [false, true]),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),

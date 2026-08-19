@@ -271,18 +271,40 @@ test('§5 turnA 로 만든 코드는 아직 라이브 경로가 못 읽는다 (�
     + ' index.html 의 «못 읽어요» 힌트(g575)와 turnASection 주석을 같이 고쳐라.');
 });
 
-test('§5 cornerMarker 로 만든 코드는 아직 라이브 경로가 못 읽는다 (그래서 UI 가 없다)', () => {
-  // 검출기 모듈(src/decoder/corner-marker-detect.js)은 있고 그 단위 테스트도 초록인데,
-  // 라이브 파이프라인(frontend → bootstrap)이 그것을 안 부른다. 본문 scan order 도
-  // 레거시라 포즈·포맷은 서는데 본문 RS 가 터진다.
+test('§5 cornerMarker — 기하는 배선됐고 왕복은 아직 안 선다 (그래서 lab 뒤에 둔다)', () => {
+  // 2026-08-20 갱신. 이 테스트는 원래 «검출기가 배선 안 됐다» 를 고정했고, 배선되면
+  // «위 기대값을 다시 재라» 고 스스로 지시했다. 배선했고, 다시 쟀다. 결과:
+  //
+  //   ⓐ 기하 단계는 **선다** — bootstrap.directAnchorHypotheses 가 앵커 실패 시
+  //      코너 마커로 넘어간다 (decoder-corner-marker-wiring.test.js, 원근 내성 약 8배).
+  //   ⓑ 그런데 **왕복은 여전히 안 선다.** 이유가 바뀌었다:
+  //      본문 scan order 가 레거시라서가 아니라, **와이어에 신호가 없어서**다 —
+  //      `formatinfo.js` 에 `cornerMarker` 비트가 없다. `decode.js` 는
+  //      `format.cornerMarker` 를 **호출자가 알려줄 때만** CM scan order 를 쓴다
+  //      (decode.js:298). 라이브 경로엔 알려줄 사람이 없다.
+  //
+  // 그래서 daehan 이 간 길(광학 검출 → patternId → layoutForFamily)이 남은 선택지다.
+  // 코너 마커도 광학으로 검출되므로 가능하지만, 그러려면 CM 검출을 fallback 밖에서도
+  // 돌려야 하고 그건 «합집합» 판단이라 실측 없이 하지 않는다.
   for (const [label, result] of [
     ['O-CM', decodeFrontend(render(encode('TLcube', { version: 1, eccLevel: 'M', cornerMarker: true })))],
     ['A-CM', decodeFrontend(render(encodeA('TLcube', { version: 0, eccLevel: 'M', cornerMarker: true }), { margin: 20 }))],
   ]) {
     assert.equal(result.ok, false,
-      label + ' 왕복이 서기 시작했다 — 이제 생성기 UI 를 붙일 근거가 생겼다 (브리프 §3.3).');
+      label + ' 왕복이 서기 시작했다 — 축하한다. 이제 (a) 이 카드를 lab 게이트 밖으로 내보내고'
+      + ' (b) index.html 의 «못 읽어요» 힌트(g579)와 cornerMarkerSection 주석을 같이 고쳐라.');
   }
+  // 기하 배선은 **있어야 한다** — 위 ⓐ 의 근거다. 사라지면 8배 실측도 같이 사라진다.
   assert.equal(
     readFileSync(ROOT + 'src/decoder/bootstrap.js', 'utf8').includes('corner-marker-detect'),
-    false, 'bootstrap 이 코너 마커 검출기를 배선했다 — 위 기대값을 다시 재라');
+    true, 'bootstrap 의 코너 마커 배선이 사라졌다 — decoder-corner-marker-wiring 도 같이 볼 것');
+  // 와이어 신호 부재가 진짜 이유라는 것을 **값으로** 고정한다. 여기가 참인 한 왕복은 못 선다.
+  assert.equal(
+    readFileSync(ROOT + 'src/formatinfo.js', 'utf8').includes('cornerMarker'),
+    false, 'formatinfo 에 cornerMarker 가 생겼다 — 왕복 기대값을 다시 재라');
+  // UI 힌트가 그 사실을 말하는가. 라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
+  const index = readFileSync(ROOT + 'index.html', 'utf8');
+  assert.match(index, /id="cornerMarkerHint"/, '힌트 문단이 없다');
+  assert.match(index, /스캐너가 못 읽어요/,
+    '코너 마커 힌트가 «못 읽어요» 를 말하지 않는다 — 왕복이 안 서는데 «잘 읽힌다» 고 적으면 거짓말이다');
 });
