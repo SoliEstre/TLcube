@@ -1068,7 +1068,38 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
         cellFinderMerged: Boolean(cellDetected && cellDetected.ok),
       });
     }
-    return detected;
+    /*
+     * 둘 다 실패했을 때 **불스아이 쪽 실패만** 반환하던 자리다 (2026-08-20 관측).
+     * 이 코퍼스의 파인더는 대부분 동심원이 아니라 풍차·덩어리·셀마스크인데,
+     * 그런 패턴이 불스아이의 `boundarySignsPass`·`angularSymmetryPass` 에서
+     * 떨어지는 것은 **정상 동작**이다. 그런데 결과에는 그 값만 실려서, 실사진 40장
+     * 분석에서 «boundarySignsPass 18건» 이라는 그럴듯하지만 **엉뚱한 검출기의 소감**이
+     * 결함의 증거처럼 읽혔다.
+     *
+     * 그래서 패턴 검출기의 진단을 **같이** 싣는다. 게이트는 한 값도 안 건드린다 —
+     * 진단만 넓히는 변경이고, `detected` 의 기존 필드는 그대로 둔다
+     * (bootstrap.js 의 symbol-clipped 판정이 `detail.evaluatedRaw`·`detail.hardChecks`
+     * 를 읽으므로 모양을 바꾸면 그 경로가 조용히 달라진다).
+     */
+    return {
+      ...detected,
+      detail: {
+        ...(detected.detail || {}),
+        detectorsTried: {
+          bullseye: 'fail',
+          centralCube: centralCubeDetected ? (centralCubeDetected.ok ? 'ok' : 'fail') : 'skipped',
+          cellMask: cellDetected ? (cellDetected.ok ? 'ok' : 'fail') : 'skipped',
+        },
+        // ⚠ 이 필드를 읽는 쪽은 «불스아이 hardChecks 는 불스아이 후보에만 유효하다» 를
+        //   전제로 읽어라. 패턴 파인더의 사유는 아래 두 필드에 있다.
+        centralCubeFailure: centralCubeDetected && !centralCubeDetected.ok
+          ? { reason: centralCubeDetected.reason, detail: centralCubeDetected.detail }
+          : undefined,
+        cellFinderFailure: cellDetected && !cellDetected.ok
+          ? { reason: cellDetected.reason, detail: cellDetected.detail }
+          : undefined,
+      },
+    };
   }
   const finders = detected.candidates
     .map((finder) => liftFinder(finder, reduced.factor))
