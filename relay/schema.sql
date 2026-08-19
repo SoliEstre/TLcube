@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     expected_locator String DEFAULT '',
     expected_locator_arm LowCardinality(String) DEFAULT '', -- 구 A/B. 신규는 비움
     expected_locator_layout LowCardinality(String) DEFAULT '', -- v1r2 | v2
+    -- 기대 축 ③ 외곽/코너 파인더 (2026-08-19). 축 ②(중앙 파인더)는 expected_finder 가
+    -- 이미 그 뜻이라 새 컬럼이 없다. live DB 는 007 ALTER 를 **먼저** 돌린 뒤 relay 배포.
+    expected_outer_finder LowCardinality(String) DEFAULT '', -- none | daehan | a-cm | o-cm
     observed_type    LowCardinality(String) DEFAULT '',
     observed_version String DEFAULT '',
     observed_ecc     LowCardinality(String) DEFAULT '',

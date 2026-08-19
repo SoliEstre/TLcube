@@ -274,6 +274,7 @@ export function eventRow(event) {
     expected_locator: configSide(expected, 'locatorProfile'),
     expected_locator_arm: configSide(expected, 'locatorArm'),
     expected_locator_layout: configSide(expected, 'locatorLayout'),
+    expected_outer_finder: configSide(expected, 'outerFinderId'),
     observed_type: configSide(observed, 'type'),
     observed_version: observed.version == null ? '' : String(observed.version),
     observed_ecc: configSide(observed, 'ecc'),

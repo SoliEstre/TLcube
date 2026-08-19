@@ -35,6 +35,7 @@ const MIG_AB = readFileSync(ROOT + 'deploy/estre-so/clickhouse/003_tl_lab_cellsu
 const MIG_ZOOM = readFileSync(ROOT + 'deploy/estre-so/clickhouse/004_tl_lab_zoom.sql', 'utf8');
 const MIG_GEO = readFileSync(ROOT + 'deploy/estre-so/clickhouse/005_tl_lab_fail_geometry.sql', 'utf8');
 const MIG_LAYOUT = readFileSync(ROOT + 'deploy/estre-so/clickhouse/006_tl_lab_cellsurface_layouts.sql', 'utf8');
+const MIG_AXES = readFileSync(ROOT + 'deploy/estre-so/clickhouse/007_tl_lab_expected_axes.sql', 'utf8');
 
 function memoryStore() {
   const map = new Map();
@@ -530,6 +531,15 @@ test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다',
   assert.match(MIG_LAYOUT, /ADD COLUMN IF NOT EXISTS cs_layout/);
   assert.match(MIG_LAYOUT, /이 저장소에서는 실행하지 않는다/);
   assert.doesNotMatch(MIG_LAYOUT, /^clickhouse-client/m);
+  // 기대 축 ③ 외곽 파인더 (2026-08-19). 축 ②는 expected_finder 를 재사용하므로
+  // 새 컬럼이 없다 — 그래서 007 은 컬럼 **하나만** 더한다.
+  assert.match(SQL, /expected_outer_finder\s+LowCardinality/);
+  assert.match(MIG_AXES, /ADD COLUMN IF NOT EXISTS expected_outer_finder/);
+  assert.match(MIG_AXES, /이 저장소에서는 실행하지 않는다/);
+  assert.doesNotMatch(MIG_AXES, /^clickhouse-client/m);
+  // ⚠ 적용 순서 경고가 파일에 남아 있어야 한다 — relay 를 먼저 배포하면 인제스트가
+  //   테이블에 없는 컬럼을 밀어 넣는다. 이 주석이 그 사고를 막는 유일한 장치다.
+  assert.match(MIG_AXES, /먼저/);
 });
 
 test('decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다', () => {
