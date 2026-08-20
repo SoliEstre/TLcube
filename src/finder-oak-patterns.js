@@ -131,6 +131,44 @@ export function isOakFinderPatternId(id) {
   return OAK_BY_ID.has(id);
 }
 
+/**
+ * 명부 후보가 **실제로 그려지는가** — `status` 가 대답하지 못하는 물음.
+ *
+ * `status: 'active'` 는 「탈락하지 않았다」이지 「구현됐다」가 아니다. 그런데 margin 순으로
+ * 정렬하면 1위가 H2O(0.6667)·3위가 H2CO3(0.4667)이고 **둘 다 그릴 수 없다** — 그 사실이
+ * 명부 표 어디에도 안 적혀 있어서, 운영자가 생성기에서 고르고 «렌더링이 안 된다» 를 보고
+ * 나서야 드러났다 (2026-08-20).
+ *
+ * 그래서 **손으로 적지 않고 유도한다.** 사본 목록은 반드시 원본과 어긋난다.
+ *   · `oak-*` 패턴표에 있으면 → 이 모듈이 그린다
+ *   · daehan → 전용 모듈(`finder-daehan.js`)이 그린다
+ *   · 그 외 → **못 그린다**
+ *
+ * ⚠ H2O·H2CO3 가 못 그려지는 이유는 «기하» 가 아니다. 발자국은 `markerA.js` 에 이미
+ *   있다(꼭짓점에서 (−1,+2) 2칸 안쪽 링 3개, 21셀). 못 그리는 것은 **톤**이다 —
+ *   정본 톤이 21셀 중 9셀(H2CO3 는 30 중 18)이 **비-순열**이라 `digitToRanks` 경로가
+ *   표현하지 못한다. 채택은 렌더러 계약 변경이고 운영자 결정 사항이다.
+ */
+export function oakRenderStatus(lineupName) {
+  const entry = OAK_LINEUP.find((row) => row.name === lineupName);
+  if (!entry) return null;
+  if (OAK_FINDER_PATTERNS.some((pattern) => pattern.lineupName === lineupName)) {
+    return 'oak-pattern-table';
+  }
+  if (entry.id === 'O-daehan') return 'daehan-module';
+  return 'not-renderable';
+}
+
+/** 명부 전체의 «그릴 수 있는가» 요약 — 진단·문서용. */
+export function oakRenderSummary() {
+  return OAK_LINEUP.map((row) => Object.freeze({
+    name: row.name,
+    status: row.status,
+    margin: row.margin,
+    render: oakRenderStatus(row.name),
+  }));
+}
+
 // ── 로드 자기검증 ──────────────────────────────────────────────────────────
 // 표 주도 데이터는 조용히 썩는다 (turnA.js 전례). 모듈이 로드되는 것 자체가
 // 아래 명제들의 통과를 뜻하게 만든다 — 회귀 파일을 안 돌려도 앱이 먼저 죽는다.
