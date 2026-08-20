@@ -24,7 +24,7 @@ import {
   FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
 } from './finder-patterns.js';
 import { digitToRanks } from './lehmer.js';
-import { BULLSEYE_MID, FINDER_CUBE_TONES } from './luminance.js';
+import { BULLSEYE_MID, FINDER_CUBE_SEAM, FINDER_CUBE_TONES } from './luminance.js';
 import { getOakFinderPattern } from './finder-oak-patterns.js';
 import { getDaehanFinderPattern } from './finder-daehan.js';
 
@@ -457,7 +457,9 @@ export function buildScene(encoded, options) {
           { x: far.x - perpendicular.x * seamHalfWidth, y: far.y - perpendicular.y * seamHalfWidth },
           { x: center.x - perpendicular.x * seamHalfWidth, y: center.y - perpendicular.y * seamHalfWidth },
         ],
-        color: palette.bullseyeDark,
+        // 프리셋의 어두운색이 아니라 **심 전용 상수**다 — 순검정은 전경 마스크에서
+        // 배경으로 먹혀 ppu 24~30 에서 큐브를 세 조각으로 갈랐다. 이유는 FINDER_CUBE_SEAM 주석.
+        color: FINDER_CUBE_SEAM,
       });
     }
     shapes.push({
