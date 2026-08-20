@@ -668,15 +668,34 @@ export function zoomTelemetry(state = {}) {
     ? Number(state.trackNative)
     : 1;
   const error = typeof state.error === 'string' && state.error ? state.error : '';
+  // ── 자동 크롭 사다리를 계측에 싣는다 (2026-08-21) ─────────────────────────
+  // 종전에는 `zoomPlan` 만 읽어서, 실패 2초/4초 뒤 걸리는 **자동 중앙 크롭**
+  // (1.5배·2.2배, 커밋 85b3a69·4d52ae9)이 계측에 **한 자리도 안 남았다.**
+  // 그래서 자동 크롭이 2.2배로 돌고 있어도 텔레메트리는 `crop: 1` 로 보고했고,
+  // 「크롭은 1배였다」로 읽으면 오판했다. 분석 배율의 유일한 출처는
+  // `effectiveCropZoom()` = 계획 크롭 × 사다리인데 그 곱이 안 흘러왔다.
+  const autoCropRung = Number.isInteger(Number(state.autoCropRung))
+    ? Math.max(0, Number(state.autoCropRung))
+    : 0;
+  const autoCrop = autoCropZoomFor(autoCropRung);
+  const cropTotal = cropApplied * autoCrop;
   return {
     zoom: trackApplied,
     zoomRequested: trackRequested,
+    // `crop` 은 **사용자 계획** 크롭 그대로다 (과거 데이터와 비교 가능하게 뜻을 안 바꿨다).
     crop: cropApplied,
     cropRequested,
+    // 새 필드 — 실제로 자른 배율은 `cropTotal` 이다.
+    autoCropRung,
+    autoCrop,
+    cropTotal,
+    // ⚠ `effectiveZoom` 의 뜻이 2026-08-21 에 **바뀌었다**: 이제 자동 크롭을 포함한다.
+    // 이름이 «실효» 인 값이 실효가 아니면 그것이 곧 거짓말이라 뜻을 고쳤다.
+    // 그 이전 데이터의 effectiveZoom 은 계획 크롭만 담는다 — 시계열 비교 시 주의.
     effectiveZoom: effectiveMagnification({
       trackZoom: trackApplied,
       trackNative: native,
-      cropZoom: cropApplied,
+      cropZoom: cropTotal,
     }),
     zoomError: error,
   };

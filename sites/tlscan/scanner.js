@@ -98,7 +98,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-21.02';
+export const SCANNER_BUILD = '2026-08-21.03';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -284,6 +284,10 @@ function currentZoomTelemetry() {
     trackApplied: currentZoom(),
     cropRequested: zoomPlan.cropRequested,
     cropApplied: zoomPlan.cropApplied,
+    // 자동 크롭 사다리를 계측에 싣는다 (2026-08-21). 이게 없으면 실패 2초/4초 뒤
+    // 걸리는 1.5배·2.2배 중앙 크롭이 텔레메트리에 **한 자리도 안 남는다** —
+    // 실제 분석 배율의 유일한 출처는 effectiveCropZoom() = 계획 × 사다리다.
+    autoCropRung: autoCropIndex,
     trackNative: zoomPlan.trackNative,
     error: zoomPlan.error,
   });

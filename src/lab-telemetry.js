@@ -1281,9 +1281,19 @@ export function normalizeFrameBody(body) {
     zoomRequested: finiteOrDefault(src.zoomRequested, Number.isFinite(Number(src.zoom)) ? Number(src.zoom) : 1),
     crop: finiteOrDefault(src.crop, 1),
     cropRequested: finiteOrDefault(src.cropRequested, finiteOrDefault(src.crop, 1)),
+    // 자동 크롭 사다리 (2026-08-21 신설). 옛 프레임에는 없으므로 기본 0/1 —
+    // 「autoCrop 1 이라 사다리가 안 걸렸다」와 「옛 빌드라 값이 없다」를 혼동하지 마라.
+    // 그 둘은 `autoCropRung` 필드의 **부재**로만 갈린다.
+    autoCropRung: Number.isInteger(Number(src.autoCropRung)) ? Math.max(0, Number(src.autoCropRung)) : 0,
+    autoCrop: finiteOrDefault(src.autoCrop, 1),
+    cropTotal: finiteOrDefault(
+      src.cropTotal,
+      finiteOrDefault(src.crop, 1) * finiteOrDefault(src.autoCrop, 1),
+    ),
     effectiveZoom: finiteOrDefault(
       src.effectiveZoom,
-      (Number.isFinite(Number(src.zoom)) ? Number(src.zoom) : 1) * finiteOrDefault(src.crop, 1),
+      (Number.isFinite(Number(src.zoom)) ? Number(src.zoom) : 1)
+        * finiteOrDefault(src.crop, 1) * finiteOrDefault(src.autoCrop, 1),
     ),
     zoomError: typeof src.zoomError === 'string' && src.zoomError ? src.zoomError : '',
     ms,
