@@ -2690,6 +2690,8 @@ function readFormatWithCells(luma, hypothesis, options, valid, cells, formatWire
       cell: erasedCells[0].cell,
       cause: 'all-format-cells-unsampled',
       erasedFormatCells: erasedCells.length,
+      firstFormatCellFailure: erasedCells[0],
+      erasedFormatCellDetails: erasedCells,
       formatWireVersion,
     });
   }
@@ -2702,11 +2704,14 @@ function readFormatWithCells(luma, hypothesis, options, valid, cells, formatWire
   if (formatCandidates.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FORMAT_CANDIDATE, {
       stage: 'format',
+      cause: 'format-crc-no-candidate',
       hypothesisId: hypothesis.hypothesisId,
       validVersionIndices: valid,
       reads,
       tones: hypothesis.tones,
       erasedFormatCells: erasedCells.length,
+      firstFormatCellFailure: erasedCells[0] || null,
+      erasedFormatCellDetails: erasedCells,
       diagnostics: enumerated.diagnostics,
       formatWireVersion,
     });
@@ -2878,6 +2883,10 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     if (!formatRead.ok) {
       diagnostics.formatFailures.push({
         hypothesisId: hypothesis.hypothesisId,
+        family: hypothesis.family,
+        k: hypothesis.k,
+        n: hypothesis.n,
+        source: hypothesis.source,
         reason: formatRead.reason,
         detail: formatRead.detail,
       });

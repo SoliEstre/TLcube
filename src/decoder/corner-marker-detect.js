@@ -9,6 +9,12 @@
  *   · 마커 셀의 기대값은 **digit(3면 휘도 순위)** 이다. 절대 휘도가 아니라 셀 안의
  *     상대 순서만 보므로 단조 톤 커브·면 게인에 불변이다 — `anchor-detect.js` 가
  *     앵커 1셀에 쓰는 판정을 12셀로 넓힌 것이고, 표본기도 같은 `sampleHexCell` 이다.
+ *   · 셀이 `tones: {T,L,R}` (절대 톤 0/1/2)를 실으면 **절대 톤 경로**로 검증한다 —
+ *     비-순열 톤(예: {T:0,L:0,R:2})은 순위로 접는 순간 두 면 동률이 `tieEpsilon` 에
+ *     걸려 셀 통째로 0점이 되므로 (H2O 정본 21셀 중 9셀이 그렇다), 순위 대신
+ *     `orientation-scorer.scoreSampledOrientation` 의 가설별 dark/bright 앵커 →
+ *     `classifyTone` 분류를 빌린다. digit 만 있는 셀은 기존 순위 경로 그대로다 —
+ *     두 경로는 셀 단위로 갈리고, 순위 경로의 동작은 한 비트도 안 바뀐다.
  *   · 60°/180°/300° 오가설과 변 중점 거울 3종에서 마커 자리로 되돌아오는 셀은
  *     **0** 이다(markerO §1 실측). 즉 그 가설의 마커 예측 자리는 전부 데이터 셀이다.
  *     ⚠ 다만 «그래서 agreement 가 우연값 ≈1/3 로 떨어진다» 고 말하면 **틀린다** —
@@ -47,6 +53,12 @@ import { markerCells, markerTetrads } from '../markerO.js';
 import { markerCellsA, markerGroupsA } from '../markerA.js';
 import { sampleHexCell } from './grid-sample.js';
 import { estimateHomography4 } from './homography.js';
+import {
+  hexKey,
+  hexLayoutFrom,
+  hexRotationHypotheses,
+  scoreSampledOrientation,
+} from './orientation-scorer.js';
 
 const FACE_NAMES = Object.freeze(['T', 'L', 'R']);
 const ORIENTATIONS = Object.freeze([0, 1, 2]);
@@ -193,9 +205,14 @@ function sampleOptionsFrom(options) {
   };
 }
 
-function scoreTetradAt(luma, H, cells, sampleOpts, tieEpsilon) {
+// 절대 톤 갈래의 회전 가설 3상 — 순수·결정적이라 호출마다 재생성할 이유가 없다.
+const HEX_ROTATION_HYPOTHESES = hexRotationHypotheses();
+
+function scoreTetradAt(luma, H, cells, sampleOpts, tieEpsilon, scorerOptions) {
   let agree = 0;
   let sampled = 0;
+  const toneCells = [];
+  const toneSamples = new Map();
   for (const cell of cells) {
     const result = sampleHexCell(
       luma,
@@ -204,10 +221,41 @@ function scoreTetradAt(luma, H, cells, sampleOpts, tieEpsilon) {
       cell.r,
       sampleOpts,
     );
+    if (cell.tones) {
+      // 절대 톤 셀 — 순위로 접지 않는다. 면별 median 만 모아 두고 묶음 단위로 한 번에
+      // 분류한다 (dark/bright 앵커가 «같은 묶음의 다른 셀» 에서 서므로 셀 단위 즉시
+      // 판정이 원리적으로 불가능하다).
+      toneCells.push(cell);
+      toneSamples.set(
+        hexKey(cell.q, cell.r),
+        result.ok ? { T: result.T.median, L: result.L.median, R: result.R.median } : null,
+      );
+      if (result.ok) sampled += 1;
+      continue;
+    }
     if (!result.ok) continue;
     sampled += 1;
     const rank = rankDigit({ T: result.T, L: result.L, R: result.R }, tieEpsilon);
     agree += faceAgreement(rank.ranks, cell.digit);
+  }
+  if (toneCells.length > 0) {
+    // 층 분리 — 코너 마커 층은 «위치·방향»(국소 탐색·alive·radius·confirm 게이트)이고,
+    // orientation-scorer 에서 빌리는 것은 «절대 톤 분류» 뿐이다. 방향 가설은 이미 상위
+    // (findMarkerHypotheses 의 orientation 루프)가 H 에 실어 내려보내므로 여기서는
+    // **항등 상(phases[0])의 일치 수만** 읽는다 — 틀린 방향의 H 아래에서는 항등 상
+    // 기대 톤이 관측과 어긋나 일치 수가 낮아지고, 그 낮은 agreement 를 마커 층의
+    // 게이트가 자른다. rival/margin/enoughSamples 는 이 층의 판정이 아니다: 특히
+    // 면별 톤 정족수(minimumSamplesPerTone 8)는 마커 «전체»(예: A-CM 21셀)를 방향
+    // 판정기로 쓸 때의 게이트라 묶음(≤7셀) 단위에서는 구조적으로 못 서고, 그것을
+    // 여기 게이트로 쓰면 절대 톤 마커가 전부 죽는다 — 게이트 «값» 은 어느 것도 바꾸지
+    // 않으며 완화도 아니다 (전체 수준 판정은 scoreSampledOrientation 소비자 몫).
+    const scored = scoreSampledOrientation(
+      hexLayoutFrom(toneCells),
+      HEX_ROTATION_HYPOTHESES,
+      (key) => toneSamples.get(key) || null,
+      scorerOptions,
+    );
+    agree += scored.phases[0].matches;
   }
   return { agree, sampled };
 }
@@ -295,7 +343,7 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
         translationHomography(offset.dx * cellSize, offset.dy * cellSize),
         multiply(H, scaleHomography(scale)),
       );
-      const scored = scoreTetradAt(luma, shifted, tetrad.cells, sampleOpts, tieEpsilon);
+      const scored = scoreTetradAt(luma, shifted, tetrad.cells, sampleOpts, tieEpsilon, options);
       return { ...scored, offset, scale, shifted };
     };
     let best = null;

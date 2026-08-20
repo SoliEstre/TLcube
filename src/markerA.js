@@ -20,6 +20,10 @@
  * → 이 레인은 **발자국만 채택하고 톤은 digit 알파벳 안에서 재배정**했다. 정본 톤
  *   채택 여부는 렌더러 계약 변경이라 **운영자 결정 사항**으로 남긴다
  *   (test/output/claude-oak-markers.md §5).
+ *   (2026-08-20 배선: **디코더 쪽 검증 경로는 이제 있다** — `markerCellsA(k,
+ *   tonesByKey)` 로 셀에 `tones` 를 실으면 `corner-marker-detect` 가 절대 톤
+ *   경로로 검증한다. 렌더러 계약은 여전히 미변경이라 정본 톤 «생성» 은 계속
+ *   운영자 결정이다.)
  *
  * ─────────────────────────────────────────────────────────────────────────
  * 2. 방향 margin 1.0000 — A 는 O 보다 깨끗하다
@@ -112,11 +116,41 @@ export function ringCentersA(k) {
 export const MARKER_LOCAL_DIGITS_A = Object.freeze({ ringEven: 4, ringOdd: 1, center: 2 });
 
 /**
- * 마커 21셀 — 코너 3 × (중심 1 + 링 6). 순서는 코너(top→BR→BL) → 라벨(Z, R0..R5).
- * @param {number} k
- * @returns {{q:number,r:number,digit:number,label:string,corner:number,role:'marker'}[]}
+ * 절대 톤 표 조회 — 마커 셀 «전부» 의 톤이 있어야 한다. 누락을 조용한 digit 폴백으로
+ * 덮지 않고 즉시 던진다: 톤 표는 «정본 톤 채택» 이라는 명시적 결정의 산출물이라
+ * (모듈 헤더 §1 — H2O 정본 21셀 중 9셀이 비-순열) 부분 적용이 성립하지 않는다.
  */
-export function markerCellsA(k) {
+function toneTripleFrom(tonesByKey, q, r) {
+  const kk = key(q, r);
+  const raw = tonesByKey instanceof Map ? tonesByKey.get(kk) : tonesByKey[kk];
+  if (!raw || typeof raw !== 'object') {
+    throw new RangeError('markerA: 톤 표에 ' + kk + ' 가 없다 — 마커 셀 전부의 톤이 필요하다');
+  }
+  const tones = {};
+  for (const face of ['T', 'L', 'R']) {
+    const tone = raw[face];
+    if (tone !== 0 && tone !== 1 && tone !== 2) {
+      throw new RangeError('markerA: ' + kk + '.' + face + ' 톤이 0/1/2 가 아니다: ' + tone);
+    }
+    tones[face] = tone;
+  }
+  return tones;
+}
+
+/**
+ * 마커 21셀 — 코너 3 × (중심 1 + 링 6). 순서는 코너(top→BR→BL) → 라벨(Z, R0..R5).
+ *
+ * `tonesByKey`("q,r" → {T,L,R}, Map 또는 평범한 객체)를 주면 각 셀에 절대 톤
+ * `tones: {T,L,R}` (0/1/2)가 실린다 — `corner-marker-detect` 가 그 셀을 순위 접기
+ * 대신 **절대 톤 경로**로 검증한다 (비-순열 정본 톤은 순위로 표현이 안 되므로 —
+ * 모듈 헤더 §1). digit 은 그대로 남는다: digit 은 렌더(alphabet) 계약이고 tones 는
+ * 디코더 검증 계약이라 층이 다르다. 렌더러가 비-순열 톤을 못 그리는 사실은 변하지
+ * 않았으므로, 정본 톤 «생성» 채택은 여전히 운영자 결정이다.
+ * @param {number} k
+ * @param {Map<string,{T:number,L:number,R:number}>|Record<string,{T:number,L:number,R:number}>} [tonesByKey]
+ * @returns {{q:number,r:number,digit:number,label:string,corner:number,role:'marker',tones?:{T:number,L:number,R:number}}[]}
+ */
+export function markerCellsA(k, tonesByKey) {
   assertK(k);
   const centers = ringCentersA(k);
   const out = [];
@@ -145,16 +179,18 @@ export function markerCellsA(k) {
       });
     });
   }
-  return out;
+  if (tonesByKey === undefined) return out;
+  return out.map((cell) => ({ ...cell, tones: toneTripleFrom(tonesByKey, cell.q, cell.r) }));
 }
 
 export function markerPositionSetA(k) {
   return new Set(markerCellsA(k).map((c) => key(c.q, c.r)));
 }
 
-/** 코너별 묶음 — 검출기가 «코너 단위» 로 다룬다. 기준점(anchor)은 링 중심이다. */
-export function markerGroupsA(k) {
-  const cells = markerCellsA(k);
+/** 코너별 묶음 — 검출기가 «코너 단위» 로 다룬다. 기준점(anchor)은 링 중심이다.
+ *  `tonesByKey` 는 `markerCellsA` 로 그대로 승계된다 (절대 톤 검증용). */
+export function markerGroupsA(k, tonesByKey) {
+  const cells = markerCellsA(k, tonesByKey);
   const groups = [];
   for (const cell of cells) {
     if (!groups[cell.corner]) groups[cell.corner] = { corner: cell.corner, cells: [], anchorLabel: 'Z' };
