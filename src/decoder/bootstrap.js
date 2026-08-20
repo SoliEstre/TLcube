@@ -62,6 +62,9 @@ import {
   hasLegacyFormatWire,
 } from '../cellSurfaceFinal.js';
 import { decodeCells } from '../decode.js';
+import { markerGSpec, markerGSpecFromFormatIndex } from '../markerG.js';
+import { dataCellsInScanOrderOMarker } from '../markerO.js';
+import { dataCellsInScanOrderAMarker } from '../markerA.js';
 import { DIGIT_COUNT_V2 } from '../formatinfo.js';
 import { enumerateFormatProposals, enumerateFormatProposalsV2 } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
@@ -418,12 +421,17 @@ function finderTransform(finder) {
 }
 
 function familyProfiles(family) {
+  // 내부 타입 G(코너 마커) 인덱스도 이 (family, k) 소유다 — `markerG.js` 표 주도.
+  // 여기 넣어야 formatIndexOwners(재배치·재라벨)와 profileForFormatCandidate 가
+  // G 인덱스로 읽힌 프레임을 자기 패밀리로 되짚을 수 있다.
   if (family === 'hex') {
     return VERSIONS.map((spec) => ({
       family,
       dimension: spec.k,
       spec,
-      formatIndices: [spec.version - 1, spec.version + 3],
+      formatIndices: [
+        spec.version - 1, spec.version + 3, markerGSpec('hex', spec.version).formatIndex,
+      ],
     }));
   }
   if (family === 'tri') {
@@ -431,7 +439,9 @@ function familyProfiles(family) {
       family,
       dimension: spec.k,
       spec,
-      formatIndices: [spec.formatIndex, spec.formatIndex + 2],
+      formatIndices: [
+        spec.formatIndex, spec.formatIndex + 2, markerGSpec('tri', spec.version).formatIndex,
+      ],
     }));
   }
   if (family === 'cube') {
@@ -458,11 +468,19 @@ function profileForHypothesis(hypothesis) {
 function validVersionIndices(hypothesis) {
   const profile = profileForHypothesis(hypothesis);
   if (!profile) return [];
+  // 내부 타입 G(코너 마커) 인덱스는 centerQr 가설에서는 열지 않는다 — cornerMarker ×
+  // centerQr 는 인코더가 던지는 배타 조합이라 그 프레임은 존재할 수 없다. centerQr
+  // 아님이면 레거시와 G 를 **둘 다** 연다: 어느 쪽인지는 CRC + 본문 RS 가 가른다
+  // (다른 값·같은 k 이므로 후보가 겹칠 수 없다 — markerG.js 무경합 자기검증).
   if (hypothesis.family === 'hex') {
-    return [profile.spec.version - 1 + (hypothesis.centerQr ? 4 : 0)];
+    return hypothesis.centerQr
+      ? [profile.spec.version - 1 + 4]
+      : [profile.spec.version - 1, markerGSpec('hex', profile.spec.version).formatIndex];
   }
   if (hypothesis.family === 'tri') {
-    return [profile.spec.formatIndex + (hypothesis.centerQr ? 2 : 0)];
+    return hypothesis.centerQr
+      ? [profile.spec.formatIndex + 2]
+      : [profile.spec.formatIndex, markerGSpec('tri', profile.spec.version).formatIndex];
   }
   if (hypothesis.cellSurface === true) {
     if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
@@ -2322,6 +2340,24 @@ function exhaustiveCubeFamilyOptions(options) {
   return { ...family, exhaustiveBlockRecovery: true };
 }
 
+function compactGeometryPoseDiagnostics(hypotheses) {
+  return hypotheses.map((hypothesis) => ({
+    hypothesisId: hypothesis.hypothesisId,
+    family: hypothesis.family,
+    k: hypothesis.k,
+    n: hypothesis.n,
+    source: hypothesis.source,
+    H: hypothesis.H ? Array.from(hypothesis.H) : null,
+    center: hypothesis.center && Number.isFinite(hypothesis.center.x) && Number.isFinite(hypothesis.center.y)
+      ? { x: hypothesis.center.x, y: hypothesis.center.y }
+      : null,
+    vertices: Array.isArray(hypothesis.vertices)
+      ? hypothesis.vertices.filter((point) => point && Number.isFinite(point.x) && Number.isFinite(point.y))
+        .map((point) => ({ x: point.x, y: point.y }))
+      : null,
+  }));
+}
+
 export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
   try {
     assertLumaField(luma);
@@ -2592,6 +2628,7 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
         cube: uniqueDimensions('cube'),
       },
       geometryHypothesisCount: unique.length,
+      poseDiagnostics: compactGeometryPoseDiagnostics(unique),
       anchorDiagnostics,
       outline: outline && {
         area: outline.area,
@@ -2957,12 +2994,54 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       referenceReportFor(hypothesis, grid, options));
     const acceptedForHypothesis = [];
 
+    /*
+     * 내부 타입 G(코너 마커) 본문 — 포맷 워드가 G 인덱스를 말하면 본문 scan order 가
+     * 레거시와 다르다 (마커가 데이터 셀을 먹는다). CM 데이터 셀은 레거시 데이터 셀의
+     * **부분집합**이므로 (마커·재배치 레퍼런스가 전부 레거시 데이터 자리를 먹는다 —
+     * `test/markerG.test.js` 가 전 k 에서 고정) 이미 표본화한 grid 를 재사용해
+     * CM scan order 로 digit 만 다시 뽑는다. G 후보가 없으면 비용 0 (lazy).
+     */
+    let markerBody = null;
+    const markerBodyFor = () => {
+      if (markerBody === null) {
+        const scan = hypothesis.family === 'hex'
+          ? dataCellsInScanOrderOMarker(dimension)
+          : dataCellsInScanOrderAMarker(dimension);
+        const markerDigits = [];
+        const markerErasures = [];
+        for (const cell of scan) {
+          const sample = grid.cells.get(cell.q + ',' + cell.r);
+          if (sample === undefined) {
+            // 레거시 경로와 같은 구제: 결정적 0 + RS 소거 (sample-starved).
+            markerErasures.push(markerDigits.length);
+            markerDigits.push(0);
+            continue;
+          }
+          markerDigits.push(sampleToDigit(sample));
+        }
+        markerBody = { digits: markerDigits, erasureCells: markerErasures };
+      }
+      return markerBody;
+    };
+
     for (const formatCandidate of formatRead.formatCandidates) {
       const decodeFormat = {
         type: layout.type,
         formatIndex: formatCandidate.versionIndex,
         eccLevel: formatCandidate.eccLevel,
       };
+      // 포맷 워드에서 읽은 인덱스가 G 표의 값이면 cornerMarker 를 켜서 하류에 전달
+      // 한다 — decode.js:298·:365 의 분기는 이미 있고, 여기가 그 호출자다 (019 의
+      // 교훈: 생성기·디코더 양 끝이 다 있어야 효과가 있다). validVersionIndices 가
+      // 자기 패밀리 G 값만 허용하므로 family 대조는 belt-and-braces 다.
+      const markerSpec = cube
+        ? null
+        : markerGSpecFromFormatIndex(formatCandidate.versionIndex, dimension);
+      const useMarkerBody = markerSpec !== null && markerSpec.family === hypothesis.family;
+      if (useMarkerBody) {
+        decodeFormat.cornerMarker = true;
+        decodeFormat.version = markerSpec.version;
+      }
       if (cube) {
         decodeFormat.n = dimension;
         decodeFormat.tones = hypothesis.tones;
@@ -2989,8 +3068,9 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         // 여기서는 같은 판정을 decode.js 에 그대로 옮긴다.
         if (layout.daehanFinder === true) decodeFormat.daehanFinder = true;
       }
+      const body = useMarkerBody ? markerBodyFor() : { digits, erasureCells };
       const decoded = withStage(options, 'decode', () =>
-        decodeCells(digits, decodeFormat, { erasureCells }));
+        decodeCells(body.digits, decodeFormat, { erasureCells: body.erasureCells }));
       if (!decoded.ok) {
         diagnostics.bodyFailures.push({
           hypothesisId: hypothesis.hypothesisId,

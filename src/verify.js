@@ -97,15 +97,65 @@ export function recoverDigit(medians) {
  * @param {{cellDigits: Map<string, {digit:number, role:string}>}} encoded
  * @returns {{total:number, matched:number, mismatches:Array, minDelta:number, ok:boolean}}
  */
+/**
+ * 면별 «절대 톤» 셀의 렌더 검증 — digit 순위가 아니라 톤의 **순서 관계**를 잰다.
+ *
+ * 코너 마커의 정본 H2O 톤처럼 비-순열(두 면이 같은 값)인 셀은 digit 순위로 재면
+ * «동률» 이 곧바로 불일치로 나온다 — 자가 다른 것이지 렌더가 틀린 것이 아니다.
+ * 그래서 여기서는 문턱 없이 **관계만** 본다:
+ *   ① 톤이 다른 두 면은 톤 크기와 같은 방향으로 밝기가 정렬돼야 한다.
+ *   ② 톤이 같은 두 면은 서로가, 톤이 다른 어떤 쌍보다도 가까워야 한다.
+ * 상수를 새로 들이지 않으므로 어떤 게이트도 내리지 않는다.
+ *
+ * ⚠ 세 면의 톤이 전부 같은 셀(예: (2,2,2))은 ①·② 가 공허하게 참이다 — 이 함수만으로는
+ * 그런 셀의 «절대 밝기가 맞는가» 를 판정할 수 없다. 그 축은 프레임 전역 앵커가 필요하고
+ * `decoder/orientation-scorer.js` 가 그 일을 한다 (검출 경로).
+ */
+function toneOrderViolations(medians, tones) {
+  const bad = [];
+  const pairs = [['T', 'L'], ['T', 'R'], ['L', 'R']];
+  let minDiffTonePair = Infinity;
+  for (const [a, b] of pairs) {
+    if (tones[a] === tones[b]) continue;
+    const gap = Math.abs(medians[a] - medians[b]);
+    if (gap < minDiffTonePair) minDiffTonePair = gap;
+    const wantBrighter = tones[a] > tones[b] ? a : b;
+    const wantDarker = wantBrighter === a ? b : a;
+    if (!(medians[wantBrighter] > medians[wantDarker])) {
+      bad.push({ pair: [a, b], why: 'order', tones: [tones[a], tones[b]] });
+    }
+  }
+  if (Number.isFinite(minDiffTonePair)) {
+    for (const [a, b] of pairs) {
+      if (tones[a] !== tones[b]) continue;
+      if (!(Math.abs(medians[a] - medians[b]) < minDiffTonePair)) {
+        bad.push({ pair: [a, b], why: 'equal-tone-not-closest', tones: [tones[a], tones[b]] });
+      }
+    }
+  }
+  return bad;
+}
+
 export function verifyRaster(raster, scene, encoded) {
   let total = 0;
   let matched = 0;
   let minDelta = Infinity;
   const mismatches = [];
 
-  for (const [cellKey, { digit, role }] of encoded.cellDigits) {
+  for (const [cellKey, { digit, role, tones }] of encoded.cellDigits) {
     const [q, r] = cellKey.split(',').map(Number);
     const medians = measureCellFaceMedians(raster, scene, q, r);
+
+    if (tones) {
+      // 렌더 계약이 digit 이 아니라 면별 절대 톤인 셀. digit 으로 재면 자가 다르다.
+      // minDelta 도 재지 않는다 — 그것은 digit 분리 계약이고, 여기선 동률이 **의도된 값**이다.
+      total += 1;
+      const violations = toneOrderViolations(medians, tones);
+      if (violations.length === 0) matched += 1;
+      else mismatches.push({ q, r, role, expectedTones: tones, medians, violations });
+      continue;
+    }
+
     const recovered = recoverDigit(medians);
 
     const sorted = FACES.map((f) => medians[f]).sort((a, b) => a - b);

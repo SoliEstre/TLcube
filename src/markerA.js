@@ -11,19 +11,15 @@
  * 중심 3셀까지 더한 21셀이 `claude-oak-review.md` §1.2 가 «슬롯 63» 으로 센 집합이고,
  * 이 모듈도 21셀을 쓴다.
  *
- * 반면 **H2O 의 톤 정본은 Type A 알파벳으로 표현할 수 없다.** 21셀 중 **9셀이
- * 비-순열**이다 (예: 링 중심 (3,−6) = (2,2,2) 전면 밝음 · (2,−6) = (2,2,0)).
- * Type O/A 의 셀은 정의상 3면 휘도 «순위» 순열(base-6 digit)이라 `scene.js` 의
- * `digitToRanks` 경로가 그런 셀을 그릴 수 없다. 정본 톤을 쓰려면 **렌더러 계약을
- * 바꿔야** 하고(마커 셀만 면별 임의 톤), 그 변경은 O/A 렌더 경로 전체에 파급된다.
+ * 반면 **H2O 의 톤 정본은 Type A 알파벳(순위 순열)으로 표현할 수 없다.** 21셀 중
+ * **9셀이 비-순열**이다 (예: 링 중심 (3,−6) = (2,2,2) 전면 밝음 · (2,−6) = (2,2,0)).
+ * digit 경로(`digitToRanks` → `palette.levels`)는 그런 셀을 못 그린다.
  *
- * → 이 레인은 **발자국만 채택하고 톤은 digit 알파벳 안에서 재배정**했다. 정본 톤
- *   채택 여부는 렌더러 계약 변경이라 **운영자 결정 사항**으로 남긴다
- *   (test/output/claude-oak-markers.md §5).
- *   (2026-08-20 배선: **디코더 쪽 검증 경로는 이제 있다** — `markerCellsA(k,
- *   tonesByKey)` 로 셀에 `tones` 를 실으면 `corner-marker-detect` 가 절대 톤
- *   경로로 검증한다. 렌더러 계약은 여전히 미변경이라 정본 톤 «생성» 은 계속
- *   운영자 결정이다.)
+ * 2026-08-20: **렌더러 계약이 열렸다.** `scene.js` 는 `entry.tones` 가 있으면 면별
+ * 절대 톤을 파인더 축(bullseyeLight / BULLSEYE_MID / bullseyeDark)으로 그린다.
+ * 이 모듈은 정본 H2O 톤을 `h2oTonesByKeyA(k)` 로 실어 주고, A-CM 검출 진입점
+ * (`findACornerMarkerHypotheses`)이 그 표를 기본값으로 관통한다. 무인자
+ * `markerCellsA(k)` 산출은 그대로 digit-only 다 — 톤은 명시적으로 실어야 한다.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * 2. 방향 margin 1.0000 — A 는 O 보다 깨끗하다
@@ -80,6 +76,7 @@ import { maxBytesForSymbols } from './capacity.js';
 import { errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
 import { VERSIONS_A } from './capacityA.js';
+import { markerGSpec } from './markerG.js';
 import { rotateDigitCw, rotateDigitCcw } from './markerO.js';
 
 export const AUTOPLACE_TRI_PATCH_REF = 'AUTOPLACE_TRI_PATCH_REF';
@@ -114,6 +111,55 @@ export function ringCentersA(k) {
  * 값은 markerO 의 알파벳(4·1·2)과 맞춰 코드 전체에서 마커 digit 어휘를 통일했다.
  */
 export const MARKER_LOCAL_DIGITS_A = Object.freeze({ ringEven: 4, ringOdd: 1, center: 2 });
+
+/**
+ * 정본 H2O 의 면별 톤 — k=4 편집기 export 를 로컬 라벨(Z, R0..R5) × 코너에 고정.
+ * 다른 k 는 같은 로컬 라벨을 링 중심에 복사한다 (`h2oTonesByKeyA`).
+ * export 에 없는 면은 중간색 1 (편집기 v2 규약). 실측: 비-순열 9셀.
+ */
+export const H2O_LOCAL_TONES_A = Object.freeze({
+  0: Object.freeze({
+    Z: Object.freeze({ T: 2, L: 2, R: 2 }),
+    R0: Object.freeze({ T: 2, L: 0, R: 2 }),
+    R1: Object.freeze({ T: 2, L: 0, R: 2 }),
+    R2: Object.freeze({ T: 2, L: 2, R: 0 }),
+    R3: Object.freeze({ T: 2, L: 2, R: 0 }),
+    R4: Object.freeze({ T: 0, L: 2, R: 2 }),
+    R5: Object.freeze({ T: 0, L: 2, R: 2 }),
+  }),
+  1: Object.freeze({
+    Z: Object.freeze({ T: 0, L: 0, R: 0 }),
+    R0: Object.freeze({ T: 1, L: 2, R: 0 }),
+    R1: Object.freeze({ T: 0, L: 2, R: 1 }),
+    R2: Object.freeze({ T: 0, L: 1, R: 2 }),
+    R3: Object.freeze({ T: 1, L: 0, R: 2 }),
+    R4: Object.freeze({ T: 2, L: 0, R: 1 }),
+    R5: Object.freeze({ T: 2, L: 1, R: 0 }),
+  }),
+  2: Object.freeze({
+    Z: Object.freeze({ T: 0, L: 0, R: 0 }),
+    R0: Object.freeze({ T: 1, L: 2, R: 0 }),
+    R1: Object.freeze({ T: 0, L: 2, R: 1 }),
+    R2: Object.freeze({ T: 0, L: 1, R: 2 }),
+    R3: Object.freeze({ T: 1, L: 0, R: 2 }),
+    R4: Object.freeze({ T: 2, L: 0, R: 1 }),
+    R5: Object.freeze({ T: 2, L: 1, R: 0 }),
+  }),
+});
+
+/** 정본 H2O 톤을 k 의 마커 좌표로 전개한 표 ("q,r" → {T,L,R}). */
+export function h2oTonesByKeyA(k) {
+  assertK(k);
+  const map = new Map();
+  for (const cell of markerCellsA(k)) {
+    const tones = H2O_LOCAL_TONES_A[cell.corner][cell.label];
+    if (!tones) {
+      throw new Error('markerA: H2O 로컬 표에 코너 ' + cell.corner + ' 라벨 ' + cell.label + ' 가 없다');
+    }
+    map.set(key(cell.q, cell.r), tones);
+  }
+  return map;
+}
 
 /**
  * 절대 톤 표 조회 — 마커 셀 «전부» 의 톤이 있어야 한다. 누락을 조용한 digit 폴백으로
@@ -379,11 +425,14 @@ export const NSYM_TABLE_ACM = Object.freeze({
 /** 마커가 먹는 셀 수 (전 k 공통 21). */
 export const MARKER_CELL_COUNT_A = 21;
 
+// formatIndex 는 레거시 A 가 아니라 **내부 타입 G 표**(`markerG.js`, 운영자 확정
+// 2026-08-20)에서 유도한다 — 레거시 값을 그대로 실으면 디코더가 마커 회계(21셀)를
+// 와이어에서 구분할 수 없다 (실기 「코너 마커 코드 스캔 불가」의 근본 원인).
 export const VERSIONS_ACM = Object.freeze(VERSIONS_A.map((spec) => Object.freeze({
   name: spec.name + 'CM',
   version: spec.version,
   k: spec.k,
-  formatIndex: spec.formatIndex,
+  formatIndex: markerGSpec('tri', spec.version).formatIndex,
   overhead: spec.overhead + MARKER_CELL_COUNT_A,
   symbolKey: spec.name + 'CM',
 })));

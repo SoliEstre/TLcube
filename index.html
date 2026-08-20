@@ -1201,11 +1201,16 @@
       </div>
 
       <!-- 코너 마커 (O-CM / A-CM) — Type O·A + lab 전용. #turnASection 과 같은 게이트 문법.
-           ⚠ **실측 (2026-08-20)**: 이 옵션은 turnA 와 달리 **왕복이 선다.**
-           `decoder/corner-marker-detect.js` 를 `bootstrap.directAnchorHypotheses` 에
-           배선했고(앵커가 0일 때만 열리는 fallback), 합성 원근 실측에서 앵커 한계
-           g=0.0001 → 코너 마커 g=0.0008 로 **약 8배** 늘었다
+           ⚠ **실측 (2026-08-20)**: 왕복이 **양 끝 다 배선돼 완전히 선다**:
+           ① 기하 — `decoder/corner-marker-detect.js` 를 `bootstrap.directAnchorHypotheses`
+           에 배선(앵커가 0일 때만 열리는 fallback). 합성 원근 실측에서 앵커 한계
+           g=0.0001 → 코너 마커 g=0.0008 로 **약 8배**
            (test/decoder-corner-marker-wiring.test.js ②, 변이 검증 완료).
+           ② 와이어 — 내부 타입 G 전용 formatIndex(`src/markerG.js` 표 주도, 운영자 확정
+           2026-08-20). 인코더가 G 인덱스를 싣고 디코더는 포맷 워드의 그 값으로 CM 회계를
+           켠다. 라이브 왕복은 test/markerG.test.js ④(6항목 전수) + generator-ui-wiring §5
+           가 잰다 (변이 검증 완료). 카드는 여전히 lab 전용이다 — 실사진(실기기) 라운드
+           전의 일반 노출은 운영자 결정 (generator-corner-marker.test.js ④ 가 잠근다).
            ⚠ turnA 와 **상호배제**다 — `encodeA` 가 둘 다 참이면 던진다(src/encodeA.js).
            그래서 이 카드를 켜면 syncCornerMarkerUi 가 turnA 를 끄고 그 카드를 잠근다.
            조용히 떨구지 않는다: 잠긴 이유를 힌트가 말한다.
@@ -1229,7 +1234,7 @@
             <span data-i18n="g578">교대 코너 3곳</span>
           </div>
         </div>
-        <p class="hint" id="cornerMarkerHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어드는데, 지금은 이 상태로 만든 코드를 스캐너가 못 읽어요 — 표식이 있다는 걸 알리는 자리가 코드 안에 아직 없거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
+        <p class="hint" id="cornerMarkerHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
       </div>
 
       <div class="row">
@@ -2510,7 +2515,7 @@ const GENERATOR_STRINGS = {
     "g576": "코너 마커 (실험)",
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
-    "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어드는데, 지금은 이 상태로 만든 코드를 스캐너가 못 읽어요 — 표식이 있다는 걸 알리는 자리가 코드 안에 아직 없거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.",
+    "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.",
     "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깔때까지 잠과 둘게요.",
     "g581": "지금 파인더가 가운데를 쓰고 있어서 QR 을 가운데에 넣을 수 없어요. 다른 파인더를 고르면 풀려요.",
     "g507": "{filename}으로 다운로드되었습니다.",
@@ -2921,7 +2926,7 @@ const GENERATOR_STRINGS = {
     "g576": "Corner markers (experimental)",
     "g577": "None (default)",
     "g578": "Three alternating corners",
-    "g579": "Experimental. It adds helper marks at three alternating corners and lowers capacity, but codes made this way cannot be read by the scanner yet — the code has no place to announce that the marks are there. Cannot be combined with silhouette direction (turnA).",
+    "g579": "Experimental. It adds helper marks at three alternating corners and lowers capacity. Codes made this way can now be read by the scanner — the format field inside the code announces that the marks are there. Cannot be combined with silhouette direction (turnA).",
     "g580": "Corner markers are unavailable while the QR sits in the centre — the two compete for the same cells. They unlock when you move the QR.",
     "g581": "The current finder occupies the centre, so the QR cannot sit there. Pick a different finder to unlock it.",
     "g507": "Downloaded as {filename}.",
@@ -3332,7 +3337,7 @@ const GENERATOR_STRINGS = {
     "g576": "コーナーマーカー（実験）",
     "g577": "なし（既定）",
     "g578": "交互の3隅",
-    "g579": "実験用です。交互の3隅に補助マークを入れ容量も減りますが、今はこの状態で作ったコードをスキャナが読み取れません — マークがあると伝える場所がコード内にまだありません。シルエット方向（turnA）とは併用できません。",
+    "g579": "実験用です。交互の3隅に補助マークを入れ容量も減ります。この状態で作ったコードもスキャナで読み取れるようになりました — マークがあることはコード内のフォーマット欄に記録されます。シルエット方向（turnA）とは併用できません。",
     "g580": "中央 QR を使っている間はコーナーマーカーを使えません — 同じマスを争うためです。QR の位置を変えると使えるようになります。",
     "g581": "現在のファインダーが中央を使っているため、QR を中央に置けません。別のファインダーを選ぶと使えます。",
     "g507": "{filename} としてダウンロードしました。",
@@ -3742,7 +3747,7 @@ const GENERATOR_STRINGS = {
     "g576": "Marqueurs d'angle (expérimental)",
     "g577": "Aucun (par défaut)",
     "g578": "Trois angles alternés",
-    "g579": "Expérimental. Ajoute des repères à trois angles alternés et réduit la capacité, mais les codes créés ainsi ne sont pas encore lisibles par le scanner — le code n'a pas de champ pour signaler la présence des repères. Incompatible avec le sens de la silhouette (turnA).",
+    "g579": "Expérimental. Ajoute des repères à trois angles alternés et réduit la capacité. Les codes créés ainsi sont désormais lisibles par le scanner — le champ de format du code signale la présence des repères. Incompatible avec le sens de la silhouette (turnA).",
     "g580": "Les marqueurs d'angle sont indisponibles tant que le QR occupe le centre — les deux se disputent les mêmes cellules. Ils se débloquent si vous déplacez le QR.",
     "g581": "Le repère actuel occupe le centre, le QR ne peut donc pas s'y placer. Choisissez un autre repère pour le débloquer.",
     "g507": "Téléchargé sous le nom {filename}.",
@@ -4152,7 +4157,7 @@ const GENERATOR_STRINGS = {
     "g576": "Marcatori d'angolo (sperimentale)",
     "g577": "Nessuno (predefinito)",
     "g578": "Tre angoli alternati",
-    "g579": "Sperimentale. Aggiunge riferimenti su tre angoli alternati e riduce la capacità, ma i codici creati così non sono ancora leggibili dallo scanner — il codice non ha un campo per segnalare che i riferimenti ci sono. Non si può combinare con la direzione della sagoma (turnA).",
+    "g579": "Sperimentale. Aggiunge riferimenti su tre angoli alternati e riduce la capacità. I codici creati così ora sono leggibili dallo scanner — il campo formato del codice segnala che i riferimenti ci sono. Non si può combinare con la direzione della sagoma (turnA).",
     "g580": "I marcatori d'angolo non sono disponibili finché il QR sta al centro — i due si contendono le stesse celle. Si sbloccano spostando il QR.",
     "g581": "Il finder attuale occupa il centro, quindi il QR non può stare lì. Scegli un altro finder per sbloccarlo.",
     "g507": "Scaricato come {filename}.",
@@ -4562,7 +4567,7 @@ const GENERATOR_STRINGS = {
     "g576": "Eckmarker (experimentell)",
     "g577": "Keine (Standard)",
     "g578": "Drei abwechselnde Ecken",
-    "g579": "Experimentell. Setzt Hilfsmarken an drei abwechselnde Ecken und senkt die Kapazität, aber so erzeugte Codes kann der Scanner noch nicht lesen — im Code fehlt die Stelle, die das Vorhandensein der Marken meldet. Nicht zusammen mit der Silhouettenrichtung (turnA) nutzbar.",
+    "g579": "Experimentell. Setzt Hilfsmarken an drei abwechselnde Ecken und senkt die Kapazität. So erzeugte Codes kann der Scanner jetzt lesen — das Formatfeld im Code meldet das Vorhandensein der Marken. Nicht zusammen mit der Silhouettenrichtung (turnA) nutzbar.",
     "g580": "Eckmarker sind nicht verfügbar, solange der QR in der Mitte sitzt — beide beanspruchen dieselben Zellen. Sie werden frei, wenn Sie den QR verschieben.",
     "g581": "Der aktuelle Finder belegt die Mitte, daher kann der QR dort nicht sitzen. Wählen Sie einen anderen Finder, um ihn freizugeben.",
     "g507": "Als {filename} heruntergeladen.",
@@ -4972,7 +4977,7 @@ const GENERATOR_STRINGS = {
     "g576": "Marcadores de esquina (experimental)",
     "g577": "Ninguno (predeterminado)",
     "g578": "Tres esquinas alternas",
-    "g579": "Experimental. Añade marcas de apoyo en tres esquinas alternas y reduce la capacidad, pero los códigos creados así todavía no los puede leer el escáner — el código no tiene dónde avisar de que las marcas están. No se puede combinar con la dirección de la silueta (turnA).",
+    "g579": "Experimental. Añade marcas de apoyo en tres esquinas alternas y reduce la capacidad. Los códigos creados así ya los puede leer el escáner — el campo de formato del código avisa de que las marcas están. No se puede combinar con la dirección de la silueta (turnA).",
     "g580": "Los marcadores de esquina no están disponibles mientras el QR ocupa el centro — ambos se disputan las mismas celdas. Se desbloquean al mover el QR.",
     "g581": "El localizador actual ocupa el centro, así que el QR no puede ir ahí. Elige otro localizador para desbloquearlo.",
     "g507": "Descargado como {filename}.",
@@ -5382,7 +5387,7 @@ const GENERATOR_STRINGS = {
     "g576": "Marcadores de canto (experimental)",
     "g577": "Nenhum (padrão)",
     "g578": "Três cantos alternados",
-    "g579": "Experimental. Acrescenta marcas de apoio em três cantos alternados e reduz a capacidade, mas códigos criados assim ainda não são lidos pelo leitor — o código não tem onde avisar que as marcas existem. Não pode ser combinado com a direção da silhueta (turnA).",
+    "g579": "Experimental. Acrescenta marcas de apoio em três cantos alternados e reduz a capacidade. Códigos criados assim agora são lidos pelo leitor — o campo de formato do código avisa que as marcas existem. Não pode ser combinado com a direção da silhueta (turnA).",
     "g580": "Os marcadores de canto ficam indisponíveis enquanto o QR está no centro — os dois disputam as mesmas células. Eles liberam quando você move o QR.",
     "g581": "O localizador atual ocupa o centro, então o QR não pode ficar ali. Escolha outro localizador para liberar.",
     "g507": "Transferido como {filename}.",

@@ -282,40 +282,44 @@ test('§5 turnA 로 만든 코드는 아직 라이브 경로가 못 읽는다 (�
     + ' index.html 의 «못 읽어요» 힌트(g575)와 turnASection 주석을 같이 고쳐라.');
 });
 
-test('§5 cornerMarker — 기하는 배선됐고 왕복은 아직 안 선다 (그래서 lab 뒤에 둔다)', () => {
-  // 2026-08-20 갱신. 이 테스트는 원래 «검출기가 배선 안 됐다» 를 고정했고, 배선되면
-  // «위 기대값을 다시 재라» 고 스스로 지시했다. 배선했고, 다시 쟀다. 결과:
+test('§5 cornerMarker — 왕복이 선다 (내부 타입 G 와이어, 2026-08-20)', () => {
+  // 2026-08-20 재갱신. 이 테스트는 «왕복이 안 선다» 를 고정하고 있었고, 배선되면
+  // 기대값을 뒤집고 g579 힌트를 같은 변경에서 고치라고 스스로 지시했다. 배선했다:
   //
-  //   ⓐ 기하 단계는 **선다** — bootstrap.directAnchorHypotheses 가 앵커 실패 시
-  //      코너 마커로 넘어간다 (decoder-corner-marker-wiring.test.js, 원근 내성 약 8배).
-  //   ⓑ 그런데 **왕복은 여전히 안 선다.** 이유가 바뀌었다:
-  //      본문 scan order 가 레거시라서가 아니라, **와이어에 신호가 없어서**다 —
-  //      `formatinfo.js` 에 `cornerMarker` 비트가 없다. `decode.js` 는
-  //      `format.cornerMarker` 를 **호출자가 알려줄 때만** CM scan order 를 쓴다
-  //      (decode.js:298). 라이브 경로엔 알려줄 사람이 없다.
+  //   ⓐ 기하 — bootstrap.directAnchorHypotheses 가 앵커 실패 시 코너 마커로
+  //      넘어간다 (decoder-corner-marker-wiring.test.js, 원근 내성 약 8배). 유지.
+  //   ⓑ 와이어 — 「신호가 없다」가 원인이었고, 신호는 **비트가 아니라 값**으로
+  //      생겼다: 내부 타입 G 전용 formatIndex (`src/markerG.js` 표 주도, 턴A 전례,
+  //      운영자 확정 2026-08-20). 인코더(encode/encodeA)가 G 인덱스를 싣고,
+  //      디코더(bootstrap→decodeCells)는 포맷 워드의 그 값으로 `format.cornerMarker`
+  //      를 켠다 (decode.js:298·:365 의 기존 분기 — 호출자가 생겼다).
   //
-  // 그래서 daehan 이 간 길(광학 검출 → patternId → layoutForFamily)이 남은 선택지다.
-  // 코너 마커도 광학으로 검출되므로 가능하지만, 그러려면 CM 검출을 fallback 밖에서도
-  // 돌려야 하고 그건 «합집합» 판단이라 실측 없이 하지 않는다.
+  // daehan 식 «광학 검출 → 합집합 배선» 은 필요 없어졌다 — 판별이 와이어에 있다.
+  // 6항목(O V1..3 · A0..2) 전수 왕복·무경합·변이 검증은 test/markerG.test.js 가 잰다.
   for (const [label, result] of [
     ['O-CM', decodeFrontend(render(encode('TLcube', { version: 1, eccLevel: 'M', cornerMarker: true })))],
     ['A-CM', decodeFrontend(render(encodeA('TLcube', { version: 0, eccLevel: 'M', cornerMarker: true }), { margin: 20 }))],
   ]) {
-    assert.equal(result.ok, false,
-      label + ' 왕복이 서기 시작했다 — 축하한다. 이제 (a) 이 카드를 lab 게이트 밖으로 내보내고'
-      + ' (b) index.html 의 «못 읽어요» 힌트(g579)와 cornerMarkerSection 주석을 같이 고쳐라.');
+    assert.equal(result.ok, true,
+      label + ' 왕복이 다시 죽었다 — 양 끝(인코더 G 인덱스 · bootstrap 의 cornerMarker'
+      + ' 전달) 중 어느 쪽이 끊겼는지 test/markerG.test.js ④ 와 같이 보라.');
+    assert.equal(result.text, 'TLcube', label + ' 페이로드 불일치');
   }
   // 기하 배선은 **있어야 한다** — 위 ⓐ 의 근거다. 사라지면 8배 실측도 같이 사라진다.
   assert.equal(
     readFileSync(ROOT + 'src/decoder/bootstrap.js', 'utf8').includes('corner-marker-detect'),
     true, 'bootstrap 의 코너 마커 배선이 사라졌다 — decoder-corner-marker-wiring 도 같이 볼 것');
-  // 와이어 신호 부재가 진짜 이유라는 것을 **값으로** 고정한다. 여기가 참인 한 왕복은 못 선다.
+  // 와이어 신호는 **전용 formatIndex 값**이지 포맷 워드의 새 비트가 아니다 — 예비
+  // 비트(RESERVED_BITS_V2) 우회는 hex 링 3 의 «15 포맷 + 2 레퍼런스» 계약을 깨서
+  // 기각됐다 (운영자 결정). formatinfo 에 cornerMarker 가 생기면 그 기각을 되살린 것이다.
   assert.equal(
     readFileSync(ROOT + 'src/formatinfo.js', 'utf8').includes('cornerMarker'),
-    false, 'formatinfo 에 cornerMarker 가 생겼다 — 왕복 기대값을 다시 재라');
-  // UI 힌트가 그 사실을 말하는가. 라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
+    false, 'formatinfo 에 cornerMarker 가 생겼다 — 기각된 예비 비트 우회를 되살렸는지 보라');
+  // UI 힌트가 새 사실을 말하는가. 라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
   const index = readFileSync(ROOT + 'index.html', 'utf8');
   assert.match(index, /id="cornerMarkerHint"/, '힌트 문단이 없다');
-  assert.match(index, /스캐너가 못 읽어요/,
-    '코너 마커 힌트가 «못 읽어요» 를 말하지 않는다 — 왕복이 안 서는데 «잘 읽힌다» 고 적으면 거짓말이다');
+  assert.doesNotMatch(index, /코드를 스캐너가 못 읽어요 — 표식이/,
+    '코너 마커 힌트가 아직 «못 읽어요» 를 말한다 — 왕복이 서는데 «못 읽는다» 고 적으면 거짓말이다');
+  assert.match(index, /스캐너가 읽어요 — 표식이 있다는 사실이/,
+    '코너 마커 힌트(g579)가 «읽어요» 를 말하지 않는다');
 });

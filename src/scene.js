@@ -184,6 +184,25 @@ function segmentsIntersect(p1, p2, p3, p4) {
   return t > 0 && t < 1 && u > 0 && u < 1;
 }
 
+/**
+ * 셀 한 면의 색. `entry.tones` 가 있으면 면별 절대 톤(0/1/2) → 파인더 축
+ * (bullseyeLight / BULLSEYE_MID / bullseyeDark). 없으면 기존 digit 순위 →
+ * `palette.levels`. 데이터 셀은 tones 를 안 들므로 한 픽셀도 안 바뀐다.
+ * 톤이 실렸는데 0/1/2 가 아니면 조용한 digit 폴백 없이 던진다.
+ */
+function faceColor(entry, face, palette) {
+  const tones = entry && entry.tones;
+  if (tones) {
+    const level = tones[face];
+    if (level !== 0 && level !== 1 && level !== 2) {
+      throw new RangeError('scene: tones.' + face + ' 가 0/1/2 가 아니다: ' + level);
+    }
+    return level === 2 ? palette.bullseyeLight
+      : level === 1 ? BULLSEYE_MID : palette.bullseyeDark;
+  }
+  return palette.levels[digitToRanks(entry.digit)[face]];
+}
+
 /** 콰이어트 패치(밝음) + QR 다크 모듈들을 axis-aligned 사각형 폴리곤으로 shapes 에 밀어넣는다. */
 function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
   const blockSide = QR_BLOCK_MODULES * qrModuleSize;
@@ -375,7 +394,6 @@ export function buildScene(encoded, options) {
     const commaIdx = key.indexOf(',');
     const q = Number(key.slice(0, commaIdx));
     const r = Number(key.slice(commaIdx + 1));
-    const ranks = digitToRanks(entry.digit);
     for (const face of FACES) {
       const points = facePolygon(q, r, face, layout);
       for (const p of points) {
@@ -387,7 +405,7 @@ export function buildScene(encoded, options) {
       shapes.push({
         kind: 'polygon',
         points,
-        color: palette.levels[ranks[face]],
+        color: faceColor(entry, face, palette),
       });
     }
   }

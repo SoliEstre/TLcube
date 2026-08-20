@@ -57,15 +57,15 @@
  *   재배치한다. 마커 없이 부르면 레거시 좌표와 바이트 동일이다.
  *
  * ─────────────────────────────────────────────────────────────────────────
- * 4. 와이어 (formatIndex) — 신설하지 않는다
+ * 4. 와이어 (formatIndex) — 내부 타입 G 전용 인덱스 (운영자 확정 2026-08-20)
  * ─────────────────────────────────────────────────────────────────────────
- * O-CM 은 **formatIndex 를 새로 만들지 않는다.** V1/V2/V3(및 V*Q) 인덱스를 그대로
- * 쓰고, 마커 유/무는 **광학 검출 + 사후 RS/CRC** 로 가른다 — Type Y 의 Y2W(면 내 QR
- * 윈도)가 이미 쓰는 계약과 같다 (`capacityY.js` capacityForY2Window: «윈도 유/무는
- * 와이어가 아니라 광학 검출 + 사후 RS/CRC 로 구분한다»). 디코더는 코너 마커 검증이
- * 통과하면 O-CM 회계로, 아니면 레거시 O 회계로 본문을 푼다.
- * 전용 인덱스가 필요하다는 판단이 서면 그것은 통합자·운영자 결정이다 — 이 모듈은
- * 제안만 남긴다 (test/output/claude-oak-markers.md §와이어 제안).
+ * ~~O-CM 은 formatIndex 를 새로 만들지 않는다~~ — **뒤집혔다.** 옛 계약(«광학 검출 +
+ * 사후 RS/CRC», Y2W 전례)은 실기에서 「코너 마커 코드가 스캔이 안 된다」로 반증됐다:
+ * 레거시와 같은 인덱스로는 디코더가 마커 회계(scan order·오버헤드 차이)를 와이어에서
+ * 구분할 수 없다. 운영자 확정으로 코너 마커는 **내부 타입 G** 다 — 턴A 전례를 따라
+ * UI·분류상은 타입 O 그대로, formatIndex 만 전용 값을 싣는다. 배정 표는
+ * `src/markerG.js` 가 유일한 진실이고, 아래 VERSIONS_OCM 의 formatIndex 는 그 표에서
+ * 유도된다 (V1CM=6·V2CM=0·V3CM=1 — 값 근거·충돌 회계는 markerG 헤더).
  *
  * 런타임 의존성 0 · 순수 ESM.
  */
@@ -83,6 +83,7 @@ import {
 import { occupiedCells as bullseyeCells } from './bullseye.js';
 import { placeReservedCellsHex } from './autoplaceHex.js';
 import { digitToRanks, ranksToDigit } from './lehmer.js';
+import { markerGSpec } from './markerG.js';
 import { maxBytesForSymbols } from './capacity.js';
 import { errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
@@ -141,6 +142,27 @@ export function tetradBase(k) {
 }
 
 /**
+ * 절대 톤 표 조회 — 마커 셀 «전부» 의 톤이 있어야 한다. 누락을 조용한 digit 폴백으로
+ * 덮지 않고 즉시 던진다 (`markerA.toneTripleFrom` 과 같은 계약).
+ */
+function toneTripleFrom(tonesByKey, q, r) {
+  const kk = key(q, r);
+  const raw = tonesByKey instanceof Map ? tonesByKey.get(kk) : tonesByKey[kk];
+  if (!raw || typeof raw !== 'object') {
+    throw new RangeError('markerO: 톤 표에 ' + kk + ' 가 없다 — 마커 셀 전부의 톤이 필요하다');
+  }
+  const tones = {};
+  for (const face of ['T', 'L', 'R']) {
+    const tone = raw[face];
+    if (tone !== 0 && tone !== 1 && tone !== 2) {
+      throw new RangeError('markerO: ' + kk + '.' + face + ' 톤이 0/1/2 가 아니다: ' + tone);
+    }
+    tones[face] = tone;
+  }
+  return tones;
+}
+
+/**
  * 마커 로컬 digit 튜플 (B, C, D). A 는 앵커 digit 이라 여기 없다.
  *
  * 선택 규칙 (전수 후보 1728 중에서, 아래 셋으로 유일하게 좁혀진다):
@@ -170,10 +192,15 @@ function applyRotation(cell, times) {
 /**
  * 마커 12셀 — 코너 3개 × tetrad 4셀. 각 원소는 좌표 + digit + 로컬 라벨 + 코너 인덱스.
  * 순서는 코너(세트 A 열거 순) → 라벨(A,B,C,D) 로 결정적이다.
+ *
+ * `tonesByKey`("q,r" → {T,L,R}, Map 또는 평범한 객체)를 주면 각 셀에 절대 톤
+ * `tones: {T,L,R}` (0/1/2)가 실린다 — `markerCellsA` 와 같은 계약 (누락·범위 밖은
+ * 즉시 RangeError, 조용한 digit 폴백 금지). 무인자 호출 산출은 바이트 동일하다.
  * @param {number} k
- * @returns {{q:number, r:number, digit:number, label:string, corner:number, role:'anchor'|'marker'}[]}
+ * @param {Map<string,{T:number,L:number,R:number}>|Record<string,{T:number,L:number,R:number}>} [tonesByKey]
+ * @returns {{q:number, r:number, digit:number, label:string, corner:number, role:'anchor'|'marker', tones?:{T:number,L:number,R:number}}[]}
  */
-export function markerCells(k) {
+export function markerCells(k, tonesByKey) {
   assertK(k);
   const base = tetradBase(k);
   const anchors = anchorCells(k);
@@ -202,7 +229,8 @@ export function markerCells(k) {
       }
     }
   }
-  return out;
+  if (tonesByKey === undefined) return out;
+  return out.map((cell) => ({ ...cell, tones: toneTripleFrom(tonesByKey, cell.q, cell.r) }));
 }
 
 /** 마커가 점유하는 좌표 집합 (앵커 3셀 포함, 12개). */
@@ -210,9 +238,10 @@ export function markerPositionSet(k) {
   return new Set(markerCells(k).map((c) => key(c.q, c.r)));
 }
 
-/** 코너별 tetrad — 검출기가 «코너 단위» 로 다루기 위한 묶음. */
-export function markerTetrads(k) {
-  const cells = markerCells(k);
+/** 코너별 tetrad — 검출기가 «코너 단위» 로 다루기 위한 묶음.
+ *  `tonesByKey` 는 `markerCells` 로 그대로 승계된다 (절대 톤 검증용). */
+export function markerTetrads(k, tonesByKey) {
+  const cells = markerCells(k, tonesByKey);
   const byCorner = new Map();
   for (const c of cells) {
     if (!byCorner.has(c.corner)) byCorner.set(c.corner, []);
@@ -353,16 +382,16 @@ export const NSYM_TABLE_OCM = Object.freeze({
   }),
 });
 
-/** O-CM 버전 정의 — formatIndex 는 레거시 O 와 같다(모듈 헤더 §4). */
+/** O-CM 버전 정의 — formatIndex 는 내부 타입 G 표(`markerG.js`)에서 유도한다(모듈 헤더 §4). */
 export const VERSIONS_OCM = Object.freeze([
   Object.freeze({
-    name: 'V1CM', version: 1, k: 6, overhead: overheadBreakdownOMarker(6).total, symbolKey: 'V1CM',
+    name: 'V1CM', version: 1, k: 6, formatIndex: markerGSpec('hex', 1).formatIndex, overhead: overheadBreakdownOMarker(6).total, symbolKey: 'V1CM',
   }),
   Object.freeze({
-    name: 'V2CM', version: 2, k: 8, overhead: overheadBreakdownOMarker(8).total, symbolKey: 'V2CM',
+    name: 'V2CM', version: 2, k: 8, formatIndex: markerGSpec('hex', 2).formatIndex, overhead: overheadBreakdownOMarker(8).total, symbolKey: 'V2CM',
   }),
   Object.freeze({
-    name: 'V3CM', version: 3, k: 10, overhead: overheadBreakdownOMarker(10).total, symbolKey: 'V3CM',
+    name: 'V3CM', version: 3, k: 10, formatIndex: markerGSpec('hex', 3).formatIndex, overhead: overheadBreakdownOMarker(10).total, symbolKey: 'V3CM',
   }),
 ]);
 
@@ -403,6 +432,7 @@ export function capacityForOMarker(spec, level = 'M') {
     version: spec.version,
     k: spec.k,
     cornerMarker: true,
+    formatIndex: spec.formatIndex,
     totalCells,
     overhead: spec.overhead,
     dataCells,

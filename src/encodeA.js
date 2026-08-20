@@ -16,6 +16,7 @@
 
 import { VERSIONS_A, VERSIONS_A_DAEHAN, capacityForA, capacityForADaehan, versionSpecA } from './capacityA.js';
 import { turnASpec } from './turnA.js';
+import { markerGSpec } from './markerG.js';
 import { frame, payloadByteLength } from './header.js';
 import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
 import { rsEncode } from './rs211.js';
@@ -29,6 +30,7 @@ import {
   VERSIONS_ACM,
   capacityForAMarker,
   markerCellsA,
+  h2oTonesByKeyA,
   patchReferenceCellsAMarker,
   dataCellsInScanOrderAMarker,
   fillerCellsAMarker,
@@ -68,7 +70,9 @@ function layoutProviderForA(cornerMarker, daehanFinder = false) {
     scan: dataCellsInScanOrderAMarker,
     filler: fillerCellsAMarker,
     patchReference: patchReferenceCellsAMarker,
-    marker: markerCellsA,
+    // 정본 H2O 톤을 실어 준다 — 검출기 진입점(findACornerMarkerHypotheses)이
+    // 같은 표를 기본값으로 쓴다. 양 끝이 같은 표를 봐야 fallback 이 선다.
+    marker: (k) => markerCellsA(k, h2oTonesByKeyA(k)),
   };
 }
 
@@ -229,7 +233,7 @@ export function encodeA(text, options = {}) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
   /*
-   * formatIndex 산출 — 두 규약이 공존한다.
+   * formatIndex 산출 — 세 규약이 공존한다.
    *
    * ⓐ 정삼각 A (기본): `spec.formatIndex + centerQr*2` **산술 유도**.
    *    이것이 **발행 규약**이다 (A0 1 · A0Q 3 · A1 12 · A1Q 14 · A2 13 · A2Q 15).
@@ -239,14 +243,23 @@ export function encodeA(text, options = {}) {
    * ⓑ 턴A (역삼각 옵션): **표 주도**(`src/turnA.js`). 산술이 원리적으로 불가능하다 —
    *    A1=12 에 균일 오프셋 +4 를 주면 16 이라 4bit 를 넘친다. 그래서 표가 전부다.
    *
-   * 두 규약이 충돌하지 않는 이유: formatIndex 는 **타입 안에서만** 유일하면 되고
-   *    (`decode.js` 의 typeO/typeA/typeY 별 해석 함수), 턴A 는 역삼각 실루엣이라
-   *    정삼각 A 와 기하로 먼저 갈린다. 운영자 확정 — «별도 타입처럼 취급하되
-   *    UI 상에만 같은 타입» (2026-08-18).
+   * ⓒ 코너 마커 (내부 타입 G, A-CM): **표 주도**(`src/markerG.js`, 운영자 확정
+   *    2026-08-20). 레거시 인덱스를 그대로 실으면 디코더가 마커 회계(21셀 차이)를
+   *    와이어에서 구분할 수 없다 — 「코너 마커 코드가 스캔 불가」의 근본 원인.
+   *    centerQr 와는 위 배타 가드가 조합을 막으므로 G 표에 Q 변형은 없다.
+   *
+   * 세 규약이 충돌하지 않는 이유: formatIndex 는 **(값, k) 쌍으로** 유일하면 되고
+   *    (`decode.js` 의 typeO/typeA/typeY 별 해석 함수 + hex·tri 공유축 회계),
+   *    턴A 는 역삼각 실루엣이라 정삼각 A 와 기하로 먼저 갈린다. G 는 빈 (값, k)
+   *    칸만 쓴다 — `test/markerG.test.js` 의 코드-유도 충돌 테스트가 지킨다.
+   *    운영자 확정 — «별도 타입처럼 취급하되 UI 상에만 같은 타입» (2026-08-18 턴A,
+   *    2026-08-20 G 승계).
    */
   const formatIndex = turnA
     ? turnASpec(spec.version, { centerQr }).formatIndex
-    : spec.formatIndex + (centerQr ? 2 : 0);
+    : cornerMarker
+      ? markerGSpec('tri', spec.version).formatIndex
+      : spec.formatIndex + (centerQr ? 2 : 0);
   const formatReplicas = encodeReplicated({ version: formatIndex, eccLevel: eccLevelValue });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(k) 순서와 정합
 
@@ -267,7 +280,7 @@ export function encodeA(text, options = {}) {
 
   // 코너 마커 21셀 (A-CM 에서만) — 고정 digit, 마스크 없음. 꼭짓점 앵커와 안 겹친다.
   for (const c of provider.marker(k)) {
-    cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: 'marker' });
+    cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, tones: c.tones, role: 'marker' });
   }
 
   const formatCoords = formatCells(k); // 육각부 무수정 재사용(D7)

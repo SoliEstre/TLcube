@@ -34,6 +34,7 @@ import {
 } from './markerO.js';
 import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
 import { daehanReservedCells } from './finder-daehan.js';
+import { markerGSpec } from './markerG.js';
 
 function cellKey(q, r) {
   return `${q},${r}`;
@@ -221,11 +222,18 @@ export function encode(text, options = {}) {
   // centerQr(V*Q, ADR 0004 §1-3): 인덱스에 +4 오프셋 — V1Q=4·V2Q=5·V3Q=6. 이 인덱스는
   // 파인더 종류의 **사후 검증**이다(디코더가 발견한 파인더 종류와 복호 인덱스가
   // 일치하는지 대조) — 여기 인코더 쪽은 오프셋 부착까지만 한다.
+  //
+  // cornerMarker(O-CM): **내부 타입 G 의 전용 인덱스**를 싣는다 (`markerG.js` 표 주도,
+  // 운영자 확정 2026-08-20). 레거시 인덱스를 그대로 쓰면 디코더가 마커 회계를 와이어에서
+  // 알 수 없다 — 「코너 마커 코드가 스캔이 안 된다」의 근본 원인이었다. centerQr 와는
+  // 위 배타 가드가 조합을 막으므로 G 표에 Q 변형은 없다.
   const eccLevelValue = ECC_LEVEL[eccLevel];
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
-  const versionIndex = (spec.version - 1) + (centerQr ? 4 : 0);
+  const versionIndex = cornerMarker
+    ? markerGSpec('hex', spec.version).formatIndex
+    : (spec.version - 1) + (centerQr ? 4 : 0);
   const formatReplicas = encodeReplicated({ version: versionIndex, eccLevel: eccLevelValue });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(k) 순서와 정합
 

@@ -22,6 +22,8 @@ import {
   ringCentersA,
   MARKER_LOCAL_DIGITS_A,
   MARKER_CELL_COUNT_A,
+  H2O_LOCAL_TONES_A,
+  h2oTonesByKeyA,
   orientationMarginAMarker,
   patchReferenceCellsAMarker,
   dataCellsInScanOrderAMarker,
@@ -109,6 +111,30 @@ function rotateLuma(source, center, radians) {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CANDIDATES_PATH = path.resolve(HERE, '..', '..', '..', '..', '..', '..');
+
+test('markerA: 정본 H2O 톤 표 — k=4 좌표·비-순열 9, 무인자 산출은 digit-only', () => {
+  const bare = markerCellsA(4);
+  for (const cell of bare) assert.equal('tones' in cell, false);
+  const tones = h2oTonesByKeyA(4);
+  assert.equal(tones.size, MARKER_CELL_COUNT_A);
+  const loaded = markerCellsA(4, tones);
+  let nonperm = 0;
+  for (const cell of loaded) {
+    assert.deepEqual(cell.tones, H2O_LOCAL_TONES_A[cell.corner][cell.label]);
+    const sorted = [cell.tones.T, cell.tones.L, cell.tones.R].slice().sort().join('');
+    if (sorted !== '012') nonperm += 1;
+  }
+  assert.equal(nonperm, 9);
+  assert.deepEqual(tones.get('3,-6'), { T: 2, L: 2, R: 2 });
+  // 다른 k 는 로컬 라벨 복사 — 발자국만 옮긴다.
+  for (const k of KS) {
+    const atK = markerCellsA(k, h2oTonesByKeyA(k));
+    assert.equal(atK.length, MARKER_CELL_COUNT_A);
+    for (const cell of atK) {
+      assert.deepEqual(cell.tones, H2O_LOCAL_TONES_A[cell.corner][cell.label]);
+    }
+  }
+});
 
 test('markerA: 발자국이 정본 H2O 와 같은 규칙 — 링 중심은 꼭짓점에서 2칸 안쪽', () => {
   // k=4 정본 좌표(H2O userNonData 18셀). 정본 JSON 은 private repo 에 있어 여기에
@@ -236,8 +262,45 @@ test('markerA: 레거시 A 경로 무영향', () => {
   assert.throws(() => encodeA('x', { version: 1, cornerMarker: true, centerQr: true }), RangeError);
 });
 
+/**
+ * 마커 셀의 톤을 **떼어** digit-only 프레임을 만든다 (대조군).
+ *
+ * ⚠ 2026-08-20 이전에는 반대였다 — 인코더가 digit 만 냈고 테스트가 톤을 **덧씌웠다**.
+ * 이제 `encodeA` 가 정본 H2O 톤을 직접 싣는다(양 끝 배선). 그래서 대조군을 만들려면
+ * 덧씌우는 게 아니라 떼어야 한다. 아래 `ENCODED_ACM` 단언이 그 전제를 잠근다 —
+ * 인코더가 다시 digit-only 로 돌아가면 이 파일이 **조용히 무의미해지지 않고** 빨개진다.
+ */
+function stripTones(encoded) {
+  const cellDigits = new Map();
+  for (const [kk, entry] of encoded.cellDigits) {
+    const { tones, ...rest } = entry;
+    cellDigits.set(kk, rest);
+  }
+  return { ...encoded, cellDigits };
+}
+
 const ENCODED_ACM = encodeA('TLcube-A-CM-rot', { version: 1, eccLevel: 'M', cornerMarker: true });
+const FRAME_ACM_DIGIT = renderFrame(stripTones(ENCODED_ACM), 10, 240);
 const FRAME_ACM = renderFrame(ENCODED_ACM, 10, 240);
+
+test('A-CM: 인코더가 정본 H2O 톤을 직접 싣는다 (아래 대조군의 전제)', () => {
+  const tones = h2oTonesByKeyA(ENCODED_ACM.k);
+  let carried = 0;
+  for (const [kk, entry] of ENCODED_ACM.cellDigits) {
+    if (!tones.has(kk)) continue;
+    assert.deepEqual(entry.tones, tones.get(kk), `${kk} 톤이 markerA 표와 다르다`);
+    carried += 1;
+  }
+  assert.equal(carried, tones.size,
+    '인코더가 마커 톤을 안 싣는다 — 아래 «digit-only 기각» 대조군이 무의미해진다');
+});
+
+test('A-CM: digit-only 프레임은 H2O 절대 톤 기본값에서 기각된다', () => {
+  assert.equal(
+    findACornerMarkerHypotheses(FRAME_ACM_DIGIT.luma, FRAME_ACM_DIGIT.bullseye, [6, 8, 10]).ok,
+    false,
+  );
+});
 
 test('A-CM: 회전 3방향 정답 하나 · 60°급 수용 0', () => {
   for (let turn = 0; turn < 3; turn += 1) {
