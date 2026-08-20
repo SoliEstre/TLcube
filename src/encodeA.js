@@ -30,6 +30,7 @@ import {
   VERSIONS_ACM,
   capacityForAMarker,
   markerCellsA,
+  h2oTonesByKeyA,
   patchReferenceCellsAMarker,
   dataCellsInScanOrderAMarker,
   fillerCellsAMarker,
@@ -69,11 +70,14 @@ function layoutProviderForA(cornerMarker, daehanFinder = false) {
     scan: dataCellsInScanOrderAMarker,
     filler: fillerCellsAMarker,
     patchReference: patchReferenceCellsAMarker,
-    // ⚠ 정본 H2O 톤은 **기본으로 안 싣는다** (2026-08-20 되돌림, 운영자 실기기 보고).
-    // 톤을 실으면 마커가 파인더 축(순백 포함)으로 그려져 **실루엣에 구멍**이 나고
-    // 원거리 인식률이 떨어졌다. 톤 경로 자체는 살아 있고(markerCellsA 2번째 인자),
-    // 「데이터와 같은 팔레트 + 조합 제한만 해제」로 재설계할 때 다시 켠다.
-    marker: markerCellsA,
+    // 정본 H2O 톤을 싣는다 — **마커의 «심볼»** 이다 (비-순열 조합이라 데이터 셀이
+    // 만들 수 없는 무늬가 나온다). 2026-08-20 에 한 번 껐다가 2026-08-21 에 되살렸다.
+    //
+    // ⚠ 그때 껐던 이유는 톤 자체가 아니라 **팔레트**였다 — 마커를 파인더 축
+    // (bullseyeLight = 순백)으로 그려서 안전영역·흰 지면과 구별이 안 돼 실루엣에
+    // 구멍이 났다. 고칠 곳은 `scene.js` 의 색이었고, 끄면서 **심볼까지 같이 지웠다.**
+    // 지금은 색은 데이터와 같고(palette.levels) 무늬만 다르다 — 운영자 지시 그대로다.
+    marker: (k) => markerCellsA(k, h2oTonesByKeyA(k)),
   };
 }
 

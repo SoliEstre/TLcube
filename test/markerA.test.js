@@ -262,13 +262,17 @@ test('markerA: 레거시 A 경로 무영향', () => {
   assert.throws(() => encodeA('x', { version: 1, cornerMarker: true, centerQr: true }), RangeError);
 });
 
+
+const ENCODED_ACM = encodeA('TLcube-A-CM-rot', { version: 1, eccLevel: 'M', cornerMarker: true });
 /**
- * 마커 셀의 톤을 **떼어** digit-only 프레임을 만든다 (대조군).
+ * 마커 톤을 **떼어** digit 렌더 프레임을 만든다.
  *
- * ⚠ 2026-08-20 이전에는 반대였다 — 인코더가 digit 만 냈고 테스트가 톤을 **덧씌웠다**.
- * 이제 `encodeA` 가 정본 H2O 톤을 직접 싣는다(양 끝 배선). 그래서 대조군을 만들려면
- * 덧씌우는 게 아니라 떼어야 한다. 아래 `ENCODED_ACM` 단언이 그 전제를 잠근다 —
- * 인코더가 다시 digit-only 로 돌아가면 이 파일이 **조용히 무의미해지지 않고** 빨개진다.
+ * ⚠ 2026-08-21 이후 라이브 프레임은 톤(=심볼)을 싣는다. 그런데 아래 회전·오수용
+ * 검사가 쓰는 `findACornerMarkerHypotheses` 는 **digit 경로**라 톤 프레임을 못 읽는다
+ * (알려진 공백 — marker-tones-both-ends ③ 이 그 사실을 잠근다). 그 공백 때문에
+ * 「회전 3방향 하나만 통과」·「60°급 수용 0」 같은 **값진 가드까지 죽이지는 않는다** —
+ * 그래서 여기서는 digit 프레임으로 그 논리를 계속 검사한다.
+ * 톤 경로가 서는 날 이 헬퍼를 지우고 라이브 프레임으로 바꾸면 된다.
  */
 function stripTones(encoded) {
   const cellDigits = new Map();
@@ -279,18 +283,24 @@ function stripTones(encoded) {
   return { ...encoded, cellDigits };
 }
 
-const ENCODED_ACM = encodeA('TLcube-A-CM-rot', { version: 1, eccLevel: 'M', cornerMarker: true });
-const FRAME_ACM = renderFrame(ENCODED_ACM, 10, 240);
+const FRAME_ACM = renderFrame(stripTones(ENCODED_ACM), 10, 240);
 
-test('A-CM: 인코더는 마커 톤을 기본으로 «안» 싣는다 (2026-08-20 되돌림)', () => {
-  // 톤을 실으면 마커가 파인더 축(순백 포함)으로 그려져 실루엣에 구멍이 난다 —
-  // 운영자 실기기 보고로 원거리 인식률 하락이 확인돼 되돌렸다 (scene.js faceColor 주석).
-  // 톤 경로 자체는 살아 있다: markerCellsA(k, tones) 는 여전히 톤을 싣는다.
-  for (const [, entry] of ENCODED_ACM.cellDigits) {
-    assert.equal(entry.tones, undefined,
-      '인코더가 마커 톤을 다시 싣는다 — 재설계(데이터 팔레트 + 조합 제한 해제) 없이 켜면 안 된다');
+test('A-CM: 인코더는 마커 톤(=심볼)을 싣는다 · 색은 데이터와 같다', () => {
+  // 2026-08-21 운영자 정정: 「A-CM 은 **색만** 데이터 셀과 같게 가고 **심볼은 유지**」.
+  // 전날 되돌릴 때 팔레트만 되돌렸어야 하는데 톤까지 껐다 — 심볼이 같이 사라졌었다.
+  // 색은 scene.js faceColor 가 palette.levels 로 칠한다 (scene-marker-tones 가 고정).
+  const tones = h2oTonesByKeyA(ENCODED_ACM.k);
+  let carried = 0;
+  for (const [kk, entry] of ENCODED_ACM.cellDigits) {
+    if (!tones.has(kk)) continue;
+    assert.deepEqual(entry.tones, tones.get(kk), `${kk} 톤이 markerA 표와 다르다`);
+    carried += 1;
   }
-  assert.ok(h2oTonesByKeyA(ENCODED_ACM.k).size > 0, 'H2O 표 자체는 남아 있어야 한다');
+  assert.equal(carried, tones.size,
+    '인코더가 마커 톤을 안 싣는다 — 마커의 «심볼» 이 사라진다 (2026-08-20 회귀 재발)');
+  // 비-순열이 실제로 들어 있어야 «데이터 셀이 못 만드는 무늬» 가 성립한다.
+  const nonPerm = [...tones.values()].filter((t) => new Set([t.T, t.L, t.R]).size < 3).length;
+  assert.ok(nonPerm > 0, '전부 순열이면 데이터 셀과 같은 무늬라 구별이 안 된다');
 });
 
 test('A-CM: 회전 3방향 정답 하나 · 60°급 수용 0', () => {

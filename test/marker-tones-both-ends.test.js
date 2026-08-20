@@ -59,15 +59,16 @@ function renderACM(version) {
   return { encoded, luma: toRelativeLuminance(raster) };
 }
 
-test('① 톤을 «주면» 마커 셀 전부에 실린다 — 개수는 markerA 에서 유도', () => {
+test('① 마커 셀 전부에 톤(심볼)이 실린다 — 개수는 markerA 에서 유도', () => {
   for (const version of VERSIONS) {
     const encoded = encodeA('x', { version, eccLevel: 'M', cornerMarker: true });
     const markers = [...encoded.cellDigits.values()].filter((v) => v.role === 'marker');
     assert.equal(markers.length, MARKER_CELL_COUNT_A,
       `A${version}CM 마커 셀 수가 markerA 상수와 다르다`);
-    // 기본 경로는 톤을 **안** 싣는다 (2026-08-20 되돌림). 기제는 markerCellsA 2번째 인자다.
-    assert.equal(markers.filter((v) => v.tones).length, 0,
-      `A${version}CM 이 톤을 기본으로 싣는다 — 실루엣 구멍 회귀가 되살아났다`);
+    // 2026-08-21: 톤(=심볼)을 **싣는다.** 실루엣을 지키는 것은 톤이 아니라 «팔레트» 이고,
+    // 그건 scene.js 가 palette.levels 로 칠해서 지킨다 (scene-marker-tones 가 고정).
+    assert.equal(markers.filter((v) => v.tones).length, MARKER_CELL_COUNT_A,
+      `A${version}CM 이 톤을 안 싣는다 — 마커 심볼이 사라진다`);
     const withTones = markerCellsA(encoded.k, h2oTonesByKeyA(encoded.k));
     assert.equal(withTones.length, MARKER_CELL_COUNT_A);
     assert.equal(withTones.filter((c) => c.tones).length, MARKER_CELL_COUNT_A,
