@@ -73,7 +73,7 @@ test('프로파일 식별자는 off · hex-frame-v1 · cell-surface-v1/v1r2/v2/v
   // **허공 마름모 설계**의 서술이었다. QR 이 실루엣 안쪽 먼 코너로 들어와 64셀을
   // 먹으면서 셀 집합·회계·와이어가 v0W 와 갈렸고, 그래서 프로파일이 실재한다.
   // 그 문단이 걱정하던 «디코더가 절대 돌려줄 수 없는 값» 도 해소됐다 — 디코더에
-  // `v0wy` 패밀리가 있고 `cellSurface-block-locator.test.js` 가 그 산출을 고정한다.
+  // `v0wy` 패밀리가 있고 `cellSurface-block-locator-v0wy-w2.test.js` 가 그 산출을 고정한다.
   // **의도적 갱신 «v0TRY 편입» (2026-08-18)** — 'cell-surface-v0try' 가 맨 뒤에
   // 붙었다 (v0TR 의 먼 코너 QR 파생 — v0TY 와 같은 슬롯 규약을 재사용한다).
   // 여기도 외곽 패딩 0 이라 `locatorOuterPaddingCells` 분기는 안 늘어난다.

@@ -47,7 +47,7 @@ const LINEUP = Object.freeze([
  */
 // 의도적 갱신 «v0W 파생 2종 편입» (2026-08-16): v0wq 가 n=21 네 번째 후보로 들어왔다.
 // v0WY 는 **여기 없다** — 와이어가 v0W 라 이 표에서는 v0w 행이 곧 v0WY 의 왕복이다
-// (그 사실 자체는 cellSurface-block-locator.test.js 의 «v0WY 는 렌더 선택이다» 가 잰다).
+// (그 사실 자체는 cellSurface-block-locator-v0wy-w2.test.js 의 «v0WY 는 렌더 선택이다» 가 잰다).
 // 의도적 갱신 «v0W2 편입» (2026-08-17): v0w2 가 n=21 다섯 번째 후보로 들어왔다.
 //
 // **의도적 갱신 «v0X 드랍» (운영자 실기기 확정 2026-08-17, 판정 3라운드)** —
@@ -61,7 +61,7 @@ const LINEUP = Object.freeze([
 // (v0w → v0t). 값·버전·n 은 어느 행도 안 바뀐다.
 //
 // ⚠ **v0wy 행은 여기 없다** — 드랍 전에도 이 파일의 활성 표에 없었고, 그 왕복
-// 회귀는 `cellSurface-block-locator.test.js` 가 자기 조건(ppu 15 · embed960)으로
+// 회귀는 `cellSurface-block-locator-v0wy-w2.test.js` 가 자기 조건(ppu 15 · embed960)으로
 // 잰다. 실측 (`claude-v0t-wy-restore-debug.out.txt`): 이 파일의 조건(ppu 10)에서는
 // v0wy 가 복원 스위치를 다 켜도 안 돌고, ppu 15 에서는 돈다 — 즉 여기 행을
 // 신설하면 «드랍 때문» 이 아닌 실패를 드랍 회귀로 오인하게 된다 (행별 조건은
@@ -284,7 +284,7 @@ test('직각 회전 왕복 — v0@13 (활성) · v2r2@21 (드랍 복원, 2톤)',
  * 「정식 경로(enableCellSurfaceY 없음)는 최종 라인업을 **수용하지 않는다**」였다.
  * 셀 표면이 시험판 전용이라는 전제 위의 명제였고, 그 전제가 뒤집혔다 —
  * 인쇄 포스터가 v0 셀 표면이 되면서 `enableCellSurfaceY` 기본값이 켜짐으로 올라갔다.
- * (같은 계열의 핀이 `test/cellSurface-block-locator.test.js` 에도 있었고 함께 뒤집었다.)
+ * (같은 계열의 핀이 `test/cellSurface-block-locator-anchored.test.js` 에도 있었고 함께 뒤집었다.)
  *
  * **지우지 않고 뒤집는다.** 이 핀이 원래 막던 것은 «계열이 조용히 정식으로 새는 것»
  * 인데, 지워 버리면 그 감시가 반대 방향으로 사라진다. 오늘은 샌 게 아니라 옮긴 것이다.

@@ -343,7 +343,7 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   //     0.035)다 — 교차 오수용 0 은 거기서 나온다.
   // 그래서 이 게이트의 실효는 여전히 «막을 것을 더 싸게 막는다» 이지만, 막는
   // 주체는 refinePose 가 아니라 CS 수용 게이트다. 대조군 테스트
-  // cellSurface-block-locator.test.js «v0xq 시딩 게이트» 가 두 구간을 함께 고정한다.
+  // cellSurface-block-locator-v0xq.test.js «v0xq 시딩 게이트» 가 두 구간을 함께 고정한다.
   v0xqRequireCenterQr: true,
   // 중앙 QR 블록 패치 사전 게이트의 상관 하한. refinePose 안의
   // minimumPatchCorrelation(0.25)과 **같은 값** — 사전 게이트가 사후 판정보다

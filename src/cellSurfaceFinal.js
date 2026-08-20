@@ -568,7 +568,7 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
  * 내려도 v0wq 검출은 온전해야 한다 — 코너 수집 게이트가
  * `(cfg.v0xqFamily !== false || cfg.v0wqFamily !== false)` 라 한쪽만 꺼도 돈다
  * (`cellsurface-block-detect.js` §v0xqCorners). 그 성질을 회귀로 고정한 것이
- * `cellSurface-block-locator.test.js` §v0XQ 드랍이다.
+ * `cellSurface-block-locator-v0xq.test.js` §v0XQ 드랍이다.
  *
  * ── **v0X 드랍 (운영자 실기기 확정 2026-08-17, 판정 3라운드)** ────────────────
  *
@@ -601,7 +601,7 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
  * ⚠ **v0X 를 끄는 것은 v0W·v0W2 를 끄는 것이 아니다.** 셋은 앵커드 순회에서 서로
  * 독립한 `if` 로 시드된다 (`cfg.v0xFamily` 실패가 뒤 브랜치를 안 자르도록 2026-08-16
  * 에 `continue` 를 걷어낸 그 자리다 — §assembleAnchoredPoses). 그 독립성을 회귀로
- * 고정한 것이 `cellSurface-block-locator.test.js` §v0X 드랍이다.
+ * 고정한 것이 `cellSurface-block-locator-v0x.test.js` §v0X 드랍이다.
  *
  * ── **v0W 계열 전체 드랍 (운영자 확정 2026-08-17, v0T 편입 라운드)** ──────────
  *
@@ -1415,7 +1415,7 @@ export const V0WQ_BLOCKS = Object.freeze({
  * ⚠ **SE 블록의 T·L 면은 v0X SE 와 좌표·톤이 완전히 같다.** 그래서 v0W2 프레임은
  * v0X 의 «먼 꼭짓점 동심 사각»(r=18.0) 을 T·L 두 면에서 그대로 보여 준다 —
  * v0X 패밀리가 v0W2 프레임에서 시드되는 것은 **정상**이고, 가르는 것은 하류 CS
- * 게이트다. 교차 오수용 0 은 거기서 나온다 (`cellSurface-block-locator.test.js`).
+ * 게이트다. 교차 오수용 0 은 거기서 나온다 (`cellSurface-block-locator-v0wy-w2.test.js`).
  *
  * 회계: 441 − 97 − 12 − 18 = **314** (v0W 341 보다 27 적다 — SE 가 27셀 커진 값 그대로).
  */
