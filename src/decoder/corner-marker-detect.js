@@ -50,7 +50,7 @@ import {
 import { axialToPixel } from '../hexgrid.js';
 import { digitToRanks } from '../lehmer.js';
 import { markerCells, markerTetrads } from '../markerO.js';
-import { markerCellsA, markerGroupsA, h2oTonesByKeyA } from '../markerA.js';
+import { markerCellsA, markerGroupsA } from '../markerA.js';
 import { sampleHexCell } from './grid-sample.js';
 import { estimateHomography4 } from './homography.js';
 import {
@@ -573,7 +573,7 @@ export function findOCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
 export function findACornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
   return findMarkerHypotheses(
     luma, bullseye, ks, options, 'tri-marker',
-    (k) => markerGroupsA(k, h2oTonesByKeyA(k)),
-    (k) => markerCellsA(k, h2oTonesByKeyA(k)),
+    markerGroupsA,
+    markerCellsA,
   );
 }

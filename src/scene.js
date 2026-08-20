@@ -185,10 +185,25 @@ function segmentsIntersect(p1, p2, p3, p4) {
 }
 
 /**
- * 셀 한 면의 색. `entry.tones` 가 있으면 면별 절대 톤(0/1/2) → 파인더 축
- * (bullseyeLight / BULLSEYE_MID / bullseyeDark). 없으면 기존 digit 순위 →
- * `palette.levels`. 데이터 셀은 tones 를 안 들므로 한 픽셀도 안 바뀐다.
+ * 셀 한 면의 색. `entry.tones` 가 있으면 면별 절대 톤(0/1/2), 없으면 digit 순위 —
+ * **어느 쪽이든 `palette.levels` 를 쓴다.** 데이터 셀은 tones 를 안 들므로 무변경.
  * 톤이 실렸는데 0/1/2 가 아니면 조용한 digit 폴백 없이 던진다.
+ *
+ * ⚠ **파인더 축(bullseyeLight/MID/Dark)을 쓰면 안 된다 — 실루엣이 깨진다.**
+ * 2026-08-20 에 「마커가 데이터와 눈으로 안 갈린다」를 고치려고 마커를 파인더 축으로
+ * 보냈다가 **원거리 인식률이 떨어졌다**(운영자 실기기 보고). 이유는 수치가 말한다:
+ *
+ *     안전영역·흰 지면        Y ≈ 1.0
+ *     bullseyeLight  #ffffff  Y = 1.0000   ← 지면과 **구별 불가**. 실루엣에 구멍이 뚫린다
+ *     levels[2]      #dce4f0  Y = 0.7699   ← 밝지만 착색돼 있어 윤곽이 남는다
+ *
+ * 즉 「데이터와 다르게」를 좇다가 「배경과도 다르게」를 잃었다. 검출의 1단계는 **실루엣**
+ * 이고, 그 앞에서는 데이터와의 구별이 아무 의미가 없다.
+ *
+ * ⇒ 규약: **색은 데이터와 같은 팔레트, 구별은 «조합»으로.** 마커 셀은 비-순열 조합
+ * (같은 톤이 두 면 이상)을 쓸 수 있고 데이터 셀은 못 쓴다 — 눈으로도 평평해 보여 갈리고,
+ * 검출기는 절대 톤 채점(orientation-scorer)으로 그 성질을 읽는다. 팔레트가 단조
+ * (0.0612 < 0.2436 < 0.7699)라 톤 순서가 보존되므로 그 채점은 그대로 선다.
  */
 function faceColor(entry, face, palette) {
   const tones = entry && entry.tones;
@@ -197,8 +212,7 @@ function faceColor(entry, face, palette) {
     if (level !== 0 && level !== 1 && level !== 2) {
       throw new RangeError('scene: tones.' + face + ' 가 0/1/2 가 아니다: ' + level);
     }
-    return level === 2 ? palette.bullseyeLight
-      : level === 1 ? BULLSEYE_MID : palette.bullseyeDark;
+    return palette.levels[level];
   }
   return palette.levels[digitToRanks(entry.digit)[face]];
 }

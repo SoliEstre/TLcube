@@ -86,10 +86,13 @@ test('데이터 셀 폴리곤 색은 tones 있는 마커가 옆에서도 palette
     const ranks5 = digitToRanks(5);
     assert.deepEqual(byKey.get('3,0:' + face).color, PALETTE.levels[ranks0[face]]);
     assert.deepEqual(byKey.get('-3,1:' + face).color, PALETTE.levels[ranks5[face]]);
+    // 2026-08-21 정정: 톤 셀도 **데이터와 같은 팔레트**를 쓴다.
+    // 파인더 축(bullseyeLight = 순백)으로 그리면 안전영역·흰 지면과 구별되지 않아
+    // 실루엣에 구멍이 나고 원거리 인식률이 떨어진다 (운영자 실기기 보고).
     const level = ({ T: 2, L: 0, R: 2 })[face];
-    const want = level === 2 ? PALETTE.bullseyeLight
-      : level === 1 ? BULLSEYE_MID : PALETTE.bullseyeDark;
-    assert.deepEqual(byKey.get('4,-2:' + face).color, want);
+    assert.deepEqual(byKey.get('4,-2:' + face).color, PALETTE.levels[level]);
+    // 그리고 파인더 축을 **안** 쓴다는 것을 값으로 못 박는다 — 되살아나면 여기서 잡힌다.
+    assert.notDeepEqual(byKey.get('4,-2:' + face).color, PALETTE.bullseyeLight);
   }
 });
 

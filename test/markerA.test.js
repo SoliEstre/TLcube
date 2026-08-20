@@ -280,26 +280,17 @@ function stripTones(encoded) {
 }
 
 const ENCODED_ACM = encodeA('TLcube-A-CM-rot', { version: 1, eccLevel: 'M', cornerMarker: true });
-const FRAME_ACM_DIGIT = renderFrame(stripTones(ENCODED_ACM), 10, 240);
 const FRAME_ACM = renderFrame(ENCODED_ACM, 10, 240);
 
-test('A-CM: 인코더가 정본 H2O 톤을 직접 싣는다 (아래 대조군의 전제)', () => {
-  const tones = h2oTonesByKeyA(ENCODED_ACM.k);
-  let carried = 0;
-  for (const [kk, entry] of ENCODED_ACM.cellDigits) {
-    if (!tones.has(kk)) continue;
-    assert.deepEqual(entry.tones, tones.get(kk), `${kk} 톤이 markerA 표와 다르다`);
-    carried += 1;
+test('A-CM: 인코더는 마커 톤을 기본으로 «안» 싣는다 (2026-08-20 되돌림)', () => {
+  // 톤을 실으면 마커가 파인더 축(순백 포함)으로 그려져 실루엣에 구멍이 난다 —
+  // 운영자 실기기 보고로 원거리 인식률 하락이 확인돼 되돌렸다 (scene.js faceColor 주석).
+  // 톤 경로 자체는 살아 있다: markerCellsA(k, tones) 는 여전히 톤을 싣는다.
+  for (const [, entry] of ENCODED_ACM.cellDigits) {
+    assert.equal(entry.tones, undefined,
+      '인코더가 마커 톤을 다시 싣는다 — 재설계(데이터 팔레트 + 조합 제한 해제) 없이 켜면 안 된다');
   }
-  assert.equal(carried, tones.size,
-    '인코더가 마커 톤을 안 싣는다 — 아래 «digit-only 기각» 대조군이 무의미해진다');
-});
-
-test('A-CM: digit-only 프레임은 H2O 절대 톤 기본값에서 기각된다', () => {
-  assert.equal(
-    findACornerMarkerHypotheses(FRAME_ACM_DIGIT.luma, FRAME_ACM_DIGIT.bullseye, [6, 8, 10]).ok,
-    false,
-  );
+  assert.ok(h2oTonesByKeyA(ENCODED_ACM.k).size > 0, 'H2O 표 자체는 남아 있어야 한다');
 });
 
 test('A-CM: 회전 3방향 정답 하나 · 60°급 수용 0', () => {

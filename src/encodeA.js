@@ -30,7 +30,6 @@ import {
   VERSIONS_ACM,
   capacityForAMarker,
   markerCellsA,
-  h2oTonesByKeyA,
   patchReferenceCellsAMarker,
   dataCellsInScanOrderAMarker,
   fillerCellsAMarker,
@@ -70,9 +69,11 @@ function layoutProviderForA(cornerMarker, daehanFinder = false) {
     scan: dataCellsInScanOrderAMarker,
     filler: fillerCellsAMarker,
     patchReference: patchReferenceCellsAMarker,
-    // 정본 H2O 톤을 실어 준다 — 검출기 진입점(findACornerMarkerHypotheses)이
-    // 같은 표를 기본값으로 쓴다. 양 끝이 같은 표를 봐야 fallback 이 선다.
-    marker: (k) => markerCellsA(k, h2oTonesByKeyA(k)),
+    // ⚠ 정본 H2O 톤은 **기본으로 안 싣는다** (2026-08-20 되돌림, 운영자 실기기 보고).
+    // 톤을 실으면 마커가 파인더 축(순백 포함)으로 그려져 **실루엣에 구멍**이 나고
+    // 원거리 인식률이 떨어졌다. 톤 경로 자체는 살아 있고(markerCellsA 2번째 인자),
+    // 「데이터와 같은 팔레트 + 조합 제한만 해제」로 재설계할 때 다시 켠다.
+    marker: markerCellsA,
   };
 }
 

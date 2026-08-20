@@ -24,7 +24,7 @@ import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { findACornerMarkerHypotheses } from '../src/decoder/corner-marker-detect.js';
-import { markerCellsA, h2oTonesByKeyA, MARKER_CELL_COUNT_A } from '../src/markerA.js';
+import { markerCellsA, markerGroupsA, h2oTonesByKeyA, MARKER_CELL_COUNT_A } from '../src/markerA.js';
 import { verifyRaster } from '../src/verify.js';
 import { getPreset, DEFAULT_PRESET, BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src/luminance.js';
 
@@ -41,59 +41,81 @@ function paletteOf(name) {
   };
 }
 
+/** 톤을 **명시로** 실어 렌더한다 — 기본 경로는 톤을 안 싣기 때문이다. */
+function withTones(encoded) {
+  const tones = h2oTonesByKeyA(encoded.k);
+  const cellDigits = new Map();
+  for (const [kk, entry] of encoded.cellDigits) {
+    const t = tones.get(kk);
+    cellDigits.set(kk, t ? { ...entry, tones: t } : entry);
+  }
+  return { ...encoded, cellDigits };
+}
+
 function renderACM(version) {
-  const encoded = encodeA('TLcube-both-ends', { version, eccLevel: 'M', cornerMarker: true });
+  const encoded = withTones(encodeA('TLcube-both-ends', { version, eccLevel: 'M', cornerMarker: true }));
   const scene = buildScene(encoded, { palette: paletteOf(DEFAULT_PRESET), margin: 20 });
   const raster = rasterize(scene, { pixelsPerUnit: PPU, supersample: 2 });
   return { encoded, luma: toRelativeLuminance(raster) };
 }
 
-test('① 생성기는 마커 셀 전부에 톤을 싣는다 — 개수는 markerA 에서 유도', () => {
+test('① 톤을 «주면» 마커 셀 전부에 실린다 — 개수는 markerA 에서 유도', () => {
   for (const version of VERSIONS) {
     const encoded = encodeA('x', { version, eccLevel: 'M', cornerMarker: true });
     const markers = [...encoded.cellDigits.values()].filter((v) => v.role === 'marker');
     assert.equal(markers.length, MARKER_CELL_COUNT_A,
       `A${version}CM 마커 셀 수가 markerA 상수와 다르다`);
-    assert.equal(markers.filter((v) => v.tones).length, MARKER_CELL_COUNT_A,
-      `A${version}CM 마커 셀에 톤이 안 실렸다 — fallback 검출기가 이 프레임을 기각한다`);
+    // 기본 경로는 톤을 **안** 싣는다 (2026-08-20 되돌림). 기제는 markerCellsA 2번째 인자다.
+    assert.equal(markers.filter((v) => v.tones).length, 0,
+      `A${version}CM 이 톤을 기본으로 싣는다 — 실루엣 구멍 회귀가 되살아났다`);
+    const withTones = markerCellsA(encoded.k, h2oTonesByKeyA(encoded.k));
+    assert.equal(withTones.length, MARKER_CELL_COUNT_A);
+    assert.equal(withTones.filter((c) => c.tones).length, MARKER_CELL_COUNT_A,
+      '톤 적재 기제가 죽었다');
   }
 });
 
-test('② 생성기가 실은 톤은 검출기가 기본값으로 쓰는 그 표다 (하드코딩 아님)', () => {
+test('② 톤 표는 발자국과 좌표가 정확히 겹친다 (하드코딩 아님)', () => {
   for (const version of VERSIONS) {
     const encoded = encodeA('x', { version, eccLevel: 'M', cornerMarker: true });
-    const expected = markerCellsA(encoded.k, h2oTonesByKeyA(encoded.k));
-    for (const cell of expected) {
+    for (const cell of markerCellsA(encoded.k, h2oTonesByKeyA(encoded.k))) {
       const got = encoded.cellDigits.get(`${cell.q},${cell.r}`);
       assert.ok(got, `A${version}CM (${cell.q},${cell.r}) 마커 셀이 없다`);
-      assert.deepEqual(got.tones, cell.tones,
-        `A${version}CM (${cell.q},${cell.r}) 톤이 markerA 표와 다르다`);
+      assert.equal(got.role, 'marker');
     }
   }
 });
 
-test('③ fallback 진입점이 생성기 렌더를 읽는다 — 이 경로는 왕복 테스트가 안 건드린다', () => {
+test('③ ⛔ 알려진 공백 — 데이터 팔레트에서는 절대 톤 검출이 «아직» 안 선다', () => {
+  // 2026-08-20/21. 운영자 실기기 보고로 마커를 파인더 축(순백 포함)에서 **데이터
+  // 팔레트로 되돌렸다** — 순백 셀이 안전영역·흰 지면과 구별되지 않아 실루엣에 구멍이
+  // 나고 원거리 인식률이 떨어졌기 때문이다 (scene.js faceColor 주석).
+  //
+  // 그러자 절대 톤 채점이 깨졌다. 원인은 팔레트가 **등간격이 아니라는 것**이다:
+  //
+  //     levels          0.0612 / 0.2436 / 0.7699
+  //     dark·bright 두 앵커의 선형 보간 중간대  [0.3163, 0.5148]
+  //     → levels[1] 이 그 아래라 톤 1 이 톤 0 으로 분류된다
+  //
+  // 파인더 축(0 / 0.5 / 1.0)은 등간격이라 이 결함이 안 보였다 — **자가 팔레트에
+  // 의존하고 있었다.** 3앵커 최근접으로 고치는 시도는 교차 오수용을 열어 되돌렸다.
+  //
+  // ▶ 이 테스트가 빨개지면(=검출이 서기 시작하면) 축하한다. 그때 할 일:
+  //   (a) 이 테스트를 «선다» 쪽으로 뒤집고
+  //   (b) encodeA 의 marker provider 에 톤을 다시 싣고 (src/encodeA.js)
+  //   (c) findACornerMarkerHypotheses 기본값도 같이 켜라 — **한쪽만 켜면 효과가 음수다**
   for (const version of VERSIONS) {
     const { encoded, luma } = renderACM(version);
     const bullseye = { center: { x: luma.width / 2, y: luma.height / 2 }, cellSize: PPU };
-    const res = findACornerMarkerHypotheses(luma, bullseye, [encoded.k], {});
-    const found = (res && res.hypotheses) || (res && res.detail && res.detail.hypotheses) || [];
-    assert.equal(res.ok, true,
-      `A${version}CM: fallback 이 ${res.reason} 로 실패했다`
-      + ' — 생성기와 검출기가 다른 톤 표를 보고 있다');
-    assert.ok(found.length >= 1, `A${version}CM: 통과 가설 0개`);
-    // 통과 목록에 실린다는 것 자체가 accepted 를 뜻한다 (`hypotheses.push` 는
-    // `verification.accepted && confirmed` 뒤에 있다). 여기선 «완전 일치» 만 더 본다 —
-    // 무왜곡 합성 렌더이므로 agreement 는 1 이어야 하고, 아니면 톤 표가 어긋난 것이다.
-    for (const h of found) {
-      assert.equal(h.agree, h.slots,
-        `A${version}CM: agreement ${h.agree}/${h.slots} — 무왜곡 렌더인데 완전 일치가 아니다`);
-    }
+    const res = findACornerMarkerHypotheses(luma, bullseye, [encoded.k],
+      { groups: markerGroupsA(encoded.k, h2oTonesByKeyA(encoded.k)) });
+    assert.equal(res.ok, false,
+      `A${version}CM 절대 톤 검출이 서기 시작했다 — 위 (a)(b)(c) 를 같은 커밋에서 처리하라`);
   }
 });
 
 test('④ 톤이 선언과 어긋나면 verifyRaster 가 잡는다 — 톤 셀도 «검사 안 하는 셀» 이 아니다', () => {
-  const encoded = encodeA('TLcube-tone-guard', { version: 1, eccLevel: 'M', cornerMarker: true });
+  const encoded = withTones(encodeA('TLcube-tone-guard', { version: 1, eccLevel: 'M', cornerMarker: true }));
   const scene = buildScene(encoded, { palette: paletteOf(DEFAULT_PRESET), margin: 20 });
   const raster = rasterize(scene, { pixelsPerUnit: PPU, supersample: 2 });
 
