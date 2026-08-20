@@ -160,8 +160,19 @@ test('§3.2 daehan 을 고르면 인코더 회계가 실제로 바뀐다 (용량
 
 test('§3.2 생성기 옵션 배선이 daehan id 를 인코더 옵션으로 옮긴다', () => {
   // encodeOptsFor 의 O 분기가 파인더 id 를 보고 daehanFinder 를 세우는가.
-  // 이 한 줄이 없으면 79셀을 그려 놓고 legacy 용량을 표시한다.
-  assert.match(INDEX, /isDaehanFinderPatternId\(cfg\.finderPatternId\)\) opts\.daehanFinder = true/);
+  // 이 배선이 없으면 79셀을 그려 놓고 legacy 용량을 표시한다.
+  //
+  // ⚠ 2026-08-20: 원래 이 단언은 **소스 한 줄을 문자 그대로** 잡았다
+  //   (`...finderPatternId)) opts.daehanFinder = true`). 그러다 daehan × 중앙 QR
+  //   배타 가드(`&& !opts.centerQr`)가 들어가자 그 줄이 갈라져 빨개졌다 — 배선은
+  //   멀쩡한데 **문자열이 안 맞아서** 실패한 것이다. 그래서 «조건과 대입이 같은
+  //   분기 안에 있다» 로 느슨하게 잰다. 가드가 하나 더 붙어도 배선은 계속 잠긴다.
+  const daehanBranch = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
+  const oBranch = daehanBranch.slice(0, daehanBranch.indexOf('function ', 10));
+  assert.match(oBranch, /isDaehanFinderPatternId\(cfg\.finderPatternId\)/,
+    'encodeOptsFor 가 파인더 id 로 daehan 을 판별하지 않는다');
+  assert.match(oBranch, /opts\.daehanFinder = true/,
+    'daehanFinder 를 인코더 옵션으로 안 넘긴다 — 79셀을 그리고 legacy 용량을 표시하게 된다');
   // 그리는 템플릿의 k 는 버전이 정한다 — 카드는 하나여야 한다.
   assert.equal(FINDER_CARD_GROUPS.daehan.length, 1,
     'daehan 카드가 하나가 아니다 — k 는 사용자가 고르는 축이 아니다');
