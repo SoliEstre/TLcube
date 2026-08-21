@@ -10,6 +10,7 @@ import {
   CUBE_BULLSEYE_FINDER_PATTERN_ID, FINDER_PATTERN_IDS, LEGACY_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
 import {
+  CENTRAL_V0_FINDER_PATTERN_ID,
   CENTER_QR_FINDER_PATTERN_ID,
   DEFAULT_OUTER_QR_POSITION,
   createFinderQrProfiles,
@@ -100,9 +101,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //   finderPatternId 를 안 준 buildScene 이 받는 값이라 임베더의 계약이고, 바꾸면
   //   불스아이 렌더 계약을 고정한 테스트 30건이 한꺼번에 깨진다. 둘은 다른 개념이다.
   finderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, BOTH,
-    [LEGACY_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
+    [LEGACY_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID,
+      CENTRAL_V0_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
   previousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
-    [LEGACY_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
+    [LEGACY_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
   // 'plane'(v0WY) 도 **바깥 QR 위치**라 여기 들어간다 — 빠뜨리면 Y 에서 «면» 을 고른 뒤
   // O/A 로 갔다 돌아올 때 복원값이 허용값 밖이 되어 조용히 기본으로 떨어진다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,

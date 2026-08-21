@@ -28,6 +28,12 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   'placementY', 'autoplaceY', 'autoplaceHex',
   // turnA 는 encodeA 앞 (2026-08-18 턴A 편입 — encodeA 가 표를 조회한다).
   'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'encodeA', 'luminance', 'export-filename',
+  // finder-selection(의존 0) 과 Y 표면 체인은 **scene 앞**이다 (2026-08-21, 중앙 v0
+  // 파인더). scene.js 가 중앙 슬롯 점유자 id 를 finder-selection 에서, v0 의 모듈
+  // 사각형·정본 셀을 ygrid·cellSurfaceFinal 에서 가져온다. 위상 검사는 정적이라
+  // 이 편집기가 v0 를 실제로 렌더하든 안 하든 번들에 들어와야 한다.
+  'finder-selection',
+  'ygrid', 'type-y-cell-editor', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
   'gf256', 'rs', 'qr', 'encode', 'scene', 'raster', 'png',
 ]);
 

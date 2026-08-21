@@ -97,10 +97,22 @@ const MODULE_ORDER = [
   // export-options 에서 가져온다 (상수 복제 금지 — «UI 는 아는데 규칙은 모르는 값» 방지).
   'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'dither', 'export-options', 'generator-state', 'export-filename',
   // export-render 는 raster·svg·png·dither 전부의 뒤다 (내보내기 파이프라인 — 앱만 쓴다).
-  'encode', 'scene', 'raster', 'verify', 'svg', 'png', 'export-render',
   // cellSurfaceFinal(최종 라인업 v0·v2r2)은 capacityY·cellSurfaceY·cellSurfaceLayouts·
   // autoplaceY 를 import 하므로 그 넷 뒤에 온다.
-  'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'tonemap',
+  //
+  // **의도적 이동 (2026-08-21, 중앙 v0 파인더)**: 이 Y 표면 체인이 `encode`·`scene`
+  // **앞**으로 왔다. scene.js 가 중앙 슬롯의 v0 점유자를 그리려고 `ygrid` 의
+  // moduleQuad 와 `cellSurfaceFinal` 의 centralV0FinderCells() 를 import 하기
+  // 때문이다 — v0 의 좌표·면 톤을 두 번째 표로 옮겨 적지 않으려는 선택이고
+  // (정본은 CELL_SURFACE_FINAL_V0 하나), 그 대가가 이 이동이다.
+  // 옮기는 값은 싸다: 체인의 로컬 의존(hexgrid·placementY·autoplaceY·capacity·
+  // rs211·header·base211·formatinfo)이 전부 이미 이 앞에 있다. 안 옮기면
+  // assertTopologicalOrder 가 빌드를 막는다 — 치환이 조용히 건너뛰어져
+  // **브라우저에서만** 터지는 자리이기 때문이다.
+  'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  'encode', 'scene', 'raster', 'verify', 'svg', 'png', 'export-render',
+  // tonemap 은 로컬 의존이 0 인 잎 모듈이라 체인이 앞으로 가도 여기 남는다.
+  'tonemap',
   // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
   // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,
   // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.

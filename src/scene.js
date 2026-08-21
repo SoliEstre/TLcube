@@ -27,6 +27,9 @@ import { digitToRanks } from './lehmer.js';
 import { BULLSEYE_MID, FINDER_CUBE_SEAM, FINDER_CUBE_TONES } from './luminance.js';
 import { getOakFinderPattern } from './finder-oak-patterns.js';
 import { getDaehanFinderPattern } from './finder-daehan.js';
+import { moduleQuad } from './ygrid.js';
+import { CENTRAL_V0_SOURCE_N, centralV0FinderCells } from './cellSurfaceFinal.js';
+import { CENTRAL_V0_FINDER_PATTERN_ID } from './finder-selection.js';
 
 // `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
 // FACE_LEVEL_INDEX)와 **같은 표**여야 하며, `FACES` 배열의 나열 순서에 기대지
@@ -73,6 +76,7 @@ export function resolveSceneFinderPatternId(
 function resolveFinderRenderPattern(id) {
   if (id === LEGACY_FINDER_PATTERN_ID) return { id, renderKind: 'bullseye' };
   if (id === CENTER_QR_FINDER_PATTERN_ID) return { id, renderKind: 'center-qr' };
+  if (id === CENTRAL_V0_FINDER_PATTERN_ID) return { id, renderKind: 'central-v0' };
   // OAK 후보(2026-08-18)는 생성 도구 산출물이 아니라 별도 표라 PATTERN_BY_ID 에
   // 없다. 여기서 먼저 풀고, 아니면 기존 조회가 «알 수 없는 id» 로 정확히 죽는다.
   const oak = getOakFinderPattern(id);
@@ -87,6 +91,19 @@ function isExperimentalFinderRenderKind(renderKind) {
   return renderKind === 'cell-mask'
     || renderKind === 'three-tone-cube'
     || renderKind === 'cube-bullseye';
+}
+
+/**
+ * 중앙 19셀 슬롯의 Type Y 6축 지지 반지름(px). FINDER_CELL_ORDER의 육각 꼭짓점을
+ * 여섯 큐브 축에 투영한 뒤 최솟값으로 유도한다. 이 반지름에 v0의 n 모듈을 맞추면
+ * 톱니형 슬롯 외곽을 넘지 않는다.
+ */
+function centralSlotRadius(layout, center) {
+  const points = FINDER_CELL_ORDER.flatMap((cell) =>
+    hexCorners(cell.q, cell.r, layout));
+  const supports = CORNER_UNIT_OFFSETS.map((axis) => Math.max(...points.map((point) =>
+    (point.x - center.x) * axis.x + (point.y - center.y) * axis.y)));
+  return Math.min(...supports);
 }
 
 /**
@@ -308,9 +325,22 @@ export function buildScene(encoded, options) {
   // DEFAULT 는 빌드별 초기값이다. 기준선과 실험 후보를 모두 렌더 표현으로 정규화해
   // 두 데이터 모양을 같은 마스크 분기로 잘못 보내지 않는다.
   const finderPattern = resolveFinderRenderPattern(finderPatternId);
-  if (centerQr && isExperimentalFinderRenderKind(finderPattern.renderKind)) {
+  const centralV0 = Boolean(encoded.centralV0);
+  const rendersCentralV0 = finderPattern.renderKind === 'central-v0';
+  const centralSlotOccupants = [
+    centerQr ? 'centerQr' : null,
+    isExperimentalFinderRenderKind(finderPattern.renderKind)
+      ? `실험 파인더(${finderPatternId})` : null,
+    centralV0 ? 'centralV0' : null,
+  ].filter(Boolean);
+  if (centralSlotOccupants.length > 1) {
     throw new RangeError(
-      `centerQr=true 인데 실험 파인더(${finderPatternId})도 지정됐다 — 중앙 슬롯은 둘 중 하나만 렌더할 수 있다`,
+      `중앙 슬롯 점유자는 하나만 렌더할 수 있다: ${centralSlotOccupants.join(' + ')}`,
+    );
+  }
+  if (centralV0 !== rendersCentralV0) {
+    throw new RangeError(
+      `centralV0 불일치: encoded.centralV0=${centralV0} vs finderPatternId=${finderPatternId}`,
     );
   }
   if (!centerQr && finderPattern.renderKind === 'center-qr') {
@@ -538,6 +568,25 @@ export function buildScene(encoded, options) {
         // 프리셋이 아니라 고정 포맷 상수 — 이유는 FINDER_CUBE_TONES 주석.
         color: FINDER_CUBE_TONES[finderPattern.toneRanks[face]],
       });
+    }
+  } else if (finderPattern.renderKind === 'central-v0') {
+    // Type Y v0 정본의 13×13 좌표를 중앙 19셀 슬롯에 닮음 이동한다. 슬롯 반지름은
+    // FINDER_CELL_ORDER의 실제 육각 외곽에서, 모듈 피치는 그 반지름/n에서 유도한다.
+    // 정본에 없는 셀은 그리지 않는다 — 이 점유자는 payload가 없는 순수 파인더다.
+    const v0Layout = {
+      size: centralSlotRadius(layout, center) / CENTRAL_V0_SOURCE_N,
+      originX: center.x,
+      originY: center.y,
+    };
+    for (const cell of centralV0FinderCells()) {
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: moduleQuad(face, cell.i, cell.j, v0Layout),
+          // 파인더 축(순백)을 쓰지 않는다. v0 정본의 면 톤을 현재 데이터 팔레트에 보존한다.
+          color: palette.levels[cell[face]],
+        });
+      }
     }
   } else if (finderPattern.renderKind === 'cell-mask') {
     // 3레벨 후보(OAK, 2026-08-18)는 `cellLevels` 를, 기존 이진 실험 파인더는

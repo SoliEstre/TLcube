@@ -22,6 +22,10 @@ import { cellCount } from './hexgrid.js';
 import { NSYM_TABLE, errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
 import { overheadBreakdown } from './placement.js';
+import { occupiedCells } from './bullseye.js';
+
+/** 중앙 슬롯 점유자(불스아이·중앙 QR·중앙 v0)가 공통으로 쓰는 셀 수. */
+export const CENTRAL_SLOT_CELL_COUNT = occupiedCells().length;
 
 /**
  * 버전 정의. `overhead` 는 `placement.overheadBreakdown(k).total` 로 **유도**한다
@@ -40,6 +44,18 @@ export const VERSIONS = Object.freeze([
     version: 3, k: 10, overhead: overheadBreakdown(10).total, symbolKey: 'V3',
   }),
 ]);
+
+// 중앙 v0는 불스아이를 대체할 뿐 새 셀을 먹지 않는다. 용량표의 생성원인 breakdown이
+// 중앙 슬롯을 빠뜨리면 별도 표를 손으로 고치는 대신 모듈 로드에서 바로 실패시킨다.
+for (const spec of VERSIONS) {
+  const breakdown = overheadBreakdown(spec.k);
+  if (breakdown.bullseye !== CENTRAL_SLOT_CELL_COUNT) {
+    throw new Error(
+      `V${spec.version}: 중앙 슬롯 ${CENTRAL_SLOT_CELL_COUNT}셀과 `
+      + `overheadBreakdown.bullseye ${breakdown.bullseye}가 다르다`,
+    );
+  }
+}
 
 /**
  * S 개의 GF(211) 심볼이 손실 없이 담는 **최대** 바이트 수 K.

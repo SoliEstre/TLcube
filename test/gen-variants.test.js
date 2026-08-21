@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { LEGACY_FINDER_PATTERN_ID } from '../src/finder-patterns.js';
+import { FINDER_CARD_GROUPS } from '../src/finder-card-ui.js';
 import {
   buildSingleHtml, FINDER_EXPERIMENT_EDITION, OFFICIAL_GENERATOR_EDITION,
 } from '../tools/build-single.mjs';
@@ -70,10 +71,22 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
   const cardUiSource = readFileSync(path.join(ROOT, 'src', 'finder-card-ui.js'), 'utf8');
   assert.doesNotMatch(source, /<select id="finderPattern"/);
   assert.match(source, /class="finder-family-grid card-row"/);
-  // 정식 행이 4개(하이브리드 추가)라 4칸 격자 + 세로 배치(썸네일 위·글자 아래)다.
-  assert.match(source, /finder-legacy-row \{ display: grid; grid-template-columns: repeat\(4,/);
+  // **의도적 갱신 (2026-08-21, 중앙 v0 편입)**: 「4칸」을 값으로 적던 자리를 «카드 수가
+  // 정한다» 로 옮겼다. 중앙 v0 카드가 formal 그룹 **밖에서** 중앙 QR 앞에 끼면서 정식
+  // 행이 5개가 됐는데, 칸 수 4 를 그대로 두면 5번째가 조용히 다음 줄로 흘러 4+1 이
+  // 된다 — 깨지지도 죽지도 않아 눈으로만 잡히는 결함이다. 그래서 값이 아니라
+  // 「행의 카드 수 = 격자 칸 수」라는 **관계**를 잠근다.
+  const formalCardCount = FINDER_CARD_GROUPS.formal.length + 1; // +1 = 중앙 v0 카드
+  // 정규식이 아니라 부분 문자열로 본다 — 이 명제엔 메타문자가 필요 없고,
+  // 이스케이프가 하나 어긋나면 검사가 조용히 헐거워진다.
+  assert.ok(
+    source.includes(
+      `finder-legacy-row { display: grid; grid-template-columns: repeat(${formalCardCount},`),
+    `정식 행 카드 ${formalCardCount}개인데 .finder-legacy-row 격자 칸 수가 그 값이 아니다`);
   assert.doesNotMatch(source, /finder-legacy-row \.finder-card \{ flex-direction: row/);
-  assert.match(source, /FINDER_CARD_GROUPS\.formal\.map/);
+  // 정식 행은 여전히 formal 그룹에서 나오고(손 나열 금지), v0 는 규칙으로 끼워진다.
+  assert.match(source, /FINDER_CARD_GROUPS\.formal\.flatMap/);
+  assert.match(source, /\[CENTRAL_V0_FINDER_CARD, entry\]/);
   assert.match(source, /function centerQrThumbnail\(\)/);
   assert.match(source, /finder-family-grid\.card-row \{\s*display: grid; grid-template-columns: repeat\(4,/);
   assert.match(source, /@media \(max-width: 420px\)[\s\S]*finder-family-grid\.card-row \{ grid-template-columns: repeat\(2,/);

@@ -290,6 +290,13 @@ test('실험 파인더 12개 모두 데이터 셀 자체검증을 통과하고 c
       qrText: 'https://tlscan.estre.so/',
       finderPatternId: FINDER_PATTERN_IDS[0],
     }),
-    /중앙 슬롯은 둘 중 하나만/,
+    // **의도적 갱신 (2026-08-21, 중앙 v0 편입)**: 중앙 슬롯 점유자가 셋이 되면서
+    // 던짐이 「둘 중 하나」에서 「점유자 목록을 이름으로 세어 하나만」으로 바뀌었다.
+    // 문구만 따라가지 않고 **더 세게** 잠근다 — 실제로 겹친 둘을 메시지가 지목해야
+    // 한다. 지목 없이 던지기만 하면 어느 조합이 막혔는지 로그에서 알 수 없다.
+    (error) => error instanceof RangeError
+      && /중앙 슬롯 점유자는 하나만/.test(error.message)
+      && error.message.includes('centerQr')
+      && error.message.includes(FINDER_PATTERN_IDS[0]),
   );
 });

@@ -128,7 +128,12 @@ const ALLOWED = {
   'index.html': 8, // JSON-LD 구조화 데이터 7 + 편집기 파인더 폴백 console.warn 1
   'sites/tlscan/scanner.js': 0,
   'src/luminance.js': 7, // 프리셋 표시명 3 + 내부 불변식 throw 4
-  'src/capacity.js': 9, // 전부 내부 불변식 throw
+  // **의도적 갱신 (2026-08-21, 중앙 v0 편입)**: 9 → 11. 더해진 것은 throw **하나**인데
+  // 세는 단위가 «문자열 리터럴» 이라 2종으로 잡힌다 (메시지를 `+` 로 이어 붙였다).
+  // 내용은 VERSIONS 를 훑어 `overheadBreakdown.bullseye` 가 중앙 슬롯 셀 수와
+  // 어긋나면 **모듈 로드 시점에** 던지는 검사다 — 화면엔 안 나간다(나갈 땐 이미
+  // 앱이 안 뜬 뒤다). 위 `실계산 사용 심볼…` 도 같은 이유로 2종을 차지한다.
+  'src/capacity.js': 11, // 전부 내부 불변식 throw
 };
 
 for (const [rel, allowed] of Object.entries(ALLOWED)) {

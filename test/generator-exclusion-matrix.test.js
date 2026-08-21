@@ -17,11 +17,14 @@ import { readFileSync } from 'node:fs';
 
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
+import { FINDER_CARD_GROUPS, CENTRAL_V0_FINDER_CARD } from '../src/finder-card-ui.js';
+import { isDaehanFinderPatternId } from '../src/finder-daehan.js';
+import { isCentralV0FinderPatternId } from '../src/finder-selection.js';
 
 const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 /** 생성기가 실제로 조합할 수 있는 인코더 플래그. UI 카드가 있는 것만 넣는다. */
-const FLAGS = ['cornerMarker', 'centerQr', 'turnA', 'daehanFinder'];
+const FLAGS = ['cornerMarker', 'centerQr', 'turnA', 'daehanFinder', 'centralV0'];
 
 function combos(flags) {
   const out = [];
@@ -56,9 +59,18 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     'centerQr+cornerMarker': /generatorState\.qrPosition === 'inner' && card\.dataset\.cornermarker === 'on'/,
     // daehan 은 파인더 선택에서 오므로 **파인더가 이긴다** — 중앙 QR 카드를 잠근다.
     'centerQr+daehanFinder': /if \(finderTakesCentre && generatorState\.qrPosition === 'inner'\)/,
+    // 중앙 v0도 같은 finderTakesCentre 규칙으로 안쪽 QR 카드를 잠근다.
+    'centerQr+centralV0': /isCentralV0FinderPatternId\(generatorState\.finderPatternId\)/,
     // 아래 둘은 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
     'cornerMarker+daehanFinder': /\} else if \(cfg\.cornerMarker === true && !opts\.centerQr\) \{/,
     'daehanFinder+turnA': /\} else if \(cfg\.turnA === true\) \{/,
+    // 둘 다 단일 finderPatternId 카드에서 유도되므로 한 상태에 동시에 설 수 없다.
+    'centralV0+daehanFinder': () => {
+      const ids = [CENTRAL_V0_FINDER_CARD,
+        ...Object.values(FINDER_CARD_GROUPS).flat()].map((entry) => entry.id);
+      return ids.every((id) => !(isCentralV0FinderPatternId(id)
+        && isDaehanFinderPatternId(id)));
+    },
   };
   const unguarded = [];
   for (const pair of pairs) {
@@ -66,7 +78,8 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     if (pair.split('+').length !== 2) continue;
     const guard = GUARDED[pair];
     if (!guard) { unguarded.push(pair + ' (가드 미등록)'); continue; }
-    if (!guard.test(INDEX)) unguarded.push(pair + ' (가드가 소스에서 사라짐)');
+    const present = typeof guard === 'function' ? guard() : guard.test(INDEX);
+    if (!present) unguarded.push(pair + ' (가드가 소스에서 사라짐)');
   }
   assert.deepEqual(unguarded, [],
     'UI 가 안 막는 배타 조합이 있다 — 고르면 렌더가 죽는다: ' + JSON.stringify(unguarded)
@@ -77,7 +90,7 @@ test('UI 가 막는 조합을 뺀 나머지는 실제로 인코드된다', () =>
   // 남는 조합이 던지면 사용자는 «되는 줄 알고 골랐다가» 빈 화면을 본다.
   for (const [label, fn, base] of [['O', encode, { version: 1, eccLevel: 'M' }],
     ['A', encodeA, { version: 0, eccLevel: 'M' }]]) {
-    for (const single of ['cornerMarker', 'centerQr', 'daehanFinder']) {
+    for (const single of ['cornerMarker', 'centerQr', 'daehanFinder', 'centralV0']) {
       if (label === 'O' && single === 'daehanFinder') continue;   // O daehan 은 파인더 선택으로 온다
       const msg = rejection(fn, base, { [single]: true });
       assert.equal(msg, null, label + ' ' + single + ' 단독인데 던진다: ' + msg);

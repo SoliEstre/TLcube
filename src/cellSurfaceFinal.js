@@ -521,6 +521,12 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
 });
 
 /**
+ * O/G 중앙 슬롯에 옮기는 v0의 원본 한 변. 숫자를 다시 적지 않고 최종 라인업의
+ * 허용 n에서 유도한다 — v0 정본 크기가 바뀌면 중앙 렌더 피치도 함께 바뀌어야 한다.
+ */
+export const CENTRAL_V0_SOURCE_N = CELL_SURFACE_FINAL_NS[CELL_SURFACE_FINAL_V0][0];
+
+/**
  * **실험판 드랍 (운영자 확정 2026-08-16) — 차단이지 삭제가 아니다.**
  *
  * 운영자 관측: 실기기 인식이 1\~5초 텀. v2r2 는 §P6(`test/output/claude-skew-real.md`)
@@ -2065,6 +2071,14 @@ export function nameCellSurfaceFinal(n, tones, id = undefined) {
 
 export function locatorCellsCellSurfaceFinal(n, id = undefined) {
   return cellSurfaceFinal(n, id === undefined ? wirePreferredFinalLayoutIdForN(n) : id).locatorCells;
+}
+
+/**
+ * O/G 중앙 슬롯용 순수 v0 파인더 셀. 좌표·T/L/R 톤을 별도 표로 복사하지 않고
+ * `CELL_SURFACE_FINAL_V0` 정본 배열의 동결된 locatorCells 참조를 그대로 돌려준다.
+ */
+export function centralV0FinderCells() {
+  return locatorCellsCellSurfaceFinal(CENTRAL_V0_SOURCE_N, CELL_SURFACE_FINAL_V0);
 }
 
 export function paintedCellsCellSurfaceFinal(n, id = undefined) {

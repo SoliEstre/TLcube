@@ -16,7 +16,7 @@ import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
 import { rsEncode } from './rs211.js';
 import { maskAdd } from './mask.js';
 import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
-import { dataCellsInScanOrder, fillerCells } from './layout.js';
+import { centralSlotCells, dataCellsInScanOrder, fillerCells } from './layout.js';
 import {
   anchorCells,
   referenceCellsAll,
@@ -124,9 +124,9 @@ export function chooseVersion(text, eccLevel = 'M', cornerMarker = false, daehan
  * 인코더 파이프라인 진입점 (SPEC §7.1). version 을 생략하면 `chooseVersion` 으로
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, centralV0?: boolean}} [options]
  * @returns {{
- *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean,
+ *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, centralV0: boolean,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
  *   dataDigits: Uint8Array,
@@ -144,8 +144,8 @@ export function encode(text, options = {}) {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
   const {
-    version, eccLevel = 'M', centerQr = false, cornerMarker = false, daehanFinder = false,
-    markerTones = false,
+    version, eccLevel = 'M', centerQr = false, centralV0 = false,
+    cornerMarker = false, daehanFinder = false, markerTones = false,
   } = options;
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
@@ -158,6 +158,9 @@ export function encode(text, options = {}) {
   }
   if (typeof markerTones !== 'boolean') {
     throw new TypeError(`markerTones 는 boolean 이어야 한다: ${typeof markerTones}`);
+  }
+  if (typeof centralV0 !== 'boolean') {
+    throw new TypeError(`centralV0 는 boolean 이어야 한다: ${typeof centralV0}`);
   }
   // markerTones 는 «O-CM 이 예약한 자리» 에 심는 심볼(H)이다 — 자리 없이 심볼만 켤 수 없다.
   if (markerTones && !cornerMarker) {
@@ -177,6 +180,14 @@ export function encode(text, options = {}) {
   }
   if (daehanFinder && cornerMarker) {
     throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
+  // 중앙 슬롯 점유자는 하나다. 중앙 v0는 중앙 QR·daehan과 같은 19셀을 쓴다.
+  // cornerMarker(Type G)는 바깥 링 점유자라 v0와 함께 쓸 수 있으며 여기서 막지 않는다.
+  if (centralV0 && centerQr) {
+    throw new RangeError('centralV0 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
+  }
+  if (centralV0 && daehanFinder) {
+    throw new RangeError('centralV0 와 daehanFinder 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
   }
   const provider = layoutProviderFor(cornerMarker, daehanFinder, markerTones);
 
@@ -294,11 +305,23 @@ export function encode(text, options = {}) {
     cellDigits.set(cellKey(c.q, c.r), { digit: fillerDigits[i], role: 'filler' });
   }
 
+  // 중앙 v0는 별도 데이터 레이아웃이 아니라 기존 중앙 슬롯의 새 점유자다. 그래도
+  // O와 G 어느 공급자에서도 그 19셀이 payload로 되살아나지 않았음을 인코더 경계에서
+  // 직접 단언한다. 좌표는 layout.js의 bullseye 정본에서 유도한다.
+  if (centralV0) {
+    for (const cell of centralSlotCells()) {
+      if (cellDigits.has(cellKey(cell.q, cell.r))) {
+        throw new Error(`centralV0 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
+      }
+    }
+  }
+
   return {
     version: spec.version,
     k,
     eccLevel,
     centerQr,
+    centralV0,
     cornerMarker,
     daehanFinder,
     markerTones,

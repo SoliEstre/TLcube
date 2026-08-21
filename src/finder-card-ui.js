@@ -10,7 +10,9 @@ import {
   THREE_TONE_CUBE_FINDER_PATTERN_ID,
   getFinderPattern,
 } from './finder-patterns.js';
-import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import {
+  CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID,
+} from './finder-selection.js';
 import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
 import { DAEHAN_FINDER_PATTERNS } from './finder-daehan.js';
 
@@ -61,6 +63,9 @@ const DAEHAN_K10 = DAEHAN_FINDER_PATTERNS.find((pattern) => pattern.k === 10);
 if (!DAEHAN_K10 || !Array.isArray(DAEHAN_K10.finderCells) || DAEHAN_K10.finderCells.length !== 79) {
   throw new Error('daehan k10 정본(79셀)이 없다 — 표가 바뀌었으면 카드 대표도 같이 정해라');
 }
+
+/** 생성 패턴 표 밖의 중앙 v0 카드 — 기존 그룹 계보·개수 계약과 분리한다. */
+export const CENTRAL_V0_FINDER_CARD = descriptor(CENTRAL_V0_FINDER_PATTERN_ID, null);
 
 export const FINDER_CARD_GROUPS = Object.freeze({
   // 사용자 지시 2026-08-13: 하이브리드를 두 번째로 — 실사진에서 실제로 읽히는 큐브

@@ -1,7 +1,12 @@
 // finder-selection.js — Type O/A 중앙 파인더와 QR 위치의 양방향 상태 계약
 
 export const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
+export const CENTRAL_V0_FINDER_PATTERN_ID = 'central-v0';
 export const DEFAULT_OUTER_QR_POSITION = 'TL';
+
+export function isCentralV0FinderPatternId(id) {
+  return id === CENTRAL_V0_FINDER_PATTERN_ID;
+}
 
 const profileFamily = (type) => type === 'Y' ? 'Y' : 'OA';
 
@@ -66,6 +71,7 @@ export function selectGeneratorType(state, type, defaultFinderPatternId) {
 function previousFinderOrDefault(state, defaultFinderPatternId) {
   const previous = state.previousFinderPatternId;
   return previous && previous !== CENTER_QR_FINDER_PATTERN_ID
+    && previous !== CENTRAL_V0_FINDER_PATTERN_ID
     ? previous
     : defaultFinderPatternId;
 }
@@ -77,6 +83,13 @@ function previousFinderOrDefault(state, defaultFinderPatternId) {
 export function normalizeFinderQrState(state, type, defaultFinderPatternId) {
   const next = { ...state };
   if (type === 'Y') return next;
+
+  // 중앙 v0는 O와 그 코너 마커 변형인 G 전용이다. Type A는 별도 인코더라 이 레인의
+  // 회계 계약을 공유하지 않으므로 타입 전환 때 기본 파인더로 되돌린다.
+  if (type === 'A' && next.finderPatternId === CENTRAL_V0_FINDER_PATTERN_ID) {
+    next.finderPatternId = defaultFinderPatternId;
+    next.previousFinderPatternId = defaultFinderPatternId;
+  }
 
   const inner = next.qrPosition === 'inner';
   const centerQr = next.finderPatternId === CENTER_QR_FINDER_PATTERN_ID;

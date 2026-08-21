@@ -420,7 +420,11 @@
      들어와 4개가 되면서 한 칸 폭이 좁아져 글자가 뭉갰다. 나머지 카드와 같은 세로 배치
      (썸네일 위 · 글자 아래)로 통일한다 — `.toggle-card` 기본값이 이미 그 모양이라
      가로 배치 override 만 걷어내면 된다. */
-  .finder-legacy-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+  /* **2026-08-21 중앙 v0 편입**: 정식 행이 5개가 됐다 — 중앙 v0 카드가 중앙 QR 바로
+     앞에 붙는다. 칸 수를 4 로 두면 5번째 카드가 **조용히 다음 줄로 흘러** 4+1 로
+     깨진다(죽지 않는다). 카드 수 ↔ 칸 수 관계는 test/gen-variants.test.js 가
+     `FINDER_CARD_GROUPS.formal.length + 1` 로 **유도해** 잠근다. */
+  .finder-legacy-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
   .finder-family-grid.card-row {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px;
   }
@@ -496,6 +500,8 @@
   @media (max-width: 420px) {
     .experiment-banner { width: calc(100% - 32px); margin-inline: 16px; align-items: flex-start; flex-direction: column; }
     .finder-family-grid.card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    /* 5칸은 폰 폭에서 썸네일이 뭉갠다 — family-grid 와 같은 관용구로 접는다. */
+    .finder-legacy-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .finder-user-patterns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
   fieldset.typeOptions { border: none; margin: 0; padding: 0; }
@@ -2510,6 +2516,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae (전면 79셀)",
     "g570": "taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)",
     "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.",
+    "g582": "중앙 v0 (Type Y 면 컬러)",
     "g572": "실루엣 방향 (실험)",
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
@@ -2921,6 +2928,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae (79-cell full surface)",
     "g570": "taegeuk + sagoae (lower capacity · trial scanner only)",
     "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when this finder is enabled in the trial scanner (/lab/).",
+    "g582": "Central v0 (Type Y face colours)",
     "g572": "Silhouette direction (experimental)",
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
@@ -3332,6 +3340,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae（全面79セル）",
     "g570": "taegeuk + sagoae（容量減少・試験版スキャナ専用）",
     "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）でこのファインダーを有効にしたときだけ読み取れます。",
+    "g582": "中央 v0（Type Y の面カラー）",
     "g572": "シルエット方向（実験）",
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
@@ -3742,6 +3751,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae (79 cellules, pleine surface)",
     "g570": "taegeuk + sagoae (capacité réduite · scanner d'essai uniquement)",
     "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec ce détecteur activé dans le scanner d'essai (/lab/).",
+    "g582": "v0 central (couleurs des faces Type Y)",
     "g572": "Orientation de la silhouette (expérimental)",
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
@@ -4152,6 +4162,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae (79 celle, superficie intera)",
     "g570": "taegeuk + sagoae (capacità ridotta · solo scanner di prova)",
     "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando questo rilevatore nello scanner di prova (/lab/).",
+    "g582": "v0 centrale (colori delle facce Type Y)",
     "g572": "Direzione della sagoma (sperimentale)",
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
@@ -4562,6 +4573,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae (79 Zellen, ganze Fläche)",
     "g570": "taegeuk + sagoae (geringere Kapazität · nur Test-Scanner)",
     "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn dieser Finder im Test-Scanner (/lab/) aktiviert ist.",
+    "g582": "Zentrales v0 (Type-Y-Flächenfarben)",
     "g572": "Silhouettenrichtung (experimentell)",
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
@@ -4972,6 +4984,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae (79 celdas, superficie completa)",
     "g570": "taegeuk + sagoae (menor capacidad · solo escáner de prueba)",
     "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con este detector activado en el escáner de prueba (/lab/).",
+    "g582": "v0 central (colores de caras Type Y)",
     "g572": "Orientación de la silueta (experimental)",
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
@@ -5382,6 +5395,7 @@ const GENERATOR_STRINGS = {
     "g569": "taegeuk + sagoae (79 células, superfície inteira)",
     "g570": "taegeuk + sagoae (menor capacidade · apenas leitor de teste)",
     "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com este detector ativado no leitor de teste (/lab/).",
+    "g582": "v0 central (cores das faces Type Y)",
     "g572": "Orientação da silhueta (experimental)",
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
@@ -5533,7 +5547,9 @@ import { placeReservedCells } from './src/autoplaceY.js';
 //   `CELL_SURFACE_FINAL_V0WQ`) 는 2026-08-17 v0WY 편입에서 `hasCenterQrSlot` 정본
 //   질의로 대체됐다 — 슬롯 레이아웃이 셋이 되면서 «id 를 여기 또 적는» 방식이
 //   빠뜨리기 쉬운 자리가 됐기 때문이다 (상수 자체는 cellSurfaceFinal.js 에 그대로 산다).
-import { cellSurfaceFinal, hasCenterQrSlot } from './src/cellSurfaceFinal.js';
+import {
+  CENTRAL_V0_SOURCE_N, cellSurfaceFinal, centralV0FinderCells, hasCenterQrSlot,
+} from './src/cellSurfaceFinal.js';
 import { faceBasis, layoutForCube, moduleQuad, YFACES } from './src/ygrid.js';
 import {
   CELL_EDITOR_MODE_MASK, TONE_BRIGHTEN, TONE_DARKEN,
@@ -5577,11 +5593,11 @@ import {
   daehanPatternId, getDaehanFinderPattern, isDaehanFinderPatternId,
 } from './src/finder-daehan.js';
 import {
-  CENTER_QR_FINDER_PATTERN_ID, commitFinderQrTransition,
-  selectFinderPattern, selectGeneratorType, selectQrPosition,
+  CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID, commitFinderQrTransition,
+  isCentralV0FinderPatternId, selectFinderPattern, selectGeneratorType, selectQrPosition,
 } from './src/finder-selection.js';
 import {
-  FINDER_CARD_GROUPS, wireFinderCardActivation,
+  CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS, wireFinderCardActivation,
 } from './src/finder-card-ui.js';
 import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
 import {
@@ -6526,6 +6542,7 @@ function currentPresetName() {
 const FINDER_LABEL_KEYS = Object.freeze({
   bullseye: 'g460',
   [CENTER_QR_FINDER_PATTERN_ID]: 'g471',
+  [CENTRAL_V0_FINDER_PATTERN_ID]: 'g582',
   'pinwheel-3-0101-cw-missing-solid': 'g463',
   'gap-ring-01-2-1-solid': 'g462',
   'flower-7-0020-coprime-offset': 'g464',
@@ -6769,25 +6786,48 @@ function centerQrThumbnail() {
   return svg;
 }
 
+function centralV0Thumbnail() {
+  const svg = finderSvgElement('svg', { viewBox: '0 0 56 48', 'aria-hidden': 'true' });
+  const levels = paletteOf(generatorState.preset).levels;
+  const layout = { size: 20 / CENTRAL_V0_SOURCE_N, originX: 28, originY: 24 };
+  for (const cell of centralV0FinderCells()) {
+    for (const face of FACES) {
+      svg.append(finderSvgElement('polygon', {
+        points: moduleQuad(face, cell.i, cell.j, layout)
+          .map((point) => point.x.toFixed(3) + ',' + point.y.toFixed(3)).join(' '),
+        fill: rgbCss(levels[cell[face]]),
+      }));
+    }
+  }
+  return svg;
+}
+
 function makeFinderCard(id, pattern) {
   const card = document.createElement('div');
   card.className = 'toggle-card finder-card';
   card.dataset.finderId = id;
   card.setAttribute('role', 'button');
   card.setAttribute('tabindex', '0');
-  card.append(pattern
-    ? pattern.renderKind === 'three-tone-cube'
+  let thumbnail;
+  if (id === CENTRAL_V0_FINDER_PATTERN_ID) thumbnail = centralV0Thumbnail();
+  else if (pattern) {
+    thumbnail = pattern.renderKind === 'three-tone-cube'
       ? finderCubeThumbnail(pattern)
       : pattern.renderKind === 'cube-bullseye'
         ? finderCubeBullseyeThumbnail(pattern)
-        : finderMaskThumbnail(pattern)
-    : (id === CENTER_QR_FINDER_PATTERN_ID ? centerQrThumbnail() : legacyFinderThumbnail()));
+        : finderMaskThumbnail(pattern);
+  } else {
+    thumbnail = id === CENTER_QR_FINDER_PATTERN_ID
+      ? centerQrThumbnail() : legacyFinderThumbnail();
+  }
+  card.append(thumbnail);
   const label = document.createElement('span');
   label.className = 'finder-card-label';
   label.dataset.finderLabelKey = FINDER_LABEL_KEYS[id];
   card.append(label);
   const activate = () => {
     const type = currentType();
+    if (type === 'A' && isCentralV0FinderPatternId(id)) return;
     commitFinderQrUi(
       selectFinderPattern(generatorState, id, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
     );
@@ -6802,9 +6842,13 @@ function ensureFinderCards() {
     || els.finderUserCards.childElementCount || els.finderOakCards.childElementCount
     || els.finderDaehanCards.childElementCount) return;
 
-  // 정식 선택지: 불스아이 → 3톤 큐브 → 중앙 QR. 큐브는 cell-mask 행에 섞지 않는다.
+  // 중앙 v0는 생성 패턴 계보 밖의 운영자 확정 카드다. 기존 formal 그룹의 계보·개수
+  // 계약은 유지하고, 중앙 QR 바로 앞에 규칙으로 끼운다.
+  const formalCards = FINDER_CARD_GROUPS.formal.flatMap((entry) =>
+    entry.id === CENTER_QR_FINDER_PATTERN_ID
+      ? [CENTRAL_V0_FINDER_CARD, entry] : [entry]);
   els.finderLegacyRow.append(
-    ...FINDER_CARD_GROUPS.formal.map(({ id, pattern }) => makeFinderCard(id, pattern)),
+    ...formalCards.map(({ id, pattern }) => makeFinderCard(id, pattern)),
   );
 
   const generatedFamilies = FINDER_CARD_GROUPS.generated;
@@ -6896,7 +6940,11 @@ function renderFinderUi() {
     }
   }
   for (const card of document.querySelectorAll('[data-finder-id]')) {
-    const active = card.dataset.finderId === generatorState.finderPatternId;
+    const centralV0Unsupported = currentType() === 'A'
+      && isCentralV0FinderPatternId(card.dataset.finderId);
+    card.style.display = centralV0Unsupported ? 'none' : '';
+    const active = !centralV0Unsupported
+      && card.dataset.finderId === generatorState.finderPatternId;
     card.classList.toggle('active', active);
     card.setAttribute('aria-pressed', String(active));
     const label = card.querySelector('[data-finder-label-key]');
@@ -6920,7 +6968,9 @@ function renderFinderUi() {
   //   `finder score record missing` 으로 renderFinderUi 가 중간에 죽는다
   //   (2026-08-18 OAK 편입 때 실제로 터진 자리다).
   const unmeasuredPattern = getOakFinderPattern(generatorState.finderPatternId)
-    || getDaehanFinderPattern(generatorState.finderPatternId);
+    || getDaehanFinderPattern(generatorState.finderPatternId)
+    || (isCentralV0FinderPatternId(generatorState.finderPatternId)
+      ? { name: t('g582') } : null);
   if (unmeasuredPattern) {
     els.finderScorePanel.classList.remove('gate-rejected');
     els.finderScorePanel.classList.add('finder-score-unmeasured');
@@ -7014,7 +7064,8 @@ function renderQrPositionUi() {
    * 고른 것인데, 여기서 조용히 daehan 을 떨구면 카드는 daehan 인데 그림은 아닌
    * «라벨이 사실이 아닌» 상태가 된다. 그래서 **중앙 QR 카드를 잠근다.**
    */
-  const finderTakesCentre = isDaehanFinderPatternId(generatorState.finderPatternId);
+  const finderTakesCentre = isDaehanFinderPatternId(generatorState.finderPatternId)
+    || isCentralV0FinderPatternId(generatorState.finderPatternId);
   if (finderTakesCentre && generatorState.qrPosition === 'inner') {
     generatorState.qrPosition = 'outer';
   }
@@ -9530,9 +9581,13 @@ function encodeOptsFor(cfg) {
   // 화면의 모든 용량 표시(정보줄·게이지·절단 프로브)는 encoded.capacity 를 그대로 읽으므로
   // 자동으로 따라온다. 이 줄이 없으면 79셀을 그려 놓고 legacy 용량(18/39/65 B)을 표시하며
   // data 셀 위에 파인더를 덧칠한다.
+  if (isCentralV0FinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
+    opts.centralV0 = true;
+  }
   if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) opts.daehanFinder = true;
   // daehan 과 코너 마커는 둘 다 layoutProviderFor 를 갈아끼운다(src/encode.js:47) —
   // 같이 주면 회계가 두 번 갈린다. daehan 이 파인더 선택에서 오므로 그쪽을 우선한다.
+  // 중앙 v0는 기존 불스아이 19셀을 교체할 뿐이라 cornerMarker(Type G)와 함께 싣는다.
   // ⚠ 중앙 QR 과도 상호배제다 — UI 가 이미 막지만, 저장·URL 로 옛 조합이 들어와도
   //   인코더가 던지는 대신 여기서 코너 마커를 떨군다 (중앙 QR 이 사용자가 더 최근에
   //   고른 것이고, QR 은 폴백 경로라 잃으면 손해가 크다).

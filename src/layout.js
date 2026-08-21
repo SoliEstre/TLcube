@@ -112,6 +112,14 @@ export function fillerCells(k, finderReserved) {
   return residual === 0 ? [] : scan.slice(scan.length - residual);
 }
 
+/**
+ * O/G 중앙 슬롯의 정본 셀. 불스아이·중앙 QR·중앙 v0가 같은 19셀 점유자를 교체하므로
+ * 새 좌표표를 만들지 않고 bullseye.occupiedCells()를 그대로 돌려준다.
+ */
+export function centralSlotCells() {
+  return occupiedCells();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 통합 레이아웃 맵 (디코더 역독 진입점)
 // ─────────────────────────────────────────────────────────────────────────────
