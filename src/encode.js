@@ -35,6 +35,7 @@ import {
 import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
 import { daehanReservedCells } from './finder-daehan.js';
 import { markerGSpec } from './markerG.js';
+import { hTonesByKeyO } from './finder-H.js';
 
 function cellKey(q, r) {
   return `${q},${r}`;
@@ -45,7 +46,7 @@ function cellKey(q, r) {
  * 여기 한 곳에 모은다. 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 세 경로가
  * 완전히 같다.
  */
-function layoutProviderFor(cornerMarker, daehanFinder = false) {
+function layoutProviderFor(cornerMarker, daehanFinder = false, markerTones = false) {
   if (daehanFinder) {
     // daehan (2026-08-18) — anchor/format/reference 좌표는 **레거시와 같다**
     // (예약 60셀이 그 셋과 하나도 안 겹치는 것이 전 k 에서 실측 확인됐다).
@@ -80,9 +81,21 @@ function layoutProviderFor(cornerMarker, daehanFinder = false) {
     format: formatCellsOMarker,
     reference: referenceCellsOMarker,
     // 코너 마커 12셀 = 앵커 3(digit 5/0/0, 레거시 계약 그대로) + 마커 9.
-    fixed: (k) => markerCells(k).map((c) => ({
-      q: c.q, r: c.r, digit: c.digit, role: c.role,
-    })),
+    //
+    // markerTones — 타입 G 기본 파인더 **H** 의 심볼 톤(`finder-H.js` 정본)을 12셀에
+    // 싣는다 (encodeA 의 H2O 적재와 같은 기제, 운영자 결정 2026-08-21). 단 **opt-in**
+    // 이다: H 는 tetrad A(= 레거시 앵커 3셀)까지 덮으므로 톤 프레임은 digit 기반
+    // 앵커 검출이 못 읽는다 (H2O 는 앵커를 안 덮어 A 는 기본 적재가 가능했다 —
+    // 실측 `test/output/lanes/claude-h-decode-probe.mjs`, 공백 잠금 finder-H.test ⑥).
+    // 기본값 전환은 검출기 배선(통합자 몫)이 선 다음이다. digit 은 그대로 남는다 —
+    // digit 은 와이어·알파벳 계약이고 tones 는 심볼 오버레이라 층이 다르다.
+    fixed: markerTones
+      ? (k) => markerCells(k, hTonesByKeyO(k)).map((c) => ({
+        q: c.q, r: c.r, digit: c.digit, role: c.role, tones: c.tones,
+      }))
+      : (k) => markerCells(k).map((c) => ({
+        q: c.q, r: c.r, digit: c.digit, role: c.role,
+      })),
   };
 }
 
@@ -132,6 +145,7 @@ export function encode(text, options = {}) {
   }
   const {
     version, eccLevel = 'M', centerQr = false, cornerMarker = false, daehanFinder = false,
+    markerTones = false,
   } = options;
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
@@ -141,6 +155,13 @@ export function encode(text, options = {}) {
   }
   if (typeof daehanFinder !== 'boolean') {
     throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
+  }
+  if (typeof markerTones !== 'boolean') {
+    throw new TypeError(`markerTones 는 boolean 이어야 한다: ${typeof markerTones}`);
+  }
+  // markerTones 는 «O-CM 이 예약한 자리» 에 심는 심볼(H)이다 — 자리 없이 심볼만 켤 수 없다.
+  if (markerTones && !cornerMarker) {
+    throw new RangeError('markerTones 는 cornerMarker(자리 예약) 없이 켤 수 없다');
   }
   // 코너 마커는 중앙 슬롯을 안 건드리지만, 중앙 QR 은 링3 을 먹고 마커는 링 k·k−1 을
   // 먹는다 — 두 변형의 동시 사용은 배치 검증을 안 했으므로 조용히 허용하지 않는다.
@@ -157,7 +178,7 @@ export function encode(text, options = {}) {
   if (daehanFinder && cornerMarker) {
     throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
-  const provider = layoutProviderFor(cornerMarker, daehanFinder);
+  const provider = layoutProviderFor(cornerMarker, daehanFinder, markerTones);
 
   const spec = version === undefined
     ? chooseVersion(text, eccLevel, cornerMarker, daehanFinder)
@@ -243,9 +264,13 @@ export function encode(text, options = {}) {
   const cellDigits = new Map();
 
   // 앵커(+O-CM 이면 마커 9셀). 각 원소가 이미 digit 을 들고 있다 — 마스크 없음.
+  // markerTones 프레임은 tones(절대 톤)도 함께 든다 — encodeA 의 마커 적재와 같은 계약.
   const fixedCells = provider.fixed(k);
   for (const c of fixedCells) {
-    cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: c.role });
+    cellDigits.set(
+      cellKey(c.q, c.r),
+      c.tones ? { digit: c.digit, tones: c.tones, role: c.role } : { digit: c.digit, role: c.role },
+    );
   }
 
   const references = provider.reference(k); // 전부 REFERENCE_DIGIT — 마스크 없음.
@@ -276,6 +301,7 @@ export function encode(text, options = {}) {
     centerQr,
     cornerMarker,
     daehanFinder,
+    markerTones,
     capacity,
     codewordSymbols,
     dataDigits,

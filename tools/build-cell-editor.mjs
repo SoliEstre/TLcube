@@ -27,7 +27,7 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // encodeA 가 daehan 표를 조회한다). ⚠ 이 줄이 빠져서 빌더의 위상 검사가
   // 「capacityA -> finder-daehan (missing)」으로 죽었다 — **검사가 일했다.**
   // 새 의존을 추가하는 레인은 번들 위상표도 같이 봐야 한다.
-  'finder-daehan', 'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'markerA', 'encodeA',
+  'finder-daehan', 'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'encodeA',
   'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'encodeY',
   'luminance', 'export-filename', 'cell-editor-history', 'cell-editor-core',

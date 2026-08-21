@@ -57,14 +57,20 @@ import {
   hexTriAxisOccupancy,
 } from './turnA.js';
 
-/** 내부 타입 G 배정 표 — 항목마다 값이 «표에 직접» 적혀 있다. 산술 유도 금지. */
+/** 내부 타입 G 배정 표 — 항목마다 값이 «표에 직접» 적혀 있다. 산술 유도 금지.
+ *
+ * `defaultFinder` (운영자 결정 2026-08-21): CM 은 파인더가 아니라 **자리 예약**이고,
+ * 그 자리에 들어가는 **심볼**이 기본 파인더다 — hex(O-CM 12셀 자리)는 **H**
+ * (`finder-H.js`), tri(A-CM 21셀 자리)는 **H2O** (`markerA.js` H2O_LOCAL_TONES_A).
+ * 톤 표는 각 모듈이 유일한 진실이고, 여기는 배정만 든다 (finder-H 로드 자기검증이
+ * hex 열을, 아래 자기검증이 패밀리 내 일관성을 강제한다). */
 export const MARKER_G_FORMAT_INDEX = Object.freeze([
-  Object.freeze({ name: 'V1CM', family: 'hex', version: 1, k: 6, formatIndex: 6 }),
-  Object.freeze({ name: 'V2CM', family: 'hex', version: 2, k: 8, formatIndex: 0 }),
-  Object.freeze({ name: 'V3CM', family: 'hex', version: 3, k: 10, formatIndex: 1 }),
-  Object.freeze({ name: 'A0CM', family: 'tri', version: 0, k: 6, formatIndex: 12 }),
-  Object.freeze({ name: 'A1CM', family: 'tri', version: 1, k: 8, formatIndex: 13 }),
-  Object.freeze({ name: 'A2CM', family: 'tri', version: 2, k: 10, formatIndex: 14 }),
+  Object.freeze({ name: 'V1CM', family: 'hex', version: 1, k: 6, formatIndex: 6, defaultFinder: 'H' }),
+  Object.freeze({ name: 'V2CM', family: 'hex', version: 2, k: 8, formatIndex: 0, defaultFinder: 'H' }),
+  Object.freeze({ name: 'V3CM', family: 'hex', version: 3, k: 10, formatIndex: 1, defaultFinder: 'H' }),
+  Object.freeze({ name: 'A0CM', family: 'tri', version: 0, k: 6, formatIndex: 12, defaultFinder: 'H2O' }),
+  Object.freeze({ name: 'A1CM', family: 'tri', version: 1, k: 8, formatIndex: 13, defaultFinder: 'H2O' }),
+  Object.freeze({ name: 'A2CM', family: 'tri', version: 2, k: 10, formatIndex: 14, defaultFinder: 'H2O' }),
 ]);
 
 /**
@@ -132,4 +138,19 @@ export function markerGSpecFromFormatIndex(formatIndex, k) {
   // (family, version) 커버리지 — 기저 버전마다 정확히 한 항목 (빠지면 인코더가 던진다).
   for (const spec of VERSIONS) markerGSpec('hex', spec.version);
   for (const spec of VERSIONS_A) markerGSpec('tri', spec.version);
+  // defaultFinder — 항목마다 비어 있지 않고, 같은 패밀리(= 같은 자리 모양)는 같은
+  // 심볼을 든다. 값 자체(H·H2O)는 심볼 모듈의 로드 자기검증이 대조한다.
+  for (const entry of MARKER_G_FORMAT_INDEX) {
+    if (typeof entry.defaultFinder !== 'string' || entry.defaultFinder === '') {
+      throw new Error('markerG: ' + entry.name + ' 의 defaultFinder 가 비었다');
+    }
+  }
+  for (const family of ['hex', 'tri']) {
+    const symbols = new Set(MARKER_G_FORMAT_INDEX
+      .filter((entry) => entry.family === family)
+      .map((entry) => entry.defaultFinder));
+    if (symbols.size !== 1) {
+      throw new Error('markerG: ' + family + ' 패밀리의 defaultFinder 가 갈린다 — ' + [...symbols].join(','));
+    }
+  }
 }
