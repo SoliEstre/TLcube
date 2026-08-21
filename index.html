@@ -1216,7 +1216,7 @@
            조용히 떨구지 않는다: 잠긴 이유를 힌트가 말한다.
            Type Y 는 대상이 아니다 — Y 는 자기 로케이터 문법(v0 계열)을 쓴다. -->
       <div id="cornerMarkerSection" hidden>
-        <label class="section-heading" data-i18n="g576">코너 마커 (실험)</label>
+        <label class="section-heading" data-i18n="g576">코너 자리 예약 (실험)</label>
         <div class="card-row" id="cornerMarkerCards">
           <div class="toggle-card active" data-cornermarker="off">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
@@ -1786,11 +1786,13 @@
              (실측 2026-08-19). Type K 는 인코더가 없어 아직 안 연다.
              ⚠ **고급 전용을 유지한다** — 왕복 실측(2026-08-19): 이 코드는 스캐너의
              `cellFinderDaehan` 옵트인이 **꺼져 있으면 0/3, 켜면 3/3** 으로 읽힌다.
-             그 옵트인은 오늘 /lab/ 토글에만 있다. 그래서 summary 가 그 사실을 말한다. -->
+             그 옵트인은 오늘 /lab/ 토글에만 있다. 그래서 summary 가 그 사실을 말한다.
+             2026-08-21: 카드는 합성 한 장(와이어 oak-daehan-k10). 표시는 taegeuk +
+             sagoae. 카드를 두 장으로 쪼개면 버전 k 와 모순되는 템플릿을 고를 수 있다. -->
         <details class="finder-collapse" id="finderDaehan">
-          <summary data-i18n="g570">전면 파인더 (용량 감소 · 시험판 스캐너 전용)</summary>
+          <summary data-i18n="g570">taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)</summary>
           <div id="finderDaehanCards"></div>
-          <p class="hint" data-i18n="g571">코드 표면 전체에 파인더가 깔려요. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 'daehan 파인더'를 켰을 때만 읽혀요.</p>
+          <p class="hint" data-i18n="g571">가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.</p>
         </details>
         <div class="finder-score-panel" id="finderScorePanel" aria-live="polite" aria-label="선택 파인더 특성" data-i18n-attr="aria-label:g496">
           <div class="finder-score-heading">
@@ -2505,14 +2507,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "미측정 (다른 계보)",
-    "g569": "daehan (전면 79셀)",
-    "g570": "전면 파인더 (용량 감소 · 시험판 스캐너 전용)",
-    "g571": "코드 표면 전체에 파인더가 깔려요. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 'daehan 파인더'를 켰을 때만 읽혀요.",
+    "g569": "taegeuk + sagoae (전면 79셀)",
+    "g570": "taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)",
+    "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.",
     "g572": "실루엣 방향 (실험)",
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
     "g575": "실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.",
-    "g576": "코너 마커 (실험)",
+    "g576": "코너 자리 예약 (실험)",
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
     "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.",
@@ -2916,14 +2918,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "Not measured (different lineage)",
-    "g569": "daehan (79-cell full surface)",
-    "g570": "Full-surface finder (lower capacity · trial scanner only)",
-    "g571": "The finder covers the whole code surface. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when 'daehan finder' is enabled in the trial scanner (/lab/).",
+    "g569": "taegeuk + sagoae (79-cell full surface)",
+    "g570": "taegeuk + sagoae (lower capacity · trial scanner only)",
+    "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when this finder is enabled in the trial scanner (/lab/).",
     "g572": "Silhouette direction (experimental)",
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
     "g575": "Experimental. For now only the format information changes — the drawn silhouette stays the same, and codes made in this state cannot be read by the scanner.",
-    "g576": "Corner markers (experimental)",
+    "g576": "Corner seat reservation (experimental)",
     "g577": "None (default)",
     "g578": "Three alternating corners",
     "g579": "Experimental. It adds helper marks at three alternating corners and lowers capacity. Codes made this way can now be read by the scanner — the format field inside the code announces that the marks are there. Cannot be combined with silhouette direction (turnA).",
@@ -3327,14 +3329,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "未計測（別系譜）",
-    "g569": "daehan（全面79セル）",
-    "g570": "全面ファインダー（容量減少・試験版スキャナ専用）",
-    "g571": "コード表面全体にファインダーが敷かれます。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）で「daehan ファインダー」を有効にしたときだけ読み取れます。",
+    "g569": "taegeuk + sagoae（全面79セル）",
+    "g570": "taegeuk + sagoae（容量減少・試験版スキャナ専用）",
+    "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）でこのファインダーを有効にしたときだけ読み取れます。",
     "g572": "シルエット方向（実験）",
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
     "g575": "実験用です。現在はフォーマット情報だけが変わり、描かれるシルエットはそのままです — この状態で作ったコードはスキャナで読み取れません。",
-    "g576": "コーナーマーカー（実験）",
+    "g576": "コーナー席予約（実験）",
     "g577": "なし（既定）",
     "g578": "交互の3隅",
     "g579": "実験用です。交互の3隅に補助マークを入れ容量も減ります。この状態で作ったコードもスキャナで読み取れるようになりました — マークがあることはコード内のフォーマット欄に記録されます。シルエット方向（turnA）とは併用できません。",
@@ -3737,14 +3739,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "Non mesuré (autre lignée)",
-    "g569": "daehan (79 cellules, pleine surface)",
-    "g570": "Détecteur pleine surface (capacité réduite · scanner d'essai uniquement)",
-    "g571": "Le détecteur couvre toute la surface du code. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec « détecteur daehan » activé dans le scanner d'essai (/lab/).",
+    "g569": "taegeuk + sagoae (79 cellules, pleine surface)",
+    "g570": "taegeuk + sagoae (capacité réduite · scanner d'essai uniquement)",
+    "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec ce détecteur activé dans le scanner d'essai (/lab/).",
     "g572": "Orientation de la silhouette (expérimental)",
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
     "g575": "Expérimental. Pour l'instant, seules les informations de format changent — la silhouette dessinée reste identique, et les codes créés dans cet état ne sont pas lisibles par le scanner.",
-    "g576": "Marqueurs d'angle (expérimental)",
+    "g576": "Réservation de coin (expérimental)",
     "g577": "Aucun (par défaut)",
     "g578": "Trois angles alternés",
     "g579": "Expérimental. Ajoute des repères à trois angles alternés et réduit la capacité. Les codes créés ainsi sont désormais lisibles par le scanner — le champ de format du code signale la présence des repères. Incompatible avec le sens de la silhouette (turnA).",
@@ -4147,14 +4149,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "Non misurato (altra linea)",
-    "g569": "daehan (79 celle, superficie intera)",
-    "g570": "Rilevatore a superficie intera (capacità ridotta · solo scanner di prova)",
-    "g571": "Il rilevatore copre l'intera superficie del codice. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando «rilevatore daehan» nello scanner di prova (/lab/).",
+    "g569": "taegeuk + sagoae (79 celle, superficie intera)",
+    "g570": "taegeuk + sagoae (capacità ridotta · solo scanner di prova)",
+    "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando questo rilevatore nello scanner di prova (/lab/).",
     "g572": "Direzione della sagoma (sperimentale)",
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
     "g575": "Sperimentale. Per ora cambiano solo le informazioni di formato — la sagoma disegnata resta uguale e i codici creati in questo stato non sono leggibili dallo scanner.",
-    "g576": "Marcatori d'angolo (sperimentale)",
+    "g576": "Prenotazione d'angolo (sperimentale)",
     "g577": "Nessuno (predefinito)",
     "g578": "Tre angoli alternati",
     "g579": "Sperimentale. Aggiunge riferimenti su tre angoli alternati e riduce la capacità. I codici creati così ora sono leggibili dallo scanner — il campo formato del codice segnala che i riferimenti ci sono. Non si può combinare con la direzione della sagoma (turnA).",
@@ -4557,14 +4559,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "Nicht gemessen (andere Linie)",
-    "g569": "daehan (79 Zellen, ganze Fläche)",
-    "g570": "Vollflächiger Finder (geringere Kapazität · nur Test-Scanner)",
-    "g571": "Der Finder bedeckt die gesamte Codefläche. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn im Test-Scanner (/lab/) „daehan-Finder“ aktiviert ist.",
+    "g569": "taegeuk + sagoae (79 Zellen, ganze Fläche)",
+    "g570": "taegeuk + sagoae (geringere Kapazität · nur Test-Scanner)",
+    "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn dieser Finder im Test-Scanner (/lab/) aktiviert ist.",
     "g572": "Silhouettenrichtung (experimentell)",
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
     "g575": "Experimentell. Derzeit ändern sich nur die Formatinformationen — die gezeichnete Silhouette bleibt gleich, und in diesem Zustand erzeugte Codes kann der Scanner nicht lesen.",
-    "g576": "Eckmarker (experimentell)",
+    "g576": "Eckplatz-Reservierung (experimentell)",
     "g577": "Keine (Standard)",
     "g578": "Drei abwechselnde Ecken",
     "g579": "Experimentell. Setzt Hilfsmarken an drei abwechselnde Ecken und senkt die Kapazität. So erzeugte Codes kann der Scanner jetzt lesen — das Formatfeld im Code meldet das Vorhandensein der Marken. Nicht zusammen mit der Silhouettenrichtung (turnA) nutzbar.",
@@ -4967,14 +4969,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "Sin medir (otro linaje)",
-    "g569": "daehan (79 celdas, superficie completa)",
-    "g570": "Detector de superficie completa (menor capacidad · solo escáner de prueba)",
-    "g571": "El detector cubre toda la superficie del código. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con «detector daehan» activado en el escáner de prueba (/lab/).",
+    "g569": "taegeuk + sagoae (79 celdas, superficie completa)",
+    "g570": "taegeuk + sagoae (menor capacidad · solo escáner de prueba)",
+    "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con este detector activado en el escáner de prueba (/lab/).",
     "g572": "Orientación de la silueta (experimental)",
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
     "g575": "Experimental. Por ahora solo cambia la información de formato — la silueta dibujada sigue igual y los códigos creados en este estado no los puede leer el escáner.",
-    "g576": "Marcadores de esquina (experimental)",
+    "g576": "Reserva de esquina (experimental)",
     "g577": "Ninguno (predeterminado)",
     "g578": "Tres esquinas alternas",
     "g579": "Experimental. Añade marcas de apoyo en tres esquinas alternas y reduce la capacidad. Los códigos creados así ya los puede leer el escáner — el campo de formato del código avisa de que las marcas están. No se puede combinar con la dirección de la silueta (turnA).",
@@ -5377,14 +5379,14 @@ const GENERATOR_STRINGS = {
     "g566": "Aspirin",
     "g567": "Benzene",
     "g568": "Não medido (outra linhagem)",
-    "g569": "daehan (79 células, superfície inteira)",
-    "g570": "Detector de superfície inteira (menor capacidade · apenas leitor de teste)",
-    "g571": "O detector cobre toda a superfície do código. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com «detector daehan» ativado no leitor de teste (/lab/).",
+    "g569": "taegeuk + sagoae (79 células, superfície inteira)",
+    "g570": "taegeuk + sagoae (menor capacidade · apenas leitor de teste)",
+    "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com este detector ativado no leitor de teste (/lab/).",
     "g572": "Orientação da silhueta (experimental)",
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
     "g575": "Experimental. Por agora só a informação de formato muda — a silhueta desenhada continua igual, e códigos criados neste estado não são lidos pelo leitor.",
-    "g576": "Marcadores de canto (experimental)",
+    "g576": "Reserva de canto (experimental)",
     "g577": "Nenhum (padrão)",
     "g578": "Três cantos alternados",
     "g579": "Experimental. Acrescenta marcas de apoio em três cantos alternados e reduz a capacidade. Códigos criados assim agora são lidos pelo leitor — o campo de formato do código avisa que as marcas existem. Não pode ser combinado com a direção da silhueta (turnA).",
@@ -6541,8 +6543,9 @@ const FINDER_LABEL_KEYS = Object.freeze({
   'oak-nitrogen-r2': 'g565',
   'oak-aspirin': 'g566',
   'oak-benzene': 'g567',
-  // daehan (2026-08-19) — 카드는 **하나**다. id 는 79셀 정본인 k10 을 쓰고, 실제로
-  // 그려지는 템플릿은 버전이 정한 k 에서 renderTypeO 가 daehanPatternId 로 고른다.
+  // daehan (2026-08-19) — 카드는 **하나**다. 와이어 id 는 79셀 정본인 k10 을 쓰고,
+  // 실제로 그려지는 템플릿은 버전이 정한 k 에서 renderTypeO 가 daehanPatternId 로
+  // 고른다. 2026-08-21: 표시 라벨만 taegeuk + sagoae (g569). formatIndex 불변.
   'oak-daehan-k10': 'g569',
 });
 
@@ -9943,7 +9946,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-21.03';
+const GENERATOR_BUILD = '2026-08-21.04';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

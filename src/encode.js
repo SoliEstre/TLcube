@@ -147,8 +147,10 @@ export function encode(text, options = {}) {
   if (cornerMarker && centerQr) {
     throw new RangeError('cornerMarker 와 centerQr 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
-  // daehan 은 중앙 19셀을 **포함해** 79셀을 먹는다 — 중앙 QR(링3 점유)과도, 코너
-  // 마커(링 k·k−1 점유)와도 겹친다. 조합 검증을 안 했으므로 조용히 허용하지 않는다.
+  // daehanFinder 는 와이어 플래그(광학+RS/CRC, formatIndex 공유). 분류 층에서는
+  // taegeuk(내부 19, 분류 1) + sagoae(예약 셀, 분류 2) 로 갈린다. 중앙 QR(링3
+  // 점유)과도, 코너 자리 예약(링 k·k−1 점유)과도 겹친다. 조합 검증을 안 했으므로
+  // 조용히 허용하지 않는다.
   if (daehanFinder && centerQr) {
     throw new RangeError('daehanFinder 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯을 둘 다 먹는다');
   }

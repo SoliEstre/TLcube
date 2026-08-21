@@ -72,7 +72,8 @@ const NSYM_SOURCE = Object.freeze({
  *
  * `version` 은 기존과 같은 1/2/3 이다 (와이어 formatIndex 를 공유하므로). 구별은
  * `name`(V1D…)과 이 배열의 정체성으로 한다 — 그래서 이 배열을 `VERSIONS` 와 절대
- * 합치면 안 된다 (모듈 헤더 참조).
+ * 합치면 안 된다 (모듈 헤더 참조). 2026-08-21: 예약 셀의 분류 이름은 sagoae.
+ * taegeuk(내부 19)은 이미 불스아이 오버헤드에 들어 있어 두 번 세지 않는다.
  *
  * @type {ReadonlyArray<{name:string, version:number, k:number, overhead:number, symbolKey:string}>}
  */

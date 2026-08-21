@@ -35,8 +35,10 @@ import { fileURLToPath } from 'node:url';
 import {
   DAEHAN_FINDER_CELLS, DAEHAN_CELL_LEVELS, DAEHAN_FINDER_PATTERNS,
   DAEHAN_FINDER_PATTERN_IDS, DAEHAN_LEVEL_FACE_INDEX, DAEHAN_RADII,
+  DAEHAN_NAME, TAEGUK_ID, SAGOAE_ID,
   daehanFinderCellsFor, daehanReservedCells, daehanPatternId, daehanKForPatternId,
   getDaehanFinderPattern, isDaehanFinderPatternId,
+  taegeukCells, sagoaeCells,
 } from '../src/finder-daehan.js';
 import { NSYM_TABLE, NSYM_TABLE_DAEHAN } from '../src/rs211.js';
 import { VERSIONS_DAEHAN, capacityForDaehan } from '../src/capacityDaehan.js';
@@ -386,5 +388,15 @@ test('⑦ 전 경로 왕복 + 배포 기본 라인업은 daehan 을 **안 든다
     const on = decodeFrontend(raster, { bootstrap: { cellFinderDaehan: true } });
     assert.equal(on.ok, true, 'k=' + spec.k + ': ' + JSON.stringify(on.reason));
     assert.equal(on.text, text);
+  }
+});
+
+test('⑧ 분류 층 id — taegeuk 19 = 슬롯, sagoae = 예약, 와이어 이름은 daehan', () => {
+  assert.equal(DAEHAN_NAME, 'daehan');
+  assert.equal(TAEGUK_ID, 'taegeuk');
+  assert.equal(SAGOAE_ID, 'sagoae');
+  assert.equal(taegeukCells().length, 19);
+  for (const k of DAEHAN_RADII) {
+    assert.equal(sagoaeCells(k).length, daehanReservedCells(k).length);
   }
 });

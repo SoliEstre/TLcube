@@ -62,9 +62,20 @@
 
 import { hexDistance } from './hexgrid.js';
 import { BULLSEYE_RADIUS } from './placement.js';
+import { FINDER_CELL_ORDER } from './finder-patterns.js';
 
-/** 정본 이름 — 표시명. */
+/** 정본 이름 — 와이어·명부·텔레메트리 키. 분류 층의 id 가 아니다. */
 export const DAEHAN_NAME = 'daehan';
+
+/**
+ * 분류·표시 층 id (2026-08-21). 와이어 patternId (`oak-daehan-k6/k8/k10`) 와
+ * formatIndex 는 그대로다 — 기존 발행 프레임이 그 문자열을 들고 있다.
+ *
+ *   taegeuk = 불스아이 안 19셀. 좌표 집합이 `FINDER_CELL_ORDER` 와 같다 (분류 1).
+ *   sagoae  = `daehanReservedCells(k)` — 중심부 기준, 꼭짓점 상대 아님 (분류 2).
+ */
+export const TAEGUK_ID = 'taegeuk';
+export const SAGOAE_ID = 'sagoae';
 
 /** `cellLevels` 삼중의 면 순서 — 검출기·렌더러와 **같은 표**여야 한다. */
 export const DAEHAN_LEVEL_FACE_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
@@ -158,6 +169,27 @@ export function daehanFinderCellsFor(k) {
  */
 export function daehanReservedCells(k) {
   return daehanFinderCellsFor(k).filter((c) => hexDistance(c.q, c.r) > BULLSEYE_RADIUS);
+}
+
+/** 분류 1 — taegeuk 좌표. 정본 `DAEHAN_FINDER_CELLS` 등장 순서, 불스아이 안만. */
+export function taegeukCells() {
+  return DAEHAN_FINDER_CELLS.filter((c) => hexDistance(c.q, c.r) <= BULLSEYE_RADIUS);
+}
+
+/** taegeuk 면 톤 — `taegeukCells()` 와 같은 순서. */
+export function taegeukLevels() {
+  const out = [];
+  for (let i = 0; i < DAEHAN_FINDER_CELLS.length; i += 1) {
+    if (hexDistance(DAEHAN_FINDER_CELLS[i].q, DAEHAN_FINDER_CELLS[i].r) <= BULLSEYE_RADIUS) {
+      out.push(DAEHAN_CELL_LEVELS[i]);
+    }
+  }
+  return Object.freeze(out);
+}
+
+/** 분류 2 — sagoae 좌표. `daehanReservedCells` 의 공개 이름. */
+export function sagoaeCells(k) {
+  return daehanReservedCells(k);
 }
 
 /** 반경 k 의 파인더 패턴 id. */
@@ -284,6 +316,27 @@ export function daehanKForPatternId(id) {
     if (reserved + 19 !== alive) {
       throw new Error('daehan k=' + k + ': 예약 + 불스아이 19 != 살아남음');
     }
+    if (sagoaeCells(k).length !== reserved) {
+      throw new Error('sagoaeCells 가 daehanReservedCells 와 갈렸다 k=' + k);
+    }
+  }
+
+  // ⑥ 분류 층: taegeuk 19셀 집합 = FINDER_CELL_ORDER. 순서는 정본 등장이라
+  //    슬롯 순서와 달라도 된다 — 집합만 같다. 이게 깨지면 분류 1 슬롯이 다른 물건이다.
+  const taegeuk = taegeukCells();
+  if (taegeuk.length !== 19) {
+    throw new Error('taegeuk 이 19셀이 아니다: ' + taegeuk.length);
+  }
+  if (taegeukLevels().length !== 19) {
+    throw new Error('taegeukLevels 가 19가 아니다');
+  }
+  const taegeukSet = new Set(taegeuk.map(key));
+  const slotSet = new Set(FINDER_CELL_ORDER.map(key));
+  if (taegeukSet.size !== slotSet.size || [...taegeukSet].some((k) => !slotSet.has(k))) {
+    throw new Error('taegeuk 좌표 집합이 FINDER_CELL_ORDER 와 다르다');
+  }
+  if (TAEGUK_ID === DAEHAN_NAME || SAGOAE_ID === DAEHAN_NAME) {
+    throw new Error('분류 id 가 와이어 이름 daehan 과 같다 — 표시층이 안 갈렸다');
   }
 
   // ⑤ 잘림은 **포함 사슬**이다 — k=6 ⊂ k=8 ⊂ k=10. 아니면 «작은 코드가 큰 코드에

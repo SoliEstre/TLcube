@@ -41,14 +41,20 @@ export const OAK_LINEUP = Object.freeze([
     finderMode: 'central-finder', finderStarter: 'central-cube-3tone',
     counts: { total: 91, detector: 18 },
     margin: 0.6667, mirrorAgreement: 1.0,
-    note: '코너 18셀 margin — 중앙 19셀 기여 별도 (4갈래 실측: claude-oak2-central4.mjs)',
+    // ⚠ 2026-08-21: finderMode·finderStarter·id 는 **정본 JSON 필드**라 값을
+    //   바꾸지 않는다 (정본 대조 회귀). 해석은 분류 층(`finder-taxonomy.js`):
+    //   H2O 는 확장 영역만 쓰는 파인더(분류 3). finderStarter 는 올라탄 기준선이지
+    //   중앙 3톤 큐브가 H2O 의 내용인 것이 아니다.
+    note: '코너 18셀 margin — 중앙 19셀 기여 별도 (4갈래 실측: claude-oak2-central4.mjs)'
+      + ' · 확장 영역 파인더 (분류 3). Type A 자리 예약의 기본 파인더',
   }),
   entry({
     name: 'H2CO3', id: 'K-central3tone', type: 'K', status: 'active',
     finderMode: 'central-finder', finderStarter: 'central-cube-3tone',
     counts: { total: 121, detector: 30 },
     margin: 0.4667, mirrorAgreement: 1.0,
-    note: '코너 30셀 margin — 중앙 19셀 기여 별도 (동상)',
+    note: '코너 30셀 margin — 중앙 19셀 기여 별도 (동상)'
+      + ' · 확장 영역 파인더 (분류 3). finderStarter 는 기준선이지 내용이 아니다',
   }),
   entry({
     name: 'Nitrogen', id: 'O-1-central3tone', type: 'O', status: 'dead',
@@ -89,9 +95,12 @@ export const OAK_LINEUP = Object.freeze([
     counts: { total: 127, detector: 31 },
     margin: 0.6452, mirrorAgreement: 0.6774,
     mirrorAgreementIntegratorConvention: 0.6559,
+    // ⚠ 2026-08-21: 명부 키 `daehan` / `O-daehan` 은 정본·측정 문자열이라 유지.
+    //   분류 층은 내부 19 = taegeuk (분류 1), 예약 셀 = sagoae (분류 2).
     note: '편입 2026-08-17 — O 최고 margin(게이트 18.4×) · 거울 톤 기각 최초 후보 · '
       + 'starter 순수 불스아이인데 margin 0.6452 (두 축 독립의 반례 증거) · '
-      + '정본 finder-daehan-editor.json (n=6 · 점유 31/127 = 24.4 %)',
+      + '정본 finder-daehan-editor.json (n=6 · 점유 31/127 = 24.4 %) · '
+      + '표시층 taegeuk+sagoae (와이어 oak-daehan-k*)',
   }),
 ]);
 

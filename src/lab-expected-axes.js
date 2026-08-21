@@ -15,7 +15,7 @@
  *   |---|---|---|---|
  *   | ① 셀 표면 레이아웃 | v0 · v0t · v0ty · v0tr · v0trq | `locatorLayout` | `CELL_SURFACE_FINAL_ACTIVE_IDS` |
  *   | ② 중앙 파인더 | 불스아이 · 속큐브 · 3톤큐브 · QR · cell-mask 11 · OAK 3 | `finderPatternId` | **이 파일** |
- *   | ③ 외곽/코너 | 없음 · daehan 사괘 · A-CM · O-CM | `outerFinderId` | **이 파일** |
+ *   | ③ 외곽/자리 예약 | 없음 · sagoae(키 `daehan`) · A-CM · O-CM | `outerFinderId` | **이 파일** |
  *
  * ①의 정본과 의미는 **한 값도 안 바뀐다.** 기존 회귀가 그 명제를 잠그고 있고,
  * 이 파일은 ①을 아예 언급하지 않는다.
@@ -30,6 +30,12 @@
  *   옵트인으로 얹히지만 (`cellFinderDaehan`), 운영자에게 그것은 «외곽 사괘» 이고
  *   고르는 자리도 거기다. 그리고 k 는 검출로 못 가른다 (포함 사슬 —
  *   `bootstrap.js` cellFinderHypotheses 주석) 이므로 k별 버튼도 두지 않는다.
+ *
+ * ⚠ 2026-08-21 분류 재편: 텔레메트리 키 `daehan` 은 **유지**한다 (기존 프레임의
+ *   expected_outer 가 그 문자열을 든다). 분류상 그 내용은 sagoae (분류 2, 중심부
+ *   기준). 내부 19셀 taegeuk 은 분류 1 이지만 축② 버튼을 따로 두지 않는다 —
+ *   합성 템플릿의 안쪽이라 다른 19셀 후보와 자리를 다툰다. a-cm / o-cm 은
+ *   파인더가 아니라 자리 예약 (기본 파인더 H2O / H).
  */
 
 import {
@@ -55,12 +61,13 @@ export const LAB_CENTRAL_FINDER_IDS = Object.freeze([
 ]);
 
 /**
- * ③ 외곽/코너 파인더.
+ * ③ 외곽 파인더 / 자리 예약.
  *
  * `none` 은 «모름» 과 **다른 값**이다 — 「외곽 파인더가 없는 코드를 찍고 있다」는
  * 적극적 관측이고, 「안 골랐다」와 섞으면 그 구분이 사라진다.
  *
- * `a-cm`/`o-cm` 은 아직 시험판 UI 에서 고를 일이 드물지만 **자리를 지금 잡아 둔다** —
+ * `daehan` 은 레거시 키 — 분류 표시는 sagoae. `a-cm`/`o-cm` 은 자리 예약이지
+ * 파인더가 아니다. 아직 시험판 UI 에서 고를 일이 드물지만 **자리를 지금 잡아 둔다** —
  * 나중에 값을 더하면 그 전 프레임들이 「미상」과 「없음」 사이에서 애매해진다.
  */
 export const LAB_OUTER_FINDER_IDS = Object.freeze(['none', 'daehan', 'a-cm', 'o-cm']);

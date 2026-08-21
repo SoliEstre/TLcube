@@ -1231,13 +1231,13 @@
            더하면 그 전 프레임들이 「미상」과 「없음」 사이에서 애매해진다.
            정본: src/lab-expected-axes.js 의 LAB_OUTER_FINDER_IDS -->
       <div id="lab-expected-outer" class="lab-expected-arm">
-        <span data-i18n="lab.expectedOuter.label">기대 외곽 파인더</span>
+        <span data-i18n="lab.expectedOuter.label">기대 외곽 파인더 / 자리 예약</span>
         <div class="lab-expected-arm-cards" role="group">
           <button type="button" data-expected-outer="" class="active" data-i18n="lab.expectedOuter.unknown">모름</button>
           <button type="button" data-expected-outer="none" data-i18n="lab.expectedOuter.none">없음</button>
-          <button type="button" data-expected-outer="daehan" data-i18n="lab.expectedOuter.daehan">daehan 사괘</button>
-          <button type="button" data-expected-outer="a-cm" data-i18n="lab.expectedOuter.a-cm">A-CM</button>
-          <button type="button" data-expected-outer="o-cm" data-i18n="lab.expectedOuter.o-cm">O-CM</button>
+          <button type="button" data-expected-outer="daehan" data-i18n="lab.expectedOuter.daehan">sagoae</button>
+          <button type="button" data-expected-outer="a-cm" data-i18n="lab.expectedOuter.a-cm">A-CM (자리 예약)</button>
+          <button type="button" data-expected-outer="o-cm" data-i18n="lab.expectedOuter.o-cm">O-CM (자리 예약)</button>
         </div>
       </div>
       <!-- 기대 톤 — expected_tones 계측. 레이아웃 카드와 같은 배선 형태다.
@@ -1258,7 +1258,7 @@
            이름» 이 된다. 그 구멍을 메우기 전까지는 실기기 판정용으로만 켠다.
            선택은 localStorage 에 남는다 — 실기기에서 앱을 껐다 켜도 유지돼야
            비교 측정이 된다. -->
-      <button type="button" id="lab-daehan-toggle" class="lab-debug-toggle" hidden aria-pressed="false" data-i18n="lab.daehan.toggle">daehan 파인더</button>
+      <button type="button" id="lab-daehan-toggle" class="lab-debug-toggle" hidden aria-pressed="false" data-i18n="lab.daehan.toggle">taegeuk + sagoae</button>
     </aside>
 
     <!-- r3 정사각 뷰: 프리뷰(cover) ≡ 분석 정사각(cropWindow crop=1). 가이드 3링과

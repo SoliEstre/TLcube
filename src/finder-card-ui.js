@@ -83,6 +83,8 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   // (V1↔k6 · V2↔k8 · V3↔k10). 카드를 셋으로 쪼개면 사용자가 버전과 모순되는 k 를
   // 고를 수 있게 된다. 대표 id 는 79셀 정본인 k10 — 직전 라운드 측정들이 이미 쓰는
   // 문자열이라 바꾸면 그 측정들과의 대조가 끊긴다 (finder-daehan.js §56-58).
+  // 2026-08-21: 분류 층은 taegeuk(내부 19)+sagoae(예약) 로 갈리지만 카드는 합성
+  // 한 장을 유지한다. 라벨만 갈랐다 (g569). 와이어 id 는 oak-daehan-k10.
   daehan: Object.freeze([descriptor(DAEHAN_K10.id, DAEHAN_K10)]),
 });
 
