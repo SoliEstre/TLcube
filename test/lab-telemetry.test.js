@@ -21,6 +21,7 @@ import {
   fillFrameMs,
   isLabPath,
   labSocketUrl,
+  labRoleToken,
   makeEnvelope,
   normalizeFrameBody,
   normalizeGenBody,
@@ -151,6 +152,41 @@ test('시험판 env/gen/frame 봉투가 릴레이 검증을 통과한다', async
   for (const key of ['total', 'proposal', 'verify', 'format', 'decode']) {
     assert.equal(typeof frame.body.ms[key], 'number');
   }
+});
+
+test('labRoleToken — options.token · 전역 __TL_LAB_TOKEN__ 이 있으면 쓰고 없으면 빈문자열', () => {
+  assert.equal(labRoleToken(), '');
+  assert.equal(labRoleToken({}), '');
+  assert.equal(labRoleToken({ token: 'abc' }), 'abc');
+  assert.equal(labRoleToken({ token: '' }), '');
+  const prev = globalThis.__TL_LAB_TOKEN__;
+  try {
+    globalThis.__TL_LAB_TOKEN__ = 'from-global';
+    assert.equal(labRoleToken(), 'from-global');
+    // options.token 이 전역보다 우선
+    assert.equal(labRoleToken({ token: 'from-opt' }), 'from-opt');
+  } finally {
+    if (prev === undefined) delete globalThis.__TL_LAB_TOKEN__;
+    else globalThis.__TL_LAB_TOKEN__ = prev;
+  }
+});
+
+test('emitter role 프레임 — 토큰 없으면 role 만, 있으면 token 을 싣는다 (하위호환)', async () => {
+  FakeWS.instances = [];
+  const plain = createLabTelemetry(labOpts());
+  plain.env({ ua: { browser: 'x' } });
+  await new Promise((r) => setTimeout(r, 30));
+  const plainFrame = JSON.parse(FakeWS.instances[0].sent[0]);
+  assert.equal(plainFrame.role, 'emitter');
+  assert.equal('token' in plainFrame, false);
+
+  FakeWS.instances = [];
+  const withTok = createLabTelemetry(labOpts({ token: 's3cret' }));
+  withTok.env({ ua: { browser: 'x' } });
+  await new Promise((r) => setTimeout(r, 30));
+  const tokFrame = JSON.parse(FakeWS.instances[0].sent[0]);
+  assert.equal(tokFrame.role, 'emitter');
+  assert.equal(tokFrame.token, 's3cret');
 });
 
 test('sid 는 sessionStorage 이고 쿠키·localStorage 영속 키가 아니다', () => {

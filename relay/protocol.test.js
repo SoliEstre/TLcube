@@ -62,6 +62,19 @@ test('역할 첫 프레임 — emitter / observer 만', () => {
   assert.equal(parseRoleFrame('not-json').ok, false);
 });
 
+test('역할 첫 프레임 — token 은 선택, 문자열이면 실어 나온다', () => {
+  // 토큰 없음 → null (하위호환)
+  assert.equal(parseRoleFrame('{"role":"emitter"}').token, null);
+  // 토큰 있음 → 그대로
+  const withTok = parseRoleFrame('{"role":"emitter","token":"abc"}');
+  assert.equal(withTok.ok, true);
+  assert.equal(withTok.token, 'abc');
+  // 토큰이 문자열이 아니면 거부
+  assert.equal(parseRoleFrame('{"role":"emitter","token":123}').ok, false);
+  // null 토큰은 허용(없는 것과 동일)
+  assert.equal(parseRoleFrame('{"role":"observer","token":null}').token, null);
+});
+
 test('한 줄 = 한 이벤트 — 개행으로 쪼갠다', () => {
   assert.deepEqual(splitLines(`${line()}\n${line({ kind: 'env', body: {} })}\n`), [
     line(),

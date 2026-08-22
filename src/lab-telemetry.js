@@ -1252,6 +1252,20 @@ export function labSocketUrl(loc) {
   return `${protocol}//${host}/lab/ws`;
 }
 
+/**
+ * 시험판 릴레이 토큰 (선택). options.token 또는 전역 `__TL_LAB_TOKEN__` 이 있으면 쓴다.
+ * 없으면 '' — role 프레임에 token 을 싣지 않는다(하위호환). 토큰 주입 배선은 배포 몫이다.
+ */
+export function labRoleToken(options = {}) {
+  if (typeof options.token === 'string' && options.token) return options.token;
+  if (typeof globalThis !== 'undefined'
+    && typeof globalThis.__TL_LAB_TOKEN__ === 'string'
+    && globalThis.__TL_LAB_TOKEN__) {
+    return globalThis.__TL_LAB_TOKEN__;
+  }
+  return '';
+}
+
 export function makeEnvelope(sid, site, kind, body, ts) {
   return {
     v: WIRE_VERSION,
@@ -1448,6 +1462,7 @@ export function createLabTelemetry(options = {}) {
 
   const sid = readSessionSid(sessionStore);
   const url = labSocketUrl(loc);
+  const roleToken = labRoleToken(options);
   let socket = null;
   let roleSent = false;
   let closed = false;
@@ -1503,7 +1518,9 @@ export function createLabTelemetry(options = {}) {
       return;
     }
     const onOpen = () => {
-      roleSent = sendRaw(JSON.stringify({ role: 'emitter' }));
+      // 토큰을 아는 경우에만 싣는다 (defense-in-depth). 없으면 role 만 — 하위호환.
+      const frame = roleToken ? { role: 'emitter', token: roleToken } : { role: 'emitter' };
+      roleSent = sendRaw(JSON.stringify(frame));
       if (roleSent) flushQueue();
     };
     const onClose = () => {

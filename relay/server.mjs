@@ -26,11 +26,58 @@ import { acceptUpgrade } from './ws.mjs';
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/**
+ * TL_LAB_ALLOWED_ORIGINS 파싱. 콤마구분 문자열 또는 배열을 받아 빈 항목을 버린 배열로.
+ * env/override 가 아예 없으면 `null` 을 돌려준다 — 이 경우 개발/테스트 안전값
+ * (localhost 계열, 모든 포트) 만 허용한다. 프로덕션은 env 로 오리진을 명시한다.
+ */
+export function parseAllowedOrigins(raw) {
+  if (raw == null) return null;
+  const items = Array.isArray(raw) ? raw : String(raw).split(',');
+  const out = [];
+  for (const item of items) {
+    const s = String(item).trim();
+    if (s) out.push(s);
+  }
+  return out;
+}
+
+function isLocalhostOrigin(origin) {
+  if (typeof origin !== 'string' || origin === '') return false;
+  let u;
+  try {
+    u = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  // WHATWG URL 은 IPv6 hostname 을 대괄호째 돌려준다 ('[::1]').
+  const h = u.hostname.replace(/^\[|\]$/g, '');
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1';
+}
+
+/**
+ * WS 핸드셰이크의 Origin 헤더가 허용되는가. 브라우저는 이 헤더를 페이지 JS 로
+ * 위조할 수 없으므로 교차사이트 구독의 실제 차단막이다.
+ *
+ * - allowedOrigins === null (env 미설정): 개발 기본값 — localhost 계열만, 모든 포트.
+ * - allowedOrigins 가 배열: 정확히 일치하는 오리진만. (프로덕션)
+ * - Origin 부재(비브라우저 클라 등): 기본 거부. 필요하면 env 목록에 명시한다.
+ */
+export function isOriginAllowed(origin, allowedOrigins) {
+  if (allowedOrigins === null) return isLocalhostOrigin(origin);
+  if (typeof origin !== 'string' || origin === '') return false;
+  return allowedOrigins.includes(origin);
+}
+
 export function loadConfig(env = process.env, overrides = {}) {
   const database = overrides.database || env.TL_LAB_CH_DATABASE || 'tl_lab';
   if (!IDENT.test(database)) throw new Error('TL_LAB_CH_DATABASE');
   const port = Number(overrides.port ?? env.TL_LAB_PORT ?? 8787);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('TL_LAB_PORT');
+  const allowedOrigins = parseAllowedOrigins(
+    overrides.allowedOrigins ?? env.TL_LAB_ALLOWED_ORIGINS,
+  );
   return {
     host: overrides.host || env.TL_LAB_HOST || '127.0.0.1',
     port,
@@ -40,6 +87,9 @@ export function loadConfig(env = process.env, overrides = {}) {
     database,
     maxPayload: Number(overrides.maxPayload ?? env.TL_LAB_MAX_PAYLOAD ?? MAX_MESSAGE_BYTES),
     maxSockets: Number(overrides.maxSockets ?? env.TL_LAB_MAX_SOCKETS ?? 256),
+    allowedOrigins,
+    // TL_LAB_TOKEN 이 설정된 경우에만 role 프레임 토큰을 강제한다. 미설정('')이면 검사 안 함.
+    token: String(overrides.token ?? env.TL_LAB_TOKEN ?? ''),
     path: '/lab/ws',
   };
 }
@@ -88,6 +138,13 @@ export function createRelay(options = {}) {
       try { socket.destroy(); } catch { /* */ }
       return;
     }
+    // Origin 대조는 acceptUpgrade 전에. 실패면 live 를 올리지 않는다.
+    if (!isOriginAllowed(req.headers.origin, cfg.allowedOrigins)) {
+      try { log('origin-reject', req.headers.origin); } catch { /* */ }
+      try { socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); } catch { /* */ }
+      try { socket.destroy(); } catch { /* */ }
+      return;
+    }
     if (live >= cfg.maxSockets) {
       try { socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n'); } catch { /* */ }
       try { socket.destroy(); } catch { /* */ }
@@ -96,7 +153,7 @@ export function createRelay(options = {}) {
     const ws = acceptUpgrade(req, socket, head, { maxPayload: cfg.maxPayload });
     if (!ws) return;
     live += 1;
-    attachClient(ws, hub, log, () => { live = Math.max(0, live - 1); });
+    attachClient(ws, hub, log, () => { live = Math.max(0, live - 1); }, cfg.token);
   });
 
   function listen() {
@@ -123,9 +180,11 @@ export function createRelay(options = {}) {
   return { server, hub, cfg, listen, close };
 }
 
-function attachClient(ws, hub, log, onGone) {
+function attachClient(ws, hub, log, onGone, token = '') {
   let role = null;
   let gone = false;
+  // 빈 토큰이면 검사를 완전히 건너뛴다 (현재 배포·클라 비파괴).
+  const requiredToken = token ? String(token) : '';
 
   const finish = () => {
     if (gone) return;
@@ -140,6 +199,11 @@ function attachClient(ws, hub, log, onGone) {
       const parsed = parseRoleFrame(text);
       if (!parsed.ok) {
         ws.close(1008, parsed.error);
+        return;
+      }
+      if (requiredToken && parsed.token !== requiredToken) {
+        try { log('token-reject', parsed.role); } catch { /* */ }
+        ws.close(1008, 'token');
         return;
       }
       role = parsed.role;

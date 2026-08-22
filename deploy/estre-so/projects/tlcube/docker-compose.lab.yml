@@ -17,6 +17,14 @@ services:
       TL_LAB_CH_DATABASE: "tl_lab"
       TL_LAB_CH_USER: ${TLCUBE_LAB_CH_USER:-tl_lab_ingest}
       TL_LAB_CH_KEY: ${TLCUBE_LAB_CH_KEY:?TLCUBE_LAB_CH_KEY 미설정 — ~/.secrets/estre.so.env 에 넣으세요}
+      # 인증(F-77): Origin 허용목록 — 콤마구분. 브라우저가 Origin 헤더를 위조할 수 없으므로
+      #   이것이 교차사이트 구독의 실제 차단막이다. **미설정이면 릴레이는 localhost 계열만
+      #   허용해 프로덕션 브라우저를 거부한다** — 프로덕션은 반드시 시험판 오리진을 명시한다.
+      #   활성화하려면 아래 주석을 풀고 재기동한다(배포 몫):
+      # TL_LAB_ALLOWED_ORIGINS: "https://tlscan.estre.so,https://tlcube.estre.so"
+      # 선택(defense-in-depth): role 프레임 토큰까지 요구. 미설정이면 이 검사는 건너뛴다.
+      #   설정 시 시험판 페이지가 같은 토큰을 클라이언트에 주입해야 한다(전역 __TL_LAB_TOKEN__).
+      # TL_LAB_TOKEN: ${TLCUBE_LAB_TOKEN:-}
     volumes:
       - ${TLCUBE_SRC:-/srv/tlcube}/relay:/app:ro
     expose:

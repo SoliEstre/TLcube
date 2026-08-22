@@ -42,8 +42,11 @@ test('마스크 없는 프레임은 프로토콜 에러', () => {
   assert.equal(frame.error, 'unmasked');
 });
 
-async function openWs(url) {
-  const ws = new WebSocket(url);
+async function openWs(url, { origin = 'http://localhost' } = {}) {
+  // 브라우저 흐름을 흉내낸다 — Origin 헤더를 실어야 릴레이가 받는다.
+  const ws = origin
+    ? new WebSocket(url, { headers: { origin } })
+    : new WebSocket(url);
   await once(ws, 'open');
   return ws;
 }
@@ -121,6 +124,130 @@ test('릴레이 — 관찰자가 없어도 적재는 호출된다', async () => 
   await new Promise((r) => setTimeout(r, 20));
   sendJson(emitter, {
     v: 1, sid: 'solo', site: 'gen', ts: '2026-08-13T12:00:00.000Z',
+    kind: 'env', body: { w: 1, h: 1 },
+  });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(n, 1);
+  emitter.close();
+  await relay.close();
+});
+
+function expectUpgradeRejected(url, { origin } = {}) {
+  return new Promise((resolve) => {
+    let ws;
+    try {
+      ws = origin ? new WebSocket(url, { headers: { origin } }) : new WebSocket(url);
+    } catch {
+      resolve(true);
+      return;
+    }
+    const done = (v) => { try { ws.close(); } catch { /* */ } resolve(v); };
+    ws.addEventListener('open', () => done(false), { once: true });
+    ws.addEventListener('error', () => done(true), { once: true });
+    ws.addEventListener('close', () => done(true), { once: true });
+  });
+}
+
+test('릴레이 — Origin 부재는 개발 기본값에서도 거부된다', async () => {
+  const relay = createRelay({
+    host: '127.0.0.1', port: 0,
+    ingest: async () => { throw new Error('should not ingest'); },
+    log() {},
+  });
+  const addr = await relay.listen();
+  const url = `ws://127.0.0.1:${addr.port}/lab/ws`;
+  assert.equal(await expectUpgradeRejected(url, { origin: '' }), true);
+  await relay.close();
+});
+
+test('릴레이 — 개발 기본값은 localhost 계열(모든 포트)만 허용', async () => {
+  const relay = createRelay({
+    host: '127.0.0.1', port: 0, ingest: async () => {}, log() {},
+  });
+  const addr = await relay.listen();
+  const url = `ws://127.0.0.1:${addr.port}/lab/ws`;
+  // 다른 오리진은 거부
+  assert.equal(await expectUpgradeRejected(url, { origin: 'https://evil.example' }), true);
+  // localhost 는 포트가 달라도 통과
+  const ok = await openWs(url, { origin: 'http://localhost:5173' });
+  assert.equal(ok.readyState, 1);
+  ok.close();
+  await relay.close();
+});
+
+test('릴레이 — 명시 허용목록: 목록 밖 Origin 거부, 목록 안만 적재', async () => {
+  const ingested = [];
+  const relay = createRelay({
+    host: '127.0.0.1', port: 0,
+    allowedOrigins: 'https://tlcube.estre.so, , https://lab.estre.so',
+    ingest: async (ev) => { ingested.push(ev.sid); },
+    log() {},
+  });
+  const addr = await relay.listen();
+  const url = `ws://127.0.0.1:${addr.port}/lab/ws`;
+  // 목록 밖 (개발 기본값이 켜져 있었다면 통과했을 localhost 도 이제 거부)
+  assert.equal(await expectUpgradeRejected(url, { origin: 'http://localhost' }), true);
+  assert.equal(await expectUpgradeRejected(url, { origin: 'https://evil.example' }), true);
+  // 목록 안 — 붙고 적재된다
+  const emitter = await openWs(url, { origin: 'https://tlcube.estre.so' });
+  sendJson(emitter, { role: 'emitter' });
+  await new Promise((r) => setTimeout(r, 20));
+  sendJson(emitter, {
+    v: 1, sid: 'ok-origin', site: 'gen', ts: '2026-08-13T12:00:00.000Z',
+    kind: 'env', body: { w: 1, h: 1 },
+  });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(ingested, ['ok-origin']);
+  emitter.close();
+  await relay.close();
+});
+
+test('릴레이 — TL_LAB_TOKEN 설정 시: 틀린/없는 토큰 emitter 는 닫히고 적재 안 됨', async () => {
+  const ingested = [];
+  const relay = createRelay({
+    host: '127.0.0.1', port: 0, token: 's3cret',
+    ingest: async (ev) => { ingested.push(ev.sid); },
+    log() {},
+  });
+  const addr = await relay.listen();
+  const url = `ws://127.0.0.1:${addr.port}/lab/ws`;
+
+  // 토큰 없는 role 프레임 → 서버가 1008 로 닫는다
+  const noTok = await openWs(url);
+  const closedP = new Promise((r) => noTok.addEventListener('close', (e) => r(e.code), { once: true }));
+  sendJson(noTok, { role: 'emitter' });
+  const code = await closedP;
+  assert.equal(code, 1008);
+  sendJson(noTok, {
+    v: 1, sid: 'no-token', site: 'gen', ts: '2026-08-13T12:00:00.000Z',
+    kind: 'env', body: { w: 1, h: 1 },
+  });
+
+  // 맞는 토큰 → 적재된다
+  const ok = await openWs(url);
+  sendJson(ok, { role: 'emitter', token: 's3cret' });
+  await new Promise((r) => setTimeout(r, 20));
+  sendJson(ok, {
+    v: 1, sid: 'with-token', site: 'gen', ts: '2026-08-13T12:00:00.000Z',
+    kind: 'env', body: { w: 1, h: 1 },
+  });
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(ingested, ['with-token']);
+  ok.close();
+  await relay.close();
+});
+
+test('릴레이 — TL_LAB_TOKEN 미설정: 토큰 없는 기존 클라가 그대로 붙는다 (비파괴)', async () => {
+  let n = 0;
+  const relay = createRelay({
+    host: '127.0.0.1', port: 0, ingest: async () => { n += 1; }, log() {},
+  });
+  const addr = await relay.listen();
+  const emitter = await openWs(`ws://127.0.0.1:${addr.port}/lab/ws`);
+  sendJson(emitter, { role: 'emitter' });
+  await new Promise((r) => setTimeout(r, 20));
+  sendJson(emitter, {
+    v: 1, sid: 'legacy', site: 'gen', ts: '2026-08-13T12:00:00.000Z',
     kind: 'env', body: { w: 1, h: 1 },
   });
   await new Promise((r) => setTimeout(r, 50));

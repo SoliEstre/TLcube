@@ -40,7 +40,13 @@ export function parseRoleFrame(text) {
   if (role !== 'emitter' && role !== 'observer') {
     return { ok: false, error: 'role 은 emitter 또는 observer' };
   }
-  return { ok: true, role };
+  // token 은 선택 필드 (defense-in-depth). 있으면 문자열이어야 한다.
+  // 서버가 토큰을 요구하는지 여부는 cfg 가 정한다 — 여기선 모양만 검증한다.
+  const token = obj.value.token;
+  if (token !== undefined && token !== null && typeof token !== 'string') {
+    return { ok: false, error: 'token 은 문자열' };
+  }
+  return { ok: true, role, token: typeof token === 'string' ? token : null };
 }
 
 export function parseEnvelope(text) {
