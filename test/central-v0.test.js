@@ -7,6 +7,7 @@ import {
   CELL_SURFACE_FINAL_V0, CENTRAL_V0_SOURCE_N, centralV0FinderCells,
   locatorCellsCellSurfaceFinal,
 } from '../src/cellSurfaceFinal.js';
+import { encodeCentralBeacon } from '../src/centralBeacon.js';
 import { encode } from '../src/encode.js';
 import {
   CENTRAL_V0_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID,
@@ -56,31 +57,42 @@ test('v0 정본 셀·톤을 중앙 19셀 외곽에서 유도한 닮음 좌표로
 
   const encoded = encode('v0', { version: 1, eccLevel: 'M', centralV0: true });
   const scene = sceneFor(encoded);
+  const n = CENTRAL_V0_SOURCE_N;
   const dataShapeCount = encoded.cellDigits.size * FACES.length;
   const finderShapes = scene.shapes.slice(dataShapeCount);
-  assert.equal(finderShapes.length, source.length * FACES.length,
-    '정본 셀 × 면 수만큼만 그려야 한다');
+  assert.equal(finderShapes.length, n * n * FACES.length,
+    '칠해지는 모듈 위치는 정본 n² 자리 전부여야 한다');
 
+  const locatorByKey = new Map(source.map((cell) => [`${cell.i},${cell.j}`, cell]));
+  const beacon = encodeCentralBeacon(encoded, CENTRAL_V0_FINDER_PATTERN_ID);
   const slot = centralSlotRadius(scene);
   const expectedLayout = {
-    size: slot.radius / CENTRAL_V0_SOURCE_N,
+    size: slot.radius / n,
     originX: slot.center.x,
     originY: slot.center.y,
   };
   let shapeIndex = 0;
-  for (const cell of source) {
-    for (const face of FACES) {
-      const shape = finderShapes[shapeIndex];
-      assert.equal(shape.kind, 'polygon');
-      assert.deepEqual(shape.points, moduleQuad(face, cell.i, cell.j, expectedLayout),
-        '좌표는 중앙 슬롯 반지름 / v0 정본 n 규칙에서만 나와야 한다');
-      assert.strictEqual(shape.color, PALETTE.levels[cell[face]],
-        'v0 면 톤을 palette.levels 인덱스로 보존해야 한다');
-      assert.notDeepEqual(shape.color, PALETTE.bullseyeLight,
-        '파인더 축의 순백을 중앙 v0 면에 쓰면 안 된다');
-      shapeIndex += 1;
+  for (let j = 0; j < n; j += 1) {
+    for (let i = 0; i < n; i += 1) {
+      const locator = locatorByKey.get(`${i},${j}`);
+      for (const face of FACES) {
+        const shape = finderShapes[shapeIndex];
+        assert.equal(shape.kind, 'polygon');
+        assert.deepEqual(shape.points, moduleQuad(face, i, j, expectedLayout),
+          '좌표는 중앙 슬롯 반지름 / v0 정본 n 규칙에서만 나와야 한다');
+        assert.ok(PALETTE.levels.includes(shape.color),
+          '비컨 면 색이 palette.levels 밖이다');
+        assert.notDeepEqual(shape.color, PALETTE.bullseyeLight,
+          '파인더 축의 순백을 중앙 v0 면에 쓰면 안 된다');
+        if (locator) {
+          assert.strictEqual(shape.color, PALETTE.levels[locator[face]],
+            'v0 locator 면 톤을 palette.levels 인덱스로 보존해야 한다');
+        }
+        shapeIndex += 1;
+      }
     }
   }
+  assert.equal(beacon.cellDigits.size, n * n);
 });
 
 test('중앙 슬롯 회계는 불스아이 정본 19셀을 재사용하고 O/G 용량·포맷은 그대로다', () => {

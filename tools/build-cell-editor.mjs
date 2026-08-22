@@ -29,7 +29,12 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // 새 의존을 추가하는 레인은 번들 위상표도 같이 봐야 한다.
   'finder-daehan', 'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'encodeA',
   'type-y-cell-editor', 'layoutY', 'capacityY',
-  'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal', 'encodeY',
+  'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  // **의도적 유지 (2026-08-21, 중앙 v0 비컨)**: encodeY 는 scene 앞으로 가야 한다.
+  // 이 편집기는 scene 을 안 실지만 encodeY 는 이미 cellSurfaceFinal 뒤에 있다 —
+  // 생성기 표에서 앞으로 옮긴 것과 같은 상대 순서다. centralBeacon 은 scene
+  // 전용이라 여기 넣지 않는다 (넣으면 쓰이지 않는 전방 의존만 생긴다).
+  'encodeY',
   'luminance', 'export-filename', 'cell-editor-history', 'cell-editor-core',
 ]);
 

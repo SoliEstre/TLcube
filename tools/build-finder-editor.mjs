@@ -33,7 +33,13 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // 사각형·정본 셀을 ygrid·cellSurfaceFinal 에서 가져온다. 위상 검사는 정적이라
   // 이 편집기가 v0 를 실제로 렌더하든 안 하든 번들에 들어와야 한다.
   'finder-selection',
-  'ygrid', 'type-y-cell-editor', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: scene.js 가 중앙 슬롯을 완전한
+  // v0 코드로 채우려고 encodeY·centralBeacon 을 부르고, 데이터 셀 톤에 tonemap 을
+  // 쓴다. encodeY 의 로컬 의존 layoutY 도 여기 온다 (capacityY 옆 — cell-editor
+  // 표와 같은 자리). 위상 검사는 정적이라 이 편집기가 비컨을 실제로 렌더하든
+  // 안 하든 번들에 들어와야 한다.
+  'tonemap', 'encodeY', 'centralBeacon',
   'gf256', 'rs', 'qr', 'encode', 'scene', 'raster', 'png',
 ]);
 

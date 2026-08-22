@@ -28,8 +28,10 @@ import { BULLSEYE_MID, FINDER_CUBE_SEAM, FINDER_CUBE_TONES } from './luminance.j
 import { getOakFinderPattern } from './finder-oak-patterns.js';
 import { getDaehanFinderPattern } from './finder-daehan.js';
 import { moduleQuad } from './ygrid.js';
-import { CENTRAL_V0_SOURCE_N, centralV0FinderCells } from './cellSurfaceFinal.js';
+import { CENTRAL_V0_SOURCE_N } from './cellSurfaceFinal.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from './finder-selection.js';
+import { digitToPattern } from './tonemap.js';
+import { encodeCentralBeacon } from './centralBeacon.js';
 
 // `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
 // FACE_LEVEL_INDEX)와 **같은 표**여야 하며, `FACES` 배열의 나열 순서에 기대지
@@ -570,22 +572,41 @@ export function buildScene(encoded, options) {
       });
     }
   } else if (finderPattern.renderKind === 'central-v0') {
-    // Type Y v0 정본의 13×13 좌표를 중앙 19셀 슬롯에 닮음 이동한다. 슬롯 반지름은
+    // Type Y v0 정본의 n×n 좌표를 중앙 19셀 슬롯에 닮음 이동한다. 슬롯 반지름은
     // FINDER_CELL_ORDER의 실제 육각 외곽에서, 모듈 피치는 그 반지름/n에서 유도한다.
-    // 정본에 없는 셀은 그리지 않는다 — 이 점유자는 payload가 없는 순수 파인더다.
+    // n² 자리를 전부 칠한다. 데이터 셀에는 바깥 코드를 설명하는 비컨 페이로드가 실린다.
+    const beacon = encodeCentralBeacon(encoded, finderPatternId);
+    const n = beacon.n;
+    if (n !== CENTRAL_V0_SOURCE_N) {
+      throw new Error(`중앙 v0 비컨 n=${n} 이 정본 ${CENTRAL_V0_SOURCE_N} 과 다르다`);
+    }
     const v0Layout = {
       size: centralSlotRadius(layout, center) / CENTRAL_V0_SOURCE_N,
       originX: center.x,
       originY: center.y,
     };
-    for (const cell of centralV0FinderCells()) {
-      for (const face of FACES) {
-        shapes.push({
-          kind: 'polygon',
-          points: moduleQuad(face, cell.i, cell.j, v0Layout),
-          // 파인더 축(순백)을 쓰지 않는다. v0 정본의 면 톤을 현재 데이터 팔레트에 보존한다.
-          color: palette.levels[cell[face]],
-        });
+    for (let j = 0; j < n; j += 1) {
+      for (let i = 0; i < n; i += 1) {
+        const entry = beacon.cellDigits.get(`${i},${j}`);
+        if (entry === undefined) {
+          throw new Error(`중앙 v0 비컨 셀 (${i},${j}) 이 없다`);
+        }
+        for (const face of FACES) {
+          let color;
+          if (entry.tones) {
+            color = faceColor(entry, face, palette);
+          } else if (beacon.tones === 2) {
+            const pattern = digitToPattern(entry.digit);
+            color = palette.levels[pattern[face] ? 2 : 0];
+          } else {
+            color = faceColor(entry, face, palette);
+          }
+          shapes.push({
+            kind: 'polygon',
+            points: moduleQuad(face, i, j, v0Layout),
+            color,
+          });
+        }
       }
     }
   } else if (finderPattern.renderKind === 'cell-mask') {

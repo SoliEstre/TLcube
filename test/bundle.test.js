@@ -26,7 +26,7 @@ const MODULE_ORDER = [
   'gf256', 'rs', 'qr', 'generator-state', 'export-filename',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'ygrid', 'placementY', 'autoplaceY', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'tonemap',
-  'encodeY', 'sceneY', 'verifyY',
+  'encodeY', 'centralBeacon', 'sceneY', 'verifyY',
   'quietzone', 'i18n', 'beacon',
 ];
 

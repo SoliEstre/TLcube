@@ -51,3 +51,9 @@ coverage/
 test/output/
 test/**/*.generated.png
 *.tmp.png
+
+# 위임 레인의 입출력 작업 폴더. lane-in/ 은 **상위 private 저장소의 문서 사본**이 들어오는
+# 자리라 여기 커밋되면 private 내용이 public 으로 샌다 (AGENTS.md §6.12). lane-out/ 은
+# 레인이 만든 패치·보고서 임시본이다. 둘 다 통합자가 읽고 버린다.
+lane-in/
+lane-out/

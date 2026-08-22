@@ -110,14 +110,21 @@ const MODULE_ORDER = [
   // assertTopologicalOrder 가 빌드를 막는다 — 치환이 조용히 건너뛰어져
   // **브라우저에서만** 터지는 자리이기 때문이다.
   'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: `encodeY` 와 잎 모듈 `tonemap` 이
+  // `encode`·`scene` **앞**으로 왔다. scene.js 가 중앙 슬롯을 완전한 v0 코드로
+  // 채우려고 `encodeY` 를 그대로 부르고(`centralBeacon`), 데이터 셀 톤은
+  // `tonemap.digitToPattern` 으로 유도하기 때문이다 — 새 인코더를 만들지 않으려는
+  // 선택이고, 그 대가가 이 이동이다. encodeY 의 로컬 의존(capacityY·header·
+  // base211·rs211·mask·formatinfo·layoutY·placementY·cellSurface*)은 전부 이미
+  // 이 앞에 있다. tonemap 은 의존 0 이라 어디에 놓아도 위상 정렬이 성립한다.
+  // 안 옮기면 assertTopologicalOrder 가 빌드를 막는다.
+  'tonemap', 'encodeY', 'centralBeacon',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png', 'export-render',
-  // tonemap 은 로컬 의존이 0 인 잎 모듈이라 체인이 앞으로 가도 여기 남는다.
-  'tonemap',
   // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
   // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,
   // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.
   'generator-render-config',
-  'encodeY', 'sceneY', 'verifyY',
+  'sceneY', 'verifyY',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
   'i18n',
   // beacon 도 의존이 없다 — 네트워크 전송과 오프라인 큐만 담는다.
