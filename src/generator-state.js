@@ -165,8 +165,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   exportPpi: field(DEFAULT_EXPORT_PPI_PURPOSE, BOTH, [...EXPORT_PPI_PURPOSES]),
   exportPpiDetail: field(EXPORT_PPI_DETAIL_AUTO, ADVANCED, [...EXPORT_PPI_DETAIL_CHOICES]),
   // 입체 음영 (과업 #17) — 좌상단 조명 전제의 그림자·반사광 띠. 셀에는 절대 안 닿고
-  // 안전영역 + 배경 영역에만 그린다 (shading.js 계약). 기본 **끔**: 새 옵션이고,
-  // 켜면 렌더 픽셀이 바뀌므로 «아무것도 안 골랐는데 그림이 달라졌다» 가 안 되게 한다.
+  // 안전영역 + 배경 영역에만 그린다 (shading.js 계약). 렌더러는 **Type Y 에만** 얹는다
+  // (index.html withShading — O/A 는 그대로 통과). 기본 **끔**: 켜면 배경/안전영역을
+  // 채워 Y 전경 실루엣 검출이 깨져 복호가 죽는다 (shading.js DEFAULT_SHADING_MODE
+  // 주석 실측). 그래서 decode-safe 기본값은 끔이고, 켬은 고급 명시 옵트인이다.
   shading: field(DEFAULT_SHADING_MODE, BOTH, [...SHADING_MODES]),
   // ② T면 엣지 아웃라인 — **별도 서브옵션**이다 (운영자 «효과 미지수» 표명).
   // 위쪽 실루엣(=T면 쪽)에 얇은 반사광/그림자 아웃라인을 더한다. shading 이 꺼져

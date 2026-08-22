@@ -58,11 +58,22 @@ export const SHADING_ON = 'on';
 /** 상태 스키마 허용값. */
 export const SHADING_MODES = Object.freeze([SHADING_OFF, SHADING_ON]);
 /**
- * 기본값 = **켬** (운영자 확정 2026-08-17 — 음영 3종 개정 (QR 제외·10×·발산 협소화)
- * 확인 후). 도입기의 «새 옵션은 끔» 정책은 그 확인으로 역할을 다했다. 끄면 산출물이
- * 음영 도입 전과 바이트 동일한 성질은 그대로다 (addShading off 경로).
+ * 기본값 = **끔** (decode-safe 기본값 — Type Y 복호 보호).
+ *
+ * 음영은 렌더러(index.html withShading)에서 **Type Y 에만** 얹힌다 — 조명 방향의
+ * 근거가 Y 면 게인 표이고, O/A 는 withShading 이 그대로 통과시킨다. 그래서 이 상수는
+ * 사실상 «Type Y 음영 기본값» 이고, O/A 산출물에는 어떤 값이든 영향이 없다.
+ *
+ * 켜면 Y 복호가 죽는다 (실측: 흰/검 배경에서 shading on → no-format-candidate,
+ * shading off → OK). 띠는 셀에 안 닿지만 안전영역·배경 영역을 채워 전경 실루엣
+ * 검출을 깨뜨리므로, 셀만 재는 자체검증(verifyRasterY)은 통과하는데 라이브 복호는
+ * 실패한다. 그래서 도입기 «새 옵션은 끔» 을 지나 2026-08-17 에 잠깐 켬으로 뒀던
+ * 기본값을 다시 **끔** 으로 되돌린다 — «아무것도 안 골랐는데 못 읽히는» 산출물이
+ * 나오면 안 된다는 것이 켬 미학보다 앞선다. 음영은 고급에서 명시로 켜는 옵트인이다
+ * (명시 선택 > 자동 기본값). 끄면 산출물이 음영 도입 전과 바이트 동일하다
+ * (addShading off 경로).
  */
-export const DEFAULT_SHADING_MODE = SHADING_ON;
+export const DEFAULT_SHADING_MODE = SHADING_OFF;
 
 /**
  * 빛의 진행 방향 (화면 좌표, y 는 아래가 +). = R 면 바깥 법선.

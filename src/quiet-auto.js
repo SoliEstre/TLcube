@@ -49,8 +49,19 @@
  *   quietMode 'none'                       → 없음
  *   quietMode 'white' / 'black'            → 그 색 (사용자 명시 — 사진과 무관)
  *   quietMode 'contrast'                   → decide()
+ *   quietMode 'auto'  + type Y              → 없음 (Y 전경 실루엣 보호 — 아래 §Type Y)
  *   quietMode 'auto'  + 배경 투명           → decide()
  *   quietMode 'auto'  + 배경 흰/검          → 없음 (불투명 배경이 이미 분리를 준다)
+ *
+ * ## Type Y 자동 안전영역 — decode-safe 분기
+ *
+ * Type Y 는 큐브 **전경 실루엣**으로 기하 후보를 잡는다. 투명 배경에서 auto 규칙이
+ * 흰/검 안전영역을 두르면 그 링이 배경을 채워 실루엣 검출을 깨고 복호가 죽는다
+ * (실측: quiet=white → no-format-candidate, quiet=none → OK). 셀에는 안 닿으므로
+ * 셀만 재는 자체검증은 통과한다 — 라이브 복호와 자체검증이 갈리는 지점이다. 그래서
+ * **type Y + auto** 는 색을 안 넣는다(none). O/A 는 이 분기에 안 들어와 종전대로
+ * 흰/검을 고른다. 사용자가 흰/검/없음/대비를 **명시** 하면 그건 위에서 이미 존중된다
+ * (명시 선택 > 자동 기본값) — 이 분기는 «auto» 에만 걸린다.
  *
  *   decide(sepW, sepB, surfaceY):
  *     사진 없음(surfaceY = null) → 셀 분리가 큰 쪽 (완전 동점이면 흰색 — 종전
@@ -173,7 +184,9 @@ export function decideQuietColor(input) {
  *
  * @param {{quietMode:string, bgMode:string, sepWhite:number, sepBlack:number,
  *          surfaceLuminance:number|null, tieThreshold?:number,
- *          separationFloor?:number}} input
+ *          separationFloor?:number, type?:'O'|'A'|'Y'}} input
+ *   type = 생성기 타입. 'Y' 일 때 auto 는 전경 실루엣 보호로 색을 안 넣는다
+ *   (§Type Y). 안 주면(O/A·미지정) 종전 규칙 그대로다.
  * @returns {{color:'white'|'black'|'none', reason:string,
  *            scoreWhite:number|null, scoreBlack:number|null}}
  */
@@ -193,6 +206,14 @@ export function resolveQuietZoneChoice(input) {
     // 불투명 배경은 실효 배경이 확정돼 있어 분리가 이미 보증된다.
     return {
       color: QUIET_COLOR_NONE, reason: 'auto-opaque-background', scoreWhite: null, scoreBlack: null,
+    };
+  }
+  if (quietMode === 'auto' && input.type === 'Y') {
+    // Type Y decode-safe: auto 흰/검 안전영역은 전경 실루엣 검출을 깨 복호를 죽인다
+    // (§Type Y). auto 는 색을 안 넣는다. 명시 선택(none/white/black/contrast)은 위
+    // 분기에서 이미 처리됐다.
+    return {
+      color: QUIET_COLOR_NONE, reason: 'auto-y-silhouette', scoreWhite: null, scoreBlack: null,
     };
   }
   if (quietMode !== 'auto' && quietMode !== 'contrast') {

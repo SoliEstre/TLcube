@@ -7370,6 +7370,10 @@ function quietChoiceInput() {
   return {
     quietMode: generatorState.quietMode,
     bgMode: generatorState.bgMode,
+    // Type Y 는 auto 안전영역이 전경 실루엣을 깨 복호를 죽이므로 auto → 없음으로
+    // 푼다 (quiet-auto.js §Type Y). O/A 는 종전대로. dispatch·buildConfig 가 모두
+    // generatorState.type 을 쓰므로 렌더 시점의 활성 타입과 일치한다.
+    type: generatorState.type,
     sepWhite: separationFromLevels(QUIET_WHITE),
     sepBlack: separationFromLevels(QUIET_BLACK),
     surfaceLuminance: lastBackdropLuminance,

@@ -165,6 +165,32 @@ test('매트릭스 — quietMode × 배경 × 사진 유무', () => {
   ]);
 });
 
+// ── Type Y decode-safe 분기 (F-78) ─────────────────────────────────────────
+// Type Y 는 auto 안전영역(흰/검)이 전경 실루엣 검출을 깨 복호를 죽인다. 그래서
+// type='Y' + auto 는 색을 안 넣는다(none). 명시 선택과 O/A 는 종전 그대로.
+test('Type Y — auto 는 안전영역을 안 넣고, 명시 선택은 그대로 존중한다', () => {
+  const sep = separations('slate');
+  const choose = (extra) => resolveQuietZoneChoice({
+    bgMode: 'transparent', ...sep, surfaceLuminance: null, separationFloor: 0.05, ...extra,
+  });
+  // 투명 배경 + auto: O 는 흰색이 붙지만 Y 는 실루엣 보호로 없음.
+  assert.equal(choose({ quietMode: 'auto', type: 'O' }).color, 'white');
+  const y = choose({ quietMode: 'auto', type: 'Y' });
+  assert.equal(y.color, 'none');
+  assert.equal(y.reason, 'auto-y-silhouette');
+  // 불투명 배경은 Y 라도 종전 사유로 없음 (분기 순서: 불투명 체크가 먼저).
+  assert.equal(resolveQuietZoneChoice({
+    quietMode: 'auto', bgMode: 'white', ...sep, surfaceLuminance: null, type: 'Y',
+  }).reason, 'auto-opaque-background');
+  // 명시 선택은 Type Y 에서도 존중된다 (명시 > 자동 기본값).
+  assert.equal(choose({ quietMode: 'white', type: 'Y' }).color, 'white');
+  assert.equal(choose({ quietMode: 'black', type: 'Y' }).color, 'black');
+  assert.equal(choose({ quietMode: 'none', type: 'Y' }).color, 'none');
+  assert.equal(choose({ quietMode: 'none', type: 'Y' }).reason, 'user-none');
+  // 대비(contrast)도 명시 요구라 Y 에서도 색을 고른다.
+  assert.equal(choose({ quietMode: 'contrast', type: 'Y' }).color, 'white');
+});
+
 test('사용자 고정 색은 «사용자가 골랐다» 는 사유를 들고 온다', () => {
   const sep = separations('slate');
   const fixed = resolveQuietZoneChoice({

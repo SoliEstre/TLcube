@@ -301,15 +301,18 @@ test('알파는 0 초과 0.5 미만이고 바깥에서 0 으로 끝난다', () =
 
 // ── ③ 끄면 아무것도 안 바뀐다 ──────────────────────────────────────────────
 
-// ⚠ **의도적 갱신 (2026-08-17, 운영자 확정)** — 음영 3종 개정 (QR 제외·10×·발산
-//   협소화) 확인 후 기본값을 **켬**으로. «옵션 생략 = 기본값» 이므로 addShading({})
-//   는 이제 띠를 만든다 — «끄면 무변경» 계약은 명시적 off 로 계속 잰다.
-test('기본값은 켬이고, 명시적으로 끄면 scene 객체가 그대로 돌아온다', () => {
-  assert.equal(DEFAULT_SHADING_MODE, SHADING_ON);
+// ⚠ **의도적 갱신 (decode-safe 기본값 복귀)** — 음영은 렌더러에서 Type Y 에만 얹히고
+//   (index.html withShading), 켜면 Y 전경 실루엣 검출이 깨져 복호가 죽는다
+//   (DEFAULT_SHADING_MODE 주석 실측). 그래서 기본값을 다시 **끔**으로 되돌린다.
+//   «옵션 생략 = 기본값 = 끔» 이므로 addShading({}) 는 이제 입력 scene 을 그대로
+//   돌려준다 (켬은 명시 옵트인). «끄면 무변경» 계약은 명시적 off 로도 계속 잰다.
+test('기본값은 끔이고, 기본값·명시적 off 모두 scene 객체가 그대로 돌아온다', () => {
+  assert.equal(DEFAULT_SHADING_MODE, SHADING_OFF);
   assert.deepEqual([...SHADING_MODES], [SHADING_OFF, SHADING_ON]);
   const scene = sceneFor({ version: 1, tones: 3 });
   assert.equal(addShading(scene, { mode: SHADING_OFF }), scene, '동일 객체여야 한다');
-  assert.ok(Array.isArray(addShading(scene, {}).shading), '옵션 생략 = 기본값 = 켬이어야 한다');
+  assert.equal(addShading(scene, {}), scene, '옵션 생략 = 기본값 = 끔 → 동일 객체');
+  assert.ok(Array.isArray(addShading(scene, { mode: SHADING_ON }).shading), '명시 켬은 띠를 만든다');
   assert.equal('shading' in addShading(scene, { mode: SHADING_OFF }), false);
 });
 
