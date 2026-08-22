@@ -119,6 +119,17 @@ test('v0 정본 셀·톤을 중앙 19셀 외곽에서 유도한 닮음 좌표로
     }
   }
   assert.equal(beacon.cellDigits.size, n * n);
+  // **폭은 모듈 자다 (운영자 2차 판정 2026-08-22 — «심이 너무 두껍다»)**:
+  // 전폭 = 0.15 × 모듈 나비(2×size). 큐브 파인더의 셀 자(0.075×cellSize)를 그대로
+  // 쓰면 모듈의 1/3을 먹는다 — 그 회귀를 값이 아니라 관계로 잠근다.
+  for (const seam of seamShapes) {
+    const width = Math.hypot(
+      seam.points[0].x - seam.points[3].x, seam.points[0].y - seam.points[3].y);
+    const moduleWidth = 2 * expectedLayout.size;
+    assert.ok(Math.abs(width - 0.15 * moduleWidth) < 1e-9,
+      `심 전폭 ${width} ≠ 모듈 나비의 15% (${0.15 * moduleWidth})`);
+  }
+
 });
 
 test('중앙 슬롯 회계는 불스아이 정본 19셀을 재사용하고 O/G 용량·포맷은 그대로다', () => {
