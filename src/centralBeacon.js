@@ -169,8 +169,12 @@ export function familyLetterFromEncoded(encoded) {
     || (Number.isInteger(encoded.n) && !Number.isInteger(encoded.k))) {
     return 'Y';
   }
-  if (encoded.cornerMarker) return 'G';
+  // ⚠ A 판별이 cornerMarker 보다 **먼저**다 (2026-08-22, A 개방). encodeA 도
+  // cornerMarker(A-CM)를 가질 수 있는데, 순서가 반대면 A-CM 비컨이 'G' 로 읽혀
+  // 검출기가 hex 를 시딩한다 — 실루엣은 삼각(tri)인데. A 의 표식은 turnA 필드의
+  // **존재**다 (encodeA 만 이 키를 돌려준다).
   if (Object.prototype.hasOwnProperty.call(encoded, 'turnA')) return 'A';
+  if (encoded.cornerMarker) return 'G';
   return 'O';
 }
 

@@ -63,7 +63,10 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     'centerQr+centralV0': /isCentralV0FinderPatternId\(generatorState\.finderPatternId\)/,
     // 아래 둘은 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
     'cornerMarker+daehanFinder': /\} else if \(cfg\.cornerMarker === true && !opts\.centerQr\) \{/,
-    'daehanFinder+turnA': /\} else if \(cfg\.turnA === true\) \{/,
+    'daehanFinder+turnA': /\} else if \(cfg\.turnA === true && !centralV0Selected\) \{/,
+    // 중앙 v0 × turnA — 배치 검증 미실시 조합 (2026-08-22 A 개방). 비컨 카드가
+    // 선택돼 있으면 encodeOptsFor 가 turnA 를 싣지 않는다.
+    'centralV0+turnA': /\} else if \(cfg\.turnA === true && !centralV0Selected\) \{/,
     // 둘 다 단일 finderPatternId 카드에서 유도되므로 한 상태에 동시에 설 수 없다.
     'centralV0+daehanFinder': () => {
       const ids = [CENTRAL_V0_FINDER_CARD,

@@ -7,6 +7,7 @@ import {
   capacityForCellSurfaceFinal,
 } from '../src/cellSurfaceFinal.js';
 import { encode } from '../src/encode.js';
+import { encodeA } from '../src/encodeA.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 import { FACES } from '../src/hexgrid.js';
 import { FINDER_CUBE_SEAM } from '../src/luminance.js';
@@ -269,5 +270,61 @@ test('스캐너 문구 — 비컨 안내 2키가 모든 언어에 있다 (하나
         lang + ' 에 ' + key + ' 가 없다 — 그 언어에서 안내가 키 이름 그대로 뜬다');
       assert.ok(SCANNER_STRINGS[lang][key].length > 0);
     }
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Type A 개방 (운영자 지시 2026-08-22 «타입 OAK 모두») — K 는 인코더가 없어 대상 밖
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('A 왕복 — encodeA 비컨의 메타 계열이 A 다 (A-CM 이어도 G 로 오독하지 않는다)', () => {
+  const plain = encodeA('a-beacon', { version: 0, eccLevel: 'M', centralV0: true });
+  const meta = readBeaconFromEncodedY(encodeCentralBeacon(plain, CENTRAL_V0_FINDER_PATTERN_ID));
+  assert.equal(meta.family, 'A');
+  assert.equal(meta.cornerMarker, false);
+
+  // A-CM: cornerMarker 를 켜도 계열은 A 다 — cornerMarker 판별이 먼저면 'G' 로 읽혀
+  // 검출기가 hex 를 시딩한다 (실루엣은 tri 인데). familyLetterFromEncoded 의 순서 잠금.
+  const cm = encodeA('a-cm', { version: 1, eccLevel: 'M', centralV0: true, cornerMarker: true });
+  const cmMeta = readBeaconFromEncodedY(encodeCentralBeacon(cm, CENTRAL_V0_FINDER_PATTERN_ID));
+  assert.equal(cmMeta.family, 'A');
+  assert.equal(cmMeta.cornerMarker, true);
+});
+
+test('A 회계·와이어 무회귀 — centralV0 가 k·dataDigits·formatIndex 를 바꾸지 않는다', () => {
+  for (const version of [0, 1, 2]) {
+    const base = encodeA('x', { version, eccLevel: 'M' });
+    const withBeacon = encodeA('x', { version, eccLevel: 'M', centralV0: true });
+    assert.equal(withBeacon.k, base.k, String(version));
+    assert.equal(withBeacon.dataDigits.length, base.dataDigits.length, String(version));
+    // ⚠ 와이어: formatIndex 는 표시층 불변 — 바뀌면 발행 규약 ⓐ가 깨진다.
+    assert.equal(withBeacon.formatIndex, base.formatIndex, String(version));
+    assert.equal(withBeacon.centralV0, true);
+  }
+});
+
+test('A 배타 — 중앙 슬롯 점유자 충돌과 미검증 조합은 던진다', () => {
+  assert.throws(() => encodeA('x', { version: 0, eccLevel: 'M', centralV0: true, centerQr: true }),
+    /중앙 슬롯 점유자는 하나다/);
+  assert.throws(() => encodeA('x', { version: 0, eccLevel: 'M', centralV0: true, daehanFinder: true }),
+    /중앙 슬롯 점유자는 하나다/);
+  assert.throws(() => encodeA('x', { version: 0, eccLevel: 'M', centralV0: true, turnA: true }),
+    /배치 검증 미실시 조합/);
+});
+
+test('A 렌더 — 비컨 구조(분리 띠 + n² 모듈 + 심 3)가 O 와 동일하다', () => {
+  const encoded = encodeA('a-render', { version: 0, eccLevel: 'M', centralV0: true });
+  // Type A 패치는 기본 margin 을 벗어난다 (encodeOptsFor 주석의 실측 — margin 20).
+  const scene = buildScene(encoded, {
+    palette: PALETTE, finderPatternId: CENTRAL_V0_FINDER_PATTERN_ID, margin: 20,
+  });
+  const n = CENTRAL_V0_SOURCE_N;
+  const tail = scene.shapes.slice(encoded.cellDigits.size * FACES.length);
+  assert.equal(tail.length, FACES.length + n * n * FACES.length + 3);
+  for (const cover of tail.slice(0, FACES.length)) {
+    assert.strictEqual(cover.color, PALETTE.background);
+  }
+  for (const seam of tail.slice(-3)) {
+    assert.strictEqual(seam.color, FINDER_CUBE_SEAM);
   }
 });

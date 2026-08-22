@@ -119,15 +119,15 @@ test('v0 정본 셀·톤을 중앙 19셀 외곽에서 유도한 닮음 좌표로
     }
   }
   assert.equal(beacon.cellDigits.size, n * n);
-  // **폭은 모듈 자다 (운영자 2차 판정 2026-08-22 — «심이 너무 두껍다»)**:
-  // 전폭 = 0.15 × 모듈 나비(2×size). 큐브 파인더의 셀 자(0.075×cellSize)를 그대로
-  // 쓰면 모듈의 1/3을 먹는다 — 그 회귀를 값이 아니라 관계로 잠근다.
+  // **폭은 모듈 자다 (운영자 판정: 2차 «두껍다» → 3차 «10%»)**: 전폭 = 0.10 ×
+  // 모듈 나비(2×size). 셀 자(0.075×cellSize)로 돌아가면 모듈의 1/3을 먹는다 —
+  // 그 회귀를 값이 아니라 관계로 잠근다.
   for (const seam of seamShapes) {
     const width = Math.hypot(
       seam.points[0].x - seam.points[3].x, seam.points[0].y - seam.points[3].y);
     const moduleWidth = 2 * expectedLayout.size;
-    assert.ok(Math.abs(width - 0.15 * moduleWidth) < 1e-9,
-      `심 전폭 ${width} ≠ 모듈 나비의 15% (${0.15 * moduleWidth})`);
+    assert.ok(Math.abs(width - 0.10 * moduleWidth) < 1e-9,
+      `심 전폭 ${width} ≠ 모듈 나비의 10% (${0.10 * moduleWidth})`);
   }
 
 });
@@ -201,11 +201,13 @@ test('생성기 카드는 O/G에 배선되고 중앙 QR과 한 슬롯을 공유�
   );
   assert.equal(selected.finderPatternId, CENTRAL_V0_FINDER_PATTERN_ID);
   assert.notEqual(selected.qrPosition, 'inner');
+  // **의도적 반전 (2026-08-22 운영자 지시 «타입 OAK 모두»)**: A 에서도 선택이
+  // 유지돼야 한다 — 예전엔 기본 파인더로 리셋되는 것을 잠갔다.
   const typeA = selectFinderPattern(
     state, CENTRAL_V0_FINDER_PATTERN_ID, 'A', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   );
-  assert.notEqual(typeA.finderPatternId, CENTRAL_V0_FINDER_PATTERN_ID,
-    'Type A에 O/G 전용 중앙 v0가 남았다');
+  assert.equal(typeA.finderPatternId, CENTRAL_V0_FINDER_PATTERN_ID,
+    'Type A 에서 중앙 v0 선택이 리셋된다 — 2026-08-22 개방이 되돌려졌다');
 
   assert.equal(INDEX.split('"g582":').length - 1, 8);
   assert.match(INDEX, /opts\.centralV0 = true/);

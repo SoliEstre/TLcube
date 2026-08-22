@@ -23,6 +23,7 @@ import { rsEncode } from './rs211.js';
 import { maskAdd } from './mask.js';
 import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { dataCellsInScanOrderA, fillerCellsA } from './layoutA.js';
+import { centralSlotCells } from './layout.js';
 import { daehanReservedCells } from './finder-daehan.js';
 import { anchorCells, referenceCellsAll, formatCells, REFERENCE_DIGIT } from './placement.js';
 import { vertexAnchors, patchReferenceCells } from './placementA.js';
@@ -130,7 +131,8 @@ export function encodeA(text, options = {}) {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
   const {
-    version, eccLevel = 'M', centerQr = false, cornerMarker = false, turnA = false,
+    version, eccLevel = 'M', centerQr = false, centralV0 = false,
+    cornerMarker = false, turnA = false,
     daehanFinder = false,
   } = options;
   if (typeof turnA !== 'boolean') {
@@ -159,6 +161,21 @@ export function encodeA(text, options = {}) {
   }
   if (daehanFinder && cornerMarker) {
     throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  }
+  // 중앙 v0 비컨 (2026-08-22 운영자 지시 «타입 OAK 모두») — A 의 육각 코어는 Type O
+  // 와 좌표까지 같아(2026-08-19 실측, daehan 편입 근거) 중앙 19셀 슬롯 규약이 그대로
+  // 성립한다. 회계도 O 와 같은 이유로 불변이다: 슬롯 셀은 애초에 어느 목록에도 없다.
+  if (typeof centralV0 !== 'boolean') {
+    throw new TypeError(`centralV0 는 boolean 이어야 한다: ${typeof centralV0}`);
+  }
+  if (centralV0 && centerQr) {
+    throw new RangeError('centralV0 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
+  }
+  if (centralV0 && daehanFinder) {
+    throw new RangeError('centralV0 와 daehanFinder 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
+  }
+  if (centralV0 && turnA) {
+    throw new RangeError('centralV0 와 turnA 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
   const provider = layoutProviderForA(cornerMarker, daehanFinder);
 
@@ -263,6 +280,8 @@ export function encodeA(text, options = {}) {
    *    운영자 확정 — «별도 타입처럼 취급하되 UI 상에만 같은 타입» (2026-08-18 턴A,
    *    2026-08-20 G 승계).
    */
+  // ⚠ 중앙 v0 비컨은 formatIndex 에 손대지 않는다 — O 와 같은 결정이다 (와이어는
+  //   표시층 불변, 「어떤 중앙 점유자인가」의 사후 검증 축은 비컨 메타 자신이 담당).
   const formatIndex = turnA
     ? turnASpec(spec.version, { centerQr }).formatIndex
     : cornerMarker
@@ -307,11 +326,22 @@ export function encodeA(text, options = {}) {
     cellDigits.set(cellKey(c.q, c.r), { digit: fillerDigits[i], role: 'filler' });
   }
 
+  // 중앙 v0: 슬롯 19셀이 payload 로 되살아나지 않았음을 인코더 경계에서 직접 단언
+  // (encode.js 의 O 경로와 같은 방어 — 좌표 정본은 layout.js 하나).
+  if (centralV0) {
+    for (const cell of centralSlotCells()) {
+      if (cellDigits.has(cellKey(cell.q, cell.r))) {
+        throw new Error(`centralV0 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
+      }
+    }
+  }
+
   return {
     version: spec.version,
     k,
     eccLevel,
     centerQr,
+    centralV0,
     cornerMarker,
     turnA,
     daehanFinder,

@@ -84,12 +84,10 @@ export function normalizeFinderQrState(state, type, defaultFinderPatternId) {
   const next = { ...state };
   if (type === 'Y') return next;
 
-  // 중앙 v0는 O와 그 코너 마커 변형인 G 전용이다. Type A는 별도 인코더라 이 레인의
-  // 회계 계약을 공유하지 않으므로 타입 전환 때 기본 파인더로 되돌린다.
-  if (type === 'A' && next.finderPatternId === CENTRAL_V0_FINDER_PATTERN_ID) {
-    next.finderPatternId = defaultFinderPatternId;
-    next.previousFinderPatternId = defaultFinderPatternId;
-  }
+  // **의도적 개방 (2026-08-22 운영자 지시 «타입 OAK 모두»)**: 중앙 v0(비컨)는 이제
+  // Type A 에서도 유효하다 — A 의 육각 코어는 O 와 좌표까지 같아 슬롯 규약이 그대로
+  // 성립하고, encodeA 가 centralV0 회계·배타를 O 와 같은 규칙으로 든다. 예전의
+  // 「A 는 기본 파인더로 되돌린다」 리셋은 여기 있었다 — 되살리면 카드가 사라진다.
 
   const inner = next.qrPosition === 'inner';
   const centerQr = next.finderPatternId === CENTER_QR_FINDER_PATTERN_ID;

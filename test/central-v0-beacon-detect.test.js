@@ -19,6 +19,7 @@ import {
   versionForFinalN,
 } from '../src/cellSurfaceFinal.js';
 import { encode } from '../src/encode.js';
+import { encodeA } from '../src/encodeA.js';
 import { encodeY } from '../src/encodeY.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 import {
@@ -348,4 +349,21 @@ test('오표식 방어 — 확대·잘림 불스아이 프레임에서 비컨 �
   const finders = discoverCentralBeaconFinders(toRelativeLuminance(zoomed));
   assert.equal(finders.length, 0,
     '불스아이 조각이 비컨 후보로 새고 있다 — verifyV0LocatorTones 를 확인하라');
+});
+
+test('A 합성 왕복 — Type A 비컨 프레임에서 바깥 tri 텍스트가 나온다', {
+  timeout: 60_000,
+}, () => {
+  // Type A 개방 (2026-08-22). A 패치는 기본 margin 밖 — margin 20 (renderA 전례).
+  const text = 'beacon-a';
+  const encoded = encodeA(text, { version: 0, eccLevel: 'M', centralV0: true });
+  const scene = buildScene(encoded, {
+    palette: PALETTE, finderPatternId: CENTRAL_V0_FINDER_PATTERN_ID, margin: 20,
+  });
+  const raster = rasterize(scene, { pixelsPerUnit: 16, supersample: 1 });
+  const result = decodeFrontend(raster);
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(result.text, text);
+  assert.equal(result.family, 'tri');
+  assert.equal(startsWithBeaconMagic(result.text), false);
 });

@@ -639,14 +639,14 @@ export function buildScene(encoded, options) {
     // 그 상수의 주석 그대로 — 순검정은 전경 마스크에서 배경으로 먹혀 ppu 24\~30 에서
     // 큐브를 세 조각으로 가른다. 방향(코너 1,3,5)·반경(radiusCells×cellSize)도 동일.
     //
-    // **폭의 자만 다르다 (운영자 2차 판정 2026-08-22 — «심이 너무 두껍다»).**
+    // **폭의 자만 다르다 (운영자 판정 2026-08-22, 2차 «너무 두껍다» → 3차 «10%로»).**
     // 큐브 파인더의 0.075×cellSize 는 반경 3.5셀짜리 거대 면 사이의 자다. 그걸
-    // 그대로 쓰면 비컨 모듈(나비 2×size ≈ 0.47셀)의 **1/3을 먹는다.** 계수 0.075 는
-    // 유지하고 자를 «분리되는 구조의 나비» 로 옮긴다 — 큐브에선 셀, 여기선 모듈.
-    // 결과: 심 전폭 = 모듈 나비의 15%. 중심 표본 비침범은 회귀가 잰다.
+    // 그대로 쓰면 비컨 모듈(나비 2×size ≈ 0.47셀)의 **1/3을 먹는다.** 자를
+    // «분리되는 구조의 나비»(모듈)로 옮기고, 계수는 실기기 판정으로 0.05 —
+    // **심 전폭 = 모듈 나비의 10%.** 중심 표본 비침범은 회귀가 잰다.
     {
       const beaconModuleWidth = 2 * v0Layout.size;
-      const seamHalfWidth = 0.075 * beaconModuleWidth;
+      const seamHalfWidth = 0.05 * beaconModuleWidth;
       const seamRadius = beaconGeometry.radiusCells * cellSize;
       for (const cornerIndex of [1, 3, 5]) {
         const unit = CORNER_UNIT_OFFSETS[cornerIndex];
