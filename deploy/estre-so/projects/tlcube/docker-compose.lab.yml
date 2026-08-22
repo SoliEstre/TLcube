@@ -20,8 +20,9 @@ services:
       # 인증(F-77): Origin 허용목록 — 콤마구분. 브라우저가 Origin 헤더를 위조할 수 없으므로
       #   이것이 교차사이트 구독의 실제 차단막이다. **미설정이면 릴레이는 localhost 계열만
       #   허용해 프로덕션 브라우저를 거부한다** — 프로덕션은 반드시 시험판 오리진을 명시한다.
-      #   활성화하려면 아래 주석을 풀고 재기동한다(배포 몫):
-      # TL_LAB_ALLOWED_ORIGINS: "https://tlscan.estre.so,https://tlcube.estre.so"
+      #   (활성화 2026-08-23 — 운영자 승인. WS 를 여는 lab 표면은 tlscan·tlcube 둘뿐,
+      #   tlstage 는 /lab/ws 프록시가 없어 목록에 안 든다.)
+      TL_LAB_ALLOWED_ORIGINS: "https://tlscan.estre.so,https://tlcube.estre.so"
       # 선택(defense-in-depth): role 프레임 토큰까지 요구. 미설정이면 이 검사는 건너뛴다.
       #   설정 시 시험판 페이지가 같은 토큰을 클라이언트에 주입해야 한다(전역 __TL_LAB_TOKEN__).
       # TL_LAB_TOKEN: ${TLCUBE_LAB_TOKEN:-}
