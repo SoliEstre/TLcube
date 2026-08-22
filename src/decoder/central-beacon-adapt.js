@@ -27,8 +27,10 @@ import { moduleQuad } from '../ygrid.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from '../finder-selection.js';
 import { centralBeaconGeometry } from '../centralBeaconWire.js';
 import { FINDER_CELL_ORDER } from '../finder-patterns.js';
-import { CORNER_UNIT_OFFSETS, hexCorners } from '../hexgrid.js';
+import { CORNER_UNIT_OFFSETS, hexCorners, regionCells } from '../hexgrid.js';
+import { VERSIONS } from '../capacity.js';
 import { detectCellSurfaceBlockShapes } from './cellsurface-block-detect.js';
+import { robustPercentiles } from './luma.js';
 import { projectPoint } from './homography.js';
 
 /** 파인더 후보의 finderKind. cell-mask · three-tone-cube 와 같이 패턴 파인더로 취급한다. */
@@ -271,6 +273,125 @@ export function verifyV0LocatorTones(luma, center, modulePitch, degrees) {
 }
 
 /**
+ * k-육각 코드 영역 **전체**의 단위 지지 반지름 — 슬롯과 같은 6축 metric.
+ * k 목록은 손으로 적지 않고 용량표(VERSIONS)에서 온다.
+ */
+const UNIT_OUTER_SUPPORT = (() => {
+  const table = new Map();
+  const layout = { size: 1, originX: 0, originY: 0 };
+  for (const spec of VERSIONS) {
+    const points = regionCells(spec.k).flatMap((cell) => hexCorners(cell.q, cell.r, layout));
+    const supports = CORNER_UNIT_OFFSETS.map((axis) => Math.max(...points.map(
+      (point) => point.x * axis.x + point.y * axis.y)));
+    table.set(spec.k, Math.min(...supports));
+  }
+  return table;
+})();
+
+/**
+ * 중심-사전 fallback — 전경 기하에서 비컨 후보를 직접 만든다.
+ *
+ * 왜 있나 (2026-08-22 실측, V3 'beacon-v3'): 블록 로케이터의 중앙 검증은 **전역
+ * 정규화**에 기대는데, 바깥 페이로드가 바뀌자 같은 중앙 픽셀이 verified 에서
+ * 사라졌다 (참중심 30px 내 히트 0/17 — coreCandidates 15197 · clusters 1134 인
+ * 프레임에서). 중앙 블록 픽셀은 페이로드와 무관하게 동일하므로 이것은 «검출이
+ * 페이로드에 좌우되는» 형태다. 검출기 내부는 Type Y 경로와 공유라 고치지 않고,
+ * 이 어댑터가 스스로 후보를 만든다:
+ *
+ *   ① 전경(테두리 중앙값과 다른 픽셀)의 중심과 6축 지지 반지름을 잰다
+ *   ② k 마다 바깥 지지 반지름 → cellSize → 비컨 모듈 피치 (정방향 식의 역)
+ *   ③ 기존 locator 톤 대조로 판정 — 지역 중앙값 분할이라 전역 정규화와 무관하다
+ *
+ * [추정] 임의 회전 실사진은 이 fallback 이 못 잡는다 (방향은 0/120/240 만 시도) —
+ * 그 축은 블록 로케이터가 담당하고, 여기는 정립 프레임의 구멍을 메운다.
+ */
+function centerPriorBeaconFinders(luma, emitted) {
+  const spread = robustPercentiles(luma, [0.05, 0.95]);
+  if (!spread) return [];
+  const margin = (spread[1] - spread[0]) * 0.2;
+  if (!(margin > 0)) return [];
+  // 테두리 중앙값 = 배경 추정 (코드는 프레임 안쪽에 있고 콰이어트가 테두리에 닿는다).
+  const border = [];
+  const borderStride = Math.max(1, Math.floor(Math.min(luma.width, luma.height) / 64));
+  for (let x = 0; x < luma.width; x += borderStride) {
+    border.push(luma.data[x], luma.data[(luma.height - 1) * luma.width + x]);
+  }
+  for (let y = 0; y < luma.height; y += borderStride) {
+    border.push(luma.data[y * luma.width], luma.data[y * luma.width + luma.width - 1]);
+  }
+  border.sort((a, b) => a - b);
+  const background = border[Math.floor(border.length / 2)];
+  // 전경 중심 + 6축 지지 (stride 2 표본 — 중심·반지름은 저주파 통계라 충분하다).
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+  for (let y = 0; y < luma.height; y += 2) {
+    const row = y * luma.width;
+    for (let x = 0; x < luma.width; x += 2) {
+      if (Math.abs(luma.data[row + x] - background) <= margin) continue;
+      sumX += x;
+      sumY += y;
+      count += 1;
+    }
+  }
+  if (count === 0) return [];
+  const center = { x: sumX / count, y: sumY / count };
+  const supports = CORNER_UNIT_OFFSETS.map(() => -Infinity);
+  for (let y = 0; y < luma.height; y += 2) {
+    const row = y * luma.width;
+    for (let x = 0; x < luma.width; x += 2) {
+      if (Math.abs(luma.data[row + x] - background) <= margin) continue;
+      for (let axis = 0; axis < CORNER_UNIT_OFFSETS.length; axis += 1) {
+        const unit = CORNER_UNIT_OFFSETS[axis];
+        const support = (x - center.x) * unit.x + (y - center.y) * unit.y;
+        if (support > supports[axis]) supports[axis] = support;
+      }
+    }
+  }
+  const outerSupport = Math.min(...supports);
+  if (!(outerSupport > 0)) return [];
+
+  const shrink = centralBeaconGeometry().shrink;
+  const finders = [];
+  for (const [k, unitOuter] of UNIT_OUTER_SUPPORT) {
+    const cellSize = outerSupport / unitOuter;
+    const modulePitch = cellSize * UNIT_CENTRAL_SLOT_RADIUS * shrink / CENTRAL_V0_SOURCE_N;
+    for (let index = 0; index < ORIENTATION_DEGREES.length; index += 1) {
+      const degrees = ORIENTATION_DEGREES[index];
+      const verdict = verifyV0LocatorTones(luma, center, modulePitch, degrees);
+      if (!verdict.pass) continue;
+      // 블록 경로가 이미 같은 포즈를 냈으면 중복을 만들지 않는다.
+      const duplicate = emitted.some((finder) =>
+        Math.hypot(finder.center.x - center.x, finder.center.y - center.y) < modulePitch
+        && Math.abs(finder.cellSize - cellSize) < cellSize * 0.05
+        && finder.rotationDegrees % 120 === degrees % 120);
+      if (duplicate) continue;
+      const H = affineCellHomography(center, cellSize, degrees);
+      finders.push({
+        finderKind: CENTRAL_BEACON_FINDER_KIND,
+        kind: CENTRAL_BEACON_FINDER_KIND,
+        patternId: CENTRAL_V0_FINDER_PATTERN_ID,
+        center: { x: center.x, y: center.y },
+        cellSize,
+        score: verdict.agreement,
+        orientation: index,
+        orientationSource: 'central-v0-center-prior',
+        orientationMargin: verdict.agreement,
+        rotationDegrees: degrees,
+        H,
+        transform: H,
+        B: H,
+        geometryResidual: 0,
+        geometryMode: 'affine',
+        source: 'central-v0-center-prior',
+        blockShapeIndex: -1,
+      });
+    }
+  }
+  return finders;
+}
+
+/**
  * 블록 로케이터가 낸 v0 n=13 shape 를 O/G 중앙 파인더 후보로 바꾼다.
  *
  * 기존 `detectCentralCubeFinders` 가 실패한 뒤에만 붙인다 — 3톤 큐브·셀마스크가
@@ -281,7 +402,22 @@ export function discoverCentralBeaconFinders(luma, options = {}) {
   const overrides = options.centralBeacon && typeof options.centralBeacon === 'object'
     ? options.centralBeacon
     : {};
-  const detected = detectCellSurfaceBlockShapes(luma, overrides);
+  // **후보 풀만 넓힌다 — Type Y 경로의 기본(2)은 그대로다.** V3 실측('beacon-v3'):
+  // 바깥 3톤 필드 조각이 자체 점수로 진짜 중앙 블록을 상위 컷 밖으로 밀었다.
+  // 넓힌 풀의 진짜/가짜 판정은 locator 톤 대조가 진다. ⚠ 오버레이는
+  // calibration.csBlockLocator 아래로 가야 먹는다 (calibration() 의 병합 규칙).
+  const callerCalibration = overrides.calibration && typeof overrides.calibration === 'object'
+    ? overrides.calibration : {};
+  const detected = detectCellSurfaceBlockShapes(luma, {
+    ...overrides,
+    calibration: {
+      ...callerCalibration,
+      csBlockLocator: {
+        maximumPosesPerFamily: 6,
+        ...(callerCalibration.csBlockLocator || {}),
+      },
+    },
+  });
   const finders = [];
   for (const shape of detected.shapes) {
     if (!isV0BeaconBlockShape(shape)) continue;
@@ -318,5 +454,13 @@ export function discoverCentralBeaconFinders(luma, options = {}) {
       });
     }
   }
-  return finders;
+  finders.push(...centerPriorBeaconFinders(luma, finders));
+  // 대조 일치율 내림차순 — 하류 검증에는 예산이 있어 **순서가 곧 생사**다.
+  // V3 실측: 가짜 2(0.83·0.86) + 참 1(1.00) 이면 no-format-candidate, 참만 남기면
+  // 같은 프레임이 k=10 으로 풀린다. 절대 문턱을 다시 만지는 대신 ① 참이 먼저
+  // 검증받게 정렬하고 ② «최선과의 격차» (5표본 = 1/18) 밖의 후보를 버린다 —
+  // 상대 우세 게이트라 열화로 전체가 낮아진 프레임에서도 동작이 같다.
+  finders.sort((left, right) => right.orientationMargin - left.orientationMargin);
+  const best = finders.length > 0 ? finders[0].orientationMargin : 0;
+  return finders.filter((finder) => finder.orientationMargin >= best - 1 / 18);
 }

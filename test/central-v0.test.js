@@ -23,6 +23,7 @@ import {
 } from '../src/hexgrid.js';
 import { centralSlotCells, overheadBreakdown } from '../src/layout.js';
 import { occupiedCells } from '../src/bullseye.js';
+import { FINDER_CUBE_SEAM } from '../src/luminance.js';
 import { buildScene } from '../src/scene.js';
 import { moduleQuad } from '../src/ygrid.js';
 
@@ -70,9 +71,16 @@ test('v0 정본 셀·톤을 중앙 19셀 외곽에서 유도한 닮음 좌표로
     assert.strictEqual(cover.color, PALETTE.background,
       '분리 띠는 배경색이어야 한다 — 다른 색이면 비컨과 데이터가 한 덩어리로 읽힌다');
   }
-  const finderShapes = tail.slice(FACES.length);
+  // 꼬리의 마지막 3개는 Y자 면 분리 심이다 (2026-08-22 운영자 판정 — 입체감).
+  const finderShapes = tail.slice(FACES.length, FACES.length + n * n * FACES.length);
   assert.equal(finderShapes.length, n * n * FACES.length,
     '칠해지는 모듈 위치는 정본 n² 자리 전부여야 한다');
+  const seamShapes = tail.slice(FACES.length + n * n * FACES.length);
+  assert.equal(seamShapes.length, 3, 'Y자 심은 정확히 3줄이어야 한다');
+  for (const seam of seamShapes) {
+    assert.strictEqual(seam.color, FINDER_CUBE_SEAM,
+      '심 색은 3톤 큐브와 같은 FINDER_CUBE_SEAM 이어야 한다 — 순검정은 마스크에 먹힌다');
+  }
 
   const locatorByKey = new Map(source.map((cell) => [`${cell.i},${cell.j}`, cell]));
   const beacon = encodeCentralBeacon(encoded, CENTRAL_V0_FINDER_PATTERN_ID);

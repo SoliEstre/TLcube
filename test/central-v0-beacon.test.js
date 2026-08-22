@@ -9,6 +9,7 @@ import {
 import { encode } from '../src/encode.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 import { FACES } from '../src/hexgrid.js';
+import { FINDER_CUBE_SEAM } from '../src/luminance.js';
 import { DIGIT_COUNT, ECC_LEVEL, encode as encodeFormat } from '../src/formatinfo.js';
 import { markerGSpec } from '../src/markerG.js';
 import { buildScene } from '../src/scene.js';
@@ -49,9 +50,9 @@ test('바닥이 깔렸다 — 칠해지는 모듈 위치는 정본 n² 전부 (l
 
   const encoded = encode('beacon-floor', { version: 2, eccLevel: 'M', centralV0: true });
   const scene = sceneFor(encoded);
-  // 앞의 FACES.length 개는 분리 띠(슬롯 배경) — 2026-08-22 비컨 2차.
-  const finderShapes = scene.shapes.slice(
-    encoded.cellDigits.size * FACES.length + FACES.length);
+  // 앞의 FACES.length 개는 분리 띠(슬롯 배경), 마지막 3개는 Y자 심 — 2026-08-22.
+  const beaconStart = encoded.cellDigits.size * FACES.length + FACES.length;
+  const finderShapes = scene.shapes.slice(beaconStart, beaconStart + n * n * FACES.length);
   const painted = new Set();
   for (let s = 0; s < finderShapes.length; s += FACES.length) {
     painted.add(Math.floor(s / FACES.length));
@@ -70,7 +71,12 @@ test('팔레트 잠금 — 비컨 렌더 색이 palette.bullseyeLight 와 같지
     assert.strictEqual(cover.color, PALETTE.background);
     assert.notDeepEqual(cover.color, PALETTE.bullseyeLight);
   }
-  const finderShapes = tail.slice(FACES.length);
+  const moduleCount = tail.length - FACES.length - 3;
+  const finderShapes = tail.slice(FACES.length, FACES.length + moduleCount);
+  for (const seam of tail.slice(FACES.length + moduleCount)) {
+    assert.strictEqual(seam.color, FINDER_CUBE_SEAM);
+    assert.notDeepEqual(seam.color, PALETTE.bullseyeLight);
+  }
   assert.ok(finderShapes.length > 0);
   for (const shape of finderShapes) {
     assert.notDeepEqual(shape.color, PALETTE.bullseyeLight);
@@ -230,8 +236,8 @@ test('구분자 — 매직은 생성기 페이로드 경로가 만들 수 없는
 test('3톤 — 비컨 면 색이 palette.levels 세 값을 전부 쓴다 (평평한 2톤 회귀 방지)', () => {
   const encoded = encode('beacon-3tone', { version: 2, eccLevel: 'M', centralV0: true });
   const scene = sceneFor(encoded);
-  const beaconShapes = scene.shapes.slice(
-    encoded.cellDigits.size * FACES.length + FACES.length);
+  const start = encoded.cellDigits.size * FACES.length + FACES.length;
+  const beaconShapes = scene.shapes.slice(start, scene.shapes.length - 3); // 심 3줄 제외
   const used = new Set(beaconShapes.map((shape) => PALETTE.levels.indexOf(shape.color)));
   // 2톤(Y0)이면 중간 레벨(1)이 통째로 사라져 평평한 QR 처럼 보인다 — 실기기에서
   // 운영자가 지적한 «입체감 없음» 이 바로 그 상태였다. BEACON_TONES 를 확인하라.

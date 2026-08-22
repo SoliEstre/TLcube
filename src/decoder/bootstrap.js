@@ -2577,7 +2577,22 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
    * **기존 파인더가 실패한 뒤에만** 가설을 추가한다. finderResult.ok 는
    * 한 비트도 안 바뀐다 (불스아이·3톤·셀마스크·QR 탐색 계약 그대로).
    */
-  if (!finderResult.ok && !cubeResult.ok && options.centralBeacon !== false) {
+  // **의도적 확장 (2026-08-22, 심 편입 후 2차)**: Y자 심이 들어가자 기존 3톤 큐브
+  // 검출기가 비컨을 집기 시작했다 — 크기 규약을 큐브와 맞춘 덕에 대체로 맞는 포즈지만
+  // **성기다.** 처음엔 `!cubeResult.ok` 만 뺐는데 부족했다: V3 실측에서 큐브 파인더가
+  // `discoverFinders` 안에서 **finderResult.ok 자체를 켜서** 이 블록이 통째로 스킵됐고,
+  // 가설 풀에 central-v0-finder 가 0 개였다 (성긴 큐브 포즈만 6개 → no-format-candidate).
+  // 그래서 조건을 «불스아이·cell-mask 의 진짜 잠금이 없을 때» 로 다시 쓴다:
+  //   · finderResult 실패 → 돈다 (원래 조건)
+  //   · finderResult 성공이 **전부 three-tone-cube** → 돈다 (심이 켠 성긴 포즈뿐인 상황)
+  //   · 불스아이·cell-mask 가 하나라도 잠겼으면 → 안 돈다 (정상 경로 비용·판정 무변경)
+  // 진짜 3톤 큐브 프레임에 섞일 걱정은 locator 톤 대조가 막는다 — 대조 실패 = 후보 0.
+  const beaconEligible = options.centralBeacon !== false && (
+    !finderResult.ok
+    || (Array.isArray(finderResult.finders) && finderResult.finders.length > 0
+      && finderResult.finders.every(
+        (finder) => finder && finder.finderKind === 'three-tone-cube')));
+  if (beaconEligible) {
     const beaconFinders = discoverCentralBeaconFinders(luma, options);
     for (const finder of beaconFinders) {
       for (const family of ['hex', 'tri']) {

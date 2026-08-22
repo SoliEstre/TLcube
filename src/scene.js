@@ -634,6 +634,32 @@ export function buildScene(encoded, options) {
         }
       }
     }
+    // Y자 면 분리 심 — 3톤 큐브 파인더와 같은 규약이다 (운영자 판정 2026-08-22:
+    // 심이 없으니 입체감이 덜하다). 색이 순검정이 아니라 FINDER_CUBE_SEAM 인 이유는
+    // 그 상수의 주석 그대로 — 순검정은 전경 마스크에서 배경으로 먹혀 ppu 24\~30 에서
+    // 큐브를 세 조각으로 가른다. 폭(0.075c)·방향(코너 1,3,5)도 큐브 분기와 같은 식.
+    // 반경은 비컨 외접 꼭짓점 = radiusCells × cellSize (큐브 파인더의 radius 와 동일).
+    // 모듈 위에 얹히지만 폭이 모듈 나비의 ~1/6 이라 중심 표본은 침범하지 않는다 —
+    // 합성 왕복·locator 톤 대조 회귀가 그 명제를 잰다.
+    {
+      const seamHalfWidth = 0.075 * cellSize;
+      const seamRadius = beaconGeometry.radiusCells * cellSize;
+      for (const cornerIndex of [1, 3, 5]) {
+        const unit = CORNER_UNIT_OFFSETS[cornerIndex];
+        const perpendicular = { x: -unit.y, y: unit.x };
+        const far = { x: center.x + unit.x * seamRadius, y: center.y + unit.y * seamRadius };
+        shapes.push({
+          kind: 'polygon',
+          points: [
+            { x: center.x + perpendicular.x * seamHalfWidth, y: center.y + perpendicular.y * seamHalfWidth },
+            { x: far.x + perpendicular.x * seamHalfWidth, y: far.y + perpendicular.y * seamHalfWidth },
+            { x: far.x - perpendicular.x * seamHalfWidth, y: far.y - perpendicular.y * seamHalfWidth },
+            { x: center.x - perpendicular.x * seamHalfWidth, y: center.y - perpendicular.y * seamHalfWidth },
+          ],
+          color: FINDER_CUBE_SEAM,
+        });
+      }
+    }
   } else if (finderPattern.renderKind === 'cell-mask') {
     // 3레벨 후보(OAK, 2026-08-18)는 `cellLevels` 를, 기존 이진 실험 파인더는
     // `cellMasks` 를 든다. 둘 다 있으면 **레벨이 이긴다** — 검출기의

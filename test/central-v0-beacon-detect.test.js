@@ -176,8 +176,12 @@ test('합성 왕복 — ppu 24 (Type Y 복호 후 재시딩) 에서 바깥 텍�
   // source 'central-v0-finder')가 이 ppu 에서 Path B(Y 복호 후 재시딩,
   // 'central-v0-beacon')보다 먼저 이긴다. 어느 경로든 사용자 계약은 같다 —
   // «바깥 텍스트가 나오고 비컨 바이트는 안 나온다». 경로는 집합으로 잠근다.
-  assert.ok(['central-v0-beacon', 'central-v0-finder'].includes(result.hypothesis.source),
-    '비컨 경로가 아니라 ' + result.hypothesis.source + ' 로 풀렸다');
+  // 심 편입 후 기존 3톤 큐브 검출기(central-cube-finder)도 비컨을 집는다 — 크기
+  // 규약을 큐브와 맞춘 덕에 그 포즈도 성립한다. 셋 중 무엇이 이기든 사용자 계약은
+  // 같다: 바깥 텍스트가 나오고 비컨 바이트는 안 나온다.
+  assert.ok(['central-v0-beacon', 'central-v0-finder', 'central-cube-finder']
+    .includes(result.hypothesis.source),
+    '비컨 계열 경로가 아니라 ' + result.hypothesis.source + ' 로 풀렸다');
   assert.equal(startsWithBeaconMagic(result.text), false);
   if (result.hypothesis.source === 'central-v0-beacon') {
     // Path B 로 풀렸을 때만 메타가 실린다 — Path A 는 페이로드를 읽지 않는다.
@@ -246,14 +250,16 @@ test('어댑터를 끄면 ppu 24 는 비컨 바이트를 사용자 텍스트로 
   // 잠근다. 여기서 잠글 진짜 불변식은 하나다:
   //   **어댑터를 끄면 바깥 텍스트가 나오지 않는다** — 즉 바깥 복호를 실제로
   //   해내는 것이 이 어댑터다. (샌 경우도, 실패한 경우도 이 단언을 통과한다.)
-  assert.ok(!(off.ok === true && off.text === text),
-    '어댑터를 껐는데 바깥 텍스트가 나왔다 — 이 어댑터가 하는 일이 없다는 뜻이다');
+  // **의도적 갱신 (심 편입 후)**: 심이 기존 3톤 큐브 검출기를 깨워, 어댑터를 꺼도
+  // 이 ppu 의 합성은 그 경로로 바깥이 풀린다. 그래서 «끄면 안 풀린다» 는 더 이상
+  // 참이 아니고, 여기서 잠글 것은 두 가지다:
+  //   ① 꺼도 켜도 **비컨 바이트가 사용자 텍스트로 새지 않는다** (누출 방지의 정본은
+  //      unpack 매직 + 스캐너 가드 — 이 단언은 디코더 층의 이중 확인이다)
+  //   ② 어댑터의 고유 가치(성긴 포즈 그림자 해소·저증거 프레임)는 V1·V3 왕복과
+  //      오표식 방어 회귀가 잰다.
   if (off.ok === true) {
-    // 뭔가 나왔다면 그것이 비컨 누출임을 확인해 둔다 (문서화 — 스캐너 가드가 막는 자리).
-    assert.equal(startsWithBeaconMagic(off.text), true);
-    const meta = tryReadBeaconFromText(off.text);
-    assert.ok(meta);
-    assert.equal(meta.family, 'O');
+    assert.equal(startsWithBeaconMagic(off.text), false,
+      '어댑터 없이도 비컨 바이트가 새면 안 된다 — 스캐너 가드 앞의 이중 방어');
   }
 
   const on = decodeFrontend(raster);
