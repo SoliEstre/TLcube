@@ -14,6 +14,7 @@ import { createI18n, wireLanguageSwitch } from '/src/i18n.js';
 import { createBeacon } from '/src/beacon.js';
 import { SCANNER_STRINGS } from './strings.js';
 import { startPwaUpdateWatch } from '/src/pwa-update.js';
+import { textStartsWithBeaconMagic } from '/src/centralBeaconWire.js';
 import { decodeFrontend } from '/src/decoder/frontend.js';
 import {
   buildCauseChain,
@@ -98,7 +99,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-22.01';
+export const SCANNER_BUILD = '2026-08-22.02';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -1414,7 +1415,13 @@ function normalizePayload(result) {
 function handleDecodeResult(result, source, session) {
   if (session !== scanSession) return;
 
-  const payload = normalizePayload(result);
+  const payloadRaw = normalizePayload(result);
+  // 중앙 비컨은 문법적으로 완전한 Type Y 코드라 여기까지 «성공» 으로 올라온다.
+  // 그대로 보여주면 매직(제어문자) 탓에 **빈 텍스트**가 뜬다 (실기기 재현 2026-08-22).
+  // 계약(§4.1): 비컨은 결과가 아니라 «바깥 코드가 있다» 는 신호다 — 종료하지 않고
+  // 전체 코드가 잡히게 안내한다.
+  const beaconOnly = payloadRaw !== null && textStartsWithBeaconMagic(payloadRaw);
+  const payload = beaconOnly ? null : payloadRaw;
 
   // 거리(셀당 픽셀 부족)가 복호 실패의 가장 흔한 원인인데 아무 피드백이 없으면
   // 사용자는 무엇을 바꿔야 할지 알 수 없다. 연속 실패가 쌓이면 한 번만 안내한다.
@@ -1445,13 +1452,20 @@ function handleDecodeResult(result, source, session) {
         // 잘림 안내가 떠 있는 동안 «더 가까이» 는 반대 지시라 억제한다.
         setStatus(t('status.closer'));
       }
+      if (beaconOnly) {
+        // 비컨만 읽혔다 = 안쪽은 선명한데 바깥 코드가 안 잡힌다. «더 가까이» 는
+        // 정반대 처방이라 이 안내가 다른 힌트를 덮는다.
+        setStatus(t('status.beaconOnly'));
+      }
     }
     // 자동 크롭 사다리 — 실패가 쌓이면 한 단씩 올리고 성공하면 위에서 0 으로
     // 돌아간다. 잘림(«너무 가깝다») 이면 올리지 않는다 — 확대가 정반대 처방이다.
     // 사용자가 확대를 직접 건드렸으면 개입하지 않는다.
     const nextRung = autoCropRung(failStreakSince === 0 ? 0 : Date.now() - failStreakSince, {
       clipped: clippedFrames >= CLIP_HINT_AFTER_FRAMES
-        || (result && result.clipSide === 'multi'),
+        || (result && result.clipSide === 'multi')
+        // 비컨만 읽히는 상태도 «너무 가깝다» 와 같은 축이다 — 확대는 정반대 처방.
+        || beaconOnly,
       manual: userZoom !== DEFAULT_USER_ZOOM,
     });
     if (nextRung !== autoCropIndex) {
@@ -1463,8 +1477,14 @@ function handleDecodeResult(result, source, session) {
 
   if (!payload) {
     if (source === 'file') {
-      setStatus(t('status.photoNoResult'));
-      showScanToast(t('toast.photoNoResult'));
+      if (beaconOnly) {
+        // 비컨은 읽혔다 — «아무것도 없음» 이 아니라 «전체가 안 보임» 을 말해 준다.
+        setStatus(t('status.beaconPhoto'));
+        showScanToast(t('status.beaconPhoto'));
+      } else {
+        setStatus(t('status.photoNoResult'));
+        showScanToast(t('toast.photoNoResult'));
+      }
       showSupportedStartGate(t('status.startOrPick'));
     }
     return;

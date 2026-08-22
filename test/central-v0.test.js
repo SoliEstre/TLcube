@@ -15,7 +15,9 @@ import {
 } from '../src/finder-selection.js';
 import { CENTRAL_V0_FINDER_CARD } from '../src/finder-card-ui.js';
 import { createGeneratorState, GENERATOR_DEFAULT_FINDER_PATTERN_ID } from '../src/generator-state.js';
-import { FINDER_CELL_ORDER } from '../src/finder-patterns.js';
+import {
+  FINDER_CELL_ORDER, THREE_TONE_CUBE_FINDER_PATTERN_ID, getFinderPattern,
+} from '../src/finder-patterns.js';
 import {
   CORNER_UNIT_OFFSETS, FACES, axialToPixel, hexCorners,
 } from '../src/hexgrid.js';
@@ -59,15 +61,31 @@ test('v0 정본 셀·톤을 중앙 19셀 외곽에서 유도한 닮음 좌표로
   const scene = sceneFor(encoded);
   const n = CENTRAL_V0_SOURCE_N;
   const dataShapeCount = encoded.cellDigits.size * FACES.length;
-  const finderShapes = scene.shapes.slice(dataShapeCount);
+  const tail = scene.shapes.slice(dataShapeCount);
+  // **의도적 갱신 (2026-08-22, 비컨 2차)**: 분리 띠(슬롯 배경 3면)가 비컨보다 먼저
+  // 온다 — 3톤 큐브 파인더와 같은 규약(«데이터 ring-3 과 연결되지 않도록»)이다.
+  const coverShapes = tail.slice(0, FACES.length);
+  assert.equal(coverShapes.length, FACES.length);
+  for (const cover of coverShapes) {
+    assert.strictEqual(cover.color, PALETTE.background,
+      '분리 띠는 배경색이어야 한다 — 다른 색이면 비컨과 데이터가 한 덩어리로 읽힌다');
+  }
+  const finderShapes = tail.slice(FACES.length);
   assert.equal(finderShapes.length, n * n * FACES.length,
     '칠해지는 모듈 위치는 정본 n² 자리 전부여야 한다');
 
   const locatorByKey = new Map(source.map((cell) => [`${cell.i},${cell.j}`, cell]));
   const beacon = encodeCentralBeacon(encoded, CENTRAL_V0_FINDER_PATTERN_ID);
   const slot = centralSlotRadius(scene);
+  // **의도적 갱신 (2026-08-22)**: 크기가 «꽉 채움» 에서 «3톤 큐브 규약» 으로 바뀌었다
+  // (운영자 지시 — 기존 3톤 큐브처럼 크기 맞춰 거리를 띄운다). 축소비는 0.875 라는
+  // 값이 아니라 큐브 패턴 표(radiusCells/slotRadiusCells)에서 유도한다.
+  const cubeSpec = getFinderPattern(THREE_TONE_CUBE_FINDER_PATTERN_ID);
+  const shrink = cubeSpec.radiusCells / cubeSpec.slotRadiusCells;
+  assert.ok(shrink > 0 && shrink < 1,
+    '3톤 큐브 규약이 축소가 아니면 이 검사는 공허하다 — 패턴 표를 확인하라');
   const expectedLayout = {
-    size: slot.radius / n,
+    size: (slot.radius * shrink) / n,
     originX: slot.center.x,
     originY: slot.center.y,
   };

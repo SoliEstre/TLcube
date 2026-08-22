@@ -118,7 +118,7 @@ const MODULE_ORDER = [
   // base211·rs211·mask·formatinfo·layoutY·placementY·cellSurface*)은 전부 이미
   // 이 앞에 있다. tonemap 은 의존 0 이라 어디에 놓아도 위상 정렬이 성립한다.
   // 안 옮기면 assertTopologicalOrder 가 빌드를 막는다.
-  'tonemap', 'encodeY', 'centralBeacon',
+  'tonemap', 'encodeY', 'centralBeaconWire', 'centralBeacon',
   'encode', 'scene', 'raster', 'verify', 'svg', 'png', 'export-render',
   // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
   // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,

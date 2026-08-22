@@ -22,6 +22,7 @@ import { HYBRID_INNER_CUBE_BANDS, bandRadii, hybridCubeRadius } from './bullseye
 import {
   DEFAULT_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
+  THREE_TONE_CUBE_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
 import { digitToRanks } from './lehmer.js';
 import { BULLSEYE_MID, FINDER_CUBE_SEAM, FINDER_CUBE_TONES } from './luminance.js';
@@ -29,6 +30,7 @@ import { getOakFinderPattern } from './finder-oak-patterns.js';
 import { getDaehanFinderPattern } from './finder-daehan.js';
 import { moduleQuad } from './ygrid.js';
 import { CENTRAL_V0_SOURCE_N } from './cellSurfaceFinal.js';
+import { centralBeaconGeometry } from './centralBeaconWire.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from './finder-selection.js';
 import { digitToPattern } from './tonemap.js';
 import { encodeCentralBeacon } from './centralBeacon.js';
@@ -580,8 +582,31 @@ export function buildScene(encoded, options) {
     if (n !== CENTRAL_V0_SOURCE_N) {
       throw new Error(`중앙 v0 비컨 n=${n} 이 정본 ${CENTRAL_V0_SOURCE_N} 과 다르다`);
     }
+    // 크기: 3톤 큐브와 같은 규약 (운영자 지시 2026-08-22 — «기존 3톤 큐브처럼 크기
+    // 맞춰서 거리를 띄워라»). 축소비의 정본은 centralBeaconWire.centralBeaconGeometry()
+    // 하나다 — 역산기(decoder/central-beacon-adapt.js)가 같은 값을 물어야 포즈가
+    // 안 어긋난다. 꽉 채우면(축소비 1) 비컨이 데이터 셀에 붙어 실루엣이 한 덩어리가 된다.
+    const beaconGeometry = centralBeaconGeometry();
+    const beaconShrink = beaconGeometry.shrink;
+    // 분리 띠: 큐브 파인더와 같은 이유(«데이터 ring-3 과 연결되지 않도록»)로 슬롯을
+    // 배경으로 먼저 덮는다. 투명 배경에서는 넣지 않는다 — shape.color 는 null 불가이고
+    // 슬롯엔 원래 아무 shape 도 없어 안 칠하는 것이 곧 배경이다 (큐브 분기와 동일).
+    if (palette.background !== null) {
+      const slotCoverLayout = {
+        size: beaconGeometry.slotRadiusCells * cellSize,
+        originX: center.x,
+        originY: center.y,
+      };
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(0, 0, face, slotCoverLayout),
+          color: palette.background,
+        });
+      }
+    }
     const v0Layout = {
-      size: centralSlotRadius(layout, center) / CENTRAL_V0_SOURCE_N,
+      size: (centralSlotRadius(layout, center) * beaconShrink) / CENTRAL_V0_SOURCE_N,
       originX: center.x,
       originY: center.y,
     };

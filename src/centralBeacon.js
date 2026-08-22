@@ -12,6 +12,7 @@
  */
 
 import { encodeY } from './encodeY.js';
+import { BEACON_MAGIC } from './centralBeaconWire.js';
 import {
   DIGIT_COUNT, ECC_LEVEL,
 } from './formatinfo.js';
@@ -38,32 +39,22 @@ import { rsDecode } from './rs211.js';
 import { maskSub } from './mask.js';
 import { unframe } from './header.js';
 
-/**
- * **「나는 페이로드가 아니다」 구분자** (계약서 `central-v0-beacon.md` §4.1).
- *
- * 중앙 비컨은 **문법적으로 완전한 Type Y v0 코드**다. 그래서 스캐너가 중앙 블록만
- * 잡으면 그것을 독립 코드로 복호해 **성공하고**, 사용자에게 메타데이터 바이트를
- * 「내용」으로 보여준다 — 바깥 URL 대신 쓰레기가 뜬다. 실패가 조용한 종류다.
- *
- * 왜 제어문자인가 — 이 페이로드 경로는 `packBeaconText` 가 `String.fromCharCode` 로
- * 만들고 `unpackBeaconText` 가 **ASCII 7bit 밖을 거부**한다. 그래서 「UTF-8 선두로
- * 불가능한 바이트(0xF5\~0xFF)」 같은 **구조적** 보장은 쓸 수 없다. 대신 생성기의
- * 페이로드 경로(URL · 텍스트 · Wi-Fi · vCard)가 만들어 낼 수 없는 제어문자를 쓴다.
- *
- * 매직만 믿지 않는다 — `unpackBeaconBytes` 의 복합 검사(길이 == 순 페이로드 ·
- * 예약 바이트 전부 0 · 계열/파인더 인덱스 유효 · 포맷 digit < 6)가 2차 방어다.
- * 매직 2바이트는 그 앞에 두는 **싼 1차 관문**이고, 20 B 예산에서 2 B 는 예약분으로 낸다.
- */
-export const BEACON_MAGIC = Object.freeze([0x01, 0x0f]); // SOH · SI
+// 매직(«나는 페이로드가 아니다» 구분자)의 정본은 centralBeaconWire.js 다 — 스캐너
+// 표시 경로가 같은 표식을 봐야 하는데 이 모듈은 encodeY 체인을 끌어 스캐너 번들에
+// 넣기엔 무겁다. 여기서 re-export 하므로 기존 소비자의 import 는 그대로다.
+export { BEACON_MAGIC, textStartsWithBeaconMagic } from './centralBeaconWire.js';
 
 /** 이 계약의 스키마. 자리가 남아 있어야 진화할 수 있다. */
 export const BEACON_SCHEMA_VERSION = 0;
 
 /**
- * 비컨 데이터 톤. encodeY 기본값(ADR 0003 v3.1 §4b, 2톤 메인)과 같다 —
- * 새 상수가 아니라 그 기본값을 여기에 고정한 것이다.
+ * 비컨 데이터 톤 = 3 (Y0T). **운영자 지시 2026-08-22 — «컬러 3톤 + 입체감».**
+ * 3톤이면 데이터 셀이 digitToRanks 순위 삼중으로 그려져 바깥 셀과 같은
+ * 아이소메트릭 큐브 문법이 된다. 2톤(Y0)은 면당 명/암 이진이라 평평한 QR 처럼
+ * 보였다. 용량은 동일하다 — 둘 다 셀당 base-6 digit (실측 20 B · 36심볼 · t=7).
+ * 와이어: formatIndex 1(Y0) → 3(Y0T). 승격 전이라 레거시 비컨은 없다.
  */
-export const BEACON_TONES = 2;
+export const BEACON_TONES = 3;
 
 /** 마커 구성 플래그 비트 자리 — encoded 필드 이름 순서. 값을 손으로 매지 않는다. */
 export const BEACON_FLAG_NAMES = Object.freeze([

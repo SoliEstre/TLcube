@@ -49,7 +49,9 @@ test('바닥이 깔렸다 — 칠해지는 모듈 위치는 정본 n² 전부 (l
 
   const encoded = encode('beacon-floor', { version: 2, eccLevel: 'M', centralV0: true });
   const scene = sceneFor(encoded);
-  const finderShapes = scene.shapes.slice(encoded.cellDigits.size * FACES.length);
+  // 앞의 FACES.length 개는 분리 띠(슬롯 배경) — 2026-08-22 비컨 2차.
+  const finderShapes = scene.shapes.slice(
+    encoded.cellDigits.size * FACES.length + FACES.length);
   const painted = new Set();
   for (let s = 0; s < finderShapes.length; s += FACES.length) {
     painted.add(Math.floor(s / FACES.length));
@@ -62,7 +64,13 @@ test('바닥이 깔렸다 — 칠해지는 모듈 위치는 정본 n² 전부 (l
 test('팔레트 잠금 — 비컨 렌더 색이 palette.bullseyeLight 와 같지 않다', () => {
   const encoded = encode('beacon-palette', { version: 2, eccLevel: 'M', centralV0: true });
   const scene = sceneFor(encoded);
-  const finderShapes = scene.shapes.slice(encoded.cellDigits.size * FACES.length);
+  const tail = scene.shapes.slice(encoded.cellDigits.size * FACES.length);
+  // 분리 띠는 배경색이고(순백 아님), 비컨 면은 levels 만 쓴다.
+  for (const cover of tail.slice(0, FACES.length)) {
+    assert.strictEqual(cover.color, PALETTE.background);
+    assert.notDeepEqual(cover.color, PALETTE.bullseyeLight);
+  }
+  const finderShapes = tail.slice(FACES.length);
   assert.ok(finderShapes.length > 0);
   for (const shape of finderShapes) {
     assert.notDeepEqual(shape.color, PALETTE.bullseyeLight);
@@ -212,5 +220,48 @@ test('구분자 — 매직은 생성기 페이로드 경로가 만들 수 없는
     // 인쇄 가능 문자로 시작한다. 여기에 'T' 같은 글자를 쓰면 「TL…」로 시작하는
     // 사용자 텍스트가 매직을 통과한다.
     assert.ok(b < 0x20, `매직 바이트가 인쇄 가능 문자다: ${b} — 사용자 텍스트와 겹친다`);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 비컨 2차 (운영자 지시 2026-08-22) — 3톤 입체감 · 스캐너 가드 배선
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('3톤 — 비컨 면 색이 palette.levels 세 값을 전부 쓴다 (평평한 2톤 회귀 방지)', () => {
+  const encoded = encode('beacon-3tone', { version: 2, eccLevel: 'M', centralV0: true });
+  const scene = sceneFor(encoded);
+  const beaconShapes = scene.shapes.slice(
+    encoded.cellDigits.size * FACES.length + FACES.length);
+  const used = new Set(beaconShapes.map((shape) => PALETTE.levels.indexOf(shape.color)));
+  // 2톤(Y0)이면 중간 레벨(1)이 통째로 사라져 평평한 QR 처럼 보인다 — 실기기에서
+  // 운영자가 지적한 «입체감 없음» 이 바로 그 상태였다. BEACON_TONES 를 확인하라.
+  assert.deepEqual([...used].sort(), [0, 1, 2]);
+});
+
+test('스캐너 배선 — 표시 경로가 매직을 보고 비컨을 내용으로 보여주지 않는다', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../sites/tlscan/scanner.js', import.meta.url), 'utf8');
+  // 배선이 끊기면 비컨이 «빈 텍스트» 결과로 뜬다 (실기기 재현 2026-08-22 — 매직이
+  // 제어문자라 화면에 아무것도 안 보이고, 스캔은 «성공» 한 것으로 끝난다).
+  assert.match(src, /from '\/src\/centralBeaconWire\.js'/,
+    '스캐너가 매직 표식 모듈을 안 문다');
+  const handle = src.slice(
+    src.indexOf('function handleDecodeResult'), src.indexOf('function startFrameLoop'));
+  assert.match(handle, /textStartsWithBeaconMagic\(/,
+    'handleDecodeResult 가 매직을 안 본다 — 비컨이 빈 텍스트로 표시된다');
+  assert.match(handle, /status\.beaconOnly/, '카메라 경로의 비컨 안내가 없다');
+  assert.match(handle, /status\.beaconPhoto/, '사진 경로의 비컨 안내가 없다');
+});
+
+test('스캐너 문구 — 비컨 안내 2키가 모든 언어에 있다 (하나만 빠져도 잡히게)', async () => {
+  const { SCANNER_STRINGS } = await import('../sites/tlscan/strings.js');
+  const langs = Object.keys(SCANNER_STRINGS);
+  assert.ok(langs.length >= 8, '언어가 ' + langs.length + '개뿐이다 — 8언어 체계가 줄었다');
+  for (const lang of langs) {
+    for (const key of ['status.beaconOnly', 'status.beaconPhoto']) {
+      assert.equal(typeof SCANNER_STRINGS[lang][key], 'string',
+        lang + ' 에 ' + key + ' 가 없다 — 그 언어에서 안내가 키 이름 그대로 뜬다');
+      assert.ok(SCANNER_STRINGS[lang][key].length > 0);
+    }
   }
 });

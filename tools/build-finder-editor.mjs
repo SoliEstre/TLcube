@@ -39,7 +39,7 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // 쓴다. encodeY 의 로컬 의존 layoutY 도 여기 온다 (capacityY 옆 — cell-editor
   // 표와 같은 자리). 위상 검사는 정적이라 이 편집기가 비컨을 실제로 렌더하든
   // 안 하든 번들에 들어와야 한다.
-  'tonemap', 'encodeY', 'centralBeacon',
+  'tonemap', 'encodeY', 'centralBeaconWire', 'centralBeacon',
   'gf256', 'rs', 'qr', 'encode', 'scene', 'raster', 'png',
 ]);
 

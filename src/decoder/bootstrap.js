@@ -164,6 +164,15 @@ import {
   sampleCubeCell,
   sampleCubeGrid,
 } from './cube-detect.js';
+import {
+  CENTRAL_BEACON_FINDER_KIND,
+  discoverCentralBeaconFinders,
+  familiesForBeaconMeta,
+  isCentralV0CubeHypothesis,
+  isPatternFinderKind,
+  outerPoseFromInnerH,
+  tryReadBeaconFromText,
+} from './central-beacon-adapt.js';
 import { sampleHexCell, sampleHexGrid } from './grid-sample.js';
 import { estimateHomography4, projectPoint } from './homography.js';
 import { estimateLocalWarp, validateOReferences } from './reference-validate.js';
@@ -1565,8 +1574,7 @@ function cornerMarkerHypotheses(luma, finder, family, options) {
 
 function cellFinderHypotheses(luma, finder, family) {
   const H = finderTransform(finder);
-  const patternFinder = finder.finderKind === 'cell-mask'
-    || finder.finderKind === 'three-tone-cube';
+  const patternFinder = isPatternFinderKind(finder.finderKind);
   if (!H || !patternFinder || !['hex', 'tri'].includes(family)) return [];
   // daehan 은 A/K **패치(외곽)로 넘어가지 않는다** — 중앙 육각 안에서만. 그 육각
   // 코어는 Type A 와 Type O 가 좌표까지 같다 (실측 2026-08-19: prefix 전수 일치,
@@ -1595,7 +1603,9 @@ function cellFinderHypotheses(luma, finder, family) {
       margin: finder.orientationMargin,
     },
     finder,
-    source: finder.finderKind === 'three-tone-cube' ? 'central-cube-finder' : 'cell-finder',
+    source: finder.finderKind === 'three-tone-cube' ? 'central-cube-finder'
+      : finder.finderKind === CENTRAL_BEACON_FINDER_KIND ? 'central-v0-finder'
+        : 'cell-finder',
     hypothesisId: family + '-' + k + '-' + finder.finderKind + '-' + finder.patternId
       + '-' + (finder.geometryMode || 'affine'),
     luma,
@@ -1700,16 +1710,21 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
   }
 
   const patternFinders = finders.filter((finder) => finder
-    && (finder.finderKind === 'cell-mask' || finder.finderKind === 'three-tone-cube'));
+    && isPatternFinderKind(finder.finderKind));
   if (patternFinders.length > 0) {
     const hasCentralCube = !patternFinders.some((finder) => finder.finderKind === 'cell-mask')
       && patternFinders.some(
         (finder) => finder.finderKind === 'three-tone-cube',
     );
+    const hasCentralBeacon = patternFinders.some(
+      (finder) => finder.finderKind === CENTRAL_BEACON_FINDER_KIND,
+    );
     return ok({
       families: ['hex', 'tri'],
       classification: ok({
-        family: hasCentralCube ? 'three-tone-cube' : 'cell-mask',
+        family: hasCentralCube ? 'three-tone-cube'
+          : hasCentralBeacon ? CENTRAL_BEACON_FINDER_KIND
+            : 'cell-mask',
         hypotheses: patternFinders.map((finder) => ({
           finderKind: finder.finderKind,
           patternId: finder.patternId,
@@ -1718,7 +1733,9 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
         })),
         diagnostics: { orientationSource: 'finder-pattern-or-three-tone-rank' },
       }),
-      fallback: hasCentralCube ? 'central-cube-body-validated' : 'cell-mask-body-validated',
+      fallback: hasCentralCube ? 'central-cube-body-validated'
+        : hasCentralBeacon ? 'central-v0-body-validated'
+          : 'cell-mask-body-validated',
     });
   }
 
@@ -2551,6 +2568,23 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
 
   hypotheses.push(...qrGeometryHypotheses(luma, qrResult, options));
   hypotheses.push(...qrWindowReferenceRefinedHypotheses(luma, qrResult, options));
+
+  /*
+   * 중앙 v0 비컨 블록 → 바깥 hex/tri 가설 (Path A).
+   *
+   * 붙일 자리는 discoverCentralCubeFinders 이지만, 그 함수가 ok 를 내면
+   * shouldProbeQr 가 꺼지고 중앙 QR·symbol-clipped 경로가 죽는다. 그래서
+   * **기존 파인더가 실패한 뒤에만** 가설을 추가한다. finderResult.ok 는
+   * 한 비트도 안 바뀐다 (불스아이·3톤·셀마스크·QR 탐색 계약 그대로).
+   */
+  if (!finderResult.ok && !cubeResult.ok && options.centralBeacon !== false) {
+    const beaconFinders = discoverCentralBeaconFinders(luma, options);
+    for (const finder of beaconFinders) {
+      for (const family of ['hex', 'tri']) {
+        hypotheses.push(...cellFinderHypotheses(luma, finder, family));
+      }
+    }
+  }
 
   let unique = deduplicateHypotheses(hypotheses);
   if (unique.length === 0) {
@@ -3519,6 +3553,79 @@ function relocationTargets(validated, attemptedFamilies) {
   return { families: Array.from(targets), evidence };
 }
 
+/**
+ * Type Y v0 복호 결과가 비컨 매직이면 사용자에게 보여 주지 않고 바깥 격자를 시딩한다.
+ * 매직이 없으면 독립 Type Y v0 — 기존대로 페이로드를 그대로 둔다.
+ */
+function recastCentralBeaconCandidates(luma, validated, options) {
+  if (options.centralBeacon === false) return null;
+  const beacons = [];
+  const rest = [];
+  for (const candidate of validated.candidates) {
+    if (isCentralV0CubeHypothesis(candidate.hypothesis)) {
+      const meta = tryReadBeaconFromText(candidate.text);
+      if (meta) {
+        beacons.push({ candidate, meta });
+        continue;
+      }
+    }
+    rest.push(candidate);
+  }
+  if (beacons.length === 0) return null;
+
+  const outerHyps = [];
+  for (const { candidate, meta } of beacons) {
+    const pose = outerPoseFromInnerH(candidate.hypothesis.H);
+    if (!pose) continue;
+    const families = familiesForBeaconMeta(meta);
+    for (const family of families) {
+      for (const k of uniqueDimensions(family)) {
+        outerHyps.push({
+          family,
+          k,
+          orientation: Number.isInteger(candidate.hypothesis.orientation)
+            ? candidate.hypothesis.orientation : 0,
+          rotationDegrees: Number.isFinite(candidate.hypothesis.rotationDegrees)
+            ? candidate.hypothesis.rotationDegrees
+            : (Number.isInteger(candidate.hypothesis.orientation)
+              ? candidate.hypothesis.orientation : 0) * 120,
+          centerQr: false,
+          H: pose.H,
+          canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+          geometryResidual: Number.isFinite(candidate.hypothesis.geometryResidual)
+            ? candidate.hypothesis.geometryResidual : 0,
+          finder: {
+            finderKind: CENTRAL_BEACON_FINDER_KIND,
+            patternId: CENTRAL_BEACON_FINDER_KIND,
+            center: pose.center,
+            cellSize: pose.cellSize,
+            H: pose.H,
+          },
+          source: 'central-v0-beacon',
+          hypothesisId: 'beacon-' + family + '-' + k + '-' + candidate.hypothesisId,
+          beacon: {
+            modulePitch: pose.modulePitch,
+            outerCellSize: pose.cellSize,
+            family: meta.family,
+            finderPatternId: meta.finderPatternId,
+          },
+        });
+      }
+    }
+  }
+  if (outerHyps.length === 0) {
+    return rest.length > 0
+      ? { kind: 'keep-rest', candidates: rest }
+      : { kind: 'fail' };
+  }
+  const outerValidated = validateGridHypotheses(luma, outerHyps, options);
+  if (outerValidated.ok) {
+    return { kind: 'recast', validated: outerValidated, hypotheses: outerHyps };
+  }
+  if (rest.length > 0) return { kind: 'keep-rest', candidates: rest };
+  return { kind: 'fail', detail: outerValidated };
+}
+
 export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
   const geometry = withStage(options, 'proposal', () =>
     enumerateGeometryHypotheses(luma, familyEvidence, options));
@@ -3642,6 +3749,38 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
         evidence: relocation.evidence,
         enabled: relocationEnabled,
       },
+    });
+  }
+  const beaconRecast = recastCentralBeaconCandidates(luma, validated, options);
+  if (beaconRecast && beaconRecast.kind === 'recast') {
+    return ok({
+      hypotheses: beaconRecast.hypotheses,
+      candidates: beaconRecast.validated.candidates,
+      diagnostics: {
+        geometry: geometry.diagnostics,
+        validation: beaconRecast.validated.diagnostics,
+        centralBeaconRecast: true,
+      },
+    });
+  }
+  if (beaconRecast && beaconRecast.kind === 'keep-rest') {
+    return ok({
+      hypotheses: geometry.hypotheses,
+      candidates: beaconRecast.candidates,
+      diagnostics: {
+        geometry: geometry.diagnostics,
+        validation: validated.diagnostics,
+        centralBeaconSuppressed: true,
+      },
+    });
+  }
+  if (beaconRecast && beaconRecast.kind === 'fail') {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+      stage: 'central-beacon-outer',
+      pipelineCode: 'BODY_RS_FAILED',
+      cause: 'beacon-decoded-outer-failed',
+      geometryDiagnostics: geometry.diagnostics,
+      beaconFailure: beaconRecast.detail,
     });
   }
   return ok({

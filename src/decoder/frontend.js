@@ -95,6 +95,7 @@ function compactHypothesis(candidate) {
     cellSizePx: cellPxFromH(hypothesis.H),
     anchors: pointsOf(hypothesis.anchors),
     vertices: pointsOf(hypothesis.vertices),
+    ...(hypothesis.beacon ? { beacon: hypothesis.beacon } : {}),
   };
 }
 
