@@ -212,6 +212,12 @@
     .export-section { order: -1; margin-bottom: 14px; }
     .export-section .export-heading { margin-top: 0; }
   }
+  /* 미리보기는 다운로드 «바로 아래» (운영자 항목 7, 2026-08-23). 데스크톱에서
+     내보내기가 order:-1 로 맨 위라, 미리보기도 -1 을 받고 DOM 동순(내보내기 뒤)
+     타이브레이크로 그 바로 아래 붙는다. 모바일은 block 이라 DOM 순서 그대로. */
+  @media (min-width: 761px) {
+    #backdropSection { order: -1; margin-bottom: 14px; }
+  }
   .panel {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 10px; padding: 16px;
@@ -681,6 +687,18 @@
   @media (max-width: 420px) {
     #quietModeCards { gap: 4px; }
     #quietModeCards .toggle-card { padding-inline: 1px; font-size: 9px; }
+  }
+  /* 큐브 입체감도 한 줄 유지 (운영자 항목 6, 2026-08-23) — 안전영역 관용구의 복제.
+     grid repeat(5) 는 안 된다: 이 행은 정식 4장·lab 5장이라(«강» 카드가 lab 전용
+     hidden) 칸이 남는다. flex nowrap 은 hidden 카드가 줄에서 빠져 양쪽 다 선다.
+     이 행은 안전영역과 달리 부제(card-sub)가 있어 접힘을 허용한다 — 카드가 높아지는
+     쪽이 줄바꿈으로 4+1 이 깨지는 쪽보다 낫다는 판정. */
+  #renderProfileCards { flex-wrap: nowrap; gap: 6px; }
+  #renderProfileCards .toggle-card { min-width: 0; padding-inline: 2px; font-size: 10px; }
+  #renderProfileCards .card-sub { font-size: 8.5px; }
+  @media (max-width: 420px) {
+    #renderProfileCards { gap: 4px; }
+    #renderProfileCards .toggle-card { padding-inline: 1px; font-size: 9px; }
   }
 
   /* ── 용량 초과 하이라이트 (텍스트·URL 입력) ─────────────────────────
@@ -1615,45 +1633,9 @@
       </div>
       <p class="hint" id="bgModeHint"></p>
 
-      <!-- 배치 미리보기 — 투명 배경 전용 (사용자 지시 2026-08-09).
-           코드를 얹을 표면 사진을 깔고 드래그/휠 줌으로 위치를 맞춰, 실루엣 검출이
-           될 자리인지 **인쇄 전에** 눈과 수치로 확인한다. 렌더 산출물에는 안 들어간다. -->
-      <div id="backdropSection" style="display:none">
-        <div class="section-heading-row">
-          <label class="section-heading" data-i18n="g060">TL 배치 미리보기 (TL 삽입할 곳 이미지 넣어서 미리 배치해보기)</label>
-          <button type="button" class="help-dot" data-help="g903" aria-expanded="false"
-                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
-              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
-            </svg>
-          </button>
-        </div>
-        <div class="row">
-          <div class="export-pair" style="flex:1">
-            <button id="backdropPick" type="button" data-i18n="g061">이미지 선택…</button>
-            <button id="backdropClear" type="button" class="icon-btn" title="배경 이미지 제거" style="display:none" data-i18n-attr="title:g013">✕</button>
-          </div>
-          <button id="backdropFit" type="button" style="display:none" data-i18n="g062">위치 초기화</button>
-        </div>
-        <input type="file" id="backdropFile" accept="image/*" style="display:none">
-        <!-- #21 (운영자 지시): 다중행 설명은 «?»(g903) 로 이관 완료 — 여기엔 조작 단서
-             한 줄만 남긴다. «내보내는 파일에 안 들어가요» 는 바로 아래 g935 가 정본. -->
-        <p class="hint" id="backdropHint" data-i18n-html="g300">미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠 또는 핀치로 확대/축소</b><span data-i18n="g083">할 수 있어요.</span></p>
-        <!-- 이 줄은 두 번 좁혔다가 **다시 넓혔다** — 이번엔 사실이 됐기 때문이다.
-             ① 운영자 초안 «안전영역을 여건에 맞춰 자동으로 골라 준다» → 그 경로가 없었다.
-             ② «색 판단에는 반영된다» → 그것도 아니었다 (2026-08-16 적대 검증 ⑤).
-                표면 휘도를 보는 분기가 |sepW − sepB| ≤ 0.02 뒤에 있었는데 UI 로 만들 수
-                있는 팔레트가 전부 그 문턱 밖이라(slate 0.1689 · ember 0.2507 ·
-                mono 0.0257 · 커스텀 0.1629~0.1764) **한 번도 실행되지 않았다**.
-             ③ 과업 #18 에서 그 입력을 1급으로 올렸다 (src/quiet-auto.js). 문턱 0.02 는
-                그대로 두고 **순서**를 바꿨다 — 셀 분리 바닥(BG_SEPARATION_MIN)을 둘 다
-                넘으면 표면 밝기가 흰/검을 **결정한다**. 실측 slate 기준 표면 휘도
-                0.5 를 넘으면 검정으로 뒤집힌다. 즉 이제 «반영된다» 가 참이다.
-             여전히 참이 아닌 것 하나는 그대로 적는다 — 사진은 **내보내는 파일에 안 들어간다**. -->
-        <p class="hint" id="backdropQuietNote" data-i18n="g935">* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, 아래 «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.</p>
-        <p class="hint" id="backdropVerdict" style="display:none"></p>
-      </div>
+      <!-- «TL 배치 미리보기» 는 여기(배경색 아래)에 있다가 2026-08-23 운영자 지시(항목 7)로
+           다운로드/복사하기 아래로 이동했다 — export-section 뒤를 보라. 표면 휘도 →
+           안전영역 자동색 인과는 그대로다 (문구 g902·g935 는 방향어를 중립화했다). -->
 
       <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
       <div class="section-heading-row">
@@ -2116,6 +2098,50 @@
         </div>
       </div>
     </section>
+
+    <!-- 배치 미리보기 — 투명 배경 전용 (사용자 지시 2026-08-09). 코드를 얹을 표면 사진을
+         깔고 드래그/휠 줌으로 위치를 맞춰, 실루엣 검출이 될 자리인지 **인쇄 전에** 눈과
+         수치로 확인한다. 렌더 산출물에는 안 들어간다.
+         위치는 2026-08-23 운영자 지시(항목 7)로 배경색 아래에서 다운로드/복사하기 아래로
+         이동 — 데스크톱은 CSS order 짝(-1·DOM 동순)이, 모바일은 DOM 순서가 이 자리를
+         «다운로드 바로 아래» 로 만든다. 표면 휘도 → 안전영역 자동색 인과는 그대로다. -->
+    <div id="backdropSection" style="display:none">
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g060">TL 배치 미리보기 (TL 삽입할 곳 이미지 넣어서 미리 배치해보기)</label>
+          <button type="button" class="help-dot" data-help="g903" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
+        <div class="row">
+          <div class="export-pair" style="flex:1">
+            <button id="backdropPick" type="button" data-i18n="g061">이미지 선택…</button>
+            <button id="backdropClear" type="button" class="icon-btn" title="배경 이미지 제거" style="display:none" data-i18n-attr="title:g013">✕</button>
+          </div>
+          <button id="backdropFit" type="button" style="display:none" data-i18n="g062">위치 초기화</button>
+        </div>
+        <input type="file" id="backdropFile" accept="image/*" style="display:none">
+        <!-- #21 (운영자 지시): 다중행 설명은 «?»(g903) 로 이관 완료 — 여기엔 조작 단서
+             한 줄만 남긴다. «내보내는 파일에 안 들어가요» 는 바로 아래 g935 가 정본. -->
+        <p class="hint" id="backdropHint" data-i18n-html="g300">미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠 또는 핀치로 확대/축소</b><span data-i18n="g083">할 수 있어요.</span></p>
+        <!-- 이 줄은 두 번 좁혔다가 **다시 넓혔다** — 이번엔 사실이 됐기 때문이다.
+             ① 운영자 초안 «안전영역을 여건에 맞춰 자동으로 골라 준다» → 그 경로가 없었다.
+             ② «색 판단에는 반영된다» → 그것도 아니었다 (2026-08-16 적대 검증 ⑤).
+                표면 휘도를 보는 분기가 |sepW − sepB| ≤ 0.02 뒤에 있었는데 UI 로 만들 수
+                있는 팔레트가 전부 그 문턱 밖이라(slate 0.1689 · ember 0.2507 ·
+                mono 0.0257 · 커스텀 0.1629~0.1764) **한 번도 실행되지 않았다**.
+             ③ 과업 #18 에서 그 입력을 1급으로 올렸다 (src/quiet-auto.js). 문턱 0.02 는
+                그대로 두고 **순서**를 바꿨다 — 셀 분리 바닥(BG_SEPARATION_MIN)을 둘 다
+                넘으면 표면 밝기가 흰/검을 **결정한다**. 실측 slate 기준 표면 휘도
+                0.5 를 넘으면 검정으로 뒤집힌다. 즉 이제 «반영된다» 가 참이다.
+             여전히 참이 아닌 것 하나는 그대로 적는다 — 사진은 **내보내는 파일에 안 들어간다**. -->
+        <p class="hint" id="backdropQuietNote" data-i18n="g935">* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.</p>
+        <p class="hint" id="backdropVerdict" style="display:none"></p>
+    </div>
+
     <div id="info"></div>
     <div id="error"></div>
   </div>
@@ -2338,7 +2364,7 @@ const GENERATOR_STRINGS = {
     "g601": "지금 적용",
     "g900": "모듈(셀) 개수를 정하는 축이에요. 개수가 늘면 담을 수 있는 양도 같이 늘어요.\n같은 인쇄 크기에서 해상도가 높을수록 모듈 하나가 작아져서, 더 가까이서 찍어야 읽혀요.\n저 = 원거리·대형 인쇄(광고판) · 중 = 1~3 m 포스터급 · 고 = 근거리·대용량.\n자동은 내용 크기에 맞춰 해상도를 먼저 올리고, 최대에서도 안 들어가면 «안정성 ⇄ 용량» 단계를 내려요.\n카드 그림은 실루엣 대비 검출기 크기예요 — 검출기 셀 수는 고정이라 해상도가 오를수록 상대적으로 작아져요.",
     "g901": "오류정정(ECC) 비중을 정하는 축이에요. 정정에 자리를 많이 줄수록 담을 양이 줄어요.\n보정 우선 = ECC H(≈40%) · 표준 = ECC M(25%) · 대용량 = ECC L(≈12%).\n자동은 입력 크기에 맞춰 H → M → L 순서로 처음 들어가는 레벨을 골라요.\n아래 자체검증 뱃지는 지금 설정으로 실제 렌더한 그림을 되읽은 결과예요 — 인쇄·촬영 조건이 아니라 «렌더가 자기 계약을 지켰는가» 만 봐요.",
-    "g902": "투명 = 배경 없이 코드만. PNG 는 알파 채널, SVG 는 배경 요소가 아예 없어요.\n흰색 = 밝은 인쇄물·문서 위에 얹을 때. 검정 = 어두운 지면·화면에 얹을 때.\n투명을 고르면 실효 배경이 «코드를 얹는 표면» 이 돼요 — 그 표면과 셀 색의 분리는 생성 시점에 보증할 수 없으니 아래 «TL 배치 미리보기» 로 실측해 보세요.",
+    "g902": "투명 = 배경 없이 코드만. PNG 는 알파 채널, SVG 는 배경 요소가 아예 없어요.\n흰색 = 밝은 인쇄물·문서 위에 얹을 때. 검정 = 어두운 지면·화면에 얹을 때.\n투명을 고르면 실효 배경이 «코드를 얹는 표면» 이 돼요 — 그 표면과 셀 색의 분리는 생성 시점에 보증할 수 없으니 «TL 배치 미리보기» 로 실측해 보세요.",
     "g903": "코드를 실제로 얹을 자리의 사진을 넣으면 미리보기 뒤에 깔려요.\n미리보기에서 드래그로 이동, 휠 또는 핀치로 확대/축소해 위치를 맞춰 보세요.\n코드 둘레의 표면 휘도와 셀 레벨의 분리를 실측해서, 인쇄 전에 «여기 놓으면 읽히는가» 를 수치로 알려줘요.\n내보내는 PNG·SVG 에는 이 사진이 안 들어가요.",
     "g904": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\n자동 = 배경이 투명이면 고대비 색을 깔고, 불투명이면 배경이 이미 안전영역이라 생략해요.\n없음 = 여백 없이 코드만. 흰색·검정 = 그 색으로 고정.\n고대비 = 흰색·검정 중에서 골라요. ① 셀 색과 너무 가까운 쪽을 먼저 떨어뜨려요 — 여백이 코드에 들러붙으면 실루엣이 코드보다 커져요. ② 둘 다 통과하면 «TL 배치 미리보기» 사진에서 잰 표면 밝기와 더 멀리 떨어진 쪽을 골라요. 밝은 표면이면 검정, 어두운 표면이면 흰색이에요.\n사진을 안 넣었으면 ② 를 못 하니 셀 색과 더 멀리 떨어진 쪽으로 정해요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
     "g905": "TL스캐너로 스캔이 안 될 때 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.\n좌상·우상·좌하·우하 = 코드 바깥 네 모서리 중 한 곳.\n안쪽 = Type O/A 는 중앙 QR, Type Y 는 Y2 윈도 β.\n없음 = QR 없이 코드만 내보내요.\n중앙 QR 변형은 코드 폭 13 cm 이상 인쇄를 권장해요.",
@@ -2358,7 +2384,7 @@ const GENERATOR_STRINGS = {
     "g931": "설명 보기",
     "g932": "설명 닫기",
     "g934": "어두운 지면",
-    "g935": "* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, 아래 «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.",
+    "g935": "* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.",
     "g941": "권장값 자동",
     "g942": "검출기 없음",
     "g943": "코너 4블록",
@@ -2750,7 +2776,7 @@ const GENERATOR_STRINGS = {
     "g601": "Apply now",
     "g900": "This axis sets the number of modules (cells). More modules, more capacity.\nAt the same printed size, higher resolution makes each module smaller, so the camera has to come closer.\nLow = long range, large prints (billboards) · Mid = poster range, 1-3 m · High = close range, high capacity.\nAuto raises resolution first, and steps “Robustness ⇄ capacity” down only if the content still does not fit at maximum.\nThe card art shows detector size against the silhouette — the detector uses a fixed cell count, so it shrinks in relative terms as resolution rises.",
     "g901": "This axis sets how much room goes to error correction (ECC). More correction means less payload.\nCorrection first = ECC H (≈40%) · Standard = ECC M (25%) · High capacity = ECC L (≈12%).\nAuto walks H → M → L and takes the first level the content fits into.\nThe self-check badge below re-reads the image this setting actually rendered. It judges whether the render kept its own contract — not how a print or a camera will behave.",
-    "g902": "Transparent = code only. PNG keeps an alpha channel; SVG has no background element at all.\nWhite = for light prints and documents. Black = for dark stock or screens.\nWith transparent, the effective background becomes the surface you put the code on. That separation cannot be guaranteed at generation time, so measure it with the TL placement preview below.",
+    "g902": "Transparent = code only. PNG keeps an alpha channel; SVG has no background element at all.\nWhite = for light prints and documents. Black = for dark stock or screens.\nWith transparent, the effective background becomes the surface you put the code on. That separation cannot be guaranteed at generation time, so measure it with the TL placement preview.",
     "g903": "Drop in a photo of the spot where the code will actually go; it sits behind the preview.\nDrag to move and use the wheel (or pinch on touch) to zoom until the placement matches.\nThe preview measures the surface luminance around the code against the cell levels, so you get a number for “will this spot read?” before printing.\nThe photo never goes into the exported PNG or SVG.",
     "g904": "The margin around the code — the equivalent of a QR quiet zone.\nAuto = lays down a high-contrast colour when the background is transparent, and skips it when the background is opaque (the background is already the quiet zone).\nNone = no margin. White / Black = fixed to that colour.\nHigh contrast = chooses between white and black. (1) A colour that sits too close to the cell levels is dropped first — a margin that blends into the code makes the silhouette larger than the code. (2) If both pass, it picks the one further from the surface brightness measured in the placement preview: black on a bright surface, white on a dark one.\nWith no photo loaded step (2) cannot run, so it falls back to whichever colour separates further from the cell levels.\nThe fallback QR block is excluded — it carries its own quiet zone.",
     "g905": "Prints a QR alongside the code as a fallback route when the TL scanner cannot read it.\nTop-left / top-right / bottom-left / bottom-right = one of the four outer corners.\nInner = a centre QR on Type O/A, the Y2 window β on Type Y.\nNone = export the code alone, without a QR.\nThe centre-QR variant is meant for prints at least 13 cm wide.",
@@ -2770,7 +2796,7 @@ const GENERATOR_STRINGS = {
     "g931": "Show explanation",
     "g932": "Close explanation",
     "g934": "Dark stock",
-    "g935": "* The surface photo measures the brightness around the code and feeds the Safe area choice below — it is what decides whether Auto and High contrast lay down white or black. The photo itself never goes into the exported PNG or SVG.",
+    "g935": "* The surface photo measures the brightness around the code and feeds the Safe area choice — it is what decides whether Auto and High contrast lay down white or black. The photo itself never goes into the exported PNG or SVG.",
     "g941": "Auto pick",
     "g942": "No detector",
     "g943": "4 corner blocks",
@@ -3162,7 +3188,7 @@ const GENERATOR_STRINGS = {
     "g601": "今すぐ適用",
     "g900": "モジュール（セル）の数を決める軸です。数が増えれば入る量も増えます。\n同じ印刷サイズなら解像度が高いほど 1 モジュールが小さくなり、より近づいて撮る必要があります。\n低 = 遠距離・大型印刷（看板）· 中 = 1〜3 m のポスター級 · 高 = 近距離・大容量。\n自動はまず解像度を上げ、最大でも入らないときに「安定性 ⇄ 容量」を下げます。\nカードの図はシルエットに対する検出器の大きさです — 検出器のセル数は固定なので、解像度が上がるほど相対的に小さくなります。",
     "g901": "誤り訂正（ECC）の割合を決める軸です。訂正に多く割くほど、入るデータ量は減ります。\n訂正優先 = ECC H（≈40%）· 標準 = ECC M（25%）· 大容量 = ECC L（≈12%）。\n自動は H → M → L の順で、最初に収まるレベルを選びます。\n下の自己検証バッジは、この設定で実際にレンダリングした画像を読み直した結果です。印刷や撮影の条件ではなく「レンダリングが自分の契約を守ったか」だけを見ます。",
-    "g902": "透明 = コードだけ。PNG はアルファチャンネル、SVG は背景要素そのものがありません。\n白 = 明るい印刷物・文書の上に置くとき。黒 = 暗い紙面・画面に置くとき。\n透明を選ぶと実効的な背景は「コードを貼る面」になります。その面とセル色の分離は生成時点では保証できないので、下の「TL 配置プレビュー」で実測してください。",
+    "g902": "透明 = コードだけ。PNG はアルファチャンネル、SVG は背景要素そのものがありません。\n白 = 明るい印刷物・文書の上に置くとき。黒 = 暗い紙面・画面に置くとき。\n透明を選ぶと実効的な背景は「コードを貼る面」になります。その面とセル色の分離は生成時点では保証できないので、「TL 配置プレビュー」で実測してください。",
     "g903": "コードを実際に置く場所の写真を入れると、プレビューの背後に敷かれます。\nプレビュー上でドラッグして移動、ホイールまたはピンチで拡大／縮小して位置を合わせてください。\nコード周囲の面の輝度とセルレベルの分離を実測し、印刷前に「ここに置いて読めるか」を数値で示します。\n書き出す PNG・SVG にはこの写真は入りません。",
     "g904": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\n自動 = 背景が透明なら高コントラスト色を敷き、不透明なら背景がすでに安全領域なので省略します。\nなし = 余白なし。白・黒 = その色に固定。\n高コントラスト = 白と黒から選びます。① セル色に近すぎる方をまず落とします — 余白がコードに貼り付くとシルエットがコードより大きくなります。② 両方通れば「TL 配置プレビュー」写真で測った面の明るさから遠い方を選びます。明るい面なら黒、暗い面なら白です。\n写真を入れていない場合は ② ができないので、セル色から遠い方に決めます。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
     "g905": "TL スキャナで読めなかったときの代替経路になる QR を、コードと一緒に印刷します。\n左上・右上・左下・右下 = コード外側の四隅のいずれか。\n内側 = Type O/A は中央 QR、Type Y は Y2 ウィンドウ β。\nなし = QR を付けずコードだけ書き出します。\n中央 QR 版はコード幅 13 cm 以上の印刷を推奨します。",
@@ -3182,7 +3208,7 @@ const GENERATOR_STRINGS = {
     "g931": "説明を表示",
     "g932": "説明を閉じる",
     "g934": "暗い紙面",
-    "g935": "* 入れた表面画像はコード周囲の面の明るさを測り、下の「安全領域」の「自動」「高コントラスト」が白と黒のどちらを敷くかを決めるのに使います。写真そのものは書き出す PNG・SVG には入りません。",
+    "g935": "* 入れた表面画像はコード周囲の面の明るさを測り、「安全領域」の「自動」「高コントラスト」が白と黒のどちらを敷くかを決めるのに使います。写真そのものは書き出す PNG・SVG には入りません。",
     "g941": "推奨を自動",
     "g942": "検出器なし",
     "g943": "四隅4ブロック",
@@ -3573,7 +3599,7 @@ const GENERATOR_STRINGS = {
     "g601": "Appliquer maintenant",
     "g900": "Cet axe fixe le nombre de modules (cellules). Plus de modules, plus de capacité.\nÀ taille d'impression égale, une résolution plus haute rend chaque module plus petit : il faut donc s'approcher davantage.\nBasse = longue distance, grands tirages (panneaux) · Moyenne = affiches, 1-3 m · Haute = courte distance, grande capacité.\nEn mode auto, la résolution monte d'abord ; l'échelon « Robustesse ⇄ capacité » ne descend que si le contenu ne rentre toujours pas au maximum.\nLe dessin de la carte montre la taille du détecteur face à la silhouette — le détecteur occupe un nombre de cellules fixe, il paraît donc plus petit à mesure que la résolution monte.",
     "g901": "Cet axe fixe la part réservée à la correction d'erreurs (ECC). Plus de correction, moins de charge utile.\nCorrection d'abord = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacité = ECC L (≈12%).\nEn mode auto, H → M → L sont parcourus et le premier niveau où le contenu rentre est retenu.\nLe badge d'auto-vérification ci-dessous relit l'image que ces réglages ont réellement produite. Il juge si le rendu a tenu son propre contrat — pas ce que donneront une impression ou un appareil photo.",
-    "g902": "Transparent = le code seul. Le PNG conserve un canal alpha ; le SVG n'a aucun élément d'arrière-plan.\nBlanc = pour les imprimés et documents clairs. Noir = pour les supports sombres et les écrans.\nAvec transparent, l'arrière-plan effectif devient « la surface qui porte le code ». Cette séparation ne peut pas être garantie à la génération : mesurez-la avec l'aperçu de placement TL ci-dessous.",
+    "g902": "Transparent = le code seul. Le PNG conserve un canal alpha ; le SVG n'a aucun élément d'arrière-plan.\nBlanc = pour les imprimés et documents clairs. Noir = pour les supports sombres et les écrans.\nAvec transparent, l'arrière-plan effectif devient « la surface qui porte le code ». Cette séparation ne peut pas être garantie à la génération : mesurez-la avec l'aperçu de placement TL.",
     "g903": "Déposez une photo de l'endroit où le code ira réellement : elle se place derrière l'aperçu.\nDans l'aperçu, faites glisser pour déplacer et zoomez à la molette ou par pincement jusqu'à ce que le placement corresponde.\nL'aperçu mesure la luminance de la surface autour du code face aux niveaux de cellule : vous obtenez un chiffre pour « est-ce que ça se lira ici ? » avant d'imprimer.\nCette photo n'entre jamais dans le PNG ni le SVG exportés.",
     "g904": "La marge autour du code — l'équivalent de la zone de silence d'un QR.\nAuto = pose une couleur très contrastée quand l'arrière-plan est transparent, et s'efface quand il est opaque (l'arrière-plan fait déjà office de zone de silence).\nAucune = pas de marge. Blanc / Noir = fixé à cette couleur.\nContraste élevé = choisit entre blanc et noir. (1) La couleur trop proche des niveaux de cellule est écartée d'abord — une marge qui se fond dans le code rend la silhouette plus grande que le code. (2) Si les deux passent, c'est celle qui s'éloigne le plus de la luminosité mesurée dans l'aperçu de placement : noir sur une surface claire, blanc sur une surface sombre.\nSans photo chargée, l'étape (2) ne peut pas s'exécuter : c'est alors la couleur la plus éloignée des niveaux de cellule qui l'emporte.\nLe bloc du QR de secours est exclu — il porte sa propre zone de silence.",
     "g905": "Imprime un QR à côté du code comme voie de secours quand le scanner TL n'arrive pas à le lire.\nEn haut à gauche / en haut à droite / en bas à gauche / en bas à droite = l'un des quatre angles extérieurs.\nIntérieur = un QR central sur les Types O/A, la fenêtre Y2 β sur le Type Y.\nAucun = exporte le code seul, sans QR.\nLa variante à QR central vise des impressions d'au moins 13 cm de large.",
@@ -3593,7 +3619,7 @@ const GENERATOR_STRINGS = {
     "g931": "Afficher l'explication",
     "g932": "Fermer l'explication",
     "g934": "Support sombre",
-    "g935": "* La photo de surface mesure la luminosité autour du code et alimente le choix de la zone de sécurité ci-dessous — c'est elle qui décide si « Auto » et « Contraste élevé » posent du blanc ou du noir. La photo elle-même n'entre jamais dans le PNG ni le SVG exportés.",
+    "g935": "* La photo de surface mesure la luminosité autour du code et alimente le choix de la zone de sécurité — c'est elle qui décide si « Auto » et « Contraste élevé » posent du blanc ou du noir. La photo elle-même n'entre jamais dans le PNG ni le SVG exportés.",
     "g941": "Auto (recommandé)",
     "g942": "Aucun détecteur",
     "g943": "4 blocs d'angle",
@@ -3984,7 +4010,7 @@ const GENERATOR_STRINGS = {
     "g601": "Applica ora",
     "g900": "Questo asse fissa il numero di moduli (celle). Più moduli, più capacità.\nA parità di dimensione di stampa, una risoluzione più alta rende ogni modulo più piccolo, quindi la fotocamera deve avvicinarsi.\nBassa = lunga distanza, stampe grandi (cartelloni) · Media = distanza da manifesto, 1-3 m · Alta = distanza ravvicinata, grande capacità.\nIn automatico la risoluzione sale per prima; il gradino «Robustezza ⇄ capacità» scende solo se al massimo il contenuto ancora non entra.\nIl disegno sulla scheda mostra la dimensione del rilevatore rispetto alla silhouette: il rilevatore occupa un numero fisso di celle, quindi in proporzione rimpicciolisce al salire della risoluzione.",
     "g901": "Questo asse fissa quanto spazio va alla correzione d'errore (ECC). Più correzione, meno payload.\nPrima la correzione = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacità = ECC L (≈12%).\nIn automatico vengono percorsi H → M → L e si prende il primo livello in cui il contenuto entra.\nIl badge di autoverifica qui sotto rilegge l'immagine che queste impostazioni hanno effettivamente prodotto: giudica se il rendering ha rispettato il proprio contratto, non come si comporteranno stampa o fotocamera.",
-    "g902": "Trasparente = solo il codice. Il PNG mantiene un canale alfa; l'SVG non ha alcun elemento di sfondo.\nBianco = per stampe e documenti chiari. Nero = per supporti scuri e schermi.\nCon trasparente lo sfondo effettivo diventa «la superficie su cui appoggi il codice»: quella separazione non è garantibile in fase di generazione, quindi misurala con l'anteprima di posizionamento TL qui sotto.",
+    "g902": "Trasparente = solo il codice. Il PNG mantiene un canale alfa; l'SVG non ha alcun elemento di sfondo.\nBianco = per stampe e documenti chiari. Nero = per supporti scuri e schermi.\nCon trasparente lo sfondo effettivo diventa «la superficie su cui appoggi il codice»: quella separazione non è garantibile in fase di generazione, quindi misurala con l'anteprima di posizionamento TL.",
     "g903": "Inserisci una foto del punto in cui il codice andrà davvero: si dispone dietro l'anteprima.\nNell'anteprima trascina per spostare e zooma con rotella o pizzico finché il posizionamento non corrisponde.\nL'anteprima misura la luminanza della superficie attorno al codice rispetto ai livelli di cella: prima di stampare ottieni un numero per «qui si leggerà?».\nQuesta foto non finisce mai nel PNG o nell'SVG esportati.",
     "g904": "È il margine attorno al codice, l'equivalente della zona di quiete di un QR.\nAuto = stende un colore ad alto contrasto quando lo sfondo è trasparente e lo salta quando lo sfondo è opaco (lo sfondo è già zona di quiete).\nNessuno = nessun margine. Bianco / Nero = fissato a quel colore.\nContrasto elevato = sceglie tra bianco e nero. (1) Il colore troppo vicino ai livelli di cella viene scartato per primo: un margine che si fonde nel codice rende la silhouette più grande del codice. (2) Se passano entrambi, vince quello più lontano dalla luminosità di superficie misurata nell'anteprima di posizionamento: nero su superficie chiara, bianco su superficie scura.\nSenza foto caricata il passo (2) non può essere eseguito, quindi si ripiega sul colore che si separa di più dai livelli di cella.\nIl blocco del QR di riserva è escluso: porta con sé la propria zona di quiete.",
     "g905": "Stampa un QR accanto al codice come via di riserva quando lo scanner TL non riesce a leggerlo.\nIn alto a sinistra / in alto a destra / in basso a sinistra / in basso a destra = uno dei quattro angoli esterni.\nInterno = QR centrale sui Tipi O/A, finestra Y2 β sul Tipo Y.\nNessuno = esporta il solo codice, senza QR.\nLa variante con QR centrale è pensata per stampe larghe almeno 13 cm.",
@@ -4004,7 +4030,7 @@ const GENERATOR_STRINGS = {
     "g931": "Mostra la spiegazione",
     "g932": "Chiudi la spiegazione",
     "g934": "Supporto scuro",
-    "g935": "* La foto della superficie misura la luminosità attorno al codice e alimenta la scelta dell'area di sicurezza qui sotto: è ciò che decide se «Auto» e «Contrasto elevato» stendono bianco o nero. La foto in sé non finisce mai nel PNG o nell'SVG esportati.",
+    "g935": "* La foto della superficie misura la luminosità attorno al codice e alimenta la scelta dell'area di sicurezza: è ciò che decide se «Auto» e «Contrasto elevato» stendono bianco o nero. La foto in sé non finisce mai nel PNG o nell'SVG esportati.",
     "g941": "Auto (consigliato)",
     "g942": "Nessun rilevatore",
     "g943": "4 blocchi d'angolo",
@@ -4395,7 +4421,7 @@ const GENERATOR_STRINGS = {
     "g601": "Jetzt anwenden",
     "g900": "Diese Achse legt die Anzahl der Module (Zellen) fest. Mehr Module, mehr Kapazität.\nBei gleicher Druckgröße wird jedes Modul mit höherer Auflösung kleiner, die Kamera muss also näher heran.\nNiedrig = große Entfernung, große Drucke (Plakatwände) · Mittel = Plakatabstand, 1-3 m · Hoch = Nahbereich, große Kapazität.\nIm Automatikmodus steigt zuerst die Auflösung; die Stufe „Robustheit ⇄ Kapazität“ sinkt nur, wenn der Inhalt auch beim Maximum nicht hineinpasst.\nDie Grafik auf der Karte zeigt die Detektorgröße im Verhältnis zur Silhouette — der Detektor belegt eine feste Zellenzahl und wirkt daher mit steigender Auflösung relativ kleiner.",
     "g901": "Diese Achse legt fest, wie viel Platz die Fehlerkorrektur (ECC) bekommt. Mehr Korrektur bedeutet weniger Nutzdaten.\nKorrektur zuerst = ECC H (≈40%) · Standard = ECC M (25%) · Große Kapazität = ECC L (≈12%).\nIm Automatikmodus wird H → M → L durchlaufen und die erste Stufe genommen, in die der Inhalt passt.\nDas Selbstprüfungs-Badge unten liest das Bild zurück, das diese Einstellungen tatsächlich erzeugt haben. Es beurteilt, ob das Rendering seinen eigenen Vertrag eingehalten hat — nicht, wie sich Druck oder Kamera verhalten werden.",
-    "g902": "Transparent = nur der Code. Das PNG behält einen Alphakanal, das SVG hat überhaupt kein Hintergrundelement.\nWeiß = für helle Drucke und Dokumente. Schwarz = für dunkle Bedruckstoffe und Bildschirme.\nBei transparent wird die Fläche, auf die Sie den Code legen, zum tatsächlichen Hintergrund. Diese Trennung lässt sich beim Erzeugen nicht garantieren — messen Sie sie mit der TL-Platzierungsvorschau unten.",
+    "g902": "Transparent = nur der Code. Das PNG behält einen Alphakanal, das SVG hat überhaupt kein Hintergrundelement.\nWeiß = für helle Drucke und Dokumente. Schwarz = für dunkle Bedruckstoffe und Bildschirme.\nBei transparent wird die Fläche, auf die Sie den Code legen, zum tatsächlichen Hintergrund. Diese Trennung lässt sich beim Erzeugen nicht garantieren — messen Sie sie mit der TL-Platzierungsvorschau.",
     "g903": "Legen Sie ein Foto der Stelle ein, an die der Code wirklich kommt; es liegt hinter der Vorschau.\nZiehen Sie in der Vorschau zum Verschieben und zoomen Sie mit Mausrad oder Pinch-Geste, bis die Platzierung stimmt.\nDie Vorschau misst die Flächenluminanz rund um den Code gegen die Zellstufen — so bekommen Sie schon vor dem Druck eine Zahl für „wird das hier gelesen?“.\nDieses Foto landet nie im exportierten PNG oder SVG.",
     "g904": "Der Rand um den Code — das Gegenstück zur Ruhezone eines QR.\nAuto = legt bei transparentem Hintergrund eine kontraststarke Farbe an und entfällt bei deckendem Hintergrund (der Hintergrund ist dann schon die Ruhezone).\nKeine = kein Rand. Weiß / Schwarz = auf diese Farbe festgelegt.\nHoher Kontrast = wählt zwischen Weiß und Schwarz. (1) Die Farbe, die den Zellstufen zu nahe kommt, fällt zuerst weg — ein Rand, der mit dem Code verschmilzt, macht die Silhouette größer als den Code. (2) Bestehen beide, gewinnt die Farbe mit dem größeren Abstand zur Flächenhelligkeit aus der Platzierungsvorschau: Schwarz auf heller, Weiß auf dunkler Fläche.\nOhne geladenes Foto lässt sich Schritt (2) nicht ausführen, dann entscheidet der größere Abstand zu den Zellstufen.\nDer Block des Ersatz-QR bleibt ausgenommen — er bringt seine eigene Ruhezone mit.",
     "g905": "Druckt neben dem Code einen QR als Ersatzweg, falls der TL-Scanner ihn nicht lesen kann.\nOben links / oben rechts / unten links / unten rechts = eine der vier äußeren Ecken.\nInnen = zentraler QR bei Typ O/A, Y2-Fenster β bei Typ Y.\nKeine = exportiert nur den Code, ohne QR.\nDie Variante mit zentralem QR ist für Drucke ab 13 cm Breite gedacht.",
@@ -4415,7 +4441,7 @@ const GENERATOR_STRINGS = {
     "g931": "Erklärung anzeigen",
     "g932": "Erklärung schließen",
     "g934": "Dunkler Bedruckstoff",
-    "g935": "* Das Flächenfoto misst die Helligkeit rund um den Code und fließt in die Wahl des Sicherheitsbereichs unten ein — es entscheidet, ob „Auto“ und „Hoher Kontrast“ Weiß oder Schwarz anlegen. Das Foto selbst landet nie im exportierten PNG oder SVG.",
+    "g935": "* Das Flächenfoto misst die Helligkeit rund um den Code und fließt in die Wahl des Sicherheitsbereichs ein — es entscheidet, ob „Auto“ und „Hoher Kontrast“ Weiß oder Schwarz anlegen. Das Foto selbst landet nie im exportierten PNG oder SVG.",
     "g941": "Auto (empfohlen)",
     "g942": "Kein Detektor",
     "g943": "4 Eckblöcke",
@@ -4806,7 +4832,7 @@ const GENERATOR_STRINGS = {
     "g601": "Aplicar ahora",
     "g900": "Este eje fija el número de módulos (celdas). Más módulos, más capacidad.\nCon el mismo tamaño impreso, a mayor resolución cada módulo se hace más pequeño, así que hay que acercar más la cámara.\nBaja = larga distancia, impresiones grandes (vallas) · Media = distancia de cartel, 1-3 m · Alta = corta distancia, gran capacidad.\nEn modo automático primero sube la resolución, y el escalón «Robustez ⇄ capacidad» solo baja si el contenido sigue sin entrar en el máximo.\nEl dibujo de la tarjeta muestra el tamaño del detector frente a la silueta: el detector ocupa un número fijo de celdas, así que se ve relativamente más pequeño a medida que sube la resolución.",
     "g901": "Este eje fija cuánto espacio se reserva a la corrección de errores (ECC). Cuanta más corrección, menos carga útil.\nCorrección primero = ECC H (≈40%) · Estándar = ECC M (25%) · Gran capacidad = ECC L (≈12%).\nEn modo automático se recorre H → M → L y se toma el primer nivel en el que entra el contenido.\nLa insignia de autocomprobación de abajo vuelve a leer la imagen que estos ajustes han producido realmente: juzga si el renderizado ha cumplido su propio contrato, no cómo se comportarán la impresión o la cámara.",
-    "g902": "Transparente = solo el código. El PNG conserva un canal alfa; el SVG no tiene ningún elemento de fondo.\nBlanco = para impresos y documentos claros. Negro = para soportes oscuros y pantallas.\nCon transparente, el fondo efectivo pasa a ser «la superficie sobre la que apoya el código». Esa separación no se puede garantizar al generar, así que mídala con la vista previa de colocación TL de abajo.",
+    "g902": "Transparente = solo el código. El PNG conserva un canal alfa; el SVG no tiene ningún elemento de fondo.\nBlanco = para impresos y documentos claros. Negro = para soportes oscuros y pantallas.\nCon transparente, el fondo efectivo pasa a ser «la superficie sobre la que apoya el código». Esa separación no se puede garantizar al generar, así que mídala con la vista previa de colocación TL.",
     "g903": "Añada una foto del sitio donde irá realmente el código: se coloca detrás de la vista previa.\nEn la vista previa, arrastre para mover y use la rueda o el pellizco para hacer zoom hasta que la colocación encaje.\nLa vista previa mide la luminancia de la superficie alrededor del código frente a los niveles de celda, de modo que obtiene una cifra para «¿se leerá aquí?» antes de imprimir.\nEsa foto nunca entra en el PNG ni en el SVG exportados.",
     "g904": "Es el margen alrededor del código, el equivalente de la zona de silencio de un QR.\nAuto = pone un color de alto contraste cuando el fondo es transparente y se omite cuando el fondo es opaco (el fondo ya hace de zona de silencio).\nNinguno = sin margen. Blanco / Negro = fijado a ese color.\nContraste alto = elige entre blanco y negro. (1) Primero se descarta el color que queda demasiado cerca de los niveles de celda: un margen que se funde con el código hace que la silueta sea mayor que el código. (2) Si pasan los dos, gana el que más se aleja del brillo de superficie medido en la vista previa de colocación: negro sobre superficie clara, blanco sobre superficie oscura.\nSin foto cargada no se puede ejecutar el paso (2), así que decide el color que más se separa de los niveles de celda.\nEl bloque del QR de respaldo queda excluido: lleva su propia zona de silencio.",
     "g905": "Imprime un QR junto al código como vía de respaldo cuando el escáner TL no consigue leerlo.\nArriba a la izquierda / arriba a la derecha / abajo a la izquierda / abajo a la derecha = una de las cuatro esquinas exteriores.\nInterior = QR central en los Tipos O/A, ventana Y2 β en el Tipo Y.\nNinguno = exporta solo el código, sin QR.\nLa variante con QR central está pensada para impresiones de al menos 13 cm de ancho.",
@@ -4826,7 +4852,7 @@ const GENERATOR_STRINGS = {
     "g931": "Mostrar la explicación",
     "g932": "Cerrar la explicación",
     "g934": "Soporte oscuro",
-    "g935": "* La foto de la superficie mide el brillo alrededor del código y alimenta la elección del área de seguridad de abajo: es lo que decide si «Auto» y «Contraste alto» ponen blanco o negro. La foto en sí nunca entra en el PNG ni en el SVG exportados.",
+    "g935": "* La foto de la superficie mide el brillo alrededor del código y alimenta la elección del área de seguridad: es lo que decide si «Auto» y «Contraste alto» ponen blanco o negro. La foto en sí nunca entra en el PNG ni en el SVG exportados.",
     "g941": "Auto (recomendado)",
     "g942": "Sin detector",
     "g943": "4 bloques de esquina",
@@ -5217,7 +5243,7 @@ const GENERATOR_STRINGS = {
     "g601": "Aplicar agora",
     "g900": "Este eixo define o número de módulos (células). Mais módulos, mais capacidade.\nCom o mesmo tamanho impresso, quanto maior a resolução mais pequeno fica cada módulo, por isso a câmara tem de se aproximar.\nBaixa = longa distância, impressões grandes (outdoors) · Média = distância de cartaz, 1-3 m · Alta = curta distância, grande capacidade.\nNo modo automático a resolução sobe primeiro, e o degrau «Robustez ⇄ capacidade» só desce se o conteúdo continuar a não caber no máximo.\nO desenho do cartão mostra o tamanho do detector em relação à silhueta — o detector ocupa um número fixo de células, por isso parece relativamente mais pequeno à medida que a resolução sobe.",
     "g901": "Este eixo define quanto espaço vai para a correção de erros (ECC). Quanta mais correção, menos carga útil.\nCorreção primeiro = ECC H (≈40%) · Padrão = ECC M (25%) · Grande capacidade = ECC L (≈12%).\nNo modo automático percorre-se H → M → L e fica o primeiro nível onde o conteúdo cabe.\nO emblema de autoverificação abaixo relê a imagem que estas definições produziram de facto: julga se a renderização cumpriu o seu próprio contrato, não como se vão comportar a impressão ou a câmara.",
-    "g902": "Transparente = só o código. O PNG mantém um canal alfa; o SVG não tem qualquer elemento de fundo.\nBranco = para impressos e documentos claros. Preto = para suportes escuros e ecrãs.\nCom transparente, o fundo efetivo passa a ser «a superfície onde assenta o código». Essa separação não pode ser garantida no momento da geração, por isso meça-a com a pré-visualização de posicionamento TL abaixo.",
+    "g902": "Transparente = só o código. O PNG mantém um canal alfa; o SVG não tem qualquer elemento de fundo.\nBranco = para impressos e documentos claros. Preto = para suportes escuros e ecrãs.\nCom transparente, o fundo efetivo passa a ser «a superfície onde assenta o código». Essa separação não pode ser garantida no momento da geração, por isso meça-a com a pré-visualização de posicionamento TL.",
     "g903": "Junte uma foto do local onde o código vai ficar mesmo: fica por trás da pré-visualização.\nNa pré-visualização, arraste para mover e amplie com a roda ou com uma pinça até o posicionamento coincidir.\nA pré-visualização mede a luminância da superfície à volta do código face aos níveis de célula, dando um número para «vai ler-se aqui?» antes de imprimir.\nEssa foto nunca entra no PNG nem no SVG exportados.",
     "g904": "É a margem à volta do código, o equivalente à zona de silêncio de um QR.\nAuto = assenta uma cor de contraste elevado quando o fundo é transparente e é dispensada quando o fundo é opaco (o fundo já é a zona de silêncio).\nNenhuma = sem margem. Branco / Preto = fixado nessa cor.\nContraste elevado = escolhe entre branco e preto. (1) A cor que fica demasiado perto dos níveis de célula é descartada primeiro — uma margem que se funde no código faz a silhueta ficar maior do que o código. (2) Se ambas passarem, ganha a que mais se afasta do brilho da superfície medido na pré-visualização de posicionamento: preto sobre superfície clara, branco sobre superfície escura.\nSem foto carregada o passo (2) não pode correr, por isso decide a cor que mais se separa dos níveis de célula.\nO bloco do QR de reserva fica de fora: traz a sua própria zona de silêncio.",
     "g905": "Imprime um QR ao lado do código como via de reserva quando o Scanner TL não consegue lê-lo.\nCanto superior esquerdo / superior direito / inferior esquerdo / inferior direito = um dos quatro cantos exteriores.\nInterior = QR central nos Tipos O/A, janela Y2 β no Tipo Y.\nNenhum = exporta apenas o código, sem QR.\nA variante com QR central destina-se a impressões com pelo menos 13 cm de largura.",
@@ -5237,7 +5263,7 @@ const GENERATOR_STRINGS = {
     "g931": "Mostrar a explicação",
     "g932": "Fechar a explicação",
     "g934": "Suporte escuro",
-    "g935": "* A foto da superfície mede o brilho à volta do código e alimenta a escolha da área de segurança abaixo — é ela que decide se «Auto» e «Contraste elevado» assentam branco ou preto. A foto em si nunca entra no PNG nem no SVG exportados.",
+    "g935": "* A foto da superfície mede o brilho à volta do código e alimenta a escolha da área de segurança — é ela que decide se «Auto» e «Contraste elevado» assentam branco ou preto. A foto em si nunca entra no PNG nem no SVG exportados.",
     "g941": "Auto (recomendado)",
     "g942": "Sem detector",
     "g943": "4 blocos de canto",
@@ -5669,7 +5695,7 @@ const els = {
   toneCardsNormal: $('toneCardsNormal'), toneCardsAdvanced: $('toneCardsAdvanced'),
   faceGain: $('faceGain'), faceGainValue: $('faceGainValue'), faceGainRow: $('faceGainRow'),
   qrUrl: $('qrUrl'),
-  // 공용 컨트롤 (QR 위치 6택 + 병행 표시 + 게이지 + 장식 이미지)
+  // 공용 컨트롤 (QR 위치 7택 + 병행 표시 + 게이지 + 장식 이미지)
   cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
   decorSection: $('decorSection'),
   decorPickL: $('decorPickL'), decorPickR: $('decorPickR'),
@@ -7084,7 +7110,11 @@ function renderQrPositionUi() {
   const finderTakesCentre = isDaehanFinderPatternId(generatorState.finderPatternId)
     || isCentralV0FinderPatternId(generatorState.finderPatternId);
   if (finderTakesCentre && generatorState.qrPosition === 'inner') {
-    generatorState.qrPosition = 'outer';
+    // ⚠ 예전엔 스키마 밖 값 'outer' 를 대입하던 잠복 버그였다 (2026-08-23 수리) —
+    // 그 값이 살아 나가면 카드 active 가 전부 꺼지고 resolveFallback 이
+    // {mode:'corner', corner:'outer'} 를 만들어 cornerBlockOrigin 이 던진다.
+    // finder-selection 스냅샷 계약의 복원값을 그대로 쓴다.
+    generatorState.qrPosition = generatorState.previousOuterQrPosition || 'TL';
   }
   els.qrPosInner.title = finderTakesCentre ? t('g581') : (isY ? t('g406') : t('g407'));
   for (const card of els.qrPositionCards.children) {
@@ -7115,7 +7145,7 @@ for (const card of els.typeCards.children) {
   });
 }
 
-// ── 일반 모드: QR 링크 포함 위치 카드 (6택 — 안쪽/좌상/우상/좌하/우하/없음) ──────
+// ── 일반 모드: QR 링크 포함 위치 카드 (7택 — 안쪽/면/좌상/우상/좌하/우하/없음) ──────
 
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
@@ -9579,8 +9609,9 @@ function encodeOptsFor(cfg) {
     const opts = { centerQr: cfg.fallback.mode === 'center' };
     if (cfg.versionA !== undefined) opts.version = cfg.versionA;
     // ⚠ turnA 는 **true 일 때만** 싣는다. cornerMarker 와 상호배제라 encodeA 가
-    //   던지는데(src/encodeA.js:113), 지금 이 경로는 cornerMarker 를 아예 안 주므로
-    //   충돌이 실재하지 않는다 — O-CM/A-CM 이 UI 에 붙는 날 여기가 같이 바뀐다.
+    //   던진다(src/encodeA.js:144). O-CM/A-CM 이 UI 에 붙은 뒤로는 아래 else-if
+    //   체인이 cornerMarker 를 실제로 싣는다 — 우선순위(다이한 > 코너 예약 > turnA)가
+    //   그 충돌을 정의된 쪽으로 해소한다.
     //   false 로도 안 채우는 이유: cfg.turnA 는 A 분기에서만 쓰이고 O/Y 인코더는
     //   이 키를 모른다. 「true 일 때만」이면 비-A 옵션 표면이 한 비트도 안 넓어진다.
     // 중앙 v0 비컨 — O 분기와 같은 주입이다 (encodeA 의 centralV0 회계·배타는
@@ -10028,7 +10059,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-23.03';
+const GENERATOR_BUILD = '2026-08-23.04';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 
