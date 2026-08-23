@@ -2382,7 +2382,7 @@ function blockReferenceSearch(luma, initialH, n, tones, options, cfg) {
     },
   };
 }
-function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
+function cellSurfaceSeedReport(n, orientation, seedId, cellSurface, estimatedNFallback = false) {
   if (!cellSurface.ok) {
     return {
       n,
@@ -2397,6 +2397,7 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
       layoutId: null,
       orientationGate: null,
       ambiguous: false,
+      ...(estimatedNFallback ? { estimatedNFallback: true } : {}),
     };
   }
   const diag = cellSurface.diagnostics
@@ -2423,6 +2424,7 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
     orientationGateApplied: diag.orientationGateApplied === true,
     ambiguous: diag.ambiguous === true || cellSurface.ambiguous === true,
     orientationMargin: Number.isFinite(diag.orientationMargin) ? diag.orientationMargin : null,
+    ...(estimatedNFallback ? { estimatedNFallback: true } : {}),
   };
 }
 
@@ -2534,7 +2536,8 @@ function softCellSurfaceShapes(shapes) {
   return out;
 }
 
-function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports) {
+// export 는 짝 테스트(F-15 표식 폴백 잠금)용이다 — 라이브 호출자는 이 파일 안뿐이다.
+export function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports) {
   for (const shape of shapes.candidates) {
     const center = liftPoint(shape.center, reduced.factor);
     const vertices = shape.vertices.map((point) => liftPoint(point, reduced.factor));
@@ -2545,7 +2548,13 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
       && SUPPORTED_N.includes(shape.estimatedN)
       ? [shape.estimatedN]
       : SUPPORTED_N;
-    for (const n of candidateNs) {
+    // F-15: 블록 로케이터의 estimatedN·family 는 표식이지 증거가 아니다. 표식된 n 이
+    // 평가에서 아무 가설도 못 만들면 나머지 n 으로 되돌아간다 — 틀린 표식이 평가
+    // 집합을 접지 못하게 (강등 + geometryReports 의 estimatedNFallback 진단).
+    // 로케이터(shrink) shape 는 n 별 사본이 이미 전부 나오므로 대상이 아니다.
+    const blockLocatorMarked = shape.cellSurfaceOnly === true
+      && shape.blockLocator && SUPPORTED_N.includes(shape.estimatedN);
+    const evaluateN = (n, estimatedNFallback) => {
       for (let orientation = 0; orientation < 3; orientation += 1) {
         const seeds = cubeGeometrySeeds(
           n,
@@ -2622,6 +2631,7 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
               orientation,
               seed.id,
               cellSurface,
+              estimatedNFallback,
             ));
             if (cellSurface.ok && cellSurface.accepted) {
               const patches = cellSurface.hypothesisPatches
@@ -2725,6 +2735,15 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
             });
           }
         }
+      }
+    };
+    const hypothesesBeforeShape = hypotheses.length;
+    for (const n of candidateNs) evaluateN(n, false);
+    // F-15: 표식된 n 의 평가가 가설 0 이면 나머지 n 재개방 (위 주석 참조).
+    if (blockLocatorMarked && hypotheses.length === hypothesesBeforeShape) {
+      for (const n of SUPPORTED_N) {
+        if (n === shape.estimatedN) continue;
+        evaluateN(n, true);
       }
     }
   }

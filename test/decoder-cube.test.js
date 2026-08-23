@@ -19,7 +19,13 @@ import {
 } from '../src/luminance.js';
 import { CORNER_UNIT_OFFSETS } from '../src/hexgrid.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
-import { detectCubeHypotheses } from '../src/decoder/cube-detect.js';
+import {
+  UNVERIFIED_CUBE_DETECTION,
+  detectCubeHypotheses,
+  hypothesesFromShapes,
+} from '../src/decoder/cube-detect.js';
+import { detectCellSurfaceBlockShapes } from '../src/decoder/cellsurface-block-detect.js';
+import { embed960, renderFinal } from './cellSurface-block-locator.helpers.mjs';
 import { distortImage } from './harness/distort.mjs';
 import { listLumaDumps, lumaToRaster, readLumaDump } from '../tools/read-luma.mjs';
 
@@ -605,4 +611,37 @@ test('F-93: calibration minimumSeamContrast 는 positiveRayCount 카운터에 �
     `오버라이드 문턱이 카운터에 닿아야 한다 (F-93): base=${baseCount}`);
   assert.notEqual(shakenCandidate.seam.positiveRayCount, baseCount,
     '문턱을 흔들었는데 카운터가 불변이면 cfg 가 배선되지 않은 것이다');
+});
+
+test('F-15: 블록 로케이터 estimatedN 표식이 틀려도 평가 집합이 접히지 않는다 (폴백 + 진단)', {
+  timeout: 120_000,
+}, () => {
+  const frame = embed960(renderFinal('v0', 0, 15));
+  const luma = rasterToLuma(frame);
+  const detected = detectCellSurfaceBlockShapes(luma, {});
+  const shape = detected.shapes.find((entry) => entry.estimatedN === 13);
+  assert.ok(shape, 'v0 프레임에서 n=13 블록 shape 가 나와야 한다: '
+    + JSON.stringify(detected.shapes.map((entry) => entry.estimatedN)));
+  const options = { enableCellSurfaceY: true };
+  const cfg = { ...UNVERIFIED_CUBE_DETECTION };
+
+  // 전제 — 올바른 표식은 가설을 만든다.
+  const okHypotheses = [];
+  hypothesesFromShapes(luma, { factor: 1 }, { candidates: [shape] }, options, cfg, okHypotheses, []);
+  assert.ok(okHypotheses.length > 0, '전제 위반: 올바른 표식으로도 가설 0');
+  assert.ok(okHypotheses.every((entry) => entry.n === 13));
+
+  // 틀린 표식(n=21) — 수리 전에는 여기서 가설 0 (표식이 평가 집합을 접었다).
+  const mislabeled = { ...shape, estimatedN: 21 };
+  const hypotheses = [];
+  const reports = [];
+  hypothesesFromShapes(
+    luma, { factor: 1 }, { candidates: [mislabeled] }, options, cfg, hypotheses, reports,
+  );
+  assert.ok(hypotheses.length > 0, '틀린 표식이 평가 집합을 접었다 (F-15)');
+  assert.ok(hypotheses.every((entry) => entry.n === 13), '증거(n=13)가 이겨야 한다');
+  assert.ok(reports.some((entry) => entry.estimatedNFallback === true && entry.n === 13),
+    '폴백 진단(estimatedNFallback)이 남아야 한다: ' + JSON.stringify(reports.map(
+      (entry) => [entry.n, entry.accepted, entry.estimatedNFallback === true],
+    )));
 });

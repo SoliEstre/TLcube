@@ -1753,7 +1753,42 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
     return ok({ families: [familyEvidence.family], classification: familyEvidence });
   }
   if (familyEvidence && typeof familyEvidence.family === 'string') {
-    return ok({ families: [familyEvidence.family], classification: familyEvidence });
+    // F-19: 공급 family 문자열은 표식이지 증거가 아니다 — 광학 분류로 재확인한다.
+    // 일치 → 채택(verified). 불일치 → 평가 집합을 접지 않고 광학 결과를 앞, 공급
+    // 표식을 뒤에 두는 확장 집합으로 강등 + 진단 필드. 분류기 무후보면 종전대로
+    // 공급 표식만 평가하되 «미검증» 을 진단에 남긴다 (조용히 무시 금지).
+    const supplied = familyEvidence.family;
+    const optical = classifyFamily(
+      luma,
+      { finder: finders, yJunction: familyEvidence.yJunction },
+      {
+        ks: classificationDimensions(finders, outline),
+        ...(options.family || {}),
+      },
+    );
+    if (optical.ok && optical.family === supplied) {
+      return ok({
+        families: [supplied],
+        classification: familyEvidence,
+        familyEvidenceCheck: { supplied, verified: true },
+      });
+    }
+    if (optical.ok) {
+      return ok({
+        families: [optical.family, supplied],
+        classification: familyEvidence,
+        familyEvidenceCheck: { supplied, verified: false, optical: optical.family },
+      });
+    }
+    return ok({
+      families: [supplied],
+      classification: familyEvidence,
+      familyEvidenceCheck: {
+        supplied,
+        verified: null,
+        opticalFailure: optical.reason || null,
+      },
+    });
   }
 
   const patternFinders = finders.filter((finder) => finder
@@ -2221,8 +2256,13 @@ function qrWindowReferenceRefinedHypotheses(luma, qrResult, options = {}) {
     yTopPoint(Y_WINDOW_FINDER_COORDS.axisA),
     yTopPoint(Y_WINDOW_FINDER_COORDS.axisB),
   ];
-  const windowCandidates = qrResult.candidates
-    .filter((candidate) => candidate.kind === 'window')
+  // F-21: 표식된 window 를 우선하되, 없으면 경계 ambiguous 후보를 window 해석으로도
+  // 평가한다 — 표식이 아니라 레퍼런스 게이트가 판정한다. 예산(1)은 그대로다.
+  const markedWindow = qrResult.candidates
+    .filter((candidate) => candidate.kind === 'window');
+  const windowCandidates = (markedWindow.length > 0
+    ? markedWindow
+    : qrResult.candidates.filter((candidate) => candidate.kindAmbiguous === true))
     .slice(0, 1);
   const offsetUnits = [
     0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75,
@@ -2316,7 +2356,8 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
   if (!qrResult || !qrResult.ok) return [];
   const hypotheses = [];
   qrResult.candidates.forEach((candidate, candidateIndex) => {
-    if (candidate.kind === 'center') {
+    // F-21: kind 경계 ambiguous 표식은 center 해석도 받는다 — 게이트가 판정.
+    if (candidate.kind === 'center' || candidate.kindAmbiguous === true) {
       qrCenterHomographies(candidate).forEach((H, axisIndex) => {
         const center = projectPoint(H, { x: 0, y: 0 });
         const xStep = projectPoint(H, { x: 1, y: 0 });
@@ -2355,7 +2396,8 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
           }
         }
       });
-      return;
+      // F-21: 경계 ambiguous 표식은 window 해석도 계속 받는다 (양쪽 평가 후 게이트 판정).
+      if (candidate.kindAmbiguous !== true) return;
     }
 
     qrWindowHomographies(candidate).forEach((H, axisIndex) => {
@@ -4501,6 +4543,12 @@ function qrTripleCandidates(clusters, options = {}) {
 
         const kind = cosine < -0.25 ? 'window' : 'center';
         const targetCosine = kind === 'window' ? -0.5 : 0;
+        // F-21: kind 는 cosine 하나로 붙인 표식이다 — 두 목표각(-0.5 vs 0)과의
+        // 거리 차가 작으면(경계 ±0.05 = cosine ∈ (-0.3, -0.2)) 표식이 증거가 못 된다.
+        // 소비자는 ambiguous 후보를 양쪽 해석으로 평가하고 레퍼런스 게이트가 판정한다
+        // (표식 강등 + 진단 필드 — 조용히 접지 않는다).
+        const kindMargin = Math.abs(Math.abs(cosine + 0.5) - Math.abs(cosine));
+        const kindAmbiguous = kindMargin < 0.1;
         const score =
           Math.abs(legA - legB) / Math.max(legA, legB)
           + Math.abs(cosine - targetCosine)
@@ -4508,6 +4556,8 @@ function qrTripleCandidates(clusters, options = {}) {
           - Math.min(100, shared.count + axisA.count + axisB.count) * 0.002;
         candidates.push({
           kind,
+          kindMargin,
+          kindAmbiguous,
           score,
           cosine,
           module,

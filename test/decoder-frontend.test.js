@@ -13,6 +13,7 @@ import {
   HOMOGRAPHY_CANONICAL_SPACE,
 } from '../src/decoder/contracts.js';
 import {
+  detectQrFinderTriples,
   directAnchorHypotheses,
   enumerateGridHypotheses,
   selectGridHypothesis,
@@ -747,8 +748,10 @@ test('재배치: tri 코드를 hex 로 오분류해도 복호된다 (실사진 �
   const raster = renderA('relocate-me', 0, 'M', { margin: 20 });
 
   // 전제 — 강제 hex 는 "정답을 읽고도 버리는" 그 상태여야 한다.
+  // F-19 수리 후 bare 문자열 evidence 는 광학 재확인을 받으므로, 여기서는
+  // «검증된 분류 공급» 형(ok:true) 으로 강제 주입 의미를 유지한다.
   const forcedNoRelocation = decodeFrontend(raster, {
-    familyEvidence: { family: 'hex' },
+    familyEvidence: { ok: true, family: 'hex' },
     bootstrap: { _familyRelocation: false },
   });
   assert.equal(forcedNoRelocation.ok, false,
@@ -763,7 +766,7 @@ test('재배치: tri 코드를 hex 로 오분류해도 복호된다 (실사진 �
    *   두 경로를 각각 검증하려면 여기서 하나를 꺼야 한다.
    */
   const relocated = decodeFrontend(raster, {
-    familyEvidence: { family: 'hex' },
+    familyEvidence: { ok: true, family: 'hex' },
     bootstrap: { _formatRecast: false },
   });
   assert.equal(relocated.ok, true,
@@ -1078,4 +1081,81 @@ test('onStage 훅이 없어도 반환 계약은 같다', () => {
   const hooked = decodeFrontend(raster, { onStage() {} });
   assert.equal(plain.ok, hooked.ok);
   assert.equal(plain.reason, hooked.reason);
+});
+
+test('F-19: 공급 family 문자열 표식은 광학 재확인을 받는다 — 틀린 표식이 평가 집합을 접지 않는다', {
+  timeout: 60_000,
+}, () => {
+  const raster = renderA('f19-claim-lock', 0, 'M', { margin: 20 });
+  // 구제 경로(재라벨·재배치)를 꺼서 분류 접힘만 잰다.
+  const hinted = decodeFrontend(raster, {
+    familyEvidence: { family: 'hex' },
+    bootstrap: { _familyRelocation: false, _formatRecast: false },
+  });
+  assert.equal(hinted.ok, true,
+    `틀린 bare 표식이 평가 집합을 접었다 (F-19): ${hinted.reason}`);
+  assert.equal(hinted.text, 'f19-claim-lock');
+  assert.equal(hinted.family, 'tri');
+
+  // 검증된 공급(ok:true)은 여전히 강제다 — 주입 계약 유지 (재배치 테스트 전제와 동일).
+  const forced = decodeFrontend(raster, {
+    familyEvidence: { ok: true, family: 'hex' },
+    bootstrap: { _familyRelocation: false, _formatRecast: false },
+  });
+  assert.equal(forced.ok, false, 'ok:true 공급은 강제 의미를 유지해야 한다');
+});
+
+// F-21 잠금용 — 7모듈 1:1:3:1:1 QR 파인더 패턴을 luma 에 그린다.
+function drawQrFinder(luma, cx, cy, module) {
+  const half = 3.5 * module;
+  for (let y = Math.floor(cy - half); y < cy + half; y += 1) {
+    for (let x = Math.floor(cx - half); x < cx + half; x += 1) {
+      if (x < 0 || y < 0 || x >= luma.width || y >= luma.height) continue;
+      const mx = Math.abs(x - cx) / module;
+      const my = Math.abs(y - cy) / module;
+      const ring = Math.max(mx, my);
+      const dark = ring <= 1.5 || (ring > 2.5 && ring <= 3.5);
+      luma.data[y * luma.width + x] = dark ? 0.05 : 0.95;
+    }
+  }
+}
+
+function qrTripleLuma(angleDegrees) {
+  const size = 400;
+  const data = new Float32Array(size * size).fill(0.95);
+  const alpha = new Uint8Array(size * size).fill(255);
+  const luma = { width: size, height: size, data, alpha };
+  const module = 6;
+  const leg = 80;
+  const shared = { x: 200, y: 200 };
+  const rad = (angleDegrees * Math.PI) / 180;
+  drawQrFinder(luma, shared.x, shared.y, module);
+  drawQrFinder(luma, shared.x + leg, shared.y, module);
+  drawQrFinder(luma, shared.x + leg * Math.cos(rad), shared.y + leg * Math.sin(rad), module);
+  return luma;
+}
+
+test('F-21: 삼중점 kind 표식은 경계 여유(kindMargin)를 함께 싣고, 경계에선 ambiguous 로 강등된다', () => {
+  // 104.48° → cosine ≈ -0.25 (표식 경계) — 표식이 증거가 못 되는 지점.
+  const ambiguous = detectQrFinderTriples(qrTripleLuma(104.48));
+  assert.equal(ambiguous.ok, true, JSON.stringify(ambiguous.detail || ambiguous.reason));
+  for (const candidate of ambiguous.candidates) {
+    const margin = Math.abs(Math.abs(candidate.cosine + 0.5) - Math.abs(candidate.cosine));
+    assert.equal(candidate.kind, candidate.cosine < -0.25 ? 'window' : 'center');
+    assert.ok(Math.abs(candidate.kindMargin - margin) < 1e-9);
+    assert.equal(candidate.kindAmbiguous, margin < 0.1);
+  }
+  assert.ok(ambiguous.candidates.some((candidate) => candidate.kindAmbiguous === true),
+    '경계각 삼중점은 ambiguous 로 표기돼야 한다: '
+    + JSON.stringify(ambiguous.candidates.map((c) => [c.kind, c.cosine, c.kindAmbiguous])));
+
+  // 90°(center) · 120°(window) — 명확한 표식은 ambiguous 가 아니다.
+  for (const [degrees, kind] of [[90, 'center'], [120, 'window']]) {
+    const clear = detectQrFinderTriples(qrTripleLuma(degrees));
+    assert.equal(clear.ok, true, degrees + '°: ' + JSON.stringify(clear.detail || clear.reason));
+    const matching = clear.candidates.filter((candidate) => candidate.kind === kind);
+    assert.ok(matching.length > 0, degrees + '° 는 ' + kind + ' 후보를 내야 한다');
+    assert.ok(matching.every((candidate) => candidate.kindAmbiguous === false),
+      degrees + '° 는 ambiguous 가 아니어야 한다');
+  }
 });
