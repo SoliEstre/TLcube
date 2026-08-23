@@ -235,7 +235,7 @@ describe('실제 인코더 산출물과의 통합', () => {
     { type: 'O', version: 1 },
   ];
 
-  async function oaScene(type, version) {
+  async function oaScene(type, version, qrCorner = 'TL') {
     const { encode } = await import('../src/encode.js');
     const { encodeA } = await import('../src/encodeA.js');
     const { buildScene } = await import('../src/scene.js');
@@ -248,7 +248,7 @@ describe('실제 인코더 산출물과의 통합', () => {
         background: null, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
       },
       qrText: TL_READER_URL,
-      qrCorner: 'TL',
+      qrCorner,
     });
   }
 
@@ -304,6 +304,85 @@ describe('실제 인코더 산출물과의 통합', () => {
       }
     });
   }
+
+  // ── 4코너 스윕 (PM/022 W1-a, 2026-08-23) ─────────────────────────────────
+  //
+  // 위 BRIDGING 테스트는 qrCorner 'TL' 고정이라 검증 표면이 1/4 이었다. 결함은 정확히
+  // 그 사각지대에 있었다: Type A 는 삼각 패치 셀이 하단 코너를 채워 코드–QR 실간격이
+  // 0.5셀인데, 색+연결성 제외의 클러스터 병합 실효 반경(~2·gap)이 그것을 삼켰다 —
+  // 실측 BL/BR 에서 QR 도형 213/213 이 안전영역 폴리곤 안 (TL/TR·Type O 는 정상).
+  // 수리는 렌더러의 `selfQuiet` 태그 (scene.js pushQrBlock · sceneY 코너 블록).
+  //
+  // 코너별 사분면 로케이터 — 기존 cornerQrPoints 의 일반화. 색은 검증 대상 로직과
+  // 무관한 축이므로 순환이 없다.
+  function cornerQrPointsAt(scene, qrColors, corner) {
+    const isQrColor = (c) => qrColors.some((q) => q.r === c.r && q.g === c.g && q.b === c.b);
+    const wantLeft = corner === 'TL' || corner === 'BL';
+    const wantTop = corner === 'TL' || corner === 'TR';
+    const pts = [];
+    for (const s of scene.shapes) {
+      if (!isQrColor(s.color)) continue;
+      const p = s.kind === 'disc'
+        ? { x: s.cx, y: s.cy }
+        : s.points.reduce((a, q) => ({ x: a.x + q.x / s.points.length, y: a.y + q.y / s.points.length }), { x: 0, y: 0 });
+      const inX = wantLeft ? p.x < scene.width / 2 : p.x > scene.width / 2;
+      const inY = wantTop ? p.y < scene.height / 2 : p.y > scene.height / 2;
+      if (inX && inY
+        && Math.hypot(p.x - scene.width / 2, p.y - scene.height / 2) > Math.min(scene.width, scene.height) / 4) {
+        pts.push(p);
+      }
+    }
+    return pts;
+  }
+
+  for (const { type, version } of BRIDGING) {
+    for (const corner of ['TL', 'TR', 'BL', 'BR']) {
+      test(`${type} v${version} · ${corner} — 어느 코너의 QR 도 안전영역이 덮지 않는다`, async () => {
+        const { BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+        const qrColors = [BULLSEYE_LIGHT, BULLSEYE_DARK];
+        const scene = await oaScene(type, version, corner);
+
+        // 태그 무결성 — 렌더러가 QR 블록에 selfQuiet 를 실제로 찍는가.
+        const tagged = scene.shapes.filter((s) => s.selfQuiet === true);
+        assert.ok(tagged.length >= 2, 'QR 블록에 selfQuiet 태그가 없다 — 렌더러 배선이 풀렸다');
+
+        const qrPts = cornerQrPointsAt(scene, qrColors, corner);
+        assert.ok(qrPts.length > 0, '코너 QR 도형을 못 찾았다 — 로케이터가 깨졌다');
+
+        for (const poly of quietZonePolygons(scene, 2, qrColors)) {
+          const covered = qrPts.filter((p) => inside(poly, p));
+          assert.equal(covered.length, 0,
+            `안전영역이 ${corner} 코너 QR 을 ${covered.length}/${qrPts.length} 덮었다`);
+        }
+      });
+    }
+  }
+
+  test('A v0 · BL — 태그를 벗기면 색 경로만으로는 삼켜진다 (태그가 실제로 일한다)', async () => {
+    // 변이 앵커: 색+연결성 폴백이 이 구성을 못 지킨다는 사실이 참이어야 태그 수리에
+    // 존재 이유가 있다. 이 단언이 «못 덮는다» 로 뒤집히는 날은 clusterShapes 의 병합
+    // 반경이 바뀐 날이다 — 그때는 태그·폴백의 분업 주석(quietzone.js)을 같이 갱신하라.
+    const { BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const qrColors = [BULLSEYE_LIGHT, BULLSEYE_DARK];
+    const scene = await oaScene('A', 0, 'BL');
+    const stripped = {
+      ...scene,
+      shapes: scene.shapes.map((s) => {
+        if (s.selfQuiet !== true) return s;
+        const clone = { ...s };
+        delete clone.selfQuiet;
+        return clone;
+      }),
+    };
+    const qrPts = cornerQrPointsAt(stripped, qrColors, 'BL');
+    assert.ok(qrPts.length > 0);
+    let covered = 0;
+    for (const poly of quietZonePolygons(stripped, 2, qrColors)) {
+      covered += qrPts.filter((p) => inside(poly, p)).length;
+    }
+    assert.ok(covered > 0,
+      '태그 없이도 안 삼켜진다 — 색 경로가 고쳐졌거나 기하가 바뀌었다. 이 테스트와 분업 주석을 재검토하라');
+  });
 
   test('제외 판정은 마진에 의존하지 않는다', async () => {
     const { BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');

@@ -240,6 +240,9 @@ function faceColor(entry, face, palette) {
 
 /** 콰이어트 패치(밝음) + QR 다크 모듈들을 axis-aligned 사각형 폴리곤으로 shapes 에 밀어넣는다. */
 function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
+  // selfQuiet: 이 블록은 자체 콰이어트 존(4모듈 밝은 패치)을 갖는다 — 안전영역
+  // (quietzone.js) 이 제외 판정을 색+연결성 근사가 아니라 이 태그로 한다.
+  // 색 근사는 Type A 하단 코너(코드–QR 간격 0.5셀 < 병합 실효반경)에서 무력화됐다.
   const blockSide = QR_BLOCK_MODULES * qrModuleSize;
   shapes.push({
     kind: 'polygon',
@@ -250,6 +253,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
       { x: blockOrigin.x, y: blockOrigin.y + blockSide },
     ],
     color: palette.bullseyeLight,
+    selfQuiet: true,
   });
 
   const qrOrigin = {
@@ -270,6 +274,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
           { x: mx, y: my + qrModuleSize },
         ],
         color: palette.bullseyeDark,
+        selfQuiet: true,
       });
     }
   }

@@ -729,6 +729,7 @@ export function buildSceneY(encoded, options) {
 
     // 콰이어트 패치 — 블록 전체를 덮는 밝은 사각형(어두운 스킨에서도 QR 리더가
     // 콰이어트 존을 확보하도록 렌더러가 보장, SPEC §14).
+    // selfQuiet: scene.js pushQrBlock 과 같은 태그 — 안전영역 제외의 정본 신호.
     shapes.push({
       kind: 'polygon',
       points: [
@@ -738,6 +739,7 @@ export function buildSceneY(encoded, options) {
         { x: blockRect.minX, y: blockRect.maxY },
       ],
       color: palette.bullseyeLight,
+      selfQuiet: true,
     });
 
     // QR 모듈 다크 사각형 — 콰이어트 4모듈 안쪽, row-major(y→x 오름차순).
@@ -759,6 +761,7 @@ export function buildSceneY(encoded, options) {
             { x: mx, y: my + qrModuleSize },
           ],
           color: palette.bullseyeDark,
+          selfQuiet: true,
         });
       }
     }
