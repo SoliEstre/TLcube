@@ -427,10 +427,14 @@
      (썸네일 위 · 글자 아래)로 통일한다 — `.toggle-card` 기본값이 이미 그 모양이라
      가로 배치 override 만 걷어내면 된다. */
   /* **2026-08-21 중앙 v0 편입**: 정식 행이 5개가 됐다 — 중앙 v0 카드가 중앙 QR 바로
-     앞에 붙는다. 칸 수를 4 로 두면 5번째 카드가 **조용히 다음 줄로 흘러** 4+1 로
-     깨진다(죽지 않는다). 카드 수 ↔ 칸 수 관계는 test/gen-variants.test.js 가
-     `FINDER_CARD_GROUPS.formal.length + 1` 로 **유도해** 잠근다. */
-  .finder-legacy-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+     앞에 붙는다.
+     **의도적 갱신 (W2 C5, 2026-08-24)**: 격자(repeat(5))를 **nowrap flex 관용구**로
+     교체했다 (#renderProfileCards — W1-c 입체감 행 — 전례 복제). 정식 normal 이
+     advancedOnly 2장(bullseye·central-cube-3tone)을 숨겨 3장이 되는데, 칸 수 고정
+     격자는 빈 칸 2개를 남긴다. flex 는 보이는 카드 수만큼 고르게 나눈다 —
+     칸 수 ↔ 카드 수 관계 잠금(gen-variants)은 관용구 잠금으로 대체됐다. */
+  .finder-legacy-row { flex-wrap: nowrap; gap: 8px; margin-top: 4px; }
+  .finder-legacy-row .toggle-card { min-width: 0; flex: 1 1 0; }
   .finder-family-grid.card-row {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px;
   }
@@ -506,8 +510,10 @@
   @media (max-width: 420px) {
     .experiment-banner { width: calc(100% - 32px); margin-inline: 16px; align-items: flex-start; flex-direction: column; }
     .finder-family-grid.card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    /* 5칸은 폰 폭에서 썸네일이 뭉갠다 — family-grid 와 같은 관용구로 접는다. */
-    .finder-legacy-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    /* (W2 C5) nowrap flex 전환 뒤 폰 폭은 #renderProfileCards 관용구를 따른다 —
+       간격·패딩만 줄인다 (advanced 5장도 접히지 않고 한 줄을 지킨다). */
+    .finder-legacy-row { gap: 4px; }
+    .finder-legacy-row .toggle-card { padding-inline: 2px; }
     .finder-user-patterns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
   fieldset.typeOptions { border: none; margin: 0; padding: 0; }
@@ -1224,42 +1230,14 @@
         <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.</p>
       </div>
 
-      <!-- 코너 마커 (O-CM / A-CM) — Type O·A + lab 전용. #turnASection 과 같은 게이트 문법.
-           ⚠ **실측 (2026-08-20)**: 왕복이 **양 끝 다 배선돼 완전히 선다**:
-           ① 기하 — `decoder/corner-marker-detect.js` 를 `bootstrap.directAnchorHypotheses`
-           에 배선(앵커가 0일 때만 열리는 fallback). 합성 원근 실측에서 앵커 한계
-           g=0.0001 → 코너 마커 g=0.0008 로 **약 8배**
-           (test/decoder-corner-marker-wiring.test.js ②, 변이 검증 완료).
-           ② 와이어 — 내부 타입 G 전용 formatIndex(`src/markerG.js` 표 주도, 운영자 확정
-           2026-08-20). 인코더가 G 인덱스를 싣고 디코더는 포맷 워드의 그 값으로 CM 회계를
-           켠다. 라이브 왕복은 test/markerG.test.js ④(6항목 전수) + generator-ui-wiring §5
-           가 잰다 (변이 검증 완료). 카드는 여전히 lab 전용이다 — 실사진(실기기) 라운드
-           전의 일반 노출은 운영자 결정 (generator-corner-marker.test.js ④ 가 잠근다).
-           ⚠ turnA 와 **상호배제**다 — `encodeA` 가 둘 다 참이면 던진다(src/encodeA.js).
-           그래서 이 카드를 켜면 syncCornerMarkerUi 가 turnA 를 끄고 그 카드를 잠근다.
-           조용히 떨구지 않는다: 잠긴 이유를 힌트가 말한다.
-           Type Y 는 대상이 아니다 — Y 는 자기 로케이터 문법(v0 계열)을 쓴다. -->
-      <div id="cornerMarkerSection" hidden>
-        <label class="section-heading" data-i18n="g576">코너 자리 예약 (실험)</label>
-        <div class="card-row" id="cornerMarkerCards">
-          <div class="toggle-card active" data-cornermarker="off">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/>
-            </svg>
-            <span data-i18n="g577">없음 (기본)</span>
-          </div>
-          <div class="toggle-card" data-cornermarker="on">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/>
-              <circle cx="12" cy="2.6" r="1.6" fill="currentColor" stroke="none"/>
-              <circle cx="21" cy="17" r="1.6" fill="currentColor" stroke="none"/>
-              <circle cx="3" cy="7" r="1.6" fill="currentColor" stroke="none"/>
-            </svg>
-            <span data-i18n="g578">교대 코너 3곳</span>
-          </div>
-        </div>
-        <p class="hint" id="cornerMarkerHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
-      </div>
+      <!-- ⚠ **의도적 갱신 (W2 C4, 2026-08-24)** — 여기 있던 #cornerMarkerSection
+           (코너 자리 예약 켬/끔 2카드)은 검출기 3구역 개편으로 소멸했다. O-CM/A-CM
+           은 #finderSection 안 내곽/외곽 구역의 seat 카드로 흡수됐고
+           (§ensureSeatCards — finder-zone-ui.zoneCards() 유도), 상태는
+           cornerMarker: boolean → innerSeat/outerSeat 로 승계됐다
+           (generator-state.js §seat 축). 왕복 실측·와이어 근거(2026-08-20,
+           decoder-corner-marker-wiring ② · markerG G 인덱스)는 그 주석과 함께
+           이식됐다. i18n g576-g578 은 여덟 언어 모두 남겨 둔다 (드랍 전례). -->
 
       <div class="row">
         <div id="versionWrapO">
@@ -1699,26 +1677,72 @@
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
             </svg><span data-i18n="g204">안쪽</span></div>
-          <!-- '면' = **먼 코너 QR** (v0TY — 2026-08-17 v0T 편입 라운드부터. 그 전에는
-               v0WY 였고, v0W 계열 드랍으로 전환 대상만 바뀌었다). ⚠ 의도적 갱신
-               (2026-08-17 재설계): 예전 아이콘은 코드 bbox **위쪽 바깥**의 마름모였다
-               — QR 이 실루엣 밖 허공에 뜨던 시절의 그림이다. 지금은 QR 이 코드
-               **안쪽 먼 코너**로 들어왔으므로 마름모를 bbox 안 위쪽 꼭짓점 자리에
-               넣는다. 기울어진 마름모라는 점은 그대로다 (T 면과 같은 기울기). -->
-          <div class="toggle-card" data-pos="plane">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-              <rect x="4" y="4" width="16" height="16" rx="2"/>
-              <path d="M12 6 L17 8.7 L12 11.4 L7 8.7 Z" fill="currentColor" stroke="none"/>
-            </svg><span data-i18n="g963">면</span>
-            <span class="card-sub" data-i18n="g965">먼 코너 (v0TY)</span></div>
+          <!-- ⚠ **의도적 갱신 (W2 C3, 2026-08-24)** — 여기 있던 '면'(plane) 카드는
+               삭제됐다. «면 = 먼 코너 QR» 은 위치 7택의 한 자리가 아니라 **안쪽 QR 의
+               배치 축**이라, (안쪽 여부) × (면 배치 seam/far) 로 분해했다 — 아래
+               «QR 면 배치» 서브섹션(#qrFacePlacementSection)이 그 축이고 v0TY·v0TRY·
+               v0TRQ 는 파생값으로 강등됐다 (§deriveYLocatorForQrPosition).
+               i18n 키 g963/g965 는 여덟 언어 모두 남겨 둔다 (드랍 카드 전례 —
+               되살릴 때 재번역하지 않기 위해서다). -->
           <div class="toggle-card" data-pos="none">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <path d="M6.5 17.5 L17.5 6.5"/>
             </svg><span data-i18n="g036">없음</span></div>
         </div>
+        <!-- «QR 면 배치» — Y + 안쪽 전용 서브섹션 (W2 C3, 운영자 확정 2026-08-23·24).
+             구 '면'(plane) 카드의 승계: 중앙측(seam) 기본 · 코너측(far) = v0TRY 기본.
+             로케이터가 v0T 계열일 때만 열린다 — 끔(정식 화면 유일 경로)은 레거시
+             윈도 β 폴백이라 이 축이 없다 (살아 있는 무동작 컨트롤 금지).
+             아이콘: 중앙측 = bbox **중앙**의 기울어진 마름모 («면 위» 임을 기울기로,
+             «중앙» 임을 위치로) · 코너측 = 구 '면' 카드 아이콘 재사용 (bbox 안 위쪽
+             꼭짓점 마름모 — 2026-08-17 재설계 이력 계승). -->
+        <div id="qrFacePlacementSection" style="display:none">
+          <div class="section-heading" data-i18n="g860">QR 면 배치</div>
+          <div class="card-row" id="qrFacePlacementCards">
+            <div class="toggle-card active" data-placement="seam">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                <path d="M12 9.3 L17 12 L12 14.7 L7 12 Z" fill="currentColor" stroke="none"/>
+              </svg><span data-i18n="g861">중앙측</span>
+              <span class="card-sub" data-i18n="g862">Y-심 (v0TRQ)</span></div>
+            <div class="toggle-card" data-placement="far">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                <path d="M12 6 L17 8.7 L12 11.4 L7 8.7 Z" fill="currentColor" stroke="none"/>
+              </svg><span data-i18n="g863">코너측</span>
+              <span class="card-sub" data-i18n="g864">먼 코너 (v0TRY)</span></div>
+          </div>
+          <p class="hint" data-i18n="g865">안쪽 QR 을 어느 자리에 실을지 골라요 — 중앙측은 Y-심(중앙) 슬롯, 코너측은 먼 코너 슬롯이에요.</p>
+        </div>
         <p class="hint" data-i18n="g065">TL스캐너로 스캔 실패 시 대체 경로가 되는 QR 을 코드에 함께 인쇄해요. '없음'은 QR 없이 코드만 내보내요.</p>
       </section>
+
+      <!-- Y + 안쪽 전용: 좌/우 면 배제영역 장식 이미지 (렌더 자유구역 — 데이터 계약 무관.
+           사용자 지시 2026-08-09). W2 C3 (설계서 ②): qrLinkSection 바로 뒤로 이동 —
+           안쪽 QR 축의 부속이라 자리를 그 옆으로 옮기고, 게이트는 표시 조건(안쪽×Y)에서
+           **실그림 조건**(윈도 β 가 실제로 그려질 때 — yWindowActive)으로 좁혔다
+           («열리는데 아무 일 없음» 리스크 해소). -->
+      <div id="decorSection" style="display:none">
+        <label class="section-heading" data-i18n="g066">장식 이미지 (좌/우 빈 면 각각 — β)</label>
+        <div class="row">
+          <div class="export-pair" style="flex:1">
+            <button id="decorPickL" type="button" data-i18n="g067">좌측 선택…</button>
+            <button id="decorClearL" type="button" class="icon-btn" title="좌측 이미지 제거" style="display:none" data-i18n-attr="title:g019">✕</button>
+          </div>
+          <div class="export-pair" style="flex:1">
+            <button id="decorPickR" type="button" data-i18n="g068">우측 선택…</button>
+            <button id="decorClearR" type="button" class="icon-btn" title="우측 이미지 제거" style="display:none" data-i18n-attr="title:g020">✕</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="decorSwap" type="button" style="display:none" data-i18n="g069">좌우 ⇄ 교환</button>
+        </div>
+        <input type="file" id="decorFileL" accept="image/*" style="display:none">
+        <input type="file" id="decorFileR" accept="image/*" style="display:none">
+        <p class="hint" data-i18n="g070">Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).
+          렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.</p>
+      </div>
 
       <!-- 검출기 선택 (운영자 지시 2026-08-16 A-4) — 타입별로 다른 두 섹션
            (#finderSection = O/A 중앙 파인더 · #yLocatorSection = Y 셀 표면 로케이터)이
@@ -1747,6 +1771,10 @@
           </button>
         </div>
         <div class="finder-legacy-row card-row" id="finderLegacyRow"></div>
+        <!-- C5 숨김-active 배지 — 정식 normal 이 advancedOnly 카드(bullseye ·
+             central-cube-3tone)를 숨긴 채 그 카드가 active 로 들어오면 이유를 말한다
+             (조용한 무시 금지 — 강제 리셋은 안 한다: 파인더는 사용자 명시 선택). -->
+        <p class="hint" id="finderAdvancedOnlyHint" style="display:none" data-i18n="g870">선택된 검출기는 고급 전용 카드예요 — 카드는 숨겨져 있지만 선택은 그대로 살아 있어요. 고급 모드에서 보여요.</p>
         <!-- 실험 후보 둘은 기본 접힘(사용자 지시 2026-08-13). 정식 4종만 펼쳐 두면
              카드 수가 15개에서 4개로 줄어 «무엇을 고르면 되는가» 가 바로 보인다. -->
         <details class="finder-collapse" id="finderBelowBar">
@@ -1798,6 +1826,31 @@
           <p class="hint finder-baseline-evidence" id="finderBaselineEvidence" style="display:none"></p>
           <p class="hint finder-score-note" data-i18n="g492">이 값은 모형 점수이며 인식률 예측이 아니에요.</p>
         </div>
+        <!-- ── 내곽·외곽 구역 (W2 C4 — 검출기 3구역, 설계서 ①) ─────────────────
+             한 제목 «검출기 선택» 아래 3구역: 위의 formal 행 + 서랍 = **중앙**(분류 1,
+             기존 구조 승계), 아래 둘 = **내곽**(분류 2) · **외곽**(분류 3 + 부재).
+             카드는 finder-zone-ui.zoneCards() 가 FINDER_TAXONOMY 에서 유도해
+             §ensureSeatCards 가 채운다 (수기 사본 철폐).
+             노출: **lab 유지** (운영자 확정 2026-08-23·24 — 고급 승격안 기각.
+             실기기 라운드 전 — 합성만으로 정식 노출을 정하지 않는다).
+             구 #cornerMarkerSection 의 승계 — 왕복 실측(2026-08-20): 기하는
+             decoder-corner-marker-wiring ②(앵커 한계 g=0.0001 → CM g=0.0008),
+             와이어는 markerG G formatIndex (markerG.test ④ · generator-ui-wiring §5).
+             sagoae = 자리만 + disabled (와이어 편입은 통합자 C2c — 부재 문법과 동일).
+             V-CM/K-CM = KIND_ABSENT 유도, 클릭 불가 + 부재 사유 힌트.
+             ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 던짐) — 핸들러가 turnA 를
+             끄고 syncTurnAUi 가 그 카드를 잠근다. centerQr 병용은 C2a 로 합법 —
+             잠금은 상수가 아니라 cmqWireExists(와이어 존재 술어)로 게이트한다. -->
+        <div id="finderInnerZone" hidden>
+          <label class="section-heading" data-i18n="g850">내곽 자리 (실험)</label>
+          <div class="card-row" id="innerSeatCards"></div>
+          <p class="hint" id="innerSeatHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
+        </div>
+        <div id="finderOuterZone" hidden>
+          <label class="section-heading" data-i18n="g851">외곽 자리 (실험)</label>
+          <div class="card-row" id="outerSeatCards"></div>
+          <p class="hint" id="outerSeatHint" data-i18n="g858">빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.</p>
+        </div>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
         <strong data-i18n="g469">실험 — 셀 파인더 스캔 경로 연결됨</strong><br>
@@ -1817,7 +1870,8 @@
             </svg>
           </button>
         </div>
-        <!-- 카드 순서 자동 → 끔 → v0 → v0T → v0TY (운영자 확정 2026-08-17 —
+        <!-- 카드 순서 자동 → 끔 → v0 → v0T → v0TR → v0TRQ (W2 C3 — v0TY·v0TRY 는
+             파생값 강등으로 카드에서 내렸다. 운영자 확정 2026-08-17 —
              **v0T = Type Y 최종 파인더**, v0W 계열 전체 대체).
              **v1r2 · v2r2 카드는 내려갔다** (실험판 드랍, 운영자 확정 2026-08-16).
              **v0XQ · v0X 카드도 내려갔다** (실기기 드랍, 2026-08-17 2·3라운드).
@@ -1898,26 +1952,12 @@
             <span data-i18n="g993">셀 표면 v0T (Y1)</span>
             <span class="card-sub" data-i18n="g995">전면 6블록</span>
           </div>
-          <!-- v0TY — v0T 파생 (먼 코너 QR 슬롯). 아이콘은 v0T 문법 그대로에서 우하
-               SE L자가 **점선 사각(QR 슬롯)** 으로 바뀐 것 — 그 한 곳이 v0T 와의
-               유일한 셀 차이이고, 곧 이 카드의 정의다. A 솔리드 블록이 그대로 남아
-               방향을 준다 (비대칭 이중화의 나머지 한쪽). -->
-          <div class="toggle-card" data-locator="cell-surface-v0ty">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
-              <rect x="5" y="5" width="3.6" height="3.6" rx=".5"/>
-              <rect x="6.1" y="6.1" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
-              <rect x="7" y="9.2" width="2" height="2" fill="currentColor" stroke="none"/>
-              <rect x="11.6" y="4.3" width="3.9" height="1.3" fill="currentColor" stroke="none"/>
-              <rect x="14.6" y="5" width="4.4" height="4.4" rx=".6"/>
-              <rect x="16" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
-              <rect x="4.7" y="11.6" width="2.6" height="4.9" rx=".5"/>
-              <rect x="5.5" y="13.4" width="1" height="1.4" fill="currentColor" stroke="none"/>
-              <rect x="13.2" y="13.2" width="6" height="6" rx=".6" stroke-dasharray="1.4 1.1"/>
-            </svg>
-            <span data-i18n="g996">셀 표면 v0TY · 먼 코너 QR (Y1)</span>
-            <span class="card-sub" data-i18n="g998">전면 + 먼 코너 QR</span>
-          </div>
+          <!-- ⚠ **의도적 갱신 (W2 C3)** — v0TY 카드는 내렸다. 드랍이 아니라 **파생값
+               강등**이다: 와이어·정본·판독·허용값은 그대로 살고, «QR 안쪽 + 코너측»
+               (#qrFacePlacementSection)이 v0T 에서 이 값을 파생한다
+               (§deriveYLocatorForQrPosition). i18n 키(g996·g997·g998)는 여덟 언어
+               모두 남겨 둔다 (드랍 카드 전례). -->
+
           <!-- v0TR — v0T 재설계 (2026-08-17). 아이콘은 **겹사각 둘 + SE L자** 다:
                우상 겹사각 = NE 바깥 동심 사각(v0T 자리 그대로) · 그 좌하로 살짝 안쪽에
                놓인 두 번째 겹사각 = **NE 안쪽 동심 사각**(이 계열의 코어 앵커, 반경 √129) ·
@@ -1955,26 +1995,11 @@
             <span data-i18n="g958">셀 표면 v0TRQ · 중앙 QR (Y1)</span>
             <span class="card-sub" data-i18n="g969">겹사각 2 + 중앙 QR</span>
           </div>
-          <!-- v0TRY — v0TR 파생 (먼 코너 QR 슬롯, 2026-08-18). 아이콘은 v0TR 문법
-               그대로에서 우하 SE L자가 점선 사각(QR 슬롯)으로 바뀐 것 — v0T → v0TY 와
-               문자 그대로 같은 변형이다. 좌상 K3 중앙은 솔리드로 남고, A 솔리드 블록이
-               방향을 준다 (SE 를 잃고 남는 유일한 판별자 — 비대칭 이중화의 나머지 한쪽).
-               v0TRQ 의 점선 사각(좌상 = 중앙)과는 자리가 다르다. -->
-          <div class="toggle-card" data-locator="cell-surface-v0try">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
-              <rect x="5" y="5" width="3.6" height="3.6" rx=".5"/>
-              <rect x="6.1" y="6.1" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
-              <rect x="7" y="9.2" width="2" height="2" fill="currentColor" stroke="none"/>
-              <rect x="14.6" y="5" width="4.4" height="4.4" rx=".6"/>
-              <rect x="16" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
-              <rect x="10.2" y="8.2" width="4.4" height="4.4" rx=".6"/>
-              <rect x="11.6" y="9.6" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
-              <rect x="13.2" y="13.2" width="6" height="6" rx=".6" stroke-dasharray="1.4 1.1"/>
-            </svg>
-            <span data-i18n="g936">셀 표면 v0TRY · 먼 코너 QR (Y1)</span>
-            <span class="card-sub" data-i18n="g937">겹사각 2 + 먼 코너 QR</span>
-          </div>
+          <!-- ⚠ **의도적 갱신 (W2 C3)** — v0TRY 카드도 v0TY 와 같은 규약으로 내렸다
+               (파생값 강등 — «QR 안쪽 + 코너측» 이 v0TR 계열에서 파생). i18n 키
+               (g936·g937·g938)는 여덟 언어 모두 남겨 둔다. v0TRQ 카드는 **남는다** —
+               슬롯이 중앙(Y-심)이라 코너 QR 위치 축과 독립인 직접 선택지다. -->
+
           <!-- v1r2(g547/g945) · v2r2(g543/g946) 카드는 2026-08-16 드랍으로 내렸다.
                i18n 키는 전 언어 (8언어) 남겨 둔다 — 되살릴 때 문자열을 다시 번역하지
                않기 위해서다 (하드코딩 금지 규약과 충돌하지 않는다: 참조가 없을 뿐). -->
@@ -2021,28 +2046,6 @@
         <textarea id="yCellEditorJson" readonly rows="8" spellcheck="false"></textarea>
       </div>
 
-      <!-- Y + 안쪽 전용: 좌/우 면 배제영역 장식 이미지 (렌더 자유구역 — 데이터 계약 무관.
-           사용자 지시 2026-08-09). -->
-      <div id="decorSection" style="display:none">
-        <label class="section-heading" data-i18n="g066">장식 이미지 (좌/우 빈 면 각각 — β)</label>
-        <div class="row">
-          <div class="export-pair" style="flex:1">
-            <button id="decorPickL" type="button" data-i18n="g067">좌측 선택…</button>
-            <button id="decorClearL" type="button" class="icon-btn" title="좌측 이미지 제거" style="display:none" data-i18n-attr="title:g019">✕</button>
-          </div>
-          <div class="export-pair" style="flex:1">
-            <button id="decorPickR" type="button" data-i18n="g068">우측 선택…</button>
-            <button id="decorClearR" type="button" class="icon-btn" title="우측 이미지 제거" style="display:none" data-i18n-attr="title:g020">✕</button>
-          </div>
-        </div>
-        <div class="row" style="margin-top:6px">
-          <button id="decorSwap" type="button" style="display:none" data-i18n="g069">좌우 ⇄ 교환</button>
-        </div>
-        <input type="file" id="decorFileL" accept="image/*" style="display:none">
-        <input type="file" id="decorFileR" accept="image/*" style="display:none">
-        <p class="hint" data-i18n="g070">Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).
-          렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.</p>
-      </div>
       <div class="check-row" id="cornerTooRow" style="display:none">
         <input type="checkbox" id="qrCornerToo">
         <label for="qrCornerToo" style="margin:0;color:var(--text)" data-i18n="g071">중앙 QR 과 코너 QR 병행 표시 (고급)</label>
@@ -2364,6 +2367,22 @@ const GENERATOR_STRINGS = {
     "g451": "심볼 {d}+{n} · 프리셋 Δmin {delta}",
     "g452": "심볼 {d}+{n}",
     "g600": "새 버전이 준비됐어요.",
+    "g850": "내곽 자리 (실험)",
+    "g851": "외곽 자리 (실험)",
+    "g852": "O-CM · 교대 코너 3곳",
+    "g853": "A-CM · 교대 코너 3곳",
+    "g854": "sagoae (준비 중)",
+    "g855": "sagoae 는 아직 켤 수 없어요 — 단독 와이어 편입 전이라 자리만 예약해 뒀어요.",
+    "g856": "V-CM (부재)",
+    "g857": "K-CM (부재)",
+    "g858": "빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.",
+    "g860": "QR 면 배치",
+    "g861": "중앙측",
+    "g862": "Y-심 (v0TRQ)",
+    "g863": "코너측",
+    "g864": "먼 코너 (v0TRY)",
+    "g865": "안쪽 QR 을 어느 자리에 실을지 골라요 — 중앙측은 Y-심(중앙) 슬롯, 코너측은 먼 코너 슬롯이에요.",
+    "g870": "선택된 검출기는 고급 전용 카드예요 — 카드는 숨겨져 있지만 선택은 그대로 살아 있어요. 고급 모드에서 보여요.",
     "g601": "지금 적용",
     "g900": "모듈(셀) 개수를 정하는 축이에요. 개수가 늘면 담을 수 있는 양도 같이 늘어요.\n같은 인쇄 크기에서 해상도가 높을수록 모듈 하나가 작아져서, 더 가까이서 찍어야 읽혀요.\n저 = 원거리·대형 인쇄(광고판) · 중 = 1~3 m 포스터급 · 고 = 근거리·대용량.\n자동은 내용 크기에 맞춰 해상도를 먼저 올리고, 최대에서도 안 들어가면 «안정성 ⇄ 용량» 단계를 내려요.\n카드 그림은 실루엣 대비 검출기 크기예요 — 검출기 셀 수는 고정이라 해상도가 오를수록 상대적으로 작아져요.",
     "g901": "오류정정(ECC) 비중을 정하는 축이에요. 정정에 자리를 많이 줄수록 담을 양이 줄어요.\n보정 우선 = ECC H(≈40%) · 표준 = ECC M(25%) · 대용량 = ECC L(≈12%).\n자동은 입력 크기에 맞춰 H → M → L 순서로 처음 들어가는 레벨을 골라요.\n아래 자체검증 뱃지는 지금 설정으로 실제 렌더한 그림을 되읽은 결과예요 — 인쇄·촬영 조건이 아니라 «렌더가 자기 계약을 지켰는가» 만 봐요.",
@@ -2556,7 +2575,7 @@ const GENERATOR_STRINGS = {
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
     "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.",
-    "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깔때까지 잠과 둘게요.",
+    "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깥으로 뺄 때까지 잠가 둘게요.",
     "g581": "지금 파인더가 가운데를 쓰고 있어서 QR 을 가운데에 넣을 수 없어요. 다른 파인더를 고르면 풀려요.",
     "g507": "{filename}으로 다운로드되었습니다.",
     "g508": "파인더 에디터",
@@ -2779,6 +2798,22 @@ const GENERATOR_STRINGS = {
     "g451": "symbols {d}+{n} · preset Δmin {delta}",
     "g452": "symbols {d}+{n}",
     "g600": "A new version is ready.",
+    "g850": "Inner seat (experimental)",
+    "g851": "Outer seat (experimental)",
+    "g852": "O-CM · 3 alternating corners",
+    "g853": "A-CM · 3 alternating corners",
+    "g854": "sagoae (in preparation)",
+    "g855": "sagoae cannot be enabled yet — its standalone wire is not in place, so the seat is only reserved.",
+    "g856": "V-CM (absent)",
+    "g857": "K-CM (absent)",
+    "g858": "The empty seats (V-CM·K-CM) have no design yet — shown as placeholders only.",
+    "g860": "QR face placement",
+    "g861": "Centre side",
+    "g862": "Y-seam (v0TRQ)",
+    "g863": "Corner side",
+    "g864": "Far corner (v0TRY)",
+    "g865": "Choose where the inner QR sits — the centre side uses the Y-seam (centre) slot, the corner side the far-corner slot.",
+    "g870": "The selected finder is an advanced-only card — the card is hidden, but your selection stays. Switch to advanced mode to see it.",
     "g601": "Apply now",
     "g900": "This axis sets the number of modules (cells). More modules, more capacity.\nAt the same printed size, higher resolution makes each module smaller, so the camera has to come closer.\nLow = long range, large prints (billboards) · Mid = poster range, 1-3 m · High = close range, high capacity.\nAuto raises resolution first, and steps “Robustness ⇄ capacity” down only if the content still does not fit at maximum.\nThe card art shows detector size against the silhouette — the detector uses a fixed cell count, so it shrinks in relative terms as resolution rises.",
     "g901": "This axis sets how much room goes to error correction (ECC). More correction means less payload.\nCorrection first = ECC H (≈40%) · Standard = ECC M (25%) · High capacity = ECC L (≈12%).\nAuto walks H → M → L and takes the first level the content fits into.\nThe self-check badge below re-reads the image this setting actually rendered. It judges whether the render kept its own contract — not how a print or a camera will behave.",
@@ -3194,6 +3229,22 @@ const GENERATOR_STRINGS = {
     "g451": "シンボル {d}+{n} · プリセット Δmin {delta}",
     "g452": "シンボル {d}+{n}",
     "g600": "新しいバージョンが利用できます。",
+    "g850": "内郭シート（実験）",
+    "g851": "外郭シート（実験）",
+    "g852": "O-CM · 交互コーナー3か所",
+    "g853": "A-CM · 交互コーナー3か所",
+    "g854": "sagoae（準備中）",
+    "g855": "sagoae はまだ有効にできません — 単独ワイヤ編入前のため、席だけ予約しています。",
+    "g856": "V-CM（不在）",
+    "g857": "K-CM（不在）",
+    "g858": "空席（V-CM·K-CM）はまだ設計がありません — 席だけ表示しています。",
+    "g860": "QR 面配置",
+    "g861": "中央側",
+    "g862": "Y シーム (v0TRQ)",
+    "g863": "コーナー側",
+    "g864": "遠コーナー (v0TRY)",
+    "g865": "内側 QR をどの位置に載せるかを選びます — 中央側は Y シーム（中央）スロット、コーナー側は遠コーナースロットです。",
+    "g870": "選択中の検出器は高度モード専用カードです — カードは非表示ですが選択は保持されます。高度モードで表示されます。",
     "g601": "今すぐ適用",
     "g900": "モジュール（セル）の数を決める軸です。数が増えれば入る量も増えます。\n同じ印刷サイズなら解像度が高いほど 1 モジュールが小さくなり、より近づいて撮る必要があります。\n低 = 遠距離・大型印刷（看板）· 中 = 1〜3 m のポスター級 · 高 = 近距離・大容量。\n自動はまず解像度を上げ、最大でも入らないときに「安定性 ⇄ 容量」を下げます。\nカードの図はシルエットに対する検出器の大きさです — 検出器のセル数は固定なので、解像度が上がるほど相対的に小さくなります。",
     "g901": "誤り訂正（ECC）の割合を決める軸です。訂正に多く割くほど、入るデータ量は減ります。\n訂正優先 = ECC H（≈40%）· 標準 = ECC M（25%）· 大容量 = ECC L（≈12%）。\n自動は H → M → L の順で、最初に収まるレベルを選びます。\n下の自己検証バッジは、この設定で実際にレンダリングした画像を読み直した結果です。印刷や撮影の条件ではなく「レンダリングが自分の契約を守ったか」だけを見ます。",
@@ -3608,6 +3659,22 @@ const GENERATOR_STRINGS = {
     "g451": "symboles {d}+{n} · Δmin du préréglage {delta}",
     "g452": "symboles {d}+{n}",
     "g600": "Une nouvelle version est prête.",
+    "g850": "Siège intérieur (expérimental)",
+    "g851": "Siège extérieur (expérimental)",
+    "g852": "O-CM · 3 coins alternés",
+    "g853": "A-CM · 3 coins alternés",
+    "g854": "sagoae (en préparation)",
+    "g855": "sagoae ne peut pas encore être activé — son câblage autonome n'est pas en place, le siège est seulement réservé.",
+    "g856": "V-CM (absent)",
+    "g857": "K-CM (absent)",
+    "g858": "Les sièges vides (V-CM·K-CM) n'ont pas encore de conception — affichés comme simples emplacements.",
+    "g860": "Placement du QR sur la face",
+    "g861": "Côté centre",
+    "g862": "Jonction Y (v0TRQ)",
+    "g863": "Côté coin",
+    "g864": "Coin éloigné (v0TRY)",
+    "g865": "Choisissez où placer le QR intérieur — le côté centre utilise l'emplacement de la jonction Y (centre), le côté coin celui du coin éloigné.",
+    "g870": "Le repère sélectionné est une carte réservée au mode avancé — la carte est masquée, mais votre sélection reste active. Passez en mode avancé pour la voir.",
     "g601": "Appliquer maintenant",
     "g900": "Cet axe fixe le nombre de modules (cellules). Plus de modules, plus de capacité.\nÀ taille d'impression égale, une résolution plus haute rend chaque module plus petit : il faut donc s'approcher davantage.\nBasse = longue distance, grands tirages (panneaux) · Moyenne = affiches, 1-3 m · Haute = courte distance, grande capacité.\nEn mode auto, la résolution monte d'abord ; l'échelon « Robustesse ⇄ capacité » ne descend que si le contenu ne rentre toujours pas au maximum.\nLe dessin de la carte montre la taille du détecteur face à la silhouette — le détecteur occupe un nombre de cellules fixe, il paraît donc plus petit à mesure que la résolution monte.",
     "g901": "Cet axe fixe la part réservée à la correction d'erreurs (ECC). Plus de correction, moins de charge utile.\nCorrection d'abord = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacité = ECC L (≈12%).\nEn mode auto, H → M → L sont parcourus et le premier niveau où le contenu rentre est retenu.\nLe badge d'auto-vérification ci-dessous relit l'image que ces réglages ont réellement produite. Il juge si le rendu a tenu son propre contrat — pas ce que donneront une impression ou un appareil photo.",
@@ -4022,6 +4089,22 @@ const GENERATOR_STRINGS = {
     "g451": "simboli {d}+{n} · Δmin del preset {delta}",
     "g452": "simboli {d}+{n}",
     "g600": "È pronta una nuova versione.",
+    "g850": "Posto interno (sperimentale)",
+    "g851": "Posto esterno (sperimentale)",
+    "g852": "O-CM · 3 angoli alternati",
+    "g853": "A-CM · 3 angoli alternati",
+    "g854": "sagoae (in preparazione)",
+    "g855": "sagoae non può ancora essere attivato — il collegamento autonomo non è pronto, il posto è solo riservato.",
+    "g856": "V-CM (assente)",
+    "g857": "K-CM (assente)",
+    "g858": "I posti vuoti (V-CM·K-CM) non hanno ancora un progetto — mostrati solo come segnaposto.",
+    "g860": "Posizione del QR sulla faccia",
+    "g861": "Lato centro",
+    "g862": "Giunzione Y (v0TRQ)",
+    "g863": "Lato angolo",
+    "g864": "Angolo lontano (v0TRY)",
+    "g865": "Scegli dove collocare il QR interno — il lato centro usa lo slot della giunzione Y (centro), il lato angolo lo slot dell'angolo lontano.",
+    "g870": "Il rilevatore selezionato è una scheda solo per la modalità avanzata — la scheda è nascosta, ma la selezione resta attiva. Passa alla modalità avanzata per vederla.",
     "g601": "Applica ora",
     "g900": "Questo asse fissa il numero di moduli (celle). Più moduli, più capacità.\nA parità di dimensione di stampa, una risoluzione più alta rende ogni modulo più piccolo, quindi la fotocamera deve avvicinarsi.\nBassa = lunga distanza, stampe grandi (cartelloni) · Media = distanza da manifesto, 1-3 m · Alta = distanza ravvicinata, grande capacità.\nIn automatico la risoluzione sale per prima; il gradino «Robustezza ⇄ capacità» scende solo se al massimo il contenuto ancora non entra.\nIl disegno sulla scheda mostra la dimensione del rilevatore rispetto alla silhouette: il rilevatore occupa un numero fisso di celle, quindi in proporzione rimpicciolisce al salire della risoluzione.",
     "g901": "Questo asse fissa quanto spazio va alla correzione d'errore (ECC). Più correzione, meno payload.\nPrima la correzione = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacità = ECC L (≈12%).\nIn automatico vengono percorsi H → M → L e si prende il primo livello in cui il contenuto entra.\nIl badge di autoverifica qui sotto rilegge l'immagine che queste impostazioni hanno effettivamente prodotto: giudica se il rendering ha rispettato il proprio contratto, non come si comporteranno stampa o fotocamera.",
@@ -4436,6 +4519,22 @@ const GENERATOR_STRINGS = {
     "g451": "Symbole {d}+{n} · Δmin der Vorgabe {delta}",
     "g452": "Symbole {d}+{n}",
     "g600": "Eine neue Version steht bereit.",
+    "g850": "Innerer Platz (experimentell)",
+    "g851": "Äußerer Platz (experimentell)",
+    "g852": "O-CM · 3 wechselnde Ecken",
+    "g853": "A-CM · 3 wechselnde Ecken",
+    "g854": "sagoae (in Vorbereitung)",
+    "g855": "sagoae kann noch nicht aktiviert werden — die eigenständige Verdrahtung fehlt, der Platz ist nur reserviert.",
+    "g856": "V-CM (nicht vorhanden)",
+    "g857": "K-CM (nicht vorhanden)",
+    "g858": "Die leeren Plätze (V-CM·K-CM) haben noch kein Design — nur als Platzhalter angezeigt.",
+    "g860": "QR-Flächenplatzierung",
+    "g861": "Mittenseite",
+    "g862": "Y-Naht (v0TRQ)",
+    "g863": "Eckenseite",
+    "g864": "Ferne Ecke (v0TRY)",
+    "g865": "Wählen Sie, wo das innere QR sitzt — die Mittenseite nutzt den Y-Naht-Slot (Mitte), die Eckenseite den Slot der fernen Ecke.",
+    "g870": "Der gewählte Detektor ist eine Karte nur für den erweiterten Modus — die Karte ist ausgeblendet, die Auswahl bleibt aber bestehen. Im erweiterten Modus wird sie angezeigt.",
     "g601": "Jetzt anwenden",
     "g900": "Diese Achse legt die Anzahl der Module (Zellen) fest. Mehr Module, mehr Kapazität.\nBei gleicher Druckgröße wird jedes Modul mit höherer Auflösung kleiner, die Kamera muss also näher heran.\nNiedrig = große Entfernung, große Drucke (Plakatwände) · Mittel = Plakatabstand, 1-3 m · Hoch = Nahbereich, große Kapazität.\nIm Automatikmodus steigt zuerst die Auflösung; die Stufe „Robustheit ⇄ Kapazität“ sinkt nur, wenn der Inhalt auch beim Maximum nicht hineinpasst.\nDie Grafik auf der Karte zeigt die Detektorgröße im Verhältnis zur Silhouette — der Detektor belegt eine feste Zellenzahl und wirkt daher mit steigender Auflösung relativ kleiner.",
     "g901": "Diese Achse legt fest, wie viel Platz die Fehlerkorrektur (ECC) bekommt. Mehr Korrektur bedeutet weniger Nutzdaten.\nKorrektur zuerst = ECC H (≈40%) · Standard = ECC M (25%) · Große Kapazität = ECC L (≈12%).\nIm Automatikmodus wird H → M → L durchlaufen und die erste Stufe genommen, in die der Inhalt passt.\nDas Selbstprüfungs-Badge unten liest das Bild zurück, das diese Einstellungen tatsächlich erzeugt haben. Es beurteilt, ob das Rendering seinen eigenen Vertrag eingehalten hat — nicht, wie sich Druck oder Kamera verhalten werden.",
@@ -4850,6 +4949,22 @@ const GENERATOR_STRINGS = {
     "g451": "símbolos {d}+{n} · Δmin del ajuste {delta}",
     "g452": "símbolos {d}+{n}",
     "g600": "Hay una nueva versión lista.",
+    "g850": "Asiento interior (experimental)",
+    "g851": "Asiento exterior (experimental)",
+    "g852": "O-CM · 3 esquinas alternas",
+    "g853": "A-CM · 3 esquinas alternas",
+    "g854": "sagoae (en preparación)",
+    "g855": "sagoae aún no se puede activar: su cableado independiente no está listo, el asiento solo está reservado.",
+    "g856": "V-CM (ausente)",
+    "g857": "K-CM (ausente)",
+    "g858": "Los asientos vacíos (V-CM·K-CM) aún no tienen diseño; se muestran solo como marcadores.",
+    "g860": "Colocación del QR en la cara",
+    "g861": "Lado central",
+    "g862": "Unión Y (v0TRQ)",
+    "g863": "Lado esquina",
+    "g864": "Esquina lejana (v0TRY)",
+    "g865": "Elige dónde va el QR interior: el lado central usa la ranura de la unión Y (centro) y el lado esquina la ranura de la esquina lejana.",
+    "g870": "El detector seleccionado es una tarjeta solo del modo avanzado: la tarjeta está oculta, pero tu selección se mantiene. Cambia al modo avanzado para verla.",
     "g601": "Aplicar ahora",
     "g900": "Este eje fija el número de módulos (celdas). Más módulos, más capacidad.\nCon el mismo tamaño impreso, a mayor resolución cada módulo se hace más pequeño, así que hay que acercar más la cámara.\nBaja = larga distancia, impresiones grandes (vallas) · Media = distancia de cartel, 1-3 m · Alta = corta distancia, gran capacidad.\nEn modo automático primero sube la resolución, y el escalón «Robustez ⇄ capacidad» solo baja si el contenido sigue sin entrar en el máximo.\nEl dibujo de la tarjeta muestra el tamaño del detector frente a la silueta: el detector ocupa un número fijo de celdas, así que se ve relativamente más pequeño a medida que sube la resolución.",
     "g901": "Este eje fija cuánto espacio se reserva a la corrección de errores (ECC). Cuanta más corrección, menos carga útil.\nCorrección primero = ECC H (≈40%) · Estándar = ECC M (25%) · Gran capacidad = ECC L (≈12%).\nEn modo automático se recorre H → M → L y se toma el primer nivel en el que entra el contenido.\nLa insignia de autocomprobación de abajo vuelve a leer la imagen que estos ajustes han producido realmente: juzga si el renderizado ha cumplido su propio contrato, no cómo se comportarán la impresión o la cámara.",
@@ -5264,6 +5379,22 @@ const GENERATOR_STRINGS = {
     "g451": "símbolos {d}+{n} · Δmin da predefinição {delta}",
     "g452": "símbolos {d}+{n}",
     "g600": "Está pronta uma nova versão.",
+    "g850": "Assento interno (experimental)",
+    "g851": "Assento externo (experimental)",
+    "g852": "O-CM · 3 cantos alternados",
+    "g853": "A-CM · 3 cantos alternados",
+    "g854": "sagoae (em preparação)",
+    "g855": "sagoae ainda não pode ser ativado — a ligação autônoma não está pronta, o assento está apenas reservado.",
+    "g856": "V-CM (ausente)",
+    "g857": "K-CM (ausente)",
+    "g858": "Os assentos vazios (V-CM·K-CM) ainda não têm design — mostrados apenas como marcadores.",
+    "g860": "Posição do QR na face",
+    "g861": "Lado central",
+    "g862": "Junção Y (v0TRQ)",
+    "g863": "Lado canto",
+    "g864": "Canto distante (v0TRY)",
+    "g865": "Escolha onde fica o QR interno — o lado central usa o encaixe da junção Y (centro) e o lado canto o encaixe do canto distante.",
+    "g870": "O detector selecionado é um cartão exclusivo do modo avançado — o cartão está oculto, mas a seleção permanece. Mude para o modo avançado para vê-lo.",
     "g601": "Aplicar agora",
     "g900": "Este eixo define o número de módulos (células). Mais módulos, mais capacidade.\nCom o mesmo tamanho impresso, quanto maior a resolução mais pequeno fica cada módulo, por isso a câmara tem de se aproximar.\nBaixa = longa distância, impressões grandes (outdoors) · Média = distância de cartaz, 1-3 m · Alta = curta distância, grande capacidade.\nNo modo automático a resolução sobe primeiro, e o degrau «Robustez ⇄ capacidade» só desce se o conteúdo continuar a não caber no máximo.\nO desenho do cartão mostra o tamanho do detector em relação à silhueta — o detector ocupa um número fixo de células, por isso parece relativamente mais pequeno à medida que a resolução sobe.",
     "g901": "Este eixo define quanto espaço vai para a correção de erros (ECC). Quanta mais correção, menos carga útil.\nCorreção primeiro = ECC H (≈40%) · Padrão = ECC M (25%) · Grande capacidade = ECC L (≈12%).\nNo modo automático percorre-se H → M → L e fica o primeiro nível onde o conteúdo cabe.\nO emblema de autoverificação abaixo relê a imagem que estas definições produziram de facto: julga se a renderização cumpriu o seu próprio contrato, não como se vão comportar a impressão ou a câmara.",
@@ -5571,7 +5702,7 @@ const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
   syncFaceGainLabel, syncRenderProfileUi, syncExportOptionsUi, syncExportPpiHint,
-  syncShadingUi, syncYLocatorUi, syncTurnAUi, syncCornerMarkerUi,
+  syncShadingUi, syncYLocatorUi, syncTurnAUi, syncSeatUi,
   syncTypeYCellEditorUi,
   syncHelpPopover,
 ];
@@ -5653,6 +5784,9 @@ import {
 import {
   CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS, wireFinderCardActivation,
 } from './src/finder-card-ui.js';
+import {
+  ADVANCED_ONLY_CENTRAL_IDS, SEAT_NONE, cmqWireExists, zoneCards,
+} from './src/finder-zone-ui.js';
 import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
@@ -5722,8 +5856,10 @@ const els = {
   toneCardsNormal: $('toneCardsNormal'), toneCardsAdvanced: $('toneCardsAdvanced'),
   faceGain: $('faceGain'), faceGainValue: $('faceGainValue'), faceGainRow: $('faceGainRow'),
   qrUrl: $('qrUrl'),
-  // 공용 컨트롤 (QR 위치 7택 + 병행 표시 + 게이지 + 장식 이미지)
+  // 공용 컨트롤 (QR 위치 6택 + 면 배치 + 병행 표시 + 게이지 + 장식 이미지)
   cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
+  qrFacePlacementSection: $('qrFacePlacementSection'),
+  qrFacePlacementCards: $('qrFacePlacementCards'),
   decorSection: $('decorSection'),
   decorPickL: $('decorPickL'), decorPickR: $('decorPickR'),
   decorClearL: $('decorClearL'), decorClearR: $('decorClearR'),
@@ -5761,6 +5897,7 @@ const els = {
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
+  finderAdvancedOnlyHint: $('finderAdvancedOnlyHint'),
   finderPatternCards: $('finderPatternCards'),
   finderUserCards: $('finderUserCards'),
   finderOakCards: $('finderOakCards'),
@@ -5772,8 +5909,11 @@ const els = {
   finderExperimentalWarning: $('finderExperimentalWarning'),
   yLocatorSection: $('yLocatorSection'), yLocatorCards: $('yLocatorCards'),
   turnASection: $('turnASection'), turnACards: $('turnACards'),
-  cornerMarkerSection: $('cornerMarkerSection'), cornerMarkerCards: $('cornerMarkerCards'),
-  cornerMarkerHint: $('cornerMarkerHint'),
+  // 검출기 seat 구역 (W2 C4 — 구 cornerMarkerSection 승계)
+  finderInnerZone: $('finderInnerZone'), innerSeatCards: $('innerSeatCards'),
+  innerSeatHint: $('innerSeatHint'),
+  finderOuterZone: $('finderOuterZone'), outerSeatCards: $('outerSeatCards'),
+  outerSeatHint: $('outerSeatHint'),
   yLocatorHint: $('yLocatorHint'),
   yLocatorArmSection: $('yLocatorArmSection'), yLocatorArmCards: $('yLocatorArmCards'),
   yLocatorArmHint: $('yLocatorArmHint'),
@@ -6507,6 +6647,18 @@ function applyFinderExperimentVisibility() {
       if (!show) block.open = false;
     }
   }
+  // ── C5 고급 게이팅 (설계서 ③ — 운영자 확정 2026-08-23·24) ────────────────
+  // 정식(official) normal 의 formal 행은 cube-bullseye·central-v0·center-qr 3장.
+  // advancedOnly(= formal 여집합 유도 — finder-zone-ui)는 **표시 게이트**로만
+  // 숨긴다: 스키마·active 는 BOTH 유지 (숨김-active 는 renderFinderUi 가 배지로
+  // 말한다 — 조용한 무시 금지, 강제 리셋도 없음: 파인더는 사용자 명시 선택이다).
+  // 시험판(finder-experiment)은 전 카드 유지 (모드 무관).
+  const trialBuild = document.body.dataset.generatorEdition === 'finder-experiment';
+  const hideAdvancedOnly = !show && !trialBuild;
+  for (const id of ADVANCED_ONLY_CENTRAL_IDS) {
+    const card = els.finderLegacyRow.querySelector('[data-finder-id="' + id + '"]');
+    if (card) card.style.display = hideAdvancedOnly ? 'none' : '';
+  }
 }
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
 els.modeAdvancedBtn.addEventListener('click', () => setMode('advanced'));
@@ -6998,13 +7150,60 @@ function ensureFinderCards() {
   }
 }
 
+/* ── 검출기 seat 구역 (W2 C4) — 내곽/외곽 카드를 zoneCards() 유도로 채운다 ──────
+ *
+ * 카드 구성·허용값·타입 부합은 전부 src/finder-zone-ui.js (분류 정본 유도)가 낸다.
+ * 여기 남는 것은 **표현**(아이콘·라벨 키)뿐이고, 유도에 있는데 표현이 없으면
+ * 아래 throw 가 로드 시점에 잡는다 — 사본 목록이 아니라 검증되는 매핑이다. */
+
+/** seat 카드 아이콘 — 발자국 미니 도면 (yLocatorCards 아이콘 규약과 같은 문법).
+ *  없음 = 실루엣만 · o-cm = 육각 + 교대 코너 3점 · a-cm = 삼각 + 코너 3점 ·
+ *  sagoae = 육각 + 안쪽 점선 링(예약 영역) · v-cm/k-cm = 점선 실루엣 (부재). */
+const SEAT_CARD_ICONS = Object.freeze({
+  [SEAT_NONE]: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/></svg>',
+  'o-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><circle cx="12" cy="2.6" r="1.6" fill="currentColor" stroke="none"/><circle cx="21" cy="17" r="1.6" fill="currentColor" stroke="none"/><circle cx="3" cy="7" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  sagoae: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M12 6.5 L16.8 9.2 L16.8 14.8 L12 17.5 L7.2 14.8 L7.2 9.2 Z" stroke-dasharray="2 1.6"/></svg>',
+  'a-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L21 19 L3 19 Z"/><circle cx="12" cy="3.4" r="1.6" fill="currentColor" stroke="none"/><circle cx="20.4" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="3.6" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  'v-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3 5 L21 5 L12 21 Z" stroke-dasharray="2.4 2"/></svg>',
+  'k-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L20 17 L4 17 Z" stroke-dasharray="2.4 2"/><path d="M12 21 L4 7 L20 7 Z" stroke-dasharray="2.4 2"/></svg>',
+});
+const SEAT_CARD_LABEL_KEYS = Object.freeze({
+  [SEAT_NONE]: 'g577', 'o-cm': 'g852', 'a-cm': 'g853',
+  sagoae: 'g854', 'v-cm': 'g856', 'k-cm': 'g857',
+});
+
+let seatCardsBuilt = false;
+function ensureSeatCards() {
+  if (seatCardsBuilt) return;
+  seatCardsBuilt = true;
+  const zones = zoneCards();
+  const build = (container, cards) => {
+    for (const desc of cards) {
+      const icon = SEAT_CARD_ICONS[desc.id];
+      const labelKey = SEAT_CARD_LABEL_KEYS[desc.id];
+      if (!icon || !labelKey) throw new Error('seat 카드 표현 누락: ' + desc.id);
+      const card = document.createElement('div');
+      card.className = 'toggle-card';
+      card.dataset.seat = desc.id;
+      card.dataset.seatTypes = desc.types.join(' ');
+      card.dataset.seatReady = desc.ready ? '1' : '0';
+      if (desc.absent) card.dataset.seatAbsent = '1';
+      card.innerHTML = icon;
+      const label = document.createElement('span');
+      label.dataset.seatLabelKey = labelKey;
+      card.append(label);
+      container.append(card);
+    }
+  };
+  build(els.innerSeatCards, zones.inner);
+  build(els.outerSeatCards, zones.outer);
+}
+
 // Type O/A 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
 function renderFinderUi() {
   ensureFinderCards();
   const visible = currentType() !== 'Y';
   els.finderSection.style.display = visible ? '' : 'none';
-  // 초기 로드에도 걸려야 한다 — setMode 안에만 두면 모드를 한 번 눌러야 적용됐다.
-  applyFinderExperimentVisibility();
 
   // ⚠ 예전엔 finderPatternCards 만 돌아서 **손그림·OAK 서랍의 패밀리 제목이 공백**
   //   이었다 (2026-08-18 브라우저 확인에서 발견 — 회귀는 카드 수만 세고 있었다).
@@ -7025,6 +7224,20 @@ function renderFinderUi() {
     card.setAttribute('aria-pressed', String(active));
     const label = card.querySelector('[data-finder-label-key]');
     label.textContent = t(label.dataset.finderLabelKey);
+  }
+  // 초기 로드에도 걸려야 한다 — setMode 안에만 두면 모드를 한 번 눌러야 적용됐다.
+  // ⚠ 위 루프의 display='' 리셋 **뒤**여야 한다 (C5) — 앞에 두면 advancedOnly
+  //   숨김이 이 루프에 되돌려진다.
+  applyFinderExperimentVisibility();
+  // C5 숨김-active 배지 — 정식 normal 에서 advancedOnly 카드가 active 인 채면
+  // (URL·이전 세션 경로) 카드는 안 보이는데 선택은 산다. 강제 리셋은 하지 않는다 —
+  // 파인더는 사용자 명시 선택이라 «파인더가 이긴다» 방향과 정합. 대신 이유를 말한다.
+  if (els.finderAdvancedOnlyHint) {
+    const hiddenActive = mode !== 'advanced'
+      && document.body.dataset.generatorEdition !== 'finder-experiment'
+      && ADVANCED_ONLY_CENTRAL_IDS.includes(generatorState.finderPatternId);
+    els.finderAdvancedOnlyHint.style.display = hiddenActive ? '' : 'none';
+    if (hiddenActive) els.finderAdvancedOnlyHint.textContent = t('g870');
   }
 
   const selectedPattern = FINDER_PATTERNS.find(
@@ -7128,6 +7341,72 @@ function renderFinderUi() {
 }
 
 /** 공용 QR 위치 카드 갱신 — 상태는 건드리지 않고 현재 정규 상태만 그린다. */
+/*
+ * ── Y 안쪽 QR «면 배치» 파생 (W2 C3, 설계서 ②) ─────────────────────────────
+ *
+ * 사용자 축은 (qrPosition 안쪽 여부) × (qrFacePlacement seam/far) 둘뿐이고,
+ * 슬롯 레이아웃(v0TY·v0TRY·v0TRQ)은 이 파생이 만든 값이다. 구 «면»(plane) 카드의
+ * 양방향 전환 2쌍(QR 카드↔로케이터 카드가 서로를 강제)은 왕복 위험을 주석으로
+ * 억누르고 있었다 — 파생 한 방향으로 대체해 그 쌍을 통째로 없앤다.
+ */
+
+/** v0T 계열(파생의 입력이 있는 base·파생 프로파일) — 스키마 허용값의 부분집합. */
+const Y_T_SERIES_PROFILES = Object.freeze([
+  LOCATOR_PROFILE_CELL_SURFACE_V0T, LOCATOR_PROFILE_CELL_SURFACE_V0TY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TR, LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
+]);
+
+/** 현재 로케이터가 QR 슬롯을 가진 레이아웃인가 — cellSurfaceFinal 정본 질의로 판정한다
+ *  (id 손 목록 금지 — 프로파일 문자열은 'cell-surface-' + 레이아웃 id 규약). */
+function ySlotLocatorActive() {
+  const profile = generatorState.locatorProfileY;
+  return isCellSurfaceLocatorProfileY(profile)
+    && hasCenterQrSlot(profile.slice('cell-surface-'.length));
+}
+
+/** Y 안쪽에서 **윈도 β 가 실제로 그려지는** 상태인가. 로케이터가 셀 표면이면
+ *  encodeOptionsForY 가 레이아웃 분기를 먼저 타므로 윈도는 안 실린다 — 이 술어가
+ *  encoded.window === true 와 같은 진리값을 낸다 (끔·hex 만 참). */
+function yWindowActive() {
+  return currentType() === 'Y' && generatorState.qrPosition === 'inner'
+    && !isCellSurfaceLocatorProfileY(generatorState.locatorProfileY);
+}
+
+/**
+ * QR 위치·면 배치 선택을 로케이터 파생값에 반영한다 (한 방향 — UI 커밋 지점에서만).
+ *   · 안쪽 + v0T 계열: seam → **v0TRQ** (v0TQ 는 편입 불가 실측 — cellSurfaceFinal
+ *     §V0TY 주석 «autoplace 거부 + 콰이어트 0셀 확증 게이트 거절» — 이라 v0TR 계열로
+ *     승격한다) · far → v0T→**v0TY** / v0TR 계열→**v0TRY**.
+ *   · 안쪽 이탈: 파생형을 base 로 되돌린다 (v0TY→v0T · v0TRQ/v0TRY→v0TR).
+ *   · 끔·hex·v0 는 안 건드린다 — 끔/hex 안쪽은 레거시 윈도 β 폴백이고(정식 화면의
+ *     유일 경로), v0(n=13)는 슬롯 파생이 없다.
+ */
+function deriveYLocatorForQrPosition(pos) {
+  if (currentType() !== 'Y') return;
+  const profile = generatorState.locatorProfileY;
+  let next = profile;
+  if (pos === 'inner') {
+    if (Y_T_SERIES_PROFILES.includes(profile)) {
+      const far = generatorState.qrFacePlacement === 'far';
+      const v0tFamily = profile === LOCATOR_PROFILE_CELL_SURFACE_V0T
+        || profile === LOCATOR_PROFILE_CELL_SURFACE_V0TY;
+      next = far
+        ? (v0tFamily ? LOCATOR_PROFILE_CELL_SURFACE_V0TY : LOCATOR_PROFILE_CELL_SURFACE_V0TRY)
+        : LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;
+    }
+  } else if (profile === LOCATOR_PROFILE_CELL_SURFACE_V0TY) {
+    next = LOCATOR_PROFILE_CELL_SURFACE_V0T;
+  } else if (profile === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ
+    || profile === LOCATOR_PROFILE_CELL_SURFACE_V0TRY) {
+    next = LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+  }
+  if (next !== profile) {
+    generatorState.locatorProfileY = next;
+    syncYLocatorUi();
+  }
+}
+
 function renderQrPositionUi() {
   const isY = currentType() === 'Y';
   /*
@@ -7158,15 +7437,28 @@ function renderQrPositionUi() {
   els.qrCornerToo.checked = generatorState.qrCornerToo;
   els.qrCenterHint.style.display = inner && !isY ? '' : 'none';
   els.cornerTooRow.style.display = mode === 'advanced' && inner && !isY ? '' : 'none';
-  els.decorSection.style.display = inner && isY ? '' : 'none';
+  // «QR 면 배치» 서브섹션 — Y + 안쪽 + v0T 계열 로케이터에서만 연다 (파생의 입력이
+  // 있을 때만 — 끔(윈도 β)·v0 에서 열면 «살아 있는 무동작 컨트롤» 이 된다).
+  const placementOpen = inner && isY
+    && Y_T_SERIES_PROFILES.includes(generatorState.locatorProfileY);
+  els.qrFacePlacementSection.style.display = placementOpen ? '' : 'none';
+  for (const card of els.qrFacePlacementCards.children) {
+    card.classList.toggle('active', card.dataset.placement === generatorState.qrFacePlacement);
+  }
+  // 장식 이미지 게이트 협착 (W2 C3): 표시 조건(안쪽×Y)이 아니라 **실그림 조건**
+  // (윈도 β 가 실제로 그려질 때 = decorActive 의 encoded.window)으로 좁힌다 —
+  // 로케이터가 셀 표면이면 열려도 아무 일이 없었다 (조사 리스크 해소).
+  els.decorSection.style.display = yWindowActive() ? '' : 'none';
 }
 
 function syncFinderQrUi() {
   // 언어·모드 재표시는 상태를 정규화하지 않는다. 사용자 선택 이벤트의 commit만 쓴다.
   renderQrPositionUi();
   renderFinderUi();
-  // QR 위치가 중앙으로 바뀌면 코너 마커가 살아 있으면 안 된다 (인코더가 던진다).
-  syncCornerMarkerUi();
+  // ⚠ **의도적 갱신 (W2 C4)** — 여기엔 «중앙 QR 이면 코너 마커 강제 소등» 이 적혀
+  // 있었다. C2a 가 그 배타를 해제했으므로 (CM+Q 합법) 소등은 없다 — seat 구역의
+  // 표시·와이어 술어 게이트만 재동기화한다 (syncSeatUi 의 cmqWireExists).
+  syncSeatUi();
 }
 
 for (const card of els.typeCards.children) {
@@ -7178,47 +7470,33 @@ for (const card of els.typeCards.children) {
   });
 }
 
-// ── 일반 모드: QR 링크 포함 위치 카드 (7택 — 안쪽/면/좌상/우상/좌하/우하/없음) ──────
+// ── 일반 모드: QR 링크 포함 위치 카드 (6택 — 안쪽/좌상/우상/좌하/우하/없음) ──────
 
 for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     const type = currentType();
-    // ── QR 위치 «면» ↔ 로케이터 v0TY 연동 (2026-08-17 v0T 편입 라운드) ─────
-    //
-    // v0WY 시절과 같은 문법이다 — 전환 대상만 v0W 계열 → v0T 계열로 바뀌었다
-    // (v0W 계열 전체 드랍 · v0T = Type Y 최종 파인더).
-    // «면» 은 **레이아웃 v0TY 자체**다 (먼 코너 슬롯 64셀) — 이 핸들러는 «레이아웃
-    // 전환» 이다.
-    //
-    // 전환 규칙 (#22 해상도 연동과 같은 관용구 — 사용자가 고른 축 하나만 움직인다):
-    //   · 면 선택 + 현재 v0t        → **v0ty**
-    //   · 면 해제(다른 QR 위치) + 현재 v0ty → **v0t** 로 복귀
-    //   · v0(n=13)·off·hex 는 **안 건드린다** — 그 자리에 v0TY 가 없다 (n=21 전용).
-    //     이때 «면» 은 레이아웃을 못 바꾸므로 QR 도 안 실린다 (fallback 이 그대로 off).
-    //   · 면 선택 + 현재 v0tr       → **v0try**   (2026-08-18 편입 — 같은 문법)
-    //   · 면 해제 + 현재 v0try       → **v0tr** 로 복귀
-    //   · v0trq 는 **안 건드린다** — 그쪽 슬롯은 중앙(Y-심)이라 «면» 과 같은 축이 아니다.
-    if (type === 'Y') {
-      if (card.dataset.pos === 'plane') {
-        if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0T) {
-          generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TY;
-          syncYLocatorUi();
-        } else if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TR) {
-          generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TRY;
-          syncYLocatorUi();
-        }
-      } else if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY) {
-        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0T;
-        syncYLocatorUi();
-      } else if (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TRY) {
-        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TR;
-        syncYLocatorUi();
-      }
-    }
+    // ⚠ **의도적 갱신 (W2 C3)** — 여기 있던 «면» ↔ v0TY/v0TRY 양방향 전환 분기는
+    // plane 카드 삭제와 함께 내렸다. Y 의 안쪽 QR 은 (안쪽 여부) × (면 배치) 로
+    // 분해됐고, 로케이터 파생은 §deriveYLocatorForQrPosition 한 방향뿐이다.
+    if (type === 'Y') deriveYLocatorForQrPosition(card.dataset.pos);
     commitFinderQrUi(
       selectQrPosition(generatorState, card.dataset.pos, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
     );
   });
+}
+
+// «QR 면 배치» 서브섹션 (W2 C3) — placement 축의 유일한 입력 지점.
+if (els.qrFacePlacementCards) {
+  for (const card of els.qrFacePlacementCards.children) {
+    card.addEventListener('click', () => {
+      generatorState.qrFacePlacement = card.dataset.placement === 'far' ? 'far' : 'seam';
+      deriveYLocatorForQrPosition(generatorState.qrPosition);
+      renderQrPositionUi();
+      // 로케이터가 바뀌면 해상도 단의 잠금·활성도 같이 움직인다 (#22 관용구).
+      syncResTierUi();
+      schedule();
+    });
+  }
 }
 syncFinderQrUi();
 
@@ -7253,7 +7531,9 @@ for (const card of els.eccTierCards.children) {
 function syncResTierUi() {
   const type = currentType();
   const isO = type === 'O';
-  const windowLocked = type === 'Y' && generatorState.qrPosition === 'inner';
+  // W2 C3 협착: «안쪽 = 윈도» 가 아니라 **실제 윈도 β 상태**만 잠근다 — 셀 표면
+  // 로케이터(파생 슬롯 포함)의 안쪽은 Y1 이 그려지는데 저·중을 잠그면 자가 거짓이다.
+  const windowLocked = yWindowActive();
   // 셀 표면 라인업 잠금 (2026-08-16 드랍 반영): v0 = Y0(저) 고정.
   // v2r2(Y1/Y2 중·고)·v1r2 잠금은 카드와 함께 내려갔다 — **Y2 는 이제 공백**이다.
   const cellSurfaceV0 = type === 'Y'
@@ -7567,35 +7847,21 @@ if (els.yLocatorCards) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_HEX_FRAME_V1;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0T) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0T;
-      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TY) {
-        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TY;
-        // «먼 코너 QR» 은 슬롯이 레이아웃 정의라 QR 이 선택 사항이 아니다 —
-        // QR 위치가 «없음» · «안쪽» 이면 슬롯이 비거나 윈도 β 와 겁친다.
-        // 사용자가 검출기 카드로 들어온 경로도 QR 위치를 «면» 으로 맞춰 준다
-        // (반대 방향 연동은 §qrPositionCards 에 있다 — v0WY 시절과 같은 문법).
-        if (generatorState.qrPosition !== 'plane') {
-          generatorState.qrPosition = 'plane';
-          renderQrPositionUi();
-        }
+      // ⚠ **의도적 갱신 (W2 C3)** — v0TY · v0TRY 분기는 카드와 함께 내렸다
+      //   (드랍이 아니라 **파생값 강등**이다: 값·와이어·판독은 그대로 살고,
+      //   §deriveYLocatorForQrPosition 이 «안쪽 + 코너측» 에서 이 값을 만든다).
+      //   구 분기의 «QR 위치를 면으로 맞춰 준다» 역방향 강제도 함께 사라졌다 —
+      //   그 양방향 쌍이 이 개편이 없애려던 왕복 위험이다.
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TR) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TR;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ) {
-        // ⚠ v0TY 와 달리 **QR 위치를 건드리지 않는다.** v0TY 의 «면» 연동은 그 카드가
-        // 곧 «먼 코너 슬롯» 이라는 레이아웃 선택이기 때문인데, v0TRQ 의 슬롯은
-        // **중앙(Y-심)** 이라 QR 위치 카드 여섯 중 어느 것과도 같은 축이 아니다.
-        // 두 QR 이 그려질 걱정도 없다 — 슬롯 레이아웃이면 sceneY 가 코너 QR 을
-        // 억제하고, 슬롯 qrText 가드도 `hasCenterQrSlot` 정본 질의로 걸린다.
+        // v0TRQ 카드는 직접 선택이 남는다 — 슬롯이 **중앙(Y-심)** 이라 코너 QR 위치
+        // 카드와 같은 축이 아니다. 두 QR 걱정도 없다: 슬롯 레이아웃이면 sceneY 가
+        // 코너 QR 을 억제하고, 슬롯 qrText 가드도 `hasCenterQrSlot` 정본 질의로 걸린다.
+        // 단 «안쪽» 이 활성이면 이 카드는 곧 «중앙측» 선택이다 — placement 축을
+        // 함께 맞춰 파생과 어긋나지 않게 한다 (한 이벤트가 함의하는 축만 움직인다).
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;
-      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TRY) {
-        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TRY;
-        // v0TY 와 **같은 연동**이다 (v0TRQ 와 다르다) — 이 슬롯은 v0TY 와 같은 «먼
-        // 코너» 라 QR 위치 카드 «면» 과 정확히 같은 축이다. QR 위치가 «없음»·«안쪽»
-        // 이면 슬롯이 비거나 윈도 β 와 겹치므로 여기서 «면» 으로 맞춰 준다
-        // (반대 방향 연동은 §qrPositionCards 에 있다).
-        if (generatorState.qrPosition !== 'plane') {
-          generatorState.qrPosition = 'plane';
-          renderQrPositionUi();
-        }
+        if (generatorState.qrPosition === 'inner') generatorState.qrFacePlacement = 'seam';
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0;
       // v1r2 · v2r2 분기는 2026-08-16 드랍으로, v0XQ(2라운드) · v0X(3라운드) 분기는
@@ -7607,6 +7873,10 @@ if (els.yLocatorCards) {
       } else {
         generatorState.locatorProfileY = LOCATOR_PROFILE_OFF;
       }
+      // «안쪽» 이 활성인 채 base 카드를 고르면 파생을 즉시 적용한다 (W2 C3 —
+      // 파생 한 방향. 안쪽이 아니면 no-op 이고, 끔·hex·v0 도 no-op 이다).
+      deriveYLocatorForQrPosition(generatorState.qrPosition);
+      renderQrPositionUi();
       syncYLocatorUi();
       syncTypeUi();
       // #22 연동: 로케이터가 해상도 단의 잠금·활성·힌트(g964)를 정하므로 여기서도
@@ -7629,21 +7899,28 @@ if (els.turnACards) {
   }
 }
 
-if (els.cornerMarkerCards) {
-  for (const card of els.cornerMarkerCards.children) {
-    card.addEventListener('click', () => {
-      // 중앙 QR 잠금은 C2a(2026-08-23)에서 해제됐다 — CM+Q 는 배치 검증 완료 조합이다
-      // (markerG CMQ 와이어 + test/markerG-centerqr.test.js 왕복 6종).
-      generatorState.cornerMarker = card.dataset.cornermarker === 'on';
-      // 상호배제를 **여기서** 해소한다 — encodeOptsFor 가 조용히 떨구면 화면의
-      // 턴A 카드는 켜진 채로 남아 «켰는데 안 먹는» 상태가 된다.
-      if (generatorState.cornerMarker) generatorState.turnA = false;
-      syncCornerMarkerUi();
-      syncTurnAUi();
-      schedule();
-    });
-  }
+// seat 카드 배선 (W2 C4) — 구 cornerMarkerCards 핸들러의 승계. 카드는
+// ensureSeatCards 가 지연 생성하므로 컨테이너 위임으로 배선한다.
+// 중앙 QR 잠금은 C2a(2026-08-23)에서 해제됐다 — CM+Q 는 배치 검증 완료 조합이다
+// (markerG CMQ 와이어 + test/markerG-centerqr.test.js 왕복 6종). 남는 잠금은
+// syncSeatUi 의 와이어 존재 술어뿐이고, disabled 카드는 여기서 걸러진다.
+function wireSeatCards(container, seatKey) {
+  if (!container) return;
+  container.addEventListener('click', (event) => {
+    const card = event.target.closest('.toggle-card');
+    if (!card || !container.contains(card) || card.classList.contains('disabled')) return;
+    generatorState[seatKey] = card.dataset.seat;
+    // 상호배제를 **여기서** 해소한다 — encodeOptsFor 가 조용히 떨구면 화면의
+    // 턴A 카드는 켜진 채로 남아 «켰는데 안 먹는» 상태가 된다 (a-cm × turnA —
+    // encodeA 가 둘 다 참이면 던진다).
+    if (generatorState.outerSeat === 'a-cm') generatorState.turnA = false;
+    syncSeatUi();
+    syncTurnAUi();
+    schedule();
+  });
 }
+wireSeatCards(els.innerSeatCards, 'innerSeat');
+wireSeatCards(els.outerSeatCards, 'outerSeat');
 
 const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
 
@@ -9020,7 +9297,9 @@ function syncTypeUi() {
   els.ecc.value = generatorState.eccLevel;
   // Y + 안쪽(윈도 β)은 2톤 전용이다 — 해상도 티어와 같은 규약으로, 렌더가 강제하는 값을
   // 카드에도 그대로 비춰 준다. 안 그러면 3톤이 선택된 것처럼 보이는데 2톤이 그려진다.
-  const toneLocked = isY && generatorState.qrPosition === 'inner';
+  // W2 C3 협착: 셀 표면 로케이터의 안쪽(파생 슬롯)은 3톤이 실제로 그려진다 —
+  // 잠금은 실제 윈도 β 상태(yWindowActive)에서만.
+  const toneLocked = isY && yWindowActive();
   const lockedTone = WINDOW_TONES;
   for (const toneCards of [els.toneCardsNormal, els.toneCardsAdvanced]) {
     for (const card of toneCards.children) {
@@ -9046,7 +9325,7 @@ function syncTypeUi() {
   syncShadingUi();       // 입체 음영도 같은 이유로 Y 전용이다.
   syncYLocatorUi();
   syncTurnAUi();
-  syncCornerMarkerUi();
+  syncSeatUi();
   syncTypeYCellEditorUi();
 }
 
@@ -9057,9 +9336,10 @@ function syncTurnAUi() {
   section.hidden = !(isLabPath() && generatorState.type === 'A');
   if (!els.turnACards) return;
   const on = generatorState.turnA === true;
-  // 코너 마커와 상호배제 — 잠긴 이유를 보이게 한다. 조용히 무시하면
+  // 코너 마커(외곽 seat a-cm)와 상호배제 — 잠긴 이유를 보이게 한다. 조용히 무시하면
   // 「켰는데 안 먹는」 카드가 되고, 그건 회귀보다 먼저 사람을 속인다.
-  const locked = generatorState.cornerMarker === true;
+  // (W2 C4: cornerMarker boolean → outerSeat 승계 — encodeA 던짐 조합은 A 쪽뿐이다.)
+  const locked = generatorState.outerSeat === 'a-cm';
   for (const card of els.turnACards.children) {
     card.classList.toggle('active', (card.dataset.turna === 'on') === on);
     card.classList.toggle('disabled', locked);
@@ -9067,29 +9347,51 @@ function syncTurnAUi() {
 }
 
 /**
- * 코너 마커 카드 — Type O·A + lab 에서만 연다.
+ * 검출기 seat 구역 (내곽/외곽) — Type O·A + lab 에서만 연다 (W2 C4 —
+ * 구 syncCornerMarkerUi 의 승계·재작성).
  *
  * Y 를 뺀 이유: Y 는 코너 마커가 아니라 자기 로케이터 문법(v0 계열)을 쓴다.
  * `encodeY` 는 이 키를 아예 모르므로 넘기면 조용히 무시되거나 던진다.
+ *
+ * «중앙 QR × 코너 예약» 배타는 C2a(2026-08-23)에서 해제됐다 — markerG CMQ 6칸
+ * (test/markerG-centerqr.test.js 배치+왕복 실측), 운영자 지시 PM/022 항목 1ⓑ.
+ * 그래서 잠금은 상수가 아니라 **와이어 존재 술어**(cmqWireExists — markerG 에
+ * 그 family 의 CMQ 행이 실재하는가)로 게이트한다: 현재 hex·tri 모두 존재라
+ * CM 계열 + 중앙 QR 동시 활성이 성립한다. 술어가 false 인 family 가 다시 생기면
+ * 그 자리에서만 seat 카드가 잠기고 g580 이 이유를 말한다 (조용한 무시 금지).
+ * turnA·daehan 배타는 그대로다 (여전히 배치 미검증 조합).
  */
-function syncCornerMarkerUi() {
-  const section = els.cornerMarkerSection;
-  if (!section) return;
-  section.hidden = !(isLabPath() && (generatorState.type === 'O' || generatorState.type === 'A'));
-  if (!els.cornerMarkerCards) return;
-  /*
-   * (구) 세 번째 상호배제 «중앙 QR × 코너 예약» 은 C2a(2026-08-23)에서 해제됐다 —
-   * 인코더의 «배치 검증 미실시» 던짐이 검증 완료로 개설됐고(markerG CMQ 6칸,
-   * test/markerG-centerqr.test.js 배치+왕복 실측), 운영자 지시(PM/022 항목 1ⓑ)가
-   * 그 목적이었다: 코드 간 스캔 성능 비교·미리보기에서 두 변형을 같이 본다.
-   * turnA·daehan 배타는 그대로다 (여전히 배치 미검증 조합).
-   */
-  const on = generatorState.cornerMarker === true;
-  for (const card of els.cornerMarkerCards.children) {
-    card.classList.toggle('active', (card.dataset.cornermarker === 'on') === on);
-    card.classList.remove('disabled');
-  }
-  if (els.cornerMarkerHint) els.cornerMarkerHint.textContent = t('g579');
+function syncSeatUi() {
+  if (!els.finderInnerZone || !els.finderOuterZone) return;
+  const type = generatorState.type;
+  const show = isLabPath() && (type === 'O' || type === 'A');
+  els.finderInnerZone.hidden = !show;
+  els.finderOuterZone.hidden = !show;
+  if (!show) return;
+  ensureSeatCards();
+  const family = type === 'O' ? 'hex' : 'tri';
+  const wireLocked = generatorState.qrPosition === 'inner' && !cmqWireExists(family);
+  const sync = (container, seatValue) => {
+    for (const card of container.children) {
+      const seat = card.dataset.seat;
+      const isNone = seat === SEAT_NONE;
+      // 타입 부합만 표시 (검출기 필터 — zoneCards 의 types 표).
+      card.style.display = card.dataset.seatTypes.split(' ').includes(type) ? '' : 'none';
+      const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone);
+      card.classList.toggle('disabled', locked);
+      card.classList.toggle('active', seat === seatValue);
+      const label = card.querySelector('[data-seat-label-key]');
+      label.textContent = t(label.dataset.seatLabelKey);
+      // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580).
+      card.title = card.dataset.seatAbsent === '1' ? t('g858')
+        : seat === 'sagoae' ? t('g855')
+          : (wireLocked && !isNone) ? t('g580') : '';
+    }
+  };
+  sync(els.innerSeatCards, generatorState.innerSeat);
+  sync(els.outerSeatCards, generatorState.outerSeat);
+  if (els.innerSeatHint) els.innerSeatHint.textContent = t('g579');
+  if (els.outerSeatHint) els.outerSeatHint.textContent = t('g858');
 }
 
 function syncYLocatorUi() {
@@ -9523,13 +9825,18 @@ function normalPayloadText() {
 function resolveFallback(type, position) {
   if (position === 'none') return { mode: 'off' }; // QR 미인쇄 (사용자 지시 2026-08-09)
   if (position === 'inner') {
-    return type === 'Y' ? { mode: 'window' } : { mode: 'center', cornerToo: false };
+    if (type !== 'Y') return { mode: 'center', cornerToo: false };
+    // Y 안쪽 (W2 C3 — placement 파생): 로케이터가 슬롯 레이아웃(v0TY·v0TRQ·v0TRY —
+    // §deriveYLocatorForQrPosition 파생값)이면 QR 은 **슬롯이 소유**한다. 'slot' 은
+    // 구 'plane' 표지의 승계로 렌더 스위치가 아니다 — renderTypeY 는 qrText 만 싣고
+    // 슬롯 qrText 가드(hasCenterQrSlot)와 sceneY 의 코너 억제가 나머지를 진다.
+    // 비-슬롯(끔·hex 는 실제 윈도 β, v0·v0T·v0TR 는 QR 없음)은 'window' 표지 유지 —
+    // 셀 표면이면 encodeOptionsForY 가 레이아웃 분기를 먼저 타서 윈도는 안 실리고,
+    // useWindow 의 코너 QR 억제만 남는다 (종전 동작 그대로).
+    return ySlotLocatorActive() ? { mode: 'slot' } : { mode: 'window' };
   }
-  // '면' = 큐브 **바깥** 면-평면 QR (v0WY). Type Y 전용 — 다른 타입은 T 면 파라메트릭
-  // 좌표계가 없으므로 코너로 내려앉는다 (선택이 조용히 무시되지 않도록 좌상 명시).
-  if (position === 'plane') {
-    return type === 'Y' ? { mode: 'plane' } : { mode: 'corner', corner: 'TL' };
-  }
+  // ⚠ **의도적 갱신 (W2 C3)** — 'plane' 분기는 카드 삭제와 함께 내렸다. 구 값이
+  //   들어와도 finder-selection.normalizeFinderQrState 가 안쪽+코너측으로 정규화한다.
   return { mode: 'corner', corner: position };
 }
 
@@ -9553,6 +9860,10 @@ function buildConfig() {
     // v0 = Y0 고정 · v0T/v0TY = Y1 고정.
     // v2r2 가 유일한 Y2(n=25) 경로였으므로 **셀 표면으로는 Y2 를 못 만든다**
     // (윈도 β 의 Y2 는 셀 표면이 아니라 그대로 산다).
+    // W2 C3 확인 (설계서 §8-2 해소): v0TR 계열(v0TR/v0TRQ/v0TRY)은 이 삼항에
+    // 없어도 된다 — encodeOptionsForY 의 레이아웃 분기가 version 1 을 강제하므로
+    // 여기서 낸 값은 그 경로에서 소비되지 않는다. 삼항이 실효인 것은
+    // 윈도 β(끔·hex + 안쪽)의 2 강제와 기본 경로뿐이다.
     versionY: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0
       ? 0
       : (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0T
@@ -9564,8 +9875,12 @@ function buildConfig() {
     versionA: selectedVersion(generatorState.versionA),
     // 턴A 는 Type A 전용이다 — 다른 타입에서 켜진 채 남아 있어도 여기서 죽인다.
     turnA: type === 'A' && generatorState.turnA === true,
-    // 코너 마커는 O·A 전용이다 (Y 는 자기 로케이터 문법을 쓴다). 같은 규약으로 죽인다.
-    cornerMarker: (type === 'O' || type === 'A') && generatorState.cornerMarker === true,
+    // 코너 마커는 seat 파생이다 (W2 C4): O 는 내곽 o-cm, A 는 외곽 a-cm 이 켠다.
+    // Y 는 자기 로케이터 문법을 쓰므로 seat 구역 자체가 안 뜬다 — 타입 술어가
+    // 종전의 «다른 타입에서 켜진 채 새는» 것을 같은 규약으로 죽인다.
+    // sagoae 는 자리 예약 값이라 와이어를 켜지 않는다 (통합자 C2c 전까지).
+    cornerMarker: (type === 'O' && generatorState.innerSeat === 'o-cm')
+      || (type === 'A' && generatorState.outerSeat === 'a-cm'),
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
       ? TL_READER_URL : generatorState.qrText.trim(),

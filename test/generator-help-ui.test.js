@@ -323,12 +323,16 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // **의도적 갱신 «v0TRY 편입» (2026-08-18)**: v0TRY(g937) 카드가 서서 7 → **8** 이다.
   // 내려간 카드는 없다 — v0TR 계열 전체가 그대로고 드랍 판정은 실기기 재스캔 뒤
   // 운영자 몫이다. 부제 키는 사전의 빈 슬롯 g937 을 썼다 (같은 3자리 규약).
+  // **의도적 갱신 (W2 C3, 2026-08-24)**: v0TY(g998) · v0TRY(g937) 카드가 내려
+  // 8 → **6** 이다. 드랍이 아니라 **파생값 강등**이다 — «QR 안쪽 + 코너측»
+  // (#qrFacePlacementSection)이 그 값을 파생한다 (§deriveYLocatorForQrPosition).
+  // 부제 키(g998·g937)는 사전에 그대로 남는다 (드랍 카드 전례 — locatorY-lab 고정).
   const cardCount = (block.match(/class="toggle-card[^"]*" data-locator=/g) || []).length;
-  assert.equal(cardCount, 8,
-    '검출기 카드는 자동·끔 + v0 + v0T 계열 2종 + v0TR 계열 3종 = 8 다');
+  assert.equal(cardCount, 6,
+    '검출기 카드는 자동·끔 + v0 + v0T + v0TR·v0TRQ = 6 이다 (v0TY·v0TRY 는 파생 강등)');
   assert.equal((block.match(/<svg /g) || []).length, cardCount,
     '검출기 카드 전부가 파인더 기하 아이콘을 가져야 한다');
-  const subKeys = ['g941', 'g942', 'g943', 'g995', 'g998', 'g957', 'g969', 'g937'];
+  const subKeys = ['g941', 'g942', 'g943', 'g995', 'g957', 'g969'];
   assert.equal(subKeys.length, cardCount, '부제 키 수가 카드 수와 다르다');
   for (const key of subKeys) {
     assert.match(block, new RegExp(`class="card-sub" data-i18n="${key}"`), `검출기 부제 ${key} 누락`);
@@ -599,22 +603,33 @@ test('#22 — v0 계열 해상도는 로케이터와 연동된다 (v0 ↔ v0T ·
   }
 });
 
-test('«면» QR 카드 ↔ v0TY 로케이터 양방향 연동 (2026-08-17 v0T 편입 라운드)', () => {
-  // ⚠ **의도적 갱신 (2026-08-17 v0WY 재설계).** 이 회귀는 원래 «충돌 회피» 를 쟀다 —
-  // 「v0XQ(중앙 QR) + 면 QR 이 동시에 렌더돼 QR 이 두 개」 라는 실기기 결함 때문에,
-  // 면을 고르면 중앙 QR 검출기를 비-QR 짝(v0wq→v0w)으로 되돌리는 배선이었다.
-  // 지금의 «면» 은 **레이아웃 v0WY 자체**라 그 충돌이 구조적으로 없다 (QR 이 슬롯
-  // 하나에만 산다). 그래서 재는 명제가 «충돌 회피» 에서 **«양방향 전환»** 으로 바뀐다.
-  //
-  // **의도적 갱신 «v0T 편입 + v0W 계열 전체 드랍» (2026-08-17)** — 전환 대상이
-  // v0W 계열 → v0T 계열로 바뀌었다 (같은 문법 — v0WY 시절의 배선 그대로).
-  // ① 면 클릭 → v0t 면 v0ty 로 전환.
-  assert.match(INDEX, /card\.dataset\.pos === 'plane'/);
-  assert.match(INDEX, /generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TY;/);
-  // ①-b 다른 QR 위치 클릭 → v0ty 였으면 v0t 로 복귀 (한쪽만 있으면 갇힌다).
-  assert.match(INDEX, /=== LOCATOR_PROFILE_CELL_SURFACE_V0TY\) \{\s*generatorState\.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0T;/);
-  // ①-c 검출기 카드로 v0ty 를 고르면 QR 위치도 «면» 으로 맞춰진다 (반대 방향).
-  assert.match(INDEX, /generatorState\.qrPosition !== 'plane'\) \{\s*generatorState\.qrPosition = 'plane';/);
+test('«QR 면 배치» 파생 — plane 카드 폐기 + 한 방향 파생 (W2 C3)', () => {
+  // ⚠ **의도적 갱신 (W2 C3, 2026-08-24).** 이 회귀는 «면» 카드 ↔ v0TY/v0TRY 의
+  // **양방향 전환 2쌍**을 쟀다 — 그 쌍이 곧 왕복 위험이라 개편이 통째로 걷어냈다.
+  // 이제 사용자 축은 (qrPosition 안쪽 여부) × (qrFacePlacement seam/far) 이고,
+  // 슬롯 레이아웃은 deriveYLocatorForQrPosition **한 방향 파생**이 만든다.
+  // ① plane 카드·분기는 부재다 (구 카드 값이 살아 돌아오면 안 된다).
+  assert.doesNotMatch(INDEX, /data-pos="plane"/);
+  assert.doesNotMatch(INDEX, /card\.dataset\.pos === 'plane'/);
+  // ①-b 역방향 강제(로케이터 → QR 위치)도 부재다 — 파생은 한 방향뿐이다.
+  assert.doesNotMatch(INDEX, /generatorState\.qrPosition = 'plane'/);
+  // ② 파생 함수가 있고, 서브섹션 카드·상태 축이 배선돼 있다.
+  assert.match(INDEX, /function deriveYLocatorForQrPosition\(pos\)/);
+  assert.match(INDEX, /id="qrFacePlacementSection"/);
+  assert.match(INDEX, /data-placement="seam"/);
+  assert.match(INDEX, /data-placement="far"/);
+  assert.match(INDEX, /generatorState\.qrFacePlacement = card\.dataset\.placement === 'far' \? 'far' : 'seam';/);
+  // ②-a 신규 i18n 키 6종은 8언어 사전 전부에 있어야 한다 (카운트 단언 —
+  //     exclusion-matrix 의 split 전례. W2 키 블록 ② = g860-g869).
+  for (const key of ['g860', 'g861', 'g862', 'g863', 'g864', 'g865']) {
+    assert.equal(INDEX.split(`"${key}":`).length - 1, 8,
+      key + ' 는 8언어 사전 전부에 있어야 한다');
+  }
+  // ②-b 파생 내용: 중앙측(seam) → v0TRQ 승격 · 코너측(far) → v0TY/v0TRY ·
+  //      안쪽 이탈 → base 복귀 (v0TY→v0T · v0TRQ/v0TRY→v0TR).
+  assert.match(INDEX, /\? \(v0tFamily \? LOCATOR_PROFILE_CELL_SURFACE_V0TY : LOCATOR_PROFILE_CELL_SURFACE_V0TRY\)\s*: LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;/);
+  assert.match(INDEX, /profile === LOCATOR_PROFILE_CELL_SURFACE_V0TY\) \{\s*next = LOCATOR_PROFILE_CELL_SURFACE_V0T;/);
+  assert.match(INDEX, /\|\| profile === LOCATOR_PROFILE_CELL_SURFACE_V0TRY\) \{\s*next = LOCATOR_PROFILE_CELL_SURFACE_V0TR;/);
   // **의도적 갱신 «v0X 드랍» (2026-08-17, 판정 3라운드)** — 여기 있던
   // `v0xq → v0x` 분기 단언을 **부재 단언으로 뒤집는다.**
   //

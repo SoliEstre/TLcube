@@ -101,15 +101,20 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   type: field('Y', BOTH, GENERATOR_TYPES),
   preset: field(DEFAULT_PRESET, BOTH, [...Object.keys(PRESETS), 'custom']),
   wifiSecurity: field('WPA', BOTH, ['WPA', 'WEP', 'nopass']),
-  // 'plane' = **먼 코너 QR** (v0TY — 2026-08-17 v0T 편입 라운드부터. 그 전에는
-  // v0WY 였고, v0W 계열 드랍으로 전환 대상만 바뀌었다). ⚠ **의도적 갱신
-  // (2026-08-17 재설계)** — 이 자리에는 「큐브 바깥 면-평면 QR · 실루엣 밖이라
-  // 데이터 셀을 한 칸도 안 먹고 어떤 레이아웃과도 조합된다」 가 적혀 있었다.
-  // 운영자가 그 설계를 폐기하고 «윈도 β 식 안쪽 배치» 로 재설계했다 — 지금의
-  // 'plane' 은 **레이아웃 선택**이다 (locatorProfileY 를 v0ty 로 전환한다,
-  // index.html §qrPositionCards). 그래서 «어떤 레이아웃과도 조합» 이 아니고 64셀을 먹는다.
+  // ⚠ **의도적 갱신 (W2 C3, 2026-08-24)** — 'plane'(«면») 이 허용값에서 빠졌다.
+  // «면 = 먼 코너 QR» 은 위치의 한 자리가 아니라 **안쪽 QR 의 배치 축**이라,
+  // (qrPosition 'inner') × (qrFacePlacement seam/far) 로 분해했다 (아래 필드).
+  // v2r2·v0W 계열 드랍과 같은 규약: 생성기 상태는 저장되지 않으므로 «저장값 폴백»
+  // 은 해당 없고, 구 값이 어떤 경로로 들어와도 finder-selection.normalizeFinderQrState
+  // 가 'inner' + 'far' 로 정규화한다 (하위호환 매핑 — 한 릴리스 유지).
   qrPosition: field(DEFAULT_OUTER_QR_POSITION, BOTH,
-    ['inner', 'plane', 'TL', 'TR', 'BL', 'BR', 'none']),
+    ['inner', 'TL', 'TR', 'BL', 'BR', 'none']),
+  // QR 면 배치 (W2 C3) — Y + 안쪽 전용 축. 'seam' = Y-심 중앙측(v0TRQ 파생) ·
+  // 'far' = 먼 코너측(v0T→v0TY · v0TR→v0TRY 파생 — index.html
+  // §deriveYLocatorForQrPosition). INTERNAL 인 이유는 locatorProfileY 와 같다:
+  // 파생의 입력(v0T 계열 로케이터)이 lab 게이트 뒤라 정식 화면 노출 대조에 들어가면
+  // 안 된다 — 정식 Y 안쪽은 레거시 윈도 β 가 유일 경로로 남는다.
+  qrFacePlacement: field('seam', INTERNAL, ['seam', 'far']),
   // 생성기 화면의 **초기 선택**은 하이브리드다(사용자 지시 2026-08-13). 실사진 12/12 ·
   // 285ms 로 순수 불스아이(24/24 · 603ms)와 같은 인식률에 절반 가까이 빠르고, 프로젝트
   // 정체성인 큐브가 코드에 실제로 보인다.
@@ -127,10 +132,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 담기지 않는다 (finder-selection.selectFinderPattern 이 그 불변식을 지킨다).
   previousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
     FINDER_CARD_PATTERN_IDS.filter((id) => id !== CENTER_QR_FINDER_PATTERN_ID)),
-  // 'plane'(v0WY) 도 **바깥 QR 위치**라 여기 들어간다 — 빠뜨리면 Y 에서 «면» 을 고른 뒤
-  // O/A 로 갔다 돌아올 때 복원값이 허용값 밖이 되어 조용히 기본으로 떨어진다.
+  // ⚠ **의도적 갱신 (W2 C3)** — 'plane' 이 여기서도 빠졌다 (qrPosition 과 동시).
+  // 구 값은 normalizeFinderQrState 가 기본 코너로 강하시킨다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
-    ['TL', 'TR', 'BL', 'BR', 'plane', 'none']),
+    ['TL', 'TR', 'BL', 'BR', 'none']),
   // O/A는 회전 기준을 함께 주는 중앙 QR이 기본이고, Y는 종전 코너 QR 기본을 유지한다.
   // 공용 상태가 타입 사이로 새지 않게 타입군별 마지막 선택을 별도 보존한다.
   finderQrProfiles: field(DEFAULT_FINDER_QR_PROFILES, INTERNAL,
@@ -150,14 +155,28 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //   안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
   //   배선이 끝나고 왕복이 서는 날이다.
   turnA: field(false, INTERNAL, [false, true]),
-  // 코너 마커 (O-CM / A-CM, 2026-08-20 UI 편입) — Type O·A 전용, lab 게이트 뒤.
-  // turnA 와 같은 `INTERNAL` 이지만 **이유가 다르다**: turnA 는 왕복이 안 서서
-  // lab 에 갇혀 있고, 코너 마커는 왕복이 선다 (합성 원근에서 앵커 한계 g=0.0001 →
-  // 코너 마커 g=0.0008, test/decoder-corner-marker-wiring.test.js ②).
-  // lab 에 두는 이유는 **실기기 라운드를 아직 안 돌았기** 때문이다 — 합성만으로
-  // 정식 노출을 정하지 않는다는 이 저장소의 규약 그대로다.
-  // ⚠ turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
-  cornerMarker: field(false, INTERNAL, [false, true]),
+  // ── 검출기 seat 축 (W2 C4, 2026-08-24) — 구 `cornerMarker: boolean` 의 승계 ──
+  // 코너 마커 (O-CM / A-CM, 2026-08-20 UI 편입)는 «켬/끔» 한 비트가 타입별로 다른
+  // 마커를 뜻하는 구조였다. 검출기 3구역 개편으로 **내곽/외곽 seat 선택**으로
+  // 분해한다: innerSeat(분류 2 — O-CM · sagoae) / outerSeat(분류 3 — A-CM).
+  // 허용값의 정본은 finder-zone-ui(FINDER_TAXONOMY 유도)다. ⚠ 여기서 **직접
+  // import 하지 못한다** — finder-taxonomy 가 이 모듈(GENERATOR_TYPES)을 import
+  // 해서, zone-ui 를 스프레드하면 taxonomy→state→zone-ui→taxonomy 순환으로
+  // 모듈 로드가 TDZ 로 죽는다 (W2 C4 실측). 그래서 F-37 의 유도 대신 **검증되는
+  // 사본**을 쓴다: 아래 리터럴이 zone-ui 유도와 어긋나면 finder-zone-ui 로드
+  // 자기검증이 그 자리에서 던진다 (사본 규칙 명문화 — «유도하거나 규칙을 적어라»).
+  // sagoae 는 자리 예약 값 — 와이어 편입은 통합자 C2c, 카드는 disabled.
+  // `cornerMarker` 필드 자체는 **스키마에서 내렸다** — 생성기 상태는 저장되지
+  // 않으므로 «저장값 하위호환» 기전이 없고(드랍 전례의 검증 렌즈 정정과 동일),
+  // 죽은 필드를 남기면 그 주석이 거짓이 된다. 인코더 옵션 키 `cornerMarker` 는
+  // 그대로다 — buildConfig 가 seat 에서 **파생**해 싣는다 (index.html).
+  // 구 boolean 이 어떤 경로로 들어와도 finder-selection.normalizeFinderQrState 가
+  // 타입별 seat 로 이관한다.
+  // lab 게이트(INTERNAL) 이유는 종전과 같다: 실기기 라운드 전 — 합성만으로 정식
+  // 노출을 정하지 않는다. 운영자 확정(2026-08-23·24): 내곽/외곽 구역 노출 lab 유지.
+  // ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
+  innerSeat: field('none', INTERNAL, ['none', 'o-cm', 'sagoae']),
+  outerSeat: field('none', INTERNAL, ['none', 'a-cm']),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),

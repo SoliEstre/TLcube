@@ -99,7 +99,12 @@ const MODULE_ORDER = [
   // dither(의존 0)·export-options(render-profile·dither만)는 generator-state 앞이어야
   // 한다 (2026-08-19 내보내기 옵션 4종) — generator-state 가 옵션 도메인·기본값을
   // export-options 에서 가져온다 (상수 복제 금지 — «UI 는 아는데 규칙은 모르는 값» 방지).
-  'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'dither', 'export-options', 'generator-state', 'export-filename',
+  // finder-zone-ui(W2 C4 — seat 구역 유도)는 generator-state 뒤다: 스키마 options
+  // 사본을 로드 시점 대조한다. 나머지 의존(finder-card-ui·markerG·finder-daehan)은
+  // 전부 이 앞에 있다. ⚠ finder-taxonomy 는 **여기 못 들어온다** — node:url·
+  // node:path top-level import (CLI 덤프 모드) 라 브라우저 번들에서 죽는다.
+  // 분류 정본 대조는 test/finder-zone-ui.test.js 가 Node 쪽에서 진다.
+  'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'dither', 'export-options', 'generator-state', 'finder-zone-ui', 'export-filename',
   // export-render 는 raster·svg·png·dither 전부의 뒤다 (내보내기 파이프라인 — 앱만 쓴다).
   // cellSurfaceFinal(최종 라인업 v0·v2r2)은 capacityY·cellSurfaceY·cellSurfaceLayouts·
   // autoplaceY 를 import 하므로 그 넷 뒤에 온다.

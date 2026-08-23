@@ -318,8 +318,10 @@ test('§5 cornerMarker — 왕복이 선다 (내부 타입 G 와이어, 2026-08-
     readFileSync(ROOT + 'src/formatinfo.js', 'utf8').includes('cornerMarker'),
     false, 'formatinfo 에 cornerMarker 가 생겼다 — 기각된 예비 비트 우회를 되살렸는지 보라');
   // UI 힌트가 새 사실을 말하는가. 라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
+  // (W2 C4: #cornerMarkerSection → 내곽/외곽 seat 구역 — 힌트는 innerSeatHint(g579)
+  //  가 승계했다. generator-corner-marker.test.js ① 이 구역 구조를 잰다.)
   const index = readFileSync(ROOT + 'index.html', 'utf8');
-  assert.match(index, /id="cornerMarkerHint"/, '힌트 문단이 없다');
+  assert.match(index, /id="innerSeatHint"/, '힌트 문단이 없다');
   assert.doesNotMatch(index, /코드를 스캐너가 못 읽어요 — 표식이/,
     '코너 마커 힌트가 아직 «못 읽어요» 를 말한다 — 왕복이 서는데 «못 읽는다» 고 적으면 거짓말이다');
   assert.match(index, /스캐너가 읽어요 — 표식이 있다는 사실이/,

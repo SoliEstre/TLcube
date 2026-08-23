@@ -55,7 +55,9 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
   const pairs = new Set(found.map((f) => f.opts));
   const GUARDED = {
     // 조합 → UI 가 막는 코드의 서명 (있어야 하는 줄)
-    'cornerMarker+turnA': /if \(generatorState\.cornerMarker\) generatorState\.turnA = false;/,
+    // (W2 C4) cornerMarker boolean → seat 승계: encodeA 던짐 조합은 A(외곽 a-cm)
+    // 쪽뿐이고, seat 핸들러가 turnA 를 끈다 (syncTurnAUi 는 카드를 잠근다).
+    'cornerMarker+turnA': /if \(generatorState\.outerSeat === 'a-cm'\) generatorState\.turnA = false;/,
     // (구) 'centerQr+cornerMarker' — C2a(2026-08-23)에서 배타 자체가 해제됐다
     // (markerG CMQ 와이어 + 배치 검증·왕복 = test/markerG-centerqr.test.js).
     // 인코더가 더는 안 던지므로 전수 탐색이 이 쌍을 찾지 않는다 — 가드 불필요.
@@ -103,11 +105,13 @@ test('UI 가 막는 조합을 뺀 나머지는 실제로 인코드된다', () =>
   }
 });
 
-test('코너 예약 힌트는 기본 문구다 — 중앙 QR 잠금 문구(g580)는 C2a 로 은퇴', () => {
+test('코너 예약 힌트는 기본 문구다 — 중앙 QR 상수 잠금(g580 분기)은 C2a 로 은퇴', () => {
   // **의도적 갱신 (C2a, 2026-08-23)**: centerQr 잠금이 해제돼 g580 분기가 사라졌다.
-  // 힌트는 항상 g579. g580 사전 항목 8언어는 남겨 둔다 (키 재사용 방지 — g567 전례).
-  assert.match(INDEX, /els\.cornerMarkerHint\.textContent = t\('g579'\)/,
+  // **의도적 갱신 (W2 C4)**: 힌트 자리가 cornerMarkerHint → innerSeatHint(g579)로
+  // 승계됐다 (seat 구역). g580 은 상수 분기가 아니라 **와이어 존재 술어**
+  // (cmqWireExists)가 false 일 때의 잠금 사유로만 산다 — 사전 8언어 유지.
+  assert.match(INDEX, /els\.innerSeatHint\.textContent = t\('g579'\)/,
     '기본 힌트 줄이 없다');
   assert.equal(INDEX.includes("centerQrOn ? t('g580')"), false,
-    '은퇴한 잠금 분기가 되살아났다 — C2a 해제와 모순');
+    '은퇴한 상수 잠금 분기가 되살아났다 — C2a 해제와 모순');
 });

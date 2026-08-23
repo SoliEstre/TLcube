@@ -125,7 +125,12 @@ const ALLOWED = {
   // 개발자 콘솔 전용이라 화면에 안 나간다(위 헤더의 «내부 불변식 throw» 와 같은 부류).
   // 이 경고가 필요한 이유: resolveFinderStarter 는 모르는 id 를 catch 로 삼켜 조용히
   // 불스아이로 되돌린다. 그 침묵이 §6.1 증상의 절반이었으므로 침묵만은 남기지 않는다.
-  'index.html': 8, // JSON-LD 구조화 데이터 7 + 편집기 파인더 폴백 console.warn 1
+  // **의도적 갱신 (W2 C4, 2026-08-24)**: 8 → 9. 더해진 1종은 `ensureSeatCards` 의
+  // «seat 카드 표현 누락» throw 다 — zoneCards() 유도에 있는데 아이콘·라벨 매핑이
+  // 없으면 로드 시점에 던지는 내부 불변식이라 화면에 안 나간다 (헤더의 «내부
+  // 불변식 throw» 부류). 이 throw 가 필요한 이유: 매핑은 유도가 아니라 표현 층의
+  // 사본이고, 조용히 빠지면 카드가 라벨 없이 선다.
+  'index.html': 9, // JSON-LD 7 + 편집기 파인더 폴백 console.warn 1 + seat 표현 불변식 throw 1
   'sites/tlscan/scanner.js': 0,
   'src/luminance.js': 7, // 프리셋 표시명 3 + 내부 불변식 throw 4
   // **의도적 갱신 (2026-08-21, 중앙 v0 편입)**: 9 → 11. 더해진 것은 throw **하나**인데
