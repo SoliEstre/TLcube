@@ -97,7 +97,7 @@ import {
 import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
 import { detectBullseyes, pyramidLevelsForImage, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
-import { OAK_FINDER_PATTERNS } from '../finder-oak-patterns.js';
+import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../finder-oak-patterns.js';
 import {
   DAEHAN_FINDER_PATTERNS, DAEHAN_RADII, daehanReservedCells, isDaehanFinderPatternId,
 } from '../finder-daehan.js';
@@ -148,16 +148,20 @@ const CELL_FINDER_LINEUP_DAEHAN = Object.freeze([
   ...OAK_FINDER_PATTERNS,
   ...DAEHAN_FINDER_PATTERNS,
   /*
-   * taegeuk 단독 (C2b 진행 중, 2026-08-23) — **아직 편입하지 않는다.** 조건과 잔여:
-   *   · 티어는 daehan 옵트인이 맞다 (mirror 0.7193 < 게이트 0.78 — daehan 전례).
-   *   · 1차 장벽(같은 자리 NMS 억제)은 해소됨 — cell-finder-detect 의 포함쌍 면제
-   *     (containmentPairs, 유도)로 두 해석이 공존하고, 비-시디드 경로에선 daehan
-   *     프레임 왕복이 성립함을 실측했다 (solo 1위 + daehan 2위 → RS/CRC 가 daehan 선택).
-   *   · **잔여 장벽 (편입 게이트)**: 시디드 탐색 경로(outline 유도 centerSeeds/
-   *     cellSizeSeeds, ss1 실측)에서 daehan 후보가 검출 단계에서 소실돼 solo 만
-   *     남는다 → 상위집합 회계 가설이 없어 왕복 사망. 오수용 0 선행 조건(운영자
-   *     2026-08-23) 미충족 — 시디드 그룹 예산/브래킷 조사 후 편입한다.
+   * taegeuk 단독 (C2b 완결, 2026-08-24) — daehan 옵트인 티어로 편입 (mirror
+   * 0.7193 < 게이트 0.78 — daehan 전례). 장벽 두 겹이 다 해소된 뒤의 편입이다:
+   *   · 1차 (NMS 같은 자리 억제): 포함쌍 면제 (containmentPairs 유도, b837c73).
+   *   · 2차 (finish 전환 개명): «최고 템플릿 전환» 이 daehan 정교화 후보를 fit
+   *     1.0000 동률에서도 solo 로 개명해 시디드 경로(ss1)가 finderCount 1 로
+   *     죽던 기제 — 전환 경쟁에서도 포함쌍 제외 (ca74b35, 프로브 실측).
+   * 오수용 게이트 (운영자 2026-08-23 «오수용 0 선행»): 코퍼스 367장 × 옵트인
+   * 라인업 3변형(b837c73 / +가드 / +편입) 전수 A/B — ok·이름·원문 플립 **전부 0**
+   * (2026-08-24, c2b-ab). 기본 라인업은 포함쌍 0 이라 구조적 무영향
+   * (finder-daehan ⑨ 가 값으로 잠근다). 기준선 80% 검출률 문턱은 taegeuk 의
+   * **정식 카드 승격** 게이트다 — 라이브 스캔테스트(⑤b, 운영자) 몫이고 이
+   * 옵트인 편입과는 층이 다르다.
    */
+  ...OAK_RENDER_ONLY_FINDER_PATTERNS,
 ]);
 
 /** 이 호출이 daehan 을 라인업에 얹는가. 기본 false — 레거시 경로는 비트 동일이다. */

@@ -436,6 +436,28 @@ test('⑨ 포함쌍 — finish 전환·NMS 이중 면제로 두 해석이 공존
     'daehan 해석이 사라졌다 (finish 전환 가드 회귀): ' + [...ids].join(','));
 });
 
+test('⑩ 시디드 경로 왕복 — ss1 프레임이 옵트인 라인업에서 원문까지 돈다 (C2b 완결)', async () => {
+  // ss1(무 슈퍼샘플) 렌더는 outline 유도 씨앗(centerSeeds/cellSizeSeeds) 경로를
+  // 타는 재현 프레임이다 — 가드 전에는 daehan 후보가 finish 전환으로 전멸해
+  // finderCount 1 → 왕복 사망이었다 (2026-08-24 프로브 실측). 이 왕복이 곧
+  // «편입 게이트 해소» 의 실효 잠금이다. ss2 는 ⑦ 이 이미 잠근다.
+  const { decodeFrontend } = await import('../src/decoder/frontend.js');
+  const preset = getPreset(DEFAULT_PRESET);
+  const palette = {
+    background: preset.background, levels: preset.levels,
+    bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+  };
+  const enc = encode('TLcube', { version: 1, eccLevel: 'M', daehanFinder: true });
+  const scene = buildScene(enc, { palette, finderPatternId: daehanPatternId(6) });
+  const raster = rasterize(scene, { pixelsPerUnit: 24, supersample: 1 });
+  const on = decodeFrontend(raster, { bootstrap: { cellFinderDaehan: true } });
+  assert.equal(on.ok, true, JSON.stringify(on.reason ?? null));
+  assert.equal(on.text, 'TLcube');
+  // 기본 라인업은 여전히 거절해야 한다 — solo 편입이 옵트인 경계를 안 넘었다.
+  const off = decodeFrontend(raster, {});
+  assert.equal(off.ok, false, 'solo 편입이 기본 라인업으로 샜다');
+});
+
 test('⑧ 분류 층 id — taegeuk 19 = 슬롯, sagoae = 예약, 와이어 이름은 daehan', () => {
   assert.equal(DAEHAN_NAME, 'daehan');
   assert.equal(TAEGUK_ID, 'taegeuk');
