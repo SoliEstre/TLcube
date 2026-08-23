@@ -97,6 +97,7 @@ import {
 import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
 import { detectBullseyes, pyramidLevelsForImage, refineBullseye } from './bullseye-detect.js';
 import { detectCellFinders } from './cell-finder-detect.js';
+import { verifySagoae } from './sagoae-verify.js';
 import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../finder-oak-patterns.js';
 import {
   DAEHAN_FINDER_PATTERNS, DAEHAN_RADII, daehanReservedCells, isDaehanFinderPatternId,
@@ -1593,7 +1594,7 @@ function cornerMarkerHypotheses(luma, finder, family, options) {
   return { hypotheses, diagnostics: result.diagnostics };
 }
 
-function cellFinderHypotheses(luma, finder, family) {
+function cellFinderHypotheses(luma, finder, family, options) {
   const H = finderTransform(finder);
   const patternFinder = isPatternFinderKind(finder.finderKind);
   if (!H || !patternFinder || !['hex', 'tri'].includes(family)) return [];
@@ -1608,7 +1609,7 @@ function cellFinderHypotheses(luma, finder, family) {
   //   k 는 기존대로 전 후보를 열거해 RS/CRC 가 고른다 — 그게 이 편입이 택한
   //   «광학 검출 + 사후 RS/CRC» 계약 그대로다 (`capacityDaehan.js` 헤더 §와이어).
   const dimensions = uniqueDimensions(family);
-  return dimensions.map((k) => ({
+  const base = dimensions.map((k) => ({
     family,
     k,
     orientation: finder.orientation,
@@ -1631,6 +1632,42 @@ function cellFinderHypotheses(luma, finder, family) {
       + '-' + (finder.geometryMode || 'affine'),
     luma,
   }));
+  /*
+   * C2c 분해 (2026-08-24) — «중앙 파인더 ∥ sagoae 검증기» 합성 가설.
+   *
+   * 원자 daehan 검출기 없이도, 옵트인 라인업에서 중앙 19셀 후보(taegeuk-solo 등)가
+   * 잡히면 그 포즈 위에서 sagoae 고리(예약 셀 20/40/60, 이진 톤)를 독립 검증해
+   * 검증이 서는 k 에만 daehan 회계 가설을 **추가**한다. daehan = ①taegeuk +
+   * ②sagoae 조합의 특수례라는 재정의(PM/022 W2-taegeuk ③)의 디코더 반쪽이다.
+   *
+   *  · 게이트: `cellFinderDaehan === true` (옵트인) — 기본 경로 비트 동일.
+   *  · 기존 가설은 한 개도 안 바뀐다 — 추가만 한다 (검증 오수용이 있어도 RS/CRC
+   *    가 가르는 «또 하나의 가설» 일 뿐, 기존 레이아웃 해석을 뺏지 않는다).
+   *  · 검증 포즈는 finder.H (검출과 같은 공간) — finderTransform 의 정준화 공간이
+   *    아니다. scoreCellMaskAtHomography 가 짝인 공간이 그쪽이다.
+   *  · daehan 이름 후보는 제외 — 원자 경로가 이미 회계를 연다 (이중 가설 방지).
+   */
+  if (options && options.cellFinderDaehan === true
+    && finder.finderKind === 'cell-mask'
+    && !isDaehanFinderPatternId(finder.patternId)) {
+    const verifyH = finder.transform || finder.H;
+    for (const hypothesis of base.slice()) {
+      if (!DAEHAN_RADII.includes(hypothesis.k) || !verifyH) continue;
+      const verified = verifySagoae(luma, verifyH, hypothesis.k, options.sagoae || {});
+      if (!verified.ok) continue;
+      base.push({
+        ...hypothesis,
+        sagoaeVerified: hypothesis.k,
+        sagoaeEvidence: {
+          correlation: verified.correlation,
+          contrastRatio: verified.contrastRatio,
+        },
+        source: 'cell-finder-sagoae',
+        hypothesisId: hypothesis.hypothesisId + '-sagoae',
+      });
+    }
+  }
+  return base;
 }
 
 export function directAnchorHypotheses(luma, finder, family, options) {
@@ -1798,9 +1835,14 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
  * 맞춘다 — §claude-di-nesting). 프레임의 k 를 정하는 것은 RS/CRC 다.
  */
 function daehanReservedCellsFor(hypothesis, dimension) {
+  if (!DAEHAN_RADII.includes(dimension)) return null;
+  // C2c 분해 경로 — 파인더 이름이 아니라 **검증된 sagoae 고리**가 회계를 연다.
+  // 단 검증은 자기 k 에만 유효하다 (고리는 k 마다 딴 셀 — 차원 전이 금지).
+  if (hypothesis && hypothesis.sagoaeVerified === dimension) {
+    return daehanReservedCells(dimension);
+  }
   const patternId = hypothesis && hypothesis.finder && hypothesis.finder.patternId;
   if (!isDaehanFinderPatternId(patternId)) return null;
-  if (!DAEHAN_RADII.includes(dimension)) return null;
   return daehanReservedCells(dimension);
 }
 
@@ -2549,7 +2591,7 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
       const allowWeakAnchorFallback = options.allowWeakAnchorFallback === true
         || (options.allowWeakAnchorFallback !== false
           && (!outline || outline.touchesBorder));
-      const patternHypotheses = cellFinderHypotheses(luma, finder, family);
+      const patternHypotheses = cellFinderHypotheses(luma, finder, family, options);
       const direct = patternHypotheses.length > 0 ? {
         hypotheses: patternHypotheses,
         strictCount: patternHypotheses.length,
