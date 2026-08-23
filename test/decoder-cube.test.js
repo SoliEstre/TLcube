@@ -555,3 +555,54 @@ test('family split: clean Type O stays hex and Type Y stays cube', {
   const y = renderY('type-y-family');
   assertYDecoded(decodeFrontend(y.raster), 'type-y-family', 1, 2);
 });
+
+test('F-93: calibration minimumSeamContrast 는 positiveRayCount 카운터에 닿는다 (흔들면 변한다)', {
+  timeout: 30_000,
+}, () => {
+  const fixture = renderY('f93-counter-lock', { version: 0, tones: 2 });
+  const luma = rasterToLuma(fixture.raster);
+  const baseline = detectCubeHypotheses(luma, undefined, { finderFirst: false });
+  assert.equal(baseline.ok, true, JSON.stringify(baseline.reason || baseline));
+  const baseCandidate = (baseline.diagnostics.shapeCandidates || [])
+    .find((entry) => entry.seam && Array.isArray(entry.seam.rays) && entry.seam.rays.length === 3);
+  assert.ok(baseCandidate, 'seam ray 3개짜리 실루엣 후보가 있어야 한다');
+  const baseCount = baseCandidate.seam.positiveRayCount;
+  assert.ok(baseCount >= 1, `기본 문턱에서 양성 ray 가 있어야 한다: ${baseCount}`);
+
+  // ray 대비값 사이 중점을 문턱으로 잡으면 카운트가 반드시 달라진다. 게이트
+  // (seam.contrast = 최상위 ray)는 그 문턱 위라 후보는 살아 있다.
+  const contrasts = baseCandidate.seam.rays.map((ray) => ray.contrast)
+    .sort((left, right) => right - left);
+  assert.ok(contrasts[0] > contrasts[contrasts.length - 1],
+    `ray 대비가 전부 같으면 이 픽스처로는 카운터를 분리 관측할 수 없다: ${contrasts}`);
+  let override = null;
+  for (let index = 1; index < contrasts.length; index += 1) {
+    if (contrasts[index - 1] > contrasts[index]) {
+      const midpoint = (contrasts[index - 1] + contrasts[index]) / 2;
+      const expected = contrasts.filter((value) => value >= midpoint).length;
+      if (expected !== baseCount && midpoint > 0) {
+        override = { midpoint, expected };
+        break;
+      }
+    }
+  }
+  assert.ok(override, `카운트를 바꾸는 중점 문턱이 있어야 한다: ${contrasts} base=${baseCount}`);
+
+  const shaken = detectCubeHypotheses(luma, undefined, {
+    finderFirst: false,
+    calibration: { minimumSeamContrast: override.midpoint },
+  });
+  const shakenCandidates = shaken.ok
+    ? (shaken.diagnostics.shapeCandidates || [])
+    : ((shaken.detail && shaken.detail.diagnostics
+      && shaken.detail.diagnostics.shapeCandidates) || []);
+  const shakenCandidate = shakenCandidates
+    .find((entry) => entry.componentIndex === baseCandidate.componentIndex
+      && entry.componentSource === baseCandidate.componentSource
+      && entry.seamParity === baseCandidate.seamParity);
+  assert.ok(shakenCandidate, '문턱은 최상위 ray 아래라 후보가 살아 있어야 한다');
+  assert.equal(shakenCandidate.seam.positiveRayCount, override.expected,
+    `오버라이드 문턱이 카운터에 닿아야 한다 (F-93): base=${baseCount}`);
+  assert.notEqual(shakenCandidate.seam.positiveRayCount, baseCount,
+    '문턱을 흔들었는데 카운터가 불변이면 cfg 가 배선되지 않은 것이다');
+});

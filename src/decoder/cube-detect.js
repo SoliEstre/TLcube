@@ -821,7 +821,10 @@ function lumaSpan(luma) {
   return Number.isFinite(min) && Number.isFinite(max) ? max - min : 0;
 }
 
-function seamEvidence(luma, center, vertices, parity, cachedSpan) {
+// cfg 를 받는다 — positiveRayCount 문턱이 언 모듈 상수를 보면 calibration 오버라이드가
+// 심 개수 카운터에 닿지 않는다 (F-93: 4자리수를 흔들어도 불변 실측). 기본값은 동일 상수라
+// 기본 경로 비트 동일.
+function seamEvidence(luma, center, vertices, parity, cachedSpan, cfg = UNVERIFIED_CUBE_DETECTION) {
   const rayReports = [];
   const span = Math.max(cachedSpan === undefined ? lumaSpan(luma) : cachedSpan, EPSILON);
   for (let ray = 0; ray < 3; ray += 1) {
@@ -863,7 +866,7 @@ function seamEvidence(luma, center, vertices, parity, cachedSpan) {
     contrast: ordered[0] ? ordered[0].contrast : 0,
     support: ordered[0] ? ordered[0].support : 0,
     positiveRayCount: rayReports.filter(
-      (report) => report.contrast >= UNVERIFIED_CUBE_DETECTION.minimumSeamContrast,
+      (report) => report.contrast >= cfg.minimumSeamContrast,
     ).length,
     rays: rayReports,
   };
@@ -961,8 +964,8 @@ function shapeCandidates(luma, cfg) {
       }
 
       if (seamSpan === undefined) seamSpan = lumaSpan(luma);
-      const even = seamEvidence(luma, diagonal.center, vertices, 0, seamSpan);
-      const odd = seamEvidence(luma, diagonal.center, vertices, 1, seamSpan);
+      const even = seamEvidence(luma, diagonal.center, vertices, 0, seamSpan, cfg);
+      const odd = seamEvidence(luma, diagonal.center, vertices, 1, seamSpan, cfg);
       const seamScore = (report) => report.contrast
         + cfg.minimumSeamContrast * report.positiveRayCount;
       const evenScore = seamScore(even);
@@ -2314,8 +2317,8 @@ function blockReferenceSearch(luma, initialH, n, tones, options, cfg) {
       projectPoint(candidate.H, { x: corner.x * n, y: corner.y * n }));
     if (!center || vertices.some((point) => point === null)) continue;
     if (seamSpan === undefined) seamSpan = lumaSpan(luma);
-    const even = seamEvidence(luma, center, vertices, 0, seamSpan);
-    const odd = seamEvidence(luma, center, vertices, 1, seamSpan);
+    const even = seamEvidence(luma, center, vertices, 0, seamSpan, cfg);
+    const odd = seamEvidence(luma, center, vertices, 1, seamSpan, cfg);
     const seamScore = (report) => report.contrast
       + cfg.minimumSeamContrast * report.positiveRayCount;
     const parityMargin = Math.abs(seamScore(odd) - seamScore(even));

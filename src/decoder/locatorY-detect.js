@@ -377,7 +377,9 @@ function doubleLineReport(luma, center, vertices, span) {
   };
 }
 
-function hubReport(luma, center, vertices, span) {
+// cfg 를 받는다 — support 카운터 문턱이 언 모듈 상수를 보면 calibration.locatorY 오버라이드가
+// 카운터에 닿지 않는다 (F-94: 75배 흔들어도 support 불변 실측). 기본값 동일 상수 = 기본 경로 비트 동일.
+function hubReport(luma, center, vertices, span, cfg = UNVERIFIED_LOCATOR_Y) {
   const stats = hexStats(vertices);
   const reports = [];
   for (let parity = 0; parity < 2; parity += 1) {
@@ -410,7 +412,7 @@ function hubReport(luma, center, vertices, span) {
       const med = contrasts.slice().sort((a, b) => a - b)[contrasts.length >> 1];
       const c = med / span;
       contrastSum += c;
-      if (c >= UNVERIFIED_LOCATOR_Y.minimumHubContrast) support += 1;
+      if (c >= cfg.minimumHubContrast) support += 1;
       rays += 1;
     }
     reports.push({
@@ -571,7 +573,7 @@ function alignVerticesToCanonical(vertices, center) {
   return { aligned, offset: offset >= 0 ? offset : 0 };
 }
 
-function emitCandidate(source, componentIndex, center, ringVertices, doubleLine, hub, span) {
+function emitCandidate(source, componentIndex, center, ringVertices, doubleLine, hub, span, cfg = UNVERIFIED_LOCATOR_Y) {
   const { aligned, offset } = alignVerticesToCanonical(ringVertices, center);
   // hub.parity 는 원본 ringVertices 순서 기준. aligned 는 offset 만큼 회전된 순서이므로 보정한다.
   const adjustedParity = ((hub.parity - offset) % 6 + 6) % 6;
@@ -595,10 +597,10 @@ function emitCandidate(source, componentIndex, center, ringVertices, doubleLine,
     + 0.20 * (hub.support / 3)
     + 0.18 * (1 - Math.min(1, hexStats(aligned).radiusCv / 0.12)),
   );
-  const hubConfirmed = hub.support >= UNVERIFIED_LOCATOR_Y.minimumHubRays
+  const hubConfirmed = hub.support >= cfg.minimumHubRays
     || (hub.support >= 1
-      && hub.contrast >= UNVERIFIED_LOCATOR_Y.minimumHubContrast * 1.5);
-  const lineConfirmed = doubleLine.count >= UNVERIFIED_LOCATOR_Y.minimumDoubleLineRays;
+      && hub.contrast >= cfg.minimumHubContrast * 1.5);
+  const lineConfirmed = doubleLine.count >= cfg.minimumDoubleLineRays;
   return {
     componentIndex,
     componentSource: source,
@@ -653,7 +655,7 @@ export function shrinkSilhouetteToCubeCandidates(luma, shape, options = {}) {
   if (doubleLine.count < cfg.minimumDoubleLineRays) {
     return reject('double-line', { count: doubleLine.count, required: cfg.minimumDoubleLineRays });
   }
-  const hub = hubReport(luma, center, vertices, span);
+  const hub = hubReport(luma, center, vertices, span, cfg);
   const hubSupportPass = hub && (
     hub.support >= cfg.minimumHubRays
     || (hub.support >= 1 && hub.contrast >= cfg.minimumHubContrast * 1.5)
@@ -688,6 +690,7 @@ export function shrinkSilhouetteToCubeCandidates(luma, shape, options = {}) {
     doubleLine,
     hub,
     span,
+    cfg,
   );
   if (!emitted) return reject('candidate-map');
 
@@ -792,7 +795,7 @@ export function detectLocatorY(luma, options = {}) {
       });
       return;
     }
-    const hub = hubReport(reduced.luma, stats.center, vertices, span);
+    const hub = hubReport(reduced.luma, stats.center, vertices, span, cfg);
     if (!hub || hub.support < cfg.minimumHubRays
       || hub.contrast < cfg.minimumHubContrast) {
       rejections.push({
@@ -808,6 +811,7 @@ export function detectLocatorY(luma, options = {}) {
       doubleLine,
       hub,
       span,
+      cfg,
     );
     if (!emitted) {
       rejections.push({ componentIndex, stage: 'cube-map' });
