@@ -353,3 +353,14 @@ test('격리 — 브로드캐스트가 ingest 를 기다리지 않는다', async
   await r.ingestP;
   assert.deepEqual(order, ['broadcast', 'ingest']);
 });
+
+test('F-65 — observed.outerFinderId 가 observed_outer_finder 열로 간다 (daehan 중앙 누수 종결)', () => {
+  // 클라(lab-telemetry observedFromResult)는 daehan 검출을 축 키 'daehan' 으로만 싣는다.
+  const row = eventRow(envelope({
+    body: frameBody({ observed: { outerFinderId: 'daehan' } }),
+  }));
+  assert.equal(row.observed_outer_finder, 'daehan');
+  assert.equal(row.observed_finder, '', 'daehan 이 중앙 열로 새면 안 된다');
+  const missing = eventRow(envelope({ body: frameBody() }));
+  assert.equal(missing.observed_outer_finder, '', '미관측은 빈 값(컬럼 DEFAULT)');
+});

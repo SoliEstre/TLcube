@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     observed_locator String DEFAULT '',
     observed_locator_arm LowCardinality(String) DEFAULT '', -- 구 A/B. 신규는 비움
     observed_locator_layout LowCardinality(String) DEFAULT '', -- 관측 레이아웃 v1r2 | v2
+    -- 관측 외곽/코너 파인더 (F-65, 2026-08-23) — expected_outer_finder 의 관측 짝.
+    -- 값은 축 키('daehan' 등)까지만. live DB 는 008 ALTER 를 **먼저** 돌린 뒤 relay 배포.
+    observed_outer_finder LowCardinality(String) DEFAULT '',
     chain_json       String DEFAULT '',            -- 원인 사슬 JSON
     chain_failed     LowCardinality(String) DEFAULT '',
     bbox_x      Nullable(Float32),                 -- 이미지 픽셀, 원점 좌상단

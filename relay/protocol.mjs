@@ -290,6 +290,10 @@ export function eventRow(event) {
     observed_locator: configSide(observed, 'locatorProfile'),
     observed_locator_arm: configSide(observed, 'locatorArm'),
     observed_locator_layout: configSide(observed, 'locatorLayout'),
+    // 관측 외곽/코너 파인더 (F-65, 2026-08-23). 기대 축 ③(expected_outer_finder)의
+    // 관측 짝 — 클라는 daehan 검출을 축 키 'daehan' 으로만 싣는다 (k 는 포함 사슬이라
+    // 검출이 못 가름). live DB 는 008 ALTER 를 **먼저** 돌린 뒤 relay 배포.
+    observed_outer_finder: configSide(observed, 'outerFinderId'),
     chain_json: Object.keys(chain).length ? JSON.stringify(chain) : '',
     chain_failed: chain.failed == null ? '' : String(chain.failed),
     bbox_x: geometryField(body, 'bbox_x'),
