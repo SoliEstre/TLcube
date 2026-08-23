@@ -3414,6 +3414,53 @@ export function enumeratePriorGridHypotheses(luma, poses, options = {}) {
     priorDiagnostics.admittedPoses = Array.from(admitted);
 
     if (validated.ok) {
+      /*
+       * 중앙 비컨 억제 (F-79) — 일반 경로(enumerateGridHypotheses 말미)와 같은 훅.
+       *
+       * 오늘의 포즈 빌더는 cellSurface 가설을 만들지 않아(위 base 의 cellSurface:false,
+       * 판별자 isCentralV0CubeHypothesis 는 cellSurface===true 요구) 이 경로로 비컨
+       * 매직이 복호될 수 없다 — 하지만 그것은 포즈 빌더의 현재 사정이지 이 함수의
+       * 계약이 아니다. «비컨 매직은 사용자에게 나가지 않는다» 는 경로마다 지킨다.
+       * kind:'fail'(후보 전원이 비컨인데 바깥 시딩 실패)이면 남은 배치를 더 돌지
+       * 않고 닫는다 — 사전 실패 시 호출자가 탐색 경로로 폴백하고 그쪽에 같은 훅이 있다.
+       */
+      const beaconRecast = recastCentralBeaconCandidates(luma, validated, options);
+      if (beaconRecast && beaconRecast.kind === 'recast') {
+        return ok({
+          hypotheses: beaconRecast.hypotheses,
+          candidates: beaconRecast.validated.candidates,
+          diagnostics: {
+            geometry: {
+              source: 'guide-prior',
+              geometryHypothesisCount: beaconRecast.hypotheses.length,
+            },
+            validation: beaconRecast.validated.diagnostics,
+            prior: priorDiagnostics,
+            centralBeaconRecast: true,
+          },
+        });
+      }
+      if (beaconRecast && beaconRecast.kind === 'keep-rest') {
+        return ok({
+          hypotheses: evaluatedHypotheses,
+          candidates: beaconRecast.candidates,
+          diagnostics: {
+            geometry: { source: 'guide-prior', geometryHypothesisCount: hypotheses.length },
+            validation: validated.diagnostics,
+            prior: priorDiagnostics,
+            centralBeaconSuppressed: true,
+          },
+        });
+      }
+      if (beaconRecast && beaconRecast.kind === 'fail') {
+        return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, {
+          stage: 'central-beacon-outer',
+          pipelineCode: 'BODY_RS_FAILED',
+          cause: 'beacon-decoded-outer-failed',
+          prior: priorDiagnostics,
+          beaconFailure: beaconRecast.detail,
+        });
+      }
       return ok({
         hypotheses: evaluatedHypotheses,
         candidates: validated.candidates,

@@ -53,6 +53,9 @@ import {
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { PRIOR_POSE_BATCH } from '../src/decoder/bootstrap.js';
 import { steadyLine } from '../src/scanner-debug-overlay.js';
+import { BEACON_MAGIC } from '../src/centralBeacon.js';
+import { tryReadBeaconFromText } from '../src/decoder/central-beacon-adapt.js';
+import { CENTRAL_V0_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SCANNER_JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
@@ -288,6 +291,47 @@ test('정렬 KAT — 여덟 레이아웃 후보를 **동시에** 던져도 정�
   assert.equal(stage, 'coarse', '정확 정렬인데 2단계까지 갔다 — 배치 조기 종료가 안 먹는다');
   assert.equal(result.hypothesis.family, 'hex');
   assert.equal(result.hypothesis.k, 6);
+});
+
+// ── ①′ 비컨 억제 계약 — 사전 경로도 비컨 바이트를 내보내지 않는다 (F-79) ──────
+
+function startsWithBeaconMagic(text) {
+  if (typeof text !== 'string' || text.length < BEACON_MAGIC.length) return false;
+  for (let i = 0; i < BEACON_MAGIC.length; i += 1) {
+    if (text.charCodeAt(i) !== BEACON_MAGIC[i]) return false;
+  }
+  return true;
+}
+
+test('비컨 계약 — 비컨 품은 O-k8 을 사전이 읽으면 바깥 텍스트다, 매직은 절대 아니다', () => {
+  /*
+   * F-79: enumeratePriorGridHypotheses 에 일반 경로의 중앙 비컨 recast 훅이 없었다.
+   *
+   * 무엇을 재서 무엇이 나오는가 (실측 2026-08-23, 수리 시점):
+   *   - 오늘의 포즈 빌더는 cellSurface 가설을 만들지 않아 (n=13 v0 포즈 부재 +
+   *     cube base 의 cellSurface:false) 매직 «자체가» 이 경로로 복호될 수 없다.
+   *   - 그래서 이 테스트의 양성 앵커는 「비컨 품은 프레임의 **바깥 텍스트**가
+   *     사전 coarse 만으로 나온다」 이고 (공허 통과 아님),
+   *   - 매직 부재 단언은 계약의 tripwire 다 — 사전 레이아웃에 cell-surface 가
+   *     추가되는 날, 훅이 사라져 있으면 이 파일이 먼저 빨개진다.
+   */
+  const layout = PRIOR_LAYOUTS.find((entry) => entry.id === 'O-k8');
+  const cellPx = layoutCellPx(layout, FRAME_SIDE);
+  const encoded = encode(TEXT, { version: 2, eccLevel: 'M', centralV0: true });
+  const scene = buildScene(encoded, {
+    palette: PALETTE, margin: 1, finderPatternId: CENTRAL_V0_FINDER_PATTERN_ID,
+  });
+  const raster = rasterize(scene, { pixelsPerUnit: cellPx, supersample: 2 });
+  const frame = placeInFrame(raster, scene);
+  const { result, stage } = priorScan(frame);
+  assert.equal(result.ok, true,
+    '비컨 품은 프레임의 사전 복호가 죽었다 — 양성 앵커 소실: ' + (result.reason || ''));
+  assert.equal(stage, 'coarse', '정확 정렬인데 2단계까지 갔다');
+  assert.equal(result.text, TEXT);
+  assert.equal(result.diagnostics.bootstrap.geometry.source, 'guide-prior');
+  assert.equal(startsWithBeaconMagic(result.text), false,
+    '비컨 바이트가 사전 경로로 새고 있다 — enumeratePriorGridHypotheses 의 recast 훅을 확인하라');
+  assert.equal(tryReadBeaconFromText(result.text), null);
 });
 
 // ── ② 오정렬은 게이트가 거부한다 (완화 0 의 실측) ─────────────────────────────
