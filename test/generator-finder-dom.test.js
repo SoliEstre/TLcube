@@ -224,6 +224,40 @@ test('중앙 QR 렌더 옵션은 실험 기본 파인더를 중앙 QR로 명시 
   assert.equal(options.qrText, 'HTTPS://TLSCAN.ESTRE.SO');
 });
 
+test('배치 불변 — O·A 캔버스는 QR 배치(코너/안쪽/없음)와 무관하게 동일하다', () => {
+  /*
+   * 운영자 2026-08-23 (PM/022 W1-b): 코너 QR 이 안 그려지는 경로에서 margin 이
+   * 라이브러리 기본(2)으로 떨어지면 Type O V1 scene 이 62.517×60 → 26.517×24 로
+   * 줄어 미리보기 코드가 2.4~2.5배 «확대» 돼 보였다 — QR 배치 간 스캔 성능·미리보기
+   * 비교가 불가능했다. sceneOptionsForOA 의 배치 불변 정책(!needsCornerQr → margin 20)
+   * 이 그 구제이고, 이 테스트는 O 전용 결함이 재발하지 않도록 O·A 둘 다 잠근다.
+   */
+  const FALLBACKS = [
+    { label: 'corner', fallback: { mode: 'corner', corner: 'TL' } },
+    { label: 'center', fallback: { mode: 'center', cornerToo: false } },
+    { label: 'off', fallback: { mode: 'off' } },
+  ];
+  for (const type of ['O', 'A']) {
+    const sizes = FALLBACKS.map(({ label, fallback }) => {
+      const encoded = encodeFor(type, fallback.mode === 'center');
+      const scene = buildScene(encoded, sceneOptionsForOA({
+        fallback,
+        finderPatternId: GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+        palette: PALETTE,
+        qrText: 'HTTPS://TLSCAN.ESTRE.SO',
+        type,
+      }));
+      return { label, width: scene.width, height: scene.height };
+    });
+    for (const size of sizes.slice(1)) {
+      assert.equal(size.width, sizes[0].width,
+        `${type} ${size.label} 폭이 corner 와 다르다 (${size.width} vs ${sizes[0].width})`);
+      assert.equal(size.height, sizes[0].height,
+        `${type} ${size.label} 높이가 corner 와 다르다`);
+    }
+  }
+});
+
 test('초기 Y에서 O/A로 전환하면 중앙 QR 포맷과 장면을 실제 기본 경로로 렌더한다', () => {
   for (const type of ['O', 'A']) {
     const state = selectGeneratorType(

@@ -239,6 +239,17 @@ export function sceneOptionsForOA({
     opts.qrCorner = fallback.corner;
     needsCornerQr = true;
   }
-  if (type === 'A' && !needsCornerQr) opts.margin = 20;
+  /*
+   * 배치 불변 정책 (생성기 앱 레이어) — 코너 QR 이 안 그려지는 경로(안쪽 QR·없음)에서도
+   * margin 을 코너 QR 구성과 같은 20 으로 유지한다. scene.js 의 라이브러리 기본(2)을
+   * 여기서 덮는 이유: 기본대로 두면 Type O V1 기준 scene 이 62.517×60 → 26.517×24 로
+   * 줄고, 미리보기는 한 축을 항상 100% 채우므로 코드가 2.4~2.5배 «확대» 돼 보인다 —
+   * QR 배치를 바꿔 가며 스캔 성능·미리보기를 비교할 수 없다 (운영자 2026-08-23).
+   * 원래 A 전용 구제였던 것을 O 로 확장했다. 라이브러리 기본(2)은 임베더 계약이라
+   * 그대로 두고, «여백 없음» 내보내기의 trim 표(export-options.js)도 별개 기능이라
+   * 건드리지 않는다 — margin 정본은 세 층이 각자 소유한다는 뜻이 아니라, 이 줄이
+   * «생성기 화면·산출물의 배치 정책» 단일 소유자라는 뜻이다.
+   */
+  if (!needsCornerQr) opts.margin = 20;
   return opts;
 }
