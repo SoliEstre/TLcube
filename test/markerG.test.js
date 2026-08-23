@@ -52,7 +52,12 @@ const PALETTE = Object.freeze({
 });
 
 function render(encoded, options = {}) {
-  const scene = buildScene(encoded, { palette: PALETTE, margin: options.margin });
+  const scene = buildScene(encoded, {
+    palette: PALETTE,
+    margin: options.margin,
+    // CMQ(C2a) — 중앙 슬롯이 QR 인 항목은 qrText 까지 넘겨야 렌더된다.
+    ...(options.centerQr ? { centerQr: true, qrText: options.qrText } : {}),
+  });
   return rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
 }
 
@@ -67,10 +72,17 @@ test('① (값,k) 무경합 — hex·tri 전점유 + 턴A + G 를 코드에서 �
   for (const occ of hexTriAxisOccupancy()) claim(occ.owner, occ.formatIndex, occ.k);
   for (const entry of TURN_A_FORMAT_INDEX) claim(entry.name, entry.formatIndex, entry.k);
   for (const entry of MARKER_G_FORMAT_INDEX) claim(entry.name, entry.formatIndex, entry.k);
-  // G 는 (family, version) 커버리지가 기저 표와 정확히 같다 — 빠지면 인코더가 던진다.
-  assert.equal(MARKER_G_FORMAT_INDEX.length, VERSIONS.length + VERSIONS_A.length);
-  for (const spec of VERSIONS) assert.ok(markerGSpec('hex', spec.version));
-  for (const spec of VERSIONS_A) assert.ok(markerGSpec('tri', spec.version));
+  // G 는 (family, version, centerQr) 커버리지가 기저 표 × Q축과 정확히 같다 —
+  // 빠지면 인코더가 던진다. (C2a 2026-08-23: CMQ 6칸 추가 — 6 → 12.)
+  assert.equal(MARKER_G_FORMAT_INDEX.length, (VERSIONS.length + VERSIONS_A.length) * 2);
+  for (const spec of VERSIONS) {
+    assert.ok(markerGSpec('hex', spec.version, false));
+    assert.ok(markerGSpec('hex', spec.version, true));
+  }
+  for (const spec of VERSIONS_A) {
+    assert.ok(markerGSpec('tri', spec.version, false));
+    assert.ok(markerGSpec('tri', spec.version, true));
+  }
 });
 
 test('② G 는 K1·cube 예약을 침범하지 않고 4bit 안이며 기저 k 와 일치한다', () => {
@@ -106,18 +118,31 @@ test('③ 와이어 — 두 인코더가 cornerMarker 에서 G 인덱스를 싣�
     assert.equal(encoded.formatIndex, markerGSpec('tri', spec.version).formatIndex,
       'A' + spec.version + 'CM formatIndex 가 G 표와 다르다');
   }
-  // centerQr 배타 — 그래서 G 표에 Q 변형이 없어도 된다 (칸 3+3 으로 족한 근거).
-  assert.throws(() => encode('TL', { version: 1, eccLevel: 'M', cornerMarker: true, centerQr: true }));
-  assert.throws(() => encodeA('TL', { version: 0, eccLevel: 'M', cornerMarker: true, centerQr: true }));
+  // **의도적 갱신 (C2a, 2026-08-23)**: centerQr 배타가 해제됐다 — 조합은 던지는 대신
+  // **CMQ 전용 인덱스**를 싣는다 (배치 검증·왕복은 test/markerG-centerqr.test.js).
+  assert.equal(
+    encode('TL', { version: 1, eccLevel: 'M', cornerMarker: true, centerQr: true })
+      .capacity.formatIndex,
+    markerGSpec('hex', 1, true).formatIndex,
+  );
+  assert.equal(
+    encodeA('TL', { version: 0, eccLevel: 'M', cornerMarker: true, centerQr: true }).formatIndex,
+    markerGSpec('tri', 0, true).formatIndex,
+  );
 });
 
-test('④ 왕복 — G 표 6항목 전부: cornerMarker 인코딩 → 렌더 → decodeFrontend 가 읽는다', () => {
+test('④ 왕복 — G 표 12항목 전부: cornerMarker(±Q) 인코딩 → 렌더 → decodeFrontend 가 읽는다', () => {
   for (const entry of MARKER_G_FORMAT_INDEX) {
     const text = 'TLcube-' + entry.name;
-    const encoded = entry.family === 'hex'
-      ? encode(text, { version: entry.version, eccLevel: 'M', cornerMarker: true })
-      : encodeA(text, { version: entry.version, eccLevel: 'M', cornerMarker: true });
-    const result = decodeFrontend(render(encoded, entry.family === 'tri' ? { margin: 20 } : {}));
+    const options = {
+      version: entry.version, eccLevel: 'M', cornerMarker: true, centerQr: entry.centerQr,
+    };
+    const encoded = entry.family === 'hex' ? encode(text, options) : encodeA(text, options);
+    const result = decodeFrontend(render(encoded, {
+      ...(entry.family === 'tri' ? { margin: 20 } : {}),
+      // CMQ — 중앙 슬롯이 QR 이므로 scene 에 qrText 가 필요하다.
+      ...(entry.centerQr ? { centerQr: true, qrText: 'HTTPS://TLSCAN.ESTRE.SO' } : {}),
+    }));
     assert.equal(result.ok, true, entry.name + ' 왕복 실패: ' + JSON.stringify(result.reason));
     assert.equal(result.text, text, entry.name + ' 페이로드 불일치');
     assert.equal(result.diagnostics.format.formatIndex, entry.formatIndex,

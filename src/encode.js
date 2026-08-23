@@ -168,9 +168,10 @@ export function encode(text, options = {}) {
   }
   // 코너 마커는 중앙 슬롯을 안 건드리지만, 중앙 QR 은 링3 을 먹고 마커는 링 k·k−1 을
   // 먹는다 — 두 변형의 동시 사용은 배치 검증을 안 했으므로 조용히 허용하지 않는다.
-  if (cornerMarker && centerQr) {
-    throw new RangeError('cornerMarker 와 centerQr 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
-  }
+  // cornerMarker × centerQr — 원래 «배치 검증 미실시 조합» 으로 던졌는데, 배치 검증이
+  // 끝나 개설됐다 (C2a 2026-08-23, PM/022 항목 1ⓑ): 마커 tetrad(링 k·k−1)와 중앙
+  // 슬롯(ring ≤2)은 서로소이고 OMarker 재배치 셀이 중앙을 침범하지 않음을
+  // test/markerG-centerqr.test.js 가 전 k 실측으로 잠근다. 와이어는 CMQ 6칸(markerG).
   // daehanFinder 는 와이어 플래그(광학+RS/CRC, formatIndex 공유). 분류 층에서는
   // taegeuk(내부 19, 분류 1) + sagoae(예약 셀, 분류 2) 로 갈린다. 중앙 QR(링3
   // 점유)과도, 코너 자리 예약(링 k·k−1 점유)과도 겹친다. 조합 검증을 안 했으므로
@@ -259,14 +260,14 @@ export function encode(text, options = {}) {
   //
   // cornerMarker(O-CM): **내부 타입 G 의 전용 인덱스**를 싣는다 (`markerG.js` 표 주도,
   // 운영자 확정 2026-08-20). 레거시 인덱스를 그대로 쓰면 디코더가 마커 회계를 와이어에서
-  // 알 수 없다 — 「코너 마커 코드가 스캔이 안 된다」의 근본 원인이었다. centerQr 와는
-  // 위 배타 가드가 조합을 막으므로 G 표에 Q 변형은 없다.
+  // 알 수 없다 — 「코너 마커 코드가 스캔이 안 된다」의 근본 원인이었다. centerQr 조합은
+  // G 표의 **CMQ 변형** (C2a 2026-08-23 — 배치 검증 후 개설, 회계는 CM 동일).
   const eccLevelValue = ECC_LEVEL[eccLevel];
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
   const versionIndex = cornerMarker
-    ? markerGSpec('hex', spec.version).formatIndex
+    ? markerGSpec('hex', spec.version, centerQr).formatIndex
     : (spec.version - 1) + (centerQr ? 4 : 0);
   const formatReplicas = encodeReplicated({ version: versionIndex, eccLevel: eccLevelValue });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(k) 순서와 정합
@@ -325,7 +326,11 @@ export function encode(text, options = {}) {
     cornerMarker,
     daehanFinder,
     markerTones,
-    capacity,
+    // capacity.formatIndex 는 표(VERSIONS_OCM 등)의 기본값이라 CMQ(C2a)에서 와이어와
+    // 갈린다 — 산출물 메타데이터는 실제 실린 인덱스를 말해야 한다 (주장≠사실 방지).
+    capacity: capacity.formatIndex !== undefined && capacity.formatIndex !== versionIndex
+      ? Object.freeze({ ...capacity, formatIndex: versionIndex })
+      : capacity,
     codewordSymbols,
     dataDigits,
     fillerDigits,

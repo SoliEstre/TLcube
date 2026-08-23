@@ -7632,8 +7632,8 @@ if (els.turnACards) {
 if (els.cornerMarkerCards) {
   for (const card of els.cornerMarkerCards.children) {
     card.addEventListener('click', () => {
-      // 중앙 QR 이면 이 카드는 잠겨 있다 — 눌러도 안 켠다 (인코더가 던지는 조합이다).
-      if (generatorState.qrPosition === 'inner' && card.dataset.cornermarker === 'on') return;
+      // 중앙 QR 잠금은 C2a(2026-08-23)에서 해제됐다 — CM+Q 는 배치 검증 완료 조합이다
+      // (markerG CMQ 와이어 + test/markerG-centerqr.test.js 왕복 6종).
       generatorState.cornerMarker = card.dataset.cornermarker === 'on';
       // 상호배제를 **여기서** 해소한다 — encodeOptsFor 가 조용히 떨구면 화면의
       // 턴A 카드는 켜진 채로 남아 «켰는데 안 먹는» 상태가 된다.
@@ -9078,22 +9078,18 @@ function syncCornerMarkerUi() {
   section.hidden = !(isLabPath() && (generatorState.type === 'O' || generatorState.type === 'A'));
   if (!els.cornerMarkerCards) return;
   /*
-   * ⚠ **세 번째 상호배제** — 중앙 QR 과도 같이 못 쓴다. 인코더 계약이다:
-   *   「코너 마커는 링 k·k−1 을, 중앙 QR 은 링3 을 먹는다 — 두 변형의 동시 사용은
-   *    배치 검증을 안 했으므로 조용히 허용하지 않는다」 (src/encode.js)
-   * 2026-08-20 운영자 보고 「코너 마커 선택 시 중앙 QR 선택하면 렌더링이 안 됨」이
-   * 정확히 이것이다. 처음 붙일 때 turnA 만 처리하고 centerQr 을 놓쳤다 —
-   * **UI 가 인코더가 던지는 조합을 만들 수 있게 열려 있었다.**
-   * 조용히 떨구지 않는다: 카드를 잠그고 힌트가 이유를 말한다.
+   * (구) 세 번째 상호배제 «중앙 QR × 코너 예약» 은 C2a(2026-08-23)에서 해제됐다 —
+   * 인코더의 «배치 검증 미실시» 던짐이 검증 완료로 개설됐고(markerG CMQ 6칸,
+   * test/markerG-centerqr.test.js 배치+왕복 실측), 운영자 지시(PM/022 항목 1ⓑ)가
+   * 그 목적이었다: 코드 간 스캔 성능 비교·미리보기에서 두 변형을 같이 본다.
+   * turnA·daehan 배타는 그대로다 (여전히 배치 미검증 조합).
    */
-  const centerQrOn = generatorState.qrPosition === 'inner';
-  if (centerQrOn && generatorState.cornerMarker === true) generatorState.cornerMarker = false;
   const on = generatorState.cornerMarker === true;
   for (const card of els.cornerMarkerCards.children) {
     card.classList.toggle('active', (card.dataset.cornermarker === 'on') === on);
-    card.classList.toggle('disabled', centerQrOn);
+    card.classList.remove('disabled');
   }
-  if (els.cornerMarkerHint) els.cornerMarkerHint.textContent = centerQrOn ? t('g580') : t('g579');
+  if (els.cornerMarkerHint) els.cornerMarkerHint.textContent = t('g579');
 }
 
 function syncYLocatorUi() {
@@ -9656,10 +9652,11 @@ function encodeOptsFor(cfg) {
     if (centralV0Selected) opts.centralV0 = true;
     if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
       opts.daehanFinder = true;
-    } else if (cfg.cornerMarker === true && !opts.centerQr) {
+    } else if (cfg.cornerMarker === true) {
       // 코너 마커가 turnA 를 이긴다 — UI 가 이미 turnA 를 꺼 두므로 여기 오는
       // cfg 는 둘 다 참일 수 없다. 그래도 else-if 로 두는 이유: URL·저장 상태로
       // 옛 조합이 들어와도 `encodeA` 의 던짐(src/encodeA.js) 대신 정의된 쪽이 이긴다.
+      // centerQr 와의 병용은 C2a 에서 개설 — !centerQr 조건을 걷었다.
       opts.cornerMarker = true;
     } else if (cfg.turnA === true && !centralV0Selected) {
       opts.turnA = true;
@@ -9683,7 +9680,7 @@ function encodeOptsFor(cfg) {
   // ⚠ 중앙 QR 과도 상호배제다 — UI 가 이미 막지만, 저장·URL 로 옛 조합이 들어와도
   //   인코더가 던지는 대신 여기서 코너 마커를 떨군다 (중앙 QR 이 사용자가 더 최근에
   //   고른 것이고, QR 은 폴백 경로라 잃으면 손해가 크다).
-  else if (cfg.cornerMarker === true && !opts.centerQr) opts.cornerMarker = true;
+  else if (cfg.cornerMarker === true) opts.cornerMarker = true; // C2a — centerQr 병용 개설
   return { fn: encode, opts };
 }
 
@@ -10093,7 +10090,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-23.09';
+const GENERATOR_BUILD = '2026-08-23.10';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

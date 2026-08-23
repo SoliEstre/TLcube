@@ -439,7 +439,10 @@ function familyProfiles(family) {
       dimension: spec.k,
       spec,
       formatIndices: [
-        spec.version - 1, spec.version + 3, markerGSpec('hex', spec.version).formatIndex,
+        spec.version - 1, spec.version + 3,
+        markerGSpec('hex', spec.version).formatIndex,
+        // CMQ (C2a) — 자리 예약 + 중앙 QR 조합의 전용 인덱스.
+        markerGSpec('hex', spec.version, true).formatIndex,
       ],
     }));
   }
@@ -449,7 +452,9 @@ function familyProfiles(family) {
       dimension: spec.k,
       spec,
       formatIndices: [
-        spec.formatIndex, spec.formatIndex + 2, markerGSpec('tri', spec.version).formatIndex,
+        spec.formatIndex, spec.formatIndex + 2,
+        markerGSpec('tri', spec.version).formatIndex,
+        markerGSpec('tri', spec.version, true).formatIndex,
       ],
     }));
   }
@@ -477,18 +482,19 @@ function profileForHypothesis(hypothesis) {
 function validVersionIndices(hypothesis) {
   const profile = profileForHypothesis(hypothesis);
   if (!profile) return [];
-  // 내부 타입 G(코너 마커) 인덱스는 centerQr 가설에서는 열지 않는다 — cornerMarker ×
-  // centerQr 는 인코더가 던지는 배타 조합이라 그 프레임은 존재할 수 없다. centerQr
-  // 아님이면 레거시와 G 를 **둘 다** 연다: 어느 쪽인지는 CRC + 본문 RS 가 가른다
+  // 내부 타입 G(코너 마커) 인덱스: centerQr 가설은 Q 계열(V*Q + **CMQ** — C2a 개설분)
+  // 을, 비-centerQr 가설은 레거시와 CM 을 연다. 어느 쪽인지는 CRC + 본문 RS 가 가른다
   // (다른 값·같은 k 이므로 후보가 겹칠 수 없다 — markerG.js 무경합 자기검증).
   if (hypothesis.family === 'hex') {
     return hypothesis.centerQr
-      ? [profile.spec.version - 1 + 4]
+      ? [profile.spec.version - 1 + 4,
+        markerGSpec('hex', profile.spec.version, true).formatIndex]
       : [profile.spec.version - 1, markerGSpec('hex', profile.spec.version).formatIndex];
   }
   if (hypothesis.family === 'tri') {
     return hypothesis.centerQr
-      ? [profile.spec.formatIndex + 2]
+      ? [profile.spec.formatIndex + 2,
+        markerGSpec('tri', profile.spec.version, true).formatIndex]
       : [profile.spec.formatIndex, markerGSpec('tri', profile.spec.version).formatIndex];
   }
   if (hypothesis.cellSurface === true) {

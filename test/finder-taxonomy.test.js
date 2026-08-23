@@ -196,7 +196,9 @@ test('④ 와이어 무회귀 — daehanFinder 가 formatIndex·포맷 워드를
       'V' + spec[0] + 'CM formatIndex 가 ' + spec[1] + ' 이 아니다');
     assert.equal(markerGSpec('hex', spec[0]).formatIndex, spec[1]);
   }
-  assert.equal(MARKER_G_FORMAT_INDEX.length, 6);
+  // **의도적 갱신 (C2a, 2026-08-23)**: CMQ 6칸 추가 — 6 → 12. CM 쪽 값(위 3단언)은
+  // 한 자리도 안 움직였다 — 그게 이 테스트의 원 주장이고 그대로 참이다.
+  assert.equal(MARKER_G_FORMAT_INDEX.length, 12);
 });
 
 test('⑤ CM 격하 · H2O 는 확장 영역 파인더 · 자리의 기본 파인더', () => {

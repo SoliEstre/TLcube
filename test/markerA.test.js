@@ -259,7 +259,11 @@ test('markerA: 레거시 A 경로 무영향', () => {
       assert.notEqual(encoded.cellDigits.get(key(c)).role, 'marker');
     }
   }
-  assert.throws(() => encodeA('x', { version: 1, cornerMarker: true, centerQr: true }), RangeError);
+  // **의도적 갱신 (C2a, 2026-08-23)**: 배타 해제 — 조합은 던지지 않고 A1CMQ 를 싣는다.
+  assert.equal(
+    encodeA('x', { version: 1, cornerMarker: true, centerQr: true }).formatIndex, 15,
+    'A1CMQ 와이어 (markerG 표)',
+  );
 });
 
 

@@ -153,9 +153,8 @@ export function encodeA(text, options = {}) {
   if (typeof cornerMarker !== 'boolean') {
     throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
   }
-  if (cornerMarker && centerQr) {
-    throw new RangeError('cornerMarker 와 centerQr 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
-  }
+  // cornerMarker × centerQr — 배치 검증 후 개설 (C2a 2026-08-23, encode.js 와 동일
+  // 근거 · 와이어는 markerG CMQ 변형). test/markerG-centerqr.test.js 가 잠근다.
   if (daehanFinder && centerQr) {
     throw new RangeError('daehanFinder 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯을 둘 다 먹는다');
   }
@@ -285,7 +284,7 @@ export function encodeA(text, options = {}) {
   const formatIndex = turnA
     ? turnASpec(spec.version, { centerQr }).formatIndex
     : cornerMarker
-      ? markerGSpec('tri', spec.version).formatIndex
+      ? markerGSpec('tri', spec.version, centerQr).formatIndex
       : spec.formatIndex + (centerQr ? 2 : 0);
   const formatReplicas = encodeReplicated({ version: formatIndex, eccLevel: eccLevelValue });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(k) 순서와 정합

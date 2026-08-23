@@ -240,11 +240,13 @@ test('markerO: 레거시 O 경로 무영향 — scan order·용량·셀 digit �
   }
 });
 
-test('markerO: cornerMarker 와 centerQr 동시 사용은 거부', () => {
-  assert.throws(
-    () => encode('x', { version: 1, cornerMarker: true, centerQr: true, qrText: 'x' }),
-    RangeError,
-  );
+test('markerO: cornerMarker 와 centerQr 동시 사용은 CMQ 인덱스로 개설됐다', () => {
+  // **의도적 갱신 (C2a, 2026-08-23)**: 원판 «배치 검증 미실시 조합» 거부가 검증
+  // 완료로 개설됐다 (markerG CMQ · 배치·왕복 = test/markerG-centerqr.test.js).
+  const combo = encode('x', { version: 1, cornerMarker: true, centerQr: true, qrText: 'x' });
+  assert.equal(combo.cornerMarker, true);
+  assert.equal(combo.centerQr, true);
+  assert.equal(combo.capacity.formatIndex, 13, 'V1CMQ 와이어 (markerG 표)');
   assert.throws(() => encode('x', { version: 1, cornerMarker: 'yes' }), TypeError);
 });
 

@@ -26,9 +26,13 @@
  *     표에 직접 적혀 있고, 정합성은 로드 시점 자기검증 + `test/markerG.test.js` 의
  *     코드-유도 충돌 테스트가 지킨다 (목록 손 관리 금지 — 이 저장소 최다 결함).
  *   · 7 은 쓰지 않는다 — K1 예약 (015 §16). 8..11 은 쓰지 않는다 — cube 축.
- *   · **Q(centerQr) 변형은 없다** — cornerMarker × centerQr 는 인코더가 던진다
- *     (`encode.js` · `encodeA.js` 의 배타 가드, 배치 검증 미실시 조합). 그래서
- *     타입당 3칸이면 족하다.
+ *   · **Q(centerQr) 변형 — 있다** (C2a, 2026-08-23 · PM/022 항목 1ⓑ): 원판은
+ *     «배치 검증 미실시 조합» 이라 인코더가 던졌는데, 배치 검증이 끝났다 —
+ *     centerQr 는 셀 회계를 바꾸지 않고(중앙 슬롯은 애초에 셀 밖 — V*Q 전례),
+ *     마커 tetrad(링 k·k−1)와 중앙 슬롯(ring ≤2)은 전 k 에서 서로소이며,
+ *     OMarker/AMarker 의 재배치 format·reference 셀이 중앙 슬롯을 침범하지 않음을
+ *     `test/markerG-centerqr.test.js` 가 전 k 실측으로 잠근다. 그래서 타입당
+ *     3칸(CM) + 3칸(CMQ) = 6칸씩이다.
  *
  * O-CM / A-CM 을 **가른다** (6칸, 묶으면 3칸):
  *   현행 점유는 (formatIndex, k) 쌍마다 소유자가 정확히 하나다 — 패밀리는 키에
@@ -45,7 +49,13 @@
  *     **연속 배정 12+version** 으로 둔다 — A0CM=12(k6) · A1CM=13(k8) ·
  *     A2CM=14(k10). 외우기 쉽고, 점유표에서 패밀리 대역이 눈으로 갈린다.
  *
- * 결과 점유 (이 표 반영 후): 빈 칸 9 = k6 {13,14,15} · k8 {2,3,15} · k10 {4,5,12}.
+ * CMQ 값 선택 (C2a — CM 반영 후 빈 칸 9 = k6 {13,14,15} · k8 {2,3,15} · k10 {4,5,12}):
+ *   · hex(O-CM+Q) 는 각 k 의 **최소 빈 값** — V1CMQ=13(k6, 저대역이 이미 만석) ·
+ *     V2CMQ=2(k8) · V3CMQ=4(k10).
+ *   · tri(A-CM+Q) 는 **고대역** — A0CMQ=15(k6) · A1CMQ=15(k8) · A2CMQ=12(k10,
+ *     A 기저 대역 12..15 안).
+ *
+ * 결과 점유 (CM+CMQ 반영 후): 빈 칸 3 = k6 {14} · k8 {3} · k10 {5}.
  */
 
 import { VERSIONS } from './capacity.js';
@@ -65,24 +75,35 @@ import {
  * 톤 표는 각 모듈이 유일한 진실이고, 여기는 배정만 든다 (finder-H 로드 자기검증이
  * hex 열을, 아래 자기검증이 패밀리 내 일관성을 강제한다). */
 export const MARKER_G_FORMAT_INDEX = Object.freeze([
-  Object.freeze({ name: 'V1CM', family: 'hex', version: 1, k: 6, formatIndex: 6, defaultFinder: 'H' }),
-  Object.freeze({ name: 'V2CM', family: 'hex', version: 2, k: 8, formatIndex: 0, defaultFinder: 'H' }),
-  Object.freeze({ name: 'V3CM', family: 'hex', version: 3, k: 10, formatIndex: 1, defaultFinder: 'H' }),
-  Object.freeze({ name: 'A0CM', family: 'tri', version: 0, k: 6, formatIndex: 12, defaultFinder: 'H2O' }),
-  Object.freeze({ name: 'A1CM', family: 'tri', version: 1, k: 8, formatIndex: 13, defaultFinder: 'H2O' }),
-  Object.freeze({ name: 'A2CM', family: 'tri', version: 2, k: 10, formatIndex: 14, defaultFinder: 'H2O' }),
+  Object.freeze({ name: 'V1CM', family: 'hex', version: 1, k: 6, formatIndex: 6, centerQr: false, defaultFinder: 'H' }),
+  Object.freeze({ name: 'V2CM', family: 'hex', version: 2, k: 8, formatIndex: 0, centerQr: false, defaultFinder: 'H' }),
+  Object.freeze({ name: 'V3CM', family: 'hex', version: 3, k: 10, formatIndex: 1, centerQr: false, defaultFinder: 'H' }),
+  Object.freeze({ name: 'A0CM', family: 'tri', version: 0, k: 6, formatIndex: 12, centerQr: false, defaultFinder: 'H2O' }),
+  Object.freeze({ name: 'A1CM', family: 'tri', version: 1, k: 8, formatIndex: 13, centerQr: false, defaultFinder: 'H2O' }),
+  Object.freeze({ name: 'A2CM', family: 'tri', version: 2, k: 10, formatIndex: 14, centerQr: false, defaultFinder: 'H2O' }),
+  // CM+Q (C2a, 2026-08-23) — 자리 예약 + 중앙 QR. 회계는 CM 과 동일(중앙은 셀 밖),
+  // 와이어만 가른다. defaultFinder 는 자리(코너) 심볼이라 CM 과 같다 — 중앙은 QR.
+  Object.freeze({ name: 'V1CMQ', family: 'hex', version: 1, k: 6, formatIndex: 13, centerQr: true, defaultFinder: 'H' }),
+  Object.freeze({ name: 'V2CMQ', family: 'hex', version: 2, k: 8, formatIndex: 2, centerQr: true, defaultFinder: 'H' }),
+  Object.freeze({ name: 'V3CMQ', family: 'hex', version: 3, k: 10, formatIndex: 4, centerQr: true, defaultFinder: 'H' }),
+  Object.freeze({ name: 'A0CMQ', family: 'tri', version: 0, k: 6, formatIndex: 15, centerQr: true, defaultFinder: 'H2O' }),
+  Object.freeze({ name: 'A1CMQ', family: 'tri', version: 1, k: 8, formatIndex: 15, centerQr: true, defaultFinder: 'H2O' }),
+  Object.freeze({ name: 'A2CMQ', family: 'tri', version: 2, k: 10, formatIndex: 12, centerQr: true, defaultFinder: 'H2O' }),
 ]);
 
 /**
- * G 항목 조회 — 인코더 측. family('hex'|'tri') + version. 없으면 RangeError —
- * 조용한 레거시 폴백은 «와이어에 신호가 없다» 는 원래 결함의 재생산이다.
+ * G 항목 조회 — 인코더 측. family('hex'|'tri') + version + centerQr(기본 false —
+ * 기존 소비자 무변경). 없으면 RangeError — 조용한 레거시 폴백은 «와이어에 신호가
+ * 없다» 는 원래 결함의 재생산이다.
  */
-export function markerGSpec(family, version) {
+export function markerGSpec(family, version, centerQr = false) {
   const spec = MARKER_G_FORMAT_INDEX.find(
-    (entry) => entry.family === family && entry.version === version,
+    (entry) => entry.family === family && entry.version === version
+      && entry.centerQr === centerQr,
   );
   if (!spec) {
-    throw new RangeError('알 수 없는 내부 타입 G 항목: ' + family + ' version ' + version);
+    throw new RangeError('알 수 없는 내부 타입 G 항목: ' + family + ' version ' + version
+      + (centerQr ? ' (+Q)' : ''));
   }
   return spec;
 }
@@ -135,9 +156,16 @@ export function markerGSpecFromFormatIndex(formatIndex, k) {
         + ' 가 기저 버전 k=' + (base ? base.k : '없음') + ' 와 다르다');
     }
   }
-  // (family, version) 커버리지 — 기저 버전마다 정확히 한 항목 (빠지면 인코더가 던진다).
-  for (const spec of VERSIONS) markerGSpec('hex', spec.version);
-  for (const spec of VERSIONS_A) markerGSpec('tri', spec.version);
+  // (family, version, centerQr) 커버리지 — 기저 버전×Q축마다 정확히 한 항목
+  // (빠지면 인코더가 던진다).
+  for (const spec of VERSIONS) {
+    markerGSpec('hex', spec.version, false);
+    markerGSpec('hex', spec.version, true);
+  }
+  for (const spec of VERSIONS_A) {
+    markerGSpec('tri', spec.version, false);
+    markerGSpec('tri', spec.version, true);
+  }
   // defaultFinder — 항목마다 비어 있지 않고, 같은 패밀리(= 같은 자리 모양)는 같은
   // 심볼을 든다. 값 자체(H·H2O)는 심볼 모듈의 로드 자기검증이 대조한다.
   for (const entry of MARKER_G_FORMAT_INDEX) {
