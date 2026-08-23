@@ -1224,42 +1224,14 @@
         <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.</p>
       </div>
 
-      <!-- 코너 마커 (O-CM / A-CM) — Type O·A + lab 전용. #turnASection 과 같은 게이트 문법.
-           ⚠ **실측 (2026-08-20)**: 왕복이 **양 끝 다 배선돼 완전히 선다**:
-           ① 기하 — `decoder/corner-marker-detect.js` 를 `bootstrap.directAnchorHypotheses`
-           에 배선(앵커가 0일 때만 열리는 fallback). 합성 원근 실측에서 앵커 한계
-           g=0.0001 → 코너 마커 g=0.0008 로 **약 8배**
-           (test/decoder-corner-marker-wiring.test.js ②, 변이 검증 완료).
-           ② 와이어 — 내부 타입 G 전용 formatIndex(`src/markerG.js` 표 주도, 운영자 확정
-           2026-08-20). 인코더가 G 인덱스를 싣고 디코더는 포맷 워드의 그 값으로 CM 회계를
-           켠다. 라이브 왕복은 test/markerG.test.js ④(6항목 전수) + generator-ui-wiring §5
-           가 잰다 (변이 검증 완료). 카드는 여전히 lab 전용이다 — 실사진(실기기) 라운드
-           전의 일반 노출은 운영자 결정 (generator-corner-marker.test.js ④ 가 잠근다).
-           ⚠ turnA 와 **상호배제**다 — `encodeA` 가 둘 다 참이면 던진다(src/encodeA.js).
-           그래서 이 카드를 켜면 syncCornerMarkerUi 가 turnA 를 끄고 그 카드를 잠근다.
-           조용히 떨구지 않는다: 잠긴 이유를 힌트가 말한다.
-           Type Y 는 대상이 아니다 — Y 는 자기 로케이터 문법(v0 계열)을 쓴다. -->
-      <div id="cornerMarkerSection" hidden>
-        <label class="section-heading" data-i18n="g576">코너 자리 예약 (실험)</label>
-        <div class="card-row" id="cornerMarkerCards">
-          <div class="toggle-card active" data-cornermarker="off">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/>
-            </svg>
-            <span data-i18n="g577">없음 (기본)</span>
-          </div>
-          <div class="toggle-card" data-cornermarker="on">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/>
-              <circle cx="12" cy="2.6" r="1.6" fill="currentColor" stroke="none"/>
-              <circle cx="21" cy="17" r="1.6" fill="currentColor" stroke="none"/>
-              <circle cx="3" cy="7" r="1.6" fill="currentColor" stroke="none"/>
-            </svg>
-            <span data-i18n="g578">교대 코너 3곳</span>
-          </div>
-        </div>
-        <p class="hint" id="cornerMarkerHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
-      </div>
+      <!-- ⚠ **의도적 갱신 (W2 C4, 2026-08-24)** — 여기 있던 #cornerMarkerSection
+           (코너 자리 예약 켬/끔 2카드)은 검출기 3구역 개편으로 소멸했다. O-CM/A-CM
+           은 #finderSection 안 내곽/외곽 구역의 seat 카드로 흡수됐고
+           (§ensureSeatCards — finder-zone-ui.zoneCards() 유도), 상태는
+           cornerMarker: boolean → innerSeat/outerSeat 로 승계됐다
+           (generator-state.js §seat 축). 왕복 실측·와이어 근거(2026-08-20,
+           decoder-corner-marker-wiring ② · markerG G 인덱스)는 그 주석과 함께
+           이식됐다. i18n g576-g578 은 여덟 언어 모두 남겨 둔다 (드랍 전례). -->
 
       <div class="row">
         <div id="versionWrapO">
@@ -1844,6 +1816,31 @@
           <p class="hint finder-baseline-evidence" id="finderBaselineEvidence" style="display:none"></p>
           <p class="hint finder-score-note" data-i18n="g492">이 값은 모형 점수이며 인식률 예측이 아니에요.</p>
         </div>
+        <!-- ── 내곽·외곽 구역 (W2 C4 — 검출기 3구역, 설계서 ①) ─────────────────
+             한 제목 «검출기 선택» 아래 3구역: 위의 formal 행 + 서랍 = **중앙**(분류 1,
+             기존 구조 승계), 아래 둘 = **내곽**(분류 2) · **외곽**(분류 3 + 부재).
+             카드는 finder-zone-ui.zoneCards() 가 FINDER_TAXONOMY 에서 유도해
+             §ensureSeatCards 가 채운다 (수기 사본 철폐).
+             노출: **lab 유지** (운영자 확정 2026-08-23·24 — 고급 승격안 기각.
+             실기기 라운드 전 — 합성만으로 정식 노출을 정하지 않는다).
+             구 #cornerMarkerSection 의 승계 — 왕복 실측(2026-08-20): 기하는
+             decoder-corner-marker-wiring ②(앵커 한계 g=0.0001 → CM g=0.0008),
+             와이어는 markerG G formatIndex (markerG.test ④ · generator-ui-wiring §5).
+             sagoae = 자리만 + disabled (와이어 편입은 통합자 C2c — 부재 문법과 동일).
+             V-CM/K-CM = KIND_ABSENT 유도, 클릭 불가 + 부재 사유 힌트.
+             ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 던짐) — 핸들러가 turnA 를
+             끄고 syncTurnAUi 가 그 카드를 잠근다. centerQr 병용은 C2a 로 합법 —
+             잠금은 상수가 아니라 cmqWireExists(와이어 존재 술어)로 게이트한다. -->
+        <div id="finderInnerZone" hidden>
+          <label class="section-heading" data-i18n="g850">내곽 자리 (실험)</label>
+          <div class="card-row" id="innerSeatCards"></div>
+          <p class="hint" id="innerSeatHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
+        </div>
+        <div id="finderOuterZone" hidden>
+          <label class="section-heading" data-i18n="g851">외곽 자리 (실험)</label>
+          <div class="card-row" id="outerSeatCards"></div>
+          <p class="hint" id="outerSeatHint" data-i18n="g858">빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.</p>
+        </div>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
         <strong data-i18n="g469">실험 — 셀 파인더 스캔 경로 연결됨</strong><br>
@@ -2360,6 +2357,15 @@ const GENERATOR_STRINGS = {
     "g451": "심볼 {d}+{n} · 프리셋 Δmin {delta}",
     "g452": "심볼 {d}+{n}",
     "g600": "새 버전이 준비됐어요.",
+    "g850": "내곽 자리 (실험)",
+    "g851": "외곽 자리 (실험)",
+    "g852": "O-CM · 교대 코너 3곳",
+    "g853": "A-CM · 교대 코너 3곳",
+    "g854": "sagoae (준비 중)",
+    "g855": "sagoae 는 아직 켤 수 없어요 — 단독 와이어 편입 전이라 자리만 예약해 뒀어요.",
+    "g856": "V-CM (부재)",
+    "g857": "K-CM (부재)",
+    "g858": "빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.",
     "g860": "QR 면 배치",
     "g861": "중앙측",
     "g862": "Y-심 (v0TRQ)",
@@ -2558,7 +2564,7 @@ const GENERATOR_STRINGS = {
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
     "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.",
-    "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깔때까지 잠과 둘게요.",
+    "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깥으로 뺄 때까지 잠가 둘게요.",
     "g581": "지금 파인더가 가운데를 쓰고 있어서 QR 을 가운데에 넣을 수 없어요. 다른 파인더를 고르면 풀려요.",
     "g507": "{filename}으로 다운로드되었습니다.",
     "g508": "파인더 에디터",
@@ -2781,6 +2787,15 @@ const GENERATOR_STRINGS = {
     "g451": "symbols {d}+{n} · preset Δmin {delta}",
     "g452": "symbols {d}+{n}",
     "g600": "A new version is ready.",
+    "g850": "Inner seat (experimental)",
+    "g851": "Outer seat (experimental)",
+    "g852": "O-CM · 3 alternating corners",
+    "g853": "A-CM · 3 alternating corners",
+    "g854": "sagoae (in preparation)",
+    "g855": "sagoae cannot be enabled yet — its standalone wire is not in place, so the seat is only reserved.",
+    "g856": "V-CM (absent)",
+    "g857": "K-CM (absent)",
+    "g858": "The empty seats (V-CM·K-CM) have no design yet — shown as placeholders only.",
     "g860": "QR face placement",
     "g861": "Centre side",
     "g862": "Y-seam (v0TRQ)",
@@ -3202,6 +3217,15 @@ const GENERATOR_STRINGS = {
     "g451": "シンボル {d}+{n} · プリセット Δmin {delta}",
     "g452": "シンボル {d}+{n}",
     "g600": "新しいバージョンが利用できます。",
+    "g850": "内郭シート（実験）",
+    "g851": "外郭シート（実験）",
+    "g852": "O-CM · 交互コーナー3か所",
+    "g853": "A-CM · 交互コーナー3か所",
+    "g854": "sagoae（準備中）",
+    "g855": "sagoae はまだ有効にできません — 単独ワイヤ編入前のため、席だけ予約しています。",
+    "g856": "V-CM（不在）",
+    "g857": "K-CM（不在）",
+    "g858": "空席（V-CM·K-CM）はまだ設計がありません — 席だけ表示しています。",
     "g860": "QR 面配置",
     "g861": "中央側",
     "g862": "Y シーム (v0TRQ)",
@@ -3622,6 +3646,15 @@ const GENERATOR_STRINGS = {
     "g451": "symboles {d}+{n} · Δmin du préréglage {delta}",
     "g452": "symboles {d}+{n}",
     "g600": "Une nouvelle version est prête.",
+    "g850": "Siège intérieur (expérimental)",
+    "g851": "Siège extérieur (expérimental)",
+    "g852": "O-CM · 3 coins alternés",
+    "g853": "A-CM · 3 coins alternés",
+    "g854": "sagoae (en préparation)",
+    "g855": "sagoae ne peut pas encore être activé — son câblage autonome n'est pas en place, le siège est seulement réservé.",
+    "g856": "V-CM (absent)",
+    "g857": "K-CM (absent)",
+    "g858": "Les sièges vides (V-CM·K-CM) n'ont pas encore de conception — affichés comme simples emplacements.",
     "g860": "Placement du QR sur la face",
     "g861": "Côté centre",
     "g862": "Jonction Y (v0TRQ)",
@@ -4042,6 +4075,15 @@ const GENERATOR_STRINGS = {
     "g451": "simboli {d}+{n} · Δmin del preset {delta}",
     "g452": "simboli {d}+{n}",
     "g600": "È pronta una nuova versione.",
+    "g850": "Posto interno (sperimentale)",
+    "g851": "Posto esterno (sperimentale)",
+    "g852": "O-CM · 3 angoli alternati",
+    "g853": "A-CM · 3 angoli alternati",
+    "g854": "sagoae (in preparazione)",
+    "g855": "sagoae non può ancora essere attivato — il collegamento autonomo non è pronto, il posto è solo riservato.",
+    "g856": "V-CM (assente)",
+    "g857": "K-CM (assente)",
+    "g858": "I posti vuoti (V-CM·K-CM) non hanno ancora un progetto — mostrati solo come segnaposto.",
     "g860": "Posizione del QR sulla faccia",
     "g861": "Lato centro",
     "g862": "Giunzione Y (v0TRQ)",
@@ -4462,6 +4504,15 @@ const GENERATOR_STRINGS = {
     "g451": "Symbole {d}+{n} · Δmin der Vorgabe {delta}",
     "g452": "Symbole {d}+{n}",
     "g600": "Eine neue Version steht bereit.",
+    "g850": "Innerer Platz (experimentell)",
+    "g851": "Äußerer Platz (experimentell)",
+    "g852": "O-CM · 3 wechselnde Ecken",
+    "g853": "A-CM · 3 wechselnde Ecken",
+    "g854": "sagoae (in Vorbereitung)",
+    "g855": "sagoae kann noch nicht aktiviert werden — die eigenständige Verdrahtung fehlt, der Platz ist nur reserviert.",
+    "g856": "V-CM (nicht vorhanden)",
+    "g857": "K-CM (nicht vorhanden)",
+    "g858": "Die leeren Plätze (V-CM·K-CM) haben noch kein Design — nur als Platzhalter angezeigt.",
     "g860": "QR-Flächenplatzierung",
     "g861": "Mittenseite",
     "g862": "Y-Naht (v0TRQ)",
@@ -4882,6 +4933,15 @@ const GENERATOR_STRINGS = {
     "g451": "símbolos {d}+{n} · Δmin del ajuste {delta}",
     "g452": "símbolos {d}+{n}",
     "g600": "Hay una nueva versión lista.",
+    "g850": "Asiento interior (experimental)",
+    "g851": "Asiento exterior (experimental)",
+    "g852": "O-CM · 3 esquinas alternas",
+    "g853": "A-CM · 3 esquinas alternas",
+    "g854": "sagoae (en preparación)",
+    "g855": "sagoae aún no se puede activar: su cableado independiente no está listo, el asiento solo está reservado.",
+    "g856": "V-CM (ausente)",
+    "g857": "K-CM (ausente)",
+    "g858": "Los asientos vacíos (V-CM·K-CM) aún no tienen diseño; se muestran solo como marcadores.",
     "g860": "Colocación del QR en la cara",
     "g861": "Lado central",
     "g862": "Unión Y (v0TRQ)",
@@ -5302,6 +5362,15 @@ const GENERATOR_STRINGS = {
     "g451": "símbolos {d}+{n} · Δmin da predefinição {delta}",
     "g452": "símbolos {d}+{n}",
     "g600": "Está pronta uma nova versão.",
+    "g850": "Assento interno (experimental)",
+    "g851": "Assento externo (experimental)",
+    "g852": "O-CM · 3 cantos alternados",
+    "g853": "A-CM · 3 cantos alternados",
+    "g854": "sagoae (em preparação)",
+    "g855": "sagoae ainda não pode ser ativado — a ligação autônoma não está pronta, o assento está apenas reservado.",
+    "g856": "V-CM (ausente)",
+    "g857": "K-CM (ausente)",
+    "g858": "Os assentos vazios (V-CM·K-CM) ainda não têm design — mostrados apenas como marcadores.",
     "g860": "Posição do QR na face",
     "g861": "Lado central",
     "g862": "Junção Y (v0TRQ)",
@@ -5615,7 +5684,7 @@ const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
   syncFaceGainLabel, syncRenderProfileUi, syncExportOptionsUi, syncExportPpiHint,
-  syncShadingUi, syncYLocatorUi, syncTurnAUi, syncCornerMarkerUi,
+  syncShadingUi, syncYLocatorUi, syncTurnAUi, syncSeatUi,
   syncTypeYCellEditorUi,
   syncHelpPopover,
 ];
@@ -5697,6 +5766,7 @@ import {
 import {
   CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS, wireFinderCardActivation,
 } from './src/finder-card-ui.js';
+import { SEAT_NONE, cmqWireExists, zoneCards } from './src/finder-zone-ui.js';
 import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
@@ -5818,8 +5888,11 @@ const els = {
   finderExperimentalWarning: $('finderExperimentalWarning'),
   yLocatorSection: $('yLocatorSection'), yLocatorCards: $('yLocatorCards'),
   turnASection: $('turnASection'), turnACards: $('turnACards'),
-  cornerMarkerSection: $('cornerMarkerSection'), cornerMarkerCards: $('cornerMarkerCards'),
-  cornerMarkerHint: $('cornerMarkerHint'),
+  // 검출기 seat 구역 (W2 C4 — 구 cornerMarkerSection 승계)
+  finderInnerZone: $('finderInnerZone'), innerSeatCards: $('innerSeatCards'),
+  innerSeatHint: $('innerSeatHint'),
+  finderOuterZone: $('finderOuterZone'), outerSeatCards: $('outerSeatCards'),
+  outerSeatHint: $('outerSeatHint'),
   yLocatorHint: $('yLocatorHint'),
   yLocatorArmSection: $('yLocatorArmSection'), yLocatorArmCards: $('yLocatorArmCards'),
   yLocatorArmHint: $('yLocatorArmHint'),
@@ -7044,6 +7117,55 @@ function ensureFinderCards() {
   }
 }
 
+/* ── 검출기 seat 구역 (W2 C4) — 내곽/외곽 카드를 zoneCards() 유도로 채운다 ──────
+ *
+ * 카드 구성·허용값·타입 부합은 전부 src/finder-zone-ui.js (분류 정본 유도)가 낸다.
+ * 여기 남는 것은 **표현**(아이콘·라벨 키)뿐이고, 유도에 있는데 표현이 없으면
+ * 아래 throw 가 로드 시점에 잡는다 — 사본 목록이 아니라 검증되는 매핑이다. */
+
+/** seat 카드 아이콘 — 발자국 미니 도면 (yLocatorCards 아이콘 규약과 같은 문법).
+ *  없음 = 실루엣만 · o-cm = 육각 + 교대 코너 3점 · a-cm = 삼각 + 코너 3점 ·
+ *  sagoae = 육각 + 안쪽 점선 링(예약 영역) · v-cm/k-cm = 점선 실루엣 (부재). */
+const SEAT_CARD_ICONS = Object.freeze({
+  [SEAT_NONE]: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/></svg>',
+  'o-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><circle cx="12" cy="2.6" r="1.6" fill="currentColor" stroke="none"/><circle cx="21" cy="17" r="1.6" fill="currentColor" stroke="none"/><circle cx="3" cy="7" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  sagoae: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M12 6.5 L16.8 9.2 L16.8 14.8 L12 17.5 L7.2 14.8 L7.2 9.2 Z" stroke-dasharray="2 1.6"/></svg>',
+  'a-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L21 19 L3 19 Z"/><circle cx="12" cy="3.4" r="1.6" fill="currentColor" stroke="none"/><circle cx="20.4" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="3.6" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  'v-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3 5 L21 5 L12 21 Z" stroke-dasharray="2.4 2"/></svg>',
+  'k-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L20 17 L4 17 Z" stroke-dasharray="2.4 2"/><path d="M12 21 L4 7 L20 7 Z" stroke-dasharray="2.4 2"/></svg>',
+});
+const SEAT_CARD_LABEL_KEYS = Object.freeze({
+  [SEAT_NONE]: 'g577', 'o-cm': 'g852', 'a-cm': 'g853',
+  sagoae: 'g854', 'v-cm': 'g856', 'k-cm': 'g857',
+});
+
+let seatCardsBuilt = false;
+function ensureSeatCards() {
+  if (seatCardsBuilt) return;
+  seatCardsBuilt = true;
+  const zones = zoneCards();
+  const build = (container, cards) => {
+    for (const desc of cards) {
+      const icon = SEAT_CARD_ICONS[desc.id];
+      const labelKey = SEAT_CARD_LABEL_KEYS[desc.id];
+      if (!icon || !labelKey) throw new Error('seat 카드 표현 누락: ' + desc.id);
+      const card = document.createElement('div');
+      card.className = 'toggle-card';
+      card.dataset.seat = desc.id;
+      card.dataset.seatTypes = desc.types.join(' ');
+      card.dataset.seatReady = desc.ready ? '1' : '0';
+      if (desc.absent) card.dataset.seatAbsent = '1';
+      card.innerHTML = icon;
+      const label = document.createElement('span');
+      label.dataset.seatLabelKey = labelKey;
+      card.append(label);
+      container.append(card);
+    }
+  };
+  build(els.innerSeatCards, zones.inner);
+  build(els.outerSeatCards, zones.outer);
+}
+
 // Type O/A 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
 function renderFinderUi() {
   ensureFinderCards();
@@ -7288,8 +7410,10 @@ function syncFinderQrUi() {
   // 언어·모드 재표시는 상태를 정규화하지 않는다. 사용자 선택 이벤트의 commit만 쓴다.
   renderQrPositionUi();
   renderFinderUi();
-  // QR 위치가 중앙으로 바뀌면 코너 마커가 살아 있으면 안 된다 (인코더가 던진다).
-  syncCornerMarkerUi();
+  // ⚠ **의도적 갱신 (W2 C4)** — 여기엔 «중앙 QR 이면 코너 마커 강제 소등» 이 적혀
+  // 있었다. C2a 가 그 배타를 해제했으므로 (CM+Q 합법) 소등은 없다 — seat 구역의
+  // 표시·와이어 술어 게이트만 재동기화한다 (syncSeatUi 의 cmqWireExists).
+  syncSeatUi();
 }
 
 for (const card of els.typeCards.children) {
@@ -7730,21 +7854,28 @@ if (els.turnACards) {
   }
 }
 
-if (els.cornerMarkerCards) {
-  for (const card of els.cornerMarkerCards.children) {
-    card.addEventListener('click', () => {
-      // 중앙 QR 잠금은 C2a(2026-08-23)에서 해제됐다 — CM+Q 는 배치 검증 완료 조합이다
-      // (markerG CMQ 와이어 + test/markerG-centerqr.test.js 왕복 6종).
-      generatorState.cornerMarker = card.dataset.cornermarker === 'on';
-      // 상호배제를 **여기서** 해소한다 — encodeOptsFor 가 조용히 떨구면 화면의
-      // 턴A 카드는 켜진 채로 남아 «켰는데 안 먹는» 상태가 된다.
-      if (generatorState.cornerMarker) generatorState.turnA = false;
-      syncCornerMarkerUi();
-      syncTurnAUi();
-      schedule();
-    });
-  }
+// seat 카드 배선 (W2 C4) — 구 cornerMarkerCards 핸들러의 승계. 카드는
+// ensureSeatCards 가 지연 생성하므로 컨테이너 위임으로 배선한다.
+// 중앙 QR 잠금은 C2a(2026-08-23)에서 해제됐다 — CM+Q 는 배치 검증 완료 조합이다
+// (markerG CMQ 와이어 + test/markerG-centerqr.test.js 왕복 6종). 남는 잠금은
+// syncSeatUi 의 와이어 존재 술어뿐이고, disabled 카드는 여기서 걸러진다.
+function wireSeatCards(container, seatKey) {
+  if (!container) return;
+  container.addEventListener('click', (event) => {
+    const card = event.target.closest('.toggle-card');
+    if (!card || !container.contains(card) || card.classList.contains('disabled')) return;
+    generatorState[seatKey] = card.dataset.seat;
+    // 상호배제를 **여기서** 해소한다 — encodeOptsFor 가 조용히 떨구면 화면의
+    // 턴A 카드는 켜진 채로 남아 «켰는데 안 먹는» 상태가 된다 (a-cm × turnA —
+    // encodeA 가 둘 다 참이면 던진다).
+    if (generatorState.outerSeat === 'a-cm') generatorState.turnA = false;
+    syncSeatUi();
+    syncTurnAUi();
+    schedule();
+  });
 }
+wireSeatCards(els.innerSeatCards, 'innerSeat');
+wireSeatCards(els.outerSeatCards, 'outerSeat');
 
 const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
 
@@ -9149,7 +9280,7 @@ function syncTypeUi() {
   syncShadingUi();       // 입체 음영도 같은 이유로 Y 전용이다.
   syncYLocatorUi();
   syncTurnAUi();
-  syncCornerMarkerUi();
+  syncSeatUi();
   syncTypeYCellEditorUi();
 }
 
@@ -9160,9 +9291,10 @@ function syncTurnAUi() {
   section.hidden = !(isLabPath() && generatorState.type === 'A');
   if (!els.turnACards) return;
   const on = generatorState.turnA === true;
-  // 코너 마커와 상호배제 — 잠긴 이유를 보이게 한다. 조용히 무시하면
+  // 코너 마커(외곽 seat a-cm)와 상호배제 — 잠긴 이유를 보이게 한다. 조용히 무시하면
   // 「켰는데 안 먹는」 카드가 되고, 그건 회귀보다 먼저 사람을 속인다.
-  const locked = generatorState.cornerMarker === true;
+  // (W2 C4: cornerMarker boolean → outerSeat 승계 — encodeA 던짐 조합은 A 쪽뿐이다.)
+  const locked = generatorState.outerSeat === 'a-cm';
   for (const card of els.turnACards.children) {
     card.classList.toggle('active', (card.dataset.turna === 'on') === on);
     card.classList.toggle('disabled', locked);
@@ -9170,29 +9302,51 @@ function syncTurnAUi() {
 }
 
 /**
- * 코너 마커 카드 — Type O·A + lab 에서만 연다.
+ * 검출기 seat 구역 (내곽/외곽) — Type O·A + lab 에서만 연다 (W2 C4 —
+ * 구 syncCornerMarkerUi 의 승계·재작성).
  *
  * Y 를 뺀 이유: Y 는 코너 마커가 아니라 자기 로케이터 문법(v0 계열)을 쓴다.
  * `encodeY` 는 이 키를 아예 모르므로 넘기면 조용히 무시되거나 던진다.
+ *
+ * «중앙 QR × 코너 예약» 배타는 C2a(2026-08-23)에서 해제됐다 — markerG CMQ 6칸
+ * (test/markerG-centerqr.test.js 배치+왕복 실측), 운영자 지시 PM/022 항목 1ⓑ.
+ * 그래서 잠금은 상수가 아니라 **와이어 존재 술어**(cmqWireExists — markerG 에
+ * 그 family 의 CMQ 행이 실재하는가)로 게이트한다: 현재 hex·tri 모두 존재라
+ * CM 계열 + 중앙 QR 동시 활성이 성립한다. 술어가 false 인 family 가 다시 생기면
+ * 그 자리에서만 seat 카드가 잠기고 g580 이 이유를 말한다 (조용한 무시 금지).
+ * turnA·daehan 배타는 그대로다 (여전히 배치 미검증 조합).
  */
-function syncCornerMarkerUi() {
-  const section = els.cornerMarkerSection;
-  if (!section) return;
-  section.hidden = !(isLabPath() && (generatorState.type === 'O' || generatorState.type === 'A'));
-  if (!els.cornerMarkerCards) return;
-  /*
-   * (구) 세 번째 상호배제 «중앙 QR × 코너 예약» 은 C2a(2026-08-23)에서 해제됐다 —
-   * 인코더의 «배치 검증 미실시» 던짐이 검증 완료로 개설됐고(markerG CMQ 6칸,
-   * test/markerG-centerqr.test.js 배치+왕복 실측), 운영자 지시(PM/022 항목 1ⓑ)가
-   * 그 목적이었다: 코드 간 스캔 성능 비교·미리보기에서 두 변형을 같이 본다.
-   * turnA·daehan 배타는 그대로다 (여전히 배치 미검증 조합).
-   */
-  const on = generatorState.cornerMarker === true;
-  for (const card of els.cornerMarkerCards.children) {
-    card.classList.toggle('active', (card.dataset.cornermarker === 'on') === on);
-    card.classList.remove('disabled');
-  }
-  if (els.cornerMarkerHint) els.cornerMarkerHint.textContent = t('g579');
+function syncSeatUi() {
+  if (!els.finderInnerZone || !els.finderOuterZone) return;
+  const type = generatorState.type;
+  const show = isLabPath() && (type === 'O' || type === 'A');
+  els.finderInnerZone.hidden = !show;
+  els.finderOuterZone.hidden = !show;
+  if (!show) return;
+  ensureSeatCards();
+  const family = type === 'O' ? 'hex' : 'tri';
+  const wireLocked = generatorState.qrPosition === 'inner' && !cmqWireExists(family);
+  const sync = (container, seatValue) => {
+    for (const card of container.children) {
+      const seat = card.dataset.seat;
+      const isNone = seat === SEAT_NONE;
+      // 타입 부합만 표시 (검출기 필터 — zoneCards 의 types 표).
+      card.style.display = card.dataset.seatTypes.split(' ').includes(type) ? '' : 'none';
+      const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone);
+      card.classList.toggle('disabled', locked);
+      card.classList.toggle('active', seat === seatValue);
+      const label = card.querySelector('[data-seat-label-key]');
+      label.textContent = t(label.dataset.seatLabelKey);
+      // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580).
+      card.title = card.dataset.seatAbsent === '1' ? t('g858')
+        : seat === 'sagoae' ? t('g855')
+          : (wireLocked && !isNone) ? t('g580') : '';
+    }
+  };
+  sync(els.innerSeatCards, generatorState.innerSeat);
+  sync(els.outerSeatCards, generatorState.outerSeat);
+  if (els.innerSeatHint) els.innerSeatHint.textContent = t('g579');
+  if (els.outerSeatHint) els.outerSeatHint.textContent = t('g858');
 }
 
 function syncYLocatorUi() {
@@ -9676,8 +9830,12 @@ function buildConfig() {
     versionA: selectedVersion(generatorState.versionA),
     // 턴A 는 Type A 전용이다 — 다른 타입에서 켜진 채 남아 있어도 여기서 죽인다.
     turnA: type === 'A' && generatorState.turnA === true,
-    // 코너 마커는 O·A 전용이다 (Y 는 자기 로케이터 문법을 쓴다). 같은 규약으로 죽인다.
-    cornerMarker: (type === 'O' || type === 'A') && generatorState.cornerMarker === true,
+    // 코너 마커는 seat 파생이다 (W2 C4): O 는 내곽 o-cm, A 는 외곽 a-cm 이 켠다.
+    // Y 는 자기 로케이터 문법을 쓰므로 seat 구역 자체가 안 뜬다 — 타입 술어가
+    // 종전의 «다른 타입에서 켜진 채 새는» 것을 같은 규약으로 죽인다.
+    // sagoae 는 자리 예약 값이라 와이어를 켜지 않는다 (통합자 C2c 전까지).
+    cornerMarker: (type === 'O' && generatorState.innerSeat === 'o-cm')
+      || (type === 'A' && generatorState.outerSeat === 'a-cm'),
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
       ? TL_READER_URL : generatorState.qrText.trim(),

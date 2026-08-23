@@ -98,6 +98,16 @@ export function normalizeFinderQrState(state, type, defaultFinderPatternId) {
   if (next.previousOuterQrPosition === 'plane') {
     next.previousOuterQrPosition = DEFAULT_OUTER_QR_POSITION;
   }
+  // 하위호환 (W2 C4): 구 `cornerMarker: boolean` → 타입별 seat 이관 — 스키마에서
+  // 내린 필드가 어떤 경로로 들어와도 새 축(innerSeat/outerSeat)으로 옮기고 걷는다
+  // (plane 매핑과 같은 방어선 지위. Y 는 대상 밖 — 필드만 걷는다).
+  if ('cornerMarker' in next) {
+    if (next.cornerMarker === true) {
+      if (type === 'O') next.innerSeat = 'o-cm';
+      if (type === 'A') next.outerSeat = 'a-cm';
+    }
+    delete next.cornerMarker;
+  }
   if (type === 'Y') return next;
 
   // **의도적 개방 (2026-08-22 운영자 지시 «타입 OAK 모두»)**: 중앙 v0(비컨)는 이제

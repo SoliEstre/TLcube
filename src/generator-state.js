@@ -155,14 +155,28 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //   안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
   //   배선이 끝나고 왕복이 서는 날이다.
   turnA: field(false, INTERNAL, [false, true]),
-  // 코너 마커 (O-CM / A-CM, 2026-08-20 UI 편입) — Type O·A 전용, lab 게이트 뒤.
-  // turnA 와 같은 `INTERNAL` 이지만 **이유가 다르다**: turnA 는 왕복이 안 서서
-  // lab 에 갇혀 있고, 코너 마커는 왕복이 선다 (합성 원근에서 앵커 한계 g=0.0001 →
-  // 코너 마커 g=0.0008, test/decoder-corner-marker-wiring.test.js ②).
-  // lab 에 두는 이유는 **실기기 라운드를 아직 안 돌았기** 때문이다 — 합성만으로
-  // 정식 노출을 정하지 않는다는 이 저장소의 규약 그대로다.
-  // ⚠ turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
-  cornerMarker: field(false, INTERNAL, [false, true]),
+  // ── 검출기 seat 축 (W2 C4, 2026-08-24) — 구 `cornerMarker: boolean` 의 승계 ──
+  // 코너 마커 (O-CM / A-CM, 2026-08-20 UI 편입)는 «켬/끔» 한 비트가 타입별로 다른
+  // 마커를 뜻하는 구조였다. 검출기 3구역 개편으로 **내곽/외곽 seat 선택**으로
+  // 분해한다: innerSeat(분류 2 — O-CM · sagoae) / outerSeat(분류 3 — A-CM).
+  // 허용값의 정본은 finder-zone-ui(FINDER_TAXONOMY 유도)다. ⚠ 여기서 **직접
+  // import 하지 못한다** — finder-taxonomy 가 이 모듈(GENERATOR_TYPES)을 import
+  // 해서, zone-ui 를 스프레드하면 taxonomy→state→zone-ui→taxonomy 순환으로
+  // 모듈 로드가 TDZ 로 죽는다 (W2 C4 실측). 그래서 F-37 의 유도 대신 **검증되는
+  // 사본**을 쓴다: 아래 리터럴이 zone-ui 유도와 어긋나면 finder-zone-ui 로드
+  // 자기검증이 그 자리에서 던진다 (사본 규칙 명문화 — «유도하거나 규칙을 적어라»).
+  // sagoae 는 자리 예약 값 — 와이어 편입은 통합자 C2c, 카드는 disabled.
+  // `cornerMarker` 필드 자체는 **스키마에서 내렸다** — 생성기 상태는 저장되지
+  // 않으므로 «저장값 하위호환» 기전이 없고(드랍 전례의 검증 렌즈 정정과 동일),
+  // 죽은 필드를 남기면 그 주석이 거짓이 된다. 인코더 옵션 키 `cornerMarker` 는
+  // 그대로다 — buildConfig 가 seat 에서 **파생**해 싣는다 (index.html).
+  // 구 boolean 이 어떤 경로로 들어와도 finder-selection.normalizeFinderQrState 가
+  // 타입별 seat 로 이관한다.
+  // lab 게이트(INTERNAL) 이유는 종전과 같다: 실기기 라운드 전 — 합성만으로 정식
+  // 노출을 정하지 않는다. 운영자 확정(2026-08-23·24): 내곽/외곽 구역 노출 lab 유지.
+  // ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
+  innerSeat: field('none', INTERNAL, ['none', 'o-cm', 'sagoae']),
+  outerSeat: field('none', INTERNAL, ['none', 'a-cm']),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
