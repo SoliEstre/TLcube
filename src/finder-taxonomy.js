@@ -22,11 +22,8 @@
  *   아니라 육각 영역 안이므로 자리(o-cm)와 같은 분류 2다. 좌표 기준은 꼭짓점.
  *   H2O(21셀, A-CM 자리)는 분류 3 그대로다 — tri 확장 영역이 맞다.
  *
- *   ⚠ **아직 표 데이터에는 반영 안 됐다** — 아래 `add({id:'H', class: 3, ...})`
- *   행과 그 renderPath/renderable/cells 값은 «디자인 없음» 시절 문장이라 지금
- *   거짓이다 (`finder-H.js` 가 12셀 톤 표를 든다). 이 레인의 쓰기 범위가 헤더
- *   주석뿐이라 표는 못 고쳤다. 코드 라운드가 행을 고칠 때 이 문단을 지운다
- *   (SPEC.md §13 TBD «[분류] H = 분류 2 를 코드 표에 반영»).
+ *   표 데이터 반영 완료 (2026-08-24 코드 라운드) — `add({id:'H', class: 2, ...})`
+ *   가 finder-H.js 실측 문장으로 섰고, 내곽 zone 유도(finder-zone-ui)가 따라온다.
  *
  * ⚠ 2026-08-21 운영자 정정:
  *   H2O·H2CO3 는 «확장 영역만 쓰는 파인더»다. 중앙 19셀 슬롯이나 OAK 공통
@@ -114,7 +111,7 @@ export const KIND_LOCATOR = 'locator';
 /**
  * 자리 예약 → 기본 파인더.
  * Type A 는 인코더가 H2O 톤을 싣는 것으로 교차 확인된다 (`encodeA` marker 경로).
- * Type G → H 는 운영자 2026-08-21 — 코드에 디자인이 없다 (짓지 않는다).
+ * Type G → H 는 운영자 2026-08-21 — 디자인 정본은 `finder-H.js` (markerTones opt-in).
  */
 export const SEAT_DEFAULT_FINDER = Object.freeze({
   'a-cm': 'H2O',
@@ -329,7 +326,7 @@ function buildItems() {
     });
   }
 
-  // O-CM — 자리 예약 (꼭짓점 기준). 기본 파인더는 H (디자인 없음).
+  // O-CM — 자리 예약 (꼭짓점 기준). 기본 파인더는 H (finder-H.js — markerTones opt-in).
   {
     const cells = markerCells(6);
     const markers = cells.filter((c) => c.role === 'marker');
@@ -388,22 +385,25 @@ function buildItems() {
     });
   }
 
-  // H — Type G 자리의 기본 파인더. 코드 표에 없어서 자리 예약 표에서 유도.
+  // H — Type G 자리의 기본 파인더 (finder-H.js 가 정본 — markerCells 유도 12셀 톤 표).
   add({
     id: 'H',
     name: 'H',
-    class: 3,
-    className: FINDER_CLASS[3],
+    class: 2,
+    className: FINDER_CLASS[2],
     kind: KIND_FINDER,
-    origin: 'SEAT_DEFAULT_FINDER[o-cm] — 운영자 2026-08-21 Type G → H',
-    renderPath: '없음 (새 디자인을 짓지 않는다)',
+    origin: 'SEAT_DEFAULT_FINDER[o-cm] — 운영자 2026-08-21 Type G → H · 분류 2 확정 2026-08-23',
+    renderPath: 'src/finder-H.js hTonesByKeyO — markerCells(k) 유도 12셀 톤 표, markerTones opt-in',
     coordBasis: COORD_VERTEX,
     innerSplit: '꼭짓점 기준',
-    toneAxis: TONE_CELL_COLOR + ' (규약). 현행 무디자인',
-    cells: '—',
+    toneAxis: TONE_CELL_COLOR + ' (palette.levels — 순백 금지, finder-H.js §팔레트)',
+    cells: '12 (markerCells 유도 — 비순열 6 · detector 6)',
+    // H2O 규약과 같다: 인코더 톤 표는 실재하지만 **생성기 선택 축이 미배선**이라
+    // 화면에서 그릴 수 없다 (SPEC §13 TBD «[G] H 의 생성기 선택 축» — F-38).
     renderable: false,
-    consumer: '없음. o-cm 이 이 자리를 예약만 한다',
-    note: '확장 영역만 쓰는 파인더 슬롯. 중앙 19셀·OAK 공통 영역과 분리된 축',
+    consumer: 'markerG defaultFinder(hex 전 버전) · 편집기 JSON. 렌더는 markerTones opt-in',
+    note: '육각 경계 12셀 = O-CM 자리의 심볼 파인더 (분류 2 기하). '
+      + 'tetrad A 가 digit 앵커를 덮으므로 앵커 검출 경로는 TBD',
   });
 
   // A-CM — 자리 예약. 기본 파인더는 H2O.
@@ -597,8 +597,10 @@ export function daehanSplitHolds(items = FINDER_TAXONOMY) {
     throw new Error('H2CO3 가 분류 3 이 아니다');
   }
   const h = taxonomyItem('H');
-  if (!h || h.class !== 3 || h.kind !== KIND_FINDER) {
-    throw new Error('H 가 분류 3 파인더 슬롯이 아니다');
+  // F-35 (운영자 확정 2026-08-23·코드 반영 2026-08-24): H = 분류 2 — O-CM 자리의
+  // 육각 경계 12셀 심볼. 분류 3 이던 편입 당시 문장은 폐기됐다 (헤더 ⚠ 참조).
+  if (!h || h.class !== 2 || h.kind !== KIND_FINDER) {
+    throw new Error('H 가 분류 2 파인더 슬롯이 아니다 (F-35 운영자 확정)');
   }
   const ocm = taxonomyItem('o-cm');
   const acm = taxonomyItem('a-cm');

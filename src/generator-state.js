@@ -158,7 +158,7 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // ── 검출기 seat 축 (W2 C4, 2026-08-24) — 구 `cornerMarker: boolean` 의 승계 ──
   // 코너 마커 (O-CM / A-CM, 2026-08-20 UI 편입)는 «켬/끔» 한 비트가 타입별로 다른
   // 마커를 뜻하는 구조였다. 검출기 3구역 개편으로 **내곽/외곽 seat 선택**으로
-  // 분해한다: innerSeat(분류 2 — O-CM · sagoae) / outerSeat(분류 3 — A-CM).
+  // 분해한다: innerSeat(분류 2 — O-CM · sagoae · H) / outerSeat(분류 3 — A-CM).
   // 허용값의 정본은 finder-zone-ui(FINDER_TAXONOMY 유도)다. ⚠ 여기서 **직접
   // import 하지 못한다** — finder-taxonomy 가 이 모듈(GENERATOR_TYPES)을 import
   // 해서, zone-ui 를 스프레드하면 taxonomy→state→zone-ui→taxonomy 순환으로

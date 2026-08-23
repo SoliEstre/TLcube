@@ -66,10 +66,16 @@ test('① seat 구역 UI 와 배선이 있고 i18n 8언어 사전이 다 있다'
 
 test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () => {
   const zones = zoneCards();
-  assert.deepEqual(zones.inner.map((c) => c.id), ['none', 'o-cm', 'sagoae']);
+  assert.deepEqual(zones.inner.map((c) => c.id), ['none', 'o-cm', 'sagoae', 'H']);
   assert.deepEqual(zones.outer.map((c) => c.id), ['none', 'a-cm', 'v-cm', 'k-cm']);
-  // 부재·자리만 카드는 클릭 불가(ready=false)다 — sagoae 와이어는 통합자 C2c.
+  // 부재·자리만 카드는 클릭 불가(ready=false)다 — sagoae 생성측 합성 렌더는 잔여.
   assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, false);
+  // H (F-35 분류 2) — 카드는 실재하되 상태 값은 아직 아니다 (생성기 축 미배선).
+  const hCard = zones.inner.find((c) => c.id === 'H');
+  assert.equal(hCard.ready, false);
+  assert.equal(hCard.stateValue, false);
+  assert.equal(INNER_SEAT_OPTIONS.includes('H'), false,
+    'H 가 상태 options 로 샜다 — 와이어 의미가 생기기 전엔 값이 아니다');
   for (const id of ['v-cm', 'k-cm']) {
     const card = zones.outer.find((c) => c.id === id);
     assert.equal(card.absent, true, id + ' 는 부재 카드여야 한다');

@@ -93,11 +93,21 @@ export function zoneCards() {
   const inner = [
     NONE_CARD,
     ...markerSeat('inner'),
-    // sagoae — 분류 2 의 내곽 파인더. **자리만**이다: daehan 합성 밖 단독 와이어가
-    // 아직 없다 (통합자 C2c 진행 중 — 레인은 대기하지 않는다, 브리프 §2 탈출구).
+    // sagoae — 분류 2 의 내곽 파인더. **자리만**이다: 디코더 분해(C2c, sagoae-verify)는
+    // 착지했지만 생성측 합성 렌더(임의 중앙 파인더 + sagoae 고리)가 미배선이다.
     Object.freeze({
       id: SAGOAE_ID, name: SAGOAE_ID, types: Object.freeze(['O', 'A']),
       ready: false, absent: false,
+    }),
+    // H — 분류 2 의 O-CM 자리 심볼 파인더 (운영자 확정 2026-08-23, F-35).
+    // 톤 표는 finder-H.js 에 실재(markerTones opt-in)하나 **생성기 선택 축이
+    // 미배선**이라 자리만이다 (SPEC §13 TBD «[G] H 의 생성기 선택 축» — F-38).
+    // sagoae 와 달리 상태 값도 아직 아니다: sagoae 는 와이어 의미(daehan 합성)가
+    // 있어 값이 실재하지만 H 는 저장할 의미 자체가 미정 — stateValue:false 로
+    // options 유도에서 뺀다 (부재 absent 와도 다르다 — 코드 정체는 실재한다).
+    Object.freeze({
+      id: 'H', name: 'H', types: Object.freeze(['O']),
+      ready: false, absent: false, stateValue: false,
     }),
   ];
   const outer = [
@@ -127,10 +137,12 @@ const ZONES = zoneCards();
  *  될 수 없으므로 제외한다. sagoae 는 자리 예약 값으로 포함한다 — disabled 는
  *  표시 게이트이지 값의 무효가 아니다. */
 export const INNER_SEAT_OPTIONS = Object.freeze(
-  ZONES.inner.filter((card) => !card.absent).map((card) => card.id),
+  ZONES.inner.filter((card) => !card.absent && card.stateValue !== false)
+    .map((card) => card.id),
 );
 export const OUTER_SEAT_OPTIONS = Object.freeze(
-  ZONES.outer.filter((card) => !card.absent).map((card) => card.id),
+  ZONES.outer.filter((card) => !card.absent && card.stateValue !== false)
+    .map((card) => card.id),
 );
 
 /**

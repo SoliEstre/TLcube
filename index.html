@@ -2373,6 +2373,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 교대 코너 3곳",
     "g854": "sagoae (준비 중)",
     "g855": "sagoae 는 아직 켤 수 없어요 — 단독 와이어 편입 전이라 자리만 예약해 뒀어요.",
+    "g859": "H",
+    "g871": "H 는 아직 켤 수 없어요 — 생성기 선택 축이 배선되기 전이라 자리만 예약해 뒀어요.",
     "g856": "V-CM (부재)",
     "g857": "K-CM (부재)",
     "g858": "빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.",
@@ -2804,6 +2806,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 3 alternating corners",
     "g854": "sagoae (in preparation)",
     "g855": "sagoae cannot be enabled yet — its standalone wire is not in place, so the seat is only reserved.",
+    "g859": "H",
+    "g871": "H cannot be enabled yet — its generator selection axis is not wired, so the seat is only reserved.",
     "g856": "V-CM (absent)",
     "g857": "K-CM (absent)",
     "g858": "The empty seats (V-CM·K-CM) have no design yet — shown as placeholders only.",
@@ -3235,6 +3239,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 交互コーナー3か所",
     "g854": "sagoae（準備中）",
     "g855": "sagoae はまだ有効にできません — 単独ワイヤ編入前のため、席だけ予約しています。",
+    "g859": "H",
+    "g871": "H はまだ有効にできません — 生成側の選択軸が未配線のため、席だけ予約しています。",
     "g856": "V-CM（不在）",
     "g857": "K-CM（不在）",
     "g858": "空席（V-CM·K-CM）はまだ設計がありません — 席だけ表示しています。",
@@ -3665,6 +3671,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 3 coins alternés",
     "g854": "sagoae (en préparation)",
     "g855": "sagoae ne peut pas encore être activé — son câblage autonome n'est pas en place, le siège est seulement réservé.",
+    "g859": "H",
+    "g871": "H ne peut pas encore être activé — son axe de sélection côté générateur n'est pas câblé, le siège est seulement réservé.",
     "g856": "V-CM (absent)",
     "g857": "K-CM (absent)",
     "g858": "Les sièges vides (V-CM·K-CM) n'ont pas encore de conception — affichés comme simples emplacements.",
@@ -4095,6 +4103,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 3 angoli alternati",
     "g854": "sagoae (in preparazione)",
     "g855": "sagoae non può ancora essere attivato — il collegamento autonomo non è pronto, il posto è solo riservato.",
+    "g859": "H",
+    "g871": "H non può ancora essere attivato — l'asse di selezione del generatore non è collegato, il posto è solo riservato.",
     "g856": "V-CM (assente)",
     "g857": "K-CM (assente)",
     "g858": "I posti vuoti (V-CM·K-CM) non hanno ancora un progetto — mostrati solo come segnaposto.",
@@ -4525,6 +4535,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 3 wechselnde Ecken",
     "g854": "sagoae (in Vorbereitung)",
     "g855": "sagoae kann noch nicht aktiviert werden — die eigenständige Verdrahtung fehlt, der Platz ist nur reserviert.",
+    "g859": "H",
+    "g871": "H kann noch nicht aktiviert werden — die Auswahlachse im Generator ist nicht verdrahtet, der Platz ist nur reserviert.",
     "g856": "V-CM (nicht vorhanden)",
     "g857": "K-CM (nicht vorhanden)",
     "g858": "Die leeren Plätze (V-CM·K-CM) haben noch kein Design — nur als Platzhalter angezeigt.",
@@ -4955,6 +4967,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 3 esquinas alternas",
     "g854": "sagoae (en preparación)",
     "g855": "sagoae aún no se puede activar: su cableado independiente no está listo, el asiento solo está reservado.",
+    "g859": "H",
+    "g871": "H aún no se puede activar: su eje de selección del generador no está cableado, el asiento solo está reservado.",
     "g856": "V-CM (ausente)",
     "g857": "K-CM (ausente)",
     "g858": "Los asientos vacíos (V-CM·K-CM) aún no tienen diseño; se muestran solo como marcadores.",
@@ -5385,6 +5399,8 @@ const GENERATOR_STRINGS = {
     "g853": "A-CM · 3 cantos alternados",
     "g854": "sagoae (em preparação)",
     "g855": "sagoae ainda não pode ser ativado — a ligação autônoma não está pronta, o assento está apenas reservado.",
+    "g859": "H",
+    "g871": "H ainda não pode ser ativado — o eixo de seleção do gerador não está conectado, o assento está apenas reservado.",
     "g856": "V-CM (ausente)",
     "g857": "K-CM (ausente)",
     "g858": "Os assentos vazios (V-CM·K-CM) ainda não têm design — mostrados apenas como marcadores.",
@@ -7166,10 +7182,12 @@ const SEAT_CARD_ICONS = Object.freeze({
   'a-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L21 19 L3 19 Z"/><circle cx="12" cy="3.4" r="1.6" fill="currentColor" stroke="none"/><circle cx="20.4" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="3.6" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>',
   'v-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3 5 L21 5 L12 21 Z" stroke-dasharray="2.4 2"/></svg>',
   'k-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L20 17 L4 17 Z" stroke-dasharray="2.4 2"/><path d="M12 21 L4 7 L20 7 Z" stroke-dasharray="2.4 2"/></svg>',
+  // H = O-CM 자리(육각 경계 12셀)의 심볼 파인더 — 육각 + H 글리프 (F-35 분류 2).
+  H: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M9 8 V16 M15 8 V16 M9 12 H15"/></svg>',
 });
 const SEAT_CARD_LABEL_KEYS = Object.freeze({
   [SEAT_NONE]: 'g577', 'o-cm': 'g852', 'a-cm': 'g853',
-  sagoae: 'g854', 'v-cm': 'g856', 'k-cm': 'g857',
+  sagoae: 'g854', 'v-cm': 'g856', 'k-cm': 'g857', H: 'g859',
 });
 
 let seatCardsBuilt = false;
@@ -9385,7 +9403,8 @@ function syncSeatUi() {
       // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580).
       card.title = card.dataset.seatAbsent === '1' ? t('g858')
         : seat === 'sagoae' ? t('g855')
-          : (wireLocked && !isNone) ? t('g580') : '';
+          : seat === 'H' ? t('g871')
+            : (wireLocked && !isNone) ? t('g580') : '';
     }
   };
   sync(els.innerSeatCards, generatorState.innerSeat);

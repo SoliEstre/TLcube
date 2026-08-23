@@ -122,17 +122,17 @@ function locatorCardOrder(html) {
 // **내려간 카드는 없다** — v0T·v0TY 는 그대로고, 드랩 판정은 실기기 재스캔
 // 뒤 운영자 몴이지 편입의 몴이 아니다. QR 위치 카드 «면» 은 여전히 v0TY 로
 // 전환한다 — v0TRQ 의 슬롯은 **중앙(Y-심)** 이라 그 축과 같은 자리가 아니다.
-// **의도적 갱신 «v0TRY 편입» (2026-08-18)** — v0TRY 카드가 v0TRQ 뒤에 붙어
-// 일곱 → **여덟**이 됐다 (`CELL_SURFACE_FINAL_IDS` 선언 순서 그대로). 내려간
-// 카드는 없다. ⚠ **QR 위치 카드 «면» 의 전환 대상이 둘이 됐다** — v0T 에서는
-// v0TY 로, **v0TR 에서는 v0TRY 로** 간다 (v0TRY 의 슬롯이 v0TY 와 같은 먼 코너라
-// 같은 축이기 때문이다). v0TRQ 는 여전히 그 축 밖이다 (중앙 Y-심 슬롯).
+// **의도적 갱신 «placement 파생 강등» (2026-08-24, W2 C3)** — v0TY·v0TRY 카드가
+// 사용자 직접 선택에서 **파생값으로 강등**돼 여덟 → **여섯**이 됐다: '면' 카드가
+// 사라지고 `qrFacePlacement`(중앙측 seam / 코너측 far) 서브섹션이 base 계열
+// (v0T/v0TR) × placement 로 실효 프로파일을 유도한다. v0TRQ 는 seam 축 카드로
+// 남는다 (중앙 Y-심 슬롯). 시험판 기대축은 여전히 v0ty/v0try 를 관측값으로
+// 갖는다 — 강등은 생성기 UI 층만이다 (설계서 ② «축 하나만 움직인다»).
 const LOCATOR_CARD_ORDER = Object.freeze([
   'auto', 'off', 'cell-surface-v0',
-  'cell-surface-v0t', 'cell-surface-v0ty',
-  'cell-surface-v0tr', 'cell-surface-v0trq', 'cell-surface-v0try',
+  'cell-surface-v0t', 'cell-surface-v0tr', 'cell-surface-v0trq',
 ]);
-test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T · v0TY → v0TR · v0TRQ · v0TRY 다', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T → v0TR → v0TRQ 다 (C3 파생 강등)', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 
