@@ -16,8 +16,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { OAK_LINEUP } from '../src/finder-oak-lineup.js';
+// «그릴 수 있는가» 의 유도 원천은 렌더 표현 전부다 (2026-08-23 W2) — 렌더 전용
+// oak-taegeuk-solo 포함. 검출 편입 여부는 이 파일의 축이 아니다.
 import {
-  OAK_FINDER_PATTERNS, oakRenderStatus, oakRenderSummary,
+  OAK_ALL_FINDER_PATTERNS, oakRenderStatus, oakRenderSummary,
 } from '../src/finder-oak-patterns.js';
 import { markerCellsA, markerGroupsA } from '../src/markerA.js';
 
@@ -26,7 +28,7 @@ test('① 렌더 상태는 유도된다 — 패턴표를 바꾸면 요약도 따
   assert.equal(summary.length, OAK_LINEUP.length, '명부 전원이 요약에 있어야 한다');
 
   // 유도의 근거: 패턴표에 있는 것과 «oak-pattern-table» 로 표시된 것이 정확히 같다.
-  const inTable = new Set(OAK_FINDER_PATTERNS.map((p) => p.lineupName));
+  const inTable = new Set(OAK_ALL_FINDER_PATTERNS.map((p) => p.lineupName));
   const marked = new Set(summary.filter((r) => r.render === 'oak-pattern-table').map((r) => r.name));
   assert.deepEqual([...marked].sort(), [...inTable].sort(),
     '패턴표와 요약이 어긋났다 — 유도가 끊겼거나 누가 손으로 적기 시작했다');
@@ -35,7 +37,7 @@ test('① 렌더 상태는 유도된다 — 패턴표를 바꾸면 요약도 따
 test('② 그릴 수 있다고 표시된 후보는 실제로 표현을 갖는다', () => {
   for (const row of oakRenderSummary()) {
     if (row.render !== 'oak-pattern-table') continue;
-    const pattern = OAK_FINDER_PATTERNS.find((p) => p.lineupName === row.name);
+    const pattern = OAK_ALL_FINDER_PATTERNS.find((p) => p.lineupName === row.name);
     assert.ok(pattern, row.name + ' 이 렌더 가능으로 표시됐는데 패턴이 없다');
     assert.equal(pattern.cellLevels.length, 19, row.name + ' 의 cellLevels 가 19가 아니다');
   }

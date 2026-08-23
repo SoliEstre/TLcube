@@ -54,14 +54,18 @@ const DEFAULT_FINDER_DECLARATION =
 // 상단 주석) — capacity.js 를 import 하는 capacityA 는 반드시 'capacity' 뒤에 온다.
 const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
-  'hexgrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup', 'finder-oak-patterns',
+  'hexgrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup',
   // **의도적 이동 (2026-08-19, daehan UI 편입)**: `placement` 와 `finder-daehan` 이
   // `finder-card-ui` **앞**으로 왔다. 카드 그룹 정본(finder-card-ui)이 daehan 대표
   // 템플릿을 집으려고 finder-daehan 을 import 하게 됐기 때문이다. 옮기는 값은 싸다 —
   // placement 는 hexgrid 하나만, finder-daehan 은 hexgrid·placement 만 쓴다(로컬 의존
   // 전부가 이미 앞에 있다). 안 옮기면 이 파일의 assertTopologicalOrder 가 빌드를
   // 막는다: specifier 치환이 조용히 건너뛰어져 **브라우저에서만** 터지기 때문이다.
-  'placement', 'finder-daehan',
+  // **의도적 이동 (2026-08-23, W2 선행)**: `finder-oak-patterns` 가 그 **뒤**로 갔고
+  // `finder-footprint`(의존: finder-patterns 뿐)가 그 앞에 새로 등록됐다 — OAK 표가
+  // footprint 표와 taegeuk 유도(finder-daehan)를 import 하게 됐기 때문이다. 같은
+  // 위상 규칙: 로컬 의존 전부가 앞에 있어야 치환이 성립한다.
+  'placement', 'finder-daehan', 'finder-footprint', 'finder-oak-patterns',
   'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'bullseye', 'layout', 'capacity',
   // capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의 뒤여야 하고

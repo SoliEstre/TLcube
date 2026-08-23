@@ -13,7 +13,7 @@ import {
 import {
   CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID,
 } from './finder-selection.js';
-import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
+import { OAK_ALL_FINDER_PATTERNS, OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
 import { DAEHAN_FINDER_PATTERNS } from './finder-daehan.js';
 
 function descriptor(id, pattern) {
@@ -82,7 +82,10 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   // 두는 이유: 출처가 다르고(탐색 산출물 vs 손작업), 표현이 다르며(면당 3레벨),
   // 지위 관리도 별도 명부(finder-oak-lineup.js)가 한다. 한 줄에 섞으면 «이 카드가
   // 어느 계보인가» 를 이름으로 못 읽는다.
-  oak: Object.freeze(OAK_FINDER_PATTERNS.map((pattern) => descriptor(pattern.id, pattern))),
+  // 카드는 **렌더 표현 전부**에서 유도한다 (2026-08-23) — 렌더 전용
+  // oak-taegeuk-solo 포함. 카드로 고르는 것은 «그리기» 이지 검출 편입이 아니다
+  // (daehan 카드가 기본 검출 라인업 밖인 것과 같은 관계).
+  oak: Object.freeze(OAK_ALL_FINDER_PATTERNS.map((pattern) => descriptor(pattern.id, pattern))),
   // daehan (2026-08-19 UI 편입) — **카드는 한 장**이다. 표에는 k=6/8/10 세 템플릿이
   // 있지만 그건 잘림본이고(k6 ⊂ k8 ⊂ k10), 어느 것을 그릴지는 **버전이 정한다**
   // (V1↔k6 · V2↔k8 · V3↔k10). 카드를 셋으로 쪼개면 사용자가 버전과 모순되는 k 를

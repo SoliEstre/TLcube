@@ -34,6 +34,12 @@
  *   · daehan (O) — 31셀 **전체 표면**이다. 중앙 19만 떼면 다른 후보가 된다
  *     (margin 0.6452 는 31셀 표면에서 나온 값이다).
  *     2026-08-21 분류 층: 내부 19 = taegeuk, 밖 = sagoae. 와이어 id 는 원자 유지.
+ *     ⚠ 2026-08-23: 그 «중앙 19만 뗀 것» 이 **별개 후보로** 편입됐다 — 아래
+ *     `oak-taegeuk-solo` (PM/022 W2-taegeuk ①). daehan 미편입 사유와 모순이 아니다:
+ *     daehan(합성)은 여전히 전용 모듈이고, taegeuk 단독은 19셀 안에 사는 **다른
+ *     margin(0.6667)의 다른 후보**로서 이 표의 불변식(19셀)에 맞는다. 단 **렌더
+ *     전용**이다 — 검출 라인업에 넣으면 daehan 프레임을 가로챈다
+ *     (`OAK_RENDER_ONLY_FINDER_PATTERNS` 헤더의 실측 · 검출 편입은 통합자 몫).
  *   · Nitrogen (dead) · Xylene (dropped) — 명부의 지위가 그렇다. 차단이지 삭제가
  *     아니므로 명부(`finder-oak-lineup.js`)에는 남아 있고 여기에만 없다.
  *
@@ -43,6 +49,8 @@
 
 import { FINDER_CELL_ORDER } from './finder-patterns.js';
 import { OAK_LINEUP } from './finder-oak-lineup.js';
+import { FOOTPRINT_NAME, FOOTPRINT_CELL_LEVELS } from './finder-footprint.js';
+import { taegeukCells, taegeukLevels } from './finder-daehan.js';
 
 /** `cellLevels` 삼중의 면 순서 — 검출기·렌더러와 **같은 표**여야 한다. */
 export const OAK_LEVEL_FACE_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
@@ -76,6 +84,29 @@ function defineOakPattern(pattern) {
     family: 'oak',
     params: Object.freeze({ ...pattern.params }),
     cellLevels: Object.freeze(pattern.cellLevels.map((triple) => Object.freeze([...triple]))),
+  });
+}
+
+/**
+ * taegeuk 단독의 슬롯 순 cellLevels — **유도**다 (값 복사 금지, 사본 목록은 썩는다).
+ *
+ * 정본은 `finder-daehan.js` 의 `taegeukCells()`/`taegeukLevels()` (daehan k10 정본의
+ * 불스아이 안 19셀 — 그 좌표 집합이 `FINDER_CELL_ORDER` 와 같다는 것은 그 모듈의
+ * 로드 자기검증 ⑥ 이 잠근다). 단 **순서가 다르다** — taegeukCells 는 daehan 정본
+ * 등장 순서이고 이 표는 슬롯 순서여야 하므로, 좌표 키로 재배열한다. 재배열이
+ * 19/19 전부를 찾는지 여기서 다시 던져 잠근다.
+ */
+function taegeukSlotCellLevels() {
+  const cells = taegeukCells();
+  const levels = taegeukLevels();
+  const byKey = new Map(cells.map((cell, i) => [cell.q + ',' + cell.r, levels[i]]));
+  return FINDER_CELL_ORDER.map((cell) => {
+    const triple = byKey.get(cell.q + ',' + cell.r);
+    if (!triple) {
+      throw new Error('taegeuk 유도: 슬롯 좌표 ' + cell.q + ',' + cell.r
+        + ' 가 taegeukCells 에 없다 — daehan 정본이 바뀌었나');
+    }
+    return [...triple];
   });
 }
 
@@ -117,15 +148,62 @@ export const OAK_FINDER_PATTERNS = Object.freeze([
       [2, 2, 0], [0, 2, 2], [2, 0, 2], [2, 2, 2], [2, 0, 2],
     ],
   }),
+  // ── Wave 2 신규 후보 (2026-08-23 편입 — PM/022 W2 선행) ───────────────────
+  defineOakPattern({
+    id: 'oak-footprint',
+    // 정본: finder-footprint-2026-08-23.json (운영자 셀 편집기 신작). 표는
+    // finder-footprint.js 가 든다 — 여기서는 유도 import 만 한다.
+    name: FOOTPRINT_NAME,
+    lineupName: FOOTPRINT_NAME,
+    params: { candidate: 'O-footprint-fullsurface', type: 'O', finderStarter: 'cube-bullseye' },
+    cellLevels: FOOTPRINT_CELL_LEVELS.map((triple) => [...triple]),
+  }),
+]);
+
+/**
+ * **렌더 전용** OAK 후보 — 카드·편집기·장면에는 있고 **기본 검출 라인업에는 없다**.
+ *
+ * 왜 갈랐나 (2026-08-23 실측): `OAK_FINDER_PATTERNS` 는 bootstrap.js 의
+ * `CELL_FINDER_LINEUP` 이 스프레드로 유도한다 — 이 표에 넣는 것 = 검출 편입이다.
+ * 그런데 taegeuk 단독의 19셀은 **모든 daehan 잘림본(k6/k8/k10)의 진부분집합이고
+ * 톤까지 같다.** daehan 프레임의 중앙 19 위에서 이 템플릿은 정당하게 상관 1.0 이고,
+ * `fit` 은 contrastRatio 가 섞여 작은 발자국이 더 높게 나오는 일까지 있어서
+ * (finder-daehan.js §포함 사슬), 검출 라인업에 넣는 순간 **daehan 옵트인 왕복이
+ * taegeuk-solo 오수용으로 죽는다** (test/finder-daehan.test.js ⑤·⑥·⑦ 실측 —
+ * «k=6 오수용: oak-taegeuk-solo»). 검출은 원리적으로 daehan/taegeuk-solo 를 못
+ * 가르고 RS/CRC 가설 열거가 갈라야 하므로, 그 배선은 오수용·margin 게이트 실측과
+ * 함께 통합자 몫이다 (daehan 이 옵트인 상수로 갈라져 있는 것과 같은 전례).
+ * 그날이 오면 이 목록에서 `OAK_FINDER_PATTERNS` 로 옮기는 것이 승격이다.
+ */
+export const OAK_RENDER_ONLY_FINDER_PATTERNS = Object.freeze([
+  defineOakPattern({
+    id: 'oak-taegeuk-solo',
+    // **표시명 = taegeuk** (운영자 확정). 분류 층 id `taegeuk`(finder-daehan.TAEGUK_ID)
+    // 와 같은 문자열이지만 다른 표다 — 그쪽은 daehan 합성의 «내부 19» 분류 라벨이고,
+    // 이쪽은 sagoae 예약셀 없이 19셀만 쓰는 **독립 렌더 후보**다
+    // (용량·와이어·formatIndex 변경 0 — daehanFinder 회계를 타지 않는다).
+    name: 'taegeuk',
+    lineupName: 'taegeuk-solo',
+    params: { candidate: 'O-taegeuk-solo', type: 'O', finderStarter: 'bullseye' },
+    cellLevels: taegeukSlotCellLevels(),
+  }),
+]);
+
+/** 렌더 표현이 있는 OAK 후보 전부 — 카드·편집기·분류 층의 유도 원천. */
+export const OAK_ALL_FINDER_PATTERNS = Object.freeze([
+  ...OAK_FINDER_PATTERNS,
+  ...OAK_RENDER_ONLY_FINDER_PATTERNS,
 ]);
 
 export const OAK_FINDER_PATTERN_IDS = Object.freeze(
   OAK_FINDER_PATTERNS.map((pattern) => pattern.id),
 );
 
-const OAK_BY_ID = new Map(OAK_FINDER_PATTERNS.map((pattern) => [pattern.id, pattern]));
+// 조회는 **렌더 표현 전부**를 커버한다 — scene.js·편집기·점수 패널이 이 조회로
+// 그린다. 검출 라인업은 이 Map 이 아니라 `OAK_FINDER_PATTERNS` 배열이 정한다.
+const OAK_BY_ID = new Map(OAK_ALL_FINDER_PATTERNS.map((pattern) => [pattern.id, pattern]));
 
-/** OAK 후보면 그 패턴, 아니면 undefined — 호출자가 기존 조회로 넘어갈 수 있게. */
+/** OAK 후보(렌더 전용 포함)면 그 패턴, 아니면 undefined — 호출자가 기존 조회로 넘어갈 수 있게. */
 export function getOakFinderPattern(id) {
   return OAK_BY_ID.get(id);
 }
@@ -155,7 +233,7 @@ export function isOakFinderPatternId(id) {
 export function oakRenderStatus(lineupName) {
   const entry = OAK_LINEUP.find((row) => row.name === lineupName);
   if (!entry) return null;
-  if (OAK_FINDER_PATTERNS.some((pattern) => pattern.lineupName === lineupName)) {
+  if (OAK_ALL_FINDER_PATTERNS.some((pattern) => pattern.lineupName === lineupName)) {
     return 'oak-pattern-table';
   }
   if (entry.id === 'O-daehan') return 'daehan-module';
@@ -177,14 +255,14 @@ export function oakRenderSummary() {
 // 아래 명제들의 통과를 뜻하게 만든다 — 회귀 파일을 안 돌려도 앱이 먼저 죽는다.
 {
   const ids = new Set();
-  for (const pattern of OAK_FINDER_PATTERNS) {
+  for (const pattern of OAK_ALL_FINDER_PATTERNS) {
     if (ids.has(pattern.id)) throw new Error('OAK 후보 id 중복: ' + pattern.id);
     ids.add(pattern.id);
   }
 
   // ① 명부(finder-oak-lineup)에 **활성**으로 있는 후보만 여기 있다. 지위가 dead /
   //    dropped 인 것을 렌더·검출에 올리면 «차단인데 살아 있는» 상태가 된다.
-  for (const pattern of OAK_FINDER_PATTERNS) {
+  for (const pattern of OAK_ALL_FINDER_PATTERNS) {
     const entry = OAK_LINEUP.find((row) => row.name === pattern.lineupName);
     if (!entry) {
       throw new Error(pattern.id + ': 명부에 없는 후보다 (lineupName=' + pattern.lineupName + ')');
@@ -199,7 +277,7 @@ export function oakRenderSummary() {
 
   // ② 중간톤을 쓰는 후보가 **실제로 있다**. 이게 0 이 되면 cellLevels 를 도입한
   //    근거 자체가 사라진 것이므로, 표현을 되돌릴지 다시 판단해야 한다.
-  const midFaces = OAK_FINDER_PATTERNS.map((pattern) => pattern.cellLevels
+  const midFaces = OAK_ALL_FINDER_PATTERNS.map((pattern) => pattern.cellLevels
     .reduce((sum, triple) => sum + triple.filter((level) => level === 1).length, 0));
   if (midFaces.reduce((a, b) => a + b, 0) === 0) {
     throw new Error('OAK 후보 어느 것도 중간톤을 안 쓴다 — cellLevels 의 존재 이유가 없다');
@@ -207,8 +285,18 @@ export function oakRenderSummary() {
 
   // ③ 어느 후보도 **한 톤으로 균일하지 않다**. 균일하면 검출기의 centeredExpected 가
   //    norm2 = 0 으로 죽는다 (거기서 죽으면 원인이 여기라는 걸 못 읽는다).
-  for (const pattern of OAK_FINDER_PATTERNS) {
+  for (const pattern of OAK_ALL_FINDER_PATTERNS) {
     const seen = new Set(pattern.cellLevels.flat());
     if (seen.size < 2) throw new Error(pattern.id + ': 면 톤이 균일하다 — 검출 불가');
+  }
+
+  // ④ 렌더 전용 후보는 **검출 표에 없다** — 이 분리가 무너지면 daehan 옵트인 왕복이
+  //    부분집합 오수용으로 죽는다 (OAK_RENDER_ONLY_FINDER_PATTERNS 헤더의 실측).
+  //    승격은 이동이지 복사가 아니다: 두 표에 같이 있으면 여기서 죽는다.
+  const detectable = new Set(OAK_FINDER_PATTERNS.map((pattern) => pattern.id));
+  for (const pattern of OAK_RENDER_ONLY_FINDER_PATTERNS) {
+    if (detectable.has(pattern.id)) {
+      throw new Error(pattern.id + ': 렌더 전용 후보가 검출 표에도 있다 — 승격은 이동이다');
+    }
   }
 }

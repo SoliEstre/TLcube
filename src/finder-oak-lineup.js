@@ -102,6 +102,31 @@ export const OAK_LINEUP = Object.freeze([
       + '정본 finder-daehan-editor.json (n=6 · 점유 31/127 = 24.4 %) · '
       + '표시층 taegeuk+sagoae (와이어 oak-daehan-k*)',
   }),
+  // ── Wave 2 신규 편입 2종 (2026-08-23, PM/022 W2 선행) ───────────────────────
+  // margin·mirrorAgreement 는 **실측**이다 — 자는 위 후보들의 정본 재계산과 동일:
+  // margin = scoreLayoutOrientation(hexLayoutFrom(cells), hexRotationHypotheses())
+  // .orientationMargin, mirror = 물리 관례(거울 좌표 ∘ L↔R 스왑) 3합성 최고
+  // (finder-oak-lineup.test.js §정본 대조 와 같은 경로). 두 행의 수치는
+  // `test/finder-footprint.test.js` ③ 이 모듈 표에서 매 회귀마다 재계산해 대조한다
+  // — 공표한 수치는 조용히 썩기 때문이다.
+  entry({
+    name: 'Footprint', id: 'O-footprint', type: 'O', status: 'active',
+    finderMode: 'full-surface', finderStarter: 'cube-bullseye',
+    counts: { total: 61, detector: 19 },
+    margin: 0.4561, mirrorAgreement: 1.0,
+    note: '운영자 셀 편집기 신작 2026-08-23 — 정본 finder-footprint-2026-08-23.json'
+      + ' (중앙 19셀 · 톤 0/2 이진 · 밝은 면 T12/L12/R12). 표는 finder-footprint.js',
+  }),
+  entry({
+    name: 'taegeuk-solo', id: 'O-taegeuk-solo', type: 'O', status: 'active',
+    finderMode: 'full-surface', finderStarter: 'bullseye',
+    counts: { total: 61, detector: 19 },
+    margin: 0.6667, mirrorAgreement: 0.7193,
+    note: 'daehan 내부 19셀 단독 (표시명 taegeuk — PM/022 W2-taegeuk ①). 좌표·톤은'
+      + ' finder-daehan.js taegeukCells/taegeukLevels 유도 — sagoae 예약셀 없음 ='
+      + ' 용량·와이어·formatIndex 변경 0. 거울 물리 관례 0.7193 은 게이트 0.78 미달'
+      + ' (daehan 0.6774 에 이은 두 번째 거울 톤 기각 후보)',
+  }),
 ]);
 
 /** 살아 있는 후보만 — dead(구 Nitrogen)·dropped(Xylene)는 여기 안 나온다. */

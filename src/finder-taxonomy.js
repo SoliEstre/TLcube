@@ -46,7 +46,7 @@ import {
   OAK_LINEUP, liveOakCandidates, oakCandidate,
 } from './finder-oak-lineup.js';
 import {
-  OAK_FINDER_PATTERNS, oakRenderStatus,
+  OAK_ALL_FINDER_PATTERNS, OAK_FINDER_PATTERNS, oakRenderStatus,
 } from './finder-oak-patterns.js';
 import {
   DAEHAN_NAME,
@@ -200,22 +200,29 @@ function buildItems() {
     });
   }
 
-  for (const pattern of OAK_FINDER_PATTERNS) {
+  for (const pattern of OAK_ALL_FINDER_PATTERNS) {
     const lineup = OAK_LINEUP.find((e) => e.name === pattern.lineupName);
+    // 렌더 전용(oak-taegeuk-solo)은 검출 소비자가 없다 — daehan 부분집합 오수용
+    // 실측으로 검출 편입이 통합자 게이트 뒤에 있다 (finder-oak-patterns.js
+    // OAK_RENDER_ONLY_FINDER_PATTERNS 헤더). 여기 표에서도 그 차이가 읽혀야 한다.
+    const detectable = OAK_FINDER_PATTERNS.includes(pattern);
     add({
       id: pattern.id,
       name: pattern.name,
       class: 1,
       className: FINDER_CLASS[1],
       kind: KIND_FINDER,
-      origin: 'OAK_FINDER_PATTERNS lineupName=' + pattern.lineupName,
+      origin: (detectable ? 'OAK_FINDER_PATTERNS' : 'OAK_RENDER_ONLY_FINDER_PATTERNS')
+        + ' lineupName=' + pattern.lineupName,
       renderPath: 'src/scene.js cell-mask (cellLevels 19)',
       coordBasis: COORD_CENTER,
       innerSplit: null,
       toneAxis: TONE_FINDER_BWG + ' 3레벨',
       cells: '19',
       renderable: true,
-      consumer: 'FINDER_CARD_GROUPS.oak · cell-finder-detect · LAB_CENTRAL',
+      consumer: detectable
+        ? 'FINDER_CARD_GROUPS.oak · cell-finder-detect · LAB_CENTRAL'
+        : 'FINDER_CARD_GROUPS.oak (렌더 전용 — 검출 편입은 통합자 몫)',
       note: 'margin=' + (lineup ? lineup.margin : '?') + ' status=' + (lineup ? lineup.status : '?'),
     });
   }

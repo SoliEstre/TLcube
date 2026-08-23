@@ -35,7 +35,9 @@ import { GENERATOR_STATE_SCHEMA, createGeneratorState } from '../src/generator-s
 import {
   applyFinderStarter, createUniversalEditorState, getCellTone,
 } from '../src/cell-editor-core.js';
-import { OAK_FINDER_PATTERNS, OAK_LEVEL_FACE_INDEX } from '../src/finder-oak-patterns.js';
+// 편집기 대조는 **렌더 표현 전부**를 돈다 (2026-08-23 W2) — 렌더 전용
+// oak-taegeuk-solo 포함. 편집기가 그리는 축은 렌더이지 검출 편입이 아니다.
+import { OAK_ALL_FINDER_PATTERNS, OAK_LEVEL_FACE_INDEX } from '../src/finder-oak-patterns.js';
 import { FINDER_CELL_ORDER } from '../src/finder-patterns.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -102,7 +104,7 @@ test('§6.1 편집기는 생성기가 고를 수 있는 파인더 id 를 조용�
 });
 
 test('§6.1 편집기 톤이 OAK 정본 cellLevels 와 19셀×3면 전부 일치한다', () => {
-  for (const pattern of OAK_FINDER_PATTERNS) {
+  for (const pattern of OAK_ALL_FINDER_PATTERNS) {
     const state = createUniversalEditorState({ type: 'O', size: 6 });
     applyFinderStarter(state, pattern.id);
     const mismatches = [];
@@ -120,11 +122,11 @@ test('§6.1 편집기 톤이 OAK 정본 cellLevels 와 19셀×3면 전부 일치
 });
 
 test('§6.1 정본 OAK 표는 편집으로 오염되지 않는다', () => {
-  const before = JSON.stringify(OAK_FINDER_PATTERNS.map((p) => p.cellLevels));
+  const before = JSON.stringify(OAK_ALL_FINDER_PATTERNS.map((p) => p.cellLevels));
   const state = createUniversalEditorState({ type: 'O', size: 6 });
-  applyFinderStarter(state, OAK_FINDER_PATTERNS[0].id);
+  applyFinderStarter(state, OAK_ALL_FINDER_PATTERNS[0].id);
   state.finderPattern.cellLevels[0][0] = (state.finderPattern.cellLevels[0][0] + 1) % 3;
-  assert.equal(JSON.stringify(OAK_FINDER_PATTERNS.map((p) => p.cellLevels)), before,
+  assert.equal(JSON.stringify(OAK_ALL_FINDER_PATTERNS.map((p) => p.cellLevels)), before,
     '편집기 사본이 얕아서 정본 표를 건드렸다');
 });
 

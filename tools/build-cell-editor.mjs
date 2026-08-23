@@ -16,7 +16,7 @@ const LOADER_TOKEN = '<!-- CELL_EDITOR_LOADER -->';
 export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // finder-oak-lineup/-patterns: scene.js 의 OAK 렌더 경로 (2026-08-18).
   'hexgrid', 'ygrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup',
-  'finder-oak-patterns', 'finder-editor-pattern',
+  'finder-editor-pattern',
   'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'header',
   'placement', 'bullseye', 'layout', 'capacity',
   // O-CM/A-CM 코너 마커 (2026-08-16) — encodeA.js 가 markerA 를, markerA 가 markerO 를,
@@ -27,7 +27,11 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // encodeA 가 daehan 표를 조회한다). ⚠ 이 줄이 빠져서 빌더의 위상 검사가
   // 「capacityA -> finder-daehan (missing)」으로 죽었다 — **검사가 일했다.**
   // 새 의존을 추가하는 레인은 번들 위상표도 같이 봐야 한다.
-  'finder-daehan', 'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'encodeA',
+  // **의도적 이동 (2026-08-23, W2 선행)**: `finder-oak-patterns` 가 daehan 뒤로 왔고
+  // `finder-footprint` 가 새로 등록됐다 — OAK 표가 footprint 표와 taegeuk 유도
+  // (finder-daehan)를 import 하게 됐기 때문이다 (build-single.mjs 동일).
+  'finder-daehan', 'finder-footprint', 'finder-oak-patterns',
+  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'encodeA',
   'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
   // **의도적 유지 (2026-08-21, 중앙 v0 비컨)**: encodeY 는 scene 앞으로 가야 한다.

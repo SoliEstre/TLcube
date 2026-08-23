@@ -23,7 +23,7 @@ import {
   FINDER_PATTERNS, LEGACY_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
 import { OAK_LINEUP } from './finder-oak-lineup.js';
-import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
+import { OAK_ALL_FINDER_PATTERNS } from './finder-oak-patterns.js';
 import { DAEHAN_FINDER_PATTERN_IDS } from './finder-daehan.js';
 import { MARKER_G_FORMAT_INDEX } from './markerG.js';
 import {
@@ -116,18 +116,54 @@ export function familyAlphabet() {
 }
 
 /**
- * 파인더 id 표. finder-selection 의 슬롯 id 를 앞에 두고, 렌더 표·OAK·daehan 을
- * 선언 순으로 잇는다. 손 enum 이 아니다.
+ * 파인더 id 표 — **와이어 순번 표** (비컨 바이트 OFF_FINDER 가 이 목록의 순번이다).
+ *
+ * ⚠ 동결 접두 (2026-08-23 정정): 발행된 비컨이 이 순번을 들고 있으므로 접두 구간은
+ *   **재배열·삽입 금지, 추가는 말미에만** 이다. 신규 2종(oak-footprint ·
+ *   oak-taegeuk-solo)을 유도 순서(OAK 표 스프레드)대로 daehan **앞에** 끼웠더니
+ *   daehan 순번이 19/20/21 → 21/22/23 으로 밀려 기존 비컨이 오독될 뻔했다 —
+ *   와이어 표는 유도가 아니라 표 주도다 (turnA·markerG 와 같은 규율).
+ *
+ * 렌더 전용 후보(oak-taegeuk-solo)도 정체 표에는 있다 — 비컨은 «이 코드가 어떤
+ * 파인더를 쓰는가» 를 말하는 표이지 검출 라인업이 아니고, 생성기가 그릴 수 있는
+ * 파인더는 전부 이름을 가져야 인코딩 시 finderIndex 가 던지지 않는다.
  */
+const WIRE_FROZEN_FINDER_ORDER = Object.freeze([
+  // 0..2 슬롯 id → 3..15 FINDER_PATTERNS(13) → 16..18 OAK 초판 3 → 19..21 daehan.
+  // 이 배열은 2026-08-22 발행분까지의 finderIdentityIds() 실측 순서 그대로다.
+  'bullseye', 'center-qr', 'central-v0',
+  'pinwheel-3-0101-cw-missing-solid', 'gap-ring-01-2-1-solid',
+  'flower-7-0020-coprime-offset', 'swirl-2-200', 'pinwheel-c2-2-1100-cw',
+  'gap-ring-01-2-1-open', 'flower-7-1020-coprime-offset', 'swirl-c2-5-5-11-both',
+  'tristar-refined-h3', 'tree-refined-h3', 'cats-refined-h3',
+  'central-cube-3tone', 'cube-bullseye',
+  'oak-nitrogen-r2', 'oak-aspirin', 'oak-benzene',
+  'oak-daehan-k6', 'oak-daehan-k8', 'oak-daehan-k10',
+  // 22..23 — 2026-08-23 추가분 (W2 후보 2종). 출하와 동시에 동결.
+  'oak-footprint', 'oak-taegeuk-solo',
+]);
+
 export function finderIdentityIds() {
   const ids = [];
   const seen = new Set();
-  addUnique(ids, seen, LEGACY_FINDER_PATTERN_ID);
-  addUnique(ids, seen, CENTER_QR_FINDER_PATTERN_ID);
-  addUnique(ids, seen, CENTRAL_V0_FINDER_PATTERN_ID);
-  for (const pattern of FINDER_PATTERNS) addUnique(ids, seen, pattern.id);
-  for (const pattern of OAK_FINDER_PATTERNS) addUnique(ids, seen, pattern.id);
-  for (const id of DAEHAN_FINDER_PATTERN_IDS) addUnique(ids, seen, id);
+  for (const id of WIRE_FROZEN_FINDER_ORDER) addUnique(ids, seen, id);
+  // 신선도 자기검증 — 동결 표가 렌더 표들과 어긋나면(오탈자·누락) 즉시 죽는다.
+  // 살아있는 id 집합은 유도로 만들고, **순번만** 동결 표가 정한다.
+  const live = new Set([
+    LEGACY_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID,
+    ...FINDER_PATTERNS.map((pattern) => pattern.id),
+    ...OAK_ALL_FINDER_PATTERNS.map((pattern) => pattern.id),
+    ...DAEHAN_FINDER_PATTERN_IDS,
+  ]);
+  for (const id of WIRE_FROZEN_FINDER_ORDER) {
+    if (!live.has(id)) {
+      throw new RangeError('와이어 동결 파인더가 렌더 표에 없다: ' + id
+        + ' — 드랍은 차단이지 삭제가 아니다. 표에서 지우지 말고 차단하라');
+    }
+  }
+  // 동결 구간 밖의 신규는 **말미에** 유도 순서로 잇는다 (2026-08-23: oak-footprint 22
+  // · oak-taegeuk-solo 23). 미래 추가도 여기로 흘러 순번이 안정된다.
+  for (const id of live) addUnique(ids, seen, id);
   return Object.freeze(ids);
 }
 

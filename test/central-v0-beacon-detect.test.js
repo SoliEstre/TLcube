@@ -11,6 +11,7 @@ import { centralBeaconGeometry } from '../src/centralBeaconWire.js';
 import {
   BEACON_MAGIC,
   encodeCentralBeacon,
+  finderIdentityIds,
   readBeaconFromEncodedY,
 } from '../src/centralBeacon.js';
 import {
@@ -99,6 +100,31 @@ function renderIndependentY(text) {
   const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
   return { encoded, raster };
 }
+
+test('와이어 동결 — finderIdentityIds 순번은 발행 비컨의 계약이다 (삽입 금지·추가는 말미)', () => {
+  /*
+   * 비컨 바이트 OFF_FINDER = 이 목록의 순번. 2026-08-23 신규 2종을 유도 순서대로
+   * daehan 앞에 끼웠다가 daehan 순번이 +2 밀려 기존 비컨이 오독될 뻔했다 —
+   * 통합자 독립 검증이 잡았고, 순번 표를 동결 표 주도로 바꿨다. 이 테스트가
+   * 그때 없던 락이다: 여기 단언과 다르게 나오면 누군가 순번을 흔든 것이다.
+   * 새 파인더는 **말미에만** 붙이고 이 목록·동결 표를 같은 커밋에서 늘려라.
+   */
+  const ids = finderIdentityIds();
+  assert.deepEqual([...ids], [
+    'bullseye', 'center-qr', 'central-v0',
+    'pinwheel-3-0101-cw-missing-solid', 'gap-ring-01-2-1-solid',
+    'flower-7-0020-coprime-offset', 'swirl-2-200', 'pinwheel-c2-2-1100-cw',
+    'gap-ring-01-2-1-open', 'flower-7-1020-coprime-offset', 'swirl-c2-5-5-11-both',
+    'tristar-refined-h3', 'tree-refined-h3', 'cats-refined-h3',
+    'central-cube-3tone', 'cube-bullseye',
+    'oak-nitrogen-r2', 'oak-aspirin', 'oak-benzene',
+    'oak-daehan-k6', 'oak-daehan-k8', 'oak-daehan-k10',
+    'oak-footprint', 'oak-taegeuk-solo',
+  ]);
+  // 특히 daehan 3종은 2026-08-22 발행분의 순번 그대로여야 한다.
+  assert.equal(ids.indexOf('oak-daehan-k6'), 19);
+  assert.equal(ids.indexOf('oak-daehan-k10'), 21);
+});
 
 test('역산 — 모듈 피치·슬롯 반지름·바깥 size 가 정방향 식의 항등이다', () => {
   const n = CENTRAL_V0_SOURCE_N;

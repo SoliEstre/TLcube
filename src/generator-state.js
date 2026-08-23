@@ -7,8 +7,9 @@
 // 않는다 — 윈도를 끄거나 O→Y→O로 돌아오면 사용자가 고른 값이 그대로 살아야 한다.
 
 import {
-  CUBE_BULLSEYE_FINDER_PATTERN_ID, FINDER_PATTERN_IDS, LEGACY_FINDER_PATTERN_ID,
+  CUBE_BULLSEYE_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
+import { CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS } from './finder-card-ui.js';
 import {
   CENTRAL_V0_FINDER_PATTERN_ID,
   CENTER_QR_FINDER_PATTERN_ID,
@@ -80,6 +81,21 @@ export const GENERATOR_DEFAULT_FINDER_PATTERN_ID = CUBE_BULLSEYE_FINDER_PATTERN_
 const DEFAULT_FINDER_QR_PROFILES = createFinderQrProfiles(GENERATOR_DEFAULT_FINDER_PATTERN_ID);
 const ALTERNATE_FINDER_QR_PROFILES = createFinderQrProfiles(LEGACY_FINDER_PATTERN_ID);
 
+/**
+ * 카드로 고를 수 있는 파인더 id 전부 — 카드 그룹 + 중앙 v0(그룹 밖 단독 카드).
+ * finderPatternId 허용값의 유일한 출처다 (F-37 — 손 목록 금지).
+ */
+const FINDER_CARD_PATTERN_IDS = Object.freeze(
+  [...Object.values(FINDER_CARD_GROUPS).flat(), CENTRAL_V0_FINDER_CARD]
+    .map((card) => card.id),
+);
+if (!FINDER_CARD_PATTERN_IDS.includes(GENERATOR_DEFAULT_FINDER_PATTERN_ID)
+  || !FINDER_CARD_PATTERN_IDS.includes(CENTRAL_V0_FINDER_PATTERN_ID)
+  || new Set(FINDER_CARD_PATTERN_IDS).size !== FINDER_CARD_PATTERN_IDS.length) {
+  throw new Error('파인더 카드 id 유도가 깨졌다 — 기본값/중앙 v0 부재 또는 중복: '
+    + FINDER_CARD_PATTERN_IDS.join(','));
+}
+
 export const GENERATOR_STATE_SCHEMA = Object.freeze({
   contentTab: field('url', BOTH, ['url', 'text', 'wifi', 'card']),
   type: field('Y', BOTH, GENERATOR_TYPES),
@@ -100,11 +116,17 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // ⚠ 라이브러리 기본값(`DEFAULT_FINDER_PATTERN_ID`)은 «불스아이» 그대로 둔다 — 그쪽은
   //   finderPatternId 를 안 준 buildScene 이 받는 값이라 임베더의 계약이고, 바꾸면
   //   불스아이 렌더 계약을 고정한 테스트 30건이 한꺼번에 깨진다. 둘은 다른 개념이다.
+  // ⚠ F-37 (2026-08-23 수리): 허용값을 손 목록으로 들다가 OAK 3종 + daehan 카드가
+  //   조용히 빠져 있었다 — 카드로 고를 수 있는데 «허용값 밖» 인 상태. 사본 목록은
+  //   반드시 원본과 어긋나므로, **카드 그룹에서 유도**한다 (formal 4 + 생성 8 +
+  //   손그림 3 + OAK + daehan 대표 + 중앙 v0). 카드가 늘면 여기와 상태 왕복 회귀가
+  //   자동으로 따라온다 — «전수 등록» 이 주장이 아니라 유도 사실이 된다.
   finderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, BOTH,
-    [LEGACY_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID,
-      CENTRAL_V0_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
+    FINDER_CARD_PATTERN_IDS),
+  // 중앙 QR 만 뺀다 — previous 는 «중앙 QR 에서 되돌아갈 곳» 이라 center-qr 자신은
+  // 담기지 않는다 (finder-selection.selectFinderPattern 이 그 불변식을 지킨다).
   previousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
-    [LEGACY_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID, ...FINDER_PATTERN_IDS]),
+    FINDER_CARD_PATTERN_IDS.filter((id) => id !== CENTER_QR_FINDER_PATTERN_ID)),
   // 'plane'(v0WY) 도 **바깥 QR 위치**라 여기 들어간다 — 빠뜨리면 Y 에서 «면» 을 고른 뒤
   // O/A 로 갔다 돌아올 때 복원값이 허용값 밖이 되어 조용히 기본으로 떨어진다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,

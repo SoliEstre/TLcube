@@ -16,12 +16,15 @@ const LOADER_TOKEN = '<!-- FINDER_EDITOR_LOADER -->';
 export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // finder-oak-lineup/-patterns 는 scene.js 가 OAK 후보를 렌더하려고 쓴다 (2026-08-18).
   // finder-patterns 뒤 · scene 앞이어야 한다.
-  'hexgrid', 'finder-patterns', 'finder-oak-lineup', 'finder-oak-patterns',
+  'hexgrid', 'finder-patterns', 'finder-oak-lineup',
   'finder-editor-pattern', 'lehmer', 'gfp', 'rs211', 'base211',
   'mask', 'formatinfo', 'header', 'placement', 'bullseye', 'layout', 'capacity',
   // daehan (2026-08-18) — scene.js 가 finder-daehan 을, encode.js 가 capacityDaehan 을
   // 쓴다. 둘 다 capacity 뒤 · encode/scene 앞.
-  'finder-daehan', 'capacityDaehan',
+  // **의도적 이동 (2026-08-23, W2 선행)**: `finder-oak-patterns` 가 daehan 뒤로 왔고
+  // `finder-footprint`(의존: finder-patterns 뿐)가 새로 등록됐다 — OAK 표가 footprint
+  // 표와 taegeuk 유도(finder-daehan)를 import 하게 됐기 때문이다 (build-single.mjs 동일).
+  'finder-daehan', 'finder-footprint', 'finder-oak-patterns', 'capacityDaehan',
   // O-CM/A-CM 코너 마커 (2026-08-16) — encode.js·encodeA.js 가 markerO/markerA 를 쓰므로
   // 그 앞에 온다. autoplaceHex 는 autoplaceY 의 AutoplaceError 를 재사용하고 autoplaceY 는
   // placementY 만 쓴다. markerA 는 layoutA·capacityA·markerO 전부의 뒤여야 한다.

@@ -1220,6 +1220,14 @@
           <button type="button" data-expected-finder="oak-nitrogen-r2" data-i18n="lab.expectedFinder.oak-nitrogen-r2">Nitrogen</button>
           <button type="button" data-expected-finder="oak-aspirin" data-i18n="lab.expectedFinder.oak-aspirin">Aspirin</button>
           <button type="button" data-expected-finder="oak-benzene" data-i18n="lab.expectedFinder.oak-benzene">Benzene</button>
+          <!-- Wave 2 (2026-08-23) — 순서는 LAB_CENTRAL_FINDER_IDS
+               (= OAK_FINDER_PATTERNS 선언 순) 그대로. 집합·순서 일치는
+               lab-expected-finder-ui.test.js 가 잠근다.
+               ⚠ oak-taegeuk-solo 버튼은 **일부러 없다** — 렌더 전용이라 검출
+               라인업 밖이고(daehan 부분집합 오수용 실측), 라인업 밖 «기대» 는
+               영원히 미스가 된다. 검출 편입(통합자) 날 버튼을 더한다 —
+               사전 키(lab.expectedFinder.oak-taegeuk-solo)는 미리 있다. -->
+          <button type="button" data-expected-finder="oak-footprint" data-i18n="lab.expectedFinder.oak-footprint">Footprint</button>
           <!-- F-40 (2026-08-23): 살아 있는 생산 파인더(중앙 v0 비컨)가 이 축에 없어
                비컨 프레임의 기대 텔레메트리가 전부 «모름» 이었다. 이 목록은 손 관리라
                두 번 누락된 전력 — 집합 일치는 lab-expected-finder-ui.test.js 가,

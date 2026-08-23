@@ -66,6 +66,11 @@ export const LAB_CENTRAL_FINDER_IDS = Object.freeze([
   THREE_TONE_CUBE_FINDER_PATTERN_ID,
   CENTER_QR_FINDER_PATTERN_ID,
   ...FINDER_CELL_MASK_PATTERNS.map((pattern) => pattern.id),
+  // ⚠ 2026-08-23 W2: `oak-footprint` 는 여기(검출 표 유도)로 자동 등재된다.
+  //   `oak-taegeuk-solo` 는 **일부러 없다** — 렌더 전용이라 검출 라인업 밖이고
+  //   (OAK_RENDER_ONLY_FINDER_PATTERNS — daehan 부분집합 오수용 실측), 라인업에
+  //   없는 것을 «기대» 로 고를 수 있으면 그 프레임의 텔레메트리는 영원히 미스다
+  //   (이 파일 상단 규약). 검출 편입(통합자)이 되는 날 스프레드가 자동으로 따라온다.
   ...OAK_FINDER_PATTERNS.map((pattern) => pattern.id),
   CENTRAL_V0_FINDER_PATTERN_ID,
 ]);

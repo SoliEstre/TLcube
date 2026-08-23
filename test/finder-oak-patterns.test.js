@@ -26,7 +26,8 @@ import {
   FINDER_CELL_MASK_PATTERNS, FINDER_CELL_ORDER, FINDER_FACE_BITS,
 } from '../src/finder-patterns.js';
 import {
-  OAK_FINDER_PATTERNS, OAK_FINDER_PATTERN_IDS, OAK_LEVEL_FACE_INDEX,
+  OAK_ALL_FINDER_PATTERNS, OAK_FINDER_PATTERNS, OAK_FINDER_PATTERN_IDS,
+  OAK_LEVEL_FACE_INDEX, OAK_RENDER_ONLY_FINDER_PATTERNS,
   getOakFinderPattern, isOakFinderPatternId,
 } from '../src/finder-oak-patterns.js';
 import { OAK_LINEUP } from '../src/finder-oak-lineup.js';
@@ -80,15 +81,24 @@ test('① 이진 11패턴 — 마스크 표현과 레벨 표현이 같은 템플
 test('② 표가 정본 편집기 export 와 같다 (없으면 자기 일관성만)', () => {
   if (!existsSync(CANON)) {
     // **조용히 통과시키지 않는다.** 정본이 없는 체크아웃에서도 잴 수 있는 것만 잰다.
-    assert.equal(OAK_FINDER_PATTERNS.length, 3, '정본 없이도 후보 수는 고정이다');
-    for (const pattern of OAK_FINDER_PATTERNS) {
+    assert.equal(OAK_ALL_FINDER_PATTERNS.length, 5, '정본 없이도 후보 수는 고정이다');
+    for (const pattern of OAK_ALL_FINDER_PATTERNS) {
       assert.equal(pattern.cellLevels.length, FINDER_CELL_ORDER.length, pattern.id);
     }
     return;
   }
   const canon = JSON.parse(readFileSync(CANON, 'utf8'));
   const byName = new Map(canon.candidates.map((entry) => [entry.name, entry]));
-  for (const pattern of OAK_FINDER_PATTERNS) {
+  // W2 신규 2종(2026-08-23)은 **이 정본의 후보가 아니다** — footprint 의 정본은
+  // finder-footprint-2026-08-23.json (test/finder-footprint.test.js ① 이 전수 대조),
+  // taegeuk-solo 는 finder-daehan.js 유도 (같은 파일 ② 가 대조). 여기서는 «이 정본
+  // 밖 후보가 정확히 그 둘뿐» 임을 잠근다 — 늘면 대조 없는 표가 생긴 것이다.
+  const outsideThisCanon = OAK_ALL_FINDER_PATTERNS
+    .filter((pattern) => !byName.has(pattern.lineupName)).map((pattern) => pattern.id);
+  assert.deepEqual(outsideThisCanon.sort(), ['oak-footprint', 'oak-taegeuk-solo'],
+    '정본 대조 경로가 없는 OAK 후보 목록이 바뀌었다');
+  for (const pattern of OAK_ALL_FINDER_PATTERNS) {
+    if (!byName.has(pattern.lineupName)) continue;
     const entry = byName.get(pattern.lineupName);
     assert.ok(entry, pattern.id + ': 정본에 ' + pattern.lineupName + ' 이 없다');
     const tone = { T: new Map(), L: new Map(), R: new Map() };
@@ -109,7 +119,9 @@ test('② 표가 정본 편집기 export 와 같다 (없으면 자기 일관성�
 
 test('② -b 명부와 표가 서로를 가린다 — 활성 O 후보 중 표현 가능한 것만 있다', () => {
   const active = OAK_LINEUP.filter((entry) => entry.status === 'active');
-  const represented = new Set(OAK_FINDER_PATTERNS.map((pattern) => pattern.lineupName));
+  // 렌더 전용(oak-taegeuk-solo)도 «표현이 있다» — 이 검사의 축은 렌더 표현이지
+  // 검출 편입이 아니다.
+  const represented = new Set(OAK_ALL_FINDER_PATTERNS.map((pattern) => pattern.lineupName));
   for (const name of represented) {
     const entry = active.find((row) => row.name === name);
     assert.ok(entry, name + ' 이 활성 명부에 없는데 표현이 있다');
@@ -156,15 +168,24 @@ test('중간톤 상수는 선형 상대휘도 0.5 다 — 8비트 절반(128)이
 });
 
 test('조회·카드 그룹 배선', () => {
+  // **의도적 갱신 (2026-08-23, W2 선행)** — 검출 표는 3 → 4 (footprint, 운영자 셀
+  // 편집기 신작). taegeuk 단독(daehan 내부 19 유도)은 **렌더 전용 표**에 있다 —
+  // 검출 라인업에 넣으면 daehan 프레임을 부분집합 오수용으로 가로챈다
+  // (OAK_RENDER_ONLY_FINDER_PATTERNS 헤더 실측 — 편입은 통합자 몫).
   assert.deepEqual([...OAK_FINDER_PATTERN_IDS],
-    ['oak-nitrogen-r2', 'oak-aspirin', 'oak-benzene']);
-  for (const id of OAK_FINDER_PATTERN_IDS) {
+    ['oak-nitrogen-r2', 'oak-aspirin', 'oak-benzene', 'oak-footprint']);
+  assert.deepEqual(OAK_RENDER_ONLY_FINDER_PATTERNS.map((pattern) => pattern.id),
+    ['oak-taegeuk-solo']);
+  for (const id of [...OAK_FINDER_PATTERN_IDS, 'oak-taegeuk-solo']) {
     assert.equal(isOakFinderPatternId(id), true, id);
     assert.ok(getOakFinderPattern(id), id);
   }
   assert.equal(isOakFinderPatternId('bullseye'), false);
   assert.equal(getOakFinderPattern('없는-id'), undefined);
-  assert.deepEqual(FINDER_CARD_GROUPS.oak.map((card) => card.id), [...OAK_FINDER_PATTERN_IDS]);
+  // 카드는 렌더 표현 전부에서 유도된다 — 렌더 전용이 카드에서 빠지면 «그릴 수
+  // 있는데 고를 수 없는» 후보가 된다.
+  assert.deepEqual(FINDER_CARD_GROUPS.oak.map((card) => card.id),
+    [...OAK_FINDER_PATTERN_IDS, 'oak-taegeuk-solo']);
   // OAK 카드는 기존 그룹 어디에도 안 섞였다 (계보가 카드로 읽혀야 한다).
   for (const group of ['formal', 'generated', 'refined']) {
     for (const card of FINDER_CARD_GROUPS[group]) {
