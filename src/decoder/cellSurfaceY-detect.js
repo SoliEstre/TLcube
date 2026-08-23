@@ -183,6 +183,12 @@ function scoreMappedSamples(samples, cfg, locators) {
   }
 
   const agreement = total > 0 ? matches / total : 0;
+  // F-96: 정렬 혼합용 전체-분모 일치율 — 분모가 «관측표본» 인 agreement 는 잘린
+  // 프레임에서 부풀어, 전체-레퍼런스 분모인 calibrateCubeReferences 의 agreementRate
+  // 와 한 정렬키로 섞이면 잘린 CS 가설이 체계적으로 앞선다. 수용 게이트는 여전히
+  // 관측 분모 agreement 를 쓴다 (게이트 완화·강화 없음 — 헤더 주석의 계약 그대로).
+  const expectedTotal = table.length * YFACES.length;
+  const agreementFull = expectedTotal > 0 ? matches / expectedTotal : 0;
   const enoughSamples = YFACES.every((face) =>
     sampleCounts[face].dark >= cfg.minimumSamplesPerTone
     && sampleCounts[face].bright >= cfg.minimumSamplesPerTone);
@@ -201,6 +207,8 @@ function scoreMappedSamples(samples, cfg, locators) {
 
   return {
     agreement,
+    agreementFull,
+    expectedTotal,
     matches,
     total,
     minimumSpan,
@@ -413,8 +421,12 @@ export function scoreCellSurfaceSamples(samples, options = {}) {
 function calibrationForTones(best, scored, tones) {
   const shared = {
     agreement: best.matches,
-    total: best.total,
-    agreementRate: best.agreement,
+    // F-96: 정렬키로 흘러가는 total·agreementRate 는 전체-레퍼런스 분모 규약으로
+    // 통일한다 (calibrateCubeReferences 의 agreement/expected.size 와 같은 규약) —
+    // 관측-분모 agreement 는 CS 내부 게이트·진단에만 남는다. 전부 관측된 프레임에서는
+    // 두 값이 같아 기본(비잘림) 경로 순위가 변하지 않는다.
+    total: Number.isFinite(best.expectedTotal) ? best.expectedTotal : best.total,
+    agreementRate: Number.isFinite(best.agreementFull) ? best.agreementFull : best.agreement,
     minimumSpan: best.minimumSpan,
     medianMargin: scored.orientationMargin,
     observations: best.observations,
@@ -479,11 +491,14 @@ function hypothesisPatchForTones(best, scored, samples, tones, n = CELL_SURFACE_
     referenceSamples: new Map(samples
       .filter((sample) => sample && sample.ok !== false)
       .map((sample) => [cellKey(sample.i, sample.j), sample])),
-    referenceAgreement: best.agreement,
+    // F-96: cube-detect 가설 정렬(referenceAgreement · referenceRefinement.quality)과
+    // bootstrap 점수로 섞이는 값은 전체-분모 규약으로 — 잘린 CS 가설이 관측-분모
+    // 부풀림으로 레퍼런스 가설을 체계적으로 앞서는 것을 닫는다.
+    referenceAgreement: Number.isFinite(best.agreementFull) ? best.agreementFull : best.agreement,
     referenceRefinement: {
       dx: 0,
       dy: 0,
-      quality: 100 * best.agreement,
+      quality: 100 * (Number.isFinite(best.agreementFull) ? best.agreementFull : best.agreement),
     },
     cellSurfaceDiagnostics: scored.diagnostics,
   };

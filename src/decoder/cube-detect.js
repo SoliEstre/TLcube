@@ -2771,7 +2771,9 @@ function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
             + 0.22 * accepted.referenceCalibration.agreementRate
             + 0.20 * clamp01(proposal.blockFill),
           );
+          // F-95: 블록 어파인 경로는 재투영 잔차를 재지 않는다 — 0 위장 대신 미실측 선언.
           const geometryResidual = 0;
+          const geometryResidualMeasured = false;
           const logicalHypothesisId = 'cube-n' + n
             + '-flat-block-c' + componentIndex + '-o' + orientation + '-t' + tones;
           const hardChecks = {
@@ -2796,6 +2798,7 @@ function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
             H: accepted.H,
             canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
             geometryResidual,
+            geometryResidualMeasured,
             sizeGeometry: {
               rK: 0,
               vertexResidual: geometryResidual,

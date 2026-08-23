@@ -1446,6 +1446,22 @@ function silhouetteHypotheses(luma, finder, k, outline, options, cfg) {
     const imageAnchors = canonicalAnchors.map((point) => projectPoint(H, point));
     if (imageAnchors.some((point) => point === null)) continue;
 
+    // F-95: 리터럴 0 대신 실측 잔차 — H 는 7개 대응점 중 앞 4점 정확적합이라
+    // 나머지 대응점의 재투영 오차가 진짜 잔차다 (px, 전 대응점 평균).
+    const residualPoints = [{ x: 0, y: 0 }, ...canonicalOuter];
+    const residualObserved = [center, ...observedOuter];
+    let residualSum = 0;
+    let residualCount = 0;
+    for (let index = 0; index < residualPoints.length; index += 1) {
+      const projected = projectPoint(H, residualPoints[index]);
+      if (!projected) continue;
+      residualSum += Math.hypot(
+        projected.x - residualObserved[index].x,
+        projected.y - residualObserved[index].y,
+      );
+      residualCount += 1;
+    }
+
     candidates.push({
       family: 'hex',
       k,
@@ -1456,7 +1472,8 @@ function silhouetteHypotheses(luma, finder, k, outline, options, cfg) {
       canonicalAnchors: anchorCells(k).map((cell) => ({ q: cell.q, r: cell.r })),
       H,
       canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-      geometryResidual: 0,
+      geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
+      geometryResidualMeasured: residualCount > 0,
       anchorMargin: anchorValidation.separation / 3,
       anchorValidation,
       finder,
@@ -1512,7 +1529,10 @@ function weakAnchorHypotheses(luma, finder, family, options) {
         canonicalAnchors,
         H,
         canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+        // F-95: H 가 파인더 유도라 독립 대응점이 없어 잔차를 잴 수 없다 —
+        // 0(전 tiebreak 승리)으로 위장하지 않고 «미실측 → 최하 우선» 으로 강등.
         geometryResidual: 0,
+        geometryResidualMeasured: false,
         anchorMargin: anchorValidation.separation / 3,
         anchorValidation,
         anchorEvidence: {
@@ -1575,7 +1595,10 @@ function cornerMarkerHypotheses(luma, finder, family, options) {
       canonicalAnchors,
       H,
       canonicalSpace: record.canonicalSpace,
+      // F-95: record 의 기하 증거는 비율(meanRadiusRatio)이지 px 잔차가 아니다 —
+      // 환산 조작 대신 «미실측 → 최하 우선» 강등 (confirmAgreement 는 anchorMargin 으로 이미 실림).
       geometryResidual: 0,
+      geometryResidualMeasured: false,
       // 정렬 키다(게이트 아님). 코너 마커의 확신도를 그대로 싣는다 —
       // 앵커 margin 과 «같은 척도인 척» 하지 않으려고 별도 필드도 남긴다.
       anchorMargin: record.confirmAgreement,
@@ -1617,6 +1640,9 @@ function cellFinderHypotheses(luma, finder, family) {
     H,
     canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
     geometryResidual: Number.isFinite(finder.geometryResidual) ? finder.geometryResidual : 0,
+    // F-95: 파인더가 잔차를 안 냈거나(부재→0 위장) 미실측 선언이면 그대로 전파한다.
+    geometryResidualMeasured: Number.isFinite(finder.geometryResidual)
+      && finder.geometryResidualMeasured !== false,
     anchorMargin: finder.orientationMargin,
     orientationEvidence: {
       source: finder.orientationSource || 'finder-pattern',
@@ -1916,11 +1942,15 @@ function referenceAgreement(referenceResult) {
 }
 
 function reprojectionResidual(luma, hypothesis, referenceResult, options, cfg) {
+  // F-95: 잔차를 재지 않은 가설(리터럴 0 생산자)은 «최하 우선» 이다 — 0 은
+  // 최상 tiebreak 인데 증거가 없다. 실측 브랜치(hex+reference 국소 워프)는
+  // geometryResidual 을 안 쓰므로 이 강등의 영향이 없다.
   if (hypothesis.family === 'cube') {
     const center = projectPoint(hypothesis.H, { x: 0, y: 0 });
     const iStep = projectPoint(hypothesis.H, { x: 1, y: 0 });
     const jStep = projectPoint(hypothesis.H, { x: 0, y: 1 });
-    if (!center || !iStep || !jStep || !Number.isFinite(hypothesis.geometryResidual)) return 1;
+    if (!center || !iStep || !jStep || !Number.isFinite(hypothesis.geometryResidual)
+      || hypothesis.geometryResidualMeasured === false) return 1;
     const pitch = median([
       Math.hypot(iStep.x - center.x, iStep.y - center.y),
       Math.hypot(jStep.x - center.x, jStep.y - center.y),
@@ -1932,6 +1962,7 @@ function reprojectionResidual(luma, hypothesis, referenceResult, options, cfg) {
   if (!referenceResult.ok || hypothesis.family !== 'hex') {
     const cellSize = hypothesis.finder && hypothesis.finder.cellSize;
     return Number.isFinite(hypothesis.geometryResidual) && Number.isFinite(cellSize) && cellSize > 0
+      && hypothesis.geometryResidualMeasured !== false
       ? hypothesis.geometryResidual / cellSize
       : 1;
   }
@@ -3742,6 +3773,8 @@ function recastCentralBeaconCandidates(luma, validated, options) {
           canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
           geometryResidual: Number.isFinite(candidate.hypothesis.geometryResidual)
             ? candidate.hypothesis.geometryResidual : 0,
+          geometryResidualMeasured: Number.isFinite(candidate.hypothesis.geometryResidual)
+            && candidate.hypothesis.geometryResidualMeasured !== false,
           finder: {
             finderKind: CENTRAL_BEACON_FINDER_KIND,
             patternId: CENTRAL_BEACON_FINDER_KIND,
