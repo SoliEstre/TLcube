@@ -695,12 +695,60 @@ function finishCandidate(luma, refined, templates, span, cfg) {
     bands: { matcher: 'cell-mask-ncc', hardChecks, turnCorrelations: wrong },
   };
 }
-function nms(candidates, limit) {
+/**
+ * 패턴 하나의 (셀좌표, 면) → 기대값 지도 — 포함쌍 유도용. templateOf 와 같은 값
+ * 규약(cellLevels → LEVEL_TARGETS · cellMasks → 0/1)이라 표현이 달라도 비교된다.
+ */
+function faceValueMap(pattern) {
+  const cells = footprintOf(pattern);
+  const map = new Map();
+  for (const sample of faceSamplesFor(cells)) {
+    const cell = cells[sample.cellIndex];
+    const value = pattern.cellLevels
+      ? LEVEL_TARGETS[pattern.cellLevels[sample.cellIndex][FACE_LEVEL_INDEX[sample.face]]]
+      : (pattern.cellMasks[sample.cellIndex] & sample.bit ? 1 : 0);
+    map.set(cell.q + ',' + cell.r + ',' + sample.face, value);
+  }
+  return map;
+}
+
+/**
+ * 포함쌍 유도 (C2b, 2026-08-23) — 작은 패턴의 발자국·톤이 큰 패턴의 **진부분집합**이면
+ * (daehan ⊃ taegeuk-solo 가 실측 사례 — 중앙 19 가 톤까지 동일), 같은 자리의 두 검출은
+ * «중복» 이 아니라 **같은 프레임의 경합 해석**이다: 어느 쪽이 프레임의 실체인지는
+ * 광학이 원리적으로 못 가르고 RS/CRC 가설 열거가 가른다 (finder-daehan.js §포함 사슬).
+ * 손 목록이 아니라 값 대조 유도다 — 새 패턴이 포함 관계를 만들면 자동으로 잡힌다.
+ */
+function containmentPairs(patterns) {
+  const maps = patterns.map((pattern) => ({ id: pattern.id, map: faceValueMap(pattern) }));
+  const pairs = new Set();
+  for (const small of maps) {
+    for (const big of maps) {
+      if (small.id === big.id || small.map.size >= big.map.size) continue;
+      let subset = true;
+      for (const [key, value] of small.map) {
+        if (big.map.get(key) !== value) { subset = false; break; }
+      }
+      if (subset) {
+        pairs.add(small.id + '|' + big.id);
+        pairs.add(big.id + '|' + small.id);
+      }
+    }
+  }
+  return pairs;
+}
+
+function nms(candidates, limit, exemptPairs) {
   const sorted = candidates.slice().sort((a, b) => b.score - a.score
     || b.orientationMargin - a.orientationMargin || a.patternId.localeCompare(b.patternId));
   const kept = [];
   for (const candidate of sorted) {
     if (kept.some((other) => {
+      // 포함쌍은 공간이 겹쳐도 억제하지 않는다 — 두 해석을 모두 가설로 올려
+      // RS/CRC 가 가르게 한다 (C2b — solo 가 daehan 을 밀어내던 오수용의 처방).
+      if (exemptPairs && exemptPairs.has(candidate.patternId + '|' + other.patternId)) {
+        return false;
+      }
       const sameCenter = Math.hypot(candidate.center.x - other.center.x,
         candidate.center.y - other.center.y) < 1.2 * Math.min(candidate.cellSize, other.cellSize);
       const sameProjective = Math.hypot(
@@ -729,7 +777,10 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
   try { assertLumaField(luma); } catch (error) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-input', message: error.message });
   }
-  const templates = normalizePatterns(patternInput, options).map(templateOf);
+  const normalized = normalizePatterns(patternInput, options);
+  const templates = normalized.map(templateOf);
+  // 포함쌍 (C2b) — NMS 억제 면제 목록. 라인업에 포함 관계가 없으면 빈 집합(비용 0급).
+  const exemptPairs = containmentPairs(normalized);
   const cfg = cfgFor(options);
   // options.footprintSearchLaw: null 이면 법칙을 끈다 (전부 cfg 상수 그대로).
   // 객체면 기본 지수를 덮어쓴다 — 파레토 위를 움직이는 손잡이다.
@@ -787,7 +838,7 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
   // 완성·게이트·NMS 는 발자국을 다시 섞어 **전 후보를 한자리에서** 겨룬다 —
   // 그룹 분리는 탐색 단계에만 걸린다.
   const candidates = nms(refined.map((entry) => finishCandidate(luma, entry, templates, span, cfg))
-    .filter((entry) => entry && entry.hardChecksPassed), cfg.maxOutputCandidates);
+    .filter((entry) => entry && entry.hardChecksPassed), cfg.maxOutputCandidates, exemptPairs);
   if (candidates.length === 0) {
     const best = refined[0];
     return fail(FRONTEND_FAILURE.NO_FINDER, {

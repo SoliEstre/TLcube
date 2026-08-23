@@ -147,6 +147,17 @@ const CELL_FINDER_LINEUP_DAEHAN = Object.freeze([
   ...FINDER_CELL_MASK_PATTERNS,
   ...OAK_FINDER_PATTERNS,
   ...DAEHAN_FINDER_PATTERNS,
+  /*
+   * taegeuk 단독 (C2b 진행 중, 2026-08-23) — **아직 편입하지 않는다.** 조건과 잔여:
+   *   · 티어는 daehan 옵트인이 맞다 (mirror 0.7193 < 게이트 0.78 — daehan 전례).
+   *   · 1차 장벽(같은 자리 NMS 억제)은 해소됨 — cell-finder-detect 의 포함쌍 면제
+   *     (containmentPairs, 유도)로 두 해석이 공존하고, 비-시디드 경로에선 daehan
+   *     프레임 왕복이 성립함을 실측했다 (solo 1위 + daehan 2위 → RS/CRC 가 daehan 선택).
+   *   · **잔여 장벽 (편입 게이트)**: 시디드 탐색 경로(outline 유도 centerSeeds/
+   *     cellSizeSeeds, ss1 실측)에서 daehan 후보가 검출 단계에서 소실돼 solo 만
+   *     남는다 → 상위집합 회계 가설이 없어 왕복 사망. 오수용 0 선행 조건(운영자
+   *     2026-08-23) 미충족 — 시디드 그룹 예산/브래킷 조사 후 편입한다.
+   */
 ]);
 
 /** 이 호출이 daehan 을 라인업에 얹는가. 기본 false — 레거시 경로는 비트 동일이다. */
