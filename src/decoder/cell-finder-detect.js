@@ -651,8 +651,18 @@ function refine(luma, coarse, span, geometryMode = 'affine') {
 }
 function degrees(radians) { return ((radians * 180 / Math.PI) % 360 + 360) % 360; }
 function turnOf(radians) { return Math.floor((degrees(radians) + 60) / 120) % 3; }
-function finishCandidate(luma, refined, templates, span, cfg) {
-  let best = scoreBest(luma, refined.H, templates, span, true);
+function finishCandidate(luma, refined, templates, span, cfg, exemptPairs) {
+  // 포함쌍은 **전환 경쟁에서도 면제**한다 (C2b 2차, 2026-08-24). NMS 면제만으로는
+  // 부족했다 — 여기의 «최고 템플릿으로 전환» 이 상류에서 daehan 정교화 후보를
+  // 전부 taegeuk-solo 로 개명해 버려(부분집합은 같은 자리에서 언제나 경쟁력이 있고,
+  // ss1 실측에선 fit 1.0000 동률에서도 전환됐다) NMS 면제가 손도 못 썼다.
+  // 부분집합/상위집합 중 무엇이 프레임의 실체인지는 광학이 원리적으로 못 가른다 —
+  // 두 해석을 다 후보로 남겨 RS/CRC 가설 열거가 가르게 한다 (nms 면제와 같은 원리).
+  const contenders = exemptPairs && exemptPairs.size > 0
+    ? templates.filter((t) => t.id === refined.template.id
+      || !exemptPairs.has(refined.template.id + '|' + t.id))
+    : templates;
+  let best = scoreBest(luma, refined.H, contenders, span, true);
   let final = refined;
   if (!best) return null;
   if (best.template.id !== refined.template.id) {
@@ -661,7 +671,7 @@ function finishCandidate(luma, refined, templates, span, cfg) {
     );
     if (rerun) {
       final = rerun;
-      best = scoreBest(luma, final.H, templates, span, true);
+      best = scoreBest(luma, final.H, contenders, span, true);
     }
   }
   const wrong = [1, 2].map((turn) => scoreAll(
@@ -719,7 +729,7 @@ function faceValueMap(pattern) {
  * 광학이 원리적으로 못 가르고 RS/CRC 가설 열거가 가른다 (finder-daehan.js §포함 사슬).
  * 손 목록이 아니라 값 대조 유도다 — 새 패턴이 포함 관계를 만들면 자동으로 잡힌다.
  */
-function containmentPairs(patterns) {
+export function containmentPairs(patterns) { // export 는 테스트 소비 (값 잠금) — 런타임 소비자는 detectCellFinders 뿐
   const maps = patterns.map((pattern) => ({ id: pattern.id, map: faceValueMap(pattern) }));
   const pairs = new Set();
   for (const small of maps) {
@@ -837,7 +847,7 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
     ]).filter(Boolean));
   // 완성·게이트·NMS 는 발자국을 다시 섞어 **전 후보를 한자리에서** 겨룬다 —
   // 그룹 분리는 탐색 단계에만 걸린다.
-  const candidates = nms(refined.map((entry) => finishCandidate(luma, entry, templates, span, cfg))
+  const candidates = nms(refined.map((entry) => finishCandidate(luma, entry, templates, span, cfg, exemptPairs))
     .filter((entry) => entry && entry.hardChecksPassed), cfg.maxOutputCandidates, exemptPairs);
   if (candidates.length === 0) {
     const best = refined[0];

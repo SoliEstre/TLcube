@@ -52,12 +52,14 @@ import { decodeCells } from '../src/decode.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
 } from '../src/luminance.js';
-import { detectCellFinders, UNVERIFIED_CELL_FINDER_CALIBRATION } from '../src/decoder/cell-finder-detect.js';
+import {
+  containmentPairs, detectCellFinders, UNVERIFIED_CELL_FINDER_CALIBRATION,
+} from '../src/decoder/cell-finder-detect.js';
 import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
 import { FINDER_CELL_MASK_PATTERNS } from '../src/finder-patterns.js';
-import { OAK_FINDER_PATTERNS } from '../src/finder-oak-patterns.js';
+import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../src/finder-oak-patterns.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const CANON = ROOT + '../.agent/decoder/data/daehan-k10.json';
@@ -353,14 +355,21 @@ test('⑥ 포함 사슬 — patternId 는 프레임의 k 를 말해 주지 **못
     centerSeeds: [{ x: luma.width / 2, y: luma.height / 2 }],
   });
   assert.ok(detected.ok);
-  // k=8 프레임인데 검출기가 뽑는 이름은 k6 이다 — 그리고 그건 «오수용» 이 아니라
-  // 포함 사슬의 당연한 귀결이다 (k6 의 39셀이 전부 제 톤 위에 있다).
+  // C2b 2차(finish 전환 가드, 2026-08-24) 전에는 부분집합 해석이 상위집합을
+  // 개명·소거해 무노이즈 합성에서도 이름이 k6 «만» 남았다. 가드 후 무노이즈
+  // 합성에선 k8 이 1위가 **될 수 있다** — 그래도 patternId 로 k 를 고르는 배선은
+  // 여전히 금지다: 실사진에선 바깥 고리가 깨지는 순간 부분집합 이름(k'<k)만
+  // 남는 것이 포함 사슬의 귀결이고(finished 단계에 k6 해석이 실재함을 프로브
+  // 실측), k 는 RS/CRC 가설 열거가 고른다 (⑦ 이 그 경로를 잠근다).
   assert.ok(isDaehanFinderPatternId(detected.candidates[0].patternId));
   assert.ok(detected.candidates[0].correlation >= 0.99);
-  assert.notEqual(
-    daehanKForPatternId(detected.candidates[0].patternId), 8,
-    '포함 사슬이 사라졌다 — 그렇다면 patternId 로 k 를 고르는 더 단순한 배선이 가능하다',
-  );
+  // 사슬은 **아래로만** 이름낸다 — k=8 프레임에서 k10(상위집합 과주장) 이름이
+  // 게이트를 통과하면 그건 포함 사슬이 아니라 오수용이다.
+  const chainKs = detected.candidates.map((c) => daehanKForPatternId(c.patternId))
+    .filter((k) => k !== undefined);
+  assert.ok(chainKs.length > 0, 'daehan 해석이 전부 사라졌다');
+  assert.ok(chainKs.every((k) => k <= 8),
+    '상위집합 과주장 (k>8) 이 게이트를 통과했다: ' + chainKs.join(','));
 });
 
 test('⑦ 전 경로 왕복 + 배포 기본 라인업은 daehan 을 **안 든다** (옵트인)', async () => {
@@ -389,6 +398,42 @@ test('⑦ 전 경로 왕복 + 배포 기본 라인업은 daehan 을 **안 든다
     assert.equal(on.ok, true, 'k=' + spec.k + ': ' + JSON.stringify(on.reason));
     assert.equal(on.text, text);
   }
+});
+
+test('⑨ 포함쌍 — finish 전환·NMS 이중 면제로 두 해석이 공존한다 (C2b 2차)', () => {
+  // (a) 기본 라인업(전부 19셀 발자국)은 포함쌍이 **구조적으로 0** — 진부분집합은
+  //     더 작은 발자국을 요구하므로. 이 0 이 「면제·가드가 기본 경로(실사진 코퍼스)에
+  //     한 값도 영향 없다」의 근거다. 값으로 잠근다.
+  assert.equal(containmentPairs([...FINDER_CELL_MASK_PATTERNS, ...OAK_FINDER_PATTERNS]).size, 0);
+  // (b) taegeuk-solo 를 얹으면 손 목록 없이 값 대조 유도가 포함쌍을 만든다 —
+  //     solo ⊂ daehan(전부) + daehan 포함 사슬(k6⊂k8⊂k10).
+  const lineup = [
+    ...FINDER_CELL_MASK_PATTERNS, ...OAK_FINDER_PATTERNS,
+    ...DAEHAN_FINDER_PATTERNS, ...OAK_RENDER_ONLY_FINDER_PATTERNS,
+  ];
+  const pairs = containmentPairs(lineup);
+  assert.ok(pairs.has('oak-taegeuk-solo|oak-daehan-k6'), 'solo ⊂ k6 유도 실패');
+  assert.ok(pairs.has('oak-daehan-k6|oak-taegeuk-solo'), '면제는 양방향이어야 한다');
+  assert.ok(pairs.has('oak-daehan-k6|oak-daehan-k10'), '포함 사슬(k6⊂k10) 자동 유도 실패');
+  // (c) 실효 — ss1 k6 프레임에서 solo 와 daehan 이 **모두** 후보로 남는다.
+  //     finish 전환 가드 없인 daehan 정교화 후보가 fit 1.0000 동률에서도 전부
+  //     solo 로 개명돼 소멸했다 (2026-08-24 프로브 실측 — NMS 면제만으론 부족).
+  const preset = getPreset(DEFAULT_PRESET);
+  const palette = {
+    background: preset.background, levels: preset.levels,
+    bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+  };
+  const enc = encode('TLcube', { version: 1, eccLevel: 'M', daehanFinder: true });
+  const scene = buildScene(enc, { palette, finderPatternId: daehanPatternId(6) });
+  const luma = toRelativeLuminance(rasterize(scene, { pixelsPerUnit: 24, supersample: 1 }), {});
+  const detected = detectCellFinders(luma, lineup, {
+    centerSeeds: [{ x: luma.width / 2, y: luma.height / 2 }],
+  });
+  assert.ok(detected.ok);
+  const ids = new Set(detected.candidates.map((c) => c.patternId));
+  assert.ok(ids.has('oak-taegeuk-solo'), 'solo 해석이 사라졌다: ' + [...ids].join(','));
+  assert.ok([...ids].some((id) => isDaehanFinderPatternId(id)),
+    'daehan 해석이 사라졌다 (finish 전환 가드 회귀): ' + [...ids].join(','));
 });
 
 test('⑧ 분류 층 id — taegeuk 19 = 슬롯, sagoae = 예약, 와이어 이름은 daehan', () => {
