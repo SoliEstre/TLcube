@@ -77,10 +77,13 @@ export const OAK_LINEUP = Object.freeze([
     margin: 0.3333, mirrorAgreement: 0.9298,
   }),
   entry({
-    name: 'Benzene', id: 'O-3-bullseye', type: 'O', status: 'active',
+    name: 'Benzene', id: 'O-3-bullseye', type: 'O', status: 'dropped',
     finderMode: 'full-surface', finderStarter: 'cube-bullseye',
     counts: { total: 61, detector: 19 },
     margin: 0.386, mirrorAgreement: 1.0,
+    note: '운영자 드랍 2026-08-23 (PM/022 항목 3) — 생성은 닫고 판독은 유지: '
+      + '패턴 표·검출 라인업·기대축·발행분 라벨은 그대로, 카드·상태 스키마에서만 빠진다. '
+      + '차단이지 삭제가 아니다',
   }),
   entry({
     name: 'Xylene', id: 'O-4-bullseye', type: 'O', status: 'dropped',

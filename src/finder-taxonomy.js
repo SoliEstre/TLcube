@@ -40,7 +40,9 @@ import {
   FINDER_CELL_ORDER,
   LEGACY_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
-import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import {
+  CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID,
+} from './finder-selection.js';
 import { FINDER_CARD_GROUPS } from './finder-card-ui.js';
 import {
   OAK_LINEUP, liveOakCandidates, oakCandidate,
@@ -180,6 +182,26 @@ function buildItems() {
     });
   }
 
+  // central-v0 (비컨) — «전수» 를 주장하는 표에 유일하게 빠져 있던 선택 가능 카드
+  // (F-34 · C1 편입, 2026-08-23). 카드 표 밖에서 index.html 이 center-qr 앞에 규칙으로
+  // 끼워 넣는 CENTRAL_V0_FINDER_CARD 가 실체다 — 2026-08-22 부터 O·A 공통 선택지.
+  add({
+    id: CENTRAL_V0_FINDER_PATTERN_ID,
+    name: '중앙 TL (비컨)',
+    class: 1,
+    className: FINDER_CLASS[1],
+    kind: KIND_FINDER,
+    origin: 'CENTRAL_V0_FINDER_CARD (finder-card-ui) — 카드 표 밖 규칙 삽입',
+    renderPath: 'src/scene.js central-v0 (내부 Type Y v0 비컨 렌더)',
+    coordBasis: COORD_CENTER,
+    innerSplit: null,
+    toneAxis: '셀 컬러 (palette.levels — 내부 Y v0 큐브)',
+    cells: '중앙 v0 블록 (n=13 축소)',
+    renderable: true,
+    consumer: '생성기 카드 formal행 삽입 · central-beacon-adapt 검출 · LAB_CENTRAL',
+    note: 'F-34 편입 — 계약 _contracts/central-v0-beacon.md 가 기하 정본',
+  });
+
   for (const pattern of FINDER_PATTERNS) {
     if (isFormalFour(pattern.id)) continue;
     add({
@@ -202,6 +224,10 @@ function buildItems() {
 
   for (const pattern of OAK_ALL_FINDER_PATTERNS) {
     const lineup = OAK_LINEUP.find((e) => e.name === pattern.lineupName);
+    // 명부 live-join (C1, 2026-08-23) — dropped/dead 후보는 분류 1 행을 만들지 않는다.
+    // 안 그러면 같은 후보가 «분류1 파인더 + U·blocked» 두 행으로 이중 등재된다
+    // (blocked 행이 유일 표현 — 아래 명부 루프가 만든다). Benzene 이 첫 사례.
+    if (lineup && lineup.status !== 'active') continue;
     // 렌더 전용(oak-taegeuk-solo)은 검출 소비자가 없다 — daehan 부분집합 오수용
     // 실측으로 검출 편입이 통합자 게이트 뒤에 있다 (finder-oak-patterns.js
     // OAK_RENDER_ONLY_FINDER_PATTERNS 헤더). 여기 표에서도 그 차이가 읽혀야 한다.

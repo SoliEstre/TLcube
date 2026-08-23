@@ -117,16 +117,26 @@ test('② 표가 정본 편집기 export 와 같다 (없으면 자기 일관성�
   }
 });
 
-test('② -b 명부와 표가 서로를 가린다 — 활성 O 후보 중 표현 가능한 것만 있다', () => {
-  const active = OAK_LINEUP.filter((entry) => entry.status === 'active');
-  // 렌더 전용(oak-taegeuk-solo)도 «표현이 있다» — 이 검사의 축은 렌더 표현이지
-  // 검출 편입이 아니다.
+test('② -b 명부와 표가 서로를 가린다 — 표현이 있는 후보는 dead 가 아니다', () => {
+  // **의도적 갱신 (C1, 2026-08-23 — Benzene 드랍)**: 원판은 «활성만 표현» 이었는데
+  // 규약이 갈라졌다 — 생성은 닫고 판독은 유지. dropped 는 표현이 남는다(발행분 판독
+  // + 검출 라인업 안정성), dead 만 표현 금지 (Nitrogen 전례). 카드·상태 스키마는
+  // 명부 live-join(finder-card-ui)이 닫는다 — 아래 -c 검사가 그 분업을 잠근다.
   const represented = new Set(OAK_ALL_FINDER_PATTERNS.map((pattern) => pattern.lineupName));
   for (const name of represented) {
-    const entry = active.find((row) => row.name === name);
-    assert.ok(entry, name + ' 이 활성 명부에 없는데 표현이 있다');
+    const entry = OAK_LINEUP.find((row) => row.name === name);
+    assert.ok(entry, name + ' 이 명부에 없는데 표현이 있다');
+    assert.notEqual(entry.status, 'dead', name + ' 은 dead 인데 표현이 있다');
     assert.equal(entry.type, 'O', name + ' 은 타입 O 가 아니다');
   }
+  // dropped 인데 표현이 있는 것 = «판독 유지» 대상 — 이름으로 고정 (부재에도 이유가 필요하다).
+  const readOnly = [...represented].filter((name) => {
+    const entry = OAK_LINEUP.find((row) => row.name === name);
+    return entry && entry.status === 'dropped';
+  });
+  assert.deepEqual(readOnly.sort(), ['Benzene'],
+    '판독-유지 드랍 목록이 바뀌었다 — 명부 note 와 이 목록을 같이 갱신하라');
+  const active = OAK_LINEUP.filter((entry) => entry.status === 'active');
   // 표현이 **없는** 활성 후보는 사유가 분명해야 한다. 사유를 값으로 고정해 둔다 —
   // 나중에 «왜 얘만 빠졌지» 를 다시 조사하지 않으려고.
   const missing = active.filter((entry) => !represented.has(entry.name)).map((e) => e.name);
@@ -182,10 +192,11 @@ test('조회·카드 그룹 배선', () => {
   }
   assert.equal(isOakFinderPatternId('bullseye'), false);
   assert.equal(getOakFinderPattern('없는-id'), undefined);
-  // 카드는 렌더 표현 전부에서 유도된다 — 렌더 전용이 카드에서 빠지면 «그릴 수
-  // 있는데 고를 수 없는» 후보가 된다.
+  // 카드는 «렌더 표현 ∩ 명부 active» 에서 유도된다 (C1 live-join, 2026-08-23) —
+  // 렌더 전용(taegeuk-solo)은 카드에 있고(그릴 수 있으면 고를 수 있다), 드랍된
+  // Benzene 은 표현이 남아도(판독 유지) 카드에서 빠진다(생성은 닫는다).
   assert.deepEqual(FINDER_CARD_GROUPS.oak.map((card) => card.id),
-    [...OAK_FINDER_PATTERN_IDS, 'oak-taegeuk-solo']);
+    ['oak-nitrogen-r2', 'oak-aspirin', 'oak-footprint', 'oak-taegeuk-solo']);
   // OAK 카드는 기존 그룹 어디에도 안 섞였다 (계보가 카드로 읽혀야 한다).
   for (const group of ['formal', 'generated', 'refined']) {
     for (const card of FINDER_CARD_GROUPS[group]) {

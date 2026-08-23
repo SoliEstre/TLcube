@@ -260,15 +260,19 @@ export function oakRenderSummary() {
     ids.add(pattern.id);
   }
 
-  // ① 명부(finder-oak-lineup)에 **활성**으로 있는 후보만 여기 있다. 지위가 dead /
-  //    dropped 인 것을 렌더·검출에 올리면 «차단인데 살아 있는» 상태가 된다.
+  // ① 명부(finder-oak-lineup)와의 정합. 원래 «활성만 표현» 이었는데 C1(2026-08-23,
+  //    Benzene 드랍)에서 규약이 갈라졌다 — **생성은 닫고 판독은 유지**:
+  //    · dead   → 표현 금지 그대로 (Nitrogen 전례 — 죽은 후보는 렌더·검출 모두 없음).
+  //    · dropped → 표현 허용. 카드·상태 스키마는 명부 live-join(finder-card-ui)이
+  //      닫고, 패턴 표는 남아 **이미 발행된 프레임의 판독**과 검출 라인업 안정성을
+  //      지킨다 (bootstrap 라인업 축소는 기준선 재측정 게이트 사안 — PM/022 §3).
   for (const pattern of OAK_ALL_FINDER_PATTERNS) {
     const entry = OAK_LINEUP.find((row) => row.name === pattern.lineupName);
     if (!entry) {
       throw new Error(pattern.id + ': 명부에 없는 후보다 (lineupName=' + pattern.lineupName + ')');
     }
-    if (entry.status !== 'active') {
-      throw new Error(pattern.id + ': 명부 지위가 ' + entry.status + ' 인데 표현이 있다');
+    if (entry.status === 'dead') {
+      throw new Error(pattern.id + ': 명부 지위가 dead 인데 표현이 있다');
     }
     if (entry.type !== 'O') {
       throw new Error(pattern.id + ': 지금 표현 가능한 것은 타입 O 뿐이다 (' + entry.type + ')');

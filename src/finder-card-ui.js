@@ -14,6 +14,7 @@ import {
   CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID,
 } from './finder-selection.js';
 import { OAK_ALL_FINDER_PATTERNS, OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
+import { OAK_LINEUP } from './finder-oak-lineup.js';
 import { DAEHAN_FINDER_PATTERNS } from './finder-daehan.js';
 
 function descriptor(id, pattern) {
@@ -85,7 +86,15 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   // 카드는 **렌더 표현 전부**에서 유도한다 (2026-08-23) — 렌더 전용
   // oak-taegeuk-solo 포함. 카드로 고르는 것은 «그리기» 이지 검출 편입이 아니다
   // (daehan 카드가 기본 검출 라인업 밖인 것과 같은 관계).
-  oak: Object.freeze(OAK_ALL_FINDER_PATTERNS.map((pattern) => descriptor(pattern.id, pattern))),
+  // 명부 live-join (C1, 2026-08-23) — 카드는 «렌더 가능 ∩ 명부 active» 다. 명부에서
+  // 드랍하면 카드·(카드 유도인) 상태 스키마가 따라 닫힌다 — 사본이 아니라 유도.
+  // 패턴 표·검출 라인업은 건드리지 않는다 (발행분 판독 유지 — Benzene 전례).
+  oak: Object.freeze(OAK_ALL_FINDER_PATTERNS
+    .filter((pattern) => {
+      const row = OAK_LINEUP.find((entry) => entry.id === pattern.params.candidate);
+      return row ? row.status === 'active' : true;
+    })
+    .map((pattern) => descriptor(pattern.id, pattern))),
   // daehan (2026-08-19 UI 편입) — **카드는 한 장**이다. 표에는 k=6/8/10 세 템플릿이
   // 있지만 그건 잘림본이고(k6 ⊂ k8 ⊂ k10), 어느 것을 그릴지는 **버전이 정한다**
   // (V1↔k6 · V2↔k8 · V3↔k10). 카드를 셋으로 쪼개면 사용자가 버전과 모순되는 k 를
