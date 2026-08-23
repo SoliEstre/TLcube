@@ -382,3 +382,46 @@ test('F-94: calibration.locatorY minimumHubContrast 는 hub support 카운터에
   assert.ok(hubReject.support < baseSupport,
     `오버라이드 문턱이 support 카운터에 닿아야 한다 (F-94): ${hubReject.support} vs ${baseSupport}`);
 });
+
+test('F-22: shrink 대비 정규화는 실루엣 창 국소 — 코드 밖 페이로드를 흔들어도 불변', {
+  timeout: 60_000,
+}, () => {
+  const fixture = renderY(PAYLOAD, { version: 0, tones: 3 });
+  const luma = rasterToLuma(fixture.raster);
+  const detected = detectCubeHypotheses(luma, null, { finderFirst: false, enableLocatorY: true });
+  assert.equal(detected.ok, true, JSON.stringify(detected.reason || detected));
+  const emitted = (detected.diagnostics.shapeCandidates || [])
+    .find((entry) => entry.locatorRoute === 'hex-frame' && Array.isArray(entry.ringVertices));
+  assert.ok(emitted, 'hex-frame 로케이터 경유 후보가 있어야 한다');
+  const shape = { center: emitted.center, vertices: emitted.ringVertices };
+
+  // 코드 대비를 [0.3, 0.7] 로 눌러 전역 span 을 흔들 여지를 만든다.
+  const squeeze = (source) => ({
+    width: source.width,
+    height: source.height,
+    data: Float32Array.from(source.data, (value) => 0.3 + 0.4 * value),
+    alpha: source.alpha,
+  });
+  const clean = squeeze(luma);
+  const shaken = squeeze(luma);
+  // 코드 밖 좌상단 구석에 순흑·순백 패치 — 전역 span 을 0.4 → 1.0 으로 2.5배 부풀린다.
+  const bounds = shape.vertices.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x), minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x), maxY: Math.max(acc.maxY, point.y),
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  const windowMargin = 0.12 * Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+  assert.ok(bounds.minX - windowMargin > 30 && bounds.minY - windowMargin > 30,
+    '전제 위반: 스탬프 영역(0..20)이 실루엣 창과 겹친다');
+  for (let y = 0; y < 20; y += 1) {
+    for (let x = 0; x < 20; x += 1) {
+      shaken.data[y * shaken.width + x] = 0;
+      shaken.data[y * shaken.width + x + 20] = 1;
+    }
+  }
+
+  const cleanOut = shrinkSilhouetteToCubeCandidates(clean, shape, {});
+  const shakenOut = shrinkSilhouetteToCubeCandidates(shaken, shape, {});
+  assert.ok(cleanOut.length > 0, '눌린 대비에서도 shrink 후보가 나와야 한다');
+  assert.deepEqual(shakenOut, cleanOut,
+    '코드 밖 페이로드가 shrink 결과를 바꿨다 — span 이 전역 통계로 되돌아간 것이다 (F-22)');
+});

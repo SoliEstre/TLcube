@@ -92,6 +92,45 @@ function lumaSpan(luma) {
   return Number.isFinite(min) && Number.isFinite(max) ? max - min : 0;
 }
 
+/*
+ * F-22: 전역 min/max span 은 코드 밖 페이로드(베젤·화면 UI)에 흔들려 대비 정규화와
+ * support 카운트의 순위를 바꾼다. shrink 경로는 실루엣 육각이 이미 있으므로, 그
+ * 꼭짓점 bbox(+12% 여유) 창의 span 으로 국소화한다. 같은 추정기(min/max)를 창에만
+ * 적용한 것이라, 코드가 프레임을 가득 채운 입력에서는 전역과 같은 값이 나온다.
+ * 창이 퇴화하면(0) 호출자가 전역 span 으로 폴백한다.
+ */
+function lumaSpanInWindow(luma, vertices) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of vertices) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return 0;
+    if (point.x < minX) minX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y > maxY) maxY = point.y;
+  }
+  const margin = 0.12 * Math.max(maxX - minX, maxY - minY);
+  const x0 = Math.max(0, Math.floor(minX - margin));
+  const y0 = Math.max(0, Math.floor(minY - margin));
+  const x1 = Math.min(luma.width - 1, Math.ceil(maxX + margin));
+  const y1 = Math.min(luma.height - 1, Math.ceil(maxY + margin));
+  if (x1 <= x0 || y1 <= y0) return 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (let y = y0; y <= y1; y += 1) {
+    const row = y * luma.width;
+    for (let x = x0; x <= x1; x += 1) {
+      const value = luma.data[row + x];
+      if (!Number.isFinite(value)) continue;
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+  }
+  return Number.isFinite(min) && Number.isFinite(max) && max > min ? max - min : 0;
+}
+
 function lumaMedian(luma) {
   const copy = Array.from(luma.data).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
   if (copy.length === 0) return 0.5;
@@ -648,7 +687,9 @@ export function shrinkSilhouetteToCubeCandidates(luma, shape, options = {}) {
   };
   if (!shape || !shape.vertices || shape.vertices.length !== 6) return reject('invalid-shape');
   const cfg = calibration(options);
-  const span = Math.max(lumaSpan(luma), EPSILON);
+  // F-22: 실루엣 창 국소 span (퇴화 시 전역 폴백) — 함수 주석 참조.
+  const windowSpan = lumaSpanInWindow(luma, shape.vertices);
+  const span = Math.max(windowSpan > 0 ? windowSpan : lumaSpan(luma), EPSILON);
   const center = shape.center;
   const vertices = shape.vertices;
   const doubleLine = doubleLineReport(luma, center, vertices, span);
