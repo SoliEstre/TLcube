@@ -2194,6 +2194,9 @@
 </div>
 <footer>
   <span data-i18n="g301">동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐</span>
+  <!-- F-99 (2026-08-23): 생성기도 익명 pageview 비콘을 보낸다(src/beacon.js — 경로·코드
+       내용은 안 실리고 file:// 경로는 F-66 수리로 비운다). 고지 0건이던 것을 상시 고지. -->
+  <span data-i18n="g999">· 익명 방문 신호(페이지뷰)만 전송해요 — 코드 내용은 안 보내요</span>
   <span class="copyright">
     <span data-i18n="g302">© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume</span> ·
     <span id="buildTag" class="build-tag">—</span>
@@ -2592,6 +2595,7 @@ const GENERATOR_STRINGS = {
     "g996": "셀 표면 v0TY · 먼 코너 QR (Y1)",
     "g997": "v0TY. v0T 파생 — QR 을 큐브 안쪽 먼 코너(T면 위 꼭짓점)에 8×8셀 슬롯으로 묻어요. 슬롯이 v0T 의 먼 코너 위상 마커 9셀을 덮지만, 안쪽 비대칭 블록 9셀이 남아 방향을 줘요 — 두 방향 블록은 그러라고 둔 의도된 이중화예요. 파인더 95셀 · 슬롯 64셀 · 데이터 252 예요. QR 위치에서 «면» 을 고르면 이 검출기로 바뀌어요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g998": "전면 + 먼 코너 QR",
+    "g999": "· 익명 방문 신호(페이지뷰)만 전송해요 — 코드 내용은 안 보내요",
     "g955": "셀 표면 v0TR (Y1)",
     "g956": "v0TR. v0T 재설계예요 — 3코너 동심 사각을 둘로 두었어요 (바깥 = v0T 자리, 안쪽 = 그것을 큰브 안쪽으로 옮긴 사본). K3 계보 중앙 16셀 + 동심 사각 68셀 + 먼 코너 위상 마커 9셀 = 102셀 · 데이터 309 이에요. 대신 v0T 의 안쪽 비대칭 블록·북쪽 팔·서쪽 블록이 없어서 방향 여유(margin)는 0.098 이에요 (게이트의 2.80배 — v0T 보다도 높아요). 코너 앵커는 바깥 동심 사각이라 반경이 v0T 계열과 같고, 그래서 계열은 거리가 아니라 무늬 정합으로 갈려요. Y1(n=21) 전용이며 성능을 보장하지 않아요.",
     "g957": "겹사각 2 + 마커",
@@ -3004,6 +3008,7 @@ const GENERATOR_STRINGS = {
     "g996": "Cell surface v0TY · far-corner QR (Y1)",
     "g997": "v0TY. The v0T derivative — the QR is buried inside the cube at the far corner (the top vertex of the T face) in an 8×8-cell slot. The slot covers v0T’s far-corner phase marker (9 cells), but the inner asymmetric block (9 cells) remains and gives the orientation — the two orientation blocks are an intentional redundancy for exactly this. 95 finder cells, a 64-cell slot, 252 data. Choosing \"Face\" for the QR position switches to this detector. Y1 (n=21) only; does not guarantee performance.",
     "g998": "Full surface + far-corner QR",
+    "g999": "· Sends only an anonymous visit signal (pageview) — never your code contents",
     "g955": "Cell surface v0TR (Y1)",
     "g956": "v0TR. The v0T redesign — it carries two sets of three-corner concentric squares (the outer one where v0T had it, the inner one the same square moved toward the cube centre). A K3-lineage centre (16 cells), the concentric squares (68 cells) and a far-corner phase marker (9 cells) — 102 cells, 309 data. In exchange v0T’s inner asymmetric block, north arm and west block are gone, so the orientation margin is 0.098 (2.80× the gate — higher than v0T itself). The corner anchor is the outer concentric square, so the radius matches the v0T family and the families are separated by pattern correlation, not by distance. Y1 (n=21) only; does not guarantee performance.",
     "g957": "Two squares + marker",
@@ -3416,6 +3421,7 @@ const GENERATOR_STRINGS = {
     "g996": "セル表面 v0TY・遠コーナーQR (Y1)",
     "g997": "v0TY。v0T 派生 — QR をキューブ内側の遠コーナー（T面の上頂点）に 8×8 セルのスロットとして埋めます。スロットは v0T の遠コーナー位相マーカー 9 セルを覆いますが、内側の非対称ブロック 9 セルが残って方向を与えます — 2 つの方向ブロックはそのための意図的な二重化です。ファインダ 95 セル・スロット 64 セル・データ 252。QR 位置で「面」を選ぶとこの検出器に切り替わります。Y1 (n=21) 専用で、性能を保証しません。",
     "g998": "全面＋遠コーナーQR",
+    "g999": "· 匿名の訪問シグナル（ページビュー）のみ送信します — コードの内容は送りません",
     "g955": "セル表面 v0TR (Y1)",
     "g956": "v0TR。v0T の再設計です — 3コーナー同心四角を2組置きました（外側は v0T と同じ位置、内側はそれをキューブ中心寄りに移した写し）。K3 系譜の中央 16セル + 同心四角 68セル + 遠コーナー位相マーカ 9セル = 102セル・データ309。代わりに v0T の内側非対称ブロック・北の腕・西ブロックが無く、方向余裕（margin）は 0.098 です（ゲートの2.80倍 — v0T よりも高い）。コーナーアンカーは外側の同心四角なので半径は v0T 系列と同じで、系列はパターン整合で分かれます（距離では分かれません）。Y1 (n=21) 専用で、性能は保証しません。",
     "g957": "同心四角2+マーカ",
@@ -3827,6 +3833,7 @@ const GENERATOR_STRINGS = {
     "g996": "Surface de cellules v0TY · QR au coin éloigné (Y1)",
     "g997": "v0TY. Dérivé de v0T — le QR est enfoui dans le cube, au coin éloigné (le sommet supérieur de la face T), dans un emplacement de 8×8 cellules. L'emplacement couvre le marqueur de phase du coin éloigné de v0T (9 cellules), mais le bloc asymétrique intérieur (9 cellules) reste et donne l'orientation — les deux blocs d'orientation sont une redondance voulue, exactement pour cela. 95 cellules de motif, un emplacement de 64 cellules, 252 données. Si vous choisissez « Face » comme position du QR, ce détecteur est activé. Y1 (n=21) uniquement ; les performances ne sont pas garanties.",
     "g998": "Pleine surface + QR au coin éloigné",
+    "g999": "· N'envoie qu'un signal de visite anonyme (page vue) — jamais le contenu de vos codes",
     "g955": "Surface de cellules v0TR (Y1)",
     "g956": "v0TR. La refonte de v0T — elle porte deux jeux de carrés concentriques à trois coins (l’extérieur là où v0T l’avait, l’intérieur étant le même carré déplacé vers le centre du cube). Un centre de lignée K3 (16 cellules), les carrés concentriques (68 cellules) et un marqueur de phase au coin éloigné (9 cellules) — 102 cellules, 309 données. En contrepartie, le bloc asymétrique intérieur, le bras nord et le bloc ouest de v0T ont disparu : la marge d’orientation est de 0,098 (2,80× le seuil — plus élevée que celle de v0T). L’ancre de coin est le carré concentrique extérieur : le rayon est donc identique à celui de la famille v0T, et les familles sont séparées par corrélation de motif, pas par la distance. Y1 (n=21) uniquement ; les performances ne sont pas garanties.",
     "g957": "Deux carrés + marqueur",
@@ -4238,6 +4245,7 @@ const GENERATOR_STRINGS = {
     "g996": "Superficie a celle v0TY · QR nell’angolo lontano (Y1)",
     "g997": "v0TY. Derivato di v0T — il QR è sepolto dentro il cubo nell’angolo lontano (il vertice superiore della faccia T) in uno slot di 8×8 celle. Lo slot copre il marcatore di fase dell’angolo lontano di v0T (9 celle), ma il blocco asimmetrico interno (9 celle) resta e dà l’orientamento — i due blocchi di orientamento sono una ridondanza voluta, esattamente per questo. 95 celle di pattern, uno slot di 64 celle, 252 dati. Se scegli «Faccia» come posizione del QR, passi a questo rilevatore. Solo Y1 (n=21); le prestazioni non sono garantite.",
     "g998": "Piena superficie + QR angolo lontano",
+    "g999": "· Invia solo un segnale di visita anonimo (pagina vista) — mai il contenuto dei codici",
     "g955": "Superficie a celle v0TR (Y1)",
     "g956": "v0TR. La riprogettazione di v0T — porta due serie di quadrati concentrici a tre angoli (quello esterno dove stava in v0T, quello interno è lo stesso quadrato spostato verso il centro del cubo). Un centro di stirpe K3 (16 celle), i quadrati concentrici (68 celle) e un marcatore di fase nell’angolo lontano (9 celle) — 102 celle, 309 dati. In cambio spariscono il blocco asimmetrico interno, il braccio nord e il blocco ovest di v0T: il margine di orientamento è 0,098 (2,80× la soglia — più alto di quello di v0T). L’ancora d’angolo è il quadrato concentrico esterno: il raggio coincide con quello della famiglia v0T e le famiglie si separano per correlazione di motivo, non per distanza. Solo Y1 (n=21); le prestazioni non sono garantite.",
     "g957": "Due quadrati + marcatore",
@@ -4649,6 +4657,7 @@ const GENERATOR_STRINGS = {
     "g996": "Zellfläche v0TY · QR in der fernen Ecke (Y1)",
     "g997": "v0TY. Das v0T-Derivat — der QR liegt im Würfel an der fernen Ecke (der oberen Spitze der T-Fläche) in einem Slot von 8×8 Zellen. Der Slot deckt v0Ts Phasenmarker an der fernen Ecke (9 Zellen) ab, aber der innere asymmetrische Block (9 Zellen) bleibt und gibt die Orientierung — die zwei Orientierungsblöcke sind genau dafür eine gewollte Redundanz. 95 Finder-Zellen, ein 64-Zellen-Slot, 252 Daten. Wird als QR-Position „Fläche“ gewählt, schaltet dieser Detektor ein. Nur für Y1 (n=21); Leistung wird nicht zugesichert.",
     "g998": "Volle Fläche + QR ferne Ecke",
+    "g999": "· Sendet nur ein anonymes Besuchssignal (Seitenaufruf) — nie den Inhalt Ihrer Codes",
     "g955": "Zellfläche v0TR (Y1)",
     "g956": "v0TR. Die Neuauslegung von v0T — sie trägt zwei Sätze konzentrischer Quadrate an drei Ecken (das äußere dort, wo v0T es hatte, das innere ist dasselbe Quadrat, zur Würfelmitte verschoben). Ein Zentrum der K3-Linie (16 Zellen), die konzentrischen Quadrate (68 Zellen) und ein Phasenmarker an der fernen Ecke (9 Zellen) — 102 Zellen, 309 Daten. Dafür fehlen v0Ts innerer asymmetrischer Block, Nordarm und Westblock: die Orientierungsmarge beträgt 0,098 (2,80× die Schwelle — höher als bei v0T). Der Eckanker ist das äußere konzentrische Quadrat: der Radius entspricht dem der v0T-Familie, und die Familien werden über Musterkorrelation getrennt, nicht über die Distanz. Nur für Y1 (n=21); Leistung wird nicht zugesichert.",
     "g957": "Zwei Quadrate + Marker",
@@ -5060,6 +5069,7 @@ const GENERATOR_STRINGS = {
     "g996": "Superficie de celdas v0TY · QR en la esquina lejana (Y1)",
     "g997": "v0TY. El derivado de v0T — el QR queda enterrado dentro del cubo en la esquina lejana (el vértice superior de la cara T) en una ranura de 8×8 celdas. La ranura tapa el marcador de fase de la esquina lejana de v0T (9 celdas), pero el bloque asimétrico interior (9 celdas) queda y da la orientación — los dos bloques de orientación son una redundancia intencionada exactamente para esto. 95 celdas de patrón, una ranura de 64 celdas, 252 datos. Si elige «Cara» como posición del QR, se cambia a este detector. Solo Y1 (n=21); no se garantiza el rendimiento.",
     "g998": "Superficie completa + QR esquina lejana",
+    "g999": "· Envía solo una señal de visita anónima (vista de página) — nunca el contenido de sus códigos",
     "g955": "Superficie de celdas v0TR (Y1)",
     "g956": "v0TR. El rediseño de v0T — lleva dos juegos de cuadrados concéntricos en tres esquinas (el exterior donde lo tenía v0T, el interior es ese mismo cuadrado desplazado hacia el centro del cubo). Un centro de linaje K3 (16 celdas), los cuadrados concéntricos (68 celdas) y un marcador de fase en la esquina lejana (9 celdas) — 102 celdas, 309 datos. A cambio desaparecen el bloque asimétrico interior, el brazo norte y el bloque oeste de v0T: el margen de orientación es 0,098 (2,80× el umbral — más alto que el de v0T). El ancla de esquina es el cuadrado concéntrico exterior: el radio coincide con el de la familia v0T y las familias se separan por correlación de patrón, no por distancia. Solo Y1 (n=21); no se garantiza el rendimiento.",
     "g957": "Dos cuadrados + marcador",
@@ -5471,6 +5481,7 @@ const GENERATOR_STRINGS = {
     "g996": "Superfície de células v0TY · QR no canto distante (Y1)",
     "g997": "v0TY. O derivado do v0T — o QR fica enterrado dentro do cubo no canto distante (o vértice superior da face T) numa ranhura de 8×8 células. A ranhura cobre o marcador de fase do canto distante do v0T (9 células), mas o bloco assimétrico interior (9 células) permanece e dá a orientação — os dois blocos de orientação são uma redundância intencional exatamente para isso. 95 células de padrão, uma ranhura de 64 células, 252 dados. Se escolher «Face» como posição do QR, passa para este detetor. Apenas Y1 (n=21); o desempenho não é garantido.",
     "g998": "Superfície completa + QR canto distante",
+    "g999": "· Envia apenas um sinal de visita anónimo (visualização de página) — nunca o conteúdo dos seus códigos",
     "g955": "Superfície de células v0TR (Y1)",
     "g956": "v0TR. A reformulação do v0T — leva dois conjuntos de quadrados concêntricos em três cantos (o exterior onde o v0T o tinha, o interior é esse mesmo quadrado deslocado para o centro do cubo). Um centro de linhagem K3 (16 células), os quadrados concêntricos (68 células) e um marcador de fase no canto distante (9 células) — 102 células, 309 dados. Em troca desaparecem o bloco assimétrico interior, o braço norte e o bloco oeste do v0T: a margem de orientação é 0,098 (2,80× o limiar — mais alta do que a do v0T). A âncora de canto é o quadrado concêntrico exterior: o raio coincide com o da família v0T e as famílias separam-se por correlação de padrão, não pela distância. Apenas Y1 (n=21); o desempenho não é garantido.",
     "g957": "Dois quadrados + marcador",
@@ -10059,7 +10070,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-23.04';
+const GENERATOR_BUILD = '2026-08-23.05';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

@@ -141,3 +141,15 @@ test('큐 표식(queued_at)은 전송 페이로드에서 제거된다', () => {
   const hub = read('sites/_shared/site.js');
   assert.match(hub, /delete payload\.queued_at/, '허브 flush 가 queued_at 을 떼어내지 않는다');
 });
+
+test('F-66 — file:// 의 경로는 비콘 path 에 실리지 않는다', async () => {
+  /*
+   * 단일 파일 생성기는 file:// 이 정상 사용 경로(SPEC §8)인데, 그때 pathname 은
+   * OS 계정명이 든 로컬 절대경로다 — 실사용자 개인정보가 그대로 샜다 (원장 F-66,
+   * 통합자 pathname 원문 재현). beaconPath 가 프로토콜로 가른다.
+   */
+  const { beaconPath } = await import('../src/beacon.js');
+  assert.equal(beaconPath({ protocol: 'file:', pathname: '/C:/Users/estre/Desktop/trilume.html' }), '');
+  assert.equal(beaconPath({ protocol: 'https:', pathname: '/lab/' }), '/lab/');
+  assert.equal(beaconPath(null), '');
+});

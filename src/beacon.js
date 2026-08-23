@@ -22,6 +22,7 @@
  *   · **나이 상한**도 둔다. 며칠 지난 이벤트는 통계를 흐리기만 한다.
  *   · flush 는 **전부 성공했을 때만** 큐를 비운다. 부분 성공이면 남은 것을 되돌려 둔다.
  *   · 개인 식별자를 담지 않는다 — 큐에 들어가는 것도 원래 비콘과 같은 메타뿐이다.
+ *     (file:// 로 열었을 때의 로컬 경로도 개인정보다 — `beaconPath` 가 비운다, F-66.)
  *
  * @module beacon
  */
@@ -105,6 +106,18 @@ function refDomain() {
   }
 }
 
+/**
+ * 비콘 row 의 path 필드 (F-66, 2026-08-23).
+ *
+ * 단일 파일 생성기는 `file://` 로 여는 것이 **정상 사용 경로**다(SPEC §8). 그때
+ * `location.pathname` 은 OS 계정명이 든 로컬 절대경로라 — 개인정보다. file: 프로토콜
+ * 에서는 빈 값을 보낸다 (빈 문자열 = ClickHouse 컬럼 DEFAULT 와 동급, 행은 산다).
+ */
+export function beaconPath(loc) {
+  if (!loc || loc.protocol === 'file:') return '';
+  return loc.pathname;
+}
+
 /** UA 힌트 — 문자열 파싱을 하지 않는다. 없으면 빈 값으로 두고 컬럼 기본값에 맡긴다. */
 function uaHints() {
   const uad = typeof navigator === 'undefined' ? null : navigator.userAgentData;
@@ -155,7 +168,7 @@ export function createBeacon(site) {
       site,
       event,
       ts: new Date().toISOString().replace('T', ' ').replace('Z', ''),
-      path: typeof location === 'undefined' ? '' : location.pathname,
+      path: beaconPath(typeof location === 'undefined' ? null : location),
       ref: refDomain(),
       ua_browser: uaBrowser,
       ua_os: uaOs,
