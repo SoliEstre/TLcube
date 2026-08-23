@@ -135,12 +135,15 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-locator="off"/);
   assert.match(INDEX, /data-locator="cell-surface-v0"/);
   // **의도적 갱신 «v0T 편입 + v0W 계열 전체 드랍» (운영자 확정 2026-08-17)** —
-  // v0W 계열 카드 넷(v0w·v0wq·v0w2·v0wy)이 내려가고 v0T · v0TY 카드가 섰다.
+  // v0W 계열 카드 넷(v0w·v0wq·v0w2·v0wy)이 내려가고 v0T 카드가 섰다.
   // 카드 부재는 정확한 닫는 따옴표까지 재서 형제 id 오검을 막는다.
   assert.match(INDEX, /data-locator="cell-surface-v0t"/);
-  assert.match(INDEX, /data-locator="cell-surface-v0ty"/);
   assert.match(INDEX, /data-locator="cell-surface-v0t"[\s\S]{0,1200}?data-i18n="g993"/);
-  assert.match(INDEX, /data-locator="cell-surface-v0ty"[\s\S]{0,1200}?data-i18n="g996"/);
+  // **의도적 갱신 (W2 C3, 2026-08-24)** — v0TY 카드는 내렸다. 드랍이 아니라
+  // **파생값 강등**이다: 허용값(위 options 단언)·와이어·판독은 그대로 살고,
+  // «QR 안쪽 + 코너측»(#qrFacePlacementSection)이 v0T 에서 이 값을 파생한다
+  // (index.html §deriveYLocatorForQrPosition). i18n 키(g996 계열)는 8언어 보존.
+  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0ty"/);
   // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — 카드 둘이 더 섬 (v0T 계열은
   // 그대로 있다 — 드랩 없는 편입). i18n 키는 사전의 빈 슬롯을 썼다 (g955·g958) —
   // 4자리 키를 만들면 i18n-coverage 의 3자리 파서가 그 키를 조용히 놓친다.
@@ -148,18 +151,21 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-locator="cell-surface-v0trq"/);
   assert.match(INDEX, /data-locator="cell-surface-v0tr"[\s\S]{0,1200}?data-i18n="g955"/);
   assert.match(INDEX, /data-locator="cell-surface-v0trq"[\s\S]{0,1200}?data-i18n="g958"/);
-  // **의도적 갱신 «v0TRY 편입» (2026-08-18)** — 카드 하나가 더 선다 (드랍 0).
-  // i18n 키도 사전의 빈 슬롯을 썼다 (g936·g937·g938 — 같은 3자리 규약).
-  assert.match(INDEX, /data-locator="cell-surface-v0try"/);
-  assert.match(INDEX, /data-locator="cell-surface-v0try"[\s\S]{0,1200}?data-i18n="g936"/);
+  // **의도적 갱신 (W2 C3)** — v0TRY 카드도 v0TY 와 같은 규약으로 내렸다
+  // (파생값 강등 — «QR 안쪽 + 코너측» 이 v0TR 계열에서 파생). v0TRQ 카드는
+  // 남는다 — 슬롯이 중앙(Y-심)이라 코너 QR 위치 축과 독립인 직접 선택지다.
+  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0try"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0wq"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w2"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0wy"/);
-  assert.match(INDEX, /data-pos="plane"/);
-  // **운영자 제기 (2026-08-17)**: «면» 카드를 레이아웃 이름으로 찾다 못 찾았다.
-  // 그래서 부제에 병기했다 — 지금은 «v0TY» 를 병기한다 (아래 문구 테스트).
-  assert.match(INDEX, /data-pos="plane"[\s\S]{0,600}?data-i18n="g965"/);
+  // **의도적 갱신 (W2 C3)** — «면»(plane) QR 위치 카드는 삭제됐다. 그 축은
+  // «QR 면 배치» 서브섹션(중앙측 seam / 코너측 far)으로 분해됐고, 레이아웃 병기
+  // 관례(운영자 제기 2026-08-17)는 서브섹션 부제(g862 v0TRQ · g864 v0TRY)가 잇는다.
+  assert.doesNotMatch(INDEX, /data-pos="plane"/);
+  assert.match(INDEX, /id="qrFacePlacementSection"/);
+  assert.match(INDEX, /data-placement="seam"[\s\S]{0,600}?data-i18n="g862"/);
+  assert.match(INDEX, /data-placement="far"[\s\S]{0,600}?data-i18n="g864"/);
   // **의도적 갱신 «드랍 정본화» (2026-08-16)** — v2r2 · v1r2 카드를 내렸다.
   // hex-frame-v1 전례와 같은 «카드만 내림» 이다: 사전 키(g543/g547/g945/g946)는
   // 여덟 언어 모두 남아 있고(아래 문구 테스트가 고정), 와이어·판독은 그대로다.

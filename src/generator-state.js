@@ -101,15 +101,20 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   type: field('Y', BOTH, GENERATOR_TYPES),
   preset: field(DEFAULT_PRESET, BOTH, [...Object.keys(PRESETS), 'custom']),
   wifiSecurity: field('WPA', BOTH, ['WPA', 'WEP', 'nopass']),
-  // 'plane' = **먼 코너 QR** (v0TY — 2026-08-17 v0T 편입 라운드부터. 그 전에는
-  // v0WY 였고, v0W 계열 드랍으로 전환 대상만 바뀌었다). ⚠ **의도적 갱신
-  // (2026-08-17 재설계)** — 이 자리에는 「큐브 바깥 면-평면 QR · 실루엣 밖이라
-  // 데이터 셀을 한 칸도 안 먹고 어떤 레이아웃과도 조합된다」 가 적혀 있었다.
-  // 운영자가 그 설계를 폐기하고 «윈도 β 식 안쪽 배치» 로 재설계했다 — 지금의
-  // 'plane' 은 **레이아웃 선택**이다 (locatorProfileY 를 v0ty 로 전환한다,
-  // index.html §qrPositionCards). 그래서 «어떤 레이아웃과도 조합» 이 아니고 64셀을 먹는다.
+  // ⚠ **의도적 갱신 (W2 C3, 2026-08-24)** — 'plane'(«면») 이 허용값에서 빠졌다.
+  // «면 = 먼 코너 QR» 은 위치의 한 자리가 아니라 **안쪽 QR 의 배치 축**이라,
+  // (qrPosition 'inner') × (qrFacePlacement seam/far) 로 분해했다 (아래 필드).
+  // v2r2·v0W 계열 드랍과 같은 규약: 생성기 상태는 저장되지 않으므로 «저장값 폴백»
+  // 은 해당 없고, 구 값이 어떤 경로로 들어와도 finder-selection.normalizeFinderQrState
+  // 가 'inner' + 'far' 로 정규화한다 (하위호환 매핑 — 한 릴리스 유지).
   qrPosition: field(DEFAULT_OUTER_QR_POSITION, BOTH,
-    ['inner', 'plane', 'TL', 'TR', 'BL', 'BR', 'none']),
+    ['inner', 'TL', 'TR', 'BL', 'BR', 'none']),
+  // QR 면 배치 (W2 C3) — Y + 안쪽 전용 축. 'seam' = Y-심 중앙측(v0TRQ 파생) ·
+  // 'far' = 먼 코너측(v0T→v0TY · v0TR→v0TRY 파생 — index.html
+  // §deriveYLocatorForQrPosition). INTERNAL 인 이유는 locatorProfileY 와 같다:
+  // 파생의 입력(v0T 계열 로케이터)이 lab 게이트 뒤라 정식 화면 노출 대조에 들어가면
+  // 안 된다 — 정식 Y 안쪽은 레거시 윈도 β 가 유일 경로로 남는다.
+  qrFacePlacement: field('seam', INTERNAL, ['seam', 'far']),
   // 생성기 화면의 **초기 선택**은 하이브리드다(사용자 지시 2026-08-13). 실사진 12/12 ·
   // 285ms 로 순수 불스아이(24/24 · 603ms)와 같은 인식률에 절반 가까이 빠르고, 프로젝트
   // 정체성인 큐브가 코드에 실제로 보인다.
@@ -127,10 +132,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 담기지 않는다 (finder-selection.selectFinderPattern 이 그 불변식을 지킨다).
   previousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
     FINDER_CARD_PATTERN_IDS.filter((id) => id !== CENTER_QR_FINDER_PATTERN_ID)),
-  // 'plane'(v0WY) 도 **바깥 QR 위치**라 여기 들어간다 — 빠뜨리면 Y 에서 «면» 을 고른 뒤
-  // O/A 로 갔다 돌아올 때 복원값이 허용값 밖이 되어 조용히 기본으로 떨어진다.
+  // ⚠ **의도적 갱신 (W2 C3)** — 'plane' 이 여기서도 빠졌다 (qrPosition 과 동시).
+  // 구 값은 normalizeFinderQrState 가 기본 코너로 강하시킨다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
-    ['TL', 'TR', 'BL', 'BR', 'plane', 'none']),
+    ['TL', 'TR', 'BL', 'BR', 'none']),
   // O/A는 회전 기준을 함께 주는 중앙 QR이 기본이고, Y는 종전 코너 QR 기본을 유지한다.
   // 공용 상태가 타입 사이로 새지 않게 타입군별 마지막 선택을 별도 보존한다.
   finderQrProfiles: field(DEFAULT_FINDER_QR_PROFILES, INTERNAL,

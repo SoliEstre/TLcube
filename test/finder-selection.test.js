@@ -91,6 +91,28 @@ test('Type Y의 안쪽 윈도는 파인더와 결합하지 않는다', () => {
   assert.equal(outer.qrPosition, 'BR');
 });
 
+test("구 «면»(plane) 값은 안쪽 + 코너측으로 정규화된다 (W2 C3 하위호환)", () => {
+  // plane 카드는 (안쪽 여부) × (면 배치) 분해로 삭제됐다 — 구 값이 어떤 경로로
+  // 들어와도 «안쪽 + 코너측(far)» 이 그 의미의 정확한 승계다. 스냅샷 복원값
+  // previousOuterQrPosition 의 'plane' 은 기본 코너로 강하시킨다.
+  const next = normalizeFinderQrState(state({
+    qrPosition: 'plane',
+    previousOuterQrPosition: 'plane',
+    qrFacePlacement: 'seam',
+  }), 'Y', OFFICIAL_DEFAULT);
+  assert.equal(next.qrPosition, 'inner');
+  assert.equal(next.qrFacePlacement, 'far');
+  assert.equal(next.previousOuterQrPosition, 'TL');
+  // Y 프로파일 스냅샷에 placement 가 실린다 — 타입 왕복에서 배치 선택이 보존된다.
+  const profiles = createFinderQrProfiles(OFFICIAL_DEFAULT);
+  assert.equal(profiles.Y.qrFacePlacement, 'seam');
+  const backFromO = selectGeneratorType(
+    selectGeneratorType({ ...state(), type: 'Y', qrFacePlacement: 'far', finderQrProfiles: profiles },
+      'O', OFFICIAL_DEFAULT),
+    'Y', OFFICIAL_DEFAULT);
+  assert.equal(backFromO.qrFacePlacement, 'far');
+});
+
 test('타입 전환 기본값은 O/A 중앙 QR, Y 바깥 QR이며 서로 새지 않는다', () => {
   const initial = state({
     type: 'Y',

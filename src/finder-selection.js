@@ -27,12 +27,14 @@ export function createFinderQrProfiles(defaultFinderPatternId) {
       finderPatternId: CENTER_QR_FINDER_PATTERN_ID,
       previousFinderPatternId: defaultFinderPatternId,
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
+      qrFacePlacement: 'seam',
     }),
     Y: Object.freeze({
       qrPosition: DEFAULT_OUTER_QR_POSITION,
       finderPatternId: defaultFinderPatternId,
       previousFinderPatternId: defaultFinderPatternId,
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
+      qrFacePlacement: 'seam',
     }),
   });
 }
@@ -43,6 +45,9 @@ function finderQrSnapshot(state) {
     finderPatternId: state.finderPatternId,
     previousFinderPatternId: state.previousFinderPatternId,
     previousOuterQrPosition: state.previousOuterQrPosition,
+    // QR 면 배치 (W2 C3) — Y 전용 축이지만 스냅샷은 타입군 공용 형태라 함께 담는다.
+    // O/A 는 이 값을 안 읽으므로 실어도 무해하고, Y 왕복에서 배치 선택이 보존된다.
+    qrFacePlacement: state.qrFacePlacement,
   });
 }
 
@@ -82,6 +87,17 @@ function previousFinderOrDefault(state, defaultFinderPatternId) {
  */
 export function normalizeFinderQrState(state, type, defaultFinderPatternId) {
   const next = { ...state };
+  // 하위호환 (W2 C3): 구 'plane'(«면») 값은 «안쪽 + 코너측» 으로 정규화한다 —
+  // plane 카드는 (안쪽 여부) × (면 배치) 분해로 삭제됐다 (generator-state.js
+  // §qrFacePlacement). 생성기 상태는 저장되지 않으므로 이 매핑은 방어선이다 —
+  // 한 릴리스 뒤 제거 후보.
+  if (next.qrPosition === 'plane') {
+    next.qrPosition = 'inner';
+    next.qrFacePlacement = 'far';
+  }
+  if (next.previousOuterQrPosition === 'plane') {
+    next.previousOuterQrPosition = DEFAULT_OUTER_QR_POSITION;
+  }
   if (type === 'Y') return next;
 
   // **의도적 개방 (2026-08-22 운영자 지시 «타입 OAK 모두»)**: 중앙 v0(비컨)는 이제
