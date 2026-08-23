@@ -36,6 +36,24 @@ import { SAGOAE_ID } from './finder-daehan.js';
 
 export const SEAT_NONE = 'none';
 
+/**
+ * 정식(official) normal 의 중앙 구역 3장 — 운영자 확정 (2026-08-23·24, W2 C5):
+ * cube-bullseye(기본) · central-v0 · center-qr. 나머지 formal 카드는 advanced
+ * 에서만 보인다 (**표시 게이트일 뿐** — 스키마·선택 값은 BOTH 유지).
+ * 근거: bullseye 는 라이브러리 기본이지 화면 기본이 아니고(finder-patterns.js §9),
+ * central-cube-3tone 은 실사진 10장 전부 실패 (PM/021:180 «단일 실패점 — 비컨 대체»).
+ */
+export const OFFICIAL_NORMAL_CENTRAL_IDS = Object.freeze(
+  ['cube-bullseye', 'central-v0', 'center-qr'],
+);
+
+/** advancedOnly 는 손 목록이 아니라 **여집합 유도**다: formal 행(formal 그룹 +
+ *  중앙 v0) − 정식 normal 3장. formal 카드가 늘면 자동으로 advanced 쪽에 선다. */
+export const ADVANCED_ONLY_CENTRAL_IDS = Object.freeze(
+  [...FINDER_CARD_GROUPS.formal.map((card) => card.id), CENTRAL_V0_FINDER_CARD.id]
+    .filter((id) => !OFFICIAL_NORMAL_CENTRAL_IDS.includes(id)),
+);
+
 /** markerG family → seat 카드 서술 (family 가 와이어 정본의 축이다). */
 const FAMILY_SEATS = Object.freeze({
   hex: Object.freeze({ id: 'o-cm', name: 'O-CM', zone: 'inner', types: Object.freeze(['O']) }),
@@ -92,7 +110,11 @@ export function zoneCards() {
   return Object.freeze({
     central: Object.freeze(
       [...Object.values(FINDER_CARD_GROUPS).flat(), CENTRAL_V0_FINDER_CARD]
-        .map((card) => card.id),
+        .map((card) => Object.freeze({
+          id: card.id,
+          // C5 고급 게이팅 — formal 행의 비-정식-normal 카드만 advancedOnly 다.
+          advancedOnly: ADVANCED_ONLY_CENTRAL_IDS.includes(card.id),
+        })),
     ),
     inner: Object.freeze(inner),
     outer: Object.freeze(outer),
@@ -127,6 +149,17 @@ export function cmqWireExists(family) {
 {
   if (ZONES.inner[0].id !== SEAT_NONE || ZONES.outer[0].id !== SEAT_NONE) {
     throw new Error('seat 구역의 첫 카드는 없음이어야 한다');
+  }
+  // C5 — 정식 normal 3장이 전부 실재하고, advancedOnly 여집합이 비어 있지 않다.
+  const centralIds = ZONES.central.map((card) => card.id);
+  for (const id of OFFICIAL_NORMAL_CENTRAL_IDS) {
+    if (!centralIds.includes(id)) {
+      throw new Error('정식 normal 중앙 카드 ' + id + ' 가 카드 목록에 없다');
+    }
+  }
+  if (ADVANCED_ONLY_CENTRAL_IDS.length === 0) {
+    throw new Error('advancedOnly 유도가 비었다 — formal 행이 전부 정식 normal 이 됐다면 '
+      + 'OFFICIAL_NORMAL_CENTRAL_IDS 확정을 다시 봐야 한다');
   }
   if (!INNER_SEAT_OPTIONS.includes('o-cm') || !INNER_SEAT_OPTIONS.includes(SAGOAE_ID)
     || !OUTER_SEAT_OPTIONS.includes('a-cm')) {

@@ -427,10 +427,14 @@
      (썸네일 위 · 글자 아래)로 통일한다 — `.toggle-card` 기본값이 이미 그 모양이라
      가로 배치 override 만 걷어내면 된다. */
   /* **2026-08-21 중앙 v0 편입**: 정식 행이 5개가 됐다 — 중앙 v0 카드가 중앙 QR 바로
-     앞에 붙는다. 칸 수를 4 로 두면 5번째 카드가 **조용히 다음 줄로 흘러** 4+1 로
-     깨진다(죽지 않는다). 카드 수 ↔ 칸 수 관계는 test/gen-variants.test.js 가
-     `FINDER_CARD_GROUPS.formal.length + 1` 로 **유도해** 잠근다. */
-  .finder-legacy-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 4px; }
+     앞에 붙는다.
+     **의도적 갱신 (W2 C5, 2026-08-24)**: 격자(repeat(5))를 **nowrap flex 관용구**로
+     교체했다 (#renderProfileCards — W1-c 입체감 행 — 전례 복제). 정식 normal 이
+     advancedOnly 2장(bullseye·central-cube-3tone)을 숨겨 3장이 되는데, 칸 수 고정
+     격자는 빈 칸 2개를 남긴다. flex 는 보이는 카드 수만큼 고르게 나눈다 —
+     칸 수 ↔ 카드 수 관계 잠금(gen-variants)은 관용구 잠금으로 대체됐다. */
+  .finder-legacy-row { flex-wrap: nowrap; gap: 8px; margin-top: 4px; }
+  .finder-legacy-row .toggle-card { min-width: 0; flex: 1 1 0; }
   .finder-family-grid.card-row {
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px;
   }
@@ -506,8 +510,10 @@
   @media (max-width: 420px) {
     .experiment-banner { width: calc(100% - 32px); margin-inline: 16px; align-items: flex-start; flex-direction: column; }
     .finder-family-grid.card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    /* 5칸은 폰 폭에서 썸네일이 뭉갠다 — family-grid 와 같은 관용구로 접는다. */
-    .finder-legacy-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    /* (W2 C5) nowrap flex 전환 뒤 폰 폭은 #renderProfileCards 관용구를 따른다 —
+       간격·패딩만 줄인다 (advanced 5장도 접히지 않고 한 줄을 지킨다). */
+    .finder-legacy-row { gap: 4px; }
+    .finder-legacy-row .toggle-card { padding-inline: 2px; }
     .finder-user-patterns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
   fieldset.typeOptions { border: none; margin: 0; padding: 0; }
@@ -1765,6 +1771,10 @@
           </button>
         </div>
         <div class="finder-legacy-row card-row" id="finderLegacyRow"></div>
+        <!-- C5 숨김-active 배지 — 정식 normal 이 advancedOnly 카드(bullseye ·
+             central-cube-3tone)를 숨긴 채 그 카드가 active 로 들어오면 이유를 말한다
+             (조용한 무시 금지 — 강제 리셋은 안 한다: 파인더는 사용자 명시 선택). -->
+        <p class="hint" id="finderAdvancedOnlyHint" style="display:none" data-i18n="g870">선택된 검출기는 고급 전용 카드예요 — 카드는 숨겨져 있지만 선택은 그대로 살아 있어요. 고급 모드에서 보여요.</p>
         <!-- 실험 후보 둘은 기본 접힘(사용자 지시 2026-08-13). 정식 4종만 펼쳐 두면
              카드 수가 15개에서 4개로 줄어 «무엇을 고르면 되는가» 가 바로 보인다. -->
         <details class="finder-collapse" id="finderBelowBar">
@@ -2372,6 +2382,7 @@ const GENERATOR_STRINGS = {
     "g863": "코너측",
     "g864": "먼 코너 (v0TRY)",
     "g865": "안쪽 QR 을 어느 자리에 실을지 골라요 — 중앙측은 Y-심(중앙) 슬롯, 코너측은 먼 코너 슬롯이에요.",
+    "g870": "선택된 검출기는 고급 전용 카드예요 — 카드는 숨겨져 있지만 선택은 그대로 살아 있어요. 고급 모드에서 보여요.",
     "g601": "지금 적용",
     "g900": "모듈(셀) 개수를 정하는 축이에요. 개수가 늘면 담을 수 있는 양도 같이 늘어요.\n같은 인쇄 크기에서 해상도가 높을수록 모듈 하나가 작아져서, 더 가까이서 찍어야 읽혀요.\n저 = 원거리·대형 인쇄(광고판) · 중 = 1~3 m 포스터급 · 고 = 근거리·대용량.\n자동은 내용 크기에 맞춰 해상도를 먼저 올리고, 최대에서도 안 들어가면 «안정성 ⇄ 용량» 단계를 내려요.\n카드 그림은 실루엣 대비 검출기 크기예요 — 검출기 셀 수는 고정이라 해상도가 오를수록 상대적으로 작아져요.",
     "g901": "오류정정(ECC) 비중을 정하는 축이에요. 정정에 자리를 많이 줄수록 담을 양이 줄어요.\n보정 우선 = ECC H(≈40%) · 표준 = ECC M(25%) · 대용량 = ECC L(≈12%).\n자동은 입력 크기에 맞춰 H → M → L 순서로 처음 들어가는 레벨을 골라요.\n아래 자체검증 뱃지는 지금 설정으로 실제 렌더한 그림을 되읽은 결과예요 — 인쇄·촬영 조건이 아니라 «렌더가 자기 계약을 지켰는가» 만 봐요.",
@@ -2802,6 +2813,7 @@ const GENERATOR_STRINGS = {
     "g863": "Corner side",
     "g864": "Far corner (v0TRY)",
     "g865": "Choose where the inner QR sits — the centre side uses the Y-seam (centre) slot, the corner side the far-corner slot.",
+    "g870": "The selected finder is an advanced-only card — the card is hidden, but your selection stays. Switch to advanced mode to see it.",
     "g601": "Apply now",
     "g900": "This axis sets the number of modules (cells). More modules, more capacity.\nAt the same printed size, higher resolution makes each module smaller, so the camera has to come closer.\nLow = long range, large prints (billboards) · Mid = poster range, 1-3 m · High = close range, high capacity.\nAuto raises resolution first, and steps “Robustness ⇄ capacity” down only if the content still does not fit at maximum.\nThe card art shows detector size against the silhouette — the detector uses a fixed cell count, so it shrinks in relative terms as resolution rises.",
     "g901": "This axis sets how much room goes to error correction (ECC). More correction means less payload.\nCorrection first = ECC H (≈40%) · Standard = ECC M (25%) · High capacity = ECC L (≈12%).\nAuto walks H → M → L and takes the first level the content fits into.\nThe self-check badge below re-reads the image this setting actually rendered. It judges whether the render kept its own contract — not how a print or a camera will behave.",
@@ -3232,6 +3244,7 @@ const GENERATOR_STRINGS = {
     "g863": "コーナー側",
     "g864": "遠コーナー (v0TRY)",
     "g865": "内側 QR をどの位置に載せるかを選びます — 中央側は Y シーム（中央）スロット、コーナー側は遠コーナースロットです。",
+    "g870": "選択中の検出器は高度モード専用カードです — カードは非表示ですが選択は保持されます。高度モードで表示されます。",
     "g601": "今すぐ適用",
     "g900": "モジュール（セル）の数を決める軸です。数が増えれば入る量も増えます。\n同じ印刷サイズなら解像度が高いほど 1 モジュールが小さくなり、より近づいて撮る必要があります。\n低 = 遠距離・大型印刷（看板）· 中 = 1〜3 m のポスター級 · 高 = 近距離・大容量。\n自動はまず解像度を上げ、最大でも入らないときに「安定性 ⇄ 容量」を下げます。\nカードの図はシルエットに対する検出器の大きさです — 検出器のセル数は固定なので、解像度が上がるほど相対的に小さくなります。",
     "g901": "誤り訂正（ECC）の割合を決める軸です。訂正に多く割くほど、入るデータ量は減ります。\n訂正優先 = ECC H（≈40%）· 標準 = ECC M（25%）· 大容量 = ECC L（≈12%）。\n自動は H → M → L の順で、最初に収まるレベルを選びます。\n下の自己検証バッジは、この設定で実際にレンダリングした画像を読み直した結果です。印刷や撮影の条件ではなく「レンダリングが自分の契約を守ったか」だけを見ます。",
@@ -3661,6 +3674,7 @@ const GENERATOR_STRINGS = {
     "g863": "Côté coin",
     "g864": "Coin éloigné (v0TRY)",
     "g865": "Choisissez où placer le QR intérieur — le côté centre utilise l'emplacement de la jonction Y (centre), le côté coin celui du coin éloigné.",
+    "g870": "Le repère sélectionné est une carte réservée au mode avancé — la carte est masquée, mais votre sélection reste active. Passez en mode avancé pour la voir.",
     "g601": "Appliquer maintenant",
     "g900": "Cet axe fixe le nombre de modules (cellules). Plus de modules, plus de capacité.\nÀ taille d'impression égale, une résolution plus haute rend chaque module plus petit : il faut donc s'approcher davantage.\nBasse = longue distance, grands tirages (panneaux) · Moyenne = affiches, 1-3 m · Haute = courte distance, grande capacité.\nEn mode auto, la résolution monte d'abord ; l'échelon « Robustesse ⇄ capacité » ne descend que si le contenu ne rentre toujours pas au maximum.\nLe dessin de la carte montre la taille du détecteur face à la silhouette — le détecteur occupe un nombre de cellules fixe, il paraît donc plus petit à mesure que la résolution monte.",
     "g901": "Cet axe fixe la part réservée à la correction d'erreurs (ECC). Plus de correction, moins de charge utile.\nCorrection d'abord = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacité = ECC L (≈12%).\nEn mode auto, H → M → L sont parcourus et le premier niveau où le contenu rentre est retenu.\nLe badge d'auto-vérification ci-dessous relit l'image que ces réglages ont réellement produite. Il juge si le rendu a tenu son propre contrat — pas ce que donneront une impression ou un appareil photo.",
@@ -4090,6 +4104,7 @@ const GENERATOR_STRINGS = {
     "g863": "Lato angolo",
     "g864": "Angolo lontano (v0TRY)",
     "g865": "Scegli dove collocare il QR interno — il lato centro usa lo slot della giunzione Y (centro), il lato angolo lo slot dell'angolo lontano.",
+    "g870": "Il rilevatore selezionato è una scheda solo per la modalità avanzata — la scheda è nascosta, ma la selezione resta attiva. Passa alla modalità avanzata per vederla.",
     "g601": "Applica ora",
     "g900": "Questo asse fissa il numero di moduli (celle). Più moduli, più capacità.\nA parità di dimensione di stampa, una risoluzione più alta rende ogni modulo più piccolo, quindi la fotocamera deve avvicinarsi.\nBassa = lunga distanza, stampe grandi (cartelloni) · Media = distanza da manifesto, 1-3 m · Alta = distanza ravvicinata, grande capacità.\nIn automatico la risoluzione sale per prima; il gradino «Robustezza ⇄ capacità» scende solo se al massimo il contenuto ancora non entra.\nIl disegno sulla scheda mostra la dimensione del rilevatore rispetto alla silhouette: il rilevatore occupa un numero fisso di celle, quindi in proporzione rimpicciolisce al salire della risoluzione.",
     "g901": "Questo asse fissa quanto spazio va alla correzione d'errore (ECC). Più correzione, meno payload.\nPrima la correzione = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacità = ECC L (≈12%).\nIn automatico vengono percorsi H → M → L e si prende il primo livello in cui il contenuto entra.\nIl badge di autoverifica qui sotto rilegge l'immagine che queste impostazioni hanno effettivamente prodotto: giudica se il rendering ha rispettato il proprio contratto, non come si comporteranno stampa o fotocamera.",
@@ -4519,6 +4534,7 @@ const GENERATOR_STRINGS = {
     "g863": "Eckenseite",
     "g864": "Ferne Ecke (v0TRY)",
     "g865": "Wählen Sie, wo das innere QR sitzt — die Mittenseite nutzt den Y-Naht-Slot (Mitte), die Eckenseite den Slot der fernen Ecke.",
+    "g870": "Der gewählte Detektor ist eine Karte nur für den erweiterten Modus — die Karte ist ausgeblendet, die Auswahl bleibt aber bestehen. Im erweiterten Modus wird sie angezeigt.",
     "g601": "Jetzt anwenden",
     "g900": "Diese Achse legt die Anzahl der Module (Zellen) fest. Mehr Module, mehr Kapazität.\nBei gleicher Druckgröße wird jedes Modul mit höherer Auflösung kleiner, die Kamera muss also näher heran.\nNiedrig = große Entfernung, große Drucke (Plakatwände) · Mittel = Plakatabstand, 1-3 m · Hoch = Nahbereich, große Kapazität.\nIm Automatikmodus steigt zuerst die Auflösung; die Stufe „Robustheit ⇄ Kapazität“ sinkt nur, wenn der Inhalt auch beim Maximum nicht hineinpasst.\nDie Grafik auf der Karte zeigt die Detektorgröße im Verhältnis zur Silhouette — der Detektor belegt eine feste Zellenzahl und wirkt daher mit steigender Auflösung relativ kleiner.",
     "g901": "Diese Achse legt fest, wie viel Platz die Fehlerkorrektur (ECC) bekommt. Mehr Korrektur bedeutet weniger Nutzdaten.\nKorrektur zuerst = ECC H (≈40%) · Standard = ECC M (25%) · Große Kapazität = ECC L (≈12%).\nIm Automatikmodus wird H → M → L durchlaufen und die erste Stufe genommen, in die der Inhalt passt.\nDas Selbstprüfungs-Badge unten liest das Bild zurück, das diese Einstellungen tatsächlich erzeugt haben. Es beurteilt, ob das Rendering seinen eigenen Vertrag eingehalten hat — nicht, wie sich Druck oder Kamera verhalten werden.",
@@ -4948,6 +4964,7 @@ const GENERATOR_STRINGS = {
     "g863": "Lado esquina",
     "g864": "Esquina lejana (v0TRY)",
     "g865": "Elige dónde va el QR interior: el lado central usa la ranura de la unión Y (centro) y el lado esquina la ranura de la esquina lejana.",
+    "g870": "El detector seleccionado es una tarjeta solo del modo avanzado: la tarjeta está oculta, pero tu selección se mantiene. Cambia al modo avanzado para verla.",
     "g601": "Aplicar ahora",
     "g900": "Este eje fija el número de módulos (celdas). Más módulos, más capacidad.\nCon el mismo tamaño impreso, a mayor resolución cada módulo se hace más pequeño, así que hay que acercar más la cámara.\nBaja = larga distancia, impresiones grandes (vallas) · Media = distancia de cartel, 1-3 m · Alta = corta distancia, gran capacidad.\nEn modo automático primero sube la resolución, y el escalón «Robustez ⇄ capacidad» solo baja si el contenido sigue sin entrar en el máximo.\nEl dibujo de la tarjeta muestra el tamaño del detector frente a la silueta: el detector ocupa un número fijo de celdas, así que se ve relativamente más pequeño a medida que sube la resolución.",
     "g901": "Este eje fija cuánto espacio se reserva a la corrección de errores (ECC). Cuanta más corrección, menos carga útil.\nCorrección primero = ECC H (≈40%) · Estándar = ECC M (25%) · Gran capacidad = ECC L (≈12%).\nEn modo automático se recorre H → M → L y se toma el primer nivel en el que entra el contenido.\nLa insignia de autocomprobación de abajo vuelve a leer la imagen que estos ajustes han producido realmente: juzga si el renderizado ha cumplido su propio contrato, no cómo se comportarán la impresión o la cámara.",
@@ -5377,6 +5394,7 @@ const GENERATOR_STRINGS = {
     "g863": "Lado canto",
     "g864": "Canto distante (v0TRY)",
     "g865": "Escolha onde fica o QR interno — o lado central usa o encaixe da junção Y (centro) e o lado canto o encaixe do canto distante.",
+    "g870": "O detector selecionado é um cartão exclusivo do modo avançado — o cartão está oculto, mas a seleção permanece. Mude para o modo avançado para vê-lo.",
     "g601": "Aplicar agora",
     "g900": "Este eixo define o número de módulos (células). Mais módulos, mais capacidade.\nCom o mesmo tamanho impresso, quanto maior a resolução mais pequeno fica cada módulo, por isso a câmara tem de se aproximar.\nBaixa = longa distância, impressões grandes (outdoors) · Média = distância de cartaz, 1-3 m · Alta = curta distância, grande capacidade.\nNo modo automático a resolução sobe primeiro, e o degrau «Robustez ⇄ capacidade» só desce se o conteúdo continuar a não caber no máximo.\nO desenho do cartão mostra o tamanho do detector em relação à silhueta — o detector ocupa um número fixo de células, por isso parece relativamente mais pequeno à medida que a resolução sobe.",
     "g901": "Este eixo define quanto espaço vai para a correção de erros (ECC). Quanta mais correção, menos carga útil.\nCorreção primeiro = ECC H (≈40%) · Padrão = ECC M (25%) · Grande capacidade = ECC L (≈12%).\nNo modo automático percorre-se H → M → L e fica o primeiro nível onde o conteúdo cabe.\nO emblema de autoverificação abaixo relê a imagem que estas definições produziram de facto: julga se a renderização cumpriu o seu próprio contrato, não como se vão comportar a impressão ou a câmara.",
@@ -5766,7 +5784,9 @@ import {
 import {
   CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS, wireFinderCardActivation,
 } from './src/finder-card-ui.js';
-import { SEAT_NONE, cmqWireExists, zoneCards } from './src/finder-zone-ui.js';
+import {
+  ADVANCED_ONLY_CENTRAL_IDS, SEAT_NONE, cmqWireExists, zoneCards,
+} from './src/finder-zone-ui.js';
 import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
@@ -5877,6 +5897,7 @@ const els = {
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
+  finderAdvancedOnlyHint: $('finderAdvancedOnlyHint'),
   finderPatternCards: $('finderPatternCards'),
   finderUserCards: $('finderUserCards'),
   finderOakCards: $('finderOakCards'),
@@ -6626,6 +6647,18 @@ function applyFinderExperimentVisibility() {
       if (!show) block.open = false;
     }
   }
+  // ── C5 고급 게이팅 (설계서 ③ — 운영자 확정 2026-08-23·24) ────────────────
+  // 정식(official) normal 의 formal 행은 cube-bullseye·central-v0·center-qr 3장.
+  // advancedOnly(= formal 여집합 유도 — finder-zone-ui)는 **표시 게이트**로만
+  // 숨긴다: 스키마·active 는 BOTH 유지 (숨김-active 는 renderFinderUi 가 배지로
+  // 말한다 — 조용한 무시 금지, 강제 리셋도 없음: 파인더는 사용자 명시 선택이다).
+  // 시험판(finder-experiment)은 전 카드 유지 (모드 무관).
+  const trialBuild = document.body.dataset.generatorEdition === 'finder-experiment';
+  const hideAdvancedOnly = !show && !trialBuild;
+  for (const id of ADVANCED_ONLY_CENTRAL_IDS) {
+    const card = els.finderLegacyRow.querySelector('[data-finder-id="' + id + '"]');
+    if (card) card.style.display = hideAdvancedOnly ? 'none' : '';
+  }
 }
 els.modeNormalBtn.addEventListener('click', () => setMode('normal'));
 els.modeAdvancedBtn.addEventListener('click', () => setMode('advanced'));
@@ -7171,8 +7204,6 @@ function renderFinderUi() {
   ensureFinderCards();
   const visible = currentType() !== 'Y';
   els.finderSection.style.display = visible ? '' : 'none';
-  // 초기 로드에도 걸려야 한다 — setMode 안에만 두면 모드를 한 번 눌러야 적용됐다.
-  applyFinderExperimentVisibility();
 
   // ⚠ 예전엔 finderPatternCards 만 돌아서 **손그림·OAK 서랍의 패밀리 제목이 공백**
   //   이었다 (2026-08-18 브라우저 확인에서 발견 — 회귀는 카드 수만 세고 있었다).
@@ -7193,6 +7224,20 @@ function renderFinderUi() {
     card.setAttribute('aria-pressed', String(active));
     const label = card.querySelector('[data-finder-label-key]');
     label.textContent = t(label.dataset.finderLabelKey);
+  }
+  // 초기 로드에도 걸려야 한다 — setMode 안에만 두면 모드를 한 번 눌러야 적용됐다.
+  // ⚠ 위 루프의 display='' 리셋 **뒤**여야 한다 (C5) — 앞에 두면 advancedOnly
+  //   숨김이 이 루프에 되돌려진다.
+  applyFinderExperimentVisibility();
+  // C5 숨김-active 배지 — 정식 normal 에서 advancedOnly 카드가 active 인 채면
+  // (URL·이전 세션 경로) 카드는 안 보이는데 선택은 산다. 강제 리셋은 하지 않는다 —
+  // 파인더는 사용자 명시 선택이라 «파인더가 이긴다» 방향과 정합. 대신 이유를 말한다.
+  if (els.finderAdvancedOnlyHint) {
+    const hiddenActive = mode !== 'advanced'
+      && document.body.dataset.generatorEdition !== 'finder-experiment'
+      && ADVANCED_ONLY_CENTRAL_IDS.includes(generatorState.finderPatternId);
+    els.finderAdvancedOnlyHint.style.display = hiddenActive ? '' : 'none';
+    if (hiddenActive) els.finderAdvancedOnlyHint.textContent = t('g870');
   }
 
   const selectedPattern = FINDER_PATTERNS.find(

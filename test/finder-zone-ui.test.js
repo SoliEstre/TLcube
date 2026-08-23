@@ -11,7 +11,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  INNER_SEAT_OPTIONS, OUTER_SEAT_OPTIONS, SEAT_NONE, cmqWireExists, zoneCards,
+  ADVANCED_ONLY_CENTRAL_IDS, INNER_SEAT_OPTIONS, OFFICIAL_NORMAL_CENTRAL_IDS,
+  OUTER_SEAT_OPTIONS, SEAT_NONE, cmqWireExists, zoneCards,
 } from '../src/finder-zone-ui.js';
 import {
   FINDER_TAXONOMY, KIND_ABSENT, KIND_SEAT, taxonomyByClass,
@@ -47,7 +48,7 @@ test('중앙 = 분류 1 — 카드 목록과 분류 정본의 차이는 taegeuk�
   // 분류 1 에는 taegeuk(표시층 id — 단독 카드는 통합자 C2b 게이트 보류)이 있고,
   // 카드에는 daehan 합성(클래스 W 와이어 — 분류 1 이 아니다)이 있다. 그 둘을 빼면
   // 두 집합은 같아야 한다 — 어긋나면 «세 면 같은 원천» 이 깨진 것이다.
-  const central = new Set(zoneCards().central);
+  const central = new Set(zoneCards().central.map((card) => card.id));
   const class1 = new Set(taxonomyByClass(1).map((row) => row.id));
   const onlyClass1 = [...class1].filter((id) => !central.has(id) && id !== TAEGUK_ID);
   const onlyCards = [...central].filter(
@@ -60,6 +61,19 @@ test('중앙 = 분류 1 — 카드 목록과 분류 정본의 차이는 taegeuk�
 test('상태 스키마 seat options 는 zone 유도와 같다 (검증되는 사본)', () => {
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.innerSeat.options], [...INNER_SEAT_OPTIONS]);
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.outerSeat.options], [...OUTER_SEAT_OPTIONS]);
+});
+
+test('C5 고급 게이팅 — advancedOnly 는 formal 여집합 유도이고 정식 normal 3장이 확정값이다', () => {
+  // 운영자 확정 (2026-08-23·24): 정식 normal 중앙 3장 = cube-bullseye·central-v0·center-qr.
+  assert.deepEqual([...OFFICIAL_NORMAL_CENTRAL_IDS],
+    ['cube-bullseye', 'central-v0', 'center-qr']);
+  assert.deepEqual([...ADVANCED_ONLY_CENTRAL_IDS].sort(),
+    ['bullseye', 'central-cube-3tone']);
+  // central 서술자의 advancedOnly 플래그가 그 유도와 일치한다.
+  for (const card of zoneCards().central) {
+    assert.equal(card.advancedOnly, ADVANCED_ONLY_CENTRAL_IDS.includes(card.id),
+      card.id + ' 의 advancedOnly 플래그가 유도와 어긋났다');
+  }
 });
 
 test('CM+Q 와이어 술어 — C2a 착지 상태에서 hex·tri 모두 병용 합법이다', () => {

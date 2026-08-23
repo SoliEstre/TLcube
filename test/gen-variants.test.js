@@ -76,13 +76,16 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
   // 행이 5개가 됐는데, 칸 수 4 를 그대로 두면 5번째가 조용히 다음 줄로 흘러 4+1 이
   // 된다 — 깨지지도 죽지도 않아 눈으로만 잡히는 결함이다. 그래서 값이 아니라
   // 「행의 카드 수 = 격자 칸 수」라는 **관계**를 잠근다.
-  const formalCardCount = FINDER_CARD_GROUPS.formal.length + 1; // +1 = 중앙 v0 카드
-  // 정규식이 아니라 부분 문자열로 본다 — 이 명제엔 메타문자가 필요 없고,
-  // 이스케이프가 하나 어긋나면 검사가 조용히 헐거워진다.
+  // **의도적 갱신 (W2 C5, 2026-08-24)**: 격자(칸 수 = 카드 수 잠금)를 **nowrap flex
+  // 관용구 잠금**으로 바꿨다. 정식 normal 이 advancedOnly 2장을 숨겨 행이 3장이
+  // 되는데, 칸 수 고정 격자는 빈 칸을 남긴다 — flex 는 보이는 카드 수만큼 고르게
+  // 나눈다 (#renderProfileCards — W1-c 입체감 행 — 전례 복제). 부분 문자열로 본다.
   assert.ok(
-    source.includes(
-      `finder-legacy-row { display: grid; grid-template-columns: repeat(${formalCardCount},`),
-    `정식 행 카드 ${formalCardCount}개인데 .finder-legacy-row 격자 칸 수가 그 값이 아니다`);
+    source.includes('.finder-legacy-row { flex-wrap: nowrap;'),
+    '.finder-legacy-row 가 nowrap flex 관용구가 아니다 — 격자로 되돌아가면 normal 3장에 빈 칸이 생긴다');
+  assert.ok(
+    source.includes('.finder-legacy-row .toggle-card { min-width: 0; flex: 1 1 0; }'),
+    '.finder-legacy-row 카드의 균등 분배 규칙이 없다');
   assert.doesNotMatch(source, /finder-legacy-row \.finder-card \{ flex-direction: row/);
   // 정식 행은 여전히 formal 그룹에서 나오고(손 나열 금지), v0 는 규칙으로 끼워진다.
   assert.match(source, /FINDER_CARD_GROUPS\.formal\.flatMap/);
