@@ -276,11 +276,29 @@ test('frame 단계별 ms 가 빠지면 미측정은 null 이고 total 만 숫자
   assert.equal(parsed.ok, true, parsed.error);
 });
 
-test('classifyStage 는 호환되고 fillFrameMs 는 total 을 단계에 복사하지 않는다', () => {
+test('classifyStage 는 원인 사슬을 반영하고 fillFrameMs 는 total 을 단계에 복사하지 않는다', () => {
+  /*
+   * F-63 (2026-08-23) 주장 갱신. 이전 주장: no-finder → 'proposal',
+   * reference-mismatch → 'verify'. 그 분류는 chain_failed(finder/sample)와 **반대
+   * 칸**을 말하는 자기모순이었다 — 실패 stage 는 buildCauseChain 이 디코더 실패
+   * detail 의 실제 필드에서 유도한 failed 단계를 따른다. 아래 finder/geometry/sample
+   * 단언들은 수리 전 분류기에서 전부 'proposal'(reference-mismatch 는 'verify')이었다.
+   */
   assert.equal(classifyStage({ ok: true }), 'decode');
-  assert.equal(classifyStage({ ok: false, reason: 'frontend:no-finder' }), 'proposal');
+  assert.equal(classifyStage({ ok: false, reason: 'frontend:no-finder' }), 'finder');
+  assert.equal(classifyStage({ ok: false, reason: 'frontend:no-anchors' }), 'geometry');
+  assert.equal(
+    classifyStage({ ok: false, reason: 'frontend:homography-degenerate' }), 'geometry');
+  assert.equal(classifyStage({ ok: false, reason: 'frontend:sample-starved' }), 'sample');
+  assert.equal(classifyStage({ ok: false, reason: 'frontend:reference-mismatch' }), 'sample');
+  // symbol-clipped 는 파이프라인 단계가 가른다 — finder 단이면 finder, 아니면 geometry.
+  assert.equal(classifyStage({
+    ok: false, reason: 'frontend:symbol-clipped', detail: { pipelineStage: 'central-cube-finder' },
+  }), 'finder');
+  assert.equal(classifyStage({ ok: false, reason: 'frontend:symbol-clipped' }), 'geometry');
+  // 사슬이 못 가르는 실패는 종전 분류 그대로다 (옛 빌드 프레임과의 연속성).
   assert.equal(classifyStage({ ok: false, reason: 'frontend:no-format-candidate' }), 'format');
-  assert.equal(classifyStage({ ok: false, reason: 'frontend:reference-mismatch' }), 'verify');
+  assert.equal(classifyStage({ ok: false, reason: 'frontend:family-ambiguous' }), 'proposal');
   assert.equal(classifyStage({
     ok: false,
     reason: 'frontend:no-grid-hypothesis',
@@ -430,4 +448,44 @@ test('브라우저 분기 캡처가 전송 상한 안에 들어온다', () => {
   const viaBrowser = withoutBuffer(() => shrinkFrameShot(noisyFrame()));
   assert.ok(viaBrowser.png.length < MAX_SHOT_CHARS,
     `data URI ${viaBrowser.png.length}자가 상한 ${MAX_SHOT_CHARS}자를 넘으면 릴레이가 버린다`);
+});
+
+/*
+ * 회귀 고정 — 봉투 build 스탬프 (F-68, 2026-08-23).
+ *
+ * SCANNER_BUILD 는 화면 푸터에만 찍혔고 봉투엔 없어서, «어느 빌드의 프레임인가» 를
+ * 적재 시각으로 추정해야 했다 — 하루 다섯 번 배포하는 날엔 그 추정이 틀린다.
+ * 아래 단언들은 수리 전 코드에서 빨강이다 (봉투에 build 키 자체가 없었다).
+ */
+test('봉투가 build 스탬프를 싣고, 없으면 키 자체가 안 생긴다', async () => {
+  const stamped = makeEnvelope('s', 'scan', 'frame',
+    normalizeFrameBody({ seq: 1, w: 8, h: 8, ok: false, reason: 'x' }),
+    undefined, '2026-08-23.03');
+  assert.equal(stamped.build, '2026-08-23.03');
+  const parsed = parseEnvelope(JSON.stringify(stamped));
+  assert.equal(parsed.ok, true, parsed.error);
+  assert.equal(parsed.event.build, '2026-08-23.03',
+    'relay 가 봉투의 build 를 떨어뜨린다 — 관찰자·적재가 빌드를 못 본다');
+
+  const plain = makeEnvelope('s', 'scan', 'frame',
+    normalizeFrameBody({ seq: 1, w: 8, h: 8, ok: false, reason: 'x' }));
+  assert.equal('build' in plain, false, '옛 호출은 바이트까지 종전과 같아야 한다');
+
+  // 클라이언트가 options.build 를 실제로 실어 보내는가 (env 포함 전 kind 공통).
+  FakeWS.instances = [];
+  const tel = createLabTelemetry(labOpts({ build: 'b-test.01' }));
+  tel.env({ ua: { browser: 'x' } });
+  tel.frame({ seq: 1, w: 8, h: 8, ok: false, reason: 'frontend:no-finder' });
+  await new Promise((r) => setTimeout(r, 30));
+  const events = FakeWS.instances[0].sent.slice(1).map((line) => JSON.parse(line));
+  assert.ok(events.length >= 2);
+  for (const event of events) {
+    assert.equal(event.build, 'b-test.01', event.kind + ' 봉투에 build 가 없다');
+  }
+});
+
+test('스캐너가 SCANNER_BUILD 를 텔레메트리에 배선한다', () => {
+  const scanner = read('sites/tlscan/scanner.js');
+  assert.match(scanner, /createLabTelemetry\(\{\s*site:\s*'scan',\s*build:\s*SCANNER_BUILD\s*\}\)/,
+    'scanner.js 가 build 를 안 넘긴다 — 봉투 스탬프가 다시 사라진다');
 });

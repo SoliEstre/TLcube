@@ -69,11 +69,29 @@ test('③ 사다리 0단은 옛 동작과 같다 (무회귀)', () => {
   assert.equal(withoutField.autoCrop, 1, '필드가 없으면 사다리 없음(1배)으로 읽어야 한다');
 });
 
-test('④ 정규화기가 옛 프레임(필드 부재)을 안전하게 읽는다', () => {
+test('④ 정규화기는 옛 프레임(필드 부재)을 null(모름)로 남긴다 — 0/1 로 채우지 않는다', () => {
+  /*
+   * F-62 (2026-08-23) 주장 갱신. 이전 주장: 부재 → autoCropRung 0 / autoCrop 1.
+   * 그 채움이 「옛 빌드라 값이 없다」와 「사다리가 안 걸렸다(0/1)」의 구분을
+   * 정규화 시점에 지웠다 — 필드 부재로 갈린다던 주석의 명제를 코드가 스스로
+   * 위반한 것이다. 지금 주장: 부재는 null. 단 파생값(cropTotal·effectiveZoom)은
+   * 사다리 모름을 1배로 가정한다 — 옛 빌드에는 사다리가 없었으므로 그 가정은 사실.
+   */
   const legacy = normalizeFrameBody({ zoom: 1, crop: 1.4, w: 720, h: 960 });
-  assert.equal(legacy.autoCropRung, 0);
-  assert.equal(legacy.autoCrop, 1);
-  assert.ok(Math.abs(legacy.cropTotal - 1.4) < 1e-9);
+  assert.equal(legacy.autoCropRung, null,
+    '부재를 0 으로 채우면 «옛 빌드» 와 «사다리 미개입» 이 다시 섞인다');
+  assert.equal(legacy.autoCrop, null,
+    '부재를 1 로 채우면 «옛 빌드» 와 «사다리 1배» 가 다시 섞인다');
+  assert.ok(Math.abs(legacy.cropTotal - 1.4) < 1e-9,
+    '파생 총 크롭은 사다리 모름 = 1배 가정으로 종전과 같아야 한다 (무회귀)');
+  assert.ok(Math.abs(legacy.effectiveZoom - 1.4) < 1e-9);
+
+  // 값이 **있는** 0/1 은 그대로 산다 — 「사다리가 있는 빌드에서 안 걸렸다」는 관측이다.
+  const flat = normalizeFrameBody({
+    zoom: 1, crop: 1.4, autoCropRung: 0, autoCrop: 1, w: 720, h: 960,
+  });
+  assert.equal(flat.autoCropRung, 0);
+  assert.equal(flat.autoCrop, 1);
 
   const modern = normalizeFrameBody({
     zoom: 1, crop: 1.4, autoCropRung: 2, autoCrop: autoCropZoomFor(2), w: 720, h: 960,

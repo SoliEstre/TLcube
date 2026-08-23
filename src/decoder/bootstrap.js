@@ -2708,6 +2708,68 @@ export function cubeSampleOptions(options) {
 }
 
 /**
+ * 포맷 실패 요약 (F-25, 2026-08-23) — «접힌 라벨» 을 펴는 계수기. 진단 전용:
+ * 게이트·분기·문턱을 바꾸지 않는다 (PM/020 레인의 9줄 순수 추가 전례).
+ *
+ * NO_FORMAT_CANDIDATE 하나로 접히던 가설별 첫 실패를 종류별로 센다:
+ *   clipped        = 포맷 셀 **전부** 프레임 밖 투영 (all-unsampled + symbol-clipped)
+ *   clippedPartial = CRC 실패인데 소거된 셀의 첫 실패가 symbol-clipped — **부분 잘림이
+ *                    CRC 로 위장**한 것 (합성 zoom×2 실측: crc 78건 전부 소거 9~14/15
+ *                    + 첫실패 clipped). 잘림 증거로 센다.
+ *   starved        = 원판 픽셀 기아 (frontend:sample-starved)
+ *   crc            = 셀을 **정상 표본**하고 포맷 CRC 전멸 (소거 무·틀린 포즈 신호 —
+ *                    PM/020 의 «표본이 되는데 CRC 가 깨진다» 그 축)
+ *   illegalTone    = 큐브 톤 삼중 불가 판독
+ *
+ * PM/020 실측: 한 프레임 206가설이 이 라벨 하나로 접혔고, 지배 사유는 잘림이
+ * 아니라 clean-CRC(포즈별 20/33 ≈ 60%, 소거 0)였다 — 이 요약이 그 정보를 실패
+ * detail 에 남기고, F-24 판정(잘림 주장 가능 여부)의 자가 된다.
+ */
+export function summarizeFormatFailures(formatFailures) {
+  const counts = {
+    clipped: 0, clippedPartial: 0, starved: 0, crc: 0, illegalTone: 0, other: 0,
+  };
+  let total = 0;
+  for (const failure of formatFailures || []) {
+    total += 1;
+    const detail = failure.detail || {};
+    const first = detail.firstFormatCellFailure || null;
+    const firstClipped = first && first.reason === FRONTEND_FAILURE.SYMBOL_CLIPPED;
+    if (detail.cause === 'format-crc-no-candidate') {
+      if (firstClipped) counts.clippedPartial += 1;
+      else counts.crc += 1;
+    } else if (firstClipped) counts.clipped += 1;
+    else if (first && first.reason === FRONTEND_FAILURE.SAMPLE_STARVED) counts.starved += 1;
+    else if (first
+      && first.cause === 'illegal-two-tone-triple-or-unreadable-three-tone-rank') {
+      counts.illegalTone += 1;
+    } else counts.other += 1;
+  }
+  let dominant = null;
+  for (const [kind, count] of Object.entries(counts)) {
+    if (count > 0 && (dominant === null || count > counts[dominant])) dominant = kind;
+  }
+  return {
+    counts,
+    dominant,
+    total,
+    /*
+     * F-24 판정축 (v3, 2026-08-23) — «심볼이 잘렸다» 는 **전부-소거 투영**(포맷 셀
+     * 15~18개 전원이 프레임 밖)이 clean-CRC(소거 0 정상 표본 = 틀린 포즈 신호)를
+     * 이길 때만 주장한다. clippedPartial(부분 소거 CRC)은 **중립** — 진짜 경미한
+     * 잘림과 크게 틀린 포즈(스케일 오차가 셀 일부를 밖으로 던짐)를 못 가르는
+     * 애매 증거라, 어느 쪽 접시에도 안 올린다 (주장은 증거가 있어야 한다).
+     *   · 합성 zoom×2 (진짜 잘림): clipped 78 > cleanCRC 0 → 주장 ✓
+     *     (v1 이 진 것은 부분소거 78을 cleanCRC 로 **오산**해서였다 — 78>78 동률.)
+     *   · PM/020 코퍼스 (심볼 프레임 안, 이미지 실증): cleanCRC 지배 → 주장 안 함 ✓
+     *   · v2(부분을 잘림 증거로 합산)는 cellmask-tele 8장 등 «프레임 안 실증» 세션을
+     *     다시 잘림으로 뒤집었다 — census 실측으로 기각.
+     */
+    clipEvidenceDominates: counts.clipped > counts.crc,
+  };
+}
+
+/**
  * 한 세대(포맷 셀 목록)로 포맷 워드를 실제로 읽는다. 세대 선택은 호출측이 한다.
  */
 function readFormatWithCells(luma, hypothesis, options, valid, cells, formatWireVersion) {
@@ -3210,6 +3272,9 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
           : payloadFailure
             ? 'PAYLOAD_VALIDATION_FAILED'
             : 'BODY_RS_FAILED',
+        // F-25 — 접힌 라벨의 지배 원인을 detail 에 남긴다 (계측이 stage 를 정직하게
+        // 분류할 근거. 게이트·분기 불변).
+        formatFailureSummary: summarizeFormatFailures(diagnostics.formatFailures),
         diagnostics,
       },
     );
@@ -3780,8 +3845,21 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
     }
 
     /*
-     * QR 후보만 남은 잘린 입력은 포맷 실패로 재분류하지 않는다. 프레임 경계에
-     * 닿은 전경에서 QR 유사 패턴이 생겨도 기존의 symbol-clipped 계약이 우선이다.
+     * QR 후보만 남은 프레임의 라벨 (F-24 재설계, 2026-08-23).
+     *
+     * 이전 규칙은 «qr-only + outline 이 프레임에 닿음 → symbol-clipped 재라벨» 이었는데,
+     * PM/020 이 그 증거축이 이 코퍼스에서 **거꾸로 읽힘** 을 실측했다 — 전경 마스크가
+     * 화면 전체를 잡아 outline 은 «심볼이 잘림» 이 아니라 «화면이 밝음» 을 재고,
+     * 원본/crop 반증쌍(원본 «잘림» 판정 → crop 은 복호 성공)과 F-83 재계측(실패 1위
+     * 49% 가 이 인플레이션)까지 겹쳤다.
+     *
+     * 새 규칙 — «잘렸다» 는 주장은 잘림 증거가 지배할 때만:
+     *   · 가설별 첫 실패의 종류를 센다 (summarizeFormatFailures — F-25 와 같은 자).
+     *   · 잘림 증거 = 전부 소거(clipped) + **부분 잘림의 CRC 위장**(clippedPartial —
+     *     소거 셀의 첫 실패가 symbol-clipped 인 CRC 실패). 이 합이 clean-CRC(소거 0
+     *     정상 표본 = 틀린 포즈 신호)를 이기면 기존대로 SYMBOL_CLIPPED.
+     *   · 아니면 검증의 원 실패 사유를 **보존**하고 qr-only 정황은 detail 로 남긴다.
+     * 복호 결과는 불변 — 실패 프레임의 «이름» 만 정직해진다 (게이트 완화 아님).
      */
     const qrOnlyGeometry = geometry.hypotheses.length > 0
       && geometry.hypotheses.every((hypothesis) => hypothesis.source?.startsWith('center-qr'));
@@ -3794,10 +3872,25 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
           + Number(outlineBounds.maxX >= luma.width - 1)
           + Number(outlineBounds.maxY >= luma.height - 1)
         : 0;
-      return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
-        stage: clippingSideCount >= 2 ? 'bootstrap-finder' : 'bootstrap-geometry',
+      const qrOnlySummary = summarizeFormatFailures(
+        validated.detail?.diagnostics?.formatFailures,
+      );
+      if (qrOnlySummary.clipEvidenceDominates) {
+        return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
+          stage: clippingSideCount >= 2 ? 'bootstrap-finder' : 'bootstrap-geometry',
+          cause: 'qr-only-no-valid-format',
+          clippingSideCount,
+          formatFailureSummary: qrOnlySummary,
+          geometryDiagnostics: geometry.diagnostics,
+        });
+      }
+      return fail(validated.reason, {
+        ...(validated.detail || {}),
         cause: 'qr-only-no-valid-format',
+        qrOnlyGeometry: true,
+        outlineTouchesFrame: true,
         clippingSideCount,
+        formatFailureSummary: qrOnlySummary,
         geometryDiagnostics: geometry.diagnostics,
       });
     }

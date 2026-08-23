@@ -491,20 +491,52 @@ test('Type Y real-photo luma dumps establish a reference-supported grid', {
   }
 });
 
-test('Type Y 3톤 실사진 성공분은 960/1440 모두 Y1T로 복호', {
+/*
+ * ⚠ F-105 (2026-08-23 규명 — 원장 021 §5 · 등록부 .agent/_coordination/EXPECTED_RED.md):
+ *
+ * 원판 «4장 전부 Y1T 복호» 는 2026-08-20 01:24 photo-probe 일괄 굽기가 **전 코퍼스를
+ * 무경고 재생성**하며 깨졌다 — 굽기 기하가 구세대(짧은 변 960/1440)에서 현행(긴 변)으로
+ * 바뀌어 해상도가 0.75× 로 깎였고, `_02` 두 장은 seamContrast 가 파인더 게이트(0.01)
+ * 아래로 떨어져 **정보 소실이 확정**이다 (코드 회귀 아님 — 테스트 탄생 커밋조차 현
+ * 덤프로 실패, 5커밋 소급 실증). 그래서 주장을 사실에 맞춰 둘로 가른다:
+ *   · 본단언 — 여전히 «성공분» 인 `_01` 쌍은 원 단언 그대로.
+ *   · 세대 단언 — `_02` 쌍은 «소실 세대» 임을 **단언**한다. 소스 jpg 재굽기
+ *     (maxSide 1280/1920 — 운영자 게이트: luma 는 junction·쓰기 금지)로 복원되면
+ *     그 테스트가 빨개지며 «원 단언으로 되돌려라» 를 알린다 — 게이트 완화가 아니라
+ *     복원을 잊지 않게 하는 역방향 래칫이다.
+ */
+test('Type Y 3톤 실사진 성공분(_01)은 960/1440 모두 Y1T로 복호', {
   timeout: 240_000,
 }, (t) => {
   const dumps = listLumaDumps().filter(({ name }) =>
-    /^KakaoTalk_20260812_030145439_(01|02)\.(960|1440)\.luma$/.test(name));
+    /^KakaoTalk_20260812_030145439_01\.(960|1440)\.luma$/.test(name));
   if (dumps.length === 0) {
     t.skip('Type Y 3톤 성공 사진 휘도 덤프 없음');
     return;
   }
-  assert.equal(dumps.length, 4, `Type Y 3톤 성공 덤프 4장 필요: ${dumps.length}`);
+  assert.equal(dumps.length, 2, `Type Y 3톤 _01 덤프 2장 필요: ${dumps.length}`);
   for (const dump of dumps) {
     const result = decodeFrontend(lumaToRaster(readLumaDump(dump.path)));
     assertYDecoded(result, 'https://tl.estre.so', 1, 3);
     assert.equal(result.versionName, 'Y1T', dump.name);
+  }
+});
+
+test('F-105 세대 단언 — _02 쌍은 8/20 재굽기로 소실됐다 (복원되면 이 테스트를 지우고 원 단언 복귀)', {
+  timeout: 240_000,
+}, (t) => {
+  const dumps = listLumaDumps().filter(({ name }) =>
+    /^KakaoTalk_20260812_030145439_02\.(960|1440)\.luma$/.test(name));
+  if (dumps.length === 0) {
+    t.skip('_02 덤프 없음');
+    return;
+  }
+  assert.equal(dumps.length, 2, `_02 덤프 2장 필요: ${dumps.length}`);
+  for (const dump of dumps) {
+    const result = decodeFrontend(lumaToRaster(readLumaDump(dump.path)));
+    assert.equal(result.ok, false,
+      dump.name + ': 소실 세대가 복호에 성공했다 — 자가 복원됐다는 뜻이다. '
+      + 'EXPECTED_RED.md 의 F-105 항목을 닫고 이 테스트를 지운 뒤 원 단언(«4장 전부»)으로 되돌려라');
   }
 });
 

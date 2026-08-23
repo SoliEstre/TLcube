@@ -99,7 +99,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-23.02';
+export const SCANNER_BUILD = '2026-08-23.03';
 
 /**
  * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
@@ -192,7 +192,9 @@ let failStreakSince = 0;
 let zoomApplyToken = 0;
 let zoomApplyTimer = 0;
 
-const lab = createLabTelemetry({ site: 'scan' });
+// build (F-68): 화면 푸터에만 찍던 배포 스탬프를 봉투에도 싣는다 — «어느 빌드의
+// 프레임인가» 를 적재 시각으로 추정하지 않게 된다.
+const lab = createLabTelemetry({ site: 'scan', build: SCANNER_BUILD });
 
 /*
  * lab 전용 디버그 오버레이 (작업 1). 안정판(`/`)에서는 enabled=false 라 팩토리가
@@ -264,6 +266,18 @@ function beginScanAttempt() {
   attemptId = makeAttemptId();
   // 잘림 안내는 시도 단위 상태다 — 이전 세션의 스트릭이 새 카메라를 오염시키면 안 된다.
   clippedFrames = 0;
+  // F-86: 아래 3셋도 같은 시도 단위 상태인데 **성공 프레임에서만** 지워지고 있었다
+  // (handleDecodeResult@payload). 실패로 끝난 이전 세션의 값이 남으면 새 시도의 첫
+  // 프레임부터 ① grabVideoFrame 이 남의 스트릭으로 1440 승격을 판정하고
+  // ② 자동 크롭 사다리가 이전 카메라의 단에서 시작하며 ③ failStreakSince 가 과거
+  // 시각이라 autoCropRung() 이 즉시 윗단을 돌려준다 — 이전 세션이 새 세션을 오염시킨다.
+  consecutiveFailedFrames = 0;
+  failStreakSince = 0;
+  if (autoCropIndex !== 0) {
+    autoCropIndex = 0;
+    // 프리뷰를 같은 값으로 즉시 재동기화 (§effectiveCropZoom 의 «가이드 = 분석» 불변식).
+    syncPreviewTransform();
+  }
   if (lab.beginAttempt) lab.beginAttempt(attemptId);
   return attemptId;
 }
@@ -453,6 +467,10 @@ function resetZoomState() {
   zoomCapability = null;
   userZoom = DEFAULT_USER_ZOOM;
   zoomPlan = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM });
+  // F-61: 자동 크롭 사다리도 줌 상태다 — 안 지우면 stopCamera() 뒤의 사진 경로가
+  // 직전 카메라의 사다리 단을 상속해 «분석은 1배(사진은 크롭 안 함), 계측은 2.2배» 로
+  // 갈린다 (currentZoomTelemetry 가 autoCropIndex 를 그대로 싣는다).
+  autoCropIndex = 0;
   zoomApplyToken += 1;
   if (zoomApplyTimer) {
     clearTimeout(zoomApplyTimer);

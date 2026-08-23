@@ -61,6 +61,19 @@ export function isLabPath(pathname) {
 
 export function classifyStage(result) {
   if (result && result.ok === true) return 'decode';
+  /*
+   * F-63 (2026-08-23): 실패 stage 는 **원인 사슬에서 유도**한다. 예전에는 아래
+   * 낱말 매칭만 있어서 finder(no-finder)·geometry(no-anchors·homography-degenerate)·
+   * sample(sample-starved) 실패가 전부 'proposal' 로 접혔다 — chain_failed 는
+   * 원인을 가르는데 stage 는 반대 칸을 말하는 자기모순이었다. 분류 규칙은
+   * buildCauseChain 이 디코더 실패 detail 의 실제 필드(reason · detail.pipelineStage ·
+   * detail.pipelineCode · diagnostics.validation)에서 이미 유도하고 있으므로 그 판정을
+   * 그대로 쓴다 — 규칙을 두 벌 적으면 반드시 어긋난다. 사슬이 못 가른 실패
+   * (failed=null·proposal 계열·format/body 는 아래 낱말 매칭과 동치)만 종전 휴리스틱으로
+   * 떨어져 옛 빌드 프레임과의 연속성을 지킨다.
+   */
+  const failed = buildCauseChain(result).failed;
+  if (failed === 'finder' || failed === 'geometry' || failed === 'sample') return failed;
   const reason = result && typeof result.reason === 'string' ? result.reason : '';
   const detail = result && result.detail && typeof result.detail === 'object'
     ? result.detail
@@ -270,7 +283,21 @@ export function observedFromResult(result) {
    *   호출자)에서 종전과 한 값도 다르지 않게 남는다.
    */
   if (hyp && typeof hyp.finderPatternId === 'string' && hyp.finderPatternId) {
-    out.finderPatternId = hyp.finderPatternId;
+    /*
+     * 관측 외곽 축 (F-65, 2026-08-23). daehan(와이어 `oak-daehan-k*`)은 축 ③(외곽
+     * 사괘)인데 지금까지 **중앙 열**(finderPatternId → observed_finder)로 새서
+     * ① 중앙 파인더 순위표를 오염시키고 ② expected_outer ↔ 관측의 조인이 원리적으로
+     * 불가능했다(관측 외곽 열 자체가 없었다). 여기서 외곽 관측(outerFinderId)으로
+     * 옮긴다. 값은 축 키 'daehan' 까지만 — k 는 포함 사슬(k6 ⊂ k8 ⊂ k10)이라 검출이
+     * 못 가르므로(bootstrap.js cellFinderHypotheses 주석) k 를 관측이라 주장하지 않는다.
+     * ⚠ ClickHouse 의 observed_outer_finder 컬럼은 아직 없다 — relay 는 모르는 키를
+     * 컬럼으로는 버리지만 body JSON 에는 남는다. 컬럼 ALTER 는 통합자 몫.
+     */
+    if (/^oak-daehan-k\d+$/.test(hyp.finderPatternId)) {
+      out.outerFinderId = 'daehan';
+    } else {
+      out.finderPatternId = hyp.finderPatternId;
+    }
   }
   if (hyp && hyp.centerQr === true) {
     out.qrPosition = 'inner';
@@ -1266,13 +1293,21 @@ export function labRoleToken(options = {}) {
   return '';
 }
 
-export function makeEnvelope(sid, site, kind, body, ts) {
+/**
+ * `build` (F-68, 2026-08-23): 배포 스탬프(SCANNER_BUILD 등)를 봉투에 싣는다 —
+ * «어느 빌드의 프레임인가» 를 ts 로 추정하던 것의 제거. 선택 필드라 없으면 키 자체가
+ * 안 생긴다(옛 봉투와 바이트 동일). relay 검증(validateEnvelope)은 모르는 키를
+ * 거부하지 않고, 관찰자 브로드캐스트는 원문을 그대로 흘리므로 와이어는 안 깨진다.
+ * ⚠ ClickHouse 이벤트 행에는 아직 build 컬럼이 없다 — 컬럼·행 매핑은 통합자 몫.
+ */
+export function makeEnvelope(sid, site, kind, body, ts, build) {
   return {
     v: WIRE_VERSION,
     sid,
     site,
     ts: ts || isoNow(),
     kind,
+    ...(typeof build === 'string' && build ? { build } : {}),
     body: body && typeof body === 'object' ? body : {},
   };
 }
@@ -1295,11 +1330,16 @@ export function normalizeFrameBody(body) {
     zoomRequested: finiteOrDefault(src.zoomRequested, Number.isFinite(Number(src.zoom)) ? Number(src.zoom) : 1),
     crop: finiteOrDefault(src.crop, 1),
     cropRequested: finiteOrDefault(src.cropRequested, finiteOrDefault(src.crop, 1)),
-    // 자동 크롭 사다리 (2026-08-21 신설). 옛 프레임에는 없으므로 기본 0/1 —
-    // 「autoCrop 1 이라 사다리가 안 걸렸다」와 「옛 빌드라 값이 없다」를 혼동하지 마라.
-    // 그 둘은 `autoCropRung` 필드의 **부재**로만 갈린다.
-    autoCropRung: Number.isInteger(Number(src.autoCropRung)) ? Math.max(0, Number(src.autoCropRung)) : 0,
-    autoCrop: finiteOrDefault(src.autoCrop, 1),
+    // 자동 크롭 사다리 (2026-08-21 신설). **부재는 null** (F-62, 2026-08-23) —
+    // 예전엔 부재를 0/1 로 채워서 「autoCrop 1 = 사다리 미개입」과 「옛 빌드 = 값이
+    // 없음」의 구분을 정규화기가 스스로 지웠다 (주석이 금지한 바로 그 혼동을 코드가
+    // 만들었다). 값이 있으면 그대로, 없거나 해석 불능이면 null(모름)로 남긴다.
+    // 파생값(cropTotal·effectiveZoom)은 사다리 모름을 1배로 **가정**해 계산한다 —
+    // 옛 빌드에는 사다리 자체가 없었으므로 그 가정이 사실이다.
+    autoCropRung: src.autoCropRung == null
+      ? null
+      : (Number.isInteger(Number(src.autoCropRung)) ? Math.max(0, Number(src.autoCropRung)) : null),
+    autoCrop: src.autoCrop == null ? null : finiteOrNull(src.autoCrop),
     cropTotal: finiteOrDefault(
       src.cropTotal,
       finiteOrDefault(src.crop, 1) * finiteOrDefault(src.autoCrop, 1),
@@ -1463,6 +1503,8 @@ export function createLabTelemetry(options = {}) {
   const sid = readSessionSid(sessionStore);
   const url = labSocketUrl(loc);
   const roleToken = labRoleToken(options);
+  // 배포 스탬프 (F-68). 호출자(scanner.js 등)가 자기 BUILD 상수를 넘긴다.
+  const build = typeof options.build === 'string' && options.build ? options.build : '';
   let socket = null;
   let roleSent = false;
   let closed = false;
@@ -1547,7 +1589,7 @@ export function createLabTelemetry(options = {}) {
 
   function emit(kind, body) {
     if (closed) return;
-    sendEvent(makeEnvelope(sid, site, kind, body));
+    sendEvent(makeEnvelope(sid, site, kind, body, undefined, build));
   }
 
   function emitShotRecord(record, roleOverride) {

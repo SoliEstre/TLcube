@@ -47,13 +47,27 @@ function cellPxFromH(H) {
  * 즉 「셀 표면 파인더가 안 잡힌다」는 신고를 **잴 계기 자체가 없었다.**
  *
  * 규칙 — 지어내지 않고 검출기가 실제로 남긴 것만 읽는다:
- *   · `finder.patternId` — cell-mask 11종 · OAK 3종 · daehan · `central-cube-3tone`.
- *     이 필드를 쓰는 검출기는 `cell-finder-detect.js` 와 3톤 큐브뿐이다.
+ *   · `finder.patternId` — cell-mask 11종 · OAK 3종 · daehan · `central-cube-3tone` ·
+ *     `central-v0`(비컨). 이 필드를 쓰는 검출기는 `cell-finder-detect.js` · 3톤 큐브 ·
+ *     중앙 비컨 어댑터뿐이다.
  *   · `innerBandsReplaced` — 불스아이 후보만 갖는다. >0 이면 안쪽 두 밴드가 큐브인
  *     하이브리드(= 운영자가 말한 «불스아이속큐브»), 0 이면 순수 링.
+ *   · **비-파인더 검출 경로** (F-30·F-64, 2026-08-23) — 큐브 실루엣·로케이터·셀 표면은
+ *     중앙 파인더 없이 잡히는 경로라 위 두 필드가 없고, 그래서 이 경로의 **성공**
+ *     프레임이 전부 observed_finder 공란이었다 — 「안 쟀다(옛 빌드)」와 구별이 안 됐다.
+ *     검출기가 실제로 남긴 경로 id(`hypothesis.source` — cube-detect.js·
+ *     cellSurfaceY-detect.js·locatorY-detect.js 가 스스로 적는 문자열)를 그대로 보고한다.
+ *     경로 id 도 지어내지 않는다: 아는 접두(source 표의 실제 값)만 열고, 그 밖은 종전대로.
  *   · 그 밖에는 null. **모르는 것을 'bullseye' 로 채우지 않는다** — 빈칸은 「안 쟀다」고
  *     읽히지만 틀린 이름은 순위표를 조용히 오염시킨다.
  */
+const NON_FINDER_SOURCE_PREFIXES = Object.freeze([
+  'cube-silhouette',      // cube-detect.js 실루엣 경로 (…-y-junction[-three-tone-rank])
+  'cube-finder-seed',     // cube-detect.js finder-seed y-spoke 경로
+  'locator-',             // locator-cell-surface-* · locator-hex-frame-* (locatorSourceId)
+  'cell-surface',         // cellsurface-block-detect.js 계열
+]);
+
 function finderPatternIdOf(hypothesis) {
   const finder = hypothesis.finder;
   if (finder && typeof finder.patternId === 'string' && finder.patternId) {
@@ -61,6 +75,10 @@ function finderPatternIdOf(hypothesis) {
   }
   const replaced = finder && finder.innerBandsReplaced;
   if (Number.isFinite(replaced)) return replaced > 0 ? 'cube-bullseye' : 'bullseye';
+  const source = typeof hypothesis.source === 'string' ? hypothesis.source : '';
+  if (NON_FINDER_SOURCE_PREFIXES.some((prefix) => source.startsWith(prefix))) {
+    return source;
+  }
   return null;
 }
 

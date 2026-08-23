@@ -44,12 +44,21 @@ import {
   LEGACY_FINDER_PATTERN_ID,
   THREE_TONE_CUBE_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
-import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import {
+  CENTER_QR_FINDER_PATTERN_ID,
+  CENTRAL_V0_FINDER_PATTERN_ID,
+} from './finder-selection.js';
 import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
 
 /**
- * ② 중앙 파인더의 활성 라인업. 순서는 «운영자가 순위로 부른 넷 → cell-mask → OAK» 다
- * (신고문이 그 순서로 왔다 — 화면에서 찾는 순서와 같게 둔다).
+ * ② 중앙 파인더의 활성 라인업. 순서는 «운영자가 순위로 부른 넷 → cell-mask → OAK →
+ * 중앙 v0(비컨)» 다 (넷·cell-mask·OAK 는 신고문 순서 — 화면에서 찾는 순서와 같게 둔다.
+ * central-v0 는 F-40, 2026-08-23 등재라 뒤에 선다).
+ *
+ * central-v0 는 `finder-selection.js` 의 id 상수에서 **유도**한다 — 검출기
+ * (`central-beacon-adapt.js` CENTRAL_BEACON_FINDER_KIND)와 렌더(`scene.js`)가 같은
+ * 문자열을 쓰는 살아 있는 생산 파인더인데 이 축에 없어서, 비컨 프레임의 실기기
+ * 텔레메트리가 전부 «모름» 으로 떨어져 expected/observed A/B 를 처음부터 못 했다.
  */
 export const LAB_CENTRAL_FINDER_IDS = Object.freeze([
   LEGACY_FINDER_PATTERN_ID,
@@ -58,6 +67,7 @@ export const LAB_CENTRAL_FINDER_IDS = Object.freeze([
   CENTER_QR_FINDER_PATTERN_ID,
   ...FINDER_CELL_MASK_PATTERNS.map((pattern) => pattern.id),
   ...OAK_FINDER_PATTERNS.map((pattern) => pattern.id),
+  CENTRAL_V0_FINDER_PATTERN_ID,
 ]);
 
 /**

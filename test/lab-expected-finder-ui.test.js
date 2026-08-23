@@ -24,6 +24,7 @@ import {
   LAB_CENTRAL_FINDER_IDS, LAB_OUTER_FINDER_IDS,
   normalizeCentralFinderId, normalizeOuterFinderId,
 } from '../src/lab-expected-axes.js';
+import { CENTRAL_V0_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -60,6 +61,14 @@ test('축 ②: 라인업이 운영자 순위의 넷과 OAK 3종을 모두 담는
   for (const id of ['oak-nitrogen-r2', 'oak-aspirin', 'oak-benzene']) {
     assert.ok(LAB_CENTRAL_FINDER_IDS.includes(id), id + ' (OAK) 가 중앙 파인더 축에 없다');
   }
+  // F-40 (2026-08-23): 중앙 v0(비컨)는 살아 있는 생산 파인더인데 이 축에 없어서
+  // 비컨 프레임의 실기기 A/B(expected/observed)가 처음부터 불가능했다 — 3톤 큐브의
+  // «아예 인식 안 됨» 을 잡아낸 그 대조를 비컨엔 할 수 없었다. id 는 손으로 적지 않고
+  // 렌더·검출이 공유하는 상수(finder-selection.js)에서 가져온다.
+  assert.ok(LAB_CENTRAL_FINDER_IDS.includes(CENTRAL_V0_FINDER_PATTERN_ID),
+    'central-v0 가 중앙 파인더 축에 없다 — 비컨 실사진 검증의 전제조건이 무너진다');
+  assert.equal(normalizeCentralFinderId(CENTRAL_V0_FINDER_PATTERN_ID),
+    CENTRAL_V0_FINDER_PATTERN_ID);
   assert.equal(new Set(LAB_CENTRAL_FINDER_IDS).size, LAB_CENTRAL_FINDER_IDS.length,
     '중앙 파인더 id 가 중복됐다');
 });

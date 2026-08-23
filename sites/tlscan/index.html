@@ -1220,6 +1220,11 @@
           <button type="button" data-expected-finder="oak-nitrogen-r2" data-i18n="lab.expectedFinder.oak-nitrogen-r2">Nitrogen</button>
           <button type="button" data-expected-finder="oak-aspirin" data-i18n="lab.expectedFinder.oak-aspirin">Aspirin</button>
           <button type="button" data-expected-finder="oak-benzene" data-i18n="lab.expectedFinder.oak-benzene">Benzene</button>
+          <!-- F-40 (2026-08-23): 살아 있는 생산 파인더(중앙 v0 비컨)가 이 축에 없어
+               비컨 프레임의 기대 텔레메트리가 전부 «모름» 이었다. 이 목록은 손 관리라
+               두 번 누락된 전력 — 집합 일치는 lab-expected-finder-ui.test.js 가,
+               central-v0 등재 자체는 같은 파일의 유도 상수 단언이 잠근다. -->
+          <button type="button" data-expected-finder="central-v0" data-i18n="lab.expectedFinder.central-v0">central-v0</button>
         </div>
       </div>
       <!-- 기대 «외곽/코너 파인더» (축 ③, 2026-08-19 운영자 지시 «외곽 파인더는 별도
