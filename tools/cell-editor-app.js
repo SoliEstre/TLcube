@@ -1,7 +1,7 @@
 /**
  * cell-editor-app.js — TLcube 셀 & 파인더 편집기 프론트엔드 컨트롤러
  *
- * 다중 타입(Y/O/A/K/V), 인터랙티브 드래그 채색, 페인트통 플러드 필,
+ * 다중 타입(Y/O/A/K/V/G), 인터랙티브 드래그 채색, 페인트통 플러드 필,
  * Undo/Redo(Ctrl+Z/Ctrl+Shift+Z), JSON 양방향 임포트/익스포트, PNG/SVG 내보내기 지원.
  */
 
@@ -587,6 +587,7 @@ function renderCanvas() {
     // Type O / A / K Axial Grid Rendering
     const k = editorState.size;
     // V(턴A)는 A 의 180° 상이라 범위가 같다 — 같은 분기를 쓴다.
+    // G 는 O 와 같은 격자라 O 분기(k+1)를 쓴다 — 다른 것은 역할뿐이다.
     const maxExtent = editorState.type === 'K' || editorState.type === 'A' || editorState.type === 'V'
       ? 2 * k + 1 : k + 1;
     const margin = 24;

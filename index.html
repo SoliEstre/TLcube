@@ -2020,8 +2020,11 @@
           <button type="button" class="toggle-card active" data-ycell-type="Y" data-i18n="g551">타입 Y (큐브 격자)</button>
           <button type="button" class="toggle-card" data-ycell-type="O" data-i18n="g552">타입 O (육각)</button>
           <button type="button" class="toggle-card" data-ycell-type="A" data-i18n="g553">타입 A (삼각)</button>
+          <button type="button" class="toggle-card" data-ycell-type="G" data-i18n="g877">타입 G (O-CM 자리)</button>
+          <button type="button" class="toggle-card" data-ycell-type="V" data-i18n="g878">턴A (역삼각)</button>
+          <button type="button" class="toggle-card" data-ycell-type="K" data-i18n="g879">타입 K (육망성)</button>
         </div>
-        <p class="hint" data-i18n="g554">타입 K는 렌더러 계약이 넓어진 뒤에 붙일게요 (아직 편집할 수 없어요).</p>
+        <p class="hint" data-i18n="g554">타입 G 는 O 영역에 자리 예약 12셀이 금테로 잠긴 판이고, 턴A 는 A 의 180° 상이에요.</p>
         <div class="card-row" id="yCellEditorModeCards">
           <button type="button" class="toggle-card active" data-ycell-mode="tone" data-i18n="g523">톤 편집</button>
           <button type="button" class="toggle-card" data-ycell-mode="mask" data-i18n="g524">데이터 영역 마스크</button>
@@ -2662,7 +2665,10 @@ const GENERATOR_STRINGS = {
     "g551": "타입 Y (큐브 격자)",
     "g552": "타입 O (육각)",
     "g553": "타입 A (삼각)",
-    "g554": "타입 K는 렌더러 계약이 넓어진 뒤에 붙일게요 (아직 편집할 수 없어요).",
+    "g877": "타입 G (O-CM 자리)",
+    "g878": "턴A (역삼각)",
+    "g879": "타입 K (육망성)",
+    "g554": "타입 G 는 O 영역에 자리 예약 12셀이 금테로 잠긴 판이고, 턴A 는 A 의 180° 상이에요.",
     "g555": "되돌리기",
     "g556": "다시하기",
     "g557": "단축키 — Ctrl/Cmd+Z 되돌리기 · Ctrl+Shift+Z 또는 Ctrl+Y 다시하기. 편집기에 포커스가 있을 때만 동작하고, 글상자 안에서는 브라우저 기본 동작을 씁니다. 드래그로 이어 칠한 한 번은 되돌리기도 한 번이에요.",
@@ -3100,7 +3106,10 @@ const GENERATOR_STRINGS = {
     "g551": "Type Y (cube grid)",
     "g552": "Type O (hex)",
     "g553": "Type A (triangle)",
-    "g554": "Type K arrives once the renderer contract widens (not editable yet).",
+    "g877": "Type G (O-CM seat)",
+    "g878": "Turn-A (inverted)",
+    "g879": "Type K (hexagram)",
+    "g554": "Type G is the O grid with the 12 reserved seat cells locked in gold; Turn-A is A's 180° image.",
     "g555": "Undo",
     "g556": "Redo",
     "g557": "Shortcuts — Ctrl/Cmd+Z undo, Ctrl+Shift+Z or Ctrl+Y redo. They only fire while the editor has focus, and text fields keep the browser default. One continuous drag counts as one undo step.",
@@ -3538,7 +3547,10 @@ const GENERATOR_STRINGS = {
     "g551": "タイプY (キューブ格子)",
     "g552": "タイプO (六角)",
     "g553": "タイプA (三角)",
-    "g554": "タイプKはレンダラ契約が広がってから追加します (まだ編集できません)。",
+    "g877": "タイプ G（O-CM 席）",
+    "g878": "ターンA（逆三角）",
+    "g879": "タイプ K（六芒星）",
+    "g554": "タイプ G は O 格子に席予約12セルが金枠で固定された盤で、ターンA は A の180°像です。",
     "g555": "元に戻す",
     "g556": "やり直す",
     "g557": "ショートカット — Ctrl/Cmd+Z で元に戻す・Ctrl+Shift+Z または Ctrl+Y でやり直す。編集器にフォーカスがあるときだけ効き、テキスト欄ではブラウザ既定の動作になります。ドラッグで続けて塗った一連は、元に戻すも一回分です。",
@@ -3975,7 +3987,10 @@ const GENERATOR_STRINGS = {
     "g551": "Type Y (grille de cube)",
     "g552": "Type O (hexagones)",
     "g553": "Type A (triangles)",
-    "g554": "Le Type K arrivera quand le contrat du moteur de rendu s'élargira (pas encore modifiable).",
+    "g877": "Type G (siège O-CM)",
+    "g878": "Turn-A (inversé)",
+    "g879": "Type K (hexagramme)",
+    "g554": "Le type G est la grille O avec les 12 cellules de siège verrouillées en or ; Turn-A est l'image à 180° de A.",
     "g555": "Annuler",
     "g556": "Rétablir",
     "g557": "Raccourcis — Ctrl/Cmd+Z annuler, Ctrl+Maj+Z ou Ctrl+Y rétablir. Ils ne fonctionnent que lorsque l'éditeur a le focus ; dans les champs de texte, le comportement par défaut du navigateur s'applique. Un tracé continu compte pour une seule annulation.",
@@ -4412,7 +4427,10 @@ const GENERATOR_STRINGS = {
     "g551": "Tipo Y (griglia a cubo)",
     "g552": "Tipo O (esagoni)",
     "g553": "Tipo A (triangoli)",
-    "g554": "Il Tipo K arriverà quando il contratto del renderer sarà più ampio (non ancora modificabile).",
+    "g877": "Tipo G (posto O-CM)",
+    "g878": "Turn-A (invertito)",
+    "g879": "Tipo K (esagramma)",
+    "g554": "Il tipo G è la griglia O con le 12 celle del posto bloccate in oro; Turn-A è l'immagine a 180° di A.",
     "g555": "Annulla",
     "g556": "Ripristina",
     "g557": "Scorciatoie — Ctrl/Cmd+Z annulla, Ctrl+Maiusc+Z oppure Ctrl+Y ripristina. Funzionano solo mentre l'editor ha il focus e nei campi di testo vale il comportamento predefinito del browser. Un tratto continuo conta come un solo annullamento.",
@@ -4849,7 +4867,10 @@ const GENERATOR_STRINGS = {
     "g551": "Typ Y (Würfelgitter)",
     "g552": "Typ O (Sechsecke)",
     "g553": "Typ A (Dreiecke)",
-    "g554": "Typ K kommt, sobald der Renderer-Vertrag breiter wird (noch nicht bearbeitbar).",
+    "g877": "Typ G (O-CM-Platz)",
+    "g878": "Turn-A (invertiert)",
+    "g879": "Typ K (Hexagramm)",
+    "g554": "Typ G ist das O-Gitter mit 12 goldgesperrten Platzzellen; Turn-A ist das 180°-Bild von A.",
     "g555": "Rückgängig",
     "g556": "Wiederholen",
     "g557": "Tastenkürzel — Strg/Cmd+Z macht rückgängig, Strg+Umschalt+Z oder Strg+Y wiederholt. Sie greifen nur, solange der Editor den Fokus hat; in Textfeldern gilt das Standardverhalten des Browsers. Ein durchgehender Zug zählt als ein Schritt.",
@@ -5286,7 +5307,10 @@ const GENERATOR_STRINGS = {
     "g551": "Tipo Y (rejilla de cubo)",
     "g552": "Tipo O (hexágonos)",
     "g553": "Tipo A (triángulos)",
-    "g554": "El Tipo K llegará cuando se amplíe el contrato del renderizador (todavía no es editable).",
+    "g877": "Tipo G (asiento O-CM)",
+    "g878": "Turn-A (invertido)",
+    "g879": "Tipo K (hexagrama)",
+    "g554": "El tipo G es la rejilla O con las 12 celdas del asiento bloqueadas en dorado; Turn-A es la imagen a 180° de A.",
     "g555": "Deshacer",
     "g556": "Rehacer",
     "g557": "Atajos — Ctrl/Cmd+Z deshace, Ctrl+Mayús+Z o Ctrl+Y rehace. Solo actúan mientras el editor tiene el foco, y en los campos de texto rige el comportamiento predeterminado del navegador. Un trazo continuo cuenta como un solo paso.",
@@ -5723,7 +5747,10 @@ const GENERATOR_STRINGS = {
     "g551": "Tipo Y (grelha de cubo)",
     "g552": "Tipo O (hexágonos)",
     "g553": "Tipo A (triângulos)",
-    "g554": "O Tipo K chega quando o contrato do renderizador alargar (ainda não é editável).",
+    "g877": "Tipo G (assento O-CM)",
+    "g878": "Turn-A (invertido)",
+    "g879": "Tipo K (hexagrama)",
+    "g554": "O tipo G é a grade O com as 12 células do assento travadas em dourado; Turn-A é a imagem a 180° de A.",
     "g555": "Desfazer",
     "g556": "Refazer",
     "g557": "Atalhos — Ctrl/Cmd+Z desfaz, Ctrl+Shift+Z ou Ctrl+Y refaz. Só funcionam enquanto o editor tem o foco, e nos campos de texto vale o comportamento predefinido do navegador. Um traço contínuo conta como um único passo.",
@@ -5783,6 +5810,7 @@ import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capa
 // 셀 편집기가 여는 O/A 격자 반경 k — 버전 표에서 읽는다 (편집기용 상수 복제 금지).
 import { VERSIONS as VERSIONS_O_TABLE } from './src/capacity.js';
 import { VERSIONS_A as VERSIONS_A_TABLE } from './src/capacityA.js';
+import { VERSIONS_K as VERSIONS_K_TABLE } from './src/capacityK.js';
 // ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
 // placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
 import { placeReservedCells } from './src/autoplaceY.js';
@@ -8230,9 +8258,12 @@ function yCellEditorStateFor(ctx) {
 
 /** 편집할 격자 반경 k. 버전 선택이 auto 면 마지막으로 인코딩된 k 를 쓴다. */
 function cellEditorHexSize(type) {
-  const table = type === 'A' ? VERSIONS_A_TABLE : VERSIONS_O_TABLE;
-  const chosen = type === 'A' ? generatorState.versionA : generatorState.versionO;
-  const lastK = type === 'A' ? lastEncodedKA : lastEncodedKO;
+  // 편집 타입 → 버전 축 (2026-08-24 확장): G 는 O 와 같은 격자(자리 예약만 다름) ·
+  // V(턴A)는 A 의 180° 상이라 k 가 같다 · K 는 자기 표(VERSIONS_K).
+  const triLike = type === 'A' || type === 'V';
+  const table = type === 'K' ? VERSIONS_K_TABLE : triLike ? VERSIONS_A_TABLE : VERSIONS_O_TABLE;
+  const chosen = triLike ? generatorState.versionA : generatorState.versionO;
+  const lastK = triLike ? lastEncodedKA : lastEncodedKO;
   if (chosen !== undefined && chosen !== 'auto') {
     const spec = table.find((item) => item.version === Number(chosen));
     if (spec) return spec.k;
@@ -9586,9 +9617,14 @@ function syncSeatUi() {
       const seat = card.dataset.seat;
       const isNone = seat === SEAT_NONE;
       // 타입 부합 표시 (검출기 필터 — zoneCards 의 types 표) + 방향 표시 스왑.
+      // **사용 가능한 것만 표시** (운영자 2026-08-24) — 타입 부합 + «현재 내부 타입»
+      // 부합이다: 정삼각(내부 A/G)이면 a-cm, 역삼각(내부 V)이면 v-cm 하나만 보인다.
+      // 부재 자리(k-cm)는 쓸 수 있는 내부 타입이 생성기에 없으므로 숨긴다 — 존재는
+      // 분류 정본(FINDER_TAXONOMY)과 SPEC 이 말한다, 잠긴 카드가 아니라.
       const typeShown = card.dataset.seatTypes.split(' ').includes(type);
-      const directionHidden = seat === 'a-cm' && turnAOn;
-      card.style.display = typeShown && !directionHidden ? '' : 'none';
+      const directionHidden = (seat === 'a-cm' && turnAOn) || (seat === 'v-cm' && !turnAOn);
+      const unusableHidden = card.dataset.seatAbsent === '1';
+      card.style.display = typeShown && !directionHidden && !unusableHidden ? '' : 'none';
       const vcmLocked = seat === 'v-cm' && !turnAOn;
       const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone) || vcmLocked;
       card.classList.toggle('disabled', locked);

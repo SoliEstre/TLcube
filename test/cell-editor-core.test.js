@@ -586,3 +586,20 @@ test('Type V (턴A) — A 의 180° 상이고 역할·이웃이 사상으로 따
     );
   }
 });
+
+test('Type G (O-CM 자리) — O 영역 + 마커 12셀이 fixed 로 잠긴다', () => {
+  // 운영자 2026-08-24 «생성기 셀 편집기에 타입 G(O-CM)·턴A(V)·타입 K 지원 추가».
+  // G 는 별도 영역이 아니라 **O 영역 + 자리 예약**이다 — 와이어가 G 를 내부 타입으로
+  // 보는 이유와 같다: 데이터 셀 집합이 O 와 다르다. 손 좌표 0 (markerO 유도).
+  assert.ok(CELL_TYPES.includes('G'));
+  const opts = { finderMode: 'central-finder' };
+  for (const k of [6, 8, 10]) {
+    const g = enumerateCells('G', k);
+    const o = enumerateCells('O', k);
+    assert.equal(g.length, o.length, 'k=' + k + ': G 영역이 O 와 다르다');
+    const fixed = (type) => enumerateCells(type, k)
+      .filter((c) => roleOfCoord(type, k, c, opts) === 'finder').length;
+    assert.equal(fixed('G') - fixed('O'), 12,
+      'k=' + k + ': G 의 자리 예약 12셀이 잠기지 않았다');
+  }
+});

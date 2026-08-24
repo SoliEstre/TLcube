@@ -52,6 +52,7 @@ import {
   regionCellsTurnA,
   roleOfA,
 } from './placementA.js';
+import { markerCells } from './markerO.js';
 import {
   FINDER_CELL_ORDER,
   FINDER_FACE_BITS,
@@ -101,7 +102,10 @@ export const CELL_EDITOR_SCHEMA_V2 = 'tlcube-cell-editor/v2';
 
 // V = 턴A (내부 타입 V, 역삼각 Type A) — 2026-08-24 편입. A 의 **180° 상**이라
 // 손 좌표·새 상수 0 이다 (placementA.regionCellsTurnA 사상 재사용).
-export const CELL_TYPES = Object.freeze(['Y', 'O', 'A', 'K', 'V']);
+// G = 내부 타입 G (코너 **자리 예약** — O-CM). 별도 영역이 아니라 **O 영역 + 마커
+// 12셀 예약**이다 (markerO.markerCells 유도) — 와이어가 G 를 별도 타입으로 보는
+// 이유와 같은 이유로 편집기도 별도 타입으로 연다: 데이터 셀 집합이 O 와 다르다.
+export const CELL_TYPES = Object.freeze(['Y', 'O', 'A', 'K', 'V', 'G']);
 export const DEFAULT_CELL_TYPE = 'Y';
 
 export const EDIT_MODES = Object.freeze(['tone', 'mask']);
@@ -406,6 +410,10 @@ export function enumerateCells(type, size) {
     }
     return cells;
   }
+  if (type === 'G') {
+    // 영역은 O 와 **한 셀도 다르지 않다** — 다른 것은 역할(마커 12셀 예약)뿐이다.
+    return enumerateCells('O', size);
+  }
   if (type === 'A') {
     const cells = [];
     const k = size;
@@ -531,6 +539,12 @@ export function roleOfCoord(type, size, c, options = {}) {
       return 'data';
     }
     return roleOfA(-c.q, -c.r, size);
+  }
+  if (type === 'G') {
+    // 자리 예약 12셀은 **그 자리에 들어가는 심볼(H)** 의 자리다 — 역할 'finder' 로
+    // 잠근다 (isFixedRole 이 잡아 편집기가 금테로 그린다). 나머지는 O 그대로.
+    if (markerCells(size).some((cell) => cell.q === c.q && cell.r === c.r)) return 'finder';
+    return roleOfCoord('O', size, c, options);
   }
   if (type === 'K') {
     if (finderMode === 'central-finder' && isCenterCell(type, c)) {
@@ -800,6 +814,7 @@ export function getFaceNeighbors(type, size, face, c) {
     const isValid = (nq, nr) => {
       if (type === 'O') return hexDistance(nq, nr) <= size;
       if (type === 'A') return isInRegionA(nq, nr, size);
+      if (type === 'G') return hexDistance(nq, nr) <= size;
       if (type === 'V') return isInRegionA(-nq, -nr, size);
       if (type === 'K') return isInRegionK(nq, nr, size);
       return false;
