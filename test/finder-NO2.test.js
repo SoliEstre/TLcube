@@ -287,19 +287,24 @@ test('⑤ 중앙 파인더와 직교 — 임의 중앙 파인더 × NO2 가 서�
     }
   }
   // 표 층의 직교 — NO2 톤 표는 k 만의 함수다 (중앙 파인더 인자가 애초에 없다).
+  // 그 주장을 두 갈래로 잰다: ① 시그니처에 k 말고 다른 인자가 없다 ② 같은 k 를
+  // 두 번 물으면 바이트 동일이다(숨은 가변 상태 없음). ①이 없으면 주석은 주장이고
+  // 단언은 자기 자신과의 비교에 그친다.
+  assert.equal(no2TonesByKeyTurnA.length, 1,
+    'no2TonesByKeyTurnA 가 k 외의 인자를 받는다 — 표 층 직교가 깨졌다');
   assert.equal(
     JSON.stringify([...no2TonesByKeyTurnA(8)]),
     JSON.stringify([...no2TonesByKeyTurnA(8)]),
   );
 
-  // ⛔ center-qr 만 V-CM 에서 안 선다 — 그 배타는 **자리의 와이어 제약**이고
-  //    (V-CMQ 포맷 인덱스 잔여 0, turnA.js §V-CM 회계 · 2026-08-24 개설 이전부터)
-  //    NO2 가 만든 것이 아니다. 이 단언은 «원인이 어디인가» 를 값으로 고정한다:
-  //    NO2 없는 자리(A-CM × centerQr)는 그대로 서므로 심볼 축이 아니다.
-  assert.throws(
+  // ⛔→✅ center-qr 도 V-CM 에서 **선다**. 이 레인은 V-CMQ 가 아직 닫혀 있던
+  //    커밋에서 갈라져 나와 여기에 «막혀 있어야 한다» 는 구 락을 남겼는데, 그 락은
+  //    이 테스트 머리의 운영자 확정(«중앙 파인더 관련 없음 — 모두 사용 가능»)과
+  //    정면으로 모순이었다. 2026-08-24 V-CMQ 개설(V*CM 인덱스 공유)로 배타가
+  //    사라졌으므로 구 락을 **양성 단언으로 전환**한다 (배타 개설 정형 ④).
+  assert.doesNotThrow(
     () => encodeVcm(1, { centerQr: true }),
-    (err) => err instanceof RangeError && err.message.includes('V-CMQ'),
-    'V-CM × centerQr 이 V-CMQ 와이어 사유가 아닌 이유로 막혔다',
+    'V-CM × centerQr 이 막혔다 — V-CMQ 는 V*CM 인덱스 공유로 열려 있다',
   );
   assert.doesNotThrow(
     () => encodeA('acmq', {

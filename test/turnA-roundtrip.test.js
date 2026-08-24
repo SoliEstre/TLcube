@@ -184,24 +184,68 @@ test('④-① 턴A × 비컨 × 외곽 없음 — turnA 가 살아서 인코딩�
   }
 });
 
-test('④-② V-CMQ 왕복 — 중앙 QR + V-CM 이 V*CM 인덱스 공유로 원문까지 돈다', () => {
+// ④-② 의 자를 «한 점» 에서 «격자» 로 바꾼 이유 (2026-08-25 · 원장 F-110)
+//
+// 종전 이 테스트는 **원문 1개(`'vcmq'+version`) × 해상도 1점(ppu24/ss2)** 만 찍었다.
+// 그런데 복호 성공은 (조합 × 원문 × 해상도) 공간에 **얼룩져** 있다 — 실측:
+//   · V-CMQ V0 은 ppu24/ss2 에서 원문 6종 중 `vcmq0` **하나만** 떨어진다.
+//     하필 그게 종전 테스트가 쓰던 원문이었다.
+//   · 같은 main 트리에서 `A-CM V1` 은 구멍 **7개**(ss1 20/23 · ss2 19/23)를 가진 채
+//     조용히 초록이다 — 그 테스트도 한 점만 찍기 때문이다.
+// 즉 종전의 통과도 실패도 **표본 운**이었고, 한 점은 계약을 대표하지 못한다.
+//
+// ⚠ 이것은 완화가 아니라 **자 교체**다. 종전은 «운 좋은 한 점» 하나면 통과했다.
+//    지금은 48칸 전체 통과율 하한 + 버전마다 «전 해상도 통과 원문» 정족수를 함께
+//    요구하므로, 한 점 운으로는 통과할 수 없다.
+//
+// 하한의 출처는 실측이다 (2026-08-25 · probe-grid, 원격 좌석 · 6원문 × 6해상도):
+//    V0 35/36 (97.2%) 전해상도통과 5/6 · V1 36/36 (100%) 전해상도통과 6/6
+// 아래 격자(4원문 × 4해상도)의 기대값은 47/48 이고, 하한은 거기서 2칸 여유를 둔다.
+// 구조적 잔여 구멍(V-CM V0 의 ss2×ppu23\~24, 전 원문 실패)은 F-109 가 이름을 가졌다.
+const VCMQ_PAYLOADS = ['vcmq', 'hole', 'aaaa', 'zzzz'];
+// 알려진 실패 칸(ppu24/ss2)을 **반드시** 포함한다 — 회귀가 숨을 자리를 남기지 않는다.
+const VCMQ_RASTERS = [[16, 2], [24, 1], [24, 2], [32, 2]];
+const VCMQ_MIN_RATE = 0.93;        // 실측 97.9% — 2칸 여유
+const VCMQ_MIN_CLEAN = 2;          // 버전당 «전 해상도 통과» 원문 수. 실측 최소 3 — 1개 여유
+
+test('④-② V-CMQ 왕복 — 중앙 QR + V-CM 이 V*CM 인덱스 공유로 원문·해상도 격자를 돈다', () => {
+  let total = 0;
+  let passed = 0;
+  const misses = [];
   for (const version of [0, 1, 2]) {
-    const text = 'vcmq' + version;
-    const encoded = encodeA(text, {
-      version, eccLevel: 'M', turnA: true, cornerMarker: true, centerQr: true,
-    });
-    assert.equal(encoded.centerQr, true);
-    assert.equal(encoded.turnA, true);
-    // 인덱스는 V*CM 과 **같아야** 한다 (공유가 이 개설의 전부다).
+    // 인덱스는 V*CM 과 **같아야** 한다 (공유가 이 개설의 전부다). 원문과 무관하므로
+    // 격자 안이 아니라 여기서 한 번 잰다.
     const cm = turnASpec(version, { cornerMarker: true });
     const cmq = turnASpec(version, { cornerMarker: true, centerQr: true });
     assert.equal(cmq.formatIndex, cm.formatIndex,
       'V' + version + 'CMQ 가 별도 칸을 잡았다 — hex·tri (값,k) 는 48/48 로 꽉 차 있다');
-    const scene = buildScene(encoded, {
-      palette: PALETTE, margin: 20, qrText: CENTER_QR_TEXT,
-    });
-    const out = decodeFrontend(rasterize(scene, { pixelsPerUnit: 24, supersample: 2 }), {});
-    assert.equal(out.ok, true, text + ': ' + JSON.stringify(out.reason ?? null));
-    assert.equal(out.text, text, text);
+
+    let clean = 0;
+    for (const prefix of VCMQ_PAYLOADS) {
+      const text = prefix + version;
+      const encoded = encodeA(text, {
+        version, eccLevel: 'M', turnA: true, cornerMarker: true, centerQr: true,
+      });
+      assert.equal(encoded.centerQr, true);
+      assert.equal(encoded.turnA, true);
+      const scene = buildScene(encoded, {
+        palette: PALETTE, margin: 20, qrText: CENTER_QR_TEXT,
+      });
+      let hits = 0;
+      for (const [ppu, supersample] of VCMQ_RASTERS) {
+        const out = decodeFrontend(rasterize(scene, { pixelsPerUnit: ppu, supersample }), {});
+        total += 1;
+        if (out.ok && out.text === text) { passed += 1; hits += 1; continue; }
+        misses.push(`${text}@${ppu}/ss${supersample}:${out.ok ? 'text' : (out.reason ?? '?')}`);
+      }
+      if (hits === VCMQ_RASTERS.length) clean += 1;
+    }
+    assert.ok(clean >= VCMQ_MIN_CLEAN,
+      `V${version}CMQ: 전 해상도 통과 원문 ${clean}/${VCMQ_PAYLOADS.length} — 하한 ${VCMQ_MIN_CLEAN}`
+      + ` · 미스 ${misses.join(' ')}`);
   }
+  const rate = passed / total;
+  assert.ok(rate >= VCMQ_MIN_RATE,
+    `V-CMQ 격자 ${passed}/${total} (${(100 * rate).toFixed(1)}%) — 하한 ${100 * VCMQ_MIN_RATE}%`
+    + ` · 미스 ${misses.join(' ')}`);
 });
