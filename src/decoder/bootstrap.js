@@ -63,6 +63,7 @@ import {
 } from '../cellSurfaceFinal.js';
 import { decodeCells } from '../decode.js';
 import { markerGSpec, markerGSpecFromFormatIndex } from '../markerG.js';
+import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from '../turnA.js';
 import { dataCellsInScanOrderOMarker } from '../markerO.js';
 import { dataCellsInScanOrderAMarker } from '../markerA.js';
 import { DIGIT_COUNT_V2 } from '../formatinfo.js';
@@ -471,6 +472,11 @@ function familyProfiles(family) {
         spec.formatIndex, spec.formatIndex + 2,
         markerGSpec('tri', spec.version).formatIndex,
         markerGSpec('tri', spec.version, true).formatIndex,
+        // 내부 타입 V (턴A, 2026-08-24) — 이 (family, k) 소유의 V 표 인덱스 전부.
+        // G 와 같은 이유: formatIndexOwners(재배치·재라벨)와 profileForFormatCandidate
+        // 가 V 인덱스로 읽힌 프레임을 자기 패밀리로 되짚을 수 있어야 한다.
+        ...TURN_A_FORMAT_INDEX.filter((entry) => entry.k === spec.k)
+          .map((entry) => entry.formatIndex),
       ],
     }));
   }
@@ -508,6 +514,15 @@ function validVersionIndices(hypothesis) {
       : [profile.spec.version - 1, markerGSpec('hex', profile.spec.version).formatIndex];
   }
   if (hypothesis.family === 'tri') {
+    // 턴A (내부 타입 V) 가설 — 실루엣 방향이 앵커/기하에서 이미 갈렸으므로
+    // **V 표 인덱스만** 연다 (centerQr 축은 레거시와 같은 규칙). 정삼각 가설은
+    // 종전 그대로 — V 인덱스를 열지 않아 기존 프레임의 후보 집합이 한 칸도 안 는다.
+    if (hypothesis.turn === true) {
+      return TURN_A_FORMAT_INDEX
+        .filter((entry) => entry.version === profile.spec.version
+          && entry.centerQr === (hypothesis.centerQr === true))
+        .map((entry) => entry.formatIndex);
+    }
     return hypothesis.centerQr
       ? [profile.spec.formatIndex + 2,
         markerGSpec('tri', profile.spec.version, true).formatIndex]
@@ -1992,6 +2007,24 @@ function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
   return null;
 }
 
+/**
+ * 턴A (내부 타입 V) 표본화 사상 — 렌더의 «배치만 180° 회전, 셀은 정립» 의 쌍대.
+ *
+ * canonical 키 (q,r) 의 셀은 이미지에서 (−q,−r) 자리에 (정립으로) 그려져 있다.
+ * 그래서 ① 표본은 반전 키의 자리에서 뜨고 ② 결과는 canonical 키로 되돌린다 —
+ * 하류(스캔 순서 digit 추출·레퍼런스 검증·마커 본문)는 전부 canonical 키로
+ * 조회하므로 이 두 함수 밖에서는 turn 을 몰라도 된다. 반전은 대합(involution)이라
+ * 두 함수가 같은 사상이고, 이름만 용도로 갈랐다.
+ */
+function negateCellKeys(map) {
+  const out = new Map();
+  for (const [key, value] of map) {
+    const comma = key.indexOf(',');
+    out.set((-Number(key.slice(0, comma))) + ',' + (-Number(key.slice(comma + 1))), value);
+  }
+  return out;
+}
+
 function referenceReportFor(hypothesis, grid, options) {
   if (hypothesis.family === 'cube') {
     const reference = hypothesis.referenceCalibration;
@@ -2419,7 +2452,7 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
         };
         for (const family of ['hex', 'tri']) {
           for (const dimension of uniqueDimensions(family)) {
-            hypotheses.push({
+            const base = {
               family,
               k: dimension,
               orientation: axisIndex,
@@ -2434,7 +2467,18 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
                 'qr-center-' + family + '-' + dimension
                 + '-c' + candidateIndex + '-a' + axisIndex,
               luma,
-            });
+            };
+            hypotheses.push(base);
+            // 턴A (내부 타입 V) 쌍둥이 — V*Q 프레임은 이 경로로 이긴다 (앵커가
+            // 아니라 중앙 QR 이 포즈를 준다 — A*Q 실측과 동일). 포즈 H 는 같고
+            // 표본 자리 사상(turn)만 다르다. 정삼각 쌍은 한 비트도 안 바뀐다.
+            if (family === 'tri') {
+              hypotheses.push({
+                ...base,
+                turn: true,
+                hypothesisId: base.hypothesisId + '-turn',
+              });
+            }
           }
         }
       });
@@ -3068,7 +3112,13 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
       : hypothesis.window === true
         ? windowedFormatCellsY(hypothesis.n)
         : formatCellsY(hypothesis.n)
-    : formatCells(hypothesis.k);
+    // 턴A (내부 타입 V): 배치가 180° 돌았으므로 포맷 셀도 반전 «자리» 에서 읽는다.
+    // 목록 순서는 canonical 그대로 — 인코더가 formatDigits 를 canonical 순서로
+    // 실었고 그리는 자리만 (−q,−r) 이므로, 반전 자리를 canonical 순서로 읽으면
+    // 복제 3벌의 자리 대응이 정확히 유지된다 (scene.js turnA 규약의 쌍대).
+    : hypothesis.family === 'tri' && hypothesis.turn === true
+      ? formatCells(hypothesis.k).map((cell) => ({ q: -cell.q, r: -cell.r }))
+      : formatCells(hypothesis.k);
   return readFormatWithCells(luma, hypothesis, options, valid, cells, 1);
 }
 
@@ -3189,13 +3239,20 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     if (!layout) continue;
     // 프레임 밖으로 잘린 셀에서 가설 전체를 죽이지 않는다 — 그 셀만 RS 소거로
     // 넘긴다 (sample-starved 구제). 한 셀도 못 읽으면 여전히 실패한다.
-    const grid = withStage(options, 'decode', () => (cube
-      ? sampleCubeGrid(luma, hypothesis, layout.map, {
-        ...cubeSampleOptions(options), collectUnsampled: true,
-      })
-      : sampleHexGrid(luma, hypothesis, layout.map, {
-        ...(options.sample || {}), collectUnsampled: true,
-      })));
+    // 턴A: 표본 자리만 반전 사상으로 (negateCellKeys 주석 참조).
+    const turn = !cube && hypothesis.family === 'tri' && hypothesis.turn === true;
+    const sampleMap = turn ? negateCellKeys(layout.map) : layout.map;
+    const grid = withStage(options, 'decode', () => {
+      const sampled = cube
+        ? sampleCubeGrid(luma, hypothesis, layout.map, {
+          ...cubeSampleOptions(options), collectUnsampled: true,
+        })
+        : sampleHexGrid(luma, hypothesis, sampleMap, {
+          ...(options.sample || {}), collectUnsampled: true,
+        });
+      if (!turn || !sampled.ok) return sampled;
+      return { ...sampled, cells: negateCellKeys(sampled.cells) };
+    });
     if (!grid.ok) {
       diagnostics.bodyFailures.push({
         hypothesisId: hypothesis.hypothesisId,
@@ -3288,6 +3345,17 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       if (useMarkerBody) {
         decodeFormat.cornerMarker = true;
         decodeFormat.version = markerSpec.version;
+      }
+      // 내부 타입 V (턴A, 2026-08-24) — 포맷 워드가 V 표의 (값,k)면 decode.js 에
+      // turn 을 전달한다 (decode.js:390 의 분기는 2026-08-18 부터 있었고, 여기가
+      // 그 호출자다 — G 배선과 같은 «양 끝» 교훈). turn 가설이 아닌데 V 값이
+      // 읽히는 일은 validVersionIndices 가 막지만, (값,k) 역조회로 한 번 더 가른다.
+      const turnSpec = turn
+        ? turnASpecFromFormatIndex(formatCandidate.versionIndex, dimension)
+        : null;
+      if (turnSpec !== null) {
+        decodeFormat.turn = true;
+        decodeFormat.version = turnSpec.version;
       }
       if (cube) {
         decodeFormat.n = dimension;
@@ -3917,6 +3985,30 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
           exhaustiveBlockRecovery: true,
           qrFinder: true,
         };
+        return retried;
+      }
+    }
+
+    /*
+     * cube 독립 양성이 파인더 경로를 잠갔는데 cube 검증이 전멸한 프레임 (2026-08-24,
+     * 턴A 레인 실측 — ▽ 프레임 + 특정 페이로드에서 cellSurface 검출이 양성으로 서고
+     * `cube-positive-independent-path` 가 discoverFinders 를 건너뛰어 tri 가설이
+     * 0개가 됐다). **총 실패 뒤에만** 한 번, 파인더 비교를 강제해 재열거한다:
+     *   · 정상 프레임 비용·판정 불변 — 검증이 성공하면 여기 안 온다.
+     *   · 게이트 완화 아님 — 수용 게이트는 같은 validateGridHypotheses 그대로다.
+     *   · 실패 → 성공 소생만 가능한 안전망이다 (retryCubeAlternatives 와 같은 문법).
+     */
+    const retryFinderComparison = options._finderComparisonRetry !== false
+      && options.alwaysCompareFinders !== true
+      && geometry.diagnostics?.finderSource === 'none-cube-positive';
+    if (retryFinderComparison) {
+      const retried = enumerateGridHypotheses(luma, familyEvidence, {
+        ...options,
+        alwaysCompareFinders: true,
+        _finderComparisonRetry: false,
+      });
+      if (retried.ok) {
+        retried.diagnostics.finderComparisonRetry = true;
         return retried;
       }
     }

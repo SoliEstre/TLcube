@@ -165,16 +165,19 @@ test('턴A 인코더 — 표 주도로 낸다 (산술 유도가 아니다)', () 
   }
 });
 
-test('⚠ 미완 — 턴A 와 기본 A 가 formatIndex 를 공유하는 조합이 있다', () => {
-  // V2Q(3) ↔ A0Q(3). 디코더에 역삼각 실루엣 판별이 붙으면 기하가 가른다.
-  // **붙기 전까지는 turnA 를 명시로만 써야 한다** — 이 사실이 사라지면(= 충돌이
-  // 없어지면) 여기가 터지고, 그때 이 경고 주석도 함께 걷어내야 한다.
+test('턴A ↔ 기본 A 의 formatIndex 공유 — 방향 판별이 기하로 가른다 (2026-08-24 개통)', () => {
+  // V2Q(3) ↔ A0Q(3) 공유는 설계 사실로 남는다 — (값, k) 쌍이 유일하면 되기 때문.
+  // 구 문구 «디코더에 역삼각 판별이 아직 없다 — turnA 를 명시로만» 은 2026-08-24 에
+  // 배타 개설 정형대로 **양성 단언으로 전환**됐다: 판별은 실재하고
+  // (anchor-detect turn 변형 · bootstrap validVersionIndices V 개방),
+  // `test/turnA-roundtrip.test.js` 의 교차 오수용 테스트가 V2Q(k=10) 가 A0Q(k=6)
+  // 로 오독되지 않음을 픽셀 왕복으로 잰다.
   const plain = new Map(PUBLISHED_FORMAT_INDEX.map((r) => [r.formatIndex, r]));
   const shared = TURN_A_FORMAT_INDEX.filter((e) => plain.has(e.formatIndex));
-  assert.deepEqual(shared.map((e) => e.name), ['V2Q'],
-    '턴A ↔ 기본 A 의 formatIndex 공유 조합이 V2Q 하나가 아니다: '
-    + JSON.stringify(shared.map((e) => e.name)));
-  // 그리고 디코더에 아직 역삼각 판별이 없다는 사실 자체 — 붙으면 이 단언을 지운다.
-  assert.equal(shared.length > 0, true,
-    '공유가 사라졌다 — 역삼각 판별이 붙었는지 확인하고 이 테스트를 갱신하라');
+  assert.ok(shared.some((e) => e.name === 'V2Q'),
+    'V2Q ↔ A0Q 공유가 사라졌다 — 와이어가 움직였는지 확인하라 (동결 위반 의심)');
+  for (const entry of shared) {
+    assert.notEqual(entry.k, plain.get(entry.formatIndex).k,
+      entry.name + ': 공유 값의 k 가 기본 A 와 같다 — (값,k) 유일성 위반');
+  }
 });

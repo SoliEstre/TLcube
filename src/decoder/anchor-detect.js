@@ -189,16 +189,41 @@ function makeAffineHomography(center, cellSize) {
   ]);
 }
 
-function homographyForOrientation(bullseye, orientation, options) {
+/**
+ * @param {number} [scale] cellSize 배율 탐색(아래 ANCHOR_SCALE_SEARCH_CELLS)의 배율.
+ *
+ * ⚠ 발견 (2026-08-24, 턴A 레인 실측): 종전 구현은 배율을 `bullseye.cellSize` 에만
+ * 곱했는데, 파인더가 transform(B)을 들고 오면 supplied H 가 그 값을 **무시**해서
+ * 2026-08-13 의 스케일 탐색 수리가 실전 경로(불스아이 검출 산출물은 항상 transform
+ * 보유)에서 무효였다 — 6개 배율이 전부 같은 H 를 재평가했다.
+ *
+ * ⚠ 스코프 (죽음 플립 0 게이트 실측): 이 무효를 **전 축에서** 실효로 바꾸자
+ * 기존 O 클러터 sweep 1건이 죽었다 — scale≠1 에서 새로 서는 앵커 가설이
+ * strictCount>0 을 만들어 실루엣 폴백(hex, strictCount===0 조건)을 억제하는
+ * 기존 트레이드를 건드린다. 그래서 실효 배율(scaleSupplied)은 **턴A 변형(신설
+ * 축)에만** 연다: 기존 축은 supplied H 분기에서 배율 무시 — 종전과 비트 동일하다.
+ * 레거시 축의 일반 수리는 통합자 판단 몫이다 (레인 보고서 §발견).
+ */
+function homographyForOrientation(bullseye, orientation, options, scale = 1, scaleSupplied = false) {
   const supplied = options.H || bullseye.baseHomography;
-  const base = supplied === undefined
-    ? makeAffineHomography(bullseye.center, bullseye.cellSize)
-    : assertHomography(supplied);
   const sign = options.orientationSign === -1 ? -1 : 1;
-  return multiplyHomographies(
-    base,
+  if (supplied === undefined) {
+    // 폴백(affine) 분기는 종전 «cellSize 에 곱하기» 수치 그대로 보존한다.
+    return multiplyHomographies(
+      makeAffineHomography(bullseye.center, bullseye.cellSize * scale),
+      rotationHomography(sign * orientation * (2 * Math.PI / 3)),
+    );
+  }
+  const withOrientation = multiplyHomographies(
+    assertHomography(supplied),
     rotationHomography(sign * orientation * (2 * Math.PI / 3)),
   );
+  if (scale === 1 || scaleSupplied !== true) return withOrientation;
+  return multiplyHomographies(withOrientation, new Float64Array([
+    scale, 0, 0,
+    0, scale, 0,
+    0, 0, 1,
+  ]));
 }
 
 function projectCell(H, q, r) {
@@ -247,7 +272,7 @@ function geometryResidual(points, center, cellSize) {
   return Math.sqrt(sum / radii.length);
 }
 
-function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, options) {
+function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, options, turn = false, scale = 1) {
   const sampleFraction = Number.isFinite(options.sampleRadiusFraction)
     && options.sampleRadiusFraction > 0
     && options.sampleRadiusFraction <= 1
@@ -265,7 +290,7 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
   const minProjectedMinorDiameter = Number.isFinite(options.minProjectedMinorDiameter)
     ? Math.max(0, options.minProjectedMinorDiameter)
     : DEFAULT_ANCHOR_MIN_PROJECTED_MINOR_DIAMETER_PX;
-  const H = homographyForOrientation(bullseye, orientation, options);
+  const H = homographyForOrientation(bullseye, orientation, options, scale, turn === true);
   const pointList = [];
   const measurements = [];
   let allSamples = true;
@@ -345,6 +370,10 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
     family,
     k,
     orientation,
+    // 턴A (내부 타입 V) — 실루엣 방향. 앵커 «자리» 가 곧 판정 신호다: 정삼각과
+    // 역삼각의 꼭짓점 자리는 100% 배타(placementA 패치 배타의 특수례)라, 한쪽
+    // 가설의 앵커 자리는 다른 쪽 프레임에서 배경(순위 동률)이라 hardChecks 가 죽는다.
+    turn: turn === true,
     centerQr: bullseye.centerQr,
     anchors: pointList,
     canonicalAnchors: canonicalAnchors.map((anchor) => ({ q: anchor.q, r: anchor.r })),
@@ -360,7 +389,7 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
       all: allSamples && allRanks && allExpected,
     },
     measurements,
-    hypothesisId: family + '-' + k + '-' + orientation,
+    hypothesisId: family + '-' + k + '-' + orientation + (turn === true ? '-turn' : ''),
     _minCount: Number.isFinite(minCount) ? minCount : 0,
   };
 }
@@ -427,54 +456,63 @@ function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
 
   const hypotheses = [];
   const rejected = [];
+  let evaluatedCount = 0;
   for (const k of normalizedKs) {
-    let anchors;
+    // anchorFactory 는 «방향 변형 목록» 을 낸다 — [{turn, anchors}].
+    // hex 는 항상 1개(turn=false), tri 는 정삼각 + 역삼각(턴A) 2개다.
+    let variants;
     try {
-      anchors = anchorFactory(k);
+      variants = anchorFactory(k);
     } catch (error) {
       rejected.push({ k, reason: error.message });
       continue;
     }
-    for (const orientation of ORIENTATIONS) {
-      let evaluated = null;
-      for (const scale of cellSizeSearchScales(k, options)) {
-        const probed = evaluate(
-          luma,
-          scale === 1
-            ? normalizedBullseye
-            : { ...normalizedBullseye, cellSize: normalizedBullseye.cellSize * scale },
-          anchors,
-          family,
+    for (const variant of variants) {
+      for (const orientation of ORIENTATIONS) {
+        evaluatedCount += 1;
+        let evaluated = null;
+        for (const scale of cellSizeSearchScales(k, options)) {
+          const probed = evaluate(
+            luma,
+            normalizedBullseye,
+            variant.anchors,
+            family,
+            k,
+            orientation,
+            options,
+            variant.turn === true,
+            scale,
+          );
+          // 통과하면 즉시 채택. 아니면 «가장 멀리 간» 것을 진단용으로 남긴다.
+          if (probed.hardChecks.all) {
+            evaluated = probed;
+            if (scale !== 1) evaluated.cellSizeScale = scale;
+            break;
+          }
+          if (evaluated === null
+            || anchorProgress(probed) > anchorProgress(evaluated)) evaluated = probed;
+        }
+        if (evaluated.hardChecks.all) hypotheses.push(evaluated);
+        else rejected.push({
+          hypothesisId: evaluated.hypothesisId,
           k,
           orientation,
-          options,
-        );
-        // 통과하면 즉시 채택. 아니면 «가장 멀리 간» 것을 진단용으로 남긴다.
-        if (probed.hardChecks.all) {
-          evaluated = probed;
-          if (scale !== 1) evaluated.cellSizeScale = scale;
-          break;
-        }
-        if (evaluated === null
-          || anchorProgress(probed) > anchorProgress(evaluated)) evaluated = probed;
+          turn: variant.turn === true,
+          hardChecks: evaluated.hardChecks,
+          anchorMargin: evaluated.anchorMargin,
+        });
       }
-      if (evaluated.hardChecks.all) hypotheses.push(evaluated);
-      else rejected.push({
-        hypothesisId: evaluated.hypothesisId,
-        k,
-        orientation,
-        hardChecks: evaluated.hardChecks,
-        anchorMargin: evaluated.anchorMargin,
-      });
     }
   }
 
-  hypotheses.sort((a, b) => a.k - b.k || a.orientation - b.orientation);
+  hypotheses.sort((a, b) => a.k - b.k
+    || (a.turn === true ? 1 : 0) - (b.turn === true ? 1 : 0)
+    || a.orientation - b.orientation);
   const detail = {
     family,
     testedKs: normalizedKs,
     testedOrientations: ORIENTATIONS.slice(),
-    evaluatedCount: normalizedKs.length * ORIENTATIONS.length,
+    evaluatedCount,
     rejected,
   };
   if (hypotheses.length === 0) {
@@ -499,12 +537,20 @@ function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
  * @returns {{ok:true, hypotheses: object[], diagnostics: object}|{ok:false, reason:string, detail?:object}}
  */
 export function findOAnchorHypotheses(luma, bullseye, ks, options = {}) {
-  return findHypotheses(luma, bullseye, ks, options, 'hex', (k) => anchorCells(k));
+  return findHypotheses(luma, bullseye, ks, options, 'hex',
+    (k) => [{ turn: false, anchors: anchorCells(k) }]);
 }
 
 /**
  * Type A의 주 꼭짓점 앵커를 전수 평가한다. Type O의 육각 코어 앵커는
  * placementA.js 규약상 보조 앵커이므로 여기서는 주 앵커 3점만 쓴다.
+ *
+ * 턴A (내부 타입 V, 2026-08-24 기하 개통) — 역삼각 변형을 함께 평가한다:
+ * 렌더 규약(«배치만 180° 회전, 셀은 정립» — scene.js)에 따라 앵커 «셀» 은
+ * (−q,−r) 자리에 정립으로 그려지므로, 검출도 같은 사상으로 좌표만 반전해 찍는다
+ * (digit 기대값·면 offset 은 정삼각과 동일). 두 변형의 앵커 자리는 100% 배타라
+ * (턴A 자리는 정삼각 프레임에서 코드 밖 배경) 오수용 축이 아니라 추가 축이다 —
+ * 기존 정삼각 평가는 한 비트도 안 바뀐다.
  *
  * @param {import('./contracts.js').LumaField} luma
  * @param {import('./contracts.js').BullseyeCandidate} bullseye
@@ -512,7 +558,16 @@ export function findOAnchorHypotheses(luma, bullseye, ks, options = {}) {
  * @param {object} [options]
  */
 export function findAAnchorHypotheses(luma, bullseye, ks, options = {}) {
-  return findHypotheses(luma, bullseye, ks, options, 'tri', (k) => vertexAnchors(k));
+  return findHypotheses(luma, bullseye, ks, options, 'tri', (k) => {
+    const upright = vertexAnchors(k);
+    return [
+      { turn: false, anchors: upright },
+      {
+        turn: true,
+        anchors: upright.map((anchor) => ({ q: -anchor.q, r: -anchor.r, digit: anchor.digit })),
+      },
+    ];
+  });
 }
 
 /**
