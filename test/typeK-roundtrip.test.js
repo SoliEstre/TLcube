@@ -196,6 +196,10 @@ test('star 오양성은 평가 집합을 넓히지 않는다 — familyWithoutSt
   assert.equal(misread.family, 'star', '오양성 전제가 사라졌다 — 근거를 다시 재라');
   assert.equal(misread.diagnostics.familyWithoutStar, 'tri',
     'star 없이는 tri 였는데 사슬 폴백이 그 값을 못 낸다 — 평가 집합이 넓어진다');
+  // bootstrap 이 실제로 읽는 것은 **집합** 이다 (빈 집합이면 base 의
+  // body-validated-hex 폴백을 재현해야 한다 — 그걸 놓쳐서 회전 30° sweep 이
+  // 한 번 죽었다: 좁히는 방향의 회귀도 실재한다).
+  assert.deepEqual(misread.diagnostics.familiesWithoutStar, ['tri']);
 
   // star 가 없는 평범한 A 프레임에서도 같은 값이 나온다 (계산이 star 유무에 안 걸린다).
   const plain = classifyFamily(luma, { finder }, { ks: [encodedA.k], minSeparation: 0.04 });

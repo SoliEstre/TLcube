@@ -2104,20 +2104,29 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
      */
     if (classified.family === 'star') {
       /*
-       * ⚠ 사슬은 «star + **star 가 없었다면 나왔을 분류 하나**» 다 — 상수
+       * ⚠ 사슬은 «star + **star 가 없었다면 이 함수가 냈을 답**» 이다 — 상수
        * ['star','tri','hex'] 가 아니다. 하드코딩하면 star 오양성 하나가 기존
        * 프레임의 평가 집합을 넓혀서, base 가 못 읽던 프레임이 우연히 살아난다
        * (실측 2026-08-24: 투명 O trim 이 tri 로 분류돼 죽던 것이 star 오양성
        * 덕에 hex 까지 평가돼 읽혔다 — `export-options.test.js` §9 링 규칙의
-       * 전제를 조용히 무너뜨렸다). familyWithoutStar 가 그 «원래 답» 이다.
-       * 없으면(원래도 무후보/모호) star 만 본다 — base 와 같은 폭이다.
+       * 전제를 조용히 무너뜨렸다).
+       *
+       * ⚠⚠ 반대 방향도 실재한다 — 「없으면 star 만」으로 좁혔더니 회전 30° sweep
+       * 이 죽었다 (`decoder-frontend.test.js`). star 없이 **무후보**인 프레임에서
+       * base 는 아래 `body-validated-hex` 폴백으로 hex 를 계속 평가하기 때문이다.
+       * 그래서 여기서 그 분기를 **그대로 재현**한다: 집합이 비면 ['hex'].
+       * (집합이 둘 이상이면 base 는 FAMILY_AMBIGUOUS 로 죽는다 — 그 자리는 base 가
+       * 어차피 못 읽으므로 전부 평가한다. 죽음 플립이 아니라 이득 방향이다.)
        */
-      const withoutStar = classified.diagnostics && classified.diagnostics.familyWithoutStar;
+      const withoutStar = (classified.diagnostics
+        && Array.isArray(classified.diagnostics.familiesWithoutStar))
+        ? classified.diagnostics.familiesWithoutStar : [];
+      const chain = withoutStar.length > 0 ? withoutStar : ['hex'];
       return ok({
-        families: withoutStar ? ['star', withoutStar] : ['star'],
+        families: ['star', ...chain],
         classification: classified,
         starChainExpansion: true,
-        starChainFallbackFamily: withoutStar || null,
+        starChainFallbackFamilies: chain,
       });
     }
     return ok({ families: [classified.family], classification: classified });

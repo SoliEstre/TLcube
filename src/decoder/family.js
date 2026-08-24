@@ -1020,11 +1020,11 @@ function copyWithStarExclusion(candidate) {
 }
 
 /**
- * star 를 빼고 tri>hex 배제만 적용했을 때 남는 패밀리 — 유일하면 그 이름, 아니면
- * null. 입력은 **배제 적용 전** 스냅샷이고, 여기서는 복사본만 만든다 (호출부의
- * 배열·항목을 건드리지 않는다).
+ * star 를 빼고 tri>hex 배제만 적용했을 때 hard 로 남는 패밀리 **집합**(정렬).
+ * 입력은 **배제 적용 전** 스냅샷이고, 여기서는 복사본만 만든다 (호출부의 배열·
+ * 항목을 건드리지 않는다).
  */
-function familyWithoutStar(preStarHypotheses) {
+function familiesWithoutStar(preStarHypotheses) {
   const candidates = preStarHypotheses.filter((candidate) => candidate.family !== 'star');
   const triPositive = candidates.some((candidate) => candidate.family === 'tri'
     && candidate.finderIndex !== undefined
@@ -1037,10 +1037,9 @@ function familyWithoutStar(preStarHypotheses) {
         && other.hardChecks && other.hardChecks.all);
     return sameFinder ? copyWithPatchExclusion(candidate) : candidate;
   });
-  const families = Array.from(new Set(resolved
+  return Array.from(new Set(resolved
     .filter((candidate) => candidate.hardChecks && candidate.hardChecks.all)
-    .map((candidate) => candidate.family)));
-  return families.length === 1 ? families[0] : null;
+    .map((candidate) => candidate.family))).sort();
 }
 
 /**
@@ -1141,6 +1140,7 @@ export function classifyFamily(luma, evidence, options = {}) {
 
   const hard = hypotheses.filter((candidate) => candidate.hardChecks && candidate.hardChecks.all);
   const familySet = Array.from(new Set(hard.map((candidate) => candidate.family))).sort();
+  const withoutStar = familiesWithoutStar(preStarHypotheses);
   const diagnostics = {
     finderCount: finders.length,
     finderReports,
@@ -1150,13 +1150,16 @@ export function classifyFamily(luma, evidence, options = {}) {
     hardHypothesisCount: hard.length,
     hardFamilies: familySet,
     /**
-     * star 가설이 **아예 없었다면** 이 프레임이 뭐로 분류됐을까 (유일하지 않으면
-     * null). star 오양성이 기존 프레임의 평가 집합을 넓히지 못하게 하는 값이다 —
-     * bootstrap 이 «star + 이 값» 만 평가한다 (chain expansion). 이게 없으면
-     * star 가 서는 순간 hex·tri 가 **둘 다** 평가돼 base 가 못 읽던 프레임이
-     * 우연히 살아난다 (실측: 투명 O trim 이 링 없이 읽혔다 — 2026-08-24).
+     * star 가설이 **아예 없었다면** 이 프레임에 남았을 hard 패밀리 집합.
+     * star 오양성이 기존 프레임의 평가 집합을 넓히지 못하게 하는 값이다 —
+     * bootstrap 이 «star + 이 집합»(비면 base 의 body-validated-hex 폴백)만
+     * 평가한다. 이게 없으면 star 가 서는 순간 hex·tri 가 **둘 다** 평가돼 base 가
+     * 못 읽던 프레임이 우연히 살아난다 (실측: 투명 O trim 이 링 없이 읽혔다 —
+     * 2026-08-24).
      */
-    familyWithoutStar: familyWithoutStar(preStarHypotheses),
+    familiesWithoutStar: withoutStar,
+    /** 위 집합이 유일할 때 그 이름, 아니면 null (진단·테스트 편의). */
+    familyWithoutStar: withoutStar.length === 1 ? withoutStar[0] : null,
   };
 
   if (familySet.length === 0) {
