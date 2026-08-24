@@ -35,8 +35,8 @@ const PALETTE = Object.freeze({
 });
 const PPU = 12;
 
-function renderK(text, version) {
-  const encoded = encodeK(text, { version, eccLevel: 'M' });
+function renderK(text, version, options = {}) {
+  const encoded = encodeK(text, { version, eccLevel: 'M', ...options });
   const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
   return {
     encoded,
@@ -67,6 +67,23 @@ test('K 왕복 — K0/K1/K2 가 star 가설·포맷 7 로 원문까지 돌아온
       spec.name + ': cube 경로가 K 실루엣에 양성으로 섰다 — F-107 함정이 K 에 열렸다. '
       + '재시도 안전망(retryFinderComparison)에 기대기 시작한 것이니 잠금 검사를 갱신하라');
   }
+});
+
+// K-CM 은 **생성·후단 복호까지** 열렸고 프론트엔드(bootstrap)는 아직 평 K 전용이다 —
+// 레인 C 의 쓰기 범위가 decoder/decode-k.js 까지였기 때문이다 (레인 보고서 §5.2).
+// «아직 안 열렸다» 를 문서가 아니라 자로 남긴다: 부재에도 이유와 날짜가 필요하고,
+// 통합자가 배선하는 순간 이 테스트가 터져서 «이제 열렸다» 를 알린다.
+test('K-CM 프론트엔드 미배선 — 포맷 단계에서 죽는다 (2026-08-24, 통합자 배선 대기)', () => {
+  const text = 'K-CM-frontend-pending';
+  const { encoded, raster } = renderK(text, 0, { cornerMarker: true });
+  assert.equal(encoded.formatIndex, 8, 'K-CM 와이어 값이 8 이 아니다');
+  const result = decodeFrontend(raster);
+  // 통과해 버리면 «미배선» 이 거짓이다 — 그 경우 이 테스트를 지우는 게 아니라
+  // 평 K 왕복과 같은 양성 단언으로 바꾼다 (배타 개설 정형 ③).
+  assert.equal(result.ok, false,
+    'K-CM 이 프론트엔드에서 복호됐다 — bootstrap 배선이 들어왔다면 이 락을 양성으로 전환하라');
+  // 그리고 «조용히 다른 원문» 이 나오는 일은 어떤 경우에도 없어야 한다.
+  assert.equal(result.text, undefined);
 });
 
 test('대조군 무회귀 — 같은 하네스에서 O·A 는 기존 패밀리로 이긴다 (star 오양성 없음)', () => {
