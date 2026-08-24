@@ -76,16 +76,25 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
   assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, false);
   assert.equal(INNER_SEAT_OPTIONS.includes('H'), false,
     'H 가 상태 값으로 되살아났다 — o-cm 통합(2026-08-24)의 회귀');
-  // v-cm — 실체 전환 (2026-08-24, 배타 개설 정형 ③): 부재 카드 단언(구 락)을
-  // 양성 단언으로. k-cm 은 여전히 부재다.
+  // v-cm · k-cm — 실체 전환 (2026-08-24, 배타 개설 정형 ③): 부재 카드 단언(구 락)을
+  // 양성 단언으로. 둘 다 이제 부재가 아니다 — 부재 카드는 하나도 안 남았다.
   {
     const vcm = zones.outer.find((c) => c.id === 'v-cm');
     assert.equal(vcm.absent, false, 'v-cm 이 아직 부재 카드다 — 2026-08-24 실체 전환 회귀');
     assert.equal(vcm.ready, true, 'v-cm 이 클릭 불가다');
     assert.deepEqual([...vcm.types], ['A'], 'v-cm 은 Type A(×turnA) 전용이다');
     const kcm = zones.outer.find((c) => c.id === 'k-cm');
-    assert.equal(kcm.absent, true, 'k-cm 는 부재 카드여야 한다');
-    assert.equal(kcm.ready, false, 'k-cm 는 클릭 불가여야 한다');
+    assert.equal(kcm.absent, false, 'k-cm 이 아직 부재 카드다 — 2026-08-24 실체 전환 회귀');
+    assert.equal(kcm.ready, true, 'k-cm 이 클릭 불가다');
+    assert.deepEqual([...kcm.types], ['K'], 'k-cm 은 Type K 전용이다');
+    // ⚠ 그런데 **상태 값은 아니다** — 생성기 타입에 K 가 없다(⑤ 잔여). 그래서 아래
+    // 기대축(LAB_OUTER) 전수 대조는 k-cm 을 애초에 안 본다: OUTER_SEAT_OPTIONS 가
+    // stateValue:false 로 걸러 낸다. K 가 생성기에 편입되면 그 게이트가 걷히고,
+    // 그 순간 아래 루프가 «LAB_OUTER_FINDER_IDS 에 k-cm 이 없다» 로 터진다 —
+    // 스캐너 기대축 + 8언어 등재가 통합자 몫이라는 신호다 (v-cm 이 지나온 길).
+    assert.equal(OUTER_SEAT_OPTIONS.includes('k-cm'), false,
+      'k-cm 이 상태 값이 됐다 — 스캐너 기대축·8언어 등재가 먼저다');
+    assert.equal(zones.outer.some((c) => c.absent), false, '부재 카드가 남아 있다');
   }
   // 기대축 대조 — 시험판 축 ③(LAB_OUTER)은 seat 값을 전부 알아야 한다
   // (sagoae 의 lab 텔레메트리 키는 레거시 'daehan' — finder-taxonomy 주석).
