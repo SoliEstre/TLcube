@@ -2374,8 +2374,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (준비 중)",
     "g855": "sagoae 는 아직 켤 수 없어요 — 단독 와이어 편입 전이라 자리만 예약해 뒀어요.",
     "g859": "H",
-    "g871": "H 심볼(O-CM 자리 파인더)을 함께 그려요. 아직 판독 배선 전이라 스캐너가 이 코드를 못 읽어요 — 표시·인쇄 확인용으로만 쓰세요.",
+    "g871": "O-CM 자리에 H 심볼을 함께 그려요 (A-CM 의 H2O 와 같은 방식). 판독은 중앙 TL(비컨) 조합에서 확인됐어요 — 다른 중앙 파인더 조합은 인식률이 떨어질 수 있어요.",
     "g872": "비컨 실측치 — 모듈나비 {mpc}/셀 · 실기기 셀 17~20px → 모듈 {lo}~{hi}px (권장 하한 {floor}px) · 내부 3톤 · ECC H(t=7) · 실기기 스캔 검증 2026-08-22",
+    "g873": "모듈 크기 (실기기)",
+    "g874": "ECC 정정력 (RS)",
     "g856": "V-CM (부재)",
     "g857": "K-CM (부재)",
     "g858": "빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.",
@@ -2808,8 +2810,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (in preparation)",
     "g855": "sagoae cannot be enabled yet — its standalone wire is not in place, so the seat is only reserved.",
     "g859": "H",
-    "g871": "Renders the H symbol (the O-CM seat finder). Decoding is not wired yet, so scanners cannot read this code — use it for display/print checks only.",
+    "g871": "Draws the H symbol on the O-CM seat (same convention as A-CM's H2O). Decoding is verified with the central TL (beacon) combination — other central finders may scan worse.",
     "g872": "Beacon measurements — module pitch {mpc}/cell · device cells 17–20px → modules {lo}–{hi}px (recommended floor {floor}px) · inner 3-tone · ECC H(t=7) · device-scan verified 2026-08-22",
+    "g873": "Module size (device)",
+    "g874": "ECC strength (RS)",
     "g856": "V-CM (absent)",
     "g857": "K-CM (absent)",
     "g858": "The empty seats (V-CM·K-CM) have no design yet — shown as placeholders only.",
@@ -3242,8 +3246,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae（準備中）",
     "g855": "sagoae はまだ有効にできません — 単独ワイヤ編入前のため、席だけ予約しています。",
     "g859": "H",
-    "g871": "H シンボル（O-CM 席のファインダー）を一緒に描画します。読取配線は未実装のため、スキャナーはこのコードを読めません — 表示・印刷確認用です。",
+    "g871": "O-CM 席に H シンボルを一緒に描画します（A-CM の H2O と同じ方式）。読取は中央TL（ビーコン）併用で確認済み — 他の中央ファインダーでは認識率が下がる場合があります。",
     "g872": "ビーコン実測 — モジュール幅 {mpc}/セル · 実機セル 17–20px → モジュール {lo}–{hi}px（推奨下限 {floor}px）· 内部3トーン · ECC H(t=7) · 実機スキャン検証 2026-08-22",
+    "g873": "モジュール寸法（実機）",
+    "g874": "ECC 訂正力（RS）",
     "g856": "V-CM（不在）",
     "g857": "K-CM（不在）",
     "g858": "空席（V-CM·K-CM）はまだ設計がありません — 席だけ表示しています。",
@@ -3675,8 +3681,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (en préparation)",
     "g855": "sagoae ne peut pas encore être activé — son câblage autonome n'est pas en place, le siège est seulement réservé.",
     "g859": "H",
-    "g871": "Rend le symbole H (le repère du siège O-CM). Le décodage n'est pas encore câblé : les scanners ne peuvent pas lire ce code — usage d'affichage/impression uniquement.",
+    "g871": "Dessine le symbole H sur le siège O-CM (même convention que le H2O d'A-CM). Le décodage est vérifié avec le TL central (balise) — les autres repères centraux peuvent moins bien scanner.",
     "g872": "Mesures balise — pas de module {mpc}/cellule · cellules réelles 17–20px → modules {lo}–{hi}px (plancher conseillé {floor}px) · 3 tons internes · ECC H(t=7) · vérifié au scan réel 2026-08-22",
+    "g873": "Taille de module (réel)",
+    "g874": "Capacité ECC (RS)",
     "g856": "V-CM (absent)",
     "g857": "K-CM (absent)",
     "g858": "Les sièges vides (V-CM·K-CM) n'ont pas encore de conception — affichés comme simples emplacements.",
@@ -4108,8 +4116,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (in preparazione)",
     "g855": "sagoae non può ancora essere attivato — il collegamento autonomo non è pronto, il posto è solo riservato.",
     "g859": "H",
-    "g871": "Disegna il simbolo H (il finder del posto O-CM). La decodifica non è ancora collegata: gli scanner non possono leggere questo codice — solo per verifiche di visualizzazione/stampa.",
+    "g871": "Disegna il simbolo H sul posto O-CM (stessa convenzione dell'H2O di A-CM). La decodifica è verificata con il TL centrale (beacon) — altri finder centrali possono scansionare peggio.",
     "g872": "Misure beacon — passo modulo {mpc}/cella · celle reali 17–20px → moduli {lo}–{hi}px (soglia consigliata {floor}px) · 3 toni interni · ECC H(t=7) · verificato con scansione reale 2026-08-22",
+    "g873": "Dimensione modulo (reale)",
+    "g874": "Capacità ECC (RS)",
     "g856": "V-CM (assente)",
     "g857": "K-CM (assente)",
     "g858": "I posti vuoti (V-CM·K-CM) non hanno ancora un progetto — mostrati solo come segnaposto.",
@@ -4541,8 +4551,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (in Vorbereitung)",
     "g855": "sagoae kann noch nicht aktiviert werden — die eigenständige Verdrahtung fehlt, der Platz ist nur reserviert.",
     "g859": "H",
-    "g871": "Zeichnet das H-Symbol (den Finder des O-CM-Platzes) mit. Die Dekodierung ist noch nicht verdrahtet — Scanner können diesen Code nicht lesen; nur zur Anzeige-/Druckprüfung.",
+    "g871": "Zeichnet das H-Symbol auf den O-CM-Platz (gleiche Konvention wie H2O bei A-CM). Dekodierung mit zentralem TL (Beacon) verifiziert — andere zentrale Finder können schlechter scannen.",
     "g872": "Beacon-Messwerte — Modulbreite {mpc}/Zelle · Gerätezellen 17–20px → Module {lo}–{hi}px (empfohlene Untergrenze {floor}px) · innen 3-Ton · ECC H(t=7) · Gerätescan verifiziert 2026-08-22",
+    "g873": "Modulgröße (Gerät)",
+    "g874": "ECC-Stärke (RS)",
     "g856": "V-CM (nicht vorhanden)",
     "g857": "K-CM (nicht vorhanden)",
     "g858": "Die leeren Plätze (V-CM·K-CM) haben noch kein Design — nur als Platzhalter angezeigt.",
@@ -4974,8 +4986,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (en preparación)",
     "g855": "sagoae aún no se puede activar: su cableado independiente no está listo, el asiento solo está reservado.",
     "g859": "H",
-    "g871": "Dibuja el símbolo H (el buscador del asiento O-CM). La decodificación aún no está cableada: los escáneres no pueden leer este código — solo para comprobaciones de visualización/impresión.",
+    "g871": "Dibuja el símbolo H en el asiento O-CM (misma convención que el H2O de A-CM). La decodificación está verificada con el TL central (baliza); otros buscadores centrales pueden escanear peor.",
     "g872": "Mediciones de baliza — paso de módulo {mpc}/celda · celdas reales 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tonos internos · ECC H(t=7) · verificado con escaneo real 2026-08-22",
+    "g873": "Tamaño de módulo (real)",
+    "g874": "Capacidad ECC (RS)",
     "g856": "V-CM (ausente)",
     "g857": "K-CM (ausente)",
     "g858": "Los asientos vacíos (V-CM·K-CM) aún no tienen diseño; se muestran solo como marcadores.",
@@ -5407,8 +5421,10 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (em preparação)",
     "g855": "sagoae ainda não pode ser ativado — a ligação autônoma não está pronta, o assento está apenas reservado.",
     "g859": "H",
-    "g871": "Desenha o símbolo H (o localizador do assento O-CM). A decodificação ainda não está ligada: os scanners não conseguem ler este código — use apenas para verificação de exibição/impressão.",
+    "g871": "Desenha o símbolo H no assento O-CM (mesma convenção do H2O do A-CM). A decodificação foi verificada com o TL central (beacon) — outros localizadores centrais podem ler pior.",
     "g872": "Medições do beacon — passo de módulo {mpc}/célula · células reais 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tons internos · ECC H(t=7) · verificado em scanner real 2026-08-22",
+    "g873": "Tamanho do módulo (real)",
+    "g874": "Capacidade ECC (RS)",
     "g856": "V-CM (ausente)",
     "g857": "K-CM (ausente)",
     "g858": "Os assentos vazios (V-CM·K-CM) ainda não têm design — mostrados apenas como marcadores.",
@@ -6830,8 +6846,73 @@ const FINDER_SVG_NS = 'http://www.w3.org/2000/svg';
 // 20 = 기존 불스아이 썸네일의 최외곽 원 — 그게 눈에 익은 기준이라 거기에 맞춘다.
 const FINDER_THUMB_OUTER = 20;
 
+/**
+ * 중앙 TL(비컨) 전용 측정 행 (운영자 2026-08-24 — «다른 항목처럼 그래프로»).
+ * 6축 하네스는 이진 셀마스크 계보라 비컨엔 정직하게 못 쓴다 — 대신 **계약 §7.1
+ * 실측이 있는 축만** 같은 시각 문법(행+게이지+기준선)으로 보인다.
+ *  · 모듈 크기: 실기기 최소 셀(17px)에서의 모듈 px vs 권장 하한 4.2px (마커)
+ *  · ECC 정정력: RS nsym 14/36 (t=7) — 심볼 대비 정정 오버헤드
+ */
+const BEACON_SCORE_ROWS = Object.freeze([
+  Object.freeze({
+    id: 'beaconModule', labelKey: 'g873', evidenceClass: 'measured',
+    value: 0.466 * 17, max: 10, baseline: 4.2,
+    text: (0.466 * 17).toFixed(1) + '~' + (0.466 * 20).toFixed(1) + 'px',
+  }),
+  Object.freeze({
+    id: 'beaconEcc', labelKey: 'g874', evidenceClass: 'measured',
+    value: 14, max: 36, baseline: null, text: 't=7 · nsym 14/36',
+  }),
+]);
+let finderScoreRowsMode = ''; // 'axes' | 'beacon' — 행 구성을 어느 쪽으로 지었나
+
+function renderBeaconScoreRows() {
+  if (finderScoreRowsMode === 'beacon') return;
+  els.finderScoreRows.replaceChildren();
+  finderScoreRowsMode = 'beacon';
+  for (const spec of BEACON_SCORE_ROWS) {
+    const row = document.createElement('div');
+    row.className = 'finder-score-row';
+    row.dataset.finderScoreAxis = spec.id;
+    const axisWrap = document.createElement('div');
+    axisWrap.className = 'finder-score-axis';
+    const label = document.createElement('span');
+    label.className = 'finder-score-axis-label';
+    label.textContent = t(spec.labelKey);
+    const evidence = document.createElement('span');
+    evidence.className = 'finder-score-evidence ' + spec.evidenceClass;
+    evidence.textContent = t('g489');
+    axisWrap.append(label, evidence);
+    const visual = document.createElement('div');
+    visual.className = 'finder-score-visual';
+    const track = document.createElement('div');
+    track.className = 'finder-score-track';
+    const fill = document.createElement('div');
+    fill.className = 'finder-score-fill';
+    fill.style.width = Math.round(100 * Math.min(1, spec.value / spec.max)) + '%';
+    track.append(fill);
+    if (spec.baseline !== null) {
+      const marker = document.createElement('span');
+      marker.className = 'finder-score-marker';
+      marker.style.left = Math.round(100 * spec.baseline / spec.max) + '%';
+      track.append(marker);
+    }
+    visual.append(track);
+    const value = document.createElement('strong');
+    value.className = 'finder-score-value';
+    value.textContent = spec.text;
+    row.append(axisWrap, visual, value);
+    els.finderScoreRows.append(row);
+  }
+}
+
 function ensureFinderScoreRows() {
+  if (finderScoreRowsMode === 'beacon') {
+    els.finderScoreRows.replaceChildren();
+    finderScoreRowsMode = '';
+  }
   if (els.finderScoreRows.childElementCount) return;
+  finderScoreRowsMode = 'axes';
   for (const axis of FINDER_SCORE_AXES) {
     const row = document.createElement('div');
     row.className = 'finder-score-row';
@@ -7190,12 +7271,10 @@ const SEAT_CARD_ICONS = Object.freeze({
   'a-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L21 19 L3 19 Z"/><circle cx="12" cy="3.4" r="1.6" fill="currentColor" stroke="none"/><circle cx="20.4" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="3.6" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>',
   'v-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3 5 L21 5 L12 21 Z" stroke-dasharray="2.4 2"/></svg>',
   'k-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L20 17 L4 17 Z" stroke-dasharray="2.4 2"/><path d="M12 21 L4 7 L20 7 Z" stroke-dasharray="2.4 2"/></svg>',
-  // H = O-CM 자리(육각 경계 12셀)의 심볼 파인더 — 육각 + H 글리프 (F-35 분류 2).
-  H: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M9 8 V16 M15 8 V16 M9 12 H15"/></svg>',
 });
 const SEAT_CARD_LABEL_KEYS = Object.freeze({
   [SEAT_NONE]: 'g577', 'o-cm': 'g852', 'a-cm': 'g853',
-  sagoae: 'g854', 'v-cm': 'g856', 'k-cm': 'g857', H: 'g859',
+  sagoae: 'g854', 'v-cm': 'g856', 'k-cm': 'g857',
 });
 
 let seatCardsBuilt = false;
@@ -7292,7 +7371,14 @@ function renderFinderUi() {
     els.finderScoreName.textContent = tf('g480', { name: unmeasuredPattern.name });
     els.finderGateBadge.className = 'finder-gate-badge';
     els.finderGateBadge.textContent = t('g568');
-    els.finderScoreRows.style.display = 'none';
+    // 중앙 TL(비컨)은 계약 실측이 있는 축을 같은 게이지 문법으로 보인다 (그 외
+    // 미측정 계보는 접는다 — 수치를 지어내지 않는다).
+    if (isCentralV0FinderPatternId(generatorState.finderPatternId)) {
+      renderBeaconScoreRows();
+      els.finderScoreRows.style.display = '';
+    } else {
+      els.finderScoreRows.style.display = 'none';
+    }
     els.finderCenterOffset.textContent = '—';
     els.finderCenterGate.className = 'finder-gate-badge';
     els.finderCenterGate.textContent = t('g568');
@@ -7583,7 +7669,10 @@ function syncResTierUi() {
   const windowLocked = yWindowActive();
   // 셀 표면 라인업 잠금 (2026-08-16 드랍 반영): v0 = Y0(저) 고정.
   // v2r2(Y1/Y2 중·고)·v1r2 잠금은 카드와 함께 내려갔다 — **Y2 는 이제 공백**이다.
-  const cellSurfaceV0 = type === 'Y'
+  // ⚠ 자동(2026-08-24 승격)에서는 잠그지 않는다 — 자동은 해상도를 따라 프로파일을
+  //   재유도하므로(저→v0·중→v0TR·고→끔) 잠금이 걸리면 «해상도 변경 안 됨» 이 된다
+  //   (아침 검수 실측). 잠금은 프로파일 **수동 선택**의 의미 보존 장치다.
+  const cellSurfaceV0 = type === 'Y' && !detectorAutoY
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0;
   // v0T · v0TY 는 n=21 뿐이라 중(中) 한 단만 연다.
   // (v0XQ·v0X 는 2026-08-17 2·3라운드 드랍, **v0W 계열 넷은 같은 날 v0T 편입
@@ -7592,14 +7681,14 @@ function syncResTierUi() {
   // #22 연동의 «중» 은 이제 **v0T** 다 — v0W 계열 드랍으로 라인업 기본이 v0t 로
   // 승계됐고 («v0w → v0t»), 라인업 기본과 «중» 이 같은 값을 가리키는 관계는
   // v0X 드랍 이후 그대로 유지된다.
-  const cellSurfaceV0t = type === 'Y'
+  const cellSurfaceV0t = type === 'Y' && !detectorAutoY
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0T;
   // v0TY 도 n=21 전용이라 «중» 한 단만 열린다. **#22 연동(저 ↔ 중) 에는
   // 넣지 않는다** — v0WY 가 그랬던 것과 같은 이유다: 이 레이아웃은 **QR 위치
   // 카드«면»** 으로 고르는 물건이라, 해상도 카드가 v0TY 로 가거나 v0TY 에서
   // 나가게 만들면 **해상도를 고르다가 QR 위치가 같이 바뀌는** 숨은 결합이 생긴다
   // (축 하나만 움직인다 — #22 관용구).
-  const cellSurfaceV0ty = type === 'Y'
+  const cellSurfaceV0ty = type === 'Y' && !detectorAutoY
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY;
   // #22 (운영자 지시 2026-08-16): v0 계열은 해상도를 «잠그지» 않고 **연동**한다 —
   // v0 에서 «중» 을 고르면 v0T 로, v0T 에서 «저» 를 고르면 v0 로 돌아온다
@@ -7643,6 +7732,18 @@ for (const card of els.resTierCards.children) {
     const type = currentType();
     // #22: v0 계열의 해상도 선택은 로케이터 전환이다 — versionY 저장값은 건드리지
     // 않는다 (로케이터가 버전을 강제하는 기존 규약 그대로, 연동 문구는 g964).
+    if (type === 'Y' && detectorAutoY) {
+      // 자동(기본값): 해상도 선택은 그대로 버전이 되고, 프로파일이 따라온다
+      // (저→v0 · 중→v0TR(+파생) · 고→끔). 수동 연동(#22) 분기는 건너뛴다.
+      generatorState[versionStateKey(type)] = versionForResolutionTier(type, card.dataset.res);
+      applyAutoLocatorProfileY();
+      syncYLocatorUi();
+      renderQrPositionUi();
+      syncTypeUi();
+      syncResTierUi();
+      schedule();
+      return;
+    }
     if (type === 'Y') {
       const locator = generatorState.locatorProfileY;
       const res = card.dataset.res;
@@ -7884,6 +7985,9 @@ syncQuietModeUi();
  * 표시용 플래그(detectorAutoY)만 모듈 안에 둔다.
  */
 function resolveAutoLocatorProfileY(pos = generatorState.qrPosition) {
+  // Y2(n=25)는 셀 표면 레이아웃 공백 — 끔만이 스펙 보증 경로다 (실측 행렬:
+  // v0=n13 · T계열 전부 n21. 2026-08-24). 자동은 해상도를 잠그지 않고 따라간다.
+  if (generatorState.versionY === 2) return LOCATOR_PROFILE_OFF;
   if (pos === 'inner') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
   if (generatorState.versionY === 0) return LOCATOR_PROFILE_CELL_SURFACE_V0;
   return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
@@ -9426,7 +9530,11 @@ function syncTurnAUi() {
 function syncSeatUi() {
   if (!els.finderInnerZone || !els.finderOuterZone) return;
   const type = generatorState.type;
-  const show = isLabPath() && (type === 'O' || type === 'A');
+  // 운영자 2026-08-24 (아침 검수 3): lab 전용 → **고급에서만 표시** 로 승격 —
+  // 실기기 스캔 확인(O/A/K 후보·H 인식)이 승격 근거다. 시험판은 전 카드 유지 관용구.
+  const show = (mode === 'advanced'
+    || document.body.dataset.generatorEdition === 'finder-experiment')
+    && (type === 'O' || type === 'A');
   els.finderInnerZone.hidden = !show;
   els.finderOuterZone.hidden = !show;
   if (!show) return;
@@ -9445,9 +9553,11 @@ function syncSeatUi() {
       const label = card.querySelector('[data-seat-label-key]');
       label.textContent = t(label.dataset.seatLabelKey);
       // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580).
+      // o-cm 은 H 심볼 통합(2026-08-24) 특성 고지 — 판독은 중앙 TL(비컨) 조합에서
+      // 확인됐고, 비컨 없는 조합은 인식률이 떨어진다 (검출 배선 잔여).
       card.title = card.dataset.seatAbsent === '1' ? t('g858')
         : seat === 'sagoae' ? t('g855')
-          : seat === 'H' ? t('g871')
+          : seat === 'o-cm' ? t('g871')
             : (wireLocked && !isNone) ? t('g580') : '';
     }
   };
@@ -9478,10 +9588,19 @@ function syncYLocatorUi() {
                 ? LOCATOR_PROFILE_CELL_SURFACE_V0TRY
                 : LOCATOR_PROFILE_OFF;
   if (els.yLocatorCards) {
-    // 자동은 «끔» 과 같은 값을 내지만 카드는 배타적으로 켠다 — 자동을 고른 사용자에게
-    // 끔이 함께 켜져 보이면 «둘 중 뭐가 적용된 건가» 가 생긴다.
+    // 자동이 기본값(2026-08-24 승격)이고 유도값(v0/v0TR/끔)을 대신 켜지 않는다 —
+    // 자동을 고른 사용자에게 유도 카드가 함께 켜져 보이면 «뭐가 적용된 건가» 가 생긴다.
+    // **옵션 필터 (아침 검수 1)**: 안쪽 QR·면 배치 상태에서 성립하는 옵션만 보인다 —
+    //   안쪽+중앙측: v0(안쪽 미지원)·v0T(seam 파생 v0TQ 부재 — placer 기각 실측) 숨김
+    //   안쪽+코너측: v0·v0TRQ(중앙측 전용 슬롯) 숨김
+    const inner = generatorState.qrPosition === 'inner';
+    const far = generatorState.qrFacePlacement === 'far';
+    const hidden = !inner ? []
+      : far ? [LOCATOR_PROFILE_CELL_SURFACE_V0, LOCATOR_PROFILE_CELL_SURFACE_V0TRQ]
+        : [LOCATOR_PROFILE_CELL_SURFACE_V0, LOCATOR_PROFILE_CELL_SURFACE_V0T];
     for (const card of els.yLocatorCards.children) {
       const isAutoCard = card.dataset.locator === 'auto';
+      card.style.display = hidden.includes(card.dataset.locator) ? 'none' : '';
       card.classList.toggle(
         'active',
         detectorAutoY ? isAutoCard : (!isAutoCard && card.dataset.locator === profile),
@@ -9948,12 +10067,11 @@ function buildConfig() {
     // Y 는 자기 로케이터 문법을 쓰므로 seat 구역 자체가 안 뜬다 — 타입 술어가
     // 종전의 «다른 타입에서 켜진 채 새는» 것을 같은 규약으로 죽인다.
     // sagoae 는 자리 예약 값이라 와이어를 켜지 않는다 (생성측 합성 렌더 전까지).
-    // H (2026-08-24) = «o-cm 자리 + 심볼 톤» — cornerMarker 와 markerTones 를
-    // 함께 켠다 (encode 계약: markerTones 는 cornerMarker 없이 못 켠다).
-    cornerMarker: (type === 'O'
-      && (generatorState.innerSeat === 'o-cm' || generatorState.innerSeat === 'H'))
+    // O-CM = 자리 + H 심볼 톤 **통합** (운영자 2026-08-24 아침 검수 3 — A-CM 이
+    // H2O 를 항상 싣는 것과 같은 문법. encode 계약상 톤은 자리와 함께만 실린다).
+    cornerMarker: (type === 'O' && generatorState.innerSeat === 'o-cm')
       || (type === 'A' && generatorState.outerSeat === 'a-cm'),
-    markerTones: type === 'O' && generatorState.innerSeat === 'H',
+    markerTones: type === 'O' && generatorState.innerSeat === 'o-cm',
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
       ? TL_READER_URL : generatorState.qrText.trim(),
@@ -10482,7 +10600,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-24.02';
+const GENERATOR_BUILD = '2026-08-24.03';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

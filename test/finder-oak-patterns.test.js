@@ -134,7 +134,8 @@ test('② -b 명부와 표가 서로를 가린다 — 표현이 있는 후보는
     const entry = OAK_LINEUP.find((row) => row.name === name);
     return entry && entry.status === 'dropped';
   });
-  assert.deepEqual(readOnly.sort(), ['Benzene'],
+  // Aspirin — 운영자 드랍 2026-08-24 (반전판도 실기기 실패·형태상 실익 없음).
+  assert.deepEqual(readOnly.sort(), ['Aspirin', 'Benzene'],
     '판독-유지 드랍 목록이 바뀌었다 — 명부 note 와 이 목록을 같이 갱신하라');
   const active = OAK_LINEUP.filter((entry) => entry.status === 'active');
   // 표현이 **없는** 활성 후보는 사유가 분명해야 한다. 사유를 값으로 고정해 둔다 —
@@ -194,9 +195,9 @@ test('조회·카드 그룹 배선', () => {
   assert.equal(getOakFinderPattern('없는-id'), undefined);
   // 카드는 «렌더 표현 ∩ 명부 active» 에서 유도된다 (C1 live-join, 2026-08-23) —
   // 렌더 전용(taegeuk-solo)은 카드에 있고(그릴 수 있으면 고를 수 있다), 드랍된
-  // Benzene 은 표현이 남아도(판독 유지) 카드에서 빠진다(생성은 닫는다).
+  // Benzene·Aspirin(2026-08-24) 은 표현이 남아도(판독 유지) 카드에서 빠진다.
   assert.deepEqual(FINDER_CARD_GROUPS.oak.map((card) => card.id),
-    ['oak-nitrogen-r2', 'oak-aspirin', 'oak-footprint', 'oak-taegeuk-solo']);
+    ['oak-nitrogen-r2', 'oak-footprint', 'oak-taegeuk-solo']);
   // OAK 카드는 기존 그룹 어디에도 안 섞였다 (계보가 카드로 읽혀야 한다).
   for (const group of ['formal', 'generated', 'refined']) {
     for (const card of FINDER_CARD_GROUPS[group]) {

@@ -199,10 +199,11 @@ test('정식 파인더 카드 행은 불스아이 → 하이브리드 → 3톤 �
   // taegeuk 단독이 붙었다 (finder-oak-patterns.js 등재에서 유도 — 손 목록 아님).
   // **의도적 갱신 (2026-08-23, C1 — Benzene 드랍)** — 21 → 20. 카드는 명부
   // live-join 유도라 status 'dropped' 가 카드를 닫는다 (판독·패턴 표는 유지).
-  assert.equal(ids.length, 20);
-  assert.deepEqual(ids.slice(-5, -1),
-    ['oak-nitrogen-r2', 'oak-aspirin', 'oak-footprint', 'oak-taegeuk-solo'],
-    'OAK 카드가 daehan 앞 네 자리가 아니다');
+  // **의도적 갱신 (2026-08-24 — Aspirin 드랍, 아침 검수 5)** — 20 → 19. 같은 규약.
+  assert.equal(ids.length, 19);
+  assert.deepEqual(ids.slice(-4, -1),
+    ['oak-nitrogen-r2', 'oak-footprint', 'oak-taegeuk-solo'],
+    'OAK 카드가 daehan 앞 세 자리가 아니다');
   assert.equal(ids.at(-1), 'oak-daehan-k10', 'daehan 카드가 맨 뒤가 아니다');
   assert.equal(new Set(ids).size, ids.length);
 });

@@ -71,10 +71,13 @@ export const OAK_LINEUP = Object.freeze([
     note: '구 Nitrogen 승계판 (같은 19셀 발자국 재도색) — 거울 공변 7후보 중 최저',
   }),
   entry({
-    name: 'Aspirin', id: 'O-2-central3tone', type: 'O', status: 'active',
+    name: 'Aspirin', id: 'O-2-central3tone', type: 'O', status: 'dropped',
     finderMode: 'full-surface', finderStarter: 'central-cube-3tone',
     counts: { total: 61, detector: 19 },
     margin: 0.3333, mirrorAgreement: 0.9298,
+    note: '운영자 드랍 2026-08-24 (아침 검수 5) — 톤 반전판도 실기기 스캔 실패, '
+      + '형태상 실익 없음 판정. 생성은 닫고 판독은 유지 (benzene 전례 — 차단이지 '
+      + '삭제가 아니다. 반전판 정본은 finder-oak-candidates.json _inverted 참조)',
   }),
   entry({
     name: 'Benzene', id: 'O-3-bullseye', type: 'O', status: 'dropped',

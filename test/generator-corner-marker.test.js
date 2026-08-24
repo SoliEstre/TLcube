@@ -66,16 +66,14 @@ test('① seat 구역 UI 와 배선이 있고 i18n 8언어 사전이 다 있다'
 
 test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () => {
   const zones = zoneCards();
-  assert.deepEqual(zones.inner.map((c) => c.id), ['none', 'o-cm', 'sagoae', 'H']);
+  // H 는 카드가 아니다 (운영자 2026-08-24 확정 2차) — o-cm 선택이 곧 «자리 + H
+  // 심볼» 이다 (A-CM=H2O 문법). 별도 카드·별도 상태 값이 다시 생기면 회귀다.
+  assert.deepEqual(zones.inner.map((c) => c.id), ['none', 'o-cm', 'sagoae']);
   assert.deepEqual(zones.outer.map((c) => c.id), ['none', 'a-cm', 'v-cm', 'k-cm']);
   // 자리만 카드는 클릭 불가(ready=false)다 — sagoae 생성측 합성 렌더는 잔여.
   assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, false);
-  // H (F-35 분류 2 · 생성 축 개통 2026-08-24) — 선택 가능 값이다 (cornerMarker
-  // + markerTones 와이어). 판독 배선 전이라 카드 힌트(g871)가 경고를 든다.
-  const hCard = zones.inner.find((c) => c.id === 'H');
-  assert.equal(hCard.ready, true);
-  assert.equal(INNER_SEAT_OPTIONS.includes('H'), true,
-    'H 생성 축이 닫혔다 — 2026-08-24 운영자 지시(심볼 적용)의 회귀');
+  assert.equal(INNER_SEAT_OPTIONS.includes('H'), false,
+    'H 가 상태 값으로 되살아났다 — o-cm 통합(2026-08-24)의 회귀');
   for (const id of ['v-cm', 'k-cm']) {
     const card = zones.outer.find((c) => c.id === id);
     assert.equal(card.absent, true, id + ' 는 부재 카드여야 한다');
@@ -105,15 +103,14 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
     'Type Y 분기에 cornerMarker 가 들어갔다 — Y 는 자기 로케이터 문법을 쓴다');
   assert.match(body, /cfg\.cornerMarker === true/,
     'cornerMarker 를 cfg 에서 읽는 줄이 없다 — UI 가 인코더에 안 닿는다');
-  // cfg 조립: seat 파생 (W2 C4 · H 개통 2026-08-24) — O 는 내곽 o-cm **또는 H**
-  // (H = o-cm 자리 + 심볼 톤), A 는 외곽 a-cm 이 켠다.
+  // cfg 조립: seat 파생 (W2 C4) — O 는 내곽 o-cm, A 는 외곽 a-cm 이 켠다.
   assert.match(INDEX,
-    /cornerMarker: \(type === 'O'\s*\n?\s*&& \(generatorState\.innerSeat === 'o-cm' \|\| generatorState\.innerSeat === 'H'\)\)\s*\|\| \(type === 'A' && generatorState\.outerSeat === 'a-cm'\)/,
+    /cornerMarker: \(type === 'O' && generatorState\.innerSeat === 'o-cm'\)\s*\|\| \(type === 'A' && generatorState\.outerSeat === 'a-cm'\)/,
     'cfg 조립이 seat 파생이 아니다 — 다른 타입에서 켜진 채 새어 나간다');
-  // H 심볼 톤 — cornerMarker 파생과 같은 자리에서만, encode 계약(자리 없이 톤 불가)
-  // 을 따라 실린다.
-  assert.match(INDEX, /markerTones: type === 'O' && generatorState\.innerSeat === 'H'/,
-    'markerTones 파생이 없다 — H 심볼이 인코더에 안 닿는다');
+  // o-cm = 자리 + H 심볼 통합 (2026-08-24 확정 2차, A-CM=H2O 문법) — markerTones
+  // 는 o-cm 과 함께만 실린다 (encode 계약: 자리 없이 톤 불가).
+  assert.match(INDEX, /markerTones: type === 'O' && generatorState\.innerSeat === 'o-cm'/,
+    'markerTones 파생이 없다 — o-cm 의 H 심볼 통합이 인코더에 안 닿는다');
 });
 
 test('③ turnA 와 상호배제 — 인코더가 던지지 않는 조합만 만든다', () => {

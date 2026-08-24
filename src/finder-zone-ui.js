@@ -99,16 +99,11 @@ export function zoneCards() {
       id: SAGOAE_ID, name: SAGOAE_ID, types: Object.freeze(['O', 'A']),
       ready: false, absent: false,
     }),
-    // H — 분류 2 의 O-CM 자리 심볼 파인더 (운영자 확정 2026-08-23, F-35 ·
-    // **생성 축 개통 2026-08-24 아침 검수 지시** — F-38 생성측 해소).
-    // 와이어 의미 = cornerMarker(자리 예약) + markerTones(H 심볼 톤, encode.js 완비).
-    // ⚠ 판독은 아직이다 — H 톤이 digit 앵커·CM digit 을 덮는데 그걸 읽는 검출
-    // 경로가 미배선 (합성 왕복 no-anchors 실증 2026-08-24). 카드 힌트(g871)가
-    // 그 사실을 말한다. 검출 배선이 서면 힌트만 내리면 된다.
-    Object.freeze({
-      id: 'H', name: 'H', types: Object.freeze(['O']),
-      ready: true, absent: false,
-    }),
+    // H 는 **카드가 아니다** (운영자 2026-08-24 아침 검수 3 — A-CM=H2O 문법):
+    // o-cm 선택이 곧 «자리 + H 심볼 톤» 이다 (buildConfig 가 markerTones 를 함께
+    // 싣는다). 분류 2 의 심볼 파인더(H)는 자리(o-cm)의 기본 심볼로 흡수된다 —
+    // SEAT_DEFAULT_FINDER 가 그 매핑의 정본이고, zone 대조 테스트는 분류 2 에서
+    // 자리 기본 심볼을 **제외한** 집합과 1:1 을 잰다 (외곽의 H2O 와 같은 규칙).
   ];
   const outer = [
     NONE_CARD,
