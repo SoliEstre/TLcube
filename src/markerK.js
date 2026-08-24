@@ -319,7 +319,8 @@ export function buildRoleSetsKMarker(k) {
  * 셀 (q,r) 의 역할. **앵커가 마커를 이긴다** — 반전 꼭짓점 3셀은 앵커로 세는 것이
  * (다)안 회계의 전부이기 때문이다 (모듈 헤더 §3). 마커 소속 여부는 별도로
  * `markerPositionSetK` 가 답한다 (검출기는 그쪽을 본다).
- * @returns {'bullseye'|'anchor'|'marker'|'format'|'reference'|'data'}
+ * @returns {'bullseye'|'finder'|'anchor'|'marker'|'format'|'reference'|'data'}
+ *   ('finder' 는 육각부 roleSets 승계분이다 — placementK.roleOfK 와 같은 분기.)
  */
 export function roleOfKMarker(q, r, k, roleSets) {
   if (hexDistance(q, r) <= 2) return 'bullseye';
