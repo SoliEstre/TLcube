@@ -361,6 +361,25 @@ export function buildScene(encoded, options) {
   if (typeof cornerToo !== 'boolean') {
     throw new TypeError(`cornerToo 는 boolean 이어야 한다: ${typeof cornerToo}`);
   }
+  /*
+   * 턴A (내부 타입 V, 2026-08-24 기하 개통) — 단일 소스는 encoded.turnA (centerQr
+   * 와 같은 규약: 와이어(formatIndex 가 V 표)와 그림(실루엣 ▽)이 어긋난 자기모순
+   * 아티팩트를 만들지 않는다).
+   *
+   * 기하 규약 — **배치만 180° 돈다. 셀(큐브)은 정립이다.**
+   *   · 셀 (q,r) 의 도형을 (−q,−r) 자리에 그린다 — placementA.regionCellsTurnA 의
+   *     정의 «영역 A 의 축좌표 180° 상» 과 같은 사상이고, 실루엣이 △ → ▽ 가 된다.
+   *   · 각 셀의 3면(Y-접합)은 돌리지 않는다 — 데이터는 (T,L,R) 순위 계약 그대로다.
+   *     장면 전체(픽셀) 회전은 셀 내부 접합까지 ⅄ 로 뒤집어 검출기의 화면 고정
+   *     face offset 계약(family.js·anchor-detect.js)과 충돌하므로 **채택하지 않았다**
+   *     (레인 보고서 «기하 결정» 참조 — 판정 신호는 실루엣 방향 ↔ 셀 격자 방향의
+   *     잔여 60° 로 성립하고, 이는 family.js 의 turn 채점이 이미 재는 축이다).
+   *   · 셀 회계·데이터 좌표(cellDigits 키)·마스크는 불변 — 이 함수는 그리는 자리만
+   *     바꾼다. 앵커·마커·패치 레퍼런스는 cellDigits 의 셀이므로 자동으로 따라 돈다.
+   *     중앙(불스아이·중앙 QR·비컨)은 180° 대칭 자리라 제자리, 코너 QR 블록은
+   *     캔버스 고정이라 안 돈다 (아래 turnA 전용 무교차 가드가 패치와의 겹침을 잰다).
+   */
+  const turnA = Boolean(encoded.turnA);
   // V*Q 는 QR 없이는 무의미 (ADR 0004 §1-4).
   if (centerQr && opts.qrText === undefined) {
     throw new RangeError('centerQr=true 인데 qrText 가 없다 — V*Q(중앙 QR)는 qrText 없이 렌더할 수 없다');
@@ -447,8 +466,11 @@ export function buildScene(encoded, options) {
     const commaIdx = key.indexOf(',');
     const q = Number(key.slice(0, commaIdx));
     const r = Number(key.slice(commaIdx + 1));
+    // 턴A: 배치 사상 (q,r) → (−q,−r). 면 폴리곤 자체는 정립 그대로다 (위 규약).
+    const drawQ = turnA ? -q : q;
+    const drawR = turnA ? -r : r;
     for (const face of FACES) {
-      const points = facePolygon(q, r, face, layout);
+      const points = facePolygon(drawQ, drawR, face, layout);
       for (const p of points) {
         if (p.x < cellMinX) cellMinX = p.x;
         if (p.y < cellMinY) cellMinY = p.y;
@@ -746,6 +768,28 @@ export function buildScene(encoded, options) {
         `코너 QR 블록(콰이어트 포함, qrCorner=${qrCorner})이 코드 실루엣(codeBounds)과 겹친다 — `
           + `margin 을 늘려야 한다: 블록=${JSON.stringify(blockRect)}, 실루엣=${JSON.stringify(silhouetteRect)}`,
       );
+    }
+    // 턴A 전용 — 패치 셀 실폴리곤과의 무교차 가드. codeBounds 는 육각 실루엣
+    // 사각뿐이라 패치를 못 본다: 정삼각 A 는 «×20 margin 에서 A1/A2 수용» 실측이
+    // 있지만, 배치가 180° 돌면 코너별 여유가 거울상으로 뒤바뀌므로 그 실측이
+    // 자동으로 이월되지 않는다. 침묵 겹침(코드 위에 QR 패치)은 데이터 소실이라
+    // '조용히 맞추지 않는다' 규약대로 던진다. 정삼각 경로는 기존 실측 계약
+    // 그대로 두고 여기서는 turnA 프레임만 잰다 (기존 렌더 무회귀).
+    if (turnA) {
+      for (const cellKey of cellDigits.keys()) {
+        const commaIdx = cellKey.indexOf(',');
+        const q = Number(cellKey.slice(0, commaIdx));
+        const r = Number(cellKey.slice(commaIdx + 1));
+        if (hexDistance(q, r) <= k) continue; // 육각부는 codeBounds 검사가 이미 덮는다
+        for (const face of FACES) {
+          if (rectPolyOverlap(blockRect, facePolygon(-q, -r, face, layout))) {
+            throw new Error(
+              `코너 QR 블록(qrCorner=${qrCorner})이 턴A 패치 셀 (${-q},${-r})와 겹친다 — `
+                + 'margin 을 늘리거나 다른 코너를 써야 한다',
+            );
+          }
+        }
+      }
     }
     pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette);
   }

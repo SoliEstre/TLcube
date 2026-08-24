@@ -14,7 +14,7 @@
  * 와이어에서 구분할 수 없었다. 019 의 교훈 그대로, 검출기 배선만으로는 효과가 0 이다.
  *
  * ⚠ 글자는 **G** 다. `Q` 를 쓰지 마라 — 이 저장소에서 Q 는 centerQr 를 뜻한다
- *   (A0Q · O V1Q · A2TQ 실재). 그리고 **포맷 v2 / 예비 비트(RESERVED_BITS_V2)로
+ *   (A0Q · O V1Q · V2Q(턴A) 실재). 그리고 **포맷 v2 / 예비 비트(RESERVED_BITS_V2)로
  *   우회하지 않는다** — 그 경로는 hex 링 3 의 «15 포맷 + 2 레퍼런스» 계약을 깨고,
  *   검증되지 않은 «hex/tri 폴백 오독 0» 전제에 의존해 기각됐다 (운영자 결정).
  *
@@ -44,7 +44,7 @@
  * 값 선택 (빈 칸: k6 {6,12,13,14,15} · k8 {0,2,3,13,15} · k10 {1,4,5,12,14}):
  *   · hex(O-CM) 는 레거시 O 가 사는 **저대역(0..6)** 에 둔다 — V1CM=6 은 k6 의
  *     유일한 저대역 빈 칸이고(k6 행 0..5 는 턴A 가 채웠다), V2CM=0 · V3CM=1 은
- *     각 k 의 최소 빈 값이다. 덤으로 값 0 행(O V1·A2T)과 1 행(A0·O V2)이 가득 찬다.
+ *     각 k 의 최소 빈 값이다. 덤으로 값 0 행(O V1·V2(턴A))과 1 행(A0·O V2)이 가득 찬다.
  *   · tri(A-CM) 는 레거시 A 기저(A1=12·A2=13)가 사는 **고대역(12..15)** 에서
  *     **연속 배정 12+version** 으로 둔다 — A0CM=12(k6) · A1CM=13(k8) ·
  *     A2CM=14(k10). 외우기 쉽고, 점유표에서 패밀리 대역이 눈으로 갈린다.
@@ -154,6 +154,23 @@ export function markerGSpecFromFormatIndex(formatIndex, k) {
     if (!base || base.k !== entry.k) {
       throw new Error('markerG: ' + entry.name + ' 의 k=' + entry.k
         + ' 가 기저 버전 k=' + (base ? base.k : '없음') + ' 와 다르다');
+    }
+  }
+  // 포맷 공간 회계 (2026-08-24 V-CM 편입) — G 12칸 + 턴A V 표(6 + V-CM 3) 반영 후
+  // **잔여 0** 을 못 박는다. V-CMQ 보류의 산술 근거가 이 단언이다: 다음 소비자는
+  // 여기가 던지는 것을 보고 «빈 칸이 없다» 를 코드에서 확인하게 된다.
+  {
+    const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES]);
+    for (const k of [6, 8, 10]) {
+      let free = 0;
+      for (let value = 0; value <= 15; value += 1) {
+        if (banned.has(value)) continue;
+        if (!seen.has(value + '|' + k)) free += 1;
+      }
+      if (free !== 0) {
+        throw new Error('markerG: k' + k + ' 잔여 칸이 ' + free
+          + ' — 점유 회계가 «잔여 0» 주장과 다르다 (V-CMQ 보류 근거 재검토)');
+      }
     }
   }
   // (family, version, centerQr) 커버리지 — 기저 버전×Q축마다 정확히 한 항목

@@ -91,6 +91,8 @@ function compactHypothesis(candidate) {
     n: hypothesis.n,
     orientation: hypothesis.orientation,
     rotationDegrees: hypothesis.rotationDegrees,
+    /** 턴A (내부 타입 V) — tri 실루엣 방향. false/미정의 = 정삼각. */
+    turn: hypothesis.turn === true,
     centerQr: hypothesis.centerQr,
     source: hypothesis.source,
     finderPatternId: finderPatternIdOf(hypothesis),

@@ -55,9 +55,9 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
   const pairs = new Set(found.map((f) => f.opts));
   const GUARDED = {
     // 조합 → UI 가 막는 코드의 서명 (있어야 하는 줄)
-    // (W2 C4) cornerMarker boolean → seat 승계: encodeA 던짐 조합은 A(외곽 a-cm)
-    // 쪽뿐이고, seat 핸들러가 turnA 를 끈다 (syncTurnAUi 는 카드를 잠근다).
-    'cornerMarker+turnA': /if \(generatorState\.outerSeat === 'a-cm'\) generatorState\.turnA = false;/,
+    // (구) 'cornerMarker+turnA' — Wave 3 ③(2026-08-24)에서 배타 자체가 개설됐다
+    // (V-CM — turnA.js V 표 말미 + 왕복 = test/turnA-roundtrip.test.js). 인코더가
+    // 더는 안 던지므로 전수 탐색이 이 쌍을 찾지 않는다 — C2a 의 CMQ 전례와 동일.
     // (구) 'centerQr+cornerMarker' — C2a(2026-08-23)에서 배타 자체가 해제됐다
     // (markerG CMQ 와이어 + 배치 검증·왕복 = test/markerG-centerqr.test.js).
     // 인코더가 더는 안 던지므로 전수 탐색이 이 쌍을 찾지 않는다 — 가드 불필요.
@@ -66,11 +66,16 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     // 중앙 v0도 같은 finderTakesCentre 규칙으로 안쪽 QR 카드를 잠근다.
     'centerQr+centralV0': /isCentralV0FinderPatternId\(generatorState\.finderPatternId\)/,
     // 아래 둘은 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
-    'cornerMarker+daehanFinder': /\} else if \(cfg\.cornerMarker === true\) \{/,
+    // (Wave 3 ④ — cornerMarker 분기 서명에 V-CMQ 가드가 붙었다.)
+    'cornerMarker+daehanFinder': /\} else if \(cfg\.cornerMarker === true && !\(cfg\.turnA === true && opts\.centerQr\)\) \{/,
     'daehanFinder+turnA': /\} else if \(cfg\.turnA === true && !centralV0Selected\) \{/,
     // 중앙 v0 × turnA — 배치 검증 미실시 조합 (2026-08-22 A 개방). 비컨 카드가
     // 선택돼 있으면 encodeOptsFor 가 turnA 를 싣지 않는다.
     'centralV0+turnA': /\} else if \(cfg\.turnA === true && !centralV0Selected\) \{/,
+    // V-CMQ (Wave 3 ③) — **환원 불가능한 3중 배타**다: 세 2-부분집합(CM+turnA=V-CM ·
+    // CM+centerQr=CMQ · turnA+centerQr=V*Q)이 전부 합법이고 3중만 던진다 (와이어
+    // 잔여 0 보류). encodeOptsFor 의 분기 가드가 그 조합을 V*Q 로 강하시킨다.
+    'centerQr+cornerMarker+turnA': /cfg\.cornerMarker === true && !\(cfg\.turnA === true && opts\.centerQr\)/,
     // 둘 다 단일 finderPatternId 카드에서 유도되므로 한 상태에 동시에 설 수 없다.
     'centralV0+daehanFinder': () => {
       const ids = [CENTRAL_V0_FINDER_CARD,
@@ -80,9 +85,18 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     },
   };
   const unguarded = [];
+  const thrownPairs = new Set([...pairs].filter((p) => p.split('+').length === 2));
   for (const pair of pairs) {
-    // 3개 이상 동시 조합은 2개짜리 배타에서 파생된다 — 2개짜리만 본다.
-    if (pair.split('+').length !== 2) continue;
+    const flags = pair.split('+');
+    // 3개 이상 동시 조합: 어떤 2-부분집합이 이미 던지면 **파생**이라 건너뛴다.
+    // 어느 부분집합도 안 던지면 **환원 불가능한 다중 배타**다 (V-CMQ, Wave 3 ③)
+    // — 자기 가드가 있어야 한다. «파생이라 전부 건너뛴다» 는 종전 가정은 V-CMQ
+    // 에서 처음 깨졌다 (세 2-조합이 전부 합법).
+    if (flags.length > 2) {
+      const derived = flags.some((_, i) => flags.some((__, j) => i < j
+        && thrownPairs.has([flags[i], flags[j]].sort().join('+'))));
+      if (derived) continue;
+    }
     const guard = GUARDED[pair];
     if (!guard) { unguarded.push(pair + ' (가드 미등록)'); continue; }
     const present = typeof guard === 'function' ? guard() : guard.test(INDEX);

@@ -54,8 +54,10 @@ test('① seat 구역 UI 와 배선이 있고 i18n 8언어 사전이 다 있다'
   // 표현 매핑이 유도 카드 전부를 덮는지 로드 시 throw 로 잡는 줄이 있어야 한다.
   assert.match(INDEX, /seat 카드 표현 누락/);
 
-  // 신규 키 (W2 블록 ① = g850-g859) + 이식된 기존 키가 8언어 전부에 있다.
+  // 신규 키 (W2 블록 ① = g850-g859 · 턴A 레인 블록 = g875-g876) + 이식된 기존 키가
+  // 8언어 전부에 있다 (카운트 단언 — 브리프 §3.4).
   for (const key of ['g850', 'g851', 'g852', 'g853', 'g854', 'g855', 'g856', 'g857', 'g858',
+    'g875', 'g876',
     'g576', 'g577', 'g578', 'g579', 'g580']) {
     const count = INDEX.split('"' + key + '":').length - 1;
     assert.equal(count, 8, key + ' 사전 항목이 8개 언어에 다 있어야 한다 (현재 ' + count + ')');
@@ -74,18 +76,30 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
   assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, false);
   assert.equal(INNER_SEAT_OPTIONS.includes('H'), false,
     'H 가 상태 값으로 되살아났다 — o-cm 통합(2026-08-24)의 회귀');
-  for (const id of ['v-cm', 'k-cm']) {
-    const card = zones.outer.find((c) => c.id === id);
-    assert.equal(card.absent, true, id + ' 는 부재 카드여야 한다');
-    assert.equal(card.ready, false, id + ' 는 클릭 불가여야 한다');
+  // v-cm — 실체 전환 (2026-08-24, 배타 개설 정형 ③): 부재 카드 단언(구 락)을
+  // 양성 단언으로. k-cm 은 여전히 부재다.
+  {
+    const vcm = zones.outer.find((c) => c.id === 'v-cm');
+    assert.equal(vcm.absent, false, 'v-cm 이 아직 부재 카드다 — 2026-08-24 실체 전환 회귀');
+    assert.equal(vcm.ready, true, 'v-cm 이 클릭 불가다');
+    assert.deepEqual([...vcm.types], ['A'], 'v-cm 은 Type A(×turnA) 전용이다');
+    const kcm = zones.outer.find((c) => c.id === 'k-cm');
+    assert.equal(kcm.absent, true, 'k-cm 는 부재 카드여야 한다');
+    assert.equal(kcm.ready, false, 'k-cm 는 클릭 불가여야 한다');
   }
   // 기대축 대조 — 시험판 축 ③(LAB_OUTER)은 seat 값을 전부 알아야 한다
   // (sagoae 의 lab 텔레메트리 키는 레거시 'daehan' — finder-taxonomy 주석).
+  // ⚠ v-cm 제외 (2026-08-24): 스캐너 기대축 등재는 sites/tlscan 버튼 + 8언어
+  // 동반이라 **통합자 몫**이다 (턴A 레인은 스캐너 소스 접촉 금지). 등재되면
+  // 아래 부재 단언이 터진다 — 그때 이 제외를 걷어라 (부재에는 이유·날짜).
   for (const id of [...INNER_SEAT_OPTIONS, ...OUTER_SEAT_OPTIONS]) {
+    if (id === 'v-cm') continue;
     const labId = id === 'sagoae' ? 'daehan' : id;
     assert.ok(LAB_OUTER_FINDER_IDS.includes(labId),
       'LAB_OUTER_FINDER_IDS 에 ' + labId + ' 가 없다 — 기대축과 seat 유도가 어긋났다');
   }
+  assert.equal(LAB_OUTER_FINDER_IDS.includes('v-cm'), false,
+    'v-cm 이 기대축에 등재됐다 — 위 제외(통합자 몫 주석)를 걷고 전수 대조로 되돌려라');
   // CM+Q 와이어 존재 술어 (C2a 착지 상태) — 병용 잠금이 열려 있어야 한다.
   assert.equal(cmqWireExists('hex'), true);
   assert.equal(cmqWireExists('tri'), true);
@@ -103,28 +117,44 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
     'Type Y 분기에 cornerMarker 가 들어갔다 — Y 는 자기 로케이터 문법을 쓴다');
   assert.match(body, /cfg\.cornerMarker === true/,
     'cornerMarker 를 cfg 에서 읽는 줄이 없다 — UI 가 인코더에 안 닿는다');
-  // cfg 조립: seat 파생 (W2 C4) — O 는 내곽 o-cm, A 는 외곽 a-cm 이 켠다.
+  // cfg 조립: seat 파생 (W2 C4 · Wave 3 ④ 재편) — O 는 내곽 o-cm, A 는 외곽
+  // 코너 자리가 방향과 짝일 때만 켠다: a-cm×정삼각 / v-cm×역삼각.
   assert.match(INDEX,
-    /cornerMarker: \(type === 'O' && generatorState\.innerSeat === 'o-cm'\)\s*\|\| \(type === 'A' && generatorState\.outerSeat === 'a-cm'\)/,
-    'cfg 조립이 seat 파생이 아니다 — 다른 타입에서 켜진 채 새어 나간다');
+    /cornerMarker: \(type === 'O' && generatorState\.innerSeat === 'o-cm'\)\s*\|\| \(type === 'A' && \(\(generatorState\.outerSeat === 'a-cm' && generatorState\.turnA !== true\)\s*\|\| \(generatorState\.outerSeat === 'v-cm' && generatorState\.turnA === true\)\)\)/,
+    'cfg 조립이 seat×방향 파생이 아니다 — 어긋난 상태가 던짐 조합으로 새어 나간다');
   // o-cm = 자리 + H 심볼 통합 (2026-08-24 확정 2차, A-CM=H2O 문법) — markerTones
   // 는 o-cm 과 함께만 실린다 (encode 계약: 자리 없이 톤 불가).
   assert.match(INDEX, /markerTones: type === 'O' && generatorState\.innerSeat === 'o-cm'/,
     'markerTones 파생이 없다 — o-cm 의 H 심볼 통합이 인코더에 안 닿는다');
 });
 
-test('③ turnA 와 상호배제 — 인코더가 던지지 않는 조합만 만든다', () => {
-  // encodeA 계약 확인: 둘 다 참이면 던진다.
+test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 개설이다', () => {
+  // 2026-08-24 배타 개설 (정형 ③ — 구 «둘 다 참이면 던진다» 락의 전환):
+  // turnA + cornerMarker 는 이제 V-CM 이다. 인코더가 V 표 말미 값으로 인코드된다.
+  const vcm = encodeA('x', { version: 1, eccLevel: 'M', cornerMarker: true, turnA: true });
+  assert.equal(vcm.formatIndex, 3, 'V1CM 의 formatIndex 가 V 표(3, k8)와 다르다');
+  assert.equal(vcm.turnA, true);
+  assert.equal(vcm.cornerMarker, true);
+  // V-CMQ(+centerQr)만 남은 배제다 — 와이어 잔여 0 (turnA.js §V-CM 회계).
   assert.throws(
-    () => encodeA('x', { version: 1, eccLevel: 'M', cornerMarker: true, turnA: true }),
-    '둘 다 참인데 안 던진다 — 상호배제 계약이 사라졌으면 UI 잠금 근거가 없어진다',
+    () => encodeA('x', {
+      version: 1, eccLevel: 'M', cornerMarker: true, turnA: true, centerQr: true,
+    }),
+    RangeError,
   );
-  // UI 가 그 조합을 못 만드는가 (seat 핸들러가 turnA 를 끈다)
+  // UI 의 방향-자리 일관성 (Wave 3 ④): 자리를 고르면 방향이 확정되고,
   assert.match(INDEX, /if \(generatorState\.outerSeat === 'a-cm'\) generatorState\.turnA = false;/,
-    'seat 를 켤 때 turnA 를 끄는 줄이 없다');
-  // turnA 카드 쪽 잠금도 seat 로 갈아탔는가
-  assert.match(INDEX, /const locked = generatorState\.outerSeat === 'a-cm';/,
-    'syncTurnAUi 잠금이 seat 를 안 본다');
+    'a-cm 선택이 방향(정삼각)을 확정하는 줄이 없다');
+  assert.match(INDEX, /if \(generatorState\.outerSeat === 'v-cm'\) generatorState\.turnA = true;/,
+    'v-cm 선택이 방향(역삼각)을 확정하는 줄이 없다');
+  // 방향을 바꾸면 자리가 승계된다 (a-cm ↔ v-cm).
+  assert.match(INDEX, /generatorState\.outerSeat = 'v-cm';/,
+    '턴A on 시 a-cm → v-cm 승계 줄이 없다');
+  assert.match(INDEX, /generatorState\.outerSeat = 'a-cm';/,
+    '턴A off 시 v-cm → a-cm 승계 줄이 없다');
+  // v-cm × 중앙 QR (V-CMQ 보류) 잠금 + 사유 힌트.
+  assert.match(INDEX, /const vcmQrLocked = generatorState\.qrPosition === 'inner';/,
+    'v-cm 의 중앙 QR 잠금이 없다 — V-CMQ 보류(와이어 잔여 0)가 UI 에 안 닿는다');
   // encodeOptsFor 에서도 코너 마커가 먼저 이긴다 (저장·URL 로 옛 조합이 들어와도)
   const opts = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
   const cmAt = opts.indexOf('cfg.cornerMarker === true');

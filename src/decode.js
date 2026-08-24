@@ -232,13 +232,18 @@ function typeOSpecFromFormatIndex(index) {
  * (정삼각 ↔ 역삼각 패치가 100% 배타적이라 확실히 갈린다) 그 결과가 여기로 온다.
  * 방향을 모르면(`turn` 미지정) 기본 A 로 본다 — 종전 동작 그대로다.
  *
- * 이 분리가 있어야 `A2TQ(3)` 과 기본 `A0Q(3)` 이 같은 값을 써도 서로를 안 먹는다.
+ * 이 분리가 있어야 `V2Q(3)` 과 기본 `A0Q(3)` 이 같은 값을 써도 서로를 안 먹는다.
  */
 function typeASpecFromFormatIndex(index, turn = false) {
   if (!Number.isInteger(index)) return undefined;
   if (turn === true) {
     // 턴A 표는 (formatIndex, k) 쌍으로 유일하다. k 를 모르면 formatIndex 만으로 찾는다.
-    const entry = TURN_A_FORMAT_INDEX.find((row) => row.formatIndex === index);
+    // V-CM 행(cornerMarker)은 여기서 배제한다 — 그 경로는 format.cornerMarker 분기
+    // (VERSIONS_ACM 회계)가 처리하고, 배제하지 않으면 V1CM=3(k8) 이 V2Q=3(k10) 과
+    // 값이 같아 이 인덱스-단독 조회가 이중해석이 된다.
+    const entry = TURN_A_FORMAT_INDEX.find(
+      (row) => row.formatIndex === index && row.cornerMarker !== true,
+    );
     if (!entry) return undefined;
     return VERSIONS_A.find((spec) => spec.version === entry.version);
   }

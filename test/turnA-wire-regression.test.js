@@ -108,9 +108,12 @@ test('formatIndex 는 **타입 안에서만** 유일하다 — 턴A 는 자기 �
   assert.equal(freeInA.length, 10,
     'A 타입 안의 빈 자리가 10 이 아니다: ' + JSON.stringify(freeInA));
 
-  // ⓒ 턴A 표 6자리가 A 안의 빈 자리로 **들어간다** (별도 타입이면 더 여유롭다).
+  // ⓒ 턴A 표가 A 안의 빈 자리로 **들어간다** (별도 타입이면 더 여유롭다).
+  // 유일성 단위는 값이 아니라 **(값, k) 쌍**이다 — V-CM 말미 추가(2026-08-24)로
+  // 값 3(V2Q k10 · V1CM k8)·5(V0Q k6 · V2CM k10)가 표 안에서 k 로 갈라 재사용된다.
   const wanted = TURN_A_FORMAT_INDEX.map((e) => e.formatIndex);
-  assert.equal(new Set(wanted).size, wanted.length, '턴A 표 안에서 값이 중복된다');
+  const pairKeys = TURN_A_FORMAT_INDEX.map((e) => e.formatIndex + '|' + e.k);
+  assert.equal(new Set(pairKeys).size, pairKeys.length, '턴A 표 안에서 (값,k) 쌍이 중복된다');
   assert.ok(wanted.length <= freeInA.length + wanted.filter((x) => usedInA.has(x)).length,
     '턴A 요구가 A 예산을 넘는다');
 
@@ -140,7 +143,7 @@ test('4bit 를 넘치는 값이 없다 — 산술 유도가 금지된 이유', (
  *   턴A     : `turnASpec(version, {centerQr}).formatIndex` (표 주도)
  *
  * ⚠ **미완 사실을 여기 박는다 — 디코더에 역삼각 실루엣 판별이 아직 없다.**
- * 그래서 `A2TQ = 3` 이 기본 `A0Q = 3` 과 **같은 값**이고, 지금은 둘을 기하로 가를
+ * 그래서 `V2Q = 3` (구명 A2TQ — 2026-08-24 V 재명명) 이 기본 `A0Q = 3` 과 **같은 값**이고, 지금은 둘을 기하로 가를
  * 수단이 디코더에 없다. 「실루엣이 갈라준다」는 설계 전제는 옳지만 **구현이 선행
  * 조건**이다. 이 테스트가 그 사실을 못 박아, 검출 경로가 붙기 전에 턴A 를 기본으로
  * 켜는 일이 없게 한다.
@@ -156,25 +159,36 @@ test('턴A 인코더 — 기본 A 발행 규약을 한 자리도 안 건드린�
 test('턴A 인코더 — 표 주도로 낸다 (산술 유도가 아니다)', () => {
   for (const entry of TURN_A_FORMAT_INDEX) {
     const encoded = encodeA('x', {
-      version: entry.version, centerQr: entry.centerQr, turnA: true,
+      version: entry.version,
+      centerQr: entry.centerQr,
+      turnA: true,
+      // V-CM 행(2026-08-24 개설) — turnA + cornerMarker 조합이 이 값을 낸다.
+      cornerMarker: entry.cornerMarker === true,
     });
     assert.equal(encoded.formatIndex, entry.formatIndex,
       entry.name + ' 의 formatIndex 가 표와 다르다');
     assert.equal(encoded.turnA, true);
     assert.equal(encoded.k, entry.k, entry.name + ' 의 k 가 표와 다르다');
   }
+  // V-CMQ 보류 — 인코더가 정직하게 던진다 (조용한 폴백 금지).
+  assert.throws(() => encodeA('x', {
+    version: 0, turnA: true, cornerMarker: true, centerQr: true,
+  }), RangeError);
 });
 
-test('⚠ 미완 — 턴A 와 기본 A 가 formatIndex 를 공유하는 조합이 있다', () => {
-  // A2TQ(3) ↔ A0Q(3). 디코더에 역삼각 실루엣 판별이 붙으면 기하가 가른다.
-  // **붙기 전까지는 turnA 를 명시로만 써야 한다** — 이 사실이 사라지면(= 충돌이
-  // 없어지면) 여기가 터지고, 그때 이 경고 주석도 함께 걷어내야 한다.
+test('턴A ↔ 기본 A 의 formatIndex 공유 — 방향 판별이 기하로 가른다 (2026-08-24 개통)', () => {
+  // V2Q(3) ↔ A0Q(3) 공유는 설계 사실로 남는다 — (값, k) 쌍이 유일하면 되기 때문.
+  // 구 문구 «디코더에 역삼각 판별이 아직 없다 — turnA 를 명시로만» 은 2026-08-24 에
+  // 배타 개설 정형대로 **양성 단언으로 전환**됐다: 판별은 실재하고
+  // (anchor-detect turn 변형 · bootstrap validVersionIndices V 개방),
+  // `test/turnA-roundtrip.test.js` 의 교차 오수용 테스트가 V2Q(k=10) 가 A0Q(k=6)
+  // 로 오독되지 않음을 픽셀 왕복으로 잰다.
   const plain = new Map(PUBLISHED_FORMAT_INDEX.map((r) => [r.formatIndex, r]));
   const shared = TURN_A_FORMAT_INDEX.filter((e) => plain.has(e.formatIndex));
-  assert.deepEqual(shared.map((e) => e.name), ['A2TQ'],
-    '턴A ↔ 기본 A 의 formatIndex 공유 조합이 A2TQ 하나가 아니다: '
-    + JSON.stringify(shared.map((e) => e.name)));
-  // 그리고 디코더에 아직 역삼각 판별이 없다는 사실 자체 — 붙으면 이 단언을 지운다.
-  assert.equal(shared.length > 0, true,
-    '공유가 사라졌다 — 역삼각 판별이 붙었는지 확인하고 이 테스트를 갱신하라');
+  assert.ok(shared.some((e) => e.name === 'V2Q'),
+    'V2Q ↔ A0Q 공유가 사라졌다 — 와이어가 움직였는지 확인하라 (동결 위반 의심)');
+  for (const entry of shared) {
+    assert.notEqual(entry.k, plain.get(entry.formatIndex).k,
+      entry.name + ': 공유 값의 k 가 기본 A 와 같다 — (값,k) 유일성 위반');
+  }
 });

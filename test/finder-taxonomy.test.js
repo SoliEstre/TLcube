@@ -59,7 +59,9 @@ test('① 분류 배정은 표에서 유도 — 손 목록과 불일치하면 �
   }
   assert.equal(taxonomyItem(oakCandidate('H2O').id).coordBasis, '꼭짓점');
   assert.equal(taxonomyItem('central-v0').class, 1, 'F-34 — 비컨이 분류 1 에 등재돼야 한다 (C1 편입)');
-  assert.equal(taxonomyItem('v-cm').class, 'U');
+  // v-cm — 실체 전환 (2026-08-24): 구 락(class 'U' 단언)을 양성 단언으로.
+  assert.equal(taxonomyItem('v-cm').class, 3, 'v-cm 이 분류 3 자리 예약이 아니다');
+  assert.equal(taxonomyItem('v-cm').kind, KIND_SEAT);
   assert.equal(taxonomyItem('k-cm').class, 'U');
   assert.deepEqual([...GENERATOR_TYPES], ['O', 'A', 'Y']);
 });
