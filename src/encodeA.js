@@ -93,8 +93,8 @@ function layoutProviderForA(cornerMarker, daehanFinder = false, turnA = false) {
     // 톤이 없어서다. 없는 값을 H2O 에서 빌려 오면 «한 자리에 심볼 두 개» 가 된다.
     //
     // ⚠ 이 전환은 검출을 **살렸다**: H2O 21셀 톤을 V-CM 에 그대로 싣던 종전 경로는
-    // V0CM(k=6)이 전 해상도 no-anchors 였는데, NO2 로 바꾸자 ppu 10\~32 중 8/9 에서
-    // 원문까지 돌아온다 (`test/turnA-roundtrip.test.js` V-CM 왕복이 값으로 잠근다).
+    // V0CM(k=6)이 전 해상도 no-anchors 였는데, NO2 로 바꾸자 ppu 10\~48 × supersample
+    // 1·2 14점 중 13점에서 원문까지 돌아온다 (`test/turnA-roundtrip.test.js` V-CM 왕복).
     marker: turnA
       ? no2SeatMarkerCellsA
       : (k) => markerCellsA(k, h2oTonesByKeyA(k)),
