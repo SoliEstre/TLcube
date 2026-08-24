@@ -5852,7 +5852,7 @@ import { digitToRanks } from './src/lehmer.js';
 //   질의로 대체됐다 — 슬롯 레이아웃이 셋이 되면서 «id 를 여기 또 적는» 방식이
 //   빠뜨리기 쉬운 자리가 됐기 때문이다 (상수 자체는 cellSurfaceFinal.js 에 그대로 산다).
 import {
-  CELL_SURFACE_FINAL_NS,
+  CELL_SURFACE_FINAL_NS, CELL_SURFACE_FINAL_V0, capacityForCellSurfaceFinal,
   CENTRAL_V0_SOURCE_N, cellSurfaceFinal, centralV0FinderCells, hasCenterQrSlot,
 } from './src/cellSurfaceFinal.js';
 import { faceBasis, layoutForCube, moduleQuad, YFACES } from './src/ygrid.js';
@@ -8087,7 +8087,44 @@ function resolveAutoLocatorProfileY(pos = generatorState.qrPosition) {
   if (generatorState.versionY === 2) return LOCATOR_PROFILE_OFF;
   if (pos === 'inner') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
   if (generatorState.versionY === 0) return LOCATOR_PROFILE_CELL_SURFACE_V0;
-  return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+  if (generatorState.versionY !== 'auto') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+  // ⭐ **'auto' 도 콘텐츠를 본다 (2026-08-25, 원장 F-112 · 운영자 지시)** —
+  //    종전엔 여기로 흘려 항상 v0TR(n=21) 이었고, 그래서 콘텐츠가 Y0 에 들어가도
+  //    첫 렌더가 **무조건 Y1** 이었다 (인코더는 정상: chooseVersionY 가 Y0 을 고른다).
+  //
+  //    순환은 어떻게 끊나 — 위 주석이 걱정한 «프로파일 → 오버헤드 → 버전 해석»
+  //    되먹임은 **일반 해석**을 여기서 할 때만 생긴다. 그런데 `v0 ⟺ n=13 ⟺ Y0` 는
+  //    일대일이라(v0 은 n=13 전용), 「콘텐츠가 v0 용량에 들어가는가」 **한 번**만
+  //    물으면 답이 스스로를 뒤집지 못한다: 들어가면 v0/Y0 이 성립하고, 안 들어가면
+  //    n≥21 이 확정이라 v0TR 이 맞다. 반복도 고정점 탐색도 필요 없다.
+  //
+  //    ⚠ **T 계열이 n=25 로 넓어지면 이 일대일이 깨진다** (v0TR ⟺ Y1 이 아니게 된다).
+  //       그때는 이 한 줄이 아니라 (프로파일 × 버전) 고정점으로 승격해야 한다 —
+  //       「면 모서리 기준 배치」 작업(운영자 2026-08-25)과 **짝으로 다뤄야 하는 자리**다.
+  return contentFitsCellSurfaceV0() ? LOCATOR_PROFILE_CELL_SURFACE_V0
+    : LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+}
+
+/**
+ * 현재 콘텐츠가 v0(n=13) 용량에 들어가는가.
+ *
+ * ECC 가 'auto' 면 **L 기준**으로 묻는다 — `encodeWithEcc` 가 H→M→L 순으로 시도해
+ * 첫 성공을 쓰므로, 「auto 로 인코드된다」 ⟺ 「L 에 들어간다」 이기 때문이다.
+ * M 으로 물으면 L 이면 들어갈 콘텐츠를 v0TR 로 밀어낸다.
+ */
+function contentFitsCellSurfaceV0() {
+  try {
+    const tones = generatorState.tone === 3 ? 3 : 2;
+    const level = generatorState.eccLevel === 'auto' ? 'L' : generatorState.eccLevel;
+    const capacity = capacityForCellSurfaceFinal(
+      CENTRAL_V0_SOURCE_N, level, tones, CELL_SURFACE_FINAL_V0,
+    );
+    return payloadByteLength(normalPayloadText()) <= capacity.dataBytes;
+  } catch {
+    // 용량 조회가 실패하면 «안 들어간다» 로 본다 — 종전 동작(v0TR)과 같아서
+    // 이 수리가 새로운 실패 모드를 만들지 않는다.
+    return false;
+  }
 }
 
 /** 자동이 켜져 있으면 현재 옵션으로 프로파일을 재유도한다 — versionY·QR 위치가

@@ -344,7 +344,16 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // 승격 (2026-08-24 운영자): 자동 = 안쪽 QR → base v0TR (placement 파생이 v0TRQ) ·
   // Y0 명시 → v0 · 그 외 → v0TR. «끔 동일값» 시절 락은 이 양성 단언으로 전환.
   assert.match(INDEX,
-    /function resolveAutoLocatorProfileY\(pos = generatorState\.qrPosition\)\s*\{[\s\S]{0,400}?if \(generatorState\.versionY === 2\) return LOCATOR_PROFILE_OFF;\s*\n\s*if \(pos === 'inner'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;\s*\n\s*if \(generatorState\.versionY === 0\) return LOCATOR_PROFILE_CELL_SURFACE_V0;\s*\n\s*return LOCATOR_PROFILE_CELL_SURFACE_V0TR;/);
+    /function resolveAutoLocatorProfileY\(pos = generatorState\.qrPosition\)\s*\{[\s\S]{0,400}?if \(generatorState\.versionY === 2\) return LOCATOR_PROFILE_OFF;\s*\n\s*if \(pos === 'inner'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;\s*\n\s*if \(generatorState\.versionY === 0\) return LOCATOR_PROFILE_CELL_SURFACE_V0;\s*\n\s*if \(generatorState\.versionY !== 'auto'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;/);
+  // **의도적 갱신 (2026-08-25, 원장 F-112 · 운영자 지시)** — 구 락은 마지막 줄이
+  // 무조건 v0TR 이었다. 그래서 'auto' 도 그리로 흘러 콘텐츠가 Y0 에 들어가도 첫
+  // 렌더가 **무조건 Y1** 이었다 (인코더는 정상 — chooseVersionY 가 Y0 을 고른다).
+  assert.match(INDEX, /return contentFitsCellSurfaceV0\(\) \? LOCATOR_PROFILE_CELL_SURFACE_V0/,
+    "'auto' 가 콘텐츠 용량을 안 본다 — F-112 회귀");
+  // ECC 'auto' 는 H→M→L 로 내려가므로 «들어가는가» 는 **L 기준**이어야 한다 —
+  // M 으로 물으면 L 이면 들어갈 콘텐츠를 v0TR 로 밀어낸다.
+  assert.match(INDEX, /generatorState\.eccLevel === 'auto' \? 'L'/,
+    "v0 적합 판정이 L 기준이 아니다 — auto 의 폴백 순서와 어긋난다");
   assert.match(INDEX, /let detectorAutoY = true;/,
     '자동이 기본값이 아니다 — 2026-08-24 운영자 확정의 회귀');
   for (const lang of LANGS) {
