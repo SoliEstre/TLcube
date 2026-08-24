@@ -821,7 +821,10 @@ function lumaSpan(luma) {
   return Number.isFinite(min) && Number.isFinite(max) ? max - min : 0;
 }
 
-function seamEvidence(luma, center, vertices, parity, cachedSpan) {
+// cfg 를 받는다 — positiveRayCount 문턱이 언 모듈 상수를 보면 calibration 오버라이드가
+// 심 개수 카운터에 닿지 않는다 (F-93: 4자리수를 흔들어도 불변 실측). 기본값은 동일 상수라
+// 기본 경로 비트 동일.
+function seamEvidence(luma, center, vertices, parity, cachedSpan, cfg = UNVERIFIED_CUBE_DETECTION) {
   const rayReports = [];
   const span = Math.max(cachedSpan === undefined ? lumaSpan(luma) : cachedSpan, EPSILON);
   for (let ray = 0; ray < 3; ray += 1) {
@@ -863,7 +866,7 @@ function seamEvidence(luma, center, vertices, parity, cachedSpan) {
     contrast: ordered[0] ? ordered[0].contrast : 0,
     support: ordered[0] ? ordered[0].support : 0,
     positiveRayCount: rayReports.filter(
-      (report) => report.contrast >= UNVERIFIED_CUBE_DETECTION.minimumSeamContrast,
+      (report) => report.contrast >= cfg.minimumSeamContrast,
     ).length,
     rays: rayReports,
   };
@@ -961,8 +964,8 @@ function shapeCandidates(luma, cfg) {
       }
 
       if (seamSpan === undefined) seamSpan = lumaSpan(luma);
-      const even = seamEvidence(luma, diagonal.center, vertices, 0, seamSpan);
-      const odd = seamEvidence(luma, diagonal.center, vertices, 1, seamSpan);
+      const even = seamEvidence(luma, diagonal.center, vertices, 0, seamSpan, cfg);
+      const odd = seamEvidence(luma, diagonal.center, vertices, 1, seamSpan, cfg);
       const seamScore = (report) => report.contrast
         + cfg.minimumSeamContrast * report.positiveRayCount;
       const evenScore = seamScore(even);
@@ -2314,8 +2317,8 @@ function blockReferenceSearch(luma, initialH, n, tones, options, cfg) {
       projectPoint(candidate.H, { x: corner.x * n, y: corner.y * n }));
     if (!center || vertices.some((point) => point === null)) continue;
     if (seamSpan === undefined) seamSpan = lumaSpan(luma);
-    const even = seamEvidence(luma, center, vertices, 0, seamSpan);
-    const odd = seamEvidence(luma, center, vertices, 1, seamSpan);
+    const even = seamEvidence(luma, center, vertices, 0, seamSpan, cfg);
+    const odd = seamEvidence(luma, center, vertices, 1, seamSpan, cfg);
     const seamScore = (report) => report.contrast
       + cfg.minimumSeamContrast * report.positiveRayCount;
     const parityMargin = Math.abs(seamScore(odd) - seamScore(even));
@@ -2379,7 +2382,7 @@ function blockReferenceSearch(luma, initialH, n, tones, options, cfg) {
     },
   };
 }
-function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
+function cellSurfaceSeedReport(n, orientation, seedId, cellSurface, estimatedNFallback = false) {
   if (!cellSurface.ok) {
     return {
       n,
@@ -2394,6 +2397,7 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
       layoutId: null,
       orientationGate: null,
       ambiguous: false,
+      ...(estimatedNFallback ? { estimatedNFallback: true } : {}),
     };
   }
   const diag = cellSurface.diagnostics
@@ -2420,6 +2424,7 @@ function cellSurfaceSeedReport(n, orientation, seedId, cellSurface) {
     orientationGateApplied: diag.orientationGateApplied === true,
     ambiguous: diag.ambiguous === true || cellSurface.ambiguous === true,
     orientationMargin: Number.isFinite(diag.orientationMargin) ? diag.orientationMargin : null,
+    ...(estimatedNFallback ? { estimatedNFallback: true } : {}),
   };
 }
 
@@ -2531,7 +2536,8 @@ function softCellSurfaceShapes(shapes) {
   return out;
 }
 
-function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports) {
+// export 는 짝 테스트(F-15 표식 폴백 잠금)용이다 — 라이브 호출자는 이 파일 안뿐이다.
+export function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports) {
   for (const shape of shapes.candidates) {
     const center = liftPoint(shape.center, reduced.factor);
     const vertices = shape.vertices.map((point) => liftPoint(point, reduced.factor));
@@ -2542,7 +2548,13 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
       && SUPPORTED_N.includes(shape.estimatedN)
       ? [shape.estimatedN]
       : SUPPORTED_N;
-    for (const n of candidateNs) {
+    // F-15: 블록 로케이터의 estimatedN·family 는 표식이지 증거가 아니다. 표식된 n 이
+    // 평가에서 아무 가설도 못 만들면 나머지 n 으로 되돌아간다 — 틀린 표식이 평가
+    // 집합을 접지 못하게 (강등 + geometryReports 의 estimatedNFallback 진단).
+    // 로케이터(shrink) shape 는 n 별 사본이 이미 전부 나오므로 대상이 아니다.
+    const blockLocatorMarked = shape.cellSurfaceOnly === true
+      && shape.blockLocator && SUPPORTED_N.includes(shape.estimatedN);
+    const evaluateN = (n, estimatedNFallback) => {
       for (let orientation = 0; orientation < 3; orientation += 1) {
         const seeds = cubeGeometrySeeds(
           n,
@@ -2619,6 +2631,7 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
               orientation,
               seed.id,
               cellSurface,
+              estimatedNFallback,
             ));
             if (cellSurface.ok && cellSurface.accepted) {
               const patches = cellSurface.hypothesisPatches
@@ -2723,6 +2736,15 @@ function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, g
           }
         }
       }
+    };
+    const hypothesesBeforeShape = hypotheses.length;
+    for (const n of candidateNs) evaluateN(n, false);
+    // F-15: 표식된 n 의 평가가 가설 0 이면 나머지 n 재개방 (위 주석 참조).
+    if (blockLocatorMarked && hypotheses.length === hypothesesBeforeShape) {
+      for (const n of SUPPORTED_N) {
+        if (n === shape.estimatedN) continue;
+        evaluateN(n, true);
+      }
     }
   }
 }
@@ -2768,7 +2790,9 @@ function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
             + 0.22 * accepted.referenceCalibration.agreementRate
             + 0.20 * clamp01(proposal.blockFill),
           );
+          // F-95: 블록 어파인 경로는 재투영 잔차를 재지 않는다 — 0 위장 대신 미실측 선언.
           const geometryResidual = 0;
+          const geometryResidualMeasured = false;
           const logicalHypothesisId = 'cube-n' + n
             + '-flat-block-c' + componentIndex + '-o' + orientation + '-t' + tones;
           const hardChecks = {
@@ -2793,6 +2817,7 @@ function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
             H: accepted.H,
             canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
             geometryResidual,
+            geometryResidualMeasured,
             sizeGeometry: {
               rK: 0,
               vertexResidual: geometryResidual,

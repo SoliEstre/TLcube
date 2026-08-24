@@ -14,7 +14,7 @@ import { buildScene } from '../src/scene.js';
 import { buildSceneY, DEFAULT_FACE_GAINS } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
-import { detectLocatorY } from '../src/decoder/locatorY-detect.js';
+import { detectLocatorY, shrinkSilhouetteToCubeCandidates } from '../src/decoder/locatorY-detect.js';
 import { detectCubeHypotheses } from '../src/decoder/cube-detect.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset, relativeLuminance,
@@ -348,4 +348,80 @@ test('QR·그라데이션·선화는 Type Y 로 오인되지 않는다', {
   }
   const lines = decodeFrontend({ width: lineW, height: lineW, pixels: linePixels });
   assert.equal(lines.ok, false);
+});
+
+test('F-94: calibration.locatorY minimumHubContrast 는 hub support 카운터에 닿는다 (흔들면 변한다)', {
+  timeout: 30_000,
+}, () => {
+  const fixture = renderY(PAYLOAD, { version: 0, tones: 3 });
+  const luma = rasterToLuma(fixture.raster);
+  const detected = detectCubeHypotheses(luma, null, { finderFirst: false, enableLocatorY: true });
+  assert.equal(detected.ok, true, JSON.stringify(detected.reason || detected));
+  const emitted = (detected.diagnostics.shapeCandidates || [])
+    .find((entry) => entry.locatorRoute === 'hex-frame' && Array.isArray(entry.ringVertices));
+  assert.ok(emitted, 'hex-frame 로케이터 경유 후보가 있어야 한다');
+  const shape = { center: emitted.center, vertices: emitted.ringVertices };
+
+  const baseline = shrinkSilhouetteToCubeCandidates(luma, shape, {});
+  assert.ok(baseline.length > 0, '기본 문턱에서 shrink 후보가 나와야 한다');
+  const baseSupport = baseline[0].seam.positiveRayCount; // = hub.support
+  const baseContrast = baseline[0].seam.contrast; // = hub.contrast (3-ray 평균)
+  assert.equal(baseSupport, 3, `클린 픽스처는 3 ray 전부 양성이어야 한다: ${baseSupport}`);
+
+  // 문턱을 평균 대비의 1.05배로 올리면 최소 1개 ray 는 반드시 그 아래다 (평균의 정의).
+  // 게이트(hub.contrast < 문턱)는 후보를 거부하지만, reject trace 의 support 로
+  // «카운터 자체» 가 문턱을 봤는지 관측한다 — 언 상수 버그라면 support 가 3 그대로다.
+  const trace = [];
+  const shaken = shrinkSilhouetteToCubeCandidates(luma, shape, {
+    locatorYDiagnostics: trace,
+    calibration: { locatorY: { minimumHubContrast: baseContrast * 1.05 } },
+  });
+  assert.equal(shaken.length, 0, '올린 문턱은 hub 게이트에서 거부돼야 한다');
+  const hubReject = trace.find((entry) => entry.stage === 'hub');
+  assert.ok(hubReject, `hub 단계 reject 가 기록돼야 한다: ${JSON.stringify(trace)}`);
+  assert.ok(hubReject.support < baseSupport,
+    `오버라이드 문턱이 support 카운터에 닿아야 한다 (F-94): ${hubReject.support} vs ${baseSupport}`);
+});
+
+test('F-22: shrink 대비 정규화는 실루엣 창 국소 — 코드 밖 페이로드를 흔들어도 불변', {
+  timeout: 60_000,
+}, () => {
+  const fixture = renderY(PAYLOAD, { version: 0, tones: 3 });
+  const luma = rasterToLuma(fixture.raster);
+  const detected = detectCubeHypotheses(luma, null, { finderFirst: false, enableLocatorY: true });
+  assert.equal(detected.ok, true, JSON.stringify(detected.reason || detected));
+  const emitted = (detected.diagnostics.shapeCandidates || [])
+    .find((entry) => entry.locatorRoute === 'hex-frame' && Array.isArray(entry.ringVertices));
+  assert.ok(emitted, 'hex-frame 로케이터 경유 후보가 있어야 한다');
+  const shape = { center: emitted.center, vertices: emitted.ringVertices };
+
+  // 코드 대비를 [0.3, 0.7] 로 눌러 전역 span 을 흔들 여지를 만든다.
+  const squeeze = (source) => ({
+    width: source.width,
+    height: source.height,
+    data: Float32Array.from(source.data, (value) => 0.3 + 0.4 * value),
+    alpha: source.alpha,
+  });
+  const clean = squeeze(luma);
+  const shaken = squeeze(luma);
+  // 코드 밖 좌상단 구석에 순흑·순백 패치 — 전역 span 을 0.4 → 1.0 으로 2.5배 부풀린다.
+  const bounds = shape.vertices.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x), minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x), maxY: Math.max(acc.maxY, point.y),
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  const windowMargin = 0.12 * Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+  assert.ok(bounds.minX - windowMargin > 30 && bounds.minY - windowMargin > 30,
+    '전제 위반: 스탬프 영역(0..20)이 실루엣 창과 겹친다');
+  for (let y = 0; y < 20; y += 1) {
+    for (let x = 0; x < 20; x += 1) {
+      shaken.data[y * shaken.width + x] = 0;
+      shaken.data[y * shaken.width + x + 20] = 1;
+    }
+  }
+
+  const cleanOut = shrinkSilhouetteToCubeCandidates(clean, shape, {});
+  const shakenOut = shrinkSilhouetteToCubeCandidates(shaken, shape, {});
+  assert.ok(cleanOut.length > 0, '눌린 대비에서도 shrink 후보가 나와야 한다');
+  assert.deepEqual(shakenOut, cleanOut,
+    '코드 밖 페이로드가 shrink 결과를 바꿨다 — span 이 전역 통계로 되돌아간 것이다 (F-22)');
 });

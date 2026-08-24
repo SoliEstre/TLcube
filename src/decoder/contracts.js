@@ -87,6 +87,8 @@ export const HOMOGRAPHY_CANONICAL_SPACE = 'hex-euclidean-unit-cell';
  * @property {Homography} H        canonical Euclidean → image pixel
  * @property {'hex-euclidean-unit-cell'} canonicalSpace
  * @property {number} geometryResidual  재투영 잔차(픽셀). 낮을수록 좋음.
+ * @property {boolean} [geometryResidualMeasured]  false 면 잔차를 재지 않은 경로다
+ *   (F-95) — 값 0 은 «최상» 이 아니라 «미실측» 이며, 정렬(rH)은 최하 우선으로 강등된다.
  */
 
 /**

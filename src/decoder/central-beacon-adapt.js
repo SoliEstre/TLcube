@@ -381,7 +381,9 @@ function centerPriorBeaconFinders(luma, emitted) {
         H,
         transform: H,
         B: H,
+        // F-95: 어파인 사전 포즈는 재투영 잔차를 재지 않는다 — 미실측 선언 (0 위장 금지).
         geometryResidual: 0,
+        geometryResidualMeasured: false,
         geometryMode: 'affine',
         source: 'central-v0-center-prior',
         blockShapeIndex: -1,
@@ -447,7 +449,9 @@ export function discoverCentralBeaconFinders(luma, options = {}) {
         H,
         transform: H,
         B: H,
+        // F-95: 위와 같다 — 블록 유도 어파인 포즈, 잔차 미실측.
         geometryResidual: 0,
+        geometryResidualMeasured: false,
         geometryMode: 'affine',
         source: 'central-v0-block-locator',
         blockShapeIndex: shape.componentIndex,

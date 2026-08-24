@@ -92,6 +92,45 @@ function lumaSpan(luma) {
   return Number.isFinite(min) && Number.isFinite(max) ? max - min : 0;
 }
 
+/*
+ * F-22: 전역 min/max span 은 코드 밖 페이로드(베젤·화면 UI)에 흔들려 대비 정규화와
+ * support 카운트의 순위를 바꾼다. shrink 경로는 실루엣 육각이 이미 있으므로, 그
+ * 꼭짓점 bbox(+12% 여유) 창의 span 으로 국소화한다. 같은 추정기(min/max)를 창에만
+ * 적용한 것이라, 코드가 프레임을 가득 채운 입력에서는 전역과 같은 값이 나온다.
+ * 창이 퇴화하면(0) 호출자가 전역 span 으로 폴백한다.
+ */
+function lumaSpanInWindow(luma, vertices) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of vertices) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return 0;
+    if (point.x < minX) minX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y > maxY) maxY = point.y;
+  }
+  const margin = 0.12 * Math.max(maxX - minX, maxY - minY);
+  const x0 = Math.max(0, Math.floor(minX - margin));
+  const y0 = Math.max(0, Math.floor(minY - margin));
+  const x1 = Math.min(luma.width - 1, Math.ceil(maxX + margin));
+  const y1 = Math.min(luma.height - 1, Math.ceil(maxY + margin));
+  if (x1 <= x0 || y1 <= y0) return 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (let y = y0; y <= y1; y += 1) {
+    const row = y * luma.width;
+    for (let x = x0; x <= x1; x += 1) {
+      const value = luma.data[row + x];
+      if (!Number.isFinite(value)) continue;
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+  }
+  return Number.isFinite(min) && Number.isFinite(max) && max > min ? max - min : 0;
+}
+
 function lumaMedian(luma) {
   const copy = Array.from(luma.data).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
   if (copy.length === 0) return 0.5;
@@ -377,7 +416,9 @@ function doubleLineReport(luma, center, vertices, span) {
   };
 }
 
-function hubReport(luma, center, vertices, span) {
+// cfg 를 받는다 — support 카운터 문턱이 언 모듈 상수를 보면 calibration.locatorY 오버라이드가
+// 카운터에 닿지 않는다 (F-94: 75배 흔들어도 support 불변 실측). 기본값 동일 상수 = 기본 경로 비트 동일.
+function hubReport(luma, center, vertices, span, cfg = UNVERIFIED_LOCATOR_Y) {
   const stats = hexStats(vertices);
   const reports = [];
   for (let parity = 0; parity < 2; parity += 1) {
@@ -410,7 +451,7 @@ function hubReport(luma, center, vertices, span) {
       const med = contrasts.slice().sort((a, b) => a - b)[contrasts.length >> 1];
       const c = med / span;
       contrastSum += c;
-      if (c >= UNVERIFIED_LOCATOR_Y.minimumHubContrast) support += 1;
+      if (c >= cfg.minimumHubContrast) support += 1;
       rays += 1;
     }
     reports.push({
@@ -571,7 +612,7 @@ function alignVerticesToCanonical(vertices, center) {
   return { aligned, offset: offset >= 0 ? offset : 0 };
 }
 
-function emitCandidate(source, componentIndex, center, ringVertices, doubleLine, hub, span) {
+function emitCandidate(source, componentIndex, center, ringVertices, doubleLine, hub, span, cfg = UNVERIFIED_LOCATOR_Y) {
   const { aligned, offset } = alignVerticesToCanonical(ringVertices, center);
   // hub.parity 는 원본 ringVertices 순서 기준. aligned 는 offset 만큼 회전된 순서이므로 보정한다.
   const adjustedParity = ((hub.parity - offset) % 6 + 6) % 6;
@@ -595,10 +636,10 @@ function emitCandidate(source, componentIndex, center, ringVertices, doubleLine,
     + 0.20 * (hub.support / 3)
     + 0.18 * (1 - Math.min(1, hexStats(aligned).radiusCv / 0.12)),
   );
-  const hubConfirmed = hub.support >= UNVERIFIED_LOCATOR_Y.minimumHubRays
+  const hubConfirmed = hub.support >= cfg.minimumHubRays
     || (hub.support >= 1
-      && hub.contrast >= UNVERIFIED_LOCATOR_Y.minimumHubContrast * 1.5);
-  const lineConfirmed = doubleLine.count >= UNVERIFIED_LOCATOR_Y.minimumDoubleLineRays;
+      && hub.contrast >= cfg.minimumHubContrast * 1.5);
+  const lineConfirmed = doubleLine.count >= cfg.minimumDoubleLineRays;
   return {
     componentIndex,
     componentSource: source,
@@ -646,14 +687,16 @@ export function shrinkSilhouetteToCubeCandidates(luma, shape, options = {}) {
   };
   if (!shape || !shape.vertices || shape.vertices.length !== 6) return reject('invalid-shape');
   const cfg = calibration(options);
-  const span = Math.max(lumaSpan(luma), EPSILON);
+  // F-22: 실루엣 창 국소 span (퇴화 시 전역 폴백) — 함수 주석 참조.
+  const windowSpan = lumaSpanInWindow(luma, shape.vertices);
+  const span = Math.max(windowSpan > 0 ? windowSpan : lumaSpan(luma), EPSILON);
   const center = shape.center;
   const vertices = shape.vertices;
   const doubleLine = doubleLineReport(luma, center, vertices, span);
   if (doubleLine.count < cfg.minimumDoubleLineRays) {
     return reject('double-line', { count: doubleLine.count, required: cfg.minimumDoubleLineRays });
   }
-  const hub = hubReport(luma, center, vertices, span);
+  const hub = hubReport(luma, center, vertices, span, cfg);
   const hubSupportPass = hub && (
     hub.support >= cfg.minimumHubRays
     || (hub.support >= 1 && hub.contrast >= cfg.minimumHubContrast * 1.5)
@@ -688,6 +731,7 @@ export function shrinkSilhouetteToCubeCandidates(luma, shape, options = {}) {
     doubleLine,
     hub,
     span,
+    cfg,
   );
   if (!emitted) return reject('candidate-map');
 
@@ -792,7 +836,7 @@ export function detectLocatorY(luma, options = {}) {
       });
       return;
     }
-    const hub = hubReport(reduced.luma, stats.center, vertices, span);
+    const hub = hubReport(reduced.luma, stats.center, vertices, span, cfg);
     if (!hub || hub.support < cfg.minimumHubRays
       || hub.contrast < cfg.minimumHubContrast) {
       rejections.push({
@@ -808,6 +852,7 @@ export function detectLocatorY(luma, options = {}) {
       doubleLine,
       hub,
       span,
+      cfg,
     );
     if (!emitted) {
       rejections.push({ componentIndex, stage: 'cube-map' });
