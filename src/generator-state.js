@@ -175,7 +175,7 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // lab 게이트(INTERNAL) 이유는 종전과 같다: 실기기 라운드 전 — 합성만으로 정식
   // 노출을 정하지 않는다. 운영자 확정(2026-08-23·24): 내곽/외곽 구역 노출 lab 유지.
   // ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
-  innerSeat: field('none', INTERNAL, ['none', 'o-cm', 'sagoae']),
+  innerSeat: field('none', INTERNAL, ['none', 'o-cm', 'sagoae', 'H']),
   outerSeat: field('none', INTERNAL, ['none', 'a-cm']),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),

@@ -2374,7 +2374,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (준비 중)",
     "g855": "sagoae 는 아직 켤 수 없어요 — 단독 와이어 편입 전이라 자리만 예약해 뒀어요.",
     "g859": "H",
-    "g871": "H 는 아직 켤 수 없어요 — 생성기 선택 축이 배선되기 전이라 자리만 예약해 뒀어요.",
+    "g871": "H 심볼(O-CM 자리 파인더)을 함께 그려요. 아직 판독 배선 전이라 스캐너가 이 코드를 못 읽어요 — 표시·인쇄 확인용으로만 쓰세요.",
+    "g872": "비컨 실측치 — 모듈나비 {mpc}/셀 · 실기기 셀 17~20px → 모듈 {lo}~{hi}px (권장 하한 {floor}px) · 내부 3톤 · ECC H(t=7) · 실기기 스캔 검증 2026-08-22",
     "g856": "V-CM (부재)",
     "g857": "K-CM (부재)",
     "g858": "빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.",
@@ -2576,7 +2577,7 @@ const GENERATOR_STRINGS = {
     "g576": "코너 자리 예약 (실험)",
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
-    "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.",
+    "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요.",
     "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깥으로 뺄 때까지 잠가 둘게요.",
     "g581": "지금 파인더가 가운데를 쓰고 있어서 QR 을 가운데에 넣을 수 없어요. 다른 파인더를 고르면 풀려요.",
     "g507": "{filename}으로 다운로드되었습니다.",
@@ -2807,7 +2808,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (in preparation)",
     "g855": "sagoae cannot be enabled yet — its standalone wire is not in place, so the seat is only reserved.",
     "g859": "H",
-    "g871": "H cannot be enabled yet — its generator selection axis is not wired, so the seat is only reserved.",
+    "g871": "Renders the H symbol (the O-CM seat finder). Decoding is not wired yet, so scanners cannot read this code — use it for display/print checks only.",
+    "g872": "Beacon measurements — module pitch {mpc}/cell · device cells 17–20px → modules {lo}–{hi}px (recommended floor {floor}px) · inner 3-tone · ECC H(t=7) · device-scan verified 2026-08-22",
     "g856": "V-CM (absent)",
     "g857": "K-CM (absent)",
     "g858": "The empty seats (V-CM·K-CM) have no design yet — shown as placeholders only.",
@@ -3009,7 +3011,7 @@ const GENERATOR_STRINGS = {
     "g576": "Corner seat reservation (experimental)",
     "g577": "None (default)",
     "g578": "Three alternating corners",
-    "g579": "Experimental. It adds helper marks at three alternating corners and lowers capacity. Codes made this way can now be read by the scanner — the format field inside the code announces that the marks are there. Cannot be combined with silhouette direction (turnA).",
+    "g579": "Experimental. It adds helper marks at three alternating corners and lowers capacity. Codes made this way can now be read by the scanner — the format field inside the code announces that the marks are there.",
     "g580": "Corner markers are unavailable while the QR sits in the centre — the two compete for the same cells. They unlock when you move the QR.",
     "g581": "The current finder occupies the centre, so the QR cannot sit there. Pick a different finder to unlock it.",
     "g507": "Downloaded as {filename}.",
@@ -3240,7 +3242,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae（準備中）",
     "g855": "sagoae はまだ有効にできません — 単独ワイヤ編入前のため、席だけ予約しています。",
     "g859": "H",
-    "g871": "H はまだ有効にできません — 生成側の選択軸が未配線のため、席だけ予約しています。",
+    "g871": "H シンボル（O-CM 席のファインダー）を一緒に描画します。読取配線は未実装のため、スキャナーはこのコードを読めません — 表示・印刷確認用です。",
+    "g872": "ビーコン実測 — モジュール幅 {mpc}/セル · 実機セル 17–20px → モジュール {lo}–{hi}px（推奨下限 {floor}px）· 内部3トーン · ECC H(t=7) · 実機スキャン検証 2026-08-22",
     "g856": "V-CM（不在）",
     "g857": "K-CM（不在）",
     "g858": "空席（V-CM·K-CM）はまだ設計がありません — 席だけ表示しています。",
@@ -3442,7 +3445,7 @@ const GENERATOR_STRINGS = {
     "g576": "コーナー席予約（実験）",
     "g577": "なし（既定）",
     "g578": "交互の3隅",
-    "g579": "実験用です。交互の3隅に補助マークを入れ容量も減ります。この状態で作ったコードもスキャナで読み取れるようになりました — マークがあることはコード内のフォーマット欄に記録されます。シルエット方向（turnA）とは併用できません。",
+    "g579": "実験用です。交互の3隅に補助マークを入れ容量も減ります。この状態で作ったコードもスキャナで読み取れるようになりました — マークがあることはコード内のフォーマット欄に記録されます。",
     "g580": "中央 QR を使っている間はコーナーマーカーを使えません — 同じマスを争うためです。QR の位置を変えると使えるようになります。",
     "g581": "現在のファインダーが中央を使っているため、QR を中央に置けません。別のファインダーを選ぶと使えます。",
     "g507": "{filename} としてダウンロードしました。",
@@ -3672,7 +3675,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (en préparation)",
     "g855": "sagoae ne peut pas encore être activé — son câblage autonome n'est pas en place, le siège est seulement réservé.",
     "g859": "H",
-    "g871": "H ne peut pas encore être activé — son axe de sélection côté générateur n'est pas câblé, le siège est seulement réservé.",
+    "g871": "Rend le symbole H (le repère du siège O-CM). Le décodage n'est pas encore câblé : les scanners ne peuvent pas lire ce code — usage d'affichage/impression uniquement.",
+    "g872": "Mesures balise — pas de module {mpc}/cellule · cellules réelles 17–20px → modules {lo}–{hi}px (plancher conseillé {floor}px) · 3 tons internes · ECC H(t=7) · vérifié au scan réel 2026-08-22",
     "g856": "V-CM (absent)",
     "g857": "K-CM (absent)",
     "g858": "Les sièges vides (V-CM·K-CM) n'ont pas encore de conception — affichés comme simples emplacements.",
@@ -3874,7 +3878,7 @@ const GENERATOR_STRINGS = {
     "g576": "Réservation de coin (expérimental)",
     "g577": "Aucun (par défaut)",
     "g578": "Trois angles alternés",
-    "g579": "Expérimental. Ajoute des repères à trois angles alternés et réduit la capacité. Les codes créés ainsi sont désormais lisibles par le scanner — le champ de format du code signale la présence des repères. Incompatible avec le sens de la silhouette (turnA).",
+    "g579": "Expérimental. Ajoute des repères à trois angles alternés et réduit la capacité. Les codes créés ainsi sont désormais lisibles par le scanner — le champ de format du code signale la présence des repères.",
     "g580": "Les marqueurs d'angle sont indisponibles tant que le QR occupe le centre — les deux se disputent les mêmes cellules. Ils se débloquent si vous déplacez le QR.",
     "g581": "Le repère actuel occupe le centre, le QR ne peut donc pas s'y placer. Choisissez un autre repère pour le débloquer.",
     "g507": "Téléchargé sous le nom {filename}.",
@@ -4104,7 +4108,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (in preparazione)",
     "g855": "sagoae non può ancora essere attivato — il collegamento autonomo non è pronto, il posto è solo riservato.",
     "g859": "H",
-    "g871": "H non può ancora essere attivato — l'asse di selezione del generatore non è collegato, il posto è solo riservato.",
+    "g871": "Disegna il simbolo H (il finder del posto O-CM). La decodifica non è ancora collegata: gli scanner non possono leggere questo codice — solo per verifiche di visualizzazione/stampa.",
+    "g872": "Misure beacon — passo modulo {mpc}/cella · celle reali 17–20px → moduli {lo}–{hi}px (soglia consigliata {floor}px) · 3 toni interni · ECC H(t=7) · verificato con scansione reale 2026-08-22",
     "g856": "V-CM (assente)",
     "g857": "K-CM (assente)",
     "g858": "I posti vuoti (V-CM·K-CM) non hanno ancora un progetto — mostrati solo come segnaposto.",
@@ -4306,7 +4311,7 @@ const GENERATOR_STRINGS = {
     "g576": "Prenotazione d'angolo (sperimentale)",
     "g577": "Nessuno (predefinito)",
     "g578": "Tre angoli alternati",
-    "g579": "Sperimentale. Aggiunge riferimenti su tre angoli alternati e riduce la capacità. I codici creati così ora sono leggibili dallo scanner — il campo formato del codice segnala che i riferimenti ci sono. Non si può combinare con la direzione della sagoma (turnA).",
+    "g579": "Sperimentale. Aggiunge riferimenti su tre angoli alternati e riduce la capacità. I codici creati così ora sono leggibili dallo scanner — il campo formato del codice segnala che i riferimenti ci sono.",
     "g580": "I marcatori d'angolo non sono disponibili finché il QR sta al centro — i due si contendono le stesse celle. Si sbloccano spostando il QR.",
     "g581": "Il finder attuale occupa il centro, quindi il QR non può stare lì. Scegli un altro finder per sbloccarlo.",
     "g507": "Scaricato come {filename}.",
@@ -4536,7 +4541,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (in Vorbereitung)",
     "g855": "sagoae kann noch nicht aktiviert werden — die eigenständige Verdrahtung fehlt, der Platz ist nur reserviert.",
     "g859": "H",
-    "g871": "H kann noch nicht aktiviert werden — die Auswahlachse im Generator ist nicht verdrahtet, der Platz ist nur reserviert.",
+    "g871": "Zeichnet das H-Symbol (den Finder des O-CM-Platzes) mit. Die Dekodierung ist noch nicht verdrahtet — Scanner können diesen Code nicht lesen; nur zur Anzeige-/Druckprüfung.",
+    "g872": "Beacon-Messwerte — Modulbreite {mpc}/Zelle · Gerätezellen 17–20px → Module {lo}–{hi}px (empfohlene Untergrenze {floor}px) · innen 3-Ton · ECC H(t=7) · Gerätescan verifiziert 2026-08-22",
     "g856": "V-CM (nicht vorhanden)",
     "g857": "K-CM (nicht vorhanden)",
     "g858": "Die leeren Plätze (V-CM·K-CM) haben noch kein Design — nur als Platzhalter angezeigt.",
@@ -4738,7 +4744,7 @@ const GENERATOR_STRINGS = {
     "g576": "Eckplatz-Reservierung (experimentell)",
     "g577": "Keine (Standard)",
     "g578": "Drei abwechselnde Ecken",
-    "g579": "Experimentell. Setzt Hilfsmarken an drei abwechselnde Ecken und senkt die Kapazität. So erzeugte Codes kann der Scanner jetzt lesen — das Formatfeld im Code meldet das Vorhandensein der Marken. Nicht zusammen mit der Silhouettenrichtung (turnA) nutzbar.",
+    "g579": "Experimentell. Setzt Hilfsmarken an drei abwechselnde Ecken und senkt die Kapazität. So erzeugte Codes kann der Scanner jetzt lesen — das Formatfeld im Code meldet das Vorhandensein der Marken.",
     "g580": "Eckmarker sind nicht verfügbar, solange der QR in der Mitte sitzt — beide beanspruchen dieselben Zellen. Sie werden frei, wenn Sie den QR verschieben.",
     "g581": "Der aktuelle Finder belegt die Mitte, daher kann der QR dort nicht sitzen. Wählen Sie einen anderen Finder, um ihn freizugeben.",
     "g507": "Als {filename} heruntergeladen.",
@@ -4968,7 +4974,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (en preparación)",
     "g855": "sagoae aún no se puede activar: su cableado independiente no está listo, el asiento solo está reservado.",
     "g859": "H",
-    "g871": "H aún no se puede activar: su eje de selección del generador no está cableado, el asiento solo está reservado.",
+    "g871": "Dibuja el símbolo H (el buscador del asiento O-CM). La decodificación aún no está cableada: los escáneres no pueden leer este código — solo para comprobaciones de visualización/impresión.",
+    "g872": "Mediciones de baliza — paso de módulo {mpc}/celda · celdas reales 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tonos internos · ECC H(t=7) · verificado con escaneo real 2026-08-22",
     "g856": "V-CM (ausente)",
     "g857": "K-CM (ausente)",
     "g858": "Los asientos vacíos (V-CM·K-CM) aún no tienen diseño; se muestran solo como marcadores.",
@@ -5170,7 +5177,7 @@ const GENERATOR_STRINGS = {
     "g576": "Reserva de esquina (experimental)",
     "g577": "Ninguno (predeterminado)",
     "g578": "Tres esquinas alternas",
-    "g579": "Experimental. Añade marcas de apoyo en tres esquinas alternas y reduce la capacidad. Los códigos creados así ya los puede leer el escáner — el campo de formato del código avisa de que las marcas están. No se puede combinar con la dirección de la silueta (turnA).",
+    "g579": "Experimental. Añade marcas de apoyo en tres esquinas alternas y reduce la capacidad. Los códigos creados así ya los puede leer el escáner — el campo de formato del código avisa de que las marcas están.",
     "g580": "Los marcadores de esquina no están disponibles mientras el QR ocupa el centro — ambos se disputan las mismas celdas. Se desbloquean al mover el QR.",
     "g581": "El localizador actual ocupa el centro, así que el QR no puede ir ahí. Elige otro localizador para desbloquearlo.",
     "g507": "Descargado como {filename}.",
@@ -5400,7 +5407,8 @@ const GENERATOR_STRINGS = {
     "g854": "sagoae (em preparação)",
     "g855": "sagoae ainda não pode ser ativado — a ligação autônoma não está pronta, o assento está apenas reservado.",
     "g859": "H",
-    "g871": "H ainda não pode ser ativado — o eixo de seleção do gerador não está conectado, o assento está apenas reservado.",
+    "g871": "Desenha o símbolo H (o localizador do assento O-CM). A decodificação ainda não está ligada: os scanners não conseguem ler este código — use apenas para verificação de exibição/impressão.",
+    "g872": "Medições do beacon — passo de módulo {mpc}/célula · células reais 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tons internos · ECC H(t=7) · verificado em scanner real 2026-08-22",
     "g856": "V-CM (ausente)",
     "g857": "K-CM (ausente)",
     "g858": "Os assentos vazios (V-CM·K-CM) ainda não têm design — mostrados apenas como marcadores.",
@@ -5602,7 +5610,7 @@ const GENERATOR_STRINGS = {
     "g576": "Reserva de canto (experimental)",
     "g577": "Nenhum (padrão)",
     "g578": "Três cantos alternados",
-    "g579": "Experimental. Acrescenta marcas de apoio em três cantos alternados e reduz a capacidade. Códigos criados assim agora são lidos pelo leitor — o campo de formato do código avisa que as marcas existem. Não pode ser combinado com a direção da silhueta (turnA).",
+    "g579": "Experimental. Acrescenta marcas de apoio em três cantos alternados e reduz a capacidade. Códigos criados assim agora são lidos pelo leitor — o campo de formato do código avisa que as marcas existem.",
     "g580": "Os marcadores de canto ficam indisponíveis enquanto o QR está no centro — os dois disputam as mesmas células. Eles liberam quando você move o QR.",
     "g581": "O localizador atual ocupa o centro, então o QR não pode ficar ali. Escolha outro localizador para liberar.",
     "g507": "Transferido como {filename}.",
@@ -5712,7 +5720,7 @@ let helpPopoverCtl = null;
 
 /** 검출기 «자동» 카드가 켜져 있는가 (UI 정책 플래그 — 와이어 값이 아니다).
  *  syncYLocatorUi 가 초기화 도중 읽을 수 있어 선언을 여기 맨 앞에 둔다 (TDZ 회피). */
-let detectorAutoY = false;
+let detectorAutoY = true; // 운영자 확정 2026-08-24: 자동이 기본값 (§resolveAutoLocatorProfileY)
 
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
@@ -7292,8 +7300,22 @@ function renderFinderUi() {
     //   여기서 직접 지운다 — 안 지우면 «실측 복호율 89%» 같은 남의 수치가 OAK 카드
     //   밑에 그대로 붙어 있다 (2026-08-18 브라우저 확인에서 실제로 그랬다).
     //   OAK 는 실측 복호율도 없다 — 실기기 라운드를 아직 안 돌았다.
-    els.finderBaselineEvidence.textContent = '';
-    els.finderBaselineEvidence.style.display = 'none';
+    // 중앙 TL(비컨)은 6축 점수 대신 **계약 수치**를 보인다 (운영자 2026-08-24 —
+    // «중앙 TL 도 측정치 정보»). 정본 = _contracts/central-v0-beacon.md §7.1 —
+    // 모듈나비/셀 0.466 은 축소비 반영값 (옛 0.533 은 축소 전 — 쓰지 마라).
+    if (isCentralV0FinderPatternId(generatorState.finderPatternId)) {
+      const mpc = 0.466; // 계약 §7.1 (모듈나비/셀, 축소비 0.875 반영)
+      els.finderBaselineEvidence.textContent = tf('g872', {
+        mpc: String(mpc),
+        lo: (mpc * 17).toFixed(1),
+        hi: (mpc * 20).toFixed(1),
+        floor: '4.2',
+      });
+      els.finderBaselineEvidence.style.display = '';
+    } else {
+      els.finderBaselineEvidence.textContent = '';
+      els.finderBaselineEvidence.style.display = 'none';
+    }
     // 실험 후보 경고는 유지한다 — OAK 도 후보이지 정식 선택지가 아니다.
     els.finderExperimentalWarning.style.display =
       (visible || document.body.dataset.generatorEdition === 'finder-experiment') ? '' : 'none';
@@ -7496,7 +7518,11 @@ for (const card of els.qrPositionCards.children) {
     // ⚠ **의도적 갱신 (W2 C3)** — 여기 있던 «면» ↔ v0TY/v0TRY 양방향 전환 분기는
     // plane 카드 삭제와 함께 내렸다. Y 의 안쪽 QR 은 (안쪽 여부) × (면 배치) 로
     // 분해됐고, 로케이터 파생은 §deriveYLocatorForQrPosition 한 방향뿐이다.
-    if (type === 'Y') deriveYLocatorForQrPosition(card.dataset.pos);
+    // 자동(기본값)이면 새 위치 기준으로 base 부터 재유도한다 (2026-08-24 승격).
+    if (type === 'Y') {
+      if (detectorAutoY) applyAutoLocatorProfileY(card.dataset.pos);
+      else deriveYLocatorForQrPosition(card.dataset.pos);
+    }
     commitFinderQrUi(
       selectQrPosition(generatorState, card.dataset.pos, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
     );
@@ -7516,6 +7542,9 @@ if (els.qrFacePlacementCards) {
     });
   }
 }
+// 자동이 기본값(2026-08-24 승격)이므로 첫 로드에서 프로파일을 즉시 유도한다 —
+// 상태 기본값(끔)은 와이어 의미라 그대로 두고, UI 정책이 위에서 덮는다.
+applyAutoLocatorProfileY();
 syncFinderQrUi();
 
 function commitFinderQrUi(nextState, type = currentType()) {
@@ -7837,20 +7866,35 @@ for (const card of els.quietModeCards.children) {
 syncQuietModeUi();
 
 /*
- * ── 검출기 «자동» (운영자 지시 2026-08-16 A-4, 정식 반영 대비) ─────────────
+ * ── 검출기 «자동» (운영자 지시 2026-08-16 A-4 · **승격 2026-08-24**) ─────────
  *
- * **자동의 현재 의미**: «지금 설정에서 권장되는 검출기를 쓴다». 그런데 정식 승격된
- * Y 검출기가 아직 없으므로 (v0 · v0W 계열 전부 lab 실험 항목, g518 이 그
- * 사실을 말한다) 권장값은 결정적으로 **끔**이다 — 끔만이 스펙이 보증하는 경로다.
- * 그래서 지금의 자동은 «끔» 과 **바이트 동일한 결과**를 낸다. 인코딩·게이트 경로는
- * 손대지 않고, 이 함수 하나가 그 정책의 유일한 자리다. 승격이 일어나면 여기만 바뀐다.
+ * **자동의 의미**: «지금 옵션에서 권장되는 검출기를 쓴다». 운영자 확정
+ * (2026-08-24 아침 검수): 자동이 **기본값**이고, 권장은
+ *   · 안쪽 QR → base v0TR (placement 파생이 seam 기본으로 **v0TRQ** 를 만든다 —
+ *     §deriveYLocatorForQrPosition. 여기서 v0TRQ 를 직접 박으면 placement 축과
+ *     이중 결정이 된다)
+ *   · Y0 (versionY === 0 명시 선택) → **v0**
+ *   · 그 외 → **v0TR**
+ * versionY 'auto' 는 v0TR 로 간다 — 해석된 버전을 여기서 쓰면 «프로파일 →
+ * 오버헤드 → 버전 해석» 순환이 생긴다 (프로파일이 용량을 바꾼다).
+ * 레거시 윈도 β 는 «검출기 끔» 명시 선택으로만 (운영자 확정 항목 2 유지).
  *
  * 상태는 generatorState 에 넣지 않는다 — locatorProfileY 의 옵션 집합은 «와이어에
  * 실리는 값» 이고, 자동은 그 값을 고르는 **UI 정책**이지 값이 아니다. 그래서 화면
  * 표시용 플래그(detectorAutoY)만 모듈 안에 둔다.
  */
-function resolveAutoLocatorProfileY() {
-  return LOCATOR_PROFILE_OFF;
+function resolveAutoLocatorProfileY(pos = generatorState.qrPosition) {
+  if (pos === 'inner') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+  if (generatorState.versionY === 0) return LOCATOR_PROFILE_CELL_SURFACE_V0;
+  return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+}
+
+/** 자동이 켜져 있으면 현재 옵션으로 프로파일을 재유도한다 — versionY·QR 위치가
+ *  바뀌는 자리마다 부른다 (자동은 상태가 아니라 정책이라 스스로 안 따라온다). */
+function applyAutoLocatorProfileY(pos = generatorState.qrPosition) {
+  if (!detectorAutoY) return;
+  generatorState.locatorProfileY = resolveAutoLocatorProfileY(pos);
+  deriveYLocatorForQrPosition(pos);
 }
 
 if (els.yLocatorCards) {
@@ -9477,6 +9521,12 @@ for (const [select, key] of [
 ]) {
   select.addEventListener('change', () => {
     generatorState[key] = select.value === 'auto' ? 'auto' : Number(select.value);
+    if (key === 'versionY') {
+      // 자동 검출기의 Y0 분기(→ v0)가 버전에 걸려 있다 — 버전이 바뀌면 재유도.
+      applyAutoLocatorProfileY();
+      syncYLocatorUi();
+      renderQrPositionUi();
+    }
     syncResTierUi();
     syncTypeYCellEditorUi(); // n 변경 즉시 셀 편집기 ref./format 재유도 (렌더 대기 없이)
     schedule();
@@ -9897,9 +9947,13 @@ function buildConfig() {
     // 코너 마커는 seat 파생이다 (W2 C4): O 는 내곽 o-cm, A 는 외곽 a-cm 이 켠다.
     // Y 는 자기 로케이터 문법을 쓰므로 seat 구역 자체가 안 뜬다 — 타입 술어가
     // 종전의 «다른 타입에서 켜진 채 새는» 것을 같은 규약으로 죽인다.
-    // sagoae 는 자리 예약 값이라 와이어를 켜지 않는다 (통합자 C2c 전까지).
-    cornerMarker: (type === 'O' && generatorState.innerSeat === 'o-cm')
+    // sagoae 는 자리 예약 값이라 와이어를 켜지 않는다 (생성측 합성 렌더 전까지).
+    // H (2026-08-24) = «o-cm 자리 + 심볼 톤» — cornerMarker 와 markerTones 를
+    // 함께 켠다 (encode 계약: markerTones 는 cornerMarker 없이 못 켠다).
+    cornerMarker: (type === 'O'
+      && (generatorState.innerSeat === 'o-cm' || generatorState.innerSeat === 'H'))
       || (type === 'A' && generatorState.outerSeat === 'a-cm'),
+    markerTones: type === 'O' && generatorState.innerSeat === 'H',
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
       ? TL_READER_URL : generatorState.qrText.trim(),
@@ -10014,7 +10068,11 @@ function encodeOptsFor(cfg) {
   // ⚠ 중앙 QR 과도 상호배제다 — UI 가 이미 막지만, 저장·URL 로 옛 조합이 들어와도
   //   인코더가 던지는 대신 여기서 코너 마커를 떨군다 (중앙 QR 이 사용자가 더 최근에
   //   고른 것이고, QR 은 폴백 경로라 잃으면 손해가 크다).
-  else if (cfg.cornerMarker === true) opts.cornerMarker = true; // C2a — centerQr 병용 개설
+  else if (cfg.cornerMarker === true) {
+    opts.cornerMarker = true; // C2a — centerQr 병용 개설
+    // H 심볼 (2026-08-24) — 자리 예약이 실릴 때만 톤도 실린다 (encode 계약).
+    if (cfg.markerTones === true) opts.markerTones = true;
+  }
   return { fn: encode, opts };
 }
 
@@ -10424,7 +10482,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-24.01';
+const GENERATOR_BUILD = '2026-08-24.02';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

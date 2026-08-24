@@ -85,7 +85,9 @@ export const LAB_CENTRAL_FINDER_IDS = Object.freeze([
  * 파인더가 아니다. 아직 시험판 UI 에서 고를 일이 드물지만 **자리를 지금 잡아 둔다** —
  * 나중에 값을 더하면 그 전 프레임들이 「미상」과 「없음」 사이에서 애매해진다.
  */
-export const LAB_OUTER_FINDER_IDS = Object.freeze(['none', 'daehan', 'a-cm', 'o-cm']);
+// H (2026-08-24) — O-CM 자리의 심볼 파인더가 생성 축을 얻어 기대값으로도 유효하다.
+// 검출 배선 전이라 관측률은 0 이 정상 — 이 축이 배선 완료를 재는 자가 된다.
+export const LAB_OUTER_FINDER_IDS = Object.freeze(['none', 'daehan', 'a-cm', 'o-cm', 'H']);
 
 /** 시험판 버튼이 넘겨온 값이 축 ②의 유효 값인가. 아니면 null(모름). */
 export function normalizeCentralFinderId(value) {

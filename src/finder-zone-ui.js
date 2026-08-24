@@ -99,15 +99,15 @@ export function zoneCards() {
       id: SAGOAE_ID, name: SAGOAE_ID, types: Object.freeze(['O', 'A']),
       ready: false, absent: false,
     }),
-    // H — 분류 2 의 O-CM 자리 심볼 파인더 (운영자 확정 2026-08-23, F-35).
-    // 톤 표는 finder-H.js 에 실재(markerTones opt-in)하나 **생성기 선택 축이
-    // 미배선**이라 자리만이다 (SPEC §13 TBD «[G] H 의 생성기 선택 축» — F-38).
-    // sagoae 와 달리 상태 값도 아직 아니다: sagoae 는 와이어 의미(daehan 합성)가
-    // 있어 값이 실재하지만 H 는 저장할 의미 자체가 미정 — stateValue:false 로
-    // options 유도에서 뺀다 (부재 absent 와도 다르다 — 코드 정체는 실재한다).
+    // H — 분류 2 의 O-CM 자리 심볼 파인더 (운영자 확정 2026-08-23, F-35 ·
+    // **생성 축 개통 2026-08-24 아침 검수 지시** — F-38 생성측 해소).
+    // 와이어 의미 = cornerMarker(자리 예약) + markerTones(H 심볼 톤, encode.js 완비).
+    // ⚠ 판독은 아직이다 — H 톤이 digit 앵커·CM digit 을 덮는데 그걸 읽는 검출
+    // 경로가 미배선 (합성 왕복 no-anchors 실증 2026-08-24). 카드 힌트(g871)가
+    // 그 사실을 말한다. 검출 배선이 서면 힌트만 내리면 된다.
     Object.freeze({
       id: 'H', name: 'H', types: Object.freeze(['O']),
-      ready: false, absent: false, stateValue: false,
+      ready: true, absent: false,
     }),
   ];
   const outer = [

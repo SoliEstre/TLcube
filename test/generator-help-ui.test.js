@@ -341,7 +341,12 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
     }
   }
   // 자동의 «현재 의미» 는 코드에 한 자리로 있어야 한다 — 화면 문구와 어긋나면 거짓말이 된다.
-  assert.match(INDEX, /function resolveAutoLocatorProfileY\(\)\s*\{\s*\n\s*return LOCATOR_PROFILE_OFF;/);
+  // 승격 (2026-08-24 운영자): 자동 = 안쪽 QR → base v0TR (placement 파생이 v0TRQ) ·
+  // Y0 명시 → v0 · 그 외 → v0TR. «끔 동일값» 시절 락은 이 양성 단언으로 전환.
+  assert.match(INDEX,
+    /function resolveAutoLocatorProfileY\(pos = generatorState\.qrPosition\)\s*\{\s*\n\s*if \(pos === 'inner'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;\s*\n\s*if \(generatorState\.versionY === 0\) return LOCATOR_PROFILE_CELL_SURFACE_V0;\s*\n\s*return LOCATOR_PROFILE_CELL_SURFACE_V0TR;/);
+  assert.match(INDEX, /let detectorAutoY = true;/,
+    '자동이 기본값이 아니다 — 2026-08-24 운영자 확정의 회귀');
   for (const lang of LANGS) {
     assert.match(langBlock(lang), /"g906":/, `${lang} 에 검출기 도움말 g906 이 없다`);
   }
