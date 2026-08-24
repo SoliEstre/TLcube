@@ -13,7 +13,7 @@
  *   1 중앙 파인더 — 초기 4종 + 중앙 19셀 (taegeuk 포함)
  *   2 OAK 공통 육각 영역 내 셀 표면 파인더 — sagoae · o-cm · **H**
  *     내부 구분: 중심부 기준 / 꼭짓점 기준
- *   3 VAK 확장 영역 셀 표면 파인더 — H2O · H2CO3 · a-cm
+ *   3 VAK 확장 영역 셀 표면 파인더 — H2O · H2CO3 · **NO2** · a-cm · v-cm
  *     꼭짓점 기준 only
  *
  * ⚠ **H = 분류 2 (운영자 확정 2026-08-23).** 편입 당시 H 는 H2O·H2CO3 와 묶여
@@ -32,7 +32,8 @@
  *   「A-CM 이 H2O 의 중앙 파인더를 버렸다」는 오독이다.
  *
  *   CM 계열은 파인더가 아니라 «자리 예약». 그 자리에 들어가는 심볼이 기본
- *   파인더다 — Type A → H2O, Type G → H.
+ *   파인더다 — Type A(a-cm) → H2O, Type G(o-cm) → H, **턴A(v-cm) → NO2**
+ *   (2026-08-24 편입 — 종전 «H2O 대칭 사상» 잠정 규약을 대체한다).
  *
  * 톤 규약:
  *   중앙 셀 파인더: 흑/백/회색 유지가 기본
@@ -78,6 +79,11 @@ import {
   markerCellsA, markerCellsTurnA, MARKER_CELL_COUNT_A,
   MARKER_LOCAL_DIGITS_A, H2O_LOCAL_TONES_A,
 } from './markerA.js';
+import {
+  NO2_NAME, NO2_LOCAL_TONES_V, NO2_LABELS,
+  NO2_CELL_COUNT, NO2_ANCHOR_COUNT, NO2_MARKER_COUNT,
+  no2CellsTurnA,
+} from './finder-NO2.js';
 import { GENERATOR_TYPES } from './generator-state.js';
 import {
   LOCATOR_PROFILE_OFF,
@@ -116,9 +122,14 @@ export const KIND_LOCATOR = 'locator';
 export const SEAT_DEFAULT_FINDER = Object.freeze({
   'a-cm': 'H2O',
   'o-cm': 'H',
-  // V-CM (2026-08-24) — A-CM 자리의 턴A 사상이라 자리 모양·심볼이 같다 (markerA
-  // markerCellsTurnA 유도 — 셀 정립이라 H2O 톤 표가 그대로 온다).
-  'v-cm': 'H2O',
+  // V-CM — **NO2** (운영자 작화 2026-08-24 수정본, 편입 2026-08-24).
+  //
+  // 종전 값은 'H2O' 였다: 자리가 A-CM 의 턴A 사상이니 심볼도 사상해 쓰자는 잠정
+  // 규약이었고, 그때는 V 자리의 «자기 심볼» 이 존재하지 않았다. 이제 존재한다 —
+  // `src/finder-NO2.js` (꼭짓점 앵커 3 + 영역 내 이웃 6, 전 k 유도).
+  // 전환은 자리 모양(A-CM 21셀 회계)을 바꾸지 않는다: NO2 의 마커 6셀이 그 21셀의
+  // 부분집합이라 오버헤드·scan order·용량이 전부 불변이다 (finder-NO2 자기검증 ③).
+  'v-cm': 'NO2',
 });
 
 function freezeRow(row) {
@@ -134,6 +145,17 @@ function h2oNonPermutationCount() {
   for (const corner of [0, 1, 2]) {
     for (const label of Object.keys(H2O_LOCAL_TONES_A[corner])) {
       const t = H2O_LOCAL_TONES_A[corner][label];
+      if (!permutationFaces([t.T, t.L, t.R])) n += 1;
+    }
+  }
+  return n;
+}
+
+function no2NonPermutationCount() {
+  let n = 0;
+  for (const corner of [0, 1, 2]) {
+    for (const label of NO2_LABELS) {
+      const t = NO2_LOCAL_TONES_V[corner][label];
       if (!permutationFaces([t.T, t.L, t.R])) n += 1;
     }
   }
@@ -409,6 +431,32 @@ function buildItems() {
       + 'tetrad A 가 digit 앵커를 덮으므로 앵커 검출 경로는 TBD',
   });
 
+  // NO2 — 턴A 자리(V-CM)의 기본 파인더 (`finder-NO2.js` 가 정본 — 유도 9셀 톤 표).
+  // 분류 3: VAK 확장 영역 · 꼭짓점 기준. 꼭짓점 «자체» 를 포함하는 첫 심볼이다
+  // (H2O 는 2칸 안쪽 링, H 는 육각 경계 tetrad — 둘 다 꼭짓점 앵커를 안 덮는다).
+  add({
+    id: NO2_NAME,
+    name: NO2_NAME,
+    class: 3,
+    className: FINDER_CLASS[3],
+    kind: KIND_FINDER,
+    origin: 'SEAT_DEFAULT_FINDER[v-cm] — 운영자 작화 2026-08-24 (수정본) · 정본 사본 test/output/lanes/finder-NO2.json',
+    renderPath: 'src/finder-NO2.js no2SeatMarkerCellsA — encodeA(turnA+cornerMarker) 기본 적재 (마커 6셀)',
+    coordBasis: COORD_VERTEX,
+    innerSplit: '꼭짓점 기준 (역삼각)',
+    toneAxis: TONE_CELL_COLOR + ' (palette.levels — 순백 금지, finder-NO2.js §5)',
+    cells: String(NO2_CELL_COUNT) + ' (꼭짓점 앵커 ' + NO2_ANCHOR_COUNT
+      + ' + 영역 내 이웃 ' + NO2_MARKER_COUNT + ' — 전 k 유도, 손 좌표 0)',
+    // 마커 6셀은 **기본 적재**라 화면에 실제로 그려진다 (H·H2O 와 갈리는 지점).
+    // 앵커 3셀은 opt-in — 덮으면 digit 기반 앵커 검출이 죽는다 (실측 2026-08-24).
+    renderable: '마커 ' + NO2_MARKER_COUNT + '셀 기본 적재 · 앵커 '
+      + NO2_ANCHOR_COUNT + '셀 opt-in(no2AnchorTones)',
+    consumer: 'encodeA V-CM 톤 경로 · 생성기 outerSeat v-cm · 편집기 JSON',
+    note: '비순열 ' + no2NonPermutationCount() + '/' + NO2_CELL_COUNT
+      + ' (전부) · 중앙 파인더 축과 **직교** — 정본 cellMasks 19 는 기본 불스아이와 바이트 동일. '
+      + '앵커 피복은 알려진 공백 (H 와 같은 축, finder-NO2.test ⑥)',
+  });
+
   // A-CM — 자리 예약. 기본 파인더는 H2O.
   {
     const cells = markerCellsA(6);
@@ -440,6 +488,7 @@ function buildItems() {
   // 종전 부재 행: «코드 정체 없음 — 분류 3 에 억지 배정하지 않음» — 이제 정체가 있다.
   {
     const cells = markerCellsTurnA(6);
+    const no2 = no2CellsTurnA(6);
     add({
       id: 'v-cm',
       name: 'V-CM',
@@ -450,12 +499,20 @@ function buildItems() {
       renderPath: 'encodeA.js marker(turnA + cornerMarker) — canonical 좌표 + scene.js turnA 배치 반전',
       coordBasis: COORD_VERTEX,
       innerSplit: '꼭짓점 기준 (역삼각)',
-      toneAxis: TONE_CELL_COLOR + '. 기본 파인더 H2O 톤 표 그대로 (셀 정립 — 사상 불변)',
+      // **실체 갱신 2026-08-24**: 자리 모양은 그대로 A-CM 사상인데 그 위에 올라가는
+      // 심볼이 H2O → NO2 로 바뀌었다. 자리(21셀 회계)와 심볼(9셀 톤)은 다른 층이다.
+      toneAxis: TONE_CELL_COLOR + '. 기본 파인더 ' + SEAT_DEFAULT_FINDER['v-cm']
+        + ' 톤 표 (셀 정립 — 사상 불변). 21셀 중 ' + no2.filter((c) => c.role === 'marker').length
+        + '셀에 톤, 나머지는 digit-only',
       cells: String(cells.length),
-      renderable: 'A-CM 과 동일 (digit + H2O tones) — 자리만 180° 상',
+      renderable: '자리 21셀 = A-CM 과 동일 digit · 심볼 NO2 마커 '
+        + no2.filter((c) => c.role === 'marker').length + '셀 톤 (앵커 '
+        + no2.filter((c) => c.role === 'anchor').length + '셀은 opt-in)',
       consumer: '생성기 outerSeat v-cm(Type A × turnA) · decode V-CM(turn + cornerMarker)',
       note: '자리 예약. A-CM 의 턴A 대응 — 손 좌표 0, markerCellsA 의 (−q,−r) 사상. '
-        + 'V-CMQ(+중앙 QR)는 와이어 잔여 0 으로 보류 (turnA.js §V-CM 회계)',
+        + '기본 파인더=' + SEAT_DEFAULT_FINDER['v-cm'] + ' (2026-08-24 편입 — 종전 H2O 잠정 규약 대체). '
+        + 'V-CMQ(+중앙 QR)는 와이어 잔여 0 으로 보류 (turnA.js §V-CM 회계) — '
+        + '**자리의 제약이지 NO2 의 제약이 아니다** (NO2 는 중앙 파인더 축과 직교)',
     });
   }
   // k-cm — 코드 정체 없음. 분류 3에 억지 배정하지 않음.
@@ -630,8 +687,16 @@ export function daehanSplitHolds(items = FINDER_TAXONOMY) {
   if (!vcm || vcm.kind !== KIND_SEAT || vcm.class !== 3) {
     throw new Error('v-cm 이 분류 3 자리 예약이 아니다 — 2026-08-24 실체 전환과 어긋난다');
   }
-  if (SEAT_DEFAULT_FINDER['v-cm'] !== 'H2O') {
-    throw new Error('v-cm 자리 예약 기본 파인더가 H2O 가 아니다 (A-CM 대칭 유도 규약)');
+  // **심볼 전환 (2026-08-24 NO2 편입)** — 종전 락은 «v-cm 기본 파인더 = H2O» 였다
+  // (A-CM 대칭 유도 잠정 규약). V 자리의 자기 심볼(NO2)이 실재하게 됐으므로 그
+  // 락을 **양성 단언으로 전환**한다 (배타 개설 정형 3단 ③ — 삭제가 아니라 전환).
+  // H2O 는 a-cm 의 심볼로 그대로 남는다 (위 a-cm 단언이 그 자리를 지킨다).
+  if (SEAT_DEFAULT_FINDER['v-cm'] !== NO2_NAME) {
+    throw new Error('v-cm 자리 예약 기본 파인더가 ' + NO2_NAME + ' 가 아니다 (2026-08-24 편입)');
+  }
+  const no2 = taxonomyItem(NO2_NAME);
+  if (!no2 || no2.class !== 3 || no2.kind !== KIND_FINDER) {
+    throw new Error(NO2_NAME + ' 가 분류 3 파인더가 아니다 — 자리(v-cm)와 심볼은 다른 층이다');
   }
   if (taxonomyItem('k-cm').class !== 'U') {
     throw new Error('k-cm 이 미분류가 아니다');

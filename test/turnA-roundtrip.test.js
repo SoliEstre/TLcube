@@ -83,9 +83,21 @@ test('정삼각 대조군 — 같은 하네스에서 기존 A 는 기존 가설�
   }
 });
 
-test('V-CM 왕복 — V1CM·V2CM 이 마커 회계로 원문까지 돌아온다 (V0CM 은 미완 락)', () => {
+test('V-CM 왕복 — V0/V1/V2 CM 3종이 NO2 심볼을 실은 채 원문까지 돌아온다', () => {
   // V-CM = 턴A + 코너 자리 예약 (2026-08-24 개설 — turnA.js V 표 말미).
-  for (const version of [1, 2]) {
+  //
+  // **미완 락 해제 (2026-08-24, NO2 편입)** — 종전 이 자리에는 «V0CM(k=6)은 전
+  // 해상도 no-anchors» 라는 미완 락이 있었고, 그 락의 지시가 «읽히기 시작하면
+  // 양성 단언 3종으로 갱신하라» 였다. 읽히기 시작했다. 근인은 앵커 검출이 아니라
+  // **자리에 실리던 심볼**이었다: V-CM 은 A-CM 의 기본 심볼(H2O) 톤 21셀을 그대로
+  // 실었는데, V 자리의 자기 심볼(NO2)로 바꾸자 톤이 21셀 → 마커 6셀로 줄고
+  // (나머지 15셀 digit-only) V0CM 이 선다. 즉 k=6 CM 앵커를 «가리고 있던» 것이
+  // H2O 였다 — 앵커 검출 코드는 한 줄도 안 바뀌었다 (이 레인은 decoder/ 무접촉).
+  //
+  // ⚠ 남은 구멍은 «범위» 가 아니라 **고립 딥**이다 (ppu 10\~48 × supersample 1·2
+  //   14점 스윕 실측): V0CM 은 24/2 하나, V1CM 은 16/2 하나에서만 죽고 나머지
+  //   13/14 는 원문까지 온다. 표본 위상 결함 꼴이라 «미완» 으로 이름 붙이지 않는다.
+  for (const version of [0, 1, 2]) {
     const text = 'vcm-roundtrip-' + version;
     const encoded = encodeA(text, { version, eccLevel: 'M', turnA: true, cornerMarker: true });
     const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
@@ -96,16 +108,6 @@ test('V-CM 왕복 — V1CM·V2CM 이 마커 회계로 원문까지 돌아온다 
     assert.equal(result.diagnostics.format.formatIndex,
       turnASpec(version, { cornerMarker: true }).formatIndex);
   }
-  // ⚠ 미완 락 — V0CM(k=6) 은 앵커가 안 선다 (실측 2026-08-24: ppu 12/16/24 전부
-  // no-anchors). A0CM 도 같은 축이다 — 직접 앵커가 실패하고 hex→recast 로만
-  // 생존하는데, recast 는 turn 축이 없어 V0CM 을 못 구한다. k=6 CM 앵커(또는
-  // turn recast)가 서는 날 이 락을 양성 단언으로 뒤집어라.
-  const enc0 = encodeA('vcm-roundtrip-0', { version: 0, eccLevel: 'M', turnA: true, cornerMarker: true });
-  const r0 = decodeFrontend(rasterize(
-    buildScene(enc0, { palette: PALETTE, margin: 20 }), { pixelsPerUnit: 12, supersample: 1 },
-  ));
-  assert.equal(r0.ok, false,
-    'V0CM 이 읽히기 시작했다 — 미완 락을 걷고 왕복 3종 양성 단언으로 갱신하라');
 });
 
 test('교차 오수용 없음 — 턴A 프레임에서 정삼각 formatIndex 가 소비되지 않는다', () => {
