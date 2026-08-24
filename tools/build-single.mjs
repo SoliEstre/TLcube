@@ -82,7 +82,11 @@ const MODULE_ORDER = [
   // 표에서 조회한다. 의존은 capacity·capacityA 둘뿐이라 여기서 위상 정렬이 성립한다.
   // (빠뜨렸더니 assertTopologicalOrder 가 «MODULE_ORDER 에 없는 모듈» 로 잡아냈다 —
   //  그대로 빌드했으면 브라우저에서만 터졌을 자리다.)
-  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'encodeA',
+  // finder-NO2(V-CM 자리의 기본 파인더, 2026-08-24)는 **markerA 뒤 · encodeA 앞**이다:
+  // 발자국 회계를 markerA(markerCellsA·markerPositionSetA)에서 유도하고 encodeA 가
+  // V-CM 톤 적재로 소비한다. 나머지 의존(hexgrid·placement·placementA·capacityA)은
+  // 전부 이미 이 앞에 있어 위상 정렬이 그대로 성립한다.
+  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'finder-NO2', 'encodeA',
   'luminance',
   // gf256→rs→qr 체인은 **scene 앞**에 와야 한다. scene.js 가 폴백 QR 을 그리려고
   // './qr.js' 를 import 하기 때문이다 — 원래는 Type Y 전용이라 보고 뒤에 뒀는데(TY8),
