@@ -487,6 +487,24 @@ export function capacityTableKMarker(level = 'M') {
   return VERSIONS_KCM.map((spec) => capacityForKMarker(spec, level));
 }
 
+/**
+ * SPEC 증보(통합자 몫)용 마크다운 표 — `capacityK.renderMarkdownTableK` 대칭.
+ * **이 함수가 표의 소스다. SPEC 에 수기로 옮겨 적고 유지하지 않는다.**
+ * 단일 물결표는 쓰지 않는다 (규약 §6.11 — GFM 취소선 트랩).
+ * @param {'L'|'M'|'H'} [level]
+ */
+export function renderMarkdownTableKMarker(level = 'M') {
+  const rows = capacityTableKMarker(level);
+  const head = '| 버전 | k | formatIndex | 총 셀 | 오버헤드 | 데이터 셀 C | 사용 심볼 S | 잔여 셀 | ECC-'
+    + level + ' nsym | t | 데이터 심볼 | K | 순 페이로드 |';
+  const sep = '|---|---|---|---|---|---|---|---|---|---|---|---|---|';
+  const body = rows.map((r) => `| ${r.name} | ${r.k} | ${r.formatIndex} | ${r.totalCells} | `
+    + `${r.overhead} | ${r.dataCells} | ${r.usedSymbols} | ${r.residualCells} | ${r.nsym} | `
+    + `${r.errorCapacity} | ${r.dataSymbols} | ${r.dataBytes} B | **${r.maxPayloadBytes} B**`
+    + `${r.chunkAligned ? '' : ' 청킹 비정렬 — 인코딩 불가 (nsym 재조정 필요)'} |`);
+  return [head, sep, ...body].join('\n');
+}
+
 /** 페이로드가 들어가는 최소 K-CM 버전 (chooseVersionK 대칭). */
 export function chooseVersionKMarker(byteLength, eccLevel = 'M') {
   for (const spec of VERSIONS_KCM) {

@@ -23,6 +23,7 @@ import {
   VERSIONS_KCM,
   capacityForKMarker,
   capacityTableKMarker,
+  renderMarkdownTableKMarker,
   versionSpecKMarker,
   chooseVersionKMarker,
   patchReferenceCellsKMarker,
@@ -304,4 +305,19 @@ test('용량표 — 확정값 · 전 조합 청크 정렬 · 버전 선택', () 
   assert.equal(chooseVersionKMarker(37, 'M').name, 'K1CM');
   assert.equal(chooseVersionKMarker(81, 'M').name, 'K2CM');
   assert.throws(() => chooseVersionKMarker(1000, 'M'), RangeError);
+});
+
+test('SPEC 증보용 마크다운 표 — 이 함수가 소스다 (수기 유지 금지)', () => {
+  for (const level of ['L', 'M', 'H']) {
+    const md = renderMarkdownTableKMarker(level);
+    for (const spec of VERSIONS_KCM) {
+      const cap = capacityForKMarker(spec, level);
+      assert.ok(md.includes(`| ${spec.name} | ${spec.k} | ${spec.formatIndex} |`),
+        `${spec.name}/${level} 행이 표에 없다`);
+      assert.ok(md.includes(`**${cap.maxPayloadBytes} B**`),
+        `${spec.name}/${level} 순 페이로드가 표에 없다`);
+    }
+    assert.doesNotMatch(md, /[^\|]~[^~]/, '단일 물결표 금지 (규약 §6.11)');
+    assert.equal(md.split('\n').length, 2 + VERSIONS_KCM.length);
+  }
 });
