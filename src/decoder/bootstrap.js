@@ -62,6 +62,11 @@ import {
   hasLegacyFormatWire,
 } from '../cellSurfaceFinal.js';
 import { decodeCells } from '../decode.js';
+// Type K(육각별, family 'star') — 후단은 decode-k.js (decode.js 는 O/A/Y 정본이라
+// 무변경 — 레인 K 브리프 §4 쓰기 범위). 회계·scan 은 K 모듈이 유일한 진실이다.
+import { decodeCellsK } from './decode-k.js';
+import { VERSIONS_K } from '../capacityK.js';
+import { dataCellsInScanOrderK, layoutMapK, vertexAnchorsK } from '../layoutK.js';
 import { markerGSpec, markerGSpecFromFormatIndex } from '../markerG.js';
 import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from '../turnA.js';
 import { dataCellsInScanOrderOMarker } from '../markerO.js';
@@ -89,6 +94,7 @@ import {
 } from './contracts.js';
 import {
   findAAnchorHypotheses,
+  findKAnchorHypotheses,
   findOAnchorHypotheses,
 } from './anchor-detect.js';
 import {
@@ -191,7 +197,7 @@ import {
   tryReadBeaconFromText,
 } from './central-beacon-adapt.js';
 import { sampleHexCell, sampleHexGrid } from './grid-sample.js';
-import { estimateHomography4, projectPoint } from './homography.js';
+import { estimateHomography4, estimateHomographyN, projectPoint } from './homography.js';
 import { estimateLocalWarp, validateOReferences } from './reference-validate.js';
 import { robustPercentiles } from './luma.js';
 import { TONE_PATTERNS } from '../tonemap.js';
@@ -231,7 +237,9 @@ export const UNVERIFIED_BOOTSTRAP_CALIBRATION = Object.freeze({
 });
 
 const ECC_NAME = Object.freeze({ 0: 'L', 1: 'M', 2: 'H' });
-const FAMILY_ORDER = Object.freeze({ hex: 0, tri: 1, cube: 2 });
+const FAMILY_ORDER = Object.freeze({
+  hex: 0, tri: 1, cube: 2, star: 3,
+});
 const EPSILON = 1e-12;
 
 function emitStage(options, stage, phase) {
@@ -488,6 +496,16 @@ function familyProfiles(family) {
       formatIndices: [spec.formatIndex],
     }));
   }
+  if (family === 'star') {
+    // Type K (육각별) — star 축 독립 표 (formatK.js: 전 버전 7, k 로 가른다).
+    // Q/CM 변형은 아직 없다 (encodeK 배타 — 배치 검증 미실시 조합).
+    return VERSIONS_K.map((spec) => ({
+      family,
+      dimension: spec.k,
+      spec,
+      formatIndices: [spec.formatIndex],
+    }));
+  }
   return [];
 }
 
@@ -527,6 +545,10 @@ function validVersionIndices(hypothesis) {
       ? [profile.spec.formatIndex + 2,
         markerGSpec('tri', profile.spec.version, true).formatIndex]
       : [profile.spec.formatIndex, markerGSpec('tri', profile.spec.version).formatIndex];
+  }
+  if (hypothesis.family === 'star') {
+    // Type K — star 축은 버전당 값 하나(7)뿐이다. Q/CM 변형 없음 (encodeK 배타).
+    return profile.formatIndices.slice();
   }
   if (hypothesis.cellSurface === true) {
     if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
@@ -1326,8 +1348,10 @@ function minimumClippingSideCount(luma, finders) {
   return minimum;
 }
 
-function validateAnchorPattern(luma, H, k, sampleOptions) {
-  const expected = anchorCells(k);
+function validateAnchorPattern(luma, H, k, sampleOptions, expectedCells) {
+  // expectedCells 를 주면 그 목록으로 검증한다 (star 별 꼭짓점 6점). 생략하면
+  // 종전과 완전히 같다 — 기존 호출부(hex 3점)는 인자를 안 넘긴다.
+  const expected = expectedCells || anchorCells(k);
   const observations = [];
   let agreement = 0;
   let separation = 0;
@@ -1495,6 +1519,164 @@ function silhouetteHypotheses(luma, finder, k, outline, options, cfg) {
       finder,
       source: 'outline-anchor',
       hypothesisId: 'hex-' + k + '-r' + String(degrees).padStart(3, '0'),
+      luma,
+    });
+  }
+
+  candidates.sort((left, right) =>
+    right.anchorMargin - left.anchorMargin
+    || left.rotationDegrees - right.rotationDegrees);
+  return candidates.slice(0, cfg.maxGeometryCandidatesPerSize);
+}
+
+/**
+ * star(Type K) 별 꼭짓점 6개의 canonical 끝점(실루엣 apex). 꼭짓점 셀 중심은
+ * 유클리드 3k 이고, 끝점 방향이 정확히 그 셀의 육각 코너 방향이라 apex =
+ * 중심 × (3k+1)/(3k) — 근사가 아니라 정확한 기하다 (pointy-top 셀 반지름 1).
+ */
+function starTipCanonicalPoints(k) {
+  const scale = (3 * k + 1) / (3 * k);
+  return vertexAnchorsK(k).map((cell) => {
+    const point = canonicalCenter(cell.q, cell.r);
+    return { x: point.x * scale, y: point.y * scale };
+  });
+}
+
+/**
+ * star(Type K) 실루엣 기반 가설 — hex `silhouetteHypotheses` 의 육각별 판.
+ *
+ * 왜 필요한가 (2026-08-25 합성 실측): 별 꼭짓점 앵커는 중심에서 3k(최대 30셀)라
+ * 파인더 H 의 원근·스케일 오차가 3k 배로 증폭된다 — K1(ppu 12, 다운샘플 파인더)
+ * 에서 앵커 자리 오차가 2셀을 넘어 6/6 이 전멸했다. hex 가 같은 상황에서 쓰는
+ * 처방 그대로: 외곽선을 따라 **관측된 별 끝 6점 + 중심**으로 H 를 재적합한다.
+ * 6점 이상 대응이라 `estimateHomographyN`(최소제곱 DLT — 레인 K 가 추가한 6점
+ * 일반화, 4점 경로 무변경)을 쓴다. 수용은 별 꼭짓점 앵커 6/6 (digit 5/0/0·1/1/1)
+ * — 60° 오가설은 여기서도 digit 으로 죽는다.
+ */
+/**
+ * 별 끝 6점의 이미지 관측 — **방사 프로파일의 국소 최원점**으로 찾는다.
+ *
+ * 왜 광선-투영 방식이 아닌가 (1차 시도 실측): 파인더 H 로 끝점 방향을 투영해
+ * 그 광선의 마지막 전경을 찍으면, 각도 오차 1° 가 반경 3k+1(최대 31셀)에서
+ * 0.4셀 이상의 접선 오차가 되고 apex 대신 빗변을 찍는다 — 6점 최소제곱이
+ * 그 잡음을 못 이겨 앵커 6/6 이 전 회전에서 죽었다. 별 끝은 정의상 «그 각도
+ * 근방에서 실루엣이 가장 먼 점» 이므로, 중심에서 전방위 경계 거리 프로파일을
+ * 한 번 재고 거리 내림차순으로 각도 분리(≥30°) 6개를 고르면 회전 가설 없이
+ * apex 가 바로 나온다. k 무관이라 finder 당 1회 계산해 캐시한다.
+ */
+const STAR_TIP_PROFILE_STEP_DEGREES = 0.5;
+const STAR_TIP_MIN_SEPARATION_DEGREES = 30;
+const starTipProfileCache = new WeakMap();
+
+function starTipObservations(luma, center, outline) {
+  const cacheKey = center.x + '|' + center.y + '|' + outline.threshold + '|' + outline.background;
+  const cached = starTipProfileCache.get(luma);
+  if (cached && cached.key === cacheKey) return cached.tips;
+
+  const samples = [];
+  for (let degrees = 0; degrees < 360; degrees += STAR_TIP_PROFILE_STEP_DEGREES) {
+    const angle = (degrees * Math.PI) / 180;
+    const observed = boundaryAlongRay(
+      luma,
+      center,
+      { x: Math.cos(angle), y: Math.sin(angle) },
+      outline,
+    );
+    if (observed) samples.push({ degrees, observed });
+  }
+  const byDistance = samples.slice()
+    .sort((left, right) => right.observed.distance - left.observed.distance);
+  const tips = [];
+  for (const candidate of byDistance) {
+    if (tips.length >= 6) break;
+    const tooClose = tips.some((tip) => {
+      const delta = Math.abs(tip.degrees - candidate.degrees);
+      return Math.min(delta, 360 - delta) < STAR_TIP_MIN_SEPARATION_DEGREES;
+    });
+    if (!tooClose) tips.push(candidate);
+  }
+  tips.sort((left, right) => left.degrees - right.degrees);
+  starTipProfileCache.set(luma, { key: cacheKey, tips });
+  return tips;
+}
+
+function starSilhouetteHypotheses(luma, finder, k, outline, options, cfg) {
+  if (!outline || outline.touchesBorder) return [];
+  const baseH = finderTransform(finder);
+  if (!baseH) return [];
+  const center = finder.center || projectPoint(baseH, { x: 0, y: 0 });
+  if (!center) return [];
+
+  const tips = starTipObservations(luma, center, outline);
+  if (tips.length !== 6) return [];
+
+  const sampleOptions = {
+    minSampleCount: cfg.anchorSampleMinCount,
+    minProjectedMinorDiameter: cfg.anchorProjectedMinorDiameter,
+    ...(options.sample || {}),
+  };
+  const canonicalAnchorCells = vertexAnchorsK(k);
+  const canonicalTips = starTipCanonicalPoints(k)
+    .map((point) => ({ point, angle: Math.atan2(point.y, point.x) }))
+    .sort((left, right) => left.angle - right.angle)
+    .map((entry) => entry.point);
+  const observedTips = tips.map((tip) => tip.observed);
+  const candidates = [];
+
+  // 배정은 순환 이동 6가지뿐이다 (양쪽 다 각도 오름차순 — 거울상은 rhombille
+  // 분할에서 애초에 불가능한 사상이라 후보에 없다). 회전 정보는 배정이 정하고,
+  // 검증은 앵커 digit(5/0/0·1/1/1) 6/6 이 한다 — 60° 이웃 배정은 여기서 죽는다.
+  for (let shift = 0; shift < 6; shift += 1) {
+    const assigned = canonicalTips.map(
+      (_, index) => observedTips[(index + shift) % 6],
+    );
+    const provisional = estimateHomographyN(
+      [{ x: 0, y: 0 }, ...canonicalTips],
+      [center, ...assigned],
+    );
+    if (!provisional) continue;
+    const anchorValidation = validateAnchorPattern(
+      luma, provisional, k, sampleOptions, canonicalAnchorCells,
+    );
+    if (anchorValidation.agreement !== canonicalAnchorCells.length) continue;
+
+    const H = provisional;
+    const imageAnchors = canonicalAnchorCells
+      .map((cell) => projectPoint(H, canonicalCenter(cell.q, cell.r)));
+    if (imageAnchors.some((point) => point === null)) continue;
+
+    // F-95 규약 (hex 판 승계): 최소제곱 H 의 재투영 잔차가 진짜 잔차다.
+    const residualPoints = [{ x: 0, y: 0 }, ...canonicalTips];
+    const residualObserved = [center, ...assigned];
+    let residualSum = 0;
+    let residualCount = 0;
+    for (let index = 0; index < residualPoints.length; index += 1) {
+      const projected = projectPoint(H, residualPoints[index]);
+      if (!projected) continue;
+      residualSum += Math.hypot(
+        projected.x - residualObserved[index].x,
+        projected.y - residualObserved[index].y,
+      );
+      residualCount += 1;
+    }
+
+    candidates.push({
+      family: 'star',
+      k,
+      orientation: 0,
+      rotationDegrees: shift * 60,
+      centerQr: false,
+      anchors: imageAnchors,
+      canonicalAnchors: canonicalAnchorCells.map((cell) => ({ q: cell.q, r: cell.r })),
+      H,
+      canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+      geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
+      geometryResidualMeasured: residualCount > 0,
+      anchorMargin: anchorValidation.separation / canonicalAnchorCells.length,
+      anchorValidation,
+      finder,
+      source: 'star-outline-anchor',
+      hypothesisId: 'star-' + k + '-s' + shift,
       luma,
     });
   }
@@ -1713,7 +1895,9 @@ function cellFinderHypotheses(luma, finder, family, options) {
 
 export function directAnchorHypotheses(luma, finder, family, options) {
   const dimensions = uniqueDimensions(family);
-  const detector = family === 'tri' ? findAAnchorHypotheses : findOAnchorHypotheses;
+  const detector = family === 'tri' ? findAAnchorHypotheses
+    : family === 'star' ? findKAnchorHypotheses
+      : findOAnchorHypotheses;
   const result = detector(luma, finder, dimensions, options.anchor || {});
   if (!result.ok) {
     // 코너 마커를 weak fallback **앞에** 둔다 — agreement + confirm 을 통과한
@@ -1800,6 +1984,27 @@ function classificationDimensions(finders, outline) {
     .map((entry) => entry.k);
 }
 
+/**
+ * star(Type K) 분류용 k 후보 — classificationDimensions 의 육각별 판. 셀 수 모델만
+ * 6k²+6k+1 로 바꾼다. hex 면적으로 고른 k 는 K 프레임에서 체계적으로 어긋나므로
+ * (K 총 셀 ≈ hex 의 2배) star 채점에는 star 면적 모델의 k 를 준다.
+ */
+function starClassificationDimensions(finders, outline) {
+  if (!outline || finders.length === 0) return uniqueDimensions('star');
+  const cellSizes = finders.map((finder) => finder.cellSize)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const cellSize = median(cellSizes);
+  if (cellSize === null) return uniqueDimensions('star');
+  return uniqueDimensions('star').map((k) => ({
+    k,
+    relativeAreaError: Math.abs(
+      (6 * k * k + 6 * k + 1) * HEX_AREA_COEFF * cellSize * cellSize - outline.area
+    ) / outline.area,
+  })).sort((left, right) => left.relativeAreaError - right.relativeAreaError || left.k - right.k)
+    .slice(0, 1)
+    .map((entry) => entry.k);
+}
+
 function classifyFamilies(luma, finders, familyEvidence, options, outline) {
   if (familyEvidence && familyEvidence.ok === true && familyEvidence.family) {
     return ok({ families: [familyEvidence.family], classification: familyEvidence });
@@ -1815,6 +2020,7 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
       { finder: finders, yJunction: familyEvidence.yJunction },
       {
         ks: classificationDimensions(finders, outline),
+        starKs: starClassificationDimensions(finders, outline),
         ...(options.family || {}),
       },
     );
@@ -1881,10 +2087,48 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
     },
     {
       ks: classificationDimensions(finders, outline),
+      starKs: starClassificationDimensions(finders, outline),
       ...(options.family || {}),
     },
   );
   if (classified.ok) {
+    /*
+     * star(K) 분류는 **라벨이지 확정이 아니다** — K ⊃ A ⊃ O 포함 사슬 때문에
+     * 교차-k 도플갱어가 있다 (실측: star k6 영역이 A k8 영역에 대부분 포함돼
+     * A1 합성 프레임에서 star 채점이 hard 로 선다). 그래서 star 로 분류되면
+     * 사슬의 나머지(tri·hex) 기하도 함께 평가한다 — 가르는 것은 분류가 아니라
+     * 앵커(별 꼭짓점 6 vs 3)·포맷 축(star=7 은 hex·tri 집합 밖)·본문 RS 다:
+     *   · 진짜 K 프레임: tri/hex 가설은 포맷 7 이 자기 집합 밖이라 포맷에서 죽는다.
+     *   · star 오분류(A/O 프레임): star 앵커가 죽고 tri/hex 가 기존 경로로 이긴다.
+     * hex/tri 분류가 이긴 프레임은 종전과 동일하게 그 패밀리 하나만 평가한다.
+     */
+    if (classified.family === 'star') {
+      /*
+       * ⚠ 사슬은 «star + **star 가 없었다면 이 함수가 냈을 답**» 이다 — 상수
+       * ['star','tri','hex'] 가 아니다. 하드코딩하면 star 오양성 하나가 기존
+       * 프레임의 평가 집합을 넓혀서, base 가 못 읽던 프레임이 우연히 살아난다
+       * (실측 2026-08-24: 투명 O trim 이 tri 로 분류돼 죽던 것이 star 오양성
+       * 덕에 hex 까지 평가돼 읽혔다 — `export-options.test.js` §9 링 규칙의
+       * 전제를 조용히 무너뜨렸다).
+       *
+       * ⚠⚠ 반대 방향도 실재한다 — 「없으면 star 만」으로 좁혔더니 회전 30° sweep
+       * 이 죽었다 (`decoder-frontend.test.js`). star 없이 **무후보**인 프레임에서
+       * base 는 아래 `body-validated-hex` 폴백으로 hex 를 계속 평가하기 때문이다.
+       * 그래서 여기서 그 분기를 **그대로 재현**한다: 집합이 비면 ['hex'].
+       * (집합이 둘 이상이면 base 는 FAMILY_AMBIGUOUS 로 죽는다 — 그 자리는 base 가
+       * 어차피 못 읽으므로 전부 평가한다. 죽음 플립이 아니라 이득 방향이다.)
+       */
+      const withoutStar = (classified.diagnostics
+        && Array.isArray(classified.diagnostics.familiesWithoutStar))
+        ? classified.diagnostics.familiesWithoutStar : [];
+      const chain = withoutStar.length > 0 ? withoutStar : ['hex'];
+      return ok({
+        families: ['star', ...chain],
+        classification: classified,
+        starChainExpansion: true,
+        starChainFallbackFamilies: chain,
+      });
+    }
     return ok({ families: [classified.family], classification: classified });
   }
   if (classified.reason === FRONTEND_FAILURE.FAMILY_AMBIGUOUS) return classified;
@@ -1962,6 +2206,14 @@ function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
       map: layoutMapA(dimension),
       dataCells: dataCellsInScanOrderA(dimension),
       type: 'A',
+    };
+  }
+  if (family === 'star') {
+    // Type K (육각별) — daehan/CM 변형 없음 (encodeK 배타 · K-CM 보류).
+    return {
+      map: layoutMapK(dimension),
+      dataCells: dataCellsInScanOrderK(dimension),
+      type: 'K',
     };
   }
   if (family === 'cube') {
@@ -2743,6 +2995,17 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
             .forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
         }
       }
+
+      // star(K) 실루엣 폴백 — hex 와 같은 조건(직접 앵커 전멸 시)에서만.
+      // 별 꼭짓점 앵커는 3k 거리라 파인더 H 오차 증폭이 hex 보다 심하다
+      // (starSilhouetteHypotheses 헤더 실측) — 이 폴백이 실질 주 경로다.
+      if (family === 'star'
+        && (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true)) {
+        for (const k of uniqueDimensions('star')) {
+          starSilhouetteHypotheses(luma, finder, k, outline, options, cfg)
+            .forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
+        }
+      }
     }
   }
 
@@ -2870,6 +3133,7 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
         hex: uniqueDimensions('hex'),
         tri: uniqueDimensions('tri'),
         cube: uniqueDimensions('cube'),
+        star: uniqueDimensions('star'),
       },
       geometryHypothesisCount: unique.length,
       poseDiagnostics: compactGeometryPoseDiagnostics(unique),
@@ -3405,8 +3669,11 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       const body = (useMarkerBody || useTurnMarkerBody)
         ? markerBodyFor()
         : { digits, erasureCells };
-      const decoded = withStage(options, 'decode', () =>
-        decodeCells(body.digits, decodeFormat, { erasureCells: body.erasureCells }));
+      // Type K 는 후단이 decode-k.js 다 — decode.js(O/A/Y 정본)는 K 를 모른다
+      // (레인 K 브리프 §4: decode.js 는 쓰기 범위 밖, decoder/** 가 K 를 소유).
+      const decoded = withStage(options, 'decode', () => (layout.type === 'K'
+        ? decodeCellsK(body.digits, decodeFormat, { erasureCells: body.erasureCells })
+        : decodeCells(body.digits, decodeFormat, { erasureCells: body.erasureCells })));
       if (!decoded.ok) {
         diagnostics.bodyFailures.push({
           hypothesisId: hypothesis.hypothesisId,

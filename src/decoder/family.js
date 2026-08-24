@@ -32,6 +32,7 @@ import {
   regionCells,
 } from '../hexgrid.js';
 import { regionCellsA, regionCellsTurnA } from '../placementA.js';
+import { patchOfK } from '../placementK.js';
 
 /*
  * 패밀리 점수의 임계값·가중치는 설계에서 M1 calibration 전 [미검증]이다.
@@ -55,6 +56,15 @@ const DEFAULT_SAMPLE_RADIUS_FRACTION = 0.5;
 // [미검증] M1 calibration 에서 확정: 거친 점수 항의 상대 가중치.
 const HEX_SCORE_WEIGHTS = Object.freeze({ grid: 0.55, separation: 0.25, outer: 0.20 });
 const TRI_SCORE_WEIGHTS = Object.freeze({ patch: 0.55, core: 0.30, finder: 0.15 });
+// [미검증] star(Type K) 채점 — tri 와 같은 가중치·문턱을 승계하되 패치가 두 계열
+// (A 계열 3 + 반전 계열 3)이라 **둘 다** 문턱을 넘어야 hard 다. 균형비까지 요구하는
+// 이유: A 프레임의 반전 자리(배경 클러터)가 우연히 문턱을 넘으면 star 오양성이
+// 기존 tri 프레임을 강등시킨다 — 실코드에서는 두 계열이 같은 톤 통계의 데이터라
+// 비슷하게 재이고, 클러터는 실코드 쪽 계열과 균형이 맞기 어렵다.
+const STAR_SCORE_WEIGHTS = Object.freeze({ patch: 0.55, core: 0.30, finder: 0.15 });
+const DEFAULT_STAR_MIN_PATCH_RATE = DEFAULT_TRI_MIN_PATCH_RATE;
+const DEFAULT_STAR_MIN_CORE_RATE = DEFAULT_TRI_MIN_CORE_RATE;
+const DEFAULT_STAR_PATCH_BALANCE = 0.5;
 const DEFAULT_KS = Object.freeze([6, 8, 10]);
 const ORIENTATIONS = Object.freeze([0, 1, 2]);
 const LUMA_RANGE_EPSILON = 1e-9;
@@ -658,6 +668,168 @@ export function scoreTriTiling(luma, finder, options = {}) {
 }
 
 /**
+ * star(Type K, 육각별) 패치 두 계열 — A 계열(top·BR·BL) = 정삼각 A 의 패치 그대로,
+ * 반전 계열(bottom·TL·TR) = 그 180° 상. 합치면 hexagram 의 코어 밖 전부다.
+ */
+function starPatchSeries(k) {
+  const aSeries = regionCellsA(k)
+    .filter((cell) => hexDistance(cell.q, cell.r) > k)
+    .map((cell) => ({ q: cell.q, r: cell.r }));
+  return {
+    aSeries,
+    invSeries: aSeries.map((cell) => ({ q: -cell.q, r: -cell.r })),
+  };
+}
+
+/**
+ * star 채점의 k 목록 — **명시 opt-in 이다. 기본값은 «없음»(빈 배열)**.
+ *
+ * 왜 DEFAULT_KS 로 떨어지지 않는가 (2026-08-24 실측으로 고침):
+ * K ⊃ A ⊃ O 포함 사슬 때문에 **교차-k 도플갱어**가 있다 — star k6 의 영역이
+ * A k8 영역 안에 거의 전부 들어가서, A1 합성 프레임을 star k6 로 재면 코어·A 계열·
+ * 반전 계열이 **전부 진짜 셀**이라 균형까지 통과하고 star 가 hard 로 선다
+ * (`test/decoder-family.test.js` «tri 패치가 있으면 O를 hard 선택하지 않음» 이
+ * 이것으로 tri → star 로 뒤집혔다). 즉 star 는 «자기 k 를 못 받으면 남의 k 로
+ * 아무 프레임이나 양성» 이 되는 채점이다.
+ *
+ * hex 면적 모델의 `options.ks` 를 물려 쓰는 것도 안 된다 — K 총 셀이 같은 k 의
+ * hex 의 약 2배라 체계적으로 어긋난다. 그래서 **호출자가 star 면적 모델로 고른
+ * k 를 `starKs` 로 직접 줘야** 한다 (bootstrap.starClassificationDimensions).
+ * 안 주면 star 가설 자체가 서지 않고 NO_GRID_HYPOTHESIS 로 남는다 —
+ * 이 레인 이전의 classifyFamily 동작(= star 부재)과 바이트 동일하다.
+ */
+function normalizeStarKs(options) {
+  if (!Array.isArray(options.starKs)) return [];
+  const output = new Set();
+  for (const value of options.starKs) {
+    if (Number.isInteger(value) && value >= 4) output.add(value);
+  }
+  return Array.from(output).sort((a, b) => a - b);
+}
+
+function scoreStarInternal(luma, finderInput, options = {}) {
+  const stats = validateLuma(luma);
+  if (stats && stats.ok === false) return stats;
+  const finder = normalizeFinder(finderInput);
+  if (!finder) {
+    return fail(FRONTEND_FAILURE.NO_FINDER, { family: 'star', message: '불스아이 증거가 없다' });
+  }
+  // ⚠ k 목록은 hex 면적 모델의 options.ks 가 아니라 **starKs**(육각별 면적 모델 —
+  // bootstrap.starClassificationDimensions)를 쓰고, **없으면 채점하지 않는다**
+  // (normalizeStarKs 헤더 — 교차-k 도플갱어 때문에 기본 sweep 이 오양성이다).
+  const ks = normalizeStarKs(options);
+  if (ks.length === 0) {
+    return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, { family: 'star', message: 'k 목록이 없다' });
+  }
+  const orientations = normalizeOrientation(options);
+  const minPatchRate = Number.isFinite(options.minStarPatchRate)
+    ? options.minStarPatchRate
+    : DEFAULT_STAR_MIN_PATCH_RATE;
+  const minCoreRate = Number.isFinite(options.minStarCoreRate)
+    ? options.minStarCoreRate
+    : DEFAULT_STAR_MIN_CORE_RATE;
+  const balance = Number.isFinite(options.starPatchBalance)
+    ? clamp01(options.starPatchBalance)
+    : DEFAULT_STAR_PATCH_BALANCE;
+  const measurements = [];
+  for (const k of ks) {
+    const core = listCells(k, {}); // 코어는 hex 와 같은 셀 — sampleCells 재정의 없이
+    const { aSeries, invSeries } = starPatchSeries(k);
+    for (const orientation of orientations) {
+      const coreMeasured = measureCells(luma, finder, k, orientation, core, options);
+      const aMeasured = measurePatch(luma, finder, k, orientation, aSeries, options);
+      const invMeasured = measurePatch(luma, finder, k, orientation, invSeries, options);
+      const coreRate = coreMeasured.strictRate;
+      const aRate = aMeasured.strictRate;
+      const invRate = invMeasured.strictRate;
+      const score = STAR_SCORE_WEIGHTS.patch * ((aRate + invRate) / 2)
+        + STAR_SCORE_WEIGHTS.core * coreRate
+        + STAR_SCORE_WEIGHTS.finder * finder.score;
+      measurements.push({
+        k,
+        orientation,
+        score,
+        coreRate,
+        aRate,
+        invRate,
+        core: coreMeasured,
+        aPatch: aMeasured,
+        invPatch: invMeasured,
+      });
+    }
+  }
+  const ordered = sortMeasurements(measurements);
+  const best = ordered[0] || {
+    k: undefined, orientation: undefined, score: 0, coreRate: 0, aRate: 0, invRate: 0,
+  };
+  const finderCheck = finder.hardChecksPassed;
+  const coreCheck = best.coreRate >= minCoreRate;
+  const patchCheck = best.aRate >= minPatchRate && best.invRate >= minPatchRate;
+  // 균형 — 두 계열이 서로의 balance 배 이상. 한쪽만 실코드(A 프레임 + 클러터)면
+  // 여기서 떨어진다 (상수 주석의 오양성 방어 근거).
+  const balanceCheck = best.invRate >= balance * best.aRate
+    && best.aRate >= balance * best.invRate;
+  return ok({
+    family: 'star',
+    finderKind: finder.kind,
+    gridKind: 'hex-core-hexagram-patch',
+    k: best.k,
+    orientation: best.orientation,
+    score: clamp01(best.score),
+    hardChecks: {
+      finder: finderCheck,
+      coreTiling: coreCheck,
+      patchTiling: patchCheck,
+      patchBalance: balanceCheck,
+      all: finderCheck && coreCheck && patchCheck && balanceCheck,
+    },
+    diagnostics: {
+      finder: {
+        center: finder.center,
+        cellSize: finder.cellSize,
+        score: finder.score,
+        hardChecksPassed: finder.hardChecksPassed,
+      },
+      lumaSpan: stats.span,
+      sizeScores: ordered,
+      selectedSize: { k: best.k, orientation: best.orientation },
+    },
+    hypothesisId: 'star-' + best.k + '-' + best.orientation,
+  });
+}
+
+/**
+ * Type K/star(육각별)의 육각 코어 + 코어 밖 여섯 삼각 패치(두 계열) 연속성 점수.
+ * 검증 셀 좌표의 정본은 placementK(patchOfK)다 — 아래 로드 자기검증이 A 계열/반전
+ * 계열 분해가 patchOfK 와 일치함을 잰다.
+ */
+export function scoreStarTiling(luma, finder, options = {}) {
+  return scoreStarInternal(luma, finder, options);
+}
+
+// starPatchSeries 의 «A 계열 + 180° 상 = hexagram 코어 밖 전부» 주장을 로드 시점에
+// 못 박는다 — 유도가 깨지면 star 채점이 조용히 다른 도형을 잰다.
+{
+  for (const k of DEFAULT_KS) {
+    const { aSeries, invSeries } = starPatchSeries(k);
+    const seen = new Set();
+    for (const [series, wanted] of [[aSeries, ['top', 'BL', 'BR']], [invSeries, ['bottom', 'TL', 'TR']]]) {
+      for (const cell of series) {
+        const patch = patchOfK(cell.q, cell.r, k);
+        if (!wanted.includes(patch)) {
+          throw new Error('family: star 패치 분해가 patchOfK 와 다르다 — ('
+            + cell.q + ',' + cell.r + ') → ' + patch);
+        }
+        seen.add(cell.q + ',' + cell.r);
+      }
+    }
+    if (seen.size !== 6 * (k * (k + 1) / 2)) {
+      throw new Error('family: star 패치 셀 수가 6·k(k+1)/2 이 아니다 — k=' + k + ' → ' + seen.size);
+    }
+  }
+}
+
+/**
  * Type Y의 육각 실루엣 + 중앙 Y 심 + 세 면 공변 격자 + 레퍼런스 네 조 점수.
  * 검출 실패를 불스아이 경로와 연결하지 않으며, tone/n/orientation 전 가설을 보존한다.
  */
@@ -832,6 +1004,44 @@ function copyWithPatchExclusion(candidate) {
   };
 }
 
+function copyWithStarExclusion(candidate) {
+  return {
+    ...candidate,
+    hardChecks: {
+      ...candidate.hardChecks,
+      starExclusion: false,
+      all: false,
+    },
+    diagnostics: {
+      ...(candidate.diagnostics || {}),
+      starExclusion: 'star 경로의 두 계열 패치 양성 증거가 있어 부분 실루엣(hex/tri) 선택을 금지했다',
+    },
+  };
+}
+
+/**
+ * star 를 빼고 tri>hex 배제만 적용했을 때 hard 로 남는 패밀리 **집합**(정렬).
+ * 입력은 **배제 적용 전** 스냅샷이고, 여기서는 복사본만 만든다 (호출부의 배열·
+ * 항목을 건드리지 않는다).
+ */
+function familiesWithoutStar(preStarHypotheses) {
+  const candidates = preStarHypotheses.filter((candidate) => candidate.family !== 'star');
+  const triPositive = candidates.some((candidate) => candidate.family === 'tri'
+    && candidate.finderIndex !== undefined
+    && candidate.hardChecks && candidate.hardChecks.all);
+  const resolved = candidates.map((candidate) => {
+    if (!triPositive || candidate.family !== 'hex') return candidate;
+    const sameFinder = candidate.finderIndex === undefined
+      || candidates.some((other) => other.family === 'tri'
+        && other.finderIndex === candidate.finderIndex
+        && other.hardChecks && other.hardChecks.all);
+    return sameFinder ? copyWithPatchExclusion(candidate) : candidate;
+  });
+  return Array.from(new Set(resolved
+    .filter((candidate) => candidate.hardChecks && candidate.hardChecks.all)
+    .map((candidate) => candidate.family))).sort();
+}
+
 /**
  * 패밀리별 rough hypothesis 전체와 hard-check 진단을 반환한다.
  *
@@ -860,20 +1070,53 @@ export function classifyFamily(luma, evidence, options = {}) {
     if (normalizedEvidence.triTiling !== undefined) finderInput.triTiling = normalizedEvidence.triTiling;
     const hex = scoreHexInternal(luma, finderInput, options);
     const tri = scoreTriInternal(luma, finderInput, options);
+    // star(Type K) — K ⊃ A ⊃ O 포함 사슬이라 K 프레임에서는 hex·tri 도 양성이
+    // 된다 (K 의 코어·A 계열 패치가 진짜 셀이므로). 그래서 star 를 같은 finder 에서
+    // 독립 채점하고, 아래 배제 규칙이 포함 사슬을 위에서 아래로 정리한다.
+    const star = scoreStarInternal(luma, finderInput, options);
     finderReports.push({
       finderIndex: i,
       hex,
       tri,
+      star,
     });
     if (hex.ok === true) hypotheses.push({ ...hex, finderIndex: i });
     else reports.push({ finderIndex: i, family: 'hex', result: hex });
     if (tri.ok === true) hypotheses.push({ ...tri, finderIndex: i });
     else reports.push({ finderIndex: i, family: 'tri', result: tri });
+    if (star.ok === true) hypotheses.push({ ...star, finderIndex: i });
+    else reports.push({ finderIndex: i, family: 'star', result: star });
   }
 
   const cube = scoreCubeTiling(luma, normalizedEvidence.yJunction, options);
   if (cube.ok === true) hypotheses.push(cube);
   else reports.push({ family: 'cube', result: cube });
+
+  // 배제 적용 **전** 스냅샷 — familyWithoutStar 가 읽는다 (copyWith* 는 항목을
+  // 교체하지 실제로 바꾸지 않으므로 얕은 복사로 충분하다).
+  const preStarHypotheses = hypotheses.slice();
+
+  /*
+   * star(K) 두 계열 패치가 양성인 같은 finder 에서 hex/tri 를 통과시키면 K 프레임이
+   * FAMILY_AMBIGUOUS 로 죽거나 부분 실루엣(A) 도플갱어로 읽힌다 — tri>hex 배제와
+   * 같은 포함-사슬 정리를 한 단 위(star>tri·hex)에서 반복한다. star 하드체크는
+   * 반전 계열 + 균형까지 요구하므로 A/O 프레임에서는 서지 않는다 (배경/클러터가
+   * 두 계열 균형 문턱을 동시에 넘어야 오발한다 — scoreStarInternal 상수 주석).
+   */
+  const starPositive = hypotheses.some((candidate) => candidate.family === 'star'
+    && candidate.finderIndex !== undefined
+    && candidate.hardChecks && candidate.hardChecks.all);
+  if (starPositive) {
+    for (let i = 0; i < hypotheses.length; i += 1) {
+      const candidate = hypotheses[i];
+      if (candidate.family !== 'hex' && candidate.family !== 'tri') continue;
+      const sameFinder = candidate.finderIndex === undefined
+        || hypotheses.some((other) => other.family === 'star'
+          && other.finderIndex === candidate.finderIndex
+          && other.hardChecks && other.hardChecks.all);
+      if (sameFinder) hypotheses[i] = copyWithStarExclusion(candidate);
+    }
+  }
 
   /*
    * A 패치가 양성인 같은 finder에서 hex 코어만 통과시키면 A0 도플갱어를
@@ -897,6 +1140,7 @@ export function classifyFamily(luma, evidence, options = {}) {
 
   const hard = hypotheses.filter((candidate) => candidate.hardChecks && candidate.hardChecks.all);
   const familySet = Array.from(new Set(hard.map((candidate) => candidate.family))).sort();
+  const withoutStar = familiesWithoutStar(preStarHypotheses);
   const diagnostics = {
     finderCount: finders.length,
     finderReports,
@@ -905,6 +1149,17 @@ export function classifyFamily(luma, evidence, options = {}) {
     hypothesisCount: hypotheses.length,
     hardHypothesisCount: hard.length,
     hardFamilies: familySet,
+    /**
+     * star 가설이 **아예 없었다면** 이 프레임에 남았을 hard 패밀리 집합.
+     * star 오양성이 기존 프레임의 평가 집합을 넓히지 못하게 하는 값이다 —
+     * bootstrap 이 «star + 이 집합»(비면 base 의 body-validated-hex 폴백)만
+     * 평가한다. 이게 없으면 star 가 서는 순간 hex·tri 가 **둘 다** 평가돼 base 가
+     * 못 읽던 프레임이 우연히 살아난다 (실측: 투명 O trim 이 링 없이 읽혔다 —
+     * 2026-08-24).
+     */
+    familiesWithoutStar: withoutStar,
+    /** 위 집합이 유일할 때 그 이름, 아니면 null (진단·테스트 편의). */
+    familyWithoutStar: withoutStar.length === 1 ? withoutStar[0] : null,
   };
 
   if (familySet.length === 0) {
