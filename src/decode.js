@@ -238,7 +238,12 @@ function typeASpecFromFormatIndex(index, turn = false) {
   if (!Number.isInteger(index)) return undefined;
   if (turn === true) {
     // 턴A 표는 (formatIndex, k) 쌍으로 유일하다. k 를 모르면 formatIndex 만으로 찾는다.
-    const entry = TURN_A_FORMAT_INDEX.find((row) => row.formatIndex === index);
+    // V-CM 행(cornerMarker)은 여기서 배제한다 — 그 경로는 format.cornerMarker 분기
+    // (VERSIONS_ACM 회계)가 처리하고, 배제하지 않으면 V1CM=3(k8) 이 V2Q=3(k10) 과
+    // 값이 같아 이 인덱스-단독 조회가 이중해석이 된다.
+    const entry = TURN_A_FORMAT_INDEX.find(
+      (row) => row.formatIndex === index && row.cornerMarker !== true,
+    );
     if (!entry) return undefined;
     return VERSIONS_A.find((spec) => spec.version === entry.version);
   }

@@ -141,8 +141,14 @@ export function encodeA(text, options = {}) {
   if (typeof daehanFinder !== 'boolean') {
     throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
   }
-  if (turnA && cornerMarker) {
-    throw new RangeError('turnA 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  // turnA × cornerMarker — **개설됐다** (V-CM, 2026-08-24 배타 개설 정형 3단):
+  //   ① 근거 실측 — 마커 21셀은 전부 패치 안(A-CM §4)이고 턴A 사상(배치 반전,
+  //      셀 정립)은 배치의 서로소성을 보존한다 (markerA ④ 자기검증 + 렌더 왕복 실측).
+  //   ② 표 명시 확장 — V 표 말미 V0CM/V1CM/V2CM (turnA.js, 잔여 3칸 정확 소진).
+  //   ③ 구 락(여기 있던 «배치 검증 미실시» 던짐)을 이 양성 경로로 전환.
+  // ⚠ V-CMQ(+centerQr)는 **보류** — (값,k) 잔여 0 (markerG 로드 자기검증이 잰다).
+  if (turnA && cornerMarker && centerQr) {
+    throw new RangeError('turnA + cornerMarker + centerQr(V-CMQ) 는 보류다 — 포맷 인덱스 잔여 칸 0 (turnA.js §V-CM 회계)');
   }
   if (turnA && daehanFinder) {
     throw new RangeError('turnA 와 daehanFinder 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
@@ -281,8 +287,10 @@ export function encodeA(text, options = {}) {
    */
   // ⚠ 중앙 v0 비컨은 formatIndex 에 손대지 않는다 — O 와 같은 결정이다 (와이어는
   //   표시층 불변, 「어떤 중앙 점유자인가」의 사후 검증 축은 비컨 메타 자신이 담당).
+  // ⓑ′ V-CM (턴A + 코너 자리 예약): V 표 말미 행 — 회계·레이아웃은 A-CM 과 같고
+  //     (provider 가 cornerMarker 로 이미 갈랐다) 와이어 값만 V 표가 가른다.
   const formatIndex = turnA
-    ? turnASpec(spec.version, { centerQr }).formatIndex
+    ? turnASpec(spec.version, { centerQr, cornerMarker }).formatIndex
     : cornerMarker
       ? markerGSpec('tri', spec.version, centerQr).formatIndex
       : spec.formatIndex + (centerQr ? 2 : 0);

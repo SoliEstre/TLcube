@@ -3353,9 +3353,13 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       const turnSpec = turn
         ? turnASpecFromFormatIndex(formatCandidate.versionIndex, dimension)
         : null;
+      const useTurnMarkerBody = turnSpec !== null && turnSpec.cornerMarker === true;
       if (turnSpec !== null) {
         decodeFormat.turn = true;
         decodeFormat.version = turnSpec.version;
+        // V-CM — 회계·scan order 는 A-CM 과 같다 (decode.js 의 cornerMarker 분기).
+        // grid 가 canonical 키로 재키돼 있어 마커 본문 추출도 그대로 재사용한다.
+        if (useTurnMarkerBody) decodeFormat.cornerMarker = true;
       }
       if (cube) {
         decodeFormat.n = dimension;
@@ -3383,7 +3387,9 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         // 여기서는 같은 판정을 decode.js 에 그대로 옮긴다.
         if (layout.daehanFinder === true) decodeFormat.daehanFinder = true;
       }
-      const body = useMarkerBody ? markerBodyFor() : { digits, erasureCells };
+      const body = (useMarkerBody || useTurnMarkerBody)
+        ? markerBodyFor()
+        : { digits, erasureCells };
       const decoded = withStage(options, 'decode', () =>
         decodeCells(body.digits, decodeFormat, { erasureCells: body.erasureCells }));
       if (!decoded.ok) {

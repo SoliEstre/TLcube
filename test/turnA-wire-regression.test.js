@@ -108,9 +108,12 @@ test('formatIndex 는 **타입 안에서만** 유일하다 — 턴A 는 자기 �
   assert.equal(freeInA.length, 10,
     'A 타입 안의 빈 자리가 10 이 아니다: ' + JSON.stringify(freeInA));
 
-  // ⓒ 턴A 표 6자리가 A 안의 빈 자리로 **들어간다** (별도 타입이면 더 여유롭다).
+  // ⓒ 턴A 표가 A 안의 빈 자리로 **들어간다** (별도 타입이면 더 여유롭다).
+  // 유일성 단위는 값이 아니라 **(값, k) 쌍**이다 — V-CM 말미 추가(2026-08-24)로
+  // 값 3(V2Q k10 · V1CM k8)·5(V0Q k6 · V2CM k10)가 표 안에서 k 로 갈라 재사용된다.
   const wanted = TURN_A_FORMAT_INDEX.map((e) => e.formatIndex);
-  assert.equal(new Set(wanted).size, wanted.length, '턴A 표 안에서 값이 중복된다');
+  const pairKeys = TURN_A_FORMAT_INDEX.map((e) => e.formatIndex + '|' + e.k);
+  assert.equal(new Set(pairKeys).size, pairKeys.length, '턴A 표 안에서 (값,k) 쌍이 중복된다');
   assert.ok(wanted.length <= freeInA.length + wanted.filter((x) => usedInA.has(x)).length,
     '턴A 요구가 A 예산을 넘는다');
 
@@ -156,13 +159,21 @@ test('턴A 인코더 — 기본 A 발행 규약을 한 자리도 안 건드린�
 test('턴A 인코더 — 표 주도로 낸다 (산술 유도가 아니다)', () => {
   for (const entry of TURN_A_FORMAT_INDEX) {
     const encoded = encodeA('x', {
-      version: entry.version, centerQr: entry.centerQr, turnA: true,
+      version: entry.version,
+      centerQr: entry.centerQr,
+      turnA: true,
+      // V-CM 행(2026-08-24 개설) — turnA + cornerMarker 조합이 이 값을 낸다.
+      cornerMarker: entry.cornerMarker === true,
     });
     assert.equal(encoded.formatIndex, entry.formatIndex,
       entry.name + ' 의 formatIndex 가 표와 다르다');
     assert.equal(encoded.turnA, true);
     assert.equal(encoded.k, entry.k, entry.name + ' 의 k 가 표와 다르다');
   }
+  // V-CMQ 보류 — 인코더가 정직하게 던진다 (조용한 폴백 금지).
+  assert.throws(() => encodeA('x', {
+    version: 0, turnA: true, cornerMarker: true, centerQr: true,
+  }), RangeError);
 });
 
 test('턴A ↔ 기본 A 의 formatIndex 공유 — 방향 판별이 기하로 가른다 (2026-08-24 개통)', () => {

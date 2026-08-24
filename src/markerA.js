@@ -240,6 +240,29 @@ export function markerPositionSetA(k) {
   return new Set(markerCellsA(k).map((c) => key(c.q, c.r)));
 }
 
+/**
+ * ── V-CM (턴A 자리 예약, 2026-08-24) — A-CM 의 **대칭 유도** ────────────────
+ *
+ * 턴A 렌더 규약(«배치만 180° 회전, 셀은 정립» — scene.js)에서 V-CM 마커가
+ * **화면에 실제로 놓이는 자리**다: `markerCellsA(k)` 의 (q,r) → (−q,−r) 사상.
+ * 손 좌표 0 — A-CM 이 유일한 진실이고 이 함수는 사상일 뿐이다 (regionCellsTurnA
+ * 와 같은 문법). digit·label·corner·tones 는 그대로다: 셀이 정립이라 면별 절대
+ * 톤(H2O)도 안 돈다.
+ *
+ * ⚠ 소비자 주의 — 인코더·렌더는 이 함수를 **안 쓴다**: encodeA 는 marker 셀을
+ * canonical 좌표로 cellDigits 에 넣고 scene.js 의 turnA 분기가 그리는 자리만
+ * 반전한다. 이 함수는 «이미지 쪽» 좌표가 필요한 소비자(검출기·분류 서술·검증)
+ * 몫이다. 두 표현의 일치는 로드 자기검증이 잰다.
+ *
+ * @param {number} k
+ * @param {Map<string,{T:number,L:number,R:number}>|Record<string,{T:number,L:number,R:number}>} [tonesByKey]
+ *   `markerCellsA` 와 같은 **canonical 키** 톤 표 (h2oTonesByKeyA(k) 그대로) —
+ *   사상 전 좌표로 조회해 사상 후 셀에 싣는다.
+ */
+export function markerCellsTurnA(k, tonesByKey) {
+  return markerCellsA(k, tonesByKey).map((cell) => ({ ...cell, q: -cell.q, r: -cell.r }));
+}
+
 /** 코너별 묶음 — 검출기가 «코너 단위» 로 다룬다. 기준점(anchor)은 링 중심이다.
  *  `tonesByKey` 는 `markerCellsA` 로 그대로 승계된다 (절대 톤 검증용). */
 export function markerGroupsA(k, tonesByKey) {
@@ -524,6 +547,24 @@ export function capacityTableAMarker(level = 'M') {
     }
     for (const c of refs) {
       if (set.has(key(c.q, c.r))) throw new Error('markerA k=' + k + ': 패치 레퍼런스가 마커와 겹친다');
+    }
+    // ④ V-CM 대칭 유도 (2026-08-24) — 사상 정확성: 항목별 (−q,−r), 나머지 필드 불변,
+    //    톤은 canonical 키 조회가 사상 후에도 실려 온다.
+    const turned = markerCellsTurnA(k, h2oTonesByKeyA(k));
+    if (turned.length !== cells.length) {
+      throw new Error('markerA k=' + k + ': V-CM 유도 셀 수가 다르다');
+    }
+    for (let i = 0; i < cells.length; i += 1) {
+      if (turned[i].q !== -cells[i].q || turned[i].r !== -cells[i].r) {
+        throw new Error('markerA k=' + k + ': V-CM 유도가 (−q,−r) 사상이 아니다 [' + i + ']');
+      }
+      if (turned[i].digit !== cells[i].digit || turned[i].label !== cells[i].label
+        || turned[i].corner !== cells[i].corner) {
+        throw new Error('markerA k=' + k + ': V-CM 유도가 digit/label/corner 를 바꿨다 [' + i + ']');
+      }
+      if (!turned[i].tones) {
+        throw new Error('markerA k=' + k + ': V-CM 유도에 톤이 안 실렸다 [' + i + ']');
+      }
     }
   }
 }

@@ -46,6 +46,23 @@ export const TURN_A_FORMAT_INDEX = Object.freeze([
   Object.freeze({ name: 'V1Q', version: 1, k: 8, centerQr: true, formatIndex: 6 }),
   Object.freeze({ name: 'V2', version: 2, k: 10, centerQr: false, formatIndex: 0 }),
   Object.freeze({ name: 'V2Q', version: 2, k: 10, centerQr: true, formatIndex: 3 }),
+  /*
+   * ── V-CM (턴A + 코너 자리 예약, 2026-08-24 말미 추가) ──────────────────────
+   *
+   * A-CM(markerG family=tri)의 턴A 대응 — 회계는 A-CM 과 동일(21셀 마커, VERSIONS_ACM)
+   * 이고 기하만 턴A 사상(배치 180° 반전)이다 (markerA.markerCellsTurnA 대칭 유도).
+   *
+   * 값 배정 — markerG 반영 후 잔여 3칸이 정확히 이 셋이다 (markerG.js 헤더 §결과
+   * 점유: k6 {14} · k8 {3} · k10 {5}). 아래 자기검증이 «이 배정 뒤 잔여 0» 을 잰다.
+   *
+   * ⚠ **V-CMQ 는 보류다** — 잔여 0 이라 앉힐 칸이 없다 (K1=7·cube 8..11 예약 침범
+   *   금지). 그래서 turnA × cornerMarker × centerQr 조합은 인코더가 막는다
+   *   (encodeA — G 의 CMQ 이전(pre-C2a) 상태와 같은 문법). 개설하려면 예약 축
+   *   해제 또는 포맷 공간 확장이 선행돼야 한다 — 레인 T 보고서 §V-CMQ 회계.
+   */
+  Object.freeze({ name: 'V0CM', version: 0, k: 6, centerQr: false, cornerMarker: true, formatIndex: 14 }),
+  Object.freeze({ name: 'V1CM', version: 1, k: 8, centerQr: false, cornerMarker: true, formatIndex: 3 }),
+  Object.freeze({ name: 'V2CM', version: 2, k: 10, centerQr: false, cornerMarker: true, formatIndex: 5 }),
 ]);
 
 /** K1 예약 (015 §16 잠정 확정) — 턴A 가 침범하면 안 되는 값. */
@@ -70,14 +87,19 @@ export function hexTriAxisOccupancy() {
   return out;
 }
 
-/** 턴A 항목 조회 — version + centerQr 로. 없으면 RangeError. */
+/** 턴A 항목 조회 — version + centerQr (+cornerMarker) 로. 없으면 RangeError.
+ *  cornerMarker=true + centerQr=true (V-CMQ) 는 잔여 칸 0 으로 **보류**라 항목이
+ *  없다 — 조용한 폴백 없이 던진다 (표 헤더 §V-CM 회계). */
 export function turnASpec(version, options = {}) {
   const centerQr = options.centerQr === true;
+  const cornerMarker = options.cornerMarker === true;
   const spec = TURN_A_FORMAT_INDEX.find(
-    (entry) => entry.version === version && entry.centerQr === centerQr,
+    (entry) => entry.version === version && entry.centerQr === centerQr
+      && (entry.cornerMarker === true) === cornerMarker,
   );
   if (!spec) {
-    throw new RangeError('알 수 없는 턴A 버전: ' + version + (centerQr ? '+centerQr' : ''));
+    throw new RangeError('알 수 없는 턴A 버전: ' + version
+      + (centerQr ? '+centerQr' : '') + (cornerMarker ? '+cornerMarker' : ''));
   }
   return spec;
 }

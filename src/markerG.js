@@ -156,6 +156,23 @@ export function markerGSpecFromFormatIndex(formatIndex, k) {
         + ' 가 기저 버전 k=' + (base ? base.k : '없음') + ' 와 다르다');
     }
   }
+  // 포맷 공간 회계 (2026-08-24 V-CM 편입) — G 12칸 + 턴A V 표(6 + V-CM 3) 반영 후
+  // **잔여 0** 을 못 박는다. V-CMQ 보류의 산술 근거가 이 단언이다: 다음 소비자는
+  // 여기가 던지는 것을 보고 «빈 칸이 없다» 를 코드에서 확인하게 된다.
+  {
+    const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES]);
+    for (const k of [6, 8, 10]) {
+      let free = 0;
+      for (let value = 0; value <= 15; value += 1) {
+        if (banned.has(value)) continue;
+        if (!seen.has(value + '|' + k)) free += 1;
+      }
+      if (free !== 0) {
+        throw new Error('markerG: k' + k + ' 잔여 칸이 ' + free
+          + ' — 점유 회계가 «잔여 0» 주장과 다르다 (V-CMQ 보류 근거 재검토)');
+      }
+    }
+  }
   // (family, version, centerQr) 커버리지 — 기저 버전×Q축마다 정확히 한 항목
   // (빠지면 인코더가 던진다).
   for (const spec of VERSIONS) {

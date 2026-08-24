@@ -83,6 +83,31 @@ test('정삼각 대조군 — 같은 하네스에서 기존 A 는 기존 가설�
   }
 });
 
+test('V-CM 왕복 — V1CM·V2CM 이 마커 회계로 원문까지 돌아온다 (V0CM 은 미완 락)', () => {
+  // V-CM = 턴A + 코너 자리 예약 (2026-08-24 개설 — turnA.js V 표 말미).
+  for (const version of [1, 2]) {
+    const text = 'vcm-roundtrip-' + version;
+    const encoded = encodeA(text, { version, eccLevel: 'M', turnA: true, cornerMarker: true });
+    const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
+    const result = decodeFrontend(rasterize(scene, { pixelsPerUnit: 12, supersample: 1 }));
+    assert.equal(result.ok, true, 'V' + version + 'CM 왕복 실패: ' + result.reason);
+    assert.equal(result.text, text);
+    assert.equal(result.hypothesis.turn, true);
+    assert.equal(result.diagnostics.format.formatIndex,
+      turnASpec(version, { cornerMarker: true }).formatIndex);
+  }
+  // ⚠ 미완 락 — V0CM(k=6) 은 앵커가 안 선다 (실측 2026-08-24: ppu 12/16/24 전부
+  // no-anchors). A0CM 도 같은 축이다 — 직접 앵커가 실패하고 hex→recast 로만
+  // 생존하는데, recast 는 turn 축이 없어 V0CM 을 못 구한다. k=6 CM 앵커(또는
+  // turn recast)가 서는 날 이 락을 양성 단언으로 뒤집어라.
+  const enc0 = encodeA('vcm-roundtrip-0', { version: 0, eccLevel: 'M', turnA: true, cornerMarker: true });
+  const r0 = decodeFrontend(rasterize(
+    buildScene(enc0, { palette: PALETTE, margin: 20 }), { pixelsPerUnit: 12, supersample: 1 },
+  ));
+  assert.equal(r0.ok, false,
+    'V0CM 이 읽히기 시작했다 — 미완 락을 걷고 왕복 3종 양성 단언으로 갱신하라');
+});
+
 test('교차 오수용 없음 — 턴A 프레임에서 정삼각 formatIndex 가 소비되지 않는다', () => {
   // V2Q(3) 와 A0Q(3) 이 같은 값을 쓰는 유일 공유 조합 — k(기하)가 갈라야 한다.
   const { raster } = renderTurnA('cross-' + 2, 2, { centerQr: true });

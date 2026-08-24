@@ -277,11 +277,23 @@ test('§5 Type A + daehan 도 옵트인 왕복이 선다 (검출만이 아니라
     'A daehan 이 옵트인을 켜도 안 읽힌다 — 배선이 검출에서 끊겼거나 회계가 갈린다');
 });
 
-test('§5 turnA 로 만든 코드는 아직 라이브 경로가 못 읽는다 (그래서 lab 뒤에 둔다)', () => {
+test('§5 turnA — 왕복이 선다 (역삼각 기하 + V 인덱스, 2026-08-24)', () => {
+  // 2026-08-24 뒤집어서 갱신 (지우지 않았다 — G 배선 §5 전례). 이 테스트는
+  // «못 읽는다» 를 고정하고 있었고, 배선되면 기대값을 뒤집고 g575 힌트를 같이
+  // 고치라고 스스로 지시했다. 배선했다:
+  //   ⓐ 기하 — scene.js turnA 분기 (배치 180° 회전 · 셀 정립 → 실루엣 ▽).
+  //   ⓑ 검출 — anchor-detect turn 변형(반전 꼭짓점, 100% 배타) + qr-center turn 쌍둥이.
+  //   ⓒ 와이어 — bootstrap validVersionIndices 가 turn 가설에 V 표 인덱스를 열고
+  //      decodeFormat.turn 으로 decode.js:390 분기(2026-08-18 준비분)를 부른다.
+  // 6종(V0..V2 × ±Q) 전수 왕복·교차 오수용 0 은 test/turnA-roundtrip.test.js 가 잰다.
+  // ⚠ lab 게이트는 **유지** — 합성만으로 정식 노출을 정하지 않는다 (운영자 확정
+  //   2026-08-23·24 seat 전례). 승격은 실기기 라운드 뒤 운영자 몫.
   const result = decodeFrontend(render(encodeA('TLcube', { version: 0, eccLevel: 'M', turnA: true }), { margin: 20 }));
-  assert.equal(result.ok, false,
-    'turnA 왕복이 서기 시작했다 — 축하한다. 이제 이 카드를 lab 게이트 밖으로 내보내고'
-    + ' index.html 의 «못 읽어요» 힌트(g575)와 turnASection 주석을 같이 고쳐라.');
+  assert.equal(result.ok, true,
+    'turnA 왕복이 다시 죽었다 — 기하(scene turnA)·검출(anchor turn)·와이어(V 개방)'
+    + ' 세 층 중 어느 쪽이 끊겼는지 test/turnA-roundtrip.test.js 와 같이 보라: '
+    + result.reason);
+  assert.equal(result.text, 'TLcube', 'turnA 페이로드 불일치');
 });
 
 test('§5 cornerMarker — 왕복이 선다 (내부 타입 G 와이어, 2026-08-20)', () => {

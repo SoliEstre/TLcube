@@ -31,6 +31,15 @@ test('표 값 고정 — 배정은 표 그 자체다', () => {
     ['V2', 0, 10, false],
     ['V2Q', 3, 10, true],
   ]);
+  // 말미 V-CM 3칸 (2026-08-24 — markerG 반영 후 잔여 3칸을 정확히 소진).
+  // V-CMQ 는 잔여 0 으로 **보류** — 행이 늘면(개설되면) 이 벡터를 갱신하라.
+  assert.deepEqual(table.slice(6), [
+    ['V0CM', 14, 6, false],
+    ['V1CM', 3, 8, false],
+    ['V2CM', 5, 10, false],
+  ]);
+  assert.ok(TURN_A_FORMAT_INDEX.slice(6).every((e) => e.cornerMarker === true),
+    '말미 행이 cornerMarker 표기가 아니다');
 });
 
 test('(값,k) 무경합 — hex·tri 공유축 전점유 + 턴A 6항목 전수', () => {
@@ -64,9 +73,10 @@ test('균일 오프셋은 4bit 를 넘친다 — 표 주도가 필수인 이유 
   assert.ok(a2.formatIndex + 2 + 1 > 15, 'A2Q + 1 = ' + (a2.formatIndex + 3));
 });
 
-test('회계 — 최악 소요 6값 ≤ 사용 가능 공간 (7·8..11 제외, k 공유 포함)', () => {
-  // 최악 소요 = T × {기본, Q} × 3버전 = 6 (A0Q 가 실재하므로 A0TQ 도 소요에 든다)
-  assert.equal(TURN_A_FORMAT_INDEX.length, 6);
+test('회계 — 소요 ≤ 사용 가능 공간 (7·8..11 제외, k 공유 포함)', () => {
+  // 기본 6 (V×Q 전조합) + V-CM 3 (2026-08-24 말미) = 9. V-CMQ 는 잔여 0 보류 —
+  // markerG 로드 자기검증의 «잔여 0» 단언이 산술 근거다.
+  assert.equal(TURN_A_FORMAT_INDEX.length, 9);
   // 사용 가능 공간: k 별로 «(값,k) 미점유 ∧ 값 ∉ {7, 8..11}» 를 센다
   const occupied = new Set(hexTriAxisOccupancy().map((o) => o.formatIndex + '|' + o.k));
   const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES]);
@@ -93,9 +103,13 @@ test('K1 예약·cube 축 무침범 + 기저 k 일치', () => {
 
 test('조회 함수 — 정방향·역방향 왕복', () => {
   for (const entry of TURN_A_FORMAT_INDEX) {
-    assert.equal(turnASpec(entry.version, { centerQr: entry.centerQr }), entry);
+    assert.equal(turnASpec(entry.version, {
+      centerQr: entry.centerQr, cornerMarker: entry.cornerMarker === true,
+    }), entry);
     assert.equal(turnASpecFromFormatIndex(entry.formatIndex, entry.k), entry);
   }
   assert.equal(turnASpecFromFormatIndex(7, 6), null);
   assert.throws(() => turnASpec(3), RangeError);
+  // V-CMQ 보류 — 조용한 폴백 없이 던진다 (개설되면 이 단언을 갱신하라).
+  assert.throws(() => turnASpec(0, { centerQr: true, cornerMarker: true }), RangeError);
 });

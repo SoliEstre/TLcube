@@ -74,18 +74,30 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
   assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, false);
   assert.equal(INNER_SEAT_OPTIONS.includes('H'), false,
     'H 가 상태 값으로 되살아났다 — o-cm 통합(2026-08-24)의 회귀');
-  for (const id of ['v-cm', 'k-cm']) {
-    const card = zones.outer.find((c) => c.id === id);
-    assert.equal(card.absent, true, id + ' 는 부재 카드여야 한다');
-    assert.equal(card.ready, false, id + ' 는 클릭 불가여야 한다');
+  // v-cm — 실체 전환 (2026-08-24, 배타 개설 정형 ③): 부재 카드 단언(구 락)을
+  // 양성 단언으로. k-cm 은 여전히 부재다.
+  {
+    const vcm = zones.outer.find((c) => c.id === 'v-cm');
+    assert.equal(vcm.absent, false, 'v-cm 이 아직 부재 카드다 — 2026-08-24 실체 전환 회귀');
+    assert.equal(vcm.ready, true, 'v-cm 이 클릭 불가다');
+    assert.deepEqual([...vcm.types], ['A'], 'v-cm 은 Type A(×turnA) 전용이다');
+    const kcm = zones.outer.find((c) => c.id === 'k-cm');
+    assert.equal(kcm.absent, true, 'k-cm 는 부재 카드여야 한다');
+    assert.equal(kcm.ready, false, 'k-cm 는 클릭 불가여야 한다');
   }
   // 기대축 대조 — 시험판 축 ③(LAB_OUTER)은 seat 값을 전부 알아야 한다
   // (sagoae 의 lab 텔레메트리 키는 레거시 'daehan' — finder-taxonomy 주석).
+  // ⚠ v-cm 제외 (2026-08-24): 스캐너 기대축 등재는 sites/tlscan 버튼 + 8언어
+  // 동반이라 **통합자 몫**이다 (턴A 레인은 스캐너 소스 접촉 금지). 등재되면
+  // 아래 부재 단언이 터진다 — 그때 이 제외를 걷어라 (부재에는 이유·날짜).
   for (const id of [...INNER_SEAT_OPTIONS, ...OUTER_SEAT_OPTIONS]) {
+    if (id === 'v-cm') continue;
     const labId = id === 'sagoae' ? 'daehan' : id;
     assert.ok(LAB_OUTER_FINDER_IDS.includes(labId),
       'LAB_OUTER_FINDER_IDS 에 ' + labId + ' 가 없다 — 기대축과 seat 유도가 어긋났다');
   }
+  assert.equal(LAB_OUTER_FINDER_IDS.includes('v-cm'), false,
+    'v-cm 이 기대축에 등재됐다 — 위 제외(통합자 몫 주석)를 걷고 전수 대조로 되돌려라');
   // CM+Q 와이어 존재 술어 (C2a 착지 상태) — 병용 잠금이 열려 있어야 한다.
   assert.equal(cmqWireExists('hex'), true);
   assert.equal(cmqWireExists('tri'), true);
@@ -113,11 +125,19 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
     'markerTones 파생이 없다 — o-cm 의 H 심볼 통합이 인코더에 안 닿는다');
 });
 
-test('③ turnA 와 상호배제 — 인코더가 던지지 않는 조합만 만든다', () => {
-  // encodeA 계약 확인: 둘 다 참이면 던진다.
+test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 개설이다', () => {
+  // 2026-08-24 배타 개설 (정형 ③ — 구 «둘 다 참이면 던진다» 락의 전환):
+  // turnA + cornerMarker 는 이제 V-CM 이다. 인코더가 V 표 말미 값으로 인코드된다.
+  const vcm = encodeA('x', { version: 1, eccLevel: 'M', cornerMarker: true, turnA: true });
+  assert.equal(vcm.formatIndex, 3, 'V1CM 의 formatIndex 가 V 표(3, k8)와 다르다');
+  assert.equal(vcm.turnA, true);
+  assert.equal(vcm.cornerMarker, true);
+  // V-CMQ(+centerQr)만 남은 배제다 — 와이어 잔여 0 (turnA.js §V-CM 회계).
   assert.throws(
-    () => encodeA('x', { version: 1, eccLevel: 'M', cornerMarker: true, turnA: true }),
-    '둘 다 참인데 안 던진다 — 상호배제 계약이 사라졌으면 UI 잠금 근거가 없어진다',
+    () => encodeA('x', {
+      version: 1, eccLevel: 'M', cornerMarker: true, turnA: true, centerQr: true,
+    }),
+    RangeError,
   );
   // UI 가 그 조합을 못 만드는가 (seat 핸들러가 turnA 를 끈다)
   assert.match(INDEX, /if \(generatorState\.outerSeat === 'a-cm'\) generatorState\.turnA = false;/,

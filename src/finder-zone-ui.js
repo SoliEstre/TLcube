@@ -32,6 +32,7 @@
 import { CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS } from './finder-card-ui.js';
 import { GENERATOR_STATE_SCHEMA } from './generator-state.js';
 import { MARKER_G_FORMAT_INDEX } from './markerG.js';
+import { TURN_A_FORMAT_INDEX } from './turnA.js';
 import { SAGOAE_ID } from './finder-daehan.js';
 
 export const SEAT_NONE = 'none';
@@ -61,11 +62,26 @@ const FAMILY_SEATS = Object.freeze({
 });
 
 /** 부재 seat — 코드 정체가 없어 유도 원천이 없다 (분류 정본의 KIND_ABSENT 행과
- *  1:1 — test/finder-zone-ui.test.js 가 짝을 강제한다). 자리만 + 클릭 불가. */
+ *  1:1 — test/finder-zone-ui.test.js 가 짝을 강제한다). 자리만 + 클릭 불가.
+ *  v-cm 은 2026-08-24 실체 전환으로 여기서 빠졌다 — 아래 turnSeat() 유도로 옮겨감. */
 const ABSENT_SEATS = Object.freeze([
-  Object.freeze({ id: 'v-cm', name: 'v-cm', types: Object.freeze(['O', 'A']) }),
   Object.freeze({ id: 'k-cm', name: 'k-cm', types: Object.freeze(['O', 'A']) }),
 ]);
+
+/**
+ * V-CM seat (2026-08-24) — «와이어 존재가 곧 seat 실재» 규칙을 turnA V 표로 확장:
+ * V 표에 cornerMarker 행(V0CM/V1CM/V2CM)이 실재하면 v-cm seat 가 실재한다.
+ * Type A × turnA 전용 — turnA off 상태의 표시 게이트는 index.html sync 몫이다
+ * (a-cm × turnA 상호배제의 쌍대: v-cm 은 turnA 를 **요구**한다).
+ */
+function turnSeat() {
+  const wired = TURN_A_FORMAT_INDEX.some((entry) => entry.cornerMarker === true);
+  return wired
+    ? [Object.freeze({
+      id: 'v-cm', name: 'V-CM', types: Object.freeze(['A']), ready: true, absent: false,
+    })]
+    : [];
+}
 
 const NONE_CARD = Object.freeze({
   id: SEAT_NONE,
@@ -108,6 +124,7 @@ export function zoneCards() {
   const outer = [
     NONE_CARD,
     ...markerSeat('outer'),
+    ...turnSeat(),
     ...ABSENT_SEATS.map((seat) => Object.freeze({
       id: seat.id, name: seat.name, types: seat.types, ready: false, absent: true,
     })),
@@ -169,7 +186,7 @@ export function cmqWireExists(family) {
       + 'OFFICIAL_NORMAL_CENTRAL_IDS 확정을 다시 봐야 한다');
   }
   if (!INNER_SEAT_OPTIONS.includes('o-cm') || !INNER_SEAT_OPTIONS.includes(SAGOAE_ID)
-    || !OUTER_SEAT_OPTIONS.includes('a-cm')) {
+    || !OUTER_SEAT_OPTIONS.includes('a-cm') || !OUTER_SEAT_OPTIONS.includes('v-cm')) {
     throw new Error('seat 허용값 유도가 깨졌다: inner=['
       + INNER_SEAT_OPTIONS.join(',') + '] outer=[' + OUTER_SEAT_OPTIONS.join(',') + ']');
   }

@@ -75,7 +75,7 @@ import {
   overheadBreakdownOMarker,
 } from './markerO.js';
 import {
-  markerCellsA, MARKER_CELL_COUNT_A,
+  markerCellsA, markerCellsTurnA, MARKER_CELL_COUNT_A,
   MARKER_LOCAL_DIGITS_A, H2O_LOCAL_TONES_A,
 } from './markerA.js';
 import { GENERATOR_TYPES } from './generator-state.js';
@@ -116,6 +116,9 @@ export const KIND_LOCATOR = 'locator';
 export const SEAT_DEFAULT_FINDER = Object.freeze({
   'a-cm': 'H2O',
   'o-cm': 'H',
+  // V-CM (2026-08-24) — A-CM 자리의 턴A 사상이라 자리 모양·심볼이 같다 (markerA
+  // markerCellsTurnA 유도 — 셀 정립이라 H2O 톤 표가 그대로 온다).
+  'v-cm': 'H2O',
 });
 
 function freezeRow(row) {
@@ -431,23 +434,31 @@ function buildItems() {
     });
   }
 
-  // v-cm / k-cm — 코드 정체 없음. 분류 3에 억지 배정하지 않음.
-  add({
-    id: 'v-cm',
-    name: 'v-cm',
-    class: 'U',
-    className: FINDER_CLASS.U,
-    kind: KIND_ABSENT,
-    origin: '검색 대상. OAK_LINEUP/FINDER_PATTERNS/LAB_OUTER/GENERATOR_TYPES/markerG 에 없음',
-    renderPath: '없음',
-    coordBasis: '—',
-    innerSplit: null,
-    toneAxis: '—',
-    cells: '—',
-    renderable: false,
-    consumer: '없음',
-    note: '부재. Type Y 셀표면 로케이터(v0…)는 다른 축이라 여기 안 넣음',
-  });
+  // V-CM — 실체 전환 (2026-08-24, 배타 개설 정형 3단: ① 근거 실측 — 턴A 기하
+  // 개통 + markerA ④ 자기검증 ② 표 명시 확장 — turnA.js V 표 말미 V0CM/V1CM/V2CM
+  // ③ 구 락(KIND_ABSENT 행 + 아래 자기검증의 'U' 단언)을 이 양성 행으로 전환).
+  // 종전 부재 행: «코드 정체 없음 — 분류 3 에 억지 배정하지 않음» — 이제 정체가 있다.
+  {
+    const cells = markerCellsTurnA(6);
+    add({
+      id: 'v-cm',
+      name: 'V-CM',
+      class: 3,
+      className: FINDER_CLASS[3],
+      kind: KIND_SEAT,
+      origin: 'src/turnA.js V 표 말미(V0CM/V1CM/V2CM) · src/markerA.js markerCellsTurnA (A-CM 대칭 유도)',
+      renderPath: 'encodeA.js marker(turnA + cornerMarker) — canonical 좌표 + scene.js turnA 배치 반전',
+      coordBasis: COORD_VERTEX,
+      innerSplit: '꼭짓점 기준 (역삼각)',
+      toneAxis: TONE_CELL_COLOR + '. 기본 파인더 H2O 톤 표 그대로 (셀 정립 — 사상 불변)',
+      cells: String(cells.length),
+      renderable: 'A-CM 과 동일 (digit + H2O tones) — 자리만 180° 상',
+      consumer: '생성기 outerSeat v-cm(Type A × turnA) · decode V-CM(turn + cornerMarker)',
+      note: '자리 예약. A-CM 의 턴A 대응 — 손 좌표 0, markerCellsA 의 (−q,−r) 사상. '
+        + 'V-CMQ(+중앙 QR)는 와이어 잔여 0 으로 보류 (turnA.js §V-CM 회계)',
+    });
+  }
+  // k-cm — 코드 정체 없음. 분류 3에 억지 배정하지 않음.
   add({
     id: 'k-cm',
     name: 'k-cm',
@@ -613,9 +624,17 @@ export function daehanSplitHolds(items = FINDER_TAXONOMY) {
   if (SEAT_DEFAULT_FINDER['a-cm'] !== 'H2O' || SEAT_DEFAULT_FINDER['o-cm'] !== 'H') {
     throw new Error('자리 예약 기본 파인더 표가 운영자 확정과 다르다');
   }
-  // v-cm / k-cm 은 미분류(부재) — 분류 3 억지 배정 금지
-  if (taxonomyItem('v-cm').class !== 'U' || taxonomyItem('k-cm').class !== 'U') {
-    throw new Error('v-cm/k-cm 이 미분류가 아니다');
+  // v-cm — 실체 전환 (2026-08-24): 구 락(«미분류 'U'» 단언)을 양성 단언으로.
+  // k-cm 은 여전히 부재 — 분류 3 억지 배정 금지.
+  const vcm = taxonomyItem('v-cm');
+  if (!vcm || vcm.kind !== KIND_SEAT || vcm.class !== 3) {
+    throw new Error('v-cm 이 분류 3 자리 예약이 아니다 — 2026-08-24 실체 전환과 어긋난다');
+  }
+  if (SEAT_DEFAULT_FINDER['v-cm'] !== 'H2O') {
+    throw new Error('v-cm 자리 예약 기본 파인더가 H2O 가 아니다 (A-CM 대칭 유도 규약)');
+  }
+  if (taxonomyItem('k-cm').class !== 'U') {
+    throw new Error('k-cm 이 미분류가 아니다');
   }
 }
 
