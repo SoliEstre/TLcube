@@ -11,17 +11,31 @@
 // 재사용)가 이미 확정한 조각을 파이프라인 순서대로 조합만 한다.
 //
 // [옵션 배타 — 배치 검증 미실시 조합은 던진다 (encodeA 문법)]
-//   centerQr / centralV0 / cornerMarker(K-CM) / daehanFinder / turnA 전부 **보류**다:
 //   · centerQr·centralV0·daehanFinder — 중앙 슬롯·예약 셀과 K 회계의 조합이 미검증.
 //     기하상 후보(중앙 19셀 슬롯은 K 코어에도 그대로 있다)지만 배타 개설 정형 3단
 //     (근거 실측 → 표 명시 확장 → 구 락의 양성 전환)을 밟기 전엔 열지 않는다.
-//   · cornerMarker(K-CM) — H2CO3 발자국이 반전 꼭짓점 앵커(digit 1, 통합자 확정)
-//     자리를 포함해(계약 K-6 (b) 실측) fixed 회계가 미해소다(계약 K-8.1).
-//     레인 보고서 §보류에 선택지를 실었다.
 //   · turnA — K = A ∪ 반전A 라 180° 회전이 실루엣을 보존한다(육각별 자기 대칭).
 //     «턴 K» 는 별도 실루엣이 아니므로 옵션 자체가 성립하지 않는다.
+//
+// [cornerMarker(K-CM) — 2026-08-24 개설 (레인 C)] 종전 이 자리는 «보류 — H2CO3
+//   발자국이 반전 꼭짓점 앵커 자리를 포함해 fixed 회계가 미해소(계약 K-8.1)» 였다.
+//   배타 개설 정형 3단을 밟았다: ① 근거 실측 (`test/markerK-measure.mjs` — 방향
+//   margin 1.0000 · 60° 사멸 유지 · 유/무 구분 0.4667 < 0.78) → ② 표 명시 확장
+//   (formatK.js K*CM 3행 · markerK.js VERSIONS_KCM) → ③ 구 락(이 배타 목록의 행 +
+//   test 의 throws 단언)을 양성 경로로. 회계는 운영자 확정 (다)안 «앵커 위 마커»:
+//   꼭짓점 셀이 앵커 digit 과 마커 digit 을 **같은 값**으로 동시에 만족하므로
+//   오버헤드 가산이 30 이 아니라 **27** 이다 (markerK.js 헤더 §3).
 
 import { VERSIONS_K, capacityForK } from './capacityK.js';
+import {
+  VERSIONS_KCM,
+  capacityForKMarker,
+  chooseVersionKMarker,
+  markerCellsK,
+  patchReferenceCellsKMarker,
+  dataCellsInScanOrderKMarker,
+  fillerCellsKMarker,
+} from './markerK.js';
 import { frame, payloadByteLength } from './header.js';
 import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
 import { rsEncode } from './rs211.js';
@@ -41,8 +55,9 @@ function cellKey(q, r) {
  * @param {string} text
  * @param {'L'|'M'|'H'} [eccLevel]
  */
-export function chooseVersionK(text, eccLevel = 'M') {
+export function chooseVersionK(text, eccLevel = 'M', cornerMarker = false) {
   const byteLength = payloadByteLength(text);
+  if (cornerMarker) return chooseVersionKMarker(byteLength, eccLevel);
   for (const spec of VERSIONS_K) {
     const capacity = capacityForK(spec, eccLevel);
     if (byteLength <= capacity.maxPayloadBytes) return spec;
@@ -55,13 +70,15 @@ export function chooseVersionK(text, eccLevel = 'M') {
 
 /**
  * Type K 인코더 파이프라인 진입점. version 을 생략하면 chooseVersionK 로 자동 선택.
+ * `cornerMarker: true` 면 K-CM — 격자·앵커·포맷은 그대로이고 마커 30셀 · 회계
+ * (overhead + 27) · 와이어 값(star 축 8)만 갈린다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H'}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', cornerMarker?: boolean}} [options]
  * @returns {{
- *   version:number, k:number, eccLevel:'L'|'M'|'H', formatIndex:number,
+ *   version:number, k:number, eccLevel:'L'|'M'|'H', cornerMarker:boolean, formatIndex:number,
  *   capacity:object, codewordSymbols:Uint8Array, dataDigits:Uint8Array,
  *   fillerDigits:Uint8Array, formatDigits:number[],
- *   cellDigits: Map<string, {digit:number, role:'anchor'|'reference'|'format'|'data'|'filler'}>,
+ *   cellDigits: Map<string, {digit:number, role:'anchor'|'marker'|'reference'|'format'|'data'|'filler'}>,
  * }}
  */
 export function encodeK(text, options = {}) {
@@ -70,13 +87,12 @@ export function encodeK(text, options = {}) {
   if (typeof text !== 'string') {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
-  const { version, eccLevel = 'M' } = options;
+  const { version, eccLevel = 'M', cornerMarker = false } = options;
   // 배타 가드 — 모듈 헤더 §옵션 배타. 조용한 무시는 «와이어와 그림이 어긋난
   // 자기모순 아티팩트» 의 씨앗이라 명시 값이 오면 던진다.
   for (const [name, reason] of [
     ['centerQr', '중앙 QR × K 회계는 배치 검증 미실시 조합이다'],
     ['centralV0', '중앙 v0 비컨 × K 는 배치 검증 미실시 조합이다'],
-    ['cornerMarker', 'K-CM 은 보류다 — fixed 회계 미해소 (계약 K-8.1, 레인 보고서 §보류)'],
     ['daehanFinder', 'daehan × K 는 배치 검증 미실시 조합이다'],
     ['turnA', 'K 실루엣은 180° 자기 대칭이라 턴 옵션이 성립하지 않는다'],
   ]) {
@@ -84,18 +100,26 @@ export function encodeK(text, options = {}) {
       throw new RangeError(`Type K 는 ${name} 를 지원하지 않는다 — ${reason}`);
     }
   }
+  if (typeof cornerMarker !== 'boolean') {
+    throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
+  }
+
+  // K-CM 은 «옵션» 이다 — 격자(k)·앵커·포맷 셀은 평 K 와 같고 회계와 와이어 값만
+  // 갈린다. 그래서 표도 버전 표를 갈아 끼우는 방식이다 (encodeA 의 provider 문법).
+  const versionTable = cornerMarker ? VERSIONS_KCM : VERSIONS_K;
+  const capacityOf = cornerMarker ? capacityForKMarker : capacityForK;
 
   let spec;
   if (version === undefined) {
-    spec = chooseVersionK(text, eccLevel);
+    spec = chooseVersionK(text, eccLevel, cornerMarker);
   } else {
-    spec = VERSIONS_K.find((entry) => entry.version === version);
+    spec = versionTable.find((entry) => entry.version === version);
     if (!spec) {
-      throw new RangeError(`알 수 없는 Type K 버전: ${version}`);
+      throw new RangeError(`알 수 없는 Type K 버전: ${version}${cornerMarker ? ' (+CM)' : ''}`);
     }
   }
 
-  const capacity = capacityForK(spec, eccLevel);
+  const capacity = capacityOf(spec, eccLevel);
   const { k } = spec;
 
   // 길이 헤더 + 0x00 패딩 → base-211 심볼.
@@ -117,10 +141,11 @@ export function encodeK(text, options = {}) {
 
   // 심볼 → 3 digit(MSD-first, 프리마스크) → scan order-K 좌표에 마스크 가산.
   const preMaskDataDigits = unpackSymbolsToCellDigits(codewordSymbols); // 길이 3S
-  const scanCells = dataCellsInScanOrderK(k);
+  const scanCells = cornerMarker ? dataCellsInScanOrderKMarker(k) : dataCellsInScanOrderK(k);
   if (scanCells.length !== capacity.dataCells) {
     throw new RangeError(
-      `scan order-K 셀 수 불일치: dataCellsInScanOrderK() ${scanCells.length} !== capacity.dataCells ${capacity.dataCells}`,
+      `scan order-K 셀 수 불일치: ${cornerMarker ? 'dataCellsInScanOrderKMarker' : 'dataCellsInScanOrderK'}()`
+      + ` ${scanCells.length} !== capacity.dataCells ${capacity.dataCells}`,
     );
   }
   const dataCellCoords = scanCells.slice(0, preMaskDataDigits.length);
@@ -131,10 +156,11 @@ export function encodeK(text, options = {}) {
   }
 
   // 잔여 셀 = 프리마스크 0 에 마스크 가산(§5.6 준용). scan order-K 의 꼬리와 동일 셀.
-  const fillerCoords = fillerCellsK(k);
+  const fillerCoords = cornerMarker ? fillerCellsKMarker(k) : fillerCellsK(k);
   if (fillerCoords.length !== capacity.residualCells) {
     throw new RangeError(
-      `필러 셀 수 불일치: fillerCellsK() ${fillerCoords.length} !== capacity.residualCells ${capacity.residualCells}`,
+      `필러 셀 수 불일치: ${cornerMarker ? 'fillerCellsKMarker' : 'fillerCellsK'}()`
+      + ` ${fillerCoords.length} !== capacity.residualCells ${capacity.residualCells}`,
     );
   }
   const fillerDigits = new Uint8Array(fillerCoords.length);
@@ -143,8 +169,8 @@ export function encodeK(text, options = {}) {
     fillerDigits[i] = maskAdd(0, c.q, c.r);
   }
 
-  // 포맷 정보 — formatIndex 는 star 축 표(formatK.js)가 정본이다 (전 버전 7,
-  // k 로 가른다). 인코더 쪽은 부착까지만 한다 (ADR 0004 «인덱스=사후 검증» 승계).
+  // 포맷 정보 — formatIndex 는 star 축 표(formatK.js)가 정본이다 (평 K 7 · K-CM 8,
+  // 각각 k 로 가른다). 인코더 쪽은 부착까지만 한다 (ADR 0004 «인덱스=사후 검증» 승계).
   const eccLevelValue = ECC_LEVEL[eccLevel];
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
@@ -156,6 +182,16 @@ export function encodeK(text, options = {}) {
   // 셀별 digit + role 맵 (불스아이 셀은 애초에 어느 목록에도 없으므로 자동 제외).
   const cellDigits = new Map();
 
+  // 코너 마커 30셀 (K-CM 에서만) — 고정 digit, 마스크 없음. **앵커보다 먼저 쓴다**:
+  // 반전 꼭짓점 3셀은 마커 발자국 안이면서 앵커이고, (다)안에서 두 digit 이 같은
+  // 값이라 뒤에 오는 앵커가 role 만 'anchor' 로 덮는다 — 회계를 «한 번» 세는
+  // roleOfKMarker 와 같은 우선순위다 (markerK.js 헤더 §3).
+  if (cornerMarker) {
+    for (const c of markerCellsK(k)) {
+      cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: 'marker' });
+    }
+  }
+
   // 앵커 = 육각 코너 3셀(보조, placement.js 무수정) + 별 꼭짓점 6셀(주, K-2) = 9.
   const anchors = [...anchorCells(k), ...vertexAnchorsK(k)];
   for (const c of anchors) {
@@ -163,7 +199,10 @@ export function encodeK(text, options = {}) {
   }
 
   // 레퍼런스 = 육각 2(k-2)셀 + 패치 레퍼런스(규칙 R′) — 전부 REFERENCE_DIGIT.
-  const references = [...referenceCellsAll(k), ...patchReferenceCellsK(k)];
+  const references = [
+    ...referenceCellsAll(k),
+    ...(cornerMarker ? patchReferenceCellsKMarker(k) : patchReferenceCellsK(k)),
+  ];
   for (const c of references) {
     cellDigits.set(cellKey(c.q, c.r), { digit: REFERENCE_DIGIT, role: 'reference' });
   }
@@ -188,6 +227,7 @@ export function encodeK(text, options = {}) {
     version: spec.version,
     k,
     eccLevel,
+    cornerMarker,
     formatIndex,
     capacity,
     codewordSymbols,
