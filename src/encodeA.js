@@ -174,8 +174,9 @@ export function encodeA(text, options = {}) {
   }
   // no2AnchorTones — V-CM 기본 심볼 NO2 의 **꼭짓점 앵커 3셀** 톤을 추가로 싣는다.
   // 정본에는 그 3셀 톤이 있는데 **기본은 안 싣는다**: 앵커에 절대 톤을 실은 프레임은
-  // digit 기반 앵커 검출이 못 읽는다 (실측 2026-08-24 — V0/V1/V2 CM 전부 no-anchors,
-  // ppu 12·24 양쪽). H 가 tetrad A 를 덮어 같은 공백을 가졌던 것과 정확히 같은 축이라
+  // digit 기반 앵커 검출이 거의 못 읽는다 (실측 2026-08-24 — 페이로드 4 × 버전 3 ×
+  // ppu 2 = 24칸 중 2칸만 성공, 실패 20 이 no-anchors. 같은 격자에서 기본 적재는
+  // 24/24). H 가 tetrad A 를 덮어 같은 공백을 가졌던 것과 정확히 같은 축이라
   // (`finder-H.js` §4 · `encode.js` markerTones) 같은 처방 — **opt-in** 으로 둔다.
   // 기본값 전환은 검출기 배선(통합자 몫)이 선 다음이다. 공백 잠금 finder-NO2.test ⑥.
   if (typeof no2AnchorTones !== 'boolean') {
