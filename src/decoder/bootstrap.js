@@ -2103,10 +2103,21 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
      * hex/tri 분류가 이긴 프레임은 종전과 동일하게 그 패밀리 하나만 평가한다.
      */
     if (classified.family === 'star') {
+      /*
+       * ⚠ 사슬은 «star + **star 가 없었다면 나왔을 분류 하나**» 다 — 상수
+       * ['star','tri','hex'] 가 아니다. 하드코딩하면 star 오양성 하나가 기존
+       * 프레임의 평가 집합을 넓혀서, base 가 못 읽던 프레임이 우연히 살아난다
+       * (실측 2026-08-24: 투명 O trim 이 tri 로 분류돼 죽던 것이 star 오양성
+       * 덕에 hex 까지 평가돼 읽혔다 — `export-options.test.js` §9 링 규칙의
+       * 전제를 조용히 무너뜨렸다). familyWithoutStar 가 그 «원래 답» 이다.
+       * 없으면(원래도 무후보/모호) star 만 본다 — base 와 같은 폭이다.
+       */
+      const withoutStar = classified.diagnostics && classified.diagnostics.familyWithoutStar;
       return ok({
-        families: ['star', 'tri', 'hex'],
+        families: withoutStar ? ['star', withoutStar] : ['star'],
         classification: classified,
         starChainExpansion: true,
+        starChainFallbackFamily: withoutStar || null,
       });
     }
     return ok({ families: [classified.family], classification: classified });

@@ -681,10 +681,27 @@ function starPatchSeries(k) {
   };
 }
 
+/**
+ * star 채점의 k 목록 — **명시 opt-in 이다. 기본값은 «없음»(빈 배열)**.
+ *
+ * 왜 DEFAULT_KS 로 떨어지지 않는가 (2026-08-24 실측으로 고침):
+ * K ⊃ A ⊃ O 포함 사슬 때문에 **교차-k 도플갱어**가 있다 — star k6 의 영역이
+ * A k8 영역 안에 거의 전부 들어가서, A1 합성 프레임을 star k6 로 재면 코어·A 계열·
+ * 반전 계열이 **전부 진짜 셀**이라 균형까지 통과하고 star 가 hard 로 선다
+ * (`test/decoder-family.test.js` «tri 패치가 있으면 O를 hard 선택하지 않음» 이
+ * 이것으로 tri → star 로 뒤집혔다). 즉 star 는 «자기 k 를 못 받으면 남의 k 로
+ * 아무 프레임이나 양성» 이 되는 채점이다.
+ *
+ * hex 면적 모델의 `options.ks` 를 물려 쓰는 것도 안 된다 — K 총 셀이 같은 k 의
+ * hex 의 약 2배라 체계적으로 어긋난다. 그래서 **호출자가 star 면적 모델로 고른
+ * k 를 `starKs` 로 직접 줘야** 한다 (bootstrap.starClassificationDimensions).
+ * 안 주면 star 가설 자체가 서지 않고 NO_GRID_HYPOTHESIS 로 남는다 —
+ * 이 레인 이전의 classifyFamily 동작(= star 부재)과 바이트 동일하다.
+ */
 function normalizeStarKs(options) {
-  const source = Array.isArray(options.starKs) ? options.starKs : DEFAULT_KS;
+  if (!Array.isArray(options.starKs)) return [];
   const output = new Set();
-  for (const value of source) {
+  for (const value of options.starKs) {
     if (Number.isInteger(value) && value >= 4) output.add(value);
   }
   return Array.from(output).sort((a, b) => a - b);
@@ -698,8 +715,8 @@ function scoreStarInternal(luma, finderInput, options = {}) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { family: 'star', message: '불스아이 증거가 없다' });
   }
   // ⚠ k 목록은 hex 면적 모델의 options.ks 가 아니라 **starKs**(육각별 면적 모델 —
-  // bootstrap.starClassificationDimensions)를 쓴다. K 총 셀이 같은 k 의 hex 의
-  // 약 2배라 hex 기준 k 는 체계적으로 크게 나온다.
+  // bootstrap.starClassificationDimensions)를 쓰고, **없으면 채점하지 않는다**
+  // (normalizeStarKs 헤더 — 교차-k 도플갱어 때문에 기본 sweep 이 오양성이다).
   const ks = normalizeStarKs(options);
   if (ks.length === 0) {
     return fail(FRONTEND_FAILURE.NO_GRID_HYPOTHESIS, { family: 'star', message: 'k 목록이 없다' });
@@ -1003,6 +1020,30 @@ function copyWithStarExclusion(candidate) {
 }
 
 /**
+ * star 를 빼고 tri>hex 배제만 적용했을 때 남는 패밀리 — 유일하면 그 이름, 아니면
+ * null. 입력은 **배제 적용 전** 스냅샷이고, 여기서는 복사본만 만든다 (호출부의
+ * 배열·항목을 건드리지 않는다).
+ */
+function familyWithoutStar(preStarHypotheses) {
+  const candidates = preStarHypotheses.filter((candidate) => candidate.family !== 'star');
+  const triPositive = candidates.some((candidate) => candidate.family === 'tri'
+    && candidate.finderIndex !== undefined
+    && candidate.hardChecks && candidate.hardChecks.all);
+  const resolved = candidates.map((candidate) => {
+    if (!triPositive || candidate.family !== 'hex') return candidate;
+    const sameFinder = candidate.finderIndex === undefined
+      || candidates.some((other) => other.family === 'tri'
+        && other.finderIndex === candidate.finderIndex
+        && other.hardChecks && other.hardChecks.all);
+    return sameFinder ? copyWithPatchExclusion(candidate) : candidate;
+  });
+  const families = Array.from(new Set(resolved
+    .filter((candidate) => candidate.hardChecks && candidate.hardChecks.all)
+    .map((candidate) => candidate.family)));
+  return families.length === 1 ? families[0] : null;
+}
+
+/**
  * 패밀리별 rough hypothesis 전체와 hard-check 진단을 반환한다.
  *
  * 성공 시 family는 유일하게 hard-check를 통과한 패밀리의 편의 필드지만,
@@ -1051,6 +1092,10 @@ export function classifyFamily(luma, evidence, options = {}) {
   const cube = scoreCubeTiling(luma, normalizedEvidence.yJunction, options);
   if (cube.ok === true) hypotheses.push(cube);
   else reports.push({ family: 'cube', result: cube });
+
+  // 배제 적용 **전** 스냅샷 — familyWithoutStar 가 읽는다 (copyWith* 는 항목을
+  // 교체하지 실제로 바꾸지 않으므로 얕은 복사로 충분하다).
+  const preStarHypotheses = hypotheses.slice();
 
   /*
    * star(K) 두 계열 패치가 양성인 같은 finder 에서 hex/tri 를 통과시키면 K 프레임이
@@ -1104,6 +1149,14 @@ export function classifyFamily(luma, evidence, options = {}) {
     hypothesisCount: hypotheses.length,
     hardHypothesisCount: hard.length,
     hardFamilies: familySet,
+    /**
+     * star 가설이 **아예 없었다면** 이 프레임이 뭐로 분류됐을까 (유일하지 않으면
+     * null). star 오양성이 기존 프레임의 평가 집합을 넓히지 못하게 하는 값이다 —
+     * bootstrap 이 «star + 이 값» 만 평가한다 (chain expansion). 이게 없으면
+     * star 가 서는 순간 hex·tri 가 **둘 다** 평가돼 base 가 못 읽던 프레임이
+     * 우연히 살아난다 (실측: 투명 O trim 이 링 없이 읽혔다 — 2026-08-24).
+     */
+    familyWithoutStar: familyWithoutStar(preStarHypotheses),
   };
 
   if (familySet.length === 0) {

@@ -20,7 +20,7 @@ import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { toRelativeLuminance } from '../src/decoder/luma.js';
-import { scoreCubeTiling, scoreStarTiling } from '../src/decoder/family.js';
+import { classifyFamily, scoreCubeTiling, scoreStarTiling } from '../src/decoder/family.js';
 import { findKAnchorHypotheses } from '../src/decoder/anchor-detect.js';
 import { VERSIONS_K } from '../src/capacityK.js';
 import { axialToPixel } from '../src/hexgrid.js';
@@ -143,4 +143,62 @@ test('cube 잠금 이중 검사 — K 실루엣에서 cube 채점이 서지 않�
     assert.equal(positive, false,
       spec.name + ': cube 채점이 K 실루엣에 hard 양성이다 — F-107 함정');
   }
+});
+
+test('star 채점은 starKs 없이는 서지 않는다 — 교차-k 도플갱어 잠금 (opt-in 규약)', () => {
+  // 실측(2026-08-24): star k6 영역이 A k8 영역에 거의 전부 들어가서 A1 프레임을
+  // star k6 로 재면 코어·A 계열·반전 계열이 **전부 진짜 셀**이라 균형까지 통과한다.
+  // 그래서 star 의 k 는 «남에게서 물려받으면 안 되는» 값이고 (hex 면적 모델의
+  // options.ks 도 마찬가지 — K 총 셀이 hex 의 약 2배), 호출자가 star 면적 모델로
+  // 고른 값을 starKs 로 직접 줘야 한다. 이 두 단언이 그 규약의 자물쇠다.
+  const encodedA = encodeA('cross-k-doppel', { version: 1, eccLevel: 'M' });
+  assert.equal(encodedA.k, 8, 'A1 의 k 가 8 이 아니다 — 이 테스트의 전제가 바뀌었다');
+  const sceneA = buildScene(encodedA, { palette: PALETTE, margin: 20 });
+  const raster = rasterize(sceneA, { pixelsPerUnit: PPU, supersample: 1 });
+  const luma = toRelativeLuminance(raster, {});
+  const center = axialToPixel(0, 0, sceneA.layout);
+  const finder = { center: { x: center.x * PPU, y: center.y * PPU }, cellSize: PPU };
+
+  // ① 근거 — 남의 k(6)를 물려 쓰면 A1 프레임에서 star 가 hard 로 선다.
+  const borrowed = scoreStarTiling(luma, finder, { starKs: [6] });
+  assert.equal(borrowed.ok, true);
+  assert.equal(borrowed.hardChecks.all, true,
+    '교차-k 도플갱어가 사라졌다면 opt-in 규약의 근거를 다시 재라 (완화 금지 — 근거 갱신)');
+
+  // ② 규약 — starKs 미공급이면 star 가설 자체가 서지 않는다 (기본 sweep 금지).
+  const noKs = scoreStarTiling(luma, finder, {});
+  assert.equal(noKs.ok, false, 'starKs 없이 star 가 채점됐다 — 기본 sweep 이 되살아났다');
+  assert.equal(noKs.reason, 'frontend:no-grid-hypothesis');
+
+  // ③ 그 결과 classifyFamily 는 이 레인 이전과 같은 답(tri)을 낸다.
+  const classified = classifyFamily(luma, { finder }, { ks: [encodedA.k], minSeparation: 0.04 });
+  assert.equal(classified.ok, true);
+  assert.equal(classified.family, 'tri',
+    'starKs 미공급 classifyFamily 가 star 로 뒤집혔다 — 무회귀 규약 위반');
+});
+
+test('star 오양성은 평가 집합을 넓히지 않는다 — familyWithoutStar 사슬 (무회귀 자물쇠)', () => {
+  // star 가 오양성으로 서면 bootstrap 은 «star + star 가 없었을 때의 분류 하나» 만
+  // 평가한다. 상수 ['star','tri','hex'] 로 넓히면 base 가 못 읽던 프레임이 우연히
+  // 살아난다 — 실측 2026-08-24: 투명 O trim(export-options §9)이 tri 분류로 죽던
+  // 것이 hex 까지 평가돼 읽혔고, 링 재적용 규칙의 전제가 조용히 무너졌다.
+  const encodedA = encodeA('chain-narrow', { version: 1, eccLevel: 'M' });
+  const sceneA = buildScene(encodedA, { palette: PALETTE, margin: 20 });
+  const raster = rasterize(sceneA, { pixelsPerUnit: PPU, supersample: 1 });
+  const luma = toRelativeLuminance(raster, {});
+  const center = axialToPixel(0, 0, sceneA.layout);
+  const finder = { center: { x: center.x * PPU, y: center.y * PPU }, cellSize: PPU };
+
+  // 남의 k(6)를 물려 준 A1 프레임 = star 오양성이 서는 자리 (위 도플갱어 테스트의 ①).
+  const misread = classifyFamily(luma, { finder },
+    { ks: [encodedA.k], starKs: [6], minSeparation: 0.04 });
+  assert.equal(misread.ok, true);
+  assert.equal(misread.family, 'star', '오양성 전제가 사라졌다 — 근거를 다시 재라');
+  assert.equal(misread.diagnostics.familyWithoutStar, 'tri',
+    'star 없이는 tri 였는데 사슬 폴백이 그 값을 못 낸다 — 평가 집합이 넓어진다');
+
+  // star 가 없는 평범한 A 프레임에서도 같은 값이 나온다 (계산이 star 유무에 안 걸린다).
+  const plain = classifyFamily(luma, { finder }, { ks: [encodedA.k], minSeparation: 0.04 });
+  assert.equal(plain.family, 'tri');
+  assert.equal(plain.diagnostics.familyWithoutStar, 'tri');
 });
