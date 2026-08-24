@@ -377,6 +377,108 @@ export function estimateHomography4(canonicalPoints, imagePoints) {
 }
 
 /**
+ * canonical -> image **N점(≥4) 대응**의 homography — Wave 3 Type K(육각별) 6점
+ * (별 꼭짓점) 확장 (레인 K 브리프 §2 «readFourPoints 4점 전용 → 6점 확장 또는
+ * 일반화 — 기존 4점 경로 바이트 동일 보존»).
+ *
+ * 보존 방식: `estimateHomography4`/`readFourPoints` 는 **한 줄도 안 바꿨다** —
+ * 이 함수는 별도 진입점이고, N=4 는 기존 정확해 함수로 그대로 위임하므로 기존
+ * 호출부(호출 무변경)와 4점 결과가 비트 동일하다. N>4 는 h33=1 gauge 의 DLT
+ * 정규방정식(AᵀA h = Aᵀb, 8×8)을 같은 결정적 solver 로 푸는 **최소제곱** 해다.
+ *
+ * 퇴화 검사가 4점판과 다른 이유: N>4 에서는 「어떤 세 점도 공선 금지」가 과잉이다
+ * — 별 꼭짓점 6점 + 중심은 마주보는 꼭짓점 쌍이 중심과 정확히 공선이지만 전체
+ * 계는 잘 결정된다. 중복점만 거르고, 랭크 부족은 solver 의 pivot 하한이 잡는다.
+ *
+ * @param {{x:number,y:number}[]} canonicalPoints
+ * @param {{x:number,y:number}[]} imagePoints 같은 길이
+ * @returns {Float64Array | null}
+ */
+export function estimateHomographyN(canonicalPoints, imagePoints) {
+  if (!canonicalPoints || !imagePoints
+    || typeof canonicalPoints.length !== 'number'
+    || canonicalPoints.length !== imagePoints.length
+    || canonicalPoints.length < 4) return null;
+  if (canonicalPoints.length === 4) {
+    return estimateHomography4(canonicalPoints, imagePoints);
+  }
+  const canonical = [];
+  const image = [];
+  for (let i = 0; i < canonicalPoints.length; i += 1) {
+    const c = canonicalPoints[i];
+    const p = imagePoints[i];
+    if (!c || !p || !Number.isFinite(c.x) || !Number.isFinite(c.y)
+      || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+    canonical.push({ x: c.x, y: c.y });
+    image.push({ x: p.x, y: p.y });
+  }
+  // 중복점 거르기 (양쪽 각각) — 공선 3점은 허용한다 (헤더 근거).
+  for (const points of [canonical, image]) {
+    const extent = pointExtent(points);
+    if (!Number.isFinite(extent) || extent <= 0) return null;
+    const minSeparation = MIN_POINT_SEPARATION_RATIO * extent;
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const dx = points[i].x - points[j].x;
+        const dy = points[i].y - points[j].y;
+        if (dx * dx + dy * dy <= minSeparation * minSeparation) return null;
+      }
+    }
+  }
+
+  const canonicalNormalized = hartleyNormalize(canonical);
+  const imageNormalized = hartleyNormalize(image);
+  if (canonicalNormalized === null || imageNormalized === null) return null;
+
+  // 정규방정식 누적: M(8×8) = ΣrowᵀA·row, v(8) = Σrowᵀ·rhs.
+  const M = Array.from({ length: 8 }, () => new Float64Array(8));
+  const v = new Float64Array(8);
+  const accumulate = (row, rhs) => {
+    for (let a = 0; a < 8; a += 1) {
+      if (row[a] === 0) continue;
+      v[a] += row[a] * rhs;
+      for (let b = 0; b < 8; b += 1) M[a][b] += row[a] * row[b];
+    }
+  };
+  for (let i = 0; i < canonical.length; i += 1) {
+    const source = canonicalNormalized.points[i];
+    const destination = imageNormalized.points[i];
+    accumulate([
+      source.x, source.y, 1,
+      0, 0, 0,
+      -destination.x * source.x, -destination.x * source.y,
+    ], destination.x);
+    accumulate([
+      0, 0, 0,
+      source.x, source.y, 1,
+      -destination.y * source.x, -destination.y * source.y,
+    ], destination.y);
+  }
+
+  const solved = solveLinearSystem8(M.map((row) => Array.from(row)), Array.from(v));
+  if (solved === null) return null;
+
+  const normalizedH = new Float64Array([
+    solved[0], solved[1], solved[2],
+    solved[3], solved[4], solved[5],
+    solved[6], solved[7], 1,
+  ]);
+  const unnormalized = multiply3(
+    multiply3(imageNormalized.inverse, normalizedH),
+    canonicalNormalized.transform,
+  );
+  const H = normalizeHomographyGauge(unnormalized);
+  if (H === null) return null;
+  // 최소제곱이라 정확해의 잔차 상한(1e-8)은 적용하지 않는다 — 잔차의 수용 여부는
+  // 호출자(예: 별 꼭짓점 앵커 6/6 검증)가 자기 증거로 판단한다. 유한성만 단언.
+  for (const point of canonical) {
+    if (projectPointSafely(H, point) === null) return null;
+  }
+  assertHomography(H);
+  return H;
+}
+
+/**
  * H를 역방향 image -> canonical 변환으로 뒤집는다.
  * @param {Float64Array} H
  * @returns {Float64Array | null}

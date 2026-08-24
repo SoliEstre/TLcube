@@ -30,6 +30,7 @@ import {
 import { ranksToDigit } from '../lehmer.js';
 import { anchorCells } from '../placement.js';
 import { vertexAnchors } from '../placementA.js';
+import { vertexAnchorsK } from '../placementK.js';
 import { sampleHexCell } from './grid-sample.js';
 
 /*
@@ -272,7 +273,7 @@ function geometryResidual(points, center, cellSize) {
   return Math.sqrt(sum / radii.length);
 }
 
-function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, options, turn = false, scale = 1) {
+function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, options, turn = false, scale = 1, scaleSupplied = false) {
   const sampleFraction = Number.isFinite(options.sampleRadiusFraction)
     && options.sampleRadiusFraction > 0
     && options.sampleRadiusFraction <= 1
@@ -290,7 +291,11 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
   const minProjectedMinorDiameter = Number.isFinite(options.minProjectedMinorDiameter)
     ? Math.max(0, options.minProjectedMinorDiameter)
     : DEFAULT_ANCHOR_MIN_PROJECTED_MINOR_DIAMETER_PX;
-  const H = homographyForOrientation(bullseye, orientation, options, scale, turn === true);
+  // 실효 배율(supplied H 에도 곱한다)은 **신설 축에만** 연다 — 턴A(turn) 전례에
+  // star(K) 를 추가 (헤더 ⚠ 스코프 주석: 기존 축은 죽음 플립 0 게이트 실측으로 동결).
+  const H = homographyForOrientation(
+    bullseye, orientation, options, scale, turn === true || scaleSupplied === true,
+  );
   const pointList = [];
   const measurements = [];
   let allSamples = true;
@@ -482,6 +487,7 @@ function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
             options,
             variant.turn === true,
             scale,
+            variant.scaleSupplied === true,
           );
           // 통과하면 즉시 채택. 아니면 «가장 멀리 간» 것을 진단용으로 남긴다.
           if (probed.hardChecks.all) {
@@ -568,6 +574,32 @@ export function findAAnchorHypotheses(luma, bullseye, ks, options = {}) {
       },
     ];
   });
+}
+
+/**
+ * Type K(육각별, family 'star')의 별 꼭짓점 앵커 6점을 전수 평가한다.
+ *
+ * 앵커 = A 계열 꼭짓점 3(digit 5/0/0 — placementA 그대로) + 반전 계열 꼭짓점 3
+ * (digit 1/1/1, 통합자 확정 2026-08-24). 여섯 점 전부 유클리드 3k·셀(= 별의 끝)
+ * 이라 geometryResidual 회계가 O/A 와 같은 꼴로 성립한다.
+ *
+ * 60° 오가설이 여기서 죽는다 (계약 K-2 채택 근거): 60° 회전은 A 계열 자리를 반전
+ * 계열 자리로 보내는데, 기대값 {5,0} 자리에서 1 이 (또는 그 역이) 읽히므로
+ * expectedPattern 하드체크가 깨진다 — test/typeK-roundtrip.test.js 가 실측 고정.
+ *
+ * 방향 변형은 1개뿐이다 — K = A ∪ 반전A 는 180° 자기 대칭이라 «턴 K» 가 없다.
+ *
+ * @param {import('./contracts.js').LumaField} luma
+ * @param {import('./contracts.js').BullseyeCandidate} bullseye
+ * @param {number[]|number} ks 지원 k 목록
+ * @param {object} [options]
+ */
+export function findKAnchorHypotheses(luma, bullseye, ks, options = {}) {
+  // scaleSupplied — star 는 신설 축이라 실효 배율 탐색을 연다 (턴A 전례, evaluate
+  // 주석). 앵커가 3k(최대 30셀) 거리라 다운샘플 파인더의 2% 대 스케일 오차만으로
+  // 0.6셀 이상 밀려 6/6 이 전멸한다 — K1 합성 왕복 실측 (2026-08-25).
+  return findHypotheses(luma, bullseye, ks, options, 'star',
+    (k) => [{ turn: false, scaleSupplied: true, anchors: vertexAnchorsK(k) }]);
 }
 
 /**
