@@ -1,5 +1,5 @@
 // placementK.js — Type K(육각별/hexagram 실루엣) 영역·별 꼭짓점 앵커·패치 레퍼런스 배치
-// (계약 claude-k-contract.md K-1·K-2·K-3, Wave 3 ② 레인 K)
+// (계약 .agent/_contracts/type-k.md K-1·K-2·K-3, Wave 3 ② 레인 K)
 //
 // Type K 는 정삼각(영역 A)과 역삼각(반전 A)을 겹친 **육각별** — 육각 코어(반경 k) +
 // 삼각 패치 6개다. 데이터 계약(§4.1 순위 3튜플·GF(211)·§4.3 마스크)은 Type O/A 를

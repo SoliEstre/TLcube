@@ -1,4 +1,4 @@
-// capacityK.js — Type K(육각별) 버전별 용량 산출 (계약 claude-k-contract.md K-6,
+// capacityK.js — Type K(육각별) 버전별 용량 산출 (계약 .agent/_contracts/type-k.md K-6,
 // capacityA.js 대칭 — Wave 3 ② 레인 K)
 //
 // **이 모듈이 SPEC 증보(통합자 몫)용 표의 소스다.** 수기로 유지하지 않는다.
