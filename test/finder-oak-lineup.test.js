@@ -197,3 +197,18 @@ test('명부의 finderStarter 는 전부 finder-patterns 의 실재 id 다', asy
   assert.ok(liveOakCandidates().length >= 5,
     '살아있는 O/A/K 후보가 5 미만이다: ' + liveOakCandidates().map((c) => c.name).join(','));
 });
+
+test('드랍하면 카드가 닫힌다 — 이름 조인 전수 유도 (갤러리 레인 적발 회귀)', async () => {
+  // id/candidate 키 조인은 footprint·daehan 행에서 어긋나 «미스=유지» 폴백과 만나
+  // 드랍 규약이 무력했다 (2026-08-24 수리 — finder-card-ui 이름 조인 + 미스 throw).
+  // 여기서는 표현 전수에 대해 「명부 지위 ↔ 카드 존재」가 1:1 임을 유도로 잠근다.
+  const { OAK_ALL_FINDER_PATTERNS } = await import('../src/finder-oak-patterns.js');
+  const { FINDER_CARD_GROUPS } = await import('../src/finder-card-ui.js');
+  const cardIds = new Set(FINDER_CARD_GROUPS.oak.map((card) => card.id));
+  for (const pattern of OAK_ALL_FINDER_PATTERNS) {
+    const row = OAK_LINEUP.find((entry) => entry.name === pattern.lineupName);
+    assert.ok(row, pattern.lineupName + ' 이 명부에 없다 (②-b 규약 위반)');
+    assert.equal(cardIds.has(pattern.id), row.status === 'active',
+      pattern.lineupName + ' (' + row.status + ') 의 카드 존재가 명부 지위와 어긋났다');
+  }
+});

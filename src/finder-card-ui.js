@@ -89,10 +89,18 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   // 명부 live-join (C1, 2026-08-23) — 카드는 «렌더 가능 ∩ 명부 active» 다. 명부에서
   // 드랍하면 카드·(카드 유도인) 상태 스키마가 따라 닫힌다 — 사본이 아니라 유도.
   // 패턴 표·검출 라인업은 건드리지 않는다 (발행분 판독 유지 — Benzene 전례).
+  // ⚠ 조인 키는 **이름**(lineupName ↔ 명부 name)이다 — id/candidate 문자열은 두 행
+  // (footprint 'O-footprint-fullsurface' vs 'O-footprint' · daehan '-k10-fullsurface')
+  // 에서 어긋나 있고, 미스 폴백이 «유지» 면 드랍 규약이 그 행들에서 무력해진다
+  // (갤러리 레인 적발 2026-08-24). 표현이 있는 후보는 명부에 반드시 있다
+  // (finder-oak-patterns ②-b 규약) — 그래서 미스는 폴백이 아니라 **로드 시점 결함**이다.
   oak: Object.freeze(OAK_ALL_FINDER_PATTERNS
     .filter((pattern) => {
-      const row = OAK_LINEUP.find((entry) => entry.id === pattern.params.candidate);
-      return row ? row.status === 'active' : true;
+      const row = OAK_LINEUP.find((entry) => entry.name === pattern.lineupName);
+      if (!row) {
+        throw new Error('OAK 카드 조인 미스 — 명부에 없는 표현: ' + pattern.lineupName);
+      }
+      return row.status === 'active';
     })
     .map((pattern) => descriptor(pattern.id, pattern))),
   // daehan (2026-08-19 UI 편입) — **카드는 한 장**이다. 표에는 k=6/8/10 세 템플릿이
