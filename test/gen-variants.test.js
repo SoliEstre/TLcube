@@ -152,7 +152,10 @@ test('파인더/QR 결합은 정규화 뒤 한 번씩만 그리는 비재귀 경
   assert.doesNotMatch(source, /function syncQrPositionUi\(/);
 
   const combinedStart = source.indexOf('function syncFinderQrUi()');
-  const combinedEnd = source.indexOf('for (const card of els.typeCards.children)', combinedStart);
+  // **의도적 갱신 (2026-08-24)** — 구 앵커 `for (const card of els.typeCards.children)`
+  // 는 고급 타입 버튼 전환으로 `wireTypeCards(container)` 함수가 됐다 (일반·고급이
+  // 같은 배선을 공유한다). 앵커만 옮긴다 — 재는 명제는 그대로다.
+  const combinedEnd = source.indexOf('function wireTypeCards(container)', combinedStart);
   assert.ok(combinedStart >= 0 && combinedEnd > combinedStart, '통합 sync 함수를 못 찾았다');
   const combined = source.slice(combinedStart, combinedEnd);
   assert.doesNotMatch(combined, /normalizeFinderQrState\(/);

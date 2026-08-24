@@ -67,15 +67,21 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     'centerQr+centralV0': /isCentralV0FinderPatternId\(generatorState\.finderPatternId\)/,
     // 아래 둘은 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
     // (Wave 3 ④ — cornerMarker 분기 서명에 V-CMQ 가드가 붙었다.)
-    'cornerMarker+daehanFinder': /\} else if \(cfg\.cornerMarker === true && !\(cfg\.turnA === true && opts\.centerQr\)\) \{/,
-    'daehanFinder+turnA': /\} else if \(cfg\.turnA === true && !centralV0Selected\) \{/,
-    // 중앙 v0 × turnA — 배치 검증 미실시 조합 (2026-08-22 A 개방). 비컨 카드가
-    // 선택돼 있으면 encodeOptsFor 가 turnA 를 싣지 않는다.
-    'centralV0+turnA': /\} else if \(cfg\.turnA === true && !centralV0Selected\) \{/,
-    // V-CMQ (Wave 3 ③) — **환원 불가능한 3중 배타**다: 세 2-부분집합(CM+turnA=V-CM ·
-    // CM+centerQr=CMQ · turnA+centerQr=V*Q)이 전부 합법이고 3중만 던진다 (와이어
-    // 잔여 0 보류). encodeOptsFor 의 분기 가드가 그 조합을 V*Q 로 강하시킨다.
-    'centerQr+cornerMarker+turnA': /cfg\.cornerMarker === true && !\(cfg\.turnA === true && opts\.centerQr\)/,
+    // **의도적 갱신 (2026-08-24 검수 4차)** — 두 서명에 붙어 있던 조건이 걷혔다:
+    //   · cornerMarker 분기의 `&& !(turnA && centerQr)` → V-CMQ 개설로 소멸
+    //   · turnA 분기의 `&& !centralV0Selected` → centralV0×turnA 개설로 소멸
+    // 가드의 **역할**(daehan 분기가 else-if 로 먼저 이긴다)은 그대로다 — 서명만 좁힌다.
+    'cornerMarker+daehanFinder': /\} else if \(cfg\.cornerMarker === true\) \{/,
+    'daehanFinder+turnA': /\} else if \(cfg\.turnA === true\) \{/,
+    // (구) 'centralV0+turnA' — 2026-08-24 검수 3차에 **개설**됐다 (턴A 기하 확정으로
+    // «배치 검증 미실시» 근거 소멸 · 왕복 = turnA-roundtrip ▽+비컨). 인코더가 더는
+    // 안 던지므로 전수 탐색이 이 쌍을 찾지 않는다 — 가드 불필요.
+    // (구) 'centerQr+cornerMarker+turnA' (V-CMQ) — 2026-08-24 검수 4차에 **개설**됐다.
+    // 새 (값,k) 를 만든 게 아니라 V*CM 인덱스를 **공유**한다 (centerQr 는 셀 회계를
+    // 안 바꾸므로 두 해석이 같은 데이터를 낸다 — turnA.js §turnASpec). 인코더가 더는
+    // 안 던지므로 전수 탐색이 이 조합을 찾지 않는다.
+    // ⚠ 그래서 «환원 불가능한 3중 배타» 사례는 현재 **0건**이다 — 아래 flags.length>2
+    //   분기는 그 사실이 바뀌면 다시 일한다 (구조는 남긴다).
     // 둘 다 단일 finderPatternId 카드에서 유도되므로 한 상태에 동시에 설 수 없다.
     'centralV0+daehanFinder': () => {
       const ids = [CENTRAL_V0_FINDER_CARD,

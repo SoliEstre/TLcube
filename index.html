@@ -1191,13 +1191,37 @@
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
     <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone faceGain qrText qrCornerToo exportDither exportPpiDetail">
-      <label class="section-heading" for="codeType" data-i18n="g041">타입</label>
-      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약). -->
-      <select id="codeType">
-        <option value="O" data-i18n="g046">Type O (마름모 8면체 필드)</option>
-        <option value="A" data-i18n="g047">Type A (삼각 실루엣 확장)</option>
-        <option value="Y" selected data-i18n="g048">Type Y (단일 큐브)</option>
-      </select>
+      <label class="section-heading" data-i18n="g041">타입</label>
+      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약).
+           ⚠ **의도적 갱신 (2026-08-24)** — 구 `<select id="codeType">` 를 일반 모드와
+           같은 **카드 행**으로 바꿨다 (운영자 «고급에서도 타입 선택은 버튼 형식»).
+           아이콘·부제는 일반 카드와 같은 그림이고, 클릭 핸들러는 #typeCards 와
+           같은 함수를 공유한다 (wireTypeCards — 두 벌 배선을 만들지 않는다). -->
+      <div class="card-row" id="typeCardsAdvanced">
+        <div class="toggle-card" data-type="O" style="flex:1">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M20 11 L16 4.1 L8 4.1 L4 11 L8 17.9 L16 17.9 Z"/>
+            <circle cx="12" cy="11" r="4.2"/>
+            <circle cx="12" cy="11" r="1.6" fill="currentColor" stroke="none"/>
+          </svg>
+          Type O
+        </div>
+        <div class="toggle-card" data-type="A" style="flex:1">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3 L21 19 L3 19 Z"/>
+            <circle cx="12" cy="14" r="3"/>
+            <circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/>
+          </svg>
+          Type A
+        </div>
+        <div class="toggle-card active" data-type="Y" style="flex:1">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3 L19 7 L19 15 L12 19 L5 15 L5 7 Z"/>
+            <path d="M12 11 L5 7 M12 11 L19 7 M12 11 L12 19"/>
+          </svg>
+          Type Y
+        </div>
+      </div>
 
       <!-- ⚠ **의도적 갱신 (W2 C4, 2026-08-24)** — 여기 있던 #cornerMarkerSection
            (코너 자리 예약 켬/끔 2카드)은 검출기 3구역 개편으로 소멸했다. O-CM/A-CM
@@ -5935,7 +5959,7 @@ import { createExportFilenameFactory } from './src/export-filename.js';
 const $ = (id) => document.getElementById(id);
 const els = {
   // 고급 모드 (페이로드·QR 폴백 체크박스류는 공용 블록으로 통합 — 사용자 지시 2026-08-09)
-  codeType: $('codeType'),
+
   versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'), versionWrapA: $('versionWrapA'),
   versionO: $('versionO'), versionY: $('versionY'), versionA: $('versionA'),
   ecc: $('ecc'), preset: $('preset'),
@@ -6016,7 +6040,8 @@ const els = {
   // 일반 모드
   panelNormal: $('panelNormal'), panelAdvanced: $('panelAdvanced'),
   modeNormalBtn: $('modeNormalBtn'), modeAdvancedBtn: $('modeAdvancedBtn'),
-  contentTabs: $('contentTabs'), typeCards: $('typeCards'), presetSwatches: $('presetSwatches'),
+  contentTabs: $('contentTabs'), typeCards: $('typeCards'),
+  typeCardsAdvanced: $('typeCardsAdvanced'), presetSwatches: $('presetSwatches'),
   qrPositionCards: $('qrPositionCards'), qrPosInner: $('qrPosInner'),
   nTextPayload: $('nTextPayload'), nUrlPayload: $('nUrlPayload'),
   nTextBackdrop: $('nTextBackdrop'), nUrlBackdrop: $('nUrlBackdrop'),
@@ -7635,14 +7660,20 @@ function syncFinderQrUi() {
   syncSeatUi();
 }
 
-for (const card of els.typeCards.children) {
-  card.addEventListener('click', () => {
-    const type = card.dataset.type;
-    commitFinderQrUi(
-      selectGeneratorType(generatorState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
-    );
-  });
+/** 타입 카드 배선 — 일반·고급이 **같은 함수**를 쓴다 (2026-08-24: 고급도 버튼). */
+function wireTypeCards(container) {
+  if (!container) return;
+  for (const card of container.children) {
+    card.addEventListener('click', () => {
+      const type = card.dataset.type;
+      commitFinderQrUi(
+        selectGeneratorType(generatorState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
+      );
+    });
+  }
 }
+wireTypeCards(els.typeCards);
+wireTypeCards(els.typeCardsAdvanced);
 
 // ── 일반 모드: QR 링크 포함 위치 카드 (6택 — 안쪽/좌상/우상/좌하/우하/없음) ──────
 
@@ -9519,7 +9550,12 @@ function syncTypeUi() {
   const type = generatorState.type;
   const isY = type === 'Y';
   const isA = type === 'A';
-  els.codeType.value = type;
+  for (const container of [els.typeCards, els.typeCardsAdvanced]) {
+    if (!container) continue;
+    for (const card of container.children) {
+      card.classList.toggle('active', card.dataset.type === type);
+    }
+  }
   els.versionO.value = String(generatorState.versionO);
   els.versionY.value = String(generatorState.versionY);
   els.versionA.value = String(generatorState.versionA);
@@ -9711,12 +9747,7 @@ function syncYLocatorUi() {
   }
 }
 
-els.codeType.addEventListener('change', () => {
-  const type = els.codeType.value;
-  commitFinderQrUi(
-    selectGeneratorType(generatorState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
-  );
-});
+// (구 #codeType select 의 change 핸들러는 카드 배선(wireTypeCards)으로 대체됐다.)
 for (const [select, key] of [
   [els.versionO, 'versionO'], [els.versionY, 'versionY'], [els.versionA, 'versionA'],
 ]) {

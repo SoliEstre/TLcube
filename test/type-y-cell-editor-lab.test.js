@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import { CELL_TYPES } from '../src/cell-editor-core.js';
 import { buildGeneratorLabHtml } from '../tools/build-gen-variants.mjs';
 import { buildSingleHtml, OFFICIAL_GENERATOR_EDITION } from '../tools/build-single.mjs';
 
@@ -70,12 +71,18 @@ test('/lab/ + Y·O·A 에서 섹션을 열고 정식판에서는 숨긴다 (K �
   assert.doesNotMatch(INDEX, /stringifyCellEditor\([^)]*encodeY/);
 });
 
-test('타입 선택은 Y/O/A 셋뿐이고 O/A 기하는 공용 코어·hexgrid 를 재사용한다', () => {
-  for (const type of ['Y', 'O', 'A']) {
+// **의도적 갱신 (2026-08-24)** — 구 락은 «Y/O/A 셋뿐 + K 제외» 였다. 그 제외의
+// 근거(«렌더러 계약 확장 대기»)는 Wave 3 ② Type K 로 해소됐고, 운영자 지시로
+// G(O-CM 자리)·V(턴A)도 함께 열렸다. 락은 삭제가 아니라 **새 집합의 양성 단언**으로.
+test('타입 선택은 Y/O/A/G/V/K 여섯이고 기하는 공용 코어·hexgrid 를 재사용한다', () => {
+  for (const type of ['Y', 'O', 'A', 'G', 'V', 'K']) {
     assert.match(INDEX, new RegExp(`data-ycell-type="${type}"`), `${type} 카드가 없다`);
   }
-  // K 제외 — 렌더러 계약 확장 대기 (태스크 #11). 카드도 사유 안내도 함께 있어야 한다.
-  assert.doesNotMatch(INDEX, /data-ycell-type="K"/);
+  // 코어의 타입 목록과 화면 카드가 **같은 집합**이어야 한다 (사본 금지).
+  for (const type of CELL_TYPES) {
+    assert.match(INDEX, new RegExp(`data-ycell-type="${type}"`),
+      type + ' 가 코어에는 있는데 편집기 카드에 없다 — 목록이 갈렸다');
+  }
   assert.match(INDEX, /data-i18n="g554"/);
   // 편집기 전용 기하·역할표 복제 금지 — 코어(placement/placementA)와 hexgrid 를 쓴다.
   assert.match(INDEX, /from '\.\/src\/cell-editor-core\.js'/);
