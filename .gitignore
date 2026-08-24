@@ -57,3 +57,7 @@ test/**/*.generated.png
 # 레인이 만든 패치·보고서 임시본이다. 둘 다 통합자가 읽고 버린다.
 lane-in/
 lane-out/
+
+# 에이전트 런타임 배선 — 이 repo 는 public 이다. settings.local.json 이 생기면
+# 자격증명이 그대로 공개된다. 구멍 자체를 닫는다.
+.claude/
