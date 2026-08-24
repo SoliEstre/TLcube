@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>TrilLuminance 레퍼런스 갤러리 (로컬)</title>
+<!--
+  sites/gallery/index.html — 레퍼런스 갤러리 1차 (PM/022 항목 12).
+
+  ⚠ **로컬 전용 페이지**다. 배포 대상이 아니고 (sites/tl · sites/tlscan 빌드 표에
+  없다), 읽는 데이터는 전부 gitignore 구역인 `test/output/gallery/` 다.
+  F-77 허용목록 충돌을 피하는 «전부-로컬 스택» 규약 — 이 페이지는 어떤 원격
+  호스트에도 요청하지 않는다 (외부 자원 0 · 인라인 CSS/JS 만).
+
+  데이터 원천 두 갈래:
+    · dev 서버 (`node tools/dev-server.mjs` → /sites/gallery/) → fetch(manifest.json)
+    · file:// 로 직접 열기 → fetch 가 CORS 로 막히므로 **classic script**
+      (`manifest.js`, `captures.js`) 를 <script src> 로 끌어 폴백한다. 그것도
+      막히면 파일 선택기로 manifest.json 을 직접 물린다.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7fb; --fg: #14161d; --muted: #5a6072; --line: #d7dae4;
+    --card: #ffffff; --accent: #2f5bd7; --warn: #b45309; --bad: #b91c1c;
+    --slot: #eceef5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1018; --fg: #e8eaf2; --muted: #99a0b5; --line: #2a2f3f;
+      --card: #161a25; --accent: #7aa2ff; --warn: #f0b350; --bad: #ff8080;
+      --slot: #1d2231;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', 'Noto Sans KR', sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    border-bottom: 1px solid var(--line); padding: 10px 16px;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .axes { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 12px; }
+  .axes b { color: var(--fg); font-weight: 600; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  button, select, input[type=file] {
+    font: inherit; color: inherit; background: var(--card);
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  main { padding: 16px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px; cursor: pointer;
+  }
+  .card.sel { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+  .card h3 { font-size: 12px; margin: 6px 0 2px; word-break: break-all; }
+  .thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .slot {
+    position: relative; background: var(--slot); border-radius: 6px; aspect-ratio: 1 / 1;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .slot img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .slot .empty { color: var(--muted); font-size: 11px; text-align: center; padding: 4px; }
+  .slot .tag {
+    position: absolute; left: 4px; top: 4px; font-size: 10px; letter-spacing: .04em;
+    background: color-mix(in srgb, var(--card) 80%, transparent); color: var(--muted);
+    border-radius: 4px; padding: 0 4px;
+  }
+  .meta { color: var(--muted); font-size: 11px; word-break: break-all; }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .badge {
+    font-size: 10px; border: 1px solid var(--line); border-radius: 999px; padding: 0 6px;
+    color: var(--muted);
+  }
+  .badge.group-official { border-color: var(--accent); color: var(--accent); }
+  .badge.group-lineup { border-color: #2f9e6b; color: #2f9e6b; }
+  .badge.group-layout { border-color: #8b5cf6; color: #8b5cf6; }
+  .badge.group-control { border-color: var(--warn); color: var(--warn); }
+  .badge.bad { border-color: var(--bad); color: var(--bad); }
+  /* 단일 뷰 */
+  .single { display: grid; gap: 16px; grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr); }
+  @media (max-width: 900px) { .single { grid-template-columns: 1fr; } }
+  .single .slot { aspect-ratio: auto; min-height: 260px; }
+  .single .stage { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 700px) { .single .stage { grid-template-columns: 1fr; } }
+  table.kv { border-collapse: collapse; width: 100%; font-size: 12px; }
+  table.kv th, table.kv td {
+    text-align: left; vertical-align: top; padding: 3px 6px; border-bottom: 1px solid var(--line);
+    word-break: break-all;
+  }
+  table.kv th { color: var(--muted); font-weight: 500; width: 38%; }
+  .help { color: var(--muted); font-size: 12px; margin-top: 14px; }
+  kbd {
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 4px; font: 11px/1.6 ui-monospace, monospace;
+  }
+  .err { color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>TrilLuminance 레퍼런스 갤러리 <span class="meta" id="counts"></span></h1>
+  <!-- 화면 제시 축 라벨 명시 (PM/022 항목 12) — 어느 방향이 어느 축인지 늘 보인다. -->
+  <div class="axes">
+    <span><b>← →</b> 파인더/레이아웃 축 (타입 안에서 이동)</span>
+    <span><b>↑ ↓</b> 타입 축 <span id="typeAxis"></span></span>
+    <span><b>g</b> 그리드 ↔ 단일</span>
+    <span><b>j / k</b> 캡처 넘기기</span>
+    <span><b>r</b> 다시 읽기</span>
+  </div>
+  <div class="bar">
+    <span class="meta" id="source"></span>
+    <button id="reload" type="button">다시 읽기</button>
+    <button id="toggle" type="button">그리드/단일</button>
+    <label class="meta">manifest.json 직접 물리기 <input id="pick" type="file" accept="application/json"></label>
+  </div>
+</header>
+<main>
+  <div id="error" class="err"></div>
+  <div id="view"></div>
+  <div class="help">
+    캡처는 <code id="capPath">test/output/gallery/captures/&lt;조합id&gt;/*.jpg</code> 에 넣고
+    <code>node tools/gallery-captures.mjs</code> 를 돌린 뒤 <kbd>r</kbd> 로 다시 읽는다.
+    레퍼런스는 <code>node tools/gallery-render.mjs</code> 가 굽는다.
+  </div>
+</main>
+<script>
+/* eslint-disable no-console */
+(function () {
+  'use strict';
+
+  // 기본 데이터 위치 — sites/gallery/ 기준 상대. dev 서버·file:// 양쪽에서 같다.
+  var DEFAULT_BASE = '../../test/output/gallery/';
+  var params = new URLSearchParams(location.search);
+  var base = params.get('base') || DEFAULT_BASE;
+  if (base.charAt(base.length - 1) !== '/') base += '/';
+
+  var state = {
+    manifest: null,
+    captures: null,
+    mode: 'grid',      // 'grid' | 'single'
+    index: 0,          // 선택된 조합
+    captureIndex: 0,   // 단일 뷰의 캡처 순번
+    source: '',
+  };
+
+  var el = {
+    view: document.getElementById('view'),
+    error: document.getElementById('error'),
+    counts: document.getElementById('counts'),
+    source: document.getElementById('source'),
+    typeAxis: document.getElementById('typeAxis'),
+  };
+
+  function combos() {
+    return state.manifest && Array.isArray(state.manifest.combos)
+      ? state.manifest.combos : [];
+  }
+
+  function capturesFor(id) {
+    if (!state.captures || !state.captures.byCombo) return [];
+    return state.captures.byCombo[id] || [];
+  }
+
+  /** classic script 로 전역을 끌어온다 — file:// 에서 fetch 가 막힐 때의 폴백. */
+  function loadScript(url, globalName) {
+    return new Promise(function (resolve) {
+      var s = document.createElement('script');
+      s.src = url + '?t=' + Date.now();
+      s.onload = function () { resolve(window[globalName] || null); };
+      s.onerror = function () { resolve(null); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function fetchJson(url) {
+    return fetch(url, { cache: 'no-store' }).then(function (r) {
+      return r.ok ? r.json() : null;
+    }).catch(function () { return null; });
+  }
+
+  function loadAll() {
+    el.error.textContent = '';
+    return fetchJson(base + 'manifest.json').then(function (m) {
+      if (m) { state.source = base + 'manifest.json (fetch)'; return m; }
+      return loadScript(base + 'manifest.js', '__TL_GALLERY_MANIFEST__').then(function (m2) {
+        if (m2) state.source = base + 'manifest.js (script 폴백 — file:// 모드)';
+        return m2;
+      });
+    }).then(function (m) {
+      state.manifest = m;
+      return fetchJson(base + 'captures.json').then(function (c) {
+        if (c) return c;
+        return loadScript(base + 'captures.js', '__TL_GALLERY_CAPTURES__');
+      });
+    }).then(function (c) {
+      state.captures = c;
+      render();
+    });
+  }
+
+  function badge(text, cls) {
+    return '<span class="badge ' + (cls || '') + '">' + escapeHtml(text) + '</span>';
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+  }
+
+  function slot(kind, src, emptyText) {
+    if (!src) {
+      return '<div class="slot"><span class="tag">' + kind + '</span>'
+        + '<span class="empty">' + escapeHtml(emptyText) + '</span></div>';
+    }
+    return '<div class="slot"><span class="tag">' + kind + '</span>'
+      + '<img loading="lazy" src="' + escapeHtml(base + src) + '" alt="' + kind + '"></div>';
+  }
+
+  function comboBadges(row) {
+    var out = badge(row.type, '') + badge('V' + row.version, '')
+      + badge(row.group, 'group-' + row.group);
+    if (row.eccLevel) out += badge('ECC ' + row.eccLevel, '');
+    if (row.status && row.status !== 'ok') out += badge(row.status, 'bad');
+    var n = capturesFor(row.id).length;
+    out += badge('캡처 ' + n, n === 0 ? '' : 'group-lineup');
+    return out;
+  }
+
+  function renderGrid() {
+    var rows = combos();
+    var html = '<div class="grid">';
+    for (var i = 0; i < rows.length; i += 1) {
+      var row = rows[i];
+      var caps = capturesFor(row.id);
+      html += '<div class="card' + (i === state.index ? ' sel' : '') + '" data-i="' + i + '">'
+        + '<div class="thumbs">'
+        + slot('레퍼런스', row.file, row.error ? '렌더 불가' : '없음')
+        + slot('실기기 캡처', caps.length ? caps[0].file : null, '캡처 없음')
+        + '</div>'
+        + '<h3>' + escapeHtml(row.id) + '</h3>'
+        + '<div class="badges">' + comboBadges(row) + '</div>'
+        + '</div>';
+    }
+    html += '</div>';
+    el.view.innerHTML = html;
+    var cards = el.view.querySelectorAll('.card');
+    for (var k = 0; k < cards.length; k += 1) {
+      cards[k].addEventListener('click', function (event) {
+        state.index = Number(event.currentTarget.getAttribute('data-i'));
+        state.captureIndex = 0;
+        state.mode = 'single';
+        render();
+      });
+    }
+    var sel = el.view.querySelector('.card.sel');
+    if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: 'nearest' });
+  }
+
+  function kv(label, value) {
+    if (value === undefined || value === null || value === '') return '';
+    return '<tr><th>' + escapeHtml(label) + '</th><td>' + escapeHtml(value) + '</td></tr>';
+  }
+
+  function renderSingle() {
+    var rows = combos();
+    var row = rows[state.index];
+    if (!row) { el.view.innerHTML = '<p>조합이 없다.</p>'; return; }
+    var caps = capturesFor(row.id);
+    if (state.captureIndex >= caps.length) state.captureIndex = 0;
+    var cap = caps.length ? caps[state.captureIndex] : null;
+    var enc = row.encoded || {};
+    var img = row.image || {};
+    var html = '<div class="single"><div>'
+      + '<h2 style="margin:0 0 4px;font-size:15px">' + escapeHtml(row.id) + '</h2>'
+      + '<div class="badges">' + comboBadges(row) + '</div>'
+      + '<div class="stage" style="margin-top:10px">'
+      + slot('레퍼런스 렌더', row.file, row.error ? ('렌더 불가 — ' + row.error) : '없음')
+      + slot('실기기 캡처' + (caps.length ? (' ' + (state.captureIndex + 1) + '/' + caps.length) : ''),
+        cap ? cap.file : null,
+        'captures/' + row.id + '/ 에 사진을 넣고 gallery-captures.mjs 를 돌려라')
+      + '</div></div><div>'
+      + '<table class="kv">'
+      + kv('축', row.axis + ' = ' + row.axisId)
+      + kv('군', row.group + (row.control ? ' (대조)' : ''))
+      + kv('타입 · 버전 · 티어', row.type + ' · V' + row.version + ' · ' + row.tier)
+      + kv('그린 파인더', row.renderedFinderPatternId)
+      + kv('레이아웃', row.layoutId)
+      + kv('페이로드 (표본 자기식별)', row.payload)
+      + kv('ECC', row.eccLevel)
+      + kv('용량', enc.capacityBytes ? (enc.capacityBytes + ' B') : '')
+      + kv('k / n', (enc.k !== undefined ? 'k=' + enc.k : '') + (enc.n !== undefined ? ' n=' + enc.n : ''))
+      + kv('톤', enc.tones)
+      + kv('안전영역', row.quietZone ? (row.quietZone.color + ' (' + row.quietZone.reason + ')') : '')
+      + kv('자체검증', row.selfCheck
+        ? (row.selfCheck.ok ? 'ok' : '실패') + ' · 셀 ' + row.selfCheck.total
+          + ' · 불일치 ' + row.selfCheck.mismatches : '')
+      + kv('이미지', img.width ? (img.width + '×' + img.height + ' · '
+        + Math.round(img.bytes / 1024) + ' KB') : '')
+      + kv('sha256', img.sha256)
+      + kv('캡처 파일', cap ? cap.file : '')
+      + '</table></div></div>';
+    el.view.innerHTML = html;
+  }
+
+  function render() {
+    var m = state.manifest;
+    if (!m) {
+      el.view.innerHTML = '';
+      el.error.textContent = '매니페스트를 못 읽었다 — '
+        + 'node tools/gallery-render.mjs 로 먼저 굽거나, file:// 라면 위의 파일 선택기로 물려라.'
+        + ' (찾은 곳: ' + base + ')';
+      return;
+    }
+    el.source.textContent = state.source
+      + (state.captures ? ' · 캡처 색인 ' + state.captures.counts.files + '장' : ' · 캡처 색인 없음');
+    var c = m.counts || {};
+    el.counts.textContent = '조합 ' + (c.total || combos().length)
+      + ' · ok ' + (c.ok || 0)
+      + (c.unrenderable ? ' · 렌더불가 ' + c.unrenderable : '')
+      + (c.selfCheckFailed ? ' · 자체검증실패 ' + c.selfCheckFailed : '');
+    var types = m.axes && m.axes.types ? m.axes.types.join(' / ') : '';
+    el.typeAxis.textContent = types ? '(' + types + ')' : '';
+    if (state.mode === 'grid') renderGrid(); else renderSingle();
+  }
+
+  /** ↑↓ 는 **타입 축** — 같은 축 위치(파인더 순번)를 유지한 채 타입을 넘긴다. */
+  function moveType(delta) {
+    var rows = combos();
+    var row = rows[state.index];
+    if (!row) return;
+    var types = [];
+    for (var i = 0; i < rows.length; i += 1) {
+      if (types.indexOf(rows[i].type) < 0) types.push(rows[i].type);
+    }
+    var within = rows.filter(function (r) { return r.type === row.type; });
+    var pos = within.indexOf(row);
+    var t = types.indexOf(row.type);
+    var next = types[(t + delta + types.length) % types.length];
+    var target = rows.filter(function (r) { return r.type === next; });
+    if (target.length === 0) return;
+    var pick = target[Math.min(pos, target.length - 1)];
+    state.index = rows.indexOf(pick);
+    state.captureIndex = 0;
+    render();
+  }
+
+  /** ←→ 는 **파인더/레이아웃 축** — 같은 타입 안에서만 돈다 (축을 섞지 않는다). */
+  function moveAxis(delta) {
+    var rows = combos();
+    var row = rows[state.index];
+    if (!row) return;
+    var within = rows.filter(function (r) { return r.type === row.type; });
+    var pos = within.indexOf(row);
+    var pick = within[(pos + delta + within.length) % within.length];
+    state.index = rows.indexOf(pick);
+    state.captureIndex = 0;
+    render();
+  }
+
+  function moveCapture(delta) {
+    var row = combos()[state.index];
+    if (!row) return;
+    var caps = capturesFor(row.id);
+    if (caps.length === 0) return;
+    state.captureIndex = (state.captureIndex + delta + caps.length) % caps.length;
+    render();
+  }
+
+  document.addEventListener('keydown', function (event) {
+    if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
+    var key = event.key;
+    if (key === 'ArrowRight') { moveAxis(1); event.preventDefault(); }
+    else if (key === 'ArrowLeft') { moveAxis(-1); event.preventDefault(); }
+    else if (key === 'ArrowDown') { moveType(1); event.preventDefault(); }
+    else if (key === 'ArrowUp') { moveType(-1); event.preventDefault(); }
+    else if (key === 'g' || key === 'G') {
+      state.mode = state.mode === 'grid' ? 'single' : 'grid'; render(); event.preventDefault();
+    } else if (key === 'Enter') { state.mode = 'single'; render(); event.preventDefault(); }
+    else if (key === 'Escape') { state.mode = 'grid'; render(); event.preventDefault(); }
+    else if (key === 'j' || key === 'J') { moveCapture(1); event.preventDefault(); }
+    else if (key === 'k' || key === 'K') { moveCapture(-1); event.preventDefault(); }
+    else if (key === 'r' || key === 'R') { loadAll(); event.preventDefault(); }
+  });
+
+  document.getElementById('reload').addEventListener('click', function () { loadAll(); });
+  document.getElementById('toggle').addEventListener('click', function () {
+    state.mode = state.mode === 'grid' ? 'single' : 'grid';
+    render();
+  });
+  document.getElementById('pick').addEventListener('change', function (event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        state.manifest = JSON.parse(String(reader.result));
+        state.source = file.name + ' (직접 물림)';
+        render();
+      } catch (error) {
+        el.error.textContent = 'manifest 파싱 실패: ' + error.message;
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  loadAll();
+}());
+</script>
+</body>
+</html>
