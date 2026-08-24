@@ -89,6 +89,13 @@ const MODULE_ORDER = [
   'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'finder-NO2', 'encodeA',
   // Type K (2026-08-24) — 셀 편집기가 VERSIONS_K 를 읽는다 (편집 타입 K).
   // placementK 는 capacityK 앞 (capacityK 가 회계를 placementK 에서 유도한다).
+  //
+  // formatK(star 축 formatIndex 표)의 제약은 **turnA·markerG 뒤 · finder-zone-ui 앞**
+  // 두 가지뿐이다 (2026-08-24 K-CM: finder-zone-ui 가 k-cm seat 를 이 표에서 유도한다).
+  // 레인 C 는 이를 위해 formatK 를 markerG 바로 뒤로 옮겼지만, 여기 Type K 묶음도
+  // 이미 finder-zone-ui(번들 후반)보다 한참 앞이라 제약을 만족한다 — 그래서 이동은
+  // 채택하지 않고 묶음을 유지한다. ⚠ formatK 에 capacityY 를 물리면 이 위상이 깨진다
+  // (capacityY 는 번들 후반) — formatK.js 헤더 §값 선택 ③ 의 ⚠ 가 그 제약이다.
   'placementK', 'formatK', 'capacityK',
   'luminance',
   // gf256→rs→qr 체인은 **scene 앞**에 와야 한다. scene.js 가 폴백 QR 을 그리려고

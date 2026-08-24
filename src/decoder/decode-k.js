@@ -16,8 +16,15 @@
 //
 // 소거 계약도 decode.js 승계: 불법 211..215 심볼과 "프레임 밖" 셀은 위치를 아는
 // 소거로 rsDecode 에 넘긴다 (2v + s ≤ nsym).
+//
+// [K-CM (2026-08-24, 레인 C)] 코너 마커 변형은 **회계와 scan order 만** 다르다:
+// 데이터 셀이 27 줄고(markerK.js 헤더 §3) 순회가 markerK.dataCellsInScanOrderKMarker
+// 다. 와이어는 star 축 값 8 이 가르고(평 K 는 7), 어느 해석인지는 (값,k) 로 유일하게
+// 정해진다 — 아래 resolveProfileK 가 두 표를 한 후보 목록으로 합쳐 그 유일성을
+// **후보 수로** 확인한다 («없으면 던진다» 는 decode.js 승계).
 
 import { VERSIONS_K, capacityForK } from '../capacityK.js';
+import { VERSIONS_KCM, capacityForKMarker, dataCellsInScanOrderKMarker } from '../markerK.js';
 import { dataCellsInScanOrderK } from '../layoutK.js';
 import {
   CHUNK_BYTES,
@@ -45,9 +52,19 @@ function normalizeEccLevel(value) {
   throw new RangeError('eccLevel은 L, M, H 또는 formatinfo.js의 값 0, 1, 2여야 한다: ' + value);
 }
 
+/** 평 K + K-CM 전 항목을 «한 목록» 으로 — 표를 둘로 나눠 훑으면 하나가 조용히 낡는다. */
+function allSpecs() {
+  return [
+    ...VERSIONS_K.map((spec) => ({ spec, cornerMarker: false })),
+    ...VERSIONS_KCM.map((spec) => ({ spec, cornerMarker: true })),
+  ];
+}
+
 /**
- * format → K 프로파일. version(논리) 또는 formatIndex(+k, star 축 표 — 전 버전이
- * 값 7 을 공유하므로 인덱스 단독으로는 유일하지 않다: k 가 필수 판별축이다).
+ * format → K 프로파일. version(논리) 또는 formatIndex(+k, star 축 표 — 한 값을 전
+ * 버전이 공유하므로 인덱스 단독으로는 유일하지 않다: k 가 필수 판별축이다).
+ * `cornerMarker` 를 주면 그 축으로도 좁힌다 — 안 주면 (값,k) 가 이미 가른다
+ * (평 K 7 · K-CM 8, formatK 로드 자기검증이 무경합을 잰다).
  */
 function resolveProfileK(format) {
   if (!format || typeof format !== 'object' || Array.isArray(format)) {
@@ -57,32 +74,41 @@ function resolveProfileK(format) {
     throw new RangeError('decode-k 는 Type K 전용이다: ' + format.type);
   }
   const eccLevel = normalizeEccLevel(format.eccLevel);
+  const wantMarker = format.cornerMarker;
+  if (wantMarker !== undefined && typeof wantMarker !== 'boolean') {
+    throw new TypeError('cornerMarker는 boolean이어야 한다: ' + typeof wantMarker);
+  }
 
-  let spec;
+  let entry;
   if (format.formatIndex !== undefined) {
-    const candidates = VERSIONS_K.filter((entry) => entry.formatIndex === format.formatIndex
-      && (format.k === undefined || entry.k === format.k)
-      && (format.version === undefined || entry.version === format.version));
+    const candidates = allSpecs().filter((c) => c.spec.formatIndex === format.formatIndex
+      && (format.k === undefined || c.spec.k === format.k)
+      && (format.version === undefined || c.spec.version === format.version)
+      && (wantMarker === undefined || c.cornerMarker === wantMarker));
     if (candidates.length !== 1) {
       throw new RangeError(
         'Type K formatIndex ' + format.formatIndex + ' 는 k(6|8|10) 로 갈라야 한다'
         + ' — k=' + format.k + ' version=' + format.version
+        + ' cornerMarker=' + wantMarker
         + ' 에서 후보 ' + candidates.length + '개',
       );
     }
-    spec = candidates[0];
+    [entry] = candidates;
   } else {
-    spec = VERSIONS_K.find((entry) => entry.version === format.version);
-    if (!spec) {
-      throw new RangeError('알 수 없는 Type K 버전: ' + format.version);
+    entry = allSpecs().find((c) => c.spec.version === format.version
+      && c.cornerMarker === (wantMarker === true));
+    if (!entry) {
+      throw new RangeError('알 수 없는 Type K 버전: ' + format.version
+        + (wantMarker === true ? ' (+CM)' : ''));
     }
-    if (format.k !== undefined && format.k !== spec.k) {
-      throw new RangeError('k가 선택한 버전의 격자 크기와 다르다: ' + format.k + ' !== ' + spec.k);
+    if (format.k !== undefined && format.k !== entry.spec.k) {
+      throw new RangeError('k가 선택한 버전의 격자 크기와 다르다: ' + format.k + ' !== ' + entry.spec.k);
     }
   }
 
-  const capacity = capacityForK(spec, eccLevel);
-  const scan = dataCellsInScanOrderK(spec.k);
+  const { spec, cornerMarker } = entry;
+  const capacity = cornerMarker ? capacityForKMarker(spec, eccLevel) : capacityForK(spec, eccLevel);
+  const scan = cornerMarker ? dataCellsInScanOrderKMarker(spec.k) : dataCellsInScanOrderK(spec.k);
   const symbolDigits = capacity.usedSymbols * 3;
   if (scan.length !== capacity.dataCells) {
     throw new Error(
@@ -103,7 +129,7 @@ function resolveProfileK(format) {
       + ' — 이 포맷은 현행 인코더가 생성할 수 없다',
     );
   }
-  return { capacity, scan, symbolDigits };
+  return { capacity, scan, symbolDigits, cornerMarker };
 }
 
 function unmaskSymbolDigits(cellDigits, profile) {
@@ -203,7 +229,8 @@ function assertZeroPadding(framed, payloadLength) {
  * 와 같다 — format.type 만 'K'(생략 가능), 소거·결과 모양 동일.
  *
  * @param {Uint8Array|number[]} cellDigits
- * @param {{type?:'K', version?:number, formatIndex?:number, eccLevel:'L'|'M'|'H'|0|1|2, k?:number}} format
+ * @param {{type?:'K', version?:number, formatIndex?:number, eccLevel:'L'|'M'|'H'|0|1|2,
+ *          k?:number, cornerMarker?:boolean}} format
  * @param {{erasureCells?:number[], erasureSymbols?:number[]}} [options]
  */
 export function decodeCellsK(cellDigits, format, options = {}) {

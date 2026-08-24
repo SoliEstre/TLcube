@@ -14,9 +14,14 @@ import {
   versionSpecK,
   renderMarkdownTableK,
 } from '../src/capacityK.js';
-import { K_FORMAT_INDEX, kFormatSpec, kSpecFromFormatIndex } from '../src/formatK.js';
-import { hexTriAxisOccupancy, TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX } from '../src/turnA.js';
+import {
+  K_FORMAT_INDEX, K_MARKER_FORMAT_INDEX, kFormatSpec, kMarkerFormatSpec, kSpecFromFormatIndex,
+} from '../src/formatK.js';
+import {
+  hexTriAxisOccupancy, TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX, CUBE_AXIS_FORMAT_INDEXES,
+} from '../src/turnA.js';
 import { MARKER_G_FORMAT_INDEX } from '../src/markerG.js';
+import { VERSIONS_Y } from '../src/capacityY.js';
 import { regionCellsK } from '../src/placementK.js';
 import { cellCount } from '../src/hexgrid.js';
 import { maxBytesForSymbols } from '../src/capacity.js';
@@ -89,17 +94,36 @@ test('NSYM 절차 재검산 — M/L/H 공식 + K2/L 만 정렬 대체 (A2/H 57�
   }
 });
 
-test('star 축 formatIndex 표 — 전 버전 7, (값,k) 로 가른다 (계약 K-7 안 1 승계)', () => {
-  assert.equal(K_FORMAT_INDEX.length, 3);
-  for (const entry of K_FORMAT_INDEX) {
+// 구 락 «표는 3행이고 전부 7» 은 2026-08-24 K-CM 개설로 **양성 단언으로 전환**됐다
+// (배타 개설 정형 3단 ③). 평 K 3행(7) + K-CM 3행(8) 이고, 두 값 다 hex·tri 가
+// 영구 회피하는 밴드 안이다 — 그 밴드 유지는 아래 테스트가 잰다.
+test('star 축 formatIndex 표 — 평 K 는 7 · K-CM 은 8, 각각 k 로 가른다 (계약 K-7 안 1)', () => {
+  assert.equal(K_FORMAT_INDEX.length, 6);
+  const plain = K_FORMAT_INDEX.filter((entry) => entry.cornerMarker === false);
+  const marker = K_FORMAT_INDEX.filter((entry) => entry.cornerMarker === true);
+  assert.equal(plain.length, 3);
+  assert.equal(marker.length, 3);
+  for (const entry of plain) {
     assert.equal(entry.formatIndex, K1_RESERVED_FORMAT_INDEX, entry.name);
     assert.equal(kFormatSpec(entry.version), entry);
     assert.equal(kSpecFromFormatIndex(7, entry.k), entry);
   }
+  for (const entry of marker) {
+    assert.equal(entry.formatIndex, K_MARKER_FORMAT_INDEX, entry.name);
+    assert.equal(kMarkerFormatSpec(entry.version), entry);
+    assert.equal(kSpecFromFormatIndex(K_MARKER_FORMAT_INDEX, entry.k), entry);
+    // K-CM 은 «옵션» 이라 기저 평 K 와 격자 크기가 같고 이름만 CM 접미다.
+    const base = kFormatSpec(entry.version);
+    assert.equal(entry.k, base.k);
+    assert.equal(entry.name, base.name + 'CM');
+    assert.notEqual(entry.formatIndex, base.formatIndex,
+      'K-CM 이 평 K 와 같은 값이면 디코더가 마커 회계를 못 가른다');
+  }
   assert.equal(kSpecFromFormatIndex(7, 4), null);
   assert.equal(kSpecFromFormatIndex(0, 6), null);
   assert.throws(() => kFormatSpec(3), RangeError);
-  // VERSIONS_K 가 표를 그대로 승계한다 (이름·k·인덱스).
+  assert.throws(() => kMarkerFormatSpec(3), RangeError);
+  // VERSIONS_K 가 표의 **평 K 행**을 그대로 승계한다 (이름·k·인덱스).
   for (const spec of VERSIONS_K) {
     const format = kFormatSpec(spec.version);
     assert.equal(spec.name, format.name);
@@ -108,15 +132,39 @@ test('star 축 formatIndex 표 — 전 버전 7, (값,k) 로 가른다 (계약 K
   }
 });
 
-test('hex·tri 축 전체가 (7,k) 를 비워 둔다 — 이중 안전의 전제 (코드 정본 실계산)', () => {
+test('hex·tri 축 전체가 예약 밴드(7 + cube 8..11)를 비워 둔다 — 이중 안전의 전제', () => {
   const claims = [
     ...hexTriAxisOccupancy(),
     ...TURN_A_FORMAT_INDEX.map((entry) => ({ owner: entry.name, formatIndex: entry.formatIndex, k: entry.k })),
     ...MARKER_G_FORMAT_INDEX.map((entry) => ({ owner: entry.name, formatIndex: entry.formatIndex, k: entry.k })),
   ];
+  const band = [K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES];
+  assert.ok(band.includes(K_MARKER_FORMAT_INDEX), 'K-CM 값이 예약 밴드 안이어야 한다');
   for (const claim of claims) {
-    assert.notEqual(claim.formatIndex, 7,
-      claim.owner + ' 가 K 예약값 7 을 점유한다');
+    assert.ok(!band.includes(claim.formatIndex),
+      claim.owner + ' 가 예약 밴드 값 ' + claim.formatIndex + ' 을 점유한다');
+  }
+  // 역방향 — hex·tri 의 «빈 칸» 이 정확히 그 밴드여야 한다 (밴드 밖 빈 칸이 생기면
+  // «K 값은 hex·tri 에 없다» 논거가 아니라 «아직 안 썼을 뿐» 이 된다).
+  const byK = new Map();
+  for (const claim of claims) {
+    if (!byK.has(claim.k)) byK.set(claim.k, new Set());
+    byK.get(claim.k).add(claim.formatIndex);
+  }
+  for (const [k, used] of byK) {
+    const free = [];
+    for (let v = 0; v < 16; v += 1) if (!used.has(v)) free.push(v);
+    assert.deepEqual(free, band.slice().sort((a, b) => a - b), `k=${k} 의 빈 값`);
+  }
+});
+
+test('cube 축과 star 축은 값이 겹쳐도 크기 축이 안 겹친다 (K-CM 이 8 을 쓰는 근거)', () => {
+  for (const y of VERSIONS_Y) {
+    for (const entry of K_FORMAT_INDEX) {
+      if (y.formatIndex !== entry.formatIndex) continue;
+      assert.notEqual(y.n, entry.k,
+        `cube ${y.name}(값 ${y.formatIndex}, n${y.n}) 과 star ${entry.name}(k${entry.k}) 이 크기까지 겹친다`);
+    }
   }
 });
 

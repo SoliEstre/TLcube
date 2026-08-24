@@ -19,6 +19,7 @@ import {
 } from '../src/finder-taxonomy.js';
 import { TAEGUK_ID, DAEHAN_FINDER_PATTERN_IDS } from '../src/finder-daehan.js';
 import { GENERATOR_STATE_SCHEMA } from '../src/generator-state.js';
+import { K_FORMAT_INDEX } from '../src/formatK.js';
 
 test('내곽/외곽 seat 유도가 분류 정본(분류 2·3 + KIND_ABSENT)과 1:1 이다', () => {
   const zones = zoneCards();
@@ -45,6 +46,25 @@ test('내곽/외곽 seat 유도가 분류 정본(분류 2·3 + KIND_ABSENT)과 1
     assert.ok(absents.includes(card.id), card.id + ' 는 분류 정본에 부재 행이 없다');
     assert.equal(card.ready, false, card.id + ' 부재 카드가 클릭 가능하다');
   }
+});
+
+test('k-cm — 와이어는 실재하고 상태값은 아직 아니다 (2026-08-24 실체 전환)', () => {
+  // 실체 전환의 두 반쪽을 한 자리에서 잰다: 카드는 «있고»(부재 아님), 상태 허용값에는
+  // «없다»(생성기 타입 K 부재 — ⑤ 잔여). 한쪽만 참이면 UI 와 와이어가 어긋난 것이다.
+  const card = zoneCards().outer.find((c) => c.id === 'k-cm');
+  assert.ok(card, 'k-cm 카드가 없다 — starSeat 유도가 죽었다');
+  assert.equal(card.absent, false, 'k-cm 이 아직 부재 카드다');
+  assert.equal(card.ready, true);
+  assert.deepEqual([...card.types], ['K']);
+  assert.ok(!OUTER_SEAT_OPTIONS.includes('k-cm'),
+    'k-cm 이 상태 허용값에 들었다 — GENERATOR_TYPES 에 K 가 생겼다면 stateValue 를 걷어라');
+  assert.ok(!GENERATOR_STATE_SCHEMA.type.options.includes('K'),
+    '생성기 타입에 K 가 생겼다 — k-cm stateValue 게이트를 다시 봐야 한다');
+  // 유도 원천은 와이어다 (손 행이 아니다).
+  assert.ok(K_FORMAT_INDEX.some((entry) => entry.cornerMarker === true),
+    'formatK 에 K-CM 행이 없는데 카드가 섰다면 유도가 아니라 손 행이다');
+  // 부재 목록은 비었다 — v-cm·k-cm 이 각자 와이어 유도로 옮겨 갔다.
+  assert.deepEqual(FINDER_TAXONOMY.filter((row) => row.kind === KIND_ABSENT).map((r) => r.id), []);
 });
 
 test('중앙 = 분류 1 — 카드 목록과 분류 정본의 차이는 taegeuk·daehan 합성뿐이다', () => {

@@ -10,8 +10,15 @@ import { encodeK, chooseVersionK } from '../src/encodeK.js';
 import { decodeCellsK } from '../src/decoder/decode-k.js';
 import { VERSIONS_K, capacityForK } from '../src/capacityK.js';
 import { dataCellsInScanOrderK, layoutMapK } from '../src/layoutK.js';
-import { regionCellsK, vertexAnchorsK } from '../src/placementK.js';
+import { regionCellsK, vertexAnchorsK, invertedVertexAnchors } from '../src/placementK.js';
 import { anchorCells } from '../src/placement.js';
+import {
+  VERSIONS_KCM,
+  MARKER_CELL_COUNT_K,
+  MARKER_OVERHEAD_ADDED_K,
+  markerCellsK,
+  dataCellsInScanOrderKMarker,
+} from '../src/markerK.js';
 
 const key = (c) => c.q + ',' + c.r;
 
@@ -117,13 +124,79 @@ test('셀 지도 — 전 셀 커버(불스아이 제외)·역할 회계·digit �
 });
 
 test('옵션 배타 — 미검증 조합은 조용히 무시하지 않고 던진다', () => {
-  for (const name of ['centerQr', 'centralV0', 'cornerMarker', 'daehanFinder', 'turnA']) {
+  // cornerMarker 는 2026-08-24 개설로 이 목록에서 **빠졌다** (배타 개설 정형 3단 ③ —
+  // 구 락을 양성 단언으로). 아래 «K-CM 개설» 테스트가 그 자리를 대신 진다.
+  for (const name of ['centerQr', 'centralV0', 'daehanFinder', 'turnA']) {
     assert.throws(() => encodeK('x', { [name]: true }), RangeError, name);
     // false 명시는 허용 (기본값과 같다).
     assert.equal(encodeK('x', { [name]: false }).ok !== false, true);
   }
   assert.throws(() => encodeK(123), TypeError);
   assert.throws(() => encodeK('x', { version: 7 }), RangeError);
+  assert.throws(() => encodeK('x', { cornerMarker: 1 }), TypeError);
+});
+
+test('K-CM 개설 — 회계·와이어·발자국 (구 배타 락의 양성 전환)', () => {
+  for (const spec of VERSIONS_KCM) {
+    const plain = VERSIONS_K.find((entry) => entry.version === spec.version);
+    // 회계 한 줄: overhead(K*CM) = overhead(K*) + 27 (markerK 헤더 §3).
+    assert.equal(spec.overhead, plain.overhead + MARKER_OVERHEAD_ADDED_K, spec.name);
+    assert.equal(spec.k, plain.k);
+    assert.notEqual(spec.formatIndex, plain.formatIndex, '와이어가 안 갈리면 회계를 못 읽는다');
+
+    const encoded = encodeK('K-CM ' + spec.name, { version: spec.version, cornerMarker: true });
+    assert.equal(encoded.cornerMarker, true);
+    assert.equal(encoded.formatIndex, spec.formatIndex);
+
+    // 마커 30셀이 전부 실렸고, 그 중 반전 꼭짓점 3셀은 앵커 digit 과 **같은 값**이다.
+    const vertices = new Set(invertedVertexAnchors(spec.k).map((c) => `${c.q},${c.r}`));
+    let markerRole = 0;
+    let anchorOverlap = 0;
+    for (const cell of markerCellsK(spec.k)) {
+      const kk = `${cell.q},${cell.r}`;
+      const placed = encoded.cellDigits.get(kk);
+      assert.ok(placed, `${spec.name} 마커 셀 ${kk} 이 안 실렸다`);
+      assert.equal(placed.digit, cell.digit, `${spec.name} 마커 ${kk} digit`);
+      if (placed.role === 'marker') markerRole += 1;
+      if (vertices.has(kk)) {
+        anchorOverlap += 1;
+        assert.equal(placed.role, 'anchor', '꼭짓점은 회계상 앵커다 (한 번만 센다)');
+      }
+    }
+    assert.equal(anchorOverlap, 3);
+    assert.equal(markerRole, MARKER_CELL_COUNT_K - 3);
+
+    // 데이터 셀이 정확히 27 줄었다 — «회계 한 줄» 의 셀 단위 확인.
+    const plainEncoded = encodeK('K-CM ' + spec.name, { version: spec.version });
+    assert.equal(
+      plainEncoded.capacity.dataCells - encoded.capacity.dataCells,
+      MARKER_OVERHEAD_ADDED_K,
+      `${spec.name} 데이터 셀 감소`,
+    );
+  }
+});
+
+test('K-CM 왕복 — 전 버전 × 전 레벨, formatIndex 경로로도 갈린다', () => {
+  for (const spec of VERSIONS_KCM) {
+    for (const level of ['L', 'M', 'H']) {
+      for (const text of ['', 'K-CM 왕복', 'https://tlcube.example/kcm']) {
+        const encoded = encodeK(text, { version: spec.version, eccLevel: level, cornerMarker: true });
+        const digits = dataCellsInScanOrderKMarker(encoded.k)
+          .map((c) => encoded.cellDigits.get(`${c.q},${c.r}`).digit);
+        const byVersion = decodeCellsK(digits, {
+          type: 'K', version: spec.version, eccLevel: level, cornerMarker: true,
+        });
+        assert.equal(byVersion.ok, true, `${spec.name}/${level} 버전 경로`);
+        assert.equal(byVersion.text, text);
+        // 와이어만 보고도 갈린다 — (값 8, k) 가 K-CM 해석을 유일하게 정한다.
+        const byWire = decodeCellsK(digits, {
+          type: 'K', formatIndex: encoded.formatIndex, k: encoded.k, eccLevel: level,
+        });
+        assert.equal(byWire.ok, true, `${spec.name}/${level} 와이어 경로`);
+        assert.equal(byWire.text, text);
+      }
+    }
+  }
 });
 
 test('decodeCellsK 프로파일 판별 — formatIndex 는 k 없이 유일하지 않다', () => {
