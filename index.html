@@ -1199,17 +1199,16 @@
         <option value="Y" selected data-i18n="g048">Type Y (단일 큐브)</option>
       </select>
 
-      <!-- 턴A (역삼각 Type A) — Type A + lab 전용. #yLocatorSection 과 같은 게이트
-           문법이다(hidden 속성 + sync 함수가 isLabPath() 로 연다).
-           ⚠ **실측 (2026-08-19)**: `encodeA(turnA:true)` 로 만든 코드는 라이브 경로
-           (decodeFrontend)가 **0/3 으로 못 읽는다** — 대조군(turnA:false)은 3/3 이다.
-           인코더가 아직 역삼각 «기하» 를 안 내고(셀 좌표 집합이 정삼각과 동일하고
-           format 15셀만 다르다) 검출기의 turn 신호도 배선돼 있지 않다. 그래서 이
-           카드는 «와이어 값만 바꾸는 실험 스위치» 이지 실루엣 전환이 아니고,
-           **정식 화면에 내보내지 않는다**. 힌트 문구가 그 사실을 그대로 말한다 —
-           라벨이 사실이 아니면 회귀보다 먼저 사람을 속인다.
-           안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
-           배선이 끝나고 왕복이 서는 날이다.
+      <!-- 턴A (역삼각 Type A = 내부 타입 V) — Type A + lab 전용. #yLocatorSection 과
+           같은 게이트 문법이다(hidden 속성 + sync 함수가 isLabPath() 로 연다).
+           **개통 (2026-08-24, Wave 3 ①②)**: 구 실측 «0/3 으로 못 읽는다» 는 닫혔다 —
+           (a) 인코더·렌더가 역삼각 기하를 낸다 (scene.js turnA — 배치 180° 회전,
+           셀 정립, 실루엣 ▽), (b) 검출·왕복이 선다 (anchor turn 변형 + V 표 인덱스,
+           test/turnA-roundtrip.test.js 6종 + V-CM 2종). 힌트(g575)도 그 사실을 말한다.
+           ⚠ lab 게이트는 **유지** — 합성만으로 정식 노출을 정하지 않는다 (운영자
+           확정 2026-08-23·24 seat 전례). 승격은 실기기 라운드 뒤 운영자 몫.
+           외곽 seat 연동 (Wave 3 ④): 켜면 코너 자리가 a-cm → v-cm 으로 승계되고
+           끄면 되돌아온다 (§wireSeatCards·syncTurnAUi — 던짐 조합을 UI 가 안 만든다).
            위치 (2026-08-19): 타입 선택(#codeType) 바로 아래. 게이트는 그대로다. -->
       <div id="turnASection" hidden>
         <label class="section-heading" data-i18n="g572">실루엣 방향 (실험)</label>
@@ -1227,7 +1226,7 @@
             <span data-i18n="g574">역삼각 (턴A)</span>
           </div>
         </div>
-        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.</p>
+        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 켜면 실루엣이 역삼각(▽)으로 뒤집혀 그려지고, 이 상태로 만든 코드도 이제 스캐너가 읽어요 — 실기기 검증은 아직 진행 중이에요.</p>
       </div>
 
       <!-- ⚠ **의도적 갱신 (W2 C4, 2026-08-24)** — 여기 있던 #cornerMarkerSection
@@ -1837,10 +1836,13 @@
              decoder-corner-marker-wiring ②(앵커 한계 g=0.0001 → CM g=0.0008),
              와이어는 markerG G formatIndex (markerG.test ④ · generator-ui-wiring §5).
              sagoae = 자리만 + disabled (와이어 편입은 통합자 C2c — 부재 문법과 동일).
-             V-CM/K-CM = KIND_ABSENT 유도, 클릭 불가 + 부재 사유 힌트.
-             ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 던짐) — 핸들러가 turnA 를
-             끄고 syncTurnAUi 가 그 카드를 잠근다. centerQr 병용은 C2a 로 합법 —
-             잠금은 상수가 아니라 cmqWireExists(와이어 존재 술어)로 게이트한다. -->
+             K-CM = KIND_ABSENT 유도, 클릭 불가 + 부재 사유 힌트.
+             V-CM = **실체 (2026-08-24 전환)** — 역삼각(턴A) 전용 코너 자리.
+             ⚠ 외곽 코너 자리는 실루엣 방향을 따라간다 (Wave 3 ④ — 던짐 조합을
+             UI 가 안 만든다): turnA off = a-cm 표시·v-cm 잠금(g875), turnA on =
+             a-cm 숨김·v-cm 개방. 방향 전환 시 선택이 a-cm ↔ v-cm 으로 승계된다.
+             centerQr 병용: a-cm 은 C2a 로 합법 (cmqWireExists 게이트) · v-cm 은
+             **불가** (V-CMQ 와이어 잔여 0 보류 — turnA.js §V-CM 회계, 힌트 g876). -->
         <div id="finderInnerZone" hidden>
           <label class="section-heading" data-i18n="g850">내곽 자리 (실험)</label>
           <div class="card-row" id="innerSeatCards"></div>
@@ -1849,7 +1851,7 @@
         <div id="finderOuterZone" hidden>
           <label class="section-heading" data-i18n="g851">외곽 자리 (실험)</label>
           <div class="card-row" id="outerSeatCards"></div>
-          <p class="hint" id="outerSeatHint" data-i18n="g858">빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.</p>
+          <p class="hint" id="outerSeatHint" data-i18n="g858">V-CM 은 역삼각(턴A) 전용 코너 자리예요 — 역삼각을 켜면 고를 수 있어요. K-CM 은 아직 설계가 없어 자리만 표시해요.</p>
         </div>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
@@ -2378,9 +2380,11 @@ const GENERATOR_STRINGS = {
     "g872": "비컨 실측치 — 모듈나비 {mpc}/셀 · 실기기 셀 17~20px → 모듈 {lo}~{hi}px (권장 하한 {floor}px) · 내부 3톤 · ECC H(t=7) · 실기기 스캔 검증 2026-08-22",
     "g873": "모듈 크기 (실기기)",
     "g874": "ECC 정정력 (RS)",
-    "g856": "V-CM (부재)",
+    "g856": "V-CM (역삼각)",
     "g857": "K-CM (부재)",
-    "g858": "빈 자리(V-CM·K-CM)는 아직 설계가 없어요 — 자리만 표시해요.",
+    "g858": "V-CM 은 역삼각(턴A) 전용 코너 자리예요 — 역삼각을 켜면 고를 수 있어요. K-CM 은 아직 설계가 없어 자리만 표시해요.",
+    "g875": "역삼각(턴A)을 켜면 고를 수 있어요.",
+    "g876": "중앙 QR 과는 함께 쓸 수 없어요 — 이 조합의 포맷 자리가 아직 없어요.",
     "g860": "QR 면 배치",
     "g861": "중앙측",
     "g862": "Y-심 (v0TRQ)",
@@ -2575,7 +2579,7 @@ const GENERATOR_STRINGS = {
     "g572": "실루엣 방향 (실험)",
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
-    "g575": "실험용이에요. 지금은 포맷 정보만 바뀌고 그림의 실루엣은 그대로예요 — 이 상태로 만든 코드는 스캐너가 못 읽어요.",
+    "g575": "실험용이에요. 켜면 실루엣이 역삼각(▽)으로 뒤집혀 그려지고, 이 상태로 만든 코드도 이제 스캐너가 읽어요 — 실기기 검증은 아직 진행 중이에요.",
     "g576": "코너 자리 예약 (실험)",
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
@@ -2814,9 +2818,11 @@ const GENERATOR_STRINGS = {
     "g872": "Beacon measurements — module pitch {mpc}/cell · device cells 17–20px → modules {lo}–{hi}px (recommended floor {floor}px) · inner 3-tone · ECC H(t=7) · device-scan verified 2026-08-22",
     "g873": "Module size (device)",
     "g874": "ECC strength (RS)",
-    "g856": "V-CM (absent)",
+    "g856": "V-CM (inverted)",
     "g857": "K-CM (absent)",
-    "g858": "The empty seats (V-CM·K-CM) have no design yet — shown as placeholders only.",
+    "g858": "V-CM is the corner seat for the inverted triangle (turnA) — enable it to select. K-CM has no design yet and is shown as a placeholder only.",
+    "g875": "Enable the inverted triangle (turnA) to select this.",
+    "g876": "Cannot be combined with the center QR — the format slot for that combination does not exist yet.",
     "g860": "QR face placement",
     "g861": "Centre side",
     "g862": "Y-seam (v0TRQ)",
@@ -3011,7 +3017,7 @@ const GENERATOR_STRINGS = {
     "g572": "Silhouette direction (experimental)",
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
-    "g575": "Experimental. For now only the format information changes — the drawn silhouette stays the same, and codes made in this state cannot be read by the scanner.",
+    "g575": "Experimental. When on, the silhouette is drawn flipped as an inverted triangle (▽), and codes made in this state can now be read by the scanner — real-device validation is still in progress.",
     "g576": "Corner seat reservation (experimental)",
     "g577": "None (default)",
     "g578": "Three alternating corners",
@@ -3250,9 +3256,11 @@ const GENERATOR_STRINGS = {
     "g872": "ビーコン実測 — モジュール幅 {mpc}/セル · 実機セル 17–20px → モジュール {lo}–{hi}px（推奨下限 {floor}px）· 内部3トーン · ECC H(t=7) · 実機スキャン検証 2026-08-22",
     "g873": "モジュール寸法（実機）",
     "g874": "ECC 訂正力（RS）",
-    "g856": "V-CM（不在）",
+    "g856": "V-CM（逆三角）",
     "g857": "K-CM（不在）",
-    "g858": "空席（V-CM·K-CM）はまだ設計がありません — 席だけ表示しています。",
+    "g858": "V-CM は逆三角（turnA）専用のコーナー席です — 逆三角をオンにすると選べます。K-CM はまだ設計がなく、席だけ表示しています。",
+    "g875": "逆三角（turnA）をオンにすると選べます。",
+    "g876": "中央 QR とは併用できません — その組み合わせのフォーマット枠がまだありません。",
     "g860": "QR 面配置",
     "g861": "中央側",
     "g862": "Y シーム (v0TRQ)",
@@ -3447,7 +3455,7 @@ const GENERATOR_STRINGS = {
     "g572": "シルエット方向（実験）",
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
-    "g575": "実験用です。現在はフォーマット情報だけが変わり、描かれるシルエットはそのままです — この状態で作ったコードはスキャナで読み取れません。",
+    "g575": "実験用です。オンにするとシルエットが逆三角形（▽）に反転して描かれ、この状態で作ったコードもスキャナで読み取れるようになりました — 実機検証はまだ進行中です。",
     "g576": "コーナー席予約（実験）",
     "g577": "なし（既定）",
     "g578": "交互の3隅",
@@ -3685,9 +3693,11 @@ const GENERATOR_STRINGS = {
     "g872": "Mesures balise — pas de module {mpc}/cellule · cellules réelles 17–20px → modules {lo}–{hi}px (plancher conseillé {floor}px) · 3 tons internes · ECC H(t=7) · vérifié au scan réel 2026-08-22",
     "g873": "Taille de module (réel)",
     "g874": "Capacité ECC (RS)",
-    "g856": "V-CM (absent)",
+    "g856": "V-CM (inversé)",
     "g857": "K-CM (absent)",
-    "g858": "Les sièges vides (V-CM·K-CM) n'ont pas encore de conception — affichés comme simples emplacements.",
+    "g858": "V-CM est le siège de coin réservé au triangle renversé (turnA) — activez-le pour le choisir. K-CM n'a pas encore de conception et reste un simple emplacement.",
+    "g875": "Activez le triangle renversé (turnA) pour le sélectionner.",
+    "g876": "Incompatible avec le QR central — l'emplacement de format pour cette combinaison n'existe pas encore.",
     "g860": "Placement du QR sur la face",
     "g861": "Côté centre",
     "g862": "Jonction Y (v0TRQ)",
@@ -3882,7 +3892,7 @@ const GENERATOR_STRINGS = {
     "g572": "Orientation de la silhouette (expérimental)",
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
-    "g575": "Expérimental. Pour l'instant, seules les informations de format changent — la silhouette dessinée reste identique, et les codes créés dans cet état ne sont pas lisibles par le scanner.",
+    "g575": "Expérimental. Une fois activé, la silhouette est dessinée inversée en triangle renversé (▽), et les codes créés dans cet état sont désormais lisibles par le scanner — la validation sur appareil réel est encore en cours.",
     "g576": "Réservation de coin (expérimental)",
     "g577": "Aucun (par défaut)",
     "g578": "Trois angles alternés",
@@ -4120,9 +4130,11 @@ const GENERATOR_STRINGS = {
     "g872": "Misure beacon — passo modulo {mpc}/cella · celle reali 17–20px → moduli {lo}–{hi}px (soglia consigliata {floor}px) · 3 toni interni · ECC H(t=7) · verificato con scansione reale 2026-08-22",
     "g873": "Dimensione modulo (reale)",
     "g874": "Capacità ECC (RS)",
-    "g856": "V-CM (assente)",
+    "g856": "V-CM (rovesciato)",
     "g857": "K-CM (assente)",
-    "g858": "I posti vuoti (V-CM·K-CM) non hanno ancora un progetto — mostrati solo come segnaposto.",
+    "g858": "V-CM è il posto d'angolo riservato al triangolo rovesciato (turnA) — attivalo per poterlo scegliere. K-CM non ha ancora un progetto ed è mostrato solo come segnaposto.",
+    "g875": "Attiva il triangolo rovesciato (turnA) per selezionarlo.",
+    "g876": "Non può essere combinato con il QR centrale — lo slot di formato per quella combinazione non esiste ancora.",
     "g860": "Posizione del QR sulla faccia",
     "g861": "Lato centro",
     "g862": "Giunzione Y (v0TRQ)",
@@ -4317,7 +4329,7 @@ const GENERATOR_STRINGS = {
     "g572": "Direzione della sagoma (sperimentale)",
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
-    "g575": "Sperimentale. Per ora cambiano solo le informazioni di formato — la sagoma disegnata resta uguale e i codici creati in questo stato non sono leggibili dallo scanner.",
+    "g575": "Sperimentale. Se attivo, la sagoma viene disegnata capovolta come triangolo rovesciato (▽) e i codici creati in questo stato ora sono leggibili dallo scanner — la convalida su dispositivo reale è ancora in corso.",
     "g576": "Prenotazione d'angolo (sperimentale)",
     "g577": "Nessuno (predefinito)",
     "g578": "Tre angoli alternati",
@@ -4555,9 +4567,11 @@ const GENERATOR_STRINGS = {
     "g872": "Beacon-Messwerte — Modulbreite {mpc}/Zelle · Gerätezellen 17–20px → Module {lo}–{hi}px (empfohlene Untergrenze {floor}px) · innen 3-Ton · ECC H(t=7) · Gerätescan verifiziert 2026-08-22",
     "g873": "Modulgröße (Gerät)",
     "g874": "ECC-Stärke (RS)",
-    "g856": "V-CM (nicht vorhanden)",
+    "g856": "V-CM (umgekehrt)",
     "g857": "K-CM (nicht vorhanden)",
-    "g858": "Die leeren Plätze (V-CM·K-CM) haben noch kein Design — nur als Platzhalter angezeigt.",
+    "g858": "V-CM ist der Eckplatz für das umgekehrte Dreieck (turnA) — zum Auswählen aktivieren. K-CM hat noch kein Design und wird nur als Platzhalter angezeigt.",
+    "g875": "Aktiviere das umgekehrte Dreieck (turnA), um dies auszuwählen.",
+    "g876": "Nicht mit dem zentralen QR kombinierbar — der Formatplatz für diese Kombination existiert noch nicht.",
     "g860": "QR-Flächenplatzierung",
     "g861": "Mittenseite",
     "g862": "Y-Naht (v0TRQ)",
@@ -4752,7 +4766,7 @@ const GENERATOR_STRINGS = {
     "g572": "Silhouettenrichtung (experimentell)",
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
-    "g575": "Experimentell. Derzeit ändern sich nur die Formatinformationen — die gezeichnete Silhouette bleibt gleich, und in diesem Zustand erzeugte Codes kann der Scanner nicht lesen.",
+    "g575": "Experimentell. Wenn aktiviert, wird die Silhouette als umgekehrtes Dreieck (▽) gezeichnet, und in diesem Zustand erzeugte Codes kann der Scanner jetzt lesen — die Prüfung am realen Gerät läuft noch.",
     "g576": "Eckplatz-Reservierung (experimentell)",
     "g577": "Keine (Standard)",
     "g578": "Drei abwechselnde Ecken",
@@ -4990,9 +5004,11 @@ const GENERATOR_STRINGS = {
     "g872": "Mediciones de baliza — paso de módulo {mpc}/celda · celdas reales 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tonos internos · ECC H(t=7) · verificado con escaneo real 2026-08-22",
     "g873": "Tamaño de módulo (real)",
     "g874": "Capacidad ECC (RS)",
-    "g856": "V-CM (ausente)",
+    "g856": "V-CM (invertido)",
     "g857": "K-CM (ausente)",
-    "g858": "Los asientos vacíos (V-CM·K-CM) aún no tienen diseño; se muestran solo como marcadores.",
+    "g858": "V-CM es el asiento de esquina del triángulo invertido (turnA): actívalo para poder elegirlo. K-CM aún no tiene diseño y se muestra solo como marcador.",
+    "g875": "Activa el triángulo invertido (turnA) para poder elegirlo.",
+    "g876": "No se puede combinar con el QR central: aún no existe el hueco de formato para esa combinación.",
     "g860": "Colocación del QR en la cara",
     "g861": "Lado central",
     "g862": "Unión Y (v0TRQ)",
@@ -5187,7 +5203,7 @@ const GENERATOR_STRINGS = {
     "g572": "Orientación de la silueta (experimental)",
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
-    "g575": "Experimental. Por ahora solo cambia la información de formato — la silueta dibujada sigue igual y los códigos creados en este estado no los puede leer el escáner.",
+    "g575": "Experimental. Al activarlo, la silueta se dibuja invertida como triángulo invertido (▽) y los códigos creados en este estado ya los puede leer el escáner — la validación en dispositivo real sigue en curso.",
     "g576": "Reserva de esquina (experimental)",
     "g577": "Ninguno (predeterminado)",
     "g578": "Tres esquinas alternas",
@@ -5425,9 +5441,11 @@ const GENERATOR_STRINGS = {
     "g872": "Medições do beacon — passo de módulo {mpc}/célula · células reais 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tons internos · ECC H(t=7) · verificado em scanner real 2026-08-22",
     "g873": "Tamanho do módulo (real)",
     "g874": "Capacidade ECC (RS)",
-    "g856": "V-CM (ausente)",
+    "g856": "V-CM (invertido)",
     "g857": "K-CM (ausente)",
-    "g858": "Os assentos vazios (V-CM·K-CM) ainda não têm design — mostrados apenas como marcadores.",
+    "g858": "V-CM é o assento de canto do triângulo invertido (turnA) — ative-o para poder escolher. K-CM ainda não tem design e é mostrado apenas como marcador.",
+    "g875": "Ative o triângulo invertido (turnA) para poder escolher.",
+    "g876": "Não pode ser combinado com o QR central — a vaga de formato dessa combinação ainda não existe.",
     "g860": "Posição do QR na face",
     "g861": "Lado central",
     "g862": "Junção Y (v0TRQ)",
@@ -5622,7 +5640,7 @@ const GENERATOR_STRINGS = {
     "g572": "Orientação da silhueta (experimental)",
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
-    "g575": "Experimental. Por agora só a informação de formato muda — a silhueta desenhada continua igual, e códigos criados neste estado não são lidos pelo leitor.",
+    "g575": "Experimental. Quando ativado, a silhueta é desenhada invertida como triângulo invertido (▽), e códigos criados neste estado já são lidos pelo leitor — a validação em aparelho real ainda está em curso.",
     "g576": "Reserva de canto (experimental)",
     "g577": "Nenhum (padrão)",
     "g578": "Três cantos alternados",
@@ -7269,7 +7287,8 @@ const SEAT_CARD_ICONS = Object.freeze({
   'o-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><circle cx="12" cy="2.6" r="1.6" fill="currentColor" stroke="none"/><circle cx="21" cy="17" r="1.6" fill="currentColor" stroke="none"/><circle cx="3" cy="7" r="1.6" fill="currentColor" stroke="none"/></svg>',
   sagoae: '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z"/><path d="M12 6.5 L16.8 9.2 L16.8 14.8 L12 17.5 L7.2 14.8 L7.2 9.2 Z" stroke-dasharray="2 1.6"/></svg>',
   'a-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L21 19 L3 19 Z"/><circle cx="12" cy="3.4" r="1.6" fill="currentColor" stroke="none"/><circle cx="20.4" cy="19" r="1.6" fill="currentColor" stroke="none"/><circle cx="3.6" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>',
-  'v-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M3 5 L21 5 L12 21 Z" stroke-dasharray="2.4 2"/></svg>',
+  // v-cm — 실체 전환 (2026-08-24): 점선(부재) → 실선 역삼각 + 코너 3점 (a-cm 의 거울상).
+  'v-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 21 L3 5 L21 5 Z"/><circle cx="12" cy="20.6" r="1.6" fill="currentColor" stroke="none"/><circle cx="3.6" cy="5" r="1.6" fill="currentColor" stroke="none"/><circle cx="20.4" cy="5" r="1.6" fill="currentColor" stroke="none"/></svg>',
   'k-cm': '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 L20 17 L4 17 Z" stroke-dasharray="2.4 2"/><path d="M12 21 L4 7 L20 7 Z" stroke-dasharray="2.4 2"/></svg>',
 });
 const SEAT_CARD_LABEL_KEYS = Object.freeze({
@@ -8055,11 +8074,20 @@ if (els.yLocatorCards) {
 
 // 턴A 카드 배선 — yLocatorCards 와 같은 형태·같은 자리. schedule() 로 재렌더를
 // 태워야 formatIndex 변경이 화면 코드에 반영된다.
+// (Wave 3 ④) 방향 전환 시 외곽 코너 자리를 승계한다: a-cm ↔ v-cm 은 같은 «코너
+// 자리» 의 두 방향이라, 선택을 버리는 대신 방향을 따라 옮긴다 — encodeA 던짐
+// 조합(구 a-cm×turnA)을 UI 가 만들지 않는 정의된 해소다.
 if (els.turnACards) {
   for (const card of els.turnACards.children) {
     card.addEventListener('click', () => {
       generatorState.turnA = card.dataset.turna === 'on';
+      if (generatorState.turnA && generatorState.outerSeat === 'a-cm') {
+        generatorState.outerSeat = 'v-cm';
+      } else if (!generatorState.turnA && generatorState.outerSeat === 'v-cm') {
+        generatorState.outerSeat = 'a-cm';
+      }
       syncTurnAUi();
+      syncSeatUi();
       schedule();
     });
   }
@@ -8076,10 +8104,13 @@ function wireSeatCards(container, seatKey) {
     const card = event.target.closest('.toggle-card');
     if (!card || !container.contains(card) || card.classList.contains('disabled')) return;
     generatorState[seatKey] = card.dataset.seat;
-    // 상호배제를 **여기서** 해소한다 — encodeOptsFor 가 조용히 떨구면 화면의
-    // 턴A 카드는 켜진 채로 남아 «켰는데 안 먹는» 상태가 된다 (a-cm × turnA —
-    // encodeA 가 둘 다 참이면 던진다).
+    // 방향-자리 일관성 (Wave 3 ④ — 구 «a-cm 이 turnA 를 끈다» 의 재편):
+    // 코너 자리는 실루엣 방향을 따른다 — a-cm 은 정삼각 전용, v-cm 은 역삼각
+    // 전용이라 자리를 고르는 행위가 방향을 확정한다. 표시층에서 반대 방향
+    // 카드는 애초에 숨김/잠금(syncSeatUi)이라 이 두 줄은 URL·이관 상태의
+    // 안전망이다 (조용한 던짐 조합 생성 금지 — encodeA V-CMQ 만 남은 배타).
     if (generatorState.outerSeat === 'a-cm') generatorState.turnA = false;
+    if (generatorState.outerSeat === 'v-cm') generatorState.turnA = true;
     syncSeatUi();
     syncTurnAUi();
     schedule();
@@ -9502,13 +9533,11 @@ function syncTurnAUi() {
   section.hidden = !(isLabPath() && generatorState.type === 'A');
   if (!els.turnACards) return;
   const on = generatorState.turnA === true;
-  // 코너 마커(외곽 seat a-cm)와 상호배제 — 잠긴 이유를 보이게 한다. 조용히 무시하면
-  // 「켰는데 안 먹는」 카드가 되고, 그건 회귀보다 먼저 사람을 속인다.
-  // (W2 C4: cornerMarker boolean → outerSeat 승계 — encodeA 던짐 조합은 A 쪽뿐이다.)
-  const locked = generatorState.outerSeat === 'a-cm';
+  // (Wave 3 ④) 구 a-cm 잠금은 재편됐다 — 배타가 개설돼(V-CM) 방향 전환이 항상
+  // 합법이고, 코너 자리는 핸들러가 방향을 따라 a-cm ↔ v-cm 으로 승계한다.
   for (const card of els.turnACards.children) {
     card.classList.toggle('active', (card.dataset.turna === 'on') === on);
-    card.classList.toggle('disabled', locked);
+    card.classList.remove('disabled');
   }
 }
 
@@ -9541,24 +9570,36 @@ function syncSeatUi() {
   ensureSeatCards();
   const family = type === 'O' ? 'hex' : 'tri';
   const wireLocked = generatorState.qrPosition === 'inner' && !cmqWireExists(family);
+  // (Wave 3 ④) 외곽 코너 자리 × 실루엣 방향: a-cm 은 정삼각 전용이라 turnA on 이면
+  // 숨긴다 (선택지가 a-cm → v-cm 으로 «바뀐다»). v-cm 은 항상 보이되 turnA off 면
+  // 잠금 + 이유(g875) — 숨기면 존재를 발견할 길이 없다. v-cm × 중앙 QR 은 V-CMQ
+  // 와이어 잔여 0 보류라 잠금 + 이유(g876) — cmqWireExists 의 V 판 상수화가 아니라
+  // 표 실측이다 (turnA.js §V-CM 회계, markerG 잔여 0 자기검증).
+  const turnAOn = generatorState.turnA === true;
+  const vcmQrLocked = generatorState.qrPosition === 'inner';
   const sync = (container, seatValue) => {
     for (const card of container.children) {
       const seat = card.dataset.seat;
       const isNone = seat === SEAT_NONE;
-      // 타입 부합만 표시 (검출기 필터 — zoneCards 의 types 표).
-      card.style.display = card.dataset.seatTypes.split(' ').includes(type) ? '' : 'none';
-      const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone);
+      // 타입 부합 표시 (검출기 필터 — zoneCards 의 types 표) + 방향 표시 스왑.
+      const typeShown = card.dataset.seatTypes.split(' ').includes(type);
+      const directionHidden = seat === 'a-cm' && turnAOn;
+      card.style.display = typeShown && !directionHidden ? '' : 'none';
+      const vcmLocked = seat === 'v-cm' && (!turnAOn || vcmQrLocked);
+      const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone) || vcmLocked;
       card.classList.toggle('disabled', locked);
       card.classList.toggle('active', seat === seatValue);
       const label = card.querySelector('[data-seat-label-key]');
       label.textContent = t(label.dataset.seatLabelKey);
-      // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580).
+      // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580)
+      // · v-cm 방향 필요(g875) / 중앙 QR 병용 불가(g876).
       // o-cm 은 H 심볼 통합(2026-08-24) 특성 고지 — 판독은 중앙 TL(비컨) 조합에서
       // 확인됐고, 비컨 없는 조합은 인식률이 떨어진다 (검출 배선 잔여).
       card.title = card.dataset.seatAbsent === '1' ? t('g858')
-        : seat === 'sagoae' ? t('g855')
-          : seat === 'o-cm' ? t('g871')
-            : (wireLocked && !isNone) ? t('g580') : '';
+        : seat === 'v-cm' ? (!turnAOn ? t('g875') : vcmQrLocked ? t('g876') : '')
+          : seat === 'sagoae' ? t('g855')
+            : seat === 'o-cm' ? t('g871')
+              : (wireLocked && !isNone) ? t('g580') : '';
     }
   };
   sync(els.innerSeatCards, generatorState.innerSeat);
@@ -10069,8 +10110,12 @@ function buildConfig() {
     // sagoae 는 자리 예약 값이라 와이어를 켜지 않는다 (생성측 합성 렌더 전까지).
     // O-CM = 자리 + H 심볼 톤 **통합** (운영자 2026-08-24 아침 검수 3 — A-CM 이
     // H2O 를 항상 싣는 것과 같은 문법. encode 계약상 톤은 자리와 함께만 실린다).
+    // (Wave 3 ④) 외곽 코너 자리는 방향과 짝이다: a-cm 은 정삼각(turnA off) 에서만,
+    // v-cm 은 역삼각(turnA on) 에서만 마커를 켠다 — 어긋난 이관·URL 상태는 마커
+    // 없이 방향만 살린다 (조용한 던짐 조합 생성 금지).
     cornerMarker: (type === 'O' && generatorState.innerSeat === 'o-cm')
-      || (type === 'A' && generatorState.outerSeat === 'a-cm'),
+      || (type === 'A' && ((generatorState.outerSeat === 'a-cm' && generatorState.turnA !== true)
+        || (generatorState.outerSeat === 'v-cm' && generatorState.turnA === true))),
     markerTones: type === 'O' && generatorState.innerSeat === 'o-cm',
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
@@ -10158,12 +10203,14 @@ function encodeOptsFor(cfg) {
     if (centralV0Selected) opts.centralV0 = true;
     if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
       opts.daehanFinder = true;
-    } else if (cfg.cornerMarker === true) {
-      // 코너 마커가 turnA 를 이긴다 — UI 가 이미 turnA 를 꺼 두므로 여기 오는
-      // cfg 는 둘 다 참일 수 없다. 그래도 else-if 로 두는 이유: URL·저장 상태로
-      // 옛 조합이 들어와도 `encodeA` 의 던짐(src/encodeA.js) 대신 정의된 쪽이 이긴다.
-      // centerQr 와의 병용은 C2a 에서 개설 — !centerQr 조건을 걷었다.
+    } else if (cfg.cornerMarker === true && !(cfg.turnA === true && opts.centerQr)) {
+      // 코너 자리 예약. (Wave 3 ④) turnA 와의 배타는 개설됐다 — 둘 다 참이면
+      // **V-CM** 이다 (turnA.js V 표 말미). 단 V-CMQ(+centerQr)는 와이어 잔여 0
+      // 보류라 그 3중 조합만 이 분기에서 빠져 아래 turnA 분기(V*Q — 합법)로
+      // 흘러간다: URL·이관 상태가 들어와도 던짐 대신 정의된 쪽이 이긴다.
+      // a-cm 의 centerQr 병용은 C2a 개설 그대로다 (CMQ).
       opts.cornerMarker = true;
+      if (cfg.turnA === true) opts.turnA = true;
     } else if (cfg.turnA === true && !centralV0Selected) {
       opts.turnA = true;
     }
