@@ -31,6 +31,7 @@ import {
   UNVERIFIED_ORIENTATION_SCORER,
 } from '../src/decoder/orientation-scorer.js';
 import { encodeK } from '../src/encodeK.js';
+import { dataCellsInScanOrderK } from '../src/layoutK.js';
 import { VERSIONS_K } from '../src/capacityK.js';
 import { hexDistance } from '../src/hexgrid.js';
 
@@ -255,3 +256,39 @@ out(`  → 채택 ${JSON.stringify(chosen.digits)} — 두 축 동시 최소.`);
 out('     셋 다 markerA 어휘 {ringEven:4, ringOdd:1, center:2} 안이다'
   + ' (W=1=ringOdd · N0=1=ringOdd · N1=2=center) — 새 digit 어휘 0개.');
 out(`     거울 오가설: 앵커 단독 1.0000 → 마커 포함 ${chosen.mirror.toFixed(4)} (마커가 메운다).`);
+
+// ─── (가) vs (다) — «무엇이 실제로 다른가» ─────────────────────────────────
+//
+// 이 절이 없으면 «(다)가 (가)보다 낫다» 가 근거 없이 굴러다닌다. 실제로 이 레인의
+// 보고서 초안이 «(다)가 데이터 3셀을 덜 뺏는다» 고 잘못 적었고, 이 측정이 잡았다.
+
+out('');
+out('══ (가) vs (다) — 용량·판별력은 같다 ══');
+for (const k of KS) {
+  const da = markerCellsKcm(k, { W: 1, N0: 1, N1: 2 });
+  const vertexKeys = new Set(vertexAnchorsK(k).map((c) => key(c.q, c.r)));
+  const ga = markerCellsPlanGa(k, { W: 1, N0: 1, N1: 2 });
+  const onAnchor = da.filter((c) => vertexKeys.has(key(c.q, c.r))).length;
+  out(`  k=${k}: (다) 마커 ${da.length} 중 앵커 ${onAnchor} → 데이터 가산 ${da.length - onAnchor}`
+    + ` · (가) 마커 ${ga.length} 중 앵커 0 → 데이터 가산 ${ga.length}`
+    + `  ⇒ ${da.length - onAnchor === ga.length ? '동일' : '다름 ✗'}`);
+  // 검출기가 실제로 보는 집합(마커 ∪ 별 꼭짓점 6)에서는 두 안이 같은 집합이다.
+  const daKeys = new Set(da.map((c) => key(c.q, c.r)));
+  const unionDa = [...da, ...vertexAnchorsK(k).filter((c) => !daKeys.has(key(c.q, c.r)))];
+  const unionGa = [...ga, ...vertexAnchorsK(k)];
+  if (unionDa.length !== unionGa.length) {
+    throw new Error(`k=${k}: 합집합 크기가 다르다 ${unionDa.length} !== ${unionGa.length}`);
+  }
+  const pDa = auxProfile(unionDa);
+  const pGa = auxProfile(unionGa);
+  out(`     합집합 오가설 — (다) rot60 ${pDa.byMap.rot60.toFixed(4)} mirror ${pDa.byMap.mirror.toFixed(4)}`
+    + ` · (가) rot60 ${pGa.byMap.rot60.toFixed(4)} mirror ${pGa.byMap.mirror.toFixed(4)}`
+    + `  ⇒ ${pDa.byMap.rot60 === pGa.byMap.rot60 && pDa.byMap.mirror === pGa.byMap.mirror ? '동일' : '다름'}`);
+}
+out('  → (다)를 고르는 근거는 용량도 판별력도 아니다: ① 발자국이 정본 H2CO3 그대로 ');
+out('     ② 반전 코너 묶음이 2점이 아니라 3점 (코너 국소 재적합에 프레임이 선다,');
+out('     그 3번째 점은 어차피 검증되는 앵커라 공짜) ③ K-8.1 을 회피가 아니라 해소.');
+out('  ⚠ 평 K scan 길이 대조 (회계 −27 의 셀 단위 확인):');
+for (const k of KS) {
+  out(`     k=${k}: 평 K 데이터 ${dataCellsInScanOrderK(k).length}`);
+}
