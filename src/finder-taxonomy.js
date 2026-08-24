@@ -75,6 +75,9 @@ import {
   overheadBreakdownOMarker,
 } from './markerO.js';
 import {
+  markerCellsK, MARKER_INVERTED_DIGITS_K, MARKER_OVERHEAD_ADDED_K,
+} from './markerK.js';
+import {
   markerCellsA, markerCellsTurnA, MARKER_CELL_COUNT_A,
   MARKER_LOCAL_DIGITS_A, H2O_LOCAL_TONES_A,
 } from './markerA.js';
@@ -119,6 +122,9 @@ export const SEAT_DEFAULT_FINDER = Object.freeze({
   // V-CM (2026-08-24) — A-CM 자리의 턴A 사상이라 자리 모양·심볼이 같다 (markerA
   // markerCellsTurnA 유도 — 셀 정립이라 H2O 톤 표가 그대로 온다).
   'v-cm': 'H2O',
+  // K-CM (2026-08-24) — 정본 발자국이 H2CO3 다 (= H2O 링 3 + 반전 꼭짓점 삼각 3,
+  // 계약 K-5). 톤 정본은 미채택이라 심볼은 발자국까지다 (markerK.js 헤더 §1).
+  'k-cm': 'H2CO3',
 });
 
 function freezeRow(row) {
@@ -458,23 +464,33 @@ function buildItems() {
         + 'V-CMQ(+중앙 QR)는 와이어 잔여 0 으로 보류 (turnA.js §V-CM 회계)',
     });
   }
-  // k-cm — 코드 정체 없음. 분류 3에 억지 배정하지 않음.
-  add({
-    id: 'k-cm',
-    name: 'k-cm',
-    class: 'U',
-    className: FINDER_CLASS.U,
-    kind: KIND_ABSENT,
-    origin: '검색 대상. markerK.js 없음 · GENERATOR_TYPES 에 K 없음',
-    renderPath: '없음',
-    coordBasis: '—',
-    innerSplit: null,
-    toneAxis: '—',
-    cells: '—',
-    renderable: false,
-    consumer: '없음',
-    note: '부재. H2CO3 의 CM 승계가 코드에 없다',
-  });
+  // K-CM — 실체 전환 (2026-08-24, 배타 개설 정형 3단: ① 근거 실측 — (다)안 «앵커 위
+  // 마커» 게이트 3종 통과(test/markerK-measure.mjs) ② 표 명시 확장 — formatK star 축
+  // K*CM 3행 + markerK VERSIONS_KCM ③ 구 락(KIND_ABSENT 행 + 아래 자기검증의 'U'
+  // 단언)을 이 양성 행으로 전환). 종전 부재 행: «markerK.js 없음» — 이제 있다.
+  {
+    const cells = markerCellsK(6);
+    add({
+      id: 'k-cm',
+      name: 'K-CM',
+      class: 3,
+      className: FINDER_CLASS[3],
+      kind: KIND_SEAT,
+      origin: 'src/markerK.js markerCellsK · src/formatK.js star 축 K*CM 행',
+      renderPath: 'encodeK.js cornerMarker: markerCellsK → palette.levels (digit 알파벳)',
+      coordBasis: COORD_VERTEX,
+      innerSplit: '꼭짓점 기준 (정·역 두 계열)',
+      toneAxis: TONE_CELL_COLOR + '. 정본 H2CO3 톤은 30 중 18 이 비-순열이라 미채택 '
+        + '(계약 K-8.2) — 발자국만 정본, 톤은 digit 알파벳 재배정 (markerA 전례)',
+      cells: String(cells.length),
+      renderable: 'digit-only (반전 삼각 ' + JSON.stringify(MARKER_INVERTED_DIGITS_K) + ')',
+      consumer: '생성기 outerSeat k-cm(Type K) · encodeK cornerMarker · decode-k (값 8, k)',
+      note: '자리 예약. 기본 파인더=' + SEAT_DEFAULT_FINDER['k-cm']
+        + ' · 발자국 30 = A 계열 21 + 반전 꼭짓점 삼각 9. 반전 꼭짓점 3셀은 앵커이자 '
+        + '마커이고 digit 이 같다((다)안) — 회계는 앵커로 한 번만 세어 오버헤드 +'
+        + MARKER_OVERHEAD_ADDED_K + '. 생성기 Type K UI 는 아직 없다 (⑤ 잔여)',
+    });
+  }
 
   for (const row of OAK_LINEUP.filter((e) => e.status !== 'active')) {
     add({
@@ -625,7 +641,6 @@ export function daehanSplitHolds(items = FINDER_TAXONOMY) {
     throw new Error('자리 예약 기본 파인더 표가 운영자 확정과 다르다');
   }
   // v-cm — 실체 전환 (2026-08-24): 구 락(«미분류 'U'» 단언)을 양성 단언으로.
-  // k-cm 은 여전히 부재 — 분류 3 억지 배정 금지.
   const vcm = taxonomyItem('v-cm');
   if (!vcm || vcm.kind !== KIND_SEAT || vcm.class !== 3) {
     throw new Error('v-cm 이 분류 3 자리 예약이 아니다 — 2026-08-24 실체 전환과 어긋난다');
@@ -633,8 +648,13 @@ export function daehanSplitHolds(items = FINDER_TAXONOMY) {
   if (SEAT_DEFAULT_FINDER['v-cm'] !== 'H2O') {
     throw new Error('v-cm 자리 예약 기본 파인더가 H2O 가 아니다 (A-CM 대칭 유도 규약)');
   }
-  if (taxonomyItem('k-cm').class !== 'U') {
-    throw new Error('k-cm 이 미분류가 아니다');
+  // k-cm — 실체 전환 (2026-08-24): 구 락(«미분류 'U'» 단언)을 양성 단언으로.
+  const kcm = taxonomyItem('k-cm');
+  if (!kcm || kcm.kind !== KIND_SEAT || kcm.class !== 3) {
+    throw new Error('k-cm 이 분류 3 자리 예약이 아니다 — 2026-08-24 실체 전환과 어긋난다');
+  }
+  if (SEAT_DEFAULT_FINDER['k-cm'] !== 'H2CO3') {
+    throw new Error('k-cm 자리 예약 기본 파인더가 H2CO3 가 아니다 (계약 K-5 정본 발자국)');
   }
 }
 

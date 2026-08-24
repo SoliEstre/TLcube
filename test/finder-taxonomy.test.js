@@ -36,6 +36,7 @@ import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
 import { encodeReplicated, ECC_LEVEL } from '../src/formatinfo.js';
 import { MARKER_G_FORMAT_INDEX, markerGSpec } from '../src/markerG.js';
+import { MARKER_CELL_COUNT_K } from '../src/markerK.js';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -62,7 +63,12 @@ test('① 분류 배정은 표에서 유도 — 손 목록과 불일치하면 �
   // v-cm — 실체 전환 (2026-08-24): 구 락(class 'U' 단언)을 양성 단언으로.
   assert.equal(taxonomyItem('v-cm').class, 3, 'v-cm 이 분류 3 자리 예약이 아니다');
   assert.equal(taxonomyItem('v-cm').kind, KIND_SEAT);
-  assert.equal(taxonomyItem('k-cm').class, 'U');
+  // k-cm — 실체 전환 (2026-08-24): 구 락(class 'U' 단언)을 양성 단언으로.
+  assert.equal(taxonomyItem('k-cm').class, 3, 'k-cm 이 분류 3 자리 예약이 아니다');
+  assert.equal(taxonomyItem('k-cm').kind, KIND_SEAT);
+  assert.equal(taxonomyItem('k-cm').cells, String(MARKER_CELL_COUNT_K));
+  // ⚠ 실체 전환은 **와이어**에서 일어났다 — 생성기 타입은 아직 안 늘었다 (⑤ 잔여).
+  // 이 두 줄이 같이 있어야 «자리는 있는데 화면은 없다» 가 문서가 아니라 자로 남는다.
   assert.deepEqual([...GENERATOR_TYPES], ['O', 'A', 'Y']);
 });
 

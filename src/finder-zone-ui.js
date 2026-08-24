@@ -18,21 +18,26 @@
  *     taegeuk 단독 카드는 만들지 않는다 (통합자 C2b 게이트 보류 — 브리프 §2 탈출구).
  *   · 내곽 = 분류 2 — 없음(기본) · O-CM(type O) · sagoae(O·A, **자리만** — 단독
  *     와이어 편입은 통합자 C2c. V-CM/K-CM 부재 문법과 동일하게 disabled).
- *   · 외곽 = 분류 3 seat + 부재 — 없음(기본) · A-CM(type A) ·
- *     V-CM/K-CM(**부재** — 자리만, 클릭 불가).
+ *   · 외곽 = 분류 3 seat — 없음(기본) · A-CM(type A) · V-CM(type A × turnA) ·
+ *     K-CM(type K — **와이어는 실재, 생성기 타입 K 가 아직 없어 상태값은 아니다**).
  *   분류 3 의 파인더 행(H · H2O · H2CO3)은 seat 카드가 아니다 — 그 자리를 채우는
  *   파인더 디자인이다 (SEAT_DEFAULT_FINDER 가 연결).
  *
  * seat 실재의 런타임 유도: markerG 표의 family 가 곧 seat 다 — hex(=Type O 육각)
  * 에 CM 행이 있으면 o-cm, tri(=Type A 삼각)에 있으면 a-cm. 마커 와이어가 없는
- * family 는 seat 도 없다. v-cm/k-cm 은 **부재 행**이라 유도 원천 자체가 없다 —
- * 분류 정본의 KIND_ABSENT 손 행과 같은 지위의 손 행이고, 테스트가 짝을 강제한다.
+ * family 는 seat 도 없다. v-cm 은 turnA V 표, k-cm 은 formatK star 표에서 같은
+ * 규칙으로 유도한다 (2026-08-24 실체 전환 — 부재 손 행이 사라졌다).
+ *
+ * ⚠ formatK 는 여기서 import 하므로 **번들에 들어간다** — 그래서 formatK 의 의존은
+ * turnA·markerG 둘로 묶어 뒀다 (capacityY 를 끌어들이면 MODULE_ORDER 위상이 깨진다.
+ * formatK.js 헤더 §값 선택 ③ 의 ⚠ 참조).
  */
 
 import { CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS } from './finder-card-ui.js';
 import { GENERATOR_STATE_SCHEMA } from './generator-state.js';
 import { MARKER_G_FORMAT_INDEX } from './markerG.js';
 import { TURN_A_FORMAT_INDEX } from './turnA.js';
+import { K_FORMAT_INDEX } from './formatK.js';
 import { SAGOAE_ID } from './finder-daehan.js';
 
 export const SEAT_NONE = 'none';
@@ -61,12 +66,12 @@ const FAMILY_SEATS = Object.freeze({
   tri: Object.freeze({ id: 'a-cm', name: 'A-CM', zone: 'outer', types: Object.freeze(['A']) }),
 });
 
-/** 부재 seat — 코드 정체가 없어 유도 원천이 없다 (분류 정본의 KIND_ABSENT 행과
+/** 부재 seat — 코드 정체가 없어 유도 원천이 없는 자리 (분류 정본의 KIND_ABSENT 행과
  *  1:1 — test/finder-zone-ui.test.js 가 짝을 강제한다). 자리만 + 클릭 불가.
- *  v-cm 은 2026-08-24 실체 전환으로 여기서 빠졌다 — 아래 turnSeat() 유도로 옮겨감. */
-const ABSENT_SEATS = Object.freeze([
-  Object.freeze({ id: 'k-cm', name: 'k-cm', types: Object.freeze(['O', 'A']) }),
-]);
+ *  **지금은 비어 있다**: v-cm(turnSeat)·k-cm(starSeat) 이 2026-08-24 실체 전환으로
+ *  각자 와이어 유도로 옮겨 갔다. 목록 자체는 남긴다 — 다음 «코드 정체 없는 자리» 가
+ *  생겼을 때 갈 곳이 이미 있어야 부재를 양성 행으로 위장하지 않는다. */
+const ABSENT_SEATS = Object.freeze([]);
 
 /**
  * V-CM seat (2026-08-24) — «와이어 존재가 곧 seat 실재» 규칙을 turnA V 표로 확장:
@@ -79,6 +84,24 @@ function turnSeat() {
   return wired
     ? [Object.freeze({
       id: 'v-cm', name: 'V-CM', types: Object.freeze(['A']), ready: true, absent: false,
+    })]
+    : [];
+}
+
+/**
+ * K-CM seat (2026-08-24) — «와이어 존재가 곧 seat 실재» 규칙을 formatK star 표로
+ * 확장: 표에 cornerMarker 행(K0CM/K1CM/K2CM)이 실재하면 k-cm seat 가 실재한다.
+ *
+ * `stateValue: false` 인 이유는 «부재» 가 아니라 **생성기 타입에 K 가 아직 없어서**다
+ * (GENERATOR_TYPES = O·A·Y — Type K 생성기 UI 는 잔여 과업 ⑤). 자리는 와이어에
+ * 실재하므로 카드는 서고(ready), 상태 허용값에는 아직 안 든다 — sagoae 의
+ * «자리만» 문법과 같은 축이다. K 가 생성기에 편입되면 이 플래그만 걷힌다.
+ */
+function starSeat() {
+  const wired = K_FORMAT_INDEX.some((entry) => entry.cornerMarker === true);
+  return wired
+    ? [Object.freeze({
+      id: 'k-cm', name: 'K-CM', types: Object.freeze(['K']), ready: true, absent: false, stateValue: false,
     })]
     : [];
 }
@@ -125,6 +148,7 @@ export function zoneCards() {
     NONE_CARD,
     ...markerSeat('outer'),
     ...turnSeat(),
+    ...starSeat(),
     ...ABSENT_SEATS.map((seat) => Object.freeze({
       id: seat.id, name: seat.name, types: seat.types, ready: false, absent: true,
     })),

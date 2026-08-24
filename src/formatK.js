@@ -20,9 +20,12 @@
  *   ② 역방향(O/A 프레임이 star 로 오분류)도 그 프레임의 값(0..6·12..15)이 star 축
  *      ({7,8}) 에 없어 같은 단계에서 죽는다.
  *   ③ cube 축은 8..11 을 쓰지만 **크기 축이 n(13/21/25) 이고 star 는 k(6/8/10)** 라
- *      (값,크기) 쌍이 겹치지 않는다 — 아래 자기검증이 VERSIONS_Y 에서 실계산으로
- *      대조한다. 값 재사용 자체는 ADR 0006 D3-1(격자 수립 경로가 다르면 안전)이
- *      이미 허용한 것이고, 이 검증은 그 위에 «크기까지 안 겹친다» 를 더한다.
+ *      (값,크기) 쌍이 겹치지 않는다. 값 재사용 자체는 ADR 0006 D3-1(격자 수립 경로가
+ *      다르면 안전)이 이미 허용한 것이고, 그 위에 «크기까지 안 겹친다» 가 더 붙는다.
+ *      ⚠ 이 대조는 **여기가 아니라 `test/capacityK.test.js`** 가 VERSIONS_Y 실계산으로
+ *      진다 — 이 모듈은 `finder-zone-ui` 가 import 하므로 브라우저 번들에 들어가고,
+ *      capacityY 를 끌어들이면 MODULE_ORDER 위상이 통째로 뒤집힌다 (capacityY 는
+ *      번들 후반이다). 번들 제약이 검증 위치를 정한 자리이고, 자는 그대로 있다.
  *
  * ⚠ 값을 이 두 개 밖으로 옮기려면 위 논거가 통째로 무너진다 — hex·tri 는
  * {0..6, 12..15} × k 를 **48/48 다 쓴다**(2026-08-24 실계산). 아래 자기검증이
@@ -42,7 +45,6 @@
 
 import { hexTriAxisOccupancy, K1_RESERVED_FORMAT_INDEX, TURN_A_FORMAT_INDEX, CUBE_AXIS_FORMAT_INDEXES } from './turnA.js';
 import { MARKER_G_FORMAT_INDEX } from './markerG.js';
-import { VERSIONS_Y } from './capacityY.js';
 
 /** K-CM 이 쓰는 star 축 값. hex·tri 가 영구 회피하는 cube 예약 밴드 안이라
  *  «포맷 단계 조기 사멸» 논거가 평 K(7)와 똑같이 선다 (헤더 §값 선택 ①). */
@@ -172,19 +174,6 @@ export function kSpecFromFormatIndex(formatIndex, k) {
       if (occ.formatIndex === entry.formatIndex && occ.k === entry.k) {
         throw new Error('formatK: hex·tri 축 ' + occ.owner + ' 가 (' + occ.formatIndex
           + ', k' + occ.k + ') 를 점유한다 — K 예약 침범');
-      }
-    }
-  }
-  // ③ — cube 축과의 «값은 겹쳐도 크기가 안 겹친다» 검증 (헤더 §값 선택 ③).
-  // K-CM 이 cube 예약 밴드의 값을 쓰므로 이 축이 새로 필요해졌다: cube 는 크기를
-  // n(13/21/25) 으로, star 는 k(6/8/10) 로 센다. 언젠가 n=6|8|10 인 Y 버전이 생기면
-  // 이 검증이 그 순간 던진다 (사본을 손으로 유지하지 않는다 — VERSIONS_Y 실계산).
-  for (const y of VERSIONS_Y) {
-    for (const entry of K_FORMAT_INDEX) {
-      if (y.formatIndex === entry.formatIndex && y.n === entry.k) {
-        throw new Error('formatK: cube 축 ' + y.name + ' 가 (' + y.formatIndex
-          + ', n' + y.n + ') 인데 star ' + entry.name + ' 이 (같은 값, k' + entry.k
-          + ') 다 — 크기 축까지 겹쳤다');
       }
     }
   }
