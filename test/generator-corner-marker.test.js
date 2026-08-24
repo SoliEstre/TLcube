@@ -93,13 +93,11 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
   // 동반이라 **통합자 몫**이다 (턴A 레인은 스캐너 소스 접촉 금지). 등재되면
   // 아래 부재 단언이 터진다 — 그때 이 제외를 걷어라 (부재에는 이유·날짜).
   for (const id of [...INNER_SEAT_OPTIONS, ...OUTER_SEAT_OPTIONS]) {
-    if (id === 'v-cm') continue;
     const labId = id === 'sagoae' ? 'daehan' : id;
     assert.ok(LAB_OUTER_FINDER_IDS.includes(labId),
       'LAB_OUTER_FINDER_IDS 에 ' + labId + ' 가 없다 — 기대축과 seat 유도가 어긋났다');
   }
-  assert.equal(LAB_OUTER_FINDER_IDS.includes('v-cm'), false,
-    'v-cm 이 기대축에 등재됐다 — 위 제외(통합자 몫 주석)를 걷고 전수 대조로 되돌려라');
+  // v-cm 기대축 등재 완료 (2026-08-24 통합자) — 전수 대조가 v-cm 을 포함한다.
   // CM+Q 와이어 존재 술어 (C2a 착지 상태) — 병용 잠금이 열려 있어야 한다.
   assert.equal(cmqWireExists('hex'), true);
   assert.equal(cmqWireExists('tri'), true);
