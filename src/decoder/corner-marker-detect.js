@@ -556,7 +556,11 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
     family,
     testedKs: kList,
     testedOrientations: ORIENTATIONS.slice(),
-    evaluatedCount: kList.length * ORIENTATIONS.length,
+    // ⚠ 변형 수를 곱한다 (2026-08-25, grok 검수 적발). 이 식은 hex(변형 1) 시절
+    // 그대로였고 tri 는 변형 2 라, k 하나만 넣어도 실제로는 6 가설을 평가하는데
+    // 값은 3 을 냈다 — **진단이 거짓말을 하면 다음 사람이 rejected 목록과 이 수를
+    // 대조하다 엉뚱한 결론에 간다.**
+    evaluatedCount: kList.length * ORIENTATIONS.length * variants.length,
     rejected,
   };
   if (hypotheses.length === 0) {

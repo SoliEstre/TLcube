@@ -9773,6 +9773,13 @@ function syncYLocatorUi() {
         for (const card of els.yLocatorCards.children) {
           const id = card.dataset.locator;
           if (!id || id === 'auto' || id === LOCATOR_PROFILE_OFF) continue;
+          // ⛔ **활성 카드는 숨기지 않는다** (2026-08-25, codex 검수 적발).
+          // 숨기면 «상태 표시는 Y2 · 실제 encode 는 Y1» 인 어긋남이 화면에서
+          // 사라져 조용한 무시가 된다 — 수동으로 v0TR 을 잠근 채 Y2 를 고르면
+          // render-config 가 encode 를 V1 로 강제하는데, 그걸 드러내는 유일한
+          // 단서가 그 카드다. 필터 도입 **전보다 나쁜 상태**가 되므로 예외로 둔다.
+          // 이 파일의 «C5 숨김-active 배지» 가 세운 규약과 같은 처방이다.
+          if (id === profile) continue;
           const layout = id.replace(/^cell-surface-/, '');
           const ns = CELL_SURFACE_FINAL_NS[layout];
           if (!ns || !ns.includes(activeN)) hidden.push(id);
@@ -10356,7 +10363,15 @@ function encodeOptsFor(cfg) {
       // V-CM 선택 가능해야 됨».
       // a-cm 의 centerQr 병용은 C2a 개설 그대로다 (CMQ).
       opts.cornerMarker = true;
-      if (cfg.turnA === true) opts.turnA = true;
+      if (cfg.turnA === true) {
+        opts.turnA = true;
+        // ⚠ **단선 수리 (2026-08-25, agy 검수 적발)** — `no2AnchorTones` 를
+        // `buildConfig()` 에만 넣고 여기서 안 실었다. 정책은 계산되는데 인코더까지
+        // 못 가서 생성기가 **항상 false 로 동작**했다 (배포까지 나간 뒤 잡혔다).
+        // 이 프로젝트에서 세 번째 같은 부류다: 한 층에서 열고 소비자를 안 쓸었다.
+        // cfg 는 정책 층, 여기는 매핑 층 — cornerMarker·turnA 와 같은 방식으로 싣는다.
+        if (cfg.no2AnchorTones === true) opts.no2AnchorTones = true;
+      }
     } else if (cfg.turnA === true) {
       // ⚠ **의도적 갱신 (2026-08-24 검수 4차)** — 여기 있던 `&& !centralV0Selected`
       // 는 encodeA 의 구 배타(centralV0 × turnA 던짐)를 UI 가 미리 피하던 자리다.

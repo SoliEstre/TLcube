@@ -348,3 +348,60 @@ test('O-CM: verifyCornerMarkers 는 탐색 없이도 정답 H 에서 1.0', () =>
   assert.equal(verified.aliveCorners, 3);
   assert.equal(verified.accepted, true);
 });
+
+// ── V-CM(턴A) 턴 변형 — **측정한 현실을 잠근다** ─────────────────────────────
+//
+// 왜 이 테스트가 생겼나 (2026-08-25, codex 검수 적발): 턴 변형을 검출기에 넣고
+// 배포까지 했는데 **그 동작을 고정하는 테스트가 하나도 없었다.** 이 파일의 기존
+// 테스트는 `findOCornerMarkerHypotheses`(O 경로)만 가져오고, markerA 의 180° 테스트는
+// «거부된다» 는 반대편 주장이다. 지정 테스트 17개가 전부 통과하는데 검출기를 직접
+// 부르면 `accepted:false · 49/63` 이었다 — 초록이 이 코드에 대해 아무 말도 안 했다.
+//
+// ⚠ 이 테스트는 «되기를 바라는 값» 이 아니라 **지금 실제로 나오는 값** 을 적는다.
+//    턴 변형이 후보로 **생성되는지**(=구조가 열렸는지)는 양성으로 잠그고,
+//    아직 게이트를 못 넘는다는 사실은 **알려진 공백(F-111)** 으로 잠근다.
+//    풀링 수리가 들어가면 이 테스트가 **터진다 — 그게 목적이다.** 조용히 지나가면
+//    누구도 «언제 고쳐졌는지» 를 모른다. 터지면 작성자가 값을 의도적으로 갱신한다.
+test('V-CM 턴 변형은 후보로 서고, 톤 앵커 고갈로 아직 게이트를 못 넘는다 (F-111)', async () => {
+  const { findACornerMarkerHypotheses } = await import('../src/decoder/corner-marker-detect.js');
+  const { toRelativeLuminance } = await import('../src/decoder/luma.js');
+  const { detectBullseyes } = await import('../src/decoder/bullseye-detect.js');
+
+  const encoded = encodeA('gate1', {
+    version: 1, eccLevel: 'M', cornerMarker: true, turnA: true,
+  });
+  const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
+  const luma = toRelativeLuminance(rasterize(scene, { pixelsPerUnit: 24, supersample: 1 }), {});
+  const bs = detectBullseyes(luma, {});
+  assert.equal(bs.ok, true, '불스아이가 안 섰다 — 이 테스트의 전제가 깨졌다');
+  const finder = bs.candidates[0];
+
+  const res = findACornerMarkerHypotheses(luma, finder, [encoded.k], {});
+  const rejected = (res.detail || res.diagnostics || {}).rejected || [];
+  const ids = rejected.map((r) => r.hypothesisId).concat(
+    (res.ok ? res.hypotheses : []).map((h) => h.hypothesisId),
+  );
+
+  // ① 구조 — 턴 변형이 실제로 평가된다. 이게 없으면 180° 배치는 원리적으로 안 보인다.
+  assert.ok(ids.some((id) => typeof id === 'string' && id.endsWith('-turn')),
+    '턴 변형 후보가 아예 생성되지 않았다 — 검출기가 다시 0°/120°/240° 만 본다');
+
+  // ② 방향 — 턴 쪽이 정립 쪽보다 확실히 높다 (사상이 맞다는 값의 증거).
+  const best = (id) => {
+    const hit = rejected.filter((r) => r.hypothesisId === id && Number.isFinite(r.agreement));
+    return hit.length ? hit[0].agreement : null;
+  };
+  const turnScore = best(`tri-marker-${encoded.k}-0-turn`);
+  const uprightScore = best(`tri-marker-${encoded.k}-0`);
+  assert.ok(turnScore !== null, '턴 후보의 agreement 가 진단에 없다');
+  assert.ok(turnScore > (uprightScore ?? 0),
+    `턴(${turnScore}) 이 정립(${uprightScore}) 보다 높아야 한다 — 좌표 사상이 맞는 방향인지의 자다`);
+
+  // ③ 알려진 공백 — 아직 통과하지 못한다. 값은 실측(49/63 ≈ 0.7778)이다.
+  //    톤 분류가 코너 묶음별(NO2 는 묶음당 2셀 = 6슬롯)이라 dark/bright 앵커가 못 선다.
+  //    전체 6셀(18슬롯)로 풀링하면 18/18 → 63/63 이 된다 (F-111 · agy·grok·codex 3중 확인).
+  assert.equal(res.ok, false,
+    'V-CM 턴이 게이트를 넘었다 — F-111 이 해소됐다면 이 테스트를 의도적으로 갱신하라');
+  assert.ok(turnScore > 0.77 && turnScore < 0.78,
+    `턴 agreement 실측 이탈: ${turnScore} (기대 0.7778 부근 · 게이트 0.78)`);
+});
