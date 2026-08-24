@@ -140,7 +140,7 @@ test('4bit 를 넘치는 값이 없다 — 산술 유도가 금지된 이유', (
  *   턴A     : `turnASpec(version, {centerQr}).formatIndex` (표 주도)
  *
  * ⚠ **미완 사실을 여기 박는다 — 디코더에 역삼각 실루엣 판별이 아직 없다.**
- * 그래서 `A2TQ = 3` 이 기본 `A0Q = 3` 과 **같은 값**이고, 지금은 둘을 기하로 가를
+ * 그래서 `V2Q = 3` (구명 A2TQ — 2026-08-24 V 재명명) 이 기본 `A0Q = 3` 과 **같은 값**이고, 지금은 둘을 기하로 가를
  * 수단이 디코더에 없다. 「실루엣이 갈라준다」는 설계 전제는 옳지만 **구현이 선행
  * 조건**이다. 이 테스트가 그 사실을 못 박아, 검출 경로가 붙기 전에 턴A 를 기본으로
  * 켜는 일이 없게 한다.
@@ -166,13 +166,13 @@ test('턴A 인코더 — 표 주도로 낸다 (산술 유도가 아니다)', () 
 });
 
 test('⚠ 미완 — 턴A 와 기본 A 가 formatIndex 를 공유하는 조합이 있다', () => {
-  // A2TQ(3) ↔ A0Q(3). 디코더에 역삼각 실루엣 판별이 붙으면 기하가 가른다.
+  // V2Q(3) ↔ A0Q(3). 디코더에 역삼각 실루엣 판별이 붙으면 기하가 가른다.
   // **붙기 전까지는 turnA 를 명시로만 써야 한다** — 이 사실이 사라지면(= 충돌이
   // 없어지면) 여기가 터지고, 그때 이 경고 주석도 함께 걷어내야 한다.
   const plain = new Map(PUBLISHED_FORMAT_INDEX.map((r) => [r.formatIndex, r]));
   const shared = TURN_A_FORMAT_INDEX.filter((e) => plain.has(e.formatIndex));
-  assert.deepEqual(shared.map((e) => e.name), ['A2TQ'],
-    '턴A ↔ 기본 A 의 formatIndex 공유 조합이 A2TQ 하나가 아니다: '
+  assert.deepEqual(shared.map((e) => e.name), ['V2Q'],
+    '턴A ↔ 기본 A 의 formatIndex 공유 조합이 V2Q 하나가 아니다: '
     + JSON.stringify(shared.map((e) => e.name)));
   // 그리고 디코더에 아직 역삼각 판별이 없다는 사실 자체 — 붙으면 이 단언을 지운다.
   assert.equal(shared.length > 0, true,

@@ -20,14 +20,16 @@ import { VERSION_BITS } from '../src/formatinfo.js';
 import { encodeA } from '../src/encodeA.js';
 
 test('표 값 고정 — 배정은 표 그 자체다', () => {
+  // 2026-08-24 재명명 (내부 타입 V 확정): 이름 층만 A0T… → V0… 로 갱신됐고
+  // **값·k·centerQr 열은 동결 그대로**다 — 이 벡터가 그 동결을 잰다.
   const table = TURN_A_FORMAT_INDEX.map((e) => [e.name, e.formatIndex, e.k, e.centerQr]);
-  assert.deepEqual(table, [
-    ['A0T', 2, 6, false],
-    ['A0TQ', 5, 6, true],
-    ['A1T', 4, 8, false],
-    ['A1TQ', 6, 8, true],
-    ['A2T', 0, 10, false],
-    ['A2TQ', 3, 10, true],
+  assert.deepEqual(table.slice(0, 6), [
+    ['V0', 2, 6, false],
+    ['V0Q', 5, 6, true],
+    ['V1', 4, 8, false],
+    ['V1Q', 6, 8, true],
+    ['V2', 0, 10, false],
+    ['V2Q', 3, 10, true],
   ]);
 });
 

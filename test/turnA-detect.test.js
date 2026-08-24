@@ -4,7 +4,7 @@
  * 배경: 턴A 는 별도 타입이 아니라 타입 A 의 **옵션**이고 실루엣만 역삼각이다
  * (운영자 확정 015 §16 · 2026-08-18 «별도 타입처럼 취급하되 UI 상에만 같은 타입»).
  * formatIndex 는 타입 안에서만 유일하면 되므로 턴A 는 자기 표를 갖는데
- * (`src/turnA.js`), 그러면 **A2TQ(3) 과 기본 A0Q(3) 이 같은 값**이 된다.
+ * (`src/turnA.js` — 내부 타입 V, 2026-08-24 재명명), 그러면 **V2Q(3) 과 기본 A0Q(3) 이 같은 값**이 된다.
  * 그 둘을 가르는 것이 실루엣이고 — 이 파일이 «실제로 갈리는가» 를 잰다.
  *
  * 유도: 턴A 영역 = 영역 A 의 축좌표 180° 상 `(q,r) → (−q,−r)` (손 좌표 0).
@@ -107,7 +107,7 @@ test('같은 formatIndex 가 방향에 따라 다른 k 로 간다 — 판별이 
     const plain = VERSIONS_A.find(
       (spec) => spec.formatIndex === entry.formatIndex || spec.formatIndex + 2 === entry.formatIndex,
     );
-    // 실측 2026-08-18: fmtIdx 3 → 턴A A2TQ(k=10) vs 기본 A0Q(k=6).
+    // 실측 2026-08-18: fmtIdx 3 → 턴A V2Q(k=10, 구명 A2TQ) vs 기본 A0Q(k=6).
     assert.notEqual(entry.k, plain.k,
       entry.name + '(k=' + entry.k + ') 와 기본 A(k=' + plain.k + ') 의 k 가 같다'
       + ' — 그렇다면 방향 판별 없이도 무해했다는 뜻이니 이 편입의 근거를 재검토하라');

@@ -232,7 +232,7 @@ function typeOSpecFromFormatIndex(index) {
  * (정삼각 ↔ 역삼각 패치가 100% 배타적이라 확실히 갈린다) 그 결과가 여기로 온다.
  * 방향을 모르면(`turn` 미지정) 기본 A 로 본다 — 종전 동작 그대로다.
  *
- * 이 분리가 있어야 `A2TQ(3)` 과 기본 `A0Q(3)` 이 같은 값을 써도 서로를 안 먹는다.
+ * 이 분리가 있어야 `V2Q(3)` 과 기본 `A0Q(3)` 이 같은 값을 써도 서로를 안 먹는다.
  */
 function typeASpecFromFormatIndex(index, turn = false) {
   if (!Number.isInteger(index)) return undefined;
