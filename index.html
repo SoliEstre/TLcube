@@ -1843,7 +1843,7 @@
              UI 가 안 만든다): turnA off = a-cm 표시·v-cm 잠금(g875), turnA on =
              a-cm 숨김·v-cm 개방. 방향 전환 시 선택이 a-cm ↔ v-cm 으로 승계된다.
              centerQr 병용: a-cm 은 C2a 로 합법 (cmqWireExists 게이트) · v-cm 은
-             **불가** (V-CMQ 와이어 잔여 0 보류 — turnA.js §V-CM 회계, 힌트 g876). -->
+             **가능** (V-CMQ 개설 2026-08-24 — V*CM 인덱스 공유, turnA.js §turnASpec). -->
         <div id="finderInnerZone" hidden>
           <label class="section-heading" data-i18n="g850">내곽 자리 (실험)</label>
           <div class="card-row" id="innerSeatCards"></div>
@@ -9574,11 +9574,13 @@ function syncSeatUi() {
   const wireLocked = generatorState.qrPosition === 'inner' && !cmqWireExists(family);
   // (Wave 3 ④) 외곽 코너 자리 × 실루엣 방향: a-cm 은 정삼각 전용이라 turnA on 이면
   // 숨긴다 (선택지가 a-cm → v-cm 으로 «바뀐다»). v-cm 은 항상 보이되 turnA off 면
-  // 잠금 + 이유(g875) — 숨기면 존재를 발견할 길이 없다. v-cm × 중앙 QR 은 V-CMQ
-  // 와이어 잔여 0 보류라 잠금 + 이유(g876) — cmqWireExists 의 V 판 상수화가 아니라
-  // 표 실측이다 (turnA.js §V-CM 회계, markerG 잔여 0 자기검증).
+  // 잠금 + 이유(g875) — 숨기면 존재를 발견할 길이 없다.
+  // ⚠ **의도적 갱신 (2026-08-24 검수 4차)** — 구 «v-cm × 중앙 QR 잠금(g876)» 은
+  // 걷혔다. V-CMQ 가 개설됐기 때문이다: 새 (값,k) 를 만드는 대신 **V*CM 인덱스를
+  // 공유**한다 (centerQr 는 셀 회계를 안 바꾸므로 두 해석이 같은 데이터를 낸다 —
+  // turnA.js §turnASpec 근거·왕복 실측). 운영자 요구 «중앙 QR 일 때 V-CM 선택
+  // 가능해야 됨» 의 이행이다.
   const turnAOn = generatorState.turnA === true;
-  const vcmQrLocked = generatorState.qrPosition === 'inner';
   const sync = (container, seatValue) => {
     for (const card of container.children) {
       const seat = card.dataset.seat;
@@ -9587,18 +9589,19 @@ function syncSeatUi() {
       const typeShown = card.dataset.seatTypes.split(' ').includes(type);
       const directionHidden = seat === 'a-cm' && turnAOn;
       card.style.display = typeShown && !directionHidden ? '' : 'none';
-      const vcmLocked = seat === 'v-cm' && (!turnAOn || vcmQrLocked);
+      const vcmLocked = seat === 'v-cm' && !turnAOn;
       const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone) || vcmLocked;
       card.classList.toggle('disabled', locked);
       card.classList.toggle('active', seat === seatValue);
       const label = card.querySelector('[data-seat-label-key]');
       label.textContent = t(label.dataset.seatLabelKey);
       // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580)
-      // · v-cm 방향 필요(g875) / 중앙 QR 병용 불가(g876).
+      // · v-cm 방향 필요(g875). g876(«중앙 QR 병용 불가»)은 V-CMQ 개설로 소멸했다 —
+      // 사전 키는 여덟 언어에 남긴다 (드랍 전례).
       // o-cm 은 H 심볼 통합(2026-08-24) 특성 고지 — 판독은 중앙 TL(비컨) 조합에서
       // 확인됐고, 비컨 없는 조합은 인식률이 떨어진다 (검출 배선 잔여).
       card.title = card.dataset.seatAbsent === '1' ? t('g858')
-        : seat === 'v-cm' ? (!turnAOn ? t('g875') : vcmQrLocked ? t('g876') : '')
+        : seat === 'v-cm' ? (!turnAOn ? t('g875') : '')
           : seat === 'sagoae' ? t('g855')
             : seat === 'o-cm' ? t('g871')
               : (wireLocked && !isNone) ? t('g580') : '';
@@ -10205,15 +10208,21 @@ function encodeOptsFor(cfg) {
     if (centralV0Selected) opts.centralV0 = true;
     if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
       opts.daehanFinder = true;
-    } else if (cfg.cornerMarker === true && !(cfg.turnA === true && opts.centerQr)) {
+    } else if (cfg.cornerMarker === true) {
       // 코너 자리 예약. (Wave 3 ④) turnA 와의 배타는 개설됐다 — 둘 다 참이면
-      // **V-CM** 이다 (turnA.js V 표 말미). 단 V-CMQ(+centerQr)는 와이어 잔여 0
-      // 보류라 그 3중 조합만 이 분기에서 빠져 아래 turnA 분기(V*Q — 합법)로
-      // 흘러간다: URL·이관 상태가 들어와도 던짐 대신 정의된 쪽이 이긴다.
+      // **V-CM** 이다 (turnA.js V 표 말미). **V-CMQ(+centerQr)도 개설됐다**
+      // (2026-08-24 검수 4차 — V*CM 인덱스 공유, turnA.js §turnASpec 근거).
+      // 그래서 구 «3중 조합 제외» 조건을 걷었다 — 운영자 요구 «중앙 QR 일 때
+      // V-CM 선택 가능해야 됨».
       // a-cm 의 centerQr 병용은 C2a 개설 그대로다 (CMQ).
       opts.cornerMarker = true;
       if (cfg.turnA === true) opts.turnA = true;
-    } else if (cfg.turnA === true && !centralV0Selected) {
+    } else if (cfg.turnA === true) {
+      // ⚠ **의도적 갱신 (2026-08-24 검수 4차)** — 여기 있던 `&& !centralV0Selected`
+      // 는 encodeA 의 구 배타(centralV0 × turnA 던짐)를 UI 가 미리 피하던 자리다.
+      // 그 배타는 개설됐는데(기하 확정 — 중앙 슬롯은 회전 불변·셀 밖) 이 조건이
+      // 남아 **중앙 TL + 외곽 없음** 조합에서 turnA 를 조용히 떨궜다 — 화면은
+      // 역삼각을 켠 채 정삼각이 나오는 «켰는데 안 먹는» 상태였다 (운영자 실측).
       opts.turnA = true;
     }
     return { fn: encodeA, opts };

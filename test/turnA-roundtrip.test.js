@@ -162,3 +162,44 @@ test('턴A × 비컨 렌더 개설 — 코너 QR 조합도 **렌더는** 선다 
   });
   assert.ok(scene.shapes.length > 0, '턴A × 비컨 × 코너 QR 렌더가 비었다');
 });
+
+/*
+ * 검수 4차 (운영자 2026-08-24) 회귀 2건.
+ *  ① «중앙 TL 일 때 외곽 자리 없음 → 정삼각으로 렌더» — index.html encodeOptsFor 의
+ *    `&& !centralV0Selected` 가 turnA 를 조용히 떨궜다 (encodeA 배타는 이미 열렸는데
+ *    UI 가 옛 배타를 계속 피하고 있었다). 여기서는 **인코더 계약**을 잠근다 —
+ *    UI 서명 잠금은 test/generator-ui-wiring.test.js 쪽이다.
+ *  ② «중앙 QR 일 때 V-CM 선택 불가» — V-CMQ 개설. V*CM 인덱스 공유가 무해한
+ *    이유는 turnA.js §turnASpec 에 있다 (회계 동일 → 두 해석이 같은 데이터).
+ */
+test('④-① 턴A × 비컨 × 외곽 없음 — turnA 가 살아서 인코딩된다', () => {
+  for (const version of [0, 1, 2]) {
+    const enc = encodeA('tv' + version, {
+      version, eccLevel: 'M', turnA: true, centralV0: true,
+    });
+    assert.equal(enc.turnA, true, 'V' + version + ': turnA 가 떨어졌다 — ▽ 가 안 그려진다');
+    assert.equal(enc.centralV0, true);
+  }
+});
+
+test('④-② V-CMQ 왕복 — 중앙 QR + V-CM 이 V*CM 인덱스 공유로 원문까지 돈다', () => {
+  for (const version of [0, 1, 2]) {
+    const text = 'vcmq' + version;
+    const encoded = encodeA(text, {
+      version, eccLevel: 'M', turnA: true, cornerMarker: true, centerQr: true,
+    });
+    assert.equal(encoded.centerQr, true);
+    assert.equal(encoded.turnA, true);
+    // 인덱스는 V*CM 과 **같아야** 한다 (공유가 이 개설의 전부다).
+    const cm = turnASpec(version, { cornerMarker: true });
+    const cmq = turnASpec(version, { cornerMarker: true, centerQr: true });
+    assert.equal(cmq.formatIndex, cm.formatIndex,
+      'V' + version + 'CMQ 가 별도 칸을 잡았다 — hex·tri (값,k) 는 48/48 로 꽉 차 있다');
+    const scene = buildScene(encoded, {
+      palette: PALETTE, margin: 20, qrText: CENTER_QR_TEXT,
+    });
+    const out = decodeFrontend(rasterize(scene, { pixelsPerUnit: 24, supersample: 2 }), {});
+    assert.equal(out.ok, true, text + ': ' + JSON.stringify(out.reason ?? null));
+    assert.equal(out.text, text, text);
+  }
+});

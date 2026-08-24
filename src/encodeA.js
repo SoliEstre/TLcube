@@ -146,10 +146,9 @@ export function encodeA(text, options = {}) {
   //      셀 정립)은 배치의 서로소성을 보존한다 (markerA ④ 자기검증 + 렌더 왕복 실측).
   //   ② 표 명시 확장 — V 표 말미 V0CM/V1CM/V2CM (turnA.js, 잔여 3칸 정확 소진).
   //   ③ 구 락(여기 있던 «배치 검증 미실시» 던짐)을 이 양성 경로로 전환.
-  // ⚠ V-CMQ(+centerQr)는 **보류** — (값,k) 잔여 0 (markerG 로드 자기검증이 잰다).
-  if (turnA && cornerMarker && centerQr) {
-    throw new RangeError('turnA + cornerMarker + centerQr(V-CMQ) 는 보류다 — 포맷 인덱스 잔여 칸 0 (turnA.js §V-CM 회계)');
-  }
+  // V-CMQ — **개설** (2026-08-24 검수 4차). 구 «잔여 칸 0 보류» 는 «새 칸이
+  // 필요하다» 는 전제가 틀렸다: V*CM 인덱스 공유가 무해하고 왕복이 선다
+  // (turnA.js §turnASpec 의 근거·실측). 배타 개설 정형대로 락은 양성 단언으로.
   if (turnA && daehanFinder) {
     throw new RangeError('turnA 와 daehanFinder 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }

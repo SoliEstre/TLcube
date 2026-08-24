@@ -110,6 +110,18 @@ test('조회 함수 — 정방향·역방향 왕복', () => {
   }
   assert.equal(turnASpecFromFormatIndex(7, 6), null);
   assert.throws(() => turnASpec(3), RangeError);
-  // V-CMQ 보류 — 조용한 폴백 없이 던진다 (개설되면 이 단언을 갱신하라).
-  assert.throws(() => turnASpec(0, { centerQr: true, cornerMarker: true }), RangeError);
+  // **의도적 갱신 (2026-08-24 검수 4차)** — 구 락의 «개설되면 이 단언을 갱신하라»
+  // 를 이행한다. V-CMQ 는 V*CM 인덱스를 공유한다 (turnA.js §turnASpec 의 근거).
+  for (const version of [0, 1, 2]) {
+    assert.equal(
+      turnASpec(version, { centerQr: true, cornerMarker: true }).formatIndex,
+      turnASpec(version, { cornerMarker: true }).formatIndex,
+      'V' + version + 'CMQ 가 V' + version + 'CM 과 다른 칸을 잡았다',
+    );
+  }
+  // 공유는 **cornerMarker 가 있을 때만**이다 — 순수 V*Q 는 자기 칸이 있다.
+  assert.notEqual(
+    turnASpec(0, { centerQr: true }).formatIndex,
+    turnASpec(0, { cornerMarker: true }).formatIndex,
+  );
 });

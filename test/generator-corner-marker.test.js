@@ -133,13 +133,16 @@ test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 
   assert.equal(vcm.formatIndex, 3, 'V1CM 의 formatIndex 가 V 표(3, k8)와 다르다');
   assert.equal(vcm.turnA, true);
   assert.equal(vcm.cornerMarker, true);
-  // V-CMQ(+centerQr)만 남은 배제다 — 와이어 잔여 0 (turnA.js §V-CM 회계).
-  assert.throws(
-    () => encodeA('x', {
-      version: 1, eccLevel: 'M', cornerMarker: true, turnA: true, centerQr: true,
-    }),
-    RangeError,
-  );
+  // **의도적 갱신 (2026-08-24 검수 4차)** — V-CMQ 도 개설됐다 (운영자 «중앙 QR 일 때
+  // V-CM 선택 가능해야 됨»). 새 칸을 만든 게 아니라 **V*CM 인덱스 공유**다 —
+  // centerQr 는 셀 회계를 안 바꾸므로 두 해석이 같은 데이터를 낸다 (turnA.js
+  // §turnASpec). 구 «던진다» 락은 그 공유를 재는 양성 단언으로 전환.
+  const vcmq = encodeA('x', {
+    version: 1, eccLevel: 'M', cornerMarker: true, turnA: true, centerQr: true,
+  });
+  assert.equal(vcmq.formatIndex, vcm.formatIndex,
+    'V1CMQ 가 V1CM 과 다른 칸을 잡았다 — hex·tri (값,k) 는 48/48 로 꽉 차 있다');
+  assert.equal(vcmq.centerQr, true);
   // UI 의 방향-자리 일관성 (Wave 3 ④): 자리를 고르면 방향이 확정되고,
   assert.match(INDEX, /if \(generatorState\.outerSeat === 'a-cm'\) generatorState\.turnA = false;/,
     'a-cm 선택이 방향(정삼각)을 확정하는 줄이 없다');
@@ -150,9 +153,11 @@ test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 
     '턴A on 시 a-cm → v-cm 승계 줄이 없다');
   assert.match(INDEX, /generatorState\.outerSeat = 'a-cm';/,
     '턴A off 시 v-cm → a-cm 승계 줄이 없다');
-  // v-cm × 중앙 QR (V-CMQ 보류) 잠금 + 사유 힌트.
-  assert.match(INDEX, /const vcmQrLocked = generatorState\.qrPosition === 'inner';/,
-    'v-cm 의 중앙 QR 잠금이 없다 — V-CMQ 보류(와이어 잔여 0)가 UI 에 안 닿는다');
+  // v-cm × 중앙 QR 잠금은 **걷혔다** (V-CMQ 개설) — 되살아나면 회귀다.
+  assert.doesNotMatch(INDEX, /const vcmQrLocked =/,
+    'v-cm 의 중앙 QR 잠금이 되살아났다 — V-CMQ 개설(2026-08-24)의 회귀');
+  assert.match(INDEX, /const vcmLocked = seat === 'v-cm' && !turnAOn;/,
+    'v-cm 잠금이 «방향 필요» 하나로 좁혀지지 않았다');
   // encodeOptsFor 에서도 코너 마커가 먼저 이긴다 (저장·URL 로 옛 조합이 들어와도)
   const opts = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
   const cmAt = opts.indexOf('cfg.cornerMarker === true');

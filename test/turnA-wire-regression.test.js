@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import { encodeA } from '../src/encodeA.js';
 import { VERSIONS_A } from '../src/capacityA.js';
 import {
-  TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX, CUBE_AXIS_FORMAT_INDEXES,
+  TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX, CUBE_AXIS_FORMAT_INDEXES, turnASpec,
 } from '../src/turnA.js';
 
 /**
@@ -170,10 +170,20 @@ test('턴A 인코더 — 표 주도로 낸다 (산술 유도가 아니다)', () 
     assert.equal(encoded.turnA, true);
     assert.equal(encoded.k, entry.k, entry.name + ' 의 k 가 표와 다르다');
   }
-  // V-CMQ 보류 — 인코더가 정직하게 던진다 (조용한 폴백 금지).
-  assert.throws(() => encodeA('x', {
+  // **의도적 갱신 (2026-08-24 검수 4차)** — V-CMQ 개설. 구 락은 «던진다» 였고,
+  // 그 근거(«새 칸이 필요한데 잔여 0»)는 전제가 틀렸다: V*CM 인덱스 **공유**가
+  // 무해하다 (centerQr 는 셀 회계를 안 바꾸므로 두 해석이 같은 데이터를 낸다).
+  // 락은 삭제가 아니라 양성 단언으로 — 공유가 유지되는지를 값으로 잠근다.
+  const cmq = encodeA('x', {
     version: 0, turnA: true, cornerMarker: true, centerQr: true,
-  }), RangeError);
+  });
+  assert.equal(cmq.centerQr, true);
+  assert.equal(cmq.turnA, true);
+  assert.equal(
+    turnASpec(0, { cornerMarker: true, centerQr: true }).formatIndex,
+    turnASpec(0, { cornerMarker: true }).formatIndex,
+    'V0CMQ 가 별도 (값,k) 를 잡았다 — hex·tri 공간은 48/48 로 꽉 차 있다',
+  );
 });
 
 test('턴A ↔ 기본 A 의 formatIndex 공유 — 방향 판별이 기하로 가른다 (2026-08-24 개통)', () => {

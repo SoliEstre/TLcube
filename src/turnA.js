@@ -93,10 +93,23 @@ export function hexTriAxisOccupancy() {
 export function turnASpec(version, options = {}) {
   const centerQr = options.centerQr === true;
   const cornerMarker = options.cornerMarker === true;
-  const spec = TURN_A_FORMAT_INDEX.find(
+  // **V-CMQ 는 V*CM 인덱스를 공유한다** (운영자 요구 2026-08-24 «중앙 QR 일 때
+  // V-CM 선택 가능해야 됨», 실측 개설). 왜 새 칸을 안 만드나 — 못 만든다:
+  // hex·tri (값,k) 공간은 48/48 로 **정확히 꽉 찼고**, 남은 것은 K1=7 과 cube 8..11
+  // 예약뿐인데 그 둘은 formatK(star 축)·cube 축의 **교차 패밀리 가드**가 기대는
+  // 자리다 (formatK.js 헤더 ①②). 그리고 **공유가 무해하다**: centerQr 는 셀 회계를
+  // 바꾸지 않으므로(중앙 슬롯은 셀 밖) CM 해석과 CMQ 해석이 **같은 데이터 셀**을
+  // 낸다 — 모호성이 원리적으로 없다. 실측: V0/V1/V2 × centerQr 왕복 원문 일치
+  // (test/turnA-roundtrip.test.js §V-CMQ).
+  let spec = TURN_A_FORMAT_INDEX.find(
     (entry) => entry.version === version && entry.centerQr === centerQr
       && (entry.cornerMarker === true) === cornerMarker,
   );
+  if (!spec && cornerMarker && centerQr) {
+    spec = TURN_A_FORMAT_INDEX.find(
+      (entry) => entry.version === version && entry.cornerMarker === true,
+    );
+  }
   if (!spec) {
     throw new RangeError('알 수 없는 턴A 버전: ' + version
       + (centerQr ? '+centerQr' : '') + (cornerMarker ? '+cornerMarker' : ''));
