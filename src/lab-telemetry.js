@@ -1071,7 +1071,10 @@ export function extractGeometry(result, width, height) {
   if (hypothesis && Number.isFinite(hypothesis.rotationDegrees)) {
     geo.rotationDeg = hypothesis.rotationDegrees;
   }
-  if (hypothesis && Number.isFinite(hypothesis.geometryResidual)) {
+  // F-95 (2026-08-24): 미실측 잔차(리터럴 0 위장)는 싣지 않는다 — 필드 생략이
+  // 정직이다. 마커 정본은 decoder/contracts.js JSDoc (geometryResidualMeasured).
+  if (hypothesis && Number.isFinite(hypothesis.geometryResidual)
+    && hypothesis.geometryResidualMeasured !== false) {
     geo.residualPx = hypothesis.geometryResidual;
   }
   if (hypothesis && Number.isFinite(hypothesis.cellSizePx) && hypothesis.cellSizePx > 0) {
