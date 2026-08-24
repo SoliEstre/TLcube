@@ -21,6 +21,7 @@ import {
   coordKey,
   createUniversalEditorState,
   defaultSizeForType,
+  CELL_TYPES,
   enumerateCells,
   getCellTone,
   invertAllTones,
@@ -558,4 +559,30 @@ test('독립 편집기도 «실제 변경 없으면 스텝 없음»·붓질 자�
   );
   // 도구 단축키는 수식키 없는 맨 키에서만 — Ctrl+B/Ctrl+E/Cmd+I 가로채기 금지.
   assert.match(app, /if \(ev\.ctrlKey \|\| ev\.metaKey \|\| ev\.altKey\) return;/);
+});
+
+test('Type V (턴A) — A 의 180° 상이고 역할·이웃이 사상으로 따라온다', () => {
+  // 운영자 2026-08-24 «편집기에 턴A부터 추가» — V-CM 심볼을 그리려면 편집기가
+  // 역삼각 영역을 알아야 한다. 손 좌표·새 상수 0: regionCellsTurnA 사상 재사용이라
+  // A 가 바뀌면 V 가 자동으로 따라온다 (사본이 아니라 유도).
+  assert.ok(CELL_TYPES.includes('V'), 'V 가 타입 목록에 없다');
+  for (const k of [4, 6, 8, 10]) {
+    const a = enumerateCells('A', k);
+    const v = enumerateCells('V', k);
+    assert.equal(v.length, a.length, 'k=' + k + ': V 셀 수가 A 와 다르다');
+    const mirrored = new Set(a.map((c) => (-c.q) + ',' + (-c.r)));
+    for (const c of v) {
+      assert.ok(mirrored.has(c.q + ',' + c.r),
+        'k=' + k + ': V 셀 (' + c.q + ',' + c.r + ') 이 A 의 180° 상이 아니다');
+    }
+  }
+  // 역할: 중앙 19셀은 180° 불변이라 A 와 같은 답, 패치는 사상된 자리의 A 역할.
+  const k = 4;
+  for (const c of enumerateCells('V', k)) {
+    assert.equal(
+      roleOfCoord('V', k, c, { finderMode: 'central-finder' }),
+      roleOfCoord('A', k, { q: -c.q, r: -c.r }, { finderMode: 'central-finder' }),
+      'V 역할이 A 의 사상과 갈렸다: ' + c.q + ',' + c.r,
+    );
+  }
 });

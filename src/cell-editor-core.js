@@ -49,6 +49,7 @@ import {
   buildRoleSetsA,
   isInRegionA,
   patchOfA,
+  regionCellsTurnA,
   roleOfA,
 } from './placementA.js';
 import {
@@ -98,7 +99,9 @@ export function bullseyeCellMasks() {
 export const CELL_EDITOR_SCHEMA_V1 = 'tlcube-y-cell-editor/v1';
 export const CELL_EDITOR_SCHEMA_V2 = 'tlcube-cell-editor/v2';
 
-export const CELL_TYPES = Object.freeze(['Y', 'O', 'A', 'K']);
+// V = 턴A (내부 타입 V, 역삼각 Type A) — 2026-08-24 편입. A 의 **180° 상**이라
+// 손 좌표·새 상수 0 이다 (placementA.regionCellsTurnA 사상 재사용).
+export const CELL_TYPES = Object.freeze(['Y', 'O', 'A', 'K', 'V']);
 export const DEFAULT_CELL_TYPE = 'Y';
 
 export const EDIT_MODES = Object.freeze(['tone', 'mask']);
@@ -415,6 +418,11 @@ export function enumerateCells(type, size) {
     }
     return cells;
   }
+  if (type === 'V') {
+    // 턴A — regionCellsA 의 180° 상. 사상 함수를 그대로 쓰므로 «A 와 같은 길이·
+    // 같은 순서» 가 정본에서 보장된다 (placementA 로드 자기검증).
+    return regionCellsTurnA(size).map((cell) => ({ q: cell.q, r: cell.r }));
+  }
   if (type === 'K') {
     const cells = [];
     const k = size;
@@ -512,6 +520,17 @@ export function roleOfCoord(type, size, c, options = {}) {
       return 'data';
     }
     return roleOfA(c.q, c.r, size);
+  }
+  if (type === 'V') {
+    // 역할도 사상이다 — (q,r) 을 A 좌표로 되돌려 roleOfA 에 묻는다. 중앙 19셀은
+    // 180° 불변이라 파인더/데이터 분기는 A 와 한 값도 다르지 않다.
+    if (finderMode === 'central-finder' && isCenterCell(type, c)) {
+      return 'finder';
+    }
+    if (finderMode === 'full-surface' && isCenterCell(type, c)) {
+      return 'data';
+    }
+    return roleOfA(-c.q, -c.r, size);
   }
   if (type === 'K') {
     if (finderMode === 'central-finder' && isCenterCell(type, c)) {
@@ -781,6 +800,7 @@ export function getFaceNeighbors(type, size, face, c) {
     const isValid = (nq, nr) => {
       if (type === 'O') return hexDistance(nq, nr) <= size;
       if (type === 'A') return isInRegionA(nq, nr, size);
+      if (type === 'V') return isInRegionA(-nq, -nr, size);
       if (type === 'K') return isInRegionK(nq, nr, size);
       return false;
     };
