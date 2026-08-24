@@ -263,16 +263,34 @@ export function markerCellsTurnA(k, tonesByKey) {
   return markerCellsA(k, tonesByKey).map((cell) => ({ ...cell, q: -cell.q, r: -cell.r }));
 }
 
-/** 코너별 묶음 — 검출기가 «코너 단위» 로 다룬다. 기준점(anchor)은 링 중심이다.
- *  `tonesByKey` 는 `markerCellsA` 로 그대로 승계된다 (절대 톤 검증용). */
-export function markerGroupsA(k, tonesByKey) {
-  const cells = markerCellsA(k, tonesByKey);
+function groupByCorner(cells) {
   const groups = [];
   for (const cell of cells) {
     if (!groups[cell.corner]) groups[cell.corner] = { corner: cell.corner, cells: [], anchorLabel: 'Z' };
     groups[cell.corner].cells.push(cell);
   }
   return groups;
+}
+
+/** 코너별 묶음 — 검출기가 «코너 단위» 로 다룬다. 기준점(anchor)은 링 중심이다.
+ *  `tonesByKey` 는 `markerCellsA` 로 그대로 승계된다 (절대 톤 검증용). */
+export function markerGroupsA(k, tonesByKey) {
+  return groupByCorner(markerCellsA(k, tonesByKey));
+}
+
+/**
+ * 턴A(역삼각) 배치의 코너별 묶음 — `markerGroupsA` 의 180° 상.
+ *
+ * 왜 «H 를 180° 돌리기» 가 아니라 좌표 사상인가: 턴A 계약은 **배치만 180° 회전 ·
+ * 셀은 정립**이다. H 를 돌리면 셀의 T/L/R 면까지 함께 돌아가 기대 톤·digit 이
+ * 전부 어긋난다. 그래서 인코더(`markerCellsTurnA`)와 **같은 사상**을 쓴다.
+ *
+ * 이게 없어서 코너 마커 검출기는 V-CM 을 원리적으로 못 맞췄다: 시도하는 방향이
+ * 0°/120°/240° 뿐이고 180° 는 그 배수가 아니다. 앵커 검출기는 이미 «정삼각 +
+ * 역삼각» 두 변형을 내는데 마커 쪽만 안 따라온 자리였다 (2026-08-25 실측).
+ */
+export function markerGroupsTurnA(k, tonesByKey) {
+  return groupByCorner(markerCellsTurnA(k, tonesByKey));
 }
 
 // ─────────────────────────────────────────────────────────────────────────

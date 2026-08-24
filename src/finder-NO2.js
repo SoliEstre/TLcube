@@ -244,6 +244,29 @@ export function no2SeatMarkerCellsA(k) {
 }
 
 /**
+ * 같은 21셀을 **턴A 자리(역삼각)** 좌표로. V-CM 을 읽는 쪽이 쓰는 기대값이다.
+ *
+ * ⚠ 왜 이게 필요한가 — 검출기가 `markerCellsA(k)`(21셀 **전부 digit**)로 재면
+ * V-CM 에서 agreement 가 **45/63 = 0.7143** 에 고정된다. NO2 가 톤으로 덮은 6셀은
+ * digit 순위와 어긋나 통째로 0점이 되기 때문이고, 그 값은 게이트 0.78 바로 아래다
+ * (2026-08-25 실측 — `tri-marker-*-turn` 이 정확히 0.7143). 게이트를 낮추는 게
+ * 아니라 **기대값을 바로잡는** 자리다: 6셀은 톤으로, 15셀은 digit 으로 잰다.
+ */
+export function no2SeatMarkerCellsTurnA(k) {
+  return no2SeatMarkerCellsA(k).map((cell) => ({ ...cell, q: -cell.q, r: -cell.r }));
+}
+
+/** `no2SeatMarkerCellsTurnA` 의 코너별 묶음 — `markerGroupsA` 와 같은 형태. */
+export function no2SeatMarkerGroupsTurnA(k) {
+  const groups = [];
+  for (const cell of no2SeatMarkerCellsTurnA(k)) {
+    if (!groups[cell.corner]) groups[cell.corner] = { corner: cell.corner, cells: [], anchorLabel: 'Z' };
+    groups[cell.corner].cells.push(cell);
+  }
+  return groups;
+}
+
+/**
  * V-CM 자리에서 NO2 가 덮는 **꼭짓점 앵커 3셀** (톤 포함, canonical 좌표).
  * digit 은 `vertexAnchors` 그대로다 — 이 목록은 `tones` 오버레이 전용이다.
  *

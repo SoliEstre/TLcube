@@ -1027,6 +1027,11 @@
           Type Y
         </div>
       </div>
+      <!-- 실루엣 방향(#turnASection)이 **타입 선택 바로 아래**에 붙는 자리 (운영자 지시
+           2026-08-25). 방향은 타입 A 의 하위 축이라 타입에서 멀어지면 무엇의 방향인지가
+           안 읽힌다. 섹션 자체는 하나만 두고 setMode 가 활성 패널의 호스트로 **옮긴다**
+           — 두 벌을 두면 어느 쪽이 최신인지가 화면마다 갈린다 (자체검증 뱃지와 같은 관용구). -->
+      <div id="turnAHostNormal"></div>
 
       <div id="toneNormalSection" style="display:none">
         <label class="section-heading" data-i18n="g052">톤</label>
@@ -1222,6 +1227,9 @@
           Type Y
         </div>
       </div>
+      <!-- 실루엣 방향이 붙는 고급 쪽 호스트 — 일반의 #turnAHostNormal 과 짝이다.
+           setMode 가 활성 패널 쪽으로 #turnASection 을 옮긴다 (요소는 하나뿐). -->
+      <div id="turnAHostAdvanced"></div>
 
       <!-- ⚠ **의도적 갱신 (W2 C4, 2026-08-24)** — 여기 있던 #cornerMarkerSection
            (코너 자리 예약 켬/끔 2카드)은 검출기 3구역 개편으로 소멸했다. O-CM/A-CM
@@ -5844,6 +5852,7 @@ import { digitToRanks } from './src/lehmer.js';
 //   질의로 대체됐다 — 슬롯 레이아웃이 셋이 되면서 «id 를 여기 또 적는» 방식이
 //   빠뜨리기 쉬운 자리가 됐기 때문이다 (상수 자체는 cellSurfaceFinal.js 에 그대로 산다).
 import {
+  CELL_SURFACE_FINAL_NS,
   CENTRAL_V0_SOURCE_N, cellSurfaceFinal, centralV0FinderCells, hasCenterQrSlot,
 } from './src/cellSurfaceFinal.js';
 import { faceBasis, layoutForCube, moduleQuad, YFACES } from './src/ygrid.js';
@@ -5856,6 +5865,7 @@ import {
 // 다중 타입(O/A) 격자·역할·직렬화는 독립 편집기와 **같은 코어**를 쓴다 — 표시 규칙이
 // 두 편집기에서 갈라지지 않게 하려는 선택이다 (기하는 placement/placementA 원본 그대로).
 import {
+  CELL_TYPES as CORE_CELL_TYPES,
   applyFinderStarter,
   cycleCellTone as cycleCoreTone,
   enumerateCells as enumerateCoreCells,
@@ -6003,6 +6013,7 @@ const els = {
   helpPopoverClose: $('helpPopoverClose'),
   selfCheckRow: $('selfCheckRow'),
   selfCheckHostNormal: $('selfCheckHostNormal'), selfCheckHostAdvanced: $('selfCheckHostAdvanced'),
+  turnAHostNormal: $('turnAHostNormal'), turnAHostAdvanced: $('turnAHostAdvanced'),
   nUrlClear: $('nUrlClear'), nTextClear: $('nTextClear'),
   customStyleCard: $('customStyleCard'), customChips: $('customChips'),
   hueRow: $('hueRow'), hueBar: $('hueBar'), hueValue: $('hueValue'),
@@ -6717,6 +6728,13 @@ function setMode(next) {
     ? els.selfCheckHostAdvanced : els.selfCheckHostNormal;
   if (selfCheckHost && els.selfCheckRow.parentElement !== selfCheckHost) {
     selfCheckHost.appendChild(els.selfCheckRow);
+  }
+  // 실루엣 방향도 같은 관용구 — **타입 선택 바로 아래**가 제자리다 (운영자 지시
+  // 2026-08-25). 종전엔 #sharedControls 안(검출기 섹션 앞)이라 타입에서 멀었고,
+  // «무엇의 방향인가» 가 안 읽혔다. 요소는 하나뿐이고 호스트만 갈아탄다.
+  const turnAHost = mode === 'advanced' ? els.turnAHostAdvanced : els.turnAHostNormal;
+  if (turnAHost && els.turnASection && els.turnASection.parentElement !== turnAHost) {
+    turnAHost.appendChild(els.turnASection);
   }
   syncTypeUi();
   syncStyleUi();
@@ -8182,11 +8200,16 @@ wireSeatCards(els.outerSeatCards, 'outerSeat');
 const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
 
 /**
- * 셀 편집기가 여는 타입. **K 는 빠져 있다** — 육망성 실루엣은 렌더러 계약이 아직
- * 안 넓어졌다(태스크 #11 «K 꼭짓점 회계 실험» 이 앵커/마커를 정하기 전까지 표시할
- * 정본 역할표가 없다). 코어(cell-editor-core.js)는 K 를 알지만 여기선 안 연다.
+ * 셀 편집기가 여는 타입 — **코어(cell-editor-core.js)에서 유도한다.**
+ *
+ * ⚠ 종전엔 손으로 유지한 사본 `['Y','O','A']` 였다. 나중에 G·V·K 버튼을 DOM 에
+ * 붙였는데 이 목록을 안 늘려서, 클릭 핸들러의 `!includes(nextType) → return` 이
+ * 삼켜 **«버튼은 있는데 아무 일도 안 나는»** 상태가 됐다 (2026-08-25 운영자 신고).
+ * 게다가 같은 목록이 «생성기 타입 추종»(syncTypeYCellEditorUi) 도 거르므로
+ * **자동 선택까지 함께** 막고 있었다 — 한 목록이 두 증상을 냈다.
+ * 정본은 코어 하나다. DOM 버튼과의 일치는 `type-y-cell-editor-lab.test.js` 가 잠근다.
  */
-const CELL_EDITOR_TYPES = Object.freeze(['Y', 'O', 'A']);
+const CELL_EDITOR_TYPES = CORE_CELL_TYPES;
 
 let yCellEditorWired = false;
 let yCellEditorStore = null;
@@ -8196,10 +8219,25 @@ let lastEncodedYn = 0;
 let lastEncodedKO = 0;
 let lastEncodedKA = 0;
 
-/** 편집 대상 타입. 생성기 타입을 따라가되 카드로 갈아탈 수 있다. */
+/** 편집 대상 타입. 생성기 조합을 따라가되 카드로 갈아탈 수 있다. */
 let cellEditorType = 'Y';
-/** 생성기 타입 추종용 — 생성기가 바뀐 순간에만 편집 타입을 끌어온다. */
+/** 생성기 조합 추종용 — 조합이 바뀐 순간에만 편집 타입을 끌어온다. */
 let cellEditorFollowedType = null;
+
+/**
+ * 생성기의 현재 **조합** → 편집 격자 타입. 타입 하나로는 안 정해진다:
+ *   · O + 안쪽 자리 o-cm → **G** (O 격자 + 마커 12셀 예약)
+ *   · A + 턴A            → **V** (A 의 180° 상 — 배치만 뒤집히고 셀은 정립)
+ *   · 그 외              → 타입 그대로 (Y · O · A · K)
+ * 자리·방향을 안 보면 편집기가 «생성기와 다른 격자» 를 열고, 그 위에 그린 작화는
+ * 좌표가 어긋난 채 저장된다.
+ */
+function effectiveEditorTypeFromGenerator() {
+  const t = generatorState.type;
+  if (t === 'O') return generatorState.innerSeat === 'o-cm' ? 'G' : 'O';
+  if (t === 'A') return generatorState.turnA === true ? 'V' : 'A';
+  return t;
+}
 /** O/A 상태는 (타입,k) 별로 산다 — cell-editor-core 상태 그대로다. */
 const cellEditorHexStates = new Map();
 /** 되돌리기 스택 (버킷 = 타입·크기). 규칙은 cell-editor-history.js 가 소유. */
@@ -8855,14 +8893,18 @@ async function copyTypeYCellEditorJson() {
 function syncTypeYCellEditorUi() {
   const section = els.yCellEditorSection;
   if (!section) return;
-  // 편집기가 여는 타입은 Y·O·A 다 (K 제외 — CELL_EDITOR_TYPES 주석 참조).
-  const show = isLabPath() && CELL_EDITOR_TYPES.includes(generatorState.type);
+  const followed = effectiveEditorTypeFromGenerator();
+  const show = isLabPath() && CELL_EDITOR_TYPES.includes(followed);
   section.hidden = !show;
   if (!show || !yCellEditorWired) return;
-  // 생성기 타입이 **바뀐 순간**에만 편집 타입을 끌어온다. 그 뒤엔 카드 선택이 이긴다.
-  if (cellEditorFollowedType !== generatorState.type) {
-    cellEditorFollowedType = generatorState.type;
-    if (CELL_EDITOR_TYPES.includes(generatorState.type)) cellEditorType = generatorState.type;
+  // 생성기 **조합**이 바뀐 순간에만 편집 타입을 끌어온다. 그 뒤엔 카드 선택이 이긴다.
+  // ⚠ 종전엔 `generatorState.type` 만 봤다. 그래서 턴A 를 켜도 type 은 여전히 'A' 라
+  //   편집기가 정립 삼각(A)을 열었고, O-CM 을 켜도 'O' 라 자리 예약이 없는 O 를 열었다
+  //   («편집 타입 자동 선택이 안 맞는다» — 2026-08-25 운영자 신고). 타입 하나가 아니라
+  //   (타입 × 방향 × 자리) 조합이 편집 격자를 정한다.
+  if (cellEditorFollowedType !== followed) {
+    cellEditorFollowedType = followed;
+    cellEditorType = followed;
   }
   if (!CELL_EDITOR_TYPES.includes(cellEditorType)) cellEditorType = 'Y';
   const ctx = cellEditorContext();
@@ -9716,6 +9758,27 @@ function syncYLocatorUi() {
     const hidden = !inner ? []
       : far ? [LOCATOR_PROFILE_CELL_SURFACE_V0, LOCATOR_PROFILE_CELL_SURFACE_V0TRQ]
         : [LOCATOR_PROFILE_CELL_SURFACE_V0, LOCATOR_PROFILE_CELL_SURFACE_V0T];
+    // **옵션 필터 2단 (검수 5차 ②, 2026-08-25)** — 버전 축도 본다.
+    // 프로파일은 셀 표면 **레이아웃**이고 레이아웃마다 성립하는 n 이 정해져 있다
+    // (v0 = 13 · T 계열 전부 = 21). 그래서 «지금 버전의 n 을 지원하지 않는 프로파일»
+    // 은 원리적으로 못 고른다 — 종전 필터는 안쪽 QR × 면배치만 봐서 그 카드들이
+    // 그대로 떠 있었고, 고르면 조용히 안 먹었다.
+    // ⚠ 목록을 손으로 적지 않는다. `CELL_SURFACE_FINAL_NS` 가 정본이고, 라인업이
+    //   바뀌면 필터가 저절로 따라온다 (사본을 만들면 또 갈린다).
+    // ⚠ 'auto' 는 잠그지 않는다 — 자동의 버전은 렌더 시점에 정해진다.
+    if (generatorState.versionY !== 'auto') {
+      const spec = versionSpecY(Number(generatorState.versionY), 2);
+      const activeN = spec ? spec.n : null;
+      if (activeN !== null) {
+        for (const card of els.yLocatorCards.children) {
+          const id = card.dataset.locator;
+          if (!id || id === 'auto' || id === LOCATOR_PROFILE_OFF) continue;
+          const layout = id.replace(/^cell-surface-/, '');
+          const ns = CELL_SURFACE_FINAL_NS[layout];
+          if (!ns || !ns.includes(activeN)) hidden.push(id);
+        }
+      }
+    }
     for (const card of els.yLocatorCards.children) {
       const isAutoCard = card.dataset.locator === 'auto';
       card.style.display = hidden.includes(card.dataset.locator) ? 'none' : '';
@@ -10189,6 +10252,16 @@ function buildConfig() {
       || (type === 'A' && ((generatorState.outerSeat === 'a-cm' && generatorState.turnA !== true)
         || (generatorState.outerSeat === 'v-cm' && generatorState.turnA === true))),
     markerTones: type === 'O' && generatorState.innerSeat === 'o-cm',
+    // NO2 정본은 **9셀**(꼭짓점 앵커 3 + 이웃 6)인데 앵커 3셀은 톤이 평평해서
+    // ({T:0,L:0,R:0} — 정본 그대로) 순위 분리가 0 이다. 그리는 순간 그 자리에서
+    // digit 을 못 읽으므로, 앵커가 **유일한 격자 씨앗**인 V-CM(중앙 QR 없음)에서는
+    // 검출이 통째로 죽는다 (실측 2026-08-25: 켜면 72/72 → 0/72).
+    // 중앙 QR 이 있으면 QR 이 격자를 잡아 주므로 앵커를 덮어도 **72/72 불변**이다.
+    // 그래서 «공짜인 자리에서만» 정본 9셀을 그린다 — 원장 F-111 이 남은 반쪽의 이름이다.
+    no2AnchorTones: type === 'A'
+      && generatorState.turnA === true
+      && generatorState.outerSeat === 'v-cm'
+      && generatorState.finderPatternId === CENTER_QR_FINDER_PATTERN_ID,
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
       ? TL_READER_URL : generatorState.qrText.trim(),
@@ -10725,7 +10798,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-25.01';
+const GENERATOR_BUILD = '2026-08-25.02';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

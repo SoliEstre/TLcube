@@ -48,18 +48,26 @@ function langBlock(lang) {
   throw new Error(`${lang} 사전이 닫히지 않는다`);
 }
 
-test('/lab/ + Y·O·A 에서 섹션을 열고 정식판에서는 숨긴다 (K 는 아예 없다)', () => {
+test('/lab/ 에서 섹션을 열고 정식판에서는 숨긴다 · 게이트 목록은 코어에서 유도한다', () => {
   assert.match(INDEX, /id="yCellEditorSection"/);
   assert.match(INDEX, /data-i18n="g521"/);
   assert.match(INDEX, /function syncTypeYCellEditorUi\(\)/);
-  // 편집기 게이트 — 타입 목록으로 열린다. 목록 자체도 못 박는다 (K 편입 사고 방지).
-  // 함수 이름에 앵커한다: 문자열만 물면 다른 함수의 같은 표현을 물어 «아무것도 안
-  // 지키는» 단언이 된다 (아래 로케이터 게이트와 실제로 그런 사고가 났다).
-  assert.match(INDEX, /const CELL_EDITOR_TYPES = Object\.freeze\(\['Y', 'O', 'A'\]\)/);
+  // **의도적 갱신 (2026-08-25)** — 구 락은 `Object.freeze(['Y','O','A'])` 라는 손
+  // 사본을 못 박고 있었다. 그런데 같은 파일의 «타입 여섯 + 사본 금지» 테스트와
+  // 정면으로 모순이었고, 그 모순이 실제 사고를 냈다: G·V·K 버튼을 DOM 에 붙였는데
+  // 이 목록을 못 늘려 클릭이 통째로 삼켜졌고(«버튼만 있고 안 먹음»), 그동안 스위트는
+  // 초록이었다 — 잡을 테스트가 있었는데 **엉뚱한 것을 쟀다.**
+  // 이제 사본을 금지하고 유도를 못 박는다.
+  assert.match(INDEX, /const CELL_EDITOR_TYPES = CORE_CELL_TYPES;/);
+  assert.doesNotMatch(INDEX, /const CELL_EDITOR_TYPES = Object\.freeze\(/,
+    '게이트 목록이 다시 손 사본이 됐다 — 코어에서 유도해야 한다');
+  // 게이트 주어는 «타입» 이 아니라 «조합» 이다: 턴A 를 켜면 type 은 여전히 'A' 라
+  // 타입만 보면 편집기가 생성기와 다른 격자를 연다.
   assert.match(
     INDEX,
-    /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(generatorState\.type\);/,
+    /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(followed\);/,
   );
+  assert.match(INDEX, /function effectiveEditorTypeFromGenerator\(\)/);
   // 로케이터 게이트 — 이쪽은 여전히 Y 전용이다 (편집기 게이트와 주어가 다르다).
   assert.match(
     INDEX,
@@ -206,10 +214,13 @@ test('시험판 번들에도 섹션이 있고 안정판은 런타임에 숨기�
   // **편집기 게이트를 안 물었다** — 같은 문자열이 syncYLocatorUi() 에도 있어서 그쪽으로
   // 통과했고, 편집기 게이트를 통째로 지워도 초록이었다. 첫 테스트에서 갈라낸 오진을
   // 번들 테스트가 그대로 하고 있었다. 이제 게이트마다 함수 이름에 앵커한다.
+  // 갱신 (2026-08-25): 게이트 주어가 «타입» → «조합» 이 됐다 (턴A·O-CM 은 type 만
+  // 봐서는 안 갈린다). 번들에도 그 형태로 실렸는지 같은 앵커로 확인한다.
   assert.match(
     official,
-    /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(generatorState\.type\);/,
+    /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(followed\);/,
   );
+  assert.match(official, /function effectiveEditorTypeFromGenerator\(\)/);
   assert.match(
     official,
     /function syncYLocatorUi\(\)[\s\S]{0,200}isLabPath\(\) && generatorState\.type === 'Y'/,

@@ -51,6 +51,7 @@ import { axialToPixel } from '../hexgrid.js';
 import { digitToRanks } from '../lehmer.js';
 import { markerCells, markerTetrads } from '../markerO.js';
 import { markerCellsA, markerGroupsA } from '../markerA.js';
+import { no2SeatMarkerCellsTurnA, no2SeatMarkerGroupsTurnA } from '../finder-NO2.js';
 import { sampleHexCell } from './grid-sample.js';
 import { estimateHomography4 } from './homography.js';
 import {
@@ -452,7 +453,11 @@ export function refineHomographyFromCorners(centerImagePoint, verification) {
  * @param {number[]|number} ks
  * @param {object} [options]
  */
-function findMarkerHypotheses(luma, bullseye, ks, options, family, groupsFor, cellsFor) {
+/**
+ * @param {{turn?: boolean, groups: (k:number)=>object[], cells: (k:number)=>object[]}[]} variants
+ *   배치 방향 변형 목록. hex 는 1개(정립), tri 는 2개(정립 + 턴A 역삼각)다.
+ */
+function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
   if (luma === null || luma === undefined) {
     return fail(FRONTEND_FAILURE.EMPTY_INPUT, { message: 'luma 가 없다' });
   }
@@ -475,12 +480,15 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, groupsFor, ce
   const hypotheses = [];
   const rejected = [];
   for (const k of kList) {
+    // 변형 = «배치 방향» 목록. tri 는 정삼각 + 역삼각(턴A) 둘이고 hex 는 하나다.
+    // 앵커 검출기(anchor-detect §anchorFactory)가 이미 쓰는 관용구를 그대로 따른다.
+    for (const variant of variants) {
     let groups;
     try {
-      cellsFor(k);
-      groups = groupsFor(k);
+      variant.cells(k);
+      groups = variant.groups(k);
     } catch (error) {
-      rejected.push({ k, reason: error.message });
+      rejected.push({ k, turn: variant.turn === true, reason: error.message });
       continue;
     }
     for (const orientation of ORIENTATIONS) {
@@ -511,6 +519,7 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, groupsFor, ce
         family,
         k,
         orientation,
+        turn: variant.turn === true,
         H,
         refinedH: refined,
         canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
@@ -520,7 +529,7 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, groupsFor, ce
         corners: verification.corners,
         meanRadiusRatio: verification.meanRadiusRatio,
         confirmAgreement: confirm ? confirm.agreement : 0,
-        hypothesisId: family + '-' + k + '-' + orientation,
+        hypothesisId: family + '-' + k + '-' + orientation + (variant.turn === true ? '-turn' : ''),
       };
       if (verification.accepted && confirmed) hypotheses.push(record);
       else {
@@ -536,9 +545,13 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, groupsFor, ce
         });
       }
     }
+    }
   }
 
-  hypotheses.sort((a, b) => a.k - b.k || a.orientation - b.orientation);
+  // 정립을 턴보다 앞에 둔다 — 기존 A-CM 프레임의 후보 순서를 바꾸지 않으려는 선택이다.
+  hypotheses.sort((a, b) => a.k - b.k
+    || (a.turn === true ? 1 : 0) - (b.turn === true ? 1 : 0)
+    || a.orientation - b.orientation);
   const diagnostics = {
     family,
     testedKs: kList,
@@ -561,8 +574,10 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, groupsFor, ce
  * @param {object} [options]
  */
 export function findOCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
+  // hex 는 턴 개념이 없다 — 변형 하나.
   return findMarkerHypotheses(
-    luma, bullseye, ks, options, 'hex-marker', markerTetrads, markerCells,
+    luma, bullseye, ks, options, 'hex-marker',
+    [{ turn: false, groups: markerTetrads, cells: markerCells }],
   );
 }
 
@@ -571,9 +586,17 @@ export function findOCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
  * 꼭짓점 앵커가 아니라 마커 자신의 중심이라, A 의 꼭짓점 앵커 계약을 전혀 안 건드린다.
  */
 export function findACornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
+  // 정립(A-CM) + 역삼각(V-CM, 턴A). 좌표 사상이지 H 회전이 **아니다** — 턴A 는
+  // «배치만 180° 회전 · 셀은 정립» 이라 H 를 돌리면 면 톤·digit 이 함께 돌아간다.
   return findMarkerHypotheses(
     luma, bullseye, ks, options, 'tri-marker',
-    markerGroupsA,
-    markerCellsA,
+    [
+      { turn: false, groups: markerGroupsA, cells: markerCellsA },
+      // 턴 변형의 기대값은 **NO2 자리 사상**이다 (V-CM 의 기본 심볼 =
+      // finder-taxonomy.SEAT_DEFAULT_FINDER['v-cm']). 21셀 전부를 digit 으로 재면
+      // NO2 가 덮은 6셀이 통째로 0점이 되어 agreement 가 0.7143 에 고정된다 —
+      // 게이트 0.78 바로 아래다. 6셀은 톤으로 · 15셀은 digit 으로 재야 맞다.
+      { turn: true, groups: no2SeatMarkerGroupsTurnA, cells: no2SeatMarkerCellsTurnA },
+    ],
   );
 }
