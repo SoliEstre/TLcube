@@ -143,18 +143,15 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   eccLevel: field('auto', BOTH, ['auto', 'H', 'M', 'L']),
   versionO: field('auto', BOTH, ['auto', 1, 2, 3]),
   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
-  // 턴A (역삼각 Type A, 2026-08-19 UI 편입) — Type A 전용. `INTERNAL` 인 이유는
-  // locatorProfileY 와 같다: **아직 lab 게이트 뒤**라 정식 화면의 노출 대조
-  // (index.html `data-state-keys`)에 들어가면 안 된다.
+  // 턴A (역삼각 Type A = **내부 타입 V**) — Type A 전용 구조 옵션.
   //
-  // ⚠ 왜 lab 뒤인가 (실측 2026-08-19): `encodeA(turnA:true)` 로 만든 코드는
-  //   라이브 경로(decodeFrontend)가 **0/3 으로 못 읽는다** (대조군 turnA:false 는
-  //   3/3). 인코더가 아직 역삼각 «기하» 를 안 내고(셀 좌표 집합이 정삼각과 동일,
-  //   format 15셀만 다르다) 검출기의 turn 신호도 배선돼 있지 않다. 즉 이 스위치는
-  //   «와이어 값만 바꾸는 실험 장치» 이지 실루엣 전환이 아니다.
-  //   안정판 노출은 (a) 인코더 기하 전환 + (b) family.turn → decode.format.turn
-  //   배선이 끝나고 왕복이 서는 날이다.
-  turnA: field(false, INTERNAL, [false, true]),
+  // **BOTH 승격 (2026-08-24)**: 구 INTERNAL 사유(«라이브가 0/3 으로 못 읽는다 —
+  // 인코더가 역삼각 기하를 안 내고 검출 turn 신호도 미배선»)는 Wave 3 ①②로
+  // 전부 닫혔다: scene.js 가 ▽ 기하를 내고(배치 180° 회전·셀 정립),
+  // anchor-detect turn 변형 + V 표 인덱스로 왕복이 서며(test/turnA-roundtrip),
+  // 운영자 실기기 스캐너 인식이 확인됐다(2026-08-24). 그래서 lab 게이트를 걷고
+  // 일반·고급 양쪽 노출로 승격했다 (index.html #turnASection → sharedControls).
+  turnA: field(false, BOTH, [false, true]),
   // ── 검출기 seat 축 (W2 C4, 2026-08-24) — 구 `cornerMarker: boolean` 의 승계 ──
   // 코너 마커 (O-CM / A-CM, 2026-08-20 UI 편입)는 «켬/끔» 한 비트가 타입별로 다른
   // 마커를 뜻하는 구조였다. 검출기 3구역 개편으로 **내곽/외곽 seat 선택**으로

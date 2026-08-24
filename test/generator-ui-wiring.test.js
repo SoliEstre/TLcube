@@ -207,35 +207,41 @@ test('§3.1 turnA 를 켜면 발행되는 formatIndex 가 실제로 바뀐다', 
   }
 });
 
-test('§3.1 turnA 는 Type A + lab 게이트 뒤에 있고 상태는 INTERNAL 이다', () => {
+// **의도적 갱신 (2026-08-24 정식 승격)** — 구 락은 «lab 게이트 뒤 + INTERNAL» 이었다.
+// 그 근거(라이브 0/3 · 검출 미배선)가 Wave 3 ①②로 닫히고 운영자 실기기 인식이
+// 확인돼, lab 게이트를 걷고 BOTH 로 승격했다. 락은 삭제가 아니라 **양성 단언 전환**이다.
+test('§3.1 turnA 는 Type A 게이트만 받고 상태는 BOTH(정식 노출)다', () => {
   assert.equal(GENERATOR_STATE_SCHEMA.turnA.defaultValue, false, 'turnA 기본값이 켬이다');
+  assert.equal(GENERATOR_STATE_SCHEMA.turnA.exposure, 'both',
+    'turnA 가 정식 노출(BOTH)이 아니다 — 2026-08-24 승격의 회귀');
   assert.equal(createGeneratorState().turnA, false);
   const at = INDEX.indexOf('function syncTurnAUi()');
   assert.notEqual(at, -1, 'syncTurnAUi 가 없다');
   const body = INDEX.slice(at, INDEX.indexOf('\n}', at));
-  assert.match(body, /isLabPath\(\)/, 'turnA 섹션이 lab 게이트를 안 받는다');
-  assert.match(body, /generatorState\.type === 'A'/, 'turnA 섹션이 Type A 게이트를 안 받는다');
+  assert.doesNotMatch(body, /isLabPath\(\)/,
+    'turnA 섹션에 lab 게이트가 되살아났다 — 정식 승격의 회귀');
+  assert.match(body, /generatorState\.type !== 'A'/, 'turnA 섹션이 Type A 게이트를 안 받는다');
   // 다른 타입에서 켜진 채 남아도 인코더까지 안 간다.
   assert.match(INDEX, /turnA: type === 'A' && generatorState\.turnA === true/);
 });
 
-test('§3.1 turnA 섹션은 타입 선택(#codeType) 바로 아래이고 sync 는 id 로 찾는다', () => {
-  // 운영자 2026-08-19: 옵션 하단이 아니라 타입 선택 아래로. 게이트는 그대로.
-  const typeAt = INDEX.indexOf('id="codeType"');
-  const typeClose = INDEX.indexOf('</select>', typeAt);
+test('§3.1 turnA 섹션은 공용 컨트롤(양쪽 모드)의 #finderSection 앞이고 sync 는 id 로 찾는다', () => {
+  // **의도적 갱신 (2026-08-24 정식 승격)** — 구 위치는 #panelAdvanced 안(타입 선택
+  // 바로 아래)이라 **고급에서만** 보였다. 운영자 «일반 쪽에도» 지시로 공용 컨트롤
+  // (#sharedControls — 두 모드가 함께 그리는 영역)의 검출기 선택 앞으로 옮겼다.
+  const sharedAt = INDEX.indexOf('id="sharedControls"');
   const turnA = INDEX.indexOf('id="turnASection"');
-  const version = INDEX.indexOf('id="versionWrapO"');
-  assert.ok(typeAt !== -1 && turnA !== -1 && version !== -1);
-  assert.ok(typeClose < turnA && turnA < version,
-    'turnASection 이 #codeType </select> 와 #versionWrapO 사이에 없다 — 다시 하단으로 내려갔나');
-  // 사이에 다른 섹션 id 가 끼면 «바로 아래»가 아니다.
-  const between = INDEX.slice(typeClose, turnA);
-  assert.equal((between.match(/id="/g) || []).length, 0,
-    '타입 선택과 실루엣 카드 사이에 다른 id 가 끼었다');
+  const finder = INDEX.indexOf('id="finderSection"');
+  assert.ok(sharedAt !== -1 && turnA !== -1 && finder !== -1);
+  assert.ok(sharedAt < turnA && turnA < finder,
+    'turnASection 이 sharedControls 안 #finderSection 앞이 아니다 — 한쪽 모드에서 사라진다');
+  // 상태 축도 그 영역의 메타데이터에 있어야 한다 (노출 대조의 단일 규약).
+  assert.match(INDEX, /<div id="sharedControls" data-state-keys="turnA /,
+    'sharedControls 의 data-state-keys 에 turnA 가 없다 — 노출 대조가 어긋난다');
   const at = INDEX.indexOf('function syncTurnAUi()');
   const body = INDEX.slice(at, INDEX.indexOf('\n}', at));
   assert.match(body, /els\.turnASection/, 'sync 가 id 조회가 아니라 형제 순서에 기대면 이동이 깨진다');
-  assert.match(body, /section\.hidden = !\(isLabPath\(\) && generatorState\.type === 'A'\)/);
+  assert.match(body, /section\.hidden = generatorState\.type !== 'A'/);
   assert.match(INDEX, /id="turnASection" hidden/);
 });
 

@@ -416,6 +416,14 @@ export function discoverCentralBeaconFinders(luma, options = {}) {
       ...callerCalibration,
       csBlockLocator: {
         maximumPosesPerFamily: 6,
+        // **중앙 창 제한** (2026-08-24) — 이 어댑터가 찾는 블록은 계약상 **중앙 고정**
+        // 이다 (central-v0 는 19셀 슬롯 삽입물). 그런데 상위 컷(centres slice(0,3))은
+        // 점수 순이라, 코너 QR 의 파인더 3개가 v0-center 로 **1.00** 을 받아 컷을
+        // 통째로 점거하고 진짜 비컨(0.81)을 밀어냈다 (A×비컨×코너QR 실측: shapes 0,
+        // verified 랭크 5). 예산을 늘리는 대신 **계약을 주입**한다 — 중앙 박스 밖
+        // v0-center 후보는 이 경로에서 애초에 후보가 아니다. Type Y 전면 CS 경로는
+        // 이 어댑터를 안 지나므로 한 비트도 안 바뀐다.
+        centreWindowFraction: 0.5,
         ...(callerCalibration.csBlockLocator || {}),
       },
     },

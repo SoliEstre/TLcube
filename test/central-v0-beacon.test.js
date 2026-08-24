@@ -308,8 +308,16 @@ test('A 배타 — 중앙 슬롯 점유자 충돌과 미검증 조합은 던진�
     /중앙 슬롯 점유자는 하나다/);
   assert.throws(() => encodeA('x', { version: 0, eccLevel: 'M', centralV0: true, daehanFinder: true }),
     /중앙 슬롯 점유자는 하나다/);
-  assert.throws(() => encodeA('x', { version: 0, eccLevel: 'M', centralV0: true, turnA: true }),
-    /배치 검증 미실시 조합/);
+  // **의도적 갱신 (2026-08-24)** — centralV0 × turnA 는 **개설**됐다. 막던 근거
+  // («배치 검증 미실시»)는 턴A 기하 확정으로 소멸했다: 배치만 180° 돌고 셀은
+  // 정립이라 중앙 슬롯은 회전 불변 자리이고 회계상 셀 밖이다. 락은 삭제가 아니라
+  // 양성 단언으로 — 배치 검증의 실체는 test/turnA-roundtrip.test.js 의 왕복이다.
+  const turned = encodeA('x', { version: 0, eccLevel: 'M', centralV0: true, turnA: true });
+  assert.equal(turned.turnA, true);
+  assert.equal(turned.centralV0, true);
+  const upright = encodeA('x', { version: 0, eccLevel: 'M', centralV0: true });
+  assert.equal(turned.cellDigits.size, upright.cellDigits.size,
+    '턴A 가 비컨 프레임의 셀 회계를 바꿨다 — 배치만 도는 계약의 회귀');
 });
 
 test('A 렌더 — 비컨 구조(분리 띠 + n² 모듈 + 심 3)가 O 와 동일하다', () => {

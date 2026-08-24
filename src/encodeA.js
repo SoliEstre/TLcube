@@ -179,9 +179,10 @@ export function encodeA(text, options = {}) {
   if (centralV0 && daehanFinder) {
     throw new RangeError('centralV0 와 daehanFinder 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
   }
-  if (centralV0 && turnA) {
-    throw new RangeError('centralV0 와 turnA 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
-  }
+  // centralV0 × turnA — **개설** (2026-08-24, 운영자 아침 검수 3차). 막던 근거는
+  // «배치 검증 미실시» 였는데 턴A 기하가 «배치만 180° 회전·셀 정립» 으로 확정되며
+  // 해소됐다: 비컨 슬롯은 중앙(회전 불변 위치)이고 회계상 셀 밖이라 turn 이 배치를
+  // 건드릴 수 없다 (배치 검증 = 왕복 테스트 test/turnA-roundtrip.test.js ▽+비컨).
   const provider = layoutProviderForA(cornerMarker, daehanFinder);
 
   let spec;

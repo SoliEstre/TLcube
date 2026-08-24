@@ -1199,36 +1199,6 @@
         <option value="Y" selected data-i18n="g048">Type Y (단일 큐브)</option>
       </select>
 
-      <!-- 턴A (역삼각 Type A = 내부 타입 V) — Type A + lab 전용. #yLocatorSection 과
-           같은 게이트 문법이다(hidden 속성 + sync 함수가 isLabPath() 로 연다).
-           **개통 (2026-08-24, Wave 3 ①②)**: 구 실측 «0/3 으로 못 읽는다» 는 닫혔다 —
-           (a) 인코더·렌더가 역삼각 기하를 낸다 (scene.js turnA — 배치 180° 회전,
-           셀 정립, 실루엣 ▽), (b) 검출·왕복이 선다 (anchor turn 변형 + V 표 인덱스,
-           test/turnA-roundtrip.test.js 6종 + V-CM 2종). 힌트(g575)도 그 사실을 말한다.
-           ⚠ lab 게이트는 **유지** — 합성만으로 정식 노출을 정하지 않는다 (운영자
-           확정 2026-08-23·24 seat 전례). 승격은 실기기 라운드 뒤 운영자 몫.
-           외곽 seat 연동 (Wave 3 ④): 켜면 코너 자리가 a-cm → v-cm 으로 승계되고
-           끄면 되돌아온다 (§wireSeatCards·syncTurnAUi — 던짐 조합을 UI 가 안 만든다).
-           위치 (2026-08-19): 타입 선택(#codeType) 바로 아래. 게이트는 그대로다. -->
-      <div id="turnASection" hidden>
-        <label class="section-heading" data-i18n="g572">실루엣 방향 (실험)</label>
-        <div class="card-row" id="turnACards">
-          <div class="toggle-card active" data-turna="off">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 3 L21 19 L3 19 Z"/>
-            </svg>
-            <span data-i18n="g573">정삼각 (기본)</span>
-          </div>
-          <div class="toggle-card" data-turna="on">
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 21 L3 5 L21 5 Z"/>
-            </svg>
-            <span data-i18n="g574">역삼각 (턴A)</span>
-          </div>
-        </div>
-        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 켜면 실루엣이 역삼각(▽)으로 뒤집혀 그려지고, 이 상태로 만든 코드도 이제 스캐너가 읽어요 — 실기기 검증은 아직 진행 중이에요.</p>
-      </div>
-
       <!-- ⚠ **의도적 갱신 (W2 C4, 2026-08-24)** — 여기 있던 #cornerMarkerSection
            (코너 자리 예약 켬/끔 2카드)은 검출기 3구역 개편으로 소멸했다. O-CM/A-CM
            은 #finderSection 안 내곽/외곽 구역의 seat 카드로 흡수됐고
@@ -1323,7 +1293,7 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="qrPosition finderPatternId bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
+    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
            도메인·자동 규칙은 전부 src/export-options.js 단일 정의를 소비한다 — UI 인라인
            재구현 금지 (교훈 .agent/_lessons/009: 손으로 적은 규칙은 테스트가 못 잠근다).
@@ -1750,6 +1720,37 @@
            섹션이 자리를 지킨다. DOM 합치기를 안 하는 이유는 #finderSection 이
            점수 패널·접힘 후보군을 함께 들고 있어(별도 태스크 소관) 구조를 흔들면
            그쪽 계약이 같이 흔들리기 때문이다. -->
+      <!-- 턴A (역삼각 Type A = 내부 타입 V) — Type A 이면 **일반·고급 양쪽**에서 연다
+           (운영자 확정 2026-08-24 «실루엣 방향 섹션 일반 쪽에도 보여져야 됨»).
+           **개통 (2026-08-24, Wave 3 ①②)**: 구 실측 «0/3 으로 못 읽는다» 는 닫혔다 —
+           (a) 인코더·렌더가 역삼각 기하를 낸다 (scene.js turnA — 배치 180° 회전,
+           셀 정립, 실루엣 ▽), (b) 검출·왕복이 선다 (anchor turn 변형 + V 표 인덱스,
+           test/turnA-roundtrip.test.js 6종 + V-CM 2종). 힌트(g575)도 그 사실을 말한다.
+           **정식 승격 (2026-08-24)**: 운영자 실기기 스캐너 인식 확인 뒤 lab 게이트를
+           걷었다 — 그래서 위치도 #panelAdvanced 밖(#sharedControls)으로 옮겼다.
+           상태 축도 INTERNAL → BOTH 다 (generator-state §turnA).
+           외곽 seat 연동 (Wave 3 ④): 켜면 코너 자리가 a-cm → v-cm 으로 승계되고
+           끄면 되돌아온다 (§wireSeatCards·syncTurnAUi — 던짐 조합을 UI 가 안 만든다).
+           위치: #finderSection 바로 앞 (타입 구조 옵션 → 검출기 선택 순). -->
+      <div id="turnASection" hidden>
+        <label class="section-heading" data-i18n="g572">실루엣 방향</label>
+        <div class="card-row" id="turnACards">
+          <div class="toggle-card active" data-turna="off">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3 L21 19 L3 19 Z"/>
+            </svg>
+            <span data-i18n="g573">정삼각 (기본)</span>
+          </div>
+          <div class="toggle-card" data-turna="on">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 21 L3 5 L21 5 Z"/>
+            </svg>
+            <span data-i18n="g574">역삼각 (턴A)</span>
+          </div>
+        </div>
+        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 켜면 실루엣이 역삼각(▽)으로 뒤집혀 그려지고, 이 상태로 만든 코드도 이제 스캐너가 읽어요 — 실기기 검증은 아직 진행 중이에요.</p>
+      </div>
+
       <div id="finderSection" style="display:none">
         <div class="section-heading-row">
           <label class="section-heading" data-i18n="g459">검출기 선택</label>
@@ -9526,11 +9527,12 @@ function syncTypeUi() {
   syncTypeYCellEditorUi();
 }
 
-/** 턴A 카드 — Type A + lab 에서만 연다 (#yLocatorSection 과 같은 게이트 문법). */
+/** 턴A 카드 — Type A 이면 일반·고급 양쪽에서 연다 (정식 승격 2026-08-24 —
+ *  운영자 실기기 인식 확인. lab 게이트는 걷혔다). */
 function syncTurnAUi() {
   const section = els.turnASection;
   if (!section) return;
-  section.hidden = !(isLabPath() && generatorState.type === 'A');
+  section.hidden = generatorState.type !== 'A';
   if (!els.turnACards) return;
   const on = generatorState.turnA === true;
   // (Wave 3 ④) 구 a-cm 잠금은 재편됐다 — 배타가 개설돼(V-CM) 방향 전환이 항상

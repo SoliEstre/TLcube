@@ -117,3 +117,48 @@ test('교차 오수용 없음 — 턴A 프레임에서 정삼각 formatIndex 가
   assert.equal(result.hypothesis.k, 10);
   assert.equal(result.hypothesis.turn, true);
 });
+
+/*
+ * 중앙 TL(비컨) 조합 — 운영자 검수 2026-08-24 «턴A 에서 내부 TL 옵션 선택 시
+ * 렌더링 안 됨». 세 겹이 겹쳐 있었다:
+ *   ① encodeA 가 centralV0 × turnA 를 «배치 검증 미실시» 로 던졌다 — 턴A 기하가
+ *      «배치만 180° 회전·셀 정립» 으로 확정되며 근거 소멸 (중앙 슬롯은 회전 불변
+ *      자리이고 회계상 셀 밖이다). 이 파일이 그 «배치 검증» 이다.
+ *   ② 코너 QR 이 있으면 비컨 검출이 0 이었다 — QR 파인더가 v0-center 로 1.00 을
+ *      받아 상위 컷(slice 0,3)을 점거하고 진짜 비컨(0.81)을 밀어냈다. 처방은
+ *      예산 증액이 아니라 **계약 주입**(centreWindowFraction — 비컨은 중앙 고정).
+ *   ③ 비컨 시딩 가설에 turn 쌍둥이가 없어 ▽ 프레임이 format-crc 로 전멸했다 —
+ *      중앙 QR 경로(qr-center)의 관용구를 미러.
+ */
+test('턴A × 중앙 TL(비컨) 왕복 — V0/V1/V2 가 원문까지 돌아온다', () => {
+  // ① encodeA 의 «centralV0 × turnA 배치 검증 미실시» 던짐이 열렸고 ③ 비컨 시딩에
+  // turn 쌍둥이가 생겨 성립하는 왕복이다. 코너 QR 병용은 **아직 불안정**이라 여기서
+  // 안 잰다 — 원장 F-108 (검출 0 · 페이로드 의존 CRC). 게이트를 낮춰 초록을 만들지
+  // 않는다: 되는 범위만 값으로 잠그고, 안 되는 범위는 이름으로 남긴다.
+  for (const version of [0, 1, 2]) {
+    const text = 'beacon-V' + version;
+    const encoded = encodeA(text, {
+      version, eccLevel: 'M', turnA: true, centralV0: true,
+    });
+    const scene = buildScene(encoded, {
+      palette: PALETTE, margin: 20, finderPatternId: 'central-v0',
+    });
+    const out = decodeFrontend(rasterize(scene, { pixelsPerUnit: 24, supersample: 2 }), {});
+    assert.equal(out.ok, true, text + ': ' + JSON.stringify(out.reason ?? null));
+    assert.equal(out.text, text, text);
+  }
+});
+
+test('턴A × 비컨 렌더 개설 — 코너 QR 조합도 **렌더는** 선다 (구 던짐의 회귀 락)', () => {
+  // 운영자 신고의 실체는 렌더 불가(encodeA 던짐)였다. 복호 안정화(F-108)와 무관하게
+  // 이 조합이 다시 던지면 화면에서 «선택했는데 아무것도 안 나온다» 가 되돌아온다.
+  const encoded = encodeA('render-only', {
+    version: 1, eccLevel: 'M', turnA: true, centralV0: true,
+  });
+  assert.equal(encoded.turnA, true);
+  const scene = buildScene(encoded, {
+    palette: PALETTE, finderPatternId: 'central-v0',
+    qrText: CENTER_QR_TEXT, qrCorner: 'TL',
+  });
+  assert.ok(scene.shapes.length > 0, '턴A × 비컨 × 코너 QR 렌더가 비었다');
+});

@@ -2776,7 +2776,22 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
     const beaconFinders = discoverCentralBeaconFinders(luma, options);
     for (const finder of beaconFinders) {
       for (const family of ['hex', 'tri']) {
-        hypotheses.push(...cellFinderHypotheses(luma, finder, family));
+        const seeded = cellFinderHypotheses(luma, finder, family, options);
+        hypotheses.push(...seeded);
+        // 턴A(내부 타입 V) 쌍둥이 — 중앙 QR 경로(§qr-center)와 **같은 관용구**다.
+        // 비컨은 중앙 고정이라 180° 배치 회전에도 포즈 H 가 같고, 표본 자리 사상
+        // (turn)만 다르다. 이 쌍이 없으면 ▽ 프레임에서 비컨이 잡혀도 V 인덱스
+        // 가설이 없어 format-crc 로 전멸한다 (턴A×비컨 실측 2026-08-24).
+        // 정삼각(tri, turn=false) 쌍과 hex 는 한 비트도 안 바뀐다 — 추가만 한다.
+        if (family === 'tri') {
+          for (const base of seeded) {
+            hypotheses.push({
+              ...base,
+              turn: true,
+              hypothesisId: base.hypothesisId + '-turn',
+            });
+          }
+        }
       }
     }
   }

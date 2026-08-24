@@ -3595,7 +3595,22 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   // dedupe 로 걷어내는 안은 **측정으로 기각**했다: 중복이 차지하던 상위 슬롯에
   // 데이터 필드의 우연 K3 가 들어와, 실패 정합 + v0 스윕 비용이 중복 성공 정합보다
   // 비쌌다 (v1r2 클린 벤치 724→1620 ms). 상위 3/4 슬라이스가 사실상의 비용 캡이다.
-  const centres = verified.filter((hit) => hit.kind === 'v0-center').slice(0, 3);
+  // 중앙 창 제한 (2026-08-24) — `centreWindowFraction` 을 준 호출자는 «찾는 블록이
+  // 중앙 고정» 이라는 **계약**을 선언한 것이다 (비컨 어댑터). 그 창 밖 후보는 상위
+  // 컷을 다투기 전에 빠진다 — 점수 컷은 비용 캡이지 «누가 진짜인가» 의 자가 아니다
+  // (코너 QR 파인더가 v0-center 1.00 으로 컷을 점거하던 실측의 처방). 미선언 경로는
+  // 아래 필터가 항등이라 비트 동일이다.
+  const centreWindow = Number.isFinite(cfg.centreWindowFraction)
+    && cfg.centreWindowFraction > 0 && cfg.centreWindowFraction <= 1
+    ? cfg.centreWindowFraction : null;
+  const inCentreWindow = (hit) => {
+    if (centreWindow === null) return true;
+    const halfW = width * centreWindow / 2;
+    const halfH = height * centreWindow / 2;
+    return Math.abs(hit.x - width / 2) <= halfW && Math.abs(hit.y - height / 2) <= halfH;
+  };
+  const centres = verified.filter((hit) => hit.kind === 'v0-center' && inCentreWindow(hit))
+    .slice(0, 3);
   const corners = verified.filter((hit) => hit.kind === 'v2r2-corner').slice(0, 4);
   const partialTelemetry = { attempted: 0, completed: 0, byAnchorCount: {} };
   // 느슨한 코너 순회 (`verifyV0xqCornerCluster`) — **별도 순회**다 (그 함수 주석 참조):
