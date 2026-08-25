@@ -40,12 +40,19 @@ test('② 사다리 — ECC 가 바깥, 해상도가 안쪽이다 (순서 자체
   const over = resolveAutoY({ payloadBytes: 21, tones: 3, eccLevel: 'auto' });
   assert.equal(over.version, 1, '21 B 에서 해상도가 안 올라갔다');
   assert.equal(over.ecc, 'H', '21 B 에서 ECC 가 내려갔다 — 사다리 순서가 뒤집혔다');
-  // v0TR@H(58) 를 넘기면 다음 단(Y2·끔)으로. 여기서도 ECC 는 H 그대로다.
+  // v0TR@21/H(58) 를 넘기면 **Y2 로 올라가되 마커는 지킨다** (v0TR@25/H = 93 B).
+  // ⚠ 2026-08-25 이전엔 여기서 «끔» 이었다 — n=25 에 셀 표면이 없어서였다.
+  // 운영자 신고(「마커가 먼저 없어지는데?」)의 수리가 이 단이다.
   const big = resolveAutoY({ payloadBytes: 59, tones: 3, eccLevel: 'auto' });
   assert.equal(big.version, 2, '59 B 에서 Y2 로 안 갔다');
   assert.equal(big.ecc, 'H');
-  assert.equal(big.locatorProfileY, LOCATOR_PROFILE_OFF,
-    'n=25 는 셀 표면 레이아웃 공백이라 «끔» 이 유일한 스펙 보증 경로다');
+  assert.equal(big.locatorProfileY, LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+    '59 B 에서 마커를 버렸다 — 해상도를 키워서 지킬 수 있는데 버리면 안 된다');
+  // 마커를 버리는 것은 **v0TR@25/H(93) 까지 쓴 뒤**다. 그게 마지막 수단이다.
+  const dropped = resolveAutoY({ payloadBytes: 94, tones: 3, eccLevel: 'auto' });
+  assert.equal(dropped.locatorProfileY, LOCATOR_PROFILE_OFF,
+    '94 B 에서도 마커를 들고 있다 — v0TR@25 용량을 넘겼는데 안 놓았다');
+  assert.equal(dropped.ecc, 'H', '마커를 버리기도 전에 ECC 를 내렸다');
 });
 
 test('③ ECC 는 **최대 해상도를 다 쓴 뒤에만** 내려간다', () => {

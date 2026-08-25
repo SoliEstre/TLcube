@@ -148,7 +148,9 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→**v0t**/Y1 · 25→**�
   // **의도적 갱신 «드랍 정본화» (운영자 확정 2026-08-16)** — v2r2 · v1r2 를 검출
   // 라인업과 생성기 카드에서 내렸다 (차단·비삭제). 그래서
   //   · `finalLayoutIdsForN(21)` = [v0x, v0xq] · `finalLayoutIdForN(21)` = v0x
-  //   · `finalLayoutIdsForN(25)` = [] · `finalLayoutIdForN(25)` = null  ← **Y2 공백**
+  //   · `finalLayoutIdsForN(25)` = ['v0t','v0tr'] · `finalLayoutIdForN(25)` = 'v0t'
+  //     ← **Y2 공백 해소 (2026-08-25)**. 그전엔 [] · null 이었고, 그래서 자동 사다리가
+  //     Y1 을 넘기는 순간 마커를 버렸다 (운영자 신고). 「면 모서리 기준 배치」가 열었다.
   //
   // **의도적 갱신 «v0W 편입» (운영자 신설 설계 2026-08-16)** — `CELL_SURFACE_FINAL_IDS`
   // 맨 뒤에 v0w 를 더했다. 선언 순서가 곧 후보 순서라 n=21 목록이
@@ -255,7 +257,10 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→**v0t**/Y1 · 25→**�
   // 순서와 무관하게 높은 쪽이 이긴다.
   // 기본이 v0tr → **v0t** (실기기 순위 3차, 2026-08-19 밤). 첫 원소가 곧 기본이다.
   assert.equal(finalLayoutIdForN(21), 'v0t');
-  assert.equal(finalLayoutIdForN(25), null);
+  // **의도적 갱신 (2026-08-25)** — n=25 가 «공백» 이 아니게 됐다: v0t·v0tr 편입
+  // (운영자 「Y1에서 Y2로 먼저 넘어가야되는데 마커가 먼저 없어지는데?」).
+  // 첫 원소가 곧 기본이라 n=21 과 같은 순서 규약을 따른다 (v0t 우선).
+  assert.equal(finalLayoutIdForN(25), 'v0t');
   assert.equal(finalLayoutIdForN(11), null);
   assert.deepEqual([...finalLayoutIdsForN(13)], ['v0']);
   // **병합 주석 (2026-08-19)** — 이 자리의 충돌은 «둘 중 하나» 가 아니라 **두 축**이었다:
@@ -264,7 +269,8 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→**v0t**/Y1 · 25→**�
   // 합치면 «판정된 순서 + 맨 뒤 v0try» 다. n=21 기본은 **v0tr 그대로** —
   // v0try 는 라인업 끝에 붙을 뿐 기본을 가져가지 않는다.
   assert.deepEqual([...finalLayoutIdsForN(21)], ['v0t', 'v0tr', 'v0try', 'v0trq', 'v0ty']);
-  assert.deepEqual([...finalLayoutIdsForN(25)], []);
+  // **의도적 갱신 (2026-08-25)** — n=25 편입. 순서는 선언 순서(v0t → v0tr)다.
+  assert.deepEqual([...finalLayoutIdsForN(25)], ['v0t', 'v0tr']);
   assert.deepEqual([...finalLayoutIdsForN(11)], []);
   // 와이어 질의는 드랍을 보지 않는다 — 발행된 v2r2@21/@25 · v0xq@21 · v0x@21 ·
   // **v0w 계열@21** 프레임의 판독 경로다.
@@ -305,8 +311,14 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→**v0t**/Y1 · 25→**�
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0xq], [21]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0w], [21]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0wy], [21]);
-  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0t], [21]);
+  // **의도적 갱신 (2026-08-25)** — v0t·v0tr 만 n=25 를 갖는다 (슬롯 없는 계열).
+  // v0ty·v0trq·v0try 는 21 뿐이다: QR 슬롯은 변 앵커가 아니라 n 마다 위치 규범이
+  // 새로 필요하고, 그 규범이 아직 없다. 「기하가 계산할 수 있다 ≠ 지원 조합이다.」
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0t], [21, 25]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0tr], [21, 25]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0ty], [21]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0trq], [21]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0try], [21]);
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v0, 'cell-surface-v0');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v2r2, 'cell-surface-v2r2');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v1r2, 'cell-surface-v1r2');
@@ -853,13 +865,18 @@ test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 �
 // V0T_CENTRE_CELLS) 중 하나에 mid 가 되살아나면 여기서 함께 터진다 (묶어 두는 것이 목적이다).
 // 의도적 갱신 «v0TRY 편입» (2026-08-18): **열다섯**이 됐다 (v0try@21). v0TRY 는
 // `V0TR_CELLS` 의 먼 코너 슬롯 박스 필터라 유도 원천이 v0TR 과 **같다** — 같은 이유로 묶는다.
-test('전 정본 mid(1) 금지 — 열다섯 인스턴스 어디에도 mid 면이 없다 (v0X 정규화 4면 고정)', () => {
+// 의도적 갱신 «n=25 편입» (2026-08-25): **열일곱**이 됐다 (v0t@25 · v0tr@25).
+// 「면 모서리 기준 배치」(SPEC §4.11)로 같은 블록을 n=25 에 인스턴스화한 것이라
+// 유도 원천이 n=21 과 **같다** — 그래서 여기 묶는 것이 특히 값이 있다: 원천에 mid 가
+// 되살아나면 두 크기에서 함께 터진다.
+test('전 정본 mid(1) 금지 — 열일곱 인스턴스 어디에도 mid 면이 없다 (v0X 정규화 4면 고정)', () => {
   // ⚠ 이 목록은 `CELL_SURFACE_FINAL_IDS × NS` 전수여야 한다 — 하나라도 빠지면
   // 그 레이아웃만 규칙 밖으로 샌다 (v0xq 편입 때 실제로 빠져 있었다).
   const instances = [
     ['v0', 13], ['v2r2', 21], ['v2r2', 25], ['v1r2', 21], ['v0x', 21], ['v0xq', 21],
     ['v0w', 21], ['v0wq', 21], ['v0w2', 21], ['v0wy', 21], ['v0t', 21], ['v0ty', 21],
     ['v0tr', 21], ['v0trq', 21], ['v0try', 21],
+    ['v0t', 25], ['v0tr', 25],
   ];
   const enumerated = CELL_SURFACE_FINAL_IDS
     .flatMap((id) => CELL_SURFACE_FINAL_NS[id].map((n) => id + '@' + n)).sort();
@@ -881,8 +898,13 @@ test('전 정본 mid(1) 금지 — 열다섯 인스턴스 어디에도 mid 면�
   // 의도적 갱신 «v0TR A 블록 편입» (2026-08-18) — 93 → 102 (+9×3면=27). v0trq(77)는
   //   불변이다: A 가 중앙 QR 슬롯 밑에 깔려 로케이터에서 빠진다.
   // 의도적 갱신 «v0TRY 편입» (2026-08-18) — 항 하나(**93** = 102 − SE 9)가 늘었다.
+  // 의도적 갱신 «n=25 편입» (2026-08-25) — 항 둘(**104 · 102**)이 늘었다. 값이 n=21 의
+  //   v0t·v0tr 과 **같은 것**이 핵심이다: 면 모서리 배치라 블록 크기가 안 변한다.
+  //   총계 3345 → 3963 이고 차이 618 = (104 + 102) × 3 — 새 인스턴스가 mid 를 하나도
+  //   안 들여왔다는 뜻이다 (mid 가 있었으면 위 단언이 먼저 터진다).
   assert.equal(faces,
-    (30 + 74 + 74 + 80 + 65 + 42 + 70 + 45 + 97 + 67 + 104 + 95 + 102 + 77 + 93) * 3,
+    (30 + 74 + 74 + 80 + 65 + 42 + 70 + 45 + 97 + 67 + 104 + 95 + 102 + 77 + 93
+      + 104 + 102) * 3,
     '훑은 면 수가 파인더 총계와 다르다');
 
   // 정규화된 네 자리의 새 값 — (0,3)L=0 · (14,20)L/R=2 · (19,19)R=2.

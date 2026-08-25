@@ -513,9 +513,14 @@ export const CELL_SURFACE_FINAL_NS = Object.freeze({
   [CELL_SURFACE_FINAL_V0WQ]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0W2]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0WY]: Object.freeze([21]),
-  [CELL_SURFACE_FINAL_V0T]: Object.freeze([21]),
+  // **n=25 편입 (2026-08-25)** — 「면 모서리 기준 배치」(SPEC §4.11) 가 낸 길이다.
+  // 블록 크기·변 inset 은 그대로고 **블록 사이 데이터 영역만** 늘어난다:
+  // 파인더 셀 수가 21 과 25 에서 **같다**(v0t 104 · v0tr 102) — 그것이 이 편입의 근거다.
+  // ⚠ 슬롯을 가진 계열(v0ty·v0trq·v0try)은 **아직 21 뿐**이다: QR 슬롯은 변 앵커가
+  //   아니라 위치가 n 에 따라 다시 정의돼야 하고, 그 규범이 아직 없다 (별건).
+  [CELL_SURFACE_FINAL_V0T]: Object.freeze([21, 25]),
   [CELL_SURFACE_FINAL_V0TY]: Object.freeze([21]),
-  [CELL_SURFACE_FINAL_V0TR]: Object.freeze([21]),
+  [CELL_SURFACE_FINAL_V0TR]: Object.freeze([21, 25]),
   [CELL_SURFACE_FINAL_V0TRQ]: Object.freeze([21]),
   [CELL_SURFACE_FINAL_V0TRY]: Object.freeze([21]),
 });
@@ -783,14 +788,16 @@ const DECLARED_DATA = Object.freeze({
     [CELL_SURFACE_FINAL_V0WY]: Object.freeze({ 21: 280 }),
     // v0t: 441 − 104(파인더 16+9+10+36+24+9) − 12 − 18 = 307. 편집기 팩 counts.data 와
     // 같은 값이지만 근거는 팩이 아니라 autoplace 재산출이다 (`claude-v0t-probe.mjs`).
-    [CELL_SURFACE_FINAL_V0T]: Object.freeze({ 21: 307 }),
+    // v0t@25: 625 − 104(파인더 — 21 과 **같다**) − 12 − 18 = 491.
+    [CELL_SURFACE_FINAL_V0T]: Object.freeze({ 21: 307, 25: 491 }),
     // v0ty: 441 − 95(파인더 104−SE 9) − 64(먼 코너 QR 슬롯 8²) − 12 − 18 = 252.
     // 슬롯 8 은 운영자 스펙(«v0WQ·v0WY 와 동일 크기») — autoplace 수용 상한도 8 이라
     // 두 자가 같은 값을 가리킨다 (`claude-v0tqty-probe.mjs` §①).
     [CELL_SURFACE_FINAL_V0TY]: Object.freeze({ 21: 252 }),
     // v0tr: 441 − 102(파인더 16 + A 9 + NE 68 + SE 9) − 12 − 18 = 309. 근거는 팩이 아니라
     // autoplace 재산출이다 (`claude-v0tr-measure.mjs` ⓓ — S=106 · 잔여 0).
-    [CELL_SURFACE_FINAL_V0TR]: Object.freeze({ 21: 309 }),
+    // v0tr@25: 625 − 102(파인더 — 21 과 **같다**) − 12 − 18 = 493.
+    [CELL_SURFACE_FINAL_V0TR]: Object.freeze({ 21: 309, 25: 493 }),
     // v0trq: 441 − 77(파인더 102 − 중앙 16 − A 9) − 64(중앙 QR 슬롯 8²) − 12 − 18 = 270.
     // 팩 counts.data 와 같은 값이지만 근거는 팩이 아니라 autoplace 재산출이다.
     [CELL_SURFACE_FINAL_V0TRQ]: Object.freeze({ 21: 270 }),
@@ -3456,10 +3463,16 @@ export function capacityForCellSurfaceFinal(
     'v0wy@21': { symbols: 93, residual: 1, locator: 67, legacy: null },
     //   v0t@21  441 − 104 − 12 − 18 = 307 · S=102 · 잔여 1 (레거시 없음 — 신설)
     'v0t@21': { symbols: 102, residual: 1, locator: 104, legacy: null },
+    //   v0t@25  625 − 104 − 12 − 18 = 491 · S=163 · **잔여 2** (n=25 편입 2026-08-25).
+    //   ⚠ locator 가 21 과 **같다**(104) — 「면 모서리 기준 배치」의 직접 귀결이다:
+    //   블록은 변에서 잰 고정 inset 이라 크기가 안 변하고 데이터 영역만 늘어난다.
+    'v0t@25': { symbols: 163, residual: 2, locator: 104, legacy: null },
     //   v0ty@21 441 − 95 − 64(먼 코너 슬롯 8²) − 12 − 18 = 252 · S=84 · 잔여 0 (레거시 없음)
     'v0ty@21': { symbols: 84, residual: 0, locator: 95, legacy: null },
     //   v0tr@21  441 − 102 − 12 − 18 = 309 · S=103 · 잔여 0 (레거시 없음 — 신설)
     'v0tr@21': { symbols: 103, residual: 0, locator: 102, legacy: null },
+    //   v0tr@25 625 − 102 − 12 − 18 = 493 · S=164 · 잔여 1 (n=25 편입 2026-08-25).
+    'v0tr@25': { symbols: 164, residual: 1, locator: 102, legacy: null },
     //   v0trq@21 441 − 77 − 64(중앙 슬롯 8²) − 12 − 18 = 270 · S=90 · 잔여 0 (레거시 없음)
     'v0trq@21': { symbols: 90, residual: 0, locator: 77, legacy: null },
     //   v0try@21 441 − 93 − 64(먼 코너 슬롯 8²) − 12 − 18 = 254 · S=84 · **잔여 2**

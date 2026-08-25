@@ -55,6 +55,12 @@ export const AUTO_ECC_LADDER = Object.freeze(['H', 'M', 'L']);
 const RUNGS = Object.freeze([
   Object.freeze({ version: 0, n: 13, profile: LOCATOR_PROFILE_CELL_SURFACE_V0, layout: CELL_SURFACE_FINAL_V0 }),
   Object.freeze({ version: 1, n: 21, profile: LOCATOR_PROFILE_CELL_SURFACE_V0TR, layout: CELL_SURFACE_FINAL_V0TR }),
+  // ⭐ **Y2 + v0TR (2026-08-25 편입)** — 그전엔 이 단이 없어서 Y1 을 넘기는 순간
+  // 「끔」으로 떨어졌다. 운영자 신고: 「Y1에서 Y2로 먼저 넘어가야되는데, 마커가
+  // 먼저 없어지는데?」 — 사다리가 게을러서가 아니라 **갈 곳이 없었다** (활성 T 계열이
+  // 전부 n=21 전용). 「면 모서리 기준 배치」(SPEC §4.11)가 n=25 를 열어 이 단이 생겼다.
+  Object.freeze({ version: 2, n: 25, profile: LOCATOR_PROFILE_CELL_SURFACE_V0TR, layout: CELL_SURFACE_FINAL_V0TR }),
+  // 마지막 수단 — 마커를 버린다. 여기까지 와야 파인더가 사라진다.
   Object.freeze({ version: 2, n: 25, profile: LOCATOR_PROFILE_OFF, layout: null }),
 ]);
 
