@@ -69,11 +69,24 @@ test('K 왕복 — K0/K1/K2 가 star 가설·포맷 7 로 원문까지 돌아온
   }
 });
 
-// K-CM 은 **생성·후단 복호까지** 열렸고 프론트엔드(bootstrap)는 아직 평 K 전용이다 —
-// 레인 C 의 쓰기 범위가 decoder/decode-k.js 까지였기 때문이다 (레인 보고서 §5.2).
-// «아직 안 열렸다» 를 문서가 아니라 자로 남긴다: 부재에도 이유와 날짜가 필요하고,
-// 통합자가 배선하는 순간 이 테스트가 터져서 «이제 열렸다» 를 알린다.
-test('K-CM 프론트엔드 미배선 — 포맷 단계에서 죽는다 (2026-08-24, 통합자 배선 대기)', () => {
+// K-CM 은 **생성·후단 복호까지** 열려 있다. 프론트엔드는 2026-08-25 에 **반쯤** 배선됐다.
+//
+// ## 벽이 어디로 옮겨갔나 (2026-08-25 실측)
+//
+// 배선한 것: `validVersionIndices` 가 star 축에서 formatIndex **8 을 함께 내놓고**
+// (그전엔 7 뿐이라 포맷 단계에서 죽었다), 포맷 워드가 8 이면 `decodeFormat.cornerMarker`
+// 를 켜며, 본문은 `dataCellsInScanOrderKMarker` 로 다시 뽑는다.
+// 그 결과 **포맷 단계는 통과한다** (formatProposalCount 0 → 1).
+//
+// 남은 것: **CM 용 역할 맵이 없다.** `layoutForHypothesis` 가 star 에 `layoutMapK(k)`
+// (평 K)를 주는데, K-CM 은 레퍼런스를 재배치한다(`patchReferenceCellsKMarker`).
+// 그래서 셀은 전부 표본화되는데(digits 163 · erasures 0) **읽은 값이 어긋나** 본문
+// RS 가 죽는다. 광학을 빼면 인코더 → `decodeCellsK` 는 **완전히 성립한다**(실측) —
+// 즉 남은 결함은 오직 이 역할 맵 하나다. `layoutMapKMarker(k)` 를 만들어
+// `layoutForHypothesis` 의 star 분기가 CM 일 때 그것을 주면 닫힌다.
+//
+// 이 락은 그때까지 «아직 안 읽힌다» 를 자로 남긴다 — 닫히는 순간 터져서 알린다.
+test('K-CM 프론트엔드 반배선 — 포맷은 통과하고 **역할 맵**에서 죽는다 (2026-08-25)', () => {
   const text = 'K-CM-frontend-pending';
   const { encoded, raster } = renderK(text, 0, { cornerMarker: true });
   assert.equal(encoded.formatIndex, 8, 'K-CM 와이어 값이 8 이 아니다');
@@ -81,7 +94,8 @@ test('K-CM 프론트엔드 미배선 — 포맷 단계에서 죽는다 (2026-08-
   // 통과해 버리면 «미배선» 이 거짓이다 — 그 경우 이 테스트를 지우는 게 아니라
   // 평 K 왕복과 같은 양성 단언으로 바꾼다 (배타 개설 정형 ③).
   assert.equal(result.ok, false,
-    'K-CM 이 프론트엔드에서 복호됐다 — bootstrap 배선이 들어왔다면 이 락을 양성으로 전환하라');
+    'K-CM 이 프론트엔드에서 복호됐다 — layoutMapKMarker 가 붙었다면 이 락을 '
+    + '평 K 왕복과 같은 **양성 단언**으로 전환하라 (배타 개설 정형 ③)');
   // 그리고 «조용히 다른 원문» 이 나오는 일은 어떤 경우에도 없어야 한다.
   assert.equal(result.text, undefined);
 });

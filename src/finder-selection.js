@@ -1,6 +1,10 @@
 // finder-selection.js — Type O/A 중앙 파인더와 QR 위치의 양방향 상태 계약
 
 import { GENERATOR_TYPES } from './generator-types.js';
+import { LEGACY_FINDER_PATTERN_ID } from './finder-patterns.js';
+
+/** Type K 가 전 버전에서 스캔되는 유일한 중앙 파인더 (2026-08-25 실측). */
+export const K_SCANNABLE_FINDER_PATTERN_ID = LEGACY_FINDER_PATTERN_ID;
 
 export const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
 export const CENTRAL_V0_FINDER_PATTERN_ID = 'central-v0';
@@ -52,10 +56,16 @@ export function createFinderQrProfiles(defaultFinderPatternId) {
     }),
     // K — 바깥 QR 기본값 (Y 와 같은 모양). encodeK 가 centerQr·centralV0·
     // daehanFinder·turnA 를 던지므로 «안쪽 QR» 기본값을 줄 수 없다.
+    //
+    // ⚠ 파인더는 `defaultFinderPatternId`(=cube-bullseye)가 **아니라** LEGACY(=bullseye)다.
+    //   실측(2026-08-25): cube-bullseye 는 K0 만 읽히고 K1·K2 는 안 읽힌다.
+    //   star 검출이 전 버전에서 성립하는 것은 bullseye 하나뿐이라, 기본값이 그 밖이면
+    //   «기본 상태로 만든 코드가 안 읽히는» 상태가 된다. index.html 의 K 파인더
+    //   허용 목록과 **같은 근거**이고, star 검출이 넓어지면 둘을 같이 걷는다.
     K: Object.freeze({
       qrPosition: DEFAULT_OUTER_QR_POSITION,
-      finderPatternId: defaultFinderPatternId,
-      previousFinderPatternId: defaultFinderPatternId,
+      finderPatternId: K_SCANNABLE_FINDER_PATTERN_ID,
+      previousFinderPatternId: K_SCANNABLE_FINDER_PATTERN_ID,
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',
     }),

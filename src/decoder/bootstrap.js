@@ -69,8 +69,10 @@ import { VERSIONS_K } from '../capacityK.js';
 import { dataCellsInScanOrderK, layoutMapK, vertexAnchorsK } from '../layoutK.js';
 import { markerGSpec, markerGSpecFromFormatIndex } from '../markerG.js';
 import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from '../turnA.js';
+import { K_MARKER_FORMAT_INDEX, kSpecFromFormatIndex } from '../formatK.js';
 import { dataCellsInScanOrderOMarker } from '../markerO.js';
 import { dataCellsInScanOrderAMarker } from '../markerA.js';
+import { dataCellsInScanOrderKMarker } from '../markerK.js';
 import { DIGIT_COUNT_V2 } from '../formatinfo.js';
 import { enumerateFormatProposals, enumerateFormatProposalsV2 } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
@@ -547,8 +549,20 @@ function validVersionIndices(hypothesis) {
       : [profile.spec.formatIndex, markerGSpec('tri', profile.spec.version).formatIndex];
   }
   if (hypothesis.family === 'star') {
-    // Type K — star 축은 버전당 값 하나(7)뿐이다. Q/CM 변형 없음 (encodeK 배타).
-    return profile.formatIndices.slice();
+    // Type K — 평 K(7) **+ K-CM(8)**. 2026-08-25 배선.
+    //
+    // ⚠ 여기가 K-CM 이 «생성은 되는데 스캔은 안 되던» 유일한 자리였다. 인코더
+    // (encodeK cornerMarker)도 디코더 후단(decode-k 의 VERSIONS_KCM 분기)도 이미
+    // 있었는데, 그 사이에서 부트스트랩이 **8 을 후보로 안 내놔** 포맷 단계에서 죽었다
+    // (test/typeK-roundtrip.test.js ② 가 그 사실의 자였다). tri 가 G 값을 함께
+    // 내놓는 것과 같은 문법이고, 어느 쪽이 맞는지는 여기서 정하지 않는다 — RS/CRC 다.
+    // ⚠ 이 패밀리의 치수는 `hypothesis.k` 다 (cube 만 `.n` — 위 519행 관용구).
+    //   처음에 `.dimension` 으로 썼다가 undefined 가 되어 조회가 null 을 냈고,
+    //   아래 폴백이 그걸 «이 k 에는 K-CM 이 없다» 로 삼켜 **버그가 정상처럼 보였다.**
+    const kcm = kSpecFromFormatIndex(K_MARKER_FORMAT_INDEX, hypothesis.k);
+    return kcm === null
+      ? profile.formatIndices.slice()
+      : [...profile.formatIndices, K_MARKER_FORMAT_INDEX];
   }
   if (hypothesis.cellSurface === true) {
     if (isCellSurfaceFinalId(hypothesis.cellSurfaceLayout)) {
@@ -3587,9 +3601,13 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     let markerBody = null;
     const markerBodyFor = () => {
       if (markerBody === null) {
+        // star(Type K)도 같은 규약이다 — K-CM 데이터 셀은 평 K 데이터 셀의 부분집합이라
+        // 표본화한 grid 를 재사용해 CM scan order 로 digit 만 다시 뽑는다.
         const scan = hypothesis.family === 'hex'
           ? dataCellsInScanOrderOMarker(dimension)
-          : dataCellsInScanOrderAMarker(dimension);
+          : hypothesis.family === 'star'
+            ? dataCellsInScanOrderKMarker(dimension)
+            : dataCellsInScanOrderAMarker(dimension);
         const markerDigits = [];
         const markerErasures = [];
         for (const cell of scan) {
@@ -3629,6 +3647,15 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       // turn 을 전달한다 (decode.js:390 의 분기는 2026-08-18 부터 있었고, 여기가
       // 그 호출자다 — G 배선과 같은 «양 끝» 교훈). turn 가설이 아닌데 V 값이
       // 읽히는 일은 validVersionIndices 가 막지만, (값,k) 역조회로 한 번 더 가른다.
+      // Type K — star 축의 (값,k) 역조회. 8 이면 K-CM 이다 (formatK 표가 정본).
+      // decode-k 는 이미 cornerMarker 축으로 좁힐 줄 안다 — 여기가 그 호출자다.
+      const starSpec = hypothesis.family === 'star'
+        ? kSpecFromFormatIndex(formatCandidate.versionIndex, dimension)
+        : null;
+      if (starSpec !== null) {
+        decodeFormat.version = starSpec.version;
+        if (starSpec.cornerMarker === true) decodeFormat.cornerMarker = true;
+      }
       const turnSpec = turn
         ? turnASpecFromFormatIndex(formatCandidate.versionIndex, dimension)
         : null;
@@ -3666,7 +3693,9 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         // 여기서는 같은 판정을 decode.js 에 그대로 옮긴다.
         if (layout.daehanFinder === true) decodeFormat.daehanFinder = true;
       }
-      const body = (useMarkerBody || useTurnMarkerBody)
+      // K-CM 도 마커가 데이터 셀을 먹으므로 본문 scan order 가 평 K 와 다르다.
+      const useStarMarkerBody = starSpec !== null && starSpec.cornerMarker === true;
+      const body = (useMarkerBody || useTurnMarkerBody || useStarMarkerBody)
         ? markerBodyFor()
         : { digits, erasureCells };
       // Type K 는 후단이 decode-k.js 다 — decode.js(O/A/Y 정본)는 K 를 모른다
