@@ -10,6 +10,11 @@
  *   --out <경로>       행 JSON 출력 (기본: test/output/corpus-ab/<라벨>.json)
  *   --base <경로>      기준 JSON. 주면 A/B 차이를 내고 죽음 플립이 있으면 exit 1
  *   --expect <N>       기대 덤프 수 (기본 367). 어긋나면 즉시 죽는다.
+ *
+ * 코퍼스가 **자라는 것**은 정상이다 (사진이 추가된다). 그래서 --base 대조는
+ * 「기준 행이 빠졌나」만 거부하고, 늘어난 행은 교집합 밖으로 빼서 따로 보고한다 —
+ * 둘을 한 조건으로 묶어 죽이면 사진을 추가할 때마다 게이트가 막히고, 그러면
+ * 사람이 게이트를 우회한다. 그게 게이트가 죽는 방식이다.
  *   --opts <JSON>      decodeFrontend 두 번째 인자 (기본 {})
  *
  * ⚠ --expect 는 장식이 아니다. listLumaDumps() 는 덤프 디렉토리가 없으면 조용히
@@ -100,22 +105,34 @@ if (!existsSync(resolvedBase)) {
   process.exit(2);
 }
 const base = new Map(JSON.parse(readFileSync(resolvedBase, 'utf8')).map((r) => [r.name, r]));
-const missing = rows.filter((r) => !base.has(r.name));
-if (missing.length) {
-  console.error(`✗ 기준에 없는 행 ${missing.length}건 — 같은 코퍼스가 아니다.`);
+
+// ⚠ «다르다» 에는 두 종류가 있다 (2026-08-25, 코퍼스 367 → 379 로 자라며 배움):
+//   (가) **기준 행이 빠졌다** — 진짜 다른 코퍼스다. 대조 자체가 무의미하니 죽는다.
+//   (나) **행이 늘었다** — 코퍼스가 자란 것이다. 기준 교집합에서 무회귀를 증명할
+//        수 있고, 신규 행은 따로 보고하면 된다.
+// 둘을 한 조건으로 묶어 죽이면 «사진을 추가할 때마다 게이트가 막히는» 상태가 되고,
+// 그러면 사람이 게이트를 우회하게 된다 — 그게 게이트가 죽는 방식이다.
+const droppedFromBase = [...base.keys()].filter((name) => !rows.some((r) => r.name === name));
+if (droppedFromBase.length) {
+  console.error(`✗ 기준 행 ${droppedFromBase.length}건이 이번 실행에 없다 — 자란 것이 아니라 다른 코퍼스다.`);
+  for (const name of droppedFromBase.slice(0, 5)) console.error(`   - ${name}`);
   process.exit(3);
 }
+const addedRows = rows.filter((r) => !base.has(r.name));
+const commonRows = rows.filter((r) => base.has(r.name));
 
-const died = rows.filter((r) => !r.ok && base.get(r.name).ok);
-const revived = rows.filter((r) => r.ok && !base.get(r.name).ok);
-const textFlip = rows.filter((r) => r.ok && base.get(r.name).ok && r.text !== base.get(r.name).text);
-const famFlip = rows.filter((r) => r.ok && base.get(r.name).ok && r.family !== base.get(r.name).family);
+// 플립은 **교집합에서만** 잰다 — 신규 행은 기준이 없어 비교 대상이 아니다.
+const died = commonRows.filter((r) => !r.ok && base.get(r.name).ok);
+const revived = commonRows.filter((r) => r.ok && !base.get(r.name).ok);
+const textFlip = commonRows.filter((r) => r.ok && base.get(r.name).ok && r.text !== base.get(r.name).text);
+const famFlip = commonRows.filter((r) => r.ok && base.get(r.name).ok && r.family !== base.get(r.name).family);
 const baseOk = [...base.values()].filter((r) => r.ok).length;
 const baseMs = [...base.values()].reduce((a, r) => a + r.ms, 0);
+const commonOk = commonRows.filter((r) => r.ok).length;
 
 console.log('');
 console.log(`기준 ${resolvedBase}`);
-console.log(`  ok        ${baseOk}/${base.size}  →  ${okCount}/${rows.length}`);
+console.log(`  ok        ${baseOk}/${base.size}  →  ${commonOk}/${commonRows.length}   (교집합)`);
 console.log(`  죽음 플립  ${died.length}`);
 console.log(`  소생 플립  ${revived.length}`);
 console.log(`  원문 플립  ${textFlip.length}`);
@@ -123,6 +140,20 @@ console.log(`  패밀리플립 ${famFlip.length}`);
 console.log(`  시간       ${(totalMs / baseMs).toFixed(2)}×`);
 for (const r of died) console.log(`  † ${r.name}  (${r.reason})`);
 for (const r of textFlip) console.log(`  ≠ ${r.name}  "${base.get(r.name).text}" → "${r.text}"`);
+
+// 신규 행은 **따로** 보고한다 — 기준이 없으니 플립 계산에 못 들어가지만,
+// 안 적으면 «코퍼스가 자랐다» 는 사실이 화면에서 사라진다.
+if (addedRows.length) {
+  const addedOk = addedRows.filter((r) => r.ok).length;
+  console.log('');
+  console.log(`신규 ${addedRows.length}행 (기준에 없던 프레임) — ok ${addedOk}/${addedRows.length}`);
+  for (const r of addedRows) {
+    console.log(`  ${r.ok ? '✓' : '✗'} ${r.name}  ${r.ok ? '' : r.reason}`);
+  }
+  console.log('');
+  console.log('⚠ 신규 행은 무회귀 게이트의 대상이 아니다. 기준선을 새로 뜨려면');
+  console.log('   --base 없이 한 번 돌려 새 BASE 를 만든다.');
+}
 
 // 게이트: 죽음 플립·원문 플립은 0 이어야 한다. 완화 금지.
 if (died.length || textFlip.length) {
