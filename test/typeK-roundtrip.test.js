@@ -23,6 +23,7 @@ import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { classifyFamily, scoreCubeTiling, scoreStarTiling } from '../src/decoder/family.js';
 import { findKAnchorHypotheses } from '../src/decoder/anchor-detect.js';
 import { VERSIONS_K } from '../src/capacityK.js';
+import { VERSIONS_KCM } from '../src/markerK.js';
 import { axialToPixel } from '../src/hexgrid.js';
 import { BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset } from '../src/luminance.js';
 
@@ -102,7 +103,7 @@ test('K 포즈 정합 — 비 bullseye 중앙 파인더도 K0/K1/K2 원문까지
   }
 });
 
-// K-CM 은 **생성·후단 복호까지** 열려 있다. 프론트엔드는 2026-08-25 에 **반쯤** 배선됐다.
+// K-CM 은 **생성·후단 복호까지** 열려 있었고, 프론트엔드는 2026-08-25 에 반쯤 배선됐다.
 //
 // ## 벽이 어디로 옮겨갔나 (2026-08-25 실측)
 //
@@ -111,26 +112,31 @@ test('K 포즈 정합 — 비 bullseye 중앙 파인더도 K0/K1/K2 원문까지
 // 를 켜며, 본문은 `dataCellsInScanOrderKMarker` 로 다시 뽑는다.
 // 그 결과 **포맷 단계는 통과한다** (formatProposalCount 0 → 1).
 //
-// 남은 것: **CM 용 역할 맵이 없다.** `layoutForHypothesis` 가 star 에 `layoutMapK(k)`
-// (평 K)를 주는데, K-CM 은 레퍼런스를 재배치한다(`patchReferenceCellsKMarker`).
-// 그래서 셀은 전부 표본화되는데(digits 163 · erasures 0) **읽은 값이 어긋나** 본문
-// RS 가 죽는다. 광학을 빼면 인코더 → `decodeCellsK` 는 **완전히 성립한다**(실측) —
-// 즉 남은 결함은 오직 이 역할 맵 하나다. `layoutMapKMarker(k)` 를 만들어
-// `layoutForHypothesis` 의 star 분기가 CM 일 때 그것을 주면 닫힌다.
+// 처음에는 `layoutForHypothesis` 가 평 K 역할 맵을 쓰므로 재배치 레퍼런스가 디지트를
+// 어긋나게 한다고 보았다. 그러나 같은 CM scan order로 인코더 `cellDigits`와 광학 grid를
+// 전수 대조하니 **163/163 일치 · erasures 0**이었다. `decodeCellsK`도 실제로 성공했다.
+// 진짜 벽은 그 다음이었다: `familyProfiles('star')`가 평 K 3행만 소유해 포맷 8의 성공
+// 후보를 `profileForFormatCandidate`가 되찾지 못했고, 빈 후보가 접힌 `BODY_RS_FAILED`로
+// 보고됐다. K-CM 3행을 star 소유 표에 넣어 그 마지막 승격 경로를 닫았다.
 //
-// 이 락은 그때까지 «아직 안 읽힌다» 를 자로 남긴다 — 닫히는 순간 터져서 알린다.
-test('K-CM 프론트엔드 반배선 — 포맷은 통과하고 **역할 맵**에서 죽는다 (2026-08-25)', () => {
-  const text = 'K-CM-frontend-pending';
-  const { encoded, raster } = renderK(text, 0, { cornerMarker: true });
-  assert.equal(encoded.formatIndex, 8, 'K-CM 와이어 값이 8 이 아니다');
-  const result = decodeFrontend(raster);
-  // 통과해 버리면 «미배선» 이 거짓이다 — 그 경우 이 테스트를 지우는 게 아니라
-  // 평 K 왕복과 같은 양성 단언으로 바꾼다 (배타 개설 정형 ③).
-  assert.equal(result.ok, false,
-    'K-CM 이 프론트엔드에서 복호됐다 — layoutMapKMarker 가 붙었다면 이 락을 '
-    + '평 K 왕복과 같은 **양성 단언**으로 전환하라 (배타 개설 정형 ③)');
-  // 그리고 «조용히 다른 원문» 이 나오는 일은 어떤 경우에도 없어야 한다.
-  assert.equal(result.text, undefined);
+// 종전 음성 락은 지우지 않고 같은 자리에서 양성 왕복 락으로 뒤집는다 (배타 개설 정형 ③).
+test('K-CM 왕복 — K0CM/K1CM/K2CM이 포맷 8과 CM scan order로 원문까지 돌아온다', () => {
+  for (const spec of VERSIONS_KCM) {
+    const text = 'K-CM-frontend-' + spec.name;
+    const { encoded, raster } = renderK(text, spec.version, { cornerMarker: true });
+    assert.equal(encoded.formatIndex, 8, spec.name + ': K-CM 와이어 값이 8 이 아니다');
+    const result = decodeFrontend(raster);
+    assert.equal(result.ok, true,
+      spec.name + ' 왕복 실패: ' + (result.reason || '') + ' '
+      + JSON.stringify(result.detail && result.detail.pipelineCode));
+    assert.equal(result.text, text, spec.name + ': 원문이 다르다');
+    assert.equal(result.family, 'star', spec.name + ': 패밀리가 star가 아니다');
+    assert.equal(result.version, spec.version, spec.name + ': 버전이 다르다');
+    assert.equal(result.versionName, spec.name, spec.name + ': 프로파일 이름이 다르다');
+    assert.equal(result.hypothesis.k, spec.k, spec.name + ': 격자 크기가 다르다');
+    assert.equal(result.diagnostics.format.formatIndex, 8,
+      spec.name + ': 소비 formatIndex가 star 축 CM 값(8)과 다르다');
+  }
 });
 
 test('대조군 무회귀 — 같은 하네스에서 O·A 는 기존 패밀리로 이긴다 (star 오양성 없음)', () => {

@@ -72,7 +72,7 @@ import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from '../turnA.js';
 import { K_MARKER_FORMAT_INDEX, kSpecFromFormatIndex } from '../formatK.js';
 import { dataCellsInScanOrderOMarker } from '../markerO.js';
 import { dataCellsInScanOrderAMarker } from '../markerA.js';
-import { dataCellsInScanOrderKMarker } from '../markerK.js';
+import { VERSIONS_KCM, dataCellsInScanOrderKMarker } from '../markerK.js';
 import { DIGIT_COUNT_V2 } from '../formatinfo.js';
 import { enumerateFormatProposals, enumerateFormatProposalsV2 } from '../format-proposals.js';
 import { axialToPixel, cellCount, HEX_AREA_COEFF, SQRT3 } from '../hexgrid.js';
@@ -499,9 +499,10 @@ function familyProfiles(family) {
     }));
   }
   if (family === 'star') {
-    // Type K (육각별) — star 축 독립 표 (formatK.js: 전 버전 7, k 로 가른다).
-    // Q/CM 변형은 아직 없다 (encodeK 배타 — 배치 검증 미실시 조합).
-    return VERSIONS_K.map((spec) => ({
+    // Type K (육각별) — 평 K(7)와 K-CM(8)을 모두 이 (family, k)가 소유한다.
+    // 평 K를 먼저 두므로 profileForHypothesis의 기하 차원 선택은 종전과 같고,
+    // profileForFormatCandidate는 실제 포맷 값으로 K-CM 행까지 되짚는다.
+    return [...VERSIONS_K, ...VERSIONS_KCM].map((spec) => ({
       family,
       dimension: spec.k,
       spec,
