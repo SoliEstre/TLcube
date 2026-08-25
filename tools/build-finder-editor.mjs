@@ -46,6 +46,9 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // 표와 같은 자리). 위상 검사는 정적이라 이 편집기가 비컨을 실제로 렌더하든
   // 안 하든 번들에 들어와야 한다.
   'tonemap', 'encodeY', 'centralBeaconWire', 'centralBeacon',
+    // formatK 는 scene 앞 (2026-08-26) — scene.js 가 육망성 외곽 판정을
+  // kSpecFromFormatIndex 로 **유도**한다 (손 사본 7·8 철폐).
+  'formatK',
   'gf256', 'rs', 'qr', 'encode', 'scene', 'raster', 'png',
 ]);
 

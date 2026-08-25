@@ -31,6 +31,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
+import { MODULE_ORDER } from '../tools/build-single.mjs';
+import { collectScannerModuleSources } from '../tools/build-scanner.mjs';
+
 /** `YYYY-MM-DD.NN` 형식인가. 형식이 깨지면 날짜 비교 자체가 무의미하다. */
 const STAMP_RE = /^(\d{4})-(\d{2})-(\d{2})\.(\d{2})$/;
 
@@ -45,26 +48,68 @@ function lastChangeDate(paths) {
   }
 }
 
+/*
+ * ⭐ **감시 목록은 번들러에서 유도한다** (2026-08-26).
+ *
+ * 종전에는 손으로 적은 5\~6개 경로였고, 거기 **구멍이 있었다**:
+ * `src/decoder/central-beacon-adapt.js` 는 스캐너 번들에 실제로 들어가는데
+ * 감시 목록엔 없었다. 그 모듈만 바뀐 배포에서 가드는 «스탬프 그대로 둬도 된다» 고
+ * 답한다 — 그게 정확히 이 가드가 막으려던 사고다 (2026-08-19: 배포는 됐는데
+ * 화면이 옛 날짜를 말해 «배포 실패» 라는 잘못된 결론이 만들어졌다).
+ *
+ * 번들러는 자기가 무엇을 나르는지 이미 안다. 손 사본을 두지 말고 그걸 쓴다.
+ *   · 생성기 — `MODULE_ORDER` (build-single.mjs, 이 커밋에서 export 로 열었다)
+ *   · 스캐너 — `collectScannerModuleSources()` (build-scanner.mjs, 이미 export)
+ * 각 표면의 진입 파일(HTML·scanner.js)은 모듈 그래프 밖이라 따로 더한다.
+ */
+function generatorWatchPaths() {
+  return ['index.html', ...MODULE_ORDER.map((name) => 'src/' + name + '.js')];
+}
+
+function scannerWatchPaths() {
+  // collectScannerModuleSources() 는 Array<{id, filePath, code, dependencies}> 를 준다.
+  // id 가 이미 repo 상대경로다 ('/src/base211.js') — filePath 는 절대경로라 안 쓴다.
+  const files = collectScannerModuleSources()
+    .map((m) => String(m.id || '').replace(/^\//, ''))
+    .filter((f) => f.endsWith('.js'));
+  return ['sites/tlscan/scanner.js', 'sites/tlscan/index.html', ...files];
+}
+
+/*
+ * ⚠ **빈 목록은 조용히 초록이다.** 유도를 처음 넣었을 때 필드 이름을 잘못 짚어
+ * 스캐너 감시가 87개 → **0개**로 무너졌는데 이 파일은 그대로 5/5 통과했다
+ * (감시할 게 없으면 «뒤처진 것도 없다»). 자가 무너진 것을 통과로 읽지 않도록,
+ * 재는 대상의 **크기 자체**를 아래에서 잠근다. 손 목록 시절 수(6·5)보다 커야 한다.
+ */
+const WATCH_FLOOR = Object.freeze({ GENERATOR_BUILD: 20, SCANNER_BUILD: 20 });
+
 const SURFACES = [
   {
     name: 'GENERATOR_BUILD',
     file: 'index.html',
     re: /const GENERATOR_BUILD = '([^']+)'/,
-    // 생성기 번들이 나르는 것 — 이들이 바뀌면 라이브 생성기가 바뀐 것이다.
-    watch: ['index.html', 'src/finder-patterns.js', 'src/finder-oak-patterns.js',
-      'src/finder-daehan.js', 'src/finder-card-ui.js', 'src/scene.js'],
+    watch: generatorWatchPaths(),
   },
   {
     name: 'SCANNER_BUILD',
     file: 'sites/tlscan/scanner.js',
     re: /export const SCANNER_BUILD = '([^']+)'/,
-    watch: ['sites/tlscan/scanner.js', 'sites/tlscan/index.html',
-      'src/decoder/bootstrap.js', 'src/decoder/cell-finder-detect.js',
-      'src/decoder/frontend.js'],
+    watch: scannerWatchPaths(),
   },
 ];
 
 for (const surface of SURFACES) {
+  test(surface.name + ' 의 감시 목록이 번들러에서 유도되고 비어 있지 않다', () => {
+    const floor = WATCH_FLOOR[surface.name];
+    assert.ok(surface.watch.length >= floor,
+      surface.name + ' 감시 경로가 ' + surface.watch.length + '개뿐이다 (하한 ' + floor + ').\n'
+      + '    → 유도가 무너지면 이 파일 전체가 «잴 게 없어서» 초록이 된다.\n'
+      + '      번들러 반환 형태가 바뀌었는지 보라 (id 필드).');
+    // 진입 파일과 모듈이 **둘 다** 있어야 한다 — 한쪽만이면 유도가 반쯤 죽은 것이다.
+    assert.ok(surface.watch.some((p) => p.startsWith('src/')),
+      surface.name + ' 감시 목록에 src/ 모듈이 하나도 없다 — 유도가 죽었다');
+  });
+
   test(surface.name + ' 은 형식이 YYYY-MM-DD.NN 이다', () => {
     const source = readFileSync(ROOT + surface.file, 'utf8');
     const match = surface.re.exec(source);

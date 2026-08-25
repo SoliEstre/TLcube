@@ -17,6 +17,7 @@ import { encodeK } from '../src/encodeK.js';
 import { encodeA } from '../src/encodeA.js';
 import { encode } from '../src/encode.js';
 import { buildScene } from '../src/scene.js';
+import { addQuietZone } from '../src/quietzone.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { familiesForBeaconMeta } from '../src/decoder/central-beacon-adapt.js';
@@ -74,6 +75,41 @@ test('K 왕복 — K0/K1/K2 가 star 가설·포맷 7 로 원문까지 돌아온
     assert.equal(cubeDiag.ok, false,
       spec.name + ': cube 경로가 K 실루엣에 양성으로 섰다 — F-107 함정이 K 에 열렸다. '
       + '재시도 안전망(retryFinderComparison)에 기대기 시작한 것이니 잠금 검사를 갱신하라');
+  }
+});
+
+test('K 육망성 안전영역 왕복 — K0/K1/K2 원문 복호와 오목 실루엣이 함께 산다', () => {
+  for (const spec of VERSIONS_K) {
+    const text = 'typeK-quiet-roundtrip-' + spec.name;
+    const encoded = encodeK(text, { version: spec.version, eccLevel: 'M' });
+    const bare = buildScene(encoded, { palette: PALETTE, margin: 20 });
+    const scene = addQuietZone(bare, {
+      color: { r: 255, g: 255, b: 255 },
+      margin: 2,
+      selfQuietColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
+    });
+    const [quiet] = scene.shapes;
+    let signed = 0;
+    for (let i = 0, j = quiet.points.length - 1; i < quiet.points.length; j = i, i += 1) {
+      signed += quiet.points[j].x * quiet.points[i].y - quiet.points[i].x * quiet.points[j].y;
+    }
+    const winding = signed > 0 ? 1 : -1;
+    let reflex = 0;
+    for (let i = 0; i < quiet.points.length; i += 1) {
+      const a = quiet.points[(i - 1 + quiet.points.length) % quiet.points.length];
+      const b = quiet.points[i];
+      const c = quiet.points[(i + 1) % quiet.points.length];
+      const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      if (cross * winding < -1e-9) reflex += 1;
+    }
+    assert.equal(reflex, 6, spec.name + ': 안전영역이 육각형으로 되돌아갔다');
+
+    const result = decodeFrontend(rasterize(scene, { pixelsPerUnit: PPU, supersample: 1 }));
+    assert.equal(result.ok, true,
+      spec.name + ' 안전영역 왕복 실패: ' + (result.reason || '') + ' '
+      + JSON.stringify(result.detail && result.detail.pipelineCode));
+    assert.equal(result.text, text, spec.name + ': 안전영역 뒤 원문이 다르다');
+    assert.equal(result.family, 'star', spec.name + ': 안전영역 뒤 family가 star가 아니다');
   }
 });
 
@@ -199,6 +235,50 @@ test('K 중앙 v0 왕복 — 평/CM × 전 k × 전 ECC가 기존 와이어로 �
       assert.equal(result.diagnostics.format.formatIndex, spec.formatIndex,
         `${spec.name}/${eccLevel}: 소비 와이어가 다르다`);
     }
+  }
+});
+
+test('K 중앙 v0 — 1080×1440 여백 프레임에서도 K0/K1/K2 가 선다', {
+  timeout: 120_000,
+}, () => {
+  // 레인 TLK (2026-08-25): 실사 k26-tl 는 모니터 전체 샷이라 기본 검색 캡 480 이
+  // 비컨 K3 코어를 죽였다. 어댑터가 캡만 올린 것을, 합성을 같은 크기로 심어 잠근다.
+  // 문턱은 그대로다 — 여백이 늘어 검색 축소가 커지는 경로만 연다.
+  const canvasW = 1080;
+  const canvasH = 1440;
+  const fill = PALETTE.background;
+  for (const spec of VERSIONS_K) {
+    const text = 'K-pad1440-' + spec.name;
+    const { raster } = renderK(text, spec.version, {
+      centralV0: true, finderPatternId: 'central-v0',
+    });
+    assert.ok(raster.width <= canvasW && raster.height <= canvasH,
+      spec.name + ': 합성 래스터가 1440 캔버스를 넘는다');
+    const padded = {
+      width: canvasW,
+      height: canvasH,
+      pixels: new Uint8ClampedArray(canvasW * canvasH * 4),
+    };
+    for (let index = 0; index < canvasW * canvasH; index += 1) {
+      padded.pixels[index * 4] = fill.r;
+      padded.pixels[index * 4 + 1] = fill.g;
+      padded.pixels[index * 4 + 2] = fill.b;
+      padded.pixels[index * 4 + 3] = 255;
+    }
+    const ox = Math.floor((canvasW - raster.width) / 2);
+    const oy = Math.floor((canvasH - raster.height) / 2);
+    for (let y = 0; y < raster.height; y += 1) {
+      padded.pixels.set(
+        raster.pixels.subarray(y * raster.width * 4, (y + 1) * raster.width * 4),
+        ((oy + y) * canvasW + ox) * 4,
+      );
+    }
+    const result = decodeFrontend(padded);
+    assert.equal(result.ok, true,
+      spec.name + ' 1440 여백 왕복 실패: ' + (result.reason || '')
+      + ' ' + JSON.stringify(result.detail && result.detail.pipelineCode));
+    assert.equal(result.text, text, spec.name + ': 원문이 다르다');
+    assert.equal(result.family, 'star', spec.name + ': star 가 아니다');
   }
 });
 

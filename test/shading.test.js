@@ -25,6 +25,8 @@ import {
 import { markHulls } from '../src/quietzone.js';
 import { addQuietZone } from '../src/quietzone.js';
 import { encodeY } from '../src/encodeY.js';
+import { encodeK } from '../src/encodeK.js';
+import { buildScene } from '../src/scene.js';
 import { buildSceneY } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
 import { sceneToSvg } from '../src/svg.js';
@@ -164,6 +166,40 @@ for (const { name, opts } of CASES) {
     }
   });
 }
+
+test('K 공유 오목 외곽 — 음영도 육망성을 따르며 코드 본체에 닿지 않는다', () => {
+  const scene = buildScene(encodeK('K-shading-shared-hull', { version: 2, eccLevel: 'M' }), {
+    palette: PALETTE,
+    margin: 20,
+  });
+  const [hull] = markHulls(scene, 2, QR_PATCH_COLORS);
+  let signed = 0;
+  for (let i = 0, j = hull.length - 1; i < hull.length; j = i, i += 1) {
+    signed += hull[j].x * hull[i].y - hull[i].x * hull[j].y;
+  }
+  const winding = signed > 0 ? 1 : -1;
+  let reflex = 0;
+  for (let i = 0; i < hull.length; i += 1) {
+    const a = hull[(i - 1 + hull.length) % hull.length];
+    const b = hull[i];
+    const c = hull[(i + 1) % hull.length];
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (cross * winding < -1e-9) reflex += 1;
+  }
+  assert.equal(reflex, 6, '음영 소비자가 육각 볼록 껍질을 받았다');
+
+  const bands = shadingBands(scene, {
+    mode: SHADING_ON, rim: true, clusterGap: 2, selfQuietColors: QR_PATCH_COLORS,
+  });
+  assert.ok(bands.length >= 6, `K 음영 띠가 너무 적다: ${bands.length}`);
+  const shapes = scene.shapes.map(shapePolygon);
+  for (const band of bands) {
+    for (let i = 0; i < shapes.length; i += 1) {
+      assert.equal(polygonsIntersect(band.points, shapes[i]), false,
+        `K ${band.group}/${band.role} 띠가 shape[${i}]와 겹친다`);
+    }
+  }
+});
 
 test('가림 실증 — 음영은 도형 아래라 QR 블록 픽셀이 음영을 켜도 안 변한다', () => {
   const scene = sceneFor({ version: 1, tones: 3, qr: true, qrCorner: 'TL' });

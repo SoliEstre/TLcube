@@ -19,14 +19,15 @@
  *
  * ## 셀 무접촉 (이 모듈의 핵심 계약)
  *
- * 띠는 마크 껍질(convex hull)을 `gap` 만큼 바깥으로 민 선에서 **시작**한다. 모든 도형은
- * 껍질 **안**에 있으므로, 껍질 변 i 의 법선 방향으로 잰 거리에서
+ * 띠는 마크 공유 외곽을 `gap` 만큼 바깥으로 민 선에서 **시작**한다. 기본 볼록 외곽은
+ * 모든 도형을 안에 두므로, 외곽 변 i 의 법선 방향으로 잰 거리에서
  *
  *   도형 ≤ 0 < gap ≤ 띠(변 i 에서 나온 사변형)
  *
- * 가 성립한다 — 변마다 **분리축**이 하나씩 존재하므로 교차가 0 이다. 증명이 이렇게 짧은
- * 것은 띠를 «껍질에서 밀어낸 사변형» 으로만 만들기 때문이고, 그래서 이 모듈은 그 형태를
- * 벗어나지 않는다. (테스트가 SAT 로 다시 확인한다 — 증명은 주장이고 측정이 사실이다.)
+ * 가 성립한다 — 변마다 **분리축**이 하나씩 존재하므로 교차가 0 이다. Type K 의 12각형은
+ * 오목이라 전역 분리축 증명을 그대로 쓸 수 없다. 그 경로는 같은 외곽의 국소 바깥 법선을
+ * 쓰되 전 띠 × 전 코드 도형의 무교차를 회귀 테스트로 직접 잰다. 어느 쪽도 띠를
+ * «공유 외곽에서 밀어낸 사변형» 밖으로 만들지 않는다.
  *
  * 껍질은 **QR 블록을 제외하고** 묶는다 (운영자 판정 2026-08-17 — 안전영역과 같은
  * `selfQuietColors` 제외 규칙). 처음엔 «그림자는 물체 하나가 진다» 논지로 QR 을
@@ -123,7 +124,7 @@ function signedArea2(poly) {
 }
 
 /**
- * 볼록 폴리곤의 **변별 바깥 단위 법선**. 길이 0 인 변은 null.
+ * 단순 폴리곤의 **변별 바깥 단위 법선**. 길이 0 인 변은 null.
  * @returns {({nx:number,ny:number}|null)[]} 인덱스 i = 변 (poly[i] → poly[i+1])
  */
 export function outwardEdgeNormals(poly) {
@@ -143,13 +144,13 @@ export function outwardEdgeNormals(poly) {
 }
 
 /**
- * 볼록 폴리곤을 바깥으로 `d` 만큼 민 **정점 배열** — 길이가 입력과 **같다**.
+ * 단순 폴리곤을 바깥으로 `d` 만큼 민 **정점 배열** — 길이가 입력과 **같다**.
  *
  * `quietzone.offsetConvex` 와 다른 점이 이 «같은 길이» 다. 그쪽은 마이터가 폭주하면
  * 꼭짓점을 둘로 쪼개(베벨) 정점 수가 늘어난다. 음영 띠는 «변 i 의 안쪽 모서리 ↔ 바깥
  * 모서리» 를 1:1 로 짝지어야 사변형이 만들어지므로, 여기서는 쪼개는 대신 마이터 길이를
- * **자른다**. 자르면 그 꼭짓점에서 띠가 얇아질 뿐 — 셀 쪽으로 파고들지는 않는다
- * (자른 점도 두 변의 바깥 반평면 안에 남는다).
+ * **자른다**. 볼록 외곽에서는 자른 점도 두 변의 바깥 반평면 안에 남는다. 오목 K 는
+ * 이 전역 증명 대신 모듈 상단에 적은 전수 무교차 회귀를 안전망으로 둔다.
  */
 export function miterVertices(poly, d) {
   const normals = outwardEdgeNormals(poly);
@@ -186,7 +187,7 @@ export function miterVertices(poly, d) {
 /**
  * 껍질 하나에서 띠들을 만든다.
  *
- * @param {{x:number,y:number}[]} hull 볼록 껍질
+ * @param {{x:number,y:number}[]} hull 공유 외곽(기본 볼록, Type K 오목 12각형)
  * @param {{gap:number, depth:number, group:'lower'|'upper', shadowAlpha:number,
  *          reflectAlpha:number, width:number, height:number}} opts
  * @returns {Array} 띠 목록

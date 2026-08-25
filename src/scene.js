@@ -33,6 +33,7 @@ import { CENTRAL_V0_SOURCE_N } from './cellSurfaceFinal.js';
 import { centralBeaconGeometry } from './centralBeaconWire.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from './finder-selection.js';
 import { digitToPattern } from './tonemap.js';
+import { kSpecFromFormatIndex } from './formatK.js';
 import { encodeCentralBeacon } from './centralBeacon.js';
 
 // `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
@@ -809,6 +810,15 @@ export function buildScene(encoded, options) {
     // ⚠ 그리는 쪽(§배치 사상)과 이 값은 **같은 `turnA` 지역변수**에서 나온다 —
     //    둘을 따로 계산하게 고치지 마라.
     turnA,
+    // Type K 는 이 scene 이 육망성 외곽을 쓴다는 렌더 메타데이터를 함께 낸다.
+    // K 에만 키가 생기므로 O/A 기존 scene 모양과 직렬화는 그대로다 — quietzone/shading
+    // 이 **같은 외곽을 공유**해야 그림자가 안 샌다 (레인 QUIET §1).
+    // ⚠ **판정은 formatK 표에서 유도한다.** 레인 원안은 `formatIndex === 7 || === 8` 로
+    //    값을 손으로 베꼈는데, 그 둘은 `src/formatK.js` 가 스스로 「유일한 진실」이라
+    //    선언한 표의 내용물이다. 손 사본은 표가 늘 때 조용히 어긋난다 — K3 를 넣는 날
+    //    여기만 옛 두 값으로 남아 새 버전의 안전영역이 육각으로 되돌아간다 (교훈 017).
+    ...(kSpecFromFormatIndex(encoded.formatIndex, encoded.k)
+      ? { markSilhouette: 'hexagram' } : {}),
     shapes,
   };
 }

@@ -52,7 +52,15 @@ const DEFAULT_FINDER_DECLARATION =
 // 별도 sceneA 모듈은 없다(buildScene 이 cellDigits 삽입 순서만 순회 — 렌더 경로 공유,
 // D7). MODULE_ORDER 등록 = MODULES 배열 등록 순서 = specifier 치환 가능 순서(본 파일
 // 상단 주석) — capacity.js 를 import 하는 capacityA 는 반드시 'capacity' 뒤에 온다.
-const MODULE_ORDER = [
+/**
+ * ⭐ **export 하는 이유** (2026-08-26): 배포 스탬프 신선도 가드
+ * (`test/build-stamp-freshness.test.js`)가 «이 표면이 나르는 소스» 목록을
+ * **손으로 유지하지 않도록** 여기서 가져간다. 손 목록이던 시절 실제로 구멍이
+ * 있었다 — 스캐너 감시 목록에 `central-beacon-adapt.js` 가 없어서, 그 모듈이
+ * 바뀌어 배포 번들이 달라져도 가드가 «스탬프 그대로 둬도 된다» 고 답했다.
+ * 그게 바로 그 가드가 막으려던 사고다(배포는 됐는데 화면은 옛 날짜).
+ */
+export const MODULE_ORDER = [
   'vendor/jcodd', 'payloadform',
   'hexgrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup',
   // **의도적 이동 (2026-08-19, daehan UI 편입)**: `placement` 와 `finder-daehan` 이

@@ -455,6 +455,15 @@ export function discoverCentralBeaconFinders(luma, options = {}) {
         // v0-center 후보는 이 경로에서 애초에 후보가 아니다. Type Y 전면 CS 경로는
         // 이 어댑터를 안 지나므로 한 비트도 안 바뀐다.
         centreWindowFraction: 0.5,
+        // **검색 해상도** (2026-08-25, 레인 TLK) — 기본 searchMaxSide=480 은
+        // 1080×1440 프레임을 factor=3 으로 줄인다. 중앙 비컨은 13×13 모듈이
+        // 19셀 슬롯 안에 들어가므로, 같은 화면에 별 전체를 담으면 k 가 클수록
+        // 모듈 px 가 줄어 factor=3 에서 K3 코어 문턱(minimumCoreUnitPx) 아래로
+        // 떨어진다. 240px 창·factor=1 에서는 K0/K1/K2 텔레 프레임이 모두
+        // locator 톤 1.00 으로 섰고, 480 검색은 18프레임 전부 파인더 0 이었다.
+        // 문턱은 안 내린다. 이 어댑터만 1080p 짧은 변이 네이티브가 되게 캡을
+        // 올린다 (1920×1080 → factor=1). Type Y 전면 경로는 기본 480 그대로다.
+        searchMaxSide: 1920,
         ...(callerCalibration.csBlockLocator || {}),
       },
     },

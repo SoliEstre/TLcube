@@ -4,7 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  convexHull, offsetConvex, clipToRect, clusterShapes, quietZonePolygons, addQuietZone,
+  convexHull, offsetConvex, clipToRect, clusterShapes, markHulls, quietZonePolygons, addQuietZone,
 } from '../src/quietzone.js';
 
 const WHITE = { r: 255, g: 255, b: 255 };
@@ -412,5 +412,72 @@ describe('실제 인코더 산출물과의 통합', () => {
     });
     const polys = quietZonePolygons(scene, 2, [BULLSEYE_LIGHT, BULLSEYE_DARK]);
     assert.equal(polys.length, 1, '불스아이 색 때문에 코드 전체가 제외되면 안 된다');
+  });
+
+  test('K2 안전영역은 6개 반사 꼭짓점을 유지한 육망성 외곽이며 모든 셀을 감싼다', async () => {
+    const { encodeK } = await import('../src/encodeK.js');
+    const { buildScene } = await import('../src/scene.js');
+    const { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const p = getPreset('slate');
+    const scene = buildScene(encodeK('quiet-zone-K2', { version: 2 }), {
+      palette: {
+        background: p.background, levels: p.levels,
+        bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+      },
+      margin: 20,
+    });
+    assert.equal(scene.markSilhouette, 'hexagram');
+
+    const [hull] = markHulls(scene, 2, [BULLSEYE_LIGHT, BULLSEYE_DARK]);
+    const [quiet] = quietZonePolygons(scene, 2, [BULLSEYE_LIGHT, BULLSEYE_DARK]);
+    const reflexCount = (poly) => {
+      let signed = 0;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+        signed += poly[j].x * poly[i].y - poly[i].x * poly[j].y;
+      }
+      const winding = signed > 0 ? 1 : -1;
+      let count = 0;
+      for (let i = 0; i < poly.length; i += 1) {
+        const a = poly[(i - 1 + poly.length) % poly.length];
+        const b = poly[i];
+        const c = poly[(i + 1) % poly.length];
+        const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+        if (cross * winding < -1e-9) count += 1;
+      }
+      return count;
+    };
+    assert.equal(hull.length, 12);
+    assert.equal(reflexCount(hull), 6, '공유 외곽이 육각 볼록 껍질로 되돌아갔다');
+    assert.equal(quiet.length, 12);
+    assert.equal(reflexCount(quiet), 6, 'offset 뒤 육망성 노치가 사라졌다');
+    assert.deepEqual(
+      quietZonePolygons(scene, 2, [BULLSEYE_LIGHT, BULLSEYE_DARK]),
+      quietZonePolygons(scene, 2, [BULLSEYE_LIGHT, BULLSEYE_DARK]),
+      '같은 입력의 안전영역 좌표가 결정적이지 않다',
+    );
+
+    // margin=2 라 모든 실제 셀 꼭짓점은 quiet 외곽보다 엄격히 안쪽이어야 한다.
+    for (const shape of scene.shapes) {
+      const points = shape.kind === 'polygon' ? shape.points : [
+        { x: shape.cx - shape.r, y: shape.cy - shape.r },
+        { x: shape.cx + shape.r, y: shape.cy - shape.r },
+        { x: shape.cx + shape.r, y: shape.cy + shape.r },
+        { x: shape.cx - shape.r, y: shape.cy + shape.r },
+      ];
+      for (const point of points) {
+        assert.equal(inside(quiet, point), true,
+          `K2 shape 꼭짓점 (${point.x},${point.y}) 이 안전영역 밖이다`);
+      }
+    }
+
+    const allPoints = scene.shapes.flatMap((shape) => (shape.kind === 'polygon' ? shape.points : [
+      { x: shape.cx - shape.r, y: shape.cy - shape.r },
+      { x: shape.cx + shape.r, y: shape.cy - shape.r },
+      { x: shape.cx + shape.r, y: shape.cy + shape.r },
+      { x: shape.cx - shape.r, y: shape.cy + shape.r },
+    ]));
+    const oldHex = offsetConvex(convexHull(allPoints), 2);
+    assert.ok(area(quiet) < area(oldHex) * 0.8,
+      `오목 외곽 넓이(${area(quiet)})가 옛 볼록 껍질(${area(oldHex)})과 거의 같다`);
   });
 });

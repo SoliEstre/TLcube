@@ -12,9 +12,12 @@
 // 도형은 **scene.shapes 의 맨 앞**에 꽂는다 — painter 순서상 뒤에 그려지는 셀·불스아이·QR
 // 이 전부 그 위에 얹힌다.
 //
-// ⚠ scene.shapes 는 셀/QR 을 구분하는 라벨을 갖지 않는다. 그래서 안전영역은 **마크 전체**
-// (코드 + 코너 QR 블록)의 볼록 껍질을 기준으로 잡는다. 인쇄물에서 한 덩어리로 취급되는
-// 단위가 그것이므로 의미상으로도 이쪽이 맞다.
+// ⚠ scene.shapes 는 셀/QR 을 구분하는 라벨을 갖지 않는다. 그래서 기본 안전영역은
+// **마크 전체**(코드 + 코너 QR 블록)의 볼록 껍질을 기준으로 잡는다. 단 Type K 는
+// scene.markSilhouette 메타데이터로 본체를 식별해 육망성 공유 외곽을 쓴다.
+
+import { axialToPixel } from './hexgrid.js';
+import { regionCellsK } from './placementK.js';
 
 /** 부동소수 비교 여유 — 좌표는 scene 단위(셀 크기 1 근방)라 이 정도면 충분하다. */
 const EPS = 1e-9;
@@ -126,6 +129,96 @@ export function offsetConvex(poly, d, miterLimit = 4) {
     }
   }
   return out;
+}
+
+/** 두 선분이 교차·접촉·공선 중첩하는가. */
+function segmentsIntersect(a, b, c, d) {
+  const cross = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const abC = cross(a, b, c);
+  const abD = cross(a, b, d);
+  const cdA = cross(c, d, a);
+  const cdB = cross(c, d, b);
+  if (((abC > EPS && abD < -EPS) || (abC < -EPS && abD > EPS))
+    && ((cdA > EPS && cdB < -EPS) || (cdA < -EPS && cdB > EPS))) return true;
+  const onSegment = (p, q, r, turn) => Math.abs(turn) <= EPS
+    && r.x >= Math.min(p.x, q.x) - EPS && r.x <= Math.max(p.x, q.x) + EPS
+    && r.y >= Math.min(p.y, q.y) - EPS && r.y <= Math.max(p.y, q.y) + EPS;
+  return onSegment(a, b, c, abC) || onSegment(a, b, d, abD)
+    || onSegment(c, d, a, cdA) || onSegment(c, d, b, cdB);
+}
+
+/** 단순 폴리곤의 비인접 변끼리 교차·접촉·중첩하는가. */
+function hasSelfIntersection(poly) {
+  const n = poly.length;
+  for (let i = 0; i < n; i += 1) {
+    const iNext = (i + 1) % n;
+    for (let j = i + 1; j < n; j += 1) {
+      const jNext = (j + 1) % n;
+      if (i === j || iNext === j || jNext === i) continue;
+      if (segmentsIntersect(poly[i], poly[iNext], poly[j], poly[jNext])) return true;
+    }
+  }
+  return false;
+}
+
+/** 반사 꼭짓점이 하나라도 있는가. 감김과 무관하다. */
+function isConcave(poly) {
+  if (poly.length < 4) return false;
+  const winding = signedArea2(poly) > 0 ? 1 : -1;
+  for (let i = 0; i < poly.length; i += 1) {
+    const a = poly[(i - 1 + poly.length) % poly.length];
+    const b = poly[i];
+    const c = poly[(i + 1) % poly.length];
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+    if (cross * winding < -EPS) return true;
+  }
+  return false;
+}
+
+/**
+ * 알려진 단순 오목 폴리곤의 바깥 마이터 오프셋.
+ *
+ * 계산은 기존 `offsetConvex` 와 같지만, 오목 입력에는 결과의 단순성 검사가 추가된다.
+ * K 육망성의 기본 margin 범위에서는 6개 반사 꼭짓점이 유지된다. margin 이 너무 커서
+ * 노치가 서로 교차하는 순간에는 잘못된 SVG 를 조용히 내보내지 않고 명시적으로 막는다.
+ */
+export function offsetSimple(poly, d, miterLimit = 4) {
+  const out = offsetConvex(poly, d, miterLimit);
+  if (hasSelfIntersection(out)) {
+    throw new RangeError(`오목 폴리곤 offset(${d}) 이 자기교차한다 — margin 을 줄여야 한다`);
+  }
+  return out;
+}
+
+/**
+ * Type K 의 셀 중심 육망성 12각형을 실제 셀 외접반지름만큼 부풀린 공유 외곽.
+ *
+ * 6개 돌출점은 두 정삼각의 꼭짓점(축좌표 거리 2k), 6개 반사 꼭짓점은 두 삼각의
+ * 교차 경계(거리 k)다. `regionCellsK` 로 12점이 정본 영역에 실제로 존재하는지 먼저
+ * 잠근 뒤 화면 좌표로 옮긴다. 셀 하나의 모든 꼭짓점은 중심에서 `layout.size` 이내라
+ * 마지막 offset 은 전 셀 도형을 포함한다.
+ */
+function hexagramHull(scene) {
+  const { k, layout } = scene;
+  if (!Number.isInteger(k) || !layout || !Number.isFinite(layout.size)) {
+    throw new TypeError('hexagram scene 은 정수 k 와 유한한 layout.size 를 가져야 한다');
+  }
+  const axial = [
+    { q: k, r: -2 * k }, { q: k, r: -k },
+    { q: 2 * k, r: -k }, { q: k, r: 0 },
+    { q: k, r: k }, { q: 0, r: k },
+    { q: -k, r: 2 * k }, { q: -k, r: k },
+    { q: -2 * k, r: k }, { q: -k, r: 0 },
+    { q: -k, r: -k }, { q: 0, r: -k },
+  ];
+  const region = new Set(regionCellsK(k).map((c) => `${c.q},${c.r}`));
+  for (const p of axial) {
+    if (!region.has(`${p.q},${p.r}`)) {
+      throw new Error(`Type K 12각형 정점 (${p.q},${p.r}) 이 regionCellsK(${k}) 밖이다`);
+    }
+  }
+  const centers = axial.map((p) => axialToPixel(p.q, p.r, layout));
+  return offsetSimple(centers, layout.size);
 }
 
 /**
@@ -309,9 +402,10 @@ function selfQuietShapeIndices(shapes, selfQuietColors) {
 }
 
 /**
- * 마크 덩어리별 **볼록 껍질**. 안전영역(`quietZonePolygons`)과 입체 음영(`shading.js`)이
- * 같은 껍질에서 출발하도록 여기 한 번만 만든다 — 두 레이어가 서로 다른 껍질을 쓰면
- * 그림자가 안전영역 밖으로 새거나 안쪽으로 파고드는 날이 온다.
+ * 마크 덩어리별 **공유 외곽**. 기본은 볼록 껍질이고, `markSilhouette='hexagram'` 인
+ * Type K 본체 클러스터만 정본 12각형 외곽을 쓴다. 안전영역(`quietZonePolygons`)과
+ * 입체 음영(`shading.js`)이 같은 외곽에서 출발하도록 여기 한 번만 만든다 — 두 레이어가
+ * 서로 다른 외곽을 쓰면 그림자가 안전영역 밖으로 새거나 안쪽으로 파고든다.
  *
  * @param {{shapes:Array}} scene
  * @param {number} clusterGap 덩어리 묶음 간격 (scene 단위)
@@ -327,8 +421,35 @@ export function markHulls(scene, clusterGap, selfQuietColors) {
     kept.push(scene.shapes[i]);
   }
 
+  const clusters = clusterShapes(kept, clusterGap);
+  let mainCluster = -1;
+  if (scene.markSilhouette === 'hexagram') {
+    // 본체에는 항상 중앙 파인더가 있어 layout 원점을 포함하는 도형이 있다. 크기만으로
+    // 고르면 비정상적으로 큰 외부 블록이 본체를 이길 수 있으므로 중심 포함으로 고른다.
+    const cx = scene.layout && scene.layout.originX;
+    const cy = scene.layout && scene.layout.originY;
+    for (let ci = 0; ci < clusters.length && mainCluster < 0; ci += 1) {
+      for (const i of clusters[ci]) {
+        const b = bboxOf(kept[i]);
+        if (cx >= b.minX - EPS && cx <= b.maxX + EPS
+          && cy >= b.minY - EPS && cy <= b.maxY + EPS) {
+          mainCluster = ci;
+          break;
+        }
+      }
+    }
+    if (mainCluster < 0) {
+      throw new Error('Type K 본체 클러스터를 찾지 못했다 — 중앙을 포함하는 도형이 없다');
+    }
+  }
+
   const out = [];
-  for (const idx of clusterShapes(kept, clusterGap)) {
+  for (let ci = 0; ci < clusters.length; ci += 1) {
+    if (ci === mainCluster) {
+      out.push(hexagramHull(scene));
+      continue;
+    }
+    const idx = clusters[ci];
     const pts = [];
     for (const i of idx) pts.push(...shapePoints(kept[i]));
     const hull = convexHull(pts);
@@ -338,7 +459,7 @@ export function markHulls(scene, clusterGap, selfQuietColors) {
 }
 
 /**
- * 안전영역 폴리곤들을 만든다 — 클러스터별 볼록 껍질 + 바깥 오프셋 + 캔버스 클립.
+ * 안전영역 폴리곤들을 만든다 — 클러스터별 공유 외곽 + 바깥 오프셋 + 캔버스 클립.
  * @param {{width:number, height:number, shapes:Array}} scene
  * @param {number} margin 오프셋 거리 (scene 단위 — 셀 크기 1 기준 "셀 몇 개분")
  * @param {{r:number,g:number,b:number}[]} [selfQuietColors] 이 색들로만 이뤄진 **연결
@@ -351,7 +472,10 @@ export function quietZonePolygons(scene, margin, selfQuietColors) {
   // 제외가 무력화된다(그 결과가 QR 과 코드를 잇는 대각선 안전영역이다).
   const out = [];
   for (const hull of markHulls(scene, margin, selfQuietColors)) {
-    const poly = clipToRect(offsetConvex(hull, margin), scene.width, scene.height);
+    const expanded = isConcave(hull)
+      ? offsetSimple(hull, margin)
+      : offsetConvex(hull, margin);
+    const poly = clipToRect(expanded, scene.width, scene.height);
     if (poly.length >= 3) out.push(poly);
   }
   return out;
