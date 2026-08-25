@@ -21,6 +21,7 @@ import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { turnASpec } from '../src/turnA.js';
+import { verifyRaster } from '../src/verify.js';
 import { BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset } from '../src/luminance.js';
 
 const PRESET = getPreset(DEFAULT_PRESET);
@@ -248,4 +249,58 @@ test('④-② V-CMQ 왕복 — 중앙 QR + V-CM 이 V*CM 인덱스 공유로 원
   assert.ok(rate >= VCMQ_MIN_RATE,
     `V-CMQ 격자 ${passed}/${total} (${(100 * rate).toFixed(1)}%) — 하한 ${100 * VCMQ_MIN_RATE}%`
     + ` · 미스 ${misses.join(' ')}`);
+});
+
+// ── 자체검증(자기 계약 확인)이 턴A 자리를 잰다 ──────────────────────────────
+//
+// 운영자 신고 (2026-08-26): «타입 A 역방향 선택 시 자체검증에서 사용 불가로 나온다».
+// 실측한 원인은 인코더도 렌더도 아니었다 — **자를 든 쪽**이었다.
+//   · scene.js §배치 사상 은 (q,r) → (−q,−r) 로 **그린다**.
+//   · verify.js 는 셀 키를 그대로 자리로 써서 **정삼각 자리**를 쟀다.
+//   ⇒ 남의 셀을 읽어 digit 123/477. 같은 래스터를 (−q,−r) 에서 읽으면 477/477.
+//
+// 디코더는 turn 가설로 이미 옳게 읽고 있어서 **위 왕복 테스트가 전부 초록이었다** —
+// 자체검증만 디코더를 우회하는 자라 혼자 틀린 채로 남아 화면에 «사용 불가» 를 띄웠다.
+// 그래서 왕복만으로는 이 결함을 못 잡는다. 이 블록이 그 자리를 따로 잠근다.
+//
+// ⚠ 「자체검증이 통과한다」만 재면 약하다 — 자가 어긋난 채로도 우연히 일치하는 셀이
+//    123개 있었다. 그래서 **정삼각 대조군과 minDelta 가 같다**를 함께 잰다: 턴A 는
+//    셀을 옮길 뿐 톤을 바꾸지 않으므로, 옳게 읽었다면 두 값이 정확히 같아야 한다.
+test('§6 자체검증 — 턴A 가 정삼각과 동일 판정 (V1·V2 × CM·Q 격자)', () => {
+  const TEXT = 'https://tlcube.estre.so/';
+  const OPTIONS = [
+    {},
+    { cornerMarker: true },
+    { centerQr: true },
+    { cornerMarker: true, centerQr: true },
+  ];
+
+  for (const version of [1, 2]) {
+    for (const opt of OPTIONS) {
+      const label = `V${version} ${JSON.stringify(opt)}`;
+      const seen = {};
+      for (const turnA of [false, true]) {
+        const encoded = encodeA(TEXT, { version, eccLevel: 'M', turnA, ...opt });
+        const scene = buildScene(encoded, {
+          palette: PALETTE, margin: 20, ...(opt.centerQr ? { qrText: CENTER_QR_TEXT } : {}),
+        });
+        // 장면은 자기가 쓴 배치 사상을 공표해야 한다 — 자체검증이 그걸 보고 표본한다.
+        assert.equal(scene.turnA, turnA, `${label}: scene.turnA 가 배치 사상을 안 공표한다`);
+
+        const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
+        const check = verifyRaster(raster, scene, encoded);
+        assert.ok(check.ok,
+          `${label} turnA=${turnA}: 자체검증 실패 ${check.matched}/${check.total}`
+          + ` (minΔ ${check.minDelta.toFixed(4)}) — 화면에 «사용 불가» 가 뜬다`);
+        assert.equal(check.mismatches.length, 0, `${label} turnA=${turnA}: 불일치 셀이 있다`);
+        seen[turnA] = check;
+      }
+      // 대조군과 같은 셀 수 · 같은 최소 Δ. 다르면 «통과했지만 다른 것을 쟀다» 다.
+      assert.equal(seen.true.total, seen.false.total,
+        `${label}: 턴A 가 잰 셀 수가 정삼각과 다르다`);
+      assert.equal(seen.true.minDelta.toFixed(6), seen.false.minDelta.toFixed(6),
+        `${label}: 턴A minΔ ${seen.true.minDelta} ≠ 정삼각 ${seen.false.minDelta}`
+        + ' — 셀만 옮겼는데 톤 분리가 달라졌다면 엉뚱한 자리를 잰 것이다');
+    }
+  }
 });

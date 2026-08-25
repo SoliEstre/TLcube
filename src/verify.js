@@ -63,9 +63,18 @@ export function discMedianLuminance(raster, cxPx, cyPx, radiusPx) {
  * @returns {{T:number, L:number, R:number}}
  */
 export function measureCellFaceMedians(raster, scene, q, r) {
+  // 턴A 배치 사상 (q,r) → (−q,−r) 를 **여기서** 적용한다 (2026-08-26). 이 모듈의
+  // 전제는 「기하를 이미 안다」인데, 알고 있던 것이 턴A 이전 기하였다: 셀 키를 그대로
+  // 자리로 써서 정삼각 자리를 재고, 그 자리에 있던 남의 셀을 읽어 턴A 를 전부
+  // «사용 불가» 로 판정했다 (실측 digit 123/477 → 사상 적용 시 477/477).
+  // 디코더는 turn 가설로 이미 옳게 읽고 있어서 왕복 테스트가 초록이었다 — 자체검증만
+  // 디코더를 우회하는 자라 혼자 틀린 채 남았다.
+  // 사상 판단은 `scene.turnA` 하나에서만 온다 (§buildScene 이 그리며 쓴 그 값).
+  const drawQ = scene.turnA ? -q : q;
+  const drawR = scene.turnA ? -r : r;
   const out = {};
   for (const face of FACES) {
-    const disc = faceSampleDisc(q, r, face, scene.layout);
+    const disc = faceSampleDisc(drawQ, drawR, face, scene.layout);
     out[face] = discMedianLuminance(
       raster,
       disc.x * raster.pixelsPerUnit,

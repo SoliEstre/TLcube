@@ -136,8 +136,13 @@ test('코너 예약 힌트는 기본 문구다 — 중앙 QR 상수 잠금(g580 
   // **의도적 갱신 (W2 C4)**: 힌트 자리가 cornerMarkerHint → innerSeatHint(g579)로
   // 승계됐다 (seat 구역). g580 은 상수 분기가 아니라 **와이어 존재 술어**
   // (cmqWireExists)가 false 일 때의 잠금 사유로만 산다 — 사전 8언어 유지.
-  assert.match(INDEX, /els\.innerSeatHint\.textContent = t\('g579'\)/,
-    '기본 힌트 줄이 없다');
+  // **의도적 갱신 (2026-08-26)**: g579 가 인라인 문단에서 «?»(help-dot)로 갔다.
+  // 팝오버가 열릴 때 t() 를 부르므로 sync 에서 다시 칠할 대상이 없다 — 재는 것은
+  // 「기본 힌트가 g579 다」로 같고, 그 배선이 sync 줄에서 data-help 로 옮겨갔다.
+  assert.match(INDEX, /class="help-dot" data-help="g579"/,
+    '기본 힌트(g579) 도착지가 없다');
+  assert.equal(INDEX.includes('els.innerSeatHint'), false,
+    '구 인라인 힌트 배선이 남아 있다 — $() 가 null 을 주므로 조용히 죽은 줄이 된다');
   assert.equal(INDEX.includes("centerQrOn ? t('g580')"), false,
     '은퇴한 상수 잠금 분기가 되살아났다 — C2a 해제와 모순');
 });

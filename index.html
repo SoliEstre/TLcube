@@ -1412,7 +1412,11 @@
                보이는 자리에서 비권장임을 말한다. 고른 뒤 결과로 알게 되면 늦다. -->
           <span class="badge warn" data-i18n="g750">비권장</span>
         </div>
-        <p class="hint" data-i18n="g709">자동은 스캔이 성립하는 최소 크기 실측에서 출발해요. «여백 없음»(비권장)은 여백 폭만 실측 최소로 줄여요 — 안전영역 판은 유지되고, Y 의 입체 음영 띠는 빠지고, 코너 QR 이 있으면 QR 이 사는 여백까지만 줄어요. Type O 는 기본 여백이 이미 최소라 변화가 없어요.</p>
+        <!-- 4줄짜리 g709 힌트는 이 섹션의 «?»(g701) 로 이관했다 (운영자 지시 2026-08-26
+             «두 줄 넘어가는 설명은 ?버튼으로»). 옮기면서 **중복도 하나 없앴다** — g709 의
+             앞 두 문장(자동의 뿌리 · «여백 없음» 이 줄이는 것)은 g701 이 이미 더 자세히
+             말하고 있었고, 고유한 것은 타입별 차이 한 문장뿐이라 그 한 줄만 g701 끝에
+             붙였다. 키 g709 는 8언어에서 지웠다 — 남겨 두면 «정본이 둘» 이 된다. -->
       </div>
 
       <!-- ② 적은 색상 화면 최적화 (디더링) — **고급 전용** (일반 모드는 기본값 = 양자화
@@ -1437,7 +1441,9 @@
           <option value="4" data-i18n="g716">4비트 (16색)</option>
           <option value="2" data-i18n="g717">2비트 (4계조 흑백)</option>
         </select>
-        <p class="hint" data-i18n="g718">자동 = 양자화 없음 (원본 그대로). 낮은 비트깊이는 3면 밝기 순위를 뭉갤 수 있어요 — 내보낸 뒤 꼭 스캔해 확인하세요.</p>
+        <!-- g718 은 은퇴했다 (2026-08-26). 뒷문장(«순위가 뭉개진다 · 꼭 스캔해 확인»)은
+             이 섹션 «?»(g711) 이 이미 더 자세히 말하고 있었고, 고유한 건 «자동 = 양자화
+             없음» 한 마디뿐이라 그 한 줄만 g711 머리에 얹었다. -->
       </div>
 
       <!-- ③ 출력 최적화 (고PPI) — **PNG 전용** (SVG 는 벡터라 ppi 무의미. 내보내기 포맷이
@@ -1650,7 +1656,8 @@
 
       <!-- «TL 배치 미리보기» 는 여기(배경색 아래)에 있다가 2026-08-23 운영자 지시(항목 7)로
            다운로드/복사하기 아래로 이동했다 — export-section 뒤를 보라. 표면 휘도 →
-           안전영역 자동색 인과는 그대로다 (문구 g902·g935 는 방향어를 중립화했다). -->
+           안전영역 자동색 인과는 그대로다 (문구 g902·g903 이 방향어를 중립화한 정본 —
+           2026-08-26 에 g935 가 은퇴하면서 그 몫이 g903 으로 갔다). -->
 
       <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
       <div class="section-heading-row">
@@ -1761,7 +1768,16 @@
            **실그림 조건**(윈도 β 가 실제로 그려질 때 — yWindowActive)으로 좁혔다
            («열리는데 아무 일 없음» 리스크 해소). -->
       <div id="decorSection" style="display:none">
-        <label class="section-heading" data-i18n="g066">장식 이미지 (좌/우 빈 면 각각 — β)</label>
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g066">장식 이미지 (좌/우 빈 면 각각 — β)</label>
+          <button type="button" class="help-dot" data-help="g070" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
         <div class="row">
           <div class="export-pair" style="flex:1">
             <button id="decorPickL" type="button" data-i18n="g067">좌측 선택…</button>
@@ -1777,8 +1793,6 @@
         </div>
         <input type="file" id="decorFileL" accept="image/*" style="display:none">
         <input type="file" id="decorFileR" accept="image/*" style="display:none">
-        <p class="hint" data-i18n="g070">Y 안쪽 QR 에서 비는 좌/우 면 영역에 데칼처럼 입혀요 (면 조명 셰이딩 적용).
-          렌더 전용이라 데이터·스캔 계약에는 영향이 없어요.</p>
       </div>
 
       <!-- 검출기 선택 (운영자 지시 2026-08-16 A-4) — 타입별로 다른 두 섹션
@@ -1795,13 +1809,33 @@
            셀 정립, 실루엣 ▽), (b) 검출·왕복이 선다 (anchor turn 변형 + V 표 인덱스,
            test/turnA-roundtrip.test.js 6종 + V-CM 2종). 힌트(g575)도 그 사실을 말한다.
            **정식 승격 (2026-08-24)**: 운영자 실기기 스캐너 인식 확인 뒤 lab 게이트를
-           걷었다 — 그래서 위치도 #panelAdvanced 밖(#sharedControls)으로 옮겼다.
-           상태 축도 INTERNAL → BOTH 다 (generator-state §turnA).
+           걷었다. 상태 축도 INTERNAL → BOTH 다 (generator-state §turnA).
+           **실험 딱지 제거 (2026-08-26, 운영자 지시)**: g572 의 «(실험)» 과 g575 의
+           «실험용 · 검증 진행 중» 을 8언어에서 뺐다. 승격은 2026-08-24 에 끝났는데
+           라벨만 남아 있던 것이다 — 부재가 아니라 미갱신. 용량·데이터 계약이 정삼각과
+           같다는 새 문구는 실측했다 (V1·V2 × L/M/H × 옵션 3종 = 18/18 동일).
            외곽 seat 연동 (Wave 3 ④): 켜면 코너 자리가 a-cm → v-cm 으로 승계되고
            끄면 되돌아온다 (§wireSeatCards·syncTurnAUi — 던짐 조합을 UI 가 안 만든다).
-           위치: #finderSection 바로 앞 (타입 구조 옵션 → 검출기 선택 순). -->
+           ⭐ **자리 (2026-08-26)**: 소스는 여기(#sharedControls)에 두되 실제 표시는
+           **타입 선택 바로 아래**다 — §placeModeHostedSections 가 활성 패널의
+           #turnAHostNormal / #turnAHostAdvanced 로 옮긴다. 방향은 타입 A 의 하위 축이라
+           타입에서 멀어지면 «무엇의 방향인가» 가 안 읽힌다.
+           ⚠ 소스를 호스트 안으로 옮기지 마라 — 호스트는 패널마다 하나씩(둘)이고
+           요소는 하나여야 한다. 노출 축 turnA 도 #sharedControls 의 data-state-keys
+           에 그대로 있다 (양쪽 모드 노출이 사실이므로). -->
       <div id="turnASection" hidden>
-        <label class="section-heading" data-i18n="g572">실루엣 방향</label>
+        <!-- 설명은 «?» 로 (운영자 2026-08-26). 이 섹션은 이제 타입 선택 바로 아래라
+             가장 눈에 띄는 자리인데, 독일어에서 3줄이라 타입과 스타일 사이를 벌렸다. -->
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g572">실루엣 방향</label>
+          <button type="button" class="help-dot" data-help="g575" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
         <div class="card-row" id="turnACards">
           <div class="toggle-card active" data-turna="off">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true">
@@ -1816,7 +1850,6 @@
             <span data-i18n="g574">역삼각 (턴A)</span>
           </div>
         </div>
-        <p class="hint" id="turnAHint" data-i18n="g575">실험용이에요. 켜면 실루엣이 역삼각(▽)으로 뒤집혀 그려지고, 이 상태로 만든 코드도 이제 스캐너가 읽어요 — 실기기 검증은 아직 진행 중이에요.</p>
       </div>
 
       <div id="finderSection" style="display:none">
@@ -1875,8 +1908,18 @@
              sagoae. 카드를 두 장으로 쪼개면 버전 k 와 모순되는 템플릿을 고를 수 있다. -->
         <details class="finder-collapse" id="finderDaehan">
           <summary data-i18n="g570">taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)</summary>
+          <!-- 서랍을 연 사람만 보는 자리지만, 열자마자 3줄(한국어 외 7언어)이 카드를
+               밀어내린다. 설명은 «?» 로 옮기고 카드가 먼저 보이게 한다. -->
+          <div class="section-heading-row">
+            <button type="button" class="help-dot" data-help="g571" aria-expanded="false"
+                    aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+                <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+              </svg>
+            </button>
+          </div>
           <div id="finderDaehanCards"></div>
-          <p class="hint" data-i18n="g571">가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.</p>
         </details>
         <div class="finder-score-panel" id="finderScorePanel" aria-live="polite" aria-label="선택 파인더 특성" data-i18n-attr="aria-label:g496">
           <div class="finder-score-heading">
@@ -1913,14 +1956,35 @@
              centerQr 병용: a-cm 은 C2a 로 합법 (cmqWireExists 게이트) · v-cm 은
              **가능** (V-CMQ 개설 2026-08-24 — V*CM 인덱스 공유, turnA.js §turnASpec). -->
         <div id="finderInnerZone" hidden>
-          <label class="section-heading" data-i18n="g850">내곽 자리</label>
+          <!-- 3줄짜리 g579 힌트를 «?» 로 이관했다 (운영자 지시 2026-08-26). 문구 키는
+               그대로 g579 다 — 자리만 옮겼지 사실이 바뀐 게 아니다. 8언어 존재는
+               generator-help-ui A-2 가 data-help 키 전수로 잰다. -->
+          <div class="section-heading-row">
+            <label class="section-heading" data-i18n="g850">내곽 자리</label>
+            <button type="button" class="help-dot" data-help="g579" aria-expanded="false"
+                    aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+                <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+              </svg>
+            </button>
+          </div>
           <div class="card-row" id="innerSeatCards"></div>
-          <p class="hint" id="innerSeatHint" data-i18n="g579">자동이 타입에 맞는 자리를 골라요 — Type O 는 교대 코너 3곳에 보조 표식이 들어가고 그만큼 담을 수 있는 양이 줄어요. 표식이 있다는 사실은 코드의 포맷 자리에 함께 적혀서 스캐너가 그대로 읽어요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.</p>
         </div>
         <div id="finderOuterZone" hidden>
-          <label class="section-heading" data-i18n="g851">외곽 자리</label>
+          <!-- 내곽(g579)과 **대칭**이어야 한다 — 한쪽만 «?» 면 두 구역이 서로 다른
+               종류의 컨트롤처럼 보인다. 독일어에서 3줄이기도 하다. -->
+          <div class="section-heading-row">
+            <label class="section-heading" data-i18n="g851">외곽 자리</label>
+            <button type="button" class="help-dot" data-help="g858" aria-expanded="false"
+                    aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+                <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+              </svg>
+            </button>
+          </div>
           <div class="card-row" id="outerSeatCards"></div>
-          <p class="hint" id="outerSeatHint" data-i18n="g858">자동이 타입과 실루엣 방향에 맞는 코너 자리를 골라요 — 정삼각·역삼각·Type K 가 각각 다른 자리를 써요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.</p>
         </div>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
@@ -2120,7 +2184,20 @@
       <!-- 셀 편집기 — Y/O/A 다중 타입 (운영자 지시 2026-08-16). K 는 제외다:
            렌더러 계약(육망성 실루엣)이 아직 안 넓어졌다 — 태스크 #11 몫. -->
       <div id="yCellEditorSection" hidden tabindex="-1">
-        <label class="section-heading" data-i18n="g521">셀 편집기</label>
+        <!-- 3줄짜리 단축키 설명(g557)을 이 «?» 로 이관했다 (운영자 지시 2026-08-26).
+             단축키는 «알면 빨라지는 것» 이지 «몰라도 막히지 않는 것» 이라 상시 3줄을
+             차지할 이유가 없다. 바로 아래 g522(2줄)는 편집 **범위**를 말하므로 —
+             모르면 «칠했는데 왜 세 면이 다 빠지지» 가 된다 — 인라인으로 남긴다. -->
+        <div class="section-heading-row">
+          <label class="section-heading" data-i18n="g521">셀 편집기</label>
+          <button type="button" class="help-dot" data-help="g557" aria-expanded="false"
+                  aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+              <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
+        </div>
         <p class="hint" id="yCellEditorScopeHint" data-i18n="g522">한 면만 칠해도 그 좌표 (i,j)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.</p>
         <label class="section-heading" data-i18n="g550">편집 타입</label>
         <div class="card-row" id="yCellEditorTypeCards">
@@ -2150,7 +2227,6 @@
           <button type="button" id="yCellEditorReset" data-i18n="g525">초기화</button>
           <button type="button" id="yCellEditorCopy" data-i18n="g526">설정값 복사</button>
         </div>
-        <p class="hint" data-i18n="g557">단축키 — Ctrl/Cmd+Z 되돌리기 · Ctrl+Shift+Z 또는 Ctrl+Y 다시하기. 편집기에 포커스가 있을 때만 동작하고, 글상자 안에서는 브라우저 기본 동작을 씁니다. 드래그로 이어 칠한 한 번은 되돌리기도 한 번이에요.</p>
         <div class="y-cell-editor-viewport" id="yCellEditorViewport">
           <svg id="yCellEditorSvg" xmlns="http://www.w3.org/2000/svg" role="group" focusable="true"></svg>
         </div>
@@ -2241,20 +2317,21 @@
         </div>
         <input type="file" id="backdropFile" accept="image/*" style="display:none">
         <!-- #21 (운영자 지시): 다중행 설명은 «?»(g903) 로 이관 완료 — 여기엔 조작 단서
-             한 줄만 남긴다. «내보내는 파일에 안 들어가요» 는 바로 아래 g935 가 정본. -->
+             한 줄만 남긴다. -->
         <p class="hint" id="backdropHint" data-i18n-html="g300">미리보기에서 <b>드래그로 이동</b>, <b data-i18n="g207">휠 또는 핀치로 확대/축소</b><span data-i18n="g083">할 수 있어요.</span></p>
-        <!-- 이 줄은 두 번 좁혔다가 **다시 넓혔다** — 이번엔 사실이 됐기 때문이다.
-             ① 운영자 초안 «안전영역을 여건에 맞춰 자동으로 골라 준다» → 그 경로가 없었다.
-             ② «색 판단에는 반영된다» → 그것도 아니었다 (2026-08-16 적대 검증 ⑤).
-                표면 휘도를 보는 분기가 |sepW − sepB| ≤ 0.02 뒤에 있었는데 UI 로 만들 수
-                있는 팔레트가 전부 그 문턱 밖이라(slate 0.1689 · ember 0.2507 ·
-                mono 0.0257 · 커스텀 0.1629~0.1764) **한 번도 실행되지 않았다**.
-             ③ 과업 #18 에서 그 입력을 1급으로 올렸다 (src/quiet-auto.js). 문턱 0.02 는
-                그대로 두고 **순서**를 바꿨다 — 셀 분리 바닥(BG_SEPARATION_MIN)을 둘 다
-                넘으면 표면 밝기가 흰/검을 **결정한다**. 실측 slate 기준 표면 휘도
-                0.5 를 넘으면 검정으로 뒤집힌다. 즉 이제 «반영된다» 가 참이다.
-             여전히 참이 아닌 것 하나는 그대로 적는다 — 사진은 **내보내는 파일에 안 들어간다**. -->
-        <p class="hint" id="backdropQuietNote" data-i18n="g935">* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.</p>
+        <!-- ⭐ **g935 는 은퇴했다 (2026-08-26, 운영자 «두 줄 넘어가는 설명은 ?버튼으로»).**
+             3줄짜리 인라인 각주였고, 재 보니 **같은 사실이 이미 두 곳에 더 있었다**:
+               · «표면 밝기가 흰/검을 정한다» → g904(안전영역 «?») 가 규칙 ①② 로 더 자세히,
+                 그리고 g991 이 실제로 골랐을 때 동적으로 («표면 밝기 {mean} 까지 보고»).
+               · «사진은 내보내는 파일에 안 들어간다» → g903(이 섹션 «?») 의 마지막 줄.
+             앞머리 `*` 는 **가리키는 대상이 없는 각주 표시**였다 — 사전 전체에서 `*` 를
+             쓰는 문자열이 g935 하나뿐이었다. 그래서 옮긴 게 아니라 **한 겹 지웠다**:
+             g903 에 «잰 밝기가 안전영역 색도 정한다» 한 줄만 끼워 이 섹션 «?» 안에서도
+             인과가 닫히게 했다. 세는 자리 수는 그대로 둘(g903·g904)이다.
+             ⚠ 되살리지 마라 — 세 번째 문장이 생기면 규칙이 바뀌는 날 한쪽만 고쳐진다
+             (generator-help-ui 의 deadClaims 가 그래서 있다).
+             남아 있던 «두 번 좁혔다 다시 넓혔다» 연혁은 quiet-auto.test.js 와
+             src/quiet-auto.js 가 들고 있다. -->
         <p class="hint" id="backdropVerdict" style="display:none"></p>
     </div>
 
@@ -2507,7 +2584,7 @@ const GENERATOR_STRINGS = {
     "g900": "모듈(셀) 개수를 정하는 축이에요. 개수가 늘면 담을 수 있는 양도 같이 늘어요.\n같은 인쇄 크기에서 해상도가 높을수록 모듈 하나가 작아져서, 더 가까이서 찍어야 읽혀요.\n저 = 원거리·대형 인쇄(광고판) · 중 = 1~3 m 포스터급 · 고 = 근거리·대용량.\n자동은 내용 크기에 맞춰 해상도를 먼저 올리고, 최대에서도 안 들어가면 «안정성 ⇄ 용량» 단계를 내려요.\n카드 그림은 실루엣 대비 검출기 크기예요 — 검출기 셀 수는 고정이라 해상도가 오를수록 상대적으로 작아져요.",
     "g901": "오류정정(ECC) 비중을 정하는 축이에요. 정정에 자리를 많이 줄수록 담을 양이 줄어요.\n보정 우선 = ECC H(≈40%) · 표준 = ECC M(25%) · 대용량 = ECC L(≈12%).\n자동은 입력 크기에 맞춰 H → M → L 순서로 처음 들어가는 레벨을 골라요.\n아래 자체검증 뱃지는 지금 설정으로 실제 렌더한 그림을 되읽은 결과예요 — 인쇄·촬영 조건이 아니라 «렌더가 자기 계약을 지켰는가» 만 봐요.",
     "g902": "투명 = 배경 없이 코드만. PNG 는 알파 채널, SVG 는 배경 요소가 아예 없어요.\n흰색 = 밝은 인쇄물·문서 위에 얹을 때. 검정 = 어두운 지면·화면에 얹을 때.\n투명을 고르면 실효 배경이 «코드를 얹는 표면» 이 돼요 — 그 표면과 셀 색의 분리는 생성 시점에 보증할 수 없으니 «TL 배치 미리보기» 로 실측해 보세요.",
-    "g903": "코드를 실제로 얹을 자리의 사진을 넣으면 미리보기 뒤에 깔려요.\n미리보기에서 드래그로 이동, 휠 또는 핀치로 확대/축소해 위치를 맞춰 보세요.\n코드 둘레의 표면 휘도와 셀 레벨의 분리를 실측해서, 인쇄 전에 «여기 놓으면 읽히는가» 를 수치로 알려줘요.\n내보내는 PNG·SVG 에는 이 사진이 안 들어가요.",
+    "g903": "코드를 실제로 얹을 자리의 사진을 넣으면 미리보기 뒤에 깔려요.\n미리보기에서 드래그로 이동, 휠 또는 핀치로 확대/축소해 위치를 맞춰 보세요.\n코드 둘레의 표면 휘도와 셀 레벨의 분리를 실측해서, 인쇄 전에 «여기 놓으면 읽히는가» 를 수치로 알려줘요.\n잰 표면 밝기는 «안전영역» 의 «자동»·«고대비» 가 흰색과 검정 중 어느 쪽을 깔지 정하는 데도 쓰여요.\n내보내는 PNG·SVG 에는 이 사진이 안 들어가요.",
     "g904": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\n자동 = 배경이 투명이면 고대비 색을 깔고, 불투명이면 배경이 이미 안전영역이라 생략해요.\n없음 = 여백 없이 코드만. 흰색·검정 = 그 색으로 고정.\n고대비 = 흰색·검정 중에서 골라요. ① 셀 색과 너무 가까운 쪽을 먼저 떨어뜨려요 — 여백이 코드에 들러붙으면 실루엣이 코드보다 커져요. ② 둘 다 통과하면 «TL 배치 미리보기» 사진에서 잰 표면 밝기와 더 멀리 떨어진 쪽을 골라요. 밝은 표면이면 검정, 어두운 표면이면 흰색이에요.\n사진을 안 넣었으면 ② 를 못 하니 셀 색과 더 멀리 떨어진 쪽으로 정해요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
     "g905": "TL스캐너로 스캔이 안 될 때 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.\n좌상·우상·좌하·우하 = 코드 바깥 네 모서리 중 한 곳.\n안쪽 = Type O/A 는 중앙 QR, Type Y 는 Y2 윈도 β.\n없음 = QR 없이 코드만 내보내요.\n중앙 QR 변형은 코드 폭 13 cm 이상 인쇄를 권장해요.",
     "g906": "스캐너가 Type Y 코드의 위치·방향을 먼저 찾는 데 쓰는 셀 표면 로케이터예요.\n자동 = 지금 설정에서 권장하는 것을 씁니다. 정식 승격된 Y 검출기가 아직 없어서 현재 «자동» 은 «끔» 과 같은 결과예요.\n후보별 점유 셀 수와 최대 payload L / M / H (정본 cellSurfaceFinal.js):\n· v0 — 30셀 (n=13) · 29 / 25 / 20 B\n· v0X — 65셀 (n=21) · 96 / 81 / 65 B\n· v0XQ — 파인더 42셀 + 중앙 QR 슬롯 81셀 (n=21) · 80 / 67 / 54 B\n· v1r2 — 80셀 (n=21) · 92 / 77 / 62 B\n· v2r2 — 74셀 (n=21) · 94 / 79 / 63 B (n=25 에서는 145 / 124 / 99 B)\n점유 셀이 적을수록 데이터에 쓸 심볼이 많이 남아요 — n=21 에서는 v0X 가 가장 많이 담고 v0XQ 가 가장 적어요. 슬롯이 없는 세 후보끼리는 차이가 L 기준 4 B 라 용량으로 고를 만한 폭이 아니지만, v0XQ 는 중앙 QR 슬롯에 81셀을 내주느라 v0X 보다 L 기준 16 B 적어요 — 그 대신 스캐너가 못 읽어도 중앙 QR 이 폴백 URL 을 싣습니다.\n실험 항목이라 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.",
@@ -2526,7 +2603,6 @@ const GENERATOR_STRINGS = {
     "g931": "설명 보기",
     "g932": "설명 닫기",
     "g934": "어두운 지면",
-    "g935": "* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서, «안전영역» 의 «자동»·«고대비» 가 흰색·검정 중 어느 쪽을 깔지 정하는 데 써요. 사진 자체는 내보내는 PNG·SVG 에 안 들어가요.",
     "g941": "권장값 자동",
     "g942": "검출기 없음",
     "g943": "코너 4블록",
@@ -2548,7 +2624,7 @@ const GENERATOR_STRINGS = {
     "g961": "TL 배치 미리보기",
     "g962": "드래그로 위치 이동 · 휠 또는 핀치로 확대/축소",
     "g700": "고정 이미지 크기",
-    "g701": "내보내는 PNG·SVG 의 픽셀 크기를 정해요 (미리보기와는 무관해요).\n자동 3종은 «스캔 왕복이 성립하는 최소 크기» 실측을 뿌리로 해요 — 하한 최저 = 그 최소 그대로, 최적 용량(기본) = 1.5배, 고품질 = 2.5배.\n고정·커스텀 크기는 코드를 비율 그대로(contain) 캔버스에 담아요. 커스텀 외에는 정사각형이에요.\n«여백 없음»(비권장)은 여백 폭만 실측 최소로 줄여요 — 안전영역 판은 유지되지만 여유가 얇아지므로, 어둡거나 복잡한 표면에 얹을 때는 주의하세요.",
+    "g701": "내보내는 PNG·SVG 의 픽셀 크기를 정해요 (미리보기와는 무관해요).\n자동 3종은 «스캔 왕복이 성립하는 최소 크기» 실측을 뿌리로 해요 — 하한 최저 = 그 최소 그대로, 최적 용량(기본) = 1.5배, 고품질 = 2.5배.\n고정·커스텀 크기는 코드를 비율 그대로(contain) 캔버스에 담아요. 커스텀 외에는 정사각형이에요.\n«여백 없음»(비권장)은 여백 폭만 실측 최소로 줄여요 — 안전영역 판은 유지되지만 여유가 얇아지므로, 어둡거나 복잡한 표면에 얹을 때는 주의하세요.\n타입마다 결과가 달라요 — Y 는 입체 음영 띠가 빠지고, 코너 QR 이 있으면 QR 이 사는 여백까지만 줄어요. Type O 는 기본 여백이 이미 최소라 변화가 없어요.",
     "g702": "자동 (하한 최저)",
     "g703": "자동 (최적 용량 · 기본)",
     "g704": "자동 (고품질)",
@@ -2556,16 +2632,14 @@ const GENERATOR_STRINGS = {
     "g706": "폭 (px)",
     "g707": "높이 (px)",
     "g708": "여백 없음",
-    "g709": "자동은 스캔이 성립하는 최소 크기 실측에서 출발해요. «여백 없음»(비권장)은 여백 폭만 실측 최소로 줄여요 — 안전영역 판은 유지되고, Y 의 입체 음영 띠는 빠지고, 코너 QR 이 있으면 QR 이 사는 여백까지만 줄어요. Type O 는 기본 여백이 이미 최소라 변화가 없어요.",
     "g710": "적은 색상 화면 최적화 (디더링)",
-    "g711": "전자잉크처럼 표시 색이 적은 화면에 코드를 띄울 때, 그 비트깊이로 실제로 양자화·디더링해서 내보내요.\n«그 화면에서 어떻게 보일지» 를 내보내기 전에 그대로 확인할 수 있어요.\n낮은 비트깊이는 서로 다른 면 밝기를 같은 값으로 뭉갤 수 있어요 — 순위가 무너지면 코드가 안 읽혀요. 내보낸 이미지를 꼭 스캔해 확인하세요.",
+    "g711": "자동 = 양자화 없음 (원본 그대로 내보내요).\n전자잉크처럼 표시 색이 적은 화면에 코드를 띄울 때, 그 비트깊이로 실제로 양자화·디더링해서 내보내요.\n«그 화면에서 어떻게 보일지» 를 내보내기 전에 그대로 확인할 수 있어요.\n낮은 비트깊이는 서로 다른 면 밝기를 같은 값으로 뭉갤 수 있어요 — 순위가 무너지면 코드가 안 읽혀요. 내보낸 이미지를 꼭 스캔해 확인하세요.",
     "g712": "자동 (양자화 없음)",
     "g713": "24비트 (트루컬러)",
     "g714": "16비트 (RGB565)",
     "g715": "8비트 (256색)",
     "g716": "4비트 (16색)",
     "g717": "2비트 (4계조 흑백)",
-    "g718": "자동 = 양자화 없음 (원본 그대로). 낮은 비트깊이는 3면 밝기 순위를 뭉갤 수 있어요 — 내보낸 뒤 꼭 스캔해 확인하세요.",
     "g719": "출력 최적화 (고PPI · PNG 전용)",
     "g720": "PNG 에 물리 밀도(ppi) 메타데이터를 실어요 — 인쇄·배치 프로그램이 실제 크기를 올바르게 잡아요.\n화면용 = 144 ppi (레티나 2x 기준) · 인쇄용 = 300 ppi 가 자동 적용돼요.\n픽셀 수는 위 «고정 이미지 크기» 가 정해요 — 이 옵션은 픽셀을 늘리지 않아요.\nSVG 는 벡터라 ppi 가 무의미해요 (PNG 내보내기에만 적용).",
     "g721": "화면용",
@@ -2687,14 +2761,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)",
     "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.",
     "g582": "중앙 TL",
-    "g572": "실루엣 방향 (실험)",
+    "g572": "실루엣 방향",
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
-    "g575": "실험용이에요. 켜면 실루엣이 역삼각(▽)으로 뒤집혀 그려지고, 이 상태로 만든 코드도 이제 스캐너가 읽어요 — 실기기 검증은 아직 진행 중이에요.",
+    "g575": "켜면 실루엣이 역삼각(▽)으로 뒤집혀 그려져요. 담는 용량과 데이터 계약은 정삼각과 같고, 이 상태로 만든 코드도 스캐너가 그대로 읽어요.",
     "g576": "코너 자리 예약 (실험)",
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
-    "g579": "자동이 타입에 맞는 자리를 골라요 — Type O 는 교대 코너 3곳에 보조 표식이 들어가고 그만큼 담을 수 있는 양이 줄어요. 표식이 있다는 사실은 코드의 포맷 자리에 함께 적혀서 스캐너가 그대로 읽어요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.",
+    "g579": "자동이 타입에 맞는 자리를 골라요 — Type O 는 교대 코너 3곳에 보조 표식이 들어가고 그만큼 담을 수 있는 양이 줄어요.\n표식이 있다는 사실은 코드의 포맷 자리에 함께 적혀서 스캐너가 그대로 읽어요.\n자리를 직접 고르는 건 시험판에서만 열려 있어요.",
     "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깥으로 뺄 때까지 잠가 둘게요.",
     "g581": "지금 파인더가 가운데를 쓰고 있어서 QR 을 가운데에 넣을 수 없어요. 다른 파인더를 고르면 풀려요.",
     "g507": "{filename}으로 다운로드되었습니다.",
@@ -2778,7 +2852,7 @@ const GENERATOR_STRINGS = {
     "g554": "타입 G 는 O 영역에 자리 예약 12셀이 금테로 잠긴 판이고, 턴A 는 A 의 180° 상이에요.",
     "g555": "되돌리기",
     "g556": "다시하기",
-    "g557": "단축키 — Ctrl/Cmd+Z 되돌리기 · Ctrl+Shift+Z 또는 Ctrl+Y 다시하기. 편집기에 포커스가 있을 때만 동작하고, 글상자 안에서는 브라우저 기본 동작을 씁니다. 드래그로 이어 칠한 한 번은 되돌리기도 한 번이에요.",
+    "g557": "단축키 — Ctrl/Cmd+Z 되돌리기 · Ctrl+Shift+Z 또는 Ctrl+Y 다시하기.\n편집기에 포커스가 있을 때만 동작하고, 글상자 안에서는 브라우저 기본 동작을 씁니다.\n드래그로 이어 칠한 한 번은 되돌리기도 한 번이에요.",
     "g558": "고정 파인더/앵커/ref/format",
     "g559": "한 면만 칠해도 그 셀 (q,r)의 T/L/R 데이터 트리플이 함께 제외됩니다. 편집 결과는 현재 코드 출력에 적용되지 않습니다.",
     "g560": "면 {face}, 셀 ({q}, {r}), 톤 {tone}, {role}",
@@ -2948,7 +3022,7 @@ const GENERATOR_STRINGS = {
     "g900": "This axis sets the number of modules (cells). More modules, more capacity.\nAt the same printed size, higher resolution makes each module smaller, so the camera has to come closer.\nLow = long range, large prints (billboards) · Mid = poster range, 1-3 m · High = close range, high capacity.\nAuto raises resolution first, and steps “Robustness ⇄ capacity” down only if the content still does not fit at maximum.\nThe card art shows detector size against the silhouette — the detector uses a fixed cell count, so it shrinks in relative terms as resolution rises.",
     "g901": "This axis sets how much room goes to error correction (ECC). More correction means less payload.\nCorrection first = ECC H (≈40%) · Standard = ECC M (25%) · High capacity = ECC L (≈12%).\nAuto walks H → M → L and takes the first level the content fits into.\nThe self-check badge below re-reads the image this setting actually rendered. It judges whether the render kept its own contract — not how a print or a camera will behave.",
     "g902": "Transparent = code only. PNG keeps an alpha channel; SVG has no background element at all.\nWhite = for light prints and documents. Black = for dark stock or screens.\nWith transparent, the effective background becomes the surface you put the code on. That separation cannot be guaranteed at generation time, so measure it with the TL placement preview.",
-    "g903": "Drop in a photo of the spot where the code will actually go; it sits behind the preview.\nDrag to move and use the wheel (or pinch on touch) to zoom until the placement matches.\nThe preview measures the surface luminance around the code against the cell levels, so you get a number for “will this spot read?” before printing.\nThe photo never goes into the exported PNG or SVG.",
+    "g903": "Drop in a photo of the spot where the code will actually go; it sits behind the preview.\nDrag to move and use the wheel (or pinch on touch) to zoom until the placement matches.\nThe preview measures the surface luminance around the code against the cell levels, so you get a number for “will this spot read?” before printing.\nThat surface reading also decides whether Safe area’s Auto and High contrast lay down white or black.\nThe photo never goes into the exported PNG or SVG.",
     "g904": "The margin around the code — the equivalent of a QR quiet zone.\nAuto = lays down a high-contrast colour when the background is transparent, and skips it when the background is opaque (the background is already the quiet zone).\nNone = no margin. White / Black = fixed to that colour.\nHigh contrast = chooses between white and black. (1) A colour that sits too close to the cell levels is dropped first — a margin that blends into the code makes the silhouette larger than the code. (2) If both pass, it picks the one further from the surface brightness measured in the placement preview: black on a bright surface, white on a dark one.\nWith no photo loaded step (2) cannot run, so it falls back to whichever colour separates further from the cell levels.\nThe fallback QR block is excluded — it carries its own quiet zone.",
     "g905": "Prints a QR alongside the code as a fallback route when the TL scanner cannot read it.\nTop-left / top-right / bottom-left / bottom-right = one of the four outer corners.\nInner = a centre QR on Type O/A, the Y2 window β on Type Y.\nNone = export the code alone, without a QR.\nThe centre-QR variant is meant for prints at least 13 cm wide.",
     "g906": "The cell-surface locator a scanner uses to find where a Type Y code is and which way it faces.\nAuto = use whatever is recommended for the current settings. No Y detector has been promoted to production yet, so today Auto resolves to the same thing as Off.\nCells occupied and max payload L / M / H per candidate (source: cellSurfaceFinal.js):\n· v0 — 30 cells (n=13) · 29 / 25 / 20 B\n· v0X — 65 cells (n=21) · 96 / 81 / 65 B\n· v0XQ — 42 cells of finder plus an 81-cell centre QR slot (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 cells (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 cells (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B at n=25)\nFewer occupied cells leave more symbols for data — at n=21, v0X holds the most and v0XQ the least. Among the three slotless candidates the spread is only 4 B at L, so capacity is not a reason to pick one; v0XQ gives up 81 cells to the centre QR slot and so holds 16 B less than v0X at L — in exchange, the centre QR carries a fallback URL when the scanner cannot read the code.\nThese are experimental: rotation, lighting, print, and live-scan performance are not guaranteed.",
@@ -2967,7 +3041,6 @@ const GENERATOR_STRINGS = {
     "g931": "Show explanation",
     "g932": "Close explanation",
     "g934": "Dark stock",
-    "g935": "* The surface photo measures the brightness around the code and feeds the Safe area choice — it is what decides whether Auto and High contrast lay down white or black. The photo itself never goes into the exported PNG or SVG.",
     "g941": "Auto pick",
     "g942": "No detector",
     "g943": "4 corner blocks",
@@ -2989,7 +3062,7 @@ const GENERATOR_STRINGS = {
     "g961": "TL placement preview",
     "g962": "Drag to move · scroll or pinch to zoom",
     "g700": "Fixed image size",
-    "g701": "Sets the pixel size of the exported PNG/SVG (independent of the preview).\nThe three automatic modes are rooted in the measured minimum size at which a scan round-trip holds — lowest = that minimum as-is, optimal (default) = ×1.5, high quality = ×2.5.\nFixed and custom sizes fit the code into the canvas with its aspect ratio preserved (contain). All but custom are square.\n«No margin» (not recommended) only shrinks the margin to the measured minimum — the quiet-zone plate is kept but the buffer gets thin, so take care when placing on dark or busy surfaces.",
+    "g701": "Sets the pixel size of the exported PNG/SVG (independent of the preview).\nThe three automatic modes are rooted in the measured minimum size at which a scan round-trip holds — lowest = that minimum as-is, optimal (default) = ×1.5, high quality = ×2.5.\nFixed and custom sizes fit the code into the canvas with its aspect ratio preserved (contain). All but custom are square.\n«No margin» (not recommended) only shrinks the margin to the measured minimum — the quiet-zone plate is kept but the buffer gets thin, so take care when placing on dark or busy surfaces.\nThe effect differs by type — on Y the shading band is dropped, and with a corner QR it only shrinks as far as the margin that QR lives in. Type O already sits at the minimum margin, so nothing changes.",
     "g702": "Auto (lowest safe)",
     "g703": "Auto (optimal size · default)",
     "g704": "Auto (high quality)",
@@ -2997,16 +3070,14 @@ const GENERATOR_STRINGS = {
     "g706": "Width (px)",
     "g707": "Height (px)",
     "g708": "No margin",
-    "g709": "Auto starts from the measured minimum size at which scanning holds. «No margin» (not recommended) only shrinks the margin to the measured minimum — the quiet-zone plate is kept, Y's shading bands are dropped, and with a corner QR the margin only shrinks to where the QR lives. Type O already has a minimal margin, so nothing changes.",
     "g710": "Low-color display optimization (dithering)",
-    "g711": "When the code will be shown on a low-color display such as e-ink, the export is actually quantized and dithered at that bit depth.\nYou see exactly how it will look on that display before exporting.\nLow bit depths can collapse different face brightness levels into the same value — if the ranking breaks, the code stops reading. Always scan the exported image to verify.",
+    "g711": "Auto = no quantization; the image is exported as rendered.\nWhen the code will be shown on a low-color display such as e-ink, the export is actually quantized and dithered at that bit depth.\nYou see exactly how it will look on that display before exporting.\nLow bit depths can collapse different face brightness levels into the same value — if the ranking breaks, the code stops reading. Always scan the exported image to verify.",
     "g712": "Auto (no quantization)",
     "g713": "24-bit (true color)",
     "g714": "16-bit (RGB565)",
     "g715": "8-bit (256 colors)",
     "g716": "4-bit (16 colors)",
     "g717": "2-bit (4-level grayscale)",
-    "g718": "Auto = no quantization (as rendered). Low bit depths can flatten the three-face brightness ranking — always scan the export to verify.",
     "g719": "Output optimization (high PPI · PNG only)",
     "g720": "Embeds physical density (ppi) metadata in the PNG — print and layout software then sizes it correctly.\nScreen = 144 ppi (retina 2x) and print = 300 ppi are applied automatically.\nPixel count is decided by «Fixed image size» above — this option does not add pixels.\nSVG is vector, so ppi is meaningless there (PNG export only).",
     "g721": "For screen",
@@ -3128,14 +3199,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (lower capacity · trial scanner only)",
     "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when this finder is enabled in the trial scanner (/lab/).",
     "g582": "Centre TL",
-    "g572": "Silhouette direction (experimental)",
+    "g572": "Silhouette direction",
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
-    "g575": "Experimental. When on, the silhouette is drawn flipped as an inverted triangle (▽), and codes made in this state can now be read by the scanner — real-device validation is still in progress.",
+    "g575": "When on, the silhouette is drawn flipped as an inverted triangle (▽). Capacity and the data contract are the same as the upright form, and the scanner reads codes made this way.",
     "g576": "Corner seat reservation (experimental)",
     "g577": "None (default)",
     "g578": "Three alternating corners",
-    "g579": "Auto picks the seat that matches the type — for Type O it adds helper marks at three alternating corners, which lowers capacity. The format field inside the code announces that the marks are there, so the scanner reads them as-is. Picking a seat by hand is open in the lab build only.",
+    "g579": "Auto picks the seat that matches the type — for Type O it adds helper marks at three alternating corners, which lowers capacity.\nThe format field inside the code announces that the marks are there, so the scanner reads them as-is.\nPicking a seat by hand is open in the lab build only.",
     "g580": "Corner markers are unavailable while the QR sits in the centre — the two compete for the same cells. They unlock when you move the QR.",
     "g581": "The current finder occupies the centre, so the QR cannot sit there. Pick a different finder to unlock it.",
     "g507": "Downloaded as {filename}.",
@@ -3219,7 +3290,7 @@ const GENERATOR_STRINGS = {
     "g554": "Type G is the O grid with the 12 reserved seat cells locked in gold; Turn-A is A's 180° image.",
     "g555": "Undo",
     "g556": "Redo",
-    "g557": "Shortcuts — Ctrl/Cmd+Z undo, Ctrl+Shift+Z or Ctrl+Y redo. They only fire while the editor has focus, and text fields keep the browser default. One continuous drag counts as one undo step.",
+    "g557": "Shortcuts — Ctrl/Cmd+Z undo, Ctrl+Shift+Z or Ctrl+Y redo.\nThey only fire while the editor has focus, and text fields keep the browser default.\nOne continuous drag counts as one undo step.",
     "g558": "Fixed finder/anchor/ref/format",
     "g559": "Painting one face excludes that (q,r) data triple on T, L, and R. Edits are not applied to the current code output.",
     "g560": "Face {face}, cell ({q}, {r}), tone {tone}, {role}",
@@ -3389,7 +3460,7 @@ const GENERATOR_STRINGS = {
     "g900": "モジュール（セル）の数を決める軸です。数が増えれば入る量も増えます。\n同じ印刷サイズなら解像度が高いほど 1 モジュールが小さくなり、より近づいて撮る必要があります。\n低 = 遠距離・大型印刷（看板）· 中 = 1〜3 m のポスター級 · 高 = 近距離・大容量。\n自動はまず解像度を上げ、最大でも入らないときに「安定性 ⇄ 容量」を下げます。\nカードの図はシルエットに対する検出器の大きさです — 検出器のセル数は固定なので、解像度が上がるほど相対的に小さくなります。",
     "g901": "誤り訂正（ECC）の割合を決める軸です。訂正に多く割くほど、入るデータ量は減ります。\n訂正優先 = ECC H（≈40%）· 標準 = ECC M（25%）· 大容量 = ECC L（≈12%）。\n自動は H → M → L の順で、最初に収まるレベルを選びます。\n下の自己検証バッジは、この設定で実際にレンダリングした画像を読み直した結果です。印刷や撮影の条件ではなく「レンダリングが自分の契約を守ったか」だけを見ます。",
     "g902": "透明 = コードだけ。PNG はアルファチャンネル、SVG は背景要素そのものがありません。\n白 = 明るい印刷物・文書の上に置くとき。黒 = 暗い紙面・画面に置くとき。\n透明を選ぶと実効的な背景は「コードを貼る面」になります。その面とセル色の分離は生成時点では保証できないので、「TL 配置プレビュー」で実測してください。",
-    "g903": "コードを実際に置く場所の写真を入れると、プレビューの背後に敷かれます。\nプレビュー上でドラッグして移動、ホイールまたはピンチで拡大／縮小して位置を合わせてください。\nコード周囲の面の輝度とセルレベルの分離を実測し、印刷前に「ここに置いて読めるか」を数値で示します。\n書き出す PNG・SVG にはこの写真は入りません。",
+    "g903": "コードを実際に置く場所の写真を入れると、プレビューの背後に敷かれます。\nプレビュー上でドラッグして移動、ホイールまたはピンチで拡大／縮小して位置を合わせてください。\nコード周囲の面の輝度とセルレベルの分離を実測し、印刷前に「ここに置いて読めるか」を数値で示します。\n測った面の明るさは、「安全領域」の「自動」「高コントラスト」が白と黒のどちらを敷くかを決めるのにも使われます。\n書き出す PNG・SVG にはこの写真は入りません。",
     "g904": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\n自動 = 背景が透明なら高コントラスト色を敷き、不透明なら背景がすでに安全領域なので省略します。\nなし = 余白なし。白・黒 = その色に固定。\n高コントラスト = 白と黒から選びます。① セル色に近すぎる方をまず落とします — 余白がコードに貼り付くとシルエットがコードより大きくなります。② 両方通れば「TL 配置プレビュー」写真で測った面の明るさから遠い方を選びます。明るい面なら黒、暗い面なら白です。\n写真を入れていない場合は ② ができないので、セル色から遠い方に決めます。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
     "g905": "TL スキャナで読めなかったときの代替経路になる QR を、コードと一緒に印刷します。\n左上・右上・左下・右下 = コード外側の四隅のいずれか。\n内側 = Type O/A は中央 QR、Type Y は Y2 ウィンドウ β。\nなし = QR を付けずコードだけ書き出します。\n中央 QR 版はコード幅 13 cm 以上の印刷を推奨します。",
     "g906": "スキャナが Type Y コードの位置と向きを最初に見つけるためのセル表面ロケータです。\n自動 = 現在の設定で推奨されるものを使います。正式採用された Y 検出器がまだないため、今の「自動」は「オフ」と同じ結果です。\n候補ごとの占有セル数と最大 payload L / M / H（正典 cellSurfaceFinal.js）:\n· v0 — 30セル（n=13）· 29 / 25 / 20 B\n· v0X — 65セル（n=21）· 96 / 81 / 65 B\n· v0XQ — ファインダ 42セル + 中央 QR スロット 81セル（n=21）· 80 / 67 / 54 B\n· v1r2 — 80セル（n=21）· 92 / 77 / 62 B\n· v2r2 — 74セル（n=21）· 94 / 79 / 63 B（n=25 では 145 / 124 / 99 B）\n占有セルが少ないほどデータに使えるシンボルが多く残ります — n=21 では v0X が最も多く入り、v0XQ が最も少ないです。スロットのない3候補どうしの差は L 基準で 4 B なので容量で選ぶほどの幅ではありませんが、v0XQ は中央 QR スロットに 81セルを割くため v0X より L 基準で 16 B 少なくなります — その代わり、スキャナが読めないときは中央 QR がフォールバック URL を担います。\n実験項目のため、回転・照明・印刷・ライブスキャンの性能は保証しません。",
@@ -3408,7 +3479,6 @@ const GENERATOR_STRINGS = {
     "g931": "説明を表示",
     "g932": "説明を閉じる",
     "g934": "暗い紙面",
-    "g935": "* 入れた表面画像はコード周囲の面の明るさを測り、「安全領域」の「自動」「高コントラスト」が白と黒のどちらを敷くかを決めるのに使います。写真そのものは書き出す PNG・SVG には入りません。",
     "g941": "推奨を自動",
     "g942": "検出器なし",
     "g943": "四隅4ブロック",
@@ -3430,7 +3500,7 @@ const GENERATOR_STRINGS = {
     "g961": "TL 配置プレビュー",
     "g962": "ドラッグで移動・ホイールまたはピンチで拡大縮小",
     "g700": "固定画像サイズ",
-    "g701": "書き出す PNG・SVG のピクセルサイズを決めます(プレビューとは無関係です)。\n自動3種は「スキャン往復が成立する最小サイズ」の実測が基準です — 下限=その最小のまま、最適容量(既定)=1.5倍、高品質=2.5倍。\n固定・カスタムサイズはコードを比率そのまま(contain)でキャンバスに収めます。カスタム以外は正方形です。\n「余白なし」(非推奨)は余白の幅だけを実測最小まで縮めます — 安全領域の板は残りますが余裕が薄くなるため、暗い面や複雑な面に載せるときは注意してください。",
+    "g701": "書き出す PNG・SVG のピクセルサイズを決めます(プレビューとは無関係です)。\n自動3種は「スキャン往復が成立する最小サイズ」の実測が基準です — 下限=その最小のまま、最適容量(既定)=1.5倍、高品質=2.5倍。\n固定・カスタムサイズはコードを比率そのまま(contain)でキャンバスに収めます。カスタム以外は正方形です。\n「余白なし」(非推奨)は余白の幅だけを実測最小まで縮めます — 安全領域の板は残りますが余裕が薄くなるため、暗い面や複雑な面に載せるときは注意してください。\nタイプごとに結果が変わります — Y は立体陰影の帯が外れ、コーナー QR がある場合は QR が収まる余白までしか縮みません。Type O は既定の余白がすでに最小なので変化しません。",
     "g702": "自動(下限)",
     "g703": "自動(最適容量・既定)",
     "g704": "自動(高品質)",
@@ -3438,16 +3508,14 @@ const GENERATOR_STRINGS = {
     "g706": "幅 (px)",
     "g707": "高さ (px)",
     "g708": "余白なし",
-    "g709": "自動はスキャンが成立する最小サイズの実測から始まります。「余白なし」(非推奨)は余白の幅だけを実測最小まで縮めます — 安全領域の板は残り、Y の立体陰影の帯は外れ、コーナー QR がある場合は QR が収まる余白までしか縮みません。Type O は既定の余白がすでに最小のため変化はありません。",
     "g710": "少色画面向け最適化(ディザリング)",
-    "g711": "電子インクのような少色画面にコードを表示する場合、そのビット深度で実際に量子化・ディザリングして書き出します。\n「その画面でどう見えるか」を書き出す前にそのまま確認できます。\n低いビット深度は異なる面の明るさを同じ値に潰すことがあります — 順位が崩れると読めません。書き出した画像を必ずスキャンして確認してください。",
+    "g711": "自動＝量子化なし（そのまま書き出します）。\n電子インクのような少色画面にコードを表示する場合、そのビット深度で実際に量子化・ディザリングして書き出します。\n「その画面でどう見えるか」を書き出す前にそのまま確認できます。\n低いビット深度は異なる面の明るさを同じ値に潰すことがあります — 順位が崩れると読めません。書き出した画像を必ずスキャンして確認してください。",
     "g712": "自動(量子化なし)",
     "g713": "24ビット(トゥルーカラー)",
     "g714": "16ビット(RGB565)",
     "g715": "8ビット(256色)",
     "g716": "4ビット(16色)",
     "g717": "2ビット(4階調グレー)",
-    "g718": "自動=量子化なし(そのまま)。低いビット深度は3面の明るさ順位を潰すことがあります — 書き出し後に必ずスキャンして確認してください。",
     "g719": "出力最適化(高PPI・PNG専用)",
     "g720": "PNG に物理密度(ppi)メタデータを載せます — 印刷・レイアウトソフトが実寸を正しく扱えます。\n画面用=144 ppi(レティナ2x)・印刷用=300 ppi が自動適用されます。\nピクセル数は上の「固定画像サイズ」が決めます — このオプションはピクセルを増やしません。\nSVG はベクターなので ppi は無意味です(PNG 書き出しのみ)。",
     "g721": "画面用",
@@ -3569,14 +3637,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae（容量減少・試験版スキャナ専用）",
     "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）でこのファインダーを有効にしたときだけ読み取れます。",
     "g582": "中央TL",
-    "g572": "シルエット方向（実験）",
+    "g572": "シルエット方向",
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
-    "g575": "実験用です。オンにするとシルエットが逆三角形（▽）に反転して描かれ、この状態で作ったコードもスキャナで読み取れるようになりました — 実機検証はまだ進行中です。",
+    "g575": "オンにするとシルエットが逆三角形（▽）に反転して描かれます。容量とデータ契約は正三角と同じで、この状態で作ったコードもスキャナがそのまま読み取ります。",
     "g576": "コーナー席予約（実験）",
     "g577": "なし（既定）",
     "g578": "交互の3隅",
-    "g579": "自動がタイプに合う席を選びます — Type O では交互の3隅に補助マークが入り、その分だけ容量が減ります。マークがあることはコード内のフォーマット欄に記録されるので、スキャナはそのまま読み取れます。席を手で選べるのは実験版だけです。",
+    "g579": "自動がタイプに合う席を選びます — Type O では交互の3隅に補助マークが入り、その分だけ容量が減ります。\nマークがあることはコード内のフォーマット欄に記録されるので、スキャナはそのまま読み取れます。\n席を手で選べるのは実験版だけです。",
     "g580": "中央 QR を使っている間はコーナーマーカーを使えません — 同じマスを争うためです。QR の位置を変えると使えるようになります。",
     "g581": "現在のファインダーが中央を使っているため、QR を中央に置けません。別のファインダーを選ぶと使えます。",
     "g507": "{filename} としてダウンロードしました。",
@@ -3660,7 +3728,7 @@ const GENERATOR_STRINGS = {
     "g554": "タイプ G は O 格子に席予約12セルが金枠で固定された盤で、ターンA は A の180°像です。",
     "g555": "元に戻す",
     "g556": "やり直す",
-    "g557": "ショートカット — Ctrl/Cmd+Z で元に戻す・Ctrl+Shift+Z または Ctrl+Y でやり直す。編集器にフォーカスがあるときだけ効き、テキスト欄ではブラウザ既定の動作になります。ドラッグで続けて塗った一連は、元に戻すも一回分です。",
+    "g557": "ショートカット — Ctrl/Cmd+Z で元に戻す・Ctrl+Shift+Z または Ctrl+Y でやり直す。\n編集器にフォーカスがあるときだけ効き、テキスト欄ではブラウザ既定の動作になります。\nドラッグで続けて塗った一連は、元に戻すも一回分です。",
     "g558": "固定 ファインダ/アンカー/ref/format",
     "g559": "1面だけ塗っても、そのセル (q,r) の T/L/R データ三つ組がまとめて除外されます。編集結果は現在のコード出力には適用されません。",
     "g560": "面 {face}、セル ({q}, {r})、トーン {tone}、{role}",
@@ -3829,7 +3897,7 @@ const GENERATOR_STRINGS = {
     "g900": "Cet axe fixe le nombre de modules (cellules). Plus de modules, plus de capacité.\nÀ taille d'impression égale, une résolution plus haute rend chaque module plus petit : il faut donc s'approcher davantage.\nBasse = longue distance, grands tirages (panneaux) · Moyenne = affiches, 1-3 m · Haute = courte distance, grande capacité.\nEn mode auto, la résolution monte d'abord ; l'échelon « Robustesse ⇄ capacité » ne descend que si le contenu ne rentre toujours pas au maximum.\nLe dessin de la carte montre la taille du détecteur face à la silhouette — le détecteur occupe un nombre de cellules fixe, il paraît donc plus petit à mesure que la résolution monte.",
     "g901": "Cet axe fixe la part réservée à la correction d'erreurs (ECC). Plus de correction, moins de charge utile.\nCorrection d'abord = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacité = ECC L (≈12%).\nEn mode auto, H → M → L sont parcourus et le premier niveau où le contenu rentre est retenu.\nLe badge d'auto-vérification ci-dessous relit l'image que ces réglages ont réellement produite. Il juge si le rendu a tenu son propre contrat — pas ce que donneront une impression ou un appareil photo.",
     "g902": "Transparent = le code seul. Le PNG conserve un canal alpha ; le SVG n'a aucun élément d'arrière-plan.\nBlanc = pour les imprimés et documents clairs. Noir = pour les supports sombres et les écrans.\nAvec transparent, l'arrière-plan effectif devient « la surface qui porte le code ». Cette séparation ne peut pas être garantie à la génération : mesurez-la avec l'aperçu de placement TL.",
-    "g903": "Déposez une photo de l'endroit où le code ira réellement : elle se place derrière l'aperçu.\nDans l'aperçu, faites glisser pour déplacer et zoomez à la molette ou par pincement jusqu'à ce que le placement corresponde.\nL'aperçu mesure la luminance de la surface autour du code face aux niveaux de cellule : vous obtenez un chiffre pour « est-ce que ça se lira ici ? » avant d'imprimer.\nCette photo n'entre jamais dans le PNG ni le SVG exportés.",
+    "g903": "Déposez une photo de l'endroit où le code ira réellement : elle se place derrière l'aperçu.\nDans l'aperçu, faites glisser pour déplacer et zoomez à la molette ou par pincement jusqu'à ce que le placement corresponde.\nL'aperçu mesure la luminance de la surface autour du code face aux niveaux de cellule : vous obtenez un chiffre pour « est-ce que ça se lira ici ? » avant d'imprimer.\nCette mesure de surface détermine aussi si « Auto » et « Contraste élevé » de la zone de sécurité posent du blanc ou du noir.\nCette photo n'entre jamais dans le PNG ni le SVG exportés.",
     "g904": "La marge autour du code — l'équivalent de la zone de silence d'un QR.\nAuto = pose une couleur très contrastée quand l'arrière-plan est transparent, et s'efface quand il est opaque (l'arrière-plan fait déjà office de zone de silence).\nAucune = pas de marge. Blanc / Noir = fixé à cette couleur.\nContraste élevé = choisit entre blanc et noir. (1) La couleur trop proche des niveaux de cellule est écartée d'abord — une marge qui se fond dans le code rend la silhouette plus grande que le code. (2) Si les deux passent, c'est celle qui s'éloigne le plus de la luminosité mesurée dans l'aperçu de placement : noir sur une surface claire, blanc sur une surface sombre.\nSans photo chargée, l'étape (2) ne peut pas s'exécuter : c'est alors la couleur la plus éloignée des niveaux de cellule qui l'emporte.\nLe bloc du QR de secours est exclu — il porte sa propre zone de silence.",
     "g905": "Imprime un QR à côté du code comme voie de secours quand le scanner TL n'arrive pas à le lire.\nEn haut à gauche / en haut à droite / en bas à gauche / en bas à droite = l'un des quatre angles extérieurs.\nIntérieur = un QR central sur les Types O/A, la fenêtre Y2 β sur le Type Y.\nAucun = exporte le code seul, sans QR.\nLa variante à QR central vise des impressions d'au moins 13 cm de large.",
     "g906": "Le localisateur de surface de cellules qu'un scanner utilise pour trouver où est un code Type Y et dans quel sens il est tourné.\nAuto = utilise ce qui est recommandé pour les réglages actuels. Aucun détecteur Y n'a encore été promu en production : aujourd'hui, Auto revient exactement à Désactivé.\nCellules occupées et charge utile maximale L / M / H par candidat (source : cellSurfaceFinal.js) :\n· v0 — 30 cellules (n=13) · 29 / 25 / 20 B\n· v0X — 65 cellules (n=21) · 96 / 81 / 65 B\n· v0XQ — motif de repérage 42 cellules + emplacement QR central 81 cellules (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 cellules (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 cellules (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B à n=25)\nMoins de cellules occupées, plus de symboles restent pour les données — à n=21, v0X en contient le plus et v0XQ le moins. Entre les trois candidats sans emplacement, l'écart n'est que de 4 B en L : la capacité n'est donc pas un critère de choix. v0XQ cède 81 cellules à l'emplacement QR central et contient donc 16 B de moins que v0X en L — en échange, le QR central porte une URL de secours quand le scanner n'arrive pas à lire le code.\nCe sont des candidats expérimentaux : les performances en rotation, éclairage, impression et scan en direct ne sont pas garanties.",
@@ -3848,7 +3916,6 @@ const GENERATOR_STRINGS = {
     "g931": "Afficher l'explication",
     "g932": "Fermer l'explication",
     "g934": "Support sombre",
-    "g935": "* La photo de surface mesure la luminosité autour du code et alimente le choix de la zone de sécurité — c'est elle qui décide si « Auto » et « Contraste élevé » posent du blanc ou du noir. La photo elle-même n'entre jamais dans le PNG ni le SVG exportés.",
     "g941": "Auto (recommandé)",
     "g942": "Aucun détecteur",
     "g943": "4 blocs d'angle",
@@ -3870,7 +3937,7 @@ const GENERATOR_STRINGS = {
     "g961": "Aperçu de placement TL",
     "g962": "Faire glisser pour déplacer · zoomer à la molette ou par pincement",
     "g700": "Taille d'image fixe",
-    "g701": "Définit la taille en pixels du PNG/SVG exporté (indépendante de l'aperçu).\nLes trois modes automatiques reposent sur la taille minimale mesurée à laquelle un aller-retour de scan tient — minimum = cette taille telle quelle, optimal (défaut) = ×1,5, haute qualité = ×2,5.\nLes tailles fixes et personnalisées placent le code dans le canevas en conservant ses proportions (contain). Toutes sauf la personnalisée sont carrées.\n« Sans marge » (déconseillé) ne réduit que la largeur de marge au minimum mesuré — la plaque de zone de silence est conservée mais la réserve s'amincit ; prudence sur les surfaces sombres ou chargées.",
+    "g701": "Définit la taille en pixels du PNG/SVG exporté (indépendante de l'aperçu).\nLes trois modes automatiques reposent sur la taille minimale mesurée à laquelle un aller-retour de scan tient — minimum = cette taille telle quelle, optimal (défaut) = ×1,5, haute qualité = ×2,5.\nLes tailles fixes et personnalisées placent le code dans le canevas en conservant ses proportions (contain). Toutes sauf la personnalisée sont carrées.\n« Sans marge » (déconseillé) ne réduit que la largeur de marge au minimum mesuré — la plaque de zone de silence est conservée mais la réserve s'amincit ; prudence sur les surfaces sombres ou chargées.\nLe résultat varie selon le type — sur Y la bande d'ombrage disparaît, et avec un QR d'angle la réduction s'arrête à la marge qui accueille ce QR. Le Type O est déjà à la marge minimale : rien ne change.",
     "g702": "Auto (minimum)",
     "g703": "Auto (optimal · défaut)",
     "g704": "Auto (haute qualité)",
@@ -3878,16 +3945,14 @@ const GENERATOR_STRINGS = {
     "g706": "Largeur (px)",
     "g707": "Hauteur (px)",
     "g708": "Sans marge",
-    "g709": "Auto part de la taille minimale mesurée où le scan tient. « Sans marge » (déconseillé) ne réduit que la largeur de marge au minimum mesuré — la plaque de zone de silence est conservée, les bandes d'ombrage de Y sont retirées, et avec un QR de coin la marge ne se réduit que jusqu'à l'emplacement du QR. Le Type O a déjà une marge minimale : rien ne change.",
     "g710": "Optimisation écrans à couleurs réduites (tramage)",
-    "g711": "Si le code sera affiché sur un écran à couleurs réduites (encre électronique, etc.), l'export est réellement quantifié et tramé à cette profondeur de bits.\nVous voyez exactement le rendu sur cet écran avant d'exporter.\nLes faibles profondeurs peuvent fusionner des luminosités de faces différentes — si l'ordre casse, le code ne se lit plus. Scannez toujours l'image exportée pour vérifier.",
+    "g711": "Auto = aucune quantification ; l’image est exportée telle quelle.\nSi le code sera affiché sur un écran à couleurs réduites (encre électronique, etc.), l'export est réellement quantifié et tramé à cette profondeur de bits.\nVous voyez exactement le rendu sur cet écran avant d'exporter.\nLes faibles profondeurs peuvent fusionner des luminosités de faces différentes — si l'ordre casse, le code ne se lit plus. Scannez toujours l'image exportée pour vérifier.",
     "g712": "Auto (sans quantification)",
     "g713": "24 bits (couleurs vraies)",
     "g714": "16 bits (RGB565)",
     "g715": "8 bits (256 couleurs)",
     "g716": "4 bits (16 couleurs)",
     "g717": "2 bits (4 niveaux de gris)",
-    "g718": "Auto = sans quantification (rendu tel quel). Les faibles profondeurs de bits peuvent aplatir l'ordre de luminosité des trois faces — scannez toujours l'export pour vérifier.",
     "g719": "Optimisation de sortie (PPI élevé · PNG uniquement)",
     "g720": "Intègre la densité physique (ppi) en métadonnée du PNG — les logiciels d'impression et de mise en page dimensionnent alors correctement.\nÉcran = 144 ppi (Retina 2x) et impression = 300 ppi s'appliquent automatiquement.\nLe nombre de pixels est décidé par « Taille d'image fixe » ci-dessus — cette option n'ajoute pas de pixels.\nLe SVG est vectoriel : le ppi n'y a pas de sens (export PNG uniquement).",
     "g721": "Écran",
@@ -4009,14 +4074,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (capacité réduite · scanner d'essai uniquement)",
     "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec ce détecteur activé dans le scanner d'essai (/lab/).",
     "g582": "TL central",
-    "g572": "Orientation de la silhouette (expérimental)",
+    "g572": "Orientation de la silhouette",
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
-    "g575": "Expérimental. Une fois activé, la silhouette est dessinée inversée en triangle renversé (▽), et les codes créés dans cet état sont désormais lisibles par le scanner — la validation sur appareil réel est encore en cours.",
+    "g575": "Une fois activé, la silhouette est dessinée renversée en triangle inversé (▽). La capacité et le contrat de données sont identiques à la forme droite, et le scanner lit les codes créés ainsi.",
     "g576": "Réservation de coin (expérimental)",
     "g577": "Aucun (par défaut)",
     "g578": "Trois angles alternés",
-    "g579": "L'auto choisit le siège correspondant au type — pour le Type O, des repères sont ajoutés à trois angles alternés, ce qui réduit la capacité. Le champ de format du code signale leur présence, le scanner les lit donc tels quels. Le choix manuel du siège n'est ouvert que dans la version labo.",
+    "g579": "L'auto choisit le siège correspondant au type — pour le Type O, des repères sont ajoutés à trois angles alternés, ce qui réduit la capacité.\nLe champ de format du code signale leur présence, le scanner les lit donc tels quels.\nLe choix manuel du siège n'est ouvert que dans la version labo.",
     "g580": "Les marqueurs d'angle sont indisponibles tant que le QR occupe le centre — les deux se disputent les mêmes cellules. Ils se débloquent si vous déplacez le QR.",
     "g581": "Le repère actuel occupe le centre, le QR ne peut donc pas s'y placer. Choisissez un autre repère pour le débloquer.",
     "g507": "Téléchargé sous le nom {filename}.",
@@ -4100,7 +4165,7 @@ const GENERATOR_STRINGS = {
     "g554": "Le type G est la grille O avec les 12 cellules de siège verrouillées en or ; Turn-A est l'image à 180° de A.",
     "g555": "Annuler",
     "g556": "Rétablir",
-    "g557": "Raccourcis — Ctrl/Cmd+Z annuler, Ctrl+Maj+Z ou Ctrl+Y rétablir. Ils ne fonctionnent que lorsque l'éditeur a le focus ; dans les champs de texte, le comportement par défaut du navigateur s'applique. Un tracé continu compte pour une seule annulation.",
+    "g557": "Raccourcis — Ctrl/Cmd+Z annuler, Ctrl+Maj+Z ou Ctrl+Y rétablir.\nIls ne fonctionnent que lorsque l'éditeur a le focus ; dans les champs de texte, le comportement par défaut du navigateur s'applique.\nUn tracé continu compte pour une seule annulation.",
     "g558": "repère/ancre/ref/format fixes",
     "g559": "Peindre une seule face exclut le triplet de données (q,r) sur T, L et R. Les modifications ne sont pas appliquées à la sortie du code actuel.",
     "g560": "Face {face}, cellule ({q}, {r}), ton {tone}, {role}",
@@ -4269,7 +4334,7 @@ const GENERATOR_STRINGS = {
     "g900": "Questo asse fissa il numero di moduli (celle). Più moduli, più capacità.\nA parità di dimensione di stampa, una risoluzione più alta rende ogni modulo più piccolo, quindi la fotocamera deve avvicinarsi.\nBassa = lunga distanza, stampe grandi (cartelloni) · Media = distanza da manifesto, 1-3 m · Alta = distanza ravvicinata, grande capacità.\nIn automatico la risoluzione sale per prima; il gradino «Robustezza ⇄ capacità» scende solo se al massimo il contenuto ancora non entra.\nIl disegno sulla scheda mostra la dimensione del rilevatore rispetto alla silhouette: il rilevatore occupa un numero fisso di celle, quindi in proporzione rimpicciolisce al salire della risoluzione.",
     "g901": "Questo asse fissa quanto spazio va alla correzione d'errore (ECC). Più correzione, meno payload.\nPrima la correzione = ECC H (≈40%) · Standard = ECC M (25%) · Grande capacità = ECC L (≈12%).\nIn automatico vengono percorsi H → M → L e si prende il primo livello in cui il contenuto entra.\nIl badge di autoverifica qui sotto rilegge l'immagine che queste impostazioni hanno effettivamente prodotto: giudica se il rendering ha rispettato il proprio contratto, non come si comporteranno stampa o fotocamera.",
     "g902": "Trasparente = solo il codice. Il PNG mantiene un canale alfa; l'SVG non ha alcun elemento di sfondo.\nBianco = per stampe e documenti chiari. Nero = per supporti scuri e schermi.\nCon trasparente lo sfondo effettivo diventa «la superficie su cui appoggi il codice»: quella separazione non è garantibile in fase di generazione, quindi misurala con l'anteprima di posizionamento TL.",
-    "g903": "Inserisci una foto del punto in cui il codice andrà davvero: si dispone dietro l'anteprima.\nNell'anteprima trascina per spostare e zooma con rotella o pizzico finché il posizionamento non corrisponde.\nL'anteprima misura la luminanza della superficie attorno al codice rispetto ai livelli di cella: prima di stampare ottieni un numero per «qui si leggerà?».\nQuesta foto non finisce mai nel PNG o nell'SVG esportati.",
+    "g903": "Inserisci una foto del punto in cui il codice andrà davvero: si dispone dietro l'anteprima.\nNell'anteprima trascina per spostare e zooma con rotella o pizzico finché il posizionamento non corrisponde.\nL'anteprima misura la luminanza della superficie attorno al codice rispetto ai livelli di cella: prima di stampare ottieni un numero per «qui si leggerà?».\nLa misura della superficie determina anche se «Auto» e «Contrasto elevato» dell’area di sicurezza stendono bianco o nero.\nQuesta foto non finisce mai nel PNG o nell'SVG esportati.",
     "g904": "È il margine attorno al codice, l'equivalente della zona di quiete di un QR.\nAuto = stende un colore ad alto contrasto quando lo sfondo è trasparente e lo salta quando lo sfondo è opaco (lo sfondo è già zona di quiete).\nNessuno = nessun margine. Bianco / Nero = fissato a quel colore.\nContrasto elevato = sceglie tra bianco e nero. (1) Il colore troppo vicino ai livelli di cella viene scartato per primo: un margine che si fonde nel codice rende la silhouette più grande del codice. (2) Se passano entrambi, vince quello più lontano dalla luminosità di superficie misurata nell'anteprima di posizionamento: nero su superficie chiara, bianco su superficie scura.\nSenza foto caricata il passo (2) non può essere eseguito, quindi si ripiega sul colore che si separa di più dai livelli di cella.\nIl blocco del QR di riserva è escluso: porta con sé la propria zona di quiete.",
     "g905": "Stampa un QR accanto al codice come via di riserva quando lo scanner TL non riesce a leggerlo.\nIn alto a sinistra / in alto a destra / in basso a sinistra / in basso a destra = uno dei quattro angoli esterni.\nInterno = QR centrale sui Tipi O/A, finestra Y2 β sul Tipo Y.\nNessuno = esporta il solo codice, senza QR.\nLa variante con QR centrale è pensata per stampe larghe almeno 13 cm.",
     "g906": "Il localizzatore di superficie a celle che uno scanner usa per trovare dove si trova un codice Tipo Y e come è orientato.\nAuto = usa ciò che è consigliato per le impostazioni correnti. Nessun rilevatore Y è ancora stato promosso in produzione, quindi oggi Auto equivale esattamente a Disattivato.\nCelle occupate e payload massimo L / M / H per candidato (fonte: cellSurfaceFinal.js):\n· v0 — 30 celle (n=13) · 29 / 25 / 20 B\n· v0X — 65 celle (n=21) · 96 / 81 / 65 B\n· v0XQ — pattern di ricerca 42 celle + slot QR centrale 81 celle (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 celle (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 celle (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B con n=25)\nMeno celle occupate, più simboli restano ai dati: con n=21 v0X contiene di più e v0XQ di meno. Fra i tre candidati senza slot lo scarto è di soli 4 B in L, quindi la capacità non è un criterio di scelta; v0XQ cede 81 celle allo slot QR centrale e perciò contiene 16 B in meno di v0X in L — in cambio il QR centrale porta un URL di riserva quando lo scanner non riesce a leggere il codice.\nSono candidati sperimentali: le prestazioni con rotazione, illuminazione, stampa e scansione dal vivo non sono garantite.",
@@ -4288,7 +4353,6 @@ const GENERATOR_STRINGS = {
     "g931": "Mostra la spiegazione",
     "g932": "Chiudi la spiegazione",
     "g934": "Supporto scuro",
-    "g935": "* La foto della superficie misura la luminosità attorno al codice e alimenta la scelta dell'area di sicurezza: è ciò che decide se «Auto» e «Contrasto elevato» stendono bianco o nero. La foto in sé non finisce mai nel PNG o nell'SVG esportati.",
     "g941": "Auto (consigliato)",
     "g942": "Nessun rilevatore",
     "g943": "4 blocchi d'angolo",
@@ -4310,7 +4374,7 @@ const GENERATOR_STRINGS = {
     "g961": "Posizionamento TL",
     "g962": "Trascinare per spostare · zoomare con rotella o pizzico",
     "g700": "Dimensione immagine fissa",
-    "g701": "Imposta la dimensione in pixel del PNG/SVG esportato (indipendente dall'anteprima).\nLe tre modalità automatiche partono dalla dimensione minima misurata a cui regge un ciclo di scansione — minimo = quella dimensione così com'è, ottimale (predefinita) = ×1,5, alta qualità = ×2,5.\nLe dimensioni fisse e personalizzate inseriscono il codice nel canvas mantenendone le proporzioni (contain). Tutte tranne la personalizzata sono quadrate.\n«Senza margine» (sconsigliato) riduce solo la larghezza del margine al minimo misurato — la lastra della zona di rispetto resta ma la riserva si assottiglia: attenzione sulle superfici scure o complesse.",
+    "g701": "Imposta la dimensione in pixel del PNG/SVG esportato (indipendente dall'anteprima).\nLe tre modalità automatiche partono dalla dimensione minima misurata a cui regge un ciclo di scansione — minimo = quella dimensione così com'è, ottimale (predefinita) = ×1,5, alta qualità = ×2,5.\nLe dimensioni fisse e personalizzate inseriscono il codice nel canvas mantenendone le proporzioni (contain). Tutte tranne la personalizzata sono quadrate.\n«Senza margine» (sconsigliato) riduce solo la larghezza del margine al minimo misurato — la lastra della zona di rispetto resta ma la riserva si assottiglia: attenzione sulle superfici scure o complesse.\nIl risultato varia per tipo — su Y la fascia di ombreggiatura viene tolta e, con un QR d'angolo, si riduce solo fino al margine che ospita quel QR. Il Type O è già al margine minimo: non cambia nulla.",
     "g702": "Auto (minimo)",
     "g703": "Auto (ottimale · predefinito)",
     "g704": "Auto (alta qualità)",
@@ -4318,16 +4382,14 @@ const GENERATOR_STRINGS = {
     "g706": "Larghezza (px)",
     "g707": "Altezza (px)",
     "g708": "Senza margine",
-    "g709": "Auto parte dalla dimensione minima misurata a cui la scansione regge. «Senza margine» (sconsigliato) riduce solo la larghezza del margine al minimo misurato — la lastra della zona di rispetto resta, le bande di ombreggiatura di Y vengono tolte e con un QR d'angolo il margine si riduce solo fino a dove vive il QR. Il Type O ha già un margine minimo: nulla cambia.",
     "g710": "Ottimizzazione per schermi a pochi colori (dithering)",
-    "g711": "Se il codice verrà mostrato su uno schermo a pochi colori (come l'e-ink), l'export viene realmente quantizzato e sottoposto a dithering a quella profondità di bit.\nVedi esattamente come apparirà su quello schermo prima di esportare.\nProfondità basse possono fondere luminosità di facce diverse nello stesso valore — se l'ordine si rompe, il codice non si legge più. Scansiona sempre l'immagine esportata per verificare.",
+    "g711": "Auto = nessuna quantizzazione: l’immagine viene esportata così com’è.\nSe il codice verrà mostrato su uno schermo a pochi colori (come l'e-ink), l'export viene realmente quantizzato e sottoposto a dithering a quella profondità di bit.\nVedi esattamente come apparirà su quello schermo prima di esportare.\nProfondità basse possono fondere luminosità di facce diverse nello stesso valore — se l'ordine si rompe, il codice non si legge più. Scansiona sempre l'immagine esportata per verificare.",
     "g712": "Auto (senza quantizzazione)",
     "g713": "24 bit (true color)",
     "g714": "16 bit (RGB565)",
     "g715": "8 bit (256 colori)",
     "g716": "4 bit (16 colori)",
     "g717": "2 bit (4 livelli di grigio)",
-    "g718": "Auto = senza quantizzazione (resa originale). Profondità di bit basse possono appiattire l'ordine di luminosità delle tre facce — scansiona sempre l'export per verificare.",
     "g719": "Ottimizzazione dell'output (PPI alto · solo PNG)",
     "g720": "Inserisce la densità fisica (ppi) nei metadati del PNG — i programmi di stampa e impaginazione dimensionano così correttamente.\nSchermo = 144 ppi (Retina 2x) e stampa = 300 ppi si applicano automaticamente.\nIl numero di pixel lo decide «Dimensione immagine fissa» qui sopra — questa opzione non aggiunge pixel.\nL'SVG è vettoriale: il ppi lì non ha senso (solo export PNG).",
     "g721": "Schermo",
@@ -4449,14 +4511,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (capacità ridotta · solo scanner di prova)",
     "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando questo rilevatore nello scanner di prova (/lab/).",
     "g582": "TL centrale",
-    "g572": "Direzione della sagoma (sperimentale)",
+    "g572": "Direzione della sagoma",
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
-    "g575": "Sperimentale. Se attivo, la sagoma viene disegnata capovolta come triangolo rovesciato (▽) e i codici creati in questo stato ora sono leggibili dallo scanner — la convalida su dispositivo reale è ancora in corso.",
+    "g575": "Se attivo, la sagoma viene disegnata capovolta come triangolo rovesciato (▽). Capacità e contratto dei dati restano quelli della forma diritta e lo scanner legge i codici creati così.",
     "g576": "Prenotazione d'angolo (sperimentale)",
     "g577": "Nessuno (predefinito)",
     "g578": "Tre angoli alternati",
-    "g579": "L'automatico sceglie il posto adatto al tipo — con il Type O aggiunge riferimenti su tre angoli alternati e riduce la capacità. Il campo formato del codice segnala che ci sono, quindi lo scanner li legge così come sono. La scelta manuale del posto è aperta solo nella versione lab.",
+    "g579": "L'automatico sceglie il posto adatto al tipo — con il Type O aggiunge riferimenti su tre angoli alternati e riduce la capacità.\nIl campo formato del codice segnala che ci sono, quindi lo scanner li legge così come sono.\nLa scelta manuale del posto è aperta solo nella versione lab.",
     "g580": "I marcatori d'angolo non sono disponibili finché il QR sta al centro — i due si contendono le stesse celle. Si sbloccano spostando il QR.",
     "g581": "Il finder attuale occupa il centro, quindi il QR non può stare lì. Scegli un altro finder per sbloccarlo.",
     "g507": "Scaricato come {filename}.",
@@ -4540,7 +4602,7 @@ const GENERATOR_STRINGS = {
     "g554": "Il tipo G è la griglia O con le 12 celle del posto bloccate in oro; Turn-A è l'immagine a 180° di A.",
     "g555": "Annulla",
     "g556": "Ripristina",
-    "g557": "Scorciatoie — Ctrl/Cmd+Z annulla, Ctrl+Maiusc+Z oppure Ctrl+Y ripristina. Funzionano solo mentre l'editor ha il focus e nei campi di testo vale il comportamento predefinito del browser. Un tratto continuo conta come un solo annullamento.",
+    "g557": "Scorciatoie — Ctrl/Cmd+Z annulla, Ctrl+Maiusc+Z oppure Ctrl+Y ripristina.\nFunzionano solo mentre l'editor ha il focus e nei campi di testo vale il comportamento predefinito del browser.\nUn tratto continuo conta come un solo annullamento.",
     "g558": "pattern/ancora/ref/format fissi",
     "g559": "Dipingere una sola faccia esclude la tripla di dati (q,r) su T, L e R. Le modifiche non vengono applicate all'output del codice corrente.",
     "g560": "Faccia {face}, cella ({q}, {r}), tono {tone}, {role}",
@@ -4709,7 +4771,7 @@ const GENERATOR_STRINGS = {
     "g900": "Diese Achse legt die Anzahl der Module (Zellen) fest. Mehr Module, mehr Kapazität.\nBei gleicher Druckgröße wird jedes Modul mit höherer Auflösung kleiner, die Kamera muss also näher heran.\nNiedrig = große Entfernung, große Drucke (Plakatwände) · Mittel = Plakatabstand, 1-3 m · Hoch = Nahbereich, große Kapazität.\nIm Automatikmodus steigt zuerst die Auflösung; die Stufe „Robustheit ⇄ Kapazität“ sinkt nur, wenn der Inhalt auch beim Maximum nicht hineinpasst.\nDie Grafik auf der Karte zeigt die Detektorgröße im Verhältnis zur Silhouette — der Detektor belegt eine feste Zellenzahl und wirkt daher mit steigender Auflösung relativ kleiner.",
     "g901": "Diese Achse legt fest, wie viel Platz die Fehlerkorrektur (ECC) bekommt. Mehr Korrektur bedeutet weniger Nutzdaten.\nKorrektur zuerst = ECC H (≈40%) · Standard = ECC M (25%) · Große Kapazität = ECC L (≈12%).\nIm Automatikmodus wird H → M → L durchlaufen und die erste Stufe genommen, in die der Inhalt passt.\nDas Selbstprüfungs-Badge unten liest das Bild zurück, das diese Einstellungen tatsächlich erzeugt haben. Es beurteilt, ob das Rendering seinen eigenen Vertrag eingehalten hat — nicht, wie sich Druck oder Kamera verhalten werden.",
     "g902": "Transparent = nur der Code. Das PNG behält einen Alphakanal, das SVG hat überhaupt kein Hintergrundelement.\nWeiß = für helle Drucke und Dokumente. Schwarz = für dunkle Bedruckstoffe und Bildschirme.\nBei transparent wird die Fläche, auf die Sie den Code legen, zum tatsächlichen Hintergrund. Diese Trennung lässt sich beim Erzeugen nicht garantieren — messen Sie sie mit der TL-Platzierungsvorschau.",
-    "g903": "Legen Sie ein Foto der Stelle ein, an die der Code wirklich kommt; es liegt hinter der Vorschau.\nZiehen Sie in der Vorschau zum Verschieben und zoomen Sie mit Mausrad oder Pinch-Geste, bis die Platzierung stimmt.\nDie Vorschau misst die Flächenluminanz rund um den Code gegen die Zellstufen — so bekommen Sie schon vor dem Druck eine Zahl für „wird das hier gelesen?“.\nDieses Foto landet nie im exportierten PNG oder SVG.",
+    "g903": "Legen Sie ein Foto der Stelle ein, an die der Code wirklich kommt; es liegt hinter der Vorschau.\nZiehen Sie in der Vorschau zum Verschieben und zoomen Sie mit Mausrad oder Pinch-Geste, bis die Platzierung stimmt.\nDie Vorschau misst die Flächenluminanz rund um den Code gegen die Zellstufen — so bekommen Sie schon vor dem Druck eine Zahl für „wird das hier gelesen?“.\nDer gemessene Flächenwert entscheidet außerdem, ob „Auto“ und „Hoher Kontrast“ des Sicherheitsbereichs Weiß oder Schwarz anlegen.\nDieses Foto landet nie im exportierten PNG oder SVG.",
     "g904": "Der Rand um den Code — das Gegenstück zur Ruhezone eines QR.\nAuto = legt bei transparentem Hintergrund eine kontraststarke Farbe an und entfällt bei deckendem Hintergrund (der Hintergrund ist dann schon die Ruhezone).\nKeine = kein Rand. Weiß / Schwarz = auf diese Farbe festgelegt.\nHoher Kontrast = wählt zwischen Weiß und Schwarz. (1) Die Farbe, die den Zellstufen zu nahe kommt, fällt zuerst weg — ein Rand, der mit dem Code verschmilzt, macht die Silhouette größer als den Code. (2) Bestehen beide, gewinnt die Farbe mit dem größeren Abstand zur Flächenhelligkeit aus der Platzierungsvorschau: Schwarz auf heller, Weiß auf dunkler Fläche.\nOhne geladenes Foto lässt sich Schritt (2) nicht ausführen, dann entscheidet der größere Abstand zu den Zellstufen.\nDer Block des Ersatz-QR bleibt ausgenommen — er bringt seine eigene Ruhezone mit.",
     "g905": "Druckt neben dem Code einen QR als Ersatzweg, falls der TL-Scanner ihn nicht lesen kann.\nOben links / oben rechts / unten links / unten rechts = eine der vier äußeren Ecken.\nInnen = zentraler QR bei Typ O/A, Y2-Fenster β bei Typ Y.\nKeine = exportiert nur den Code, ohne QR.\nDie Variante mit zentralem QR ist für Drucke ab 13 cm Breite gedacht.",
     "g906": "Der Zellflächen-Lokator, mit dem ein Scanner zuerst findet, wo ein Typ-Y-Code liegt und wie er gedreht ist.\nAuto = nimmt, was für die aktuellen Einstellungen empfohlen ist. Es wurde noch kein Y-Detektor in den Produktivstand befördert, deshalb entspricht Auto heute genau Aus.\nBelegte Zellen und maximale Nutzdaten L / M / H je Kandidat (Quelle: cellSurfaceFinal.js):\n· v0 — 30 Zellen (n=13) · 29 / 25 / 20 B\n· v0X — 65 Zellen (n=21) · 96 / 81 / 65 B\n· v0XQ — Suchmuster 42 Zellen + zentraler QR-Slot 81 Zellen (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 Zellen (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 Zellen (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B bei n=25)\nJe weniger Zellen belegt sind, desto mehr Symbole bleiben für Daten — bei n=21 fasst v0X am meisten und v0XQ am wenigsten. Zwischen den drei Kandidaten ohne Slot liegen bei L nur 4 B, die Kapazität taugt dort also nicht als Auswahlgrund; v0XQ gibt 81 Zellen an den zentralen QR-Slot ab und fasst bei L deshalb 16 B weniger als v0X — dafür trägt der zentrale QR eine Ersatz-URL, wenn der Scanner den Code nicht lesen kann.\nDas sind Versuchskandidaten: Leistung bei Drehung, Beleuchtung, Druck und Live-Scan ist nicht zugesichert.",
@@ -4728,7 +4790,6 @@ const GENERATOR_STRINGS = {
     "g931": "Erklärung anzeigen",
     "g932": "Erklärung schließen",
     "g934": "Dunkler Bedruckstoff",
-    "g935": "* Das Flächenfoto misst die Helligkeit rund um den Code und fließt in die Wahl des Sicherheitsbereichs ein — es entscheidet, ob „Auto“ und „Hoher Kontrast“ Weiß oder Schwarz anlegen. Das Foto selbst landet nie im exportierten PNG oder SVG.",
     "g941": "Auto (empfohlen)",
     "g942": "Kein Detektor",
     "g943": "4 Eckblöcke",
@@ -4750,7 +4811,7 @@ const GENERATOR_STRINGS = {
     "g961": "TL-Platzierungsvorschau",
     "g962": "Ziehen zum Verschieben · Mausrad oder Pinch-Geste zum Zoomen",
     "g700": "Feste Bildgröße",
-    "g701": "Legt die Pixelgröße des exportierten PNG/SVG fest (unabhängig von der Vorschau).\nDie drei Automatikmodi fußen auf der gemessenen Mindestgröße, bei der ein Scan-Roundtrip besteht — Untergrenze = dieses Minimum unverändert, optimal (Standard) = ×1,5, hohe Qualität = ×2,5.\nFeste und benutzerdefinierte Größen setzen den Code mit erhaltenem Seitenverhältnis (contain) in die Leinwand. Alle außer benutzerdefiniert sind quadratisch.\n„Ohne Rand“ (nicht empfohlen) verkleinert nur die Randbreite auf das gemessene Minimum — die Ruhezonen-Platte bleibt, doch der Puffer wird dünn; Vorsicht auf dunklen oder unruhigen Flächen.",
+    "g701": "Legt die Pixelgröße des exportierten PNG/SVG fest (unabhängig von der Vorschau).\nDie drei Automatikmodi fußen auf der gemessenen Mindestgröße, bei der ein Scan-Roundtrip besteht — Untergrenze = dieses Minimum unverändert, optimal (Standard) = ×1,5, hohe Qualität = ×2,5.\nFeste und benutzerdefinierte Größen setzen den Code mit erhaltenem Seitenverhältnis (contain) in die Leinwand. Alle außer benutzerdefiniert sind quadratisch.\n„Ohne Rand“ (nicht empfohlen) verkleinert nur die Randbreite auf das gemessene Minimum — die Ruhezonen-Platte bleibt, doch der Puffer wird dünn; Vorsicht auf dunklen oder unruhigen Flächen.\nDas Ergebnis hängt vom Typ ab — bei Y entfällt das Schattierungsband, und mit einem Eck-QR wird nur bis zu dem Rand verkleinert, in dem dieser QR sitzt. Type O liegt bereits am Mindestrand, ändert sich also nicht.",
     "g702": "Auto (Untergrenze)",
     "g703": "Auto (optimal · Standard)",
     "g704": "Auto (hohe Qualität)",
@@ -4758,16 +4819,14 @@ const GENERATOR_STRINGS = {
     "g706": "Breite (px)",
     "g707": "Höhe (px)",
     "g708": "Ohne Rand",
-    "g709": "Auto geht von der gemessenen Mindestgröße aus, bei der der Scan besteht. „Ohne Rand“ (nicht empfohlen) verkleinert nur die Randbreite auf das gemessene Minimum — die Ruhezonen-Platte bleibt, Ys Schattierungsbänder entfallen, und mit einem Ecken-QR schrumpft der Rand nur bis zum QR. Type O hat bereits einen minimalen Rand: nichts ändert sich.",
     "g710": "Optimierung für farbarme Displays (Dithering)",
-    "g711": "Wird der Code auf einem farbarmen Display wie E-Ink gezeigt, wird der Export tatsächlich mit dieser Bittiefe quantisiert und gedithert.\nSie sehen vor dem Export genau, wie er auf diesem Display aussieht.\nNiedrige Bittiefen können unterschiedliche Flächenhelligkeiten auf denselben Wert zusammenfallen lassen — bricht die Rangfolge, ist der Code unlesbar. Scannen Sie das exportierte Bild immer zur Kontrolle.",
+    "g711": "Auto = keine Quantisierung; das Bild wird unverändert exportiert.\nWird der Code auf einem farbarmen Display wie E-Ink gezeigt, wird der Export tatsächlich mit dieser Bittiefe quantisiert und gedithert.\nSie sehen vor dem Export genau, wie er auf diesem Display aussieht.\nNiedrige Bittiefen können unterschiedliche Flächenhelligkeiten auf denselben Wert zusammenfallen lassen — bricht die Rangfolge, ist der Code unlesbar. Scannen Sie das exportierte Bild immer zur Kontrolle.",
     "g712": "Auto (keine Quantisierung)",
     "g713": "24 Bit (True Color)",
     "g714": "16 Bit (RGB565)",
     "g715": "8 Bit (256 Farben)",
     "g716": "4 Bit (16 Farben)",
     "g717": "2 Bit (4 Graustufen)",
-    "g718": "Auto = keine Quantisierung (wie gerendert). Niedrige Bittiefen können die Helligkeitsrangfolge der drei Flächen einebnen — Export immer per Scan prüfen.",
     "g719": "Ausgabeoptimierung (hohe PPI · nur PNG)",
     "g720": "Bettet die physische Dichte (ppi) als Metadatum ins PNG ein — Druck- und Layoutsoftware bemisst dann korrekt.\nBildschirm = 144 ppi (Retina 2x) und Druck = 300 ppi werden automatisch angewendet.\nDie Pixelzahl bestimmt „Feste Bildgröße“ oben — diese Option fügt keine Pixel hinzu.\nSVG ist vektorbasiert, ppi ist dort bedeutungslos (nur PNG-Export).",
     "g721": "Bildschirm",
@@ -4889,14 +4948,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (geringere Kapazität · nur Test-Scanner)",
     "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn dieser Finder im Test-Scanner (/lab/) aktiviert ist.",
     "g582": "Zentraler TL",
-    "g572": "Silhouettenrichtung (experimentell)",
+    "g572": "Silhouettenrichtung",
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
-    "g575": "Experimentell. Wenn aktiviert, wird die Silhouette als umgekehrtes Dreieck (▽) gezeichnet, und in diesem Zustand erzeugte Codes kann der Scanner jetzt lesen — die Prüfung am realen Gerät läuft noch.",
+    "g575": "Wenn aktiviert, wird die Silhouette als umgekehrtes Dreieck (▽) gezeichnet. Kapazität und Datenvertrag entsprechen der aufrechten Form, und der Scanner liest so erzeugte Codes.",
     "g576": "Eckplatz-Reservierung (experimentell)",
     "g577": "Keine (Standard)",
     "g578": "Drei abwechselnde Ecken",
-    "g579": "Automatisch wählt den zum Typ passenden Platz — bei Type O kommen Hilfsmarken an drei abwechselnde Ecken, was die Kapazität senkt. Das Formatfeld im Code meldet ihr Vorhandensein, der Scanner liest sie also unverändert. Die Platzwahl von Hand ist nur in der Laborversion offen.",
+    "g579": "Automatisch wählt den zum Typ passenden Platz — bei Type O kommen Hilfsmarken an drei abwechselnde Ecken, was die Kapazität senkt.\nDas Formatfeld im Code meldet ihr Vorhandensein, der Scanner liest sie also unverändert.\nDie Platzwahl von Hand ist nur in der Laborversion offen.",
     "g580": "Eckmarker sind nicht verfügbar, solange der QR in der Mitte sitzt — beide beanspruchen dieselben Zellen. Sie werden frei, wenn Sie den QR verschieben.",
     "g581": "Der aktuelle Finder belegt die Mitte, daher kann der QR dort nicht sitzen. Wählen Sie einen anderen Finder, um ihn freizugeben.",
     "g507": "Als {filename} heruntergeladen.",
@@ -4980,7 +5039,7 @@ const GENERATOR_STRINGS = {
     "g554": "Typ G ist das O-Gitter mit 12 goldgesperrten Platzzellen; Turn-A ist das 180°-Bild von A.",
     "g555": "Rückgängig",
     "g556": "Wiederholen",
-    "g557": "Tastenkürzel — Strg/Cmd+Z macht rückgängig, Strg+Umschalt+Z oder Strg+Y wiederholt. Sie greifen nur, solange der Editor den Fokus hat; in Textfeldern gilt das Standardverhalten des Browsers. Ein durchgehender Zug zählt als ein Schritt.",
+    "g557": "Tastenkürzel — Strg/Cmd+Z macht rückgängig, Strg+Umschalt+Z oder Strg+Y wiederholt.\nSie greifen nur, solange der Editor den Fokus hat; in Textfeldern gilt das Standardverhalten des Browsers.\nEin durchgehender Zug zählt als ein Schritt.",
     "g558": "Feste Suchmuster/Anker/ref/format",
     "g559": "Auch wenn Sie nur eine Fläche einfärben, fällt das Datentripel dieser Zelle (q,r) auf T, L und R zusammen weg. Die Bearbeitung wirkt sich nicht auf die aktuelle Codeausgabe aus.",
     "g560": "Fläche {face}, Zelle ({q}, {r}), Tonwert {tone}, {role}",
@@ -5149,7 +5208,7 @@ const GENERATOR_STRINGS = {
     "g900": "Este eje fija el número de módulos (celdas). Más módulos, más capacidad.\nCon el mismo tamaño impreso, a mayor resolución cada módulo se hace más pequeño, así que hay que acercar más la cámara.\nBaja = larga distancia, impresiones grandes (vallas) · Media = distancia de cartel, 1-3 m · Alta = corta distancia, gran capacidad.\nEn modo automático primero sube la resolución, y el escalón «Robustez ⇄ capacidad» solo baja si el contenido sigue sin entrar en el máximo.\nEl dibujo de la tarjeta muestra el tamaño del detector frente a la silueta: el detector ocupa un número fijo de celdas, así que se ve relativamente más pequeño a medida que sube la resolución.",
     "g901": "Este eje fija cuánto espacio se reserva a la corrección de errores (ECC). Cuanta más corrección, menos carga útil.\nCorrección primero = ECC H (≈40%) · Estándar = ECC M (25%) · Gran capacidad = ECC L (≈12%).\nEn modo automático se recorre H → M → L y se toma el primer nivel en el que entra el contenido.\nLa insignia de autocomprobación de abajo vuelve a leer la imagen que estos ajustes han producido realmente: juzga si el renderizado ha cumplido su propio contrato, no cómo se comportarán la impresión o la cámara.",
     "g902": "Transparente = solo el código. El PNG conserva un canal alfa; el SVG no tiene ningún elemento de fondo.\nBlanco = para impresos y documentos claros. Negro = para soportes oscuros y pantallas.\nCon transparente, el fondo efectivo pasa a ser «la superficie sobre la que apoya el código». Esa separación no se puede garantizar al generar, así que mídala con la vista previa de colocación TL.",
-    "g903": "Añada una foto del sitio donde irá realmente el código: se coloca detrás de la vista previa.\nEn la vista previa, arrastre para mover y use la rueda o el pellizco para hacer zoom hasta que la colocación encaje.\nLa vista previa mide la luminancia de la superficie alrededor del código frente a los niveles de celda, de modo que obtiene una cifra para «¿se leerá aquí?» antes de imprimir.\nEsa foto nunca entra en el PNG ni en el SVG exportados.",
+    "g903": "Añada una foto del sitio donde irá realmente el código: se coloca detrás de la vista previa.\nEn la vista previa, arrastre para mover y use la rueda o el pellizco para hacer zoom hasta que la colocación encaje.\nLa vista previa mide la luminancia de la superficie alrededor del código frente a los niveles de celda, de modo que obtiene una cifra para «¿se leerá aquí?» antes de imprimir.\nEsa medida de superficie determina también si «Auto» y «Contraste alto» del área de seguridad ponen blanco o negro.\nEsa foto nunca entra en el PNG ni en el SVG exportados.",
     "g904": "Es el margen alrededor del código, el equivalente de la zona de silencio de un QR.\nAuto = pone un color de alto contraste cuando el fondo es transparente y se omite cuando el fondo es opaco (el fondo ya hace de zona de silencio).\nNinguno = sin margen. Blanco / Negro = fijado a ese color.\nContraste alto = elige entre blanco y negro. (1) Primero se descarta el color que queda demasiado cerca de los niveles de celda: un margen que se funde con el código hace que la silueta sea mayor que el código. (2) Si pasan los dos, gana el que más se aleja del brillo de superficie medido en la vista previa de colocación: negro sobre superficie clara, blanco sobre superficie oscura.\nSin foto cargada no se puede ejecutar el paso (2), así que decide el color que más se separa de los niveles de celda.\nEl bloque del QR de respaldo queda excluido: lleva su propia zona de silencio.",
     "g905": "Imprime un QR junto al código como vía de respaldo cuando el escáner TL no consigue leerlo.\nArriba a la izquierda / arriba a la derecha / abajo a la izquierda / abajo a la derecha = una de las cuatro esquinas exteriores.\nInterior = QR central en los Tipos O/A, ventana Y2 β en el Tipo Y.\nNinguno = exporta solo el código, sin QR.\nLa variante con QR central está pensada para impresiones de al menos 13 cm de ancho.",
     "g906": "El localizador de superficie de celdas que un escáner usa para encontrar dónde está un código Tipo Y y hacia dónde está orientado.\nAuto = usa lo recomendado para los ajustes actuales. Todavía no se ha promovido ningún detector Y a producción, así que hoy Auto equivale exactamente a Desactivado.\nCeldas ocupadas y carga útil máxima L / M / H por candidato (fuente: cellSurfaceFinal.js):\n· v0 — 30 celdas (n=13) · 29 / 25 / 20 B\n· v0X — 65 celdas (n=21) · 96 / 81 / 65 B\n· v0XQ — patrón localizador 42 celdas + ranura QR central 81 celdas (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 celdas (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 celdas (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B con n=25)\nCuantas menos celdas ocupadas, más símbolos quedan para los datos: con n=21, v0X es el que más guarda y v0XQ el que menos. Entre los tres candidatos sin ranura la diferencia es de solo 4 B en L, así que la capacidad no sirve como criterio de elección; v0XQ cede 81 celdas a la ranura del QR central y por eso guarda 16 B menos que v0X en L — a cambio, el QR central lleva una URL de respaldo cuando el escáner no consigue leer el código.\nSon candidatos experimentales: no se garantiza el rendimiento en rotación, iluminación, impresión ni escaneo en vivo.",
@@ -5168,7 +5227,6 @@ const GENERATOR_STRINGS = {
     "g931": "Mostrar la explicación",
     "g932": "Cerrar la explicación",
     "g934": "Soporte oscuro",
-    "g935": "* La foto de la superficie mide el brillo alrededor del código y alimenta la elección del área de seguridad: es lo que decide si «Auto» y «Contraste alto» ponen blanco o negro. La foto en sí nunca entra en el PNG ni en el SVG exportados.",
     "g941": "Auto (recomendado)",
     "g942": "Sin detector",
     "g943": "4 bloques de esquina",
@@ -5190,7 +5248,7 @@ const GENERATOR_STRINGS = {
     "g961": "Colocación TL",
     "g962": "Arrastrar para mover · rueda o pellizco para hacer zoom",
     "g700": "Tamaño de imagen fijo",
-    "g701": "Define el tamaño en píxeles del PNG/SVG exportado (independiente de la vista previa).\nLos tres modos automáticos parten del tamaño mínimo medido con el que se sostiene un ciclo de escaneo — mínimo = ese tamaño tal cual, óptimo (predeterminado) = ×1,5, alta calidad = ×2,5.\nLos tamaños fijos y personalizados encajan el código en el lienzo conservando su proporción (contain). Todos salvo el personalizado son cuadrados.\n«Sin margen» (no recomendado) solo reduce el ancho del margen al mínimo medido — la placa de la zona de silencio se conserva pero la reserva se adelgaza; cuidado sobre superficies oscuras o complejas.",
+    "g701": "Define el tamaño en píxeles del PNG/SVG exportado (independiente de la vista previa).\nLos tres modos automáticos parten del tamaño mínimo medido con el que se sostiene un ciclo de escaneo — mínimo = ese tamaño tal cual, óptimo (predeterminado) = ×1,5, alta calidad = ×2,5.\nLos tamaños fijos y personalizados encajan el código en el lienzo conservando su proporción (contain). Todos salvo el personalizado son cuadrados.\n«Sin margen» (no recomendado) solo reduce el ancho del margen al mínimo medido — la placa de la zona de silencio se conserva pero la reserva se adelgaza; cuidado sobre superficies oscuras o complejas.\nEl resultado varía según el tipo — en Y se quita la banda de sombreado y, con un QR de esquina, solo se reduce hasta el margen que aloja ese QR. El Type O ya está en el margen mínimo, así que no cambia nada.",
     "g702": "Auto (mínimo)",
     "g703": "Auto (óptimo · predeterminado)",
     "g704": "Auto (alta calidad)",
@@ -5198,16 +5256,14 @@ const GENERATOR_STRINGS = {
     "g706": "Ancho (px)",
     "g707": "Alto (px)",
     "g708": "Sin margen",
-    "g709": "Auto parte del tamaño mínimo medido con el que el escaneo funciona. «Sin margen» (no recomendado) solo reduce el ancho del margen al mínimo medido — la placa de la zona de silencio se conserva, las bandas de sombreado de Y se quitan y, con un QR de esquina, el margen solo se reduce hasta donde vive el QR. El Type O ya tiene un margen mínimo: nada cambia.",
     "g710": "Optimización para pantallas de pocos colores (tramado)",
-    "g711": "Si el código se mostrará en una pantalla de pocos colores (como tinta electrónica), la exportación se cuantiza y se trama realmente a esa profundidad de bits.\nVes exactamente cómo se verá en esa pantalla antes de exportar.\nLas profundidades bajas pueden fundir brillos de caras distintas en el mismo valor — si el orden se rompe, el código deja de leerse. Escanea siempre la imagen exportada para verificar.",
+    "g711": "Auto = sin cuantización; la imagen se exporta tal cual.\nSi el código se mostrará en una pantalla de pocos colores (como tinta electrónica), la exportación se cuantiza y se trama realmente a esa profundidad de bits.\nVes exactamente cómo se verá en esa pantalla antes de exportar.\nLas profundidades bajas pueden fundir brillos de caras distintas en el mismo valor — si el orden se rompe, el código deja de leerse. Escanea siempre la imagen exportada para verificar.",
     "g712": "Auto (sin cuantización)",
     "g713": "24 bits (color verdadero)",
     "g714": "16 bits (RGB565)",
     "g715": "8 bits (256 colores)",
     "g716": "4 bits (16 colores)",
     "g717": "2 bits (4 niveles de gris)",
-    "g718": "Auto = sin cuantización (tal como se renderiza). Las profundidades de bits bajas pueden aplanar el orden de brillo de las tres caras — escanea siempre la exportación para verificar.",
     "g719": "Optimización de salida (PPI alto · solo PNG)",
     "g720": "Incrusta la densidad física (ppi) como metadato del PNG — los programas de impresión y maquetación dimensionan entonces correctamente.\nPantalla = 144 ppi (Retina 2x) e impresión = 300 ppi se aplican automáticamente.\nEl número de píxeles lo decide «Tamaño de imagen fijo» arriba — esta opción no añade píxeles.\nEl SVG es vectorial: el ppi no tiene sentido ahí (solo exportación PNG).",
     "g721": "Pantalla",
@@ -5329,14 +5385,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (menor capacidad · solo escáner de prueba)",
     "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con este detector activado en el escáner de prueba (/lab/).",
     "g582": "TL central",
-    "g572": "Orientación de la silueta (experimental)",
+    "g572": "Orientación de la silueta",
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
-    "g575": "Experimental. Al activarlo, la silueta se dibuja invertida como triángulo invertido (▽) y los códigos creados en este estado ya los puede leer el escáner — la validación en dispositivo real sigue en curso.",
+    "g575": "Al activarlo, la silueta se dibuja invertida como triángulo invertido (▽). La capacidad y el contrato de datos son los mismos que en la forma recta, y el escáner lee los códigos creados así.",
     "g576": "Reserva de esquina (experimental)",
     "g577": "Ninguno (predeterminado)",
     "g578": "Tres esquinas alternas",
-    "g579": "El automático elige el asiento acorde al tipo: en Type O añade marcas de apoyo en tres esquinas alternas y reduce la capacidad. El campo de formato del código avisa de que están, así que el escáner las lee tal cual. Elegir el asiento a mano solo está abierto en la versión de laboratorio.",
+    "g579": "El automático elige el asiento acorde al tipo: en Type O añade marcas de apoyo en tres esquinas alternas y reduce la capacidad.\nEl campo de formato del código avisa de que están, así que el escáner las lee tal cual.\nElegir el asiento a mano solo está abierto en la versión de laboratorio.",
     "g580": "Los marcadores de esquina no están disponibles mientras el QR ocupa el centro — ambos se disputan las mismas celdas. Se desbloquean al mover el QR.",
     "g581": "El localizador actual ocupa el centro, así que el QR no puede ir ahí. Elige otro localizador para desbloquearlo.",
     "g507": "Descargado como {filename}.",
@@ -5420,7 +5476,7 @@ const GENERATOR_STRINGS = {
     "g554": "El tipo G es la rejilla O con las 12 celdas del asiento bloqueadas en dorado; Turn-A es la imagen a 180° de A.",
     "g555": "Deshacer",
     "g556": "Rehacer",
-    "g557": "Atajos — Ctrl/Cmd+Z deshace, Ctrl+Mayús+Z o Ctrl+Y rehace. Solo actúan mientras el editor tiene el foco, y en los campos de texto rige el comportamiento predeterminado del navegador. Un trazo continuo cuenta como un solo paso.",
+    "g557": "Atajos — Ctrl/Cmd+Z deshace, Ctrl+Mayús+Z o Ctrl+Y rehace.\nSolo actúan mientras el editor tiene el foco, y en los campos de texto rige el comportamiento predeterminado del navegador.\nUn trazo continuo cuenta como un solo paso.",
     "g558": "patrón/ancla/ref/format fijos",
     "g559": "Pintar una sola cara excluye el triplete de datos (q,r) en T, L y R. Las ediciones no se aplican a la salida del código actual.",
     "g560": "Cara {face}, celda ({q}, {r}), tono {tone}, {role}",
@@ -5589,7 +5645,7 @@ const GENERATOR_STRINGS = {
     "g900": "Este eixo define o número de módulos (células). Mais módulos, mais capacidade.\nCom o mesmo tamanho impresso, quanto maior a resolução mais pequeno fica cada módulo, por isso a câmara tem de se aproximar.\nBaixa = longa distância, impressões grandes (outdoors) · Média = distância de cartaz, 1-3 m · Alta = curta distância, grande capacidade.\nNo modo automático a resolução sobe primeiro, e o degrau «Robustez ⇄ capacidade» só desce se o conteúdo continuar a não caber no máximo.\nO desenho do cartão mostra o tamanho do detector em relação à silhueta — o detector ocupa um número fixo de células, por isso parece relativamente mais pequeno à medida que a resolução sobe.",
     "g901": "Este eixo define quanto espaço vai para a correção de erros (ECC). Quanta mais correção, menos carga útil.\nCorreção primeiro = ECC H (≈40%) · Padrão = ECC M (25%) · Grande capacidade = ECC L (≈12%).\nNo modo automático percorre-se H → M → L e fica o primeiro nível onde o conteúdo cabe.\nO emblema de autoverificação abaixo relê a imagem que estas definições produziram de facto: julga se a renderização cumpriu o seu próprio contrato, não como se vão comportar a impressão ou a câmara.",
     "g902": "Transparente = só o código. O PNG mantém um canal alfa; o SVG não tem qualquer elemento de fundo.\nBranco = para impressos e documentos claros. Preto = para suportes escuros e ecrãs.\nCom transparente, o fundo efetivo passa a ser «a superfície onde assenta o código». Essa separação não pode ser garantida no momento da geração, por isso meça-a com a pré-visualização de posicionamento TL.",
-    "g903": "Junte uma foto do local onde o código vai ficar mesmo: fica por trás da pré-visualização.\nNa pré-visualização, arraste para mover e amplie com a roda ou com uma pinça até o posicionamento coincidir.\nA pré-visualização mede a luminância da superfície à volta do código face aos níveis de célula, dando um número para «vai ler-se aqui?» antes de imprimir.\nEssa foto nunca entra no PNG nem no SVG exportados.",
+    "g903": "Junte uma foto do local onde o código vai ficar mesmo: fica por trás da pré-visualização.\nNa pré-visualização, arraste para mover e amplie com a roda ou com uma pinça até o posicionamento coincidir.\nA pré-visualização mede a luminância da superfície à volta do código face aos níveis de célula, dando um número para «vai ler-se aqui?» antes de imprimir.\nEssa medição de superfície determina também se «Auto» e «Contraste alto» da área de segurança assentam branco ou preto.\nEssa foto nunca entra no PNG nem no SVG exportados.",
     "g904": "É a margem à volta do código, o equivalente à zona de silêncio de um QR.\nAuto = assenta uma cor de contraste elevado quando o fundo é transparente e é dispensada quando o fundo é opaco (o fundo já é a zona de silêncio).\nNenhuma = sem margem. Branco / Preto = fixado nessa cor.\nContraste elevado = escolhe entre branco e preto. (1) A cor que fica demasiado perto dos níveis de célula é descartada primeiro — uma margem que se funde no código faz a silhueta ficar maior do que o código. (2) Se ambas passarem, ganha a que mais se afasta do brilho da superfície medido na pré-visualização de posicionamento: preto sobre superfície clara, branco sobre superfície escura.\nSem foto carregada o passo (2) não pode correr, por isso decide a cor que mais se separa dos níveis de célula.\nO bloco do QR de reserva fica de fora: traz a sua própria zona de silêncio.",
     "g905": "Imprime um QR ao lado do código como via de reserva quando o Scanner TL não consegue lê-lo.\nCanto superior esquerdo / superior direito / inferior esquerdo / inferior direito = um dos quatro cantos exteriores.\nInterior = QR central nos Tipos O/A, janela Y2 β no Tipo Y.\nNenhum = exporta apenas o código, sem QR.\nA variante com QR central destina-se a impressões com pelo menos 13 cm de largura.",
     "g906": "O localizador de superfície de células que um leitor usa para encontrar onde está um código Tipo Y e para que lado está virado.\nAuto = usa o que é recomendado para as definições atuais. Ainda não foi promovido nenhum detetor Y para produção, por isso hoje Auto equivale exatamente a Desligado.\nCélulas ocupadas e carga útil máxima L / M / H por candidato (fonte: cellSurfaceFinal.js):\n· v0 — 30 células (n=13) · 29 / 25 / 20 B\n· v0X — 65 células (n=21) · 96 / 81 / 65 B\n· v0XQ — padrão localizador 42 células + ranhura QR central 81 células (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 células (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 células (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B com n=25)\nQuantas menos células ocupadas, mais símbolos sobram para os dados — com n=21, v0X é o que leva mais e v0XQ o que leva menos. Entre os três candidatos sem ranhura a diferença é de apenas 4 B em L, pelo que a capacidade não serve de critério de escolha; v0XQ cede 81 células à ranhura do QR central e leva por isso menos 16 B do que v0X em L — em troca, o QR central transporta um URL de reserva quando o leitor não consegue ler o código.\nSão candidatos experimentais: não se garante o desempenho em rotação, iluminação, impressão nem leitura ao vivo.",
@@ -5608,7 +5664,6 @@ const GENERATOR_STRINGS = {
     "g931": "Mostrar a explicação",
     "g932": "Fechar a explicação",
     "g934": "Suporte escuro",
-    "g935": "* A foto da superfície mede o brilho à volta do código e alimenta a escolha da área de segurança — é ela que decide se «Auto» e «Contraste elevado» assentam branco ou preto. A foto em si nunca entra no PNG nem no SVG exportados.",
     "g941": "Auto (recomendado)",
     "g942": "Sem detector",
     "g943": "4 blocos de canto",
@@ -5630,7 +5685,7 @@ const GENERATOR_STRINGS = {
     "g961": "Posicionamento TL",
     "g962": "Arrastar para mover · roda ou pinça para ampliar",
     "g700": "Tamanho de imagem fixo",
-    "g701": "Define o tamanho em píxeis do PNG/SVG exportado (independente da pré-visualização).\nOs três modos automáticos partem do tamanho mínimo medido em que um ciclo de leitura se mantém — mínimo = esse tamanho tal e qual, ótimo (predefinição) = ×1,5, alta qualidade = ×2,5.\nOs tamanhos fixos e personalizados encaixam o código na tela preservando a proporção (contain). Todos exceto o personalizado são quadrados.\n«Sem margem» (não recomendado) reduz apenas a largura da margem ao mínimo medido — a placa da zona de silêncio é mantida mas a folga fica fina; cuidado em superfícies escuras ou complexas.",
+    "g701": "Define o tamanho em píxeis do PNG/SVG exportado (independente da pré-visualização).\nOs três modos automáticos partem do tamanho mínimo medido em que um ciclo de leitura se mantém — mínimo = esse tamanho tal e qual, ótimo (predefinição) = ×1,5, alta qualidade = ×2,5.\nOs tamanhos fixos e personalizados encaixam o código na tela preservando a proporção (contain). Todos exceto o personalizado são quadrados.\n«Sem margem» (não recomendado) reduz apenas a largura da margem ao mínimo medido — a placa da zona de silêncio é mantida mas a folga fica fina; cuidado em superfícies escuras ou complexas.\nO resultado varia com o tipo — em Y a faixa de sombreado sai e, com um QR de canto, só encolhe até à margem onde esse QR fica. O Type O já está na margem mínima, portanto nada muda.",
     "g702": "Auto (mínimo)",
     "g703": "Auto (ótimo · predefinição)",
     "g704": "Auto (alta qualidade)",
@@ -5638,16 +5693,14 @@ const GENERATOR_STRINGS = {
     "g706": "Largura (px)",
     "g707": "Altura (px)",
     "g708": "Sem margem",
-    "g709": "Auto parte do tamanho mínimo medido em que a leitura se mantém. «Sem margem» (não recomendado) reduz apenas a largura da margem ao mínimo medido — a placa da zona de silêncio é mantida, as faixas de sombreado de Y são retiradas e, com um QR de canto, a margem só encolhe até onde vive o QR. O Type O já tem uma margem mínima: nada muda.",
     "g710": "Otimização para ecrãs de poucas cores (dithering)",
-    "g711": "Se o código for mostrado num ecrã de poucas cores (como tinta eletrónica), a exportação é realmente quantizada e submetida a dithering nessa profundidade de bits.\nVê exatamente como ficará nesse ecrã antes de exportar.\nProfundidades baixas podem fundir brilhos de faces diferentes no mesmo valor — se a ordem quebrar, o código deixa de ser lido. Digitalize sempre a imagem exportada para verificar.",
+    "g711": "Auto = sem quantização; a imagem é exportada tal como está.\nSe o código for mostrado num ecrã de poucas cores (como tinta eletrónica), a exportação é realmente quantizada e submetida a dithering nessa profundidade de bits.\nVê exatamente como ficará nesse ecrã antes de exportar.\nProfundidades baixas podem fundir brilhos de faces diferentes no mesmo valor — se a ordem quebrar, o código deixa de ser lido. Digitalize sempre a imagem exportada para verificar.",
     "g712": "Auto (sem quantização)",
     "g713": "24 bits (cor verdadeira)",
     "g714": "16 bits (RGB565)",
     "g715": "8 bits (256 cores)",
     "g716": "4 bits (16 cores)",
     "g717": "2 bits (4 níveis de cinzento)",
-    "g718": "Auto = sem quantização (tal como renderizado). Profundidades de bits baixas podem achatar a ordem de brilho das três faces — digitalize sempre a exportação para verificar.",
     "g719": "Otimização de saída (PPI alto · apenas PNG)",
     "g720": "Incorpora a densidade física (ppi) como metadado do PNG — os programas de impressão e paginação dimensionam então corretamente.\nEcrã = 144 ppi (Retina 2x) e impressão = 300 ppi aplicam-se automaticamente.\nO número de píxeis é decidido por «Tamanho de imagem fixo» acima — esta opção não acrescenta píxeis.\nO SVG é vetorial: o ppi não tem sentido aí (apenas exportação PNG).",
     "g721": "Ecrã",
@@ -5769,14 +5822,14 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (menor capacidade · apenas leitor de teste)",
     "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com este detector ativado no leitor de teste (/lab/).",
     "g582": "TL central",
-    "g572": "Orientação da silhueta (experimental)",
+    "g572": "Orientação da silhueta",
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
-    "g575": "Experimental. Quando ativado, a silhueta é desenhada invertida como triângulo invertido (▽), e códigos criados neste estado já são lidos pelo leitor — a validação em aparelho real ainda está em curso.",
+    "g575": "Quando ativado, a silhueta é desenhada invertida como triângulo invertido (▽). A capacidade e o contrato de dados são os da forma direita, e o leitor lê os códigos criados assim.",
     "g576": "Reserva de canto (experimental)",
     "g577": "Nenhum (padrão)",
     "g578": "Três cantos alternados",
-    "g579": "O automático escolhe o assento adequado ao tipo — no Type O acrescenta marcas de apoio em três cantos alternados e reduz a capacidade. O campo de formato do código avisa que elas existem, por isso o leitor as lê tal como estão. Escolher o assento à mão só está aberto na versão de laboratório.",
+    "g579": "O automático escolhe o assento adequado ao tipo — no Type O acrescenta marcas de apoio em três cantos alternados e reduz a capacidade.\nO campo de formato do código avisa que elas existem, por isso o leitor as lê tal como estão.\nEscolher o assento à mão só está aberto na versão de laboratório.",
     "g580": "Os marcadores de canto ficam indisponíveis enquanto o QR está no centro — os dois disputam as mesmas células. Eles liberam quando você move o QR.",
     "g581": "O localizador atual ocupa o centro, então o QR não pode ficar ali. Escolha outro localizador para liberar.",
     "g507": "Transferido como {filename}.",
@@ -5860,7 +5913,7 @@ const GENERATOR_STRINGS = {
     "g554": "O tipo G é a grade O com as 12 células do assento travadas em dourado; Turn-A é a imagem a 180° de A.",
     "g555": "Desfazer",
     "g556": "Refazer",
-    "g557": "Atalhos — Ctrl/Cmd+Z desfaz, Ctrl+Shift+Z ou Ctrl+Y refaz. Só funcionam enquanto o editor tem o foco, e nos campos de texto vale o comportamento predefinido do navegador. Um traço contínuo conta como um único passo.",
+    "g557": "Atalhos — Ctrl/Cmd+Z desfaz, Ctrl+Shift+Z ou Ctrl+Y refaz.\nSó funcionam enquanto o editor tem o foco, e nos campos de texto vale o comportamento predefinido do navegador.\nUm traço contínuo conta como um único passo.",
     "g558": "padrão/âncora/ref/format fixos",
     "g559": "Pintar apenas uma face exclui o triplo de dados (q,r) em T, L e R. As edições não são aplicadas à saída do código atual.",
     "g560": "Face {face}, célula ({q}, {r}), tom {tone}, {role}",
@@ -6117,9 +6170,10 @@ const els = {
   turnASection: $('turnASection'), turnACards: $('turnACards'),
   // 검출기 seat 구역 (W2 C4 — 구 cornerMarkerSection 승계)
   finderInnerZone: $('finderInnerZone'), innerSeatCards: $('innerSeatCards'),
-  innerSeatHint: $('innerSeatHint'),
+  // innerSeatHint 는 없앴다 (2026-08-26 — g579 가 «?» 로 갔다). $() 는 없는 id 에
+  // null 을 주므로 남겨 둬도 안 터지지만, 그 null 이 «있는데 아직 안 그렸다» 처럼 읽힌다.
   finderOuterZone: $('finderOuterZone'), outerSeatCards: $('outerSeatCards'),
-  outerSeatHint: $('outerSeatHint'),
+  // innerSeatHint·outerSeatHint 는 없앴다 (2026-08-26 — g579·g858 이 «?» 로 갔다).
   yLocatorHint: $('yLocatorHint'),
   yLocatorArmSection: $('yLocatorArmSection'), yLocatorArmCards: $('yLocatorArmCards'),
   yLocatorArmHint: $('yLocatorArmHint'),
@@ -6798,13 +6852,17 @@ function applyPreviewFit() {
 
 // ── 모드 전환 ───────────────────────────────────────────────────────────
 
-function setMode(next) {
-  // 모드는 오직 노출만 바꾼다. generatorState를 DOM에서 읽어 덮거나 정규화하지 않는다.
-  mode = transitionGeneratorMode(next);
-  els.modeNormalBtn.classList.toggle('active', mode === 'normal');
-  els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
-  els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
-  els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
+/**
+ * 모드마다 **자리가 다른** 섹션들을 활성 패널의 호스트로 옮긴다.
+ *
+ * ⚠ **호출 지점이 계약이다** (2026-08-26). 종전에는 이 옮기기가 `setMode` 본문에만
+ * 있었고 `setMode` 는 모드 버튼 두 개의 click 리스너에서만 불렸다 — 즉 **최초 로드에서
+ * 한 번도 안 돌았다.** 규칙은 맞는데 트리거 목록이 비어 있어서, 운영자 화면에서는
+ * 실루엣 방향이 계속 옛 자리(검출기 섹션 앞)에 있었고 모드 버튼을 눌러야 제자리로
+ * 갔다. 그래서 이름을 주고 **초기화에서도 한 번 부른다.**
+ * 새 «모드별 자리» 섹션이 생기면 여기에만 넣는다 — 리스너에 흩지 마라.
+ */
+function placeModeHostedSections() {
   // 자체검증 뱃지는 «안정성 ⇄ 용량» 바로 아래에 있어야 한다(A-7). 고급 모드에는 그
   // 카드 행이 없으므로 대응 위치(버전·ECC 행 아래)로 **같은 요소를 옮긴다** — 두 벌을
   // 두면 어느 쪽이 최신인지가 화면마다 갈린다.
@@ -6816,10 +6874,23 @@ function setMode(next) {
   // 실루엣 방향도 같은 관용구 — **타입 선택 바로 아래**가 제자리다 (운영자 지시
   // 2026-08-25). 종전엔 #sharedControls 안(검출기 섹션 앞)이라 타입에서 멀었고,
   // «무엇의 방향인가» 가 안 읽혔다. 요소는 하나뿐이고 호스트만 갈아탄다.
+  // 노출 축(turnA)은 그대로 #sharedControls 의 data-state-keys 에 있다 — 요소가
+  // 어디 붙어 있느냐와 «어느 모드에 노출되느냐» 는 다른 사실이고, 턴A 는 양쪽 모드
+  // 노출이 맞다. 두 패널에 키를 복사해 넣으면 손으로 유지하는 사본이 하나 는다.
   const turnAHost = mode === 'advanced' ? els.turnAHostAdvanced : els.turnAHostNormal;
   if (turnAHost && els.turnASection && els.turnASection.parentElement !== turnAHost) {
     turnAHost.appendChild(els.turnASection);
   }
+}
+
+function setMode(next) {
+  // 모드는 오직 노출만 바꾼다. generatorState를 DOM에서 읽어 덮거나 정규화하지 않는다.
+  mode = transitionGeneratorMode(next);
+  els.modeNormalBtn.classList.toggle('active', mode === 'normal');
+  els.modeAdvancedBtn.classList.toggle('active', mode === 'advanced');
+  els.panelNormal.style.display = mode === 'normal' ? '' : 'none';
+  els.panelAdvanced.style.display = mode === 'advanced' ? '' : 'none';
+  placeModeHostedSections();
   syncTypeUi();
   syncStyleUi();
   syncResTierUi();
@@ -10031,8 +10102,11 @@ function syncSeatUi() {
   };
   sync(els.innerSeatCards, generatorState.innerSeat, innerSeatAuto);
   sync(els.outerSeatCards, generatorState.outerSeat, outerSeatAuto);
-  if (els.innerSeatHint) els.innerSeatHint.textContent = t('g579');
-  if (els.outerSeatHint) els.outerSeatHint.textContent = t('g858');
+  // 내곽 g579 · 외곽 g858 **둘 다** «?»(help-dot) 로 갔다 (2026-08-26). 팝오버는
+  // 열릴 때 t() 를 부르므로 여기서 다시 칠할 대상이 없다.
+  // ⚠ 한쪽만 옮기면 두 구역이 서로 다른 종류의 컨트롤처럼 보인다 — 처음엔 내곽만
+  //   옮겼다가(한국어에선 외곽이 2줄이라 규칙에 안 걸렸다) 8언어로 다시 재서 맞췄다.
+  //   g858 은 카드 tooltip 으로도 쓰이므로 사전 키는 그대로 산다 (§wireSeatCards).
 }
 
 function syncYLocatorUi() {
@@ -10183,6 +10257,9 @@ els.qrCornerToo.addEventListener('change', () => {
   schedule();
 });
 syncTypeUi();
+// 모드별 자리 배치를 **최초 로드에서도** 한 번 돌린다 (§placeModeHostedSections).
+// 이 한 줄이 없으면 모드 버튼을 누르기 전까지 실루엣 방향·자체검증이 옛 자리에 남는다.
+placeModeHostedSections();
 
 // ── 렌더 프로파일 + 면 게인 슬라이더 (Type Y) ──────────────────────────────
 //

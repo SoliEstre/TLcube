@@ -235,6 +235,24 @@ test('§3.1 turnA 섹션은 공용 컨트롤(양쪽 모드)의 #finderSection �
   assert.ok(sharedAt !== -1 && turnA !== -1 && finder !== -1);
   assert.ok(sharedAt < turnA && turnA < finder,
     'turnASection 이 sharedControls 안 #finderSection 앞이 아니다 — 한쪽 모드에서 사라진다');
+  // ⭐ **화면 자리는 소스 자리가 아니다** (2026-08-26, 운영자 «타입 선택 아래로»).
+  // 소스는 위 그대로 두고 §placeModeHostedSections 가 활성 패널의 호스트로 옮긴다.
+  // ⚠ 이 함수는 **최초 로드에서도** 불려야 한다. 종전에는 옮기기가 setMode 본문에만
+  //   있었고 setMode 는 모드 버튼 click 에서만 불려서, 규칙은 맞는데 **트리거가 없어**
+  //   화면에는 옛 자리 그대로였다 (운영자가 «이동하자» 고 다시 신고한 원인).
+  //   그래서 «호출이 둘 이상» 을 잰다 — 정의 1 + setMode 1 + 초기화 1.
+  assert.match(INDEX, /<div id="turnAHostNormal"><\/div>/, '일반 쪽 호스트가 없다');
+  assert.match(INDEX, /<div id="turnAHostAdvanced"><\/div>/, '고급 쪽 호스트가 없다');
+  assert.match(INDEX, /function placeModeHostedSections\(\)/,
+    '자리 배치 규칙에 이름이 없다 — 리스너 본문에 인라인이면 초기화에서 못 부른다');
+  assert.ok(INDEX.split('placeModeHostedSections(').length - 1 >= 3,
+    'placeModeHostedSections 호출이 부족하다 — 정의·setMode·초기화 셋이 필요하다'
+    + ' (초기화 호출이 빠지면 모드 버튼을 누르기 전까지 옛 자리에 남는다)');
+  const typeCardsAt = INDEX.indexOf('id="typeCards"');
+  const hostAt = INDEX.indexOf('id="turnAHostNormal"');
+  assert.ok(typeCardsAt !== -1 && typeCardsAt < hostAt
+    && hostAt < INDEX.indexOf('id="toneNormalSection"'),
+    '일반 쪽 호스트가 타입 카드 바로 아래가 아니다 — «무엇의 방향인가» 가 안 읽힌다');
   // 상태 축도 그 영역의 메타데이터에 있어야 한다 (노출 대조의 단일 규약).
   assert.match(INDEX, /<div id="sharedControls" data-state-keys="turnA /,
     'sharedControls 의 data-state-keys 에 turnA 가 없다 — 노출 대조가 어긋난다');
@@ -339,16 +357,25 @@ test('§5 cornerMarker — 왕복이 선다 (내부 타입 G 와이어, 2026-08-
   // (W2 C4: #cornerMarkerSection → 내곽/외곽 seat 구역 — 힌트는 innerSeatHint(g579)
   //  가 승계했다. generator-corner-marker.test.js ① 이 구역 구조를 잰다.)
   const index = readFileSync(ROOT + 'index.html', 'utf8');
-  assert.match(index, /id="innerSeatHint"/, '힌트 문단이 없다');
   assert.doesNotMatch(index, /코드를 스캐너가 못 읽어요 — 표식이/,
     '코너 마커 힌트가 아직 «못 읽어요» 를 말한다 — 왕복이 서는데 «못 읽는다» 고 적으면 거짓말이다');
   // **의도적 갱신 (2026-08-25)** — 구 락은 **어순**을 잠갔다(«스캐너가 읽어요 — 표식이
   // 있다는 사실이»). 자리 개편으로 힌트가 다시 쓰이면서 같은 주장이 순서만 바뀌어
   // 빨개졌다. 잠글 것은 문장이 아니라 **주장 둘**이다: ① 포맷 자리에 적힌다 ②
   // 스캐너가 읽는다. 어순을 잠그면 문구를 손볼 때마다 거짓 빨강이 난다.
-  const innerHint = index.slice(index.indexOf('id="innerSeatHint"'), index.indexOf('id="innerSeatHint"') + 400);
-  assert.match(innerHint, /코드의 포맷 자리에/, '코너 마커 힌트(g579)가 포맷 자리 기록을 안 말한다');
-  assert.match(innerHint, /스캐너가 그대로 읽어요|스캐너가 읽어요/,
+  //
+  // **의도적 갱신 (2026-08-26, 운영자 «두 줄 넘어가는 설명은 ?버튼으로»)** — g579 는
+  // 3줄이라 인라인 `<p id="innerSeatHint">` 에서 «?»(help-dot)로 옮겼다. 재는 대상은
+  // 그대로 **주장 둘**이고, 자리만 DOM 문단 → 사전 값으로 바뀐다. 오히려 이쪽이 세다:
+  // 구 단언은 한국어 DOM 폴백만 봤고, 이건 사용자가 실제로 읽는 사전 문자열을 본다.
+  assert.match(index, /class="help-dot" data-help="g579"/,
+    '내곽 자리 «?» 가 g579 를 안 가리킨다 — 힌트를 옮겨 놓고 도착지를 안 만들면 설명이 사라진다');
+  assert.doesNotMatch(index, /id="innerSeatHint"/,
+    '인라인 힌트 문단이 되살아났다 — 같은 사실이 «?» 와 본문 두 곳에 살면 한쪽만 고쳐진다');
+  const g579ko = /"g579": "((?:[^"\\]|\\.)*)"/.exec(index);
+  assert.ok(g579ko, 'g579 사전 값을 못 찾았다');
+  assert.match(g579ko[1], /코드의 포맷 자리에/, '코너 마커 힌트(g579)가 포맷 자리 기록을 안 말한다');
+  assert.match(g579ko[1], /스캐너가 그대로 읽어요|스캐너가 읽어요/,
     '코너 마커 힌트(g579)가 «읽어요» 를 말하지 않는다');
 });
 

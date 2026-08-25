@@ -801,6 +801,14 @@ export function buildScene(encoded, options) {
     height: layout.height,
     background: palette.background,
     finderPatternId: centerQr ? 'centerQr' : finderPatternId,
+    // 턴A 배치 사상을 **장면이 공표한다** (2026-08-26). 이 값이 없으면 장면을 도로
+    // 표본하는 쪽(자체검증 verify.js)이 `encoded` 를 따로 들고 와 같은 분기를 다시
+    // 써야 하고, 그 순간 「(q,r) → 화면 자리」 규칙이 두 곳으로 갈라진다. 실제로
+    // 갈라져 있었다 — 자체검증이 정삼각 자리를 재서 턴A 를 전부 «사용 불가» 로
+    // 판정했다 (실측 123/477; 같은 래스터를 (−q,−r) 에서 읽으면 477/477).
+    // ⚠ 그리는 쪽(§배치 사상)과 이 값은 **같은 `turnA` 지역변수**에서 나온다 —
+    //    둘을 따로 계산하게 고치지 마라.
+    turnA,
     shapes,
   };
 }

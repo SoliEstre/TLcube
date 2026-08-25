@@ -163,11 +163,16 @@ test('배치 미리보기 안내는 도달 가능한 동작만 주장한다', ()
   //        **순서**를 바꿨다 — 이제 사진이 실제로 흰/검을 정한다.
   //   그래서 이 테스트가 지키는 계약은 «주장하지 마라» 에서 **«주장한 대로 동작하는지»**
   //   로 옮겨간다. 아래 doesNotMatch 목록은 그대로 둔다 — 일부는 지금 규칙에서 참인
-  //   문장이 됐지만, 정본 문구는 g935 한 곳이어야 한다. 같은 사실을 다른 문장으로
-  //   두 번 적으면 다음 규칙 변경 때 한쪽만 고쳐진다.
-  assert.match(INDEX, /id="backdropQuietNote"[^>]*data-i18n="g935"/);
+  //   문장이 됐지만, **같은 사실을 또 다른 문장으로 적으면** 다음 규칙 변경 때 한쪽만
+  //   고쳐진다. (정본은 g903·g904 둘이다: 원인 쪽 g903 «잰 밝기가 색도 정한다» ·
+  //    규칙 쪽 g904 «①②» . 2026-08-26 이전에는 여기에 g935 가 셋째로 있었다.)
+  // **의도적 갱신 (2026-08-26)** — g935(3줄 인라인 각주)가 은퇴하고 그 인과가
+  // g903(이 섹션 «?») 안으로 들어갔다. 계약은 그대로 «주장한 대로 동작하는지» 이고,
+  // 주장이 적힌 자리만 바뀐다. ⚠ 아래 deadClaims 는 **그대로 둔다** — 세 번째 문장이
+  // 생기는 것을 막는 게 그 목록의 일이고, 그 일은 이관과 무관하게 계속 필요하다.
+  assert.doesNotMatch(INDEX, /id="backdropQuietNote"/);
   assert.doesNotMatch(INDEX, /안전영역 옵션을 삽입할 곳 여건에 맞춰 자동 선택해 줍니다/);
-  assert.match(langBlock('ko'), /"g935": "\* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서/);
+  assert.match(langBlock('ko'), /"g903": "(?:[^"\\]|\\.)*잰 표면 밝기는 «안전영역» 의 «자동»·«고대비»/);
   const deadClaims = [
     /밝기는[^"]*흰\/검정[^"]*판단에 반영/,          // ko
     /brightness[^"]*feeds[^"]*colour choice/i,      // en
@@ -497,7 +502,25 @@ test('O/A 파인더 도움말은 그 섹션에 실재하는 것만 설명한다'
   // g906 을 공유하던 시절에는 O/A 섹션에 없는 «자동» 카드 설명이 정식 화면에 떴다.
   const finder = outerHtmlById(INDEX, 'finderSection');
   const finderKeys = [...finder.matchAll(/data-help="(g\d{3})"/g)].map((m) => m[1]);
-  assert.deepEqual(finderKeys, ['g907'], '#finderSection 의 도움말 키가 g907 하나가 아니다');
+  // **의도적 갱신 (2026-08-26)** — 목록이 하나에서 둘로 늘었다. 운영자 «두 줄 넘어가는
+  // 설명은 ?버튼으로» 로 내곽 자리의 3줄 힌트(g579)가 «?» 가 되면서 이 섹션 안에
+  // 두 번째 도움말이 생겼다.
+  // ⚠ 이 단언이 지키는 것은 «키가 하나» 가 아니라 **«그 섹션에 실재하는 것만 설명한다»**
+  //   다 (g906 을 공유하던 시절 O/A 화면에 없는 «자동» 카드 설명이 떴던 자리). 그래서
+  //   수를 늘리는 대신 **키마다 그 대상이 이 섹션 안에 있는지**를 같이 잰다 — 다음에
+  //   또 늘 때 «목록에 추가» 만 하고 지나가면 원래 막던 것을 놓친다.
+  const FINDER_HELP_OWNERS = {
+    g907: 'finderLegacyRow',
+    g571: 'finderDaehan',
+    g579: 'finderInnerZone',
+    g858: 'finderOuterZone',
+  };
+  assert.deepEqual(finderKeys, Object.keys(FINDER_HELP_OWNERS),
+    '#finderSection 의 도움말 키 목록이 바뀌었다 — 아래 소유자 표도 같이 갱신하라');
+  for (const [key, ownerId] of Object.entries(FINDER_HELP_OWNERS)) {
+    assert.ok(finder.includes('id="' + ownerId + '"'),
+      `${key} 가 설명하는 ${ownerId} 가 #finderSection 에 없다 — 없는 것을 설명한다`);
+  }
   assert.ok(!finder.includes('data-locator="auto"'), 'O/A 섹션에는 «자동» 카드가 없다');
   for (const lang of LANGS) {
     const body = new RegExp('"g907": "((?:[^"\\\\]|\\\\.)*)"').exec(langBlock(lang));

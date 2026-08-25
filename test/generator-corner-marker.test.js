@@ -41,10 +41,20 @@ test('① seat 구역 UI 와 배선이 있고 i18n 8언어 사전이 다 있다'
     INDEX.indexOf('<div id="finderSection"'),
     INDEX.indexOf('id="rotationGuidance"'),
   );
-  for (const id of ['finderInnerZone', 'innerSeatCards', 'innerSeatHint',
-    'finderOuterZone', 'outerSeatCards', 'outerSeatHint']) {
+  // **의도적 갱신 (2026-08-26)** — innerSeatHint 는 목록에서 빠졌다. 3줄짜리 g579 가
+  // «?»(help-dot)로 갔기 때문이다 (운영자 «두 줄 넘어가는 설명은 ?버튼으로»).
+  // 구역이 설명을 **갖고 있는가** 는 그대로 잰다 — 자리만 문단에서 버튼으로 옮겼다.
+  for (const id of ['finderInnerZone', 'innerSeatCards',
+    'finderOuterZone', 'outerSeatCards']) {
     assert.ok(finderSection.includes('id="' + id + '"'),
       id + ' 가 #finderSection 안에 없다');
+  }
+  // 두 구역은 **대칭**이어야 한다 — 한쪽만 «?» 면 서로 다른 종류의 컨트롤로 읽힌다.
+  // (처음엔 내곽만 옮겼다. 한국어에선 외곽 힌트가 2줄이라 규칙에 안 걸렸고,
+  //  8언어로 다시 재서야 독일어 3줄이 드러났다 — 한 언어는 계약이 아니다.)
+  for (const key of ['g579', 'g858']) {
+    assert.ok(finderSection.includes('data-help="' + key + '"'),
+      `자리 설명(${key})이 #finderSection 안에 없다 — 문단도 «?» 도 없으면 설명이 사라진 것이다`);
   }
   // 카드는 zoneCards() 유도로 지연 생성된다 — 빌더와 위임 배선이 있는가.
   assert.match(INDEX, /function ensureSeatCards\(\)/);

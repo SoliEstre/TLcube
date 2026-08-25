@@ -119,7 +119,9 @@ test('undo/redo 는 순수 모듈 위임 + 스트로크 코얼레싱 + 섹션 �
   assert.match(INDEX, /const shortcut = classifyHistoryShortcut\(ev\);/);
   assert.doesNotMatch(INDEX, /window\.addEventListener\(\s*['"]keydown['"]/);
   // 안내 노출 + 불가 시 비활성.
-  assert.match(INDEX, /data-i18n="g557"/);
+  // **의도적 갱신 (2026-08-26)**: 단축키 안내(g557)는 3줄이라 «?»(help-dot)로 갔다
+  // (운영자 «두 줄 넘어가는 설명은 ?버튼으로»). 안내가 **있는가** 는 그대로 잰다.
+  assert.match(INDEX, /class="help-dot" data-help="g557"/);
   assert.match(INDEX, /els\.yCellEditorUndo\.disabled = !canUndoHistory\(/);
   assert.match(INDEX, /els\.yCellEditorRedo\.disabled = !canRedoHistory\(/);
 });

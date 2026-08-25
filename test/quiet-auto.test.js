@@ -225,15 +225,22 @@ test('되먹임 재렌더에 상한이 있다 (표면 휘도 ↔ 안전영역 �
   assert.match(INDEX, /quietColorAtRender = choice\.color;/);
 });
 
-test('g935·g904 가 «사진이 안전영역 색을 정한다» 는 사실을 여덟 언어로 말한다', () => {
+test('g903·g904 가 «사진이 안전영역 색을 정한다» 는 사실을 여덟 언어로 말한다', () => {
   // 두 문구는 gen-ui 픽스에서 «반영되지 않아요» 로 좁혀졌던 자리다. 이제 반영되므로
   // 옛 부정 문구가 남아 있으면 그게 거짓말이 된다.
   assert.equal(INDEX.includes('아래 «안전영역» 의 옵션·색에도 반영되지 않아요'), false);
   assert.equal(INDEX.includes('nor the Safe area option or colour below'), false);
   assert.equal(INDEX.includes('「安全領域」のオプション・色にも反映されません'), false);
-  assert.match(INDEX, /"g935": "\* 넣은 표면 이미지는 코드 둘레의 표면 밝기를 재서/);
-  assert.match(INDEX, /"g935": "\* The surface photo measures the brightness around the code/);
-  assert.match(INDEX, /"g935": "\* 入れた表面画像はコード周囲の面の明るさを測り/);
+  // **의도적 갱신 (2026-08-26)** — g935 는 은퇴했다 (운영자 «두 줄 넘어가는 설명은
+  // ?버튼으로»). 3줄 인라인 각주였고, 같은 사실이 이미 g904(규칙 ①②)와 g991(동적
+  // 후행구)에 있었다. 앞머리 `*` 는 가리키는 대상이 없는 각주였다.
+  // 재는 것은 그대로 — «사진이 안전영역 색을 정한다» 가 화면에서 말해지는가 — 이고,
+  // 자리만 g935 → g903(이 섹션 «?») 마지막 줄 앞으로 옮겼다.
+  assert.equal(INDEX.includes('"g935"'), false,
+    'g935 가 되살아났다 — 같은 사실의 세 번째 문장이 생기면 규칙 변경 때 한쪽만 고쳐진다');
+  assert.match(INDEX, /잰 표면 밝기는 «안전영역» 의 «자동»·«고대비» 가 흰색과 검정 중/);
+  assert.match(INDEX, /That surface reading also decides whether Safe area’s Auto and High contrast/);
+  assert.match(INDEX, /測った面の明るさは、「安全領域」の「自動」「高コントラスト」が白と黒のどちらを/);
   // g904 «언제나 이 한 단계로 정해져요» 도 더는 사실이 아니다.
   assert.equal(INDEX.includes('언제나 이 한 단계로 정해져요'), false);
   assert.equal(INDEX.includes('that single step always settles it'), false);
@@ -241,7 +248,7 @@ test('g935·g904 가 «사진이 안전영역 색을 정한다» 는 사실을 �
   // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 사전이 ko/en/ja 3언어에서
   //   ko/en/ja/fr/it/de/es/pt 8언어로 넓어졌다. 재는 것은 그대로 —
   //   «이 키가 모든 언어에 있는가» — 이고 기대값만 언어 수를 따라간다.
-  for (const key of ['g904', 'g935', 'g991']) {
+  for (const key of ['g904', 'g903', 'g991']) {
     assert.equal(INDEX.match(new RegExp(`"${key}":`, 'g'))?.length, 8, `${key} 8언어`);
   }
 });
