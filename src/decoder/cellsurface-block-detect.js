@@ -60,8 +60,7 @@ import { CORNER_UNIT_OFFSETS } from '../hexgrid.js';
 import { faceBasis, moduleCenter } from '../ygrid.js';
 import {
   CENTER_QR_SLOT_CELLS,
-  V0T_BLOCKS, V0TR_BLOCKS, V0TRQ_BLOCKS, V0TRY_BLOCKS, V0TY_BLOCKS,
-  V0W_BLOCKS, V0W2_BLOCKS, V0WQ_BLOCKS, V0WY_BLOCKS, V0XQ_BLOCKS,
+  blocksCellSurfaceFinalForN,
   centerQrFinderCoreCells, centerQrQuietFrameCells, centerQrSlotCellsFor,
   centerQrSlotOriginFor, centerQrSlotPlacementFor,
   locatorCellsCellSurfaceFinal,
@@ -1239,8 +1238,9 @@ function assertCentrePatchFits(patch) {
 
 function patchesForV0xq(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0xq');
-  const inCorner = (cell) => cell.i <= V0XQ_BLOCKS.CORNER.iMax && cell.j >= V0XQ_BLOCKS.CORNER.jMin;
-  const inMarker = (cell) => cell.i >= V0XQ_BLOCKS.MARKER.iMin && cell.j <= V0XQ_BLOCKS.MARKER.jMax;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0xq');
+  const inCorner = (cell) => cell.i <= blocks.CORNER.iMax && cell.j >= blocks.CORNER.jMin;
+  const inMarker = (cell) => cell.i >= blocks.MARKER.iMin && cell.j <= blocks.MARKER.jMax;
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
   const markers = YFACE_LIST.map((face) => buildPatch(cells, face, inMarker))
     .filter((patch) => patch !== null);
@@ -1266,9 +1266,10 @@ function patchesForV0xq(n) {
  */
 function patchesForV0w(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0w');
-  const inCentre = (cell) => cell.i <= V0W_BLOCKS.NW.iMax && cell.j <= V0W_BLOCKS.NW.jMax;
-  const inCorner = (cell) => cell.i <= V0W_BLOCKS.NE.iMax && cell.j >= V0W_BLOCKS.NE.jMin;
-  const inPhase = (cell) => cell.i >= V0W_BLOCKS.SE.iMin && cell.j >= V0W_BLOCKS.SE.jMin;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0w');
+  const inCentre = (cell) => cell.i <= blocks.NW.iMax && cell.j <= blocks.NW.jMax;
+  const inCorner = (cell) => cell.i <= blocks.NE.iMax && cell.j >= blocks.NE.jMin;
+  const inPhase = (cell) => cell.i >= blocks.SE.iMin && cell.j >= blocks.SE.jMin;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
   const phase = YFACE_LIST.map((face) => buildPatch(cells, face, inPhase))
@@ -1292,9 +1293,10 @@ function patchesForV0w(n) {
  */
 function patchesForV0w2(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0w2');
-  const inCentre = (cell) => cell.i <= V0W2_BLOCKS.NW.iMax && cell.j <= V0W2_BLOCKS.NW.jMax;
-  const inCorner = (cell) => cell.i <= V0W2_BLOCKS.NE.iMax && cell.j >= V0W2_BLOCKS.NE.jMin;
-  const inMarker = (cell) => cell.i >= V0W2_BLOCKS.SE.iMin && cell.j >= V0W2_BLOCKS.SE.jMin;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0w2');
+  const inCentre = (cell) => cell.i <= blocks.NW.iMax && cell.j <= blocks.NW.jMax;
+  const inCorner = (cell) => cell.i <= blocks.NE.iMax && cell.j >= blocks.NE.jMin;
+  const inMarker = (cell) => cell.i >= blocks.SE.iMin && cell.j >= blocks.SE.jMin;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
   const markers = YFACE_LIST.map((face) => buildPatch(cells, face, inMarker))
@@ -1317,8 +1319,9 @@ function patchesForV0w2(n) {
  */
 function patchesForV0wq(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0wq');
-  const inCorner = (cell) => cell.i <= V0WQ_BLOCKS.CORNER.iMax && cell.j >= V0WQ_BLOCKS.CORNER.jMin;
-  const inMarker = (cell) => cell.i >= V0WQ_BLOCKS.MARKER.iMin && cell.j >= V0WQ_BLOCKS.MARKER.jMin;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0wq');
+  const inCorner = (cell) => cell.i <= blocks.CORNER.iMax && cell.j >= blocks.CORNER.jMin;
+  const inMarker = (cell) => cell.i >= blocks.MARKER.iMin && cell.j >= blocks.MARKER.jMin;
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
   const markers = YFACE_LIST.map((face) => buildPatch(cells, face, inMarker))
     .filter((patch) => patch !== null);
@@ -1347,9 +1350,10 @@ function patchesForV0wq(n) {
  */
 function patchesForV0wy(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0wy');
-  const inCentre = (cell) => cell.i <= V0WY_BLOCKS.NW.iMax && cell.j <= V0WY_BLOCKS.NW.jMax;
-  const inCorner = (cell) => cell.i <= V0WY_BLOCKS.NE.iMax && cell.j >= V0WY_BLOCKS.NE.jMin;
-  const inMarker = (cell) => cell.i >= V0WY_BLOCKS.SW.iMin && cell.j <= V0WY_BLOCKS.SW.jMax;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0wy');
+  const inCentre = (cell) => cell.i <= blocks.NW.iMax && cell.j <= blocks.NW.jMax;
+  const inCorner = (cell) => cell.i <= blocks.NE.iMax && cell.j >= blocks.NE.jMin;
+  const inMarker = (cell) => cell.i >= blocks.SW.iMin && cell.j <= blocks.SW.jMax;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
   const markers = YFACE_LIST.map((face) => buildPatch(cells, face, inMarker))
@@ -1378,15 +1382,16 @@ function patchesForV0wy(n) {
  */
 function patchesForV0t(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0t');
-  const inCentre = (cell) => cell.i <= V0T_BLOCKS.NW.iMax && cell.j <= V0T_BLOCKS.NW.jMax;
-  const inCorner = (cell) => cell.i <= V0T_BLOCKS.NE.iMax && cell.j >= V0T_BLOCKS.NE.jMin;
-  const inA = (cell) => cell.i >= V0T_BLOCKS.A.iMin && cell.i <= V0T_BLOCKS.A.iMax
-    && cell.j >= V0T_BLOCKS.A.jMin && cell.j <= V0T_BLOCKS.A.jMax;
-  const inArm = (cell) => cell.i <= V0T_BLOCKS.ARM.iMax && cell.j >= V0T_BLOCKS.ARM.jMin
-    && cell.j <= V0T_BLOCKS.ARM.jMax;
-  const inW = (cell) => cell.i >= V0T_BLOCKS.W.iMin && cell.i <= V0T_BLOCKS.W.iMax
-    && cell.j <= V0T_BLOCKS.W.jMax;
-  const inPhase = (cell) => cell.i >= V0T_BLOCKS.SE.iMin && cell.j >= V0T_BLOCKS.SE.jMin;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0t');
+  const inCentre = (cell) => cell.i <= blocks.NW.iMax && cell.j <= blocks.NW.jMax;
+  const inCorner = (cell) => cell.i <= blocks.NE.iMax && cell.j >= blocks.NE.jMin;
+  const inA = (cell) => cell.i >= blocks.A.iMin && cell.i <= blocks.A.iMax
+    && cell.j >= blocks.A.jMin && cell.j <= blocks.A.jMax;
+  const inArm = (cell) => cell.i <= blocks.ARM.iMax && cell.j >= blocks.ARM.jMin
+    && cell.j <= blocks.ARM.jMax;
+  const inW = (cell) => cell.i >= blocks.W.iMin && cell.i <= blocks.W.iMax
+    && cell.j <= blocks.W.jMax;
+  const inPhase = (cell) => cell.i >= blocks.SE.iMin && cell.j >= blocks.SE.jMin;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
   const extras = [inA, inArm, inW, inPhase]
@@ -1407,14 +1412,15 @@ function patchesForV0t(n) {
  */
 function patchesForV0ty(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0ty');
-  const inCentre = (cell) => cell.i <= V0TY_BLOCKS.NW.iMax && cell.j <= V0TY_BLOCKS.NW.jMax;
-  const inCorner = (cell) => cell.i <= V0TY_BLOCKS.NE.iMax && cell.j >= V0TY_BLOCKS.NE.jMin;
-  const inA = (cell) => cell.i >= V0TY_BLOCKS.A.iMin && cell.i <= V0TY_BLOCKS.A.iMax
-    && cell.j >= V0TY_BLOCKS.A.jMin && cell.j <= V0TY_BLOCKS.A.jMax;
-  const inArm = (cell) => cell.i <= V0TY_BLOCKS.ARM.iMax && cell.j >= V0TY_BLOCKS.ARM.jMin
-    && cell.j <= V0TY_BLOCKS.ARM.jMax;
-  const inW = (cell) => cell.i >= V0TY_BLOCKS.W.iMin && cell.i <= V0TY_BLOCKS.W.iMax
-    && cell.j <= V0TY_BLOCKS.W.jMax;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0ty');
+  const inCentre = (cell) => cell.i <= blocks.NW.iMax && cell.j <= blocks.NW.jMax;
+  const inCorner = (cell) => cell.i <= blocks.NE.iMax && cell.j >= blocks.NE.jMin;
+  const inA = (cell) => cell.i >= blocks.A.iMin && cell.i <= blocks.A.iMax
+    && cell.j >= blocks.A.jMin && cell.j <= blocks.A.jMax;
+  const inArm = (cell) => cell.i <= blocks.ARM.iMax && cell.j >= blocks.ARM.jMin
+    && cell.j <= blocks.ARM.jMax;
+  const inW = (cell) => cell.i >= blocks.W.iMin && cell.i <= blocks.W.iMax
+    && cell.j <= blocks.W.jMax;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inCorner));
   const extras = [inA, inArm, inW]
@@ -1457,17 +1463,18 @@ function patchesForV0ty(n) {
  */
 function patchesForV0tr(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0tr');
-  const inCentre = (cell) => cell.i <= V0TR_BLOCKS.NW.iMax && cell.j <= V0TR_BLOCKS.NW.jMax;
-  const inInner = (cell) => cell.i >= V0TR_BLOCKS.NE_INNER.iMin
-    && cell.i <= V0TR_BLOCKS.NE_INNER.iMax
-    && cell.j >= V0TR_BLOCKS.NE_INNER.jMin && cell.j <= V0TR_BLOCKS.NE_INNER.jMax;
-  const inOuter = (cell) => cell.i <= V0TR_BLOCKS.NE_OUTER.iMax
-    && cell.j >= V0TR_BLOCKS.NE_OUTER.jMin;
-  const inPhase = (cell) => cell.i >= V0TR_BLOCKS.SE.iMin && cell.j >= V0TR_BLOCKS.SE.jMin;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0tr');
+  const inCentre = (cell) => cell.i <= blocks.NW.iMax && cell.j <= blocks.NW.jMax;
+  const inInner = (cell) => cell.i >= blocks.NE_INNER.iMin
+    && cell.i <= blocks.NE_INNER.iMax
+    && cell.j >= blocks.NE_INNER.jMin && cell.j <= blocks.NE_INNER.jMax;
+  const inOuter = (cell) => cell.i <= blocks.NE_OUTER.iMax
+    && cell.j >= blocks.NE_OUTER.jMin;
+  const inPhase = (cell) => cell.i >= blocks.SE.iMin && cell.j >= blocks.SE.jMin;
   // A 블록 (2026-08-18 편입) — v0T 와 같은 자리·같은 배열. 정련의 방향 판별자다.
   // 빠뜨리면 정본에는 들어왔는데 정련이 안 쓰는 «반쪽 편입» 이 된다.
-  const inA = (cell) => cell.i >= V0TR_BLOCKS.A.iMin && cell.i <= V0TR_BLOCKS.A.iMax
-    && cell.j >= V0TR_BLOCKS.A.jMin && cell.j <= V0TR_BLOCKS.A.jMax;
+  const inA = (cell) => cell.i >= blocks.A.iMin && cell.i <= blocks.A.iMax
+    && cell.j >= blocks.A.jMin && cell.j <= blocks.A.jMax;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inOuter));
   const extras = [inA, inInner, inPhase]
@@ -1493,12 +1500,13 @@ function patchesForV0tr(n) {
  */
 function patchesForV0trq(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0trq');
-  const inInner = (cell) => cell.i >= V0TRQ_BLOCKS.NE_INNER.iMin
-    && cell.i <= V0TRQ_BLOCKS.NE_INNER.iMax
-    && cell.j >= V0TRQ_BLOCKS.NE_INNER.jMin && cell.j <= V0TRQ_BLOCKS.NE_INNER.jMax;
-  const inOuter = (cell) => cell.i <= V0TRQ_BLOCKS.NE_OUTER.iMax
-    && cell.j >= V0TRQ_BLOCKS.NE_OUTER.jMin;
-  const inPhase = (cell) => cell.i >= V0TRQ_BLOCKS.SE.iMin && cell.j >= V0TRQ_BLOCKS.SE.jMin;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0trq');
+  const inInner = (cell) => cell.i >= blocks.NE_INNER.iMin
+    && cell.i <= blocks.NE_INNER.iMax
+    && cell.j >= blocks.NE_INNER.jMin && cell.j <= blocks.NE_INNER.jMax;
+  const inOuter = (cell) => cell.i <= blocks.NE_OUTER.iMax
+    && cell.j >= blocks.NE_OUTER.jMin;
+  const inPhase = (cell) => cell.i >= blocks.SE.iMin && cell.j >= blocks.SE.jMin;
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inOuter));
   const extras = [inInner, inPhase]
     .flatMap((filter) => YFACE_LIST.map((face) => buildPatch(cells, face, filter)))
@@ -1531,14 +1539,15 @@ function patchesForV0trq(n) {
  */
 function patchesForV0try(n) {
   const cells = locatorCellsCellSurfaceFinal(n, 'v0try');
-  const inCentre = (cell) => cell.i <= V0TRY_BLOCKS.NW.iMax && cell.j <= V0TRY_BLOCKS.NW.jMax;
-  const inA = (cell) => cell.i >= V0TRY_BLOCKS.A.iMin && cell.i <= V0TRY_BLOCKS.A.iMax
-    && cell.j >= V0TRY_BLOCKS.A.jMin && cell.j <= V0TRY_BLOCKS.A.jMax;
-  const inInner = (cell) => cell.i >= V0TRY_BLOCKS.NE_INNER.iMin
-    && cell.i <= V0TRY_BLOCKS.NE_INNER.iMax
-    && cell.j >= V0TRY_BLOCKS.NE_INNER.jMin && cell.j <= V0TRY_BLOCKS.NE_INNER.jMax;
-  const inOuter = (cell) => cell.i <= V0TRY_BLOCKS.NE_OUTER.iMax
-    && cell.j >= V0TRY_BLOCKS.NE_OUTER.jMin;
+  const blocks = blocksCellSurfaceFinalForN(n, 'v0try');
+  const inCentre = (cell) => cell.i <= blocks.NW.iMax && cell.j <= blocks.NW.jMax;
+  const inA = (cell) => cell.i >= blocks.A.iMin && cell.i <= blocks.A.iMax
+    && cell.j >= blocks.A.jMin && cell.j <= blocks.A.jMax;
+  const inInner = (cell) => cell.i >= blocks.NE_INNER.iMin
+    && cell.i <= blocks.NE_INNER.iMax
+    && cell.j >= blocks.NE_INNER.jMin && cell.j <= blocks.NE_INNER.jMax;
+  const inOuter = (cell) => cell.i <= blocks.NE_OUTER.iMax
+    && cell.j >= blocks.NE_OUTER.jMin;
   const centreParts = YFACE_LIST.map((face) => buildPatch(cells, face, inCentre));
   const corners = YFACE_LIST.map((face) => buildPatch(cells, face, inOuter));
   const extras = [inA, inInner]

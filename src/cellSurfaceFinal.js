@@ -838,6 +838,33 @@ export function hasLegacyFormatWire(id) {
 const FACES = Object.freeze(['T', 'L', 'R']);
 
 /**
+ * v1r2 이후 셀 표면 파인더 정본을 처음 계측한 면 한 변. 이 값은 지원 버전이 아니라
+ * **inset 원본 좌표계**다. 실제 좌표는 아래 `farEdgeCell` 로 매 n 에서 다시 낸다.
+ * v0(n=13)은 운영자 지정 예외라 이 기준을 쓰지 않는다.
+ */
+export const CELL_SURFACE_EDGE_ANCHOR_BASE_N = 21;
+
+function assertEdgeAnchorN(n) {
+  if (!Number.isSafeInteger(n) || n < CELL_SURFACE_EDGE_ANCHOR_BASE_N) {
+    throw new RangeError(
+      '면 모서리 기준 파인더 n 은 '
+      + CELL_SURFACE_EDGE_ANCHOR_BASE_N + ' 이상의 안전한 정수여야 한다: ' + n,
+    );
+  }
+  return n;
+}
+
+/** 높은 쪽 변의 마지막 셀(n−1)에서 `inset`칸 안쪽인 좌표. */
+function farEdgeCell(n, inset) {
+  return assertEdgeAnchorN(n) - 1 - inset;
+}
+
+/** n=21 원본 좌표를 높은 쪽 변에서 같은 inset인 좌표로 옮긴다. */
+function moveFarEdgeCoordinate(value, n) {
+  return farEdgeCell(n, CELL_SURFACE_EDGE_ANCHOR_BASE_N - 1 - value);
+}
+
+/**
  * v0 정본 30셀 [i, j, T, L, R] — cellsurface-v0-editor.json (사용자 제공 2026-08-15)
  * 컴팩트 전사. 네 코너 블록: NW 3×3 · NE 2×3 · SW 3×2 · SE 3×3 + 팔 (n=13 고정).
  */
@@ -874,7 +901,8 @@ const V2R2_FAR_BASE_CELLS = Object.freeze([
 
 /**
  * v1r2 정본 80셀 [i, j, T, L, R] — cellsurface-v1r2-editor.json (사용자 제공 2026-08-15)
- * 컴팩트 전사, n=21 고정. 파인더 점유 = **toneOverrides 가 닿는 (i,j) 전체**다
+ * 컴팩트 전사. 이 배열은 n=21 **톤 원본**이고 실제 좌표는 면 모서리 inset으로 인스턴스화한다.
+ * 파인더 점유 = **toneOverrides 가 닿는 (i,j) 전체**다
  * (userNonData 62 만 세면 편집기 고정 배치 위에 칠한 18 셀이 빠진다 — c0e7321 계약).
  * 네 코너 블록: NW 5×5(25) · SE 5×5(25) · NE 계단(15) · SW 계단(15) — 코너별 비대칭.
  * NW 는 세 면의 원점이 모여 렌더 **중심**이 되고, SE 는 면별 먼 꼭짓점이다.
@@ -898,7 +926,8 @@ const V1R2_CELLS = Object.freeze([
 
 /**
  * v0X 정본 65셀 [i, j, T, L, R] — cellsurface-v0x-editor.json
- * (운영자 제공 2026-08-16 · **정규화 2026-08-16 승인**) 컴팩트 전사, n=21 고정.
+ * (운영자 제공 2026-08-16 · **정규화 2026-08-16 승인**) 컴팩트 전사. 이 배열은
+ * n=21 **톤 원본**이고 실제 좌표는 면 모서리 inset으로 인스턴스화한다.
  * 정본 painted 는 **toneOverrides 가 닿는 (i,j) 전체**다
  * (userNonData 62 + 레거시 고정 위치 위 도색 3: (0,3)·(14,20)·(19,19)).
  * 정규화본은 `toneOverrides` 195 항목 = 65셀 × 3면을 **전부** 실으므로 DEFAULT_TONE
@@ -934,16 +963,22 @@ const V0X_CELLS = Object.freeze([
 ]);
 
 /**
- * v0X 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다.
- * SINGLE 은 (14,20) 단독 셀이라 블록이 아니다 (패치로 쓸 수 없다 — Pearson 최소 6점).
+ * v0X 블록 범위 — 낮은 변은 절대 inset, 높은 변은 n−1에서의 inset으로 정의한다.
+ * SINGLE 은 단독 셀이라 블록이 아니다 (패치로 쓸 수 없다 — Pearson 최소 6점).
  */
-export const V0X_BLOCKS = Object.freeze({
-  NW: Object.freeze({ iMax: 3, jMax: 3 }),
-  NE: Object.freeze({ iMax: 1, jMin: 18 }),
-  SW: Object.freeze({ iMin: 18, jMax: 1 }),
-  SE: Object.freeze({ iMin: 15, jMin: 15 }),
-  SINGLE: Object.freeze({ i: 14, j: 20 }),
-});
+function v0xBlocksForN(n) {
+  assertEdgeAnchorN(n);
+  return Object.freeze({
+    NW: Object.freeze({ iMax: 3, jMax: 3 }),
+    NE: Object.freeze({ iMax: 1, jMin: farEdgeCell(n, 2) }),
+    SW: Object.freeze({ iMin: farEdgeCell(n, 2), jMax: 1 }),
+    SE: Object.freeze({ iMin: farEdgeCell(n, 5), jMin: farEdgeCell(n, 5) }),
+    SINGLE: Object.freeze({ i: farEdgeCell(n, 6), j: farEdgeCell(n, 0) }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. 새 배치는 `blocksCellSurfaceFinalForN` 을 쓴다. */
+export const V0X_BLOCKS = v0xBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0xq (중앙 QR 변형 × v0X 문법, 2026-08-17 운영자 분기 확정) ─────────────
@@ -995,7 +1030,8 @@ export const V0X_BLOCKS = Object.freeze({
  * 그래서 v0xq 정본에는 **mid 면이 0개**다 — v0X 를 포함한 전 정본과 같은 규칙이고,
  * 톤 가드 0/2 를 그대로 쓴다 (`buildLocatorCells` + 자기검증 ④ 이중 방벽).
  */
-const V0XQ_CORNER_SHIFT = 15;
+/** n=21 톤 원본에서 v0X SE를 NE로 옮기는 거리. 일반 n 좌표는 edge-anchor가 다시 낸다. */
+const V0XQ_BASE_CORNER_SHIFT = 15;
 
 /** mid(1) 면을 나머지 두 면의 공통 톤으로 정규화한다. 두 면이 다르면 throw. */
 function normalizeMidFaces(i, j, T, L, R) {
@@ -1020,7 +1056,7 @@ const V0XQ_CORNER_CELLS = Object.freeze(V0X_CELLS
   .filter(([i, j]) => i >= V0X_BLOCKS.SE.iMin && j >= V0X_BLOCKS.SE.jMin)
   .map(([i, j, T, L, R]) => {
     const [nT, nL, nR] = normalizeMidFaces(i, j, T, L, R);
-    return Object.freeze([i - V0XQ_CORNER_SHIFT, j, nT, nL, nR]);
+    return Object.freeze([i - V0XQ_BASE_CORNER_SHIFT, j, nT, nL, nR]);
   }));
 
 /** v0X SW 위상 마커 — 좌표·톤 **그대로** 재사용 (같은 정본 배열에서 필터). */
@@ -1251,23 +1287,33 @@ function slotCellsFor(id, n) {
   return Object.freeze(cells);
 }
 
-/** v0xq 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V0XQ_BLOCKS = Object.freeze({
-  /** 3코너 동심 사각 (NE 사분면) — T 좌상 · R 우상 · L 하단. */
-  CORNER: Object.freeze({ iMax: 5, jMin: 15 }),
-  /** 위상 마커 (SW 사분면) — T 우상 · L 좌상 · R 하단. */
-  MARKER: Object.freeze({ iMin: 18, jMax: 1 }),
-  /** 중앙 QR 슬롯 (NW 사분면). */
-  SLOT: Object.freeze({ iMax: CENTER_QR_SLOT_CELLS - 1, jMax: CENTER_QR_SLOT_CELLS - 1 }),
-});
+/** v0xq 블록 범위 — 로케이터 패치·검출기가 같은 n 종속 정의를 쓴다. */
+function v0xqBlocksForN(n) {
+  assertEdgeAnchorN(n);
+  return Object.freeze({
+    /** 3코너 동심 사각 (NE 사분면) — T 좌상 · R 우상 · L 하단. */
+    CORNER: Object.freeze({ iMax: 5, jMin: farEdgeCell(n, 5) }),
+    /** 위상 마커 (SW 사분면) — T 우상 · L 좌상 · R 하단. */
+    MARKER: Object.freeze({ iMin: farEdgeCell(n, 2), jMax: 1 }),
+    /** 중앙 QR 슬롯 (NW 사분면). */
+    SLOT: Object.freeze({ iMax: CENTER_QR_SLOT_CELLS - 1, jMax: CENTER_QR_SLOT_CELLS - 1 }),
+  });
+}
 
-/** v1r2 네 코너 블록의 셀 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V1R2_BLOCKS = Object.freeze({
-  NW: Object.freeze({ iMax: 4, jMax: 4 }),
-  NE: Object.freeze({ iMax: 3, jMin: 16 }),
-  SW: Object.freeze({ iMin: 16, jMax: 3 }),
-  SE: Object.freeze({ iMin: 16, jMin: 16 }),
-});
+/** v1r2 네 코너 블록의 셀 범위 — 네 변에서의 inset으로만 정의한다. */
+function v1r2BlocksForN(n) {
+  assertEdgeAnchorN(n);
+  return Object.freeze({
+    NW: Object.freeze({ iMax: 4, jMax: 4 }),
+    NE: Object.freeze({ iMax: 3, jMin: farEdgeCell(n, 4) }),
+    SW: Object.freeze({ iMin: farEdgeCell(n, 4), jMax: 3 }),
+    SE: Object.freeze({ iMin: farEdgeCell(n, 4), jMin: farEdgeCell(n, 4) }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0XQ_BLOCKS = v0xqBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
+export const V1R2_BLOCKS = v1r2BlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * v2r2 중앙 블록 A = **v1r2 NW 5×5 와 같은 정본 공유** (2026-08-16 in-place 개정).
@@ -1304,11 +1350,11 @@ const V2R2_CENTER_CELLS = Object.freeze(V1R2_CELLS.filter(
  * 두 반경 차 1.30셀은 `ANCHOR_SNAP_CELLS`(3.2) 안이라 **거리로는 못 가른다** —
  * 가르는 것은 패치 Pearson 과 CS 게이트다 (`cellsurface-block-detect.js` §v0W).
  */
-const V0W_N = 21;
 /** v0 정본의 먼 코너 블록 하한 (n=13 캔버스) — `blockLimitsFor(13).farLimit` 와 같은 값. */
 const V0_FAR_MIN = 10;
 const V0_BASE_N = 13;
-const V0W_FAR_SHIFT = V0W_N - V0_BASE_N;
+/** n=21 톤 원본을 만들 때만 쓰는 이동량. 일반 n 좌표는 edge-anchor 인스턴스가 낸다. */
+const V0W_BASE_FAR_SHIFT = CELL_SURFACE_EDGE_ANCHOR_BASE_N - V0_BASE_N;
 
 /**
  * K3 불스아이 중앙 정본. `V2R2_CENTER_CELLS` 와 **같은 참조**다 — 이름을 하나 더 두는
@@ -1321,7 +1367,7 @@ const K3_CENTRE_CELLS = V2R2_CENTER_CELLS;
 const V0W_PHASE_CELLS = Object.freeze(V0_CELLS
   .filter(([i, j]) => i >= V0_FAR_MIN && j >= V0_FAR_MIN)
   .map(([i, j, T, L, R]) =>
-    Object.freeze([i + V0W_FAR_SHIFT, j + V0W_FAR_SHIFT, T, L, R])));
+    Object.freeze([i + V0W_BASE_FAR_SHIFT, j + V0W_BASE_FAR_SHIFT, T, L, R])));
 
 const V0W_CELLS = Object.freeze([
   ...K3_CENTRE_CELLS,
@@ -1329,15 +1375,22 @@ const V0W_CELLS = Object.freeze([
   ...V0W_PHASE_CELLS,
 ]);
 
-/** v0W 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V0W_BLOCKS = Object.freeze({
-  /** K3 불스아이 중앙 (NW 사분면). */
-  NW: Object.freeze({ iMax: V1R2_BLOCKS.NW.iMax, jMax: V1R2_BLOCKS.NW.jMax }),
-  /** 3면 동일 동심 사각 (NE 사분면) — 심 꼭짓점 셋. */
-  NE: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
-  /** 위상 마커 (SE 사분면) — v0 코너 블록. T=L·R≠ 비대칭. */
-  SE: Object.freeze({ iMin: V0_FAR_MIN + V0W_FAR_SHIFT, jMin: V0_FAR_MIN + V0W_FAR_SHIFT }),
-});
+/** v0W 블록 범위 — 로케이터 패치·검출기가 같은 n 종속 정의를 쓴다. */
+function v0wBlocksForN(n) {
+  const v1r2 = v1r2BlocksForN(n);
+  const v0xq = v0xqBlocksForN(n);
+  return Object.freeze({
+    /** K3 불스아이 중앙 (NW 사분면). */
+    NW: Object.freeze({ iMax: v1r2.NW.iMax, jMax: v1r2.NW.jMax }),
+    /** 3면 동일 동심 사각 (NE 사분면) — 심 꼭짓점 셋. */
+    NE: Object.freeze({ iMax: v0xq.CORNER.iMax, jMin: v0xq.CORNER.jMin }),
+    /** 위상 마커 (SE 사분면) — v0 코너 블록. T=L·R≠ 비대칭. */
+    SE: Object.freeze({ iMin: farEdgeCell(n, 2), jMin: farEdgeCell(n, 2) }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0W_BLOCKS = v0wBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0WQ (v0W 파생 ① — 중앙 QR 슬롯, 2026-08-16 운영자 지시) ────────────────
@@ -1375,17 +1428,24 @@ const V0WQ_CELLS = Object.freeze([
   ...V0W_PHASE_CELLS,
 ]);
 
-/** v0WQ 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V0WQ_BLOCKS = Object.freeze({
-  /** 3면 동일 동심 사각 (NE 사분면) — v0xq 와 같은 블록. */
-  CORNER: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
-  /** 위상 마커 (SE 사분면) — v0W 와 같은 블록. */
-  MARKER: Object.freeze({ iMin: V0W_BLOCKS.SE.iMin, jMin: V0W_BLOCKS.SE.jMin }),
-  /** 중앙 QR 슬롯 (NW 사분면) — v0xq 보다 한 칸 작다 (§CENTER_QR_SLOT_CELLS_V0WQ). */
-  SLOT: Object.freeze({
-    iMax: CENTER_QR_SLOT_CELLS_V0WQ - 1, jMax: CENTER_QR_SLOT_CELLS_V0WQ - 1,
-  }),
-});
+/** v0WQ 블록 범위 — 로케이터 패치·검출기가 같은 n 종속 정의를 쓴다. */
+function v0wqBlocksForN(n) {
+  const v0xq = v0xqBlocksForN(n);
+  const v0w = v0wBlocksForN(n);
+  return Object.freeze({
+    /** 3면 동일 동심 사각 (NE 사분면) — v0xq 와 같은 블록. */
+    CORNER: Object.freeze({ iMax: v0xq.CORNER.iMax, jMin: v0xq.CORNER.jMin }),
+    /** 위상 마커 (SE 사분면) — v0W 와 같은 블록. */
+    MARKER: Object.freeze({ iMin: v0w.SE.iMin, jMin: v0w.SE.jMin }),
+    /** 중앙 QR 슬롯 (NW 사분면) — v0xq 보다 한 칸 작다 (§CENTER_QR_SLOT_CELLS_V0WQ). */
+    SLOT: Object.freeze({
+      iMax: CENTER_QR_SLOT_CELLS_V0WQ - 1, jMax: CENTER_QR_SLOT_CELLS_V0WQ - 1,
+    }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0WQ_BLOCKS = v0wqBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0W2 (v0W 파생 ② — 운영자 신설 2026-08-17, 실기기 판정 라운드) ──────────
@@ -1425,8 +1485,6 @@ export const V0WQ_BLOCKS = Object.freeze({
  *
  * 회계: 441 − 97 − 12 − 18 = **314** (v0W 341 보다 27 적다 — SE 가 27셀 커진 값 그대로).
  */
-const V0W2_N = 21;
-
 /** 세 면 중 다수 톤. 톤이 0|2 뿐이라 «둘 이상» 은 항상 존재한다 (mid 를 만들지 않는다). */
 function majorityTone(T, L, R) {
   if (T === L || T === R) return T;
@@ -1479,15 +1537,23 @@ const V0W2_CELLS = Object.freeze([
   ...V0W2_MARKER_CELLS,
 ]);
 
-/** v0W2 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V0W2_BLOCKS = Object.freeze({
-  /** K3 불스아이 중앙 (NW 사분면) — 3면 대칭화본. */
-  NW: Object.freeze({ iMax: V1R2_BLOCKS.NW.iMax, jMax: V1R2_BLOCKS.NW.jMax }),
-  /** 3면 동일 동심 사각 (NE 사분면) — v0W·v0WQ 와 같은 블록. */
-  NE: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
-  /** 대형 위상 마커 (SE 사분면) — v0X SE 와 같은 자리의 6×6. */
-  SE: Object.freeze({ iMin: V0X_BLOCKS.SE.iMin, jMin: V0X_BLOCKS.SE.jMin }),
-});
+/** v0W2 블록 범위 — 로케이터 패치·검출기가 같은 n 종속 정의를 쓴다. */
+function v0w2BlocksForN(n) {
+  const v1r2 = v1r2BlocksForN(n);
+  const v0xq = v0xqBlocksForN(n);
+  const v0x = v0xBlocksForN(n);
+  return Object.freeze({
+    /** K3 불스아이 중앙 (NW 사분면) — 3면 대칭화본. */
+    NW: Object.freeze({ iMax: v1r2.NW.iMax, jMax: v1r2.NW.jMax }),
+    /** 3면 동일 동심 사각 (NE 사분면) — v0W·v0WQ 와 같은 블록. */
+    NE: Object.freeze({ iMax: v0xq.CORNER.iMax, jMin: v0xq.CORNER.jMin }),
+    /** 대형 위상 마커 (SE 사분면) — v0X SE 와 같은 자리의 6×6. */
+    SE: Object.freeze({ iMin: v0x.SE.iMin, jMin: v0x.SE.jMin }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0W2_BLOCKS = v0w2BlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0WY (v0W 파생 ③ — 먼 코너 QR, 운영자 **재설계** 2026-08-17) ────────────
@@ -1515,27 +1581,33 @@ export const V0W2_BLOCKS = Object.freeze({
  * v0W ↔ v0WQ 와 **같은 부분집합 별칭**을 만든다. v0XQ 는 드랍 상태라 라인업 밖이고,
  * 실물 래스터에서는 슬롯 자리 픽셀이 갈라 준다 (교차 전수가 그 판정기다).
  */
-const V0WY_N = 21;
-
 const V0WY_CELLS = Object.freeze([
   ...K3_CENTRE_CELLS,
   ...V0XQ_CORNER_CELLS,
   ...V0XQ_MARKER_CELLS,
 ]);
 
-/** v0WY 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V0WY_BLOCKS = Object.freeze({
-  /** K3 불스아이 중앙 (NW 사분면) — v0W 와 같은 블록. */
-  NW: Object.freeze({ iMax: V1R2_BLOCKS.NW.iMax, jMax: V1R2_BLOCKS.NW.jMax }),
-  /** 3면 동일 동심 사각 (NE 사분면) — v0W·v0WQ·v0W2 와 같은 블록. */
-  NE: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
-  /** 위상 마커 (SW 사분면) — v0XQ 와 같은 블록 (= v0 SW 3×2 의 (+8,0)). */
-  SW: Object.freeze({ iMin: V0XQ_BLOCKS.MARKER.iMin, jMax: V0XQ_BLOCKS.MARKER.jMax }),
-  /** 먼 코너 QR 슬롯 (SE 사분면) — [n−m, n−1]². n=21·m=8 에서 [13,20]². */
-  SLOT: Object.freeze({
-    iMin: V0WY_N - CENTER_QR_SLOT_CELLS_V0WY, jMin: V0WY_N - CENTER_QR_SLOT_CELLS_V0WY,
-  }),
-});
+/** v0WY 블록 범위 — 로케이터 패치·검출기가 같은 n 종속 정의를 쓴다. */
+function v0wyBlocksForN(n) {
+  const v1r2 = v1r2BlocksForN(n);
+  const v0xq = v0xqBlocksForN(n);
+  return Object.freeze({
+    /** K3 불스아이 중앙 (NW 사분면) — v0W 와 같은 블록. */
+    NW: Object.freeze({ iMax: v1r2.NW.iMax, jMax: v1r2.NW.jMax }),
+    /** 3면 동일 동심 사각 (NE 사분면) — v0W·v0WQ·v0W2 와 같은 블록. */
+    NE: Object.freeze({ iMax: v0xq.CORNER.iMax, jMin: v0xq.CORNER.jMin }),
+    /** 위상 마커 (SW 사분면) — v0XQ 와 같은 블록 (= v0 SW 3×2 의 (+8,0)). */
+    SW: Object.freeze({ iMin: v0xq.MARKER.iMin, jMax: v0xq.MARKER.jMax }),
+    /** 먼 코너 QR 슬롯 (SE 사분면) — [n−m, n−1]². */
+    SLOT: Object.freeze({
+      iMin: farEdgeCell(n, CENTER_QR_SLOT_CELLS_V0WY - 1),
+      jMin: farEdgeCell(n, CENTER_QR_SLOT_CELLS_V0WY - 1),
+    }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0WY_BLOCKS = v0wyBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0T (Type Y 최종 파인더 — 운영자 확정 2026-08-17) ────────────────────────
@@ -1555,8 +1627,6 @@ export const V0WY_BLOCKS = Object.freeze({
  * (§CELL_SURFACE_FINAL_V0T). 유도·전사 분해의 실측은 `claude-v0t-derive.mjs`
  * (NW 16/16 · NE 36/36 · SE 9/9 완전 일치 · A/N팔/W 는 기존 정본에 없음).
  */
-const V0T_N = 21;
-
 /** v0T 중앙 — K3 대칭화본(v0W2 중앙)의 (0..3)² 부분. 대칭화 4셀이 전부 이 안이다. */
 const V0T_CENTRE_CELLS = Object.freeze(K3_CENTRE_SYMMETRIC_CELLS
   .filter(([i, j]) => i <= 3 && j <= 3));
@@ -1597,21 +1667,28 @@ const V0T_CELLS = Object.freeze([
   ...V0W_PHASE_CELLS,
 ]);
 
-/** v0T 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V0T_BLOCKS = Object.freeze({
-  /** K3 계보 중앙 (0..3)² — 3면 대칭화본이라 위상 판별력 0 (검출 전용). */
-  NW: Object.freeze({ iMax: 3, jMax: 3 }),
-  /** A 블록 — **L 반전 비대칭** 9셀. 안쪽 방향 판별자 (이중화 ①). */
-  A: Object.freeze({ iMin: 4, iMax: 6, jMin: 3, jMax: 5 }),
-  /** N팔 (0..1)×(10..14) — 검출 보조 (3면 동일). */
-  ARM: Object.freeze({ iMax: 1, jMin: 10, jMax: 14 }),
-  /** 3면 동일 동심 사각 (NE 사분면) — v0W 계열과 같은 블록. */
-  NE: Object.freeze({ iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin }),
-  /** W 블록 (10..15)×(0..3) — 검출 보조 (3면 동일). */
-  W: Object.freeze({ iMin: 10, iMax: 15, jMax: 3 }),
-  /** SE 위상 마커 — **R 반전 비대칭** 6/9셀. 먼 코너 방향 판별자 (이중화 ②). */
-  SE: Object.freeze({ iMin: V0W_BLOCKS.SE.iMin, jMin: V0W_BLOCKS.SE.jMin }),
-});
+/** v0T 블록 범위 — 각 팔도 맞닿은 변에서의 inset으로 정의한다. */
+function v0tBlocksForN(n) {
+  const v0xq = v0xqBlocksForN(n);
+  const v0w = v0wBlocksForN(n);
+  return Object.freeze({
+    /** K3 계보 중앙 (0..3)² — 3면 대칭화본이라 위상 판별력 0 (검출 전용). */
+    NW: Object.freeze({ iMax: 3, jMax: 3 }),
+    /** A 블록 — **L 반전 비대칭** 9셀. 안쪽 방향 판별자 (이중화 ①). */
+    A: Object.freeze({ iMin: 4, iMax: 6, jMin: 3, jMax: 5 }),
+    /** N팔 — i 낮은 변·j 높은 변 기준. */
+    ARM: Object.freeze({ iMax: 1, jMin: farEdgeCell(n, 10), jMax: farEdgeCell(n, 6) }),
+    /** 3면 동일 동심 사각 (NE 사분면) — v0W 계열과 같은 블록. */
+    NE: Object.freeze({ iMax: v0xq.CORNER.iMax, jMin: v0xq.CORNER.jMin }),
+    /** W 블록 — i 높은 변·j 낮은 변 기준. */
+    W: Object.freeze({ iMin: farEdgeCell(n, 10), iMax: farEdgeCell(n, 5), jMax: 3 }),
+    /** SE 위상 마커 — **R 반전 비대칭** 6/9셀. 먼 코너 방향 판별자 (이중화 ②). */
+    SE: Object.freeze({ iMin: v0w.SE.iMin, jMin: v0w.SE.jMin }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0T_BLOCKS = v0tBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0TY (v0T 파생 — 먼 코너 QR 슬롯, 운영자 확정 2026-08-17) ────────────────
@@ -1621,22 +1698,31 @@ export const V0T_BLOCKS = Object.freeze({
  * 남은 방향 판별자는 A 블록 (L 반전 9셀) 하나 — 의도된 이중화의 실증
  * (§CELL_SURFACE_FINAL_V0TY — 보충 블록 신설·마커 이전 금지, 운영자 확정).
  */
-const V0TY_N = 21;
-const V0TY_SLOT_MIN = V0TY_N - CENTER_QR_SLOT_CELLS_V0TY;
+/** n=21 톤 원본에서 SE를 걷어내기 위한 슬롯 하한. 일반 n 슬롯은 함수로 다시 낸다. */
+const V0TY_BASE_SLOT_MIN = farEdgeCell(
+  CELL_SURFACE_EDGE_ANCHOR_BASE_N, CENTER_QR_SLOT_CELLS_V0TY - 1,
+);
 
 const V0TY_CELLS = Object.freeze(V0T_CELLS
-  .filter(([i, j]) => !(i >= V0TY_SLOT_MIN && j >= V0TY_SLOT_MIN)));
+  .filter(([i, j]) => !(i >= V0TY_BASE_SLOT_MIN && j >= V0TY_BASE_SLOT_MIN)));
 
-/** v0TY 블록 범위 — v0T 에서 SE 가 슬롯으로 바뀐 것. */
-export const V0TY_BLOCKS = Object.freeze({
-  NW: V0T_BLOCKS.NW,
-  A: V0T_BLOCKS.A,
-  ARM: V0T_BLOCKS.ARM,
-  NE: V0T_BLOCKS.NE,
-  W: V0T_BLOCKS.W,
-  /** 먼 코너 QR 슬롯 — [n−m, n−1]². n=21·m=8 에서 [13,20]². */
-  SLOT: Object.freeze({ iMin: V0TY_SLOT_MIN, jMin: V0TY_SLOT_MIN }),
-});
+/** v0TY 블록 범위 — v0T 에서 SE 가 n 종속 슬롯으로 바뀐 것. */
+function v0tyBlocksForN(n) {
+  const v0t = v0tBlocksForN(n);
+  const slotMin = farEdgeCell(n, CENTER_QR_SLOT_CELLS_V0TY - 1);
+  return Object.freeze({
+    NW: v0t.NW,
+    A: v0t.A,
+    ARM: v0t.ARM,
+    NE: v0t.NE,
+    W: v0t.W,
+    /** 먼 코너 QR 슬롯 — [n−m, n−1]². */
+    SLOT: Object.freeze({ iMin: slotMin, jMin: slotMin }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0TY_BLOCKS = v0tyBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0TR (v0T 재설계 — 운영자 2026-08-17) ────────────────────────────────────
@@ -1658,8 +1744,6 @@ export const V0TY_BLOCKS = Object.freeze({
  * ⚠ **v0T 의 A 블록·N팔·W 블록이 없다.** 방향 판별은 SE 6셀 하나가 전부라
  * margin 이 0.0430 까지 내려간다 (§CELL_SURFACE_FINAL_V0TR — 숫자와 함께 적어 둔다).
  */
-const V0TR_N = 21;
-
 /** 안쪽 동심 사각의 평행이동 — 바깥 사각을 «안쪽으로» 옮긴 양 (팩 유도 실측). */
 const V0TR_INNER_SHIFT_I = 2;
 const V0TR_INNER_SHIFT_J = -5;
@@ -1701,33 +1785,38 @@ const V0TR_CELLS = Object.freeze([
   ...V0W_PHASE_CELLS,
 ]);
 
-/** v0TR 블록 범위 — 로케이터 패치·검출기가 같은 정의를 쓴다. */
-export const V0TR_BLOCKS = Object.freeze({
-  /** K3 계보 중앙 (0..3)² — v0T 와 같은 배열이라 서명도 같다 (v0tr 만). */
-  NW: V0T_BLOCKS.NW,
-  /**
-   * A 블록 — **L 반전 비대칭 9셀**. v0T 와 같은 범위·같은 배열 (2026-08-18 편입).
-   * v0TRY 에서 슬롯이 SE 를 삼킨 뒤 **남는 유일한 방향 판별자**다. 중앙 (5,4) 는
-   * 파인더 전체의 유일한 고립점이기도 하다.
-   */
-  A: V0T_BLOCKS.A,
-  /** NE **바깥** 동심 사각 — v0T·v0W 계열과 문자 그대로 같은 자리 (반경 √279). */
-  NE_OUTER: Object.freeze({
-    iMax: V0XQ_BLOCKS.CORNER.iMax, jMin: V0XQ_BLOCKS.CORNER.jMin,
-  }),
-  /**
-   * NE **안쪽** 동심 사각 — 이 계열의 코어 앵커다 (반경 √129 = 11.3578셀).
-   * 범위는 바깥 상자를 평행이동해서 낸다 (숫자 재기입 금지).
-   */
-  NE_INNER: Object.freeze({
-    iMin: V0TR_INNER_SHIFT_I,
-    iMax: V0XQ_BLOCKS.CORNER.iMax + V0TR_INNER_SHIFT_I,
-    jMin: V0XQ_BLOCKS.CORNER.jMin + V0TR_INNER_SHIFT_J,
-    jMax: (V0TR_N - 1) + V0TR_INNER_SHIFT_J,
-  }),
-  /** SE 위상 마커 — **R 반전 비대칭** 6/9셀. v0TR 계열의 **유일한** 방향 판별자. */
-  SE: Object.freeze({ iMin: V0W_BLOCKS.SE.iMin, jMin: V0W_BLOCKS.SE.jMin }),
-});
+/** v0TR 블록 범위 — 바깥·안쪽 사각 모두 높은 j 변의 inset으로 이동한다. */
+function v0trBlocksForN(n) {
+  const v0t = v0tBlocksForN(n);
+  const outer = v0xqBlocksForN(n).CORNER;
+  const phase = v0wBlocksForN(n).SE;
+  return Object.freeze({
+    /** K3 계보 중앙 (0..3)² — v0T 와 같은 배열이라 서명도 같다 (v0tr 만). */
+    NW: v0t.NW,
+    /**
+     * A 블록 — **L 반전 비대칭 9셀**. v0T 와 같은 범위·같은 배열 (2026-08-18 편입).
+     * v0TRY 에서 슬롯이 SE 를 삼킨 뒤 **남는 유일한 방향 판별자**다. 중앙 (5,4) 는
+     * 파인더 전체의 유일한 고립점이기도 하다.
+     */
+    A: v0t.A,
+    /** NE **바깥** 동심 사각 — v0T·v0W 계열과 문자 그대로 같은 자리 (반경 √279). */
+    NE_OUTER: Object.freeze({ iMax: outer.iMax, jMin: outer.jMin }),
+    /**
+     * NE **안쪽** 동심 사각 — 바깥 사각의 (i+2,j−5) 평행이동.
+     */
+    NE_INNER: Object.freeze({
+      iMin: V0TR_INNER_SHIFT_I,
+      iMax: outer.iMax + V0TR_INNER_SHIFT_I,
+      jMin: outer.jMin + V0TR_INNER_SHIFT_J,
+      jMax: farEdgeCell(n, 0) + V0TR_INNER_SHIFT_J,
+    }),
+    /** SE 위상 마커 — **R 반전 비대칭** 6/9셀. */
+    SE: Object.freeze({ iMin: phase.iMin, jMin: phase.jMin }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0TR_BLOCKS = v0trBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0TRQ (v0TR 파생 — 중앙 QR 슬롯, 운영자 정본 2026-08-17) ─────────────────
@@ -1736,20 +1825,25 @@ export const V0TR_BLOCKS = Object.freeze({
  * **V0TR_CELLS 에서 슬롯 박스 필터로 만든다** (행 참조 유지 · 손 좌표 0).
  * v0TY 가 V0T_CELLS 를 필터해서 나온 것과 **같은 규약**이다.
  */
-const V0TRQ_N = 21;
 const V0TRQ_SLOT_MAX = CENTER_QR_SLOT_CELLS_V0TRQ - 1;
 
 const V0TRQ_CELLS = Object.freeze(V0TR_CELLS
   .filter(([i, j]) => !(i <= V0TRQ_SLOT_MAX && j <= V0TRQ_SLOT_MAX)));
 
 /** v0TRQ 블록 범위 — v0TR 에서 NW 중앙이 슬롯으로 바뀐 것. */
-export const V0TRQ_BLOCKS = Object.freeze({
-  NE_OUTER: V0TR_BLOCKS.NE_OUTER,
-  NE_INNER: V0TR_BLOCKS.NE_INNER,
-  SE: V0TR_BLOCKS.SE,
-  /** 중앙 QR 슬롯 (Y-심 앵커) — [0, m−1]². n=21·m=8 에서 (0..7)². */
-  SLOT: Object.freeze({ iMax: V0TRQ_SLOT_MAX, jMax: V0TRQ_SLOT_MAX }),
-});
+function v0trqBlocksForN(n) {
+  const v0tr = v0trBlocksForN(n);
+  return Object.freeze({
+    NE_OUTER: v0tr.NE_OUTER,
+    NE_INNER: v0tr.NE_INNER,
+    SE: v0tr.SE,
+    /** 중앙 QR 슬롯 (Y-심 앵커) — [0, m−1]². */
+    SLOT: Object.freeze({ iMax: V0TRQ_SLOT_MAX, jMax: V0TRQ_SLOT_MAX }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0TRQ_BLOCKS = v0trqBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
 
 /**
  * ── v0TRY (v0TR 파생 — **먼 코너** QR 슬롯, 운영자 2026-08-18) ────────────────
@@ -1757,27 +1851,181 @@ export const V0TRQ_BLOCKS = Object.freeze({
  * 슬롯 [13,20]² 가 v0TR 의 SE 블록 (18..20)² 를 9/9 삼킨다 — 정의가 곧 유도다:
  * **V0TR_CELLS 에서 슬롯 박스 필터로 만든다** (행 참조 유지 · 손 좌표 0).
  * `V0TY_CELLS = V0T_CELLS.filter(...)` 와 **문자 그대로 같은 꼴**이고, 슬롯 상자도
- * v0TY 의 것을 그대로 쓴다 (`V0TY_SLOT_MIN` 참조 — 숫자 13 을 다시 적지 않는다).
+ * v0TY 의 것을 그대로 쓴다 (`V0TY_BASE_SLOT_MIN` 참조 — 숫자 13 을 다시 적지 않는다).
  *
  * 남은 방향 판별자는 A 블록 (L 반전 9셀) 하나 — v0TY 와 같은 «의도된 이중화» 실증이다
  * (§CELL_SURFACE_FINAL_V0TRY — 보충 블록 신설·마커 이전 없음).
  */
-const V0TRY_N = 21;
 /** v0TY 와 **같은 상자**를 쓴다 — 슬롯 규약 재사용 (새 상수 신설 금지, 운영자 지시). */
-const V0TRY_SLOT_MIN = V0TY_SLOT_MIN;
+const V0TRY_BASE_SLOT_MIN = V0TY_BASE_SLOT_MIN;
 
 const V0TRY_CELLS = Object.freeze(V0TR_CELLS
-  .filter(([i, j]) => !(i >= V0TRY_SLOT_MIN && j >= V0TRY_SLOT_MIN)));
+  .filter(([i, j]) => !(i >= V0TRY_BASE_SLOT_MIN && j >= V0TRY_BASE_SLOT_MIN)));
 
-/** v0TRY 블록 범위 — v0TR 에서 SE 가 슬롯으로 바뀐 것 (NW·A·NE 는 그대로). */
-export const V0TRY_BLOCKS = Object.freeze({
-  NW: V0TR_BLOCKS.NW,
-  A: V0TR_BLOCKS.A,
-  NE_OUTER: V0TR_BLOCKS.NE_OUTER,
-  NE_INNER: V0TR_BLOCKS.NE_INNER,
-  /** 먼 코너 QR 슬롯 — [n−m, n−1]². n=21·m=8 에서 [13,20]² (v0TY 와 같은 상자). */
-  SLOT: Object.freeze({ iMin: V0TRY_SLOT_MIN, jMin: V0TRY_SLOT_MIN }),
+/** v0TRY 블록 범위 — v0TR 에서 SE 가 n 종속 슬롯으로 바뀐 것. */
+function v0tryBlocksForN(n) {
+  const v0tr = v0trBlocksForN(n);
+  const slotMin = farEdgeCell(n, CENTER_QR_SLOT_CELLS_V0TY - 1);
+  return Object.freeze({
+    NW: v0tr.NW,
+    A: v0tr.A,
+    NE_OUTER: v0tr.NE_OUTER,
+    NE_INNER: v0tr.NE_INNER,
+    /** 먼 코너 QR 슬롯 — [n−m, n−1]² (v0TY 와 같은 상자). */
+    SLOT: Object.freeze({ iMin: slotMin, jMin: slotMin }),
+  });
+}
+
+/** n=21 발행 와이어 호환 별칭. */
+export const V0TRY_BLOCKS = v0tryBlocksForN(CELL_SURFACE_EDGE_ANCHOR_BASE_N);
+
+/** v2r2도 같은 공개 블록 질의에 포함한다. 이 레이아웃의 행 인스턴스는 원래부터 n 종속이다. */
+function v2r2BlocksForN(n) {
+  assertEdgeAnchorN(n);
+  return Object.freeze({
+    CENTER: Object.freeze({ iMax: 4, jMax: 4 }),
+    FAR: Object.freeze({ iMin: farEdgeCell(n, 6), jMin: farEdgeCell(n, 6) }),
+  });
+}
+
+/**
+ * 비-v0 셀 표면 파인더의 블록 범위. `CELL_SURFACE_FINAL_NS`와 독립한 **순수 기하
+ * 질의**라 n=25 이상도 계산하지만 라인업·용량·와이어를 추가하지 않는다.
+ */
+export function blocksCellSurfaceFinalForN(n, id) {
+  assertCellSurfaceFinalId(id);
+  if (id === CELL_SURFACE_FINAL_V0) {
+    throw new RangeError('v0 는 n=13 고정 기하 예외라 면 모서리 기준 블록 질의를 쓰지 않는다');
+  }
+  assertEdgeAnchorN(n);
+  if (id === CELL_SURFACE_FINAL_V2R2) return v2r2BlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V1R2) return v1r2BlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0X) return v0xBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0XQ) return v0xqBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0W) return v0wBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0WQ) return v0wqBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0W2) return v0w2BlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0WY) return v0wyBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0T) return v0tBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0TY) return v0tyBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0TR) return v0trBlocksForN(n);
+  if (id === CELL_SURFACE_FINAL_V0TRQ) return v0trqBlocksForN(n);
+  return v0tryBlocksForN(n);
+}
+
+function blockContainsRow(block, i, j) {
+  if (block.i !== undefined && i !== block.i) return false;
+  if (block.j !== undefined && j !== block.j) return false;
+  if (block.iMin !== undefined && i < block.iMin) return false;
+  if (block.iMax !== undefined && i > block.iMax) return false;
+  if (block.jMin !== undefined && j < block.jMin) return false;
+  if (block.jMax !== undefined && j > block.jMax) return false;
+  return true;
+}
+
+function anchorGroup(block, iFar, jFar) {
+  return Object.freeze({ block, iFar, jFar });
+}
+
+/**
+ * n=21 톤 원본의 각 블록이 어느 변 쌍에 붙는지. `false`는 낮은(0) 변, `true`는
+ * 높은(n−1) 변이다. v0T ARM과 W도 각각 NE·SW 띠와 함께 움직여 접속·간격을 지킨다.
+ */
+const EDGE_ANCHOR_GROUPS = Object.freeze({
+  [CELL_SURFACE_FINAL_V1R2]: Object.freeze([
+    anchorGroup(V1R2_BLOCKS.NW, false, false),
+    anchorGroup(V1R2_BLOCKS.NE, false, true),
+    anchorGroup(V1R2_BLOCKS.SW, true, false),
+    anchorGroup(V1R2_BLOCKS.SE, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0X]: Object.freeze([
+    anchorGroup(V0X_BLOCKS.NW, false, false),
+    anchorGroup(V0X_BLOCKS.NE, false, true),
+    anchorGroup(V0X_BLOCKS.SW, true, false),
+    anchorGroup(V0X_BLOCKS.SE, true, true),
+    anchorGroup(V0X_BLOCKS.SINGLE, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0XQ]: Object.freeze([
+    anchorGroup(V0XQ_BLOCKS.CORNER, false, true),
+    anchorGroup(V0XQ_BLOCKS.MARKER, true, false),
+  ]),
+  [CELL_SURFACE_FINAL_V0W]: Object.freeze([
+    anchorGroup(V0W_BLOCKS.NW, false, false),
+    anchorGroup(V0W_BLOCKS.NE, false, true),
+    anchorGroup(V0W_BLOCKS.SE, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0WQ]: Object.freeze([
+    anchorGroup(V0WQ_BLOCKS.CORNER, false, true),
+    anchorGroup(V0WQ_BLOCKS.MARKER, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0W2]: Object.freeze([
+    anchorGroup(V0W2_BLOCKS.NW, false, false),
+    anchorGroup(V0W2_BLOCKS.NE, false, true),
+    anchorGroup(V0W2_BLOCKS.SE, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0WY]: Object.freeze([
+    anchorGroup(V0WY_BLOCKS.NW, false, false),
+    anchorGroup(V0WY_BLOCKS.NE, false, true),
+    anchorGroup(V0WY_BLOCKS.SW, true, false),
+  ]),
+  [CELL_SURFACE_FINAL_V0T]: Object.freeze([
+    anchorGroup(V0T_BLOCKS.NW, false, false),
+    anchorGroup(V0T_BLOCKS.A, false, false),
+    anchorGroup(V0T_BLOCKS.ARM, false, true),
+    anchorGroup(V0T_BLOCKS.NE, false, true),
+    anchorGroup(V0T_BLOCKS.W, true, false),
+    anchorGroup(V0T_BLOCKS.SE, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0TY]: Object.freeze([
+    anchorGroup(V0TY_BLOCKS.NW, false, false),
+    anchorGroup(V0TY_BLOCKS.A, false, false),
+    anchorGroup(V0TY_BLOCKS.ARM, false, true),
+    anchorGroup(V0TY_BLOCKS.NE, false, true),
+    anchorGroup(V0TY_BLOCKS.W, true, false),
+  ]),
+  [CELL_SURFACE_FINAL_V0TR]: Object.freeze([
+    anchorGroup(V0TR_BLOCKS.NW, false, false),
+    anchorGroup(V0TR_BLOCKS.A, false, false),
+    anchorGroup(V0TR_BLOCKS.NE_OUTER, false, true),
+    anchorGroup(V0TR_BLOCKS.NE_INNER, false, true),
+    anchorGroup(V0TR_BLOCKS.SE, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0TRQ]: Object.freeze([
+    anchorGroup(V0TRQ_BLOCKS.NE_OUTER, false, true),
+    anchorGroup(V0TRQ_BLOCKS.NE_INNER, false, true),
+    anchorGroup(V0TRQ_BLOCKS.SE, true, true),
+  ]),
+  [CELL_SURFACE_FINAL_V0TRY]: Object.freeze([
+    anchorGroup(V0TRY_BLOCKS.NW, false, false),
+    anchorGroup(V0TRY_BLOCKS.A, false, false),
+    anchorGroup(V0TRY_BLOCKS.NE_OUTER, false, true),
+    anchorGroup(V0TRY_BLOCKS.NE_INNER, false, true),
+  ]),
 });
+
+function edgeAnchoredRowsForN(rows, n, id) {
+  assertEdgeAnchorN(n);
+  if (n === CELL_SURFACE_EDGE_ANCHOR_BASE_N) return rows;
+  const groups = EDGE_ANCHOR_GROUPS[id];
+  if (!groups) throw new Error(id + ': 면 모서리 앵커 그룹이 없다');
+  return Object.freeze(rows.map(([i, j, T, L, R]) => {
+    const matched = groups.filter(({ block }) => blockContainsRow(block, i, j));
+    if (matched.length === 0) {
+      throw new Error(id + ': n=21 원본 셀이 블록 범위 밖이다: ' + i + ',' + j);
+    }
+    const { iFar, jFar } = matched[0];
+    for (const group of matched) {
+      if (group.iFar !== iFar || group.jFar !== jFar) {
+        throw new Error(id + ': 겹친 블록의 변 앵커가 충돌한다: ' + i + ',' + j);
+      }
+    }
+    return Object.freeze([
+      iFar ? moveFarEdgeCoordinate(i, n) : i,
+      jFar ? moveFarEdgeCoordinate(j, n) : j,
+      T, L, R,
+    ]);
+  }));
+}
 
 function cellKey(i, j) {
   return i + ',' + j;
@@ -1905,26 +2153,41 @@ function packableBytesForSymbols(dataSymbols) {
 
 function canonicalRowsFor(id, n) {
   if (id === CELL_SURFACE_FINAL_V0) return V0_CELLS;
-  if (id === CELL_SURFACE_FINAL_V1R2) return V1R2_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0X) return V0X_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0XQ) return V0XQ_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0W) return V0W_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0WQ) return V0WQ_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0W2) return V0W2_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0WY) return V0WY_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0T) return V0T_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0TY) return V0TY_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0TR) return V0TR_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0TRQ) return V0TRQ_CELLS;
-  if (id === CELL_SURFACE_FINAL_V0TRY) return V0TRY_CELLS;
-  return v2r2CellsForN(n);
+  if (id === CELL_SURFACE_FINAL_V2R2) return v2r2CellsForN(n);
+  let rows;
+  if (id === CELL_SURFACE_FINAL_V1R2) rows = V1R2_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0X) rows = V0X_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0XQ) rows = V0XQ_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0W) rows = V0W_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0WQ) rows = V0WQ_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0W2) rows = V0W2_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0WY) rows = V0WY_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0T) rows = V0T_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0TY) rows = V0TY_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0TR) rows = V0TR_CELLS;
+  else if (id === CELL_SURFACE_FINAL_V0TRQ) rows = V0TRQ_CELLS;
+  else rows = V0TRY_CELLS;
+  return edgeAnchoredRowsForN(rows, n, id);
+}
+
+/**
+ * 순수 파인더 기하 질의. 비-v0는 n>=21이면 계산하지만 `CELL_SURFACE_FINAL_NS`·SURFACES
+ * 캐시를 바꾸지 않으므로 해당 n의 인코딩·검출 라인업을 활성화하지 않는다.
+ */
+export function locatorCellsCellSurfaceFinalForEdgeN(n, id) {
+  assertCellSurfaceFinalId(id);
+  if (id === CELL_SURFACE_FINAL_V0) {
+    if (n !== 13) throw new RangeError('v0 는 n=13 고정 기하다: n=' + n);
+  } else {
+    assertEdgeAnchorN(n);
+  }
+  return buildLocatorCells(canonicalRowsFor(id, n));
 }
 
 function buildFinalSurface(id, n, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
   assertCellSurfaceFinalN(id, n);
   const blockLength = formatBlockLengthForWire(formatWire);
-  const rows = canonicalRowsFor(id, n);
-  const locatorCells = buildLocatorCells(rows);
+  const locatorCells = locatorCellsCellSurfaceFinalForEdgeN(n, id);
   const painted = locatorCells.map((cell) => ({ i: cell.i, j: cell.j }));
 
   // QR 슬롯 — 데이터도 파인더도 아니다. autoplace 에는 **점유**로 넘기고
@@ -2355,7 +2618,7 @@ export function capacityForCellSurfaceFinal(
     if (se.size !== 36) throw new Error('v0X SE 가 36셀이 아니다: ' + se.size);
     let normalized = 0;
     for (const [i, j, T, L, R] of V0XQ_CORNER_CELLS) {
-      const want = se.get((i + V0XQ_CORNER_SHIFT) + ',' + j);
+      const want = se.get((i + V0XQ_BASE_CORNER_SHIFT) + ',' + j);
       if (!want) throw new Error('v0xq 코너 셀 (' + i + ',' + j + ') 이 v0X SE 에 없다');
       const faces = [T, L, R];
       for (let index = 0; index < 3; index += 1) {
@@ -2476,7 +2739,7 @@ export function capacityForCellSurfaceFinal(
     }
     for (let index = 0; index < 9; index += 1) {
       const [i, j, T, L, R] = v0Far[index];
-      const want = [i + V0W_FAR_SHIFT, j + V0W_FAR_SHIFT, T, L, R].join(',');
+      const want = [i + V0W_BASE_FAR_SHIFT, j + V0W_BASE_FAR_SHIFT, T, L, R].join(',');
       if (V0W_PHASE_CELLS[index].join(',') !== want) {
         throw new Error('v0W 위상 마커가 v0 SE 정본의 평행이동본이 아니다: ' + index);
       }
@@ -2644,7 +2907,7 @@ export function capacityForCellSurfaceFinal(
     if (asymOutsideSe !== 0) {
       throw new Error('v0W2 의 SE 밖에 면 비대칭 셀이 있다: ' + asymOutsideSe);
     }
-    if (slotCellsFor(CELL_SURFACE_FINAL_V0W2, V0W2_N).length !== 0) {
+    if (slotCellsFor(CELL_SURFACE_FINAL_V0W2, CELL_SURFACE_EDGE_ANCHOR_BASE_N).length !== 0) {
       throw new Error('v0W2 에 QR 슬롯이 생겼다 — v0xq · v0wq · v0wy 전용이다');
     }
   }
@@ -2675,7 +2938,7 @@ export function capacityForCellSurfaceFinal(
     if (v0Sw.length !== 6) throw new Error('v0 SW 3×2 가 6셀이 아니다: ' + v0Sw.length);
     for (let index = 0; index < 6; index += 1) {
       const [i, j, T, L, R] = v0Sw[index];
-      const want = [i + V0W_FAR_SHIFT, j, T, L, R].join(',');
+      const want = [i + V0W_BASE_FAR_SHIFT, j, T, L, R].join(',');
       if (V0XQ_MARKER_CELLS[index].join(',') !== want) {
         throw new Error('v0WY 마커가 v0 SW 정본의 (+8,0) 평행이동본이 아니다: ' + index);
       }
@@ -2685,12 +2948,16 @@ export function capacityForCellSurfaceFinal(
     if (CENTER_QR_SLOT_CELLS_V0WY !== CENTER_QR_SLOT_CELLS_V0WQ) {
       throw new Error('v0WY 슬롯 한 변이 v0WQ 와 다르다 — 운영자 스펙은 «동일 크기» 다');
     }
-    const wyOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0WY, V0WY_N);
-    const wqOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0WQ, V0WY_N);
+    const wyOrigin = centerQrSlotOriginFor(
+      CELL_SURFACE_FINAL_V0WY, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    );
+    const wqOrigin = centerQrSlotOriginFor(
+      CELL_SURFACE_FINAL_V0WQ, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    );
     if (wyOrigin.i === wqOrigin.i && wyOrigin.j === wqOrigin.j) {
       throw new Error('v0WY 슬롯이 v0WQ 와 같은 자리다 — 먼 코너 배치가 아니다');
     }
-    if (wyOrigin.i !== V0WY_N - CENTER_QR_SLOT_CELLS_V0WY) {
+    if (wyOrigin.i !== V0WY_BLOCKS.SLOT.iMin) {
       throw new Error('v0WY 슬롯이 먼 코너에 앵커되지 않았다: ' + wyOrigin.i);
     }
     // 블록 분할 25/36/6 — 세 블록 밖 셀 0 · 겹침 0 · **슬롯과의 겹침 0**
@@ -2735,7 +3002,9 @@ export function capacityForCellSurfaceFinal(
     }
     // 그리고 v0W 의 SE 마커 9셀은 **전부 v0WY 슬롯 안**이어야 한다 — 그 포함이
     // «먼 코너를 QR 이 가져갔다» 의 정의다.
-    const slotKeys = new Set(slotCellsFor(CELL_SURFACE_FINAL_V0WY, V0WY_N)
+    const slotKeys = new Set(slotCellsFor(
+      CELL_SURFACE_FINAL_V0WY, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    )
       .map((cell) => cellKey(cell.i, cell.j)));
     if (!theirsOnly.every((key) => slotKeys.has(key))) {
       throw new Error('v0W SE 마커가 v0WY 슬롯 안에 다 들어 있지 않다');
@@ -2814,7 +3083,7 @@ export function capacityForCellSurfaceFinal(
         throw new Error('v0T A 블록 (' + i + ',' + j + ') 이 «L 만 반전» 이 아니다');
       }
     }
-    if (slotCellsFor(CELL_SURFACE_FINAL_V0T, V0T_N).length !== 0) {
+    if (slotCellsFor(CELL_SURFACE_FINAL_V0T, CELL_SURFACE_EDGE_ANCHOR_BASE_N).length !== 0) {
       throw new Error('v0T 에 QR 슬롯이 생겼다 — v0xq · v0wq · v0wy · v0ty 전용이다');
     }
   }
@@ -2838,7 +3107,9 @@ export function capacityForCellSurfaceFinal(
     if (removed.length !== 9 || removed.some((row, index) => row !== V0W_PHASE_CELLS[index])) {
       throw new Error('v0TY 필터가 걷어낸 것이 v0T SE (v0W PHASE) 9행이 아니다');
     }
-    const slotKeys = new Set(slotCellsFor(CELL_SURFACE_FINAL_V0TY, V0TY_N)
+    const slotKeys = new Set(slotCellsFor(
+      CELL_SURFACE_FINAL_V0TY, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    )
       .map((cell) => cellKey(cell.i, cell.j)));
     if (!removed.every(([i, j]) => slotKeys.has(cellKey(i, j)))) {
       throw new Error('v0T SE 블록이 v0TY 슬롯 안에 다 들어 있지 않다');
@@ -2857,8 +3128,10 @@ export function capacityForCellSurfaceFinal(
     if (CENTER_QR_SLOT_CELLS_V0TY !== CENTER_QR_SLOT_CELLS_V0WQ) {
       throw new Error('v0TY 슬롯 한 변이 v0WQ 와 다르다 — 운영자 스펙은 «동일 크기» 다');
     }
-    const tyOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0TY, V0TY_N);
-    if (tyOrigin.i !== V0TY_N - CENTER_QR_SLOT_CELLS_V0TY || tyOrigin.i !== tyOrigin.j) {
+    const tyOrigin = centerQrSlotOriginFor(
+      CELL_SURFACE_FINAL_V0TY, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    );
+    if (tyOrigin.i !== V0TY_BLOCKS.SLOT.iMin || tyOrigin.i !== tyOrigin.j) {
       throw new Error('v0TY 슬롯이 먼 코너에 앵커되지 않았다: ' + tyOrigin.i + ',' + tyOrigin.j);
     }
   }
@@ -2965,7 +3238,7 @@ export function capacityForCellSurfaceFinal(
       throw new Error('v0TR 비대칭이 A 9 + SE 6 이 아니다: '
         + JSON.stringify({ total: asym.length, A: asymA.length, SE: asymSe.length }));
     }
-    if (slotCellsFor(CELL_SURFACE_FINAL_V0TR, V0TR_N).length !== 0) {
+    if (slotCellsFor(CELL_SURFACE_FINAL_V0TR, CELL_SURFACE_EDGE_ANCHOR_BASE_N).length !== 0) {
       throw new Error('v0TR 에 QR 슬롯이 생겼다 — 슬롯은 v0trq 쪽이다');
     }
   }
@@ -2994,7 +3267,9 @@ export function capacityForCellSurfaceFinal(
       throw new Error('v0TRQ 필터가 걷어낸 것이 v0T 중앙 16 + A 9 행이 아니다: '
         + removed.length);
     }
-    const slotKeys = new Set(slotCellsFor(CELL_SURFACE_FINAL_V0TRQ, V0TRQ_N)
+    const slotKeys = new Set(slotCellsFor(
+      CELL_SURFACE_FINAL_V0TRQ, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    )
       .map((cell) => cellKey(cell.i, cell.j)));
     if (slotKeys.size !== 64) {
       throw new Error('v0TRQ 슬롯이 64셀이 아니다: ' + slotKeys.size);
@@ -3016,7 +3291,9 @@ export function capacityForCellSurfaceFinal(
     if (CENTER_QR_SLOT_CELLS_V0TRQ !== CENTER_QR_SLOT_CELLS_V0WQ) {
       throw new Error('v0TRQ 슬롯 한 변이 v0WQ 와 다르다 — 같은 참조 사슬이어야 한다');
     }
-    const trqOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0TRQ, V0TRQ_N);
+    const trqOrigin = centerQrSlotOriginFor(
+      CELL_SURFACE_FINAL_V0TRQ, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    );
     if (trqOrigin.i !== 0 || trqOrigin.j !== 0) {
       throw new Error('v0TRQ 슬롯이 Y-심(0,0) 에 앵커되지 않았다: '
         + trqOrigin.i + ',' + trqOrigin.j);
@@ -3049,7 +3326,9 @@ export function capacityForCellSurfaceFinal(
       throw new Error('v0TRY 필터가 걷어낸 것이 SE 9행(V0W_PHASE_CELLS)이 아니다: '
         + removed.length);
     }
-    const slotKeys = new Set(slotCellsFor(CELL_SURFACE_FINAL_V0TRY, V0TRY_N)
+    const slotKeys = new Set(slotCellsFor(
+      CELL_SURFACE_FINAL_V0TRY, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    )
       .map((cell) => cellKey(cell.i, cell.j)));
     if (slotKeys.size !== 64) {
       throw new Error('v0TRY 슬롯이 64셀이 아니다: ' + slotKeys.size);
@@ -3072,8 +3351,10 @@ export function capacityForCellSurfaceFinal(
       !== centerQrSlotCellsFor(CELL_SURFACE_FINAL_V0TY)) {
       throw new Error('v0TRY 슬롯 한 변이 v0TY 와 다르다 — 같은 값을 재사용해야 한다');
     }
-    const tryOrigin = centerQrSlotOriginFor(CELL_SURFACE_FINAL_V0TRY, V0TRY_N);
-    if (tryOrigin.i !== V0TRY_SLOT_MIN || tryOrigin.i !== tryOrigin.j) {
+    const tryOrigin = centerQrSlotOriginFor(
+      CELL_SURFACE_FINAL_V0TRY, CELL_SURFACE_EDGE_ANCHOR_BASE_N,
+    );
+    if (tryOrigin.i !== V0TRY_BASE_SLOT_MIN || tryOrigin.i !== tryOrigin.j) {
       throw new Error('v0TRY 슬롯이 먼 코너 (13,13) 에 앵커되지 않았다: '
         + tryOrigin.i + ',' + tryOrigin.j);
     }
