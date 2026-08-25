@@ -167,6 +167,8 @@ const MODULE_ORDER = [
   // 그 셋에서 유도한다). generator-render-config 와 같은 층 — 둘 다 «상태 → 인코더 옵션»
   // 경계이고, 인라인 HTML 에 두면 테스트가 못 닿는 자리라 모듈로 뺀 것이다.
   'generator-auto-y',
+  // locator 표시 규칙 — locatorY 뒤면 된다 (그 상수만 쓴다).
+  'generator-locator-options',
   'generator-render-config',
   'sceneY', 'verifyY',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).

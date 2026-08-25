@@ -5881,6 +5881,9 @@ import { VERSIONS_A as VERSIONS_A_TABLE } from './src/capacityA.js';
 import { VERSIONS_K as VERSIONS_K_TABLE } from './src/capacityK.js';
 import { encodeK } from './src/encodeK.js';
 import { resolveAutoY } from './src/generator-auto-y.js';
+import {
+  activeLocatorCardId, allowedYLocatorCards, effectiveVersionYForOptions,
+} from './src/generator-locator-options.js';
 // ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
 // placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
 import { placeReservedCells } from './src/autoplaceY.js';
@@ -9847,48 +9850,59 @@ function syncYLocatorUi() {
   if (els.yLocatorCards) {
     // 자동이 기본값(2026-08-24 승격)이고 유도값(v0/v0TR/끔)을 대신 켜지 않는다 —
     // 자동을 고른 사용자에게 유도 카드가 함께 켜져 보이면 «뭐가 적용된 건가» 가 생긴다.
-    // **옵션 필터 (아침 검수 1)**: 안쪽 QR·면 배치 상태에서 성립하는 옵션만 보인다 —
-    //   안쪽+중앙측: v0(안쪽 미지원)·v0T(seam 파생 v0TQ 부재 — placer 기각 실측) 숨김
-    //   안쪽+코너측: v0·v0TRQ(중앙측 전용 슬롯) 숨김
+    //
+    // ⭐ **허용 목록으로 전환 (2026-08-25, 운영자 지시)** — 종전엔 «숨길 것» 을 적는
+    // 부정 목록이었다. 부정 목록은 옵션이 늘 때마다 새는데(새 프로파일은 «안 적혔으니
+    // 보인다»), 운영자 명세는 «이렇게만 표시되어야 됨» 이라 **긍정 목록**이 정본이다:
+    //
+    //   Y0            → 없음 · v0
+    //   Y1 이상       → 없음 · v0T · v0TR
+    //   안쪽QR·중앙측 → v0TRQ **만** (없음도 없다 — 중앙 슬롯이 강제된다)
+    //   안쪽QR·코너측 → 없음 · v0T · v0TR
+    //
+    // ⚠ 코너측에서 운영자가 부른 이름은 **v0TY · v0TRY** 다. 그 둘은 카드가 없고
+    //   (W2 C3 에서 «파생값 강등» — 카드를 되살리면 그때 없앤 «QR 위치 ↔ 로케이터»
+    //   양방향 강제가 함께 돌아온다), §deriveYLocatorForQrPosition 이 v0T/v0TR 카드
+    //   선택을 그 상태에서 v0TY/v0TRY 로 **유도**한다. 즉 카드로는 v0T·v0TR 를 보이고
+    //   결과 프로파일이 v0TY·v0TRY 다 (아이콘의 점선 사각·i18n g965 «먼 코너 (v0TY)»
+    //   가 이미 그 규약을 말한다).
+    // 표시 규칙·파생 사상은 `src/generator-locator-options.js` 가 소유한다 —
+    // 인라인 사본을 두면 둘이 갈린다 (이 repo 가 여러 번 겪은 자리다). 여기서는
+    // 상태를 모아 넘기고 결과만 쓴다.
     const inner = generatorState.qrPosition === 'inner';
     const far = generatorState.qrFacePlacement === 'far';
-    const hidden = !inner ? []
-      : far ? [LOCATOR_PROFILE_CELL_SURFACE_V0, LOCATOR_PROFILE_CELL_SURFACE_V0TRQ]
-        : [LOCATOR_PROFILE_CELL_SURFACE_V0, LOCATOR_PROFILE_CELL_SURFACE_V0T];
-    // **옵션 필터 2단 (검수 5차 ②, 2026-08-25)** — 버전 축도 본다.
-    // 프로파일은 셀 표면 **레이아웃**이고 레이아웃마다 성립하는 n 이 정해져 있다
-    // (v0 = 13 · T 계열 전부 = 21). 그래서 «지금 버전의 n 을 지원하지 않는 프로파일»
-    // 은 원리적으로 못 고른다 — 종전 필터는 안쪽 QR × 면배치만 봐서 그 카드들이
-    // 그대로 떠 있었고, 고르면 조용히 안 먹었다.
-    // ⚠ 목록을 손으로 적지 않는다. `CELL_SURFACE_FINAL_NS` 가 정본이고, 라인업이
-    //   바뀌면 필터가 저절로 따라온다 (사본을 만들면 또 갈린다).
-    // ⚠ 'auto' 는 잠그지 않는다 — 자동의 버전은 렌더 시점에 정해진다.
-    if (generatorState.versionY !== 'auto') {
-      const spec = versionSpecY(Number(generatorState.versionY), 2);
-      const activeN = spec ? spec.n : null;
-      if (activeN !== null) {
-        for (const card of els.yLocatorCards.children) {
-          const id = card.dataset.locator;
-          if (!id || id === 'auto' || id === LOCATOR_PROFILE_OFF) continue;
-          // ⛔ **활성 카드는 숨기지 않는다** (2026-08-25, codex 검수 적발).
-          // 숨기면 «상태 표시는 Y2 · 실제 encode 는 Y1» 인 어긋남이 화면에서
-          // 사라져 조용한 무시가 된다 — 수동으로 v0TR 을 잠근 채 Y2 를 고르면
-          // render-config 가 encode 를 V1 로 강제하는데, 그걸 드러내는 유일한
-          // 단서가 그 카드다. 필터 도입 **전보다 나쁜 상태**가 되므로 예외로 둔다.
-          // 이 파일의 «C5 숨김-active 배지» 가 세운 규약과 같은 처방이다.
-          if (id === profile) continue;
-          const layout = id.replace(/^cell-surface-/, '');
-          const ns = CELL_SURFACE_FINAL_NS[layout];
-          if (!ns || !ns.includes(activeN)) hidden.push(id);
-        }
-      }
+    const activeCardId = activeLocatorCardId(profile);
+    const autoPick = (!inner && generatorState.versionY === 'auto') ? resolveAutoYSafe() : null;
+    const effectiveVersionY = effectiveVersionYForOptions({
+      inner, versionY: generatorState.versionY,
+      autoVersion: autoPick === null ? null : autoPick.version,
+    });
+    const allowed = allowedYLocatorCards({ inner, far, versionY: effectiveVersionY });
+
+    const hidden = [];
+    for (const card of els.yLocatorCards.children) {
+      const id = card.dataset.locator;
+      if (!id || id === 'auto') continue;          // 자동은 언제나 보인다
+      // ⛔ **활성 카드는 숨기지 않는다** (2026-08-25, codex 검수 적발).
+      // 숨기면 «상태 표시는 Y2 · 실제 encode 는 Y1» 인 어긋남이 화면에서 사라져
+      // 조용한 무시가 된다 — 그걸 드러내는 유일한 단서가 그 카드다.
+      if (id === activeCardId) continue;
+      if (!allowed.includes(id)) { hidden.push(id); continue; }
+      // 허용 목록을 통과해도 **레이아웃이 그 n 을 지원해야** 한다. 목록을 손으로
+      // 적지 않는다 — `CELL_SURFACE_FINAL_NS` 가 정본이고 라인업이 바뀌면 저절로
+      // 따라온다 (예: Y2/n=25 는 셀 표면 공백이라 T 계열이 여기서 걸린다).
+      if (id === LOCATOR_PROFILE_OFF) continue;
+      const spec = versionSpecY(effectiveVersionY, 2);
+      if (!spec) continue;
+      const ns = CELL_SURFACE_FINAL_NS[id.replace(/^cell-surface-/, '')];
+      if (!ns || !ns.includes(spec.n)) hidden.push(id);
     }
     for (const card of els.yLocatorCards.children) {
       const isAutoCard = card.dataset.locator === 'auto';
       card.style.display = hidden.includes(card.dataset.locator) ? 'none' : '';
       card.classList.toggle(
         'active',
-        detectorAutoY ? isAutoCard : (!isAutoCard && card.dataset.locator === profile),
+        detectorAutoY ? isAutoCard : (!isAutoCard && card.dataset.locator === activeCardId),
       );
     }
   }
