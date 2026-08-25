@@ -1557,15 +1557,68 @@ function starTipCanonicalPoints(k) {
 }
 
 /**
+ * 별 꼭짓점 6점의 최소제곱 similarity. 외곽선 양자화가 작은 원근항으로 과적합되면
+ * 별 안쪽 본문에서 오차가 다시 커지므로, projective H 와 나란히 안정적인 4-DOF
+ * 후보도 둔다. 어느 쪽이 맞는지는 별 앵커 6/6 뒤의 CRC·RS가 결정한다.
+ */
+function starTipSimilarity(canonicalPoints, imagePoints) {
+  if (canonicalPoints.length !== imagePoints.length || canonicalPoints.length < 2) return null;
+  const count = canonicalPoints.length;
+  let canonicalX = 0;
+  let canonicalY = 0;
+  let imageX = 0;
+  let imageY = 0;
+  for (let index = 0; index < count; index += 1) {
+    canonicalX += canonicalPoints[index].x;
+    canonicalY += canonicalPoints[index].y;
+    imageX += imagePoints[index].x;
+    imageY += imagePoints[index].y;
+  }
+  canonicalX /= count;
+  canonicalY /= count;
+  imageX /= count;
+  imageY /= count;
+
+  let dot = 0;
+  let cross = 0;
+  let denominator = 0;
+  for (let index = 0; index < count; index += 1) {
+    const x = canonicalPoints[index].x - canonicalX;
+    const y = canonicalPoints[index].y - canonicalY;
+    const u = imagePoints[index].x - imageX;
+    const v = imagePoints[index].y - imageY;
+    dot += x * u + y * v;
+    cross += x * v - y * u;
+    denominator += x * x + y * y;
+  }
+  if (!(denominator > 1e-12)) return null;
+  const a = dot / denominator;
+  const b = cross / denominator;
+  const tx = imageX - (a * canonicalX - b * canonicalY);
+  const ty = imageY - (b * canonicalX + a * canonicalY);
+  return new Float64Array([
+    a, -b, tx,
+    b, a, ty,
+    0, 0, 1,
+  ]);
+}
+
+/**
  * star(Type K) 실루엣 기반 가설 — hex `silhouetteHypotheses` 의 육각별 판.
  *
  * 왜 필요한가 (2026-08-25 합성 실측): 별 꼭짓점 앵커는 중심에서 3k(최대 30셀)라
  * 파인더 H 의 원근·스케일 오차가 3k 배로 증폭된다 — K1(ppu 12, 다운샘플 파인더)
  * 에서 앵커 자리 오차가 2셀을 넘어 6/6 이 전멸했다. hex 가 같은 상황에서 쓰는
- * 처방 그대로: 외곽선을 따라 **관측된 별 끝 6점 + 중심**으로 H 를 재적합한다.
- * 6점 이상 대응이라 `estimateHomographyN`(최소제곱 DLT — 레인 K 가 추가한 6점
+ * 처방 그대로: 외곽선을 따라 **관측된 별 끝 6점**으로 H 를 재적합한다.
+ * 6점 대응이라 `estimateHomographyN`(최소제곱 DLT — 레인 K 가 추가한 6점
  * 일반화, 4점 경로 무변경)을 쓴다. 수용은 별 꼭짓점 앵커 6/6 (digit 5/0/0·1/1/1)
  * — 60° 오가설은 여기서도 digit 으로 죽는다.
+ *
+ * ⚠ 중심을 대응점으로 넣지 않는다 (2026-08-25 POSE 실측). 이 경로가 필요한
+ * cell-mask/OAK seed는 중심 자체가 최대 22.1px(1.84셀) 어긋났는데, 정확한 별끝
+ * 여섯 점과 그 나쁜 중심을 한 H에 함께 맞추면 내부에 가짜 projective warp가 생겼다.
+ * 별끝 6점만으로 projective H는 이미 과결정이고, 원점 영상 좌표는 그 H가 **결과로**
+ * 정해야 한다. 수용은 아래의 독립 K 앵커 6/6 + 포맷 CRC + 본문 RS가 그대로 맡는다.
  */
 /**
  * 별 끝 6점의 이미지 관측 — **방사 프로파일의 국소 최원점**으로 찾는다.
@@ -1644,55 +1697,56 @@ function starSilhouetteHypotheses(luma, finder, k, outline, options, cfg) {
     const assigned = canonicalTips.map(
       (_, index) => observedTips[(index + shift) % 6],
     );
-    const provisional = estimateHomographyN(
-      [{ x: 0, y: 0 }, ...canonicalTips],
-      [center, ...assigned],
-    );
-    if (!provisional) continue;
-    const anchorValidation = validateAnchorPattern(
-      luma, provisional, k, sampleOptions, canonicalAnchorCells,
-    );
-    if (anchorValidation.agreement !== canonicalAnchorCells.length) continue;
-
-    const H = provisional;
-    const imageAnchors = canonicalAnchorCells
-      .map((cell) => projectPoint(H, canonicalCenter(cell.q, cell.r)));
-    if (imageAnchors.some((point) => point === null)) continue;
-
-    // F-95 규약 (hex 판 승계): 최소제곱 H 의 재투영 잔차가 진짜 잔차다.
-    const residualPoints = [{ x: 0, y: 0 }, ...canonicalTips];
-    const residualObserved = [center, ...assigned];
-    let residualSum = 0;
-    let residualCount = 0;
-    for (let index = 0; index < residualPoints.length; index += 1) {
-      const projected = projectPoint(H, residualPoints[index]);
-      if (!projected) continue;
-      residualSum += Math.hypot(
-        projected.x - residualObserved[index].x,
-        projected.y - residualObserved[index].y,
+    const poseModels = [
+      { mode: 'projective', H: estimateHomographyN(canonicalTips, assigned) },
+      { mode: 'similarity', H: starTipSimilarity(canonicalTips, assigned) },
+    ];
+    for (const poseModel of poseModels) {
+      const H = poseModel.H;
+      if (!H) continue;
+      const anchorValidation = validateAnchorPattern(
+        luma, H, k, sampleOptions, canonicalAnchorCells,
       );
-      residualCount += 1;
-    }
+      if (anchorValidation.agreement !== canonicalAnchorCells.length) continue;
 
-    candidates.push({
-      family: 'star',
-      k,
-      orientation: 0,
-      rotationDegrees: shift * 60,
-      centerQr: false,
-      anchors: imageAnchors,
-      canonicalAnchors: canonicalAnchorCells.map((cell) => ({ q: cell.q, r: cell.r })),
-      H,
-      canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-      geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
-      geometryResidualMeasured: residualCount > 0,
-      anchorMargin: anchorValidation.separation / canonicalAnchorCells.length,
-      anchorValidation,
-      finder,
-      source: 'star-outline-anchor',
-      hypothesisId: 'star-' + k + '-s' + shift,
-      luma,
-    });
+      const imageAnchors = canonicalAnchorCells
+        .map((cell) => projectPoint(H, canonicalCenter(cell.q, cell.r)));
+      if (imageAnchors.some((point) => point === null)) continue;
+
+      // F-95 규약 (hex 판 승계): 최소제곱 H 의 재투영 잔차가 진짜 잔차다.
+      let residualSum = 0;
+      let residualCount = 0;
+      for (let index = 0; index < canonicalTips.length; index += 1) {
+        const projected = projectPoint(H, canonicalTips[index]);
+        if (!projected) continue;
+        residualSum += Math.hypot(
+          projected.x - assigned[index].x,
+          projected.y - assigned[index].y,
+        );
+        residualCount += 1;
+      }
+
+      candidates.push({
+        family: 'star',
+        k,
+        orientation: 0,
+        rotationDegrees: shift * 60,
+        centerQr: false,
+        anchors: imageAnchors,
+        canonicalAnchors: canonicalAnchorCells.map((cell) => ({ q: cell.q, r: cell.r })),
+        H,
+        canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+        geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
+        geometryResidualMeasured: residualCount > 0,
+        anchorMargin: anchorValidation.separation / canonicalAnchorCells.length,
+        anchorValidation,
+        finder,
+        source: 'star-outline-anchor',
+        poseModel: poseModel.mode,
+        hypothesisId: 'star-' + k + '-s' + shift + '-' + poseModel.mode,
+        luma,
+      });
+    }
   }
 
   candidates.sort((left, right) =>
@@ -3023,6 +3077,57 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
     }
   }
 
+  /*
+   * Type K 독립 앵커 개설 — 분류에 star 가 없더라도 중앙 파인더가 준 포즈 위에서
+   * 별 꼭짓점 6점을 직접 확인한다.
+   *
+   * 왜 분류 뒤 별도 축인가 (2026-08-25 POSE 실측): cell-mask/3톤 파인더의 H 는
+   * K 전용 배율 탐색으로 보정하면 포맷 셀을 읽을 수 있는 seed지만, star 분류기는
+   * 3k 거리의 패치까지 먼저 찍으므로 중심·배율의 셀 이하 오차가 증폭되어 star
+   * 라벨만 잃는다. 그러면 같은 H 가 hex/tri 포맷 인덱스만 허용받아 star 포맷 7을
+   * 한 번도 평가하지 못한다
+   * (hypothesisCount 300대 · formatProposalCount 0).
+   *
+   * 이 축은 라벨 우회가 아니다. `findKAnchorHypotheses`의 기존 하드체크
+   * (별 꼭짓점 6/6 · 면 순위 분리 · 기대 digit)을 모두 통과한 포즈만 추가하고,
+   * 뒤의 포맷 CRC → 본문 RS → payload 게이트도 그대로 받는다. O/A 프레임에는
+   * 반전 계열 별 꼭짓점 3점이 없으므로 6/6에서 닫힌다. 이미 star 로 분류된 경로는
+   * 위 루프가 같은 검사를 했으므로 중복 실행하지 않는다.
+   */
+  if (!classified.families.includes('star')) {
+    for (let finderIndex = 0; finderIndex < finders.length; finderIndex += 1) {
+      const finder = finders[finderIndex];
+      const direct = directAnchorHypotheses(luma, finder, 'star', {
+        ...options,
+        allowWeakAnchorFallback: false,
+      });
+      direct.hypotheses.forEach((hypothesis) => {
+        hypotheses.push({ ...hypothesis, finderIndex });
+      });
+      anchorDiagnostics.push({
+        family: 'star',
+        finderIndex,
+        mode: 'independent-star-anchor',
+        directCount: direct.hypotheses.length,
+        strictCount: direct.strictCount,
+        fallbackCount: direct.fallbackCount,
+        directFailure: direct.failure,
+      });
+
+      // direct 가 6/6을 하나라도 세우면 outline 폴백을 열지 않는다. non-star 프레임
+      // 대부분은 6/6이 0이 정상이지만, outline 가설도 별 꼭짓점 6/6을 독립 통과해야
+      // 후보가 된다.
+      // direct 범위 밖의 OAK seed(중심/배율/회전 동시 오차)는 이 전역 정합이 유일한
+      // 복구 경로다. O/A 오수용 여부는 같은 포맷 CRC→RS 게이트와 코퍼스 A/B로 잰다.
+      if (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true) {
+        for (const k of uniqueDimensions('star')) {
+          starSilhouetteHypotheses(luma, finder, k, outline, options, cfg)
+            .forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
+        }
+      }
+    }
+  }
+
   hypotheses.push(...qrGeometryHypotheses(luma, qrResult, options));
   hypotheses.push(...qrWindowReferenceRefinedHypotheses(luma, qrResult, options));
 
@@ -3558,6 +3663,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     const digits = [];
     const cubeUnreadableCells = [];
     const unsampledCells = [];
+    const starTieCells = [];
     const erasureCells = [];
     for (const cell of layout.dataCells) {
       const key = cube ? cell.i + ',' + cell.j : cell.q + ',' + cell.r;
@@ -3583,7 +3689,18 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
           digits.push(read.digit);
         }
       } else {
-        digits.push(sampleToDigit(sample));
+        // K 외곽 포즈를 정답 H로 바꿔도 daehan 장식이 덮은 본문 셀은 세 면의
+        // 휘도가 정확히 동률(`tie`)이었다. 이를 임의 순위 digit으로 확정하면
+        // K0/K1이 각각 9/16 symbol 오류가 되어 RS 한계를 딱 1개 넘는다. 관측이
+        // 말하지 못한 값을 기존 unsampled와 같은 위치 지정 소거로 넘긴다.
+        // 다른 패밀리는 기존 판정을 한 비트도 바꾸지 않는다.
+        if (hypothesis.family === 'star' && sample.tie === true) {
+          digits.push(0);
+          starTieCells.push({ cell, cause: 'equal-luminance-rank' });
+          erasureCells.push(scanIndex);
+        } else {
+          digits.push(sampleToDigit(sample));
+        }
       }
     }
 
@@ -3610,6 +3727,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
             : dataCellsInScanOrderAMarker(dimension);
         const markerDigits = [];
         const markerErasures = [];
+        const markerTieCells = [];
         for (const cell of scan) {
           const sample = grid.cells.get(cell.q + ',' + cell.r);
           if (sample === undefined) {
@@ -3618,9 +3736,19 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
             markerDigits.push(0);
             continue;
           }
-          markerDigits.push(sampleToDigit(sample));
+          if (hypothesis.family === 'star' && sample.tie === true) {
+            markerErasures.push(markerDigits.length);
+            markerTieCells.push({ cell, cause: 'equal-luminance-rank' });
+            markerDigits.push(0);
+          } else {
+            markerDigits.push(sampleToDigit(sample));
+          }
         }
-        markerBody = { digits: markerDigits, erasureCells: markerErasures };
+        markerBody = {
+          digits: markerDigits,
+          erasureCells: markerErasures,
+          tieCells: markerTieCells,
+        };
       }
       return markerBody;
     };
@@ -3697,7 +3825,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       const useStarMarkerBody = starSpec !== null && starSpec.cornerMarker === true;
       const body = (useMarkerBody || useTurnMarkerBody || useStarMarkerBody)
         ? markerBodyFor()
-        : { digits, erasureCells };
+        : { digits, erasureCells, tieCells: starTieCells };
       // Type K 는 후단이 decode-k.js 다 — decode.js(O/A/Y 정본)는 K 를 모른다
       // (레인 K 브리프 §4: decode.js 는 쓰기 범위 밖, decoder/** 가 K 를 소유).
       const decoded = withStage(options, 'decode', () => (layout.type === 'K'
@@ -3711,6 +3839,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
           reason: decoded.reason,
           cubeUnreadableCount: cubeUnreadableCells.length,
           unsampledCount: unsampledCells.length,
+          starTieCount: body.tieCells.length,
         });
         continue;
       }
@@ -3727,6 +3856,8 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       acceptedForHypothesis.push({
         decoded,
         formatCandidate,
+        tieCells: body.tieCells,
+        erasureCellCount: body.erasureCells.length,
         // 분모는 **실제 포맷 셀 수**다. v1 은 15, 포맷 v2 는 18 —
         // 15 로 고정하면 v2 경로에서 agreement 가 1 을 넘어 점수가 부풀려진다.
         formatAgreement: matchingFormatDigits / formatRead.samples.length,
@@ -3764,6 +3895,13 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
             cells: cubeUnreadableCells,
             unsampledCells,
             erasureCellCount: erasureCells.length,
+          }
+          : undefined,
+        starTieErasure: accepted.tieCells.length > 0
+          ? {
+            mode: 'equal-luminance-rank-rs-erasure',
+            cells: accepted.tieCells,
+            erasureCellCount: accepted.erasureCellCount,
           }
           : undefined,
         formatCandidate: accepted.formatCandidate,

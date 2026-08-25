@@ -380,14 +380,13 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
   //    (조합 전수는 test/generator-exclusion-matrix.test.js 의 K 절이 잰다.)
   assert.match(index, /const typeRejectsCentreQr = currentType\(\) === 'K';/,
     'K 의 안쪽 QR 잠금이 없다 — encodeK 가 centerQr 를 던져 첫 클릭이 죽는다');
-  // **의도적 갱신 (2026-08-25)** — 거부 목록에서 **허용 목록**으로 뒤집었다.
-  // 처음엔 encodeK 가 던지는 셋(중앙QR·중앙v0·daehan)만 숨겼는데, finderPatternId 를
-  // 실제로 배선하고 재보니 **나머지도 대부분 스캔이 안 됐다** (star 검출이 불스아이
-  // 밖을 못 읽는다 — 대조군으로 Type O 에서는 전부 성립함을 확인). 거부 목록은
-  // «안 적힌 것은 보인다» 라서 못 읽는 코드를 계속 흘린다.
-  // 실측 집합과 왕복 근거는 test/typeK-generator-finder.test.js 가 든다.
-  assert.ok(index.includes("const K_SCANNABLE_FINDER_IDS = typeK ? new Set(['bullseye'])"),
-    'K 파인더 허용 목록이 없다 — 스캔 안 되는 파인더가 카드로 열린다');
+  // **의도적 갱신 2회 (2026-08-25 하루 안에)** — 거부 → 허용 → **다시 거부**다.
+  // ① finderPatternId 를 배선하고 재보니 대부분 스캔이 안 돼 허용 목록으로 좁혔고,
+  // ② 같은 날 레인 POSE 가 star 독립 검출을 열어(54/54) 그 사유가 사라져 철회했다.
+  // 지금 남는 차단은 **인코더가 실제로 던지는 것**뿐이다 (encodeK §옵션 배타).
+  // 왕복 근거는 test/typeK-generator-finder.test.js 가 든다.
+  assert.ok(index.includes('const K_BLOCKED_FINDER_IDS = typeK'),
+    'K 배타 게이트가 없다 — encodeK 가 던지는 조합(centerQr·centralV0·daehan)이 카드로 열린다');
 
   // ⑤ K-CM 은 **아직 잠겨 있어야 한다** — bootstrap 이 star formatIndex 8 을 안 연다.
   //    여기서 열면 «생성은 되는데 스캔이 안 되는» 코드를 발행한다 (typeK-roundtrip ②).

@@ -69,6 +69,39 @@ test('K 왕복 — K0/K1/K2 가 star 가설·포맷 7 로 원문까지 돌아온
   }
 });
 
+test('K 포즈 정합 — 비 bullseye 중앙 파인더도 K0/K1/K2 원문까지 돌아온다', () => {
+  // 2026-08-25 POSE 회귀: 이 셋은 모두 중앙 파인더 H 자체는 있었지만 star 분류가
+  // 3k 거리 패치에서 먼저 깨져, 정상 경로에 star 가설이 0개였다. 그 결과 수백 개
+  // hex/tri 가설이 포맷 7을 한 번도 평가하지 못했다(formatProposalCount=0).
+  // 각 계보(하이브리드 불스아이 / 3톤 큐브 / cell-mask)의 실측 실패 대표를 전 버전으로
+  // 잠근다. finder 목록 전체의 변동 추적은 lane-out/pose-matrix.mjs가 카드 표에서 유도한다.
+  const finderPatternIds = [
+    'cube-bullseye',
+    'central-cube-3tone',
+    'pinwheel-3-0101-cw-missing-solid',
+  ];
+  for (const finderPatternId of finderPatternIds) {
+    for (const spec of VERSIONS_K) {
+      const text = 'K-pose-' + finderPatternId + '-' + spec.name;
+      const encoded = encodeK(text, { version: spec.version, eccLevel: 'M' });
+      const scene = buildScene(encoded, {
+        palette: PALETTE,
+        margin: 20,
+        finderPatternId,
+      });
+      const raster = rasterize(scene, { pixelsPerUnit: PPU, supersample: 1 });
+      const result = decodeFrontend(raster);
+      assert.equal(result.ok, true,
+        finderPatternId + ' ' + spec.name + ' 왕복 실패: '
+        + (result.reason || '') + ' ' + JSON.stringify(result.detail?.pipelineCode));
+      assert.equal(result.text, text, finderPatternId + ' ' + spec.name + ': 원문이 다르다');
+      assert.equal(result.family, 'star', finderPatternId + ' ' + spec.name + ': star가 아니다');
+      assert.equal(result.version, spec.version,
+        finderPatternId + ' ' + spec.name + ': 버전이 다르다');
+    }
+  }
+});
+
 // K-CM 은 **생성·후단 복호까지** 열려 있다. 프론트엔드는 2026-08-25 에 **반쯤** 배선됐다.
 //
 // ## 벽이 어디로 옮겨갔나 (2026-08-25 실측)

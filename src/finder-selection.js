@@ -57,15 +57,13 @@ export function createFinderQrProfiles(defaultFinderPatternId) {
     // K — 바깥 QR 기본값 (Y 와 같은 모양). encodeK 가 centerQr·centralV0·
     // daehanFinder·turnA 를 던지므로 «안쪽 QR» 기본값을 줄 수 없다.
     //
-    // ⚠ 파인더는 `defaultFinderPatternId`(=cube-bullseye)가 **아니라** LEGACY(=bullseye)다.
-    //   실측(2026-08-25): cube-bullseye 는 K0 만 읽히고 K1·K2 는 안 읽힌다.
-    //   star 검출이 전 버전에서 성립하는 것은 bullseye 하나뿐이라, 기본값이 그 밖이면
-    //   «기본 상태로 만든 코드가 안 읽히는» 상태가 된다. index.html 의 K 파인더
-    //   허용 목록과 **같은 근거**이고, star 검출이 넓어지면 둘을 같이 걷는다.
+    // ⭐ **기본 파인더 복귀 (2026-08-25 저녁)** — 잠깐 LEGACY(bullseye)로 내려 뒀었다.
+    // 사유는 「cube-bullseye 는 K0 만 읽힌다」였고, 레인 POSE 가 star 검출을 열어
+    // 그 제약이 사라졌다 (54/54). 다른 타입과 같은 기본값으로 되돌린다.
     K: Object.freeze({
       qrPosition: DEFAULT_OUTER_QR_POSITION,
-      finderPatternId: K_SCANNABLE_FINDER_PATTERN_ID,
-      previousFinderPatternId: K_SCANNABLE_FINDER_PATTERN_ID,
+      finderPatternId: defaultFinderPatternId,
+      previousFinderPatternId: defaultFinderPatternId,
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',
     }),

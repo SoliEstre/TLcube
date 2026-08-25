@@ -7492,31 +7492,23 @@ function renderFinderUi() {
       heading.textContent = t(heading.dataset.finderFamilyKey);
     }
   }
-  // ── Type K 파인더 **허용 목록** (2026-08-25 실측) ────────────────────────
-  // 운영자 신고: 「생성 현재 중앙 파인더 C2 쌍날로만 고정 렌더, 그 외 모든 파인더
-  // 옵션 작동 안 함. 스캔도 당연히 안됨.」 렌더 고정은 renderTypeK 가 sceneOpts 에
-  // finderPatternId 를 안 넘긴 탓이었고 그건 고쳤다. 그런데 넘기고 나서 재보니
-  // **대부분이 스캔이 안 된다** — 그건 별개의, 더 오래된 결함이다.
-  //
-  // 실측 (버전 3종 × 카드 파인더 20종 왕복):
-  //   bullseye            K0 ✓ K1 ✓ K2 ✓   ← 유일하게 전 버전 성립
-  //   cube-bullseye       K0 ✓ K1 ✗ K2 ✗   ← 부분 성립 («가끔 된다» 는 된다가 아니다)
-  //   나머지 18종          전부 ✗
-  // ⚠ **대조군**: 같은 셀마스크 파인더들이 Type O 에서는 **전부 성립**한다.
-  //   즉 파인더의 문제가 아니라 **star 패밀리 검출 경로**가 불스아이 밖을 못 읽는다.
-  //   K 는 오늘 처음 생성기에 올라왔고 typeK-roundtrip 은 늘 라이브러리 기본
-  //   (=bullseye)으로만 왕복을 쟀다 — 그래서 이 공백이 여태 안 보였다.
-  //
-  // 그때까지 K 에는 **스캔되는 것만** 보인다. 못 읽는 코드를 발행하게 두느니
-  // 선택지를 줄인다 (K-CM 자리를 잠근 것과 같은 판단).
-  // 해제 조건: star 검출이 셀마스크 파인더를 읽게 되면 이 목록을 걷는다.
+  // ── Type K 배타 (2026-08-25) ────────────────────────────────────────────
+  // ⭐ **허용 목록 철회 (같은 날 저녁)** — 잠깐 `bullseye` 하나로 묶어 뒀었다.
+  // 사유는 「star 검출이 불스아이 밖을 못 읽는다」였고, **레인 POSE 가 그것을 열었다**:
+  // 분류에 star 가 없을 때 중앙 파인더별로 K 앵커 검출을 독립 실행한다 (bootstrap).
+  // 실측 재측정 — 파인더 19종 × 버전 3 중 **합법 조합 54/54 성공**.
+  // 그래서 남는 차단은 **인코더가 실제로 던지는 것**뿐이다: centerQr · centralV0 ·
+  // daehanFinder (encodeK §옵션 배타). 그 셋만 숨긴다.
   const typeK = currentType() === 'K';
-  const K_SCANNABLE_FINDER_IDS = typeK ? new Set(['bullseye']) : null;
+  const K_BLOCKED_FINDER_IDS = typeK
+    ? new Set(['center-qr', CENTRAL_V0_FINDER_PATTERN_ID])
+    : null;
   for (const card of document.querySelectorAll('[data-finder-id]')) {
     // 중앙 v0(비컨)는 2026-08-22 부터 O·A 공통이다 — A 에서 카드를 숨기던 분기는
     // finder-selection 의 리셋과 함께 걷어냈다 (운영자 지시 «타입 OAK 모두»).
     const fid = card.dataset.finderId;
-    const blockedForK = K_SCANNABLE_FINDER_IDS !== null && !K_SCANNABLE_FINDER_IDS.has(fid);
+    const blockedForK = K_BLOCKED_FINDER_IDS !== null
+      && (K_BLOCKED_FINDER_IDS.has(fid) || isDaehanFinderPatternId(fid));
     card.style.display = blockedForK ? 'none' : '';
     const active = fid === generatorState.finderPatternId;
     card.classList.toggle('active', active);
