@@ -7938,27 +7938,34 @@ function syncResTierUi() {
   // v0X 드랍 이후 그대로 유지된다.
   const cellSurfaceV0t = type === 'Y' && !detectorAutoY
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0T;
-  // v0TY 도 n=21 전용이라 «중» 한 단만 열린다. **#22 연동(저 ↔ 중) 에는
-  // 넣지 않는다** — v0WY 가 그랬던 것과 같은 이유다: 이 레이아웃은 **QR 위치
-  // 카드«면»** 으로 고르는 물건이라, 해상도 카드가 v0TY 로 가거나 v0TY 에서
-  // 나가게 만들면 **해상도를 고르다가 QR 위치가 같이 바뀌는** 숨은 결합이 생긴다
-  // (축 하나만 움직인다 — #22 관용구).
+  // v0TY 는 **#22 연동(저 ↔ 중) 에 넣지 않는다** — v0WY 가 그랬던 것과 같은 이유다:
+  // 이 레이아웃은 **QR 위치 카드«면»** 으로 고르는 물건이라, 해상도 카드가 v0TY 로
+  // 가거나 v0TY 에서 나가게 만들면 **해상도를 고르다가 QR 위치가 같이 바뀌는** 숨은
+  // 결합이 생긴다 (축 하나만 움직인다 — #22 관용구). 그래서 «저» 는 계속 잠근다.
+  // ⚠ 구 주석은 「v0TY 도 n=21 전용이라 «중» 한 단만 열린다」였다 — QR25 로 거짓이 됐다.
   const cellSurfaceV0ty = type === 'Y' && !detectorAutoY
     && generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY;
   // #22 (운영자 지시 2026-08-16): v0 계열은 해상도를 «잠그지» 않고 **연동**한다 —
-  // v0 에서 «중» 을 고르면 v0T 로, v0T 에서 «저» 를 고르면 v0 로 돌아온다
-  // (대칭 복귀). «고» 는 Y2 셀 표면이 공백이라 계속 잠근다.
+  // v0 에서 «중» 을 고르면 v0T 로, v0T 에서 «저» 를 고르면 v0 로 돌아온다 (대칭 복귀).
+  //
+  // ⭐ **«고» 잠금 해제 (2026-08-25 저녁)** — 구 근거는 「Y2 셀 표면이 공백」이었고
+  //    9ce2883(v0T·v0TR) · QR25(v0TY·v0TRQ·v0TRY)로 **둘 다 소멸**했다. 이 잠금은
+  //    B1 의 삼항과 **독립된 두 번째 핀**이라 하나만 걷으면 여전히 도달 불가다
+  //    (검증 렌즈가 「B1 만 고치고 B2 를 두면 도달 불가」로 짚었다).
+  //    v0 은 n=13 전용이라 «고» 잠금이 그대로 남는다.
   // 셀 표면 잠금이 windowLocked 보다 우선한다 — selectedTier 계산과 같은 우선순위.
   const isOff = (res) =>
     cellSurfaceV0 ? res === 'high'
-      : cellSurfaceV0ty ? (res === 'low' || res === 'high')
-        : cellSurfaceV0t ? res === 'high'
+      : cellSurfaceV0ty ? res === 'low'
+        : cellSurfaceV0t ? false
           : windowLocked ? (res === 'low' || res === 'mid')
             : false;
+  // ⭐ 선택 표시도 **실제 버전을 따라간다** — 'mid' 를 박아 두면 사용자가 «고» 를 눌러
+  //    Y2 로 갔는데 카드는 «중» 이 켜진 채인 «표시 ≠ 와이어» 가 된다.
   const selectedTier = cellSurfaceV0
     ? 'low'
     : (cellSurfaceV0t || cellSurfaceV0ty)
-      ? 'mid'
+      ? resolutionTierForVersion('Y', effectiveVersionYForEncode() ?? 1)
       : resolutionTierForVersion(
         type, generatorState[versionStateKey(type)],
       );
@@ -8299,11 +8306,26 @@ function resolveAutoYSafe() {
  */
 function effectiveVersionYForEncode() {
   if (generatorState.versionY !== 'auto') return Number(generatorState.versionY);
+  // ⭐ **잰 레이아웃 = 쓸 레이아웃** (2026-08-25 저녁, 검증 렌즈 M3).
+  //
+  //    종전엔 검출기 자동이면 **사다리 값을 먼저** 썼다. 그런데 사다리는 (해상도 ×
+  //    로케이터) 를 쌍으로 고르고, **안쪽 QR 은 그 뒤에 로케이터를 갈아 끼운다**
+  //    (`deriveYLocatorForQrPosition`: v0TR → v0TRQ / v0TY / v0TRY). 그래서 사다리는
+  //    v0TR 용량(n=21 에서 58 B)으로 「Y1 이면 된다」고 답하는데 실제로 쓰이는 v0TRQ 는
+  //    51 B 라, 그 사이 페이로드에서 **해상도 대신 ECC 가 먼저 내려갔다** —
+  //    운영자 신고 ②(「ECC 축소가 먼저 들어간다」)가 안쪽 QR 축에서 살아 있던 것이다.
+  //    실측 어긋남: 40\~95 B 구간에서 v0trq 16 · v0ty 24 · v0try 23건.
+  //
+  //    고침: 자동이든 수동이든 **지금 확정된 그 레이아웃**으로 잰다. 사다리는 레이아웃이
+  //    셀 표면이 아닐 때(끔·hex 프레임)만 답한다 — 그때는 잴 레이아웃이 없기 때문이다.
+  //    자동 + 바깥 QR 에서는 두 답이 같다(사다리가 고른 그 레이아웃을 다시 재므로).
+  const forLayout = resolveVersionForLayoutSafe();
+  if (forLayout !== undefined) return forLayout;
   if (detectorAutoY) {
     const auto = resolveAutoYSafe();
     if (auto !== null) return auto.version;
   }
-  return resolveVersionForLayoutSafe();
+  return undefined;
 }
 
 /**
@@ -10525,21 +10547,21 @@ function buildConfig() {
     versionO: selectedVersion(generatorState.versionO),
     // Y 안쪽 윈도는 렌더 의미상 Y2 전용이다. 이 유효값은 저장된 versionY를
     // 덮지 않으므로 윈도/타입/모드 왕복 뒤 수동 또는 자동 선택이 복원된다.
-    // 셀 표면 라인업 (2026-08-25 v0T·v0TR n=25 편입까지):
-    // v0 = Y0 고정 · v0TY = Y1 고정 · **v0T·v0TR = Y1/Y2 양쪽**.
-    // ⭐ **v0T 를 이 삼항에서 뺐다 (2026-08-25)** — 여기서 1 을 내면 encodeOptionsForY
-    //    가 Y2 를 받을 길이 없다. 「v0T/v0TY = Y1 고정」은 9ce2883 이전의 사실이었다.
-    // W2 C3 확인 (설계서 §8-2 해소)의 근거도 **함께 만료됐다**: 「v0TR 계열은 이 삼항에
-    // 없어도 된다 — 레이아웃 분기가 version 1 을 강제하니까」였는데, 그 강제를 걷었으므로
-    // 이제 v0TR 은 여기서 낸 값을 **실제로 소비한다**. (v0TRQ·v0TRY 는 아직 n=21 전용이라
-    // 레이아웃 분기가 계속 1 로 받아 준다 — 여기서 2 가 가도 무해하다.)
+    // 셀 표면 라인업 (2026-08-25 저녁, 레인 QR25 까지):
+    // **v0 만 버전 고정이다** (n=13 전용). T 계열 다섯(v0T · v0TY · v0TR · v0TRQ · v0TRY)은
+    // 전부 `[21, 25]` 이라 여기서 고정하면 안 된다 — 판정 정본은 `CELL_SURFACE_FINAL_NS`.
+    //
+    // ⚠ **이 자리는 하루에 두 번 고쳤다.** 아침에 v0T 를 뺐는데 v0TY 를 남겼고
+    //   (그때는 v0TY 가 정말 n=21 전용이었다), 저녁에 QR25 가 v0TY 를 열자 그 잔존이
+    //   **살아 있는 하드핀**이 됐다 — 검증 렌즈 셋이 독립으로 같은 줄을 짚었다.
+    //   교훈 016 의 정확한 재발이다: 라인업을 넓히는 사람과 상수를 걷는 사람이 다르면
+    //   «허용은 됐는데 고정은 남는» 상태가 생긴다. 그래서 이제 **목록을 안 적는다** —
+    //   v0 하나만 특례로 두고 나머지는 전부 유효 버전을 그대로 흘린다.
     versionY: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0
       ? 0
-      : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY
-        ? 1
-        : fallback.mode === 'window'
-          ? 2
-          : effectiveVersionYForEncode(),
+      : fallback.mode === 'window'
+        ? 2
+        : effectiveVersionYForEncode(),
     versionA: selectedVersion(generatorState.versionA),
     versionK: selectedVersion(generatorState.versionK),
     // 턴A 는 Type A 전용이다 — 다른 타입에서 켜진 채 남아 있어도 여기서 죽인다.
