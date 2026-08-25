@@ -51,7 +51,7 @@ import { axialToPixel } from '../hexgrid.js';
 import { digitToRanks } from '../lehmer.js';
 import { markerCells, markerTetrads } from '../markerO.js';
 import { markerCellsA, markerGroupsA } from '../markerA.js';
-import { no2SeatMarkerCellsTurnA, no2SeatMarkerGroupsTurnA } from '../finder-NO2.js';
+import { co2SeatMarkerCellsTurnA, co2SeatMarkerGroupsTurnA } from '../finder-CO2.js';
 import { sampleHexCell } from './grid-sample.js';
 import { estimateHomography4 } from './homography.js';
 import {
@@ -221,7 +221,7 @@ function medianOf(values) {
  *
  * 왜 묶음별이 아닌가 — 절대 톤 분류의 앵커는 «이 프레임에서 무엇이 어둡고 무엇이
  * 밝은가» 라는 **프레임 수준 성질**이다. 그런데 검증은 코너 묶음별로 도니, 톤 셀이
- * 성긴 심볼(NO2: 묶음당 2셀 = 6슬롯)에서는 (면,톤) 조합당 표본이 1\~2개로 떨어져
+ * 성긴 심볼(CO2: 묶음당 2셀 = 6슬롯)에서는 (면,톤) 조합당 표본이 1\~2개로 떨어져
  * 중앙값이 잡음이 된다. 실측: 묶음별 49/63 · 전체 6셀(18슬롯) 풀링 **18/18 → 63/63**.
  *
  * ⚠ 기저 H 에서 한 번만 표본한다 — 묶음별 국소 탐색은 **자리**를 찾는 것이고
@@ -382,7 +382,7 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
   // 검증·탐색·재적합 논리는 두 타입이 **완전히 같다**; 다른 것은 좌표 목록뿐이다.
   const tetrads = options.groups || markerTetrads(k);
   // ⭐ **톤 앵커는 마커 전체에서 한 번 세운다 (2026-08-25, F-111)** — 묶음별로
-  // 세우면 NO2 처럼 톤 셀이 성긴 심볼에서 (면,톤) 표본이 1\~2개로 떨어져 중앙값이
+  // 세우면 CO2 처럼 톤 셀이 성긴 심볼에서 (면,톤) 표본이 1\~2개로 떨어져 중앙값이
   // 잡음이 된다 (실측: 묶음별 49/63 · 풀링 18/18 → 63/63).
   // 「위치·방향은 묶음별 · 절대 톤 분류는 프레임 수준」 이라는 층 분리를 한 겹 더 민 것이고,
   // 게이트 값은 아무것도 안 바꾼다. 톤 셀이 없는 마커(A-CM·O-CM 의 digit 기대값)면
@@ -658,11 +658,11 @@ export function findACornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
     luma, bullseye, ks, options, 'tri-marker',
     [
       { turn: false, groups: markerGroupsA, cells: markerCellsA },
-      // 턴 변형의 기대값은 **NO2 자리 사상**이다 (V-CM 의 기본 심볼 =
+      // 턴 변형의 기대값은 **CO2 자리 사상**이다 (V-CM 의 기본 심볼 =
       // finder-taxonomy.SEAT_DEFAULT_FINDER['v-cm']). 21셀 전부를 digit 으로 재면
-      // NO2 가 덮은 6셀이 통째로 0점이 되어 agreement 가 0.7143 에 고정된다 —
+      // CO2 가 덮은 6셀이 통째로 0점이 되어 agreement 가 0.7143 에 고정된다 —
       // 게이트 0.78 바로 아래다. 6셀은 톤으로 · 15셀은 digit 으로 재야 맞다.
-      { turn: true, groups: no2SeatMarkerGroupsTurnA, cells: no2SeatMarkerCellsTurnA },
+      { turn: true, groups: co2SeatMarkerGroupsTurnA, cells: co2SeatMarkerCellsTurnA },
     ],
   );
 }

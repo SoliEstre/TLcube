@@ -140,15 +140,15 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
   assert.match(INDEX, /markerTones: type === 'O' && generatorState\.innerSeat === 'o-cm'/,
     'markerTones 파생이 없다 — o-cm 의 H 심볼 통합이 인코더에 안 닿는다');
 
-  // ⚠ **단선 회귀 (2026-08-25, agy 검수 적발)** — `no2AnchorTones` 를 buildConfig 에만
+  // ⚠ **단선 회귀 (2026-08-25, agy 검수 적발)** — `co2AnchorTones` 를 buildConfig 에만
   // 넣고 encodeOptsFor 에서 안 실어서, 정책은 계산되는데 인코더까지 못 갔다.
   // 생성기가 **항상 false 로 동작**했고 배포까지 나간 뒤에야 잡혔다.
   // 이 프로젝트에서 세 번째 같은 부류다(한 층에서 열고 소비자를 안 쓸었다) —
   // 그래서 «정책이 있다» 와 «전달된다» 를 **따로** 잠근다. 하나만 재면 또 샌다.
-  assert.match(INDEX, /no2AnchorTones: type === 'A'/,
-    'no2AnchorTones 정책이 cfg 조립에 없다');
-  assert.match(INDEX, /if \(cfg\.no2AnchorTones === true\) opts\.no2AnchorTones = true;/,
-    'no2AnchorTones 가 encodeOptsFor 에서 안 실린다 — 정책이 인코더에 안 닿는 단선이다');
+  assert.match(INDEX, /co2AnchorTones: type === 'A'/,
+    'co2AnchorTones 정책이 cfg 조립에 없다');
+  assert.match(INDEX, /if \(cfg\.co2AnchorTones === true\) opts\.co2AnchorTones = true;/,
+    'co2AnchorTones 가 encodeOptsFor 에서 안 실린다 — 정책이 인코더에 안 닿는 단선이다');
 });
 
 test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 개설이다', () => {

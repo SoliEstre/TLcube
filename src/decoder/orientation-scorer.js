@@ -189,7 +189,7 @@ export function scoreSampledOrientation(layout, hypotheses, sampleByKey, options
     // 왜 필요한가: 절대 톤 분류의 dark/bright 앵커는 «이 프레임에서 무엇이 어둡고
     // 무엇이 밝은가» 라는 **프레임 수준 성질**인데, 호출자가 layout 을 작게 쪼개
     // 부르면 (면,톤) 조합당 표본이 1\~2개로 떨어져 중앙값이 잡음이 된다.
-    // 실측(코너 마커 × NO2): 묶음당 톤 셀 2개(6슬롯)면 49/63, 마커 전체 6셀
+    // 실측(코너 마커 × CO2): 묶음당 톤 셀 2개(6슬롯)면 49/63, 마커 전체 6셀
     // (18슬롯)로 풀링하면 **18/18 → 63/63**. 게이트 값은 아무것도 안 바꾼다 —
     // 바뀌는 것은 «무엇을 표본으로 삼아 앵커를 세우는가» 뿐이다.
     const injected = options && options.toneAnchors;

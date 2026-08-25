@@ -1,21 +1,21 @@
 /**
- * finder-NO2.js — NO2 파인더 (턴A = 내부 타입 V 의 기본 파인더)의 «톤 정본».
+ * finder-CO2.js — CO2 파인더 (턴A = 내부 타입 V 의 기본 파인더)의 «톤 정본».
  *
  * ─────────────────────────────────────────────────────────────────────────
  * 1. 지위 — V-CM 은 «자리 예약», 그 자리의 «심볼» 이 기본 파인더다
  * ─────────────────────────────────────────────────────────────────────────
- * 운영자 결정 (2026-08-21 CM 격하 · 2026-08-24 NO2 편입): CM 계열은 파인더가 아니라
+ * 운영자 결정 (2026-08-21 CM 격하 · 2026-08-24 CO2 편입): CM 계열은 파인더가 아니라
  * 자리 예약이고, 그 자리에 들어가는 심볼이 기본 파인더다 — Type A 자리(A-CM)엔 H2O
  * (`markerA.js` H2O_LOCAL_TONES_A), Type G 자리(O-CM)엔 H (`finder-H.js`), 그리고
- * **턴A 자리(V-CM)엔 NO2** (이 모듈). 배정은 `finder-taxonomy.SEAT_DEFAULT_FINDER`
+ * **턴A 자리(V-CM)엔 CO2** (이 모듈). 배정은 `finder-taxonomy.SEAT_DEFAULT_FINDER`
  * 의 `'v-cm'` 열이 든다.
  *
  * ⚠ **중앙 파인더와 직교** (운영자 확정 2026-08-24 — «중앙 파인더 관련 없음, 모두
- * 사용 가능»). NO2 는 **자리(V-CM) 심볼**이고 중앙 19셀 슬롯 축과 별개다. 그래서
+ * 사용 가능»). CO2 는 **자리(V-CM) 심볼**이고 중앙 19셀 슬롯 축과 별개다. 그래서
  * 이 모듈은 `finder-patterns.js`·`finder-selection.js` 를 **import 하지 않는다** —
  * 표가 중앙 파인더 선택에 의존할 방법이 구조적으로 없다는 것이 직교성의 증명이고,
- * `test/finder-NO2.test.js` ⑤ 가 그 사실을 값으로 잠근다 (불스아이·큐브 불스아이·
- * 중앙 3톤 큐브·중앙 v0 비컨 전부에서 NO2 면 색이 바이트 동일).
+ * `test/finder-CO2.test.js` ⑤ 가 그 사실을 값으로 잠근다 (불스아이·큐브 불스아이·
+ * 중앙 3톤 큐브·중앙 v0 비컨 전부에서 CO2 면 색이 바이트 동일).
  *
  * 정본 export 의 `finderPattern.cellMasks` 19개는 `cell-editor-core.js`
  * `bullseyeCellMasks()` 산출과 **바이트 동일**이다 (실측) — 즉 중앙 슬롯 표현은
@@ -26,18 +26,18 @@
  * 2. 정본과 발자국 — 9셀 = 꼭짓점 앵커 3 + «영역 내 이웃» 6, 손 좌표 0
  * ─────────────────────────────────────────────────────────────────────────
  * 정본: 셀 편집기 v2 export (운영자 작화 2026-08-24 **수정본** · type V · k=4 ·
- * starter bullseye). repo 사본: `test/output/lanes/finder-NO2.json` (바이트 동일).
+ * starter bullseye). repo 사본: `test/output/lanes/finder-CO2.json` (바이트 동일).
  *
  * 정본이 닿는 9셀을 코드로 되짚었더니 임의 배치가 아니라 **닫힌 규칙**이었다:
  *
- *   NO2 셀 = ⋃ (V 꼭짓점 앵커 a) { a } ∪ { a 의 이웃 중 영역 안인 것 }
+ *   CO2 셀 = ⋃ (V 꼭짓점 앵커 a) { a } ∪ { a 의 이웃 중 영역 안인 것 }
  *
  * 그리고 그 «영역 안인 이웃» 은 **전 k 에서 정확히 2개**다 (k=4/6/8/10 실측 —
  * 아래 로드 자기검증 ①이 매 로드마다 다시 잰다). 꼭짓점은 영역의 뾰족한 끝이라
  * 이웃 6 중 4가 영역 밖으로 떨어지기 때문이고, 그래서 이 규칙은 k 무관하게 선다.
  * V 꼭짓점 앵커 자신은 `placementA.vertexAnchors(k)` 의 180° 상이다 (턴A 정의).
  *
- * k=4 정본 대조 (`test/finder-NO2.test.js` ①): 유도한 9셀이 정본
+ * k=4 정본 대조 (`test/finder-CO2.test.js` ①): 유도한 9셀이 정본
  * `userNonData`(6) ∪ 앵커(3) 와 **전수 일치**하고 톤도 27면 전부 일치한다.
  * 그래서 좌표는 이 모듈에 **하나도 없다** — 아래 표는 코너 × 로컬 라벨(A·N0·N1)
  * 로만 적히고 좌표는 전부 `vertexAnchors` + `neighbors` 에서 유도된다
@@ -60,9 +60,9 @@
  * ─────────────────────────────────────────────────────────────────────────
  * 4. 회계 — V-CM 자리에서 «셀을 새로 먹지 않는다»
  * ─────────────────────────────────────────────────────────────────────────
- * 실측 (전 k): NO2 의 마커 6셀은 **A-CM 마커 21셀의 부분집합**이고 (꼭짓점에서
+ * 실측 (전 k): CO2 의 마커 6셀은 **A-CM 마커 21셀의 부분집합**이고 (꼭짓점에서
  * 2칸 안쪽 링의 바깥쪽 두 셀), 앵커 3셀은 이미 `vertexAnchors` 다. 그래서 V-CM
- * (= A-CM 회계의 턴A 사상) 위에 NO2 를 얹으면 **오버헤드·scan order·용량이 전부
+ * (= A-CM 회계의 턴A 사상) 위에 CO2 를 얹으면 **오버헤드·scan order·용량이 전부
  * 불변**이다 — digit 은 그대로 남고 `tones` 오버레이만 붙는다. 자기검증 ③이 잰다.
  *
  * 반대로 **순수 V**(자리 예약 없는 턴A) 레이아웃에서는 그 6셀이 데이터(k=6 은
@@ -75,23 +75,23 @@
  * 셀 entry 에 `tones: {T,L,R}` 를 실으면 `scene.js` faceColor 가 **데이터와 같은
  * `palette.levels`** 로 그린다. 파인더 축(bullseyeLight = 순백)은 금지 — 순백이
  * 안전영역·흰 지면과 구별되지 않아 실루엣에 구멍이 난다 (2026-08-20 실기기 실측,
- * `scene.js` faceColor 헤더). 구별은 색이 아니라 «조합»이다: NO2 9셀은 **전부
+ * `scene.js` faceColor 헤더). 구별은 색이 아니라 «조합»이다: CO2 9셀은 **전부
  * 비-순열**(전면 동톤 2셀 포함)이라 데이터 셀이 만들 수 없는 무늬다.
  *
- * ⚠ **알려진 공백 (실측 2026-08-24)** — NO2 는 **꼭짓점 앵커 3셀까지 덮는다.**
+ * ⚠ **알려진 공백 (실측 2026-08-24)** — CO2 는 **꼭짓점 앵커 3셀까지 덮는다.**
  * 앵커에 절대 톤을 실은 프레임은 digit 기반 앵커 검출이 거의 못 읽는다:
  * 페이로드 4 × 버전 3 × ppu 2 = **24칸 중 2칸만 성공**(실패 20 = `no-anchors`,
  * 2 = `no-format-candidate`)이고 그 2칸은 한 페이로드·한 버전에 몰려 있다 —
  * **페이로드 의존**이라 «가끔 된다» 이지 «된다» 가 아니다 (F-108 과 같은 결).
  * 같은 격자에서 **기본 적재(마커 6셀만)는 24/24** 다. H 가 tetrad A 를 덮어 같은
  * 공백을 가졌던 것과 **정확히 같은 축**이다 (`finder-H.js` §4). 그래서 앵커 톤
- * 적재는 **opt-in**(`encodeA` 의 `no2AnchorTones`)이고 기본은 마커 6셀만 싣는다.
+ * 적재는 **opt-in**(`encodeA` 의 `co2AnchorTones`)이고 기본은 마커 6셀만 싣는다.
  * 기본값 전환은 검출기 배선(통합자 몫)이 선 다음이다 — 한쪽만 켜면 효과가 음수다.
- * 공백 잠금: `test/finder-NO2.test.js` ⑥.
+ * 공백 잠금: `test/finder-CO2.test.js` ⑥.
  *
  * 반면 **마커 6셀 적재는 기본**이고, 그 전환은 V0CM 을 살렸다: A-CM 기본 심볼
  * (H2O) 톤을 V-CM 에 그대로 싣던 종전 경로에서 V0CM(k=6)은 전 해상도 `no-anchors`
- * 였는데, NO2 로 바꾸자 ppu 10\~48 × supersample 1·2 **14점 중 13점**에서 원문까지
+ * 였는데, CO2 로 바꾸자 ppu 10\~48 × supersample 1·2 **14점 중 13점**에서 원문까지
  * 돌아온다 (V1CM 13/14 · V2CM 14/14 — 남은 것은 범위가 아니라 고립 딥이다).
  *
  * 런타임 의존성 0 · 순수 ESM.
@@ -104,19 +104,19 @@ import { markerCellsA, markerPositionSetA } from './markerA.js';
 import { VERSIONS_A } from './capacityA.js';
 
 /** 심볼 이름 — `finder-taxonomy.SEAT_DEFAULT_FINDER['v-cm']` 값과 같은 문자열. */
-export const NO2_NAME = 'NO2';
+export const CO2_NAME = 'CO2';
 
 /** 로컬 라벨 — A = 꼭짓점 앵커, N0·N1 = 영역 안 이웃 2 (`neighbors` 순서). */
-export const NO2_LABELS = Object.freeze(['A', 'N0', 'N1']);
+export const CO2_LABELS = Object.freeze(['A', 'N0', 'N1']);
 
 /** 앵커 라벨 (톤 적재가 opt-in 인 셀) 과 마커 라벨 (기본 적재) 의 분할. */
-export const NO2_ANCHOR_LABEL = 'A';
-export const NO2_MARKER_LABELS = Object.freeze(['N0', 'N1']);
+export const CO2_ANCHOR_LABEL = 'A';
+export const CO2_MARKER_LABELS = Object.freeze(['N0', 'N1']);
 
 /** 발자국 개수 — 유도값의 기대치. 자기검증이 매 로드마다 재확인한다. */
-export const NO2_ANCHOR_COUNT = 3;
-export const NO2_MARKER_COUNT = 6;
-export const NO2_CELL_COUNT = NO2_ANCHOR_COUNT + NO2_MARKER_COUNT;
+export const CO2_ANCHOR_COUNT = 3;
+export const CO2_MARKER_COUNT = 6;
+export const CO2_CELL_COUNT = CO2_ANCHOR_COUNT + CO2_MARKER_COUNT;
 
 function key(q, r) {
   return q + ',' + r;
@@ -130,15 +130,15 @@ function assertK(k) {
 }
 
 /**
- * 정본 NO2 의 면별 톤 — k=4 편집기 export 를 코너(0·1·2) × 로컬 라벨(A·N0·N1)에
- * 고정. 다른 k 는 같은 로컬 라벨을 그 k 의 꼭짓점 자리에 복사한다 (`no2TonesByKeyA`).
+ * 정본 CO2 의 면별 톤 — k=4 편집기 export 를 코너(0·1·2) × 로컬 라벨(A·N0·N1)에
+ * 고정. 다른 k 는 같은 로컬 라벨을 그 k 의 꼭짓점 자리에 복사한다 (`co2TonesByKeyA`).
  * 27/27 면이 정본에 명시돼 있다 — 중간톤 폴백을 쓰는 면이 없다.
  * 실측: 9셀 **전부** 비-순열 · 세 코너 튜플이 서로 다르다 (방향 비공변).
  *
  * ⚠ 코너 인덱스는 `placementA.vertexAnchors(k)` 배열 순서다 (0 = A 의 위 꼭짓점 →
  *   V 에서는 아래, 1 = A 의 우하 → V 의 좌상, 2 = A 의 좌하 → V 의 우상).
  */
-export const NO2_LOCAL_TONES_V = Object.freeze({
+export const CO2_LOCAL_TONES_V = Object.freeze({
   0: Object.freeze({
     A: Object.freeze({ T: 2, L: 0, R: 0 }),
     N0: Object.freeze({ T: 0, L: 2, R: 0 }),
@@ -157,7 +157,7 @@ export const NO2_LOCAL_TONES_V = Object.freeze({
 });
 
 /**
- * NO2 발자국 9셀 — **canonical(Type A) 좌표**. 인코더가 쓰는 공간이다
+ * CO2 발자국 9셀 — **canonical(Type A) 좌표**. 인코더가 쓰는 공간이다
  * (`encodeA` 는 canonical 좌표로 cellDigits 를 채우고 `scene.js` 의 turnA 분기가
  * 그리는 자리만 반전한다 — `markerA.markerCellsTurnA` 헤더와 같은 계약).
  *
@@ -168,29 +168,29 @@ export const NO2_LOCAL_TONES_V = Object.freeze({
  * @returns {{q:number,r:number,corner:number,label:string,role:'anchor'|'marker',
  *            tones:{T:number,L:number,R:number}}[]} 길이 9
  */
-export function no2CellsA(k) {
+export function co2CellsA(k) {
   assertK(k);
   const out = [];
   vertexAnchors(k).forEach((anchor, corner) => {
-    const table = NO2_LOCAL_TONES_V[corner];
-    if (!table) throw new Error('finder-NO2: 로컬 표에 코너 ' + corner + ' 가 없다');
+    const table = CO2_LOCAL_TONES_V[corner];
+    if (!table) throw new Error('finder-CO2: 로컬 표에 코너 ' + corner + ' 가 없다');
     out.push({
       q: anchor.q,
       r: anchor.r,
       corner,
-      label: NO2_ANCHOR_LABEL,
+      label: CO2_ANCHOR_LABEL,
       role: 'anchor',
-      tones: table[NO2_ANCHOR_LABEL],
+      tones: table[CO2_ANCHOR_LABEL],
     });
     const inner = neighbors(anchor.q, anchor.r).filter((c) => isInRegionA(c.q, c.r, k));
-    if (inner.length !== NO2_MARKER_LABELS.length) {
+    if (inner.length !== CO2_MARKER_LABELS.length) {
       throw new Error(
-        'finder-NO2 k=' + k + ': 코너 ' + corner + ' 의 영역 내 이웃이 '
+        'finder-CO2 k=' + k + ': 코너 ' + corner + ' 의 영역 내 이웃이 '
         + inner.length + ' 개다 — 유도 규칙(정확히 2)의 전제 위반',
       );
     }
     inner.forEach((cell, index) => {
-      const label = NO2_MARKER_LABELS[index];
+      const label = CO2_MARKER_LABELS[index];
       out.push({
         q: cell.q, r: cell.r, corner, label, role: 'marker', tones: table[label],
       });
@@ -200,13 +200,13 @@ export function no2CellsA(k) {
 }
 
 /**
- * NO2 발자국 9셀 — **턴A(이미지) 좌표**. 정본 편집기 export 가 쓰는 공간이고
+ * CO2 발자국 9셀 — **턴A(이미지) 좌표**. 정본 편집기 export 가 쓰는 공간이고
  * (`(q,r) → (−q,−r)`), 검출기·분류 서술·정본 대조가 쓴다. 셀이 정립이라 면별
  * 절대 톤은 사상에서 안 돈다 — `markerCellsTurnA` 와 같은 문법.
  * @param {number} k
  */
-export function no2CellsTurnA(k) {
-  return no2CellsA(k).map((cell) => ({ ...cell, q: -cell.q, r: -cell.r }));
+export function co2CellsTurnA(k) {
+  return co2CellsA(k).map((cell) => ({ ...cell, q: -cell.q, r: -cell.r }));
 }
 
 function tonesByKey(cells, labels) {
@@ -218,25 +218,25 @@ function tonesByKey(cells, labels) {
   return map;
 }
 
-/** 정본 NO2 톤을 k 의 **canonical** 좌표로 전개한 표 ("q,r" → {T,L,R}) — 9셀. */
-export function no2TonesByKeyA(k) {
-  return tonesByKey(no2CellsA(k));
+/** 정본 CO2 톤을 k 의 **canonical** 좌표로 전개한 표 ("q,r" → {T,L,R}) — 9셀. */
+export function co2TonesByKeyA(k) {
+  return tonesByKey(co2CellsA(k));
 }
 
-/** 정본 NO2 톤을 k 의 **턴A(이미지)** 좌표로 전개한 표 — 9셀 (정본 대조용). */
-export function no2TonesByKeyTurnA(k) {
-  return tonesByKey(no2CellsTurnA(k));
+/** 정본 CO2 톤을 k 의 **턴A(이미지)** 좌표로 전개한 표 — 9셀 (정본 대조용). */
+export function co2TonesByKeyTurnA(k) {
+  return tonesByKey(co2CellsTurnA(k));
 }
 
 /**
- * V-CM 자리(A-CM 21셀 레이아웃)에 NO2 심볼을 얹은 **마커 셀 목록**.
- * 21셀의 digit·역할은 `markerCellsA(k)` 그대로이고 (회계 불변), NO2 가 덮는 6셀만
+ * V-CM 자리(A-CM 21셀 레이아웃)에 CO2 심볼을 얹은 **마커 셀 목록**.
+ * 21셀의 digit·역할은 `markerCellsA(k)` 그대로이고 (회계 불변), CO2 가 덮는 6셀만
  * `tones` 를 든다. 나머지 15셀은 digit-only — 정본에 그 자리의 톤이 없기 때문이고,
  * 없는 값을 H2O 에서 빌려 오면 «다른 심볼 두 개가 한 자리에» 가 된다.
  * @param {number} k
  */
-export function no2SeatMarkerCellsA(k) {
-  const toneMap = tonesByKey(no2CellsA(k), NO2_MARKER_LABELS);
+export function co2SeatMarkerCellsA(k) {
+  const toneMap = tonesByKey(co2CellsA(k), CO2_MARKER_LABELS);
   return markerCellsA(k).map((cell) => {
     const tones = toneMap.get(key(cell.q, cell.r));
     return tones ? { ...cell, tones } : { ...cell };
@@ -247,19 +247,19 @@ export function no2SeatMarkerCellsA(k) {
  * 같은 21셀을 **턴A 자리(역삼각)** 좌표로. V-CM 을 읽는 쪽이 쓰는 기대값이다.
  *
  * ⚠ 왜 이게 필요한가 — 검출기가 `markerCellsA(k)`(21셀 **전부 digit**)로 재면
- * V-CM 에서 agreement 가 **45/63 = 0.7143** 에 고정된다. NO2 가 톤으로 덮은 6셀은
+ * V-CM 에서 agreement 가 **45/63 = 0.7143** 에 고정된다. CO2 가 톤으로 덮은 6셀은
  * digit 순위와 어긋나 통째로 0점이 되기 때문이고, 그 값은 게이트 0.78 바로 아래다
  * (2026-08-25 실측 — `tri-marker-*-turn` 이 정확히 0.7143). 게이트를 낮추는 게
  * 아니라 **기대값을 바로잡는** 자리다: 6셀은 톤으로, 15셀은 digit 으로 잰다.
  */
-export function no2SeatMarkerCellsTurnA(k) {
-  return no2SeatMarkerCellsA(k).map((cell) => ({ ...cell, q: -cell.q, r: -cell.r }));
+export function co2SeatMarkerCellsTurnA(k) {
+  return co2SeatMarkerCellsA(k).map((cell) => ({ ...cell, q: -cell.q, r: -cell.r }));
 }
 
-/** `no2SeatMarkerCellsTurnA` 의 코너별 묶음 — `markerGroupsA` 와 같은 형태. */
-export function no2SeatMarkerGroupsTurnA(k) {
+/** `co2SeatMarkerCellsTurnA` 의 코너별 묶음 — `markerGroupsA` 와 같은 형태. */
+export function co2SeatMarkerGroupsTurnA(k) {
   const groups = [];
-  for (const cell of no2SeatMarkerCellsTurnA(k)) {
+  for (const cell of co2SeatMarkerCellsTurnA(k)) {
     if (!groups[cell.corner]) groups[cell.corner] = { corner: cell.corner, cells: [], anchorLabel: 'Z' };
     groups[cell.corner].cells.push(cell);
   }
@@ -267,20 +267,20 @@ export function no2SeatMarkerGroupsTurnA(k) {
 }
 
 /**
- * V-CM 자리에서 NO2 가 덮는 **꼭짓점 앵커 3셀** (톤 포함, canonical 좌표).
+ * V-CM 자리에서 CO2 가 덮는 **꼭짓점 앵커 3셀** (톤 포함, canonical 좌표).
  * digit 은 `vertexAnchors` 그대로다 — 이 목록은 `tones` 오버레이 전용이다.
  *
  * ⚠ 적재는 opt-in 이다 (모듈 헤더 §5 — 앵커 피복은 digit 기반 앵커 검출을 죽인다).
  * @param {number} k
  */
-export function no2SeatAnchorCellsA(k) {
+export function co2SeatAnchorCellsA(k) {
   const byKey = new Map(vertexAnchors(k).map((c) => [key(c.q, c.r), c.digit]));
-  return no2CellsA(k)
-    .filter((cell) => cell.label === NO2_ANCHOR_LABEL)
+  return co2CellsA(k)
+    .filter((cell) => cell.label === CO2_ANCHOR_LABEL)
     .map((cell) => {
       const digit = byKey.get(key(cell.q, cell.r));
       if (digit === undefined) {
-        throw new Error('finder-NO2: 앵커 라벨 셀 ' + key(cell.q, cell.r) + ' 이 꼭짓점 앵커가 아니다');
+        throw new Error('finder-CO2: 앵커 라벨 셀 ' + key(cell.q, cell.r) + ' 이 꼭짓점 앵커가 아니다');
       }
       return { q: cell.q, r: cell.r, digit, corner: cell.corner, tones: cell.tones };
     });
@@ -291,20 +291,20 @@ export function no2SeatAnchorCellsA(k) {
 // ─────────────────────────────────────────────────────────────────────────
 {
   // ⓪ 표의 모양 — 코너 3 × 라벨 3, 톤은 0/1/2.
-  const corners = Object.keys(NO2_LOCAL_TONES_V).map(Number).sort((a, b) => a - b);
+  const corners = Object.keys(CO2_LOCAL_TONES_V).map(Number).sort((a, b) => a - b);
   if (corners.join(',') !== '0,1,2') {
-    throw new Error('finder-NO2: 표의 코너가 0,1,2 가 아니다: ' + corners);
+    throw new Error('finder-CO2: 표의 코너가 0,1,2 가 아니다: ' + corners);
   }
   for (const corner of corners) {
-    const labels = Object.keys(NO2_LOCAL_TONES_V[corner]).sort();
-    if (labels.join(',') !== [...NO2_LABELS].sort().join(',')) {
-      throw new Error('finder-NO2: 코너 ' + corner + ' 의 라벨이 NO2_LABELS 와 다르다');
+    const labels = Object.keys(CO2_LOCAL_TONES_V[corner]).sort();
+    if (labels.join(',') !== [...CO2_LABELS].sort().join(',')) {
+      throw new Error('finder-CO2: 코너 ' + corner + ' 의 라벨이 CO2_LABELS 와 다르다');
     }
     for (const label of labels) {
       for (const face of ['T', 'L', 'R']) {
-        const tone = NO2_LOCAL_TONES_V[corner][label][face];
+        const tone = CO2_LOCAL_TONES_V[corner][label][face];
         if (tone !== 0 && tone !== 1 && tone !== 2) {
-          throw new Error('finder-NO2: ' + corner + '.' + label + '.' + face + ' 톤이 0/1/2 가 아니다');
+          throw new Error('finder-CO2: ' + corner + '.' + label + '.' + face + ' 톤이 0/1/2 가 아니다');
         }
       }
     }
@@ -322,23 +322,23 @@ export function no2SeatAnchorCellsA(k) {
   const CANON_K = 4;
   const KS = [CANON_K, ...VERSIONS_A.map((spec) => spec.k)];
   for (const k of KS) {
-    const cells = no2CellsA(k);
+    const cells = co2CellsA(k);
     // ① 마커 6 · 앵커 3 (유도 규칙의 전제 «영역 내 이웃이 정확히 2» 는
-    //    no2CellsA 안에서 이미 던진다 — 여기서는 합계를 다시 센다).
-    if (cells.length !== NO2_CELL_COUNT) {
-      throw new Error('finder-NO2 k=' + k + ': 셀 수가 ' + NO2_CELL_COUNT + ' 이 아니다: ' + cells.length);
+    //    co2CellsA 안에서 이미 던진다 — 여기서는 합계를 다시 센다).
+    if (cells.length !== CO2_CELL_COUNT) {
+      throw new Error('finder-CO2 k=' + k + ': 셀 수가 ' + CO2_CELL_COUNT + ' 이 아니다: ' + cells.length);
     }
     const anchorCount = cells.filter((c) => c.role === 'anchor').length;
     const markerCount = cells.filter((c) => c.role === 'marker').length;
-    if (anchorCount !== NO2_ANCHOR_COUNT || markerCount !== NO2_MARKER_COUNT) {
+    if (anchorCount !== CO2_ANCHOR_COUNT || markerCount !== CO2_MARKER_COUNT) {
       throw new Error(
-        'finder-NO2 k=' + k + ': 앵커/마커 수가 ' + anchorCount + '/' + markerCount
-        + ' 다 — ' + NO2_ANCHOR_COUNT + '/' + NO2_MARKER_COUNT + ' 이어야 한다',
+        'finder-CO2 k=' + k + ': 앵커/마커 수가 ' + anchorCount + '/' + markerCount
+        + ' 다 — ' + CO2_ANCHOR_COUNT + '/' + CO2_MARKER_COUNT + ' 이어야 한다',
       );
     }
     // 전 셀에 톤이 실린다 (표 누락을 조용한 폴백으로 덮지 않는다).
     for (const c of cells) {
-      if (!c.tones) throw new Error('finder-NO2 k=' + k + ': ' + key(c.q, c.r) + ' 에 톤이 없다');
+      if (!c.tones) throw new Error('finder-CO2 k=' + k + ': ' + key(c.q, c.r) + ' 에 톤이 없다');
     }
 
     // ② 로컬 구조 동형 — 코너별 «이웃 방향 인덱스 쌍» 이 전 k 에서 같아야
@@ -349,7 +349,7 @@ export function no2SeatAnchorCellsA(k) {
     if (dirSignature === null) dirSignature = signature;
     else if (signature !== dirSignature) {
       throw new Error(
-        'finder-NO2 k=' + k + ': 로컬 방향 서명이 다르다 (' + signature + ' vs '
+        'finder-CO2 k=' + k + ': 로컬 방향 서명이 다르다 (' + signature + ' vs '
         + dirSignature + ') — 라벨 복사 유도가 k 마다 다른 자리를 가리킨다',
       );
     }
@@ -361,30 +361,30 @@ export function no2SeatAnchorCellsA(k) {
     for (const c of cells) {
       const kk = key(c.q, c.r);
       if (c.role === 'marker' && !markerSet.has(kk)) {
-        throw new Error('finder-NO2 k=' + k + ': 마커 셀 ' + kk + ' 이 A-CM 마커 21셀 밖이다');
+        throw new Error('finder-CO2 k=' + k + ': 마커 셀 ' + kk + ' 이 A-CM 마커 21셀 밖이다');
       }
       if (c.role === 'anchor' && !vertexSet.has(kk)) {
-        throw new Error('finder-NO2 k=' + k + ': 앵커 셀 ' + kk + ' 이 꼭짓점 앵커가 아니다');
+        throw new Error('finder-CO2 k=' + k + ': 앵커 셀 ' + kk + ' 이 꼭짓점 앵커가 아니다');
       }
       if (!isInRegionA(c.q, c.r, k)) {
-        throw new Error('finder-NO2 k=' + k + ': 셀 ' + kk + ' 이 영역 밖이다');
+        throw new Error('finder-CO2 k=' + k + ': 셀 ' + kk + ' 이 영역 밖이다');
       }
     }
     // 자리 적재본이 21셀 회계를 그대로 두고 6셀에만 톤을 얹는다.
-    const seat = no2SeatMarkerCellsA(k);
+    const seat = co2SeatMarkerCellsA(k);
     const base = markerCellsA(k);
     if (seat.length !== base.length) {
-      throw new Error('finder-NO2 k=' + k + ': 자리 적재본 셀 수가 A-CM 과 다르다');
+      throw new Error('finder-CO2 k=' + k + ': 자리 적재본 셀 수가 A-CM 과 다르다');
     }
     let toned = 0;
     for (let i = 0; i < seat.length; i += 1) {
       if (seat[i].q !== base[i].q || seat[i].r !== base[i].r || seat[i].digit !== base[i].digit) {
-        throw new Error('finder-NO2 k=' + k + ': 자리 적재본이 A-CM 좌표/digit 을 바꿨다 [' + i + ']');
+        throw new Error('finder-CO2 k=' + k + ': 자리 적재본이 A-CM 좌표/digit 을 바꿨다 [' + i + ']');
       }
       if (seat[i].tones) toned += 1;
     }
-    if (toned !== NO2_MARKER_COUNT) {
-      throw new Error('finder-NO2 k=' + k + ': 자리 적재 톤 셀이 ' + toned + ' 개다 — ' + NO2_MARKER_COUNT + ' 이어야 한다');
+    if (toned !== CO2_MARKER_COUNT) {
+      throw new Error('finder-CO2 k=' + k + ': 자리 적재 톤 셀이 ' + toned + ' 개다 — ' + CO2_MARKER_COUNT + ' 이어야 한다');
     }
 
     // ④ 발자국 ρ-불변 — 코너 셋이 rotate120/240 궤도로 닫힌다 (방향 판별의 전제).
@@ -394,43 +394,43 @@ export function no2SeatAnchorCellsA(k) {
         const [q, r] = kk.split(',').map(Number);
         const p = rot(q, r);
         if (!set.has(key(p.q, p.r))) {
-          throw new Error('finder-NO2 k=' + k + ': 발자국이 ρ-불변이 아니다 (' + kk + ')');
+          throw new Error('finder-CO2 k=' + k + ': 발자국이 ρ-불변이 아니다 (' + kk + ')');
         }
       }
     }
 
     // ⑤ 턴A 사상 정확성 — (−q,−r) 이고 나머지 필드는 불변 (셀 정립).
-    const turned = no2CellsTurnA(k);
+    const turned = co2CellsTurnA(k);
     for (let i = 0; i < cells.length; i += 1) {
       if (turned[i].q !== -cells[i].q || turned[i].r !== -cells[i].r) {
-        throw new Error('finder-NO2 k=' + k + ': 턴A 사상이 (−q,−r) 이 아니다 [' + i + ']');
+        throw new Error('finder-CO2 k=' + k + ': 턴A 사상이 (−q,−r) 이 아니다 [' + i + ']');
       }
       if (turned[i].label !== cells[i].label || turned[i].corner !== cells[i].corner
         || turned[i].tones !== cells[i].tones) {
-        throw new Error('finder-NO2 k=' + k + ': 턴A 사상이 라벨/코너/톤을 바꿨다 [' + i + ']');
+        throw new Error('finder-CO2 k=' + k + ': 턴A 사상이 라벨/코너/톤을 바꿨다 [' + i + ']');
       }
     }
   }
 
   // ⑥ 심볼다움 — 비-순열 셀이 실재하고(digit 경로가 못 그리는 이유), 톤이 균일하지
   //    않으며, 세 코너 튜플이 서로 다르다 (코너 구별이 산다). finder-H ③ 전례.
-  const tuples = corners.map((corner) => NO2_LABELS
-    .map((label) => ['T', 'L', 'R'].map((face) => NO2_LOCAL_TONES_V[corner][label][face]).join(''))
+  const tuples = corners.map((corner) => CO2_LABELS
+    .map((label) => ['T', 'L', 'R'].map((face) => CO2_LOCAL_TONES_V[corner][label][face]).join(''))
     .join('|'));
   if (new Set(tuples).size !== 3) {
-    throw new Error('finder-NO2: 코너 튜플이 서로 같다 — 코너 구별이 죽는다');
+    throw new Error('finder-CO2: 코너 튜플이 서로 같다 — 코너 구별이 죽는다');
   }
   let nonPermutation = 0;
   const seenTones = new Set();
   for (const corner of corners) {
-    for (const label of NO2_LABELS) {
-      const t = NO2_LOCAL_TONES_V[corner][label];
+    for (const label of CO2_LABELS) {
+      const t = CO2_LOCAL_TONES_V[corner][label];
       seenTones.add(t.T).add(t.L).add(t.R);
       if (new Set([t.T, t.L, t.R]).size < 3) nonPermutation += 1;
     }
   }
   if (nonPermutation === 0) {
-    throw new Error('finder-NO2: 비-순열 셀이 없다 — digit 알파벳으로 충분했다는 뜻이 된다');
+    throw new Error('finder-CO2: 비-순열 셀이 없다 — digit 알파벳으로 충분했다는 뜻이 된다');
   }
-  if (seenTones.size < 2) throw new Error('finder-NO2: 톤이 균일하다 — 검출 불가');
+  if (seenTones.size < 2) throw new Error('finder-CO2: 톤이 균일하다 — 검출 불가');
 }

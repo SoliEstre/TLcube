@@ -219,17 +219,17 @@ test('④ 와이어 무회귀 — daehanFinder 가 formatIndex·포맷 워드를
 test('⑤ CM 격하 · H2O 는 확장 영역 파인더 · 자리의 기본 파인더', () => {
   assert.equal(SEAT_DEFAULT_FINDER['a-cm'], 'H2O');
   assert.equal(SEAT_DEFAULT_FINDER['o-cm'], 'H');
-  // **양성 전환 (2026-08-24 NO2 편입)** — 종전 이 자리에는 «v-cm 도 H2O» 라는
+  // **양성 전환 (2026-08-24 CO2 편입)** — 종전 이 자리에는 «v-cm 도 H2O» 라는
   // 잠정 락이 모듈 로드 자기검증에 있었다. V 자리의 자기 심볼이 생겨 그 락을
   // 양성 단언으로 뒤집는다 (배타 개설 정형 3단 ③). a-cm 의 H2O 는 그대로다.
-  assert.equal(SEAT_DEFAULT_FINDER['v-cm'], 'NO2');
-  const no2 = taxonomyItem('NO2');
-  assert.equal(no2.class, 3, 'NO2 는 분류 3 (VAK 확장 영역 · 꼭짓점 기준)');
-  assert.equal(no2.kind, KIND_FINDER, 'NO2 는 심볼이지 자리가 아니다');
-  assert.ok(no2.renderPath.includes('finder-NO2'), 'NO2 renderPath 가 정본 모듈을 안 가리킨다');
+  assert.equal(SEAT_DEFAULT_FINDER['v-cm'], 'CO2');
+  const co2 = taxonomyItem('CO2');
+  assert.equal(co2.class, 3, 'CO2 는 분류 3 (VAK 확장 영역 · 꼭짓점 기준)');
+  assert.equal(co2.kind, KIND_FINDER, 'CO2 는 심볼이지 자리가 아니다');
+  assert.ok(co2.renderPath.includes('finder-CO2'), 'CO2 renderPath 가 정본 모듈을 안 가리킨다');
   const vcm = taxonomyItem('v-cm');
   assert.equal(vcm.kind, KIND_SEAT);
-  assert.ok(vcm.note.includes('기본 파인더=NO2'), 'v-cm 행이 기본 심볼 전환을 안 적는다');
+  assert.ok(vcm.note.includes('기본 파인더=CO2'), 'v-cm 행이 기본 심볼 전환을 안 적는다');
   const ocm = taxonomyItem('o-cm');
   const acm = taxonomyItem('a-cm');
   assert.equal(ocm.kind, KIND_SEAT);

@@ -36,16 +36,16 @@ import {
   dataCellsInScanOrderAMarker,
   fillerCellsAMarker,
 } from './markerA.js';
-import { no2SeatMarkerCellsA, no2SeatAnchorCellsA, NO2_NAME } from './finder-NO2.js';
+import { co2SeatMarkerCellsA, co2SeatAnchorCellsA, CO2_NAME } from './finder-CO2.js';
 
 /**
  * 레이아웃 공급자 — 레거시 A 와 A-CM(코너 마커)의 차이를 여기 한 곳에 모은다.
  * 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 두 경로가 완전히 같다.
  * encode.js(Type O)의 `layoutProviderFor` 와 같은 구조다.
  *
- * `turnA` 는 **자리의 기본 심볼**만 가른다 (A-CM = H2O · V-CM = NO2). 회계
+ * `turnA` 는 **자리의 기본 심볼**만 가른다 (A-CM = H2O · V-CM = CO2). 회계
  * (versions·capacity·scan·filler·patchReference)는 두 자리가 완전히 같다 —
- * V-CM 은 A-CM 의 턴A 사상이고, NO2 의 마커 6셀은 A-CM 마커 21셀의 부분집합이다.
+ * V-CM 은 A-CM 의 턴A 사상이고, CO2 의 마커 6셀은 A-CM 마커 21셀의 부분집합이다.
  */
 function layoutProviderForA(cornerMarker, daehanFinder = false, turnA = false) {
   if (daehanFinder) {
@@ -87,16 +87,16 @@ function layoutProviderForA(cornerMarker, daehanFinder = false, turnA = false) {
     // H2O 는 확장 영역 파인더이지 중앙 3톤 큐브가 아니다. A-CM 이 H2O 의 중앙
     // 파인더를 버린 것이 아니다.
     //
-    // ── V-CM (턴A 자리) 은 **NO2** 를 싣는다 (운영자 작화 2026-08-24 · 편입 같은 날).
-    // 자리 21셀의 좌표·digit·역할은 A-CM 과 바이트 동일이고 (회계 불변), NO2 가
+    // ── V-CM (턴A 자리) 은 **CO2** 를 싣는다 (운영자 작화 2026-08-24 · 편입 같은 날).
+    // 자리 21셀의 좌표·digit·역할은 A-CM 과 바이트 동일이고 (회계 불변), CO2 가
     // 덮는 마커 6셀만 tones 를 든다. 나머지 15셀은 **digit-only** — 정본에 그 자리의
     // 톤이 없어서다. 없는 값을 H2O 에서 빌려 오면 «한 자리에 심볼 두 개» 가 된다.
     //
     // ⚠ 이 전환은 검출을 **살렸다**: H2O 21셀 톤을 V-CM 에 그대로 싣던 종전 경로는
-    // V0CM(k=6)이 전 해상도 no-anchors 였는데, NO2 로 바꾸자 ppu 10\~48 × supersample
+    // V0CM(k=6)이 전 해상도 no-anchors 였는데, CO2 로 바꾸자 ppu 10\~48 × supersample
     // 1·2 14점 중 13점에서 원문까지 돌아온다 (`test/turnA-roundtrip.test.js` V-CM 왕복).
     marker: turnA
-      ? no2SeatMarkerCellsA
+      ? co2SeatMarkerCellsA
       : (k) => markerCellsA(k, h2oTonesByKeyA(k)),
   };
 }
@@ -129,11 +129,11 @@ export function chooseVersionA(text, eccLevel = 'M') {
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
  * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, daehanFinder?: boolean,
- *          no2AnchorTones?: boolean}} [options]
- *   `no2AnchorTones` — V-CM 기본 심볼 NO2 의 꼭짓점 앵커 3셀 톤까지 싣는다 (opt-in,
+ *          co2AnchorTones?: boolean}} [options]
+ *   `co2AnchorTones` — V-CM 기본 심볼 CO2 의 꼭짓점 앵커 3셀 톤까지 싣는다 (opt-in,
  *   자리 필수). 기본 적재는 마커 6셀뿐이다 — 앵커 피복은 앵커 검출을 죽인다.
  * @returns {{
- *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, daehanFinder: boolean, no2AnchorTones: boolean, formatIndex: number,
+ *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, daehanFinder: boolean, co2AnchorTones: boolean, formatIndex: number,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
  *   dataDigits: Uint8Array,
@@ -152,7 +152,7 @@ export function encodeA(text, options = {}) {
   const {
     version, eccLevel = 'M', centerQr = false, centralV0 = false,
     cornerMarker = false, turnA = false,
-    daehanFinder = false, no2AnchorTones = false,
+    daehanFinder = false, co2AnchorTones = false,
   } = options;
   if (typeof turnA !== 'boolean') {
     throw new TypeError(`turnA 는 boolean 이어야 한다: ${typeof turnA}`);
@@ -171,19 +171,19 @@ export function encodeA(text, options = {}) {
   if (turnA && daehanFinder) {
     throw new RangeError('turnA 와 daehanFinder 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
-  // no2AnchorTones — V-CM 기본 심볼 NO2 의 **꼭짓점 앵커 3셀** 톤을 추가로 싣는다.
+  // co2AnchorTones — V-CM 기본 심볼 CO2 의 **꼭짓점 앵커 3셀** 톤을 추가로 싣는다.
   // 정본에는 그 3셀 톤이 있는데 **기본은 안 싣는다**: 앵커에 절대 톤을 실은 프레임은
   // digit 기반 앵커 검출이 거의 못 읽는다 (실측 2026-08-24 — 페이로드 4 × 버전 3 ×
   // ppu 2 = 24칸 중 2칸만 성공, 실패 20 이 no-anchors. 같은 격자에서 기본 적재는
   // 24/24). H 가 tetrad A 를 덮어 같은 공백을 가졌던 것과 정확히 같은 축이라
   // (`finder-H.js` §4 · `encode.js` markerTones) 같은 처방 — **opt-in** 으로 둔다.
-  // 기본값 전환은 검출기 배선(통합자 몫)이 선 다음이다. 공백 잠금 finder-NO2.test ⑥.
-  if (typeof no2AnchorTones !== 'boolean') {
-    throw new TypeError(`no2AnchorTones 는 boolean 이어야 한다: ${typeof no2AnchorTones}`);
+  // 기본값 전환은 검출기 배선(통합자 몫)이 선 다음이다. 공백 잠금 finder-CO2.test ⑥.
+  if (typeof co2AnchorTones !== 'boolean') {
+    throw new TypeError(`co2AnchorTones 는 boolean 이어야 한다: ${typeof co2AnchorTones}`);
   }
-  if (no2AnchorTones && !(turnA && cornerMarker)) {
+  if (co2AnchorTones && !(turnA && cornerMarker)) {
     throw new RangeError(
-      'no2AnchorTones 는 ' + NO2_NAME + ' 의 자리(V-CM = turnA + cornerMarker) 없이 못 켠다',
+      'co2AnchorTones 는 ' + CO2_NAME + ' 의 자리(V-CM = turnA + cornerMarker) 없이 못 켠다',
     );
   }
   if (typeof centerQr !== 'boolean') {
@@ -340,14 +340,14 @@ export function encodeA(text, options = {}) {
     cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: 'anchor' });
   }
 
-  // NO2 앵커 톤 오버레이 (opt-in) — digit 은 그대로 두고 `tones` 만 얹는다.
+  // CO2 앵커 톤 오버레이 (opt-in) — digit 은 그대로 두고 `tones` 만 얹는다.
   // digit 은 와이어·알파벳 계약이고 tones 는 심볼 오버레이라 층이 다르다.
-  if (no2AnchorTones) {
-    for (const c of no2SeatAnchorCellsA(k)) {
+  if (co2AnchorTones) {
+    for (const c of co2SeatAnchorCellsA(k)) {
       const kk = cellKey(c.q, c.r);
       const entry = cellDigits.get(kk);
       if (!entry || entry.role !== 'anchor' || entry.digit !== c.digit) {
-        throw new Error(NO2_NAME + ' 앵커 톤 대상 ' + kk + ' 이 꼭짓점 앵커가 아니다');
+        throw new Error(CO2_NAME + ' 앵커 톤 대상 ' + kk + ' 이 꼭짓점 앵커가 아니다');
       }
       cellDigits.set(kk, { ...entry, tones: c.tones });
     }
@@ -399,7 +399,7 @@ export function encodeA(text, options = {}) {
     cornerMarker,
     turnA,
     daehanFinder,
-    no2AnchorTones,
+    co2AnchorTones,
     formatIndex,
     capacity,
     codewordSymbols,

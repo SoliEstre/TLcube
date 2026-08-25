@@ -4,7 +4,7 @@
   "size": 4,
   "finderMode": "central-finder",
   "finderStarter": "bullseye",
-  "name": "NO2",
+  "name": "CO2",
   "_note": "운영자 작화 (2026-08-24, **수정본** — bottom 코너 톤 정정). 턴A(내부 타입 V)의 기본 파인더 심볼, V-CM 자리 (A-CM=H2O 규약). 지시: «모든 k 대응» — k=4 가 정본, k=6/8/10 은 유도.",
   "toneLevels": {
     "0": "dark",
@@ -231,6 +231,6 @@
       5,
       3
     ],
-    "name": "NO2"
+    "name": "CO2"
   }
 }
