@@ -1,5 +1,7 @@
 // finder-selection.js — Type O/A 중앙 파인더와 QR 위치의 양방향 상태 계약
 
+import { GENERATOR_TYPES } from './generator-types.js';
+
 export const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
 export const CENTRAL_V0_FINDER_PATTERN_ID = 'central-v0';
 export const DEFAULT_OUTER_QR_POSITION = 'TL';
@@ -8,7 +10,19 @@ export function isCentralV0FinderPatternId(id) {
   return id === CENTRAL_V0_FINDER_PATTERN_ID;
 }
 
-const profileFamily = (type) => type === 'Y' ? 'Y' : 'OA';
+/**
+ * 타입 → 프로파일군.
+ *
+ * ⚠ K 를 'OA' 로 보내면 안 된다 — OA 프로파일은 `qrPosition:'inner'` +
+ * center-qr 이고, buildConfig 가 그것을 `centerQr:true` 로 번역하는데
+ * `encodeK` 는 centerQr 를 **던진다**. 즉 K 의 «첫 클릭 기본 상태» 가 곧
+ * RangeError 가 된다. K 는 Y 와 같은 바깥 QR 기본값을 쓴다.
+ */
+const profileFamily = (type) => {
+  if (type === 'Y') return 'Y';
+  if (type === 'K') return 'K';
+  return 'OA';
+};
 
 /**
  * O/A는 중앙 QR을 기본 파인더로, Y는 종전의 바깥 QR을 기본으로 쓴다.
@@ -36,6 +50,15 @@ export function createFinderQrProfiles(defaultFinderPatternId) {
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',
     }),
+    // K — 바깥 QR 기본값 (Y 와 같은 모양). encodeK 가 centerQr·centralV0·
+    // daehanFinder·turnA 를 던지므로 «안쪽 QR» 기본값을 줄 수 없다.
+    K: Object.freeze({
+      qrPosition: DEFAULT_OUTER_QR_POSITION,
+      finderPatternId: defaultFinderPatternId,
+      previousFinderPatternId: defaultFinderPatternId,
+      previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
+      qrFacePlacement: 'seam',
+    }),
   });
 }
 
@@ -53,7 +76,7 @@ function finderQrSnapshot(state) {
 
 /** 타입을 바꾸면서 현재 타입군 선택을 저장하고 대상 타입군 선택을 복원한다. */
 export function selectGeneratorType(state, type, defaultFinderPatternId) {
-  if (!['O', 'A', 'Y'].includes(type)) {
+  if (!GENERATOR_TYPES.includes(type)) {
     throw new RangeError('알 수 없는 생성기 타입: ' + type);
   }
   const defaults = createFinderQrProfiles(defaultFinderPatternId);

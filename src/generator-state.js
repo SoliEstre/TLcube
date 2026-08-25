@@ -52,14 +52,20 @@ import {
   LOCATOR_PROFILE_OFF,
 } from './locatorY.js';
 
+import { GENERATOR_TYPES } from './generator-types.js';
+
 export const GENERATOR_MODES = Object.freeze(['normal', 'advanced']);
-export const GENERATOR_TYPES = Object.freeze(['O', 'A', 'Y']);
+// 타입 목록의 정의는 generator-types.js 하나다 (순환 회피 + 손 사본 철폐).
+// 소비자들이 예전부터 여기서 가져가므로 재수출로 경로를 유지한다.
+export { GENERATOR_TYPES };
 export const RESOLUTION_TIERS = Object.freeze(['auto', 'low', 'mid', 'high']);
 
 export const RESOLUTION_TIER_VERSIONS = Object.freeze({
   O: Object.freeze({ low: 1, mid: 2, high: 3 }),
   A: Object.freeze({ low: 0, mid: 1, high: 2 }),
   Y: Object.freeze({ low: 0, mid: 1, high: 2 }),
+  // K 는 VERSIONS_K 표를 쓴다 — version 0/1/2 (O 의 1/2/3 과 **한 칸 어긋난다**).
+  K: Object.freeze({ low: 0, mid: 1, high: 2 }),
 });
 
 const BOTH = 'both';
@@ -143,6 +149,9 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   eccLevel: field('auto', BOTH, ['auto', 'H', 'M', 'L']),
   versionO: field('auto', BOTH, ['auto', 1, 2, 3]),
   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
+  // K — VERSIONS_K 표 (0/1/2). versionO 를 빌려 쓰면 O 의 1/2/3 과
+  // 한 칸 어긋나 편집 격자가 생성기와 다른 k 로 열린다 (index.html cellEditorHexSize).
+  versionK: field('auto', BOTH, ['auto', 0, 1, 2]),
   // 턴A (역삼각 Type A = **내부 타입 V**) — Type A 전용 구조 옵션.
   //
   // **BOTH 승격 (2026-08-24)**: 구 INTERNAL 사유(«라이브가 0/3 으로 못 읽는다 —

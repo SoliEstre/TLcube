@@ -119,7 +119,13 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
   // 「어느 분기에 있는가」가 이 검사의 대상이다.
   const opts = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
   const body = opts.slice(0, opts.indexOf('\n}\n'));
-  const yBranch = body.slice(body.indexOf("cfg.type === 'Y'"), body.indexOf("cfg.type === 'A'"));
+  // ⚠ Y 분기의 끝은 «A 분기의 시작» 이 아니라 **다음 타입 분기 어느 것이든**이다.
+  // 종전 식은 타입이 셋이라 성립했고, 2026-08-25 에 K 분기가 Y 와 A 사이에 들어오자
+  // K 의 주석이 «Y 분기» 로 딸려 들어와 거짓 경보가 났다. 타입이 늘어도 안 깨지게 바꾼다.
+  const yStart = body.indexOf("cfg.type === 'Y'");
+  const nextBranch = [...body.matchAll(/cfg.type === '[A-Z]'/g)]
+    .map((m) => m.index).filter((i) => i > yStart);
+  const yBranch = body.slice(yStart, nextBranch.length ? nextBranch[0] : body.length);
   assert.equal(yBranch.includes('cornerMarker'), false,
     'Type Y 분기에 cornerMarker 가 들어갔다 — Y 는 자기 로케이터 문법을 쓴다');
   assert.match(body, /cfg\.cornerMarker === true/,

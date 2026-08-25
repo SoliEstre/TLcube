@@ -17,9 +17,15 @@ import { readFileSync } from 'node:fs';
 
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
+import { encodeK } from '../src/encodeK.js';
+import {
+  GENERATOR_DEFAULT_FINDER_PATTERN_ID, createGeneratorState,
+} from '../src/generator-state.js';
 import { FINDER_CARD_GROUPS, CENTRAL_V0_FINDER_CARD } from '../src/finder-card-ui.js';
 import { isDaehanFinderPatternId } from '../src/finder-daehan.js';
-import { isCentralV0FinderPatternId } from '../src/finder-selection.js';
+import {
+  CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId, selectGeneratorType,
+} from '../src/finder-selection.js';
 
 const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
@@ -134,4 +140,41 @@ test('코너 예약 힌트는 기본 문구다 — 중앙 QR 상수 잠금(g580 
     '기본 힌트 줄이 없다');
   assert.equal(INDEX.includes("centerQrOn ? t('g580')"), false,
     '은퇴한 상수 잠금 분기가 되살아났다 — C2a 해제와 모순');
+});
+
+// ── Type K ─────────────────────────────────────────────────────────────────
+// K 의 배타는 O/A 와 **모양이 다르다**: 쌍이 아니라 **단독 플래그**다 (encodeK.js
+// §옵션 배타 — 명시 값이 오면 던진다). 위의 쌍 전수 탐색은 `length < 2` 를 건너뛰므로
+// K 를 **구조적으로 못 본다** — 그래서 자를 따로 세운다. 자를 먼저 넓히지 않고 UI 를
+// 열면, 배타 조합이 «초록인 채로» 나간다 (2026-08-20 코너마커×중앙QR 과 같은 부류).
+test('Type K 배타 — 인코더에게 묻고, UI 상태가 그 조합을 만들 수 있는지 본다', () => {
+  const CANDIDATES = ['cornerMarker', 'centerQr', 'centralV0', 'daehanFinder', 'turnA'];
+  const thrown = CANDIDATES
+    .filter((f) => rejection(encodeK, { version: 0, eccLevel: 'M' }, { [f]: true }) !== null)
+    .sort();
+  assert.deepEqual(thrown, ['centerQr', 'centralV0', 'daehanFinder', 'turnA'],
+    'K 의 배타 목록이 바뀌었다 — 인코더가 정본이니 UI 가드를 다시 맞춰라');
+
+  // K-CM 은 합법이어야 한다 — 자리는 실재하고 **스캔만** 미배선이다 (typeK-roundtrip ②).
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { cornerMarker: true }), null,
+    'K-CM 이 인코더에서 막혔다 — 자리 자체가 사라졌나');
+
+  // ── 상태층 — K 를 고르면 «던지는 기본값» 이 만들어지면 안 된다.
+  // ⚠ 이 자리가 실제 첫 관문이다: profileFamily 가 K 를 'OA' 로 보내면 기본 프로파일이
+  //    qrPosition:'inner' + center-qr 이고, buildConfig 가 그것을 centerQr:true 로
+  //    번역해 encodeK 가 **첫 클릭에서** 던진다. 스키마 검증보다 앞선다.
+  const k = selectGeneratorType(
+    createGeneratorState({ type: 'Y' }), 'K', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  );
+  assert.equal(k.type, 'K', 'K 로 전환이 안 된다');
+  assert.notEqual(k.finderPatternId, CENTER_QR_FINDER_PATTERN_ID,
+    'K 의 기본 파인더가 중앙 QR 이다 — 첫 클릭이 곧 encodeK 던짐이다');
+  assert.notEqual(k.qrPosition, 'inner',
+    'K 의 기본 QR 위치가 inner 다 — buildConfig 가 centerQr 로 번역해 던진다');
+
+  // 타입 목록의 **손 사본이 없어야 한다** — finder-selection 이 GENERATOR_TYPES 를
+  // 유도해 써야 한다. 사본이 남아 있으면 한쪽만 늘어나 K 클릭이 RangeError 로 죽는다.
+  const SRC = readFileSync(new URL('../src/finder-selection.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(SRC, /\[\s*'O'\s*,\s*'A'\s*,\s*'Y'\s*\]/,
+    'finder-selection.js 에 타입 목록 손 사본이 남아 있다 — GENERATOR_TYPES 에서 유도하라');
 });

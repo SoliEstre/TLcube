@@ -56,10 +56,17 @@ test('k-cm — 와이어는 실재하고 상태값은 아직 아니다 (2026-08-
   assert.equal(card.absent, false, 'k-cm 이 아직 부재 카드다');
   assert.equal(card.ready, true);
   assert.deepEqual([...card.types], ['K']);
+  assert.ok(GENERATOR_STATE_SCHEMA.type.options.includes('K'),
+    '생성기 타입에서 K 가 빠졌다 — 편입이 되돌아갔나');
+  // ⚠ **의도적 갱신 (2026-08-25)** — K 가 생성기 타입에 들어왔는데도 k-cm 은 **계속 잠근다.**
+  // 구 락의 잠금 사유는 「생성기 타입에 K 가 없다」였고 그건 이제 거짓이다. 진짜 사유는
+  // 한 층 아래에 있다: **bootstrap 이 star 축 formatIndex 8 을 안 연다** — 즉 K-CM 은
+  // 생성은 되는데 **스캔이 안 된다** (test/typeK-roundtrip.test.js ② 가 그 사실의 자다).
+  // 여기서 열면 «읽을 수 없는 코드를 발행하는» 상태가 된다. 자리를 여는 조건은 생성기
+  // 타입이 아니라 디코더 배선이다.
   assert.ok(!OUTER_SEAT_OPTIONS.includes('k-cm'),
-    'k-cm 이 상태 허용값에 들었다 — GENERATOR_TYPES 에 K 가 생겼다면 stateValue 를 걷어라');
-  assert.ok(!GENERATOR_STATE_SCHEMA.type.options.includes('K'),
-    '생성기 타입에 K 가 생겼다 — k-cm stateValue 게이트를 다시 봐야 한다');
+    'k-cm 이 상태 허용값에 들었다 — bootstrap formatIndex 8 배선이 끝났는지 먼저 확인하라 '
+    + '(안 끝났으면 스캔 불가 코드가 발행된다)');
   // 유도 원천은 와이어다 (손 행이 아니다).
   assert.ok(K_FORMAT_INDEX.some((entry) => entry.cornerMarker === true),
     'formatK 에 K-CM 행이 없는데 카드가 섰다면 유도가 아니라 손 행이다');

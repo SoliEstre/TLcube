@@ -995,9 +995,10 @@
     </div>
 
     <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
-    <div id="panelNormal" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone">
+    <div id="panelNormal" data-state-keys="type preset versionO versionA versionK versionY eccLevel customHue tone">
       <label class="section-heading" data-i18n="g041">타입</label>
-      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 선택 = Y (사용자 지시 2026-08-09). -->
+      <!-- 배치 = 용량 오름차순 O → A → K → Y, 기본 선택 = Y (사용자 지시 2026-08-09).
+           실측 최대 용량 (ECC M): O 66 · A 102 · K 139 · Y 142 B — K 는 A 와 Y 사이다. -->
       <div class="card-row" id="typeCards">
         <div class="toggle-card" data-type="O" style="flex:1">
           <!-- Type O 실루엣 = 플랫탑 육각형 (pointy-top 셀 격자의 반경 k 영역 — 위아래 변이 평평) -->
@@ -1017,6 +1018,18 @@
             <circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/>
           </svg>
           Type A
+        </div>
+        <div class="toggle-card" data-type="K" style="flex:1">
+          <!-- Type K 실루엣 = 육각별(hexagram) = A ∪ 반전A (placementK) — 180° 자기
+               대칭이라 «턴 K» 가 성립하지 않는다 (encodeK §옵션 배타). 불스아이는
+               O·A 와 공유하므로 같은 미니 아이콘을 쓴다. -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3.4 L20.6 18.3 L3.4 18.3 Z"/>
+            <path d="M12 18.6 L3.4 3.7 L20.6 3.7 Z"/>
+            <circle cx="12" cy="11" r="2.6"/>
+            <circle cx="12" cy="11" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+          Type K
         </div>
         <div class="toggle-card active" data-type="Y" style="flex:1">
           <!-- Type Y = 위에서 본 큐브: Y-심 팔 = 좌상·우상 꼭짓점, 다리 = 아래 꼭짓점 (SPEC §14) -->
@@ -1195,9 +1208,9 @@
     </div>
 
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
-    <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionY eccLevel customHue tone faceGain qrText qrCornerToo exportDither exportPpiDetail">
+    <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionK versionY eccLevel customHue tone faceGain qrText qrCornerToo exportDither exportPpiDetail">
       <label class="section-heading" data-i18n="g041">타입</label>
-      <!-- 배치 = 용량 오름차순 O → A → Y, 기본 = Y (일반 모드와 동일 규약).
+      <!-- 배치 = 용량 오름차순 O → A → K → Y, 기본 = Y (일반 모드와 동일 규약).
            ⚠ **의도적 갱신 (2026-08-24)** — 구 `<select id="codeType">` 를 일반 모드와
            같은 **카드 행**으로 바꿨다 (운영자 «고급에서도 타입 선택은 버튼 형식»).
            아이콘·부제는 일반 카드와 같은 그림이고, 클릭 핸들러는 #typeCards 와
@@ -1218,6 +1231,18 @@
             <circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/>
           </svg>
           Type A
+        </div>
+        <div class="toggle-card" data-type="K" style="flex:1">
+          <!-- Type K 실루엣 = 육각별(hexagram) = A ∪ 반전A (placementK) — 180° 자기
+               대칭이라 «턴 K» 가 성립하지 않는다 (encodeK §옵션 배타). 불스아이는
+               O·A 와 공유하므로 같은 미니 아이콘을 쓴다. -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3.4 L20.6 18.3 L3.4 18.3 Z"/>
+            <path d="M12 18.6 L3.4 3.7 L20.6 3.7 Z"/>
+            <circle cx="12" cy="11" r="2.6"/>
+            <circle cx="12" cy="11" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+          Type K
         </div>
         <div class="toggle-card active" data-type="Y" style="flex:1">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
@@ -1266,6 +1291,15 @@
             <option value="0">A0 (k=6 · 31 B)</option>
             <option value="1">A1 (k=8 · 62 B)</option>
             <option value="2">A2 (k=10 · 101 B)</option>
+          </select>
+        </div>
+        <div id="versionWrapK" style="display:none">
+          <label for="versionK" data-i18n="g049">버전</label>
+          <select id="versionK">
+            <option value="auto" selected data-i18n="g050">자동 (최소)</option>
+            <option value="0">K0 (k=6 · 44 B)</option>
+            <option value="1">K1 (k=8 · 87 B)</option>
+            <option value="2">K2 (k=10 · 139 B)</option>
           </select>
         </div>
         <div>
@@ -1831,7 +1865,7 @@
              용량을 깎는다 (V3 65 B → 46 B · A2 101 B → 80 B). OAK 3장은 용량 불변이라
              같은 줄에 두면 «같은 종류의 선택» 이라는 거짓 함의가 생긴다.
              Type A 도 쓴다 — 육각 코어가 O 와 좌표 동일하고 패치에는 안 들어간다
-             (실측 2026-08-19). Type K 는 인코더가 없어 아직 안 연다.
+             (실측 2026-08-19). Type K 는 encodeK 가 daehanFinder 를 던져서 안 연다 (인코더는 있다 — 2026-08-24).
              ⚠ **고급 전용을 유지한다** — 왕복 실측(2026-08-19): 이 코드는 스캐너의
              `cellFinderDaehan` 옵트인이 **꺼져 있으면 0/3, 켜면 3/3** 으로 읽힌다.
              그 옵트인은 오늘 /lab/ 토글에만 있다. 그래서 summary 가 그 사실을 말한다.
@@ -5843,6 +5877,7 @@ import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capa
 import { VERSIONS as VERSIONS_O_TABLE } from './src/capacity.js';
 import { VERSIONS_A as VERSIONS_A_TABLE } from './src/capacityA.js';
 import { VERSIONS_K as VERSIONS_K_TABLE } from './src/capacityK.js';
+import { encodeK } from './src/encodeK.js';
 // ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
 // placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
 import { placeReservedCells } from './src/autoplaceY.js';
@@ -5971,7 +6006,8 @@ const els = {
   // 고급 모드 (페이로드·QR 폴백 체크박스류는 공용 블록으로 통합 — 사용자 지시 2026-08-09)
 
   versionWrapO: $('versionWrapO'), versionWrapY: $('versionWrapY'), versionWrapA: $('versionWrapA'),
-  versionO: $('versionO'), versionY: $('versionY'), versionA: $('versionA'),
+  versionWrapK: $('versionWrapK'),
+  versionO: $('versionO'), versionY: $('versionY'), versionA: $('versionA'), versionK: $('versionK'),
   ecc: $('ecc'), preset: $('preset'),
   optionsY: $('optionsY'), toneNormalSection: $('toneNormalSection'),
   toneCardsNormal: $('toneCardsNormal'), toneCardsAdvanced: $('toneCardsAdvanced'),
@@ -7411,11 +7447,27 @@ function renderFinderUi() {
       heading.textContent = t(heading.dataset.finderFamilyKey);
     }
   }
+  // ── Type K 배타 (2026-08-25) ────────────────────────────────────────────
+  // encodeK 는 centerQr·centralV0·daehanFinder 를 **던진다** (encodeK.js §옵션 배타 —
+  // 셋 다 «배치 검증 미실시» 사유). 그래서 K 에서는 그 셋을 고를 수 없게 카드를 숨긴다.
+  // 숨기는 이유(잠금이 아니라 은닉): 이 셋은 K 의 «못 쓰는 선택지» 가 아니라 **아직
+  // 검증 안 한 조합**이라, disabled 로 남겨 두면 «왜 회색인가» 만 늘고 설명할 근거가 없다.
+  //
+  // ⚠ 운영자 의도 보존: 중앙 v0(비컨)에 대해 «타입 OAK 모두» 지시가 있었다(2026-08-22).
+  //   지금 막는 것은 그 지시의 철회가 아니라 **인코더 계약이 아직 안 따라온 상태**다.
+  //   encodeK 의 centralV0 배타가 배치 검증으로 풀리면 이 목록에서 먼저 걷어야 한다.
+  const typeK = currentType() === 'K';
+  const K_BLOCKED_FINDER_IDS = typeK
+    ? new Set(['center-qr', CENTRAL_V0_FINDER_PATTERN_ID])
+    : null;
   for (const card of document.querySelectorAll('[data-finder-id]')) {
     // 중앙 v0(비컨)는 2026-08-22 부터 O·A 공통이다 — A 에서 카드를 숨기던 분기는
     // finder-selection 의 리셋과 함께 걷어냈다 (운영자 지시 «타입 OAK 모두»).
-    card.style.display = '';
-    const active = card.dataset.finderId === generatorState.finderPatternId;
+    const fid = card.dataset.finderId;
+    const blockedForK = K_BLOCKED_FINDER_IDS !== null
+      && (K_BLOCKED_FINDER_IDS.has(fid) || isDaehanFinderPatternId(fid));
+    card.style.display = blockedForK ? 'none' : '';
+    const active = fid === generatorState.finderPatternId;
     card.classList.toggle('active', active);
     card.setAttribute('aria-pressed', String(active));
     const label = card.querySelector('[data-finder-label-key]');
@@ -7636,7 +7688,11 @@ function renderQrPositionUi() {
    * 고른 것인데, 여기서 조용히 daehan 을 떨구면 카드는 daehan 인데 그림은 아닌
    * «라벨이 사실이 아닌» 상태가 된다. 그래서 **중앙 QR 카드를 잠근다.**
    */
-  const finderTakesCentre = isDaehanFinderPatternId(generatorState.finderPatternId)
+  // K 는 파인더와 무관하게 **안쪽 QR 자체가 불가**다 — encodeK 가 centerQr 를 던진다.
+  // 파인더가 중앙을 먹어서가 아니라 타입 계약이라, 같은 «안쪽 잠금» 축에 함께 싣는다.
+  const typeRejectsCentreQr = currentType() === 'K';
+  const finderTakesCentre = typeRejectsCentreQr
+    || isDaehanFinderPatternId(generatorState.finderPatternId)
     || isCentralV0FinderPatternId(generatorState.finderPatternId);
   if (finderTakesCentre && generatorState.qrPosition === 'inner') {
     // ⚠ 예전엔 스키마 밖 값 'outer' 를 대입하던 잠복 버그였다 (2026-08-23 수리) —
@@ -8368,7 +8424,11 @@ function cellEditorHexSize(type) {
   // V(턴A)는 A 의 180° 상이라 k 가 같다 · K 는 자기 표(VERSIONS_K).
   const triLike = type === 'A' || type === 'V';
   const table = type === 'K' ? VERSIONS_K_TABLE : triLike ? VERSIONS_A_TABLE : VERSIONS_O_TABLE;
-  const chosen = triLike ? generatorState.versionA : generatorState.versionO;
+  // ⚠ K 는 **자기 버전 축**(versionK)을 읽는다. 종전엔 versionO 를 빌려 썼는데
+  // O 는 1/2/3 · K 는 0/1/2 라 한 칸 어긋난 k 로 편집 격자가 열렸다 (생성기가
+  // K 를 못 골라 auto 폴백에 가려 잠복해 있던 결함이다 — 편입과 같은 커밋에서 걷는다).
+  const chosen = type === 'K' ? generatorState.versionK
+    : triLike ? generatorState.versionA : generatorState.versionO;
   const lastK = triLike ? lastEncodedKA : lastEncodedKO;
   if (chosen !== undefined && chosen !== 'auto') {
     const spec = table.find((item) => item.version === Number(chosen));
@@ -9629,6 +9689,7 @@ function syncTypeUi() {
   const type = generatorState.type;
   const isY = type === 'Y';
   const isA = type === 'A';
+  const isK = type === 'K';
   for (const container of [els.typeCards, els.typeCardsAdvanced]) {
     if (!container) continue;
     for (const card of container.children) {
@@ -9638,6 +9699,7 @@ function syncTypeUi() {
   els.versionO.value = String(generatorState.versionO);
   els.versionY.value = String(generatorState.versionY);
   els.versionA.value = String(generatorState.versionA);
+  els.versionK.value = String(generatorState.versionK);
   els.ecc.value = generatorState.eccLevel;
   // Y + 안쪽(윈도 β)은 2톤 전용이다 — 해상도 티어와 같은 규약으로, 렌더가 강제하는 값을
   // 카드에도 그대로 비춰 준다. 안 그러면 3톤이 선택된 것처럼 보이는데 2톤이 그려진다.
@@ -9661,9 +9723,13 @@ function syncTypeUi() {
   for (const card of els.eccTierCards.children) {
     card.classList.toggle('active', card.dataset.tier === generatorState.eccLevel);
   }
-  els.versionWrapO.style.display = (isY || isA) ? 'none' : '';
+  // ⚠ versionWrapO 는 «Y·A 가 아니면» 이 아니라 **«O 일 때만»** 이다. 종전 식은
+  // 타입이 셋뿐이라 성립했고, K 가 늘자마자 «K 인데 O 버전 표가 열리는» 상태가 된다
+  // (O 는 1/2/3 · K 는 0/1/2 라 한 칸 어긋난 k 를 고르게 된다).
+  els.versionWrapO.style.display = (isY || isA || isK) ? 'none' : '';
   els.versionWrapY.style.display = isY ? '' : 'none';
   els.versionWrapA.style.display = isA ? '' : 'none';
+  els.versionWrapK.style.display = isK ? '' : 'none';
   els.optionsY.style.display = isY ? '' : 'none';
   syncRenderProfileUi(); // 렌더 프로파일 섹션도 Y 에서만 열린다 (면 게인 소비자가 Y 뿐).
   syncShadingUi();       // 입체 음영도 같은 이유로 Y 전용이다.
@@ -9857,6 +9923,7 @@ function syncYLocatorUi() {
 // (구 #codeType select 의 change 핸들러는 카드 배선(wireTypeCards)으로 대체됐다.)
 for (const [select, key] of [
   [els.versionO, 'versionO'], [els.versionY, 'versionY'], [els.versionA, 'versionA'],
+  [els.versionK, 'versionK'],
 ]) {
   select.addEventListener('change', () => {
     generatorState[key] = select.value === 'auto' ? 'auto' : Number(select.value);
@@ -10281,6 +10348,7 @@ function buildConfig() {
           ? 2
           : selectedVersion(generatorState.versionY),
     versionA: selectedVersion(generatorState.versionA),
+    versionK: selectedVersion(generatorState.versionK),
     // 턴A 는 Type A 전용이다 — 다른 타입에서 켜진 채 남아 있어도 여기서 죽인다.
     turnA: type === 'A' && generatorState.turnA === true,
     // 코너 마커는 seat 파생이다 (W2 C4): O 는 내곽 o-cm, A 는 외곽 a-cm 이 켠다.
@@ -10418,6 +10486,21 @@ function encodeOptsFor(cfg) {
       opts.turnA = true;
     }
     return { fn: encodeA, opts };
+  }
+  if (cfg.type === 'K') {
+    // Type K — encodeK 는 centerQr·centralV0·daehanFinder·turnA 를 **던진다**
+    // (encodeK.js §옵션 배타). 그래서 여기서는 그 넷을 **한 비트도 안 싣는다** —
+    // false 로도 안 채운다. encodeK 는 `options[name] !== undefined && !== false`
+    // 로 보므로 false 는 통과하지만, 안 싣는 쪽이 «UI 가 만들 수 있는 조합» 을
+    // 옵션 표면에서 아예 없앤다 (A 분기의 turnA 규약과 같은 이유).
+    //
+    // K-CM(cornerMarker)은 인코더상 합법이지만 **여기서도 안 싣는다**: 부트스트랩이
+    // star 축 formatIndex 8 을 안 열어 K-CM 은 생성돼도 **스캔이 안 되기 때문**이다
+    // (test/typeK-roundtrip.test.js ②). 자리 카드도 같은 이유로 잠겨 있다
+    // (finder-zone-ui.starSeat stateValue:false). 배선이 끝나면 두 자리를 함께 연다.
+    const opts = {};
+    if (cfg.versionK !== undefined) opts.version = cfg.versionK;
+    return { fn: encodeK, opts };
   }
   const opts = { centerQr: cfg.fallback.mode === 'center' };
   if (cfg.versionO !== undefined) opts.version = cfg.versionO;

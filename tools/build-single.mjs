@@ -66,6 +66,9 @@ const MODULE_ORDER = [
   // footprint 표와 taegeuk 유도(finder-daehan)를 import 하게 됐기 때문이다. 같은
   // 위상 규칙: 로컬 의존 전부가 앞에 있어야 치환이 성립한다.
   'placement', 'finder-daehan', 'finder-footprint', 'finder-oak-patterns',
+  // generator-types 는 finder-selection·generator-state **양쪽의 앞**이어야 한다
+  // (둘 다 타입 목록을 여기서 가져간다 — 2026-08-25 손 사본 철폐).
+  'generator-types',
   'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
   'header', 'bullseye', 'layout', 'capacity',
   // capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의 뒤여야 하고
@@ -97,6 +100,20 @@ const MODULE_ORDER = [
   // 채택하지 않고 묶음을 유지한다. ⚠ formatK 에 capacityY 를 물리면 이 위상이 깨진다
   // (capacityY 는 번들 후반) — formatK.js 헤더 §값 선택 ③ 의 ⚠ 가 그 제약이다.
   'placementK', 'formatK', 'capacityK',
+  // encodeK 와 그 K 전용 의존 (2026-08-25, 생성기 편입). markerK·layoutK 는 그전까지
+  // **아무도 번들에 안 넣었다** — index.html 이 capacityK 만 import 했기 때문이다.
+  // 셋을 같이 등재하지 않으면 './src/encodeK.js' specifier 가 치환 없이 남는다
+  // (bundle.test.js «specifier 가 재작성되지 않고 남아있음» 이 그걸 잡는 자다).
+  // 순서는 위상 검사가 정했다: layoutK → markerK → encodeK.
+  //
+  // ⚠ **decoder/orientation-scorer 가 생성기 번들에 처음 들어온다.** markerK 가
+  // `orientationMarginKMarker()` (설계 지표 — 인코더가 안 부른다) 때문에 그것을
+  // import 하는데, 이 번들러는 트리 셰이킹을 안 하므로 모듈 통째로 딸려 온다.
+  // 비용 14 KB / 2.2 MB (~0.6%)이고 그 모듈은 **의존성 0** 이라 여기서 멈춘다.
+  // 더 싸게 하려면 markerK 의 margin 함수를 별도 모듈로 떼야 하는데, 그건 이 편입의
+  // 범위가 아니라 적지 않고 미룬다 — 왜 여기 있는지는 이 주석이 답한다.
+  'decoder/orientation-scorer',
+  'layoutK', 'markerK', 'encodeK',
   'luminance',
   // gf256→rs→qr 체인은 **scene 앞**에 와야 한다. scene.js 가 폴백 QR 을 그리려고
   // './qr.js' 를 import 하기 때문이다 — 원래는 Type Y 전용이라 보고 뒤에 뒀는데(TY8),

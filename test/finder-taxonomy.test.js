@@ -67,9 +67,16 @@ test('① 분류 배정은 표에서 유도 — 손 목록과 불일치하면 �
   assert.equal(taxonomyItem('k-cm').class, 3, 'k-cm 이 분류 3 자리 예약이 아니다');
   assert.equal(taxonomyItem('k-cm').kind, KIND_SEAT);
   assert.equal(taxonomyItem('k-cm').cells, String(MARKER_CELL_COUNT_K));
-  // ⚠ 실체 전환은 **와이어**에서 일어났다 — 생성기 타입은 아직 안 늘었다 (⑤ 잔여).
-  // 이 두 줄이 같이 있어야 «자리는 있는데 화면은 없다» 가 문서가 아니라 자로 남는다.
-  assert.deepEqual([...GENERATOR_TYPES], ['O', 'A', 'Y']);
+  // ⚠ **의도적 갱신 (2026-08-25)** — 생성기 타입에 K 가 편입됐다 (⑤ 잔여 해소).
+  // 구 락은 `deepEqual(GENERATOR_TYPES, ['O','A','Y'])` 로 «화면 없음» 을 잠갔었다.
+  // 이제 양성 단언으로 뒤집는다: K 는 목록에 **있고**, 목록의 정의는 한 곳
+  // (generator-types.js)이며, 그 안에 파생 내부 타입(G·V)은 **없다**.
+  assert.ok(GENERATOR_TYPES.includes('K'), '생성기 타입에서 K 가 빠졌다 — 편입이 되돌아갔나');
+  assert.deepEqual([...GENERATOR_TYPES], ['O', 'A', 'Y', 'K']);
+  for (const derived of ['G', 'V']) {
+    assert.ok(!GENERATOR_TYPES.includes(derived),
+      derived + ' 가 생성기 타입에 들었다 — 자리·옵션에서 유도되는 파생 타입이지 카드 축이 아니다');
+  }
 });
 
 test('② daehan 분리 — taegeuk 분류1 · sagoae 분류2 · 원자는 와이어 합성', () => {

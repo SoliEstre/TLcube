@@ -345,3 +345,46 @@ test('§5 cornerMarker — 왕복이 선다 (내부 타입 G 와이어, 2026-08-
   assert.match(index, /스캐너가 읽어요 — 표식이 있다는 사실이/,
     '코너 마커 힌트(g579)가 «읽어요» 를 말하지 않는다');
 });
+
+// ── Type K 생성기 편입 (2026-08-25) ──────────────────────────────────────────
+// 운영자 보고: 「타입 K도 아직 안 된 것 같고」. 실제로 카드가 DOM 에 없었고,
+// 상태 스키마·타입 목록·인코더 디스패치가 전부 K 를 몰랐다.
+//
+// ⚠ 이 파일이 정규식으로 index.html 을 재는 이유: 「초록 테스트는 동작하는 UI 가
+//   아니다」를 이 프로젝트에서 여러 번 밟았다. 상태층만 재면 «상태는 K 인데 화면엔
+//   카드가 없고 인코더는 O 를 뱉는» 상태가 초록으로 통과한다.
+test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 **셋 다** 서 있다', () => {
+  const index = readFileSync(ROOT + 'index.html', 'utf8');
+
+  // ① 카드 — 일반·고급 **두 벌**. 한 벌만 있으면 모드에 따라 사라진다.
+  const cards = index.match(/data-type="K"/g) || [];
+  assert.equal(cards.length, 2,
+    'Type K 카드가 ' + cards.length + '벌이다 — 일반(#typeCards)·고급(#typeCardsAdvanced) 둘 다 필요하다');
+
+  // ② 버전 축 — K 는 VERSIONS_K(0/1/2)를 쓴다. O(1/2/3)를 빌려 쓰면 한 칸 어긋난다.
+  assert.match(index, /<select id="versionK">/, 'K 버전 셀렉터가 없다');
+  assert.match(index, /els\.versionWrapK\.style\.display = isK \?/,
+    'K 버전 표 스위칭이 없다 — 고급 모드에서 O 표가 열린 채로 남는다');
+  assert.match(index, /generatorState\.versionK/,
+    'buildConfig·편집기가 versionK 를 안 읽는다');
+  assert.doesNotMatch(index, /const chosen = triLike \? generatorState\.versionA : generatorState\.versionO;/,
+    'cellEditorHexSize 가 아직 K 에 versionO 를 먹인다 (O 1/2/3 vs K 0/1/2 — 한 칸 어긋남)');
+
+  // ③ 인코더 디스패치 — «카드는 있는데 O 프레임이 나오는» 상태를 막는다.
+  assert.match(index, /import \{ encodeK \} from '\.\/src\/encodeK\.js';/,
+    'index.html 이 encodeK 를 import 하지 않는다 — K 를 골라도 encode(O)로 떨어진다');
+  assert.match(index, /if \(cfg\.type === 'K'\) \{/, 'encodeOptsFor 에 K 분기가 없다');
+  assert.match(index, /return \{ fn: encodeK, opts \};/, 'K 분기가 encodeK 를 안 돌려준다');
+
+  // ④ 배타 — encodeK 가 던지는 넷이 UI 에서 만들어지면 안 된다.
+  //    (조합 전수는 test/generator-exclusion-matrix.test.js 의 K 절이 잰다.)
+  assert.match(index, /const typeRejectsCentreQr = currentType\(\) === 'K';/,
+    'K 의 안쪽 QR 잠금이 없다 — encodeK 가 centerQr 를 던져 첫 클릭이 죽는다');
+  assert.match(index, /K_BLOCKED_FINDER_IDS/,
+    'K 에서 중앙 QR·중앙 v0·daehan 파인더 카드를 거르는 게이트가 없다');
+
+  // ⑤ K-CM 은 **아직 잠겨 있어야 한다** — bootstrap 이 star formatIndex 8 을 안 연다.
+  //    여기서 열면 «생성은 되는데 스캔이 안 되는» 코드를 발행한다 (typeK-roundtrip ②).
+  assert.doesNotMatch(index, /opts\.cornerMarker = true;[\s\S]{0,120}encodeK/,
+    'K 분기가 cornerMarker 를 싣는다 — bootstrap 배선이 끝났는지 먼저 확인하라');
+});

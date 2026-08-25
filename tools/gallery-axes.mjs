@@ -53,8 +53,24 @@ export const GALLERY_BASE_TIER = 'low';
 /** O/A 조합의 QR 폴백 — 생성기 상태 기계와 같은 규약. */
 const DEFAULT_QR_CORNER = 'TL';
 
-/** 갤러리 축에 쓰는 타입 — 생성기가 아는 타입 전부 (Type K 는 아직 없다). */
-export const GALLERY_TYPES = GENERATOR_TYPES;
+/**
+ * 갤러리 축에 쓰는 타입.
+ *
+ * ⚠ **GENERATOR_TYPES 와 일부러 분리한다** (2026-08-25). 종전에는 그대로 별칭이었고
+ * 「Type K 는 아직 없다」는 주석이 붙어 있었는데, K 가 생성기에 편입되는 순간 갤러리가
+ * K 조합을 굽기 시작한다 — 그런데 갤러리는 **이미지를 굽는 표면**이고 K 캡처 규약도
+ * 참조 산출물도 아직 없다. 축이 자동으로 넓어지면 «빈 칸이 있는 갤러리» 가 조용히 는다.
+ *
+ * 그래서 배제는 **자동 파생이 아니라 명시**로 둔다 — 부재에도 이유가 필요하다.
+ * 해제 조건: K 캡처 규약(gallery-captures) + 참조 산출물이 서면 이 목록에서 걷는다.
+ */
+const GALLERY_EXCLUDED_TYPES = Object.freeze(['K']);
+export const GALLERY_TYPES = Object.freeze(
+  GENERATOR_TYPES.filter((t) => !GALLERY_EXCLUDED_TYPES.includes(t)),
+);
+if (GALLERY_TYPES.length === 0) {
+  throw new Error('갤러리 타입 축이 비었다 — 제외 목록이 생성기 타입을 전부 먹었다');
+}
 
 function assertKnownFinderId(id) {
   if (!GENERATOR_STATE_SCHEMA.finderPatternId.options.includes(id)) {

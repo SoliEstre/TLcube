@@ -35,6 +35,9 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // 파인더). scene.js 가 중앙 슬롯 점유자 id 를 finder-selection 에서, v0 의 모듈
   // 사각형·정본 셀을 ygrid·cellSurfaceFinal 에서 가져온다. 위상 검사는 정적이라
   // 이 편집기가 v0 를 실제로 렌더하든 안 하든 번들에 들어와야 한다.
+  // generator-types 는 finder-selection·generator-state **양쪽의 앞**이어야 한다
+  // (둘 다 타입 목록을 여기서 가져간다 — 2026-08-25 손 사본 철폐).
+  'generator-types',
   'finder-selection',
   'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: scene.js 가 중앙 슬롯을 완전한

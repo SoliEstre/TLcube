@@ -92,10 +92,18 @@ function turnSeat() {
  * K-CM seat (2026-08-24) — «와이어 존재가 곧 seat 실재» 규칙을 formatK star 표로
  * 확장: 표에 cornerMarker 행(K0CM/K1CM/K2CM)이 실재하면 k-cm seat 가 실재한다.
  *
- * `stateValue: false` 인 이유는 «부재» 가 아니라 **생성기 타입에 K 가 아직 없어서**다
- * (GENERATOR_TYPES = O·A·Y — Type K 생성기 UI 는 잔여 과업 ⑤). 자리는 와이어에
- * 실재하므로 카드는 서고(ready), 상태 허용값에는 아직 안 든다 — sagoae 의
- * «자리만» 문법과 같은 축이다. K 가 생성기에 편입되면 이 플래그만 걷힌다.
+ * `stateValue: false` 인 이유는 «부재» 가 아니다.
+ *
+ * ⚠ **2026-08-25 사유 이전** — 종전 사유는 「생성기 타입에 K 가 아직 없어서」였는데
+ * 그날 K 가 편입되면서 그 문장이 거짓이 됐다. 진짜 사유는 한 층 아래에 있다:
+ * **`decoder/bootstrap.js` 가 star 축 formatIndex 8 을 안 연다** — K-CM 은 인코더도
+ * 디코더 후단(decode-k)도 있는데 그 사이 부트스트랩이 평 K(포맷 7)만 골라서,
+ * 생성은 되고 **스캔이 안 된다** (`test/typeK-roundtrip.test.js` ② 가 그 자다).
+ * 여기서 열면 «읽을 수 없는 코드를 발행하는» 상태가 된다.
+ *
+ * 자리는 와이어에 실재하므로 카드는 서고(ready), 상태 허용값에는 아직 안 든다 —
+ * sagoae 의 «자리만» 문법과 같은 축이다.
+ * **해제 조건: 생성기 타입이 아니라 bootstrap 배선이다.**
  */
 function starSeat() {
   const wired = K_FORMAT_INDEX.some((entry) => entry.cornerMarker === true);

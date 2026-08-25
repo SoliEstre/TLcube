@@ -413,8 +413,13 @@ function buildItems() {
         + ' · finderStarter=' + row.finderStarter
         + ' 는 올라탄 기준선이지 이 디자인의 내용이 아니다'
         + (isH2O ? ' · 비순열 ' + h2oNonPermutationCount() + '/21' : '')
-        + (row.type === 'K' ? ' · Type K 인코더 없음 (GENERATOR_TYPES='
-          + GENERATOR_TYPES.join(',') + ')' : ''),
+        + (row.type === 'K'
+          // ⚠ 종전엔 «Type K 인코더 없음» 이라 적혀 있었다 — encodeK.js 착지(2026-08-24)로
+          // 거짓이 됐고, K 생성기 편입(2026-08-25)으로 두 번째 절도 낡았다. 명부·덤프로
+          // 흘러가는 문장이라 거짓이면 다음 사람을 오도한다: **유도해서** 적는다.
+          ? ' · Type K 생성기 편입=' + (GENERATOR_TYPES.includes('K') ? 'O' : 'X')
+            + ' (GENERATOR_TYPES=' + GENERATOR_TYPES.join(',') + ')'
+          : ''),
     });
   }
 
