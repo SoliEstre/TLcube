@@ -98,6 +98,7 @@ import {
   findAAnchorHypotheses,
   findKAnchorHypotheses,
   findOAnchorHypotheses,
+  paintedVertexAnchorsK,
 } from './anchor-detect.js';
 import {
   findACornerMarkerHypotheses,
@@ -1378,7 +1379,11 @@ function validateAnchorPattern(luma, H, k, sampleOptions, expectedCells) {
       continue;
     }
     const observed = sampleToDigit(sample);
-    const matched = !sample.tie && observed === anchor.digit;
+    // H2CO3 반전 꼭짓점: 전면 동톤이라 동률이 기대값이다. 문턱을 낮추는 게 아니라
+    // 「순위가 있어야 한다」를 「없어야 한다」로 뒤집는다 — 뚜렷한 순위가 나오면 기각.
+    const matched = anchor.flatDark === true
+      ? sample.tie === true
+      : (!sample.tie && observed === anchor.digit);
     if (matched) agreement += 1;
     if (Number.isFinite(sample.separation)) separation += sample.separation;
     observations.push({
@@ -1684,6 +1689,12 @@ function starSilhouetteHypotheses(luma, finder, k, outline, options, cfg) {
     ...(options.sample || {}),
   };
   const canonicalAnchorCells = vertexAnchorsK(k);
+  // 평 K = digit 5/0/0·1/1/1. K-CM H2CO3 = A 계열 digit + 반전 꼭짓점 전면 동톤.
+  // 두 목록은 배타라 기존 평 K 실루엣 평가는 한 비트도 안 바뀐다.
+  const expectedLists = [
+    canonicalAnchorCells,
+    paintedVertexAnchorsK(k),
+  ];
   const canonicalTips = starTipCanonicalPoints(k)
     .map((point) => ({ point, angle: Math.atan2(point.y, point.x) }))
     .sort((left, right) => left.angle - right.angle)
@@ -1693,7 +1704,7 @@ function starSilhouetteHypotheses(luma, finder, k, outline, options, cfg) {
 
   // 배정은 순환 이동 6가지뿐이다 (양쪽 다 각도 오름차순 — 거울상은 rhombille
   // 분할에서 애초에 불가능한 사상이라 후보에 없다). 회전 정보는 배정이 정하고,
-  // 검증은 앵커 digit(5/0/0·1/1/1) 6/6 이 한다 — 60° 이웃 배정은 여기서 죽는다.
+  // 검증은 앵커 6/6 이 한다 — 60° 이웃 배정은 여기서 죽는다.
   for (let shift = 0; shift < 6; shift += 1) {
     const assigned = canonicalTips.map(
       (_, index) => observedTips[(index + shift) % 6],
@@ -1705,48 +1716,51 @@ function starSilhouetteHypotheses(luma, finder, k, outline, options, cfg) {
     for (const poseModel of poseModels) {
       const H = poseModel.H;
       if (!H) continue;
-      const anchorValidation = validateAnchorPattern(
-        luma, H, k, sampleOptions, canonicalAnchorCells,
-      );
-      if (anchorValidation.agreement !== canonicalAnchorCells.length) continue;
-
-      const imageAnchors = canonicalAnchorCells
-        .map((cell) => projectPoint(H, canonicalCenter(cell.q, cell.r)));
-      if (imageAnchors.some((point) => point === null)) continue;
-
-      // F-95 규약 (hex 판 승계): 최소제곱 H 의 재투영 잔차가 진짜 잔차다.
-      let residualSum = 0;
-      let residualCount = 0;
-      for (let index = 0; index < canonicalTips.length; index += 1) {
-        const projected = projectPoint(H, canonicalTips[index]);
-        if (!projected) continue;
-        residualSum += Math.hypot(
-          projected.x - assigned[index].x,
-          projected.y - assigned[index].y,
+      for (const expectedCells of expectedLists) {
+        const anchorValidation = validateAnchorPattern(
+          luma, H, k, sampleOptions, expectedCells,
         );
-        residualCount += 1;
-      }
+        if (anchorValidation.agreement !== expectedCells.length) continue;
 
-      candidates.push({
-        family: 'star',
-        k,
-        orientation: 0,
-        rotationDegrees: shift * 60,
-        centerQr: false,
-        anchors: imageAnchors,
-        canonicalAnchors: canonicalAnchorCells.map((cell) => ({ q: cell.q, r: cell.r })),
-        H,
-        canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-        geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
-        geometryResidualMeasured: residualCount > 0,
-        anchorMargin: anchorValidation.separation / canonicalAnchorCells.length,
-        anchorValidation,
-        finder,
-        source: 'star-outline-anchor',
-        poseModel: poseModel.mode,
-        hypothesisId: 'star-' + k + '-s' + shift + '-' + poseModel.mode,
-        luma,
-      });
+        const imageAnchors = expectedCells
+          .map((cell) => projectPoint(H, canonicalCenter(cell.q, cell.r)));
+        if (imageAnchors.some((point) => point === null)) continue;
+
+        // F-95 규약 (hex 판 승계): 최소제곱 H 의 재투영 잔차가 진짜 잔차다.
+        let residualSum = 0;
+        let residualCount = 0;
+        for (let index = 0; index < canonicalTips.length; index += 1) {
+          const projected = projectPoint(H, canonicalTips[index]);
+          if (!projected) continue;
+          residualSum += Math.hypot(
+            projected.x - assigned[index].x,
+            projected.y - assigned[index].y,
+          );
+          residualCount += 1;
+        }
+
+        candidates.push({
+          family: 'star',
+          k,
+          orientation: 0,
+          rotationDegrees: shift * 60,
+          centerQr: false,
+          anchors: imageAnchors,
+          canonicalAnchors: expectedCells.map((cell) => ({ q: cell.q, r: cell.r })),
+          H,
+          canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+          geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
+          geometryResidualMeasured: residualCount > 0,
+          anchorMargin: anchorValidation.separation / expectedCells.length,
+          anchorValidation,
+          finder,
+          source: 'star-outline-anchor',
+          poseModel: poseModel.mode,
+          hypothesisId: 'star-' + k + '-s' + shift + '-' + poseModel.mode
+            + (expectedCells !== canonicalAnchorCells ? '-h2co3' : ''),
+          luma,
+        });
+      }
     }
   }
 

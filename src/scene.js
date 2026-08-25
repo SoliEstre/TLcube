@@ -27,7 +27,9 @@ import {
 import { digitToRanks } from './lehmer.js';
 import { BULLSEYE_MID, FINDER_CUBE_SEAM, FINDER_CUBE_TONES } from './luminance.js';
 import { getOakFinderPattern } from './finder-oak-patterns.js';
-import { getDaehanFinderPattern } from './finder-daehan.js';
+import {
+  getDaehanFinderPattern, isDaehanFinderPatternId, sagoaeCells, sagoaeLevels,
+} from './finder-daehan.js';
 import { moduleQuad } from './ygrid.js';
 import { CENTRAL_V0_SOURCE_N } from './cellSurfaceFinal.js';
 import { centralBeaconGeometry } from './centralBeaconWire.js';
@@ -335,6 +337,22 @@ export function buildScene(encoded, options) {
   // DEFAULT 는 빌드별 초기값이다. 기준선과 실험 후보를 모두 렌더 표현으로 정규화해
   // 두 데이터 모양을 같은 마스크 분기로 잘못 보내지 않는다.
   const finderPattern = resolveFinderRenderPattern(finderPatternId);
+  const sagoae = encoded.sagoae === true;
+  if (encoded.sagoae !== undefined && typeof encoded.sagoae !== 'boolean') {
+    throw new TypeError(`encoded.sagoae 는 boolean 이어야 한다: ${typeof encoded.sagoae}`);
+  }
+  if (sagoae && encoded.daehanFinder !== true) {
+    throw new RangeError('sagoae 장면은 daehan 예약 레이아웃 회계(encoded.daehanFinder=true)가 필요하다');
+  }
+  // sagoae 는 새 renderKind 가 아니라 **cell-mask 합성의 바깥 부분**이다. 중앙은
+  // 독립 cell-mask 여야 C2c 가 같은 포즈에서 고리를 검증할 수 있다. 원자 daehan 을
+  // 중앙으로 또 고르면 이미 sagoae 를 포함하므로 중복 렌더가 된다.
+  if (sagoae && (finderPattern.renderKind !== 'cell-mask'
+    || isDaehanFinderPatternId(finderPatternId))) {
+    throw new RangeError(
+      `sagoae 는 독립 중앙 cell-mask 와만 합성할 수 있다: ${finderPatternId}`,
+    );
+  }
   const centralV0 = Boolean(encoded.centralV0);
   const rendersCentralV0 = finderPattern.renderKind === 'central-v0';
   const centralSlotOccupants = [
@@ -728,6 +746,33 @@ export function buildScene(encoded, options) {
         });
       }
     }
+    // 내곽 자리 sagoae — 원자 daehan 의 불스아이 밖 부분만 같은 cell-mask 화법으로
+    // 합성한다. 좌표·톤은 finder-daehan 정본에서 함께 유도되고, 인코더가 예약한 셀은
+    // cellDigits 에 없어야 한다. 이 가드가 없으면 일반 회계 위에 고리를 덧칠해 데이터가
+    // 조용히 사라지는, 수정 전의 정확한 실패를 되살릴 수 있다.
+    if (sagoae) {
+      const cells = sagoaeCells(k);
+      const cellLevels = sagoaeLevels(k);
+      if (cells.length !== cellLevels.length) {
+        throw new Error(`sagoae 좌표·톤 수 불일치: ${cells.length} vs ${cellLevels.length}`);
+      }
+      for (let ci = 0; ci < cells.length; ci += 1) {
+        const cell = cells[ci];
+        if (cellDigits.has(`${cell.q},${cell.r}`)) {
+          throw new Error(`sagoae 예약 셀이 데이터에 남았다: ${cell.q},${cell.r}`);
+        }
+        for (const face of FACES) {
+          const level = cellLevels[ci][FINDER_LEVEL_FACE_INDEX[face]];
+          const color = level === 2 ? palette.bullseyeLight
+            : level === 1 ? BULLSEYE_MID : palette.bullseyeDark;
+          shapes.push({
+            kind: 'polygon',
+            points: facePolygon(cell.q, cell.r, face, layout),
+            color,
+          });
+        }
+      }
+    }
   } else if (finderPattern.renderKind === 'bullseye' && !centerQr) {
     // (2) 불스아이 6 disc — 바깥 밴드(반지름 큰 것)부터. i(0=중심)가 짝수면 dark, 홀수면 light.
     const radii = bandRadii(cellSize); // 오름차순(안→밖), 마지막이 R_max.
@@ -802,6 +847,7 @@ export function buildScene(encoded, options) {
     height: layout.height,
     background: palette.background,
     finderPatternId: centerQr ? 'centerQr' : finderPatternId,
+    sagoae,
     // 턴A 배치 사상을 **장면이 공표한다** (2026-08-26). 이 값이 없으면 장면을 도로
     // 표본하는 쪽(자체검증 verify.js)이 `encoded` 를 따로 들고 와 같은 분기를 다시
     // 써야 하고, 그 순간 「(q,r) → 화면 자리」 규칙이 두 곳으로 갈라진다. 실제로

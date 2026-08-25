@@ -345,6 +345,24 @@ test('60° 오가설 사멸 — 앵커 판정만으로 죽는다 (계약 K-2 채
   }
 });
 
+test('K-CM 반전 꼭짓점 전면-dark — K0CM/K1CM/K2CM × ppu 10/12/16 원문까지', () => {
+  // 레인 KVTX: 운영자 작화는 반전 꼭짓점 3셀이 3면 다 dark. 문턱은 안 내린다.
+  for (const spec of VERSIONS_KCM) {
+    for (const ppu of [10, 12, 16]) {
+      const text = 'K-CM-flatdark-' + spec.name + '-ppu' + ppu;
+      const encoded = encodeK(text, { version: spec.version, eccLevel: 'M', cornerMarker: true });
+      const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
+      const raster = rasterize(scene, { pixelsPerUnit: ppu, supersample: 1 });
+      const result = decodeFrontend(raster);
+      assert.equal(result.ok, true,
+        spec.name + ' ppu' + ppu + ' 왕복 실패: ' + (result.reason || '') + ' '
+        + JSON.stringify(result.detail && result.detail.pipelineCode));
+      assert.equal(result.text, text, spec.name + ' ppu' + ppu + ': 원문이 다르다');
+      assert.equal(result.family, 'star', spec.name + ' ppu' + ppu + ': star 가 아니다');
+    }
+  }
+});
+
 test('cube 잠금 이중 검사 — K 실루엣에서 cube 채점이 서지 않는다 (F-107 이중 자물쇠)', () => {
   // 위 왕복 테스트의 진단 단언과 겹으로: 검출기 단독 호출에서도 양성이 아니어야
   // 한다 (성공 경로가 바뀌어도 이 자물쇠가 남는다 — 턴A 레인 안전망 전례).

@@ -171,7 +171,8 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 모듈 로드가 TDZ 로 죽는다 (W2 C4 실측). 그래서 F-37 의 유도 대신 **검증되는
   // 사본**을 쓴다: 아래 리터럴이 zone-ui 유도와 어긋나면 finder-zone-ui 로드
   // 자기검증이 그 자리에서 던진다 (사본 규칙 명문화 — «유도하거나 규칙을 적어라»).
-  // sagoae 는 자리 예약 값 — 와이어 편입은 통합자 C2c, 카드는 disabled.
+  // sagoae 는 기존 daehan 예약 회계/formatIndex 를 공유하는 내곽 값이다. 중앙
+  // cell-mask 와의 합성 렌더 + C2c 검증 경로가 선 뒤 카드가 양성 선택지가 됐다.
   // `cornerMarker` 필드 자체는 **스키마에서 내렸다** — 생성기 상태는 저장되지
   // 않으므로 «저장값 하위호환» 기전이 없고(드랍 전례의 검증 렌즈 정정과 동일),
   // 죽은 필드를 남기면 그 주석이 거짓이 된다. 인코더 옵션 키 `cornerMarker` 는

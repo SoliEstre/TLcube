@@ -186,6 +186,27 @@ test('인자 없는 sync* 함수가 전부 TEXT_SYNCERS 에 등록돼 있다', (
     `TEXT_SYNCERS 에 없는 함수가 있다: ${unknown.join(', ')} — 이름이 바뀌었거나 인자를 받게 됐다`);
 });
 
+test('생성기 사전에 중복 키가 없다', () => {
+  // ⚠ 이건 아래 «같은 키 집합» 단언이 **원리적으로 못 보는** 각도다. 객체 리터럴에
+  // 같은 키가 두 번 있어도 집합은 그대로고, 실행할 때 **뒤엣것이 조용히 이긴다.**
+  // 2026-08-26 실제 사고: 새 문구에 이미 쓰이는 g992 를 골라 8언어에 넣었는데
+  // 커버리지는 초록이었다. 화면에는 남의 문구(음영 경고)가 나왔을 것이다.
+  // ⇒ 새 키는 «최대 + 1» 이 아니라 **실제 미사용**에서 고른다 (g999 까지 차 있었다).
+  const raw = readFileSync(`${ROOT}index.html`, 'utf8');
+  const start = raw.indexOf('const GENERATOR_STRINGS = {');
+  assert.ok(start >= 0, 'GENERATOR_STRINGS 를 못 찾았다');
+  const js = raw.slice(start, raw.indexOf('\n};', start));
+  const counts = new Map();
+  for (const m of js.matchAll(/"(g\d{3})":/g)) counts.set(m[1], (counts.get(m[1]) || 0) + 1);
+  assert.ok(counts.size > 0, '사전 키를 하나도 못 셌다 — 자가 무너졌다');
+  // 언어가 여덟이므로 정상 키는 정확히 8회다. 그보다 많으면 중복, 적으면 누락.
+  const wrong = [...counts.entries()].filter(([, c]) => c !== 8);
+  assert.deepEqual(wrong, [],
+    '8회가 아닌 키가 있다 (많으면 **중복** — 뒤엣것이 이겨 엉뚱한 문구가 나온다, '
+    + '적으면 누락 — 한국어로 조용히 폴백한다): '
+    + wrong.map(([k, c]) => k + '×' + c).join(' '));
+});
+
 test('생성기 사전의 여덟 언어가 같은 키 집합을 갖는다', () => {
   // 키가 빠지면 조용히 한국어로 폴백한다(i18n.js translate). 그게 이번 사고의
   // 증상과 똑같이 보이므로, 폴백에 기대지 말고 여기서 막는다.

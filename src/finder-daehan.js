@@ -192,6 +192,23 @@ export function sagoaeCells(k) {
   return daehanReservedCells(k);
 }
 
+/** sagoae 면 톤 — `sagoaeCells(k)` 와 같은 순서.
+ *
+ * 원자 daehan 패턴의 바깥 부분을 복사한 별도 표가 아니다. 같은 잘림 정본에서
+ * 불스아이 밖 인덱스만 함께 고른다. 중앙 파인더와 sagoae 를 합성하는 장면은 이
+ * 함수와 `sagoaeCells` 를 짝으로 써야 좌표·톤 순서가 갈리지 않는다.
+ */
+export function sagoaeLevels(k) {
+  const clipped = CLIPPED.get(assertRadius(k));
+  const out = [];
+  for (let i = 0; i < clipped.cells.length; i += 1) {
+    if (hexDistance(clipped.cells[i].q, clipped.cells[i].r) > BULLSEYE_RADIUS) {
+      out.push(clipped.levels[i]);
+    }
+  }
+  return Object.freeze(out);
+}
+
 /** 반경 k 의 파인더 패턴 id. */
 export function daehanPatternId(k) {
   return 'oak-daehan-k' + assertRadius(k);

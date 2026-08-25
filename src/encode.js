@@ -124,7 +124,8 @@ export function chooseVersion(text, eccLevel = 'M', cornerMarker = false, daehan
  * 인코더 파이프라인 진입점 (SPEC §7.1). version 을 생략하면 `chooseVersion` 으로
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, centralV0?: boolean}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, centralV0?: boolean,
+ *          sagoae?: boolean}} [options]
  * @returns {{
  *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, centralV0: boolean,
  *   capacity: object,
@@ -145,7 +146,7 @@ export function encode(text, options = {}) {
   }
   const {
     version, eccLevel = 'M', centerQr = false, centralV0 = false,
-    cornerMarker = false, daehanFinder = false, markerTones = false,
+    cornerMarker = false, daehanFinder = false, sagoae = false, markerTones = false,
   } = options;
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
@@ -156,6 +157,18 @@ export function encode(text, options = {}) {
   if (typeof daehanFinder !== 'boolean') {
     throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
   }
+  if (typeof sagoae !== 'boolean') {
+    throw new TypeError(`sagoae 는 boolean 이어야 한다: ${typeof sagoae}`);
+  }
+  // 원자 daehan 은 이미 taegeuk+sagoae 전체를 뜻한다. sagoae=true 는 중앙
+  // 파인더를 호출자가 따로 고르는 **분해 합성** 경로라 둘을 함께 켜면 같은 고리를
+  // 두 번 주장한다. 회계는 같아도 광학 의미가 다르므로 조용히 합치지 않는다.
+  if (sagoae && daehanFinder) {
+    throw new RangeError('sagoae 와 daehanFinder 를 동시에 켤 수 없다 — 원자 daehan 이 sagoae 를 이미 포함한다');
+  }
+  // 와이어에는 sagoae 전용 formatIndex 가 없다. 기존 daehan 예약 레이아웃을
+  // 그대로 공유하고, `sagoae` 메타만 장면에서 중앙/내곽을 분리하는 데 쓴다.
+  const usesDaehanLayout = daehanFinder || sagoae;
   if (typeof markerTones !== 'boolean') {
     throw new TypeError(`markerTones 는 boolean 이어야 한다: ${typeof markerTones}`);
   }
@@ -176,24 +189,24 @@ export function encode(text, options = {}) {
   // taegeuk(내부 19, 분류 1) + sagoae(예약 셀, 분류 2) 로 갈린다. 중앙 QR(링3
   // 점유)과도, 코너 자리 예약(링 k·k−1 점유)과도 겹친다. 조합 검증을 안 했으므로
   // 조용히 허용하지 않는다.
-  if (daehanFinder && centerQr) {
-    throw new RangeError('daehanFinder 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯을 둘 다 먹는다');
+  if (usesDaehanLayout && centerQr) {
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 centerQr 를 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
   }
-  if (daehanFinder && cornerMarker) {
-    throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  if (usesDaehanLayout && cornerMarker) {
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
   // 중앙 슬롯 점유자는 하나다. 중앙 v0는 중앙 QR·daehan과 같은 19셀을 쓴다.
   // cornerMarker(Type G)는 바깥 링 점유자라 v0와 함께 쓸 수 있으며 여기서 막지 않는다.
   if (centralV0 && centerQr) {
-    throw new RangeError('centralV0 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 centerQr 는 같은 19셀을 쓴다');
   }
-  if (centralV0 && daehanFinder) {
-    throw new RangeError('centralV0 와 daehanFinder 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
+  if (centralV0 && usesDaehanLayout) {
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 daehan/sagoae 예약 레이아웃을 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
   }
-  const provider = layoutProviderFor(cornerMarker, daehanFinder, markerTones);
+  const provider = layoutProviderFor(cornerMarker, usesDaehanLayout, markerTones);
 
   const spec = version === undefined
-    ? chooseVersion(text, eccLevel, cornerMarker, daehanFinder)
+    ? chooseVersion(text, eccLevel, cornerMarker, usesDaehanLayout)
     : provider.versions.find((v) => v.version === version);
   if (!spec) {
     throw new RangeError(`알 수 없는 버전: ${version} (허용 ${provider.versions.map((v) => v.version).join(', ')})`);
@@ -324,7 +337,10 @@ export function encode(text, options = {}) {
     centerQr,
     centralV0,
     cornerMarker,
-    daehanFinder,
+    // `daehanFinder` 는 후단 decodeCells 가 이미 쓰는 예약-레이아웃 회계 신호다.
+    // 분해 합성도 같은 회계를 쓰므로 true 이고, 광학 구분은 `sagoae` 가 맡는다.
+    daehanFinder: usesDaehanLayout,
+    sagoae,
     markerTones,
     // capacity.formatIndex 는 표(VERSIONS_OCM 등)의 기본값이라 CMQ(C2a)에서 와이어와
     // 갈린다 — 산출물 메타데이터는 실제 실린 인덱스를 말해야 한다 (주장≠사실 방지).

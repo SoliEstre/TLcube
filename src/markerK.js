@@ -34,7 +34,7 @@
  *   ③ 비-순열 18/30 (계약 K-5 서술과 일치)
  *
  * ⚠ **양보한 것: 방향 margin.** 정본 톤은 ρ-공변이다(코너 4·5 가 코너 3 의 면 순환).
- *   그래서 «칠한 층» 의 방향 margin 은 1.0000 → **0.5667** 이 된다. 이것은 K 만의
+ *   그래서 «칠한 층» 의 방향 margin 은 1.0000 → **0.4667** 이 된다. 이것은 K 만의
  *   문제가 아니다 — **A-CM 도 이미 0.6667 이다**(같은 자로 실측한 대조군). 즉 정본 톤
  *   채택이 margin 을 양보하는 것은 이 프로젝트가 A 에서 이미 받아들인 거래이고,
  *   `orientationMarginAMarker`/`orientationMarginKMarker` 가 **digit 층**을 보고하는
@@ -233,19 +233,13 @@ function cycleFaces(tones, shift) {
 }
 
 /**
- * ⛔ **별 꼭짓점 W 는 절대 톤에서 뺀다** (계약 K-8.2 부분 채택, 2026-08-25).
- *
- * W 의 정본 톤은 `(0,0,0)` — **전면 동톤**이다. 그런데 그 셀은 동시에 **별 꼭짓점
- * 앵커**이고(계약 K-2), 앵커 판정은 digit 순위 (2,0,1) 를 읽는다. 평평하게 칠하면
- * 순위가 사라져 앵커가 죽는다 — A-CM 은 마커가 꼭짓점에 안 닿아 이 충돌이 없었다
- * (markerA §2). 모듈 헤더 §2 가 「그 3셀은 앵커 digit 과 마커 톤을 **동시에** 만족해야
- * 한다」고 적은 자리이고, (다)안의 해(digit = 앵커 digit)는 **digit 영역에서만** 성립한다.
- *
- * 그래서 30셀 중 **27셀**에만 정본 톤을 싣는다. 남는 비-순열은 15셀이라
- * 「digit 알파벳이 못 그리는 무늬」라는 심볼다움의 근거는 그대로다.
- * 전부 칠하는 판을 실측한 결과는 §probes/h2co3 왕복 표에 있다.
+ * 별 꼭짓점 W 의 정본 톤은 `(0,0,0)` — **전면 동톤**이다. 그 셀은 동시에 별 꼭짓점
+ * 앵커(계약 K-2)라 예전에는 순위를 지키려고 톤 표에서 뺐다. 운영자 작화는 3면 다
+ * dark 가 정본이고, 디코더는 그 자리의 기대값을 동률로 뒤집는다 (`flatDark`).
+ * 빼는 쪽이 구현이 작화를 덮은 것이었으므로 기본은 싣는다.
+ * `includeVertex: false` 는 칠하지 않은 대조군용이다.
  */
-export const H2CO3_VERTEX_KEEPS_DIGIT = true;
+export const H2CO3_VERTEX_KEEPS_DIGIT = false;
 
 /**
  * 정본 H2CO3 톤을 k 의 마커 좌표로 전개한 표 ("q,r" → {T,L,R}).
@@ -255,12 +249,12 @@ export const H2CO3_VERTEX_KEEPS_DIGIT = true;
  * 독립 교차검증이다). 사본을 새로 적지 않는 이유가 그것이다.
  *
  * @param {number} k
- * @param {{includeVertex?: boolean}} [options] `includeVertex: true` 는 **실측용**이다 —
- *   꼭짓점까지 칠하면 앵커가 죽는지 재는 경로. 생산 기본값은 false.
+ * @param {{includeVertex?: boolean}} [options] 기본은 꼭짓점 W 포함.
+ *   `includeVertex: false` 는 칠하지 않은 대조군.
  */
 export function h2co3TonesByKeyK(k, options = {}) {
   assertK(k);
-  const includeVertex = options.includeVertex === true;
+  const includeVertex = options.includeVertex !== false;
   const map = h2oTonesByKeyA(k);
   invertedTrianglesK(k).forEach((cells, corner) => {
     for (const c of cells) {
@@ -275,9 +269,8 @@ export function h2co3TonesByKeyK(k, options = {}) {
  * K-CM 마커 30셀 — A 계열 21(코너 0..2, markerA 정본) + 반전 삼각 9(코너 3..5).
  * digit 은 전부 순열 알파벳 안이다.
  *
- * `tonesByKey` 를 주면 그 표에 **있는 셀에만** 절대 톤 `tones: {T,L,R}` 가 실린다
- * (markerA 는 «전부 있어야 한다» 로 던지는데, K 는 꼭짓점 3셀을 **의도적으로 뺀다** —
- * §H2CO3_VERTEX_KEEPS_DIGIT. 그래서 여기서는 부분 적용이 계약이다).
+ * `tonesByKey` 를 주면 그 표에 **있는 셀에만** 절대 톤 `tones: {T,L,R}` 가 실린다.
+ * 정본은 꼭짓점 W 포함 30셀 전부다. `includeVertex: false` 대조군만 꼭짓점 3셀을 뺀다.
  * digit 은 그대로 남는다 — digit 은 렌더 알파벳 계약이고 tones 는 그 위에 얹는 층이다.
  *
  * @param {number} k
@@ -308,7 +301,7 @@ export function markerCellsK(k, tonesByKey) {
     const tones = tonesByKey instanceof Map
       ? tonesByKey.get(key(cell.q, cell.r))
       : tonesByKey[key(cell.q, cell.r)];
-    if (!tones) return cell; // 꼭짓점 3셀 — digit 경로 유지가 계약이다
+    if (!tones) return cell; // includeVertex:false 대조군만 여기로 온다
     for (const face of ['T', 'L', 'R']) {
       const tone = tones[face];
       if (tone !== 0 && tone !== 1 && tone !== 2) {
@@ -481,7 +474,7 @@ export function fillerCellsKMarker(k) {
  * 채점은 `decoder/orientation-scorer.js` 정본이다 — markerO/markerA 의 margin 규약과
  * 같은 자다 (이 모듈은 자를 새로 만들지 않는다).
  *
- * ⚠ **이 함수가 재는 것은 «digit 층» 이다** — 렌더는 2026-08-25 부터 27셀에 정본 톤을
+ * ⚠ **이 함수가 재는 것은 «digit 층» 이다** — 렌더는 정본 톤 30셀(꼭짓점 W 포함)을
  *   칠하므로 화면의 무늬는 이것과 다르다 (헤더 §1 ⚠). 층을 바꾸지 않는 이유는
  *   `orientationMarginAMarker` 가 A 에서 **정확히 같은 관습**이기 때문이다 — 한쪽만
  *   바꾸면 두 자가 갈려서 A·K 비교가 불가능해진다. 칠한 층의 값은 테스트가 따로 잠근다.

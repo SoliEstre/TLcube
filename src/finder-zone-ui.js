@@ -16,8 +16,8 @@
  * 구역 규약 (운영자 확정 3분류, 2026-08-21 + W2 설계 ①):
  *   · 중앙 = 분류 1 — 카드 DOM 은 기존 FINDER_CARD_GROUPS 경로 승계.
  *     taegeuk 단독 카드는 만들지 않는다 (통합자 C2b 게이트 보류 — 브리프 §2 탈출구).
- *   · 내곽 = 분류 2 — 없음(기본) · O-CM(type O) · sagoae(O·A, **자리만** — 단독
- *     와이어 편입은 통합자 C2c. V-CM/K-CM 부재 문법과 동일하게 disabled).
+ *   · 내곽 = 분류 2 — 없음(기본) · O-CM(type O) · sagoae(O·A, 기존 daehan
+ *     예약 회계/formatIndex 공유 + C2c 합성 검증).
  *   · 외곽 = 분류 3 seat — 없음(기본) · A-CM(type A) · V-CM(type A × turnA) ·
  *     K-CM(type K — **와이어는 실재, 생성기 타입 K 가 아직 없어 상태값은 아니다**).
  *   분류 3 의 파인더 행(H · H2O · H2CO3)은 seat 카드가 아니다 — 그 자리를 채우는
@@ -144,11 +144,12 @@ export function zoneCards() {
   const inner = [
     NONE_CARD,
     ...markerSeat('inner'),
-    // sagoae — 분류 2 의 내곽 파인더. **자리만**이다: 디코더 분해(C2c, sagoae-verify)는
-    // 착지했지만 생성측 합성 렌더(임의 중앙 파인더 + sagoae 고리)가 미배선이다.
+    // sagoae — 분류 2 의 내곽 파인더. 기존 daehan 예약 회계/formatIndex 를 공유하고
+    // 장면이 선택된 중앙 cell-mask 바깥에 고리만 합성한다. 디코더는 C2c 검증으로
+    // 같은 포즈에서 예약 회계를 연다. 별도 renderKind·formatIndex 는 만들지 않는다.
     Object.freeze({
       id: SAGOAE_ID, name: SAGOAE_ID, types: Object.freeze(['O', 'A']),
-      ready: false, absent: false,
+      ready: true, absent: false,
     }),
     // H 는 **카드가 아니다** (운영자 2026-08-24 아침 검수 3 — A-CM=H2O 문법):
     // o-cm 선택이 곧 «자리 + H 심볼 톤» 이다 (buildConfig 가 markerTones 를 함께

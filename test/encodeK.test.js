@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { encodeK, chooseVersionK } from '../src/encodeK.js';
+import { encodeK, chooseVersionK, h2co3IncludeVertexK } from '../src/encodeK.js';
 import { decodeCellsK } from '../src/decoder/decode-k.js';
 import { VERSIONS_K, capacityForK } from '../src/capacityK.js';
 import { dataCellsInScanOrderK, layoutMapK } from '../src/layoutK.js';
@@ -194,6 +194,8 @@ test('K-CM 개설 — 회계·와이어·발자국 (구 배타 락의 양성 전
       if (vertices.has(kk)) {
         anchorOverlap += 1;
         assert.equal(placed.role, 'anchor', '꼭짓점은 회계상 앵커다 (한 번만 센다)');
+        assert.deepEqual(placed.tones, { T: 0, L: 0, R: 0 },
+          spec.name + ' 반전 꼭짓점 ' + kk + ' 이 전면 dark 가 아니다');
       }
     }
     assert.equal(anchorOverlap, 3);
@@ -206,6 +208,32 @@ test('K-CM 개설 — 회계·와이어·발자국 (구 배타 락의 양성 전
       MARKER_OVERHEAD_ADDED_K,
       `${spec.name} 데이터 셀 감소`,
     );
+  }
+});
+
+test('K-CM × 중앙 v0 — 반전 꼭짓점 W 톤만 뺀다 (비컨 블록 상위 컷 회귀 잠금)', () => {
+  assert.equal(h2co3IncludeVertexK({ cornerMarker: true }), true);
+  assert.equal(h2co3IncludeVertexK({ cornerMarker: true, centralV0: false }), true);
+  assert.equal(h2co3IncludeVertexK({ cornerMarker: true, centralV0: true }), false);
+  assert.equal(h2co3IncludeVertexK({ cornerMarker: false, centralV0: true }), false);
+  for (const spec of VERSIONS_KCM) {
+    const painted = encodeK('kvtx-v0-skip', { version: spec.version, cornerMarker: true });
+    const withBeacon = encodeK('kvtx-v0-skip', {
+      version: spec.version, cornerMarker: true, centralV0: true,
+    });
+    assert.equal(painted.centralV0, false);
+    assert.equal(withBeacon.centralV0, true);
+    assert.equal(withBeacon.formatIndex, painted.formatIndex, spec.name + ' 와이어가 갈렸다');
+    assert.deepEqual(withBeacon.capacity, painted.capacity, spec.name + ' 회계가 갈렸다');
+    for (const a of invertedVertexAnchors(spec.k)) {
+      const kk = key(a);
+      assert.deepEqual(painted.cellDigits.get(kk).tones, { T: 0, L: 0, R: 0 },
+        spec.name + ' 기본 K-CM 꼭짓점 ' + kk + ' 이 전면 dark 가 아니다');
+      assert.equal(withBeacon.cellDigits.get(kk).tones, undefined,
+        spec.name + ' v0 조합에서 꼭짓점 ' + kk + ' 에 톤이 실렸다');
+      assert.equal(withBeacon.cellDigits.get(kk).digit, a.digit);
+      assert.equal(withBeacon.cellDigits.get(kk).role, 'anchor');
+    }
   }
 });
 

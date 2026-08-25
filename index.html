@@ -1875,6 +1875,13 @@
         <!-- C5 숨김-active 배지 — 정식 normal 이 advancedOnly 카드(bullseye ·
              central-cube-3tone)를 숨긴 채 그 카드가 active 로 들어오면 이유를 말한다
              (조용한 무시 금지 — 강제 리셋은 안 한다: 파인더는 사용자 명시 선택). -->
+        <!-- K-CM × 중앙 v0 배타 (레인 KVTX 2026-08-26). 인코더가 이 조합에서만
+             반전 꼭짓점 W 의 정본 톤을 뺀다 — 별 끝 3셀을 전면 dark 로 칠하면 그 암점이
+             중앙 슬롯과 **같은 v0 패밀리 블록**으로 잡혀 상위 컷을 밀어내고 진짜 비컨이
+             0개가 되기 때문이다 (실측 K1CM/L: 비컨 9 → 0). 문턱은 안 내렸다.
+             ⚠ 화면이 이 사실을 말해야 한다 — 안 그러면 «작화가 안 실렸다» 로 다시
+             신고가 온다. 오늘 실제로 그 경로로 왔다 (배타를 열면 소비자도 쓸어라). -->
+        <p class="hint" id="kcmBeaconNote" style="display:none" data-i18n="g908">중앙 v0(비컨)과 함께 쓰면 별 꼭짓점 큐브는 전면 dark 대신 순위 무늬로 그려져요 — 그 자리를 어둡게 칠하면 비컨 검출이 중앙을 못 찾아요. 나머지 마커 무늬와 용량은 그대로예요.</p>
         <p class="hint" id="finderAdvancedOnlyHint" style="display:none" data-i18n="g870">선택된 검출기는 고급 전용 카드예요 — 카드는 숨겨져 있지만 선택은 그대로 살아 있어요. 고급 모드에서 보여요.</p>
         <!-- 실험 후보 둘은 기본 접힘(사용자 지시 2026-08-13). 정식 4종만 펼쳐 두면
              카드 수가 15개에서 4개로 줄어 «무엇을 고르면 되는가» 가 바로 보인다. -->
@@ -2695,6 +2702,7 @@ const GENERATOR_STRINGS = {
     "g989": "코드 바깥 여백에 오른쪽 아래 그림자와 왼쪽 아래 반사광을 둘러요. 셀에는 안 닿아요.",
     "g990": "아래쪽 그림자·반사광에 더해 위쪽 테두리에도 얇은 아웃라인을 그려요. 인식률 영향이 아직 확실하지 않은 선택이에요.",
     "g991": " (배치 사진의 표면 밝기 {mean} 까지 보고 골랐어요) ",
+    "g908": "중앙 v0(비컨)과 함께 쓰면 별 꼭짓점 큐브는 전면 dark 대신 순위 무늬로 그려져요 — 그 자리를 어둡게 칠하면 비컨 검출이 중앙을 못 찾아요. 나머지 마커 무늬와 용량은 그대로예요.",
     "g992": " ⚠ 배경이 «검정»이 아니면 음영이 스캔을 방해할 수 있어요 — 흰 배경에서 복호가 20/20 → 6/20, 투명 배경을 중간 밝기 표면에 얹었을 때 10/10 → 0/10 으로 떨어졌어요. 전시용이면 그대로 쓰고, 스캔이 목적이면 배경을 검정으로 두거나 음영을 끄세요.",
     "g453": "타입 <b>Y</b> · 버전 <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · 톤 <b>{tones}</b>",
     "g454": " · 윈도 <b>β</b>",
@@ -3133,6 +3141,7 @@ const GENERATOR_STRINGS = {
     "g989": "Wraps a lower-right shadow and a lower-left reflection around the code, outside the cells.",
     "g990": "Adds a thin outline along the upper border on top of the lower shadow and reflection. Its effect on scan rate is not yet settled.",
     "g991": " (also weighing the surface brightness {mean} from the placement photo) ",
+    "g908": "With the centre v0 beacon, the star-tip cubes are drawn with a rank pattern instead of solid dark — darkening those spots stops the beacon detector from finding the centre. The rest of the marker pattern and the capacity are unchanged.",
     "g992": " ⚠ Unless the background is black, the shading can get in the way of scanning — on a white background decoding went 20/20 → 6/20, and a transparent export placed on a mid-brightness surface went 10/10 → 0/10. Fine for display use; if scanning matters, set the background to black or turn the shading off.",
     "g453": "Type <b>Y</b> · version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tones <b>{tones}</b>",
     "g454": " · window <b>β</b>",
@@ -3571,6 +3580,7 @@ const GENERATOR_STRINGS = {
     "g989": "コードの外側の余白に、右下の影と左下の反射光を回します。セルには触れません。",
     "g990": "下側の影・反射光に加えて、上側の縁にも細いアウトラインを描きます。読み取り率への影響がまだ確かでない選択です。",
     "g991": "（配置写真の面の明るさ {mean} も見て選びました） ",
+    "g908": "中央 v0（ビーコン）と併用すると、星の頂点キューブは全面 dark ではなく順位模様で描かれます — そこを暗く塗るとビーコン検出が中央を見つけられなくなるためです。ほかのマーカー模様と容量は変わりません。",
     "g992": " ⚠ 背景が「黒」以外のときは陰影がスキャンを妨げることがあります — 白背景では復号が 20/20 → 6/20、透明で書き出して中間の明るさの面に載せた場合は 10/10 → 0/10 に落ちました。展示用ならそのままで、スキャンが目的なら背景を黒にするか陰影を切ってください。",
     "g453": "タイプ <b>Y</b> · バージョン <b>{ver}</b>（n={n}）· ECC <b>{ecc}</b> · トーン <b>{tones}</b>",
     "g454": " · ウィンドウ <b>β</b>",
@@ -4008,6 +4018,7 @@ const GENERATOR_STRINGS = {
     "g989": "Entoure le code d'une ombre en bas à droite et d'un reflet en bas à gauche, hors des cellules.",
     "g990": "Ajoute un fin contour le long du bord supérieur, en plus de l'ombre et du reflet du bas. Son effet sur le taux de lecture n'est pas encore tranché.",
     "g991": " (en tenant compte aussi de la luminosité de surface {mean} relevée sur la photo de placement) ",
+    "g908": "Avec la balise v0 centrale, les cubes aux pointes de l’étoile sont dessinés avec un motif de rang plutôt qu’en sombre uni : assombrir ces points empêche le détecteur de balise de trouver le centre. Le reste du motif et la capacité ne changent pas.",
     "g992": " ⚠ Si l'arrière-plan n'est pas « noir », l'ombrage peut gêner la lecture — sur fond blanc le décodage est passé de 20/20 → 6/20, et un export transparent posé sur une surface de luminosité moyenne de 10/10 → 0/10. Parfait pour l'exposition ; si la lecture compte, mettez l'arrière-plan en noir ou désactivez l'ombrage.",
     "g453": "Type <b>Y</b> · version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tons <b>{tones}</b>",
     "g454": " · fenêtre <b>β</b>",
@@ -4445,6 +4456,7 @@ const GENERATOR_STRINGS = {
     "g989": "Avvolge il codice con un'ombra in basso a destra e un riflesso in basso a sinistra, fuori dalle celle.",
     "g990": "Aggiunge un contorno sottile lungo il bordo superiore, oltre all'ombra e al riflesso in basso. Il suo effetto sul tasso di scansione non è ancora chiaro.",
     "g991": " (tenendo conto anche della luminosità di superficie {mean} rilevata nella foto di posizionamento) ",
+    "g908": "Con il beacon v0 centrale, i cubi sulle punte della stella vengono disegnati con un motivo di rango invece che scuri pieni: scurire quei punti impedisce al rilevatore di beacon di trovare il centro. Il resto del motivo e la capacità restano invariati.",
     "g992": " ⚠ Se lo sfondo non è «nero», l'ombreggiatura può ostacolare la scansione: su sfondo bianco la decodifica è passata da 20/20 → 6/20 e un'esportazione trasparente appoggiata su una superficie di luminosità media da 10/10 → 0/10. Va bene per l'esposizione; se conta la scansione, metti lo sfondo su nero o disattiva l'ombreggiatura.",
     "g453": "Tipo <b>Y</b> · versione <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · toni <b>{tones}</b>",
     "g454": " · finestra <b>β</b>",
@@ -4882,6 +4894,7 @@ const GENERATOR_STRINGS = {
     "g989": "Legt außerhalb der Zellen einen Schatten unten rechts und einen Reflex unten links um den Code.",
     "g990": "Ergänzt zusätzlich zu Schatten und Reflex unten eine dünne Kontur am oberen Rand. Ihre Wirkung auf die Leserate ist noch nicht geklärt.",
     "g991": " (dabei zählt auch die Flächenhelligkeit {mean} aus dem Platzierungsfoto) ",
+    "g908": "Zusammen mit dem zentralen v0-Beacon werden die Würfel an den Sternspitzen mit einem Rangmuster statt durchgehend dunkel gezeichnet — dunkle Flecken dort hindern die Beacon-Erkennung daran, die Mitte zu finden. Das übrige Markenmuster und die Kapazität bleiben gleich.",
     "g992": " ⚠ Ist der Hintergrund nicht „schwarz“, kann die Schattierung das Scannen stören — auf weißem Hintergrund fiel die Dekodierung von 20/20 → 6/20, und ein transparenter Export auf mittelheller Fläche von 10/10 → 0/10. Für Ausstellungszwecke unbedenklich; wenn Scannen zählt, setzen Sie den Hintergrund auf Schwarz oder schalten Sie die Schattierung ab.",
     "g453": "Typ <b>Y</b> · Version <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · Tonwerte <b>{tones}</b>",
     "g454": " · Fenster <b>β</b>",
@@ -5319,6 +5332,7 @@ const GENERATOR_STRINGS = {
     "g989": "Rodea el código con una sombra abajo a la derecha y un reflejo abajo a la izquierda, fuera de las celdas.",
     "g990": "Añade un contorno fino a lo largo del borde superior, además de la sombra y el reflejo de abajo. Su efecto sobre la tasa de lectura aún no está claro.",
     "g991": " (teniendo en cuenta también el brillo de superficie {mean} de la foto de colocación) ",
+    "g908": "Con la baliza v0 central, los cubos de las puntas de la estrella se dibujan con un patrón de rango en lugar de oscuro sólido: oscurecer esos puntos impide que el detector de baliza encuentre el centro. El resto del patrón y la capacidad no cambian.",
     "g992": " ⚠ Si el fondo no es «negro», el sombreado puede estorbar el escaneo: sobre fondo blanco la decodificación pasó de 20/20 → 6/20, y una exportación transparente apoyada en una superficie de brillo medio, de 10/10 → 0/10. Vale para exposición; si lo que importa es escanear, ponga el fondo en negro o desactive el sombreado.",
     "g453": "Tipo <b>Y</b> · versión <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tonos <b>{tones}</b>",
     "g454": " · ventana <b>β</b>",
@@ -5756,6 +5770,7 @@ const GENERATOR_STRINGS = {
     "g989": "Envolve o código com uma sombra em baixo à direita e um reflexo em baixo à esquerda, fora das células.",
     "g990": "Acrescenta um contorno fino ao longo do bordo superior, além da sombra e do reflexo de baixo. O seu efeito na taxa de leitura ainda não está resolvido.",
     "g991": " (tendo também em conta o brilho de superfície {mean} da foto de posicionamento) ",
+    "g908": "Com o farol v0 central, os cubos nas pontas da estrela são desenhados com um padrão de ordem em vez de escuro sólido — escurecer esses pontos impede o detetor de farol de encontrar o centro. O resto do padrão e a capacidade mantêm-se.",
     "g992": " ⚠ Se o fundo não for «preto», o sombreamento pode atrapalhar a leitura — em fundo branco a descodificação passou de 20/20 → 6/20 e uma exportação transparente assente numa superfície de brilho médio passou de 10/10 → 0/10. Serve para exposição; se o que importa é ler, ponha o fundo a preto ou desligue o sombreamento.",
     "g453": "Tipo <b>Y</b> · versão <b>{ver}</b> (n={n}) · ECC <b>{ecc}</b> · tons <b>{tones}</b>",
     "g454": " · janela <b>β</b>",
@@ -6157,6 +6172,7 @@ const els = {
   hueRowAdv: $('hueRowAdv'), hueBarAdv: $('hueBarAdv'), hueValueAdv: $('hueValueAdv'),
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
   finderAdvancedOnlyHint: $('finderAdvancedOnlyHint'),
+  kcmBeaconNote: $('kcmBeaconNote'),
   finderPatternCards: $('finderPatternCards'),
   finderUserCards: $('finderUserCards'),
   finderOakCards: $('finderOakCards'),
@@ -7658,6 +7674,15 @@ function renderFinderUi() {
       && ADVANCED_ONLY_CENTRAL_IDS.includes(generatorState.finderPatternId);
     els.finderAdvancedOnlyHint.style.display = hiddenActive ? '' : 'none';
     if (hiddenActive) els.finderAdvancedOnlyHint.textContent = t('g870');
+  }
+  // K-CM × 중앙 v0 — 인코더(encodeK.h2co3IncludeVertexK)가 강제하는 배타를 화면이
+  // 말한다. 조건은 **인코더와 같은 술어**여야 한다: cornerMarker && centralV0.
+  if (els.kcmBeaconNote) {
+    const kcmBeacon = generatorState.type === 'K'
+      && generatorState.outerSeat === 'k-cm'
+      && isCentralV0FinderPatternId(generatorState.finderPatternId);
+    els.kcmBeaconNote.style.display = kcmBeacon ? '' : 'none';
+    if (kcmBeacon) els.kcmBeaconNote.textContent = t('g908');
   }
 
   const selectedPattern = FINDER_PATTERNS.find(

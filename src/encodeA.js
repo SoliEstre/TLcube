@@ -129,11 +129,12 @@ export function chooseVersionA(text, eccLevel = 'M') {
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
  * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, daehanFinder?: boolean,
- *          co2AnchorTones?: boolean}} [options]
+ *          sagoae?: boolean, co2AnchorTones?: boolean}} [options]
  *   `co2AnchorTones` — V-CM 기본 심볼 CO2 의 꼭짓점 앵커 3셀 톤까지 싣는다 (opt-in,
  *   자리 필수). 기본 적재는 마커 6셀뿐이다 — 앵커 피복은 앵커 검출을 죽인다.
  * @returns {{
- *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, daehanFinder: boolean, co2AnchorTones: boolean, formatIndex: number,
+ *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean,
+ *   daehanFinder: boolean, sagoae: boolean, co2AnchorTones: boolean, formatIndex: number,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
  *   dataDigits: Uint8Array,
@@ -152,7 +153,7 @@ export function encodeA(text, options = {}) {
   const {
     version, eccLevel = 'M', centerQr = false, centralV0 = false,
     cornerMarker = false, turnA = false,
-    daehanFinder = false, co2AnchorTones = false,
+    daehanFinder = false, sagoae = false, co2AnchorTones = false,
   } = options;
   if (typeof turnA !== 'boolean') {
     throw new TypeError(`turnA 는 boolean 이어야 한다: ${typeof turnA}`);
@@ -160,6 +161,15 @@ export function encodeA(text, options = {}) {
   if (typeof daehanFinder !== 'boolean') {
     throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
   }
+  if (typeof sagoae !== 'boolean') {
+    throw new TypeError(`sagoae 는 boolean 이어야 한다: ${typeof sagoae}`);
+  }
+  if (sagoae && daehanFinder) {
+    throw new RangeError('sagoae 와 daehanFinder 를 동시에 켤 수 없다 — 원자 daehan 이 sagoae 를 이미 포함한다');
+  }
+  // Type O 와 같은 와이어 공유: sagoae 는 A*D 예약 레이아웃을 쓰고, 별도
+  // formatIndex 를 만들지 않는다. 광학 합성 여부만 `sagoae` 메타로 남긴다.
+  const usesDaehanLayout = daehanFinder || sagoae;
   // turnA × cornerMarker — **개설됐다** (V-CM, 2026-08-24 배타 개설 정형 3단):
   //   ① 근거 실측 — 마커 21셀은 전부 패치 안(A-CM §4)이고 턴A 사상(배치 반전,
   //      셀 정립)은 배치의 서로소성을 보존한다 (markerA ④ 자기검증 + 렌더 왕복 실측).
@@ -168,8 +178,8 @@ export function encodeA(text, options = {}) {
   // V-CMQ — **개설** (2026-08-24 검수 4차). 구 «잔여 칸 0 보류» 는 «새 칸이
   // 필요하다» 는 전제가 틀렸다: V*CM 인덱스 공유가 무해하고 왕복이 선다
   // (turnA.js §turnASpec 의 근거·실측). 배타 개설 정형대로 락은 양성 단언으로.
-  if (turnA && daehanFinder) {
-    throw new RangeError('turnA 와 daehanFinder 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  if (turnA && usesDaehanLayout) {
+    throw new RangeError('turnA 와 daehan/sagoae 예약 레이아웃을 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
   // co2AnchorTones — V-CM 기본 심볼 CO2 의 **꼭짓점 앵커 3셀** 톤을 추가로 싣는다.
   // 정본에는 그 3셀 톤이 있는데 **기본은 안 싣는다**: 앵커에 절대 톤을 실은 프레임은
@@ -194,11 +204,11 @@ export function encodeA(text, options = {}) {
   }
   // cornerMarker × centerQr — 배치 검증 후 개설 (C2a 2026-08-23, encode.js 와 동일
   // 근거 · 와이어는 markerG CMQ 변형). test/markerG-centerqr.test.js 가 잠근다.
-  if (daehanFinder && centerQr) {
-    throw new RangeError('daehanFinder 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯을 둘 다 먹는다');
+  if (usesDaehanLayout && centerQr) {
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 centerQr 를 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
   }
-  if (daehanFinder && cornerMarker) {
-    throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+  if (usesDaehanLayout && cornerMarker) {
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
   // 중앙 v0 비컨 (2026-08-22 운영자 지시 «타입 OAK 모두») — A 의 육각 코어는 Type O
   // 와 좌표까지 같아(2026-08-19 실측, daehan 편입 근거) 중앙 19셀 슬롯 규약이 그대로
@@ -207,16 +217,16 @@ export function encodeA(text, options = {}) {
     throw new TypeError(`centralV0 는 boolean 이어야 한다: ${typeof centralV0}`);
   }
   if (centralV0 && centerQr) {
-    throw new RangeError('centralV0 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 centerQr 는 같은 19셀을 쓴다');
   }
-  if (centralV0 && daehanFinder) {
-    throw new RangeError('centralV0 와 daehanFinder 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
+  if (centralV0 && usesDaehanLayout) {
+    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 daehan/sagoae 예약 레이아웃을 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
   }
   // centralV0 × turnA — **개설** (2026-08-24, 운영자 아침 검수 3차). 막던 근거는
   // «배치 검증 미실시» 였는데 턴A 기하가 «배치만 180° 회전·셀 정립» 으로 확정되며
   // 해소됐다: 비컨 슬롯은 중앙(회전 불변 위치)이고 회계상 셀 밖이라 turn 이 배치를
   // 건드릴 수 없다 (배치 검증 = 왕복 테스트 test/turnA-roundtrip.test.js ▽+비컨).
-  const provider = layoutProviderForA(cornerMarker, daehanFinder, turnA);
+  const provider = layoutProviderForA(cornerMarker, usesDaehanLayout, turnA);
 
   let spec;
   if (version === undefined) {
@@ -398,7 +408,8 @@ export function encodeA(text, options = {}) {
     centralV0,
     cornerMarker,
     turnA,
-    daehanFinder,
+    daehanFinder: usesDaehanLayout,
+    sagoae,
     co2AnchorTones,
     formatIndex,
     capacity,

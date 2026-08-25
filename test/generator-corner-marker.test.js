@@ -82,8 +82,9 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
   // 심볼» 이다 (A-CM=H2O 문법). 별도 카드·별도 상태 값이 다시 생기면 회귀다.
   assert.deepEqual(zones.inner.map((c) => c.id), ['none', 'o-cm', 'sagoae']);
   assert.deepEqual(zones.outer.map((c) => c.id), ['none', 'a-cm', 'v-cm', 'k-cm']);
-  // 자리만 카드는 클릭 불가(ready=false)다 — sagoae 생성측 합성 렌더는 잔여.
-  assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, false);
+  // sagoae 는 기존 daehan 예약 회계/formatIndex 공유 + C2c 합성 왕복이 서서
+  // 구 `ready:false` 락이 양성 카드 단언으로 뒤집혔다.
+  assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, true);
   assert.equal(INNER_SEAT_OPTIONS.includes('H'), false,
     'H 가 상태 값으로 되살아났다 — o-cm 통합(2026-08-24)의 회귀');
   // v-cm · k-cm — 실체 전환 (2026-08-24, 배타 개설 정형 ③): 부재 카드 단언(구 락)을

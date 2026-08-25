@@ -30,7 +30,7 @@ import {
 import { ranksToDigit } from '../lehmer.js';
 import { anchorCells } from '../placement.js';
 import { vertexAnchors } from '../placementA.js';
-import { vertexAnchorsK } from '../placementK.js';
+import { invertedVertexAnchors, vertexAnchorsK } from '../placementK.js';
 import { sampleHexCell } from './grid-sample.js';
 
 /*
@@ -336,11 +336,22 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
     const expected = anchor.digit;
     const sampleCheck = sampled.ok
       && orderedFaces.every((face) => face.count >= minSampleCount);
-    const rankCheck = sampled.ok
-      && !rank.tie
-      && Number.isFinite(rank.separation)
-      && rank.separation >= minSeparation;
-    const expectedCheck = sampled.ok && rank.digit === expected;
+    /*
+     * 비-순열 앵커 (`flatDark`) — K 의 H2CO3 반전 꼭짓점은 전면 동톤 (0,0,0) 이다.
+     * 그 셀은 마커 무늬와 별 꼭짓점 앵커를 겸한다. 평평하게 칠하면 순위가 사라져
+     * 기존 rankCheck 가 죽고, hardChecks 는 전원 통과를 요구하므로 6개가 함께 죽는다.
+     *
+     * 기대값을 뒤집는다: 데이터 셀은 계약상 동률일 수 없다 (Δmin 0.12 — SPEC §7.2).
+     * 별 끝점의 동률은 잡음이 아니라 마커의 서명이다. 문턱 완화가 아니다 —
+     * 「순위가 있어야 한다」를 「순위가 없어야 한다」로 바꾼 것이고, 둘 다 틀리면 죽는다.
+     */
+    const flatDark = anchor.flatDark === true;
+    const rankCheck = sampled.ok && (flatDark
+      ? rank.tie === true
+      : (!rank.tie
+        && Number.isFinite(rank.separation)
+        && rank.separation >= minSeparation));
+    const expectedCheck = sampled.ok && (flatDark ? rank.tie === true : rank.digit === expected);
     allSamples = allSamples && sampleCheck;
     allRanks = allRanks && rankCheck;
     allExpected = allExpected && expectedCheck;
@@ -506,6 +517,16 @@ function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
           turn: variant.turn === true,
           hardChecks: evaluated.hardChecks,
           anchorMargin: evaluated.anchorMargin,
+          measurements: evaluated.measurements.map((m) => ({
+            qr: m.canonical.q + ',' + m.canonical.r,
+            exp: m.expectedDigit,
+            obs: m.observedDigit,
+            sep: m.separation,
+            tie: m.tie,
+            s: m.sampleCheck,
+            r: m.rankCheck,
+            e: m.expectedCheck,
+          })),
         });
       }
     }
@@ -594,12 +615,30 @@ export function findAAnchorHypotheses(luma, bullseye, ks, options = {}) {
  * @param {number[]|number} ks 지원 k 목록
  * @param {object} [options]
  */
+/**
+ * K-CM H2CO3 가 반전 꼭짓점 3셀을 전면 동톤(0,0,0)으로 칠한 프레임의 앵커 목록.
+ * A 계열은 기존 digit(5/0/0), 반전 계열은 `flatDark` — 동률이 기대값이다.
+ * 평 K(칠하지 않은) 목록 `vertexAnchorsK` 와 배타: 한쪽이 서면 다른 쪽은 hardChecks
+ * 에서 죽는다 (데이터 셀은 동률일 수 없고, 칠한 셀은 순위가 없다).
+ */
+export function paintedVertexAnchorsK(k) {
+  return [
+    ...vertexAnchors(k),
+    ...invertedVertexAnchors(k).map((anchor) => ({ ...anchor, flatDark: true })),
+  ];
+}
+
 export function findKAnchorHypotheses(luma, bullseye, ks, options = {}) {
   // scaleSupplied — star 는 신설 축이라 실효 배율 탐색을 연다 (턴A 전례, evaluate
   // 주석). 앵커가 3k(최대 30셀) 거리라 다운샘플 파인더의 2% 대 스케일 오차만으로
   // 0.6셀 이상 밀려 6/6 이 전멸한다 — K1 합성 왕복 실측 (2026-08-25).
   return findHypotheses(luma, bullseye, ks, options, 'star',
-    (k) => [{ turn: false, scaleSupplied: true, anchors: vertexAnchorsK(k) }]);
+    (k) => [
+      { turn: false, scaleSupplied: true, anchors: vertexAnchorsK(k) },
+      // H2CO3 변형 — 반전 꼭짓점 3셀은 digit 순위가 아니라 동률이 기대값이다.
+      // 턴A 와 같은 「추가 가설 축」이라 기존 가설 평가는 한 비트도 안 바뀐다.
+      { turn: false, scaleSupplied: true, anchors: paintedVertexAnchorsK(k) },
+    ]);
 }
 
 /**

@@ -38,7 +38,7 @@ import {
   DAEHAN_NAME, TAEGUK_ID, SAGOAE_ID,
   daehanFinderCellsFor, daehanReservedCells, daehanPatternId, daehanKForPatternId,
   getDaehanFinderPattern, isDaehanFinderPatternId,
-  taegeukCells, sagoaeCells,
+  taegeukCells, sagoaeCells, sagoaeLevels,
 } from '../src/finder-daehan.js';
 import { NSYM_TABLE, NSYM_TABLE_DAEHAN } from '../src/rs211.js';
 import { VERSIONS_DAEHAN, capacityForDaehan } from '../src/capacityDaehan.js';
@@ -465,5 +465,8 @@ test('⑧ 분류 층 id — taegeuk 19 = 슬롯, sagoae = 예약, 와이어 이�
   assert.equal(taegeukCells().length, 19);
   for (const k of DAEHAN_RADII) {
     assert.equal(sagoaeCells(k).length, daehanReservedCells(k).length);
+    assert.equal(sagoaeLevels(k).length, sagoaeCells(k).length);
+    assert.ok(sagoaeLevels(k).flat().every((level) => level === 0 || level === 2),
+      'sagoae 는 원자 daehan 의 이진 톤 바깥 부분이어야 한다');
   }
 });
