@@ -9,7 +9,9 @@
  *   --frontend <경로>  비교할 decodeFrontend 구현 (기본: 이 트리의 src/decoder/frontend.js)
  *   --out <경로>       행 JSON 출력 (기본: test/output/corpus-ab/<라벨>.json)
  *   --base <경로>      기준 JSON. 주면 A/B 차이를 내고 죽음 플립이 있으면 exit 1
- *   --expect <N>       기대 덤프 수 (기본 367). 어긋나면 즉시 죽는다.
+ *   --expect <N>       기대 덤프 수 (기본 379). 어긋나면 즉시 죽는다.
+ *                      ⚠ 이 값은 **올릴 때만** 만진다. 낮춰서 통과시키면
+ *                      listLumaDumps() 의 «빈 배열 = 0/0 전부 통과» 거짓 초록이 열린다.
  *
  * 코퍼스가 **자라는 것**은 정상이다 (사진이 추가된다). 그래서 --base 대조는
  * 「기준 행이 빠졌나」만 거부하고, 늘어난 행은 교집합 밖으로 빼서 따로 보고한다 —
@@ -44,7 +46,7 @@ const flag = (name, fallback) => {
 const frontendPath = resolve(flag('frontend', join(REPO, 'src', 'decoder', 'frontend.js')));
 const outPath = resolve(flag('out', join(REPO, 'test', 'output', 'corpus-ab', `${label}.json`)));
 const basePath = flag('base', null);
-const expect = Number(flag('expect', '367'));
+const expect = Number(flag('expect', '379'));
 const decodeOpts = JSON.parse(flag('opts', '{}'));
 
 // ── 재료 ──────────────────────────────────────────────────────────

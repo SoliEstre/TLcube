@@ -6,6 +6,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import { centralBeaconGeometry } from '../src/centralBeaconWire.js';
 import {
@@ -45,6 +47,10 @@ import { decodeFrontend } from '../src/decoder/frontend.js';
 import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { distortImage } from './harness/distort.mjs';
 import { listLumaDumps, lumaToRaster, readLumaDump } from '../tools/read-luma.mjs';
+
+/** 실사진 코퍼스 장수 — 정본은 지문 JSON. 여기서 다시 적지 않는다. */
+const CORPUS_COUNT = JSON.parse(readFileSync(
+  fileURLToPath(new URL('./photo-corpus-fingerprint.json', import.meta.url)), 'utf8')).count;
 
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
@@ -330,7 +336,12 @@ test('무회귀 — 비컨 없는 실사진 한 장의 compact 가 바이트 동
   timeout: 120_000,
 }, () => {
   const dumps = listLumaDumps();
-  assert.equal(dumps.length, 367);
+  // 장수는 **유도한다** — 정본은 photo-corpus-fingerprint.json 하나다. 손으로 나란히
+  // 유지하던 사본이라 코퍼스가 367 → 379 로 자랐을 때 여기만 뒤처져 빨개졌다
+  // (2026-08-25). 자를 두 군데 적으면 반드시 어긋난다.
+  assert.equal(dumps.length, CORPUS_COUNT,
+    `코퍼스 장수가 지문과 다르다 (${dumps.length} vs ${CORPUS_COUNT}) — `
+    + 'photo-corpus-fingerprint.test.js 의 규율대로 EXPECTED_RED 기록 후 regen 하라');
   const entry = dumps.find((dump) => dump.name === 'cellfinder-20260812-07.960.luma');
   assert.ok(entry, 'cell-finder 실사진 덤프가 없다');
   const result = decodeFrontend(lumaToRaster(readLumaDump(entry.path)));

@@ -350,19 +350,20 @@ test('O-CM: verifyCornerMarkers 는 탐색 없이도 정답 H 에서 1.0', () =>
 });
 
 // ── V-CM(턴A) 턴 변형 — **측정한 현실을 잠근다** ─────────────────────────────
+// 이 자리엔 원래 «알려진 공백(F-111)» 락이 있었다: 턴 후보가 서긴 하지만 톤 앵커가
+// 코너 묶음별로만 모여 dark/bright 가 못 서고 agreement 0.7778 에서 멈춘다는 것.
+// 2026-08-25 풀링 수리(6셀 18슬롯 전체에서 앵커를 모은다)로 **그 공백이 닫혔다.**
+// 락이 터졌고, 그게 이 락의 목적이었다 — 조용히 통과했으면 «언제 고쳐졌는지» 를
+// 아무도 몰랐을 것이다. 아래는 짐작이 아니라 원격 좌석 실측값이다:
 //
-// 왜 이 테스트가 생겼나 (2026-08-25, codex 검수 적발): 턴 변형을 검출기에 넣고
-// 배포까지 했는데 **그 동작을 고정하는 테스트가 하나도 없었다.** 이 파일의 기존
-// 테스트는 `findOCornerMarkerHypotheses`(O 경로)만 가져오고, markerA 의 180° 테스트는
-// «거부된다» 는 반대편 주장이다. 지정 테스트 17개가 전부 통과하는데 검출기를 직접
-// 부르면 `accepted:false · 49/63` 이었다 — 초록이 이 코드에 대해 아무 말도 안 했다.
+//   ACCEPT  tri-marker-8-0-turn   agreement = 1
+//   reject  tri-marker-8-1-turn   agreement = 0.6190
+//   reject  tri-marker-8-2-turn   agreement = 0.5079
+//   reject  tri-marker-8-0        agreement = 0        ← 정립 배치는 아예 안 맞는다
 //
-// ⚠ 이 테스트는 «되기를 바라는 값» 이 아니라 **지금 실제로 나오는 값** 을 적는다.
-//    턴 변형이 후보로 **생성되는지**(=구조가 열렸는지)는 양성으로 잠그고,
-//    아직 게이트를 못 넘는다는 사실은 **알려진 공백(F-111)** 으로 잠근다.
-//    풀링 수리가 들어가면 이 테스트가 **터진다 — 그게 목적이다.** 조용히 지나가면
-//    누구도 «언제 고쳐졌는지» 를 모른다. 터지면 작성자가 값을 의도적으로 갱신한다.
-test('V-CM 턴 변형은 후보로 서고, 톤 앵커 고갈로 아직 게이트를 못 넘는다 (F-111)', async () => {
+// 정립이 0 인 것이 핵심이다. 턴A 계약(«배치만 180° 회전 · 셀은 정립»)이 좌표 사상
+// (q,r)→(−q,−r) 로 구현돼 있다는 값의 증거다 — H 를 돌린 게 아니다.
+test('V-CM 턴 변형은 정답 배치로 서고 게이트를 넘는다 (F-111 해소)', async () => {
   const { findACornerMarkerHypotheses } = await import('../src/decoder/corner-marker-detect.js');
   const { toRelativeLuminance } = await import('../src/decoder/luma.js');
   const { detectBullseyes } = await import('../src/decoder/bullseye-detect.js');
@@ -374,34 +375,30 @@ test('V-CM 턴 변형은 후보로 서고, 톤 앵커 고갈로 아직 게이트
   const luma = toRelativeLuminance(rasterize(scene, { pixelsPerUnit: 24, supersample: 1 }), {});
   const bs = detectBullseyes(luma, {});
   assert.equal(bs.ok, true, '불스아이가 안 섰다 — 이 테스트의 전제가 깨졌다');
-  const finder = bs.candidates[0];
 
-  const res = findACornerMarkerHypotheses(luma, finder, [encoded.k], {});
-  const rejected = (res.detail || res.diagnostics || {}).rejected || [];
-  const ids = rejected.map((r) => r.hypothesisId).concat(
-    (res.ok ? res.hypotheses : []).map((h) => h.hypothesisId),
-  );
+  const res = findACornerMarkerHypotheses(luma, bs.candidates[0], [encoded.k], {});
+  const diag = res.detail || res.diagnostics || {};
+  const rejected = diag.rejected || [];
 
-  // ① 구조 — 턴 변형이 실제로 평가된다. 이게 없으면 180° 배치는 원리적으로 안 보인다.
-  assert.ok(ids.some((id) => typeof id === 'string' && id.endsWith('-turn')),
-    '턴 변형 후보가 아예 생성되지 않았다 — 검출기가 다시 0°/120°/240° 만 본다');
+  // ① 게이트 통과 — 공백이 닫혔다는 사실 자체.
+  assert.equal(res.ok, true,
+    'V-CM 턴이 게이트를 못 넘는다 — 풀링 수리가 되돌아갔나 (F-111 재발)');
 
-  // ② 방향 — 턴 쪽이 정립 쪽보다 확실히 높다 (사상이 맞다는 값의 증거).
-  const best = (id) => {
-    const hit = rejected.filter((r) => r.hypothesisId === id && Number.isFinite(r.agreement));
-    return hit.length ? hit[0].agreement : null;
-  };
-  const turnScore = best(`tri-marker-${encoded.k}-0-turn`);
-  const uprightScore = best(`tri-marker-${encoded.k}-0`);
-  assert.ok(turnScore !== null, '턴 후보의 agreement 가 진단에 없다');
-  assert.ok(turnScore > (uprightScore ?? 0),
-    `턴(${turnScore}) 이 정립(${uprightScore}) 보다 높아야 한다 — 좌표 사상이 맞는 방향인지의 자다`);
+  // ② 구조 — 이긴 것이 **턴 변형**이어야 한다. 정립이 이기면 사상이 뒤집힌 것이다.
+  assert.equal(res.hypotheses.length, 1, '정답 가설이 정확히 하나가 아니다');
+  const winner = res.hypotheses[0];
+  assert.equal(winner.hypothesisId, `tri-marker-${encoded.k}-0-turn`,
+    '턴 변형이 아닌 것이 이겼다 — 좌표 사상 (q,r)→(−q,−r) 이 깨졌나');
+  assert.equal(winner.agreement, 1,
+    `턴 agreement 가 1 이 아니다: ${winner.agreement} — 풀링이 부분적으로만 듣는다`);
 
-  // ③ 알려진 공백 — 아직 통과하지 못한다. 값은 실측(49/63 ≈ 0.7778)이다.
-  //    톤 분류가 코너 묶음별(NO2 는 묶음당 2셀 = 6슬롯)이라 dark/bright 앵커가 못 선다.
-  //    전체 6셀(18슬롯)로 풀링하면 18/18 → 63/63 이 된다 (F-111 · agy·grok·codex 3중 확인).
-  assert.equal(res.ok, false,
-    'V-CM 턴이 게이트를 넘었다 — F-111 이 해소됐다면 이 테스트를 의도적으로 갱신하라');
-  assert.ok(turnScore > 0.77 && turnScore < 0.78,
-    `턴 agreement 실측 이탈: ${turnScore} (기대 0.7778 부근 · 게이트 0.78)`);
+  // ③ 탐색 공간 — 변형 2종 × 방향 3 × k 1 = 6. 이 수가 줄면 턴이 다시 안 보인다.
+  assert.equal(diag.evaluatedCount, 6,
+    `평가 수가 6 이 아니다: ${diag.evaluatedCount} — 턴 변형이 목록에서 빠졌나`);
+
+  // ④ 정립은 0 — «턴A 는 배치 회전이지 H 회전이 아니다» 의 값의 증거.
+  const uprightRow = rejected.find((r) => r.hypothesisId === `tri-marker-${encoded.k}-0`);
+  assert.ok(uprightRow, '정립 후보가 평가되지 않았다 — 대조군이 사라졌다');
+  assert.equal(uprightRow.agreement, 0,
+    `정립 배치가 0 이 아니다: ${uprightRow.agreement} — 두 배치가 구분이 안 되면 오수용이 난다`);
 });

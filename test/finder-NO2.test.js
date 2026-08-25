@@ -314,15 +314,30 @@ test('⑤ 중앙 파인더와 직교 — 임의 중앙 파인더 × NO2 가 서�
   );
 });
 
-test('⑥ ⛔ 알려진 공백 — NO2 앵커 톤(opt-in)을 실으면 digit 앵커 검출이 죽는다', () => {
-  // 실측 격자 (페이로드 4 × 버전 3 × ppu 2 = 24칸, 2026-08-24):
-  //   기본(마커 6셀만)  24/24 성공
-  //   앵커 톤 ON         2/24 성공 — 실패 20 은 no-anchors, 2 는 no-format-candidate.
-  //   생존 2칸은 **페이로드 의존**이다 (V1CM × 'NO2-render' 한 조합뿐) — 즉 «가끔
-  //   된다» 이지 «된다» 가 아니다. F-108 (페이로드 의존 CRC)과 같은 결이다.
-  // 아래 락은 그 격자의 대표 표본(전 버전에서 재현되는 페이로드) 하나를 값으로
-  // 고정한다. 격자 전수는 레인 보고서에 남는다 (테스트에 넣기엔 400s 다).
+test('⑥ ⛔ 알려진 공백 — NO2 앵커 톤(opt-in)의 벽은 «앵커» 가 아니라 «형식 정보» 다', () => {
+  // 2026-08-25 풀링 수리 이후 **재측정** (원격 좌석, 페이로드 4 × 버전 3 × ppu 2 = 24칸).
+  // 공백은 닫히지 않았다. 대신 **원인이 한 층 내려갔다** — 그게 이 락이 잡는 것이다.
+  //
+  //            수리 전            수리 후
+  //   성공      2/24              2/24        ← 총합은 그대로
+  //   no-anchors        20               7    ← 13칸이 여기서 빠져나갔고
+  //   no-format-candidate 2             15    ← 그대로 여기 쌓였다
+  //
+  // 원인은 **페이로드가 아니라 버전으로 갈린다** (24칸 전수에서 재현):
+  //   V0      → no-anchors            (8칸 중 7 — 앵커가 아직 굶는다)
+  //   V1·V2   → no-format-candidate   (16칸 중 15 — 앵커는 섰다)
+  //             진단: hypothesisCount ≥ 1 · formatProposalCount 0 · formatCandidateCount 0
+  //             즉 «포즈는 섰는데 형식 정보를 못 읽는다».
+  //   생존 2칸은 여전히 페이로드 의존이다 ('NO2-render' × V1 뿐) — «가끔 된다» 이지
+  //   «된다» 가 아니다.
+  //
+  // ⚠ 이 formatProposalCount 0 서명은 **실기기 V-CM 실패와 같다** (2026-08-25 실사진
+  //    12프레임: hypothesisCount 290~342 · formatProposalCount 0). 입력 조건은 다르지만
+  //    (저쪽은 기본 경로, 여기는 앵커 톤 ON) 벽의 서명이 일치한다 — 실물 병목의
+  //    **60초짜리 합성 재현**일 가능성이 높다. 다음 표적(포즈 정합 · F-108)의 입구다.
   const GAP_TEXT = 'TLcube';
+  // 버전별 벽 — 격자 전수에서 나온 값이다. 바뀌면 «원인이 또 옮겨갔다» 는 뜻이니 터진다.
+  const WALL_BY_VERSION = { 0: 'no-anchors', 1: 'no-format-candidate', 2: 'no-format-candidate' };
   const render12 = (encoded) => rasterize(
     buildScene(encoded, { palette: PALETTE, margin: 20 }),
     { pixelsPerUnit: 12, supersample: 1 },
@@ -331,18 +346,37 @@ test('⑥ ⛔ 알려진 공백 — NO2 앵커 톤(opt-in)을 실으면 digit 앵
     version, eccLevel: 'M', turnA: true, cornerMarker: true, ...extra,
   });
   for (const version of [0, 1, 2]) {
-    // 대조군 — 기본 적재는 선다 (공백 잠금의 전제이자, 이 공백이 «앵커 축» 임을 가른다).
+    // 대조군 — 기본 적재는 선다 (공백 잠금의 전제이자, 이 공백이 «앵커 톤» 축임을 가른다).
     const base = decodeFrontend(render12(encodeGap(version)));
     assert.equal(base.ok, true,
       'V' + version + 'CM 기본 왕복이 죽었다 — 공백 잠금의 전제 붕괴');
-    // 앵커 3셀까지 덮으면 digit 기반 앵커 검출이 죽는다 (H 의 tetrad A 와 같은 축).
+
     const toned = decodeFrontend(render12(encodeGap(version, { no2AnchorTones: true })));
     assert.equal(toned.ok, false,
       'V' + version + 'CM: NO2 앵커 톤 검출이 서기 시작했다 — 이 단언을 뒤집고 '
       + 'no2AnchorTones 기본값 전환을 운영자와 논의하라 (한쪽만 켜면 효과가 음수다)');
     const code = typeof toned.reason === 'string' ? toned.reason : toned.reason?.code ?? '';
-    assert.ok(String(code).includes('no-anchors'),
-      'V' + version + 'CM: 실패 사유가 앵커 축이 아니다 (' + code + ') — 공백의 원인이 바뀌었나');
+    assert.ok(String(code).includes(WALL_BY_VERSION[version]),
+      'V' + version + 'CM: 벽이 옮겨갔다 — 기대 ' + WALL_BY_VERSION[version] + ' · 실제 ' + code
+      + ' (원인이 바뀌었으면 격자를 다시 재고 이 표를 갱신하라)');
+
+    // V1·V2 는 «포즈는 섰는데 형식 정보가 0» 이라는 서명까지 잠근다 — 실기기와 대조할 자다.
+    // ⚠ 진단은 detail.cause.diagnostics 다 (detail 바로 밑 아님). 이 계열의 키를 두 번
+    //    틀렸으니 값을 적기 전에 덤프부터 한다 — formatFailureSummary.counts 와 같은 함정.
+    if (WALL_BY_VERSION[version] === 'no-format-candidate') {
+      const cause = toned.detail?.cause ?? {};
+      const diag = cause.diagnostics ?? {};
+      assert.ok((diag.hypothesisCount ?? 0) >= 1,
+        'V' + version + 'CM: 포즈 가설이 0 이다 — 벽이 형식 정보가 아니라 포즈로 되돌아갔다');
+      assert.equal(diag.formatProposalCount, 0,
+        'V' + version + 'CM: formatProposalCount 가 0 이 아니다 (' + diag.formatProposalCount
+        + ') — 형식 정보가 읽히기 시작했다면 이 공백이 닫히는 중이다');
+      // 지배 사유가 crc = «표본은 정상인데 CRC 가 전멸» = 틀린 포즈 신호. 실기기 V-CM
+      // 실패의 지배 사유와 **같다**. 이게 바뀌면 두 현상이 갈라진 것이니 다시 이어야 한다.
+      assert.equal(cause.formatFailureSummary?.dominant, 'crc',
+        'V' + version + 'CM: 지배 사유가 crc 가 아니다 ('
+        + cause.formatFailureSummary?.dominant + ') — 실기기 실패와의 서명 일치가 깨졌다');
+    }
   }
 });
 

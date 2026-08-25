@@ -183,10 +183,25 @@ export function scoreSampledOrientation(layout, hypotheses, sampleByKey, options
       if (slot.expected === 0) darkByFace[slot.face].push(value);
       else if (slot.expected === 2) brightByFace[slot.face].push(value);
     }
+    // ⭐ **앵커 주입 (2026-08-25, F-111)** — `options.toneAnchors` 가 있으면 그것을
+    // 쓴다. 없으면 종전과 **한 비트도 다르지 않게** 이 layout 에서 유도한다.
+    //
+    // 왜 필요한가: 절대 톤 분류의 dark/bright 앵커는 «이 프레임에서 무엇이 어둡고
+    // 무엇이 밝은가» 라는 **프레임 수준 성질**인데, 호출자가 layout 을 작게 쪼개
+    // 부르면 (면,톤) 조합당 표본이 1\~2개로 떨어져 중앙값이 잡음이 된다.
+    // 실측(코너 마커 × NO2): 묶음당 톤 셀 2개(6슬롯)면 49/63, 마커 전체 6셀
+    // (18슬롯)로 풀링하면 **18/18 → 63/63**. 게이트 값은 아무것도 안 바꾼다 —
+    // 바뀌는 것은 «무엇을 표본으로 삼아 앵커를 세우는가» 뿐이다.
+    const injected = options && options.toneAnchors;
     const anchors = {};
     const sampleCounts = {};
     for (const face of FACES3) {
-      anchors[face] = { dark: median(darkByFace[face]), bright: median(brightByFace[face]) };
+      anchors[face] = injected && injected[face]
+        ? { dark: injected[face].dark, bright: injected[face].bright }
+        : { dark: median(darkByFace[face]), bright: median(brightByFace[face]) };
+      // ⚠ sampleCounts 는 언제나 **이 layout 이 직접 본 것**을 센다 — 앵커를 주입받아도
+      // 그대로다. 주입 시엔 앵커의 출처가 여기가 아니므로, 이 수를 «앵커가 굶었다» 의
+      // 근거로 읽으면 오진이다. 그래서 anchorsInjected 를 함께 낸다.
       sampleCounts[face] = { dark: darkByFace[face].length, bright: brightByFace[face].length };
     }
     let matches = 0;
@@ -211,6 +226,7 @@ export function scoreSampledOrientation(layout, hypotheses, sampleByKey, options
       matches,
       total,
       anchors,
+      anchorsInjected: Boolean(injected),
       sampleCounts,
       enoughSamples,
     };

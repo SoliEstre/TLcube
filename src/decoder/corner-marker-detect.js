@@ -209,6 +209,59 @@ function sampleOptionsFrom(options) {
 // 절대 톤 갈래의 회전 가설 3상 — 순수·결정적이라 호출마다 재생성할 이유가 없다.
 const HEX_ROTATION_HYPOTHESES = hexRotationHypotheses();
 
+function medianOf(values) {
+  if (values.length === 0) return NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * 마커 **전체**의 톤 셀에서 면별 dark/bright 앵커를 한 번 세운다 (F-111).
+ *
+ * 왜 묶음별이 아닌가 — 절대 톤 분류의 앵커는 «이 프레임에서 무엇이 어둡고 무엇이
+ * 밝은가» 라는 **프레임 수준 성질**이다. 그런데 검증은 코너 묶음별로 도니, 톤 셀이
+ * 성긴 심볼(NO2: 묶음당 2셀 = 6슬롯)에서는 (면,톤) 조합당 표본이 1\~2개로 떨어져
+ * 중앙값이 잡음이 된다. 실측: 묶음별 49/63 · 전체 6셀(18슬롯) 풀링 **18/18 → 63/63**.
+ *
+ * ⚠ 기저 H 에서 한 번만 표본한다 — 묶음별 국소 탐색은 **자리**를 찾는 것이고
+ * 앵커는 **밝기 수준**이라, 셀 이하 평행이동으로 의미 있게 안 변한다.
+ *
+ * 톤 셀이 하나도 없으면(A-CM·O-CM 의 digit 기대값) `null` 을 낸다 — 주입이 안
+ * 일어나고 종전 경로 그대로다.
+ */
+function poolToneAnchors(luma, H, tetrads, sampleOpts) {
+  const dark = { T: [], L: [], R: [] };
+  const bright = { T: [], L: [], R: [] };
+  let toneCellCount = 0;
+  for (const tetrad of tetrads) {
+    for (const cell of tetrad.cells) {
+      if (!cell.tones) continue;
+      toneCellCount += 1;
+      const res = sampleHexCell(
+        luma, { H, canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE }, cell.q, cell.r, sampleOpts,
+      );
+      if (!res.ok) continue;
+      for (const face of FACE_NAMES) {
+        const value = res[face] && res[face].median;
+        if (!Number.isFinite(value)) continue;
+        if (cell.tones[face] === 0) dark[face].push(value);
+        else if (cell.tones[face] === 2) bright[face].push(value);
+      }
+    }
+  }
+  if (toneCellCount === 0) return null;
+  const anchors = {};
+  for (const face of FACE_NAMES) {
+    const d = medianOf(dark[face]);
+    const b = medianOf(bright[face]);
+    // 한쪽이라도 표본이 없으면 주입하지 않는다 — 반쪽 앵커는 종전 유도보다 나쁘다.
+    if (!Number.isFinite(d) || !Number.isFinite(b)) return null;
+    anchors[face] = { dark: d, bright: b };
+  }
+  return anchors;
+}
+
 function scoreTetradAt(luma, H, cells, sampleOpts, tieEpsilon, scorerOptions) {
   let agree = 0;
   let sampled = 0;
@@ -328,6 +381,15 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
   // 마커 묶음 공급자 — O 는 tetrad(기준점 = 코너 앵커 A), A 는 링(기준점 = 링 중심 Z).
   // 검증·탐색·재적합 논리는 두 타입이 **완전히 같다**; 다른 것은 좌표 목록뿐이다.
   const tetrads = options.groups || markerTetrads(k);
+  // ⭐ **톤 앵커는 마커 전체에서 한 번 세운다 (2026-08-25, F-111)** — 묶음별로
+  // 세우면 NO2 처럼 톤 셀이 성긴 심볼에서 (면,톤) 표본이 1\~2개로 떨어져 중앙값이
+  // 잡음이 된다 (실측: 묶음별 49/63 · 풀링 18/18 → 63/63).
+  // 「위치·방향은 묶음별 · 절대 톤 분류는 프레임 수준」 이라는 층 분리를 한 겹 더 민 것이고,
+  // 게이트 값은 아무것도 안 바꾼다. 톤 셀이 없는 마커(A-CM·O-CM 의 digit 기대값)면
+  // 앵커가 null 이라 주입이 안 일어나고 **종전 경로 그대로**다.
+  const pooledToneAnchors = poolToneAnchors(luma, H, tetrads, sampleOpts);
+  const scorerOptions = pooledToneAnchors
+    ? { ...options, toneAnchors: pooledToneAnchors } : options;
   const corners = [];
   let totalAgree = 0;
   let totalSlots = 0;
@@ -344,7 +406,7 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
         translationHomography(offset.dx * cellSize, offset.dy * cellSize),
         multiply(H, scaleHomography(scale)),
       );
-      const scored = scoreTetradAt(luma, shifted, tetrad.cells, sampleOpts, tieEpsilon, options);
+      const scored = scoreTetradAt(luma, shifted, tetrad.cells, sampleOpts, tieEpsilon, scorerOptions);
       return { ...scored, offset, scale, shifted };
     };
     let best = null;
