@@ -87,13 +87,13 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
     assert.equal(kcm.absent, false, 'k-cm 이 아직 부재 카드다 — 2026-08-24 실체 전환 회귀');
     assert.equal(kcm.ready, true, 'k-cm 이 클릭 불가다');
     assert.deepEqual([...kcm.types], ['K'], 'k-cm 은 Type K 전용이다');
-    // ⚠ 그런데 **상태 값은 아니다** — 생성기 타입에 K 가 없다(⑤ 잔여). 그래서 아래
-    // 기대축(LAB_OUTER) 전수 대조는 k-cm 을 애초에 안 본다: OUTER_SEAT_OPTIONS 가
-    // stateValue:false 로 걸러 낸다. K 가 생성기에 편입되면 그 게이트가 걷히고,
-    // 그 순간 아래 루프가 «LAB_OUTER_FINDER_IDS 에 k-cm 이 없다» 로 터진다 —
-    // 스캐너 기대축 + 8언어 등재가 통합자 몫이라는 신호다 (v-cm 이 지나온 길).
-    assert.equal(OUTER_SEAT_OPTIONS.includes('k-cm'), false,
-      'k-cm 이 상태 값이 됐다 — 스캐너 기대축·8언어 등재가 먼저다');
+    // ⭐ **k-cm 상태값 개설 (2026-08-25)**. 이 자리는 자기가 터질 조건을 미리 적어
+    // 뒀고 — 「K 가 편입되면 게이트가 걷히고, 그 순간 LAB_OUTER_FINDER_IDS 에 k-cm 이
+    // 없다로 터진다」 — **정확히 그 순서로 일어났다**. 그래서 요구한 것을 먼저 했다:
+    // 스캐너 기대축 등재(src/lab-expected-axes.js) + 버튼 + 8언어. 그 다음 이 락을
+    // 양성으로 뒤집는다. 아래 전수 루프가 이제 k-cm 을 **실제로** 검사한다.
+    assert.equal(OUTER_SEAT_OPTIONS.includes('k-cm'), true,
+      'k-cm 이 상태 값에서 빠졌다 — 카드는 서는데 클릭이 상태에 안 실린다');
     assert.equal(zones.outer.some((c) => c.absent), false, '부재 카드가 남아 있다');
   }
   // 기대축 대조 — 시험판 축 ③(LAB_OUTER)은 seat 값을 전부 알아야 한다
@@ -132,8 +132,10 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
     'cornerMarker 를 cfg 에서 읽는 줄이 없다 — UI 가 인코더에 안 닿는다');
   // cfg 조립: seat 파생 (W2 C4 · Wave 3 ④ 재편) — O 는 내곽 o-cm, A 는 외곽
   // 코너 자리가 방향과 짝일 때만 켠다: a-cm×정삼각 / v-cm×역삼각.
+  // **의도적 갱신 (2026-08-25)** — K 절(k-cm)이 O 와 A 사이에 들어왔다. K 는 방향 축이
+  // 없으므로(육각별은 turnA 가 성립 안 한다) 자리 하나로 끝난다.
   assert.match(INDEX,
-    /cornerMarker: \(type === 'O' && generatorState\.innerSeat === 'o-cm'\)\s*\|\| \(type === 'A' && \(\(generatorState\.outerSeat === 'a-cm' && generatorState\.turnA !== true\)\s*\|\| \(generatorState\.outerSeat === 'v-cm' && generatorState\.turnA === true\)\)\)/,
+    /cornerMarker: \(type === 'O' && generatorState\.innerSeat === 'o-cm'\)\s*\|\| \(type === 'K' && generatorState\.outerSeat === 'k-cm'\)\s*\|\| \(type === 'A' && \(\(generatorState\.outerSeat === 'a-cm' && generatorState\.turnA !== true\)\s*\|\| \(generatorState\.outerSeat === 'v-cm' && generatorState\.turnA === true\)\)\)/,
     'cfg 조립이 seat×방향 파생이 아니다 — 어긋난 상태가 던짐 조합으로 새어 나간다');
   // o-cm = 자리 + H 심볼 통합 (2026-08-24 확정 2차, A-CM=H2O 문법) — markerTones
   // 는 o-cm 과 함께만 실린다 (encode 계약: 자리 없이 톤 불가).

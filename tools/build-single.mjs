@@ -169,6 +169,8 @@ const MODULE_ORDER = [
   'generator-auto-y',
   // locator 표시 규칙 — locatorY 뒤면 된다 (그 상수만 쓴다).
   'generator-locator-options',
+  // 자리 자동 기준표 — import 가 하나도 없는 순수 상수라 위상 제약이 없다.
+  'generator-seat-auto',
   'generator-render-config',
   'sceneY', 'verifyY',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).

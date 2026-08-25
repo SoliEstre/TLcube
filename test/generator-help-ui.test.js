@@ -347,8 +347,18 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // 자동의 «현재 의미» 는 코드에 한 자리로 있어야 한다 — 화면 문구와 어긋나면 거짓말이 된다.
   // 승격 (2026-08-24 운영자): 자동 = 안쪽 QR → base v0TR (placement 파생이 v0TRQ) ·
   // Y0 명시 → v0 · 그 외 → v0TR. «끔 동일값» 시절 락은 이 양성 단언으로 전환.
+  // **의도적 갱신 (2026-08-25)** — 구 락은 첫 줄에 «Y2 → 끔» 을 함께 잠갔다.
+  // 그 줄의 근거(「n=25 는 셀 표면 공백」)가 9ce2883 로 소멸했는데 락이 남아 있으면
+  // 락이 **버그를 지킨다**. 그래서 그 줄만 빼고 나머지 셋은 그대로 잠근다.
   assert.match(INDEX,
-    /function resolveAutoLocatorProfileY\(pos = generatorState\.qrPosition\)\s*\{[\s\S]{0,400}?if \(generatorState\.versionY === 2\) return LOCATOR_PROFILE_OFF;\s*\n\s*if \(pos === 'inner'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;\s*\n\s*if \(generatorState\.versionY === 0\) return LOCATOR_PROFILE_CELL_SURFACE_V0;\s*\n\s*if \(generatorState\.versionY !== 'auto'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;/);
+    /function resolveAutoLocatorProfileY\(pos = generatorState\.qrPosition\)\s*\{[\s\S]{0,700}?if \(pos === 'inner'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;\s*\n\s*if \(generatorState\.versionY === 0\) return LOCATOR_PROFILE_CELL_SURFACE_V0;\s*\n\s*if \(generatorState\.versionY !== 'auto'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;/);
+  // 그리고 **되돌아오지 않는지**를 양성으로 잠근다 — 이 줄이 다시 생기면 운영자가
+  // Y2 를 고를 때 마커가 또 사라진다 (2026-08-25 신고 ②).
+  assert.doesNotMatch(INDEX, /if \(generatorState\.versionY === 2\) return LOCATOR_PROFILE_OFF;/,
+    '«Y2 → 끔» 가드가 부활했다 — v0T·v0TR 은 n=25 를 지원한다');
+  // 자동이 고른 버전이 인코더까지 가는가. 안 가면 사다리는 Y2 를 고르는데 렌더는 Y1 이다.
+  assert.match(INDEX, /function effectiveVersionYForEncode\(\)/,
+    '자동 해상도를 인코더로 옮기는 경로가 없다');
   // **의도적 갱신 (2026-08-25, 운영자 지시)** — 구 락은 「'auto' 가 콘텐츠를 보는가」와
   // 「그 판정이 **L 기준**인가」를 잠갔다. 앞은 유지되지만 뒤는 **뒤집혔다.**
   //

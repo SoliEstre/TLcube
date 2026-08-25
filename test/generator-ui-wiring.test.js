@@ -342,7 +342,13 @@ test('§5 cornerMarker — 왕복이 선다 (내부 타입 G 와이어, 2026-08-
   assert.match(index, /id="innerSeatHint"/, '힌트 문단이 없다');
   assert.doesNotMatch(index, /코드를 스캐너가 못 읽어요 — 표식이/,
     '코너 마커 힌트가 아직 «못 읽어요» 를 말한다 — 왕복이 서는데 «못 읽는다» 고 적으면 거짓말이다');
-  assert.match(index, /스캐너가 읽어요 — 표식이 있다는 사실이/,
+  // **의도적 갱신 (2026-08-25)** — 구 락은 **어순**을 잠갔다(«스캐너가 읽어요 — 표식이
+  // 있다는 사실이»). 자리 개편으로 힌트가 다시 쓰이면서 같은 주장이 순서만 바뀌어
+  // 빨개졌다. 잠글 것은 문장이 아니라 **주장 둘**이다: ① 포맷 자리에 적힌다 ②
+  // 스캐너가 읽는다. 어순을 잠그면 문구를 손볼 때마다 거짓 빨강이 난다.
+  const innerHint = index.slice(index.indexOf('id="innerSeatHint"'), index.indexOf('id="innerSeatHint"') + 400);
+  assert.match(innerHint, /코드의 포맷 자리에/, '코너 마커 힌트(g579)가 포맷 자리 기록을 안 말한다');
+  assert.match(innerHint, /스캐너가 그대로 읽어요|스캐너가 읽어요/,
     '코너 마커 힌트(g579)가 «읽어요» 를 말하지 않는다');
 });
 
@@ -388,8 +394,12 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
   assert.ok(index.includes('const K_BLOCKED_FINDER_IDS = typeK'),
     'K 배타 게이트가 없다 — encodeK 가 던지는 조합(centerQr·centralV0·daehan)이 카드로 열린다');
 
-  // ⑤ K-CM 은 **아직 잠겨 있어야 한다** — bootstrap 이 star formatIndex 8 을 안 연다.
-  //    여기서 열면 «생성은 되는데 스캔이 안 되는» 코드를 발행한다 (typeK-roundtrip ②).
-  assert.doesNotMatch(index, /opts\.cornerMarker = true;[\s\S]{0,120}encodeK/,
-    'K 분기가 cornerMarker 를 싣는다 — bootstrap 배선이 끝났는지 먼저 확인하라');
+  // ⑤ **K-CM 개설 (2026-08-25 저녁, 레인 KCM)** — 구 락은 「아직 잠겨 있어야 한다」였다.
+  //    사유(bootstrap 이 star formatIndex 8 을 안 연다)가 해소됐으므로 양성으로 뒤집는다:
+  //    이제 **안 실으면** 「카드는 켜지는데 와이어엔 없는」 상태가 된다.
+  //    근거는 typeK-roundtrip 의 K0CM/K1CM/K2CM 전수 왕복이다.
+  assert.match(index, /opts\.cornerMarker = true;[\s\S]{0,120}encodeK/,
+    'K 분기가 cornerMarker 를 안 싣는다 — 자리를 열어 놓고 인코더에 안 넘기면 무동작이다');
+  assert.match(index, /type === 'K' && generatorState\.outerSeat === 'k-cm'/,
+    'buildConfig 이 K 의 k-cm 자리를 cornerMarker 로 파생하지 않는다');
 });

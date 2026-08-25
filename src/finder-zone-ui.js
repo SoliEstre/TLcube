@@ -92,32 +92,36 @@ function turnSeat() {
  * K-CM seat (2026-08-24) — «와이어 존재가 곧 seat 실재» 규칙을 formatK star 표로
  * 확장: 표에 cornerMarker 행(K0CM/K1CM/K2CM)이 실재하면 k-cm seat 가 실재한다.
  *
- * `stateValue: false` 인 이유는 «부재» 가 아니다.
+ * ## ⭐ 배타 개설 (2026-08-25) — `stateValue: false` 를 걷었다
  *
- * ⚠ **2026-08-25 사유 이전** — 종전 사유는 「생성기 타입에 K 가 아직 없어서」였는데
- * 그날 K 가 편입되면서 그 문장이 거짓이 됐다. 진짜 사유는 한 층 아래에 있다:
- * **`decoder/bootstrap.js` 가 star 축 formatIndex 8 을 안 연다** — K-CM 은 인코더도
- * 디코더 후단(decode-k)도 있는데 그 사이 부트스트랩이 평 K(포맷 7)만 골라서,
- * 생성은 되고 **스캔이 안 된다** (`test/typeK-roundtrip.test.js` ② 가 그 자다).
- * 여기서 열면 «읽을 수 없는 코드를 발행하는» 상태가 된다.
+ * 사유가 두 번 바뀐 자리다. ① 「생성기 타입에 K 가 아직 없어서」 → K 편입으로 거짓이
+ * 됐고, ② 「`decoder/bootstrap.js` 가 star 축 formatIndex 8 을 안 연다」로 이전됐다.
+ * ②가 진짜였고 **레인 KCM 이 그 한 줄을 찾아 닫았다**: `familyProfiles('star')` 가
+ * `VERSIONS_K` 3행만 소유해서, 광학 디지트가 163/163 맞고 `decodeCellsK` 가 성공했는데도
+ * `profileForFormatCandidate` 가 포맷 8 프로파일을 못 찾아 **성공 후보를 버렸다**
+ * (빈 후보가 상위에서 `BODY_RS_FAILED` 로 접혀 RS 실패처럼 보였다).
+ * star 소유 표를 `[...VERSIONS_K, ...VERSIONS_KCM]` 로 넓혀 닫혔다.
  *
- * 자리는 와이어에 실재하므로 카드는 서고(ready), 상태 허용값에는 아직 안 든다 —
- * sagoae 의 «자리만» 문법과 같은 축이다.
- * **해제 조건: 생성기 타입이 아니라 bootstrap 배선이다.**
+ * 근거는 주장이 아니라 자다 — `test/typeK-roundtrip.test.js` 의 구 음성 락이 같은
+ * 자리에서 **K0CM/K1CM/K2CM 전수 양성 왕복**으로 뒤집혔다 (배타 개설 정형 ④).
+ * 새 (값,k) 도 새 인덱스도 안 만들었다 — 이미 있던 포맷 8 을 그대로 쓴다.
  */
 function starSeat() {
   const wired = K_FORMAT_INDEX.some((entry) => entry.cornerMarker === true);
   return wired
     ? [Object.freeze({
-      id: 'k-cm', name: 'K-CM', types: Object.freeze(['K']), ready: true, absent: false, stateValue: false,
+      id: 'k-cm', name: 'K-CM', types: Object.freeze(['K']), ready: true, absent: false,
     })]
     : [];
 }
 
+// ⭐ **K 추가 (2026-08-25)** — 「없음」은 자리 축의 원점이라 자리 구역이 뜨는 타입
+// 전부에 있어야 한다. K 가 빠져 있어서 Type K 에서는 내곽·외곽 카드가 **하나도**
+// 서지 않았다 (운영자 신고 ① 「내곽 및 외곽 파인더 섹션도 없음」의 절반).
 const NONE_CARD = Object.freeze({
   id: SEAT_NONE,
   name: SEAT_NONE,
-  types: Object.freeze(['O', 'A']),
+  types: Object.freeze(['O', 'A', 'K']),
   ready: true,
   absent: false,
 });

@@ -88,7 +88,12 @@ export const LAB_CENTRAL_FINDER_IDS = Object.freeze([
 // H (2026-08-24) — O-CM 자리의 심볼 파인더가 생성 축을 얻어 기대값으로도 유효하다.
 // 검출 배선 전이라 관측률은 0 이 정상 — 이 축이 배선 완료를 재는 자가 된다.
 // v-cm (2026-08-24) — 턴A(내부 타입 V)의 A-CM 사상이 실체가 되어 기대값으로 유효하다.
-export const LAB_OUTER_FINDER_IDS = Object.freeze(['none', 'daehan', 'a-cm', 'o-cm', 'H', 'v-cm']);
+// k-cm (2026-08-25) — 레인 KCM 이 star 축 formatIndex 8 승격을 닫아 **생성·판독이 다
+//   선다**. 등재가 늦으면 K-CM 프레임의 텔레메트리가 전부 «모름» 으로 떨어져
+//   expected/observed A/B 를 못 한다 (이 파일 상단 규약 — v-cm 이 지나온 길).
+export const LAB_OUTER_FINDER_IDS = Object.freeze(
+  ['none', 'daehan', 'a-cm', 'o-cm', 'H', 'v-cm', 'k-cm'],
+);
 
 /** 시험판 버튼이 넘겨온 값이 축 ②의 유효 값인가. 아니면 null(모름). */
 export function normalizeCentralFinderId(value) {

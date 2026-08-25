@@ -1913,14 +1913,14 @@
              centerQr 병용: a-cm 은 C2a 로 합법 (cmqWireExists 게이트) · v-cm 은
              **가능** (V-CMQ 개설 2026-08-24 — V*CM 인덱스 공유, turnA.js §turnASpec). -->
         <div id="finderInnerZone" hidden>
-          <label class="section-heading" data-i18n="g850">내곽 자리 (실험)</label>
+          <label class="section-heading" data-i18n="g850">내곽 자리</label>
           <div class="card-row" id="innerSeatCards"></div>
-          <p class="hint" id="innerSeatHint" data-i18n="g579">실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요. 실루엣 방향(턴A)과 함께 쓸 수는 없어요.</p>
+          <p class="hint" id="innerSeatHint" data-i18n="g579">자동이 타입에 맞는 자리를 골라요 — Type O 는 교대 코너 3곳에 보조 표식이 들어가고 그만큼 담을 수 있는 양이 줄어요. 표식이 있다는 사실은 코드의 포맷 자리에 함께 적혀서 스캐너가 그대로 읽어요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.</p>
         </div>
         <div id="finderOuterZone" hidden>
-          <label class="section-heading" data-i18n="g851">외곽 자리 (실험)</label>
+          <label class="section-heading" data-i18n="g851">외곽 자리</label>
           <div class="card-row" id="outerSeatCards"></div>
-          <p class="hint" id="outerSeatHint" data-i18n="g858">V-CM 은 역삼각(턴A) 전용 코너 자리예요 — 역삼각을 켜면 고를 수 있어요. K-CM 은 아직 설계가 없어 자리만 표시해요.</p>
+          <p class="hint" id="outerSeatHint" data-i18n="g858">자동이 타입과 실루엣 방향에 맞는 코너 자리를 골라요 — 정삼각·역삼각·Type K 가 각각 다른 자리를 써요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.</p>
         </div>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
@@ -2480,8 +2480,8 @@ const GENERATOR_STRINGS = {
     "g451": "심볼 {d}+{n} · 프리셋 Δmin {delta}",
     "g452": "심볼 {d}+{n}",
     "g600": "새 버전이 준비됐어요.",
-    "g850": "내곽 자리 (실험)",
-    "g851": "외곽 자리 (실험)",
+    "g850": "내곽 자리",
+    "g851": "외곽 자리",
     "g852": "O-CM · 교대 코너 3곳",
     "g853": "A-CM · 교대 코너 3곳",
     "g854": "sagoae (준비 중)",
@@ -2493,7 +2493,7 @@ const GENERATOR_STRINGS = {
     "g874": "ECC 정정력 (RS)",
     "g856": "V-CM (역삼각)",
     "g857": "K-CM (부재)",
-    "g858": "V-CM 은 역삼각(턴A) 전용 코너 자리예요 — 역삼각을 켜면 고를 수 있어요. K-CM 은 아직 설계가 없어 자리만 표시해요.",
+    "g858": "자동이 타입과 실루엣 방향에 맞는 코너 자리를 골라요 — 정삼각·역삼각·Type K 가 각각 다른 자리를 써요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.",
     "g875": "역삼각(턴A)을 켜면 고를 수 있어요.",
     "g876": "중앙 QR 과는 함께 쓸 수 없어요 — 이 조합의 포맷 자리가 아직 없어요.",
     "g860": "QR 면 배치",
@@ -2694,7 +2694,7 @@ const GENERATOR_STRINGS = {
     "g576": "코너 자리 예약 (실험)",
     "g577": "없음 (기본)",
     "g578": "교대 코너 3곳",
-    "g579": "실험용이에요. 교대 코너 3곳에 보조 표식을 넣고 담을 수 있는 양이 줄어들어요. 이제 이 상태로 만든 코드도 스캐너가 읽어요 — 표식이 있다는 사실이 코드의 포맷 자리에 함께 적히거든요.",
+    "g579": "자동이 타입에 맞는 자리를 골라요 — Type O 는 교대 코너 3곳에 보조 표식이 들어가고 그만큼 담을 수 있는 양이 줄어요. 표식이 있다는 사실은 코드의 포맷 자리에 함께 적혀서 스캐너가 그대로 읽어요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.",
     "g580": "중앙 QR 을 쓰는 동안에는 코너 마커를 못 켜요. 둘이 같은 칸을 놓고 다투거든요 — QR 위치를 바깥으로 뺄 때까지 잠가 둘게요.",
     "g581": "지금 파인더가 가운데를 쓰고 있어서 QR 을 가운데에 넣을 수 없어요. 다른 파인더를 고르면 풀려요.",
     "g507": "{filename}으로 다운로드되었습니다.",
@@ -2921,8 +2921,8 @@ const GENERATOR_STRINGS = {
     "g451": "symbols {d}+{n} · preset Δmin {delta}",
     "g452": "symbols {d}+{n}",
     "g600": "A new version is ready.",
-    "g850": "Inner seat (experimental)",
-    "g851": "Outer seat (experimental)",
+    "g850": "Inner seat",
+    "g851": "Outer seat",
     "g852": "O-CM · 3 alternating corners",
     "g853": "A-CM · 3 alternating corners",
     "g854": "sagoae (in preparation)",
@@ -2934,7 +2934,7 @@ const GENERATOR_STRINGS = {
     "g874": "ECC strength (RS)",
     "g856": "V-CM (inverted)",
     "g857": "K-CM (absent)",
-    "g858": "V-CM is the corner seat for the inverted triangle (turnA) — enable it to select. K-CM has no design yet and is shown as a placeholder only.",
+    "g858": "Auto picks the corner seat that matches the type and silhouette direction — upright triangle, inverted triangle and Type K each use a different seat. Picking a seat by hand is open in the lab build only.",
     "g875": "Enable the inverted triangle (turnA) to select this.",
     "g876": "Cannot be combined with the center QR — the format slot for that combination does not exist yet.",
     "g860": "QR face placement",
@@ -3135,7 +3135,7 @@ const GENERATOR_STRINGS = {
     "g576": "Corner seat reservation (experimental)",
     "g577": "None (default)",
     "g578": "Three alternating corners",
-    "g579": "Experimental. It adds helper marks at three alternating corners and lowers capacity. Codes made this way can now be read by the scanner — the format field inside the code announces that the marks are there.",
+    "g579": "Auto picks the seat that matches the type — for Type O it adds helper marks at three alternating corners, which lowers capacity. The format field inside the code announces that the marks are there, so the scanner reads them as-is. Picking a seat by hand is open in the lab build only.",
     "g580": "Corner markers are unavailable while the QR sits in the centre — the two compete for the same cells. They unlock when you move the QR.",
     "g581": "The current finder occupies the centre, so the QR cannot sit there. Pick a different finder to unlock it.",
     "g507": "Downloaded as {filename}.",
@@ -3362,8 +3362,8 @@ const GENERATOR_STRINGS = {
     "g451": "シンボル {d}+{n} · プリセット Δmin {delta}",
     "g452": "シンボル {d}+{n}",
     "g600": "新しいバージョンが利用できます。",
-    "g850": "内郭シート（実験）",
-    "g851": "外郭シート（実験）",
+    "g850": "内郭シート",
+    "g851": "外郭シート",
     "g852": "O-CM · 交互コーナー3か所",
     "g853": "A-CM · 交互コーナー3か所",
     "g854": "sagoae（準備中）",
@@ -3375,7 +3375,7 @@ const GENERATOR_STRINGS = {
     "g874": "ECC 訂正力（RS）",
     "g856": "V-CM（逆三角）",
     "g857": "K-CM（不在）",
-    "g858": "V-CM は逆三角（turnA）専用のコーナー席です — 逆三角をオンにすると選べます。K-CM はまだ設計がなく、席だけ表示しています。",
+    "g858": "自動がタイプと輪郭の向きに合うコーナー席を選びます — 正三角・逆三角・Type K がそれぞれ別の席を使います。席を手で選べるのは実験版だけです。",
     "g875": "逆三角（turnA）をオンにすると選べます。",
     "g876": "中央 QR とは併用できません — その組み合わせのフォーマット枠がまだありません。",
     "g860": "QR 面配置",
@@ -3576,7 +3576,7 @@ const GENERATOR_STRINGS = {
     "g576": "コーナー席予約（実験）",
     "g577": "なし（既定）",
     "g578": "交互の3隅",
-    "g579": "実験用です。交互の3隅に補助マークを入れ容量も減ります。この状態で作ったコードもスキャナで読み取れるようになりました — マークがあることはコード内のフォーマット欄に記録されます。",
+    "g579": "自動がタイプに合う席を選びます — Type O では交互の3隅に補助マークが入り、その分だけ容量が減ります。マークがあることはコード内のフォーマット欄に記録されるので、スキャナはそのまま読み取れます。席を手で選べるのは実験版だけです。",
     "g580": "中央 QR を使っている間はコーナーマーカーを使えません — 同じマスを争うためです。QR の位置を変えると使えるようになります。",
     "g581": "現在のファインダーが中央を使っているため、QR を中央に置けません。別のファインダーを選ぶと使えます。",
     "g507": "{filename} としてダウンロードしました。",
@@ -3802,8 +3802,8 @@ const GENERATOR_STRINGS = {
     "g451": "symboles {d}+{n} · Δmin du préréglage {delta}",
     "g452": "symboles {d}+{n}",
     "g600": "Une nouvelle version est prête.",
-    "g850": "Siège intérieur (expérimental)",
-    "g851": "Siège extérieur (expérimental)",
+    "g850": "Siège intérieur",
+    "g851": "Siège extérieur",
     "g852": "O-CM · 3 coins alternés",
     "g853": "A-CM · 3 coins alternés",
     "g854": "sagoae (en préparation)",
@@ -3815,7 +3815,7 @@ const GENERATOR_STRINGS = {
     "g874": "Capacité ECC (RS)",
     "g856": "V-CM (inversé)",
     "g857": "K-CM (absent)",
-    "g858": "V-CM est le siège de coin réservé au triangle renversé (turnA) — activez-le pour le choisir. K-CM n'a pas encore de conception et reste un simple emplacement.",
+    "g858": "L'auto choisit le siège de coin correspondant au type et au sens de la silhouette — triangle droit, triangle renversé et Type K utilisent chacun un siège différent. Le choix manuel du siège n'est ouvert que dans la version labo.",
     "g875": "Activez le triangle renversé (turnA) pour le sélectionner.",
     "g876": "Incompatible avec le QR central — l'emplacement de format pour cette combinaison n'existe pas encore.",
     "g860": "Placement du QR sur la face",
@@ -4016,7 +4016,7 @@ const GENERATOR_STRINGS = {
     "g576": "Réservation de coin (expérimental)",
     "g577": "Aucun (par défaut)",
     "g578": "Trois angles alternés",
-    "g579": "Expérimental. Ajoute des repères à trois angles alternés et réduit la capacité. Les codes créés ainsi sont désormais lisibles par le scanner — le champ de format du code signale la présence des repères.",
+    "g579": "L'auto choisit le siège correspondant au type — pour le Type O, des repères sont ajoutés à trois angles alternés, ce qui réduit la capacité. Le champ de format du code signale leur présence, le scanner les lit donc tels quels. Le choix manuel du siège n'est ouvert que dans la version labo.",
     "g580": "Les marqueurs d'angle sont indisponibles tant que le QR occupe le centre — les deux se disputent les mêmes cellules. Ils se débloquent si vous déplacez le QR.",
     "g581": "Le repère actuel occupe le centre, le QR ne peut donc pas s'y placer. Choisissez un autre repère pour le débloquer.",
     "g507": "Téléchargé sous le nom {filename}.",
@@ -4242,8 +4242,8 @@ const GENERATOR_STRINGS = {
     "g451": "simboli {d}+{n} · Δmin del preset {delta}",
     "g452": "simboli {d}+{n}",
     "g600": "È pronta una nuova versione.",
-    "g850": "Posto interno (sperimentale)",
-    "g851": "Posto esterno (sperimentale)",
+    "g850": "Posto interno",
+    "g851": "Posto esterno",
     "g852": "O-CM · 3 angoli alternati",
     "g853": "A-CM · 3 angoli alternati",
     "g854": "sagoae (in preparazione)",
@@ -4255,7 +4255,7 @@ const GENERATOR_STRINGS = {
     "g874": "Capacità ECC (RS)",
     "g856": "V-CM (rovesciato)",
     "g857": "K-CM (assente)",
-    "g858": "V-CM è il posto d'angolo riservato al triangolo rovesciato (turnA) — attivalo per poterlo scegliere. K-CM non ha ancora un progetto ed è mostrato solo come segnaposto.",
+    "g858": "L'automatico sceglie il posto d'angolo adatto al tipo e al verso della sagoma — triangolo dritto, triangolo rovesciato e Type K usano posti diversi. La scelta manuale del posto è aperta solo nella versione lab.",
     "g875": "Attiva il triangolo rovesciato (turnA) per selezionarlo.",
     "g876": "Non può essere combinato con il QR centrale — lo slot di formato per quella combinazione non esiste ancora.",
     "g860": "Posizione del QR sulla faccia",
@@ -4456,7 +4456,7 @@ const GENERATOR_STRINGS = {
     "g576": "Prenotazione d'angolo (sperimentale)",
     "g577": "Nessuno (predefinito)",
     "g578": "Tre angoli alternati",
-    "g579": "Sperimentale. Aggiunge riferimenti su tre angoli alternati e riduce la capacità. I codici creati così ora sono leggibili dallo scanner — il campo formato del codice segnala che i riferimenti ci sono.",
+    "g579": "L'automatico sceglie il posto adatto al tipo — con il Type O aggiunge riferimenti su tre angoli alternati e riduce la capacità. Il campo formato del codice segnala che ci sono, quindi lo scanner li legge così come sono. La scelta manuale del posto è aperta solo nella versione lab.",
     "g580": "I marcatori d'angolo non sono disponibili finché il QR sta al centro — i due si contendono le stesse celle. Si sbloccano spostando il QR.",
     "g581": "Il finder attuale occupa il centro, quindi il QR non può stare lì. Scegli un altro finder per sbloccarlo.",
     "g507": "Scaricato come {filename}.",
@@ -4682,8 +4682,8 @@ const GENERATOR_STRINGS = {
     "g451": "Symbole {d}+{n} · Δmin der Vorgabe {delta}",
     "g452": "Symbole {d}+{n}",
     "g600": "Eine neue Version steht bereit.",
-    "g850": "Innerer Platz (experimentell)",
-    "g851": "Äußerer Platz (experimentell)",
+    "g850": "Innerer Platz",
+    "g851": "Äußerer Platz",
     "g852": "O-CM · 3 wechselnde Ecken",
     "g853": "A-CM · 3 wechselnde Ecken",
     "g854": "sagoae (in Vorbereitung)",
@@ -4695,7 +4695,7 @@ const GENERATOR_STRINGS = {
     "g874": "ECC-Stärke (RS)",
     "g856": "V-CM (umgekehrt)",
     "g857": "K-CM (nicht vorhanden)",
-    "g858": "V-CM ist der Eckplatz für das umgekehrte Dreieck (turnA) — zum Auswählen aktivieren. K-CM hat noch kein Design und wird nur als Platzhalter angezeigt.",
+    "g858": "Automatisch wählt den Eckplatz passend zu Typ und Silhouettenrichtung — aufrechtes Dreieck, umgekehrtes Dreieck und Type K nutzen je einen anderen Platz. Die Platzwahl von Hand ist nur in der Laborversion offen.",
     "g875": "Aktiviere das umgekehrte Dreieck (turnA), um dies auszuwählen.",
     "g876": "Nicht mit dem zentralen QR kombinierbar — der Formatplatz für diese Kombination existiert noch nicht.",
     "g860": "QR-Flächenplatzierung",
@@ -4896,7 +4896,7 @@ const GENERATOR_STRINGS = {
     "g576": "Eckplatz-Reservierung (experimentell)",
     "g577": "Keine (Standard)",
     "g578": "Drei abwechselnde Ecken",
-    "g579": "Experimentell. Setzt Hilfsmarken an drei abwechselnde Ecken und senkt die Kapazität. So erzeugte Codes kann der Scanner jetzt lesen — das Formatfeld im Code meldet das Vorhandensein der Marken.",
+    "g579": "Automatisch wählt den zum Typ passenden Platz — bei Type O kommen Hilfsmarken an drei abwechselnde Ecken, was die Kapazität senkt. Das Formatfeld im Code meldet ihr Vorhandensein, der Scanner liest sie also unverändert. Die Platzwahl von Hand ist nur in der Laborversion offen.",
     "g580": "Eckmarker sind nicht verfügbar, solange der QR in der Mitte sitzt — beide beanspruchen dieselben Zellen. Sie werden frei, wenn Sie den QR verschieben.",
     "g581": "Der aktuelle Finder belegt die Mitte, daher kann der QR dort nicht sitzen. Wählen Sie einen anderen Finder, um ihn freizugeben.",
     "g507": "Als {filename} heruntergeladen.",
@@ -5122,8 +5122,8 @@ const GENERATOR_STRINGS = {
     "g451": "símbolos {d}+{n} · Δmin del ajuste {delta}",
     "g452": "símbolos {d}+{n}",
     "g600": "Hay una nueva versión lista.",
-    "g850": "Asiento interior (experimental)",
-    "g851": "Asiento exterior (experimental)",
+    "g850": "Asiento interior",
+    "g851": "Asiento exterior",
     "g852": "O-CM · 3 esquinas alternas",
     "g853": "A-CM · 3 esquinas alternas",
     "g854": "sagoae (en preparación)",
@@ -5135,7 +5135,7 @@ const GENERATOR_STRINGS = {
     "g874": "Capacidad ECC (RS)",
     "g856": "V-CM (invertido)",
     "g857": "K-CM (ausente)",
-    "g858": "V-CM es el asiento de esquina del triángulo invertido (turnA): actívalo para poder elegirlo. K-CM aún no tiene diseño y se muestra solo como marcador.",
+    "g858": "El automático elige el asiento de esquina acorde al tipo y al sentido de la silueta: triángulo recto, triángulo invertido y Type K usan asientos distintos. Elegir el asiento a mano solo está abierto en la versión de laboratorio.",
     "g875": "Activa el triángulo invertido (turnA) para poder elegirlo.",
     "g876": "No se puede combinar con el QR central: aún no existe el hueco de formato para esa combinación.",
     "g860": "Colocación del QR en la cara",
@@ -5336,7 +5336,7 @@ const GENERATOR_STRINGS = {
     "g576": "Reserva de esquina (experimental)",
     "g577": "Ninguno (predeterminado)",
     "g578": "Tres esquinas alternas",
-    "g579": "Experimental. Añade marcas de apoyo en tres esquinas alternas y reduce la capacidad. Los códigos creados así ya los puede leer el escáner — el campo de formato del código avisa de que las marcas están.",
+    "g579": "El automático elige el asiento acorde al tipo: en Type O añade marcas de apoyo en tres esquinas alternas y reduce la capacidad. El campo de formato del código avisa de que están, así que el escáner las lee tal cual. Elegir el asiento a mano solo está abierto en la versión de laboratorio.",
     "g580": "Los marcadores de esquina no están disponibles mientras el QR ocupa el centro — ambos se disputan las mismas celdas. Se desbloquean al mover el QR.",
     "g581": "El localizador actual ocupa el centro, así que el QR no puede ir ahí. Elige otro localizador para desbloquearlo.",
     "g507": "Descargado como {filename}.",
@@ -5562,8 +5562,8 @@ const GENERATOR_STRINGS = {
     "g451": "símbolos {d}+{n} · Δmin da predefinição {delta}",
     "g452": "símbolos {d}+{n}",
     "g600": "Está pronta uma nova versão.",
-    "g850": "Assento interno (experimental)",
-    "g851": "Assento externo (experimental)",
+    "g850": "Assento interno",
+    "g851": "Assento externo",
     "g852": "O-CM · 3 cantos alternados",
     "g853": "A-CM · 3 cantos alternados",
     "g854": "sagoae (em preparação)",
@@ -5575,7 +5575,7 @@ const GENERATOR_STRINGS = {
     "g874": "Capacidade ECC (RS)",
     "g856": "V-CM (invertido)",
     "g857": "K-CM (ausente)",
-    "g858": "V-CM é o assento de canto do triângulo invertido (turnA) — ative-o para poder escolher. K-CM ainda não tem design e é mostrado apenas como marcador.",
+    "g858": "O automático escolhe o assento de canto adequado ao tipo e ao sentido da silhueta — triângulo direito, triângulo invertido e Type K usam assentos diferentes. Escolher o assento à mão só está aberto na versão de laboratório.",
     "g875": "Ative o triângulo invertido (turnA) para poder escolher.",
     "g876": "Não pode ser combinado com o QR central — a vaga de formato dessa combinação ainda não existe.",
     "g860": "Posição do QR na face",
@@ -5776,7 +5776,7 @@ const GENERATOR_STRINGS = {
     "g576": "Reserva de canto (experimental)",
     "g577": "Nenhum (padrão)",
     "g578": "Três cantos alternados",
-    "g579": "Experimental. Acrescenta marcas de apoio em três cantos alternados e reduz a capacidade. Códigos criados assim agora são lidos pelo leitor — o campo de formato do código avisa que as marcas existem.",
+    "g579": "O automático escolhe o assento adequado ao tipo — no Type O acrescenta marcas de apoio em três cantos alternados e reduz a capacidade. O campo de formato do código avisa que elas existem, por isso o leitor as lê tal como estão. Escolher o assento à mão só está aberto na versão de laboratório.",
     "g580": "Os marcadores de canto ficam indisponíveis enquanto o QR está no centro — os dois disputam as mesmas células. Eles liberam quando você move o QR.",
     "g581": "O localizador atual ocupa o centro, então o QR não pode ficar ali. Escolha outro localizador para liberar.",
     "g507": "Transferido como {filename}.",
@@ -5976,8 +5976,11 @@ import {
 import { getOakFinderPattern, isOakFinderPatternId } from './src/finder-oak-patterns.js';
 // daehan (2026-08-19 UI 편입) — OAK 와 같은 이유로 **별도 표**라 여기서 직접 푼다.
 import {
-  daehanPatternId, getDaehanFinderPattern, isDaehanFinderPatternId,
+  TAEGUK_ID, daehanPatternId, getDaehanFinderPattern, isDaehanFinderPatternId,
 } from './src/finder-daehan.js';
+// 자리 «자동» 기준표 (운영자 2026-08-25). 표는 순수 모듈에 있다 — 인라인에 두면
+// 테스트가 못 닿는다 (generator-auto-y·generator-locator-options 와 같은 처방).
+import { autoSeatsFor } from './src/generator-seat-auto.js';
 import {
   CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID, commitFinderQrTransition,
   isCentralV0FinderPatternId, selectFinderPattern, selectGeneratorType, selectQrPosition,
@@ -7449,11 +7452,61 @@ const SEAT_CARD_LABEL_KEYS = Object.freeze({
   sagoae: 'g854', 'v-cm': 'g856', 'k-cm': 'g857',
 });
 
+/** 자리 «자동» 카드 id — zoneCards() 유도에는 **없다**. 자동은 자리가 아니라 그
+ *  자리를 고르는 UI 정책이라(검출기 자동과 같은 문법) 분류 정본에 넣지 않는다. */
+const SEAT_AUTO = 'auto';
+/** 자동 카드 아이콘 — 검출기 자동 카드(#yLocatorCards)와 같은 도형을 쓴다. 같은
+ *  뜻의 컨트롤이 화면마다 다르게 생기면 사용자가 둘을 다른 기능으로 읽는다. */
+const SEAT_AUTO_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M17.5 12a5.5 5.5 0 1 1-1.6-3.9"/><path d="M17.8 6.6v3h-3"/></svg>';
+
+/**
+ * 자리 «자동» 이 켜져 있나 (운영자 2026-08-25 「기본 선택 상태로」 → 기본값 true).
+ *
+ * detectorAutoY 와 같은 문법이다: **상태가 아니라 UI 정책**이라 generatorState 에
+ * 안 넣는다. 와이어에 실리는 것은 자동이 «고른 결과»(innerSeat·outerSeat)뿐이다.
+ *
+ * ⚠ **선언 위치가 계약이다.** 이 셋은 `syncSeatUi()` 가 쓰고, 그 함수는 모듈 초기화
+ *   중(§renderFinderUi 배선 직후)에 한 번 불린다. 아래쪽 편집기 구역에 두었더니
+ *   `Cannot access 'SEAT_ZONE_TYPES' before initialization` 으로 **앱 전체가 죽었다**
+ *   (2026-08-25 브라우저 실측). 파싱은 통과하므로 문법 테스트가 못 잡는 자리다 —
+ *   const/let 을 첫 소비자보다 뒤에 두지 않는다.
+ */
+let innerSeatAuto = true;
+let outerSeatAuto = true;
+
+/** 자리 구역이 열리는 타입 (Y 는 자기 로케이터 문법을 쓰므로 자리 축이 없다). */
+const SEAT_ZONE_TYPES = Object.freeze(['O', 'A', 'K']);
+
+/**
+ * 자동 기준표가 받는 타입 축 — `effectiveEditorTypeFromGenerator` 와 **다르다**.
+ * 그쪽은 O + o-cm 을 'G' 로 접는데, 그 값을 여기 쓰면 (자리 → 타입 → 자리) 순환이
+ * 된다. 자리 축이 보는 것은 (타입 × 실루엣 방향) 뿐이다.
+ */
+function autoSeatType() {
+  if (generatorState.type === 'A') return generatorState.turnA === true ? 'V' : 'A';
+  return generatorState.type;
+}
+
 let seatCardsBuilt = false;
 function ensureSeatCards() {
   if (seatCardsBuilt) return;
   seatCardsBuilt = true;
   const zones = zoneCards();
+  const buildAuto = (container) => {
+    const card = document.createElement('div');
+    card.className = 'toggle-card';
+    card.dataset.seat = SEAT_AUTO;
+    // 자동은 **모든 타입에서** 보인다 — 자리 축이 열린 타입 전부가 자동을 쓴다.
+    card.dataset.seatTypes = 'O A K';
+    card.dataset.seatReady = '1';
+    card.innerHTML = SEAT_AUTO_ICON;
+    const label = document.createElement('span');
+    label.dataset.seatLabelKey = 'g028';
+    card.append(label);
+    container.append(card);
+  };
+  buildAuto(els.innerSeatCards);
+  buildAuto(els.outerSeatCards);
   const build = (container, cards) => {
     for (const desc of cards) {
       const icon = SEAT_CARD_ICONS[desc.id];
@@ -8181,9 +8234,11 @@ syncQuietModeUi();
  * 표시용 플래그(detectorAutoY)만 모듈 안에 둔다.
  */
 function resolveAutoLocatorProfileY(pos = generatorState.qrPosition) {
-  // Y2(n=25)는 셀 표면 레이아웃 공백 — 끔만이 스펙 보증 경로다 (실측 행렬:
-  // v0=n13 · T계열 전부 n21. 2026-08-24). 자동은 해상도를 잠그지 않고 따라간다.
-  if (generatorState.versionY === 2) return LOCATOR_PROFILE_OFF;
+  // ⭐ **«Y2 → 끔» 가드 철거 (2026-08-25)**. 구 근거는 「Y2(n=25)는 셀 표면 레이아웃
+  // 공백이라 끔만이 스펙 보증 경로」였고 2026-08-24 시점엔 **사실이었다**. 9ce2883 이
+  // v0T·v0TR 을 [21, 25] 로 넓히면서 그 근거가 소멸했는데 가드만 남아, 운영자가 Y2 를
+  // 고르면 마커가 사라졌다 — 인코더 하드핀과 **같은 사고의 소비자측 절반**이다.
+  // (배타를 열면 인코더만이 아니라 UI 가드까지 쓸어야 한다.)
   if (pos === 'inner') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
   if (generatorState.versionY === 0) return LOCATOR_PROFILE_CELL_SURFACE_V0;
   if (generatorState.versionY !== 'auto') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
@@ -8215,6 +8270,29 @@ function resolveAutoYSafe() {
   } catch {
     return null;
   }
+}
+
+/**
+ * 인코딩에 쓸 «지금 Y 버전».
+ *
+ * 종전엔 이 값이 필요 없었다 — 로케이터 프로파일이 버전을 **하드핀**했으므로
+ * (v0 → 0 · T 계열 전부 → 1) 프로파일만 정하면 버전이 따라왔다. v0T·v0TR 이
+ * n=25 로 열리면서 그 일대일이 깨졌다: 같은 v0TR 이 Y1 도 Y2 도 된다. 그래서
+ * **사다리가 쌍으로 고른 버전**을 여기서 꺼내 인코더까지 옮긴다.
+ *
+ * ⚠ 순환 아님. §resolveAutoLocatorProfileY 가 경고하는 순환은 「해석된 버전으로
+ *   **프로파일을 고르는**」 방향이다(프로파일이 오버헤드를 바꾸므로). 여기는 반대로
+ *   사다리가 이미 (버전, 프로파일) 을 **한 번에** 고른 결과를 읽기만 한다 —
+ *   구성상 둘은 서로 정합이다.
+ *
+ * 검출기가 수동이면 undefined 를 준다 = 종전 동작(레이아웃 분기의 기본값 Y1).
+ * 사다리를 안 물어본 선택에 사다리 값을 밀어 넣지 않는다.
+ */
+function effectiveVersionYForEncode() {
+  if (generatorState.versionY !== 'auto') return Number(generatorState.versionY);
+  if (!detectorAutoY) return undefined;
+  const auto = resolveAutoYSafe();
+  return auto === null ? undefined : auto.version;
 }
 
 /** 자동이 켜져 있으면 현재 옵션으로 프로파일을 재유도한다 — versionY·QR 위치가
@@ -8316,7 +8394,12 @@ function wireSeatCards(container, seatKey) {
   container.addEventListener('click', (event) => {
     const card = event.target.closest('.toggle-card');
     if (!card || !container.contains(card) || card.classList.contains('disabled')) return;
-    generatorState[seatKey] = card.dataset.seat;
+    // ⭐ 자동 카드는 **값이 아니라 정책**을 켠다 (2026-08-25). 값은 syncSeatUi 가
+    //    기준표에서 유도하므로 여기서 쓰지 않는다 — 두 곳에서 쓰면 갈린다.
+    const isAutoCard = card.dataset.seat === SEAT_AUTO;
+    if (seatKey === 'innerSeat') innerSeatAuto = isAutoCard;
+    else outerSeatAuto = isAutoCard;
+    if (!isAutoCard) generatorState[seatKey] = card.dataset.seat;
     // 방향-자리 일관성 (Wave 3 ④ — 구 «a-cm 이 turnA 를 끈다» 의 재편):
     // 코너 자리는 실루엣 방향을 따른다 — a-cm 은 정삼각 전용, v-cm 은 역삼각
     // 전용이라 자리를 고르는 행위가 방향을 확정한다. 표시층에서 반대 방향
@@ -8415,7 +8498,9 @@ function yOffPlacement(n) {
 function yCellEditorContext() {
   const encOpts = encodeOptionsForY({
     tone: generatorState.tone,
-    versionY: generatorState.versionY === 'auto' ? undefined : Number(generatorState.versionY),
+    // 인코더와 **같은 유효 버전**을 본다 — 여기서 'auto' 를 undefined 로만 접으면
+    // 사다리가 Y2 를 고른 상태에서 편집기만 Y1 배치를 그린다 (표시 ≠ 와이어).
+    versionY: effectiveVersionYForEncode(),
     fallback: resolveFallback('Y', generatorState.qrPosition),
     locatorProfileY: generatorState.locatorProfileY,
   });
@@ -9815,13 +9900,31 @@ function syncTurnAUi() {
 function syncSeatUi() {
   if (!els.finderInnerZone || !els.finderOuterZone) return;
   const type = generatorState.type;
-  // 운영자 2026-08-24 (아침 검수 3): lab 전용 → **고급에서만 표시** 로 승격 —
-  // 실기기 스캔 확인(O/A/K 후보·H 인식)이 승격 근거다. 시험판은 전 카드 유지 관용구.
-  const show = (mode === 'advanced'
-    || document.body.dataset.generatorEdition === 'finder-experiment')
-    && (type === 'O' || type === 'A');
+  const lab = isLabPath()
+    || document.body.dataset.generatorEdition === 'finder-experiment';
+  // 운영자 2026-08-24 (아침 검수 3): lab 전용 → **고급에서만 표시** 로 승격.
+  // ⭐ **Type K 추가 (2026-08-25 신고 ①)** — 「내곽 및 외곽 파인더 섹션도 없음」.
+  //    K 는 자리(k-cm)가 실재하는데 이 술어가 O·A 만 봐서 구역이 통째로 안 떴다.
+  const show = (mode === 'advanced' || lab) && SEAT_ZONE_TYPES.includes(type);
+  // ⭐ **자동 유도는 표시 게이트 «앞»** 이다 (2026-08-25). 구역이 숨겨진 일반 모드가
+  //    바로 자동의 주 사용자다 — 표시 뒤로 미루면 「일반 사용자 자동 상태 권장」이
+  //    「일반 사용자는 자동이 안 걸린다」가 된다.
+  const auto = SEAT_ZONE_TYPES.includes(type)
+    ? autoSeatsFor({
+      type: autoSeatType(),
+      centralFinderIsTaegeuk: generatorState.finderPatternId === TAEGUK_ID,
+      // 시험판은 «안 되는 것도 눌러 보는» 표면이다 — 정식의 자동은 절대 막힌 칸을
+      // 안 고른다 (generator-seat-auto §SAFE_FALLBACK).
+      allowBlocked: lab,
+    })
+    : null;
+  if (auto !== null) {
+    if (innerSeatAuto) generatorState.innerSeat = auto.inner;
+    if (outerSeatAuto) generatorState.outerSeat = auto.outer;
+  }
   els.finderInnerZone.hidden = !show;
-  els.finderOuterZone.hidden = !show;
+  // O 는 외곽 자리 섹션 자체를 안 보인다 (운영자 명세) — 판정은 기준표가 낸다.
+  els.finderOuterZone.hidden = !show || auto === null || !auto.outerSectionVisible;
   if (!show) return;
   ensureSeatCards();
   const family = type === 'O' ? 'hex' : 'tri';
@@ -9835,9 +9938,10 @@ function syncSeatUi() {
   // turnA.js §turnASpec 근거·왕복 실측). 운영자 요구 «중앙 QR 일 때 V-CM 선택
   // 가능해야 됨» 의 이행이다.
   const turnAOn = generatorState.turnA === true;
-  const sync = (container, seatValue) => {
+  const sync = (container, seatValue, autoOn) => {
     for (const card of container.children) {
       const seat = card.dataset.seat;
+      const isAutoCard = seat === SEAT_AUTO;
       const isNone = seat === SEAT_NONE;
       // 타입 부합 표시 (검출기 필터 — zoneCards 의 types 표) + 방향 표시 스왑.
       // **사용 가능한 것만 표시** (운영자 2026-08-24) — 타입 부합 + «현재 내부 타입»
@@ -9847,11 +9951,18 @@ function syncSeatUi() {
       const typeShown = card.dataset.seatTypes.split(' ').includes(type);
       const directionHidden = (seat === 'a-cm' && turnAOn) || (seat === 'v-cm' && !turnAOn);
       const unusableHidden = card.dataset.seatAbsent === '1';
-      card.style.display = typeShown && !directionHidden && !unusableHidden ? '' : 'none';
+      // ⭐ **CM 계열은 시험판에서만** (운영자 2026-08-25 「CM계열 선택지 정식에선
+      //    숨기고(lab에만 표시)」). 정식 고급에 남는 것은 자동 · 없음 둘뿐이다.
+      const officialHidden = !lab && !isAutoCard && !isNone;
+      card.style.display = typeShown && !directionHidden && !unusableHidden && !officialHidden
+        ? '' : 'none';
       const vcmLocked = seat === 'v-cm' && !turnAOn;
-      const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone) || vcmLocked;
+      const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone && !isAutoCard)
+        || vcmLocked;
       card.classList.toggle('disabled', locked);
-      card.classList.toggle('active', seat === seatValue);
+      // 자동이 켜져 있으면 **자동 카드만** 켜진다 — 자동이 고른 결과 카드까지 함께
+      // 켜면 «둘 다 골라져 있는» 화면이 되고, 무엇이 이기는지가 안 보인다.
+      card.classList.toggle('active', autoOn ? isAutoCard : (!isAutoCard && seat === seatValue));
       const label = card.querySelector('[data-seat-label-key]');
       label.textContent = t(label.dataset.seatLabelKey);
       // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580)
@@ -9866,8 +9977,8 @@ function syncSeatUi() {
               : (wireLocked && !isNone) ? t('g580') : '';
     }
   };
-  sync(els.innerSeatCards, generatorState.innerSeat);
-  sync(els.outerSeatCards, generatorState.outerSeat);
+  sync(els.innerSeatCards, generatorState.innerSeat, innerSeatAuto);
+  sync(els.outerSeatCards, generatorState.outerSeat, outerSeatAuto);
   if (els.innerSeatHint) els.innerSeatHint.textContent = t('g579');
   if (els.outerSeatHint) els.outerSeatHint.textContent = t('g858');
 }
@@ -10384,22 +10495,21 @@ function buildConfig() {
     versionO: selectedVersion(generatorState.versionO),
     // Y 안쪽 윈도는 렌더 의미상 Y2 전용이다. 이 유효값은 저장된 versionY를
     // 덮지 않으므로 윈도/타입/모드 왕복 뒤 수동 또는 자동 선택이 복원된다.
-    // 셀 표면 라인업 (2026-08-17 v0T 편입·v0W 계열 전체 드랍까지):
-    // v0 = Y0 고정 · v0T/v0TY = Y1 고정.
-    // v2r2 가 유일한 Y2(n=25) 경로였으므로 **셀 표면으로는 Y2 를 못 만든다**
-    // (윈도 β 의 Y2 는 셀 표면이 아니라 그대로 산다).
-    // W2 C3 확인 (설계서 §8-2 해소): v0TR 계열(v0TR/v0TRQ/v0TRY)은 이 삼항에
-    // 없어도 된다 — encodeOptionsForY 의 레이아웃 분기가 version 1 을 강제하므로
-    // 여기서 낸 값은 그 경로에서 소비되지 않는다. 삼항이 실효인 것은
-    // 윈도 β(끔·hex + 안쪽)의 2 강제와 기본 경로뿐이다.
+    // 셀 표면 라인업 (2026-08-25 v0T·v0TR n=25 편입까지):
+    // v0 = Y0 고정 · v0TY = Y1 고정 · **v0T·v0TR = Y1/Y2 양쪽**.
+    // ⭐ **v0T 를 이 삼항에서 뺐다 (2026-08-25)** — 여기서 1 을 내면 encodeOptionsForY
+    //    가 Y2 를 받을 길이 없다. 「v0T/v0TY = Y1 고정」은 9ce2883 이전의 사실이었다.
+    // W2 C3 확인 (설계서 §8-2 해소)의 근거도 **함께 만료됐다**: 「v0TR 계열은 이 삼항에
+    // 없어도 된다 — 레이아웃 분기가 version 1 을 강제하니까」였는데, 그 강제를 걷었으므로
+    // 이제 v0TR 은 여기서 낸 값을 **실제로 소비한다**. (v0TRQ·v0TRY 는 아직 n=21 전용이라
+    // 레이아웃 분기가 계속 1 로 받아 준다 — 여기서 2 가 가도 무해하다.)
     versionY: generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0
       ? 0
-      : (generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0T
-        || generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY)
+      : generatorState.locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY
         ? 1
         : fallback.mode === 'window'
           ? 2
-          : selectedVersion(generatorState.versionY),
+          : effectiveVersionYForEncode(),
     versionA: selectedVersion(generatorState.versionA),
     versionK: selectedVersion(generatorState.versionK),
     // 턴A 는 Type A 전용이다 — 다른 타입에서 켜진 채 남아 있어도 여기서 죽인다.
@@ -10413,7 +10523,11 @@ function buildConfig() {
     // (Wave 3 ④) 외곽 코너 자리는 방향과 짝이다: a-cm 은 정삼각(turnA off) 에서만,
     // v-cm 은 역삼각(turnA on) 에서만 마커를 켠다 — 어긋난 이관·URL 상태는 마커
     // 없이 방향만 살린다 (조용한 던짐 조합 생성 금지).
+    // ⭐ **K 추가 (2026-08-25)** — k-cm 자리가 열렸는데 이 술어가 O·A 만 봐서, 자동이
+    //    k-cm 을 골라도 **와이어에 안 실렸다**. 「켰는데 안 먹는」의 정확한 형태다:
+    //    카드는 켜지고 상태도 들어가는데 소비자가 그 축을 안 읽는다.
     cornerMarker: (type === 'O' && generatorState.innerSeat === 'o-cm')
+      || (type === 'K' && generatorState.outerSeat === 'k-cm')
       || (type === 'A' && ((generatorState.outerSeat === 'a-cm' && generatorState.turnA !== true)
         || (generatorState.outerSeat === 'v-cm' && generatorState.turnA === true))),
     markerTones: type === 'O' && generatorState.innerSeat === 'o-cm',
@@ -10547,12 +10661,15 @@ function encodeOptsFor(cfg) {
     // 로 보므로 false 는 통과하지만, 안 싣는 쪽이 «UI 가 만들 수 있는 조합» 을
     // 옵션 표면에서 아예 없앤다 (A 분기의 turnA 규약과 같은 이유).
     //
-    // K-CM(cornerMarker)은 인코더상 합법이지만 **여기서도 안 싣는다**: 부트스트랩이
-    // star 축 formatIndex 8 을 안 열어 K-CM 은 생성돼도 **스캔이 안 되기 때문**이다
-    // (test/typeK-roundtrip.test.js ②). 자리 카드도 같은 이유로 잠겨 있다
-    // (finder-zone-ui.starSeat stateValue:false). 배선이 끝나면 두 자리를 함께 연다.
+    // ⭐ **K-CM 개설 (2026-08-25)** — 구 주석은 「부트스트랩이 star 축 formatIndex 8 을
+    //    안 열어 생성돼도 스캔이 안 되므로 여기서도 안 싣는다」였고, 「배선이 끝나면 두
+    //    자리를 함께 연다」고 적어 뒀다. 레인 KCM 이 그 배선을 닫았으므로 **함께 연다**:
+    //    여기(인코더 옵션) · finder-zone-ui(stateValue) · generator-seat-auto(blocked) ·
+    //    generator-state(허용값) · buildConfig(cornerMarker 술어). 다섯이 한 벌이다 —
+    //    하나만 열면 「켰는데 안 먹는」 상태가 된다 (이 repo 가 반복해 겪은 자리).
     const opts = {};
     if (cfg.versionK !== undefined) opts.version = cfg.versionK;
+    if (cfg.cornerMarker) opts.cornerMarker = true;
     return { fn: encodeK, opts };
   }
   const opts = { centerQr: cfg.fallback.mode === 'center' };
@@ -10850,7 +10967,17 @@ function schedule() {
     // 사다리를 고쳐도 **무효화가 빠지면 안 고쳐진다** — 파생값은 «올바른 유도» 와
     // «빠짐없는 트리거» 둘 다 있어야 산다. schedule() 은 콘텐츠 변경을 포함해
     // 모든 재렌더가 지나는 자리라 여기 두면 트리거 목록을 손으로 유지하지 않아도 된다.
-    if (currentType() === 'Y') applyAutoLocatorProfileY();
+    if (currentType() === 'Y') {
+      applyAutoLocatorProfileY();
+      // ⭐ **표시도 같은 트리거를 탄다 (2026-08-25, 브라우저 실측)** — 위에서 값을
+      // 재유도해도 카드 목록은 안 따라왔다. 자동이 Y2 를 고른 상태인데 화면엔
+      // 「없음 · v0」(= Y0 목록)만 서 있었다: 허용 목록이 «지금 버전» 의 함수인데
+      // 그 버전이 콘텐츠의 함수이기 때문이다. 값과 표시는 **같은 자리에서** 무효화한다.
+      syncYLocatorUi();
+    }
+    // 자리 «자동» 도 파생값이다 — 중앙 파인더(taegeuk)·실루엣 방향이 바뀌면 따라와야
+    // 한다. 트리거 목록을 손으로 유지하지 않는다: 모든 재렌더가 여기를 지난다.
+    syncSeatUi();
     render();
   }, 120);
 }

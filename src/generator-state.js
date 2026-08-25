@@ -184,7 +184,11 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // v-cm (2026-08-24 실체 전환) 은 그 쌍대다 — **turnA 를 요구**한다 (V-CM =
   // 턴A + 코너 자리 예약. turnA off + v-cm 조합은 UI sync 가 잠근다).
   innerSeat: field('none', INTERNAL, ['none', 'o-cm', 'sagoae']),
-  outerSeat: field('none', INTERNAL, ['none', 'a-cm', 'v-cm']),
+  // ⭐ **k-cm 편입 (2026-08-25)** — 자리는 2026-08-24 부터 와이어에 실재했지만
+  // 부트스트랩이 star 축 포맷 8 을 안 열어 «생성은 되고 스캔이 안 되는» 값이었다.
+  // 레인 KCM 이 그 한 줄(familyProfiles('star') 가 VERSIONS_KCM 미소유)을 닫아
+  // K0CM/K1CM/K2CM 왕복이 전부 서므로 허용값에 든다 (자 = typeK-roundtrip ②).
+  outerSeat: field('none', INTERNAL, ['none', 'a-cm', 'v-cm', 'k-cm']),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),

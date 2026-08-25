@@ -16,9 +16,9 @@
  * 정본은 `finder-zone-ui`(SEAT_DEFAULT_FINDER)다 — 「o-cm 선택이 곧 자리 + H 심볼 톤」
  * 이라는 2026-08-24 운영자 확정 문법이다. 그래서 H·H2O·H2CO3 는 **카드가 아니다.**
  *
- * ## ⛔ 표의 두 칸은 지금 성립하지 않는다
+ * ## ⛔ 표에는 아직 성립하지 않는 칸이 있다
  *
- * 자동이 «고를 수 있다» 고 말하는 것과 «그 결과가 동작한다» 는 다르다. 아래 둘은
+ * 자동이 «고를 수 있다» 고 말하는 것과 «그 결과가 동작한다» 는 다르다. 아래는
  * 자리는 실재하지만 **끝단이 없다** — 자동이 그걸 고르면 이 프로젝트가 여러 번 겪은
  * 「켰는데 안 먹는」 상태를 자동이 **기본값으로** 만들어 낸다. 그래서 표에 사실을
  * 적어 두고 (`blocked`), 소비자가 안전한 폴백을 쓰게 한다.
@@ -26,11 +26,12 @@
  *   · `sagoae` — 검출측(bootstrap 합성 가설 + 회계 개방)은 완료. **생성측 합성 렌더가
  *     없다** (임의 중앙 파인더 + sagoae 고리를 그릴 경로가 없고, index.html 의 렌더
  *     용접 한 줄이 예약을 켜면 중앙 파인더를 원자 daehan 으로 강제한다).
- *   · `k-cm` (H2CO3) — 인코더도 디코더 후단(decode-k)도 있는데 그 사이 부트스트랩이
- *     star 축 formatIndex **8 을 안 연다**. 생성은 되고 **스캔이 안 된다**
- *     (test/typeK-roundtrip.test.js ② 가 그 사실의 자).
+ *   · ~~`k-cm` (H2CO3)~~ — **해제됨 (2026-08-25, 레인 KCM)**. 벽은 부트스트랩의
+ *     `familyProfiles('star')` 가 `VERSIONS_KCM` 을 안 가진 것이었고, 그 한 줄을 고치니
+ *     K0CM/K1CM/K2CM 왕복이 전부 선다. 자는 `test/typeK-roundtrip.test.js` — 구 음성
+ *     락이 같은 자리에서 **양성 왕복 락**이 됐다.
  *
- * 해제되면 `blocked` 를 지우면 된다 — 표의 나머지는 안 건드린다.
+ * 해제되면 `blocked` 를 지우면 된다 — 표의 나머지는 안 건드린다 (k-cm 이 그 전례다).
  */
 
 export const SEAT_NONE = 'none';
@@ -59,10 +60,7 @@ const BY_TYPE = Object.freeze({
   O: Object.freeze({ inner: SEAT_O_CM, outer: SEAT_NONE, outerSectionVisible: false, blocked: null }),
   A: Object.freeze({ inner: SEAT_NONE, outer: SEAT_A_CM, outerSectionVisible: true, blocked: null }),
   V: Object.freeze({ inner: SEAT_NONE, outer: SEAT_V_CM, outerSectionVisible: true, blocked: null }),
-  K: Object.freeze({
-    inner: SEAT_NONE, outer: SEAT_K_CM, outerSectionVisible: true,
-    blocked: 'k-cm-bootstrap-unwired',
-  }),
+  K: Object.freeze({ inner: SEAT_NONE, outer: SEAT_K_CM, outerSectionVisible: true, blocked: null }),
 });
 
 /** 막힌 칸의 안전 폴백 — «없음». 자동이 스캔 불가 코드를 기본값으로 만들지 않는다. */

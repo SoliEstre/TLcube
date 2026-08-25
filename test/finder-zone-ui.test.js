@@ -48,9 +48,9 @@ test('내곽/외곽 seat 유도가 분류 정본(분류 2·3 + KIND_ABSENT)과 1
   }
 });
 
-test('k-cm — 와이어는 실재하고 상태값은 아직 아니다 (2026-08-24 실체 전환)', () => {
-  // 실체 전환의 두 반쪽을 한 자리에서 잰다: 카드는 «있고»(부재 아님), 상태 허용값에는
-  // «없다»(생성기 타입 K 부재 — ⑤ 잔여). 한쪽만 참이면 UI 와 와이어가 어긋난 것이다.
+test('k-cm — 와이어·카드·상태 허용값이 **셋 다** 실재한다 (2026-08-25 개설)', () => {
+  // 세 반쪽을 한 자리에서 잰다: 와이어(formatK CM 행) · 카드(부재 아님·ready) ·
+  // 상태 허용값. 하나만 어긋나도 «켰는데 안 먹는» 상태가 된다.
   const card = zoneCards().outer.find((c) => c.id === 'k-cm');
   assert.ok(card, 'k-cm 카드가 없다 — starSeat 유도가 죽었다');
   assert.equal(card.absent, false, 'k-cm 이 아직 부재 카드다');
@@ -58,15 +58,15 @@ test('k-cm — 와이어는 실재하고 상태값은 아직 아니다 (2026-08-
   assert.deepEqual([...card.types], ['K']);
   assert.ok(GENERATOR_STATE_SCHEMA.type.options.includes('K'),
     '생성기 타입에서 K 가 빠졌다 — 편입이 되돌아갔나');
-  // ⚠ **의도적 갱신 (2026-08-25)** — K 가 생성기 타입에 들어왔는데도 k-cm 은 **계속 잠근다.**
-  // 구 락의 잠금 사유는 「생성기 타입에 K 가 없다」였고 그건 이제 거짓이다. 진짜 사유는
-  // 한 층 아래에 있다: **bootstrap 이 star 축 formatIndex 8 을 안 연다** — 즉 K-CM 은
-  // 생성은 되는데 **스캔이 안 된다** (test/typeK-roundtrip.test.js ② 가 그 사실의 자다).
-  // 여기서 열면 «읽을 수 없는 코드를 발행하는» 상태가 된다. 자리를 여는 조건은 생성기
-  // 타입이 아니라 디코더 배선이다.
-  assert.ok(!OUTER_SEAT_OPTIONS.includes('k-cm'),
-    'k-cm 이 상태 허용값에 들었다 — bootstrap formatIndex 8 배선이 끝났는지 먼저 확인하라 '
-    + '(안 끝났으면 스캔 불가 코드가 발행된다)');
+  // ⚠ **의도적 갱신 2회차 (2026-08-25 저녁, 배타 개설)** — 이 락은 사유가 두 번 바뀌었다.
+  //   ① 「생성기 타입에 K 가 없다」 → K 편입으로 거짓이 됐고,
+  //   ② 「bootstrap 이 star 축 formatIndex 8 을 안 연다」로 이전했다가,
+  //   ③ **레인 KCM 이 ②를 닫았다** — familyProfiles('star') 가 VERSIONS_KCM 을 안 가져
+  //      성공 후보를 버리고 있었다. 자는 test/typeK-roundtrip.test.js 의 K0CM/K1CM/K2CM
+  //      전수 양성 왕복이다.
+  // 그래서 음성 락을 **양성 단언으로 뒤집는다**. 다시 빼려면 그 왕복부터 빨개져야 한다.
+  assert.ok(OUTER_SEAT_OPTIONS.includes('k-cm'),
+    'k-cm 이 상태 허용값에서 빠졌다 — 카드는 서는데 클릭이 상태에 안 실린다');
   // 유도 원천은 와이어다 (손 행이 아니다).
   assert.ok(K_FORMAT_INDEX.some((entry) => entry.cornerMarker === true),
     'formatK 에 K-CM 행이 없는데 카드가 섰다면 유도가 아니라 손 행이다');

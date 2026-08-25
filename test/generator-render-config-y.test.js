@@ -13,11 +13,22 @@ import { encodeY } from '../src/encodeY.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from '../src/capacityY.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
+  LOCATOR_PROFILE_CELL_SURFACE_V0T,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TR,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRQ,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
+  LOCATOR_PROFILE_CELL_SURFACE_V0TY,
   LOCATOR_PROFILE_CELL_SURFACE_V0X,
   LOCATOR_PROFILE_CELL_SURFACE_V0XQ,
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
 } from '../src/locatorY.js';
+import {
+  CELL_SURFACE_FINAL_IDS,
+  CELL_SURFACE_FINAL_NS,
+  CELL_SURFACE_FINAL_PROFILE,
+} from '../src/cellSurfaceFinal.js';
+import { versionSpecY } from '../src/capacityY.js';
 
 const TEXT = 'https://tl.estre.so';
 const windowState = (tone) => ({ tone, versionY: undefined, fallback: { mode: 'window' } });
@@ -306,6 +317,94 @@ test('셀 표면 v0W 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용�
       assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
       // 441 − 70(파인더) − 12(reference) − 18(format v2) = 341.
       assert.equal(encoded.capacity.dataCells, 341);
+    }
+  }
+});
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * T 계열 × 해상도 — 2026-08-25 신고 ② 의 회귀 게이트
+ *
+ * 이 파일에는 v0X · v0XQ · v1r2 · v0W 계열의 «Y1 고정» 계약이 다 적혀 있었는데
+ * **T 계열(v0T · v0TR · v0TY · v0TRQ · v0TRY)만 한 줄도 없었다.** 그래서 9ce2883
+ * 이 v0T·v0TR 을 n=25 로 넓혔을 때 encodeOptionsForY 의 «version: 1» 하드핀이
+ * 남은 것을 **아무 테스트도 못 봤다** — 라인업·선언 data·회계 표를 다 통과했지만
+ * 그 셋은 「이 조합이 합법인가」를 묻지 「누가 이 값을 고정하는가」는 안 묻는다.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+test('셀 표면 v0T·v0TR 은 Y2 명시 선택에서 n=25 로 간다 (하드핀 해제 · 신고 ②)', () => {
+  const CASES = [
+    [LOCATOR_PROFILE_CELL_SURFACE_V0T, 'v0t', { 21: 307, 25: 491 }],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TR, 'v0tr', { 21: 309, 25: 493 }],
+  ];
+  for (const [profile, layout, data] of CASES) {
+    for (const tone of [2, 3]) {
+      for (const [versionY, wantVersion, wantN] of [[0, 1, 21], [1, 1, 21], [2, 2, 25], [undefined, 1, 21]]) {
+        const opts = encodeOptionsForY({
+          tone,
+          versionY,
+          fallback: { mode: 'window' },
+          locatorProfileY: profile,
+        });
+        assert.equal(opts.cellSurface, true);
+        assert.equal(opts.cellSurfaceLayout, layout);
+        assert.equal(opts.tones, tone);
+        assert.equal(opts.window, undefined, '윈도보다 앞선다');
+        assert.equal(opts.version, wantVersion, layout + ' versionY=' + versionY);
+        const encoded = encodeY(TEXT, opts);
+        assert.equal(encoded.n, wantN, layout + ' versionY=' + versionY);
+        assert.equal(encoded.locatorProfile, profile);
+        assert.equal(encoded.formatIndex, tone === 3 ? 3 : 1);
+        // 선언 data 와 같은 수 — 다르면 «파인더 셀 수가 n 에 불변» 이 깨진 것이다.
+        assert.equal(encoded.capacity.dataCells, data[wantN], layout + '@' + wantN);
+      }
+    }
+  }
+});
+
+test('QR 슬롯 계열(v0TY·v0TRQ·v0TRY)은 아직 n=21 전용이다 — 함께 열지 않았다', () => {
+  // 슬롯은 면 모서리 앵커가 아니라 n=25 위치 규범이 없다. 여기가 초록인 동안은
+  // «안 연 것» 이지 «못 본 것» 이 아니다 — 열 때 이 테스트가 먼저 빨개진다.
+  for (const [profile, layout] of [
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TY, 'v0ty'],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TRQ, 'v0trq'],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TRY, 'v0try'],
+  ]) {
+    for (const versionY of [0, 1, 2, undefined]) {
+      const opts = encodeOptionsForY({
+        tone: 2, versionY, fallback: { mode: 'window' }, locatorProfileY: profile,
+      });
+      assert.equal(opts.cellSurfaceLayout, layout);
+      assert.equal(opts.version, 1, layout + ' versionY=' + versionY);
+      assert.equal(encodeY(TEXT, opts).n, 21);
+    }
+  }
+});
+
+test('레이아웃이 지원하는 n 을 encodeOptionsForY 가 실제로 낸다 — 하드핀 회귀 게이트', () => {
+  // ⭐ **손 목록이 아니라 유도다.** 레이아웃별 «Y1 고정» 을 이 파일에 한 줄씩 적는
+  // 방식은 라인업이 자랄 때마다 어긋난다 (실제로 T 계열이 통째로 빠져 있었다).
+  // 정본은 CELL_SURFACE_FINAL_NS 하나이고, 이 테스트는 그것과 함수 사이의 **관계**를
+  // 잠근다. 새 n 을 여는 사람은 NS 만 고치면 여기가 하드핀을 잡아 준다.
+  //
+  //   ① 낸 version 의 n 은 **반드시** 그 레이아웃이 지원하는 n 이어야 한다.
+  //   ② 사용자가 지원되는 n 을 명시했으면 **그대로** 줘야 한다 (하드핀 금지).
+  const nOf = (version) => versionSpecY(version, 2).n;
+  for (const id of CELL_SURFACE_FINAL_IDS) {
+    const profile = CELL_SURFACE_FINAL_PROFILE[id];
+    const ns = CELL_SURFACE_FINAL_NS[id];
+    assert.ok(Array.isArray(ns) && ns.length > 0, id + ' 의 허용 n 이 없다');
+    for (const versionY of [0, 1, 2, undefined]) {
+      const opts = encodeOptionsForY({
+        tone: 2, versionY, fallback: { mode: 'none' }, locatorProfileY: profile,
+      });
+      assert.equal(typeof opts.version, 'number', id + ' 이 version 을 안 낸다');
+      assert.ok(ns.includes(nOf(opts.version)),
+        id + ': versionY=' + versionY + ' → n=' + nOf(opts.version) + ' 은 지원 목록 [' + ns + '] 밖이다');
+      if (versionY !== undefined && ns.includes(nOf(versionY))) {
+        assert.equal(opts.version, versionY,
+          id + ': 지원하는 Y' + versionY + ' 를 명시했는데 Y' + opts.version + ' 로 못 박혔다');
+      }
     }
   }
 });

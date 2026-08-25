@@ -114,7 +114,19 @@ test('buildConfig은 모드나 고급 DOM이 아니라 단일 generatorState만 
   assert.doesNotMatch(source, /if\s*\(\s*(?<![.\w])mode\b/);
   assert.doesNotMatch(source,
     /els\.(codeType|versionO|versionY|versionA|ecc|preset|tone|faceGain|qrUrl|qrCornerToo)/);
-  assert.match(source, /generatorState\.versionY/);
+  // **의도적 갱신 (2026-08-25)** — 구 락은 buildConfig 본문에 `generatorState.versionY`
+  // 리터럴이 있는지 봤다. Y2(n=25) 편입으로 «자동이 고른 버전» 을 인코더까지 옮겨야 해서
+  // 그 읽기가 `effectiveVersionYForEncode()` 로 이름을 얻었고 리터럴이 사라졌다.
+  // 이 락이 지키려던 것은 **리터럴이 아니라 출처**(DOM 이 아니라 상태)이므로 락을
+  // 헬퍼까지 따라가게 옮긴다 — 헬퍼가 els.* 를 읽으면 여기서 빨개진다.
+  assert.match(source, /generatorState\.versionY|effectiveVersionYForEncode\(\)/);
+  if (!/generatorState\.versionY/.test(source)) {
+    const hStart = INDEX_SOURCE.indexOf('function effectiveVersionYForEncode()');
+    assert.ok(hStart >= 0, 'buildConfig 이 헬퍼로 versionY 를 내는데 그 헬퍼가 없다');
+    const hSource = INDEX_SOURCE.slice(hStart, INDEX_SOURCE.indexOf('\n}', hStart));
+    assert.match(hSource, /generatorState\.versionY/, '헬퍼가 상태를 안 읽는다');
+    assert.doesNotMatch(hSource, /els\./, '헬퍼가 DOM 을 읽는다 — 락이 우회됐다');
+  }
   assert.match(source, /fallback\.mode === 'window'[\s\S]*\? 2/);
 });
 

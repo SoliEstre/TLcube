@@ -59,8 +59,15 @@ export function encodeOptionsForY(state) {
   }
   // 카드 라인업 (2026-08-17 v0T 편입·v0W 계열 전체 드랍까지 반영):
   // v0 = Y0(n=13) ·
-  // v0T = **Y1 최종 파인더** (NW 16 + A 9 + N팔 10 + NE 36 + W 24 + SE 9 = 104셀 · 데이터 307) ·
-  // v0TY = v0T 파생 (먼 코너 QR 슬롯 8² — 파인더 95 · 슬롯 64 · 데이터 252).
+  // v0T = **T 계열 최종 파인더** (NW 16 + A 9 + N팔 10 + NE 36 + W 24 + SE 9 = 104셀) —
+  //       n=21 데이터 307 · **n=25 데이터 491** (2026-08-25 편입. 면 모서리 기준 배치라
+  //       파인더 셀 수가 n 에 불변이고, 늘어난 면적이 그대로 데이터로 간다) ·
+  // v0TY = v0T 파생 (먼 코너 QR 슬롯 8² — 파인더 95 · 슬롯 64 · 데이터 252, n=21 전용).
+  //
+  // ⚠ **어느 분기가 version 을 고정하는지가 이 함수의 실질**이다. 레이아웃이 여러 n 을
+  //   지원하면 고정을 걷어야 하고, 안 걷으면 «사다리·카드 목록은 Y2 를 고르는데 렌더만
+  //   Y1» 인 조용한 어긋남이 된다 (2026-08-25 운영자 신고의 원인). 판정 정본은
+  //   `cellSurfaceFinal.js` 의 `CELL_SURFACE_FINAL_NS` 다.
   //
   // **v2r2 · v1r2 (2026-08-16) · v0XQ · v0X · v0W · v0WQ · v0W2 · v0WY (2026-08-17)
   // 는 카드에서 내려갔다** (`generator-state.js` 의 허용값에서 제거 — UI 로는 이
@@ -146,8 +153,14 @@ export function encodeOptionsForY(state) {
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0T) {
     return {
       tones: tone === 3 ? 3 : 2,
-      // v0T 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
-      version: 1,
+      // ⭐ **하드핀 해제 (2026-08-25)** — 「v0T 도 n=21 뿐이다」는 9ce2883 이전의 사실이다.
+      // 「면 모서리 기준 배치」(SPEC §4.11)가 n=25 를 열어 v0T·v0TR 이 [21, 25] 가 됐다
+      // (`CELL_SURFACE_FINAL_NS` 가 정본). 그때 라인업·선언 data·회계 표는 넓혔는데
+      // **이 상수를 안 걷어서** 사다리는 Y2 를 고르는데 렌더는 Y1 이 나왔다 — 그리고
+      // 용량을 넘기면 ECC 가 내려갔다(운영자 신고 2026-08-25 「Y2로 넘어가면 마커가
+      // 사라짐 · 수동 선택해도 렌더 안 됨」). 셋을 통과시켜도 **누가 이 값을 고정하는가**
+      // 는 아무도 안 묻는다 — 허용 목록을 넓히는 것과 강제 상수를 걷는 것은 다른 작업이다.
+      version: versionY === 2 ? 2 : 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0T),
     };
@@ -155,7 +168,10 @@ export function encodeOptionsForY(state) {
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY) {
     return {
       tones: tone === 3 ? 3 : 2,
-      // v0TY 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
+      // v0TY 는 **아직** n=21 뿐이다 — Y1 로 고정한다. v0T·v0TR 이 n=25 로 열린
+      // 2026-08-25 에도 이 셋(v0TY·v0TRQ·v0TRY)은 안 열었다: QR 슬롯은 면 모서리
+      // 앵커가 아니라 **n=25 위치 규범이 없다**. `CELL_SURFACE_FINAL_NS` 가 정본이고
+      // 여기 상수는 그 사실의 사본이니, 거기가 [21, 25] 가 되면 여기도 같이 걷는다.
       version: 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TY),
@@ -164,8 +180,11 @@ export function encodeOptionsForY(state) {
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TR) {
     return {
       tones: tone === 3 ? 3 : 2,
-      // v0TR 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
-      version: 1,
+      // ⭐ **하드핀 해제 (2026-08-25)** — v0T 와 같은 근거다 (§V0T 분기 주석).
+      // v0TR 은 [21, 25] 이고, 자동 사다리(`generator-auto-y.js` RUNGS 2단)가
+      // 「Y2 + v0TR」을 고르는 **유일한 마커 보존 경로**다. 여기가 1 로 못 박혀 있으면
+      // 그 단이 존재하되 도달할 수 없다.
+      version: versionY === 2 ? 2 : 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TR),
     };

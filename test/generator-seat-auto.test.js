@@ -12,7 +12,7 @@ import {
   autoSeatsFor, AUTO_SEAT_TYPES,
   SEAT_NONE, SEAT_O_CM, SEAT_A_CM, SEAT_V_CM, SEAT_K_CM, SEAT_SAGOAE,
 } from '../src/generator-seat-auto.js';
-import { zoneCards } from '../src/finder-zone-ui.js';
+import { OUTER_SEAT_OPTIONS, zoneCards } from '../src/finder-zone-ui.js';
 
 test('① 운영자 기준표 5행 — 심볼 이름이 아니라 **자리 id** 로', () => {
   // 명세는 H·H2O·CO2·H2CO3 로 적혀 있는데 상태가 드는 값은 자리 id 다.
@@ -40,17 +40,20 @@ test('② O 만 외곽 섹션을 숨긴다', () => {
 });
 
 test('③ ⛔ 막힌 칸은 자동이 고르지 않는다 — 안 되는 것을 기본값으로 만들지 않는다', () => {
-  // K 외곽(H2CO3) — bootstrap 이 star formatIndex 8 을 안 열어 **스캔이 안 된다**.
+  // **의도적 갱신 (2026-08-25)** — K 외곽(H2CO3) 이 이 락에서 나갔다. 사유였던
+  // 「bootstrap 이 star formatIndex 8 을 안 연다」를 레인 KCM 이 닫았고, 그 근거는
+  // test/typeK-roundtrip.test.js 의 **K0CM/K1CM/K2CM 전수 양성 왕복**이다.
+  // 락을 지우는 게 아니라 **양성 단언으로 뒤집는다** (배타 개설 정형 ④).
   const k = autoSeatsFor({ type: 'K' });
-  assert.equal(k.outer, SEAT_NONE, 'K 자동이 k-cm 을 골랐다 — 스캔 불가 코드가 기본값이 된다');
-  assert.equal(k.blocked, 'k-cm-bootstrap-unwired');
-  assert.equal(k.appliedFallback, true);
-  // sagoae — 검출측은 됐지만 **생성측 합성 렌더가 없다**.
+  assert.equal(k.outer, SEAT_K_CM, 'K 자동이 k-cm 을 안 고른다 — 개설이 소비자까지 안 왔다');
+  assert.equal(k.blocked, null);
+  assert.equal(k.appliedFallback, false);
+  // sagoae — 검출측은 됐지만 **생성측 합성 렌더가 없다**. 여기는 아직 막혀 있다.
   const t = autoSeatsFor({ type: 'A', centralFinderIsTaegeuk: true });
   assert.equal(t.inner, SEAT_NONE, 'taegeuk 자동이 sagoae 를 골랐다 — 그릴 경로가 없다');
   assert.equal(t.blocked, 'sagoae-no-generator-render');
   // 막히지 않은 칸은 폴백을 안 쓴다.
-  for (const type of ['O', 'A', 'V']) {
+  for (const type of ['O', 'A', 'V', 'K']) {
     assert.equal(autoSeatsFor({ type }).appliedFallback, false, type + ' 이 헛되이 폴백했다');
   }
 });
@@ -75,8 +78,13 @@ test('⑤ 막힘 사유는 **실제 상태**와 일치해야 한다 (라벨이 �
   assert.ok(sagoae, 'sagoae 카드가 사라졌다');
   assert.equal(sagoae.ready, false,
     'sagoae 가 ready 가 됐다 — 생성측 렌더가 붙었다면 기준표의 blocked 를 지워라');
-  // k-cm 은 카드는 ready 지만 상태 허용값에 없다 (stateValue:false).
+  // k-cm — **2026-08-25 개설**. 구 락은 「카드는 ready 지만 상태 허용값엔 없다」
+  // (stateValue:false) 였다. 이제 허용값에 **들어야** 한다 — 안 들면 UI 가 카드를
+  // 보여 주고도 클릭이 상태에 안 실려 «켰는데 안 먹는» 상태가 된다 (이 repo 의 상습).
   const kcm = zoneCards().outer.find((c) => c.id === SEAT_K_CM);
   assert.ok(kcm, 'k-cm 카드가 사라졌다');
   assert.equal(kcm.ready, true, 'k-cm 은 와이어가 실재하므로 ready 여야 한다');
+  assert.notEqual(kcm.stateValue, false, 'k-cm 이 다시 자리-예약으로 강등됐다');
+  assert.ok(OUTER_SEAT_OPTIONS.includes(SEAT_K_CM),
+    'k-cm 이 외곽 허용값에 없다 — 자동이 고르는 값을 상태가 안 받는다');
 });
