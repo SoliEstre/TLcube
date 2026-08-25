@@ -345,15 +345,24 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // Y0 명시 → v0 · 그 외 → v0TR. «끔 동일값» 시절 락은 이 양성 단언으로 전환.
   assert.match(INDEX,
     /function resolveAutoLocatorProfileY\(pos = generatorState\.qrPosition\)\s*\{[\s\S]{0,400}?if \(generatorState\.versionY === 2\) return LOCATOR_PROFILE_OFF;\s*\n\s*if \(pos === 'inner'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;\s*\n\s*if \(generatorState\.versionY === 0\) return LOCATOR_PROFILE_CELL_SURFACE_V0;\s*\n\s*if \(generatorState\.versionY !== 'auto'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR;/);
-  // **의도적 갱신 (2026-08-25, 원장 F-112 · 운영자 지시)** — 구 락은 마지막 줄이
-  // 무조건 v0TR 이었다. 그래서 'auto' 도 그리로 흘러 콘텐츠가 Y0 에 들어가도 첫
-  // 렌더가 **무조건 Y1** 이었다 (인코더는 정상 — chooseVersionY 가 Y0 을 고른다).
-  assert.match(INDEX, /return contentFitsCellSurfaceV0\(\) \? LOCATOR_PROFILE_CELL_SURFACE_V0/,
-    "'auto' 가 콘텐츠 용량을 안 본다 — F-112 회귀");
-  // ECC 'auto' 는 H→M→L 로 내려가므로 «들어가는가» 는 **L 기준**이어야 한다 —
-  // M 으로 물으면 L 이면 들어갈 콘텐츠를 v0TR 로 밀어낸다.
-  assert.match(INDEX, /generatorState\.eccLevel === 'auto' \? 'L'/,
-    "v0 적합 판정이 L 기준이 아니다 — auto 의 폴백 순서와 어긋난다");
+  // **의도적 갱신 (2026-08-25, 운영자 지시)** — 구 락은 「'auto' 가 콘텐츠를 보는가」와
+  // 「그 판정이 **L 기준**인가」를 잠갔다. 앞은 유지되지만 뒤는 **뒤집혔다.**
+  //
+  // 구 근거: 「ECC auto 는 H→M→L 로 내려가니 «들어가는가» 도 L 기준이어야 한다.」
+  // 그 추론은 **국소적으로는 맞았다** (인코더가 실제로 그렇게 내려간다). 그런데
+  // 로케이터가 버전을 하드핀하므로, L 기준으로 v0 을 잡는 순간 해상도가 Y0 에
+  // 못 박히고 ECC 만 남아 내려간다 — 「v0 고정이 우선순위가 되면 안 됨」(운영자).
+  //
+  // 새 규칙: 사다리를 `src/generator-auto-y.js` 가 소유하고, ECC 가 **바깥** 루프다.
+  // 이 파일은 그 소유권만 잠근다 — 값은 test/generator-auto-y.test.js 가 잰다.
+  assert.match(INDEX, /const auto = resolveAutoYSafe\(\);/,
+    "'auto' 가 사다리 모듈을 안 쓴다 — 판정이 다시 인라인으로 돌아갔나");
+  assert.match(INDEX, /import \{ resolveAutoY \} from '\.\/src\/generator-auto-y\.js';/,
+    'generator-auto-y 를 import 하지 않는다');
+  assert.doesNotMatch(INDEX, /generatorState\.eccLevel === 'auto' \? 'L'/,
+    'v0 적합 판정이 아직 L 기준이다 — ECC 가 해상도보다 먼저 양보한다');
+  assert.doesNotMatch(INDEX, /function contentFitsCellSurfaceV0\(\)/,
+    'contentFitsCellSurfaceV0 이 남아 있다 — 사다리로 대체됐으니 죽은 코드다');
   assert.match(INDEX, /let detectorAutoY = true;/,
     '자동이 기본값이 아니다 — 2026-08-24 운영자 확정의 회귀');
   for (const lang of LANGS) {

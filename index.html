@@ -997,8 +997,10 @@
     <!-- ══════════════════════ 일반 모드 ══════════════════════ -->
     <div id="panelNormal" data-state-keys="type preset versionO versionA versionK versionY eccLevel customHue tone">
       <label class="section-heading" data-i18n="g041">타입</label>
-      <!-- 배치 = 용량 오름차순 O → A → K → Y, 기본 선택 = Y (사용자 지시 2026-08-09).
-           실측 최대 용량 (ECC M): O 66 · A 102 · K 139 · Y 142 B — K 는 A 와 Y 사이다. -->
+      <!-- 배치 = **O → K → A → Y** (운영자 2026-08-25 — "OKAY" 니모닉). 기본 선택 = Y.
+           ⚠ 용량 오름차순이 **아니다** (실측 ECC M 최대: O 66 · A 102 · K 139 · Y 142 B).
+           종전 규약이었던 «용량 오름차순»(2026-08-09)을 운영자가 니모닉으로 교체했다 —
+           이 줄을 «용량순» 이라 되돌려 적으면 화면과 어긋난 거짓 주석이 된다. -->
       <div class="card-row" id="typeCards">
         <div class="toggle-card" data-type="O" style="flex:1">
           <!-- Type O 실루엣 = 플랫탑 육각형 (pointy-top 셀 격자의 반경 k 영역 — 위아래 변이 평평) -->
@@ -1009,6 +1011,18 @@
           </svg>
           Type O
         </div>
+        <div class="toggle-card" data-type="K" style="flex:1">
+          <!-- Type K 실루엣 = 육각별(hexagram) = A ∪ 반전A (placementK) — 180° 자기
+               대칭이라 «턴 K» 가 성립하지 않는다 (encodeK §옵션 배타). 불스아이는
+               O·A 와 공유하므로 같은 미니 아이콘을 쓴다. -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3 L5.07 15 L18.93 15 Z"/>
+            <path d="M12 19 L18.93 7 L5.07 7 Z"/>
+            <circle cx="12" cy="11" r="2.6"/>
+            <circle cx="12" cy="11" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+          Type K
+        </div>
         <div class="toggle-card" data-type="A" style="flex:1">
           <!-- Type A 실루엣 = 플랫바닥 삼각(△, 위 꼭짓점) — 육각 실루엣에 삼각 패치 3개를 붙여
                닫은 확장(ADR 0005). 미니 불스아이 아이콘으로 Type O 와 파인더 계약 공유를 암시. -->
@@ -1018,18 +1032,6 @@
             <circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/>
           </svg>
           Type A
-        </div>
-        <div class="toggle-card" data-type="K" style="flex:1">
-          <!-- Type K 실루엣 = 육각별(hexagram) = A ∪ 반전A (placementK) — 180° 자기
-               대칭이라 «턴 K» 가 성립하지 않는다 (encodeK §옵션 배타). 불스아이는
-               O·A 와 공유하므로 같은 미니 아이콘을 쓴다. -->
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <path d="M12 3.4 L20.6 18.3 L3.4 18.3 Z"/>
-            <path d="M12 18.6 L3.4 3.7 L20.6 3.7 Z"/>
-            <circle cx="12" cy="11" r="2.6"/>
-            <circle cx="12" cy="11" r="1" fill="currentColor" stroke="none"/>
-          </svg>
-          Type K
         </div>
         <div class="toggle-card active" data-type="Y" style="flex:1">
           <!-- Type Y = 위에서 본 큐브: Y-심 팔 = 좌상·우상 꼭짓점, 다리 = 아래 꼭짓점 (SPEC §14) -->
@@ -1210,7 +1212,7 @@
     <!-- ══════════════════════ 고급 모드 ══════════════════════ -->
     <div id="panelAdvanced" style="display:none" data-state-keys="type preset versionO versionA versionK versionY eccLevel customHue tone faceGain qrText qrCornerToo exportDither exportPpiDetail">
       <label class="section-heading" data-i18n="g041">타입</label>
-      <!-- 배치 = 용량 오름차순 O → A → K → Y, 기본 = Y (일반 모드와 동일 규약).
+      <!-- 배치 = O → K → A → Y, 기본 = Y (일반 모드와 동일 규약 — "OKAY" 니모닉).
            ⚠ **의도적 갱신 (2026-08-24)** — 구 `<select id="codeType">` 를 일반 모드와
            같은 **카드 행**으로 바꿨다 (운영자 «고급에서도 타입 선택은 버튼 형식»).
            아이콘·부제는 일반 카드와 같은 그림이고, 클릭 핸들러는 #typeCards 와
@@ -1224,6 +1226,18 @@
           </svg>
           Type O
         </div>
+        <div class="toggle-card" data-type="K" style="flex:1">
+          <!-- Type K 실루엣 = 육각별(hexagram) = A ∪ 반전A (placementK) — 180° 자기
+               대칭이라 «턴 K» 가 성립하지 않는다 (encodeK §옵션 배타). 불스아이는
+               O·A 와 공유하므로 같은 미니 아이콘을 쓴다. -->
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+            <path d="M12 3 L5.07 15 L18.93 15 Z"/>
+            <path d="M12 19 L18.93 7 L5.07 7 Z"/>
+            <circle cx="12" cy="11" r="2.6"/>
+            <circle cx="12" cy="11" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+          Type K
+        </div>
         <div class="toggle-card" data-type="A" style="flex:1">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
             <path d="M12 3 L21 19 L3 19 Z"/>
@@ -1231,18 +1245,6 @@
             <circle cx="12" cy="14" r="1.1" fill="currentColor" stroke="none"/>
           </svg>
           Type A
-        </div>
-        <div class="toggle-card" data-type="K" style="flex:1">
-          <!-- Type K 실루엣 = 육각별(hexagram) = A ∪ 반전A (placementK) — 180° 자기
-               대칭이라 «턴 K» 가 성립하지 않는다 (encodeK §옵션 배타). 불스아이는
-               O·A 와 공유하므로 같은 미니 아이콘을 쓴다. -->
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-            <path d="M12 3.4 L20.6 18.3 L3.4 18.3 Z"/>
-            <path d="M12 18.6 L3.4 3.7 L20.6 3.7 Z"/>
-            <circle cx="12" cy="11" r="2.6"/>
-            <circle cx="12" cy="11" r="1" fill="currentColor" stroke="none"/>
-          </svg>
-          Type K
         </div>
         <div class="toggle-card active" data-type="Y" style="flex:1">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
@@ -5878,6 +5880,7 @@ import { VERSIONS as VERSIONS_O_TABLE } from './src/capacity.js';
 import { VERSIONS_A as VERSIONS_A_TABLE } from './src/capacityA.js';
 import { VERSIONS_K as VERSIONS_K_TABLE } from './src/capacityK.js';
 import { encodeK } from './src/encodeK.js';
+import { resolveAutoY } from './src/generator-auto-y.js';
 // ref./format 표시는 선택 파인더의 painted 셀을 점유로 넣은 autoplace 유도만 쓴다 —
 // placementY 레거시 고정 배치 직접 참조 금지 (끔 = 빈 점유 유도가 레거시와 바이트 동일).
 import { placeReservedCells } from './src/autoplaceY.js';
@@ -8144,42 +8147,33 @@ function resolveAutoLocatorProfileY(pos = generatorState.qrPosition) {
   if (pos === 'inner') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
   if (generatorState.versionY === 0) return LOCATOR_PROFILE_CELL_SURFACE_V0;
   if (generatorState.versionY !== 'auto') return LOCATOR_PROFILE_CELL_SURFACE_V0TR;
-  // ⭐ **'auto' 도 콘텐츠를 본다 (2026-08-25, 원장 F-112 · 운영자 지시)** —
-  //    종전엔 여기로 흘려 항상 v0TR(n=21) 이었고, 그래서 콘텐츠가 Y0 에 들어가도
-  //    첫 렌더가 **무조건 Y1** 이었다 (인코더는 정상: chooseVersionY 가 Y0 을 고른다).
+  // ⭐ **자동의 우선순위 = 해상도 → ECC → 파인더 (2026-08-25, 운영자 지시)**
   //
-  //    순환은 어떻게 끊나 — 위 주석이 걱정한 «프로파일 → 오버헤드 → 버전 해석»
-  //    되먹임은 **일반 해석**을 여기서 할 때만 생긴다. 그런데 `v0 ⟺ n=13 ⟺ Y0` 는
-  //    일대일이라(v0 은 n=13 전용), 「콘텐츠가 v0 용량에 들어가는가」 **한 번**만
-  //    물으면 답이 스스로를 뒤집지 못한다: 들어가면 v0/Y0 이 성립하고, 안 들어가면
-  //    n≥21 이 확정이라 v0TR 이 맞다. 반복도 고정점 탐색도 필요 없다.
+  // 종전엔 여기서 「콘텐츠가 v0 용량에 **L 기준으로** 들어가나」를 물었다. 그런데
+  // 로케이터는 generator-render-config 에서 **버전을 하드핀**하므로(v0 → version 0),
+  // 그 한 물음이 곧 해상도 결정이었고 남은 손잡이가 ECC 뿐이라 H→M→L 로 내려갔다.
+  // 즉 **해상도가 파인더에 종속**돼 있었다 — 운영자가 「v0 고정이 우선순위가 되면
+  // 안 됨」이라고 한 자리가 정확히 이것이다.
   //
-  //    ⚠ **T 계열이 n=25 로 넓어지면 이 일대일이 깨진다** (v0TR ⟺ Y1 이 아니게 된다).
-  //       그때는 이 한 줄이 아니라 (프로파일 × 버전) 고정점으로 승격해야 한다 —
-  //       「면 모서리 기준 배치」 작업(운영자 2026-08-25)과 **짝으로 다뤄야 하는 자리**다.
-  return contentFitsCellSurfaceV0() ? LOCATOR_PROFILE_CELL_SURFACE_V0
-    : LOCATOR_PROFILE_CELL_SURFACE_V0TR;
+  // 사다리 자체는 `src/generator-auto-y.js` 가 소유한다 (순수 함수 — 인라인 HTML 에
+  // 두면 테스트가 못 닿는다. generator-render-config 가 세운 전례와 같은 처방).
+  const auto = resolveAutoYSafe();
+  return auto === null ? LOCATOR_PROFILE_CELL_SURFACE_V0TR : auto.locatorProfileY;
 }
 
 /**
- * 현재 콘텐츠가 v0(n=13) 용량에 들어가는가.
- *
- * ECC 가 'auto' 면 **L 기준**으로 묻는다 — `encodeWithEcc` 가 H→M→L 순으로 시도해
- * 첫 성공을 쓰므로, 「auto 로 인코드된다」 ⟺ 「L 에 들어간다」 이기 때문이다.
- * M 으로 물으면 L 이면 들어갈 콘텐츠를 v0TR 로 밀어낸다.
+ * 자동 판정 — 페이로드를 못 읽으면 null. 종전 `contentFitsCellSurfaceV0()` 의
+ * try/catch 규약을 승계한다 (실패 시 v0TR = 종전 동작이라 새 실패 모드를 안 만든다).
  */
-function contentFitsCellSurfaceV0() {
+function resolveAutoYSafe() {
   try {
-    const tones = generatorState.tone === 3 ? 3 : 2;
-    const level = generatorState.eccLevel === 'auto' ? 'L' : generatorState.eccLevel;
-    const capacity = capacityForCellSurfaceFinal(
-      CENTRAL_V0_SOURCE_N, level, tones, CELL_SURFACE_FINAL_V0,
-    );
-    return payloadByteLength(normalPayloadText()) <= capacity.dataBytes;
+    return resolveAutoY({
+      payloadBytes: payloadByteLength(normalPayloadText()),
+      tones: generatorState.tone === 3 ? 3 : 2,
+      eccLevel: generatorState.eccLevel,
+    });
   } catch {
-    // 용량 조회가 실패하면 «안 들어간다» 로 본다 — 종전 동작(v0TR)과 같아서
-    // 이 수리가 새로운 실패 모드를 만들지 않는다.
-    return false;
+    return null;
   }
 }
 
@@ -10647,6 +10641,46 @@ function renderTypeA(cfg) {
   };
 }
 
+/**
+ * Type K 렌더 — 육각별(hexagram) 프레임.
+ *
+ * ⚠ **이 함수가 없어서 K 를 고르면 `renderTypeO` 로 떨어졌다** (2026-08-25 브라우저
+ * 확인에서 적발). 타입 카드·상태·인코더 디스패치를 다 붙여 놓고 렌더 분기만 빠지면
+ * 「고르면 Type O 코드가 나오는」 상태가 된다 — 정규식 테스트는 이 층을 못 본다.
+ *
+ * `sceneOptsForOA` 는 K 를 던진다(O/A 전용 계약). K 는 중앙 QR 이 없으므로
+ * (encodeK 가 centerQr 를 던진다) 바깥 코너 QR 만 얹는 단순한 옵션이다.
+ */
+function renderTypeK(cfg) {
+  const { fn, opts } = encodeOptsFor(cfg);
+  const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
+
+  const sceneOpts = { palette: paletteOf(cfg.presetName, cfg.faceGains), margin: 20 };
+  if (cfg.fallback.mode === 'corner') {
+    sceneOpts.qrText = cfg.qrText;
+    sceneOpts.qrCorner = cfg.fallback.corner;
+  }
+  const scene = buildScene(encoded, sceneOpts);
+
+  const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 2 });
+  const check = verifyRaster(raster, scene, encoded);
+  const bytes = payloadByteLength(cfg.text);
+  const selfCheck = selfCheckMarkup(
+    check,
+    'g445', { total: check.total, delta: check.minDelta.toFixed(3) },
+    'g446', { n: check.mismatches.length },
+  );
+  const verLabel = `K${encoded.version}${encoded.cornerMarker ? 'CM' : ''}`;
+  const info =
+    `${tf('g449', { type: 'K', ver: verLabel, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
+    tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
+    tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
+  return {
+    type: 'K', encoded, scene: withQuietZone(scene), info, selfCheck, sceneOpts,
+    finderPatternId: cfg.finderPatternId,
+  };
+}
+
 function renderTypeY(cfg) {
   const useWindow = cfg.fallback.mode === 'window';
   const { fn, opts } = encodeOptsFor(cfg);
@@ -10756,7 +10790,12 @@ function render() {
     syncFaceGainLabel();
     const cfg = buildConfig();
     const fullText = cfg.text;
-    const renderCurrent = () => (cfg.type === 'Y' ? renderTypeY(cfg) : cfg.type === 'A' ? renderTypeA(cfg) : renderTypeO(cfg));
+    // ⚠ 폴백이 «나머지 전부 O» 다 — 타입이 늘 때마다 여기 분기를 안 더하면
+    // 새 타입이 **조용히 O 로 렌더된다** (2026-08-25 K 에서 실제로 그랬다).
+    const renderCurrent = () => (cfg.type === 'Y' ? renderTypeY(cfg)
+      : cfg.type === 'A' ? renderTypeA(cfg)
+        : cfg.type === 'K' ? renderTypeK(cfg)
+          : renderTypeO(cfg));
     let result;
     try {
       result = renderCurrent();

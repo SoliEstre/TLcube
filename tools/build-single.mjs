@@ -163,6 +163,10 @@ const MODULE_ORDER = [
   // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
   // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,
   // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.
+  // generator-auto-y 는 cellSurfaceFinal·capacityY·locatorY 뒤여야 한다 (용량 사다리를
+  // 그 셋에서 유도한다). generator-render-config 와 같은 층 — 둘 다 «상태 → 인코더 옵션»
+  // 경계이고, 인라인 HTML 에 두면 테스트가 못 닿는 자리라 모듈로 뺀 것이다.
+  'generator-auto-y',
   'generator-render-config',
   'sceneY', 'verifyY',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
