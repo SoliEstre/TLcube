@@ -332,10 +332,13 @@ test('셀 표면 v0W 는 versionY 와 무관하게 Y1(n=21) 고정이고 사용�
  * 그 셋은 「이 조합이 합법인가」를 묻지 「누가 이 값을 고정하는가」는 안 묻는다.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-test('셀 표면 v0T·v0TR 은 Y2 명시 선택에서 n=25 로 간다 (하드핀 해제 · 신고 ②)', () => {
+test('셀 표면 v0T·v0TR·슬롯 계열은 Y2 명시 선택에서 n=25 로 간다 (하드핀 해제 · 신고 ②)', () => {
   const CASES = [
     [LOCATOR_PROFILE_CELL_SURFACE_V0T, 'v0t', { 21: 307, 25: 491 }],
     [LOCATOR_PROFILE_CELL_SURFACE_V0TR, 'v0tr', { 21: 309, 25: 493 }],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TY, 'v0ty', { 21: 252, 25: 436 }],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TRQ, 'v0trq', { 21: 270, 25: 454 }],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TRY, 'v0try', { 21: 254, 25: 438 }],
   ];
   for (const [profile, layout, data] of CASES) {
     for (const tone of [2, 3]) {
@@ -362,22 +365,23 @@ test('셀 표면 v0T·v0TR 은 Y2 명시 선택에서 n=25 로 간다 (하드핀
   }
 });
 
-test('QR 슬롯 계열(v0TY·v0TRQ·v0TRY)은 아직 n=21 전용이다 — 함께 열지 않았다', () => {
-  // 슬롯은 면 모서리 앵커가 아니라 n=25 위치 규범이 없다. 여기가 초록인 동안은
-  // «안 연 것» 이지 «못 본 것» 이 아니다 — 열 때 이 테스트가 먼저 빨개진다.
-  for (const [profile, layout] of [
-    [LOCATOR_PROFILE_CELL_SURFACE_V0TY, 'v0ty'],
-    [LOCATOR_PROFILE_CELL_SURFACE_V0TRQ, 'v0trq'],
-    [LOCATOR_PROFILE_CELL_SURFACE_V0TRY, 'v0try'],
+test('QR 슬롯 계열(v0TY·v0TRQ·v0TRY)은 n=25 로 열렸고 하드핀이 걷혔다', () => {
+  // 슬롯 원점 함수가 이미 n 을 받는다 (`centerQrSlotOriginFor`). n=25 충돌 실측이
+  // 겹침 0 을 냈으므로 NS 를 넓히고, 여기 상수도 함께 걷는다 — ②만 하고 ③을
+  // 빼면 아래 「하드핀 회귀 게이트」가 빨개진다.
+  for (const [profile, layout, data] of [
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TY, 'v0ty', 436],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TRQ, 'v0trq', 454],
+    [LOCATOR_PROFILE_CELL_SURFACE_V0TRY, 'v0try', 438],
   ]) {
-    for (const versionY of [0, 1, 2, undefined]) {
-      const opts = encodeOptionsForY({
-        tone: 2, versionY, fallback: { mode: 'window' }, locatorProfileY: profile,
-      });
-      assert.equal(opts.cellSurfaceLayout, layout);
-      assert.equal(opts.version, 1, layout + ' versionY=' + versionY);
-      assert.equal(encodeY(TEXT, opts).n, 21);
-    }
+    const opts = encodeOptionsForY({
+      tone: 2, versionY: 2, fallback: { mode: 'none' }, locatorProfileY: profile,
+    });
+    assert.equal(opts.cellSurfaceLayout, layout);
+    assert.equal(opts.version, 2, layout + ' versionY=2 하드핀이 남았다');
+    const encoded = encodeY(TEXT, opts);
+    assert.equal(encoded.n, 25);
+    assert.equal(encoded.capacity.dataCells, data, layout + '@25');
   }
 });
 

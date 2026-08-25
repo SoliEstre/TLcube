@@ -311,8 +311,10 @@ function toneHistogram(cells) {
 // 그 취지는 그대로다. 다만 **명시적 편입**이 한 번 일어났다: v0t·v0tr 에 n=25 를
 // 넣었다 (운영자 신고 「Y1에서 Y2로 먼저 넘어가야되는데 마커가 먼저 없어지는데?」).
 // 근거는 이 파일이 이미 재고 있다 — n=25 파인더 셀 수가 n=21 과 **같다**.
-// ⚠ 슬롯 계열(v0ty·v0trq·v0try)은 여전히 21 뿐이다: QR 슬롯은 변 앵커가 아니라
-//   n 마다 위치 규범이 새로 필요하고 그 규범이 아직 없다.
+// **의도적 갱신 (2026-08-25, 레인 QR25)** — 슬롯 계열(v0ty·v0trq·v0try)도
+// 명시 편입으로 [21, 25] 가 됐다. 슬롯 원점은 이미 n 을 받고, n=25 충돌 실측이
+// 겹침 0 을 냈다. 「기하가 계산할 수 있다 ≠ 지원 조합이다」는 그대로다 — 이번에도
+// NS 를 손으로 넓힌 것이지 기하 질의가 라인업을 넓힌 것이 아니다.
 test('CELL_SURFACE_FINAL_NS 는 **명시 편입**으로만 넓어진다 (기하가 저절로 넓히지 않는다)', () => {
   assert.deepEqual(CELL_SURFACE_FINAL_NS, {
     v0: [13],
@@ -325,18 +327,18 @@ test('CELL_SURFACE_FINAL_NS 는 **명시 편입**으로만 넓어진다 (기하�
     v0w2: [21],
     v0wy: [21],
     v0t: [21, 25],
-    v0ty: [21],
+    v0ty: [21, 25],
     v0tr: [21, 25],
-    v0trq: [21],
-    v0try: [21],
+    v0trq: [21, 25],
+    v0try: [21, 25],
   });
   assert.deepEqual(finalLayoutIdsForN(13), ['v0']);
   assert.deepEqual(finalLayoutIdsForN(21), ['v0t', 'v0tr', 'v0try', 'v0trq', 'v0ty']);
-  assert.deepEqual(finalLayoutIdsForN(25), ['v0t', 'v0tr']);
+  assert.deepEqual(finalLayoutIdsForN(25), ['v0t', 'v0tr', 'v0try', 'v0trq', 'v0ty']);
   assert.equal(finalLayoutIdForN(25), 'v0t');
-  // 드랍(v2r2)은 와이어에 남고, 새 편입(v0t·v0tr)이 앞이 아니라 **뒤**에 붙는다 —
+  // 드랍(v2r2)은 와이어에 남고, 새 편입이 앞이 아니라 **뒤**에 붙는다 —
   // 선언 순서가 곧 목록 순서다.
-  assert.deepEqual(allFinalLayoutIdsForN(25), ['v2r2', 'v0t', 'v0tr']);
+  assert.deepEqual(allFinalLayoutIdsForN(25), ['v2r2', 'v0t', 'v0tr', 'v0try', 'v0trq', 'v0ty']);
   assert.equal(hasFinalLayoutWireForN(25), true);
   assert.equal(wirePreferredFinalLayoutIdForN(25), 'v2r2');
 });

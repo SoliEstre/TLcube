@@ -81,10 +81,11 @@ const DROPPED_N21_LINEUP = Object.freeze([
 ]);
 
 function renderFinal(text, {
-  layout, version, tones = 2, pixelsPerUnit = 10, supersample = 2, margin = 16,
+  layout, version, tones = 2, eccLevel = 'M',
+  pixelsPerUnit = 10, supersample = 2, margin = 16,
 } = {}) {
   const encoded = encodeY(text, {
-    cellSurfaceLayout: layout, version, tones, eccLevel: 'M',
+    cellSurfaceLayout: layout, version, tones, eccLevel,
   });
   // 중앙 QR 변형(v0xq · v0wq)은 QR 이 레이아웃 정의의 일부라 qrText 가 필수다.
   const scene = buildSceneY(encoded, {
@@ -198,6 +199,39 @@ test('v0TRY 왕복 — v0try (n=21) × 2톤/3톤 (스위치 없음)', {
     assert.equal(result.hypothesis.cellSurfaceLayout, 'v0try',
       'v0try@' + tones + '톤 이 ' + result.hypothesis.cellSurfaceLayout + ' 로 읽혔다');
     assert.equal(result.hypothesis.n, 21);
+  }
+});
+
+/**
+ * **슬롯 계열 n=25 왕복** (레인 QR25, 2026-08-25) — 세 레이아웃 × n=21·25 × ECC L/M/H.
+ * 기존 v0T·v0TR n=25 테스트와 같은 파이프라인: encodeY → buildSceneY → rasterize →
+ * decodeFrontend. 슬롯 레이아웃은 qrText 가 필수 (`renderFinal` 이 hasCenterQrSlot 로
+ * 채운다). 레이아웃 id 와 n 까지 단언한다.
+ */
+test('슬롯 계열 왕복 — v0ty · v0trq · v0try × n=21/25 × ECC L/M/H (스위치 없음)', {
+  timeout: 600_000,
+}, () => {
+  const LAYOUTS = ['v0ty', 'v0trq', 'v0try'];
+  for (const layout of LAYOUTS) {
+    for (const { version, n } of [{ version: 1, n: 21 }, { version: 2, n: 25 }]) {
+      for (const eccLevel of ['L', 'M', 'H']) {
+        const fixture = renderFinal(PAYLOAD, {
+          layout, version, tones: 2, eccLevel,
+        });
+        assert.equal(fixture.encoded.n, n, layout + ' version=' + version);
+        assert.equal(fixture.encoded.eccLevel, eccLevel);
+        const result = decodeLab(fixture.raster);
+        assert.equal(result.ok, true, JSON.stringify({
+          layout, n, eccLevel, reason: result.reason,
+        }));
+        assert.equal(result.text, PAYLOAD, layout + '@' + n + ' ECC-' + eccLevel);
+        assert.equal(result.hypothesis.cellSurfaceLayout, layout,
+          layout + '@' + n + ' ECC-' + eccLevel + ' 이 '
+          + result.hypothesis.cellSurfaceLayout + ' 로 읽혔다');
+        assert.equal(result.hypothesis.n, n);
+        assert.equal(result.eccLevel, eccLevel);
+      }
+    }
   }
 });
 

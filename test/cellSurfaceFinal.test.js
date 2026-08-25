@@ -270,7 +270,9 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→**v0t**/Y1 · 25→**�
   // v0try 는 라인업 끝에 붙을 뿐 기본을 가져가지 않는다.
   assert.deepEqual([...finalLayoutIdsForN(21)], ['v0t', 'v0tr', 'v0try', 'v0trq', 'v0ty']);
   // **의도적 갱신 (2026-08-25)** — n=25 편입. 순서는 선언 순서(v0t → v0tr)다.
-  assert.deepEqual([...finalLayoutIdsForN(25)], ['v0t', 'v0tr']);
+  // **의도적 갱신 (2026-08-25, 레인 QR25)** — 슬롯 계열 셋도 n=25 로 열렸다.
+  // 선언 순서대로 v0try · v0trq · v0ty 가 뒤에 붙는다. 기본은 여전히 v0t.
+  assert.deepEqual([...finalLayoutIdsForN(25)], ['v0t', 'v0tr', 'v0try', 'v0trq', 'v0ty']);
   assert.deepEqual([...finalLayoutIdsForN(11)], []);
   // 와이어 질의는 드랍을 보지 않는다 — 발행된 v2r2@21/@25 · v0xq@21 · v0x@21 ·
   // **v0w 계열@21** 프레임의 판독 경로다.
@@ -311,14 +313,14 @@ test('n → 라인업 기본·버전 (13→v0/Y0 · 21→**v0t**/Y1 · 25→**�
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0xq], [21]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0w], [21]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0wy], [21]);
-  // **의도적 갱신 (2026-08-25)** — v0t·v0tr 만 n=25 를 갖는다 (슬롯 없는 계열).
-  // v0ty·v0trq·v0try 는 21 뿐이다: QR 슬롯은 변 앵커가 아니라 n 마다 위치 규범이
-  // 새로 필요하고, 그 규범이 아직 없다. 「기하가 계산할 수 있다 ≠ 지원 조합이다.」
+  // **의도적 갱신 (2026-08-25)** — v0t·v0tr 이 n=25 를 갖는다 (슬롯 없는 계열).
+  // **의도적 갱신 (2026-08-25, 레인 QR25)** — 슬롯 계열(v0ty·v0trq·v0try)도
+  // [21, 25] 다. 슬롯 원점 함수가 이미 n 을 받고, n=25 충돌 실측이 겹침 0 을 냈다.
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0t], [21, 25]);
   assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0tr], [21, 25]);
-  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0ty], [21]);
-  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0trq], [21]);
-  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0try], [21]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0ty], [21, 25]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0trq], [21, 25]);
+  assert.deepEqual([...CELL_SURFACE_FINAL_NS.v0try], [21, 25]);
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v0, 'cell-surface-v0');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v2r2, 'cell-surface-v2r2');
   assert.equal(CELL_SURFACE_FINAL_PROFILE.v1r2, 'cell-surface-v1r2');
@@ -869,14 +871,16 @@ test('v0X 구조 — NW16 · SE36 · NE6 · SW6 + 단독 (14,20), SE 는 3면 �
 // 「면 모서리 기준 배치」(SPEC §4.11)로 같은 블록을 n=25 에 인스턴스화한 것이라
 // 유도 원천이 n=21 과 **같다** — 그래서 여기 묶는 것이 특히 값이 있다: 원천에 mid 가
 // 되살아나면 두 크기에서 함께 터진다.
-test('전 정본 mid(1) 금지 — 열일곱 인스턴스 어디에도 mid 면이 없다 (v0X 정규화 4면 고정)', () => {
+// 의도적 갱신 «슬롯 계열 n=25» (2026-08-25, 레인 QR25): **스무**가 됐다
+// (v0ty@25 · v0trq@25 · v0try@25). 파인더 셀 수가 n=21 과 같다.
+test('전 정본 mid(1) 금지 — 스무 인스턴스 어디에도 mid 면이 없다 (v0X 정규화 4면 고정)', () => {
   // ⚠ 이 목록은 `CELL_SURFACE_FINAL_IDS × NS` 전수여야 한다 — 하나라도 빠지면
   // 그 레이아웃만 규칙 밖으로 샌다 (v0xq 편입 때 실제로 빠져 있었다).
   const instances = [
     ['v0', 13], ['v2r2', 21], ['v2r2', 25], ['v1r2', 21], ['v0x', 21], ['v0xq', 21],
     ['v0w', 21], ['v0wq', 21], ['v0w2', 21], ['v0wy', 21], ['v0t', 21], ['v0ty', 21],
     ['v0tr', 21], ['v0trq', 21], ['v0try', 21],
-    ['v0t', 25], ['v0tr', 25],
+    ['v0t', 25], ['v0tr', 25], ['v0ty', 25], ['v0trq', 25], ['v0try', 25],
   ];
   const enumerated = CELL_SURFACE_FINAL_IDS
     .flatMap((id) => CELL_SURFACE_FINAL_NS[id].map((n) => id + '@' + n)).sort();
@@ -902,9 +906,11 @@ test('전 정본 mid(1) 금지 — 열일곱 인스턴스 어디에도 mid 면�
   //   v0t·v0tr 과 **같은 것**이 핵심이다: 면 모서리 배치라 블록 크기가 안 변한다.
   //   총계 3345 → 3963 이고 차이 618 = (104 + 102) × 3 — 새 인스턴스가 mid 를 하나도
   //   안 들여왔다는 뜻이다 (mid 가 있었으면 위 단언이 먼저 터진다).
+  // 의도적 갱신 «슬롯 계열 n=25» (2026-08-25) — 항 셋(**95 · 77 · 93**)이 늘었다.
+  //   값이 n=21 의 v0ty·v0trq·v0try 와 **같다**. 3963 → 4758, 차이 795 = (95+77+93)×3.
   assert.equal(faces,
     (30 + 74 + 74 + 80 + 65 + 42 + 70 + 45 + 97 + 67 + 104 + 95 + 102 + 77 + 93
-      + 104 + 102) * 3,
+      + 104 + 102 + 95 + 77 + 93) * 3,
     '훑은 면 수가 파인더 총계와 다르다');
 
   // 정규화된 네 자리의 새 값 — (0,3)L=0 · (14,20)L/R=2 · (19,19)R=2.

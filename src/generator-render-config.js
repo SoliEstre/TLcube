@@ -62,7 +62,9 @@ export function encodeOptionsForY(state) {
   // v0T = **T 계열 최종 파인더** (NW 16 + A 9 + N팔 10 + NE 36 + W 24 + SE 9 = 104셀) —
   //       n=21 데이터 307 · **n=25 데이터 491** (2026-08-25 편입. 면 모서리 기준 배치라
   //       파인더 셀 수가 n 에 불변이고, 늘어난 면적이 그대로 데이터로 간다) ·
-  // v0TY = v0T 파생 (먼 코너 QR 슬롯 8² — 파인더 95 · 슬롯 64 · 데이터 252, n=21 전용).
+  // v0TY = v0T 파생 (먼 코너 QR 슬롯 8² — 파인더 95 · 슬롯 64 ·
+  //       n=21 데이터 252 · **n=25 데이터 436** (2026-08-25 편입. 슬롯 원점은
+  //       `centerQrSlotOriginFor` 가 이미 n 을 받는다 — far = (n−m, n−m))).
   //
   // ⚠ **어느 분기가 version 을 고정하는지가 이 함수의 실질**이다. 레이아웃이 여러 n 을
   //   지원하면 고정을 걷어야 하고, 안 걷으면 «사다리·카드 목록은 Y2 를 고르는데 렌더만
@@ -168,11 +170,11 @@ export function encodeOptionsForY(state) {
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TY) {
     return {
       tones: tone === 3 ? 3 : 2,
-      // v0TY 는 **아직** n=21 뿐이다 — Y1 로 고정한다. v0T·v0TR 이 n=25 로 열린
-      // 2026-08-25 에도 이 셋(v0TY·v0TRQ·v0TRY)은 안 열었다: QR 슬롯은 면 모서리
-      // 앵커가 아니라 **n=25 위치 규범이 없다**. `CELL_SURFACE_FINAL_NS` 가 정본이고
-      // 여기 상수는 그 사실의 사본이니, 거기가 [21, 25] 가 되면 여기도 같이 걷는다.
-      version: 1,
+      // ⭐ **하드핀 해제 (2026-08-25, 레인 QR25)** — 「v0TY 는 n=21 뿐이다」는
+      // `centerQrSlotOriginFor` 가 이미 n 을 받기 전의 서술이다. NS 가 [21, 25] 가
+      // 됐으므로 여기 상수도 함께 걷는다 (v0T·v0TR 과 같은 사고 — 라인업만 넓히고
+      // 하드핀을 안 걷으면 사다리는 Y2 를 고르는데 렌더는 Y1).
+      version: versionY === 2 ? 2 : 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TY),
     };
@@ -192,8 +194,9 @@ export function encodeOptionsForY(state) {
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ) {
     return {
       tones: tone === 3 ? 3 : 2,
-      // v0TRQ 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
-      version: 1,
+      // ⭐ **하드핀 해제 (2026-08-25, 레인 QR25)** — v0TY 와 같은 근거다.
+      // 슬롯은 seam (0,0) 이라 n 과 무관하고, NS 가 [21, 25] 다.
+      version: versionY === 2 ? 2 : 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TRQ),
     };
@@ -201,8 +204,9 @@ export function encodeOptionsForY(state) {
   if (locatorProfileY === LOCATOR_PROFILE_CELL_SURFACE_V0TRY) {
     return {
       tones: tone === 3 ? 3 : 2,
-      // v0TRY 도 n=21 뿐이다 — 버전 선택과 무관하게 Y1 로 고정한다.
-      version: 1,
+      // ⭐ **하드핀 해제 (2026-08-25, 레인 QR25)** — v0TY 와 같은 근거다.
+      // 슬롯은 far (n−m, n−m) 이라 이미 n 일반화돼 있고, NS 가 [21, 25] 다.
+      version: versionY === 2 ? 2 : 1,
       cellSurface: true,
       cellSurfaceLayout: assertCellSurfaceFinalId(CELL_SURFACE_FINAL_V0TRY),
     };
