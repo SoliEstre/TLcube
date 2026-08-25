@@ -541,11 +541,14 @@ function buildItems() {
       className: FINDER_CLASS[3],
       kind: KIND_SEAT,
       origin: 'src/markerK.js markerCellsK · src/formatK.js star 축 K*CM 행',
-      renderPath: 'encodeK.js cornerMarker: markerCellsK → palette.levels (digit 알파벳)',
+      renderPath: 'encodeK.js cornerMarker: markerCellsK(k, h2co3TonesByKeyK(k)) '
+        + '→ 27셀 절대 톤 · 꼭짓점 3셀은 digit 알파벳',
       coordBasis: COORD_VERTEX,
       innerSplit: '꼭짓점 기준 (정·역 두 계열)',
-      toneAxis: TONE_CELL_COLOR + '. 정본 H2CO3 톤은 30 중 18 이 비-순열이라 미채택 '
-        + '(계약 K-8.2) — 발자국만 정본, 톤은 digit 알파벳 재배정 (markerA 전례)',
+      toneAxis: TONE_CELL_COLOR + '. **정본 H2CO3 톤 채택** (계약 K-8.2, 2026-08-25) — '
+        + '30셀 중 27 에 절대 톤을 싣는다 (18 이 비-순열이라 digit 알파벳이 못 그리는 무늬). '
+        + '별 꼭짓점 3셀만 digit 유지 — 정본 톤 (0,0,0) 이 전면 동톤이라 앵커 순위가 죽는다 '
+        + '(encodeA 가 H2O 에 하는 것과 같은 계약이되, A 는 마커가 앵커에 안 닿아 예외가 없다)',
       cells: String(cells.length),
       renderable: 'digit-only (반전 삼각 ' + JSON.stringify(MARKER_INVERTED_DIGITS_K) + ')',
       consumer: '생성기 outerSeat k-cm(Type K) · encodeK cornerMarker · decode-k (값 8, k)',

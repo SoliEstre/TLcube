@@ -32,6 +32,7 @@ import {
   dataCellsInScanOrderKMarker,
   fillerCellsKMarker,
   orientationMarginKMarker,
+  h2co3TonesByKeyK,
 } from '../src/markerK.js';
 import {
   ANCHOR_INVERTED_DIGIT,
@@ -53,6 +54,7 @@ import { encodeK } from '../src/encodeK.js';
 import { VERSIONS_K, capacityForK } from '../src/capacityK.js';
 import {
   hexLayoutFrom, idealAgreement, hexAuxCoordMaps, hexHypothesis,
+  hexRotationHypotheses, scoreLayoutOrientation,
   FACE_IDENTITY, FACE_CYCLE_CW, FACE_CYCLE_CW2, UNVERIFIED_ORIENTATION_SCORER,
 } from '../src/decoder/orientation-scorer.js';
 
@@ -153,6 +155,56 @@ test('① 방향 margin — orientation-scorer 정본으로 1.0000 (게이트 0.
     for (const phase of scored.phases) {
       assert.equal(phase.agreement, phase.id === 'identity' ? 1 : 0, phase.id);
     }
+  }
+});
+
+test('①-b 정본 H2CO3 톤 채택 — 27셀에 절대 톤 · 꼭짓점 3셀은 digit (계약 K-8.2)', () => {
+  // 「정본 톤은 안 쓴다」였던 구 서술의 **양성 전환**이다 (2026-08-25).
+  // 운영자 지적: 「H·H2O·CO2 는 비순열도 넣지 않았나? 왜 K 에는 못 넣지?」 — 맞았다.
+  for (const k of KS) {
+    const tones = h2co3TonesByKeyK(k);
+    const cells = markerCellsK(k, tones);
+    const toned = cells.filter((c) => c.tones !== undefined);
+    const plain = cells.filter((c) => c.tones === undefined);
+    assert.equal(toned.length, MARKER_CELL_COUNT_K - 3, `k=${k}: 절대 톤 셀이 27 이 아니다`);
+    assert.equal(plain.length, 3, `k=${k}: digit 유지 셀이 3 이 아니다`);
+    // digit 을 지키는 셋은 **정확히 별 꼭짓점 앵커**여야 한다 — 다른 셀이 새면
+    // 심볼에 구멍이 나고, 꼭짓점이 칠해지면 앵커가 죽는다.
+    const vertexSet = vertexAnchorPositionSetK(k);
+    for (const c of plain) {
+      assert.ok(vertexSet.has(`${c.q},${c.r}`),
+        `k=${k}: digit 유지 셀 ${c.q},${c.r} 가 꼭짓점 앵커가 아니다`);
+      assert.equal(c.label, 'W');
+    }
+    // 심볼다움 — digit 알파벳이 못 그리는 무늬가 실재해야 한다 (finder-H·finder-CO2 규약).
+    const nonPermutation = toned.filter((c) => new Set([c.tones.T, c.tones.L, c.tones.R]).size < 3);
+    assert.ok(nonPermutation.length > 0,
+      `k=${k}: 비-순열 셀이 없다 — digit 알파벳으로 충분했다는 뜻이 된다`);
+    assert.equal(nonPermutation.length, 15,
+      `k=${k}: 비-순열 27셀 중 15 여야 한다 (정본 18 − 꼭짓점 3)`);
+  }
+});
+
+test('①-c 방향 margin 은 **두 층**이 다르다 — 정본 톤은 ρ-공변이다', () => {
+  // ⚠ 이 테스트가 있는 이유: `orientationMarginKMarker` 는 **digit 층**을 보고하는데
+  //    렌더는 27셀을 정본 톤으로 칠한다. 두 층이 조용히 갈리면 「margin 1.0」이라는
+  //    주장이 화면에 대해 거짓이 된다. 그래서 칠한 층도 **값으로** 잠근다.
+  //
+  //    대조군 (같은 자로 실측): **A-CM 도 정본 H2O 톤에서 0.6667** 이다. 즉 정본 톤
+  //    채택이 margin 을 양보하는 것은 A 에서 이미 받아들인 거래이고 K 만의 문제가 아니다.
+  //    둘 다 게이트 0.035 보다 한참 위다.
+  for (const k of KS) {
+    assert.equal(orientationMarginKMarker(k).margin, 1, `k=${k}: digit 층`);
+    const painted = scoreLayoutOrientation(
+      hexLayoutFrom(markerCellsK(k, h2co3TonesByKeyK(k)).map((c) => ({
+        q: c.q, r: c.r, tones: c.tones ?? digitToRanks(c.digit),
+      }))),
+      hexRotationHypotheses(),
+    );
+    assert.equal(painted.orientationMargin.toFixed(4), '0.5667', `k=${k}: 칠한 층`);
+    assert.ok(painted.orientationMargin
+      >= UNVERIFIED_ORIENTATION_SCORER.minimumOrientationMargin,
+    `k=${k}: 칠한 층이 게이트 아래로 내려갔다`);
   }
 });
 

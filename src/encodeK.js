@@ -34,6 +34,7 @@ import {
   capacityForKMarker,
   chooseVersionKMarker,
   markerCellsK,
+  h2co3TonesByKeyK,
   patchReferenceCellsKMarker,
   dataCellsInScanOrderKMarker,
   fillerCellsKMarker,
@@ -201,9 +202,21 @@ export function encodeK(text, options = {}) {
   // 반전 꼭짓점 3셀은 마커 발자국 안이면서 앵커이고, (다)안에서 두 digit 이 같은
   // 값이라 뒤에 오는 앵커가 role 만 'anchor' 로 덮는다 — 회계를 «한 번» 세는
   // roleOfKMarker 와 같은 우선순위다 (markerK.js 헤더 §3).
+  // ⭐ **정본 H2CO3 톤 채택 (2026-08-25, 계약 K-8.2)** — encodeA 가 H2O 에 하는 것과
+  //    같은 계약이다(`markerCellsA(k, h2oTonesByKeyA(k))`). 운영자 지적: 「H·H2O·CO2 는
+  //    비-순열도 넣지 않았나? 왜 K 에는 못 넣지?」 — 맞다. 못 넣는 게 아니라 K-8.2 가
+  //    미해소로 남아 있었을 뿐이다. digit 은 그대로 두고 `tones` 를 얹는다
+  //    (scene.js §셀 한 면의 색 — entry.tones 가 있으면 파인더 축 절대 톤으로 그린다).
+  //
+  // ⚠ 별 꼭짓점 3셀은 톤 표에 **없다**(§H2CO3_VERTEX_KEEPS_DIGIT) — 정본 톤이 전면
+  //   동톤 (0,0,0) 이라 앵커 순위가 사라지기 때문이다. 그리고 설령 실려도 **아래 앵커
+  //   패스가 role 과 함께 덮는다** — 쓰기 순서가 그 결정을 구조적으로 한 번 더 지킨다.
   if (cornerMarker) {
-    for (const c of markerCellsK(k)) {
-      cellDigits.set(cellKey(c.q, c.r), { digit: c.digit, role: 'marker' });
+    const tones = h2co3TonesByKeyK(k);
+    for (const c of markerCellsK(k, tones)) {
+      const entry = { digit: c.digit, role: 'marker' };
+      if (c.tones) entry.tones = c.tones;
+      cellDigits.set(cellKey(c.q, c.r), entry);
     }
   }
 

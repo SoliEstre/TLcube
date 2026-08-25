@@ -18,10 +18,28 @@
  * `test/markerK-measure.mjs` 가 이 유도의 k=4 산출이 정본 H2CO3 `userNonData`
  * 30셀과 **집합 동일**(누락 0·초과 0)임을 잰다. 아래 로드 자기검증도 같은 대조를 한다.
  *
- * **정본 톤은 안 쓴다** — H2CO3 30셀 중 18셀이 비-순열이라 Type K 알파벳(순위 순열)
- * 으로 표현이 안 된다 (계약 K-5). markerA 가 H2O 에서 한 것과 같은 처리를 한다:
- * 발자국은 정본, **톤은 digit 알파벳 안에서 재배정**. 정본 톤 «생성» 채택
- * (= 렌더러 계약 변경)은 계약 **K-8.2 미해소**로 남는다 — 이 레인 범위 밖이다.
+ * ⭐ **정본 톤 채택 (2026-08-25 — 계약 K-8.2 해소)**
+ *
+ * 구 서술은 「정본 톤은 안 쓴다 — 비-순열이라 표현이 안 된다」였다. 그 문장은 **digit
+ * 알파벳 층에서만 참**이고, 렌더러 계약은 2026-08-20 에 이미 열려 있었다 (`scene.js` 는
+ * `entry.tones` 가 있으면 면별 절대 톤을 파인더 축으로 그린다). encodeA 는 그때부터
+ * H2O 정본 톤을 실어 왔다 (`markerCellsA(k, h2oTonesByKeyA(k))`). 운영자 지적으로 드러난
+ * 사실: **K 만 그 배선이 없었다** — 못 넣은 게 아니라 K-8.2 를 레인 범위 밖으로 미뤄 둔 것.
+ *
+ * 실측이 세 가지를 확인했다 (`.agent/_remote/probes/h2co3.mjs`, k=4 정본 대조):
+ *   ① 유도 30셀 ≡ 정본 `userNonData` (누락 0 · 초과 0)
+ *   ② **A 계열 21셀의 정본 톤이 H2O 표와 21/21 같다** — 「H2CO3 = H2O + 반전삼각」
+ *      분해가 발자국만이 아니라 **톤 축에서도** 성립한다는 독립 교차검증이다.
+ *      그래서 이 모듈은 A 계열 톤을 새로 적지 않고 `h2oTonesByKeyA` 를 재사용한다.
+ *   ③ 비-순열 18/30 (계약 K-5 서술과 일치)
+ *
+ * ⚠ **양보한 것: 방향 margin.** 정본 톤은 ρ-공변이다(코너 4·5 가 코너 3 의 면 순환).
+ *   그래서 «칠한 층» 의 방향 margin 은 1.0000 → **0.5667** 이 된다. 이것은 K 만의
+ *   문제가 아니다 — **A-CM 도 이미 0.6667 이다**(같은 자로 실측한 대조군). 즉 정본 톤
+ *   채택이 margin 을 양보하는 것은 이 프로젝트가 A 에서 이미 받아들인 거래이고,
+ *   `orientationMarginAMarker`/`orientationMarginKMarker` 가 **digit 층**을 보고하는
+ *   관습도 둘이 같다. 게이트 0.035 대비로는 두 값 모두 한참 위다.
+ *   두 층의 값은 `test/markerK.test.js` 가 **둘 다** 잠근다 — 조용히 갈리지 않게.
  *
  * ─────────────────────────────────────────────────────────────────────────
  * 2. (다)안 «앵커 위 마커» — 왜 성립하는가 (실측이 답했다)
@@ -95,7 +113,9 @@ import {
   regionCellsK,
 } from './placementK.js';
 import { dataCellsInScanOrderK } from './layoutK.js';
-import { markerCellsA, MARKER_LOCAL_DIGITS_A, MARKER_CELL_COUNT_A } from './markerA.js';
+import {
+  markerCellsA, h2oTonesByKeyA, MARKER_LOCAL_DIGITS_A, MARKER_CELL_COUNT_A,
+} from './markerA.js';
 import { AutoplaceError } from './autoplaceY.js';
 import { digitToRanks } from './lehmer.js';
 import { maxBytesForSymbols } from './capacity.js';
@@ -187,13 +207,85 @@ export function invertedTrianglesK(k) {
 }
 
 /**
- * K-CM 마커 30셀 — A 계열 21(코너 0..2, markerA 정본) + 반전 삼각 9(코너 3..5).
- * digit 은 전부 순열 알파벳 안이다 (정본 톤 미채택 — 모듈 헤더 §1).
- * @param {number} k
- * @returns {{q:number,r:number,digit:number,label:string,corner:number,
- *            series:'A'|'inverted',role:'marker'}[]}
+ * 반전 삼각의 정본 H2CO3 톤 — 코너 3(기준) 하나만 적고 나머지는 ρ 면 순환으로
+ * **유도**한다. 손 표를 세 벌 적으면 회전 대칭이 깨져도 아무도 모른다.
+ *
+ * 실측 (`.agent/_remote/probes/h2co3.mjs`, k=4 정본 대조):
+ *   코너 3: W (0,0,0) · N0 (2,2,0) · N1 (2,2,0)
+ *   코너 4: W (0,0,0) · N0 (0,2,2) · N1 (0,2,2)   ← 코너 3 의 면 1-순환
+ *   코너 5: W (0,0,0) · N0 (2,0,2) · N1 (2,0,2)   ← 면 2-순환
+ * 세 코너의 W 가 전부 (0,0,0) 이고 N0·N1 이 코너 안에서 같다 — 그래서 기준 한 벌이면 된다.
  */
-export function markerCellsK(k) {
+const INVERTED_LOCAL_TONES_K = Object.freeze({
+  W: Object.freeze({ T: 0, L: 0, R: 0 }),
+  N0: Object.freeze({ T: 2, L: 2, R: 0 }),
+  N1: Object.freeze({ T: 2, L: 2, R: 0 }),
+});
+
+/** 면 (T,L,R) 을 shift 칸 순환. ρ(120°)가 면에 하는 일과 같은 사상이다. */
+function cycleFaces(tones, shift) {
+  const order = ['T', 'L', 'R'];
+  const out = {};
+  for (let i = 0; i < order.length; i += 1) {
+    out[order[(i + shift) % order.length]] = tones[order[i]];
+  }
+  return Object.freeze(out);
+}
+
+/**
+ * ⛔ **별 꼭짓점 W 는 절대 톤에서 뺀다** (계약 K-8.2 부분 채택, 2026-08-25).
+ *
+ * W 의 정본 톤은 `(0,0,0)` — **전면 동톤**이다. 그런데 그 셀은 동시에 **별 꼭짓점
+ * 앵커**이고(계약 K-2), 앵커 판정은 digit 순위 (2,0,1) 를 읽는다. 평평하게 칠하면
+ * 순위가 사라져 앵커가 죽는다 — A-CM 은 마커가 꼭짓점에 안 닿아 이 충돌이 없었다
+ * (markerA §2). 모듈 헤더 §2 가 「그 3셀은 앵커 digit 과 마커 톤을 **동시에** 만족해야
+ * 한다」고 적은 자리이고, (다)안의 해(digit = 앵커 digit)는 **digit 영역에서만** 성립한다.
+ *
+ * 그래서 30셀 중 **27셀**에만 정본 톤을 싣는다. 남는 비-순열은 15셀이라
+ * 「digit 알파벳이 못 그리는 무늬」라는 심볼다움의 근거는 그대로다.
+ * 전부 칠하는 판을 실측한 결과는 §probes/h2co3 왕복 표에 있다.
+ */
+export const H2CO3_VERTEX_KEEPS_DIGIT = true;
+
+/**
+ * 정본 H2CO3 톤을 k 의 마커 좌표로 전개한 표 ("q,r" → {T,L,R}).
+ *
+ * A 계열 21셀은 **H2O 표를 그대로 재사용**한다 — 실측으로 21/21 같았다
+ * (H2CO3 = H2O + 반전삼각 분해가 발자국만이 아니라 톤 축에서도 성립한다는
+ * 독립 교차검증이다). 사본을 새로 적지 않는 이유가 그것이다.
+ *
+ * @param {number} k
+ * @param {{includeVertex?: boolean}} [options] `includeVertex: true` 는 **실측용**이다 —
+ *   꼭짓점까지 칠하면 앵커가 죽는지 재는 경로. 생산 기본값은 false.
+ */
+export function h2co3TonesByKeyK(k, options = {}) {
+  assertK(k);
+  const includeVertex = options.includeVertex === true;
+  const map = h2oTonesByKeyA(k);
+  invertedTrianglesK(k).forEach((cells, corner) => {
+    for (const c of cells) {
+      if (c.label === 'W' && !includeVertex) continue;
+      map.set(key(c.q, c.r), cycleFaces(INVERTED_LOCAL_TONES_K[c.label], corner));
+    }
+  });
+  return map;
+}
+
+/**
+ * K-CM 마커 30셀 — A 계열 21(코너 0..2, markerA 정본) + 반전 삼각 9(코너 3..5).
+ * digit 은 전부 순열 알파벳 안이다.
+ *
+ * `tonesByKey` 를 주면 그 표에 **있는 셀에만** 절대 톤 `tones: {T,L,R}` 가 실린다
+ * (markerA 는 «전부 있어야 한다» 로 던지는데, K 는 꼭짓점 3셀을 **의도적으로 뺀다** —
+ * §H2CO3_VERTEX_KEEPS_DIGIT. 그래서 여기서는 부분 적용이 계약이다).
+ * digit 은 그대로 남는다 — digit 은 렌더 알파벳 계약이고 tones 는 그 위에 얹는 층이다.
+ *
+ * @param {number} k
+ * @param {Map<string,{T:number,L:number,R:number}>} [tonesByKey]
+ * @returns {{q:number,r:number,digit:number,label:string,corner:number,
+ *            series:'A'|'inverted',role:'marker',tones?:{T:number,L:number,R:number}}[]}
+ */
+export function markerCellsK(k, tonesByKey) {
   assertK(k);
   const out = markerCellsA(k).map((c) => ({ ...c, series: 'A' }));
   // 반전 코너 번호는 A 계열 코너 수 뒤에서 이어진다 (상수 3 을 손으로 적지 않는다).
@@ -211,7 +303,20 @@ export function markerCellsK(k) {
       });
     }
   });
-  return out;
+  if (tonesByKey === undefined) return out;
+  return out.map((cell) => {
+    const tones = tonesByKey instanceof Map
+      ? tonesByKey.get(key(cell.q, cell.r))
+      : tonesByKey[key(cell.q, cell.r)];
+    if (!tones) return cell; // 꼭짓점 3셀 — digit 경로 유지가 계약이다
+    for (const face of ['T', 'L', 'R']) {
+      const tone = tones[face];
+      if (tone !== 0 && tone !== 1 && tone !== 2) {
+        throw new RangeError('markerK: ' + key(cell.q, cell.r) + '.' + face + ' 톤이 0/1/2 가 아니다: ' + tone);
+      }
+    }
+    return { ...cell, tones: { T: tones.T, L: tones.L, R: tones.R } };
+  });
 }
 
 export function markerPositionSetK(k) {
@@ -375,6 +480,11 @@ export function fillerCellsKMarker(k) {
  * 마커 30셀 × 3면 = 90 슬롯의 방향 margin. 사상은 «좌표 회전 ∘ 면 순환» 합성이고
  * 채점은 `decoder/orientation-scorer.js` 정본이다 — markerO/markerA 의 margin 규약과
  * 같은 자다 (이 모듈은 자를 새로 만들지 않는다).
+ *
+ * ⚠ **이 함수가 재는 것은 «digit 층» 이다** — 렌더는 2026-08-25 부터 27셀에 정본 톤을
+ *   칠하므로 화면의 무늬는 이것과 다르다 (헤더 §1 ⚠). 층을 바꾸지 않는 이유는
+ *   `orientationMarginAMarker` 가 A 에서 **정확히 같은 관습**이기 때문이다 — 한쪽만
+ *   바꾸면 두 자가 갈려서 A·K 비교가 불가능해진다. 칠한 층의 값은 테스트가 따로 잠근다.
  */
 export function orientationMarginKMarker(k) {
   const layout = hexLayoutFrom(
