@@ -49,6 +49,8 @@ import {
   wirePreferredFinalLayoutIdForN,
   CELL_SURFACE_FINAL_FORMAT_WIRE,
   CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
+  // 허용 n 정본 — format.n 이 없을 때의 유도 원천 (아래 §finalN 참조).
+  CELL_SURFACE_FINAL_NS,
 } from './cellSurfaceFinal.js';
 import {
   CHUNK_BYTES,
@@ -502,15 +504,32 @@ function resolveProfile(format) {
       }
       let finalN = requestedN;
       if (finalN === undefined) {
-        if (finalIdHint === 'v0') finalN = 13;
-        else if (finalIdHint === 'v1r2' || finalIdHint === 'v0x' || finalIdHint === 'v0xq'
-          || finalIdHint === 'v0w' || finalIdHint === 'v0t' || finalIdHint === 'v0ty'
-          || finalIdHint === 'v0tr' || finalIdHint === 'v0trq'
-          || finalIdHint === 'v0try') {
-          finalN = 21;
-        }
-        else {
-          throw new RangeError('신세대 셀 표면 v2r2 는 format.n(21|25) 이 필요하다');
+        // 허용 n 의 정본은 `CELL_SURFACE_FINAL_NS` 다 — 여기에 손 목록을 두지 않는다.
+        // 여기엔 「v0 → 13, 그 밖의 T/W/X 계열 → 21」 이라는 사본이 있었고 **이미
+        // 썩어 있었다**: v0wq·v0w2·v0wy 가 목록에서 빠져, 합법 n 이 21 하나뿐인데도
+        // 「v2r2 는 format.n 이 필요하다」로 던졌다 (실측 2026-08-25, 3종 전부).
+        //
+        // ⚠ **복수 n 이면 유도하지 않고 던진다.** 2026-08-25 에 v0t·v0tr 이
+        // [21, 25] 로 열리면서(9ce2883) 「없으면 21」 은 잘못된 회계를 고르는 길이
+        // 됐다 — v0t@25 를 21 로 읽어도 아래 `assertCellSurfaceFinalN` 은 21 이
+        // NS 에 있으니 **안 던진다**. 구 동작 실측: v0t@25(491셀)·v0tr@25(493셀)이
+        // 21 회계(307·309)로 내려가 `mask: scan-order digit 수가 맞지 않는다` 로
+        // 죽었다 — 실패하긴 하되 **원인을 엉뚱한 단계에 씌운다**. 셀 수가 우연히
+        // 같아지는 조합이 생기면 그때는 조용히 틀린 답이 된다.
+        //
+        // 던진 예외는 `decodeCells` 가 `{ ok: false, reason: 'format: …' }` 로
+        // 접어 호출자에게 **실패로** 보인다 (삼키지 않는다 — 정식 앞단
+        // `decoder/bootstrap.js` 는 이것을 `diagnostics.bodyFailures` 에 적는다).
+        const allowedNs = finalIdHint === null ? undefined : CELL_SURFACE_FINAL_NS[finalIdHint];
+        if (allowedNs !== undefined && allowedNs.length === 1) {
+          finalN = allowedNs[0];
+        } else {
+          throw new RangeError(
+            '신세대 셀 표면 ' + (finalIdHint === null ? '(레이아웃 힌트 없음)' : finalIdHint)
+            + ' 는 format.n('
+            + (allowedNs === undefined ? '13|21|25' : allowedNs.join('|'))
+            + ') 이 필요하다',
+          );
         }
       }
       // **와이어** 질의다 — 라인업(finalLayoutIdForN)이 아니라 «읽을 수 있는 n 인가».

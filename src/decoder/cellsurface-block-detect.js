@@ -59,6 +59,7 @@
 import { CORNER_UNIT_OFFSETS } from '../hexgrid.js';
 import { faceBasis, moduleCenter } from '../ygrid.js';
 import {
+  CELL_SURFACE_FINAL_NS,
   CENTER_QR_SLOT_CELLS,
   blocksCellSurfaceFinalForN,
   centerQrFinderCoreCells, centerQrQuietFrameCells, centerQrSlotCellsFor,
@@ -248,7 +249,7 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   //
   // NE 동심 사각이 **둘**인 계열이다 (바깥 = v0T 와 같은 자리 √279 · 안쪽 = 그
   // (i+2, j−5) 평행이동 √129 = 11.3578). 코너 앵커는 **바깥**이고, 그것은 설계
-  // 취향이 아니라 **실측이 고른 값**이다 (§V0TR_CORE_RADIUS_CELLS 에 전말):
+  // 취향이 아니라 **실측이 고른 값**이다 (§v0TR 코너 반경 주석에 전말):
   //   · 안쪽(11.3578)을 코너로 삼으면 `ANCHOR_SNAP_CELLS`(3.2) 밖으로 나가 계열이
   //     거리로 깔끔히 갈릴 «뻔했다». 그런데 실물 프레임에서 안쪽 코어는 **엄격
   //     코너로 검증되지 않아**(바깥 사각과 맞닿아 «배경으로 열린다» 가 안 선다)
@@ -403,7 +404,7 @@ export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
   //
   // ① **중앙 불스아이 거부권** — 코너 삼중점의 무게중심에 **이미 검증된 K3 불스아이**
   //    (`verifyV0Cluster` 의 `v0-center`)가 앉아 있으면 그 중앙은 QR 슬롯이 아니다.
-  //    소스가 이미 그렇게 선언해 놓고(§V0XQ_CORE_RADIUS_CELLS 주석 «가르는 것은
+  //    소스가 이미 그렇게 선언해 놓고(§v0xq 코너 반경 주석 «가르는 것은
   //    중앙이다 — v0xq 만 중앙이 QR 이고 나머지는 K3 불스아이다») 구현하지 않았던
   //    조건이다. 값은 **삼중점 반경 R 로 정규화**한 거리 (실측 256칸):
   //      가짜 0.000\~0.054 · 진짜 0.108\~1.000 → 문턱 0.075 (양쪽 \~1.4× 여유).
@@ -2325,6 +2326,50 @@ function refinePose(luma, H0, patches, cfg, telemetry = null) {
 }
 
 /**
+ * 앵커드 스냅 허용폭 ±3.2셀 (마스크 침식이 u 를 부풀린다 — 종전 근거 유지).
+ * 후보 반경표는 아래 두 곳이 낸다: 스칼라 반경 계열은 §V2R2_RADII, 앵커 유도 계열은
+ * §anchoredHypothesesFor. **여기에 값을 다시 적지 않는다** (사본은 어긋난다).
+ */
+const ANCHOR_SNAP_CELLS = 3.2;
+
+/**
+ * ★ **합법 n 은 정본에서 유도한다** (2026-08-25 M1) — 손 상수 금지.
+ *
+ * 여기에는 레이아웃마다 `const V0xx_N = 21;` 이 박혀 있었다. 2026-08-25 에 셀 표면
+ * 라인업이 v0T·v0TR 을 `[21, 25]` 로 열었을 때 그 상수들은 21 그대로 남아,
+ * **n=25 프레임에서 그 패밀리의 가설이 아예 시드되지 않았다** (스냅 반경도 21 기준
+ * 16.7033 이라 25 의 20.6640 과 3.96셀 차 — `ANCHOR_SNAP_CELLS`(3.2) 밖).
+ * 「라인업만 넓히고 상수를 안 걷는」 잔존이다 — 나란히 유지하는 사본은 반드시 어긋난다.
+ *
+ * 그래서 이제 n 목록은 `CELL_SURFACE_FINAL_NS` 에서만 온다. 정본이 넓히면 로케이터
+ * 가설도 같은 순간 넓어지고, 좁히면 같이 좁아진다.
+ */
+function finalNsFor(layoutId) {
+  const ns = CELL_SURFACE_FINAL_NS[layoutId];
+  if (!Array.isArray(ns) || ns.length === 0) {
+    throw new RangeError('셀 표면 최종 라인업에 없는 레이아웃이다: ' + layoutId);
+  }
+  return ns;
+}
+
+/**
+ * 닫힌형 반경을 **정본에서 못 유도하는** 패밀리 전용 — 합법 n 이 하나일 때만 성립한다.
+ * 정본이 그 레이아웃의 n 을 넓히면 여기서 죽는다: 「새 n 의 반경을 다시 재라」 를
+ * 강제하는 것이 목적이다 (조용히 가설 하나를 잃는 것보다 낫다 — 그 조용한 손실이
+ * 이 과업의 발단이다).
+ */
+function soleFinalN(layoutId) {
+  const ns = finalNsFor(layoutId);
+  if (ns.length !== 1) {
+    throw new RangeError(
+      layoutId + ' 는 코너 반경이 패치 앵커와 다른 양이라 단일 n 가정 위에 서 있다. '
+      + '정본이 n 을 넓혔으니(' + ns.join(',') + ') 새 n 의 코어 중심 반경을 재고 표를 세워라',
+    );
+  }
+  return ns[0];
+}
+
+/**
  * 앵커드 패밀리 후보표 — 중앙(K3)에서 K5 원거리 코어까지의 canonical 거리(셀).
  *   · v2r2: 블록 B 7×7 코어 중심 = 셀 (n−4,n−4) 중심 → (n−3.5) — 21→17.5 · 25→21.5.
  *   · v1r2: 면 T SE 5×5 코어 중심 = (17.5,17.5) → 18.0
@@ -2332,16 +2377,98 @@ function refinePose(luma, H0, patches, cfg, telemetry = null) {
  * 스냅 허용폭 ±3.2셀 (마스크 침식이 u 를 부풀린다 — 종전 근거 유지).
  * v2r2@21(17.5)과 v1r2(18.0)는 거리로 갈라지지 않는다 — 둘 다 후보 포즈를 세우고
  * 수용은 CS 평가 게이트가 판정한다 (n=21 병행 평가 계약, formatIndex 불변).
+ *
+ * ⚠ 이 둘의 반경은 **패치 앵커(블록 무게중심)가 아니라 K5 코어 중심**이라 아래
+ * `anchoredHypothesesFor` 의 유도로 대체할 수 없다 (실측 v1r2@21: 코어 18.0 ·
+ * 앵커 18.5 — `test/output/lanes/claude-m1-radius-probe.mjs`). 그래서 이 둘만
+ * 닫힌형을 유지한다. 대신 **n 목록은 정본에서 유도**한다: v2r2 는 닫힌형이 n 의
+ * 함수라 그대로 따라가고, v1r2 는 단일 n 가정이 깨지는 순간 `soleFinalN` 이 죽는다.
  */
-const ANCHOR_SNAP_CELLS = 3.2;
 const V1R2_CORE_RADIUS_CELLS = 18;
-const V1R2_N = 21;
-const V2R2_RADII = Object.freeze([
-  Object.freeze({ n: 21, radius: 17.5 }),
-  Object.freeze({ n: 25, radius: 21.5 }),
-]);
+const V1R2_N = soleFinalN('v1r2');
+const V2R2_RADII = Object.freeze(finalNsFor('v2r2').map(
+  (n) => Object.freeze({ n, radius: n - 3.5 }),
+));
 /** v2r2 드랍 기본값의 «후보 0개» 표 — 루프 형태를 바꾸지 않고 시드만 0 으로 만든다. */
 const EMPTY_RADII = Object.freeze([]);
+
+/**
+ * `anchoredSimilaritySeedTo` 계열(코너 앵커 = 패치 무게중심)의 **가설표**.
+ * 합법 n 마다 `{ n, radius }` 를 낸다. 반경도 손으로 안 적는다 — `V0TR` ·`V0TRY` 가
+ * 쓰던 그 경로(`patchesFor(n, id).corners[0].anchor`)를 전 패밀리로 넓힌 것뿐이다.
+ *
+ * **무회귀 근거 (실측)**: n=21 에서 유도값은 종전 닫힌 상수와 **비트 동일**이다 —
+ * v0w·v0w2·v0wy·v0t·v0ty·v0tr·v0trq·v0try·v0wq·v0xq 전부 √279 = 16.703293088490067,
+ * v0x 는 18 (`test/output/lanes/claude-m1-radius-probe.mjs`). 그래서 스냅 경계가
+ * ULP 만큼도 안 움직인다.
+ *
+ * **지연 계산**이다 — 모듈 로드에서 패치 세트를 다 만들지 않는다 (종전에는 v0TR ·
+ * v0TRY 둘만 로드 시점에 만들었다). 패밀리마다 최초 1회만 만들고 `patchesFor` 캐시가
+ * 그 뒤를 받는다.
+ */
+const anchoredHypothesisCache = new Map();
+function anchoredHypothesesFor(layoutId) {
+  const cached = anchoredHypothesisCache.get(layoutId);
+  if (cached !== undefined) return cached;
+  const built = Object.freeze(finalNsFor(layoutId).map((n) => {
+    const anchor = patchesFor(n, layoutId).corners[0].anchor;
+    return Object.freeze({ n, radius: Math.hypot(anchor.x, anchor.y) });
+  }));
+  anchoredHypothesisCache.set(layoutId, built);
+  return built;
+}
+
+/**
+ * 이 추정 반경에 스냅되는 가설이 하나라도 있나 — 브랜치의 **선행 검사**다.
+ * 동반자 게이트(`squareRingCompanions`)를 이 뒤에 두는 형태를 종전 그대로 유지해
+ * 게이트 호출 횟수가 안 늘어나게 한다 (합법 n 이 하나면 종전 `Math.abs(...) <= snap`
+ * 한 줄과 완전히 같은 판정이다).
+ */
+function anchoredFamilySnaps(layoutId, estimatedRadius) {
+  for (const candidate of anchoredHypothesesFor(layoutId)) {
+    if (Math.abs(estimatedRadius - candidate.radius) <= ANCHOR_SNAP_CELLS) return true;
+  }
+  return false;
+}
+
+/**
+ * 앵커드 시딩 한 패밀리 — 합법 n **전부**를 세우고 쌍마다 정합 점수 최고 하나만 채택한다.
+ *
+ * v2r2 의 21↔25 규약과 **같은 형태**다 (§V2R2_RADII 위 주석): 톤 커브가 밝은 링을
+ * 침식하면 u 가 부풀어 겹침 구간에서 오스냅되므로 허용폭 안 후보를 전부 시드하고,
+ * 틀린 n 의 포즈는 어차피 하류 CS 게이트가 기각하므로 쌍당 하나만 남긴다. 동률은
+ * 앞선 후보(작은 n)가 이긴다 — 결정성. 합법 n 이 하나면 루프가 한 번 도는 것이라
+ * **종전과 비트 동일**하다.
+ *
+ * `confirm` 은 슬롯 QR 확증처럼 정련 뒤에 붙는 확증이다 (없으면 null). 거절은
+ * 세어서 돌려준다 — 호출부가 `diagnostics.slotQr.rejected` 로 올린다.
+ */
+function seedAnchoredFamily(
+  layoutId, estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry, confirm = null,
+) {
+  let best = null;
+  let rejected = 0;
+  for (const candidate of anchoredHypothesesFor(layoutId)) {
+    if (Math.abs(estimatedRadius - candidate.radius) > ANCHOR_SNAP_CELLS) continue;
+    const patches = patchesFor(candidate.n, layoutId);
+    const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
+    const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
+    if (!refined) continue;
+    if (confirm !== null && !confirm(refined, patches)) {
+      rejected += 1;
+      continue;
+    }
+    if (best === null || refined.meanCorrelation > best.score) {
+      best = {
+        n: candidate.n,
+        H: refined.H,
+        score: refined.meanCorrelation,
+        partial: refined.partial || null,
+      };
+    }
+  }
+  return { best, rejected };
+}
 
 /**
  * v0X — SE (15..20)² 동심 사각의 암 2×2 코어 중심은 셀 경계 (18,18) 이라 중앙에서
@@ -2379,10 +2506,19 @@ const EMPTY_RADII = Object.freeze([]);
  * (→ 120° 위상 3가설), 패치 Pearson 이 참 위상을 고른다.
  */
 const V0X_CORE_RADIUS_CELLS = 18;
-const V0X_N = 21;
+// v0X 는 v1r2 와 같은 **스칼라 반경 시드**(`anchoredSimilaritySeed`, canonical (0,−1)
+// 가정) 경로라 아래 앵커 유도표를 안 쓴다. n 만 정본에서 받는다.
+const V0X_N = soleFinalN('v0x');
+
+// ─────────────────────────────────────────────────────────────────────────
+// 앵커 유도 계열의 **코너 반경 근거** — 값 자체는 `anchoredHypothesesFor` 가 정본에서
+// 뽑는다. 아래 절들은 「그 유도가 무엇을 재고 있는가」 의 기록이고, 닫힌형 숫자는
+// 회귀가 매 실행 대조한다 (`cellSurface-block-locator-derived-n.test.js` §②).
+// 종전에는 절마다 `const V0xx_CORE_RADIUS_CELLS`·`V0xx_N` 이 붙어 있었다.
+// ─────────────────────────────────────────────────────────────────────────
 
 /**
- * v0W — 동심 사각이 v0X 와 **같은 블록**인데 앉은 자리가 다르다.
+ * §v0W 코너 반경 — 동심 사각이 v0X 와 **같은 블록**인데 앉은 자리가 다르다.
  *
  * v0X 는 SE (15..20)² = 면마다 «먼 꼭짓점»(C0·C2·C4), v0W 는 NE (0..5)×(15..20) =
  * 면마다 «심(seam) 꼭짓점»(C1·C3·C5)이다. 블록 무게중심 (a,b) = (3,18) 이고 두 기저의
@@ -2398,40 +2534,40 @@ const V0X_N = 21;
  * canonical 앵커 방향은 **(0,−1) 이 아니다** (면 T 실측 θ = −141.1°) — 그래서
  * `anchoredSimilaritySeedTo` 를 쓴다. 자세한 근거는 그 함수 주석과
  * `test/output/lanes/claude-v0w-probe-geom.mjs`.
+ *
+ * 반경·n 은 이제 `anchoredHypothesesFor('v0w')` 가 낸다 — 위 닫힌형 √279 는 **유도값과
+ * 비트 동일**임이 실측됐고(§anchoredHypothesesFor), 그래서 상수를 걷어도 판정이 안 바뀐다.
  */
-const V0W_CORE_RADIUS_CELLS = Math.sqrt(279);
-const V0W_N = 21;
 
 /**
- * v0W2 — NE 동심 사각이 v0W 와 **같은 배열·같은 자리**라 코어 반경도 같은 √279 다.
+ * §v0W2 코너 반경 — NE 동심 사각이 v0W 와 **같은 배열·같은 자리**라 코어 반경도 같은 √279 다.
  * 그래서 v0W2 는 v0W 바로 뒤에 같은 (중앙, 코너) 쌍에서 시드된다. 두 패밀리를 가르는
  * 것은 거리가 아니라 refinePose 의 패치 Pearson 과 하류 CS 게이트다.
  */
-const V0W2_CORE_RADIUS_CELLS = V0W_CORE_RADIUS_CELLS;
-const V0W2_N = 21;
 
 /**
- * v0WY — NE 동심 사각이 v0W 와 **같은 배열·같은 자리**라 코어 반경도 같다 (√279).
+ * §v0WY 코너 반경 — NE 동심 사각이 v0W 와 **같은 배열·같은 자리**라 코어 반경도 같다 (√279).
  * 즉 시드 기하로는 v0W·v0W2 와 한 톨도 안 갈라진다. §v0wyFamily 의 ⓐⓑⓒ 가 가른다.
  */
-const V0WY_CORE_RADIUS_CELLS = V0W_CORE_RADIUS_CELLS;
-const V0WY_N = 21;
 
 /**
- * v0T — NE 동심 사각이 v0W 계열과 **같은 배열·같은 자리**라 코어 반경도 같다 (√279).
+ * §v0T 코너 반경 — NE 동심 사각이 v0W 계열과 **같은 배열·같은 자리**라 코어 반경도 같다 (√279).
  * 중앙은 K3 계보의 (0..3)² 16셀 대칭화본 — `verifyV0Cluster` 의 'v0-center' 서명은
  * 같은 K3 계보라 그대로 잡는다 (v0X 의 NW 16 이 같은 자리에서 잡혀 온 전례).
  * v0W 계열이 드랍으로 꺼진 뒤에도 이 브랜치는 독립으로 돈다.
+ *
+ * ⚠ **n=25 (2026-08-25 라인업 확장)** — v0T·v0TR 은 정본이 `[21, 25]` 다. 같은 블록이
+ * 면 모서리 기준으로 평행이동하므로 코너 앵커 무게중심이 (3,18) → (3,22) 로 가고
+ * 반경은 √279 = 16.7033 → √427 = 20.6640 이 된다 (실측
+ * `claude-m1-radius-probe.mjs`). 두 값은 3.96셀 떨어져 `ANCHOR_SNAP_CELLS`(3.2)
+ * 밖이라 **서로의 프레임을 안 먹는다** — n=25 프레임은 종전에 이 패밀리 가설을
+ * 통째로 잃고 있었다.
  */
-const V0T_CORE_RADIUS_CELLS = V0W_CORE_RADIUS_CELLS;
-const V0T_N = 21;
 
-/** v0TY — 중앙·NE 가 v0T 와 같은 배열이라 시드 기하가 같다. 슬롯 QR 확증이 가른다. */
-const V0TY_CORE_RADIUS_CELLS = V0W_CORE_RADIUS_CELLS;
-const V0TY_N = 21;
+/** §v0TY 코너 반경 — 중앙·NE 가 v0T 와 같은 배열이라 시드 기하가 같다. 슬롯 QR 확증이 가른다. */
 
 /**
- * v0TR — 코너 앵커가 NE **바깥** 동심 사각이라 반경이 √279 로 v0W 계열·v0T·v0TY 와 같다.
+ * §v0TR 코너 반경 — 코너 앵커가 NE **바깥** 동심 사각이라 반경이 √279 로 v0W 계열·v0T·v0TY 와 같다.
  *
  * ⚠ **여기에 «√129 로 갈라진다» 를 쓸 뻔했다 — 실측이 기각했다.** 정본의 NE 안쪽
  * 동심 사각(무게중심 (5,13) → r² = 25+169−65 = 129 → 11.3578셀)은 √279 와 5.35셀
@@ -2448,25 +2584,18 @@ const V0TY_N = 21;
  * 즉 v0T 반경이 만들어지는 것과 **같은 경로** — 에서 그대로 뽑는다. 정본 블록이
  * 움직이면 이 반경도 같이 움직인다 (닫힌 형태 상수를 박아 두면 조용히 어긋난다).
  * 실측 대조: `test/output/lanes/claude-v0tr-measure.mjs` ⓑ.
+ *
+ * **2026-08-25**: 이 «같은 경로» 유도가 `anchoredHypothesesFor` 로 올라가 전 패밀리가
+ * 쓴다. 여기서만 하던 것을 n 축까지 넓힌 것이다 — v0TR 은 정본이 `[21, 25]` 라
+ * 가설이 둘 선다.
  */
-const V0TR_N = 21;
-const V0TR_CORE_RADIUS_CELLS = (() => {
-  const anchor = patchesFor(V0TR_N, 'v0tr').corners[0].anchor;
-  return Math.hypot(anchor.x, anchor.y);
-})();
-/** v0TRQ — 코너가 v0TR 과 같은 배열(안쪽 사각)이라 삼중점 반경도 같다. */
-const V0TRQ_N = 21;
+/** §v0TRQ 코너 반경 — 코너가 v0TR 과 같은 배열(안쪽 사각)이라 삼중점 반경도 같다. */
 /**
- * v0TRY — 코너가 v0TR 과 **같은 배열**(NE 바깥 사각)이다. 슬롯이 SE 쪽이라 NE 를 한
+ * §v0TRY 코너 반경 — 코너가 v0TR 과 **같은 배열**(NE 바깥 사각)이다. 슬롯이 SE 쪽이라 NE 를 한
  * 셀도 안 건드리므로 반경이 v0TR 과 **같다** (실측 Δ = 0.000000 —
  * `claude-v0try-measure.mjs` ⓔ). v0T ↔ v0TY 와 같은 관계다.
  * 값은 여기서도 손으로 적지 않고 **같은 경로**에서 뽑는다.
  */
-const V0TRY_N = 21;
-const V0TRY_CORE_RADIUS_CELLS = (() => {
-  const anchor = patchesFor(V0TRY_N, 'v0try').corners[0].anchor;
-  return Math.hypot(anchor.x, anchor.y);
-})();
 
 /**
  * 패치의 동적 범위 (p95−p5) — §v0wySlotQrMinSpanRatio (span 상응성) 의 재료.
@@ -2759,24 +2888,24 @@ function assembleAnchoredPoses(
       // v0X 프레임에서 51.1° 틀어진 자리를 보고, (b) 하류 CS 수용 게이트
       // (agreement 0.78 · orientation margin 0.035) 다. 교차 오수용 0 은 거기서 나온다
       // (v0xq 편입에서 확인한 것과 같은 구조 — §v0xqRequireCenterQr 주석).
-      if (cfg.v0wFamily !== false
-        && Math.abs(estimatedRadius - V0W_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+      // YFACE_LIST[0] = 'T' — 면 T 의 동심 사각 무게중심이 canonical 앵커다
+      // (`seedAnchoredFamily` 안에서 그대로 쓴다).
+      if (cfg.v0wFamily !== false && anchoredFamilySnaps('v0w', estimatedRadius)) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
         const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (gateCompanions !== 0 || cfg.v0wRequireSquareRing === false) {
-          const patches = patchesFor(V0W_N, 'v0w');
-          // YFACE_LIST[0] = 'T' — 면 T 의 동심 사각 무게중심이 canonical 앵커다.
-          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
-          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (refined) {
+          const { best } = seedAnchoredFamily(
+            'v0w', estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry,
+          );
+          if (best !== null) {
             anchoredCentres.add(centreIndex);
             posesV0w.push({
               family: 'v0w',
               layoutId: 'v0w',
-              n: V0W_N,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               squareRingCompanions: companions,
             });
@@ -2787,25 +2916,23 @@ function assembleAnchoredPoses(
       // 같은 쌍에서 한 번 더 시드하고, 가르는 것은 refinePose 의 패치 Pearson 과
       // 하류 CS 게이트다. v0W 브랜치와 **독립**이다 (게이트 실패가 서로를 안 자른다 —
       // v0X ↔ v0W 에서 고친 것과 같은 결합을 여기서 만들지 않는다).
-      if (cfg.v0w2Family !== false
-        && Math.abs(estimatedRadius - V0W2_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+      // canonical 앵커는 v0W 과 같은 블록이라 같은 방향(−141.1°)이다.
+      if (cfg.v0w2Family !== false && anchoredFamilySnaps('v0w2', estimatedRadius)) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
         const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (gateCompanions !== 0 || cfg.v0w2RequireSquareRing === false) {
-          const patches = patchesFor(V0W2_N, 'v0w2');
-          // YFACE_LIST[0] = 'T' — 면 T 의 동심 사각 무게중심이 canonical 앵커다
-          // (v0W 과 같은 블록이라 같은 방향 −141.1°).
-          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
-          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (refined) {
+          const { best } = seedAnchoredFamily(
+            'v0w2', estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry,
+          );
+          if (best !== null) {
             anchoredCentres.add(centreIndex);
             posesV0w2.push({
               family: 'v0w2',
               layoutId: 'v0w2',
-              n: V0W2_N,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               squareRingCompanions: companions,
             });
@@ -2817,28 +2944,27 @@ function assembleAnchoredPoses(
       // (게이트 실패가 서로를 안 자른다 — v0X ↔ v0W 에서 고친 결합을 여기서 안 만든다).
       // 마지막에 **슬롯 QR 확증**이 붙는다 — 이것만이 «먼 코너에 진짜 QR 이 있는가» 를
       // 재고, 없으면 그 포즈는 v0W 프레임 위에 선 v0WY 가설이다 (§slotQrConfirmsPose).
-      if (cfg.v0wyFamily !== false
-        && Math.abs(estimatedRadius - V0WY_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+      if (cfg.v0wyFamily !== false && anchoredFamilySnaps('v0wy', estimatedRadius)) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
         const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (gateCompanions !== 0 || cfg.v0wyRequireSquareRing === false) {
-          const patches = patchesFor(V0WY_N, 'v0wy');
-          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
-          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (refined && slotQrConfirmsPose(fullLuma, refined.H, patches, cfg)) {
+          const { best, rejected } = seedAnchoredFamily(
+            'v0wy', estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry,
+            (refined, patches) => slotQrConfirmsPose(fullLuma, refined.H, patches, cfg),
+          );
+          slotQrRejected += rejected;
+          if (best !== null) {
             anchoredCentres.add(centreIndex);
             posesV0wy.push({
               family: 'v0wy',
               layoutId: 'v0wy',
-              n: V0WY_N,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               squareRingCompanions: companions,
             });
-          } else if (refined) {
-            slotQrRejected += 1;
           }
         }
       }
@@ -2846,23 +2972,25 @@ function assembleAnchoredPoses(
       // 같은 (중앙, 코너) 쌍에서 시드된다. 드랍된 v0W 계열 브랜치와 **독립**이다
       // (게이트 실패가 서로를 안 자른다 — v0X ↔ v0W 에서 고친 결합을 안 만든다).
       // 가르는 것은 refinePose 의 패치 Pearson (A·N팔·W·SE 서브앵커) 과 하류 CS 게이트다.
-      if (cfg.v0tFamily !== false
-        && Math.abs(estimatedRadius - V0T_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+      // ⚠ 정본이 `[21, 25]` 라 **가설이 둘** 선다 (2026-08-25). 두 반경은 3.96셀
+      // 떨어져 서로의 프레임에서 잘 안 열리고, 열리는 겹침 구간에서는 쌍당 정합
+      // 점수 최고 하나만 남는다 (§seedAnchoredFamily — v2r2 21↔25 와 같은 규약).
+      if (cfg.v0tFamily !== false && anchoredFamilySnaps('v0t', estimatedRadius)) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
         const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (gateCompanions !== 0 || cfg.v0tRequireSquareRing === false) {
-          const patches = patchesFor(V0T_N, 'v0t');
-          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
-          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (refined) {
+          const { best } = seedAnchoredFamily(
+            'v0t', estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry,
+          );
+          if (best !== null) {
             anchoredCentres.add(centreIndex);
             posesV0t.push({
               family: 'v0t',
               layoutId: 'v0t',
-              n: V0T_N,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               squareRingCompanions: companions,
             });
@@ -2871,29 +2999,28 @@ function assembleAnchoredPoses(
       }
       // v0TY (v0T 파생 — 먼 코너 QR 슬롯) — 시드 기하가 v0T 와 같다. 마지막에
       // **슬롯 QR 확증**이 붙는다 (v0WY 와 같은 확증 — 스위치만 독립, §v0tyRequireSlotQr).
-      if (cfg.v0tyFamily !== false
-        && Math.abs(estimatedRadius - V0TY_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+      if (cfg.v0tyFamily !== false && anchoredFamilySnaps('v0ty', estimatedRadius)) {
         const companions = squareRingCompanions(centre, corner, corners, cfg);
         const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (gateCompanions !== 0 || cfg.v0tyRequireSquareRing === false) {
-          const patches = patchesFor(V0TY_N, 'v0ty');
-          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
-          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (refined
-            && slotQrConfirmsPose(fullLuma, refined.H, patches, cfg, cfg.v0tyRequireSlotQr)) {
+          const { best, rejected } = seedAnchoredFamily(
+            'v0ty', estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry,
+            (refined, patches) =>
+              slotQrConfirmsPose(fullLuma, refined.H, patches, cfg, cfg.v0tyRequireSlotQr),
+          );
+          slotQrRejected += rejected;
+          if (best !== null) {
             anchoredCentres.add(centreIndex);
             posesV0ty.push({
               family: 'v0ty',
               layoutId: 'v0ty',
-              n: V0TY_N,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               squareRingCompanions: companions,
             });
-          } else if (refined) {
-            slotQrRejected += 1;
           }
         }
       }
@@ -2903,14 +3030,14 @@ function assembleAnchoredPoses(
       // ⚠ **정정 (2026-08-18, v0TRY 레인 지적)**: 여기에 «여기만 반경이 다르다
       // (√129 = 11.3578) · 3.2셀 밖이라 v0T·v0TY 프레임에서는 이 if 가 첫 줄에서
       // 끝난다 = 비용이 안 붙는다» 고 적혀 있었다. **둘 다 사실이 아니다.**
-      // `V0TR_CORE_RADIUS_CELLS` 는 **√279 = 16.7033** 으로 v0T 계열과 **같다** —
-      // 코너 앵커가 바깥 동심 사각이기 때문이다(§V0TR_BLOCKS 및 위 §1426 주석:
-      // «안쪽을 코너 앵커로» 는 실물에서 엄격 코너 검증이 안 돼 기각됐다).
+      // v0TR 의 코너 반경은 **√279 = 16.7033** 으로 v0T 계열과 **같다** — 코너 앵커가
+      // 바깥 동심 사각이기 때문이다(§V0TR_BLOCKS 및 위 §1426 주석: «안쪽을 코너
+      // 앵커로» 는 실물에서 엄격 코너 검증이 안 돼 기각됐다).
       // 반경이 같으므로 이 `if` 는 v0T·v0TY 프레임에서도 **매번 열리고**, 그래서
       // 편입 비용이 그 프레임들에도 붙는다 — 실측 **+17\~28 %** (v0TRY 레인 §①ⓖ).
       // 낡은 주석을 믿고 «비용이 안 붙는다» 로 설계 판단을 하면 안 된다.
-      if (cfg.v0trFamily !== false
-        && Math.abs(estimatedRadius - V0TR_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+      // v0T 와 마찬가지로 정본이 `[21, 25]` 라 가설이 둘이다 (2026-08-25).
+      if (cfg.v0trFamily !== false && anchoredFamilySnaps('v0tr', estimatedRadius)) {
         // ⚠ 리베이스 화해 (2026-08-18): 이 브랜치는 `fd37c9c` 기준 레인에서 왔고
         // 링 수리(3c2bfa0)를 못 봤다. 다른 여섯 브랜치와 **같이** 게이트값과 정렬값을
         // 가른다 — 안 가르면 v0TR 만 «캡된 목록으로 동반자 판정» 이라 거리에서
@@ -2919,18 +3046,18 @@ function assembleAnchoredPoses(
         const companions = squareRingCompanions(centre, corner, corners, cfg);
         const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (gateCompanions !== 0 || cfg.v0trRequireSquareRing === false) {
-          const patches = patchesFor(V0TR_N, 'v0tr');
-          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
-          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (refined) {
+          const { best } = seedAnchoredFamily(
+            'v0tr', estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry,
+          );
+          if (best !== null) {
             anchoredCentres.add(centreIndex);
             posesV0tr.push({
               family: 'v0tr',
               layoutId: 'v0tr',
-              n: V0TR_N,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               squareRingCompanions: companions,
             });
@@ -2940,8 +3067,7 @@ function assembleAnchoredPoses(
       // v0TRY (v0TR 파생 — 먼 코너 QR 슬롯, 2026-08-18) — 시드 기하가 v0TR 과 같다
       // (반경 √279 동일). 마지막에 **슬롯 QR 확증**이 붙는다 (v0WY·v0TY 와 같은 확증 —
       // 스위치만 독립, §v0tryRequireSlotQr). 위 브랜치들과 **독립**이다.
-      if (cfg.v0tryFamily !== false
-        && Math.abs(estimatedRadius - V0TRY_CORE_RADIUS_CELLS) <= ANCHOR_SNAP_CELLS) {
+      if (cfg.v0tryFamily !== false && anchoredFamilySnaps('v0try', estimatedRadius)) {
         // ⚠ 게이트값 ≠ 정렬값 — 다른 일곱 브랜치와 **같은 형태**로 쓴다
         // (§companionsForGate · `.agent/_lessons/008` · 링 수리 3c2bfa0).
         // `squareRingCompanions` 만으로 게이트를 판정하면 캡된 목록으로 판정하게 되어
@@ -2949,24 +3075,24 @@ function assembleAnchoredPoses(
         const companions = squareRingCompanions(centre, corner, corners, cfg);
         const gateCompanions = companionsForGate(centre, corner, corners, ringPool, cfg, companions);
         if (gateCompanions !== 0 || cfg.v0tryRequireSquareRing === false) {
-          const patches = patchesFor(V0TRY_N, 'v0try');
-          const H0 = anchoredSimilaritySeedTo(centre, corner, factor, patches.corners[0].anchor);
-          const refined = H0 === null ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (refined
-            && slotQrConfirmsPose(fullLuma, refined.H, patches, cfg, cfg.v0tryRequireSlotQr)) {
+          const { best, rejected } = seedAnchoredFamily(
+            'v0try', estimatedRadius, centre, corner, factor, fullLuma, cfg, telemetry,
+            (refined, patches) =>
+              slotQrConfirmsPose(fullLuma, refined.H, patches, cfg, cfg.v0tryRequireSlotQr),
+          );
+          slotQrRejected += rejected;
+          if (best !== null) {
             anchoredCentres.add(centreIndex);
             posesV0try.push({
               family: 'v0try',
               layoutId: 'v0try',
-              n: V0TRY_N,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               squareRingCompanions: companions,
             });
-          } else if (refined) {
-            slotQrRejected += 1;
           }
         }
       }
@@ -3106,51 +3232,52 @@ function assembleBullseyeConfirmedPoses(
               });
             }
           }
+          // ⚠ **n·반경을 여기 적지 않는다** (2026-08-25). 종전에는 행마다
+          // `n: V0T_N, radius: V0T_CORE_RADIUS_CELLS` 를 손으로 들고 있었고, 라인업이
+          // v0T·v0TR 을 [21,25] 로 열었을 때 이 표가 21 에 남아 구제 경로도 같이
+          // n=25 가설을 잃었다. 이제 `seedAnchoredFamily` 가 정본에서 유도한다 —
+          // 이 표에 남는 것은 «스위치 · id · 출력 배열 · 슬롯 확증» 뿐이다.
           for (const spec of [
-            { on: cfg.v0wFamily !== false, id: 'v0w', n: V0W_N, radius: V0W_CORE_RADIUS_CELLS, out: posesV0w },
-            { on: cfg.v0w2Family !== false, id: 'v0w2', n: V0W2_N, radius: V0W2_CORE_RADIUS_CELLS, out: posesV0w2 },
+            { on: cfg.v0wFamily !== false, id: 'v0w', out: posesV0w },
+            { on: cfg.v0w2Family !== false, id: 'v0w2', out: posesV0w2 },
             // v0WY 도 같은 구제 경로를 태다 — 중앙 K3 불스아이가 있는 레이아웃이라
             // 엄격 코너가 3개 미만이라 사각 링 게이트가 구조적으로 0 이 되는 칸에서
             // 똑같이 죽는다. 슬롯 QR 확증은 여기서도 붙는다 (아래 spec.slotQr).
-            { on: cfg.v0wyFamily !== false, id: 'v0wy', n: V0WY_N, radius: V0WY_CORE_RADIUS_CELLS, out: posesV0wy, slotQr: true, slotQrEnabled: cfg.v0wyRequireSlotQr },
+            { on: cfg.v0wyFamily !== false, id: 'v0wy', out: posesV0wy, slotQr: true, slotQrEnabled: cfg.v0wyRequireSlotQr },
             // v0T·v0TY (2026-08-17 편입) — 중앙이 K3 계보 16셀이라 같은 구제 대상이다.
             // v0TY 의 슬롯 QR 확증 스위치는 v0WY 와 독립이다 (§v0tyRequireSlotQr).
-            { on: cfg.v0tFamily !== false, id: 'v0t', n: V0T_N, radius: V0T_CORE_RADIUS_CELLS, out: posesV0t },
-            { on: cfg.v0tyFamily !== false, id: 'v0ty', n: V0TY_N, radius: V0TY_CORE_RADIUS_CELLS, out: posesV0ty, slotQr: true, slotQrEnabled: cfg.v0tyRequireSlotQr },
+            { on: cfg.v0tFamily !== false, id: 'v0t', out: posesV0t },
+            { on: cfg.v0tyFamily !== false, id: 'v0ty', out: posesV0ty, slotQr: true, slotQrEnabled: cfg.v0tyRequireSlotQr },
             // v0TR (2026-08-17) — 중앙이 v0T 와 같은 K3 계보 16셀이라 같은 구제 대상이다.
             // ⚠ **정정 (2026-08-18)**: «반경만 다르다 (√129) — 이 표에서 √279 가 아닌
-            // 유일한 행» 이라고 적혀 있었으나 **틀렸다.** `V0TR_CORE_RADIUS_CELLS` 는
+            // 유일한 행» 이라고 적혀 있었으나 **틀렸다.** v0TR 의 코너 반경은
             // √279 = 16.7033 으로 이 표의 다른 행과 **같다** (코너 앵커가 바깥 사각).
             // 같은 오류가 앵커드 브랜치 주석에도 있었다 — 함께 고쳤다.
-            { on: cfg.v0trFamily !== false, id: 'v0tr', n: V0TR_N, radius: V0TR_CORE_RADIUS_CELLS, out: posesV0tr },
+            { on: cfg.v0trFamily !== false, id: 'v0tr', out: posesV0tr },
             // v0TRY (2026-08-18) — v0TR 과 같은 중앙 K3 16셀·같은 코너 반경이라 같은
             // 구제 대상이다. 슬롯 QR 확증 스위치는 v0WY·v0TY 와 독립이다.
-            { on: cfg.v0tryFamily !== false, id: 'v0try', n: V0TRY_N, radius: V0TRY_CORE_RADIUS_CELLS, out: posesV0try, slotQr: true, slotQrEnabled: cfg.v0tryRequireSlotQr },
+            { on: cfg.v0tryFamily !== false, id: 'v0try', out: posesV0try, slotQr: true, slotQrEnabled: cfg.v0tryRequireSlotQr },
           ]) {
             if (!spec.on) continue;
-            if (Math.abs(estimatedRadius - spec.radius) > ANCHOR_SNAP_CELLS) continue;
-            const patches = patchesFor(spec.n, spec.id);
-            const H0 = anchoredSimilaritySeedTo(
-              anchor, corner, factor, patches.corners[0].anchor,
-            );
-            const refined = H0 === null
-              ? null : refinePose(fullLuma, H0, patches, cfg, telemetry);
-            if (!refined) continue;
             // 거절도 **계수**한다 — 예전에는 여기서 조용히 `continue` 만 해서
             // `diagnostics.slotQr.rejected` (회귀 대조군) 가 이 경로의 실패를 못 셌다.
-            if (spec.slotQr
-              && !slotQrConfirmsPose(fullLuma, refined.H, patches, cfg, spec.slotQrEnabled)) {
-              slotQrRejected += 1;
-              continue;
-            }
+            const { best, rejected } = seedAnchoredFamily(
+              spec.id, estimatedRadius, anchor, corner, factor, fullLuma, cfg, telemetry,
+              spec.slotQr
+                ? (refined, patches) =>
+                  slotQrConfirmsPose(fullLuma, refined.H, patches, cfg, spec.slotQrEnabled)
+                : null,
+            );
+            slotQrRejected += rejected;
+            if (best === null) continue;
             confirmed.add(centreIndex);
             spec.out.push({
               family: spec.id,
               layoutId: spec.id,
-              n: spec.n,
-              H: refined.H,
-              score: refined.meanCorrelation,
-              partial: refined.partial || null,
+              n: best.n,
+              H: best.H,
+              score: best.score,
+              partial: best.partial,
               estimatedRadius,
               bullseyeConfirmed: true,
             });
@@ -3167,15 +3294,18 @@ function assembleBullseyeConfirmedPoses(
 }
 
 /**
- * v0xq — 3코너 동심 사각의 암 2×2 코어 중심은 블록 (0..5)×(15..20) 의 **정중앙**
- * (a,b) = (3,18) 이다 (동심 사각이 i·j 양방향 대칭이라 블록 무게중심 = 코어 중심).
- * 중심 거리는 닫힌 형태로 떨어진다 — 두 기저의 사잇각이 120° 이므로
+ * §v0xq 코너 반경 — 3코너 동심 사각의 암 2×2 코어 중심은 블록 (0..5)×(15..20) 의
+ * **정중앙** (a,b) = (3,18) 이다 (동심 사각이 i·j 양방향 대칭이라 블록 무게중심 =
+ * 코어 중심). 중심 거리는 닫힌 형태로 떨어진다 — 두 기저의 사잇각이 120° 이므로
  *   r² = a² + b² − a·b = 9 + 324 − 54 = 279 → r = √279 = 16.7033셀.
  * v0X·v1r2 의 18.0 과 1.30셀 차이라 ANCHOR_SNAP_CELLS(3.2) 안에서 **거리로는 못
  * 가른다**. 가르는 것은 중앙이다 — v0xq 만 중앙이 QR 이고 나머지는 K3 불스아이다.
+ *
+ * 값은 **상수로 안 둔다** (2026-08-25): 삼중점 경로의 시드 스케일은
+ * `patches.corners[0].anchor` 에서 바로 나오고(§assembleCentreQrPoses), 그 앵커가
+ * 위 닫힌형과 비트 동일임이 실측돼 있다. 종전 `V0XQ_CORE_RADIUS_CELLS` 는 선언만
+ * 되고 **아무 데서도 안 쓰이던 죽은 상수**였다 — 함께 걷었다.
  */
-const V0XQ_CORE_RADIUS_CELLS = Math.sqrt(279);
-const V0XQ_N = 21;
 
 /** 단위 벡터 u 를 v 로 보내는 회전의 (cos, sin). 삼각함수 없이 내적·외적으로. */
 function rotationBetween(ux, uy, vx, vy) {
@@ -3245,9 +3375,16 @@ function assembleCentreQrPoses(
       poses, tripleCount: 0, centreRejected: 0, bullseyeVetoed, finderContrastRejected,
     };
   }
-  const patches = patchesFor(V0XQ_N, layoutId);
-  const canonical = patches.corners[0].anchor; // YFACE_LIST[0] = 'T'
-  const canonicalR = Math.hypot(canonical.x, canonical.y);
+  // 합법 n 마다 «패치 + canonical 코너 앵커» 를 미리 만든다 — n 목록은 **정본
+  // 유도**다 (§finalNsFor). 종전에는 `patchesFor(V0XQ_N=21, layoutId)` 로 n 을 손으로
+  // 박아, v0TRQ 처럼 라인업이 넓어질 수 있는 계열에서 다른 n 의 삼중점을 못 세웠다.
+  // 삼중점 탐색 자체는 반경 **비**만 보므로 어느 n 이든 같은 삼중점을 찾아내고,
+  // 시드 스케일을 가르는 것은 `canonicalR` 이다 (§assembleV0trqPoses 주석).
+  const hypotheses = finalNsFor(layoutId).map((n) => {
+    const patches = patchesFor(n, layoutId);
+    const canonical = patches.corners[0].anchor; // YFACE_LIST[0] = 'T'
+    return { n, patches, canonical, canonicalR: Math.hypot(canonical.x, canonical.y) };
+  });
   const angleTolerance = (cfg.v0xqTripleAngleToleranceDeg * Math.PI) / 180;
   let tripleCount = 0;
   let centreRejected = 0;
@@ -3297,45 +3434,61 @@ function assembleCentreQrPoses(
           const dy = cornerFull.y - centreFull.y;
           const d = Math.hypot(dx, dy);
           if (!(d > EPSILON)) continue;
-          const rot = rotationBetween(
-            canonical.x / canonicalR, canonical.y / canonicalR, dx / d, dy / d,
-          );
-          const scale = d / canonicalR;
-          const H0 = similarityHomography(centreFull, scale, rot.cos, rot.sin);
-          if (cfg.v0xqRequireCenterQr !== false) {
-            const cellPx = localCellPx(H0);
-            if (!Number.isFinite(cellPx) || cellPx <= 0.5) continue;
-            const probe = registerPatch(
-              fullLuma, H0, patches.centre,
-              cfg.registrationRangeCells * cellPx,
-              Math.max(0.5, cfg.registrationStepCells * cellPx),
+          // 합법 n 전부를 세우고 **코너당 정합 점수 최고 하나만** 남긴다 (앵커드
+          // 경로의 §seedAnchoredFamily 와 같은 규약 · 동률은 작은 n). 합법 n 이
+          // 하나면 이 루프가 한 번 도는 것이라 종전과 비트 동일하다.
+          let best = null;
+          for (const hypothesis of hypotheses) {
+            const { patches, canonical, canonicalR } = hypothesis;
+            const rot = rotationBetween(
+              canonical.x / canonicalR, canonical.y / canonicalR, dx / d, dy / d,
             );
-            if (!probe || probe.correlation < cfg.v0xqCentreMinCorrelation) {
-              centreRejected += 1;
-              continue;
-            }
-            // ★ QR 다움 판별 — 상관이 통과해도 «파인더 암코어 3점» 이 실제로 어둡지
-            // 않으면 그 중앙은 QR 이 아니다 (§centreQrRequireFinderContrast).
-            // 상관 게이트가 재는 것은 면 게인 음영이고, 이것이 재는 것이 QR 구조다.
-            if (cfg.centreQrRequireFinderContrast !== false) {
-              const contrast = centreQrFinderContrast(
-                fullLuma, H0, patches.centre, probe.offsetX, probe.offsetY,
+            const scale = d / canonicalR;
+            const H0 = similarityHomography(centreFull, scale, rot.cos, rot.sin);
+            if (cfg.v0xqRequireCenterQr !== false) {
+              const cellPx = localCellPx(H0);
+              if (!Number.isFinite(cellPx) || cellPx <= 0.5) continue;
+              const probe = registerPatch(
+                fullLuma, H0, patches.centre,
+                cfg.registrationRangeCells * cellPx,
+                Math.max(0.5, cfg.registrationStepCells * cellPx),
               );
-              if (contrast === null || contrast < cfg.centreQrMinFinderContrast) {
-                finderContrastRejected += 1;
+              if (!probe || probe.correlation < cfg.v0xqCentreMinCorrelation) {
+                centreRejected += 1;
                 continue;
               }
+              // ★ QR 다움 판별 — 상관이 통과해도 «파인더 암코어 3점» 이 실제로 어둡지
+              // 않으면 그 중앙은 QR 이 아니다 (§centreQrRequireFinderContrast).
+              // 상관 게이트가 재는 것은 면 게인 음영이고, 이것이 재는 것이 QR 구조다.
+              if (cfg.centreQrRequireFinderContrast !== false) {
+                const contrast = centreQrFinderContrast(
+                  fullLuma, H0, patches.centre, probe.offsetX, probe.offsetY,
+                );
+                if (contrast === null || contrast < cfg.centreQrMinFinderContrast) {
+                  finderContrastRejected += 1;
+                  continue;
+                }
+              }
+            }
+            const refined = refinePose(fullLuma, H0, patches, cfg, telemetry);
+            if (!refined) continue;
+            if (best === null || refined.meanCorrelation > best.score) {
+              best = {
+                n: hypothesis.n,
+                H: refined.H,
+                score: refined.meanCorrelation,
+                partial: refined.partial || null,
+              };
             }
           }
-          const refined = refinePose(fullLuma, H0, patches, cfg, telemetry);
-          if (!refined) continue;
+          if (best === null) continue;
           poses.push({
             family: layoutId,
             layoutId,
-            n: V0XQ_N,
-            H: refined.H,
-            score: refined.meanCorrelation,
-            partial: refined.partial || null,
+            n: best.n,
+            H: best.H,
+            score: best.score,
+            partial: best.partial,
             estimatedRadius,
           });
         }
@@ -3891,6 +4044,11 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   recentreByRays,
   patchesForN,
   patchesFor,
+  // 정본 유도 계열 (2026-08-25 M1) — 「라인업이 넓히면 로케이터도 넓어진다」 를
+  // 회귀로 잠그는 입력이다 (`cellSurface-block-locator-derived-n.test.js`).
+  finalNsFor,
+  anchoredHypothesesFor,
+  V2R2_RADII,
   assembleAnchoredPoses,
   assembleBullseyeConfirmedPoses,
   anchoredSimilaritySeed,

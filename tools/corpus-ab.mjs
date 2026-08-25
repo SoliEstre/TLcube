@@ -9,9 +9,16 @@
  *   --frontend <경로>  비교할 decodeFrontend 구현 (기본: 이 트리의 src/decoder/frontend.js)
  *   --out <경로>       행 JSON 출력 (기본: test/output/corpus-ab/<라벨>.json)
  *   --base <경로>      기준 JSON. 주면 A/B 차이를 내고 죽음 플립이 있으면 exit 1
- *   --expect <N>       기대 덤프 수 (기본 379). 어긋나면 즉시 죽는다.
- *                      ⚠ 이 값은 **올릴 때만** 만진다. 낮춰서 통과시키면
- *                      listLumaDumps() 의 «빈 배열 = 0/0 전부 통과» 거짓 초록이 열린다.
+ *   --expect <N>       기대 덤프 수. **기본값은 손 상수가 아니라**
+ *                      `test/photo-corpus-fingerprint.json` 의 행 수에서 유도한다
+ *                      (그 파일이 코퍼스 자의 정본이다 — F-105 규율).
+ *                      ⚠ 명시로 낮춰서 통과시키지 마라. listLumaDumps() 는 덤프
+ *                      디렉토리가 없으면 조용히 빈 배열을 주므로 «0/0 전부 통과»
+ *                      라는 거짓 초록이 열린다.
+ *                      ⭐ 2026-08-25: 종전엔 여기 `379` 가 박혀 있었고 그 값이
+ *                      네 곳에 흩어져 있었다. 코퍼스가 379 → 433 으로 자라자
+ *                      **넷을 다 손으로 올려야 했다** — 그게 사본 목록이 썩는
+ *                      방식이다. 이제 둘(여기 · run-corpus.ps1)은 유도한다.
  *
  * 코퍼스가 **자라는 것**은 정상이다 (사진이 추가된다). 그래서 --base 대조는
  * 「기준 행이 빠졌나」만 거부하고, 늘어난 행은 교집합 밖으로 빼서 따로 보고한다 —
@@ -46,7 +53,29 @@ const flag = (name, fallback) => {
 const frontendPath = resolve(flag('frontend', join(REPO, 'src', 'decoder', 'frontend.js')));
 const outPath = resolve(flag('out', join(REPO, 'test', 'output', 'corpus-ab', `${label}.json`)));
 const basePath = flag('base', null);
-const expect = Number(flag('expect', '379'));
+/** 코퍼스 자의 정본 — 지문 JSON 의 행 수. 못 읽으면 «모른다» 로 죽는다
+ *  (임의 기본값을 지어내면 그 순간 다섯 번째 사본이 된다). */
+function fingerprintCount() {
+  const path = join(REPO, 'test', 'photo-corpus-fingerprint.json');
+  if (!existsSync(path)) return null;
+  try {
+    // 지문 JSON 은 `{ _note, count, digest }` 다 — 행 목록이 아니라 **수와 다이제스트**만
+    // 담는다 (목록을 담으면 그 자체가 또 하나의 사본이 된다). count 를 그대로 쓴다.
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    return Number.isInteger(parsed?.count) ? parsed.count : null;
+  } catch {
+    return null;
+  }
+}
+
+const expectFlag = flag('expect', null);
+const derived = expectFlag === null ? fingerprintCount() : null;
+if (expectFlag === null && derived === null) {
+  console.error('✗ 기대 덤프 수를 모른다 — 지문 JSON 을 못 읽었고 --expect 도 없다.');
+  console.error('  자를 모르는 채로 재면 «0/0 전부 통과» 거짓 초록이 열린다.');
+  process.exit(3);
+}
+const expect = Number(expectFlag ?? derived);
 const decodeOpts = JSON.parse(flag('opts', '{}'));
 
 // ── 재료 ──────────────────────────────────────────────────────────

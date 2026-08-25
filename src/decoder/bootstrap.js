@@ -596,7 +596,7 @@ function validVersionIndices(hypothesis) {
 /** 모든 패밀리를 통틀어 존재하는 포맷 인덱스 전체. 재배치 탐색의 열거 범위다. */
 function allFormatIndices() {
   const out = new Set();
-  for (const family of ['hex', 'tri', 'cube']) {
+  for (const family of ['hex', 'tri', 'cube', 'star']) {
     for (const entry of familyProfiles(family)) {
       for (const index of entry.formatIndices) out.add(index);
     }
@@ -615,7 +615,7 @@ function allFormatIndices() {
  */
 function formatIndexOwners(formatIndex) {
   const owners = [];
-  for (const family of ['hex', 'tri', 'cube']) {
+  for (const family of ['hex', 'tri', 'cube', 'star']) {
     for (const entry of familyProfiles(family)) {
       if (entry.formatIndices.includes(formatIndex)) {
         owners.push({ family, dimension: entry.dimension });
@@ -4246,6 +4246,26 @@ export function enumeratePriorGridHypotheses(luma, poses, options = {}) {
 const FORMAT_RECAST_MAX = 12;
 
 /**
+ * 다른 패밀리로의 **새** 재라벨은 포맷 3복제가 한 말을 모호성 없이 합의했을 때만 연다.
+ * `erasedFormatCells` 하나라도 있거나, 복제 하나가 통째로 소거됐거나, 다수결 원문이
+ * 둘 이상이면 기존 실패를 보존한다. CRC 는 이 함수 뒤의 전 인덱스 재열거와
+ * `validateGridHypotheses` 에서 각각 그대로 돈다.
+ */
+function hasCleanFormatRecastEvidence(failure) {
+  const detail = failure && failure.detail;
+  const generated = detail && detail.diagnostics && detail.diagnostics.generated;
+  return Boolean(
+    detail
+    && detail.erasedFormatCells === 0
+    && generated
+    && generated.majority === 1
+    && generated.replicas === 3
+    && generated.erasedReplicas === 0
+    && generated.unique === 1,
+  );
+}
+
+/**
  * **포맷 재라벨** — 이미 «좋은 H» 를 든 가설이 남의 패밀리 포맷을 CRC 까지 맞춰 읽었다면,
  * H 는 그대로 두고 **패밀리·차원 라벨만** 갈아 끼운 가설을 낸다.
  *
@@ -4277,11 +4297,42 @@ function recastHypothesesByFormat(hypotheses, validated) {
   if (failures.length === 0) return [];
   const byId = new Map(hypotheses.map((hypothesis) => [hypothesis.hypothesisId, hypothesis]));
   const everyIndex = allFormatIndices();
-  const recast = [];
   const seen = new Set();
+  const appendOwnerCandidates = (target, source, proposal, owner) => {
+    for (const centerQr of [false, true]) {
+      const candidate = {
+        ...source,
+        family: owner.family,
+        k: owner.dimension,
+        centerQr,
+      };
+      // 라벨 조합이 실제로 이 인덱스를 소유하는지는 기존 규칙에 물어본다.
+      if (!validVersionIndices(candidate).includes(proposal.versionIndex)) continue;
+      const id = `${source.hypothesisId}~recast-${owner.family}-${owner.dimension}`
+        + (centerQr ? '-qr' : '');
+      if (seen.has(id)) continue;
+      seen.add(id);
+      candidate.hypothesisId = id;
+      candidate.source = `${source.source}+format-recast`;
+      // 크기 증거는 옛 패밀리 기준이라 그대로 쓰면 안 된다. 없으면 rK=1 로 떨어진다.
+      delete candidate.sizeGeometry;
+      target.push(candidate);
+    }
+  };
 
+  // 기존 hex↔tri 재라벨은 종전 상한·순서 그대로 먼저 완성한다. 새 star 후보가
+  // FORMAT_RECAST_MAX 자리를 소비해 기존 후보를 밀어내면 «추가만» 계약이 깨진다.
+  const recast = [];
+  const starRecast = [];
   for (const failure of failures) {
-    if (recast.length >= FORMAT_RECAST_MAX) break;
+    // 두 목록이 모두 찼을 때만 끝낸다. star가 먼저 차도 기존 목록은 종전대로 계속
+    // 만들고, 기존 목록이 먼저 차도 뒤의 star 증거는 기존 목록을 건드리지 않고 찾는다.
+    if (recast.length >= FORMAT_RECAST_MAX
+      && starRecast.length >= FORMAT_RECAST_MAX) break;
+    // 종전 구현은 실패 하나를 처리하기 시작할 때만 상한을 확인하고, 그 실패에서 나온
+    // 후보는 모두 넣었다. 같은 실패 안에서 잘라 기존 집합을 줄이지 않도록 이 값을 고정한다.
+    const collectExisting = recast.length < FORMAT_RECAST_MAX;
+    const collectStar = starRecast.length < FORMAT_RECAST_MAX;
     const reads = failure.detail && failure.detail.reads;
     const source = byId.get(failure.hypothesisId);
     // cube 는 격자 파라미터화(canonicalSpace)가 달라 라벨만 갈아 끼울 수 없다.
@@ -4298,29 +4349,22 @@ function recastHypothesesByFormat(hypotheses, validated) {
       for (const owner of formatIndexOwners(proposal.versionIndex)) {
         if (owner.family === 'cube') continue;
         if (owner.family === source.family && owner.dimension === source.k) continue;
-        for (const centerQr of [false, true]) {
-          const candidate = {
-            ...source,
-            family: owner.family,
-            k: owner.dimension,
-            centerQr,
-          };
-          // 라벨 조합이 실제로 이 인덱스를 소유하는지는 기존 규칙에 물어본다.
-          if (!validVersionIndices(candidate).includes(proposal.versionIndex)) continue;
-          const id = `${source.hypothesisId}~recast-${owner.family}-${owner.dimension}`
-            + (centerQr ? '-qr' : '');
-          if (seen.has(id)) continue;
-          seen.add(id);
-          candidate.hypothesisId = id;
-          candidate.source = `${source.source}+format-recast`;
-          // 크기 증거는 옛 패밀리 기준이라 그대로 쓰면 안 된다. 없으면 rK=1 로 떨어진다.
-          delete candidate.sizeGeometry;
-          recast.push(candidate);
+        if (owner.family === 'star') {
+          if (collectStar
+            && owner.dimension === source.k
+            && hasCleanFormatRecastEvidence(failure)) {
+            appendOwnerCandidates(starRecast, source, proposal, owner);
+          }
+          continue;
+        }
+        if (collectExisting) {
+          appendOwnerCandidates(recast, source, proposal, owner);
         }
       }
     }
   }
-  return recast;
+  // star는 별도 목록으로 **후첨**한다. 기존 목록의 원소·순서·상한 판정을 바꾸지 않는다.
+  return [...recast, ...starRecast];
 }
 
 function relocationTargets(validated, attemptedFamilies) {
@@ -4342,6 +4386,9 @@ function relocationTargets(validated, attemptedFamilies) {
     for (const proposal of enumerated.proposals) {
       if (!proposal.crcOk) continue;
       for (const owner of formatIndexOwners(proposal.versionIndex)) {
+        // star 는 위의 동일-H 재라벨에서만 연다. 여기서 기하를 새로 열거하면
+        // 포맷을 깨끗하게 읽은 바로 그 증거와 무관한 후보까지 넓어질 수 있다.
+        if (owner.family === 'star') continue;
         if (attemptedFamilies.has(owner.family)) continue;
         targets.add(owner.family);
         evidence.push({

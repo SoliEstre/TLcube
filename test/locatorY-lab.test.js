@@ -251,7 +251,11 @@ test('로케이터 문구는 8언어가 같고 성능 보장을 하지 않는다
   // 드랍 보존 — v0W2 카드는 내려갔지만 사전 문자열은 남는다 (재번역 방지).
   assert.match(INDEX, /"g610":\s*"셀 표면 v0W2 \(Y1\)"/);
   // v0T 카드가 실제로 사전 라벨을 쓴다.
-  assert.match(INDEX, /data-locator="cell-surface-v0t"[\s\S]*?data-i18n="g993">셀 표면 v0T \(Y1\)</);
+  // **의도적 갱신 «T 계열 해상도 개방» (2026-08-25)** — 라벨 꼬리표가 `(Y1)` 에서
+  // `(Y1/Y2)` 로 바뀌었다. v2r2 의 `(Y1/Y2)`(g543) 와 같은 관례다. 근거는
+  // `CELL_SURFACE_FINAL_NS` 의 v0t = [21, 25] 이고, 그 유도를 재는 것이
+  // `i18n-cell-surface-resolution.test.js` 다 (여기는 카드↔사전 배선만 잰다).
+  assert.match(INDEX, /data-locator="cell-surface-v0t"[\s\S]*?data-i18n="g993">셀 표면 v0T \(Y1\/Y2\)</);
   // 운영자가 «v0TY» 로 찾을 수 있어야 한다 — 부제에 그 문자열이 실제로 있다.
   for (const lang of ['ko', 'en', 'ja']) {
     assert.match(langBlock(lang), /"g965":\s*"[^"]*v0TY[^"]*"/, lang + ' 의 g965 에 v0TY 가 없다');
