@@ -42,10 +42,11 @@ import {
 export const INNER_FORCED_VERSION_Y = 1;
 
 /** 파생 프로파일 → 그것을 만든 **기반 카드**. 없으면 활성 카드가 하나도 안 켜진다. */
-export const CARD_FOR_DERIVED_PROFILE = Object.freeze({
-  [LOCATOR_PROFILE_CELL_SURFACE_V0TY]: LOCATOR_PROFILE_CELL_SURFACE_V0T,
-  [LOCATOR_PROFILE_CELL_SURFACE_V0TRY]: LOCATOR_PROFILE_CELL_SURFACE_V0TR,
-});
+// ⭐ **2026-08-25 카드 복원으로 비었다.** v0TY·v0TRY 가 자기 카드를 되찾았으므로
+// 사상할 것이 없다 — 사상을 남겨 두면 사용자가 v0TY 를 눌렀는데 v0T 가 켜진다.
+// 표를 지우지 않고 **빈 채로** 두는 이유: 앞으로 또 «카드 없는 파생값» 이 생기면
+// 여기가 그 자리다 (그때 활성 카드가 하나도 안 켜지는 증상으로 되돌아온다).
+export const CARD_FOR_DERIVED_PROFILE = Object.freeze({});
 
 /** 활성 프로파일을 화면 카드 id 로 옮긴다 (파생이면 기반 카드). */
 export function activeLocatorCardId(profile) {
@@ -65,7 +66,11 @@ export function allowedYLocatorCards({ inner, far, versionY }) {
   const tSeries = [LOCATOR_PROFILE_CELL_SURFACE_V0T, LOCATOR_PROFILE_CELL_SURFACE_V0TR];
   if (inner) {
     // 중앙측은 «v0TRQ 만» 이다 — 없음도 없다 (중앙 슬롯이 강제된다).
-    return far ? [LOCATOR_PROFILE_OFF, ...tSeries] : [LOCATOR_PROFILE_CELL_SURFACE_V0TRQ];
+    // 코너측은 **먼 코너 슬롯 계열**이다: v0TY · v0TRY (2026-08-25 운영자 — 카드 복원).
+    // v0T · v0TR 이 아니다. 둘은 슬롯이 없는 전면 레이아웃이라 먼 코너 QR 이 설 자리가 없다.
+    return far
+      ? [LOCATOR_PROFILE_OFF, LOCATOR_PROFILE_CELL_SURFACE_V0TY, LOCATOR_PROFILE_CELL_SURFACE_V0TRY]
+      : [LOCATOR_PROFILE_CELL_SURFACE_V0TRQ];
   }
   return versionY === 0
     ? [LOCATOR_PROFILE_OFF, LOCATOR_PROFILE_CELL_SURFACE_V0]

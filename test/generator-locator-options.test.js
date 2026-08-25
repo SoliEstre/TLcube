@@ -27,6 +27,8 @@ const V0 = LOCATOR_PROFILE_CELL_SURFACE_V0;
 const V0T = LOCATOR_PROFILE_CELL_SURFACE_V0T;
 const V0TR = LOCATOR_PROFILE_CELL_SURFACE_V0TR;
 const V0TRQ = LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;
+const V0TY = LOCATOR_PROFILE_CELL_SURFACE_V0TY;
+const V0TRY = LOCATOR_PROFILE_CELL_SURFACE_V0TRY;
 
 test('① 운영자 명세 4행을 표 그대로 잠근다', () => {
   const rows = [
@@ -34,7 +36,7 @@ test('① 운영자 명세 4행을 표 그대로 잠근다', () => {
     ['Y1 · 바깥QR', { inner: false, far: false, versionY: 1 }, [OFF, V0T, V0TR]],
     ['Y2 · 바깥QR', { inner: false, far: false, versionY: 2 }, [OFF, V0T, V0TR]],
     ['안쪽 · 중앙측', { inner: true, far: false, versionY: 1 }, [V0TRQ]],
-    ['안쪽 · 코너측', { inner: true, far: true, versionY: 1 }, [OFF, V0T, V0TR]],
+    ['안쪽 · 코너측', { inner: true, far: true, versionY: 1 }, [OFF, V0TY, V0TRY]],
   ];
   for (const [label, state, expected] of rows) {
     assert.deepEqual(allowedYLocatorCards(state), expected, label);
@@ -68,13 +70,11 @@ test('③ 안쪽 QR 은 자동 사다리를 묻지 않는다 (T 계열 강제)',
   assert.equal(effectiveVersionYForOptions({ inner: false, versionY: 'auto', autoVersion: null }), 1);
 });
 
-test('④ 파생 프로파일은 기반 카드로 표시된다 — 아니면 «아무 것도 안 켜진다»', () => {
-  // v0TY·v0TRY 는 카드가 없다(W2 C3 파생값 강등). 사상 없이 그대로 비교하면
-  // 안쪽+코너측에서 사용자가 카드를 눌러도 선택 흔적이 화면에 안 남는다.
-  assert.equal(activeLocatorCardId(LOCATOR_PROFILE_CELL_SURFACE_V0TY), V0T);
-  assert.equal(activeLocatorCardId(LOCATOR_PROFILE_CELL_SURFACE_V0TRY), V0TR);
-  // 카드가 있는 값은 그대로 통과한다.
-  for (const id of [OFF, V0, V0T, V0TR, V0TRQ]) {
+test('④ v0TY·v0TRY 는 **자기 카드**로 표시된다 (2026-08-25 카드 복원)', () => {
+  // W2 C3 에서 파생값으로 강등했다가 운영자 지시로 카드를 되살렸다. 카드가 있으므로
+  // 더는 기반 카드로 사상하지 않는다 — 사상하면 사용자가 v0TY 를 눌렀는데 v0T 가
+  // 켜지는 «라벨이 사실이 아닌» 상태가 된다.
+  for (const id of [OFF, V0, V0T, V0TR, V0TRQ, V0TY, V0TRY]) {
     assert.equal(activeLocatorCardId(id), id, id + ' 이 엉뚱한 카드로 사상됐다');
   }
 });

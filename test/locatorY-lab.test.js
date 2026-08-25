@@ -139,11 +139,13 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   // 카드 부재는 정확한 닫는 따옴표까지 재서 형제 id 오검을 막는다.
   assert.match(INDEX, /data-locator="cell-surface-v0t"/);
   assert.match(INDEX, /data-locator="cell-surface-v0t"[\s\S]{0,1200}?data-i18n="g993"/);
-  // **의도적 갱신 (W2 C3, 2026-08-24)** — v0TY 카드는 내렸다. 드랍이 아니라
-  // **파생값 강등**이다: 허용값(위 options 단언)·와이어·판독은 그대로 살고,
-  // «QR 안쪽 + 코너측»(#qrFacePlacementSection)이 v0T 에서 이 값을 파생한다
-  // (index.html §deriveYLocatorForQrPosition). i18n 키(g996 계열)는 8언어 보존.
-  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0ty"/);
+  // **의도적 갱신 (2026-08-25, 운영자 지시)** — W2 C3 의 «파생값 강등» 을 **철회**하고
+  // v0TY 카드를 되살렸다 («코너측일 땐 v0TY랑 v0TRY이 표시 되어야 돼»). 표시 범위는
+  // generator-locator-options 의 허용 목록이 «안쪽 + 코너측» 으로 좁힌다.
+  // ⚠ 구 핸들러의 역방향 강제(qrPosition = 'plane')는 되살리지 **않았다** — 'plane' 은
+  //   (안쪽 × 면배치) 분해로 사라진 값이고, 그 양방향 쌍이 C3 가 없애려던 위험이었다.
+  assert.match(INDEX, /data-locator="cell-surface-v0ty"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0ty"[\s\S]{0,1200}?data-i18n="g996"/);
   // **의도적 갱신 «v0TR 계열 편입» (2026-08-17)** — 카드 둘이 더 섬 (v0T 계열은
   // 그대로 있다 — 드랩 없는 편입). i18n 키는 사전의 빈 슬롯을 썼다 (g955·g958) —
   // 4자리 키를 만들면 i18n-coverage 의 3자리 파서가 그 키를 조용히 놓친다.
@@ -151,10 +153,9 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   assert.match(INDEX, /data-locator="cell-surface-v0trq"/);
   assert.match(INDEX, /data-locator="cell-surface-v0tr"[\s\S]{0,1200}?data-i18n="g955"/);
   assert.match(INDEX, /data-locator="cell-surface-v0trq"[\s\S]{0,1200}?data-i18n="g958"/);
-  // **의도적 갱신 (W2 C3)** — v0TRY 카드도 v0TY 와 같은 규약으로 내렸다
-  // (파생값 강등 — «QR 안쪽 + 코너측» 이 v0TR 계열에서 파생). v0TRQ 카드는
-  // 남는다 — 슬롯이 중앙(Y-심)이라 코너 QR 위치 축과 독립인 직접 선택지다.
-  assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0try"/);
+  // **의도적 갱신 (2026-08-25)** — v0TRY 도 v0TY 와 같은 규약으로 되살렸다.
+  assert.match(INDEX, /data-locator="cell-surface-v0try"/);
+  assert.match(INDEX, /data-locator="cell-surface-v0try"[\s\S]{0,1200}?data-i18n="g936"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0wq"/);
   assert.doesNotMatch(INDEX, /data-locator="cell-surface-v0w2"/);

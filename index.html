@@ -2029,6 +2029,29 @@
                (§deriveYLocatorForQrPosition). i18n 키(g996·g997·g998)는 여덟 언어
                모두 남겨 둔다 (드랍 카드 전례). -->
 
+          <!-- ⭐ **복원 (2026-08-25, 운영자 지시)** — W2 C3 에서 «파생값 강등» 으로
+               내렸던 카드다. 운영자가 「코너측일 땐 v0TY랑 v0TRY이 표시 되어야 돼」로
+               되돌렸다. ⚠ **구 핸들러의 역방향 강제는 되살리지 않는다**: 그 분기는
+               `qrPosition = 'plane'` 을 밀어 넣었는데 'plane' 은 (안쪽 × 면배치) 로
+               분해되며 사라진 값이고, 애초에 그 양방향 쌍이 C3 가 없애려던 왕복
+               위험이었다. 지금은 **표시 자체가 안쪽+코너측에서만** 열리므로
+               (generator-locator-options) 상태를 되밀 이유가 없다. -->
+          <div class="toggle-card" data-locator="cell-surface-v0ty">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5" y="5" width="3.6" height="3.6" rx=".5"/>
+              <rect x="6.1" y="6.1" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
+              <rect x="7" y="9.2" width="2" height="2" fill="currentColor" stroke="none"/>
+              <rect x="11.6" y="4.3" width="3.9" height="1.3" fill="currentColor" stroke="none"/>
+              <rect x="14.6" y="5" width="4.4" height="4.4" rx=".6"/>
+              <rect x="16" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <rect x="4.7" y="11.6" width="2.6" height="4.9" rx=".5"/>
+              <rect x="5.5" y="13.4" width="1" height="1.4" fill="currentColor" stroke="none"/>
+              <rect x="13.2" y="13.2" width="6" height="6" rx=".6" stroke-dasharray="1.4 1.1"/>
+            </svg>
+            <span data-i18n="g996">셀 표면 v0TY · 먼 코너 QR (Y1)</span>
+            <span class="card-sub" data-i18n="g998">전면 + 먼 코너 QR</span>
+          </div>
           <!-- v0TR — v0T 재설계 (2026-08-17). 아이콘은 **겹사각 둘 + SE L자** 다:
                우상 겹사각 = NE 바깥 동심 사각(v0T 자리 그대로) · 그 좌하로 살짝 안쪽에
                놓인 두 번째 겹사각 = **NE 안쪽 동심 사각**(이 계열의 코어 앵커, 반경 √129) ·
@@ -2065,6 +2088,22 @@
             </svg>
             <span data-i18n="g958">셀 표면 v0TRQ · 중앙 QR (Y1)</span>
             <span class="card-sub" data-i18n="g969">겹사각 2 + 중앙 QR</span>
+          </div>
+          <!-- ⭐ **복원 (2026-08-25, 운영자 지시)** — v0TY 와 같은 규약. 역방향 강제 없음. -->
+          <div class="toggle-card" data-locator="cell-surface-v0try">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="2"/>
+              <rect x="5" y="5" width="3.6" height="3.6" rx=".5"/>
+              <rect x="6.1" y="6.1" width="1.4" height="1.4" fill="currentColor" stroke="none"/>
+              <rect x="7" y="9.2" width="2" height="2" fill="currentColor" stroke="none"/>
+              <rect x="14.6" y="5" width="4.4" height="4.4" rx=".6"/>
+              <rect x="16" y="6.4" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <rect x="10.2" y="8.2" width="4.4" height="4.4" rx=".6"/>
+              <rect x="11.6" y="9.6" width="1.6" height="1.6" fill="currentColor" stroke="none"/>
+              <rect x="13.2" y="13.2" width="6" height="6" rx=".6" stroke-dasharray="1.4 1.1"/>
+            </svg>
+            <span data-i18n="g936">셀 표면 v0TRY · 먼 코너 QR (Y1)</span>
+            <span class="card-sub" data-i18n="g937">겹사각 2 + 먼 코너 QR</span>
           </div>
           <!-- ⚠ **의도적 갱신 (W2 C3)** — v0TRY 카드도 v0TY 와 같은 규약으로 내렸다
                (파생값 강등 — «QR 안쪽 + 코너측» 이 v0TR 계열에서 파생). i18n 키
@@ -8205,6 +8244,14 @@ if (els.yLocatorCards) {
       //   §deriveYLocatorForQrPosition 이 «안쪽 + 코너측» 에서 이 값을 만든다).
       //   구 분기의 «QR 위치를 면으로 맞춰 준다» 역방향 강제도 함께 사라졌다 —
       //   그 양방향 쌍이 이 개편이 없애려던 왕복 위험이다.
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TY) {
+        // ⭐ 카드 복원 (2026-08-25 운영자). **역방향 강제 없음** — 구 분기는
+        // `qrPosition = 'plane'` 을 밀어 넣었지만 'plane' 은 (안쪽 × 면배치) 분해로
+        // 사라진 값이고, 그 양방향 쌍이 W2 C3 가 없애려던 왕복 위험이었다.
+        // 이 카드는 **안쪽+코너측에서만 표시**되므로 상태를 되밀 이유가 없다.
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TY;
+      } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TRY) {
+        generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TRY;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TR) {
         generatorState.locatorProfileY = LOCATOR_PROFILE_CELL_SURFACE_V0TR;
       } else if (next === LOCATOR_PROFILE_CELL_SURFACE_V0TRQ) {
@@ -10986,7 +11033,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-25.04';
+const GENERATOR_BUILD = '2026-08-25.05';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

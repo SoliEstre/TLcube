@@ -128,11 +128,16 @@ function locatorCardOrder(html) {
 // (v0T/v0TR) × placement 로 실효 프로파일을 유도한다. v0TRQ 는 seam 축 카드로
 // 남는다 (중앙 Y-심 슬롯). 시험판 기대축은 여전히 v0ty/v0try 를 관측값으로
 // 갖는다 — 강등은 생성기 UI 층만이다 (설계서 ② «축 하나만 움직인다»).
+// **의도적 갱신 (2026-08-25, 운영자 지시)** — W2 C3 의 «파생값 강등» 을 철회하고
+// v0TY · v0TRY 카드를 되살렸다 (6 → 8). 각각 자기 계열 바로 뒤에 붙는다:
+// v0T → v0TY · v0TRQ → v0TRY. 표시 범위는 generator-locator-options 가 좁힌다
+// («안쪽 + 코너측» 에서만) — 카드가 있다는 것과 늘 보인다는 것은 다르다.
 const LOCATOR_CARD_ORDER = Object.freeze([
   'auto', 'off', 'cell-surface-v0',
-  'cell-surface-v0t', 'cell-surface-v0tr', 'cell-surface-v0trq',
+  'cell-surface-v0t', 'cell-surface-v0ty',
+  'cell-surface-v0tr', 'cell-surface-v0trq', 'cell-surface-v0try',
 ]);
-test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T → v0TR → v0TRQ 다 (C3 파생 강등)', () => {
+test('Y 검출기 옵션 카드 순서는 자동 → 끔 → v0 → v0T·v0TY → v0TR·v0TRQ·v0TRY 다', () => {
   assert.deepEqual(locatorCardOrder(INDEX), [...LOCATOR_CARD_ORDER]);
 });
 
