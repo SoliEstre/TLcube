@@ -19,6 +19,7 @@ import { encode } from '../src/encode.js';
 import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import { familiesForBeaconMeta } from '../src/decoder/central-beacon-adapt.js';
 import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { classifyFamily, scoreCubeTiling, scoreStarTiling } from '../src/decoder/family.js';
 import { findKAnchorHypotheses } from '../src/decoder/anchor-detect.js';
@@ -37,8 +38,14 @@ const PALETTE = Object.freeze({
 const PPU = 12;
 
 function renderK(text, version, options = {}) {
-  const encoded = encodeK(text, { version, eccLevel: 'M', ...options });
-  const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
+  const { qrText, finderPatternId, ...encodeOptions } = options;
+  const encoded = encodeK(text, { version, eccLevel: 'M', ...encodeOptions });
+  const scene = buildScene(encoded, {
+    palette: PALETTE,
+    margin: 20,
+    ...(qrText === undefined ? {} : { qrText }),
+    ...(finderPatternId === undefined ? {} : { finderPatternId }),
+  });
   return {
     encoded,
     scene,
@@ -136,6 +143,62 @@ test('K-CM 왕복 — K0CM/K1CM/K2CM이 포맷 8과 CM scan order로 원문까�
     assert.equal(result.hypothesis.k, spec.k, spec.name + ': 격자 크기가 다르다');
     assert.equal(result.diagnostics.format.formatIndex, 8,
       spec.name + ': 소비 formatIndex가 star 축 CM 값(8)과 다르다');
+  }
+});
+
+test('K 중앙 QR 왕복 — 평/CM × 전 k × 전 ECC가 기존 와이어로 원문까지 돌아온다', () => {
+  const profiles = [
+    ...VERSIONS_K.map((spec) => ({ spec, cornerMarker: false })),
+    ...VERSIONS_KCM.map((spec) => ({ spec, cornerMarker: true })),
+  ];
+  for (const { spec, cornerMarker } of profiles) {
+    for (const eccLevel of ['L', 'M', 'H']) {
+      const text = 'KQ-' + spec.name + '-' + eccLevel;
+      const { encoded, raster } = renderK(text, spec.version, {
+        eccLevel, cornerMarker, centerQr: true, qrText: text,
+      });
+      assert.equal(encoded.formatIndex, spec.formatIndex, `${spec.name}/${eccLevel}: 와이어 공유 실패`);
+      const result = decodeFrontend(raster);
+      assert.equal(result.ok, true,
+        `${spec.name}/${eccLevel} 중앙 QR 왕복 실패: ${result.reason || ''} `
+        + JSON.stringify(result.detail?.pipelineCode));
+      assert.equal(result.text, text, `${spec.name}/${eccLevel}: 원문이 다르다`);
+      assert.equal(result.family, 'star', `${spec.name}/${eccLevel}: star가 아니다`);
+      assert.equal(result.versionName, spec.name, `${spec.name}/${eccLevel}: 프로파일이 다르다`);
+      assert.equal(result.diagnostics.format.formatIndex, spec.formatIndex,
+        `${spec.name}/${eccLevel}: 소비 와이어가 다르다`);
+    }
+  }
+});
+
+test('K 중앙 v0 왕복 — 평/CM × 전 k × 전 ECC가 기존 와이어로 원문까지 돌아온다', () => {
+  const profiles = [
+    ...VERSIONS_K.map((spec) => ({ spec, cornerMarker: false })),
+    ...VERSIONS_KCM.map((spec) => ({ spec, cornerMarker: true })),
+  ];
+  for (const { spec, cornerMarker } of profiles) {
+    for (const eccLevel of ['L', 'M', 'H']) {
+      const text = 'KB-' + spec.name + '-' + eccLevel;
+      const { encoded, raster } = renderK(text, spec.version, {
+        eccLevel, cornerMarker, centralV0: true, finderPatternId: 'central-v0',
+      });
+      assert.equal(encoded.formatIndex, spec.formatIndex, `${spec.name}/${eccLevel}: 와이어 공유 실패`);
+      // 비컨 본문 우선 경로에서도 현재 계열 추론(O=평 K, G=K-CM)을 포맷 7/8이
+      // star로 되짚어야 한다. 직접 locator 경로만 초록이고 재분류 경로가 죽는 것을 막는다.
+      assert.deepEqual(familiesForBeaconMeta({
+        family: cornerMarker ? 'G' : 'O',
+        formatDigits: encoded.formatDigits.slice(0, 5),
+      }), ['star'], `${spec.name}/${eccLevel}: 비컨 메타가 star로 재분류되지 않는다`);
+      const result = decodeFrontend(raster);
+      assert.equal(result.ok, true,
+        `${spec.name}/${eccLevel} 중앙 v0 왕복 실패: ${result.reason || ''} `
+        + JSON.stringify(result.detail?.pipelineCode));
+      assert.equal(result.text, text, `${spec.name}/${eccLevel}: 원문이 다르다`);
+      assert.equal(result.family, 'star', `${spec.name}/${eccLevel}: star가 아니다`);
+      assert.equal(result.versionName, spec.name, `${spec.name}/${eccLevel}: 프로파일이 다르다`);
+      assert.equal(result.diagnostics.format.formatIndex, spec.formatIndex,
+        `${spec.name}/${eccLevel}: 소비 와이어가 다르다`);
+    }
   }
 });
 

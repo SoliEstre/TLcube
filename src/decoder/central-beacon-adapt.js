@@ -29,6 +29,10 @@ import { centralBeaconGeometry } from '../centralBeaconWire.js';
 import { FINDER_CELL_ORDER } from '../finder-patterns.js';
 import { CORNER_UNIT_OFFSETS, hexCorners, regionCells } from '../hexgrid.js';
 import { VERSIONS } from '../capacity.js';
+import { VERSIONS_K } from '../capacityK.js';
+import { regionCellsK } from '../layoutK.js';
+import { decodeSingle } from '../formatinfo.js';
+import { K_FORMAT_INDEX } from '../formatK.js';
 import { detectCellSurfaceBlockShapes } from './cellsurface-block-detect.js';
 import { robustPercentiles } from './luma.js';
 import { projectPoint } from './homography.js';
@@ -175,14 +179,24 @@ export function isCentralV0CubeHypothesis(hypothesis) {
 }
 
 /**
- * 비컨 메타의 계열 글자 → 바깥 기하 패밀리.
+ * 비컨 메타의 계열 글자 + 바깥 포맷 워드 → 바깥 기하 패밀리.
  * G 는 hex 위에 코너 마커가 앉은 것이라 패밀리는 hex, 포맷 워드가 G 인덱스를 말한다.
+ * K 는 현재 비컨 계열 추론에서 평 K를 O, K-CM을 G로 적지만, 바깥 포맷 값 7/8은
+ * star 축에서만 유효하다. 그래서 그 5digit을 직접 복호해 K 표의 값이면 star로
+ * 되짚는다. 새 와이어 값은 없고, K 표가 이미 가진 7/8을 판별 신호로 재사용한다.
  * Y 는 바깥 O/G 가 아니므로 시딩하지 않는다.
  */
 export function familiesForBeaconMeta(meta) {
   if (!meta || typeof meta.family !== 'string') return [];
+  if (meta.family === 'K') return ['star'];
   if (meta.family === 'A') return ['tri'];
   if (meta.family === 'Y') return [];
+  if (Array.isArray(meta.formatDigits) && meta.formatDigits.length === 5) {
+    const format = decodeSingle(meta.formatDigits);
+    if (format.ok && K_FORMAT_INDEX.some((entry) => entry.formatIndex === format.version)) {
+      return ['star'];
+    }
+  }
   return ['hex'];
 }
 
@@ -288,6 +302,21 @@ const UNIT_OUTER_SUPPORT = (() => {
   return table;
 })();
 
+/** Type K 별 실루엣의 단위 지지 반지름. 중앙 슬롯은 O와 같지만 바깥 경계가 3k
+ * 꼭짓점까지 뻗으므로, O 표로 역산한 cellSize는 K에서 틀린다. 기존 표는 건드리지
+ * 않고 별 후보를 나란히 둔 뒤 locator 톤 대조가 맞는 배율만 남긴다. */
+const UNIT_STAR_OUTER_SUPPORT = (() => {
+  const table = new Map();
+  const layout = { size: 1, originX: 0, originY: 0 };
+  for (const spec of VERSIONS_K) {
+    const points = regionCellsK(spec.k).flatMap((cell) => hexCorners(cell.q, cell.r, layout));
+    const supports = CORNER_UNIT_OFFSETS.map((axis) => Math.max(...points.map(
+      (point) => point.x * axis.x + point.y * axis.y)));
+    table.set(spec.k, Math.min(...supports));
+  }
+  return table;
+})();
+
 /**
  * 중심-사전 fallback — 전경 기하에서 비컨 후보를 직접 만든다.
  *
@@ -353,7 +382,9 @@ function centerPriorBeaconFinders(luma, emitted) {
 
   const shrink = centralBeaconGeometry().shrink;
   const finders = [];
-  for (const [k, unitOuter] of UNIT_OUTER_SUPPORT) {
+  // hex/O 후보를 먼저 두어 기존 프레임의 순서가 비트 동일하다. star 후보는 뒤에
+  // 추가하며, 잘못된 실루엣 배율은 아래 locator 톤 대조에서 탈락한다.
+  for (const [k, unitOuter] of [...UNIT_OUTER_SUPPORT, ...UNIT_STAR_OUTER_SUPPORT]) {
     const cellSize = outerSupport / unitOuter;
     const modulePitch = cellSize * UNIT_CENTRAL_SLOT_RADIUS * shrink / CENTRAL_V0_SOURCE_N;
     for (let index = 0; index < ORIENTATION_DEGREES.length; index += 1) {

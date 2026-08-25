@@ -43,7 +43,8 @@
  */
 
 import {
-  CELL_SURFACE_FINAL_V0, CELL_SURFACE_FINAL_V0TR, capacityForCellSurfaceFinal,
+  CELL_SURFACE_FINAL_NS, CELL_SURFACE_FINAL_V0, CELL_SURFACE_FINAL_V0TR,
+  capacityForCellSurfaceFinal,
 } from './cellSurfaceFinal.js';
 import { VERSIONS_Y, capacityForY } from './capacityY.js';
 import {
@@ -85,6 +86,49 @@ function capacityOfRung(rung, level, tones) {
     ?? VERSIONS_Y.find((s) => s.version === rung.version);
   if (!spec) return -1;
   return capacityForY(spec, level).maxPayloadBytes;
+}
+
+/** n → Y 버전. 손 표를 안 쓰고 VERSIONS_Y 에서 유도한다 (버전이 늘면 따라온다). */
+function versionOfN(n) {
+  const spec = VERSIONS_Y.find((s) => s.n === n);
+  return spec === undefined ? undefined : spec.version;
+}
+
+/**
+ * **로케이터를 사용자가 고정한 상태**에서 「들어가는 최소 해상도」.
+ *
+ * 왜 별도 함수인가 (2026-08-25 운영자 신고 ②-2): `resolveAutoY` 는 (해상도 × 로케이터)
+ * 를 **쌍으로** 고른다. 그런데 사용자가 검출기 카드를 직접 누르면 로케이터는 고정되고
+ * 남는 자유도는 해상도뿐이다 — 그때 사다리를 그대로 쓰면 «사다리가 고른 로케이터» 와
+ * «사용자가 고른 로케이터» 가 어긋난다. 그렇다고 안 쓰면 **버전이 기본값 Y1 로 떨어져**
+ * 내용이 잘린다 (운영자 실측: 「Y2 로 넘어간 상태에서 검출기를 직접 고르면 Y1 로 내려옴」).
+ *
+ * 그래서 «그 레이아웃이 지원하는 n 안에서만» 같은 사다리 규칙(ECC 바깥 · 해상도 안쪽)을
+ * 다시 돈다. 지원 n 의 정본은 `CELL_SURFACE_FINAL_NS` 다 — 손 목록을 만들지 않는다.
+ *
+ * @param {{layout:string, payloadBytes:number, tones:2|3, eccLevel:'auto'|'L'|'M'|'H'}} input
+ * @returns {number|undefined} 지원 n 이 없거나 알 수 없는 레이아웃이면 undefined
+ *   (그때는 호출자가 인코더 기본 해석에 맡긴다 — 조용히 값을 지어내지 않는다).
+ */
+export function resolveVersionForLayout({ layout, payloadBytes, tones, eccLevel }) {
+  const ns = CELL_SURFACE_FINAL_NS[layout];
+  if (!Array.isArray(ns) || ns.length === 0) return undefined;
+  const versions = [...ns].sort((a, b) => a - b).map(versionOfN).filter((v) => v !== undefined);
+  if (versions.length === 0) return undefined;
+  const t = tones === 3 ? 3 : 2;
+  const levels = eccLevel === 'auto' ? AUTO_ECC_LADDER : [eccLevel];
+  for (const level of levels) {
+    for (let i = 0; i < versions.length; i += 1) {
+      let cap;
+      try {
+        cap = capacityForCellSurfaceFinal(ns[i], level, t, layout).maxPayloadBytes;
+      } catch { continue; }
+      if (cap >= 0 && payloadBytes <= cap) return versions[i];
+    }
+  }
+  // 최저 ECC·최대 해상도로도 안 들어간다 — 최대를 주고 인코더가 판정하게 둔다
+  // (여기서 조용히 자르면 «왜 잘렸는지» 가 화면에서 사라진다).
+  return versions[versions.length - 1];
 }
 
 /**

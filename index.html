@@ -5919,7 +5919,7 @@ import { VERSIONS as VERSIONS_O_TABLE } from './src/capacity.js';
 import { VERSIONS_A as VERSIONS_A_TABLE } from './src/capacityA.js';
 import { VERSIONS_K as VERSIONS_K_TABLE } from './src/capacityK.js';
 import { encodeK } from './src/encodeK.js';
-import { resolveAutoY } from './src/generator-auto-y.js';
+import { resolveAutoY, resolveVersionForLayout } from './src/generator-auto-y.js';
 import {
   activeLocatorCardId, allowedYLocatorCards, effectiveVersionYForOptions,
 } from './src/generator-locator-options.js';
@@ -7550,12 +7550,17 @@ function renderFinderUi() {
   // 사유는 「star 검출이 불스아이 밖을 못 읽는다」였고, **레인 POSE 가 그것을 열었다**:
   // 분류에 star 가 없을 때 중앙 파인더별로 K 앵커 검출을 독립 실행한다 (bootstrap).
   // 실측 재측정 — 파인더 19종 × 버전 3 중 **합법 조합 54/54 성공**.
-  // 그래서 남는 차단은 **인코더가 실제로 던지는 것**뿐이다: centerQr · centralV0 ·
-  // daehanFinder (encodeK §옵션 배타). 그 셋만 숨긴다.
+  // 그래서 남는 차단은 **인코더가 실제로 던지는 것**뿐이다 (encodeK §옵션 배타).
+  //
+  // ⭐ **centerQr · centralV0 개설 (2026-08-25 저녁, 레인 KEX)** — 운영자 신고 ①
+  //    「중앙 TL 이랑 중앙 QR 카드가 없음」. 「배치 검증 미실시」는 «안 된다» 가 아니라
+  //    **«안 재 봤다»** 였고, 재 보니 열렸다: K 코어는 O/A 와 **좌표까지 같은 중앙
+  //    19셀 슬롯**을 이미 비워 두고, 전 k 에서 그 슬롯 ∩ 데이터 셀 = **0** 이다.
+  //    회계가 안 바뀌므로 새 포맷 값도 없다 — 평 K 7 · K-CM 8 을 그대로 공유한다.
+  //    자: 평/CM × 전 k × 전 ECC 프런트엔드 왕복 **36/36**.
+  //    남는 차단은 **daehan 하나**다 (그쪽은 여전히 미실측).
   const typeK = currentType() === 'K';
-  const K_BLOCKED_FINDER_IDS = typeK
-    ? new Set(['center-qr', CENTRAL_V0_FINDER_PATTERN_ID])
-    : null;
+  const K_BLOCKED_FINDER_IDS = typeK ? new Set() : null;
   for (const card of document.querySelectorAll('[data-finder-id]')) {
     // 중앙 v0(비컨)는 2026-08-22 부터 O·A 공통이다 — A 에서 카드를 숨기던 분기는
     // finder-selection 의 리셋과 함께 걷어냈다 (운영자 지시 «타입 OAK 모두»).
@@ -7784,11 +7789,12 @@ function renderQrPositionUi() {
    * 고른 것인데, 여기서 조용히 daehan 을 떨구면 카드는 daehan 인데 그림은 아닌
    * «라벨이 사실이 아닌» 상태가 된다. 그래서 **중앙 QR 카드를 잠근다.**
    */
-  // K 는 파인더와 무관하게 **안쪽 QR 자체가 불가**다 — encodeK 가 centerQr 를 던진다.
-  // 파인더가 중앙을 먹어서가 아니라 타입 계약이라, 같은 «안쪽 잠금» 축에 함께 싣는다.
-  const typeRejectsCentreQr = currentType() === 'K';
-  const finderTakesCentre = typeRejectsCentreQr
-    || isDaehanFinderPatternId(generatorState.finderPatternId)
+  // ⭐ **K 의 안쪽 QR 잠금 해제 (2026-08-25, 레인 KEX)**. 구 사유는 「encodeK 가
+  //    centerQr 를 던진다」였고 그건 **타입 계약이 아니라 미실측 배타**였다 —
+  //    실측하니 중앙 19셀 슬롯이 K 코어에도 그대로 있고 데이터 교집합이 0 이라
+  //    회계가 안 바뀐다. 이제 K 도 O·A 와 같은 «파인더가 중앙을 먹나» 축만 본다.
+  //    (daehan 은 여전히 중앙을 먹으므로 그 술어가 K 에서도 계속 잠근다.)
+  const finderTakesCentre = isDaehanFinderPatternId(generatorState.finderPatternId)
     || isCentralV0FinderPatternId(generatorState.finderPatternId);
   if (finderTakesCentre && generatorState.qrPosition === 'inner') {
     // ⚠ 예전엔 스키마 밖 값 'outer' 를 대입하던 잠복 버그였다 (2026-08-23 수리) —
@@ -8285,14 +8291,38 @@ function resolveAutoYSafe() {
  *   사다리가 이미 (버전, 프로파일) 을 **한 번에** 고른 결과를 읽기만 한다 —
  *   구성상 둘은 서로 정합이다.
  *
- * 검출기가 수동이면 undefined 를 준다 = 종전 동작(레이아웃 분기의 기본값 Y1).
- * 사다리를 안 물어본 선택에 사다리 값을 밀어 넣지 않는다.
+ * ⚠ **검출기가 수동일 때도 해상도는 유도해야 한다** (2026-08-25 운영자 신고 ②-2).
+ *   여기서 undefined 를 주면 레이아웃 분기의 기본값 Y1 로 떨어져, 「Y2 로 넘어간
+ *   상태에서 검출기를 직접 고르면 Y1 로 내려오고 내용이 잘리는」 상태가 된다.
+ *   사다리(로케이터까지 고르는 것)를 쓰지 않되, **고정된 그 레이아웃이 지원하는 n**
+ *   안에서 같은 규칙으로 최소 해상도를 고른다 — 자유도가 하나 줄었을 뿐이다.
  */
 function effectiveVersionYForEncode() {
   if (generatorState.versionY !== 'auto') return Number(generatorState.versionY);
-  if (!detectorAutoY) return undefined;
-  const auto = resolveAutoYSafe();
-  return auto === null ? undefined : auto.version;
+  if (detectorAutoY) {
+    const auto = resolveAutoYSafe();
+    if (auto !== null) return auto.version;
+  }
+  return resolveVersionForLayoutSafe();
+}
+
+/**
+ * 손으로 고른 로케이터의 «들어가는 최소 해상도». 셀 표면이 아니면(끔·hex 프레임)
+ * undefined — 그 경로는 평 Y 용량 규약을 따르므로 여기서 값을 지어내지 않는다.
+ */
+function resolveVersionForLayoutSafe() {
+  const profile = generatorState.locatorProfileY;
+  if (typeof profile !== 'string' || !profile.startsWith('cell-surface-')) return undefined;
+  try {
+    return resolveVersionForLayout({
+      layout: profile.slice('cell-surface-'.length),
+      payloadBytes: payloadByteLength(normalPayloadText()),
+      tones: generatorState.tone === 3 ? 3 : 2,
+      eccLevel: generatorState.eccLevel,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 /** 자동이 켜져 있으면 현재 옵션으로 프로파일을 재유도한다 — versionY·QR 위치가
@@ -10667,9 +10697,16 @@ function encodeOptsFor(cfg) {
     //    여기(인코더 옵션) · finder-zone-ui(stateValue) · generator-seat-auto(blocked) ·
     //    generator-state(허용값) · buildConfig(cornerMarker 술어). 다섯이 한 벌이다 —
     //    하나만 열면 「켰는데 안 먹는」 상태가 된다 (이 repo 가 반복해 겪은 자리).
+    //
+    // ⭐ **중앙 슬롯 개설 (2026-08-25 저녁, 레인 KEX)** — centerQr · centralV0 도 같은
+    //    규약으로 싣는다. 회계가 안 바뀌므로(슬롯 ∩ 데이터 = 0) 새 인덱스 없이 평 K 7 ·
+    //    K-CM 8 을 공유한다. 술어는 O·A 분기와 **같은 것**을 쓴다 — 사본을 만들면 갈린다.
+    //    여전히 **안 싣는 것**은 daehanFinder · turnA 다 (encodeK 가 던진다).
     const opts = {};
     if (cfg.versionK !== undefined) opts.version = cfg.versionK;
     if (cfg.cornerMarker) opts.cornerMarker = true;
+    if (cfg.fallback.mode === 'center') opts.centerQr = true;
+    else if (isCentralV0FinderPatternId(cfg.finderPatternId)) opts.centralV0 = true;
     return { fn: encodeK, opts };
   }
   const opts = { centerQr: cfg.fallback.mode === 'center' };
@@ -10841,7 +10878,14 @@ function renderTypeK(cfg) {
     margin: 20,
     finderPatternId: cfg.finderPatternId,
   };
-  if (cfg.fallback.mode === 'corner') {
+  // ⭐ **중앙 QR 개설 (2026-08-25, 레인 KEX)** — sceneOptionsForOA 와 **같은 모양**으로
+  //    싣는다. 그 함수는 O·A 전용 계약이라 K 가 못 쓰고, 손 조립이라 «빠뜨림이 조용한»
+  //    자리다 (같은 함수에서 finderPatternId 를 빠뜨려 운영자 신고가 났던 전례).
+  if (cfg.fallback.mode === 'center') {
+    sceneOpts.centerQr = true;
+    sceneOpts.qrText = cfg.qrText;
+    sceneOpts.cornerToo = Boolean(cfg.fallback.cornerToo);
+  } else if (cfg.fallback.mode === 'corner') {
     sceneOpts.qrText = cfg.qrText;
     sceneOpts.qrCorner = cfg.fallback.corner;
   }
@@ -11179,7 +11223,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-25.08';
+const GENERATOR_BUILD = '2026-08-25.09';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

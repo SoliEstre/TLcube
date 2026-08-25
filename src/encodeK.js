@@ -10,10 +10,12 @@
 // rs211.js/mask.js/formatinfo.js/layoutK.js/placementK.js/placement.js(육각부 무수정
 // 재사용)가 이미 확정한 조각을 파이프라인 순서대로 조합만 한다.
 //
-// [옵션 배타 — 배치 검증 미실시 조합은 던진다 (encodeA 문법)]
-//   · centerQr·centralV0·daehanFinder — 중앙 슬롯·예약 셀과 K 회계의 조합이 미검증.
-//     기하상 후보(중앙 19셀 슬롯은 K 코어에도 그대로 있다)지만 배타 개설 정형 3단
-//     (근거 실측 → 표 명시 확장 → 구 락의 양성 전환)을 밟기 전엔 열지 않는다.
+// [중앙 슬롯 옵션 — 2026-08-25 KEX 실측 후 개설]
+//   · centerQr·centralV0 — K 코어가 O/A 와 좌표까지 같은 중앙 19셀 슬롯을 이미
+//     비워 두며, 전 k 에서 그 슬롯과 data 셀의 교집합은 0 이다. 둘 다 «그림의
+//     점유자 교체»라 회계는 불변이고 새 와이어 값도 없다: 평 K 는 7, K-CM 은 8을
+//     그대로 공유한다. 전 k × ECC × 평/CM 프런트엔드 왕복이 이 결론을 잠근다.
+//   · daehanFinder — 중앙 슬롯·예약 셀과 K 회계의 조합이 여전히 미검증이다.
 //   · turnA — K = A ∪ 반전A 라 180° 회전이 실루엣을 보존한다(육각별 자기 대칭).
 //     «턴 K» 는 별도 실루엣이 아니므로 옵션 자체가 성립하지 않는다.
 //
@@ -42,6 +44,7 @@ import { rsEncode } from './rs211.js';
 import { maskAdd } from './mask.js';
 import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { dataCellsInScanOrderK, fillerCellsK } from './layoutK.js';
+import { centralSlotCells } from './layout.js';
 import { anchorCells, referenceCellsAll, formatCells, REFERENCE_DIGIT } from './placement.js';
 import { vertexAnchorsK, patchReferenceCellsK } from './placementK.js';
 
@@ -73,9 +76,11 @@ export function chooseVersionK(text, eccLevel = 'M', cornerMarker = false) {
  * `cornerMarker: true` 면 K-CM — 격자·앵커·포맷은 그대로이고 마커 30셀 · 회계
  * (overhead + 27) · 와이어 값(star 축 8)만 갈린다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', cornerMarker?: boolean}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', cornerMarker?: boolean,
+ *          centerQr?: boolean, centralV0?: boolean}} [options]
  * @returns {{
- *   version:number, k:number, eccLevel:'L'|'M'|'H', cornerMarker:boolean, formatIndex:number,
+ *   version:number, k:number, eccLevel:'L'|'M'|'H', cornerMarker:boolean,
+ *   centerQr:boolean, centralV0:boolean, formatIndex:number,
  *   capacity:object, codewordSymbols:Uint8Array, dataDigits:Uint8Array,
  *   fillerDigits:Uint8Array, formatDigits:number[],
  *   cellDigits: Map<string, {digit:number, role:'anchor'|'marker'|'reference'|'format'|'data'|'filler'}>,
@@ -87,12 +92,12 @@ export function encodeK(text, options = {}) {
   if (typeof text !== 'string') {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
-  const { version, eccLevel = 'M', cornerMarker = false } = options;
+  const {
+    version, eccLevel = 'M', cornerMarker = false, centerQr = false, centralV0 = false,
+  } = options;
   // 배타 가드 — 모듈 헤더 §옵션 배타. 조용한 무시는 «와이어와 그림이 어긋난
   // 자기모순 아티팩트» 의 씨앗이라 명시 값이 오면 던진다.
   for (const [name, reason] of [
-    ['centerQr', '중앙 QR × K 회계는 배치 검증 미실시 조합이다'],
-    ['centralV0', '중앙 v0 비컨 × K 는 배치 검증 미실시 조합이다'],
     ['daehanFinder', 'daehan × K 는 배치 검증 미실시 조합이다'],
     ['turnA', 'K 실루엣은 180° 자기 대칭이라 턴 옵션이 성립하지 않는다'],
   ]) {
@@ -102,6 +107,15 @@ export function encodeK(text, options = {}) {
   }
   if (typeof cornerMarker !== 'boolean') {
     throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
+  }
+  if (typeof centerQr !== 'boolean') {
+    throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
+  }
+  if (typeof centralV0 !== 'boolean') {
+    throw new TypeError(`centralV0 는 boolean 이어야 한다: ${typeof centralV0}`);
+  }
+  if (centralV0 && centerQr) {
+    throw new RangeError('centralV0 와 centerQr 를 동시에 켤 수 없다 — 중앙 슬롯 점유자는 하나다');
   }
 
   // K-CM 은 «옵션» 이다 — 격자(k)·앵커·포맷 셀은 평 K 와 같고 회계와 와이어 값만
@@ -170,7 +184,8 @@ export function encodeK(text, options = {}) {
   }
 
   // 포맷 정보 — formatIndex 는 star 축 표(formatK.js)가 정본이다 (평 K 7 · K-CM 8,
-  // 각각 k 로 가른다). 인코더 쪽은 부착까지만 한다 (ADR 0004 «인덱스=사후 검증» 승계).
+  // 각각 k 로 가른다). centerQr·centralV0 는 중앙 슬롯의 그림만 바꾸고 본문 회계가
+  // 같으므로 새 값을 만들지 않고 이 인덱스를 공유한다. 인코더 쪽은 부착까지만 한다.
   const eccLevelValue = ECC_LEVEL[eccLevel];
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
@@ -223,11 +238,24 @@ export function encodeK(text, options = {}) {
     cellDigits.set(cellKey(c.q, c.r), { digit: fillerDigits[i], role: 'filler' });
   }
 
+  // 두 중앙 옵션은 기존 19셀 슬롯의 점유자 교체다. 평 K/K-CM 어느 공급자에서도
+  // 그 셀이 payload 로 되살아나지 않았음을 인코더 경계에서 직접 단언한다.
+  if (centerQr || centralV0) {
+    for (const cell of centralSlotCells()) {
+      if (cellDigits.has(cellKey(cell.q, cell.r))) {
+        const owner = centerQr ? 'centerQr' : 'centralV0';
+        throw new Error(`${owner} 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
+      }
+    }
+  }
+
   return {
     version: spec.version,
     k,
     eccLevel,
     cornerMarker,
+    centerQr,
+    centralV0,
     formatIndex,
     capacity,
     codewordSymbols,

@@ -371,8 +371,11 @@ test('검출기 카드는 파인더 기하 아이콘 + 부제를 갖고 자동 �
   // 이 파일은 그 소유권만 잠근다 — 값은 test/generator-auto-y.test.js 가 잰다.
   assert.match(INDEX, /const auto = resolveAutoYSafe\(\);/,
     "'auto' 가 사다리 모듈을 안 쓴다 — 판정이 다시 인라인으로 돌아갔나");
-  assert.match(INDEX, /import \{ resolveAutoY \} from '\.\/src\/generator-auto-y\.js';/,
-    'generator-auto-y 를 import 하지 않는다');
+  // 2026-08-25: `resolveVersionForLayout` 이 같은 모듈에서 함께 들어오면서 구 락의
+  // «중괄호 안에 이름 하나» 가정이 깨졌다. 잠글 것은 **소유권**(사다리 판정이
+  // 인라인으로 안 돌아왔나)이지 import 목록의 길이가 아니다.
+  assert.match(INDEX, /import \{[^}]*\bresolveAutoY\b[^}]*\} from '\.\/src\/generator-auto-y\.js';/,
+    'generator-auto-y 의 resolveAutoY 를 import 하지 않는다');
   assert.doesNotMatch(INDEX, /generatorState\.eccLevel === 'auto' \? 'L'/,
     'v0 적합 판정이 아직 L 기준이다 — ECC 가 해상도보다 먼저 양보한다');
   assert.doesNotMatch(INDEX, /function contentFitsCellSurfaceV0\(\)/,

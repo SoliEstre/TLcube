@@ -143,21 +143,30 @@ test('코너 예약 힌트는 기본 문구다 — 중앙 QR 상수 잠금(g580 
 });
 
 // ── Type K ─────────────────────────────────────────────────────────────────
-// K 의 배타는 O/A 와 **모양이 다르다**: 쌍이 아니라 **단독 플래그**다 (encodeK.js
-// §옵션 배타 — 명시 값이 오면 던진다). 위의 쌍 전수 탐색은 `length < 2` 를 건너뛰므로
-// K 를 **구조적으로 못 본다** — 그래서 자를 따로 세운다. 자를 먼저 넓히지 않고 UI 를
-// 열면, 배타 조합이 «초록인 채로» 나간다 (2026-08-20 코너마커×중앙QR 과 같은 부류).
+// K 의 남은 배타는 O/A 와 **모양이 다르다**: 쌍이 아니라 **단독 플래그**다
+// (daehanFinder·turnA). 위의 쌍 전수 탐색은 `length < 2` 를 건너뛰므로 K 를
+// 구조적으로 못 본다 — 그래서 자를 따로 세운다. centerQr·centralV0는 2026-08-25
+// KEX 실측 후 개설되어 아래 양성 단언으로 구 락을 뒤집었다.
 test('Type K 배타 — 인코더에게 묻고, UI 상태가 그 조합을 만들 수 있는지 본다', () => {
   const CANDIDATES = ['cornerMarker', 'centerQr', 'centralV0', 'daehanFinder', 'turnA'];
   const thrown = CANDIDATES
     .filter((f) => rejection(encodeK, { version: 0, eccLevel: 'M' }, { [f]: true }) !== null)
     .sort();
-  assert.deepEqual(thrown, ['centerQr', 'centralV0', 'daehanFinder', 'turnA'],
+  assert.deepEqual(thrown, ['daehanFinder', 'turnA'],
     'K 의 배타 목록이 바뀌었다 — 인코더가 정본이니 UI 가드를 다시 맞춰라');
 
-  // K-CM 은 합법이어야 한다 — 자리는 실재하고 **스캔만** 미배선이다 (typeK-roundtrip ②).
+  // K-CM·중앙 QR·중앙 v0는 합법이어야 한다. 두 중앙 점유자는 기존 19셀 슬롯을
+  // 교체할 뿐이고, 평 K/K-CM 와이어 7/8을 공유한다 (typeK-roundtrip 양성 왕복).
   assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { cornerMarker: true }), null,
     'K-CM 이 인코더에서 막혔다 — 자리 자체가 사라졌나');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { centerQr: true }), null,
+    'K 중앙 QR이 인코더에서 막혔다 — KEX 개설 회귀');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { centralV0: true }), null,
+    'K 중앙 v0가 인코더에서 막혔다 — KEX 개설 회귀');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M', cornerMarker: true },
+    { centerQr: true }), null, 'K-CM 중앙 QR이 막혔다 — 와이어 8 공유 회귀');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M', cornerMarker: true },
+    { centralV0: true }), null, 'K-CM 중앙 v0가 막혔다 — 와이어 8 공유 회귀');
 
   // ── 상태층 — K 를 고르면 «던지는 기본값» 이 만들어지면 안 된다.
   // ⚠ 이 자리가 실제 첫 관문이다: profileFamily 가 K 를 'OA' 로 보내면 기본 프로파일이

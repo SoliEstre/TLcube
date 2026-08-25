@@ -384,21 +384,35 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
 
   // ④ 배타 — encodeK 가 던지는 넷이 UI 에서 만들어지면 안 된다.
   //    (조합 전수는 test/generator-exclusion-matrix.test.js 의 K 절이 잰다.)
-  assert.match(index, /const typeRejectsCentreQr = currentType\(\) === 'K';/,
-    'K 의 안쪽 QR 잠금이 없다 — encodeK 가 centerQr 를 던져 첫 클릭이 죽는다');
+  // **의도적 갱신 (2026-08-25 저녁, 레인 KEX)** — 구 락은 「K 는 안쪽 QR 자체가 불가」를
+  // 잠갔고, 그 사유는 「encodeK 가 centerQr 를 던진다」였다. 그런데 그 던짐은 **타입
+  // 계약이 아니라 «배치 검증 미실시» 배타**였고, 재 보니 열렸다: 중앙 19셀 슬롯이
+  // K 코어에도 그대로 있고 전 k 에서 데이터 셀과 교집합이 0 이라 회계가 안 바뀐다.
+  // 그래서 잠금을 걷고, **되돌아오지 않는지**를 양성으로 잠근다.
+  assert.doesNotMatch(index, /const typeRejectsCentreQr = currentType\(\) === 'K';/,
+    'K 의 안쪽 QR 잠금이 부활했다 — 중앙 슬롯은 2026-08-25 에 개설됐다 (레인 KEX)');
+  assert.match(index, /if \(cfg\.fallback\.mode === 'center'\) opts\.centerQr = true;/,
+    'K 분기가 centerQr 를 인코더에 안 넘긴다 — 카드만 열고 와이어는 안 여는 상태');
+  assert.match(index, /else if \(isCentralV0FinderPatternId\(cfg\.finderPatternId\)\) opts\.centralV0 = true;/,
+    'K 분기가 centralV0 를 인코더에 안 넘긴다');
   // **의도적 갱신 2회 (2026-08-25 하루 안에)** — 거부 → 허용 → **다시 거부**다.
   // ① finderPatternId 를 배선하고 재보니 대부분 스캔이 안 돼 허용 목록으로 좁혔고,
   // ② 같은 날 레인 POSE 가 star 독립 검출을 열어(54/54) 그 사유가 사라져 철회했다.
   // 지금 남는 차단은 **인코더가 실제로 던지는 것**뿐이다 (encodeK §옵션 배타).
   // 왕복 근거는 test/typeK-generator-finder.test.js 가 든다.
+  // 남는 배타는 **daehan 하나**다 (2026-08-25 KEX 이후). 게이트 자체는 유지한다 —
+  // 술어가 사라지면 daehan 카드가 K 에서 열리고 encodeK 가 첫 클릭에 던진다.
   assert.ok(index.includes('const K_BLOCKED_FINDER_IDS = typeK'),
-    'K 배타 게이트가 없다 — encodeK 가 던지는 조합(centerQr·centralV0·daehan)이 카드로 열린다');
+    'K 배타 게이트가 없다 — encodeK 가 던지는 daehan 조합이 카드로 열린다');
 
   // ⑤ **K-CM 개설 (2026-08-25 저녁, 레인 KCM)** — 구 락은 「아직 잠겨 있어야 한다」였다.
   //    사유(bootstrap 이 star formatIndex 8 을 안 연다)가 해소됐으므로 양성으로 뒤집는다:
   //    이제 **안 실으면** 「카드는 켜지는데 와이어엔 없는」 상태가 된다.
   //    근거는 typeK-roundtrip 의 K0CM/K1CM/K2CM 전수 왕복이다.
-  assert.match(index, /opts\.cornerMarker = true;[\s\S]{0,120}encodeK/,
+  // 창이 120 자였는데 2026-08-25 KEX 가 centerQr·centralV0 두 줄을 그 사이에 끼워
+  // 넣어 거짓 빨강이 났다. 창은 «같은 분기 안인가» 를 재는 도구이지 줄 간격 계약이
+  // 아니므로, 분기 하나가 들어갈 만큼 넓힌다.
+  assert.match(index, /opts\.cornerMarker = true;[\s\S]{0,400}encodeK/,
     'K 분기가 cornerMarker 를 안 싣는다 — 자리를 열어 놓고 인코더에 안 넘기면 무동작이다');
   assert.match(index, /type === 'K' && generatorState\.outerSeat === 'k-cm'/,
     'buildConfig 이 K 의 k-cm 자리를 cornerMarker 로 파생하지 않는다');

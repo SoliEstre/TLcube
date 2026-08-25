@@ -2771,7 +2771,10 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
           centerQr: true,
           qrCandidate: candidate,
         };
-        for (const family of ['hex', 'tri']) {
+        // 중앙 19셀 슬롯은 hex/tri/star 코어에서 좌표가 같다. Type K도 같은 QR 포즈를
+        // 쓰므로 star 가설을 함께 연다. 실제 소유 여부는 포맷 CRC(7/8) + 본문 RS가
+        // 가른다 — 게이트·문턱은 그대로다.
+        for (const family of ['hex', 'tri', 'star']) {
           for (const dimension of uniqueDimensions(family)) {
             const base = {
               family,
@@ -3133,7 +3136,7 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
   hypotheses.push(...qrWindowReferenceRefinedHypotheses(luma, qrResult, options));
 
   /*
-   * 중앙 v0 비컨 블록 → 바깥 hex/tri 가설 (Path A).
+   * 중앙 v0 비컨 블록 → 바깥 hex/tri/star 가설 (Path A).
    *
    * 붙일 자리는 discoverCentralCubeFinders 이지만, 그 함수가 ok 를 내면
    * shouldProbeQr 가 꺼지고 중앙 QR·symbol-clipped 경로가 죽는다. 그래서
@@ -3158,7 +3161,20 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
   if (beaconEligible) {
     const beaconFinders = discoverCentralBeaconFinders(luma, options);
     for (const finder of beaconFinders) {
-      for (const family of ['hex', 'tri']) {
+      // K 코어도 같은 중앙 19셀 슬롯을 쓰므로 같은 포즈에서 star 가설을 추가한다.
+      // 포맷 7/8 + 본문 RS가 소유자를 가르며 기존 수용 게이트는 바뀌지 않는다.
+      for (const family of ['hex', 'tri', 'star']) {
+        if (family === 'star') {
+          // 중앙-사전의 바깥 지지 반지름은 픽셀 문턱 때문에 수 % 작을 수 있다.
+          // K 꼭짓점은 3k 거리라 그 오차가 증폭되므로, 이미 있는 K 앵커 배율 탐색으로
+          // H를 정합한 후보만 연다 (새 문턱 없음).
+          const direct = directAnchorHypotheses(luma, finder, 'star', {
+            ...options,
+            allowWeakAnchorFallback: false,
+          });
+          hypotheses.push(...direct.hypotheses);
+          continue;
+        }
         const seeded = cellFinderHypotheses(luma, finder, family, options);
         hypotheses.push(...seeded);
         // 턴A(내부 타입 V) 쌍둥이 — 중앙 QR 경로(§qr-center)와 **같은 관용구**다.

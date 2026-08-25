@@ -10,6 +10,7 @@ import { encodeK, chooseVersionK } from '../src/encodeK.js';
 import { decodeCellsK } from '../src/decoder/decode-k.js';
 import { VERSIONS_K, capacityForK } from '../src/capacityK.js';
 import { dataCellsInScanOrderK, layoutMapK } from '../src/layoutK.js';
+import { centralSlotCells } from '../src/layout.js';
 import { regionCellsK, vertexAnchorsK, invertedVertexAnchors } from '../src/placementK.js';
 import { anchorCells } from '../src/placement.js';
 import {
@@ -123,17 +124,49 @@ test('셀 지도 — 전 셀 커버(불스아이 제외)·역할 회계·digit �
   }
 });
 
-test('옵션 배타 — 미검증 조합은 조용히 무시하지 않고 던진다', () => {
-  // cornerMarker 는 2026-08-24 개설로 이 목록에서 **빠졌다** (배타 개설 정형 3단 ③ —
-  // 구 락을 양성 단언으로). 아래 «K-CM 개설» 테스트가 그 자리를 대신 진다.
-  for (const name of ['centerQr', 'centralV0', 'daehanFinder', 'turnA']) {
+test('옵션 배타 — 남은 미검증·무의미 조합만 던진다', () => {
+  // cornerMarker·centerQr·centralV0 는 개설되어 이 목록에서 빠졌다. 아래 양성
+  // 단언과 프런트엔드 왕복이 구 락의 자리를 대신 진다.
+  for (const name of ['daehanFinder', 'turnA']) {
     assert.throws(() => encodeK('x', { [name]: true }), RangeError, name);
     // false 명시는 허용 (기본값과 같다).
     assert.equal(encodeK('x', { [name]: false }).ok !== false, true);
   }
+  assert.throws(() => encodeK('x', { centerQr: true, centralV0: true }), RangeError);
   assert.throws(() => encodeK(123), TypeError);
   assert.throws(() => encodeK('x', { version: 7 }), RangeError);
   assert.throws(() => encodeK('x', { cornerMarker: 1 }), TypeError);
+  assert.throws(() => encodeK('x', { centerQr: 1 }), TypeError);
+  assert.throws(() => encodeK('x', { centralV0: 1 }), TypeError);
+});
+
+test('중앙 슬롯 개설 — centerQr·centralV0는 회계·와이어를 바꾸지 않는다', () => {
+  const slots = centralSlotCells();
+  assert.equal(slots.length, 19, '중앙 슬롯은 hexDistance≤2의 19셀이다');
+  const profiles = [
+    ...VERSIONS_K.map((spec) => ({ spec, cornerMarker: false })),
+    ...VERSIONS_KCM.map((spec) => ({ spec, cornerMarker: true })),
+  ];
+  for (const { spec, cornerMarker } of profiles) {
+    const baseline = encodeK('K-seat-' + spec.name, {
+      version: spec.version, cornerMarker,
+    });
+    const region = new Set(regionCellsK(spec.k).map(key));
+    for (const seat of slots) assert.equal(region.has(key(seat)), true, `${spec.name} 슬롯 영역`);
+
+    for (const option of ['centerQr', 'centralV0']) {
+      const encoded = encodeK('K-seat-' + spec.name, {
+        version: spec.version, cornerMarker, [option]: true,
+      });
+      assert.equal(encoded[option], true, `${spec.name} ${option} 메타`);
+      assert.equal(encoded.formatIndex, baseline.formatIndex, `${spec.name} ${option} 와이어 공유`);
+      assert.deepEqual(encoded.capacity, baseline.capacity, `${spec.name} ${option} 회계 불변`);
+      for (const seat of slots) {
+        assert.equal(encoded.cellDigits.has(key(seat)), false,
+          `${spec.name} ${option}: 중앙 슬롯이 payload에 남았다 ${key(seat)}`);
+      }
+    }
+  }
 });
 
 test('K-CM 개설 — 회계·와이어·발자국 (구 배타 락의 양성 전환)', () => {
