@@ -54,15 +54,26 @@ export function createFinderQrProfiles(defaultFinderPatternId) {
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',
     }),
-    // K — 바깥 QR 기본값 (Y 와 같은 모양). encodeK 가 centerQr·centralV0·
-    // daehanFinder·turnA 를 던지므로 «안쪽 QR» 기본값을 줄 수 없다.
-    //
-    // ⭐ **기본 파인더 복귀 (2026-08-25 저녁)** — 잠깐 LEGACY(bullseye)로 내려 뒀었다.
-    // 사유는 「cube-bullseye 는 K0 만 읽힌다」였고, 레인 POSE 가 star 검출을 열어
-    // 그 제약이 사라졌다 (54/54). 다른 타입과 같은 기본값으로 되돌린다.
+    /*
+     * K — **안쪽(중앙) QR 기본값. O/A 와 같다** (운영자 지시 2026-08-26:
+     * 「oak 중에 얘만 속큐브로 되어 있다」).
+     *
+     * ⚠ 종전 주석은 「encodeK 가 centerQr·centralV0·daehanFinder·turnA 를 던지므로
+     *   «안쪽 QR» 기본값을 줄 수 없다」고 적고 있었다. **그 서술은 틀렸다.**
+     *   `encodeK` 는 `centerQr` 를 받는다 (`encodeK.js:111`). 던지는 것은
+     *   `centralV0 && centerQr` **조합**일 때뿐이고(`:132`), 사유는 둘이 같은 중앙
+     *   19셀 슬롯을 다투기 때문이다. 즉 제약이 아니라 **미배선**이었다 —
+     *   형제 타입(O/A)이 이미 하고 있으면 그건 제약이 아니다.
+     *   (중앙 QR 렌더·인식은 2026-08-26 오전에 수리돼 운영자 확인까지 끝났다.)
+     *
+     * ⭐ **기본 파인더 복귀 (2026-08-25 저녁)** — 잠깐 LEGACY(bullseye)로 내려 뒀었다.
+     * 사유는 「cube-bullseye 는 K0 만 읽힌다」였고, 레인 POSE 가 star 검출을 열어
+     * 그 제약이 사라졌다 (54/54). `previousFinderPatternId` 가 그 값을 들고 있어
+     * 사용자가 중앙 QR 을 끄면 여기로 돌아온다.
+     */
     K: Object.freeze({
-      qrPosition: DEFAULT_OUTER_QR_POSITION,
-      finderPatternId: defaultFinderPatternId,
+      qrPosition: 'inner',
+      finderPatternId: CENTER_QR_FINDER_PATTERN_ID,
       previousFinderPatternId: defaultFinderPatternId,
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',

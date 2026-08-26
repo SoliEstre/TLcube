@@ -77,6 +77,7 @@ import {
   kaApexRadiusCells,
   silhouetteRadiusCells,
 } from './scanner-zoom.js';
+import { HOMOGRAPHY_CANONICAL_SPACE } from './decoder/contracts.js';
 
 /**
  * 가이드가 겨냥하는 레이아웃 표. `ring` 은 그 형상이 어느 링에 앉는가이고,
@@ -226,6 +227,157 @@ function makePose(layout, frameSide, rotationDegrees, scale, offsetCells, center
   };
 }
 
+function finiteHomography(value) {
+  if (!value || value.length !== 9) return null;
+  const H = new Float64Array(9);
+  for (let index = 0; index < H.length; index += 1) {
+    const entry = Number(value[index]);
+    if (!Number.isFinite(entry)) return null;
+    H[index] = entry;
+  }
+  const determinant = H[0] * (H[4] * H[8] - H[5] * H[7])
+    - H[1] * (H[3] * H[8] - H[5] * H[6])
+    + H[2] * (H[3] * H[7] - H[4] * H[6]);
+  return Number.isFinite(determinant) && Math.abs(determinant) > Number.EPSILON ? H : null;
+}
+
+function projectOrigin(H) {
+  if (!H || Math.abs(H[8]) <= Number.EPSILON) return null;
+  const x = H[2] / H[8];
+  const y = H[5] / H[8];
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+function projectedCellPx(H) {
+  const origin = projectOrigin(H);
+  if (!origin) return null;
+  const project = (x, y) => {
+    const denominator = H[6] * x + H[7] * y + H[8];
+    if (Math.abs(denominator) <= Number.EPSILON) return null;
+    const px = (H[0] * x + H[1] * y + H[2]) / denominator;
+    const py = (H[3] * x + H[4] * y + H[5]) / denominator;
+    return Number.isFinite(px) && Number.isFinite(py) ? { x: px, y: py } : null;
+  };
+  const xStep = project(1, 0);
+  const yStep = project(0, 1);
+  if (!xStep || !yStep) return null;
+  const cellPx = (
+    Math.hypot(xStep.x - origin.x, xStep.y - origin.y)
+    + Math.hypot(yStep.x - origin.x, yStep.y - origin.y)
+  ) / 2;
+  return cellPx > 0 ? cellPx : null;
+}
+
+function scaleImageSpace(H, scaleX, scaleY) {
+  return new Float64Array([
+    H[0] * scaleX, H[1] * scaleX, H[2] * scaleX,
+    H[3] * scaleY, H[4] * scaleY, H[5] * scaleY,
+    H[6], H[7], H[8],
+  ]);
+}
+
+function layoutForPose(family, dimension) {
+  return PRIOR_LAYOUTS.find((entry) => entry.family === family
+    && (family === 'cube' ? entry.n : entry.k) === dimension) || null;
+}
+
+/**
+ * 성공 가설 → 다음 프레임에 다시 넣을 사전 포즈.
+ *
+ * `compactHypothesis()` 가 내는 JSON 숫자 배열을 Float64Array 로 복원한다. 캐노니컬
+ * 좌표는 셀 단위라 해상도와 무관하지만 H 의 출력은 **현재 라스터 픽셀**이다. 그래서
+ * source/target 크기가 함께 주어지면 영상 쪽 두 행을 재배율한다(960↔1440 승격 경로).
+ * 필수 값이 하나라도 없거나 좌표계가 다르면 프레임 루프를 깨지 않고 null 을 돌려준다.
+ */
+export function poseFromHypothesis(hypothesis, options = {}) {
+  if (!hypothesis || typeof hypothesis !== 'object') return null;
+  if (hypothesis.canonicalSpace !== HOMOGRAPHY_CANONICAL_SPACE) return null;
+  const family = hypothesis.family;
+  if (family !== 'hex' && family !== 'tri' && family !== 'cube') return null;
+  const dimension = Number(family === 'cube' ? hypothesis.n : hypothesis.k);
+  const rotationDegrees = Number(hypothesis.rotationDegrees);
+  if (!Number.isInteger(dimension) || dimension <= 0 || !Number.isFinite(rotationDegrees)) {
+    return null;
+  }
+
+  let H = finiteHomography(hypothesis.H);
+  if (!H) return null;
+
+  const dimensionOptionsPresent = [
+    options.sourceWidth, options.sourceHeight, options.targetWidth, options.targetHeight,
+  ].some((value) => value !== undefined);
+  let frameWidth = Number(hypothesis.frameWidth);
+  let frameHeight = Number(hypothesis.frameHeight);
+  if (dimensionOptionsPresent) {
+    const sourceWidth = Number(options.sourceWidth);
+    const sourceHeight = Number(options.sourceHeight);
+    const targetWidth = Number(options.targetWidth);
+    const targetHeight = Number(options.targetHeight);
+    if (!(sourceWidth > 0) || !(sourceHeight > 0)
+      || !(targetWidth > 0) || !(targetHeight > 0)) return null;
+    H = scaleImageSpace(H, targetWidth / sourceWidth, targetHeight / sourceHeight);
+    frameWidth = targetWidth;
+    frameHeight = targetHeight;
+  }
+
+  const center = projectOrigin(H);
+  const cellPx = projectedCellPx(H);
+  if (!center || !(cellPx > 0)) return null;
+  const layout = layoutForPose(family, dimension);
+  const layoutId = typeof options.layoutId === 'string' && options.layoutId
+    ? options.layoutId
+    : layout
+      ? layout.id
+      : family === 'hex'
+        ? 'O-k' + dimension
+        : family === 'tri' ? 'A-k' + dimension : 'Y-n' + dimension;
+  const sourceId = typeof options.id === 'string' && options.id
+    ? options.id
+    : typeof hypothesis.id === 'string' && hypothesis.id
+      ? hypothesis.id
+      : 'carry-' + layoutId + '-r' + rotationDegrees;
+
+  return {
+    id: sourceId,
+    layoutId,
+    family,
+    k: family === 'cube' ? undefined : dimension,
+    n: family === 'cube' ? dimension : undefined,
+    ring: layout ? layout.ring : undefined,
+    rotationDegrees,
+    scale: 1,
+    offsetCells: { dx: 0, dy: 0 },
+    baseCellPx: cellPx,
+    cellPx,
+    centerX: center.x,
+    centerY: center.y,
+    H,
+    canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+    ...(frameWidth > 0 && frameHeight > 0 ? { frameWidth, frameHeight } : {}),
+  };
+}
+
+function jitterHomography(pose, scale, offset) {
+  const H = finiteHomography(pose && pose.H);
+  const centerX = Number(pose && pose.centerX);
+  const centerY = Number(pose && pose.centerY);
+  const baseCellPx = Number(pose && pose.baseCellPx);
+  if (!H || !Number.isFinite(centerX) || !Number.isFinite(centerY) || !(baseCellPx > 0)) {
+    return null;
+  }
+  const targetX = centerX + offset.dx * baseCellPx;
+  const targetY = centerY + offset.dy * baseCellPx;
+  // 영상 좌표에서 중심 기준 배율·평행이동을 왼쪽 합성한다. 오른쪽 합성은 원근 H의
+  // 캐노니컬 좌표를 바꿔 다음 프레임의 카메라 운동과 다른 변환이 된다.
+  const tx = targetX - scale * centerX;
+  const ty = targetY - scale * centerY;
+  return new Float64Array([
+    scale * H[0] + tx * H[6], scale * H[1] + tx * H[7], scale * H[2] + tx * H[8],
+    scale * H[3] + ty * H[6], scale * H[4] + ty * H[7], scale * H[5] + ty * H[8],
+    H[6], H[7], H[8],
+  ]);
+}
+
 function normalizeCenter(frameSide, options) {
   const side = Number(frameSide);
   const x = Number(options.centerX);
@@ -321,8 +473,7 @@ export function guidePriorPoses(options = {}) {
 export function jitterPoses(pose, options = {}) {
   const frameSide = Number(options.frameSide);
   if (!pose || !(frameSide > 0)) return [];
-  const layout = PRIOR_LAYOUTS.find((entry) => entry.id === pose.layoutId);
-  if (!layout) return [];
+  if (!finiteHomography(pose.H)) return [];
   const scales = Array.isArray(options.scales) && options.scales.length > 0
     ? options.scales
     : PRIOR_REFINE_SCALES;
@@ -335,22 +486,27 @@ export function jitterPoses(pose, options = {}) {
 
   const offsetGrid = crossOffsets(offsets);
 
-  const center = {
-    x: pose.centerX,
-    y: pose.centerY,
-  };
   const poses = [];
   for (const scale of scales) {
     for (const offset of offsetGrid) {
       // 이미 1단계에서 평가한 (배율 그대로 · 오프셋 0) 조합은 다시 넣지 않는다.
       if (scale === 1 && offset.dx === 0 && offset.dy === 0) continue;
-      const refined = makePose(
-        layout, frameSide, pose.rotationDegrees, pose.scale * scale, offset, center,
-      );
-      if (!refined) continue;
-      refined.id = pose.id + '~j' + scale.toFixed(3)
-        + formatSigned(offset.dx, 2) + formatSigned(offset.dy, 2);
-      refined.refinedFrom = pose.id;
+      const H = jitterHomography(pose, scale, offset);
+      const refinedCenter = H && projectOrigin(H);
+      const cellPx = H && projectedCellPx(H);
+      if (!H || !refinedCenter || !(cellPx > 0)) continue;
+      const refined = {
+        ...pose,
+        id: pose.id + '~j' + scale.toFixed(3)
+          + formatSigned(offset.dx, 2) + formatSigned(offset.dy, 2),
+        scale: Number(pose.scale) * scale,
+        offsetCells: { dx: offset.dx, dy: offset.dy },
+        cellPx,
+        centerX: refinedCenter.x,
+        centerY: refinedCenter.y,
+        H,
+        refinedFrom: pose.id,
+      };
       poses.push(refined);
       if (poses.length >= limit) return poses;
     }

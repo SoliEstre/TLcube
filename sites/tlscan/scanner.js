@@ -61,7 +61,11 @@ import {
 } from '/src/scan-steady.js';
 import {
   guidePriorPoses,
+  jitterPoses,
+  poseFromHypothesis,
   priorPoseBudget,
+  PRIOR_COARSE_OFFSET_CELLS,
+  PRIOR_MAX_REFINE_POSES,
   refineSeedsFrom,
 } from '/src/scan-guide-prior.js';
 
@@ -191,6 +195,8 @@ let autoCropIndex = 0;
 let failStreakSince = 0;
 let zoomApplyToken = 0;
 let zoomApplyTimer = 0;
+/** 직전 프레임의 성공 가설에서 복원한 포즈. 실패 프레임은 null 을 남긴다. */
+let lastFramePose = null;
 
 // build (F-68): 화면 푸터에만 찍던 배포 스탬프를 봉투에도 싣는다 — «어느 빌드의
 // 프레임인가» 를 적재 시각으로 추정하지 않게 된다.
@@ -264,6 +270,8 @@ function resetFrameSeq() {
 
 function beginScanAttempt() {
   attemptId = makeAttemptId();
+  // 포즈도 시도 단위 상태다. 이전 카메라·사진 세션의 픽셀 H 를 새 세션에 넘기지 않는다.
+  lastFramePose = null;
   // 잘림 안내는 시도 단위 상태다 — 이전 세션의 스트릭이 새 카메라를 오염시키면 안 된다.
   clippedFrames = 0;
   // F-86: 아래 3셋도 같은 시도 단위 상태인데 **성공 프레임에서만** 지워지고 있었다
@@ -885,7 +893,7 @@ function flushPriorReport(imageData, report, extraMs) {
   updateDebugOverlay(imageData, report.result, report.stage, ms);
 }
 
-async function attemptGuidePriorScan(imageData) {
+async function attemptGuidePriorScan(imageData, previousMs = 0) {
   const frameSide = Math.min(imageData.width, imageData.height);
   const coarse = coarsePosesFor(frameSide);
   if (coarse.length === 0) return { ok: false, reason: 'prior-no-poses' };
@@ -893,7 +901,7 @@ async function attemptGuidePriorScan(imageData) {
   const first = await decodeFrame(imageData, { priorPoses: coarse, deferReport: true });
   if (first.ok) {
     lastPriorSummary = { stage: 'coarse', poses: coarse.length, ok: true, ms: first.ms };
-    flushPriorReport(imageData, first.report, 0);
+    flushPriorReport(imageData, first.report, previousMs);
     return first;
   }
 
@@ -906,7 +914,7 @@ async function attemptGuidePriorScan(imageData) {
       admitted: 0,
       ms: first.ms,
     };
-    flushPriorReport(imageData, first.report, 0);
+    flushPriorReport(imageData, first.report, previousMs);
     return first;
   }
   const second = await decodeFrame(imageData, { priorPoses: refine, deferReport: true });
@@ -918,8 +926,64 @@ async function attemptGuidePriorScan(imageData) {
     ms: (first.ms || 0) + (second.ms || 0),
   };
   // 요약을 먼저 세운 뒤 보고한다 — 순서가 뒤바뀌면 오버레이가 **직전 발동**의 요약을 찍는다.
-  flushPriorReport(imageData, second.report, first.ms || 0);
+  flushPriorReport(imageData, second.report, previousMs + (first.ms || 0));
   return second;
+}
+
+/** 직전 성공 H 를 현재 프레임 해상도로 옮기고, 정확 포즈를 맨 앞에 둔 24개 후보. */
+function carriedPosesFor(imageData) {
+  if (!lastFramePose || !imageData) return [];
+  const seed = poseFromHypothesis(lastFramePose, {
+    id: 'frame-carry',
+    sourceWidth: lastFramePose.frameWidth,
+    sourceHeight: lastFramePose.frameHeight,
+    targetWidth: imageData.width,
+    targetHeight: imageData.height,
+  });
+  if (!seed) return [];
+  return [
+    seed,
+    ...jitterPoses(seed, {
+      frameSide: Math.min(imageData.width, imageData.height),
+      offsetCells: PRIOR_COARSE_OFFSET_CELLS,
+      maxPoses: PRIOR_MAX_REFINE_POSES - 1,
+    }),
+  ].slice(0, PRIOR_MAX_REFINE_POSES);
+}
+
+/** 이번 프레임이 다음 프레임에 남길 포즈를 성공·실패 모두에서 확정한다. */
+function rememberFramePose(result, imageData) {
+  lastFramePose = result && result.ok === true
+    ? poseFromHypothesis(result.hypothesis, {
+      id: 'frame-carry',
+      sourceWidth: imageData.width,
+      sourceHeight: imageData.height,
+      targetWidth: imageData.width,
+      targetHeight: imageData.height,
+    })
+    : null;
+}
+
+/** 직전 포즈를 먼저 시도하고 실패하면 그 프레임의 종전 경로로 폴백한다. */
+async function attemptCarriedPoseScan(imageData, useGuidePrior) {
+  const poses = carriedPosesFor(imageData);
+  if (poses.length === 0) {
+    return useGuidePrior ? attemptGuidePriorScan(imageData) : decodeFrame(imageData);
+  }
+  const carried = await decodeFrame(imageData, { priorPoses: poses, deferReport: true });
+  lastPriorSummary = {
+    stage: 'carry', poses: poses.length, ok: Boolean(carried.ok), ms: carried.ms,
+  };
+  if (carried.ok) {
+    flushPriorReport(imageData, carried.report, 0);
+    return carried;
+  }
+
+  const carriedMs = carried.ms || 0;
+  if (useGuidePrior) return attemptGuidePriorScan(imageData, carriedMs);
+  const fallback = await decodeFrame(imageData, { deferReport: true });
+  flushPriorReport(imageData, fallback.report, carriedMs);
+  return fallback;
 }
 
 /**
@@ -1552,12 +1616,15 @@ function startFrameLoop(session) {
           }
         }
 
-        const attempt = usePrior
-          ? attemptGuidePriorScan(imageData)
-          : decodeFrame(imageData);
+        const attempt = lastFramePose
+          ? attemptCarriedPoseScan(imageData, usePrior)
+          : usePrior
+            ? attemptGuidePriorScan(imageData)
+            : decodeFrame(imageData);
 
         attempt
           .then((result) => {
+            if (session === scanSession) rememberFramePose(result, imageData);
             if (usePrior && !result.ok && session === scanSession && statusOwnedBySteady) {
               // 사전이 실패하면 원래 조준 안내로 되돌린다 — 「시도 중」 이 눌러앉으면
               // 사용자는 무엇을 바꿔야 할지 모른 채 기다리게 된다.
@@ -1568,6 +1635,7 @@ function startFrameLoop(session) {
           })
           .catch(() => {
             if (session !== scanSession) return;
+            lastFramePose = null;
             stopCamera();
             setStatus(t('status.frameError'));
             showSupportedStartGate(t('status.restart'));

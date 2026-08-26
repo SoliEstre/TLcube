@@ -2439,8 +2439,8 @@
              앞이고 기본이었는데, 생성기 안의 «Y 미리보기 → 3D» 는 «내 코드를 3D 로»
              로 읽힌다. 그 자리에 교육용 단일 셀이 나오면 «코드 렌더가 안 된다» 로
              보인다 (운영자 실제 보고). 순서가 곧 기대값이다. -->
-        <button type="button" class="y3d-btn on" id="y3dField" data-i18n="g883">필드</button>
-        <button type="button" class="y3d-btn" id="y3dCell" data-i18n="g882">한 셀</button>
+        <button type="button" class="y3d-btn on" id="y3dField" data-i18n="g883">코드 렌더</button>
+        <button type="button" class="y3d-btn" id="y3dCell" data-i18n="g882">면 배치 보기</button>
         <span id="y3dDigits">
           <button type="button" class="y3d-btn y3d-digit" data-digit="0">0</button>
           <button type="button" class="y3d-btn y3d-digit" data-digit="1">1</button>
@@ -2894,8 +2894,8 @@ const GENERATOR_STRINGS = {
     "g999": "· 익명 방문 신호(페이지뷰)만 전송해요 — 코드 내용은 안 보내요",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "한 셀",
-    "g883": "필드",
+    "g882": "면 배치 보기",
+    "g883": "코드 렌더",
     "g884": "아이소메트릭 (정위치)",
     "g885": "Y 미리보기",
     "g886": "3D 는 보기 층입니다. 내보내는 PNG·SVG 는 항상 2.5D 아이소메트릭 그대로입니다.\n한 셀을 돌려 세 면의 휘도 순위를 볼 수 있고, 필드는 지금 만든 코드 전체를 궤도로 돌립니다.\n드래그로 돌리고 휠로 여백을 조절합니다. 0–5 는 digit 입니다.",
@@ -3341,8 +3341,8 @@ const GENERATOR_STRINGS = {
     "g999": "· Sends only an anonymous visit signal (pageview) — never your code contents",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "One cell",
-    "g883": "Field",
+    "g882": "Face layout",
+    "g883": "Code render",
     "g884": "Isometric (home view)",
     "g885": "Y preview",
     "g886": "3D is a viewer layer. Exported PNG and SVG stay on the frozen 2.5D isometric projection.\nSpin one cell to see the three-face luminance rank, or orbit the whole code you just made.\nDrag to orbit and use the wheel to change the margin. Keys 0–5 set the digit.",
@@ -3788,8 +3788,8 @@ const GENERATOR_STRINGS = {
     "g999": "· 匿名の訪問シグナル（ページビュー）のみ送信します — コードの内容は送りません",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "1セル",
-    "g883": "フィールド",
+    "g882": "面の配置",
+    "g883": "コード描画",
     "g884": "アイソメトリック (初期位置)",
     "g885": "Yプレビュー",
     "g886": "3D は表示レイヤです。書き出す PNG・SVG は常に 2.5D アイソメトリックのままです。\n1セルを回して三面の輝度順位を見られ、フィールドは今作ったコード全体を軌道で回します。\nドラッグで回転、ホイールで余白。0–5 は digit です。",
@@ -4234,8 +4234,8 @@ const GENERATOR_STRINGS = {
     "g999": "· N'envoie qu'un signal de visite anonyme (page vue) — jamais le contenu de vos codes",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "Une cellule",
-    "g883": "Champ",
+    "g882": "Disposition des faces",
+    "g883": "Rendu du code",
     "g884": "Isométrique (vue initiale)",
     "g885": "Aperçu Y",
     "g886": "Le 3D est une couche de visualisation. Les PNG et SVG exportés restent sur la projection isométrique 2.5D figée.\nFaites tourner une cellule pour voir le rang de luminance des trois faces, ou mettez en orbite le code entier.\nGlissez pour orbiter, molette pour la marge. Les touches 0–5 choisissent le digit.",
@@ -4680,8 +4680,8 @@ const GENERATOR_STRINGS = {
     "g999": "· Invia solo un segnale di visita anonimo (pagina vista) — mai il contenuto dei codici",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "Una cella",
-    "g883": "Campo",
+    "g882": "Disposizione facce",
+    "g883": "Render del codice",
     "g884": "Isometrico (vista iniziale)",
     "g885": "Anteprima Y",
     "g886": "Il 3D è uno strato di visualizzazione. PNG e SVG esportati restano sulla proiezione isometrica 2.5D congelata.\nRuota una cella per vedere il rango di luminanza delle tre facce, oppure metti in orbita l’intero codice.\nTrascina per orbitare, rotella per il margine. I tasti 0–5 impostano il digit.",
@@ -5126,8 +5126,8 @@ const GENERATOR_STRINGS = {
     "g999": "· Sendet nur ein anonymes Besuchssignal (Seitenaufruf) — nie den Inhalt Ihrer Codes",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "Eine Zelle",
-    "g883": "Feld",
+    "g882": "Flächenanordnung",
+    "g883": "Code-Rendering",
     "g884": "Isometrisch (Ausgangsansicht)",
     "g885": "Y-Vorschau",
     "g886": "3D ist eine Betrachtungsebene. Exportierte PNG- und SVG-Dateien bleiben bei der eingefrorenen 2.5D-Isometrie.\nDrehen Sie eine Zelle, um den Luminanzrang der drei Flächen zu sehen, oder umrunden Sie den ganzen Code.\nZiehen zum Drehen, Rad für den Rand. Die Tasten 0–5 setzen die Ziffer.",
@@ -5572,8 +5572,8 @@ const GENERATOR_STRINGS = {
     "g999": "· Envía solo una señal de visita anónima (vista de página) — nunca el contenido de sus códigos",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "Una celda",
-    "g883": "Campo",
+    "g882": "Disposición de caras",
+    "g883": "Render del código",
     "g884": "Isométrico (vista inicial)",
     "g885": "Vista Y",
     "g886": "El 3D es una capa de visualización. Los PNG y SVG exportados siguen en la proyección isométrica 2.5D congelada.\nGire una celda para ver el rango de luminancia de las tres caras, u orbite el código entero.\nArrastre para orbitar y use la rueda para el margen. Las teclas 0–5 eligen el dígito.",
@@ -6018,8 +6018,8 @@ const GENERATOR_STRINGS = {
     "g999": "· Envia apenas um sinal de visita anónimo (visualização de página) — nunca o conteúdo dos seus códigos",
     "g880": "2.5D",
     "g881": "3D",
-    "g882": "Uma célula",
-    "g883": "Campo",
+    "g882": "Disposição das faces",
+    "g883": "Render do código",
     "g884": "Isométrico (vista inicial)",
     "g885": "Pré-visualização Y",
     "g886": "O 3D é uma camada de visualização. Os PNG e SVG exportados ficam na projeção isométrica 2.5D congelada.\nRode uma célula para ver a ordem de luminância das três faces, ou ponha o código inteiro em órbita.\nArraste para orbitar e use a roda para a margem. As teclas 0–5 definem o dígito.",

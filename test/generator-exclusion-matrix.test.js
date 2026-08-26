@@ -181,10 +181,31 @@ test('Type K 배타 — 인코더에게 묻고, UI 상태가 그 조합을 만�
     createGeneratorState({ type: 'Y' }), 'K', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   );
   assert.equal(k.type, 'K', 'K 로 전환이 안 된다');
-  assert.notEqual(k.finderPatternId, CENTER_QR_FINDER_PATTERN_ID,
-    'K 의 기본 파인더가 중앙 QR 이다 — 첫 클릭이 곧 encodeK 던짐이다');
-  assert.notEqual(k.qrPosition, 'inner',
-    'K 의 기본 QR 위치가 inner 다 — buildConfig 가 centerQr 로 번역해 던진다');
+  /*
+   * ⚠ **정형 ③ 전환 (2026-08-26)** — 이 자리는 종전에
+   *   `notEqual(finderPatternId, CENTER_QR)` · `notEqual(qrPosition, 'inner')` 두
+   *   **음성 락**이었고, 근거로 「buildConfig 가 centerQr 로 번역해 encodeK 가 던진다」를
+   *   달고 있었다. **그 근거는 이 테스트 자신이 반증한다** — 바로 위에서
+   *   `rejection(encodeK, …, { centerQr: true }) === null` 을 단언하고 있다.
+   *   즉 K 의 중앙 QR 은 인코더가 받는다 (렌더까지의 왕복은
+   *   `typeK-roundtrip.test.js` 「K 중앙 QR 왕복 — 평/CM × 전 k × 전 ECC」가 잠근다).
+   *   운영자 지시(2026-08-26)로 K 기본값은 O/A 와 같은 중앙 QR 이 됐다.
+   *
+   *   대신 **원래 지키려던 것**을 직접 잰다: 기본 상태가 만들어 내는 인코더 조합이
+   *   «던지는 조합» 이면 안 된다. 값이 아니라 성질을 잠근다 — 나중에 기본값이 또
+   *   바뀌어도 이 자는 계속 옳다.
+   */
+  const defaultFlags = {};
+  if (k.qrPosition === 'inner' && k.finderPatternId === CENTER_QR_FINDER_PATTERN_ID) {
+    defaultFlags.centerQr = true;
+  }
+  if (isCentralV0FinderPatternId(k.finderPatternId)) defaultFlags.centralV0 = true;
+  // ⚠ «값이 있나» 먼저 — 아무 플래그도 안 세워지면 아래 단언이 공짜로 통과한다.
+  assert.ok(Object.keys(defaultFlags).length > 0,
+    'K 기본 상태에서 인코더 플래그가 하나도 안 나왔다 — 자가 잠들었다 (기본값 축이 바뀌었나)');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, defaultFlags), null,
+    'K 기본 상태가 encodeK 가 던지는 조합이다 — 첫 클릭이 곧 오류다: '
+    + JSON.stringify(defaultFlags));
 
   // 타입 목록의 **손 사본이 없어야 한다** — finder-selection 이 GENERATOR_TYPES 를
   // 유도해 써야 한다. 사본이 남아 있으면 한쪽만 늘어나 K 클릭이 RangeError 로 죽는다.

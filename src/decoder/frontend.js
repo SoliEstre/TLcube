@@ -35,6 +35,18 @@ function cellPxFromH(H) {
   return (sx + sy) / 2;
 }
 
+/** 텔레메트리 JSON 경계에서도 보존되는 row-major 3×3 배열로 줄인다. */
+function serializableHomography(H) {
+  if (!H || H.length !== 9) return null;
+  const out = [];
+  for (const value of H) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return null;
+    out.push(number);
+  }
+  return out;
+}
+
 /**
  * **어느 중앙 파인더로 잡혔는가** — 관측된 파인더의 이름 (2026-08-19).
  *
@@ -110,6 +122,9 @@ function compactHypothesis(candidate) {
     orientationGate: hypothesis.orientationGate || null,
     cellSurfaceAmbiguous: hypothesis.cellSurfaceAmbiguous === true,
     canonicalSpace: hypothesis.canonicalSpace,
+    // Float64Array 를 공개 결과에 그대로 흘리지 않는다. 이 객체는 lab 텔레메트리 JSON
+    // 경계도 지나므로 숫자 배열로 고정한다.
+    H: serializableHomography(hypothesis.H),
     reprojectionResidualPx: hypothesis.reprojectionResidualPx,
     vertexResidualPx: hypothesis.vertexResidualPx,
     anchorRadiusSpreadPx: hypothesis.anchorRadiusSpreadPx,
