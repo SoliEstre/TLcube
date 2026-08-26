@@ -176,8 +176,25 @@ export function buildOrbitMesh(options) {
     }
   }
 
-  quads.sort((a, b) => a.depth - b.depth);
-  return { n, yaw, pitch, quads };
+  // ⚠ **내림차순이다 — 먼 것부터 칠한다** (painter's algorithm).
+  //    `quadDepth` 는 (x+y+z)/4 이고 아이소메트릭 시선이 (1,1,1) 이라 **값이 클수록 멀다**.
+  //    데이터 없는 뒷면(back)은 구조상 가장 먼 면이고 실측 depth 가 26 으로 module
+  //    최대(25)보다 크다. 오름차순이면 그 뒷면이 **맨 마지막에 칠해져 코드 전체를 덮는다**
+  //    — 라이브에서 실제로 그렇게 났고(2026-08-26 운영자 신고 「3D 는 코드 렌더가 안 된다」),
+  //    화면은 단색 `#242830`(BACK_COLOR) 육각형만 보였다.
+  quads.sort((a, b) => b.depth - a.depth);
+
+  // 회전 불변 반지름 — `fitView` 가 이 값으로 스케일을 고정한다. 회전은 거리를
+  // 보존하므로 회전된 코너로 재도 값이 같다.
+  let radius3d = 0;
+  for (const q of quads) {
+    for (const p of q.corners3d) {
+      const dx = p.x - center.x; const dy = p.y - center.y; const dz = p.z - center.z;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d > radius3d) radius3d = d;
+    }
+  }
+  return { n, yaw, pitch, quads, center, radius3d };
 }
 
 function concatBytes(parts) {
@@ -304,7 +321,54 @@ export function hexOf(c) {
   return `#${h(c.r)}${h(c.g)}${h(c.b)}`;
 }
 
-/** 투영점의 축정렬 bbox → 캔버스 맞춤 변환. */
+/**
+ * **회전 불변** 캔버스 맞춤 변환 (2026-08-26 운영자 신고).
+ *
+ * 종전 `fitView` 는 **투영점의 2D bbox** 로 스케일을 잡았다. bbox 는 회전하면 변하므로
+ * 「돌릴 때마다 «출력 가능한 최대 크기» 로 다시 맞춰져 크기가 계속 바뀌는」 상태가 됐다.
+ *
+ * 처방: 스케일을 **회전에 안 변하는 양**에서 뽑는다.
+ *   · `radius3d` — 중심에서 가장 먼 코너까지의 3D 거리. 회전은 거리를 보존하니 불변이다.
+ *   · `projMax`  — `isoProject` 가 단위 벡터를 얼마나 늘릴 수 있나의 상한.
+ *     투영이 **선형**이라 이 값은 layout 만의 함수고 회전과 무관하다.
+ * ⇒ 화면 반지름 = `radius3d × projMax` 로 고정하고, 중심은 캔버스 중앙에 못 박는다.
+ *
+ * 대가: 어떤 각도에서는 여백이 조금 남는다 (최악 각도 기준으로 잡으므로). 그 대신
+ * **어느 각도에서도 안 잘리고 크기가 안 흔들린다** — 회전 UI 에서는 그쪽이 맞다.
+ */
+export function fitViewStable(mesh, width, height, pad, layout) {
+  const margin = pad === undefined ? 24 : pad;
+  // isoProject 의 최대 확대율. 선형이라 단위 구면을 훑으면 상한이 정확히 나온다.
+  // 기저 세 벡터의 상만으로는 부족하다 (대각 방향이 더 길 수 있다) — 그래서 샘플링한다.
+  const zero = { size: layout.size, originX: 0, originY: 0 };
+  let projMax = 0;
+  const STEPS = 64;
+  for (let a = 0; a < STEPS; a += 1) {
+    const th = (a / STEPS) * Math.PI * 2;
+    for (let b = 0; b <= STEPS / 2; b += 1) {
+      const ph = (b / (STEPS / 2)) * Math.PI;
+      const ux = Math.sin(ph) * Math.cos(th);
+      const uy = Math.sin(ph) * Math.sin(th);
+      const uz = Math.cos(ph);
+      const p = isoProject(ux, uy, uz, zero);
+      const r = Math.hypot(p.x, p.y);
+      if (r > projMax) projMax = r;
+    }
+  }
+  const screenR = Math.max(mesh.radius3d * projMax, 1e-9);
+  const avail = Math.min(width, height) / 2 - margin;
+  const scale = Math.max(avail, 1) / screenR;
+  const c = isoProject(mesh.center.x, mesh.center.y, mesh.center.z, layout);
+  const ox = width / 2 - c.x * scale;
+  const oy = height / 2 - c.y * scale;
+  return {
+    scale,
+    map(p) { return { x: p.x * scale + ox, y: p.y * scale + oy }; },
+  };
+}
+
+/** 투영점의 축정렬 bbox → 캔버스 맞춤 변환. ⚠ 회전하면 스케일이 변한다 —
+ *  회전 UI 에는 `fitViewStable` 을 쓴다. 정지 렌더(내보내기 등)용으로만 남긴다. */
 export function fitView(quads, width, height, pad) {
   const margin = pad === undefined ? 24 : pad;
   let minX = Infinity;
@@ -338,7 +402,10 @@ export function paintQuads(ctx, mesh, options) {
   const bg = opts.background || { r: 14, g: 16, b: 24 };
   ctx.fillStyle = hexOf(bg);
   ctx.fillRect(0, 0, width, height);
-  const view = fitView(mesh.quads, width, height, opts.pad);
+  // 회전 UI 는 **안정 맞춤**을 쓴다 (크기가 안 흔들린다). layout 이 없으면 종전 경로.
+  const view = (opts.layout && mesh.radius3d && mesh.center)
+    ? fitViewStable(mesh, width, height, opts.pad, opts.layout)
+    : fitView(mesh.quads, width, height, opts.pad);
   const selected = opts.selected;
   for (const q of mesh.quads) {
     const pts = q.points2d.map(view.map);

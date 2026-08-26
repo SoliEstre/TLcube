@@ -155,6 +155,7 @@ function rebuild() {
     includeBack: true,
   });
   state.view = paintQuads(ctx, state.mesh, {
+    layout,  // 회전 불변 스케일 (fitViewStable)
     background: preset.background,
     pad: state.pad,
     selected: state.selected,

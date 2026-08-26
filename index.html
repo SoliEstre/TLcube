@@ -7079,6 +7079,9 @@ function paintY3dPreview() {
   y3dPreview.view = paintQuads(ctx, y3dPreview.mesh, {
     background: bg,
     pad: y3dPreview.pad,
+    // layout 을 넘기면 **회전 불변 스케일**(fitViewStable)을 쓴다 — 안 넘기면 종전
+    // bbox 맞춤이라 돌릴 때마다 크기가 변한다 (2026-08-26 운영자 신고).
+    layout,
     selected: y3dPreview.mode === 'cell'
       ? { face: 'T', i: 0, j: 0 }
       : y3dPreview.selected,
