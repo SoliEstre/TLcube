@@ -2435,8 +2435,12 @@
         </button>
       </div>
       <div class="y3d-row" id="y3dOrbitRow" hidden>
-        <button type="button" class="y3d-btn on" id="y3dCell" data-i18n="g882">한 셀</button>
-        <button type="button" class="y3d-btn" id="y3dField" data-i18n="g883">필드</button>
+        <!-- ⚠ **필드가 먼저이고 기본이다** (2026-08-26 운영자 지시). 종전엔 「한 셀」이
+             앞이고 기본이었는데, 생성기 안의 «Y 미리보기 → 3D» 는 «내 코드를 3D 로»
+             로 읽힌다. 그 자리에 교육용 단일 셀이 나오면 «코드 렌더가 안 된다» 로
+             보인다 (운영자 실제 보고). 순서가 곧 기대값이다. -->
+        <button type="button" class="y3d-btn on" id="y3dField" data-i18n="g883">필드</button>
+        <button type="button" class="y3d-btn" id="y3dCell" data-i18n="g882">한 셀</button>
         <span id="y3dDigits">
           <button type="button" class="y3d-btn y3d-digit" data-digit="0">0</button>
           <button type="button" class="y3d-btn y3d-digit" data-digit="1">1</button>
@@ -6095,7 +6099,8 @@ let detectorAutoY = true; // 운영자 확정 2026-08-24: 자동이 기본값 (�
 /** Y 3D 미리보기 상태. generatorState 가 아니다 — encode/scene 에 새면 안 된다. */
 const y3dPreview = {
   on: false,
-  mode: 'cell',
+  // 기본은 **필드**(내 코드 전체)다 — 위 버튼 순서와 한 벌이다. 한 셀은 교육용 보조.
+  mode: 'field',
   digit: 3,
   yaw: 0,
   pitch: 0,
@@ -7149,8 +7154,11 @@ els.view3d.addEventListener('pointermove', (ev) => {
   const dy = ev.clientY - y3dPreview.lastY;
   y3dPreview.lastX = ev.clientX;
   y3dPreview.lastY = ev.clientY;
-  y3dPreview.yaw += dx * 0.01;
-  y3dPreview.pitch += dy * 0.01;
+  // ⚠ **부호가 음수다 — 「큐브를 끈다」** (2026-08-26 운영자 지시).
+  //    양수면 «카메라를 끈다» 가 되어, 오른쪽으로 끌면 큐브가 왼쪽으로 돈다.
+  //    사용자는 손가락 밑의 물체가 손가락을 따라오길 기대한다.
+  y3dPreview.yaw -= dx * 0.01;
+  y3dPreview.pitch -= dy * 0.01;
   paintY3dPreview();
 });
 const endY3dPointer = (ev) => {
