@@ -25,7 +25,7 @@ import { getPreset, DEFAULT_PRESET, BULLSEYE_DARK, BULLSEYE_LIGHT } from '../src
 import { MODULE_ORDER } from '../tools/build-single.mjs';
 import {
   cubePoint, isoProject, moduleCorners3d, orbitPoint, cubeCenter,
-  buildOrbitMesh, meshToGltf,
+  buildOrbitMesh, meshToGltf, fitViewStable, hexOf, paintQuads,
 } from '../src/y3d-viewer.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -257,5 +257,106 @@ describe('glTF 손짠 내보내기 (lab 전용 — 생성기 미배선)', () => 
     assert.ok(gltf.buffers[0].uri.startsWith('data:application/octet-stream;base64,'));
     assert.equal(json.includes('three'), false);
     assert.ok(json.length > 1000);
+  });
+});
+
+/*
+ * ⭐ **화면에 실제로 무엇이 칠해지나** (2026-08-26 신설 — 운영자 신고 두 건의 자).
+ *
+ * 이 파일의 종전 단언들은 «3D 가 scene 을 안 건드린다»(무영향)와 «배선이 opt-in 이다»를
+ * 쟀다. 둘 다 초록이었는데 **라이브 화면은 코드가 아예 안 보였다** — 데이터 없는
+ * 뒷면(back)이 맨 위에 칠해져 단색 육각형만 남았고, 스위트 2571건이 그걸 못 봤다.
+ *
+ * 이유는 재는 대상이 달랐기 때문이다: 「scene 을 안 바꾼다」는 **안 한 일**의 단언이고,
+ * 「코드가 보인다」는 **한 일**의 단언이다. 아래 셋이 후자를 잰다.
+ */
+describe('3D 가 실제로 코드를 그리는가 (운영자 신고 회귀)', () => {
+  const preset = getPreset(DEFAULT_PRESET);
+  const build = (yaw = 0, pitch = 0) => {
+    const enc = encodeY('https://tl.estre.so', { version: 0, eccLevel: 'H', tones: 3 });
+    const layout = layoutForCube(enc.n, { size: 1, margin: 0.25 });
+    const mesh = buildOrbitMesh({
+      n: enc.n, tones: 3, levels: preset.levels, layout, yaw, pitch,
+      digitAt: (i, j) => {
+        const e = enc.cellDigits.get(`${i},${j}`);
+        return e ? e.digit : null;
+      },
+    });
+    return { enc, layout, mesh };
+  };
+
+  test('뒷면은 데이터 면보다 **먼저** 칠해진다 — 배열 순서가 곧 칠하기 순서다', () => {
+    const { mesh } = build();
+    const lastBack = mesh.quads.map((q) => q.kind).lastIndexOf('back');
+    const firstModule = mesh.quads.findIndex((q) => q.kind === 'module');
+    assert.ok(mesh.quads.some((q) => q.kind === 'back'), '뒷면이 아예 없다 — 자가 무의미해진다');
+    assert.ok(
+      lastBack < firstModule,
+      `뒷면이 데이터 면 뒤에 칠해진다 (마지막 back=${lastBack}, 첫 module=${firstModule}) `
+      + '— 화가 알고리즘은 **먼 것부터**다. 라이브에서 코드가 통째로 덮인다.',
+    );
+  });
+
+  test('데이터 면 색은 전부 팔레트 레벨이다 — 뒷면 색이 새어 나오지 않는다', () => {
+    const { mesh } = build();
+    const allowed = new Set(preset.levels.map(hexOf));
+    const mods = mesh.quads.filter((q) => q.kind === 'module');
+    assert.ok(mods.length > 100, `데이터 면이 너무 적다: ${mods.length}`);
+    const bad = mods.filter((q) => !allowed.has(hexOf(q.color)));
+    assert.equal(bad.length, 0,
+      `팔레트 밖 색이 데이터 면에 있다: ${[...new Set(bad.map((q) => hexOf(q.color)))].join(' ')}`);
+    // 세 레벨이 **전부** 등장해야 한다. 하나로 뭉개지면 순위가 안 보인다.
+    const used = new Set(mods.map((q) => hexOf(q.color)));
+    assert.equal(used.size, 3, `쓰인 레벨이 3종이 아니다: ${[...used].join(' ')}`);
+  });
+
+  test('회전해도 스케일이 안 변한다 — fitViewStable (운영자 신고 「크기 보존 안 됨」)', () => {
+    const angles = [[0, 0], [0.4, 0.2], [1.1, -0.3], [2.5, 0.6], [-1.7, 1.2]];
+    const scales = angles.map(([y, p]) => {
+      const { mesh, layout } = build(y, p);
+      return fitViewStable(mesh, 800, 800, 24, layout).scale;
+    });
+    for (let i = 1; i < scales.length; i += 1) {
+      assert.equal(scales[i], scales[0],
+        `각도마다 스케일이 다르다 (${angles[i]} → ${scales[i]} vs ${scales[0]}) `
+        + '— 돌릴 때마다 크기가 변한다.');
+    }
+    // radius3d 도 회전 불변이어야 한다 (회전은 거리를 보존한다).
+    const radii = angles.map(([y, p]) => build(y, p).mesh.radius3d);
+    for (const r of radii) assert.ok(Math.abs(r - radii[0]) < 1e-9, '반지름이 회전에 변한다');
+  });
+
+  /*
+   * ⚠ 위 테스트만으로는 부족하다 — `fitViewStable` 을 **직접** 부르므로
+   *   `paintQuads` 가 실제로 그 경로를 타는지는 안 잰다. 실제로 배선을 되돌리는
+   *   변이를 넣어 봤더니 16/16 이 그대로 초록이었다. 그래서 **끝단**을 잰다.
+   */
+  test('paintQuads 가 그 안정 경로를 실제로 탄다 — 가짜 ctx 로 끝단 측정', () => {
+    const stub = () => {
+      const canvas = { width: 800, height: 800 };
+      return {
+        canvas,
+        fillStyle: '', strokeStyle: '', lineWidth: 0, font: '', textAlign: '', textBaseline: '',
+        fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
+        fill() {}, stroke() {}, fillText() {},
+      };
+    };
+    const angles = [[0, 0], [0.4, 0.2], [1.1, -0.3], [2.5, 0.6]];
+    const scales = angles.map(([y, p]) => {
+      const { mesh, layout } = build(y, p);
+      return paintQuads(stub(), mesh, { layout, pad: 24 }).scale;
+    });
+    // ⚠ **먼저 «값이 있나» 를 재라.** 구 `fitView` 는 `scale` 을 반환하지 않아서,
+    //    배선이 그쪽으로 되돌아가면 undefined === undefined 로 **조용히 통과**한다.
+    //    실제로 그 변이를 넣었을 때 17/17 이 그대로 초록이었다 (2026-08-26).
+    for (const sc of scales) {
+      assert.ok(Number.isFinite(sc) && sc > 0,
+        `paintQuads 가 scale 을 안 낸다 (${sc}) — 안정 경로를 안 타고 있다.`);
+    }
+    for (let i = 1; i < scales.length; i += 1) {
+      assert.equal(scales[i], scales[0],
+        `paintQuads 가 각도마다 다른 스케일을 낸다 (${angles[i]} → ${scales[i]} vs ${scales[0]}) `
+        + '— 안정 경로(fitViewStable)로 안 가고 있다.');
+    }
   });
 });

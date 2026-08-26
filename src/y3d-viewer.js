@@ -10,7 +10,7 @@
  * 런타임 의존성 0. 브라우저 ESM · node --test 둘 다 로드 가능.
  */
 
-import { CORNER_UNIT_OFFSETS } from './hexgrid.js';
+import { CORNER_UNIT_OFFSETS, SQRT3 } from './hexgrid.js';
 import { YFACES } from './ygrid.js';
 import { digitToRanks } from './lehmer.js';
 import { digitToPattern } from './tonemap.js';
@@ -184,16 +184,16 @@ export function buildOrbitMesh(options) {
   //    화면은 단색 `#242830`(BACK_COLOR) 육각형만 보였다.
   quads.sort((a, b) => b.depth - a.depth);
 
-  // 회전 불변 반지름 — `fitView` 가 이 값으로 스케일을 고정한다. 회전은 거리를
-  // 보존하므로 회전된 코너로 재도 값이 같다.
-  let radius3d = 0;
-  for (const q of quads) {
-    for (const p of q.corners3d) {
-      const dx = p.x - center.x; const dy = p.y - center.y; const dz = p.z - center.z;
-      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (d > radius3d) radius3d = d;
-    }
-  }
+  // 회전 불변 반지름 — `fitViewStable` 이 이 값으로 스케일을 고정한다.
+  //
+  // ⚠ **회전된 코너를 훑지 마라.** 처음엔 그렇게 짰는데, 회전이 부동소수 잡음을 넣어
+  //    같은 모델인데도 각도마다 반지름이 **1 ulp** 씩 달라졌다 (27.268938433450444 vs
+  //    …45045). 스케일이 사실상 같아도 «불변» 이라는 성질 자체가 깨진다.
+  //
+  // 모델은 항상 축정렬 상자 [0,n]³ 이고 중심이 (n/2,n/2,n/2) 이므로 최원점은 꼭짓점,
+  // 거리는 **닫힌 형태** (n/2)·√3 이다. 회전과 무관하고 잡음도 없다.
+  // (실측 대조: n=13 → 11.258, 코너 스캔 결과와 같다.)
+  const radius3d = (n / 2) * SQRT3;
   return { n, yaw, pitch, quads, center, radius3d };
 }
 
