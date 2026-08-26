@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>TLcube — Type Y 3D 뷰어 프로토타입</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  레인 Y3D lab 페이지. 생성기 배선은 index.html 의 opt-in 토글이다.
+  여는 법: node tools/dev-server.mjs  →  http://localhost:8765/tools/y3d-viewer.html
+  ESM 이라 file:// 에서는 import 가 막힌다 (생성기 번들과 다름).
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #101218; color: #e6e8ec;
+    font: 13px/1.45 ui-sans-serif, system-ui, sans-serif;
+    min-height: 100vh; display: grid;
+    grid-template-columns: minmax(280px, 340px) 1fr;
+  }
+  aside { padding: 16px 18px 24px; border-right: 1px solid #262b33; overflow: auto; }
+  h1 { font-size: 15px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: #8b93a3; margin: 0 0 16px; }
+  section { margin: 0 0 16px; }
+  section h2 {
+    font-size: 11px; font-weight: 600; color: #8b93a3;
+    text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  button, select {
+    background: #1e232c; color: #e6e8ec; border: 1px solid #333a45;
+    border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: #4a5568; }
+  button.on { background: #2a5bd7; border-color: #2a5bd7; color: #fff; }
+  button.digit { min-width: 36px; font-variant-numeric: tabular-nums; }
+  canvas {
+    display: block; width: 100%; height: 100vh; cursor: grab;
+    touch-action: none; background: #101218;
+  }
+  canvas:active { cursor: grabbing; }
+  .ranks {
+    display: grid; grid-template-columns: 28px 1fr auto; gap: 6px 10px;
+    align-items: center; background: #181c24; border-radius: 8px; padding: 10px 12px;
+  }
+  .swatch { width: 22px; height: 22px; border-radius: 4px; border: 1px solid #0006; }
+  .note { color: #8b93a3; font-size: 12px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  kbd { background: #1e232c; border: 1px solid #333a45; border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Type Y 3D 뷰어</h1>
+  <p class="sub">포맷 투영은 frozen. 여기는 같은 큐브를 궤도만 돌리는 층.</p>
+
+  <section>
+    <h2>무엇을 보나</h2>
+    <div class="row">
+      <button id="mode-cell" class="on">한 셀</button>
+      <button id="mode-field">필드 n=5</button>
+      <button id="mode-y0">실코드 Y0</button>
+    </div>
+    <p class="note" id="mode-note" style="margin:8px 0 0">한 셀: digit 하나 = 세 면 순위. 드래그로 큐브를 돌린다.</p>
+  </section>
+
+  <section>
+    <h2>톤</h2>
+    <div class="row">
+      <button id="tones-3" class="on">3톤 순위</button>
+      <button id="tones-2">2톤 면배정</button>
+    </div>
+  </section>
+
+  <section id="digit-section">
+    <h2>digit</h2>
+    <div class="row" id="digits"></div>
+  </section>
+
+  <section>
+    <h2>이 셀의 세 면</h2>
+    <div class="ranks" id="ranks"></div>
+    <p class="note" id="pick" style="margin:8px 0 0"></p>
+  </section>
+
+  <section>
+    <h2>카메라</h2>
+    <div class="row">
+      <button id="reset">아이소메트릭 리셋</button>
+      <button id="gltf">glTF 받기</button>
+    </div>
+    <p class="note" style="margin:8px 0 0">드래그 = 궤도 · 휠 = 여백. <kbd>0</kbd>–<kbd>5</kbd> 는 digit.</p>
+  </section>
+
+  <p class="note">생성기 PNG/SVG 경로는 이 페이지를 모른다. 생성기 3D 는 opt-in 토글이다.</p>
+</aside>
+<canvas id="view" width="900" height="900" aria-label="Type Y 큐브 궤도 뷰"></canvas>
+<script type="module">
+import { getPreset, DEFAULT_PRESET } from '../src/luminance.js';
+import { layoutForCube, YFACES } from '../src/ygrid.js';
+import { digitToRanks, digitToBrightnessOrder, FACES } from '../src/lehmer.js';
+import { digitToPattern } from '../src/tonemap.js';
+import { encodeY } from '../src/encodeY.js';
+import {
+  buildOrbitMesh, paintQuads, hitTest, meshToGltf, hexOf,
+} from '../src/y3d-viewer.js';
+
+const canvas = document.getElementById('view');
+const ctx = canvas.getContext('2d', { alpha: false });
+const preset = getPreset(DEFAULT_PRESET);
+const RANK_WORD = ['어둠', '중간', '밝음'];
+const BIT_WORD = ['어둠', '밝음'];
+
+const state = {
+  mode: 'cell',
+  tones: 3,
+  digit: 3,
+  n: 1,
+  yaw: 0,
+  pitch: 0,
+  pad: 48,
+  selected: { face: 'T', i: 0, j: 0 },
+  encoded: null,
+  dragging: false,
+  lastX: 0,
+  lastY: 0,
+  view: null,
+  mesh: null,
+};
+
+function digitAt(i, j) {
+  if (state.mode === 'cell') return state.digit;
+  if (state.mode === 'field') return (i + 2 * j) % 6;
+  const entry = state.encoded && state.encoded.cellDigits.get(`${i},${j}`);
+  return entry ? entry.digit : null;
+}
+
+function currentDigit() {
+  if (state.mode === 'cell') return state.digit;
+  const s = state.selected;
+  const d = digitAt(s.i, s.j);
+  return d === null ? 0 : d;
+}
+
+function rebuild() {
+  const layout = layoutForCube(state.n, { size: 1, margin: 0.25 });
+  state.mesh = buildOrbitMesh({
+    n: state.n,
+    tones: state.tones,
+    levels: preset.levels,
+    layout,
+    yaw: state.yaw,
+    pitch: state.pitch,
+    digitAt,
+    includeBack: true,
+  });
+  state.view = paintQuads(ctx, state.mesh, {
+    background: preset.background,
+    pad: state.pad,
+    selected: state.selected,
+    labels: state.mode === 'cell',
+  });
+  renderPanel();
+}
+
+function renderPanel() {
+  const d = currentDigit();
+  const s = state.selected;
+  const ranksEl = document.getElementById('ranks');
+  ranksEl.replaceChildren();
+  if (state.tones === 3) {
+    const ranks = digitToRanks(d);
+    const order = digitToBrightnessOrder(d).map((idx) => FACES[idx]);
+    for (const face of YFACES) {
+      const sw = document.createElement('div');
+      sw.className = 'swatch';
+      sw.style.background = hexOf(preset.levels[ranks[face]]);
+      const name = document.createElement('div');
+      name.textContent = face + ' 면';
+      const val = document.createElement('div');
+      val.textContent = ranks[face] + '  ' + RANK_WORD[ranks[face]];
+      ranksEl.append(sw, name, val);
+    }
+    document.getElementById('pick').textContent =
+      'digit ' + d + ' · 밝기순 ' + order.join(' → ')
+      + (state.mode === 'cell' ? '' : ` · 칸 (${s.i},${s.j}) ${s.face}`);
+  } else {
+    const bits = digitToPattern(d);
+    for (const face of YFACES) {
+      const sw = document.createElement('div');
+      sw.className = 'swatch';
+      sw.style.background = hexOf(preset.levels[bits[face] ? 2 : 0]);
+      const name = document.createElement('div');
+      name.textContent = face + ' 면';
+      const val = document.createElement('div');
+      val.textContent = bits[face] + '  ' + BIT_WORD[bits[face]];
+      ranksEl.append(sw, name, val);
+    }
+    document.getElementById('pick').textContent =
+      'digit ' + d + ' · 2톤 면배정'
+      + (state.mode === 'cell' ? '' : ` · 칸 (${s.i},${s.j}) ${s.face}`);
+  }
+  for (const btn of document.querySelectorAll('button.digit')) {
+    btn.classList.toggle('on', Number(btn.dataset.digit) === state.digit);
+  }
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  document.getElementById('mode-cell').classList.toggle('on', mode === 'cell');
+  document.getElementById('mode-field').classList.toggle('on', mode === 'field');
+  document.getElementById('mode-y0').classList.toggle('on', mode === 'y0');
+  document.getElementById('digit-section').hidden = mode !== 'cell';
+  const notes = {
+    cell: '한 셀: digit 하나 = 세 면 순위. 드래그로 큐브를 돌린다.',
+    field: '합성 n=5 필드. 칸을 클릭하면 그 셀의 digit 을 읽는다.',
+    y0: 'encodeY 실코드 (Y0 · 3톤 또는 2톤). 생성기 export 경로는 그대로다.',
+  };
+  document.getElementById('mode-note').textContent = notes[mode];
+  if (mode === 'cell') {
+    state.n = 1;
+    state.selected = { face: 'T', i: 0, j: 0 };
+    state.encoded = null;
+  } else if (mode === 'field') {
+    state.n = 5;
+    state.selected = { face: 'T', i: 0, j: 0 };
+    state.encoded = null;
+  } else {
+    state.encoded = encodeY('TLcube 3D', { version: 0, eccLevel: 'M', tones: state.tones });
+    state.n = state.encoded.n;
+    state.selected = { face: 'T', i: 0, j: 0 };
+  }
+  rebuild();
+}
+
+const digitRow = document.getElementById('digits');
+for (let d = 0; d < 6; d += 1) {
+  const btn = document.createElement('button');
+  btn.className = 'digit';
+  btn.dataset.digit = String(d);
+  btn.textContent = String(d);
+  btn.addEventListener('click', () => {
+    state.digit = d;
+    rebuild();
+  });
+  digitRow.append(btn);
+}
+
+document.getElementById('mode-cell').onclick = () => setMode('cell');
+document.getElementById('mode-field').onclick = () => setMode('field');
+document.getElementById('mode-y0').onclick = () => setMode('y0');
+document.getElementById('tones-3').onclick = () => {
+  state.tones = 3;
+  document.getElementById('tones-3').classList.add('on');
+  document.getElementById('tones-2').classList.remove('on');
+  if (state.mode === 'y0') setMode('y0');
+  else rebuild();
+};
+document.getElementById('tones-2').onclick = () => {
+  state.tones = 2;
+  document.getElementById('tones-2').classList.add('on');
+  document.getElementById('tones-3').classList.remove('on');
+  if (state.mode === 'y0') setMode('y0');
+  else rebuild();
+};
+document.getElementById('reset').onclick = () => {
+  state.yaw = 0;
+  state.pitch = 0;
+  state.pad = 48;
+  rebuild();
+};
+document.getElementById('gltf').onclick = () => {
+  const json = JSON.stringify(meshToGltf(state.mesh), null, 2);
+  const blob = new Blob([json], { type: 'model/gltf+json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'tlcube-y3d.gltf';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+canvas.addEventListener('pointerdown', (ev) => {
+  canvas.setPointerCapture(ev.pointerId);
+  state.dragging = true;
+  state.lastX = ev.clientX;
+  state.lastY = ev.clientY;
+  const rect = canvas.getBoundingClientRect();
+  const sx = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  const sy = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  const hit = state.view && hitTest(state.mesh, state.view, sx, sy);
+  if (hit) {
+    state.selected = hit;
+    if (state.mode === 'cell') state.digit = hit.digit;
+    rebuild();
+  }
+});
+canvas.addEventListener('pointerup', () => { state.dragging = false; });
+canvas.addEventListener('pointermove', (ev) => {
+  if (!state.dragging) return;
+  const dx = ev.clientX - state.lastX;
+  const dy = ev.clientY - state.lastY;
+  state.lastX = ev.clientX;
+  state.lastY = ev.clientY;
+  state.yaw += dx * 0.01;
+  state.pitch += dy * 0.01;
+  rebuild();
+});
+canvas.addEventListener('wheel', (ev) => {
+  ev.preventDefault();
+  state.pad = Math.min(160, Math.max(12, state.pad + (ev.deltaY > 0 ? 6 : -6)));
+  rebuild();
+}, { passive: false });
+
+window.addEventListener('keydown', (ev) => {
+  if (ev.key >= '0' && ev.key <= '5') {
+    state.digit = Number(ev.key);
+    state.mode = 'cell';
+    setMode('cell');
+  }
+});
+
+function fitCanvas() {
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  rebuild();
+}
+window.addEventListener('resize', fitCanvas);
+fitCanvas();
+</script>
+</body>
+</html>

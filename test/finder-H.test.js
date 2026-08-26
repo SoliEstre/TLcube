@@ -14,10 +14,9 @@
  *   ③ 팔레트 잠금 — H 셀 면 색 = palette.levels[tone] (파인더 축 아님).
  *   ④ 12셀이 실제로 그려진다 — verifyRaster 0 mismatch + digit 프레임과 픽셀이 다르다.
  *   ⑤ 레거시 무변경 — H 를 안 쓴 O/A 프레임 sha256 = HEAD 실측 (claude-h-head-hashes).
- *   ⑥ ⛔ 알려진 공백 — H 톤 프레임은 현행 decodeFrontend 가 못 읽는다 (H 가 tetrad A
- *      = 레거시 앵커까지 덮으므로 no-anchors — H2O 에는 없는 공백이다). 빨개지면
- *      (= 검출이 서면) 축하한다: (a) 이 단언을 뒤집고 (b) encode 의 markerTones 기본값
- *      전환을 운영자와 논의하라 — 한쪽만 켜면 효과가 음수다 (019 교훈).
+ *   ⑥ H 톤 프레임은 코너 마커 절대 톤 경로로 읽힌다 (F-85). digit-only O-CM 은
+ *      종전대로 앵커 경로. encode 의 markerTones 기본값은 아직 false — 기본값
+ *      전환은 실기기 라운드 뒤 운영자 판단이다.
  *   ⑦ 옵션 가드 — markerTones 는 boolean 이고 cornerMarker(자리) 없이 못 켠다.
  *
  * 변이 검증: encode.js 의 markerTones 적재 분기를 끄면 ③④ 가 빨개진다 (lane-out/verify.txt).
@@ -37,6 +36,8 @@ import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { verifyRaster } from '../src/verify.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import { findOCornerMarkerHypotheses } from '../src/decoder/corner-marker-detect.js';
+import { toRelativeLuminance } from '../src/decoder/luma.js';
 import { FACES, facePolygon } from '../src/hexgrid.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
@@ -204,7 +205,7 @@ test('⑤ 레거시 무변경 — H 를 안 쓴 O/A 프레임 sha256 = HEAD 실�
   );
 });
 
-test('⑥ ⛔ 알려진 공백 — H 톤 프레임은 현행 디코더가 «아직» 못 읽는다 (앵커 피복)', () => {
+test('⑥ H 톤 프레임은 코너 마커 절대 톤 경로로 읽힌다 (F-85)', () => {
   const render12 = (encoded) => rasterize(
     buildScene(encoded, { palette: PALETTE }),
     { pixelsPerUnit: 12, supersample: 1 },
@@ -213,13 +214,42 @@ test('⑥ ⛔ 알려진 공백 — H 톤 프레임은 현행 디코더가 «아�
   const digit = decodeFrontend(render12(
     encode('TLcube-H', { version: 1, eccLevel: 'M', cornerMarker: true }),
   ));
-  assert.equal(digit.ok, true, 'digit-only O-CM 왕복이 죽었다 — 공백 잠금의 전제 붕괴');
-  // H 톤은 tetrad A(= 레거시 앵커)까지 덮는다 → no-anchors (claude-h-decode-probe 실측).
-  const toned = decodeFrontend(render12(
-    encode('TLcube-H', { version: 1, eccLevel: 'M', cornerMarker: true, markerTones: true }),
+  assert.equal(digit.ok, true, 'digit-only O-CM 왕복이 죽었다');
+  assert.equal(digit.text, 'TLcube-H');
+
+  const encoded = encode('TLcube-H', {
+    version: 1, eccLevel: 'M', cornerMarker: true, markerTones: true,
+  });
+  // 검출기 단 — 프런트가 안 탄 `if (cell.tones)` 가지가 H 변형 groups 로 열린다.
+  const cellSize = 20;
+  const scene = buildScene(encoded, { palette: PALETTE, cellSize });
+  const raster = rasterize(scene, { pixelsPerUnit: 1, supersample: 4 });
+  const luma = toRelativeLuminance(raster);
+  const cm = findOCornerMarkerHypotheses(luma, {
+    center: { x: scene.layout.originX, y: scene.layout.originY },
+    cellSize,
+  }, [encoded.k]);
+  assert.equal(cm.ok, true, 'H 톤 코너 마커 검출이 죽었다: ' + (cm.reason || ''));
+  assert.ok(cm.hypotheses.some((h) => String(h.hypothesisId).endsWith('-h')),
+    '이긴 가설에 tag=h 가 없다 — 절대 톤 변형이 안 열렸다');
+
+  const toned = decodeFrontend(render12(encoded));
+  assert.equal(toned.ok, true,
+    'H 톤 프런트 왕복이 죽었다: ' + (toned.reason || '') + '@' + (toned.detail && toned.detail.stage));
+  assert.equal(toned.text, 'TLcube-H');
+  assert.equal(toned.hypothesis.source, 'corner-marker',
+    'H 톤이 앵커 경로로 읽혔다 — tetrad A 피복이 풀린 것이다');
+
+  // V2 도 같은 경로. ppu 12 는 k=8 에서 가끔 no-anchors 로 남는다 (해상도, 문턱 아님).
+  const v2 = decodeFrontend(rasterize(
+    buildScene(encode('TLcube-H', {
+      version: 2, eccLevel: 'M', cornerMarker: true, markerTones: true,
+    }), { palette: PALETTE }),
+    { pixelsPerUnit: 16, supersample: 1 },
   ));
-  assert.equal(toned.ok, false,
-    'H 톤 검출이 서기 시작했다 — 이 단언을 뒤집고 markerTones 기본값 전환을 운영자와 논의하라');
+  assert.equal(v2.ok, true, 'V2CM+H ppu16 왕복이 죽었다: ' + (v2.reason || ''));
+  assert.equal(v2.text, 'TLcube-H');
+  assert.equal(v2.hypothesis.source, 'corner-marker');
 });
 
 test('⑦ 옵션 가드 — markerTones 는 boolean · cornerMarker(자리) 없이 못 켠다', () => {

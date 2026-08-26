@@ -9,13 +9,13 @@
  *
  *   ⚠ 톤 적재는 **opt-in** (`markerTones`) 이다 — H 는 tetrad A(= 레거시 앵커
  *   3셀)까지 덮으므로 톤을 실은 프레임은 digit 기반 앵커 검출이 못 읽는다.
- *   `markerTones` 없이 부르면 인코더는 digit-only 마름모를 `palette.levels` 로
- *   칠하고, 그 경로는 편입 전과 바이트 동일이다.
+ *   코너 마커 검출기의 H 톤 변형이 그 자리를 읽는다 (`findOCornerMarkerHypotheses`
+ *   tag `h`). `markerTones` 없이 부르면 인코더는 digit-only 마름모를
+ *   `palette.levels` 로 칠하고, 그 경로는 편입 전과 바이트 동일이다.
  *
  *   ⚠ **분류상 H 는 분류 2** (OAK 공통 육각 영역 내 셀 표면 파인더 · 꼭짓점
  *   기준, 운영자 확정 2026-08-23) — H 12셀이 곧 이 모듈의 육각 경계 tetrad 라
  *   자리(o-cm)와 같은 칸이다. ~~분류 3 (VAK 확장 영역)~~ 은 편입 초기 표기다.
- *   `finder-taxonomy.js` 의 H **행 데이터**는 아직 class 3 이다 (SPEC.md §13 TBD).
  *
  * 운영자 지시: «O/K/A 타입도 마커 구현 필요. 인식 여건을 Y 계열과 같은 수준으로.»
  * Y 의 v0/v0X 코너 마커 문법을 육각 격자로 옮긴 것이다. **중앙 불스아이는 그대로

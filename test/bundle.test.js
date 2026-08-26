@@ -27,6 +27,7 @@ const MODULE_ORDER = [
   'encode', 'scene', 'raster', 'verify', 'svg', 'png',
   'ygrid', 'placementY', 'autoplaceY', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'tonemap',
   'encodeY', 'centralBeacon', 'sceneY', 'verifyY',
+  'y3d-viewer',
   'quietzone', 'i18n', 'beacon',
 ];
 

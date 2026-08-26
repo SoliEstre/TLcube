@@ -6,9 +6,10 @@
  *     만든 기저 H 에서 «예측된 코너 자리» 를 국소 탐색할 뿐이라, `bullseye-detect`
  *     의 제안·검증·SPD 정제 파이프라인을 한 줄도 안 건드린다. 새 전역 제안기를
  *     만들지 않으므로 실사 24/24 기준선에 영향이 없다.
- *   · 마커 셀의 기대값은 **digit(3면 휘도 순위)** 이다. 절대 휘도가 아니라 셀 안의
- *     상대 순서만 보므로 단조 톤 커브·면 게인에 불변이다 — `anchor-detect.js` 가
- *     앵커 1셀에 쓰는 판정을 12셀로 넓힌 것이고, 표본기도 같은 `sampleHexCell` 이다.
+ *   · 마커 셀의 기대값은 **digit(3면 휘도 순위)** 이거나, H 변형이면 **절대 톤**이다.
+ *     digit 경로는 셀 안의 상대 순서만 보므로 단조 톤 커브·면 게인에 불변이다 —
+ *     `anchor-detect.js` 가 앵커 1셀에 쓰는 판정을 12셀로 넓힌 것이고, 표본기도
+ *     같은 `sampleHexCell` 이다.
  *   · 셀이 `tones: {T,L,R}` (절대 톤 0/1/2)를 실으면 **절대 톤 경로**로 검증한다 —
  *     비-순열 톤(예: {T:0,L:0,R:2})은 순위로 접는 순간 두 면 동률이 `tieEpsilon` 에
  *     걸려 셀 통째로 0점이 되므로 (H2O 정본 21셀 중 9셀이 그렇다), 순위 대신
@@ -51,6 +52,7 @@ import { axialToPixel } from '../hexgrid.js';
 import { digitToRanks } from '../lehmer.js';
 import { markerCells, markerTetrads } from '../markerO.js';
 import { markerCellsA, markerGroupsA } from '../markerA.js';
+import { hTonesByKeyO } from '../finder-H.js';
 import { co2SeatMarkerCellsTurnA, co2SeatMarkerGroupsTurnA } from '../finder-CO2.js';
 import { sampleHexCell } from './grid-sample.js';
 import { estimateHomography4 } from './homography.js';
@@ -507,17 +509,22 @@ export function refineHomographyFromCorners(centerImagePoint, verification) {
   }
 }
 
+function variantSuffix(variant) {
+  return (variant.turn === true ? '-turn' : '') + (variant.tag ? '-' + variant.tag : '');
+}
+
+function markerCellsH(k) {
+  return markerCells(k, hTonesByKeyO(k));
+}
+
+function markerTetradsH(k) {
+  return markerTetrads(k, hTonesByKeyO(k));
+}
+
 /**
- * Type O 코너 마커 가설 전수 평가 — (k, 방향) 전 조합. 첫 통과에서 멈추지 않는다.
- *
- * @param {import('./contracts.js').LumaField} luma
- * @param {import('./contracts.js').BullseyeCandidate} bullseye
- * @param {number[]|number} ks
- * @param {object} [options]
- */
-/**
- * @param {{turn?: boolean, groups: (k:number)=>object[], cells: (k:number)=>object[]}[]} variants
- *   배치 방향 변형 목록. hex 는 1개(정립), tri 는 2개(정립 + 턴A 역삼각)다.
+ * @param {{turn?: boolean, tag?: string, groups: (k:number)=>object[], cells: (k:number)=>object[]}[]} variants
+ *   배치 방향·기대값 변형 목록. tri 는 정립 + 턴A 역삼각. hex 는 턴이 없고
+ *   기대값이 두 갈래다 (H 톤 · digit-only).
  */
 function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
   if (luma === null || luma === undefined) {
@@ -542,7 +549,7 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
   const hypotheses = [];
   const rejected = [];
   for (const k of kList) {
-    // 변형 = «배치 방향» 목록. tri 는 정삼각 + 역삼각(턴A) 둘이고 hex 는 하나다.
+    // 변형 = 배치 방향(tri 정립/턴) × 기대값(hex 의 H 톤/digit).
     // 앵커 검출기(anchor-detect §anchorFactory)가 이미 쓰는 관용구를 그대로 따른다.
     for (const variant of variants) {
     let groups;
@@ -591,7 +598,8 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
         corners: verification.corners,
         meanRadiusRatio: verification.meanRadiusRatio,
         confirmAgreement: confirm ? confirm.agreement : 0,
-        hypothesisId: family + '-' + k + '-' + orientation + (variant.turn === true ? '-turn' : ''),
+        tag: variant.tag || '',
+        hypothesisId: family + '-' + k + '-' + orientation + variantSuffix(variant),
       };
       if (verification.accepted && confirmed) hypotheses.push(record);
       else {
@@ -611,9 +619,11 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
   }
 
   // 정립을 턴보다 앞에 둔다 — 기존 A-CM 프레임의 후보 순서를 바꾸지 않으려는 선택이다.
+  // tag 빈 문자열(digit-only)이 'h' 보다 앞 — 레거시 O-CM 가설 id 를 그대로 둔다.
   hypotheses.sort((a, b) => a.k - b.k
     || (a.turn === true ? 1 : 0) - (b.turn === true ? 1 : 0)
-    || a.orientation - b.orientation);
+    || a.orientation - b.orientation
+    || String(a.tag || '').localeCompare(String(b.tag || '')));
   const diagnostics = {
     family,
     testedKs: kList,
@@ -621,7 +631,7 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
     // ⚠ 변형 수를 곱한다 (2026-08-25, grok 검수 적발). 이 식은 hex(변형 1) 시절
     // 그대로였고 tri 는 변형 2 라, k 하나만 넣어도 실제로는 6 가설을 평가하는데
     // 값은 3 을 냈다 — **진단이 거짓말을 하면 다음 사람이 rejected 목록과 이 수를
-    // 대조하다 엉뚱한 결론에 간다.**
+    // 대조하다 엉뚱한 결론에 간다.** hex 는 F-85 로 기대값 변형이 2 가 됐다.
     evaluatedCount: kList.length * ORIENTATIONS.length * variants.length,
     rejected,
   };
@@ -640,10 +650,18 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
  * @param {object} [options]
  */
 export function findOCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
-  // hex 는 턴 개념이 없다 — 변형 하나.
+  // hex 는 턴이 없다. 기대값은 두 갈래:
+  //   · H 톤 — Type G 기본 심볼 (`finder-H.js`). tetrad A 가 레거시 앵커를 덮어
+  //     digit 앵커 검출이 죽으므로, 이 변형이 라이브 디코드의 격자 씨앗이다 (F-85).
+  //     `if (cell.tones)` 가지는 여기 groups 가 톤을 실어야 프런트가 탄다.
+  //   · digit-only — 인코더 API 의 markerTones:false 레거시. 생성기 UI 는 o-cm
+  //     선택 시 톤을 항상 싣지만, 자리만 켠 프레임은 여전히 읽혀야 한다.
   return findMarkerHypotheses(
     luma, bullseye, ks, options, 'hex-marker',
-    [{ turn: false, groups: markerTetrads, cells: markerCells }],
+    [
+      { turn: false, tag: 'h', groups: markerTetradsH, cells: markerCellsH },
+      { turn: false, groups: markerTetrads, cells: markerCells },
+    ],
   );
 }
 

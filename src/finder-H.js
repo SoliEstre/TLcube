@@ -50,11 +50,11 @@
  * 이다: H 12셀 중 6셀이 비-순열(전면 동톤 3 포함)이라 데이터 셀이 만들 수 없다.
  * digit 층은 그대로 남는다 — digit 은 와이어·알파벳 계약이고 tones 는 심볼 오버레이다.
  *
- * ⚠ 알려진 공백 (실측 2026-08-21, `claude-h-decode-probe.mjs`): H 는 tetrad A
- * (= 레거시 앵커 3셀)까지 덮으므로, 톤을 실은 프레임은 digit 기반 앵커 검출이
- * 못 읽는다 (H2O 는 앵커를 안 덮어 이 공백이 없다). 그래서 `encode.js` 의 톤 적재는
- * **opt-in** (`markerTones`) 이고 기본 digit 렌더는 바이트 동일이다 — 검출기 배선과
- * 기본값 전환은 통합자 몫이다 (`test/finder-H.test.js` ⑥ 이 공백을 잠근다).
+ * ⚠ H 는 tetrad A(= 레거시 앵커 3셀)까지 덮으므로 digit 기반 앵커 검출은 못 읽는다
+ * (H2O 는 앵커를 안 덮어 그 공백이 없다). 코너 마커 검출기는 H 톤 변형을 연다
+ * (`findOCornerMarkerHypotheses` tag `h`, F-85). 인코더 톤 적재는 여전히 **opt-in**
+ * (`markerTones`) 이고 기본 digit 렌더는 바이트 동일이다 — 기본값 전환은 실기기
+ * 라운드 뒤 운영자 판단이다 (`test/finder-H.test.js` ⑥).
  *
  * 런타임 의존성 0 · 순수 ESM.
  */

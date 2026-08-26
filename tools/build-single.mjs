@@ -185,6 +185,10 @@ export const MODULE_ORDER = [
   'generator-seat-auto',
   'generator-render-config',
   'sceneY', 'verifyY',
+  // y3d-viewer 는 보기 층 (레인 Y3DW). hexgrid·ygrid·lehmer·tonemap 만 쓰고
+  // scene/sceneY 는 import 하지 않는다 — 3D 는 opt-in 미리보기이고 PNG·SVG 경로와
+  // 접점이 0 이다. 그 넷이 전부 이 앞에 있어 위상 정렬이 성립한다.
+  'y3d-viewer',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
   'i18n',
   // beacon 도 의존이 없다 — 네트워크 전송과 오프라인 큐만 담는다.

@@ -364,7 +364,6 @@ function buildItems() {
     const cells = markerCells(6);
     const markers = cells.filter((c) => c.role === 'marker');
     const anchors = cells.filter((c) => c.role === 'anchor');
-    const withTones = cells.filter((c) => c.tones);
     const ob = overheadBreakdownOMarker(6);
     add({
       id: 'o-cm',
@@ -373,14 +372,12 @@ function buildItems() {
       className: FINDER_CLASS[2],
       kind: KIND_SEAT,
       origin: 'src/markerO.js markerCells · markerG family=hex',
-      renderPath: 'encode.js provider.fixed → cellDigits digit only → scene.faceColor palette.levels',
+      renderPath: 'encode.js provider.fixed → o-cm 이면 finder-H 톤(markerTones) · 아니면 digit-only → scene.faceColor palette.levels',
       coordBasis: COORD_VERTEX,
       innerSplit: '꼭짓점 기준',
-      toneAxis: TONE_CELL_COLOR + '. tones 미부착',
+      toneAxis: TONE_CELL_COLOR + '. 생성기 o-cm 이 markerTones 파생 (기본값 innerSeat=none 은 digit-only)',
       cells: '12 (anchor ' + anchors.length + ' + marker ' + markers.length + ')',
-      renderable: withTones.length === 0
-        ? 'digit-only (전용 심볼 없음)'
-        : 'tones ' + withTones.length,
+      renderable: 'digit-only 기본 · o-cm 선택 시 H ' + cells.length + '셀',
       consumer: '생성기 cornerMarker · decode formatIndex G · corner-marker-detect',
       note: '자리 예약. 기본 파인더=' + SEAT_DEFAULT_FINDER['o-cm']
         + ' (디자인 없음) · overhead.marker=' + ob.marker
@@ -431,17 +428,17 @@ function buildItems() {
     className: FINDER_CLASS[2],
     kind: KIND_FINDER,
     origin: 'SEAT_DEFAULT_FINDER[o-cm] — 운영자 2026-08-21 Type G → H · 분류 2 확정 2026-08-23',
-    renderPath: 'src/finder-H.js hTonesByKeyO — markerCells(k) 유도 12셀 톤 표, markerTones opt-in',
+    renderPath: 'src/finder-H.js hTonesByKeyO — markerCells(k) 유도 12셀 톤 표, 생성기 o-cm → markerTones',
     coordBasis: COORD_VERTEX,
     innerSplit: '꼭짓점 기준',
     toneAxis: TONE_CELL_COLOR + ' (palette.levels — 순백 금지, finder-H.js §팔레트)',
     cells: '12 (markerCells 유도 — 비순열 6 · detector 6)',
-    // H2O 규약과 같다: 인코더 톤 표는 실재하지만 **생성기 선택 축이 미배선**이라
-    // 화면에서 그릴 수 없다 (SPEC §13 TBD «[G] H 의 생성기 선택 축» — F-38).
-    renderable: false,
-    consumer: 'markerG defaultFinder(hex 전 버전) · 편집기 JSON. 렌더는 markerTones opt-in',
+    // F-38: 선택 축은 별도 토글이 아니라 o-cm 자리다 (운영자 2026-08-24,
+    // A-CM=H2O 문법). 생성기 기본값(innerSeat=none)은 아직 digit-only.
+    renderable: 'o-cm 선택 시 markerTones (생성기 기본값 아님)',
+    consumer: 'markerG defaultFinder(hex 전 버전) · 생성기 innerSeat=o-cm · corner-marker-detect tag=h',
     note: '육각 경계 12셀 = O-CM 자리의 심볼 파인더 (분류 2 기하). '
-      + 'tetrad A 가 digit 앵커를 덮으므로 앵커 검출 경로는 TBD',
+      + 'tetrad A 가 digit 앵커를 덮으므로 앵커 경로는 안 읽고 코너 마커 H 변형이 읽는다 (F-85)',
   });
 
   // CO2 — 턴A 자리(V-CM)의 기본 파인더 (`finder-CO2.js` 가 정본 — 유도 9셀 톤 표).

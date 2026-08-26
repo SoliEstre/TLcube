@@ -652,6 +652,36 @@
     .stage-hint { font-size: 12px; padding: 6px 10px; }
     .stage-overlay-btn { max-width: 48%; }
   }
+  /* Y 3D 미리보기 (레인 Y3DW) — 보기 층. 기본은 2.5D, 3D 는 opt-in.
+     PNG·SVG 경로와 접점 0. CM 레인이 만지는 파인더·자리·톤 축과 다른 자리(무대). */
+  #view3d { display: none; z-index: 2; cursor: grab; }
+  #view3d.on { display: block; }
+  #view3d:active { cursor: grabbing; }
+  #y3dBar {
+    position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 3;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    pointer-events: none;
+  }
+  #y3dBar[hidden] { display: none; }
+  #y3dBar > * { pointer-events: auto; }
+  .y3d-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .y3d-label { font-size: 11px; color: var(--dim); margin-right: 4px; }
+  .y3d-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 9px; font-size: 12px; border-radius: 8px;
+    background: color-mix(in srgb, var(--panel) 86%, transparent);
+    border: 1px solid var(--line); color: var(--text);
+    backdrop-filter: blur(3px); cursor: pointer;
+  }
+  .y3d-btn.on {
+    background: var(--accent); color: var(--accent-on); border-color: var(--accent);
+  }
+  .y3d-btn:hover { border-color: var(--accent); }
+  .y3d-digit { min-width: 28px; justify-content: center; font-variant-numeric: tabular-nums; }
+  @media (max-width: 760px) {
+    #y3dBar { left: 10px; right: 10px; bottom: 10px; }
+    .y3d-btn { padding: 4px 8px; font-size: 11px; }
+  }
   footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; text-align: center; }
   footer .copyright { display: block; margin-top: 4px; font-size: 10px; opacity: .75; }
   /* 빌드 식별자 — 실기기 피드백에서 어느 배포본인지 즉시 알기 위한 것.
@@ -2357,6 +2387,11 @@
     <div id="canvasWrap">
       <canvas id="backdropCanvas"></canvas>
       <canvas id="view"></canvas>
+      <!-- tabindex: 3D 미리보기의 숫자 단축키(0\~5)를 **이 캔버스에 포커스가 있을 때만**
+           받기 위해서다. 전역 window keydown 은 이 파일에서 금지돼 있고
+           (type-y-cell-editor-lab.test 가 잰다), 그 금지에는 이유가 있다 — 셀 편집기·
+           생성기·3D 가 각자 전역으로 키를 물면 서로를 삼킨다. -->
+      <canvas id="view3d" tabindex="0" data-i18n-attr="aria-label:g887" aria-label="Type Y 큐브 궤도 보기"></canvas>
     </div>
     <!-- 미리보기 위 오버레이 한 줄 (2026-08-16 운영자 지시 B-3·B-4).
          왼쪽 = 배경 사진을 넣었을 때만 뜨는 조작 안내, 오른쪽 = 투명 배경일 때 뜨는
@@ -2383,6 +2418,35 @@
         </svg>
         <span id="stageBackdropPickLabel" data-i18n="g961">TL 배치 미리보기</span>
       </button>
+    </div>
+    <!-- Y 미리보기 토글 (레인 Y3DW). Type Y 에서만 연다. 기본 2.5D · 3D 는 opt-in.
+         파인더·자리·톤 축(레인 CM)과 다른 섹션이다. -->
+    <div id="y3dBar" hidden>
+      <div class="y3d-row">
+        <span class="y3d-label" data-i18n="g885">Y 미리보기</span>
+        <button type="button" class="y3d-btn on" id="y3dMode25" data-i18n="g880">2.5D</button>
+        <button type="button" class="y3d-btn" id="y3dMode3d" data-i18n="g881">3D</button>
+        <button type="button" class="help-dot" data-help="g886" aria-expanded="false"
+                aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+            <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+          </svg>
+        </button>
+      </div>
+      <div class="y3d-row" id="y3dOrbitRow" hidden>
+        <button type="button" class="y3d-btn on" id="y3dCell" data-i18n="g882">한 셀</button>
+        <button type="button" class="y3d-btn" id="y3dField" data-i18n="g883">필드</button>
+        <span id="y3dDigits">
+          <button type="button" class="y3d-btn y3d-digit" data-digit="0">0</button>
+          <button type="button" class="y3d-btn y3d-digit" data-digit="1">1</button>
+          <button type="button" class="y3d-btn y3d-digit" data-digit="2">2</button>
+          <button type="button" class="y3d-btn y3d-digit on" data-digit="3">3</button>
+          <button type="button" class="y3d-btn y3d-digit" data-digit="4">4</button>
+          <button type="button" class="y3d-btn y3d-digit" data-digit="5">5</button>
+        </span>
+        <button type="button" class="y3d-btn" id="y3dReset" data-i18n="g884">아이소메트릭</button>
+      </div>
     </div>
   </div>
 </main>
@@ -2824,6 +2888,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY. v0T 파생 — QR 을 큐브 안쪽 먼 코너(T면 위 꼭짓점)에 8×8셀 슬롯으로 묻어요. 슬롯이 v0T 의 먼 코너 위상 마커 9셀을 덮지만, 안쪽 비대칭 블록 9셀이 남아 방향을 줘요 — 두 방향 블록은 그러라고 둔 의도된 이중화예요. 파인더 95셀 · 슬롯 64셀 · 데이터 252 예요. QR 위치에서 «면» 을 고르면 이 검출기로 바뀌어요. Y1(n=21)·Y2(n=25) 둘 다 돼요 — n=25 에서도 파인더·슬롯 셀 수는 같고 데이터만 436 으로 늘어요. 성능을 보장하지 않아요.",
     "g998": "전면 + 먼 코너 QR",
     "g999": "· 익명 방문 신호(페이지뷰)만 전송해요 — 코드 내용은 안 보내요",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "한 셀",
+    "g883": "필드",
+    "g884": "아이소메트릭",
+    "g885": "Y 미리보기",
+    "g886": "3D 는 보기 층입니다. 내보내는 PNG·SVG 는 항상 2.5D 아이소메트릭 그대로입니다.\n한 셀을 돌려 세 면의 휘도 순위를 볼 수 있고, 필드는 지금 만든 코드 전체를 궤도로 돌립니다.\n드래그로 돌리고 휠로 여백을 조절합니다. 0–5 는 digit 입니다.",
+    "g887": "Type Y 큐브 궤도 보기",
     "g955": "셀 표면 v0TR (Y1/Y2)",
     "g956": "v0TR. v0T 재설계예요 — 3코너 동심 사각을 둘로 두었어요 (바깥 = v0T 자리, 안쪽 = 그것을 큰브 안쪽으로 옮긴 사본). K3 계보 중앙 16셀 + 동심 사각 68셀 + 먼 코너 위상 마커 9셀 = 102셀 · 데이터 309 이에요. 대신 v0T 의 안쪽 비대칭 블록·북쪽 팔·서쪽 블록이 없어서 방향 여유(margin)는 0.098 이에요 (게이트의 2.80배 — v0T 보다도 높아요). 코너 앵커는 바깥 동심 사각이라 반경이 v0T 계열과 같고, 그래서 계열은 거리가 아니라 무늬 정합으로 갈려요. Y1(n=21)·Y2(n=25) 둘 다 돼요 — n=25 에서도 파인더 셀 수는 같고 데이터만 493 으로 늘어요. 성능을 보장하지 않아요.",
     "g957": "겹사각 2 + 마커",
@@ -3263,6 +3335,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY. The v0T derivative — the QR is buried inside the cube at the far corner (the top vertex of the T face) in an 8×8-cell slot. The slot covers v0T’s far-corner phase marker (9 cells), but the inner asymmetric block (9 cells) remains and gives the orientation — the two orientation blocks are an intentional redundancy for exactly this. 95 finder cells, a 64-cell slot, 252 data. Choosing \"Face\" for the QR position switches to this detector. Works at both Y1 (n=21) and Y2 (n=25) — at n=25 the finder and slot cell counts are unchanged and only the data grows, to 436. Does not guarantee performance.",
     "g998": "Full surface + far-corner QR",
     "g999": "· Sends only an anonymous visit signal (pageview) — never your code contents",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "One cell",
+    "g883": "Field",
+    "g884": "Isometric",
+    "g885": "Y preview",
+    "g886": "3D is a viewer layer. Exported PNG and SVG stay on the frozen 2.5D isometric projection.\nSpin one cell to see the three-face luminance rank, or orbit the whole code you just made.\nDrag to orbit and use the wheel to change the margin. Keys 0–5 set the digit.",
+    "g887": "Type Y cube orbit view",
     "g955": "Cell surface v0TR (Y1/Y2)",
     "g956": "v0TR. The v0T redesign — it carries two sets of three-corner concentric squares (the outer one where v0T had it, the inner one the same square moved toward the cube centre). A K3-lineage centre (16 cells), the concentric squares (68 cells) and a far-corner phase marker (9 cells) — 102 cells, 309 data. In exchange v0T’s inner asymmetric block, north arm and west block are gone, so the orientation margin is 0.098 (2.80× the gate — higher than v0T itself). The corner anchor is the outer concentric square, so the radius matches the v0T family and the families are separated by pattern correlation, not by distance. Works at both Y1 (n=21) and Y2 (n=25) — at n=25 the finder cell count is the same and only the data grows, to 493. Does not guarantee performance.",
     "g957": "Two squares + marker",
@@ -3702,6 +3782,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY。v0T 派生 — QR をキューブ内側の遠コーナー（T面の上頂点）に 8×8 セルのスロットとして埋めます。スロットは v0T の遠コーナー位相マーカー 9 セルを覆いますが、内側の非対称ブロック 9 セルが残って方向を与えます — 2 つの方向ブロックはそのための意図的な二重化です。ファインダ 95 セル・スロット 64 セル・データ 252。QR 位置で「面」を選ぶとこの検出器に切り替わります。Y1(n=21)・Y2(n=25) の両方で使えます — n=25 でもファインダ・スロットのセル数は同じで、データだけ 436 に増えます。性能は保証しません。",
     "g998": "全面＋遠コーナーQR",
     "g999": "· 匿名の訪問シグナル（ページビュー）のみ送信します — コードの内容は送りません",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "1セル",
+    "g883": "フィールド",
+    "g884": "アイソメトリック",
+    "g885": "Yプレビュー",
+    "g886": "3D は表示レイヤです。書き出す PNG・SVG は常に 2.5D アイソメトリックのままです。\n1セルを回して三面の輝度順位を見られ、フィールドは今作ったコード全体を軌道で回します。\nドラッグで回転、ホイールで余白。0–5 は digit です。",
+    "g887": "Type Y キューブ軌道ビュー",
     "g955": "セル表面 v0TR (Y1/Y2)",
     "g956": "v0TR。v0T の再設計です — 3コーナー同心四角を2組置きました（外側は v0T と同じ位置、内側はそれをキューブ中心寄りに移した写し）。K3 系譜の中央 16セル + 同心四角 68セル + 遠コーナー位相マーカ 9セル = 102セル・データ309。代わりに v0T の内側非対称ブロック・北の腕・西ブロックが無く、方向余裕（margin）は 0.098 です（ゲートの2.80倍 — v0T よりも高い）。コーナーアンカーは外側の同心四角なので半径は v0T 系列と同じで、系列はパターン整合で分かれます（距離では分かれません）。Y1(n=21)・Y2(n=25) の両方で使えます — n=25 でもファインダのセル数は同じで、データだけ 493 に増えます。性能は保証しません。",
     "g957": "同心四角2+マーカ",
@@ -4140,6 +4228,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY. Dérivé de v0T — le QR est enfoui dans le cube, au coin éloigné (le sommet supérieur de la face T), dans un emplacement de 8×8 cellules. L'emplacement couvre le marqueur de phase du coin éloigné de v0T (9 cellules), mais le bloc asymétrique intérieur (9 cellules) reste et donne l'orientation — les deux blocs d'orientation sont une redondance voulue, exactement pour cela. 95 cellules de motif, un emplacement de 64 cellules, 252 données. Si vous choisissez « Face » comme position du QR, ce détecteur est activé. Utilisable en Y1 (n=21) comme en Y2 (n=25) — à n=25, les décomptes du viseur et de l’emplacement restent identiques et seules les données passent à 436. Les performances ne sont pas garanties.",
     "g998": "Pleine surface + QR au coin éloigné",
     "g999": "· N'envoie qu'un signal de visite anonyme (page vue) — jamais le contenu de vos codes",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "Une cellule",
+    "g883": "Champ",
+    "g884": "Isométrique",
+    "g885": "Aperçu Y",
+    "g886": "Le 3D est une couche de visualisation. Les PNG et SVG exportés restent sur la projection isométrique 2.5D figée.\nFaites tourner une cellule pour voir le rang de luminance des trois faces, ou mettez en orbite le code entier.\nGlissez pour orbiter, molette pour la marge. Les touches 0–5 choisissent le digit.",
+    "g887": "Vue en orbite du cube Type Y",
     "g955": "Surface de cellules v0TR (Y1/Y2)",
     "g956": "v0TR. La refonte de v0T — elle porte deux jeux de carrés concentriques à trois coins (l’extérieur là où v0T l’avait, l’intérieur étant le même carré déplacé vers le centre du cube). Un centre de lignée K3 (16 cellules), les carrés concentriques (68 cellules) et un marqueur de phase au coin éloigné (9 cellules) — 102 cellules, 309 données. En contrepartie, le bloc asymétrique intérieur, le bras nord et le bloc ouest de v0T ont disparu : la marge d’orientation est de 0,098 (2,80× le seuil — plus élevée que celle de v0T). L’ancre de coin est le carré concentrique extérieur : le rayon est donc identique à celui de la famille v0T, et les familles sont séparées par corrélation de motif, pas par la distance. Utilisable en Y1 (n=21) comme en Y2 (n=25) — à n=25, le nombre de cellules du motif est identique et seules les données montent, à 493. Les performances ne sont pas garanties.",
     "g957": "Deux carrés + marqueur",
@@ -4578,6 +4674,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY. Derivato di v0T — il QR è sepolto dentro il cubo nell’angolo lontano (il vertice superiore della faccia T) in uno slot di 8×8 celle. Lo slot copre il marcatore di fase dell’angolo lontano di v0T (9 celle), ma il blocco asimmetrico interno (9 celle) resta e dà l’orientamento — i due blocchi di orientamento sono una ridondanza voluta, esattamente per questo. 95 celle di pattern, uno slot di 64 celle, 252 dati. Se scegli «Faccia» come posizione del QR, passi a questo rilevatore. Utilizzabile sia in Y1 (n=21) sia in Y2 (n=25) — a n=25 i conteggi di mirino e slot restano uguali e solo i dati salgono a 436. Le prestazioni non sono garantite.",
     "g998": "Piena superficie + QR angolo lontano",
     "g999": "· Invia solo un segnale di visita anonimo (pagina vista) — mai il contenuto dei codici",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "Una cella",
+    "g883": "Campo",
+    "g884": "Isometrico",
+    "g885": "Anteprima Y",
+    "g886": "Il 3D è uno strato di visualizzazione. PNG e SVG esportati restano sulla proiezione isometrica 2.5D congelata.\nRuota una cella per vedere il rango di luminanza delle tre facce, oppure metti in orbita l’intero codice.\nTrascina per orbitare, rotella per il margine. I tasti 0–5 impostano il digit.",
+    "g887": "Vista in orbita del cubo Type Y",
     "g955": "Superficie a celle v0TR (Y1/Y2)",
     "g956": "v0TR. La riprogettazione di v0T — porta due serie di quadrati concentrici a tre angoli (quello esterno dove stava in v0T, quello interno è lo stesso quadrato spostato verso il centro del cubo). Un centro di stirpe K3 (16 celle), i quadrati concentrici (68 celle) e un marcatore di fase nell’angolo lontano (9 celle) — 102 celle, 309 dati. In cambio spariscono il blocco asimmetrico interno, il braccio nord e il blocco ovest di v0T: il margine di orientamento è 0,098 (2,80× la soglia — più alto di quello di v0T). L’ancora d’angolo è il quadrato concentrico esterno: il raggio coincide con quello della famiglia v0T e le famiglie si separano per correlazione di motivo, non per distanza. Utilizzabile sia in Y1 (n=21) sia in Y2 (n=25) — a n=25 le celle del pattern sono le stesse e crescono solo i dati, a 493. Le prestazioni non sono garantite.",
     "g957": "Due quadrati + marcatore",
@@ -5016,6 +5120,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY. Das v0T-Derivat — der QR liegt im Würfel an der fernen Ecke (der oberen Spitze der T-Fläche) in einem Slot von 8×8 Zellen. Der Slot deckt v0Ts Phasenmarker an der fernen Ecke (9 Zellen) ab, aber der innere asymmetrische Block (9 Zellen) bleibt und gibt die Orientierung — die zwei Orientierungsblöcke sind genau dafür eine gewollte Redundanz. 95 Finder-Zellen, ein 64-Zellen-Slot, 252 Daten. Wird als QR-Position „Fläche“ gewählt, schaltet dieser Detektor ein. Für Y1 (n=21) und Y2 (n=25) nutzbar — bei n=25 bleiben Sucher- und Slot-Zellzahlen gleich, nur die Daten steigen auf 436. Leistung wird nicht zugesichert.",
     "g998": "Volle Fläche + QR ferne Ecke",
     "g999": "· Sendet nur ein anonymes Besuchssignal (Seitenaufruf) — nie den Inhalt Ihrer Codes",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "Eine Zelle",
+    "g883": "Feld",
+    "g884": "Isometrisch",
+    "g885": "Y-Vorschau",
+    "g886": "3D ist eine Betrachtungsebene. Exportierte PNG- und SVG-Dateien bleiben bei der eingefrorenen 2.5D-Isometrie.\nDrehen Sie eine Zelle, um den Luminanzrang der drei Flächen zu sehen, oder umrunden Sie den ganzen Code.\nZiehen zum Drehen, Rad für den Rand. Die Tasten 0–5 setzen die Ziffer.",
+    "g887": "Type-Y-Würfel in der Umlaufansicht",
     "g955": "Zellfläche v0TR (Y1/Y2)",
     "g956": "v0TR. Die Neuauslegung von v0T — sie trägt zwei Sätze konzentrischer Quadrate an drei Ecken (das äußere dort, wo v0T es hatte, das innere ist dasselbe Quadrat, zur Würfelmitte verschoben). Ein Zentrum der K3-Linie (16 Zellen), die konzentrischen Quadrate (68 Zellen) und ein Phasenmarker an der fernen Ecke (9 Zellen) — 102 Zellen, 309 Daten. Dafür fehlen v0Ts innerer asymmetrischer Block, Nordarm und Westblock: die Orientierungsmarge beträgt 0,098 (2,80× die Schwelle — höher als bei v0T). Der Eckanker ist das äußere konzentrische Quadrat: der Radius entspricht dem der v0T-Familie, und die Familien werden über Musterkorrelation getrennt, nicht über die Distanz. Für Y1 (n=21) und Y2 (n=25) nutzbar — bei n=25 bleibt die Zahl der Finder-Zellen gleich, nur die Daten steigen auf 493. Leistung wird nicht zugesichert.",
     "g957": "Zwei Quadrate + Marker",
@@ -5454,6 +5566,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY. El derivado de v0T — el QR queda enterrado dentro del cubo en la esquina lejana (el vértice superior de la cara T) en una ranura de 8×8 celdas. La ranura tapa el marcador de fase de la esquina lejana de v0T (9 celdas), pero el bloque asimétrico interior (9 celdas) queda y da la orientación — los dos bloques de orientación son una redundancia intencionada exactamente para esto. 95 celdas de patrón, una ranura de 64 celdas, 252 datos. Si elige «Cara» como posición del QR, se cambia a este detector. Se puede usar tanto en Y1 (n=21) como en Y2 (n=25): con n=25 los recuentos del localizador y de la ranura no cambian y solo los datos suben a 436. No se garantiza el rendimiento.",
     "g998": "Superficie completa + QR esquina lejana",
     "g999": "· Envía solo una señal de visita anónima (vista de página) — nunca el contenido de sus códigos",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "Una celda",
+    "g883": "Campo",
+    "g884": "Isométrico",
+    "g885": "Vista Y",
+    "g886": "El 3D es una capa de visualización. Los PNG y SVG exportados siguen en la proyección isométrica 2.5D congelada.\nGire una celda para ver el rango de luminancia de las tres caras, u orbite el código entero.\nArrastre para orbitar y use la rueda para el margen. Las teclas 0–5 eligen el dígito.",
+    "g887": "Vista orbital del cubo Type Y",
     "g955": "Superficie de celdas v0TR (Y1/Y2)",
     "g956": "v0TR. El rediseño de v0T — lleva dos juegos de cuadrados concéntricos en tres esquinas (el exterior donde lo tenía v0T, el interior es ese mismo cuadrado desplazado hacia el centro del cubo). Un centro de linaje K3 (16 celdas), los cuadrados concéntricos (68 celdas) y un marcador de fase en la esquina lejana (9 celdas) — 102 celdas, 309 datos. A cambio desaparecen el bloque asimétrico interior, el brazo norte y el bloque oeste de v0T: el margen de orientación es 0,098 (2,80× el umbral — más alto que el de v0T). El ancla de esquina es el cuadrado concéntrico exterior: el radio coincide con el de la familia v0T y las familias se separan por correlación de patrón, no por distancia. Se puede usar tanto en Y1 (n=21) como en Y2 (n=25): con n=25 el número de celdas de patrón es el mismo y solo suben los datos, a 493. No se garantiza el rendimiento.",
     "g957": "Dos cuadrados + marcador",
@@ -5892,6 +6012,14 @@ const GENERATOR_STRINGS = {
     "g997": "v0TY. O derivado do v0T — o QR fica enterrado dentro do cubo no canto distante (o vértice superior da face T) numa ranhura de 8×8 células. A ranhura cobre o marcador de fase do canto distante do v0T (9 células), mas o bloco assimétrico interior (9 células) permanece e dá a orientação — os dois blocos de orientação são uma redundância intencional exatamente para isso. 95 células de padrão, uma ranhura de 64 células, 252 dados. Se escolher «Face» como posição do QR, passa para este detetor. Pode usar-se tanto em Y1 (n=21) como em Y2 (n=25): com n=25 as contagens do localizador e da ranhura mantêm-se e só os dados sobem para 436. O desempenho não é garantido.",
     "g998": "Superfície completa + QR canto distante",
     "g999": "· Envia apenas um sinal de visita anónimo (visualização de página) — nunca o conteúdo dos seus códigos",
+    "g880": "2.5D",
+    "g881": "3D",
+    "g882": "Uma célula",
+    "g883": "Campo",
+    "g884": "Isométrico",
+    "g885": "Pré-visualização Y",
+    "g886": "O 3D é uma camada de visualização. Os PNG e SVG exportados ficam na projeção isométrica 2.5D congelada.\nRode uma célula para ver a ordem de luminância das três faces, ou ponha o código inteiro em órbita.\nArraste para orbitar e use a roda para a margem. As teclas 0–5 definem o dígito.",
+    "g887": "Vista em órbita do cubo Type Y",
     "g955": "Superfície de células v0TR (Y1/Y2)",
     "g956": "v0TR. A reformulação do v0T — leva dois conjuntos de quadrados concêntricos em três cantos (o exterior onde o v0T o tinha, o interior é esse mesmo quadrado deslocado para o centro do cubo). Um centro de linhagem K3 (16 células), os quadrados concêntricos (68 células) e um marcador de fase no canto distante (9 células) — 102 células, 309 dados. Em troca desaparecem o bloco assimétrico interior, o braço norte e o bloco oeste do v0T: a margem de orientação é 0,098 (2,80× o limiar — mais alta do que a do v0T). A âncora de canto é o quadrado concêntrico exterior: o raio coincide com o da família v0T e as famílias separam-se por correlação de padrão, não pela distância. Pode usar-se tanto em Y1 (n=21) como em Y2 (n=25): com n=25 o número de células de padrão é o mesmo e só os dados sobem, para 493. O desempenho não é garantido.",
     "g957": "Dois quadrados + marcador",
@@ -5964,6 +6092,22 @@ let helpPopoverCtl = null;
  *  syncYLocatorUi 가 초기화 도중 읽을 수 있어 선언을 여기 맨 앞에 둔다 (TDZ 회피). */
 let detectorAutoY = true; // 운영자 확정 2026-08-24: 자동이 기본값 (§resolveAutoLocatorProfileY)
 
+/** Y 3D 미리보기 상태. generatorState 가 아니다 — encode/scene 에 새면 안 된다. */
+const y3dPreview = {
+  on: false,
+  mode: 'cell',
+  digit: 3,
+  yaw: 0,
+  pitch: 0,
+  pad: 48,
+  selected: { face: 'T', i: 0, j: 0 },
+  view: null,
+  mesh: null,
+  dragging: false,
+  lastX: 0,
+  lastY: 0,
+};
+
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
   syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
@@ -5971,6 +6115,7 @@ const TEXT_SYNCERS = [
   syncShadingUi, syncYLocatorUi, syncTurnAUi, syncSeatUi,
   syncTypeYCellEditorUi,
   syncHelpPopover,
+  syncOrbitPreviewUi,
 ];
 
 const genI18n = createI18n(GENERATOR_STRINGS, {
@@ -6092,6 +6237,7 @@ import { maxSafeRadius } from './src/bullseye.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance, DELTA_MIN_CONTRACT } from './src/luminance.js';
 import { buildScene } from './src/scene.js';
 import { buildSceneY } from './src/sceneY.js';
+import { buildOrbitMesh, paintQuads, hitTest } from './src/y3d-viewer.js';
 import {
   RENDER_PROFILE_AUTO, RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_PRINT,
   RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT,
@@ -6221,6 +6367,10 @@ const els = {
   nGaugeFill: $('nGaugeFill'), nGaugeLabel: $('nGaugeLabel'),
   // 공통
   info: $('info'), error: $('error'), canvas: $('view'),
+  view3d: $('view3d'),
+  y3dBar: $('y3dBar'), y3dMode25: $('y3dMode25'), y3dMode3d: $('y3dMode3d'),
+  y3dOrbitRow: $('y3dOrbitRow'), y3dCell: $('y3dCell'), y3dField: $('y3dField'),
+  y3dDigits: $('y3dDigits'), y3dReset: $('y3dReset'),
   exportPng: $('exportPng'), exportSvg: $('exportSvg'),
   downloadToast: $('downloadToast'),
 };
@@ -6870,6 +7020,169 @@ function applyPreviewFit() {
   const aspect = c.width > 0 && c.height > 0 ? c.width / c.height : 1;
   els.canvasWrap.style.setProperty('--code-aspect', String(aspect));
 }
+
+// ── Y 3D 미리보기 (레인 Y3DW) ──────────────────────────────────────────
+// 보기 층만. generatorState 에 안 넣는다 — encode/scene 옵션으로 새면 안 된다.
+// 기본 on:false = 2.5D. 토글은 schedule() 을 부르지 않는다.
+function syncOrbitPreviewUi() {
+  const isY = generatorState.type === 'Y';
+  if (!isY) y3dPreview.on = false;
+  els.y3dBar.hidden = !isY;
+  els.y3dMode25.classList.toggle('on', !y3dPreview.on);
+  els.y3dMode3d.classList.toggle('on', y3dPreview.on);
+  els.y3dOrbitRow.hidden = !isY || !y3dPreview.on;
+  els.view3d.classList.toggle('on', isY && y3dPreview.on);
+  els.y3dCell.classList.toggle('on', y3dPreview.mode === 'cell');
+  els.y3dField.classList.toggle('on', y3dPreview.mode === 'field');
+  const cellMode = y3dPreview.mode === 'cell';
+  els.y3dDigits.hidden = !cellMode;
+  for (const btn of els.y3dDigits.querySelectorAll('.y3d-digit')) {
+    btn.classList.toggle('on', Number(btn.dataset.digit) === y3dPreview.digit);
+  }
+}
+
+function paintY3dPreview() {
+  syncOrbitPreviewUi();
+  const show = generatorState.type === 'Y' && y3dPreview.on
+    && current && current.type === 'Y' && current.encoded;
+  els.view3d.classList.toggle('on', !!show);
+  if (!show) return;
+  const canvas = els.view3d;
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (w <= 0 || h <= 0) return;
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  const pal = paletteOf(generatorState.preset);
+  const encoded = current.encoded;
+  const n = y3dPreview.mode === 'cell' ? 1 : encoded.n;
+  const tones = encoded.tones === 2 ? 2 : 3;
+  const layout = layoutForCube(n, { size: 1, margin: 0.25 });
+  const digitAt = (i, j) => {
+    if (y3dPreview.mode === 'cell') return y3dPreview.digit;
+    const entry = encoded.cellDigits.get(`${i},${j}`);
+    return entry ? entry.digit : null;
+  };
+  y3dPreview.mesh = buildOrbitMesh({
+    n,
+    tones,
+    levels: pal.levels,
+    layout,
+    yaw: y3dPreview.yaw,
+    pitch: y3dPreview.pitch,
+    digitAt,
+    includeBack: true,
+  });
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const bg = pal.background || { r: 14, g: 16, b: 24 };
+  y3dPreview.view = paintQuads(ctx, y3dPreview.mesh, {
+    background: bg,
+    pad: y3dPreview.pad,
+    selected: y3dPreview.mode === 'cell'
+      ? { face: 'T', i: 0, j: 0 }
+      : y3dPreview.selected,
+    labels: y3dPreview.mode === 'cell',
+  });
+}
+
+els.y3dMode25.addEventListener('click', () => {
+  y3dPreview.on = false;
+  syncOrbitPreviewUi();
+});
+els.y3dMode3d.addEventListener('click', () => {
+  y3dPreview.on = true;
+  syncOrbitPreviewUi();
+  paintY3dPreview();
+});
+els.y3dCell.addEventListener('click', () => {
+  y3dPreview.mode = 'cell';
+  syncOrbitPreviewUi();
+  paintY3dPreview();
+});
+els.y3dField.addEventListener('click', () => {
+  y3dPreview.mode = 'field';
+  syncOrbitPreviewUi();
+  paintY3dPreview();
+});
+els.y3dReset.addEventListener('click', () => {
+  y3dPreview.yaw = 0;
+  y3dPreview.pitch = 0;
+  y3dPreview.pad = 48;
+  paintY3dPreview();
+});
+for (const btn of els.y3dDigits.querySelectorAll('.y3d-digit')) {
+  btn.addEventListener('click', () => {
+    y3dPreview.digit = Number(btn.dataset.digit);
+    y3dPreview.mode = 'cell';
+    syncOrbitPreviewUi();
+    paintY3dPreview();
+  });
+}
+
+els.view3d.addEventListener('pointerdown', (ev) => {
+  if (!y3dPreview.on) return;
+  ev.stopPropagation();
+  try { els.view3d.setPointerCapture(ev.pointerId); } catch { /* 캡처 없이 진행 */ }
+  y3dPreview.dragging = true;
+  y3dPreview.lastX = ev.clientX;
+  y3dPreview.lastY = ev.clientY;
+  const rect = els.view3d.getBoundingClientRect();
+  const sx = (ev.clientX - rect.left) * (els.view3d.width / Math.max(rect.width, 1));
+  const sy = (ev.clientY - rect.top) * (els.view3d.height / Math.max(rect.height, 1));
+  const hit = y3dPreview.view && y3dPreview.mesh
+    && hitTest(y3dPreview.mesh, y3dPreview.view, sx, sy);
+  if (hit) {
+    y3dPreview.selected = hit;
+    if (y3dPreview.mode === 'cell') y3dPreview.digit = hit.digit;
+    syncOrbitPreviewUi();
+    paintY3dPreview();
+  }
+});
+els.view3d.addEventListener('pointermove', (ev) => {
+  if (!y3dPreview.dragging) return;
+  ev.stopPropagation();
+  const dx = ev.clientX - y3dPreview.lastX;
+  const dy = ev.clientY - y3dPreview.lastY;
+  y3dPreview.lastX = ev.clientX;
+  y3dPreview.lastY = ev.clientY;
+  y3dPreview.yaw += dx * 0.01;
+  y3dPreview.pitch += dy * 0.01;
+  paintY3dPreview();
+});
+const endY3dPointer = (ev) => {
+  if (!y3dPreview.dragging) return;
+  ev.stopPropagation();
+  y3dPreview.dragging = false;
+};
+els.view3d.addEventListener('pointerup', endY3dPointer);
+els.view3d.addEventListener('pointercancel', endY3dPointer);
+els.view3d.addEventListener('wheel', (ev) => {
+  if (!y3dPreview.on) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  y3dPreview.pad = Math.min(160, Math.max(12, y3dPreview.pad + (ev.deltaY > 0 ? 6 : -6)));
+  paintY3dPreview();
+}, { passive: false });
+
+// ⚠ **전역 window keydown 금지** (이 파일의 계약 — `type-y-cell-editor-lab.test` 가
+//    잰다). 레인 Y3DW 는 이 단축키를 window 에 달았고 그 자가 즉시 잡았다.
+//    이유는 서식 취향이 아니다: 셀 편집기 undo/redo · 생성기 · 3D 가 각자 전역으로
+//    키를 물면 서로를 삼킨다. 셀 편집기가 먼저 섹션 스코프로 갔고 이쪽도 따른다.
+//    캔버스가 키를 받으려면 포커스가 필요해서 `tabindex="0"` 을 함께 줬다.
+els.view3d.addEventListener('keydown', (ev) => {
+  if (!y3dPreview.on || generatorState.type !== 'Y') return;
+  if (ev.key >= '0' && ev.key <= '5') {
+    ev.preventDefault();
+    y3dPreview.digit = Number(ev.key);
+    y3dPreview.mode = 'cell';
+    syncOrbitPreviewUi();
+    paintY3dPreview();
+  }
+});
+window.addEventListener('resize', () => {
+  if (y3dPreview.on) paintY3dPreview();
+});
 
 // ── 모드 전환 ───────────────────────────────────────────────────────────
 
@@ -9702,7 +10015,7 @@ els.backdropFit.addEventListener('click', () => {
   const points = new Map();
   let dragging = false;
   let pinch = null; // { dist, cx, cy } — 직전 프레임의 두 점 거리·중점 (클라이언트 좌표)
-  const active = () => generatorState.bgMode === 'transparent' && backdrop.bitmap !== null;
+  const active = () => generatorState.bgMode === 'transparent' && backdrop.bitmap !== null && !y3dPreview.on;
   /** CSS 픽셀 → 캔버스 픽셀 배율 (미리보기가 축소돼 있어도 이동량이 어긋나지 않게).
    *  B-1 이후 요소 박스 == 그려진 그림이라 이 비율이 실제 표시 배율과 정확히 같다.
    *  (그 전에는 레터박스 때문에 최대 45% 어긋났다 — 드래그가 그만큼 덜 따라왔다.) */
@@ -10287,6 +10600,7 @@ els.qrCornerToo.addEventListener('change', () => {
   schedule();
 });
 syncTypeUi();
+syncOrbitPreviewUi(); // Y 미리보기 바 — Type Y 기본값이면 첫 프레임부터 보여야 한다.
 // 모드별 자리 배치를 **최초 로드에서도** 한 번 돌린다 (§placeModeHostedSections).
 // 이 한 줄이 없으면 모드 버튼을 누르기 전까지 실루엣 방향·자체검증이 옛 자리에 남는다.
 placeModeHostedSections();
@@ -11227,6 +11541,7 @@ function render() {
     drawScene(result.scene, els.canvas, 26);
     // 표시 상자는 그린 픽셀의 종횡비를 따라간다 (B-1) — drawScene 직후, 배경 레이어보다 먼저.
     applyPreviewFit();
+    paintY3dPreview();
     if (decorActive(current)) {
       const ctx = els.canvas.getContext('2d');
       const dpr = window.devicePixelRatio || 1;
@@ -11266,6 +11581,7 @@ function render() {
     updateGauge(null, null, '');
     els.eccTierHint.textContent = '';
     updateOverflowHighlight(null);
+    paintY3dPreview();
   });
 }
 

@@ -239,10 +239,11 @@ test('⑤ CM 격하 · H2O 는 확장 영역 파인더 · 자리의 기본 파�
   assert.equal(acm.class, 3);
   const h = taxonomyItem('H');
   // F-35 (2026-08-24 코드 반영): H = 분류 2 — O-CM 자리(육각 경계 12셀) 심볼.
-  // renderable 은 H2O 규약대로 false (인코더 톤 표는 실재·화면 축 미배선).
+  // F-38: 선택 축은 o-cm (별도 토글 아님). 기본값(innerSeat=none)은 아직 digit-only.
   assert.equal(h.class, 2);
   assert.equal(h.kind, KIND_FINDER);
-  assert.equal(h.renderable, false);
+  assert.notEqual(h.renderable, false, 'H.renderable 이 다시 boolean false 다 — o-cm 축이 안 보인다');
+  assert.match(String(h.renderable), /o-cm/, 'H.renderable 이 o-cm 파생을 안 적는다');
   assert.ok(h.renderPath.includes('finder-H'), 'H renderPath 가 finder-H 정본을 안 가리킨다');
   const h2o = taxonomyItem(oakCandidate('H2O').id);
   assert.ok(h2o.note.includes('기준선'), 'H2O 주석이 finderStarter 오독을 막지 않는다');

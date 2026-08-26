@@ -85,10 +85,10 @@ function layoutProviderFor(cornerMarker, daehanFinder = false, markerTones = fal
     // markerTones — 타입 G 기본 파인더 **H** 의 심볼 톤(`finder-H.js` 정본)을 12셀에
     // 싣는다 (encodeA 의 H2O 적재와 같은 기제, 운영자 결정 2026-08-21). 단 **opt-in**
     // 이다: H 는 tetrad A(= 레거시 앵커 3셀)까지 덮으므로 톤 프레임은 digit 기반
-    // 앵커 검출이 못 읽는다 (H2O 는 앵커를 안 덮어 A 는 기본 적재가 가능했다 —
-    // 실측 `test/output/lanes/claude-h-decode-probe.mjs`, 공백 잠금 finder-H.test ⑥).
-    // 기본값 전환은 검출기 배선(통합자 몫)이 선 다음이다. digit 은 그대로 남는다 —
-    // digit 은 와이어·알파벳 계약이고 tones 는 심볼 오버레이라 층이 다르다.
+    // 앵커 검출이 못 읽는다. 코너 마커 검출기의 H 톤 변형이 그 자리를 읽는다 (F-85).
+    // 생성기는 o-cm 선택이 이 플래그를 파생한다 (F-38). 기본값 전환은 실기기 라운드
+    // 뒤 운영자 판단이다. digit 은 그대로 남는다 — digit 은 와이어·알파벳 계약이고
+    // tones 는 심볼 오버레이라 층이 다르다.
     fixed: markerTones
       ? (k) => markerCells(k, hTonesByKeyO(k)).map((c) => ({
         q: c.q, r: c.r, digit: c.digit, role: c.role, tones: c.tones,

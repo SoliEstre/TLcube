@@ -1,7 +1,0 @@
-[복원 전체 (테스트 재현)] ok=false reason=frontend:no-format-candidate
-[v0wy 만 복원] ok=false reason=frontend:no-format-candidate
-[v0wy 복원 + 신규 v0t 계열 끔] ok=false reason=frontend:no-format-candidate
-ppu=15
-[복원 전체 (테스트 재현)] ok=true layout=v0wy
-[v0wy 만 복원] ok=false reason=frontend:no-grid-hypothesis
-[v0wy 복원 + 신규 v0t 계열 끔] ok=false reason=frontend:no-grid-hypothesis
