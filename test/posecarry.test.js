@@ -11,7 +11,10 @@ import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 
 import { encode } from '../src/encode.js';
+import { encodeA } from '../src/encodeA.js';
+import { encodeY } from '../src/encodeY.js';
 import { buildScene } from '../src/scene.js';
+import { buildSceneY } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
 import {
   BULLSEYE_DARK,
@@ -43,6 +46,18 @@ const SCANNER_JS = readFileSync(new URL('../sites/tlscan/scanner.js', import.met
 function render(text = TEXT, version = 2) {
   const encoded = encode(text, { version, eccLevel: 'M' });
   const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
+  return rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
+}
+
+function renderFamily(family, text) {
+  if (family === 'hex') return render(text, 2);
+  if (family === 'tri') {
+    const encoded = encodeA(text, { version: 1, eccLevel: 'M' });
+    const scene = buildScene(encoded, { palette: PALETTE, margin: 26 });
+    return rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
+  }
+  const encoded = encodeY(text, { version: 1, eccLevel: 'M', tones: 3 });
+  const scene = buildSceneY(encoded, { palette: PALETTE, margin: 20 });
   return rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
 }
 
@@ -146,6 +161,57 @@ test('왕복 핵심 — 성공 H 가 JSON 을 지나 같은 원문을 사전 경
   }));
 });
 
+test('회전 라벨 없는 성공 H 도 세 패밀리에서 포즈 이월 후 원문까지 왕복한다', {
+  timeout: 180_000,
+}, () => {
+  assert.ok(fixture && fixture.normal, 'hex 왕복 양성 앵커가 먼저 만들어지지 않았다');
+  const cases = [
+    { family: 'hex', text: TEXT, raster: fixture.raster, normal: fixture.normal.result },
+    { family: 'tri', text: 'poserot synthetic tri' },
+    { family: 'cube', text: 'poserot synthetic cube' },
+  ];
+  const results = [];
+
+  for (const entry of cases) {
+    const raster = entry.raster || renderFamily(entry.family, entry.text);
+    const normal = entry.normal || decodeFrontend(raster);
+    assert.equal(normal.ok, true, `${entry.family}: 일반 탐색 실패 ${normal.reason}`);
+    assert.equal(normal.text, entry.text, `${entry.family}: 일반 탐색 오독`);
+    assert.ok(Array.isArray(normal.hypothesis.H), `${entry.family}: 성공 H 가 없다`);
+    assert.ok(normal.hypothesis.H.every(Number.isFinite), `${entry.family}: 성공 H 가 유한하지 않다`);
+
+    const withoutRotation = JSON.parse(JSON.stringify(normal.hypothesis));
+    delete withoutRotation.rotationDegrees;
+    assert.equal(Object.hasOwn(withoutRotation, 'rotationDegrees'), false,
+      `${entry.family}: 결손 자에 rotationDegrees 가 남았다`);
+    const pose = poseFromHypothesis(withoutRotation, {
+      id: 'poserot-' + entry.family,
+      sourceWidth: raster.width,
+      sourceHeight: raster.height,
+      targetWidth: raster.width,
+      targetHeight: raster.height,
+    });
+    assert.ok(pose, `${entry.family}: H 에서 포즈를 복원하지 못했다`);
+    assert.ok(Number.isFinite(pose.rotationDegrees), `${entry.family}: 복원 회전이 유한하지 않다`);
+
+    const carried = decodeFrontend(raster, { priorPoses: [pose] });
+    assert.equal(carried.ok, true, `${entry.family}: 이월 복호 실패 ${carried.reason}`);
+    assert.equal(carried.text, entry.text, `${entry.family}: 이월 원문 불일치`);
+    results.push({
+      family: entry.family,
+      source: normal.hypothesis.source,
+      rotationDegrees: pose.rotationDegrees,
+      roundtrip: true,
+    });
+  }
+
+  console.log('POSEROT_ROUNDTRIP ' + JSON.stringify({
+    total: results.length,
+    matched: results.filter((entry) => entry.roundtrip).length,
+    results,
+  }));
+});
+
 test('변이 증인 — H 를 제거한 변환 결과는 null 이고 사전 복호는 실패한다', () => {
   assert.ok(fixture && fixture.pose, '왕복 양성 앵커가 먼저 만들어지지 않았다');
   const brokenHypothesis = { ...fixture.normal.result.hypothesis };
@@ -178,7 +244,7 @@ test('변환기 — 불완전 입력은 throw 없이 null, 해상도 변경은 �
     { ...base, H: [1, 0, 0] },
     { ...base, family: 'star' },
     { ...base, k: undefined },
-    { ...base, rotationDegrees: undefined },
+    { ...base, rotationDegrees: 'invalid' },
     { ...base, canonicalSpace: '다른-좌표계' },
   ]) {
     assert.doesNotThrow(() => poseFromHypothesis(incomplete));

@@ -241,6 +241,19 @@ function finiteHomography(value) {
   return Number.isFinite(determinant) && Math.abs(determinant) > Number.EPSILON ? H : null;
 }
 
+/** canonical 원점에서 H 의 국소 x축 방향을 절대 회전각으로 복원한다. */
+function rotationDegreesFromHomography(H) {
+  // x'=(h00*x+h01*y+h02)/(h20*x+h21*y+h22) 의 원점 x 미분이다.
+  // 공통 분모 h22^2 는 양수라 방향에는 영향을 주지 않는다.
+  const localDxX = H[0] * H[8] - H[2] * H[6];
+  const localDxY = H[3] * H[8] - H[5] * H[6];
+  if (!Number.isFinite(localDxX) || !Number.isFinite(localDxY)
+    || Math.hypot(localDxX, localDxY) <= Number.EPSILON) return null;
+  const degrees = Math.atan2(localDxY, localDxX) * 180 / Math.PI;
+  const normalized = ((degrees % 360) + 360) % 360;
+  return Object.is(normalized, -0) ? 0 : normalized;
+}
+
 function projectOrigin(H) {
   if (!H || Math.abs(H[8]) <= Number.EPSILON) return null;
   const x = H[2] / H[8];
@@ -295,13 +308,16 @@ export function poseFromHypothesis(hypothesis, options = {}) {
   const family = hypothesis.family;
   if (family !== 'hex' && family !== 'tri' && family !== 'cube') return null;
   const dimension = Number(family === 'cube' ? hypothesis.n : hypothesis.k);
-  const rotationDegrees = Number(hypothesis.rotationDegrees);
+  let H = finiteHomography(hypothesis.H);
+  if (!H) return null;
+  // 일반 탐색의 일부 가설은 회전 라벨을 싣지 않지만 H 는 같은 회전을 이미 품는다.
+  // 값이 아예 없을 때만 복원한다. 유한하지 않은 명시값을 H 로 덮어 결함을 숨기지 않는다.
+  const rotationDegrees = hypothesis.rotationDegrees === undefined
+    ? rotationDegreesFromHomography(H)
+    : Number(hypothesis.rotationDegrees);
   if (!Number.isInteger(dimension) || dimension <= 0 || !Number.isFinite(rotationDegrees)) {
     return null;
   }
-
-  let H = finiteHomography(hypothesis.H);
-  if (!H) return null;
 
   const dimensionOptionsPresent = [
     options.sourceWidth, options.sourceHeight, options.targetWidth, options.targetHeight,

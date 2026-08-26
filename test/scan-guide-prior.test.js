@@ -46,11 +46,13 @@ import {
   PRIOR_REFINE_OFFSET_CELLS,
   PRIOR_REFINE_SCALES,
   PRIOR_ROTATIONS,
+  poseFromHypothesis,
   priorPoseBudget,
   refineSeedsFrom,
   similarityHomography,
 } from '../src/scan-guide-prior.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import { HOMOGRAPHY_CANONICAL_SPACE } from '../src/decoder/contracts.js';
 import { PRIOR_POSE_BATCH } from '../src/decoder/bootstrap.js';
 import { steadyLine } from '../src/scanner-debug-overlay.js';
 import { BEACON_MAGIC } from '../src/centralBeacon.js';
@@ -197,6 +199,48 @@ test('포즈 H 는 순수 닮음변환이고 회전은 60° 격자 6개다', () 
   assert.equal(H[5], 200);
   assert.deepEqual([H[6], H[7], H[8]], [0, 0, 1], '원근 항이 있으면 닮음이 아니다');
   assert.equal(similarityHomography(0, 0, 0, 0), null);
+});
+
+test('rotationDegrees 부재 시 H 국소 x축에서 복원하며 명시값과 1e-9° 안에서 같다', () => {
+  const toleranceDegrees = 1e-9;
+  const counts = { hex: 0, tri: 0, cube: 0 };
+  let maximumErrorDegrees = 0;
+  const poses = guidePriorPoses({ frameSide: FRAME_SIDE });
+  assert.ok(poses.length > 0, '가이드-사전 대조군이 0개라 회전 검산이 공허하다');
+
+  for (const source of poses) {
+    const hypothesis = {
+      family: source.family,
+      k: source.k,
+      n: source.n,
+      canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
+      H: [...source.H],
+    };
+    assert.equal(Object.hasOwn(hypothesis, 'rotationDegrees'), false,
+      '복원 대조군에 rotationDegrees 가 섞였다');
+    const derived = poseFromHypothesis(hypothesis);
+    const explicit = poseFromHypothesis({
+      ...hypothesis,
+      rotationDegrees: source.rotationDegrees,
+    });
+    assert.ok(derived, `${source.id}: H 회전 복원 실패`);
+    assert.ok(explicit, `${source.id}: 명시 회전 대조군 실패`);
+
+    const rawError = Math.abs(derived.rotationDegrees - explicit.rotationDegrees) % 360;
+    const errorDegrees = Math.min(rawError, 360 - rawError);
+    maximumErrorDegrees = Math.max(maximumErrorDegrees, errorDegrees);
+    counts[source.family] += 1;
+    assert.ok(errorDegrees <= toleranceDegrees,
+      `${source.id}: H 복원 오차 ${errorDegrees}° > ${toleranceDegrees}°`);
+  }
+
+  assert.deepEqual(counts, { hex: 270, tri: 270, cube: 180 });
+  console.log('POSEROT_DERIVATION ' + JSON.stringify({
+    samples: poses.length,
+    counts,
+    maximumErrorDegrees,
+    toleranceDegrees,
+  }));
 });
 
 test('포즈 목록은 결정적이고 예산 안이다 — 8 레이아웃 × 6 회전 × 3 배율 × 5 오프셋', () => {
