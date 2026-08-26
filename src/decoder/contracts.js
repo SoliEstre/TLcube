@@ -86,9 +86,15 @@ export const HOMOGRAPHY_CANONICAL_SPACE = 'hex-euclidean-unit-cell';
  * @property {Point[]} [seamVertices] Type Y Y-심에서 뻗는 외곽 3점(영상 좌표)
  * @property {Homography} H        canonical Euclidean → image pixel
  * @property {'hex-euclidean-unit-cell'} canonicalSpace
- * @property {number} geometryResidual  재투영 잔차(픽셀). 낮을수록 좋음.
- * @property {boolean} [geometryResidualMeasured]  false 면 잔차를 재지 않은 경로다
- *   (F-95) — 값 0 은 «최상» 이 아니라 «미실측» 이며, 정렬(rH)은 최하 우선으로 강등된다.
+ * @property {number} [reprojectionResidualPx]  관측 대응점 재투영 오차(px).
+ * @property {number} [vertexResidualPx]  cube 외곽 꼭짓점 재투영 오차(px).
+ * @property {number} [anchorRadiusSpreadPx]  앵커 반경의 RMS 산포(px).
+ * @property {number} [finderFitPenaltyPx]  파인더 적합도 벌점을 px 척도로 옮긴 진단값.
+ * @property {number} [referenceAdjustmentPx]  레퍼런스 정교화 이동량(px).
+ * @property {number} [qrGeometryScore]  QR 삼중점 기하 점수(무차원, 낮을수록 좋음).
+ *
+ * F-95: 위 값은 서로 다른 물리량이므로 한 `geometryResidual` 이름이나 정렬키로
+ * 합치지 않는다. 값이 없으면 필드를 생략한다. 미실측 리터럴 0은 금지다.
  */
 
 /**
@@ -163,4 +169,17 @@ export function assertHomography(H) {
     if (!Number.isFinite(H[i])) throw new RangeError(`H[${i}] 가 유한하지 않다: ${H[i]}`);
   }
   return H;
+}
+
+/**
+ * 선택적 동종 측정값 오름차순 비교. 한쪽만 실측이면 실측값을 먼저 둔다.
+ * F-95의 핵심은 `undefined`를 0으로 강제해 최상으로 만드는 일을 금지하는 것이다.
+ */
+export function compareOptionalMetricAscending(left, right) {
+  const hasLeft = Number.isFinite(left);
+  const hasRight = Number.isFinite(right);
+  if (hasLeft && hasRight) return left - right;
+  if (hasLeft) return -1;
+  if (hasRight) return 1;
+  return 0;
 }

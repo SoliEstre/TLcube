@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import { encodeA } from '../src/encodeA.js';
 import { VERSIONS_A } from '../src/capacityA.js';
 import {
-  TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX, CUBE_AXIS_FORMAT_INDEXES, turnASpec,
+  TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX, CUBE_RESERVED_FORMAT_INDEXES, turnASpec,
 } from '../src/turnA.js';
 
 /**
@@ -119,7 +119,7 @@ test('formatIndex 는 **타입 안에서만** 유일하다 — 턴A 는 자기 �
 
   // ⓓ 예약 축 침범은 여전히 금지 — 이건 타입과 무관한 규약이다.
   assert.ok(!wanted.includes(K1_RESERVED_FORMAT_INDEX), '턴A 가 K1 예약(7)을 침범한다');
-  for (const cube of CUBE_AXIS_FORMAT_INDEXES) {
+  for (const cube of CUBE_RESERVED_FORMAT_INDEXES) {
     assert.ok(!wanted.includes(cube), '턴A 가 cube 축(' + cube + ')을 침범한다');
   }
 });

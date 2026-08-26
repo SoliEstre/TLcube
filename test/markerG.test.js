@@ -24,7 +24,7 @@ import {
 import {
   TURN_A_FORMAT_INDEX,
   K1_RESERVED_FORMAT_INDEX,
-  CUBE_AXIS_FORMAT_INDEXES,
+  CUBE_RESERVED_FORMAT_INDEXES,
   hexTriAxisOccupancy,
 } from '../src/turnA.js';
 import { VERSIONS } from '../src/capacity.js';
@@ -89,7 +89,7 @@ test('② G 는 K1·cube 예약을 침범하지 않고 4bit 안이며 기저 k �
   for (const entry of MARKER_G_FORMAT_INDEX) {
     assert.ok(entry.formatIndex >= 0 && entry.formatIndex <= 15, entry.name + ' 4bit 범위');
     assert.notEqual(entry.formatIndex, K1_RESERVED_FORMAT_INDEX, entry.name + ' K1 침범');
-    assert.equal(CUBE_AXIS_FORMAT_INDEXES.includes(entry.formatIndex), false,
+    assert.equal(CUBE_RESERVED_FORMAT_INDEXES.includes(entry.formatIndex), false,
       entry.name + ' cube 축 침범');
     const base = entry.family === 'hex'
       ? VERSIONS.find((v) => v.version === entry.version)

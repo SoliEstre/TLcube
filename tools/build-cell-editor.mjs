@@ -22,6 +22,13 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // O-CM/A-CM 코너 마커 (2026-08-16) — encodeA.js 가 markerA 를, markerA 가 markerO 를,
   // markerO 가 autoplaceHex 를, autoplaceHex 가 autoplaceY(→placementY) 를 쓴다.
   'placementY', 'autoplaceY', 'autoplaceHex',
+  // formatY 는 turnA·capacityY·cellSurface* **전부의 앞**이다 (2026-08-26, 레인 LEDGER
+  // 의 F-90 상수 유도화로 신설). ⚠ 이 목록은 build-single·build-finder-editor 의
+  // 사본과 **별개**라, 신설 모듈을 한 곳에만 등재하면 나머지 빌드가 죽는다.
+  // ⚠ 그리고 **formatK 를 대조군으로 삼지 마라** — formatK 는 이 편집기에 없지만
+  //   formatY 는 필요하다 (소비자 집합이 다르다). 실제로 그 오판으로 한 번 놓쳤고,
+  //   위상 검사가 `turnA -> formatY (missing)` 로 잡았다.
+  'formatY',
   // turnA 는 encodeA 앞 (2026-08-18 턴A 편입 — encodeA 가 표를 조회한다).
   // finder-daehan 은 capacityA 앞 (2026-08-19 daehan × Type A 지원 — capacityA 와
   // encodeA 가 daehan 표를 조회한다). ⚠ 이 줄이 빠져서 빌더의 위상 검사가

@@ -191,6 +191,13 @@ test('encodeY — 비문자열 페이로드는 version 명시 여부와 무관�
   assert.throws(() => encodeY(['a'], { version: 2, eccLevel: 'H' }), TypeError);
 });
 
+test('encodeY — boolean 옵션은 실제 boolean만 받는다', () => {
+  assert.throws(() => encodeY('x', { window: 1 }), TypeError);
+  assert.throws(() => encodeY('x', { window: 'yes' }), TypeError);
+  assert.throws(() => encodeY('x', { cellSurface: 1 }), TypeError);
+  assert.throws(() => encodeY('x', { cellSurface: 'yes' }), TypeError);
+});
+
 // ── 5. 면 내 QR 윈도 β (ADR 0003 D1 + [C7 Q7]) — Y2(n=25)·tones=2 전용 ────────
 
 /** windowedDataCellsInScanOrder(n,tones) 를 encodeY.js 밖에서 재구성한다(그

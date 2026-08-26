@@ -36,6 +36,7 @@ import {
   MIN_ROUNDTRIP_PPU,
   PRINT_PPI_TIERS,
   exportPhysicalWidthMm,
+  minRoundtripPpuKey,
   minRoundtripPpu,
   ppuForPpi,
   resolveExportPpi,
@@ -108,11 +109,11 @@ test('상태 기본값에서 출발한 내보내기 계획이 왕복 복호된�
     palette: paletteFor(profile), cellSize: 1, margin: 3, cornerQr: false,
   });
   const minPpu = minRoundtripPpu({
-    type: 'Y', version: encoded.version,
+    type: 'Y', version: encoded.version, n: encoded.n,
     cellSurfaceLayout: encoded.cellSurfaceLayout || null,
     ditherBits: ditherBitsOf(state),
   });
-  assert.equal(minPpu, 7.5, 'Y:v0t 실측 하한이 표와 다르다 — 바꿨다면 §2.3 을 다시 쟀는가');
+  assert.equal(minPpu, 7, 'Y:v0t n=21 실측 하한이 표와 다르다 — 바꿨다면 §2.3 을 다시 쟀는가');
   const size = resolveExportSize({
     mode: state.exportSize,
     customWidth: state.exportWidth, customHeight: state.exportHeight,
@@ -253,14 +254,41 @@ test('실측 하한표 — 조합별 값과 «양자화가 하한을 안 내린�
   assert.deepEqual({ ...MIN_ROUNDTRIP_PPU }, {
     'O:1': 8.5, 'O:2': 8.5, 'O:3': 8,
     'A:0': 9, 'A:1': 9, 'A:2': 8.5,
-    'Y:v0': 7.5, 'Y:v0t': 7.5, 'Y:v0ty': 7.5,
+    'Y:v0:13': 7.5,
+    'Y:v0t:21': 7, 'Y:v0t:25': 7,
+    'Y:v0ty:21': 7, 'Y:v0ty:25': 7,
   }, '하한표가 실측과 다르다 — 바꿨다면 §2.3 을 다시 쟀는가');
   assert.equal(minRoundtripPpu({ type: 'O', version: 2 }), 8.5);
-  assert.equal(minRoundtripPpu({ type: 'Y', version: 0, cellSurfaceLayout: 'v0' }), 7.5);
+  assert.equal(minRoundtripPpuKey({
+    type: 'Y', version: 0, n: 13, cellSurfaceLayout: 'v0',
+  }), 'Y:v0:13');
+  assert.equal(minRoundtripPpuKey({
+    type: 'Y', version: 1, n: 21, cellSurfaceLayout: 'v0t',
+  }), 'Y:v0t:21');
+  assert.equal(minRoundtripPpuKey({
+    type: 'Y', version: 2, n: 25, cellSurfaceLayout: 'v0t',
+  }), 'Y:v0t:25');
+  assert.equal(minRoundtripPpu({
+    type: 'Y', version: 0, n: 13, cellSurfaceLayout: 'v0',
+  }), 7.5);
+  assert.equal(minRoundtripPpu({
+    type: 'Y', version: 1, n: 21, cellSurfaceLayout: 'v0t',
+  }), 7);
+  assert.equal(minRoundtripPpu({
+    type: 'Y', version: 2, n: 25, cellSurfaceLayout: 'v0t',
+  }), 7);
+  assert.equal(minRoundtripPpu({
+    type: 'Y', version: 1, n: 21, cellSurfaceLayout: 'v0ty',
+  }), 7);
+  assert.equal(minRoundtripPpu({
+    type: 'Y', version: 2, n: 25, cellSurfaceLayout: 'v0ty',
+  }), 7);
   // 표에 없는 조합은 보수적 폴백 — 실측 최댓값(9) 이상이어야 한다.
   assert.ok(minRoundtripPpu({ type: 'Y', version: 1 }) >= 9);
   for (const bits of DITHER_BIT_DEPTHS) {
-    assert.ok(minRoundtripPpu({ type: 'Y', version: 1, cellSurfaceLayout: 'v0t', ditherBits: bits }) >= 7.5);
+    assert.ok(minRoundtripPpu({
+      type: 'Y', version: 1, n: 21, cellSurfaceLayout: 'v0t', ditherBits: bits,
+    }) >= 7);
   }
 });
 
@@ -274,9 +302,9 @@ test('실측 조합표 — 프로파일 + 크기 하한(minPpi) + pHYs 비오염
   assert.deepEqual(DITHER_AUTO_COMBO[8], { ppi: null, profile: null, minPpi: null });
   assert.deepEqual(DITHER_AUTO_COMBO[16], { ppi: null, profile: null, minPpi: null });
   // 하한이 minRoundtripPpu 에 실제로 실린다 (ppuForPpi 환산 — 배관 확인).
-  assert.equal(minRoundtripPpu({ type: 'Y', version: 1, cellSurfaceLayout: 'v0t', ditherBits: 2 }),
+  assert.equal(minRoundtripPpu({ type: 'Y', version: 1, n: 21, cellSurfaceLayout: 'v0t', ditherBits: 2 }),
     ppuForPpi(72));
-  assert.equal(minRoundtripPpu({ type: 'Y', version: 1, cellSurfaceLayout: 'v0t', ditherBits: 4 }),
+  assert.equal(minRoundtripPpu({ type: 'Y', version: 1, n: 21, cellSurfaceLayout: 'v0t', ditherBits: 4 }),
     ppuForPpi(48));
   // 그리고 pHYs 메타데이터는 **오염되지 않는다** — minPpi 는 렌더 밀도 하한이지 밀도
   // 선언이 아니다 (필드 분리의 이유 — 감사의 «값만 편집» 판단에 대한 정정).
@@ -299,7 +327,9 @@ test('§10 감사 격자 회귀 — 2비트 + 자동(하한 최저)가 복호 �
     });
     const size = resolveExportSize({
       mode: 'auto-min', sceneWidth: scene.width, sceneHeight: scene.height,
-      minPpu: minRoundtripPpu({ type: 'Y', version: 1, cellSurfaceLayout: 'v0t', ditherBits: bits }),
+      minPpu: minRoundtripPpu({
+        type: 'Y', version: 1, n: encoded.n, cellSurfaceLayout: 'v0t', ditherBits: bits,
+      }),
     });
     const padded = padRasterToCanvas(
       quantizeDitherRaster(rasterize(scene, { pixelsPerUnit: size.ppu, supersample: 2 }), bits),
@@ -474,7 +504,8 @@ function exportRasterOf(scene, type, encoded) {
   const size = resolveExportSize({
     mode: 'auto-fit', sceneWidth: scene.width, sceneHeight: scene.height,
     minPpu: minRoundtripPpu({
-      type, version: encoded.version, cellSurfaceLayout: encoded.cellSurfaceLayout || null,
+      type, version: encoded.version, n: encoded.n,
+      cellSurfaceLayout: encoded.cellSurfaceLayout || null,
     }),
   });
   return padRasterToCanvas(

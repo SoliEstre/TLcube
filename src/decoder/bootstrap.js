@@ -1532,8 +1532,9 @@ function silhouetteHypotheses(luma, finder, k, outline, options, cfg) {
       canonicalAnchors: anchorCells(k).map((cell) => ({ q: cell.q, r: cell.r })),
       H,
       canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-      geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
-      geometryResidualMeasured: residualCount > 0,
+      ...(residualCount > 0
+        ? { reprojectionResidualPx: residualSum / residualCount }
+        : {}),
       anchorMargin: anchorValidation.separation / 3,
       anchorValidation,
       finder,
@@ -1749,8 +1750,9 @@ function starSilhouetteHypotheses(luma, finder, k, outline, options, cfg) {
           canonicalAnchors: expectedCells.map((cell) => ({ q: cell.q, r: cell.r })),
           H,
           canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-          geometryResidual: residualCount > 0 ? residualSum / residualCount : 0,
-          geometryResidualMeasured: residualCount > 0,
+          ...(residualCount > 0
+            ? { reprojectionResidualPx: residualSum / residualCount }
+            : {}),
           anchorMargin: anchorValidation.separation / expectedCells.length,
           anchorValidation,
           finder,
@@ -1810,10 +1812,7 @@ function weakAnchorHypotheses(luma, finder, family, options) {
         canonicalAnchors,
         H,
         canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-        // F-95: H 가 파인더 유도라 독립 대응점이 없어 잔차를 잴 수 없다 —
-        // 0(전 tiebreak 승리)으로 위장하지 않고 «미실측 → 최하 우선» 으로 강등.
-        geometryResidual: 0,
-        geometryResidualMeasured: false,
+        // F-95: H가 파인더 유도라 독립 대응점이 없다. 잔차 필드를 만들지 않는다.
         anchorMargin: anchorValidation.separation / 3,
         anchorValidation,
         anchorEvidence: {
@@ -1876,10 +1875,8 @@ function cornerMarkerHypotheses(luma, finder, family, options) {
       canonicalAnchors,
       H,
       canonicalSpace: record.canonicalSpace,
-      // F-95: record 의 기하 증거는 비율(meanRadiusRatio)이지 px 잔차가 아니다 —
-      // 환산 조작 대신 «미실측 → 최하 우선» 강등 (confirmAgreement 는 anchorMargin 으로 이미 실림).
-      geometryResidual: 0,
-      geometryResidualMeasured: false,
+      // F-95: record의 기하 증거는 비율(meanRadiusRatio)이지 px 잔차가 아니다.
+      // 환산 조작 없이 별도 anchorEvidence에만 둔다.
       // 정렬 키다(게이트 아님). 코너 마커의 확신도를 그대로 싣는다 —
       // 앵커 margin 과 «같은 척도인 척» 하지 않으려고 별도 필드도 남긴다.
       anchorMargin: record.confirmAgreement,
@@ -1920,10 +1917,14 @@ function cellFinderHypotheses(luma, finder, family, options) {
     centerQr: false,
     H,
     canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-    geometryResidual: Number.isFinite(finder.geometryResidual) ? finder.geometryResidual : 0,
-    // F-95: 파인더가 잔차를 안 냈거나(부재→0 위장) 미실측 선언이면 그대로 전파한다.
-    geometryResidualMeasured: Number.isFinite(finder.geometryResidual)
-      && finder.geometryResidualMeasured !== false,
+    ...(Number.isFinite(finder.reprojectionResidualPx)
+      ? { reprojectionResidualPx: finder.reprojectionResidualPx } : {}),
+    ...(Number.isFinite(finder.vertexResidualPx)
+      ? { vertexResidualPx: finder.vertexResidualPx } : {}),
+    ...(Number.isFinite(finder.anchorRadiusSpreadPx)
+      ? { anchorRadiusSpreadPx: finder.anchorRadiusSpreadPx } : {}),
+    ...(Number.isFinite(finder.finderFitPenaltyPx)
+      ? { finderFitPenaltyPx: finder.finderFitPenaltyPx } : {}),
     anchorMargin: finder.orientationMargin,
     orientationEvidence: {
       source: finder.orientationSource || 'finder-pattern',
@@ -2387,28 +2388,25 @@ function referenceAgreement(referenceResult) {
 }
 
 function reprojectionResidual(luma, hypothesis, referenceResult, options, cfg) {
-  // F-95: 잔차를 재지 않은 가설(리터럴 0 생산자)은 «최하 우선» 이다 — 0 은
-  // 최상 tiebreak 인데 증거가 없다. 실측 브랜치(hex+reference 국소 워프)는
-  // geometryResidual 을 안 쓰므로 이 강등의 영향이 없다.
+  // F-95: rH는 실제 재투영 오차 또는 레퍼런스 국소 워프만 쓴다. 꼭짓점 오차·앵커
+  // 반경 산포·파인더 적합도 벌점·레퍼런스 이동량은 이름과 정렬키를 분리한다.
   if (hypothesis.family === 'cube') {
     const center = projectPoint(hypothesis.H, { x: 0, y: 0 });
     const iStep = projectPoint(hypothesis.H, { x: 1, y: 0 });
     const jStep = projectPoint(hypothesis.H, { x: 0, y: 1 });
-    if (!center || !iStep || !jStep || !Number.isFinite(hypothesis.geometryResidual)
-      || hypothesis.geometryResidualMeasured === false) return 1;
+    if (!center || !iStep || !jStep || !Number.isFinite(hypothesis.reprojectionResidualPx)) return 1;
     const pitch = median([
       Math.hypot(iStep.x - center.x, iStep.y - center.y),
       Math.hypot(jStep.x - center.x, jStep.y - center.y),
     ]);
     return Number.isFinite(pitch) && pitch > EPSILON
-      ? hypothesis.geometryResidual / pitch
+      ? hypothesis.reprojectionResidualPx / pitch
       : 1;
   }
   if (!referenceResult.ok || hypothesis.family !== 'hex') {
     const cellSize = hypothesis.finder && hypothesis.finder.cellSize;
-    return Number.isFinite(hypothesis.geometryResidual) && Number.isFinite(cellSize) && cellSize > 0
-      && hypothesis.geometryResidualMeasured !== false
-      ? hypothesis.geometryResidual / cellSize
+    return Number.isFinite(hypothesis.reprojectionResidualPx) && Number.isFinite(cellSize) && cellSize > 0
+      ? hypothesis.reprojectionResidualPx / cellSize
       : 1;
   }
   try {
@@ -2742,7 +2740,7 @@ function qrWindowReferenceRefinedHypotheses(luma, qrResult, options = {}) {
         hypotheses.push({
           ...entry,
           referenceSamples: entry.referenceCalibration.samples,
-          geometryResidual: entry.adjustment * pitch,
+          referenceAdjustmentPx: entry.adjustment * pitch,
           referenceRefinement: {
             mode: 'qr-fixed-fourth-point-grid',
             dxCells: entry.dxUnits,
@@ -2798,7 +2796,7 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
               centerQr: true,
               H,
               canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-              geometryResidual: Math.max(0, candidate.score) * cellSize,
+              qrGeometryScore: Math.max(0, candidate.score),
               finder,
               source: 'center-qr-finder',
               hypothesisId:
@@ -2844,7 +2842,7 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
         ...base,
         referenceCalibration,
         referenceSamples: referenceCalibration.samples,
-        geometryResidual: Math.max(0, candidate.score) * pitch,
+        qrGeometryScore: Math.max(0, candidate.score),
         source: 'center-qr-window-finder',
         hypothesisId:
           'qr-window-c' + candidateIndex + '-a' + axisIndex,
@@ -4456,10 +4454,8 @@ function recastCentralBeaconCandidates(luma, validated, options) {
           centerQr: false,
           H: pose.H,
           canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-          geometryResidual: Number.isFinite(candidate.hypothesis.geometryResidual)
-            ? candidate.hypothesis.geometryResidual : 0,
-          geometryResidualMeasured: Number.isFinite(candidate.hypothesis.geometryResidual)
-            && candidate.hypothesis.geometryResidualMeasured !== false,
+          // F-95: 내부 비컨 H에서 바깥 포즈를 새로 만들었으므로 내부의 어떤 잔차도
+          // 바깥 재투영 오차가 아니다. 잔차 필드를 전파하지 않는다.
           finder: {
             finderKind: CENTRAL_BEACON_FINDER_KIND,
             patternId: CENTRAL_BEACON_FINDER_KIND,

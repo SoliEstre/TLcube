@@ -19,13 +19,10 @@
  *      정확히 {7,8,9,10,11} 이다 (아래 자기검증이 매 로드 확인).
  *   ② 역방향(O/A 프레임이 star 로 오분류)도 그 프레임의 값(0..6·12..15)이 star 축
  *      ({7,8}) 에 없어 같은 단계에서 죽는다.
- *   ③ cube 축은 8..11 을 쓰지만 **크기 축이 n(13/21/25) 이고 star 는 k(6/8/10)** 라
- *      (값,크기) 쌍이 겹치지 않는다. 값 재사용 자체는 ADR 0006 D3-1(격자 수립 경로가
- *      다르면 안전)이 이미 허용한 것이고, 그 위에 «크기까지 안 겹친다» 가 더 붙는다.
- *      ⚠ 이 대조는 **여기가 아니라 `test/capacityK.test.js`** 가 VERSIONS_Y 실계산으로
- *      진다 — 이 모듈은 `finder-zone-ui` 가 import 하므로 브라우저 번들에 들어가고,
- *      capacityY 를 끌어들이면 MODULE_ORDER 위상이 통째로 뒤집힌다 (capacityY 는
- *      번들 후반이다). 번들 제약이 검증 위치를 정한 자리이고, 자는 그대로 있다.
+ *   ③ cube 축 실점유는 **14값**이고 평 K의 7까지 이미 포함한다(F-90). 그래도 cube의
+ *      크기 축은 n(13/21/25), star는 k(6/8/10)라 (값,크기) 쌍이 겹치지 않는다.
+ *      값 재사용 자체는 ADR 0006 D3-1이 허용한다. 조기 로드 가능한 `formatY.js`가
+ *      실점유 claim을 유도하고, 아래 로드 가드가 전 claim과 star를 대조한다.
  *
  * ⚠ 값을 이 두 개 밖으로 옮기려면 위 논거가 통째로 무너진다 — hex·tri 는
  * {0..6, 12..15} × k 를 **48/48 다 쓴다**(2026-08-24 실계산). 아래 자기검증이
@@ -43,8 +40,14 @@
  * 구분할 수 없다.
  */
 
-import { hexTriAxisOccupancy, K1_RESERVED_FORMAT_INDEX, TURN_A_FORMAT_INDEX, CUBE_AXIS_FORMAT_INDEXES } from './turnA.js';
+import {
+  hexTriAxisOccupancy,
+  K1_RESERVED_FORMAT_INDEX,
+  TURN_A_FORMAT_INDEX,
+  CUBE_RESERVED_FORMAT_INDEXES,
+} from './turnA.js';
 import { MARKER_G_FORMAT_INDEX } from './markerG.js';
+import { CUBE_AXIS_FORMAT_CLAIMS, CUBE_AXIS_FORMAT_INDEXES } from './formatY.js';
 
 /** K-CM 이 쓰는 star 축 값. hex·tri 가 영구 회피하는 cube 예약 밴드 안이라
  *  «포맷 단계 조기 사멸» 논거가 평 K(7)와 똑같이 선다 (헤더 §값 선택 ①). */
@@ -121,10 +124,10 @@ export function kSpecFromFormatIndex(formatIndex, k) {
         + ' k=' + plain.k + ' 과 다르다 — K-CM 은 «옵션» 이라 격자 크기가 같다');
     }
   }
-  // 이중 안전의 전제 검증 ① — 이 표의 값은 hex·tri 축이 **영구 회피하는 밴드**
-  // (K 예약 7 + cube 예약 8..11) 안이어야 한다. 밖의 값을 쓰면 «포맷 단계 조기
+  // 이중 안전의 전제 검증 ① — 이 표의 값은 hex·tri 축이 **영구 회피하는 정책 밴드**
+  // (K 예약 7 + cube 기저 예약 8..11) 안이어야 한다. 밖의 값을 쓰면 «포맷 단계 조기
   // 사멸» 논거의 절반이 사라진다 — hex·tri 는 나머지 {0..6,12..15}×k 를 다 쓴다.
-  const RESERVED_BAND = Object.freeze([K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES]);
+  const RESERVED_BAND = Object.freeze([K1_RESERVED_FORMAT_INDEX, ...CUBE_RESERVED_FORMAT_INDEXES]);
   const offReserve = K_FORMAT_INDEX.filter((entry) => !RESERVED_BAND.includes(entry.formatIndex));
   if (offReserve.length > 0) {
     throw new Error('formatK: hex·tri 영구 회피 밴드 [' + RESERVED_BAND.join(',') + '] 밖의 값을 쓴다 — '
@@ -132,9 +135,9 @@ export function kSpecFromFormatIndex(formatIndex, k) {
       + ' (의도한 확장이면 헤더 §값 선택 논거와 이 검증을 함께 갱신하라)');
   }
   if (K_MARKER_FORMAT_INDEX === K1_RESERVED_FORMAT_INDEX
-    || !CUBE_AXIS_FORMAT_INDEXES.includes(K_MARKER_FORMAT_INDEX)) {
+    || !CUBE_RESERVED_FORMAT_INDEXES.includes(K_MARKER_FORMAT_INDEX)) {
     throw new Error('formatK: K_MARKER_FORMAT_INDEX ' + K_MARKER_FORMAT_INDEX
-      + ' 이 cube 예약 밴드 [' + CUBE_AXIS_FORMAT_INDEXES.join(',') + '] 안이 아니다');
+      + ' 이 cube 예약 밴드 [' + CUBE_RESERVED_FORMAT_INDEXES.join(',') + '] 안이 아니다');
   }
   // ①b — hex·tri 축이 그 밴드를 **실제로** 비워 두는가 (k 마다 빈 값 = 밴드 그대로).
   // 코드 정본에서 실계산한다: 손으로 «48/48 꽉 찼다» 를 적어 두면 그 사본이 썩는다.
@@ -176,5 +179,18 @@ export function kSpecFromFormatIndex(formatIndex, k) {
           + ', k' + occ.k + ') 를 점유한다 — K 예약 침범');
       }
     }
+  }
+  // F-90: cube 실점유 전부(현행 14값)와 star를 (값,크기)로 대조한다. 값 7의
+  // 중복은 실제이며 축 분리상 합법이지만, 크기까지 같아지면 오판 가설이 생기므로 죽는다.
+  for (const cube of CUBE_AXIS_FORMAT_CLAIMS) {
+    for (const entry of K_FORMAT_INDEX) {
+      if (cube.formatIndex === entry.formatIndex && cube.n === entry.k) {
+        throw new Error('formatK: cube ' + cube.owner + ' 와 star ' + entry.name
+          + ' 이 (값=' + cube.formatIndex + ', 크기=' + cube.n + ')까지 겹친다');
+      }
+    }
+  }
+  if (!CUBE_AXIS_FORMAT_INDEXES.includes(K1_RESERVED_FORMAT_INDEX)) {
+    throw new Error('formatK: F-90 전제 변화 — cube 실점유에서 K 값 7이 사라졌다; 축 분리 근거를 재검토하라');
   }
 }

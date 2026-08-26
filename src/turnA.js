@@ -16,8 +16,8 @@
  *     O V2=1(k8) 과 A0=1(k6) 이 같은 값을 쓴다 (decode.js «두 해석 만들고 k 로
  *     가른다»). 턴A 도 같은 기제만 쓴다 — **같은 (값, k) 쌍은 절대 겹치지 않는다.**
  *   · 7 은 쓰지 않는다 — K1 배정 잠정 확정 (015 §16).
- *   · 8·9·10·11 은 쓰지 않는다 — cube 축 값과 겹치고, tri↔cube 격자 수립 경로
- *     분리는 아직 실측 전 가설이다 (.agent/_contracts/type-k.md §K-7).
+ *   · 8·9·10·11 은 쓰지 않는다 — hex·tri의 cube 기저 예약 정책 밴드다. cube 실점유
+ *     전체는 이 넷이 아니라 `formatY.js`가 유도한 14값이다(F-90).
  *   · 현행 tri 실점유 = {1(A0·k6), 3(A0Q·k6), 12(A1·k8), 14(A1Q·k8),
  *     13(A2·k10), 15(A2Q·k10)} — A0Q 는 실재한다 (encodeA(version 0, centerQr)
  *     실호출 확인). 따라서 턴A 최악 소요는 T×Q 전조합 = **6값**이다
@@ -35,6 +35,12 @@
 
 import { VERSIONS_A } from './capacityA.js';
 import { VERSIONS } from './capacity.js';
+import {
+  CUBE_AXIS_FORMAT_INDEXES,
+  HEX_TRI_CUBE_RESERVED_FORMAT_INDEXES,
+} from './formatY.js';
+
+export { CUBE_AXIS_FORMAT_INDEXES } from './formatY.js';
 
 /** 내부 타입 V 배정 표 — 항목마다 값이 «표에 직접» 적혀 있다. 산술 유도 금지.
  *  값·k·centerQr 은 발행 와이어라 **동결**이다 (2026-08-24 재명명 — 구명
@@ -67,8 +73,8 @@ export const TURN_A_FORMAT_INDEX = Object.freeze([
 
 /** K1 예약 (015 §16 잠정 확정) — 턴A 가 침범하면 안 되는 값. */
 export const K1_RESERVED_FORMAT_INDEX = 7;
-/** cube 축 점유 값 — tri↔cube 분리 실측 전이라 턴A 는 피한다. */
-export const CUBE_AXIS_FORMAT_INDEXES = Object.freeze([8, 9, 10, 11]);
+/** hex·tri가 비워 두는 cube 기저 정책 밴드. cube 실점유 전체는 formatY.js가 유도한다. */
+export const CUBE_RESERVED_FORMAT_INDEXES = HEX_TRI_CUBE_RESERVED_FORMAT_INDEXES;
 
 /**
  * 현행 hex·tri 축 점유를 (formatIndex, k) 쌍으로 전수 열거한다 — 코드 정본에서
@@ -145,7 +151,7 @@ export function turnASpecFromFormatIndex(formatIndex, k) {
     if (entry.formatIndex === K1_RESERVED_FORMAT_INDEX) {
       throw new Error('turnA: K1 예약값 7 침범 — ' + entry.name);
     }
-    if (CUBE_AXIS_FORMAT_INDEXES.includes(entry.formatIndex)) {
+    if (CUBE_RESERVED_FORMAT_INDEXES.includes(entry.formatIndex)) {
       throw new Error('turnA: cube 축 값 침범 — ' + entry.name + '=' + entry.formatIndex);
     }
     claim(entry.name, entry.formatIndex, entry.k);

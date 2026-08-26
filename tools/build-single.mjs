@@ -77,7 +77,7 @@ export const MODULE_ORDER = [
   // generator-types 는 finder-selection·generator-state **양쪽의 앞**이어야 한다
   // (둘 다 타입 목록을 여기서 가져간다 — 2026-08-25 손 사본 철폐).
   'generator-types',
-  'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo',
+  'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'formatY',
   'header', 'bullseye', 'layout', 'capacity',
   // capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의 뒤여야 하고
   // encode/decode 의 앞이다.
@@ -143,7 +143,7 @@ export const MODULE_ORDER = [
   // 전부 이 앞에 있다. ⚠ finder-taxonomy 는 **여기 못 들어온다** — node:url·
   // node:path top-level import (CLI 덤프 모드) 라 브라우저 번들에서 죽는다.
   // 분류 정본 대조는 test/finder-zone-ui.test.js 가 Node 쪽에서 진다.
-  'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'dither', 'export-options', 'generator-state', 'finder-zone-ui', 'export-filename',
+  'gf256', 'rs', 'qr', 'quietzone', 'shading', 'quiet-auto', 'render-profile', 'dither',
   // export-render 는 raster·svg·png·dither 전부의 뒤다 (내보내기 파이프라인 — 앱만 쓴다).
   // cellSurfaceFinal(최종 라인업 v0·v2r2)은 capacityY·cellSurfaceY·cellSurfaceLayouts·
   // autoplaceY 를 import 하므로 그 넷 뒤에 온다.
@@ -158,6 +158,10 @@ export const MODULE_ORDER = [
   // assertTopologicalOrder 가 빌드를 막는다 — 치환이 조용히 건너뛰어져
   // **브라우저에서만** 터지는 자리이기 때문이다.
   'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  // export-options 는 최종 cell-surface n 정본을 읽는다. generator-state 는 그 옵션을
+  // 읽으므로 둘 다 cellSurfaceFinal 뒤에 둔다. 순서를 어기면 단일 파일 로더의 specifier
+  // 치환이 조용히 남아 브라우저에서만 실패한다.
+  'export-options', 'generator-state', 'finder-zone-ui', 'export-filename',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: `encodeY` 와 잎 모듈 `tonemap` 이
   // `encode`·`scene` **앞**으로 왔다. scene.js 가 중앙 슬롯을 완전한 v0 코드로
   // 채우려고 `encodeY` 를 그대로 부르고(`centralBeacon`), 데이터 셀 톤은

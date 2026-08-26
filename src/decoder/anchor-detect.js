@@ -262,7 +262,7 @@ function rankStat(faces, tieEpsilon) {
   };
 }
 
-function geometryResidual(points, center, cellSize) {
+function anchorRadiusSpread(points, center) {
   const radii = points
     .filter((point) => finitePoint(point))
     .map((point) => Math.hypot(point.x - center.x, point.y - center.y));
@@ -380,7 +380,7 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
     ? 0
     : separations.reduce((sum, value) => sum + value, 0) / separations.length;
   const score = clamp01(meanSeparation / Math.max(minSeparation, LUMA_RANGE_EPSILON));
-  const residual = geometryResidual(pointList, bullseye.center, bullseye.cellSize);
+  const residual = anchorRadiusSpread(pointList, bullseye.center);
 
   return {
     family,
@@ -395,7 +395,7 @@ function evaluate(luma, bullseye, canonicalAnchors, family, k, orientation, opti
     canonicalAnchors: canonicalAnchors.map((anchor) => ({ q: anchor.q, r: anchor.r })),
     H,
     canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-    geometryResidual: residual,
+    anchorRadiusSpreadPx: residual,
     anchorMargin: separations.length === 0 ? 0 : Math.min(...separations),
     score,
     hardChecks: {
@@ -602,7 +602,7 @@ export function findAAnchorHypotheses(luma, bullseye, ks, options = {}) {
  *
  * 앵커 = A 계열 꼭짓점 3(digit 5/0/0 — placementA 그대로) + 반전 계열 꼭짓점 3
  * (digit 1/1/1, 통합자 확정 2026-08-24). 여섯 점 전부 유클리드 3k·셀(= 별의 끝)
- * 이라 geometryResidual 회계가 O/A 와 같은 꼴로 성립한다.
+ * 이라 anchorRadiusSpreadPx 회계가 O/A 와 같은 꼴로 성립한다.
  *
  * 60° 오가설이 여기서 죽는다 (계약 K-2 채택 근거): 60° 회전은 A 계열 자리를 반전
  * 계열 자리로 보내는데, 기대값 {5,0} 자리에서 1 이 (또는 그 역이) 읽히므로

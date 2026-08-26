@@ -37,6 +37,7 @@ import {
   FRONTEND_FAILURE,
   HOMOGRAPHY_CANONICAL_SPACE,
   assertLumaField,
+  compareOptionalMetricAscending,
   fail,
   ok,
 } from './contracts.js';
@@ -2591,7 +2592,7 @@ export function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypoth
             seamVertices: seed.observedSeams,
             H: seed.H,
             canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-            geometryResidual: vertexResidual,
+            vertexResidualPx: vertexResidual,
             sizeGeometry: {
               rK: relativeVertexResidual,
               vertexResidual,
@@ -2705,7 +2706,7 @@ export function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypoth
               ...base,
               center: refinedCenter || center,
               H: refined.H,
-              geometryResidual: refinedVertexResidual,
+              vertexResidualPx: refinedVertexResidual,
               sizeGeometry: {
                 rK: refinedRelativeVertexResidual,
                 vertexResidual: refinedVertexResidual,
@@ -2796,9 +2797,8 @@ function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
             + 0.22 * accepted.referenceCalibration.agreementRate
             + 0.20 * clamp01(proposal.blockFill),
           );
-          // F-95: 블록 어파인 경로는 재투영 잔차를 재지 않는다 — 0 위장 대신 미실측 선언.
-          const geometryResidual = 0;
-          const geometryResidualMeasured = false;
+          // F-95: 블록 어파인 경로는 꼭짓점 잔차를 재지 않는다. 숫자 0을 만들지 않고
+          // sizeGeometry의 미실측 순위도 최하(1)로 둔다.
           const logicalHypothesisId = 'cube-n' + n
             + '-flat-block-c' + componentIndex + '-o' + orientation + '-t' + tones;
           const hardChecks = {
@@ -2822,12 +2822,10 @@ function recoverFlatBlockHypotheses(luma, reduced, options, cfg) {
             seamVertices: CANONICAL_SEAM_CORNERS.map((index) => accepted.vertices[index]),
             H: accepted.H,
             canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
-            geometryResidual,
-            geometryResidualMeasured,
             sizeGeometry: {
-              rK: 0,
-              vertexResidual: geometryResidual,
-              relativeVertexResidual: 0,
+              rK: 1,
+              vertexResidual: null,
+              relativeVertexResidual: 1,
               proposalScaleX: accepted.scaleX,
               proposalScaleY: accepted.scaleY,
             },
@@ -3018,7 +3016,7 @@ function detectCubeViaFinderFirst(luma, options) {
   hypotheses.sort((left, right) =>
     (right.referenceAgreement || 0) - (left.referenceAgreement || 0)
     || (right.shapeScore || 0) - (left.shapeScore || 0)
-    || (left.geometryResidual || 0) - (right.geometryResidual || 0));
+    || compareOptionalMetricAscending(left.vertexResidualPx, right.vertexResidualPx));
 
   return ok({
     hypotheses,
@@ -3254,7 +3252,7 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
     group.sort((left, right) =>
       right.referenceAgreement - left.referenceAgreement
       || right.referenceRefinement.quality - left.referenceRefinement.quality
-      || left.geometryResidual - right.geometryResidual
+      || compareOptionalMetricAscending(left.vertexResidualPx, right.vertexResidualPx)
       || left.geometrySeed.localeCompare(right.geometrySeed));
     hypotheses.push(...group.slice(0, 2));
   }
@@ -3500,7 +3498,7 @@ export function detectCentralCubeFinders(luma, options = {}) {
       H: best.seed.H,
       transform: best.seed.H,
       B: best.seed.H,
-      geometryResidual: best.vertexResidual,
+      vertexResidualPx: best.vertexResidual,
       geometryMode: best.seed.id,
       hardChecks,
       hardChecksPassed: hardChecks.all,
@@ -3512,7 +3510,7 @@ export function detectCentralCubeFinders(luma, options = {}) {
   candidates.sort((left, right) =>
     right.score - left.score
     || right.orientationMargin - left.orientationMargin
-    || left.geometryResidual - right.geometryResidual);
+    || compareOptionalMetricAscending(left.vertexResidualPx, right.vertexResidualPx));
   if (candidates.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, {
       stage: 'central-cube-finder',

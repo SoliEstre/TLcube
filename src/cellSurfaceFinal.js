@@ -150,6 +150,7 @@ import {
   placeReservedCells, FORMAT_BLOCK_LENGTH_V1, FORMAT_BLOCK_LENGTH_V2,
 } from './autoplaceY.js';
 import { FORMAT_CELLS_V2 } from './formatinfo.js';
+import { CELL_SURFACE_FINAL_FORMAT_INDEX as FORMAT_INDEX_Y_FINAL } from './formatY.js';
 
 /**
  * 이 라인업이 **생성**하는 포맷 세대. 신세대 셀 표면은 전부 v2(6 digit · 18셀).
@@ -500,7 +501,7 @@ export const CELL_SURFACE_FINAL_PROFILE = Object.freeze({
 });
 
 /** 신세대 셀 표면 formatIndex — 한 쌍뿐. 세 레이아웃이 같이 쓴다(신설 금지). */
-export const CELL_SURFACE_FINAL_FORMAT_INDEX = Object.freeze({ 2: 1, 3: 3 });
+export const CELL_SURFACE_FINAL_FORMAT_INDEX = FORMAT_INDEX_Y_FINAL;
 
 /** 레이아웃별 허용 n. v2r2·v1r2 는 n=13 을 autoplace 가 거부한다(REF_QUADRANT). */
 export const CELL_SURFACE_FINAL_NS = Object.freeze({

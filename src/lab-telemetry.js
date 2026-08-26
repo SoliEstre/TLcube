@@ -649,7 +649,14 @@ export function emptyGeometry() {
     clipSide: null,
     rotationDeg: null,
     perspective: null,
+    // `residualPx`는 호환 필드이며 실제 재투영 오차만 싣는다. 나머지는 이름을 분리한다.
     residualPx: null,
+    reprojectionResidualPx: null,
+    vertexResidualPx: null,
+    anchorRadiusSpreadPx: null,
+    finderFitPenaltyPx: null,
+    referenceAdjustmentPx: null,
+    qrGeometryScore: null,
     cellPx: null,
     geometryStage: null,
     detectPath: null,
@@ -1071,11 +1078,16 @@ export function extractGeometry(result, width, height) {
   if (hypothesis && Number.isFinite(hypothesis.rotationDegrees)) {
     geo.rotationDeg = hypothesis.rotationDegrees;
   }
-  // F-95 (2026-08-24): 미실측 잔차(리터럴 0 위장)는 싣지 않는다 — 필드 생략이
-  // 정직이다. 마커 정본은 decoder/contracts.js JSDoc (geometryResidualMeasured).
-  if (hypothesis && Number.isFinite(hypothesis.geometryResidual)
-    && hypothesis.geometryResidualMeasured !== false) {
-    geo.residualPx = hypothesis.geometryResidual;
+  // F-95: 서로 다른 물리량을 같은 residualPx로 공표하지 않는다. 호환 residualPx에는
+  // 실제 재투영 오차만 싣고, 나머지는 이름이 붙은 필드로 낸다.
+  if (hypothesis) {
+    for (const field of [
+      'reprojectionResidualPx', 'vertexResidualPx', 'anchorRadiusSpreadPx',
+      'finderFitPenaltyPx', 'referenceAdjustmentPx', 'qrGeometryScore',
+    ]) {
+      if (Number.isFinite(hypothesis[field])) geo[field] = hypothesis[field];
+    }
+    geo.residualPx = geo.reprojectionResidualPx;
   }
   if (hypothesis && Number.isFinite(hypothesis.cellSizePx) && hypothesis.cellSizePx > 0) {
     geo.cellPx = hypothesis.cellSizePx;
@@ -1110,6 +1122,14 @@ export function normalizeGeometry(src) {
   geo.rotationDeg = finiteOrNull(src.rotationDeg);
   geo.perspective = finiteOrNull(src.perspective);
   geo.residualPx = finiteOrNull(src.residualPx);
+  for (const field of [
+    'reprojectionResidualPx', 'vertexResidualPx', 'anchorRadiusSpreadPx',
+    'finderFitPenaltyPx', 'referenceAdjustmentPx', 'qrGeometryScore',
+  ]) geo[field] = finiteOrNull(src[field]);
+  if (geo.reprojectionResidualPx == null && geo.residualPx != null) {
+    geo.reprojectionResidualPx = geo.residualPx;
+  }
+  geo.residualPx = geo.reprojectionResidualPx;
   const cellPx = finiteOrNull(src.cellPx);
   geo.cellPx = cellPx != null && cellPx > 0 ? cellPx : null;
   geo.geometryStage = typeof src.geometryStage === 'string' && src.geometryStage

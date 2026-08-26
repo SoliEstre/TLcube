@@ -117,6 +117,11 @@ test('K 포즈 정합 — 비 bullseye 중앙 파인더도 K0/K1/K2 원문까지
   // 2026-08-25 POSE 회귀: 이 셋은 모두 중앙 파인더 H 자체는 있었지만 star 분류가
   // 3k 거리 패치에서 먼저 깨져, 정상 경로에 star 가설이 0개였다. 그 결과 수백 개
   // hex/tri 가설이 포맷 7을 한 번도 평가하지 못했다(formatProposalCount=0).
+  // 2026-08-26 실측: central-cube-3tone × K0/K1/K2 에서 직접 중앙 큐브 탐지는
+  // 모두 양성이어도 프론트엔드 cube 경로는 모두 no-grid-hypothesis 로 끝났고, 원문은
+  // star 외곽 실루엣 앵커(anchor-detector/star-outline-anchor)로 돌아왔다. 따라서
+  // 아래 central-cube-3tone 행의 초록은 외곽 실루엣이 만든다. 이 테스트는 중앙 3톤
+  // 파인더의 프론트엔드 수용을 재지 않는다.
   // 각 계보(하이브리드 불스아이 / 3톤 큐브 / cell-mask)의 실측 실패 대표를 전 버전으로
   // 잠근다. finder 목록 전체의 변동 추적은 lane-out/pose-matrix.mjs가 카드 표에서 유도한다.
   const finderPatternIds = [

@@ -23,6 +23,7 @@ import { errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
 import { VERSIONS_Y } from './capacityY.js';
 import { placeReservedCells } from './autoplaceY.js';
+import { CELL_SURFACE_LAYOUT_FORMAT_INDEX as FORMAT_INDEX_Y_DRAFT } from './formatY.js';
 
 export const CELL_SURFACE_LAYOUT_N = 21;
 export const CELL_SURFACE_LAYOUT_VERSION = 1;
@@ -49,10 +50,7 @@ export const CELL_SURFACE_LAYOUT_PROFILE = Object.freeze({
 });
 
 /** cube 미사용 슬롯. 3톤 = 2톤 + 2. 구 12/14 는 건드리지 않는다. */
-export const CELL_SURFACE_LAYOUT_FORMAT_INDEX = Object.freeze({
-  [CELL_SURFACE_LAYOUT_V1R2]: Object.freeze({ 2: 4, 3: 6 }),
-  [CELL_SURFACE_LAYOUT_V2]: Object.freeze({ 2: 5, 3: 7 }),
-});
+export const CELL_SURFACE_LAYOUT_FORMAT_INDEX = FORMAT_INDEX_Y_DRAFT;
 
 export const CELL_SURFACE_LAYOUT_DECLARED_DATA = Object.freeze({
   [CELL_SURFACE_LAYOUT_V1R2]: 334,

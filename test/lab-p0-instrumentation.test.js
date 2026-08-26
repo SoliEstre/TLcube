@@ -205,6 +205,8 @@ test('bbox/corners/occupancy/rotation/perspective/cellPx 단위와 nullable 직�
   assert.equal(empty.rotationDeg, null);
   assert.equal(empty.perspective, null);
   assert.equal(empty.residualPx, null);
+  assert.equal(empty.reprojectionResidualPx, null);
+  assert.equal(empty.vertexResidualPx, null);
   assert.equal(empty.cellPx, null);
   assert.equal(empty.geometryStage, null);
   assert.equal(empty.detectPath, null);
@@ -217,7 +219,8 @@ test('bbox/corners/occupancy/rotation/perspective/cellPx 단위와 nullable 직�
     hypothesis: {
       vertices: corners,
       rotationDegrees: 120,
-      geometryResidual: 1.4,
+      reprojectionResidualPx: 1.4,
+      vertexResidualPx: 2.1,
       cellSizePx: 11.2,
     },
   }, 100, 80);
@@ -228,6 +231,8 @@ test('bbox/corners/occupancy/rotation/perspective/cellPx 단위와 nullable 직�
   assert.equal(geo.rotationDeg, 120);
   assert.ok(geo.perspective > 0);
   assert.equal(geo.residualPx, 1.4);
+  assert.equal(geo.reprojectionResidualPx, 1.4);
+  assert.equal(geo.vertexResidualPx, 2.1);
   assert.equal(geo.cellPx, 11.2);
 
   const body = normalizeFrameBody({

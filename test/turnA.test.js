@@ -8,7 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CUBE_AXIS_FORMAT_INDEXES,
+  CUBE_RESERVED_FORMAT_INDEXES,
   K1_RESERVED_FORMAT_INDEX,
   TURN_A_FORMAT_INDEX,
   hexTriAxisOccupancy,
@@ -79,7 +79,7 @@ test('회계 — 소요 ≤ 사용 가능 공간 (7·8..11 제외, k 공유 포�
   assert.equal(TURN_A_FORMAT_INDEX.length, 9);
   // 사용 가능 공간: k 별로 «(값,k) 미점유 ∧ 값 ∉ {7, 8..11}» 를 센다
   const occupied = new Set(hexTriAxisOccupancy().map((o) => o.formatIndex + '|' + o.k));
-  const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES]);
+  const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_RESERVED_FORMAT_INDEXES]);
   for (const k of [6, 8, 10]) {
     let free = 0;
     for (let v = 0; v <= 15; v += 1) {
@@ -95,7 +95,7 @@ test('회계 — 소요 ≤ 사용 가능 공간 (7·8..11 제외, k 공유 포�
 test('K1 예약·cube 축 무침범 + 기저 k 일치', () => {
   for (const entry of TURN_A_FORMAT_INDEX) {
     assert.notEqual(entry.formatIndex, K1_RESERVED_FORMAT_INDEX, entry.name);
-    assert.ok(!CUBE_AXIS_FORMAT_INDEXES.includes(entry.formatIndex), entry.name);
+    assert.ok(!CUBE_RESERVED_FORMAT_INDEXES.includes(entry.formatIndex), entry.name);
     const base = VERSIONS_A.find((v) => v.version === entry.version);
     assert.equal(entry.k, base.k, entry.name + ' k 불일치');
   }

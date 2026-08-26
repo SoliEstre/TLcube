@@ -18,9 +18,10 @@ import {
   K_FORMAT_INDEX, K_MARKER_FORMAT_INDEX, kFormatSpec, kMarkerFormatSpec, kSpecFromFormatIndex,
 } from '../src/formatK.js';
 import {
-  hexTriAxisOccupancy, TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX, CUBE_AXIS_FORMAT_INDEXES,
+  hexTriAxisOccupancy, TURN_A_FORMAT_INDEX, K1_RESERVED_FORMAT_INDEX, CUBE_RESERVED_FORMAT_INDEXES,
 } from '../src/turnA.js';
 import { MARKER_G_FORMAT_INDEX } from '../src/markerG.js';
+import { CUBE_AXIS_FORMAT_CLAIMS, CUBE_AXIS_FORMAT_INDEXES } from '../src/formatY.js';
 import { VERSIONS_Y } from '../src/capacityY.js';
 import { regionCellsK } from '../src/placementK.js';
 import { cellCount } from '../src/hexgrid.js';
@@ -138,7 +139,7 @@ test('hex·tri 축 전체가 예약 밴드(7 + cube 8..11)를 비워 둔다 — 
     ...TURN_A_FORMAT_INDEX.map((entry) => ({ owner: entry.name, formatIndex: entry.formatIndex, k: entry.k })),
     ...MARKER_G_FORMAT_INDEX.map((entry) => ({ owner: entry.name, formatIndex: entry.formatIndex, k: entry.k })),
   ];
-  const band = [K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES];
+  const band = [K1_RESERVED_FORMAT_INDEX, ...CUBE_RESERVED_FORMAT_INDEXES];
   assert.ok(band.includes(K_MARKER_FORMAT_INDEX), 'K-CM 값이 예약 밴드 안이어야 한다');
   for (const claim of claims) {
     assert.ok(!band.includes(claim.formatIndex),
@@ -159,11 +160,14 @@ test('hex·tri 축 전체가 예약 밴드(7 + cube 8..11)를 비워 둔다 — 
 });
 
 test('cube 축과 star 축은 값이 겹쳐도 크기 축이 안 겹친다 (K-CM 이 8 을 쓰는 근거)', () => {
-  for (const y of VERSIONS_Y) {
+  assert.deepEqual(CUBE_AXIS_FORMAT_INDEXES, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14]);
+  assert.ok(CUBE_AXIS_FORMAT_INDEXES.includes(K1_RESERVED_FORMAT_INDEX),
+    'F-90: K 값 7은 cube 초안 와이어가 이미 점유한다');
+  for (const y of CUBE_AXIS_FORMAT_CLAIMS) {
     for (const entry of K_FORMAT_INDEX) {
       if (y.formatIndex !== entry.formatIndex) continue;
       assert.notEqual(y.n, entry.k,
-        `cube ${y.name}(값 ${y.formatIndex}, n${y.n}) 과 star ${entry.name}(k${entry.k}) 이 크기까지 겹친다`);
+        `cube ${y.owner}(값 ${y.formatIndex}, n${y.n}) 과 star ${entry.name}(k${entry.k}) 이 크기까지 겹친다`);
     }
   }
 });

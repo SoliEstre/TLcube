@@ -13,6 +13,7 @@ import { maxBytesForSymbols } from './capacity.js';
 import { errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
 import { VERSIONS_Y } from './capacityY.js';
+import { CELL_SURFACE_LEGACY_FORMAT_INDEX } from './formatY.js';
 import {
   CELL_EDITOR_SCHEMA,
   DEFAULT_CELL_TONE,
@@ -46,8 +47,8 @@ export const CELL_SURFACE_NAME = CELL_SURFACE_NAME_3T;
  * VERSIONS_Y 사용분 {0,2,8,9,10,11} 과 겹치지 않음을 로드 시 검증한다.
  * 12/14 는 tri A1/A1Q 와 숫자가 같지만 cube 축(finder=null)이라 분리된다.
  */
-export const CELL_SURFACE_FORMAT_INDEX_2T = 12;
-export const CELL_SURFACE_FORMAT_INDEX_3T = 14;
+export const CELL_SURFACE_FORMAT_INDEX_2T = CELL_SURFACE_LEGACY_FORMAT_INDEX[2];
+export const CELL_SURFACE_FORMAT_INDEX_3T = CELL_SURFACE_LEGACY_FORMAT_INDEX[3];
 /** @deprecated 2톤 index. 신규 코드는 formatIndexCellSurface(tones) 를 쓴다. */
 export const CELL_SURFACE_FORMAT_INDEX = CELL_SURFACE_FORMAT_INDEX_2T;
 

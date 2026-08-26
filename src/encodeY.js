@@ -181,6 +181,12 @@ export function encodeY(text, options = {}) {
     cellSurfaceLayout: layoutId,
     locatorArm,
   } = options;
+  if (typeof window !== 'boolean') {
+    throw new TypeError(`window 는 boolean 이어야 한다: ${typeof window}`);
+  }
+  if (typeof cellSurface !== 'boolean') {
+    throw new TypeError(`cellSurface 는 boolean 이어야 한다: ${typeof cellSurface}`);
+  }
 
   if (layoutId) {
     if (window) {

@@ -25,7 +25,8 @@
  *     +4 는 4bit 를 넘친다) 이 공간엔 균일 규칙이 살아남을 자리가 없다. 값은 아래
  *     표에 직접 적혀 있고, 정합성은 로드 시점 자기검증 + `test/markerG.test.js` 의
  *     코드-유도 충돌 테스트가 지킨다 (목록 손 관리 금지 — 이 저장소 최다 결함).
- *   · 7 은 쓰지 않는다 — K1 예약 (015 §16). 8..11 은 쓰지 않는다 — cube 축.
+ *   · 7 은 쓰지 않는다 — K1 예약 (015 §16). 8..11 은 쓰지 않는다 — hex·tri의
+ *     cube 기저 예약 정책 밴드다. cube 실점유 전체는 `formatY.js`가 유도한다.
  *   · **Q(centerQr) 변형 — 있다** (C2a, 2026-08-23 · PM/022 항목 1ⓑ): 원판은
  *     «배치 검증 미실시 조합» 이라 인코더가 던졌는데, 배치 검증이 끝났다 —
  *     centerQr 는 셀 회계를 바꾸지 않고(중앙 슬롯은 애초에 셀 밖 — V*Q 전례),
@@ -63,7 +64,7 @@ import { VERSIONS_A } from './capacityA.js';
 import {
   TURN_A_FORMAT_INDEX,
   K1_RESERVED_FORMAT_INDEX,
-  CUBE_AXIS_FORMAT_INDEXES,
+  CUBE_RESERVED_FORMAT_INDEXES,
   hexTriAxisOccupancy,
 } from './turnA.js';
 
@@ -141,7 +142,7 @@ export function markerGSpecFromFormatIndex(formatIndex, k) {
     if (entry.formatIndex === K1_RESERVED_FORMAT_INDEX) {
       throw new Error('markerG: K1 예약값 7 침범 — ' + entry.name);
     }
-    if (CUBE_AXIS_FORMAT_INDEXES.includes(entry.formatIndex)) {
+    if (CUBE_RESERVED_FORMAT_INDEXES.includes(entry.formatIndex)) {
       throw new Error('markerG: cube 축 값 침범 — ' + entry.name + '=' + entry.formatIndex);
     }
     claim(entry.name, entry.formatIndex, entry.k);
@@ -160,7 +161,7 @@ export function markerGSpecFromFormatIndex(formatIndex, k) {
   // **잔여 0** 을 못 박는다. V-CMQ 보류의 산술 근거가 이 단언이다: 다음 소비자는
   // 여기가 던지는 것을 보고 «빈 칸이 없다» 를 코드에서 확인하게 된다.
   {
-    const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_AXIS_FORMAT_INDEXES]);
+    const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_RESERVED_FORMAT_INDEXES]);
     for (const k of [6, 8, 10]) {
       let free = 0;
       for (let value = 0; value <= 15; value += 1) {

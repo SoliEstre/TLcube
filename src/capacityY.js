@@ -33,6 +33,7 @@
 import { maxBytesForSymbols } from './capacity.js';
 import { errorCapacity } from './rs211.js';
 import { HEADER_BYTES, maxPayloadFor } from './header.js';
+import { Y_FORMAT_INDEX } from './formatY.js';
 import {
   referenceCellsAll, formatCells, referenceGroups, FORMAT_BLOCK_LENGTH,
 } from './placementY.js';
@@ -81,22 +82,22 @@ export const NSYM_TABLE_Y = Object.freeze({
  */
 export const VERSIONS_Y = Object.freeze([
   Object.freeze({
-    name: 'Y0', version: 0, n: 13, tones: 2, formatIndex: 0, overhead: overheadBreakdownY(13).total, symbolKey: 'Y0',
+    name: 'Y0', version: 0, n: 13, tones: 2, formatIndex: Y_FORMAT_INDEX.Y0, overhead: overheadBreakdownY(13).total, symbolKey: 'Y0',
   }),
   Object.freeze({
-    name: 'Y1', version: 1, n: 21, tones: 2, formatIndex: 8, overhead: overheadBreakdownY(21).total, symbolKey: 'Y1',
+    name: 'Y1', version: 1, n: 21, tones: 2, formatIndex: Y_FORMAT_INDEX.Y1, overhead: overheadBreakdownY(21).total, symbolKey: 'Y1',
   }),
   Object.freeze({
-    name: 'Y2', version: 2, n: 25, tones: 2, formatIndex: 9, overhead: overheadBreakdownY(25).total, symbolKey: 'Y2',
+    name: 'Y2', version: 2, n: 25, tones: 2, formatIndex: Y_FORMAT_INDEX.Y2, overhead: overheadBreakdownY(25).total, symbolKey: 'Y2',
   }),
   Object.freeze({
-    name: 'Y0T', version: 0, n: 13, tones: 3, formatIndex: 2, overhead: overheadBreakdownY(13).total, symbolKey: 'Y0',
+    name: 'Y0T', version: 0, n: 13, tones: 3, formatIndex: Y_FORMAT_INDEX.Y0T, overhead: overheadBreakdownY(13).total, symbolKey: 'Y0',
   }),
   Object.freeze({
-    name: 'Y1T', version: 1, n: 21, tones: 3, formatIndex: 10, overhead: overheadBreakdownY(21).total, symbolKey: 'Y1',
+    name: 'Y1T', version: 1, n: 21, tones: 3, formatIndex: Y_FORMAT_INDEX.Y1T, overhead: overheadBreakdownY(21).total, symbolKey: 'Y1',
   }),
   Object.freeze({
-    name: 'Y2T', version: 2, n: 25, tones: 3, formatIndex: 11, overhead: overheadBreakdownY(25).total, symbolKey: 'Y2',
+    name: 'Y2T', version: 2, n: 25, tones: 3, formatIndex: Y_FORMAT_INDEX.Y2T, overhead: overheadBreakdownY(25).total, symbolKey: 'Y2',
   }),
 ]);
 

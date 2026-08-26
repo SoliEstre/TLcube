@@ -700,7 +700,9 @@ function finishCandidate(luma, refined, templates, span, cfg, exemptPairs) {
     orientationMargin, rotationDegrees: degrees(final.params.rotation),
     hardChecks, hardChecksPassed: hardChecks.all,
     H: final.H, transform: final.H, B: final.H,
-    geometryResidual: (1 - score) * cellSize,
+    // F-95: 재투영 오차가 아니라 적합도 벌점을 px 척도로 옮긴 값이다. 이름을 분리해
+    // bootstrap rH와 telemetry residualPx가 재투영 오차로 오인하지 않게 한다.
+    finderFitPenaltyPx: (1 - score) * cellSize,
     geometryMode: final.geometryMode,
     bands: { matcher: 'cell-mask-ncc', hardChecks, turnCorrelations: wrong },
   };

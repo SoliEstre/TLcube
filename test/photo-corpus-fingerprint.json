@@ -1,5 +1,5 @@
 {
   "_note": "실사진 luma 코퍼스 지문 — (이름, 바이트) 목록의 SHA-256. 갱신 규율은 이 파일을 만드는 regen 스크립트 헤더 참조.",
-  "count": 433,
-  "digest": "40a014be47646d75b323643225dab2f08232423e9f57f9b56c1ffb3d9a319bad"
+  "count": 481,
+  "digest": "9f8bed076957b10df81431dbd21d3022755eec9ba9ac587174b6112b6900e469"
 }

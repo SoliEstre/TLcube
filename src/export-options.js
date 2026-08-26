@@ -38,6 +38,7 @@ import {
   assertRenderProfile,
 } from './render-profile.js';
 import { DITHER_BIT_DEPTHS } from './dither.js';
+import { CELL_SURFACE_FINAL_NS, versionForFinalN } from './cellSurfaceFinal.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ① 고정 이미지 크기
@@ -235,7 +236,8 @@ export const DITHER_AUTO_COMBO = Object.freeze({
  * Y cellSize 1 에서는 1 단위 = 1 셀이라 두 수가 같다). 보고서 §2.3 실측으로 채운다.
  *
  * 하한은 버전·레이아웃마다 다르다 — 고정 상수 하나로 때우지 않는다(운영자 지시).
- * 키: 'O:1'..'O:3' · 'A:0'..'A:2' · 'Y:<cellSurfaceLayout>' · 'Y:plain:<version>'.
+ * 키: 'O:1'..'O:3' · 'A:0'..'A:2' · 'Y:<cellSurfaceLayout>:<n>' ·
+ * 'Y:plain:<version>'. 같은 레이아웃 안에서도 n별 측정값을 독립적으로 보존한다.
  */
 export const MIN_ROUNDTRIP_PPU = Object.freeze({
   // §2.3 실측(M3, granularity 0.5, 무왜곡·페이로드 3종 전수) + 독립 재검증(기본 옵션
@@ -248,9 +250,14 @@ export const MIN_ROUNDTRIP_PPU = Object.freeze({
   'A:0': 9,
   'A:1': 9,
   'A:2': 8.5,
-  'Y:v0': 7.5,
-  'Y:v0t': 7.5,
-  'Y:v0ty': 7.5,
+  // 2026-08-26 재측정: 2.0..12.0 ppu, 0.5 간격. 각 행은 2/3톤 × 짧은/중간/최대
+  // 수용 페이로드(6조합)를 확인했다. 실패 ppu는 첫 실패 증거를 남기고, 최소와 다음
+  // ppu는 6/6을 확인했다. n=21/25의 값이 현재 같아도 입력 축을 합치지 않는다.
+  'Y:v0:13': 7.5,
+  'Y:v0t:21': 7,
+  'Y:v0t:25': 7,
+  'Y:v0ty:21': 7,
+  'Y:v0ty:25': 7,
 });
 
 /** 하한표에 없는 조합의 보수적 폴백 (실측 최댓값 이상으로 §2.3 에서 확정). */
@@ -258,20 +265,27 @@ export const MIN_ROUNDTRIP_PPU_FALLBACK = 12;
 
 /**
  * 인코딩 결과 문맥 → 하한표 키. 인코딩에서 유도한다 — 상수 하나로 때우지 않기 위한 장치.
- * @param {{type:'O'|'A'|'Y', version:number, cellSurfaceLayout?:string|null}} ctx
+ * @param {{type:'O'|'A'|'Y', version:number, n?:number|null,
+ *          cellSurfaceLayout?:string|null}} ctx
  */
 export function minRoundtripPpuKey(ctx) {
   if (ctx.type === 'Y') {
-    return ctx.cellSurfaceLayout
+    if (!ctx.cellSurfaceLayout) return 'Y:plain:' + ctx.version;
+    const ns = CELL_SURFACE_FINAL_NS[ctx.cellSurfaceLayout];
+    if (!Array.isArray(ns)) return 'Y:' + ctx.cellSurfaceLayout;
+    const n = Number.isInteger(ctx.n) && ns.includes(ctx.n)
+      ? ctx.n
+      : ns.find((candidate) => versionForFinalN(candidate) === ctx.version);
+    return n === undefined
       ? 'Y:' + ctx.cellSurfaceLayout
-      : 'Y:plain:' + ctx.version;
+      : 'Y:' + ctx.cellSurfaceLayout + ':' + n;
   }
   return ctx.type + ':' + ctx.version;
 }
 
 /**
  * 왕복이 서는 최소 ppu. 비트깊이가 낮으면 §2.2 실측이 정하는 배율/하한이 얹힌다.
- * @param {{type:'O'|'A'|'Y', version:number, cellSurfaceLayout?:string|null,
+ * @param {{type:'O'|'A'|'Y', version:number, n?:number|null, cellSurfaceLayout?:string|null,
  *          ditherBits?: number|null}} ctx
  */
 export function minRoundtripPpu(ctx) {

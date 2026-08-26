@@ -29,6 +29,12 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // 그 앞에 온다. autoplaceHex 는 autoplaceY 의 AutoplaceError 를 재사용하고 autoplaceY 는
   // placementY 만 쓴다. markerA 는 layoutA·capacityA·markerO 전부의 뒤여야 한다.
   'placementY', 'autoplaceY', 'autoplaceHex',
+  // formatY 는 turnA·capacityY·cellSurface* · formatK **전부의 앞**이다 (2026-08-26,
+  // 레인 LEDGER 의 F-90 상수 유도화로 신설). ⚠ 이 목록은 build-single.mjs 의
+  // MODULE_ORDER 와 **별개의 손 사본**이라, 신설 모듈을 한쪽에만 등재하면 다른 쪽
+  // 빌드가 죽는다 — 실제로 그렇게 났고 위상 검사가 즉시 잡았다
+  //   (`turnA -> formatY (missing)` 외 5건). 검사가 붙어 있어 사본이 안 썩는 자리다.
+  'formatY',
   // turnA 는 encodeA 앞 (2026-08-18 턴A 편입 — encodeA 가 표를 조회한다).
   'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA', 'luminance', 'export-filename',
   // finder-selection(의존 0) 과 Y 표면 체인은 **scene 앞**이다 (2026-08-21, 중앙 v0
