@@ -27,7 +27,7 @@ import {
   STEADY_VISUAL_TOLERANCE,
 } from '../src/scan-steady.js';
 
-const FRAME_MS = 320; // scanner.js FRAME_INTERVAL_MS
+const FRAME_MS = 320; // 느린 기기 표본 간격을 재생하는 테스트 값(현재 최속 하한과 무관)
 
 /** grid² 길이의 서명. base 에 delta 를 균일하게 더하면 MAD 가 정확히 |delta| 다. */
 function signatureOf(base, delta = 0) {

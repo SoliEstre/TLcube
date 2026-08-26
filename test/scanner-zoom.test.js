@@ -609,7 +609,7 @@ test('디버그 오버레이는 isLabPath() 로만 활성화된다 (안정판 `/
 });
 
 test('잘림 안내 — multi-clip 연속이면 «조금 뒤로» 를 띄우고 새 전송 경로는 만들지 않는다', () => {
-  assert.match(SCANNER_JS, /CLIP_HINT_AFTER_FRAMES/);
+  assert.match(SCANNER_JS, /CLIP_HINT_MS/);
   assert.match(SCANNER_JS, /clipSide === 'multi'/);
   assert.match(SCANNER_JS, /t\('status\.clipped'\)/);
   // 판정은 프레임마다 이미 계산 가능한 extractGeometry 를 재사용한다 — 반환 객체에
@@ -1227,7 +1227,7 @@ test('자동 크롭 사다리 — 실패가 쌓이면 오르고, 잘림·수동�
   //   (2026-08-18 실기기: 0.5fps 에서 8프레임 = 16초).
   assert.ok(AUTO_CROP_STEP_MS <= 3000, '한 단 오르는 데 3초를 넘기면 사용자가 먼저 포기한다');
   assert.match(SCANNER_JS, /failStreakSince/);
-  assert.match(SCANNER_JS, /Date\.now\(\) - failStreakSince/);
+  assert.match(SCANNER_JS, /elapsedSinceMs\(failStreakSince, handledAt\)/);
   // 배율 조회는 범위 밖을 양끝으로 물린다.
   assert.equal(autoCropZoomFor(-5), 1);
   assert.equal(autoCropZoomFor(99), 2.2);
@@ -1238,7 +1238,7 @@ test('자동 크롭 사다리 — 실패가 쌓이면 오르고, 잘림·수동�
   assert.match(SCANNER_JS, /function effectiveCropZoom\(\)/);
   assert.match(SCANNER_JS, /maxSide,\s*\n\s*effectiveCropZoom\(\),/);
   assert.match(SCANNER_JS, /const scale = effectiveCropZoom\(\);/);
-  assert.match(SCANNER_JS, /autoCropRung\(failStreakSince/);
+  assert.match(SCANNER_JS, /autoCropRung\(elapsedSinceMs\(failStreakSince, handledAt\)/);
 });
 
 /*

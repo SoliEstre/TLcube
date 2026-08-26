@@ -68,8 +68,14 @@ import {
   PRIOR_MAX_REFINE_POSES,
   refineSeedsFrom,
 } from '/src/scan-guide-prior.js';
-
-const FRAME_INTERVAL_MS = 320;
+import {
+  adaptiveFrameIntervalMs,
+  CLIP_HINT_MS,
+  CLOSER_HINT_MS,
+  elapsedSinceMs,
+  escalationDue,
+  scheduleNextEscalationAt,
+} from '/src/scanner-frame-rate.js';
 
 /**
  * 디코더에 넘기기 전 프레임을 줄이는 상한(긴 변, px). 미리보기 화질과는 무관하다.
@@ -103,24 +109,20 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-26.07';
+export const SCANNER_BUILD = '2026-08-26.08';
 
-/**
- * 연속 실패가 이 횟수를 넘으면 "더 가까이" 안내를 띄운다.
+/*
+ * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
  * 복호 실패의 가장 흔한 원인이 거리(셀당 픽셀 부족)인데, 아무 피드백이 없으면
- * 사용자는 무엇을 바꿔야 할지 알 수 없다.
- */
-const HINT_AFTER_FAILED_FRAMES = 24;
-
-/**
- * 2면 이상 잘림(multi-clip)이 이 프레임 수만큼 **연속**이면 "조금 뒤로" 안내를 띄운다.
+ * 사용자는 무엇을 바꿔야 할지 알 수 없다. 구 24프레임 × 320ms의 체감 시간을 보존한다.
+ *
+ * 2면 이상 잘림(multi-clip)이 0.96초 **연속**이면 "조금 뒤로" 안내를 띄운다.
  * 실측(f2dbb2b 이후 340프레임): multi-clip 구간 성공 0% (274/274) — 코드가 분석
  * 프레임을 넘치면 절대 못 읽는데, 사용자에게는 아무 신호가 없었다.
  * 판정은 프레임마다 이미 계산 가능한 extractGeometry().clipSide 를 재사용한다 —
  * 기기 안 로컬 값이며 안정판 텔레메트리 0바이트 불변식과 무관하다.
- * 3프레임 ≈ 1초(FRAME_INTERVAL_MS 320) — 스치는 잘림에는 침묵한다.
+ * 구 3프레임 × 320ms의 체감 시간이다 — 스치는 잘림에는 침묵한다.
  */
-const CLIP_HINT_AFTER_FRAMES = 3;
 
 const scannerApp = document.getElementById('scanner-app');
 const cameraStage = document.getElementById('camera-stage');
@@ -174,11 +176,11 @@ let scanSession = 0;
 let isDecoding = false;
 let cameraRequestPending = false;
 let lastDecodeAt = 0;
+/** 직전 grab부터 결과 처리까지의 전체 프레임 비용. 다음 시작 간격의 적응 입력이다. */
+let lastFrameCostMs = 0;
 let stoppedForVisibility = false;
 let activeUrl = '';
 let returnFocus = null;
-let consecutiveFailedFrames = 0;
-let clippedFrames = 0;
 let frameSeq = 0;
 let labEnvSent = false;
 let attemptId = '';
@@ -191,8 +193,14 @@ let zoomPlan = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM });
  * «가이드 ≠ 분석» 사고가 재현된다.
  */
 let autoCropIndex = 0;
-/** 연속 실패가 시작된 시각(ms). 사다리는 프레임 수가 아니라 **시간**으로 오른다. */
-let failStreakSince = 0;
+/** 연속 실패가 시작된 시각(ms). 안내·사다리·승격은 프레임 수가 아니라 **시간**으로 간다. */
+let failStreakSince = null;
+/** multi-clip 연속 구간의 시작 시각과 안내 소유 상태. */
+let clipStreakSince = null;
+let clipHintShown = false;
+let closerHintShown = false;
+/** 다음 1440px 승격이 허용되는 시각. 실패 스트릭이 없으면 null이다. */
+let nextEscalationAt = null;
 let zoomApplyToken = 0;
 let zoomApplyTimer = 0;
 /** 직전 프레임의 성공 가설에서 복원한 포즈. 실패 프레임은 null 을 남긴다. */
@@ -226,7 +234,7 @@ const debugOverlay = createDebugOverlay({
  *   · **기존 연속 스캔 경로는 무회귀.** 사전 시도는 트리거가 걸린 그 한 프레임 슬롯만
  *     차지하고(중복 실행 아님), 나머지 프레임은 종전 `decodeFrame()` 이 그대로 돈다.
  *     한 슬롯을 «두 번» 돌리면 발동 프레임 비용이 두 배가 되므로 대체를 택했다 —
- *     발동은 최대 1.5초에 한 번이라 연속 경로가 잃는 것은 4\~5 프레임 중 한 장이다.
+ *     발동은 최대 1.5초에 한 번이라 100ms 최속 경로도 잃는 것은 최대 15프레임 중 한 장이다.
  *   · 게이트 완화 0. 사전 포즈는 후보 추가일 뿐이고 수용은 디코더가 그대로 결정한다.
  *   · 텔레메트리 0바이트 불변식 불변 — 안정도 계산은 전부 기기 안 로컬이고, 새 전송
  *     경로를 만들지 않는다(lab 오버레이 표시는 기존 로컬 값 재사용과 같은 성질).
@@ -268,19 +276,22 @@ function resetFrameSeq() {
   frameSeq = 0;
 }
 
+function resetFailureTiming() {
+  failStreakSince = null;
+  clipStreakSince = null;
+  clipHintShown = false;
+  closerHintShown = false;
+  nextEscalationAt = null;
+}
+
 function beginScanAttempt() {
   attemptId = makeAttemptId();
   // 포즈도 시도 단위 상태다. 이전 카메라·사진 세션의 픽셀 H 를 새 세션에 넘기지 않는다.
   lastFramePose = null;
-  // 잘림 안내는 시도 단위 상태다 — 이전 세션의 스트릭이 새 카메라를 오염시키면 안 된다.
-  clippedFrames = 0;
-  // F-86: 아래 3셋도 같은 시도 단위 상태인데 **성공 프레임에서만** 지워지고 있었다
-  // (handleDecodeResult@payload). 실패로 끝난 이전 세션의 값이 남으면 새 시도의 첫
-  // 프레임부터 ① grabVideoFrame 이 남의 스트릭으로 1440 승격을 판정하고
-  // ② 자동 크롭 사다리가 이전 카메라의 단에서 시작하며 ③ failStreakSince 가 과거
-  // 시각이라 autoCropRung() 이 즉시 윗단을 돌려준다 — 이전 세션이 새 세션을 오염시킨다.
-  consecutiveFailedFrames = 0;
-  failStreakSince = 0;
+  // F-86: 실패·잘림의 모든 시간 상태는 시도 단위다. 남으면 새 시도의 첫 프레임부터
+  // ① 1440 승격 ② 안내 ③ 자동 크롭 사다리가 이전 카메라의 시간을 상속한다.
+  resetFailureTiming();
+  lastFrameCostMs = 0;
   if (autoCropIndex !== 0) {
     autoCropIndex = 0;
     // 프리뷰를 같은 값으로 즉시 재동기화 (§effectiveCropZoom 의 «가이드 = 분석» 불변식).
@@ -1166,6 +1177,7 @@ function stopCamera() {
   cameraRequestPending = false;
   isDecoding = false;
   lastDecodeAt = 0;
+  lastFrameCostMs = 0;
 
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
@@ -1441,15 +1453,12 @@ function imageDataWhole(source, width, height) {
  * 그래서 **연속 실패가 쌓이면 스캐너가 스스로 해상도를 올린다** — 같은 거리에서 셀당
  * 픽셀이 1.5배가 되어 하한을 넘긴다.
  *
- * 매 프레임 올리지 않는 이유는 비용이다(복호가 프레임당 수백 ms\~수 초). 흔한 경우는
+ * 매 프레임 올리지 않는 이유는 비용이다(복호가 프레임당 수십 ms\~수 초). 흔한 경우는
  * 빠르게 돌리고, 안 될 때만 비싸게 한 번 더 본다.
  */
 const FRAME_ESCALATED_SIDE = 1440;
-const ESCALATE_EVERY = 5;
-
-function grabVideoFrame() {
-  const escalate = consecutiveFailedFrames > 0
-    && consecutiveFailedFrames % ESCALATE_EVERY === 0;
+function grabVideoFrame(atMs = nowMs()) {
+  const escalate = escalationDue(atMs, nextEscalationAt);
   const maxSide = escalate ? FRAME_ESCALATED_SIDE : FRAME_MAX_SIDE;
   const grabbed = imageDataCenterSquare(
     cameraVideo,
@@ -1458,7 +1467,10 @@ function grabVideoFrame() {
     maxSide,
     effectiveCropZoom(),
   );
-  if (grabbed) return grabbed;
+  if (grabbed) {
+    if (escalate) nextEscalationAt = scheduleNextEscalationAt(atMs);
+    return grabbed;
+  }
   if (effectiveCropZoom() > 1.001) {
     // 크롭 실패 폴백은 자동 사다리도 함께 내린다 — 안 내리면 다음 프레임이 같은
     // 배율로 또 실패한다.
@@ -1476,13 +1488,15 @@ function grabVideoFrame() {
     // 크롭 폴백 해제 시 프리뷰의 CSS scale(crop) 잔존을 즉시 재동기화 —
     // 안 하면 이 경로에서만 «가이드 = 분석 영역» 불변식이 화면상 깨진다.
     syncPreviewTransform();
-    return imageDataCenterSquare(
+    const fallback = imageDataCenterSquare(
       cameraVideo,
       cameraVideo.videoWidth,
       cameraVideo.videoHeight,
       maxSide,
       1,
     );
+    if (fallback && escalate) nextEscalationAt = scheduleNextEscalationAt(atMs);
+    return fallback;
   }
   return null;
 }
@@ -1509,30 +1523,34 @@ function handleDecodeResult(result, source, session) {
   // 사용자는 무엇을 바꿔야 할지 알 수 없다. 연속 실패가 쌓이면 한 번만 안내한다.
   if (source === 'camera') {
     if (payload) {
-      consecutiveFailedFrames = 0;
-      clippedFrames = 0;
-      failStreakSince = 0;
+      resetFailureTiming();
     } else {
-      consecutiveFailedFrames += 1;
-      if (failStreakSince === 0) failStreakSince = Date.now();
+      const handledAt = nowMs();
+      if (failStreakSince === null) {
+        failStreakSince = handledAt;
+        nextEscalationAt = scheduleNextEscalationAt(handledAt);
+      }
+      const failedMs = elapsedSinceMs(failStreakSince, handledAt);
       // 잘림 안내 — multi-clip(2면 이상 잘림) 연속이면 «조금 뒤로». 실측에서 이
       // 상태의 성공률이 0% 라 다른 어떤 힌트보다 우선한다. 해소되면 기본 조준
       // 문구로 되돌린다(한 번 뜨고 눌러앉으면 이미 물러난 사용자를 계속 몬다).
       if (result && result.clipSide === 'multi') {
-        clippedFrames += 1;
-        if (clippedFrames === CLIP_HINT_AFTER_FRAMES) {
+        if (clipStreakSince === null) clipStreakSince = handledAt;
+        if (!clipHintShown
+          && elapsedSinceMs(clipStreakSince, handledAt) >= CLIP_HINT_MS) {
+          clipHintShown = true;
           setStatus(t('status.clipped'));
         }
       } else {
-        if (clippedFrames >= CLIP_HINT_AFTER_FRAMES) {
-          setStatus(t('status.aim'));
-        }
-        clippedFrames = 0;
+        if (clipHintShown) setStatus(t('status.aim'));
+        clipStreakSince = null;
+        clipHintShown = false;
       }
-      if (consecutiveFailedFrames === HINT_AFTER_FAILED_FRAMES
-        && clippedFrames < CLIP_HINT_AFTER_FRAMES) {
-        // 잘림 안내가 떠 있는 동안 «더 가까이» 는 반대 지시라 억제한다.
-        setStatus(t('status.closer'));
+      if (!closerHintShown && failedMs >= CLOSER_HINT_MS) {
+        // 문턱은 한 번만 소비한다. 그 순간 잘림 안내가 떠 있으면 반대 지시라 표시만
+        // 억제하고, 잘림이 풀린 뒤 뒤늦게 «더 가까이» 를 띄우지는 않는다.
+        closerHintShown = true;
+        if (!clipHintShown) setStatus(t('status.closer'));
       }
       if (beaconOnly) {
         // 비컨만 읽혔다 = 안쪽은 선명한데 바깥 코드가 안 잡힌다. «더 가까이» 는
@@ -1543,8 +1561,9 @@ function handleDecodeResult(result, source, session) {
     // 자동 크롭 사다리 — 실패가 쌓이면 한 단씩 올리고 성공하면 위에서 0 으로
     // 돌아간다. 잘림(«너무 가깝다») 이면 올리지 않는다 — 확대가 정반대 처방이다.
     // 사용자가 확대를 직접 건드렸으면 개입하지 않는다.
-    const nextRung = autoCropRung(failStreakSince === 0 ? 0 : Date.now() - failStreakSince, {
-      clipped: clippedFrames >= CLIP_HINT_AFTER_FRAMES
+    const handledAt = nowMs();
+    const nextRung = autoCropRung(elapsedSinceMs(failStreakSince, handledAt), {
+      clipped: clipHintShown
         || (result && result.clipSide === 'multi')
         // 비컨만 읽히는 상태도 «너무 가깝다» 와 같은 축이다 — 확대는 정반대 처방.
         || beaconOnly,
@@ -1588,8 +1607,10 @@ function startFrameLoop(session) {
       return;
     }
 
-    if (!isDecoding && timestamp - lastDecodeAt >= FRAME_INTERVAL_MS) {
-      const imageData = grabVideoFrame();
+    const intervalMs = adaptiveFrameIntervalMs(lastFrameCostMs);
+    if (!isDecoding && timestamp - lastDecodeAt >= intervalMs) {
+      const frameStartedAt = nowMs();
+      const imageData = grabVideoFrame(frameStartedAt);
 
       if (imageData) {
         if (!firstGrabRendered) {
@@ -1600,7 +1621,7 @@ function startFrameLoop(session) {
         isDecoding = true;
 
         /*
-         * 안정 유지 판정 — 복호보다 **먼저** 한다. 복호는 수백 ms 걸리므로 그 뒤에
+         * 안정 유지 판정 — 복호보다 **먼저** 한다. 복호는 수십 ms\~수 초 걸리므로 그 뒤에
          * 재면 프레임 사이 간격이 복호 시간에 오염된다(같은 뷰인데 「움직였다」 가 된다).
          * 서명 만들기는 stride 4 다운샘플이라 프레임 grab 비용에 묻힌다.
          */
@@ -1642,7 +1663,10 @@ function startFrameLoop(session) {
           })
           .finally(() => {
             if (usePrior) priorInFlight = false;
-            if (session === scanSession) isDecoding = false;
+            if (session === scanSession) {
+              lastFrameCostMs = Math.max(0, nowMs() - frameStartedAt);
+              isDecoding = false;
+            }
             noteFrameProcessed();
           });
       }

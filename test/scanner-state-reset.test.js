@@ -1,8 +1,8 @@
 /**
  * scanner-state-reset.test.js — 시도 단위 상태가 시도 경계에서 실제로 지워지는가.
  *
- * F-86 (2026-08-23): beginScanAttempt 가 clippedFrames **만** 리셋했다.
- * consecutiveFailedFrames · failStreakSince · autoCropIndex 는 성공 프레임에서만
+ * F-86 (2026-08-23): beginScanAttempt 가 잘림 스트릭 **하나만** 리셋했다.
+ * 실패 스트릭 · failStreakSince · autoCropIndex 는 성공 프레임에서만
  * 지워져서, 실패로 끝난 이전 세션의 값이 새 세션 첫 프레임을 오염시켰다 —
  * ① grab 승격(1440) 판정이 남의 스트릭을 읽고 ② 자동 크롭 사다리가 이전 카메라의
  * 단에서 시작하며 ③ failStreakSince 가 과거 시각이라 사다리가 즉시 윗단으로 오른다.
@@ -32,21 +32,26 @@ function sliceOf(name, nextName) {
   return SRC.slice(start, end);
 }
 
-test('F-86: beginScanAttempt 가 시도 단위 카운터 3셋을 전부 리셋한다', () => {
+test('F-86: beginScanAttempt 가 시도 단위 시간 상태를 전부 리셋한다', () => {
   const body = sliceOf('beginScanAttempt', 'activeVideoTrack');
-  assert.match(body, /clippedFrames\s*=\s*0/,
-    '기존 리셋(clippedFrames)이 사라졌다 — 잘림 안내 스트릭이 세션을 넘는다');
-  assert.match(body, /consecutiveFailedFrames\s*=\s*0/,
-    'consecutiveFailedFrames 리셋이 없다 — 이전 세션의 실패 스트릭이 새 시도의 '
-    + '1440 승격 판정을 오염시킨다');
-  assert.match(body, /failStreakSince\s*=\s*0/,
-    'failStreakSince 리셋이 없다 — 과거 시각이 남아 자동 크롭 사다리가 새 시도 '
-    + '첫 프레임부터 윗단으로 오른다');
+  assert.match(body, /resetFailureTiming\(\)/,
+    '실패·잘림 안내와 승격 시계 리셋이 없다 — 이전 세션의 시간이 새 시도로 샌다');
+  assert.match(body, /lastFrameCostMs\s*=\s*0/,
+    '직전 카메라의 프레임 비용이 새 시도의 호출 간격을 오염시킨다');
   assert.match(body, /autoCropIndex\s*=\s*0/,
     'autoCropIndex 리셋이 없다 — 이전 세션의 사다리 단이 새 시도로 샌다');
   // 사다리를 지웠으면 프리뷰도 같은 값으로 — «가이드 = 분석» 불변식 (2026-08-15 사고).
   assert.match(body, /syncPreviewTransform\(\)/,
     'beginScanAttempt 가 사다리를 지우고 프리뷰를 재동기화하지 않는다');
+});
+
+test('F-86: resetFailureTiming 이 모든 시간 소비자 상태를 실제로 비운다', () => {
+  const body = sliceOf('resetFailureTiming', 'beginScanAttempt');
+  assert.match(body, /failStreakSince\s*=\s*null/);
+  assert.match(body, /clipStreakSince\s*=\s*null/);
+  assert.match(body, /clipHintShown\s*=\s*false/);
+  assert.match(body, /closerHintShown\s*=\s*false/);
+  assert.match(body, /nextEscalationAt\s*=\s*null/);
 });
 
 test('F-61: resetZoomState 가 자동 크롭 사다리도 지운다', () => {
@@ -56,12 +61,12 @@ test('F-61: resetZoomState 가 자동 크롭 사다리도 지운다', () => {
     + '직전 카메라의 사다리 값을 상속 보고한다 (분석 1배 / 계측 2.2배 괴리)');
 });
 
-test('전제 배선이 살아 있다 — 계측·승격·사다리가 그 카운터들을 실제로 읽는다', () => {
+test('전제 배선이 살아 있다 — 계측·승격·사다리가 시간 상태를 실제로 읽는다', () => {
   // 위 리셋 단언이 공허해지지 않게, 소비 지점의 실재를 함께 잠근다.
   assert.match(sliceOf('currentZoomTelemetry', 'formatZoomLabel'),
     /autoCropRung\s*:\s*autoCropIndex/);
   assert.match(sliceOf('grabVideoFrame', 'normalizePayload'),
-    /consecutiveFailedFrames\s*%\s*ESCALATE_EVERY/);
+    /escalationDue\(atMs, nextEscalationAt\)/);
   assert.match(sliceOf('handleDecodeResult', 'startFrameLoop'),
-    /failStreakSince\s*===\s*0\s*\?\s*0\s*:\s*Date\.now\(\)\s*-\s*failStreakSince/);
+    /elapsedSinceMs\(failStreakSince, handledAt\)/);
 });
