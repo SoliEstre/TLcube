@@ -172,6 +172,9 @@ function wrapDiscSample(entry) {
 function sampleProfileBucket(options) {
   const profile = options && options._proposalProfile;
   if (!profile || typeof profile !== 'object') return null;
+  // OTHERMS 경계 계측은 수십만 원판 호출의 계수를 끈다. 시간 귀속은 상위 함수
+  // 경계에서만 하며, 기존 proposal 프로브는 이 플래그가 없어 종전 계수를 유지한다.
+  if (profile.lightweight === true) return null;
   const segment = typeof profile.segment === 'string' ? profile.segment : 'unattributed';
   if (!profile.gridSample || typeof profile.gridSample !== 'object') profile.gridSample = {};
   if (!profile.gridSample[segment]) {

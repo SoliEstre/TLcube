@@ -486,10 +486,11 @@ function checkedLuma(luma) {
  * 2×2 box average 피라미드. level 픽셀 중심을 원본으로 옮길 때
  * original=factor*level+offset, offset=(factor-1)/2다.
  */
-function makePyramid(luma, maxLevels) {
-  const levels = [{ ...luma, factor: 1, offset: 0, level: 0 }];
-  let current = levels[0];
-  for (let level = 1; level < maxLevels; level += 1) {
+function makePyramid(luma, maxLevels, reusableLevels = null) {
+  const levels = Array.isArray(reusableLevels) ? reusableLevels : [];
+  if (levels.length === 0) levels.push({ ...luma, factor: 1, offset: 0, level: 0 });
+  let current = levels[levels.length - 1];
+  for (let level = levels.length; level < maxLevels; level += 1) {
     if (Math.min(current.width, current.height) < 48) break;
     const width = Math.ceil(current.width / 2);
     const height = Math.ceil(current.height / 2);
@@ -549,7 +550,7 @@ function makePyramid(luma, maxLevels) {
     };
     levels.push(current);
   }
-  return levels;
+  return levels.slice(0, maxLevels);
 }
 
 function sobelPoints(luma, span) {
@@ -790,6 +791,54 @@ export function pyramidLevelsForImage(luma) {
   );
 }
 
+/*
+ * 같은 휘도장에서 커버 깊이만 늘리는 재시도는 얕은 레벨의 원시 제안까지 같아야 한다.
+ * 레벨별 결과만 재사용하고, 합친 뒤의 전역 정렬·NMS·점수·정제는 매 호출 다시 수행한다.
+ * 따라서 깊은 레벨이 얕은 후보의 순위를 바꾸는 기존 의미는 그대로 남는다.
+ */
+function proposalCacheEntry(luma, options, boundaries) {
+  const root = options._bullseyeProposalCache;
+  if (!root || typeof root !== 'object') return null;
+  if (!(root.byLuma instanceof WeakMap)) root.byLuma = new WeakMap();
+  if (!root.stats || typeof root.stats !== 'object') {
+    root.stats = { levelHits: 0, levelMisses: 0 };
+  }
+  const signature = JSON.stringify({
+    boundaries,
+    outerRadiusSeeds: Array.isArray(options.outerRadiusSeeds)
+      ? options.outerRadiusSeeds
+      : null,
+  });
+  const cached = root.byLuma.get(luma);
+  if (cached && cached.signature === signature) return cached;
+  const entry = { signature, levels: [], rawByLevel: [] };
+  root.byLuma.set(luma, entry);
+  return entry;
+}
+
+function collectLevelRawProposals(level, options, boundaries) {
+  const raw = [];
+  const stats = robustStats(level);
+  if (!(stats.span > 1e-6)) return raw;
+  const gradients = sobelPoints(level, stats.span);
+  if (gradients.length === 0) return raw;
+  for (const radius of radiusSeedsForLevel(level, options)) {
+    const votes = voteScale(level, gradients, radius, boundaries);
+    for (const maximum of localVoteMaxima(level, votes, radius)) {
+      raw.push({
+        center: {
+          x: maximum.x * level.factor + level.offset,
+          y: maximum.y * level.factor + level.offset,
+        },
+        outerRadius: maximum.outerRadius * level.factor,
+        vote: maximum.vote,
+        pyramidLevel: level.level,
+      });
+    }
+  }
+  return raw;
+}
+
 function collectRawProposals(luma, options) {
   const maxLevels = options.maxPyramidLevels === undefined
     ? MAX_PYRAMID_LEVELS
@@ -797,28 +846,23 @@ function collectRawProposals(luma, options) {
   if (!Number.isInteger(maxLevels) || maxLevels < 1 || maxLevels > 8) return [];
   const boundaries = proposalBoundaries(options);
   if (boundaries === null) return [];
-  const pyramid = makePyramid(luma, maxLevels);
+  const cache = proposalCacheEntry(luma, options, boundaries);
+  const pyramid = makePyramid(luma, maxLevels, cache && cache.levels);
+  if (cache) cache.levels = pyramid;
   const raw = [];
 
   for (const level of pyramid) {
-    const stats = robustStats(level);
-    if (!(stats.span > 1e-6)) continue;
-    const gradients = sobelPoints(level, stats.span);
-    if (gradients.length === 0) continue;
-    for (const radius of radiusSeedsForLevel(level, options)) {
-      const votes = voteScale(level, gradients, radius, boundaries);
-      for (const maximum of localVoteMaxima(level, votes, radius)) {
-        raw.push({
-          center: {
-            x: maximum.x * level.factor + level.offset,
-            y: maximum.y * level.factor + level.offset,
-          },
-          outerRadius: maximum.outerRadius * level.factor,
-          vote: maximum.vote,
-          pyramidLevel: level.level,
-        });
-      }
+    if (cache && cache.rawByLevel[level.level] !== undefined) {
+      options._bullseyeProposalCache.stats.levelHits += 1;
+      raw.push(...cache.rawByLevel[level.level]);
+      continue;
     }
+    const levelRaw = collectLevelRawProposals(level, options, boundaries);
+    if (cache) {
+      cache.rawByLevel[level.level] = levelRaw;
+      options._bullseyeProposalCache.stats.levelMisses += 1;
+    }
+    raw.push(...levelRaw);
   }
 
   raw.sort((a, b) => b.vote - a.vote
@@ -851,6 +895,10 @@ function collectRawProposals(luma, options) {
   }
   return kept;
 }
+
+export const BULLSEYE_DISCOVERY_TEST_ONLY = Object.freeze({
+  collectRawProposals,
+});
 
 /** params=[cx,cy,log(a),log(c),b,p,q], SPD S=[[a,b],[b,c]]. */
 function homographyFromParams(params) {

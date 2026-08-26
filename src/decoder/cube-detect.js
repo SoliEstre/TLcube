@@ -1323,25 +1323,26 @@ function cellSurfaceSampler(luma, base, options, cfg, enabled = true) {
   const byI = enabled ? new Map() : null;
   const stableOptions = enabled ? sampleOptions(options, cfg) : null;
   const profile = cubeProposalProfile(options);
-  if (profile && !profile.cellSurfaceSamples) {
-    profile.cellSurfaceSamples = { calls: 0, hits: 0, misses: 0 };
+  const counterProfile = profile && profile.lightweight !== true ? profile : null;
+  if (counterProfile && !counterProfile.cellSurfaceSamples) {
+    counterProfile.cellSurfaceSamples = { calls: 0, hits: 0, misses: 0 };
   }
   return (i, j) => {
-    if (profile) profile.cellSurfaceSamples.calls += 1;
+    if (counterProfile) counterProfile.cellSurfaceSamples.calls += 1;
     if (enabled) {
       const byJ = byI.get(i);
       if (byJ && byJ.has(j)) {
-        if (profile) profile.cellSurfaceSamples.hits += 1;
+        if (counterProfile) counterProfile.cellSurfaceSamples.hits += 1;
         return byJ.get(j);
       }
       const sampled = sampleCubeCell(luma, base, i, j, stableOptions);
       const target = byJ || new Map();
       if (!byJ) byI.set(i, target);
       target.set(j, sampled);
-      if (profile) profile.cellSurfaceSamples.misses += 1;
+      if (counterProfile) counterProfile.cellSurfaceSamples.misses += 1;
       return sampled;
     }
-    if (profile) profile.cellSurfaceSamples.misses += 1;
+    if (counterProfile) counterProfile.cellSurfaceSamples.misses += 1;
     // 대조 모드는 변경 전처럼 매 호출마다 sampleOptions 객체도 다시 만든다.
     return sampleCubeCell(luma, base, i, j, sampleOptions(options, cfg));
   };

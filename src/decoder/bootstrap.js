@@ -262,6 +262,118 @@ function withStage(options, stage, fn) {
   }
 }
 
+/*
+ * proposal 전수 계측은 함수 경계만 잰다. 픽셀·셀·후보 안쪽에서 시계를 읽으면
+ * 관측 비용이 새 병목이 되므로, 한 기하 열거 호출당 아래 배타 구간만 누적한다.
+ * cube/cell-finder의 기존 세부 계측과 안쪽 control 구간은 벽시계에서 빼서 중복
+ * 귀속하지 않는다. 프로파일이 없으면 타이머와 구간용 클로저를 만들지 않는다.
+ */
+function proposalProfileNow() {
+  return globalThis.performance && typeof globalThis.performance.now === 'function'
+    ? globalThis.performance.now()
+    : Date.now();
+}
+
+function bootstrapProposalProfile(options) {
+  const direct = options && options._proposalProfile;
+  const family = options && options.family && options.family._proposalProfile;
+  const cube = options && options.family && options.family.cube
+    && options.family.cube._proposalProfile;
+  const cellFinder = options && options.cellFinder && options.cellFinder._proposalProfile;
+  const profile = direct || family || cube || cellFinder;
+  return profile && typeof profile === 'object' ? profile : null;
+}
+
+const PROPOSAL_CUBE_TIME_KEYS = Object.freeze([
+  'enumerateMs', 'evaluateMs', 'refineMs', 'recoveryMs',
+]);
+
+function accumulatedProposalProfileMs(profile) {
+  let total = 0;
+  const cube = profile.cube || {};
+  for (const key of PROPOSAL_CUBE_TIME_KEYS) {
+    const value = cube[key];
+    if (Number.isFinite(value)) total += value;
+  }
+  for (const call of profile.cellFinderCalls || []) {
+    total += Number(call.setupMs) || 0;
+    total += Number(call.enumerateMs) || 0;
+    total += Number(call.evaluateMs) || 0;
+    total += Number(call.refineMs) || 0;
+  }
+  for (const bucket of Object.values(profile.control || {})) {
+    if (bucket && Number.isFinite(bucket.ms)) total += bucket.ms;
+  }
+  return total;
+}
+
+function measureProposalControl(profile, key, fn) {
+  const attributedBefore = accumulatedProposalProfileMs(profile);
+  const started = proposalProfileNow();
+  try {
+    return fn();
+  } finally {
+    const elapsed = Math.max(0, proposalProfileNow() - started);
+    const nested = Math.max(0, accumulatedProposalProfileMs(profile) - attributedBefore);
+    if (!profile.control || typeof profile.control !== 'object') profile.control = {};
+    if (!profile.control[key]) profile.control[key] = { ms: 0, calls: 0 };
+    profile.control[key].ms += Math.max(0, elapsed - nested);
+    profile.control[key].calls += 1;
+  }
+}
+
+function accumulatedCellFinderProfileMs(profile) {
+  let total = 0;
+  for (const call of profile.cellFinderCalls || []) {
+    total += Number(call.setupMs) || 0;
+    total += Number(call.enumerateMs) || 0;
+    total += Number(call.evaluateMs) || 0;
+    total += Number(call.refineMs) || 0;
+  }
+  return total;
+}
+
+/* finderDiscovery 안쪽은 프로브가 요청한 함수 경계만 기록한다. */
+function finderDiscoveryCallProfile(profile, luma) {
+  if (!profile) return null;
+  if (!Array.isArray(profile.finderDiscoveryCalls)) profile.finderDiscoveryCalls = [];
+  const call = {
+    width: luma.width,
+    height: luma.height,
+    steps: [],
+  };
+  profile.finderDiscoveryCalls.push(call);
+  return call;
+}
+
+function measureFinderDiscoveryStep(profile, call, step, meta, fn) {
+  if (!profile || !call) return fn();
+  const nestedBefore = accumulatedCellFinderProfileMs(profile);
+  const started = proposalProfileNow();
+  let result;
+  try {
+    result = fn();
+    return result;
+  } finally {
+    const wallMs = Math.max(0, proposalProfileNow() - started);
+    const nestedMs = Math.max(0, accumulatedCellFinderProfileMs(profile) - nestedBefore);
+    call.steps.push({
+      step,
+      ms: Math.max(0, wallMs - nestedMs),
+      wallMs,
+      nestedMs,
+      ...(meta || {}),
+      ...(result && typeof result === 'object' && typeof result.ok === 'boolean'
+        ? {
+          ok: result.ok,
+          candidateCount: Array.isArray(result.candidates) ? result.candidates.length : null,
+          finderCount: Array.isArray(result.finders) ? result.finders.length : null,
+        }
+        : {}),
+    });
+  }
+}
+
 /* 빈번한 기하 중앙값은 정렬·복사 대신 재사용 Float64 scratch quickselect를 쓴다. */
 let medianValuesScratch = new Float64Array(0);
 let medianOrderScratch = new Uint32Array(0);
@@ -1038,13 +1150,30 @@ function discoverCentralCubeFinders(luma, options) {
 }
 
 function discoverFinders(luma, familyEvidence, options, cfg) {
+  const profile = bootstrapProposalProfile(options);
+  const callProfile = finderDiscoveryCallProfile(profile, luma);
   const supplied = findersFromEvidence(familyEvidence);
   if (supplied.length > 0) return ok({ finders: supplied, source: 'supplied' });
+
+  const reuseFinderDiscoveryWork = options._finderDiscoveryReuse !== false;
+  const bullseyeProposalCache = reuseFinderDiscoveryWork
+    ? { stats: { levelHits: 0, levelMisses: 0 } }
+    : null;
+  if (callProfile) {
+    callProfile.reuseEnabled = reuseFinderDiscoveryWork;
+    callProfile.reuse = bullseyeProposalCache ? bullseyeProposalCache.stats : null;
+  }
 
   // 경계가 안정된 입력은 기존 outline 면적 seed가 가장 싸고 정확하다.
   // 이 fast path가 실패하면 outline aggregate가 UI/복수 코드에 오염된 것으로 보고
   // 같은 프레임을 일반 다중스케일로 한 번 더 탐색한다.
-  const fullOutline = outlineEvidence(luma, cfg);
+  const fullOutline = measureFinderDiscoveryStep(
+    profile,
+    callProfile,
+    'outline',
+    { pass: 'full' },
+    () => outlineEvidence(luma, cfg),
+  );
   const outlineCanSeed = fullOutline
     && !fullOutline.touchesBorder
     && fullOutline.borderDisagreement <= fullOutline.threshold;
@@ -1079,6 +1208,9 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       // (안쪽 2밴드가 큐브)를 **같은 제안 위에서** 둘 다 채점하고 점수로 고른다.
       // 제안 단계는 한 번만 돌므로 추가 비용은 싼 검증 쪽뿐이다.
       ringLayouts: [0, HYBRID_INNER_CUBE_BANDS],
+      ...(bullseyeProposalCache
+        ? { _bullseyeProposalCache: bullseyeProposalCache }
+        : {}),
       outerRadiusSeeds: useOutlineSeeds
         ? finderRadiusSeeds(reducedOutline && reducedOutline.luma, reducedOutline && reducedOutline.outline)
         : undefined,
@@ -1089,19 +1221,48 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
   };
 
   let usedOutlineSeeds = Boolean(outlineCanSeed);
-  let reduced = downsampleLuma(
-    luma,
-    requestedMaxDimension ?? (
-      usedOutlineSeeds ? cfg.finderMaxDimension : cfg.finderClutterMaxDimension
+  let reduced = measureFinderDiscoveryStep(
+    profile,
+    callProfile,
+    'downsample',
+    { pass: 'initial' },
+    () => downsampleLuma(
+      luma,
+      requestedMaxDimension ?? (
+        usedOutlineSeeds ? cfg.finderMaxDimension : cfg.finderClutterMaxDimension
+      ),
+      usedOutlineSeeds ? fullOutline.bounds : null,
     ),
-    usedOutlineSeeds ? fullOutline.bounds : null,
   );
-  let reducedOutline = outlineEvidence(reduced.luma, cfg);
-  let finderOptions = makeFinderOptions(
-    usedOutlineSeeds,
-    { luma: reduced.luma, outline: reducedOutline },
+  let reducedOutline = measureFinderDiscoveryStep(
+    profile,
+    callProfile,
+    'outline',
+    { pass: 'initial-reduced' },
+    () => outlineEvidence(reduced.luma, cfg),
   );
-  let detected = detectBullseyes(reduced.luma, finderOptions);
+  let finderOptions = measureFinderDiscoveryStep(
+    profile,
+    callProfile,
+    'finder-options',
+    { pass: 'initial' },
+    () => makeFinderOptions(
+      usedOutlineSeeds,
+      { luma: reduced.luma, outline: reducedOutline },
+    ),
+  );
+  let detected = measureFinderDiscoveryStep(
+    profile,
+    callProfile,
+    'bullseye',
+    {
+      pass: 'initial',
+      width: reduced.luma.width,
+      height: reduced.luma.height,
+      maxPyramidLevels: finderOptions.maxPyramidLevels,
+    },
+    () => detectBullseyes(reduced.luma, finderOptions),
+  );
   const shouldTryPatternFinder = !detected.ok;
 
   const callerFixedScaleSearch = Object.prototype.hasOwnProperty.call(
@@ -1110,14 +1271,43 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
   );
   if (!detected.ok && usedOutlineSeeds && !callerFixedScaleSearch) {
     usedOutlineSeeds = false;
-    reduced = downsampleLuma(
-      luma,
-      requestedMaxDimension ?? cfg.finderClutterMaxDimension,
-      null,
+    reduced = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'downsample',
+      { pass: 'clutter' },
+      () => downsampleLuma(
+        luma,
+        requestedMaxDimension ?? cfg.finderClutterMaxDimension,
+        null,
+      ),
     );
-    reducedOutline = outlineEvidence(reduced.luma, cfg);
-    finderOptions = makeFinderOptions(false, null);
-    detected = detectBullseyes(reduced.luma, finderOptions);
+    reducedOutline = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'outline',
+      { pass: 'clutter-reduced' },
+      () => outlineEvidence(reduced.luma, cfg),
+    );
+    finderOptions = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'finder-options',
+      { pass: 'clutter' },
+      () => makeFinderOptions(false, null),
+    );
+    detected = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'bullseye',
+      {
+        pass: 'clutter',
+        width: reduced.luma.width,
+        height: reduced.luma.height,
+        maxPyramidLevels: finderOptions.maxPyramidLevels,
+      },
+      () => detectBullseyes(reduced.luma, finderOptions),
+    );
   }
   if (!detected.ok
     && !callerFixedScaleSearch
@@ -1125,10 +1315,39 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     && cfg.finderClutterRetryMaxDimension > cfg.finderClutterMaxDimension
     && Math.max(luma.width, luma.height) > cfg.finderClutterMaxDimension) {
     usedOutlineSeeds = false;
-    reduced = downsampleLuma(luma, cfg.finderClutterRetryMaxDimension, null);
-    reducedOutline = outlineEvidence(reduced.luma, cfg);
-    finderOptions = makeFinderOptions(false, null);
-    detected = detectBullseyes(reduced.luma, finderOptions);
+    reduced = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'downsample',
+      { pass: 'resolution-retry' },
+      () => downsampleLuma(luma, cfg.finderClutterRetryMaxDimension, null),
+    );
+    reducedOutline = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'outline',
+      { pass: 'resolution-retry-reduced' },
+      () => outlineEvidence(reduced.luma, cfg),
+    );
+    finderOptions = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'finder-options',
+      { pass: 'resolution-retry' },
+      () => makeFinderOptions(false, null),
+    );
+    detected = measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'bullseye',
+      {
+        pass: 'resolution-retry',
+        width: reduced.luma.width,
+        height: reduced.luma.height,
+        maxPyramidLevels: finderOptions.maxPyramidLevels,
+      },
+      () => detectBullseyes(reduced.luma, finderOptions),
+    );
   }
   /*
    * 마지막 수단 — **탐색 커버를 이미지에서 유도해** 다시 한 번. 레벨 하나가 한
@@ -1142,17 +1361,40 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
   if (!detected.ok && !callerFixedScaleSearch) {
     const deeper = pyramidLevelsForImage(reduced.luma);
     if (deeper > (finderOptions.maxPyramidLevels ?? 1)) {
-      detected = detectBullseyes(reduced.luma, {
-        ...finderOptions,
-        maxPyramidLevels: deeper,
-      });
+      detected = measureFinderDiscoveryStep(
+        profile,
+        callProfile,
+        'bullseye',
+        {
+          pass: 'coverage-retry',
+          width: reduced.luma.width,
+          height: reduced.luma.height,
+          maxPyramidLevels: deeper,
+        },
+        () => detectBullseyes(reduced.luma, {
+          ...finderOptions,
+          maxPyramidLevels: deeper,
+        }),
+      );
     }
   }
   const centralCubeDetected = shouldTryPatternFinder
-    ? discoverCentralCubeFinders(luma, options)
+    ? measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'central-cube',
+      null,
+      () => discoverCentralCubeFinders(luma, options),
+    )
     : null;
   const cellDetected = shouldTryPatternFinder
-    ? discoverCellFinders(luma, fullOutline, options, cfg)
+    ? measureFinderDiscoveryStep(
+      profile,
+      callProfile,
+      'cell-mask-control',
+      null,
+      () => discoverCellFinders(luma, fullOutline, options, cfg),
+    )
     : null;
   const patternFinders = [];
   if (centralCubeDetected && centralCubeDetected.ok) {
@@ -1203,10 +1445,15 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       },
     };
   }
-  const finders = detected.candidates
-    .map((finder) => liftFinder(finder, reduced.factor))
-    .filter(Boolean)
-    .map((finder) => {
+  const finders = measureFinderDiscoveryStep(
+    profile,
+    callProfile,
+    'bullseye-lift',
+    { candidateCount: detected.candidates.length },
+    () => detected.candidates
+      .map((finder) => liftFinder(finder, reduced.factor))
+      .filter(Boolean)
+      .map((finder) => {
       if (usedOutlineSeeds || reduced.factor === 1) return finder;
       /*
        * ⚠ **레이아웃을 같이 넘겨야 한다.** 이 재정제는 축소본에서 찾은 후보를 원본
@@ -1224,7 +1471,8 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       return fullResolution.ok
         ? { ...fullResolution.candidate, innerBandsReplaced: finder.innerBandsReplaced ?? 0 }
         : finder;
-    });
+      }),
+  );
   finders.push(...patternFinders);
   if (finders.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'bootstrap-finder-lift' });
@@ -2891,14 +3139,66 @@ function compactGeometryPoseDiagnostics(hypotheses) {
   }));
 }
 
+function classifyGeometryFamilies(
+  luma,
+  familyEvidence,
+  options,
+  outline,
+  cubeResult,
+  finderResult,
+) {
+  const finders = finderResult.ok ? finderResult.finders : [];
+  if (finderResult.ok) {
+    const evidence = familyEvidence && typeof familyEvidence === 'object'
+      ? { ...familyEvidence }
+      : {};
+    if (cubeResult.ok) {
+      evidence.yJunction = { geometryHypotheses: cubeResult.geometryHypotheses };
+    }
+    return classifyFamilies(luma, finders, evidence, options, outline);
+  }
+  if (cubeResult.ok) {
+    return ok({
+      families: ['cube'],
+      classification: ok({
+        family: 'cube',
+        hypotheses: [cubeResult],
+        diagnostics: { cubeOnly: true },
+      }),
+      cubeOnly: true,
+    });
+  }
+  return ok({
+    families: [],
+    classification: ok({
+      family: 'qr',
+      hypotheses: [],
+      diagnostics: { qrOnly: true },
+    }),
+    qrOnly: true,
+  });
+}
+
 export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) {
+  const profile = bootstrapProposalProfile(options);
+  return profile
+    ? measureProposalControl(profile, 'orchestrationMs', () =>
+      enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile))
+    : enumerateGeometryHypothesesImpl(luma, familyEvidence, options, null);
+}
+
+function enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile) {
   try {
     assertLumaField(luma);
   } catch (error) {
     return fail(FRONTEND_FAILURE.EMPTY_INPUT, { stage: 'bootstrap', message: error.message });
   }
-  const cfg = calibration(options);
-  const outline = outlineEvidence(luma, cfg);
+  const cfg = profile
+    ? measureProposalControl(profile, 'bootstrapSetupMs', () => calibration(options))
+    : calibration(options);
+  const outline = profile
+    ? measureProposalControl(profile, 'outlineMs', () => outlineEvidence(luma, cfg))
+    : outlineEvidence(luma, cfg);
 
   /*
    * Type Y는 불스아이 실패 뒤에 실행되는 폴백이 아니다. 전용 기하 검출을 독립 평가하고,
@@ -2911,13 +3211,28 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
   const familyOptions = options.family && typeof options.family === 'object'
     ? options.family
     : EMPTY_FAMILY_OPTIONS;
-  const cubeResult = scoreCubeTiling(luma, yJunctionEvidence, familyOptions);
-  const finderResult = cubeResult.ok && options.alwaysCompareFinders !== true
-    ? fail(FRONTEND_FAILURE.NO_FINDER, {
-      stage: 'bootstrap-finder',
-      cause: 'cube-positive-independent-path',
-    })
-    : discoverFinders(luma, familyEvidence, options, cfg);
+  const cubeResult = profile
+    ? measureProposalControl(profile, 'cubeDispatchMs', () =>
+      scoreCubeTiling(luma, yJunctionEvidence, familyOptions))
+    : scoreCubeTiling(luma, yJunctionEvidence, familyOptions);
+  let finderResult;
+  if (profile) {
+    finderResult = measureProposalControl(profile, 'finderDiscoveryMs', () => (
+      cubeResult.ok && options.alwaysCompareFinders !== true
+        ? fail(FRONTEND_FAILURE.NO_FINDER, {
+          stage: 'bootstrap-finder',
+          cause: 'cube-positive-independent-path',
+        })
+        : discoverFinders(luma, familyEvidence, options, cfg)
+    ));
+  } else {
+    finderResult = cubeResult.ok && options.alwaysCompareFinders !== true
+      ? fail(FRONTEND_FAILURE.NO_FINDER, {
+        stage: 'bootstrap-finder',
+        cause: 'cube-positive-independent-path',
+      })
+      : discoverFinders(luma, familyEvidence, options, cfg);
+  }
   /*
    * 큐브 경로가 이미 양성인데 QR 트리플까지 열면 가설이 200개 가까이 늘어
    * 포맷 검사만 수십 ms 다(실측 Type Y). 중앙 QR 세트는 큐브 양성이 아니라
@@ -2928,12 +3243,22 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
     || finderResult.cellFinderMerged === true
     || (typeof finderResult.source === 'string'
       && finderResult.source.includes('cell-mask'));
-  const qrResult = shouldProbeQr
-    ? detectQrFinderTriples(luma, options.qrFinder || {})
-    : fail(FRONTEND_FAILURE.NO_FINDER, {
-      stage: 'qr-finder',
-      cause: 'existing-path-positive',
-    });
+  let qrResult;
+  if (profile) {
+    qrResult = measureProposalControl(profile, 'qrDiscoveryMs', () => (shouldProbeQr
+      ? detectQrFinderTriples(luma, options.qrFinder || {})
+      : fail(FRONTEND_FAILURE.NO_FINDER, {
+        stage: 'qr-finder',
+        cause: 'existing-path-positive',
+      })));
+  } else {
+    qrResult = shouldProbeQr
+      ? detectQrFinderTriples(luma, options.qrFinder || {})
+      : fail(FRONTEND_FAILURE.NO_FINDER, {
+        stage: 'qr-finder',
+        cause: 'existing-path-positive',
+      });
+  }
 
   if (!finderResult.ok && !cubeResult.ok && !qrResult.ok) {
     const finderSawCandidates = finderResult.detail
@@ -2979,44 +3304,71 @@ export function enumerateGeometryHypotheses(luma, familyEvidence, options = {}) 
     });
   }
 
-  const finders = finderResult.ok ? finderResult.finders : [];
-  let classified;
-  if (finderResult.ok) {
-    const evidence = familyEvidence && typeof familyEvidence === 'object'
-      ? { ...familyEvidence }
-      : {};
-    if (cubeResult.ok) {
-      evidence.yJunction = { geometryHypotheses: cubeResult.geometryHypotheses };
-    }
-    classified = classifyFamilies(
+  const classified = profile
+    ? measureProposalControl(profile, 'familyClassificationMs', () =>
+      classifyGeometryFamilies(
+        luma,
+        familyEvidence,
+        options,
+        outline,
+        cubeResult,
+        finderResult,
+      ))
+    : classifyGeometryFamilies(
       luma,
-      finders,
-      evidence,
+      familyEvidence,
       options,
       outline,
+      cubeResult,
+      finderResult,
     );
-  } else if (cubeResult.ok) {
-    classified = ok({
-      families: ['cube'],
-      classification: ok({
-        family: 'cube',
-        hypotheses: [cubeResult],
-        diagnostics: { cubeOnly: true },
-      }),
-      cubeOnly: true,
-    });
-  } else {
-    classified = ok({
-      families: [],
-      classification: ok({
-        family: 'qr',
-        hypotheses: [],
-        diagnostics: { qrOnly: true },
-      }),
-      qrOnly: true,
-    });
-  }
   if (!classified.ok) return classified;
+
+  const finders = finderResult.ok ? finderResult.finders : [];
+  if (profile) {
+    return measureProposalControl(profile, 'hypothesisAssemblyMs', () =>
+      assembleGeometryHypotheses(
+        luma,
+        familyEvidence,
+        options,
+        cfg,
+        outline,
+        cubeResult,
+        finderResult,
+        qrResult,
+        shouldProbeQr,
+        classified,
+        finders,
+      ));
+  }
+  return assembleGeometryHypotheses(
+    luma,
+    familyEvidence,
+    options,
+    cfg,
+    outline,
+    cubeResult,
+    finderResult,
+    qrResult,
+    shouldProbeQr,
+    classified,
+    finders,
+  );
+}
+
+function assembleGeometryHypotheses(
+  luma,
+  familyEvidence,
+  options,
+  cfg,
+  outline,
+  cubeResult,
+  finderResult,
+  qrResult,
+  shouldProbeQr,
+  classified,
+  finders,
+) {
 
   const hypotheses = [];
   const deferredWeakHypotheses = [];
