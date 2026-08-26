@@ -6105,7 +6105,8 @@ const y3dPreview = {
   yaw: 0,
   pitch: 0,
   pad: 48,
-  selected: { face: 'T', i: 0, j: 0 },
+  // ⛔ 셀 커서(노란 테두리)는 없앴다 (2026-08-26 운영자 지시). 클릭은 «한 셀» 모드에서
+  //    숫자를 고르는 데만 쓰고, 어느 칸이 골렸는지 화면에 표시하지 않는다.
   view: null,
   mesh: null,
   dragging: false,
@@ -7109,9 +7110,8 @@ function paintY3dPreview() {
     // layout 을 넘기면 **회전 불변 스케일**(fitViewStable)을 쓴다 — 안 넘기면 종전
     // bbox 맞춤이라 돌릴 때마다 크기가 변한다 (2026-08-26 운영자 신고).
     layout,
-    selected: y3dPreview.mode === 'cell'
-      ? { face: 'T', i: 0, j: 0 }
-      : y3dPreview.selected,
+    // 셀 커서 없음 (2026-08-26 운영자 지시). 「한 셀」 모드의 면 구분은 T/L/R 라벨이 한다.
+    selected: null,
     labels: y3dPreview.mode === 'cell',
   });
 }
@@ -7157,14 +7157,16 @@ els.view3d.addEventListener('pointerdown', (ev) => {
   y3dPreview.dragging = true;
   y3dPreview.lastX = ev.clientX;
   y3dPreview.lastY = ev.clientY;
+  // 클릭이 남은 이유는 «한 셀» 모드에서 숫자를 고르기 위해서다. 필드 모드에서는
+  // 아무 표시도 하지 않는다 — 커서를 없앴으므로 여기서 할 일이 없다.
+  if (y3dPreview.mode !== 'cell') return;
   const rect = els.view3d.getBoundingClientRect();
   const sx = (ev.clientX - rect.left) * (els.view3d.width / Math.max(rect.width, 1));
   const sy = (ev.clientY - rect.top) * (els.view3d.height / Math.max(rect.height, 1));
   const hit = y3dPreview.view && y3dPreview.mesh
     && hitTest(y3dPreview.mesh, y3dPreview.view, sx, sy);
-  if (hit) {
-    y3dPreview.selected = hit;
-    if (y3dPreview.mode === 'cell') y3dPreview.digit = hit.digit;
+  if (hit && hit.digit !== null && hit.digit !== undefined) {
+    y3dPreview.digit = hit.digit;
     syncOrbitPreviewUi();
     paintY3dPreview();
   }

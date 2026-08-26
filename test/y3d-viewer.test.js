@@ -297,6 +297,49 @@ describe('3D 가 실제로 코드를 그리는가 (운영자 신고 회귀)', ()
     );
   });
 
+  /*
+   * ⚠ 위 자는 **정위치에서만** 옳다. `kind`(back/module) 는 «칠하는 순서» 의 판단 축이
+   * 아니다 — 180° 돌리면 뒷면이 앞으로 와야 맞다. 진짜 축은 **면이 어느 쪽을 보는가**다.
+   *
+   * 운영자 신고 (2026-08-26): 「특정 각도 넘어가면 셀이 투명해진다」.
+   * 원인은 대표점 오차였다. 뒷면은 n×n 을 통째로 덮는 **큰 사각 한 장**이라 depth 가
+   * «중심 한 점» 이고, 앞면 셀은 작아서 제 자리의 depth 를 갖는다. n=13 에서 뒷면 26 vs
+   * 앞면 먼 구석 셀 25 — **여유가 1** 이라 조금만 돌리면 구석 셀이 «더 멀다» 로 밀리고
+   * 뒤이어 칠해진 뒷면이 그 위를 덮었다.
+   * 실측(격자 133점): 118점에서 최대 143칸. pitch ±10° 만으로 이미 6~10칸이었다.
+   */
+  test('돌려도 셀이 안 묻힌다 — 등진 면이 **전부** 마주 본 면보다 먼저 칠해진다', () => {
+    const angles = [];
+    for (let yawDeg = 0; yawDeg <= 180; yawDeg += 15) {
+      for (let pitchDeg = -60; pitchDeg <= 60; pitchDeg += 15) angles.push([yawDeg, pitchDeg]);
+    }
+    const DEG = Math.PI / 180;
+    let sawDepthInversion = false;
+    for (const [yawDeg, pitchDeg] of angles) {
+      const { mesh } = build(yawDeg * DEG, pitchDeg * DEG);
+      const fronts = mesh.quads.filter((q) => q.facing < 0);
+      const backs = mesh.quads.filter((q) => !(q.facing < 0));
+      // ⚠ 먼저 «값이 있나» — 한 무리가 비면 아래 순서 단언이 공짜로 통과한다.
+      assert.ok(fronts.length > 0 && backs.length > 0,
+        `facing 이 두 무리를 못 만든다 (yaw=${yawDeg} pitch=${pitchDeg}, `
+        + `front=${fronts.length} back=${backs.length}) — 자가 잠들었다.`);
+      const firstFront = mesh.quads.findIndex((q) => q.facing < 0);
+      const lastBack = mesh.quads.map((q) => !(q.facing < 0)).lastIndexOf(true);
+      assert.ok(lastBack < firstFront,
+        `등진 면이 마주 본 면 뒤에 칠해진다 (yaw=${yawDeg} pitch=${pitchDeg}, `
+        + `마지막 등진=${lastBack}, 첫 마주=${firstFront}) — 그 자리에 구멍이 뚫린다.`);
+      // depth 만으로 정렬했으면 실제로 뒤집혔을 각도가 이 격자에 **있어야** 한다.
+      // 없으면 이 자는 안 나는 사고를 지키는 셈이라, 다음 사람이 지워도 안 잡힌다.
+      const nearestHiddenBack = Math.min(...backs.map((q) => q.depth));
+      if (fronts.some((q) => q.kind === 'module' && q.depth > nearestHiddenBack)) {
+        sawDepthInversion = true;
+      }
+    }
+    assert.ok(sawDepthInversion,
+      'depth 역전이 이 격자에서 한 번도 안 났다 — 이 자가 지키는 사고가 재현되지 않는다. '
+      + '각도 격자를 넓히거나, 원인이 바뀐 것인지 확인하라.');
+  });
+
   test('데이터 면 색은 전부 팔레트 레벨이다 — 뒷면 색이 새어 나오지 않는다', () => {
     const { mesh } = build();
     const allowed = new Set(preset.levels.map(hexOf));

@@ -129,6 +129,32 @@ function quadDepth(corners) {
   return s / corners.length;
 }
 
+/**
+ * 이 quad 가 카메라를 **등지고 있나**. 부호만 쓴다 — `>0` 이면 뒤를 본다.
+ *
+ * 시선은 depth 와 같은 축이다: `quadDepth` 가 (x+y+z)/4 이고 «값이 클수록 멀다» 이므로
+ * «멀어지는 방향» = (1,1,1). 바깥쪽 법선이 그쪽을 향하면 그 면은 뒤를 보는 것이다.
+ *
+ * ⚠ **감기(winding) 순서를 믿지 않는다.** `cubePoint` 는 T·L·R 를 각자 편한 파라메트릭
+ *    순서로 내므로 세 면의 감기가 같지 않다. 대신 «큐브 중심 → quad 중심» 벡터로
+ *    바깥쪽을 정한다 — 모델이 볼록 상자라 이 판정은 회전과 무관하게 옳다.
+ */
+function outwardFacing(corners, center) {
+  const [p0, p1, , p3] = corners;
+  const ux = p1.x - p0.x; const uy = p1.y - p0.y; const uz = p1.z - p0.z;
+  const vx = p3.x - p0.x; const vy = p3.y - p0.y; const vz = p3.z - p0.z;
+  let nx = uy * vz - uz * vy;
+  let ny = uz * vx - ux * vz;
+  let nz = ux * vy - uy * vx;
+  let cx = 0; let cy = 0; let cz = 0;
+  for (const p of corners) { cx += p.x; cy += p.y; cz += p.z; }
+  cx = cx / corners.length - center.x;
+  cy = cy / corners.length - center.y;
+  cz = cz / corners.length - center.z;
+  if (nx * cx + ny * cy + nz * cz < 0) { nx = -nx; ny = -ny; nz = -nz; }
+  return nx + ny + nz;
+}
+
 const BACK_COLOR = Object.freeze({ r: 36, g: 40, b: 48 });
 
 /**
@@ -179,6 +205,7 @@ export function buildOrbitMesh(options) {
           corners3d: corners,
           points2d: corners.map((p) => isoProject(p.x, p.y, p.z, layout)),
           depth: quadDepth(corners),
+          facing: outwardFacing(corners, center),
         });
       }
     }
@@ -202,17 +229,36 @@ export function buildOrbitMesh(options) {
         corners3d: corners,
         points2d: corners.map((p) => isoProject(p.x, p.y, p.z, layout)),
         depth: quadDepth(corners),
+        facing: outwardFacing(corners, center),
       });
     }
   }
 
-  // ⚠ **내림차순이다 — 먼 것부터 칠한다** (painter's algorithm).
-  //    `quadDepth` 는 (x+y+z)/4 이고 아이소메트릭 시선이 (1,1,1) 이라 **값이 클수록 멀다**.
-  //    데이터 없는 뒷면(back)은 구조상 가장 먼 면이고 실측 depth 가 26 으로 module
-  //    최대(25)보다 크다. 오름차순이면 그 뒷면이 **맨 마지막에 칠해져 코드 전체를 덮는다**
-  //    — 라이브에서 실제로 그렇게 났고(2026-08-26 운영자 신고 「3D 는 코드 렌더가 안 된다」),
-  //    화면은 단색 `#242830`(BACK_COLOR) 육각형만 보였다.
-  quads.sort((a, b) => b.depth - a.depth);
+  // ── 칠하는 순서: ①등진 면 먼저 ②그 안에서 먼 것부터 ────────────────────────
+  //
+  // ⚠ **depth 만으로는 못 가른다** (2026-08-26 운영자 신고 「특정 각도 넘어가면 셀이
+  //    투명해진다」). 뒷면은 n×n 을 통째로 덮는 **큰 사각 한 장**이라 depth 가 «중심
+  //    한 점» 이고, 앞면 셀은 작아서 제 자리의 depth 를 갖는다. n=13 에서 뒷면 중심
+  //    depth 26 vs 앞면 먼 구석 셀 25 — **여유가 1** 이다. 조금만 돌리면 구석 셀이
+  //    26 을 넘어 «더 멀다» 로 정렬되고, 뒤이어 칠해진 뒷면이 그 위를 덮는다.
+  //    실측(n=13, yaw 0~90° × pitch ±30° 격자 133점): **118점에서 최대 143칸**이
+  //    그렇게 묻혔다. pitch ±10° 만으로 이미 6~10칸이다 — 「특정 각도」가 아니라
+  //    **정위치(0,0)만 우연히 0** 이었다.
+  //
+  // 고친 방법: **면이 어느 쪽을 보는가**를 먼저 본다. 모델은 볼록 상자 [0,n]³ 라
+  //    ①등진 면끼리는 서로 안 겹치고 ②마주 보는 면끼리도 서로 안 겹치며 ③겹침은
+  //    «등진 면 ↔ 마주 보는 면» 사이에서만 난다. 그래서 등진 것을 **전부 먼저** 칠하면
+  //    depth 의 대표점 오차와 무관하게 항상 옳다. 뒷면을 지우지 않고 남겨 둔 이유는
+  //    데이터 없는 칸의 구멍으로 «속» 이 비쳐 보이면 안 되기 때문이다.
+  //
+  // depth 정렬은 그대로 둔다 — 같은 무리 안에서는 여전히 먼 것부터가 맞고,
+  // 나중에 볼록하지 않은 요소가 붙어도 한 겹의 방어가 남는다.
+  quads.sort((a, b) => {
+    const af = a.facing < 0 ? 1 : 0; // 1 = 카메라를 마주 본다
+    const bf = b.facing < 0 ? 1 : 0;
+    if (af !== bf) return af - bf; // 등진 면(0) 을 먼저 칠한다
+    return b.depth - a.depth;
+  });
 
   // 회전 불변 반지름 — `fitViewStable` 이 이 값으로 스케일을 고정한다.
   //

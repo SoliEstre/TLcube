@@ -29,6 +29,7 @@ import { VERSIONS } from '../src/capacity.js';
 import { VERSIONS_A } from '../src/capacityA.js';
 import {
   CELL_PX_FLOOR,
+  AUTO_CROP_ENABLED,
   AUTO_CROP_LADDER,
   AUTO_CROP_STEP_MS,
   autoCropRung,
@@ -1207,18 +1208,21 @@ test('r5 ③ 힌트 — 패널이 내부 오버플로일 때만 하단 페이드
  * 그대로 살아 있다. 실패가 쌓인 구간만 친다.
  */
 test('자동 크롭 사다리 — 실패가 쌓이면 오르고, 잘림·수동·성공이면 개입하지 않는다', () => {
+  // ⚠ 이 자는 **사다리 기계**를 잰다. 배선(기본값)이 켜져 있는지는 아래 별도 자가 잰다 —
+  //   둘을 한 자에 섞으면 2026-08-26 에 끈 뒤로 이 로직이 조용히 썩는다.
+  const on = { enabled: true };
   assert.deepEqual([...AUTO_CROP_LADDER], [1, 1.5, 2.2]);
   // 성공(0) 과 문턱 미만은 개입 없음.
-  assert.equal(autoCropRung(0), 0);
-  assert.equal(autoCropRung(AUTO_CROP_STEP_MS - 1), 0);
+  assert.equal(autoCropRung(0, on), 0);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS - 1, on), 0);
   // 한 단씩 오르고 상한에서 멈춘다.
-  assert.equal(autoCropRung(AUTO_CROP_STEP_MS), 1);
-  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 2), 2);
-  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 99), AUTO_CROP_LADDER.length - 1);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS, on), 1);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 2, on), 2);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 99, on), AUTO_CROP_LADDER.length - 1);
   // 잘림은 «너무 가깝다» — 확대는 정반대 처방이라 개입 금지.
-  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 3, { clipped: true }), 0);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 3, { ...on, clipped: true }), 0);
   // 사용자가 확대를 직접 건드렸으면 자동은 물러난다.
-  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 3, { manual: true }), 0);
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 3, { ...on, manual: true }), 0);
   // ⚠ 문턱은 **시간**이다 — 프레임 수로 잡으면 fps 가 낮을 때 체감이 무너진다
   //   (2026-08-18 실기기: 0.5fps 에서 8프레임 = 16초).
   assert.ok(AUTO_CROP_STEP_MS <= 3000, '한 단 오르는 데 3초를 넘기면 사용자가 먼저 포기한다');
@@ -1235,4 +1239,25 @@ test('자동 크롭 사다리 — 실패가 쌓이면 오르고, 잘림·수동�
   assert.match(SCANNER_JS, /maxSide,\s*\n\s*effectiveCropZoom\(\),/);
   assert.match(SCANNER_JS, /const scale = effectiveCropZoom\(\);/);
   assert.match(SCANNER_JS, /autoCropRung\(failStreakSince/);
+});
+
+/*
+ * ── 자동 확대는 **꺼져 있다** (2026-08-26, 운영자 지시) ─────────────────────
+ *
+ * 「가이드도 있으니 사용자가 직접 확대를 하는게 맞는 것 같아.」
+ * 위 자가 사다리 «기계» 를 재는 것과 달리, 이 자는 **기본 배선**을 잰다.
+ * 상수만 보면 «이미 꺼져 있다» 로 오판하기 쉽다 — `DEFAULT_USER_ZOOM` 은 원래 1 이고,
+ * 꺼야 했던 것은 «실패가 쌓이면 스스로 오르는» 이 사다리 쪽이다.
+ */
+test('자동 확대 기본값 — 꺼져 있고, 켜면 같은 입력이 오른다', () => {
+  assert.equal(AUTO_CROP_ENABLED, false, '운영자 지시로 꺼 둔 값이다 — 켜려면 지시가 필요하다');
+  // 옵션을 안 주면(= 스캐너가 부르는 방식) 아무리 실패가 쌓여도 0 이다.
+  for (const ms of [0, AUTO_CROP_STEP_MS, AUTO_CROP_STEP_MS * 2, AUTO_CROP_STEP_MS * 99]) {
+    assert.equal(autoCropRung(ms), 0, ms + 'ms 실패에도 자동 개입이 없어야 한다');
+  }
+  // ⚠ 위가 «함수가 늘 0» 이라서 통과하는 게 아님을 같은 자에서 못 박는다.
+  //   (같은 입력이 enabled 에서 오른다 = 0 을 만든 것은 **플래그**다.)
+  assert.equal(autoCropRung(AUTO_CROP_STEP_MS * 99, { enabled: true }), AUTO_CROP_LADDER.length - 1);
+  // 배율은 사다리 0 단 = 1배 — 프리뷰 transform 이 붙지 않는다.
+  assert.equal(autoCropZoomFor(autoCropRung(AUTO_CROP_STEP_MS * 99)), 1);
 });

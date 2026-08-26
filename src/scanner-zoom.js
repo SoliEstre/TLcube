@@ -80,6 +80,27 @@ export const CROP_ZOOM_STEP = 0.1;
  * CELL_PX_FLOOR(9) 에 닿는다. 그 이상은 크롭 창이 좁아져 조준이 어려워진다.
  */
 export const AUTO_CROP_LADDER = Object.freeze([1, 1.5, 2.2]);
+
+/**
+ * ⛔ **자동 사다리는 꺼져 있다 (2026-08-26, 운영자 지시).**
+ *
+ * 지시 원문: 「자동 확대? 줌?은 일단 꺼놔야겠어. 가이드도 있으니 사용자가 직접
+ * 확대를 하는게 맞는 것 같아.」 — 즉 «누가 배율을 정하는가» 의 문제이지 사다리
+ * 수치가 틀렸다는 판정이 아니다. 그래서 **사다리는 지우지 않고 이 한 칸으로 끈다**.
+ *
+ * ⚠ **끄는 것이 fps 를 올리지 않는다.** 사다리는 프레임당 패스를 늘리지 않고 크롭
+ * 창만 바꾼다 — 성능 근거로 이 값을 인용하지 마라. fps 의 지렛대는 프레임 간 포즈
+ * 재사용이다 (`PM/023 §16`).
+ *
+ * ⚠ 그리고 **끄면 잃는 것이 있다** — 사다리가 살려 내던 프레임이 실제로 있다:
+ * `PM/024 §3` 실측에서 창을 0.6 으로 좁히면 0/12 → **3/12** 가 됐다. 사용자가
+ * 가이드를 보고 직접 확대하면 같은 자리를 덮지만, **안 하면 그 프레임은 실패로
+ * 남는다.** 이 교환을 알고 끈 것이다.
+ *
+ * 다시 켜려면 이 값 하나만 `true` 로. 사다리 로직 자체는 `{ enabled: true }` 로
+ * 계속 테스트한다 — 꺼 두는 동안 썩지 않게.
+ */
+export const AUTO_CROP_ENABLED = false;
 /**
  * 한 단 올리는 데 필요한 **연속 실패 시간(ms)**.
  *
@@ -97,10 +118,14 @@ export const AUTO_CROP_STEP_MS = 2000;
  * @param {number} failedMs 연속 실패가 이어진 시간(ms)
  * @param {boolean} clipped 잘림(«너무 가깝다») 신호가 서 있는가
  * @param {boolean} manual 사용자가 확대를 직접 건드렸는가
+ * @param {boolean} enabled 자동 개입 자체가 켜져 있는가 (기본 = `AUTO_CROP_ENABLED`)
  * @returns {number} AUTO_CROP_LADDER 인덱스 (0 = 개입 없음)
  */
-export function autoCropRung(failedMs, { clipped = false, manual = false } = {}) {
-  if (clipped || manual) return 0;
+export function autoCropRung(
+  failedMs,
+  { clipped = false, manual = false, enabled = AUTO_CROP_ENABLED } = {},
+) {
+  if (!enabled || clipped || manual) return 0;
   const ms = Number(failedMs);
   if (!Number.isFinite(ms) || ms < AUTO_CROP_STEP_MS) return 0;
   return Math.min(
