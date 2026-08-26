@@ -840,10 +840,11 @@ export function scoreCubeTiling(luma, yJunction, options = {}) {
   const cubeOptions = normalizeCubeSurfaceDefault(options.cube && typeof options.cube === 'object'
     ? options.cube
     : options);
+  const cacheLimit = cubeTilingCacheLimit(cubeOptions);
   const cached = cachedCubeTiling(luma, yJunction, cubeOptions);
   if (cached !== undefined) return cached;
   const computed = computeCubeTiling(luma, yJunction, cubeOptions);
-  storeCubeTiling(luma, yJunction, cubeOptions, computed);
+  storeCubeTiling(luma, yJunction, cubeOptions, computed, cacheLimit);
   return computed;
 }
 
@@ -857,16 +858,26 @@ export function scoreCubeTiling(luma, yJunction, options = {}) {
  *   · 같은 함수 안의 `classifyFamily` (여기 아래 `scoreCubeTiling` 호출)
  *   · 재배치 재시도 / finder 해상도 재시도가 그 둘을 다시 부른다
  *
- * 캐시가 안전한 이유: 결과는 (`luma`, `yJunction`, cube 경로가 실제로 읽는 옵션
- * 여섯 개)의 순수 함수다. `cube-detect.js` 가 options 에서 읽는 키는 `calibration` ·
+ * 캐시가 안전한 이유: 결과는 (`luma`, `yJunction`, cube 경로가 실제로 읽는 옵션)의
+ * 순수 함수다. `cube-detect.js` 가 options 에서 읽는 키는 `calibration` ·
  * `sample` · `disc` · `tones` · `exhaustiveBlockRecovery` · `enableLocatorY` ·
  * `enableCellSurfaceY`이고(중첩 호출의
  * `samplingConfig`도 여기서 파생된다), 나머지 bootstrap 전용 플래그는 이 경로에
- * 도달하지 않는다. 여섯 값과 yJunction 은 `Object.is` 로 비교한다 — 객체면 동일성,
+ * 도달하지 않는다. 위 값들과 yJunction 은 `Object.is` 로 비교한다 — 객체면 동일성,
  * 원시값이면 값.
  * 다르면 그냥 다시 계산한다.
+ *
+ * 한 프레임에는 보통 기본 탐색과 `exhaustiveBlockRecovery` 탐색 두 키가 교대로
+ * 등장한다. 한 칸만 두면 기본 → 전수 → 기본 순서에서 첫 기본 결과가 밀려나 같은
+ * 전수 검출을 다시 한다. 두 칸 FIFO는 두 결과를 함께 보존하며, 프레임 객체가
+ * 사라지면 WeakMap 항목도 함께 사라진다. `_cubeTilingCacheEntries: 1`은 FAILFAST
+ * 전수 A/B에서 이전 한 칸 동작을 재현하는 계측 전용 스위치다.
  */
 const cubeTilingCache = new WeakMap();
+
+function cubeTilingCacheLimit(cubeOptions) {
+  return cubeOptions._cubeTilingCacheEntries === 1 ? 1 : 2;
+}
 
 function cubeTilingKeyMatches(entry, yJunction, cubeOptions) {
   return Object.is(entry.yJunction, yJunction)
@@ -884,16 +895,19 @@ function cubeTilingKeyMatches(entry, yJunction, cubeOptions) {
 
 function cachedCubeTiling(luma, yJunction, cubeOptions) {
   if (luma === null || typeof luma !== 'object') return undefined;
-  const entry = cubeTilingCache.get(luma);
-  if (entry === undefined || !cubeTilingKeyMatches(entry, yJunction, cubeOptions)) {
-    return undefined;
+  const entries = cubeTilingCache.get(luma);
+  if (!Array.isArray(entries)) return undefined;
+  for (const entry of entries) {
+    if (cubeTilingKeyMatches(entry, yJunction, cubeOptions)) return entry.value;
   }
-  return entry.value;
+  return undefined;
 }
 
-function storeCubeTiling(luma, yJunction, cubeOptions, value) {
+function storeCubeTiling(luma, yJunction, cubeOptions, value, limit = 2) {
   if (luma === null || typeof luma !== 'object') return;
-  cubeTilingCache.set(luma, {
+  const previous = cubeTilingCache.get(luma);
+  const entries = Array.isArray(previous) ? previous.slice() : [];
+  entries.push({
     yJunction,
     calibration: cubeOptions.calibration,
     sample: cubeOptions.sample,
@@ -907,7 +921,16 @@ function storeCubeTiling(luma, yJunction, cubeOptions, value) {
     finderFirst: cubeOptions.finderFirst,
     value,
   });
+  while (entries.length > limit) entries.shift();
+  cubeTilingCache.set(luma, entries);
 }
+
+/** FAILFAST 캐시 변이 자 전용. 복호 경로에서는 사용하지 않는다. */
+export const FAILFAST_CACHE_TEST_ONLY = Object.freeze({
+  cachedCubeTiling,
+  cubeTilingCacheLimit,
+  storeCubeTiling,
+});
 
 function computeCubeTiling(luma, yJunction, cubeOptions) {
   const detected = detectCubeHypotheses(luma, yJunction, cubeOptions);
