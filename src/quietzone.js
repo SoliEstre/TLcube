@@ -383,12 +383,76 @@ function shapeIsSelfQuietColored(shape, selfQuietColors) {
  * 불스아이도 같은 두 색을 쓰지만 코드 셀과 **맞닿아** 있어 ② 의 클러스터에 코드 셀이
  * 섞이므로 제외되지 않고, 태그도 없으므로 ① 에도 안 걸린다.
  */
-function selfQuietShapeIndices(shapes, selfQuietColors) {
+/**
+ * 자체 콰이어트 존을 가진 **떨어져 있는** 블록의 인덱스.
+ *
+ * ⭐ **원점 인식 (2026-08-26, 운영자 지시)** — 이 배제의 뜻은 처음부터
+ * 「**폴백** QR 블록」, 즉 코드 **바깥에 따로 붙은** 덩어리였다. 그런데 판정이
+ * «색이 전부 불스아이인 연결 덩어리» 하나뿐이라, 코드 **안에 박힌** 중앙 QR 까지
+ * 같이 걷어냈다. 중앙 QR 은 떨어져 있지 않다 — 중앙 19셀 슬롯을 채우는 코드의 일부다.
+ *
+ * 그 오배제가 K 에서 터졌다: `markSilhouette='hexagram'` 은 본체 클러스터를
+ * «layout 원점을 품은 도형» 으로 고르는데, 배제된 그 중앙 QR 이 **정확히 원점을
+ * 품은 유일한 도형**이었다 ⇒ 본체 없음 ⇒ throw. 실측 대조군(2026-08-26):
+ * K 평 OK · K+코너QR OK · K+중앙TL OK · **K+중앙QR ❌** · O+중앙QR OK
+ * (O 는 육망성 경로를 안 타서 증상만 안 보였을 뿐, 오배제는 O 에서도 일어나고 있었다).
+ *
+ * ⇒ **원점을 품은 덩어리는 배제하지 않는다.** 술어는 `markHulls` 의 본체 판정과
+ * **같은 것**을 쓴다 — 두 곳이 «중앙» 을 다르게 정의하면 그 차이가 그대로 사고다.
+ *
+ * ⚠ O/A 는 볼록 껍질이라 **안쪽 도형이 늘어도 껍질이 안 바뀐다** — 중앙 QR 은 코드
+ * 안쪽이므로 산출이 바이트 동일해야 한다. 그 예측을 테스트가 잠근다.
+ *
+ * ⚠ **두 배제 경로를 «둘 다» 면제해야 한다** (2026-08-26 실측에서 배웠다).
+ * 처음엔 색-클러스터 루프에만 면제를 걸었는데 **아무 효과가 없었다** — 중앙 QR 모듈은
+ * `shape.selfQuiet === true` 명시 표지로도 걸리고, 원점을 품은 도형 2개가 **둘 다**
+ * 그 표지를 달고 있었다. 그 표지는 «떨어져 있다» 는 단언이 아니라 그냥 «이건 QR» 이라
+ * 렌더러가 코너·중앙을 안 가리고 붙인다. 그래서 면제는 표지가 아니라 **위치**로 건다.
+ */
+function selfQuietShapeIndices(shapes, selfQuietColors, origin) {
   const excluded = new Set();
   if (!selfQuietColors || selfQuietColors.length === 0) return excluded;
 
+  const hasOrigin = origin && Number.isFinite(origin.x) && Number.isFinite(origin.y);
+  // ⚠ **bbox 로 판정하면 안 된다** (2026-08-26 실측). 처음엔 `markHulls` 의 본체 판정과
+  //    같은 bbox 술어를 썼는데, A v0 의 BL·BR 코너 QR 이 **bbox 만** 원점을 걸쳐
+  //    함께 면제됐고 `quietzone.test.js` 의 「어느 코너의 QR 도 안전영역이 덮지
+  //    않는다」가 깨졌다. 원 주석이 경계하던 «비정상적으로 큰 외부 블록» 과 같은 함정이다.
+  //    면제는 **실제로 원점을 덮는** 도형에만 준다 — 점-다각형 포함으로 좁힌다.
+  const holdsOrigin = (i) => {
+    if (!hasOrigin) return false;
+    const s = shapes[i];
+    const pts = s.points;
+    if (!Array.isArray(pts) || pts.length < 3) return false;
+    // 먼저 bbox 로 싸게 거르고(대부분 여기서 끝난다), 통과한 것만 정확히 판정한다.
+    const b = bboxOf(s);
+    if (origin.x < b.minX - EPS || origin.x > b.maxX + EPS
+      || origin.y < b.minY - EPS || origin.y > b.maxY + EPS) return false;
+    let inside = false;
+    for (let a = 0, c = pts.length - 1; a < pts.length; c = a, a += 1) {
+      const yi = pts[a].y; const yj = pts[c].y;
+      if ((yi > origin.y) !== (yj > origin.y)) {
+        const xCross = ((pts[c].x - pts[a].x) * (origin.y - yi)) / (yj - yi) + pts[a].x;
+        if (origin.x < xCross) inside = !inside;
+      }
+    }
+    return inside;
+  };
+
+  // 원점을 품은 도형이 든 덩어리는 통째로 «코드의 일부» 다 — 어느 경로로도 배제하지
+  // 않는다. 덩어리 단위로 잡는 이유는, 낱개만 살리면 중앙 QR 이 반쪽만 남아 껍질이
+  // 실제 그림과 어긋나기 때문이다.
+  const central = new Set();
+  if (hasOrigin) {
+    for (const idx of clusterShapes(shapes, CONNECT_GAP)) {
+      let hit = false;
+      for (const i of idx) if (holdsOrigin(i)) { hit = true; break; }
+      if (hit) for (const i of idx) central.add(i);
+    }
+  }
+
   for (let i = 0; i < shapes.length; i += 1) {
-    if (shapes[i].selfQuiet === true) excluded.add(i);
+    if (shapes[i].selfQuiet === true && !central.has(i)) excluded.add(i);
   }
 
   for (const idx of clusterShapes(shapes, CONNECT_GAP)) {
@@ -396,7 +460,7 @@ function selfQuietShapeIndices(shapes, selfQuietColors) {
     for (const i of idx) {
       if (!shapeIsSelfQuietColored(shapes[i], selfQuietColors)) { all = false; break; }
     }
-    if (all) for (const i of idx) excluded.add(i);
+    if (all) for (const i of idx) if (!central.has(i)) excluded.add(i);
   }
   return excluded;
 }
@@ -414,7 +478,14 @@ function selfQuietShapeIndices(shapes, selfQuietColors) {
  * @returns {{x:number,y:number}[][]} 껍질(정점 3개 이상)만
  */
 export function markHulls(scene, clusterGap, selfQuietColors) {
-  const excluded = selfQuietShapeIndices(scene.shapes, selfQuietColors);
+  // ⚠ **원점을 반드시 넘긴다.** 안 넘기면 배제가 원점을 못 보고 중앙 QR 을 다시
+  //    걷어내며, 그러면 아래 본체 판정이 «중앙을 품은 도형 없음» 으로 던진다.
+  //    (2026-08-26: 함수 인자만 늘리고 이 호출부를 안 고쳐 수정이 무효였다 —
+  //     전후 지문이 **완전히 동일**해서 드러났다. 「배타를 열면 소비자도 쓸어라」.)
+  const origin = scene.layout
+    ? { x: scene.layout.originX, y: scene.layout.originY }
+    : null;
+  const excluded = selfQuietShapeIndices(scene.shapes, selfQuietColors, origin);
   const kept = [];
   for (let i = 0; i < scene.shapes.length; i += 1) {
     if (excluded.has(i)) continue;

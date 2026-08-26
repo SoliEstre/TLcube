@@ -58,6 +58,7 @@ import {
   UI_STACK_BUDGET,
   UI_STACK_BUDGET_PARTS,
   aimGuideMinFractions,
+  kaCellPxAt,
   applyTrackZoom,
   buttonStep,
   cropWindow,
@@ -363,6 +364,44 @@ test('바깥 점 크기 — 채우면 점유율이 실측 성공 지대(0.15-0.3
   assert.equal(min.minY2, (GUIDE_CELLS_Y2 * CELL_PX_FLOOR) / 960);
   assert.ok(GUIDE_OUTER_FRACTION >= 2 * min.minY2, 'Y2 가 하한 아래로 내려간다');
   assert.ok(GUIDE_OUTER_FRACTION >= 2 * min.minV3, 'Y1 이 하한 아래로 내려간다');
+});
+
+/*
+ * ⭐ **A/K 봉투 (2026-08-26 신설, PM/024 = W-7).**
+ *
+ * 위 테스트는 오래도록 **V3·Y2 두 축만** 쟀다. A/K 는 첨두 반경이 3k+2 라 셀 수가
+ * 다른데 자에 축이 아예 없었고, 그래서 「A2 는 960 에서 8.10px < 9」가
+ * `GUIDE_OUTER_FRACTION` 주석에 **적혀 있는 채로** 스위트가 초록이었다.
+ * (레인 ENV 가 K2 에서 같은 값을 독립 재발견해 드러났다 — A2 와 K2 는 같은 k=10 이라
+ *  같은 수다.)
+ *
+ * ⚠ 이 테스트는 **완화가 아니다.** 「지금 이렇다」를 양성 단언으로 못 박아,
+ * 하한·가이드 분수·첨두 유도식 중 **무엇이 움직여도 빨개지게** 한다.
+ * k=10 이 960 에서 하한을 넘게 되면(=좋아지면) 이 테스트가 먼저 터지고,
+ * 그때 이 블록을 «넘는다» 로 갱신하는 것이 옳은 순서다.
+ */
+test('A/K 봉투 — k=6·8 은 960 가이드에서 복호 하한 위, k=10 은 아래다 (기록)', () => {
+  const floor = CELL_PX_FLOOR;
+  const px = (k) => kaCellPxAt(k, GUIDE_OUTER_FRACTION, FRAME_MAX_SIDE);
+
+  // k=6 (A0/K0) · k=8 (A1/K1) 은 960 가이드에서 하한 위다.
+  assert.ok(px(6) >= floor, `k=6 이 하한 아래로 내려갔다: ${px(6)}`);
+  assert.ok(px(8) >= floor, `k=8 이 하한 아래로 내려갔다: ${px(8)}`);
+
+  // ⚠ k=10 (A2/K2) 은 **아래다.** 이 줄이 빨개지면 봉투가 움직인 것이니
+  //    PM/024 를 같이 갱신해라 — 숫자만 고치지 마라.
+  assert.ok(px(10) < floor,
+    `k=10 이 960 가이드에서 하한을 넘었다 (${px(10)}). 개선이면 PM/024 와 함께 갱신해라.`);
+
+  // 자기 검산 — 유도식이 주석의 실측값과 같은가 (8.10px).
+  assert.equal(px(10).toFixed(2), '8.10');
+
+  // minKA 는 「하한을 만족하려면 필요한 최소 채움 비율」이다. k=10 은 가이드보다 크다
+  // — 그게 곧 「두 구간이 안 겹친다」의 산술 표현이다 (PM/024 §3).
+  const min = aimGuideMinFractions();
+  assert.ok(2 * min.minKA(10) > GUIDE_OUTER_FRACTION,
+    'k=10 이 가이드 안에서 하한을 만족하게 됐다 — PM/024 갱신 대상');
+  assert.ok(2 * min.minKA(8) <= GUIDE_OUTER_FRACTION, 'k=8 이 가이드 밖으로 나갔다');
 });
 
 /*

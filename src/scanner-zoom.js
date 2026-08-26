@@ -714,7 +714,28 @@ export function aimGuideMinFractions(frameSide = FRAME_MAX_SIDE, cellPx = CELL_P
     frameSide: side,
     minV3: (GUIDE_CELLS_V3 * px) / side,
     minY2: (GUIDE_CELLS_Y2 * px) / side,
+    // ⭐ **A/K 축 신설 (2026-08-26)** — 이 함수는 오래도록 V3·Y2 **둘만** 냈고
+    //    테스트도 그 둘만 잠갔다. 그런데 A/K 는 첨두 반경이 `kaApexRadiusCells(k)`
+    //    = 3k+2 라 **셀 수가 다르다** (k=10 이면 32, 즉 지름 기준 64셀).
+    //    ⇒ 자가 A/K 를 아예 안 재고 있었고, 그래서 「A2 는 960 에서 8.10px < 9」가
+    //      바로 위 GUIDE_OUTER_FRACTION 주석에 **적혀 있는데도** 초록이었다.
+    //      (레인 ENV 가 K2 에서 같은 값을 독립 재발견해 드러났다.)
+    //    한 축을 손으로 더 적는 게 아니라 **k 를 받는 함수**로 낸다 — 새 버전이
+    //    생겨도 목록을 고칠 필요가 없다.
+    minKA: (k) => (2 * kaApexRadiusCells(k) * px) / (2 * side),
   };
+}
+
+/**
+ * A/K 가 가이드 점유 `fraction` 에서 갖는 셀 픽셀. 하한(9px) 대조용.
+ * `cell = f·S / (2·(3k+2))` — 첨두 반경이 (3k+2)s 이므로 지름은 그 두 배다.
+ *
+ * ⚠ **1440 승격을 낙관하지 마라.** 승격은 `round(sourceSide)` 로 캡핑되므로
+ * 전형적 1080p 스트림에선 1080² 가 상한이고, k=10 은 거기서 \~9.11px 로
+ * 하한 대비 여유가 **1.2%** 밖에 없다. 12.15px 는 min side >= 1440 기기에서만이다.
+ */
+export function kaCellPxAt(k, fraction = GUIDE_OUTER_FRACTION, frameSide = FRAME_MAX_SIDE) {
+  return (Number(fraction) * Number(frameSide)) / (2 * kaApexRadiusCells(k));
 }
 
 /**

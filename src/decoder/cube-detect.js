@@ -108,6 +108,9 @@ export const UNVERIFIED_CUBE_DETECTION = Object.freeze({
   maximumShapeCandidates: 4,
   minimumFinderToneSpanRatio: 0.05,
   minimumFinderOrientationMargin: 0.04,
+  // 'empty': 앞 변형이 후보를 하나라도 내면 반전 마스크를 건너뛴다 (기본, 비용 절약).
+  // 'always': 반전도 돌린다. 문턱은 그대로. 측정·호출자 옵트인 전용.
+  invertFallback: 'empty',
 });
 
 const EPSILON = 1e-9;
@@ -924,10 +927,13 @@ function shapeCandidates(luma, cfg) {
     rejections.push({ componentIndex, source, stage, measured, threshold });
   };
   for (const variant of variants) {
-    // 폴백 변형은 앞선 변형이 전부 빈손일 때만 돈다 — 정상 경로의 비용을 0 으로 둔다.
+    // 폴백 변형은 기본('empty')에선 앞선 변형이 전부 빈손일 때만 돈다.
+    // invertFallback:'always' 는 문턱을 안 내리고 반전 마스크만 추가한다.
     if (variant.fallbackOnly) {
-      const found = [...candidatesBySource.values()].some((list) => list.length > 0);
-      if (found) break;
+      if (cfg.invertFallback !== 'always') {
+        const found = [...candidatesBySource.values()].some((list) => list.length > 0);
+        if (found) break;
+      }
       variant.mask = variant.buildMask();
     }
     const mask = closeMask(variant.mask, luma.width, luma.height);
@@ -3387,6 +3393,7 @@ export function detectCentralCubeFinders(luma, options = {}) {
     const radius = shape.radius * reduced.factor;
     const byOrientation = [];
 
+    const skipReasons = [];
     for (let orientation = 0; orientation < 3; orientation += 1) {
       let best = null;
       const seeds = [];
@@ -3394,6 +3401,7 @@ export function detectCentralCubeFinders(luma, options = {}) {
         { bounds }, FINDER_CUBE_RADIUS_CELLS, 1, orientation,
       );
       if (affineH) seeds.push({ id: 'flat-block-affine', H: affineH });
+      else skipReasons.push({ orientation, stage: 'no-affine-h' });
       for (const seed of seeds) {
         const vertexResidual = vertexSetResidual(
           seed.H,
@@ -3401,9 +3409,17 @@ export function detectCentralCubeFinders(luma, options = {}) {
           vertices,
         );
         const relativeVertexResidual = vertexResidual / Math.max(radius, EPSILON);
-        if (relativeVertexResidual > cfg.maximumVertexResidual) continue;
+        if (relativeVertexResidual > cfg.maximumVertexResidual) {
+          skipReasons.push({
+            orientation, stage: 'vertex-residual', relativeVertexResidual,
+          });
+          continue;
+        }
         const rank = centralCubeRankReport(luma, seed.H, options, cfg, span);
-        if (!rank) continue;
+        if (!rank) {
+          skipReasons.push({ orientation, stage: 'rank-sample' });
+          continue;
+        }
         const report = {
           orientation,
           seed,
@@ -3432,6 +3448,11 @@ export function detectCentralCubeFinders(luma, options = {}) {
       : -Infinity;
     geometryReports.push({
       componentIndex: shape.componentIndex,
+      componentSource: shape.componentSource,
+      center,
+      radius,
+      score: shape.score,
+      skipReasons,
       orientations: byOrientation.map((entry) => ({
         orientation: entry.orientation,
         geometrySeed: entry.seed.id,

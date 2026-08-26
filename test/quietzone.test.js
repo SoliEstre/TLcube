@@ -481,3 +481,88 @@ describe('실제 인코더 산출물과의 통합', () => {
       `오목 외곽 넓이(${area(quiet)})가 옛 볼록 껍질(${area(oldHex)})과 거의 같다`);
   });
 });
+
+/*
+ * ⭐ **중앙 QR × Type K 회귀 (2026-08-26, 운영자 신고 「중앙 QR 은 아예 렌더 안 됨」).**
+ *
+ * `markSilhouette='hexagram'`(K 안전영역 육망성, 2026-08-26 아침 착지)은 본체 클러스터를
+ * «layout 원점을 품은 도형» 으로 고른다. 그런데 자체 콰이어트 배제가 **중앙 QR 도**
+ * 걷어내고 있었고, 그게 정확히 원점을 품은 유일한 도형이라 「본체 없음」으로 던졌다.
+ *
+ * 배제의 뜻은 처음부터 「코드 **바깥에 따로 붙은** 폴백 블록」이었다 — 중앙 QR 은
+ * 코드 안에 박혀 있으므로 대상이 아니다. 그래서 **원점을 품은 덩어리는 면제**한다.
+ *
+ * ⚠ 두 배제 경로(`selfQuiet` 명시 표지 · 색-클러스터)를 **둘 다** 면제해야 한다.
+ *   한쪽만 걸면 수정이 **완전히 무효**다 (실제로 그렇게 한 번 헛돌았고, 전후 지문이
+ *   바이트 동일해서 드러났다).
+ */
+describe('중앙 QR × 육망성 실루엣 — 원점 면제 (실제 인코더)', () => {
+  // ⚠ **합성 씬으로 짜지 마라.** 처음에 손으로 만든 도형 6장으로 시도했는데
+  //    `hexagramHull` 의 계약(top-level `k` · `layout.size` · `regionCellsK` 로 12점이
+  //    정본 영역에 실재)을 못 맞춰 엉뚱한 TypeError 로 두 번 헛돌았다. 이 회귀는
+  //    **실물 인코더 산출물에서만** 정직하게 재현된다.
+  async function kScene(encodeOptions, sceneExtra) {
+    const { encodeK } = await import('../src/encodeK.js');
+    const { encode } = await import('../src/encode.js');
+    const { buildScene } = await import('../src/scene.js');
+    const { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const p = getPreset('slate');
+    const palette = {
+      background: p.background, levels: p.levels,
+      bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+    };
+    const fn = sceneExtra && sceneExtra.__typeO ? encode : encodeK;
+    const opts = { ...(sceneExtra || {}) };
+    delete opts.__typeO;
+    return {
+      scene: buildScene(fn('hello', { version: 1, ...encodeOptions }), {
+        palette, margin: 20, ...opts,
+      }),
+      qrColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
+    };
+  }
+  const QR = 'HTTPS://X.TL/A';
+  const WHITE_FILL = { r: 255, g: 255, b: 255 };
+
+  test('K + 중앙 QR 이 안전영역을 만든다 (수정 전엔 「본체 클러스터 없음」으로 던졌다)', async () => {
+    for (const extra of [{}, { cornerMarker: true }]) {
+      const { scene, qrColors } = await kScene(
+        { centerQr: true, ...extra },
+        { centerQr: true, qrText: QR, finderPatternId: 'center-qr' },
+      );
+      assert.equal(scene.markSilhouette, 'hexagram', '육망성 경로가 아니면 이 회귀를 못 잰다');
+      assert.doesNotThrow(
+        () => addQuietZone(scene, { color: WHITE_FILL, margin: 2, selfQuietColors: qrColors }),
+        `K${extra.cornerMarker ? '-CM' : ''} + 중앙 QR 에서 본체 판정이 죽었다`,
+      );
+    }
+  });
+
+  test('K 의 다른 중앙 조합은 종전대로 산다 (면제가 이 조합만 건드렸는지)', async () => {
+    const cases = [
+      ['평', {}, {}],
+      ['중앙 TL(v0)', { centralV0: true }, { finderPatternId: 'central-v0' }],
+      ['코너 QR', {}, { qrText: QR, qrCorner: 'TL' }],
+    ];
+    for (const [name, eo, so] of cases) {
+      const { scene, qrColors } = await kScene(eo, so);
+      assert.doesNotThrow(
+        () => addQuietZone(scene, { color: WHITE_FILL, margin: 2, selfQuietColors: qrColors }),
+        `K ${name} 이 깨졌다`,
+      );
+    }
+  });
+
+  test('원점에서 떨어진 코너 QR 은 **여전히** 배제된다 — 면제가 너무 넓지 않다', async () => {
+    // ⚠ 이 단언이 이 수정의 진짜 안전장치다. 처음엔 면제 술어를 bbox 포함으로 썼는데
+    //    A v0 의 BL·BR 코너 QR 이 **bbox 만** 원점을 걸쳐 함께 면제됐고, 같은 파일의
+    //    「어느 코너의 QR 도 안전영역이 덮지 않는다」가 깨졌다 ⇒ 점-다각형 포함으로 좁혔다.
+    const { scene, qrColors } = await kScene({}, { qrText: QR, qrCorner: 'TL' });
+    const hulls = markHulls(scene, 2, qrColors);
+    const body = markHulls(
+      (await kScene({}, {})).scene, 2, qrColors,
+    );
+    assert.equal(hulls.length, body.length,
+      '코너 QR 이 면제되어 껍질 수가 늘었다 — 면제 범위가 넓다');
+  });
+});

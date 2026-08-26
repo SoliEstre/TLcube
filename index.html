@@ -349,11 +349,16 @@
   .input-clear:hover { color: var(--bad); border-color: var(--line); }
   .input-clear svg { width: 11px; height: 11px; }
 
-  /* 자체검증 3태 뱃지 자리 — «안정성 ⇄ 용량» 바로 아래. */
-  .selfcheck-row { margin: 8px 0 0; font-size: 11px; line-height: 1.6; }
+  /* 자체검증 3태 뱃지 자리 — «안정성 ⇄ 용량» 바로 아래.
+     ⭐ 2026-08-26 운영자 지시로 **키웠다** (11 → 13px · 세부 10.5 → 12px). 이 줄은
+     «지금 만든 코드가 읽히는가» 를 말하는 유일한 표시인데 주변 캡션과 같은 크기라
+     지나쳐졌다. 뱃지 자체도 굵게 해서 세 상태(사용가능/주의/불가)가 스캔에서
+     잡히게 한다 — 크기만 키우면 여전히 «문단 속 한 줄» 로 읽힌다. */
+  .selfcheck-row { margin: 10px 0 0; font-size: 13px; line-height: 1.6; }
   .selfcheck-row:empty { display: none; }
+  .selfcheck-row .badge { font-weight: 600; font-size: 12.5px; padding: 2px 8px; }
   .badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
-  .selfcheck-detail { display: block; margin-top: 3px; color: var(--dim); font-size: 10.5px; }
+  .selfcheck-detail { display: block; margin-top: 4px; color: var(--dim); font-size: 12px; }
 
   .experimental-warning {
     margin: 7px 0 0; padding: 7px 9px;
