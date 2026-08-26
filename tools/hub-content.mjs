@@ -115,8 +115,8 @@ export const strings = {
     whyNow3: '<strong>대신 밀도는 포기했습니다.</strong> 마름모 셀은 정사각 모듈보다 면적 효율이 불리해요. 이 포맷은 밀도 경쟁을 하지 않습니다. 많이 담아야 하면 QR이 맞아요.',
     ctaMake: '코드 만들어보기',
 
-    typesTitle: '타입 3종',
-    typesLead: '어디에 얹을지에 따라 고르면 됩니다. 셋 다 같은 데이터 계약을 공유하고 실루엣만 달라요. 아래 코드에는 전부 <code>https://tl.estre.so</code> 가 들어 있어요.',
+    typesTitle: '타입 4종',
+    typesLead: '어디에 얹을지에 따라 고르면 됩니다. 넷 다 같은 데이터 계약을 공유하고 실루엣만 달라요. 아래 코드에는 전부 <code>https://tl.estre.so</code> 가 들어 있어요.',
     typeYName: 'Type Y — 단일 큐브',
     typeYDesc: '세 면이 각각 n×n 격자. 한 덩어리라 간판·굿즈에 어울립니다.',
     typeYMeta: 'n = 13 / 21 / 25 · 순 페이로드 31 / 98 / 141 B',
@@ -126,7 +126,10 @@ export const strings = {
     typeAName: 'Type A — 삼각 실루엣',
     typeADesc: '육각 코어에 코너 패치를 더해 정삼각형이 됩니다.',
     typeAMeta: 'k = 6 / 8 / 10 · 순 페이로드 31 / 62 / 101 B',
-    typesFoot: '순 페이로드는 ECC-M 기준이에요. 세 타입 모두 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있어서, TL 코드를 못 읽는 환경에서도 최소한의 경로가 남습니다.',
+    typeKName: 'Type K — 육각별',
+    typeKDesc: '정삼각형과 그 180° 상을 합친 별. 같은 k 에서 용량이 가장 큽니다.',
+    typeKMeta: 'k = 6 / 8 / 10 · 순 페이로드 43 / 86 / 138 B',
+    typesFoot: '순 페이로드는 ECC-M 기준이에요. 네 타입 모두 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있어서, TL 코드를 못 읽는 환경에서도 최소한의 경로가 남습니다.',
 
     howTitle: '어떻게 동작하나',
     how1Title: '1. 셀 = 마름모 3면', how1Desc: '육각 셀을 rhombille 타일링으로 T·L·R 세 면으로 나눕니다.',
@@ -138,7 +141,7 @@ export const strings = {
     why3: '<strong>다만 «자동으로 예뻐지는» 건 아닙니다.</strong> 자유로워지는 것은 계약이지 결과가 아니에요. 그 안에서 무엇을 그릴지는 여전히 만드는 사람 몫입니다.',
 
     statusTitle: '스캐너 개선 현황',
-    statusLead: '<strong>디코더는 동작합니다.</strong> 세 타입 모두 실기기 사진에서 읽히고, 지금은 인식률과 속도를 끌어올리는 개선 단계예요. 아래 시간은 <strong>실기기 촬영 정지사진 한 장을 한 번 복호한 값</strong>이며, 라이브 첫 잠금 시간이나 성공률이 아니에요.',
+    statusLead: '<strong>디코더는 동작합니다.</strong> 네 타입 모두 실기기 사진에서 읽히고, 지금은 인식률과 속도를 끌어올리는 개선 단계예요. 아래 시간은 <strong>실기기 촬영 정지사진 한 장을 한 번 복호한 값</strong>이며, 라이브 첫 잠금 시간이나 성공률이 아니에요.',
     thType: '타입', thDecoded: '실사진 복호', thTime: '정지사진 1회 복호', thRealtime: '라이브 검증',
     rowYName: '<strong>Type Y</strong> — 단일 큐브',
     rowOName: '<strong>Type O</strong> — 육각 필드',
@@ -185,8 +188,8 @@ export const strings = {
     whyNow3: '<strong>Density was the trade.</strong> Rhombic cells are less area-efficient than square modules. This format does not compete on density. If you need to carry a lot, QR is the right tool.',
     ctaMake: 'Make a code',
 
-    typesTitle: 'Three types',
-    typesLead: 'Pick by where it will sit. All three share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.',
+    typesTitle: 'Four types',
+    typesLead: 'Pick by where it will sit. All four share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.',
     typeYName: 'Type Y — single cube',
     typeYDesc: 'Three n×n faces. A single solid mark, good for signage and merch.',
     typeYMeta: 'n = 13 / 21 / 25 · net payload 31 / 98 / 141 B',
@@ -196,7 +199,10 @@ export const strings = {
     typeAName: 'Type A — triangular silhouette',
     typeADesc: 'A hexagonal core plus corner patches, forming an equilateral triangle.',
     typeAMeta: 'k = 6 / 8 / 10 · net payload 31 / 62 / 101 B',
-    typesFoot: 'Net payload is at ECC-M. All three types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.',
+    typeKName: 'Type K — Hexagram',
+    typeKDesc: 'A triangle unioned with its 180° image. Largest payload at the same k.',
+    typeKMeta: 'k = 6 / 8 / 10 · net payload 43 / 86 / 138 B',
+    typesFoot: 'Net payload is at ECC-M. All four types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.',
 
     howTitle: 'How it works',
     how1Title: '1. Cell = three rhombi', how1Desc: 'A rhombille tiling splits each hexagonal cell into T, L and R faces.',
@@ -255,7 +261,7 @@ export const strings = {
     whyNow3: '<strong>代わりに密度は捨てました。</strong>菱形セルは正方モジュールより面積効率で不利です。このフォーマットは密度で競いません。たくさん詰め込みたいなら QR が適しています。',
     ctaMake: 'コードを作ってみる',
 
-    typesTitle: '3 つのタイプ',
+    typesTitle: 'タイプ4種',
     typesLead: 'どこに載せるかで選んでください。3 つとも同じデータ契約を共有し、シルエットだけが異なります。以下のコードにはすべて <code>https://tl.estre.so</code> が入っています。',
     typeYName: 'Type Y — 単一キューブ',
     typeYDesc: '3 面がそれぞれ n×n の格子。ひと塊なので看板やグッズに向きます。',
@@ -266,6 +272,9 @@ export const strings = {
     typeAName: 'Type A — 三角シルエット',
     typeADesc: '六角のコアにコーナーパッチを足して正三角形になります。',
     typeAMeta: 'k = 6 / 8 / 10 · 正味ペイロード 31 / 62 / 101 B',
+    typeKName: 'Type K — 六芒星',
+    typeKDesc: '正三角形とその180°像を合わせた星。同じ k で容量が最大です。',
+    typeKMeta: 'k = 6 / 8 / 10 · 正味ペイロード 43 / 86 / 138 B',
     typesFoot: '正味ペイロードは ECC-M 基準です。3 タイプとも<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。',
 
     howTitle: '仕組み',
@@ -326,7 +335,7 @@ export const strings = {
     whyNow3: '<strong>La densité, elle, a été sacrifiée.</strong> Les cellules en losange sont moins efficaces en surface que les modules carrés. Ce format ne concourt pas sur la densité. S\'il faut transporter beaucoup, le QR reste l\'outil adapté.',
     ctaMake: 'Créer un code',
 
-    typesTitle: 'Trois types',
+    typesTitle: 'Quatre types',
     typesLead: 'Choisissez selon l\'endroit où il sera posé. Les trois partagent le même contrat de données et ne diffèrent que par la silhouette. Tous les codes ci-dessous encodent <code>https://tl.estre.so</code>.',
     typeYName: 'Type Y — cube unique',
     typeYDesc: 'Trois faces n×n. Une marque d\'un seul tenant, adaptée à la signalétique et aux objets.',
@@ -337,6 +346,9 @@ export const strings = {
     typeAName: 'Type A — silhouette triangulaire',
     typeADesc: 'Un cœur hexagonal complété de pièces d\'angle, formant un triangle équilatéral.',
     typeAMeta: 'k = 6 / 8 / 10 · charge utile nette 31 / 62 / 101 B',
+    typeKName: 'Type K — Hexagramme',
+    typeKDesc: 'Un triangle uni à son image à 180°. Charge utile la plus grande à k égal.',
+    typeKMeta: 'k = 6 / 8 / 10 · charge utile nette 43 / 86 / 138 B',
     typesFoot: 'La charge utile nette est donnée pour ECC-M. Les trois types peuvent porter un <strong>QR de secours</strong> à côté, si bien qu\'il reste un chemin là où un code TL ne peut pas être lu.',
 
     howTitle: 'Fonctionnement',
@@ -396,7 +408,7 @@ export const strings = {
     whyNow3: '<strong>In cambio si è rinunciato alla densità.</strong> Le celle romboidali sono meno efficienti in superficie dei moduli quadrati. Questo formato non compete sulla densità. Se serve trasportare molto, lo strumento giusto resta il QR.',
     ctaMake: 'Crea un codice',
 
-    typesTitle: 'Tre tipi',
+    typesTitle: 'Quattro tipi',
     typesLead: 'Scegli in base a dove verrà messo. Tutti e tre condividono lo stesso contratto dati e differiscono solo per la silhouette. Ogni codice qui sotto contiene <code>https://tl.estre.so</code>.',
     typeYName: 'Type Y — cubo singolo',
     typeYDesc: 'Tre facce n×n. Un segno compatto, adatto a insegne e gadget.',
@@ -407,6 +419,9 @@ export const strings = {
     typeAName: 'Type A — silhouette triangolare',
     typeADesc: 'Un nucleo esagonale più le toppe d\'angolo, che formano un triangolo equilatero.',
     typeAMeta: 'k = 6 / 8 / 10 · payload netto 31 / 62 / 101 B',
+    typeKName: 'Type K — Esagramma',
+    typeKDesc: 'Un triangolo unito alla sua immagine a 180°. Massima capacità a parità di k.',
+    typeKMeta: 'k = 6 / 8 / 10 · payload netto 43 / 86 / 138 B',
     typesFoot: 'Il payload netto è riferito a ECC-M. Tutti e tre i tipi possono portare accanto un <strong>QR di riserva</strong>, così resta una via anche dove il codice TL non è leggibile.',
 
     howTitle: 'Come funziona',
@@ -467,7 +482,7 @@ export const strings = {
     whyNow3: '<strong>Dafür wurde die Dichte aufgegeben.</strong> Rautenzellen nutzen die Fläche schlechter als quadratische Module. Dieses Format tritt nicht im Wettbewerb um Dichte an. Wer viel unterbringen muss, ist mit QR richtig.',
     ctaMake: 'Code erstellen',
 
-    typesTitle: 'Drei Typen',
+    typesTitle: 'Vier Typen',
     typesLead: 'Wählen Sie danach, wo der Code sitzen soll. Alle drei teilen denselben Datenvertrag und unterscheiden sich nur in der Silhouette. Jeder Code unten enthält <code>https://tl.estre.so</code>.',
     typeYName: 'Type Y — einzelner Würfel',
     typeYDesc: 'Drei n×n-Flächen. Ein geschlossenes Zeichen, gut für Beschilderung und Merchandise.',
@@ -478,6 +493,9 @@ export const strings = {
     typeAName: 'Type A — dreieckige Silhouette',
     typeADesc: 'Ein sechseckiger Kern plus Eckflächen ergibt ein gleichseitiges Dreieck.',
     typeAMeta: 'k = 6 / 8 / 10 · Nutzdaten netto 31 / 62 / 101 B',
+    typeKName: 'Type K — Hexagramm',
+    typeKDesc: 'Ein Dreieck vereinigt mit seinem 180°-Bild. Größte Nutzlast bei gleichem k.',
+    typeKMeta: 'k = 6 / 8 / 10 · Netto-Nutzlast 43 / 86 / 138 B',
     typesFoot: 'Die Netto-Nutzdaten gelten für ECC-M. Alle drei Typen können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann.',
 
     howTitle: 'Funktionsweise',
@@ -538,7 +556,7 @@ export const strings = {
     whyNow3: '<strong>A cambio se renunció a la densidad.</strong> Las celdas romboidales aprovechan peor la superficie que los módulos cuadrados. Este formato no compite en densidad. Si hay que llevar mucho, la herramienta adecuada es el QR.',
     ctaMake: 'Crear un código',
 
-    typesTitle: 'Tres tipos',
+    typesTitle: 'Cuatro tipos',
     typesLead: 'Elija según dónde vaya a ir. Los tres comparten el mismo contrato de datos y solo se diferencian en la silueta. Todos los códigos de abajo contienen <code>https://tl.estre.so</code>.',
     typeYName: 'Type Y — cubo único',
     typeYDesc: 'Tres caras n×n. Una marca de una sola pieza, buena para rotulación y merchandising.',
@@ -549,6 +567,9 @@ export const strings = {
     typeAName: 'Type A — silueta triangular',
     typeADesc: 'Un núcleo hexagonal más parches de esquina, que forman un triángulo equilátero.',
     typeAMeta: 'k = 6 / 8 / 10 · carga útil neta 31 / 62 / 101 B',
+    typeKName: 'Type K — Hexagrama',
+    typeKDesc: 'Un triángulo unido con su imagen a 180°. Mayor carga útil con la misma k.',
+    typeKMeta: 'k = 6 / 8 / 10 · carga útil neta 43 / 86 / 138 B',
     typesFoot: 'La carga útil neta es con ECC-M. Los tres tipos pueden llevar al lado un <strong>QR de respaldo</strong>, de modo que quede una vía donde un código TL no se pueda leer.',
 
     howTitle: 'Cómo funciona',
@@ -609,7 +630,7 @@ export const strings = {
     whyNow3: '<strong>Em troca, abdicou-se da densidade.</strong> As células em losango aproveitam pior a área do que os módulos quadrados. Este formato não compete em densidade. Se for preciso levar muito, a ferramenta certa é o QR.',
     ctaMake: 'Criar um código',
 
-    typesTitle: 'Três tipos',
+    typesTitle: 'Quatro tipos',
     typesLead: 'Escolha consoante o sítio onde vai ficar. Os três partilham o mesmo contrato de dados e diferem apenas na silhueta. Todos os códigos abaixo contêm <code>https://tl.estre.so</code>.',
     typeYName: 'Type Y — cubo único',
     typeYDesc: 'Três faces n×n. Uma marca de uma só peça, boa para sinalética e merchandising.',
@@ -620,6 +641,9 @@ export const strings = {
     typeAName: 'Type A — silhueta triangular',
     typeADesc: 'Um núcleo hexagonal mais remendos de canto, formando um triângulo equilátero.',
     typeAMeta: 'k = 6 / 8 / 10 · carga útil líquida 31 / 62 / 101 B',
+    typeKName: 'Type K — Hexagrama',
+    typeKDesc: 'Um triângulo unido à sua imagem de 180°. Maior carga útil com o mesmo k.',
+    typeKMeta: 'k = 6 / 8 / 10 · carga útil líquida 43 / 86 / 138 B',
     typesFoot: 'A carga útil líquida é para ECC-M. Os três tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.',
 
     howTitle: 'Como funciona',

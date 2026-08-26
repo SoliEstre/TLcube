@@ -143,8 +143,8 @@
   </section>
 
   <section id="types">
-    <h2>Three types</h2>
-    <p class="dim">Pick by where it will sit. All three share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
+    <h2>Four types</h2>
+    <p class="dim">Pick by where it will sit. All four share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="../assets/type-Y.png" alt="Type Y — single cube">
@@ -164,8 +164,20 @@
         <p class="dim">A hexagonal core plus corner patches, forming an equilateral triangle.</p>
         <div class="meta">k = 6 / 8 / 10 · net payload 31 / 62 / 101 B</div>
       </div>
+      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
+           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
+           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
+              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
+           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
+           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
+      <div class="card">
+        <img src="../assets/type-K.png" alt="Type K — Hexagram">
+        <h3>Type K — Hexagram</h3>
+        <p class="dim">A triangle unioned with its 180° image. Largest payload at the same k.</p>
+        <div class="meta">k = 6 / 8 / 10 · net payload 43 / 86 / 138 B</div>
+      </div>
     </div>
-    <p class="dim" style="margin-top:16px">Net payload is at ECC-M. All three types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.</p>
+    <p class="dim" style="margin-top:16px">Net payload is at ECC-M. All four types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.</p>
   </section>
 
   <section id="what">

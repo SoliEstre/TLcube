@@ -253,6 +253,18 @@ ${jsonLd(lang, t)}
         <p class="dim">${t.typeADesc}</p>
         <div class="meta">${t.typeAMeta}</div>
       </div>
+      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
+           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
+           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
+              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
+           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
+           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
+      <div class="card">
+        <img src="${p}assets/type-K.png" alt="${t.typeKName}">
+        <h3>${t.typeKName}</h3>
+        <p class="dim">${t.typeKDesc}</p>
+        <div class="meta">${t.typeKMeta}</div>
+      </div>
     </div>
     <p class="dim" style="margin-top:16px">${t.typesFoot}</p>
   </section>

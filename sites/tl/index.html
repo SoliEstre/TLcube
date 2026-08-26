@@ -143,8 +143,8 @@
   </section>
 
   <section id="types">
-    <h2>타입 3종</h2>
-    <p class="dim">어디에 얹을지에 따라 고르면 됩니다. 셋 다 같은 데이터 계약을 공유하고 실루엣만 달라요. 아래 코드에는 전부 <code>https://tl.estre.so</code> 가 들어 있어요.</p>
+    <h2>타입 4종</h2>
+    <p class="dim">어디에 얹을지에 따라 고르면 됩니다. 넷 다 같은 데이터 계약을 공유하고 실루엣만 달라요. 아래 코드에는 전부 <code>https://tl.estre.so</code> 가 들어 있어요.</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="assets/type-Y.png" alt="Type Y — 단일 큐브">
@@ -164,8 +164,20 @@
         <p class="dim">육각 코어에 코너 패치를 더해 정삼각형이 됩니다.</p>
         <div class="meta">k = 6 / 8 / 10 · 순 페이로드 31 / 62 / 101 B</div>
       </div>
+      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
+           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
+           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
+              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
+           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
+           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
+      <div class="card">
+        <img src="assets/type-K.png" alt="Type K — 육각별">
+        <h3>Type K — 육각별</h3>
+        <p class="dim">정삼각형과 그 180° 상을 합친 별. 같은 k 에서 용량이 가장 큽니다.</p>
+        <div class="meta">k = 6 / 8 / 10 · 순 페이로드 43 / 86 / 138 B</div>
+      </div>
     </div>
-    <p class="dim" style="margin-top:16px">순 페이로드는 ECC-M 기준이에요. 세 타입 모두 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있어서, TL 코드를 못 읽는 환경에서도 최소한의 경로가 남습니다.</p>
+    <p class="dim" style="margin-top:16px">순 페이로드는 ECC-M 기준이에요. 네 타입 모두 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있어서, TL 코드를 못 읽는 환경에서도 최소한의 경로가 남습니다.</p>
   </section>
 
   <section id="what">
@@ -183,7 +195,7 @@
 
   <section id="scanner-status">
     <h2>스캐너 개선 현황</h2>
-    <p class="lead"><strong>디코더는 동작합니다.</strong> 세 타입 모두 실기기 사진에서 읽히고, 지금은 인식률과 속도를 끌어올리는 개선 단계예요. 아래 시간은 <strong>실기기 촬영 정지사진 한 장을 한 번 복호한 값</strong>이며, 라이브 첫 잠금 시간이나 성공률이 아니에요.</p>
+    <p class="lead"><strong>디코더는 동작합니다.</strong> 네 타입 모두 실기기 사진에서 읽히고, 지금은 인식률과 속도를 끌어올리는 개선 단계예요. 아래 시간은 <strong>실기기 촬영 정지사진 한 장을 한 번 복호한 값</strong>이며, 라이브 첫 잠금 시간이나 성공률이 아니에요.</p>
     <div class="table-scroll" style="margin-top:20px">
       <table>
         <thead>

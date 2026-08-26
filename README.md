@@ -4,7 +4,7 @@
 
 > Formal name **TrilLuminance (cube)** · codename Trilume.
 > A 2.5D visual code that stores data in the **luminance rank** of three rhombic faces per hexagonal cell.
-> Status: **M0 encoder complete** — text in → render · PNG/SVG export · deterministic output.
+> Status: **encoder, decoder and live camera scanner all running** — the browser generator and scanner are live.
 
 <p align="center">
   <img src="sites/tl/assets/type-Y.png" alt="Type Y — a single isometric cube with a fallback QR at the top left" width="30%">
@@ -33,24 +33,29 @@ The data contract is only **the order between faces** and a **minimum separation
 
 That freedom is the point of the format.
 
-## Three types
+## Four types
 
 | Type | Silhouette | Net payload (ECC-M) |
 |---|---|---|
 | **O** | Hexagonal field | 18 / 39 / 65 B (k = 6 / 8 / 10) |
 | **A** | Triangular silhouette | 31 / 62 / 101 B (k = 6 / 8 / 10) |
+| **K** | Hexagram (A union inverted A) | 43 / 86 / 138 B (k = 6 / 8 / 10) |
 | **Y** | Single isometric cube | 31 / 98 / 141 B (n = 13 / 21 / 25) |
 
-All three share the same data contract and differ only in silhouette. Each can carry a **fallback QR** printed alongside, so a reader that cannot decode the TL code still has a path.
+All four share the same data contract and differ only in silhouette. Each can carry a
+**fallback QR** printed alongside, so a reader that cannot decode the TL code still has a path.
+
+**K** is a triangle unioned with its 180-degree image. At the same k it holds more cells
+than A, so it carries the largest payload, and its six points double as detection anchors.
 
 ## Status
 
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 | Generator — layout frozen | **complete** |
-| M1 | Synthetic decoder + distortion harness | — |
-| M2 | Real-camera scanner | — |
-| M3 | Style presets · packaging | — |
+| M1 | Synthetic decoder | **complete** — `src/decoder/`, 194 test files |
+| M2 | Real-camera scanner | **running** — [tlscan.estre.so](https://tlscan.estre.so) |
+| M3 | Style presets · packaging | in progress — 4 presets |
 
 ## Usage
 

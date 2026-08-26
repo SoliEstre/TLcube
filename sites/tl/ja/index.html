@@ -143,7 +143,7 @@
   </section>
 
   <section id="types">
-    <h2>3 つのタイプ</h2>
+    <h2>タイプ4種</h2>
     <p class="dim">どこに載せるかで選んでください。3 つとも同じデータ契約を共有し、シルエットだけが異なります。以下のコードにはすべて <code>https://tl.estre.so</code> が入っています。</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
@@ -163,6 +163,18 @@
         <h3>Type A — 三角シルエット</h3>
         <p class="dim">六角のコアにコーナーパッチを足して正三角形になります。</p>
         <div class="meta">k = 6 / 8 / 10 · 正味ペイロード 31 / 62 / 101 B</div>
+      </div>
+      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
+           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
+           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
+              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
+           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
+           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
+      <div class="card">
+        <img src="../assets/type-K.png" alt="Type K — 六芒星">
+        <h3>Type K — 六芒星</h3>
+        <p class="dim">正三角形とその180°像を合わせた星。同じ k で容量が最大です。</p>
+        <div class="meta">k = 6 / 8 / 10 · 正味ペイロード 43 / 86 / 138 B</div>
       </div>
     </div>
     <p class="dim" style="margin-top:16px">正味ペイロードは ECC-M 基準です。3 タイプとも<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。</p>
