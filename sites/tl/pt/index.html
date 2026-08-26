@@ -204,18 +204,19 @@
         <tbody>
           <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
                텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
-          <tr><td><strong>Type Y</strong> — cubo único</td><td><span class="badge ok">3 / 3</span></td><td>≈ 0.1 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
-          <tr><td><strong>Type O</strong> — campo hexagonal</td><td><span class="badge ok">3 / 3</span></td><td>≈ 1.8 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
-          <tr><td><strong>Type A</strong> — silhueta triangular</td><td><span class="badge ok">3 / 3</span></td><td>≈ 0.86 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
-          <tr><td><strong>Variante de QR central</strong> (os três tipos)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Type Y</strong> — cubo único</td><td><span class="badge ok">9 / 16</span></td><td>≈ 3.4 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Type O</strong> — campo hexagonal</td><td><span class="badge ok">29 / 48</span></td><td>≈ 2.0 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Type A</strong> — silhueta triangular</td><td><span class="badge ok">18 / 19</span></td><td>≈ 3.2 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Type K</strong> — hexagrama</td><td><span class="badge ok">18 / 27</span></td><td>≈ 3.4 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
+          <tr><td><strong>Variante QR central</strong> (os quatro tipos) · 2026-08-13</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">faltam mais medições</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px"><strong>No critério de uma descodificação de uma foto fixa</strong>, o Type Y é o mais curto e O e A demoram mais. A reformulação dos padrões localizadores e as novas tentativas de formato alargaram o conjunto de fotos reais que se descodificam, à custa de mais trabalho em alguns caminhos; o Y tenta primeiro um caminho barato e só faz uma varredura completa depois de falhar. Estes números não devem ser lidos como tempo até à primeira fixação ao vivo.</p>
+    <p class="dim" style="margin-top:16px"><strong>Uma descodificação de uma única foto fixa.</strong> O Type O é agora o mais rápido; A, K e Y ficam próximos atrás. ⚠ Uma versão anterior desta página dizia que o Type Y era o mais rápido: era uma amostra de 9 fotos e, com uma amostra mais ampla, a <strong>ordem inverteu-se</strong>. Não leia isto como tempo de primeiro engate em direto.</p>
     <p class="dim"><strong>O tempo de uma descodificação em foto fixa não prevê a sensação da leitura ao vivo.</strong> Nas primeiras medições em dispositivo real, um fotograma rápido podia ainda assim dar uma primeira fixação lenta quando eram precisos muitos fotogramas antes de um bem-sucedido, e a ordem dos tipos diferia desta tabela de foto fixa. Esse registo abrange um só dispositivo e uma amostra pequena, pelo que ainda não atribuímos uma classificação de uso ao vivo.</p>
     <p class="dim">As condições de captura também pesam. Na medição, <strong>9 píxeis por célula</strong> foi o limite inferior de descodificação e, à mesma distância, uma <strong>objetiva ultra grande-angular</strong> enquadra o código mais pequeno e desce abaixo dessa linha (ultra grande-angular 7.6 px falhou / grande-angular 9.1 px conseguiu). É por isso que o scanner oferece a escolha da objetiva.</p>
     <p class="dim">Na <strong>variante de QR central</strong>, um bloco QR substitui o padrão localizador central. Os seus padrões dão o ponto de entrada de posição e orientação com que se descodifica o corpo TL em redor. O gerador usa agora este caminho validado por predefinição nos tipos O e A. Por predefinição, o QR continua a ser uma reserva com uma ligação para o leitor; a carga útil fica no corpo TL.</p>
-    <p class="dim" style="margin-top:16px"><small>Medido a 2026-08-13 · amostra de 9 fotos com três sensores de telemóvel (ultra grande-angular, grande-angular, teleobjetiva) · lado curto 1440 px. A amostra é pequena — leia isto como um <em>estado atual</em>, não como uma taxa de êxito.</small></p>
+    <p class="dim" style="margin-top:16px"><small>Medido a 2026-08-26 · amostra de <strong>110 fotos</strong> (cada uma tentada a 960 · 1440 px de lado curto). ⚠ A maior parte da amostra está <strong>fotografada a partir de um ecrã</strong>: não são números de impressão nem de colocação real. Além disso, 123 dos 233 fotogramas do corpus são capturas-limite guardadas precisamente por ainda não descodificarem — ficam aqui excluídas. Só a linha do QR central vem da ronda anterior de 2026-08-13.</small></p>
   </section>
 
   <section id="spec">

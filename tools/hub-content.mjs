@@ -11,61 +11,70 @@
 
 /** 실측 수치 — 여덟 언어가 공유한다. 값이 바뀌면 여기만 고친다. */
 export const stats = {
-  measuredOn: '2026-08-13',
-  sampleCount: 9,
-  shortSidePx: 1440,
+  measuredOn: '2026-08-26',
+  /*
+   * ⚠ **공표 표본은 «일반 촬영» 110장이다** — 코퍼스 전체 233장이 아니다.
+   *
+   * 코퍼스는 성능 표본이 아니라 **실험 기록**으로 자라 왔다. 233장 중 123장은
+   * 「지금 못 읽는 것」을 일부러 모아 둔 한계·실험 프레임이다:
+   *   · 파인더 패턴 비교 스윕 80장 — 장마다 **다른** 파인더가 그려져 있다
+   *   · 봉투 경계 프레임 24장 — 개발 문서에 「0/48 이 정상」으로 등재돼 있다
+   *   · 기울기 스트레스·경계 프로브 19장
+   * 이걸 섞어 세면 전체 37.3% 가 나오는데, 그건 **실험 로그를 성능으로 공표**하는
+   * 것이다. 배타 근거는 배치별로 개발 문서에 남겼고, 근거를 못 찾은 배치는
+   * **빼지 않고 남겼다** (v0t-20260817 = 0/6 — 그래서 Y 가 낮게 잡힌다).
+   *
+   * 시간도 같은 표본으로 다시 냈다. 종전 집계는 전 코퍼스 기준이라 프로브가
+   * 중앙값을 끌고 갔다 (Y 는 성공 18건 중 8건이 «복호되라고 크롭한» 생존자였다).
+   */
+  sampleCount: 110,
+  corpusTotal: 233,
+  probeExcluded: 123,
+  triedShortSides: '960 · 1440',
   cellFloorPx: 9,
   ultraWideFailPx: 7.6,
   wideOkPx: 9.1,
-  // 복호 시간은 **1440px 짧은 변 기준, 파일별 최소값(교차 8회)의 타입 중앙값**이다.
-  // 순차 측정은 워밍업·열 편향이 들어가 실제 1.44배가 1.14배로 보인 전례가 있어
-  // 최적화 전후를 같은 프로세스에서 번갈아 잰다. 절대값은 측정 머신에 종속되므로
-  // 배수(전 대비)가 더 안정적인 값이라는 점을 알아 둔다.
-  // 재현 하네스는 `test/output/lanes/hub-stats.mjs` 다 — 표본·방법·대조군이 그 안에 있다.
-  //   ⚠ 이 경로는 **로컬 전용**이다(`test/output/` 은 gitignore). 실기기 사진 휘도 덤프도
-  //   저장소에 없으므로 clone 만으로는 재현되지 않는다 — 수치를 고치려면 덤프를 가진
-  //   개발 머신에서 재야 한다.
-  //   ⚠ **스위트 안에서 재지 마라.** `node --test` 가 `test/` 아래 `.mjs` 를 전부 실행해서
-  //   이 하네스까지 돌린다. 그러면 CPU 를 다투는 상태로 재고 결과 JSON 을 덮는다
-  //   (실측: 그렇게 덮인 값 225/1217/2794 vs 한가한 상태 102/863/1805 — 하마터면
-  //   «고쳤는데 느려졌다» 는 정반대 결론을 실을 뻔했다). 하네스에 가드를 넣어 뒀다.
   //
-  // 이번 갱신 이력(같은 9장·같은 방법, 옛 커밋 9879068 과 짝지어 측정):
-  //   한때 Y 4.1× · A 2.0× · O 1.7× 느려져 있었다. 파인더 하이브리드화와 포맷 재라벨이
-  //   **인식률을 시간으로 산** 결과였다(그 대가로 Type A 가 2/3 → 3/3).
-  //   그 뒤 큐브 경로를 «낙관적 빠른 경로 + 실패 시 1회 전수 재시도» 로 바꿔 되돌렸다.
-  //   ⚠ 옛 게시값과 직접 비교하지 마라 — O 는 옛 게시값(690ms)이 이 머신에서 재현되지
-  //   않아(옛 코드 1273ms) **당시 O 수치 자체가 의심스럽다.** 근거는 짝지은 배수다.
-  //
-  // ⚠ `ms` 는 **언어별 표기 맵**이다 (2026-08-17, 8언어 확장 전에는 ms/msEn/msJa 세 필드였다).
-  //   언어가 늘 때마다 필드 이름을 하나씩 더하면 렌더 쪽 삼항 사슬이 같이 길어지고,
-  //   한 언어를 빠뜨려도 «undefined» 가 표에 그대로 찍힌다. 맵이면 렌더가 코드로 찾는다.
-  //   ⚠ **숫자 표기는 en 형태를 유지한다.** 소수점을 언어별로 쉼표로 바꾸면 같은 수치가
-  //     생성기 사전(`0.62`·`20/20 → 6/20`)과 다르게 보인다 — 수치는 번역 대상이 아니다.
+  // ⚠ **«복호 시간» 은 성공한 사진의 중앙값이다** (실패는 끝까지 다 시도한 시간이라
+  //   성격이 다르므로 섞지 않는다). 절대값은 측정 머신에 종속된다.
+  // ⚠ **옛 게시값과 직접 비교하지 마라.** 옛 표는 사진 **9장** 기준이었고 지금은
+  //   110장이다. 순위 자체가 뒤집혔다 — 옛 표의 「Type Y 약 0.1초」는 넓힌 표본에서
+  //   **3.4초**다. 표본이 작을 때의 수치를 개선/악화의 근거로 쓰면 안 된다.
+  // ⚠ `ms` 는 **언어별 표기 맵**이다. 숫자 표기는 en 형태를 유지한다 —
+  //   소수점을 언어별 쉼표로 바꾸면 같은 수치가 생성기 사전과 다르게 보인다.
   types: {
     Y: {
-      decoded: '3 / 3',
+      decoded: '9 / 16',
       ms: {
-        ko: '약 0.1초', en: '~0.1 s', ja: '約 0.1 秒',
-        fr: '≈ 0.1 s', it: '≈ 0.1 s', de: '≈ 0.1 s', es: '≈ 0.1 s', pt: '≈ 0.1 s',
+        ko: '약 3.4초', en: '~3.4 s', ja: '約 3.4 秒',
+        fr: '≈ 3.4 s', it: '≈ 3.4 s', de: '≈ 3.4 s', es: '≈ 3.4 s', pt: '≈ 3.4 s',
       },
     },
     O: {
-      decoded: '3 / 3',
+      decoded: '29 / 48',
       ms: {
-        ko: '약 1.8초', en: '~1.8 s', ja: '約 1.8 秒',
-        fr: '≈ 1.8 s', it: '≈ 1.8 s', de: '≈ 1.8 s', es: '≈ 1.8 s', pt: '≈ 1.8 s',
+        ko: '약 2.0초', en: '~2.0 s', ja: '約 2.0 秒',
+        fr: '≈ 2.0 s', it: '≈ 2.0 s', de: '≈ 2.0 s', es: '≈ 2.0 s', pt: '≈ 2.0 s',
       },
     },
     A: {
-      decoded: '3 / 3',
+      decoded: '18 / 19',
       ms: {
-        ko: '약 0.86초', en: '~0.86 s', ja: '約 0.86 秒',
-        fr: '≈ 0.86 s', it: '≈ 0.86 s', de: '≈ 0.86 s', es: '≈ 0.86 s', pt: '≈ 0.86 s',
+        ko: '약 3.2초', en: '~3.2 s', ja: '約 3.2 秒',
+        fr: '≈ 3.2 s', it: '≈ 3.2 s', de: '≈ 3.2 s', es: '≈ 3.2 s', pt: '≈ 3.2 s',
+      },
+    },
+    K: {
+      decoded: '18 / 27',
+      ms: {
+        ko: '약 3.4초', en: '~3.4 s', ja: '約 3.4 秒',
+        fr: '≈ 3.4 s', it: '≈ 3.4 s', de: '≈ 3.4 s', es: '≈ 3.4 s', pt: '≈ 3.4 s',
       },
     },
   },
-  centerQr: { decoded: '8 / 9' },
+  // ⚠ 이 행만 **옛 라운드(9장)** 값이다 — 이번 코퍼스로는 중앙 QR 변형을 따로 가를 수
+  //   없어 재측정하지 못했다. 날짜를 행에 같이 실어 출처가 섞이지 않게 한다.
+  centerQr: { decoded: '8 / 9', measuredOn: '2026-08-13' },
 };
 
 /*
@@ -146,13 +155,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — 단일 큐브',
     rowOName: '<strong>Type O</strong> — 육각 필드',
     rowAName: '<strong>Type A</strong> — 삼각 실루엣',
-    rowCenterQr: '<strong>중앙 QR 변형</strong> (세 타입 공통)',
+    rowKName: '<strong>Type K</strong> — 육각별',
+    rowCenterQr: `<strong>중앙 QR 변형</strong> (네 타입 공통) · ${stats.centerQr.measuredOn}`,
     badgePending: '추가 측정 중',
     statusNote1: '<strong>정지사진 1회 복호 시간만으로 라이브 체감을 예측할 수 없습니다.</strong> 시험판의 초기 실기기 계측에서는 한 프레임을 빨리 처리해도 성공까지 많은 프레임이 필요하면 첫 잠금이 늦어졌고, 타입 순위도 정지사진 표와 달라졌어요. 아직 기기 한 대의 작은 표본이므로 라이브 등급은 붙이지 않고 추가 측정 중으로 표시합니다.',
-    statusNote0: '<strong>정지사진 한 장을 한 번 읽는 기준</strong>에서는 Type Y가 가장 짧고 O·A가 더 깁니다. 파인더 재설계와 포맷 재시도는 실사진 인식 범위를 넓히는 대신 일부 경로의 1회 처리 시간을 늘렸고, Y는 «싸게 먼저 시도하고 실패할 때만 한 번 전부 훑는» 구조로 줄였어요. 이 수치를 라이브 첫 잠금 시간으로 읽으면 안 됩니다.',
+    statusNote0: `<strong>정지사진 한 장을 한 번 읽는 기준</strong>입니다. 지금은 Type O가 가장 짧고 A·K·Y가 비슷하게 더 깁니다. ⚠ 이전 게시에서 «Type Y가 가장 빠르다»고 적었던 것은 사진 9장 기준이었고, 표본을 넓혀 다시 재니 <strong>순서가 뒤집혔어요</strong>. 이 수치를 라이브 첫 잠금 시간으로 읽으면 안 됩니다.`,
     statusNote2: `촬영 조건도 크게 작용합니다. 실측에서 <strong>셀당 ${stats.cellFloorPx}픽셀</strong>이 복호 하한이었고, 같은 거리라도 <strong>초광각 렌즈</strong>로 찍으면 코드가 작게 담겨 이 선 아래로 내려갔어요 (초광각 ${stats.ultraWideFailPx}px 실패 / 광각 ${stats.wideOkPx}px 성공). 스캐너에 렌즈 선택을 넣어 둔 이유입니다.`,
     statusNote3: '<strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하고, QR의 파인더를 위치·방향 진입점으로 써서 바깥 TL 본문을 복호해요. 생성기는 이제 Type O/A에서 이 검증된 경로를 기본으로 사용합니다. QR은 기본적으로 리더 링크를 담는 폴백이고, 실제 페이로드는 TL 본문에 남습니다.',
-    statusFoot: `측정 ${stats.measuredOn} · 표본은 스마트폰 3개 센서(초광각·광각·망원)로 찍은 사진 ${stats.sampleCount}장 · 짧은 변 ${stats.shortSidePx}px 기준. 표본이 작아 성공률이 아니라 <em>현재 상태</em>로 읽어 주세요.`,
+    statusFoot: `측정 ${stats.measuredOn} · 표본 <strong>${stats.sampleCount}장</strong> (각 장을 ${stats.triedShortSides}px 두 해상도로 시도). ⚠ 표본은 대부분 <strong>모니터 화면을 찍은 사진</strong>이라 인쇄물·실배치 수치가 아니에요. 그리고 코퍼스 ${stats.corpusTotal}장 중 <strong>${stats.probeExcluded}장</strong>은 «지금 못 읽는 것»을 일부러 모아 둔 한계·실험 프레임이라 성능 표본에서 뺐습니다. 중앙 QR 행만 ${stats.centerQr.measuredOn} 옛 라운드 값이에요.`,
 
     specTitle: '스펙과 구현',
     spec1: '포맷 스펙과 레퍼런스 구현은 <strong>Apache License 2.0</strong> 으로 공개돼 있습니다. 바닐라 JavaScript, 빌드 툴체인 없음, 런타임 의존성 0 — 단일 HTML 파일로 동작합니다.',
@@ -219,13 +229,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — single cube',
     rowOName: '<strong>Type O</strong> — hex field',
     rowAName: '<strong>Type A</strong> — triangular silhouette',
-    rowCenterQr: '<strong>Centre-QR variant</strong> (all three types)',
+    rowKName: '<strong>Type K</strong> — hexagram',
+    rowCenterQr: `<strong>Centre-QR variant</strong> (all four types) · ${stats.centerQr.measuredOn}`,
     badgePending: 'more data needed',
     statusNote1: '<strong>One static-photo decode time does not predict how live scanning feels.</strong> In the first real-device lab trace, a fast frame could still lead to a slow first lock when many frames were needed before one succeeded, and the type ranking differed from this static-photo table. That trace covers one device and a small sample, so we do not assign live usability grades yet.',
-    statusNote0: '<strong>For one decode of one static photo</strong>, Type Y is shortest and O and A take longer. Finder and format retry work expanded the set of real photos that decode, at the cost of more work on some paths; Y now tries a cheap path first and performs one full sweep only after failure. These figures must not be read as live time to first lock.',
+    statusNote0: `<strong>One decode of one still photo.</strong> Type O is now the fastest; A, K and Y sit close together behind it. ⚠ An earlier version of this page said Type Y was the fastest — that was a 9-photo sample, and on a wider sample the <strong>order flipped</strong>. Do not read these as live first-lock times.`,
     statusNote2: `Shooting conditions matter too. Measured, <strong>${stats.cellFloorPx} pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide ${stats.ultraWideFailPx} px failed / wide ${stats.wideOkPx} px succeeded). That is why the scanner offers a lens picker.`,
     statusNote3: 'In the <strong>centre-QR variant</strong>, a QR block replaces the central finder. Its finder patterns provide the position and orientation entry point used to decode the surrounding TL body. The generator now uses this validated path by default for Types O and A. By default the QR remains a reader-link fallback; the payload stays in the TL body.',
-    statusFoot: `Measured ${stats.measuredOn} · sample of ${stats.sampleCount} photos across three phone sensors (ultra-wide, wide, telephoto) · short side ${stats.shortSidePx} px. The sample is small — read this as a <em>current state</em>, not a success rate.`,
+    statusFoot: `Measured ${stats.measuredOn} · sample of <strong>${stats.sampleCount} photos</strong> (each tried at ${stats.triedShortSides} px short side). ⚠ Most of the sample is <strong>photographed off a monitor</strong>, so these are not print or in-situ numbers. And ${stats.probeExcluded} of the ${stats.corpusTotal} corpus frames are limit/experiment shots kept precisely because they do not decode yet — they are excluded here. Only the centre-QR row is from the older ${stats.centerQr.measuredOn} round.`,
 
     specTitle: 'Spec and implementation',
     spec1: 'The format spec and reference implementation are published under the <strong>Apache License 2.0</strong>. Vanilla JavaScript, no build toolchain, zero runtime dependencies — it runs as a single HTML file.',
@@ -292,13 +303,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — 単一キューブ',
     rowOName: '<strong>Type O</strong> — 六角フィールド',
     rowAName: '<strong>Type A</strong> — 三角シルエット',
-    rowCenterQr: '<strong>中央 QR 変種</strong>（3 タイプ共通）',
+    rowKName: '<strong>Type K</strong> — 六芒星',
+    rowCenterQr: `<strong>中央 QR 変種</strong>（4 タイプ共通） · ${stats.centerQr.measuredOn}`,
     badgePending: '追加測定中',
     statusNote1: '<strong>静止画 1 回の復号時間だけではライブの体感を予測できません。</strong>試験版の初期実機計測では、1 フレームが速くても成功までに多くのフレームを要すると初回ロックが遅くなり、タイプの順序も静止画の表とは異なりました。まだ 1 台の小さな標本なので、ライブの実用性評価は付けず追加測定中としています。',
-    statusNote0: '<strong>静止画 1 枚を 1 回読む基準</strong>では Type Y が最短で、O・A はより長くかかります。ファインダの再設計とフォーマット再試行で読める実写真の範囲は広がりましたが、一部の経路では 1 回の処理量が増えました。Y は安い経路を先に試し、失敗時だけ 1 回全探索します。この数値をライブの初回ロック時間として読んではいけません。',
+    statusNote0: `<strong>静止画 1 枚を 1 回読む基準</strong>です。現在は Type O が最も短く、A・K・Y はその後ろで近い値です。⚠ 以前の掲載で「Type Y が最速」と書いたのは写真 9 枚の標本で、標本を広げて測り直すと<strong>順序が逆転</strong>しました。ライブの初回ロック時間として読まないでください。`,
     statusNote2: `撮影条件も大きく効きます。実測では<strong>セルあたり ${stats.cellFloorPx} ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 ${stats.ultraWideFailPx}px 失敗 / 広角 ${stats.wideOkPx}px 成功）。スキャナにレンズ選択を入れているのはそのためです。`,
     statusNote3: '<strong>中央 QR 変種</strong>では QR ブロックが中央ファインダを置き換え、QR のファインダを位置・方向の入口として周囲の TL 本文を復号します。ジェネレータは Type O/A でこの検証済み経路を標準にしました。QR は既定ではリーダーリンクのフォールバックで、ペイロード自体は TL 本文に残ります。',
-    statusFoot: `測定 ${stats.measuredOn} · 標本はスマートフォンの 3 つのセンサー（超広角・広角・望遠）で撮った写真 ${stats.sampleCount} 枚 · 短辺 ${stats.shortSidePx}px 基準。標本が小さいので成功率ではなく<em>現在の状態</em>として読んでください。`,
+    statusFoot: `測定 ${stats.measuredOn} · 標本 <strong>${stats.sampleCount} 枚</strong>（各枚を短辺 ${stats.triedShortSides}px の 2 解像度で試行）。⚠ 標本の大半は<strong>モニター画面を撮った写真</strong>で、印刷物や実配置の数値ではありません。またコーパス ${stats.corpusTotal} 枚のうち <strong>${stats.probeExcluded} 枚</strong>は「今は読めないもの」を意図的に集めた限界・実験フレームなので、性能標本から除いています。中央 QR の行だけ ${stats.centerQr.measuredOn} の旧ラウンド値です。`,
 
     specTitle: '仕様と実装',
     spec1: 'フォーマット仕様とリファレンス実装は <strong>Apache License 2.0</strong> で公開しています。バニラ JavaScript、ビルドツールチェーンなし、ランタイム依存 0 — 単一の HTML ファイルで動きます。',
@@ -366,13 +378,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — cube unique',
     rowOName: '<strong>Type O</strong> — champ hexagonal',
     rowAName: '<strong>Type A</strong> — silhouette triangulaire',
-    rowCenterQr: '<strong>Variante QR central</strong> (les trois types)',
+    rowKName: '<strong>Type K</strong> — hexagramme',
+    rowCenterQr: `<strong>Variante QR central</strong> (les quatre types) · ${stats.centerQr.measuredOn}`,
     badgePending: 'mesures en cours',
     statusNote1: '<strong>Le temps d\'un décodage sur photo fixe ne prédit pas le ressenti d\'un scan en direct.</strong> Lors des premières mesures sur appareil réel, une image rapide pouvait tout de même donner un premier accrochage lent lorsqu\'il fallait beaucoup d\'images avant une réussite, et le classement des types différait de ce tableau sur photo fixe. Ces relevés portent sur un seul appareil et un petit échantillon : nous n\'attribuons donc pas encore de note d\'usage en direct.',
-    statusNote0: '<strong>Pour un décodage d\'une photo fixe</strong>, le Type Y est le plus court, O et A sont plus longs. La refonte des repères et les nouveaux essais de format ont élargi l\'ensemble des photos réelles qui se décodent, au prix de plus de travail sur certains chemins ; Y tente désormais un chemin bon marché d\'abord et ne balaie tout qu\'une fois, après échec. Ces chiffres ne doivent pas se lire comme un temps de premier accrochage en direct.',
+    statusNote0: `<strong>Un décodage d’une seule photo fixe.</strong> Le Type O est désormais le plus rapide ; A, K et Y sont proches derrière. ⚠ Une version antérieure de cette page annonçait le Type Y comme le plus rapide : c’était un échantillon de 9 photos, et sur un échantillon élargi l’<strong>ordre s’est inversé</strong>. Ne lisez pas ces valeurs comme des temps de premier verrouillage en direct.`,
     statusNote2: `Les conditions de prise de vue comptent aussi. À la mesure, <strong>${stats.cellFloorPx} pixels par cellule</strong> était le plancher de décodage, et à distance égale un <strong>objectif ultra grand-angle</strong> cadre le code plus petit et passe sous cette ligne (ultra grand-angle ${stats.ultraWideFailPx} px en échec / grand-angle ${stats.wideOkPx} px en réussite). C\'est pourquoi le scanner propose un choix d\'objectif.`,
     statusNote3: 'Dans la <strong>variante QR central</strong>, un bloc QR remplace le repère central. Ses motifs de repérage fournissent le point d\'entrée en position et en orientation qui sert à décoder le corps TL environnant. Le générateur utilise désormais ce chemin validé par défaut pour les types O et A. Par défaut, le QR reste un secours qui porte un lien de lecture ; la charge utile, elle, reste dans le corps TL.',
-    statusFoot: `Mesuré le ${stats.measuredOn} · échantillon de ${stats.sampleCount} photos prises avec trois capteurs de téléphone (ultra grand-angle, grand-angle, téléobjectif) · petit côté ${stats.shortSidePx} px. L\'échantillon est petit — lisez ceci comme un <em>état actuel</em>, pas comme un taux de réussite.`,
+    statusFoot: `Mesuré le ${stats.measuredOn} · échantillon de <strong>${stats.sampleCount} photos</strong> (chacune essayée en ${stats.triedShortSides} px de petit côté). ⚠ L’essentiel de l’échantillon est <strong>photographié sur un écran</strong> : ce ne sont pas des chiffres d’impression ni de mise en situation. Et ${stats.probeExcluded} des ${stats.corpusTotal} images du corpus sont des prises limites conservées justement parce qu’elles ne se décodent pas encore — elles sont exclues ici. Seule la ligne QR central provient de la campagne du ${stats.centerQr.measuredOn}.`,
 
     specTitle: 'Spécification et implémentation',
     spec1: 'La spécification du format et l\'implémentation de référence sont publiées sous <strong>licence Apache 2.0</strong>. JavaScript vanilla, aucune chaîne de build, zéro dépendance à l\'exécution — cela tourne dans un seul fichier HTML.',
@@ -439,13 +452,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — cubo singolo',
     rowOName: '<strong>Type O</strong> — campo esagonale',
     rowAName: '<strong>Type A</strong> — silhouette triangolare',
-    rowCenterQr: '<strong>Variante con QR centrale</strong> (tutti e tre i tipi)',
+    rowKName: '<strong>Type K</strong> — esagramma',
+    rowCenterQr: `<strong>Variante QR centrale</strong> (tutti e quattro i tipi) · ${stats.centerQr.measuredOn}`,
     badgePending: 'altre misure in corso',
     statusNote1: '<strong>Il tempo di una decodifica su foto statica non predice la sensazione della scansione dal vivo.</strong> Nelle prime misure su dispositivo reale, un fotogramma veloce poteva comunque portare a un primo aggancio lento quando servivano molti fotogrammi prima di uno riuscito, e la classifica dei tipi risultava diversa da questa tabella su foto statica. Quei rilievi riguardano un solo dispositivo e un campione piccolo, quindi non assegniamo ancora un giudizio d\'uso dal vivo.',
-    statusNote0: '<strong>Sul criterio di una decodifica di una foto statica</strong>, il Type Y è il più breve e O e A richiedono più tempo. La riprogettazione dei pattern di ricerca e i nuovi tentativi di formato hanno allargato l\'insieme di foto reali che si decodificano, al costo di più lavoro su alcuni percorsi; Y prova prima un percorso economico e fa una scansione completa solo dopo un fallimento. Questi numeri non vanno letti come tempo del primo aggancio dal vivo.',
+    statusNote0: `<strong>Una decodifica di una singola foto ferma.</strong> Il Type O è ora il più rapido; A, K e Y stanno vicini subito dietro. ⚠ Una versione precedente di questa pagina indicava il Type Y come il più rapido: era un campione di 9 foto e, su un campione più ampio, l’<strong>ordine si è ribaltato</strong>. Non leggeteli come tempi di primo aggancio dal vivo.`,
     statusNote2: `Contano molto anche le condizioni di ripresa. Alla misura, <strong>${stats.cellFloorPx} pixel per cella</strong> era il limite inferiore di decodifica e, a parità di distanza, un <strong>obiettivo ultragrandangolare</strong> inquadra il codice più piccolo e scende sotto quella soglia (ultragrandangolare ${stats.ultraWideFailPx} px fallito / grandangolare ${stats.wideOkPx} px riuscito). Per questo lo scanner offre la scelta dell\'obiettivo.`,
     statusNote3: 'Nella <strong>variante con QR centrale</strong> un blocco QR sostituisce il pattern di ricerca centrale. I suoi pattern forniscono il punto d\'ingresso di posizione e orientamento con cui si decodifica il corpo TL circostante. Il generatore usa ora questo percorso verificato come impostazione predefinita per i tipi O e A. Per impostazione predefinita il QR resta una riserva che porta un link al lettore; il payload vero rimane nel corpo TL.',
-    statusFoot: `Misurato il ${stats.measuredOn} · campione di ${stats.sampleCount} foto scattate con tre sensori di telefono (ultragrandangolare, grandangolare, teleobiettivo) · lato corto ${stats.shortSidePx} px. Il campione è piccolo: da leggere come <em>stato attuale</em>, non come tasso di successo.`,
+    statusFoot: `Misurato il ${stats.measuredOn} · campione di <strong>${stats.sampleCount} foto</strong> (ognuna provata a ${stats.triedShortSides} px di lato corto). ⚠ Gran parte del campione è <strong>fotografata da uno schermo</strong>: non sono numeri di stampa né di posa reale. Inoltre ${stats.probeExcluded} dei ${stats.corpusTotal} fotogrammi del corpus sono scatti al limite tenuti proprio perché non si decodificano ancora — qui sono esclusi. Solo la riga QR centrale viene dal ciclo precedente del ${stats.centerQr.measuredOn}.`,
 
     specTitle: 'Specifica e implementazione',
     spec1: 'La specifica del formato e l\'implementazione di riferimento sono pubblicate con <strong>licenza Apache 2.0</strong>. JavaScript puro, nessuna toolchain di build, zero dipendenze a runtime — funziona come un singolo file HTML.',
@@ -513,13 +527,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — einzelner Würfel',
     rowOName: '<strong>Type O</strong> — Sechseckfeld',
     rowAName: '<strong>Type A</strong> — dreieckige Silhouette',
-    rowCenterQr: '<strong>Variante mit zentralem QR</strong> (alle drei Typen)',
+    rowKName: '<strong>Type K</strong> — Hexagramm',
+    rowCenterQr: `<strong>Zentrale-QR-Variante</strong> (alle vier Typen) · ${stats.centerQr.measuredOn}`,
     badgePending: 'weitere Messungen nötig',
     statusNote1: '<strong>Die Zeit einer Dekodierung auf einem Standfoto sagt nichts darüber, wie sich Live-Scannen anfühlt.</strong> In der ersten Messreihe auf einem echten Gerät konnte ein schnelles Einzelbild trotzdem zu einem späten ersten Treffer führen, wenn viele Bilder nötig waren, und die Reihenfolge der Typen wich von dieser Standfoto-Tabelle ab. Diese Reihe umfasst ein Gerät und eine kleine Stichprobe — deshalb vergeben wir noch keine Live-Bewertung.',
-    statusNote0: '<strong>Für eine Dekodierung eines Standfotos</strong> ist Type Y am kürzesten, O und A brauchen länger. Der Umbau der Suchmuster und die Format-Wiederholversuche haben die Menge lesbarer echter Fotos vergrößert, um den Preis von mehr Arbeit auf einzelnen Pfaden; Y versucht jetzt zuerst einen billigen Pfad und durchsucht erst nach einem Fehlschlag einmal vollständig. Diese Werte dürfen nicht als Live-Zeit bis zum ersten Treffer gelesen werden.',
+    statusNote0: `<strong>Eine Dekodierung eines Standbilds.</strong> Type O ist jetzt am schnellsten; A, K und Y liegen dicht dahinter. ⚠ Eine frühere Fassung dieser Seite nannte Type Y als schnellsten — das war eine Stichprobe von 9 Fotos, und bei größerer Stichprobe hat sich die <strong>Reihenfolge umgedreht</strong>. Lesen Sie das nicht als Live-Zeit bis zum ersten Treffer.`,
     statusNote2: `Auch die Aufnahmebedingungen wirken stark. Gemessen war <strong>${stats.cellFloorPx} Pixel je Zelle</strong> die Untergrenze der Dekodierung, und bei gleichem Abstand fasst ein <strong>Ultraweitwinkel</strong> den Code kleiner und fällt unter diese Linie (Ultraweitwinkel ${stats.ultraWideFailPx} px gescheitert / Weitwinkel ${stats.wideOkPx} px erfolgreich). Deshalb bietet der Scanner eine Objektivwahl an.`,
     statusNote3: 'In der <strong>Variante mit zentralem QR</strong> ersetzt ein QR-Block das zentrale Suchmuster. Dessen Suchmuster liefern den Einstieg für Position und Ausrichtung, mit dem der umgebende TL-Körper dekodiert wird. Der Generator nutzt diesen geprüften Weg jetzt standardmäßig für die Typen O und A. Standardmäßig bleibt der QR ein Ersatz mit einem Leser-Link; die Nutzdaten selbst bleiben im TL-Körper.',
-    statusFoot: `Gemessen am ${stats.measuredOn} · Stichprobe von ${stats.sampleCount} Fotos aus drei Telefonsensoren (Ultraweitwinkel, Weitwinkel, Tele) · kurze Seite ${stats.shortSidePx} px. Die Stichprobe ist klein — lesen Sie das als <em>aktuellen Stand</em>, nicht als Erfolgsquote.`,
+    statusFoot: `Gemessen am ${stats.measuredOn} · Stichprobe von <strong>${stats.sampleCount} Fotos</strong> (jedes bei ${stats.triedShortSides} px kurzer Seite versucht). ⚠ Der Großteil der Stichprobe ist <strong>vom Monitor abfotografiert</strong> — das sind keine Druck- oder Vor-Ort-Werte. Und ${stats.probeExcluded} der ${stats.corpusTotal} Korpusbilder sind Grenz- und Versuchsaufnahmen, die gerade deshalb aufbewahrt werden, weil sie noch nicht dekodieren — sie sind hier ausgeschlossen. Nur die Zentral-QR-Zeile stammt aus der älteren Runde vom ${stats.centerQr.measuredOn}.`,
 
     specTitle: 'Spezifikation und Implementierung',
     spec1: 'Formatspezifikation und Referenzimplementierung sind unter der <strong>Apache License 2.0</strong> veröffentlicht. Reines JavaScript, keine Build-Toolchain, null Laufzeitabhängigkeiten — es läuft als einzelne HTML-Datei.',
@@ -587,13 +602,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — cubo único',
     rowOName: '<strong>Type O</strong> — campo hexagonal',
     rowAName: '<strong>Type A</strong> — silueta triangular',
-    rowCenterQr: '<strong>Variante de QR central</strong> (los tres tipos)',
+    rowKName: '<strong>Type K</strong> — hexagrama',
+    rowCenterQr: `<strong>Variante QR central</strong> (los cuatro tipos) · ${stats.centerQr.measuredOn}`,
     badgePending: 'faltan más medidas',
     statusNote1: '<strong>El tiempo de una decodificación en foto fija no predice cómo se siente el escaneo en directo.</strong> En las primeras medidas sobre un dispositivo real, un fotograma rápido podía dar aun así un primer enganche lento cuando hacían falta muchos fotogramas antes de uno acertado, y el orden de los tipos difería de esta tabla de foto fija. Esa traza cubre un solo dispositivo y una muestra pequeña, así que todavía no asignamos una nota de uso en directo.',
-    statusNote0: '<strong>Con el criterio de una decodificación de una foto fija</strong>, el Type Y es el más corto y O y A tardan más. El rediseño de los patrones localizadores y los reintentos de formato ampliaron el conjunto de fotos reales que se decodifican, a costa de más trabajo en algunos caminos; Y prueba primero un camino barato y solo hace un barrido completo tras un fallo. Estas cifras no deben leerse como tiempo hasta el primer enganche en directo.',
+    statusNote0: `<strong>Una decodificación de una sola foto fija.</strong> Ahora el Type O es el más rápido; A, K e Y quedan cerca detrás. ⚠ Una versión anterior de esta página decía que el Type Y era el más rápido: era una muestra de 9 fotos y, con una muestra más amplia, el <strong>orden se invirtió</strong>. No lea esto como tiempo de primer enganche en vivo.`,
     statusNote2: `Las condiciones de captura también pesan. En la medición, <strong>${stats.cellFloorPx} píxeles por celda</strong> fue el suelo de decodificación y, a la misma distancia, un <strong>objetivo ultra gran angular</strong> encuadra el código más pequeño y baja de esa línea (ultra gran angular ${stats.ultraWideFailPx} px falló / gran angular ${stats.wideOkPx} px acertó). Por eso el escáner ofrece un selector de objetivo.`,
     statusNote3: 'En la <strong>variante de QR central</strong>, un bloque QR sustituye al patrón localizador central. Sus patrones aportan el punto de entrada de posición y orientación con el que se decodifica el cuerpo TL de alrededor. El generador usa ya esta vía validada de forma predeterminada para los tipos O y A. Por defecto el QR sigue siendo un respaldo con un enlace al lector; la carga útil se queda en el cuerpo TL.',
-    statusFoot: `Medido el ${stats.measuredOn} · muestra de ${stats.sampleCount} fotos con tres sensores de teléfono (ultra gran angular, gran angular, teleobjetivo) · lado corto ${stats.shortSidePx} px. La muestra es pequeña: léalo como un <em>estado actual</em>, no como una tasa de acierto.`,
+    statusFoot: `Medido el ${stats.measuredOn} · muestra de <strong>${stats.sampleCount} fotos</strong> (cada una probada a ${stats.triedShortSides} px de lado corto). ⚠ La mayor parte de la muestra está <strong>fotografiada de una pantalla</strong>: no son cifras de impresión ni de colocación real. Además, ${stats.probeExcluded} de los ${stats.corpusTotal} fotogramas del corpus son tomas límite guardadas precisamente porque todavía no decodifican — aquí quedan excluidas. Solo la fila de QR central viene de la ronda anterior del ${stats.centerQr.measuredOn}.`,
 
     specTitle: 'Especificación e implementación',
     spec1: 'La especificación del formato y la implementación de referencia se publican bajo la <strong>Licencia Apache 2.0</strong>. JavaScript puro, sin cadena de compilación, cero dependencias en ejecución — funciona como un único archivo HTML.',
@@ -661,13 +677,14 @@ export const strings = {
     rowYName: '<strong>Type Y</strong> — cubo único',
     rowOName: '<strong>Type O</strong> — campo hexagonal',
     rowAName: '<strong>Type A</strong> — silhueta triangular',
-    rowCenterQr: '<strong>Variante de QR central</strong> (os três tipos)',
+    rowKName: '<strong>Type K</strong> — hexagrama',
+    rowCenterQr: `<strong>Variante QR central</strong> (os quatro tipos) · ${stats.centerQr.measuredOn}`,
     badgePending: 'faltam mais medições',
     statusNote1: '<strong>O tempo de uma descodificação em foto fixa não prevê a sensação da leitura ao vivo.</strong> Nas primeiras medições em dispositivo real, um fotograma rápido podia ainda assim dar uma primeira fixação lenta quando eram precisos muitos fotogramas antes de um bem-sucedido, e a ordem dos tipos diferia desta tabela de foto fixa. Esse registo abrange um só dispositivo e uma amostra pequena, pelo que ainda não atribuímos uma classificação de uso ao vivo.',
-    statusNote0: '<strong>No critério de uma descodificação de uma foto fixa</strong>, o Type Y é o mais curto e O e A demoram mais. A reformulação dos padrões localizadores e as novas tentativas de formato alargaram o conjunto de fotos reais que se descodificam, à custa de mais trabalho em alguns caminhos; o Y tenta primeiro um caminho barato e só faz uma varredura completa depois de falhar. Estes números não devem ser lidos como tempo até à primeira fixação ao vivo.',
+    statusNote0: `<strong>Uma descodificação de uma única foto fixa.</strong> O Type O é agora o mais rápido; A, K e Y ficam próximos atrás. ⚠ Uma versão anterior desta página dizia que o Type Y era o mais rápido: era uma amostra de 9 fotos e, com uma amostra mais ampla, a <strong>ordem inverteu-se</strong>. Não leia isto como tempo de primeiro engate em direto.`,
     statusNote2: `As condições de captura também pesam. Na medição, <strong>${stats.cellFloorPx} píxeis por célula</strong> foi o limite inferior de descodificação e, à mesma distância, uma <strong>objetiva ultra grande-angular</strong> enquadra o código mais pequeno e desce abaixo dessa linha (ultra grande-angular ${stats.ultraWideFailPx} px falhou / grande-angular ${stats.wideOkPx} px conseguiu). É por isso que o scanner oferece a escolha da objetiva.`,
     statusNote3: 'Na <strong>variante de QR central</strong>, um bloco QR substitui o padrão localizador central. Os seus padrões dão o ponto de entrada de posição e orientação com que se descodifica o corpo TL em redor. O gerador usa agora este caminho validado por predefinição nos tipos O e A. Por predefinição, o QR continua a ser uma reserva com uma ligação para o leitor; a carga útil fica no corpo TL.',
-    statusFoot: `Medido a ${stats.measuredOn} · amostra de ${stats.sampleCount} fotos com três sensores de telemóvel (ultra grande-angular, grande-angular, teleobjetiva) · lado curto ${stats.shortSidePx} px. A amostra é pequena — leia isto como um <em>estado atual</em>, não como uma taxa de êxito.`,
+    statusFoot: `Medido a ${stats.measuredOn} · amostra de <strong>${stats.sampleCount} fotos</strong> (cada uma tentada a ${stats.triedShortSides} px de lado curto). ⚠ A maior parte da amostra está <strong>fotografada a partir de um ecrã</strong>: não são números de impressão nem de colocação real. Além disso, ${stats.probeExcluded} dos ${stats.corpusTotal} fotogramas do corpus são capturas-limite guardadas precisamente por ainda não descodificarem — ficam aqui excluídas. Só a linha do QR central vem da ronda anterior de ${stats.centerQr.measuredOn}.`,
 
     specTitle: 'Especificação e implementação',
     spec1: 'A especificação do formato e a implementação de referência estão publicadas sob a <strong>Licença Apache 2.0</strong>. JavaScript simples, sem cadeia de compilação, zero dependências em execução — funciona como um único ficheiro HTML.',

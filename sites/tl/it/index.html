@@ -204,18 +204,19 @@
         <tbody>
           <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
                텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
-          <tr><td><strong>Type Y</strong> — cubo singolo</td><td><span class="badge ok">3 / 3</span></td><td>≈ 0.1 s</td><td><span class="badge warn">altre misure in corso</span></td></tr>
-          <tr><td><strong>Type O</strong> — campo esagonale</td><td><span class="badge ok">3 / 3</span></td><td>≈ 1.8 s</td><td><span class="badge warn">altre misure in corso</span></td></tr>
-          <tr><td><strong>Type A</strong> — silhouette triangolare</td><td><span class="badge ok">3 / 3</span></td><td>≈ 0.86 s</td><td><span class="badge warn">altre misure in corso</span></td></tr>
-          <tr><td><strong>Variante con QR centrale</strong> (tutti e tre i tipi)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">altre misure in corso</span></td></tr>
+          <tr><td><strong>Type Y</strong> — cubo singolo</td><td><span class="badge ok">9 / 16</span></td><td>≈ 3.4 s</td><td><span class="badge warn">altre misure in corso</span></td></tr>
+          <tr><td><strong>Type O</strong> — campo esagonale</td><td><span class="badge ok">29 / 48</span></td><td>≈ 2.0 s</td><td><span class="badge warn">altre misure in corso</span></td></tr>
+          <tr><td><strong>Type A</strong> — silhouette triangolare</td><td><span class="badge ok">18 / 19</span></td><td>≈ 3.2 s</td><td><span class="badge warn">altre misure in corso</span></td></tr>
+          <tr><td><strong>Type K</strong> — esagramma</td><td><span class="badge ok">18 / 27</span></td><td>≈ 3.4 s</td><td><span class="badge warn">altre misure in corso</span></td></tr>
+          <tr><td><strong>Variante QR centrale</strong> (tutti e quattro i tipi) · 2026-08-13</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">altre misure in corso</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px"><strong>Sul criterio di una decodifica di una foto statica</strong>, il Type Y è il più breve e O e A richiedono più tempo. La riprogettazione dei pattern di ricerca e i nuovi tentativi di formato hanno allargato l'insieme di foto reali che si decodificano, al costo di più lavoro su alcuni percorsi; Y prova prima un percorso economico e fa una scansione completa solo dopo un fallimento. Questi numeri non vanno letti come tempo del primo aggancio dal vivo.</p>
+    <p class="dim" style="margin-top:16px"><strong>Una decodifica di una singola foto ferma.</strong> Il Type O è ora il più rapido; A, K e Y stanno vicini subito dietro. ⚠ Una versione precedente di questa pagina indicava il Type Y come il più rapido: era un campione di 9 foto e, su un campione più ampio, l’<strong>ordine si è ribaltato</strong>. Non leggeteli come tempi di primo aggancio dal vivo.</p>
     <p class="dim"><strong>Il tempo di una decodifica su foto statica non predice la sensazione della scansione dal vivo.</strong> Nelle prime misure su dispositivo reale, un fotogramma veloce poteva comunque portare a un primo aggancio lento quando servivano molti fotogrammi prima di uno riuscito, e la classifica dei tipi risultava diversa da questa tabella su foto statica. Quei rilievi riguardano un solo dispositivo e un campione piccolo, quindi non assegniamo ancora un giudizio d'uso dal vivo.</p>
     <p class="dim">Contano molto anche le condizioni di ripresa. Alla misura, <strong>9 pixel per cella</strong> era il limite inferiore di decodifica e, a parità di distanza, un <strong>obiettivo ultragrandangolare</strong> inquadra il codice più piccolo e scende sotto quella soglia (ultragrandangolare 7.6 px fallito / grandangolare 9.1 px riuscito). Per questo lo scanner offre la scelta dell'obiettivo.</p>
     <p class="dim">Nella <strong>variante con QR centrale</strong> un blocco QR sostituisce il pattern di ricerca centrale. I suoi pattern forniscono il punto d'ingresso di posizione e orientamento con cui si decodifica il corpo TL circostante. Il generatore usa ora questo percorso verificato come impostazione predefinita per i tipi O e A. Per impostazione predefinita il QR resta una riserva che porta un link al lettore; il payload vero rimane nel corpo TL.</p>
-    <p class="dim" style="margin-top:16px"><small>Misurato il 2026-08-13 · campione di 9 foto scattate con tre sensori di telefono (ultragrandangolare, grandangolare, teleobiettivo) · lato corto 1440 px. Il campione è piccolo: da leggere come <em>stato attuale</em>, non come tasso di successo.</small></p>
+    <p class="dim" style="margin-top:16px"><small>Misurato il 2026-08-26 · campione di <strong>110 foto</strong> (ognuna provata a 960 · 1440 px di lato corto). ⚠ Gran parte del campione è <strong>fotografata da uno schermo</strong>: non sono numeri di stampa né di posa reale. Inoltre 123 dei 233 fotogrammi del corpus sono scatti al limite tenuti proprio perché non si decodificano ancora — qui sono esclusi. Solo la riga QR centrale viene dal ciclo precedente del 2026-08-13.</small></p>
   </section>
 
   <section id="spec">

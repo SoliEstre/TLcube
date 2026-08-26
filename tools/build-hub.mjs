@@ -158,6 +158,18 @@ function render(lang) {
   /* 복호 시간 표기는 언어별 맵에서 찾는다. 예전엔 ko/en/else 삼항이라 언어를 늘리면
      새 언어가 조용히 일본어 표기를 물려받았다 — 맵이면 빠진 언어가 en 으로 떨어진다. */
   const msOf = (type) => s.types[type].ms[lang.code] || s.types[type].ms.en;
+  /*
+   * 성능표의 타입 행은 **`stats.types` 에서 유도한다.** 종전엔 Y·O·A 세 줄을 손으로
+   * 들고 있었고, Type K 를 더할 때 이 자리가 통째로 빠졌다 — 손 목록은 반드시 어긋난다.
+   * 라벨은 `row<타입>Name` 규약으로 찾고 **없으면 던진다**: 조용히 `undefined` 가 표에
+   * 찍히는 것보다 빌드가 죽는 편이 낫다 (8언어 중 한 언어만 빠지는 게 이 파일의 상습 사고).
+   */
+  const typeRows = () => Object.keys(s.types).map((k) => {
+    const label = t[`row${k}Name`];
+    if (!label) throw new Error(`허브 성능표: row${k}Name 문자열이 없다 (타입 ${k}, ${lang.code})`);
+    return `<tr><td>${label}</td><td>${badge('ok', s.types[k].decoded)}</td>`
+      + `<td>${msOf(k)}</td><td>${badge('warn', t.badgePending)}</td></tr>`;
+  }).join('\n          ');
 
   return `<!doctype html>
 <html lang="${lang.htmlLang}" prefix="og: https://ogp.me/ns#">
@@ -293,9 +305,7 @@ ${jsonLd(lang, t)}
         <tbody>
           <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
                텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
-          <tr><td>${t.rowYName}</td><td>${badge('ok', s.types.Y.decoded)}</td><td>${msOf('Y')}</td><td>${badge('warn', t.badgePending)}</td></tr>
-          <tr><td>${t.rowOName}</td><td>${badge('ok', s.types.O.decoded)}</td><td>${msOf('O')}</td><td>${badge('warn', t.badgePending)}</td></tr>
-          <tr><td>${t.rowAName}</td><td>${badge('ok', s.types.A.decoded)}</td><td>${msOf('A')}</td><td>${badge('warn', t.badgePending)}</td></tr>
+          ${typeRows()}
           <tr><td>${t.rowCenterQr}</td><td>${badge('ok', s.centerQr.decoded)}</td><td>—</td><td>${badge('warn', t.badgePending)}</td></tr>
         </tbody>
       </table>

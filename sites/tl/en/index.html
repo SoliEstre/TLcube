@@ -204,18 +204,19 @@
         <tbody>
           <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
                텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
-          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">3 / 3</span></td><td>~0.1 s</td><td><span class="badge warn">more data needed</span></td></tr>
-          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">3 / 3</span></td><td>~1.8 s</td><td><span class="badge warn">more data needed</span></td></tr>
-          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge ok">3 / 3</span></td><td>~0.86 s</td><td><span class="badge warn">more data needed</span></td></tr>
-          <tr><td><strong>Centre-QR variant</strong> (all three types)</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">9 / 16</span></td><td>~3.4 s</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">29 / 48</span></td><td>~2.0 s</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge ok">18 / 19</span></td><td>~3.2 s</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Type K</strong> — hexagram</td><td><span class="badge ok">18 / 27</span></td><td>~3.4 s</td><td><span class="badge warn">more data needed</span></td></tr>
+          <tr><td><strong>Centre-QR variant</strong> (all four types) · 2026-08-13</td><td><span class="badge ok">8 / 9</span></td><td>—</td><td><span class="badge warn">more data needed</span></td></tr>
         </tbody>
       </table>
     </div>
-    <p class="dim" style="margin-top:16px"><strong>For one decode of one static photo</strong>, Type Y is shortest and O and A take longer. Finder and format retry work expanded the set of real photos that decode, at the cost of more work on some paths; Y now tries a cheap path first and performs one full sweep only after failure. These figures must not be read as live time to first lock.</p>
+    <p class="dim" style="margin-top:16px"><strong>One decode of one still photo.</strong> Type O is now the fastest; A, K and Y sit close together behind it. ⚠ An earlier version of this page said Type Y was the fastest — that was a 9-photo sample, and on a wider sample the <strong>order flipped</strong>. Do not read these as live first-lock times.</p>
     <p class="dim"><strong>One static-photo decode time does not predict how live scanning feels.</strong> In the first real-device lab trace, a fast frame could still lead to a slow first lock when many frames were needed before one succeeded, and the type ranking differed from this static-photo table. That trace covers one device and a small sample, so we do not assign live usability grades yet.</p>
     <p class="dim">Shooting conditions matter too. Measured, <strong>9 pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide 7.6 px failed / wide 9.1 px succeeded). That is why the scanner offers a lens picker.</p>
     <p class="dim">In the <strong>centre-QR variant</strong>, a QR block replaces the central finder. Its finder patterns provide the position and orientation entry point used to decode the surrounding TL body. The generator now uses this validated path by default for Types O and A. By default the QR remains a reader-link fallback; the payload stays in the TL body.</p>
-    <p class="dim" style="margin-top:16px"><small>Measured 2026-08-13 · sample of 9 photos across three phone sensors (ultra-wide, wide, telephoto) · short side 1440 px. The sample is small — read this as a <em>current state</em>, not a success rate.</small></p>
+    <p class="dim" style="margin-top:16px"><small>Measured 2026-08-26 · sample of <strong>110 photos</strong> (each tried at 960 · 1440 px short side). ⚠ Most of the sample is <strong>photographed off a monitor</strong>, so these are not print or in-situ numbers. And 123 of the 233 corpus frames are limit/experiment shots kept precisely because they do not decode yet — they are excluded here. Only the centre-QR row is from the older 2026-08-13 round.</small></p>
   </section>
 
   <section id="spec">

@@ -141,7 +141,11 @@ test('llms.txt 계열이 페이지와 같은 실측값을 쓴다', () => {
   for (const rel of LLMS_WITH_STATS) {
     const txt = readFileSync(ROOT + rel, 'utf8');
     assert.ok(txt.includes(stats.measuredOn), `${rel}: 측정일이 ${stats.measuredOn} 이 아니다`);
-    for (const type of ['Y', 'O', 'A']) {
+    // ⚠ 타입 목록을 손으로 들지 않는다 — `['Y','O','A']` 로 박아 뒀더니 Type K 를
+    //    더한 날 이 자가 **K 만 빼고** 초록이었다. `stats.types` 가 정본이다.
+    const types = Object.keys(stats.types);
+    assert.ok(types.length >= 4, `타입이 ${types.length}종뿐이다 — 자가 잠들었다`);
+    for (const type of types) {
       assert.ok(txt.includes(stats.types[type].decoded),
         `${rel}: Type ${type} 복호 수치 ${stats.types[type].decoded} 가 없다`);
     }
