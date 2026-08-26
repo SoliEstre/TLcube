@@ -149,6 +149,10 @@ export const PRIOR_MAX_REFINE_POSES = 24;
 /** 2단계에 씨앗으로 쓸 1단계 통과 포즈 수 상한. 씨앗당 6 후보 → 최대 24. */
 export const PRIOR_MAX_REFINE_SEEDS = 4;
 
+/** 실패 H 는 바로 다음 프레임 한 번만 쓴다. 오래 멈춘 탭·GC 뒤의 픽셀 포즈는 버린다. */
+export const FRAME_POSE_MAX_AGE_MS = 2000;
+export const FRAME_POSE_MAX_ATTEMPTS = 1;
+
 /** 정사각 분석 프레임 한 변에서 가이드 링 반지름(px). */
 export function guideRingRadii(frameSide) {
   const side = Number(frameSide);
@@ -370,6 +374,58 @@ export function poseFromHypothesis(hypothesis, options = {}) {
     H,
     canonicalSpace: HOMOGRAPHY_CANONICAL_SPACE,
     ...(frameWidth > 0 && frameHeight > 0 ? { frameWidth, frameHeight } : {}),
+  };
+}
+
+/**
+ * 디코더 실패 결과에서 라이브 이월 상태를 만든다.
+ * `carryEvidence.eligible` 은 포맷 CRC 통과 뒤 본문에서 실패한 경우에만 true 다.
+ */
+export function framePoseCarryFromResult(result, options = {}) {
+  if (!result || result.ok === true || result.carryMiss === true) return null;
+  if (!result.carryEvidence || result.carryEvidence.eligible !== true) return null;
+  const savedAtMs = Number(options.nowMs);
+  if (!Number.isFinite(savedAtMs)) return null;
+  const pose = poseFromHypothesis(result.carryHypothesis, {
+    id: 'frame-carry',
+    sourceWidth: options.sourceWidth,
+    sourceHeight: options.sourceHeight,
+    targetWidth: options.sourceWidth,
+    targetHeight: options.sourceHeight,
+  });
+  if (!pose) return null;
+  return {
+    pose,
+    savedAtMs,
+    remainingAttempts: FRAME_POSE_MAX_ATTEMPTS,
+    evidence: result.carryEvidence,
+  };
+}
+
+/**
+ * 이월 상태를 현재 프레임 크기로 옮겨 한 번 소비한다. 반환 뒤 상태는 항상 비므로
+ * 빗나간 포즈가 24개 후보로 매 프레임 부풀지 않는다.
+ */
+export function consumeFramePoseCarry(carry, options = {}) {
+  if (!carry || !carry.pose || carry.remainingAttempts !== FRAME_POSE_MAX_ATTEMPTS) {
+    return { pose: null, next: null, reason: 'empty' };
+  }
+  const atMs = Number(options.nowMs);
+  const ageMs = atMs - Number(carry.savedAtMs);
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRAME_POSE_MAX_AGE_MS) {
+    return { pose: null, next: null, reason: 'expired' };
+  }
+  const pose = poseFromHypothesis(carry.pose, {
+    id: 'frame-carry',
+    sourceWidth: carry.pose.frameWidth,
+    sourceHeight: carry.pose.frameHeight,
+    targetWidth: options.targetWidth,
+    targetHeight: options.targetHeight,
+  });
+  return {
+    pose,
+    next: null,
+    reason: pose ? 'ready' : 'invalid',
   };
 }
 

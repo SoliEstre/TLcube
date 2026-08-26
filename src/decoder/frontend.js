@@ -141,6 +141,18 @@ function compactHypothesis(candidate) {
 
 function failureDetail(stage, result, diagnostics) {
   const cause = result && result.detail;
+  const rawFailureHypothesis = cause && cause.failureHypothesis;
+  const compactFailureHypothesis = rawFailureHypothesis
+    ? compactHypothesis({ hypothesis: rawFailureHypothesis })
+    : undefined;
+  // 내부 Float64Array·검출기 객체를 cause 에 중복 노출하지 않는다. 공개 실패 경계에는
+  // 성공 H 와 같은 compact 숫자 배열 하나만 둔다.
+  let publicCause = cause;
+  if (cause && rawFailureHypothesis) {
+    const { failureHypothesis: omittedFailureHypothesis, ...rest } = cause;
+    void omittedFailureHypothesis;
+    publicCause = rest;
+  }
   const lifted = diagnostics
     || (result && result.diagnostics)
     || (cause && cause.diagnostics)
@@ -149,8 +161,13 @@ function failureDetail(stage, result, diagnostics) {
     stage,
     pipelineStage: cause && cause.stage ? cause.stage : stage,
     pipelineCode: cause && cause.pipelineCode,
-    cause,
+    cause: publicCause,
     diagnostics: lifted,
+    failureHypothesis: compactFailureHypothesis,
+    carryHypothesis: cause && cause.carryEvidence && cause.carryEvidence.eligible === true
+      ? compactFailureHypothesis
+      : undefined,
+    carryEvidence: cause && cause.carryEvidence,
     // 가이드-사전 경로는 «어느 포즈가 포맷까지 갔나» 를 2단계 지터의 씨앗으로 쓴다.
     // detail.cause 안에 묻어 두면 호출자가 내부 구조를 알아야 하므로 위로 올린다.
     prior: cause && cause.prior,

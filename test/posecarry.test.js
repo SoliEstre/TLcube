@@ -16,6 +16,8 @@ import { encodeY } from '../src/encodeY.js';
 import { buildScene } from '../src/scene.js';
 import { buildSceneY } from '../src/sceneY.js';
 import { rasterize } from '../src/raster.js';
+import { axialToPixel } from '../src/hexgrid.js';
+import { anchorCells, dataCellsInScanOrder } from '../src/layout.js';
 import {
   BULLSEYE_DARK,
   BULLSEYE_LIGHT,
@@ -25,6 +27,10 @@ import {
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { HOMOGRAPHY_CANONICAL_SPACE } from '../src/decoder/contracts.js';
 import {
+  consumeFramePoseCarry,
+  FRAME_POSE_MAX_AGE_MS,
+  FRAME_POSE_MAX_ATTEMPTS,
+  framePoseCarryFromResult,
   jitterPoses,
   poseFromHypothesis,
   PRIOR_COARSE_OFFSET_CELLS,
@@ -43,10 +49,16 @@ const FILL = Object.freeze({ ...PRESET.background, a: 255 });
 const TEXT = 'posecarry synthetic roundtrip';
 const SCANNER_JS = readFileSync(new URL('../sites/tlscan/scanner.js', import.meta.url), 'utf8');
 
-function render(text = TEXT, version = 2) {
+function render(text = TEXT, version = 2, options = {}) {
   const encoded = encode(text, { version, eccLevel: 'M' });
-  const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
-  return rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
+  const scene = buildScene(encoded, {
+    palette: PALETTE,
+    margin: options.margin === undefined ? 20 : options.margin,
+  });
+  return rasterize(scene, {
+    pixelsPerUnit: options.pixelsPerUnit === undefined ? 12 : options.pixelsPerUnit,
+    supersample: 1,
+  });
 }
 
 function renderFamily(family, text) {
@@ -99,6 +111,86 @@ function translateRaster(raster, dx, dy) {
   return { width: raster.width, height: raster.height, pixels };
 }
 
+function damageDataCells(raster, hypothesis, count) {
+  const pixels = new Uint8ClampedArray(raster.pixels);
+  const H = hypothesis.H;
+  const radius = Math.max(2, Math.floor(hypothesis.cellSizePx * 0.42));
+  const project = (point) => {
+    const denominator = H[6] * point.x + H[7] * point.y + H[8];
+    return {
+      x: (H[0] * point.x + H[1] * point.y + H[2]) / denominator,
+      y: (H[3] * point.x + H[4] * point.y + H[5]) / denominator,
+    };
+  };
+  for (const cell of dataCellsInScanOrder(hypothesis.k).slice(0, count)) {
+    const center = project(axialToPixel(cell.q, cell.r));
+    for (let y = Math.floor(center.y - radius); y <= Math.ceil(center.y + radius); y += 1) {
+      if (y < 0 || y >= raster.height) continue;
+      for (let x = Math.floor(center.x - radius); x <= Math.ceil(center.x + radius); x += 1) {
+        if (x < 0 || x >= raster.width) continue;
+        if (Math.hypot(x - center.x, y - center.y) > radius) continue;
+        const target = (y * raster.width + x) * 4;
+        pixels[target] = FILL.r;
+        pixels[target + 1] = FILL.g;
+        pixels[target + 2] = FILL.b;
+        pixels[target + 3] = 255;
+      }
+    }
+  }
+  return { width: raster.width, height: raster.height, pixels };
+}
+
+function hideDiscoveryGeometry(raster, hypothesis) {
+  const pixels = new Uint8ClampedArray(raster.pixels);
+  const H = hypothesis.H;
+  const cellPx = hypothesis.cellSizePx;
+  const project = (point) => {
+    const denominator = H[6] * point.x + H[7] * point.y + H[8];
+    return {
+      x: (H[0] * point.x + H[1] * point.y + H[2]) / denominator,
+      y: (H[3] * point.x + H[4] * point.y + H[5]) / denominator,
+    };
+  };
+  const eraseDisc = (center, radius) => {
+    for (let y = Math.floor(center.y - radius); y <= Math.ceil(center.y + radius); y += 1) {
+      if (y < 0 || y >= raster.height) continue;
+      for (let x = Math.floor(center.x - radius); x <= Math.ceil(center.x + radius); x += 1) {
+        if (x < 0 || x >= raster.width) continue;
+        if (Math.hypot(x - center.x, y - center.y) > radius) continue;
+        const target = (y * raster.width + x) * 4;
+        pixels[target] = FILL.r;
+        pixels[target + 1] = FILL.g;
+        pixels[target + 2] = FILL.b;
+        pixels[target + 3] = 255;
+      }
+    }
+  };
+  // 중심 파인더와 세 앵커만 지운다. format/data 셀은 건드리지 않아 prior 경로는
+  // 같은 H 로 본문을 읽을 수 있고, 일반 탐색만 기하 원천을 잃는다.
+  eraseDisc(project({ x: 0, y: 0 }), cellPx * 1.6);
+  for (const cell of anchorCells(hypothesis.k)) {
+    eraseDisc(project(axialToPixel(cell.q, cell.r)), cellPx * 0.58);
+  }
+  return { width: raster.width, height: raster.height, pixels };
+}
+
+function median(values) {
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function timingSummary(values) {
+  assert.ok(values.length > 0, '비용 표본이 0개다');
+  return {
+    samples: values.length,
+    medianMs: Number(median(values).toFixed(3)),
+    maxMs: Number(Math.max(...values).toFixed(3)),
+  };
+}
+
 function scanSweep(values, makeRaster, poses) {
   const successes = [];
   for (const value of values) {
@@ -113,6 +205,8 @@ function scanSweep(values, makeRaster, poses) {
 }
 
 let fixture = null;
+let failureFixture = null;
+let liveFixture = null;
 
 test('왕복 핵심 — 성공 H 가 JSON 을 지나 같은 원문을 사전 경로로 복호하고 더 빠르다', {
   timeout: 60_000,
@@ -210,6 +304,196 @@ test('회전 라벨 없는 성공 H 도 세 패밀리에서 포즈 이월 후 �
     matched: results.filter((entry) => entry.roundtrip).length,
     results,
   }));
+});
+
+test('실패 진단 — 형태가 남고 본문이 가려진 프레임은 이월할 H 를 값으로 싣는다', {
+  timeout: 60_000,
+}, () => {
+  assert.ok(fixture && fixture.raster, '왕복 양성 앵커가 먼저 만들어지지 않았다');
+  const damaged = damageDataCells(fixture.raster, fixture.normal.result.hypothesis, 90);
+  const measured = timedDecode(damaged);
+  const failed = measured.result;
+  const validation = failed.detail && failed.detail.diagnostics;
+  console.log('POSECARRY_FAILURE_SOURCE ' + JSON.stringify({
+    ok: failed.ok,
+    reason: failed.reason,
+    pipelineCode: failed.detail && failed.detail.pipelineCode,
+    hypothesisCount: validation && validation.hypothesisCount,
+    formatCandidateCount: validation && validation.formatCandidateCount,
+    formatFailures: validation && validation.formatFailures && validation.formatFailures.length,
+    bodyFailures: validation && validation.bodyFailures && validation.bodyFailures.length,
+    hasCarryHypothesis: Boolean(failed.detail && failed.detail.carryHypothesis),
+    carryQuality: failed.detail && failed.detail.carryEvidence
+      && failed.detail.carryEvidence.quality,
+  }));
+
+  assert.equal(failed.ok, false, '가린 프레임이 성공해 실패 후보 자가 공허하다');
+  assert.ok(validation && validation.hypothesisCount > 0,
+    '가린 프레임에 기하 가설이 0개라 실패 포즈 원천이 아니다');
+  assert.ok(failed.detail && failed.detail.carryHypothesis,
+    '일반 탐색 실패 결과에 이월 후보 H 가 실리지 않았다');
+  assert.ok(Array.isArray(failed.detail.carryHypothesis.H)
+    && failed.detail.carryHypothesis.H.length === 9
+    && failed.detail.carryHypothesis.H.every(Number.isFinite),
+  '실패 이월 H 가 유한한 JSON 숫자 배열이 아니다');
+  assert.equal(failed.detail.carryEvidence.eligible, true);
+  assert.equal(failed.detail.carryEvidence.quality, 'format-admitted-body-failed');
+  assert.equal(failed.detail.carryEvidence.formatCandidateCount, 1);
+  assert.equal(failed.detail.carryEvidence.bodyFailureCount, 1);
+  failureFixture = { raster: damaged, failed };
+});
+
+test('약한 실패 진단 — symbol-clipped H 는 보이되 라이브 이월에는 쓰지 않는다', {
+  timeout: 60_000,
+}, () => {
+  const tight = render(TEXT, 2, { margin: 4, pixelsPerUnit: 16 });
+  const clipped = decodeFrontend(distortImage(tight, { scale: 2, fill: FILL }));
+  assert.equal(clipped.ok, false, '2× 줌 잘림 자가 실패하지 않았다');
+  assert.equal(clipped.reason, 'frontend:symbol-clipped');
+  assert.ok(clipped.detail.geometryDiagnostics.geometryHypothesisCount > 0,
+    '기하 가설이 0개라 약한 후보 자가 공허하다');
+  assert.ok(clipped.detail.failureHypothesis,
+    'symbol-clipped 최선 기하가 진단에 실리지 않았다');
+  assert.equal(clipped.detail.carryHypothesis, undefined,
+    '포맷 미확정 잘림 H 가 라이브 이월 대상으로 승격됐다');
+  assert.equal(clipped.detail.carryEvidence.eligible, false);
+  assert.equal(clipped.detail.carryEvidence.quality, 'format-clipped');
+  console.log('POSECARRY_WEAK_CLIPPED ' + JSON.stringify({
+    reason: clipped.reason,
+    geometryHypothesisCount: clipped.detail.geometryDiagnostics.geometryHypothesisCount,
+    formatFailureSummary: clipped.detail.formatFailureSummary,
+    hasFailureHypothesis: Boolean(clipped.detail.failureHypothesis),
+    eligible: clipped.detail.carryEvidence.eligible,
+    quality: clipped.detail.carryEvidence.quality,
+  }));
+});
+
+test('연속 프레임 — 본문 실패 H 이월은 2프레임, 없으면 3프레임 만에 성공한다', {
+  timeout: 60_000,
+}, () => {
+  assert.ok(failureFixture && failureFixture.failed, '강한 실패 후보가 먼저 만들어지지 않았다');
+  assert.equal(FRAME_POSE_MAX_ATTEMPTS, 1);
+  assert.equal(FRAME_POSE_MAX_AGE_MS, 2000);
+  const shellFailure = {
+    ok: false,
+    carryHypothesis: failureFixture.failed.detail.carryHypothesis,
+    carryEvidence: failureFixture.failed.detail.carryEvidence,
+  };
+  const state = framePoseCarryFromResult(shellFailure, {
+    nowMs: 1000,
+    sourceWidth: failureFixture.raster.width,
+    sourceHeight: failureFixture.raster.height,
+  });
+  assert.ok(state && state.pose, 'eligible 실패가 이월 상태를 만들지 않았다');
+  assert.equal(state.remainingAttempts, 1);
+
+  const expired = consumeFramePoseCarry(state, {
+    nowMs: 1000 + FRAME_POSE_MAX_AGE_MS + 1,
+    targetWidth: fixture.raster.width,
+    targetHeight: fixture.raster.height,
+  });
+  assert.equal(expired.pose, null);
+  assert.equal(expired.reason, 'expired');
+
+  const consumed = consumeFramePoseCarry(state, {
+    nowMs: 1100,
+    targetWidth: fixture.raster.width,
+    targetHeight: fixture.raster.height,
+  });
+  assert.ok(consumed.pose, '다음 프레임에서 이월 포즈를 꺼내지 못했다');
+  assert.equal(consumed.next, null, '1회 소비 뒤 포즈가 남았다');
+  assert.equal(consumeFramePoseCarry(consumed.next, {
+    nowMs: 1200,
+    targetWidth: fixture.raster.width,
+    targetHeight: fixture.raster.height,
+  }).pose, null, '같은 실패 H 가 두 프레임째 살아 있다');
+
+  const hidden = hideDiscoveryGeometry(fixture.raster, fixture.normal.result.hypothesis);
+  const withoutCarry = timedDecode(hidden);
+  assert.equal(withoutCarry.result.ok, false,
+    '파인더·앵커 은닉 프레임도 전수 탐색이 성공해 프레임 비교가 공허하다');
+  assert.ok(withoutCarry.result.detail.failureHypothesis,
+    'no-format-candidate 최선 기하가 진단에 실리지 않았다');
+  assert.equal(withoutCarry.result.detail.carryHypothesis, undefined,
+    '포맷 CRC 실패 H 가 라이브 이월 대상으로 승격됐다');
+  assert.equal(withoutCarry.result.detail.carryEvidence.eligible, false);
+  assert.equal(withoutCarry.result.detail.carryEvidence.quality, 'format-rejected');
+  const poses = carryCandidates(consumed.pose, Math.min(hidden.width, hidden.height));
+  const withCarry = timedDecode(hidden, { priorPoses: poses });
+  assert.equal(withCarry.result.ok, true, JSON.stringify(withCarry.result));
+  assert.equal(withCarry.result.text, TEXT);
+  assert.equal(withCarry.result.diagnostics.bootstrap.geometry.source, 'guide-prior');
+
+  // frame 1 = 본문 실패. frame 2 에서 이월은 성공한다. 이월이 없으면 같은 frame 2 가
+  // no-anchors 로 실패하고, 양성 앵커인 clean frame 3 에서야 성공한다.
+  const withCarryFrames = 2;
+  const withoutCarryFrames = 3;
+  assert.equal(fixture.normal.result.ok, true, 'frame 3 clean 양성 앵커가 사라졌다');
+  assert.ok(withCarryFrames < withoutCarryFrames);
+  liveFixture = { hidden, withCarry, withoutCarry, shellFailure };
+  console.log('POSECARRY_SEQUENCE ' + JSON.stringify({
+    samples: 1,
+    withCarryFrames,
+    withoutCarryFrames,
+    savedFrames: withoutCarryFrames - withCarryFrames,
+    frame2WithoutCarryReason: withoutCarry.result.reason,
+    frame2WithoutCarryQuality: withoutCarry.result.detail.carryEvidence.quality,
+    frame2WithoutCarryHypotheses: withoutCarry.result.detail.diagnostics.hypothesisCount,
+    frame2WithoutCarryFormatCandidates:
+      withoutCarry.result.detail.diagnostics.formatCandidateCount,
+    frame2CarryMs: Number(withCarry.ms.toFixed(3)),
+    frame2LegacyMs: Number(withoutCarry.ms.toFixed(3)),
+  }));
+});
+
+test('비용 — 이월 실패는 한 프레임만 쓰고 다음 전수 폴백까지 종전 두 프레임보다 싸다', {
+  timeout: 60_000,
+}, () => {
+  assert.ok(failureFixture && liveFixture, '비용 양성·실패 앵커가 먼저 만들어지지 않았다');
+  const state = framePoseCarryFromResult(liveFixture.shellFailure, {
+    nowMs: 2000,
+    sourceWidth: failureFixture.raster.width,
+    sourceHeight: failureFixture.raster.height,
+  });
+  const consumed = consumeFramePoseCarry(state, {
+    nowMs: 2100,
+    targetWidth: failureFixture.raster.width,
+    targetHeight: failureFixture.raster.height,
+  });
+  const poses = carryCandidates(
+    consumed.pose,
+    Math.min(failureFixture.raster.width, failureFixture.raster.height),
+  );
+  const missRaster = translateRaster(liveFixture.hidden, 30, 0);
+  const carryMiss = timedDecode(missRaster, { priorPoses: poses });
+  assert.equal(carryMiss.result.ok, false, '본문 훼손 프레임의 이월 실패 자가 성공했다');
+  const legacyFirst = timedDecode(missRaster);
+  assert.equal(legacyFirst.result.ok, false, '종전 첫 프레임 실패 자가 성공했다');
+  const fallback = timedDecode(missRaster);
+  assert.equal(fallback.result.ok, false, '다음 프레임 전수 폴백 실패 자가 성공했다');
+
+  const carryMissThenFallback = carryMiss.ms + fallback.ms;
+  const legacyTwoFrames = legacyFirst.ms + fallback.ms;
+  assert.ok(carryMissThenFallback <= legacyTwoFrames,
+    `이월 실패+다음 폴백 ${carryMissThenFallback.toFixed(3)}ms > 종전 두 프레임 ${legacyTwoFrames.toFixed(3)}ms`);
+
+  console.log('POSECARRY_COST ' + JSON.stringify({
+    carryHitFrame: timingSummary([liveFixture.withCarry.ms]),
+    carryMissFrame: timingSummary([carryMiss.ms]),
+    fallbackFrame: timingSummary([fallback.ms]),
+    carryMissThenFallback: timingSummary([carryMissThenFallback]),
+    legacyTwoFrames: timingSummary([legacyTwoFrames]),
+  }));
+
+  // 변이 증인 — miss 표식을 지우면 같은 실패 후보가 다시 살아날 수 있다.
+  assert.equal(framePoseCarryFromResult({
+    ...liveFixture.shellFailure,
+    carryMiss: true,
+  }, {
+    nowMs: 2200,
+    sourceWidth: failureFixture.raster.width,
+    sourceHeight: failureFixture.raster.height,
+  }), null, 'carryMiss 뒤 포즈가 다시 살아났다');
 });
 
 test('변이 증인 — H 를 제거한 변환 결과는 null 이고 사전 복호는 실패한다', () => {
@@ -345,7 +629,7 @@ test('유효 봉투 — 직전 포즈 24개 후보의 평행이동·배율·회�
   }));
 });
 
-test('스캐너 배선 — 직전 포즈 우선·종전 폴백·시도 경계 리셋·매 프레임 갱신', () => {
+test('스캐너 배선 — 실패 포즈 1회·다음 프레임 폴백·시도 경계 리셋', () => {
   const begin = SCANNER_JS.slice(
     SCANNER_JS.indexOf('function beginScanAttempt'),
     SCANNER_JS.indexOf('function activeVideoTrack'),
@@ -358,11 +642,13 @@ test('스캐너 배선 — 직전 포즈 우선·종전 폴백·시도 경계 �
     SCANNER_JS.indexOf('function renderSteadyMeter'),
   );
   const priorAt = carry.indexOf('decodeFrame(imageData, { priorPoses: poses, deferReport: true })');
-  const normalFallbackAt = carry.indexOf('decodeFrame(imageData, { deferReport: true })');
-  assert.ok(priorAt >= 0 && normalFallbackAt > priorAt,
-    '직전 포즈 시도가 종전 탐색 폴백보다 앞이 아니다');
+  const missAt = carry.indexOf('carryMiss: true');
+  assert.ok(priorAt >= 0 && missAt > priorAt,
+    '직전 포즈 실패가 소비 표식을 남기지 않는다');
+  assert.doesNotMatch(carry, /const fallback = await decodeFrame/,
+    '이월 실패 프레임에 전수 탐색을 덧붙여 비용을 키운다');
   assert.match(carry, /if \(useGuidePrior\) return attemptGuidePriorScan/,
-    '종전 가이드-사전 폴백이 사라졌다');
+    '예약된 가이드-사전 프레임보다 이월을 우선해 비용을 더한다');
 
   const loop = SCANNER_JS.slice(
     SCANNER_JS.indexOf('function startFrameLoop'),
@@ -371,7 +657,31 @@ test('스캐너 배선 — 직전 포즈 우선·종전 폴백·시도 경계 �
   assert.match(loop, /lastFramePose\s*\?\s*attemptCarriedPoseScan/,
     '프레임 루프가 직전 포즈를 우선하지 않는다');
   assert.match(loop, /rememberFramePose\(result, imageData\)/,
-    '성공·실패 결과에서 이번 프레임 포즈를 갱신하지 않는다');
+    '실패 결과에서 이번 프레임 포즈를 갱신하지 않는다');
   assert.match(loop, /\.catch\([\s\S]*?lastFramePose\s*=\s*null/,
     '예외 프레임이 이전 포즈를 남긴다');
+});
+
+test('라이브 생명주기 — 성공은 세션을 끝내므로 실패 프레임이 다음 포즈를 남긴다', () => {
+  const remember = SCANNER_JS.slice(
+    SCANNER_JS.indexOf('function rememberFramePose'),
+    SCANNER_JS.indexOf('async function attemptCarriedPoseScan'),
+  );
+  const handle = SCANNER_JS.slice(
+    SCANNER_JS.indexOf('function handleDecodeResult'),
+    SCANNER_JS.indexOf('function startFrameLoop'),
+  );
+  const loop = SCANNER_JS.slice(
+    SCANNER_JS.indexOf('function startFrameLoop'),
+    SCANNER_JS.indexOf('async function startCamera'),
+  );
+
+  assert.match(handle, /if \(!payload\)[\s\S]*?return;[\s\S]*?stopCamera\(\)/,
+    '성공 뒤 stopCamera 로 세션이 끝난다는 양성 앵커가 사라졌다');
+  assert.match(loop, /rememberFramePose\(result, imageData\)[\s\S]*?handleDecodeResult/,
+    '이번 프레임 상태 확정이 성공 종료 판정보다 먼저가 아니다');
+  assert.match(remember, /framePoseCarryFromResult/,
+    '실패 결과의 기하를 읽지 않는다 — 성공 때만 생긴 포즈에는 다음 프레임이 없다');
+  assert.doesNotMatch(remember, /lastFramePose\s*=\s*result && result\.ok === true/,
+    '성공 전용 이월 배선으로 되돌아갔다');
 });

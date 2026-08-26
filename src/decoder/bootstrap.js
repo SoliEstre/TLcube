@@ -3621,6 +3621,104 @@ export function selectGridHypothesis(candidates, options = {}) {
   });
 }
 
+/** 실패 진단에 실을 수 있는 유한 H 인가. 채택 게이트가 아니라 직렬화 전 안전 검사다. */
+function hasFiniteFailurePose(hypothesis) {
+  if (!hypothesis
+    || (hypothesis.family !== 'hex'
+      && hypothesis.family !== 'tri'
+      && hypothesis.family !== 'cube')
+    || hypothesis.canonicalSpace !== HOMOGRAPHY_CANONICAL_SPACE
+    || !hypothesis.H
+    || hypothesis.H.length !== 9) return false;
+  for (const value of hypothesis.H) {
+    if (!Number.isFinite(value)) return false;
+  }
+  return true;
+}
+
+/**
+ * 검증 실패 중 다음 프레임에 참고할 **최선의 기하 하나**를 고른다.
+ *
+ * 새 점수나 문턱은 만들지 않는다. 이미 지난 파이프라인 단계가 품질 순서다:
+ *   1. 포맷 CRC 통과 뒤 본문 실패 — 라이브 이월 가능.
+ *   2. 포맷 셀 잘림 — 기하는 있으나 포맷 미확정, 진단 전용.
+ *   3. 그 밖의 포맷 실패 — clean CRC 실패는 틀린 포즈 신호라 진단 전용.
+ * 같은 단계에서는 본문 소거·불가독 셀이 적은 가설, 그 뒤 기존 열거 순서를 쓴다.
+ */
+function failurePoseFromValidation(hypotheses, diagnostics) {
+  const bodyById = new Map();
+  for (const failure of diagnostics.bodyFailures) {
+    const list = bodyById.get(failure.hypothesisId) || [];
+    list.push(failure);
+    bodyById.set(failure.hypothesisId, list);
+  }
+  const formatById = new Map(
+    diagnostics.formatFailures.map((failure) => [failure.hypothesisId, failure]),
+  );
+  const ranked = [];
+  for (let index = 0; index < hypotheses.length; index += 1) {
+    const hypothesis = hypotheses[index];
+    if (!hasFiniteFailurePose(hypothesis)) continue;
+    const bodyFailures = bodyById.get(hypothesis.hypothesisId) || [];
+    const formatFailure = formatById.get(hypothesis.hypothesisId) || null;
+    let rank = 0;
+    let quality = null;
+    let eligible = false;
+    if (bodyFailures.length > 0) {
+      rank = 3;
+      quality = 'format-admitted-body-failed';
+      eligible = true;
+    } else if (formatFailure) {
+      const first = formatFailure.detail && formatFailure.detail.firstFormatCellFailure;
+      if (first && first.reason === FRONTEND_FAILURE.SYMBOL_CLIPPED) {
+        rank = 2;
+        quality = 'format-clipped';
+      } else {
+        rank = 1;
+        quality = 'format-rejected';
+      }
+    }
+    if (rank === 0) continue;
+    const bodyDamage = bodyFailures.reduce((minimum, failure) => {
+      const count = Number(failure.cubeUnreadableCount || 0)
+        + Number(failure.unsampledCount || 0)
+        + Number(failure.starTieCount || 0);
+      return Math.min(minimum, count);
+    }, Number.POSITIVE_INFINITY);
+    ranked.push({
+      hypothesis,
+      rank,
+      quality,
+      eligible,
+      bodyFailures,
+      formatFailure,
+      bodyDamage,
+      index,
+    });
+  }
+  ranked.sort((left, right) =>
+    right.rank - left.rank
+    || left.bodyDamage - right.bodyDamage
+    || left.index - right.index);
+  const best = ranked[0];
+  if (!best) return null;
+  return {
+    failureHypothesis: best.hypothesis,
+    carryEvidence: {
+      eligible: best.eligible,
+      quality: best.quality,
+      hypothesisId: best.hypothesis.hypothesisId,
+      formatCandidateCount: diagnostics.formatCandidateCount,
+      bodyFailureCount: best.bodyFailures.length,
+      bodyFailureReasons: best.bodyFailures.map((failure) => failure.reason),
+      formatFailureReason: best.formatFailure && best.formatFailure.reason,
+      erasedFormatCells: best.formatFailure && best.formatFailure.detail
+        ? best.formatFailure.detail.erasedFormatCells
+        : undefined,
+    },
+  };
+}
+
 /**
  * 기하 가설마다 포맷 전 후보와 본문 RS를 모두 평가한 뒤 body-valid 후보만 반환한다.
  * readFormatForHypothesis를 공개 경계로 유지하면서 전체 bootstrap 루프도 이 함수가
@@ -3951,6 +4049,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     const payloadFailure = diagnostics.bodyFailures.some((entry) =>
       typeof entry.reason === 'string'
       && /^(base211|header|utf8):/.test(entry.reason));
+    const failurePose = failurePoseFromValidation(hypotheses, diagnostics);
     return fail(
       hadFormat ? FRONTEND_FAILURE.NO_GRID_HYPOTHESIS : FRONTEND_FAILURE.NO_FORMAT_CANDIDATE,
       {
@@ -3964,6 +4063,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         // 분류할 근거. 게이트·분기 불변).
         formatFailureSummary: summarizeFormatFailures(diagnostics.formatFailures),
         diagnostics,
+        ...(failurePose || {}),
       },
     );
   }
@@ -4641,6 +4741,8 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
           clippingSideCount,
           formatFailureSummary: qrOnlySummary,
           geometryDiagnostics: geometry.diagnostics,
+          failureHypothesis: validated.detail && validated.detail.failureHypothesis,
+          carryEvidence: validated.detail && validated.detail.carryEvidence,
         });
       }
       return fail(validated.reason, {

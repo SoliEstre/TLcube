@@ -60,9 +60,10 @@ import {
   requestMotionPermission,
 } from '/src/scan-steady.js';
 import {
+  consumeFramePoseCarry,
+  framePoseCarryFromResult,
   guidePriorPoses,
   jitterPoses,
-  poseFromHypothesis,
   priorPoseBudget,
   PRIOR_COARSE_OFFSET_CELLS,
   PRIOR_MAX_REFINE_POSES,
@@ -841,6 +842,11 @@ async function decodeFrame(imageData, settings = {}) {
       ok: false,
       reason: (result && result.reason) || 'decode-failed',
       clipSide,
+      // 실패 기하 이월. bootstrap 이 포맷 CRC 통과 뒤 본문에서 죽은 H 만 eligible 로
+      // 올리고, scanner 는 그 한 개만 다음 프레임에 한 번 쓴다.
+      carryHypothesis: result && result.detail && result.detail.carryHypothesis,
+      failureHypothesis: result && result.detail && result.detail.failureHypothesis,
+      carryEvidence: result && result.detail && result.detail.carryEvidence,
       // 2단계 지터의 씨앗 — 「포맷 CRC 까지 간」 사전 포즈 id 들.
       admittedPoses: (result && result.detail && result.detail.prior
         && result.detail.prior.admittedPoses) || [],
@@ -941,16 +947,18 @@ async function attemptGuidePriorScan(imageData, previousMs = 0) {
   return second;
 }
 
-/** 직전 성공 H 를 현재 프레임 해상도로 옮기고, 정확 포즈를 맨 앞에 둔 24개 후보. */
+/** 직전 실패 H 를 현재 프레임 해상도로 옮기고, 정확 포즈를 맨 앞에 둔 24개 후보. */
 function carriedPosesFor(imageData) {
   if (!lastFramePose || !imageData) return [];
-  const seed = poseFromHypothesis(lastFramePose, {
-    id: 'frame-carry',
-    sourceWidth: lastFramePose.frameWidth,
-    sourceHeight: lastFramePose.frameHeight,
+  const consumed = consumeFramePoseCarry(lastFramePose, {
+    nowMs: nowMs(),
     targetWidth: imageData.width,
     targetHeight: imageData.height,
   });
+  // 한 번 꺼낸 순간 소비한다. 실패 결과가 같은 포즈를 다시 싣더라도 carryMiss 가
+  // rememberFramePose 에서 막아 다음 프레임은 전수 탐색으로 돌아간다.
+  lastFramePose = consumed.next;
+  const seed = consumed.pose;
   if (!seed) return [];
   return [
     seed,
@@ -962,24 +970,22 @@ function carriedPosesFor(imageData) {
   ].slice(0, PRIOR_MAX_REFINE_POSES);
 }
 
-/** 이번 프레임이 다음 프레임에 남길 포즈를 성공·실패 모두에서 확정한다. */
+/** 이번 실패가 다음 프레임에 남길 포즈를 확정한다. 성공은 곧 세션 종료라 남기지 않는다. */
 function rememberFramePose(result, imageData) {
-  lastFramePose = result && result.ok === true
-    ? poseFromHypothesis(result.hypothesis, {
-      id: 'frame-carry',
-      sourceWidth: imageData.width,
-      sourceHeight: imageData.height,
-      targetWidth: imageData.width,
-      targetHeight: imageData.height,
-    })
-    : null;
+  lastFramePose = framePoseCarryFromResult(result, {
+    nowMs: nowMs(),
+    sourceWidth: imageData && imageData.width,
+    sourceHeight: imageData && imageData.height,
+  });
 }
 
-/** 직전 포즈를 먼저 시도하고 실패하면 그 프레임의 종전 경로로 폴백한다. */
+/** 직전 포즈를 한 번 시도한다. 실패하면 다음 프레임이 종전 전수 탐색으로 폴백한다. */
 async function attemptCarriedPoseScan(imageData, useGuidePrior) {
+  // 안정 트리거가 이미 예약한 가이드-사전 프레임에 이월 비용을 덧붙이지 않는다.
+  if (useGuidePrior) return attemptGuidePriorScan(imageData);
   const poses = carriedPosesFor(imageData);
   if (poses.length === 0) {
-    return useGuidePrior ? attemptGuidePriorScan(imageData) : decodeFrame(imageData);
+    return decodeFrame(imageData);
   }
   const carried = await decodeFrame(imageData, { priorPoses: poses, deferReport: true });
   lastPriorSummary = {
@@ -989,12 +995,8 @@ async function attemptCarriedPoseScan(imageData, useGuidePrior) {
     flushPriorReport(imageData, carried.report, 0);
     return carried;
   }
-
-  const carriedMs = carried.ms || 0;
-  if (useGuidePrior) return attemptGuidePriorScan(imageData, carriedMs);
-  const fallback = await decodeFrame(imageData, { deferReport: true });
-  flushPriorReport(imageData, fallback.report, carriedMs);
-  return fallback;
+  flushPriorReport(imageData, carried.report, 0);
+  return { ...carried, carryMiss: true };
 }
 
 /**
