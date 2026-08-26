@@ -374,6 +374,120 @@ function measureFinderDiscoveryStep(profile, call, step, meta, fn) {
   }
 }
 
+/*
+ * hypothesisAssembly 안쪽은 픽셀·셀 루프에 시계를 넣지 않는다. 조립의 큰 구간과
+ * 앵커·실루엣 검출 함수 경계만 재며, 중첩 구간은 자식 시간을 빼서 배타 합을 만든다.
+ * 프로파일이 없으면 호출부는 원래 함수만 실행한다.
+ */
+const HYPOTHESIS_ASSEMBLY_STEP_KEYS = Object.freeze([
+  'classifiedFamiliesMs',
+  'classifiedCellFinderMs',
+  'classifiedDirectAnchorMs',
+  'classifiedSilhouetteMs',
+  'independentStarMs',
+  'independentStarDirectMs',
+  'independentStarSilhouetteMs',
+  'qrMs',
+  'qrGeometryMs',
+  'qrWindowRefineMs',
+  'beaconMs',
+  'beaconDiscoveryMs',
+  'beaconDirectAnchorMs',
+  'beaconCellFinderMs',
+  'deduplicateMs',
+  'fallbackDeduplicateMs',
+  'failureFinalizeMs',
+  'successFinalizeMs',
+]);
+
+function hypothesisAssemblyCallProfile(
+  profile,
+  luma,
+  outline,
+  cubeResult,
+  finderResult,
+  qrResult,
+  classified,
+  finders,
+) {
+  if (!profile) return null;
+  if (!Array.isArray(profile.hypothesisAssemblyCalls)) {
+    profile.hypothesisAssemblyCalls = [];
+  }
+  const call = {
+    width: luma.width,
+    height: luma.height,
+    families: classified.families.slice(),
+    finderSource: finderResult.ok ? finderResult.source : 'none-cube-positive',
+    finderCount: finders.length,
+    finderKinds: finders.map((finder) => finder && finder.finderKind || null),
+    outlineTouchesBorder: outline ? outline.touchesBorder === true : null,
+    cubeOk: cubeResult.ok === true,
+    cubeHypothesisCount: cubeResult.ok ? cubeResult.geometryHypotheses.length : 0,
+    qrOk: qrResult.ok === true,
+    qrCandidateCount: qrResult.ok && Array.isArray(qrResult.candidates)
+      ? qrResult.candidates.length : 0,
+    steps: Object.fromEntries(HYPOTHESIS_ASSEMBLY_STEP_KEYS.map((key) => [
+      key,
+      { ms: 0, calls: 0 },
+    ])),
+    counters: {
+      classifiedCellFinderCalls: 0,
+      classifiedCellFinderOutputs: 0,
+      classifiedDirectAnchorCalls: 0,
+      classifiedDirectAnchorOutputs: 0,
+      classifiedSilhouetteCalls: 0,
+      classifiedSilhouetteOutputs: 0,
+      independentStarDirectCalls: 0,
+      independentStarDirectOutputs: 0,
+      independentStarSilhouetteCalls: 0,
+      independentStarSilhouetteOutputs: 0,
+      qrGeometryOutputs: 0,
+      qrWindowRefineOutputs: 0,
+      beaconFinderCount: 0,
+      beaconDirectAnchorCalls: 0,
+      beaconDirectAnchorOutputs: 0,
+      beaconCellFinderCalls: 0,
+      beaconCellFinderOutputs: 0,
+      beaconTurnCloneCount: 0,
+      finderResolutionRetryCount: 0,
+      rawCandidateCount: 0,
+      deferredWeakCandidateCount: 0,
+      uniqueCandidateCount: 0,
+      duplicateCandidateCount: 0,
+      sizeGeometryCopyCount: 0,
+      poseDiagnosticCopyCount: 0,
+    },
+    outcome: null,
+    sourceCounts: {},
+    familyCounts: {},
+    dimensionCounts: {},
+  };
+  profile.hypothesisAssemblyCalls.push(call);
+  return call;
+}
+
+function measureHypothesisAssemblyStep(profile, call, key, fn) {
+  if (!profile || !call) return fn();
+  const attributedBefore = Number(profile.hypothesisAssemblyAttributedMs) || 0;
+  const started = proposalProfileNow();
+  try {
+    return fn();
+  } finally {
+    const wallMs = Math.max(0, proposalProfileNow() - started);
+    const attributedAfter = Number(profile.hypothesisAssemblyAttributedMs) || 0;
+    const nestedMs = Math.max(0, attributedAfter - attributedBefore);
+    const exclusiveMs = Math.max(0, wallMs - nestedMs);
+    call.steps[key].ms += exclusiveMs;
+    call.steps[key].calls += 1;
+    profile.hypothesisAssemblyAttributedMs = attributedAfter + exclusiveMs;
+  }
+}
+
+function addHypothesisAssemblyCounter(call, key, amount = 1) {
+  if (call) call.counters[key] += amount;
+}
+
 /* 빈번한 기하 중앙값은 정렬·복사 대신 재사용 Float64 scratch quickselect를 쓴다. */
 let medianValuesScratch = new Float64Array(0);
 let medianOrderScratch = new Uint32Array(0);
@@ -3339,6 +3453,7 @@ function enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile)
         shouldProbeQr,
         classified,
         finders,
+        profile,
       ));
   }
   return assembleGeometryHypotheses(
@@ -3353,6 +3468,7 @@ function enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile)
     shouldProbeQr,
     classified,
     finders,
+    null,
   );
 }
 
@@ -3368,82 +3484,143 @@ function assembleGeometryHypotheses(
   shouldProbeQr,
   classified,
   finders,
+  profile,
 ) {
-
+  const assemblyCall = hypothesisAssemblyCallProfile(
+    profile,
+    luma,
+    outline,
+    cubeResult,
+    finderResult,
+    qrResult,
+    classified,
+    finders,
+  );
   const hypotheses = [];
   const deferredWeakHypotheses = [];
   const anchorDiagnostics = [];
-  for (const family of classified.families) {
-    if (family === 'cube') {
-      const cubeHypotheses = cubeResult.ok ? cubeResult.geometryHypotheses : [];
-      for (const raw of cubeHypotheses) {
-        hypotheses.push({
-          ...raw,
-          source: raw.source || 'cube-detector',
-          luma,
+  measureHypothesisAssemblyStep(profile, assemblyCall, 'classifiedFamiliesMs', () => {
+    for (const family of classified.families) {
+      if (family === 'cube') {
+        const cubeHypotheses = cubeResult.ok ? cubeResult.geometryHypotheses : [];
+        for (const raw of cubeHypotheses) {
+          hypotheses.push({
+            ...raw,
+            source: raw.source || 'cube-detector',
+            luma,
+          });
+        }
+        anchorDiagnostics.push({
+          family,
+          cubeHypothesisCount: cubeHypotheses.length,
+          cubeDiagnostics: cubeResult.diagnostics,
         });
+        continue;
       }
-      anchorDiagnostics.push({
-        family,
-        cubeHypothesisCount: cubeHypotheses.length,
-        cubeDiagnostics: cubeResult.diagnostics,
-      });
-      continue;
-    }
 
-    for (let finderIndex = 0; finderIndex < finders.length; finderIndex += 1) {
-      const finder = finders[finderIndex];
-      const allowWeakAnchorFallback = options.allowWeakAnchorFallback === true
-        || (options.allowWeakAnchorFallback !== false
-          && (!outline || outline.touchesBorder));
-      const patternHypotheses = cellFinderHypotheses(luma, finder, family, options);
-      const direct = patternHypotheses.length > 0 ? {
-        hypotheses: patternHypotheses,
-        strictCount: patternHypotheses.length,
-        fallbackCount: 0,
-        diagnostics: {
-          mode: 'finder-pattern',
-          orientationSource: 'finder-pattern',
-          patternId: finder.patternId,
-        },
-      } : directAnchorHypotheses(luma, finder, family, {
-        ...options,
-        allowWeakAnchorFallback,
-      });
-      direct.hypotheses.forEach((hypothesis) => {
-        const annotated = { ...hypothesis, finderIndex };
-        if (hypothesis.source === 'anchor-fallback') deferredWeakHypotheses.push(annotated);
-        else hypotheses.push(annotated);
-      });
-      anchorDiagnostics.push({
-        family,
-        finderIndex,
-        directCount: direct.hypotheses.length,
-        strictCount: direct.strictCount,
-        fallbackCount: direct.fallbackCount,
-        directFailure: direct.failure,
-      });
+      for (let finderIndex = 0; finderIndex < finders.length; finderIndex += 1) {
+        const finder = finders[finderIndex];
+        const allowWeakAnchorFallback = options.allowWeakAnchorFallback === true
+          || (options.allowWeakAnchorFallback !== false
+            && (!outline || outline.touchesBorder));
+        const patternHypotheses = measureHypothesisAssemblyStep(
+          profile,
+          assemblyCall,
+          'classifiedCellFinderMs',
+          () => cellFinderHypotheses(luma, finder, family, options),
+        );
+        addHypothesisAssemblyCounter(assemblyCall, 'classifiedCellFinderCalls');
+        addHypothesisAssemblyCounter(
+          assemblyCall,
+          'classifiedCellFinderOutputs',
+          patternHypotheses.length,
+        );
+        let direct;
+        if (patternHypotheses.length > 0) {
+          direct = {
+            hypotheses: patternHypotheses,
+            strictCount: patternHypotheses.length,
+            fallbackCount: 0,
+            diagnostics: {
+              mode: 'finder-pattern',
+              orientationSource: 'finder-pattern',
+              patternId: finder.patternId,
+            },
+          };
+        } else {
+          direct = measureHypothesisAssemblyStep(
+            profile,
+            assemblyCall,
+            'classifiedDirectAnchorMs',
+            () => directAnchorHypotheses(luma, finder, family, {
+              ...options,
+              allowWeakAnchorFallback,
+            }),
+          );
+          addHypothesisAssemblyCounter(assemblyCall, 'classifiedDirectAnchorCalls');
+          addHypothesisAssemblyCounter(
+            assemblyCall,
+            'classifiedDirectAnchorOutputs',
+            direct.hypotheses.length,
+          );
+        }
+        direct.hypotheses.forEach((hypothesis) => {
+          const annotated = { ...hypothesis, finderIndex };
+          if (hypothesis.source === 'anchor-fallback') deferredWeakHypotheses.push(annotated);
+          else hypotheses.push(annotated);
+        });
+        anchorDiagnostics.push({
+          family,
+          finderIndex,
+          directCount: direct.hypotheses.length,
+          strictCount: direct.strictCount,
+          fallbackCount: direct.fallbackCount,
+          directFailure: direct.failure,
+        });
 
-      if (family === 'hex'
-        && (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true)) {
-        for (const k of uniqueDimensions('hex')) {
-          silhouetteHypotheses(luma, finder, k, outline, options, cfg)
-            .forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
+        if (family === 'hex'
+          && (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true)) {
+          for (const k of uniqueDimensions('hex')) {
+            const produced = measureHypothesisAssemblyStep(
+              profile,
+              assemblyCall,
+              'classifiedSilhouetteMs',
+              () => silhouetteHypotheses(luma, finder, k, outline, options, cfg),
+            );
+            addHypothesisAssemblyCounter(assemblyCall, 'classifiedSilhouetteCalls');
+            addHypothesisAssemblyCounter(
+              assemblyCall,
+              'classifiedSilhouetteOutputs',
+              produced.length,
+            );
+            produced.forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
+          }
+        }
+
+        // star(K) 실루엣 폴백 — hex 와 같은 조건(직접 앵커 전멸 시)에서만.
+        // 별 꼭짓점 앵커는 3k 거리라 파인더 H 오차 증폭이 hex 보다 심하다
+        // (starSilhouetteHypotheses 헤더 실측) — 이 폴백이 실질 주 경로다.
+        if (family === 'star'
+          && (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true)) {
+          for (const k of uniqueDimensions('star')) {
+            const produced = measureHypothesisAssemblyStep(
+              profile,
+              assemblyCall,
+              'classifiedSilhouetteMs',
+              () => starSilhouetteHypotheses(luma, finder, k, outline, options, cfg),
+            );
+            addHypothesisAssemblyCounter(assemblyCall, 'classifiedSilhouetteCalls');
+            addHypothesisAssemblyCounter(
+              assemblyCall,
+              'classifiedSilhouetteOutputs',
+              produced.length,
+            );
+            produced.forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
+          }
         }
       }
-
-      // star(K) 실루엣 폴백 — hex 와 같은 조건(직접 앵커 전멸 시)에서만.
-      // 별 꼭짓점 앵커는 3k 거리라 파인더 H 오차 증폭이 hex 보다 심하다
-      // (starSilhouetteHypotheses 헤더 실측) — 이 폴백이 실질 주 경로다.
-      if (family === 'star'
-        && (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true)) {
-        for (const k of uniqueDimensions('star')) {
-          starSilhouetteHypotheses(luma, finder, k, outline, options, cfg)
-            .forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
-        }
-      }
     }
-  }
+  });
 
   /*
    * Type K 독립 앵커 개설 — 분류에 star 가 없더라도 중앙 파인더가 준 포즈 위에서
@@ -3462,42 +3639,82 @@ function assembleGeometryHypotheses(
    * 반전 계열 별 꼭짓점 3점이 없으므로 6/6에서 닫힌다. 이미 star 로 분류된 경로는
    * 위 루프가 같은 검사를 했으므로 중복 실행하지 않는다.
    */
-  if (!classified.families.includes('star')) {
-    for (let finderIndex = 0; finderIndex < finders.length; finderIndex += 1) {
-      const finder = finders[finderIndex];
-      const direct = directAnchorHypotheses(luma, finder, 'star', {
-        ...options,
-        allowWeakAnchorFallback: false,
-      });
-      direct.hypotheses.forEach((hypothesis) => {
-        hypotheses.push({ ...hypothesis, finderIndex });
-      });
-      anchorDiagnostics.push({
-        family: 'star',
-        finderIndex,
-        mode: 'independent-star-anchor',
-        directCount: direct.hypotheses.length,
-        strictCount: direct.strictCount,
-        fallbackCount: direct.fallbackCount,
-        directFailure: direct.failure,
-      });
+  measureHypothesisAssemblyStep(profile, assemblyCall, 'independentStarMs', () => {
+    if (!classified.families.includes('star')) {
+      for (let finderIndex = 0; finderIndex < finders.length; finderIndex += 1) {
+        const finder = finders[finderIndex];
+        const direct = measureHypothesisAssemblyStep(
+          profile,
+          assemblyCall,
+          'independentStarDirectMs',
+          () => directAnchorHypotheses(luma, finder, 'star', {
+            ...options,
+            allowWeakAnchorFallback: false,
+          }),
+        );
+        addHypothesisAssemblyCounter(assemblyCall, 'independentStarDirectCalls');
+        addHypothesisAssemblyCounter(
+          assemblyCall,
+          'independentStarDirectOutputs',
+          direct.hypotheses.length,
+        );
+        direct.hypotheses.forEach((hypothesis) => {
+          hypotheses.push({ ...hypothesis, finderIndex });
+        });
+        anchorDiagnostics.push({
+          family: 'star',
+          finderIndex,
+          mode: 'independent-star-anchor',
+          directCount: direct.hypotheses.length,
+          strictCount: direct.strictCount,
+          fallbackCount: direct.fallbackCount,
+          directFailure: direct.failure,
+        });
 
-      // direct 가 6/6을 하나라도 세우면 outline 폴백을 열지 않는다. non-star 프레임
-      // 대부분은 6/6이 0이 정상이지만, outline 가설도 별 꼭짓점 6/6을 독립 통과해야
-      // 후보가 된다.
-      // direct 범위 밖의 OAK seed(중심/배율/회전 동시 오차)는 이 전역 정합이 유일한
-      // 복구 경로다. O/A 오수용 여부는 같은 포맷 CRC→RS 게이트와 코퍼스 A/B로 잰다.
-      if (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true) {
-        for (const k of uniqueDimensions('star')) {
-          starSilhouetteHypotheses(luma, finder, k, outline, options, cfg)
-            .forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
+        // direct 가 6/6을 하나라도 세우면 outline 폴백을 열지 않는다. non-star 프레임
+        // 대부분은 6/6이 0이 정상이지만, outline 가설도 별 꼭짓점 6/6을 독립 통과해야
+        // 후보가 된다.
+        // direct 범위 밖의 OAK seed(중심/배율/회전 동시 오차)는 이 전역 정합이 유일한
+        // 복구 경로다. O/A 오수용 여부는 같은 포맷 CRC→RS 게이트와 코퍼스 A/B로 잰다.
+        if (direct.strictCount === 0 || options.alwaysOutlineHypotheses === true) {
+          for (const k of uniqueDimensions('star')) {
+            const produced = measureHypothesisAssemblyStep(
+              profile,
+              assemblyCall,
+              'independentStarSilhouetteMs',
+              () => starSilhouetteHypotheses(luma, finder, k, outline, options, cfg),
+            );
+            addHypothesisAssemblyCounter(assemblyCall, 'independentStarSilhouetteCalls');
+            addHypothesisAssemblyCounter(
+              assemblyCall,
+              'independentStarSilhouetteOutputs',
+              produced.length,
+            );
+            produced.forEach((hypothesis) => hypotheses.push({ ...hypothesis, finderIndex }));
+          }
         }
       }
     }
-  }
+  });
 
-  hypotheses.push(...qrGeometryHypotheses(luma, qrResult, options));
-  hypotheses.push(...qrWindowReferenceRefinedHypotheses(luma, qrResult, options));
+  measureHypothesisAssemblyStep(profile, assemblyCall, 'qrMs', () => {
+    const qrGeometry = measureHypothesisAssemblyStep(
+      profile,
+      assemblyCall,
+      'qrGeometryMs',
+      () => qrGeometryHypotheses(luma, qrResult, options),
+    );
+    const qrRefined = measureHypothesisAssemblyStep(
+      profile,
+      assemblyCall,
+      'qrWindowRefineMs',
+      () => qrWindowReferenceRefinedHypotheses(luma, qrResult, options),
+    );
+    addHypothesisAssemblyCounter(assemblyCall, 'qrGeometryOutputs', qrGeometry.length);
+    addHypothesisAssemblyCounter(assemblyCall, 'qrWindowRefineOutputs', qrRefined.length);
+    hypotheses.push(...qrGeometry);
+    hypotheses.push(...qrRefined);
+  });
 
   /*
    * 중앙 v0 비컨 블록 → 바깥 hex/tri/star 가설 (Path A).
@@ -3522,44 +3739,88 @@ function assembleGeometryHypotheses(
     || (Array.isArray(finderResult.finders) && finderResult.finders.length > 0
       && finderResult.finders.every(
         (finder) => finder && finder.finderKind === 'three-tone-cube')));
-  if (beaconEligible) {
-    const beaconFinders = discoverCentralBeaconFinders(luma, options);
-    for (const finder of beaconFinders) {
-      // K 코어도 같은 중앙 19셀 슬롯을 쓰므로 같은 포즈에서 star 가설을 추가한다.
-      // 포맷 7/8 + 본문 RS가 소유자를 가르며 기존 수용 게이트는 바뀌지 않는다.
-      for (const family of ['hex', 'tri', 'star']) {
-        if (family === 'star') {
-          // 중앙-사전의 바깥 지지 반지름은 픽셀 문턱 때문에 수 % 작을 수 있다.
-          // K 꼭짓점은 3k 거리라 그 오차가 증폭되므로, 이미 있는 K 앵커 배율 탐색으로
-          // H를 정합한 후보만 연다 (새 문턱 없음).
-          const direct = directAnchorHypotheses(luma, finder, 'star', {
-            ...options,
-            allowWeakAnchorFallback: false,
-          });
-          hypotheses.push(...direct.hypotheses);
-          continue;
-        }
-        const seeded = cellFinderHypotheses(luma, finder, family, options);
-        hypotheses.push(...seeded);
-        // 턴A(내부 타입 V) 쌍둥이 — 중앙 QR 경로(§qr-center)와 **같은 관용구**다.
-        // 비컨은 중앙 고정이라 180° 배치 회전에도 포즈 H 가 같고, 표본 자리 사상
-        // (turn)만 다르다. 이 쌍이 없으면 ▽ 프레임에서 비컨이 잡혀도 V 인덱스
-        // 가설이 없어 format-crc 로 전멸한다 (턴A×비컨 실측 2026-08-24).
-        // 정삼각(tri, turn=false) 쌍과 hex 는 한 비트도 안 바뀐다 — 추가만 한다.
-        if (family === 'tri') {
-          for (const base of seeded) {
-            hypotheses.push({
-              ...base,
-              turn: true,
-              hypothesisId: base.hypothesisId + '-turn',
-            });
+  measureHypothesisAssemblyStep(profile, assemblyCall, 'beaconMs', () => {
+    if (beaconEligible) {
+      const beaconFinders = measureHypothesisAssemblyStep(
+        profile,
+        assemblyCall,
+        'beaconDiscoveryMs',
+        () => discoverCentralBeaconFinders(luma, options),
+      );
+      addHypothesisAssemblyCounter(assemblyCall, 'beaconFinderCount', beaconFinders.length);
+      for (const finder of beaconFinders) {
+        // K 코어도 같은 중앙 19셀 슬롯을 쓰므로 같은 포즈에서 star 가설을 추가한다.
+        // 포맷 7/8 + 본문 RS가 소유자를 가르며 기존 수용 게이트는 바뀌지 않는다.
+        for (const family of ['hex', 'tri', 'star']) {
+          if (family === 'star') {
+            // 중앙-사전의 바깥 지지 반지름은 픽셀 문턱 때문에 수 % 작을 수 있다.
+            // K 꼭짓점은 3k 거리라 그 오차가 증폭되므로, 이미 있는 K 앵커 배율 탐색으로
+            // H를 정합한 후보만 연다 (새 문턱 없음).
+            const direct = measureHypothesisAssemblyStep(
+              profile,
+              assemblyCall,
+              'beaconDirectAnchorMs',
+              () => directAnchorHypotheses(luma, finder, 'star', {
+                ...options,
+                allowWeakAnchorFallback: false,
+              }),
+            );
+            addHypothesisAssemblyCounter(assemblyCall, 'beaconDirectAnchorCalls');
+            addHypothesisAssemblyCounter(
+              assemblyCall,
+              'beaconDirectAnchorOutputs',
+              direct.hypotheses.length,
+            );
+            hypotheses.push(...direct.hypotheses);
+            continue;
+          }
+          const seeded = measureHypothesisAssemblyStep(
+            profile,
+            assemblyCall,
+            'beaconCellFinderMs',
+            () => cellFinderHypotheses(luma, finder, family, options),
+          );
+          addHypothesisAssemblyCounter(assemblyCall, 'beaconCellFinderCalls');
+          addHypothesisAssemblyCounter(
+            assemblyCall,
+            'beaconCellFinderOutputs',
+            seeded.length,
+          );
+          hypotheses.push(...seeded);
+          // 턴A(내부 타입 V) 쌍둥이 — 중앙 QR 경로(§qr-center)와 **같은 관용구**다.
+          // 비컨은 중앙 고정이라 180° 배치 회전에도 포즈 H 가 같고, 표본 자리 사상
+          // (turn)만 다르다. 이 쌍이 없으면 ▽ 프레임에서 비컨이 잡혀도 V 인덱스
+          // 가설이 없어 format-crc 로 전멸한다 (턴A×비컨 실측 2026-08-24).
+          // 정삼각(tri, turn=false) 쌍과 hex 는 한 비트도 안 바뀐다 — 추가만 한다.
+          if (family === 'tri') {
+            for (const base of seeded) {
+              hypotheses.push({
+                ...base,
+                turn: true,
+                hypothesisId: base.hypothesisId + '-turn',
+              });
+              addHypothesisAssemblyCounter(assemblyCall, 'beaconTurnCloneCount');
+            }
           }
         }
       }
     }
-  }
+  });
 
-  let unique = deduplicateHypotheses(hypotheses);
+  if (assemblyCall) {
+    assemblyCall.counters.rawCandidateCount = hypotheses.length;
+    assemblyCall.counters.deferredWeakCandidateCount = deferredWeakHypotheses.length;
+  }
+  let unique = measureHypothesisAssemblyStep(
+    profile,
+    assemblyCall,
+    'deduplicateMs',
+    () => deduplicateHypotheses(hypotheses),
+  );
+  if (assemblyCall) {
+    assemblyCall.counters.uniqueCandidateCount = unique.length;
+    assemblyCall.counters.duplicateCandidateCount = Math.max(0, hypotheses.length - unique.length);
+  }
   if (unique.length === 0) {
     const shouldRetryFinderResolution = options._finderResolutionRetry !== false
       && options.finderMaxDimension === undefined
@@ -3567,14 +3828,24 @@ function assembleGeometryHypotheses(
       && finderResult.source.includes('multiscale')
       && cfg.finderClutterRetryMaxDimension > cfg.finderClutterMaxDimension;
     if (shouldRetryFinderResolution) {
+      addHypothesisAssemblyCounter(assemblyCall, 'finderResolutionRetryCount');
       const retried = enumerateGeometryHypotheses(luma, familyEvidence, {
         ...options,
         finderMaxDimension: cfg.finderClutterRetryMaxDimension,
         _finderResolutionRetry: false,
       });
-      if (retried.ok) return retried;
+      if (retried.ok) {
+        if (assemblyCall) assemblyCall.outcome = 'finder-resolution-retry';
+        return retried;
+      }
     }
-    unique = deduplicateHypotheses(deferredWeakHypotheses);
+    unique = measureHypothesisAssemblyStep(
+      profile,
+      assemblyCall,
+      'fallbackDeduplicateMs',
+      () => deduplicateHypotheses(deferredWeakHypotheses),
+    );
+    if (assemblyCall) assemblyCall.counters.uniqueCandidateCount = unique.length;
   }
 
   if (unique.length === 0) {
@@ -3583,69 +3854,87 @@ function assembleGeometryHypotheses(
     const clippingSideCount = clipped
       ? minimumClippingSideCount(luma, finders)
       : 0;
-    return fail(reason, {
-      stage: clippingSideCount >= 2 ? 'bootstrap-finder' : 'bootstrap-geometry',
-      clippingSideCount,
-      anchorDiagnostics,
-      cubeFailure: cubeResult.ok ? undefined : cubeResult,
-      outline: outline && {
-        area: outline.area,
-        bounds: outline.bounds,
-        touchesBorder: outline.touchesBorder,
-      },
-    });
+    if (assemblyCall) assemblyCall.outcome = reason;
+    return measureHypothesisAssemblyStep(profile, assemblyCall, 'failureFinalizeMs', () =>
+      fail(reason, {
+        stage: clippingSideCount >= 2 ? 'bootstrap-finder' : 'bootstrap-geometry',
+        clippingSideCount,
+        anchorDiagnostics,
+        cubeFailure: cubeResult.ok ? undefined : cubeResult,
+        outline: outline && {
+          area: outline.area,
+          bounds: outline.bounds,
+          touchesBorder: outline.touchesBorder,
+        },
+      }));
   }
 
-  for (const hypothesis of unique) {
-    if (hypothesis.family !== 'cube') {
-      hypothesis.sizeGeometry = sizeGeometryEvidence(hypothesis, outline);
+  return measureHypothesisAssemblyStep(profile, assemblyCall, 'successFinalizeMs', () => {
+    for (const hypothesis of unique) {
+      if (hypothesis.family !== 'cube') {
+        hypothesis.sizeGeometry = sizeGeometryEvidence(hypothesis, outline);
+        addHypothesisAssemblyCounter(assemblyCall, 'sizeGeometryCopyCount');
+      }
+      delete hypothesis.luma;
+      if (assemblyCall) {
+        const source = hypothesis.source || 'unknown';
+        const family = hypothesis.family || 'unknown';
+        const dimension = hypothesis.k ?? hypothesis.n ?? 'unknown';
+        assemblyCall.sourceCounts[source] = (assemblyCall.sourceCounts[source] || 0) + 1;
+        assemblyCall.familyCounts[family] = (assemblyCall.familyCounts[family] || 0) + 1;
+        assemblyCall.dimensionCounts[dimension]
+          = (assemblyCall.dimensionCounts[dimension] || 0) + 1;
+      }
     }
-    delete hypothesis.luma;
-  }
-  return ok({
-    hypotheses: unique,
-    diagnostics: {
-      finderSource: finderResult.ok ? finderResult.source : 'none-cube-positive',
-      finderCount: finders.length,
-      finderFailure: finderResult.ok ? undefined : finderResult,
-      qr: {
-        ok: qrResult.ok,
-        reason: qrResult.reason,
-        diagnostics: qrResult.ok ? qrResult.diagnostics : qrResult.detail,
-        hypothesisCount: hypotheses.filter((entry) =>
-          typeof entry.source === 'string' && entry.source.startsWith('center-qr')).length,
-        skipped: !shouldProbeQr,
+    if (assemblyCall) {
+      assemblyCall.outcome = 'ok';
+      assemblyCall.counters.poseDiagnosticCopyCount = unique.length;
+    }
+    return ok({
+      hypotheses: unique,
+      diagnostics: {
+        finderSource: finderResult.ok ? finderResult.source : 'none-cube-positive',
+        finderCount: finders.length,
+        finderFailure: finderResult.ok ? undefined : finderResult,
+        qr: {
+          ok: qrResult.ok,
+          reason: qrResult.reason,
+          diagnostics: qrResult.ok ? qrResult.diagnostics : qrResult.detail,
+          hypothesisCount: hypotheses.filter((entry) =>
+            typeof entry.source === 'string' && entry.source.startsWith('center-qr')).length,
+          skipped: !shouldProbeQr,
+        },
+        cube: {
+          ok: cubeResult.ok,
+          reason: cubeResult.reason,
+          hypothesisCount: cubeResult.ok ? cubeResult.geometryHypotheses.length : 0,
+          diagnostics: cubeResult.ok ? cubeResult.diagnostics : cubeResult.detail,
+        },
+        downsampleFactor: finderResult.ok ? finderResult.downsampleFactor || 1 : 1,
+        classification: {
+          ok: classified.classification && classified.classification.ok,
+          reason: classified.classification && classified.classification.reason,
+          family: classified.classification && classified.classification.family,
+          fallback: classified.fallback,
+        },
+        capacityDimensions: {
+          hex: uniqueDimensions('hex'),
+          tri: uniqueDimensions('tri'),
+          cube: uniqueDimensions('cube'),
+          star: uniqueDimensions('star'),
+        },
+        geometryHypothesisCount: unique.length,
+        poseDiagnostics: compactGeometryPoseDiagnostics(unique),
+        anchorDiagnostics,
+        outline: outline && {
+          area: outline.area,
+          bounds: outline.bounds,
+          touchesBorder: outline.touchesBorder,
+          fillRatio: outline.fillRatio,
+          threshold: outline.threshold,
+        },
       },
-      cube: {
-        ok: cubeResult.ok,
-        reason: cubeResult.reason,
-        hypothesisCount: cubeResult.ok ? cubeResult.geometryHypotheses.length : 0,
-        diagnostics: cubeResult.ok ? cubeResult.diagnostics : cubeResult.detail,
-      },
-      downsampleFactor: finderResult.ok ? finderResult.downsampleFactor || 1 : 1,
-      classification: {
-        ok: classified.classification && classified.classification.ok,
-        reason: classified.classification && classified.classification.reason,
-        family: classified.classification && classified.classification.family,
-        fallback: classified.fallback,
-      },
-      capacityDimensions: {
-        hex: uniqueDimensions('hex'),
-        tri: uniqueDimensions('tri'),
-        cube: uniqueDimensions('cube'),
-        star: uniqueDimensions('star'),
-      },
-      geometryHypothesisCount: unique.length,
-      poseDiagnostics: compactGeometryPoseDiagnostics(unique),
-      anchorDiagnostics,
-      outline: outline && {
-        area: outline.area,
-        bounds: outline.bounds,
-        touchesBorder: outline.touchesBorder,
-        fillRatio: outline.fillRatio,
-        threshold: outline.threshold,
-      },
-    },
+    });
   });
 }
 
