@@ -211,14 +211,14 @@ test('K-CM 개설 — 회계·와이어·발자국 (구 배타 락의 양성 전
   }
 });
 
-test('K-CM × 중앙 v0 — 반전 꼭짓점 W 톤만 뺀다 (비컨 블록 상위 컷 회귀 잠금)', () => {
+test('K-CM × 중앙 v0 — 반전 꼭짓점 W 정본 톤을 그대로 싣는다', () => {
   assert.equal(h2co3IncludeVertexK({ cornerMarker: true }), true);
   assert.equal(h2co3IncludeVertexK({ cornerMarker: true, centralV0: false }), true);
-  assert.equal(h2co3IncludeVertexK({ cornerMarker: true, centralV0: true }), false);
+  assert.equal(h2co3IncludeVertexK({ cornerMarker: true, centralV0: true }), true);
   assert.equal(h2co3IncludeVertexK({ cornerMarker: false, centralV0: true }), false);
   for (const spec of VERSIONS_KCM) {
-    const painted = encodeK('kvtx-v0-skip', { version: spec.version, cornerMarker: true });
-    const withBeacon = encodeK('kvtx-v0-skip', {
+    const painted = encodeK('kvx-v0-vertex', { version: spec.version, cornerMarker: true });
+    const withBeacon = encodeK('kvx-v0-vertex', {
       version: spec.version, cornerMarker: true, centralV0: true,
     });
     assert.equal(painted.centralV0, false);
@@ -229,11 +229,13 @@ test('K-CM × 중앙 v0 — 반전 꼭짓점 W 톤만 뺀다 (비컨 블록 상�
       const kk = key(a);
       assert.deepEqual(painted.cellDigits.get(kk).tones, { T: 0, L: 0, R: 0 },
         spec.name + ' 기본 K-CM 꼭짓점 ' + kk + ' 이 전면 dark 가 아니다');
-      assert.equal(withBeacon.cellDigits.get(kk).tones, undefined,
-        spec.name + ' v0 조합에서 꼭짓점 ' + kk + ' 에 톤이 실렸다');
+      assert.deepEqual(withBeacon.cellDigits.get(kk).tones, { T: 0, L: 0, R: 0 },
+        spec.name + ' v0 조합 꼭짓점 ' + kk + ' 에 정본 톤이 없다');
       assert.equal(withBeacon.cellDigits.get(kk).digit, a.digit);
       assert.equal(withBeacon.cellDigits.get(kk).role, 'anchor');
     }
+    assert.equal([...withBeacon.cellDigits.values()].filter((entry) => entry.tones).length, 30,
+      spec.name + ' v0 조합의 정본 톤 셀이 30개가 아니다');
   }
 });
 

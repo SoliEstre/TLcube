@@ -15,9 +15,10 @@
 //     비워 두며, 전 k 에서 그 슬롯과 data 셀의 교집합은 0 이다. 둘 다 «그림의
 //     점유자 교체»라 회계는 불변이고 새 와이어 값도 없다: 평 K 는 7, K-CM 은 8을
 //     그대로 공유한다. 전 k × ECC × 평/CM 프런트엔드 왕복이 이 결론을 잠근다.
-//     ⚠ K-CM × centralV0: 반전 꼭짓점 W 의 전면-dark 톤은 **안 싣는다**.
-//     근거는 encodeK.h2co3IncludeVertexK — 별 끝 암점 3개가 비컨 블록 상위 컷을
-//     밀어 k≥8 에서 중앙 가설이 0이 된다 (레인 KVTX).
+//     K-CM × centralV0 도 반전 꼭짓점 W 의 전면-dark 정본 톤을 그대로 싣는다.
+//     과거에는 별 끝 암점 3개가 비컨 블록 상위 컷을 밀어 중앙 가설을 0으로 만들어
+//     예외를 뒀지만, 중앙 비컨 어댑터가 중앙 고정 계약(centreWindowFraction)을 주입한
+//     뒤에는 전 k × ECC에서 비컨 가설이 유지된다 (레인 KVX 재계측).
 //   · daehanFinder — 중앙 슬롯·예약 셀과 K 회계의 조합이 여전히 미검증이다.
 //   · turnA — K = A ∪ 반전A 라 180° 회전이 실루엣을 보존한다(육각별 자기 대칭).
 //     «턴 K» 는 별도 실루엣이 아니므로 옵션 자체가 성립하지 않는다.
@@ -57,14 +58,13 @@ function cellKey(q, r) {
 }
 
 /**
- * K-CM 정본은 반전 꼭짓점 W 를 전면 dark 로 칠한다. 중앙 v0 비컨과 겹치면 그 3셀만
- * 뺀다 — 검출기 문턱을 건드리지 않고, 칠이 만드는 암점 3개가 비컨 블록 상위 컷을
- * 밀어내는 조합만 피한다 (K1CM/L 칠함: v0 형상 5 · locator 통과 0 · 비컨 가설 0.
- * 같은 프레임 칠 안 함: 비컨 9 + star 앵커 1. K0CM 은 k=6 이라 중앙 큐브 비중이
- * 커 칠해도 산다). N0·N1 톤과 회계·와이어는 그대로다.
+ * K-CM 정본은 반전 꼭짓점 W 를 전면 dark 로 칠한다. 중앙 v0 조합도 예외가 아니다.
+ * 과거의 3셀 제외는 별 끝 암점이 비컨 블록 상위 컷을 점거하던 검출기 양보였으나,
+ * 중앙 비컨 어댑터가 중앙 고정 계약으로 후보를 가른 뒤 재계측한 전 k × ECC에서
+ * 정본 톤 30셀과 비컨 가설 9개가 함께 유지됐다. N0·N1 톤과 회계·와이어는 그대로다.
  */
 export function h2co3IncludeVertexK(options = {}) {
-  return options.cornerMarker === true && options.centralV0 !== true;
+  return options.cornerMarker === true;
 }
 
 /**
@@ -225,7 +225,7 @@ export function encodeK(text, options = {}) {
   // 반전 꼭짓점 3셀은 마커 발자국이면서 앵커다. 정본 톤은 전면 동톤 (0,0,0) —
   // 운영자 작화(레인 KVTX). digit 은 앵커 값이 남고 tones 만 얹는다. 앵커 패스는
   // role 을 'anchor' 로 덮되, 이미 실린 tones 는 보존한다 (CO2 앵커 톤과 같은 층).
-  // 중앙 v0 와 겹치면 W 만 뺀다 — `h2co3IncludeVertexK`.
+  // 중앙 v0 조합도 W 를 뺄 이유가 없다 — `h2co3IncludeVertexK`.
   if (cornerMarker) {
     const tones = h2co3TonesByKeyK(k, {
       includeVertex: h2co3IncludeVertexK({ cornerMarker, centralV0 }),

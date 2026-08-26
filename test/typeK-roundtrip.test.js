@@ -234,6 +234,12 @@ test('K 중앙 v0 왕복 — 평/CM × 전 k × 전 ECC가 기존 와이어로 �
       assert.equal(result.versionName, spec.name, `${spec.name}/${eccLevel}: 프로파일이 다르다`);
       assert.equal(result.diagnostics.format.formatIndex, spec.formatIndex,
         `${spec.name}/${eccLevel}: 소비 와이어가 다르다`);
+      if (cornerMarker) {
+        const beaconHypotheses = result.diagnostics.bootstrap.geometry.poseDiagnostics
+          .filter((pose) => pose.source === 'central-v0-finder');
+        assert.ok(beaconHypotheses.length >= 9,
+          `${spec.name}/${eccLevel}: 중앙 비컨 가설이 상위 컷에서 밀렸다 (${beaconHypotheses.length})`);
+      }
     }
   }
 });
