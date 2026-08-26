@@ -118,6 +118,58 @@ const EPSILON = 1e-9;
 const SUPPORTED_N = Object.freeze([13, 21, 25]);
 const SUPPORTED_TONES = Object.freeze([2, 3]);
 const CANONICAL_SEAM_CORNERS = Object.freeze([1, 3, 5]);
+
+function profileNow() {
+  return globalThis.performance && typeof globalThis.performance.now === 'function'
+    ? globalThis.performance.now()
+    : Date.now();
+}
+
+function cubeProposalProfile(options) {
+  const direct = options && options._proposalProfile;
+  const nested = options && options.sample && options.sample._proposalProfile;
+  const profile = direct || nested;
+  if (!profile || typeof profile !== 'object') return null;
+  if (!profile.cube || typeof profile.cube !== 'object') {
+    profile.cube = {
+      enumerateMs: 0,
+      evaluateMs: 0,
+      refineMs: 0,
+      recoveryMs: 0,
+    };
+  }
+  return profile;
+}
+
+function measureCubeProposal(options, key, segment, fn) {
+  const profile = cubeProposalProfile(options);
+  if (!profile) return fn();
+  const sampleProfile = options && options.sample && options.sample._proposalProfile;
+  const previousSegment = sampleProfile && sampleProfile.segment;
+  if (sampleProfile) sampleProfile.segment = segment;
+  const started = profileNow();
+  try {
+    return fn();
+  } finally {
+    profile.cube[key] += Math.max(0, profileNow() - started);
+    if (sampleProfile) sampleProfile.segment = previousSegment;
+  }
+}
+
+function measureCubeMixedEnumeration(options, fn) {
+  const profile = cubeProposalProfile(options);
+  if (!profile) return fn();
+  const evaluateBefore = profile.cube.evaluateMs;
+  const refineBefore = profile.cube.refineMs;
+  const started = profileNow();
+  try {
+    return fn();
+  } finally {
+    const nested = (profile.cube.evaluateMs - evaluateBefore)
+      + (profile.cube.refineMs - refineBefore);
+    profile.cube.enumerateMs += Math.max(0, profileNow() - started - nested);
+  }
+}
 const TONE_FACE_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
 
 /*
@@ -1256,6 +1308,50 @@ export function sampleCubeCell(luma, geometry, i, j, options = {}) {
   }
   return ok({ ...faces, i, j });
 }
+
+/*
+ * 셀 표면 레이아웃들은 같은 H에서 같은 (i,j)를 겹쳐 읽는다. 원판 캐시가 있어도
+ * 셀마다 원판 세 개의 중첩 Map 조회와 결과 객체 조립은 다시 든다. 평가 한 번의
+ * 수명 안에서 셀 결과를 보존해 그 상위 중복을 접는다. 키는 정수 i→j 두 단계라
+ * 부동소수 문자열을 새로 만들지 않는다.
+ */
+function cellSurfaceMemoizationEnabled(options) {
+  return !options || options._memoizeCellSurfaceSamples !== false;
+}
+
+function cellSurfaceSampler(luma, base, options, cfg, enabled = true) {
+  const byI = enabled ? new Map() : null;
+  const stableOptions = enabled ? sampleOptions(options, cfg) : null;
+  const profile = cubeProposalProfile(options);
+  if (profile && !profile.cellSurfaceSamples) {
+    profile.cellSurfaceSamples = { calls: 0, hits: 0, misses: 0 };
+  }
+  return (i, j) => {
+    if (profile) profile.cellSurfaceSamples.calls += 1;
+    if (enabled) {
+      const byJ = byI.get(i);
+      if (byJ && byJ.has(j)) {
+        if (profile) profile.cellSurfaceSamples.hits += 1;
+        return byJ.get(j);
+      }
+      const sampled = sampleCubeCell(luma, base, i, j, stableOptions);
+      const target = byJ || new Map();
+      if (!byJ) byI.set(i, target);
+      target.set(j, sampled);
+      if (profile) profile.cellSurfaceSamples.misses += 1;
+      return sampled;
+    }
+    if (profile) profile.cellSurfaceSamples.misses += 1;
+    // 대조 모드는 변경 전처럼 매 호출마다 sampleOptions 객체도 다시 만든다.
+    return sampleCubeCell(luma, base, i, j, sampleOptions(options, cfg));
+  };
+}
+
+/** proposal 셀 계층 캐시 변이 자 전용. 복호 경로의 소비자는 이 파일 안뿐이다. */
+export const PROPOSAL_CELL_CACHE_TEST_ONLY = Object.freeze({
+  cellSurfaceMemoizationEnabled,
+  cellSurfaceSampler,
+});
 
 /**
  * 레퍼런스 셀 표본 지도. **프레임 밖으로 잘린 레퍼런스 셀 하나가 전체 보정을
@@ -2628,10 +2724,19 @@ export function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypoth
             ? hasFinalLayoutWireForN(n)
             : finalLayoutIdForN(n) !== null;
           if (options.enableCellSurfaceY === true && cellSurfaceLineupOpen) {
-            const cellSurface = evaluateCellSurfaceGeometry(
+            const sampleCell = cellSurfaceSampler(
+              luma,
               base,
-              (i, j) => sampleCubeCell(luma, base, i, j, sampleOptions(options, cfg)),
               options,
+              cfg,
+              cellSurfaceMemoizationEnabled(options),
+            );
+            const cellSurface = measureCubeProposal(options, 'evaluateMs', 'evaluate', () =>
+              evaluateCellSurfaceGeometry(
+                base,
+                sampleCell,
+                options,
+              ),
             );
             geometryReports.push(cellSurfaceSeedReport(
               n,
@@ -2666,7 +2771,8 @@ export function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypoth
           // 소프트 CS 탐침 shape 는 셀 표면 평가만 받는다 — 하드체크에서 떨어진
           // 육각이라 일반 레퍼런스/정제 경로(일반 Y 가설 생산)에는 넣지 않는다.
           if (shape.cellSurfaceOnly === true) continue;
-          const references = calibrateCubeReferences(luma, base, options);
+          const references = measureCubeProposal(options, 'evaluateMs', 'evaluate', () =>
+            calibrateCubeReferences(luma, base, options));
           geometryReports.push({
             n,
             orientation,
@@ -2688,13 +2794,15 @@ export function hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypoth
             (entry) => entry.hardChecks.all || entry.minimumSpan > 0,
           );
           for (const initialCalibration of refinable) {
-            const refined = refineHomographyWithReferences(
-              luma,
-              base,
-              initialCalibration.tones,
-              options,
-              cfg,
-              initialCalibration.hardChecks.all,
+            const refined = measureCubeProposal(options, 'refineMs', 'refine', () =>
+              refineHomographyWithReferences(
+                luma,
+                base,
+                initialCalibration.tones,
+                options,
+                cfg,
+                initialCalibration.hardChecks.all,
+              ),
             );
             if (!refined) continue;
             const refinedVertexResidual = vertexSetResidual(refined.H, n, vertices);
@@ -3154,8 +3262,13 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
   }
 
   const cfg = calibration(options);
-  const reduced = downsampleLuma(luma, cfg.maxDimension);
-  const shapes = shapeCandidates(reduced.luma, cfg);
+  const { reduced, shapes } = measureCubeProposal(options, 'enumerateMs', 'enumerate', () => {
+    const reducedValue = downsampleLuma(luma, cfg.maxDimension);
+    return {
+      reduced: reducedValue,
+      shapes: shapeCandidates(reducedValue.luma, cfg),
+    };
+  });
   // 새 Type Y 로케이터는 시험판에서 명시적으로 켠 경우에만 후보를 만든다.
   // 라이브러리/정식 스캐너의 기본 검출 계약과 프레임 비용은 그대로 유지한다.
   const locatorEnabled = options.enableLocatorY === true;
@@ -3179,7 +3292,8 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
   const geometryReports = [];
   let blockRecovery = null;
 
-  hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports);
+  measureCubeMixedEnumeration(options, () =>
+    hypothesesFromShapes(luma, reduced, shapes, options, cfg, hypotheses, geometryReports));
 
   // CS 파인더 블록 로케이터 — 마스크·실루엣 무의존으로 블록을 직접 찾아 기하를
   // 재정렬한다 (강한 톤 시프트에서 hull 이 0.5셀+ 어긋나는 병목의 원리 해법).
@@ -3189,17 +3303,20 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
   let blockLocator = null;
   let locatorAccepted = false;
   if (options.enableCellSurfaceY === true && options.csBlockLocator !== false) {
-    blockLocator = detectCellSurfaceBlockShapes(luma, options);
+    blockLocator = measureCubeProposal(options, 'enumerateMs', 'enumerate', () =>
+      detectCellSurfaceBlockShapes(luma, options));
     if (blockLocator.shapes.length > 0) {
       const reportsBefore = geometryReports.length;
-      hypothesesFromShapes(
-        luma,
-        { factor: 1 },
-        { candidates: blockLocator.shapes },
-        options,
-        cfg,
-        hypotheses,
-        geometryReports,
+      measureCubeMixedEnumeration(options, () =>
+        hypothesesFromShapes(
+          luma,
+          { factor: 1 },
+          { candidates: blockLocator.shapes },
+          options,
+          cfg,
+          hypotheses,
+          geometryReports,
+        ),
       );
       locatorAccepted = geometryReports
         .slice(reportsBefore)
@@ -3214,14 +3331,16 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
   if (options.enableCellSurfaceY === true && !attemptedBeforeLocator && !locatorAccepted) {
     const soft = softCellSurfaceShapes(shapes);
     if (soft.length > 0) {
-      hypothesesFromShapes(
-        luma,
-        reduced,
-        { candidates: soft },
-        options,
-        cfg,
-        hypotheses,
-        geometryReports,
+      measureCubeMixedEnumeration(options, () =>
+        hypothesesFromShapes(
+          luma,
+          reduced,
+          { candidates: soft },
+          options,
+          cfg,
+          hypotheses,
+          geometryReports,
+        ),
       );
     }
   }
@@ -3231,7 +3350,8 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
     && entry.referenceCalibration.hardChecks
     && entry.referenceCalibration.hardChecks.all);
   if (!hasConfirmedGrid) {
-    blockRecovery = recoverFlatBlockHypotheses(luma, reduced, options, cfg);
+    blockRecovery = measureCubeProposal(options, 'recoveryMs', 'recovery', () =>
+      recoverFlatBlockHypotheses(luma, reduced, options, cfg));
     hypotheses.push(...blockRecovery.hypotheses);
     geometryReports.push(...blockRecovery.reports.map((report) => ({
       geometrySeed: 'flat-block-affine',

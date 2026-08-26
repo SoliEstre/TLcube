@@ -166,6 +166,37 @@ function wrapDiscSample(entry) {
 }
 
 /*
+ * proposal 전수 프로브의 선택적 계수기. 호출자가 객체를 명시한 경우에만 만든다.
+ * 시간 A/B와 섞지 않도록 함수 안에서는 시계를 읽지 않고 호출·캐시·픽셀 수만 센다.
+ */
+function sampleProfileBucket(options) {
+  const profile = options && options._proposalProfile;
+  if (!profile || typeof profile !== 'object') return null;
+  const segment = typeof profile.segment === 'string' ? profile.segment : 'unattributed';
+  if (!profile.gridSample || typeof profile.gridSample !== 'object') profile.gridSample = {};
+  if (!profile.gridSample[segment]) {
+    profile.gridSample[segment] = {
+      calls: 0,
+      cacheHits: 0,
+      successCacheHits: 0,
+      failureCacheHits: 0,
+      cacheMisses: 0,
+      successComputations: 0,
+      failureComputations: 0,
+      bboxPixelVisits: 0,
+      geometricPixels: 0,
+      lumaReads: 0,
+    };
+  }
+  return profile.gridSample[segment];
+}
+
+function profiledDiscSampleFailure(profile, reason, detail) {
+  if (profile) profile.failureComputations += 1;
+  return fail(reason, detail);
+}
+
+/*
  * 원판 표본은 셀마다 median과 MAD를 구한다. Float64Array scratch와 stable 순번을
  * 재사용해 전체 정렬과 임시 deviations 배열을 없앤다.
  */
@@ -581,23 +612,34 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   assertHomography(H);
   validateDisc(disc);
   const config = samplingConfig(options);
+  const profile = sampleProfileBucket(options);
+  if (profile) profile.calls += 1;
   // 조회와 저장이 같은 (config, x, y, radius) 경로를 쓴다 (§lookupDiscSample).
   const discSamples = successfulDiscCacheFor(luma, H);
   const cached = lookupDiscSample(discSamples, disc, config);
-  if (cached !== undefined) return wrapDiscSample(cached);
+  if (cached !== undefined) {
+    if (profile) {
+      profile.cacheHits += 1;
+      profile.successCacheHits += 1;
+    }
+    return wrapDiscSample(cached);
+  }
+  if (profile) profile.cacheMisses += 1;
 
   // 정규화·역행렬은 H 만의 함수라 H 정체성으로 메모이즈한다 (§projectionFor).
   const projection = projectionFor(H);
   const normalizedH = projection.normalized;
   if (normalizedH === null) {
-    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+    return profiledDiscSampleFailure(profile,
+      FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
       stage: 'sample-projected-disc',
       cause: 'zero-scale-homography',
     });
   }
   const inverseH = projection.inverse;
   if (inverseH === null) {
-    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+    return profiledDiscSampleFailure(profile,
+      FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
       stage: 'sample-projected-disc',
       cause: 'non-invertible-homography',
     });
@@ -613,7 +655,8 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   for (const corner of corners) {
     const projected = projectPoint(normalizedH, corner.x, corner.y);
     if (projected === null) {
-      return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+      return profiledDiscSampleFailure(profile,
+        FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
         stage: 'sample-projected-disc',
         cause: 'disc-crosses-projective-horizon',
       });
@@ -639,7 +682,8 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
     maxX < 0 || maxY < 0 || minX > luma.width || minY > luma.height
   );
   if (!projectedIntersectsImage) {
-    return fail(FRONTEND_FAILURE.SYMBOL_CLIPPED, {
+    return profiledDiscSampleFailure(profile,
+      FRONTEND_FAILURE.SYMBOL_CLIPPED, {
       stage: 'sample-projected-disc',
       cause: 'projected-disc-outside-image',
       projectedBounds: { minX, minY, maxX, maxY },
@@ -652,6 +696,7 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   const y1 = Math.min(luma.height - 1, Math.ceil(maxY) + 1);
   const radiusSquared = disc.radius * disc.radius;
   const values = ensureDiscValuesScratch((x1 - x0 + 1) * (y1 - y0 + 1));
+  if (profile) profile.bboxPixelVisits += (x1 - x0 + 1) * (y1 - y0 + 1);
   let valueCount = 0;
   let geometricCount = 0;
   let opaqueCount = 0;
@@ -678,6 +723,10 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
       valueCount += 1;
     }
   }
+  if (profile) {
+    profile.geometricPixels += geometricCount;
+    profile.lumaReads += opaqueCount;
+  }
 
   const minorDiameter = projectedMinorDiameter(normalizedH, disc);
   const opaqueRatio = geometricCount === 0 ? 0 : opaqueCount / geometricCount;
@@ -692,7 +741,8 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
     constraintsFailed.push('insufficient-opaque-coverage');
   }
   if (constraintsFailed.length > 0) {
-    return fail(FRONTEND_FAILURE.SAMPLE_STARVED, {
+    return profiledDiscSampleFailure(profile,
+      FRONTEND_FAILURE.SAMPLE_STARVED, {
       stage: 'sample-projected-disc',
       cause: constraintsFailed[0],
       constraintsFailed,
@@ -719,6 +769,7 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
     projectedMinorDiameter: minorDiameter,
     geometricCount,
   };
+  if (profile) profile.successComputations += 1;
   cacheSuccessfulDiscSample(discSamples, disc, config, entry);
   return wrapDiscSample(entry);
 }

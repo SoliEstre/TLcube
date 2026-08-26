@@ -31,6 +31,22 @@ export const UNVERIFIED_CELL_FINDER_CALIBRATION = Object.freeze({
 const REFINED_FACE_FRACTIONS = Object.freeze([0.10, 0.90]);
 const TURN_RADIANS = 2 * Math.PI / 3;
 const EPSILON = 1e-12;
+
+function profileNow() {
+  return globalThis.performance && typeof globalThis.performance.now === 'function'
+    ? globalThis.performance.now()
+    : Date.now();
+}
+
+function proposalProfile(options) {
+  const profile = options && options._proposalProfile;
+  return profile && typeof profile === 'object' ? profile : null;
+}
+
+function addProfileTime(profile, key, started) {
+  if (!profile) return;
+  profile[key] += Math.max(0, profileNow() - started);
+}
 /**
  * 발자국(셀 목록) → 면 표본. 2026-08-18 daehan 편입으로 **발자국이 하나가 아니게**
  * 됐다 (기존 19셀 + daehan 31셀).
@@ -786,6 +802,14 @@ export function scoreCellMaskAtHomography(luma, cellMasks, H, options = {}) {
 }
 
 export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS, options = {}) {
+  const rootProfile = proposalProfile(options);
+  const profile = rootProfile ? {
+    setupMs: 0,
+    enumerateMs: 0,
+    evaluateMs: 0,
+    refineMs: 0,
+  } : null;
+  const setupStarted = profile ? profileNow() : 0;
   try { assertLumaField(luma); } catch (error) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-input', message: error.message });
   }
@@ -801,6 +825,7 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
   const percentiles = robustPercentiles(luma, [0.01, 0.99]);
   const span = percentiles ? percentiles[1] - percentiles[0] : 0;
   if (!(span > EPSILON)) return fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-search', cause: 'luma-span-degenerate' });
+  addProfileTime(profile, 'setupMs', setupStarted);
   // 조대 탐색을 **발자국 그룹별로** 돈다. 그래야 큰 발자국이 자기 격자를 제대로
   // 훑어도 작은 발자국의 파라미터·연산량이 한 값도 안 늘어난다 (그리고 큰 발자국이
   // 공유 조대 목록에서 작은 발자국의 자리를 뺏는 일도 사라진다).
@@ -812,6 +837,7 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
   let scaleCount = 0;
   const groups = [];
   for (const [faceSamples, group] of groupByFootprint(templates)) {
+    const groupEnumerationStarted = profile ? profileNow() : 0;
     const gcfg = searchParamsFor(cfg, faceSamples, law);
     if (gcfg.varianceCentersPerScale > 0 && !integrals) integrals = integralsOf(luma);
     const scales = scaleSeeds(luma, options, gcfg);
@@ -819,19 +845,26 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
     const scaleBracket = scaleBracketOf(scales);
     if (scales.length > scaleCount) scaleCount = scales.length;
     const coarse = [];
+    addProfileTime(profile, 'enumerateMs', groupEnumerationStarted);
     for (const cellSize of scales) {
+      const scaleEnumerationStarted = profile ? profileNow() : 0;
       const variance = (gcfg.varianceCentersPerScale > 0 && integrals)
         ? varianceCenters(luma, integrals, cellSize, gcfg) : [];
       const centers = centerSeeds(luma, variance, options.centerSeeds);
+      addProfileTime(profile, 'enumerateMs', scaleEnumerationStarted);
       for (const center of centers) {
         for (let angle = 0; angle < 360; angle += gcfg.coarseAngleStepDegrees) {
+          const geometryStarted = profile ? profileNow() : 0;
           const params = {
             centerX: center.x, centerY: center.y, logScale: Math.log(cellSize),
             rotation: angle * Math.PI / 180, anisotropy: 0, shear: 0,
             projectiveX: 0, projectiveY: 0,
           };
           const H = HFrom(params);
+          addProfileTime(profile, 'enumerateMs', geometryStarted);
+          const evaluationStarted = profile ? profileNow() : 0;
           const scored = scoreBest(luma, H, group, span, false);
+          addProfileTime(profile, 'evaluateMs', evaluationStarted);
           evaluatedGeometry += 1;
           if (scored && scored.fit > 0) {
             insertTop(coarse, { ...scored, params, H, scaleBracket }, gcfg.maxCoarseCandidates);
@@ -842,6 +875,7 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
     evaluatedCoarse += coarse.length;
     groups.push({ coarse, gcfg });
   }
+  const refineStarted = profile ? profileNow() : 0;
   const refined = groups.flatMap(({ coarse, gcfg }) => coarse.slice(0, gcfg.maxRefinedCandidates)
     .flatMap((candidate) => [
       refine(luma, candidate, span, 'affine'),
@@ -851,6 +885,17 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
   // 그룹 분리는 탐색 단계에만 걸린다.
   const candidates = nms(refined.map((entry) => finishCandidate(luma, entry, templates, span, cfg, exemptPairs))
     .filter((entry) => entry && entry.hardChecksPassed), cfg.maxOutputCandidates, exemptPairs);
+  addProfileTime(profile, 'refineMs', refineStarted);
+  if (rootProfile) {
+    if (!Array.isArray(rootProfile.cellFinderCalls)) rootProfile.cellFinderCalls = [];
+    rootProfile.cellFinderCalls.push({
+      ...profile,
+      evaluatedGeometry,
+      evaluatedCoarse,
+      evaluatedRefined: refined.length,
+      candidateCount: candidates.length,
+    });
+  }
   if (candidates.length === 0) {
     const best = refined[0];
     return fail(FRONTEND_FAILURE.NO_FINDER, {
