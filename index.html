@@ -7069,6 +7069,27 @@ function paintY3dPreview() {
     const entry = encoded.cellDigits.get(`${i},${j}`);
     return entry ? entry.digit : null;
   };
+  /*
+   * ⭐ **파인더(로케이터) 칸의 절대 톤** — 운영자 신고 2026-08-26
+   *    「필드 기준으로 데이터 부분만 셀 출력이 되고 파인더 영역은 구멍이 뚫린다」.
+   *
+   * 셀 표면 로케이터를 켜면 파인더 칸은 `digit: null` 이고 대신 면별 절대 레벨
+   * `tones: {T,L,R}` 를 든다. 종전 3D 는 digit 만 보고 그 칸을 **건너뛰어** 구멍이 됐다.
+   * 2.5D(`sceneY.js` §locator)는 같은 자리에서 tones 를 읽어 칠하므로 꽉 찼다 —
+   * 두 렌더가 갈려 있었다.
+   *
+   * ⚠ **`entry.tones` 하나로 충분한지 실측했다**: 셀 표면 프로파일 **14종 × 전 버전**에서
+   *   로케이터 칸이 **100% tones 를 들고 있다** (v0 30 · v0t 104 · v0ty 95 · v2r2 74 …).
+   *   sceneY 의 나머지 분기(`locatorToneCellSurfaceFinal` 등)는 tones 가 **없을 때**의
+   *   폴백이라 이 경로에선 안 탄다. 한 점이 아니라 격자로 확인한 결론이다.
+   */
+  const levelAt = (i, j, face) => {
+    if (y3dPreview.mode === 'cell') return null;
+    const entry = encoded.cellDigits.get(`${i},${j}`);
+    if (!entry || !entry.tones) return null;
+    const lv = entry.tones[face];
+    return Number.isInteger(lv) ? lv : null;
+  };
   y3dPreview.mesh = buildOrbitMesh({
     n,
     tones,
@@ -7077,6 +7098,7 @@ function paintY3dPreview() {
     yaw: y3dPreview.yaw,
     pitch: y3dPreview.pitch,
     digitAt,
+    levelAt,
     includeBack: true,
   });
   const ctx = canvas.getContext('2d', { alpha: false });

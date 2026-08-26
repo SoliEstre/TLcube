@@ -100,6 +100,29 @@ function colorOfDigit(digit, face, tones, levels) {
   return levels[digitToRanks(digit)[face]];
 }
 
+/**
+ * 한 셀 한 면의 색.
+ *
+ * ⭐ **digit 만으로는 부족하다** (2026-08-26 운영자 신고 「파인더 영역에 구멍이 뚫린다」).
+ * 셀 표면 로케이터(`cellSurface`)를 켜면 파인더 칸은 `digit: null` 이고 대신
+ * **`tones: {T,L,R}`** (면별 절대 레벨 인덱스)를 든다. 실측: Y0 v0 에서 169칸 중
+ * **30칸**이 그 모양이다 (`role:'locator'`).
+ *
+ * 종전 뷰어는 `digitAt` 이 null 이면 그 칸을 **통째로 건너뛰어** 구멍이 됐다.
+ * 2.5D(`sceneY.js` §locator)는 같은 자리에서 tones 를 읽어 칠하므로 꽉 찬다 —
+ * 두 렌더가 갈렸던 것이고, 여기서 **같은 화법**으로 맞춘다.
+ *
+ * `levelAt(i, j, face)` 는 호출자가 주는 «절대 레벨 인덱스 또는 null» 이다.
+ * null 이면 digit 경로로 떨어진다 — 로케이터가 없는 구성에서는 종전과 완전히 같다.
+ */
+function colorOfCell(digit, face, tones, levels, levelAt, i, j) {
+  if (typeof levelAt === 'function') {
+    const lv = levelAt(i, j, face);
+    if (Number.isInteger(lv) && lv >= 0 && lv < levels.length) return levels[lv];
+  }
+  return colorOfDigit(digit, face, tones, levels);
+}
+
 function quadDepth(corners) {
   let s = 0;
   for (const p of corners) s += p.x + p.y + p.z;
@@ -122,6 +145,8 @@ export function buildOrbitMesh(options) {
   const yaw = options.yaw === 0 ? 0 : (options.yaw || 0);
   const pitch = options.pitch === 0 ? 0 : (options.pitch || 0);
   const digitAt = options.digitAt;
+  /** (i,j,face) → 절대 레벨 인덱스 | null. 로케이터 칸용. 없으면 digit 경로만 쓴다. */
+  const levelAt = options.levelAt;
   const includeBack = options.includeBack !== false;
   if (!Number.isInteger(n) || n <= 0) {
     throw new RangeError(`n 은 1 이상의 정수여야 한다: ${n}`);
@@ -135,7 +160,12 @@ export function buildOrbitMesh(options) {
   for (let j = 0; j < n; j += 1) {
     for (let i = 0; i < n; i += 1) {
       const digit = digitAt(i, j);
-      if (digit === null || digit === undefined) continue;
+      // ⚠ digit 이 없어도 **levelAt 이 색을 낼 수 있으면 그린다** — 로케이터 칸이 그렇다.
+      //    종전엔 무조건 건너뛰어 파인더가 구멍이 됐다 (운영자 신고 2026-08-26).
+      const hasDigit = digit !== null && digit !== undefined;
+      const hasLevel = typeof levelAt === 'function'
+        && YFACES.some((f) => Number.isInteger(levelAt(i, j, f)));
+      if (!hasDigit && !hasLevel) continue;
       for (const face of YFACES) {
         const raw = moduleCorners3d(face, i, j);
         const corners = raw.map((p) => orbitPoint(p, yaw, pitch, center));
@@ -145,7 +175,7 @@ export function buildOrbitMesh(options) {
           i,
           j,
           digit,
-          color: colorOfDigit(digit, face, tones, levels),
+          color: colorOfCell(digit, face, tones, levels, levelAt, i, j),
           corners3d: corners,
           points2d: corners.map((p) => isoProject(p.x, p.y, p.z, layout)),
           depth: quadDepth(corners),

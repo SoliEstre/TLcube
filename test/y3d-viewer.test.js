@@ -331,6 +331,50 @@ describe('3D 가 실제로 코드를 그리는가 (운영자 신고 회귀)', ()
    *   `paintQuads` 가 실제로 그 경로를 타는지는 안 잰다. 실제로 배선을 되돌리는
    *   변이를 넣어 봤더니 16/16 이 그대로 초록이었다. 그래서 **끝단**을 잰다.
    */
+  /*
+   * ⭐ **파인더(로케이터) 칸도 그려야 한다** (2026-08-26 운영자 신고
+   *   「데이터 부분만 셀 출력이 되고 파인더 영역은 구멍이 뚫린다」).
+   *
+   * 셀 표면 로케이터를 켜면 그 칸은 `digit: null` + `tones: {T,L,R}` 다.
+   * digit 만 보면 건너뛰어 **구멍**이 되고, 2.5D 는 tones 를 읽어 꽉 찬다.
+   * 두 렌더가 갈렸던 자리다.
+   */
+  test('로케이터 칸이 구멍이 되지 않는다 — digit 없어도 tones 로 그린다', async () => {
+    const { CELL_SURFACE_FINAL_V0 } = await import('../src/cellSurfaceFinal.js');
+    const enc = encodeY('https://tl.estre.so', {
+      version: 0, eccLevel: 'H', tones: 3,
+      cellSurface: true, cellSurfaceLayout: CELL_SURFACE_FINAL_V0,
+    });
+    const locators = [...enc.cellDigits.entries()].filter(([, v]) => v.role === 'locator');
+    assert.ok(locators.length > 0, '이 구성에 로케이터 칸이 없다 — 자가 무의미해진다');
+    // ⚠ **먼저 「잴 게 있나」**: 로케이터 칸이 정말 digit 없이 tones 만 드는가.
+    assert.ok(locators.every(([, v]) => v.digit === null || v.digit === undefined),
+      '로케이터가 digit 을 든다 — 이 회귀의 전제가 바뀌었다');
+    assert.ok(locators.every(([, v]) => v.tones), '로케이터가 tones 를 안 든다');
+
+    const layout = layoutForCube(enc.n, { size: 1, margin: 0.25 });
+    const mesh = buildOrbitMesh({
+      n: enc.n, tones: 3, levels: preset.levels, layout, yaw: 0, pitch: 0,
+      digitAt: (i, j) => {
+        const e = enc.cellDigits.get(`${i},${j}`);
+        return e ? e.digit : null;
+      },
+      levelAt: (i, j, face) => {
+        const e = enc.cellDigits.get(`${i},${j}`);
+        const lv = e && e.tones ? e.tones[face] : null;
+        return Number.isInteger(lv) ? lv : null;
+      },
+    });
+    // 전 칸 × 3면이 다 그려져야 한다 — 로케이터를 건너뛰면 이 수가 모자란다.
+    const mods = mesh.quads.filter((q) => q.kind === 'module');
+    assert.equal(mods.length, enc.n * enc.n * 3,
+      `데이터 면 수가 모자란다 (${mods.length} vs ${enc.n * enc.n * 3}) `
+      + `— 로케이터 ${locators.length}칸이 구멍이 됐을 수 있다.`);
+    // 그 칸들의 색도 팔레트 안이어야 한다 (뒷면 색이 새면 안 된다).
+    const allowed = new Set(preset.levels.map(hexOf));
+    assert.ok(mods.every((q) => allowed.has(hexOf(q.color))), '팔레트 밖 색이 있다');
+  });
+
   test('paintQuads 가 그 안정 경로를 실제로 탄다 — 가짜 ctx 로 끝단 측정', () => {
     const stub = () => {
       const canvas = { width: 800, height: 800 };
