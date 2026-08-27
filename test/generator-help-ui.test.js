@@ -24,6 +24,7 @@ import {
   HELP_POPOVER_EDGE, HELP_POPOVER_GAP, positionHelpPopover,
 } from '../src/help-popover.js';
 import { PRESETS, getPreset, relativeLuminance } from '../src/luminance.js';
+import { makeCustomPalette } from '../src/palette-hue.js';
 import { decideQuietColor } from '../src/quiet-auto.js';
 import { buildSingleHtml } from '../tools/build-single.mjs';
 
@@ -217,9 +218,29 @@ test('안전영역 — 문턱 타이브레이크는 프리셋 전부에서 죽�
   assert.equal(measured.ember.toFixed(4), '0.2507');
   assert.equal(measured.mono.toFixed(4), '0.0257');
   // 커스텀 팔레트는 slate 의 **상대휘도를 그대로 타깃**해서 만든다 — 그래서 hue 를
-  // 어디로 돌려도 slate 근처(0.1629~0.1764)에 머문다. 그 구조를 소스에서 확인한다.
-  assert.match(INDEX, /const base = getPreset\('slate'\);/);
-  assert.match(INDEX, /colorAtLuminance\(hue, CUSTOM_SATS\.levels\[i\], relativeLuminance\(lvl\)\)/);
+  // 어디로 돌려도 slate 근처에 머문다.
+  //
+  // ⚠ **의도적 갱신** (2026-08-27, `src/palette-hue.js` 추출): 종전엔 이 구조를
+  //   `index.html` 소스에 `const base = getPreset('slate');` 가 **글자 그대로**
+  //   있는지로 확인했다. 팔레트 코드가 모듈로 나가자 그 자가 죽었고, 새 자리로
+  //   옮겨 적어도 두 번째 정규식은 여전히 틀렸다 — 추출본은 `levels[i]` 가 아니라
+  //   `levels[index]` 다. **코드의 철자를 재던 자였기 때문**이다.
+  //   지금은 같은 주장을 **값으로** 잰다: hue 를 한 바퀴 돌려 실제로 slate 근처에
+  //   머무는지 본다. 이쪽이 더 강하다 — 채도·타깃·기준 프리셋을 잘못 잡거나 RGB 를
+  //   지어내면 철자가 어떻든 이 범위를 벗어난다.
+  const customSeparations = [];
+  for (let hue = 0; hue < 360; hue += 1) {
+    const { levels } = makeCustomPalette(hue);
+    customSeparations.push(Math.abs(sep(levels, white) - sep(levels, black)));
+  }
+  assert.equal(customSeparations.length, 360, '커스텀 hue 전수 표본이 비었다');
+  // 실측 고정 (2026-08-27, hue 0~359 전수). 최소 hue 96 · 최대 hue 305.
+  assert.equal(Math.min(...customSeparations).toFixed(4), '0.1629');
+  assert.equal(Math.max(...customSeparations).toFixed(4), '0.1764');
+  // 그리고 그 범위가 실제로 slate 를 감싼다 — «slate 근처» 가 말뿐이 아님을 잰다.
+  assert.ok(Math.min(...customSeparations) < measured.slate
+    && measured.slate < Math.max(...customSeparations),
+  `slate ${measured.slate.toFixed(4)} 가 커스텀 범위 밖이다 — 기준 프리셋이 바뀌었나`);
   // 그리고 «순서를 바꾸면 살아난다» 는 여기서 한 번 실증한다 — 같은 수치 그대로,
   // 새 규칙에서는 표면 밝기가 실제로 답을 가른다. (규칙 전수 검증은 quiet-auto.test.js.)
   const slate = getPreset('slate').levels;
