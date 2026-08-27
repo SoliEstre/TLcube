@@ -138,6 +138,16 @@ test('Type Y 톤은 일반·고급 카드가 같은 단일 상태를 쓰고 기�
   assert.ok(exposedGeneratorStateKeys('advanced').includes('tone'));
   assert.match(INDEX_SOURCE, /id="toneCardsNormal"[\s\S]*data-tone="2"[\s\S]*data-tone="3"/);
   assert.match(INDEX_SOURCE, /id="toneCardsAdvanced"[\s\S]*data-tone="2"[\s\S]*data-tone="3"/);
-  assert.match(INDEX_SOURCE,
-    /const generatorState = createGeneratorState\(\);\s*const nextExportFilename = createExportFilenameFactory\(\);/);
+  // ⚠ **인접이 아니라 «한 번만·이 순서로»** 를 잰다 (2026-08-27). 종전엔 두 줄이
+  //   붙어 있는지를 봤는데, 정식 화면용 중앙 TL 정화 블록이 사이에 들어오며 깨졌다.
+  //   중간에 코드가 오는 것은 사고가 아니다 — **두 번 만드는 것**이 사고다.
+  const stateDecls = INDEX_SOURCE.match(/const generatorState = createGeneratorState\(\);/g) || [];
+  const filenameDecls = INDEX_SOURCE.match(/const nextExportFilename = createExportFilenameFactory\(\);/g) || [];
+  assert.equal(stateDecls.length, 1, 'generatorState 는 정확히 한 번 만들어야 한다');
+  assert.equal(filenameDecls.length, 1, 'nextExportFilename 은 정확히 한 번 만들어야 한다');
+  assert.ok(
+    INDEX_SOURCE.indexOf('const generatorState = createGeneratorState();')
+      < INDEX_SOURCE.indexOf('const nextExportFilename = createExportFilenameFactory();'),
+    'generatorState 가 nextExportFilename 보다 뒤에 있다',
+  );
 });

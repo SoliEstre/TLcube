@@ -89,7 +89,11 @@ test('select 대신 계열 카드 격자이고 이진 마스크·3톤 큐브 썸
   assert.doesNotMatch(source, /finder-legacy-row \.finder-card \{ flex-direction: row/);
   // 정식 행은 여전히 formal 그룹에서 나오고(손 나열 금지), v0 는 규칙으로 끼워진다.
   assert.match(source, /FINDER_CARD_GROUPS\.formal\.flatMap/);
-  assert.match(source, /\[CENTRAL_V0_FINDER_CARD, entry\]/);
+  // ⚠ **철자가 아니라 성질을 잰다** (2026-08-27). 종전엔 `[CENTRAL_V0_FINDER_CARD, entry]`
+  //   를 글자 그대로 봤는데, 시험판 중앙 카드가 그 사이에 들어오며 깨졌다. 지켜야 할 것은
+  //   「v0 가 entry **앞에** 규칙으로 끼워진다(손 나열이 아니다)」이지 둘 사이가 비어 있다가
+  //   아니다. 사이에 무엇이 오든 순서만 맞으면 통과한다.
+  assert.match(source, /\[CENTRAL_V0_FINDER_CARD,[^\]]*entry\]/);
   assert.match(source, /function centerQrThumbnail\(\)/);
   assert.match(source, /finder-family-grid\.card-row \{\s*display: grid; grid-template-columns: repeat\(4,/);
   assert.match(source, /@media \(max-width: 420px\)[\s\S]*finder-family-grid\.card-row \{ grid-template-columns: repeat\(2,/);

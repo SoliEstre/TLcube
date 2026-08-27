@@ -30,6 +30,7 @@ import {
 } from '../src/luminance.js';
 import { FINDER_CARD_GROUPS } from '../src/finder-card-ui.js';
 import { CENTER_QR_FINDER_PATTERN_ID } from '../src/finder-selection.js';
+import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from '../src/centralMarkerN7.js';
 import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
 import { GENERATOR_STATE_SCHEMA, createGeneratorState } from '../src/generator-state.js';
 import {
@@ -88,6 +89,10 @@ test('§6.1 편집기는 생성기가 고를 수 있는 파인더 id 를 조용�
   const cardIds = Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id);
   const notRepresentable = new Set([
     CENTER_QR_FINDER_PATTERN_ID, // QR 모듈 블록이라 셀 표현이 없다 (동기화가 건너뛴다)
+    // 중앙 TL(n=7 마커, 2026-08-27) — 49셀이 **전부 고정**인 코드북이라 중앙 19셀
+    // 편집기에 편집할 것이 없다. daehan(39/59/79셀)과 같은 부류의 «알려진 예외» 이지
+    // 조용한 폴백이 아니다. 편집 대상이 생기면 이 줄을 지운다.
+    CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
   ]);
   const swallowed = [];
   for (const id of cardIds) {
