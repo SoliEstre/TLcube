@@ -1,6 +1,9 @@
 // generator-render-config.js — 생성기의 정규 상태 → 인코더/scene 옵션 경계
 
 import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import {
+  centralMarkerN7FamilyForType, isCentralMarkerN7FinderPatternId,
+} from './centralMarkerN7.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
   CELL_SURFACE_FINAL_V0,
@@ -252,6 +255,11 @@ export function sceneOptionsForOA({
     centerQr,
     finderPatternId: centerQr ? CENTER_QR_FINDER_PATTERN_ID : finderPatternId,
   };
+  // 중앙 TL family는 QR 위치가 아니라 바깥 타입의 속성이다. 실제 N7 렌더가 선택된
+  // 모든 O/A 경로에서 여기서 유도해, 호출자가 옵션을 손으로 덧붙이는 사본을 만들지 않는다.
+  if (isCentralMarkerN7FinderPatternId(opts.finderPatternId)) {
+    opts.centralMarkerN7Family = centralMarkerN7FamilyForType(type);
+  }
   let needsCornerQr = false;
   if (centerQr) {
     opts.qrText = qrText;

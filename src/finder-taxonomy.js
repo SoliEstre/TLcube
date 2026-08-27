@@ -53,6 +53,7 @@ import {
 import {
   CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID,
 } from './finder-selection.js';
+import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from './centralMarkerN7.js';
 import { FINDER_CARD_GROUPS } from './finder-card-ui.js';
 import {
   OAK_LINEUP, liveOakCandidates, oakCandidate,
@@ -242,6 +243,28 @@ function buildItems() {
     renderable: true,
     consumer: '생성기 카드 formal행 삽입 · central-beacon-adapt 검출 · LAB_CENTRAL',
     note: 'F-34 편입 — 계약 _contracts/central-v0-beacon.md 가 기하 정본',
+  });
+
+  // 중앙 TL (n=7 마커) — 2026-08-27 편입. 중앙 Y0(n=13) 와 **같은 슬롯**을 쓰지만
+  // 성격이 다르다: Y0 는 «Type Y 코드 한 벌» 이고 이쪽은 **데이터를 안 싣는 고정 마커**다
+  // (49셀 < 오버헤드 60셀이라 데이터 프레임이 산술적으로 불가능 — 레인 BCN7).
+  // ⚠ **시험판 전용**이다. 디코더가 아직 이 마커를 못 읽는다 — 정식에 노출하면
+  //   «만들 수는 있는데 스캔이 안 되는» 코드를 사용자가 발행한다.
+  add({
+    id: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+    name: '중앙 TL (n=7 마커)',
+    class: 1,
+    className: FINDER_CLASS[1],
+    kind: KIND_FINDER,
+    origin: 'CENTRAL_MARKER_N7_FINDER_CARD (finder-card-ui) — 시험판 전용 카드',
+    renderPath: 'src/scene.js central-marker-n7 (고정 코드북 렌더)',
+    coordBasis: COORD_CENTER,
+    innerSplit: null,
+    toneAxis: '셀 컬러 (palette.levels — 후보 B 고정 3톤)',
+    cells: '중앙 슬롯 49셀 전부 고정 (pose 12 + family 37)',
+    renderable: true,
+    consumer: '시험판 생성기 카드 · (디코더 편입 전)',
+    note: '레인 BCN7/BCN7P — 실사 거짓 수용 0/1.78억 창. 참 수용은 아직 합성뿐',
   });
 
   for (const pattern of FINDER_PATTERNS) {

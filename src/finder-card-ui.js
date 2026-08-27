@@ -12,10 +12,16 @@ import {
 } from './finder-patterns.js';
 import {
   CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID,
+  isCentralV0FinderPatternId,
 } from './finder-selection.js';
-import { OAK_ALL_FINDER_PATTERNS, OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
+import {
+  OAK_ALL_FINDER_PATTERNS, OAK_FINDER_PATTERNS, getOakFinderPattern,
+} from './finder-oak-patterns.js';
 import { OAK_LINEUP } from './finder-oak-lineup.js';
-import { DAEHAN_FINDER_PATTERNS } from './finder-daehan.js';
+import { DAEHAN_FINDER_PATTERNS, getDaehanFinderPattern } from './finder-daehan.js';
+import {
+  CENTRAL_MARKER_N7_FINDER_PATTERN_ID, isCentralMarkerN7FinderPatternId,
+} from './centralMarkerN7.js';
 
 function descriptor(id, pattern) {
   return Object.freeze({ id, pattern });
@@ -68,6 +74,23 @@ if (!DAEHAN_K10 || !Array.isArray(DAEHAN_K10.finderCells) || DAEHAN_K10.finderCe
 /** 생성 패턴 표 밖의 중앙 v0 카드 — 기존 그룹 계보·개수 계약과 분리한다. */
 export const CENTRAL_V0_FINDER_CARD = descriptor(CENTRAL_V0_FINDER_PATTERN_ID, null);
 
+/** 디코더 배선 전 /lab/에서만 그리는 중앙 TL n=7 카드. */
+export const CENTRAL_MARKER_N7_FINDER_CARD = descriptor(
+  CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  null,
+);
+
+const CENTRAL_V0_UNMEASURED = Object.freeze({ labelKey: 'g582' });
+const CENTRAL_MARKER_N7_UNMEASURED = Object.freeze({ labelKey: 'g1000' });
+
+/** 카드 점수 패널의 미측정 분류 정본 — UI와 N-way sync 가드가 함께 소비한다. */
+export function getUnmeasuredFinderPattern(id) {
+  return getOakFinderPattern(id)
+    || getDaehanFinderPattern(id)
+    || (isCentralV0FinderPatternId(id) ? CENTRAL_V0_UNMEASURED : null)
+    || (isCentralMarkerN7FinderPatternId(id) ? CENTRAL_MARKER_N7_UNMEASURED : null);
+}
+
 export const FINDER_CARD_GROUPS = Object.freeze({
   // 사용자 지시 2026-08-13: 하이브리드를 두 번째로 — 실사진에서 실제로 읽히는 큐브
   // 선택지가 이쪽이고, 순수 3톤 큐브는 정지 사진 0/6 이라 뒤로 민다.
@@ -77,6 +100,9 @@ export const FINDER_CARD_GROUPS = Object.freeze({
     descriptor(THREE_TONE_CUBE_FINDER_PATTERN_ID, getFinderPattern(THREE_TONE_CUBE_FINDER_PATTERN_ID)),
     descriptor(CENTER_QR_FINDER_PATTERN_ID, null),
   ]),
+  // 상태 스키마는 카드 그룹 전체에서 유도하되, DOM 생성은 index.html 이 /lab/에서만
+  // 이 그룹을 formal 행에 끼운다. 숨김과 선택 차단은 서로 독립된 두 겹이다.
+  lab: Object.freeze([CENTRAL_MARKER_N7_FINDER_CARD]),
   generated: Object.freeze(generatedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
   refined: Object.freeze(refinedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
   // O/A/K 후보 (2026-08-18) — 운영자 편집기 export 계보. 이진 후보들과 **다른 줄**에

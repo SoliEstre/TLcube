@@ -73,6 +73,11 @@ export const MODULE_ORDER = [
   // `finder-footprint`(의존: finder-patterns 뿐)가 그 앞에 새로 등록됐다 — OAK 표가
   // footprint 표와 taegeuk 유도(finder-daehan)를 import 하게 됐기 때문이다. 같은
   // 위상 규칙: 로컬 의존 전부가 앞에 있어야 치환이 성립한다.
+  // 중앙 TL(n=7 마커) 코드북 — 의존 0 인 잎 모듈. 소비자는 `scene`(그린다) 과
+  // `finder-card-ui`(카드 정본) **둘**이라 그 앞이어야 한다.
+  // ⚠ 이 목록은 빌더마다 손 사본이다 — 신설 모듈은 그 모듈을 나르는 빌더 **전부**에
+  //    등재해야 한다. 한쪽만 하면 다른 쪽 빌드가 위상 검사에서 죽는다 (실제로 죽었다).
+  'centralMarkerN7',
   'placement', 'finder-daehan', 'finder-footprint', 'finder-oak-patterns',
   // generator-types 는 finder-selection·generator-state **양쪽의 앞**이어야 한다
   // (둘 다 타입 목록을 여기서 가져간다 — 2026-08-25 손 사본 철폐).

@@ -18,6 +18,7 @@ import {
 import { encodeA } from '../src/encodeA.js';
 import {
   FINDER_CARD_GROUPS,
+  getUnmeasuredFinderPattern,
   wireFinderCardActivation,
 } from '../src/finder-card-ui.js';
 import {
@@ -200,7 +201,8 @@ test('정식 파인더 카드 행은 불스아이 → 하이브리드 → 3톤 �
   // **의도적 갱신 (2026-08-23, C1 — Benzene 드랍)** — 21 → 20. 카드는 명부
   // live-join 유도라 status 'dropped' 가 카드를 닫는다 (판독·패턴 표는 유지).
   // **의도적 갱신 (2026-08-24 — Aspirin 드랍, 아침 검수 5)** — 20 → 19. 같은 규약.
-  assert.equal(ids.length, 19);
+  // **의도적 갱신 (2026-08-27, N7CARD 시험판 카드)** — 19 → 20. /lab/ 전용 중앙 TL 카드가 붙었고 정식 화면 카드 수 19는 변하지 않았다.
+  assert.equal(ids.length, 20);
   assert.deepEqual(ids.slice(-4, -1),
     ['oak-nitrogen-r2', 'oak-footprint', 'oak-taegeuk-solo'],
     'OAK 카드가 daehan 앞 세 자리가 아니다');
@@ -360,23 +362,22 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
  *
  * 회귀가 **카드 수만 세고 선택 동작을 안 재고 있었다.** 이 검사는 그 구멍을 막는다:
  * 카드로 나오는 모든 id 는 ⓐ 점수 레코드가 있거나 ⓑ 미측정 분기가 받아야 한다.
- * index.html 의 실제 분기 조건과 **같은 술어**(getOakFinderPattern ‖ getDaehanFinderPattern)로 잰다 —
- * 다른 술어로 재면 이 검사가 초록인 채로 UI 만 다시 죽는다.
+ * index.html 의 실제 분기가 소비하는 **같은 유도 함수**로 잰다 — 다른 술어로 재면
+ * 이 검사가 초록인 채로 UI 만 다시 죽는다.
  */
 test('모든 파인더 카드 id 는 점수 레코드가 있거나 미측정 분기가 받는다', async () => {
   const { FINDER_BASELINE_SCORES, FINDER_PATTERNS } = await import('../src/finder-patterns.js');
-  const { getOakFinderPattern } = await import('../src/finder-oak-patterns.js');
   const scored = new Set([
     ...FINDER_PATTERNS.map((pattern) => pattern.id),
     ...Object.keys(FINDER_BASELINE_SCORES),
   ]);
   const ids = Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id);
   assert.ok(ids.length >= 18, '카드가 18개 미만이다 — 그룹이 비었는지 보라');
-  // ⚠ 술어를 **index.html 의 실제 분기와 같은 모양**으로 쓴다. 2026-08-19 에 여기서
+  // ⚠ 술어를 **index.html 의 실제 분기에서 유도**한다. 2026-08-19 에 여기서
   //   한 번 걸렸다: `isOakFinderPatternId('oak-daehan-k10')` 은 **false** 다 —
   //   OAK_BY_ID 가 세 id 만 든 Map 이라 `oak-` 접두사는 계보를 말해 주지 않는다.
-  //   index.html 은 `getOakFinderPattern(id) || getDaehanFinderPattern(id)` 로 받는다.
-  const unmeasured = (id) => Boolean(getOakFinderPattern(id) || getDaehanFinderPattern(id));
+  //   이제 UI와 이 가드가 getUnmeasuredFinderPattern 하나를 함께 소비한다.
+  const unmeasured = (id) => Boolean(getUnmeasuredFinderPattern(id));
   const orphans = ids.filter((id) => !scored.has(id) && !unmeasured(id));
   assert.deepEqual(orphans, [],
     '점수 레코드도 없고 미측정 분기도 안 받는 카드: ' + JSON.stringify(orphans)

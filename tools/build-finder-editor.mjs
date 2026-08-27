@@ -14,6 +14,11 @@ const OUTPUT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html'
 const LOADER_TOKEN = '<!-- FINDER_EDITOR_LOADER -->';
 
 export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
+  // 중앙 TL(n=7 마커) 코드북 — 의존 0 인 잎 모듈. 소비자는 `scene`(그린다) 과
+  // `finder-card-ui`(카드 정본) **둘**이라 그 앞이어야 한다.
+  // ⚠ 이 목록은 빌더마다 손 사본이다 — 신설 모듈은 그 모듈을 나르는 빌더 **전부**에
+  //    등재해야 한다. 한쪽만 하면 다른 쪽 빌드가 위상 검사에서 죽는다 (실제로 죽었다).
+  'centralMarkerN7',
   // finder-oak-lineup/-patterns 는 scene.js 가 OAK 후보를 렌더하려고 쓴다 (2026-08-18).
   // finder-patterns 뒤 · scene 앞이어야 한다.
   'hexgrid', 'finder-patterns', 'finder-oak-lineup',
