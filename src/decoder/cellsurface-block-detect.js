@@ -59,6 +59,12 @@
 import { CORNER_UNIT_OFFSETS } from '../hexgrid.js';
 import { faceBasis, moduleCenter } from '../ygrid.js';
 import {
+  CENTRAL_N7_LOCATOR_CELLS,
+  CENTRAL_N7_PATTERN_FAMILY_ID,
+  CENTRAL_N7_SCHEMA_ID,
+  CENTRAL_N7_SIZE,
+} from '../centralN7Schema.js';
+import {
   CELL_SURFACE_FINAL_NS,
   CENTER_QR_SLOT_CELLS,
   blocksCellSurfaceFinalForN,
@@ -1660,6 +1666,193 @@ function bilinear(luma, x, y) {
   const top = luma.data[base] * (1 - fx) + luma.data[base + 1] * fx;
   const bottom = luma.data[base + luma.width] * (1 - fx) + luma.data[base + luma.width + 1] * fx;
   return top * (1 - fy) + bottom * fy;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 5a. 중앙 n=7 coded locator 전용 패치와 국소 정련.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * 중앙 n=7은 v0의 13×13 블록과 좌표계만 닮았고, 실제 템플릿은 7×7의 재앵커
+ * locator 30셀이다. v0 patchesForN(13)을 크기만 줄여 재사용하면 데이터 19셀을
+ * locator로 오인하므로, 정본 30셀에서 면 중심 90점을 독립 유도한다.
+ */
+const CENTRAL_N7_PATCH_TEMPLATE = Object.freeze(CENTRAL_N7_LOCATOR_CELLS.flatMap((cell) =>
+  ['T', 'L', 'R'].map((face) => Object.freeze({
+    point: Object.freeze(moduleCenter(face, cell.i, cell.j, {
+      size: 1, originX: 0, originY: 0,
+    })),
+    expected: cell[face] === 2 ? 1 : -1,
+  }))));
+
+function centralN7PatchScore(luma, center, modulePitch, degrees) {
+  const radians = degrees * Math.PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const values = new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length);
+  const expected = new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length);
+  let count = 0;
+  for (const entry of CENTRAL_N7_PATCH_TEMPLATE) {
+    const px = entry.point.x * modulePitch;
+    const py = entry.point.y * modulePitch;
+    const sampleX = Math.round(center.x + px * cosine - py * sine);
+    const sampleY = Math.round(center.y + px * sine + py * cosine);
+    if (sampleX < 0 || sampleY < 0 || sampleX >= luma.width || sampleY >= luma.height) continue;
+    const value = luma.data[sampleY * luma.width + sampleX];
+    values[count] = value;
+    expected[count] = entry.expected;
+    count += 1;
+  }
+  // locator의 90면 가운데 일부가 프레임 밖인 포즈를 정련 증거로 쓰지 않는다.
+  if (count < Math.ceil(CENTRAL_N7_PATCH_TEMPLATE.length * 5 / 6)) return null;
+  const correlation = pearson(values, expected, count);
+  if (correlation === null) return null;
+  const dark = [];
+  const bright = [];
+  for (let index = 0; index < count; index += 1) {
+    (expected[index] > 0 ? bright : dark).push(values[index]);
+  }
+  dark.sort((left, right) => left - right);
+  bright.sort((left, right) => left - right);
+  const darkMedian = dark[Math.floor(dark.length / 2)];
+  const brightMedian = bright[Math.floor(bright.length / 2)];
+  if (!(brightMedian > darkMedian)) return null;
+  const midpoint = (darkMedian + brightMedian) / 2;
+  let agree = 0;
+  for (let index = 0; index < count; index += 1) {
+    if ((values[index] > midpoint) === (expected[index] > 0)) agree += 1;
+  }
+  // 실사진 모아레에서는 Pearson 진폭이 참 포즈보다 넓은 UI 패치에서 더 클 수 있다.
+  // 이진 locator agreement를 1차로, Pearson은 결정적 미세 타이브레이크로만 쓴다.
+  return agree / count + correlation * 1e-3;
+}
+
+function affineCentralN7Homography(center, modulePitch, degrees) {
+  const radians = degrees * Math.PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  return new Float64Array([
+    modulePitch * cosine, -modulePitch * sine, center.x,
+    modulePitch * sine, modulePitch * cosine, center.y,
+    0, 0, 1,
+  ]);
+}
+
+function refineCentralN7Seed(luma, seed) {
+  if (!seed || !seed.center || !(seed.modulePitch > 0)
+    || !Number.isFinite(seed.degrees)) return null;
+  let best = {
+    center: { x: seed.center.x, y: seed.center.y },
+    modulePitch: seed.modulePitch,
+    degrees: seed.degrees,
+    score: centralN7PatchScore(luma, seed.center, seed.modulePitch, seed.degrees),
+  };
+  if (best.score === null) return null;
+
+  const rounds = [
+    { offsets: [-0.5, 0, 0.5], scales: [0.96, 1, 1.04], angles: [-3, 0, 3] },
+    { offsets: [-0.2, 0, 0.2], scales: [0.985, 1, 1.015], angles: [-1, 0, 1] },
+  ];
+  for (const round of rounds) {
+    const base = best;
+    for (const oy of round.offsets) {
+      for (const ox of round.offsets) {
+        for (const scale of round.scales) {
+          for (const angle of round.angles) {
+            const candidate = {
+              center: {
+                x: base.center.x + ox * base.modulePitch,
+                y: base.center.y + oy * base.modulePitch,
+              },
+              modulePitch: base.modulePitch * scale,
+              degrees: base.degrees + angle,
+            };
+            const score = centralN7PatchScore(
+              luma, candidate.center, candidate.modulePitch, candidate.degrees,
+            );
+            if (score !== null && score > best.score) best = { ...candidate, score };
+          }
+        }
+      }
+    }
+  }
+  return {
+    ...seed,
+    n: CENTRAL_N7_SIZE,
+    family: CENTRAL_N7_PATTERN_FAMILY_ID,
+    layoutId: CENTRAL_N7_SCHEMA_ID,
+    center: best.center,
+    modulePitch: best.modulePitch,
+    degrees: best.degrees,
+    score: best.score,
+    H: affineCentralN7Homography(best.center, best.modulePitch, best.degrees),
+  };
+}
+
+/**
+ * 중앙 슬롯/바깥 실루엣이 준 seed를 n=7 전용 90면 패치로 정련해 블록 shape로 만든다.
+ * 기존 detectCellSurfaceBlockShapes와 v0 라인업에는 합류하지 않는 병렬 입구다.
+ */
+export function detectCentralN7BlockShapes(luma, seeds = []) {
+  if (!Array.isArray(seeds) || seeds.length === 0) {
+    return { shapes: [], diagnostics: { source: 'central-n7-block-locator', seedCount: 0 } };
+  }
+  const expanded = [];
+  for (const seed of seeds) {
+    const radius = Number.isInteger(seed.searchRadiusCells) && seed.searchRadiusCells > 0
+      ? seed.searchRadiusCells : 0;
+    const step = radius > 0 ? 0.5 : 1;
+    for (let oy = -radius; oy <= radius; oy += step) {
+      for (let ox = -radius; ox <= radius; ox += step) {
+        expanded.push({
+          ...seed,
+          center: {
+            x: seed.center.x + ox * seed.modulePitch,
+            y: seed.center.y + oy * seed.modulePitch,
+          },
+          searchRadiusCells: 0,
+        });
+      }
+    }
+  }
+  const scored = expanded.map((seed) => ({
+    seed,
+    score: centralN7PatchScore(luma, seed.center, seed.modulePitch, seed.degrees),
+  })).filter((entry) => entry.score !== null)
+    .sort((left, right) => right.score - left.score
+      || left.seed.modulePitch - right.seed.modulePitch
+      || left.seed.degrees - right.seed.degrees);
+
+  // 서로 다른 k/family seed가 같은 패치 크기로 모일 수 있으므로 정련 전에는 합치지 않는다.
+  // 상위 12개면 지원 표 전 family의 근접 이웃을 보존하면서 프레임당 비용을 고정한다.
+  const refined = scored.slice(0, 12).map((entry) => refineCentralN7Seed(luma, entry.seed))
+    .filter((pose) => pose !== null)
+    .sort((left, right) => right.score - left.score
+      || left.modulePitch - right.modulePitch || left.degrees - right.degrees);
+  const shapes = [];
+  for (const pose of refined) {
+    const shape = shapeFromPose(pose, shapes.length);
+    if (!shape) continue;
+    shape.componentSource = 'central-n7-block-locator';
+    shape.blockLocator.schemaId = CENTRAL_N7_SCHEMA_ID;
+    shape.blockLocator.outerFamily = pose.outerFamily;
+    shape.blockLocator.outerK = pose.outerK;
+    shape.blockLocator.seedCellSize = pose.outerCellSize;
+    shape.blockLocator.modulePitch = pose.modulePitch;
+    shape.blockLocator.rotationDegrees = pose.degrees;
+    shapes.push(shape);
+  }
+  return {
+    shapes,
+    diagnostics: {
+      source: 'central-n7-block-locator',
+      seedCount: seeds.length,
+      expandedSeedCount: expanded.length,
+      scoredSeedCount: scored.length,
+      refinedCount: refined.length,
+      shapeCount: shapes.length,
+    },
+  };
 }
 
 function pearson(values, expected, count) {

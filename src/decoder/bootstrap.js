@@ -192,7 +192,9 @@ import {
 } from './cube-detect.js';
 import {
   CENTRAL_BEACON_FINDER_KIND,
+  CENTRAL_N7_FINDER_KIND,
   discoverCentralBeaconFinders,
+  discoverCentralN7Finders,
   familiesForBeaconMeta,
   isCentralV0CubeHypothesis,
   isPatternFinderKind,
@@ -2296,7 +2298,8 @@ function cellFinderHypotheses(luma, finder, family, options) {
     finder,
     source: finder.finderKind === 'three-tone-cube' ? 'central-cube-finder'
       : finder.finderKind === CENTRAL_BEACON_FINDER_KIND ? 'central-v0-finder'
-        : 'cell-finder',
+        : finder.finderKind === CENTRAL_N7_FINDER_KIND ? 'central-n7-finder'
+          : 'cell-finder',
     hypothesisId: family + '-' + k + '-' + finder.finderKind + '-' + finder.patternId
       + '-' + (finder.geometryMode || 'affine'),
     luma,
@@ -3740,18 +3743,23 @@ function assembleGeometryHypotheses(
       && finderResult.finders.every(
         (finder) => finder && finder.finderKind === 'three-tone-cube')));
   measureHypothesisAssemblyStep(profile, assemblyCall, 'beaconMs', () => {
-    if (beaconEligible) {
+    if (beaconEligible || options.centralBeacon !== false) {
       const beaconFinders = measureHypothesisAssemblyStep(
         profile,
         assemblyCall,
         'beaconDiscoveryMs',
-        () => discoverCentralBeaconFinders(luma, options),
+        () => beaconEligible
+          ? discoverCentralBeaconFinders(luma, options)
+          : discoverCentralN7Finders(luma, options),
       );
       addHypothesisAssemblyCounter(assemblyCall, 'beaconFinderCount', beaconFinders.length);
       for (const finder of beaconFinders) {
         // K 코어도 같은 중앙 19셀 슬롯을 쓰므로 같은 포즈에서 star 가설을 추가한다.
         // 포맷 7/8 + 본문 RS가 소유자를 가르며 기존 수용 게이트는 바뀌지 않는다.
-        for (const family of ['hex', 'tri', 'star']) {
+        const beaconFamilies = finder.centralN7
+          ? [finder.centralN7.family]
+          : ['hex', 'tri', 'star'];
+        for (const family of beaconFamilies) {
           if (family === 'star') {
             // 중앙-사전의 바깥 지지 반지름은 픽셀 문턱 때문에 수 % 작을 수 있다.
             // K 꼭짓점은 3k 거리라 그 오차가 증폭되므로, 이미 있는 K 앵커 배율 탐색으로
@@ -3766,20 +3774,34 @@ function assembleGeometryHypotheses(
               }),
             );
             addHypothesisAssemblyCounter(assemblyCall, 'beaconDirectAnchorCalls');
+            const directHypotheses = finder.centralN7
+              ? direct.hypotheses.map((hypothesis) => ({
+                ...hypothesis,
+                centralN7: finder.centralN7,
+                source: 'central-n7-finder',
+              }))
+              : direct.hypotheses;
             addHypothesisAssemblyCounter(
               assemblyCall,
               'beaconDirectAnchorOutputs',
-              direct.hypotheses.length,
+              directHypotheses.length,
             );
-            hypotheses.push(...direct.hypotheses);
+            hypotheses.push(...directHypotheses);
             continue;
           }
-          const seeded = measureHypothesisAssemblyStep(
+          const rawSeeded = measureHypothesisAssemblyStep(
             profile,
             assemblyCall,
             'beaconCellFinderMs',
             () => cellFinderHypotheses(luma, finder, family, options),
           );
+          const seeded = finder.centralN7
+            ? rawSeeded.map((hypothesis) => ({
+              ...hypothesis,
+              centralN7: finder.centralN7,
+              source: 'central-n7-finder',
+            }))
+            : rawSeeded;
           addHypothesisAssemblyCounter(assemblyCall, 'beaconCellFinderCalls');
           addHypothesisAssemblyCounter(
             assemblyCall,
@@ -4138,6 +4160,44 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
       stage: 'format',
       cause: 'no-version-indices-for-geometry',
       hypothesisId: hypothesis && hypothesis.hypothesisId,
+    });
+  }
+
+  // 중앙 n=7에는 바깥 surface format 복제 셀이 없다. 19셀 codeword가 복원한 기존
+  // 5-digit outerFormat을 세 복제의 확정 관측으로 공급한다. 이 경로는 locator
+  // verifier + decodeCentralN7을 통과한 가설에만 존재하며, surface fallback을 타지 않는다.
+  if (hypothesis.centralN7
+    && hypothesis.centralN7.family === hypothesis.family
+    && Array.isArray(hypothesis.centralN7.outerFormat)
+    && hypothesis.centralN7.outerFormat.length === 5) {
+    const reads = [0, 1, 2].map(() => hypothesis.centralN7.outerFormat.slice());
+    const enumerated = enumerateFormatProposals(reads, { validVersionIndices: valid });
+    const formatCandidates = enumerated.proposals.filter((proposal) => proposal.crcOk);
+    if (formatCandidates.length === 0) {
+      return fail(FRONTEND_FAILURE.NO_FORMAT_CANDIDATE, {
+        stage: 'format',
+        cause: 'central-n7-format-owner-mismatch',
+        hypothesisId: hypothesis.hypothesisId,
+        validVersionIndices: valid,
+        reads,
+        erasedFormatCells: 0,
+        firstFormatCellFailure: null,
+        erasedFormatCellDetails: [],
+        diagnostics: enumerated.diagnostics,
+        formatWireVersion: 1,
+      });
+    }
+    return ok({
+      hypothesis,
+      reads,
+      samples: [],
+      erasedFormatCells: [],
+      digitCount: 5,
+      formatWireVersion: 1,
+      proposals: enumerated.proposals,
+      formatCandidates,
+      diagnostics: { ...enumerated.diagnostics, source: 'central-n7-codeword' },
+      validVersionIndices: valid,
     });
   }
 
