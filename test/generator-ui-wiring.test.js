@@ -423,8 +423,19 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
     'K 의 안쪽 QR 잠금이 부활했다 — 중앙 슬롯은 2026-08-25 에 개설됐다 (레인 KEX)');
   assert.match(index, /if \(cfg\.fallback\.mode === 'center'\) opts\.centerQr = true;/,
     'K 분기가 centerQr 를 인코더에 안 넘긴다 — 카드만 열고 와이어는 안 여는 상태');
-  assert.match(index, /else if \(isCentralV0FinderPatternId\(cfg\.finderPatternId\)\) opts\.centralV0 = true;/,
-    'K 분기가 centralV0 를 인코더에 안 넘긴다');
+  // ⚠ **2026-08-28 재작성 — 철자 자였다.** 종전엔 `else if (isCentralV0FinderPatternId(...))
+  //   opts.centralV0 = true;` 라는 **문장 전체**를 잠갔다. 중앙 비컨 플래그가 공유 유도
+  //   (centralBeaconEncoderOptions)로 빠지면서 그 철자가 사라졌고, **옳은 변경이 빨간불**이 됐다.
+  //   옮겨 적으면 다음 리팩터링까지만 산다. 지금은 **심볼 하나**만 잰다:
+  //   「두 디스패치(O·K)가 중앙 비컨 유도를 실제로 부른다」.
+  //   ⚠ 이것도 여전히 철자 자다 — 값으로 재려면 index.html 안의 디스패치를 import 할 수
+  //   있어야 하는데 인라인이라 못 한다. 그 한계를 숨기지 않고 적어 둔다. 실제 동작
+  //   (카드 선택 → encoded 플래그)은 generator-exclusion-matrix / central-n7-exclusion 이
+  //   **값으로** 잰다 — 이 줄이 지키는 건 «배선이 있는가» 뿐이다.
+  const beaconWiring = index.split('centralBeaconEncoderOptions(').length - 1;
+  assert.ok(beaconWiring >= 2,
+    `중앙 비컨 유도 호출이 ${beaconWiring}곳뿐이다 — O·K 두 디스패치가 다 불러야 한다`
+      + ' (카드만 열고 와이어는 안 여는 상태를 막는 자다)');
   // **의도적 갱신 2회 (2026-08-25 하루 안에)** — 거부 → 허용 → **다시 거부**다.
   // ① finderPatternId 를 배선하고 재보니 대부분 스캔이 안 돼 허용 목록으로 좁혔고,
   // ② 같은 날 레인 POSE 가 star 독립 검출을 열어(54/54) 그 사유가 사라져 철회했다.
