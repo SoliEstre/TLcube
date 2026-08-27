@@ -71,6 +71,29 @@ const QR_BLOCK_MODULES = QR_MODULE_GRID + 2 * QR_QUIET_MODULES;
  */
 const DEFAULT_MARGIN_FACTOR_QR = 20;
 
+/**
+ * 코너 QR 이 **떨어져 보이기** 위한 최소 여유 (셀 단위, 2026-08-27 운영자 판정).
+ *
+ * TL 은 «전시 가능한 미학» 이 1번 목적이라 «읽히면 됐다» 로 합격시킬 수 없다.
+ * 종전 배치는 블록을 **캔버스 bbox 코너** 기준으로 놓았는데, 그러면 여유가 모양에
+ * 따라 들쭉날쭉해진다 — 실측(2026-08-27): O 5.44 · Y 6.31/9.78 · 그런데 **A/V 의
+ * 넓은 변이 만나는 두 코너만 0.50**. 그 자리에서는 코드 안전영역(기본 2셀 후광)이
+ * QR 자기 흰 패치와 맞붙어, 둘의 합집합이 «용접된» 이상한 다각형으로 보인다.
+ *
+ * 그래서 블록을 **코드 실루엣 기준**으로 바깥으로 당긴다. 예산은 고정이다 —
+ * 당긴 거리 + 가장자리 여백 = margin - blockSide = 5.5셀. 그 배분이 아래 둘이다:
+ *   · 여유 3.5셀 = 후광 2셀 + 눈에 보이는 도랑 1.5셀
+ *   · 가장자리 여백 2셀 — 0 으로 두면 블록이 캔버스 변에 딱 붙어 **잘려 보인다**
+ *     (실측 후보 렌더에서 확인했다).
+ * ⚠ 후광을 3.5셀보다 두껍게 쓰는 호출자는 다시 붙는다. index.html 의
+ *   QUIET_MARGIN_CELLS 는 2 라 이 안에 있고, test/quietzone.test.js 가 마진 1~3
+ *   스윕으로 실제 분리를 잰다.
+ */
+const CORNER_QR_MIN_CLEARANCE_CELLS = 3.5;
+
+/** 코너 QR 블록이 캔버스 변에서 유지할 최소 여백 (셀). 0 이면 잘린 것처럼 보인다. */
+const CORNER_QR_MIN_EDGE_INSET_CELLS = 2;
+
 // 기준선·실험 후보를 모두 명시적 렌더 표현으로 정규화한다.
 const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
 
@@ -168,6 +191,81 @@ function cornerBlockOrigin(qrCorner, margin, blockSide, width, height) {
     case 'BR': return { x: farX, y: farY };
     default: throw new RangeError(`qrCorner 는 ${QR_CORNERS.join(' | ')} 중 하나여야 한다: ${qrCorner}`);
   }
+}
+
+/** 축 정렬 사각과 점 사이 최단거리 (사각 안이면 0). */
+function pointRectDistance(v, rect) {
+  const dx = Math.max(rect.minX - v.x, 0, v.x - rect.maxX);
+  const dy = Math.max(rect.minY - v.y, 0, v.y - rect.maxY);
+  return Math.hypot(dx, dy);
+}
+
+/** 축 정렬 사각과 선분 사이 최단거리. 꼭짓점만 재면 변 한가운데가 최근접일 때
+ *  거리를 **과대평가**한다 — 여유를 보장하는 계산이라 그 방향이 위험해서 정확히 잰다. */
+function segmentRectDistance(a, b, rect) {
+  if (pointRectDistance(a, rect) === 0 || pointRectDistance(b, rect) === 0) return 0;
+  let best = Math.min(pointRectDistance(a, rect), pointRectDistance(b, rect));
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const len2 = vx * vx + vy * vy;
+  const corners = [
+    { x: rect.minX, y: rect.minY }, { x: rect.maxX, y: rect.minY },
+    { x: rect.maxX, y: rect.maxY }, { x: rect.minX, y: rect.maxY },
+  ];
+  for (const c of corners) {
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((c.x - a.x) * vx + (c.y - a.y) * vy) / len2));
+    best = Math.min(best, Math.hypot(c.x - (a.x + t * vx), c.y - (a.y + t * vy)));
+  }
+  return best;
+}
+
+/** 이미 push 된 코드 도형들과 블록 사각 사이 최단거리. */
+function blockClearance(shapes, rect) {
+  let best = Infinity;
+  for (const shape of shapes) {
+    const pts = shape.kind === 'disc'
+      ? [
+        { x: shape.cx - shape.r, y: shape.cy }, { x: shape.cx + shape.r, y: shape.cy },
+        { x: shape.cx, y: shape.cy - shape.r }, { x: shape.cx, y: shape.cy + shape.r },
+      ]
+      : shape.points;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+      best = Math.min(best, segmentRectDistance(pts[j], pts[i], rect));
+    }
+  }
+  return best;
+}
+
+const blockRectAt = (origin, blockSide) => ({
+  minX: origin.x, minY: origin.y, maxX: origin.x + blockSide, maxY: origin.y + blockSide,
+});
+
+/**
+ * 코너 QR 블록을 코드 실루엣에서 CORNER_QR_MIN_CLEARANCE_CELLS 만큼 떨어지도록
+ * **바깥으로** 당긴다 (가장자리 여백은 CORNER_QR_MIN_EDGE_INSET_CELLS 를 지킨다).
+ * 여유가 이미 충분하면 원점을 그대로 돌려주므로 **O·K·Y 산출은 바이트 동일**하다.
+ */
+function pullCornerBlockOut(shapes, origin, blockSide, qrCorner, cellSize, width, height) {
+  const target = CORNER_QR_MIN_CLEARANCE_CELLS * cellSize;
+  const dirX = qrCorner === 'TL' || qrCorner === 'BL' ? -1 : 1;
+  const dirY = qrCorner === 'TL' || qrCorner === 'TR' ? -1 : 1;
+  const insetX = dirX < 0 ? origin.x : width - (origin.x + blockSide);
+  const insetY = dirY < 0 ? origin.y : height - (origin.y + blockSide);
+  const room = Math.min(insetX, insetY) - CORNER_QR_MIN_EDGE_INSET_CELLS * cellSize;
+  if (!(room > 0)) return origin;
+
+  let pulled = 0;
+  // 대각으로 d 만큼 나가면 축 정렬 제약에서는 여유가 정확히 d 늘어난다. 최근접
+  // 제약이 도중에 바뀔 수 있으므로 다시 재고 멈춘다 (고정 3회 — 결정적).
+  for (let round = 0; round < 3; round += 1) {
+    const at = { x: origin.x + dirX * pulled, y: origin.y + dirY * pulled };
+    const deficit = target - blockClearance(shapes, blockRectAt(at, blockSide));
+    if (deficit <= 0) break;
+    const step = Math.min(deficit, room - pulled);
+    if (step <= 0) break;
+    pulled += step;
+  }
+  return pulled === 0 ? origin : { x: origin.x + dirX * pulled, y: origin.y + dirY * pulled };
 }
 
 function rectsOverlap(a, b) {
@@ -875,7 +973,13 @@ export function buildScene(encoded, options) {
     }
     const qrModuleSize = cellSize / 2;
     const blockSide = QR_BLOCK_MODULES * qrModuleSize;
-    const blockOrigin = cornerBlockOrigin(qrCorner, margin, blockSide, layout.width, layout.height);
+    // bbox 코너 기준 기본 위치 → 코드 실루엣 기준으로 여유를 채워 바깥으로 당긴다.
+    // shapes 에는 이 시점에 셀·파인더(+중앙 QR)가 다 들어 있어 실루엣이 정확하다.
+    const blockOrigin = pullCornerBlockOut(
+      shapes,
+      cornerBlockOrigin(qrCorner, margin, blockSide, layout.width, layout.height),
+      blockSide, qrCorner, cellSize, layout.width, layout.height,
+    );
     const blockRect = {
       minX: blockOrigin.x,
       minY: blockOrigin.y,

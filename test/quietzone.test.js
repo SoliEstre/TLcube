@@ -361,21 +361,20 @@ describe('실제 인코더 산출물과의 통합', () => {
 
   // ── 인접(융합) 축 — 「덮는가」와 「닿는가」는 다른 성질이다 ─────────────────
   //
-  // 2026-08-27 운영자 신고: 「턴A 안전영역이 QR 이랑 연결된다 — 저번에 고치지 않았나?」
-  // 위 4코너 스윕은 그때도 **전부 초록**이었다. 두 자가 서로 다른 것을 재고 있어서다:
-  //   · 위 스윕 = **포함** — 안전영역 폴리곤이 QR 도형 중심을 덮는가 (판때기 결함)
-  //   · 화면    = **인접** — 흰 영역이 QR 자기 패치에 닿아 눈에 한 덩어리인가
-  // 실측(2026-08-27): 넓은 변이 만나는 코너는 코드–QR 간격이 **0.5셀**인데 마진이
-  // 2셀이라, 폴리곤이 QR 을 **안 덮으면서도 닿는다**. 6024c02 시점을 체크아웃해 같은
-  // 자로 재 보니 그때도 0.5셀·정점침범 1 로 **오늘과 동일** ⇒ 회귀가 아니라
-  // 「처음부터 안 잰 축」이다. 코퍼스 실측으로 해도 갈렸다: 융합이 있는 A0·V0 가
-  // 대조 배치에서 3/6·3/6 으로 융합이 없는 K0(3/6)과 같고 K2(1/6)보다 낫다 —
-  // 이 표본(타입당 n=6)에서 융합은 복호를 **깎지 않는다**.
+  // 2026-08-27 운영자 신고: 「턴A 안전영역이 QR 이랑 연결된다」. 위 4코너 스윕은
+  // 그때 **전부 초록**이었다 — 거짓 초록이 아니라 **다른 것을 재고 있었다**:
+  //   · 위 스윕 = **포함** — 폴리곤이 QR 도형 **중심**을 덮는가 (판때기 결함)
+  //   · 화면    = **인접** — 흰 후광이 QR 자기 흰 패치에 **닿아** 한 덩어리로 보이는가
+  // 실측: 넓은 변이 만나는 코너의 코드-QR 여유가 **0.5셀**인데 후광이 2셀이라,
+  // 폴리곤이 QR 을 안 덮으면서도 닿았다. 6024c02(종전 수리) 시점도 수치가 같아
+  // **회귀가 아니라 처음부터 안 재던 축**이었다.
   //
-  // 그래서 이 테스트는 «고쳐라» 가 아니라 **현재 성질을 못 박는 앵커**다. 좌표나 셀
-  // 수를 얼리지 않고 구조만 단언한다 — 배치가 바뀌어 이게 빨개지는 날은 누군가
-  // 넓은 변 코너의 간격을 실제로 바꾼 날이고, 그때 이 주석을 같이 갱신하면 된다.
-  test('코너 QR 은 덮이지 않지만 넓은 변 코너에서는 닿는다 (인접 축 앵커)', async () => {
+  // 수리(2026-08-27): scene.js 가 코너 블록을 **코드 실루엣 기준**으로 바깥으로 당겨
+  // 최소 여유 CORNER_QR_MIN_CLEARANCE_CELLS(3.5셀)를 확보한다. 그래서 이제 어떤
+  // 타입·코너·마진(1~3셀)에서도 **닿지 않는다**. 이 테스트가 그 성질을 잠근다.
+  // ⚠ 이 자가 빨개지면 배치나 후광 두께가 바뀐 것이다 — 화면에서 먼저 확인하라
+  //   (여기서 재는 것과 사람이 보는 것이 같은 성질인지가 이 건의 교훈이다).
+  test('안전영역은 어떤 코너에서도 코너 QR 에 닿지 않는다 (인접 축)', async () => {
     const { encode } = await import('../src/encode.js');
     const { encodeA } = await import('../src/encodeA.js');
     const { buildScene } = await import('../src/scene.js');
@@ -387,9 +386,6 @@ describe('실제 인코더 산출물과의 통합', () => {
     const palette = {
       background: null, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
     };
-    // 안전영역 마진 (index.html 의 QUIET_MARGIN_CELLS 와 같은 값). 간격이 이보다
-    // 좁으면 폴리곤이 QR 패치에 닿는다 — 그게 화면의 「한 덩어리」다.
-    const MARGIN = 2;
 
     const distPtSeg = (q, a, b) => {
       const vx = b.x - a.x; const vy = b.y - a.y;
@@ -398,14 +394,14 @@ describe('실제 인코더 산출물과의 통합', () => {
       return Math.hypot(q.x - (a.x + t * vx), q.y - (a.y + t * vy));
     };
 
-    /** 코너 QR 도형의 **모든 정점**과 안전영역 폴리곤 사이 최단거리 (셀 단위). */
-    function cornerGap(scene, corner) {
+    /** 코너 QR 도형 정점과 안전영역 폴리곤 사이 최단거리 + 중심 포함 수. */
+    function probe(scene, corner, margin) {
       const wantLeft = corner === 'TL' || corner === 'BL';
       const wantTop = corner === 'TL' || corner === 'TR';
+      const polys = quietZonePolygons(scene, margin, qrColors);
       let gap = Infinity;
       let centersCovered = 0;
       let found = 0;
-      const polys = quietZonePolygons(scene, MARGIN, qrColors);
       for (const s of scene.shapes) {
         if (!isQrColor(s.color)) continue;
         const pts = s.kind === 'disc' ? [{ x: s.cx, y: s.cy }] : s.points;
@@ -433,59 +429,68 @@ describe('실제 인코더 산출물과의 통합', () => {
       { id: 'A v0', encoded: encodeA('quiet zone', { version: 0 }) },
       { id: 'V v0 (turnA)', encoded: encodeA('quiet zone', { version: 0, turnA: true }) },
     ];
-    const CORNERS = ['TL', 'TR', 'BL', 'BR'];
-    const touching = new Map();
-    for (const { id, encoded } of SHAPES) {
-      const hits = [];
-      for (const corner of CORNERS) {
-        const scene = buildScene(encoded, { palette, qrText: TL_READER_URL, qrCorner: corner });
-        const { gap, centersCovered, found } = cornerGap(scene, corner);
-        assert.ok(found > 0, `${id} · ${corner}: 코너 QR 도형을 못 찾았다 — 로케이터가 깨졌다`);
-        // 포함 축 — 6024c02 가 되살린 성질. 인접이 있더라도 이건 끝까지 0 이어야 한다.
-        assert.equal(centersCovered, 0,
-          `${id} · ${corner}: 안전영역이 코너 QR 중심을 ${centersCovered}개 덮었다 (판때기 복귀)`);
-        if (gap < MARGIN) hits.push(corner);
+    // 후광 두께 스윕 — 생성기 기본값은 2셀(index.html QUIET_MARGIN_CELLS)이고,
+    // scene.js 가 3.5셀 여유를 잡으므로 3셀까지는 도랑이 남아야 한다.
+    for (const margin of [1, 2, 3]) {
+      for (const { id, encoded } of SHAPES) {
+        for (const corner of ['TL', 'TR', 'BL', 'BR']) {
+          const scene = buildScene(encoded, { palette, qrText: TL_READER_URL, qrCorner: corner });
+          const { gap, centersCovered, found } = probe(scene, corner, margin);
+          assert.ok(found > 0, `${id} · ${corner}: 코너 QR 도형을 못 찾았다 — 로케이터가 깨졌다`);
+          assert.equal(centersCovered, 0,
+            `${id} · ${corner} · 마진 ${margin}: 안전영역이 코너 QR 중심을 덮었다 (판때기 복귀)`);
+          assert.ok(gap > 0,
+            `${id} · ${corner} · 마진 ${margin}: 후광이 QR 흰 패치에 닿는다 (간격 ${gap.toFixed(3)}셀) — `
+              + '화면에서는 둘이 한 덩어리로 «용접된» 것처럼 보인다');
+        }
       }
-      touching.set(id, hits);
     }
-
-    // 구조 단언 — 어느 코너인지는 안 얼린다. O 는 사방이 넉넉하고(육각이라 코너와
-    // 멀다), 삼각 계열은 **넓은 변이 만나는 두 코너**만 닿으며, 정삼각과 역삼각은
-    // 그 두 코너가 서로 **엇갈린다**(뒤집힌 축).
-    assert.deepEqual(touching.get('O v1'), [],
-      `O v1 이 코너 QR 에 닿는다 (${touching.get('O v1').join(',')}) — 육각 배치가 바뀌었다`);
-    assert.equal(touching.get('A v0').length, 2,
-      `A v0 의 닿는 코너가 2개가 아니다: ${touching.get('A v0').join(',') || '없음'}`);
-    assert.equal(touching.get('V v0 (turnA)').length, 2,
-      `V(turnA) 의 닿는 코너가 2개가 아니다: ${touching.get('V v0 (turnA)').join(',') || '없음'}`);
-    const overlap = touching.get('A v0').filter((c) => touching.get('V v0 (turnA)').includes(c));
-    assert.deepEqual(overlap, [],
-      `정삼각과 역삼각이 **같은** 코너에서 닿는다 (${overlap.join(',')}) — 한쪽 뒤집기가 풀렸다`);
   });
-  test('A v0 · BL — 태그를 벗기면 색 경로만으로는 삼켜진다 (태그가 실제로 일한다)', async () => {
-    // 변이 앵커: 색+연결성 폴백이 이 구성을 못 지킨다는 사실이 참이어야 태그 수리에
-    // 존재 이유가 있다. 이 단언이 «못 덮는다» 로 뒤집히는 날은 clusterShapes 의 병합
-    // 반경이 바뀐 날이다 — 그때는 태그·폴백의 분업 주석(quietzone.js)을 같이 갱신하라.
+
+  // ⭐ **2026-08-27 재조준.** 종전 이 자리는 「A v0 · BL 에서 태그를 벗기면 색 경로만으로는
+  //    삼켜진다」였다. 코너 블록을 실루엣 기준으로 3.5셀 당기면서 그게 **뒤집혔다** —
+  //    실측: 태그를 벗겨도 O/A/V × 4코너 × 마진 2/3/4 전부 0/213 (색 경로도 안 삼킨다).
+  //    그러면 「태그가 일한다」를 그 구성으로는 더 못 보인다. 그렇다고 단언을 지우면
+  //    태그가 조용히 죽은 코드가 되므로, **역사적 실패 기하를 인위적으로 되돌려** 재현한다.
+  test('가까웠던 그 기하로 되돌리면 태그만이 QR 을 구한다 (태그가 실제로 일한다)', async () => {
     const { BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
     const qrColors = [BULLSEYE_LIGHT, BULLSEYE_DARK];
     const scene = await oaScene('A', 0, 'BL');
-    const stripped = {
-      ...scene,
-      shapes: scene.shapes.map((s) => {
-        if (s.selfQuiet !== true) return s;
-        const clone = { ...s };
+    const cell = scene.layout.size;
+    // 수리 전 위치로 되돌린다 — BL 은 «오른쪽·위» 로 3셀 밀면 종전의 0.5셀 여유가 된다.
+    const back = (s) => ({
+      ...s,
+      shapes: s.shapes.map((shape) => {
+        if (shape.selfQuiet !== true || !shape.points) return shape;
+        return { ...shape, points: shape.points.map((v) => ({ x: v.x + 3 * cell, y: v.y - 3 * cell })) };
+      }),
+    });
+    const strip = (s) => ({
+      ...s,
+      shapes: s.shapes.map((shape) => {
+        if (shape.selfQuiet !== true) return shape;
+        const clone = { ...shape };
         delete clone.selfQuiet;
         return clone;
       }),
+    });
+
+    const near = back(scene);
+    const qrPts = cornerQrPointsAt(near, qrColors, 'BL');
+    assert.ok(qrPts.length > 0, '되돌린 좌표에서 코너 QR 을 못 찾았다 — 이 테스트의 전제가 깨졌다');
+
+    const coveredIn = (s) => {
+      let n = 0;
+      for (const poly of quietZonePolygons(s, 2, qrColors)) {
+        n += cornerQrPointsAt(s, qrColors, 'BL').filter((p) => inside(poly, p)).length;
+      }
+      return n;
     };
-    const qrPts = cornerQrPointsAt(stripped, qrColors, 'BL');
-    assert.ok(qrPts.length > 0);
-    let covered = 0;
-    for (const poly of quietZonePolygons(stripped, 2, qrColors)) {
-      covered += qrPts.filter((p) => inside(poly, p)).length;
-    }
-    assert.ok(covered > 0,
-      '태그 없이도 안 삼켜진다 — 색 경로가 고쳐졌거나 기하가 바뀌었다. 이 테스트와 분업 주석을 재검토하라');
+    assert.ok(coveredIn(strip(near)) > 0,
+      '되돌린 기하에서도 색 경로가 안 삼킨다 — clusterShapes 병합 반경이 바뀌었다. '
+        + 'quietzone.js 의 태그·폴백 분업 주석과 이 테스트를 같이 재검토하라');
+    assert.equal(coveredIn(near), 0,
+      '태그가 있는데도 삼켜졌다 — selfQuiet 제외 경로가 끊겼다');
   });
 
   test('제외 판정은 마진에 의존하지 않는다', async () => {

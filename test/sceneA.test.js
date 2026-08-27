@@ -12,7 +12,9 @@
 //       Map 삽입 그대로 존중된다).
 //   (3) 불스아이·QR 슬롯(19셀) 은 Type A 에서도 무변경(ADR 0005 D7) — 패치 셀 유무와
 //       무관하게 6 disc 규약 그대로.
-//   (4) 코너 QR 위치 4택(TL/TR/BL/BR) — 방위 고정 + bbox 코너 대칭 이동, 무교차.
+//   (4) 코너 QR 위치 4택(TL/TR/BL/BR) — 방위 고정 + 코너 대칭 배치, 무교차.
+//       ⭐ 2026-08-27: 기준이 «bbox 코너» 에서 «코드 실루엣» 으로 바뀌었다 — 실루엣이
+//       가까운 코너에서는 바깥으로 당겨 최소 여유를 확보한다 (scene.js 상수 주석 참조).
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -167,14 +169,21 @@ describe('buildScene — 코너 QR 위치 4택 (ADR 0004 §1-7, Type A 패치 �
     }
   });
 
-  test('bbox 대칭 이동: TR/BL/BR 블록 원점이 TL 대비 layout.width/height 기준 거울상', () => {
+  // ⭐ **2026-08-27 배치 규칙 변경.** 종전에는 블록을 **캔버스 bbox 코너** 에 고정
+  //    (margin·0.25 안쪽)했다. 그러면 여유가 모양에 따라 들쭉날쭉해서, 넓은 변이 코너에
+  //    닿는 A/V 의 두 코너만 코드와 0.5셀이 됐고 안전영역 후광이 QR 흰 패치와 «용접» 돼
+  //    보였다 (운영자 신고). 지금은 **코드 실루엣 기준**으로 바깥으로 당긴다.
+  //    ⇒ 그래서 재는 것을 둘로 나눈다. 거울상은 **실루엣이 대칭인 코드**에서만 참이고,
+  //      이 합성 A 는 패치 셀이 위쪽에만 있어 비대칭이라 거울상 단언 자체가 틀린 주장이다.
+  test('bbox 대칭 이동: 실루엣이 대칭인 코드(Type O)에서는 4 코너 원점이 거울상이다', async () => {
+    const { encode } = await import('../src/encode.js');
     const cellSize = 1;
     const margin = 20 * cellSize;
-    const qrModuleSize = cellSize / 2;
-    const blockSide = 29 * qrModuleSize; // 4 콰이어트 + 21 QR + 4 콰이어트
+    const blockSide = 29 * (cellSize / 2);
+    const encodedO = encode('quiet zone', { version: 1 });
 
     function quietOriginFor(qrCorner) {
-      const scene = buildScene(encoded, {
+      const scene = buildScene(encodedO, {
         palette: PALETTE, qrText: TL_READER_URL, qrCorner, cellSize, margin,
       });
       const quiet = scene.shapes.find((s) => s.kind === 'polygon' && s.color === PALETTE.bullseyeLight);
@@ -186,6 +195,7 @@ describe('buildScene — 코너 QR 위치 4택 (ADR 0004 §1-7, Type A 패치 �
       };
     }
 
+    // 육각 실루엣은 bbox 코너에서 멀어 당기기가 안 걸린다 — 종전 원점 그대로여야 한다.
     const tl = quietOriginFor('TL');
     assert.ok(Math.abs(tl.x - margin * 0.25) < 1e-9);
     assert.ok(Math.abs(tl.y - margin * 0.25) < 1e-9);
@@ -201,6 +211,39 @@ describe('buildScene — 코너 QR 위치 4택 (ADR 0004 §1-7, Type A 패치 �
     const br = quietOriginFor('BR');
     assert.ok(Math.abs(br.x - tr.x) < 1e-9);
     assert.ok(Math.abs(br.y - bl.y) < 1e-9);
+  });
+
+  test('실루엣이 가까우면 블록은 **바깥으로만** 대각으로 당겨진다 (가장자리 여백 유지)', () => {
+    const cellSize = 1;
+    const margin = 20 * cellSize;
+    const blockSide = 29 * (cellSize / 2);
+    const MIN_INSET = 2 * cellSize; // scene.js CORNER_QR_MIN_EDGE_INSET_CELLS
+    const EPS = 1e-9;
+
+    for (const qrCorner of QR_CORNERS) {
+      const scene = buildScene(encoded, {
+        palette: PALETTE, qrText: TL_READER_URL, qrCorner, cellSize, margin,
+      });
+      const quiet = scene.shapes.find((s) => s.kind === 'polygon' && s.color === PALETTE.bullseyeLight);
+      const x = Math.min(...quiet.points.map((p) => p.x));
+      const y = Math.min(...quiet.points.map((p) => p.y));
+      const baseX = qrCorner === 'TL' || qrCorner === 'BL'
+        ? margin * 0.25 : scene.width - margin * 0.25 - blockSide;
+      const baseY = qrCorner === 'TL' || qrCorner === 'TR'
+        ? margin * 0.25 : scene.height - margin * 0.25 - blockSide;
+      const dirX = qrCorner === 'TL' || qrCorner === 'BL' ? -1 : 1;
+      const dirY = qrCorner === 'TL' || qrCorner === 'TR' ? -1 : 1;
+      const pullX = (x - baseX) * dirX;
+      const pullY = (y - baseY) * dirY;
+
+      assert.ok(pullX >= -EPS, `${qrCorner}: 블록이 x 로 안쪽으로 밀렸다 (${pullX.toFixed(3)})`);
+      assert.ok(pullY >= -EPS, `${qrCorner}: 블록이 y 로 안쪽으로 밀렸다 (${pullY.toFixed(3)})`);
+      assert.ok(Math.abs(pullX - pullY) < 1e-6,
+        `${qrCorner}: 당기기가 대각이 아니다 (x ${pullX.toFixed(3)} vs y ${pullY.toFixed(3)})`);
+      const inset = Math.min(x, y, scene.width - (x + blockSide), scene.height - (y + blockSide));
+      assert.ok(inset >= MIN_INSET - EPS,
+        `${qrCorner}: 캔버스 변에서 ${inset.toFixed(2)}셀 — ${MIN_INSET}셀 미만이면 잘려 보인다`);
+    }
   });
 
   test('margin 을 너무 작게 강제하면 4 코너 전부 throw — 셀 캔버스 가드가 먼저 발화', () => {
@@ -226,11 +269,15 @@ describe('buildScene — 코너 QR 위치 4택 (ADR 0004 §1-7, Type A 패치 �
     );
     assert.deepEqual(sceneDefault, sceneExplicitTL);
 
+    // ⚠ 원점 스냅샷(margin·0.25)은 2026-08-27 배치 변경으로 **더는 참이 아니다** —
+    //   실루엣이 가까우면 바깥으로 당긴다. 대신 그 규칙이 지키는 성질을 잰다.
     const quiet = sceneDefault.shapes.find((s) => s.kind === 'polygon' && s.color === PALETTE.bullseyeLight);
     const originX = Math.min(...quiet.points.map((p) => p.x));
     const originY = Math.min(...quiet.points.map((p) => p.y));
-    assert.ok(Math.abs(originX - margin * 0.25) < 1e-9);
-    assert.ok(Math.abs(originY - margin * 0.25) < 1e-9);
+    assert.ok(originX <= margin * 0.25 + 1e-9, '블록이 안쪽으로 밀렸다 — 당기기는 바깥 방향뿐이다');
+    assert.ok(originY <= margin * 0.25 + 1e-9, '블록이 안쪽으로 밀렸다 — 당기기는 바깥 방향뿐이다');
+    assert.ok(originX >= 2 * cellSize - 1e-9, '캔버스 변에서 2셀 미만 — 잘려 보인다');
+    assert.ok(originY >= 2 * cellSize - 1e-9, '캔버스 변에서 2셀 미만 — 잘려 보인다');
   });
 
   test('무교차 단언은 실제 codeBounds(k, layout) 대비 실측으로도 확인(회귀 이중 확인)', () => {
