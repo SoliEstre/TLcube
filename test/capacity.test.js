@@ -23,7 +23,19 @@ import {
 import { cellCount } from '../src/hexgrid.js';
 import { NSYM_TABLE, errorCapacity } from '../src/rs211.js';
 import { maxPayloadFor } from '../src/header.js';
-import { overheadBreakdown } from '../src/placement.js';
+import { overheadBreakdown, roleOf } from '../src/placement.js';
+import { overheadBreakdownOMarker, roleOfOMarker } from '../src/markerO.js';
+
+function countedOverhead(k, roleAt) {
+  let count = 0;
+  for (let q = -k; q <= k; q += 1) {
+    for (let r = -k; r <= k; r += 1) {
+      if (Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) > k) continue;
+      if (roleAt(q, r, k) !== 'data') count += 1;
+    }
+  }
+  return count;
+}
 
 // ADR 0001 §3.3.2/§3.3.3 + .agent/PM/005_ecc_redesign.md P3 절 + M0 T8 오버헤드 대사
 // (통합자 사전 검산, placement.overheadBreakdown(k) 실계산 반영). 사용자 검산 완료.
@@ -190,6 +202,50 @@ describe('오버헤드는 이제 잠정이 아니다 (T8 완료)', () => {
         () => capacityFor({ ...v, overhead: v.overhead + sign * delta }, 'M'),
         /NSYM_TABLE/,
         `V${v.version}: overhead${sign > 0 ? '+' : '-'}${delta} 가 가드를 발화시키지 못했다 (residual=${r.residualCells})`,
+      );
+    }
+  });
+});
+
+describe('lab 확장 반경의 오버헤드 실계수 자', () => {
+  test('k=12·14·16·18 Type O/G 예약 좌표 전수가 breakdown과 일치한다', () => {
+    const expected = [
+      { k: 12, totalCells: 469, overheadO: 57, overheadG: 66 },
+      { k: 14, totalCells: 631, overheadO: 61, overheadG: 70 },
+      { k: 16, totalCells: 817, overheadO: 65, overheadG: 74 },
+      { k: 18, totalCells: 1027, overheadO: 69, overheadG: 78 },
+    ];
+
+    for (const row of expected) {
+      assert.equal(cellCount(row.k), row.totalCells, `k=${row.k}: 총 셀`);
+      assert.equal(countedOverhead(row.k, roleOf), row.overheadO, `O/k=${row.k}: 좌표 전수`);
+      assert.equal(overheadBreakdown(row.k).total, row.overheadO, `O/k=${row.k}: breakdown`);
+      assert.equal(countedOverhead(row.k, roleOfOMarker), row.overheadG, `G/k=${row.k}: 좌표 전수`);
+      assert.equal(overheadBreakdownOMarker(row.k).total, row.overheadG, `G/k=${row.k}: breakdown`);
+    }
+  });
+
+  test('새 반경에서도 NSYM 표-실계수 가드는 오버헤드 최소 변이에 발화한다', () => {
+    for (const k of [12, 14, 16, 18]) {
+      const overhead = countedOverhead(k, roleOf);
+      const totalCells = cellCount(k);
+      const dataCells = totalCells - overhead;
+      const usedSymbols = Math.floor(dataCells / 3);
+      const residualCells = dataCells - usedSymbols * 3;
+      const symbolKey = `K${k}_PROBE`;
+      const spec = { version: k / 2 - 2, k, overhead, symbolKey };
+      const source = {
+        tableName: 'K18_PROBE',
+        table: { [symbolKey]: { symbols: usedSymbols, M: 1 } },
+      };
+
+      assert.equal(capacityFor(spec, 'M', source).usedSymbols, usedSymbols);
+      const delta = residualCells === 1 ? 2 : 1;
+      const sign = residualCells === 2 ? -1 : 1;
+      assert.throws(
+        () => capacityFor({ ...spec, overhead: overhead + sign * delta }, 'M', source),
+        /K18_PROBE/,
+        `k=${k}: overhead${sign > 0 ? '+' : '-'}${delta} 변이가 표 불일치를 내야 한다`,
       );
     }
   });
