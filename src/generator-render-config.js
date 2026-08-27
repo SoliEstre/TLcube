@@ -1,6 +1,6 @@
 // generator-render-config.js — 생성기의 정규 상태 → 인코더/scene 옵션 경계
 
-import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import { CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId } from './finder-selection.js';
 import {
   centralMarkerN7FamilyForType, isCentralMarkerN7FinderPatternId,
 } from './centralMarkerN7.js';
@@ -302,4 +302,24 @@ export function sceneOptionsForOA({
    */
   if (!needsCornerQr) opts.margin = 20;
   return opts;
+}
+
+/**
+ * 중앙 슬롯 **비컨** 파인더 → 인코더 플래그. 중앙 QR 이 켜져 있으면 아무것도 안 준다
+ * (중앙은 하나만 먹는다).
+ *
+ * ⚠ **이 유도가 존재하는 이유는 손 사본이 실제로 늙었기 때문이다.** 종전에는
+ * `index.html` 의 디스패치 안에만 있었고, `test/generator-finder-dom.test.js` 의
+ * 하네스가 같은 규칙을 손으로 다시 적어 두고 있었다. 그 사본은 `daehanFinder` 만
+ * 알아서, 새 중앙 비컨(centralN7)이 붙자 하네스만 `centralN7 불일치` 로 죽었다.
+ * 새 점유자가 늘 때 **한 곳만 고치면 되도록** 여기 한 번만 적는다.
+ *
+ * daehan 은 여기 넣지 않는다 — K 경로는 daehan 을 인코더에 안 싣는 계약이라
+ * 같이 묶으면 그 침묵이 깨진다 (동작 변경이 되므로 별도 결정이 필요하다).
+ */
+export function centralBeaconEncoderOptions(finderPatternId, centerQr) {
+  if (centerQr) return {};
+  if (isCentralV0FinderPatternId(finderPatternId)) return { centralV0: true };
+  if (finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) return { centralN7: true };
+  return {};
 }

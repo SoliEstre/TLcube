@@ -6246,7 +6246,7 @@ import {
   ADVANCED_ONLY_CENTRAL_IDS, SEAT_NONE, cmqWireExists, zoneCards,
 } from './src/finder-zone-ui.js';
 import {
-  centralN7FamilyForType, encodeOptionsForY, sceneOptionsForOA,
+  centralN7FamilyForType, encodeOptionsForY, sceneOptionsForOA,, centralBeaconEncoderOptions,
 } from './src/generator-render-config.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
@@ -11216,8 +11216,9 @@ function encodeOptsFor(cfg) {
     if (cfg.versionK !== undefined) opts.version = cfg.versionK;
     if (cfg.cornerMarker) opts.cornerMarker = true;
     if (cfg.fallback.mode === 'center') opts.centerQr = true;
-    else if (isCentralV0FinderPatternId(cfg.finderPatternId)) opts.centralV0 = true;
-    else if (cfg.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) opts.centralN7 = true;
+    // 중앙 비컨 플래그는 **공유 유도** 하나에서 온다 (generator-render-config.js).
+    // 여기 손으로 다시 적으면 새 점유자가 늘 때 한쪽만 늙는다 — 실제로 늙었다.
+    Object.assign(opts, centralBeaconEncoderOptions(cfg.finderPatternId, Boolean(opts.centerQr)));
     return { fn: encodeK, opts };
   }
   const opts = { centerQr: cfg.fallback.mode === 'center' };
@@ -11227,12 +11228,8 @@ function encodeOptsFor(cfg) {
   // 화면의 모든 용량 표시(정보줄·게이지·절단 프로브)는 encoded.capacity 를 그대로 읽으므로
   // 자동으로 따라온다. 이 줄이 없으면 79셀을 그려 놓고 legacy 용량(18/39/65 B)을 표시하며
   // data 셀 위에 파인더를 덧칠한다.
-  if (isCentralV0FinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
-    opts.centralV0 = true;
-  }
-  if (cfg.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID && !opts.centerQr) {
-    opts.centralN7 = true;
-  }
+  // 중앙 비컨 플래그는 **공유 유도** 하나에서 온다 (generator-render-config.js).
+  Object.assign(opts, centralBeaconEncoderOptions(cfg.finderPatternId, Boolean(opts.centerQr)));
   if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) opts.daehanFinder = true;
   // daehan 과 코너 마커는 둘 다 layoutProviderFor 를 갈아끼운다(src/encode.js:47) —
   // 같이 주면 회계가 두 번 갈린다. daehan 이 파인더 선택에서 오므로 그쪽을 우선한다.

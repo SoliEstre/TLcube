@@ -226,7 +226,11 @@ export function encodeA(text, options = {}) {
   ].filter(Boolean);
   if (centralSlotOccupants.length > 1) {
     throw new RangeError(
-      `중앙 슬롯 점유자는 하나다 — ${centralSlotOccupants.join(' + ')} 를 동시에 켤 수 없다`,
+      `중앙 슬롯 점유자는 하나다 — ${centralSlotOccupants.join(' + ')} 를 동시에 켤 수 없다`
+        // ⚠ **이유 꼬리를 떼지 마라.** 점유자 목록을 유도로 바꾸며 한 번 사라졌고,
+        //   sagoae-roundtrip 의 「조용히 강등되지 않는다」가 그걸 잡았다. «하나다» 는
+        //   무엇이 막혔는지만 말하고 **왜** 막혔는지는 안 말한다.
+        + ' — 검출 합성 미지원 조합이다',
     );
   }
   // centralV0 × turnA — **개설** (2026-08-24, 운영자 아침 검수 3차). 막던 근거는

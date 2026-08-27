@@ -37,7 +37,7 @@ import {
   DEFAULT_PRESET,
   getPreset,
 } from '../src/luminance.js';
-import { sceneOptionsForOA } from '../src/generator-render-config.js';
+import { sceneOptionsForOA , centralBeaconEncoderOptions } from '../src/generator-render-config.js';
 import { rasterize } from '../src/raster.js';
 import { renderWithErrorDisplay } from '../src/render-status.js';
 import { buildScene, resolveSceneFinderPatternId } from '../src/scene.js';
@@ -99,7 +99,13 @@ function appendFinderCards(root) {
  * 제품 규칙을 안 따라간 것이었다). Type A 는 daehanFinder 옵션 자체가 없다.
  */
 function encodeFor(type, centerQr, finderPatternId) {
-  const options = { eccLevel: 'H', centerQr };
+  // ⚠ 중앙 비컨 플래그는 **손으로 적지 않는다** — index.html 과 같은 공유 유도를 쓴다.
+  //   종전 이 함수는 daehanFinder 만 아는 손 사본이었고, 새 중앙 비컨이 붙자
+  //   여기서만 `centralN7 불일치` 로 죽었다 (2026-08-28). 사본이 늙는 방식이다.
+  const options = {
+    eccLevel: 'H', centerQr,
+    ...centralBeaconEncoderOptions(finderPatternId, centerQr),
+  };
   if (type === 'A') return encodeA('https://example.com/trilume', options);
   if (isDaehanFinderPatternId(finderPatternId)) options.daehanFinder = true;
   return encode('https://example.com/trilume', options);
@@ -202,7 +208,10 @@ test('정식 파인더 카드 행은 불스아이 → 하이브리드 → 3톤 �
   // live-join 유도라 status 'dropped' 가 카드를 닫는다 (판독·패턴 표는 유지).
   // **의도적 갱신 (2026-08-24 — Aspirin 드랍, 아침 검수 5)** — 20 → 19. 같은 규약.
   // **의도적 갱신 (2026-08-27, N7CARD 시험판 카드)** — 19 → 20. /lab/ 전용 중앙 TL 카드가 붙었고 정식 화면 카드 수 19는 변하지 않았다.
-  assert.equal(ids.length, 20);
+  // **의도적 갱신 (2026-08-28, N7B)** — 20 → 21. 후보 B 가 「중앙 M7」로 개명되고
+  // 새 스키마 카드 「중앙 TL」이 붙었다. 둘 다 /lab/ 전용이라 **정식 화면 카드 수 19는
+  // 그대로다** — 이 수는 시험판 포함 전수다.
+  assert.equal(ids.length, 21);
   assert.deepEqual(ids.slice(-4, -1),
     ['oak-nitrogen-r2', 'oak-footprint', 'oak-taegeuk-solo'],
     'OAK 카드가 daehan 앞 세 자리가 아니다');
