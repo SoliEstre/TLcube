@@ -128,12 +128,14 @@ export function chooseVersionA(text, eccLevel = 'M') {
  * Type A 인코더 파이프라인 진입점. version 을 생략하면 `chooseVersionA` 로
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
- * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, daehanFinder?: boolean,
- *          sagoae?: boolean, co2AnchorTones?: boolean}} [options]
+ * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, centralV0?: boolean,
+ *          centralN7?: boolean, daehanFinder?: boolean, sagoae?: boolean,
+ *          co2AnchorTones?: boolean}} [options]
  *   `co2AnchorTones` — V-CM 기본 심볼 CO2 의 꼭짓점 앵커 3셀 톤까지 싣는다 (opt-in,
  *   자리 필수). 기본 적재는 마커 6셀뿐이다 — 앵커 피복은 앵커 검출을 죽인다.
  * @returns {{
  *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean,
+ *   centralV0: boolean, centralN7: boolean,
  *   daehanFinder: boolean, sagoae: boolean, co2AnchorTones: boolean, formatIndex: number,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
@@ -151,7 +153,7 @@ export function encodeA(text, options = {}) {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
   const {
-    version, eccLevel = 'M', centerQr = false, centralV0 = false,
+    version, eccLevel = 'M', centerQr = false, centralV0 = false, centralN7 = false,
     cornerMarker = false, turnA = false,
     daehanFinder = false, sagoae = false, co2AnchorTones = false,
   } = options;
@@ -204,9 +206,6 @@ export function encodeA(text, options = {}) {
   }
   // cornerMarker × centerQr — 배치 검증 후 개설 (C2a 2026-08-23, encode.js 와 동일
   // 근거 · 와이어는 markerG CMQ 변형). test/markerG-centerqr.test.js 가 잠근다.
-  if (usesDaehanLayout && centerQr) {
-    throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 centerQr 를 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
-  }
   if (usesDaehanLayout && cornerMarker) {
     throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
@@ -216,11 +215,19 @@ export function encodeA(text, options = {}) {
   if (typeof centralV0 !== 'boolean') {
     throw new TypeError(`centralV0 는 boolean 이어야 한다: ${typeof centralV0}`);
   }
-  if (centralV0 && centerQr) {
-    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 centerQr 는 같은 19셀을 쓴다');
+  if (typeof centralN7 !== 'boolean') {
+    throw new TypeError(`centralN7 는 boolean 이어야 한다: ${typeof centralN7}`);
   }
-  if (centralV0 && usesDaehanLayout) {
-    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 daehan/sagoae 예약 레이아웃을 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
+  const centralSlotOccupants = [
+    centerQr ? 'centerQr' : null,
+    centralV0 ? 'centralV0' : null,
+    centralN7 ? 'centralN7' : null,
+    usesDaehanLayout ? 'daehan/sagoae' : null,
+  ].filter(Boolean);
+  if (centralSlotOccupants.length > 1) {
+    throw new RangeError(
+      `중앙 슬롯 점유자는 하나다 — ${centralSlotOccupants.join(' + ')} 를 동시에 켤 수 없다`,
+    );
   }
   // centralV0 × turnA — **개설** (2026-08-24, 운영자 아침 검수 3차). 막던 근거는
   // «배치 검증 미실시» 였는데 턴A 기하가 «배치만 180° 회전·셀 정립» 으로 확정되며
@@ -390,12 +397,13 @@ export function encodeA(text, options = {}) {
     cellDigits.set(cellKey(c.q, c.r), { digit: fillerDigits[i], role: 'filler' });
   }
 
-  // 중앙 v0: 슬롯 19셀이 payload 로 되살아나지 않았음을 인코더 경계에서 직접 단언
+  // 중앙 v0·중앙 n=7: 슬롯 19셀이 payload 로 되살아나지 않았음을 인코더 경계에서 직접 단언
   // (encode.js 의 O 경로와 같은 방어 — 좌표 정본은 layout.js 하나).
-  if (centralV0) {
+  if (centralV0 || centralN7) {
     for (const cell of centralSlotCells()) {
       if (cellDigits.has(cellKey(cell.q, cell.r))) {
-        throw new Error(`centralV0 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
+        const owner = centralV0 ? 'centralV0' : 'centralN7';
+        throw new Error(`${owner} 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
       }
     }
   }
@@ -406,6 +414,7 @@ export function encodeA(text, options = {}) {
     eccLevel,
     centerQr,
     centralV0,
+    centralN7,
     cornerMarker,
     turnA,
     daehanFinder: usesDaehanLayout,

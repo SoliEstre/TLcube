@@ -42,6 +42,13 @@ import {
   CENTRAL_MARKER_N7_SIZE,
   centralMarkerN7State,
 } from './centralMarkerN7.js';
+import {
+  CENTRAL_N7_DATA_SCAN_ORDER,
+  CENTRAL_N7_FINDER_PATTERN_ID,
+  CENTRAL_N7_LOCATOR_CELLS,
+  CENTRAL_N7_SIZE,
+} from './centralN7Schema.js';
+import { encodeCentralN7 } from './centralN7Codec.js';
 
 // `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
 // FACE_LEVEL_INDEX)와 **같은 표**여야 하며, `FACES` 배열의 나열 순서에 기대지
@@ -114,6 +121,9 @@ function resolveFinderRenderPattern(id) {
   if (id === CENTRAL_V0_FINDER_PATTERN_ID) return { id, renderKind: 'central-v0' };
   if (id === CENTRAL_MARKER_N7_FINDER_PATTERN_ID) {
     return { id, renderKind: 'central-marker-n7' };
+  }
+  if (id === CENTRAL_N7_FINDER_PATTERN_ID) {
+    return { id, renderKind: 'central-n7-payload' };
   }
   // OAK 후보(2026-08-18)는 생성 도구 산출물이 아니라 별도 표라 PATTERN_BY_ID 에
   // 없다. 여기서 먼저 풀고, 아니면 기존 조회가 «알 수 없는 id» 로 정확히 죽는다.
@@ -399,6 +409,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   cellSize?: number, margin?: number,
  *   qrText?: string, centerQr?: boolean, cornerToo?: boolean,
  *   finderPatternId?: string,
+ *   centralN7Family?: 'hex'|'tri'|'star',
  *   centralMarkerN7Family?: 'hex'|'tri'|'star',
  *   centralMarkerN7Turn?: 0|1|2, centralMarkerN7Parity?: 0|1,
  *   qrCorner?: 'TL'|'TR'|'BL'|'BR',
@@ -464,11 +475,14 @@ export function buildScene(encoded, options) {
   }
   const centralV0 = Boolean(encoded.centralV0);
   const rendersCentralV0 = finderPattern.renderKind === 'central-v0';
+  const centralN7 = Boolean(encoded.centralN7);
+  const rendersCentralN7 = finderPattern.renderKind === 'central-n7-payload';
   const centralSlotOccupants = [
     centerQr ? 'centerQr' : null,
     isExperimentalFinderRenderKind(finderPattern.renderKind)
       ? `실험 파인더(${finderPatternId})` : null,
     centralV0 ? 'centralV0' : null,
+    centralN7 ? 'centralN7' : null,
   ].filter(Boolean);
   if (centralSlotOccupants.length > 1) {
     throw new RangeError(
@@ -478,6 +492,11 @@ export function buildScene(encoded, options) {
   if (centralV0 !== rendersCentralV0) {
     throw new RangeError(
       `centralV0 불일치: encoded.centralV0=${centralV0} vs finderPatternId=${finderPatternId}`,
+    );
+  }
+  if (centralN7 !== rendersCentralN7) {
+    throw new RangeError(
+      `centralN7 불일치: encoded.centralN7=${centralN7} vs finderPatternId=${finderPatternId}`,
     );
   }
   if (!centerQr && finderPattern.renderKind === 'center-qr') {
@@ -728,8 +747,86 @@ export function buildScene(encoded, options) {
         color: FINDER_CUBE_TONES[finderPattern.toneRanks[face]],
       });
     }
+  } else if (finderPattern.renderKind === 'central-n7-payload') {
+    // 정본 7×7 기하의 로케이터 30셀과 codec payload 19셀을 같은 모듈 격자에 그린다.
+    // family는 바깥 포맷에서 추측하지 않는다. 호출자가 O/G→hex, A/V→tri, K→star를
+    // 명시해야 K가 hex로 조용히 폴백하지 않는다.
+    if (!Array.isArray(encoded.formatDigits) || encoded.formatDigits.length < 5) {
+      throw new TypeError('중앙 n=7 렌더에는 encoded.formatDigits 5자리 이상이 필요하다');
+    }
+    const payloadDigits = encodeCentralN7({
+      family: opts.centralN7Family,
+      outerFormat: encoded.formatDigits.slice(0, 5),
+    });
+    if (payloadDigits.length !== CENTRAL_N7_DATA_SCAN_ORDER.length) {
+      throw new Error(
+        `중앙 n=7 payload/scan 수 불일치: ${payloadDigits.length} vs ${CENTRAL_N7_DATA_SCAN_ORDER.length}`,
+      );
+    }
+
+    const markerGeometry = centralBeaconGeometry();
+    if (palette.background !== null) {
+      const slotCoverLayout = {
+        size: markerGeometry.slotRadiusCells * cellSize,
+        originX: center.x,
+        originY: center.y,
+      };
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(0, 0, face, slotCoverLayout),
+          color: palette.background,
+        });
+      }
+    }
+    const markerLayout = {
+      size: (centralSlotRadius(layout, center) * markerGeometry.shrink) / CENTRAL_N7_SIZE,
+      originX: center.x,
+      originY: center.y,
+    };
+    for (const cell of CENTRAL_N7_LOCATOR_CELLS) {
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: moduleQuad(face, cell.i, cell.j, markerLayout),
+          color: palette.levels[cell[face]],
+        });
+      }
+    }
+    for (let index = 0; index < CENTRAL_N7_DATA_SCAN_ORDER.length; index += 1) {
+      const cell = CENTRAL_N7_DATA_SCAN_ORDER[index];
+      const ranks = digitToRanks(payloadDigits[index]);
+      for (const face of FACES) {
+        shapes.push({
+          kind: 'polygon',
+          points: moduleQuad(face, cell.i, cell.j, markerLayout),
+          color: palette.levels[ranks[face]],
+        });
+      }
+    }
+    // 후보 B·중앙 v0와 같은 10% 전폭의 Y자 분리 심. 셀 내용과 무관한 공통 기하다.
+    {
+      const markerModuleWidth = 2 * markerLayout.size;
+      const seamHalfWidth = 0.05 * markerModuleWidth;
+      const seamRadius = markerGeometry.radiusCells * cellSize;
+      for (const cornerIndex of [1, 3, 5]) {
+        const unit = CORNER_UNIT_OFFSETS[cornerIndex];
+        const perpendicular = { x: -unit.y, y: unit.x };
+        const far = { x: center.x + unit.x * seamRadius, y: center.y + unit.y * seamRadius };
+        shapes.push({
+          kind: 'polygon',
+          points: [
+            { x: center.x + perpendicular.x * seamHalfWidth, y: center.y + perpendicular.y * seamHalfWidth },
+            { x: far.x + perpendicular.x * seamHalfWidth, y: far.y + perpendicular.y * seamHalfWidth },
+            { x: far.x - perpendicular.x * seamHalfWidth, y: far.y - perpendicular.y * seamHalfWidth },
+            { x: center.x - perpendicular.x * seamHalfWidth, y: center.y - perpendicular.y * seamHalfWidth },
+          ],
+          color: FINDER_CUBE_SEAM,
+        });
+      }
+    }
   } else if (finderPattern.renderKind === 'central-marker-n7') {
-    // 중앙 TL은 데이터 프레임이 아니라 7×7 전 셀이 고정된 후보 B 마커다. 인코더
+    // 중앙 M7은 데이터 프레임이 아니라 7×7 전 셀이 고정된 후보 B 마커다. 인코더
     // 산출물에는 아무 플래그도 추가하지 않고, UI가 바깥 타입에서 family만 렌더 옵션으로
     // 전달한다. turn/parity는 코드북 18상태를 재는 렌더 자용이며 생성기 기본은 0/0이다.
     const marker = centralMarkerN7State(

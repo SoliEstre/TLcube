@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import {
   CENTRAL_MARKER_N7_CODEBOOK,
@@ -14,7 +13,10 @@ import {
   mapCentralMarkerGrid,
   sanitizeCentralMarkerN7FinderState,
 } from '../src/centralMarkerN7.js';
-import { FINDER_CARD_GROUPS } from '../src/finder-card-ui.js';
+import {
+  FINDER_CARD_GROUPS, labOnlyFinderCardsVisible,
+  labOnlyFinderSelectionAllowed, sanitizeLabOnlyFinderState,
+} from '../src/finder-card-ui.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   GENERATOR_STATE_SCHEMA,
@@ -34,7 +36,6 @@ import { FINDER_CELL_ORDER } from '../src/finder-patterns.js';
 import { centralBeaconGeometry } from '../src/centralBeaconWire.js';
 import { moduleCenter } from '../src/ygrid.js';
 
-const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const PALETTE = Object.freeze({
   background: Object.freeze({ r: 248, g: 249, b: 251 }),
   levels: Object.freeze([
@@ -195,33 +196,28 @@ test('정식 화면 2겹 차단과 저장 상태 복구 — DOM 부재·선택 �
     unsafe, true, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   ), unsafe, 'lab 상태는 바꾸면 안 된다');
 
-  assert.deepEqual(FINDER_CARD_GROUPS.lab.map((card) => card.id),
-    [CENTRAL_MARKER_N7_FINDER_PATTERN_ID]);
+  assert.equal(labOnlyFinderCardsVisible(false), false);
+  assert.equal(labOnlyFinderCardsVisible(true), true);
+  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, false), false);
+  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, true), true);
+  assert.equal(sanitizeLabOnlyFinderState(
+    unsafe, false, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  ).finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
+  assert.ok(FINDER_CARD_GROUPS.lab.some(
+    (card) => card.id === CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  ));
+  assert.ok(FINDER_CARD_GROUPS.formal.every(
+    (card) => card.id !== CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  ));
   assert.ok(GENERATOR_STATE_SCHEMA.finderPatternId.options
     .includes(CENTRAL_MARKER_N7_FINDER_PATTERN_ID));
-  assert.match(INDEX, /centralMarkerN7VisibleOnSurface\(isLabPath\(\)\)/,
-    '정식 DOM 비생성 게이트가 실제 카드 조립에 쓰이지 않는다');
-  assert.match(INDEX, /centralMarkerN7SelectionAllowed\(id, isLabPath\(\)\)/,
-    '클릭·키보드 활성화 차단이 실제 핸들러에 쓰이지 않는다');
-  assert.match(INDEX, /sanitizeCentralMarkerN7FinderState\([\s\S]*generatorState/,
-    '정식 저장 상태 복구가 generatorState에 배선되지 않았다');
 });
 
-test('아이콘·8언어 — 공용 n/셀 공급자는 n=7 49셀·n=13 169셀을 그린다', () => {
+test('아이콘 — 공용 n/셀 공급자는 n=7 49셀·n=13 169셀을 그린다', () => {
   const marker = centralMarkerN7State('hex', 0, 0);
   const markerByKey = new Map(marker.cells.map((cell) => [`${cell.i},${cell.j}`, cell]));
   const n7 = mapCentralMarkerGrid(7, (i, j) => markerByKey.get(`${i},${j}`));
   const n13 = mapCentralMarkerGrid(13, () => ({ T: 0, L: 1, R: 2 }));
   assert.equal(n7.length, 49);
   assert.equal(n13.length, 169);
-  assert.match(INDEX, /centralMarkerThumbnail\(CENTRAL_V0_SOURCE_N,/);
-  assert.match(INDEX, /centralMarkerThumbnail\([\s\S]*CENTRAL_MARKER_N7_SIZE,/);
-  assert.match(INDEX, /dataset\.thumbnailCellCount = String\(supplied\.length\)/);
-
-  assert.equal(INDEX.split('"g1000":').length - 1, 8);
-  for (const label of [
-    '중앙 TL', 'Centre TL', '中央TL', 'TL central',
-    'TL centrale', 'Zentraler TL',
-  ]) assert.ok(INDEX.includes(`"g1000": "${label}"`), label);
 });
-

@@ -2845,7 +2845,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)",
     "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.",
     "g582": "중앙 Y0",
-    "g1000": "중앙 TL",
+    "g1000": "중앙 M7",
+    "g1001": "중앙 TL",
     "g572": "실루엣 방향",
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
@@ -3293,7 +3294,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (lower capacity · trial scanner only)",
     "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when this finder is enabled in the trial scanner (/lab/).",
     "g582": "Centre Y0",
-    "g1000": "Centre TL",
+    "g1000": "Centre M7",
+    "g1001": "Centre TL",
     "g572": "Silhouette direction",
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
@@ -3741,7 +3743,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae（容量減少・試験版スキャナ専用）",
     "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）でこのファインダーを有効にしたときだけ読み取れます。",
     "g582": "中央Y0",
-    "g1000": "中央TL",
+    "g1000": "中央M7",
+    "g1001": "中央TL",
     "g572": "シルエット方向",
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
@@ -4188,7 +4191,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (capacité réduite · scanner d'essai uniquement)",
     "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec ce détecteur activé dans le scanner d'essai (/lab/).",
     "g582": "Y0 central",
-    "g1000": "TL central",
+    "g1000": "M7 central",
+    "g1001": "TL central",
     "g572": "Orientation de la silhouette",
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
@@ -4635,7 +4639,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (capacità ridotta · solo scanner di prova)",
     "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando questo rilevatore nello scanner di prova (/lab/).",
     "g582": "Y0 centrale",
-    "g1000": "TL centrale",
+    "g1000": "M7 centrale",
+    "g1001": "TL centrale",
     "g572": "Direzione della sagoma",
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
@@ -5082,7 +5087,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (geringere Kapazität · nur Test-Scanner)",
     "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn dieser Finder im Test-Scanner (/lab/) aktiviert ist.",
     "g582": "Zentrales Y0",
-    "g1000": "Zentraler TL",
+    "g1000": "Zentraler M7",
+    "g1001": "Zentraler TL",
     "g572": "Silhouettenrichtung",
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
@@ -5529,7 +5535,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (menor capacidad · solo escáner de prueba)",
     "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con este detector activado en el escáner de prueba (/lab/).",
     "g582": "Y0 central",
-    "g1000": "TL central",
+    "g1000": "M7 central",
+    "g1001": "TL central",
     "g572": "Orientación de la silueta",
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
@@ -5976,7 +5983,8 @@ const GENERATOR_STRINGS = {
     "g570": "taegeuk + sagoae (menor capacidade · apenas leitor de teste)",
     "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com este detector ativado no leitor de teste (/lab/).",
     "g582": "Y0 central",
-    "g1000": "TL central",
+    "g1000": "M7 central",
+    "g1001": "TL central",
     "g572": "Orientação da silhueta",
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
@@ -6221,20 +6229,25 @@ import {
   isCentralV0FinderPatternId, selectFinderPattern, selectGeneratorType, selectQrPosition,
 } from './src/finder-selection.js';
 import {
-  CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS, getUnmeasuredFinderPattern,
+  CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS, centralN7ThumbnailCells,
+  getUnmeasuredFinderPattern, isLabOnlyFinderPatternId, labOnlyFinderCardsVisible,
+  labOnlyFinderSelectionAllowed, sanitizeLabOnlyFinderState,
   wireFinderCardActivation,
 } from './src/finder-card-ui.js';
 import {
   CENTRAL_MARKER_N7_FINDER_PATTERN_ID, CENTRAL_MARKER_N7_SIZE,
-  centralMarkerN7FamilyForType, centralMarkerN7SelectionAllowed,
-  centralMarkerN7State, centralMarkerN7VisibleOnSurface,
+  centralMarkerN7FamilyForType, centralMarkerN7State,
   isCentralMarkerN7FinderPatternId, mapCentralMarkerGrid,
-  sanitizeCentralMarkerN7FinderState,
 } from './src/centralMarkerN7.js';
+import {
+  CENTRAL_N7_FINDER_PATTERN_ID, CENTRAL_N7_SIZE,
+} from './src/centralN7Schema.js';
 import {
   ADVANCED_ONLY_CENTRAL_IDS, SEAT_NONE, cmqWireExists, zoneCards,
 } from './src/finder-zone-ui.js';
-import { encodeOptionsForY, sceneOptionsForOA } from './src/generator-render-config.js';
+import {
+  centralN7FamilyForType, encodeOptionsForY, sceneOptionsForOA,
+} from './src/generator-render-config.js';
 import {
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0T,
@@ -6457,10 +6470,10 @@ refreshInputClearButtons();
 /** 생성기 선택의 단일 상태 — 모드는 이 객체의 노출 범위만 바꾼다. */
 let mode = 'normal';
 const generatorState = createGeneratorState();
-// 저장 상태·확장 주입으로 정식 화면에 중앙 TL이 살아나도 렌더 전에 기본값으로 닫는다.
+// 저장 상태·확장 주입으로 정식 화면에 시험판 중앙 카드가 살아나도 렌더 전에 기본값으로 닫는다.
 // 현재 선택뿐 아니라 직전 선택·타입군 스냅샷도 함께 정리해 타입 왕복 재유입을 막는다.
 if (!isLabPath()) {
-  Object.assign(generatorState, sanitizeCentralMarkerN7FinderState(
+  Object.assign(generatorState, sanitizeLabOnlyFinderState(
     generatorState, false, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   ));
 }
@@ -7387,6 +7400,7 @@ const FINDER_LABEL_KEYS = Object.freeze({
   [CENTER_QR_FINDER_PATTERN_ID]: 'g471',
   [CENTRAL_V0_FINDER_PATTERN_ID]: 'g582',
   [CENTRAL_MARKER_N7_FINDER_PATTERN_ID]: 'g1000',
+  [CENTRAL_N7_FINDER_PATTERN_ID]: 'g1001',
   'pinwheel-3-0101-cw-missing-solid': 'g463',
   'gap-ring-01-2-1-solid': 'g462',
   'flower-7-0020-coprime-offset': 'g464',
@@ -7746,6 +7760,15 @@ function centralMarkerN7Thumbnail() {
   );
 }
 
+function centralN7Thumbnail() {
+  const cells = centralN7ThumbnailCells();
+  const byKey = new Map(cells.map((cell) => [cell.i + ',' + cell.j, cell]));
+  return centralMarkerThumbnail(
+    CENTRAL_N7_SIZE,
+    (i, j) => byKey.get(i + ',' + j),
+  );
+}
+
 function makeFinderCard(id, pattern) {
   const card = document.createElement('div');
   card.className = 'toggle-card finder-card';
@@ -7755,6 +7778,7 @@ function makeFinderCard(id, pattern) {
   let thumbnail;
   if (id === CENTRAL_V0_FINDER_PATTERN_ID) thumbnail = centralV0Thumbnail();
   else if (id === CENTRAL_MARKER_N7_FINDER_PATTERN_ID) thumbnail = centralMarkerN7Thumbnail();
+  else if (id === CENTRAL_N7_FINDER_PATTERN_ID) thumbnail = centralN7Thumbnail();
   else if (pattern) {
     thumbnail = pattern.renderKind === 'three-tone-cube'
       ? finderCubeThumbnail(pattern)
@@ -7772,8 +7796,8 @@ function makeFinderCard(id, pattern) {
   card.append(label);
   const activate = () => {
     // DOM 비노출과 별개인 두 번째 차단. 저장 상태·확장이 정식 화면에서 이벤트를
-    // 만들어도 디코더 미배선 중앙 TL을 선택 상태로 넣지 않는다.
-    if (!centralMarkerN7SelectionAllowed(id, isLabPath())) return;
+    // 만들어도 디코더 미배선 시험판 중앙 카드를 선택 상태로 넣지 않는다.
+    if (!labOnlyFinderSelectionAllowed(id, isLabPath())) return;
     const type = currentType();
     commitFinderQrUi(
       selectFinderPattern(generatorState, id, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
@@ -7789,9 +7813,9 @@ function ensureFinderCards() {
     || els.finderUserCards.childElementCount || els.finderOakCards.childElementCount
     || els.finderDaehanCards.childElementCount) return;
 
-  // 중앙 v0는 생성 패턴 계보 밖의 운영자 확정 카드다. 중앙 TL은 lab에서만 같은 자리에
-  // 끼우며, 정식 화면에서는 요소 자체를 만들지 않는다(숨김 속성에 기대지 않는다).
-  const labCentralCards = centralMarkerN7VisibleOnSurface(isLabPath())
+  // 중앙 v0는 생성 패턴 계보 밖의 운영자 확정 카드다. 중앙 M7·중앙 TL은 lab에서만
+  // 같은 자리에 끼우며, 정식 화면에서는 요소 자체를 만들지 않는다(숨김 속성에 기대지 않는다).
+  const labCentralCards = labOnlyFinderCardsVisible(isLabPath())
     ? FINDER_CARD_GROUPS.lab : [];
   const formalCards = FINDER_CARD_GROUPS.formal.flatMap((entry) =>
     entry.id === CENTER_QR_FINDER_PATTERN_ID
@@ -8245,7 +8269,8 @@ function renderQrPositionUi() {
   //    (daehan 은 여전히 중앙을 먹으므로 그 술어가 K 에서도 계속 잠근다.)
   const finderTakesCentre = isDaehanFinderPatternId(generatorState.finderPatternId)
     || isCentralV0FinderPatternId(generatorState.finderPatternId)
-    || isCentralMarkerN7FinderPatternId(generatorState.finderPatternId);
+    || isCentralMarkerN7FinderPatternId(generatorState.finderPatternId)
+    || generatorState.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID;
   if (finderTakesCentre && generatorState.qrPosition === 'inner') {
     // ⚠ 예전엔 스키마 밖 값 'outer' 를 대입하던 잠복 버그였다 (2026-08-23 수리) —
     // 그 값이 살아 나가면 카드 active 가 전부 꺼지고 resolveFallback 이
@@ -9110,7 +9135,9 @@ function syncCellEditorFinderFromGenerator(state, ctx) {
   // 중앙 QR 은 셀이 아니라 QR 모듈 블록이라 편집기에 대응 표현이 없다. 불스아이로
   // 되돌려 그리면 «편집기가 보여 주는 것 = 코드가 그리는 것» 이라는 이 동기화의
   // 전제가 거짓말이 된다 — 그래서 건드리지 않고 지난다.
-  if (wanted === CENTER_QR_FINDER_PATTERN_ID) return;
+  if (wanted === CENTER_QR_FINDER_PATTERN_ID
+    || isCentralV0FinderPatternId(wanted)
+    || isLabOnlyFinderPatternId(wanted)) return;
   if (state.finderStarter === wanted) return;
   applyFinderStarter(state, wanted);
   // 조용한 불스아이 되돌림 금지 — resolveFinderStarter 는 모르는 id 를 catch 로
@@ -11135,6 +11162,9 @@ function encodeOptsFor(cfg) {
     const centralV0Selected = isCentralV0FinderPatternId(cfg.finderPatternId)
       && !opts.centerQr;
     if (centralV0Selected) opts.centralV0 = true;
+    if (cfg.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID && !opts.centerQr) {
+      opts.centralN7 = true;
+    }
     if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
       opts.daehanFinder = true;
     } else if (cfg.cornerMarker === true) {
@@ -11187,6 +11217,7 @@ function encodeOptsFor(cfg) {
     if (cfg.cornerMarker) opts.cornerMarker = true;
     if (cfg.fallback.mode === 'center') opts.centerQr = true;
     else if (isCentralV0FinderPatternId(cfg.finderPatternId)) opts.centralV0 = true;
+    else if (cfg.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) opts.centralN7 = true;
     return { fn: encodeK, opts };
   }
   const opts = { centerQr: cfg.fallback.mode === 'center' };
@@ -11198,6 +11229,9 @@ function encodeOptsFor(cfg) {
   // data 셀 위에 파인더를 덧칠한다.
   if (isCentralV0FinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
     opts.centralV0 = true;
+  }
+  if (cfg.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID && !opts.centerQr) {
+    opts.centralN7 = true;
   }
   if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) opts.daehanFinder = true;
   // daehan 과 코너 마커는 둘 다 layoutProviderFor 를 갈아끼운다(src/encode.js:47) —
@@ -11360,6 +11394,9 @@ function renderTypeK(cfg) {
   };
   if (isCentralMarkerN7FinderPatternId(cfg.finderPatternId)) {
     sceneOpts.centralMarkerN7Family = centralMarkerN7FamilyForType(cfg.type);
+  }
+  if (cfg.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) {
+    sceneOpts.centralN7Family = centralN7FamilyForType(cfg.type);
   }
   // ⭐ **중앙 QR 개설 (2026-08-25, 레인 KEX)** — sceneOptionsForOA 와 **같은 모양**으로
   //    싣는다. 그 함수는 O·A 전용 계약이라 K 가 못 쓰고, 손 조립이라 «빠뜨림이 조용한»
@@ -11708,7 +11745,7 @@ render();
 
 // .10 은 결번이다 — d91a34d 가 제목에만 «.10» 을 달고 이 상수를 안 올려서 라이브는
 // 계속 .09 를 표시했다. 같은 태그를 두 커밋이 주장하지 않도록 그 번호는 버린다.
-const GENERATOR_BUILD = '2026-08-27.05';
+const GENERATOR_BUILD = '2026-08-28.01';
 const buildTagEl = document.getElementById('buildTag');
 if (buildTagEl) buildTagEl.textContent = GENERATOR_BUILD;
 

@@ -4,6 +4,7 @@ import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
 import {
   centralMarkerN7FamilyForType, isCentralMarkerN7FinderPatternId,
 } from './centralMarkerN7.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from './centralN7Schema.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
   CELL_SURFACE_FINAL_V0,
@@ -38,6 +39,21 @@ import {
   LOCATOR_PROFILE_CELL_SURFACE_V1R2,
   LOCATOR_PROFILE_CELL_SURFACE_V2R2,
 } from './locatorY.js';
+
+const CENTRAL_N7_FAMILY_BY_TYPE = Object.freeze({
+  O: 'hex',
+  G: 'hex',
+  A: 'tri',
+  V: 'tri',
+  K: 'star',
+});
+
+/** 바깥 타입을 중앙 n=7 payload의 명시 family로 바꾼다. */
+export function centralN7FamilyForType(type) {
+  const family = CENTRAL_N7_FAMILY_BY_TYPE[type];
+  if (family === undefined) throw new RangeError('중앙 n=7을 지원하지 않는 타입: ' + type);
+  return family;
+}
 
 /**
  * Type Y 인코더 옵션 — UI 상태(톤·해상도·폴백)를 인코더가 받는 모양으로 바꾼다.
@@ -259,6 +275,9 @@ export function sceneOptionsForOA({
   // 모든 O/A 경로에서 여기서 유도해, 호출자가 옵션을 손으로 덧붙이는 사본을 만들지 않는다.
   if (isCentralMarkerN7FinderPatternId(opts.finderPatternId)) {
     opts.centralMarkerN7Family = centralMarkerN7FamilyForType(type);
+  }
+  if (opts.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) {
+    opts.centralN7Family = centralN7FamilyForType(type);
   }
   let needsCornerQr = false;
   if (centerQr) {

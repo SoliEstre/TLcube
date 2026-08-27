@@ -22,6 +22,15 @@ import { DAEHAN_FINDER_PATTERNS, getDaehanFinderPattern } from './finder-daehan.
 import {
   CENTRAL_MARKER_N7_FINDER_PATTERN_ID, isCentralMarkerN7FinderPatternId,
 } from './centralMarkerN7.js';
+import {
+  CENTRAL_N7_DATA_SCAN_ORDER,
+  CENTRAL_N7_FINDER_PATTERN_ID,
+  CENTRAL_N7_LOCATOR_CELLS,
+  CENTRAL_N7_SIZE,
+} from './centralN7Schema.js';
+import { encodeCentralN7 } from './centralN7Codec.js';
+import { ECC_LEVEL, encode as encodeOuterFormat } from './formatinfo.js';
+import { digitToRanks } from './lehmer.js';
 
 function descriptor(id, pattern) {
   return Object.freeze({ id, pattern });
@@ -80,15 +89,108 @@ export const CENTRAL_MARKER_N7_FINDER_CARD = descriptor(
   null,
 );
 
+/** 디코더 배선 전 /lab/에서만 그리는 payload형 중앙 TL n=7 카드. */
+export const CENTRAL_N7_FINDER_CARD = descriptor(CENTRAL_N7_FINDER_PATTERN_ID, null);
+
+const LAB_ONLY_FINDER_IDS = Object.freeze([
+  CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  CENTRAL_N7_FINDER_PATTERN_ID,
+]);
+
+export function isLabOnlyFinderPatternId(id) {
+  return LAB_ONLY_FINDER_IDS.includes(id);
+}
+
+export function labOnlyFinderCardsVisible(lab) {
+  return lab === true;
+}
+
+export function labOnlyFinderSelectionAllowed(id, lab) {
+  return !isLabOnlyFinderPatternId(id) || lab === true;
+}
+
+function safeLabOnlyFinderId(id, lab, fallbackId) {
+  return labOnlyFinderSelectionAllowed(id, lab) ? id : fallbackId;
+}
+
+/** 정식 화면에 저장·주입된 시험판 전용 선택과 프로파일 스냅샷을 함께 걷는다. */
+export function sanitizeLabOnlyFinderState(state, lab, fallbackId) {
+  if (state === null || typeof state !== 'object') throw new TypeError('생성기 상태가 필요하다');
+  if (typeof fallbackId !== 'string' || fallbackId === '') {
+    throw new TypeError('시험판 전용 파인더의 정식 화면 폴백 id가 필요하다');
+  }
+  if (lab === true) return state;
+
+  let changed = false;
+  const sanitizeProfile = (profile) => {
+    if (profile === null || typeof profile !== 'object') return profile;
+    const finderPatternId = safeLabOnlyFinderId(profile.finderPatternId, false, fallbackId);
+    const previousFinderPatternId = safeLabOnlyFinderId(
+      profile.previousFinderPatternId, false, fallbackId,
+    );
+    if (finderPatternId === profile.finderPatternId
+      && previousFinderPatternId === profile.previousFinderPatternId) return profile;
+    changed = true;
+    return Object.freeze({ ...profile, finderPatternId, previousFinderPatternId });
+  };
+
+  let finderQrProfiles = state.finderQrProfiles;
+  if (finderQrProfiles && typeof finderQrProfiles === 'object') {
+    const sanitized = Object.fromEntries(Object.entries(finderQrProfiles)
+      .map(([name, profile]) => [name, sanitizeProfile(profile)]));
+    if (Object.keys(sanitized).some((name) => sanitized[name] !== finderQrProfiles[name])) {
+      finderQrProfiles = Object.freeze(sanitized);
+    }
+  }
+
+  const finderPatternId = safeLabOnlyFinderId(state.finderPatternId, false, fallbackId);
+  const previousFinderPatternId = safeLabOnlyFinderId(
+    state.previousFinderPatternId, false, fallbackId,
+  );
+  if (finderPatternId !== state.finderPatternId
+    || previousFinderPatternId !== state.previousFinderPatternId
+    || finderQrProfiles !== state.finderQrProfiles) changed = true;
+
+  return changed ? {
+    ...state,
+    finderPatternId,
+    previousFinderPatternId,
+    finderQrProfiles,
+  } : state;
+}
+
+/** 실제 정본 좌표와 codec 샘플에서 유도한 새 카드 49셀. */
+export function centralN7ThumbnailCells() {
+  const outerFormat = encodeOuterFormat({ version: 0, eccLevel: ECC_LEVEL.M });
+  const digits = encodeCentralN7({ family: 'hex', outerFormat });
+  const locator = CENTRAL_N7_LOCATOR_CELLS.map((cell) => Object.freeze({
+    ...cell,
+    role: 'locator',
+  }));
+  const data = CENTRAL_N7_DATA_SCAN_ORDER.map((cell, index) => Object.freeze({
+    ...cell,
+    ...digitToRanks(digits[index]),
+    digit: digits[index],
+    role: 'data',
+  }));
+  const cells = Object.freeze([...locator, ...data]);
+  if (cells.length !== CENTRAL_N7_SIZE ** 2) {
+    throw new Error('중앙 n=7 카드 아이콘이 49셀이 아니다: ' + cells.length);
+  }
+  return cells;
+}
+
 const CENTRAL_V0_UNMEASURED = Object.freeze({ labelKey: 'g582' });
 const CENTRAL_MARKER_N7_UNMEASURED = Object.freeze({ labelKey: 'g1000' });
+const CENTRAL_N7_UNMEASURED = Object.freeze({ labelKey: 'g1001' });
 
 /** 카드 점수 패널의 미측정 분류 정본 — UI와 N-way sync 가드가 함께 소비한다. */
 export function getUnmeasuredFinderPattern(id) {
   return getOakFinderPattern(id)
     || getDaehanFinderPattern(id)
     || (isCentralV0FinderPatternId(id) ? CENTRAL_V0_UNMEASURED : null)
-    || (isCentralMarkerN7FinderPatternId(id) ? CENTRAL_MARKER_N7_UNMEASURED : null);
+    || (isCentralMarkerN7FinderPatternId(id) ? CENTRAL_MARKER_N7_UNMEASURED : null)
+    || (id === CENTRAL_N7_FINDER_PATTERN_ID ? CENTRAL_N7_UNMEASURED : null);
 }
 
 export const FINDER_CARD_GROUPS = Object.freeze({
@@ -102,7 +204,7 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   ]),
   // 상태 스키마는 카드 그룹 전체에서 유도하되, DOM 생성은 index.html 이 /lab/에서만
   // 이 그룹을 formal 행에 끼운다. 숨김과 선택 차단은 서로 독립된 두 겹이다.
-  lab: Object.freeze([CENTRAL_MARKER_N7_FINDER_CARD]),
+  lab: Object.freeze([CENTRAL_MARKER_N7_FINDER_CARD, CENTRAL_N7_FINDER_CARD]),
   generated: Object.freeze(generatedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
   refined: Object.freeze(refinedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
   // O/A/K 후보 (2026-08-18) — 운영자 편집기 export 계보. 이진 후보들과 **다른 줄**에

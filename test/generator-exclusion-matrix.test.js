@@ -25,12 +25,16 @@ import { FINDER_CARD_GROUPS, CENTRAL_V0_FINDER_CARD } from '../src/finder-card-u
 import { isDaehanFinderPatternId } from '../src/finder-daehan.js';
 import {
   CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId, selectGeneratorType,
+  selectFinderPattern,
 } from '../src/finder-selection.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 
 const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 /** 생성기가 실제로 조합할 수 있는 인코더 플래그. UI 카드가 있는 것만 넣는다. */
-const FLAGS = ['cornerMarker', 'centerQr', 'turnA', 'daehanFinder', 'centralV0'];
+const FLAGS = [
+  'cornerMarker', 'centerQr', 'turnA', 'daehanFinder', 'centralV0', 'centralN7',
+];
 
 function combos(flags) {
   const out = [];
@@ -45,6 +49,18 @@ function combos(flags) {
 /** 인코더가 이 조합을 거부하는가 — 거부하면 그 사유 문자열을 준다. */
 function rejection(fn, base, opts) {
   try { fn('x', { ...base, ...opts }); return null; } catch (error) { return error.message; }
+}
+
+/** 두 중앙 카드 id를 어느 순서로 골라도 상태에는 마지막 하나만 남는가. */
+function finderSelectionsAreExclusive(leftId, rightId) {
+  const initial = createGeneratorState({ type: 'O' });
+  const select = (state, id) => selectFinderPattern(
+    state, id, 'O', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  );
+  const leftThenRight = select(select(initial, leftId), rightId);
+  const rightThenLeft = select(select(initial, rightId), leftId);
+  return leftThenRight.finderPatternId === rightId
+    && rightThenLeft.finderPatternId === leftId;
 }
 
 test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으로 적지 않는다', () => {
@@ -71,6 +87,9 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     'centerQr+daehanFinder': /if \(finderTakesCentre && generatorState\.qrPosition === 'inner'\)/,
     // 중앙 v0도 같은 finderTakesCentre 규칙으로 안쪽 QR 카드를 잠근다.
     'centerQr+centralV0': /isCentralV0FinderPatternId\(generatorState\.finderPatternId\)/,
+    'centerQr+centralN7': () => finderSelectionsAreExclusive(
+      CENTER_QR_FINDER_PATTERN_ID, CENTRAL_N7_FINDER_PATTERN_ID,
+    ),
     // 아래 둘은 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
     // (Wave 3 ④ — cornerMarker 분기 서명에 V-CMQ 가드가 붙었다.)
     // **의도적 갱신 (2026-08-24 검수 4차)** — 두 서명에 붙어 있던 조건이 걷혔다:
@@ -95,6 +114,12 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
       return ids.every((id) => !(isCentralV0FinderPatternId(id)
         && isDaehanFinderPatternId(id)));
     },
+    'centralN7+centralV0': () => finderSelectionsAreExclusive(
+      CENTRAL_N7_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_CARD.id,
+    ),
+    'centralN7+daehanFinder': () => finderSelectionsAreExclusive(
+      CENTRAL_N7_FINDER_PATTERN_ID, FINDER_CARD_GROUPS.daehan[0].id,
+    ),
   };
   const unguarded = [];
   const thrownPairs = new Set([...pairs].filter((p) => p.split('+').length === 2));
@@ -123,7 +148,9 @@ test('UI 가 막는 조합을 뺀 나머지는 실제로 인코드된다', () =>
   // 남는 조합이 던지면 사용자는 «되는 줄 알고 골랐다가» 빈 화면을 본다.
   for (const [label, fn, base] of [['O', encode, { version: 1, eccLevel: 'M' }],
     ['A', encodeA, { version: 0, eccLevel: 'M' }]]) {
-    for (const single of ['cornerMarker', 'centerQr', 'daehanFinder', 'centralV0']) {
+    for (const single of [
+      'cornerMarker', 'centerQr', 'daehanFinder', 'centralV0', 'centralN7',
+    ]) {
       if (label === 'O' && single === 'daehanFinder') continue;   // O daehan 은 파인더 선택으로 온다
       const msg = rejection(fn, base, { [single]: true });
       assert.equal(msg, null, label + ' ' + single + ' 단독인데 던진다: ' + msg);
@@ -153,7 +180,9 @@ test('코너 예약 힌트는 기본 문구다 — 중앙 QR 상수 잠금(g580 
 // 구조적으로 못 본다 — 그래서 자를 따로 세운다. centerQr·centralV0는 2026-08-25
 // KEX 실측 후 개설되어 아래 양성 단언으로 구 락을 뒤집었다.
 test('Type K 배타 — 인코더에게 묻고, UI 상태가 그 조합을 만들 수 있는지 본다', () => {
-  const CANDIDATES = ['cornerMarker', 'centerQr', 'centralV0', 'daehanFinder', 'turnA'];
+  const CANDIDATES = [
+    'cornerMarker', 'centerQr', 'centralV0', 'centralN7', 'daehanFinder', 'turnA',
+  ];
   const thrown = CANDIDATES
     .filter((f) => rejection(encodeK, { version: 0, eccLevel: 'M' }, { [f]: true }) !== null)
     .sort();
@@ -168,10 +197,14 @@ test('Type K 배타 — 인코더에게 묻고, UI 상태가 그 조합을 만�
     'K 중앙 QR이 인코더에서 막혔다 — KEX 개설 회귀');
   assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { centralV0: true }), null,
     'K 중앙 v0가 인코더에서 막혔다 — KEX 개설 회귀');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { centralN7: true }), null,
+    'K 중앙 n=7이 인코더에서 막혔다 — N7B 개설 회귀');
   assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M', cornerMarker: true },
     { centerQr: true }), null, 'K-CM 중앙 QR이 막혔다 — 와이어 8 공유 회귀');
   assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M', cornerMarker: true },
     { centralV0: true }), null, 'K-CM 중앙 v0가 막혔다 — 와이어 8 공유 회귀');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M', cornerMarker: true },
+    { centralN7: true }), null, 'K-CM 중앙 n=7이 막혔다 — 와이어 8 공유 회귀');
 
   // ── 상태층 — K 를 고르면 «던지는 기본값» 이 만들어지면 안 된다.
   // ⚠ 이 자리가 실제 첫 관문이다: profileFamily 가 K 를 'OA' 로 보내면 기본 프로파일이

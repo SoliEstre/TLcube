@@ -125,9 +125,10 @@ export function chooseVersion(text, eccLevel = 'M', cornerMarker = false, daehan
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
  * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, centralV0?: boolean,
- *          sagoae?: boolean}} [options]
+ *          centralN7?: boolean, sagoae?: boolean}} [options]
  * @returns {{
  *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, centralV0: boolean,
+ *   centralN7: boolean,
  *   capacity: object,
  *   codewordSymbols: Uint8Array,
  *   dataDigits: Uint8Array,
@@ -145,7 +146,7 @@ export function encode(text, options = {}) {
     throw new TypeError(`페이로드는 문자열이어야 한다: ${typeof text}`);
   }
   const {
-    version, eccLevel = 'M', centerQr = false, centralV0 = false,
+    version, eccLevel = 'M', centerQr = false, centralV0 = false, centralN7 = false,
     cornerMarker = false, daehanFinder = false, sagoae = false, markerTones = false,
   } = options;
   if (typeof centerQr !== 'boolean') {
@@ -175,6 +176,9 @@ export function encode(text, options = {}) {
   if (typeof centralV0 !== 'boolean') {
     throw new TypeError(`centralV0 는 boolean 이어야 한다: ${typeof centralV0}`);
   }
+  if (typeof centralN7 !== 'boolean') {
+    throw new TypeError(`centralN7 는 boolean 이어야 한다: ${typeof centralN7}`);
+  }
   // markerTones 는 «O-CM 이 예약한 자리» 에 심는 심볼(H)이다 — 자리 없이 심볼만 켤 수 없다.
   if (markerTones && !cornerMarker) {
     throw new RangeError('markerTones 는 cornerMarker(자리 예약) 없이 켤 수 없다');
@@ -189,19 +193,21 @@ export function encode(text, options = {}) {
   // taegeuk(내부 19, 분류 1) + sagoae(예약 셀, 분류 2) 로 갈린다. 중앙 QR(링3
   // 점유)과도, 코너 자리 예약(링 k·k−1 점유)과도 겹친다. 조합 검증을 안 했으므로
   // 조용히 허용하지 않는다.
-  if (usesDaehanLayout && centerQr) {
-    throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 centerQr 를 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
-  }
   if (usesDaehanLayout && cornerMarker) {
     throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
-  // 중앙 슬롯 점유자는 하나다. 중앙 v0는 중앙 QR·daehan과 같은 19셀을 쓴다.
-  // cornerMarker(Type G)는 바깥 링 점유자라 v0와 함께 쓸 수 있으며 여기서 막지 않는다.
-  if (centralV0 && centerQr) {
-    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 centerQr 는 같은 19셀을 쓴다');
-  }
-  if (centralV0 && usesDaehanLayout) {
-    throw new RangeError('중앙 슬롯 점유자는 하나다 — centralV0 와 daehan/sagoae 예약 레이아웃을 동시에 켤 수 없다 — 검출 합성 미지원 조합이다');
+  // 중앙 슬롯 점유자는 하나다. 목록에서 활성 점유자를 유도해 새 점유자가 늘어도
+  // pair 조건을 손으로 빠뜨리지 않는다. cornerMarker(Type G)는 바깥 링 점유자다.
+  const centralSlotOccupants = [
+    centerQr ? 'centerQr' : null,
+    centralV0 ? 'centralV0' : null,
+    centralN7 ? 'centralN7' : null,
+    usesDaehanLayout ? 'daehan/sagoae' : null,
+  ].filter(Boolean);
+  if (centralSlotOccupants.length > 1) {
+    throw new RangeError(
+      `중앙 슬롯 점유자는 하나다 — ${centralSlotOccupants.join(' + ')} 를 동시에 켤 수 없다`,
+    );
   }
   const provider = layoutProviderFor(cornerMarker, usesDaehanLayout, markerTones);
 
@@ -319,13 +325,14 @@ export function encode(text, options = {}) {
     cellDigits.set(cellKey(c.q, c.r), { digit: fillerDigits[i], role: 'filler' });
   }
 
-  // 중앙 v0는 별도 데이터 레이아웃이 아니라 기존 중앙 슬롯의 새 점유자다. 그래도
+  // 중앙 v0와 중앙 n=7은 별도 데이터 레이아웃이 아니라 기존 중앙 슬롯의 점유자다. 그래도
   // O와 G 어느 공급자에서도 그 19셀이 payload로 되살아나지 않았음을 인코더 경계에서
   // 직접 단언한다. 좌표는 layout.js의 bullseye 정본에서 유도한다.
-  if (centralV0) {
+  if (centralV0 || centralN7) {
     for (const cell of centralSlotCells()) {
       if (cellDigits.has(cellKey(cell.q, cell.r))) {
-        throw new Error(`centralV0 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
+        const owner = centralV0 ? 'centralV0' : 'centralN7';
+        throw new Error(`${owner} 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
       }
     }
   }
@@ -336,6 +343,7 @@ export function encode(text, options = {}) {
     eccLevel,
     centerQr,
     centralV0,
+    centralN7,
     cornerMarker,
     // `daehanFinder` 는 후단 decodeCells 가 이미 쓰는 예약-레이아웃 회계 신호다.
     // 분해 합성도 같은 회계를 쓰므로 true 이고, 광학 구분은 `sagoae` 가 맡는다.

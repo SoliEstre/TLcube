@@ -14,7 +14,7 @@ const OUTPUT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html'
 const LOADER_TOKEN = '<!-- FINDER_EDITOR_LOADER -->';
 
 export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
-  // 중앙 TL(n=7 마커) 코드북 — 의존 0 인 잎 모듈. 소비자는 `scene`(그린다) 과
+  // 중앙 M7(n=7 마커) 코드북 — 의존 0 인 잎 모듈. 소비자는 `scene`(그린다) 과
   // `finder-card-ui`(카드 정본) **둘**이라 그 앞이어야 한다.
   // ⚠ 이 목록은 빌더마다 손 사본이다 — 신설 모듈은 그 모듈을 나르는 빌더 **전부**에
   //    등재해야 한다. 한쪽만 하면 다른 쪽 빌드가 위상 검사에서 죽는다 (실제로 죽었다).
@@ -51,6 +51,9 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   'generator-types',
   'finder-selection',
   'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  // scene 의 중앙 n=7 렌더 경로: 스키마는 cellSurfaceFinal 뒤, 코덱은 이미 앞에 있는
+  // formatinfo 와 스키마 뒤에 둔다. 이 편집기는 finder-card-ui 를 싣지 않는다.
+  'centralN7Schema', 'centralN7Codec',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: scene.js 가 중앙 슬롯을 완전한
   // v0 코드로 채우려고 encodeY·centralBeacon 을 부르고, 데이터 셀 톤에 tonemap 을
   // 쓴다. encodeY 의 로컬 의존 layoutY 도 여기 온다 (capacityY 옆 — cell-editor

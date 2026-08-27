@@ -73,7 +73,7 @@ export const MODULE_ORDER = [
   // `finder-footprint`(의존: finder-patterns 뿐)가 그 앞에 새로 등록됐다 — OAK 표가
   // footprint 표와 taegeuk 유도(finder-daehan)를 import 하게 됐기 때문이다. 같은
   // 위상 규칙: 로컬 의존 전부가 앞에 있어야 치환이 성립한다.
-  // 중앙 TL(n=7 마커) 코드북 — 의존 0 인 잎 모듈. 소비자는 `scene`(그린다) 과
+  // 중앙 M7(n=7 마커) 코드북 — 의존 0 인 잎 모듈. 소비자는 `scene`(그린다) 과
   // `finder-card-ui`(카드 정본) **둘**이라 그 앞이어야 한다.
   // ⚠ 이 목록은 빌더마다 손 사본이다 — 신설 모듈은 그 모듈을 나르는 빌더 **전부**에
   //    등재해야 한다. 한쪽만 하면 다른 쪽 빌드가 위상 검사에서 죽는다 (실제로 죽었다).
@@ -82,7 +82,7 @@ export const MODULE_ORDER = [
   // generator-types 는 finder-selection·generator-state **양쪽의 앞**이어야 한다
   // (둘 다 타입 목록을 여기서 가져간다 — 2026-08-25 손 사본 철폐).
   'generator-types',
-  'finder-selection', 'finder-card-ui', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'formatY',
+  'finder-selection', 'render-status', 'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'formatY',
   'header', 'bullseye', 'layout', 'capacity',
   // capacityDaehan 은 rs211·capacity·placement·finder-daehan 전부의 뒤여야 하고
   // encode/decode 의 앞이다.
@@ -170,6 +170,10 @@ export const MODULE_ORDER = [
   // assertTopologicalOrder 가 빌드를 막는다 — 치환이 조용히 건너뛰어져
   // **브라우저에서만** 터지는 자리이기 때문이다.
   'ygrid', 'type-y-cell-editor', 'layoutY', 'capacityY', 'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
+  // 중앙 n=7 스키마는 cellSurfaceFinal 의 중앙 v0 정본에서 로케이터를 유도한다.
+  // 코덱은 formatinfo 와 스키마를 소비한다. finder-card-ui·scene·생성기 설정이 모두
+  // 이 둘을 쓰므로 여기서 의존 순서대로 싣고 소비자보다 앞에 둔다.
+  'centralN7Schema', 'centralN7Codec', 'finder-card-ui',
   // export-options 는 최종 cell-surface n 정본을 읽는다. generator-state 는 그 옵션을
   // 읽으므로 둘 다 cellSurfaceFinal 뒤에 둔다. 순서를 어기면 단일 파일 로더의 specifier
   // 치환이 조용히 남아 브라우저에서만 실패한다.
