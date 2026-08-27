@@ -100,11 +100,12 @@ export const languages = [
 
 export const strings = {
   ko: {
-    title: 'TLcube — 휘도 순위로 데이터를 싣는 2.5D 시각 코드',
+    title: 'TLcube — 휘도 순위로 데이터를 싣는 3D 바코드(실은 2.5D)',
     description: '육각 셀을 마름모 3면으로 나누고, 세 면의 상대 휘도 순서에 데이터를 싣는 오픈 시각 코드. 스펙과 레퍼런스 구현은 Apache-2.0 으로 공개돼 있습니다.',
-    ogTitle: 'TLcube — 휘도 순위로 데이터를 싣는 2.5D 시각 코드',
+    ogTitle: 'TLcube — 휘도 순위로 데이터를 싣는 3D 바코드',
     ogDescription: '절대 밝기가 아니라 세 면의 순서에 데이터를 싣습니다. 조명이 흔들려도 순서만 지켜지면 살아남아요.',
-    jsonHeadline: 'TLcube — 절대 밝기가 아니라 순서에 데이터를 싣는 2.5D 시각 코드',
+    ogImageAlt: 'TLcube 배너 — 초록 Type Y 큐브 코드와 Type O·A·K 코드 석 장.',
+    jsonHeadline: 'TLcube — 절대 밝기가 아니라 순서에 데이터를 싣는 3D 바코드',
     jsonDescription: '육각 셀을 마름모 3면으로 나누고 세 면의 상대 휘도 순서(3! = 6가지)를 base-6 심볼로 쓰는 오픈 시각 코드. 단조 톤 변형에 불변합니다.',
 
     navWhyNow: '왜 지금',
@@ -176,11 +177,12 @@ export const strings = {
   },
 
   en: {
-    title: 'TLcube — a 2.5D visual code that carries data in luminance rank',
+    title: 'TLcube — a 3D barcode (actually 2.5D) that carries data in luminance rank',
     description: 'An open visual code that splits a hexagonal cell into three rhombic faces and carries data in the relative luminance order of those faces. Spec and reference implementation are published under Apache-2.0.',
-    ogTitle: 'TLcube — a 2.5D visual code that carries data in luminance rank',
+    ogTitle: 'TLcube — a 3D barcode that carries data in luminance rank',
     ogDescription: 'Data rides on the order of three faces, not on absolute brightness. As long as the order survives, so does the value.',
-    jsonHeadline: 'TLcube — a 2.5D visual code carrying data in rank, not absolute brightness',
+    ogImageAlt: 'TLcube banner — a green Type Y cube code beside Type O, A and K codes.',
+    jsonHeadline: 'TLcube — a 3D barcode carrying data in rank, not absolute brightness',
     jsonDescription: 'An open visual code that splits a hexagonal cell into three rhombic faces and uses their relative luminance order (3! = 6) as one base-6 symbol. Invariant under monotonic tone transforms.',
 
     navWhyNow: 'Why now',
@@ -250,11 +252,12 @@ export const strings = {
   },
 
   ja: {
-    title: 'TLcube — 輝度の順序でデータを載せる 2.5D ビジュアルコード',
+    title: 'TLcube — 輝度の順序でデータを載せる3Dバーコード（実際は2.5D）',
     description: '六角形のセルを 3 つの菱形の面に分け、面どうしの相対輝度の順序にデータを載せるオープンなビジュアルコード。仕様とリファレンス実装は Apache-2.0 で公開しています。',
-    ogTitle: 'TLcube — 輝度の順序でデータを載せる 2.5D ビジュアルコード',
+    ogTitle: 'TLcube — 輝度の順序でデータを載せる3Dバーコード',
     ogDescription: '絶対的な明るさではなく、3 面の順序にデータを載せます。順序さえ保たれれば値は生き残ります。',
-    jsonHeadline: 'TLcube — 絶対輝度ではなく順序にデータを載せる 2.5D ビジュアルコード',
+    ogImageAlt: 'TLcube バナー — 緑の Type Y キューブコードと Type O・A・K のコード 3 枚。',
+    jsonHeadline: 'TLcube — 絶対輝度ではなく順序にデータを載せる3Dバーコード',
     jsonDescription: '六角形のセルを 3 つの菱形の面に分け、その相対輝度の順序（3! = 6 通り）を base-6 シンボル 1 つとして使うオープンなビジュアルコード。単調なトーン変換に対して不変です。',
 
     navWhyNow: 'なぜ今',
@@ -325,11 +328,12 @@ export const strings = {
 
   /* fr — vouvoiement. 상표 고지(footerTrademark)는 법적 문구라 전 언어 영어 원문 유지. */
   fr: {
-    title: 'TLcube — un code visuel 2.5D qui porte les données dans le rang de luminance',
+    title: 'TLcube — un code-barres 3D (en réalité 2.5D) qui porte les données dans le rang de luminance',
     description: 'Un code visuel ouvert qui divise une cellule hexagonale en trois faces en losange et porte les données dans l\'ordre de luminance relative de ces faces. La spécification et l\'implémentation de référence sont publiées sous Apache-2.0.',
-    ogTitle: 'TLcube — un code visuel 2.5D qui porte les données dans le rang de luminance',
+    ogTitle: 'TLcube — un code-barres 3D qui porte les données dans le rang de luminance',
     ogDescription: 'Les données reposent sur l\'ordre des trois faces, pas sur la luminosité absolue. Tant que l\'ordre survit, la valeur survit.',
-    jsonHeadline: 'TLcube — un code visuel 2.5D qui porte les données dans le rang, non dans la luminosité absolue',
+    ogImageAlt: 'Bannière TLcube — un code cube Type Y vert à côté des codes Type O, A et K.',
+    jsonHeadline: 'TLcube — un code-barres 3D qui porte les données dans le rang, non dans la luminosité absolue',
     jsonDescription: 'Un code visuel ouvert qui divise une cellule hexagonale en trois faces en losange et utilise leur ordre de luminance relative (3! = 6) comme un symbole en base 6. Invariant par transformation tonale monotone.',
 
     navWhyNow: 'Pourquoi maintenant',
@@ -399,11 +403,12 @@ export const strings = {
   },
 
   it: {
-    title: 'TLcube — un codice visivo 2.5D che porta i dati nel rango di luminanza',
+    title: 'TLcube — un codice a barre 3D (in realtà 2.5D) che porta i dati nel rango di luminanza',
     description: 'Un codice visivo aperto che divide una cella esagonale in tre facce romboidali e porta i dati nell\'ordine di luminanza relativa di quelle facce. Specifica e implementazione di riferimento sono pubblicate con licenza Apache-2.0.',
-    ogTitle: 'TLcube — un codice visivo 2.5D che porta i dati nel rango di luminanza',
+    ogTitle: 'TLcube — un codice a barre 3D che porta i dati nel rango di luminanza',
     ogDescription: 'I dati poggiano sull\'ordine delle tre facce, non sulla luminosità assoluta. Finché sopravvive l\'ordine, sopravvive il valore.',
-    jsonHeadline: 'TLcube — un codice visivo 2.5D che porta i dati nel rango, non nella luminosità assoluta',
+    ogImageAlt: 'Banner TLcube — un codice cubo Type Y verde accanto ai codici Type O, A e K.',
+    jsonHeadline: 'TLcube — un codice a barre 3D che porta i dati nel rango, non nella luminosità assoluta',
     jsonDescription: 'Un codice visivo aperto che divide una cella esagonale in tre facce romboidali e usa il loro ordine di luminanza relativa (3! = 6) come un simbolo in base 6. Invariante rispetto alle trasformazioni tonali monotone.',
 
     navWhyNow: 'Perché ora',
@@ -474,11 +479,12 @@ export const strings = {
 
   /* de — Siezen. 명사는 대문자, 합성어는 붙여 쓰거나 하이픈으로 잇는다. */
   de: {
-    title: 'TLcube — ein 2.5D-Bildcode, der Daten im Luminanzrang trägt',
+    title: 'TLcube — ein 3D-Barcode (eigentlich 2.5D), der Daten im Luminanzrang trägt',
     description: 'Ein offener Bildcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und die Daten in der relativen Luminanzreihenfolge dieser Flächen trägt. Spezifikation und Referenzimplementierung sind unter Apache-2.0 veröffentlicht.',
-    ogTitle: 'TLcube — ein 2.5D-Bildcode, der Daten im Luminanzrang trägt',
+    ogTitle: 'TLcube — ein 3D-Barcode, der Daten im Luminanzrang trägt',
     ogDescription: 'Die Daten liegen in der Reihenfolge der drei Flächen, nicht in der absoluten Helligkeit. Solange die Reihenfolge überlebt, überlebt der Wert.',
-    jsonHeadline: 'TLcube — ein 2.5D-Bildcode, der Daten im Rang statt in absoluter Helligkeit trägt',
+    ogImageAlt: 'TLcube-Banner — ein grüner Type-Y-Würfelcode neben den Codes Type O, A und K.',
+    jsonHeadline: 'TLcube — ein 3D-Barcode, der Daten im Rang statt in absoluter Helligkeit trägt',
     jsonDescription: 'Ein offener Bildcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und deren relative Luminanzreihenfolge (3! = 6) als ein Symbol zur Basis 6 nutzt. Invariant gegenüber monotonen Tonwertänderungen.',
 
     navWhyNow: 'Warum jetzt',
@@ -549,11 +555,12 @@ export const strings = {
 
   /* es — usted (3인칭 단수 명령/직설). */
   es: {
-    title: 'TLcube — un código visual 2.5D que lleva los datos en el rango de luminancia',
+    title: 'TLcube — un código de barras 3D (en realidad 2.5D) que lleva los datos en el rango de luminancia',
     description: 'Un código visual abierto que divide una celda hexagonal en tres caras romboidales y lleva los datos en el orden de luminancia relativa de esas caras. La especificación y la implementación de referencia se publican bajo Apache-2.0.',
-    ogTitle: 'TLcube — un código visual 2.5D que lleva los datos en el rango de luminancia',
+    ogTitle: 'TLcube — un código de barras 3D que lleva los datos en el rango de luminancia',
     ogDescription: 'Los datos viajan en el orden de las tres caras, no en el brillo absoluto. Mientras el orden sobreviva, el valor sobrevive.',
-    jsonHeadline: 'TLcube — un código visual 2.5D que lleva los datos en el rango, no en el brillo absoluto',
+    ogImageAlt: 'Banner de TLcube — un código cubo Type Y verde junto a los códigos Type O, A y K.',
+    jsonHeadline: 'TLcube — un código de barras 3D que lleva los datos en el rango, no en el brillo absoluto',
     jsonDescription: 'Un código visual abierto que divide una celda hexagonal en tres caras romboidales y usa su orden de luminancia relativa (3! = 6) como un símbolo en base 6. Invariante ante transformaciones tonales monótonas.',
 
     navWhyNow: 'Por qué ahora',
@@ -624,11 +631,12 @@ export const strings = {
 
   /* pt — pt-PT 어휘 (ecrã·câmara·ficheiro·predefinição). 스캐너 사전과 같은 계열. */
   pt: {
-    title: 'TLcube — um código visual 2.5D que leva os dados na ordem de luminância',
+    title: 'TLcube — um código de barras 3D (na verdade 2.5D) que leva os dados na ordem de luminância',
     description: 'Um código visual aberto que divide uma célula hexagonal em três faces em losango e leva os dados na ordem de luminância relativa dessas faces. A especificação e a implementação de referência estão publicadas sob Apache-2.0.',
-    ogTitle: 'TLcube — um código visual 2.5D que leva os dados na ordem de luminância',
+    ogTitle: 'TLcube — um código de barras 3D que leva os dados na ordem de luminância',
     ogDescription: 'Os dados assentam na ordem das três faces, não no brilho absoluto. Enquanto a ordem sobreviver, o valor sobrevive.',
-    jsonHeadline: 'TLcube — um código visual 2.5D que leva os dados na ordem, não no brilho absoluto',
+    ogImageAlt: 'Banner TLcube — um código cubo Type Y verde ao lado dos códigos Type O, A e K.',
+    jsonHeadline: 'TLcube — um código de barras 3D que leva os dados na ordem, não no brilho absoluto',
     jsonDescription: 'Um código visual aberto que divide uma célula hexagonal em três faces em losango e usa a sua ordem de luminância relativa (3! = 6) como um símbolo em base 6. Invariante a transformações tonais monótonas.',
 
     navWhyNow: 'Porquê agora',

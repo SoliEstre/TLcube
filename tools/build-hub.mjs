@@ -164,6 +164,10 @@ function render(lang) {
    * 라벨은 `row<타입>Name` 규약으로 찾고 **없으면 던진다**: 조용히 `undefined` 가 표에
    * 찍히는 것보다 빌드가 죽는 편이 낫다 (8언어 중 한 언어만 빠지는 게 이 파일의 상습 사고).
    */
+  const ogImageAlt = () => {
+    if (!t.ogImageAlt) throw new Error(`og:image:alt 문자열이 없다 (${lang.code})`);
+    return t.ogImageAlt;
+  };
   const typeRows = () => Object.keys(s.types).map((k) => {
     const label = t[`row${k}Name`];
     if (!label) throw new Error(`허브 성능표: row${k}Name 문자열이 없다 (타입 ${k}, ${lang.code})`);
@@ -186,7 +190,10 @@ ${alternates()}
 <meta property="og:title" content="${t.ogTitle}">
 <meta property="og:description" content="${t.ogDescription}">
 <meta property="og:url" content="${ORIGIN}/${lang.dir}">
-<meta property="og:image" content="${ORIGIN}/assets/type-Y.png">
+<meta property="og:image" content="${ORIGIN}/assets/og-banner.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${ogImageAlt()}">
 <meta property="og:locale" content="${lang.ogLocale}">
 ${languages.filter((l) => l.code !== lang.code).map((l) => `<meta property="og:locale:alternate" content="${l.ogLocale}">`).join('\n')}
 <meta name="twitter:card" content="summary_large_image">

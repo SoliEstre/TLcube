@@ -51,7 +51,7 @@ export function buildScannerLabHtml() {
  * 새 후보를 넣을 때는 여기에 한 줄 더한다. id 가 URL 이 되므로 짧고 안정적으로 둔다 —
  * 사용자가 폰에서 눌러 오가고, 결과를 보고할 때 이 이름으로 부르게 된다.
  */
-const VARIANTS = [
+export const VARIANTS = [
   {
     id: 'new',
     ref: null,

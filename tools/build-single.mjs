@@ -122,7 +122,14 @@ export const MODULE_ORDER = [
   // 범위가 아니라 적지 않고 미룬다 — 왜 여기 있는지는 이 주석이 답한다.
   'decoder/orientation-scorer',
   'layoutK', 'markerK', 'encodeK',
-  'luminance',
+  // palette-hue 는 luminance **바로 뒤**다 (의존은 getPreset·relativeLuminance 둘뿐).
+  // ⚠ 이 모듈은 src 안 어느 모듈도 import 하지 않는다 — 소비자가 `index.html` 의 app
+  //   코드와 `tools/asset-render.mjs` 뿐이다. 그래서 assertTopologicalOrder() 의
+  //   의존 그래프 순회로는 **영영 안 잡힌다**(그 순회는 등재된 모듈에서만 출발한다).
+  //   등재를 빠뜨렸을 때 실제로 잡아 준 자는 `test/bundle.test.js` 의
+  //   «app 코드에 './src/' specifier 가 남아있지 않다» 하나였다. 등재 안 하면
+  //   번들이 상대 import 를 그대로 안고 나가 **라이브에서만** 404 로 죽는다.
+  'luminance', 'palette-hue',
   // gf256→rs→qr 체인은 **scene 앞**에 와야 한다. scene.js 가 폴백 QR 을 그리려고
   // './qr.js' 를 import 하기 때문이다 — 원래는 Type Y 전용이라 보고 뒤에 뒀는데(TY8),
   // Type O 의 scene 이 그걸 쓰게 되면서 전방 참조가 됐다. 등록 순서 = 치환 가능 순서라

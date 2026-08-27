@@ -3,7 +3,7 @@
 **English** · [한국어](README.ko.md)
 
 > Formal name **TrilLuminance (cube)** · codename Trilume.
-> A 2.5D visual code that stores data in the **luminance rank** of three rhombic faces per hexagonal cell.
+> A 3D barcode (actually 2.5D) that stores data in the **luminance rank** of three rhombic faces per hexagonal cell.
 > Status: **encoder, decoder and live camera scanner all running** — the browser generator and scanner are live.
 
 <p align="center">
