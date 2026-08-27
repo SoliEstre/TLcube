@@ -148,6 +148,14 @@ test('llms.txt 계열이 페이지와 같은 실측값을 쓴다', () => {
     for (const type of types) {
       assert.ok(txt.includes(stats.types[type].decoded),
         `${rel}: Type ${type} 복호 수치 ${stats.types[type].decoded} 가 없다`);
+      // ⚠ **시간도 본다** (2026-08-27 추가). 복호 수만 보던 시절, 재측정으로 시간이
+      //    3.4→1.8초 로 바뀌었는데 복호 수는 그대로여서 이 자가 **초록인 채로**
+      //    llms 두 장이 옛 시간을 들고 있었다. 값이 안 변하는 칸만 보는 자는
+      //    변하는 칸을 못 지킨다.
+      //    타입과 시간을 **한 문자열로 묶어** 본다 — 따로 보면 두 타입이 같은
+      //    시간을 가질 때 서로의 값으로 통과한다.
+      const row = `${stats.types[type].decoded}, ${stats.types[type].ms.ko}`;
+      assert.ok(txt.includes(row), `${rel}: Type ${type} 행이 "${row}" 와 다르다`);
     }
     assert.ok(txt.includes(stats.centerQr.decoded), `${rel}: 중앙 QR 수치`);
     assert.ok(!/개발 중/.test(txt),
