@@ -371,7 +371,7 @@ ${jsonLd(lang, t)}
  * ⚠ `LASTMOD` 는 **상수**다. 오늘 날짜를 쓰면 빌드를 돌릴 때마다 파일이 바뀌어
  *   «동기화 가드» 테스트가 매번 깨진다. 내용이 실제로 바뀐 날에 손으로 올린다.
  */
-const LASTMOD = '2026-08-17';
+const LASTMOD = '2026-08-27';
 
 function sitemap() {
   const alts = languages
