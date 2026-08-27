@@ -100,7 +100,7 @@ export const languages = [
 
 export const strings = {
   ko: {
-    title: 'TLcube — 휘도 순위로 데이터를 싣는 3D 바코드(실은 2.5D)',
+    title: 'TLcube — 휘도 순위로 데이터를 싣는 3D 바코드',
     description: '육각 셀을 마름모 3면으로 나누고, 세 면의 상대 휘도 순서에 데이터를 싣는 오픈 3D 바코드. 스펙과 레퍼런스 구현은 Apache-2.0 으로 공개돼 있습니다.',
     ogTitle: 'TLcube — 휘도 순위로 데이터를 싣는 3D 바코드',
     ogDescription: '절대 밝기가 아니라 세 면의 순서에 데이터를 싣습니다. 조명이 흔들려도 순서만 지켜지면 살아남아요.',
@@ -118,7 +118,7 @@ export const strings = {
 
     heroTitle: 'QR은 잘 읽히죠.<br><strong>예뻤던 적이 없을 뿐</strong>',
     heroLead: '포스터·패키지·명함… QR이 안 들어가는 데가 없는데, 공들인 디자인 위에 마지막으로 흑백 네모를 얹는 건 늘 아쉬웠어요. 그런데 QR이 그렇게 생긴 데는 이유가 있습니다 — <strong>1994년의 카메라와 연산으로 «어떻게든 읽히게» 만든 결과</strong>거든요.',
-    heroLead2: '그 제약이 지금은 많이 풀렸습니다. 카메라도 연산도 넉넉해졌죠. 그래서 인식 성능만 더 쫓는 대신 <strong>눈에 들어오는 쪽</strong>으로 한번 만들어 봤어요. QR을 대체하려는 게 아니라, <strong>옆자리를 하나</strong> 만드는 겁니다.',
+    heroLead2: '그 제약이 지금은 많이 풀렸습니다. 카메라도 연산도 넉넉해졌죠. 그래서 인식 성능만 더 쫓는 대신 <strong>눈에 들어오는 쪽</strong>으로 한번 만들어 봤어요. QR을 대체하려는 게 아니라, <strong>옆자리를 하나</strong> 만드는 겁니다. 결과물은 <strong>3D 바코드(실은 2.5D)</strong> — 평면에 인쇄되지만 눈에는 입체로 읽힙니다.',
     whyNowTitle: '왜 지금인가',
     whyNow1: '<strong>QR은 그 시절의 최선이었습니다.</strong> 흑백 두 값, 정사각 모듈, 큰 파인더 — 전부 «성능이 빠듯한 카메라로도 읽히게» 하려는 선택이었어요. 그 제약 아래서는 미감을 포기하는 게 합리적이었습니다.',
     whyNow2: '<strong>그 전제가 바뀌었어요.</strong> 지금 폰 카메라는 그때와 비교가 안 되고, 실시간 영상 처리도 브라우저 안에서 됩니다. 그러면 남는 여유를 밀도에 더 쓸 게 아니라 <strong>보이는 것</strong>에 써도 되지 않을까 — 그게 이걸 만든 이유입니다.',
@@ -177,7 +177,7 @@ export const strings = {
   },
 
   en: {
-    title: 'TLcube — a 3D barcode (actually 2.5D) that carries data in luminance rank',
+    title: 'TLcube — a 3D barcode that carries data in luminance rank',
     description: 'An open 3D barcode that splits a hexagonal cell into three rhombic faces and carries data in the relative luminance order of those faces. Spec and reference implementation are published under Apache-2.0.',
     ogTitle: 'TLcube — a 3D barcode that carries data in luminance rank',
     ogDescription: 'Data rides on the order of three faces, not on absolute brightness. As long as the order survives, so does the value.',
@@ -193,7 +193,7 @@ export const strings = {
 
     heroTitle: 'QR reads well.<br>It has just never been <strong>pretty</strong>',
     heroLead: 'Posters, packaging, business cards — QR is everywhere, and dropping a black-and-white square onto a design you spent weeks on has always stung. But QR looks the way it does for a reason: it is what you build when a <strong>1994 camera and 1994 silicon</strong> have to read it at all.',
-    heroLead2: 'Those constraints have largely lifted. Phone cameras and compute have room to spare now. So instead of chasing recognition alone, we spent that headroom on <strong>being worth looking at</strong>. This is not a replacement for QR — it is <strong>a seat next to it</strong>.',
+    heroLead2: 'Those constraints have largely lifted. Phone cameras and compute have room to spare now. So instead of chasing recognition alone, we spent that headroom on <strong>being worth looking at</strong>. This is not a replacement for QR — it is <strong>a seat next to it</strong>. The result is a <strong>3D barcode (actually 2.5D)</strong> — printed flat, but read as solid.',
     whyNowTitle: 'Why now',
     whyNow1: '<strong>QR was the right answer for its moment.</strong> Two values, square modules, big finder patterns — every one of those choices existed so a weak camera could still read it. Under those constraints, giving up on looks was rational.',
     whyNow2: '<strong>That premise changed.</strong> Phone cameras today are nothing like those, and real-time video processing runs inside a browser. So the headroom could go into density — or it could go into <strong>how it looks</strong>. That is why this exists.',
@@ -252,7 +252,7 @@ export const strings = {
   },
 
   ja: {
-    title: 'TLcube — 輝度の順序でデータを載せる3Dバーコード（実際は2.5D）',
+    title: 'TLcube — 輝度の順序でデータを載せる3Dバーコード',
     description: '六角形のセルを 3 つの菱形の面に分け、面どうしの相対輝度の順序にデータを載せるオープンな3Dバーコード。仕様とリファレンス実装は Apache-2.0 で公開しています。',
     ogTitle: 'TLcube — 輝度の順序でデータを載せる3Dバーコード',
     ogDescription: '絶対的な明るさではなく、3 面の順序にデータを載せます。順序さえ保たれれば値は生き残ります。',
@@ -268,7 +268,7 @@ export const strings = {
 
     heroTitle: 'QR はよく読めます。<br>ただ<strong>綺麗だった試しがない</strong>',
     heroLead: 'ポスター、パッケージ、名刺 — QR が入らない場所はほとんどありません。けれど何週間もかけたデザインの上に、最後に白黒の四角を置くのはいつも心残りでした。とはいえ QR があの形なのには理由があります。<strong>1994 年のカメラと演算で「とにかく読める」ようにした結果</strong>なのです。',
-    heroLead2: 'その制約はもうかなり緩みました。カメラも演算も余裕があります。そこで認識性能をさらに追うかわりに、その余裕を<strong>見て気持ちのいいもの</strong>に使ってみました。QR を置き換えるためではなく、<strong>隣にもう一席</strong>つくるためのものです。',
+    heroLead2: 'その制約はもうかなり緩みました。カメラも演算も余裕があります。そこで認識性能をさらに追うかわりに、その余裕を<strong>見て気持ちのいいもの</strong>に使ってみました。QR を置き換えるためではなく、<strong>隣にもう一席</strong>つくるためのものです。 できあがるのは<strong>3Dバーコード（実際は2.5D）</strong>——平面に印刷されますが、目には立体に見えます。',
     whyNowTitle: 'なぜ今なのか',
     whyNow1: '<strong>QR は当時の最適解でした。</strong>白黒の 2 値、正方モジュール、大きなファインダ — どれも性能の限られたカメラでも読めるようにするための選択です。その制約の下では、見た目を諦めるのは合理的でした。',
     whyNow2: '<strong>その前提が変わりました。</strong>いまのスマートフォンのカメラは当時とは比べものにならず、リアルタイムの映像処理がブラウザの中で動きます。ならばその余裕を密度にではなく、<strong>見え方</strong>に使ってもいいのではないか — それがこれを作った理由です。',
@@ -328,7 +328,7 @@ export const strings = {
 
   /* fr — vouvoiement. 상표 고지(footerTrademark)는 법적 문구라 전 언어 영어 원문 유지. */
   fr: {
-    title: 'TLcube — un code-barres 3D (en réalité 2.5D) qui porte les données dans le rang de luminance',
+    title: 'TLcube — un code-barres 3D qui porte les données dans le rang de luminance',
     description: 'Un code-barres 3D ouvert qui divise une cellule hexagonale en trois faces en losange et porte les données dans l\'ordre de luminance relative de ces faces. La spécification et l\'implémentation de référence sont publiées sous Apache-2.0.',
     ogTitle: 'TLcube — un code-barres 3D qui porte les données dans le rang de luminance',
     ogDescription: 'Les données reposent sur l\'ordre des trois faces, pas sur la luminosité absolue. Tant que l\'ordre survit, la valeur survit.',
@@ -344,7 +344,7 @@ export const strings = {
 
     heroTitle: 'Le QR se lit bien.<br>Il n\'a simplement jamais été <strong>beau</strong>',
     heroLead: 'Affiches, emballages, cartes de visite — le QR est partout, et poser un carré noir et blanc sur un design longuement travaillé a toujours laissé un regret. Mais s\'il a cette allure, c\'est pour une raison : c\'est ce qu\'on construit quand <strong>une caméra et un processeur de 1994</strong> doivent pouvoir le lire.',
-    heroLead2: 'Ces contraintes se sont largement levées. Les caméras de téléphone et la puissance de calcul ont de la marge. Alors, plutôt que de courir après la seule reconnaissance, nous avons dépensé cette marge du côté du <strong>plaisir des yeux</strong>. Il ne s\'agit pas de remplacer le QR, mais de lui <strong>ajouter un siège voisin</strong>.',
+    heroLead2: 'Ces contraintes se sont largement levées. Les caméras de téléphone et la puissance de calcul ont de la marge. Alors, plutôt que de courir après la seule reconnaissance, nous avons dépensé cette marge du côté du <strong>plaisir des yeux</strong>. Il ne s\'agit pas de remplacer le QR, mais de lui <strong>ajouter un siège voisin</strong>. Le résultat est un <strong>code-barres 3D (en réalité 2.5D)</strong> — imprimé à plat, mais perçu en relief.',
     whyNowTitle: 'Pourquoi maintenant',
     whyNow1: '<strong>Le QR était la bonne réponse à son époque.</strong> Deux valeurs, des modules carrés, de grands motifs de repérage — chacun de ces choix existait pour qu\'une caméra faible puisse tout de même lire. Sous ces contraintes, renoncer à l\'esthétique était rationnel.',
     whyNow2: '<strong>Cette prémisse a changé.</strong> Les caméras de téléphone d\'aujourd\'hui n\'ont plus rien à voir, et le traitement vidéo en temps réel tourne dans un navigateur. Cette marge pouvait aller à la densité — ou à <strong>l\'apparence</strong>. C\'est la raison d\'être de ce format.',
@@ -403,7 +403,7 @@ export const strings = {
   },
 
   it: {
-    title: 'TLcube — un codice a barre 3D (in realtà 2.5D) che porta i dati nel rango di luminanza',
+    title: 'TLcube — un codice a barre 3D che porta i dati nel rango di luminanza',
     description: 'Un codice a barre 3D aperto che divide una cella esagonale in tre facce romboidali e porta i dati nell\'ordine di luminanza relativa di quelle facce. Specifica e implementazione di riferimento sono pubblicate con licenza Apache-2.0.',
     ogTitle: 'TLcube — un codice a barre 3D che porta i dati nel rango di luminanza',
     ogDescription: 'I dati poggiano sull\'ordine delle tre facce, non sulla luminosità assoluta. Finché sopravvive l\'ordine, sopravvive il valore.',
@@ -419,7 +419,7 @@ export const strings = {
 
     heroTitle: 'Il QR si legge bene.<br>Non è mai stato <strong>bello</strong>',
     heroLead: 'Manifesti, confezioni, biglietti da visita — il QR è ovunque, e mettere un quadrato in bianco e nero sopra un progetto curato per settimane è sempre stato un dispiacere. Ma il QR ha quell\'aspetto per un motivo: è ciò che si costruisce quando <strong>una fotocamera e un processore del 1994</strong> devono riuscire a leggerlo.',
-    heroLead2: 'Quei vincoli sono in gran parte caduti. Le fotocamere dei telefoni e la potenza di calcolo hanno margine. Così, invece di rincorrere solo il riconoscimento, quel margine è stato speso perché il codice <strong>valga la pena di essere guardato</strong>. Non è un sostituto del QR: è <strong>un posto accanto</strong>.',
+    heroLead2: 'Quei vincoli sono in gran parte caduti. Le fotocamere dei telefoni e la potenza di calcolo hanno margine. Così, invece di rincorrere solo il riconoscimento, quel margine è stato speso perché il codice <strong>valga la pena di essere guardato</strong>. Non è un sostituto del QR: è <strong>un posto accanto</strong>. Il risultato è un <strong>codice a barre 3D (in realtà 2.5D)</strong> — stampato in piano, ma percepito in rilievo.',
     whyNowTitle: 'Perché proprio ora',
     whyNow1: '<strong>Il QR era la risposta giusta per il suo tempo.</strong> Due valori, moduli quadrati, grandi pattern di ricerca — ognuna di quelle scelte serviva a far leggere il codice anche a una fotocamera debole. Con quei vincoli, rinunciare all\'estetica era razionale.',
     whyNow2: '<strong>Quella premessa è cambiata.</strong> Le fotocamere dei telefoni di oggi non hanno nulla a che vedere con quelle, e l\'elaborazione video in tempo reale gira dentro un browser. Quel margine poteva andare alla densità — oppure a <strong>come appare</strong>. È per questo che il formato esiste.',
@@ -479,7 +479,7 @@ export const strings = {
 
   /* de — Siezen. 명사는 대문자, 합성어는 붙여 쓰거나 하이픈으로 잇는다. */
   de: {
-    title: 'TLcube — ein 3D-Barcode (eigentlich 2.5D), der Daten im Luminanzrang trägt',
+    title: 'TLcube — ein 3D-Barcode, der Daten im Luminanzrang trägt',
     description: 'Ein offener 3D-Barcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und die Daten in der relativen Luminanzreihenfolge dieser Flächen trägt. Spezifikation und Referenzimplementierung sind unter Apache-2.0 veröffentlicht.',
     ogTitle: 'TLcube — ein 3D-Barcode, der Daten im Luminanzrang trägt',
     ogDescription: 'Die Daten liegen in der Reihenfolge der drei Flächen, nicht in der absoluten Helligkeit. Solange die Reihenfolge überlebt, überlebt der Wert.',
@@ -495,7 +495,7 @@ export const strings = {
 
     heroTitle: 'QR liest sich gut.<br>Es war nur nie <strong>schön</strong>',
     heroLead: 'Plakate, Verpackungen, Visitenkarten — QR ist überall, und ein Schwarz-Weiß-Quadrat auf ein wochenlang gestaltetes Layout zu setzen, hat immer wehgetan. Doch QR sieht so aus, weil es so aussehen musste: So baut man einen Code, wenn <strong>eine Kamera und ein Prozessor von 1994</strong> ihn überhaupt lesen sollen.',
-    heroLead2: 'Diese Beschränkungen sind weitgehend gefallen. Handykameras und Rechenleistung haben Luft. Statt allein der Erkennung nachzujagen, ist diese Luft hier darin gelandet, dass der Code <strong>sehenswert</strong> ist. Das ist kein Ersatz für QR — es ist <strong>ein Platz daneben</strong>.',
+    heroLead2: 'Diese Beschränkungen sind weitgehend gefallen. Handykameras und Rechenleistung haben Luft. Statt allein der Erkennung nachzujagen, ist diese Luft hier darin gelandet, dass der Code <strong>sehenswert</strong> ist. Das ist kein Ersatz für QR — es ist <strong>ein Platz daneben</strong>. Das Ergebnis ist ein <strong>3D-Barcode (eigentlich 2.5D)</strong> — flach gedruckt, aber räumlich gelesen.',
     whyNowTitle: 'Warum jetzt',
     whyNow1: '<strong>QR war die richtige Antwort seiner Zeit.</strong> Zwei Werte, quadratische Module, große Suchmuster — jede dieser Entscheidungen gab es, damit auch eine schwache Kamera lesen konnte. Unter diesen Bedingungen war der Verzicht auf Ästhetik vernünftig.',
     whyNow2: '<strong>Diese Voraussetzung hat sich geändert.</strong> Heutige Handykameras sind damit nicht zu vergleichen, und Echtzeit-Videoverarbeitung läuft im Browser. Der gewonnene Spielraum konnte in Dichte fließen — oder in <strong>das Aussehen</strong>. Deshalb gibt es dieses Format.',
@@ -555,7 +555,7 @@ export const strings = {
 
   /* es — usted (3인칭 단수 명령/직설). */
   es: {
-    title: 'TLcube — un código de barras 3D (en realidad 2.5D) que lleva los datos en el rango de luminancia',
+    title: 'TLcube — un código de barras 3D que lleva los datos en el rango de luminancia',
     description: 'Un código de barras 3D abierto que divide una celda hexagonal en tres caras romboidales y lleva los datos en el orden de luminancia relativa de esas caras. La especificación y la implementación de referencia se publican bajo Apache-2.0.',
     ogTitle: 'TLcube — un código de barras 3D que lleva los datos en el rango de luminancia',
     ogDescription: 'Los datos viajan en el orden de las tres caras, no en el brillo absoluto. Mientras el orden sobreviva, el valor sobrevive.',
@@ -571,7 +571,7 @@ export const strings = {
 
     heroTitle: 'El QR se lee bien.<br>Solo que nunca ha sido <strong>bonito</strong>',
     heroLead: 'Carteles, envases, tarjetas de visita — el QR está en todas partes, y colocar un cuadrado en blanco y negro sobre un diseño trabajado durante semanas siempre ha dolido. Pero el QR tiene ese aspecto por una razón: es lo que se construye cuando <strong>una cámara y un procesador de 1994</strong> tienen que poder leerlo.',
-    heroLead2: 'Esas restricciones se han levantado en buena parte. Las cámaras de los teléfonos y la potencia de cálculo van sobradas. Así que, en lugar de perseguir solo el reconocimiento, ese margen se ha gastado en que <strong>merezca la pena mirarlo</strong>. No es un sustituto del QR: es <strong>un asiento a su lado</strong>.',
+    heroLead2: 'Esas restricciones se han levantado en buena parte. Las cámaras de los teléfonos y la potencia de cálculo van sobradas. Así que, en lugar de perseguir solo el reconocimiento, ese margen se ha gastado en que <strong>merezca la pena mirarlo</strong>. No es un sustituto del QR: es <strong>un asiento a su lado</strong>. El resultado es un <strong>código de barras 3D (en realidad 2.5D)</strong> — impreso en plano, pero percibido en relieve.',
     whyNowTitle: 'Por qué ahora',
     whyNow1: '<strong>El QR fue la respuesta correcta para su momento.</strong> Dos valores, módulos cuadrados, patrones localizadores grandes — cada una de esas decisiones existía para que una cámara débil pudiera leerlo igualmente. Con esas restricciones, renunciar a la estética era razonable.',
     whyNow2: '<strong>Esa premisa ha cambiado.</strong> Las cámaras de los teléfonos de hoy no se parecen en nada a aquellas, y el procesado de vídeo en tiempo real corre dentro de un navegador. Ese margen podía ir a la densidad — o podía ir a <strong>cómo se ve</strong>. Por eso existe este formato.',
@@ -631,7 +631,7 @@ export const strings = {
 
   /* pt — pt-PT 어휘 (ecrã·câmara·ficheiro·predefinição). 스캐너 사전과 같은 계열. */
   pt: {
-    title: 'TLcube — um código de barras 3D (na verdade 2.5D) que leva os dados na ordem de luminância',
+    title: 'TLcube — um código de barras 3D que leva os dados na ordem de luminância',
     description: 'Um código de barras 3D aberto que divide uma célula hexagonal em três faces em losango e leva os dados na ordem de luminância relativa dessas faces. A especificação e a implementação de referência estão publicadas sob Apache-2.0.',
     ogTitle: 'TLcube — um código de barras 3D que leva os dados na ordem de luminância',
     ogDescription: 'Os dados assentam na ordem das três faces, não no brilho absoluto. Enquanto a ordem sobreviver, o valor sobrevive.',
@@ -647,7 +647,7 @@ export const strings = {
 
     heroTitle: 'O QR lê-se bem.<br>Só nunca foi <strong>bonito</strong>',
     heroLead: 'Cartazes, embalagens, cartões de visita — o QR está em todo o lado, e pousar um quadrado a preto e branco sobre um design trabalhado durante semanas sempre custou. Mas o QR tem este aspeto por uma razão: é o que se constrói quando <strong>uma câmara e um processador de 1994</strong> têm de conseguir lê-lo.',
-    heroLead2: 'Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>.',
+    heroLead2: 'Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>. O resultado é um <strong>código de barras 3D (na verdade 2.5D)</strong> — impresso em plano, mas percebido em relevo.',
     whyNowTitle: 'Porquê agora',
     whyNow1: '<strong>O QR foi a resposta certa para o seu tempo.</strong> Dois valores, módulos quadrados, padrões localizadores grandes — cada uma dessas escolhas existia para que mesmo uma câmara fraca conseguisse ler. Com essas restrições, abdicar da estética era racional.',
     whyNow2: '<strong>Essa premissa mudou.</strong> As câmaras dos telemóveis de hoje não se comparam, e o processamento de vídeo em tempo real corre dentro de um navegador. Essa folga podia ir para a densidade — ou podia ir para <strong>o aspeto</strong>. É por isso que este formato existe.',
