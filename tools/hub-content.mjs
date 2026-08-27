@@ -161,7 +161,7 @@ export const strings = {
     statusNote1: '<strong>정지사진 1회 복호 시간만으로 라이브 체감을 예측할 수 없습니다.</strong> 시험판의 초기 실기기 계측에서는 한 프레임을 빨리 처리해도 성공까지 많은 프레임이 필요하면 첫 잠금이 늦어졌고, 타입 순위도 정지사진 표와 달라졌어요. 아직 기기 한 대의 작은 표본이므로 라이브 등급은 붙이지 않고 추가 측정 중으로 표시합니다.',
     statusNote0: `<strong>정지사진 한 장을 한 번 읽는 기준</strong>입니다. 지금은 Type O가 가장 짧고 A·K·Y가 비슷하게 더 깁니다. ⚠ 이전 게시에서 «Type Y가 가장 빠르다»고 적었던 것은 사진 9장 기준이었고, 표본을 넓혀 다시 재니 <strong>순서가 뒤집혔어요</strong>. 이 수치를 라이브 첫 잠금 시간으로 읽으면 안 됩니다.`,
     statusNote2: `촬영 조건도 크게 작용합니다. 실측에서 <strong>셀당 ${stats.cellFloorPx}픽셀</strong>이 복호 하한이었고, 같은 거리라도 <strong>초광각 렌즈</strong>로 찍으면 코드가 작게 담겨 이 선 아래로 내려갔어요 (초광각 ${stats.ultraWideFailPx}px 실패 / 광각 ${stats.wideOkPx}px 성공). 스캐너에 렌즈 선택을 넣어 둔 이유입니다.`,
-    statusNote3: '<strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하고, QR의 파인더를 위치·방향 진입점으로 써서 바깥 TL 본문을 복호해요. 생성기는 이제 Type O/A에서 이 검증된 경로를 기본으로 사용합니다. QR은 기본적으로 리더 링크를 담는 폴백이고, 실제 페이로드는 TL 본문에 남습니다.',
+    statusNote3: '<strong>중앙 QR 변형</strong>은 QR 블록이 중앙 파인더 자리를 대신하고, QR의 파인더를 위치·방향 진입점으로 써서 바깥 TL 본문을 복호해요. 생성기는 이제 Type O·A·K에서 이 검증된 경로를 기본으로 사용합니다. QR은 기본적으로 리더 링크를 담는 폴백이고, 실제 페이로드는 TL 본문에 남습니다.',
     statusFoot: `측정 ${stats.measuredOn} · 표본 <strong>${stats.sampleCount}장</strong> (각 장을 ${stats.triedShortSides}px 두 해상도로 시도). ⚠ 표본은 대부분 <strong>모니터 화면을 찍은 사진</strong>이라 인쇄물·실배치 수치가 아니에요. 그리고 코퍼스 ${stats.corpusTotal}장 중 <strong>${stats.probeExcluded}장</strong>은 «지금 못 읽는 것»을 일부러 모아 둔 한계·실험 프레임이라 성능 표본에서 뺐습니다. 중앙 QR 행만 ${stats.centerQr.measuredOn} 옛 라운드 값이에요.`,
 
     specTitle: '스펙과 구현',
@@ -224,7 +224,7 @@ export const strings = {
     why3: '<strong>It does not make anything pretty on its own.</strong> What opens up is the contract, not the outcome. What you draw inside it is still your work.',
 
     statusTitle: 'Scanner — where it stands',
-    statusLead: '<strong>The decoder works.</strong> All three types read from real-device photos; what is left is raising accuracy and speed. Each time below is <strong>one decode of one static photo taken on a real phone</strong> — not time to first lock or a live success rate.',
+    statusLead: '<strong>The decoder works.</strong> All four types read from real-device photos; what is left is raising accuracy and speed. Each time below is <strong>one decode of one static photo taken on a real phone</strong> — not time to first lock or a live success rate.',
     thType: 'Type', thDecoded: 'Real photos decoded', thTime: 'One static-photo decode', thRealtime: 'Live validation',
     rowYName: '<strong>Type Y</strong> — single cube',
     rowOName: '<strong>Type O</strong> — hex field',
@@ -286,7 +286,7 @@ export const strings = {
     typeKName: 'Type K — 六芒星',
     typeKDesc: '正三角形とその180°像を合わせた星。同じ k で容量が最大です。',
     typeKMeta: 'k = 6 / 8 / 10 · 正味ペイロード 43 / 86 / 138 B',
-    typesFoot: '正味ペイロードは ECC-M 基準です。3 タイプとも<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。',
+    typesFoot: '正味ペイロードは ECC-M 基準です。4 タイプとも<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。',
 
     howTitle: '仕組み',
     how1Title: '1. セル = 3 つの菱形', how1Desc: 'rhombille タイリングで六角セルを T・L・R の 3 面に分けます。',
@@ -298,7 +298,7 @@ export const strings = {
     why3: '<strong>ただし「自動できれいになる」わけではありません。</strong>自由になるのは契約であって結果ではありません。その中で何を描くかは作り手の仕事のままです。',
 
     statusTitle: 'スキャナ改善状況',
-    statusLead: '<strong>デコーダは動作します。</strong>3 タイプとも実機の写真から読めており、いまは認識率と速度を上げる改善段階です。以下の時間は<strong>実機で撮影した静止画 1 枚を 1 回復号した値</strong>で、ライブの初回ロック時間や成功率ではありません。',
+    statusLead: '<strong>デコーダは動作します。</strong>4 タイプとも実機の写真から読めており、いまは認識率と速度を上げる改善段階です。以下の時間は<strong>実機で撮影した静止画 1 枚を 1 回復号した値</strong>で、ライブの初回ロック時間や成功率ではありません。',
     thType: 'タイプ', thDecoded: '実写真の復号', thTime: '静止画 1 回の復号', thRealtime: 'ライブ検証',
     rowYName: '<strong>Type Y</strong> — 単一キューブ',
     rowOName: '<strong>Type O</strong> — 六角フィールド',
@@ -309,7 +309,7 @@ export const strings = {
     statusNote1: '<strong>静止画 1 回の復号時間だけではライブの体感を予測できません。</strong>試験版の初期実機計測では、1 フレームが速くても成功までに多くのフレームを要すると初回ロックが遅くなり、タイプの順序も静止画の表とは異なりました。まだ 1 台の小さな標本なので、ライブの実用性評価は付けず追加測定中としています。',
     statusNote0: `<strong>静止画 1 枚を 1 回読む基準</strong>です。現在は Type O が最も短く、A・K・Y はその後ろで近い値です。⚠ 以前の掲載で「Type Y が最速」と書いたのは写真 9 枚の標本で、標本を広げて測り直すと<strong>順序が逆転</strong>しました。ライブの初回ロック時間として読まないでください。`,
     statusNote2: `撮影条件も大きく効きます。実測では<strong>セルあたり ${stats.cellFloorPx} ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 ${stats.ultraWideFailPx}px 失敗 / 広角 ${stats.wideOkPx}px 成功）。スキャナにレンズ選択を入れているのはそのためです。`,
-    statusNote3: '<strong>中央 QR 変種</strong>では QR ブロックが中央ファインダを置き換え、QR のファインダを位置・方向の入口として周囲の TL 本文を復号します。ジェネレータは Type O/A でこの検証済み経路を標準にしました。QR は既定ではリーダーリンクのフォールバックで、ペイロード自体は TL 本文に残ります。',
+    statusNote3: '<strong>中央 QR 変種</strong>では QR ブロックが中央ファインダを置き換え、QR のファインダを位置・方向の入口として周囲の TL 本文を復号します。ジェネレータは Type O・A・K でこの検証済み経路を標準にしました。QR は既定ではリーダーリンクのフォールバックで、ペイロード自体は TL 本文に残ります。',
     statusFoot: `測定 ${stats.measuredOn} · 標本 <strong>${stats.sampleCount} 枚</strong>（各枚を短辺 ${stats.triedShortSides}px の 2 解像度で試行）。⚠ 標本の大半は<strong>モニター画面を撮った写真</strong>で、印刷物や実配置の数値ではありません。またコーパス ${stats.corpusTotal} 枚のうち <strong>${stats.probeExcluded} 枚</strong>は「今は読めないもの」を意図的に集めた限界・実験フレームなので、性能標本から除いています。中央 QR の行だけ ${stats.centerQr.measuredOn} の旧ラウンド値です。`,
 
     specTitle: '仕様と実装',
@@ -361,7 +361,7 @@ export const strings = {
     typeKName: 'Type K — Hexagramme',
     typeKDesc: 'Un triangle uni à son image à 180°. Charge utile la plus grande à k égal.',
     typeKMeta: 'k = 6 / 8 / 10 · charge utile nette 43 / 86 / 138 B',
-    typesFoot: 'La charge utile nette est donnée pour ECC-M. Les trois types peuvent porter un <strong>QR de secours</strong> à côté, si bien qu\'il reste un chemin là où un code TL ne peut pas être lu.',
+    typesFoot: 'La charge utile nette est donnée pour ECC-M. Les quatre types peuvent porter un <strong>QR de secours</strong> à côté, si bien qu\'il reste un chemin là où un code TL ne peut pas être lu.',
 
     howTitle: 'Fonctionnement',
     how1Title: '1. Cellule = trois losanges', how1Desc: 'Un pavage rhombille divise chaque cellule hexagonale en faces T, L et R.',
@@ -373,7 +373,7 @@ export const strings = {
     why3: '<strong>Cela ne rend rien beau tout seul.</strong> Ce qui s\'ouvre, c\'est le contrat, pas le résultat. Ce que vous dessinez à l\'intérieur reste votre travail.',
 
     statusTitle: 'Scanner — où nous en sommes',
-    statusLead: '<strong>Le décodeur fonctionne.</strong> Les trois types se lisent sur des photos prises avec de vrais appareils ; reste à faire monter la précision et la vitesse. Chaque temps ci-dessous correspond à <strong>un décodage d\'une photo fixe prise avec un vrai téléphone</strong> — ce n\'est ni un temps de premier accrochage ni un taux de réussite en direct.',
+    statusLead: '<strong>Le décodeur fonctionne.</strong> Les quatre types se lisent sur des photos prises avec de vrais appareils ; reste à faire monter la précision et la vitesse. Chaque temps ci-dessous correspond à <strong>un décodage d\'une photo fixe prise avec un vrai téléphone</strong> — ce n\'est ni un temps de premier accrochage ni un taux de réussite en direct.',
     thType: 'Type', thDecoded: 'Photos réelles décodées', thTime: 'Un décodage sur photo fixe', thRealtime: 'Validation en direct',
     rowYName: '<strong>Type Y</strong> — cube unique',
     rowOName: '<strong>Type O</strong> — champ hexagonal',
@@ -510,7 +510,7 @@ export const strings = {
     typeKName: 'Type K — Hexagramm',
     typeKDesc: 'Ein Dreieck vereinigt mit seinem 180°-Bild. Größte Nutzlast bei gleichem k.',
     typeKMeta: 'k = 6 / 8 / 10 · Netto-Nutzlast 43 / 86 / 138 B',
-    typesFoot: 'Die Netto-Nutzdaten gelten für ECC-M. Alle drei Typen können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann.',
+    typesFoot: 'Die Netto-Nutzdaten gelten für ECC-M. Alle vier Typen können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann.',
 
     howTitle: 'Funktionsweise',
     how1Title: '1. Zelle = drei Rauten', how1Desc: 'Eine Rhombille-Parkettierung teilt jede sechseckige Zelle in die Flächen T, L und R.',
@@ -522,7 +522,7 @@ export const strings = {
     why3: '<strong>Schön wird davon aber nichts von allein.</strong> Frei wird der Vertrag, nicht das Ergebnis. Was Sie darin zeichnen, bleibt Ihre Arbeit.',
 
     statusTitle: 'Scanner — Stand der Dinge',
-    statusLead: '<strong>Der Decoder funktioniert.</strong> Alle drei Typen werden auf Fotos echter Geräte gelesen; offen sind Genauigkeit und Tempo. Jede Zeit unten ist <strong>eine Dekodierung eines Standfotos von einem echten Telefon</strong> — weder die Zeit bis zum ersten Treffer noch eine Erfolgsquote im Livebetrieb.',
+    statusLead: '<strong>Der Decoder funktioniert.</strong> Alle vier Typen werden auf Fotos echter Geräte gelesen; offen sind Genauigkeit und Tempo. Jede Zeit unten ist <strong>eine Dekodierung eines Standfotos von einem echten Telefon</strong> — weder die Zeit bis zum ersten Treffer noch eine Erfolgsquote im Livebetrieb.',
     thType: 'Typ', thDecoded: 'Echte Fotos dekodiert', thTime: 'Eine Dekodierung, Standfoto', thRealtime: 'Live-Prüfung',
     rowYName: '<strong>Type Y</strong> — einzelner Würfel',
     rowOName: '<strong>Type O</strong> — Sechseckfeld',
@@ -585,7 +585,7 @@ export const strings = {
     typeKName: 'Type K — Hexagrama',
     typeKDesc: 'Un triángulo unido con su imagen a 180°. Mayor carga útil con la misma k.',
     typeKMeta: 'k = 6 / 8 / 10 · carga útil neta 43 / 86 / 138 B',
-    typesFoot: 'La carga útil neta es con ECC-M. Los tres tipos pueden llevar al lado un <strong>QR de respaldo</strong>, de modo que quede una vía donde un código TL no se pueda leer.',
+    typesFoot: 'La carga útil neta es con ECC-M. Los cuatro tipos pueden llevar al lado un <strong>QR de respaldo</strong>, de modo que quede una vía donde un código TL no se pueda leer.',
 
     howTitle: 'Cómo funciona',
     how1Title: '1. Celda = tres rombos', how1Desc: 'Un teselado rhombille divide cada celda hexagonal en las caras T, L y R.',
@@ -597,7 +597,7 @@ export const strings = {
     why3: '<strong>Pero nada se vuelve bonito por sí solo.</strong> Lo que se abre es el contrato, no el resultado. Lo que dibuje dentro sigue siendo su trabajo.',
 
     statusTitle: 'Escáner — dónde estamos',
-    statusLead: '<strong>El decodificador funciona.</strong> Los tres tipos se leen en fotos de dispositivos reales; queda subir la precisión y la velocidad. Cada tiempo de abajo es <strong>una decodificación de una foto fija tomada con un teléfono real</strong>, no el tiempo hasta el primer enganche ni una tasa de acierto en directo.',
+    statusLead: '<strong>El decodificador funciona.</strong> Los cuatro tipos se leen en fotos de dispositivos reales; queda subir la precisión y la velocidad. Cada tiempo de abajo es <strong>una decodificación de una foto fija tomada con un teléfono real</strong>, no el tiempo hasta el primer enganche ni una tasa de acierto en directo.',
     thType: 'Tipo', thDecoded: 'Fotos reales decodificadas', thTime: 'Una decodificación en foto fija', thRealtime: 'Validación en directo',
     rowYName: '<strong>Type Y</strong> — cubo único',
     rowOName: '<strong>Type O</strong> — campo hexagonal',
@@ -660,7 +660,7 @@ export const strings = {
     typeKName: 'Type K — Hexagrama',
     typeKDesc: 'Um triângulo unido à sua imagem de 180°. Maior carga útil com o mesmo k.',
     typeKMeta: 'k = 6 / 8 / 10 · carga útil líquida 43 / 86 / 138 B',
-    typesFoot: 'A carga útil líquida é para ECC-M. Os três tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.',
+    typesFoot: 'A carga útil líquida é para ECC-M. Os quatro tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.',
 
     howTitle: 'Como funciona',
     how1Title: '1. Célula = três losangos', how1Desc: 'Uma pavimentação rhombille divide cada célula hexagonal nas faces T, L e R.',
@@ -672,7 +672,7 @@ export const strings = {
     why3: '<strong>Mas nada fica bonito sozinho.</strong> O que se abre é o contrato, não o resultado. O que desenhar lá dentro continua a ser trabalho seu.',
 
     statusTitle: 'Scanner — ponto de situação',
-    statusLead: '<strong>O descodificador funciona.</strong> Os três tipos leem-se a partir de fotos de dispositivos reais; falta subir a precisão e a velocidade. Cada tempo abaixo é <strong>uma descodificação de uma foto fixa tirada com um telemóvel real</strong>, não o tempo até à primeira fixação nem uma taxa de êxito ao vivo.',
+    statusLead: '<strong>O descodificador funciona.</strong> Os quatro tipos leem-se a partir de fotos de dispositivos reais; falta subir a precisão e a velocidade. Cada tempo abaixo é <strong>uma descodificação de uma foto fixa tirada com um telemóvel real</strong>, não o tempo até à primeira fixação nem uma taxa de êxito ao vivo.',
     thType: 'Tipo', thDecoded: 'Fotos reais descodificadas', thTime: 'Uma descodificação em foto fixa', thRealtime: 'Validação ao vivo',
     rowYName: '<strong>Type Y</strong> — cubo único',
     rowOName: '<strong>Type O</strong> — campo hexagonal',
