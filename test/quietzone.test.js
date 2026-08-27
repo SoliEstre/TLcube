@@ -541,7 +541,7 @@ describe('중앙 QR × 육망성 실루엣 — 원점 면제 (실제 인코더)'
   test('K 의 다른 중앙 조합은 종전대로 산다 (면제가 이 조합만 건드렸는지)', async () => {
     const cases = [
       ['평', {}, {}],
-      ['중앙 TL(v0)', { centralV0: true }, { finderPatternId: 'central-v0' }],
+      ['중앙 Y0(v0)', { centralV0: true }, { finderPatternId: 'central-v0' }],
       ['코너 QR', {}, { qrText: QR, qrCorner: 'TL' }],
     ];
     for (const [name, eo, so] of cases) {

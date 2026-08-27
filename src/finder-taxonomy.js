@@ -229,7 +229,7 @@ function buildItems() {
   // 끼워 넣는 CENTRAL_V0_FINDER_CARD 가 실체다 — 2026-08-22 부터 O·A 공통 선택지.
   add({
     id: CENTRAL_V0_FINDER_PATTERN_ID,
-    name: '중앙 TL (비컨)',
+    name: '중앙 Y0 (비컨)',
     class: 1,
     className: FINDER_CLASS[1],
     kind: KIND_FINDER,

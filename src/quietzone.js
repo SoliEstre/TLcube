@@ -394,7 +394,7 @@ function shapeIsSelfQuietColored(shape, selfQuietColors) {
  * 그 오배제가 K 에서 터졌다: `markSilhouette='hexagram'` 은 본체 클러스터를
  * «layout 원점을 품은 도형» 으로 고르는데, 배제된 그 중앙 QR 이 **정확히 원점을
  * 품은 유일한 도형**이었다 ⇒ 본체 없음 ⇒ throw. 실측 대조군(2026-08-26):
- * K 평 OK · K+코너QR OK · K+중앙TL OK · **K+중앙QR ❌** · O+중앙QR OK
+ * K 평 OK · K+코너QR OK · K+중앙Y0 OK · **K+중앙QR ❌** · O+중앙QR OK
  * (O 는 육망성 경로를 안 타서 증상만 안 보였을 뿐, 오배제는 O 에서도 일어나고 있었다).
  *
  * ⇒ **원점을 품은 덩어리는 배제하지 않는다.** 술어는 `markHulls` 의 본체 판정과
