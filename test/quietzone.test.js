@@ -358,6 +358,110 @@ describe('실제 인코더 산출물과의 통합', () => {
     }
   }
 
+
+  // ── 인접(융합) 축 — 「덮는가」와 「닿는가」는 다른 성질이다 ─────────────────
+  //
+  // 2026-08-27 운영자 신고: 「턴A 안전영역이 QR 이랑 연결된다 — 저번에 고치지 않았나?」
+  // 위 4코너 스윕은 그때도 **전부 초록**이었다. 두 자가 서로 다른 것을 재고 있어서다:
+  //   · 위 스윕 = **포함** — 안전영역 폴리곤이 QR 도형 중심을 덮는가 (판때기 결함)
+  //   · 화면    = **인접** — 흰 영역이 QR 자기 패치에 닿아 눈에 한 덩어리인가
+  // 실측(2026-08-27): 넓은 변이 만나는 코너는 코드–QR 간격이 **0.5셀**인데 마진이
+  // 2셀이라, 폴리곤이 QR 을 **안 덮으면서도 닿는다**. 6024c02 시점을 체크아웃해 같은
+  // 자로 재 보니 그때도 0.5셀·정점침범 1 로 **오늘과 동일** ⇒ 회귀가 아니라
+  // 「처음부터 안 잰 축」이다. 코퍼스 실측으로 해도 갈렸다: 융합이 있는 A0·V0 가
+  // 대조 배치에서 3/6·3/6 으로 융합이 없는 K0(3/6)과 같고 K2(1/6)보다 낫다 —
+  // 이 표본(타입당 n=6)에서 융합은 복호를 **깎지 않는다**.
+  //
+  // 그래서 이 테스트는 «고쳐라» 가 아니라 **현재 성질을 못 박는 앵커**다. 좌표나 셀
+  // 수를 얼리지 않고 구조만 단언한다 — 배치가 바뀌어 이게 빨개지는 날은 누군가
+  // 넓은 변 코너의 간격을 실제로 바꾼 날이고, 그때 이 주석을 같이 갱신하면 된다.
+  test('코너 QR 은 덮이지 않지만 넓은 변 코너에서는 닿는다 (인접 축 앵커)', async () => {
+    const { encode } = await import('../src/encode.js');
+    const { encodeA } = await import('../src/encodeA.js');
+    const { buildScene } = await import('../src/scene.js');
+    const { getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT } = await import('../src/luminance.js');
+    const { TL_READER_URL } = await import('../src/qr.js');
+    const qrColors = [BULLSEYE_LIGHT, BULLSEYE_DARK];
+    const isQrColor = (c) => qrColors.some((q) => q.r === c.r && q.g === c.g && q.b === c.b);
+    const p = getPreset('slate');
+    const palette = {
+      background: null, levels: p.levels, bullseyeDark: BULLSEYE_DARK, bullseyeLight: BULLSEYE_LIGHT,
+    };
+    // 안전영역 마진 (index.html 의 QUIET_MARGIN_CELLS 와 같은 값). 간격이 이보다
+    // 좁으면 폴리곤이 QR 패치에 닿는다 — 그게 화면의 「한 덩어리」다.
+    const MARGIN = 2;
+
+    const distPtSeg = (q, a, b) => {
+      const vx = b.x - a.x; const vy = b.y - a.y;
+      const L = vx * vx + vy * vy;
+      const t = L === 0 ? 0 : Math.max(0, Math.min(1, ((q.x - a.x) * vx + (q.y - a.y) * vy) / L));
+      return Math.hypot(q.x - (a.x + t * vx), q.y - (a.y + t * vy));
+    };
+
+    /** 코너 QR 도형의 **모든 정점**과 안전영역 폴리곤 사이 최단거리 (셀 단위). */
+    function cornerGap(scene, corner) {
+      const wantLeft = corner === 'TL' || corner === 'BL';
+      const wantTop = corner === 'TL' || corner === 'TR';
+      let gap = Infinity;
+      let centersCovered = 0;
+      let found = 0;
+      const polys = quietZonePolygons(scene, MARGIN, qrColors);
+      for (const s of scene.shapes) {
+        if (!isQrColor(s.color)) continue;
+        const pts = s.kind === 'disc' ? [{ x: s.cx, y: s.cy }] : s.points;
+        const ctr = pts.reduce(
+          (a, q) => ({ x: a.x + q.x / pts.length, y: a.y + q.y / pts.length }), { x: 0, y: 0 },
+        );
+        const inX = wantLeft ? ctr.x < scene.width / 2 : ctr.x > scene.width / 2;
+        const inY = wantTop ? ctr.y < scene.height / 2 : ctr.y > scene.height / 2;
+        if (!(inX && inY
+          && Math.hypot(ctr.x - scene.width / 2, ctr.y - scene.height / 2)
+            > Math.min(scene.width, scene.height) / 4)) continue;
+        found += 1;
+        for (const poly of polys) {
+          if (inside(poly, ctr)) centersCovered += 1;
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+            for (const v of pts) gap = Math.min(gap, distPtSeg(v, poly[j], poly[i]));
+          }
+        }
+      }
+      return { gap, centersCovered, found };
+    }
+
+    const SHAPES = [
+      { id: 'O v1', encoded: encode('quiet zone', { version: 1 }) },
+      { id: 'A v0', encoded: encodeA('quiet zone', { version: 0 }) },
+      { id: 'V v0 (turnA)', encoded: encodeA('quiet zone', { version: 0, turnA: true }) },
+    ];
+    const CORNERS = ['TL', 'TR', 'BL', 'BR'];
+    const touching = new Map();
+    for (const { id, encoded } of SHAPES) {
+      const hits = [];
+      for (const corner of CORNERS) {
+        const scene = buildScene(encoded, { palette, qrText: TL_READER_URL, qrCorner: corner });
+        const { gap, centersCovered, found } = cornerGap(scene, corner);
+        assert.ok(found > 0, `${id} · ${corner}: 코너 QR 도형을 못 찾았다 — 로케이터가 깨졌다`);
+        // 포함 축 — 6024c02 가 되살린 성질. 인접이 있더라도 이건 끝까지 0 이어야 한다.
+        assert.equal(centersCovered, 0,
+          `${id} · ${corner}: 안전영역이 코너 QR 중심을 ${centersCovered}개 덮었다 (판때기 복귀)`);
+        if (gap < MARGIN) hits.push(corner);
+      }
+      touching.set(id, hits);
+    }
+
+    // 구조 단언 — 어느 코너인지는 안 얼린다. O 는 사방이 넉넉하고(육각이라 코너와
+    // 멀다), 삼각 계열은 **넓은 변이 만나는 두 코너**만 닿으며, 정삼각과 역삼각은
+    // 그 두 코너가 서로 **엇갈린다**(뒤집힌 축).
+    assert.deepEqual(touching.get('O v1'), [],
+      `O v1 이 코너 QR 에 닿는다 (${touching.get('O v1').join(',')}) — 육각 배치가 바뀌었다`);
+    assert.equal(touching.get('A v0').length, 2,
+      `A v0 의 닿는 코너가 2개가 아니다: ${touching.get('A v0').join(',') || '없음'}`);
+    assert.equal(touching.get('V v0 (turnA)').length, 2,
+      `V(turnA) 의 닿는 코너가 2개가 아니다: ${touching.get('V v0 (turnA)').join(',') || '없음'}`);
+    const overlap = touching.get('A v0').filter((c) => touching.get('V v0 (turnA)').includes(c));
+    assert.deepEqual(overlap, [],
+      `정삼각과 역삼각이 **같은** 코너에서 닿는다 (${overlap.join(',')}) — 한쪽 뒤집기가 풀렸다`);
+  });
   test('A v0 · BL — 태그를 벗기면 색 경로만으로는 삼켜진다 (태그가 실제로 일한다)', async () => {
     // 변이 앵커: 색+연결성 폴백이 이 구성을 못 지킨다는 사실이 참이어야 태그 수리에
     // 존재 이유가 있다. 이 단언이 «못 덮는다» 로 뒤집히는 날은 clusterShapes 의 병합
