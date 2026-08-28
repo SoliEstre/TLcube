@@ -47,7 +47,7 @@ export const SCANNER_STRINGS = {
     'input.label': '스캔할 사진 선택',
     'footer.intro': '소개',
     'footer.generator': '생성기',
-    'footer.beacon': '익명 방문 신호만 전송',
+    'footer.beacon': '익명 사용 신호만 전송',
     'lang.label': '언어',
 
     'gate.title': '카메라를 시작할까요?',
@@ -134,7 +134,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': '카메라',
 
     'lab.notice.title': '시험판입니다',
-    'lab.notice.body': '이 주소는 시험판입니다. 기기·카메라 정보와 축소 이미지(실패·성공 직전·성공의 층화 표본)가 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 프레임을 기기 안에서만 처리하고, 익명 방문 신호(페이지뷰)만 보냅니다.',
+    'lab.notice.body': '이 주소는 시험판입니다. 기기·카메라 정보와 축소 이미지(실패·성공 직전·성공의 층화 표본)가 실시간 전송됩니다. 페이로드 내용은 보내지 않습니다. 안정판은 프레임을 기기 안에서만 처리하고, 익명 사용 신호만 보냅니다.',
     'lab.expectedArm.label': '기대 로케이터 팔',
     'lab.expectedArm.unknown': '모름',
     'lab.expectedArm.a': 'A (구)',
@@ -216,7 +216,7 @@ export const SCANNER_STRINGS = {
     'input.label': 'Choose a photo to scan',
     'footer.intro': 'About',
     'footer.generator': 'Generator',
-    'footer.beacon': 'Sends only an anonymous visit signal',
+    'footer.beacon': 'Sends only anonymous usage signals',
     'lang.label': 'Language',
 
     'gate.title': 'Start the camera?',
@@ -298,7 +298,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'Camera',
 
     'lab.notice.title': 'This is the lab build',
-    'lab.notice.body': 'This is the lab scanner. Device and camera details, and shrunken frame images (stratified samples of failures, the frame before success, and success), are sent in real time. Payload contents are not sent. The stable scanner processes frames only on the device and sends only an anonymous visit signal (pageview).',
+    'lab.notice.body': 'This is the lab scanner. Device and camera details, and shrunken frame images (stratified samples of failures, the frame before success, and success), are sent in real time. Payload contents are not sent. The stable scanner processes frames only on the device and sends only anonymous usage signals.',
     'lab.expectedArm.label': 'Expected locator arm',
     'lab.expectedArm.unknown': 'Unknown',
     'lab.expectedArm.a': 'A (old)',
@@ -380,7 +380,7 @@ export const SCANNER_STRINGS = {
     'input.label': 'スキャンする写真を選択',
     'footer.intro': '紹介',
     'footer.generator': 'ジェネレータ',
-    'footer.beacon': '匿名の訪問シグナルのみ送信',
+    'footer.beacon': '匿名の利用シグナルのみ送信',
     'lang.label': '言語',
 
     'gate.title': 'カメラを起動しますか？',
@@ -462,7 +462,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'カメラ',
 
     'lab.notice.title': '試用版です',
-    'lab.notice.body': 'このアドレスは試用版です。端末・カメラ情報と、フレームの縮小画像（失敗・成功直前・成功の層化標本）がリアルタイムで送信されます。ペイロードの内容は送りません。安定版はフレームを端末の中だけで処理し、匿名の訪問シグナル（ページビュー）だけを送ります。',
+    'lab.notice.body': 'このアドレスは試用版です。端末・カメラ情報と、フレームの縮小画像（失敗・成功直前・成功の層化標本）がリアルタイムで送信されます。ペイロードの内容は送りません。安定版はフレームを端末の中だけで処理し、匿名の利用シグナルだけを送ります。',
     'lab.expectedArm.label': '期待ロケーターアーム',
     'lab.expectedArm.unknown': '不明',
     'lab.expectedArm.a': 'A（旧）',
@@ -544,7 +544,7 @@ export const SCANNER_STRINGS = {
     'input.label': 'Choisir une photo à scanner',
     'footer.intro': 'À propos',
     'footer.generator': 'Générateur',
-    'footer.beacon': 'N\'envoie qu\'un signal de visite anonyme',
+    'footer.beacon': 'N\'envoie que des signaux d\'utilisation anonymes',
     'lang.label': 'Langue',
 
     'gate.title': 'Démarrer la caméra ?',
@@ -626,7 +626,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'Caméra',
 
     'lab.notice.title': 'Version d\'essai',
-    'lab.notice.body': 'Cette adresse est une version d\'essai. Les informations sur l\'appareil et la caméra ainsi que des images réduites (échantillon stratifié des échecs, de l\'image précédant la réussite et de la réussite) sont transmises en temps réel. Le contenu de la charge utile n\'est pas transmis. La version stable traite les images uniquement sur l\'appareil et n\'envoie qu\'un signal de visite anonyme (page vue).',
+    'lab.notice.body': 'Cette adresse est une version d\'essai. Les informations sur l\'appareil et la caméra ainsi que des images réduites (échantillon stratifié des échecs, de l\'image précédant la réussite et de la réussite) sont transmises en temps réel. Le contenu de la charge utile n\'est pas transmis. La version stable traite les images uniquement sur l\'appareil et n\'envoie que des signaux d\'utilisation anonymes.',
     'lab.expectedArm.label': 'Bras de localisateur attendu',
     'lab.expectedArm.unknown': 'Inconnu',
     'lab.expectedArm.a': 'A (ancien)',
@@ -708,7 +708,7 @@ export const SCANNER_STRINGS = {
     'input.label': 'Scegli una foto da scansionare',
     'footer.intro': 'Informazioni',
     'footer.generator': 'Generatore',
-    'footer.beacon': 'Invia solo un segnale di visita anonimo',
+    'footer.beacon': 'Invia solo segnali di utilizzo anonimi',
     'lang.label': 'Lingua',
 
     'gate.title': 'Avviare la fotocamera?',
@@ -790,7 +790,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'Fotocamera',
 
     'lab.notice.title': 'Versione di prova',
-    'lab.notice.body': 'Questo indirizzo è una versione di prova. Le informazioni su dispositivo e fotocamera e le immagini ridotte dei fotogrammi (campione stratificato di fallimenti, del fotogramma precedente al successo e del successo) vengono inviate in tempo reale. Il contenuto del payload non viene inviato. La versione stabile elabora i fotogrammi solo sul dispositivo e invia soltanto un segnale di visita anonimo (pagina vista).',
+    'lab.notice.body': 'Questo indirizzo è una versione di prova. Le informazioni su dispositivo e fotocamera e le immagini ridotte dei fotogrammi (campione stratificato di fallimenti, del fotogramma precedente al successo e del successo) vengono inviate in tempo reale. Il contenuto del payload non viene inviato. La versione stabile elabora i fotogrammi solo sul dispositivo e invia solo segnali di utilizzo anonimi.',
     'lab.expectedArm.label': 'Braccio del localizzatore atteso',
     'lab.expectedArm.unknown': 'Sconosciuto',
     'lab.expectedArm.a': 'A (vecchio)',
@@ -872,7 +872,7 @@ export const SCANNER_STRINGS = {
     'input.label': 'Foto zum Scannen wählen',
     'footer.intro': 'Info',
     'footer.generator': 'Generator',
-    'footer.beacon': 'Sendet nur ein anonymes Besuchssignal',
+    'footer.beacon': 'Sendet nur anonyme Nutzungssignale',
     'lang.label': 'Sprache',
 
     'gate.title': 'Kamera starten?',
@@ -954,7 +954,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'Kamera',
 
     'lab.notice.title': 'Testversion',
-    'lab.notice.body': 'Diese Adresse ist eine Testversion. Geräte- und Kameradaten sowie verkleinerte Bilder (geschichtete Stichprobe aus Fehlschlägen, dem Bild vor dem Erfolg und dem Erfolg) werden in Echtzeit übertragen. Der Inhalt der Nutzdaten wird nicht übertragen. Die stabile Version verarbeitet Bilder nur auf dem Gerät und sendet lediglich ein anonymes Besuchssignal (Seitenaufruf).',
+    'lab.notice.body': 'Diese Adresse ist eine Testversion. Geräte- und Kameradaten sowie verkleinerte Bilder (geschichtete Stichprobe aus Fehlschlägen, dem Bild vor dem Erfolg und dem Erfolg) werden in Echtzeit übertragen. Der Inhalt der Nutzdaten wird nicht übertragen. Die stabile Version verarbeitet Bilder nur auf dem Gerät und sendet nur anonyme Nutzungssignale.',
     'lab.expectedArm.label': 'Erwarteter Lokator-Arm',
     'lab.expectedArm.unknown': 'Unbekannt',
     'lab.expectedArm.a': 'A (alt)',
@@ -1036,7 +1036,7 @@ export const SCANNER_STRINGS = {
     'input.label': 'Elegir una foto para escanear',
     'footer.intro': 'Acerca de',
     'footer.generator': 'Generador',
-    'footer.beacon': 'Envía solo una señal de visita anónima',
+    'footer.beacon': 'Envía solo señales de uso anónimas',
     'lang.label': 'Idioma',
 
     'gate.title': '¿Iniciar la cámara?',
@@ -1118,7 +1118,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'Cámara',
 
     'lab.notice.title': 'Versión de prueba',
-    'lab.notice.body': 'Esta dirección es una versión de prueba. Los datos del dispositivo y de la cámara y las imágenes reducidas de los fotogramas (muestra estratificada de fallos, del fotograma previo al acierto y del acierto) se envían en tiempo real. El contenido de la carga útil no se envía. La versión estable procesa los fotogramas solo en el dispositivo y envía únicamente una señal de visita anónima (vista de página).',
+    'lab.notice.body': 'Esta dirección es una versión de prueba. Los datos del dispositivo y de la cámara y las imágenes reducidas de los fotogramas (muestra estratificada de fallos, del fotograma previo al acierto y del acierto) se envían en tiempo real. El contenido de la carga útil no se envía. La versión estable procesa los fotogramas solo en el dispositivo y envía solo señales de uso anónimas.',
     'lab.expectedArm.label': 'Brazo del localizador esperado',
     'lab.expectedArm.unknown': 'Desconocido',
     'lab.expectedArm.a': 'A (antiguo)',
@@ -1200,7 +1200,7 @@ export const SCANNER_STRINGS = {
     'input.label': 'Escolher uma foto para ler',
     'footer.intro': 'Sobre',
     'footer.generator': 'Gerador',
-    'footer.beacon': 'Envia apenas um sinal de visita anónimo',
+    'footer.beacon': 'Envia apenas sinais de utilização anónimos',
     'lang.label': 'Idioma',
 
     'gate.title': 'Iniciar a câmara?',
@@ -1282,7 +1282,7 @@ export const SCANNER_STRINGS = {
     'camera.fallback': 'Câmara',
 
     'lab.notice.title': 'Versão de ensaio',
-    'lab.notice.body': 'Este endereço é uma versão de ensaio. Os dados do dispositivo e da câmara e as imagens reduzidas dos fotogramas (amostra estratificada de falhas, do fotograma anterior ao êxito e do êxito) são enviados em tempo real. O conteúdo da carga útil não é enviado. A versão estável processa os fotogramas apenas no dispositivo e envia somente um sinal de visita anónimo (visualização de página).',
+    'lab.notice.body': 'Este endereço é uma versão de ensaio. Os dados do dispositivo e da câmara e as imagens reduzidas dos fotogramas (amostra estratificada de falhas, do fotograma anterior ao êxito e do êxito) são enviados em tempo real. O conteúdo da carga útil não é enviado. A versão estável processa os fotogramas apenas no dispositivo e envia apenas sinais de utilização anónimos.',
     'lab.expectedArm.label': 'Braço do localizador esperado',
     'lab.expectedArm.unknown': 'Desconhecido',
     'lab.expectedArm.a': 'A (antigo)',

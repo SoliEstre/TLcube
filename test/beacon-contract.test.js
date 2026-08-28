@@ -103,6 +103,13 @@ test('두 스키마의 컬럼 집합이 서로 같다', () => {
     `${labelA} 와 ${labelB} 의 컬럼이 갈렸다 — 갈린 쪽 호스팅에서만 행이 조용히 버려진다`);
 });
 
+test('P1 스키마는 build 만 넓히고 서버 소유 P2 컬럼은 싣지 않는다', () => {
+  const cols = schemaColumns();
+  assert.ok(cols.includes('build'), 'P1 배포 스탬프 컬럼이 없다');
+  assert.ok(!cols.includes('country'), 'P2 country 를 P1에 섞으면 안 된다');
+  assert.ok(!cols.includes('visitor_key'), 'P2 visitor_key 를 P1에 섞으면 안 된다');
+});
+
 for (const [label, rel] of [
   ['생성기·스캐너 (src/beacon.js)', 'src/beacon.js'],
   ['허브 (sites/_shared/site.js)', 'sites/_shared/site.js'],
@@ -130,6 +137,56 @@ test('두 구현의 필드 집합이 서로 같다', () => {
   const a = payloadKeys('src/beacon.js').slice().sort();
   const b = payloadKeys('sites/_shared/site.js').slice().sort();
   assert.deepEqual(a, b, '한쪽만 고쳐서 갈라졌다');
+});
+
+test('두 구현이 P1 공통 이벤트 속성과 참여 종료 중복 방지를 함께 가진다', () => {
+  for (const rel of ['src/beacon.js', 'sites/_shared/site.js']) {
+    const src = read(rel);
+    for (const prop of ['surface', 'online', 'active_ms_delta', 'reason', 'interacted']) {
+      assert.ok(src.includes(prop), `${rel}: ${prop} 공통 속성이 없다`);
+    }
+    assert.match(src, /visibilitychange/, `${rel}: hidden 참여 종료 훅이 없다`);
+    assert.match(src, /pagehide/, `${rel}: pagehide 참여 종료 훅이 없다`);
+    assert.match(src, /visibleSince === null/, `${rel}: hidden/pagehide 중복 종료 방지가 없다`);
+    assert.match(src, /appinstalled/, `${rel}: PWA 설치 완료 이벤트가 없다`);
+    assert.doesNotMatch(src, /navigator\.userAgent(?!Data)/,
+      `${rel}: P2 서버 UA 폴백 대신 클라이언트 raw UA를 읽으면 안 된다`);
+  }
+});
+
+test('P1 생성·내보내기 이벤트는 정본 props만 보내고 빌드 스탬프를 연결한다', () => {
+  const src = read('index.html');
+  assert.match(src, /createBeacon\('gen',\s*\{\s*build:\s*GENERATOR_BUILD\s*\}\)/);
+  assert.match(src, /genBeacon\('generate',\s*props\)/);
+  assert.match(src, /genBeacon\('export',\s*\{/);
+  assert.match(src, /genBeacon\('fail',\s*\{\s*stage,\s*reason_code:\s*reasonCode\s*\}\)/);
+  for (const prop of [
+    'type', 'version', 'ecc', 'tones', 'preset', 'qr_pos', 'mode', 'content', 'bytes',
+    'finder', 'locator_layout', 'render_profile', 'shading',
+  ]) {
+    assert.match(src, new RegExp(`\\b${prop}:`), `generate.${prop} 누락`);
+  }
+  for (const prop of ['format', 'via', 'size', 'ppi', 'margin', 'dither']) {
+    assert.match(src, new RegExp(`\\b${prop}[,:]`), `export.${prop} 누락`);
+  }
+  assert.doesNotMatch(src, /genBeacon\('(?:generate|export|fail)'[^;]*(?:payload|cfg\.text)/s,
+    '생성기 제품 이벤트 호출에 페이로드가 들어가면 안 된다');
+});
+
+test('P1 스캔 이벤트는 시도 단위이고 실패 원문 대신 닫힌 reason_code만 보낸다', () => {
+  const src = read('sites/tlscan/scanner.js');
+  assert.match(src, /createBeacon\('scan',\s*\{\s*build:\s*SCANNER_BUILD\s*\}\)/);
+  for (const event of ['scan_start', 'scan_ok', 'scan_fail']) {
+    assert.ok(src.includes(`beacon('${event}'`), `${event} 호출 누락`);
+  }
+  for (const prop of ['source', 'attempt_seq', 'type', 'version', 'ecc', 'tones', 'via', 'content', 'ms', 'frames']) {
+    assert.match(src, new RegExp(`\\b${prop}:`), `scan_ok.${prop} 누락`);
+  }
+  assert.match(src, /reason_code:\s*reasonCode/);
+  assert.doesNotMatch(src, /reason_code:\s*(?:result|error|raw)/,
+    '원시 오류 객체·문자열을 reason_code로 보내면 안 된다');
+  assert.match(src, /productAttempt\s*=\s*null/,
+    '성공·실패 뒤 시도를 닫아 결과 이벤트를 한 번으로 제한해야 한다');
 });
 
 test('큐 표식(queued_at)은 전송 페이로드에서 제거된다', () => {

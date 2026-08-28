@@ -65,6 +65,8 @@
   // ── 비콘 ────────────────────────────────────────────────
   const ENDPOINT = 'https://tl.estre.so/i';
   const site = document.body.dataset.site || 'hub';
+  const buildMeta = document.querySelector('meta[name="tl-build"]');
+  const build = document.body.dataset.build || (buildMeta && buildMeta.content) || '';
 
   /** 탭 수명 임시 ID — 영속 식별자가 아니다(sessionStorage). */
   const session = (() => {
@@ -97,8 +99,22 @@
   })();
   const uaOs = (uad && uad.platform) || '';
 
+  function usageSurface() {
+    if (location.protocol === 'file:') return 'file';
+    try {
+      if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return 'pwa';
+      if (navigator.standalone === true) return 'pwa';
+    } catch { /* 일반 웹 표면으로 폴백 */ }
+    return 'web';
+  }
+
   function send(event, props) {
     if (!navigator.sendBeacon) return;
+    const eventProps = props ? Object.assign({}, props) : {};
+    if (event === 'pageview') {
+      eventProps.surface = usageSurface();
+      eventProps.online = navigator.onLine === false ? 0 : 1;
+    }
     const row = {
       site,
       event,
@@ -108,11 +124,12 @@
       ua_browser: uaBrowser,
       ua_os: uaOs,
       lang: document.documentElement.lang || '',
+      build,
       session,
       // ⚠ props 컬럼은 Map(String, String) 이다 — JSON **객체**로 보내야 하고
       //   문자열로 보내면 JSONEachRow 파싱이 실패한다. 값도 전부 문자열로 맞춘다.
-      props: props
-        ? Object.fromEntries(Object.entries(props).map(([k, v]) => [k, String(v)]))
+      props: Object.keys(eventProps).length
+        ? Object.fromEntries(Object.entries(eventProps).map(([k, v]) => [k, String(v)]))
         : {},
     };
     // 오프라인이면 큐에 쌓았다가 온라인 복귀·다음 방문에 흘려보낸다.
@@ -177,9 +194,31 @@
     if (a) send('out', { to: a.dataset.out });
   });
 
-  // 이탈 훅 이중 — 큐가 비어 있어도 비용이 없다.
-  let done = false;
-  const flush = () => { if (done) return; done = true; };
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
-  window.addEventListener('pagehide', flush);
+  // 보이는 구간만 누적한다. hidden 뒤 pagehide 가 이어져도 마지막 조각은 한 번만 간다.
+  let visibleSince = document.visibilityState === 'hidden' ? null : Date.now();
+  let interacted = false;
+  const markInteracted = () => { interacted = true; };
+  for (const name of ['pointerdown', 'keydown', 'input']) {
+    document.addEventListener(name, markInteracted, { passive: true });
+  }
+  const finishVisible = (reason) => {
+    if (visibleSince === null) return;
+    const activeMs = Math.max(0, Math.min(0xffffffff, Date.now() - visibleSince));
+    visibleSince = null;
+    if (activeMs > 0) {
+      send('engage', {
+        active_ms_delta: Math.round(activeMs),
+        reason,
+        interacted: interacted ? 1 : 0,
+      });
+    }
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') finishVisible('hidden');
+    else if (visibleSince === null) visibleSince = Date.now();
+  });
+  window.addEventListener('pagehide', () => finishVisible('pagehide'));
+  if (site === 'gen' || site === 'scan') {
+    window.addEventListener('appinstalled', () => send('pwa_install', { surface: 'pwa' }));
+  }
 })();

@@ -93,6 +93,7 @@ function enqueue(row) {
  * 비콘 하나를 만든다.
  *
  * @param {string} site `body[data-site]` 에 해당하는 사이트 식별자
+ * @param {{build?: string}} options 배포 스탬프
  * @returns {(event: string, props?: Record<string, unknown>) => void}
  */
 /** 리퍼러의 **도메인만**. 전체 URL 은 저장하지 않는다. */
@@ -126,7 +127,22 @@ function uaHints() {
   return { browser: brand ? brand.brand : '', os: (uad && uad.platform) || '' };
 }
 
-export function createBeacon(site) {
+/** pageview 의 실행 표면. file:// 경로 자체는 beaconPath 가 계속 비운다. */
+export function usageSurface() {
+  if (typeof location !== 'undefined' && location.protocol === 'file:') return 'file';
+  try {
+    if (typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches) {
+      return 'pwa';
+    }
+    if (typeof navigator !== 'undefined' && navigator.standalone === true) return 'pwa';
+  } catch {
+    // matchMedia 접근이 막혀도 일반 웹 표면으로 안전하게 폴백한다.
+  }
+  return 'web';
+}
+
+export function createBeacon(site, options = {}) {
+  const build = typeof options.build === 'string' ? options.build : '';
   const { browser: uaBrowser, os: uaOs } = uaHints();
   /** 탭 수명 임시 ID — 영속 식별자가 아니다. */
   const session = (() => {
@@ -141,13 +157,7 @@ export function createBeacon(site) {
     }
   })();
 
-  // 온라인으로 돌아오면 밀린 것을 흘려보낸다. 첫 로드에서도 한 번 시도한다.
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', () => flushQueue());
-    flushQueue();
-  }
-
-  return function send(event, props) {
+  function send(event, props) {
     /*
      * ⚠ **필드 집합이 ClickHouse 테이블 컬럼과 정확히 일치해야 한다.**
      *   수집은 `INSERT … FORMAT JSONEachRow` 이고 `async_insert=1&
@@ -164,6 +174,11 @@ export function createBeacon(site) {
      *       달라져 집계가 조용히 어긋난다.
      *   `test/beacon-contract.test.js` 가 이 일치를 고정한다.
      */
+    const eventProps = props ? { ...props } : {};
+    if (event === 'pageview') {
+      eventProps.surface = usageSurface();
+      eventProps.online = typeof navigator === 'undefined' || navigator.onLine !== false ? 1 : 0;
+    }
     const row = {
       site,
       event,
@@ -173,14 +188,54 @@ export function createBeacon(site) {
       ua_browser: uaBrowser,
       ua_os: uaOs,
       lang: typeof document === 'undefined' ? '' : (document.documentElement.lang || ''),
+      build,
       session,
       // ⚠ props 는 Map(String, String) 컬럼이라 **객체**로 보내고 값도 문자열로 맞춘다.
-      props: props
-        ? Object.fromEntries(Object.entries(props).map(([k, v]) => [k, String(v)]))
+      props: Object.keys(eventProps).length
+        ? Object.fromEntries(Object.entries(eventProps).map(([k, v]) => [k, String(v)]))
         : {},
     };
     // 오프라인이면 큐에 쌓는다. navigator.onLine 은 거짓 양성이 있으므로 전송 결과도 본다.
     const online = typeof navigator === 'undefined' || navigator.onLine !== false;
     if (!online || !post(row)) enqueue(row);
-  };
+  }
+
+  // 온라인으로 돌아오면 밀린 것을 흘려보낸다. 첫 로드에서도 한 번 시도한다.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', () => flushQueue());
+    flushQueue();
+  }
+
+  /* 보이는 구간만 참여 시간으로 센다. hidden 뒤 pagehide 가 이어져도 visibleSince 가
+     이미 null 이라 마지막 조각을 두 번 보내지 않는다. */
+  if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+    let visibleSince = document.visibilityState === 'hidden' ? null : Date.now();
+    let interacted = false;
+    const markInteracted = () => { interacted = true; };
+    for (const name of ['pointerdown', 'keydown', 'input']) {
+      document.addEventListener(name, markInteracted, { passive: true });
+    }
+    const finishVisible = (reason) => {
+      if (visibleSince === null) return;
+      const activeMs = Math.max(0, Math.min(0xffffffff, Date.now() - visibleSince));
+      visibleSince = null;
+      if (activeMs > 0) {
+        send('engage', {
+          active_ms_delta: Math.round(activeMs),
+          reason,
+          interacted: interacted ? 1 : 0,
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') finishVisible('hidden');
+      else if (visibleSince === null) visibleSince = Date.now();
+    });
+    window.addEventListener('pagehide', () => finishVisible('pagehide'));
+    if (site === 'gen' || site === 'scan') {
+      window.addEventListener('appinstalled', () => send('pwa_install', { surface: 'pwa' }));
+    }
+  }
+
+  return send;
 }

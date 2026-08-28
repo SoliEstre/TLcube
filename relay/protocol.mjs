@@ -250,6 +250,7 @@ export function eventRow(event) {
     site: event.site,
     ts: toChDateTime(event.ts),
     kind: event.kind,
+    build: typeof event.build === 'string' ? event.build : '',
     seq: asUInt(body.seq),
     w: asUInt(body.w),
     h: asUInt(body.h),

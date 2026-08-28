@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS tl_analytics.events
     ref        LowCardinality(String) DEFAULT '', -- referrer 도메인만 (전체 URL 미저장)
     ua_browser LowCardinality(String) DEFAULT '', -- UA 힌트 (문자열 파싱 안 함)
     ua_os      LowCardinality(String) DEFAULT '',
-    lang       LowCardinality(String) DEFAULT '', -- 문서 언어(ko|en|ja)
+    lang       LowCardinality(String) DEFAULT '', -- 문서 언어
+    build      LowCardinality(String) DEFAULT '', -- 클라이언트 배포 스탬프
     session    String DEFAULT '',                 -- sessionStorage 임시 ID — 영속 식별자 아님
     props      Map(LowCardinality(String), String) DEFAULT map()
 )
@@ -64,3 +65,6 @@ GROUP BY date, site, event;
 -- 확인 쿼리
 -- SELECT site, event, count() FROM tl_analytics.events GROUP BY site, event ORDER BY count() DESC;
 -- SELECT date, site, countMerge(views) v, uniqMerge(sessions) s FROM tl_analytics.daily_stats GROUP BY date, site ORDER BY date DESC LIMIT 30;
+
+-- 기존 자체호스팅 테이블에도 P1 배포 스탬프 컬럼을 추가한다.
+ALTER TABLE tl_analytics.events ADD COLUMN IF NOT EXISTS build LowCardinality(String) DEFAULT '' AFTER lang;

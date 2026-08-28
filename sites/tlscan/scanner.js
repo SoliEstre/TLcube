@@ -119,7 +119,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-28.03';
+export const SCANNER_BUILD = '2026-08-28.04';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -198,6 +198,8 @@ let returnFocus = null;
 let frameSeq = 0;
 let labEnvSent = false;
 let attemptId = '';
+let productAttemptSeq = 0;
+let productAttempt = null;
 let zoomCapability = null;
 let userZoom = DEFAULT_USER_ZOOM;
 let zoomPlan = resolveZoomPlan({ userZoom: DEFAULT_USER_ZOOM });
@@ -298,7 +300,7 @@ function resetFailureTiming() {
   nextEscalationAt = null;
 }
 
-function beginScanAttempt() {
+function beginScanAttempt(source) {
   attemptId = makeAttemptId();
   // 포즈도 시도 단위 상태다. 이전 카메라·사진 세션의 픽셀 H 를 새 세션에 넘기지 않는다.
   lastFramePose = null;
@@ -312,7 +314,87 @@ function beginScanAttempt() {
     syncPreviewTransform();
   }
   if (lab.beginAttempt) lab.beginAttempt(attemptId);
+  productAttemptSeq += 1;
+  productAttempt = {
+    source,
+    attemptSeq: productAttemptSeq,
+    startedAt: nowMs(),
+    frames: 0,
+  };
+  beacon('scan_start', { source, attempt_seq: productAttemptSeq });
   return attemptId;
+}
+
+function noteProductFrame() {
+  if (productAttempt) productAttempt.frames += 1;
+}
+
+function scanElapsedMs(attempt) {
+  return Math.max(0, Math.min(0xffffffff, Math.round(nowMs() - attempt.startedAt)));
+}
+
+function scanContentKind(payload) {
+  const kind = sniffPayload(payload).kind;
+  return ['url', 'text', 'wifi', 'card'].includes(kind) ? kind : 'text';
+}
+
+function scanVia(result) {
+  const hypothesis = result && result.hypothesis;
+  return hypothesis && (hypothesis.centerQr === true || /qr/i.test(hypothesis.source || ''))
+    ? 'qr'
+    : 'cube';
+}
+
+function finishProductScanOk(result, payload) {
+  const attempt = productAttempt;
+  if (!attempt) return;
+  productAttempt = null;
+  const observed = observedFromResult(result);
+  beacon('scan_ok', {
+    source: attempt.source,
+    attempt_seq: attempt.attemptSeq,
+    type: observed.type || '',
+    version: observed.version == null ? '' : observed.version,
+    ecc: observed.ecc || '',
+    tones: observed.tones == null ? '' : observed.tones,
+    via: scanVia(result),
+    content: scanContentKind(payload),
+    ms: scanElapsedMs(attempt),
+    frames: attempt.frames,
+  });
+}
+
+function finishProductScanFail(reasonCode) {
+  const attempt = productAttempt;
+  if (!attempt) return;
+  productAttempt = null;
+  beacon('scan_fail', {
+    source: attempt.source,
+    attempt_seq: attempt.attemptSeq,
+    reason_code: reasonCode,
+    ms: scanElapsedMs(attempt),
+    frames: attempt.frames,
+  });
+}
+
+/** 원시 디코더 오류는 전송하지 않고 이 닫힌 집합으로만 접는다. */
+function closedScanReason(result, fallback = 'unreadable') {
+  if (result && result.clipSide === 'multi') return 'clipped';
+  const raw = String((result && result.reason) || '');
+  if (/frame-invalid/i.test(raw)) return 'invalid-frame';
+  if (/finder/i.test(raw)) return 'no-finder';
+  if (/format/i.test(raw)) return 'no-format';
+  if (/geometry|grid|homography|proposal/i.test(raw)) return 'geometry';
+  if (/dynamic|contrast|luma/i.test(raw)) return 'low-contrast';
+  if (/decode|payload|header|reed|rs-/i.test(raw)) return 'decode-failed';
+  return fallback;
+}
+
+function cameraStartReason(error) {
+  const name = error && error.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'permission-denied';
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'camera-unavailable';
+  return 'camera-start-failed';
 }
 
 function activeVideoTrack() {
@@ -846,6 +928,9 @@ async function decodeFrame(imageData, settings = {}) {
         ok: true,
         payload: result.text,
         family: result.family,
+        version: result.version,
+        eccLevel: result.eccLevel,
+        tones: result.tones,
         hypothesis: result.hypothesis,
         ms: ms && ms.total,
         report,
@@ -1684,6 +1769,7 @@ function handleDecodeResult(result, source, session) {
 
   if (!payload) {
     if (source === 'file') {
+      finishProductScanFail(beaconOnly ? 'beacon-only' : closedScanReason(result));
       if (beaconOnly) {
         // 비컨은 읽혔다 — «아무것도 없음» 이 아니라 «전체가 안 보임» 을 말해 준다.
         setStatus(t('status.beaconPhoto'));
@@ -1697,6 +1783,7 @@ function handleDecodeResult(result, source, session) {
     return;
   }
 
+  finishProductScanOk(result, payload);
   stopCamera();
   showResult(payload);
   setStatus(t('status.decoded'));
@@ -1719,6 +1806,7 @@ function startFrameLoop(session) {
       const imageData = grabVideoFrame(frameStartedAt);
 
       if (imageData) {
+        noteProductFrame();
         if (!firstGrabRendered) {
           firstGrabRendered = true;
           renderGuideDots();
@@ -1764,6 +1852,7 @@ function startFrameLoop(session) {
           .catch(() => {
             if (session !== scanSession) return;
             lastFramePose = null;
+            finishProductScanFail('decoder-error');
             stopCamera();
             setStatus(t('status.frameError'));
             showSupportedStartGate(t('status.restart'));
@@ -1814,7 +1903,7 @@ async function startCamera(options) {
 
   const session = ++scanSession;
   resetFrameSeq();
-  beginScanAttempt();
+  beginScanAttempt('camera');
   cameraRequestPending = true;
   setStatus(t('status.starting'));
 
@@ -1868,6 +1957,7 @@ async function startCamera(options) {
     if (session !== scanSession) return;
 
     sendLabEnvOnce(null);
+    finishProductScanFail(cameraStartReason(error));
     stopCamera();
 
     if (automatic) {
@@ -1912,13 +2002,14 @@ function loadImage(file) {
 async function decodeImageFile(file) {
   if (!file) return;
 
+  finishProductScanFail('source-changed');
   stopCamera();
   hideCameraGate();
   hideResult({ restoreFocus: false });
 
   const session = ++scanSession;
   resetFrameSeq();
-  beginScanAttempt();
+  beginScanAttempt('file');
   sendLabEnvOnce(null);
   setStatus(t('status.checkingPhoto'));
 
@@ -1927,10 +2018,12 @@ async function decodeImageFile(file) {
     const imageData = imageDataWhole(image, image.naturalWidth, image.naturalHeight);
     if (!imageData) throw new Error('image-data-unavailable');
 
+    noteProductFrame();
     const result = await decodeFrame(imageData);
     handleDecodeResult(result, 'file', session);
   } catch {
     if (session === scanSession) {
+      finishProductScanFail('file-read-error');
       setStatus(t('status.photoUnreadable'));
       showScanToast(t('toast.photoUnreadable'));
       showSupportedStartGate(t('status.startOrPick'));
@@ -2215,6 +2308,7 @@ function stopCameraForLifecycle() {
   if (!cameraStream && !cameraRequestPending) return;
 
   stoppedForVisibility = true;
+  finishProductScanFail('page-hidden');
   stopCamera();
 }
 
@@ -2242,7 +2336,10 @@ async function recoverCameraAfterResume() {
 
   if (action === 'gate') {
     stoppedForVisibility = false;
-    if (liveness === 'dead') stopCamera();
+    if (liveness === 'dead') {
+      finishProductScanFail('camera-ended');
+      stopCamera();
+    }
     setStatus(t('status.hiddenStopped'));
 
     if (!isSecureForCamera() || !hasCameraApi()) {
@@ -2258,7 +2355,10 @@ async function recoverCameraAfterResume() {
 
   resumeAttemptsThisTransition += 1;
   stoppedForVisibility = false;
-  if (liveness === 'dead') stopCamera();
+  if (liveness === 'dead') {
+    finishProductScanFail('camera-ended');
+    stopCamera();
+  }
   showPreparingCameraGate();
   setStatus(t('status.preparing'));
   await startCamera({ automatic: true });
@@ -2433,6 +2533,7 @@ if (cameraPicker) {
     // 렌즈 변경도 사용자 제스처다 — 자동 시작으로 지연됐던 센서를 여기서 붙일 수 있다.
     void attachMotionAssist({ userGesture: true });
     selectedCameraId = cameraPicker.value || '';
+    finishProductScanFail('camera-restarted');
     stopCamera();
     startCamera({ deviceId: selectedCameraId }).catch(() => {});
   });
@@ -2464,7 +2565,7 @@ wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
  * 사용 이벤트 비콘. 페이로드 **내용은 절대 담지 않는다** — 종류(url/text/wifi/card)와
  * 성공 여부 같은 메타만 보낸다. 오프라인이면 큐에 쌓였다가 온라인 복귀 때 흘러간다.
  */
-const beacon = createBeacon('scan');
+const beacon = createBeacon('scan', { build: SCANNER_BUILD });
 beacon('pageview');
 
 /*

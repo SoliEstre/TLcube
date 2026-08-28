@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     site        LowCardinality(String),            -- 'gen' | 'scan'
     ts          DateTime64(3, 'UTC'),
     kind        LowCardinality(String),            -- 'env' | 'gen' | 'frame'
+    build       LowCardinality(String) DEFAULT '', -- 클라이언트 배포 스탬프. 옛 봉투는 빈 문자열
     -- 아래는 계약 §4 frame 본문. env/gen 은 DEFAULT 로 비고 body 만 채운다.
     seq         UInt32 DEFAULT 0,                  -- 스캔 시작부터 누적. 성공 프레임의 seq 가 본 질문
     w           UInt16 DEFAULT 0,

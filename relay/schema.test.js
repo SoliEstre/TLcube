@@ -69,6 +69,7 @@ test('eventRow 키가 tl_lab.events 컬럼과 같다', () => {
     site: 'scan',
     ts: '2026-08-13T00:00:00.000Z',
     kind: 'frame',
+    build: '2026-08-28.03',
     body: {
       seq: 1, w: 2, h: 3, zoom: 1,
       ms: { total: 1, proposal: 1, verify: 1, format: 1, decode: 1 },
@@ -76,6 +77,7 @@ test('eventRow 키가 tl_lab.events 컬럼과 같다', () => {
     },
   });
   assert.deepEqual(Object.keys(row).sort(), cols.slice().sort());
+  assert.equal(row.build, '2026-08-28.03');
 });
 
 test('thumbnailRow 키가 tl_lab.thumbnails 컬럼과 같다', () => {

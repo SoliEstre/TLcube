@@ -1321,7 +1321,7 @@ export function labRoleToken(options = {}) {
  * «어느 빌드의 프레임인가» 를 ts 로 추정하던 것의 제거. 선택 필드라 없으면 키 자체가
  * 안 생긴다(옛 봉투와 바이트 동일). relay 검증(validateEnvelope)은 모르는 키를
  * 거부하지 않고, 관찰자 브로드캐스트는 원문을 그대로 흘리므로 와이어는 안 깨진다.
- * ⚠ ClickHouse 이벤트 행에는 아직 build 컬럼이 없다 — 컬럼·행 매핑은 통합자 몫.
+ * relay 는 build 를 `tl_lab.events.build` 로 편다. 옛 봉투에는 키가 없어 빈 문자열이다.
  */
 export function makeEnvelope(sid, site, kind, body, ts, build) {
   return {

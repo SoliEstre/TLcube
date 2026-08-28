@@ -224,8 +224,12 @@ test('frame.cellSurface 는 선택이고 시도/점수/사유를 행으로 편�
 
 test('ClickHouse 행 — ISO ts 를 UTC DateTime64 문자열로', () => {
   assert.equal(toChDateTime('2026-08-13T12:00:00.000Z'), '2026-08-13 12:00:00.000');
-  const row = eventRow(envelope({ body: frameBody({ ok: true, type: 'hex', cellPx: 11.4 }) }));
+  const row = eventRow(envelope({
+    build: '2026-08-28.03',
+    body: frameBody({ ok: true, type: 'hex', cellPx: 11.4 }),
+  }));
   assert.equal(row.ok, 1);
+  assert.equal(row.build, '2026-08-28.03');
   assert.equal(row.type, 'hex');
   assert.equal(row.cell_px, 11.4);
   assert.equal(row.ms_proposal, 90);
@@ -235,6 +239,7 @@ test('ClickHouse 행 — ISO ts 를 UTC DateTime64 문자열로', () => {
     body: frameBody({ ms: { total: 10, proposal: null, verify: null, format: null, decode: null } }),
   }));
   assert.equal(missingMs.ms_proposal, null);
+  assert.equal(eventRow(envelope()).build, '', '옛 봉투는 빈 build 로 적재한다');
   const shot = thumbnailRow(envelope({
     kind: 'frameShot',
     body: { seq: 4, w: 96, h: 54, png: 'data:image/png;base64,AA==' },
