@@ -153,15 +153,19 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
   assert.match(INDEX, /markerTones: type === 'O' && generatorState\.innerSeat === 'o-cm'/,
     'markerTones 파생이 없다 — o-cm 의 H 심볼 통합이 인코더에 안 닿는다');
 
-  // ⚠ **단선 회귀 (2026-08-25, agy 검수 적발)** — `co2AnchorTones` 를 buildConfig 에만
-  // 넣고 encodeOptsFor 에서 안 실어서, 정책은 계산되는데 인코더까지 못 갔다.
-  // 생성기가 **항상 false 로 동작**했고 배포까지 나간 뒤에야 잡혔다.
-  // 이 프로젝트에서 세 번째 같은 부류다(한 층에서 열고 소비자를 안 쓸었다) —
-  // 그래서 «정책이 있다» 와 «전달된다» 를 **따로** 잠근다. 하나만 재면 또 샌다.
-  assert.match(INDEX, /co2AnchorTones: type === 'A'/,
-    'co2AnchorTones 정책이 cfg 조립에 없다');
-  assert.match(INDEX, /if \(cfg\.co2AnchorTones === true\) opts\.co2AnchorTones = true;/,
-    'co2AnchorTones 가 encodeOptsFor 에서 안 실린다 — 정책이 인코더에 안 닿는 단선이다');
+  // ⚠ **의도적 갱신 (2026-08-28)** — CO2 정책은 cfg→opts 전달 boolean이 아니라
+  // encodeA 중앙 점유자의 `suppliesOuterFormat` 성질이 됐다. 소스 철자를 잠그면 또
+  // 사본이 되므로 실제 인코딩 값으로 잰다: 기존 중앙은 6셀, 중앙 TL은 9셀 기본이다.
+  const legacyCo2 = encodeA('co2-property', {
+    version: 1, eccLevel: 'M', turnA: true, cornerMarker: true,
+  });
+  const centralTlCo2 = encodeA('co2-property', {
+    version: 1, eccLevel: 'M', turnA: true, cornerMarker: true, centralN7: true,
+  });
+  assert.equal(legacyCo2.co2AnchorTones, false,
+    '바깥 형식을 공급하지 않는 중앙에서 CO2 앵커 톤이 기본으로 켜졌다');
+  assert.equal(centralTlCo2.co2AnchorTones, true,
+    '바깥 형식을 공급하는 중앙 TL에서 CO2 앵커 톤이 기본으로 안 켜졌다');
 });
 
 test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 개설이다', () => {

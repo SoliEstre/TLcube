@@ -10,11 +10,11 @@
  *   ② 전 k 유도 — k=4(정본) + 6/8/10(발행)에서 마커 6·앵커 3 · 라벨 복사 규칙 성립.
  *   ③ 회계 불변 — 마커 6 ⊂ A-CM 21 · 앵커 3 = 꼭짓점 앵커 · V-CM 용량표 무변동.
  * 자리 층:
- *   ④ 렌더 적재 — V-CM 프레임에서 마커 6셀만 palette.levels 톤 (파인더 축 아님).
+ *   ④ 렌더 적재 — 기존 중앙 6셀 · 형식 공급 중앙 TL 9셀을 palette.levels 톤으로.
  *   ⑤ 중앙 파인더와 **직교** — 임의 중앙 파인더 6종에서 CO2 색이 바이트 동일.
  *      center-qr 만 서지 않고, 그 원인이 «자리의 와이어»(V-CMQ)임을 값으로 고정.
- *   ⑥ ⛔ 알려진 공백 — 앵커 톤(opt-in)을 실으면 digit 앵커 검출이 죽는다.
- *   ⑦ 옵션 가드 — co2AnchorTones 는 boolean · 자리 없이 못 켠다 · 기본 false.
+ *   ⑥ 조건부 개방 — 기존 중앙의 형식 벽은 유지 · 중앙 TL에서는 앵커 톤 기본 ON 성공.
+ *   ⑦ 옵션 가드 — boolean · 자리 없이 못 켬 · 성질 기본값 · 명시 override.
  *   ⑧ A-CM 무회귀 — turnA=false 자리는 H2O 그대로 (톤 표 + 픽셀 sha256).
  */
 
@@ -38,6 +38,7 @@ import { encodeA } from '../src/encodeA.js';
 import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 import { FACES, facePolygon } from '../src/hexgrid.js';
 import { CENTRAL_V0_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 import {
@@ -207,10 +208,11 @@ function encodeVcm(version, extra = {}) {
   });
 }
 
-/** CO2 마커 6셀 × 3면의 색을 cellDigits 순회 순서 그대로 뽑는다 (scene 계약 승계). */
-function co2FaceColors(encoded, scene) {
+/** 요청한 CO2 역할 셀 × 3면의 색을 cellDigits 순회 순서 그대로 뽑는다 (scene 계약 승계). */
+function co2FaceColors(encoded, scene, roles = ['marker']) {
+  const roleSet = new Set(roles);
   const wanted = new Set(co2CellsA(encoded.k)
-    .filter((c) => c.role === 'marker').map(key));
+    .filter((c) => roleSet.has(c.role)).map(key));
   const out = [];
   let idx = 0;
   for (const [kk, entry] of encoded.cellDigits) {
@@ -229,7 +231,8 @@ function co2FaceColors(encoded, scene) {
   return out;
 }
 
-test('④ 렌더 적재 — V-CM 프레임에서 CO2 마커 6셀만 palette.levels 톤으로 그려진다', () => {
+test('④ 렌더 적재 — 기존 중앙은 6셀, 형식 공급 중앙 TL은 CO2 9셀 전부 palette 톤이다', () => {
+  // 기존 중앙: 합성 72/72 기준선이 의존하는 6셀 기본을 그대로 잠근다.
   for (const version of [0, 1, 2]) {
     const encoded = encodeVcm(version);
     const scene = buildScene(encoded, { palette: PALETTE, margin: 20 });
@@ -256,6 +259,37 @@ test('④ 렌더 적재 — V-CM 프레임에서 CO2 마커 6셀만 palette.leve
     for (const [kk, entry] of encoded.cellDigits) {
       if (entry.role === 'marker') assert.ok(seatKeys.has(kk), kk + ' 이 A-CM 자리 밖인데 marker 다');
     }
+  }
+
+  // ⭐ **조건부 개방 (2026-08-28)** — 중앙 TL은 바깥 포맷을 중앙 codeword로
+  // 공급한다. V-CM과 함께면 CO2 정본의 마커 6 + 앵커 3 = 9셀을 기본 적재한다.
+  for (const version of [0, 1, 2]) {
+    const encoded = encodeVcm(version, { centralN7: true });
+    assert.equal(encoded.co2AnchorTones, true,
+      'V' + version + 'CM + 중앙 TL: 형식 공급 성질이 앵커 톤 기본값을 못 열었다');
+    const scene = buildScene(encoded, {
+      palette: PALETTE,
+      margin: 20,
+      finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
+      centralN7Family: 'tri',
+    });
+    const faces = co2FaceColors(encoded, scene, ['marker', 'anchor']);
+    assert.equal(faces.length, CO2_CELL_COUNT * FACES.length,
+      'V' + version + 'CM + 중앙 TL: CO2 면 수가 9셀 × 3면과 다르다');
+    for (const f of faces) {
+      assert.ok(f.tone === 0 || f.tone === 1 || f.tone === 2,
+        f.kk + ':' + f.face + ' 에 CO2 톤이 안 실렸다');
+      assert.deepEqual(f.color, PALETTE.levels[f.tone],
+        f.kk + ':' + f.face + ' 색이 palette.levels[' + f.tone + '] 가 아니다');
+      assert.notDeepEqual(f.color, PALETTE.bullseyeLight,
+        f.kk + ':' + f.face + ' 가 파인더 축(순백)으로 그려졌다');
+    }
+    const toned = [...encoded.cellDigits.entries()].filter(([, v]) => v.tones).map(([kk]) => kk);
+    assert.deepEqual(
+      toned.sort(),
+      co2CellsA(encoded.k).map(key).sort(),
+      'V' + version + 'CM + 중앙 TL: 톤 실린 셀이 CO2 9셀과 다르다',
+    );
   }
 });
 
@@ -314,47 +348,44 @@ test('⑤ 중앙 파인더와 직교 — 임의 중앙 파인더 × CO2 가 서�
   );
 });
 
-test('⑥ ⛔ 알려진 공백 — CO2 앵커 톤(opt-in)의 벽은 «앵커» 가 아니라 «형식 정보» 다', () => {
-  // 2026-08-25 풀링 수리 이후 **재측정** (원격 좌석, 페이로드 4 × 버전 3 × ppu 2 = 24칸).
-  // 공백은 닫히지 않았다. 대신 **원인이 한 층 내려갔다** — 그게 이 락이 잡는 것이다.
-  //
-  //            수리 전            수리 후
-  //   성공      2/24              2/24        ← 총합은 그대로
-  //   no-anchors        20               7    ← 13칸이 여기서 빠져나갔고
-  //   no-format-candidate 2             15    ← 그대로 여기 쌓였다
-  //
-  // 원인은 **페이로드가 아니라 버전으로 갈린다** (24칸 전수에서 재현):
-  //   V0      → no-anchors            (8칸 중 7 — 앵커가 아직 굶는다)
-  //   V1·V2   → no-format-candidate   (16칸 중 15 — 앵커는 섰다)
-  //             진단: hypothesisCount ≥ 1 · formatProposalCount 0 · formatCandidateCount 0
-  //             즉 «포즈는 섰는데 형식 정보를 못 읽는다».
-  //   생존 2칸은 여전히 페이로드 의존이다 ('CO2-render' × V1 뿐) — «가끔 된다» 이지
-  //   «된다» 가 아니다.
-  //
-  // ⚠ 이 formatProposalCount 0 서명은 **실기기 V-CM 실패와 같다** (2026-08-25 실사진
-  //    12프레임: hypothesisCount 290~342 · formatProposalCount 0). 입력 조건은 다르지만
-  //    (저쪽은 기본 경로, 여기는 앵커 톤 ON) 벽의 서명이 일치한다 — 실물 병목의
-  //    **60초짜리 합성 재현**일 가능성이 높다. 다음 표적(포즈 정합 · F-108)의 입구다.
+test('⑥ 조건부 개방 — 기존 중앙의 형식 벽은 유지되고 중앙 TL에서는 열린다', () => {
+  // ⚠ **의도적 갱신 (2026-08-28)** — 게이트 완화가 아니다. 같은 합성 72칸에서
+  //   기존 중앙: off 72/72 · ON 0/72(no-format-candidate 72)
+  //   중앙 TL:   off 68/72 · ON 71/72(no-grid-hypothesis 1)
+  // 로 방향이 뒤집힌 원인을 조건 두 갈래의 양성 단언으로 더 강하게 잠근다.
+  // 기존 중앙의 벽은 계속 값으로 재고, 중앙 TL은 바깥 포맷 5 digit을 중앙 codeword로
+  // 공급할 때 실제 왕복이 선다는 값을 새로 잰다. 전부 rasterize 합성이고 실사진은 0장이다.
   const GAP_TEXT = 'TLcube';
-  // 버전별 벽 — 격자 전수에서 나온 값이다. 바뀌면 «원인이 또 옮겨갔다» 는 뜻이니 터진다.
+  // 기존 중앙 강제 ON의 버전별 벽 — 바뀌면 원인이 또 옮겨간 것이므로 재측정한다.
   const WALL_BY_VERSION = { 0: 'no-anchors', 1: 'no-format-candidate', 2: 'no-format-candidate' };
-  const render12 = (encoded) => rasterize(
-    buildScene(encoded, { palette: PALETTE, margin: 20 }),
+  const render12 = (encoded, centralTl = false) => rasterize(
+    buildScene(encoded, {
+      palette: PALETTE,
+      margin: 20,
+      ...(centralTl ? {
+        finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
+        centralN7Family: 'tri',
+      } : {}),
+    }),
     { pixelsPerUnit: 12, supersample: 1 },
   );
   const encodeGap = (version, extra) => encodeA(GAP_TEXT, {
     version, eccLevel: 'M', turnA: true, cornerMarker: true, ...extra,
   });
+  let legacyOffSuccess = 0;
+  let legacyForcedOnSuccess = 0;
+  let centralTlDefaultOnSuccess = 0;
   for (const version of [0, 1, 2]) {
-    // 대조군 — 기본 적재는 선다 (공백 잠금의 전제이자, 이 공백이 «앵커 톤» 축임을 가른다).
+    // 조건 A: 기존 중앙은 기본 6셀로 계속 선다. 강제 ON은 기존 형식 벽을 그대로 낸다.
     const base = decodeFrontend(render12(encodeGap(version)));
     assert.equal(base.ok, true,
       'V' + version + 'CM 기본 왕복이 죽었다 — 공백 잠금의 전제 붕괴');
+    legacyOffSuccess += Number(base.ok);
 
     const toned = decodeFrontend(render12(encodeGap(version, { co2AnchorTones: true })));
+    legacyForcedOnSuccess += Number(toned.ok);
     assert.equal(toned.ok, false,
-      'V' + version + 'CM: CO2 앵커 톤 검출이 서기 시작했다 — 이 단언을 뒤집고 '
-      + 'co2AnchorTones 기본값 전환을 운영자와 논의하라 (한쪽만 켜면 효과가 음수다)');
+      'V' + version + 'CM 기존 중앙 + 강제 ON이 섰다 — 벽 조건을 다시 측정하라');
     const code = typeof toned.reason === 'string' ? toned.reason : toned.reason?.code ?? '';
     assert.ok(String(code).includes(WALL_BY_VERSION[version]),
       'V' + version + 'CM: 벽이 옮겨갔다 — 기대 ' + WALL_BY_VERSION[version] + ' · 실제 ' + code
@@ -377,10 +408,23 @@ test('⑥ ⛔ 알려진 공백 — CO2 앵커 톤(opt-in)의 벽은 «앵커» �
         'V' + version + 'CM: 지배 사유가 crc 가 아니다 ('
         + cause.formatFailureSummary?.dominant + ') — 실기기 실패와의 서명 일치가 깨졌다');
     }
+
+    // 조건 B: 중앙 TL은 형식 공급 성질로 앵커 톤이 기본 ON이고 같은 입력이 왕복한다.
+    const centralEncoded = encodeGap(version, { centralN7: true });
+    assert.equal(centralEncoded.co2AnchorTones, true,
+      'V' + version + 'CM + 중앙 TL: 조건부 기본 ON이 아니다');
+    const central = decodeFrontend(render12(centralEncoded, true));
+    centralTlDefaultOnSuccess += Number(central.ok);
+    assert.equal(central.ok, true,
+      'V' + version + 'CM + 중앙 TL: 바깥 형식 공급 조건인데 왕복이 안 섰다 — '
+      + String(typeof central.reason === 'string' ? central.reason : central.reason?.code ?? 'unknown'));
   }
+  assert.equal(legacyOffSuccess, 3, '기존 중앙 + 기본 off 성공 수가 3/3이 아니다');
+  assert.equal(legacyForcedOnSuccess, 0, '기존 중앙 + 강제 ON 성공 수가 0/3이 아니다');
+  assert.equal(centralTlDefaultOnSuccess, 3, '중앙 TL + 기본 ON 성공 수가 3/3이 아니다');
 });
 
-test('⑦ 옵션 가드 — co2AnchorTones 는 boolean · 자리(V-CM) 없이 못 켠다 · 기본 false', () => {
+test('⑦ 옵션 가드 — boolean · V-CM 필수 · 형식 공급 조건부 기본 · 명시 양방향 override', () => {
   assert.throws(
     () => encodeA('TL', { version: 1, eccLevel: 'M', co2AnchorTones: true }),
     RangeError,
@@ -394,7 +438,12 @@ test('⑦ 옵션 가드 — co2AnchorTones 는 boolean · 자리(V-CM) 없이 �
     () => encodeVcm(1, { co2AnchorTones: 1 }),
     TypeError,
   );
-  assert.equal(encodeVcm(1).co2AnchorTones, false, '기본값이 false 가 아니다');
+  assert.equal(encodeVcm(1).co2AnchorTones, false,
+    '기존 중앙의 조건부 기본값이 false 가 아니다');
+  assert.equal(encodeVcm(1, { centralN7: true }).co2AnchorTones, true,
+    '형식 공급 중앙 TL의 조건부 기본값이 true 가 아니다');
+  assert.equal(encodeVcm(1, { centralN7: true, co2AnchorTones: false }).co2AnchorTones, false,
+    '중앙 TL에서 명시 false가 조건부 기본값을 못 덮는다');
   assert.equal(encodeVcm(1, { co2AnchorTones: true }).co2AnchorTones, true);
 });
 

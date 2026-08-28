@@ -131,8 +131,9 @@ export function chooseVersionA(text, eccLevel = 'M') {
  * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, centralV0?: boolean,
  *          centralN7?: boolean, daehanFinder?: boolean, sagoae?: boolean,
  *          co2AnchorTones?: boolean}} [options]
- *   `co2AnchorTones` — V-CM 기본 심볼 CO2 의 꼭짓점 앵커 3셀 톤까지 싣는다 (opt-in,
- *   자리 필수). 기본 적재는 마커 6셀뿐이다 — 앵커 피복은 앵커 검출을 죽인다.
+ *   `co2AnchorTones` — V-CM 기본 심볼 CO2 의 꼭짓점 앵커 3셀 톤까지 싣는다.
+ *   생략하면 중앙 점유자의 `suppliesOuterFormat` 성질로 유도하며, boolean 명시는
+ *   그 조건부 기본값을 덮는다. 자리(V-CM)는 항상 필요하다.
  * @returns {{
  *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean,
  *   centralV0: boolean, centralN7: boolean,
@@ -155,7 +156,7 @@ export function encodeA(text, options = {}) {
   const {
     version, eccLevel = 'M', centerQr = false, centralV0 = false, centralN7 = false,
     cornerMarker = false, turnA = false,
-    daehanFinder = false, sagoae = false, co2AnchorTones = false,
+    daehanFinder = false, sagoae = false, co2AnchorTones: requestedCo2AnchorTones,
   } = options;
   if (typeof turnA !== 'boolean') {
     throw new TypeError(`turnA 는 boolean 이어야 한다: ${typeof turnA}`);
@@ -183,21 +184,6 @@ export function encodeA(text, options = {}) {
   if (turnA && usesDaehanLayout) {
     throw new RangeError('turnA 와 daehan/sagoae 예약 레이아웃을 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
-  // co2AnchorTones — V-CM 기본 심볼 CO2 의 **꼭짓점 앵커 3셀** 톤을 추가로 싣는다.
-  // 정본에는 그 3셀 톤이 있는데 **기본은 안 싣는다**: 앵커에 절대 톤을 실은 프레임은
-  // digit 기반 앵커 검출이 거의 못 읽는다 (실측 2026-08-24 — 페이로드 4 × 버전 3 ×
-  // ppu 2 = 24칸 중 2칸만 성공, 실패 20 이 no-anchors. 같은 격자에서 기본 적재는
-  // 24/24). H 가 tetrad A 를 덮어 같은 공백을 가졌던 것과 정확히 같은 축이라
-  // (`finder-H.js` §4 · `encode.js` markerTones) 같은 처방 — **opt-in** 으로 둔다.
-  // 기본값 전환은 검출기 배선(통합자 몫)이 선 다음이다. 공백 잠금 finder-CO2.test ⑥.
-  if (typeof co2AnchorTones !== 'boolean') {
-    throw new TypeError(`co2AnchorTones 는 boolean 이어야 한다: ${typeof co2AnchorTones}`);
-  }
-  if (co2AnchorTones && !(turnA && cornerMarker)) {
-    throw new RangeError(
-      'co2AnchorTones 는 ' + CO2_NAME + ' 의 자리(V-CM = turnA + cornerMarker) 없이 못 켠다',
-    );
-  }
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
   }
@@ -218,19 +204,41 @@ export function encodeA(text, options = {}) {
   if (typeof centralN7 !== 'boolean') {
     throw new TypeError(`centralN7 는 boolean 이어야 한다: ${typeof centralN7}`);
   }
+  // 중앙 점유자 행은 배타와 **기능 성질**의 SSoT 다. 새 점유자는 어차피 배타를 위해
+  // 이 행에 들어와야 하며, 바깥 형식을 공급하는지 여기서 함께 선언한다. CO2 쪽에
+  // 파인더 id 목록을 따로 두지 않는다 — 다음 공급자가 생겨도 CO2 분기는 안 바뀐다.
   const centralSlotOccupants = [
-    centerQr ? 'centerQr' : null,
-    centralV0 ? 'centralV0' : null,
-    centralN7 ? 'centralN7' : null,
-    usesDaehanLayout ? 'daehan/sagoae' : null,
+    centerQr ? { name: 'centerQr', suppliesOuterFormat: false } : null,
+    centralV0 ? { name: 'centralV0', suppliesOuterFormat: false } : null,
+    centralN7 ? { name: 'centralN7', suppliesOuterFormat: true } : null,
+    usesDaehanLayout ? { name: 'daehan/sagoae', suppliesOuterFormat: false } : null,
   ].filter(Boolean);
   if (centralSlotOccupants.length > 1) {
     throw new RangeError(
-      `중앙 슬롯 점유자는 하나다 — ${centralSlotOccupants.join(' + ')} 를 동시에 켤 수 없다`
+      `중앙 슬롯 점유자는 하나다 — ${centralSlotOccupants.map((o) => o.name).join(' + ')} 를 동시에 켤 수 없다`
         // ⚠ **이유 꼬리를 떼지 마라.** 점유자 목록을 유도로 바꾸며 한 번 사라졌고,
         //   sagoae-roundtrip 의 「조용히 강등되지 않는다」가 그걸 잡았다. «하나다» 는
         //   무엇이 막혔는지만 말하고 **왜** 막혔는지는 안 말한다.
         + ' — 검출 합성 미지원 조합이다',
+    );
+  }
+  // ⚠ **조건부 개방 (2026-08-28)** — 합성 72칸에서 기존 중앙은 앵커 톤을 켜면
+  // 72/72 → 0/72(no-format-candidate)였지만, 바깥 포맷을 codeword로 공급하는 중앙
+  // TL은 68/72 → 71/72로 방향이 뒤집혔다. 그래서 V-CM이면서 중앙 점유자가 그
+  // 성질을 가질 때만 정본 9셀을 기본 적재한다. 실사진은 아직 한 장도 없다.
+  if (requestedCo2AnchorTones !== undefined
+    && typeof requestedCo2AnchorTones !== 'boolean') {
+    throw new TypeError(
+      `co2AnchorTones 는 boolean 이어야 한다: ${typeof requestedCo2AnchorTones}`,
+    );
+  }
+  const centralSuppliesOuterFormat = centralSlotOccupants
+    .some((occupant) => occupant.suppliesOuterFormat);
+  const co2AnchorTones = requestedCo2AnchorTones
+    ?? (turnA && cornerMarker && centralSuppliesOuterFormat);
+  if (co2AnchorTones && !(turnA && cornerMarker)) {
+    throw new RangeError(
+      'co2AnchorTones 는 ' + CO2_NAME + ' 의 자리(V-CM = turnA + cornerMarker) 없이 못 켠다',
     );
   }
   // centralV0 × turnA — **개설** (2026-08-24, 운영자 아침 검수 3차). 막던 근거는

@@ -496,20 +496,20 @@ function buildItems() {
     className: FINDER_CLASS[3],
     kind: KIND_FINDER,
     origin: 'SEAT_DEFAULT_FINDER[v-cm] — 운영자 작화 2026-08-24 (수정본) · 정본 사본 test/output/lanes/finder-CO2.json',
-    renderPath: 'src/finder-CO2.js co2SeatMarkerCellsA — encodeA(turnA+cornerMarker) 기본 적재 (마커 6셀)',
+    renderPath: 'src/finder-CO2.js — encodeA V-CM 기본 6셀, 바깥 형식 공급 중앙이면 9셀',
     coordBasis: COORD_VERTEX,
     innerSplit: '꼭짓점 기준 (역삼각)',
     toneAxis: TONE_CELL_COLOR + ' (palette.levels — 순백 금지, finder-CO2.js §5)',
     cells: String(CO2_CELL_COUNT) + ' (꼭짓점 앵커 ' + CO2_ANCHOR_COUNT
       + ' + 영역 내 이웃 ' + CO2_MARKER_COUNT + ' — 전 k 유도, 손 좌표 0)',
-    // 마커 6셀은 **기본 적재**라 화면에 실제로 그려진다 (H·H2O 와 갈리는 지점).
-    // 앵커 3셀은 opt-in — 덮으면 digit 기반 앵커 검출이 죽는다 (실측 2026-08-24).
+    // 마커 6셀은 항상 기본 적재다. 앵커 3셀은 중앙 점유자가 바깥 형식을 공급할 때만
+    // 조건부 기본 적재한다 (합성 재측정 2026-08-28, 실사진 미검증).
     renderable: '마커 ' + CO2_MARKER_COUNT + '셀 기본 적재 · 앵커 '
-      + CO2_ANCHOR_COUNT + '셀 opt-in(co2AnchorTones)',
+      + CO2_ANCHOR_COUNT + '셀 조건부 기본(중앙 바깥 형식 공급) · 명시 override',
     consumer: 'encodeA V-CM 톤 경로 · 생성기 outerSeat v-cm · 편집기 JSON',
     note: '비순열 ' + co2NonPermutationCount() + '/' + CO2_CELL_COUNT
       + ' (전부) · 중앙 파인더 축과 **직교** — 정본 cellMasks 19 는 기본 불스아이와 바이트 동일. '
-      + '앵커 피복은 알려진 공백 (H 와 같은 축, finder-CO2.test ⑥)',
+      + '앵커 피복은 기존 중앙에서 형식 벽 유지 · 중앙 TL에서 조건부 개방 (finder-CO2.test ⑥)',
   });
 
   // A-CM — 자리 예약. 기본 파인더는 H2O.

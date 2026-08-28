@@ -11069,16 +11069,9 @@ function buildConfig() {
       || (type === 'A' && ((generatorState.outerSeat === 'a-cm' && generatorState.turnA !== true)
         || (generatorState.outerSeat === 'v-cm' && generatorState.turnA === true))),
     markerTones: type === 'O' && generatorState.innerSeat === 'o-cm',
-    // CO2 정본은 **9셀**(꼭짓점 앵커 3 + 이웃 6)인데 앵커 3셀은 톤이 평평해서
-    // ({T:0,L:0,R:0} — 정본 그대로) 순위 분리가 0 이다. 그리는 순간 그 자리에서
-    // digit 을 못 읽으므로, 앵커가 **유일한 격자 씨앗**인 V-CM(중앙 QR 없음)에서는
-    // 검출이 통째로 죽는다 (실측 2026-08-25: 켜면 72/72 → 0/72).
-    // 중앙 QR 이 있으면 QR 이 격자를 잡아 주므로 앵커를 덮어도 **72/72 불변**이다.
-    // 그래서 «공짜인 자리에서만» 정본 9셀을 그린다 — 원장 F-111 이 남은 반쪽의 이름이다.
-    co2AnchorTones: type === 'A'
-      && generatorState.turnA === true
-      && generatorState.outerSeat === 'v-cm'
-      && generatorState.finderPatternId === CENTER_QR_FINDER_PATTERN_ID,
+    // CO2 앵커 3셀의 조건부 기본값은 encodeA가 중앙 슬롯 점유자의
+    // `suppliesOuterFormat` 성질에서 유도한다. 생성기가 파인더 id 목록을 다시 적거나
+    // boolean을 넘기면 다음 중앙 공급자에서 사본이 갈린다 — 여기서는 옵션을 만들지 않는다.
     tone: generatorState.tone,
     qrText: generatorState.qrText.trim() === ''
       ? TL_READER_URL : generatorState.qrText.trim(),
@@ -11178,12 +11171,8 @@ function encodeOptsFor(cfg) {
       opts.cornerMarker = true;
       if (cfg.turnA === true) {
         opts.turnA = true;
-        // ⚠ **단선 수리 (2026-08-25, agy 검수 적발)** — `co2AnchorTones` 를
-        // `buildConfig()` 에만 넣고 여기서 안 실었다. 정책은 계산되는데 인코더까지
-        // 못 가서 생성기가 **항상 false 로 동작**했다 (배포까지 나간 뒤 잡혔다).
-        // 이 프로젝트에서 세 번째 같은 부류다: 한 층에서 열고 소비자를 안 쓸었다.
-        // cfg 는 정책 층, 여기는 매핑 층 — cornerMarker·turnA 와 같은 방식으로 싣는다.
-        if (cfg.co2AnchorTones === true) opts.co2AnchorTones = true;
+        // CO2 앵커 톤은 encodeA가 중앙 점유자의 형식 공급 성질에서 직접 유도한다.
+        // 이 매핑 층에서 다시 싣지 않는다 — 명시 override는 라이브러리 호출자용이다.
       }
     } else if (cfg.turnA === true) {
       // ⚠ **의도적 갱신 (2026-08-24 검수 4차)** — 여기 있던 `&& !centralV0Selected`
