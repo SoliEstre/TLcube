@@ -16,6 +16,10 @@ import { SCANNER_STRINGS } from './strings.js';
 import { startPwaUpdateWatch } from '/src/pwa-update.js';
 import { textStartsWithBeaconMagic } from '/src/centralBeaconWire.js';
 import { decodeFrontend } from '/src/decoder/frontend.js';
+import { detectQrFinderTriples } from '/src/decoder/bootstrap.js';
+import { toRelativeLuminance } from '/src/decoder/luma.js';
+import { localizeCornerQrAssist } from '/src/decoder/corner-qr-assist.js';
+import { immediateCornerQrHint } from '/src/scanner-scan-assist.js';
 import {
   buildCauseChain,
   classifyStage,
@@ -110,7 +114,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-28.01';
+export const SCANNER_BUILD = '2026-08-28.02';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -1510,6 +1514,33 @@ function normalizePayload(result) {
   return result.payload;
 }
 
+/**
+ * 복호가 끝내 실패한 프레임에만 코너 QR 스캔 어시스트를 붙인다.
+ *
+ * 디코더 옵션이나 포즈 목록에는 되먹이지 않는다. 이 결과의 소비자는 아래 안내 분기뿐이며,
+ * 12가설을 한 위치로 좁히지 못하면 `scanAssist.ok === false` 그대로 침묵한다.
+ */
+function attachCornerQrScanAssist(result, imageData) {
+  if (!result || result.ok === true || !imageData) return result;
+  try {
+    const luma = toRelativeLuminance({
+      width: imageData.width,
+      height: imageData.height,
+      pixels: imageData.data,
+    }, { rejectLowDynamicRange: false });
+    if (!luma || luma.ok === false) return result;
+    const detected = detectQrFinderTriples(luma);
+    const candidates = detected && detected.ok === true ? detected.candidates : [];
+    return {
+      ...result,
+      scanAssist: localizeCornerQrAssist(luma, candidates),
+    };
+  } catch {
+    // 어시스트 실패가 기존 시간 기반 안내나 다음 프레임을 막아서는 안 된다.
+    return result;
+  }
+}
+
 function handleDecodeResult(result, source, session) {
   if (session !== scanSession) return;
 
@@ -1547,6 +1578,11 @@ function handleDecodeResult(result, source, session) {
         if (clipHintShown) setStatus(t('status.aim'));
         clipStreakSince = null;
         clipHintShown = false;
+      }
+      const immediateHint = immediateCornerQrHint(result);
+      if (!closerHintShown && immediateHint) {
+        closerHintShown = true;
+        setStatus(t(immediateHint.messageKey));
       }
       if (!closerHintShown && failedMs >= CLOSER_HINT_MS) {
         // 문턱은 한 번만 소비한다. 그 순간 잘림 안내가 떠 있으면 반대 지시라 표시만
@@ -1647,6 +1683,7 @@ function startFrameLoop(session) {
 
         attempt
           .then((result) => {
+            result = attachCornerQrScanAssist(result, imageData);
             if (session === scanSession) rememberFramePose(result, imageData);
             if (usePrior && !result.ok && session === scanSession && statusOwnedBySteady) {
               // 사전이 실패하면 원래 조준 안내로 되돌린다 — 「시도 중」 이 눌러앉으면
