@@ -52,6 +52,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': '카메라를 시작할까요?',
     'gate.message': '카메라 권한을 허용하면 바로 스캔해요.',
+    'gate.preparing.title': '카메라를 준비하고 있어요',
+    'gate.preparing.message': '잠시만 기다려 주세요. 준비되면 바로 스캔을 시작해요.',
     'gate.start': '탭해서 카메라 시작',
     'gate.https.title': 'HTTPS 연결이 필요해요',
     'gate.https.message': 'HTTPS가 아닌 연결에서는 카메라를 사용할 수 없어요. 사진에서 스캔할 수 있어요.',
@@ -219,6 +221,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': 'Start the camera?',
     'gate.message': 'Allow camera access and scanning starts right away.',
+    'gate.preparing.title': 'Getting the camera ready',
+    'gate.preparing.message': 'Please wait. Scanning starts as soon as the camera is ready.',
     'gate.start': 'Tap to start the camera',
     'gate.https.title': 'HTTPS is required',
     'gate.https.message': 'The camera is unavailable over a non-HTTPS connection. You can still scan from a photo.',
@@ -381,6 +385,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': 'カメラを起動しますか？',
     'gate.message': 'カメラを許可するとすぐにスキャンできます。',
+    'gate.preparing.title': 'カメラを準備しています',
+    'gate.preparing.message': 'しばらくお待ちください。準備ができ次第、スキャンを開始します。',
     'gate.start': 'タップしてカメラを起動',
     'gate.https.title': 'HTTPS 接続が必要です',
     'gate.https.message': 'HTTPS でない接続ではカメラを使えません。写真からスキャンできます。',
@@ -543,6 +549,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': 'Démarrer la caméra ?',
     'gate.message': 'Autorisez l\'accès à la caméra et le scan démarre immédiatement.',
+    'gate.preparing.title': 'Préparation de la caméra',
+    'gate.preparing.message': 'Patientez un instant. Le scan démarre dès que la caméra est prête.',
     'gate.start': 'Touchez pour démarrer la caméra',
     'gate.https.title': 'Une connexion HTTPS est requise',
     'gate.https.message': 'La caméra n\'est pas disponible sur une connexion non HTTPS. Vous pouvez tout de même scanner depuis une photo.',
@@ -705,6 +713,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': 'Avviare la fotocamera?',
     'gate.message': 'Consenti l\'accesso alla fotocamera e la scansione parte subito.',
+    'gate.preparing.title': 'Preparazione della fotocamera',
+    'gate.preparing.message': 'Attendi un momento. La scansione inizierà non appena la fotocamera sarà pronta.',
     'gate.start': 'Tocca per avviare la fotocamera',
     'gate.https.title': 'È necessaria una connessione HTTPS',
     'gate.https.message': 'La fotocamera non è disponibile su una connessione non HTTPS. È comunque possibile scansionare da una foto.',
@@ -867,6 +877,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': 'Kamera starten?',
     'gate.message': 'Erlauben Sie den Kamerazugriff, dann startet der Scan sofort.',
+    'gate.preparing.title': 'Kamera wird vorbereitet',
+    'gate.preparing.message': 'Bitte warten Sie kurz. Der Scan startet, sobald die Kamera bereit ist.',
     'gate.start': 'Zum Starten der Kamera tippen',
     'gate.https.title': 'HTTPS ist erforderlich',
     'gate.https.message': 'Über eine Verbindung ohne HTTPS ist die Kamera nicht verfügbar. Sie können weiterhin aus einem Foto scannen.',
@@ -1029,6 +1041,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': '¿Iniciar la cámara?',
     'gate.message': 'Permita el acceso a la cámara y el escaneo empezará enseguida.',
+    'gate.preparing.title': 'Preparando la cámara',
+    'gate.preparing.message': 'Espere un momento. El escaneo comenzará en cuanto la cámara esté lista.',
     'gate.start': 'Toque para iniciar la cámara',
     'gate.https.title': 'Se requiere HTTPS',
     'gate.https.message': 'La cámara no está disponible en una conexión que no sea HTTPS. Aun así puede escanear desde una foto.',
@@ -1191,6 +1205,8 @@ export const SCANNER_STRINGS = {
 
     'gate.title': 'Iniciar a câmara?',
     'gate.message': 'Permita o acesso à câmara e a leitura começa de imediato.',
+    'gate.preparing.title': 'A preparar a câmara',
+    'gate.preparing.message': 'Aguarde um momento. A leitura começa assim que a câmara estiver pronta.',
     'gate.start': 'Toque para iniciar a câmara',
     'gate.https.title': 'É necessária uma ligação HTTPS',
     'gate.https.message': 'A câmara não está disponível numa ligação sem HTTPS. Ainda assim, pode ler a partir de uma foto.',

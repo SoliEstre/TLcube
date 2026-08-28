@@ -21,6 +21,11 @@ import { toRelativeLuminance } from '/src/decoder/luma.js';
 import { localizeCornerQrAssist } from '/src/decoder/corner-qr-assist.js';
 import { immediateCornerQrHint } from '/src/scanner-scan-assist.js';
 import {
+  cameraLiveness,
+  gatePresentation,
+  resumeAction,
+} from '/src/scanner-camera-lifecycle.js';
+import {
   buildCauseChain,
   classifyStage,
   createLabTelemetry,
@@ -114,7 +119,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-28.02';
+export const SCANNER_BUILD = '2026-08-28.03';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -184,6 +189,10 @@ let lastDecodeAt = 0;
 /** 직전 grab부터 결과 처리까지의 전체 프레임 비용. 다음 시작 간격의 적응 입력이다. */
 let lastFrameCostMs = 0;
 let stoppedForVisibility = false;
+let hadCameraThisSession = false;
+let resumeAttemptsThisTransition = 0;
+let cameraTrackEndCleanups = [];
+let cameraGatePhase = 'start';
 let activeUrl = '';
 let returnFocus = null;
 let frameSeq = 0;
@@ -706,7 +715,10 @@ function reportLabFrame(imageData, result, ms, stage) {
  */
 const i18n = createI18n(SCANNER_STRINGS, {
   onChange() {
-    if (!cameraGate.hidden) showSupportedStartGate();
+    if (!cameraGate.hidden) {
+      if (cameraGatePhase === 'preparing') showPreparingCameraGate();
+      else showSupportedStartGate();
+    }
     if (!resultPanel.hidden && lastResult !== null) showResult(lastResult);
     if (!zoomControls.hidden) refreshZoomChrome();
     // 렌즈 선택지도 JS 가 채운다 — 권한 전에는 기기 이름이 없어 «카메라 1» 같은
@@ -1134,12 +1146,16 @@ function resetProcFps(visible) {
 
 function showCameraGate(settings) {
   const options = settings || {};
-  const canStart = options.canStart !== false;
+  const requestedCanStart = options.canStart !== false;
+  const phase = options.phase || (requestedCanStart ? 'start' : 'disabled');
+  const presentation = gatePresentation(phase, requestedCanStart);
 
+  cameraGatePhase = phase;
   cameraGateTitle.textContent = options.title || t('gate.title');
   cameraGateMessage.textContent = options.message || t('gate.message');
   startCameraButton.textContent = options.startLabel || t('gate.start');
-  startCameraButton.disabled = !canStart;
+  startCameraButton.hidden = !presentation.showStart;
+  startCameraButton.disabled = !presentation.canStart;
   cameraGate.hidden = false;
 }
 
@@ -1173,9 +1189,60 @@ function showSupportedStartGate(message) {
   });
 }
 
+function showPreparingCameraGate() {
+  showCameraGate({
+    phase: 'preparing',
+    title: t('gate.preparing.title'),
+    message: t('gate.preparing.message'),
+  });
+}
+
 function stopTracks(stream) {
   if (!stream) return;
   stream.getTracks().forEach((track) => track.stop());
+}
+
+function clearCameraTrackEndListeners() {
+  cameraTrackEndCleanups.forEach((cleanup) => cleanup());
+  cameraTrackEndCleanups = [];
+}
+
+/*
+ * 자동 재시작 1회 제한이 막아야 하는 것은 «무한 루프» 지 «두 번째 사고» 가 아니다.
+ *
+ * 카운터를 hidden 전환에서만 0 으로 되돌리면, 복귀 자동 재시작이 **성공한 뒤** 같은
+ * 포그라운드 구간에서 카메라가 다시 회수될 때(통화·다른 카메라 앱) 두 번째 죽음은
+ * 자동 복구를 못 받고 곧장 탭 게이트로 강등된다 — 사용자에겐 「아까는 알아서 살아났는데
+ * 왜 지금은 탭하라 하나」 가 된다. 그건 제한의 의도가 아니라 문자 그대로의 부작용이다.
+ *
+ * 그래서 **카메라가 실제로 얼마간 살아 있었으면** 다음 사고를 위한 자동 시도 1회를
+ * 되돌려 준다. 열리자마자 죽는 기기(다른 앱이 쥐고 있는 경우)는 이 문턱을 못 넘으므로
+ * 타이트 루프는 여전히 불가능하다 — 막는 성질은 유지하고 값만 조건부로 만든다.
+ */
+const RESUME_ATTEMPT_EARNBACK_MS = 5000;
+
+function earnFreshResumeAttempt(session) {
+  window.setTimeout(() => {
+    if (session !== scanSession) return;
+    if (currentCameraLiveness() !== 'live') return;
+    resumeAttemptsThisTransition = 0;
+  }, RESUME_ATTEMPT_EARNBACK_MS);
+}
+
+function watchCameraTrackEnds(stream, session) {
+  clearCameraTrackEndListeners();
+
+  for (const track of stream.getVideoTracks()) {
+    if (!track || typeof track.addEventListener !== 'function') continue;
+
+    const onEnded = () => {
+      if (session !== scanSession || cameraStream !== stream) return;
+      if (document.visibilityState === 'hidden') return;
+      void recoverCameraAfterResume();
+    };
+    track.addEventListener('ended', onEnded);
+    cameraTrackEndCleanups.push(() => track.removeEventListener('ended', onEnded));
+  }
 }
 
 function stopCamera() {
@@ -1192,6 +1259,7 @@ function stopCamera() {
 
   const stream = cameraStream;
   cameraStream = null;
+  clearCameraTrackEndListeners();
   stopTracks(stream);
 
   try {
@@ -1763,6 +1831,8 @@ async function startCamera(options) {
     }
 
     cameraStream = stream;
+    hadCameraThisSession = true;
+    watchCameraTrackEnds(stream, session);
     selectedCameraId = activeDeviceIdOf(stream) || deviceId || '';
     tryContinuousFocus(stream);
     zoomCapability = readTrackCapability(activeVideoTrack());
@@ -1782,6 +1852,10 @@ async function startCamera(options) {
       return;
     }
 
+    if (currentCameraLiveness() !== 'live') {
+      throw new Error('camera-stream-ended-before-start');
+    }
+
     cameraRequestPending = false;
     setCameraStageActive(true);
     renderGuideDots();
@@ -1789,6 +1863,7 @@ async function startCamera(options) {
     setStatus(t('status.aim'));
     sendLabEnvOnce(stream);
     startFrameLoop(session);
+    earnFreshResumeAttempt(session);
   } catch (error) {
     if (session !== scanSession) return;
 
@@ -2121,6 +2196,74 @@ function openImagePicker() {
   imageInput.click();
 }
 
+function currentCameraLiveness() {
+  const stream = cameraStream;
+  const tracks = stream && typeof stream.getVideoTracks === 'function'
+    ? stream.getVideoTracks()
+    : [];
+
+  return cameraLiveness({
+    hasStream: Boolean(stream),
+    videoTrackStates: tracks.map((track) => track.readyState),
+    srcObjectMatches: cameraVideo.srcObject === stream,
+    videoEnded: cameraVideo.ended,
+  });
+}
+
+function stopCameraForLifecycle() {
+  resumeAttemptsThisTransition = 0;
+  if (!cameraStream && !cameraRequestPending) return;
+
+  stoppedForVisibility = true;
+  stopCamera();
+}
+
+async function recoverCameraAfterResume() {
+  if (document.visibilityState === 'hidden' || cameraRequestPending) return;
+
+  const liveness = currentCameraLiveness();
+  // 스트림을 결과 표시·사진 선택 등 다른 의도적 경로에서 끈 경우는 복귀 대상이 아니다.
+  // pagehide/hidden에서 끈 absent 상태만 stoppedForVisibility로 구분한다.
+  if (liveness === 'absent' && !stoppedForVisibility) return;
+
+  const action = resumeAction({
+    liveness,
+    hadCameraThisSession,
+    stoppedForVisibility,
+    attemptsThisTransition: resumeAttemptsThisTransition,
+    secure: isSecureForCamera(),
+    hasApi: hasCameraApi(),
+  });
+
+  if (action === 'none') {
+    stoppedForVisibility = false;
+    return;
+  }
+
+  if (action === 'gate') {
+    stoppedForVisibility = false;
+    if (liveness === 'dead') stopCamera();
+    setStatus(t('status.hiddenStopped'));
+
+    if (!isSecureForCamera() || !hasCameraApi()) {
+      showSupportedStartGate();
+    } else {
+      showCameraGate({
+        message: t('status.hiddenRestart'),
+        startLabel: t('gate.retry'),
+      });
+    }
+    return;
+  }
+
+  resumeAttemptsThisTransition += 1;
+  stoppedForVisibility = false;
+  if (liveness === 'dead') stopCamera();
+  showPreparingCameraGate();
+  setStatus(t('status.preparing'));
+  await startCamera({ automatic: true });
+}
+
 async function initialiseCamera() {
   if (!isSecureForCamera()) {
     setStatus(t('gate.https.message'));
@@ -2134,8 +2277,8 @@ async function initialiseCamera() {
     return;
   }
 
-  showSupportedStartGate();
-  setStatus(t('status.tapToStart'));
+  showPreparingCameraGate();
+  setStatus(t('status.preparing'));
 
   // 권한 상태를 **먼저 조회해서** 자동 시작 여부를 정하지 않는다.
   //
@@ -2506,19 +2649,18 @@ syncPanelScrollHint();
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
-    if (cameraStream || cameraRequestPending) {
-      stoppedForVisibility = true;
-      stopCamera();
-    }
+    stopCameraForLifecycle();
     return;
   }
 
-  if (stoppedForVisibility) {
-    stoppedForVisibility = false;
-    setStatus(t('status.hiddenStopped'));
-    showSupportedStartGate(t('status.hiddenRestart'));
-  }
+  void recoverCameraAfterResume();
 });
-window.addEventListener('pagehide', stopCamera);
+window.addEventListener('pagehide', stopCameraForLifecycle);
+window.addEventListener('pageshow', () => {
+  void recoverCameraAfterResume();
+});
+document.addEventListener('resume', () => {
+  void recoverCameraAfterResume();
+});
 
 void initialiseCamera();
