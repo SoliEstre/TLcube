@@ -15,7 +15,7 @@ import {
 } from '../src/centralMarkerN7.js';
 import {
   FINDER_CARD_GROUPS, labOnlyFinderCardsVisible,
-  labOnlyFinderSelectionAllowed, sanitizeLabOnlyFinderState,
+  labOnlyFinderSelectionAllowed, sanitizeFinderCardState,
 } from '../src/finder-card-ui.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
@@ -169,11 +169,11 @@ test('용량·formatIndex 무회귀 — O/A/K × 전 k × 전 ECC 27조합은 �
   assert.equal(checked, 3 * 3 * 3);
 });
 
-test('정식 화면 2겹 차단과 저장 상태 복구 — DOM 부재·선택 거부·기본값 복귀', () => {
+test('드랍 2겹 차단과 저장 상태 복구 — 전 surface DOM 부재·선택 거부·기본값 복귀', () => {
   assert.equal(centralMarkerN7VisibleOnSurface(false), false);
-  assert.equal(centralMarkerN7VisibleOnSurface(true), true);
+  assert.equal(centralMarkerN7VisibleOnSurface(true), false);
   assert.equal(centralMarkerN7SelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, false), false);
-  assert.equal(centralMarkerN7SelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, true), true);
+  assert.equal(centralMarkerN7SelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, true), false);
 
   const unsafe = {
     finderPatternId: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
@@ -192,25 +192,26 @@ test('정식 화면 2겹 차단과 저장 상태 복구 — DOM 부재·선택 �
   assert.equal(safe.previousFinderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
   assert.equal(safe.finderQrProfiles.OA.finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
   assert.equal(safe.finderQrProfiles.OA.previousFinderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
-  assert.strictEqual(sanitizeCentralMarkerN7FinderState(
+  assert.equal(sanitizeCentralMarkerN7FinderState(
     unsafe, true, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
-  ), unsafe, 'lab 상태는 바꾸면 안 된다');
+  ).finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  '드랍 상태는 lab에서도 닫혀야 한다');
 
   assert.equal(labOnlyFinderCardsVisible(false), false);
   assert.equal(labOnlyFinderCardsVisible(true), true);
   assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, false), false);
-  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, true), true);
-  assert.equal(sanitizeLabOnlyFinderState(
-    unsafe, false, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, true), false);
+  for (const lab of [false, true]) assert.equal(sanitizeFinderCardState(
+    unsafe, lab, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   ).finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
-  assert.ok(FINDER_CARD_GROUPS.lab.some(
-    (card) => card.id === CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  assert.ok(FINDER_CARD_GROUPS.lab.every(
+    (card) => card.id !== CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
   ));
   assert.ok(FINDER_CARD_GROUPS.formal.every(
     (card) => card.id !== CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
   ));
-  assert.ok(GENERATOR_STATE_SCHEMA.finderPatternId.options
-    .includes(CENTRAL_MARKER_N7_FINDER_PATTERN_ID));
+  assert.equal(GENERATOR_STATE_SCHEMA.finderPatternId.options
+    .includes(CENTRAL_MARKER_N7_FINDER_PATTERN_ID), false);
 });
 
 test('아이콘 — 공용 n/셀 공급자는 n=7 49셀·n=13 169셀을 그린다', () => {

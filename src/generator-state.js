@@ -7,9 +7,12 @@
 // 않는다 — 윈도를 끄거나 O→Y→O로 돌아오면 사용자가 고른 값이 그대로 살아야 한다.
 
 import {
-  CUBE_BULLSEYE_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
+  LEGACY_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
-import { CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS } from './finder-card-ui.js';
+import {
+  CENTRAL_N7_FINDER_CARD, CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS,
+  sanitizeFinderCardState,
+} from './finder-card-ui.js';
 import {
   CENTRAL_V0_FINDER_PATTERN_ID,
   CENTER_QR_FINDER_PATTERN_ID,
@@ -82,8 +85,8 @@ function field(defaultValue, exposure, options) {
 
 // 선택 가능한 축을 한 곳에 등록한다. UI 노출 대조와 상태 왕복 테스트가 이 스키마를
 // 순회하므로 새 항목을 더하면 일반/고급 누락과 보존 검사가 함께 확장된다.
-/** 생성기 화면의 초기 파인더 — 라이브러리 기본값과 별개다(위 주석). */
-export const GENERATOR_DEFAULT_FINDER_PATTERN_ID = CUBE_BULLSEYE_FINDER_PATTERN_ID;
+/** 생성기 O/A/K 화면의 초기 파인더 — 라이브러리 기본값과 별개다(아래 주석). */
+export const GENERATOR_DEFAULT_FINDER_PATTERN_ID = CENTRAL_N7_FINDER_CARD.id;
 const DEFAULT_FINDER_QR_PROFILES = createFinderQrProfiles(GENERATOR_DEFAULT_FINDER_PATTERN_ID);
 const ALTERNATE_FINDER_QR_PROFILES = createFinderQrProfiles(LEGACY_FINDER_PATTERN_ID);
 
@@ -121,9 +124,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 파생의 입력(v0T 계열 로케이터)이 lab 게이트 뒤라 정식 화면 노출 대조에 들어가면
   // 안 된다 — 정식 Y 안쪽은 레거시 윈도 β 가 유일 경로로 남는다.
   qrFacePlacement: field('seam', INTERNAL, ['seam', 'far']),
-  // 생성기 화면의 **초기 선택**은 하이브리드다(사용자 지시 2026-08-13). 실사진 12/12 ·
-  // 285ms 로 순수 불스아이(24/24 · 603ms)와 같은 인식률에 절반 가까이 빠르고, 프로젝트
-  // 정체성인 큐브가 코드에 실제로 보인다.
+  // 생성기 O/A/K 화면의 **초기 선택**은 중앙 TL이다(운영자 지시 2026-08-28).
+  // 새 n=7 payload 스키마가 실사진 18/30으로 종전 중앙 Y0 14/30을 넘었고, 디자인
+  // 기본값으로 확정됐다. 기본값은 새 상태에만 적용한다 — override로 들어온 기존의
+  // 유효한 저장·URL 선택은 아래 createGeneratorState에서 그대로 보존한다.
   // ⚠ 라이브러리 기본값(`DEFAULT_FINDER_PATTERN_ID`)은 «불스아이» 그대로 둔다 — 그쪽은
   //   finderPatternId 를 안 준 buildScene 이 받는 값이라 임베더의 계약이고, 바꾸면
   //   불스아이 렌더 계약을 고정한 테스트 30건이 한꺼번에 깨진다. 둘은 다른 개념이다.
@@ -142,7 +146,7 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 구 값은 normalizeFinderQrState 가 기본 코너로 강하시킨다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
     ['TL', 'TR', 'BL', 'BR', 'none']),
-  // O/A는 회전 기준을 함께 주는 중앙 QR이 기본이고, Y는 종전 코너 QR 기본을 유지한다.
+  // O/A/K는 중앙 TL + 바깥 QR이 기본이고, Y는 종전 코너 QR 기본을 유지한다.
   // 공용 상태가 타입 사이로 새지 않게 타입군별 마지막 선택을 별도 보존한다.
   finderQrProfiles: field(DEFAULT_FINDER_QR_PROFILES, INTERNAL,
     [DEFAULT_FINDER_QR_PROFILES, ALTERNATE_FINDER_QR_PROFILES]),
@@ -289,7 +293,10 @@ export function createGeneratorState(overrides = {}) {
     if (!(key in GENERATOR_STATE_SCHEMA)) throw new RangeError('알 수 없는 생성기 상태 키: ' + key);
     state[key] = value;
   }
-  return state;
+  // 드랍된 중앙 M7이 옛 저장·URL에 남아 있으면 새 기본(중앙 TL)로 명시 정화한다.
+  // 그 밖의 유효한 옛 선택은 건드리지 않는다. lab=true는 «lab 전용은 허용» 뜻이고,
+  // dropped는 surface와 무관하게 언제나 닫힌다.
+  return sanitizeFinderCardState(state, true, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
 }
 
 /** 일반 노출 키는 고급에서도 모두 노출되고, 고급 전용 키만 뒤에 더해진다. */

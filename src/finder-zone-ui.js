@@ -33,7 +33,9 @@
  * formatK.js 헤더 §값 선택 ③ 의 ⚠ 참조).
  */
 
-import { CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS } from './finder-card-ui.js';
+import {
+  CENTRAL_N7_FINDER_CARD, CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS,
+} from './finder-card-ui.js';
 import { GENERATOR_STATE_SCHEMA } from './generator-state.js';
 import { MARKER_G_FORMAT_INDEX } from './markerG.js';
 import { TURN_A_FORMAT_INDEX } from './turnA.js';
@@ -43,14 +45,13 @@ import { SAGOAE_ID } from './finder-daehan.js';
 export const SEAT_NONE = 'none';
 
 /**
- * 정식(official) normal 의 중앙 구역 3장 — 운영자 확정 (2026-08-23·24, W2 C5):
- * cube-bullseye(기본) · central-v0 · center-qr. 나머지 formal 카드는 advanced
- * 에서만 보인다 (**표시 게이트일 뿐** — 스키마·선택 값은 BOTH 유지).
- * 근거: bullseye 는 라이브러리 기본이지 화면 기본이 아니고(finder-patterns.js §9),
- * central-cube-3tone 은 실사진 10장 전부 실패 (PM/021:180 «단일 실패점 — 비컨 대체»).
+ * 정식(official) normal 의 중앙 구역 3장 — 운영자 확정 (2026-08-28):
+ * cube-bullseye · central-n7-payload(새 기본) · center-qr. 중앙 Y0(central-v0)는
+ * 기능을 유지한 채 advanced 표시로 이동한다. 나머지 formal 카드도 advanced에서만
+ * 보인다 (**표시 게이트일 뿐** — 스키마·선택 값은 BOTH 유지).
  */
 export const OFFICIAL_NORMAL_CENTRAL_IDS = Object.freeze(
-  ['cube-bullseye', 'central-v0', 'center-qr'],
+  ['cube-bullseye', CENTRAL_N7_FINDER_CARD.id, 'center-qr'],
 );
 
 /** advancedOnly 는 손 목록이 아니라 **여집합 유도**다: formal 행(formal 그룹 +

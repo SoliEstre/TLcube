@@ -197,13 +197,13 @@ export function isCentralMarkerN7FinderPatternId(id) {
   return id === CENTRAL_MARKER_N7_FINDER_PATTERN_ID;
 }
 
-/** 중앙 TL은 디코더 배선 전까지 /lab/에서만 보이고 선택할 수 있다. */
-export function centralMarkerN7VisibleOnSurface(lab) {
-  return lab === true;
+/** 중앙 M7 후보 B는 실사진 0/30 드랍으로 모든 카드 surface에서 닫혔다. */
+export function centralMarkerN7VisibleOnSurface(_lab) {
+  return false;
 }
 
-export function centralMarkerN7SelectionAllowed(id, lab) {
-  return !isCentralMarkerN7FinderPatternId(id) || lab === true;
+export function centralMarkerN7SelectionAllowed(id, _lab) {
+  return !isCentralMarkerN7FinderPatternId(id);
 }
 
 function safeFinderId(id, lab, fallbackId) {
@@ -211,22 +211,21 @@ function safeFinderId(id, lab, fallbackId) {
 }
 
 /**
- * 저장 상태/확장 주입으로 정식 화면에 lab 전용 선택이 살아난 경우 안전한 기본값으로
- * 되돌린다. 현재 선택뿐 아니라 직전 선택과 타입군 스냅샷도 함께 닫아 재유입을 막는다.
+ * 저장 상태/URL/확장 주입으로 드랍 선택이 살아난 경우 surface와 무관하게 안전한
+ * 기본값으로 되돌린다. 현재·직전 선택과 타입군 스냅샷도 함께 닫아 재유입을 막는다.
  */
 export function sanitizeCentralMarkerN7FinderState(state, lab, fallbackId) {
   if (state === null || typeof state !== 'object') throw new TypeError('생성기 상태가 필요하다');
   if (typeof fallbackId !== 'string' || fallbackId === '') {
-    throw new TypeError('중앙 TL 정식 화면 폴백 id가 필요하다');
+    throw new TypeError('중앙 M7 드랍 폴백 id가 필요하다');
   }
-  if (lab === true) return state;
 
   let changed = false;
   const sanitizeProfile = (profile) => {
     if (profile === null || typeof profile !== 'object') return profile;
-    const finderPatternId = safeFinderId(profile.finderPatternId, false, fallbackId);
+    const finderPatternId = safeFinderId(profile.finderPatternId, lab, fallbackId);
     const previousFinderPatternId = safeFinderId(
-      profile.previousFinderPatternId, false, fallbackId,
+      profile.previousFinderPatternId, lab, fallbackId,
     );
     if (finderPatternId === profile.finderPatternId
       && previousFinderPatternId === profile.previousFinderPatternId) return profile;
@@ -245,9 +244,9 @@ export function sanitizeCentralMarkerN7FinderState(state, lab, fallbackId) {
     }
   }
 
-  const finderPatternId = safeFinderId(state.finderPatternId, false, fallbackId);
+  const finderPatternId = safeFinderId(state.finderPatternId, lab, fallbackId);
   const previousFinderPatternId = safeFinderId(
-    state.previousFinderPatternId, false, fallbackId,
+    state.previousFinderPatternId, lab, fallbackId,
   );
   if (finderPatternId !== state.finderPatternId
     || previousFinderPatternId !== state.previousFinderPatternId

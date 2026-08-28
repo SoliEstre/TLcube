@@ -5,11 +5,18 @@ import {
   CENTER_QR_FINDER_PATTERN_ID,
   commitFinderQrTransition,
   createFinderQrProfiles,
+  finderPatternForTypeTransition,
+  finderPatternSupportedForType,
   normalizeFinderQrState,
   selectFinderPattern,
   selectGeneratorType,
   selectQrPosition,
 } from '../src/finder-selection.js';
+import {
+  CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS,
+} from '../src/finder-card-ui.js';
+import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from '../src/centralMarkerN7.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 
 const OFFICIAL_DEFAULT = 'bullseye';
 const TRIAL_DEFAULT = 'pinwheel-c2-2-1100-cw';
@@ -24,8 +31,8 @@ function state(overrides = {}) {
   };
 }
 
-test('O/A 중앙 QR 파인더 선택은 QR 위치를 안쪽으로 함께 고른다', () => {
-  for (const type of ['O', 'A']) {
+test('O/A/K 중앙 QR 파인더 선택은 QR 위치를 안쪽으로 함께 고른다', () => {
+  for (const type of ['O', 'A', 'K']) {
     const next = selectFinderPattern(
       state(), CENTER_QR_FINDER_PATTERN_ID, type, OFFICIAL_DEFAULT,
     );
@@ -35,8 +42,8 @@ test('O/A 중앙 QR 파인더 선택은 QR 위치를 안쪽으로 함께 고른�
   }
 });
 
-test('O/A 안쪽 QR 선택은 직전 파인더를 기억하고 중앙 QR을 고른다', () => {
-  for (const type of ['O', 'A']) {
+test('O/A/K 안쪽 QR 선택은 직전 파인더를 기억하고 중앙 QR을 고른다', () => {
+  for (const type of ['O', 'A', 'K']) {
     const next = selectQrPosition(state({
       finderPatternId: TRIAL_DEFAULT,
       previousFinderPatternId: TRIAL_DEFAULT,
@@ -113,7 +120,7 @@ test("구 «면»(plane) 값은 안쪽 + 코너측으로 정규화된다 (W2 C3 
   assert.equal(backFromO.qrFacePlacement, 'far');
 });
 
-test('타입 전환 기본값은 O/A 중앙 QR, Y 바깥 QR이며 서로 새지 않는다', () => {
+test('타입 전환 기본값은 O/A/K 기본 중앙 파인더 + 바깥 QR이며 Y와 서로 새지 않는다', () => {
   const initial = state({
     type: 'Y',
     finderQrProfiles: createFinderQrProfiles(TRIAL_DEFAULT),
@@ -121,12 +128,60 @@ test('타입 전환 기본값은 O/A 중앙 QR, Y 바깥 QR이며 서로 새지 
   });
 
   const typeO = selectGeneratorType(initial, 'O', TRIAL_DEFAULT);
-  assert.equal(typeO.qrPosition, 'inner');
-  assert.equal(typeO.finderPatternId, CENTER_QR_FINDER_PATTERN_ID);
+  assert.equal(typeO.qrPosition, 'TL');
+  assert.equal(typeO.finderPatternId, TRIAL_DEFAULT);
 
   const typeY = selectGeneratorType(typeO, 'Y', TRIAL_DEFAULT);
   assert.equal(typeY.qrPosition, 'TL');
   assert.equal(typeY.finderPatternId, TRIAL_DEFAULT);
+});
+
+test('O/A/K 전 타입쌍에서 지원되는 중앙 파인더 선택을 승계한다', () => {
+  const types = ['O', 'A', 'K'];
+  const activeFinderIds = new Set([
+    ...Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id),
+    CENTRAL_V0_FINDER_CARD.id,
+  ]);
+  for (const sourceType of types) {
+    for (const targetType of types) {
+      for (const finderPatternId of activeFinderIds) {
+        if (!finderPatternSupportedForType(finderPatternId, sourceType)) continue;
+        const initial = state({
+          type: sourceType,
+          finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
+          previousFinderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
+          finderQrProfiles: createFinderQrProfiles(CENTRAL_N7_FINDER_PATTERN_ID),
+        });
+        const picked = selectFinderPattern(
+          initial, finderPatternId, sourceType, CENTRAL_N7_FINDER_PATTERN_ID,
+        );
+        const moved = selectGeneratorType(
+          picked, targetType, CENTRAL_N7_FINDER_PATTERN_ID,
+        );
+        const expected = finderPatternSupportedForType(finderPatternId, targetType)
+          ? finderPatternId : CENTRAL_N7_FINDER_PATTERN_ID;
+        assert.equal(moved.finderPatternId, expected,
+          `${sourceType}→${targetType} ${finderPatternId}`);
+        assert.equal(
+          moved.qrPosition === 'inner',
+          moved.finderPatternId === CENTER_QR_FINDER_PATTERN_ID,
+          `${sourceType}→${targetType} ${finderPatternId}의 중앙 QR 결합`,
+        );
+      }
+    }
+  }
+});
+
+test('승계 불가 조합은 QR이 아니라 정의된 기본 중앙 TL로 폴백한다', () => {
+  const daehan = FINDER_CARD_GROUPS.daehan[0].id;
+  for (const unsupported of [daehan, CENTRAL_MARKER_N7_FINDER_PATTERN_ID]) {
+    assert.equal(finderPatternSupportedForType(unsupported, 'K'), false, unsupported);
+    assert.equal(finderPatternForTypeTransition(
+      unsupported, 'K', CENTRAL_N7_FINDER_PATTERN_ID,
+    ), CENTRAL_N7_FINDER_PATTERN_ID, unsupported);
+  }
+  assert.notEqual(CENTRAL_N7_FINDER_PATTERN_ID, CENTER_QR_FINDER_PATTERN_ID,
+    '불가 조합 폴백이 중앙 QR이면 운영자 미결정을 대신하게 된다');
 });
 
 test('O/A에서 사용자가 고른 바깥 QR과 파인더는 Y 왕복 뒤 복원된다', () => {

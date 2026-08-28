@@ -1,9 +1,11 @@
-// finder-selection.js — Type O/A 중앙 파인더와 QR 위치의 양방향 상태 계약
+// finder-selection.js — Type O/A/K 중앙 파인더와 QR 위치의 양방향 상태 계약
 
 import { GENERATOR_TYPES } from './generator-types.js';
+import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from './centralMarkerN7.js';
+import { isDaehanFinderPatternId } from './finder-daehan.js';
 import { LEGACY_FINDER_PATTERN_ID } from './finder-patterns.js';
 
-/** Type K 가 전 버전에서 스캔되는 유일한 중앙 파인더 (2026-08-25 실측). */
+/** 구 소비자 호환 상수. 현재 K는 daehan 외 중앙 파인더 전부를 지원한다. */
 export const K_SCANNABLE_FINDER_PATTERN_ID = LEGACY_FINDER_PATTERN_ID;
 
 export const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
@@ -17,10 +19,9 @@ export function isCentralV0FinderPatternId(id) {
 /**
  * 타입 → 프로파일군.
  *
- * ⚠ K 를 'OA' 로 보내면 안 된다 — OA 프로파일은 `qrPosition:'inner'` +
- * center-qr 이고, buildConfig 가 그것을 `centerQr:true` 로 번역하는데
- * `encodeK` 는 centerQr 를 **던진다**. 즉 K 의 «첫 클릭 기본 상태» 가 곧
- * RangeError 가 된다. K 는 Y 와 같은 바깥 QR 기본값을 쓴다.
+ * K는 O/A와 같은 기본 중앙 파인더를 쓰지만 QR 위치·직전 선택 이력은 별도 보존한다.
+ * 그래서 K를 OA 프로파일에 합치지 않는다. 중앙 파인더 선택 자체는 아래 타입 전환
+ * 승계 규칙이 O/A/K 사이에서 옮긴다.
  */
 const profileFamily = (type) => {
   if (type === 'Y') return 'Y';
@@ -28,8 +29,34 @@ const profileFamily = (type) => {
   return 'OA';
 };
 
+const OAK_TYPES = Object.freeze(['O', 'A', 'K']);
+
 /**
- * O/A는 중앙 QR을 기본 파인더로, Y는 종전의 바깥 QR을 기본으로 쓴다.
+ * 타입 전환 때 중앙 파인더를 그대로 승계할 수 있는가.
+ *
+ * 현재 불가 조합은 두 종류다. 드랍된 중앙 M7은 모든 타입에서 닫혔고, daehan은 K
+ * 인코더 배선이 없어 K에서만 닫힌다. 그 밖의 기존 카드 조합은 유지한다.
+ */
+export function finderPatternSupportedForType(finderPatternId, type) {
+  if (!OAK_TYPES.includes(type)) return true;
+  if (finderPatternId === CENTRAL_MARKER_N7_FINDER_PATTERN_ID) return false;
+  return type !== 'K' || !isDaehanFinderPatternId(finderPatternId);
+}
+
+/** 불가 조합의 정의된 폴백 — QR이 아니라 호출자가 준 생성기 기본 중앙 파인더다. */
+export function finderPatternForTypeTransition(
+  finderPatternId, type, defaultFinderPatternId,
+) {
+  if (finderPatternSupportedForType(finderPatternId, type)) return finderPatternId;
+  if (!finderPatternSupportedForType(defaultFinderPatternId, type)) {
+    throw new RangeError('타입 ' + type + '의 중앙 파인더 폴백도 지원되지 않는다: '
+      + defaultFinderPatternId);
+  }
+  return defaultFinderPatternId;
+}
+
+/**
+ * O/A/K는 전달받은 기본 중앙 파인더 + 바깥 QR을, Y는 종전의 바깥 QR을 쓴다.
  *
  * 공용 qrPosition 하나만 두고 타입을 바꾸면 O/A의 `inner`가 Y의 윈도 β로 새거나,
  * 반대로 Y의 코너 선택이 O/A 기본값을 덮는다. 타입군별 스냅샷을 별도로 들고 전환할 때만
@@ -41,8 +68,8 @@ export function createFinderQrProfiles(defaultFinderPatternId) {
   }
   return Object.freeze({
     OA: Object.freeze({
-      qrPosition: 'inner',
-      finderPatternId: CENTER_QR_FINDER_PATTERN_ID,
+      qrPosition: DEFAULT_OUTER_QR_POSITION,
+      finderPatternId: defaultFinderPatternId,
       previousFinderPatternId: defaultFinderPatternId,
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',
@@ -54,26 +81,11 @@ export function createFinderQrProfiles(defaultFinderPatternId) {
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',
     }),
-    /*
-     * K — **안쪽(중앙) QR 기본값. O/A 와 같다** (운영자 지시 2026-08-26:
-     * 「oak 중에 얘만 속큐브로 되어 있다」).
-     *
-     * ⚠ 종전 주석은 「encodeK 가 centerQr·centralV0·daehanFinder·turnA 를 던지므로
-     *   «안쪽 QR» 기본값을 줄 수 없다」고 적고 있었다. **그 서술은 틀렸다.**
-     *   `encodeK` 는 `centerQr` 를 받는다 (`encodeK.js:111`). 던지는 것은
-     *   `centralV0 && centerQr` **조합**일 때뿐이고(`:132`), 사유는 둘이 같은 중앙
-     *   19셀 슬롯을 다투기 때문이다. 즉 제약이 아니라 **미배선**이었다 —
-     *   형제 타입(O/A)이 이미 하고 있으면 그건 제약이 아니다.
-     *   (중앙 QR 렌더·인식은 2026-08-26 오전에 수리돼 운영자 확인까지 끝났다.)
-     *
-     * ⭐ **기본 파인더 복귀 (2026-08-25 저녁)** — 잠깐 LEGACY(bullseye)로 내려 뒀었다.
-     * 사유는 「cube-bullseye 는 K0 만 읽힌다」였고, 레인 POSE 가 star 검출을 열어
-     * 그 제약이 사라졌다 (54/54). `previousFinderPatternId` 가 그 값을 들고 있어
-     * 사용자가 중앙 QR 을 끄면 여기로 돌아온다.
-     */
+    // K도 같은 중앙 TL 기본값을 쓴다. 별도 프로파일은 K에서 고른 QR 위치·직전
+    // 선택을 O/A와 독립 보존하기 위한 것이며, 타입 전환 시 현재 파인더만 승계한다.
     K: Object.freeze({
-      qrPosition: 'inner',
-      finderPatternId: CENTER_QR_FINDER_PATTERN_ID,
+      qrPosition: DEFAULT_OUTER_QR_POSITION,
+      finderPatternId: defaultFinderPatternId,
       previousFinderPatternId: defaultFinderPatternId,
       previousOuterQrPosition: DEFAULT_OUTER_QR_POSITION,
       qrFacePlacement: 'seam',
@@ -107,12 +119,22 @@ export function selectGeneratorType(state, type, defaultFinderPatternId) {
     [sourceFamily]: finderQrSnapshot(state),
   });
   const target = finderQrProfiles[targetFamily] || defaults[targetFamily];
-  return normalizeFinderQrState({
+  let next = {
     ...state,
     ...target,
     type,
     finderQrProfiles,
-  }, type, defaultFinderPatternId);
+  };
+  // O/A/K 사이에서는 현재 중앙 파인더를 대상 타입으로 승계한다. QR 위치와 직전
+  // 바깥 위치는 대상 프로파일 것을 유지하고, selectFinderPattern이 중앙 QR 결합만
+  // 정규화한다. 불가 조합은 중앙 TL(호출자가 준 기본값)로 명시 폴백한다.
+  if (OAK_TYPES.includes(state.type) && OAK_TYPES.includes(type)) {
+    const carriedFinder = finderPatternForTypeTransition(
+      state.finderPatternId, type, defaultFinderPatternId,
+    );
+    next = selectFinderPattern(next, carriedFinder, type, defaultFinderPatternId);
+  }
+  return normalizeFinderQrState(next, type, defaultFinderPatternId);
 }
 
 function previousFinderOrDefault(state, defaultFinderPatternId) {
@@ -124,7 +146,7 @@ function previousFinderOrDefault(state, defaultFinderPatternId) {
 }
 
 /**
- * O/A 에서만 중앙 QR ↔ 안쪽을 하나의 상태로 정규화한다.
+ * O/A/K 에서 중앙 QR ↔ 안쪽을 하나의 상태로 정규화한다.
  * Type Y 의 안쪽은 Y2 윈도이므로 파인더 상태를 절대 건드리지 않는다.
  */
 export function normalizeFinderQrState(state, type, defaultFinderPatternId) {
@@ -206,7 +228,7 @@ export function selectFinderPattern(state, finderPatternId, type, defaultFinderP
   return normalizeFinderQrState(next, type, defaultFinderPatternId);
 }
 
-/** QR 위치 선택. O/A 안쪽은 중앙 QR을 고르고, 바깥으로 나가면 직전 파인더를 복원한다. */
+/** QR 위치 선택. O/A/K 안쪽은 중앙 QR을 고르고, 바깥으로 나가면 직전 파인더를 복원한다. */
 export function selectQrPosition(state, qrPosition, type, defaultFinderPatternId) {
   const next = { ...state, qrPosition };
   if (qrPosition !== 'inner') next.previousOuterQrPosition = qrPosition;

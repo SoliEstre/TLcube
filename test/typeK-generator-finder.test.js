@@ -23,10 +23,11 @@ import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { BULLSEYE_DARK, BULLSEYE_LIGHT, getPreset } from '../src/luminance.js';
-import { selectGeneratorType, CENTER_QR_FINDER_PATTERN_ID } from '../src/finder-selection.js';
+import { selectGeneratorType } from '../src/finder-selection.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID, createGeneratorState,
 } from '../src/generator-state.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 
 const PRESET = getPreset('slate');
 const PALETTE = {
@@ -38,6 +39,7 @@ const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const roundTrip = (encoded, text, finderPatternId) => {
   const opts = { palette: PALETTE, margin: 20 };
   if (finderPatternId) opts.finderPatternId = finderPatternId;
+  if (finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) opts.centralN7Family = 'star';
   try {
     const r = decodeFrontend(rasterize(buildScene(encoded, opts), { pixelsPerUnit: 12, supersample: 1 }));
     return r.ok === true && r.text === text;
@@ -56,52 +58,32 @@ test('② 허용한 파인더는 **전 버전에서** 실제로 스캔된다', (
   // 코드를 만든다 (cube-bullseye 가 정확히 그 경우라 목록 밖이다).
   for (const version of [0, 1, 2]) {
     const text = 'K-finder-lock-' + version;
-    const encoded = encodeK(text, { version, eccLevel: 'M' });
+    const encoded = encodeK(text, { version, eccLevel: 'M', centralN7: true });
     assert.equal(roundTrip(encoded, text, GENERATOR_DEFAULT_FINDER_PATTERN_ID), true,
       'K' + version + ' 가 허용 파인더(' + GENERATOR_DEFAULT_FINDER_PATTERN_ID + ')로 안 읽힌다');
   }
 });
 
-test('③ K 의 기본 상태가 안 읽히면 안 된다 — 기본 = 중앙 QR (O/A 와 같다)', () => {
+test('③ K 의 기본 상태가 안 읽히면 안 된다 — 기본 = 중앙 TL (O/A 와 같다)', () => {
   const next = selectGeneratorType(
     createGeneratorState({ type: 'Y' }), 'K', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   );
-  /*
-   * **의도적 갱신 (2026-08-26, 운영자 지시)** — 「oak 중에 얘만 속큐브로 되어 있다」.
-   * K 기본값을 O/A 와 같은 **중앙 QR** 로 맞췄다.
-   *
-   * ⚠ 종전 이 자리는 `finderPatternId === GENERATOR_DEFAULT_FINDER_PATTERN_ID` 를
-   *   요구하는 **대리 지표**였다. 그것이 지키려던 것은 「기본값이 곧 못 읽는 코드가
-   *   되면 안 된다」이지 특정 상수값이 아니다. 정형 ③ 대로 **양성 단언**으로 바꾼다:
-   *   ①기본이 무엇인지 명시하고 ②그 기본이 실제로 읽힌다는 증거를 건다.
-   */
-  assert.equal(next.finderPatternId, CENTER_QR_FINDER_PATTERN_ID,
-    'K 기본 파인더가 중앙 QR 이 아니다 — O/A 와 같은 기본값이어야 한다');
-  assert.equal(next.qrPosition, 'inner', 'K 기본 QR 위치가 안쪽이 아니다');
+  assert.equal(next.finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+    'K 기본 파인더가 생성기 공용 기본값이 아니다');
+  assert.notEqual(next.qrPosition, 'inner', '중앙 TL과 중앙 QR을 같은 슬롯에 놓았다');
+  assert.doesNotThrow(() => encodeK('K-default-central-tl', {
+    version: 1, eccLevel: 'M', centralN7: true,
+  }), 'K 기본 조합(centralN7)이 encodeK 에서 던진다 — 첫 클릭이 곧 오류다');
 
-  // ①기본 상태가 인코더를 통과한다 (첫 클릭이 던짐이 되면 안 된다).
-  assert.doesNotThrow(() => encodeK('K-default-centerqr', {
-    version: 1, eccLevel: 'M', centerQr: true,
-  }), 'K 기본 조합(centerQr)이 encodeK 에서 던진다 — 첫 클릭이 곧 오류다');
-
-  /*
-   * ②「읽힌다」의 증거는 **렌더까지 가는 왕복**이라야 하고, 그 자는 이미 있다:
-   *   `typeK-roundtrip.test.js` 의 「K 중앙 QR 왕복 — 평/CM × 전 k × 전 ECC」.
-   *   여기서 그 자의 **존재를 잠근다** — 지워지면 이 단언이 빨개진다.
-   *   (주석으로 「저기서 지킨다」고만 적으면 그 문장이 언제든 거짓이 된다.)
-   */
-  const RT = readFileSync(new URL('./typeK-roundtrip.test.js', import.meta.url), 'utf8');
-  assert.match(RT, /K 중앙 QR 왕복 — 평\/CM × 전 k × 전 ECC/,
-    'K 중앙 QR 왕복 자가 사라졌다 — 기본 상태가 읽힌다는 증거가 없어졌다');
-  assert.match(RT, /centerQr: true/, 'K 왕복 자가 centerQr 를 더는 안 켠다');
-
-  // ③사용자가 중앙 QR 을 끄면 돌아갈 자리(previousFinderPatternId)도 읽혀야 한다.
+  // 기본과 직전 파인더가 모두 같은 중앙 TL이며 실제 프런트엔드 왕복해야 한다.
   assert.equal(next.previousFinderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
     'K 의 복귀 파인더가 표준 기본값이 아니다');
   const dtext = 'K-default-finder';
-  assert.equal(roundTrip(encodeK(dtext, { version: 1, eccLevel: 'M' }), dtext,
+  assert.equal(roundTrip(encodeK(dtext, {
+    version: 1, eccLevel: 'M', centralN7: true,
+  }), dtext,
     GENERATOR_DEFAULT_FINDER_PATTERN_ID), true,
-    '복귀 파인더로 만든 K1 이 안 읽힌다 — 중앙 QR 을 끄면 못 읽는 코드가 된다');
+    '기본 중앙 TL로 만든 K1 이 안 읽힌다');
 });
 
 test('④ **공백 해소** — star 검출이 중앙 파인더 전종을 읽는다 (레인 POSE)', () => {

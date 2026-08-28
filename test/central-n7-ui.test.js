@@ -3,13 +3,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  CENTRAL_N7_FINDER_CARD,
+  CENTRAL_FINDER_CARD_LINEUP, CENTRAL_N7_FINDER_CARD,
   FINDER_CARD_GROUPS,
   centralN7ThumbnailCells,
   getUnmeasuredFinderPattern,
+  isDroppedFinderPatternId,
   labOnlyFinderCardsVisible,
   labOnlyFinderSelectionAllowed,
-  sanitizeLabOnlyFinderState,
+  sanitizeFinderCardState,
 } from '../src/finder-card-ui.js';
 import {
   CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
@@ -61,42 +62,72 @@ function objectLiteralAfter(source, declaration) {
   throw new Error('객체 끝을 찾지 못했다: ' + declaration);
 }
 
-test('시험판 카드 표에는 중앙 M7·중앙 TL 두 장만 있고 formal에는 둘 다 없다', () => {
-  assert.deepEqual(FINDER_CARD_GROUPS.lab.map((card) => card.id), [
-    CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
-    CENTRAL_N7_FINDER_PATTERN_ID,
-  ]);
-  const formalIds = new Set(FINDER_CARD_GROUPS.formal.map((card) => card.id));
-  assert.equal(formalIds.has(CENTRAL_MARKER_N7_FINDER_PATTERN_ID), false);
-  assert.equal(formalIds.has(CENTRAL_N7_FINDER_PATTERN_ID), false);
+test('중앙 카드 명부 status가 카드 표면을 live-join하고 M7 기하는 보존한다', () => {
+  const allCardIds = new Set(Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id));
+  for (const entry of CENTRAL_FINDER_CARD_LINEUP) {
+    assert.equal(allCardIds.has(entry.card.id), entry.status === 'active', entry.card.id);
+  }
+  const m7 = CENTRAL_FINDER_CARD_LINEUP.find(
+    (entry) => entry.card.id === CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  );
+  const tl = CENTRAL_FINDER_CARD_LINEUP.find(
+    (entry) => entry.card.id === CENTRAL_N7_FINDER_PATTERN_ID,
+  );
+  assert.equal(m7.status, 'dropped');
+  assert.equal(isDroppedFinderPatternId(m7.card.id), true);
+  assert.equal(tl.status, 'active');
+  assert.equal(tl.surface, 'formal');
+  assert.equal(FINDER_CARD_GROUPS.formal.includes(CENTRAL_N7_FINDER_CARD), true);
+  assert.equal(centralMarkerN7State('hex', 0, 0).cells.length > 0, true,
+    'M7 카드는 닫아도 기하 모듈은 살아 있어야 한다');
   assert.equal(CENTRAL_N7_FINDER_CARD.id, CENTRAL_N7_FINDER_PATTERN_ID);
   assert.equal(getUnmeasuredFinderPattern(CENTRAL_N7_FINDER_PATTERN_ID).labelKey, 'g1001');
   assert.ok(GENERATOR_STATE_SCHEMA.finderPatternId.options.includes(CENTRAL_N7_FINDER_PATTERN_ID));
+  assert.equal(GENERATOR_STATE_SCHEMA.finderPatternId.options.includes(
+    CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  ), false);
 });
 
-test('두 시험판 카드 모두 정식에서 비노출·선택 거부·저장 상태 복구된다', () => {
+test('중앙 TL은 정식 선택 가능하고 드랍 M7 저장 상태는 모든 표면에서 중앙 TL로 정화된다', () => {
   assert.equal(labOnlyFinderCardsVisible(false), false);
   assert.equal(labOnlyFinderCardsVisible(true), true);
-  for (const id of [CENTRAL_MARKER_N7_FINDER_PATTERN_ID, CENTRAL_N7_FINDER_PATTERN_ID]) {
-    assert.equal(labOnlyFinderSelectionAllowed(id, false), false, id);
-    assert.equal(labOnlyFinderSelectionAllowed(id, true), true, id);
-    const unsafe = {
-      finderPatternId: id,
-      previousFinderPatternId: id,
+  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_N7_FINDER_PATTERN_ID, false), true);
+  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_N7_FINDER_PATTERN_ID, true), true);
+  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, false), false);
+  assert.equal(labOnlyFinderSelectionAllowed(CENTRAL_MARKER_N7_FINDER_PATTERN_ID, true), false);
+  const unsafe = {
+    finderPatternId: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+    previousFinderPatternId: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+    finderQrProfiles: Object.freeze({
+      OA: Object.freeze({
+        finderPatternId: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+        previousFinderPatternId: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+      }),
+    }),
+  };
+  for (const lab of [false, true]) {
+    const safe = sanitizeFinderCardState(
+      unsafe, lab, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+    );
+    assert.equal(safe.finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
+    assert.equal(safe.previousFinderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
+    assert.equal(safe.finderQrProfiles.OA.finderPatternId,
+      GENERATOR_DEFAULT_FINDER_PATTERN_ID);
+  }
+});
+
+test('기존의 살아 있는 카드 선택은 기본값 변경 뒤에도 정화 과정에서 보존된다', () => {
+  for (const card of Object.values(FINDER_CARD_GROUPS).flat()) {
+    const oldState = {
+      finderPatternId: card.id,
+      previousFinderPatternId: card.id,
       finderQrProfiles: Object.freeze({
-        OA: Object.freeze({ finderPatternId: id, previousFinderPatternId: id }),
+        OA: Object.freeze({ finderPatternId: card.id, previousFinderPatternId: card.id }),
       }),
     };
-    const safe = sanitizeLabOnlyFinderState(
-      unsafe, false, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
-    );
-    assert.equal(safe.finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID, id);
-    assert.equal(safe.previousFinderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID, id);
-    assert.equal(safe.finderQrProfiles.OA.finderPatternId,
-      GENERATOR_DEFAULT_FINDER_PATTERN_ID, id);
-    assert.strictEqual(sanitizeLabOnlyFinderState(
-      unsafe, true, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
-    ), unsafe, id + ' lab state');
+    assert.strictEqual(sanitizeFinderCardState(
+      oldState, true, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+    ), oldState, card.id);
   }
 });
 

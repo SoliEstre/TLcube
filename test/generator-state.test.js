@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 
 import { commitFinderQrTransition } from '../src/finder-selection.js';
+import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from '../src/centralMarkerN7.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   GENERATOR_STATE_SCHEMA, createGeneratorState, exposedGeneratorStateKeys,
@@ -69,7 +71,7 @@ test('모드·타입 혼합 왕복이 모든 상태 키를 항목별로 보존�
    * ⚠ `qrPosition: 'inner'` 는 독립 축이 아니다 — Type O/A 에서 **중앙 QR 파인더를
    *   강제**하므로 finderPatternId 와 짝지어 움직인다. 그 둘을 각각 «기본값과 다른 첫
    *   선택지» 로 잡으면 모순된 조합이 만들어지고, 전환이 그걸 옳게 해소한 결과를
-   *   «왕복이 깨졌다» 로 읽게 된다. (기본 파인더가 불스아이일 땐 대안이 마침
+   *   «왕복이 깨졌다» 로 읽게 된다. (과거 기본 파인더가 불스아이일 땐 대안이 마침
    *   center-qr 이라 이 결함이 우연히 가려져 있었다 — 2026-08-13 기본값 변경에서 드러남.)
    */
   const coupledToFinder = new Set(['inner']);
@@ -150,4 +152,30 @@ test('Type Y 톤은 일반·고급 카드가 같은 단일 상태를 쓰고 기�
       < INDEX_SOURCE.indexOf('const nextExportFilename = createExportFilenameFactory();'),
     'generatorState 가 nextExportFilename 보다 뒤에 있다',
   );
+});
+
+test('새 O/A/K 프로파일만 중앙 TL을 기본으로 쓰고 유효한 옛 파인더 override는 보존한다', () => {
+  const fresh = createGeneratorState();
+  assert.equal(GENERATOR_DEFAULT_FINDER_PATTERN_ID, CENTRAL_N7_FINDER_PATTERN_ID);
+  for (const family of ['OA', 'K']) {
+    assert.equal(fresh.finderQrProfiles[family].finderPatternId,
+      CENTRAL_N7_FINDER_PATTERN_ID, family);
+    assert.notEqual(fresh.finderQrProfiles[family].qrPosition, 'inner', family);
+  }
+
+  for (const oldId of GENERATOR_STATE_SCHEMA.finderPatternId.options) {
+    const restored = createGeneratorState({
+      finderPatternId: oldId,
+      previousFinderPatternId: oldId === 'center-qr'
+        ? CENTRAL_N7_FINDER_PATTERN_ID : oldId,
+    });
+    assert.equal(restored.finderPatternId, oldId, oldId);
+  }
+
+  const dropped = createGeneratorState({
+    finderPatternId: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+    previousFinderPatternId: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
+  });
+  assert.equal(dropped.finderPatternId, CENTRAL_N7_FINDER_PATTERN_ID);
+  assert.equal(dropped.previousFinderPatternId, CENTRAL_N7_FINDER_PATTERN_ID);
 });

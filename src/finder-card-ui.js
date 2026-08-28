@@ -83,22 +83,54 @@ if (!DAEHAN_K10 || !Array.isArray(DAEHAN_K10.finderCells) || DAEHAN_K10.finderCe
 /** 생성 패턴 표 밖의 중앙 v0 카드 — 기존 그룹 계보·개수 계약과 분리한다. */
 export const CENTRAL_V0_FINDER_CARD = descriptor(CENTRAL_V0_FINDER_PATTERN_ID, null);
 
-/** 디코더 배선 전 /lab/에서만 그리는 중앙 TL n=7 카드. */
+/** 구 후보 B — 기하·판독 회귀 보존용 중앙 M7 n=7 카드. */
 export const CENTRAL_MARKER_N7_FINDER_CARD = descriptor(
   CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
   null,
 );
 
-/** 디코더 배선 전 /lab/에서만 그리는 payload형 중앙 TL n=7 카드. */
+/** payload형 중앙 TL n=7 카드. */
 export const CENTRAL_N7_FINDER_CARD = descriptor(CENTRAL_N7_FINDER_PATTERN_ID, null);
 
-const LAB_ONLY_FINDER_IDS = Object.freeze([
-  CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
-  CENTRAL_N7_FINDER_PATTERN_ID,
+/**
+ * 중앙 n=7 카드 명부 — OAK 명부와 같은 live-join 규약이다.
+ *
+ * `active` 행만 surface에 합류한다. `dropped`는 카드·상태 허용값을 닫되 descriptor와
+ * 기하 모듈은 남긴다. 중앙 M7은 실사진 0/30으로 드랍, 중앙 TL은 18/30으로 정식
+ * 승격됐다(운영자 지시 2026-08-28).
+ */
+export const CENTRAL_FINDER_CARD_LINEUP = Object.freeze([
+  Object.freeze({
+    card: CENTRAL_MARKER_N7_FINDER_CARD,
+    status: 'dropped',
+    surface: 'lab',
+  }),
+  Object.freeze({
+    card: CENTRAL_N7_FINDER_CARD,
+    status: 'active',
+    surface: 'formal',
+  }),
 ]);
+
+const liveCentralFinderCards = (surface) => CENTRAL_FINDER_CARD_LINEUP
+  .filter((entry) => entry.status === 'active' && entry.surface === surface)
+  .map((entry) => entry.card);
+
+const LAB_ONLY_FINDER_IDS = Object.freeze(
+  liveCentralFinderCards('lab').map((card) => card.id),
+);
+const DROPPED_FINDER_IDS = Object.freeze(
+  CENTRAL_FINDER_CARD_LINEUP
+    .filter((entry) => entry.status === 'dropped')
+    .map((entry) => entry.card.id),
+);
 
 export function isLabOnlyFinderPatternId(id) {
   return LAB_ONLY_FINDER_IDS.includes(id);
+}
+
+export function isDroppedFinderPatternId(id) {
+  return DROPPED_FINDER_IDS.includes(id);
 }
 
 export function labOnlyFinderCardsVisible(lab) {
@@ -106,27 +138,31 @@ export function labOnlyFinderCardsVisible(lab) {
 }
 
 export function labOnlyFinderSelectionAllowed(id, lab) {
-  return !isLabOnlyFinderPatternId(id) || lab === true;
+  return !isDroppedFinderPatternId(id) && (!isLabOnlyFinderPatternId(id) || lab === true);
 }
 
-function safeLabOnlyFinderId(id, lab, fallbackId) {
-  return labOnlyFinderSelectionAllowed(id, lab) ? id : fallbackId;
+function safeFinderCardId(id, lab, fallbackId) {
+  return !isDroppedFinderPatternId(id) && labOnlyFinderSelectionAllowed(id, lab)
+    ? id : fallbackId;
 }
 
-/** 정식 화면에 저장·주입된 시험판 전용 선택과 프로파일 스냅샷을 함께 걷는다. */
-export function sanitizeLabOnlyFinderState(state, lab, fallbackId) {
+/**
+ * 저장·URL·확장 주입 상태에서 닫힌 카드를 현재 정의된 폴백으로 정화한다.
+ * 드랍 카드는 모든 surface에서, lab 전용 카드는 정식 surface에서 닫힌다. 현재 선택뿐
+ * 아니라 직전 선택과 타입군 스냅샷도 함께 정리해 타입 왕복 재유입을 막는다.
+ */
+export function sanitizeFinderCardState(state, lab, fallbackId) {
   if (state === null || typeof state !== 'object') throw new TypeError('생성기 상태가 필요하다');
   if (typeof fallbackId !== 'string' || fallbackId === '') {
-    throw new TypeError('시험판 전용 파인더의 정식 화면 폴백 id가 필요하다');
+    throw new TypeError('닫힌 파인더의 폴백 id가 필요하다');
   }
-  if (lab === true) return state;
 
   let changed = false;
   const sanitizeProfile = (profile) => {
     if (profile === null || typeof profile !== 'object') return profile;
-    const finderPatternId = safeLabOnlyFinderId(profile.finderPatternId, false, fallbackId);
-    const previousFinderPatternId = safeLabOnlyFinderId(
-      profile.previousFinderPatternId, false, fallbackId,
+    const finderPatternId = safeFinderCardId(profile.finderPatternId, lab, fallbackId);
+    const previousFinderPatternId = safeFinderCardId(
+      profile.previousFinderPatternId, lab, fallbackId,
     );
     if (finderPatternId === profile.finderPatternId
       && previousFinderPatternId === profile.previousFinderPatternId) return profile;
@@ -143,9 +179,9 @@ export function sanitizeLabOnlyFinderState(state, lab, fallbackId) {
     }
   }
 
-  const finderPatternId = safeLabOnlyFinderId(state.finderPatternId, false, fallbackId);
-  const previousFinderPatternId = safeLabOnlyFinderId(
-    state.previousFinderPatternId, false, fallbackId,
+  const finderPatternId = safeFinderCardId(state.finderPatternId, lab, fallbackId);
+  const previousFinderPatternId = safeFinderCardId(
+    state.previousFinderPatternId, lab, fallbackId,
   );
   if (finderPatternId !== state.finderPatternId
     || previousFinderPatternId !== state.previousFinderPatternId
@@ -158,6 +194,9 @@ export function sanitizeLabOnlyFinderState(state, lab, fallbackId) {
     finderQrProfiles,
   } : state;
 }
+
+/** 구 공개 이름은 외부 소비자 하위호환을 위해 한 릴리스 유지한다. */
+export const sanitizeLabOnlyFinderState = sanitizeFinderCardState;
 
 /** 실제 정본 좌표와 codec 샘플에서 유도한 새 카드 49셀. */
 export function centralN7ThumbnailCells() {
@@ -200,11 +239,12 @@ export const FINDER_CARD_GROUPS = Object.freeze({
     descriptor(LEGACY_FINDER_PATTERN_ID, null),
     descriptor(CUBE_BULLSEYE_FINDER_PATTERN_ID, getFinderPattern(CUBE_BULLSEYE_FINDER_PATTERN_ID)),
     descriptor(THREE_TONE_CUBE_FINDER_PATTERN_ID, getFinderPattern(THREE_TONE_CUBE_FINDER_PATTERN_ID)),
+    ...liveCentralFinderCards('formal'),
     descriptor(CENTER_QR_FINDER_PATTERN_ID, null),
   ]),
-  // 상태 스키마는 카드 그룹 전체에서 유도하되, DOM 생성은 index.html 이 /lab/에서만
-  // 이 그룹을 formal 행에 끼운다. 숨김과 선택 차단은 서로 독립된 두 겹이다.
-  lab: Object.freeze([CENTRAL_MARKER_N7_FINDER_CARD, CENTRAL_N7_FINDER_CARD]),
+  // 상태 스키마는 살아 있는 카드 그룹 전체에서 유도하되, DOM 생성은 index.html 이
+  // /lab/에서만 이 그룹을 formal 행에 끼운다. 현재 중앙 시험판 전용 active 행은 0개다.
+  lab: Object.freeze(liveCentralFinderCards('lab')),
   generated: Object.freeze(generatedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
   refined: Object.freeze(refinedPatterns.map((pattern) => descriptor(pattern.id, pattern))),
   // O/A/K 후보 (2026-08-18) — 운영자 편집기 export 계보. 이진 후보들과 **다른 줄**에
@@ -240,6 +280,29 @@ export const FINDER_CARD_GROUPS = Object.freeze({
   // 한 장을 유지한다. 라벨만 갈랐다 (g569). 와이어 id 는 oak-daehan-k10.
   daehan: Object.freeze([descriptor(DAEHAN_K10.id, DAEHAN_K10)]),
 });
+
+// 중앙 명부 live-join 자기검증 — status만 바꾸면 카드 그룹이 따라 닫혀야 한다.
+{
+  const seen = new Set();
+  const liveBySurface = {
+    formal: new Set(FINDER_CARD_GROUPS.formal.map((card) => card.id)),
+    lab: new Set(FINDER_CARD_GROUPS.lab.map((card) => card.id)),
+  };
+  for (const entry of CENTRAL_FINDER_CARD_LINEUP) {
+    if (seen.has(entry.card.id)) throw new Error('중앙 카드 명부 id 중복: ' + entry.card.id);
+    seen.add(entry.card.id);
+    if (!['active', 'dropped'].includes(entry.status)) {
+      throw new Error('중앙 카드 명부 status 오류: ' + entry.card.id + ' = ' + entry.status);
+    }
+    if (!Object.hasOwn(liveBySurface, entry.surface)) {
+      throw new Error('중앙 카드 명부 surface 오류: ' + entry.card.id + ' = ' + entry.surface);
+    }
+    const joined = liveBySurface[entry.surface].has(entry.card.id);
+    if (joined !== (entry.status === 'active')) {
+      throw new Error('중앙 카드 명부 live-join 불일치: ' + entry.card.id);
+    }
+  }
+}
 
 /**
  * 실제 카드 요소의 click/Enter/Space를 같은 활성화 경계로 묶는다.

@@ -18,7 +18,12 @@ import {
   FINDER_TAXONOMY, KIND_ABSENT, KIND_SEAT, SEAT_DEFAULT_FINDER, taxonomyByClass,
 } from '../src/finder-taxonomy.js';
 import { TAEGUK_ID, DAEHAN_FINDER_PATTERN_IDS } from '../src/finder-daehan.js';
-import { GENERATOR_STATE_SCHEMA } from '../src/generator-state.js';
+import {
+  GENERATOR_DEFAULT_FINDER_PATTERN_ID, GENERATOR_STATE_SCHEMA,
+} from '../src/generator-state.js';
+import {
+  CENTRAL_FINDER_CARD_LINEUP, CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS,
+} from '../src/finder-card-ui.js';
 import { K_FORMAT_INDEX } from '../src/formatK.js';
 
 test('내곽/외곽 seat 유도가 분류 정본(분류 2·3 + KIND_ABSENT)과 1:1 이다', () => {
@@ -80,7 +85,11 @@ test('중앙 = 분류 1 — 카드 목록과 분류 정본의 차이는 taegeuk�
   // 두 집합은 같아야 한다 — 어긋나면 «세 면 같은 원천» 이 깨진 것이다.
   const central = new Set(zoneCards().central.map((card) => card.id));
   const class1 = new Set(taxonomyByClass(1).map((row) => row.id));
-  const onlyClass1 = [...class1].filter((id) => !central.has(id) && id !== TAEGUK_ID);
+  const droppedCards = new Set(CENTRAL_FINDER_CARD_LINEUP
+    .filter((entry) => entry.status === 'dropped').map((entry) => entry.card.id));
+  const onlyClass1 = [...class1].filter(
+    (id) => !central.has(id) && id !== TAEGUK_ID && !droppedCards.has(id),
+  );
   const onlyCards = [...central].filter(
     (id) => !class1.has(id) && !DAEHAN_FINDER_PATTERN_IDS.includes(id),
   );
@@ -93,12 +102,22 @@ test('상태 스키마 seat options 는 zone 유도와 같다 (검증되는 사�
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.outerSeat.options], [...OUTER_SEAT_OPTIONS]);
 });
 
-test('C5 고급 게이팅 — advancedOnly 는 formal 여집합 유도이고 정식 normal 3장이 확정값이다', () => {
-  // 운영자 확정 (2026-08-23·24): 정식 normal 중앙 3장 = cube-bullseye·central-v0·center-qr.
-  assert.deepEqual([...OFFICIAL_NORMAL_CENTRAL_IDS],
-    ['cube-bullseye', 'central-v0', 'center-qr']);
-  assert.deepEqual([...ADVANCED_ONLY_CENTRAL_IDS].sort(),
-    ['bullseye', 'central-cube-3tone']);
+test('정식 일반은 새 기본 중앙 TL을 노출하고 중앙 Y0는 formal 여집합인 고급으로 이동한다', () => {
+  const normal = new Set(OFFICIAL_NORMAL_CENTRAL_IDS);
+  const advancedOnly = new Set(ADVANCED_ONLY_CENTRAL_IDS);
+  const formal = new Set([
+    ...FINDER_CARD_GROUPS.formal.map((card) => card.id), CENTRAL_V0_FINDER_CARD.id,
+  ]);
+  assert.equal(normal.has(GENERATOR_DEFAULT_FINDER_PATTERN_ID), true,
+    '새 기본 중앙 TL이 정식 일반에서 숨겨졌다');
+  assert.equal(normal.has(CENTRAL_V0_FINDER_CARD.id), false,
+    '중앙 Y0가 정식 일반에 남아 있다');
+  assert.equal(advancedOnly.has(CENTRAL_V0_FINDER_CARD.id), true,
+    '중앙 Y0가 고급 표면으로 가지 않았다');
+  assert.equal([...normal].some((id) => advancedOnly.has(id)), false,
+    '일반과 고급 전용 카드가 겹친다');
+  assert.deepEqual(new Set([...normal, ...advancedOnly]), formal,
+    'advancedOnly가 formal - 정식 일반 여집합이 아니다');
   // central 서술자의 advancedOnly 플래그가 그 유도와 일치한다.
   for (const card of zoneCards().central) {
     assert.equal(card.advancedOnly, ADVANCED_ONLY_CENTRAL_IDS.includes(card.id),

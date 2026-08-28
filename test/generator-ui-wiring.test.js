@@ -30,6 +30,7 @@ import {
 } from '../src/luminance.js';
 import { FINDER_CARD_GROUPS, isLabOnlyFinderPatternId } from '../src/finder-card-ui.js';
 import { CENTER_QR_FINDER_PATTERN_ID } from '../src/finder-selection.js';
+import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
 import { GENERATOR_STATE_SCHEMA, createGeneratorState } from '../src/generator-state.js';
 import {
@@ -88,8 +89,8 @@ test('§6.1 편집기는 생성기가 고를 수 있는 파인더 id 를 조용�
   const cardIds = Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id);
   const notRepresentable = new Set([
     CENTER_QR_FINDER_PATTERN_ID, // QR 모듈 블록이라 셀 표현이 없다 (동기화가 건너뛴다)
-    // 시험판 중앙 M7·TL은 모두 7×7 전용 기하라 중앙 19셀 편집기에 표현할 수 없다.
-    // 카드 목록과 lab-only 술어에서 유도해 새 시험판 카드를 손 목록으로 놓치지 않는다.
+    CENTRAL_N7_FINDER_PATTERN_ID, // 정식 중앙 TL도 7×7 전용이라 19셀 편집기에 없다.
+    // 남아 있는 시험판 중앙 카드는 lab-only 술어에서 유도한다.
     ...cardIds.filter(isLabOnlyFinderPatternId),
   ]);
   const swallowed = [];

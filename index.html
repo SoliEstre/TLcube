@@ -434,12 +434,11 @@
      들어와 4개가 되면서 한 칸 폭이 좁아져 글자가 뭉갰다. 나머지 카드와 같은 세로 배치
      (썸네일 위 · 글자 아래)로 통일한다 — `.toggle-card` 기본값이 이미 그 모양이라
      가로 배치 override 만 걷어내면 된다. */
-  /* **2026-08-21 중앙 v0 편입**: 정식 행이 5개가 됐다 — 중앙 v0 카드가 중앙 QR 바로
-     앞에 붙는다.
-     **의도적 갱신 (W2 C5, 2026-08-24)**: 격자(repeat(5))를 **nowrap flex 관용구**로
-     교체했다 (#renderProfileCards — W1-c 입체감 행 — 전례 복제). 정식 normal 이
-     advancedOnly 2장(bullseye·central-cube-3tone)을 숨겨 3장이 되는데, 칸 수 고정
-     격자는 빈 칸 2개를 남긴다. flex 는 보이는 카드 수만큼 고르게 나눈다 —
+  /* **2026-08-28 중앙 TL 정식 승격**: formal 5장 + 계보 밖 중앙 v0 1장이다.
+     중앙 TL이 새 기본으로 normal에 서고, 중앙 v0는 advanced 표시로 이동했다.
+     격자는 **nowrap flex 관용구**다 (#renderProfileCards — W1-c 입체감 행 전례).
+     정식 normal 이 advancedOnly 3장(bullseye·central-cube-3tone·central-v0)을 숨겨
+     3장이 되는데, 칸 수 고정 격자는 빈 칸을 남긴다. flex 는 보이는 카드 수만큼 고르게 나눈다 —
      칸 수 ↔ 카드 수 관계 잠금(gen-variants)은 관용구 잠금으로 대체됐다. */
   .finder-legacy-row { flex-wrap: nowrap; gap: 8px; margin-top: 4px; }
   .finder-legacy-row .toggle-card { min-width: 0; flex: 1 1 0; }
@@ -6231,7 +6230,7 @@ import {
 import {
   CENTRAL_V0_FINDER_CARD, FINDER_CARD_GROUPS, centralN7ThumbnailCells,
   getUnmeasuredFinderPattern, isLabOnlyFinderPatternId, labOnlyFinderCardsVisible,
-  labOnlyFinderSelectionAllowed, sanitizeLabOnlyFinderState,
+  labOnlyFinderSelectionAllowed, sanitizeFinderCardState,
   wireFinderCardActivation,
 } from './src/finder-card-ui.js';
 import {
@@ -6470,13 +6469,11 @@ refreshInputClearButtons();
 /** 생성기 선택의 단일 상태 — 모드는 이 객체의 노출 범위만 바꾼다. */
 let mode = 'normal';
 const generatorState = createGeneratorState();
-// 저장 상태·확장 주입으로 정식 화면에 시험판 중앙 카드가 살아나도 렌더 전에 기본값으로 닫는다.
-// 현재 선택뿐 아니라 직전 선택·타입군 스냅샷도 함께 정리해 타입 왕복 재유입을 막는다.
-if (!isLabPath()) {
-  Object.assign(generatorState, sanitizeLabOnlyFinderState(
-    generatorState, false, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
-  ));
-}
+// 저장 상태·URL·확장 주입의 닫힌 중앙 카드를 렌더 전에 정의된 폴백(중앙 TL)으로
+// 정화한다. dropped는 시험판에서도 닫히고, 현재·직전·타입군 스냅샷을 함께 걷는다.
+Object.assign(generatorState, sanitizeFinderCardState(
+  generatorState, isLabPath(), GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+));
 const nextExportFilename = createExportFilenameFactory();
 let downloadToastTimer = 0;
 
@@ -7296,7 +7293,8 @@ function applyFinderExperimentVisibility() {
     }
   }
   // ── C5 고급 게이팅 (설계서 ③ — 운영자 확정 2026-08-23·24) ────────────────
-  // 정식(official) normal 의 formal 행은 cube-bullseye·central-v0·center-qr 3장.
+  // 정식(official) normal 의 formal 행은 cube-bullseye·중앙 TL·center-qr 3장.
+  // 중앙 Y0(central-v0)는 기능을 유지하고 advancedOnly 표시로 옮겼다.
   // advancedOnly(= formal 여집합 유도 — finder-zone-ui)는 **표시 게이트**로만
   // 숨긴다: 스키마·active 는 BOTH 유지 (숨김-active 는 renderFinderUi 가 배지로
   // 말한다 — 조용한 무시 금지, 강제 리셋도 없음: 파인더는 사용자 명시 선택이다).
@@ -7795,8 +7793,8 @@ function makeFinderCard(id, pattern) {
   label.dataset.finderLabelKey = FINDER_LABEL_KEYS[id];
   card.append(label);
   const activate = () => {
-    // DOM 비노출과 별개인 두 번째 차단. 저장 상태·확장이 정식 화면에서 이벤트를
-    // 만들어도 디코더 미배선 시험판 중앙 카드를 선택 상태로 넣지 않는다.
+    // DOM 비노출과 별개인 두 번째 차단. 저장 상태·확장이 이벤트를 만들어도 dropped
+    // 또는 그 surface에서 닫힌 카드를 선택 상태로 넣지 않는다.
     if (!labOnlyFinderSelectionAllowed(id, isLabPath())) return;
     const type = currentType();
     commitFinderQrUi(
@@ -7813,8 +7811,9 @@ function ensureFinderCards() {
     || els.finderUserCards.childElementCount || els.finderOakCards.childElementCount
     || els.finderDaehanCards.childElementCount) return;
 
-  // 중앙 v0는 생성 패턴 계보 밖의 운영자 확정 카드다. 중앙 M7·중앙 TL은 lab에서만
-  // 같은 자리에 끼우며, 정식 화면에서는 요소 자체를 만들지 않는다(숨김 속성에 기대지 않는다).
+  // 중앙 v0는 생성 패턴 계보 밖의 운영자 확정 카드다. 중앙 명부의 active lab 행만
+  // 시험판에서 같은 자리에 끼운다. 현재 중앙 M7은 dropped, 중앙 TL은 formal 승격이라
+  // lab 전용 행은 비어 있다 — 기하·모듈은 남지만 M7 카드 요소는 어느 빌드에도 없다.
   const labCentralCards = labOnlyFinderCardsVisible(isLabPath())
     ? FINDER_CARD_GROUPS.lab : [];
   const formalCards = FINDER_CARD_GROUPS.formal.flatMap((entry) =>
@@ -9132,10 +9131,12 @@ function cellEditorStateFor(ctx) {
 function syncCellEditorFinderFromGenerator(state, ctx) {
   if (ctx.type === 'Y') return; // Y 는 중앙 파인더 슬롯이 없다 (셀 표면 로케이터를 쓴다)
   const wanted = generatorState.finderPatternId;
-  // 중앙 QR 은 셀이 아니라 QR 모듈 블록이라 편집기에 대응 표현이 없다. 불스아이로
+  // 중앙 QR과 n×n 중앙 비컨은 19셀 파인더 편집기에 대응 표현이 없다. 불스아이로
   // 되돌려 그리면 «편집기가 보여 주는 것 = 코드가 그리는 것» 이라는 이 동기화의
-  // 전제가 거짓말이 된다 — 그래서 건드리지 않고 지난다.
+  // 전제가 거짓말이 된다 — 그래서 건드리지 않고 지난다. 중앙 TL은 정식 승격 뒤에도
+  // 7×7 전용 기하라는 사실은 그대로다.
   if (wanted === CENTER_QR_FINDER_PATTERN_ID
+    || wanted === CENTRAL_N7_FINDER_PATTERN_ID
     || isCentralV0FinderPatternId(wanted)
     || isLabOnlyFinderPatternId(wanted)) return;
   if (state.finderStarter === wanted) return;
@@ -11195,11 +11196,10 @@ function encodeOptsFor(cfg) {
     return { fn: encodeA, opts };
   }
   if (cfg.type === 'K') {
-    // Type K — encodeK 는 centerQr·centralV0·daehanFinder·turnA 를 **던진다**
-    // (encodeK.js §옵션 배타). 그래서 여기서는 그 넷을 **한 비트도 안 싣는다** —
-    // false 로도 안 채운다. encodeK 는 `options[name] !== undefined && !== false`
-    // 로 보므로 false 는 통과하지만, 안 싣는 쪽이 «UI 가 만들 수 있는 조합» 을
-    // 옵션 표면에서 아예 없앤다 (A 분기의 turnA 규약과 같은 이유).
+    // Type K — encodeK 가 아직 던지는 것은 daehanFinder·turnA다(§옵션 배타).
+    // centerQr·centralV0·centralN7은 중앙 슬롯 점유자로 개설됐고 아래 공유 유도가
+    // 실제 선택 하나만 싣는다. 거부 옵션 둘은 false조차 채우지 않아 K 옵션 표면에서
+    // 만들지 않는다 (A 분기의 turnA 규약과 같은 이유).
     //
     // ⭐ **K-CM 개설 (2026-08-25)** — 구 주석은 「부트스트랩이 star 축 formatIndex 8 을
     //    안 열어 생성돼도 스캔이 안 되므로 여기서도 안 싣는다」였고, 「배선이 끝나면 두

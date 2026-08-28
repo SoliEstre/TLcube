@@ -44,7 +44,9 @@ const INDEX = readFileSync(ROOT + 'index.html', 'utf8');
 
 test('① 분류 배정은 표에서 유도 — 손 목록과 불일치하면 실패', () => {
   const formalIds = FINDER_CARD_GROUPS.formal.map((d) => d.id);
-  assert.equal(formalIds.length, 4);
+  assert.ok(formalIds.length > 0);
+  assert.equal(new Set(formalIds).size, formalIds.length,
+    '정식 카드 명부에 같은 id가 중복됐다');
   for (const id of formalIds) {
     const row = taxonomyItem(id);
     assert.ok(row, id + ' 가 분류 표에 없다');

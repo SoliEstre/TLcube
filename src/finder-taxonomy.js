@@ -173,11 +173,11 @@ function co2NonPermutationCount() {
 }
 
 const FORMAL_IDS = FINDER_CARD_GROUPS.formal.map((d) => d.id);
-if (FORMAL_IDS.length !== 4) {
-  throw new Error('초기 4종이 4가 아니다: ' + FORMAL_IDS.join(','));
+if (FORMAL_IDS.length === 0 || new Set(FORMAL_IDS).size !== FORMAL_IDS.length) {
+  throw new Error('정식 카드 명부가 비었거나 중복이다: ' + FORMAL_IDS.join(','));
 }
 
-function isFormalFour(id) {
+function isFormalCard(id) {
   return FORMAL_IDS.includes(id);
 }
 
@@ -201,6 +201,8 @@ function buildItems() {
   const add = (row) => { items.push(freezeRow(row)); };
 
   for (const desc of FINDER_CARD_GROUPS.formal) {
+    // 중앙 TL은 n=7 전용 기하·톤·소비자 설명이 있어 아래 특수 행이 소유한다.
+    if (desc.id === CENTRAL_N7_FINDER_PATTERN_ID) continue;
     const pattern = desc.pattern;
     const renderKind = pattern
       ? pattern.renderKind
@@ -222,7 +224,7 @@ function buildItems() {
           : '19셀 슬롯',
       renderable: true,
       consumer: '생성기 카드 formal · LAB_CENTRAL_FINDER_IDS · scene.js',
-      note: '초기 4종',
+      note: '정식 중앙 카드',
     });
   }
 
@@ -249,46 +251,46 @@ function buildItems() {
   // 중앙 M7 (n=7 마커) — 2026-08-27 편입. 중앙 Y0(n=13) 와 **같은 슬롯**을 쓰지만
   // 성격이 다르다: Y0 는 «Type Y 코드 한 벌» 이고 이쪽은 **데이터를 안 싣는 고정 마커**다
   // (49셀 < 오버헤드 60셀이라 데이터 프레임이 산술적으로 불가능 — 레인 BCN7).
-  // ⚠ **시험판 전용**이다. 디코더가 아직 이 마커를 못 읽는다 — 정식에 노출하면
-  //   «만들 수는 있는데 스캔이 안 되는» 코드를 사용자가 발행한다.
+  // 실사진 0/30으로 2026-08-28 드랍됐다. 분류·기하·판독 회귀는 보존하고 카드와
+  // 생성기 상태 허용값만 닫는다 (차단이지 삭제가 아니다).
   add({
     id: CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
     name: '중앙 M7 (n=7 마커)',
     class: 1,
     className: FINDER_CLASS[1],
     kind: KIND_FINDER,
-    origin: 'CENTRAL_MARKER_N7_FINDER_CARD (finder-card-ui) — 시험판 전용 카드',
+    origin: 'CENTRAL_FINDER_CARD_LINEUP dropped (finder-card-ui) — 구 시험판 카드',
     renderPath: 'src/scene.js central-marker-n7 (고정 코드북 렌더)',
     coordBasis: COORD_CENTER,
     innerSplit: null,
     toneAxis: '셀 컬러 (palette.levels — 후보 B 고정 3톤)',
     cells: '중앙 슬롯 49셀 전부 고정 (pose 12 + family 37)',
     renderable: true,
-    consumer: '시험판 생성기 카드 · (디코더 편입 전)',
-    note: '레인 BCN7/BCN7P — 실사 거짓 수용 0/1.78억 창. 참 수용은 아직 합성뿐',
+    consumer: '기하·발행분 판독 회귀 (생성기 카드는 드랍)',
+    note: '실사진 0/30으로 후보 B 드랍 — 카드 차단, 기하 보존',
   });
 
   // 중앙 TL (n=7 payload) — v0에서 유도한 로케이터 30셀과 codec 데이터 19셀.
-  // 디코더 검출 배선 전이므로 후보 B와 함께 시험판 전용이다.
+  // 실사진 18/30으로 2026-08-28 정식 승격됐고 O/A/K 생성기 기본값이다.
   add({
     id: CENTRAL_N7_FINDER_PATTERN_ID,
     name: '중앙 TL (n=7 payload)',
     class: 1,
     className: FINDER_CLASS[1],
     kind: KIND_FINDER,
-    origin: 'CENTRAL_N7_FINDER_CARD (finder-card-ui) — 시험판 전용 카드',
+    origin: 'CENTRAL_N7_FINDER_CARD (finder-card-ui) — 정식 카드',
     renderPath: 'src/scene.js central-n7-payload (locator 30 + codec data 19)',
     coordBasis: COORD_CENTER,
     innerSplit: null,
     toneAxis: '셀 컬러 (palette.levels — locator 절대 톤 + payload 순열)',
     cells: '중앙 슬롯 49셀 (locator 30 + payload 19)',
     renderable: true,
-    consumer: '시험판 생성기 카드 · (검출은 N7C)',
-    note: '레인 N7A/N7B — family + 바깥 format을 rep3-check1에 싣는다',
+    consumer: '정식 생성기 카드 · 중앙 n=7 검출',
+    note: '실사진 18/30 — O/A/K 기본 중앙 파인더',
   });
 
   for (const pattern of FINDER_PATTERNS) {
-    if (isFormalFour(pattern.id)) continue;
+    if (isFormalCard(pattern.id)) continue;
     add({
       id: pattern.id,
       name: pattern.name,
@@ -796,7 +798,7 @@ function printTable(rows) {
 export function printFinderTaxonomy() {
   printSection('0. 유도 출처');
   console.log('module: src/finder-taxonomy.js');
-  console.log('formal4:', FORMAL_IDS.join(', '));
+  console.log('formal:', FORMAL_IDS.join(', '));
   console.log('FINDER_PATTERNS:', FINDER_PATTERNS.length);
   console.log('OAK_FINDER_PATTERNS:', OAK_FINDER_PATTERNS.map((p) => p.id).join(', '));
   console.log('DAEHAN_FINDER_PATTERN_IDS:', [...DAEHAN_FINDER_PATTERN_IDS].join(', '));

@@ -17,7 +17,7 @@ import {
 } from '../src/finder-daehan.js';
 import { encodeA } from '../src/encodeA.js';
 import {
-  FINDER_CARD_GROUPS,
+  CENTRAL_FINDER_CARD_LINEUP, FINDER_CARD_GROUPS,
   getUnmeasuredFinderPattern,
   wireFinderCardActivation,
 } from '../src/finder-card-ui.js';
@@ -183,40 +183,16 @@ function makeUiHarness(type) {
   };
 }
 
-test('정식 파인더 카드 행은 불스아이 → 하이브리드 → 3톤 큐브 → 중앙 QR이고 나머지는 동적으로 이어진다', () => {
+test('파인더 DOM 대체는 살아 있는 카드 명부를 중복 없이 전부 반영한다', () => {
   const root = new DomRootFallback();
   appendFinderCards(root);
   const ids = root.querySelectorAll('[data-finder-id]').map((card) => card.dataset.finderId);
-
-  // 사용자 지시 2026-08-13: 실사진에서 실제로 읽히는 큐브 선택지가 하이브리드라 두 번째다.
-  assert.deepEqual(ids.slice(0, 4), [
-    'bullseye',
-    'cube-bullseye',
-    'central-cube-3tone',
-    CENTER_QR_FINDER_PATTERN_ID,
-  ]);
-  // **의도적 갱신 (2026-08-18, OAK 편입)** — 15 → 18. 정식 4 + 생성 8 + 손그림 3 에
-  // O/A/K 후보 3(Nitrogen r2 · Aspirin · Benzene)이 별도 줄로 붙었다. 세 후보는
-  // 계보(편집기 export)도 표현(면당 3레벨)도 앞의 것들과 달라서 같은 줄에 안 섞는다
-  // — 카드만 보고 계보를 읽을 수 있어야 한다 (finder-oak-patterns.js 헤더).
-  // **의도적 갱신 (2026-08-19, daehan 편입)** — 18 → 19. daehan 은 **한 장**이다
-  // (k=6/8/10 은 잘림본이고 어느 것을 그릴지는 버전이 정한다). OAK 와도 다른 줄에
-  // 두는 이유는 회계다 — 이 후보만 용량을 깎는다 (V3 65 B → 46 B).
-  // **의도적 갱신 (2026-08-23, W2 선행)** — 19 → 21. OAK 서랍에 footprint ·
-  // taegeuk 단독이 붙었다 (finder-oak-patterns.js 등재에서 유도 — 손 목록 아님).
-  // **의도적 갱신 (2026-08-23, C1 — Benzene 드랍)** — 21 → 20. 카드는 명부
-  // live-join 유도라 status 'dropped' 가 카드를 닫는다 (판독·패턴 표는 유지).
-  // **의도적 갱신 (2026-08-24 — Aspirin 드랍, 아침 검수 5)** — 20 → 19. 같은 규약.
-  // **의도적 갱신 (2026-08-27, N7CARD 시험판 카드)** — 19 → 20. /lab/ 전용 중앙 TL 카드가 붙었고 정식 화면 카드 수 19는 변하지 않았다.
-  // **의도적 갱신 (2026-08-28, N7B)** — 20 → 21. 후보 B 가 「중앙 M7」로 개명되고
-  // 새 스키마 카드 「중앙 TL」이 붙었다. 둘 다 /lab/ 전용이라 **정식 화면 카드 수 19는
-  // 그대로다** — 이 수는 시험판 포함 전수다.
-  assert.equal(ids.length, 21);
-  assert.deepEqual(ids.slice(-4, -1),
-    ['oak-nitrogen-r2', 'oak-footprint', 'oak-taegeuk-solo'],
-    'OAK 카드가 daehan 앞 세 자리가 아니다');
-  assert.equal(ids.at(-1), 'oak-daehan-k10', 'daehan 카드가 맨 뒤가 아니다');
   assert.equal(new Set(ids).size, ids.length);
+  assert.equal(ids.includes(GENERATOR_DEFAULT_FINDER_PATTERN_ID), true,
+    '새 기본 중앙 TL 카드가 DOM 명부에 없다');
+  for (const entry of CENTRAL_FINDER_CARD_LINEUP) {
+    assert.equal(ids.includes(entry.card.id), entry.status === 'active', entry.card.id);
+  }
 });
 
 test('장면 기본 파인더도 중앙 QR일 때는 실험판 기본값으로 새지 않는다', () => {
@@ -255,7 +231,9 @@ test('배치 불변 — O·A 캔버스는 QR 배치(코너/안쪽/없음)와 무
   ];
   for (const type of ['O', 'A']) {
     const sizes = FALLBACKS.map(({ label, fallback }) => {
-      const encoded = encodeFor(type, fallback.mode === 'center');
+      const encoded = encodeFor(
+        type, fallback.mode === 'center', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+      );
       const scene = buildScene(encoded, sceneOptionsForOA({
         fallback,
         finderPatternId: GENERATOR_DEFAULT_FINDER_PATTERN_ID,
@@ -274,13 +252,13 @@ test('배치 불변 — O·A 캔버스는 QR 배치(코너/안쪽/없음)와 무
   }
 });
 
-test('초기 Y에서 O/A로 전환하면 중앙 QR 포맷과 장면을 실제 기본 경로로 렌더한다', () => {
+test('초기 Y에서 O/A로 전환하면 중앙 TL 포맷과 장면을 실제 기본 경로로 렌더한다', () => {
   for (const type of ['O', 'A']) {
     const state = selectGeneratorType(
       createGeneratorState(), type, GENERATOR_DEFAULT_FINDER_PATTERN_ID,
     );
     const fallback = fallbackFor(state);
-    const encoded = encodeFor(type, fallback.mode === 'center');
+    const encoded = encodeFor(type, fallback.mode === 'center', state.finderPatternId);
     const scene = buildScene(encoded, sceneOptionsForOA({
       fallback,
       finderPatternId: state.finderPatternId,
@@ -289,9 +267,10 @@ test('초기 Y에서 O/A로 전환하면 중앙 QR 포맷과 장면을 실제 �
       type,
     }));
 
-    assert.equal(state.qrPosition, 'inner', type);
-    assert.equal(encoded.centerQr, true, type);
-    assert.equal(scene.finderPatternId, 'centerQr', type);
+    assert.equal(state.finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID, type);
+    assert.notEqual(state.qrPosition, 'inner', type);
+    assert.equal(encoded.centralN7, true, type);
+    assert.equal(scene.finderPatternId, GENERATOR_DEFAULT_FINDER_PATTERN_ID, type);
     assert.equal(verifyRaster(
       rasterize(scene, { pixelsPerUnit: 12, supersample: 2 }), scene, encoded,
     ).ok, true, type);
