@@ -1,5 +1,15 @@
 User-agent: *
 Allow: /
+# 접두어를 손으로 고르면 그 뒤에 는 파일이 전부 샌다 — 실제로 lab-gen.html 과
+# cell-editor.html 이 `gen-` 에 안 걸려 열려 있었다(2026-08-28 실측). 그래서 목록이
+# 아니라 규칙을 건다: `/_shared/` 아래 **HTML 은 전부** 색인 대상이 아니다.
+# 시험판(원격 수집 고지) · 에디터 · 버전 비교 빌드가 여기 모이고, 어느 쪽도 안정판과
+# 중복 내용이라 색인되면 사용자가 시험판을 안정판으로 알고 들어온다.
+# ⚠ CSS·JS·아이콘·webmanifest·llms.txt 는 **계속 허용**해야 한다 — 막으면 렌더를
+#   평가 못 해 안정판 자체의 색인 품질이 떨어진다. 그래서 확장자로 좁힌다.
+Disallow: /_shared/*.html$
+Disallow: /lab/
+# 아래 접두어는 와일드카드를 안 읽는 크롤러용 이중화다. 위 규칙에 포함된다.
 Disallow: /_shared/gen-
 
 Sitemap: https://tlcube.estre.so/sitemap.xml
