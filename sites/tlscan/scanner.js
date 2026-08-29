@@ -26,6 +26,10 @@ import {
   resumeAction,
 } from '/src/scanner-camera-lifecycle.js';
 import {
+  DAEHAN_FALLBACK_INITIAL_STATE,
+  daehanFallbackDecision,
+} from '/src/scanner-daehan-fallback.js';
+import {
   buildCauseChain,
   classifyStage,
   createLabTelemetry,
@@ -309,6 +313,8 @@ function beginScanAttempt(source) {
   // ① 1440 승격 ② 안내 ③ 자동 크롭 사다리가 이전 카메라의 시간을 상속한다.
   resetFailureTiming();
   lastFrameCostMs = 0;
+  // daehan 폴백의 연속 실패도 시도 단위다 (위 lastFramePose 와 같은 이유).
+  daehanFallbackState = DAEHAN_FALLBACK_INITIAL_STATE;
   if (autoCropIndex !== 0) {
     autoCropIndex = 0;
     // 프리뷰를 같은 값으로 즉시 재동기화 (§effectiveCropZoom 의 «가이드 = 분석» 불변식).
@@ -731,7 +737,22 @@ function sendLabEnvOnce(stream) {
   }).catch(() => {});
 }
 
-function reportLabFrame(imageData, result, ms, stage) {
+/**
+ * @param {object} [extra] frame body 에 그대로 얹을 추가 키. 현재는 daehan 폴백의
+ *   `escalated` 하나다 — false = 1차 패스만, true = daehan 2차 패스를 실제로 돌린 프레임.
+ *
+ * ⚠ **이 키는 아직 좌석에 도달하지 않는다** (2026-08-30 실측). 세 층이 모르는 키를
+ *   각자 떨군다:
+ *     ① `src/lab-telemetry.js` `normalizeFrameBody` — 반환이 **명시 객체 리터럴**이라
+ *        여기서 제일 먼저 죽는다. 와이어에 오르지도 못한다.
+ *     ② `relay/protocol.mjs` `eventRow` — 컬럼별 명시 매핑.
+ *     ③ `relay/schema.sql` `events` — 명시 컬럼뿐. raw JSON body 컬럼은 **없다**.
+ *   즉 「frame body 는 raw JSON 이라 DDL 불요」 는 사실이 아니다. 좌석이 이 키로
+ *   폴백 기여를 가르려면 ①②③을 함께 열어야 한다 (기대 축 ③ outerFinderId 가
+ *   같은 계열로 이미 겪은 일 — 아래 lab.frame 근처 주석 참조).
+ *   여기까지 배선해 두는 이유는, 세 층이 열리는 날 스캐너 쪽에 할 일이 없게 하기 위함이다.
+ */
+function reportLabFrame(imageData, result, ms, stage, extra) {
   if (!lab.enabled || !imageData) return;
   frameSeq += 1;
   const ok = result && result.ok === true;
@@ -776,6 +797,7 @@ function reportLabFrame(imageData, result, ms, stage) {
       chain,
       geometry,
       cellSurface,
+      ...(extra && typeof extra === 'object' ? extra : {}),
     });
     lab.frameShot({
       seq: frameSeq,
@@ -855,6 +877,14 @@ async function refreshCameraChoices() {
 }
 
 /**
+ * daehan 폴백의 연속 실패 카운터. 판정 규칙은 `scanner-daehan-fallback.js` 가
+ * 전부 가지고, 여기는 상태 한 칸만 든다. 시도 단위 상태라 `beginScanAttempt` 가
+ * 리셋한다 — 안 하면 새 시도의 첫 실패가 이전 카메라의 실패 횟수를 상속해
+ * 「조준하자마자 2차 패스」 라는 이 정책의 목적이 프레임 3장만큼 늦어진다.
+ */
+let daehanFallbackState = DAEHAN_FALLBACK_INITIAL_STATE;
+
+/**
  * TLcube 디코더 경계.
  *
  * ⚠ `ImageData` 는 `.data` 를, 디코더는 `.pixels` 를 쓴다. 여기서 맞춰 준다 —
@@ -866,6 +896,9 @@ async function refreshCameraChoices() {
  * 포기했는지** 알 수 있게 한다.
  *
  * @param {ImageData} imageData 카메라 또는 업로드 이미지에서 얻은 프레임
+ * @param {{priorPoses?: Array, deferReport?: boolean, source?: 'live'|'still'}} [settings]
+ *   `source` 를 안 주면 라이브로 본다 — 스로틀이 걸리는 쪽이 기본값이어야
+ *   새 호출자가 실수로 무제한 2차 패스를 여는 일이 없다.
  * @returns {Promise<{ ok: boolean, payload?: string, reason?: string }>}
  */
 async function decodeFrame(imageData, settings = {}) {
@@ -879,21 +912,30 @@ async function decodeFrame(imageData, settings = {}) {
   const t0 = nowMs();
   try {
     const clock = createStageClock();
-    const result = decodeFrontend({
+    const raster = {
       width: imageData.width,
       height: imageData.height,
       pixels: imageData.data,
-    }, {
+    };
+    /*
+     * 한 프레임의 패스 하나. 1차·2차가 **같은 함수**를 쓴다 — 옵션을 두 벌 적으면
+     * 언젠가 한쪽만 바뀌고, 그러면 「2차 패스가 1차와 다른 조건으로 돌았다」 가
+     * 조용히 성립한다. 두 패스의 유일한 차이는 `cellFinderDaehan` 이다.
+     * 시계도 하나를 공유한다: 보고는 한 행이고 total 이 두 패스의 합이므로
+     * 단계 시간도 합이어야 앞뒤가 맞는다.
+     */
+    const runPass = (daehan) => decodeFrontend(raster, {
       onStage: (stageName, phase) => clock.onStage(stageName, phase),
-      // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너는 종전
-      // 검출 계약과 프레임 비용을 그대로 유지한다.
+      // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너의 **1차 패스**는
+      // 종전 검출 계약과 프레임 비용을 그대로 유지한다 (daehan 은 실패한 프레임의
+      // 2차 패스로만 붙는다 — 아래 폴백).
       // ⚠ cellFinderDaehan 은 **bootstrap 아래**여야 한다. decodeFrontend 는
       //   `options.bootstrap` 만 추려서 넘기고(frontend.js:117), 라인업을 고르는
       //   discoverCellFinders 가 받는 options 는 그 bootstrapOptions 다
       //   (bootstrap.js:849·884). 최상위에 두면 조용히 무시된다 — 토글을 눌러도
       //   아무 일이 안 일어나고, 그게 «daehan 이 효과가 없다» 로 오독된다.
       bootstrap: {
-        cellFinderDaehan,
+        cellFinderDaehan: daehan,
         // **셀 표면 검출을 정식에서도 켠다** (운영자 확정 2026-08-19).
         //
         // 왜 지금인가 — 인쇄용 포스터를 v0(셀 표면)로 바꾸려는데, 이 스위치가
@@ -913,6 +955,30 @@ async function decodeFrame(imageData, settings = {}) {
       // 가이드-사전 포즈. 없으면 이 객체 키 자체가 안 생겨 종전 경로와 동일하다.
       ...(Array.isArray(settings.priorPoses) ? { priorPoses: settings.priorPoses } : {}),
     });
+
+    // 1차 패스 — 현행 그대로다. 토글이 꺼진 정식 경로는 여기까지 **비트 동일**이고,
+    // 성공하던 프레임은 아래 폴백이 구조상 안 돌아 결과·비용이 안 변한다.
+    let result = runPass(cellFinderDaehan);
+
+    /*
+     * daehan 폴백 2차 패스 (2026-08-30). 판정은 순수 모듈이 한다 — 분기 규칙을
+     * 여기에 다시 적으면 자(test/scanner-daehan-fallback.test.js)와 어긋난다.
+     * 2차가 **성공했을 때만** 결과를 갈아끼운다: 실패하면 1차 실패 객체를 그대로
+     * 두어야 carryHypothesis·admittedPoses 같은 이월 증거가 안 사라진다.
+     */
+    const decision = daehanFallbackDecision(daehanFallbackState, {
+      source: settings.source === 'still' ? 'still' : 'live',
+      firstPassOk: result && result.ok === true,
+      daehanForced: cellFinderDaehan,
+      usedPriorPoses: Array.isArray(settings.priorPoses),
+    });
+    daehanFallbackState = decision.state;
+    if (decision.escalate) {
+      const escalatedResult = runPass(true);
+      if (escalatedResult && escalatedResult.ok === true) result = escalatedResult;
+    }
+    const escalated = decision.escalate;
+
     const stage = classifyStage(result);
     const ms = fillFrameMs(nowMs() - t0, clock.snapshot());
     /*
@@ -920,10 +986,12 @@ async function decodeFrame(imageData, settings = {}) {
      * 그대로 보고하면 lab 프레임 행이 2건 생기고 frameSeq 가 +2 라 프레임 시간·레이트
      * 통계가 트리거 프레임을 겹쳐 센다. 그래서 사전 경로는 보고를 호출자에게 미루고
      * (`deferReport`) 마지막에 **한 프레임 = 한 행**으로 합쳐 낸다.
+     * 폴백 2차 패스도 같은 문법을 따른다 — 행을 하나 더 만들지 않고 `escalated`
+     * 키 하나로 구분한다 (frameSeq·시간 통계 겹침 금지).
      */
-    const report = settings.deferReport ? { result, ms, stage } : null;
+    const report = settings.deferReport ? { result, ms, stage, escalated } : null;
     if (!settings.deferReport) {
-      reportLabFrame(imageData, result, ms, stage);
+      reportLabFrame(imageData, result, ms, stage, { escalated });
       updateDebugOverlay(imageData, result, stage, ms);
     }
 
@@ -1011,7 +1079,8 @@ function flushPriorReport(imageData, report, extraMs) {
   if (!report) return;
   const total = (report.ms && report.ms.total ? report.ms.total : 0) + (extraMs || 0);
   const ms = extraMs ? fillFrameMs(total) : report.ms;
-  reportLabFrame(imageData, report.result, ms, report.stage);
+  reportLabFrame(imageData, report.result, ms, report.stage,
+    { escalated: report.escalated === true });
   updateDebugOverlay(imageData, report.result, report.stage, ms);
 }
 
@@ -2023,7 +2092,9 @@ async function decodeImageFile(file) {
     if (!imageData) throw new Error('image-data-unavailable');
 
     noteProductFrame();
-    const result = await decodeFrame(imageData);
+    // 업로드는 프레임이 한 장뿐이다 — 스로틀할 다음 프레임이 없으므로 실패하면
+    // 항상 daehan 2차 패스를 돈다 (`source: 'still'`).
+    const result = await decodeFrame(imageData, { source: 'still' });
     handleDecodeResult(result, 'file', session);
   } catch {
     if (session === scanSession) {
@@ -2665,12 +2736,19 @@ if (expectedEmphasisRoot && isLabPath()) {
   }
 }
 
-// daehan 파인더 옵트인 (2026-08-18) — 시험판 전용 즉석 토글.
+// daehan 파인더 **1차 패스 강제** (2026-08-18 도입, 2026-08-30 의미 갱신)
+// — 시험판 전용 즉석 토글.
+//
+// ⚠ 이 토글은 더 이상 «정식 스캐너가 daehan 을 읽는 유일한 길» 이 아니다.
+//    정식 기본 동작은 decodeFrame 의 **폴백 2차 패스**이고(실패한 프레임에만),
+//    이 토글은 그와 직교인 «1차 패스부터 daehan 을 얹는다(강제)» 다. 켜져 있으면
+//    폴백은 안 돈다 — 1차가 이미 daehan 이라 2차가 정의상 같은 결과를 낸다.
 //
 // 왜 토글이 필요한가: daehan 은 «기본 라인업에 올리면 셀 24px 부근에서 레거시
-// 5칸을 가져간다» 는 실측 때문에 옵트인으로 들어왔다. 그런데 그 판정을 뒤집으려면
+// 5칸을 가져간다» 는 실측 때문에 옵트인으로 들어왔다. 그 판정을 뒤집으려면
 // **실기기에서 켜 보는 수밖에 없다** — 합성 프레임만으로는 실제 촬영 배율 분포를
-// 모른다. 코드에만 있는 플래그는 실기기 판정을 못 만든다.
+// 모른다. 코드에만 있는 플래그는 실기기 판정을 못 만든다. 폴백이 붙은 뒤에도
+// 이 토글은 «1차 패스에 얹었을 때의 비용·오수용» 을 재는 자로 남는다.
 //
 // localStorage 에 남기는 이유: 실기기 비교 측정은 앱을 껐다 켜며 하게 되는데,
 // 매번 다시 눌러야 하면 «껐다고 생각했는데 켜져 있던» 프레임이 섞인다.
