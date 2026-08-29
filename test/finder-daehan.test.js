@@ -155,8 +155,16 @@ test('② 기존 회계 무변경 — 예약 인자를 안 넘기는 경로 전�
       assert.equal(cap.nsym, NSYM_TABLE[spec.symbolKey][level]);
     }
   }
-  // V1/V2/V3 순 페이로드 (M) — 공표된 값.
-  assert.deepEqual(VERSIONS.map((s) => capacityFor(s, 'M').maxPayloadBytes), [18, 39, 65]);
+  // V1/V2/V3 순 페이로드 (M) — 공표된 값. **버전 전수가 아니라 이 셋만** 잰다:
+  // 여기 주장은 「이미 발행된 프레임의 회계가 안 움직였다」이지 「hex 버전이 셋뿐이다」
+  // 가 아니다. V4 «대용량»(k=12, 2026-08-30)은 daehan 이 지원하지 않는 신설분이고
+  // (인코더가 명시 거절한다 — `encode.js` §배타), 그 회계는 자기 레인 테스트가 잠근다.
+  const published = [1, 2, 3].map((version) => {
+    const spec = VERSIONS.find((s) => s.version === version);
+    assert.ok(spec, `발행분 V${version} 이 VERSIONS 에서 사라졌다`);
+    return spec;
+  });
+  assert.deepEqual(published.map((s) => capacityFor(s, 'M').maxPayloadBytes), [18, 39, 65]);
   // layoutMap 도 예약을 안 넘기면 'finder' 역할을 절대 안 만든다.
   for (const k of [6, 8, 10]) {
     const roles = new Set(Array.from(layoutMap(k).values()).map((e) => e.role));

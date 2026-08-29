@@ -52,6 +52,13 @@ const SNAPSHOT_M = [
     version: 3, k: 10, totalCells: 331, overhead: 53, dataCells: 278, usedSymbols: 92,
     residualCells: 2, nsym: 23, errorCapacity: 11, dataSymbols: 69, dataBytes: 66, maxPayloadBytes: 65,
   },
+  // V4 «대용량» (k=12, 2026-08-30 신설). **V1~V3 의 값은 한 자리도 안 움직였다** —
+  // 행 하나가 늘었을 뿐이다 (오버헤드 유도식·nsym 절차 어느 쪽도 안 건드렸다).
+  // nsym 35 의 근거는 `rs211.js` NSYM_TABLE V4 주석 (SPEC §5 절차값, 손 선택 아님).
+  {
+    version: 4, k: 12, totalCells: 469, overhead: 57, dataCells: 412, usedSymbols: 137,
+    residualCells: 1, nsym: 35, errorCapacity: 17, dataSymbols: 102, dataBytes: 98, maxPayloadBytes: 97,
+  },
 ];
 
 describe('용량표 스냅샷 (ADR 0001 §3.3, ECC-M)', () => {

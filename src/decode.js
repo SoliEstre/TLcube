@@ -213,13 +213,40 @@ function selectVersionSpec(options) {
   return candidates[0];
 }
 
+/**
+ * formatIndex → Type O(hex 기저) 버전 스펙.
+ *
+ * 규약은 «version − 1, centerQr 이면 +4» 하나뿐이다 (SPEC §4.4 «변형 오프셋 —
+ * hex Q +4»). **범위를 손으로 적지 않는다** — 초판은 `0..2` / `4..6` 이라는 리터럴
+ * 범위였고 그건 «버전이 셋» 이라는 사실의 사본이었다. V4(k=12) 편입 2026-08-30 에
+ * 그 사본이 정확히 예상대로 뒤처져 V4 프레임이 «알 수 없는 formatIndex 3» 으로
+ * 죽었다 (인코더는 이미 3 을 싣고 있었다). 이제 `VERSIONS` 에서 유도한다.
+ *
+ * 두 사상은 서로 겹치지 않는다: version−1 ∈ [0, |VERSIONS|−1], +4 ∈ [4, |VERSIONS|+3]
+ * 이고 hex 표가 4칸 블록으로 동결돼 있어(namespace.test.js D2) 버전이 4개까지는
+ * 항상 배타다. 5번째 버전을 열면 겹치므로 그때 이 유도를 표 주도로 바꿔야 한다 —
+ * 아래 단언이 그 시점에 던진다.
+ */
+const HEX_CENTER_QR_OFFSET = 4;
+
 function typeOSpecFromFormatIndex(index) {
   if (!Number.isInteger(index)) return undefined;
-  let version;
-  if (index >= 0 && index <= 2) version = index + 1;
-  else if (index >= 4 && index <= 6) version = index - 3;
-  else return undefined;
-  return VERSIONS.find((spec) => spec.version === version);
+  return VERSIONS.find((spec) => spec.version - 1 === index
+    || spec.version - 1 + HEX_CENTER_QR_OFFSET === index);
+}
+
+{
+  // 「기본 인덱스 블록과 Q 인덱스 블록이 안 겹친다」는 위 유도의 전제다. 겹치면
+  // `typeOSpecFromFormatIndex` 가 조용히 잘못된 버전을 돌려준다 — 조용한 오독은
+  // 이 저장소에서 가장 비싼 실패라 로드 시점에 던진다.
+  const plain = new Set(VERSIONS.map((spec) => spec.version - 1));
+  for (const spec of VERSIONS) {
+    const q = spec.version - 1 + HEX_CENTER_QR_OFFSET;
+    if (plain.has(q)) {
+      throw new Error('decode: hex 기본 인덱스와 Q 인덱스가 겹친다 (V' + spec.version
+        + 'Q = ' + q + ') — +' + HEX_CENTER_QR_OFFSET + ' 오프셋 유도를 표 주도로 바꿔라');
+    }
+  }
 }
 
 /**

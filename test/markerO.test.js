@@ -162,7 +162,8 @@ test('markerO: 회계 — 오버헤드 분해와 총 셀 항등', () => {
 });
 
 test('markerO: 용량표 (제안 NSYM — 확정은 운영자)', () => {
-  assert.deepEqual(Object.keys(NSYM_TABLE_OCM), ['V1CM', 'V2CM', 'V3CM']);
+  // V4CM 은 2026-08-30 «대용량» 신설분이다 — V1\~V3CM 의 값은 한 자리도 안 움직였다.
+  assert.deepEqual(Object.keys(NSYM_TABLE_OCM), ['V1CM', 'V2CM', 'V3CM', 'V4CM']);
   const rows = capacityTableOMarker('M').map((r) => [
     r.name, r.k, r.totalCells, r.overhead, r.dataCells, r.usedSymbols, r.residualCells,
     r.nsym, r.dataBytes, r.maxPayloadBytes,
@@ -171,13 +172,14 @@ test('markerO: 용량표 (제안 NSYM — 확정은 운영자)', () => {
     ['V1CM', 6, 127, 54, 73, 24, 1, 7, 16, 15],
     ['V2CM', 8, 217, 58, 159, 53, 0, 13, 38, 37],
     ['V3CM', 10, 331, 62, 269, 89, 2, 23, 63, 62],
+    ['V4CM', 12, 469, 66, 403, 134, 1, 35, 95, 94],
   ]);
   // 마커 9셀의 대가 — 레거시 대비 순 페이로드 손실 (M).
   const legacy = VERSIONS.map((s) => capacityFor(s, 'M').maxPayloadBytes);
   const marker = VERSIONS_OCM.map((s) => capacityForOMarker(s, 'M').maxPayloadBytes);
-  assert.deepEqual(legacy, [18, 39, 65]);
-  assert.deepEqual(marker, [15, 37, 62]);
-  assert.deepEqual(legacy.map((v, i) => v - marker[i]), [3, 2, 3]);
+  assert.deepEqual(legacy, [18, 39, 65, 97]);
+  assert.deepEqual(marker, [15, 37, 62, 94]);
+  assert.deepEqual(legacy.map((v, i) => v - marker[i]), [3, 2, 3, 3]);
   // 표와 실계산이 어긋나면 조용히 맞추지 않는다.
   assert.throws(
     () => capacityForOMarker({

@@ -186,12 +186,23 @@ test('⑤ 레거시 무변경 — H 를 안 쓴 O/A 프레임 sha256 = HEAD 실�
     '35f4cb375c5478373f8bdc073752f857c4c7c8088779ee83d8ac9cb290ec93a4',
     'O V1 plain 렌더가 움직였다',
   );
+  // ⚠ 이 표는 **HEAD b992b9f 시점에 존재하던 버전**만 든다. 이 테스트의 주장은
+  //   「레거시가 안 움직였다」이지 「모든 버전이 픽셀 고정됐다」가 아니다 — V4CM
+  //   (2026-08-30 «대용량» 신설)은 그 시점에 없었으므로 기준값이 원리적으로 없고,
+  //   여기서 새로 찍으면 그건 무회귀 증거가 아니라 방금 만든 값이다. V4CM 의 잠금은
+  //   자기 레인의 왕복 테스트(`test/capacity-v4.test.js`)가 진다.
+  //   개수를 단언해 두는 이유: 「핀이 없다」와 「핀을 빠뜨렸다」를 가르기 위해서다.
   const cmPins = {
     1: 'd52180b495c71b14b44b8369b32f4ec84428df425c3b4b6c87cfcf1670b93b58',
     2: '26637a56b7812baec357f9d6671d46dbeeb3eb1c9660e0bc281e9b4f6f070340',
     3: '3f87b0ed912a90602ee081fa6ec1b97f8cf427fda258c5cc04edf3c61290b91c',
   };
-  for (const spec of VERSIONS_OCM) {
+  const pinnedSpecs = VERSIONS_OCM.filter((spec) => cmPins[spec.version] !== undefined);
+  assert.equal(pinnedSpecs.length, Object.keys(cmPins).length,
+    'cmPins 에 VERSIONS_OCM 에 없는 버전이 있다 — 표가 실체보다 앞섰다');
+  assert.equal(pinnedSpecs.length, 3,
+    '레거시 CM 핀 개수가 3 이 아니다 — 기준값(HEAD b992b9f)의 출처를 다시 적어라');
+  for (const spec of pinnedSpecs) {
     assert.equal(
       sha256(renderPinned(encode('pin', { version: spec.version, eccLevel: 'M', cornerMarker: true }))),
       cmPins[spec.version],

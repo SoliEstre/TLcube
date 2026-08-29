@@ -383,7 +383,15 @@ export function overheadBreakdownOMarker(k) {
 //   V1CM S=24  → M round(6)=6(짝) → 7    · L round(2.88)=3  · H round(9.6)=10
 //   V2CM S=53  → M round(13.25)=13(홀)   · L round(6.36)=6  · H round(21.2)=21
 //   V3CM S=89  → M round(22.25)=22(짝)→23 · L round(10.68)=11 · H round(35.6)=36
+//   V4CM S=134 → M round(33.5)=34(짝)→35  · L round(16.08)=16 · H round(53.6)=54
 // 이 표는 **제안**이다 — 확정(비준)은 운영자 몫이고, 그 전까지 O-CM 은 실험 경로다.
+//
+// V4CM 의 S=134 유도 (2026-08-30): 총 셀 469 − `overheadBreakdownOMarker(12).total` 66
+// (불스아이 19 + 앵커 3 + 마커 9 + 포맷 15 + 레퍼런스 20) = 403 → ⌊403/3⌋ = 134,
+// 잔여 셀 1. 마커 회계는 k 파생이라 표 행 추가 말고 손댈 곳이 없다 (`markerCells(k)`
+// 가 12셀을 k 에서 유도하고 `placementOMarker(k)` 가 format·reference 를 재배치한다).
+// 평 V4 의 nsym(16/35/55)과 **H 만 다르다** — S 가 137 → 134 로 줄어 round(0.40·S)
+// 가 55 → 54 로 내려간다. L·M 은 같은 값으로 떨어진다.
 
 /** @type {Readonly<Record<string, Readonly<{symbols:number, L:number, M:number, H:number}>>>} */
 export const NSYM_TABLE_OCM = Object.freeze({
@@ -395,6 +403,9 @@ export const NSYM_TABLE_OCM = Object.freeze({
   }),
   V3CM: Object.freeze({
     symbols: 89, L: 11, M: 23, H: 36,
+  }),
+  V4CM: Object.freeze({
+    symbols: 134, L: 16, M: 35, H: 54,
   }),
 });
 
@@ -408,6 +419,9 @@ export const VERSIONS_OCM = Object.freeze([
   }),
   Object.freeze({
     name: 'V3CM', version: 3, k: 10, formatIndex: markerGSpec('hex', 3).formatIndex, overhead: overheadBreakdownOMarker(10).total, symbolKey: 'V3CM',
+  }),
+  Object.freeze({
+    name: 'V4CM', version: 4, k: 12, formatIndex: markerGSpec('hex', 4).formatIndex, overhead: overheadBreakdownOMarker(12).total, symbolKey: 'V4CM',
   }),
 ]);
 
@@ -522,7 +536,9 @@ export function orientationMarginOMarker(k) {
     }
   }
   // ② 마커 위치 집합은 ρ-불변이고 60°·180°·300° 에서는 겹침 0 이어야 한다.
-  for (const k of [6, 8, 10]) {
+  // k 목록은 **표에서 유도한다** — 손 사본으로 두면 버전이 늘 때 새 k 만 조용히
+  // 검증에서 빠진다 (V4/k12 편입 2026-08-30 에 실제로 [6,8,10] 사본이 남아 있었다).
+  for (const k of VERSIONS_OCM.map((spec) => spec.k)) {
     const set = markerPositionSet(k);
     const maps = [
       ['120', (q, r) => rotate120(q, r), true],

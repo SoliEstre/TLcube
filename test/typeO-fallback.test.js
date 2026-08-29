@@ -62,8 +62,15 @@ function extractModuleCoords(darkShapes, blockOriginX, blockOriginY, qrModuleSiz
 }
 
 describe('(1) V1Q~V3Q 포맷 정보 버전 인덱스 왕복', () => {
-  test('centerQr=true → 디코드된 버전 인덱스 = 4/5/6 (V1Q/V2Q/V3Q)', () => {
-    const expected = { 1: 4, 2: 5, 3: 6 };
+  test('centerQr=true → 디코드된 버전 인덱스 = version−1+4 (V1Q… 전 버전)', () => {
+    // 원판은 `{1:4, 2:5, 3:6}` 손 표였다 — «버전이 셋» 이라는 사실의 사본이라
+    // V4 «대용량» 편입(2026-08-30)에 정확히 뒤처졌다. 바로 아래 non-Q 테스트는
+    // 처음부터 `spec.version - 1` 로 유도하고 있었으므로 그 문법에 맞춘다.
+    // 오프셋 4 자체(ADR 0004 §1-3 / SPEC §4.4 «hex Q +4»)는 여기 한 번만 적는다.
+    const HEX_Q_OFFSET = 4;
+    const expected = Object.fromEntries(
+      VERSIONS.map((spec) => [spec.version, spec.version - 1 + HEX_Q_OFFSET]),
+    );
     for (const spec of VERSIONS) {
       const result = encode('typeO fallback KAT', {
         version: spec.version,
