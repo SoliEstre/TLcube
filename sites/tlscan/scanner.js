@@ -739,9 +739,18 @@ function sendLabEnvOnce(stream) {
 
 /**
  * @param {object} [extra] frame body 에 그대로 얹을 추가 키. 현재는 daehan 폴백의
- *   `escalated` 하나다 — frame body 는 relay 에서 raw JSON 컬럼이라 모르는 키를
- *   조용히 통과시킨다(스키마·DDL 불요). 좌석 분석이 «폴백이 살린 프레임» 을 이 키로
- *   가른다: 없거나 false = 1차 패스만, true = daehan 2차 패스를 실제로 돌린 프레임.
+ *   `escalated` 하나다 — false = 1차 패스만, true = daehan 2차 패스를 실제로 돌린 프레임.
+ *
+ * ⚠ **이 키는 아직 좌석에 도달하지 않는다** (2026-08-30 실측). 세 층이 모르는 키를
+ *   각자 떨군다:
+ *     ① `src/lab-telemetry.js` `normalizeFrameBody` — 반환이 **명시 객체 리터럴**이라
+ *        여기서 제일 먼저 죽는다. 와이어에 오르지도 못한다.
+ *     ② `relay/protocol.mjs` `eventRow` — 컬럼별 명시 매핑.
+ *     ③ `relay/schema.sql` `events` — 명시 컬럼뿐. raw JSON body 컬럼은 **없다**.
+ *   즉 「frame body 는 raw JSON 이라 DDL 불요」 는 사실이 아니다. 좌석이 이 키로
+ *   폴백 기여를 가르려면 ①②③을 함께 열어야 한다 (기대 축 ③ outerFinderId 가
+ *   같은 계열로 이미 겪은 일 — 아래 lab.frame 근처 주석 참조).
+ *   여기까지 배선해 두는 이유는, 세 층이 열리는 날 스캐너 쪽에 할 일이 없게 하기 위함이다.
  */
 function reportLabFrame(imageData, result, ms, stage, extra) {
   if (!lab.enabled || !imageData) return;

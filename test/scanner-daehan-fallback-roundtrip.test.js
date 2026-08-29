@@ -187,8 +187,13 @@ test('배선: 보고는 한 행이고 escalated 키가 lab body 로 간다', () 
   assert.equal(reports.length, 3,
     'decodeFrame 의 reportLabFrame 호출이 3곳(무효 프레임 · 정상 경로 · throw 경로)이 ' +
     '아니다 — 폴백이 행을 하나 더 만들면 frameSeq 와 프레임 시간 통계가 겹쳐 센다');
+  // ⚠ 이 단언이 지키는 것은 «scanner.js 가 키를 넘긴다» 까지다. 그 키가 좌석까지
+  //    가는지는 **이 자가 못 지키는 축**이다 — normalizeFrameBody(명시 리터럴) ·
+  //    eventRow(명시 매핑) · schema.sql(명시 컬럼)이 각자 모르는 키를 떨구고, 셋 다
+  //    이 레인의 쓰기 범위 밖이다. 덮는 방법: 세 층을 열고 relay 왕복으로 재는 자를
+  //    거기 두는 것 (통합자·좌석 몫). 여기서 초록이어도 «좌석에 도달한다» 는 아니다.
   assert.match(body, /reportLabFrame\(imageData, result, ms, stage, \{ escalated \}\)/,
-    'escalated 키가 lab frame body 로 안 간다 — 좌석이 폴백 기여를 못 가른다');
+    'escalated 키가 lab frame body 호출로 안 간다 — 세 층이 열려도 스캐너가 안 보낸다');
   assert.match(SRC, /\.\.\.\(extra && typeof extra === 'object' \? extra : \{\}\)/,
     'reportLabFrame 이 추가 키를 body 에 안 얹는다');
 });
