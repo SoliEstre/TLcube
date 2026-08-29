@@ -56,12 +56,13 @@ function n7Geometry(scene, pixelsPerUnit) {
   };
 }
 
-function renderN7(encoded, family, pixelsPerUnit = 16) {
+function renderN7(encoded, family, pixelsPerUnit = 16, centralN7Emphasis = 'default') {
   const scene = buildScene(encoded, {
     palette: PALETTE,
     margin: 20,
     finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
     centralN7Family: family,
+    centralN7Emphasis,
   });
   const raster = rasterize(scene, { pixelsPerUnit, supersample: 2 });
   return { scene, raster, luma: toRelativeLuminance(raster), ...n7Geometry(scene, pixelsPerUnit) };
@@ -173,11 +174,22 @@ test('합성 O/A/K 중앙 n=7은 codeword가 지정한 family로만 바깥 본�
     { family: 'star', text: 'n7-K', encoded: encodeK('n7-K', { version: 0, centralN7: true }) },
   ];
   for (const spec of cases) {
-    const frame = renderN7(spec.encoded, spec.family);
-    const result = decodeFrontend(frame.raster);
-    assert.equal(result.ok, true, `${spec.family}: ${result.reason}`);
-    assert.equal(result.text, spec.text, spec.family);
-    assert.equal(result.family, spec.family, spec.family);
-    assert.equal(result.hypothesis.finderPatternId, CENTRAL_N7_FINDER_PATTERN_ID, spec.family);
+    let baseline = null;
+    for (const emphasis of ['default', 'locator', 'all']) {
+      const frame = renderN7(spec.encoded, spec.family, 16, emphasis);
+      const result = decodeFrontend(frame.raster);
+      const label = `${spec.family}/${emphasis}`;
+      assert.equal(result.ok, true, `${label}: ${result.reason}`);
+      assert.equal(result.text, spec.text, label);
+      assert.equal(result.family, spec.family, label);
+      assert.equal(result.hypothesis.finderPatternId, CENTRAL_N7_FINDER_PATTERN_ID, label);
+      const identity = {
+        text: result.text,
+        family: result.family,
+        finderPatternId: result.hypothesis.finderPatternId,
+      };
+      if (baseline === null) baseline = identity;
+      else assert.deepEqual(identity, baseline, `${label}이 기본 복호 결과와 달라졌다`);
+    }
   }
 });

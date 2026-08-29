@@ -46,7 +46,7 @@ export const CONFIG_SIDE_KEYS = Object.freeze([
 ]);
 export const GEN_BODY_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'bgMode', 'quietMode',
-  'locatorProfile', 'locatorLayout',
+  'locatorProfile', 'locatorLayout', 'centralN7Emphasis',
 ]);
 
 /** `/lab` 또는 `/lab/…` 만 시험판. `/label` 같은 접두 오탐을 막는다. */

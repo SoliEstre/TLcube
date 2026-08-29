@@ -49,6 +49,7 @@ import {
   CENTRAL_N7_SIZE,
 } from './centralN7Schema.js';
 import { encodeCentralN7 } from './centralN7Codec.js';
+import { centralN7LevelPalettes } from './centralN7Emphasis.js';
 
 // `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
 // FACE_LEVEL_INDEX)와 **같은 표**여야 하며, `FACES` 배열의 나열 순서에 기대지
@@ -410,6 +411,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   qrText?: string, centerQr?: boolean, cornerToo?: boolean,
  *   finderPatternId?: string,
  *   centralN7Family?: 'hex'|'tri'|'star',
+ *   centralN7Emphasis?: 'default'|'locator'|'all',
  *   centralMarkerN7Family?: 'hex'|'tri'|'star',
  *   centralMarkerN7Turn?: 0|1|2, centralMarkerN7Parity?: 0|1,
  *   qrCorner?: 'TL'|'TR'|'BL'|'BR',
@@ -784,12 +786,15 @@ export function buildScene(encoded, options) {
       originX: center.x,
       originY: center.y,
     };
+    const centralN7Palettes = centralN7LevelPalettes(
+      palette.levels, opts.centralN7Emphasis,
+    );
     for (const cell of CENTRAL_N7_LOCATOR_CELLS) {
       for (const face of FACES) {
         shapes.push({
           kind: 'polygon',
           points: moduleQuad(face, cell.i, cell.j, markerLayout),
-          color: palette.levels[cell[face]],
+          color: centralN7Palettes.locator[cell[face]],
         });
       }
     }
@@ -800,7 +805,7 @@ export function buildScene(encoded, options) {
         shapes.push({
           kind: 'polygon',
           points: moduleQuad(face, cell.i, cell.j, markerLayout),
-          color: palette.levels[ranks[face]],
+          color: centralN7Palettes.data[ranks[face]],
         });
       }
     }

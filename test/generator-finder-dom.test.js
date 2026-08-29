@@ -26,6 +26,7 @@ import {
   commitFinderQrTransition,
   selectFinderPattern,
   selectGeneratorType,
+  selectQrPosition,
 } from '../src/finder-selection.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
@@ -176,6 +177,18 @@ function makeUiHarness(type) {
   }
   return {
     root, errors,
+    selectQr(position) {
+      commitFinderQrTransition(
+        state,
+        selectQrPosition(state, position, type, DEFAULT_FINDER_PATTERN_ID),
+        type,
+        DEFAULT_FINDER_PATTERN_ID,
+        {
+          cancelPendingRender() { pendingRenderCancelled += 1; },
+          render,
+        },
+      );
+    },
     get pendingRenderCancelled() { return pendingRenderCancelled; },
     get renderCount() { return renderCount; },
     get rendered() { return rendered; },
@@ -279,27 +292,33 @@ test('초기 Y에서 O/A로 전환하면 중앙 TL 포맷과 장면을 실제 �
 
 test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기 연속 클릭은 오류 없이 렌더한다', () => {
   for (const type of ['O', 'A']) {
-    const harness = makeUiHarness(type);
-    const cards = harness.root.querySelectorAll('[data-finder-id]');
+    const listingHarness = makeUiHarness(type);
+    const cards = listingHarness.root.querySelectorAll('[data-finder-id]');
     const ids = cards.map((card) => card.dataset.finderId);
     assert.ok(ids.length > 0, type + ': 카드가 없다');
 
-    for (const card of cards) {
+    for (const id of ids) {
+      // 각 카드를 독립 외부 QR 상태에서 잰다. center-qr 은 하위 선택이라 상위
+      // qrPosition='inner' 를 먼저 고른 뒤에만 화면에 나타난다.
+      const harness = makeUiHarness(type);
+      const card = harness.root.querySelectorAll('[data-finder-id]')
+        .find((candidate) => candidate.dataset.finderId === id);
+      if (id === CENTER_QR_FINDER_PATTERN_ID) harness.selectQr('inner');
       card.click();
       assert.equal(
         harness.errors.length,
         0,
-        type + '/' + card.dataset.finderId + ': 렌더 오류: ' + harness.errors.join(' | '),
+        type + '/' + id + ': 렌더 오류: ' + harness.errors.join(' | '),
       );
-      assert.equal(harness.state.finderPatternId, card.dataset.finderId);
+      assert.equal(harness.state.finderPatternId, id);
       assert.ok(harness.rendered && harness.rendered.scene.shapes.length > 0);
-      if (card.dataset.finderId === CENTER_QR_FINDER_PATTERN_ID) {
+      if (id === CENTER_QR_FINDER_PATTERN_ID) {
         assert.equal(harness.state.qrPosition, 'inner');
         assert.equal(harness.rendered.finderPatternId, 'centerQr');
       }
       // «카드가 있다» 가 아니라 «누르면 인코딩이 바뀐다» 를 잰다 (2026-08-19 브리프 §4).
       // daehan 은 파인더가 60셀을 더 먹어 **용량이 준다** — 그게 이 카드의 실제 효과다.
-      if (isDaehanFinderPatternId(card.dataset.finderId)) {
+      if (isDaehanFinderPatternId(id)) {
         if (type === 'O') {
           assert.equal(harness.rendered.encoded.daehanFinder, true,
             'daehan 카드를 눌렀는데 인코더가 daehan 회계로 안 갔다');
@@ -322,7 +341,7 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
             'Type A 가 daehan 을 그대로 그렸다 — encodeA 에 daehanFinder 가 없다');
         }
       }
-      if (card.dataset.finderId === 'central-cube-3tone') {
+      if (id === 'central-cube-3tone') {
         assert.equal(harness.rendered.finderPatternId, 'central-cube-3tone');
         assert.equal(
           harness.rendered.scene.shapes.filter((shape) => shape.kind === 'disc').length,
@@ -332,11 +351,16 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
       }
     }
 
-    // 사람보다 빠른 통합 순회와 같은 조건: DOM에서 읽은 카드 모두를 대기 없이 누른다.
-    for (const card of cards) card.click();
-    assert.equal(harness.errors.length, 0, type + ': 빠른 연속 클릭 렌더 오류');
-    assert.equal(harness.pendingRenderCancelled, cards.length * 2);
-    assert.equal(harness.renderCount, cards.length * 2, type + ': 카드 전환마다 렌더는 정확히 한 번이어야 한다');
+    // 사람보다 빠른 통합 순회와 같은 조건: 바깥 QR에서 DOM 카드 모두를 대기 없이
+    // 누른다. 숨겨진 center-qr 의 합성 이벤트도 부모 QR 위치를 바꾸지 않아야 한다.
+    const fastHarness = makeUiHarness(type);
+    const fastCards = fastHarness.root.querySelectorAll('[data-finder-id]');
+    for (const card of fastCards) card.click();
+    assert.equal(fastHarness.errors.length, 0, type + ': 빠른 연속 클릭 렌더 오류');
+    assert.notEqual(fastHarness.state.qrPosition, 'inner', type + ': 검출기가 QR 부모 축을 바꿨다');
+    assert.equal(fastHarness.pendingRenderCancelled, fastCards.length);
+    assert.equal(fastHarness.renderCount, fastCards.length,
+      type + ': 카드 전환마다 렌더는 정확히 한 번이어야 한다');
   }
 });
 

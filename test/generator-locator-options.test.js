@@ -7,6 +7,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   allowedYLocatorCards, effectiveVersionYForOptions, activeLocatorCardId,
@@ -29,6 +30,7 @@ const V0TR = LOCATOR_PROFILE_CELL_SURFACE_V0TR;
 const V0TRQ = LOCATOR_PROFILE_CELL_SURFACE_V0TRQ;
 const V0TY = LOCATOR_PROFILE_CELL_SURFACE_V0TY;
 const V0TRY = LOCATOR_PROFILE_CELL_SURFACE_V0TRY;
+const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 test('① 운영자 명세 4행을 표 그대로 잠근다', () => {
   const rows = [
@@ -89,4 +91,36 @@ test('⑤ 허용 목록에 «자동» 은 없다 — 호출자가 항상 보인�
   ]) {
     assert.ok(!allowedYLocatorCards(state).includes('auto'), '허용 목록에 auto 가 들었다');
   }
+});
+
+test('⑥ Y 안쪽 QR은 일반·고급 공용 부모 경로에서 검출기와 면 배치를 연다', () => {
+  const qrHandlerStart = INDEX.indexOf(
+    'for (const card of els.qrPositionCards.children)',
+    INDEX.indexOf('wireTypeCards(els.typeCardsAdvanced)'),
+  );
+  const qrHandler = INDEX.slice(
+    qrHandlerStart,
+    INDEX.indexOf('// «QR 면 배치» 서브섹션', qrHandlerStart),
+  );
+  const qrUi = INDEX.slice(
+    INDEX.indexOf('function renderQrPositionUi()'),
+    INDEX.indexOf('function syncFinderQrUi()'),
+  );
+  const autoResolver = INDEX.slice(
+    INDEX.indexOf('function resolveAutoLocatorProfileY'),
+    INDEX.indexOf('function effectiveVersionYForEncode'),
+  );
+  assert.match(qrHandler, /type === 'Y'[\s\S]*applyAutoLocatorProfileY\(card\.dataset\.pos\)/,
+    'Y 안쪽을 누르는 공용 카드가 자동 검출기를 먼저 유도하지 않는다');
+  assert.match(qrHandler, /selectQrPosition\(generatorState, card\.dataset\.pos/,
+    '유도 뒤 상위 qrPosition 커밋이 없다');
+  assert.doesNotMatch(qrHandler, /mode ===|mode !==/,
+    '일반·고급이 서로 다른 QR 위계 핸들러를 탄다');
+  assert.match(autoResolver, /if \(pos === 'inner'\) return LOCATOR_PROFILE_CELL_SURFACE_V0TR/,
+    '안쪽 QR 자동 경로가 T 계열 기반 검출기로 진입하지 않는다');
+  assert.match(qrUi,
+    /const placementOpen = inner && isY[\s\S]*Y_T_SERIES_PROFILES\.includes/,
+    '안쪽+Y+T 계열에서 QR 면 배치 섹션이 열리지 않는다');
+  assert.doesNotMatch(qrUi, /finderTakesCentre/,
+    '숨겨진 O\/A\/K 파인더 스냅샷이 Y 안쪽 진입을 다시 잠근다');
 });

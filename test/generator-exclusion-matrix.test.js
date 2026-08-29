@@ -19,13 +19,14 @@ import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
 import { encodeK } from '../src/encodeK.js';
 import {
-  GENERATOR_DEFAULT_FINDER_PATTERN_ID, createGeneratorState,
+  GENERATOR_DEFAULT_FINDER_PATTERN_ID, GENERATOR_MODES, GENERATOR_STATE_SCHEMA,
+  GENERATOR_TYPES, createGeneratorState,
 } from '../src/generator-state.js';
 import { FINDER_CARD_GROUPS, CENTRAL_V0_FINDER_CARD } from '../src/finder-card-ui.js';
 import { isDaehanFinderPatternId } from '../src/finder-daehan.js';
 import {
-  CENTER_QR_FINDER_PATTERN_ID, isCentralV0FinderPatternId, selectGeneratorType,
-  selectFinderPattern,
+  CENTER_QR_FINDER_PATTERN_ID, finderPatternConflictsWithInnerQr,
+  isCentralV0FinderPatternId, selectGeneratorType, selectFinderPattern, selectQrPosition,
 } from '../src/finder-selection.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 
@@ -63,6 +64,56 @@ function finderSelectionsAreExclusive(leftId, rightId) {
     && rightThenLeft.finderPatternId === leftId;
 }
 
+/** QR 상위 선택이 중앙 파인더를 양보시키고, 안쪽 동안 재선택을 막는가. */
+function innerQrHierarchyGuards(finderPatternId) {
+  const initial = createGeneratorState({ type: 'O' });
+  const finder = selectFinderPattern(
+    initial, finderPatternId, 'O', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  );
+  const inner = selectQrPosition(
+    finder, 'inner', 'O', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  );
+  const locked = selectFinderPattern(
+    inner, finderPatternId, 'O', GENERATOR_DEFAULT_FINDER_PATTERN_ID,
+  );
+  return finderPatternConflictsWithInnerQr(finderPatternId)
+    // 잠금은 UI/전이 규칙이지 스키마 삭제가 아니다. 카드 값은 그대로 남아야 한다.
+    && GENERATOR_STATE_SCHEMA.finderPatternId.options.includes(finderPatternId)
+    && inner.qrPosition === 'inner'
+    && inner.finderPatternId === CENTER_QR_FINDER_PATTERN_ID
+    && inner.previousFinderPatternId === finderPatternId
+    && locked.qrPosition === inner.qrPosition
+    && locked.finderPatternId === inner.finderPatternId
+    && locked.previousFinderPatternId === inner.previousFinderPatternId;
+}
+
+test('QR 위치 카드가 상위이고 중앙 파인더 카드가 하위라는 DOM 배선을 잠근다', () => {
+  const qrUi = INDEX.slice(
+    INDEX.indexOf('function renderQrPositionUi()'),
+    INDEX.indexOf('function syncFinderQrUi()'),
+  );
+  const finderUi = INDEX.slice(
+    INDEX.indexOf('function renderFinderUi()'),
+    INDEX.indexOf('/** 공용 QR 위치 카드 갱신'),
+  );
+  assert.match(qrUi, /card\.dataset\.pos === 'inner'[\s\S]*classList\.remove\('disabled'\)/,
+    '안쪽 QR 카드는 모든 타입·모드에서 명시적으로 잠금을 걷어야 한다');
+  for (const type of GENERATOR_TYPES) {
+    for (const mode of GENERATOR_MODES) {
+      assert.equal(GENERATOR_STATE_SCHEMA.qrPosition.exposure, 'both', `${type}/${mode}`);
+      assert.equal(GENERATOR_STATE_SCHEMA.qrPosition.options.includes('inner'), true, `${type}/${mode}`);
+    }
+  }
+  assert.doesNotMatch(qrUi, /finderTakesCentre|previousOuterQrPosition/,
+    'QR 카드 렌더가 하위 파인더를 보고 부모 상태를 밀어내고 있다');
+  assert.match(finderUi, /innerQrActive && finderPatternConflictsWithInnerQr\(fid\)/,
+    '안쪽 QR 동안 중앙 점유 파인더를 잠그는 배선이 없다');
+  assert.match(finderUi, /finderLockedByInnerQr \? t\('g581'\) : ''/,
+    '잠긴 파인더가 역방향 안내 문구를 소비하지 않는다');
+  assert.match(finderUi, /CENTER_QR_FINDER_PATTERN_ID && !innerQrActive/,
+    '하위 중앙 QR 카드는 부모 안쪽 선택 전에는 숨겨져야 한다');
+});
+
 test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으로 적지 않는다', () => {
   const found = [];
   for (const opts of combos(FLAGS)) {
@@ -83,13 +134,13 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     // (구) 'centerQr+cornerMarker' — C2a(2026-08-23)에서 배타 자체가 해제됐다
     // (markerG CMQ 와이어 + 배치 검증·왕복 = test/markerG-centerqr.test.js).
     // 인코더가 더는 안 던지므로 전수 탐색이 이 쌍을 찾지 않는다 — 가드 불필요.
-    // daehan 은 파인더 선택에서 오므로 **파인더가 이긴다** — 중앙 QR 카드를 잠근다.
-    'centerQr+daehanFinder': /if \(finderTakesCentre && generatorState\.qrPosition === 'inner'\)/,
-    // 중앙 v0도 같은 finderTakesCentre 규칙으로 안쪽 QR 카드를 잠근다.
-    'centerQr+centralV0': /isCentralV0FinderPatternId\(generatorState\.finderPatternId\)/,
-    'centerQr+centralN7': () => finderSelectionsAreExclusive(
-      CENTER_QR_FINDER_PATTERN_ID, CENTRAL_N7_FINDER_PATTERN_ID,
+    // QR 위치가 상위다. 안쪽을 고르면 파인더가 center-qr 로 양보하고, 안쪽 동안
+    // 중앙 점유 파인더 재선택은 상태를 바꾸지 않는다. 소스 모양이 아니라 성질을 잰다.
+    'centerQr+daehanFinder': () => innerQrHierarchyGuards(
+      FINDER_CARD_GROUPS.daehan[0].id,
     ),
+    'centerQr+centralV0': () => innerQrHierarchyGuards(CENTRAL_V0_FINDER_CARD.id),
+    'centerQr+centralN7': () => innerQrHierarchyGuards(CENTRAL_N7_FINDER_PATTERN_ID),
     // 아래 둘은 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
     // (Wave 3 ④ — cornerMarker 분기 서명에 V-CMQ 가드가 붙었다.)
     // **의도적 갱신 (2026-08-24 검수 4차)** — 두 서명에 붙어 있던 조건이 걷혔다:

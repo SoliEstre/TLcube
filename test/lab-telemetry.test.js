@@ -217,6 +217,15 @@ test('gen 정규화는 페이로드 내용을 버리고 config_id 를 붙인다'
   assert.match(body.config_id, /^c[0-9a-f]{8}$/);
 });
 
+test('중앙 TL 강조는 gen 본문과 config_id를 3갈래로 구분한다', () => {
+  const bodies = ['default', 'locator', 'all'].map((centralN7Emphasis) => normalizeGenBody({
+    type: 'O', version: 1, finderPatternId: 'central-n7-payload', centralN7Emphasis,
+  }));
+  assert.deepEqual(bodies.map((body) => body.centralN7Emphasis),
+    ['default', 'locator', 'all']);
+  assert.equal(new Set(bodies.map((body) => body.config_id)).size, 3);
+});
+
 test('extractCellSurfaceProbe 는 시도/점수/사유를 정규화하고 없으면 미시도다', () => {
   const empty = extractCellSurfaceProbe({ ok: false, reason: 'frontend:no-finder' });
   assert.equal(empty.attempted, false);

@@ -239,3 +239,21 @@ test('생성기 사전의 여덟 언어가 같은 키 집합을 갖는다', () =
   }
   assert.ok(ko.size > 100, `키가 너무 적다(${ko.size}) — 파서가 깨졌을 수 있다`);
 });
+
+test('g581은 8언어 모두 «안쪽 QR 우선» 역방향 안내다', () => {
+  const raw = readFileSync(`${ROOT}index.html`, 'utf8');
+  const start = raw.indexOf('const GENERATOR_STRINGS = {');
+  const js = raw.slice(start, raw.indexOf('\n};', start));
+  const values = [...js.matchAll(/"g581":\s*("(?:\\.|[^"])*")/g)]
+    .map((match) => JSON.parse(match[1]));
+  assert.deepEqual(values, [
+    '안쪽 QR 이 가운데를 쓰고 있어요. QR 위치를 바꾸면 이 파인더를 고를 수 있어요.',
+    'The inner QR is using the centre. Move the QR to choose this finder.',
+    '内側 QR が中央を使っています。QR の位置を変えると、このファインダーを選べます。',
+    'Le QR intérieur occupe le centre. Changez la position du QR pour choisir ce repère.',
+    'Il QR interno occupa il centro. Cambia la posizione del QR per scegliere questo finder.',
+    'Der innere QR belegt die Mitte. Ändern Sie die QR-Position, um diesen Finder auszuwählen.',
+    'El QR interior ocupa el centro. Cambia la posición del QR para elegir este localizador.',
+    'O QR interno ocupa o centro. Mude a posição do QR para escolher este localizador.',
+  ]);
+});

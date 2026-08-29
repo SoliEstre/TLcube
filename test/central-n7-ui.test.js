@@ -23,6 +23,9 @@ import {
 } from '../src/centralN7Schema.js';
 import { decodeCentralN7 } from '../src/centralN7Codec.js';
 import {
+  CENTRAL_N7_EMPHASIS_MODES, DEFAULT_CENTRAL_N7_EMPHASIS,
+} from '../src/centralN7Emphasis.js';
+import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   GENERATOR_STATE_SCHEMA,
 } from '../src/generator-state.js';
@@ -83,6 +86,10 @@ test('중앙 카드 명부 status가 카드 표면을 live-join하고 M7 기하�
   assert.equal(CENTRAL_N7_FINDER_CARD.id, CENTRAL_N7_FINDER_PATTERN_ID);
   assert.equal(getUnmeasuredFinderPattern(CENTRAL_N7_FINDER_PATTERN_ID).labelKey, 'g1001');
   assert.ok(GENERATOR_STATE_SCHEMA.finderPatternId.options.includes(CENTRAL_N7_FINDER_PATTERN_ID));
+  assert.equal(GENERATOR_STATE_SCHEMA.centralN7Emphasis.defaultValue,
+    DEFAULT_CENTRAL_N7_EMPHASIS);
+  assert.deepEqual(GENERATOR_STATE_SCHEMA.centralN7Emphasis.options,
+    CENTRAL_N7_EMPHASIS_MODES);
   assert.equal(GENERATOR_STATE_SCHEMA.finderPatternId.options.includes(
     CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
   ), false);
@@ -163,7 +170,23 @@ test('생성기 i18n은 8개 언어 모두에 후보 B·새 카드 키가 존재
   assert.deepEqual(Object.keys(strings), [...SUPPORTED_LANGUAGES]);
   assert.equal(Object.keys(strings).length, 8);
   for (const language of SUPPORTED_LANGUAGES) {
-    assert.equal(Object.hasOwn(strings[language], 'g1000'), true, language + ' g1000');
-    assert.equal(Object.hasOwn(strings[language], 'g1001'), true, language + ' g1001');
+    for (const key of ['g1000', 'g1001', 'g1002', 'g1003', 'g1004', 'g1005', 'g1006', 'g1007', 'g1008']) {
+      assert.equal(Object.hasOwn(strings[language], key), true, language + ' ' + key);
+    }
   }
+});
+
+test('중앙 TL 강조 UI는 3택 상태와 O/A/K + 중앙 TL 가시성에 배선된다', () => {
+  const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const sharedKeys = source.match(/id="sharedControls" data-state-keys="([^"]+)"/u)?.[1]
+    .split(/\s+/u) || [];
+  assert.ok(sharedKeys.includes('centralN7Emphasis'));
+  assert.match(source, /id="centralN7EmphasisSection" hidden/);
+  for (const mode of CENTRAL_N7_EMPHASIS_MODES) {
+    assert.match(source, new RegExp(`data-n7-emphasis="${mode}"`));
+  }
+  assert.match(source, /\['O', 'A', 'K'\]\.includes\(generatorState\.type\)/);
+  assert.match(source, /generatorState\.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID/);
+  assert.match(source, /centralN7Emphasis: cfg\.centralN7Emphasis/);
+  assert.match(source, /sceneOpts\.centralN7Emphasis = cfg\.centralN7Emphasis/);
 });

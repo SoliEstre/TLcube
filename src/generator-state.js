@@ -39,6 +39,9 @@ import {
 } from './export-options.js';
 import { DEFAULT_SHADING_MODE, SHADING_MODES } from './shading.js';
 import {
+  CENTRAL_N7_EMPHASIS_MODES, DEFAULT_CENTRAL_N7_EMPHASIS,
+} from './centralN7Emphasis.js';
+import {
   DEFAULT_LOCATOR_PROFILE_Y,
   LOCATOR_PROFILE_CELL_SURFACE_V0,
   LOCATOR_PROFILE_CELL_SURFACE_V0T,
@@ -138,6 +141,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //   자동으로 따라온다 — «전수 등록» 이 주장이 아니라 유도 사실이 된다.
   finderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, BOTH,
     FINDER_CARD_PATTERN_IDS),
+  // 중앙 TL의 렌더 색만 바꾸는 실험 축. 기본은 기존 팔레트를 그대로 써서 이전 출력과
+  // 같고, locator/all은 포맷·용량·순위 문법을 건드리지 않은 채 대비만 비교한다.
+  centralN7Emphasis: field(DEFAULT_CENTRAL_N7_EMPHASIS, BOTH,
+    CENTRAL_N7_EMPHASIS_MODES),
   // 중앙 QR 만 뺀다 — previous 는 «중앙 QR 에서 되돌아갈 곳» 이라 center-qr 자신은
   // 담기지 않는다 (finder-selection.selectFinderPattern 이 그 불변식을 지킨다).
   previousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,

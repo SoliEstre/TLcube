@@ -252,6 +252,7 @@ export function encodeOptionsForY(state) {
  * finderPatternId를 생략해 기본값으로 되돌아가지 않도록 여기서 명시한다.
  */
 export function sceneOptionsForOA({
+  centralN7Emphasis,
   fallback,
   finderPatternId,
   palette,
@@ -278,6 +279,7 @@ export function sceneOptionsForOA({
   }
   if (opts.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) {
     opts.centralN7Family = centralN7FamilyForType(type);
+    if (centralN7Emphasis !== undefined) opts.centralN7Emphasis = centralN7Emphasis;
   }
   let needsCornerQr = false;
   if (centerQr) {
