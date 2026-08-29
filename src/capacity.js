@@ -43,6 +43,13 @@ export const VERSIONS = Object.freeze([
   Object.freeze({
     version: 3, k: 10, overhead: overheadBreakdown(10).total, symbolKey: 'V3',
   }),
+  // V4 «대용량» (운영자 지시 2026-08-30). k 는 1↔6·2↔8·3↔10 의 등차를 그대로 이어
+  // **12** 다 — 이 등차는 `test/namespace.test.js` 가 «hex k 는 버전마다 단조 증가»
+  // 로 이미 고정해 둔 전제이고, 같은 테스트가 hex 표 3·7 을 V4·V4Q 로 **예약**해
+  // 두었다. 즉 k=12 는 새 값이 아니라 예약된 자리를 채우는 것이다.
+  Object.freeze({
+    version: 4, k: 12, overhead: overheadBreakdown(12).total, symbolKey: 'V4',
+  }),
 ]);
 
 // 중앙 v0는 불스아이를 대체할 뿐 새 셀을 먹지 않는다. 용량표의 생성원인 breakdown이

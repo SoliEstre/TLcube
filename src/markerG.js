@@ -90,6 +90,23 @@ export const MARKER_G_FORMAT_INDEX = Object.freeze([
   Object.freeze({ name: 'A0CMQ', family: 'tri', version: 0, k: 6, formatIndex: 15, centerQr: true, defaultFinder: 'H2O' }),
   Object.freeze({ name: 'A1CMQ', family: 'tri', version: 1, k: 8, formatIndex: 15, centerQr: true, defaultFinder: 'H2O' }),
   Object.freeze({ name: 'A2CMQ', family: 'tri', version: 2, k: 10, formatIndex: 12, centerQr: true, defaultFinder: 'H2O' }),
+  // ── V4 «대용량» (hex, k=12 — 2026-08-30) ──────────────────────────────────
+  //
+  // **k=12 는 (값,k) 공간의 새 행이다.** 위 「결과 점유 … 빈 칸 3」·「잔여 0」 회계는
+  // 전부 k6/k8/k10 세 행 이야기이고 k=12 와는 아무 관계가 없다 — 새 k 는 16칸을
+  // 통째로 새로 연다. 그래서 V-CMQ 가 보류된 이유(앉힐 칸 없음)가 여기엔 없다.
+  //
+  // k=12 의 사전 점유는 hex 기저 축뿐이다: 3 = V4 · 7 = V4Q (`hexTriAxisOccupancy`
+  // 의 version−1 / +4 유도). 예약 밴드(K1=7 · cube 8..11)를 빼면 빈 칸은
+  // {0,1,2,4,5,6,12,13,14,15} 10칸이다. 값 7 은 V4Q 가 가져가는데, 이는 K 예약과
+  // 충돌하지 않는다 — 예약의 실질은 **(값,k) 쌍**이고 star 축은 k6/k8/k10 에만
+  // 산다 (`formatK.js` 로드 가드가 K_FORMAT_INDEX 의 k 에 대해서만 잰다). 그리고
+  // `test/namespace.test.js` 의 HEX_RESERVED 가 3·7 을 애초에 V4·V4Q 로 예약해 뒀다.
+  //
+  // 값 선택은 위 §값 선택 규칙 그대로다 — hex(O-CM)는 **각 k 의 최소 빈 값**:
+  // V4CM = 0 · V4CMQ = 1.
+  Object.freeze({ name: 'V4CM', family: 'hex', version: 4, k: 12, formatIndex: 0, centerQr: false, defaultFinder: 'H' }),
+  Object.freeze({ name: 'V4CMQ', family: 'hex', version: 4, k: 12, formatIndex: 1, centerQr: true, defaultFinder: 'H' }),
 ]);
 
 /**
@@ -158,19 +175,34 @@ export function markerGSpecFromFormatIndex(formatIndex, k) {
     }
   }
   // 포맷 공간 회계 (2026-08-24 V-CM 편입) — G 12칸 + 턴A V 표(6 + V-CM 3) 반영 후
-  // **잔여 0** 을 못 박는다. V-CMQ 보류의 산술 근거가 이 단언이다: 다음 소비자는
-  // 여기가 던지는 것을 보고 «빈 칸이 없다» 를 코드에서 확인하게 된다.
+  // k6/k8/k10 의 **잔여 0** 을 못 박는다. V-CMQ 보류의 산술 근거가 이 단언이다:
+  // 다음 소비자는 여기가 던지는 것을 보고 «빈 칸이 없다» 를 코드에서 확인하게 된다.
+  //
+  // ⚠ **만석을 주장하는 k 와 안 하는 k 를 둘 다 잰다.** k=12(V4, 2026-08-30)는 새로
+  // 연 행이라 빈 칸이 남아 있는 것이 정상이고, 그냥 루프에서 빼 두면 «빠뜨렸다» 와
+  // «비어 있기로 했다» 가 똑같이 생긴다. 그래서 비-만석 k 에 대해서는 반대 방향
+  // 단언(«예고 없이 만석이 되면 던진다»)을 건다. k 목록 자체는 표에서 유도한다 —
+  // 손 사본을 두면 다음 k 가 늘 때 이 검사만 뒤처진다.
   {
     const banned = new Set([K1_RESERVED_FORMAT_INDEX, ...CUBE_RESERVED_FORMAT_INDEXES]);
-    for (const k of [6, 8, 10]) {
+    /** 「48/48 꽉 찼다」를 주장하는 k — V1~V3 시절 회계. 여기 없는 k 는 여유가 있다. */
+    const SATURATED_KS = Object.freeze([6, 8, 10]);
+    const tableKs = Array.from(new Set(MARKER_G_FORMAT_INDEX.map((entry) => entry.k)))
+      .sort((a, b) => a - b);
+    for (const k of tableKs) {
       let free = 0;
       for (let value = 0; value <= 15; value += 1) {
         if (banned.has(value)) continue;
         if (!seen.has(value + '|' + k)) free += 1;
       }
-      if (free !== 0) {
-        throw new Error('markerG: k' + k + ' 잔여 칸이 ' + free
-          + ' — 점유 회계가 «잔여 0» 주장과 다르다 (V-CMQ 보류 근거 재검토)');
+      if (SATURATED_KS.includes(k)) {
+        if (free !== 0) {
+          throw new Error('markerG: k' + k + ' 잔여 칸이 ' + free
+            + ' — 점유 회계가 «잔여 0» 주장과 다르다 (V-CMQ 보류 근거 재검토)');
+        }
+      } else if (free === 0) {
+        throw new Error('markerG: k' + k + ' 이 예고 없이 만석 — 새 행을 앉힐 칸이 없다;'
+          + ' SATURATED_KS 에 넣고 그 사실을 헤더에 적어라');
       }
     }
   }
