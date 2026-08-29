@@ -5,6 +5,7 @@ import {
   CENTER_QR_FINDER_PATTERN_ID,
   commitFinderQrTransition,
   createFinderQrProfiles,
+  finderPatternConflictsWithInnerQr,
   finderPatternForTypeTransition,
   finderPatternSupportedForType,
   normalizeFinderQrState,
@@ -31,13 +32,13 @@ function state(overrides = {}) {
   };
 }
 
-test('O/A/K 중앙 QR 파인더 선택은 QR 위치를 안쪽으로 함께 고른다', () => {
+test('O/A/K 검출기 선택은 상위 QR 위치를 안쪽으로 바꾸지 못한다', () => {
   for (const type of ['O', 'A', 'K']) {
     const next = selectFinderPattern(
       state(), CENTER_QR_FINDER_PATTERN_ID, type, OFFICIAL_DEFAULT,
     );
-    assert.equal(next.finderPatternId, CENTER_QR_FINDER_PATTERN_ID);
-    assert.equal(next.qrPosition, 'inner');
+    assert.equal(next.finderPatternId, OFFICIAL_DEFAULT);
+    assert.equal(next.qrPosition, 'TL');
     assert.equal(next.previousFinderPatternId, OFFICIAL_DEFAULT);
   }
 });
@@ -77,15 +78,28 @@ test('직전 파인더 이력이 없으면 빌드별 기본값으로 복원한�
   }
 });
 
-test('안쪽에서 다른 파인더를 고르면 직전 바깥 QR 위치도 함께 복원한다', () => {
-  const next = selectFinderPattern(state({
+test('안쪽에서 중앙 점유 파인더를 고르면 잠금이 상태를 그대로 보존한다', () => {
+  const initial = state({
     finderPatternId: CENTER_QR_FINDER_PATTERN_ID,
     previousFinderPatternId: OFFICIAL_DEFAULT,
     qrPosition: 'inner',
     previousOuterQrPosition: 'BL',
-  }), TRIAL_DEFAULT, 'A', OFFICIAL_DEFAULT);
-  assert.equal(next.finderPatternId, TRIAL_DEFAULT);
-  assert.equal(next.qrPosition, 'BL');
+  });
+  const next = selectFinderPattern(initial, TRIAL_DEFAULT, 'A', OFFICIAL_DEFAULT);
+  assert.deepEqual(next, initial);
+});
+
+test('카드 명부에서 안쪽 QR 과 충돌하지 않는 유일한 검출기는 중앙 QR 자신이다', () => {
+  const ids = new Set(Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id));
+  ids.add(CENTRAL_V0_FINDER_CARD.id);
+  assert.equal(ids.has(CENTER_QR_FINDER_PATTERN_ID), true);
+  for (const id of ids) {
+    assert.equal(
+      finderPatternConflictsWithInnerQr(id),
+      id !== CENTER_QR_FINDER_PATTERN_ID,
+      id,
+    );
+  }
 });
 
 test('Type Y의 안쪽 윈도는 파인더와 결합하지 않는다', () => {
@@ -142,6 +156,8 @@ test('O/A/K 전 타입쌍에서 지원되는 중앙 파인더 선택을 승계�
     ...Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id),
     CENTRAL_V0_FINDER_CARD.id,
   ]);
+  // center-qr 은 독립 파인더 선택이 아니라 상위 qrPosition='inner' 의 파생값이다.
+  activeFinderIds.delete(CENTER_QR_FINDER_PATTERN_ID);
   for (const sourceType of types) {
     for (const targetType of types) {
       for (const finderPatternId of activeFinderIds) {

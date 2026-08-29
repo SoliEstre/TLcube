@@ -17,6 +17,16 @@ export function isCentralV0FinderPatternId(id) {
 }
 
 /**
+ * 안쪽 QR 과 동시에 선택할 수 없는 중앙 파인더인가.
+ *
+ * 생성기 카드의 파인더는 전부 중앙 슬롯을 쓰며, `center-qr` 만 안쪽 QR 자신을
+ * 검출기로 쓰는 동일 자원이다. 따라서 id 손 목록 대신 이 한 가지 예외로 판정한다.
+ */
+export function finderPatternConflictsWithInnerQr(id) {
+  return typeof id === 'string' && id !== '' && id !== CENTER_QR_FINDER_PATTERN_ID;
+}
+
+/**
  * 타입 → 프로파일군.
  *
  * K는 O/A와 같은 기본 중앙 파인더를 쓰지만 QR 위치·직전 선택 이력은 별도 보존한다.
@@ -209,21 +219,23 @@ export function commitFinderQrTransition(
   return state;
 }
 
-/** 파인더 카드 선택. 중앙 QR은 안쪽을 고르고, 다른 파인더는 직전 바깥 QR 위치를 복원한다. */
+/**
+ * 파인더 카드 선택.
+ *
+ * qrPosition 이 상위 축이다. O/A/K 에서 안쪽이 아니면 중앙 QR 카드는 부모 상태를
+ * 바꾸지 못하고, 안쪽이면 중앙 슬롯을 다투는 파인더 카드가 상태를 바꾸지 못한다.
+ */
 export function selectFinderPattern(state, finderPatternId, type, defaultFinderPatternId) {
+  if (type !== 'Y') {
+    const inner = state.qrPosition === 'inner';
+    const centerQr = finderPatternId === CENTER_QR_FINDER_PATTERN_ID;
+    if ((!inner && centerQr) || (inner && finderPatternConflictsWithInnerQr(finderPatternId))) {
+      return normalizeFinderQrState(state, type, defaultFinderPatternId);
+    }
+  }
   const next = { ...state, finderPatternId };
   if (finderPatternId !== CENTER_QR_FINDER_PATTERN_ID) {
     next.previousFinderPatternId = finderPatternId;
-  }
-  if (type !== 'Y') {
-    if (finderPatternId === CENTER_QR_FINDER_PATTERN_ID) {
-      if (state.finderPatternId !== CENTER_QR_FINDER_PATTERN_ID) {
-        next.previousFinderPatternId = state.finderPatternId;
-      }
-      next.qrPosition = 'inner';
-    } else if (state.qrPosition === 'inner') {
-      next.qrPosition = state.previousOuterQrPosition || DEFAULT_OUTER_QR_POSITION;
-    }
   }
   return normalizeFinderQrState(next, type, defaultFinderPatternId);
 }
