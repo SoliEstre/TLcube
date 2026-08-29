@@ -194,17 +194,26 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 그대로다 — buildConfig 가 seat 에서 **파생**해 싣는다 (index.html).
   // 구 boolean 이 어떤 경로로 들어와도 finder-selection.normalizeFinderQrState 가
   // 타입별 seat 로 이관한다.
-  // lab 게이트(INTERNAL) 이유는 종전과 같다: 실기기 라운드 전 — 합성만으로 정식
-  // 노출을 정하지 않는다. 운영자 확정(2026-08-23·24): 내곽/외곽 구역 노출 lab 유지.
+  // ⭐ **BOTH 승격 (운영자 지시 2026-08-30)** — turnA 승격(위)과 같은 형식이다.
+  // 구 INTERNAL 사유는 «실기기 라운드 전 — 합성만으로 정식 노출을 정하지 않는다»
+  // (운영자 확정 2026-08-23·24)였고, 그 라운드가 자리별로 다 돌았다:
+  //   · o-cm(H) — markerG G formatIndex 왕복 (generator-corner-marker ⑤ 계열).
+  //   · a-cm(H2O) — 같은 표의 tri 행.
+  //   · v-cm(CO2) — V*CM 인덱스 공유 왕복 (V-CMQ 개설 2026-08-24).
+  //   · k-cm(H2CO3) — typeK-roundtrip ② 가 K0CM/K1CM/K2CM 전수 양성으로 뒤집음.
+  //   · sagoae — C2c 합성 렌더 + 원문 왕복 36칸 (test/sagoae-roundtrip ②③).
+  //   · daehan 서랍 — 운영자 라이브 실기 확인 (턴A·K2, 2026-08-29).
+  // 표시 술어의 정본은 finder-zone-ui.seatCardShown 이고, 여기는 **스키마 노출**만
+  // 연다 (숨김-active 금지 규약 — 노출과 잠금은 다른 축).
   // ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
   // v-cm (2026-08-24 실체 전환) 은 그 쌍대다 — **turnA 를 요구**한다 (V-CM =
   // 턴A + 코너 자리 예약. turnA off + v-cm 조합은 UI sync 가 잠근다).
-  innerSeat: field('none', INTERNAL, ['none', 'o-cm', 'sagoae']),
+  innerSeat: field('none', BOTH, ['none', 'o-cm', 'sagoae']),
   // ⭐ **k-cm 편입 (2026-08-25)** — 자리는 2026-08-24 부터 와이어에 실재했지만
   // 부트스트랩이 star 축 포맷 8 을 안 열어 «생성은 되고 스캔이 안 되는» 값이었다.
   // 레인 KCM 이 그 한 줄(familyProfiles('star') 가 VERSIONS_KCM 미소유)을 닫아
   // K0CM/K1CM/K2CM 왕복이 전부 서므로 허용값에 든다 (자 = typeK-roundtrip ②).
-  outerSeat: field('none', INTERNAL, ['none', 'a-cm', 'v-cm', 'k-cm']),
+  outerSeat: field('none', BOTH, ['none', 'a-cm', 'v-cm', 'k-cm']),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),

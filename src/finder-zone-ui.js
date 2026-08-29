@@ -196,6 +196,56 @@ export const OUTER_SEAT_OPTIONS = Object.freeze(
 );
 
 /**
+ * 자리 구역이 열리는 생성기 타입 (Y 는 자기 로케이터 문법을 쓰므로 자리 축이 없다).
+ *
+ * index.html 이 손 사본으로 들고 있던 값을 여기로 올렸다 (2026-08-30) — 자리 축의
+ * 다른 정본이 전부 이 모듈에 있는데 «어느 타입에 자리가 있나» 만 소비 지점에
+ * 남아 있었다. 사본 규칙(«유도하거나 규칙을 적어라»)의 미적용 자리였다.
+ */
+export const SEAT_ZONE_TYPES = Object.freeze(['O', 'A', 'K']);
+
+/**
+ * 이 자리 카드가 **보이는가** (정식·시험판 공통).
+ *
+ * ⚠ **표시와 잠금은 다른 축이다.** 이 술어는 «화면에 카드가 있나» 만 답한다.
+ * 누를 수 있나(seatReady · wireLocked · vcmLocked · 타입 부합 잠금)는 소비 지점이
+ * 따로 계산하고, 잠긴 카드는 **보이되 disabled** 다 — 숨기면 존재를 발견할 길이
+ * 없다(V-CM g875 전례).
+ *
+ * ## ⭐ 정식 노출 (운영자 지시 2026-08-30) — 구 `officialHidden` 철폐
+ *
+ * 구 규칙은 index.html syncSeatUi 의 `officialHidden = !lab && !isAutoCard && !isNone`
+ * 이었다 (운영자 2026-08-25 «CM계열 선택지 정식에선 숨기고(lab에만 표시)»). 그래서
+ * 정식 빌드에는 자동·없음 둘만 남았고, 운영자가 2026-08-30 에 그 결과를 네 갈래로
+ * 신고했다: 내곽에 정식 H 카드가 없다 · 외곽에 H2O·CO2·H2CO3 카드가 없다 ·
+ * 사괘 단독 카드가 없다 · daehan 이 고급에 갇혀 있다.
+ *
+ * 근거가 그 사이에 바뀌었다 — 구 게이트의 사유는 «실기기 라운드 전» 이었는데
+ * (generator-state seat 필드 주석) 그 라운드가 돌았다: K-CM 은 typeK-roundtrip 전수
+ * 양성, V-CM 은 V*CM 인덱스 공유 왕복, sagoae 는 C2c 왕복 36칸(O/A × V × ECC ×
+ * 해상도, test/sagoae-roundtrip ③), daehan 은 운영자 라이브 실기(턴A·K2).
+ *
+ * 그래서 `lab` 은 이 술어의 인자가 **아니다**. 시험판이 정식보다 더 보여 주는 축은
+ * 여전히 있지만(자동의 allowBlocked 등) 그건 «무엇을 고르나» 쪽이지 «카드가 있나»
+ * 쪽이 아니다.
+ *
+ * @param {{seat:string, type:string, seatTypes:readonly string[], turnA?:boolean,
+ *          absent?:boolean}} input
+ */
+export function seatCardShown({ seat, type, seatTypes, turnA = false, absent = false }) {
+  // 부재 자리 — 쓸 수 있는 내부 타입이 생성기에 없다. 존재는 분류 정본과 SPEC 이
+  // 말한다, 잠긴 카드가 아니라.
+  if (absent === true) return false;
+  // 타입 부합 (zoneCards 의 types 표).
+  if (!seatTypes.includes(type)) return false;
+  // 외곽 코너 자리는 실루엣 방향을 따라간다 (Wave 3 ④ — 던짐 조합을 UI 가 안
+  // 만든다): 정삼각이면 a-cm, 역삼각(턴A)이면 v-cm 하나만 보인다.
+  if (seat === 'a-cm' && turnA === true) return false;
+  if (seat === 'v-cm' && turnA !== true) return false;
+  return true;
+}
+
+/**
  * CM+Q 와이어 존재 술어 (설계 ① 배타표) — centerQr×seat 잠금은 상수가 아니라
  * **markerG 에 CMQ 행이 실재하는가**로 게이트한다. C2a(2026-08-23)가 CMQ 6칸을
  * 착지시켰으므로 현재 hex·tri 모두 true — 병용이 합법이다. 이 술어가 false 인

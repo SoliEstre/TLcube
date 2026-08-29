@@ -16,7 +16,8 @@
  *   ② `encodeOptsFor` 가 O·A 에서 cornerMarker 를 싣고 Y 에서는 안 싣는다
  *      — cfg 조립은 seat 파생이다
  *   ③ turnA 와 **상호배제** — 둘 다 켜도 encodeA 가 던지지 않는다
- *   ④ 상태 필드(innerSeat/outerSeat)가 lab 게이트(INTERNAL) 뒤에 있고 유도 options 다
+ *   ④ 상태 필드(innerSeat/outerSeat)가 **정식 노출(BOTH)** 이고 유도 options 다
+ *   ⑥ 자리 카드가 정식 빌드에서 보이고, 라벨이 심볼명을 가리킨다 (2026-08-30)
  *   ⑤ 마커를 켠 O 심볼은 용량이 줄고 실제로 인코드된다 (불변)
  */
 
@@ -25,7 +26,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { createGeneratorState, GENERATOR_STATE_SCHEMA, exposedGeneratorStateKeys } from '../src/generator-state.js';
-import { INNER_SEAT_OPTIONS, OUTER_SEAT_OPTIONS, zoneCards, cmqWireExists } from '../src/finder-zone-ui.js';
+import {
+  INNER_SEAT_OPTIONS, OUTER_SEAT_OPTIONS, cmqWireExists, seatCardShown, zoneCards,
+} from '../src/finder-zone-ui.js';
+import { SEAT_DEFAULT_FINDER } from '../src/finder-taxonomy.js';
 import { LAB_OUTER_FINDER_IDS } from '../src/lab-expected-axes.js';
 import { encode } from '../src/encode.js';
 import { encodeA } from '../src/encodeA.js';
@@ -215,7 +219,7 @@ test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 
     'cornerMarker 디스패치가 평-turnA 디스패치보다 뒤에 있다 — 옛 조합이 들어오면 던지는 쪽으로 간다');
 });
 
-test('④ seat 상태 필드는 lab 게이트 뒤(INTERNAL)·유도 options 다', () => {
+test('④ seat 상태 필드는 정식 노출(BOTH)·유도 options 다', () => {
   const state = createGeneratorState();
   assert.equal(state.innerSeat, 'none', '기본값은 없음이어야 한다');
   assert.equal(state.outerSeat, 'none', '기본값은 없음이어야 한다');
@@ -226,14 +230,89 @@ test('④ seat 상태 필드는 lab 게이트 뒤(INTERNAL)·유도 options 다'
   // options 는 유도 배열이다 (F-37 규약 — 손 목록 금지).
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.innerSeat.options], [...INNER_SEAT_OPTIONS]);
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.outerSeat.options], [...OUTER_SEAT_OPTIONS]);
+  // ⭐ **정식 노출로 뒤집힌 락 (운영자 지시 2026-08-30)** — 구 단언은 «두 모드 다
+  // 노출 false» 였고 사유는 «실기기 라운드를 아직 안 돌았다» 였다. 그 라운드가
+  // 자리마다 돌아서(generator-state seat 필드 주석 §BOTH 승격 — k-cm typeK-roundtrip ②,
+  // v-cm V*CM 왕복, sagoae sagoae-roundtrip ③, daehan 운영자 라이브) 배타를 연다.
   // 노출 대조를 **유도**한다 — 상수를 손으로 적으면 exposure 값 이름이 바뀔 때 썩는다.
   for (const mode of ['normal', 'advanced']) {
     for (const key of ['innerSeat', 'outerSeat']) {
-      assert.equal(exposedGeneratorStateKeys(mode).includes(key), false,
-        key + ' 가 ' + mode + ' 모드에 노출됐다 — 실기기 라운드를 아직 안 돌았다'
-        + ' (운영자 확정 2026-08-23·24: lab 유지)');
+      assert.equal(exposedGeneratorStateKeys(mode).includes(key), true,
+        key + ' 가 ' + mode + ' 모드에서 빠졌다 — 자리 축이 다시 lab 뒤로 숨었다'
+        + ' (운영자 지시 2026-08-30: 정식 일반 노출)');
     }
   }
+});
+
+/*
+ * ⑥ 자리 카드 정식 노출 + 심볼명 라벨 (운영자 지시 2026-08-30).
+ *
+ * ⚠ 재는 것은 **성질**이지 배치가 아니다: 「seatCardShown 이 lab 을 안 본다」와
+ *   「라벨 키가 가리키는 사전 값이 SEAT_DEFAULT_FINDER 심볼명이다」. 자리 카드가
+ *   어느 컨테이너에 몇 번째로 붙는지는 재지 않는다 — 그건 다음 리팩터링까지만 산다.
+ */
+test('⑥ 자리 카드는 정식 빌드에서 보인다 — 표시 술어에 lab 축이 없다', () => {
+  const zones = zoneCards();
+  const shownFor = (card, type, turnA) => seatCardShown({
+    seat: card.id, type, seatTypes: card.types, turnA, absent: card.absent === true,
+  });
+  // 내곽 — O 에서 없음·o-cm(H)·sagoae 셋 다 보인다. 구 officialHidden 은 정식에
+  // 자동·없음만 남겼고, 그래서 운영자가 «내곽 자리에 정식 H 카드가 없다» 를 봤다.
+  for (const card of zones.inner) {
+    assert.equal(shownFor(card, 'O', false), true,
+      '내곽 ' + card.id + ' 카드가 O 에서 안 보인다');
+  }
+  // 외곽 — 정삼각이면 a-cm(H2O), 역삼각이면 v-cm(CO2), K 면 k-cm(H2CO3).
+  assert.equal(shownFor(zones.outer.find((c) => c.id === 'a-cm'), 'A', false), true,
+    '외곽 H2O(a-cm) 카드가 정삼각에서 안 보인다');
+  assert.equal(shownFor(zones.outer.find((c) => c.id === 'v-cm'), 'A', true), true,
+    '외곽 CO2(v-cm) 카드가 역삼각에서 안 보인다');
+  assert.equal(shownFor(zones.outer.find((c) => c.id === 'k-cm'), 'K', false), true,
+    '외곽 H2CO3(k-cm) 카드가 Type K 에서 안 보인다');
+  // 표시와 잠금은 다른 축이다 — 술어는 방향 스왑·타입 부합만 닫는다.
+  assert.equal(shownFor(zones.outer.find((c) => c.id === 'a-cm'), 'A', true), false,
+    'a-cm 이 역삼각에서도 보인다 — 방향 스왑(Wave 3 ④)이 사라졌다');
+  assert.equal(shownFor(zones.outer.find((c) => c.id === 'v-cm'), 'A', false), false,
+    'v-cm 이 정삼각에서도 보인다 — 방향 스왑이 사라졌다');
+  assert.equal(shownFor(zones.inner.find((c) => c.id === 'o-cm'), 'K', false), false,
+    'o-cm 이 Type K 에서 보인다 — 타입 부합 표가 무시됐다');
+  // 술어가 lab/mode 를 인자로 되찾으면 «정식에선 안 보임» 이 조용히 돌아온다.
+  assert.equal(/\blab\b|\bmode\b/.test(seatCardShown.toString()), false,
+    'seatCardShown 이 lab·mode 축을 다시 봤다 — 정식 노출이 되돌려졌다');
+});
+
+test('⑥-b 자리 카드 라벨 키는 SEAT_DEFAULT_FINDER 심볼명을 가리킨다', () => {
+  // index.html 의 SEAT_CARD_LABEL_KEYS 를 **구조로** 읽는다 (객체 리터럴 파싱).
+  const at = INDEX.indexOf('const SEAT_CARD_LABEL_KEYS = Object.freeze({');
+  assert.notEqual(at, -1, 'SEAT_CARD_LABEL_KEYS 가 사라졌다');
+  const body = INDEX.slice(at, INDEX.indexOf('});', at));
+  const labelKeyFor = (seat) => {
+    const m = new RegExp("(?:\\[?'?" + seat + "'?\\]?|" + seat + "):\\s*'(g\\d+)'").exec(body);
+    assert.ok(m, seat + ' 의 라벨 키를 못 읽었다');
+    return m[1];
+  };
+  // ko 사전의 값을 뽑는다 — 심볼명은 언어 불변이므로 여덟 언어가 같아야 한다.
+  const valuesFor = (key) => [...INDEX.matchAll(
+    new RegExp('"' + key + '": "([^"]*)"', 'g'),
+  )].map((m) => m[1]);
+  for (const [seat, symbol] of Object.entries(SEAT_DEFAULT_FINDER)) {
+    const values = valuesFor(labelKeyFor(seat));
+    assert.equal(values.length, 8, seat + ' 라벨이 8언어에 다 있어야 한다');
+    for (const value of values) {
+      assert.equal(value, symbol,
+        seat + ' 카드 라벨이 심볼명(' + symbol + ')이 아니라 «' + value + '» 다 —'
+        + ' 자리명은 tooltip 으로 강등됐다 (운영자 지시 2026-08-30)');
+    }
+  }
+  // sagoae 는 SEAT_DEFAULT_FINDER 에 없다 (자리가 아니라 그 자체가 심볼이다).
+  // 라벨은 여덟 언어 전부 sagoae 를 담되 ko/ja 는 자기 글자를 앞에 둔다.
+  for (const value of valuesFor(labelKeyFor('sagoae'))) {
+    assert.ok(value.includes('sagoae'),
+      'sagoae 라벨이 로마자 식별자를 잃었다: ' + value);
+  }
+  // 자리명은 카드가 **버리지 않는다** — tooltip 으로 살아 있어야 한다.
+  assert.match(INDEX, /card\.dataset\.seatName = desc\.name;/,
+    '자리명이 tooltip 경로에서도 사라졌다 — 강등이 아니라 삭제가 됐다');
 });
 
 test('⑤ 마커를 켠 O 심볼은 용량이 줄고 실제로 인코드된다', () => {

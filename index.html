@@ -1403,7 +1403,7 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId centralN7Emphasis bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
+    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat outerSeat centralN7Emphasis bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
            도메인·자동 규칙은 전부 src/export-options.js 단일 정의를 소비한다 — UI 인라인
            재구현 금지 (교훈 .agent/_lessons/009: 손으로 적은 규칙은 테스트가 못 잠근다).
@@ -1951,9 +1951,16 @@
              Type A 도 쓴다 — 육각 코어가 O 와 좌표 동일하고 패치에는 안 들어간다
              (실측 2026-08-19). Type K 도 쓴다 — 2026-08-29 개설 (사괘 ∩ K 역할셀
              전 k 0 실측 · 와이어 7 공유 · K0D 36 / K1D 73 / K2D 119 B, ECC-M).
-             ⚠ **고급 전용을 유지한다** — 왕복 실측(2026-08-19): 이 코드는 스캐너의
-             `cellFinderDaehan` 옵트인이 **꺼져 있으면 0/3, 켜면 3/3** 으로 읽힌다.
-             그 옵트인은 오늘 /lab/ 토글에만 있다. 그래서 summary 가 그 사실을 말한다.
+             ⭐ **정식 일반 승격 (운영자 지시 2026-08-30)** — 구 규약은 «고급 전용
+             유지» 였다. 운영자가 라이브 스캐너로 턴A·K2 daehan 실기 확인을 마치고
+             정식 일반 노출을 지시했다. 승격한 것은 **생성 표면**이다.
+             ⚠ 읽기 조건은 **안 바뀌었다** (레인 tier 2026-08-30 재실측): 왕복
+             실측(2026-08-19)의 «옵트인 꺼져 있으면 0/3, 켜면 3/3» 은 지금도 참이고,
+             그 옵트인은 여전히 /lab/ 스캐너 토글에만 있다 (bootstrap.js
+             cellFinderLineupFor · scanner.js DAEHAN_TOGGLE_KEY). 기본 라인업을 여는
+             것은 decoder 소유라 이 층에서 못 한다 — 그래서 summary(g570)가 «용량
+             감소» 와 «읽으려면 시험판 스캐너» 둘 다 말한다. 사실을 지우고 승격하면
+             일반 사용자가 «만들었는데 안 읽히는» 코드를 말없이 받는다.
              2026-08-21: 카드는 합성 한 장(와이어 oak-daehan-k10). 표시는 taegeuk +
              sagoae. 카드를 두 장으로 쪼개면 버전 k 와 모순되는 템플릿을 고를 수 있다. -->
         <details class="finder-collapse" id="finderDaehan">
@@ -1992,12 +1999,14 @@
              기존 구조 승계), 아래 둘 = **내곽**(분류 2) · **외곽**(분류 3 + 부재).
              카드는 finder-zone-ui.zoneCards() 가 FINDER_TAXONOMY 에서 유도해
              §ensureSeatCards 가 채운다 (수기 사본 철폐).
-             노출: **lab 유지** (운영자 확정 2026-08-23·24 — 고급 승격안 기각.
-             실기기 라운드 전 — 합성만으로 정식 노출을 정하지 않는다).
+             노출: **정식 일반** (운영자 지시 2026-08-30). 구 규약은 «lab 유지»
+             (2026-08-23·24 — 실기기 라운드 전)였고, 그 라운드가 돌아 근거가
+             바뀌었다. 표시 판정 정본은 finder-zone-ui.seatCardShown §정식 노출.
              구 #cornerMarkerSection 의 승계 — 왕복 실측(2026-08-20): 기하는
              decoder-corner-marker-wiring ②(앵커 한계 g=0.0001 → CM g=0.0008),
              와이어는 markerG G formatIndex (markerG.test ④ · generator-ui-wiring §5).
-             sagoae = 자리만 + disabled (와이어 편입은 통합자 C2c — 부재 문법과 동일).
+             sagoae = **양성 선택지** (2026-08-30 갱신) — 구 «자리만 + disabled» 는
+             C2c 합성 렌더 + 검증 왕복이 서면서 낡았다 (test/sagoae-roundtrip ②③).
              K-CM = KIND_ABSENT 유도, 클릭 불가 + 부재 사유 힌트.
              V-CM = **실체 (2026-08-24 전환)** — 역삼각(턴A) 전용 코너 자리.
              ⚠ 외곽 코너 자리는 실루엣 방향을 따라간다 (Wave 3 ④ — 던짐 조합을
@@ -2671,17 +2680,17 @@ const GENERATOR_STRINGS = {
     "g600": "새 버전이 준비됐어요.",
     "g850": "내곽 자리",
     "g851": "외곽 자리",
-    "g852": "O-CM · 교대 코너 3곳",
-    "g853": "A-CM · 교대 코너 3곳",
-    "g854": "sagoae (준비 중)",
-    "g855": "sagoae 는 아직 켤 수 없어요 — 단독 와이어 편입 전이라 자리만 예약해 뒀어요.",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "사괘(sagoae)",
+    "g855": "사괘 고리를 중앙 파인더 바깥에 함께 그려요 (taegeuk + 사괘 = daehan 과 같은 예약 회계라 용량이 줄어요). 읽으려면 시험판 스캐너가 필요해요.",
     "g859": "H",
     "g871": "O-CM 자리에 H 심볼을 함께 그려요 (A-CM 의 H2O 와 같은 방식). 판독은 중앙 Y0(비컨) 조합에서 확인됐어요 — 다른 중앙 파인더 조합은 인식률이 떨어질 수 있어요.",
     "g872": "비컨 실측치 — 모듈나비 {mpc}/셀 · 실기기 셀 17~20px → 모듈 {lo}~{hi}px (권장 하한 {floor}px) · 내부 3톤 · ECC H(t=7) · 실기기 스캔 검증 2026-08-22",
     "g873": "모듈 크기 (실기기)",
     "g874": "ECC 정정력 (RS)",
-    "g856": "V-CM (역삼각)",
-    "g857": "K-CM (부재)",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "자동이 타입과 실루엣 방향에 맞는 코너 자리를 골라요 — 정삼각·역삼각·Type K 가 각각 다른 자리를 써요. 자리를 직접 고르는 건 시험판에서만 열려 있어요.",
     "g875": "역삼각(턴A)을 켜면 고를 수 있어요.",
     "g876": "중앙 QR 과는 함께 쓸 수 없어요 — 이 조합의 포맷 자리가 아직 없어요.",
@@ -2871,7 +2880,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "미측정 (다른 계보)",
     "g569": "taegeuk + sagoae (전면 79셀)",
-    "g570": "taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)",
+    "g570": "taegeuk + sagoae (용량 감소 · 읽으려면 시험판 스캐너)",
     "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.",
     "g582": "중앙 Y0",
     "g1000": "중앙 M7",
@@ -3127,17 +3136,17 @@ const GENERATOR_STRINGS = {
     "g600": "A new version is ready.",
     "g850": "Inner seat",
     "g851": "Outer seat",
-    "g852": "O-CM · 3 alternating corners",
-    "g853": "A-CM · 3 alternating corners",
-    "g854": "sagoae (in preparation)",
-    "g855": "sagoae cannot be enabled yet — its standalone wire is not in place, so the seat is only reserved.",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "sagoae",
+    "g855": "Draws the sagoae ring outside the central finder (same reserved accounting as taegeuk + sagoae = daehan, so capacity drops). Reading needs the trial scanner.",
     "g859": "H",
     "g871": "Draws the H symbol on the O-CM seat (same convention as A-CM's H2O). Decoding is verified with the central Y0 (beacon) combination — other central finders may scan worse.",
     "g872": "Beacon measurements — module pitch {mpc}/cell · device cells 17–20px → modules {lo}–{hi}px (recommended floor {floor}px) · inner 3-tone · ECC H(t=7) · device-scan verified 2026-08-22",
     "g873": "Module size (device)",
     "g874": "ECC strength (RS)",
-    "g856": "V-CM (inverted)",
-    "g857": "K-CM (absent)",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "Auto picks the corner seat that matches the type and silhouette direction — upright triangle, inverted triangle and Type K each use a different seat. Picking a seat by hand is open in the lab build only.",
     "g875": "Enable the inverted triangle (turnA) to select this.",
     "g876": "Cannot be combined with the center QR — the format slot for that combination does not exist yet.",
@@ -3327,7 +3336,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Not measured (different lineage)",
     "g569": "taegeuk + sagoae (79-cell full surface)",
-    "g570": "taegeuk + sagoae (lower capacity · trial scanner only)",
+    "g570": "taegeuk + sagoae (lower capacity · reading needs the trial scanner)",
     "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when this finder is enabled in the trial scanner (/lab/).",
     "g582": "Centre Y0",
     "g1000": "Centre M7",
@@ -3583,17 +3592,17 @@ const GENERATOR_STRINGS = {
     "g600": "新しいバージョンが利用できます。",
     "g850": "内郭シート",
     "g851": "外郭シート",
-    "g852": "O-CM · 交互コーナー3か所",
-    "g853": "A-CM · 交互コーナー3か所",
-    "g854": "sagoae（準備中）",
-    "g855": "sagoae はまだ有効にできません — 単独ワイヤ編入前のため、席だけ予約しています。",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "四卦(sagoae)",
+    "g855": "四卦のリングを中央ファインダーの外側に描画します（taegeuk + 四卦 = daehan と同じ予約会計のため容量が減ります）。読み取りには試験版スキャナが必要です。",
     "g859": "H",
     "g871": "O-CM 席に H シンボルを一緒に描画します（A-CM の H2O と同じ方式）。読取は中央Y0（ビーコン）併用で確認済み — 他の中央ファインダーでは認識率が下がる場合があります。",
     "g872": "ビーコン実測 — モジュール幅 {mpc}/セル · 実機セル 17–20px → モジュール {lo}–{hi}px（推奨下限 {floor}px）· 内部3トーン · ECC H(t=7) · 実機スキャン検証 2026-08-22",
     "g873": "モジュール寸法（実機）",
     "g874": "ECC 訂正力（RS）",
-    "g856": "V-CM（逆三角）",
-    "g857": "K-CM（不在）",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "自動がタイプと輪郭の向きに合うコーナー席を選びます — 正三角・逆三角・Type K がそれぞれ別の席を使います。席を手で選べるのは実験版だけです。",
     "g875": "逆三角（turnA）をオンにすると選べます。",
     "g876": "中央 QR とは併用できません — その組み合わせのフォーマット枠がまだありません。",
@@ -3783,7 +3792,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "未計測（別系譜）",
     "g569": "taegeuk + sagoae（全面79セル）",
-    "g570": "taegeuk + sagoae（容量減少・試験版スキャナ専用）",
+    "g570": "taegeuk + sagoae（容量減少・読み取りには試験版スキャナ）",
     "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）でこのファインダーを有効にしたときだけ読み取れます。",
     "g582": "中央Y0",
     "g1000": "中央M7",
@@ -4038,17 +4047,17 @@ const GENERATOR_STRINGS = {
     "g600": "Une nouvelle version est prête.",
     "g850": "Siège intérieur",
     "g851": "Siège extérieur",
-    "g852": "O-CM · 3 coins alternés",
-    "g853": "A-CM · 3 coins alternés",
-    "g854": "sagoae (en préparation)",
-    "g855": "sagoae ne peut pas encore être activé — son câblage autonome n'est pas en place, le siège est seulement réservé.",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "sagoae",
+    "g855": "Dessine l'anneau sagoae autour du repère central (même comptabilité réservée que taegeuk + sagoae = daehan, la capacité diminue donc). La lecture nécessite le scanner d'essai.",
     "g859": "H",
     "g871": "Dessine le symbole H sur le siège O-CM (même convention que le H2O d'A-CM). Le décodage est vérifié avec le Y0 central (balise) — les autres repères centraux peuvent moins bien scanner.",
     "g872": "Mesures balise — pas de module {mpc}/cellule · cellules réelles 17–20px → modules {lo}–{hi}px (plancher conseillé {floor}px) · 3 tons internes · ECC H(t=7) · vérifié au scan réel 2026-08-22",
     "g873": "Taille de module (réel)",
     "g874": "Capacité ECC (RS)",
-    "g856": "V-CM (inversé)",
-    "g857": "K-CM (absent)",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "L'auto choisit le siège de coin correspondant au type et au sens de la silhouette — triangle droit, triangle renversé et Type K utilisent chacun un siège différent. Le choix manuel du siège n'est ouvert que dans la version labo.",
     "g875": "Activez le triangle renversé (turnA) pour le sélectionner.",
     "g876": "Incompatible avec le QR central — l'emplacement de format pour cette combinaison n'existe pas encore.",
@@ -4238,7 +4247,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Non mesuré (autre lignée)",
     "g569": "taegeuk + sagoae (79 cellules, pleine surface)",
-    "g570": "taegeuk + sagoae (capacité réduite · scanner d'essai uniquement)",
+    "g570": "taegeuk + sagoae (capacité réduite · lecture avec le scanner d'essai)",
     "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec ce détecteur activé dans le scanner d'essai (/lab/).",
     "g582": "Y0 central",
     "g1000": "M7 central",
@@ -4493,17 +4502,17 @@ const GENERATOR_STRINGS = {
     "g600": "È pronta una nuova versione.",
     "g850": "Posto interno",
     "g851": "Posto esterno",
-    "g852": "O-CM · 3 angoli alternati",
-    "g853": "A-CM · 3 angoli alternati",
-    "g854": "sagoae (in preparazione)",
-    "g855": "sagoae non può ancora essere attivato — il collegamento autonomo non è pronto, il posto è solo riservato.",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "sagoae",
+    "g855": "Disegna l'anello sagoae attorno al finder centrale (stessa contabilità riservata di taegeuk + sagoae = daehan, quindi la capacità diminuisce). La lettura richiede lo scanner di prova.",
     "g859": "H",
     "g871": "Disegna il simbolo H sul posto O-CM (stessa convenzione dell'H2O di A-CM). La decodifica è verificata con il Y0 centrale (beacon) — altri finder centrali possono scansionare peggio.",
     "g872": "Misure beacon — passo modulo {mpc}/cella · celle reali 17–20px → moduli {lo}–{hi}px (soglia consigliata {floor}px) · 3 toni interni · ECC H(t=7) · verificato con scansione reale 2026-08-22",
     "g873": "Dimensione modulo (reale)",
     "g874": "Capacità ECC (RS)",
-    "g856": "V-CM (rovesciato)",
-    "g857": "K-CM (assente)",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "L'automatico sceglie il posto d'angolo adatto al tipo e al verso della sagoma — triangolo dritto, triangolo rovesciato e Type K usano posti diversi. La scelta manuale del posto è aperta solo nella versione lab.",
     "g875": "Attiva il triangolo rovesciato (turnA) per selezionarlo.",
     "g876": "Non può essere combinato con il QR centrale — lo slot di formato per quella combinazione non esiste ancora.",
@@ -4693,7 +4702,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Non misurato (altra linea)",
     "g569": "taegeuk + sagoae (79 celle, superficie intera)",
-    "g570": "taegeuk + sagoae (capacità ridotta · solo scanner di prova)",
+    "g570": "taegeuk + sagoae (capacità ridotta · lettura con lo scanner di prova)",
     "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando questo rilevatore nello scanner di prova (/lab/).",
     "g582": "Y0 centrale",
     "g1000": "M7 centrale",
@@ -4948,17 +4957,17 @@ const GENERATOR_STRINGS = {
     "g600": "Eine neue Version steht bereit.",
     "g850": "Innerer Platz",
     "g851": "Äußerer Platz",
-    "g852": "O-CM · 3 wechselnde Ecken",
-    "g853": "A-CM · 3 wechselnde Ecken",
-    "g854": "sagoae (in Vorbereitung)",
-    "g855": "sagoae kann noch nicht aktiviert werden — die eigenständige Verdrahtung fehlt, der Platz ist nur reserviert.",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "sagoae",
+    "g855": "Zeichnet den sagoae-Ring um den zentralen Finder (gleiche reservierte Buchführung wie taegeuk + sagoae = daehan, daher sinkt die Kapazität). Zum Lesen wird der Test-Scanner benötigt.",
     "g859": "H",
     "g871": "Zeichnet das H-Symbol auf den O-CM-Platz (gleiche Konvention wie H2O bei A-CM). Dekodierung mit zentralem Y0 (Beacon) verifiziert — andere zentrale Finder können schlechter scannen.",
     "g872": "Beacon-Messwerte — Modulbreite {mpc}/Zelle · Gerätezellen 17–20px → Module {lo}–{hi}px (empfohlene Untergrenze {floor}px) · innen 3-Ton · ECC H(t=7) · Gerätescan verifiziert 2026-08-22",
     "g873": "Modulgröße (Gerät)",
     "g874": "ECC-Stärke (RS)",
-    "g856": "V-CM (umgekehrt)",
-    "g857": "K-CM (nicht vorhanden)",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "Automatisch wählt den Eckplatz passend zu Typ und Silhouettenrichtung — aufrechtes Dreieck, umgekehrtes Dreieck und Type K nutzen je einen anderen Platz. Die Platzwahl von Hand ist nur in der Laborversion offen.",
     "g875": "Aktiviere das umgekehrte Dreieck (turnA), um dies auszuwählen.",
     "g876": "Nicht mit dem zentralen QR kombinierbar — der Formatplatz für diese Kombination existiert noch nicht.",
@@ -5148,7 +5157,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Nicht gemessen (andere Linie)",
     "g569": "taegeuk + sagoae (79 Zellen, ganze Fläche)",
-    "g570": "taegeuk + sagoae (geringere Kapazität · nur Test-Scanner)",
+    "g570": "taegeuk + sagoae (geringere Kapazität · Lesen mit dem Test-Scanner)",
     "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn dieser Finder im Test-Scanner (/lab/) aktiviert ist.",
     "g582": "Zentrales Y0",
     "g1000": "Zentraler M7",
@@ -5403,17 +5412,17 @@ const GENERATOR_STRINGS = {
     "g600": "Hay una nueva versión lista.",
     "g850": "Asiento interior",
     "g851": "Asiento exterior",
-    "g852": "O-CM · 3 esquinas alternas",
-    "g853": "A-CM · 3 esquinas alternas",
-    "g854": "sagoae (en preparación)",
-    "g855": "sagoae aún no se puede activar: su cableado independiente no está listo, el asiento solo está reservado.",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "sagoae",
+    "g855": "Dibuja el anillo sagoae alrededor del buscador central (misma contabilidad reservada que taegeuk + sagoae = daehan, por lo que baja la capacidad). La lectura requiere el escáner de prueba.",
     "g859": "H",
     "g871": "Dibuja el símbolo H en el asiento O-CM (misma convención que el H2O de A-CM). La decodificación está verificada con el Y0 central (baliza); otros buscadores centrales pueden escanear peor.",
     "g872": "Mediciones de baliza — paso de módulo {mpc}/celda · celdas reales 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tonos internos · ECC H(t=7) · verificado con escaneo real 2026-08-22",
     "g873": "Tamaño de módulo (real)",
     "g874": "Capacidad ECC (RS)",
-    "g856": "V-CM (invertido)",
-    "g857": "K-CM (ausente)",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "El automático elige el asiento de esquina acorde al tipo y al sentido de la silueta: triángulo recto, triángulo invertido y Type K usan asientos distintos. Elegir el asiento a mano solo está abierto en la versión de laboratorio.",
     "g875": "Activa el triángulo invertido (turnA) para poder elegirlo.",
     "g876": "No se puede combinar con el QR central: aún no existe el hueco de formato para esa combinación.",
@@ -5603,7 +5612,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Sin medir (otro linaje)",
     "g569": "taegeuk + sagoae (79 celdas, superficie completa)",
-    "g570": "taegeuk + sagoae (menor capacidad · solo escáner de prueba)",
+    "g570": "taegeuk + sagoae (menor capacidad · lectura con el escáner de prueba)",
     "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con este detector activado en el escáner de prueba (/lab/).",
     "g582": "Y0 central",
     "g1000": "M7 central",
@@ -5858,17 +5867,17 @@ const GENERATOR_STRINGS = {
     "g600": "Está pronta uma nova versão.",
     "g850": "Assento interno",
     "g851": "Assento externo",
-    "g852": "O-CM · 3 cantos alternados",
-    "g853": "A-CM · 3 cantos alternados",
-    "g854": "sagoae (em preparação)",
-    "g855": "sagoae ainda não pode ser ativado — a ligação autônoma não está pronta, o assento está apenas reservado.",
+    "g852": "H",
+    "g853": "H2O",
+    "g854": "sagoae",
+    "g855": "Desenha o anel sagoae ao redor do localizador central (mesma contabilidade reservada de taegeuk + sagoae = daehan, então a capacidade diminui). A leitura requer o leitor de teste.",
     "g859": "H",
     "g871": "Desenha o símbolo H no assento O-CM (mesma convenção do H2O do A-CM). A decodificação foi verificada com o Y0 central (beacon) — outros localizadores centrais podem ler pior.",
     "g872": "Medições do beacon — passo de módulo {mpc}/célula · células reais 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tons internos · ECC H(t=7) · verificado em scanner real 2026-08-22",
     "g873": "Tamanho do módulo (real)",
     "g874": "Capacidade ECC (RS)",
-    "g856": "V-CM (invertido)",
-    "g857": "K-CM (ausente)",
+    "g856": "CO2",
+    "g857": "H2CO3",
     "g858": "O automático escolhe o assento de canto adequado ao tipo e ao sentido da silhueta — triângulo direito, triângulo invertido e Type K usam assentos diferentes. Escolher o assento à mão só está aberto na versão de laboratório.",
     "g875": "Ative o triângulo invertido (turnA) para poder escolher.",
     "g876": "Não pode ser combinado com o QR central — a vaga de formato dessa combinação ainda não existe.",
@@ -6058,7 +6067,7 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Não medido (outra linhagem)",
     "g569": "taegeuk + sagoae (79 células, superfície inteira)",
-    "g570": "taegeuk + sagoae (menor capacidade · apenas leitor de teste)",
+    "g570": "taegeuk + sagoae (menor capacidade · leitura com o leitor de teste)",
     "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com este detector ativado no leitor de teste (/lab/).",
     "g582": "Y0 central",
     "g1000": "M7 central",
@@ -6336,7 +6345,8 @@ import {
   CENTRAL_N7_EMPHASIS_MODES, centralN7LevelPalettes,
 } from './src/centralN7Emphasis.js';
 import {
-  ADVANCED_ONLY_CENTRAL_IDS, SEAT_NONE, cmqWireExists, zoneCards,
+  ADVANCED_ONLY_CENTRAL_IDS, SEAT_NONE, SEAT_ZONE_TYPES,
+  cmqWireExists, seatCardShown, zoneCards,
 } from './src/finder-zone-ui.js';
 import {
   centralN7EmphasisAppliesTo, centralN7FamilyForType, encodeOptionsForY,
@@ -7511,11 +7521,28 @@ function setMode(next) {
  *   편입된 셀 표면 파인더는 **일반 모드에서도** 고를 수 있어야 한다. 서랍이 접혀 있는
  *   것(details 기본 닫힘)은 그대로 두므로 카드 수는 여전히 4개로 보인다.
  *   지시는 «새로 추가된 셀 표면 파인더» 한정이라 나머지 두 서랍은 고급 전용을 유지한다.
- *   `finderDaehan` 도 고급 전용이다 — 그쪽은 시험판 스캐너에서만 읽힌다(실측, 아래 서랍 주석).
+ *
+ * ⭐ **`finderDaehan` 정식 일반 승격 (운영자 지시 2026-08-30)** — 구 사유는
+ *   «시험판 스캐너에서만 읽힌다» 였다. 그 사실 자체는 **아직 참이다** (아래 §판정),
+ *   그런데 운영자가 라이브 스캐너로 턴A·K2 daehan 실기 확인을 마치고 «실험용/고급용
+ *   말고 정식 일반으로» 를 지시했다. 서랍은 **생성 표면**이라 읽기 게이트와 층이
+ *   다르다 — 그래서 승격은 표시만 하고, 읽기 조건은 summary(g570)가 말한다.
+ *
+ *   §판정 (레인 tier 2026-08-30 실측 — «옵트인이 소멸했다» 는 가설의 **반박**):
+ *     · 게이트는 살아 있다: `src/decoder/bootstrap.js` `cellFinderLineupFor()`
+ *       (≈179행) 이 `options.cellFinderDaehan === true` 일 때만 DAEHAN 라인업을
+ *       주고, C2c 분해 경로(≈2322행)도 같은 조건 뒤다.
+ *     · 그 옵트인을 켜는 곳은 오늘도 /lab/ 스캐너 토글 하나다
+ *       (`sites/tlscan/scanner.js` ≈2680: `isLabPath() && localStorage[...] === '1'`).
+ *     · 자가 O·A·V·K 전 계열에서 그 사실을 잠그고 있고 전부 초록이다:
+ *       finder-daehan ⑦ (O V1~V3 기본 라인업 거절) · finder-daehan-a
+ *       (A0D 기본 거절) · finder-daehan-vk (V0~V2D·K0~K2D 기본 거절).
+ *     · 즉 운영자의 실기 확인은 «lab 스캐너 + 토글 ON» 경로다. 기본 라인업을
+ *       여는 것은 `src/decoder/**` 변경이라 이 레인의 쓰기 범위 밖이다.
  */
 function applyFinderExperimentVisibility() {
   const show = mode === 'advanced';
-  for (const id of ['finderBelowBar', 'finderUnscannable', 'finderDaehan']) {
+  for (const id of ['finderBelowBar', 'finderUnscannable']) {
     const block = document.getElementById(id);
     if (block) {
       block.style.display = show ? '' : 'none';
@@ -8191,8 +8218,9 @@ const SEAT_AUTO_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="no
 let innerSeatAuto = true;
 let outerSeatAuto = true;
 
-/** 자리 구역이 열리는 타입 (Y 는 자기 로케이터 문법을 쓰므로 자리 축이 없다). */
-const SEAT_ZONE_TYPES = Object.freeze(['O', 'A', 'K']);
+// SEAT_ZONE_TYPES 는 finder-zone-ui 로 올라갔다 (2026-08-30) — 자리 축 정본이
+// 전부 그 모듈인데 이 값만 손 사본으로 남아 있었다. import 는 호이스팅되므로
+// 위 ⚠ 의 «첫 소비자보다 뒤에 두지 않는다» TDZ 함정도 함께 사라진다.
 
 /**
  * 자동 기준표가 받는 타입 축 — `effectiveEditorTypeFromGenerator` 와 **다르다**.
@@ -8232,6 +8260,11 @@ function ensureSeatCards() {
       const card = document.createElement('div');
       card.className = 'toggle-card';
       card.dataset.seat = desc.id;
+      // ⭐ **자리명 강등 (운영자 지시 2026-08-30)** — 라벨은 심볼명(H·H2O·CO2·H2CO3)
+      // 이 되고 자리명(O-CM·A-CM·V-CM·K-CM)은 tooltip 으로 내려간다. 자리명은
+      // **번역하지 않는다**: 사전 키가 아니라 와이어 식별자라 8언어에서 같은 글자다
+      // (zoneCards 의 desc.name = markerG/turnA/formatK 표에서 온 값).
+      card.dataset.seatName = desc.name;
       card.dataset.seatTypes = desc.types.join(' ');
       card.dataset.seatReady = desc.ready ? '1' : '0';
       if (desc.absent) card.dataset.seatAbsent = '1';
@@ -10770,7 +10803,11 @@ function syncSeatUi() {
   // 운영자 2026-08-24 (아침 검수 3): lab 전용 → **고급에서만 표시** 로 승격.
   // ⭐ **Type K 추가 (2026-08-25 신고 ①)** — 「내곽 및 외곽 파인더 섹션도 없음」.
   //    K 는 자리(k-cm)가 실재하는데 이 술어가 O·A 만 봐서 구역이 통째로 안 떴다.
-  const show = (mode === 'advanced' || lab) && SEAT_ZONE_TYPES.includes(type);
+  // ⭐ **정식 일반 승격 (운영자 지시 2026-08-30)** — 구 게이트는 `mode === 'advanced'
+  //    || lab` 이었다. 구역이 고급 뒤에 있으면 그 안의 카드를 아무리 열어도 일반
+  //    사용자에겐 자리 축이 존재하지 않는다 (운영자 신고 ③④의 절반이 여기였다).
+  //    실기기 라운드는 돌았다 — 근거는 finder-zone-ui.seatCardShown §정식 노출.
+  const show = SEAT_ZONE_TYPES.includes(type);
   // ⭐ **자동 유도는 표시 게이트 «앞»** 이다 (2026-08-25). 구역이 숨겨진 일반 모드가
   //    바로 자동의 주 사용자다 — 표시 뒤로 미루면 「일반 사용자 자동 상태 권장」이
   //    「일반 사용자는 자동이 안 걸린다」가 된다.
@@ -10808,19 +10845,18 @@ function syncSeatUi() {
       const seat = card.dataset.seat;
       const isAutoCard = seat === SEAT_AUTO;
       const isNone = seat === SEAT_NONE;
-      // 타입 부합 표시 (검출기 필터 — zoneCards 의 types 표) + 방향 표시 스왑.
-      // **사용 가능한 것만 표시** (운영자 2026-08-24) — 타입 부합 + «현재 내부 타입»
-      // 부합이다: 정삼각(내부 A/G)이면 a-cm, 역삼각(내부 V)이면 v-cm 하나만 보인다.
-      // 부재 자리(k-cm)는 쓸 수 있는 내부 타입이 생성기에 없으므로 숨긴다 — 존재는
-      // 분류 정본(FINDER_TAXONOMY)과 SPEC 이 말한다, 잠긴 카드가 아니라.
-      const typeShown = card.dataset.seatTypes.split(' ').includes(type);
-      const directionHidden = (seat === 'a-cm' && turnAOn) || (seat === 'v-cm' && !turnAOn);
-      const unusableHidden = card.dataset.seatAbsent === '1';
-      // ⭐ **CM 계열은 시험판에서만** (운영자 2026-08-25 「CM계열 선택지 정식에선
-      //    숨기고(lab에만 표시)」). 정식 고급에 남는 것은 자동 · 없음 둘뿐이다.
-      const officialHidden = !lab && !isAutoCard && !isNone;
-      card.style.display = typeShown && !directionHidden && !unusableHidden && !officialHidden
-        ? '' : 'none';
+      // 표시 판정은 **finder-zone-ui.seatCardShown 하나**가 낸다 (2026-08-30) —
+      // 타입 부합 · 방향 스왑(a-cm ↔ v-cm) · 부재를 그 술어가 다 안다. 여기 인라인
+      // 조건으로 두면 자가 «index.html 의 철자» 를 재게 되어 다음 리팩터링까지만
+      // 산다. 구 `officialHidden`(정식에선 자동·없음만) 은 철폐됐다 — 근거·경위는
+      // 그 술어의 §정식 노출 주석.
+      card.style.display = seatCardShown({
+        seat,
+        type,
+        seatTypes: card.dataset.seatTypes.split(' '),
+        turnA: turnAOn,
+        absent: card.dataset.seatAbsent === '1',
+      }) ? '' : 'none';
       const vcmLocked = seat === 'v-cm' && !turnAOn;
       const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone && !isAutoCard)
         || vcmLocked;
@@ -10830,16 +10866,22 @@ function syncSeatUi() {
       card.classList.toggle('active', autoOn ? isAutoCard : (!isAutoCard && seat === seatValue));
       const label = card.querySelector('[data-seat-label-key]');
       label.textContent = t(label.dataset.seatLabelKey);
-      // 잠긴 이유를 카드가 말한다: 부재(g858) · sagoae 자리만(g855) · 와이어 부재(g580)
-      // · v-cm 방향 필요(g875). g876(«중앙 QR 병용 불가»)은 V-CMQ 개설로 소멸했다 —
-      // 사전 키는 여덟 언어에 남긴다 (드랍 전례).
-      // o-cm 은 H 심볼 통합(2026-08-24) 특성 고지 — 판독은 중앙 Y0(비컨) 조합에서
-      // 확인됐고, 비컨 없는 조합은 인식률이 떨어진다 (검출 배선 잔여).
-      card.title = card.dataset.seatAbsent === '1' ? t('g858')
+      // 카드가 말하는 것 둘: **자리명**(라벨에서 강등된 O-CM·A-CM·V-CM·K-CM)과
+      // 그 자리의 사정. 사정 = 부재(g858) · sagoae 특성(g855) · 와이어 부재(g580)
+      // · v-cm 방향 필요(g875) · o-cm 의 H 심볼 통합 고지(g871).
+      // g876(«중앙 QR 병용 불가»)은 V-CMQ 개설로 소멸했다 — 사전 키는 여덟 언어에
+      // 남긴다 (드랍 전례).
+      // ⚠ **g855 는 이제 잠금 사유가 아니다** (2026-08-30): sagoae 는 C2c 왕복이
+      //   서서 양성 선택지다. 문구도 «자리만 예약» 에서 특성 고지로 바꿨다.
+      const seatNote = card.dataset.seatAbsent === '1' ? t('g858')
         : seat === 'v-cm' ? (!turnAOn ? t('g875') : '')
           : seat === 'sagoae' ? t('g855')
             : seat === 'o-cm' ? t('g871')
               : (wireLocked && !isNone) ? t('g580') : '';
+      // 자리명은 자동·없음에는 없다 (그 둘은 자리가 아니라 자리를 고르는 방식이다).
+      const seatName = isAutoCard || isNone ? '' : (card.dataset.seatName || '');
+      card.title = seatName && seatNote ? seatName + ' — ' + seatNote
+        : seatName || seatNote;
     }
   };
   sync(els.innerSeatCards, generatorState.innerSeat, innerSeatAuto);
