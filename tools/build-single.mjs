@@ -207,6 +207,8 @@ export const MODULE_ORDER = [
   'y3d-viewer',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
   'i18n',
+  // generate-debounce 는 의존이 없는 순수 상태 전이다. 앱만 소비하며 시간 축을 고정한다.
+  'generate-debounce',
   // beacon 도 의존이 없다 — 네트워크 전송과 오프라인 큐만 담는다.
   'beacon',
   // pwa-update 도 의존이 없다 — 서비스 워커 등록과 갱신 배너 DOM 만 담는다.
