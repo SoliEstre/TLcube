@@ -431,8 +431,22 @@ const INTERNAL_TOKENS = [
   'cellSurfaceFinal', 'cell-surface-', 'hex-frame', 'locatorProfileY',
 ];
 
-/** lab 전용으로 게이트된 정적 컨테이너 (id → 닫는 지점을 찾을 앵커). */
-const LAB_ONLY_SECTIONS = ['yLocatorSection', 'yCellEditorSection'];
+/**
+ * lab 전용으로 게이트된 정적 컨테이너 (id → 닫는 지점을 찾을 앵커).
+ *
+ * **자 교정 (2026-08-29, 완화 아님)** — `yLocatorSection` 이 여기서 빠졌다:
+ * 운영자 결정 §2 «Y 검출기 선택을 정식에 노출» 로 섹션 게이트가 `type === 'Y'`
+ * 만 남았다. 그 섹션 안에서 **«?»(g906) 본문만** lab 게이트를 유지한다 (내부
+ * 후보명·정본 소스 파일명을 들고 있어서) — 아래 별도 테스트가 그 게이트를 잰다.
+ */
+const LAB_ONLY_SECTIONS = ['yCellEditorSection'];
+
+/**
+ * 내부 명칭 소거 대상에서 빼는 «운영자 승인 노출» 컨테이너. yLocatorSection 의
+ * 카드 라벨(«셀 표면 v0T (Y1/Y2)» 등)·data-locator 속성은 레이아웃 id 가 곧 카드
+ * 정체라, 정식 노출 결정(2026-08-29 §2)이 그 표기를 함께 승인했다.
+ */
+const OPERATOR_EXPOSED_SECTIONS = ['yLocatorSection'];
 
 /** id 로 시작하는 요소의 바깥 HTML 을 태그 깊이로 잘라 낸다. */
 function outerHtmlById(html, id) {
@@ -469,15 +483,35 @@ test('lab 전용 섹션은 isLabPath 게이트를 실제로 갖는다', () => {
     assert.match(body, /section\.hidden = !show;/,
       `${id}: 그 조건으로 hidden 을 정하지 않는다`);
   }
+});
+
+test('Y 검출기 섹션은 정식 노출이고 g906 «?» 만 lab 게이트를 유지한다 (2026-08-29 §2)', () => {
+  // **자 교정 (완화 아님)** — 종전엔 yLocatorSection 전체가 lab 전용으로 잠겨 있었다.
+  // 운영자 결정으로 섹션은 type === 'Y' 만 보고 열리며, 항목별 판단으로 «?»(g906)
+  // 본문만 lab 에 남는다 (내부 후보명 v0X·v1r2 · 정본 파일명 · 드랍 라인업 수치).
+  const at = INDEX.indexOf('function syncYLocatorUi()');
+  assert.ok(at > 0, 'syncYLocatorUi 가 없다');
+  const body = INDEX.slice(at, at + 1400);
+  assert.match(body, /const show = generatorState\.type === 'Y';/,
+    'Y 검출기 섹션 게이트가 type === \'Y\' 단독이 아니다 — 정식 노출의 회귀');
+  assert.match(body, /section\.querySelector\('\[data-help="g906"\]'\)/,
+    'g906 «?» 를 섹션에서 집는 배선이 없다');
+  assert.match(body, /\.hidden = !isLabPath\(\);/,
+    'g906 «?» 가 lab 밖에서도 열린다 — 내부 명칭 본문이 정식 화면으로 샌다');
+  // 정식 노출로 옮겨 갔어도 카드 라벨의 레이아웃 id 병기는 카드 정체라 남는다.
   const block = outerHtmlById(INDEX, 'yLocatorSection');
-  assert.match(block, /셀 표면 v0 \(Y0\)/, 'lab 섹션에는 내부 명칭 병기가 남아 있어야 한다');
+  assert.match(block, /셀 표면 v0 \(Y0\)/, 'Y 검출기 카드의 레이아웃 id 병기가 사라졌다');
 });
 
 test('정식 화면의 정적 DOM 에는 내부 후보명이 없다', () => {
   // lab 전용 컨테이너를 통째로 도려낸 나머지 = 정식 화면에서 볼 수 있는 마크업.
   // (사전 블록과 <script> 는 별도 테스트가 본다 — 여기서는 눈에 보이는 마크업만.)
+  // **자 교정 (2026-08-29 §2, 완화 아님)** — yLocatorSection 은 이제 정식 노출이지만
+  // 이 소거 대상에서도 뺀다: 카드의 data-locator 속성·라벨이 레이아웃 id
+  // (cell-surface-v0…)를 정체로 들고 있고, 운영자 노출 결정이 그 표기를 승인했다.
+  // 나머지 정식 마크업이 내부 명칭을 새로 들이는 것은 계속 여기서 걸린다.
   let markup = INDEX.slice(0, INDEX.indexOf('const GENERATOR_STRINGS = {'));
-  for (const id of LAB_ONLY_SECTIONS) {
+  for (const id of [...LAB_ONLY_SECTIONS, ...OPERATOR_EXPOSED_SECTIONS]) {
     markup = markup.split(outerHtmlById(INDEX, id)).join('');
   }
   // 주석은 개발자용이라 제외한다 (화면에 안 나간다).

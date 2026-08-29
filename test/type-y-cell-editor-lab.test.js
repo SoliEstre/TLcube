@@ -68,10 +68,12 @@ test('/lab/ 에서 섹션을 열고 정식판에서는 숨긴다 · 게이트 �
     /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(followed\);/,
   );
   assert.match(INDEX, /function effectiveEditorTypeFromGenerator\(\)/);
-  // 로케이터 게이트 — 이쪽은 여전히 Y 전용이다 (편집기 게이트와 주어가 다르다).
+  // 로케이터 게이트 — 이쪽은 여전히 Y 전용이지만, **자 교정 (2026-08-29 §2, 완화
+  // 아님)**: 운영자 정식 노출 결정으로 lab 게이트가 걷혀 `type === 'Y'` 단독이다.
+  // 이 앵커의 역할(편집기 게이트와 주어가 다른 별개 게이트임을 갈라 재기)은 그대로다.
   assert.match(
     INDEX,
-    /function syncYLocatorUi\(\)[\s\S]{0,200}isLabPath\(\) && generatorState\.type === 'Y'/,
+    /function syncYLocatorUi\(\)[\s\S]{0,900}const show = generatorState\.type === 'Y';/,
   );
   assert.match(INDEX, /if \(isLabPath\(\)\) wireTypeYCellEditor\(\)/);
   assert.match(INDEX, /section\.hidden = !show/);
@@ -223,9 +225,10 @@ test('시험판 번들에도 섹션이 있고 안정판은 런타임에 숨기�
     /function syncTypeYCellEditorUi\(\)[\s\S]{0,400}const show = isLabPath\(\) && CELL_EDITOR_TYPES\.includes\(followed\);/,
   );
   assert.match(official, /function effectiveEditorTypeFromGenerator\(\)/);
+  // 자 교정 (2026-08-29 §2) — 로케이터 게이트는 정식 노출로 type 단독이 됐다 (위와 동일).
   assert.match(
     official,
-    /function syncYLocatorUi\(\)[\s\S]{0,200}isLabPath\(\) && generatorState\.type === 'Y'/,
+    /function syncYLocatorUi\(\)[\s\S]{0,900}const show = generatorState\.type === 'Y';/,
   );
   assert.match(lab, /\["type-y-cell-editor"/);
   assert.match(official, /\["type-y-cell-editor"/);

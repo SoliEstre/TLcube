@@ -89,6 +89,27 @@ test('안쪽에서 중앙 점유 파인더를 고르면 잠금이 상태를 그�
   assert.deepEqual(next, initial);
 });
 
+test('안쪽 활성 중 다른 검출기 선택의 정의된 해소 — 직전 바깥 위치 복귀 후 선택 (2026-08-29 §1)', () => {
+  // UI(makeFinderCard)는 이 두 계약 함수의 합성을 탄다: 잠금을 깨는 게 아니라
+  // 먼저 selectQrPosition 으로 안쪽을 벗어난 뒤 파인더를 고른다. 위의 잠금 테스트
+  // (selectFinderPattern 단독은 상태 보존)와 함께 있어야 완전한 그림이다.
+  for (const type of ['O', 'A', 'K']) {
+    const inner = selectQrPosition(state({
+      finderPatternId: OFFICIAL_DEFAULT,
+      previousFinderPatternId: OFFICIAL_DEFAULT,
+      previousOuterQrPosition: 'BL',
+    }), 'inner', type, OFFICIAL_DEFAULT);
+    assert.equal(inner.finderPatternId, CENTER_QR_FINDER_PATTERN_ID);
+    const resolved = selectFinderPattern(
+      selectQrPosition(inner, inner.previousOuterQrPosition, type, OFFICIAL_DEFAULT),
+      TRIAL_DEFAULT, type, OFFICIAL_DEFAULT,
+    );
+    assert.equal(resolved.qrPosition, 'BL', type + ': 직전 바깥 위치로 안 돌아갔다');
+    assert.equal(resolved.finderPatternId, TRIAL_DEFAULT, type + ': 클릭한 검출기가 안 선택됐다');
+    assert.equal(resolved.previousFinderPatternId, TRIAL_DEFAULT);
+  }
+});
+
 test('카드 명부에서 안쪽 QR 과 충돌하지 않는 유일한 검출기는 중앙 QR 자신이다', () => {
   const ids = new Set(Object.values(FINDER_CARD_GROUPS).flat().map((card) => card.id));
   ids.add(CENTRAL_V0_FINDER_CARD.id);

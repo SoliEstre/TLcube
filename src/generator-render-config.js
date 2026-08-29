@@ -56,6 +56,25 @@ export function centralN7FamilyForType(type) {
 }
 
 /**
+ * `centralN7Emphasis` 강조 축이 적용되는 중앙 파인더인가 — 정본 목록의 단일 소유자.
+ *
+ * 운영자 결정 2026-08-29 §4 는 «중앙 TL + 3톤 큐브 + 중앙 Y0» 였으나, **3톤 큐브는
+ * 같은 브리프의 §2.4 왕복 자에서 거부됐다**: 강조 dark(순검정 Y=0.0000)가 기본
+ * 프리셋 배경(Y=0.0053)과의 차 0.0053 < 마스크 허용오차 0.018 로 배경에 흡수돼
+ * 실루엣 검출이 전패한다 (ppu 10/12/16/24 `frontend:no-finder` · 흰 배경 대조군은
+ * 전부 통과 — scene.js three-tone-cube 분기 주석 실측). 그래서 적용 대상은
+ * **중앙 TL(n=7 payload) · 중앙 Y0(비컨)** 둘이다. 왕복 자는
+ * test/central-emphasis-roundtrip.test.js — 대상은 3택 전부 기본과 동일 복호,
+ * 큐브는 옵션 무시(픽셀 동일)를 잠근다. cube-bullseye·bullseye·cell-mask 계보는
+ * 결정 범위 밖. 소비자: sceneOptionsForOA · index.html 의 K 디스패치 · 강조 섹션
+ * 가시성 · lab 텔레메트리 — 손 사본을 두지 말고 이걸 불러라.
+ */
+export function centralN7EmphasisAppliesTo(finderPatternId) {
+  return finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID
+    || isCentralV0FinderPatternId(finderPatternId);
+}
+
+/**
  * Type Y 인코더 옵션 — UI 상태(톤·해상도·폴백)를 인코더가 받는 모양으로 바꾼다.
  *
  * 왜 모듈로 빼나: 윈도 β 는 **Y2 · 2톤 전용**(ADR 0003 D1 조건 ②)인데, 생성기가 version 만
@@ -279,7 +298,11 @@ export function sceneOptionsForOA({
   }
   if (opts.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) {
     opts.centralN7Family = centralN7FamilyForType(type);
-    if (centralN7Emphasis !== undefined) opts.centralN7Emphasis = centralN7Emphasis;
+  }
+  // 강조 축은 family 보다 넓다 (2026-08-29 §4 — 중앙 TL · 3톤 큐브 · 중앙 Y0).
+  // centerQr 이면 finderPatternId 가 center-qr 로 이미 양보돼 있어 여기서 걸리지 않는다.
+  if (centralN7EmphasisAppliesTo(opts.finderPatternId) && centralN7Emphasis !== undefined) {
+    opts.centralN7Emphasis = centralN7Emphasis;
   }
   let needsCornerQr = false;
   if (centerQr) {

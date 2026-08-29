@@ -298,8 +298,9 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
     assert.ok(ids.length > 0, type + ': 카드가 없다');
 
     for (const id of ids) {
-      // 각 카드를 독립 외부 QR 상태에서 잰다. center-qr 은 하위 선택이라 상위
-      // qrPosition='inner' 를 먼저 고른 뒤에만 화면에 나타난다.
+      // 각 카드를 독립 외부 QR 상태에서 잰다. center-qr 은 상위 qrPosition='inner'
+      // 의 표현이라(2026-08-29 §1 — 카드는 상시 노출), 이 하네스에서는 상위 축을
+      // 먼저 inner 로 옮긴 뒤 계약 선택이 그것을 유지하는지를 잰다.
       const harness = makeUiHarness(type);
       const card = harness.root.querySelectorAll('[data-finder-id]')
         .find((candidate) => candidate.dataset.finderId === id);
@@ -352,7 +353,10 @@ test('DOM 이벤트 대체: Type O/A의 실제 카드 목록 전체와 무대기
     }
 
     // 사람보다 빠른 통합 순회와 같은 조건: 바깥 QR에서 DOM 카드 모두를 대기 없이
-    // 누른다. 숨겨진 center-qr 의 합성 이벤트도 부모 QR 위치를 바꾸지 않아야 한다.
+    // 누른다. center-qr 카드는 상시 노출(2026-08-29 §1)이지만 이 하네스는 계약
+    // 함수(selectFinderPattern)만 배선하므로 — 그 계약대로 — center-qr 합성
+    // 이벤트가 부모 QR 위치를 바꾸지 않아야 한다 (안쪽 전환은 UI 의
+    // selectQrPosition 라우팅 몫이고 index.html 이 든다).
     const fastHarness = makeUiHarness(type);
     const fastCards = fastHarness.root.querySelectorAll('[data-finder-id]');
     for (const card of fastCards) card.click();

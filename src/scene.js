@@ -411,7 +411,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   qrText?: string, centerQr?: boolean, cornerToo?: boolean,
  *   finderPatternId?: string,
  *   centralN7Family?: 'hex'|'tri'|'star',
- *   centralN7Emphasis?: 'default'|'locator'|'all',
+ *   centralN7Emphasis?: 'default'|'locator'|'all',  // 중앙 TL · 중앙 v0 가 소비 (2026-08-29 §4 — 3톤 큐브는 실측 거부)
  *   centralMarkerN7Family?: 'hex'|'tri'|'star',
  *   centralMarkerN7Turn?: 0|1|2, centralMarkerN7Parity?: 0|1,
  *   qrCorner?: 'TL'|'TR'|'BL'|'BR',
@@ -677,6 +677,15 @@ export function buildScene(encoded, options) {
         });
       }
     }
+    // ⛔ **강조(centralN7Emphasis) 확장 거부 (2026-08-29 §2.4 실측)** — 강조 팔레트의
+    // dark 는 순검정(Y=0.0000)인데 기본 프리셋 배경이 Y=0.0053 이라 차 0.0053 이
+    // 전경 마스크 허용오차 0.018 **안**에 들어가, 가장 어두운 면이 배경으로 분류돼
+    // 큐브가 2면 쐐기가 되고 실루엣 검출이 죽는다 (합성 왕복 ppu 10/12/16/24 전패
+    // `frontend:no-finder` · 대조군: 흰 배경에서는 전부 통과 — FINDER_CUBE_SEAM
+    // 주석의 바로 그 문턱 기전이다). 그래서 이 분기는 opts.centralN7Emphasis 를
+    // **소비하지 않는다** — 정본 술어 centralN7EmphasisAppliesTo(generator-render-config)
+    // 가 큐브를 대상에서 빼서 옵션이 애초에 오지 않고, 와도 무시된다
+    // (test/central-emphasis-roundtrip.test.js 가 그 무시를 픽셀 동일성으로 잠근다).
     for (const face of FACES) {
       shapes.push({
         kind: 'polygon',
@@ -930,6 +939,15 @@ export function buildScene(encoded, options) {
       originX: center.x,
       originY: center.y,
     };
+    // 강조 3택 (운영자 2026-08-29 §4) — 중앙 TL 과 같은 함수·같은 3택을 소비한다.
+    // 비컨에도 **로케이터/데이터 구분이 실재한다**: `entry.tones` 가 있는 셀 =
+    // 레이아웃 고정 로케이터 블록, `entry.digit` 셀 = 비컨 페이로드 데이터다
+    // (2026-08-29 실측 — cellSurfaceFinal v0 의 locator/data 가 encodeY 산출물에
+    // 그대로 온다). 그래서 «로케이터만»과 «전체»는 여기서도 다른 결과다.
+    // 기본('default')은 두 팔레트가 palette.levels 그대로라 이전 출력과 바이트 동일.
+    const beaconPalettes = centralN7LevelPalettes(
+      palette.levels, opts.centralN7Emphasis,
+    );
     for (let j = 0; j < n; j += 1) {
       for (let i = 0; i < n; i += 1) {
         const entry = beacon.cellDigits.get(`${i},${j}`);
@@ -939,12 +957,12 @@ export function buildScene(encoded, options) {
         for (const face of FACES) {
           let color;
           if (entry.tones) {
-            color = faceColor(entry, face, palette);
+            color = faceColor(entry, face, { levels: beaconPalettes.locator });
           } else if (beacon.tones === 2) {
             const pattern = digitToPattern(entry.digit);
-            color = palette.levels[pattern[face] ? 2 : 0];
+            color = beaconPalettes.data[pattern[face] ? 2 : 0];
           } else {
-            color = faceColor(entry, face, palette);
+            color = faceColor(entry, face, { levels: beaconPalettes.data });
           }
           shapes.push({
             kind: 'polygon',

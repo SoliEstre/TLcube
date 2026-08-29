@@ -129,7 +129,7 @@ test('locatorProfileY 는 내부 상태이고 기본은 off 이며 왕복 선택
   assert.equal(clone.locatorProfileY, LOCATOR_PROFILE_HEX_FRAME_V1);
 });
 
-test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 연다', () => {
+test('Y타입 검출기 옵션 섹션은 소스에 있고 Type Y 에서 정식으로 연다 (2026-08-29 §2)', () => {
   assert.match(INDEX, /id="yLocatorSection"/);
   assert.match(INDEX, /data-i18n="g515"/);
   assert.match(INDEX, /data-locator="off"/);
@@ -186,7 +186,11 @@ test('Y타입 검출기 옵션 섹션은 소스에 있고 lab 경로에서만 �
   // 차단이지 삭제가 아니다 — hex-frame-v1 렌더·마진 경로는 소스에 그대로 있다.
   assert.match(INDEX, /LOCATOR_PROFILE_HEX_FRAME_V1/);
   assert.match(INDEX, /function syncYLocatorUi\(\)/);
-  assert.match(INDEX, /isLabPath\(\) && generatorState\.type === 'Y'/);
+  // **자 교정 (2026-08-29 §2, 완화 아님)** — 종전 락은 `isLabPath() && type === 'Y'`
+  // 게이트(배치)를 고정했다. 운영자 결정 «Y 검출기 선택을 정식에 노출» 로 섹션은
+  // type === 'Y' 만 보고, «?»(g906) 본문만 lab 게이트가 남는다 (generator-help-ui 가 잰다).
+  assert.match(INDEX, /const show = generatorState\.type === 'Y';/,
+    'Y 검출기 섹션이 type 게이트 단독이 아니다 — 정식 노출의 회귀');
   assert.match(INDEX, /isLabPath\(\) && generatorState\.locatorProfileY === LOCATOR_PROFILE_HEX_FRAME_V1/);
   assert.match(INDEX, /isCellSurfaceLocatorProfileY\(generatorState\.locatorProfileY\)/);
   assert.match(INDEX, /locatorProfile: generatorState\.locatorProfileY/);
@@ -272,12 +276,17 @@ test('로케이터 문구는 8언어가 같고 성능 보장을 하지 않는다
   assert.equal(GENERATOR_STATE_SCHEMA.locatorArmY, undefined);
 });
 
-test('시험판 번들에는 섹션이 있고 안정판은 런타임에 숨긴다', () => {
+test('시험판·안정판 번들 모두 섹션이 있고 Type Y 게이트로 연다 (2026-08-29 §2)', () => {
+  // **자 교정 (완화 아님)** — 종전엔 안정판이 «런타임 lab 게이트로 숨긴다» 를 쟀다.
+  // 정식 노출 결정으로 재는 성질이 «두 번들 다 섹션이 실재하고 type 게이트로 연다»
+  // 가 됐다. g906 «?» 의 lab 게이트가 번들에도 실려 있는지 함께 잰다.
   const lab = buildGeneratorLabHtml();
   const official = buildSingleHtml({ generatorEdition: OFFICIAL_GENERATOR_EDITION });
   assert.match(lab, /id="yLocatorSection"/);
   assert.match(lab, /data-i18n="g515"/);
   assert.match(official, /id="yLocatorSection"/);
   assert.match(official, /section\.hidden = !show/);
-  assert.match(official, /isLabPath\(\) && generatorState\.type === 'Y'/);
+  assert.match(official, /const show = generatorState\.type === 'Y';/);
+  assert.match(official, /\.hidden = !isLabPath\(\);/,
+    '안정판 번들에서 g906 «?» lab 게이트가 사라졌다');
 });

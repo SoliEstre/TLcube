@@ -107,11 +107,29 @@ test('QR 위치 카드가 상위이고 중앙 파인더 카드가 하위라는 D
   assert.doesNotMatch(qrUi, /finderTakesCentre|previousOuterQrPosition/,
     'QR 카드 렌더가 하위 파인더를 보고 부모 상태를 밀어내고 있다');
   assert.match(finderUi, /innerQrActive && finderPatternConflictsWithInnerQr\(fid\)/,
-    '안쪽 QR 동안 중앙 점유 파인더를 잠그는 배선이 없다');
-  assert.match(finderUi, /finderLockedByInnerQr \? t\('g581'\) : ''/,
-    '잠긴 파인더가 역방향 안내 문구를 소비하지 않는다');
-  assert.match(finderUi, /CENTER_QR_FINDER_PATTERN_ID && !innerQrActive/,
-    '하위 중앙 QR 카드는 부모 안쪽 선택 전에는 숨겨져야 한다');
+    '안쪽 QR 동안 중앙 점유 파인더의 충돌 판정 배선이 없다');
+  // **자 교정 (2026-08-29 운영자 결정 §1 — 완화 아님)**. 종전 두 단언은 «하드
+  // 잠금(disabled + g581)» 과 «안쪽 선택 전 중앙 QR 카드 숨김» 이라는 **배치**를
+  // 고정했다. 결정 §1 로:
+  //   · 중앙 QR 카드는 상시 노출 — 클릭이 상위 selectQrPosition('inner') 로 라우팅
+  //   · 안쪽 활성 중 다른 검출기 클릭 = 직전 바깥 위치 복귀 후 선택 (계약 합성)
+  // 이 됐다. **상태 계약의 잠금 자체는 유지**된다 — selectFinderPattern 단독은
+  // inner+파인더 결합을 안 만든다 (위 innerQrHierarchyGuards 가 값으로 잰다).
+  // 여기서는 새 성질을 잰다: 안내 문구 소비 + 상시 노출 + 계약 경로 라우팅.
+  assert.match(finderUi, /finderRestoresOuterQr \? t\('g581'\) : ''/,
+    '역방향 안내 문구(직전 위치 복귀 예고)가 소비되지 않는다');
+  assert.doesNotMatch(finderUi, /CENTER_QR_FINDER_PATTERN_ID && !innerQrActive/,
+    '중앙 QR 카드 숨김이 부활했다 — 2026-08-29 §1 상시 노출의 회귀');
+  const cardActivate = INDEX.slice(
+    INDEX.indexOf('function makeFinderCard('),
+    INDEX.indexOf('function ensureFinderCards('),
+  );
+  assert.match(cardActivate, /id === CENTER_QR_FINDER_PATTERN_ID/,
+    '중앙 QR 카드 클릭이 일반 파인더 선택으로 흐른다 — QR 위치 전환으로 라우팅해야 한다');
+  assert.match(cardActivate, /selectQrPosition\(\s+generatorState, 'inner'/,
+    '중앙 QR 카드가 selectQrPosition(inner) 계약 경로를 안 탄다 (직접 대입 금지)');
+  assert.match(cardActivate, /previousOuterQrPosition/,
+    '다른 검출기 클릭의 직전 바깥 위치 복귀 경로가 없다');
 });
 
 test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으로 적지 않는다', () => {

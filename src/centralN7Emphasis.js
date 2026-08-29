@@ -3,6 +3,20 @@ import { BULLSEYE_DARK } from './luminance.js';
 export const CENTRAL_N7_EMPHASIS_MODES = Object.freeze(['default', 'locator', 'all']);
 export const DEFAULT_CENTRAL_N7_EMPHASIS = 'default';
 
+/**
+ * **생성기 UI 의 초기 선택** — 라이브러리 기본(`DEFAULT_CENTRAL_N7_EMPHASIS`)과
+ * 별개다 (finderPatternId 의 GENERATOR_DEFAULT ↔ DEFAULT 와 같은 관계).
+ *
+ * 'all' 인 근거: 운영자 실기 A2 비교 (2026-08-29) — 로케이터만/전체 모두 기본보다
+ * 향상, 전체가 미묘하게 우세. ⚠ 라이브러리 기본은 'default' 그대로 둔다 — 그쪽은
+ * emphasis 를 안 준 buildScene 호출자(임베더)의 계약이라, 바꾸면 기존 발행 출력의
+ * 재생성이 조용히 달라진다.
+ *
+ * 저장 상태 마이그레이션: 해당 없음 (2026-08-29 실측 — 생성기 상태는 어디에도
+ * 저장되지 않는다. index.html 의 localStorage 는 'tlcube-theme' 하나뿐이다).
+ */
+export const GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS = 'all';
+
 export function assertCentralN7Emphasis(value = DEFAULT_CENTRAL_N7_EMPHASIS) {
   if (!CENTRAL_N7_EMPHASIS_MODES.includes(value)) {
     throw new RangeError(
@@ -51,3 +65,9 @@ export function centralN7LevelPalettes(levels, emphasis = DEFAULT_CENTRAL_N7_EMP
     data: mode === 'all' ? emphasized : levels,
   });
 }
+
+// ⛔ 3톤 큐브용 톤 선택 함수(centralN7FinderTones)는 **여기 두지 않는다** — 그 확장은
+// 2026-08-29 §2.4 왕복 자에서 거부됐다 (강조 dark 순검정이 어두운 프리셋 배경과의
+// 차 0.0053 < 마스크 허용오차 0.018 로 배경에 먹혀 실루엣 검출 전패 — scene.js
+// three-tone-cube 분기 주석 실측). 되살리려면 순검정 대신 FINDER_CUBE_SEAM 식
+// 두-제약(배경 문턱 초과 + 최암면과의 분리) 앵커부터 다시 재라.

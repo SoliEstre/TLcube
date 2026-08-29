@@ -241,19 +241,23 @@ test('생성기 사전의 여덟 언어가 같은 키 집합을 갖는다', () =
 });
 
 test('g581은 8언어 모두 «안쪽 QR 우선» 역방향 안내다', () => {
+  // **의도적 갱신 (2026-08-29, 결정 1)** — 구 문구는 «QR 위치를 바꾸면 고를 수
+  // 있다»(하드 잠금의 안내)였다. 안쪽 활성 중 다른 검출기 클릭이 «직전 바깥 위치
+  // 복귀 후 선택» 으로 정의되면서(§1), 문구가 그 결과를 예고하도록 바뀌었다.
+  // 재는 성질은 그대로다: 8언어가 같은 역방향 안내를 갖는다.
   const raw = readFileSync(`${ROOT}index.html`, 'utf8');
   const start = raw.indexOf('const GENERATOR_STRINGS = {');
   const js = raw.slice(start, raw.indexOf('\n};', start));
   const values = [...js.matchAll(/"g581":\s*("(?:\\.|[^"])*")/g)]
     .map((match) => JSON.parse(match[1]));
   assert.deepEqual(values, [
-    '안쪽 QR 이 가운데를 쓰고 있어요. QR 위치를 바꾸면 이 파인더를 고를 수 있어요.',
-    'The inner QR is using the centre. Move the QR to choose this finder.',
-    '内側 QR が中央を使っています。QR の位置を変えると、このファインダーを選べます。',
-    'Le QR intérieur occupe le centre. Changez la position du QR pour choisir ce repère.',
-    'Il QR interno occupa il centro. Cambia la posizione del QR per scegliere questo finder.',
-    'Der innere QR belegt die Mitte. Ändern Sie die QR-Position, um diesen Finder auszuwählen.',
-    'El QR interior ocupa el centro. Cambia la posición del QR para elegir este localizador.',
-    'O QR interno ocupa o centro. Mude a posição do QR para escolher este localizador.',
+    '안쪽 QR 이 가운데를 쓰고 있어요. 이 검출기를 고르면 QR 링크가 직전 바깥 위치로 돌아가요.',
+    'The inner QR is using the centre. Choosing this finder moves the QR link back to its previous outer position.',
+    '内側 QR が中央を使っています。このファインダーを選ぶと、QR リンクは直前の外側位置に戻ります。',
+    'Le QR intérieur occupe le centre. Choisir ce repère ramène le lien QR à sa position extérieure précédente.',
+    'Il QR interno occupa il centro. Scegliendo questo finder, il link QR torna alla posizione esterna precedente.',
+    'Der innere QR belegt die Mitte. Wenn Sie diesen Finder wählen, kehrt der QR-Link zur vorherigen äußeren Position zurück.',
+    'El QR interior ocupa el centro. Al elegir este localizador, el enlace QR vuelve a su posición exterior anterior.',
+    'O QR interno ocupa o centro. Ao escolher este localizador, o link QR volta à posição externa anterior.',
   ]);
 });

@@ -39,7 +39,7 @@ import {
 } from './export-options.js';
 import { DEFAULT_SHADING_MODE, SHADING_MODES } from './shading.js';
 import {
-  CENTRAL_N7_EMPHASIS_MODES, DEFAULT_CENTRAL_N7_EMPHASIS,
+  CENTRAL_N7_EMPHASIS_MODES, GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS,
 } from './centralN7Emphasis.js';
 import {
   DEFAULT_LOCATOR_PROFILE_Y,
@@ -141,9 +141,13 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //   자동으로 따라온다 — «전수 등록» 이 주장이 아니라 유도 사실이 된다.
   finderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, BOTH,
     FINDER_CARD_PATTERN_IDS),
-  // 중앙 TL의 렌더 색만 바꾸는 실험 축. 기본은 기존 팔레트를 그대로 써서 이전 출력과
-  // 같고, locator/all은 포맷·용량·순위 문법을 건드리지 않은 채 대비만 비교한다.
-  centralN7Emphasis: field(DEFAULT_CENTRAL_N7_EMPHASIS, BOTH,
+  // 중앙 파인더(중앙 TL · 중앙 Y0 — 3톤 큐브는 §2.4 실측 거부)의 렌더 색만 바꾸는 축 — 포맷·용량·
+  // 순위 문법은 어떤 모드에서도 안 바뀐다. **UI 기본값은 'all'** (운영자 실기 A2,
+  // 2026-08-29 — 로케이터/전체 모두 향상, 전체가 미묘하게 우세). 라이브러리 기본
+  // (DEFAULT_CENTRAL_N7_EMPHASIS = 'default')과 별개다 — finderPatternId 의
+  // GENERATOR_DEFAULT ↔ DEFAULT 관계와 동일. 저장 마이그레이션은 해당 없음
+  // (생성기 상태는 저장되지 않는다 — 2026-08-29 실측, localStorage 는 테마뿐).
+  centralN7Emphasis: field(GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS, BOTH,
     CENTRAL_N7_EMPHASIS_MODES),
   // 중앙 QR 만 뺀다 — previous 는 «중앙 QR 에서 되돌아갈 곳» 이라 center-qr 자신은
   // 담기지 않는다 (finder-selection.selectFinderPattern 이 그 불변식을 지킨다).
