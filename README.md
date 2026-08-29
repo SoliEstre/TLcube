@@ -37,7 +37,7 @@ That freedom is the point of the format.
 
 | Type | Silhouette | Net payload (ECC-M) |
 |---|---|---|
-| **O** | Hexagonal field | 18 / 39 / 65 B (k = 6 / 8 / 10) |
+| **O** | Hexagonal field | 18 / 39 / 65 / 97 B (k = 6 / 8 / 10 / 12) |
 | **A** | Triangular silhouette | 31 / 62 / 101 B (k = 6 / 8 / 10) |
 | **K** | Hexagram (A union inverted A) | 43 / 86 / 138 B (k = 6 / 8 / 10) |
 | **Y** | Single isometric cube | 31 / 98 / 141 B (n = 13 / 21 / 25) |
