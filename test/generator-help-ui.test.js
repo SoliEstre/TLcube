@@ -293,7 +293,8 @@ test('카드마다 있던 native title= 설명은 «?» 로 옮겨졌다', () =>
 // ── A-3 부제·아이콘 ───────────────────────────────────────────────────────
 
 test('해상도·안정성 카드는 사전을 거친 부제와 인라인 SVG 를 갖는다', () => {
-  const subs = ['g920', 'g921', 'g922', 'g923', 'g924', 'g925', 'g926', 'g927'];
+  // g1010 = «대용량»(V4, 2026-08-30) 부제.
+  const subs = ['g920', 'g921', 'g922', 'g923', 'g1010', 'g924', 'g925', 'g926', 'g927'];
   for (const key of subs) {
     assert.match(INDEX, new RegExp(`class="card-sub" data-i18n="${key}"`), `부제 ${key} 누락`);
     for (const lang of LANGS) {
@@ -303,7 +304,12 @@ test('해상도·안정성 카드는 사전을 거친 부제와 인라인 SVG �
   // 아이콘은 인라인 SVG + currentColor (외부 자산·PNG 금지).
   const resStart = INDEX.indexOf('id="resTierCards"');
   const resBlock = INDEX.slice(resStart, INDEX.indexOf('id="resTierHint"', resStart));
-  assert.equal((resBlock.match(/<svg /g) || []).length, 4, '해상도 카드 4개 모두 아이콘이어야 한다');
+  // 개수는 손 상수가 아니라 «카드마다 아이콘 하나» 성질로 잰다 — 종전 4 는 카드
+  // 수의 사본이라 «대용량» 추가로 어긋났다.
+  const resCardCount = (resBlock.match(/data-res="/g) || []).length;
+  assert.ok(resCardCount >= 4, '해상도 카드가 4개 미만이면 카드 자체가 사라진 것이다');
+  assert.equal((resBlock.match(/<svg /g) || []).length, resCardCount,
+    '해상도 카드 ' + resCardCount + '개 모두 아이콘이어야 한다');
   assert.doesNotMatch(resBlock, /<img |\.png/);
   assert.match(resBlock, /stroke="currentColor"/);
 });

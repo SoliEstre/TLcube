@@ -344,8 +344,13 @@ test('3링 기하 좌표 검산 — K 첨두 (3k+2)s · K 중앙육각 = O 실�
 test('버전 짝 판정 — O V1↔A0 · V2↔A1 · V3↔A2 (같은 k), 안쪽 링 짝은 k=6', () => {
   const oByVersion = Object.fromEntries(VERSIONS.map((v) => [v.version, v.k]));
   const aByName = Object.fromEntries(VERSIONS_A.map((v) => [v.name, v.k]));
-  assert.deepEqual(oByVersion, { 1: 6, 2: 8, 3: 10 });
+  // 짝 주장의 스코프는 «A 가 사는 k» 다 — O 전용 확장(V4 k=12, 2026-08-30)은
+  // A 짝이 없는 게 정상이라 이 판정의 대상이 아니다. O 표 전체를 deepEqual 로
+  // 박으면 (표 사본) O 확장마다 여기가 깨진다 — 짝이 있는 세 칸만 값으로 잠근다.
   assert.deepEqual(aByName, { A0: 6, A1: 8, A2: 10 });
+  assert.equal(oByVersion[1], 6);
+  assert.equal(oByVersion[2], 8);
+  assert.equal(oByVersion[3], 10);
   // 운영자 표기 «O1 - K1(A1)» = 코드 명명 O V1 ↔ A0 기하 (A 1-베이스 읽기).
   assert.equal(GUIDE_PAIR_K, 6);
   assert.equal(oByVersion[1], GUIDE_PAIR_K);

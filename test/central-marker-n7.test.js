@@ -166,7 +166,10 @@ test('용량·formatIndex 무회귀 — O/A/K × 전 k × 전 ECC 27조합은 �
       }
     }
   }
-  assert.equal(checked, 3 * 3 * 3);
+  // 기대치는 손 상수가 아니라 표에서 유도한다 — 종전 3*3*3 은 버전 표 크기의
+  // 사본이라 V4(2026-08-30) 추가로 어긋났다. 재는 성질(렌더 전후 불변)은 그대로다.
+  assert.equal(checked,
+    (VERSIONS.length + VERSIONS_A.length + VERSIONS_K.length) * 3);
 });
 
 test('드랍 2겹 차단과 저장 상태 복구 — 전 surface DOM 부재·선택 거부·기본값 복귀', () => {

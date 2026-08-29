@@ -2371,6 +2371,7 @@ export function directAnchorHypotheses(luma, finder, family, options) {
     // 코너 마커를 weak fallback **앞에** 둔다 — agreement + confirm 을 통과한
     // 가설이라 「약한 경계 fallback」보다 강하다. 앵커가 없을 때만 열리므로
     // 현재 통과하는 프레임에는 도달하지 않는다.
+    let markerDiagnostics = null;
     if (result.reason === FRONTEND_FAILURE.NO_ANCHORS) {
       const marker = cornerMarkerHypotheses(luma, finder, family, options);
       if (marker.hypotheses.length > 0) {
@@ -2386,6 +2387,9 @@ export function directAnchorHypotheses(luma, finder, family, options) {
           diagnostics: marker.diagnostics,
         };
       }
+      // 0건이어도 진단은 버리지 않는다 — 마커 폴백이 «왜» 비었는지가 아래 failure
+      // 진단의 일부다 (V4 회귀 분해 2026-08-30 에서 이 침묵이 원인 규명을 막았다).
+      markerDiagnostics = marker.diagnostics || null;
     }
     const fallback = options.allowWeakAnchorFallback === true
       && result.reason === FRONTEND_FAILURE.NO_ANCHORS
@@ -2401,6 +2405,7 @@ export function directAnchorHypotheses(luma, finder, family, options) {
       strictCount: 0,
       fallbackCount: fallback.length,
       failure: result,
+      ...(markerDiagnostics ? { markerDiagnostics } : {}),
     };
   }
 
@@ -2436,13 +2441,36 @@ function deduplicateHypotheses(hypotheses) {
     || left.hypothesisId.localeCompare(right.hypothesisId));
 }
 
+/**
+ * 분류용 공유 k 축 — hex·tri 를 **같은 k 로** 채점하는 것이 패밀리 판별 장치다:
+ * 등면적 (family,k) 쌍(hex k10 331셀 ≈ tri k8 325셀)은 모양이 아니라 «틀린
+ * 스케일에서의 점수 붕괴»로 갈린다. 그래서 정의역은 hex 표 전체가 아니라
+ * **hex ∩ tri 공유 k** 다. 한쪽 표에만 있는 k(현재 hex V4 k=12)를 넣으면 tri
+ * 프레임의 최근접이 그리로 이동해 tri 채점이 표 밖 k 로 무너진다 (2026-08-30
+ * 실측: 턴A V2 가 hex 모델의 12 를 받아 tri 앵커 단계가 통째로 증발 —
+ * turnA-roundtrip 3건 · probe-turna-v4.mjs). 반대로 가족별 최적 k 를 따로 주면
+ * 등면적 오양성이 서로 열린다 (같은 날 실측: 그 시도에서 hex 왕복 전멸).
+ * 공유축 밖 k 의 프레임(hex k=12)은 최근접 공유 k(10)로 hex 분류를 통과하고,
+ * 실제 k 는 디코드 열거(uniqueDimensions('hex') — k=12 포함)가 확정한다
+ * (capacity-v4 프런트엔드 왕복이 그 경로를 잰다).
+ */
+function sharedClassificationKs() {
+  const tri = new Set(uniqueDimensions('tri'));
+  const shared = uniqueDimensions('hex').filter((k) => tri.has(k));
+  if (shared.length === 0) {
+    throw new Error('분류 공유 k 축이 비었다 — hex·tri 표가 완전히 갈라졌다면 '
+      + '분류 판별 장치(동일 k 교차 채점)를 다시 설계해야 한다');
+  }
+  return shared;
+}
+
 function classificationDimensions(finders, outline) {
-  if (!outline || finders.length === 0) return uniqueDimensions('hex');
+  if (!outline || finders.length === 0) return sharedClassificationKs();
   const cellSizes = finders.map((finder) => finder.cellSize)
     .filter((value) => Number.isFinite(value) && value > 0);
   const cellSize = median(cellSizes);
-  if (cellSize === null) return uniqueDimensions('hex');
-  return uniqueDimensions('hex').map((k) => ({
+  if (cellSize === null) return sharedClassificationKs();
+  return sharedClassificationKs().map((k) => ({
     k,
     relativeAreaError: Math.abs(
       cellCount(k) * HEX_AREA_COEFF * cellSize * cellSize - outline.area
@@ -3611,6 +3639,8 @@ function assembleGeometryHypotheses(
           strictCount: direct.strictCount,
           fallbackCount: direct.fallbackCount,
           directFailure: direct.failure,
+          // 마커 폴백이 0건일 때의 «왜» — directAnchorHypotheses 가 실어 준다.
+          ...(direct.markerDiagnostics ? { markerDiagnostics: direct.markerDiagnostics } : {}),
         });
 
         if (family === 'hex'
