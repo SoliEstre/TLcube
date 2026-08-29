@@ -1189,6 +1189,18 @@
           <span data-i18n="g077">고</span>
           <span class="card-sub" data-i18n="g923">가까운 거리</span>
         </div>
+        <!-- 대용량 (V4 · k=12, 2026-08-30) — V4 가 실재하는 타입에서만 보인다
+             (표시 게이트 = resolutionTierAvailable, syncResTierUi). 아이콘은 같은
+             실루엣 + 파인더 원판 최소 비례 (V4 셀 수 469, 파인더 고정 규약). -->
+        <div class="toggle-card" data-res="max">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12 L16 5.1 L8 5.1 L4 12 L8 18.9 L16 18.9 Z"/>
+            <circle cx="12" cy="12" r="1.5"/>
+            <circle cx="12" cy="12" r="0.65" fill="currentColor" stroke="none"/>
+          </svg>
+          <span data-i18n="g1009">대용량</span>
+          <span class="card-sub" data-i18n="g1010">최대 115 B</span>
+        </div>
       </div>
       <p class="hint" id="resTierHint"></p>
 
@@ -1317,6 +1329,7 @@
             <option value="1">V1 (k=6 · 18 B)</option>
             <option value="2">V2 (k=8 · 39 B)</option>
             <option value="3">V3 (k=10 · 65 B)</option>
+            <option value="4">V4 (k=12 · 115 B)</option>
           </select>
         </div>
         <div id="versionWrapY" style="display:none">
@@ -1964,7 +1977,7 @@
              2026-08-21: 카드는 합성 한 장(와이어 oak-daehan-k10). 표시는 taegeuk +
              sagoae. 카드를 두 장으로 쪼개면 버전 k 와 모순되는 템플릿을 고를 수 있다. -->
         <details class="finder-collapse" id="finderDaehan">
-          <summary data-i18n="g570">taegeuk + sagoae (용량 감소 · 시험판 스캐너 전용)</summary>
+          <summary data-i18n="g570">taegeuk + sagoae (용량 감소)</summary>
           <!-- 서랍을 연 사람만 보는 자리지만, 열자마자 3줄(한국어 외 7언어)이 카드를
                밀어내린다. 설명은 «?» 로 옮기고 카드가 먼저 보이게 한다. -->
           <div class="section-heading-row">
@@ -2634,7 +2647,7 @@ const GENERATOR_STRINGS = {
     "g406": "안쪽 — Y2 윈도 β (실기기 미검증, 미학 옵션)",
     "g407": "안쪽 — 중앙 QR 변형(불스아이 대체)",
     "g408": "Y 안쪽(윈도 β)은 Y2 전용이라 해상도가 고(Y2)로 고정돼요.",
-    "g409": "저 V1 = 광고판·원거리 / 중 V2 = 1~3m 인쇄물 / 고 V3 = 근거리 대용량이에요.",
+    "g409": "저 V1 = 광고판·원거리 / 중 V2 = 1~3m 인쇄물 / 고 V3 = 근거리 / 대용량 V4 = 초근접·최대 115 B 예요.",
     "g410": "저 Y0 = 광고판·원거리 (O 저와 같은 급) / 중 Y1 = 근거리 인쇄 / 고 Y2 = 고밀도예요.",
     "g411": "저 A0 / 중 A1 / 고 A2 예요. A 는 삼각 확장 때문에 저(A0)도 절대 밀도가 중거리급 하한이라, 광고판급 원거리는 Type O 저나 Y 저가 적합해요.",
     "g412": "체커보드는 화면 표시일 뿐이에요 — 실효 배경은 코드를 얹는 표면이 되니, 셀 색과 뚜렷이 구분되는 바탕에 얹어 주세요.",
@@ -2683,7 +2696,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "사괘(sagoae)",
-    "g855": "사괘 고리를 중앙 파인더 바깥에 함께 그려요 (taegeuk + 사괘 = daehan 과 같은 예약 회계라 용량이 줄어요). 읽으려면 시험판 스캐너가 필요해요.",
+    "g855": "사괘 고리를 중앙 파인더 바깥에 함께 그려요 (taegeuk + 사괘 = daehan 과 같은 예약 회계라 용량이 줄어요). 정식 스캐너가 읽어요 — 첫 시도에서 안 잡히면 자동으로 재시도해요.",
     "g859": "H",
     "g871": "O-CM 자리에 H 심볼을 함께 그려요 (A-CM 의 H2O 와 같은 방식). 판독은 중앙 Y0(비컨) 조합에서 확인됐어요 — 다른 중앙 파인더 조합은 인식률이 떨어질 수 있어요.",
     "g872": "비컨 실측치 — 모듈나비 {mpc}/셀 · 실기기 셀 17~20px → 모듈 {lo}~{hi}px (권장 하한 {floor}px) · 내부 3톤 · ECC H(t=7) · 실기기 스캔 검증 2026-08-22",
@@ -2714,6 +2727,8 @@ const GENERATOR_STRINGS = {
     "g921": "먼 거리",
     "g922": "포스터 거리",
     "g923": "가까운 거리",
+    "g1009": "대용량",
+    "g1010": "최대 115 B",
     "g924": "내용에 맞춰",
     "g925": "손상에 강함",
     "g926": "균형",
@@ -2880,8 +2895,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "미측정 (다른 계보)",
     "g569": "taegeuk + sagoae (전면 79셀)",
-    "g570": "taegeuk + sagoae (용량 감소 · 읽으려면 시험판 스캐너)",
-    "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 지금은 시험판 스캐너(/lab/)에서 이 파인더를 켰을 때만 읽혀요.",
+    "g570": "taegeuk + sagoae (용량 감소)",
+    "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 정식 스캐너가 읽어요 — 첫 시도에서 안 잡히면 자동으로 이 파인더를 켜 재시도해요.",
     "g582": "중앙 Y0",
     "g1000": "중앙 M7",
     "g1001": "중앙 TL",
@@ -3090,7 +3105,7 @@ const GENERATOR_STRINGS = {
     "g406": "Inside — Y2 window β (unverified on real devices, aesthetic option)",
     "g407": "Inside — center QR variant (replaces the bullseye)",
     "g408": "Y inside (window β) is Y2-only, so resolution is pinned to High (Y2).",
-    "g409": "Low V1 = billboards and long range / Mid V2 = print at 1–3 m / High V3 = close range, high capacity.",
+    "g409": "Low V1 = billboards and long range / Mid V2 = print at 1–3 m / High V3 = close range / High capacity V4 = very close, up to 115 B.",
     "g410": "Low Y0 = billboards and long range (same class as O Low) / Mid Y1 = close-range print / High Y2 = high density.",
     "g411": "Low A0 / Mid A1 / High A2. Because of the triangular extension, even A0 sits at the low end of mid-range density — for billboard distances use Type O Low or Y Low.",
     "g412": "The checkerboard is a screen indicator only — the effective background is whatever surface the code sits on, so place it on something clearly distinct from the cell colors.",
@@ -3139,7 +3154,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "sagoae",
-    "g855": "Draws the sagoae ring outside the central finder (same reserved accounting as taegeuk + sagoae = daehan, so capacity drops). Reading needs the trial scanner.",
+    "g855": "Draws the sagoae ring outside the central finder (same reserved accounting as taegeuk + sagoae = daehan, so capacity drops). The regular scanner reads it — if the first pass misses, it retries automatically.",
     "g859": "H",
     "g871": "Draws the H symbol on the O-CM seat (same convention as A-CM's H2O). Decoding is verified with the central Y0 (beacon) combination — other central finders may scan worse.",
     "g872": "Beacon measurements — module pitch {mpc}/cell · device cells 17–20px → modules {lo}–{hi}px (recommended floor {floor}px) · inner 3-tone · ECC H(t=7) · device-scan verified 2026-08-22",
@@ -3170,6 +3185,8 @@ const GENERATOR_STRINGS = {
     "g921": "Long range",
     "g922": "Poster range",
     "g923": "Close range",
+    "g1009": "High capacity",
+    "g1010": "Up to 115 B",
     "g924": "Fits content",
     "g925": "Damage tolerant",
     "g926": "Balanced",
@@ -3336,8 +3353,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Not measured (different lineage)",
     "g569": "taegeuk + sagoae (79-cell full surface)",
-    "g570": "taegeuk + sagoae (lower capacity · reading needs the trial scanner)",
-    "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). For now it is only readable when this finder is enabled in the trial scanner (/lab/).",
+    "g570": "taegeuk + sagoae (lower capacity)",
+    "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). The regular scanner reads it — if the first pass misses, it automatically retries with this finder enabled.",
     "g582": "Centre Y0",
     "g1000": "Centre M7",
     "g1001": "Centre TL",
@@ -3546,7 +3563,7 @@ const GENERATOR_STRINGS = {
     "g406": "内側 — Y2 ウィンドウ β（実機未検証・美観オプション）",
     "g407": "内側 — 中央 QR 変種（ブルズアイの代替）",
     "g408": "Y の内側（ウィンドウ β）は Y2 専用なので、解像度は高（Y2）に固定されます。",
-    "g409": "低 V1 = 看板・遠距離 / 中 V2 = 1〜3m の印刷物 / 高 V3 = 近距離・大容量です。",
+    "g409": "低 V1 = 看板・遠距離 / 中 V2 = 1〜3m の印刷物 / 高 V3 = 近距離 / 大容量 V4 = 超近接・最大 115 B です。",
     "g410": "低 Y0 = 看板・遠距離（O の低と同じ級）/ 中 Y1 = 近距離の印刷 / 高 Y2 = 高密度です。",
     "g411": "低 A0 / 中 A1 / 高 A2 です。A は三角の拡張があるため、低（A0）でも絶対密度が中距離級の下限にあたります。看板級の遠距離には Type O の低か Y の低が向いています。",
     "g412": "チェッカーボードは画面表示だけです — 実効的な背景はコードを載せる面になるので、セル色とはっきり区別できる下地に置いてください。",
@@ -3595,7 +3612,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "四卦(sagoae)",
-    "g855": "四卦のリングを中央ファインダーの外側に描画します（taegeuk + 四卦 = daehan と同じ予約会計のため容量が減ります）。読み取りには試験版スキャナが必要です。",
+    "g855": "四卦のリングを中央ファインダーの外側に描画します（taegeuk + 四卦 = daehan と同じ予約会計のため容量が減ります）。正式スキャナで読み取れます — 最初のパスで見つからない場合は自動的に再試行します。",
     "g859": "H",
     "g871": "O-CM 席に H シンボルを一緒に描画します（A-CM の H2O と同じ方式）。読取は中央Y0（ビーコン）併用で確認済み — 他の中央ファインダーでは認識率が下がる場合があります。",
     "g872": "ビーコン実測 — モジュール幅 {mpc}/セル · 実機セル 17–20px → モジュール {lo}–{hi}px（推奨下限 {floor}px）· 内部3トーン · ECC H(t=7) · 実機スキャン検証 2026-08-22",
@@ -3626,6 +3643,8 @@ const GENERATOR_STRINGS = {
     "g921": "遠距離",
     "g922": "ポスター距離",
     "g923": "近距離",
+    "g1009": "大容量",
+    "g1010": "最大 115 B",
     "g924": "内容に合わせて",
     "g925": "損傷に強い",
     "g926": "バランス",
@@ -3792,8 +3811,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "未計測（別系譜）",
     "g569": "taegeuk + sagoae（全面79セル）",
-    "g570": "taegeuk + sagoae（容量減少・読み取りには試験版スキャナ）",
-    "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。現在は試験版スキャナ（/lab/）でこのファインダーを有効にしたときだけ読み取れます。",
+    "g570": "taegeuk + sagoae（容量減少）",
+    "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。正式スキャナで読み取れます — 最初のパスで見つからない場合、このファインダーを有効にして自動的に再試行します。",
     "g582": "中央Y0",
     "g1000": "中央M7",
     "g1001": "中央TL",
@@ -4001,7 +4020,7 @@ const GENERATOR_STRINGS = {
     "g406": "Intérieur — fenêtre Y2 β (non vérifié sur appareil réel, option esthétique)",
     "g407": "Intérieur — variante à QR central (remplace la cible)",
     "g408": "L'intérieur Y (fenêtre β) est réservé à Y2 : la résolution est donc figée sur Haute (Y2).",
-    "g409": "Basse V1 = panneaux et longue distance / Moyenne V2 = imprimés à 1–3 m / Haute V3 = courte distance, grande capacité.",
+    "g409": "Basse V1 = panneaux et longue distance / Moyenne V2 = imprimés à 1–3 m / Haute V3 = courte distance / Haute capacité V4 = très proche, jusqu'à 115 B.",
     "g410": "Basse Y0 = panneaux et longue distance (même classe que O Basse) / Moyenne Y1 = impression de près / Haute Y2 = haute densité.",
     "g411": "Basse A0 / Moyenne A1 / Haute A2. À cause de l'extension triangulaire, même A0 se situe au bas de la densité moyenne — pour les distances d'affichage, préférez le Type O Basse ou Y Basse.",
     "g412": "Le damier n'est qu'un repère à l'écran — le fond effectif est la surface qui porte le code : posez-le sur un fond nettement distinct des couleurs de cellule.",
@@ -4050,7 +4069,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "sagoae",
-    "g855": "Dessine l'anneau sagoae autour du repère central (même comptabilité réservée que taegeuk + sagoae = daehan, la capacité diminue donc). La lecture nécessite le scanner d'essai.",
+    "g855": "Dessine l'anneau sagoae autour du repère central (même comptabilité réservée que taegeuk + sagoae = daehan, la capacité diminue donc). Le scanner officiel le lit — si la première passe échoue, il réessaie automatiquement.",
     "g859": "H",
     "g871": "Dessine le symbole H sur le siège O-CM (même convention que le H2O d'A-CM). Le décodage est vérifié avec le Y0 central (balise) — les autres repères centraux peuvent moins bien scanner.",
     "g872": "Mesures balise — pas de module {mpc}/cellule · cellules réelles 17–20px → modules {lo}–{hi}px (plancher conseillé {floor}px) · 3 tons internes · ECC H(t=7) · vérifié au scan réel 2026-08-22",
@@ -4081,6 +4100,8 @@ const GENERATOR_STRINGS = {
     "g921": "Longue distance",
     "g922": "Distance d'affiche",
     "g923": "Courte distance",
+    "g1009": "Haute capacité",
+    "g1010": "Jusqu'à 115 B",
     "g924": "Selon le contenu",
     "g925": "Tolérant aux dommages",
     "g926": "Équilibré",
@@ -4247,8 +4268,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Non mesuré (autre lignée)",
     "g569": "taegeuk + sagoae (79 cellules, pleine surface)",
-    "g570": "taegeuk + sagoae (capacité réduite · lecture avec le scanner d'essai)",
-    "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Pour l'instant, la lecture n'est possible qu'avec ce détecteur activé dans le scanner d'essai (/lab/).",
+    "g570": "taegeuk + sagoae (capacité réduite)",
+    "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Le scanner officiel le lit — si la première passe échoue, il réessaie automatiquement avec ce détecteur activé.",
     "g582": "Y0 central",
     "g1000": "M7 central",
     "g1001": "TL central",
@@ -4456,7 +4477,7 @@ const GENERATOR_STRINGS = {
     "g406": "Interno — finestra Y2 β (non verificata su dispositivi reali, opzione estetica)",
     "g407": "Interno — variante con QR centrale (sostituisce il bersaglio)",
     "g408": "L'interno Y (finestra β) è riservato a Y2, quindi la risoluzione resta fissa su Alta (Y2).",
-    "g409": "Bassa V1 = cartelloni e lunga distanza / Media V2 = stampa a 1–3 m / Alta V3 = distanza ravvicinata, grande capacità.",
+    "g409": "Bassa V1 = cartelloni e lunga distanza / Media V2 = stampa a 1–3 m / Alta V3 = distanza ravvicinata / Alta capacità V4 = molto vicino, fino a 115 B.",
     "g410": "Bassa Y0 = cartelloni e lunga distanza (stessa classe di O Bassa) / Media Y1 = stampa ravvicinata / Alta Y2 = alta densità.",
     "g411": "Bassa A0 / Media A1 / Alta A2. Per via dell'estensione triangolare, anche A0 si colloca al limite inferiore della densità media: per le distanze da cartellone conviene il Tipo O Bassa o Y Bassa.",
     "g412": "La scacchiera è solo un riferimento a schermo — lo sfondo effettivo è la superficie su cui poggia il codice: posizionalo su uno sfondo nettamente distinto dai colori delle celle.",
@@ -4505,7 +4526,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "sagoae",
-    "g855": "Disegna l'anello sagoae attorno al finder centrale (stessa contabilità riservata di taegeuk + sagoae = daehan, quindi la capacità diminuisce). La lettura richiede lo scanner di prova.",
+    "g855": "Disegna l'anello sagoae attorno al finder centrale (stessa contabilità riservata di taegeuk + sagoae = daehan, quindi la capacità diminuisce). Lo scanner ufficiale lo legge — se il primo passaggio fallisce, riprova automaticamente.",
     "g859": "H",
     "g871": "Disegna il simbolo H sul posto O-CM (stessa convenzione dell'H2O di A-CM). La decodifica è verificata con il Y0 centrale (beacon) — altri finder centrali possono scansionare peggio.",
     "g872": "Misure beacon — passo modulo {mpc}/cella · celle reali 17–20px → moduli {lo}–{hi}px (soglia consigliata {floor}px) · 3 toni interni · ECC H(t=7) · verificato con scansione reale 2026-08-22",
@@ -4536,6 +4557,8 @@ const GENERATOR_STRINGS = {
     "g921": "Lunga distanza",
     "g922": "Distanza da manifesto",
     "g923": "Distanza ravvicinata",
+    "g1009": "Alta capacità",
+    "g1010": "Fino a 115 B",
     "g924": "In base al contenuto",
     "g925": "Tollera i danni",
     "g926": "Equilibrata",
@@ -4702,8 +4725,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Non misurato (altra linea)",
     "g569": "taegeuk + sagoae (79 celle, superficie intera)",
-    "g570": "taegeuk + sagoae (capacità ridotta · lettura con lo scanner di prova)",
-    "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Per ora è leggibile solo attivando questo rilevatore nello scanner di prova (/lab/).",
+    "g570": "taegeuk + sagoae (capacità ridotta)",
+    "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Lo scanner ufficiale lo legge — se il primo passaggio fallisce, riprova automaticamente con questo rilevatore attivo.",
     "g582": "Y0 centrale",
     "g1000": "M7 centrale",
     "g1001": "TL centrale",
@@ -4911,7 +4934,7 @@ const GENERATOR_STRINGS = {
     "g406": "Innen — Y2-Fenster β (auf echten Geräten ungeprüft, ästhetische Option)",
     "g407": "Innen — Variante mit zentralem QR (ersetzt die Zielscheibe)",
     "g408": "Innen bei Y (Fenster β) gibt es nur für Y2, deshalb bleibt die Auflösung auf Hoch (Y2) fixiert.",
-    "g409": "Niedrig V1 = Plakatwände und große Entfernung / Mittel V2 = Druck auf 1–3 m / Hoch V3 = Nahbereich, große Kapazität.",
+    "g409": "Niedrig V1 = Plakatwände und große Entfernung / Mittel V2 = Druck auf 1–3 m / Hoch V3 = Nahbereich / Hohe Kapazität V4 = sehr nah, bis zu 115 B.",
     "g410": "Niedrig Y0 = Plakatwände und große Entfernung (gleiche Klasse wie O Niedrig) / Mittel Y1 = Druck im Nahbereich / Hoch Y2 = hohe Dichte.",
     "g411": "Niedrig A0 / Mittel A1 / Hoch A2. Wegen der dreieckigen Erweiterung liegt selbst A0 am unteren Rand der mittleren Dichte — für Plakatwand-Entfernungen eignen sich Typ O Niedrig oder Y Niedrig.",
     "g412": "Das Schachbrett ist nur eine Bildschirmmarkierung — der effektive Hintergrund ist die Fläche, die den Code trägt: Platzieren Sie ihn auf einem Untergrund, der sich deutlich von den Zellfarben abhebt.",
@@ -4960,7 +4983,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "sagoae",
-    "g855": "Zeichnet den sagoae-Ring um den zentralen Finder (gleiche reservierte Buchführung wie taegeuk + sagoae = daehan, daher sinkt die Kapazität). Zum Lesen wird der Test-Scanner benötigt.",
+    "g855": "Zeichnet den sagoae-Ring um den zentralen Finder (gleiche reservierte Buchführung wie taegeuk + sagoae = daehan, daher sinkt die Kapazität). Der reguläre Scanner liest ihn — schlägt der erste Durchlauf fehl, versucht er es automatisch erneut.",
     "g859": "H",
     "g871": "Zeichnet das H-Symbol auf den O-CM-Platz (gleiche Konvention wie H2O bei A-CM). Dekodierung mit zentralem Y0 (Beacon) verifiziert — andere zentrale Finder können schlechter scannen.",
     "g872": "Beacon-Messwerte — Modulbreite {mpc}/Zelle · Gerätezellen 17–20px → Module {lo}–{hi}px (empfohlene Untergrenze {floor}px) · innen 3-Ton · ECC H(t=7) · Gerätescan verifiziert 2026-08-22",
@@ -4991,6 +5014,8 @@ const GENERATOR_STRINGS = {
     "g921": "Große Entfernung",
     "g922": "Plakatabstand",
     "g923": "Nahbereich",
+    "g1009": "Hohe Kapazität",
+    "g1010": "Bis zu 115 B",
     "g924": "Passend zum Inhalt",
     "g925": "Schadenstolerant",
     "g926": "Ausgewogen",
@@ -5157,8 +5182,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Nicht gemessen (andere Linie)",
     "g569": "taegeuk + sagoae (79 Zellen, ganze Fläche)",
-    "g570": "taegeuk + sagoae (geringere Kapazität · Lesen mit dem Test-Scanner)",
-    "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Derzeit nur lesbar, wenn dieser Finder im Test-Scanner (/lab/) aktiviert ist.",
+    "g570": "taegeuk + sagoae (geringere Kapazität)",
+    "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Der reguläre Scanner liest ihn — schlägt der erste Durchlauf fehl, wird automatisch mit aktiviertem Finder erneut versucht.",
     "g582": "Zentrales Y0",
     "g1000": "Zentraler M7",
     "g1001": "Zentraler TL",
@@ -5366,7 +5391,7 @@ const GENERATOR_STRINGS = {
     "g406": "Interior — ventana Y2 β (sin verificar en dispositivos reales, opción estética)",
     "g407": "Interior — variante con QR central (sustituye a la diana)",
     "g408": "El interior de Y (ventana β) es exclusivo de Y2, así que la resolución queda fijada en Alta (Y2).",
-    "g409": "Baja V1 = vallas y larga distancia / Media V2 = impresos a 1–3 m / Alta V3 = corta distancia, gran capacidad.",
+    "g409": "Baja V1 = vallas y larga distancia / Media V2 = impresos a 1–3 m / Alta V3 = corta distancia / Alta capacidad V4 = muy cerca, hasta 115 B.",
     "g410": "Baja Y0 = vallas y larga distancia (misma clase que O Baja) / Media Y1 = impresión de cerca / Alta Y2 = alta densidad.",
     "g411": "Baja A0 / Media A1 / Alta A2. Por la extensión triangular, incluso A0 queda en el extremo bajo de la densidad media: para distancias de valla conviene el Tipo O Baja o Y Baja.",
     "g412": "El damero es solo una referencia en pantalla — el fondo efectivo es la superficie que sostiene el código: colóquelo sobre un fondo claramente distinto de los colores de celda.",
@@ -5415,7 +5440,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "sagoae",
-    "g855": "Dibuja el anillo sagoae alrededor del buscador central (misma contabilidad reservada que taegeuk + sagoae = daehan, por lo que baja la capacidad). La lectura requiere el escáner de prueba.",
+    "g855": "Dibuja el anillo sagoae alrededor del buscador central (misma contabilidad reservada que taegeuk + sagoae = daehan, por lo que baja la capacidad). El escáner oficial lo lee — si la primera pasada falla, reintenta automáticamente.",
     "g859": "H",
     "g871": "Dibuja el símbolo H en el asiento O-CM (misma convención que el H2O de A-CM). La decodificación está verificada con el Y0 central (baliza); otros buscadores centrales pueden escanear peor.",
     "g872": "Mediciones de baliza — paso de módulo {mpc}/celda · celdas reales 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tonos internos · ECC H(t=7) · verificado con escaneo real 2026-08-22",
@@ -5446,6 +5471,8 @@ const GENERATOR_STRINGS = {
     "g921": "Larga distancia",
     "g922": "Distancia de cartel",
     "g923": "Corta distancia",
+    "g1009": "Alta capacidad",
+    "g1010": "Hasta 115 B",
     "g924": "Según el contenido",
     "g925": "Tolera daños",
     "g926": "Equilibrado",
@@ -5612,8 +5639,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Sin medir (otro linaje)",
     "g569": "taegeuk + sagoae (79 celdas, superficie completa)",
-    "g570": "taegeuk + sagoae (menor capacidad · lectura con el escáner de prueba)",
-    "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). Por ahora solo se lee con este detector activado en el escáner de prueba (/lab/).",
+    "g570": "taegeuk + sagoae (menor capacidad)",
+    "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). El escáner oficial lo lee — si la primera pasada falla, reintenta automáticamente con este detector activado.",
     "g582": "Y0 central",
     "g1000": "M7 central",
     "g1001": "TL central",
@@ -5821,7 +5848,7 @@ const GENERATOR_STRINGS = {
     "g406": "Interior — janela Y2 β (não verificada em equipamentos reais, opção estética)",
     "g407": "Interior — variante com QR central (substitui o alvo)",
     "g408": "O interior de Y (janela β) é exclusivo de Y2, por isso a resolução fica fixa em Alta (Y2).",
-    "g409": "Baixa V1 = outdoors e longa distância / Média V2 = impressos a 1–3 m / Alta V3 = curta distância, grande capacidade.",
+    "g409": "Baixa V1 = outdoors e longa distância / Média V2 = impressos a 1–3 m / Alta V3 = curta distância / Alta capacidade V4 = muito perto, até 115 B.",
     "g410": "Baixa Y0 = outdoors e longa distância (mesma classe que O Baixa) / Média Y1 = impressão de perto / Alta Y2 = alta densidade.",
     "g411": "Baixa A0 / Média A1 / Alta A2. Devido à extensão triangular, mesmo A0 fica no limite inferior da densidade média — para distâncias de outdoor convém o Tipo O Baixa ou Y Baixa.",
     "g412": "O xadrez é apenas uma indicação no ecrã — o fundo efetivo é a superfície que suporta o código: coloque-o sobre um fundo claramente distinto das cores das células.",
@@ -5870,7 +5897,7 @@ const GENERATOR_STRINGS = {
     "g852": "H",
     "g853": "H2O",
     "g854": "sagoae",
-    "g855": "Desenha o anel sagoae ao redor do localizador central (mesma contabilidade reservada de taegeuk + sagoae = daehan, então a capacidade diminui). A leitura requer o leitor de teste.",
+    "g855": "Desenha o anel sagoae ao redor do localizador central (mesma contabilidade reservada de taegeuk + sagoae = daehan, então a capacidade diminui). O leitor oficial consegue lê-lo — se a primeira passagem falhar, tenta novamente automaticamente.",
     "g859": "H",
     "g871": "Desenha o símbolo H no assento O-CM (mesma convenção do H2O do A-CM). A decodificação foi verificada com o Y0 central (beacon) — outros localizadores centrais podem ler pior.",
     "g872": "Medições do beacon — passo de módulo {mpc}/célula · células reais 17–20px → módulos {lo}–{hi}px (mínimo recomendado {floor}px) · 3 tons internos · ECC H(t=7) · verificado em scanner real 2026-08-22",
@@ -5901,6 +5928,8 @@ const GENERATOR_STRINGS = {
     "g921": "Longa distância",
     "g922": "Distância de cartaz",
     "g923": "Curta distância",
+    "g1009": "Alta capacidade",
+    "g1010": "Até 115 B",
     "g924": "Conforme o conteúdo",
     "g925": "Tolera danos",
     "g926": "Equilibrado",
@@ -6067,8 +6096,8 @@ const GENERATOR_STRINGS = {
     "g584": "taegeuk",
     "g568": "Não medido (outra linhagem)",
     "g569": "taegeuk + sagoae (79 células, superfície inteira)",
-    "g570": "taegeuk + sagoae (menor capacidade · leitura com o leitor de teste)",
-    "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). Por enquanto só é legível com este detector ativado no leitor de teste (/lab/).",
+    "g570": "taegeuk + sagoae (menor capacidade)",
+    "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). O leitor oficial consegue lê-lo — se a primeira passagem falhar, ele tenta novamente com este detector ativado.",
     "g582": "Y0 central",
     "g1000": "M7 central",
     "g1001": "TL central",
@@ -6371,8 +6400,8 @@ import {
 } from './src/locatorY.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
-  createGeneratorState, resolutionTierForVersion, transitionGeneratorMode,
-  versionForResolutionTier, versionStateKey,
+  createGeneratorState, resolutionTierAvailable, resolutionTierForVersion,
+  transitionGeneratorMode, versionForResolutionTier, versionStateKey,
 } from './src/generator-state.js';
 import { CORNER_UNIT_OFFSETS, FACES, facePolygon } from './src/hexgrid.js';
 import { maxSafeRadius } from './src/bullseye.js';
@@ -8812,6 +8841,11 @@ function syncResTierUi() {
   // 기존 auto/저/중/고 선택이 그대로 복원되어야 하기 때문이다.
   for (const card of els.resTierCards.children) {
     const res = card.dataset.res;
+    // 티어가 이 타입에 없으면(지금은 max — V4 는 O 뿐) 카드 자체를 숨긴다.
+    // disabled 가 아니라 display 인 이유: 없는 선택지는 «잠긴 것» 이 아니라
+    // «없는 것» 이고, 잠금 표시는 이유를 물게 만든다 (숨김-active 는 성립 불가 —
+    // 타입별 version 필드가 분리돼 있어 타입 전환이 선택을 침범하지 않는다).
+    card.style.display = resolutionTierAvailable(type, res) ? '' : 'none';
     card.classList.toggle('disabled', isOff(res));
     card.classList.toggle('active', res === selectedTier);
   }

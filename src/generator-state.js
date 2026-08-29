@@ -64,15 +64,25 @@ export const GENERATOR_MODES = Object.freeze(['normal', 'advanced']);
 // 타입 목록의 정의는 generator-types.js 하나다 (순환 회피 + 손 사본 철폐).
 // 소비자들이 예전부터 여기서 가져가므로 재수출로 경로를 유지한다.
 export { GENERATOR_TYPES };
-export const RESOLUTION_TIERS = Object.freeze(['auto', 'low', 'mid', 'high']);
+// max(«대용량») 는 **V4 가 실재하는 타입에만** 있다 — 지금은 O 뿐 (k=12, 2026-08-30).
+// 타입 맵에 키가 없으면 versionForResolutionTier 가 던진다 (조용한 undefined 금지).
+// UI 는 그 카드 자체를 해당 타입에서 숨긴다 (index.html §resTierCards 타입 게이트).
+export const RESOLUTION_TIERS = Object.freeze(['auto', 'low', 'mid', 'high', 'max']);
 
 export const RESOLUTION_TIER_VERSIONS = Object.freeze({
-  O: Object.freeze({ low: 1, mid: 2, high: 3 }),
+  O: Object.freeze({ low: 1, mid: 2, high: 3, max: 4 }),
   A: Object.freeze({ low: 0, mid: 1, high: 2 }),
   Y: Object.freeze({ low: 0, mid: 1, high: 2 }),
   // K 는 VERSIONS_K 표를 쓴다 — version 0/1/2 (O 의 1/2/3 과 **한 칸 어긋난다**).
   K: Object.freeze({ low: 0, mid: 1, high: 2 }),
 });
+
+/** 이 타입에서 이 티어가 고를 수 있는가 — 카드 표시 게이트가 쓰는 술어. */
+export function resolutionTierAvailable(type, tier) {
+  versionStateKey(type);
+  if (!RESOLUTION_TIERS.includes(tier)) throw new RangeError('알 수 없는 해상도 티어: ' + tier);
+  return tier === 'auto' || RESOLUTION_TIER_VERSIONS[type][tier] !== undefined;
+}
 
 const BOTH = 'both';
 const ADVANCED = 'advanced';
@@ -162,7 +172,9 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   finderQrProfiles: field(DEFAULT_FINDER_QR_PROFILES, INTERNAL,
     [DEFAULT_FINDER_QR_PROFILES, ALTERNATE_FINDER_QR_PROFILES]),
   eccLevel: field('auto', BOTH, ['auto', 'H', 'M', 'L']),
-  versionO: field('auto', BOTH, ['auto', 1, 2, 3]),
+  // V4 (k=12, «대용량») — 2026-08-30 개설. 예약돼 있던 hex 칸 V4=3·V4Q=7 을
+  // 레인 v4 가 채웠다 (capacity.js VERSIONS · markerG V4CM/V4CMQ · decode 개방).
+  versionO: field('auto', BOTH, ['auto', 1, 2, 3, 4]),
   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
   // K — VERSIONS_K 표 (0/1/2). versionO 를 빌려 쓰면 O 의 1/2/3 과
   // 한 칸 어긋나 편집 격자가 생성기와 다른 k 로 열린다 (index.html cellEditorHexSize).
@@ -344,7 +356,13 @@ export function versionStateKey(type) {
 export function versionForResolutionTier(type, tier) {
   versionStateKey(type);
   if (!RESOLUTION_TIERS.includes(tier)) throw new RangeError('알 수 없는 해상도 티어: ' + tier);
-  return tier === 'auto' ? 'auto' : RESOLUTION_TIER_VERSIONS[type][tier];
+  if (tier === 'auto') return 'auto';
+  const version = RESOLUTION_TIER_VERSIONS[type][tier];
+  if (version === undefined) {
+    // max 는 O 전용 — UI 가 카드를 숨기므로 여기 오면 게이트 누락이다.
+    throw new RangeError('Type ' + type + '에 없는 해상도 티어: ' + tier);
+  }
+  return version;
 }
 
 export function resolutionTierForVersion(type, version) {
