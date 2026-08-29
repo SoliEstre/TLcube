@@ -213,6 +213,29 @@ export function encode(text, options = {}) {
         + ' — 검출 합성 미지원 조합이다',
     );
   }
+  // ── 배타 — daehan/sagoae 예약 레이아웃 × V4 «대용량» (2026-08-30 신설) ──────
+  //
+  // daehan 은 **불스아이 19셀 밖으로 파인더 셀을 더 쓰는 유일한 후보**라 회계가
+  // 본표와 다른 자기 표를 든다 (`capacityDaehan.js` VERSIONS_DAEHAN ·
+  // `rs211.js` NSYM_TABLE_DAEHAN). 그 표의 예약 셀 수(k6 −20 · k8 −40 · k10 −60)는
+  // 파인더 기하에서 실측으로 확정한 값이지 k 파생식이 아니다 — k=12 행을 «−80» 으로
+  // 적으면 그건 회계가 아니라 짐작이고, 그 짐작이 `capacityFor` 의 symbols 대조를
+  // 우연히 통과하면 조용히 다른 코드가 나간다.
+  //
+  // 그래서 **조용한 V3D 강등 없이 명시 거절**한다 (Type K × sagoae 전례의 문법 —
+  // 「무엇이 막혔는가」와 「왜」를 둘 다 말한다). 조건은 두 표의 차집합에서 유도하므로
+  // daehan 이 나중에 k=12 를 열면 이 가드는 저절로 열린다 — 손 목록이 아니다.
+  if (version !== undefined && usesDaehanLayout
+    && VERSIONS.some((v) => v.version === version)
+    && !VERSIONS_DAEHAN.some((v) => v.version === version)) {
+    throw new RangeError(
+      `daehan/sagoae 예약 레이아웃은 V${version} 를 지원하지 않는다 — `
+      + `VERSIONS_DAEHAN 에 그 버전 행이 없다 (허용 ${VERSIONS_DAEHAN.map((v) => `V${v.version}D`).join(', ')}). `
+      + '파인더 예약 셀 수가 k 파생이 아니라 실측 확정값이라 새 k 로 유도할 수 없다 — '
+      + '기하 확정이 선행돼야 한다',
+    );
+  }
+
   const provider = layoutProviderFor(cornerMarker, usesDaehanLayout, markerTones);
 
   const spec = version === undefined

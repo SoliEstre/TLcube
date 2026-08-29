@@ -33,6 +33,8 @@ import {
 } from '../hexgrid.js';
 import { regionCellsA, regionCellsTurnA } from '../placementA.js';
 import { patchOfK } from '../placementK.js';
+import { VERSIONS } from '../capacity.js';
+import { VERSIONS_K } from '../capacityK.js';
 
 /*
  * 패밀리 점수의 임계값·가중치는 설계에서 M1 calibration 전 [미검증]이다.
@@ -65,7 +67,18 @@ const STAR_SCORE_WEIGHTS = Object.freeze({ patch: 0.55, core: 0.30, finder: 0.15
 const DEFAULT_STAR_MIN_PATCH_RATE = DEFAULT_TRI_MIN_PATCH_RATE;
 const DEFAULT_STAR_MIN_CORE_RATE = DEFAULT_TRI_MIN_CORE_RATE;
 const DEFAULT_STAR_PATCH_BALANCE = 0.5;
-const DEFAULT_KS = Object.freeze([6, 8, 10]);
+/**
+ * hex 격자 가설의 **기본** k 후보 — `capacity.VERSIONS` 에서 유도한다.
+ *
+ * 부하를 지는 경로는 이게 아니다: 실제 복호는 `bootstrap.classificationDimensions`
+ * 가 `uniqueDimensions('hex')`(역시 VERSIONS 유도)로 만든 `options.ks` 를 넘겨준다.
+ * 여기는 **ks 를 안 준 호출자용 폴백**이라 뒤처져도 실기가 안 죽고, 그래서 더
+ * 위험하다 — V4(k=12) 편입 2026-08-30 시점에 이 상수는 리터럴 `[6, 8, 10]` 이었고,
+ * 그 사본이 틀렸다는 사실을 어떤 왕복 테스트도 못 보고 있었다. 유도로 바꾼다.
+ */
+const DEFAULT_KS = Object.freeze(
+  Array.from(new Set(VERSIONS.map((spec) => spec.k))).sort((a, b) => a - b),
+);
 const ORIENTATIONS = Object.freeze([0, 1, 2]);
 const LUMA_RANGE_EPSILON = 1e-9;
 const FACE_NAMES = Object.freeze(['T', 'L', 'R']);
@@ -810,7 +823,11 @@ export function scoreStarTiling(luma, finder, options = {}) {
 // starPatchSeries 의 «A 계열 + 180° 상 = hexagram 코어 밖 전부» 주장을 로드 시점에
 // 못 박는다 — 유도가 깨지면 star 채점이 조용히 다른 도형을 잰다.
 {
-  for (const k of DEFAULT_KS) {
+  // ⚠ 이 검사의 k 는 **star 표(VERSIONS_K)** 에서 온다 — hex 의 DEFAULT_KS 가 아니다.
+  //   원판은 DEFAULT_KS 를 빌려 썼는데 두 축의 k 계열이 같았기 때문에 안 보였을 뿐이고,
+  //   V4(hex k=12) 편입으로 갈렸다. star 기하 주장을 hex 의 k 로 재면 그 순간부터
+  //   «재는 대상이 그것이 아니다».
+  for (const k of Array.from(new Set(VERSIONS_K.map((spec) => spec.k)))) {
     const { aSeries, invSeries } = starPatchSeries(k);
     const seen = new Set();
     for (const [series, wanted] of [[aSeries, ['top', 'BL', 'BR']], [invSeries, ['bottom', 'TL', 'TR']]]) {

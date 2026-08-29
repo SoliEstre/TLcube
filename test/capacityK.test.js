@@ -141,12 +141,34 @@ test('hex·tri 축 전체가 예약 밴드(7 + cube 8..11)를 비워 둔다 — 
   ];
   const band = [K1_RESERVED_FORMAT_INDEX, ...CUBE_RESERVED_FORMAT_INDEXES];
   assert.ok(band.includes(K_MARKER_FORMAT_INDEX), 'K-CM 값이 예약 밴드 안이어야 한다');
+
+  // ── 예약의 사정거리는 «값» 이 아니라 «(값, k)» 다 (2026-08-30 V4 편입으로 갈림) ──
+  //
+  // 원판은 값만 봤다: 「hex·tri 의 어떤 배정도 밴드 값을 쓰지 않는다」. 그건 hex·tri 와
+  // star 의 k 계열이 {6,8,10} 으로 **같았기 때문에** 값 축만 봐도 충분했던 것이고,
+  // 사정거리를 잘못 적어 둔 것이다. V4 «대용량»(hex k=12)이 열리면서 갈렸다:
+  //   · V4Q 가 값 7 을 쓴다 (hex Q = version−1+4 규약 — `test/namespace.test.js` 의
+  //     HEX_RESERVED 가 애초에 3·7 을 V4·V4Q 로 **예약해 둔** 자리다).
+  //   · 그러나 star 축은 k ∈ {6,8,10} 에만 산다. (7, k12) 는 star 가 절대 안 쓰는
+  //     쌍이므로 「K 프레임이 hex 로 오분류돼도 포맷 단계에서 죽는다」 논거는 그대로다 —
+  //     그 논거는 star 가 실제로 사는 k 에서만 필요하다.
+  // 그래서 검사를 star 의 k 로 스코프한다. `formatK.js` 의 로드 가드 ①b 도 원래부터
+  // K_FORMAT_INDEX 의 k 에 대해서만 재고 있었으므로, 코드 쪽 불변식은 무변경이다.
+  // (⚠ 통합자 몫 — `formatK.js` 헤더와 SPEC §4.4 의 산문은 아직 «hex·tri 는 7 을
+  //  영구히 안 쓴다» 로 적혀 있다. 그 문장에 (값,k) 스코프를 명시해야 한다.)
+  const starKs = new Set(K_FORMAT_INDEX.map((entry) => entry.k));
+  assert.deepEqual([...starKs].sort((a, b) => a - b), [6, 8, 10],
+    'star 축의 k 계열이 바뀌었다 — 예약 사정거리 논증을 다시 세워라');
+
   for (const claim of claims) {
+    if (!starKs.has(claim.k)) continue;
     assert.ok(!band.includes(claim.formatIndex),
-      claim.owner + ' 가 예약 밴드 값 ' + claim.formatIndex + ' 을 점유한다');
+      claim.owner + ' 가 star k=' + claim.k + ' 에서 예약 밴드 값 ' + claim.formatIndex + ' 을 점유한다');
   }
-  // 역방향 — hex·tri 의 «빈 칸» 이 정확히 그 밴드여야 한다 (밴드 밖 빈 칸이 생기면
-  // «K 값은 hex·tri 에 없다» 논거가 아니라 «아직 안 썼을 뿐» 이 된다).
+  // 역방향 — star 가 사는 k 에서 hex·tri 의 «빈 칸» 이 정확히 그 밴드여야 한다
+  // (밴드 밖 빈 칸이 생기면 «K 값은 hex·tri 에 없다» 논거가 아니라 «아직 안 썼을 뿐»
+  // 이 된다). star 가 안 사는 k(현행 12)는 이 논거의 대상이 아니다 — 대신 그 k 에서
+  // 밴드가 **실제로 열려 있다**는 사실을 양성으로 단언해 「빠뜨렸다」와 구분한다.
   const byK = new Map();
   for (const claim of claims) {
     if (!byK.has(claim.k)) byK.set(claim.k, new Set());
@@ -155,7 +177,12 @@ test('hex·tri 축 전체가 예약 밴드(7 + cube 8..11)를 비워 둔다 — 
   for (const [k, used] of byK) {
     const free = [];
     for (let v = 0; v < 16; v += 1) if (!used.has(v)) free.push(v);
-    assert.deepEqual(free, band.slice().sort((a, b) => a - b), `k=${k} 의 빈 값`);
+    if (starKs.has(k)) {
+      assert.deepEqual(free, band.slice().sort((a, b) => a - b), `k=${k} 의 빈 값`);
+    } else {
+      assert.ok(free.length > 0,
+        `k=${k} 는 star 밖 k 인데 빈 칸이 0 이다 — 새 변형을 앉힐 자리가 없다`);
+    }
   }
 });
 
