@@ -201,11 +201,18 @@ test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 
   assert.match(INDEX, /const vcmLocked = seat === 'v-cm' && !turnAOn;/,
     'v-cm 잠금이 «방향 필요» 하나로 좁혀지지 않았다');
   // encodeOptsFor 에서도 코너 마커가 먼저 이긴다 (저장·URL 로 옛 조합이 들어와도)
+  //
+  // ⚠ **자 재조준 (2026-08-30)** — 종전엔 «cfg.cornerMarker 토큰이 cfg.turnA 토큰보다
+  //   먼저 나온다» 는 첫-등장 순서를 쟀다. 그건 성질(«cornerMarker 디스패치가 평-turnA
+  //   디스패치보다 앞이라 옛 조합이 던짐 경로로 안 간다»)이 아니라 철자였고,
+  //   daehan×turnA 개설(2026-08-29)로 daehan 분기가 그보다 앞에서 cfg.turnA 를
+  //   정당하게 참조하자 거짓 빨강이 났다. 재는 것을 **else-if 디스패치 구문 순서**로
+  //   좁힌다 — cornerMarker 디스패치가 평-turnA 디스패치보다 앞이면 성질은 성립한다.
   const opts = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
-  const cmAt = opts.indexOf('cfg.cornerMarker === true');
-  const turnAt = opts.indexOf('cfg.turnA === true');
+  const cmAt = opts.indexOf("else if (cfg.cornerMarker === true) {");
+  const turnAt = opts.indexOf("else if (cfg.turnA === true) {");
   assert.ok(cmAt >= 0 && turnAt >= 0 && cmAt < turnAt,
-    'cornerMarker 분기가 turnA 보다 뒤에 있다 — 옛 조합이 들어오면 던지는 쪽으로 간다');
+    'cornerMarker 디스패치가 평-turnA 디스패치보다 뒤에 있다 — 옛 조합이 들어오면 던지는 쪽으로 간다');
 });
 
 test('④ seat 상태 필드는 lab 게이트 뒤(INTERNAL)·유도 options 다', () => {

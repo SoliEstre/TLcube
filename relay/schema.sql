@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     cell_px     Nullable(Float32),                 -- 실측 셀 크기(px). 미측정은 NULL. 거짓 0 금지
     attempt_id  String DEFAULT '',                 -- 한 스캔 시도. 카메라 세션 또는 사진 1장
     config_id   String DEFAULT '',                 -- 생성 설정 해시. 스캐너가 모르면 빈 문자열
+    emphasis    LowCardinality(String) DEFAULT '', -- gen 설정 centralN7Emphasis: default | locator | all. frame/env·구봉투는 빈 문자열
     expected_type    LowCardinality(String) DEFAULT '',
     expected_version String DEFAULT '',
     expected_ecc     LowCardinality(String) DEFAULT '',
@@ -55,6 +56,9 @@ CREATE TABLE IF NOT EXISTS tl_lab.events
     -- 기대 축 ③ 외곽/코너 파인더 (2026-08-19). 축 ②(중앙 파인더)는 expected_finder 가
     -- 이미 그 뜻이라 새 컬럼이 없다. live DB 는 007 ALTER 를 **먼저** 돌린 뒤 relay 배포.
     expected_outer_finder LowCardinality(String) DEFAULT '', -- none | daehan | a-cm | o-cm
+    -- 기대 축 ④ 중앙 강조 변이 (2026-08-29). gen 행의 emphasis(010)와 달리 frame 행에
+    -- 실린다 — 프레임별 변이 성공률의 유일한 축. live DB 는 011 ALTER 먼저, relay 나중.
+    expected_emphasis LowCardinality(String) DEFAULT '', -- default | locator | all. 미선택·구봉투는 빈 문자열
     observed_type    LowCardinality(String) DEFAULT '',
     observed_version String DEFAULT '',
     observed_ecc     LowCardinality(String) DEFAULT '',

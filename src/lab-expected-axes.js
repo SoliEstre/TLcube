@@ -49,6 +49,7 @@ import {
   CENTRAL_V0_FINDER_PATTERN_ID,
 } from './finder-selection.js';
 import { OAK_FINDER_PATTERNS } from './finder-oak-patterns.js';
+import { CENTRAL_N7_EMPHASIS_MODES } from './centralN7Emphasis.js';
 
 /**
  * ② 중앙 파인더의 활성 라인업. 순서는 «운영자가 순위로 부른 넷 → cell-mask → OAK →
@@ -103,4 +104,18 @@ export function normalizeCentralFinderId(value) {
 /** 시험판 버튼이 넘겨온 값이 축 ③의 유효 값인가. 아니면 null(모름). */
 export function normalizeOuterFinderId(value) {
   return LAB_OUTER_FINDER_IDS.includes(value) ? value : null;
+}
+
+/**
+ * ④ 중앙 강조 변이 (2026-08-29). 「강조 변이별 라이브 프레임 성공률」을 가르는 축 —
+ * gen 행의 emphasis(010)만으로는 라이브 프레임과 붙일 수 없었다 (스캐너 frame 은
+ * config_id 를 싣지 않는다, 실측 0/357). ②·③과 같은 규약이다: 목록은 손으로 적지
+ * 않고 렌더·인코더가 쓰는 정본(`centralN7Emphasis.js` CENTRAL_N7_EMPHASIS_MODES)에서
+ * 유도한다. 라인업 밖 값(저장·URL 등 옛 값 포함)은 null(모름)로 떨어진다.
+ */
+export const LAB_EMPHASIS_MODES = Object.freeze([...CENTRAL_N7_EMPHASIS_MODES]);
+
+/** 시험판 버튼이 넘겨온 값이 축 ④의 유효 값인가. 아니면 null(모름). */
+export function normalizeExpectedEmphasis(value) {
+  return LAB_EMPHASIS_MODES.includes(value) ? value : null;
 }

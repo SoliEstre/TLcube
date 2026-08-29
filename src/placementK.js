@@ -217,9 +217,11 @@ export function patchReferenceCellsK(k) {
  * @param {number} k
  * @returns {{anchor: Set<string>, format: Set<string>, reference: Set<string>, finder: Set<string>}}
  */
-export function buildRoleSetsK(k) {
+export function buildRoleSetsK(k, finderReserved) {
   assertRadius(k);
-  const hexSets = buildRoleSets(k);
+  // `finderReserved` 는 육각부로만 전달한다 (buildRoleSetsA 동형) — daehan 좌표는
+  // 전 k 에서 패치에 0개 · 별 꼭짓점/패치 레퍼런스와 교집합 0 (2026-08-29 실측).
+  const hexSets = buildRoleSets(k, finderReserved);
   const anchor = new Set(hexSets.anchor);
   for (const c of vertexAnchorsK(k)) anchor.add(key(c.q, c.r));
   const reference = new Set(hexSets.reference);

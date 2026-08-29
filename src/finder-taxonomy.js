@@ -399,8 +399,9 @@ function buildItems() {
       toneAxis: TONE_FINDER_BWG + ' 3레벨 — 정본은 0/2 이진',
       cells: String(alive) + ' (taegeuk 19 + sagoae ' + reserved + ')',
       renderable: true,
-      consumer: '카드 대표 oak-daehan-k10 · encode.daehanFinder · bootstrap 옵트인',
-      note: 'formatIndex 공유 (V*D). 표시층 id 는 taegeuk + sagoae',
+      consumer: '카드 대표 oak-daehan-k10 · encode/A/K.daehanFinder · bootstrap 옵트인',
+      note: 'formatIndex 공유 — O=V*D · A=A*D · 턴A=V표 · K=7 (2026-08-29 V·K 개방). '
+        + '표시층 id 는 taegeuk + sagoae',
     });
   }
 

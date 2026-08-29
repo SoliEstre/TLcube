@@ -38,6 +38,7 @@ import { occupiedCells } from './bullseye.js';
 import { anchorCells, formatCells, referenceCellsAll } from './placement.js';
 import { vertexAnchorsK, patchReferenceCellsK, regionCellsK } from './placementK.js';
 import { kFormatSpec } from './formatK.js';
+import { daehanReservedCells } from './finder-daehan.js';
 
 /**
  * Type K 오버헤드 실계산 — 하드코딩이 아니라 placement.js/placementK.js 실계산 합.
@@ -45,15 +46,19 @@ import { kFormatSpec } from './formatK.js';
  * @returns {{k:number, bullseye:number, anchor:number, format:number,
  *            hexReference:number, patchReference:number, total:number}}
  */
-export function overheadBreakdownK(k) {
+export function overheadBreakdownK(k, finderReservedCount = 0) {
+  if (!Number.isInteger(finderReservedCount) || finderReservedCount < 0) {
+    throw new RangeError('파인더 예약 셀 수는 0 이상 정수여야 한다: ' + finderReservedCount);
+  }
   const bullseye = occupiedCells().length; // 19 (hexDistance<=2, k 무관)
   const anchor = anchorCells(k).length + vertexAnchorsK(k).length; // 3 + 6 = 9
   const format = formatCells(k).length; // 15 (k 무관)
   const hexReference = referenceCellsAll(k).length; // 2(k-2)
   const patchReference = patchReferenceCellsK(k).length; // 규칙 R′ — 링당 6
-  const total = bullseye + anchor + format + hexReference + patchReference;
+  const total = bullseye + anchor + format + hexReference + patchReference + finderReservedCount;
   return {
-    k, bullseye, anchor, format, hexReference, patchReference, total,
+    k, bullseye, anchor, format, hexReference, patchReference,
+    finder: finderReservedCount, total,
   };
 }
 
@@ -118,11 +123,13 @@ export function versionSpecK(version) {
 
 /**
  * 한 버전의 용량 전체. capacityA.js `capacityForA` 회계를 그대로 승계한다.
+ * `nsymTable` 은 daehan 변형이 표만 갈아 끼우는 주입구다 (capacityForA 동형).
  * @param {{name?:string, version:number, k:number, overhead:number, symbolKey:string, formatIndex:number}} spec
  * @param {'L'|'M'|'H'} [level]
  */
-export function capacityForK(spec, level = 'M') {
+export function capacityForK(spec, level = 'M', nsymTable = NSYM_TABLE_K) {
   const label = spec.name || `K${spec.version}`;
+  const tableName = nsymTable === NSYM_TABLE_K ? 'NSYM_TABLE_K' : 'NSYM_TABLE_K_DAEHAN';
   const totalCells = 6 * spec.k * spec.k + 6 * spec.k + 1;
   const dataCells = totalCells - spec.overhead;
   if (dataCells <= 0) {
@@ -132,21 +139,21 @@ export function capacityForK(spec, level = 'M') {
   const usedSymbols = Math.floor(dataCells / 3);
   const residualCells = dataCells - usedSymbols * 3;
 
-  const table = NSYM_TABLE_K[spec.symbolKey];
+  const table = nsymTable[spec.symbolKey];
   if (!table) {
-    throw new RangeError(`${label}: NSYM_TABLE_K 에 키 ${spec.symbolKey} 가 없다`);
+    throw new RangeError(`${label}: ${tableName} 에 키 ${spec.symbolKey} 가 없다`);
   }
   if (table.symbols !== usedSymbols) {
     // 표가 전제한 심볼 수와 실계산이 어긋난다 — 조용히 맞추지 않고 던진다.
     throw new RangeError(
-      `${label}: 실계산 사용 심볼 ${usedSymbols} 이 NSYM_TABLE_K.${spec.symbolKey}.symbols `
+      `${label}: 실계산 사용 심볼 ${usedSymbols} 이 ${tableName}.${spec.symbolKey}.symbols `
       + `(${table.symbols}) 과 어긋난다 — overhead(${spec.overhead})/k(${spec.k}) 와 표가 불일치한다`,
     );
   }
 
   const nsym = table[level];
   if (!Number.isInteger(nsym)) {
-    throw new RangeError(`${label}: NSYM_TABLE_K.${spec.symbolKey} 에 레벨 ${level} 이 없다`);
+    throw new RangeError(`${label}: ${tableName}.${spec.symbolKey} 에 레벨 ${level} 이 없다`);
   }
   const dataSymbols = usedSymbols - nsym;
   if (dataSymbols <= 0) {
@@ -202,6 +209,48 @@ export function renderMarkdownTableK(level = 'M') {
   return [head, sep, ...body].join('\n');
 }
 
+/**
+ * Type K + daehan nsym 표 (2026-08-29 배타 개방 실측 — 브리프 C).
+ *
+ * O/A daehan 과 같은 정책: **절대 정정능력(부모 버전의 nsym)을 승계**한다.
+ * 실측(probe-daehan-vk): S = 56 / 108 / 174 에서 부모 nsym 이 **전 조합 청크
+ * 정렬**이라 A2D/M 류의 +2 보정이 하나도 필요 없었다 — 표가 부모와 같은 열이다.
+ */
+export const NSYM_TABLE_K_DAEHAN = Object.freeze({
+  K0D: Object.freeze({ symbols: 56, L: 8, M: 17, H: 25 }),
+  K1D: Object.freeze({ symbols: 108, L: 15, M: 31, H: 49 }),
+  K2D: Object.freeze({ symbols: 174, L: 26, M: 49, H: 78 }),
+});
+
+/**
+ * Type K daehan 버전. formatIndex 는 **평 K 의 7 을 그대로 공유한다** (전용 와이어를
+ * 안 만든다 — O `capacityDaehan.js` · A `VERSIONS_A_DAEHAN` 과 같은 계약: daehan
+ * 유/무는 광학 검출 + 사후 RS/CRC 로 가른다. K-CM 이 8 을 새로 받은 것과 다른 이유:
+ * CM 은 중앙 파인더가 평 K 와 같아 와이어만이 회계 신호이지만, daehan 은 중앙
+ * 불스아이 자체를 taegeuk 으로 교체해 **광학이 신호다**). version 도 0/1/2 를
+ * 공유하므로 **이 배열을 VERSIONS_K 와 합치면 안 된다** (capacityDaehan 헤더 참조).
+ */
+export const VERSIONS_K_DAEHAN = Object.freeze([0, 1, 2].map((version) => {
+  const format = kFormatSpec(version);
+  return Object.freeze({
+    name: format.name + 'D',
+    version,
+    k: format.k,
+    formatIndex: format.formatIndex,
+    overhead: overheadBreakdownK(format.k, daehanReservedCells(format.k).length).total,
+    symbolKey: format.name + 'D',
+  });
+}));
+
+export function capacityForKDaehan(spec, level = 'M') {
+  const base = capacityForK(spec, level, NSYM_TABLE_K_DAEHAN);
+  return { ...base, daehanFinder: true };
+}
+
+export function capacityTableKDaehan(level = 'M') {
+  return VERSIONS_K_DAEHAN.map((v) => capacityForKDaehan(v, level));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 로드 시점 자기검증 — 확정 수치(2026-08-25 실측)와 청크 정렬을 못 박는다
 // (capacityA daehan EXPECT 블록 전례). 계약 K-1 의 k=4 총 셀 검산(121 = 61 + 6×10)
@@ -235,6 +284,46 @@ export function renderMarkdownTableK(level = 'M') {
       }
       if (cap.chunkAligned !== true) {
         throw new Error(spec.name + '/' + level + ': 청크 비정렬 — 생산 불가');
+      }
+    }
+  }
+}
+
+// daehan 변형 자기검증 (capacityA daehan EXPECT 블록 전례) — 2026-08-29 실측 고정.
+{
+  const EXPECT_D = {
+    K0D: { k: 6, overhead: 83, dataCells: 170, symbols: 56, residual: 2, payload: { L: 45, M: 36, H: 28 } },
+    K1D: { k: 8, overhead: 107, dataCells: 326, symbols: 108, residual: 2, payload: { L: 88, M: 73, H: 55 } },
+    K2D: { k: 10, overhead: 137, dataCells: 524, symbols: 174, residual: 2, payload: { L: 141, M: 119, H: 91 } },
+  };
+  for (const spec of VERSIONS_K_DAEHAN) {
+    const want = EXPECT_D[spec.name];
+    if (!want) throw new Error('capacityK daehan: 기대표에 없는 키 ' + spec.name);
+    if (spec.k !== want.k || spec.overhead !== want.overhead) {
+      throw new Error(spec.name + ': k/오버헤드가 확정값과 다르다 — k=' + spec.k
+        + ' overhead=' + spec.overhead);
+    }
+    // 와이어 공유 계약 — 평 K 와 같은 formatIndex(7)·version 이어야 한다.
+    const parent = VERSIONS_K.find((v) => v.version === spec.version);
+    if (!parent || spec.formatIndex !== parent.formatIndex) {
+      throw new Error(spec.name + ': formatIndex 가 평 K 와 갈렸다 — 와이어 공유 계약 위반');
+    }
+    for (const level of ['L', 'M', 'H']) {
+      const cap = capacityForKDaehan(spec, level);
+      if (cap.dataCells !== want.dataCells || cap.usedSymbols !== want.symbols
+        || cap.residualCells !== want.residual) {
+        throw new Error(spec.name + '/' + level + ': 데이터 셀·심볼·잔여가 확정값과 다르다');
+      }
+      if (cap.maxPayloadBytes !== want.payload[level]) {
+        throw new Error(spec.name + '/' + level + ': 순 페이로드 ' + cap.maxPayloadBytes
+          + ' B 가 확정값 ' + want.payload[level] + ' B 와 다르다');
+      }
+      if (cap.chunkAligned !== true) {
+        throw new Error(spec.name + '/' + level + ': 청크 비정렬 — 생산 불가');
+      }
+      // 부모 nsym 승계 (t 불변) — 표가 조용히 낮아지면 여기서 죽는다.
+      if (cap.nsym !== NSYM_TABLE_K[parent.symbolKey][level]) {
+        throw new Error(spec.name + '/' + level + ': nsym 이 부모 승계값과 다르다');
       }
     }
   }

@@ -192,6 +192,11 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': '모름',
     'lab.expectedTones.two': '2톤',
     'lab.expectedTones.three': '3톤',
+    'lab.expectedEmphasis.label': '기대 중앙 강조',
+    'lab.expectedEmphasis.unknown': '모름',
+    'lab.expectedEmphasis.default': '기본',
+    'lab.expectedEmphasis.locator': '로케이터만',
+    'lab.expectedEmphasis.all': '전체',
   },
 
   en: {
@@ -356,6 +361,11 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': 'Unknown',
     'lab.expectedTones.two': '2-tone',
     'lab.expectedTones.three': '3-tone',
+    'lab.expectedEmphasis.label': 'Expected centre emphasis',
+    'lab.expectedEmphasis.unknown': 'Unknown',
+    'lab.expectedEmphasis.default': 'Default',
+    'lab.expectedEmphasis.locator': 'Locator only',
+    'lab.expectedEmphasis.all': 'All',
   },
 
   ja: {
@@ -520,6 +530,11 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': '不明',
     'lab.expectedTones.two': '2トーン',
     'lab.expectedTones.three': '3トーン',
+    'lab.expectedEmphasis.label': '期待中央強調',
+    'lab.expectedEmphasis.unknown': '不明',
+    'lab.expectedEmphasis.default': '標準',
+    'lab.expectedEmphasis.locator': 'ロケータのみ',
+    'lab.expectedEmphasis.all': 'すべて',
   },
 
   fr: {
@@ -684,6 +699,11 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': 'Inconnus',
     'lab.expectedTones.two': '2 tons',
     'lab.expectedTones.three': '3 tons',
+    'lab.expectedEmphasis.label': 'Accent du centre attendu',
+    'lab.expectedEmphasis.unknown': 'Inconnu',
+    'lab.expectedEmphasis.default': 'Par défaut',
+    'lab.expectedEmphasis.locator': 'Repère uniquement',
+    'lab.expectedEmphasis.all': 'Tout',
   },
 
   it: {
@@ -848,6 +868,11 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': 'Sconosciuti',
     'lab.expectedTones.two': '2 toni',
     'lab.expectedTones.three': '3 toni',
+    'lab.expectedEmphasis.label': 'Enfasi del centro attesa',
+    'lab.expectedEmphasis.unknown': 'Sconosciuta',
+    'lab.expectedEmphasis.default': 'Predefinita',
+    'lab.expectedEmphasis.locator': 'Solo localizzatore',
+    'lab.expectedEmphasis.all': 'Tutto',
   },
 
   de: {
@@ -1012,6 +1037,11 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': 'Unbekannt',
     'lab.expectedTones.two': '2 Tonwerte',
     'lab.expectedTones.three': '3 Tonwerte',
+    'lab.expectedEmphasis.label': 'Erwartete Mitten-Betonung',
+    'lab.expectedEmphasis.unknown': 'Unbekannt',
+    'lab.expectedEmphasis.default': 'Standard',
+    'lab.expectedEmphasis.locator': 'Nur Locator',
+    'lab.expectedEmphasis.all': 'Alles',
   },
 
   es: {
@@ -1176,6 +1206,11 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': 'Desconocidos',
     'lab.expectedTones.two': '2 tonos',
     'lab.expectedTones.three': '3 tonos',
+    'lab.expectedEmphasis.label': 'Énfasis del centro esperado',
+    'lab.expectedEmphasis.unknown': 'Desconocido',
+    'lab.expectedEmphasis.default': 'Predeterminado',
+    'lab.expectedEmphasis.locator': 'Solo localizador',
+    'lab.expectedEmphasis.all': 'Todo',
   },
 
   pt: {
@@ -1340,5 +1375,10 @@ export const SCANNER_STRINGS = {
     'lab.expectedTones.unknown': 'Desconhecidos',
     'lab.expectedTones.two': '2 tons',
     'lab.expectedTones.three': '3 tons',
+    'lab.expectedEmphasis.label': 'Destaque do centro esperado',
+    'lab.expectedEmphasis.unknown': 'Desconhecido',
+    'lab.expectedEmphasis.default': 'Padrão',
+    'lab.expectedEmphasis.locator': 'Só localizador',
+    'lab.expectedEmphasis.all': 'Tudo',
   },
 };

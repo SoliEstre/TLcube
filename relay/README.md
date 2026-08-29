@@ -38,6 +38,8 @@ P0 부터 frame 본문은 기존 `reason`/`ms`/`type`/`cellPx` 를 유지한 채
 live ClickHouse 가 이미 있으면 `relay/schema.sql` 을 다시 실행하지 말고
 `deploy/estre-so/clickhouse/002_tl_lab_p0_instrumentation.sql` 이후 번호순 마이그레이션을 적용한다.
 P1 배포 스탬프 컬럼은 `009_tl_lab_build.sql` 이 추가한다.
+gen 강조 변이(`emphasis`) 컬럼은 `010_tl_lab_emphasis.sql` 이 추가한다.
+기대 강조 변이(`expected_emphasis`, frame 행) 컬럼은 `011_tl_lab_expected_emphasis.sql` 이 추가한다.
 이 저장소의 구현 레인은 그 ALTER 를 실행하지 않는다.
 
 ```

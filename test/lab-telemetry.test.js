@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { parseEnvelope } from '../relay/protocol.mjs';
+import { eventRow, parseEnvelope } from '../relay/protocol.mjs';
 import {
   MAX_SHOT_CHARS,
   SID_KEY,
@@ -224,6 +224,48 @@ test('중앙 TL 강조는 gen 본문과 config_id를 3갈래로 구분한다', (
   assert.deepEqual(bodies.map((body) => body.centralN7Emphasis),
     ['default', 'locator', 'all']);
   assert.equal(new Set(bodies.map((body) => body.config_id)).size, 3);
+});
+
+test('강조 변이는 relay 검증을 지나 emphasis 열로 착지한다 — end-to-end (010)', () => {
+  // 봉투에 실렸는데 컬럼이 없어 조용히 폐기되던 바로 그 경로를 끝단까지 잠근다.
+  const body = normalizeGenBody({
+    type: 'O', version: 1, finderPatternId: 'central-n7-payload', centralN7Emphasis: 'all',
+  });
+  const parsed = parseEnvelope(JSON.stringify(
+    makeEnvelope('sid1', 'gen', 'gen', body, '2026-08-29T00:00:00.000Z', '2026-08-29.01'),
+  ));
+  assert.equal(parsed.ok, true, parsed.error);
+  const row = eventRow(parsed.event);
+  assert.equal(row.emphasis, 'all');
+  assert.equal(row.config_id, body.config_id, 'frame 조인 키(config_id)와 같은 행에 있다');
+  // 강조 비대상 구성(키 자체가 없는 구봉투와 같은 모양)은 거부 없이 빈값 — 컬럼 DEFAULT
+  const plain = parseEnvelope(JSON.stringify(
+    makeEnvelope('sid1', 'gen', 'gen', normalizeGenBody({ type: 'A', version: 1 }),
+      '2026-08-29T00:00:00.000Z', '2026-08-29.01'),
+  ));
+  assert.equal(plain.ok, true, plain.error);
+  assert.equal(eventRow(plain.event).emphasis, '');
+
+  // 기대 축 ④ (011) — 스캐너 frame 경로도 같은 끝단까지 잠근다. CONFIG_SIDE_KEYS 에
+  // centralN7Emphasis 가 없으면 normalizeConfigSide 가 여기서 조용히 버린다 —
+  // gen 쪽(GEN_BODY_KEYS)이 빠졌던 것과 똑같은 화이트리스트 함정의 frame 판.
+  const frame = normalizeFrameBody({
+    seq: 1, w: 10, h: 10, ok: false, reason: 'x',
+    expected: { finderPatternId: 'central-n7-payload', centralN7Emphasis: 'locator' },
+  });
+  assert.equal(frame.expected.centralN7Emphasis, 'locator',
+    'normalizeConfigSide 가 centralN7Emphasis 를 버리면 안 된다');
+  const frameParsed = parseEnvelope(JSON.stringify(makeEnvelope('sid1', 'scan', 'frame', frame)));
+  assert.equal(frameParsed.ok, true, frameParsed.error);
+  const frameRow = eventRow(frameParsed.event);
+  assert.equal(frameRow.expected_emphasis, 'locator');
+  assert.equal(frameRow.emphasis, '', 'frame 은 gen 열(emphasis)을 채우지 않는다');
+  // 미선택(모름)은 빈값 — 「안 골랐다」가 특정 변이로 오인되면 안 된다
+  const unset = normalizeFrameBody({ seq: 2, w: 10, h: 10, ok: false, reason: 'x' });
+  const unsetRow = eventRow(parseEnvelope(JSON.stringify(
+    makeEnvelope('sid1', 'scan', 'frame', unset),
+  )).event);
+  assert.equal(unsetRow.expected_emphasis, '');
 });
 
 test('extractCellSurfaceProbe 는 시도/점수/사유를 정규화하고 없으면 미시도다', () => {

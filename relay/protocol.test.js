@@ -369,3 +369,37 @@ test('F-65 — observed.outerFinderId 가 observed_outer_finder 열로 간다 (d
   const missing = eventRow(envelope({ body: frameBody() }));
   assert.equal(missing.observed_outer_finder, '', '미관측은 빈 값(컬럼 DEFAULT)');
 });
+
+test('010 — gen 봉투 centralN7Emphasis 가 emphasis 열로 간다. 구봉투·frame 은 빈값', () => {
+  const gen = validateEnvelope(envelope({
+    kind: 'gen',
+    site: 'gen',
+    body: {
+      type: 'O', version: 1, finderPatternId: 'central-n7-payload',
+      centralN7Emphasis: 'locator', config_id: 'c0badcafe',
+    },
+  }));
+  assert.equal(gen.ok, true, gen.error);
+  const row = eventRow(gen.event);
+  assert.equal(row.emphasis, 'locator');
+  assert.equal(row.config_id, 'c0badcafe');
+  // 구버전 gen 봉투(필드 없음)는 거부하지 않고 빈값으로 산다
+  const old = validateEnvelope(envelope({ kind: 'gen', site: 'gen', body: { type: 'O' } }));
+  assert.equal(old.ok, true, old.error);
+  assert.equal(eventRow(old.event).emphasis, '', '구봉투는 빈 emphasis 로 적재한다');
+  // frame 봉투는 gen 쪽 키를 싣지 않는다 — 컬럼 DEFAULT
+  assert.equal(eventRow(envelope()).emphasis, '');
+});
+
+test('011 — frame.expected.centralN7Emphasis 가 expected_emphasis 열로 간다 (기대 축 ④)', () => {
+  // gen 행의 emphasis(010)는 frame 과 붙일 조인 키가 없다(스캐너 config_id 미탑재) —
+  // 프레임별 변이 성공률은 이 열이 유일한 축이다.
+  const row = eventRow(envelope({
+    body: frameBody({ expected: { centralN7Emphasis: 'all' } }),
+  }));
+  assert.equal(row.expected_emphasis, 'all');
+  assert.equal(row.emphasis, '', 'gen 열(emphasis)로 새면 안 된다 — 열이 다르다');
+  // 미선택(모름)·구버전 봉투는 거부 없이 빈값(컬럼 DEFAULT)
+  const missing = eventRow(envelope({ body: frameBody() }));
+  assert.equal(missing.expected_emphasis, '');
+});

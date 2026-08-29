@@ -339,8 +339,11 @@ export function sceneOptionsForOA({
  * 알아서, 새 중앙 비컨(centralN7)이 붙자 하네스만 `centralN7 불일치` 로 죽었다.
  * 새 점유자가 늘 때 **한 곳만 고치면 되도록** 여기 한 번만 적는다.
  *
- * daehan 은 여기 넣지 않는다 — K 경로는 daehan 을 인코더에 안 싣는 계약이라
- * 같이 묶으면 그 침묵이 깨진다 (동작 변경이 되므로 별도 결정이 필요하다).
+ * daehan 은 여기 넣지 않는다 — 이 유도는 «중앙 슬롯 **비컨**» 전용이고, daehan 은
+ * 회계까지 바꾸는 셀 파인더라 층이 다르다. daehanFinder 플래그는 O/A/K 디스패치가
+ * 각자의 else-if 체인(코너 자리와의 우선순위 해소) 안에서 같은 술어
+ * (isDaehanFinderPatternId + !centerQr)로 싣는다 — K 도 2026-08-29 개설로 같은
+ * 모양이 됐다 (세 분기 대조 자: test/finder-daehan-vk.test.js §배선).
  */
 export function centralBeaconEncoderOptions(finderPatternId, centerQr) {
   if (centerQr) return {};

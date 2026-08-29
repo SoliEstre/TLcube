@@ -442,10 +442,12 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
   // ② 같은 날 레인 POSE 가 star 독립 검출을 열어(54/54) 그 사유가 사라져 철회했다.
   // 지금 남는 차단은 **인코더가 실제로 던지는 것**뿐이다 (encodeK §옵션 배타).
   // 왕복 근거는 test/typeK-generator-finder.test.js 가 든다.
-  // 남는 배타는 **daehan 하나**다 (2026-08-25 KEX 이후). 게이트 자체는 유지한다 —
-  // 술어가 사라지면 daehan 카드가 K 에서 열리고 encodeK 가 첫 클릭에 던진다.
-  assert.ok(index.includes('const K_BLOCKED_FINDER_IDS = typeK'),
-    'K 배타 게이트가 없다 — encodeK 가 던지는 daehan 조합이 카드로 열린다');
+  // **의도적 갱신 3회 (2026-08-29, 브리프 C)** — 마지막 차단이던 daehan 이 개설돼
+  // 게이트가 **공집합**이 됐고, 죽은 게이트는 걷었다 (encodeK 가 던지는 turnA·
+  // sagoae 는 파인더 카드가 아니다). «던지는 카드가 없으면 게이트도 없다» 는 성질은
+  // test/typeK-generator-finder.test.js ⑤ 가 인코더에게 직접 물어 값으로 잰다.
+  assert.ok(!index.includes('K_BLOCKED_FINDER_IDS'),
+    '걷힌 K 차단 게이트의 잔재가 남아 있다 — 죽은 배선은 다음 배타 때 오도한다');
 
   // ⑤ **K-CM 개설 (2026-08-25 저녁, 레인 KCM)** — 구 락은 「아직 잠겨 있어야 한다」였다.
   //    사유(bootstrap 이 star formatIndex 8 을 안 연다)가 해소됐으므로 양성으로 뒤집는다:

@@ -2339,6 +2339,25 @@ function cellFinderHypotheses(luma, finder, family, options) {
       });
     }
   }
+  /*
+   * 턴A(내부 타입 V) 쌍둥이 — 중앙 QR(§qr-center)·비컨(§beacon) 경로와 **같은
+   * 관용구**다 (2026-08-29, 브리프 C). 셀 파인더는 중앙 고정이라 180° 배치 회전에도
+   * 포즈 H 가 같고, 표본 자리 사상(turn)만 다르다. 이 쌍이 없으면 ▽ 프레임에서
+   * 셀 파인더(daehan 포함 — 좌표 집합이 180° 자기 대칭이라 제자리 렌더)가 잡혀도
+   * V 인덱스 가설이 없어 no-format-candidate 로 전멸한다 — V×daehan 실측과, 같은
+   * 뿌리의 기존 공백(V×OAK 셀마스크 대조군 실측 2026-08-29)이 그 증거다.
+   * 정삼각(tri, turn=false) 쌍과 hex 는 한 비트도 안 바뀐다 — 추가만 한다.
+   * sagoae 검증 가설도 쌍을 받는다 (검증 고리는 제자리 렌더라 turn 불변).
+   */
+  if (family === 'tri') {
+    for (const hypothesis of base.slice()) {
+      base.push({
+        ...hypothesis,
+        turn: true,
+        hypothesisId: hypothesis.hypothesisId + '-turn',
+      });
+    }
+  }
   return base;
 }
 
@@ -2658,7 +2677,20 @@ function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
     };
   }
   if (family === 'star') {
-    // Type K (육각별) — daehan/CM 변형 없음 (encodeK 배타 · K-CM 보류).
+    // Type K (육각별). daehan (2026-08-29 개설) — hex/tri 와 같은 판별 경로:
+    // 검출기가 뽑은 patternId(또는 C2c sagoae 검증)가 여기까지 도달해 회계를 가른다.
+    // 와이어는 평 K 7 공유 (capacityK.VERSIONS_K_DAEHAN 헤더 §계약).
+    // K-CM 은 별도 축 — 회계는 decode-k 의 cornerMarker 분기가 가르고 여기 map 은
+    // 평 K 와 같다 (격자·앵커·포맷 동일).
+    const reserved = daehanReservedCellsFor(hypothesis, dimension);
+    if (reserved) {
+      return {
+        map: layoutMapK(dimension, reserved),
+        dataCells: dataCellsInScanOrderK(dimension, reserved),
+        type: 'K',
+        daehanFinder: true,
+      };
+    }
     return {
       map: layoutMapK(dimension),
       dataCells: dataCellsInScanOrderK(dimension),

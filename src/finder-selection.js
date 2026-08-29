@@ -2,10 +2,9 @@
 
 import { GENERATOR_TYPES } from './generator-types.js';
 import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from './centralMarkerN7.js';
-import { isDaehanFinderPatternId } from './finder-daehan.js';
 import { LEGACY_FINDER_PATTERN_ID } from './finder-patterns.js';
 
-/** 구 소비자 호환 상수. 현재 K는 daehan 외 중앙 파인더 전부를 지원한다. */
+/** 구 소비자 호환 상수. 현재 K는 중앙 파인더 전부를 지원한다 (daehan 은 2026-08-29 개설). */
 export const K_SCANNABLE_FINDER_PATTERN_ID = LEGACY_FINDER_PATTERN_ID;
 
 export const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
@@ -44,13 +43,13 @@ const OAK_TYPES = Object.freeze(['O', 'A', 'K']);
 /**
  * 타입 전환 때 중앙 파인더를 그대로 승계할 수 있는가.
  *
- * 현재 불가 조합은 두 종류다. 드랍된 중앙 M7은 모든 타입에서 닫혔고, daehan은 K
- * 인코더 배선이 없어 K에서만 닫힌다. 그 밖의 기존 카드 조합은 유지한다.
+ * 현재 불가 조합은 드랍된 중앙 M7 하나다 (모든 타입에서 닫혔다). daehan × K 는
+ * 2026-08-29 개설됐다 — encodeK 가 daehanFinder 를 받고 K*D 왕복이 선다
+ * (test/finder-daehan-vk.test.js). 그 밖의 기존 카드 조합은 유지한다.
  */
 export function finderPatternSupportedForType(finderPatternId, type) {
   if (!OAK_TYPES.includes(type)) return true;
-  if (finderPatternId === CENTRAL_MARKER_N7_FINDER_PATTERN_ID) return false;
-  return type !== 'K' || !isDaehanFinderPatternId(finderPatternId);
+  return finderPatternId !== CENTRAL_MARKER_N7_FINDER_PATTERN_ID;
 }
 
 /** 불가 조합의 정의된 폴백 — QR이 아니라 호출자가 준 생성기 기본 중앙 파인더다. */

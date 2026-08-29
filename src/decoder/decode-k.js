@@ -23,9 +23,12 @@
 // 정해진다 — 아래 resolveProfileK 가 두 표를 한 후보 목록으로 합쳐 그 유일성을
 // **후보 수로** 확인한다 («없으면 던진다» 는 decode.js 승계).
 
-import { VERSIONS_K, capacityForK } from '../capacityK.js';
+import {
+  VERSIONS_K, capacityForK, VERSIONS_K_DAEHAN, capacityForKDaehan,
+} from '../capacityK.js';
 import { VERSIONS_KCM, capacityForKMarker, dataCellsInScanOrderKMarker } from '../markerK.js';
 import { dataCellsInScanOrderK } from '../layoutK.js';
+import { daehanReservedCells } from '../finder-daehan.js';
 import {
   CHUNK_BYTES,
   decodeChunkInto,
@@ -77,6 +80,40 @@ function resolveProfileK(format) {
   const wantMarker = format.cornerMarker;
   if (wantMarker !== undefined && typeof wantMarker !== 'boolean') {
     throw new TypeError('cornerMarker는 boolean이어야 한다: ' + typeof wantMarker);
+  }
+
+  if (format.daehanFinder === true) {
+    // K + daehan (2026-08-29) — O/A daehan 과 같은 와이어 계약: formatIndex 는 평 K
+    // 의 7 을 그대로 공유하고, 갈리는 것은 회계와 scan order 뿐이다. 판별 신호는
+    // 와이어가 아니라 **파인더 검출 결과**(taegeuk/사괘)로 온다 — bootstrap 이
+    // patternId 를 이 플래그로 바꾼다. version 이 아니라 k 로 찾는 이유는
+    // decode.js A-daehan 분기와 같다 (포함 사슬 — 패턴의 k ≠ 프레임의 k).
+    if (wantMarker === true) {
+      throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
+    }
+    const wantK = format.k === undefined ? undefined : format.k;
+    const spec = wantK === undefined
+      ? VERSIONS_K_DAEHAN.find((entry0) => entry0.version === format.version)
+      : VERSIONS_K_DAEHAN.find((entry0) => entry0.k === wantK);
+    if (!spec) {
+      throw new RangeError(
+        'K daehan 버전을 모른다: k=' + format.k + ' version=' + format.version
+        + ' (허용 k ' + VERSIONS_K_DAEHAN.map((v) => v.k).join(', ') + ')',
+      );
+    }
+    if (format.k !== undefined && format.k !== spec.k) {
+      throw new RangeError('k가 선택한 버전의 격자 크기와 다르다: ' + format.k + ' !== ' + spec.k);
+    }
+    const capacity = capacityForKDaehan(spec, eccLevel);
+    const scan = dataCellsInScanOrderK(spec.k, daehanReservedCells(spec.k));
+    const symbolDigits = capacity.usedSymbols * 3;
+    if (scan.length !== capacity.dataCells
+      || symbolDigits + capacity.residualCells !== scan.length
+      || symbolCountForByteLength(capacity.dataBytes) !== capacity.dataSymbols) {
+      throw new Error('K daehan 회계 불일치: scan ' + scan.length + ' / capacity '
+        + capacity.dataCells + ' — 표와 레이아웃이 갈렸다');
+    }
+    return { capacity, scan, symbolDigits, cornerMarker: false };
   }
 
   let entry;

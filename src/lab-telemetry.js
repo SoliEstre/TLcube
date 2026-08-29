@@ -39,10 +39,18 @@ export const CHAIN_STAGES = Object.freeze([
  * 쓰는** 것이라 relay·ClickHouse 가 그대로 받는다(`expected_finder` 컬럼).
  * ③만 새 필드다 — relay 는 모르는 키를 조용히 버리므로 와이어는 안 깨지지만,
  * ClickHouse 에 컬럼이 생기기 전까지 값은 **저장되지 않는다.**
+ *
+ * ④ 중앙 강조 변이 — `centralN7Emphasis` (2026-08-29 추가, default · locator · all).
+ * gen 행의 emphasis(010)는 frame 과 붙일 조인 키가 없어(스캐너 config_id 미탑재,
+ * 실측 0/357) 프레임별 변이 성공률을 못 갈랐다 — 그래서 기대 쪽에도 축을 편다.
+ * relay 는 `expected_emphasis` 로 편다 (011 ALTER 먼저, relay 배포 나중).
  */
 export const CONFIG_SIDE_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'locatorProfile',
   'locatorLayout', 'outerFinderId',
+  // ④ 중앙 강조 변이 (2026-08-29) — 이 키가 여기 없으면 normalizeConfigSide 가
+  // 스캐너 expected 에서 조용히 버린다 (gen 쪽 GEN_BODY_KEYS 와 같은 화이트리스트 함정).
+  'centralN7Emphasis',
 ]);
 export const GEN_BODY_KEYS = Object.freeze([
   'type', 'version', 'ecc', 'tones', 'finderPatternId', 'qrPosition', 'bgMode', 'quietMode',
@@ -236,6 +244,7 @@ export function emptyConfigSide() {
     locatorProfile: null,
     locatorLayout: null,
     outerFinderId: null,
+    centralN7Emphasis: null,
   };
 }
 

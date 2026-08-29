@@ -1949,7 +1949,8 @@
              용량을 깎는다 (V3 65 B → 46 B · A2 101 B → 80 B). OAK 3장은 용량 불변이라
              같은 줄에 두면 «같은 종류의 선택» 이라는 거짓 함의가 생긴다.
              Type A 도 쓴다 — 육각 코어가 O 와 좌표 동일하고 패치에는 안 들어간다
-             (실측 2026-08-19). Type K 는 encodeK 가 daehanFinder 를 던져서 안 연다 (인코더는 있다 — 2026-08-24).
+             (실측 2026-08-19). Type K 도 쓴다 — 2026-08-29 개설 (사괘 ∩ K 역할셀
+             전 k 0 실측 · 와이어 7 공유 · K0D 36 / K1D 73 / K2D 119 B, ECC-M).
              ⚠ **고급 전용을 유지한다** — 왕복 실측(2026-08-19): 이 코드는 스캐너의
              `cellFinderDaehan` 옵트인이 **꺼져 있으면 0/3, 켜면 3/3** 으로 읽힌다.
              그 옵트인은 오늘 /lab/ 토글에만 있다. 그래서 summary 가 그 사실을 말한다.
@@ -6401,7 +6402,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-08-29.03';
+const GENERATOR_BUILD = '2026-08-30.01';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -8354,16 +8355,18 @@ function renderFinderUi() {
   //    19셀 슬롯**을 이미 비워 두고, 전 k 에서 그 슬롯 ∩ 데이터 셀 = **0** 이다.
   //    회계가 안 바뀌므로 새 포맷 값도 없다 — 평 K 7 · K-CM 8 을 그대로 공유한다.
   //    자: 평/CM × 전 k × 전 ECC 프런트엔드 왕복 **36/36**.
-  //    남는 차단은 **daehan 하나**다 (그쪽은 여전히 미실측).
-  const typeK = currentType() === 'K';
+  //
+  // ⭐ **daehan 개설 (2026-08-29, 브리프 C)** — 마지막 차단이 걷혔다. 실측:
+  //    taegeuk 19 = 중앙 슬롯 19 (좌표 동일), 사괘 ∩ (K 앵커 9·포맷·레퍼런스·
+  //    K-CM 마커 30) = 전 k 에서 0, 회계는 capacityK.VERSIONS_K_DAEHAN (와이어는
+  //    평 K 7 공유 — 광학+RS/CRC 계약). 자: 전 k × ECC 왕복 + ▽/star 프런트엔드
+  //    왕복 (test/finder-daehan-vk.test.js). encodeK 배타 목록에서 daehanFinder 가
+  //    빠졌으므로 **카드를 숨길 근거가 남지 않았다** — K 차단 집합은 이제 비었다.
   const innerQrActive = generatorState.qrPosition === 'inner';
-  const K_BLOCKED_FINDER_IDS = typeK ? new Set() : null;
   for (const card of document.querySelectorAll('[data-finder-id]')) {
     // 중앙 v0(비컨)는 2026-08-22 부터 O·A 공통이다 — A 에서 카드를 숨기던 분기는
     // finder-selection 의 리셋과 함께 걷어냈다 (운영자 지시 «타입 OAK 모두»).
     const fid = card.dataset.finderId;
-    const blockedForK = K_BLOCKED_FINDER_IDS !== null
-      && (K_BLOCKED_FINDER_IDS.has(fid) || isDaehanFinderPatternId(fid));
     // QR 위치가 상위 축이다. 중앙 QR 카드는 **상시 노출**이다 (운영자 2026-08-29 §1 —
     // 종전 «안쪽 선택 전 숨김» 을 교체). 카드 자체가 상위 qrPosition='inner' 의
     // 표현이라, active 는 아래 finderPatternId 대조가 normalize 불변식(안쪽 ⟺
@@ -8373,7 +8376,7 @@ function renderFinderUi() {
     // 정의된 해소는 하드 비활성이 아니라 «누르면 직전 바깥 위치로 복귀» 다 (§1,
     // makeFinderCard 의 합성 경로). title(g581)이 그 결과를 예고한다.
     const finderRestoresOuterQr = innerQrActive && finderPatternConflictsWithInnerQr(fid);
-    card.style.display = blockedForK ? 'none' : '';
+    card.style.display = '';
     card.classList.remove('disabled');
     card.setAttribute('aria-disabled', 'false');
     card.title = finderRestoresOuterQr ? t('g581') : '';
@@ -10755,7 +10758,9 @@ function syncTurnAUi() {
  * 그 family 의 CMQ 행이 실재하는가)로 게이트한다: 현재 hex·tri 모두 존재라
  * CM 계열 + 중앙 QR 동시 활성이 성립한다. 술어가 false 인 family 가 다시 생기면
  * 그 자리에서만 seat 카드가 잠기고 g580 이 이유를 말한다 (조용한 무시 금지).
- * turnA·daehan 배타는 그대로다 (여전히 배치 미검증 조합).
+ * turnA × daehan 은 2026-08-29 개설됐다 (V*D — encodeOptsFor A 분기 참조).
+ * 남은 배타는 daehan × 코너 자리(cornerMarker)다 — encodeA/encodeK 가 던지고,
+ * encodeOptsFor 의 다이한-우선 else-if 가 그 조합을 만들지 않는다.
  */
 function syncSeatUi() {
   if (!els.finderInnerZone || !els.finderOuterZone) return;
@@ -11483,15 +11488,14 @@ function encodeOptsFor(cfg) {
   if (cfg.type === 'A') {
     const opts = { centerQr: cfg.fallback.mode === 'center' };
     if (cfg.versionA !== undefined) opts.version = cfg.versionA;
-    // ⚠ turnA 는 **true 일 때만** 싣는다. cornerMarker 와 상호배제라 encodeA 가
-    //   던진다(src/encodeA.js:144). O-CM/A-CM 이 UI 에 붙은 뒤로는 아래 else-if
-    //   체인이 cornerMarker 를 실제로 싣는다 — 우선순위(다이한 > 코너 예약 > turnA)가
-    //   그 충돌을 정의된 쪽으로 해소한다.
+    // ⚠ turnA 는 **true 일 때만** 싣는다. 아래 else-if 체인(다이한 > 코너 예약 >
+    //   turnA 단독)은 상호배제 해소가 아니라 **분기별로 함께 실을 짝을 정의**한다 —
+    //   다이한·코너 예약 각각이 turnA 를 병용으로 싣는다 (V*D 2026-08-29 · V-CM
+    //   2026-08-24 개설). 남은 배타(다이한 × 코너 예약)는 encodeA 가 던진다.
     //   false 로도 안 채우는 이유: cfg.turnA 는 A 분기에서만 쓰이고 O/Y 인코더는
     //   이 키를 모른다. 「true 일 때만」이면 비-A 옵션 표면이 한 비트도 안 넓어진다.
     // 중앙 v0 비컨 — O 분기와 같은 주입이다 (encodeA 의 centralV0 회계·배타는
-    // encode.js 와 동일 규칙). turnA 는 배치 검증 미실시 조합이라 encodeA 가
-    // 던진다 — 비컨 카드가 선택돼 있으면 아래 체인에서 turnA 를 싣지 않는다.
+    // encode.js 와 동일 규칙).
     const centralV0Selected = isCentralV0FinderPatternId(cfg.finderPatternId)
       && !opts.centerQr;
     if (centralV0Selected) opts.centralV0 = true;
@@ -11500,6 +11504,11 @@ function encodeOptsFor(cfg) {
     }
     if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
       opts.daehanFinder = true;
+      // turnA × daehan — 개설 (2026-08-29 브리프 C: daehan 좌표 집합이 180° 자기
+      // 대칭 + 예약 ∩ 역할 셀 0 실측, 와이어는 V*D 공유). 둘 다 참이면 V*D 다 —
+      // 코너 자리(cornerMarker)와 daehan 의 배타는 encodeA 가 여전히 던지므로
+      // 이 분기가 else-if 로 먼저 이기는 구조는 그대로 둔다.
+      if (cfg.turnA === true) opts.turnA = true;
     } else if (cfg.cornerMarker === true) {
       // 코너 자리 예약. (Wave 3 ④) turnA 와의 배타는 개설됐다 — 둘 다 참이면
       // **V-CM** 이다 (turnA.js V 표 말미). **V-CMQ(+centerQr)도 개설됐다**
@@ -11524,9 +11533,9 @@ function encodeOptsFor(cfg) {
     return { fn: encodeA, opts };
   }
   if (cfg.type === 'K') {
-    // Type K — encodeK 가 아직 던지는 것은 daehanFinder·turnA다(§옵션 배타).
+    // Type K — encodeK 가 아직 던지는 것은 turnA·sagoae(합성)다(§옵션 배타).
     // centerQr·centralV0·centralN7은 중앙 슬롯 점유자로 개설됐고 아래 공유 유도가
-    // 실제 선택 하나만 싣는다. 거부 옵션 둘은 false조차 채우지 않아 K 옵션 표면에서
+    // 실제 선택 하나만 싣는다. 거부 옵션은 false조차 채우지 않아 K 옵션 표면에서
     // 만들지 않는다 (A 분기의 turnA 규약과 같은 이유).
     //
     // ⭐ **K-CM 개설 (2026-08-25)** — 구 주석은 「부트스트랩이 star 축 formatIndex 8 을
@@ -11539,14 +11548,23 @@ function encodeOptsFor(cfg) {
     // ⭐ **중앙 슬롯 개설 (2026-08-25 저녁, 레인 KEX)** — centerQr · centralV0 도 같은
     //    규약으로 싣는다. 회계가 안 바뀌므로(슬롯 ∩ 데이터 = 0) 새 인덱스 없이 평 K 7 ·
     //    K-CM 8 을 공유한다. 술어는 O·A 분기와 **같은 것**을 쓴다 — 사본을 만들면 갈린다.
-    //    여전히 **안 싣는 것**은 daehanFinder · turnA 다 (encodeK 가 던진다).
+    // ⭐ **daehan 개설 (2026-08-29, 브리프 C)** — O 분기와 같은 술어·같은 자리로
+    //    싣는다. 이 한 줄이 capacityOf 를 capacityForKDaehan 으로 바꿔 화면 용량
+    //    표시(정보줄·게이지)가 K*D 회계(36/73/119 B, ECC-M)를 그대로 따라온다.
+    //    여전히 **안 싣는 것**은 turnA · sagoae(합성) 다 (encodeK 가 던진다).
     const opts = {};
     if (cfg.versionK !== undefined) opts.version = cfg.versionK;
-    if (cfg.cornerMarker) opts.cornerMarker = true;
     if (cfg.fallback.mode === 'center') opts.centerQr = true;
     // 중앙 비컨 플래그는 **공유 유도** 하나에서 온다 (generator-render-config.js).
     // 여기 손으로 다시 적으면 새 점유자가 늘 때 한쪽만 늙는다 — 실제로 늙었다.
     Object.assign(opts, centralBeaconEncoderOptions(cfg.finderPatternId, Boolean(opts.centerQr)));
+    // daehan 이 파인더 선택에서 오므로 코너 자리보다 우선한다 (O 분기와 같은 해소 —
+    // 둘을 같이 실으면 encodeK 가 던진다: daehan × cornerMarker 배치 미검증).
+    if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) {
+      opts.daehanFinder = true;
+    } else if (cfg.cornerMarker) {
+      opts.cornerMarker = true;
+    }
     return { fn: encodeK, opts };
   }
   const opts = { centerQr: cfg.fallback.mode === 'center' };
@@ -11707,6 +11725,12 @@ function renderTypeK(cfg) {
   const { fn, opts } = encodeOptsFor(cfg);
   const encoded = encodeWithEcc(fn, cfg.text, opts, cfg.eccLevel);
 
+  // daehan (2026-08-29 개설) — 카드는 하나(`oak-daehan-k10`)지만 그리는 템플릿의
+  // k 는 버전이 정한다 (renderTypeO/renderTypeA 와 같은 재사상·같은 이유 — 스캔·
+  // 텔레메트리 라벨 대조).
+  const renderedFinderPatternId = encoded.daehanFinder
+    ? daehanPatternId(encoded.k) : cfg.finderPatternId;
+
   // ⚠ **finderPatternId 를 반드시 넘긴다.** 빠뜨리면 buildScene 이 라이브러리 기본
   // 파인더로 되돌아가 «어느 카드를 골라도 같은 중앙 파인더가 나오는» 상태가 된다
   // (2026-08-25 운영자 신고: 「C2 쌍날로만 고정 렌더, 그 외 모든 파인더 옵션 작동 안 함」).
@@ -11715,7 +11739,7 @@ function renderTypeK(cfg) {
   const sceneOpts = {
     palette: paletteOf(cfg.presetName, cfg.faceGains),
     margin: 20,
-    finderPatternId: cfg.finderPatternId,
+    finderPatternId: renderedFinderPatternId,
   };
   if (isCentralMarkerN7FinderPatternId(cfg.finderPatternId)) {
     sceneOpts.centralMarkerN7Family = centralMarkerN7FamilyForType(cfg.type);
@@ -11749,14 +11773,16 @@ function renderTypeK(cfg) {
     'g445', { total: check.total, delta: check.minDelta.toFixed(3) },
     'g446', { n: check.mismatches.length },
   );
-  const verLabel = `K${encoded.version}${encoded.cornerMarker ? 'CM' : ''}`;
+  // 버전 이름에 D 를 넣는다 — 인코더가 이미 그 이름을 쓴다(capacityK `K*D`).
+  // 화면만 «K2» 라고 쓰면 138 B 를 기대하는 사람이 119 B 짜리 코드를 들고 간다.
+  const verLabel = `K${encoded.version}${encoded.cornerMarker ? 'CM' : ''}${encoded.daehanFinder ? 'D' : ''}`;
   const info =
     `${tf('g449', { type: 'K', ver: verLabel, k: encoded.k, ecc: encoded.eccLevel })}<br>` +
     tf('g450', { bytes, max: encoded.capacity.maxPayloadBytes }) +
     tf('g451', { d: encoded.capacity.dataSymbols, n: encoded.capacity.nsym, delta: deltaMinFor(cfg.presetName).toFixed(3) });
   return {
     type: 'K', encoded, scene: withQuietZone(scene), info, selfCheck, sceneOpts,
-    finderPatternId: cfg.finderPatternId,
+    finderPatternId: renderedFinderPatternId,
   };
 }
 

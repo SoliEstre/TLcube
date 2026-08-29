@@ -78,6 +78,7 @@ test('eventRow 키가 tl_lab.events 컬럼과 같다', () => {
   });
   assert.deepEqual(Object.keys(row).sort(), cols.slice().sort());
   assert.equal(row.build, '2026-08-28.03');
+  assert.equal(row.emphasis, '', 'frame 은 emphasis 를 싣지 않는다 — gen 행만 채운다 (010)');
 });
 
 test('thumbnailRow 키가 tl_lab.thumbnails 컬럼과 같다', () => {

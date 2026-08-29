@@ -61,6 +61,7 @@ import {
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import {
   normalizeCentralFinderId,
+  normalizeExpectedEmphasis,
   normalizeOuterFinderId,
 } from '/src/lab-expected-axes.js';
 import {
@@ -119,7 +120,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-29.03';
+export const SCANNER_BUILD = '2026-08-30.01';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -749,6 +750,9 @@ function reportLabFrame(imageData, result, ms, stage) {
   // 안 깨지지만 **ClickHouse 에 컬럼이 생기기 전까지는 저장되지 않는다.**
   if (expectedCentralFinder) expected.finderPatternId = expectedCentralFinder;
   if (expectedOuterFinder) expected.outerFinderId = expectedOuterFinder;
+  // 축 ④ (2026-08-29). CONFIG_SIDE_KEYS 에 centralN7Emphasis 가 열려 있어야
+  // normalizeConfigSide 를 지나 relay(expected_emphasis)에 닿는다 — 011 ALTER 선행.
+  if (expectedEmphasis) expected.centralN7Emphasis = expectedEmphasis;
   if (cellSurface && expectedLocatorLayout && !cellSurface.expectedLayout) {
     cellSurface.expectedLayout = expectedLocatorLayout;
   }
@@ -2639,6 +2643,22 @@ if (expectedOuterRoot && isLabPath()) {
     button.addEventListener('click', () => {
       expectedOuterFinder = normalizeOuterFinderId(button.dataset.expectedOuter);
       for (const other of expectedOuterRoot.querySelectorAll('[data-expected-outer]')) {
+        other.classList.toggle('active', other === button);
+      }
+    });
+  }
+}
+
+// 축 ④ 중앙 강조 변이 (2026-08-29) — 파인더/외곽 카드와 같은 배선. 정본 판정은
+// src/lab-expected-axes.js(normalizeExpectedEmphasis, centralN7Emphasis.js 에서 유도).
+// 라인업 밖 값은 null(모름)로 떨어진다.
+let expectedEmphasis = null;
+const expectedEmphasisRoot = document.getElementById('lab-expected-emphasis');
+if (expectedEmphasisRoot && isLabPath()) {
+  for (const button of expectedEmphasisRoot.querySelectorAll('[data-expected-emphasis]')) {
+    button.addEventListener('click', () => {
+      expectedEmphasis = normalizeExpectedEmphasis(button.dataset.expectedEmphasis);
+      for (const other of expectedEmphasisRoot.querySelectorAll('[data-expected-emphasis]')) {
         other.classList.toggle('active', other === button);
       }
     });

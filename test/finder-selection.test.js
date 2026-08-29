@@ -210,8 +210,15 @@ test('O/A/K 전 타입쌍에서 지원되는 중앙 파인더 선택을 승계�
 });
 
 test('승계 불가 조합은 QR이 아니라 정의된 기본 중앙 TL로 폴백한다', () => {
+  // daehan × K 는 2026-08-29 개설로 이 목록에서 **빠졌다** — 아래 양성 단언이
+  // 구 락의 자리를 대신 진다 (배타 개설 정형 ④). 남은 불가 조합은 드랍된 M7 뿐이다.
   const daehan = FINDER_CARD_GROUPS.daehan[0].id;
-  for (const unsupported of [daehan, CENTRAL_MARKER_N7_FINDER_PATTERN_ID]) {
+  assert.equal(finderPatternSupportedForType(daehan, 'K'), true,
+    'daehan × K 승계가 다시 막혔다 — 2026-08-29 개설 회귀 (encodeK daehanFinder)');
+  assert.equal(finderPatternForTypeTransition(
+    daehan, 'K', CENTRAL_N7_FINDER_PATTERN_ID,
+  ), daehan, 'daehan 이 K 전환에서 폴백으로 강등됐다');
+  for (const unsupported of [CENTRAL_MARKER_N7_FINDER_PATTERN_ID]) {
     assert.equal(finderPatternSupportedForType(unsupported, 'K'), false, unsupported);
     assert.equal(finderPatternForTypeTransition(
       unsupported, 'K', CENTRAL_N7_FINDER_PATTERN_ID,

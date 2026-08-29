@@ -125,19 +125,24 @@ test('셀 지도 — 전 셀 커버(불스아이 제외)·역할 회계·digit �
 });
 
 test('옵션 배타 — 남은 미검증·무의미 조합만 던진다', () => {
-  // cornerMarker·centerQr·centralV0 는 개설되어 이 목록에서 빠졌다. 아래 양성
-  // 단언과 프런트엔드 왕복이 구 락의 자리를 대신 진다.
-  for (const name of ['daehanFinder', 'turnA']) {
+  // cornerMarker·centerQr·centralV0 는 개설되어 이 목록에서 빠졌고, daehanFinder
+  // 도 2026-08-29 개설로 빠졌다 (자: test/finder-daehan-vk.test.js 양성 왕복).
+  // sagoae(합성)는 디코더 C2c 가 star 가설을 안 만들어 끝단이 없으므로 명시 거절이다.
+  for (const name of ['sagoae', 'turnA']) {
     assert.throws(() => encodeK('x', { [name]: true }), RangeError, name);
     // false 명시는 허용 (기본값과 같다).
     assert.equal(encodeK('x', { [name]: false }).ok !== false, true);
   }
   assert.throws(() => encodeK('x', { centerQr: true, centralV0: true }), RangeError);
+  // daehan 은 중앙 슬롯 점유자다 — 다른 점유자·코너 자리와의 배타는 유지된다.
+  assert.throws(() => encodeK('x', { daehanFinder: true, centerQr: true }), RangeError);
+  assert.throws(() => encodeK('x', { daehanFinder: true, cornerMarker: true }), RangeError);
   assert.throws(() => encodeK(123), TypeError);
   assert.throws(() => encodeK('x', { version: 7 }), RangeError);
   assert.throws(() => encodeK('x', { cornerMarker: 1 }), TypeError);
   assert.throws(() => encodeK('x', { centerQr: 1 }), TypeError);
   assert.throws(() => encodeK('x', { centralV0: 1 }), TypeError);
+  assert.throws(() => encodeK('x', { daehanFinder: 1 }), TypeError);
 });
 
 test('중앙 슬롯 개설 — centerQr·centralV0는 회계·와이어를 바꾸지 않는다', () => {

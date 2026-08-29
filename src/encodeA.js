@@ -181,9 +181,15 @@ export function encodeA(text, options = {}) {
   // V-CMQ — **개설** (2026-08-24 검수 4차). 구 «잔여 칸 0 보류» 는 «새 칸이
   // 필요하다» 는 전제가 틀렸다: V*CM 인덱스 공유가 무해하고 왕복이 선다
   // (turnA.js §turnASpec 의 근거·실측). 배타 개설 정형대로 락은 양성 단언으로.
-  if (turnA && usesDaehanLayout) {
-    throw new RangeError('turnA 와 daehan/sagoae 예약 레이아웃을 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
-  }
+  // turnA × daehan/sagoae — **개설** (2026-08-29 실측, 브리프 C). 여기 있던
+  // «배치 검증 미실시» throw 의 해소 근거:
+  //   ① daehan 79셀 좌표 **집합이 180° 자기 대칭**이다 (전 k 잘림본 포함 실측).
+  //      scene 은 파인더·사괘를 제자리(절대 좌표)에 그리고 데이터만 (−q,−r) 로
+  //      돌리므로, 대칭이 곧 «파인더가 데이터 위에 덧칠되지 않는다» 의 증명이다.
+  //   ② 예약 셀 ∩ (앵커·포맷·레퍼런스·패치·V-CM 마커) = 전 k 에서 0 (실측 재확인).
+  //   ③ 와이어는 V*D 공유 — 아래 formatIndex 유도의 turnA 분기가 V 표(V0=2·V1=4·
+  //      V2=0)를 그대로 읽는다. A*D(1·12·13)와 값이 달라 모호성이 없다.
+  //   자: test/finder-daehan-vk.test.js (전 k × ECC 왕복 + ▽ 프런트엔드 왕복).
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
   }

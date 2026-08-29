@@ -159,14 +159,17 @@ test('인코더가 던지는 조합을 전수로 찾는다 — 목록을 손으�
     ),
     'centerQr+centralV0': () => innerQrHierarchyGuards(CENTRAL_V0_FINDER_CARD.id),
     'centerQr+centralN7': () => innerQrHierarchyGuards(CENTRAL_N7_FINDER_PATTERN_ID),
-    // 아래 둘은 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
+    // 아래는 daehan 분기가 else-if 로 먼저 이겨서 애초에 함께 실리지 않는다.
     // (Wave 3 ④ — cornerMarker 분기 서명에 V-CMQ 가드가 붙었다.)
     // **의도적 갱신 (2026-08-24 검수 4차)** — 두 서명에 붙어 있던 조건이 걷혔다:
     //   · cornerMarker 분기의 `&& !(turnA && centerQr)` → V-CMQ 개설로 소멸
     //   · turnA 분기의 `&& !centralV0Selected` → centralV0×turnA 개설로 소멸
     // 가드의 **역할**(daehan 분기가 else-if 로 먼저 이긴다)은 그대로다 — 서명만 좁힌다.
+    // (구) 'daehanFinder+turnA' — 2026-08-29 브리프 C 에서 배타 자체가 **개설**됐다
+    // (daehan 좌표 집합 180° 자기 대칭 + 예약 ∩ 역할 셀 0 실측, 와이어 V*D 공유 —
+    // src/encodeA.js §turnA × daehan). 인코더가 더는 안 던지므로 전수 탐색이 이
+    // 쌍을 찾지 않는다 — daehan 분기가 turnA 를 **함께 싣는다** (encodeOptsFor A).
     'cornerMarker+daehanFinder': /\} else if \(cfg\.cornerMarker === true\) \{/,
-    'daehanFinder+turnA': /\} else if \(cfg\.turnA === true\) \{/,
     // (구) 'centralV0+turnA' — 2026-08-24 검수 3차에 **개설**됐다 (턴A 기하 확정으로
     // «배치 검증 미실시» 근거 소멸 · 왕복 = turnA-roundtrip ▽+비컨). 인코더가 더는
     // 안 던지므로 전수 탐색이 이 쌍을 찾지 않는다 — 가드 불필요.
@@ -245,17 +248,18 @@ test('코너 예약 힌트는 기본 문구다 — 중앙 QR 상수 잠금(g580 
 
 // ── Type K ─────────────────────────────────────────────────────────────────
 // K 의 남은 배타는 O/A 와 **모양이 다르다**: 쌍이 아니라 **단독 플래그**다
-// (daehanFinder·turnA). 위의 쌍 전수 탐색은 `length < 2` 를 건너뛰므로 K 를
+// (turnA·sagoae). 위의 쌍 전수 탐색은 `length < 2` 를 건너뛰므로 K 를
 // 구조적으로 못 본다 — 그래서 자를 따로 세운다. centerQr·centralV0는 2026-08-25
-// KEX 실측 후 개설되어 아래 양성 단언으로 구 락을 뒤집었다.
+// KEX 실측 후, daehanFinder 는 2026-08-29 브리프 C 실측 후 개설되어 아래 양성
+// 단언으로 구 락을 뒤집었다.
 test('Type K 배타 — 인코더에게 묻고, UI 상태가 그 조합을 만들 수 있는지 본다', () => {
   const CANDIDATES = [
-    'cornerMarker', 'centerQr', 'centralV0', 'centralN7', 'daehanFinder', 'turnA',
+    'cornerMarker', 'centerQr', 'centralV0', 'centralN7', 'daehanFinder', 'turnA', 'sagoae',
   ];
   const thrown = CANDIDATES
     .filter((f) => rejection(encodeK, { version: 0, eccLevel: 'M' }, { [f]: true }) !== null)
     .sort();
-  assert.deepEqual(thrown, ['daehanFinder', 'turnA'],
+  assert.deepEqual(thrown, ['sagoae', 'turnA'],
     'K 의 배타 목록이 바뀌었다 — 인코더가 정본이니 UI 가드를 다시 맞춰라');
 
   // K-CM·중앙 QR·중앙 v0는 합법이어야 한다. 두 중앙 점유자는 기존 19셀 슬롯을
@@ -268,6 +272,13 @@ test('Type K 배타 — 인코더에게 묻고, UI 상태가 그 조합을 만�
     'K 중앙 v0가 인코더에서 막혔다 — KEX 개설 회귀');
   assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { centralN7: true }), null,
     'K 중앙 n=7이 인코더에서 막혔다 — N7B 개설 회귀');
+  assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M' }, { daehanFinder: true }), null,
+    'K daehan 이 인코더에서 막혔다 — 2026-08-29 개설 회귀');
+  // daehan 은 중앙 슬롯 점유자·코너 자리와의 배타는 유지한다 (encodeK 가드).
+  assert.notEqual(rejection(encodeK, { version: 0, eccLevel: 'M', daehanFinder: true },
+    { centerQr: true }), null, 'daehan × 중앙 QR 이 조용히 통과한다 — 점유자 규칙 소실');
+  assert.notEqual(rejection(encodeK, { version: 0, eccLevel: 'M', daehanFinder: true },
+    { cornerMarker: true }), null, 'daehan × K-CM 이 조용히 통과한다 — 배치 미검증 가드 소실');
   assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M', cornerMarker: true },
     { centerQr: true }), null, 'K-CM 중앙 QR이 막혔다 — 와이어 8 공유 회귀');
   assert.equal(rejection(encodeK, { version: 0, eccLevel: 'M', cornerMarker: true },

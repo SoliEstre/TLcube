@@ -1269,6 +1269,22 @@
           <button type="button" data-expected-tones="3" data-i18n="lab.expectedTones.three">3톤</button>
         </div>
       </div>
+      <!-- 기대 «중앙 강조» (축 ④, 2026-08-29) — 강조 변이별 라이브 프레임 성공률을
+           가르는 유일한 축이다. gen 행의 emphasis(010)는 frame 과 붙일 조인 키가 없어
+           (스캐너는 config_id 를 싣지 않는다 — 실측 0/357) 프레임 소급 분해가 불가능했다.
+           값은 생성기 «중앙 강조색» 카드(data-n7-emphasis)와 같은 폐쇄집합이어야 한다 —
+           정본은 src/lab-expected-axes.js 의 LAB_EMPHASIS_MODES 이고 그 목록은
+           centralN7Emphasis.js 의 CENTRAL_N7_EMPHASIS_MODES 에서 유도된다 (손 목록 금지).
+           회귀: test/lab-expected-emphasis-ui.test.js -->
+      <div id="lab-expected-emphasis" class="lab-expected-arm">
+        <span data-i18n="lab.expectedEmphasis.label">기대 중앙 강조</span>
+        <div class="lab-expected-arm-cards" role="group">
+          <button type="button" data-expected-emphasis="" class="active" data-i18n="lab.expectedEmphasis.unknown">모름</button>
+          <button type="button" data-expected-emphasis="default" data-i18n="lab.expectedEmphasis.default">기본</button>
+          <button type="button" data-expected-emphasis="locator" data-i18n="lab.expectedEmphasis.locator">로케이터만</button>
+          <button type="button" data-expected-emphasis="all" data-i18n="lab.expectedEmphasis.all">전체</button>
+        </div>
+      </div>
       <!-- 디버그 오버레이 토글 (작업 1, lab 전용·기본 켬). authored hidden — 안정판에선
            scanner-debug-overlay.js 가 아예 활성화되지 않아 이 hidden 이 그대로 남는다. -->
       <button type="button" id="lab-debug-toggle" class="lab-debug-toggle" hidden aria-pressed="true" data-i18n="lab.debug.toggle">검출 오버레이</button>

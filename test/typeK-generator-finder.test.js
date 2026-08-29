@@ -49,7 +49,13 @@ const roundTrip = (encoded, text, finderPatternId) => {
 test('① renderTypeK 는 finderPatternId 를 scene 으로 넘긴다 (안 넘기면 카드가 무동작)', () => {
   const body = INDEX.slice(INDEX.indexOf('function renderTypeK'));
   const fn = body.slice(0, body.indexOf('\n}\n'));
-  assert.match(fn, /finderPatternId: cfg\.finderPatternId/,
+  // 2026-08-29 daehan 개설로 직결(cfg.finderPatternId)이 아니라 **재사상 변수**를
+  // 싣는다 — daehan 이면 버전 k 의 잘림본 id, 아니면 고른 카드 그대로 (renderTypeO
+  // 와 같은 유도). 잠글 성질은 «cfg 의 선택이 scene 까지 도달한다» 이므로 유도식과
+  // 적재를 함께 잰다.
+  assert.match(fn, /renderedFinderPatternId = encoded\.daehanFinder\s*\?\s*daehanPatternId\(encoded\.k\)\s*:\s*cfg\.finderPatternId/,
+    'renderTypeK 의 파인더 id 유도가 cfg.finderPatternId 에서 출발하지 않는다');
+  assert.match(fn, /finderPatternId: renderedFinderPatternId/,
     'renderTypeK 가 finderPatternId 를 안 싣는다 — 어느 파인더를 골라도 같은 그림이 나온다');
 });
 
@@ -104,10 +110,23 @@ test('④ **공백 해소** — star 검출이 중앙 파인더 전종을 읽는
     'Type O 대조군이 죽었다 — K 고유 결함이 아니라 파인더·렌더 회귀다');
 });
 
-test('⑤ UI 허용 목록이 실측과 같은 값을 쓴다 (사본이 갈리면 화면과 코드가 어긋난다)', () => {
-  // 허용 목록은 철회됐다 — 남는 차단은 **인코더가 실제로 던지는 것**뿐이다.
-  assert.ok(INDEX.includes('const K_BLOCKED_FINDER_IDS = typeK'),
-    'K 배타 게이트가 사라졌다 — encodeK 가 던지는 조합이 카드로 열린다');
+test('⑤ K 카드 차단 게이트는 인코더 실측과 같이 움직인다 — 던지는 카드가 없으면 게이트도 없다', () => {
+  // 허용 목록(2026-08-25 철회)에 이어 차단 집합도 2026-08-29 daehan 개설로 공집합이
+  // 됐다 — encodeK 가 던지는 것(turnA·sagoae)은 **파인더 카드가 아니다**. 그래서
+  // 게이트 자체를 걷었다. 재는 성질: ⓐ 어떤 중앙 파인더 카드도 K 인코더 옵션에서
+  // 던지지 않는다 (encodeK 에게 직접 묻는다 — 손 목록 금지), ⓑ 걷힌 게이트·허용
+  // 목록의 잔재가 없다 (남으면 다음 사람이 살아 있는 줄 알고 배선한다).
+  const cardFlags = [
+    {}, { daehanFinder: true }, { centralV0: true }, { centralN7: true }, { centerQr: true },
+  ];
+  for (const flags of cardFlags) {
+    assert.doesNotThrow(() => encodeK('K-card-' + Object.keys(flags).join(''), {
+      version: 0, eccLevel: 'M', ...flags,
+    }), 'K 파인더 카드 조합이 인코더에서 던진다 — 카드 차단 게이트를 되살려야 한다: '
+      + JSON.stringify(flags));
+  }
+  assert.ok(!INDEX.includes('K_BLOCKED_FINDER_IDS'),
+    '걷힌 차단 게이트의 잔재가 남아 있다 — 죽은 배선은 다음 배타 때 오도한다');
   assert.ok(!INDEX.includes('K_SCANNABLE_FINDER_IDS'),
     '허용 목록이 남아 있다 — star 검출이 열렸으므로 걷어야 한다');
 });

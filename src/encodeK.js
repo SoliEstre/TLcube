@@ -19,7 +19,17 @@
 //     과거에는 별 끝 암점 3개가 비컨 블록 상위 컷을 밀어 중앙 가설을 0으로 만들어
 //     예외를 뒀지만, 중앙 비컨 어댑터가 중앙 고정 계약(centreWindowFraction)을 주입한
 //     뒤에는 전 k × ECC에서 비컨 가설이 유지된다 (레인 KVX 재계측).
-//   · daehanFinder — 중앙 슬롯·예약 셀과 K 회계의 조합이 여전히 미검증이다.
+//   · daehanFinder — **2026-08-29 실측 후 개설** (브리프 C — 배타 개설 정형).
+//     ① 근거 실측: taegeuk 19 = 중앙 슬롯 19 (좌표 동일 — finder-taxonomy 로드
+//     단언), 사괘 20/40/60 은 전 k 에서 육각 코어 안 · K 의 앵커 9/포맷 15/
+//     레퍼런스/패치 레퍼런스/K-CM 마커 30 과 교집합 **전부 0** · 전부 기존 data
+//     셀이라 회계가 «잘라내기» 하나로 선다 (PM/017 의 O-CM k=6 4셀 같은 조건부
+//     충돌도 K 에는 없다). ② 표 명시 확장: capacityK.VERSIONS_K_DAEHAN — 와이어는
+//     O/A daehan 과 같은 계약으로 평 K 7 을 **공유**한다 (광학 검출 + 사후 RS/CRC).
+//     ③ 구 락은 test/finder-daehan-vk.test.js 의 양성 왕복·오독 거절 자로 전환.
+//   · sagoae(합성) × K — 여전히 닫혀 있다. 디코더 C2c 합성 검증기
+//     (bootstrap.cellFinderHypotheses)가 hex·tri 가설만 만들므로 star 쪽 끝단이
+//     없다 — 조용한 무시 대신 던진다 (원자 daehan 은 이미 사괘를 포함한다).
 //   · turnA — K = A ∪ 반전A 라 180° 회전이 실루엣을 보존한다(육각별 자기 대칭).
 //     «턴 K» 는 별도 실루엣이 아니므로 옵션 자체가 성립하지 않는다.
 //
@@ -32,7 +42,10 @@
 //   꼭짓점 셀이 앵커 digit 과 마커 digit 을 **같은 값**으로 동시에 만족하므로
 //   오버헤드 가산이 30 이 아니라 **27** 이다 (markerK.js 헤더 §3).
 
-import { VERSIONS_K, capacityForK } from './capacityK.js';
+import {
+  VERSIONS_K, capacityForK, VERSIONS_K_DAEHAN, capacityForKDaehan,
+} from './capacityK.js';
+import { daehanReservedCells } from './finder-daehan.js';
 import {
   VERSIONS_KCM,
   capacityForKMarker,
@@ -73,9 +86,18 @@ export function h2co3IncludeVertexK(options = {}) {
  * @param {string} text
  * @param {'L'|'M'|'H'} [eccLevel]
  */
-export function chooseVersionK(text, eccLevel = 'M', cornerMarker = false) {
+export function chooseVersionK(text, eccLevel = 'M', cornerMarker = false, daehanFinder = false) {
   const byteLength = payloadByteLength(text);
   if (cornerMarker) return chooseVersionKMarker(byteLength, eccLevel);
+  if (daehanFinder) {
+    for (const spec of VERSIONS_K_DAEHAN) {
+      if (byteLength <= capacityForKDaehan(spec, eccLevel).maxPayloadBytes) return spec;
+    }
+    const last = VERSIONS_K_DAEHAN[VERSIONS_K_DAEHAN.length - 1];
+    throw new RangeError(
+      `페이로드 ${byteLength} B 는 ${last.name}(ECC-${eccLevel}) 용량을 초과한다`,
+    );
+  }
   for (const spec of VERSIONS_K) {
     const capacity = capacityForK(spec, eccLevel);
     if (byteLength <= capacity.maxPayloadBytes) return spec;
@@ -92,10 +114,12 @@ export function chooseVersionK(text, eccLevel = 'M', cornerMarker = false) {
  * (overhead + 27) · 와이어 값(star 축 8)만 갈린다.
  * @param {string} text UTF-8 페이로드
  * @param {{version?: number, eccLevel?: 'L'|'M'|'H', cornerMarker?: boolean,
- *          centerQr?: boolean, centralV0?: boolean, centralN7?: boolean}} [options]
+ *          centerQr?: boolean, centralV0?: boolean, centralN7?: boolean,
+ *          daehanFinder?: boolean}} [options]
  * @returns {{
  *   version:number, k:number, eccLevel:'L'|'M'|'H', cornerMarker:boolean,
- *   centerQr:boolean, centralV0:boolean, centralN7:boolean, formatIndex:number,
+ *   centerQr:boolean, centralV0:boolean, centralN7:boolean, daehanFinder:boolean,
+ *   formatIndex:number,
  *   capacity:object, codewordSymbols:Uint8Array, dataDigits:Uint8Array,
  *   fillerDigits:Uint8Array, formatDigits:number[],
  *   cellDigits: Map<string, {digit:number, role:'anchor'|'marker'|'reference'|'format'|'data'|'filler'}>,
@@ -109,12 +133,14 @@ export function encodeK(text, options = {}) {
   }
   const {
     version, eccLevel = 'M', cornerMarker = false, centerQr = false, centralV0 = false,
-    centralN7 = false,
+    centralN7 = false, daehanFinder = false,
   } = options;
   // 배타 가드 — 모듈 헤더 §옵션 배타. 조용한 무시는 «와이어와 그림이 어긋난
   // 자기모순 아티팩트» 의 씨앗이라 명시 값이 오면 던진다.
+  // (daehanFinder 는 2026-08-29 개설로 이 목록에서 **빠졌다** — 모듈 헤더 ①~③,
+  //  자는 test/finder-daehan-vk.test.js 의 양성 왕복.)
   for (const [name, reason] of [
-    ['daehanFinder', 'daehan × K 는 배치 검증 미실시 조합이다'],
+    ['sagoae', 'sagoae 합성 × K 는 디코더 C2c 검증기가 star 가설을 안 만들어 끝단이 없다 — 원자 daehanFinder 를 써라'],
     ['turnA', 'K 실루엣은 180° 자기 대칭이라 턴 옵션이 성립하지 않는다'],
   ]) {
     if (options[name] !== undefined && options[name] !== false) {
@@ -123,6 +149,14 @@ export function encodeK(text, options = {}) {
   }
   if (typeof cornerMarker !== 'boolean') {
     throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
+  }
+  if (typeof daehanFinder !== 'boolean') {
+    throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
+  }
+  // daehan × cornerMarker — encodeA 와 같은 문법의 배타 (배치 왕복 미검증 조합).
+  // 셀 교집합은 0 실측이지만 (사괘 ∩ K-CM 마커 = 0, 전 k) 검출 합성은 별개 축이다.
+  if (daehanFinder && cornerMarker) {
+    throw new RangeError('daehanFinder 와 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
@@ -137,6 +171,9 @@ export function encodeK(text, options = {}) {
     centerQr ? 'centerQr' : null,
     centralV0 ? 'centralV0' : null,
     centralN7 ? 'centralN7' : null,
+    // daehan 은 taegeuk 이 중앙 19셀 슬롯 그 자체다 (좌표 동일 — finder-taxonomy
+    // 로드 단언). 다른 점유자와의 배타는 encodeA 와 같은 이 목록 하나가 정본이다.
+    daehanFinder ? 'daehanFinder' : null,
   ].filter(Boolean);
   if (centralSlotOccupants.length > 1) {
     throw new RangeError(
@@ -148,18 +185,21 @@ export function encodeK(text, options = {}) {
     );
   }
 
-  // K-CM 은 «옵션» 이다 — 격자(k)·앵커·포맷 셀은 평 K 와 같고 회계와 와이어 값만
-  // 갈린다. 그래서 표도 버전 표를 갈아 끼우는 방식이다 (encodeA 의 provider 문법).
-  const versionTable = cornerMarker ? VERSIONS_KCM : VERSIONS_K;
-  const capacityOf = cornerMarker ? capacityForKMarker : capacityForK;
+  // K-CM·daehan 은 «옵션» 이다 — 격자(k)·앵커·포맷 셀은 평 K 와 같고 회계와
+  // scan order(daehan 은 와이어 값도 평 K 7 공유)만 갈린다. 그래서 표를 갈아
+  // 끼우는 방식이다 (encodeA 의 provider 문법). 상호배제는 위 가드가 이미 쟀다.
+  const versionTable = cornerMarker ? VERSIONS_KCM
+    : daehanFinder ? VERSIONS_K_DAEHAN : VERSIONS_K;
+  const capacityOf = cornerMarker ? capacityForKMarker
+    : daehanFinder ? capacityForKDaehan : capacityForK;
 
   let spec;
   if (version === undefined) {
-    spec = chooseVersionK(text, eccLevel, cornerMarker);
+    spec = chooseVersionK(text, eccLevel, cornerMarker, daehanFinder);
   } else {
     spec = versionTable.find((entry) => entry.version === version);
     if (!spec) {
-      throw new RangeError(`알 수 없는 Type K 버전: ${version}${cornerMarker ? ' (+CM)' : ''}`);
+      throw new RangeError(`알 수 없는 Type K 버전: ${version}${cornerMarker ? ' (+CM)' : ''}${daehanFinder ? ' (+D)' : ''}`);
     }
   }
 
@@ -184,8 +224,11 @@ export function encodeK(text, options = {}) {
   }
 
   // 심볼 → 3 digit(MSD-first, 프리마스크) → scan order-K 좌표에 마스크 가산.
+  // daehan 은 예약 셀(사괘 20/40/60)을 육각부 접두에서 잘라낸다 (layoutK 예약 인자).
+  const daehanReserved = daehanFinder ? daehanReservedCells(k) : undefined;
   const preMaskDataDigits = unpackSymbolsToCellDigits(codewordSymbols); // 길이 3S
-  const scanCells = cornerMarker ? dataCellsInScanOrderKMarker(k) : dataCellsInScanOrderK(k);
+  const scanCells = cornerMarker ? dataCellsInScanOrderKMarker(k)
+    : dataCellsInScanOrderK(k, daehanReserved);
   if (scanCells.length !== capacity.dataCells) {
     throw new RangeError(
       `scan order-K 셀 수 불일치: ${cornerMarker ? 'dataCellsInScanOrderKMarker' : 'dataCellsInScanOrderK'}()`
@@ -200,7 +243,7 @@ export function encodeK(text, options = {}) {
   }
 
   // 잔여 셀 = 프리마스크 0 에 마스크 가산(§5.6 준용). scan order-K 의 꼬리와 동일 셀.
-  const fillerCoords = cornerMarker ? fillerCellsKMarker(k) : fillerCellsK(k);
+  const fillerCoords = cornerMarker ? fillerCellsKMarker(k) : fillerCellsK(k, daehanReserved);
   if (fillerCoords.length !== capacity.residualCells) {
     throw new RangeError(
       `필러 셀 수 불일치: ${cornerMarker ? 'fillerCellsKMarker' : 'fillerCellsK'}()`
@@ -215,7 +258,9 @@ export function encodeK(text, options = {}) {
 
   // 포맷 정보 — formatIndex 는 star 축 표(formatK.js)가 정본이다 (평 K 7 · K-CM 8,
   // 각각 k 로 가른다). centerQr·centralV0·centralN7은 중앙 슬롯의 그림만 바꾸고 본문 회계가
-  // 같으므로 새 값을 만들지 않고 이 인덱스를 공유한다. 인코더 쪽은 부착까지만 한다.
+  // 같으므로 새 값을 만들지 않고 이 인덱스를 공유한다. daehan 도 7 을 공유하되 이유가
+  // 다르다 — 회계는 갈리지만 판별 신호가 와이어가 아니라 **광학**(taegeuk 검출)이다
+  // (O/A daehan 과 같은 계약 — capacityK.VERSIONS_K_DAEHAN 헤더). 인코더 쪽은 부착까지만 한다.
   const eccLevelValue = ECC_LEVEL[eccLevel];
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
@@ -287,13 +332,21 @@ export function encodeK(text, options = {}) {
     cellDigits.set(cellKey(c.q, c.r), { digit: fillerDigits[i], role: 'filler' });
   }
 
-  // 세 중앙 옵션은 기존 19셀 슬롯의 점유자 교체다. 평 K/K-CM 어느 공급자에서도
-  // 그 셀이 payload 로 되살아나지 않았음을 인코더 경계에서 직접 단언한다.
-  if (centerQr || centralV0 || centralN7) {
+  // 중앙 옵션은 기존 19셀 슬롯의 점유자 교체다 (daehan 은 taegeuk = 슬롯 19 그 자체).
+  // 어느 공급자에서도 그 셀이 payload 로 되살아나지 않았음을 인코더 경계에서 직접 단언한다.
+  if (centerQr || centralV0 || centralN7 || daehanFinder) {
     for (const cell of centralSlotCells()) {
       if (cellDigits.has(cellKey(cell.q, cell.r))) {
         const owner = centralSlotOccupants[0];
         throw new Error(`${owner} 중앙 슬롯 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
+      }
+    }
+  }
+  // daehan 예약 셀(사괘)도 같은 방어 — scene.js 의 sagoae 렌더 가드가 이 성질에 기댄다.
+  if (daehanReserved) {
+    for (const cell of daehanReserved) {
+      if (cellDigits.has(cellKey(cell.q, cell.r))) {
+        throw new Error(`daehan 예약 셀이 데이터에 남았다: ${cellKey(cell.q, cell.r)}`);
       }
     }
   }
@@ -306,6 +359,7 @@ export function encodeK(text, options = {}) {
     centerQr,
     centralV0,
     centralN7,
+    daehanFinder,
     formatIndex,
     capacity,
     codewordSymbols,

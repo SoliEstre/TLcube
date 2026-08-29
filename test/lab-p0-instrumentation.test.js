@@ -36,6 +36,8 @@ const MIG_ZOOM = readFileSync(ROOT + 'deploy/estre-so/clickhouse/004_tl_lab_zoom
 const MIG_GEO = readFileSync(ROOT + 'deploy/estre-so/clickhouse/005_tl_lab_fail_geometry.sql', 'utf8');
 const MIG_LAYOUT = readFileSync(ROOT + 'deploy/estre-so/clickhouse/006_tl_lab_cellsurface_layouts.sql', 'utf8');
 const MIG_AXES = readFileSync(ROOT + 'deploy/estre-so/clickhouse/007_tl_lab_expected_axes.sql', 'utf8');
+const MIG_GEN_EMPH = readFileSync(ROOT + 'deploy/estre-so/clickhouse/010_tl_lab_emphasis.sql', 'utf8');
+const MIG_EXP_EMPH = readFileSync(ROOT + 'deploy/estre-so/clickhouse/011_tl_lab_expected_emphasis.sql', 'utf8');
 
 function memoryStore() {
   const map = new Map();
@@ -545,6 +547,19 @@ test('live migration 파일은 idempotent ALTER 이고 실행 명령이 없다',
   // ⚠ 적용 순서 경고가 파일에 남아 있어야 한다 — relay 를 먼저 배포하면 인제스트가
   //   테이블에 없는 컬럼을 밀어 넣는다. 이 주석이 그 사고를 막는 유일한 장치다.
   assert.match(MIG_AXES, /먼저/);
+  // 강조 변이 두 열 (2026-08-29). 010 = gen 행(emphasis) · 011 = frame 기대 축 ④
+  // (expected_emphasis) — gen 행만으로는 라이브 프레임과 붙일 조인 키가 없었다
+  // (스캐너 config_id 미탑재, 실측 0/357).
+  assert.match(SQL, /^\s+emphasis\s+LowCardinality/m); // gen 행 열 (expected_ 접두 없이)
+  assert.match(SQL, /^\s+expected_emphasis\s+LowCardinality/m);
+  assert.match(MIG_GEN_EMPH, /ADD COLUMN IF NOT EXISTS emphasis/);
+  assert.match(MIG_GEN_EMPH, /이 저장소에서는 실행하지 않는다/);
+  assert.doesNotMatch(MIG_GEN_EMPH, /^clickhouse-client/m);
+  assert.match(MIG_GEN_EMPH, /먼저/);
+  assert.match(MIG_EXP_EMPH, /ADD COLUMN IF NOT EXISTS expected_emphasis/);
+  assert.match(MIG_EXP_EMPH, /이 저장소에서는 실행하지 않는다/);
+  assert.doesNotMatch(MIG_EXP_EMPH, /^clickhouse-client/m);
+  assert.match(MIG_EXP_EMPH, /먼저/);
 });
 
 test('decodeFrontend onStage 훅은 기본 반환을 바꾸지 않는다', () => {

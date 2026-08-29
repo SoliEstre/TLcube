@@ -272,6 +272,10 @@ export function eventRow(event) {
     cell_px: body.cellPx == null ? geometryField(body, 'cell_px') : asNullableFloat(body.cellPx),
     attempt_id: body.attempt_id == null ? '' : String(body.attempt_id),
     config_id: body.config_id == null ? '' : String(body.config_id),
+    // gen 설정의 강조 변이 (010, 2026-08-29). kind='gen' 본문(GEN_BODY_KEYS)에만 실린다 —
+    // frame/env·구버전 봉투는 키가 없어 빈 문자열(컬럼 DEFAULT)로 산다. 거부하지 않는다.
+    // frame 행은 config_id 로 gen 행과 조인해 변이를 얻는다.
+    emphasis: configSide(body, 'centralN7Emphasis'),
     expected_type: configSide(expected, 'type'),
     expected_version: expected.version == null ? '' : String(expected.version),
     expected_ecc: configSide(expected, 'ecc'),
@@ -282,6 +286,10 @@ export function eventRow(event) {
     expected_locator_arm: configSide(expected, 'locatorArm'),
     expected_locator_layout: configSide(expected, 'locatorLayout'),
     expected_outer_finder: configSide(expected, 'outerFinderId'),
+    // 기대 축 ④ 중앙 강조 변이 (011, 2026-08-29) — gen 행의 emphasis(010)는 frame 과
+    // 붙일 조인 키가 없어(스캐너 config_id 미탑재) 프레임별 변이 성공률을 못 갈랐다.
+    // 구봉투·미선택은 빈 문자열(컬럼 DEFAULT). live DB 는 011 ALTER 먼저, relay 나중.
+    expected_emphasis: configSide(expected, 'centralN7Emphasis'),
     observed_type: configSide(observed, 'type'),
     observed_version: observed.version == null ? '' : String(observed.version),
     observed_ecc: configSide(observed, 'ecc'),
