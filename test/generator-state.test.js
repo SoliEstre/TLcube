@@ -10,7 +10,8 @@ import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   GENERATOR_STATE_SCHEMA, createGeneratorState, exposedGeneratorStateKeys,
-  resolutionTierForVersion, transitionGeneratorMode, versionForResolutionTier,
+  RESOLUTION_TIERS, resolutionTierAvailable, resolutionTierForVersion,
+  transitionGeneratorMode, versionForResolutionTier,
 } from '../src/generator-state.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -50,8 +51,12 @@ test('일반 노출 선택은 전부 고급에도 있고 실제 패널 메타데
 });
 
 test('일반 티어와 고급 정확 버전은 모든 타입에서 같은 canonical 값으로 왕복한다', () => {
-  for (const type of ['O', 'A', 'Y']) {
-    for (const tier of ['auto', 'low', 'mid', 'high']) {
+  for (const [type, tiers] of [
+    ['O', ['auto', 'low', 'mid', 'high', 'max', 'ultra']],
+    ['A', ['auto', 'low', 'mid', 'high']],
+    ['Y', ['auto', 'low', 'mid', 'high']],
+  ]) {
+    for (const tier of tiers) {
       const version = versionForResolutionTier(type, tier);
       assert.equal(resolutionTierForVersion(type, version), tier, type + ' ' + tier);
     }
@@ -60,6 +65,21 @@ test('일반 티어와 고급 정확 버전은 모든 타입에서 같은 canoni
     /<select id="versionY">\s*<option value="auto" selected[^>]*>[^<]+<\/option>/);
   assert.match(INDEX_SOURCE,
     /<select id="versionA">\s*<option value="auto" selected[^>]*>[^<]+<\/option>/);
+});
+
+test('ultra는 O 화면 전용 정권 표지이고 실제 C0/C1/C2는 versionC 별도 축이다', () => {
+  assert.ok(RESOLUTION_TIERS.includes('ultra'));
+  assert.equal(resolutionTierAvailable('O', 'ultra'), true);
+  for (const type of ['A', 'K', 'Y']) assert.equal(resolutionTierAvailable(type, 'ultra'), false);
+
+  const state = createGeneratorState();
+  assert.equal(state.versionC, 0);
+  assert.deepEqual(GENERATOR_STATE_SCHEMA.versionC.options, [0, 1, 2]);
+  assert.ok(GENERATOR_STATE_SCHEMA.versionO.options.includes('ultra'));
+  assert.equal(versionForResolutionTier('O', 'ultra'), 'ultra');
+  assert.equal(resolutionTierForVersion('O', 'ultra'), 'ultra');
+  assert.notEqual(state.versionO, state.versionC,
+    '기본 O 정권과 C 버전 숫자를 같은 상태 칸으로 읽으면 안 된다');
 });
 
 test('모드·타입 혼합 왕복이 모든 상태 키를 항목별로 보존한다', () => {
@@ -122,6 +142,9 @@ test('buildConfig은 모드나 고급 DOM이 아니라 단일 generatorState만 
   // 이 락이 지키려던 것은 **리터럴이 아니라 출처**(DOM 이 아니라 상태)이므로 락을
   // 헬퍼까지 따라가게 옮긴다 — 헬퍼가 els.* 를 읽으면 여기서 빨개진다.
   assert.match(source, /generatorState\.versionY|effectiveVersionYForEncode\(\)/);
+  assert.match(source, /typeCGeneratorActive\(\)/, 'buildConfig 이 Type C 활성 상태를 안 읽는다');
+  assert.match(source, /versionC:\s*selectedVersion\(generatorState\.versionC\)/,
+    'buildConfig 이 C 버전을 DOM이 아닌 generatorState.versionC에서 읽어야 한다');
   if (!/generatorState\.versionY/.test(source)) {
     const hStart = INDEX_SOURCE.indexOf('function effectiveVersionYForEncode()');
     assert.ok(hStart >= 0, 'buildConfig 이 헬퍼로 versionY 를 내는데 그 헬퍼가 없다');

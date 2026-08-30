@@ -517,13 +517,15 @@ test('§6.3 buildConfig·매퍼가 사괘를 두 타입 모두 싣는다 — «�
 });
 
 test('§6.3 V4 상호 잠금은 한 술어를 네 소비자가 쓴다 — 한쪽만 잠그면 우회로가 남는다', () => {
-  // 술어 자체는 표 유도다 (VERSIONS_DAEHAN — 손 상수 금지).
+  // 술어 자체는 활성 회계표 유도다 (평 O와 Type C를 숫자로 섞지 않는다).
   assert.match(INDEX, /DAEHAN_O_VERSIONS = new Set\(VERSIONS_DAEHAN\.map/,
     'daehan 지원 버전이 표 유도가 아니다');
+  assert.match(INDEX, /DAEHAN_C_VERSIONS = new Set\(VERSIONS_C_DAEHAN\.map/,
+    'C*D 지원 버전이 VERSIONS_C_DAEHAN 표 유도가 아니다');
   // 소비자 4곳: 파인더 카드 잠금 · 사괘 자리 잠금 · «대용량» 티어 잠금 · select 옵션.
-  const uses = (INDEX.match(/daehanSupportsOVersion\(/g) || []).length;
+  const uses = (INDEX.match(/daehanSupportsGeneratorVersion\(/g) || []).length;
   assert.ok(uses >= 3,
-    'daehanSupportsOVersion 소비자가 ' + uses + '곳뿐이다 — 카드·자리·select 세 축 미만이면 우회로다');
+    'daehanSupportsGeneratorVersion 소비자가 ' + uses + '곳뿐이다 — 카드·자리·select 세 축 미만이면 우회로다');
   assert.match(INDEX, /res === 'max' && daehanAccountingActive/,
     '«대용량» 티어가 daehan·사괘 활성에서 안 잠긴다');
   // 버전 변경이 파인더 카드 잠금을 재동기한다 (실기에서 안 걸리던 그 구멍).
@@ -536,4 +538,60 @@ test('§6.3 사괘 중앙 파트너 잠금은 scene 계약을 유도한다 — �
     '사괘 자리 잠금이 scene.sagoaeComposableWith 를 유도하지 않는다');
   assert.ok(!/renderKind === 'cell-mask'[^]*?innerSeat === 'sagoae'/.test(INDEX),
     'UI 가 cell-mask 조건을 손으로 옮겨 적었다 — scene 계약이 바뀌면 한쪽만 늙는다');
+});
+
+// ── §6.3 Type C ultra 생성기 배선 ───────────────────────────────────────────
+
+test('§6.3 ultra 카드와 C0/C1/C2 select가 ECC-M 수치로 한 벌이다', () => {
+  assert.match(INDEX, /data-res="ultra"/);
+  assert.match(INDEX, /id="versionC"[\s\S]*value="0"[^>]*data-i18n="g1016"[\s\S]*value="1"[^>]*data-i18n="g1017"[\s\S]*value="2"[^>]*data-i18n="g1018"/);
+  assert.match(INDEX, /C0 \(k=14 · 134 B\)/);
+  assert.match(INDEX, /C1 \(k=17 · 202 B\)/);
+  assert.match(INDEX, /C2 \(k=20 · 255 B\)/);
+  assert.match(INDEX, /versionWrapC:\s*\$\('versionWrapC'\)/,
+    'C select DOM 참조가 없다');
+  assert.match(INDEX, /els\.versionWrapC\.style\.display = isC \? '' : 'none'/,
+    'ultra 활성과 C select 표시가 연결되지 않았다');
+});
+
+test('§6.3 Type C 디스패치는 notchC와 versionC를 싣고 C*D를 열며 CM은 엔진 사유로 거절한다', () => {
+  const start = INDEX.indexOf("if (cfg.type === 'O' && cfg.typeC === true)");
+  const end = INDEX.indexOf("if (cfg.type === 'A')", start);
+  assert.ok(start >= 0 && end > start, 'encodeOptsFor의 Type C O 분기를 못 찾았다');
+  const branch = INDEX.slice(start, end);
+  assert.match(branch, /const opts = \{ notchC: true \}/);
+  assert.match(branch, /opts\.version = cfg\.versionC/);
+  assert.match(branch, /opts\.daehanFinder = true/);
+  assert.match(branch, /opts\.sagoae = true/);
+  assert.match(branch, /opts\.cornerMarker = true/,
+    'stale CM 상태가 공용 TYPE_C_CM_UNSUPPORTED_REASON으로 명시 거절되지 않는다');
+  assert.doesNotMatch(branch, /else if \(cfg\.(?:cornerMarker|sagoae)/,
+    'daehan과 함께 남은 stale CM·사괘 상태를 조용히 강등한다');
+  assert.match(INDEX, /encoded\.notchC[\s\S]{0,120}encoded\.capacity\.name/,
+    'Type C 정보줄이 capacity.name(C0/C*D)을 쓰지 않는다');
+});
+
+test('§6.3 C+CM 잠금과 중앙 변형 폴백·복귀가 양방향으로 배선됐다', () => {
+  assert.match(INDEX, /TYPE_C_CM_UNSUPPORTED_REASON/,
+    '공용 Type C CM 거절 사유를 UI가 소비하지 않는다');
+  assert.match(INDEX, /typeCCmLocked = seat === 'o-cm' && typeCGeneratorActive\(\)/,
+    'Type C에서 o-cm 자리 카드가 잠기지 않는다');
+  assert.match(INDEX, /res === 'ultra' && manualCmActive/,
+    '명시 CM에서 ultra 진입을 반대로 잠그지 않는다');
+  assert.match(INDEX, /Object\.keys\(centralBeaconEncoderOptions\(state\.finderPatternId, false\)\)/,
+    'Type C 중앙 변형 판정이 중앙 비컨 정본 유도가 아니다');
+  assert.match(INDEX, /typeCPreviousFinderPatternId:\s*generatorState\.finderPatternId[\s\S]{0,700}selectFinderPattern\([\s\S]{0,120}LEGACY_FINDER_PATTERN_ID/,
+    'ultra 진입 시 기본 중앙 TL을 호환 불스아이로 옮기고 보존하는 배선이 없다');
+  assert.match(INDEX, /leavesTypeC && generatorState\.typeCFinderFallbackActive/,
+    'ultra 이탈 시 이전 중앙 선택 복귀 배선이 없다');
+  assert.match(INDEX, /fid === CENTER_QR_FINDER_PATTERN_ID[\s\S]{0,180}centralBeaconEncoderOptions\(fid, false\)/,
+    'Type C 활성 중 중앙 QR·Y0·TL 카드 우회로가 잠기지 않는다');
+});
+
+test('§6.3 Type C 생성기 신규 문구는 g1014부터 8언어 전부 존재한다', () => {
+  for (let n = 1014; n <= 1022; n += 1) {
+    const key = 'g' + n;
+    const count = (INDEX.match(new RegExp('"' + key + '":', 'g')) || []).length;
+    assert.equal(count, 8, key + '가 생성기 8언어 사전에 정확히 한 번씩 있어야 한다');
+  }
 });

@@ -197,7 +197,9 @@ test('생성기 사전에 중복 키가 없다', () => {
   assert.ok(start >= 0, 'GENERATOR_STRINGS 를 못 찾았다');
   const js = raw.slice(start, raw.indexOf('\n};', start));
   const counts = new Map();
-  for (const m of js.matchAll(/"(g\d{3})":/g)) counts.set(m[1], (counts.get(m[1]) || 0) + 1);
+  // g1000 이상도 센다. 종전 `{3}`은 g1009~ 신규 키를 통째로 놓쳐 8언어 누락을
+  // 초록으로 만들었다 — 자가 새 키 체계보다 먼저 늙은 경우다.
+  for (const m of js.matchAll(/"(g\d{3,})":/g)) counts.set(m[1], (counts.get(m[1]) || 0) + 1);
   assert.ok(counts.size > 0, '사전 키를 하나도 못 셌다 — 자가 무너졌다');
   // 언어가 여덟이므로 정상 키는 정확히 8회다. 그보다 많으면 중복, 적으면 누락.
   const wrong = [...counts.entries()].filter(([, c]) => c !== 8);
@@ -205,6 +207,9 @@ test('생성기 사전에 중복 키가 없다', () => {
     '8회가 아닌 키가 있다 (많으면 **중복** — 뒤엣것이 이겨 엉뚱한 문구가 나온다, '
     + '적으면 누락 — 한국어로 조용히 폴백한다): '
     + wrong.map(([k, c]) => k + '×' + c).join(' '));
+  for (let n = 1014; n <= 1022; n += 1) {
+    assert.equal(counts.get('g' + n), 8, `Type C UI 키 g${n}가 여덟 사전에 모두 있어야 한다`);
+  }
 });
 
 test('생성기 사전의 여덟 언어가 같은 키 집합을 갖는다', () => {
@@ -224,7 +229,7 @@ test('생성기 사전의 여덟 언어가 같은 키 집합을 갖는다', () =
       if (js[i] === '{') depth += 1;
       else if (js[i] === '}') { depth -= 1; if (depth === 0) { end = i; break; } }
     }
-    return new Set([...js.slice(open, end).matchAll(/"(g\d{3})"\s*:/g)].map((m) => m[1]));
+    return new Set([...js.slice(open, end).matchAll(/"(g\d{3,})"\s*:/g)].map((m) => m[1]));
   };
   const ko = keysOf('ko');
   // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): en·ja → 7개 대상 언어.

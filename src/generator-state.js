@@ -64,13 +64,17 @@ export const GENERATOR_MODES = Object.freeze(['normal', 'advanced']);
 // 타입 목록의 정의는 generator-types.js 하나다 (순환 회피 + 손 사본 철폐).
 // 소비자들이 예전부터 여기서 가져가므로 재수출로 경로를 유지한다.
 export { GENERATOR_TYPES };
-// max(«대용량») 는 **V4 가 실재하는 타입에만** 있다 — 지금은 O 뿐 (k=12, 2026-08-30).
+// max(«대용량») 와 ultra(«초 대용량» Type C)는 **그 행이 실재하는 타입에만** 있다 —
+// 지금은 둘 다 O 화면뿐이다 (각각 V4 k=12 · C0~C2 k=14/17/20, 2026-08-30).
 // 타입 맵에 키가 없으면 versionForResolutionTier 가 던진다 (조용한 undefined 금지).
 // UI 는 그 카드 자체를 해당 타입에서 숨긴다 (index.html §resTierCards 타입 게이트).
-export const RESOLUTION_TIERS = Object.freeze(['auto', 'low', 'mid', 'high', 'max']);
+export const RESOLUTION_TIERS = Object.freeze(['auto', 'low', 'mid', 'high', 'max', 'ultra']);
 
 export const RESOLUTION_TIER_VERSIONS = Object.freeze({
-  O: Object.freeze({ low: 1, mid: 2, high: 3, max: 4 }),
+  // ultra 는 O 버전 번호가 아니다. `versionO: 'ultra'` 는 활성 정권 표지이고 실제
+  // Type C 버전은 별도 `versionC`가 든다. 숫자 0/1/2를 versionO에 넣으면 O축과
+  // 충돌하므로 문자열 표지를 RESOLUTION 티어 왕복에만 사용한다.
+  O: Object.freeze({ low: 1, mid: 2, high: 3, max: 4, ultra: 'ultra' }),
   A: Object.freeze({ low: 0, mid: 1, high: 2 }),
   Y: Object.freeze({ low: 0, mid: 1, high: 2 }),
   // K 는 VERSIONS_K 표를 쓴다 — version 0/1/2 (O 의 1/2/3 과 **한 칸 어긋난다**).
@@ -167,6 +171,15 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 구 값은 normalizeFinderQrState 가 기본 코너로 강하시킨다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
     ['TL', 'TR', 'BL', 'BR', 'none']),
+  // Type C 와이어는 평 C/C*D 두 행만 있어 중앙 QR·centralV0·centralN7 변형을
+  // 싣지 못한다. ultra 진입 당시 그 중앙 변형이 선택돼 있으면 UI가 호환 불스아이로
+  // 잠시 옮기고, 정권을 나갈 때 아래 스냅샷으로 복원한다. 사용자가 C 안에서 다른
+  // 합법 파인더를 명시 선택하면 active를 내리므로 옛 선택을 덮어쓰지 않는다.
+  typeCFinderFallbackActive: field(false, INTERNAL, [false, true]),
+  typeCPreviousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
+    FINDER_CARD_PATTERN_IDS),
+  typeCPreviousQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
+    ['inner', 'TL', 'TR', 'BL', 'BR', 'none']),
   // O/A/K는 중앙 TL + 바깥 QR이 기본이고, Y는 종전 코너 QR 기본을 유지한다.
   // 공용 상태가 타입 사이로 새지 않게 타입군별 마지막 선택을 별도 보존한다.
   finderQrProfiles: field(DEFAULT_FINDER_QR_PROFILES, INTERNAL,
@@ -174,7 +187,11 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   eccLevel: field('auto', BOTH, ['auto', 'H', 'M', 'L']),
   // V4 (k=12, «대용량») — 2026-08-30 개설. 예약돼 있던 hex 칸 V4=3·V4Q=7 을
   // 레인 v4 가 채웠다 (capacity.js VERSIONS · markerG V4CM/V4CMQ · decode 개방).
-  versionO: field('auto', BOTH, ['auto', 1, 2, 3, 4]),
+  versionO: field('auto', BOTH, ['auto', 1, 2, 3, 4, 'ultra']),
+  // Type C(3시 노치)는 생성기 화면 분류상 O지만 와이어 버전은 C0/C1/C2 = 0/1/2다.
+  // versionO에 이 숫자를 섞지 않는다. versionO의 'ultra'가 활성 정권만 표시하고,
+  // 이 필드가 정권을 나갔다 돌아와도 사용자가 고른 C 버전을 보존한다.
+  versionC: field(0, BOTH, [0, 1, 2]),
   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
   // K — VERSIONS_K 표 (0/1/2). versionO 를 빌려 쓰면 O 의 1/2/3 과
   // 한 칸 어긋나 편집 격자가 생성기와 다른 k 로 열린다 (index.html cellEditorHexSize).
@@ -369,7 +386,7 @@ export function resolutionTierForVersion(type, version) {
   versionStateKey(type);
   if (version === 'auto') return 'auto';
   const entry = Object.entries(RESOLUTION_TIER_VERSIONS[type])
-    .find(([, candidate]) => candidate === Number(version));
+    .find(([, candidate]) => String(candidate) === String(version));
   if (!entry) throw new RangeError('Type ' + type + '에 없는 버전: ' + version);
   return entry[0];
 }
