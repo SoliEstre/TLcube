@@ -257,7 +257,12 @@ export function decodeFrontend(raster, options = {}) {
    * 비용은 기하 전멸 프레임의 탐색 1회 추가뿐이다.
    */
   if (!enumerated.ok
-    && enumerated.reason === FRONTEND_FAILURE.NO_ANCHORS
+    && (enumerated.reason === FRONTEND_FAILURE.NO_ANCHORS
+      // 시드 finder 의 «그럴듯한 성공» 이 별칭 가설을 세우면 실패가 검증 단계
+      // (포맷 CRC 전멸)로 접혀 NO_ANCHORS 가 아니게 된다 — C1 k=16 실측: k12
+      // 별칭(1.30× 스케일)이 유일 가설로 서서 NO_FORMAT_CANDIDATE 로 죽었다.
+      // 같은 소생 전용 논리다: 프레임이 이미 총 실패했을 때만 한 번 더 돈다.
+      || enumerated.reason === FRONTEND_FAILURE.NO_FORMAT_CANDIDATE)
     && enumerated.detail && enumerated.detail.outlineSeedsUsed === true
     && bootstrapOptions.disableOutlineSeeds !== true
     && !priorPoses) {

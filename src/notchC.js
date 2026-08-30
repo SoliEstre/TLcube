@@ -1,33 +1,39 @@
 /**
- * notchC.js — Type C 3시 노치의 좌표 정본.
+ * notchC.js — Type C 3시 노치의 좌표 정본 (v2, 2026-08-30 개정).
  *
- * 노치는 3시 코너 `(k, 0)`에 상대적인 고정 8셀이다. k가 커져도 폭을 늘리지 않는다.
- * 좌표 규칙은 운영자가 확정한 k=6 축소 개념을 일반화한 것이며, 아래 로드
- * 자기검증이 그 정본 8셀과 배열 순서·집합을 모두 대조한다.
+ * v2 형상 = **3줄 개방 슬롯**: r ∈ {−1, 0, +1} 세 줄을 3시 코너 끝(실루엣 포함)에서
+ * 안쪽으로 파낸다. 중심 줄이 양옆보다 2칸 깊은 스피어형이고, 3시 축(거울 (q,r) ↔
+ * (q+r, −r))에 대칭이다. 코너 (k,0) 은 **노치에 포함**된다 — v1 이 (k,0) 을 «기준
+ * 앵커»로 남겨 이웃 전멸로 부유 큐브를 만들었던 결함의 정정이며, 그래서 Type C
+ * 반경의 앵커는 placement.js 가 세트 B({(0,k),(−k,0),(k,−k)}) 로 이설한다.
  *
- * 런타임 의존성 0 원칙을 지키기 위해 JSON을 브라우저 번들에 싣지 않는다. 대신 규칙과
- * 독립된 k=6 절대좌표 오라클을 함께 두고, 둘이 갈리면 모듈 로드에서 즉시 실패한다.
+ *   r = −1 : q ∈ [9, k]      (k−8 셀)
+ *   r =  0 : q ∈ [7, k]      (k−6 셀)  ← 스피어 중심
+ *   r = +1 : q ∈ [8, k−1]    (k−8 셀)
+ *
+ * 성질 (아래 로드 자기검증이 잠근다):
+ *   - 셀 수 = 3k − 22 ≡ 2 (mod 3). 데이터 셀 잔여(0/1/2)는 k 의 mod-3 부류가
+ *     결정한다 — 잔여는 표(capacityC)가 행별로 잠그고 엔진은 일반 처리한다.
+ *   - 최심 링 7 — daehan 예약(링 ≤ 6)·포맷 링(3)·불스아이(≤ 2) 와 구조적으로
+ *     서로소. 레퍼런스 셀 비침범은 capacityC 로드 자기검증이 역할표로 잰다.
+ *   - v1 의 고정 8셀은 v2 의 진부분집합이다 (기하 연속성 — 기존 배경 기대 검사가
+ *     재던 영역이 그대로 안에 있다).
+ *
+ * 설계 유래: k=6 축소 개념도(`.agent/PM/027` assets, 운영자 작화)의 «3줄 × 4깊이 ×
+ * 코너 포함» 12셀을 k≥14 로 비례 일반화한 것. k=6 개념도 자체는 그 판의 포맷 링과
+ * 겹쳐 실규약이 될 수 없으므로 **문서 지위**로 남고, 코드 오라클은 k=14 절대좌표다.
  */
 
 import { hexDistance } from './hexgrid.js';
 
-/** Type C가 지원하는 최소 반경. k=6은 개념도 자기검증에만 쓰인다. */
-export const TYPE_C_MIN_RADIUS = 6;
+/** Type C 와이어가 정의된 최소 반경 (C0). v2 규칙은 k < 14 에서 정의되지 않는다. */
+export const TYPE_C_MIN_RADIUS = 14;
 
-/** 규약상 노치 셀 수. */
-export const NOTCH_C_CELL_COUNT = 8;
-
-/** 3시 코너 `(k,0)` 상대 오프셋 `[dq, dr]` — 개념도 등장 순서 그대로. */
-export const NOTCH_C_RELATIVE_OFFSETS = Object.freeze([
-  Object.freeze([-3, 1]),
-  Object.freeze([-2, -1]),
-  Object.freeze([-2, 0]),
-  Object.freeze([-2, 1]),
-  Object.freeze([-1, -1]),
-  Object.freeze([-1, 0]),
-  Object.freeze([-1, 1]),
-  Object.freeze([0, -1]),
-]);
+/** 규약상 노치 셀 수 — k 의 함수다 (v1 은 고정 8이었다). */
+export function notchCellCountC(k) {
+  assertRadius(k);
+  return 3 * k - 22;
+}
 
 function assertRadius(k) {
   if (!Number.isInteger(k) || k < TYPE_C_MIN_RADIUS) {
@@ -41,15 +47,18 @@ function cellKey(q, r) {
 }
 
 /**
- * 반경 k의 3시 노치 8셀. 반환 순서는 `NOTCH_C_RELATIVE_OFFSETS` 순서다.
+ * 반경 k의 3시 노치 셀. 반환 순서는 줄(r=−1 → 0 → +1) 순, 줄 안에서 q 오름차순 —
+ * 결정적이며 소비자는 이 순서에 의미를 싣지 않는다 (집합이 계약이다).
  * @param {number} k
  * @returns {ReadonlyArray<Readonly<{q:number,r:number}>>}
  */
 export function notchCellsC(k) {
   assertRadius(k);
-  return Object.freeze(
-    NOTCH_C_RELATIVE_OFFSETS.map(([dq, dr]) => Object.freeze({ q: k + dq, r: dr })),
-  );
+  const cells = [];
+  for (let q = 9; q <= k; q += 1) cells.push(Object.freeze({ q, r: -1 }));
+  for (let q = 7; q <= k; q += 1) cells.push(Object.freeze({ q, r: 0 }));
+  for (let q = 8; q <= k - 1; q += 1) cells.push(Object.freeze({ q, r: 1 }));
+  return Object.freeze(cells);
 }
 
 /** 반경 k의 노치 좌표 집합 (`Set<"q,r">`). */
@@ -86,40 +95,43 @@ export function typeCReservedCells(k, additionalReserved) {
   return Object.freeze(out.map((cell) => Object.freeze(cell)));
 }
 
-// 모듈 로드 자기검증 — turnA.js의 표 검증 문법을 따른다.
+// 모듈 로드 자기검증 — 규칙과 독립된 k=14 절대좌표 오라클 + 전 지원 반경 성질.
 {
-  // 규칙에서 역유도하지 않은 k=6 개념도 절대좌표 오라클.
-  const conceptK6 = Object.freeze([
-    Object.freeze({ q: 3, r: 1 }),
-    Object.freeze({ q: 4, r: -1 }),
-    Object.freeze({ q: 4, r: 0 }),
-    Object.freeze({ q: 4, r: 1 }),
-    Object.freeze({ q: 5, r: -1 }),
-    Object.freeze({ q: 5, r: 0 }),
-    Object.freeze({ q: 5, r: 1 }),
-    Object.freeze({ q: 6, r: -1 }),
-  ]);
-  const actual = notchCellsC(6);
-  if (actual.length !== NOTCH_C_CELL_COUNT || conceptK6.length !== NOTCH_C_CELL_COUNT) {
-    throw new Error(`notchC: k=6 노치가 ${NOTCH_C_CELL_COUNT}셀이 아니다`);
+  // 규칙에서 역유도하지 않고 손으로 전개한 C0(k=14) 20셀.
+  const oracleK14 = [
+    [9, -1], [10, -1], [11, -1], [12, -1], [13, -1], [14, -1],
+    [7, 0], [8, 0], [9, 0], [10, 0], [11, 0], [12, 0], [13, 0], [14, 0],
+    [8, 1], [9, 1], [10, 1], [11, 1], [12, 1], [13, 1],
+  ];
+  const actual = notchCellsC(14);
+  if (actual.length !== oracleK14.length || actual.length !== notchCellCountC(14)) {
+    throw new Error(`notchC: k=14 노치가 ${oracleK14.length}셀이 아니다: ${actual.length}`);
   }
-  const seen = new Set();
   for (let i = 0; i < actual.length; i += 1) {
     const got = actual[i];
-    const want = conceptK6[i];
-    const key = cellKey(got.q, got.r);
-    if (seen.has(key)) throw new Error(`notchC: k=6 좌표 중복 ${key}`);
-    seen.add(key);
-    if (got.q !== want.q || got.r !== want.r) {
-      throw new Error(
-        `notchC: k=6 개념도 불일치 index=${i} 실제 ${key} 기대 ${cellKey(want.q, want.r)}`,
-      );
-    }
-    if (hexDistance(got.q, got.r) > 6) {
-      throw new Error(`notchC: k=6 영역 밖 좌표 ${key}`);
+    const [wq, wr] = oracleK14[i];
+    if (got.q !== wq || got.r !== wr) {
+      throw new Error(`notchC: k=14 오라클 불일치 index=${i} 실제 ${cellKey(got.q, got.r)} 기대 ${cellKey(wq, wr)}`);
     }
   }
-  if (seen.has('6,0')) {
-    throw new Error('notchC: 3시 방향 기준 앵커 (k,0)를 노치가 먹는다');
+  for (const k of [14, 16, 18, 20]) {
+    const cells = notchCellsC(k);
+    const set = new Set(cells.map((c) => cellKey(c.q, c.r)));
+    if (set.size !== cells.length) throw new Error(`notchC: k=${k} 좌표 중복`);
+    if (cells.length !== 3 * k - 22 || cells.length % 3 !== 2) {
+      throw new Error(`notchC: k=${k} 셀 수 성질 위반 (${cells.length})`);
+    }
+    for (const c of cells) {
+      const d = hexDistance(c.q, c.r);
+      if (d < 7 || d > k) throw new Error(`notchC: k=${k} 링 범위 밖 좌표 ${cellKey(c.q, c.r)} (링 ${d})`);
+      // 3시 축 거울 대칭: (q,r) ↔ (q+r, −r)
+      if (!set.has(cellKey(c.q + c.r, -c.r))) {
+        throw new Error(`notchC: k=${k} 거울 대칭 위반 ${cellKey(c.q, c.r)}`);
+      }
+    }
+    // v2 는 코너를 실루엣째 판다 — (k,0) 이 없으면 부유 큐브 결함(v1)으로의 회귀다.
+    if (!set.has(cellKey(k, 0))) {
+      throw new Error(`notchC: k=${k} 노치가 3시 코너 (k,0) 을 포함해야 한다`);
+    }
   }
 }

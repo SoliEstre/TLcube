@@ -191,7 +191,7 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // Type C(3시 노치)는 생성기 화면 분류상 O지만 와이어 버전은 C0/C1/C2 = 0/1/2다.
   // versionO에 이 숫자를 섞지 않는다. versionO의 'ultra'가 활성 정권만 표시하고,
   // 이 필드가 정권을 나갔다 돌아와도 사용자가 고른 C 버전을 보존한다.
-  versionC: field(0, BOTH, [0, 1, 2]),
+  versionC: field(0, BOTH, [0, 1, 2, 3]),
   versionA: field('auto', BOTH, ['auto', 0, 1, 2]),
   // K — VERSIONS_K 표 (0/1/2). versionO 를 빌려 쓰면 O 의 1/2/3 과
   // 한 칸 어긋나 편집 격자가 생성기와 다른 k 로 열린다 (index.html cellEditorHexSize).

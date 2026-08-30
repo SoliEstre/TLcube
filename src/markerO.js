@@ -219,7 +219,7 @@ function applyRotation(cell, times) {
 export function markerCells(k, tonesByKey) {
   assertK(k);
   const base = tetradBase(k);
-  const anchors = anchorCells(k);
+  const anchors = anchorCells(k, 'A'); // G 정권은 세트 A 전용 — ρ 궤도 정리 (헤더 §1)
   const out = [];
   for (let m = 0; m < ANCHOR_CORNER_INDICES.length; m += 1) {
     const cornerIndex = ANCHOR_CORNER_INDICES[m];

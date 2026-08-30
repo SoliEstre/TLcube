@@ -110,7 +110,10 @@ test('같은 렌더가 폴백 없이는 실패한다 — 폴백이 원인임을 
   const off = decodeFrontend(DAEHAN_RASTER, scannerOptions(false));
   assert.equal(off.ok, false,
     '1차 패스만으로 이미 읽힌다 — 위 테스트가 폴백이 아니라 딴것을 재고 있다');
-  assert.equal(off.reason, 'frontend:no-format-candidate');
+  // 잠그는 성질은 «1차 총 실패» 다. 구체 실패 코드는 시드 사다리 구성에 따라
+  // no-format-candidate ↔ no-finder 사이를 오간다 (노치 v2 시드 재유도 실측) —
+  // 코드 철자를 핀하면 정당한 시드 개정마다 이 자가 깨진다.
+  assert.match(String(off.reason), /^frontend:/);
 });
 
 test('레거시 렌더는 1차에서 성공하고 2차 패스가 아예 안 돈다', () => {

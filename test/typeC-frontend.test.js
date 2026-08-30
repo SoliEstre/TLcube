@@ -20,7 +20,7 @@ import {
   DEFAULT_PRESET,
   getPreset,
 } from '../src/luminance.js';
-import { typeCReservedCells } from '../src/notchC.js';
+import { notchCellCountC, typeCReservedCells } from '../src/notchC.js';
 import { rasterize } from '../src/raster.js';
 import { buildScene } from '../src/scene.js';
 import { distortImage } from './harness/distort.mjs';
@@ -73,8 +73,8 @@ function assertDecoded(result, text, name) {
   assert.equal(result.version, 0, name);
   assert.equal(result.hypothesis.k, 14, name);
   assert.equal(result.hypothesis.notchC, true, name);
-  assert.equal(result.hypothesis.notchHint.sampled, 8, name);
-  assert.equal(result.hypothesis.notchHint.background, 8, name);
+  assert.equal(result.hypothesis.notchHint.sampled, notchCellCountC(result.hypothesis.k), name);
+  assert.equal(result.hypothesis.notchHint.background, notchCellCountC(result.hypothesis.k), name);
   assert.equal(result.hypothesis.notchHint.foreground, 0, name);
   assert.ok(result.hypothesis.notchHint.backgroundRate >= 0.75, name);
   assert.equal(result.crsDistance, 2 * result.corrected, name);
@@ -82,9 +82,9 @@ function assertDecoded(result, text, name) {
 
 function assertClassificationBoundary(result, name) {
   const dimensions = result.diagnostics.bootstrap.geometry.capacityDimensions;
-  assert.ok(dimensions.hex.includes(14), name + ': C0 k=14가 hex 프로필에 없다');
-  assert.ok(dimensions.hex.includes(17), name + ': C1 k=17가 hex 프로필에 없다');
-  assert.ok(dimensions.hex.includes(20), name + ': C2 k=20가 hex 프로필에 없다');
+  for (const ck of [14, 16, 18, 20]) {
+    assert.ok(dimensions.hex.includes(ck), name + `: C 사다리 k=${ck}가 hex 프로필에 없다`);
+  }
   const shared = dimensions.hex.filter((k) => dimensions.tri.includes(k));
   assert.deepEqual(shared, [6, 8, 10], name + ': C k가 공유 1패스 축에 섞였다');
 }

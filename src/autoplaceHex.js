@@ -395,7 +395,8 @@ export function legacyOccupiedHex(k) {
       if (hexDistance(q, r) <= 2) out.push({ q, r });
     }
   }
-  for (const kk of anchorPositionSet(k)) {
+  // G(코너 자리) 재유도는 세트 A 전용 정권이다 — markerO ρ 궤도와 같은 근거.
+  for (const kk of anchorPositionSet(k, 'A')) {
     const [q, r] = kk.split(',').map(Number);
     out.push({ q, r });
   }

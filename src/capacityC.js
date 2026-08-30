@@ -15,10 +15,11 @@ import {
   MAX_CODEWORD_LEN, NSYM_TABLE_C, errorCapacity, rsBlockConfigForC,
 } from './rs211.js';
 import { symbolCountForByteLength } from './base211.js';
-import { overheadBreakdown } from './placement.js';
+import { overheadBreakdown, ANCHOR_SET_B_RADII, buildRoleSets } from './placement.js';
+import { hexDistance } from './hexgrid.js';
 import { daehanReservedCells } from './finder-daehan.js';
 import { notchCellsC, typeCReservedCells } from './notchC.js';
-import { C_FORMAT_INDEX } from './formatC.js';
+import { C_FORMAT_INDEX, TYPE_C_RADII } from './formatC.js';
 
 const NSYM_SOURCE = Object.freeze({ table: NSYM_TABLE_C, tableName: 'NSYM_TABLE_C' });
 
@@ -102,13 +103,18 @@ export function capacityTableC(level = 'M', options = {}) {
 
 // 로드 자기검증 — 회계·청킹·고정 블록 경계를 값으로 잠근다.
 {
+  // 노치 v2 (3줄 슬롯, 3k−22셀) × 4단 사다리 재유도값 — 2026-08-30.
+  // 유도: .agent/scratch/derive-ladder4.mjs. 잔여 셀은 k mod 3 부류가 결정한다
+  // (k≡2→1 · k≡1→0 · k≡0→2) — 엔진은 잔여를 일반 처리하고 이 표가 행별로 잠근다.
   const EXPECT = Object.freeze({
-    C0: Object.freeze({ k: 14, overhead: 69, dataCells: 562, symbols: 187, payload: [158, 134, 107] }),
-    C1: Object.freeze({ k: 17, overhead: 75, dataCells: 844, symbols: 281, payload: [237, 202, 160] }),
-    C2: Object.freeze({ k: 20, overhead: 81, dataCells: 1180, symbols: 393, payload: [255, 255, 225] }),
-    C0D: Object.freeze({ k: 14, overhead: 129, dataCells: 502, symbols: 167, payload: [140, 118, 95] }),
-    C1D: Object.freeze({ k: 17, overhead: 135, dataCells: 784, symbols: 261, payload: [221, 187, 150] }),
-    C2D: Object.freeze({ k: 20, overhead: 141, dataCells: 1120, symbols: 373, payload: [255, 255, 214] }),
+    C0: Object.freeze({ k: 14, overhead: 81, dataCells: 550, symbols: 183, residual: 1, payload: [154, 130, 105] }),
+    C1: Object.freeze({ k: 16, overhead: 91, dataCells: 726, symbols: 242, residual: 0, payload: [203, 172, 139] }),
+    C2: Object.freeze({ k: 18, overhead: 101, dataCells: 926, symbols: 308, residual: 2, payload: [255, 220, 176] }),
+    C3: Object.freeze({ k: 20, overhead: 111, dataCells: 1150, symbols: 383, residual: 1, payload: [255, 255, 223] }),
+    C0D: Object.freeze({ k: 14, overhead: 141, dataCells: 490, symbols: 163, residual: 1, payload: [137, 116, 93] }),
+    C1D: Object.freeze({ k: 16, overhead: 151, dataCells: 666, symbols: 222, residual: 0, payload: [188, 157, 128] }),
+    C2D: Object.freeze({ k: 18, overhead: 161, dataCells: 866, symbols: 288, residual: 2, payload: [240, 205, 166] }),
+    C3D: Object.freeze({ k: 20, overhead: 171, dataCells: 1090, symbols: 363, residual: 1, payload: [255, 255, 208] }),
   });
   const levels = ['L', 'M', 'H'];
   for (const spec of [...VERSIONS_C, ...VERSIONS_C_DAEHAN]) {
@@ -122,7 +128,7 @@ export function capacityTableC(level = 'M', options = {}) {
     for (let i = 0; i < levels.length; i += 1) {
       const cap = capacityForC(spec, levels[i]);
       if (cap.dataCells !== want.dataCells || cap.usedSymbols !== want.symbols
-        || cap.residualCells !== 1 || cap.maxPayloadBytes !== want.payload[i]) {
+        || cap.residualCells !== want.residual || cap.maxPayloadBytes !== want.payload[i]) {
         throw new Error(`capacityC: ${spec.name}/${levels[i]} 회계가 기대표와 다르다`);
       }
       if (symbolCountForByteLength(cap.dataBytes) !== cap.dataSymbols) {
@@ -132,6 +138,26 @@ export function capacityTableC(level = 'M', options = {}) {
       if (cap.rsBlockCount !== expectedBlocks || cap.minimumRsBlocks !== expectedBlocks
         || cap.rsCodewordSymbolsPerBlock.some((count) => count > MAX_CODEWORD_LEN)) {
         throw new Error(`capacityC: ${spec.name}/${levels[i]} RS 블록 경계가 표와 다르다`);
+      }
+    }
+  }
+
+  // 노치 v2 구조 계약 (2026-08-30):
+  // ① 앵커 세트 B 반경 목록은 placement.js 의 사본이다 — 정본(TYPE_C_RADII)과의
+  //    일치를 여기서 잠근다 (placement → formatC import 는 순환이라 불가).
+  if (ANCHOR_SET_B_RADII.length !== TYPE_C_RADII.length
+    || ANCHOR_SET_B_RADII.some((k, i) => k !== TYPE_C_RADII[i])) {
+    throw new Error('capacityC: placement.ANCHOR_SET_B_RADII 가 formatC.TYPE_C_RADII 와 다르다');
+  }
+  // ② 노치는 순수 데이터 영역만 판다 — 앵커(세트 B)·포맷·레퍼런스·불스아이와
+  //    서로소. 겹치면 overheadBreakdown 의 단순 합산이 이중 계상이 된다.
+  for (const k of TYPE_C_RADII) {
+    const roles = buildRoleSets(k, []);
+    for (const cell of notchCellsC(k)) {
+      const cellK = `${cell.q},${cell.r}`;
+      if (hexDistance(cell.q, cell.r) <= 2
+        || roles.anchor.has(cellK) || roles.format.has(cellK) || roles.reference.has(cellK)) {
+        throw new Error(`capacityC: k=${k} 노치 셀 ${cellK} 이 비데이터 역할을 침범한다`);
       }
     }
   }

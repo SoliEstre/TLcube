@@ -67,14 +67,14 @@ test('일반 티어와 고급 정확 버전은 모든 타입에서 같은 canoni
     /<select id="versionA">\s*<option value="auto" selected[^>]*>[^<]+<\/option>/);
 });
 
-test('ultra는 O 화면 전용 정권 표지이고 실제 C0/C1/C2는 versionC 별도 축이다', () => {
+test('ultra는 O 화면 전용 정권 표지이고 실제 C0~C3는 versionC 별도 축이다', () => {
   assert.ok(RESOLUTION_TIERS.includes('ultra'));
   assert.equal(resolutionTierAvailable('O', 'ultra'), true);
   for (const type of ['A', 'K', 'Y']) assert.equal(resolutionTierAvailable(type, 'ultra'), false);
 
   const state = createGeneratorState();
   assert.equal(state.versionC, 0);
-  assert.deepEqual(GENERATOR_STATE_SCHEMA.versionC.options, [0, 1, 2]);
+  assert.deepEqual(GENERATOR_STATE_SCHEMA.versionC.options, [0, 1, 2, 3]);
   assert.ok(GENERATOR_STATE_SCHEMA.versionO.options.includes('ultra'));
   assert.equal(versionForResolutionTier('O', 'ultra'), 'ultra');
   assert.equal(resolutionTierForVersion('O', 'ultra'), 'ultra');

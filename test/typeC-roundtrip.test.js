@@ -18,9 +18,9 @@ import {
 } from '../src/luminance.js';
 import { FACES, axialToPixel, facePolygon } from '../src/hexgrid.js';
 import { dataCellsInScanOrder } from '../src/layout.js';
-import { notchCellsC, typeCReservedCells } from '../src/notchC.js';
+import { notchCellCountC, notchCellsC, typeCReservedCells } from '../src/notchC.js';
 import {
-  VERSIONS_C, VERSIONS_C_DAEHAN,
+  VERSIONS_C, VERSIONS_C_DAEHAN, capacityForC,
 } from '../src/capacityC.js';
 import { TYPE_C_CM_UNSUPPORTED_REASON } from '../src/formatC.js';
 import {
@@ -85,7 +85,12 @@ describe('C0 × ECC L/M/H 생성·회계·자체검증', () => {
       for (const cell of notchCellsC(encoded.k)) {
         assert.equal(encoded.cellDigits.has(`${cell.q},${cell.r}`), false);
       }
-      assert.equal(encoded.cellDigits.get(`${encoded.k},0`)?.role, 'anchor');
+      // v2: 3시 코너는 노치에 포함돼 셀 자체가 없고, 앵커는 세트 B 로 이설됐다.
+      assert.equal(encoded.cellDigits.has(`${encoded.k},0`), false);
+      const anchorEntries = [...encoded.cellDigits.values()].filter((entry) => entry.role === 'anchor');
+      assert.equal(anchorEntries.length, 3);
+      assert.equal(anchorEntries.filter((entry) => entry.digit === 5).length, 1);
+      assert.equal(encoded.cellDigits.get(`0,${encoded.k}`)?.role, 'anchor');
 
       const { scene } = renderAndVerify(encoded, 'bullseye');
       assert.equal(scene.notchC, true);
@@ -133,7 +138,7 @@ describe('C0D × daehan/sagoae 합성', () => {
       assert.deepEqual(split.formatDigits, atomic.formatDigits);
 
       const reserved = typeCReservedCells(atomic.k, daehanReservedCells(atomic.k));
-      assert.equal(reserved.length, 68);
+      assert.equal(reserved.length, notchCellCountC(atomic.k) + 60);
       assert.equal(dataCellsInScanOrder(atomic.k, reserved).length, atomic.capacity.dataCells);
       for (const cell of [...notchCellsC(atomic.k), ...sagoaeCells(atomic.k)]) {
         assert.equal(atomic.cellDigits.has(`${cell.q},${cell.r}`), false);
@@ -168,10 +173,12 @@ test('C1/C2와 C1D/C2D는 전 ECC에서 고정 2블록으로 생성된다', () =
       }
     }
   }
-  assert.equal(chooseVersion('x'.repeat(135), 'M', false, false, true).name, 'C1');
-  assert.equal(chooseVersion('x'.repeat(203), 'M', false, false, true).name, 'C2');
-  assert.equal(chooseVersion('x'.repeat(119), 'M', false, true, true).name, 'C1D');
-  assert.equal(chooseVersion('x'.repeat(188), 'M', false, true, true).name, 'C2D');
+  // 승격 임계는 손 상수가 아니라 용량 표에서 유도한다 (사본 목록은 썩는다).
+  const overflowLen = (spec) => capacityForC(spec, 'M').maxPayloadBytes + 1;
+  assert.equal(chooseVersion('x'.repeat(overflowLen(VERSIONS_C[0])), 'M', false, false, true).name, 'C1');
+  assert.equal(chooseVersion('x'.repeat(overflowLen(VERSIONS_C[1])), 'M', false, false, true).name, 'C2');
+  assert.equal(chooseVersion('x'.repeat(overflowLen(VERSIONS_C_DAEHAN[0])), 'M', false, true, true).name, 'C1D');
+  assert.equal(chooseVersion('x'.repeat(overflowLen(VERSIONS_C_DAEHAN[1])), 'M', false, true, true).name, 'C2D');
 });
 
 test('CM × C는 자동·명시 버전 모두 표의 동일 사유로 거절된다', () => {

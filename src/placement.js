@@ -61,6 +61,35 @@ export const CORNER_DIRECTIONS = Object.freeze([
 /** 앵커로 쓰는 코너 인덱스 — 세트 A(교대 인덱스, 위 주석 근거). */
 export const ANCHOR_CORNER_INDICES = Object.freeze([0, 2, 4]);
 
+/**
+ * Type C(3시 노치) 반경은 **세트 B** {1,3,5} 를 쓴다 — 노치 v2 가 (k,0) 코너를
+ * 실루엣째 파내므로 세트 A 의 기준 앵커 자리가 사라진다. 교대 3코너의 유효한
+ * 선택지는 두 세트뿐이고(위 주석), 세트 B 도 120°-불변·회전 유일성 성질이 같다.
+ * k=14/16/18/20 은 C 전용 반경이라 이 분기는 다른 타입의 배치를 건드리지 않는다.
+ * ⚠ 이 목록은 formatC.js `TYPE_C_RADII` 와 같아야 한다 — capacityC.js 로드
+ * 자기검증이 두 목록의 일치를 단언한다 (여기서 import 하면 순환이라 사본을 두되
+ * 자로 잠근다).
+ */
+export const ANCHOR_SET_B_RADII = Object.freeze([14, 16, 18, 20]);
+export const ANCHOR_CORNER_INDICES_SET_B = Object.freeze([1, 3, 5]);
+
+/**
+ * 반경 k 가 쓰는 앵커 코너 인덱스 목록.
+ *
+ * 기본은 k 유도다 — 확장 반경(k ≥ 14)의 **발행 와이어는 Type C** 라 세트 B 가
+ * 정권이다. 단 같은 k 를 쓰는 **G(코너 자리) 정권은 구조적으로 세트 A 전용**이다
+ * (markerO ρ 궤도 정리 — tetrad 가 세트 A 코너에 산다. C×CM 거절이 두 정권의
+ * 비겹침을 보증한다). 그래서 G 계열(markerO·autoplaceHex)은 `set: 'A'` 를 명시로
+ * 넘겨 k 유도를 우회한다 — lab 확장 반경의 평 O 는 기본(세트 B)을 그대로 쓴다.
+ * @param {number} k
+ * @param {'A'|'B'} [set] 명시 세트 (생략 시 k 유도)
+ */
+export function anchorCornerIndicesFor(k, set) {
+  if (set === 'A') return ANCHOR_CORNER_INDICES;
+  if (set === 'B') return ANCHOR_CORNER_INDICES_SET_B;
+  return ANCHOR_SET_B_RADII.includes(k) ? ANCHOR_CORNER_INDICES_SET_B : ANCHOR_CORNER_INDICES;
+}
+
 /** 앵커 중 digit 5 를 받는 코너 인덱스(= 방향 기준점). 나머지 앵커는 digit 0. */
 export const ANCHOR_PRIMARY_INDEX = 0;
 
@@ -119,19 +148,20 @@ export function corners(k) {
  * @param {number} k
  * @returns {{q:number, r:number, digit:number}[]} 길이 3
  */
-export function anchorCells(k) {
+export function anchorCells(k, set) {
   const all = corners(k);
-  return ANCHOR_CORNER_INDICES.map((idx) => ({
+  const indices = anchorCornerIndicesFor(k, set);
+  return indices.map((idx) => ({
     ...all[idx],
-    digit: idx === ANCHOR_CORNER_INDICES[ANCHOR_PRIMARY_INDEX]
+    digit: idx === indices[ANCHOR_PRIMARY_INDEX]
       ? ANCHOR_PRIMARY_DIGIT
       : ANCHOR_SECONDARY_DIGIT,
   }));
 }
 
 /** 앵커 좌표 집합 (Set<"q,r">). digit 무관, 위치만. */
-export function anchorPositionSet(k) {
-  return new Set(anchorCells(k).map((c) => key(c.q, c.r)));
+export function anchorPositionSet(k, set) {
+  return new Set(anchorCells(k, set).map((c) => key(c.q, c.r)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,7 +265,9 @@ function ringOccupiedIndexSet(k, r) {
   }
   if (r === k) {
     const ringSize = 6 * r;
-    for (const idx of ANCHOR_CORNER_INDICES) {
+    // 앵커 세트는 k 유도다 — 세트 B 반경(Type C)에서 세트 A 인덱스를 회피하면
+    // 레퍼런스가 실제 앵커 위에 앉는다.
+    for (const idx of anchorCornerIndicesFor(k)) {
       // corners()[idx] 는 ringWalk(r) 에서 인덱스 (idx 를 코너-슬롯 순서로 재사상)에
       // 온다. corners() 순서 [0..5] ↔ ringWalk 코너 인덱스 [2r,r,0,5r,4r,3r]
       // (docstring 유도: dir4·r 시작 = corners()[2], 이후 dir0 r걸음 = corners()[1], ...).

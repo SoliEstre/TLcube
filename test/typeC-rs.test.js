@@ -142,35 +142,30 @@ describe('C1/C2/C1D/C2D × L/M/H 백엔드 복호', () => {
   }
 });
 
-test('C1/M 데이터→패리티 경계 버스트 34심볼이 두 블록 t=17/17로 분산 복구된다', () => {
+test('C1/M 데이터→패리티 경계 버스트 2t심볼이 두 블록 t/t로 분산 복구된다', () => {
   const encoded = encode(PAYLOAD, { notchC: true, version: 1, eccLevel: 'M' });
+  const tPerBlock = Math.floor(encoded.capacity.rsParitySymbolsPerBlock / 2);
   const map = rsBlockInterleaveMap(encoded.capacity.rsBlockConfig);
-  assert.deepEqual(
-    map.slice(208, 213).map(({ blockIndex, codewordIndex, kind }) =>
-      [blockIndex, codewordIndex, kind]),
-    [
-      [0, 104, 'data'],
-      [1, 104, 'data'],
-      [1, 105, 'data'],
-      [0, 105, 'parity'],
-      [1, 106, 'parity'],
-    ],
-  );
+  // 인터리브 2상 성질: 데이터 라운드로빈 전부 끝난 뒤에야 패리티 라운드로빈이다 —
+  // 짧은 블록의 첫 패리티가 긴 블록의 마지막 데이터와 절대 섞이지 않는다.
+  const dataSymbols = encoded.capacity.dataSymbols;
+  assert.ok(map.slice(0, dataSymbols).every((slot) => slot.kind === 'data'));
+  assert.ok(map.slice(dataSymbols).every((slot) => slot.kind === 'parity'));
 
-  const burst = Array.from({ length: 34 }, (_, index) => 194 + index);
+  const burst = Array.from({ length: 2 * tPerBlock }, (_, index) => dataSymbols - tPerBlock + index);
   const byBlock = [0, 0];
   for (const wireIndex of burst) byBlock[map[wireIndex].blockIndex] += 1;
-  assert.deepEqual(byBlock, [17, 17]);
-  assert.ok(burst.includes(encoded.capacity.dataSymbols - 1));
-  assert.ok(burst.includes(encoded.capacity.dataSymbols));
+  assert.deepEqual(byBlock, [tPerBlock, tPerBlock]);
+  assert.ok(burst.includes(dataSymbols - 1));
+  assert.ok(burst.includes(dataSymbols));
 
   const damaged = corruptSymbols(encoded.codewordSymbols, burst);
   const decoded = decodeCells(maskedDigitsForCodeword(encoded, damaged), formatFor(encoded));
   assert.equal(decoded.ok, true, decoded.reason);
   assert.equal(decoded.text, PAYLOAD);
-  assert.equal(decoded.corrected, 34);
-  assert.equal(decoded.crsDistance, 68);
-  assert.deepEqual(decoded.blockCorrections.map((block) => block.errorCount), [17, 17]);
+  assert.equal(decoded.corrected, 2 * tPerBlock);
+  assert.equal(decoded.crsDistance, 4 * tPerBlock);
+  assert.deepEqual(decoded.blockCorrections.map((block) => block.errorCount), [tPerBlock, tPerBlock]);
 });
 
 test('전역 소거가 한 블록의 p를 넘으면 실패 블록을 명시한다', () => {
@@ -178,7 +173,8 @@ test('전역 소거가 한 블록의 p를 넘으면 실패 블록을 명시한�
   const map = rsBlockInterleaveMap(encoded.capacity.rsBlockConfig);
   const blockZeroWire = map.flatMap((slot, wireIndex) =>
     slot.blockIndex === 0 ? [wireIndex] : []).slice(0, encoded.capacity.rsParitySymbolsPerBlock + 1);
-  assert.equal(blockZeroWire.length, 18);
+  const parityPerBlock = encoded.capacity.rsParitySymbolsPerBlock;
+  assert.equal(blockZeroWire.length, parityPerBlock + 1);
   const damaged = corruptSymbols(encoded.codewordSymbols, blockZeroWire);
   const decoded = decodeCells(
     maskedDigitsForCodeword(encoded, damaged),
@@ -186,7 +182,9 @@ test('전역 소거가 한 블록의 p를 넘으면 실패 블록을 명시한�
     { erasureSymbols: blockZeroWire },
   );
   assert.equal(decoded.ok, false);
-  assert.match(decoded.reason, /^rs: RS 블록 1\/2: 소거 개수\(18\).*패리티 심볼 수\(17\)/);
+  assert.match(decoded.reason, new RegExp(
+    `^rs: RS \ube14\ub85d 1/2: \uc18c\uac70 \uac1c\uc218\\(${parityPerBlock + 1}\\).*\ud328\ub9ac\ud2f0 \uc2ec\ubcfc \uc218\\(${parityPerBlock}\\)`,
+  ));
 });
 
 test('Type C는 formatIndex+k를 필수로 하고 예약·모순 입력을 format 단계에서 거절한다', () => {
@@ -241,14 +239,16 @@ test('formatinfo.decode 원시 version과 논리 version을 6개 C 행 모두 �
   }
 });
 
-test('C0/C1/C2/C0D/C1D/C2D canonical scan order 좌표는 불변이다', () => {
+test('C0..C3/C0D..C3D canonical scan order 좌표는 불변이다', () => {
   const expected = {
-    C0: [562, 'dcd4fde2756692b735dfbb4d7ad6d8f532ec28d2404fc74650fb6159bd8bd133'],
-    C1: [844, 'df3ed24c608eee3974535fd68cd884634a01bc8532a669afeda08c247fd59fbd'],
-    C2: [1180, '12929cece498c30b600b9df89e917307093b037cb2a3d88b875193ea85214103'],
-    C0D: [502, '0c43aefa99ef760e3552d1a21c780b4d7b228d1ad1c05a09bbbbf4614527ef2d'],
-    C1D: [784, '20fb76adb1d43e1d722926f8ad5fc3f1f99d8d5adebae5aa8d98311e2a45402e'],
-    C2D: [1120, '2ba64fb6014d28935b225139f83e55516c69aa616ac78512469b5cd706bfe705'],
+    C0: [550, '38259676b4a29178b5de33bae7122b09cac29d93fd4b9f92335d6bd661566f33'],
+    C1: [726, 'e5daa04aa44e1028e553ed99a17755a2edeb12c0f9139e0c293bdde54aa8647c'],
+    C2: [926, 'c8ed9aec6234bf32de6605a3888f302f4fc548eac70e8a317001274abeb971e3'],
+    C3: [1150, '54b8e70b4737238ef4cc69b8e3fbac20463b0ad0c405c937973295aa46d27f92'],
+    C0D: [490, '8f8c4c1bfb41e5c0b23673813bcc05cb73c6a9998eaea712712a0f3af3a0340b'],
+    C1D: [666, '7938f87ddf1805bec6282776b5e60019ff2967abcb7600096991e1682782c2f3'],
+    C2D: [866, '60c378c100bc1550ed85014cf6e2845869b42fa968a50fd5bf765480aaa03d6a'],
+    C3D: [1090, 'b6a480cebe979fa8b95af5b2269b140f4dae13bc24dc65a79a77f08f92145142'],
   };
   for (const row of C_FORMAT_INDEX) {
     const additional = row.daehanFinder ? daehanReservedCells(row.k) : undefined;
@@ -265,14 +265,14 @@ test('C0/C1/C2/C0D/C1D/C2D canonical scan order 좌표는 불변이다', () => {
 test('C0/C0D 발행 코드워드 해시는 새 1블록 경로에서도 비트 동일하다', () => {
   const expected = {
     C0: {
-      L: '1e9d496e8f4f82fc54fcaffc309d866542e8bed4e2da78a6fc14534df5d9927a',
-      M: '4d76e6ca3d25f0eb46aef4ef78808ba75a65b1f3c4c3a7af18f8bd784ef1128f',
-      H: 'ac075fbaec4bb18075e83a4178362edda563ef03c2a9e0743bcde3a77eb30d38',
+      L: '534760df42b40d2a78a65b920ec119897c696e51ae8afe59f4fedadbb238e2e1',
+      M: 'a38e8479dd78db99a0c93bf68f759fbe19ff2787a70fcb2f177d958c30374562',
+      H: 'd2add2b537ff7423cd45fbe2f0f1426e3af457a7e17be2bee557a22b33a9d38e',
     },
     C0D: {
-      L: 'bd5205c04561fe68d64a13c7cfd17008a7cdb369c0766fa0d35f25cabd4226c4',
-      M: 'ded79cbe9c01172530ccf589220c74198726688d9830b03acafa83e2050e0268',
-      H: '1b3b3747011f0affc898eac0519d9c62925ce9a6af6164809577179d8f2364da',
+      L: '7934dda25d5c8a3ab41e3e941930ef0c896e0e1b6507f0976e74bfda98c52987',
+      M: 'c67723bf644609f6cb0e89fefaa786ea352a7d894d2a4612aad4901c76b94d0c',
+      H: '69a9ac6ef540444e36ad94d277e292d4d59f44eb4c7eb8b52b6532cddf044cbe',
     },
   };
   for (const [name, byLevel] of Object.entries(expected)) {

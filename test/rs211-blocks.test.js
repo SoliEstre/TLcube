@@ -20,29 +20,39 @@ import {
 const LEVELS = Object.freeze(['L', 'M', 'H']);
 
 describe('Type C RS 블록 구성 표', () => {
-  test('18개 (행,ECC) 구성이 리터럴 계약값과 같다', () => {
+  test('24개 (행,ECC) 구성이 리터럴 계약값과 같다 (4단 사다리, 노치 v2)', () => {
     const expected = {
-      C0: { totals: [22, 47, 75], data: [[165], [140], [112]], parity: [22, 47, 75] },
+      C0: { totals: [22, 47, 73], data: [[161], [136], [110]], parity: [22, 47, 73] },
       C1: {
-        totals: [34, 70, 114],
-        data: [[123, 124], [105, 106], [83, 84]],
-        parity: [17, 35, 57],
+        totals: [30, 62, 96],
+        data: [[106, 106], [90, 90], [73, 73]],
+        parity: [15, 31, 48],
       },
       C2: {
-        totals: [48, 98, 158],
-        data: [[172, 173], [147, 148], [117, 118]],
-        parity: [24, 49, 79],
+        totals: [36, 78, 124],
+        data: [[136, 136], [115, 115], [92, 92]],
+        parity: [18, 39, 62],
       },
-      C0D: { totals: [20, 43, 67], data: [[147], [124], [100]], parity: [20, 43, 67] },
+      C3: {
+        totals: [50, 94, 150],
+        data: [[166, 167], [144, 145], [116, 117]],
+        parity: [25, 47, 75],
+      },
+      C0D: { totals: [19, 41, 65], data: [[144], [122], [98]], parity: [19, 41, 65] },
       C1D: {
-        totals: [30, 66, 104],
-        data: [[115, 116], [97, 98], [78, 79]],
-        parity: [15, 33, 52],
+        totals: [26, 58, 88],
+        data: [[98, 98], [82, 82], [67, 67]],
+        parity: [13, 29, 44],
       },
       C2D: {
-        totals: [44, 94, 150],
-        data: [[164, 165], [139, 140], [111, 112]],
-        parity: [22, 47, 75],
+        totals: [38, 74, 114],
+        data: [[125, 125], [107, 107], [87, 87]],
+        parity: [19, 37, 57],
+      },
+      C3D: {
+        totals: [44, 94, 146],
+        data: [[159, 160], [134, 135], [108, 109]],
+        parity: [22, 47, 73],
       },
     };
 
@@ -131,7 +141,9 @@ test('두 번째 블록의 소거 한계 초과는 블록 2/2와 전역 위치�
   const decoded = rsDecodeBlocks(damaged, config, { erasures: new Uint16Array(erasures) });
   assert.equal(decoded.ok, false);
   assert.equal(decoded.blockIndex, 1);
-  assert.match(decoded.reason, /^RS 블록 2\/2: 소거 개수\(18\).*패리티 심볼 수\(17\)/);
+  assert.match(decoded.reason, new RegExp(
+    `^RS 블록 2/2: 소거 개수\\(${config.paritySymbolsPerBlock + 1}\\).*패리티 심볼 수\\(${config.paritySymbolsPerBlock}\\)`,
+  ));
   assert.deepEqual(decoded.erasurePositions, erasures);
 });
 

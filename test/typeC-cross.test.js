@@ -14,6 +14,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { encode } from '../src/encode.js';
+import { daehanPatternId } from '../src/finder-daehan.js';
 import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
@@ -32,20 +33,33 @@ const PALETTE = Object.freeze({
 function roundtrip(name, opts) {
   const text = 'typeC-cross-' + name;
   const encoded = encode(text, opts);
-  const raster = rasterize(buildScene(encoded, { palette: PALETTE, margin: 20 }),
-    { pixelsPerUnit: 12, supersample: 1 });
-  const result = decodeFrontend(raster);
+  // C*D 는 제품 정형대로 태극(daehan 완전판)을 실제로 그린다 — finderPatternId 를
+  // 안 주면 사괘 자리 60셀이 빈 «비제품 프레임» 이 되고, 그 프레임의 복호 여부는
+  // 제품 축이 아니다 (v1 에서 우연히 돌던 것을 자로 잠그지 않는다).
+  const scene = buildScene(encoded, {
+    palette: PALETTE,
+    margin: 20,
+    ...(opts.daehanFinder ? { finderPatternId: daehanPatternId(encoded.k) } : {}),
+  });
+  const raster = rasterize(scene, { pixelsPerUnit: 12, supersample: 1 });
+  // 제품 계약: C*D 복호는 daehan 라인업 옵트인 경로다 (정식 스캐너 폴백 2차가
+  // 이 옵션을 켠다 — scanner-daehan-fallback). 평 C 는 기본 경로 그대로.
+  const result = decodeFrontend(raster, opts.daehanFinder
+    ? { bootstrap: { cellFinderDaehan: true } }
+    : undefined);
   assert.equal(result.ok, true, name + ' 왕복 실패: ' + (result.reason || ''));
   assert.equal(result.text, text, name + ': 원문 불일치');
-  assert.equal(result.hypothesis.k, opts.version === 1 ? 17 : 20, name + ': k 판정');
+  assert.equal(result.hypothesis.k, ({ 1: 16, 2: 18, 3: 20 })[opts.version], name + ': k 판정');
   return result;
 }
 
 test('다중 블록 × 프런트 — C1/C2 전 계열이 원문까지 돈다', { timeout: 300_000 }, () => {
   roundtrip('C1/M', { notchC: true, version: 1, eccLevel: 'M' });
   roundtrip('C2/M', { notchC: true, version: 2, eccLevel: 'M' });
+  roundtrip('C3/M', { notchC: true, version: 3, eccLevel: 'M' });
   roundtrip('C1D/M', { notchC: true, version: 1, eccLevel: 'M', daehanFinder: true });
   roundtrip('C2D/H', { notchC: true, version: 2, eccLevel: 'H', daehanFinder: true });
+  roundtrip('C3D/M', { notchC: true, version: 3, eccLevel: 'M', daehanFinder: true });
 });
 
 test('블록 수 1 무회귀 — C0 는 같은 경로에서 종전과 같이 돈다', { timeout: 120_000 }, () => {

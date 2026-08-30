@@ -89,12 +89,12 @@ test('Type C 5점 — EDGE 방향 동일 외경에서 3시 V-노치 index 1만 �
   }), /EDGE_UNIT_OFFSETS\[1\]/);
 });
 
-test('Type C 봉투 — C0/C1/C2의 960px cell_px와 C2 최소 배율을 고정한다', () => {
+test('Type C 봉투 — 4단 사다리의 960px cell_px와 최소 배율을 고정한다', () => {
   assert.equal(FRAME_MAX_SIDE, 960);
   assert.equal(CELL_PX_FLOOR, 9);
   assert.deepEqual(
     Object.fromEntries(VERSIONS_C.map((spec) => [spec.name, spec.k])),
-    { C0: 14, C1: 17, C2: 20 },
+    { C0: 14, C1: 16, C2: 18, C3: 20 },
   );
 
   // C 실루엣의 E-꼭짓점 반경을 바깥 링 R=fS/2에 맞춘 셀 크기다.
@@ -103,16 +103,17 @@ test('Type C 봉투 — C0/C1/C2의 960px cell_px와 C2 최소 배율을 고정�
   );
   const px = Object.fromEntries(VERSIONS_C.map((spec) => [spec.name, cellPx(spec.k)]));
   assert.equal(px.C0.toFixed(2), '10.20');
-  assert.equal(px.C1.toFixed(2), '8.47');
-  assert.equal(px.C2.toFixed(2), '7.24');
+  assert.equal(px.C1.toFixed(2), '8.98');
+  assert.equal(px.C2.toFixed(2), '8.02');
+  assert.equal(px.C3.toFixed(2), '7.24');
+  // C0 만 바닥 위, C1 은 바닥 경계(0.2% 아래) — 가이드 정합 시 C1 부터 확대 여지.
   assert.ok(px.C0 >= CELL_PX_FLOOR);
-  assert.ok(px.C1 < CELL_PX_FLOOR);
-  assert.ok(px.C2 < CELL_PX_FLOOR);
+  assert.ok(px.C1 < CELL_PX_FLOOR && px.C2 < CELL_PX_FLOOR && px.C3 < CELL_PX_FLOOR);
 
-  const c2MinScale = CELL_PX_FLOOR / px.C2;
-  assert.equal(c2MinScale.toFixed(6), '1.242907');
-  assert.ok(c2MinScale > 1.24 && c2MinScale < 1.25,
-    `C2 최소 배율이 약 1.25×가 아니다: ${c2MinScale}`);
+  const c3MinScale = CELL_PX_FLOOR / px.C3;
+  assert.equal(c3MinScale.toFixed(6), '1.242907');
+  assert.ok(c3MinScale > 1.24 && c3MinScale < 1.25,
+    `C3 최소 배율이 약 1.25×가 아니다: ${c3MinScale}`);
 
   // 동일 외경 C의 bbox 점유율은 K/육각 축과 같고 실측 성공 지대 안이다.
   const occupancy = guideOccupancyEstimates().hexagon;

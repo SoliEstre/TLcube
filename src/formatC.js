@@ -15,7 +15,11 @@ import {
 } from './turnA.js';
 import { MARKER_G_FORMAT_INDEX } from './markerG.js';
 
-export const TYPE_C_RADII = Object.freeze([14, 17, 20]);
+/**
+ * 4단 등간 사다리 (운영자 정정 2026-08-30): C0=14 · C1=16 · C2=18 · C3=20.
+ * 초기 발행분(30.03)의 [14,17,20] 3단은 운영자 계산 착오였다 — 채택 전 정정.
+ */
+export const TYPE_C_RADII = Object.freeze([14, 16, 18, 20]);
 export const TYPE_C_RESERVED_FORMAT_INDEXES = Object.freeze([
   K1_RESERVED_FORMAT_INDEX,
   ...CUBE_RESERVED_FORMAT_INDEXES,
@@ -25,14 +29,16 @@ export const TYPE_C_RESERVED_FORMAT_INDEXES = Object.freeze([
 export const TYPE_C_CM_UNSUPPORTED_REASON =
   'Type C × cornerMarker(CM) 는 이번 범위 밖이다 — 3시 노치가 CM tetrad 3셀과 겹쳐 배치·회계·검출을 검증하지 않았다';
 
-/** Type C 와이어 표. 평 3행 뒤 C*D 3행. */
+/** Type C 와이어 표. 평 4행 뒤 C*D 4행. */
 export const C_FORMAT_INDEX = Object.freeze([
   Object.freeze({ name: 'C0', version: 0, k: 14, formatIndex: 0, daehanFinder: false }),
-  Object.freeze({ name: 'C1', version: 1, k: 17, formatIndex: 0, daehanFinder: false }),
-  Object.freeze({ name: 'C2', version: 2, k: 20, formatIndex: 0, daehanFinder: false }),
+  Object.freeze({ name: 'C1', version: 1, k: 16, formatIndex: 0, daehanFinder: false }),
+  Object.freeze({ name: 'C2', version: 2, k: 18, formatIndex: 0, daehanFinder: false }),
+  Object.freeze({ name: 'C3', version: 3, k: 20, formatIndex: 0, daehanFinder: false }),
   Object.freeze({ name: 'C0D', version: 0, k: 14, formatIndex: 1, daehanFinder: true }),
-  Object.freeze({ name: 'C1D', version: 1, k: 17, formatIndex: 1, daehanFinder: true }),
-  Object.freeze({ name: 'C2D', version: 2, k: 20, formatIndex: 1, daehanFinder: true }),
+  Object.freeze({ name: 'C1D', version: 1, k: 16, formatIndex: 1, daehanFinder: true }),
+  Object.freeze({ name: 'C2D', version: 2, k: 18, formatIndex: 1, daehanFinder: true }),
+  Object.freeze({ name: 'C3D', version: 3, k: 20, formatIndex: 1, daehanFinder: true }),
 ]);
 
 /** version + daehanFinder → 표 항목. 없으면 RangeError. */
@@ -88,7 +94,7 @@ export function cSpecFromFormatIndex(formatIndex, k) {
   const plain = C_FORMAT_INDEX.filter((entry) => !entry.daehanFinder);
   const daehan = C_FORMAT_INDEX.filter((entry) => entry.daehanFinder);
   if (plain.length !== TYPE_C_RADII.length || daehan.length !== TYPE_C_RADII.length) {
-    throw new Error('formatC: 평 C 3행과 C*D 3행이 모두 있어야 한다');
+    throw new Error('formatC: 평 C와 C*D가 TYPE_C_RADII 행수만큼 있어야 한다');
   }
   for (let version = 0; version < TYPE_C_RADII.length; version += 1) {
     const p = cFormatSpec(version);

@@ -115,7 +115,7 @@ import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../finder-
 import {
   DAEHAN_FINDER_PATTERNS, DAEHAN_RADII, daehanReservedCells, isDaehanFinderPatternId,
 } from '../finder-daehan.js';
-import { NOTCH_C_CELL_COUNT, notchCellsC, typeCReservedCells } from '../notchC.js';
+import { TYPE_C_MIN_RADIUS, notchCellCountC, notchCellsC, typeCReservedCells } from '../notchC.js';
 
 /**
  * 중앙 파인더 검출 라인업 = 생성·손그림 이진 11종 + OAK 후보 3종 + daehan 3종 (2026-08-18).
@@ -1200,7 +1200,12 @@ function finderRadiusSeeds(luma, outline) {
     ...uniqueDimensions('tri'),
   ]));
   const seeds = dimensions.map((k) => {
-    const size = Math.sqrt(outline.area / (cellCount(k) * HEX_AREA_COEFF));
+    // Type C 반경(k ≥ 14)의 실루엣은 노치 v2 가 판 셀만큼 면적이 준다 — 전체
+    // 셀수로 나누면 시드 스케일이 그만큼 작아져 앵커(3k 증폭) 허용치를 넘긴다.
+    const effectiveCells = k >= TYPE_C_MIN_RADIUS
+      ? cellCount(k) - notchCellCountC(k)
+      : cellCount(k);
+    const size = Math.sqrt(outline.area / (effectiveCells * HEX_AREA_COEFF));
     return Math.sqrt(13) * size;
   }).filter((value) => Number.isFinite(value) && value > 0);
   return seeds.length > 0 ? seeds : undefined;
@@ -4133,6 +4138,11 @@ function assembleGeometryHypotheses(
         finderSource: finderResult.ok ? finderResult.source : 'none-cube-positive',
         finderCount: finders.length,
         finderFailure: finderResult.ok ? undefined : finderResult,
+        // 무시드 재시도 조건 (frontend) — 성공 기하가 시드 정권 위에서 섰는지.
+        // 검증 단계 실패(NO_FORMAT_CANDIDATE)로 접혀도 이 플래그가 승계돼야
+        // «시드의 그럴듯한 성공 → 별칭 가설 독점 → CRC 사망» 프레임을 재시도가
+        // 구제한다 (C1 k=16 실측 — k12 별칭 1.30× 스케일).
+        outlineSeedsUsed: Boolean(finderResult.ok && finderResult.usedOutlineSeeds === true),
         qr: {
           ok: qrResult.ok,
           reason: qrResult.reason,
@@ -4500,7 +4510,7 @@ function typeCNotchHint(luma, hypothesis, options) {
     ? options.notch.minBackgroundRate
     : TYPE_C_NOTCH_MIN_BACKGROUND_RATE;
   return {
-    ok: sampled === NOTCH_C_CELL_COUNT && backgroundRate >= minBackgroundRate,
+    ok: sampled === notchCellCountC(hypothesis.k) && backgroundRate >= minBackgroundRate,
     orientation: hypothesis.orientation,
     rotationDegrees: hypothesis.rotationDegrees,
     sampled,
@@ -5805,6 +5815,8 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
     return fail(validated.reason, {
       ...(validated.detail || {}),
       geometryDiagnostics: geometry.diagnostics,
+      // 시드 정권 플래그 승계 — frontend 무시드 재시도의 판정 근거.
+      outlineSeedsUsed: geometry.diagnostics?.outlineSeedsUsed === true,
       relocation: {
         attemptedFamilies: Array.from(attempted),
         targets: relocation.families,

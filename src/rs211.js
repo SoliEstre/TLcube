@@ -130,61 +130,85 @@ function freezeRsBlockLevel(blockCount, dataSymbolsPerBlock, paritySymbolsPerBlo
  * 다중 블록 행의 고정 절차:
  *   1. B = ceil(S/210)인 최소 블록 수(현재 모두 2)를 쓴다.
  *   2. 긴 블록 길이 ceil(S/B)에 SPEC §5 비율 절차를 적용하고 모든 블록에 같은
- *      `paritySymbolsPerBlock`을 쓴다.
+ *      `paritySymbolsPerBlock`을 쓴다. (사다리 = C0 k14 · C1 k16 · C2 k18 · C3 k20 —
+ *      2026-08-30 운영자 정정 4단 등간.)
  *   3. 전체 데이터 심볼 수가 base-211 청킹과 어긋나면 정렬되는 최근접 홀수로
- *      보정한다. 발동은 C1/H 56→57, C1D/L 16→15 두 행뿐이다.
+ *      보정한다 (동거리는 보호가 두꺼운 위쪽). 정렬 판정의 자는 산식이 아니라
+ *      **실모듈**(capacity.maxBytesForSymbols ↔ base211.symbolCountForByteLength
+ *      왕복 동일성)이다. 발동 6행: C0D/L 20→19 · C2D/L 17→19 · C2D/H 58→57 ·
+ *      C3/L 23→25 · C3/M 49→47 · C3/H 77→75.
  *   4. 데이터 심볼은 짧은 블록 먼저, 블록 간 길이 차 1 이하로 고정한다.
+ *
+ * ⚠ 2026-08-30 노치 v2(3줄 슬롯, 3k−22셀) 개정으로 전 행을 재유도했다 — 유도
+ *   스크립트는 `.agent/scratch/derive-notch-v2.mjs` (사설 트리), 값 잠금은
+ *   capacityC.js EXPECT 와 test/capacityC.test.js.
  *
  * 인터리빙은 QR과 같이 **데이터 라운드로빈 뒤 패리티 라운드로빈**이다. 짧은 블록의
  * 첫 패리티가 긴 블록의 마지막 데이터와 섞이지 않는다.
  */
 export const NSYM_TABLE_C = Object.freeze({
   C0: Object.freeze({
-    symbols: 187, L: 22, M: 47, H: 75,
+    symbols: 183, L: 22, M: 47, H: 73,
     blocks: Object.freeze({
-      L: freezeRsBlockLevel(1, [165], 22),
-      M: freezeRsBlockLevel(1, [140], 47),
-      H: freezeRsBlockLevel(1, [112], 75),
+      L: freezeRsBlockLevel(1, [161], 22),
+      M: freezeRsBlockLevel(1, [136], 47),
+      H: freezeRsBlockLevel(1, [110], 73),
     }),
   }),
   C1: Object.freeze({
-    symbols: 281, L: 34, M: 70, H: 114,
+    symbols: 242, L: 30, M: 62, H: 96,
     blocks: Object.freeze({
-      L: freezeRsBlockLevel(2, [123, 124], 17),
-      M: freezeRsBlockLevel(2, [105, 106], 35),
-      H: freezeRsBlockLevel(2, [83, 84], 57),
+      L: freezeRsBlockLevel(2, [106, 106], 15),
+      M: freezeRsBlockLevel(2, [90, 90], 31),
+      H: freezeRsBlockLevel(2, [73, 73], 48),
     }),
   }),
   C2: Object.freeze({
-    symbols: 393, L: 48, M: 98, H: 158,
+    symbols: 308, L: 36, M: 78, H: 124,
     blocks: Object.freeze({
-      L: freezeRsBlockLevel(2, [172, 173], 24),
-      M: freezeRsBlockLevel(2, [147, 148], 49),
-      H: freezeRsBlockLevel(2, [117, 118], 79),
+      L: freezeRsBlockLevel(2, [136, 136], 18),
+      M: freezeRsBlockLevel(2, [115, 115], 39),
+      H: freezeRsBlockLevel(2, [92, 92], 62),
+    }),
+  }),
+  C3: Object.freeze({
+    symbols: 383, L: 50, M: 94, H: 150,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(2, [166, 167], 25),
+      M: freezeRsBlockLevel(2, [144, 145], 47),
+      H: freezeRsBlockLevel(2, [116, 117], 75),
     }),
   }),
   C0D: Object.freeze({
-    symbols: 167, L: 20, M: 43, H: 67,
+    symbols: 163, L: 19, M: 41, H: 65,
     blocks: Object.freeze({
-      L: freezeRsBlockLevel(1, [147], 20),
-      M: freezeRsBlockLevel(1, [124], 43),
-      H: freezeRsBlockLevel(1, [100], 67),
+      L: freezeRsBlockLevel(1, [144], 19),
+      M: freezeRsBlockLevel(1, [122], 41),
+      H: freezeRsBlockLevel(1, [98], 65),
     }),
   }),
   C1D: Object.freeze({
-    symbols: 261, L: 30, M: 66, H: 104,
+    symbols: 222, L: 26, M: 58, H: 88,
     blocks: Object.freeze({
-      L: freezeRsBlockLevel(2, [115, 116], 15),
-      M: freezeRsBlockLevel(2, [97, 98], 33),
-      H: freezeRsBlockLevel(2, [78, 79], 52),
+      L: freezeRsBlockLevel(2, [98, 98], 13),
+      M: freezeRsBlockLevel(2, [82, 82], 29),
+      H: freezeRsBlockLevel(2, [67, 67], 44),
     }),
   }),
   C2D: Object.freeze({
-    symbols: 373, L: 44, M: 94, H: 150,
+    symbols: 288, L: 38, M: 74, H: 114,
     blocks: Object.freeze({
-      L: freezeRsBlockLevel(2, [164, 165], 22),
-      M: freezeRsBlockLevel(2, [139, 140], 47),
-      H: freezeRsBlockLevel(2, [111, 112], 75),
+      L: freezeRsBlockLevel(2, [125, 125], 19),
+      M: freezeRsBlockLevel(2, [107, 107], 37),
+      H: freezeRsBlockLevel(2, [87, 87], 57),
+    }),
+  }),
+  C3D: Object.freeze({
+    symbols: 363, L: 44, M: 94, H: 146,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(2, [159, 160], 22),
+      M: freezeRsBlockLevel(2, [134, 135], 47),
+      H: freezeRsBlockLevel(2, [108, 109], 73),
     }),
   }),
 });
@@ -1077,9 +1101,9 @@ export function rsDecodeMessage(received, nsym, options = {}) {
 // Type C 블록 표 로드 자기검증. 표가 회계·인터리브 사상과 따로 썩으면 즉시 실패한다.
 {
   const levels = ['L', 'M', 'H'];
-  const expectedKeys = ['C0', 'C1', 'C2', 'C0D', 'C1D', 'C2D'];
+  const expectedKeys = ['C0', 'C1', 'C2', 'C3', 'C0D', 'C1D', 'C2D', 'C3D'];
   if (Object.keys(NSYM_TABLE_C).join('|') !== expectedKeys.join('|')) {
-    throw new Error('NSYM_TABLE_C 행 명부나 순서가 C0/C1/C2/C0D/C1D/C2D와 다르다');
+    throw new Error('NSYM_TABLE_C 행 명부나 순서가 C0..C3/C0D..C3D와 다르다');
   }
   for (const symbolKey of expectedKeys) {
     const row = NSYM_TABLE_C[symbolKey];

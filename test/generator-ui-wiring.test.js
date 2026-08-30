@@ -542,12 +542,13 @@ test('§6.3 사괘 중앙 파트너 잠금은 scene 계약을 유도한다 — �
 
 // ── §6.3 Type C ultra 생성기 배선 ───────────────────────────────────────────
 
-test('§6.3 ultra 카드와 C0/C1/C2 select가 ECC-M 수치로 한 벌이다', () => {
+test('§6.3 ultra 카드와 C0~C3 select가 ECC-M 수치로 한 벌이다', () => {
   assert.match(INDEX, /data-res="ultra"/);
-  assert.match(INDEX, /id="versionC"[\s\S]*value="0"[^>]*data-i18n="g1016"[\s\S]*value="1"[^>]*data-i18n="g1017"[\s\S]*value="2"[^>]*data-i18n="g1018"/);
-  assert.match(INDEX, /C0 \(k=14 · 134 B\)/);
-  assert.match(INDEX, /C1 \(k=17 · 202 B\)/);
-  assert.match(INDEX, /C2 \(k=20 · 255 B\)/);
+  assert.match(INDEX, /id="versionC"[\s\S]*value="0"[^>]*data-i18n="g1016"[\s\S]*value="1"[^>]*data-i18n="g1017"[\s\S]*value="2"[^>]*data-i18n="g1018"[\s\S]*value="3"[^>]*data-i18n="g1023"/);
+  assert.match(INDEX, /C0 \(k=14 · 130 B\)/);
+  assert.match(INDEX, /C1 \(k=16 · 172 B\)/);
+  assert.match(INDEX, /C2 \(k=18 · 220 B\)/);
+  assert.match(INDEX, /C3 \(k=20 · 255 B\)/);
   assert.match(INDEX, /versionWrapC:\s*\$\('versionWrapC'\)/,
     'C select DOM 참조가 없다');
   assert.match(INDEX, /els\.versionWrapC\.style\.display = isC \? '' : 'none'/,
