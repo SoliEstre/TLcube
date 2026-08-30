@@ -11,6 +11,8 @@ const SRC_DIR = path.join(ROOT, 'src');
 const TEMPLATE_PATH = path.join(MODULE_DIR, 'cell-editor-template.html');
 const APP_PATH = path.join(MODULE_DIR, 'cell-editor-app.js');
 const OUTPUT_SHARED_PATH = path.join(ROOT, 'sites', '_shared', 'cell-editor.html');
+// 수렴 지문 대상 (rebuild-all.mjs) — 쓰기가 사용하는 경로 상수에서 유도한다.
+export const OUTPUTS = Object.freeze([OUTPUT_SHARED_PATH]);
 const LOADER_TOKEN = '<!-- CELL_EDITOR_LOADER -->';
 
 export const CELL_EDITOR_MODULE_ORDER = Object.freeze([

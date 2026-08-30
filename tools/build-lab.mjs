@@ -19,6 +19,8 @@ export const LAB_OUTPUTS = Object.freeze({
   generator: LAB_GENERATOR_PATH,
   scanner: LAB_SCANNER_PATH,
 });
+// 수렴 지문 대상 (rebuild-all.mjs) — 쓰기 루프가 순회하는 LAB_OUTPUTS 에서 유도한다.
+export const OUTPUTS = Object.freeze(Object.values(LAB_OUTPUTS));
 
 export function buildLabVariants() {
   return Object.freeze({

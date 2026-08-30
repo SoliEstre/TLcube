@@ -28,6 +28,8 @@ const INDEX_HTML = path.join(SCANNER_DIR, 'index.html');
 const ENTRY_FILE = path.join(SCANNER_DIR, 'scanner.js');
 const OUT_DIR = path.join(ROOT, 'dist');
 const OUT_FILE = path.join(OUT_DIR, 'tlscan.html');
+// 수렴 지문 대상 (rebuild-all.mjs) — 쓰기가 사용하는 경로 상수에서 유도한다.
+export const OUTPUTS = Object.freeze([OUT_FILE]);
 const ENTRY_MODULE_ID = '/scanner.js';
 const SOURCE_PREFIX = '/src/';
 

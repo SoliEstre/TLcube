@@ -27,6 +27,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const POSTER_REL = 'print/tlcube-poster.html';
 export const POSTER_BW_REL = 'print/tlcube-poster-bw.html';
+// 수렴 지문 대상 (rebuild-all.mjs) — isMain 의 쓰기 2건이 사용하는 상수 그대로.
+export const OUTPUTS = Object.freeze([POSTER_REL, POSTER_BW_REL]);
 export const POSTER_URL = 'https://tl.estre.so';
 export const POSTER_TL_TYPE = 'Y';
 export const POSTER_TL_VERSION = 0;

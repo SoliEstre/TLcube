@@ -11,6 +11,8 @@ const SRC_DIR = path.join(ROOT, 'src');
 const TEMPLATE_PATH = path.join(MODULE_DIR, 'finder-editor-template.html');
 const APP_PATH = path.join(MODULE_DIR, 'finder-editor-app.js');
 const OUTPUT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html');
+// 수렴 지문 대상 (rebuild-all.mjs) — 쓰기가 사용하는 경로 상수에서 유도한다.
+export const OUTPUTS = Object.freeze([OUTPUT_PATH]);
 const LOADER_TOKEN = '<!-- FINDER_EDITOR_LOADER -->';
 
 export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([

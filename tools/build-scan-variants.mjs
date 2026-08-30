@@ -66,6 +66,12 @@ export const VARIANTS = [
   },
 ];
 
+/** 변형 파일 경로 — 쓰기 루프와 OUTPUTS 가 같은 유도를 쓴다 (철자 사본 금지). */
+const variantFile = (v) => path.join(OUT_DIR, `scan-${v.id}.html`);
+
+// 수렴 지문 대상 (rebuild-all.mjs) — VARIANTS 테이블에서 유도한다.
+export const OUTPUTS = Object.freeze([...VARIANTS.map(variantFile), LAB_SCANNER_PATH]);
+
 /** 번들에 박힌 빌드 태그를 꺼내 라벨에 쓴다 — 어느 빌드를 보고 있는지 스스로 증명한다. */
 function buildTagOf(html) {
   const m = /SCANNER_BUILD\s*=\s*'([^']+)'/.exec(html);
@@ -145,7 +151,7 @@ function main() {
     const at = html.indexOf('>', html.indexOf('<body')) + 1;
     if (at <= 0) throw new Error(`${v.id}: <body> 를 못 찾았다`);
     const out = html.slice(0, at) + pickerBar(v.id, tags) + html.slice(at);
-    const file = path.join(OUT_DIR, `scan-${v.id}.html`);
+    const file = variantFile(v);
     writeFileSync(file, out);
     console.log(`sites/_shared/scan-${v.id}.html  ${tags[v.id].padEnd(16)} ${(out.length / 1024).toFixed(0)} KB  (${v.name})`);
   }

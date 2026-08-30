@@ -15,6 +15,8 @@ const OFFICIAL_PATH = path.join(ROOT, 'dist', 'trilume.html');
 const EXPERIMENT_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder.html');
 const EDITOR_PATH = path.join(ROOT, 'sites', '_shared', 'gen-finder-editor.html');
 export const LAB_GENERATOR_PATH = path.join(ROOT, 'sites', '_shared', 'lab-gen.html');
+// 수렴 지문 대상 (rebuild-all.mjs) — main() 의 쓰기 4건이 사용하는 상수 그대로.
+export const OUTPUTS = Object.freeze([OFFICIAL_PATH, EXPERIMENT_PATH, EDITOR_PATH, LAB_GENERATOR_PATH]);
 
 export const FINDER_EXPERIMENT_DEFAULT_ID = 'pinwheel-c2-2-1100-cw';
 

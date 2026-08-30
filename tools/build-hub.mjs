@@ -20,6 +20,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { languages, strings, stats } from './hub-content.mjs';
@@ -395,13 +396,26 @@ ${entries}
 `;
 }
 
-for (const lang of languages) {
-  const dir = ROOT + lang.dir;
-  if (lang.dir) mkdirSync(dir, { recursive: true });
-  const html = render(lang);
-  writeFileSync(dir + 'index.html', html);
-  console.log(`${(lang.dir || './').padEnd(6)} ${lang.label.padEnd(10)} ${html.length.toLocaleString()} chars`);
+// 수렴 지문 대상 (rebuild-all.mjs) — 쓰기 루프와 같은 languages 테이블·ROOT 에서 유도한다.
+export const OUTPUTS = Object.freeze([
+  ...languages.map((l) => ROOT + l.dir + 'index.html'),
+  ROOT + 'sitemap.xml',
+]);
+
+export function writeHub() {
+  for (const lang of languages) {
+    const dir = ROOT + lang.dir;
+    if (lang.dir) mkdirSync(dir, { recursive: true });
+    const html = render(lang);
+    writeFileSync(dir + 'index.html', html);
+    console.log(`${(lang.dir || './').padEnd(6)} ${lang.label.padEnd(10)} ${html.length.toLocaleString()} chars`);
+  }
+  writeFileSync(`${ROOT}sitemap.xml`, sitemap());
+  console.log(`${'sitemap'.padEnd(6)} ${String(languages.length).padEnd(10)} URLs`);
+  console.log(`\n→ ${ROOT}`);
 }
-writeFileSync(`${ROOT}sitemap.xml`, sitemap());
-console.log(`${'sitemap'.padEnd(6)} ${String(languages.length).padEnd(10)} URLs`);
-console.log(`\n→ ${ROOT}`);
+
+// rebuild-all.mjs 가 OUTPUTS 를 읽으려고 이 모듈을 import 한다 — import 만으로 빌드가
+// 돌면 안 되므로 CLI 직접 실행일 때만 쓴다 (다른 빌더 8개와 같은 가드).
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) writeHub();

@@ -22,6 +22,8 @@ const SRC_DIR = path.join(ROOT, 'src');
 const INDEX_HTML = path.join(ROOT, 'index.html');
 const OUT_DIR = path.join(ROOT, 'dist');
 const OUT_FILE = path.join(OUT_DIR, 'trilume.html');
+// 수렴 지문 대상 (rebuild-all.mjs) — 쓰기가 사용하는 경로 상수에서 유도한다.
+export const OUTPUTS = Object.freeze([OUT_FILE]);
 
 export const OFFICIAL_GENERATOR_EDITION = 'official';
 export const FINDER_EXPERIMENT_EDITION = 'finder-experiment';
