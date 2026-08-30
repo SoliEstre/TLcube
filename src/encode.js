@@ -13,7 +13,7 @@
 import { VERSIONS, capacityFor } from './capacity.js';
 import { frame, payloadByteLength } from './header.js';
 import { bytesToSymbols, unpackSymbolsToCellDigits } from './base211.js';
-import { rsEncode } from './rs211.js';
+import { rsEncode, rsEncodeBlocks } from './rs211.js';
 import { maskAdd } from './mask.js';
 import { encodeReplicated, ECC_LEVEL } from './formatinfo.js';
 import { centralSlotCells, dataCellsInScanOrder, fillerCells } from './layout.js';
@@ -39,7 +39,6 @@ import {
   VERSIONS_C,
   VERSIONS_C_DAEHAN,
   capacityForC,
-  assertTypeCSingleBlock,
 } from './capacityC.js';
 import { cFormatSpec, TYPE_C_CM_UNSUPPORTED_REASON } from './formatC.js';
 import { markerGSpec } from './markerG.js';
@@ -144,7 +143,6 @@ export function chooseVersion(
   for (const spec of provider.versions) {
     const capacity = provider.capacity(spec, eccLevel);
     if (byteLength <= capacity.maxPayloadBytes) {
-      if (notchC) assertTypeCSingleBlock(capacity);
       return spec;
     }
   }
@@ -295,7 +293,6 @@ export function encode(text, options = {}) {
   }
 
   const capacity = provider.capacity(spec, eccLevel);
-  if (notchC) assertTypeCSingleBlock(capacity);
   const { k } = spec;
 
   // 길이 헤더 + 0x00 패딩 (header.js) → base-211 심볼 (base211.js).
@@ -308,8 +305,12 @@ export function encode(text, options = {}) {
     );
   }
 
-  // RS(GF(211)) 패리티 부착 → 코드워드 = 데이터 심볼 ‖ 패리티, 길이 S(=usedSymbols).
-  const codewordSymbols = rsEncode(symbols, capacity.nsym);
+  // RS(GF(211)) 패리티 부착. Type C는 고정 블록표에 따라 연속 데이터 분할 → 블록별
+  // RS → 데이터 RR/패리티 RR 인터리빙을 한다. C0/C0D(블록 1)는 기존 rsEncode와
+  // 바이트 동일한 항등 사상이다. 다른 패밀리의 단일 블록 호출은 문자 그대로 유지한다.
+  const codewordSymbols = notchC
+    ? rsEncodeBlocks(symbols, capacity.rsBlockConfig)
+    : rsEncode(symbols, capacity.nsym);
   if (codewordSymbols.length !== capacity.usedSymbols) {
     throw new RangeError(
       `코드워드 심볼 개수 불일치: rsEncode() ${codewordSymbols.length} !== capacity.usedSymbols ${capacity.usedSymbols}`,

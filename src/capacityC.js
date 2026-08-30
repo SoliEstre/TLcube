@@ -6,13 +6,14 @@
  * daehan 완전판의 불스아이 밖 sagoae 60셀(C*D)을 넣어 유도한다. 중앙 taegeuk
  * 19셀은 기존 bullseye 항이 이미 세므로 다시 더하지 않는다.
  *
- * C1/C2는 회계 S가 GF(211) 단일 RS 코드워드 상한 210을 넘는다. 이 모듈은 표와
- * 이론 용량을 숨기지 않되 `singleBlockEncodable:false`로 표시하며, 인코더가 호출하는
- * assertTypeCSingleBlock()은 다중 블록 규약이 없는 상태를 명시적으로 거절한다.
+ * C1/C2 계열은 `rs211.js`의 고정 다중 블록 표를 쓴다. `nsym`은 전 블록 패리티 합,
+ * 실제 정정 한계는 `errorCapacityPerBlock`과 블록별 `2v+s≤p` 계약으로 해석한다.
  */
 
 import { capacityFor } from './capacity.js';
-import { MAX_CODEWORD_LEN, NSYM_TABLE_C } from './rs211.js';
+import {
+  MAX_CODEWORD_LEN, NSYM_TABLE_C, errorCapacity, rsBlockConfigForC,
+} from './rs211.js';
 import { symbolCountForByteLength } from './base211.js';
 import { overheadBreakdown } from './placement.js';
 import { daehanReservedCells } from './finder-daehan.js';
@@ -20,10 +21,6 @@ import { notchCellsC, typeCReservedCells } from './notchC.js';
 import { C_FORMAT_INDEX } from './formatC.js';
 
 const NSYM_SOURCE = Object.freeze({ table: NSYM_TABLE_C, tableName: 'NSYM_TABLE_C' });
-
-/** C1/C2 계열 공용 거절 사유. C-UI/C-DEC도 이 상수를 그대로 표시할 수 있다. */
-export const TYPE_C_RS_BLOCK_UNDEFINED_REASON =
-  'Type C 코드워드가 GF(211) 단일 블록 상한 210심볼을 넘지만 다중 RS 블록의 분할·패리티 배분·scan-order 매핑 규약이 정의되지 않았다';
 
 function buildSpec(entry) {
   const additional = entry.daehanFinder ? daehanReservedCells(entry.k) : undefined;
@@ -48,21 +45,46 @@ export const VERSIONS_C_DAEHAN = Object.freeze(
 );
 
 /**
- * Type C 한 행의 셀·패리티 회계. `singleBlockEncodable`은 현 rs211 구현 가능 여부이며,
- * `minimumRsBlocks`는 필요한 블록 수의 하한일 뿐 분할 규약을 주장하지 않는다.
+ * Type C 한 행의 셀·패리티·고정 블록 회계.
  */
 export function capacityForC(spec, level = 'M') {
   const base = capacityFor(spec, level, NSYM_SOURCE);
+  const rsBlockConfig = rsBlockConfigForC(spec.symbolKey, level);
+  const dataSymbolsPerBlock = rsBlockConfig.dataSymbolsPerBlock;
+  const paritySymbolsPerBlock = rsBlockConfig.paritySymbolsPerBlock;
+  const codewordSymbolsPerBlock = Object.freeze(
+    dataSymbolsPerBlock.map((count) => count + paritySymbolsPerBlock),
+  );
+  const dataSymbols = dataSymbolsPerBlock.reduce((sum, count) => sum + count, 0);
+  const totalParity = rsBlockConfig.blockCount * paritySymbolsPerBlock;
+  if (dataSymbols !== base.dataSymbols || totalParity !== base.nsym
+    || codewordSymbolsPerBlock.reduce((sum, count) => sum + count, 0) !== base.usedSymbols) {
+    throw new Error(`${spec.name}/${level}: capacityFor와 RS 블록 표의 심볼 회계가 어긋난다`);
+  }
+  const errorCapacityPerBlock = errorCapacity(paritySymbolsPerBlock);
   return {
     ...base,
+    // 총 오류가 어디에 몰릴지 모르는 보장은 한 블록 t까지다. 블록에 고르게 퍼진
+    // 최댓값은 errorCapacityAggregate이고, 정규 판정은 각 블록 2v+s≤p다.
+    errorCapacity: errorCapacityPerBlock,
+    errorCapacityPerBlock,
+    errorCapacityAggregate: rsBlockConfig.blockCount * errorCapacityPerBlock,
+    totalParitySymbols: totalParity,
+    nsymPerBlock: paritySymbolsPerBlock,
     name: spec.name,
     formatIndex: spec.formatIndex,
     notchC: true,
     daehanFinder: spec.daehanFinder === true,
     notchCount: spec.notchCount,
     finderReservedCount: spec.finderReservedCount,
+    rsEncodable: true,
     singleBlockEncodable: base.usedSymbols <= MAX_CODEWORD_LEN,
     minimumRsBlocks: Math.ceil(base.usedSymbols / MAX_CODEWORD_LEN),
+    rsBlockCount: rsBlockConfig.blockCount,
+    rsParitySymbolsPerBlock: paritySymbolsPerBlock,
+    rsDataSymbolsPerBlock: dataSymbolsPerBlock,
+    rsCodewordSymbolsPerBlock: codewordSymbolsPerBlock,
+    rsBlockConfig,
   };
 }
 
@@ -73,34 +95,20 @@ export function capacityForCDaehan(spec, level = 'M') {
   return capacityForC(spec, level);
 }
 
-/** 현재 단일 GF(211) 블록으로 실제 인코딩 가능한지 단언한다. */
-export function assertTypeCSingleBlock(capacity) {
-  if (!capacity || !Number.isInteger(capacity.usedSymbols)) {
-    throw new TypeError('Type C 용량 객체가 필요하다');
-  }
-  if (capacity.usedSymbols > MAX_CODEWORD_LEN) {
-    throw new RangeError(
-      `${capacity.name || `C${capacity.version}`}/${capacity.level}: ${TYPE_C_RS_BLOCK_UNDEFINED_REASON} `
-      + `(S=${capacity.usedSymbols}, 최소 블록 수 ${Math.ceil(capacity.usedSymbols / MAX_CODEWORD_LEN)})`,
-    );
-  }
-  return capacity;
-}
-
 export function capacityTableC(level = 'M', options = {}) {
   const versions = options.daehanFinder === true ? VERSIONS_C_DAEHAN : VERSIONS_C;
   return versions.map((spec) => capacityForC(spec, level));
 }
 
-// 로드 자기검증 — 회계·청킹·단일블록 경계를 값으로 잠근다.
+// 로드 자기검증 — 회계·청킹·고정 블록 경계를 값으로 잠근다.
 {
   const EXPECT = Object.freeze({
     C0: Object.freeze({ k: 14, overhead: 69, dataCells: 562, symbols: 187, payload: [158, 134, 107] }),
-    C1: Object.freeze({ k: 17, overhead: 75, dataCells: 844, symbols: 281, payload: [237, 201, 161] }),
-    C2: Object.freeze({ k: 20, overhead: 81, dataCells: 1180, symbols: 393, payload: [255, 255, 226] }),
+    C1: Object.freeze({ k: 17, overhead: 75, dataCells: 844, symbols: 281, payload: [237, 202, 160] }),
+    C2: Object.freeze({ k: 20, overhead: 81, dataCells: 1180, symbols: 393, payload: [255, 255, 225] }),
     C0D: Object.freeze({ k: 14, overhead: 129, dataCells: 502, symbols: 167, payload: [140, 118, 95] }),
-    C1D: Object.freeze({ k: 17, overhead: 135, dataCells: 784, symbols: 261, payload: [220, 188, 150] }),
-    C2D: Object.freeze({ k: 20, overhead: 141, dataCells: 1120, symbols: 373, payload: [255, 255, 215] }),
+    C1D: Object.freeze({ k: 17, overhead: 135, dataCells: 784, symbols: 261, payload: [221, 187, 150] }),
+    C2D: Object.freeze({ k: 20, overhead: 141, dataCells: 1120, symbols: 373, payload: [255, 255, 214] }),
   });
   const levels = ['L', 'M', 'H'];
   for (const spec of [...VERSIONS_C, ...VERSIONS_C_DAEHAN]) {
@@ -120,9 +128,10 @@ export function capacityTableC(level = 'M', options = {}) {
       if (symbolCountForByteLength(cap.dataBytes) !== cap.dataSymbols) {
         throw new Error(`capacityC: ${spec.name}/${levels[i]} base-211 청킹 비정렬`);
       }
-      const shouldFit = spec.version === 0;
-      if (cap.singleBlockEncodable !== shouldFit) {
-        throw new Error(`capacityC: ${spec.name} 단일블록 경계가 C0/C0D 규약과 다르다`);
+      const expectedBlocks = Math.ceil(cap.usedSymbols / MAX_CODEWORD_LEN);
+      if (cap.rsBlockCount !== expectedBlocks || cap.minimumRsBlocks !== expectedBlocks
+        || cap.rsCodewordSymbolsPerBlock.some((count) => count > MAX_CODEWORD_LEN)) {
+        throw new Error(`capacityC: ${spec.name}/${levels[i]} RS 블록 경계가 표와 다르다`);
       }
     }
   }

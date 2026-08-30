@@ -58,7 +58,7 @@ import {
   packCellDigitsToSymbols,
   symbolCountForByteLength,
 } from './base211.js';
-import { rsDecode } from './rs211.js';
+import { rsDecode, rsDecodeBlocks } from './rs211.js';
 import { maskSub, DEFAULT_MASK_INDEX, assertMaskIndex } from './mask.js';
 import { unframe } from './header.js';
 import {
@@ -73,6 +73,9 @@ import {
 } from './markerA.js';
 import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
 import { daehanReservedCells } from './finder-daehan.js';
+import { VERSIONS_C, VERSIONS_C_DAEHAN, capacityForC } from './capacityC.js';
+import { typeCReservedCells } from './notchC.js';
+import { cSpecFromFormatIndex } from './formatC.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderO } from './layout.js';
 import { dataCellsInScanOrderA } from './layoutA.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderY } from './layoutY.js';
@@ -299,6 +302,60 @@ function resolveProfile(format) {
   const eccLevel = normalizeEccLevel(format.eccLevel);
   const rawExplicit = format.formatIndex !== undefined;
   const formatIndex = rawFormatIndex(format);
+
+  if (type === 'C') {
+    // Type C는 같은 formatIndex를 k=14/17/20이 공유한다. logical version과 raw
+    // formatIndex를 `format.version` 하나만으로 겸용하면 C1(논리 1)과 C1D(raw 1)가
+    // 모호해지므로 C-DEC 계약 그대로 `(formatIndex,k)`를 둘 다 필수로 받는다.
+    // 선택적 version은 행을 고르지 않으며, generic 어댑터 호환을 위해 raw/논리 중
+    // 어느 의미든 표와 일치할 때만 받아들인다.
+    if (!Number.isInteger(format.formatIndex)) {
+      throw new RangeError('Type C는 raw formatIndex가 필요하다');
+    }
+    if (!Number.isInteger(format.k)) {
+      throw new RangeError('Type C는 formatIndex와 짝인 k가 필요하다');
+    }
+    const wireSpec = cSpecFromFormatIndex(format.formatIndex, format.k);
+    if (!wireSpec) {
+      throw new RangeError(
+        `알 수 없는 Type C (formatIndex,k): (${format.formatIndex},${format.k})`,
+      );
+    }
+    if (format.version !== undefined
+      && format.version !== format.formatIndex
+      && format.version !== wireSpec.version) {
+      throw new RangeError(
+        `Type C version ${format.version}이 raw formatIndex ${format.formatIndex}`
+        + ` 또는 논리 version ${wireSpec.version} 어느 쪽과도 다르다`,
+      );
+    }
+    if (format.daehanFinder !== undefined) {
+      if (typeof format.daehanFinder !== 'boolean') {
+        throw new TypeError(`daehanFinder는 boolean이어야 한다: ${typeof format.daehanFinder}`);
+      }
+      if (format.daehanFinder !== wireSpec.daehanFinder) {
+        throw new RangeError(
+          `Type C daehanFinder=${format.daehanFinder}가 formatIndex ${format.formatIndex}`
+          + `의 표 값 ${wireSpec.daehanFinder}와 다르다`,
+        );
+      }
+    }
+    const versions = wireSpec.daehanFinder ? VERSIONS_C_DAEHAN : VERSIONS_C;
+    const spec = versions.find((entry) => entry.name === wireSpec.name);
+    if (!spec) {
+      throw new Error(`Type C 와이어 행 ${wireSpec.name}의 용량 행이 없다`);
+    }
+    const additional = spec.daehanFinder ? daehanReservedCells(spec.k) : undefined;
+    const capacity = capacityForC(spec, eccLevel);
+    return finishProfile({
+      type,
+      eccLevel,
+      capacity,
+      rsBlockConfig: capacity.rsBlockConfig,
+      scan: dataCellsInScanOrderO(spec.k, typeCReservedCells(spec.k, additional)),
+      coordinates: (cell) => [cell.q, cell.r],
+    });
+  }
 
   if (type === 'O' && format.daehanFinder === true) {
     // daehan (전면 파인더, 2026-08-18) — O-CM 과 **같은 와이어 계약**이다:
@@ -715,7 +772,7 @@ function resolveProfile(format) {
     });
   }
 
-  throw new RangeError('알 수 없는 코드 패밀리: ' + type + ' (허용 O, A, Y)');
+  throw new RangeError('알 수 없는 코드 패밀리: ' + type + ' (허용 O, A, Y, C)');
 }
 
 function unmaskSymbolDigits(cellDigits, profile) {
@@ -832,7 +889,9 @@ function assertZeroPadding(framed, payloadLength) {
  *
  * format.version은 encode 계열의 논리 버전 또는 formatinfo.decode의 raw version-index를
  * 받을 수 있다. 후자와 전자가 충돌하는 값은 k/n(및 Type Y tones)으로 판별하며,
- * formatIndex를 쓰면 raw index임을 명시한다. type을 생략하면 Type O다.
+ * formatIndex를 쓰면 raw index임을 명시한다. 단 Type C는 두 의미가 실제로 모호하므로
+ * `type:'C'`와 raw `formatIndex`+`k`를 반드시 함께 쓴다. Type C의 선택적 version은
+ * raw 또는 논리값의 호환성 대조에만 쓰며 행을 선택하지 않는다. type을 생략하면 Type O다.
  *
  * cellDigits는 실제 심볼 digit만(3S개) 또는 scan order 전체(3S + filler개) 모두
  * 허용한다. filler는 코드워드가 아니므로 전체 입력일 때도 꼬리에서 무시한다.
@@ -844,8 +903,8 @@ function assertZeroPadding(framed, payloadLength) {
  *
  * @param {Uint8Array|number[]} cellDigits
  * @param {{
- *   type?: 'O'|'A'|'Y',
- *   version:number,
+ *   type?: 'O'|'A'|'Y'|'C',
+ *   version?:number,
  *   formatIndex?:number,
  *   eccLevel:'L'|'M'|'H'|0|1|2,
  *   k?:number,
@@ -929,9 +988,15 @@ export function decodeCells(cellDigits, format, options = {}) {
 
   let rsResult;
   try {
-    rsResult = erasureIndices.length > 0
-      ? rsDecode(received, profile.capacity.nsym, { erasures: erasureIndices })
-      : rsDecode(received, profile.capacity.nsym);
+    if (profile.rsBlockConfig) {
+      rsResult = erasureIndices.length > 0
+        ? rsDecodeBlocks(received, profile.rsBlockConfig, { erasures: erasureIndices })
+        : rsDecodeBlocks(received, profile.rsBlockConfig);
+    } else {
+      rsResult = erasureIndices.length > 0
+        ? rsDecode(received, profile.capacity.nsym, { erasures: erasureIndices })
+        : rsDecode(received, profile.capacity.nsym);
+    }
   } catch (cause) {
     return fail('rs', cause);
   }
@@ -976,6 +1041,14 @@ export function decodeCells(cellDigits, format, options = {}) {
     // C_RS = 2u + e — 소거 e개는 패리티를 1개씩만 쓴다. 점수 계약은 이 필드를 쓴다.
     crsDistance: 2 * rsResult.errorCount + erasureCount,
   };
+  if (rsResult.blockResults) {
+    result.blockCorrections = rsResult.blockResults.map((block, blockIndex) => ({
+      blockIndex,
+      errorCount: block.errorCount,
+      erasureCount: block.erasureCount ?? 0,
+      crsDistance: 2 * block.errorCount + (block.erasureCount ?? 0),
+    }));
+  }
   if (packed.illegalIndices.length > 0 || declaredErasures.length > 0) {
     result.erasureFallback = {
       mode: erasureMode,
