@@ -17,7 +17,6 @@ import {
 } from '../src/formatC.js';
 import {
   VERSIONS_C, VERSIONS_C_DAEHAN, capacityForC, capacityTableC,
-  assertTypeCSingleBlock, TYPE_C_RS_BLOCK_UNDEFINED_REASON,
 } from '../src/capacityC.js';
 import {
   DAEHAN_RADII, daehanFinderCellsFor, daehanPatternId, daehanReservedCells,
@@ -117,11 +116,11 @@ describe('용량·ECC 표', () => {
   test('셀·오버헤드·S·순 페이로드 계약값', () => {
     const expected = {
       C0: [631, 69, 562, 187, [158, 134, 107]],
-      C1: [919, 75, 844, 281, [237, 201, 161]],
-      C2: [1261, 81, 1180, 393, [255, 255, 226]],
+      C1: [919, 75, 844, 281, [237, 202, 160]],
+      C2: [1261, 81, 1180, 393, [255, 255, 225]],
       C0D: [631, 129, 502, 167, [140, 118, 95]],
-      C1D: [919, 135, 784, 261, [220, 188, 150]],
-      C2D: [1261, 141, 1120, 373, [255, 255, 215]],
+      C1D: [919, 135, 784, 261, [221, 187, 150]],
+      C2D: [1261, 141, 1120, 373, [255, 255, 214]],
     };
     for (const spec of [...VERSIONS_C, ...VERSIONS_C_DAEHAN]) {
       const caps = LEVELS.map((level) => capacityForC(spec, level));
@@ -134,7 +133,7 @@ describe('용량·ECC 표', () => {
     }
   });
 
-  test('SPEC §5 절차는 V2/M만 기존 예외이고 Type C는 C1/H 113만 청킹 보정이다', () => {
+  test('SPEC §5 절차는 V2/M 기존 예외, Type C 블록은 C1/H·C1D/L만 청킹 보정이다', () => {
     const existingMismatches = [];
     for (const [name, row] of Object.entries(NSYM_TABLE)) {
       const want = nsymByProcedure(row.symbols);
@@ -146,16 +145,21 @@ describe('용량·ECC 표', () => {
     }
     assert.deepEqual(existingMismatches, ['V2/M 14≠15']);
 
-    const cMismatches = [];
+    const cBlockMismatches = [];
     for (const [name, row] of Object.entries(NSYM_TABLE_C)) {
-      const want = nsymByProcedure(row.symbols);
       for (const level of LEVELS) {
-        if (row[level] !== want[level]) {
-          cMismatches.push(`${name}/${level} ${row[level]}≠${want[level]}`);
+        const config = row.blocks[level];
+        const longestCodeword = Math.max(...config.dataSymbolsPerBlock)
+          + config.paritySymbolsPerBlock;
+        const want = nsymByProcedure(longestCodeword)[level];
+        if (config.paritySymbolsPerBlock !== want) {
+          cBlockMismatches.push(
+            `${name}/${level} ${config.paritySymbolsPerBlock}≠${want}`,
+          );
         }
       }
     }
-    assert.deepEqual(cMismatches, ['C1/H 113≠112']);
+    assert.deepEqual(cBlockMismatches, ['C1/H 57≠56', 'C1D/L 15≠16']);
 
     for (const spec of [...VERSIONS_C, ...VERSIONS_C_DAEHAN]) {
       for (const level of LEVELS) {
@@ -165,19 +169,29 @@ describe('용량·ECC 표', () => {
     }
   });
 
-  test('GF(211) 단일 블록은 C0/C0D만 열고 C1/C2 계열은 같은 사유로 거절', () => {
+  test('C0/C0D는 한 블록, C1/C2 계열은 최소 두 블록으로 모두 210 이하', () => {
     for (const spec of [...VERSIONS_C, ...VERSIONS_C_DAEHAN]) {
-      const cap = capacityForC(spec, 'M');
-      if (spec.version === 0) {
-        assert.equal(assertTypeCSingleBlock(cap), cap);
-        assert.equal(cap.minimumRsBlocks, 1);
-      } else {
-        assert.equal(cap.singleBlockEncodable, false);
-        assert.equal(cap.minimumRsBlocks, 2);
-        assert.throws(
-          () => assertTypeCSingleBlock(cap),
-          (error) => error instanceof RangeError
-            && error.message.includes(TYPE_C_RS_BLOCK_UNDEFINED_REASON),
+      for (const level of LEVELS) {
+        const cap = capacityForC(spec, level);
+        const expectedBlocks = spec.version === 0 ? 1 : 2;
+        assert.equal(cap.rsBlockCount, expectedBlocks, `${spec.name}/${level}`);
+        assert.equal(cap.minimumRsBlocks, expectedBlocks, `${spec.name}/${level}`);
+        assert.equal(cap.rsEncodable, true, `${spec.name}/${level}`);
+        assert.equal(cap.singleBlockEncodable, expectedBlocks === 1, `${spec.name}/${level}`);
+        assert.ok(cap.rsCodewordSymbolsPerBlock.every((count) => count <= 210));
+        assert.equal(
+          cap.rsCodewordSymbolsPerBlock.reduce((sum, count) => sum + count, 0),
+          cap.usedSymbols,
+        );
+        assert.equal(
+          cap.rsDataSymbolsPerBlock.reduce((sum, count) => sum + count, 0),
+          cap.dataSymbols,
+        );
+        assert.equal(cap.nsym, cap.rsBlockCount * cap.rsParitySymbolsPerBlock);
+        assert.equal(cap.errorCapacity, cap.errorCapacityPerBlock);
+        assert.equal(
+          cap.errorCapacityAggregate,
+          cap.rsBlockCount * cap.errorCapacityPerBlock,
         );
       }
     }

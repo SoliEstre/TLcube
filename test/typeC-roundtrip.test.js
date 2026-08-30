@@ -1,9 +1,8 @@
 /**
  * typeC-roundtrip.test.js — Type C 생성측 합성 자.
  *
- * C 전용 디코더가 생기기 전까지 인코드 → 회계·scan-order → scene → raster
- * 자체검증을 닫는다. GF(211) 단일 블록에 들어오지 않는 C1/C2 계열은 같은 자에서
- * 명시 거절을 잠그며, 다중 블록을 임의로 발명하지 않는다.
+ * C0/C0D의 인코드 → 회계·scan-order → scene → raster 자체검증과 C1/C2 계열의
+ * 고정 다중 블록 생성을 잠근다. 백엔드 원문·오류·소거 복호는 typeC-rs.test.js가 맡는다.
  */
 
 import { test, describe } from 'node:test';
@@ -21,7 +20,7 @@ import { FACES, axialToPixel, facePolygon } from '../src/hexgrid.js';
 import { dataCellsInScanOrder } from '../src/layout.js';
 import { notchCellsC, typeCReservedCells } from '../src/notchC.js';
 import {
-  VERSIONS_C, VERSIONS_C_DAEHAN, TYPE_C_RS_BLOCK_UNDEFINED_REASON,
+  VERSIONS_C, VERSIONS_C_DAEHAN,
 } from '../src/capacityC.js';
 import { TYPE_C_CM_UNSUPPORTED_REASON } from '../src/formatC.js';
 import {
@@ -155,32 +154,24 @@ describe('C0D × daehan/sagoae 합성', () => {
   }
 });
 
-test('C1/C2와 C1D/C2D는 전 ECC에서 같은 단일블록 사유로 거절된다', () => {
+test('C1/C2와 C1D/C2D는 전 ECC에서 고정 2블록으로 생성된다', () => {
   for (const versions of [VERSIONS_C, VERSIONS_C_DAEHAN]) {
     const daehanFinder = versions === VERSIONS_C_DAEHAN;
     for (const spec of versions.filter((entry) => entry.version > 0)) {
       for (const eccLevel of LEVELS) {
-        assert.throws(
-          () => encode(PAYLOAD, {
-            notchC: true, version: spec.version, eccLevel, daehanFinder,
-          }),
-          (error) => error instanceof RangeError
-            && error.message.includes(TYPE_C_RS_BLOCK_UNDEFINED_REASON),
-          `${spec.name}/${eccLevel}`,
-        );
+        const encoded = encode(PAYLOAD, {
+          notchC: true, version: spec.version, eccLevel, daehanFinder,
+        });
+        assert.equal(encoded.capacity.name, spec.name);
+        assert.equal(encoded.capacity.rsBlockCount, 2);
+        assert.equal(encoded.codewordSymbols.length, encoded.capacity.usedSymbols);
       }
     }
   }
-  assert.throws(
-    () => chooseVersion('x'.repeat(135), 'M', false, false, true),
-    (error) => error instanceof RangeError
-      && error.message.includes(TYPE_C_RS_BLOCK_UNDEFINED_REASON),
-  );
-  assert.throws(
-    () => chooseVersion('x'.repeat(119), 'M', false, true, true),
-    (error) => error instanceof RangeError
-      && error.message.includes(TYPE_C_RS_BLOCK_UNDEFINED_REASON),
-  );
+  assert.equal(chooseVersion('x'.repeat(135), 'M', false, false, true).name, 'C1');
+  assert.equal(chooseVersion('x'.repeat(203), 'M', false, false, true).name, 'C2');
+  assert.equal(chooseVersion('x'.repeat(119), 'M', false, true, true).name, 'C1D');
+  assert.equal(chooseVersion('x'.repeat(188), 'M', false, true, true).name, 'C2D');
 });
 
 test('CM × C는 자동·명시 버전 모두 표의 동일 사유로 거절된다', () => {
