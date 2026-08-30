@@ -69,8 +69,18 @@ test('§6.2 OAK 서랍은 모드 게이트를 안 받고, 기준 미달·스캔 
   // 운영자 지시 2026-08-19: «새로 추가된 셀 표면 파인더» 한정으로 일반 모드 노출.
   assert.equal(gated.has('finderOak'), false,
     'finderOak 이 다시 고급 전용이 됐다 — 일반 모드에서 OAK 를 못 고른다');
-  assert.equal(gated.has('finderBelowBar'), true, '기준 미달 서랍이 일반 모드로 샜다');
-  assert.equal(gated.has('finderUnscannable'), true, '스캔 불가 서랍이 일반 모드로 샜다');
+  assert.equal(gated.has('finderBelowBar'), true, '기준 미달 서랍이 게이트 목록에서 빠졌다');
+  assert.equal(gated.has('finderUnscannable'), true, '스캔 불가 서랍이 게이트 목록에서 빠졌다');
+  // 정식 철수 (운영자 2026-08-30): 두 서랍의 게이트는 모드(고급)가 아니라 **표면(lab)**이다.
+  // 루프 본문이 isLabPath 유도 변수를 소비해야 한다 — mode 로 되돌아가면 고급에서 다시 샌다.
+  {
+    const at = INDEX.indexOf('function applyFinderExperimentVisibility()');
+    const body = INDEX.slice(at, INDEX.indexOf("for (const id of ['finderBelowBar'", at) + 400);
+    assert.match(body, /const showDropped = isLabPath\(\);/,
+      '드랍 서랍 게이트가 lab 표면 유도가 아니다');
+    assert.match(body, /block\.style\.display = showDropped \? '' : 'none';/,
+      '드랍 서랍 표시가 showDropped 를 소비하지 않는다');
+  }
   // 서랍이 실재하는지도 함께 — 목록에서 빼는 것과 서랍을 지우는 것은 다르다.
   for (const id of ['finderOak', 'finderBelowBar', 'finderUnscannable']) {
     assert.ok(INDEX.includes(`id="${id}"`), id + ' 서랍이 마크업에 없다');

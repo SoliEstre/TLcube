@@ -7723,11 +7723,15 @@ function setMode(next) {
  */
 function applyFinderExperimentVisibility() {
   const show = mode === 'advanced';
+  // 기준 미달·스캔 불가 서랍은 **정식 철수, lab 전용** (운영자 2026-08-30 —
+  // 「괜히 스캔 되는 걸로 착각할 것 같다」). 고급 모드로도 안 연다 — 모드 게이트가
+  // 아니라 표면 게이트다.
+  const showDropped = isLabPath();
   for (const id of ['finderBelowBar', 'finderUnscannable']) {
     const block = document.getElementById(id);
     if (block) {
-      block.style.display = show ? '' : 'none';
-      if (!show) block.open = false;
+      block.style.display = showDropped ? '' : 'none';
+      if (!showDropped) block.open = false;
     }
   }
   // ── C5 고급 게이팅 (설계서 ③ — 운영자 확정 2026-08-23·24) ────────────────
