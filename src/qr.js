@@ -50,6 +50,54 @@ export const QR_V1L_CAPACITY = 25;
  */
 export const TL_READER_URL = 'HTTPS://TLSCAN.ESTRE.SO';
 
+/**
+ * TL 리더 QR의 1글자 가족 힌트 등록부.
+ *
+ * `aliases`는 생성기가 실제로 넘기는 타입(O/A/K/Y)과 그 파생 타입(G/V/C0~C3),
+ * 그리고 스캐너가 쓰는 기하 family를 한 등록부에서 만난다. URL 문자 배정은 이 표만
+ * 소유한다. C는 육각 해석을 쓰되 3시 노치 실루엣이라는 별도 힌트이므로, parser의
+ * 반환값은 디코더가 이해하는 `hex`로 통일한다.
+ */
+export const TL_READER_HINT_REGISTRY = Object.freeze([
+  Object.freeze({ hint: 'O', family: 'hex', aliases: Object.freeze(['O', 'G', 'hex']) }),
+  Object.freeze({ hint: 'A', family: 'tri', aliases: Object.freeze(['A', 'V', 'tri']) }),
+  Object.freeze({ hint: 'K', family: 'star', aliases: Object.freeze(['K', 'star']) }),
+  Object.freeze({ hint: 'Y', family: 'cube', aliases: Object.freeze(['Y', 'cube']) }),
+  Object.freeze({ hint: 'C', family: 'hex', aliases: Object.freeze(['C', 'C0', 'C1', 'C2', 'C3', 'hex-notch']) }),
+]);
+
+function readerHintEntryForFamily(family) {
+  if (typeof family !== 'string') return null;
+  return TL_READER_HINT_REGISTRY.find((entry) => entry.aliases.includes(family)) || null;
+}
+
+function readerHintEntryForCharacter(hint) {
+  return TL_READER_HINT_REGISTRY.find((entry) => entry.hint === hint) || null;
+}
+
+/**
+ * 가족 힌트를 붙인 TL 리더 URL. 등록부 밖 입력은 기존 무힌트 URL을 바이트 그대로
+ * 돌려 하위 호환을 지킨다. v1-L 알파뉴메릭 최대 25자에 정확히 맞는다.
+ */
+export function tlReaderUrlWithHint(family) {
+  const entry = readerHintEntryForFamily(family);
+  return entry === null ? TL_READER_URL : TL_READER_URL + '/' + entry.hint;
+}
+
+/**
+ * tlscan pathname의 정확히 한 글자 `/x` 힌트를 디코더 family로 푼다.
+ *
+ * location을 직접 읽지 않는 순수 함수라 브라우저 경로와 국소 자가가 같은 규약을 쓴다.
+ * 예약 숫자·미지 문자·부재·여러 글자 경로는 모두 무힌트(null)다.
+ */
+export function tlReaderFamilyHintFromPath(pathname) {
+  if (typeof pathname !== 'string') return null;
+  const match = /^\/([A-Z])$/.exec(pathname);
+  if (match === null) return null;
+  const entry = readerHintEntryForCharacter(match[1]);
+  return entry === null ? null : entry.family;
+}
+
 // ── 내부 상수 ────────────────────────────────────────────────────────────
 
 const SIZE = 21; // QR v1 모듈 한 변
