@@ -16,7 +16,7 @@ import {
   TYPE_C_RESERVED_FORMAT_INDEXES, cFormatSpec, cSpecFromFormatIndex,
 } from '../src/formatC.js';
 import {
-  VERSIONS_C, VERSIONS_C_DAEHAN, capacityForC, capacityTableC,
+  VERSIONS_C, VERSIONS_C_DAEHAN, VERSIONS_C_Q, capacityForC, capacityTableC,
 } from '../src/capacityC.js';
 import {
   DAEHAN_RADII, daehanFinderCellsFor, daehanPatternId, daehanReservedCells,
@@ -75,23 +75,57 @@ describe('3시 노치 정본 (v2 — 3줄 개방 슬롯)', () => {
 });
 
 describe('Type C 와이어 표와 CM 거절', () => {
-  test('평 C 값 0 네 행 뒤 C*D 값 1 네 행이며 예약 밴드를 비운다', () => {
+  test('평 C 값 0 · C*D 값 1 · CQ 값 4 네 행씩이며 예약 밴드를 비운다', () => {
     assert.deepEqual(C_FORMAT_INDEX, [
-      { name: 'C0', version: 0, k: 14, formatIndex: 0, daehanFinder: false },
-      { name: 'C1', version: 1, k: 16, formatIndex: 0, daehanFinder: false },
-      { name: 'C2', version: 2, k: 18, formatIndex: 0, daehanFinder: false },
-      { name: 'C3', version: 3, k: 20, formatIndex: 0, daehanFinder: false },
-      { name: 'C0D', version: 0, k: 14, formatIndex: 1, daehanFinder: true },
-      { name: 'C1D', version: 1, k: 16, formatIndex: 1, daehanFinder: true },
-      { name: 'C2D', version: 2, k: 18, formatIndex: 1, daehanFinder: true },
-      { name: 'C3D', version: 3, k: 20, formatIndex: 1, daehanFinder: true },
+      { name: 'C0', version: 0, k: 14, formatIndex: 0, daehanFinder: false, centerQr: false },
+      { name: 'C1', version: 1, k: 16, formatIndex: 0, daehanFinder: false, centerQr: false },
+      { name: 'C2', version: 2, k: 18, formatIndex: 0, daehanFinder: false, centerQr: false },
+      { name: 'C3', version: 3, k: 20, formatIndex: 0, daehanFinder: false, centerQr: false },
+      { name: 'C0D', version: 0, k: 14, formatIndex: 1, daehanFinder: true, centerQr: false },
+      { name: 'C1D', version: 1, k: 16, formatIndex: 1, daehanFinder: true, centerQr: false },
+      { name: 'C2D', version: 2, k: 18, formatIndex: 1, daehanFinder: true, centerQr: false },
+      { name: 'C3D', version: 3, k: 20, formatIndex: 1, daehanFinder: true, centerQr: false },
+      { name: 'CQ0', version: 0, k: 14, formatIndex: 4, daehanFinder: false, centerQr: true },
+      { name: 'CQ1', version: 1, k: 16, formatIndex: 4, daehanFinder: false, centerQr: true },
+      { name: 'CQ2', version: 2, k: 18, formatIndex: 4, daehanFinder: false, centerQr: true },
+      { name: 'CQ3', version: 3, k: 20, formatIndex: 4, daehanFinder: false, centerQr: true },
     ]);
     for (const entry of C_FORMAT_INDEX) {
       assert.equal(TYPE_C_RESERVED_FORMAT_INDEXES.includes(entry.formatIndex), false);
-      assert.equal(cFormatSpec(entry.version, { daehanFinder: entry.daehanFinder }), entry);
+      assert.equal(cFormatSpec(entry.version, {
+        daehanFinder: entry.daehanFinder, centerQr: entry.centerQr,
+      }), entry);
       assert.equal(cSpecFromFormatIndex(entry.formatIndex, entry.k), entry);
     }
     assert.equal(cSpecFromFormatIndex(2, 14), null);
+    // CDQ(C*D + 중앙 QR)는 행이 없다 — sagoae×정식 중앙 검증기 확장 트랙 몫.
+    assert.throws(
+      () => cFormatSpec(0, { daehanFinder: true, centerQr: true }),
+      (error) => error instanceof RangeError && /CDQ/.test(error.message),
+    );
+  });
+
+  test('CQ 회계는 같은 버전의 평 C 와 완전 동일하다 — 19셀 슬롯 점유자 교체', () => {
+    assert.equal(VERSIONS_C_Q.length, VERSIONS_C.length);
+    for (const q of VERSIONS_C_Q) {
+      const p = VERSIONS_C.find((entry) => entry.version === q.version);
+      assert.ok(p, q.name);
+      // RS 블록·NSYM 축은 기본 행의 symbolKey 를 그대로 쓴다 (손 CQ 행 사본 금지).
+      assert.equal(q.symbolKey, p.name, q.name);
+      assert.equal(q.overhead, p.overhead, q.name);
+      for (const level of LEVELS) {
+        const a = capacityForC(q, level);
+        const b = capacityForC(p, level);
+        assert.equal(a.dataCells, b.dataCells, `${q.name}/${level}`);
+        assert.equal(a.usedSymbols, b.usedSymbols, `${q.name}/${level}`);
+        assert.equal(a.residualCells, b.residualCells, `${q.name}/${level}`);
+        assert.equal(a.maxPayloadBytes, b.maxPayloadBytes, `${q.name}/${level}`);
+        assert.deepEqual(a.rsBlockConfig, b.rsBlockConfig, `${q.name}/${level}`);
+        // 이름·formatIndex 만 자기 것 — 산출물 메타가 실제 실린 행을 말한다.
+        assert.equal(a.name, q.name, `${q.name}/${level}`);
+        assert.equal(a.formatIndex, 4, `${q.name}/${level}`);
+      }
+    }
   });
 
   test('CM tetrad와 노치가 전 C 반경에서 겹쳐 동일 사유로 거절된다', () => {

@@ -38,6 +38,7 @@ import { typeCReservedCells } from './notchC.js';
 import {
   VERSIONS_C,
   VERSIONS_C_DAEHAN,
+  VERSIONS_C_Q,
   capacityForC,
 } from './capacityC.js';
 import { cFormatSpec, TYPE_C_CM_UNSUPPORTED_REASON } from './formatC.js';
@@ -54,17 +55,22 @@ function cellKey(q, r) {
  * 완전히 같다.
  */
 function layoutProviderFor(
-  cornerMarker, daehanFinder = false, markerTones = false, notchC = false,
+  cornerMarker, daehanFinder = false, markerTones = false, notchC = false, centerQr = false,
 ) {
   if (notchC) {
-    // Type C는 기존 O의 고정 셀·포맷·레퍼런스 좌표를 유지하고, 3시 노치 8셀과
+    // Type C는 기존 O의 고정 셀·포맷·레퍼런스 좌표를 유지하고, 3시 노치와
     // 선택적 sagoae 60셀만 scan-order에서 제외한다. 두 예약 집합의 합성·겹침
     // 검증은 notchC.js 한 진입점에서 맡는다.
+    //
+    // centerQr(CQ) 는 회계가 평 C 와 완전 동일하지만 **이름·formatIndex 가 다른
+    // 자기 행**(VERSIONS_C_Q)을 쓴다 — 산출물 메타데이터(capacity.name)가 실제
+    // 실린 행을 말해야 하기 때문이다 (주장≠사실 방지). 비-C 경로의 centerQr 는
+    // 공급자를 바꾸지 않는다 (V*Q 는 VERSIONS 공유 — 기존 계약 그대로).
     const reserved = (k) => typeCReservedCells(
       k, daehanFinder ? daehanReservedCells(k) : undefined,
     );
     return {
-      versions: daehanFinder ? VERSIONS_C_DAEHAN : VERSIONS_C,
+      versions: daehanFinder ? VERSIONS_C_DAEHAN : centerQr ? VERSIONS_C_Q : VERSIONS_C,
       capacity: capacityForC,
       scan: (k) => dataCellsInScanOrder(k, reserved(k)),
       filler: (k) => fillerCells(k, reserved(k)),
@@ -134,12 +140,13 @@ function layoutProviderFor(
  */
 export function chooseVersion(
   text, eccLevel = 'M', cornerMarker = false, daehanFinder = false, notchC = false,
+  centerQr = false,
 ) {
   if (notchC && cornerMarker) {
     throw new RangeError(TYPE_C_CM_UNSUPPORTED_REASON);
   }
   const byteLength = payloadByteLength(text);
-  const provider = layoutProviderFor(cornerMarker, daehanFinder, false, notchC);
+  const provider = layoutProviderFor(cornerMarker, daehanFinder, false, notchC, centerQr);
   for (const spec of provider.versions) {
     const capacity = provider.capacity(spec, eccLevel);
     if (byteLength <= capacity.maxPayloadBytes) {
@@ -225,9 +232,20 @@ export function encode(text, options = {}) {
   if (notchC && cornerMarker) {
     throw new RangeError(TYPE_C_CM_UNSUPPORTED_REASON);
   }
-  if (notchC && (centerQr || centralV0 || centralN7)) {
+  // ── Type C 중앙 슬롯 — 개통 2건 + 남은 배타 1건 (2026-08-30, PM/027 §5.3·§5.4) ──
+  //
+  //   · 중앙 TL(centralN7)은 **별도 formatIndex 가 필요 없다** — 비컨 payload 는
+  //     표면 포맷의 사본(family 1 digit + 바깥 5-digit 코드워드)이라 평 C 행
+  //     (formatIndex 0..3)이 현행 코덱 그대로 실린다 (안 ①, 와이어 변경 0).
+  //   · 중앙 QR(centerQr)은 전용 CQ 행(formatIndex 4, 평 C 전용)이 formatC 표에 있다.
+  //   · C*D × (centralN7·centerQr) 는 아래 centralSlotOccupants 단일 점유 가드가
+  //     거절한다 (daehan/sagoae 가 중앙 슬롯을 이미 점유) — CDQ·C*D×TL 은
+  //     sagoae×정식 중앙 검증기 확장 트랙 몫이다.
+  //   · 남는 배타는 centralV0 하나 — C 실루엣에서 n=13 비컨의 발견·검증이 미실측이다.
+  if (notchC && centralV0) {
     throw new RangeError(
-      'Type C 와이어 표는 평 C와 C*D만 정의한다 — 다른 중앙 슬롯 변형은 별도 formatIndex가 없다',
+      'Type C × centralV0(n=13 비컨) 는 미개통이다 — C 실루엣에서 v0 비컨 검증이 없다 '
+      + '(중앙 TL 은 평 C 행 그대로, 중앙 QR 은 CQ 행(formatIndex 4)으로 개통됨)',
     );
   }
   // 코너 마커는 중앙 슬롯을 안 건드리지만, 중앙 QR 은 링3 을 먹고 마커는 링 k·k−1 을
@@ -283,10 +301,10 @@ export function encode(text, options = {}) {
     );
   }
 
-  const provider = layoutProviderFor(cornerMarker, usesDaehanLayout, markerTones, notchC);
+  const provider = layoutProviderFor(cornerMarker, usesDaehanLayout, markerTones, notchC, centerQr);
 
   const spec = version === undefined
-    ? chooseVersion(text, eccLevel, cornerMarker, usesDaehanLayout, notchC)
+    ? chooseVersion(text, eccLevel, cornerMarker, usesDaehanLayout, notchC, centerQr)
     : provider.versions.find((v) => v.version === version);
   if (!spec) {
     throw new RangeError(`알 수 없는 버전: ${version} (허용 ${provider.versions.map((v) => v.version).join(', ')})`);
@@ -364,7 +382,7 @@ export function encode(text, options = {}) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
   const versionIndex = notchC
-    ? cFormatSpec(spec.version, { daehanFinder: usesDaehanLayout }).formatIndex
+    ? cFormatSpec(spec.version, { daehanFinder: usesDaehanLayout, centerQr }).formatIndex
     : cornerMarker
       ? markerGSpec('hex', spec.version, centerQr).formatIndex
       : (spec.version - 1) + (centerQr ? 4 : 0);

@@ -559,38 +559,48 @@ test('§6.3 ultra 카드와 C0~C3 select가 ECC-M 수치로 한 벌이다', () =
     'ultra 활성과 C select 표시가 연결되지 않았다');
 });
 
-test('§6.3 Type C 디스패치는 notchC와 versionC를 싣고 C*D를 열며 CM은 엔진 사유로 거절한다', () => {
+test('§6.3 Type C 디스패치는 notchC·versionC·중앙 변형을 싣고 CM은 엔진 사유로 거절한다', () => {
   const start = INDEX.indexOf("if (cfg.type === 'O' && cfg.typeC === true)");
   const end = INDEX.indexOf("if (cfg.type === 'A')", start);
   assert.ok(start >= 0 && end > start, 'encodeOptsFor의 Type C O 분기를 못 찾았다');
   const branch = INDEX.slice(start, end);
-  assert.match(branch, /const opts = \{ notchC: true \}/);
+  // CQ 개통 (2026-08-30) — 안쪽 QR 상태가 centerQr 로 실려야 CQ 행(formatIndex 4)이
+  // 나간다. 이 줄이 빠지면 «켰는데 안 먹는» 상태다 (인코더만 열고 소비자를 안 쓺).
+  assert.match(branch, /const opts = \{ notchC: true, centerQr: cfg\.fallback\.mode === 'center' \}/);
   assert.match(branch, /opts\.version = cfg\.versionC/);
   assert.match(branch, /opts\.daehanFinder = true/);
+  // 중앙 TL 개통 — 비컨 플래그는 O/A/K 와 같은 정본 유도 하나에서 온다 (사본 금지).
+  assert.match(branch, /Object\.assign\(opts, centralBeaconEncoderOptions\(cfg\.finderPatternId, opts\.centerQr\)\)/,
+    'Type C 분기가 중앙 비컨 정본 유도를 소비하지 않는다 — 중앙 TL 이 와이어에 안 실린다');
   assert.match(branch, /opts\.sagoae = true/);
   assert.match(branch, /opts\.cornerMarker = true/,
     'stale CM 상태가 공용 TYPE_C_CM_UNSUPPORTED_REASON으로 명시 거절되지 않는다');
   assert.doesNotMatch(branch, /else if \(cfg\.(?:cornerMarker|sagoae)/,
-    'daehan과 함께 남은 stale CM·사괘 상태를 조용히 강등한다');
+    'daehan과 함께 남은 stale CM 상태를 조용히 강등한다');
   assert.match(INDEX, /encoded\.notchC[\s\S]{0,120}encoded\.capacity\.name/,
-    'Type C 정보줄이 capacity.name(C0/C*D)을 쓰지 않는다');
+    'Type C 정보줄이 capacity.name(C0/C*D/CQ*)을 쓰지 않는다');
 });
 
-test('§6.3 C+CM 잠금과 중앙 변형 폴백·복귀가 양방향으로 배선됐다', () => {
+test('§6.3 C+CM 잠금과 중앙 Y0 폴백·복귀가 양방향으로 배선됐다 (TL·QR 은 개통)', () => {
   assert.match(INDEX, /TYPE_C_CM_UNSUPPORTED_REASON/,
     '공용 Type C CM 거절 사유를 UI가 소비하지 않는다');
   assert.match(INDEX, /typeCCmLocked = seat === 'o-cm' && typeCGeneratorActive\(\)/,
     'Type C에서 o-cm 자리 카드가 잠기지 않는다');
   assert.match(INDEX, /res === 'ultra' && manualCmActive/,
     '명시 CM에서 ultra 진입을 반대로 잠그지 않는다');
-  assert.match(INDEX, /Object\.keys\(centralBeaconEncoderOptions\(state\.finderPatternId, false\)\)/,
-    'Type C 중앙 변형 판정이 중앙 비컨 정본 유도가 아니다');
+  // 개통 (2026-08-30, PM/027 §5.3·§5.4) — 폴백·잠금 축은 centralV0 «하나» 다.
+  // 판정은 여전히 중앙 비컨 정본 유도에서 온다 (손 사본 금지).
+  assert.match(INDEX, /centralBeaconEncoderOptions\(state\.finderPatternId, false\)\.centralV0 === true/,
+    'Type C 폴백 판정이 중앙 비컨 정본 유도의 centralV0 축이 아니다');
+  assert.match(INDEX, /typeCCentralLocked = typeCGeneratorActive\(\)\s*&& centralBeaconEncoderOptions\(fid, false\)\.centralV0 === true/,
+    'Type C 활성 중 중앙 Y0 카드 우회로가 잠기지 않는다 (TL·QR 은 잠그면 안 된다)');
+  // 개통된 축이 도로 잠기지 않는다 — 카드 잠금 조건에 중앙 QR id·TL 이 끼면 회귀다.
+  assert.doesNotMatch(INDEX, /typeCCentralLocked = typeCGeneratorActive\(\)\s*&& \(fid === CENTER_QR_FINDER_PATTERN_ID/,
+    '중앙 QR 카드가 Type C 에서 도로 잠겼다 — CQ 개통의 회귀');
   assert.match(INDEX, /typeCPreviousFinderPatternId:\s*generatorState\.finderPatternId[\s\S]{0,700}selectFinderPattern\([\s\S]{0,120}LEGACY_FINDER_PATTERN_ID/,
-    'ultra 진입 시 기본 중앙 TL을 호환 불스아이로 옮기고 보존하는 배선이 없다');
+    'ultra 진입 시 중앙 Y0 를 호환 불스아이로 옮기고 보존하는 배선이 없다');
   assert.match(INDEX, /leavesTypeC && generatorState\.typeCFinderFallbackActive/,
     'ultra 이탈 시 이전 중앙 선택 복귀 배선이 없다');
-  assert.match(INDEX, /fid === CENTER_QR_FINDER_PATTERN_ID[\s\S]{0,180}centralBeaconEncoderOptions\(fid, false\)/,
-    'Type C 활성 중 중앙 QR·Y0·TL 카드 우회로가 잠기지 않는다');
 });
 
 test('§6.3 Type C 생성기 신규 문구는 g1014부터 8언어 전부 존재한다', () => {

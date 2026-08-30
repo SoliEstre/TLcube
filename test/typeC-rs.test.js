@@ -203,13 +203,16 @@ test('Type C는 formatIndex+k를 필수로 하고 예약·모순 입력을 forma
   }
 });
 
-test('formatinfo.decode 원시 version과 논리 version을 6개 C 행 모두 일관되게 수용한다', () => {
+test('formatinfo.decode 원시 version과 논리 version을 전체 C 행에서 일관되게 수용한다', () => {
   for (const row of C_FORMAT_INDEX) {
     const encoded = encode(PAYLOAD, {
       notchC: true,
       version: row.version,
       eccLevel: 'M',
       daehanFinder: row.daehanFinder,
+      // CQ 행 (2026-08-30 개통) — 점유자 교체 축이라 회계는 평 C 와 같고 와이어
+      // 값(4)만 다르다. 이 플래그가 빠지면 평 행이 나가 아래 raw.version 대조가 잡는다.
+      centerQr: row.centerQr,
     });
     const raw = decodedFormatFor(encoded);
     assert.equal(raw.ok, true, row.name);
@@ -254,9 +257,15 @@ test('C0..C3/C0D..C3D canonical scan order 좌표는 불변이다', () => {
     const additional = row.daehanFinder ? daehanReservedCells(row.k) : undefined;
     const scan = dataCellsInScanOrder(row.k, typeCReservedCells(row.k, additional));
     const serialized = scan.map((cell) => `${cell.q},${cell.r}`).join(';');
+    // CQ 행은 중앙 슬롯 점유자만 다르고 scan order 는 같은 버전의 평 행과 동일하다 —
+    // 기대값을 평 행 이름으로 되찾는다 (표 조회 — 이름 산술 금지).
+    const base = row.centerQr
+      ? C_FORMAT_INDEX.find((entry) => entry.version === row.version
+        && entry.daehanFinder === row.daehanFinder && entry.centerQr !== true)
+      : row;
     assert.deepEqual(
       [scan.length, createHash('sha256').update(serialized).digest('hex')],
-      expected[row.name],
+      expected[base.name],
       row.name,
     );
   }

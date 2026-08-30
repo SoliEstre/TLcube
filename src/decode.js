@@ -73,7 +73,9 @@ import {
 } from './markerA.js';
 import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
 import { daehanReservedCells } from './finder-daehan.js';
-import { VERSIONS_C, VERSIONS_C_DAEHAN, capacityForC } from './capacityC.js';
+import {
+  VERSIONS_C, VERSIONS_C_DAEHAN, VERSIONS_C_Q, capacityForC,
+} from './capacityC.js';
 import { typeCReservedCells } from './notchC.js';
 import { cSpecFromFormatIndex } from './formatC.js';
 import { dataCellsInScanOrder as dataCellsInScanOrderO } from './layout.js';
@@ -340,7 +342,9 @@ function resolveProfile(format) {
         );
       }
     }
-    const versions = wireSpec.daehanFinder ? VERSIONS_C_DAEHAN : VERSIONS_C;
+    const versions = wireSpec.centerQr === true
+      ? VERSIONS_C_Q
+      : wireSpec.daehanFinder ? VERSIONS_C_DAEHAN : VERSIONS_C;
     const spec = versions.find((entry) => entry.name === wireSpec.name);
     if (!spec) {
       throw new Error(`Type C 와이어 행 ${wireSpec.name}의 용량 행이 없다`);

@@ -569,6 +569,31 @@ export function findOAnchorHypotheses(luma, bullseye, ks, options = {}) {
 }
 
 /**
+ * Type C(노치 실루엣, hex 기하 공유) 전용 앵커 평가 — **실효 배율 탐색을 연다.**
+ *
+ * findOAnchorHypotheses 와 같은 hex 앵커 평가지만 scaleSupplied 를 켠 신설 축이다
+ * (턴A → star(K) 전례의 세 번째 적용 — evaluate 헤더 ⚠ 스코프 주석: 기존 hex 축은
+ * 동결 유지). 왜 필요한가: C 사다리는 k 14/16/18/20 이라 세트 B 앵커가 유클리드
+ * ≈1.73k 셀 거리다 — 중앙 비컨(19셀 슬롯)의 어파인 포즈는 실루엣/로케이터에서 온
+ * 2%대 스케일 오차를 갖고, 그것이 앵커·본문 가장자리에서 0.6셀 이상으로 증폭돼
+ * RS 가 전멸한다 (C0×중앙TL 합성 실측 2026-08-30: 실루엣 seed cellSize 11.684 vs
+ * 실제 12.0, −2.6%). K1 합성 왕복(2026-08-25)과 정확히 같은 축이다.
+ *
+ * 앵커 목록은 placement.anchorCells(k) 그대로 — C 반경은 거기서 이미 세트 B 다.
+ * 호출자는 ks 를 Type C 반경으로 좁혀 부른다 (레거시 hex k 를 여기로 보내면
+ * 동결 축과 중복 가설이 된다).
+ *
+ * @param {import('./contracts.js').LumaField} luma
+ * @param {import('./contracts.js').BullseyeCandidate} bullseye
+ * @param {number[]|number} ks Type C 반경 목록
+ * @param {object} [options]
+ */
+export function findCAnchorHypotheses(luma, bullseye, ks, options = {}) {
+  return findHypotheses(luma, bullseye, ks, options, 'hex',
+    (k) => [{ turn: false, scaleSupplied: true, anchors: anchorCells(k) }]);
+}
+
+/**
  * Type A의 주 꼭짓점 앵커를 전수 평가한다. Type O의 육각 코어 앵커는
  * placementA.js 규약상 보조 앵커이므로 여기서는 주 앵커 3점만 쓴다.
  *

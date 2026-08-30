@@ -26,6 +26,7 @@ import {
   capacityForC,
   VERSIONS_C,
   VERSIONS_C_DAEHAN,
+  VERSIONS_C_Q,
 } from '../capacityC.js';
 import { rsDecodeBlocks } from '../rs211.js';
 
@@ -85,7 +86,7 @@ function resolveProfile(format) {
   // formatC의 행은 의도적으로 와이어 필드만 가진다. 용량 계산에는 symbolKey·overhead
   // 를 함께 보유한 capacityC의 정본 행이 필요하므로 name/k/daehan 조합으로 다시 찾는다.
   // 이 연결도 formatIndex 단독이나 version 산술을 쓰지 않는다.
-  const capacitySpec = [...VERSIONS_C, ...VERSIONS_C_DAEHAN].find(
+  const capacitySpec = [...VERSIONS_C, ...VERSIONS_C_DAEHAN, ...VERSIONS_C_Q].find(
     (entry) => entry.name === spec.name
       && entry.k === spec.k
       && entry.daehanFinder === spec.daehanFinder,
