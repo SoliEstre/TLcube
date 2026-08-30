@@ -10,6 +10,7 @@
 
 import { VERSIONS } from '../capacity.js';
 import { VERSIONS_A } from '../capacityA.js';
+import { VERSIONS_C } from '../capacityC.js';
 import {
   VERSIONS_Y,
   windowedReferenceCellsY,
@@ -62,6 +63,7 @@ import {
   hasLegacyFormatWire,
 } from '../cellSurfaceFinal.js';
 import { decodeCells } from '../decode.js';
+import { decodeCellsC } from './decode-c.js';
 // Type K(육각별, family 'star') — 후단은 decode-k.js (decode.js 는 O/A/Y 정본이라
 // 무변경 — 레인 K 브리프 §4 쓰기 범위). 회계·scan 은 K 모듈이 유일한 진실이다.
 import { decodeCellsK } from './decode-k.js';
@@ -70,6 +72,7 @@ import { dataCellsInScanOrderK, layoutMapK, vertexAnchorsK } from '../layoutK.js
 import { markerGSpec, markerGSpecFromFormatIndex } from '../markerG.js';
 import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from '../turnA.js';
 import { K_MARKER_FORMAT_INDEX, kSpecFromFormatIndex } from '../formatK.js';
+import { C_FORMAT_INDEX, cSpecFromFormatIndex } from '../formatC.js';
 import { dataCellsInScanOrderOMarker } from '../markerO.js';
 import { dataCellsInScanOrderAMarker } from '../markerA.js';
 import { VERSIONS_KCM, dataCellsInScanOrderKMarker } from '../markerK.js';
@@ -112,6 +115,7 @@ import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../finder-
 import {
   DAEHAN_FINDER_PATTERNS, DAEHAN_RADII, daehanReservedCells, isDaehanFinderPatternId,
 } from '../finder-daehan.js';
+import { NOTCH_C_CELL_COUNT, notchCellsC, typeCReservedCells } from '../notchC.js';
 
 /**
  * 중앙 파인더 검출 라인업 = 생성·손그림 이진 11종 + OAK 후보 3종 + daehan 3종 (2026-08-18).
@@ -690,7 +694,7 @@ function familyProfiles(family) {
   // 여기 넣어야 formatIndexOwners(재배치·재라벨)와 profileForFormatCandidate 가
   // G 인덱스로 읽힌 프레임을 자기 패밀리로 되짚을 수 있다.
   if (family === 'hex') {
-    return VERSIONS.map((spec) => ({
+    const legacy = VERSIONS.map((spec) => ({
       family,
       dimension: spec.k,
       spec,
@@ -701,6 +705,21 @@ function familyProfiles(family) {
         markerGSpec('hex', spec.version, true).formatIndex,
       ],
     }));
+    /*
+     * Type C — 일반 hex 기하를 공유하지만 k=14/17/20과 와이어 소유자가 별도다.
+     * 평 C/C*D는 같은 k에서 formatIndex(0/1)만 달라 한 profile에 같이 싣는다.
+     * 여기서 VERSIONS와 산술로 합치면 C의 version=0이 O의 version 체계로 새므로,
+     * C 표가 정한 행만 그대로 더한다.
+     */
+    const typeC = VERSIONS_C.map((spec) => ({
+      family,
+      dimension: spec.k,
+      spec,
+      typeC: true,
+      formatIndices: C_FORMAT_INDEX.filter((entry) => entry.k === spec.k)
+        .map((entry) => entry.formatIndex),
+    }));
+    return [...legacy, ...typeC];
   }
   if (family === 'tri') {
     return VERSIONS_A.map((spec) => ({
@@ -754,6 +773,11 @@ function profileForHypothesis(hypothesis) {
 function validVersionIndices(hypothesis) {
   const profile = profileForHypothesis(hypothesis);
   if (!profile) return [];
+  // Type C의 version은 O의 `version - 1` 산술축이 아니다. k와 formatIndex를 함께
+  // 읽는 표가 와이어 정본이며, C0/C1/C2의 공통 값 0을 여기서 모두 연다.
+  if (hypothesis.family === 'hex' && profile.typeC === true) {
+    return profile.formatIndices.slice();
+  }
   // 내부 타입 G(코너 마커) 인덱스: centerQr 가설은 Q 계열(V*Q + **CMQ** — C2a 개설분)
   // 을, 비-centerQr 가설은 레거시와 CM 을 연다. 어느 쪽인지는 CRC + 본문 RS 가 가른다
   // (다른 값·같은 k 이므로 후보가 겹칠 수 없다 — markerG.js 무경합 자기검증).
@@ -855,6 +879,20 @@ function formatIndexOwners(formatIndex) {
 }
 
 function profileForFormatCandidate(hypothesis, formatIndex) {
+  // Type C의 같은 formatIndex는 k가 없으면 C0/C1/C2를 가를 수 없다. 일반 hex
+  // profile 조회보다 먼저 표 역조회를 해 versionName·C*D 회계를 정확히 되살린다.
+  if (hypothesis && hypothesis.family === 'hex' && Number.isInteger(hypothesis.k)) {
+    const cSpec = cSpecFromFormatIndex(formatIndex, hypothesis.k);
+    if (cSpec !== null) {
+      return {
+        family: 'hex',
+        dimension: hypothesis.k,
+        spec: cSpec,
+        typeC: true,
+        formatIndices: [formatIndex],
+      };
+    }
+  }
   if (hypothesis && hypothesis.cellSurface === true
     && isCellSurfaceFinalFormatIndex(formatIndex)
     // **와이어** 질의다 (라인업 아님) — v2r2 드랍 뒤에도 n=25 가설이 어디선가
@@ -2766,6 +2804,18 @@ function daehanReservedCellsFor(hypothesis, dimension) {
  */
 function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
   if (family === 'hex') {
+    // Type C의 노치 8셀은 데이터가 아니라 실제 배경이다. 우선 평 C scan으로 표본을
+    // 모아 C0/C0D 두 wire가 공유하도록 하고, C*D 후보의 sagoae 60셀 제거는 포맷을
+    // 읽은 뒤 `typeCBodyFor`가 같은 grid에서 다시 적용한다.
+    if (cSpecFromFormatIndex(0, dimension) !== null) {
+      const reserved = typeCReservedCells(dimension);
+      return {
+        map: layoutMap(dimension, reserved),
+        dataCells: dataCellsInScanOrder(dimension, reserved),
+        type: 'C',
+        notchC: true,
+      };
+    }
     // daehan (2026-08-18) — 파인더가 불스아이 밖으로 셀을 더 먹으므로 data 셀이
     // 줄어든다. 판별 신호는 **검출기가 뽑은 patternId** 하나이고, 그것이 여기까지
     // 실제로 도달한다: detectCellFinders → cellFinderHypotheses(hypothesis.finder)
@@ -4415,6 +4465,72 @@ function readFormatForHypothesis(luma, hypothesis, options = {}) {
   return readFormatWithCells(luma, hypothesis, options, valid, cells, 1);
 }
 
+// 노치의 여덟 셀은 데이터 격자에서 빠진 «배경 기대»다. Type C의 k는 일반 hex
+// k와 겹치지 않으므로 여기서는 `(0,k)` 표 조회로만 C 후보를 연다. 이 힌트는 잘못된
+// 방향을 싼 단계에서 버리되, 성공 수용은 아래의 포맷 CRC와 본문 RS를 반드시 지난다.
+const TYPE_C_NOTCH_MIN_BACKGROUND_RATE = 0.75;
+
+function typeCNotchHint(luma, hypothesis, options) {
+  if (!hypothesis || hypothesis.family !== 'hex' || !Number.isInteger(hypothesis.k)
+    || cSpecFromFormatIndex(0, hypothesis.k) === null) return null;
+  const observations = [];
+  let sampled = 0;
+  let background = 0;
+  let foreground = 0;
+  for (const cell of notchCellsC(hypothesis.k)) {
+    const sample = sampleHexCell(luma, hypothesis, cell.q, cell.r, options.sample || {});
+    if (!sample.ok) {
+      observations.push({ q: cell.q, r: cell.r, reason: sample.reason });
+      continue;
+    }
+    sampled += 1;
+    // 데이터 셀은 세 면의 순위가 분리돼 strict/tie=false여야 한다. 노치는 같은
+    // 배경으로 돌아가므로 역으로 tie=true가 기대값이다. 표본 부재는 배경 증거가 아니다.
+    if (sample.tie === true) background += 1;
+    else foreground += 1;
+    observations.push({
+      q: cell.q,
+      r: cell.r,
+      tie: sample.tie === true,
+      separation: sample.separation,
+    });
+  }
+  const backgroundRate = sampled === 0 ? 0 : background / sampled;
+  const minBackgroundRate = Number.isFinite(options.notch?.minBackgroundRate)
+    ? options.notch.minBackgroundRate
+    : TYPE_C_NOTCH_MIN_BACKGROUND_RATE;
+  return {
+    ok: sampled === NOTCH_C_CELL_COUNT && backgroundRate >= minBackgroundRate,
+    orientation: hypothesis.orientation,
+    rotationDegrees: hypothesis.rotationDegrees,
+    sampled,
+    background,
+    foreground,
+    backgroundRate,
+    minBackgroundRate,
+    observations,
+  };
+}
+
+function typeCBodyFromGrid(grid, k, daehanFinder) {
+  const reserved = typeCReservedCells(k, daehanFinder ? daehanReservedCells(k) : undefined);
+  const scan = dataCellsInScanOrder(k, reserved);
+  const digits = [];
+  const erasureCells = [];
+  const unsampledCells = [];
+  for (const cell of scan) {
+    const sample = grid.cells.get(cell.q + ',' + cell.r);
+    if (sample === undefined) {
+      erasureCells.push(digits.length);
+      unsampledCells.push({ cell, cause: 'unsampled-cell' });
+      digits.push(0);
+    } else {
+      digits.push(sampleToDigit(sample));
+    }
+  }
+  return { digits, erasureCells, tieCells: [], unsampledCells };
+}
+
 /**
  * body-valid 후보 중 개정 §6 점수 최고 하나를 고른다. 후보 수가 둘 이상인
  * 사실은 실패 조건이 아니며 selectionMargin/nearTie 진단으로만 남는다.
@@ -4600,9 +4716,29 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
     bodyValidCount: 0,
     formatFailures: [],
     bodyFailures: [],
+    notchHints: [],
+    notchFailures: [],
   };
 
   for (const hypothesis of hypotheses) {
+    const notchHint = typeCNotchHint(luma, hypothesis, options);
+    if (notchHint !== null) {
+      diagnostics.notchHints.push({
+        hypothesisId: hypothesis.hypothesisId,
+        k: hypothesis.k,
+        ...notchHint,
+      });
+      if (!notchHint.ok) {
+        diagnostics.notchFailures.push({
+          hypothesisId: hypothesis.hypothesisId,
+          k: hypothesis.k,
+          orientation: hypothesis.orientation,
+          backgroundRate: notchHint.backgroundRate,
+          sampled: notchHint.sampled,
+        });
+        continue;
+      }
+    }
     const formatRead = withStage(options, 'format', () =>
       readFormatForHypothesis(luma, hypothesis, options));
     if (!formatRead.ok) {
@@ -4745,6 +4881,16 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       }
       return markerBody;
     };
+    let cDaehanBody = null;
+    const typeCBodyFor = (spec) => {
+      if (spec.daehanFinder !== true) {
+        return { digits, erasureCells, tieCells: [], unsampledCells };
+      }
+      if (cDaehanBody === null) {
+        cDaehanBody = typeCBodyFromGrid(grid, dimension, true);
+      }
+      return cDaehanBody;
+    };
 
     for (const formatCandidate of formatRead.formatCandidates) {
       const decodeFormat = {
@@ -4752,6 +4898,15 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         formatIndex: formatCandidate.versionIndex,
         eccLevel: formatCandidate.eccLevel,
       };
+      const cSpec = layout.type === 'C'
+        ? cSpecFromFormatIndex(formatCandidate.versionIndex, dimension)
+        : null;
+      if (layout.type === 'C' && cSpec === null) continue;
+      if (cSpec !== null) {
+        decodeFormat.version = cSpec.version;
+        decodeFormat.notchC = true;
+        decodeFormat.daehanFinder = cSpec.daehanFinder;
+      }
       // 포맷 워드에서 읽은 인덱스가 G 표의 값이면 cornerMarker 를 켜서 하류에 전달
       // 한다 — decode.js:298·:365 의 분기는 이미 있고, 여기가 그 호출자다 (019 의
       // 교훈: 생성기·디코더 양 끝이 다 있어야 효과가 있다). validVersionIndices 가
@@ -4816,14 +4971,18 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       }
       // K-CM 도 마커가 데이터 셀을 먹으므로 본문 scan order 가 평 K 와 다르다.
       const useStarMarkerBody = starSpec !== null && starSpec.cornerMarker === true;
-      const body = (useMarkerBody || useTurnMarkerBody || useStarMarkerBody)
-        ? markerBodyFor()
-        : { digits, erasureCells, tieCells: starTieCells };
+      const body = cSpec !== null
+        ? typeCBodyFor(cSpec)
+        : (useMarkerBody || useTurnMarkerBody || useStarMarkerBody)
+          ? markerBodyFor()
+          : { digits, erasureCells, tieCells: starTieCells };
       // Type K 는 후단이 decode-k.js 다 — decode.js(O/A/Y 정본)는 K 를 모른다
       // (레인 K 브리프 §4: decode.js 는 쓰기 범위 밖, decoder/** 가 K 를 소유).
       const decoded = withStage(options, 'decode', () => (layout.type === 'K'
         ? decodeCellsK(body.digits, decodeFormat, { erasureCells: body.erasureCells })
-        : decodeCells(body.digits, decodeFormat, { erasureCells: body.erasureCells })));
+        : layout.type === 'C'
+          ? decodeCellsC(body.digits, decodeFormat, { erasureCells: body.erasureCells })
+          : decodeCells(body.digits, decodeFormat, { erasureCells: body.erasureCells })));
       if (!decoded.ok) {
         diagnostics.bodyFailures.push({
           hypothesisId: hypothesis.hypothesisId,
@@ -4868,10 +5027,13 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         accepted.formatCandidate.versionIndex,
       );
       if (!profile) continue;
+      const candidateHypothesis = notchHint === null
+        ? hypothesis
+        : { ...hypothesis, notchC: true, notchHint };
       const candidate = {
         hypothesisId: hypothesis.hypothesisId + '-' + accepted.formatCandidate.source,
         geometryHypothesisId: hypothesis.hypothesisId,
-        hypothesis,
+        hypothesis: candidateHypothesis,
         family: hypothesis.family,
         version: profile.spec.version,
         versionName: profile.spec.name,
@@ -4881,6 +5043,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         text: accepted.decoded.text,
         corrected: accepted.decoded.corrected,
         crsDistance: accepted.decoded.crsDistance,
+        ...(notchHint === null ? {} : { notchC: true, notchHint }),
         erasureFallback: accepted.decoded.erasureFallback,
         cubeSamplingFallback: cubeUnreadableCells.length > 0 || unsampledCells.length > 0
           ? {

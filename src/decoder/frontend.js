@@ -135,6 +135,20 @@ function compactHypothesis(candidate) {
     cellSizePx: cellPxFromH(hypothesis.H),
     anchors: pointsOf(hypothesis.anchors),
     vertices: pointsOf(hypothesis.vertices),
+    // Type C 노치는 방향 단서일 뿐 수락 근거는 포맷 CRC + RS다. 원시 표본 배열 대신
+    // 공개 UI/스캐너가 표시할 수 있는 요약만 전달한다.
+    ...(hypothesis.notchC === true ? {
+      notchC: true,
+      notchHint: hypothesis.notchHint ? {
+        orientation: hypothesis.notchHint.orientation,
+        rotationDegrees: hypothesis.notchHint.rotationDegrees,
+        sampled: hypothesis.notchHint.sampled,
+        background: hypothesis.notchHint.background,
+        foreground: hypothesis.notchHint.foreground,
+        backgroundRate: hypothesis.notchHint.backgroundRate,
+        minBackgroundRate: hypothesis.notchHint.minBackgroundRate,
+      } : null,
+    } : {}),
     ...(hypothesis.beacon ? { beacon: hypothesis.beacon } : {}),
   };
 }

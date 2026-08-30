@@ -35,6 +35,8 @@ import { regionCellsA, regionCellsTurnA } from '../placementA.js';
 import { patchOfK } from '../placementK.js';
 import { VERSIONS } from '../capacity.js';
 import { VERSIONS_K } from '../capacityK.js';
+import { cSpecFromFormatIndex } from '../formatC.js';
+import { notchCellsC } from '../notchC.js';
 
 /*
  * 패밀리 점수의 임계값·가중치는 설계에서 M1 calibration 전 [미검증]이다.
@@ -57,6 +59,16 @@ const DEFAULT_TRI_MIN_CORE_RATE = 0.45;
 const DEFAULT_SAMPLE_RADIUS_FRACTION = 0.5;
 // [미검증] M1 calibration 에서 확정: 거친 점수 항의 상대 가중치.
 const HEX_SCORE_WEIGHTS = Object.freeze({ grid: 0.55, separation: 0.25, outer: 0.20 });
+// Type C는 3시 노치 8셀이 의도적으로 배경이다. 전경 격자 점수에서 뺀 뒤 별도
+// 배경 지지율을 넣어야 한다. 그렇지 않으면 정상 C가 outer strict-rate에서 부당하게
+// 감점되고, 반대로 단순 제외만 하면 노치가 채워진 잘못된 프레임도 통과할 수 있다.
+const TYPE_C_HEX_SCORE_WEIGHTS = Object.freeze({
+  grid: 0.45,
+  separation: 0.20,
+  outer: 0.15,
+  notchBackground: 0.20,
+});
+const DEFAULT_TYPE_C_MIN_NOTCH_BACKGROUND_RATE = 0.75;
 const TRI_SCORE_WEIGHTS = Object.freeze({ patch: 0.55, core: 0.30, finder: 0.15 });
 // [미검증] star(Type K) 채점 — tri 와 같은 가중치·문턱을 승계하되 패치가 두 계열
 // (A 계열 3 + 반전 계열 3)이라 **둘 다** 문턱을 넘어야 hard 다. 균형비까지 요구하는
@@ -351,6 +363,41 @@ function listCells(k, options) {
   }
 }
 
+function isTypeCDimension(k) {
+  return cSpecFromFormatIndex(0, k) !== null;
+}
+
+function typeCScoringCells(k, options) {
+  const cells = listCells(k, options);
+  if (!isTypeCDimension(k)) return cells;
+  const notch = new Set(notchCellsC(k).map((cell) => cell.q + ',' + cell.r));
+  return cells.filter((cell) => !notch.has(cell.q + ',' + cell.r));
+}
+
+function measureTypeCNotchBackground(luma, finder, k, orientation, options) {
+  const cells = notchCellsC(k);
+  let valid = 0;
+  let background = 0;
+  let foreground = 0;
+  for (const cell of cells) {
+    const signal = cellSignal(luma, finder, cell.q, cell.r, orientation, options);
+    if (!signal.valid) continue;
+    valid += 1;
+    // 배경은 같은 바탕색으로 세 면 순위가 갈리지 않는다. 유효한데 strict인 경우만
+    // 데이터 전경 증거이며, 표본 부재는 배경 지지로 세지 않는다.
+    if (signal.strict) foreground += 1;
+    else background += 1;
+  }
+  return {
+    total: cells.length,
+    valid,
+    background,
+    foreground,
+    backgroundRate: cells.length === 0 ? 0 : background / cells.length,
+    validRate: cells.length === 0 ? 0 : valid / cells.length,
+  };
+}
+
 /**
  * 코어 밖 패치 셀 — 실루엣 **방향**별로 낸다 (2026-08-18 턴A 편입).
  *
@@ -493,14 +540,24 @@ function scoreHexInternal(luma, finderInput, options = {}) {
   const orientations = normalizeOrientation(options);
   const measurements = [];
   for (const k of ks) {
-    const cells = listCells(k, options);
+    const typeC = isTypeCDimension(k);
+    const cells = typeC ? typeCScoringCells(k, options) : listCells(k, options);
     for (const orientation of orientations) {
       const measured = measureCells(luma, finder, k, orientation, cells, options);
       const separation = clamp01(measured.meanSeparation / Math.max(stats.span, LUMA_RANGE_EPSILON));
-      const score = HEX_SCORE_WEIGHTS.grid * measured.strictRate
-        + HEX_SCORE_WEIGHTS.separation * separation
-        + HEX_SCORE_WEIGHTS.outer * measured.outerRate;
-      measurements.push({ ...measured, score });
+      if (typeC) {
+        const notch = measureTypeCNotchBackground(luma, finder, k, orientation, options);
+        const score = TYPE_C_HEX_SCORE_WEIGHTS.grid * measured.strictRate
+          + TYPE_C_HEX_SCORE_WEIGHTS.separation * separation
+          + TYPE_C_HEX_SCORE_WEIGHTS.outer * measured.outerRate
+          + TYPE_C_HEX_SCORE_WEIGHTS.notchBackground * notch.backgroundRate;
+        measurements.push({ ...measured, notch, typeC: true, score });
+      } else {
+        const score = HEX_SCORE_WEIGHTS.grid * measured.strictRate
+          + HEX_SCORE_WEIGHTS.separation * separation
+          + HEX_SCORE_WEIGHTS.outer * measured.outerRate;
+        measurements.push({ ...measured, score });
+      }
     }
   }
   const ordered = sortMeasurements(measurements);
@@ -511,6 +568,8 @@ function scoreHexInternal(luma, finderInput, options = {}) {
     strictRate: 0,
     outerRate: 0,
     validRate: 0,
+    notch: null,
+    typeC: false,
   };
   const finderCheck = finder.hardChecksPassed;
   const tilingCheck = best.strictRate >= (
@@ -523,6 +582,11 @@ function scoreHexInternal(luma, finderInput, options = {}) {
       ? options.minHexOuterRate
       : DEFAULT_HEX_MIN_OUTER_RATE
   );
+  const notchCheck = best.typeC !== true || best.notch.backgroundRate >= (
+    Number.isFinite(options.minTypeCNotchBackgroundRate)
+      ? options.minTypeCNotchBackgroundRate
+      : DEFAULT_TYPE_C_MIN_NOTCH_BACKGROUND_RATE
+  );
   return ok({
     family: 'hex',
     finderKind: finder.kind,
@@ -534,7 +598,8 @@ function scoreHexInternal(luma, finderInput, options = {}) {
       finder: finderCheck,
       tiling: tilingCheck,
       boundary: outerCheck,
-      all: finderCheck && tilingCheck && outerCheck,
+      ...(best.typeC === true ? { notchBackground: notchCheck } : {}),
+      all: finderCheck && tilingCheck && outerCheck && notchCheck,
     },
     diagnostics: {
       finder: {
@@ -546,6 +611,7 @@ function scoreHexInternal(luma, finderInput, options = {}) {
       lumaSpan: stats.span,
       sizeScores: ordered,
       selectedSize: { k: best.k, orientation: best.orientation },
+      ...(best.typeC === true ? { typeCNotch: best.notch } : {}),
     },
     hypothesisId: 'hex-' + best.k + '-' + best.orientation,
   });
