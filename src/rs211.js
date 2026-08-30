@@ -100,15 +100,26 @@ export const NSYM_TABLE = Object.freeze({
  *   (`V1D`/`V2D`/`V3D`)로 분리해 둔 이유가 이것이고, 본표 `NSYM_TABLE` 은 daehan
  *   편입으로 **한 값도 바뀌지 않았다**.
  *
+ * **V4D (2026-08-30 개방 — daehan × V4 «대용량»)** — 같은 승계 규약의 네 번째 행.
+ * k=12 에서 daehan 은 k10 완전판 79셀(예약 60)을 중심 고정 재사용하므로
+ * (`finder-daehan.js` templateRadius 클램프 — `DAEHAN_RADII` 는 늘리지 않는다)
+ * S = ⌊(469 − 117)/3⌋ = **117** · 잔여 1. nsym 은 V4 절차값(16/35/55)을 승계한다.
+ * ⚠ 승계 축의 뉘앙스가 기존 3행과 다르다: V1~V3 는 «절대 t 보존» 이 곧 패리티율
+ *   상승(예: M 25.9%→35.0%)이었지만, V4D 는 S 감소 폭이 작아(137→117) 상승분도
+ *   작다 (M 25.5%→29.9%). 축 이름은 여전히 «절대 정정능력 보존» 이다 — 절차식
+ *   재산출(14/29/47)이 아니라 동명 V4 값이 정본이다 (PM/027 §5.5 잠긴 결론).
+ *
  * 결과 순 페이로드 (실측 — `capacityDaehan.js` 가 산출하고 테스트가 값으로 잠근다):
  *   V1D  L 15 B · M 11 B · H 7 B
  *   V2D  L 32 B · M 26 B · H 18 B
  *   V3D  L 57 B · M 46 B · H 32 B
+ *   V4D  L 96 B · M 78 B · H 58 B
  */
 export const NSYM_TABLE_DAEHAN = Object.freeze({
   V1D: Object.freeze({ symbols: 20, L: 3, M: 7, H: 11 }),
   V2D: Object.freeze({ symbols: 42, L: 7, M: 14, H: 22 }),
   V3D: Object.freeze({ symbols: 72, L: 11, M: 23, H: 37 }),
+  V4D: Object.freeze({ symbols: 117, L: 16, M: 35, H: 55 }),
 });
 
 function freezeRsBlockLevel(blockCount, dataSymbolsPerBlock, paritySymbolsPerBlock) {

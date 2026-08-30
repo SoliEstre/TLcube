@@ -30,6 +30,9 @@ import { encode } from '../src/encode.js';
 import { decodeCells } from '../src/decode.js';
 import { decode as decodeFormatInfo } from '../src/formatinfo.js';
 import { dataCellsInScanOrder } from '../src/layout.js';
+import { daehanReservedCells } from '../src/finder-daehan.js';
+import { VERSIONS_A_DAEHAN } from '../src/capacityA.js';
+import { VERSIONS_K_DAEHAN } from '../src/capacityK.js';
 import { symbolCountForByteLength } from '../src/base211.js';
 import { buildScene } from '../src/scene.js';
 import { rasterize } from '../src/raster.js';
@@ -280,28 +283,54 @@ describe('④ 왕복 — 프런트엔드 (합성 렌더 → 격자 가설 → k=
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('⑤ 배타 — daehan/sagoae × V4 는 정의가 없다', () => {
-  test('명시 거절 — 조용한 V3D 강등이 아니다', () => {
+// ⑤ 는 배타 자였다 («daehan/sagoae × V4 는 정의가 없다») — V4D 개방(2026-08-30,
+// PM/027 §5.5)으로 양성 + 대조군으로 반전한다. 개방의 선행 게이트는 misread 재실측
+// (test/output/lanes/claude-v4d-misread.mjs — 거절 실패 0건)이다.
+describe('⑤ 개방 — daehan/sagoae × V4 = V4D (와이어는 V 인덱스 공유)', () => {
+  test('양성 — 구 거절 조합 전부가 V4D 회계로 선다', () => {
     for (const options of [
       { version: 4, daehanFinder: true },
       { version: 4, sagoae: true },
       { version: 4, eccLevel: 'H', daehanFinder: true },
     ]) {
-      assert.throws(
-        () => encode('daehan v4', options),
-        (error) => {
-          assert.ok(error instanceof RangeError, '거절은 RangeError 여야 한다');
-          assert.match(error.message, /V4/, '메시지가 어느 버전인지 안 말한다');
-          assert.match(error.message, /VERSIONS_DAEHAN/, '메시지가 어느 표에 없는지 안 말한다');
-          assert.match(error.message, /파인더 예약 셀 수/, '메시지가 **왜** 막혔는지 안 말한다');
-          return true;
-        },
-        JSON.stringify(options),
-      );
+      const encoded = encode('daehan v4', options);
+      assert.equal(encoded.k, 12, JSON.stringify(options));
+      assert.equal(encoded.daehanFinder, true, 'daehan 예약 회계 신호가 안 섰다');
+      assert.equal(encoded.capacity.usedSymbols, 117, 'V4D 회계(S=117)가 아니다');
+      // 와이어 — 전용 formatIndex 신설 금지: 평 V4 의 3 을 그대로 공유한다.
+      assert.equal(formatIndexOf(encoded), 3, JSON.stringify(options));
     }
   });
 
-  test('대조군 — daehan V1~V3 은 여전히 통과한다 (「전부 막혔다」가 아니다)', () => {
+  test('용량 계약값 — V4D 96/78/58 B (nsym 은 V4 승계 16/35/55, 절차 재산출 아님)', () => {
+    const bytes = {};
+    for (const level of LEVELS) {
+      const encoded = encode('v4d', { version: 4, eccLevel: level, daehanFinder: true });
+      bytes[level] = encoded.capacity.maxPayloadBytes;
+      assert.equal(encoded.capacity.nsym, NSYM_TABLE.V4[level],
+        `V4D/${level}: nsym 이 V4 승계값이 아니다`);
+    }
+    assert.deepEqual(bytes, { L: 96, M: 78, H: 58 });
+  });
+
+  test('digit 왕복 — V4D × L/M/H × 경계 페이로드', () => {
+    for (const level of LEVELS) {
+      const encoded = encode('v4d cap', { version: 4, eccLevel: level, daehanFinder: true });
+      const max = encoded.capacity.maxPayloadBytes;
+      for (const text of ['', 'x', 'D'.repeat(max), '대한 V4D ✅']) {
+        const enc = encode(text, { version: 4, eccLevel: level, daehanFinder: true });
+        const scan = dataCellsInScanOrder(12, daehanReservedCells(12));
+        const digits = scan.map((c) => enc.cellDigits.get(c.q + ',' + c.r).digit);
+        const out = decodeCells(digits, {
+          type: 'O', daehanFinder: true, k: 12, formatIndex: 3, eccLevel: level,
+        });
+        assert.equal(out.ok, true, level + ': ' + (out.reason || ''));
+        assert.equal(out.text, text);
+      }
+    }
+  });
+
+  test('대조군 — daehan V1~V3 은 여전히 통과한다 (「V4 만 열렸다」가 아니다)', () => {
     for (const version of [1, 2, 3]) {
       const encoded = encode('daehan ok', { version, daehanFinder: true });
       assert.equal(encoded.daehanFinder, true);
@@ -309,7 +338,22 @@ describe('⑤ 배타 — daehan/sagoae × V4 는 정의가 없다', () => {
     }
   });
 
-  test('cornerMarker 는 반대로 **열려 있다** — G4 가 거절되지 않는지 대조', () => {
+  test('cornerMarker 는 **열려 있다** — G4 가 거절되지 않는지 대조 (보존)', () => {
     assert.equal(encode('g4 ok', { version: 4, cornerMarker: true }).cornerMarker, true);
+  });
+
+  test('배타 유지 — daehan × cornerMarker 는 여전히 원자 거절 (배치 검증 미실시)', () => {
+    assert.throws(
+      () => encode('d x cm', { version: 4, daehanFinder: true, cornerMarker: true }),
+      /중앙 슬롯 점유자는 하나다/,
+    );
+  });
+
+  test('개방은 hex 축 한정 — A/K daehan 표에는 k=12 행이 없다 (게이트의 정본이 이 표다)', () => {
+    // bootstrap.daehanReservedCellsFor 의 게이트가 family 별 회계 표 유도로 바뀌었다
+    // (2026-08-30) — 그래서 이 표 단언이 곧 «O 표 하나로 전 가족을 조종하지 않는다»
+    // 의 결정 단계 단언이다.
+    assert.equal(VERSIONS_A_DAEHAN.some((spec) => spec.k === 12), false);
+    assert.equal(VERSIONS_K_DAEHAN.some((spec) => spec.k === 12), false);
   });
 });

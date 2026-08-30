@@ -14,7 +14,8 @@
  * (20/40/60), 프레임의 k 를 정하는 것은 여기서도 RS/CRC 다 (bootstrap :1604 계약).
  */
 import {
-  DAEHAN_CELL_LEVELS, DAEHAN_FINDER_CELLS, DAEHAN_RADII, daehanReservedCells,
+  DAEHAN_CELL_LEVELS, DAEHAN_COMPLETE_RADIUS, DAEHAN_FINDER_CELLS, DAEHAN_RADII,
+  daehanReservedCells,
 } from '../finder-daehan.js';
 import {
   UNVERIFIED_CELL_FINDER_CALIBRATION, scoreCellMaskAtHomography,
@@ -55,7 +56,14 @@ export const SAGOAE_VERIFY_CALIBRATION = Object.freeze({
  *   고리가 화면 밖이거나 휘도 스팬이 죽었으면 ok:false (correlation null).
  */
 export function verifySagoae(luma, H, k, options = {}) {
-  const pattern = RING_PATTERNS.get(k);
+  // k > 완전판(10) 프레임(V4D 개방 2026-08-30 · Type C k14/17/20)의 고리는 k10 과
+  // **동일 60셀**이다 — `daehanReservedCells` 의 templateRadius 클램프와 같은 기하
+  // 사실 (실호출: cells(12) ≡ cells(10) · levels 도 동일). 손 별칭 목록을 두지 않고
+  // 같은 클램프로 유도한다. 반환 k 는 호출자의 프레임 k 그대로다 — bootstrap 의
+  // `sagoaeVerified` 스탬프(엄밀 일치 게이트)가 프레임 k 를 요구한다.
+  const pattern = RING_PATTERNS.get(
+    Number.isInteger(k) && k > DAEHAN_COMPLETE_RADIUS ? DAEHAN_COMPLETE_RADIUS : k,
+  );
   if (!pattern) throw new RangeError('sagoae 반경이 아니다: ' + k);
   const cfg = { ...SAGOAE_VERIFY_CALIBRATION, ...(options.calibration || {}) };
   // detailed(면당 4점) 로 잰다 — 원자 검출기의 완성 단계와 같은 해상도 (coarse 1점은

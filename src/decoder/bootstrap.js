@@ -9,8 +9,9 @@
  */
 
 import { VERSIONS } from '../capacity.js';
-import { VERSIONS_A } from '../capacityA.js';
+import { VERSIONS_A, VERSIONS_A_DAEHAN } from '../capacityA.js';
 import { VERSIONS_C } from '../capacityC.js';
+import { VERSIONS_DAEHAN } from '../capacityDaehan.js';
 import {
   VERSIONS_Y,
   windowedReferenceCellsY,
@@ -67,7 +68,7 @@ import { decodeCellsC } from './decode-c.js';
 // Type K(육각별, family 'star') — 후단은 decode-k.js (decode.js 는 O/A/Y 정본이라
 // 무변경 — 레인 K 브리프 §4 쓰기 범위). 회계·scan 은 K 모듈이 유일한 진실이다.
 import { decodeCellsK } from './decode-k.js';
-import { VERSIONS_K } from '../capacityK.js';
+import { VERSIONS_K, VERSIONS_K_DAEHAN } from '../capacityK.js';
 import { dataCellsInScanOrderK, layoutMapK, vertexAnchorsK } from '../layoutK.js';
 import { markerGSpec, markerGSpecFromFormatIndex } from '../markerG.js';
 import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from '../turnA.js';
@@ -113,7 +114,7 @@ import { detectCellFinders } from './cell-finder-detect.js';
 import { verifySagoae } from './sagoae-verify.js';
 import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../finder-oak-patterns.js';
 import {
-  DAEHAN_FINDER_PATTERNS, DAEHAN_RADII, daehanReservedCells, isDaehanFinderPatternId,
+  DAEHAN_FINDER_PATTERNS, daehanReservedCells, isDaehanFinderPatternId,
 } from '../finder-daehan.js';
 import { NOTCH_C_CELL_COUNT, notchCellsC, typeCReservedCells } from '../notchC.js';
 
@@ -2388,7 +2389,13 @@ function cellFinderHypotheses(luma, finder, family, options) {
     && !isDaehanFinderPatternId(finder.patternId)) {
     const verifyH = finder.transform || finder.H;
     for (const hypothesis of base.slice()) {
-      if (!DAEHAN_RADII.includes(hypothesis.k) || !verifyH) continue;
+      // 표 주도 게이트 (2026-08-30, V4D) — family 별 회계 표가 연 k 만 검증한다.
+      // 구 `DAEHAN_RADII.includes` 는 잘림 템플릿 목록이라 k=12 를 영영 안 열었다.
+      if (!daehanAccountingOpen(family, hypothesis.k) || !verifyH) continue;
+      // ⚠ 검증 호출의 k 는 프레임 k 그대로다 — verifySagoae 가 완전판 클램프(k>10 →
+      //   k10 고리 60셀 동일)를 스스로 안다. 아래 `sagoaeVerified` 스탬프도 **프레임
+      //   k** 여야 한다: 10 으로 찍으면 daehanReservedCellsFor 의 엄밀 일치
+      //   (`sagoaeVerified === dimension`)가 k=12 에서 영영 안 열리는 침묵 실패다.
       const verified = verifySagoae(luma, verifyH, hypothesis.k, options.sagoae || {});
       if (!verified.ok) continue;
       base.push({
@@ -2779,15 +2786,38 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
 }
 
 /**
+ * family 별 «daehan 회계가 정의된 k» 집합 — **표 주도** (구 게이트는 `DAEHAN_RADII`
+ * 손 목록이라 V4D 개방 때 자동으로 안 열렸다 — 2026-08-30 교체).
+ *
+ * ⚠ **한 표로 전 가족을 조종하지 마라.** 이 함수는 hex·tri·star 3패밀리가 공유하는
+ * `daehanReservedCellsFor` 의 게이트다. 세 회계 표(O `VERSIONS_DAEHAN` · A
+ * `VERSIONS_A_DAEHAN` · K `VERSIONS_K_DAEHAN`)의 k 집합은 지금 {6,8,10} 이 겹쳐
+ * 보이지만 각자 따로 확장된다 — hex 만 k=12(V4D)를 열었고, tri/star 는 각자 표가
+ * 열리는 날 여기가 저절로 따라온다.
+ */
+const DAEHAN_ACCOUNTING_KS = Object.freeze({
+  hex: new Set(VERSIONS_DAEHAN.map((spec) => spec.k)),
+  tri: new Set(VERSIONS_A_DAEHAN.map((spec) => spec.k)),
+  star: new Set(VERSIONS_K_DAEHAN.map((spec) => spec.k)),
+});
+
+function daehanAccountingOpen(family, dimension) {
+  const ks = DAEHAN_ACCOUNTING_KS[family];
+  return ks !== undefined && ks.has(dimension);
+}
+
+/**
  * 이 가설의 파인더가 daehan 계열이면 **가설 차원 기준** 예약 셀 목록을, 아니면 null.
  *
  * 예약 셀은 `daehanReservedCells(dimension)` 이지 `daehanReservedCells(패턴의 k)` 가
  * **아니다.** 패턴 id 의 k 는 «검출기가 어느 잘림본으로 맞췄나» 일 뿐이고, 포함
  * 사슬 때문에 그것이 프레임의 k 와 다를 수 있다 (k=8 프레임을 k6 템플릿이 정당하게
  * 맞춘다 — §claude-di-nesting). 프레임의 k 를 정하는 것은 RS/CRC 다.
+ * k > 완전판(10) 프레임(V4D)은 k10 79셀 정본을 중심 고정 재사용한다 —
+ * `daehanReservedCells` 의 templateRadius 클램프가 그 사실을 스스로 말한다.
  */
-function daehanReservedCellsFor(hypothesis, dimension) {
-  if (!DAEHAN_RADII.includes(dimension)) return null;
+function daehanReservedCellsFor(family, hypothesis, dimension) {
+  if (!daehanAccountingOpen(family, dimension)) return null;
   // C2c 분해 경로 — 파인더 이름이 아니라 **검증된 sagoae 고리**가 회계를 연다.
   // 단 검증은 자기 k 에만 유효하다 (고리는 k 마다 딴 셀 — 차원 전이 금지).
   if (hypothesis && hypothesis.sagoaeVerified === dimension) {
@@ -2821,7 +2851,7 @@ function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
     // 실제로 도달한다: detectCellFinders → cellFinderHypotheses(hypothesis.finder)
     // → validateGridHypotheses → 이 함수. 전용 formatIndex 를 안 만드는 근거가 이
     // 경로의 실재다 (`capacityDaehan.js` 헤더 §와이어).
-    const reserved = daehanReservedCellsFor(hypothesis, dimension);
+    const reserved = daehanReservedCellsFor(family, hypothesis, dimension);
     if (reserved) {
       return {
         map: layoutMap(dimension, reserved),
@@ -2837,7 +2867,7 @@ function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
     };
   }
   if (family === 'tri') {
-    const reserved = daehanReservedCellsFor(hypothesis, dimension);
+    const reserved = daehanReservedCellsFor(family, hypothesis, dimension);
     if (reserved) {
       return {
         map: layoutMapA(dimension, reserved),
@@ -2858,7 +2888,7 @@ function layoutForFamily(family, dimension, hypothesis, formatWire = 2) {
     // 와이어는 평 K 7 공유 (capacityK.VERSIONS_K_DAEHAN 헤더 §계약).
     // K-CM 은 별도 축 — 회계는 decode-k 의 cornerMarker 분기가 가르고 여기 map 은
     // 평 K 와 같다 (격자·앵커·포맷 동일).
-    const reserved = daehanReservedCellsFor(hypothesis, dimension);
+    const reserved = daehanReservedCellsFor(family, hypothesis, dimension);
     if (reserved) {
       return {
         map: layoutMapK(dimension, reserved),

@@ -50,16 +50,26 @@
  *   ② 프레임 층 9조합 — 배포 기본 라인업(daehan 없음)은 daehan 프레임을 전부
  *      `frontend:no-format-candidate` 로 거절한다.
  *   ③ 역방향 9조합 — 레거시 프레임을 daehan 회계로 읽어도 전부 RS 거절.
+ *   **k=12 확장 재실측 (2026-08-30, V4D 개방 게이트 — `test/output/lanes/claude-v4d-misread.mjs`):**
+ *   ① 셀 층 — V4D 프레임을 평 V4 회계로 읽기 9조합(쓴 ECC × 읽는 ECC) 전부 RS 거절
+ *      (V4Q 는 셀 회계가 평 V4 와 동일하므로 같은 실측이 덮는다).
+ *   ② 프레임 층 — 배포 기본 라인업이 V4D 렌더를 전부 `frontend:no-format-candidate` 로 거절.
+ *   ③ 역방향 — 평 V4 프레임을 V4D 회계로 읽기 9조합 전부 거절.
  *   새 조합에서 거절 실패가 나오면 그때는 전용 formatIndex(ⓐ)가 필요하고,
- *   VERSION_BITS 4 의 빈 슬롯(3 · 7 · 8\~15)에서 배정한다 — 이 라운드 범위 밖이다.
+ *   VERSION_BITS 4 의 빈 슬롯에서 배정한다 — ⚠ 이 헤더의 구 문장 «빈 슬롯 3 · 7 · 8\~15»
+ *   는 V4 신설(2026-08-30) 전 기준이라 낡았다: **3 은 V4 · 7 은 V4Q 가 점유**했고
+ *   8\~11 은 cube 예약이다. k=12 열의 실제 빈 값은 {2, 4, 5, 6, 12\~15} 다.
  *
  * 런타임 의존성 0 · 순수 ESM.
  */
 
 import { NSYM_TABLE_DAEHAN } from './rs211.js';
-import { capacityFor } from './capacity.js';
+import { VERSIONS, capacityFor } from './capacity.js';
 import { overheadBreakdown } from './placement.js';
 import { DAEHAN_RADII, daehanReservedCells } from './finder-daehan.js';
+
+/** V4D 의 k 는 본표 V4 행이 정본이다 (버전 ↔ k 대응을 두 벌 적지 않는다). */
+const V4_K = VERSIONS.find((spec) => spec.version === 4).k;
 
 const NSYM_SOURCE = Object.freeze({
   table: NSYM_TABLE_DAEHAN,
@@ -75,15 +85,32 @@ const NSYM_SOURCE = Object.freeze({
  * 합치면 안 된다 (모듈 헤더 참조). 2026-08-21: 예약 셀의 분류 이름은 sagoae.
  * taegeuk(내부 19)은 이미 불스아이 오버헤드에 들어 있어 두 번 세지 않는다.
  *
+ * **V4D (2026-08-30 개방)** — `DAEHAN_RADII` 는 잘림 **템플릿** 반경 목록이라 절대
+ * 늘리지 않는다 (`finder-daehan.js` 자기검증 ④b·⑤ 가 그 배열에 걸려 있다). k=12 는
+ * `templateRadius` 클램프로 k10 완전판 79셀(예약 60)을 그대로 쓰므로, 여기서만
+ * 명시 행 하나를 **유도 3행 뒤에** 붙인다. overhead 는 위 규약대로 실계산이다 —
+ * 손 상수 117 을 박지 않는다 (사본 목록은 썩는다).
+ *
  * @type {ReadonlyArray<{name:string, version:number, k:number, overhead:number, symbolKey:string}>}
  */
-export const VERSIONS_DAEHAN = Object.freeze(DAEHAN_RADII.map((k, index) => Object.freeze({
-  name: 'V' + (index + 1) + 'D',
-  version: index + 1,
-  k,
-  overhead: overheadBreakdown(k, daehanReservedCells(k).length).total,
-  symbolKey: 'V' + (index + 1) + 'D',
-})));
+export const VERSIONS_DAEHAN = Object.freeze([
+  ...DAEHAN_RADII.map((k, index) => Object.freeze({
+    name: 'V' + (index + 1) + 'D',
+    version: index + 1,
+    k,
+    overhead: overheadBreakdown(k, daehanReservedCells(k).length).total,
+    symbolKey: 'V' + (index + 1) + 'D',
+  })),
+  Object.freeze({
+    name: 'V4D',
+    version: 4,
+    // k=12 예약 셀은 완전판(k10) 60셀의 중심 고정 재사용이다 — daehanReservedCells 가
+    // 클램프로 그 사실을 스스로 말한다 (아래 자기검증이 값으로 잠근다).
+    k: V4_K,
+    overhead: overheadBreakdown(V4_K, daehanReservedCells(V4_K).length).total,
+    symbolKey: 'V4D',
+  }),
+]);
 
 /** patternId 나 k 로 daehan spec 을 찾는다. 없으면 undefined. */
 export function daehanSpecForK(k) {
@@ -114,7 +141,16 @@ export function capacityTableDaehan(level = 'M') {
     V1D: { k: 6, overhead: 65, dataCells: 62, symbols: 20, payload: { L: 15, M: 11, H: 7 } },
     V2D: { k: 8, overhead: 89, dataCells: 128, symbols: 42, payload: { L: 32, M: 26, H: 18 } },
     V3D: { k: 10, overhead: 113, dataCells: 218, symbols: 72, payload: { L: 57, M: 46, H: 32 } },
+    V4D: { k: 12, overhead: 117, dataCells: 352, symbols: 117, payload: { L: 96, M: 78, H: 58 } },
   };
+  // 역방향 — EXPECT 에만 있고 표에 없는 잉여 키를 잡는다. 없으면 «표 행 커밋이
+  // 롤백되고 EXPECT 만 남은» 부분 되돌림이 조용히 초록으로 위장된다.
+  for (const name of Object.keys(EXPECT)) {
+    if (!VERSIONS_DAEHAN.some((spec) => spec.name === name)) {
+      throw new Error('capacityDaehan: EXPECT 에만 있고 표에 없는 키 ' + name
+        + ' — 표 행과 기대표는 같은 커밋으로 움직여야 한다');
+    }
+  }
   for (const spec of VERSIONS_DAEHAN) {
     const want = EXPECT[spec.name];
     if (!want) throw new Error('capacityDaehan: 기대표에 없는 키 ' + spec.name);
