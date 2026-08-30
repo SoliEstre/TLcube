@@ -495,3 +495,45 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
   assert.match(index, /type === 'K' && generatorState\.outerSeat === 'k-cm'/,
     'buildConfig 이 K 의 k-cm 자리를 cornerMarker 로 파생하지 않는다');
 });
+
+// ── §6.3 사괘 단독 배선 + V4 상호 잠금 (운영자 실기 신고 2026-08-30) ────────────
+//
+// 신고 두 건의 형태가 같았다 — «카드는 켜지는데 아무 일도 없다/던진다»:
+//   · sagoae: 인코더·scene 은 지원(sagoae-roundtrip)하는데 buildConfig 가 옵션을
+//     안 실었다 (배타를 열면 소비자도 쓸어라).
+//   · daehan × V4: 예약 회계가 k ≤ 10 이라 인코더가 정당하게 던지는데, UI 가 그
+//     조합을 만들 수 있었다.
+// 아래 자는 구문 앵커(디스패치 실재)와 술어 소비(우회로 없음)를 성질로 잰다 —
+// encodeOptsFor 순서 자(generator-corner-marker)와 같은 문법이다.
+
+test('§6.3 buildConfig·매퍼가 사괘를 두 타입 모두 싣는다 — «켰는데 안 먹는» 재발 방지', () => {
+  assert.match(INDEX, /sagoae: \(type === 'O' \|\| type === 'A'\) && generatorState\.innerSeat === 'sagoae'/,
+    'buildConfig 이 innerSeat=sagoae 를 인코더 옵션으로 파생하지 않는다');
+  // O·A 매퍼 각각에 사괘 디스패치가 실재한다 (강등 규칙 포함 — cfg.sagoae 분기).
+  const oBranch = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
+  const matches = oBranch.match(/else if \(cfg\.sagoae === true && !opts\.centerQr\) \{/g) || [];
+  assert.equal(matches.length, 2,
+    '사괘 디스패치가 O·A 두 분기에 있어야 한다 (현재 ' + matches.length + ')');
+});
+
+test('§6.3 V4 상호 잠금은 한 술어를 네 소비자가 쓴다 — 한쪽만 잠그면 우회로가 남는다', () => {
+  // 술어 자체는 표 유도다 (VERSIONS_DAEHAN — 손 상수 금지).
+  assert.match(INDEX, /DAEHAN_O_VERSIONS = new Set\(VERSIONS_DAEHAN\.map/,
+    'daehan 지원 버전이 표 유도가 아니다');
+  // 소비자 4곳: 파인더 카드 잠금 · 사괘 자리 잠금 · «대용량» 티어 잠금 · select 옵션.
+  const uses = (INDEX.match(/daehanSupportsOVersion\(/g) || []).length;
+  assert.ok(uses >= 3,
+    'daehanSupportsOVersion 소비자가 ' + uses + '곳뿐이다 — 카드·자리·select 세 축 미만이면 우회로다');
+  assert.match(INDEX, /res === 'max' && daehanAccountingActive/,
+    '«대용량» 티어가 daehan·사괘 활성에서 안 잠긴다');
+  // 버전 변경이 파인더 카드 잠금을 재동기한다 (실기에서 안 걸리던 그 구멍).
+  assert.match(INDEX, /버전은 daehan·사괘 잠금의 입력이다/,
+    '버전 변경 경로가 renderFinderUi 재동기를 잃었다');
+});
+
+test('§6.3 사괘 중앙 파트너 잠금은 scene 계약을 유도한다 — 사본 조건 금지', () => {
+  assert.match(INDEX, /sagoaeComposableWith\(generatorState\.finderPatternId\)/,
+    '사괘 자리 잠금이 scene.sagoaeComposableWith 를 유도하지 않는다');
+  assert.ok(!/renderKind === 'cell-mask'[^]*?innerSeat === 'sagoae'/.test(INDEX),
+    'UI 가 cell-mask 조건을 손으로 옮겨 적었다 — scene 계약이 바뀌면 한쪽만 늙는다');
+});

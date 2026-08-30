@@ -2729,6 +2729,9 @@ const GENERATOR_STRINGS = {
     "g923": "가까운 거리",
     "g1009": "대용량",
     "g1010": "최대 97 B",
+    "g1011": "대용량(V4)에는 daehan·사괘 정의가 없어요 — V3 이하에서 쓸 수 있어요.",
+    "g1012": "daehan·사괘 선택 중에는 쓸 수 없어요 — V4 정의가 없어요.",
+    "g1013": "사괘 단독은 후보 계열(독립 cell-mask) 중앙과만 합성돼요 — 정식 중앙(불스아이·TL·QR) 합성은 검증기 확장을 기다려요.",
     "g924": "내용에 맞춰",
     "g925": "손상에 강함",
     "g926": "균형",
@@ -2894,7 +2897,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "미측정 (다른 계보)",
-    "g569": "taegeuk + sagoae (전면 79셀)",
+    "g569": "daehan (전면 79셀)",
     "g570": "taegeuk + sagoae (용량 감소)",
     "g571": "가운데 19셀은 taegeuk, 그 밖은 sagoae 입니다. 검출은 쉬워지지만 담는 용량이 줄어요 (V3 기준 65 B → 46 B). 정식 스캐너가 읽어요 — 첫 시도에서 안 잡히면 자동으로 이 파인더를 켜 재시도해요.",
     "g582": "중앙 Y0",
@@ -3187,6 +3190,9 @@ const GENERATOR_STRINGS = {
     "g923": "Close range",
     "g1009": "High capacity",
     "g1010": "Up to 97 B",
+    "g1011": "daehan and sagoae are not defined at High capacity (V4) — available up to V3.",
+    "g1012": "Unavailable while daehan or sagoae is selected — no V4 definition.",
+    "g1013": "Standalone sagoae composes only with candidate-series (independent cell-mask) centres — composition with the regular centres (bullseye · TL · QR) awaits a verifier extension.",
     "g924": "Fits content",
     "g925": "Damage tolerant",
     "g926": "Balanced",
@@ -3352,7 +3358,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "Not measured (different lineage)",
-    "g569": "taegeuk + sagoae (79-cell full surface)",
+    "g569": "daehan (79-cell full surface)",
     "g570": "taegeuk + sagoae (lower capacity)",
     "g571": "The inner 19 cells are taegeuk; the reserved cells outside are sagoae. Detection gets easier but capacity drops (V3: 65 B → 46 B). The regular scanner reads it — if the first pass misses, it automatically retries with this finder enabled.",
     "g582": "Centre Y0",
@@ -3645,6 +3651,9 @@ const GENERATOR_STRINGS = {
     "g923": "近距離",
     "g1009": "大容量",
     "g1010": "最大 97 B",
+    "g1011": "大容量（V4）には daehan・四卦の定義がありません — V3 以下で使えます。",
+    "g1012": "daehan・四卦の選択中は使えません — V4 の定義がありません。",
+    "g1013": "四卦単独は候補系列（独立セルマスク）の中央とのみ合成できます — 正式中央（ブルズアイ・TL・QR）との合成は検証器の拡張待ちです。",
     "g924": "内容に合わせて",
     "g925": "損傷に強い",
     "g926": "バランス",
@@ -3810,7 +3819,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "未計測（別系譜）",
-    "g569": "taegeuk + sagoae（全面79セル）",
+    "g569": "daehan（全面79セル）",
     "g570": "taegeuk + sagoae（容量減少）",
     "g571": "中央19セルは taegeuk、その外側の予約セルは sagoae です。検出は容易になりますが容量が減ります（V3 で 65 B → 46 B）。正式スキャナで読み取れます — 最初のパスで見つからない場合、このファインダーを有効にして自動的に再試行します。",
     "g582": "中央Y0",
@@ -4102,6 +4111,9 @@ const GENERATOR_STRINGS = {
     "g923": "Courte distance",
     "g1009": "Haute capacité",
     "g1010": "Jusqu'à 97 B",
+    "g1011": "daehan et sagoae ne sont pas définis en Haute capacité (V4) — disponibles jusqu'à V3.",
+    "g1012": "Indisponible pendant la sélection de daehan ou sagoae — pas de définition V4.",
+    "g1013": "Le sagoae seul ne se compose qu'avec les centres de la série candidate (cell-mask indépendant) — la composition avec les centres officiels (bullseye · TL · QR) attend une extension du vérificateur.",
     "g924": "Selon le contenu",
     "g925": "Tolérant aux dommages",
     "g926": "Équilibré",
@@ -4267,7 +4279,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "Non mesuré (autre lignée)",
-    "g569": "taegeuk + sagoae (79 cellules, pleine surface)",
+    "g569": "daehan (79 cellules, pleine surface)",
     "g570": "taegeuk + sagoae (capacité réduite)",
     "g571": "Les 19 cellules centrales sont taegeuk ; les cellules réservées au-delà sont sagoae. La détection devient plus facile mais la capacité diminue (V3 : 65 B → 46 B). Le scanner officiel le lit — si la première passe échoue, il réessaie automatiquement avec ce détecteur activé.",
     "g582": "Y0 central",
@@ -4559,6 +4571,9 @@ const GENERATOR_STRINGS = {
     "g923": "Distanza ravvicinata",
     "g1009": "Alta capacità",
     "g1010": "Fino a 97 B",
+    "g1011": "daehan e sagoae non sono definiti in Alta capacità (V4) — disponibili fino a V3.",
+    "g1012": "Non disponibile con daehan o sagoae selezionati — nessuna definizione V4.",
+    "g1013": "Il sagoae da solo si compone solo con i centri della serie candidata (cell-mask indipendente) — la composizione con i centri ufficiali (bullseye · TL · QR) attende un'estensione del verificatore.",
     "g924": "In base al contenuto",
     "g925": "Tollera i danni",
     "g926": "Equilibrata",
@@ -4724,7 +4739,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "Non misurato (altra linea)",
-    "g569": "taegeuk + sagoae (79 celle, superficie intera)",
+    "g569": "daehan (79 celle, superficie intera)",
     "g570": "taegeuk + sagoae (capacità ridotta)",
     "g571": "Le 19 celle centrali sono taegeuk; le celle riservate all'esterno sono sagoae. Il rilevamento diventa più facile ma la capacità diminuisce (V3: 65 B → 46 B). Lo scanner ufficiale lo legge — se il primo passaggio fallisce, riprova automaticamente con questo rilevatore attivo.",
     "g582": "Y0 centrale",
@@ -5016,6 +5031,9 @@ const GENERATOR_STRINGS = {
     "g923": "Nahbereich",
     "g1009": "Hohe Kapazität",
     "g1010": "Bis zu 97 B",
+    "g1011": "daehan und sagoae sind bei Hoher Kapazität (V4) nicht definiert — verfügbar bis V3.",
+    "g1012": "Nicht verfügbar, solange daehan oder sagoae gewählt ist — keine V4-Definition.",
+    "g1013": "Sagoae allein lässt sich nur mit Zentren der Kandidatenreihe (unabhängige Cell-Mask) kombinieren — die Kombination mit den regulären Zentren (Bullseye · TL · QR) wartet auf eine Verifizierer-Erweiterung.",
     "g924": "Passend zum Inhalt",
     "g925": "Schadenstolerant",
     "g926": "Ausgewogen",
@@ -5181,7 +5199,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "Nicht gemessen (andere Linie)",
-    "g569": "taegeuk + sagoae (79 Zellen, ganze Fläche)",
+    "g569": "daehan (79 Zellen, ganze Fläche)",
     "g570": "taegeuk + sagoae (geringere Kapazität)",
     "g571": "Die inneren 19 Zellen sind taegeuk, die reservierten Zellen außen sind sagoae. Die Erkennung wird einfacher, aber die Kapazität sinkt (V3: 65 B → 46 B). Der reguläre Scanner liest ihn — schlägt der erste Durchlauf fehl, wird automatisch mit aktiviertem Finder erneut versucht.",
     "g582": "Zentrales Y0",
@@ -5473,6 +5491,9 @@ const GENERATOR_STRINGS = {
     "g923": "Corta distancia",
     "g1009": "Alta capacidad",
     "g1010": "Hasta 97 B",
+    "g1011": "daehan y sagoae no están definidos en Alta capacidad (V4) — disponibles hasta V3.",
+    "g1012": "No disponible mientras daehan o sagoae esté seleccionado — sin definición V4.",
+    "g1013": "El sagoae solo se compone únicamente con centros de la serie candidata (cell-mask independiente) — la composición con los centros oficiales (bullseye · TL · QR) espera una extensión del verificador.",
     "g924": "Según el contenido",
     "g925": "Tolera daños",
     "g926": "Equilibrado",
@@ -5638,7 +5659,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "Sin medir (otro linaje)",
-    "g569": "taegeuk + sagoae (79 celdas, superficie completa)",
+    "g569": "daehan (79 celdas, superficie completa)",
     "g570": "taegeuk + sagoae (menor capacidad)",
     "g571": "Las 19 celdas centrales son taegeuk; las celdas reservadas fuera son sagoae. La detección es más fácil pero la capacidad baja (V3: 65 B → 46 B). El escáner oficial lo lee — si la primera pasada falla, reintenta automáticamente con este detector activado.",
     "g582": "Y0 central",
@@ -5930,6 +5951,9 @@ const GENERATOR_STRINGS = {
     "g923": "Curta distância",
     "g1009": "Alta capacidade",
     "g1010": "Até 97 B",
+    "g1011": "daehan e sagoae não estão definidos em Alta capacidade (V4) — disponíveis até V3.",
+    "g1012": "Indisponível enquanto daehan ou sagoae estiver selecionado — sem definição V4.",
+    "g1013": "O sagoae sozinho só se compõe com centros da série candidata (cell-mask independente) — a composição com os centros oficiais (bullseye · TL · QR) aguarda uma extensão do verificador.",
     "g924": "Conforme o conteúdo",
     "g925": "Tolera danos",
     "g926": "Equilibrado",
@@ -6095,7 +6119,7 @@ const GENERATOR_STRINGS = {
     "g583": "Footprint",
     "g584": "taegeuk",
     "g568": "Não medido (outra linhagem)",
-    "g569": "taegeuk + sagoae (79 células, superfície inteira)",
+    "g569": "daehan (79 células, superfície inteira)",
     "g570": "taegeuk + sagoae (menor capacidade)",
     "g571": "As 19 células centrais são taegeuk; as células reservadas no exterior são sagoae. A detecção fica mais fácil, mas a capacidade diminui (V3: 65 B → 46 B). O leitor oficial consegue lê-lo — se a primeira passagem falhar, ele tenta novamente com este detector ativado.",
     "g582": "Y0 central",
@@ -6347,6 +6371,14 @@ import { getOakFinderPattern, isOakFinderPatternId } from './src/finder-oak-patt
 import {
   TAEGUK_ID, daehanPatternId, getDaehanFinderPattern, isDaehanFinderPatternId,
 } from './src/finder-daehan.js';
+import { VERSIONS_DAEHAN } from './src/capacityDaehan.js';
+// daehan(·사괘 — 같은 예약 회계) 이 정의된 O 버전 집합 — 손 상수가 아니라 표 유도.
+// V4(k=12) 는 예약 셀이 실측 확정값이라 유도 불가로 **정의가 없다** (레인 v4 판정).
+// 이 술어가 카드·티어 상호 잠금의 정본이다 (던짐 조합을 UI 가 안 만든다).
+const DAEHAN_O_VERSIONS = new Set(VERSIONS_DAEHAN.map((spec) => spec.version));
+function daehanSupportsOVersion(version) {
+  return version === 'auto' || DAEHAN_O_VERSIONS.has(Number(version));
+}
 // 자리 «자동» 기준표 (운영자 2026-08-25). 표는 순수 모듈에 있다 — 인라인에 두면
 // 테스트가 못 닿는다 (generator-auto-y·generator-locator-options 와 같은 처방).
 import { autoSeatsFor } from './src/generator-seat-auto.js';
@@ -6407,7 +6439,7 @@ import { CORNER_UNIT_OFFSETS, FACES, facePolygon } from './src/hexgrid.js';
 import { maxSafeRadius } from './src/bullseye.js';
 import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, presetDeltaMin, relativeLuminance, DELTA_MIN_CONTRACT } from './src/luminance.js';
 import { makeCustomPalette } from './src/palette-hue.js';
-import { buildScene } from './src/scene.js';
+import { buildScene, sagoaeComposableWith } from './src/scene.js';
 import { buildSceneY } from './src/sceneY.js';
 import { buildOrbitMesh, paintQuads, hitTest } from './src/y3d-viewer.js';
 import {
@@ -8438,10 +8470,16 @@ function renderFinderUi() {
     // 정의된 해소는 하드 비활성이 아니라 «누르면 직전 바깥 위치로 복귀» 다 (§1,
     // makeFinderCard 의 합성 경로). title(g581)이 그 결과를 예고한다.
     const finderRestoresOuterQr = innerQrActive && finderPatternConflictsWithInnerQr(fid);
+    // daehan × V4 — 예약 회계(VERSIONS_DAEHAN)가 k ≤ 10 이라 «대용량»(V4) 에는
+    // 정의가 없다 (인코더가 던진다 — 운영자 실기 신고 2026-08-30 «O4 daehan 렌더
+    // 안 됨»). 던짐 조합은 UI 가 안 만든다: 잠금 + 사유 (조용한 리셋·숨김 아님).
+    const daehanV4Locked = isDaehanFinderPatternId(fid)
+      && !daehanSupportsOVersion(generatorState.versionO);
     card.style.display = '';
-    card.classList.remove('disabled');
-    card.setAttribute('aria-disabled', 'false');
-    card.title = finderRestoresOuterQr ? t('g581') : '';
+    card.classList.toggle('disabled', daehanV4Locked);
+    card.setAttribute('aria-disabled', String(daehanV4Locked));
+    card.title = daehanV4Locked ? t('g1011')
+      : finderRestoresOuterQr ? t('g581') : '';
     const active = fid === generatorState.finderPatternId;
     card.classList.toggle('active', active);
     card.setAttribute('aria-pressed', String(active));
@@ -8822,12 +8860,19 @@ function syncResTierUi() {
   //    (검증 렌즈가 「B1 만 고치고 B2 를 두면 도달 불가」로 짚었다).
   //    v0 은 n=13 전용이라 «고» 잠금이 그대로 남는다.
   // 셀 표면 잠금이 windowLocked 보다 우선한다 — selectedTier 계산과 같은 우선순위.
+  // daehan(카드)·사괘(내곽) 활성 중엔 «대용량»(V4) 을 잠근다 — 예약 회계가 k ≤ 10
+  // 이라 V4 정의가 없다 (daehan/sagoae 카드 쪽 V4 잠금의 쌍대. 양방향 잠금이라
+  // 어느 쪽을 먼저 골라도 던짐 조합이 안 만들어진다).
+  const daehanAccountingActive = type === 'O'
+    && (isDaehanFinderPatternId(generatorState.finderPatternId)
+      || generatorState.innerSeat === 'sagoae');
   const isOff = (res) =>
-    cellSurfaceV0 ? res === 'high'
-      : cellSurfaceV0ty ? res === 'low'
-        : cellSurfaceV0t ? false
-          : windowLocked ? (res === 'low' || res === 'mid')
-            : false;
+    (res === 'max' && daehanAccountingActive) ? true
+      : cellSurfaceV0 ? res === 'high'
+        : cellSurfaceV0ty ? res === 'low'
+          : cellSurfaceV0t ? false
+            : windowLocked ? (res === 'low' || res === 'mid')
+              : false;
   // ⭐ 선택 표시도 **실제 버전을 따라간다** — 'mid' 를 박아 두면 사용자가 «고» 를 눌러
   //    Y2 로 갔는데 카드는 «중» 이 켜진 채인 «표시 ≠ 와이어» 가 된다.
   const selectedTier = cellSurfaceV0
@@ -8848,6 +8893,8 @@ function syncResTierUi() {
     card.style.display = resolutionTierAvailable(type, res) ? '' : 'none';
     card.classList.toggle('disabled', isOff(res));
     card.classList.toggle('active', res === selectedTier);
+    // 잠긴 이유를 카드가 말한다 — «대용량» 은 daehan·사괘 회계와 배타 (g1012).
+    card.title = res === 'max' && daehanAccountingActive ? t('g1012') : '';
   }
   els.resTierHint.textContent =
     (cellSurfaceV0 || cellSurfaceV0t)
@@ -8905,6 +8952,8 @@ for (const card of els.resTierCards.children) {
     generatorState[versionStateKey(type)] = versionForResolutionTier(type, card.dataset.res);
     syncTypeUi();
     syncResTierUi();
+    // 버전은 daehan·사괘 잠금의 입력이다 (V4 정의 없음) — 파인더 카드도 재동기.
+    renderFinderUi();
     schedule();
   });
 }
@@ -10754,6 +10803,19 @@ function syncTypeUi() {
     }
   }
   els.versionO.value = String(generatorState.versionO);
+  // daehan·사괘 회계 활성 중엔 select 의 V4 도 잠근다 (res 카드 «대용량» 잠금과
+  // 같은 술어 — 두 UI 는 같은 값의 왕복 표현이라 한쪽만 잠그면 우회로가 남는다).
+  {
+    const daehanAccounting = type === 'O'
+      && (isDaehanFinderPatternId(generatorState.finderPatternId)
+        || generatorState.innerSeat === 'sagoae');
+    for (const option of els.versionO.options) {
+      if (!daehanSupportsOVersion(option.value === 'auto' ? 'auto' : Number(option.value))) {
+        option.disabled = daehanAccounting;
+        option.title = daehanAccounting ? t('g1012') : '';
+      }
+    }
+  }
   els.versionY.value = String(generatorState.versionY);
   els.versionA.value = String(generatorState.versionA);
   els.versionK.value = String(generatorState.versionK);
@@ -10892,8 +10954,17 @@ function syncSeatUi() {
         absent: card.dataset.seatAbsent === '1',
       }) ? '' : 'none';
       const vcmLocked = seat === 'v-cm' && !turnAOn;
+      // sagoae × V4 — daehan 과 같은 예약 회계(k ≤ 10)라 «대용량»(V4) 에는 정의가
+      // 없다 (daehan 카드 잠금과 같은 술어 — 던짐 조합을 UI 가 안 만든다).
+      const sagoaeV4Locked = seat === 'sagoae' && currentType() === 'O'
+        && !daehanSupportsOVersion(generatorState.versionO);
+      // sagoae × 중앙 파트너 — 렌더·C2c 계약(scene.sagoaeComposableWith 유도):
+      // 독립 cell-mask 중앙(후보 계열)과만 합성된다. 정식 중앙(불스아이·TL·QR)
+      // 합성은 검증기 확장 대기 (운영자 실기 신고 2026-08-30 의 잔여 축).
+      const sagoaePartnerLocked = seat === 'sagoae'
+        && !sagoaeComposableWith(generatorState.finderPatternId);
       const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone && !isAutoCard)
-        || vcmLocked;
+        || vcmLocked || sagoaeV4Locked || sagoaePartnerLocked;
       card.classList.toggle('disabled', locked);
       // 자동이 켜져 있으면 **자동 카드만** 켜진다 — 자동이 고른 결과 카드까지 함께
       // 켜면 «둘 다 골라져 있는» 화면이 되고, 무엇이 이기는지가 안 보인다.
@@ -10909,7 +10980,8 @@ function syncSeatUi() {
       //   서서 양성 선택지다. 문구도 «자리만 예약» 에서 특성 고지로 바꿨다.
       const seatNote = card.dataset.seatAbsent === '1' ? t('g858')
         : seat === 'v-cm' ? (!turnAOn ? t('g875') : '')
-          : seat === 'sagoae' ? t('g855')
+          : seat === 'sagoae' ? (sagoaeV4Locked ? t('g1011')
+            : sagoaePartnerLocked ? t('g1013') : t('g855'))
             : seat === 'o-cm' ? t('g871')
               : (wireLocked && !isNone) ? t('g580') : '';
       // 자리명은 자동·없음에는 없다 (그 둘은 자리가 아니라 자리를 고르는 방식이다).
@@ -11050,6 +11122,8 @@ for (const [select, key] of [
       renderQrPositionUi();
     }
     syncResTierUi();
+    // 버전은 daehan·사괘 잠금의 입력이다 (V4 정의 없음) — 파인더 카드도 재동기.
+    renderFinderUi();
     syncTypeYCellEditorUi(); // n 변경 즉시 셀 편집기 ref./format 재유도 (렌더 대기 없이)
     schedule();
   });
@@ -11487,6 +11561,11 @@ function buildConfig() {
       || (type === 'A' && ((generatorState.outerSeat === 'a-cm' && generatorState.turnA !== true)
         || (generatorState.outerSeat === 'v-cm' && generatorState.turnA === true))),
     markerTones: type === 'O' && generatorState.innerSeat === 'o-cm',
+    // sagoae 단독 (2026-08-30, 운영자 실기 신고 «렌더링 안 됨») — 인코더·scene 은
+    // 이미 지원하는데(sagoae-roundtrip 39/39) 이 소비자가 옵션을 안 실어 «카드는
+    // 켜지는데 아무 일도 없는» 상태였다 (배타를 열면 소비자도 쓸어라의 그 형태).
+    // O·A 공통 — encodeA 도 같은 옵션 키를 받는다. K 는 encodeK 명시 거절 유지.
+    sagoae: (type === 'O' || type === 'A') && generatorState.innerSeat === 'sagoae',
     // CO2 앵커 3셀의 조건부 기본값은 encodeA가 중앙 슬롯 점유자의
     // `suppliesOuterFormat` 성질에서 유도한다. 생성기가 파인더 id 목록을 다시 적거나
     // boolean을 넘기면 다음 중앙 공급자에서 사본이 갈린다 — 여기서는 옵션을 만들지 않는다.
@@ -11598,6 +11677,13 @@ function encodeOptsFor(cfg) {
         // CO2 앵커 톤은 encodeA가 중앙 점유자의 형식 공급 성질에서 직접 유도한다.
         // 이 매핑 층에서 다시 싣지 않는다 — 명시 override는 라이브러리 호출자용이다.
       }
+    } else if (cfg.sagoae === true && !opts.centerQr) {
+      // 사괘 단독 (2026-08-30) — O 분기와 같은 자리·같은 강등 규칙. 외곽 코너
+      // 자리(a-cm/v-cm)가 이기면(위 분기) 사괘는 떨군다 — encodeA 가 «중앙 슬롯
+      // 점유자는 하나다» 로 던지는 조합이라 이 매퍼가 안 만든다. turnA 병용은
+      // 개설돼 있다 (2026-08-29 브리프 C — daehan 과 같은 180° 자기대칭 근거).
+      opts.sagoae = true;
+      if (cfg.turnA === true) opts.turnA = true;
     } else if (cfg.turnA === true) {
       // ⚠ **의도적 갱신 (2026-08-24 검수 4차)** — 여기 있던 `&& !centralV0Selected`
       // 는 encodeA 의 구 배타(centralV0 × turnA 던짐)를 UI 가 미리 피하던 자리다.
@@ -11663,6 +11749,12 @@ function encodeOptsFor(cfg) {
     opts.cornerMarker = true; // C2a — centerQr 병용 개설
     // H 심볼 (2026-08-24) — 자리 예약이 실릴 때만 톤도 실린다 (encode 계약).
     if (cfg.markerTones === true) opts.markerTones = true;
+  } else if (cfg.sagoae === true && !opts.centerQr) {
+    // 사괘 단독 (2026-08-30, 운영자 실기 신고) — daehan 예약 회계를 공유하므로
+    // (V*D 와이어, Q 변형 없음) centerQr 병용은 이 매퍼가 떨군다 — 위 코너 마커
+    // × 중앙 QR 강등과 같은 전례다. daehan 카드가 이기면(위 분기) 사괘는 이미
+    // 포함이라 따로 안 싣는다.
+    opts.sagoae = true;
   }
   return { fn: encode, opts };
 }
@@ -11723,9 +11815,13 @@ function renderTypeO(cfg) {
   // 재사상 없이도 맞다 — scene.js 의 반경 가드가 k10 패턴을 k=6/8 로 자르면 좌표·톤이
   // 잘림본과 같다. 재사상하는 이유는 아래 `finderPatternId` 가 스캔·텔레메트리 라벨로
   // 기록되기 때문이다 — k=6 프레임을 «k10 템플릿» 이라 적어 두면 나중 대조가 끊긴다.
-  const renderedFinderPatternId = encoded.daehanFinder
+  // ⚠ sagoae 단독 프레임도 encoded.daehanFinder=true 다 (회계 공유) — 하지만 중앙
+  //   슬롯은 사용자가 고른 파인더 그대로고 사괘 고리만 합성이다. daehan «원자» 일
+  //   때만 중앙을 taegeuk 템플릿으로 갈아끼운다 (encoded.sagoae 로 가른다).
+  const atomicDaehan = encoded.daehanFinder && encoded.sagoae !== true;
+  const renderedFinderPatternId = atomicDaehan
     ? daehanPatternId(encoded.k) : cfg.finderPatternId;
-  const sceneCfg = encoded.daehanFinder
+  const sceneCfg = atomicDaehan
     ? { ...cfg, finderPatternId: renderedFinderPatternId } : cfg;
   // scene 옵션을 붙잡아 둔다 — 내보내기의 «여백 없음» 이 최소 안전 margin
   // (trimExportMargin)으로 scene 을 재생성해야 해서다 (exportPlanFor 가 읽는다).
@@ -11760,9 +11856,13 @@ function renderTypeA(cfg) {
 
   // daehan (2026-08-19) — Type A 도 육각 코어에 쓴다. 카드는 하나고 그리는 템플릿의
   // k 는 버전이 정한다 (renderTypeO 와 같다).
-  const renderedFinderPatternId = encoded.daehanFinder
+  // ⚠ sagoae 단독 프레임도 encoded.daehanFinder=true 다 (회계 공유) — 하지만 중앙
+  //   슬롯은 사용자가 고른 파인더 그대로고 사괘 고리만 합성이다. daehan «원자» 일
+  //   때만 중앙을 taegeuk 템플릿으로 갈아끼운다 (encoded.sagoae 로 가른다).
+  const atomicDaehan = encoded.daehanFinder && encoded.sagoae !== true;
+  const renderedFinderPatternId = atomicDaehan
     ? daehanPatternId(encoded.k) : cfg.finderPatternId;
-  const sceneCfg = encoded.daehanFinder
+  const sceneCfg = atomicDaehan
     ? { ...cfg, finderPatternId: renderedFinderPatternId } : cfg;
   // renderTypeO 와 같은 이유로 scene 옵션을 붙잡는다 (내보내기 «여백 없음» 재생성용).
   const sceneOpts = sceneOptsForOA(sceneCfg, centerQr);

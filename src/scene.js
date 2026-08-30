@@ -136,6 +136,23 @@ function resolveFinderRenderPattern(id) {
   return getFinderPattern(id);
 }
 
+/**
+ * 사괘 단독이 이 중앙과 합성 가능한가 — buildScene 렌더 가드와 **같은 성질**의
+ * 술어다 (2026-08-30). UI 잠금이 이걸 유도한다 — 조건을 UI 에 옮겨 적으면
+ * 계약이 바뀔 때 한쪽만 늙는다 (사본 규칙). 중앙이 독립 cell-mask 여야 C2c 가
+ * 같은 포즈에서 고리를 검증할 수 있고, 원자 daehan 은 이미 사괘를 포함한다.
+ * 정식 중앙(불스아이·중앙 TL·중앙 QR)과의 합성은 **검증기 확장 대기** 축이다.
+ */
+export function sagoaeComposableWith(finderPatternId) {
+  let pattern;
+  try {
+    pattern = resolveFinderRenderPattern(finderPatternId);
+  } catch {
+    return false;
+  }
+  return pattern.renderKind === 'cell-mask' && !isDaehanFinderPatternId(finderPatternId);
+}
+
 function isExperimentalFinderRenderKind(renderKind) {
   return renderKind === 'cell-mask'
     || renderKind === 'three-tone-cube'
@@ -469,8 +486,7 @@ export function buildScene(encoded, options) {
   // sagoae 는 새 renderKind 가 아니라 **cell-mask 합성의 바깥 부분**이다. 중앙은
   // 독립 cell-mask 여야 C2c 가 같은 포즈에서 고리를 검증할 수 있다. 원자 daehan 을
   // 중앙으로 또 고르면 이미 sagoae 를 포함하므로 중복 렌더가 된다.
-  if (sagoae && (finderPattern.renderKind !== 'cell-mask'
-    || isDaehanFinderPatternId(finderPatternId))) {
+  if (sagoae && !sagoaeComposableWith(finderPatternId)) {
     throw new RangeError(
       `sagoae 는 독립 중앙 cell-mask 와만 합성할 수 있다: ${finderPatternId}`,
     );
