@@ -111,27 +111,95 @@ export const NSYM_TABLE_DAEHAN = Object.freeze({
   V3D: Object.freeze({ symbols: 72, L: 11, M: 23, H: 37 }),
 });
 
+function freezeRsBlockLevel(blockCount, dataSymbolsPerBlock, paritySymbolsPerBlock) {
+  return Object.freeze({
+    blockCount,
+    dataSymbolsPerBlock: Object.freeze(dataSymbolsPerBlock),
+    paritySymbolsPerBlock,
+  });
+}
+
 /**
- * Type C(3시 노치) nsym 표.
+ * Type C(3시 노치) RS 블록 구성 표.
  *
- * 모든 값은 SPEC §5 절차에서 유도한다:
- *   L = round(0.12·S), M = round(0.25·S) 뒤 짝수면 +1, H = round(0.40·S).
- * C1/H만 절차값 112가 base-211 청킹과 비정렬이라, A2/H 전례대로 가장 가까운
- * 상향 정렬값 113으로 보정한다. 나머지 17개 조합은 절차값 그대로 정렬된다.
+ * 와이어는 `(formatIndex,k)+ECC`로 이 표를 조회한다. 블록 수·블록별 데이터 길이·
+ * 블록별 패리티 수는 전부 리터럴이며, 디코더가 S에서 산술로 재구성하지 않는다.
+ * 기존 소비자를 위한 L/M/H 숫자는 **총 패리티 수**이고, C0/C0D의 값은 발행값과
+ * 문자 그대로 같다. 실제 블록 규약은 같은 행의 `blocks[level]`이 정본이다.
  *
- * ⚠ 이 표는 셀·패리티 회계의 정본이지 다중 RS 블록 규약이 아니다. GF(211) 단일
- * 코드워드 상한은 210이므로 S가 이를 넘는 C1/C2/C1D/C2D는 현재 인코딩할 수 없다.
- * 블록 수·패리티 배분·scan-order 매핑이 별도 확정되기 전까지 capacityC/encode가
- * 명시적으로 거절한다. 총 S를 조용히 여러 rsEncode 호출로 쪼개지 마라.
+ * 다중 블록 행의 고정 절차:
+ *   1. B = ceil(S/210)인 최소 블록 수(현재 모두 2)를 쓴다.
+ *   2. 긴 블록 길이 ceil(S/B)에 SPEC §5 비율 절차를 적용하고 모든 블록에 같은
+ *      `paritySymbolsPerBlock`을 쓴다.
+ *   3. 전체 데이터 심볼 수가 base-211 청킹과 어긋나면 정렬되는 최근접 홀수로
+ *      보정한다. 발동은 C1/H 56→57, C1D/L 16→15 두 행뿐이다.
+ *   4. 데이터 심볼은 짧은 블록 먼저, 블록 간 길이 차 1 이하로 고정한다.
+ *
+ * 인터리빙은 QR과 같이 **데이터 라운드로빈 뒤 패리티 라운드로빈**이다. 짧은 블록의
+ * 첫 패리티가 긴 블록의 마지막 데이터와 섞이지 않는다.
  */
 export const NSYM_TABLE_C = Object.freeze({
-  C0: Object.freeze({ symbols: 187, L: 22, M: 47, H: 75 }),
-  C1: Object.freeze({ symbols: 281, L: 34, M: 71, H: 113 }),
-  C2: Object.freeze({ symbols: 393, L: 47, M: 99, H: 157 }),
-  C0D: Object.freeze({ symbols: 167, L: 20, M: 43, H: 67 }),
-  C1D: Object.freeze({ symbols: 261, L: 31, M: 65, H: 104 }),
-  C2D: Object.freeze({ symbols: 373, L: 45, M: 93, H: 149 }),
+  C0: Object.freeze({
+    symbols: 187, L: 22, M: 47, H: 75,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(1, [165], 22),
+      M: freezeRsBlockLevel(1, [140], 47),
+      H: freezeRsBlockLevel(1, [112], 75),
+    }),
+  }),
+  C1: Object.freeze({
+    symbols: 281, L: 34, M: 70, H: 114,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(2, [123, 124], 17),
+      M: freezeRsBlockLevel(2, [105, 106], 35),
+      H: freezeRsBlockLevel(2, [83, 84], 57),
+    }),
+  }),
+  C2: Object.freeze({
+    symbols: 393, L: 48, M: 98, H: 158,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(2, [172, 173], 24),
+      M: freezeRsBlockLevel(2, [147, 148], 49),
+      H: freezeRsBlockLevel(2, [117, 118], 79),
+    }),
+  }),
+  C0D: Object.freeze({
+    symbols: 167, L: 20, M: 43, H: 67,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(1, [147], 20),
+      M: freezeRsBlockLevel(1, [124], 43),
+      H: freezeRsBlockLevel(1, [100], 67),
+    }),
+  }),
+  C1D: Object.freeze({
+    symbols: 261, L: 30, M: 66, H: 104,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(2, [115, 116], 15),
+      M: freezeRsBlockLevel(2, [97, 98], 33),
+      H: freezeRsBlockLevel(2, [78, 79], 52),
+    }),
+  }),
+  C2D: Object.freeze({
+    symbols: 373, L: 44, M: 94, H: 150,
+    blocks: Object.freeze({
+      L: freezeRsBlockLevel(2, [164, 165], 22),
+      M: freezeRsBlockLevel(2, [139, 140], 47),
+      H: freezeRsBlockLevel(2, [111, 112], 75),
+    }),
+  }),
 });
+
+/** Type C 표에서 한 ECC 레벨의 고정 블록 구성을 조회한다. */
+export function rsBlockConfigForC(symbolKey, level) {
+  if (!Object.hasOwn(NSYM_TABLE_C, symbolKey)) {
+    throw new RangeError(`NSYM_TABLE_C 에 키 ${symbolKey} 가 없다`);
+  }
+  const row = NSYM_TABLE_C[symbolKey];
+  if (!Object.hasOwn(row.blocks, level)) {
+    throw new RangeError(`NSYM_TABLE_C.${symbolKey}.blocks 에 레벨 ${level} 이 없다`);
+  }
+  return row.blocks[level];
+}
 
 /** 복호 실패 예외. `reason` / `syndromes` 를 함께 싣는다. */
 export class RSDecodeError extends Error {
@@ -169,6 +237,139 @@ function validateFcr(fcr) {
   if (!Number.isInteger(fcr) || fcr < 0) {
     throw new RangeError(`fcr 은 0 이상 정수여야 한다: ${fcr}`);
   }
+}
+
+// ── 다중 RS 블록 인터리빙 ───────────────────────────────────────────────
+
+function rsBlockShape(config) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new TypeError('RS 블록 구성 객체가 필요하다');
+  }
+  const { blockCount, dataSymbolsPerBlock, paritySymbolsPerBlock } = config;
+  if (!Number.isInteger(blockCount) || blockCount < 1) {
+    throw new RangeError(`blockCount 는 1 이상 정수여야 한다: ${blockCount}`);
+  }
+  if (!Array.isArray(dataSymbolsPerBlock)
+    && !ArrayBuffer.isView(dataSymbolsPerBlock)) {
+    throw new TypeError('dataSymbolsPerBlock 는 배열이어야 한다');
+  }
+  if (dataSymbolsPerBlock.length !== blockCount) {
+    throw new RangeError(
+      `dataSymbolsPerBlock 길이(${dataSymbolsPerBlock.length})가 blockCount(${blockCount})와 다르다`,
+    );
+  }
+  validateNsym(paritySymbolsPerBlock);
+
+  const dataLengths = [];
+  const codewordLengths = [];
+  let totalDataSymbols = 0;
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
+    const dataLength = dataSymbolsPerBlock[blockIndex];
+    if (!Number.isInteger(dataLength) || dataLength < 1) {
+      throw new RangeError(
+        `dataSymbolsPerBlock[${blockIndex}] 는 1 이상 정수여야 한다: ${dataLength}`,
+      );
+    }
+    if (blockIndex > 0 && dataLength < dataSymbolsPerBlock[blockIndex - 1]) {
+      throw new RangeError('RS 데이터 블록은 짧은 블록 먼저여야 한다');
+    }
+    const codewordLength = dataLength + paritySymbolsPerBlock;
+    if (codewordLength > MAX_CODEWORD_LEN) {
+      throw new RangeError(
+        `RS 블록 ${blockIndex} 길이(${codewordLength})가 ${MAX_CODEWORD_LEN}을 넘는다`,
+      );
+    }
+    dataLengths.push(dataLength);
+    codewordLengths.push(codewordLength);
+    totalDataSymbols += dataLength;
+  }
+  if (dataLengths[dataLengths.length - 1] - dataLengths[0] > 1) {
+    throw new RangeError('RS 블록 간 데이터 심볼 수 차이는 1 이하여야 한다');
+  }
+  return {
+    blockCount,
+    dataLengths,
+    codewordLengths,
+    paritySymbolsPerBlock,
+    totalDataSymbols,
+    totalParitySymbols: blockCount * paritySymbolsPerBlock,
+    totalCodewordSymbols: totalDataSymbols + blockCount * paritySymbolsPerBlock,
+  };
+}
+
+/**
+ * QR식 2단계 인터리빙의 와이어 인덱스 사상.
+ * 데이터 심볼을 라운드로빈한 뒤 패리티 심볼을 별도 라운드로빈한다.
+ */
+export function rsBlockInterleaveMap(config) {
+  const shape = rsBlockShape(config);
+  const out = [];
+  const maxDataLength = shape.dataLengths[shape.dataLengths.length - 1];
+  for (let round = 0; round < maxDataLength; round += 1) {
+    for (let blockIndex = 0; blockIndex < shape.blockCount; blockIndex += 1) {
+      if (round >= shape.dataLengths[blockIndex]) continue;
+      out.push(Object.freeze({ blockIndex, codewordIndex: round, kind: 'data' }));
+    }
+  }
+  for (let round = 0; round < shape.paritySymbolsPerBlock; round += 1) {
+    for (let blockIndex = 0; blockIndex < shape.blockCount; blockIndex += 1) {
+      out.push(Object.freeze({
+        blockIndex,
+        codewordIndex: shape.dataLengths[blockIndex] + round,
+        kind: 'parity',
+      }));
+    }
+  }
+  if (out.length !== shape.totalCodewordSymbols) {
+    throw new Error(
+      `RS 인터리브 사상 길이(${out.length})가 코드워드 합계(${shape.totalCodewordSymbols})와 다르다`,
+    );
+  }
+  return out;
+}
+
+/** 블록별 체계적 코드워드를 QR식 2단계 라운드로빈 심볼열로 인터리빙한다. */
+export function interleaveRsBlocks(blocks, config) {
+  const shape = rsBlockShape(config);
+  if (!Array.isArray(blocks) || blocks.length !== shape.blockCount) {
+    throw new RangeError(`blocks 는 길이 ${shape.blockCount} 배열이어야 한다`);
+  }
+  const normalized = blocks.map((block, blockIndex) => {
+    const symbols = toSymbols(block, `blocks[${blockIndex}]`);
+    if (symbols.length !== shape.codewordLengths[blockIndex]) {
+      throw new RangeError(
+        `blocks[${blockIndex}] 길이(${symbols.length})가 표의 코드워드 길이`
+        + `(${shape.codewordLengths[blockIndex]})와 다르다`,
+      );
+    }
+    return symbols;
+  });
+  const out = new Uint8Array(shape.totalCodewordSymbols);
+  const map = rsBlockInterleaveMap(config);
+  for (let wireIndex = 0; wireIndex < map.length; wireIndex += 1) {
+    const { blockIndex, codewordIndex } = map[wireIndex];
+    out[wireIndex] = normalized[blockIndex][codewordIndex];
+  }
+  return out;
+}
+
+/** 인터리빙된 심볼열을 표에 고정된 체계적 RS 블록들로 되돌린다. */
+export function deinterleaveRsBlocks(interleaved, config) {
+  const shape = rsBlockShape(config);
+  const symbols = toSymbols(interleaved, 'interleaved');
+  if (symbols.length !== shape.totalCodewordSymbols) {
+    throw new RangeError(
+      `interleaved 길이(${symbols.length})가 표의 코드워드 합계`
+      + `(${shape.totalCodewordSymbols})와 다르다`,
+    );
+  }
+  const blocks = shape.codewordLengths.map((length) => new Uint8Array(length));
+  const map = rsBlockInterleaveMap(config);
+  for (let wireIndex = 0; wireIndex < map.length; wireIndex += 1) {
+    const { blockIndex, codewordIndex } = map[wireIndex];
+    blocks[blockIndex][codewordIndex] = symbols[wireIndex];
+  }
+  return blocks;
 }
 
 // ── 용량 헬퍼 ───────────────────────────────────────────────────────────
@@ -283,6 +484,31 @@ export function rsEncode(msg, nsym, options = {}) {
   // out[0..data.length) 는 위 루프에서 뭉개졌으므로 원 메시지로 복원한다.
   out.set(data, 0);
   return out;
+}
+
+/**
+ * 고정 블록 표에 따라 데이터 심볼열을 연속 분할하고, 블록별 RS 부호화 뒤 QR식으로
+ * 인터리빙한다. base-211 변환은 이 함수보다 앞에서 전체 프레임에 한 번만 끝나 있어야 한다.
+ */
+export function rsEncodeBlocks(message, config, options = {}) {
+  const shape = rsBlockShape(config);
+  const data = toSymbols(message, 'message');
+  if (data.length !== shape.totalDataSymbols) {
+    throw new RangeError(
+      `message 길이(${data.length})가 블록 표의 데이터 합계(${shape.totalDataSymbols})와 다르다`,
+    );
+  }
+  const blocks = [];
+  let offset = 0;
+  for (const dataLength of shape.dataLengths) {
+    const blockMessage = data.slice(offset, offset + dataLength);
+    blocks.push(rsEncode(blockMessage, shape.paritySymbolsPerBlock, options));
+    offset += dataLength;
+  }
+  if (offset !== data.length) {
+    throw new Error(`RS 블록 분할 소비량(${offset})이 데이터 길이(${data.length})와 다르다`);
+  }
+  return interleaveRsBlocks(blocks, config);
 }
 
 /**
@@ -712,6 +938,114 @@ export function rsDecode(received, nsym, options = {}) {
 }
 
 /**
+ * 인터리빙된 다중 RS 블록 복호. 전역 와이어 소거 인덱스를 같은 인터리브 사상으로
+ * `(blockIndex, localCodewordIndex)`에 배달하고, 모든 블록이 성공할 때만 원 메시지를
+ * 블록 순서로 재조립한다. 블록 수 1은 발행 경로 무회귀를 위해 `rsDecode` 반환 객체를
+ * 그대로 돌려주고, 다중 블록만 `blockResults`와 블록별 `syndromes` 배열을 덧붙인다.
+ */
+export function rsDecodeBlocks(received, config, options = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('options 는 객체여야 한다');
+  }
+  const { fcr = DEFAULT_FCR, erasures } = options;
+  validateFcr(fcr);
+  const shape = rsBlockShape(config);
+  const wire = toSymbols(received, 'received');
+  if (wire.length !== shape.totalCodewordSymbols) {
+    throw new RangeError(
+      `received 길이(${wire.length})가 블록 표의 코드워드 합계`
+      + `(${shape.totalCodewordSymbols})와 다르다`,
+    );
+  }
+
+  // 단일 블록은 기존 복호 경로를 문자 그대로 재사용한다. 반환 객체까지 같은 계약이다.
+  if (shape.blockCount === 1) {
+    return rsDecode(wire, shape.paritySymbolsPerBlock, { fcr, erasures });
+  }
+
+  const erasurePositions = normalizeErasurePositions(erasures, wire.length);
+  const map = rsBlockInterleaveMap(config);
+  const blocks = deinterleaveRsBlocks(wire, config);
+  const erasuresByBlock = Array.from({ length: shape.blockCount }, () => []);
+  for (const wireIndex of erasurePositions) {
+    const { blockIndex, codewordIndex } = map[wireIndex];
+    erasuresByBlock[blockIndex].push(codewordIndex);
+  }
+
+  const wireIndexByBlock = shape.codewordLengths.map((length) => new Array(length));
+  for (let wireIndex = 0; wireIndex < map.length; wireIndex += 1) {
+    const { blockIndex, codewordIndex } = map[wireIndex];
+    wireIndexByBlock[blockIndex][codewordIndex] = wireIndex;
+  }
+
+  const blockResults = [];
+  for (let blockIndex = 0; blockIndex < shape.blockCount; blockIndex += 1) {
+    const localErasures = erasuresByBlock[blockIndex];
+    const result = localErasures.length > 0
+      ? rsDecode(blocks[blockIndex], shape.paritySymbolsPerBlock, {
+        fcr, erasures: localErasures,
+      })
+      : rsDecode(blocks[blockIndex], shape.paritySymbolsPerBlock, { fcr });
+    blockResults.push(result);
+    if (!result.ok) {
+      return {
+        ok: false,
+        reason: `RS 블록 ${blockIndex + 1}/${shape.blockCount}: ${result.reason}`,
+        blockIndex,
+        blockResults,
+        syndromes: blockResults.map((entry) => entry.syndromes),
+        errorPositions: null,
+        erasurePositions: erasurePositions.slice(),
+        erasureCount: erasurePositions.length,
+      };
+    }
+  }
+
+  const correctedBlocks = blockResults.map((result) => result.codeword);
+  const codeword = interleaveRsBlocks(correctedBlocks, config);
+  const message = new Uint8Array(shape.totalDataSymbols);
+  let messageOffset = 0;
+  for (const result of blockResults) {
+    message.set(result.message, messageOffset);
+    messageOffset += result.message.length;
+  }
+  if (messageOffset !== message.length) {
+    throw new Error(
+      `RS 블록 메시지 재조립 길이(${messageOffset})가 표의 데이터 합계(${message.length})와 다르다`,
+    );
+  }
+
+  const errorPositions = [];
+  const correctedPositions = [];
+  for (let blockIndex = 0; blockIndex < blockResults.length; blockIndex += 1) {
+    const result = blockResults[blockIndex];
+    for (const localIndex of result.errorPositions) {
+      errorPositions.push(wireIndexByBlock[blockIndex][localIndex]);
+    }
+    const localCorrected = result.correctedPositions ?? result.errorPositions;
+    for (const localIndex of localCorrected) {
+      correctedPositions.push(wireIndexByBlock[blockIndex][localIndex]);
+    }
+  }
+  errorPositions.sort((left, right) => left - right);
+  correctedPositions.sort((left, right) => left - right);
+
+  return {
+    ok: true,
+    codeword,
+    message,
+    parity: codeword.slice(shape.totalDataSymbols),
+    errorPositions,
+    errorCount: errorPositions.length,
+    erasurePositions: erasurePositions.slice(),
+    erasureCount: erasurePositions.length,
+    correctedPositions,
+    syndromes: blockResults.map((result) => result.syndromes),
+    blockResults,
+  };
+}
+
+/**
  * 소거 복호 전용 진입점. `rsDecode(received, nsym, { ...options, erasures })` 와 같다.
  * 소비자가 «소거를 쓰고 있다» 는 사실을 호출부에서 읽히게 하려고 따로 둔다.
  * erasures 가 비면 일반 오류 복호로 그대로 내려간다.
@@ -738,4 +1072,57 @@ export function rsDecodeMessage(received, nsym, options = {}) {
     });
   }
   return result.message;
+}
+
+// Type C 블록 표 로드 자기검증. 표가 회계·인터리브 사상과 따로 썩으면 즉시 실패한다.
+{
+  const levels = ['L', 'M', 'H'];
+  const expectedKeys = ['C0', 'C1', 'C2', 'C0D', 'C1D', 'C2D'];
+  if (Object.keys(NSYM_TABLE_C).join('|') !== expectedKeys.join('|')) {
+    throw new Error('NSYM_TABLE_C 행 명부나 순서가 C0/C1/C2/C0D/C1D/C2D와 다르다');
+  }
+  for (const symbolKey of expectedKeys) {
+    const row = NSYM_TABLE_C[symbolKey];
+    if (!Number.isInteger(row.symbols) || row.symbols < 1) {
+      throw new Error(`NSYM_TABLE_C.${symbolKey}.symbols 가 양의 정수가 아니다`);
+    }
+    for (const level of levels) {
+      const config = rsBlockConfigForC(symbolKey, level);
+      const shape = rsBlockShape(config);
+      const minimumBlockCount = Math.ceil(row.symbols / MAX_CODEWORD_LEN);
+      if (shape.blockCount !== minimumBlockCount) {
+        throw new Error(
+          `${symbolKey}/${level}: 블록 수 ${shape.blockCount}가 최소 ${minimumBlockCount}와 다르다`,
+        );
+      }
+      if (shape.totalCodewordSymbols !== row.symbols) {
+        throw new Error(
+          `${symbolKey}/${level}: 블록 코드워드 합 ${shape.totalCodewordSymbols}`
+          + `가 symbols ${row.symbols}와 다르다`,
+        );
+      }
+      if (row[level] !== shape.totalParitySymbols) {
+        throw new Error(
+          `${symbolKey}/${level}: 총 패리티 ${row[level]}가 블록 합`
+          + ` ${shape.totalParitySymbols}와 다르다`,
+        );
+      }
+
+      // 모든 행에서 인터리브↔디인터리브가 역함수인지 실제 심볼열로 검사한다.
+      const blocks = shape.codewordLengths.map((length, blockIndex) =>
+        Uint8Array.from({ length }, (_, index) => (blockIndex * 97 + index) % P));
+      const interleaved = interleaveRsBlocks(blocks, config);
+      const restored = deinterleaveRsBlocks(interleaved, config);
+      for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+        if (blocks[blockIndex].length !== restored[blockIndex].length
+          || blocks[blockIndex].some((value, index) => value !== restored[blockIndex][index])) {
+          throw new Error(`${symbolKey}/${level}: 인터리브 왕복이 블록 ${blockIndex}를 바꿨다`);
+        }
+      }
+      if (shape.blockCount === 1
+        && interleaved.some((value, index) => value !== blocks[0][index])) {
+        throw new Error(`${symbolKey}/${level}: 단일 블록 인터리브가 항등이 아니다`);
+      }
+    }
+  }
 }
