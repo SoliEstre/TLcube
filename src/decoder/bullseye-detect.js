@@ -596,16 +596,18 @@ function sobelPoints(luma, span) {
   return points;
 }
 
-function radiusSeedsForLevel(level, options) {
-  if (Array.isArray(options.outerRadiusSeeds)) {
-    return options.outerRadiusSeeds
-      .filter((radius) => Number.isFinite(radius) && radius > 0)
-      .map((radius) => radius / level.factor)
-      .filter((radius) => radius >= MIN_PROJECTED_BAND_WIDTH_PX * BAND_COUNT
-        && radius <= Math.min(level.width, level.height) * MAX_OUTER_RADIUS_FRACTION)
-      .sort((a, b) => a - b);
-  }
+/** 호출자가 준 반지름 힌트 중 이 레벨에서 잴 수 있는 것만. */
+function seedRadiiForLevel(level, options) {
+  return options.outerRadiusSeeds
+    .filter((radius) => Number.isFinite(radius) && radius > 0)
+    .map((radius) => radius / level.factor)
+    .filter((radius) => radius >= MIN_PROJECTED_BAND_WIDTH_PX * BAND_COUNT
+      && radius <= Math.min(level.width, level.height) * MAX_OUTER_RADIUS_FRACTION)
+    .sort((a, b) => a - b);
+}
 
+/** 힌트가 없을 때 쓰는 기하 사다리(레벨당 한 옥타브). */
+function ladderRadiiForLevel(level) {
   const minimumResolvable = MIN_PROJECTED_BAND_WIDTH_PX * BAND_COUNT;
   const minOuter = level.level === 0
     ? minimumResolvable
@@ -624,6 +626,47 @@ function radiusSeedsForLevel(level, options) {
     radii.push(maxOuter);
   }
   return radii;
+}
+
+/**
+ * 이 레벨에서 투표를 걸 바깥 반지름 목록.
+ *
+ * ⚠ **힌트는 사다리를 «대체» 하지 않는다 — 합집합이다.**
+ *
+ * 예전엔 `outerRadiusSeeds` 가 오면 사다리를 통째로 갈아 끼웠다. 그러면 힌트를 만든
+ * 상류 모델이 조금이라도 어긋난 프레임에서 **정답 반지름이 애초에 후보로 안 올라온다** —
+ * 그런데 힌트 반지름 쪽이 «성공» 을 반환해 버리면 호출자의 무시드 재시도(bootstrap 의
+ * clutter 패스)마저 안 돈다. 2026-08-29 실측: hex k=12 셀수 469 와 tri k=10 셀수 496 이
+ * 2.8% 밖에 안 떨어져 있어, V4 편입 뒤 tri k10 프레임(턴A V2CM)에서 k12 힌트가 참 반지름
+ * +2.8% 자리에 앉아 처음으로 «성공» 했고 — 그 어긋난 finder 로 코너 마커 CO2 6셀이
+ * 전멸했다(agreement 0.7143 < 0.78). 힌트 «표» 를 고치는 두 방향(셀수 모델 정정 · k≤10 핀)은
+ * 둘 다 반대쪽 축을 죽였다. 근접이 존재하는 한 표로는 못 가른다.
+ *
+ * 그래서 **가르는 일은 하류(점수·hard check)에 맡기고**, 제안 단계는 두 출처의 반지름을
+ * 한 패스에 함께 올린다. 힌트는 이제 «싼 지름길» 이 아니라 «추가 표본» 이다.
+ *
+ * ▸ **비용** — 힌트 프레임의 제안 패스가 레벨당 반지름 4\~7개에서 사다리(\~9개)만큼
+ *   늘어 `detectBullseyes` 단독으로 +22\~47% (실측 중앙값 \~+42%). 대신 힌트가 빗나가
+ *   무시드 패스를 한 번 더 돌던 프레임이 한 번에 끝나서 `decodeFrontend` 왕복은 −2\~+5%
+ *   (노이즈 범위) 였다. 총 처리량과 응답 지연은 다른 축이니 둘 다 적어 둔다.
+ *
+ * ▸ **힌트가 없는 경로는 사다리 그대로다** — 6프레임(hex V2/V4/V4×ss2 · tri 턴A/V-CM/
+ *   V-CM+CO2)의 원시 제안·최종 후보를 전체 정밀도로 해시해 베이스와 바이트 동일 확인.
+ *
+ * 이 성질을 재는 자: `test/finder-seed-union.test.js`.
+ */
+function radiusSeedsForLevel(level, options) {
+  const ladder = ladderRadiiForLevel(level);
+  if (!Array.isArray(options.outerRadiusSeeds)) return ladder;
+  const merged = ladder.slice();
+  for (const radius of seedRadiiForLevel(level, options)) {
+    // 사다리 눈금과 사실상 같은 힌트는 투표를 두 번 걸어 봐야 같은 표만 쌓인다.
+    const duplicate = merged.some(
+      (other) => Math.abs(radius - other) <= 1e-9 * Math.max(radius, other),
+    );
+    if (!duplicate) merged.push(radius);
+  }
+  return merged.sort((a, b) => a - b);
 }
 
 /**
