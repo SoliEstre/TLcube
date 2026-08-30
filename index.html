@@ -6611,7 +6611,7 @@ import { payloadByteLength } from './src/header.js';
 // rasterToPng 직접 호출은 2026-08-19 내보내기 옵션 배선에서 사라졌다 — PNG 조립은
 // export-render.renderExportPng 가 맡는다 (png.js 는 그 안에서 소비된다).
 import { sceneToSvg } from './src/svg.js';
-import { TL_READER_URL } from './src/qr.js';
+import { TL_READER_URL, tlReaderUrlWithHint } from './src/qr.js';
 import { wifiPayload, cardPayload } from './src/payloadform.js';
 import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js';
 import { createExportFilenameFactory } from './src/export-filename.js';
@@ -11794,6 +11794,8 @@ function buildConfig() {
   const type = generatorState.type;
   const typeC = typeCGeneratorActive();
   const fallback = resolveFallback(type, generatorState.qrPosition);
+  const configuredQrText = generatorState.qrText.trim();
+  const useReaderFamilyHint = document.body.dataset.generatorEdition === 'official';
   if (fallback.mode === 'center') fallback.cornerToo = generatorState.qrCornerToo;
 
   const selectedVersion = (candidate) =>
@@ -11856,8 +11858,11 @@ function buildConfig() {
     // `suppliesOuterFormat` 성질에서 유도한다. 생성기가 파인더 id 목록을 다시 적거나
     // boolean을 넘기면 다음 중앙 공급자에서 사본이 갈린다 — 여기서는 옵션을 만들지 않는다.
     tone: generatorState.tone,
-    qrText: generatorState.qrText.trim() === ''
-      ? TL_READER_URL : generatorState.qrText.trim(),
+    // 기본 TL 리더 URL일 때만 실루엣 가족 힌트를 붙인다. 사용자 URL은 한 글자라도
+    // 바꾸지 않는다. Type C는 O 화면의 파생이므로 type 값 대신 C 등록부를 고른다.
+    qrText: configuredQrText === '' || configuredQrText === TL_READER_URL
+      ? (useReaderFamilyHint ? tlReaderUrlWithHint(typeC ? 'C' : type) : TL_READER_URL)
+      : configuredQrText,
     faceGains: currentFaceGains(),
     finderPatternId: generatorState.finderPatternId,
     centralN7Emphasis: generatorState.centralN7Emphasis,

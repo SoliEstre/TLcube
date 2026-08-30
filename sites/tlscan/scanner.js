@@ -10,6 +10,7 @@
 //    잡히지 않는 dev/prod 괴리다. 절대 경로 + nginx alias(`/src/`)로 양쪽을 일치시킨다.
 //    (같은 이유로 `_shared` 도 alias 로 붙인다 — deploy/estre-so/projects/tlcube/static.conf)
 import { sniffPayload } from '/src/payloadform.js';
+import { tlReaderFamilyHintFromPath } from '/src/qr.js';
 import { createI18n, wireLanguageSwitch } from '/src/i18n.js';
 import { createBeacon } from '/src/beacon.js';
 import { SCANNER_STRINGS } from './strings.js';
@@ -192,6 +193,11 @@ if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTit
 
 const frameCanvas = document.createElement('canvas');
 const frameContext = frameCanvas.getContext('2d', { willReadFrequently: true });
+// QR의 `/x` 힌트는 URL 경로에서 한 번만 읽는다. null이면 기존 무힌트 경로와 같은
+// 옵션 모양을 유지한다. family의 문자 배정·역해석은 qr.js 등록부가 단독 소유한다.
+const scannerFamilyHint = tlReaderFamilyHintFromPath(location.pathname);
+const scannerFamilyEvidence = scannerFamilyHint === null
+  ? null : Object.freeze({ family: scannerFamilyHint });
 
 let cameraStream = null;
 let animationFrameId = 0;
@@ -958,6 +964,9 @@ async function decodeFrame(imageData, settings = {}) {
      */
     const runPass = (daehan) => decodeFrontend(raster, {
       onStage: (stageName, phase) => clock.onStage(stageName, phase),
+      // QR 힌트는 선택지를 줄이는 보조 증거일 뿐이다. 미지·부재는 키 자체를 생략해
+      // 종전의 무힌트 탐색 경로를 바이트 단위로 보존한다.
+      ...(scannerFamilyEvidence === null ? {} : { familyEvidence: scannerFamilyEvidence }),
       // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너의 **1차 패스**는
       // 종전 검출 계약과 프레임 비용을 그대로 유지한다 (daehan 은 실패한 프레임의
       // 2차 패스로만 붙는다 — 아래 폴백).
