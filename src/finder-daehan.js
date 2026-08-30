@@ -126,8 +126,11 @@ export const DAEHAN_CELL_LEVELS = Object.freeze([
   [0, 0, 0], [2, 2, 2], [0, 0, 0], [0, 0, 0],
 ].map((triple) => Object.freeze([...triple])));
 
-/** daehan 을 쓸 수 있는 반경 — 기존 O 버전과 같은 셋. */
+/** daehan 잘림 템플릿 반경 — 기존 O 버전과 같은 셋. 패턴 명부/디코더 후보는 이 셋이다. */
 export const DAEHAN_RADII = Object.freeze([6, 8, 10]);
+
+/** 79셀 정본이 완전히 들어오는 최소 반경. 그 이상은 모두 k10 완전판을 공유한다. */
+export const DAEHAN_COMPLETE_RADIUS = 10;
 
 function clipIndices(k) {
   const out = [];
@@ -138,11 +141,15 @@ function clipIndices(k) {
   return out;
 }
 
-function assertRadius(k) {
-  if (!DAEHAN_RADII.includes(k)) {
-    throw new RangeError('daehan 은 반경 ' + DAEHAN_RADII.join('/') + ' 에서만 정의된다: ' + k);
+function templateRadius(k) {
+  if (!Number.isInteger(k)) {
+    throw new RangeError('daehan 반경은 정수여야 한다: ' + k);
   }
-  return k;
+  if (DAEHAN_RADII.includes(k)) return k;
+  if (k > DAEHAN_COMPLETE_RADIUS) return DAEHAN_COMPLETE_RADIUS;
+  throw new RangeError(
+    'daehan 은 반경 6/8 또는 완전판이 들어오는 10 이상에서 정의된다: ' + k,
+  );
 }
 
 const CLIPPED = new Map(DAEHAN_RADII.map((k) => {
@@ -155,7 +162,7 @@ const CLIPPED = new Map(DAEHAN_RADII.map((k) => {
 
 /** 반경 k 에서 살아남는 파인더 셀 (잘림 적용). 39 / 59 / 79. */
 export function daehanFinderCellsFor(k) {
-  return CLIPPED.get(assertRadius(k)).cells;
+  return CLIPPED.get(templateRadius(k)).cells;
 }
 
 /**
@@ -199,7 +206,7 @@ export function sagoaeCells(k) {
  * 함수와 `sagoaeCells` 를 짝으로 써야 좌표·톤 순서가 갈리지 않는다.
  */
 export function sagoaeLevels(k) {
-  const clipped = CLIPPED.get(assertRadius(k));
+  const clipped = CLIPPED.get(templateRadius(k));
   const out = [];
   for (let i = 0; i < clipped.cells.length; i += 1) {
     if (hexDistance(clipped.cells[i].q, clipped.cells[i].r) > BULLSEYE_RADIUS) {
@@ -211,7 +218,7 @@ export function sagoaeLevels(k) {
 
 /** 반경 k 의 파인더 패턴 id. */
 export function daehanPatternId(k) {
-  return 'oak-daehan-k' + assertRadius(k);
+  return 'oak-daehan-k' + templateRadius(k);
 }
 
 function definePattern(k) {
@@ -335,6 +342,17 @@ export function daehanKForPatternId(id) {
     }
     if (sagoaeCells(k).length !== reserved) {
       throw new Error('sagoaeCells 가 daehanReservedCells 와 갈렸다 k=' + k);
+    }
+  }
+
+  // ④b 완전판 포화 — Type C처럼 k>10인 프레임은 새 템플릿/새 그림이 아니라 k10
+  // 79셀 정본을 중심 고정으로 그대로 쓴다. legacy DAEHAN_RADII는 늘리지 않는다.
+  for (const k of [14, 17, 20]) {
+    if (daehanFinderCellsFor(k).length !== 79 || daehanReservedCells(k).length !== 60) {
+      throw new Error('daehan k=' + k + ': k10 완전판 79/예약60 포화가 성립하지 않는다');
+    }
+    if (sagoaeLevels(k).length !== 60 || daehanPatternId(k) !== daehanPatternId(10)) {
+      throw new Error('daehan k=' + k + ': 좌표·톤·템플릿 id가 k10 완전판과 갈렸다');
     }
   }
 

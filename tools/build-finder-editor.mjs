@@ -25,7 +25,7 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // finder-patterns 뒤 · scene 앞이어야 한다.
   'hexgrid', 'finder-patterns', 'finder-oak-lineup',
   'finder-editor-pattern', 'lehmer', 'gfp', 'rs211', 'base211',
-  'mask', 'formatinfo', 'header', 'placement', 'bullseye', 'layout', 'capacity',
+  'mask', 'formatinfo', 'header', 'placement', 'notchC', 'bullseye', 'layout', 'capacity',
   // daehan (2026-08-18) — scene.js 가 finder-daehan 을, encode.js 가 capacityDaehan 을
   // 쓴다. 둘 다 capacity 뒤 · encode/scene 앞.
   // **의도적 이동 (2026-08-23, W2 선행)**: `finder-oak-patterns` 가 daehan 뒤로 왔고
@@ -43,7 +43,7 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   //   (`turnA -> formatY (missing)` 외 5건). 검사가 붙어 있어 사본이 안 썩는 자리다.
   'formatY',
   // turnA 는 encodeA 앞 (2026-08-18 턴A 편입 — encodeA 가 표를 조회한다).
-  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA', 'luminance', 'export-filename',
+  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'formatC', 'capacityC', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA', 'luminance', 'export-filename',
   // finder-selection(의존 0) 과 Y 표면 체인은 **scene 앞**이다 (2026-08-21, 중앙 v0
   // 파인더). scene.js 가 중앙 슬롯 점유자 id 를 finder-selection 에서, v0 의 모듈
   // 사각형·정본 셀을 ygrid·cellSurfaceFinal 에서 가져온다. 위상 검사는 정적이라

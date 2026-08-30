@@ -20,7 +20,7 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   'hexgrid', 'ygrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup',
   'finder-editor-pattern',
   'lehmer', 'gfp', 'rs211', 'base211', 'mask', 'formatinfo', 'header',
-  'placement', 'bullseye', 'layout', 'capacity',
+  'placement', 'notchC', 'bullseye', 'layout', 'capacity',
   // O-CM/A-CM 코너 마커 (2026-08-16) — encodeA.js 가 markerA 를, markerA 가 markerO 를,
   // markerO 가 autoplaceHex 를, autoplaceHex 가 autoplaceY(→placementY) 를 쓴다.
   'placementY', 'autoplaceY', 'autoplaceHex',
@@ -40,7 +40,7 @@ export const CELL_EDITOR_MODULE_ORDER = Object.freeze([
   // `finder-footprint` 가 새로 등록됐다 — OAK 표가 footprint 표와 taegeuk 유도
   // (finder-daehan)를 import 하게 됐기 때문이다 (build-single.mjs 동일).
   'finder-daehan', 'finder-footprint', 'finder-oak-patterns',
-  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA',
+  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'formatC', 'capacityC', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA',
   'type-y-cell-editor', 'layoutY', 'capacityY',
   'cellSurfaceY', 'cellSurfaceLayouts', 'cellSurfaceFinal',
   // **의도적 유지 (2026-08-21, 중앙 v0 비컨)**: encodeY 는 scene 앞으로 가야 한다.

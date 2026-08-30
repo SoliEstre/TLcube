@@ -80,7 +80,7 @@ export const MODULE_ORDER = [
   // ⚠ 이 목록은 빌더마다 손 사본이다 — 신설 모듈은 그 모듈을 나르는 빌더 **전부**에
   //    등재해야 한다. 한쪽만 하면 다른 쪽 빌드가 위상 검사에서 죽는다 (실제로 죽었다).
   'centralMarkerN7',
-  'placement', 'finder-daehan', 'finder-footprint', 'finder-oak-patterns',
+  'placement', 'notchC', 'finder-daehan', 'finder-footprint', 'finder-oak-patterns',
   // generator-types 는 finder-selection·generator-state **양쪽의 앞**이어야 한다
   // (둘 다 타입 목록을 여기서 가져간다 — 2026-08-25 손 사본 철폐).
   'generator-types',
@@ -104,7 +104,7 @@ export const MODULE_ORDER = [
   // 발자국 회계를 markerA(markerCellsA·markerPositionSetA)에서 유도하고 encodeA 가
   // V-CM 톤 적재로 소비한다. 나머지 의존(hexgrid·placement·placementA·capacityA)은
   // 전부 이미 이 앞에 있어 위상 정렬이 그대로 성립한다.
-  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA',
+  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'formatC', 'capacityC', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA',
   // Type K (2026-08-24) — 셀 편집기가 VERSIONS_K 를 읽는다 (편집 타입 K).
   // placementK 는 capacityK 앞 (capacityK 가 회계를 placementK 에서 유도한다).
   //

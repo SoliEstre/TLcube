@@ -111,6 +111,28 @@ export const NSYM_TABLE_DAEHAN = Object.freeze({
   V3D: Object.freeze({ symbols: 72, L: 11, M: 23, H: 37 }),
 });
 
+/**
+ * Type C(3시 노치) nsym 표.
+ *
+ * 모든 값은 SPEC §5 절차에서 유도한다:
+ *   L = round(0.12·S), M = round(0.25·S) 뒤 짝수면 +1, H = round(0.40·S).
+ * C1/H만 절차값 112가 base-211 청킹과 비정렬이라, A2/H 전례대로 가장 가까운
+ * 상향 정렬값 113으로 보정한다. 나머지 17개 조합은 절차값 그대로 정렬된다.
+ *
+ * ⚠ 이 표는 셀·패리티 회계의 정본이지 다중 RS 블록 규약이 아니다. GF(211) 단일
+ * 코드워드 상한은 210이므로 S가 이를 넘는 C1/C2/C1D/C2D는 현재 인코딩할 수 없다.
+ * 블록 수·패리티 배분·scan-order 매핑이 별도 확정되기 전까지 capacityC/encode가
+ * 명시적으로 거절한다. 총 S를 조용히 여러 rsEncode 호출로 쪼개지 마라.
+ */
+export const NSYM_TABLE_C = Object.freeze({
+  C0: Object.freeze({ symbols: 187, L: 22, M: 47, H: 75 }),
+  C1: Object.freeze({ symbols: 281, L: 34, M: 71, H: 113 }),
+  C2: Object.freeze({ symbols: 393, L: 47, M: 99, H: 157 }),
+  C0D: Object.freeze({ symbols: 167, L: 20, M: 43, H: 67 }),
+  C1D: Object.freeze({ symbols: 261, L: 31, M: 65, H: 104 }),
+  C2D: Object.freeze({ symbols: 373, L: 45, M: 93, H: 149 }),
+});
+
 /** 복호 실패 예외. `reason` / `syndromes` 를 함께 싣는다. */
 export class RSDecodeError extends Error {
   constructor(message, details = {}) {
