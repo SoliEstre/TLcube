@@ -28,7 +28,7 @@ import { digitToRanks } from './lehmer.js';
 import { BULLSEYE_MID, FINDER_CUBE_SEAM, FINDER_CUBE_TONES } from './luminance.js';
 import { getOakFinderPattern } from './finder-oak-patterns.js';
 import {
-  getDaehanFinderPattern, isDaehanFinderPatternId, sagoaeCells, sagoaeLevels,
+  DAEHAN_RADII, getDaehanFinderPattern, isDaehanFinderPatternId, sagoaeCells, sagoaeLevels,
 } from './finder-daehan.js';
 import { notchCellsC } from './notchC.js';
 import { moduleQuad } from './ygrid.js';
@@ -138,11 +138,29 @@ function resolveFinderRenderPattern(id) {
 }
 
 /**
+ * 사괘와 합성 가능한 중앙의 renderKind (T2 확장 2026-08-30, PM/028 §4).
+ *
+ *   · cell-mask — 후보 계열 독립 중앙 (2026-08-26 C2c 개통분. 원자 daehan 제외 —
+ *     이미 사괘를 포함하므로 중복 렌더가 된다).
+ *   · bullseye · central-n7-payload(중앙 TL) · center-qr(중앙 QR) — **정식 중앙
+ *     3종** (검증기 확장 T2). 디코더 반쪽: bootstrap 의 C2c 분해가 불스아이(앵커
+ *     경로 H)·TL(central-n7 finder H)·QR(qr-center H) 포즈 위에서도 verifySagoae
+ *     를 돌려 daehan 회계 가설을 추가한다.
+ *
+ * 3종 밖은 계속 잠긴다 — central-v0(비컨 검증 위 C2c 미실측) · cube-bullseye/
+ * three-tone-cube(큐브가 슬롯 반경 3.5~4셀 — 사괘 링과의 합성 기하 미실측) ·
+ * central-marker-n7(카드 드랍). 목록이 아니라 renderKind 성질로 잠근다.
+ */
+const SAGOAE_COMPOSABLE_RENDER_KINDS = Object.freeze([
+  'cell-mask', 'bullseye', 'central-n7-payload', 'center-qr',
+]);
+
+/**
  * 사괘 단독이 이 중앙과 합성 가능한가 — buildScene 렌더 가드와 **같은 성질**의
  * 술어다 (2026-08-30). UI 잠금이 이걸 유도한다 — 조건을 UI 에 옮겨 적으면
- * 계약이 바뀔 때 한쪽만 늙는다 (사본 규칙). 중앙이 독립 cell-mask 여야 C2c 가
- * 같은 포즈에서 고리를 검증할 수 있고, 원자 daehan 은 이미 사괘를 포함한다.
- * 정식 중앙(불스아이·중앙 TL·중앙 QR)과의 합성은 **검증기 확장 대기** 축이다.
+ * 계약이 바뀔 때 한쪽만 늙는다 (사본 규칙). 원자 daehan 은 이미 사괘를 포함하므로
+ * 제외. 정식 중앙(불스아이·중앙 TL·중앙 QR)은 **T2 검증기 확장으로 개통**됐다
+ * (PM/028 §4 — 구 «검증기 확장 대기» 락의 양성 전환. 자: test/sagoae-roundtrip).
  */
 export function sagoaeComposableWith(finderPatternId) {
   let pattern;
@@ -151,7 +169,34 @@ export function sagoaeComposableWith(finderPatternId) {
   } catch {
     return false;
   }
-  return pattern.renderKind === 'cell-mask' && !isDaehanFinderPatternId(finderPatternId);
+  return SAGOAE_COMPOSABLE_RENDER_KINDS.includes(pattern.renderKind)
+    && !isDaehanFinderPatternId(finderPatternId);
+}
+
+/*
+ * 로드 단언 (T2 2026-08-30) — 정식 중앙 합성 개방의 기하 전제를 성질로 잠근다:
+ * 사괘 고리의 **최소 링 거리**가 ① 중앙 19셀 슬롯(FINDER_CELL_ORDER — 불스아이·
+ * TL·QR 이 모두 이 슬롯을 점유)의 최대 링 거리보다, ② 중앙 QR 보호 사각의 경계인
+ * ring-3 보다 크다. 값(6)을 옮겨 적지 않고 정본(finder-daehan·finder-patterns)에서
+ * 로드 시 재유도한다 — 좌표 정본이 바뀌면 렌더 전에 여기서 먼저 죽는다.
+ * k > 완전판은 k10 클램프(동일 60셀)라 DAEHAN_RADII 전수로 충분하다.
+ */
+{
+  const slotMax = Math.max(
+    ...FINDER_CELL_ORDER.map((cell) => hexDistance(cell.q, cell.r)),
+  );
+  const QR_SLOT_BOUNDARY_RING = 3; // §V*Q — 보호 사각은 ring-3 셀 안쪽에 내접한다
+  for (const k of DAEHAN_RADII) {
+    const ringMin = Math.min(
+      ...sagoaeCells(k).map((cell) => hexDistance(cell.q, cell.r)),
+    );
+    if (!(ringMin > slotMax && ringMin > QR_SLOT_BOUNDARY_RING)) {
+      throw new Error(
+        `사괘 고리(k=${k}, 최소 링 ${ringMin})가 중앙 점유 영역(슬롯 ${slotMax} · `
+        + `QR 경계 ${QR_SLOT_BOUNDARY_RING})과 서로소가 아니다 — 정식 중앙 합성 전제 붕괴`,
+      );
+    }
+  }
 }
 
 function isExperimentalFinderRenderKind(renderKind) {
@@ -498,12 +543,12 @@ export function buildScene(encoded, options) {
   if (sagoae && encoded.daehanFinder !== true) {
     throw new RangeError('sagoae 장면은 daehan 예약 레이아웃 회계(encoded.daehanFinder=true)가 필요하다');
   }
-  // sagoae 는 새 renderKind 가 아니라 **cell-mask 합성의 바깥 부분**이다. 중앙은
-  // 독립 cell-mask 여야 C2c 가 같은 포즈에서 고리를 검증할 수 있다. 원자 daehan 을
-  // 중앙으로 또 고르면 이미 sagoae 를 포함하므로 중복 렌더가 된다.
+  // sagoae 는 새 renderKind 가 아니라 **중앙 합성의 바깥 부분**이다. 허용 중앙은
+  // SAGOAE_COMPOSABLE_RENDER_KINDS (독립 cell-mask + 정식 중앙 3종 — T2 개방).
+  // 원자 daehan 을 중앙으로 또 고르면 이미 sagoae 를 포함하므로 중복 렌더가 된다.
   if (sagoae && !sagoaeComposableWith(finderPatternId)) {
     throw new RangeError(
-      `sagoae 는 독립 중앙 cell-mask 와만 합성할 수 있다: ${finderPatternId}`,
+      `sagoae 와 합성할 수 없는 중앙이다 (허용: 독립 cell-mask · 불스아이 · 중앙 TL · 중앙 QR): ${finderPatternId}`,
     );
   }
   const centralV0 = Boolean(encoded.centralV0);
@@ -1069,33 +1114,6 @@ export function buildScene(encoded, options) {
         });
       }
     }
-    // 내곽 자리 sagoae — 원자 daehan 의 불스아이 밖 부분만 같은 cell-mask 화법으로
-    // 합성한다. 좌표·톤은 finder-daehan 정본에서 함께 유도되고, 인코더가 예약한 셀은
-    // cellDigits 에 없어야 한다. 이 가드가 없으면 일반 회계 위에 고리를 덧칠해 데이터가
-    // 조용히 사라지는, 수정 전의 정확한 실패를 되살릴 수 있다.
-    if (sagoae) {
-      const cells = sagoaeCells(k);
-      const cellLevels = sagoaeLevels(k);
-      if (cells.length !== cellLevels.length) {
-        throw new Error(`sagoae 좌표·톤 수 불일치: ${cells.length} vs ${cellLevels.length}`);
-      }
-      for (let ci = 0; ci < cells.length; ci += 1) {
-        const cell = cells[ci];
-        if (cellDigits.has(`${cell.q},${cell.r}`)) {
-          throw new Error(`sagoae 예약 셀이 데이터에 남았다: ${cell.q},${cell.r}`);
-        }
-        for (const face of FACES) {
-          const level = cellLevels[ci][FINDER_LEVEL_FACE_INDEX[face]];
-          const color = level === 2 ? palette.bullseyeLight
-            : level === 1 ? BULLSEYE_MID : palette.bullseyeDark;
-          shapes.push({
-            kind: 'polygon',
-            points: facePolygon(cell.q, cell.r, face, layout),
-            color,
-          });
-        }
-      }
-    }
   } else if (finderPattern.renderKind === 'bullseye' && !centerQr) {
     // (2) 불스아이 6 disc — 바깥 밴드(반지름 큰 것)부터. i(0=중심)가 짝수면 dark, 홀수면 light.
     const radii = bandRadii(cellSize); // 오름차순(안→밖), 마지막이 R_max.
@@ -1112,6 +1130,48 @@ export function buildScene(encoded, options) {
     throw new RangeError('지원하지 않는 파인더 렌더 표현: ' + finderPattern.renderKind);
   }
   // (centerQr 의 중앙 블록은 (0) 에서 이미 — 셀 밑에 깔리는 painter 순서가 확대 규약이다.)
+
+  // 심부 자리 sagoae — 원자 daehan 의 불스아이 밖 부분만 같은 cell-mask 화법으로
+  // 합성한다. 좌표·톤은 finder-daehan 정본에서 함께 유도되고, 인코더가 예약한 셀은
+  // cellDigits 에 없어야 한다. 이 가드가 없으면 일반 회계 위에 고리를 덧칠해 데이터가
+  // 조용히 사라지는, 수정 전의 정확한 실패를 되살릴 수 있다.
+  // ⚠ T2(2026-08-30)에 cell-mask 분기 안에서 여기로 나왔다 — 허용 중앙이 정식 3종
+  //   (불스아이·중앙 TL·중앙 QR)으로 늘어 고리 합성은 중앙 renderKind 와 직교다.
+  //   고리 셀은 전부 서로소 폴리곤이라 painter 순서 이동은 픽셀 불변이다
+  //   (test/sagoae-roundtrip ② 픽셀 동일성이 그 사실을 잰다).
+  if (sagoae) {
+    const cells = sagoaeCells(k);
+    const cellLevels = sagoaeLevels(k);
+    if (cells.length !== cellLevels.length) {
+      throw new Error(`sagoae 좌표·톤 수 불일치: ${cells.length} vs ${cellLevels.length}`);
+    }
+    // 렌더 단언 (T2) — 로드 단언(§SAGOAE_COMPOSABLE_RENDER_KINDS 아래)의 프레임판:
+    // 이 프레임이 실제로 그리는 고리 셀이 중앙 19셀 슬롯과 서로소다. 불스아이·TL·QR
+    // 이 전부 그 슬롯(과 ring-3 내접 보호 사각)을 점유하므로 이 성질 하나가 3종
+    // 합성의 무겹침을 잰다.
+    const centralSlotKeys = new Set(
+      FINDER_CELL_ORDER.map((slotCell) => `${slotCell.q},${slotCell.r}`),
+    );
+    for (let ci = 0; ci < cells.length; ci += 1) {
+      const cell = cells[ci];
+      if (cellDigits.has(`${cell.q},${cell.r}`)) {
+        throw new Error(`sagoae 예약 셀이 데이터에 남았다: ${cell.q},${cell.r}`);
+      }
+      if (centralSlotKeys.has(`${cell.q},${cell.r}`)) {
+        throw new Error(`sagoae 고리 셀이 중앙 슬롯을 침범했다: ${cell.q},${cell.r}`);
+      }
+      for (const face of FACES) {
+        const level = cellLevels[ci][FINDER_LEVEL_FACE_INDEX[face]];
+        const color = level === 2 ? palette.bullseyeLight
+          : level === 1 ? BULLSEYE_MID : palette.bullseyeDark;
+        shapes.push({
+          kind: 'polygon',
+          points: facePolygon(cell.q, cell.r, face, layout),
+          color,
+        });
+      }
+    }
+  }
 
   // (3) 코너 QR 블록 — sceneY.js 와 동일 painter 패턴(콰이어트 4모듈 밝은 패치 +
   // 다크 모듈, QR 모듈 = cellSize/2). 위치는 qrCorner 4택(ADR 0004 §1-7) — 방위는

@@ -509,11 +509,16 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
 test('§6.3 buildConfig·매퍼가 사괘를 두 타입 모두 싣는다 — «켰는데 안 먹는» 재발 방지', () => {
   assert.match(INDEX, /sagoae: \(type === 'O' \|\| type === 'A'\) && generatorState\.innerSeat === 'sagoae'/,
     'buildConfig 이 innerSeat=sagoae 를 인코더 옵션으로 파생하지 않는다');
-  // O·A 매퍼 각각에 사괘 디스패치가 실재한다 (강등 규칙 포함 — cfg.sagoae 분기).
+  // O·A 매퍼 각각에 사괘 디스패치가 실재한다. ⚠ **의도적 갱신 (T2 2026-08-30)** —
+  // 구 철자 `&& !opts.centerQr` 는 정식 중앙 3종 개통(사괘×중앙 QR 와이어 공유)으로
+  // 걷혔다. O·A 는 무조건 싣고, centerQr 강등이 남는 곳은 C 분기(CDQ 행 부재)뿐이다.
   const oBranch = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
-  const matches = oBranch.match(/else if \(cfg\.sagoae === true && !opts\.centerQr\) \{/g) || [];
+  const matches = oBranch.match(/else if \(cfg\.sagoae === true\) \{/g) || [];
   assert.equal(matches.length, 2,
     '사괘 디스패치가 O·A 두 분기에 있어야 한다 (현재 ' + matches.length + ')');
+  const cMatches = oBranch.match(/if \(cfg\.sagoae === true && !opts\.centerQr\) opts\.sagoae = true;/g) || [];
+  assert.equal(cMatches.length, 1,
+    'C 분기의 CDQ 강등(와이어 행 부재)이 한 곳이어야 한다 (현재 ' + cMatches.length + ')');
 });
 
 test('§6.3 버전 잠금은 표 유도 술어 한 겹뿐이다 — 손 겹은 V4D 개방으로 걷었다', () => {

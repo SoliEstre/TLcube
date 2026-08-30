@@ -115,7 +115,7 @@ import { detectCellFinders } from './cell-finder-detect.js';
 import { verifySagoae } from './sagoae-verify.js';
 import { OAK_FINDER_PATTERNS, OAK_RENDER_ONLY_FINDER_PATTERNS } from '../finder-oak-patterns.js';
 import {
-  DAEHAN_FINDER_PATTERNS, daehanReservedCells, isDaehanFinderPatternId,
+  DAEHAN_COMPLETE_RADIUS, DAEHAN_FINDER_PATTERNS, daehanReservedCells, isDaehanFinderPatternId,
 } from '../finder-daehan.js';
 import { TYPE_C_MIN_RADIUS, notchCellCountC, notchCellsC, typeCReservedCells } from '../notchC.js';
 
@@ -1440,7 +1440,17 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     },
     () => detectBullseyes(reduced.luma, finderOptions),
   );
-  const shouldTryPatternFinder = !detected.ok;
+  /*
+   * T2 (2026-08-30, PM/028 §4) — **옵트인(cellFinderDaehan)에서는 불스아이가
+   * 이겨도 패턴 파인더를 함께 돌린다.** 사괘×불스아이 합성 프레임에서 불스아이
+   * 검출이 첫 패스에 성공하면 daehan 라인업 탐색이 통째로 잠겨, 첫 패스가
+   * 어디서 서느냐는 운에 따라 O2(첫 패스 실패 → 라인업 병합)는 읽히고 O3(첫
+   * 패스 성공)는 no-anchors 로 전멸하는 비대칭이 있었다 (레인 T2 실측 —
+   * k=10 앵커는 사괘 링-10 과 같은 링이라 rank 분리가 죽는다). 병합 문법은
+   * 이미 있던 «불스아이 재시도 성공 + patternFinders 푸시» 경로 그대로다.
+   * 기본 경로(옵트인 아님)는 비트 동일.
+   */
+  const shouldTryPatternFinder = !detected.ok || options.cellFinderDaehan === true;
 
   const callerFixedScaleSearch = Object.prototype.hasOwnProperty.call(
     finderOverrides,
@@ -2329,6 +2339,62 @@ function cornerMarkerHypotheses(luma, finder, family, options) {
   return { hypotheses, diagnostics: result.diagnostics };
 }
 
+/**
+ * C2c 분해 쌍 첨부 — «중앙 포즈 ∥ sagoae 검증기» 합성 가설의 공용 반쪽
+ * (T2 확장 2026-08-30, PM/028 §4).
+ *
+ * 원래 cellFinderHypotheses 안의 cell-mask 전용 블록이었다. 정식 중앙 3종
+ * (불스아이·중앙 TL·중앙 QR) 개방으로 포즈 공급 경로가 셋으로 늘어(앵커 경로·
+ * central-n7 경로·qr-center 경로) 여기로 나왔다 — 규칙은 그대로다:
+ *
+ *  · 게이트: `options.cellFinderDaehan === true` (옵트인) — 기본 경로 비트 동일.
+ *  · 기존 가설은 한 개도 안 바뀐다 — verifySagoae 가 서는 (family,k) 에만
+ *    daehan 회계 가설을 **추가**한다. 오수용이 있어도 RS/CRC 가 가르는 «또 하나의
+ *    가설» 일 뿐 기존 레이아웃 해석을 뺏지 않는다.
+ *  · `daehanAccountingOpen` 표 주도 — family 별 회계 표가 연 k 만 검증한다.
+ *  · ⚠ 검증 호출·스탬프의 k 는 **프레임 k 그대로** — verifySagoae 가 완전판
+ *    클램프(k>10 → k10 고리 60셀 동일)를 스스로 알고, `sagoaeVerified` 는
+ *    daehanReservedCellsFor 의 엄밀 일치(`=== dimension`)가 프레임 k 를 요구한다.
+ *  · 캐시는 (H 객체, 클램프 고리) 단위 — qr-center 처럼 같은 포즈 H 를 (family,k)
+ *    행 전부가 공유하는 경로에서 같은 60셀 상관을 행 수만큼 다시 재지 않는다.
+ *
+ * @param {(hypothesis: object) => Float64Array|null} verifyHFor 검증 포즈 공급자 —
+ *   cell-finder 경로는 finder.transform(검출과 같은 공간), 앵커·QR 경로는
+ *   가설의 H(계약 canonical 공간). scoreCellMaskAtHomography 는 둘 다 짝이다
+ *   (canonical Euclidean → image, contracts.js §Homography).
+ */
+function appendSagoaeVerifiedTwins(luma, base, options, verifyHFor) {
+  if (!options || options.cellFinderDaehan !== true) return;
+  const cache = new Map(); // H → Map(클램프 고리 k → verifySagoae 결과)
+  for (const hypothesis of base.slice()) {
+    // 이미 쌍이거나(중복 방지) 회계 표가 닫힌 (family,k) 는 재지 않는다.
+    if (hypothesis.sagoaeVerified !== undefined) continue;
+    if (!daehanAccountingOpen(hypothesis.family, hypothesis.k)) continue;
+    const H = verifyHFor(hypothesis);
+    if (!H) continue;
+    const ringK = Number.isInteger(hypothesis.k) && hypothesis.k > DAEHAN_COMPLETE_RADIUS
+      ? DAEHAN_COMPLETE_RADIUS : hypothesis.k;
+    let byRing = cache.get(H);
+    if (!byRing) { byRing = new Map(); cache.set(H, byRing); }
+    let verified = byRing.get(ringK);
+    if (!verified) {
+      verified = verifySagoae(luma, H, hypothesis.k, options.sagoae || {});
+      byRing.set(ringK, verified);
+    }
+    if (!verified.ok) continue;
+    base.push({
+      ...hypothesis,
+      sagoaeVerified: hypothesis.k,
+      sagoaeEvidence: {
+        correlation: verified.correlation,
+        contrastRatio: verified.contrastRatio,
+      },
+      source: (hypothesis.source || 'hypothesis') + '-sagoae',
+      hypothesisId: hypothesis.hypothesisId + '-sagoae',
+    });
+  }
+}
+
 function cellFinderHypotheses(luma, finder, family, options) {
   const H = finderTransform(finder);
   const patternFinder = isPatternFinderKind(finder.finderKind);
@@ -2376,45 +2442,21 @@ function cellFinderHypotheses(luma, finder, family, options) {
     luma,
   }));
   /*
-   * C2c 분해 (2026-08-24) — «중앙 파인더 ∥ sagoae 검증기» 합성 가설.
+   * C2c 분해 (2026-08-24 · T2 확장 2026-08-30) — «중앙 파인더 ∥ sagoae 검증기»
+   * 합성 가설. 원자 daehan 검출기 없이도 중앙 포즈 위에서 sagoae 고리(예약 셀
+   * 20/40/60, 이진 톤)를 독립 검증해 서는 k 에만 daehan 회계 가설을 추가한다 —
+   * daehan = ①taegeuk + ②sagoae 조합의 특수례라는 재정의(PM/022 W2-taegeuk ③)의
+   * 디코더 반쪽. 규칙 전문은 appendSagoaeVerifiedTwins 헤더.
    *
-   * 원자 daehan 검출기 없이도, 옵트인 라인업에서 중앙 19셀 후보(taegeuk-solo 등)가
-   * 잡히면 그 포즈 위에서 sagoae 고리(예약 셀 20/40/60, 이진 톤)를 독립 검증해
-   * 검증이 서는 k 에만 daehan 회계 가설을 **추가**한다. daehan = ①taegeuk +
-   * ②sagoae 조합의 특수례라는 재정의(PM/022 W2-taegeuk ③)의 디코더 반쪽이다.
-   *
-   *  · 게이트: `cellFinderDaehan === true` (옵트인) — 기본 경로 비트 동일.
-   *  · 기존 가설은 한 개도 안 바뀐다 — 추가만 한다 (검증 오수용이 있어도 RS/CRC
-   *    가 가르는 «또 하나의 가설» 일 뿐, 기존 레이아웃 해석을 뺏지 않는다).
-   *  · 검증 포즈는 finder.H (검출과 같은 공간) — finderTransform 의 정준화 공간이
-   *    아니다. scoreCellMaskAtHomography 가 짝인 공간이 그쪽이다.
-   *  · daehan 이름 후보는 제외 — 원자 경로가 이미 회계를 연다 (이중 가설 방지).
+   *  · 파인더 게이트 — cell-mask(2026-08-24 개통분) + **central-n7(중앙 TL, T2)**.
+   *    중앙 비컨(central-v0)은 3종 밖이라 열지 않고, daehan 이름 후보는 원자
+   *    경로가 이미 회계를 여므로 제외한다 (이중 가설 방지).
+   *  · 검증 포즈는 finder.transform (검출과 같은 공간, cell-mask 는 H 와 동일 객체).
    */
-  if (options && options.cellFinderDaehan === true
-    && finder.finderKind === 'cell-mask'
+  if ((finder.finderKind === 'cell-mask' || finder.finderKind === CENTRAL_N7_FINDER_KIND)
     && !isDaehanFinderPatternId(finder.patternId)) {
     const verifyH = finder.transform || finder.H;
-    for (const hypothesis of base.slice()) {
-      // 표 주도 게이트 (2026-08-30, V4D) — family 별 회계 표가 연 k 만 검증한다.
-      // 구 `DAEHAN_RADII.includes` 는 잘림 템플릿 목록이라 k=12 를 영영 안 열었다.
-      if (!daehanAccountingOpen(family, hypothesis.k) || !verifyH) continue;
-      // ⚠ 검증 호출의 k 는 프레임 k 그대로다 — verifySagoae 가 완전판 클램프(k>10 →
-      //   k10 고리 60셀 동일)를 스스로 안다. 아래 `sagoaeVerified` 스탬프도 **프레임
-      //   k** 여야 한다: 10 으로 찍으면 daehanReservedCellsFor 의 엄밀 일치
-      //   (`sagoaeVerified === dimension`)가 k=12 에서 영영 안 열리는 침묵 실패다.
-      const verified = verifySagoae(luma, verifyH, hypothesis.k, options.sagoae || {});
-      if (!verified.ok) continue;
-      base.push({
-        ...hypothesis,
-        sagoaeVerified: hypothesis.k,
-        sagoaeEvidence: {
-          correlation: verified.correlation,
-          contrastRatio: verified.contrastRatio,
-        },
-        source: 'cell-finder-sagoae',
-        hypothesisId: hypothesis.hypothesisId + '-sagoae',
-      });
-    }
+    appendSagoaeVerifiedTwins(luma, base, options, () => verifyH || null);
   }
   /*
    * 턴A(내부 타입 V) 쌍둥이 — 중앙 QR(§qr-center)·비컨(§beacon) 경로와 **같은
@@ -2495,6 +2537,20 @@ export function directAnchorHypotheses(luma, finder, family, options) {
       source: 'anchor-detector',
       luma,
     });
+  }
+  /*
+   * T2 (2026-08-30, PM/028 §4) — **불스아이 중앙** 프레임의 C2c 분해 쌍.
+   * 불스아이 프레임의 포즈는 cell-finder 가 아니라 이 앵커 경로가 세운다 —
+   * 검출 후보(detectBullseyes)는 finderKind 를 안 들므로 «패턴 파인더가 아닌
+   * 비-QR 중앙» 이 곧 불스아이 계열이다. 검증 포즈는 앵커 정합 가설의 H
+   * (계약 canonical 공간 — cornerMarkerHypotheses 가 같은 H 로 projectPoint 한다).
+   * 기존 가설·게이트는 한 비트도 안 바뀐다 — 추가만 한다.
+   */
+  if (finder
+    && (finder.finderKind === undefined || finder.finderKind === null
+      || finder.finderKind === 'bullseye')
+    && finder.centerQr !== true) {
+    appendSagoaeVerifiedTwins(luma, hypotheses, options, (hypothesis) => hypothesis.H || null);
   }
   return {
     hypotheses,
@@ -3459,6 +3515,15 @@ function qrGeometryHypotheses(luma, qrResult, options = {}) {
       });
     });
   });
+  /*
+   * T2 (2026-08-30, PM/028 §4) — **중앙 QR** 프레임의 C2c 분해 쌍. 중앙 QR 의
+   * 포즈는 이 경로가 세우고(qrCenterHomographies), 같은 축의 H 를 hex/tri/star ×
+   * 전 k 행이 공유하므로 헬퍼의 (H, 클램프 고리) 캐시가 검증을 축당 한 번으로
+   * 접는다. window(family cube) 가설은 daehan 회계 표에 없어 게이트가 거른다.
+   * 턴A 쌍도 그대로 쌍을 받는다 — 고리는 제자리 렌더라 turn 불변 (cell-finder
+   * 경로와 같은 문장). 기존 가설·게이트는 한 비트도 안 바뀐다 — 추가만 한다.
+   */
+  appendSagoaeVerifiedTwins(luma, hypotheses, options, (hypothesis) => hypothesis.H || null);
   return hypotheses;
 }
 

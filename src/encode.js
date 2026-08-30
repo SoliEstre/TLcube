@@ -238,9 +238,11 @@ export function encode(text, options = {}) {
   //     표면 포맷의 사본(family 1 digit + 바깥 5-digit 코드워드)이라 평 C 행
   //     (formatIndex 0..3)이 현행 코덱 그대로 실린다 (안 ①, 와이어 변경 0).
   //   · 중앙 QR(centerQr)은 전용 CQ 행(formatIndex 4, 평 C 전용)이 formatC 표에 있다.
-  //   · C*D × (centralN7·centerQr) 는 아래 centralSlotOccupants 단일 점유 가드가
-  //     거절한다 (daehan/sagoae 가 중앙 슬롯을 이미 점유) — CDQ·C*D×TL 은
-  //     sagoae×정식 중앙 검증기 확장 트랙 몫이다.
+  //   · C*D(사괘 분해) × 중앙 TL — **개통** (T2 2026-08-30, PM/028 §4): sagoae 가
+  //     중앙 점유자 목록에서 빠지면서(고리는 링 6/8/10 점유 — 중앙 슬롯 밖) 성립.
+  //     TL 은 C 에서 formatIndex 무변이라 와이어도 그대로다 (자: sagoae-roundtrip C).
+  //   · C*D × 중앙 QR(CDQ)는 **와이어 행이 없어** 여전히 닫혀 있다 — 아래
+  //     cFormatSpec 호출이 «CDQ 행 없음» 사유로 명시 거절한다 (formatC.js 표 정본).
   //   · 남는 배타는 centralV0 하나 — C 실루엣에서 n=13 비컨의 발견·검증이 미실측이다.
   if (notchC && centralV0) {
     throw new RangeError(
@@ -261,13 +263,27 @@ export function encode(text, options = {}) {
   if (usesDaehanLayout && cornerMarker) {
     throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
   }
+  // sagoae × centralV0 — 3종 밖 잔여 배타 (T2 2026-08-30): v0 비컨 포즈 위의 C2c
+  // 검증이 미실측이라 정식 3종(불스아이·TL·QR)과 달리 열지 않는다. sagoae 가 아래
+  // 점유자 목록에서 빠지면서 이 조합이 조용히 통과하게 되므로 명시 거절로 남긴다
+  // (scene 의 sagoaeComposableWith 도 같은 성질로 잠근다 — 두 끝이 같은 계약).
+  if (sagoae && centralV0) {
+    throw new RangeError(
+      'sagoae × centralV0(중앙 Y0 비컨) 는 미개통이다 — v0 비컨 포즈 위 C2c 검증 미실측 '
+      + '(정식 중앙 3종: 불스아이·중앙 TL·중앙 QR 만 개통, PM/028 §4)',
+    );
+  }
   // 중앙 슬롯 점유자는 하나다. 목록에서 활성 점유자를 유도해 새 점유자가 늘어도
   // pair 조건을 손으로 빠뜨리지 않는다. cornerMarker(Type G)는 바깥 링 점유자다.
+  // ⚠ **sagoae 는 점유자가 아니다** (T2 2026-08-30 — 구 'daehan/sagoae' 락의 양성
+  //   전환): 분해 합성의 고리는 링 6/8/10 을 점유하고 중앙 슬롯은 호출자가 고른
+  //   중앙(불스아이·TL·QR·cell-mask)이 점유한다 — 기하 서로소는 scene 로드/렌더
+  //   단언이 잰다. 원자 daehan 은 taegeuk 이 슬롯을 점유하므로 목록에 남는다.
   const centralSlotOccupants = [
     centerQr ? 'centerQr' : null,
     centralV0 ? 'centralV0' : null,
     centralN7 ? 'centralN7' : null,
-    usesDaehanLayout ? 'daehan/sagoae' : null,
+    daehanFinder ? 'daehan' : null,
   ].filter(Boolean);
   if (centralSlotOccupants.length > 1) {
     throw new RangeError(
