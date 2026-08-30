@@ -575,7 +575,8 @@ test('점 렌더 자가진단 (작업 4) — 재시도·첫 grab 재렌더·스�
   assert.match(SCANNER_JS, /DOCUMENT_POSITION_FOLLOWING/);
   assert.match(SCANNER_HTML, /\.scan-dot-layer \{[^}]*z-index: 2/);
   // r3 불변식: 점이 뷰 밖이면 콘솔 경고 + 오버레이 표기.
-  assert.match(SCANNER_JS, /dotsOutOfBounds\(dots, side\)/);
+  // 가이드 통합(2026-08-30) 후 자가진단은 K 18점 + C 링(노치 포함)을 한 번에 잰다.
+  assert.match(SCANNER_JS, /dotsOutOfBounds\(\s*\{ \.\.\.dots, typeC: \[\.\.\.typeCRing\.dots, typeCRing\.notch\] \}, side,?\s*\)/);
   assert.match(SCANNER_JS, /console\.warn\('\[tlscan\] guide dots out of square view:'/);
   assert.match(SCANNER_JS, /debugOverlay\.flagDotIssue\(outOfBounds\)/);
   // dotsOutOfBounds 자체: 뷰 안이면 빈 배열, 밖이면 링·인덱스를 짚는다.

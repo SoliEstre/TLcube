@@ -23,12 +23,9 @@ import {
   silhouetteRadiusCells,
 } from '../src/scanner-zoom.js';
 import {
-  DEFAULT_SCAN_GUIDE_TYPE,
-  SCAN_GUIDE_TYPE,
   TYPE_C_NOTCH_VERTEX_INDEX,
-  scanGuideCopyKeys,
   typeCGuideDotPositions,
-  wireScanGuideType,
+  typeCGuideRingPositions,
 } from '../sites/tlscan/scan-guide-ui.js';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 import { collectScannerModuleSources } from '../tools/build-scanner.mjs';
@@ -121,139 +118,74 @@ test('Type C 봉투 — 4단 사다리의 960px cell_px와 최소 배율을 고�
   assert.ok(occupancy >= 0.15 && occupancy <= 0.3, `C 점유율 ${occupancy}`);
 });
 
-class FakeClassList {
-  constructor(initial = []) {
-    this.values = new Set(initial);
-  }
-
-  toggle(name, force) {
-    if (force) this.values.add(name);
-    else this.values.delete(name);
-  }
-
-  contains(name) {
-    return this.values.has(name);
-  }
-}
-
-class FakeButton {
-  constructor(type, active = false) {
-    this.dataset = { guideType: type };
-    this.classList = new FakeClassList(active ? ['active'] : []);
-    this.attributes = new Map();
-    this.listeners = new Map();
-  }
-
-  setAttribute(name, value) {
-    this.attributes.set(name, value);
-  }
-
-  getAttribute(name) {
-    return this.attributes.get(name);
-  }
-
-  addEventListener(name, listener) {
-    this.listeners.set(name, listener);
-  }
-
-  removeEventListener(name, listener) {
-    if (this.listeners.get(name) === listener) this.listeners.delete(name);
-  }
-
-  click() {
-    this.listeners.get('click')?.();
-  }
-}
-
-test('가이드 선택 상태 — K가 기본이고 C 전환은 버튼·문구 키를 함께 바꾼다', () => {
-  assert.equal(DEFAULT_SCAN_GUIDE_TYPE, SCAN_GUIDE_TYPE.K);
-  assert.deepEqual(scanGuideCopyKeys('K'), {
-    message: 'guide.message',
-    detail: 'guide.dots',
+test('가이드 링 분해 — 채운 5점 + 3시 속 빈 노치 1점이 같은 반지름 위에 있다', () => {
+  const ring = typeCGuideRingPositions({
+    screenSide: 1000,
+    edgeUnitOffsets: EDGE_UNIT_OFFSETS,
+    outerFraction: GUIDE_OUTER_FRACTION,
   });
-  assert.deepEqual(scanGuideCopyKeys('C'), {
-    message: 'guide.cMessage',
-    detail: 'guide.cDots',
-  });
-
-  const k = new FakeButton('K', true);
-  const c = new FakeButton('C');
-  const root = { querySelectorAll: () => [k, c] };
-  const changes = [];
-  const controller = wireScanGuideType(root, { onChange: (type) => changes.push(type) });
-
-  assert.equal(controller.type, 'K');
-  assert.equal(k.classList.contains('active'), true);
-  assert.equal(k.getAttribute('aria-pressed'), 'true');
-  assert.equal(c.getAttribute('aria-pressed'), 'false');
-
-  c.click();
-  assert.equal(controller.type, 'C');
-  assert.equal(k.getAttribute('aria-pressed'), 'false');
-  assert.equal(c.getAttribute('aria-pressed'), 'true');
-  assert.deepEqual(changes, ['C']);
-  c.click();
-  assert.deepEqual(changes, ['C'], '같은 선택을 다시 눌러 중복 변경을 알리면 안 된다');
-
-  controller.setType('알 수 없음');
-  assert.equal(controller.type, 'K');
-  assert.deepEqual(changes, ['C', 'K']);
-  controller.destroy();
-  c.click();
-  assert.equal(controller.type, 'K');
+  assert.ok(ring);
+  assert.equal(ring.dots.length, 5);
+  // 노치 표식은 3시(E_1) — +x 축 위.
+  near(ring.notch.y, 500);
+  assert.ok(ring.notch.x > 500);
+  const radius = GUIDE_OUTER_FRACTION * 500;
+  for (const point of [...ring.dots, ring.notch]) {
+    near(Math.hypot(point.x - 500, point.y - 500), radius, 1e-9);
+  }
+  // 5점 래퍼는 링의 채운 점과 동일하다 (구 계약 유지).
+  assert.deepEqual(typeCGuideDotPositions({
+    screenSide: 1000,
+    edgeUnitOffsets: EDGE_UNIT_OFFSETS,
+    outerFraction: GUIDE_OUTER_FRACTION,
+  }), ring.dots);
 });
 
-test('스캐너 배선 — stage overlay 선택기, K 기본 18점, C 5점, UI 예산 불변', () => {
-  const stageAt = SCANNER_HTML.indexOf('<div class="square-stage" id="camera-stage">');
-  const selectorAt = SCANNER_HTML.indexOf('id="scan-guide-type"');
-  const stageSectionEnd = SCANNER_HTML.indexOf('</section>', stageAt);
-  assert.ok(stageAt >= 0 && selectorAt > stageAt && selectorAt < stageSectionEnd,
-    'K/C 선택기가 카메라 스테이지 안에 있지 않다');
-
-  assert.match(SCANNER_HTML, /\.scan-guide-type \{[^}]*position: absolute;/s);
-  assert.match(SCANNER_HTML, /\.scan-guide-type \{[^}]*visibility: hidden;/s);
-  assert.match(SCANNER_HTML, /\.square-stage\.is-active \.scan-guide-type \{[^}]*visibility: visible;/s);
-  assert.match(SCANNER_HTML, /data-guide-type="K" aria-pressed="true"/);
-  assert.match(SCANNER_HTML, /data-guide-type="C" aria-pressed="false"/);
+test('스캐너 배선 — K 18점 + C 링을 항상 함께 그리고 토글은 없다', () => {
+  // 토글 폐지 (운영자 «같이 배치», 2026-08-30) — 마크업·배선 양쪽에서 부재를 잠근다.
+  assert.equal(SCANNER_HTML.includes('scan-guide-type'), false,
+    'K/C 토글 마크업이 되살아났다');
+  assert.equal(SCANNER_JS.includes('wireScanGuideType'), false,
+    '토글 배선이 되살아났다');
   assert.match(
     SCANNER_HTML,
     /--tl-ui-stack-h: calc\(36px \+ 132px \+ 34px \+ 62px \+ 52px \+ 24px \+ 76px\);/,
-    'overlay 추가가 기존 UI_STACK_BUDGET을 바꿨다',
+    '가이드 개편이 기존 UI_STACK_BUDGET을 바꿨다',
   );
 
   assert.match(SCANNER_JS, /EDGE_UNIT_OFFSETS/);
   assert.match(SCANNER_JS, /outerFraction: GUIDE_OUTER_FRACTION/);
-  assert.match(SCANNER_JS, /ring\(dots\.typeC, 'dot-type-c', outerR\)/);
-  assert.match(SCANNER_JS, /ring\(dots\.outer, 'dot-outer', outerR\)/);
-  assert.match(SCANNER_JS, /ring\(dots\.middle, 'dot-middle', outerR \* 0\.85\)/);
-  assert.match(SCANNER_JS, /ring\(dots\.inner, 'dot-inner', outerR \* 0\.72\)/);
-  assert.match(SCANNER_JS, /wireScanGuideType\(scanGuideTypeRoot/);
-  assert.match(SCANNER_JS, /refreshScanGuideCopy\(\);\s*\n\s*renderGuideDots\(\);/);
-  assert.match(SCANNER_JS, /SCANNER_BUILD = '2026-08-30\.03'/);
+  // 두 링이 조건 분기 없이 연달아 그려진다 — 어느 한쪽이 조건 뒤로 숨으면 빨강.
+  assert.match(SCANNER_JS,
+    /ring\(dots\.outer, 'dot-outer', outerR\);[\s\S]{0,220}ring\(dots\.middle, 'dot-middle', outerR \* 0\.85\);[\s\S]{0,220}ring\(dots\.inner, 'dot-inner', outerR \* 0\.72\);[\s\S]{0,220}ring\(typeCRing\.dots, 'dot-type-c', outerR\);/);
+  assert.match(SCANNER_JS, /ring\(\[typeCRing\.notch\], 'dot-notch', outerR\)/);
+  assert.match(SCANNER_HTML, /\.scan-dot-layer \.dot-notch \{[^}]*fill: none;/s,
+    '노치 표식이 속 빈 점이 아니다');
+  // 빌드 스탬프는 형식만 잠근다 — 철자 핀은 배포 범프마다 이 자를 깨뜨렸다.
+  assert.match(SCANNER_JS, /SCANNER_BUILD = '20\d{2}-\d{2}-\d{2}\.\d{2}'/);
 
   const moduleIds = collectScannerModuleSources().map((moduleSource) => moduleSource.id);
-  assert.ok(moduleIds.includes('/tlscan/scan-guide-ui.js'), '단일 파일 빌드 그래프에 새 헬퍼가 없다');
+  assert.ok(moduleIds.includes('/tlscan/scan-guide-ui.js'), '단일 파일 빌드 그래프에 헬퍼가 없다');
   assert.ok(moduleIds.indexOf('/tlscan/scan-guide-ui.js') < moduleIds.indexOf('/scanner.js'),
-    '새 헬퍼가 scanner.js보다 먼저 등록되지 않는다');
+    '헬퍼가 scanner.js보다 먼저 등록되지 않는다');
 });
 
-test('8언어 — 선택기와 Type C 동적 안내 키가 전 언어에 있고 언어 변경 콜백이 동기화한다', () => {
+test('8언어 — 병합 안내가 전 언어에 있고 토글 키는 전 언어에서 사라졌다', () => {
   const languages = Object.keys(SCANNER_STRINGS);
   assert.deepEqual(languages, ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt']);
-  const keys = [
-    'guide.typeLabel',
-    'guide.typeK',
-    'guide.typeC',
-    'guide.cMessage',
-    'guide.cDots',
-  ];
   for (const lang of languages) {
-    for (const key of keys) {
-      assert.equal(typeof SCANNER_STRINGS[lang][key], 'string', `${lang}.${key} 없음`);
-      assert.ok(SCANNER_STRINGS[lang][key].trim(), `${lang}.${key} 비어 있음`);
+    const dots = SCANNER_STRINGS[lang]['guide.dots'];
+    assert.equal(typeof dots, 'string', lang + '.guide.dots 없음');
+    // 병합 문구는 C 확대 지시(«C2·C3 …»)를 반드시 나른다 — C1 경계·C3 1.25× 유도의
+    // 사용자 표면이다 (물리 봉투 자가 수치의 정본).
+    assert.ok(/C2[·・]C3/.test(dots), lang + '.guide.dots 에 C 확대 지시가 없다: ' + dots);
+    for (const gone of ['guide.typeLabel', 'guide.typeK', 'guide.typeC', 'guide.cMessage', 'guide.cDots']) {
+      assert.equal(SCANNER_STRINGS[lang][gone], undefined, lang + '.' + gone + ' 이 남아 있다');
     }
   }
+  // 문구 갱신은 고정 키 한 벌로 — 언어 변경 콜백이 같은 함수를 태운다.
+  assert.match(SCANNER_JS, /setAttribute\('data-i18n', 'guide\.message'\)/);
+  assert.match(SCANNER_JS, /setAttribute\('data-i18n', 'guide\.dots'\)/);
   assert.match(SCANNER_JS, /onChange\(\) \{[\s\S]*refreshScanGuideCopy\(\);/);
-  assert.match(SCANNER_JS, /setAttribute\('data-i18n', keys\.message\)/);
-  assert.match(SCANNER_JS, /setAttribute\('data-i18n', keys\.detail\)/);
 });
+

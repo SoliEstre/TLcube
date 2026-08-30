@@ -65,11 +65,7 @@ import {
   zoomTelemetry,
 } from '/src/scanner-zoom.js';
 import {
-  DEFAULT_SCAN_GUIDE_TYPE,
-  SCAN_GUIDE_TYPE,
-  scanGuideCopyKeys,
-  typeCGuideDotPositions,
-  wireScanGuideType,
+  typeCGuideRingPositions,
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import {
@@ -175,7 +171,6 @@ const zoomOutButton = document.getElementById('zoom-out');
 const zoomValue = document.getElementById('zoom-value');
 const zoomErrorBox = document.getElementById('zoom-error');
 const dotLayer = document.getElementById('scan-dot-layer');
-const scanGuideTypeRoot = document.getElementById('scan-guide-type');
 const scanGuideMessage = document.getElementById('scan-guide-message');
 const scanGuideDetail = document.getElementById('scan-guide-detail');
 const scannerPanels = document.getElementById('scanner-panels');
@@ -190,7 +185,7 @@ if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTit
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
     !closeResultSecondaryButton || !zoomControls || !zoomSlider || !zoomInButton ||
     !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer || !scannerPanels ||
-    !scanGuideTypeRoot || !scanGuideMessage || !scanGuideDetail ||
+    !scanGuideMessage || !scanGuideDetail ||
     !steadyMeter || !steadyMeterFill) {
   throw new Error('TLcube scanner markup is incomplete.');
 }
@@ -199,7 +194,6 @@ const frameCanvas = document.createElement('canvas');
 const frameContext = frameCanvas.getContext('2d', { willReadFrequently: true });
 
 let cameraStream = null;
-let scanGuideType = DEFAULT_SCAN_GUIDE_TYPE;
 let animationFrameId = 0;
 let scanSession = 0;
 let isDecoding = false;
@@ -564,18 +558,17 @@ function renderGuideDots() {
     return;
   }
   guideRetryCount = 0;
-  const dots = scanGuideType === SCAN_GUIDE_TYPE.C
-    ? {
-        typeC: typeCGuideDotPositions({
-          screenSide: side,
-          centerX: side / 2,
-          centerY: side / 2,
-          edgeUnitOffsets: EDGE_UNIT_OFFSETS,
-          outerFraction: GUIDE_OUTER_FRACTION,
-        }),
-      }
-    : guideDotPositions(side, side / 2, side / 2);
-  if (!dots || (scanGuideType === SCAN_GUIDE_TYPE.C && !dots.typeC)) {
+  // K 18점 + C 링을 **동시에** 그린다 (2026-08-30 운영자 «같이 배치» — 토글 폐지).
+  // C 5점은 K 점의 부분집합이 아니다 (E vs C 방향 30° 어긋남) — 두 링을 겹친다.
+  const dots = guideDotPositions(side, side / 2, side / 2);
+  const typeCRing = typeCGuideRingPositions({
+    screenSide: side,
+    centerX: side / 2,
+    centerY: side / 2,
+    edgeUnitOffsets: EDGE_UNIT_OFFSETS,
+    outerFraction: GUIDE_OUTER_FRACTION,
+  });
+  if (!dots || !typeCRing) {
     dotLayer.replaceChildren();
     return;
   }
@@ -593,19 +586,20 @@ function renderGuideDots() {
       fragment.append(circle);
     }
   };
-  if (scanGuideType === SCAN_GUIDE_TYPE.C) {
-    ring(dots.typeC, 'dot-type-c', outerR);
-  } else {
-    // K가 기본값이다. 기존 3링 18점과 반지름·스타일·순서를 그대로 보존한다.
-    ring(dots.outer, 'dot-outer', outerR);
-    ring(dots.middle, 'dot-middle', outerR * 0.85);
-    ring(dots.inner, 'dot-inner', outerR * 0.72);
-  }
+  // 기존 3링 18점의 반지름·스타일·순서를 그대로 보존하고, 그 위에 C 링을 얹는다.
+  ring(dots.outer, 'dot-outer', outerR);
+  ring(dots.middle, 'dot-middle', outerR * 0.85);
+  ring(dots.inner, 'dot-inner', outerR * 0.72);
+  ring(typeCRing.dots, 'dot-type-c', outerR);
+  // 3시 노치 자리는 «맞출 큐브가 없다» — 속 빈 표식으로 자리만 알린다.
+  ring([typeCRing.notch], 'dot-notch', outerR);
   dotLayer.replaceChildren(fragment);
 
   // 자가진단 (작업 4): r3 불변식 — 점은 뷰 밖으로 나갈 수 없다(최대 반경 27% < 50%).
   // 위반은 좌표계 회귀이므로 콘솔 경고 + lab 오버레이 표기.
-  const outOfBounds = dotsOutOfBounds(dots, side);
+  const outOfBounds = dotsOutOfBounds(
+    { ...dots, typeC: [...typeCRing.dots, typeCRing.notch] }, side,
+  );
   if (outOfBounds.length > 0) {
     console.warn('[tlscan] guide dots out of square view:', outOfBounds);
   }
@@ -846,11 +840,11 @@ function reportLabFrame(imageData, result, ms, stage, extra) {
 }
 
 function refreshScanGuideCopy() {
-  const keys = scanGuideCopyKeys(scanGuideType);
-  scanGuideMessage.setAttribute('data-i18n', keys.message);
-  scanGuideDetail.setAttribute('data-i18n', keys.detail);
-  scanGuideMessage.textContent = t(keys.message);
-  scanGuideDetail.textContent = t(keys.detail);
+  // 토글 폐지 후 문구는 한 벌이다 — K·C 조준 지시가 guide.dots 에 병합돼 있다.
+  scanGuideMessage.setAttribute('data-i18n', 'guide.message');
+  scanGuideDetail.setAttribute('data-i18n', 'guide.dots');
+  scanGuideMessage.textContent = t('guide.message');
+  scanGuideDetail.textContent = t('guide.dots');
 }
 
 /*
@@ -2673,14 +2667,6 @@ if (buildTag) buildTag.textContent = SCANNER_BUILD;
 document.documentElement.setAttribute('lang', i18n.lang);
 i18n.apply();
 wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
-wireScanGuideType(scanGuideTypeRoot, {
-  initialType: scanGuideType,
-  onChange(nextType) {
-    scanGuideType = nextType;
-    refreshScanGuideCopy();
-    renderGuideDots();
-  },
-});
 refreshScanGuideCopy();
 
 /*

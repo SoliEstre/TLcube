@@ -322,65 +322,6 @@
     gap: 8px;
   }
 
-  /*
-   * K/C 선택은 카메라 스테이지 안의 오버레이다. 문서 흐름 밖이라
-   * --tl-ui-stack-h(416px)를 늘리지 않으며, 카메라가 켜진 동안만 조작 가능하다.
-   * z-index 5는 점(2)·lab 관측 레이어(3·4) 위의 실제 UI라는 뜻이다.
-   */
-  .scan-guide-type {
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    z-index: 5;
-    display: flex;
-    width: max-content;
-    max-width: calc(100% - 16px);
-    padding: 3px;
-    overflow: hidden;
-    border: 1px solid rgb(255 255 255 / .24);
-    border-radius: 999px;
-    background: rgb(5 13 19 / .76);
-    box-shadow: 0 5px 18px rgb(0 0 0 / .42);
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(-50%);
-    visibility: hidden;
-    transition: opacity 180ms ease;
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
-  }
-
-  .square-stage.is-active .scan-guide-type {
-    opacity: 1;
-    pointer-events: auto;
-    visibility: visible;
-  }
-
-  .scan-guide-type button {
-    min-width: 58px;
-    min-height: 36px;
-    padding: 7px 12px;
-    border: 0;
-    border-radius: 999px;
-    color: rgb(231 247 255 / .78);
-    background: transparent;
-    cursor: pointer;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 720;
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  .scan-guide-type button.active {
-    color: #061117;
-    background: #d6f2ff;
-  }
-
-  .scan-guide-type button:focus-visible {
-    outline: 2px solid #fff;
-    outline-offset: -2px;
-  }
 
   /*
    * K 3링 18점 / C 5점 조준 가이드. r3: 레이어가 정사각 뷰(≡ 분석 정사각) **안에**
@@ -428,11 +369,20 @@
     filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
   }
 
-  /* C는 K 바깥 점과 같은 반지름·점 크기. 황색 5점과 3시 빈 자리로 노치를 읽힌다. */
+  /* C는 K 바깥 점과 같은 반지름·점 크기. 황색 5점 + 3시 속 빈 표식으로 노치를 읽힌다. */
   .scan-dot-layer .dot-type-c {
     fill: rgb(255 225 143 / .96);
     stroke: rgb(37 22 0 / .72);
     stroke-width: 1.5;
+    filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
+  }
+
+  /* 3시 노치 표식 — 맞출 큐브가 없는 자리라 속을 비운다 (C 링과 같은 황색 계열). */
+  .scan-dot-layer .dot-notch {
+    fill: none;
+    stroke: rgb(255 225 143 / .9);
+    stroke-width: 2;
+    stroke-dasharray: 3 3;
     filter: drop-shadow(0 1px 6px rgb(0 0 0 / .8));
   }
 
@@ -1369,15 +1319,10 @@
     <section class="square-stage-wrap">
       <div class="square-stage" id="camera-stage">
         <video id="camera-preview" autoplay muted playsinline data-i18n-attr="aria-label:camera.label" aria-label="TLcube 코드를 비추는 카메라 화면"></video>
-        <!-- K=3링 18점, C=동일 외경 5점. 순수 시각 보조라 aria-hidden 이고
-             scanner.js renderGuideDots()가 현재 선택에 맞는 circle만 채운다. -->
+        <!-- K 3링 18점 + C 링(황색 5점 + 3시 속 빈 노치 표식)을 동시에 그린다
+             (2026-08-30 토글 폐지). 순수 시각 보조라 aria-hidden 이고 circle 은
+             scanner.js renderGuideDots()가 채운다. -->
         <svg class="scan-dot-layer" id="scan-dot-layer" aria-hidden="true"></svg>
-        <!-- 선택기는 스테이지 절대 배치라 기존 UI_STACK_BUDGET을 소비하지 않는다. -->
-        <div class="scan-guide-type" id="scan-guide-type" role="group"
-             data-i18n-attr="aria-label:guide.typeLabel" aria-label="스캔 가이드 유형">
-          <button type="button" class="active" data-guide-type="K" aria-pressed="true" data-i18n="guide.typeK">타입 K</button>
-          <button type="button" data-guide-type="C" aria-pressed="false" data-i18n="guide.typeC">타입 C</button>
-        </div>
         <!-- 안정 유지 게이지 (2026-08-16). 정식 화면의 **유일한** 추가 UI 이고, 표시는
              뷰 하단 2px 선 하나다 — 조준을 방해하지 않는 최소치. 유지 0 이면 폭 0 이라
              사실상 없는 것과 같다. 값은 기기 안 로컬 계산이며 전송 경로가 없다.
