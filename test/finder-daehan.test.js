@@ -185,11 +185,13 @@ test('③ nsym 본표가 안 바뀌었다 — V1D 함정', () => {
   assert.deepEqual({ ...NSYM_TABLE_DAEHAN.V1D }, { symbols: 20, L: 3, M: 7, H: 11 });
   assert.deepEqual({ ...NSYM_TABLE_DAEHAN.V2D }, { symbols: 42, L: 7, M: 14, H: 22 });
   assert.deepEqual({ ...NSYM_TABLE_DAEHAN.V3D }, { symbols: 72, L: 11, M: 23, H: 37 });
+  // V4D (2026-08-30 개방) — 같은 승계 규약의 네 번째 행.
+  assert.deepEqual({ ...NSYM_TABLE_DAEHAN.V4D }, { symbols: 117, L: 16, M: 35, H: 55 });
   // 두 표가 **다른 객체**이고 키가 안 겹친다 — 한쪽 수정이 다른 쪽에 새지 않는다.
   for (const k of Object.keys(NSYM_TABLE)) assert.ok(!(k in NSYM_TABLE_DAEHAN));
   for (const k of Object.keys(NSYM_TABLE_DAEHAN)) assert.ok(!(k in NSYM_TABLE));
   // nsym 은 «정정능력 t 를 현행과 동일 유지» 다 — 동명 버전과 값이 같아야 한다.
-  for (let i = 0; i < 3; i += 1) {
+  for (let i = 0; i < 4; i += 1) {
     const legacy = NSYM_TABLE['V' + (i + 1)];
     const daehan = NSYM_TABLE_DAEHAN['V' + (i + 1) + 'D'];
     for (const level of ['L', 'M', 'H']) assert.equal(daehan[level], legacy[level]);
@@ -198,13 +200,16 @@ test('③ nsym 본표가 안 바뀌었다 — V1D 함정', () => {
 
 test('③ -b daehan 회계가 확정값과 같다', () => {
   const EXPECT = {
-    V1D: { k: 6, overhead: 65, dataCells: 62, symbols: 20, payload: { L: 15, M: 11, H: 7 } },
-    V2D: { k: 8, overhead: 89, dataCells: 128, symbols: 42, payload: { L: 32, M: 26, H: 18 } },
-    V3D: { k: 10, overhead: 113, dataCells: 218, symbols: 72, payload: { L: 57, M: 46, H: 32 } },
+    V1D: { k: 6, overhead: 65, dataCells: 62, symbols: 20, residual: 2, payload: { L: 15, M: 11, H: 7 } },
+    V2D: { k: 8, overhead: 89, dataCells: 128, symbols: 42, residual: 2, payload: { L: 32, M: 26, H: 18 } },
+    V3D: { k: 10, overhead: 113, dataCells: 218, symbols: 72, residual: 2, payload: { L: 57, M: 46, H: 32 } },
+    // V4D (2026-08-30 개방) — k=12 는 k10 완전판 예약 60셀 재사용, 잔여 1 (본표 V4 와 같다).
+    V4D: { k: 12, overhead: 117, dataCells: 352, symbols: 117, residual: 1, payload: { L: 96, M: 78, H: 58 } },
   };
-  assert.equal(VERSIONS_DAEHAN.length, 3);
+  assert.equal(VERSIONS_DAEHAN.length, 4);
   for (const spec of VERSIONS_DAEHAN) {
     const want = EXPECT[spec.name];
+    assert.ok(want, '기대표에 없는 행 ' + spec.name);
     assert.equal(spec.k, want.k);
     assert.equal(spec.overhead, want.overhead);
     // 오버헤드는 손 상수가 아니라 실계산이어야 한다.
@@ -215,11 +220,11 @@ test('③ -b daehan 회계가 확정값과 같다', () => {
       assert.equal(cap.usedSymbols, want.symbols);
       assert.equal(cap.maxPayloadBytes, want.payload[level]);
       assert.equal(cap.daehanFinder, true);
-      assert.equal(cap.residualCells, 2);
+      assert.equal(cap.residualCells, want.residual);
     }
     // scan order 길이가 회계와 짝이다.
     assert.equal(dataCellsInScanOrder(spec.k, daehanReservedCells(spec.k)).length, want.dataCells);
-    assert.equal(fillerCells(spec.k, daehanReservedCells(spec.k)).length, 2);
+    assert.equal(fillerCells(spec.k, daehanReservedCells(spec.k)).length, want.residual);
   }
   // VERSIONS_DAEHAN 은 VERSIONS 와 **다른 배열**이다 (같은 배열에 넣으면 find 가
   // 조용히 엉뚱한 spec 을 집는다 — capacityDaehan.js 헤더).
@@ -227,7 +232,8 @@ test('③ -b daehan 회계가 확정값과 같다', () => {
 });
 
 test('③ -c 예약 셀이 anchor/format/reference 와 안 겹친다', () => {
-  for (const k of DAEHAN_RADII) {
+  // 회계가 열린 전 k — 템플릿 목록(DAEHAN_RADII)이 아니라 표에서 유도한다 (k=12 포함).
+  for (const k of VERSIONS_DAEHAN.map((spec) => spec.k)) {
     const base = buildRoleSets(k);
     for (const cell of daehanReservedCells(k)) {
       assert.equal(

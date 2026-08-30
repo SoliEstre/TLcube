@@ -516,18 +516,22 @@ test('§6.3 buildConfig·매퍼가 사괘를 두 타입 모두 싣는다 — «�
     '사괘 디스패치가 O·A 두 분기에 있어야 한다 (현재 ' + matches.length + ')');
 });
 
-test('§6.3 V4 상호 잠금은 한 술어를 네 소비자가 쓴다 — 한쪽만 잠그면 우회로가 남는다', () => {
+test('§6.3 버전 잠금은 표 유도 술어 한 겹뿐이다 — 손 겹은 V4D 개방으로 걷었다', () => {
   // 술어 자체는 활성 회계표 유도다 (평 O와 Type C를 숫자로 섞지 않는다).
   assert.match(INDEX, /DAEHAN_O_VERSIONS = new Set\(VERSIONS_DAEHAN\.map/,
     'daehan 지원 버전이 표 유도가 아니다');
   assert.match(INDEX, /DAEHAN_C_VERSIONS = new Set\(VERSIONS_C_DAEHAN\.map/,
     'C*D 지원 버전이 VERSIONS_C_DAEHAN 표 유도가 아니다');
-  // 소비자 4곳: 파인더 카드 잠금 · 사괘 자리 잠금 · «대용량» 티어 잠금 · select 옵션.
+  // 소비자: 파인더 카드 잠금 · 사괘 자리 잠금 · select 옵션 — 표가 좁아지면 셋이
+  // 같이 잠긴다. 우회로(술어를 안 거치는 손 조건)를 두지 않는다.
   const uses = (INDEX.match(/daehanSupportsGeneratorVersion\(/g) || []).length;
   assert.ok(uses >= 3,
     'daehanSupportsGeneratorVersion 소비자가 ' + uses + '곳뿐이다 — 카드·자리·select 세 축 미만이면 우회로다');
-  assert.match(INDEX, /res === 'max' && daehanAccountingActive/,
-    '«대용량» 티어가 daehan·사괘 활성에서 안 잠긴다');
+  // V4D 개방(2026-08-30): «대용량» 티어의 손 잠금(res==='max' && daehanAccountingActive)
+  // 은 표를 열어도 화면이 잠긴 채 남는 두 번째 겹이라 **제거됐다** — 되살아나면
+  // 「켰는데 안 먹는」 재발이다 (배타를 열면 소비자도 쓸어라).
+  assert.doesNotMatch(INDEX, /res === 'max' && daehanAccountingActive/,
+    '«대용량» 티어에 daehan 손 잠금 겹이 되살아났다 — 잠금 정본은 표 유도 술어 하나다');
   // 버전 변경이 파인더 카드 잠금을 재동기한다 (실기에서 안 걸리던 그 구멍).
   assert.match(INDEX, /버전은 daehan·사괘 잠금의 입력이다/,
     '버전 변경 경로가 renderFinderUi 재동기를 잃었다');
