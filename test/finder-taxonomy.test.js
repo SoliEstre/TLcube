@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SUPPORTED_LANGUAGES } from '../src/i18n.js';
 import {
-  FINDER_TAXONOMY, FINDER_CLASS, KIND_FINDER, KIND_SEAT, KIND_WIRE,
+  FINDER_TAXONOMY, FINDER_CLASS, KIND_BLOCKED, KIND_FINDER, KIND_SEAT, KIND_WIRE,
   SEAT_DEFAULT_FINDER, taxonomyByClass, taxonomyItem, daehanSplitHolds,
   taegeukEqualsCentralSlot,
 } from '../src/finder-taxonomy.js';
@@ -79,6 +79,21 @@ test('① 분류 배정은 표에서 유도 — 손 목록과 불일치하면 �
     assert.ok(!GENERATOR_TYPES.includes(derived),
       derived + ' 가 생성기 타입에 들었다 — 자리·옵션에서 유도되는 파생 타입이지 카드 축이 아니다');
   }
+});
+
+test('①-a Nitrogen r2 드랍 — taxonomy 기록·판독 패턴과 카드 노출을 분리한다', async () => {
+  const row = oakCandidate('Nitrogen r2');
+  assert.equal(row.status, 'dropped');
+  const taxonomy = taxonomyItem(row.id);
+  assert.ok(taxonomy, '드랍된 Nitrogen r2가 taxonomy에서 사라졌다');
+  assert.equal(taxonomy.kind, KIND_BLOCKED,
+    '드랍된 Nitrogen r2가 taxonomy에서 생성기용 finder로 다시 노출됐다');
+  assert.equal(taxonomy.renderable, false);
+  assert.equal(FINDER_CARD_GROUPS.oak.some((card) => card.id === 'oak-nitrogen-r2'), false,
+    '드랍된 Nitrogen r2 카드가 UI에 남아 있다');
+  const { getOakFinderPattern } = await import('../src/finder-oak-patterns.js');
+  assert.ok(getOakFinderPattern('oak-nitrogen-r2'),
+    'taxonomy가 보존해야 할 Nitrogen r2 패턴 조회가 없다');
 });
 
 test('② daehan 분리 — taegeuk 분류1 · sagoae 분류2 · 원자는 와이어 합성', () => {

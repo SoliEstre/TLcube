@@ -41,6 +41,21 @@ test('폐기 회귀 — 구 Nitrogen 은 내려가 있고, 기록은 남아 있�
   assert.equal(dead.margin, 0.0351, 'dead 사유(게이트 동률 margin)가 기록에서 사라졌다');
 });
 
+test('Nitrogen r2 드랍 — 카드만 닫고 패턴·판독 명부는 보존한다', async () => {
+  const row = oakCandidate('Nitrogen r2');
+  assert.ok(row, 'Nitrogen r2 기록이 삭제됐다 — 드랍 규약은 차단이지 삭제가 아니다');
+  assert.equal(row.status, 'dropped');
+  assert.equal(row.id, 'O-1r2-central3tone');
+  assert.match(row.note, /Footprint/);
+
+  assert.equal(liveOakCandidates().some((e) => e.name === 'Nitrogen r2'), false);
+  const { getOakFinderPattern, OAK_FINDER_PATTERN_IDS } = await import('../src/finder-oak-patterns.js');
+  assert.ok(OAK_FINDER_PATTERN_IDS.includes('oak-nitrogen-r2'),
+    'Nitrogen r2 검출 패턴이 삭제됐다 — 발행 프레임 호환이 깨진다');
+  assert.ok(getOakFinderPattern('oak-nitrogen-r2'),
+    'Nitrogen r2 렌더/판독 패턴 조회가 삭제됐다');
+});
+
 test('편입 회귀 — daehan 은 살아 있는 O 후보다', () => {
   const live = liveOakCandidates();
   const d = live.find((e) => e.name === 'daehan');

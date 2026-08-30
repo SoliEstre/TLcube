@@ -196,7 +196,7 @@ test('⑥ FINDER_LABEL_KEYS 등재 + 생성기 8언어 사전에 g583/g584 가 �
     'FINDER_LABEL_KEYS 에 oak-taegeuk-solo 가 없다');
   assert.equal(SUPPORTED_LANGUAGES.length, 8);
   // 두 라벨은 고유명·로마자 고정 표기라 8개 언어 사전에 같은 문자열로 들어간다
-  // (g565~g567 · g569 의 taegeuk 표기와 같은 규약). 언어 블록당 정확히 1개씩.
+  // (g566/g567 · g569 의 taegeuk 표기와 같은 규약). 언어 블록당 정확히 1개씩.
   const footprintEntries = INDEX.match(/"g583": "Footprint"/g) || [];
   const taegeukEntries = INDEX.match(/"g584": "taegeuk"/g) || [];
   assert.equal(footprintEntries.length, SUPPORTED_LANGUAGES.length,
