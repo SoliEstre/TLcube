@@ -30,6 +30,7 @@ import { getOakFinderPattern } from './finder-oak-patterns.js';
 import {
   getDaehanFinderPattern, isDaehanFinderPatternId, sagoaeCells, sagoaeLevels,
 } from './finder-daehan.js';
+import { notchCellsC } from './notchC.js';
 import { moduleQuad } from './ygrid.js';
 import { CENTRAL_V0_SOURCE_N } from './cellSurfaceFinal.js';
 import { centralBeaconGeometry } from './centralBeaconWire.js';
@@ -445,6 +446,20 @@ export function buildScene(encoded, options) {
   }
   if (!(cellDigits instanceof Map)) {
     throw new TypeError('encoded.cellDigits 는 Map 이어야 한다');
+  }
+  const notchC = encoded.notchC === true;
+  if (encoded.notchC !== undefined && typeof encoded.notchC !== 'boolean') {
+    throw new TypeError(`encoded.notchC 는 boolean 이어야 한다: ${typeof encoded.notchC}`);
+  }
+  if (notchC) {
+    // 노치는 별도 색이나 배경 도형이 아니라 셀의 단순 부재다. 잘못된 인코딩 결과를
+    // 여기서 필터링하면 데이터가 조용히 사라지므로, 한 셀이라도 돌아오면 즉시 실패한다.
+    for (const cell of notchCellsC(k)) {
+      const key = `${cell.q},${cell.r}`;
+      if (cellDigits.has(key)) {
+        throw new Error(`Type C 노치 셀이 렌더 입력에 남았다: ${key}`);
+      }
+    }
   }
 
   const opts = options || {};
@@ -1161,6 +1176,7 @@ export function buildScene(encoded, options) {
     height: layout.height,
     background: palette.background,
     finderPatternId: centerQr ? 'centerQr' : finderPatternId,
+    notchC,
     sagoae,
     // 턴A 배치 사상을 **장면이 공표한다** (2026-08-26). 이 값이 없으면 장면을 도로
     // 표본하는 쪽(자체검증 verify.js)이 `encoded` 를 따로 들고 와 같은 분기를 다시

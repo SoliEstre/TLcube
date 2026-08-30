@@ -34,6 +34,14 @@ import {
 } from './markerO.js';
 import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
 import { daehanReservedCells } from './finder-daehan.js';
+import { typeCReservedCells } from './notchC.js';
+import {
+  VERSIONS_C,
+  VERSIONS_C_DAEHAN,
+  capacityForC,
+  assertTypeCSingleBlock,
+} from './capacityC.js';
+import { cFormatSpec, TYPE_C_CM_UNSUPPORTED_REASON } from './formatC.js';
 import { markerGSpec } from './markerG.js';
 import { hTonesByKeyO } from './finder-H.js';
 
@@ -46,7 +54,26 @@ function cellKey(q, r) {
  * 여기 한 곳에 모은다. 파이프라인(헤더·base211·RS·마스크·포맷 정보)은 세 경로가
  * 완전히 같다.
  */
-function layoutProviderFor(cornerMarker, daehanFinder = false, markerTones = false) {
+function layoutProviderFor(
+  cornerMarker, daehanFinder = false, markerTones = false, notchC = false,
+) {
+  if (notchC) {
+    // Type C는 기존 O의 고정 셀·포맷·레퍼런스 좌표를 유지하고, 3시 노치 8셀과
+    // 선택적 sagoae 60셀만 scan-order에서 제외한다. 두 예약 집합의 합성·겹침
+    // 검증은 notchC.js 한 진입점에서 맡는다.
+    const reserved = (k) => typeCReservedCells(
+      k, daehanFinder ? daehanReservedCells(k) : undefined,
+    );
+    return {
+      versions: daehanFinder ? VERSIONS_C_DAEHAN : VERSIONS_C,
+      capacity: capacityForC,
+      scan: (k) => dataCellsInScanOrder(k, reserved(k)),
+      filler: (k) => fillerCells(k, reserved(k)),
+      format: formatCells,
+      reference: referenceCellsAll,
+      fixed: (k) => anchorCells(k).map((c) => ({ ...c, role: 'anchor' })),
+    };
+  }
   if (daehanFinder) {
     // daehan (2026-08-18) — anchor/format/reference 좌표는 **레거시와 같다**
     // (예약 60셀이 그 셋과 하나도 안 겹치는 것이 전 k 에서 실측 확인됐다).
@@ -106,17 +133,27 @@ function layoutProviderFor(cornerMarker, daehanFinder = false, markerTones = fal
  * @param {'L'|'M'|'H'} [eccLevel]
  * @returns {{version:number, k:number, overhead:number, symbolKey:string}} VERSIONS 원소
  */
-export function chooseVersion(text, eccLevel = 'M', cornerMarker = false, daehanFinder = false) {
+export function chooseVersion(
+  text, eccLevel = 'M', cornerMarker = false, daehanFinder = false, notchC = false,
+) {
+  if (notchC && cornerMarker) {
+    throw new RangeError(TYPE_C_CM_UNSUPPORTED_REASON);
+  }
   const byteLength = payloadByteLength(text);
-  const provider = layoutProviderFor(cornerMarker, daehanFinder);
+  const provider = layoutProviderFor(cornerMarker, daehanFinder, false, notchC);
   for (const spec of provider.versions) {
     const capacity = provider.capacity(spec, eccLevel);
-    if (byteLength <= capacity.maxPayloadBytes) return spec;
+    if (byteLength <= capacity.maxPayloadBytes) {
+      if (notchC) assertTypeCSingleBlock(capacity);
+      return spec;
+    }
   }
   const last = provider.versions[provider.versions.length - 1];
-  const suffix = daehanFinder ? 'D' : cornerMarker ? 'CM' : '';
+  const label = notchC
+    ? last.name
+    : `V${last.version}${daehanFinder ? 'D' : cornerMarker ? 'CM' : ''}`;
   throw new RangeError(
-    `페이로드 ${byteLength} B 는 V${last.version}${suffix}(ECC-${eccLevel}) 용량을 초과한다`,
+    `페이로드 ${byteLength} B 는 ${label}(ECC-${eccLevel}) 용량을 초과한다`,
   );
 }
 
@@ -125,7 +162,7 @@ export function chooseVersion(text, eccLevel = 'M', cornerMarker = false, daehan
  * 자동 선택한다.
  * @param {string} text UTF-8 페이로드
  * @param {{version?: number, eccLevel?: 'L'|'M'|'H', centerQr?: boolean, centralV0?: boolean,
- *          centralN7?: boolean, sagoae?: boolean}} [options]
+ *          centralN7?: boolean, sagoae?: boolean, notchC?: boolean}} [options]
  * @returns {{
  *   version: number, k: number, eccLevel: 'L'|'M'|'H', centerQr: boolean, centralV0: boolean,
  *   centralN7: boolean,
@@ -148,12 +185,16 @@ export function encode(text, options = {}) {
   const {
     version, eccLevel = 'M', centerQr = false, centralV0 = false, centralN7 = false,
     cornerMarker = false, daehanFinder = false, sagoae = false, markerTones = false,
+    notchC = false,
   } = options;
   if (typeof centerQr !== 'boolean') {
     throw new TypeError(`centerQr 는 boolean 이어야 한다: ${typeof centerQr}`);
   }
   if (typeof cornerMarker !== 'boolean') {
     throw new TypeError(`cornerMarker 는 boolean 이어야 한다: ${typeof cornerMarker}`);
+  }
+  if (typeof notchC !== 'boolean') {
+    throw new TypeError(`notchC 는 boolean 이어야 한다: ${typeof notchC}`);
   }
   if (typeof daehanFinder !== 'boolean') {
     throw new TypeError(`daehanFinder 는 boolean 이어야 한다: ${typeof daehanFinder}`);
@@ -182,6 +223,14 @@ export function encode(text, options = {}) {
   // markerTones 는 «O-CM 이 예약한 자리» 에 심는 심볼(H)이다 — 자리 없이 심볼만 켤 수 없다.
   if (markerTones && !cornerMarker) {
     throw new RangeError('markerTones 는 cornerMarker(자리 예약) 없이 켤 수 없다');
+  }
+  if (notchC && cornerMarker) {
+    throw new RangeError(TYPE_C_CM_UNSUPPORTED_REASON);
+  }
+  if (notchC && (centerQr || centralV0 || centralN7)) {
+    throw new RangeError(
+      'Type C 와이어 표는 평 C와 C*D만 정의한다 — 다른 중앙 슬롯 변형은 별도 formatIndex가 없다',
+    );
   }
   // 코너 마커는 중앙 슬롯을 안 건드리지만, 중앙 QR 은 링3 을 먹고 마커는 링 k·k−1 을
   // 먹는다 — 두 변형의 동시 사용은 배치 검증을 안 했으므로 조용히 허용하지 않는다.
@@ -236,16 +285,17 @@ export function encode(text, options = {}) {
     );
   }
 
-  const provider = layoutProviderFor(cornerMarker, usesDaehanLayout, markerTones);
+  const provider = layoutProviderFor(cornerMarker, usesDaehanLayout, markerTones, notchC);
 
   const spec = version === undefined
-    ? chooseVersion(text, eccLevel, cornerMarker, usesDaehanLayout)
+    ? chooseVersion(text, eccLevel, cornerMarker, usesDaehanLayout, notchC)
     : provider.versions.find((v) => v.version === version);
   if (!spec) {
     throw new RangeError(`알 수 없는 버전: ${version} (허용 ${provider.versions.map((v) => v.version).join(', ')})`);
   }
 
   const capacity = provider.capacity(spec, eccLevel);
+  if (notchC) assertTypeCSingleBlock(capacity);
   const { k } = spec;
 
   // 길이 헤더 + 0x00 패딩 (header.js) → base-211 심볼 (base211.js).
@@ -312,9 +362,11 @@ export function encode(text, options = {}) {
   if (eccLevelValue === undefined || eccLevelValue === ECC_LEVEL.RESERVED) {
     throw new RangeError(`알 수 없는 ECC 레벨: ${eccLevel}`);
   }
-  const versionIndex = cornerMarker
-    ? markerGSpec('hex', spec.version, centerQr).formatIndex
-    : (spec.version - 1) + (centerQr ? 4 : 0);
+  const versionIndex = notchC
+    ? cFormatSpec(spec.version, { daehanFinder: usesDaehanLayout }).formatIndex
+    : cornerMarker
+      ? markerGSpec('hex', spec.version, centerQr).formatIndex
+      : (spec.version - 1) + (centerQr ? 4 : 0);
   const formatReplicas = encodeReplicated({ version: versionIndex, eccLevel: eccLevelValue });
   const formatDigits = formatReplicas.flat(); // 길이 15, formatCells(k) 순서와 정합
 
@@ -372,6 +424,7 @@ export function encode(text, options = {}) {
     centralV0,
     centralN7,
     cornerMarker,
+    notchC,
     // `daehanFinder` 는 후단 decodeCells 가 이미 쓰는 예약-레이아웃 회계 신호다.
     // 분해 합성도 같은 회계를 쓰므로 true 이고, 광학 구분은 `sagoae` 가 맡는다.
     daehanFinder: usesDaehanLayout,
