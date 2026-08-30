@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLcube — un codice a barre 3D che porta i dati nel rango di luminanza</title>
+<title>TLcube — un codice a barre 3D (in realtà 2.5D) che porta i dati nel rango di luminanza</title>
 <meta name="description" content="Un codice a barre 3D aperto che divide una cella esagonale in tre facce romboidali e porta i dati nell'ordine di luminanza relativa di quelle facce. Specifica e implementazione di riferimento sono pubblicate con licenza Apache-2.0.">
 <link rel="canonical" href="https://tl.estre.so/it/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
@@ -126,7 +126,7 @@
   <section id="hero">
     <h1>Il QR si legge bene.<br>Non è mai stato <strong>bello</strong></h1>
     <p class="lead">Manifesti, confezioni, biglietti da visita — il QR è ovunque, e mettere un quadrato in bianco e nero sopra un progetto curato per settimane è sempre stato un dispiacere. Ma il QR ha quell'aspetto per un motivo: è ciò che si costruisce quando <strong>una fotocamera e un processore del 1994</strong> devono riuscire a leggerlo.</p>
-    <p class="lead">Quei vincoli sono in gran parte caduti. Le fotocamere dei telefoni e la potenza di calcolo hanno margine. Così, invece di rincorrere solo il riconoscimento, quel margine è stato speso perché il codice <strong>valga la pena di essere guardato</strong>. Non è un sostituto del QR: è <strong>un posto accanto</strong>. Il risultato è un <strong>codice a barre 3D (in realtà 2.5D)</strong> — stampato in piano, ma percepito in rilievo.</p>
+    <p class="lead">Quei vincoli sono in gran parte caduti. Le fotocamere dei telefoni e la potenza di calcolo hanno margine. Così, invece di rincorrere solo il riconoscimento, quel margine è stato speso perché il codice <strong>valga la pena di essere guardato</strong>. Non è un sostituto del QR: è <strong>un posto accanto</strong>. Il risultato è un <strong>codice a barre 3D</strong> — stampato in piano, ma percepito in rilievo.</p>
     <div class="cta">
       <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Crea un codice</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
@@ -146,8 +146,8 @@
   </section>
 
   <section id="types">
-    <h2>Quattro tipi</h2>
-    <p class="dim">Scegli in base a dove verrà messo. Tutti e tre condividono lo stesso contratto dati e differiscono solo per la silhouette. Ogni codice qui sotto contiene <code>https://tl.estre.so</code>.</p>
+    <h2>Cinque tipi</h2>
+    <p class="dim">Scegli in base a dove verrà messo. Tutti e cinque condividono lo stesso contratto dati e differiscono solo per la silhouette. Ogni codice qui sotto contiene <code>https://tl.estre.so</code>.</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="../assets/type-Y.png" alt="Type Y — cubo singolo">
@@ -160,6 +160,11 @@
         <h3>Type O — campo esagonale</h3>
         <p class="dim">La forma base. Le celle romboidali si dispongono attorno a un pattern di ricerca centrale.</p>
         <div class="meta">k = 6 / 8 / 10 / 12 · payload netto 18 / 39 / 65 / 97 B</div>
+      </div>
+      <div class="card">
+        <h3>Type C — capacità ultra con tacca</h3>
+        <p class="dim">La tacca a ore 3 fissa orientamento e tipo nella silhouette stessa. La gamma C0–C3 è per scansioni ravvicinate; da C1 in su, avvicina il codice o usa lo zoom.</p>
+        <div class="meta">k = 14 / 16 / 18 / 20 · payload netto 130 / 172 / 220 / 255 B</div>
       </div>
       <div class="card">
         <img src="../assets/type-A.png" alt="Type A — silhouette triangolare">
@@ -180,7 +185,7 @@
         <div class="meta">k = 6 / 8 / 10 / 12 · payload netto 43 / 86 / 138 B</div>
       </div>
     </div>
-    <p class="dim" style="margin-top:16px">Il payload netto è riferito a ECC-M. Tutti e tre i tipi possono portare accanto un <strong>QR di riserva</strong>, così resta una via anche dove il codice TL non è leggibile.</p>
+    <p class="dim" style="margin-top:16px">Il payload netto è riferito a ECC-M. Tutti e cinque i tipi possono portare accanto un <strong>QR di riserva</strong>, così resta una via anche dove il codice TL non è leggibile.</p>
   </section>
 
   <section id="what">

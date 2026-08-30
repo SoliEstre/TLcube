@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLcube — ein 3D-Barcode, der Daten im Luminanzrang trägt</title>
+<title>TLcube — ein 3D-Barcode (eigentlich 2.5D), der Daten im Luminanzrang trägt</title>
 <meta name="description" content="Ein offener 3D-Barcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und die Daten in der relativen Luminanzreihenfolge dieser Flächen trägt. Spezifikation und Referenzimplementierung sind unter Apache-2.0 veröffentlicht.">
 <link rel="canonical" href="https://tl.estre.so/de/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
@@ -126,7 +126,7 @@
   <section id="hero">
     <h1>QR liest sich gut.<br>Es war nur nie <strong>schön</strong></h1>
     <p class="lead">Plakate, Verpackungen, Visitenkarten — QR ist überall, und ein Schwarz-Weiß-Quadrat auf ein wochenlang gestaltetes Layout zu setzen, hat immer wehgetan. Doch QR sieht so aus, weil es so aussehen musste: So baut man einen Code, wenn <strong>eine Kamera und ein Prozessor von 1994</strong> ihn überhaupt lesen sollen.</p>
-    <p class="lead">Diese Beschränkungen sind weitgehend gefallen. Handykameras und Rechenleistung haben Luft. Statt allein der Erkennung nachzujagen, ist diese Luft hier darin gelandet, dass der Code <strong>sehenswert</strong> ist. Das ist kein Ersatz für QR — es ist <strong>ein Platz daneben</strong>. Das Ergebnis ist ein <strong>3D-Barcode (eigentlich 2.5D)</strong> — flach gedruckt, aber räumlich gelesen.</p>
+    <p class="lead">Diese Beschränkungen sind weitgehend gefallen. Handykameras und Rechenleistung haben Luft. Statt allein der Erkennung nachzujagen, ist diese Luft hier darin gelandet, dass der Code <strong>sehenswert</strong> ist. Das ist kein Ersatz für QR — es ist <strong>ein Platz daneben</strong>. Das Ergebnis ist ein <strong>3D-Barcode</strong> — flach gedruckt, aber räumlich gelesen.</p>
     <div class="cta">
       <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Code erstellen</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
@@ -146,8 +146,8 @@
   </section>
 
   <section id="types">
-    <h2>Vier Typen</h2>
-    <p class="dim">Wählen Sie danach, wo der Code sitzen soll. Alle drei teilen denselben Datenvertrag und unterscheiden sich nur in der Silhouette. Jeder Code unten enthält <code>https://tl.estre.so</code>.</p>
+    <h2>Fünf Typen</h2>
+    <p class="dim">Wählen Sie danach, wo der Code sitzen soll. Alle fünf teilen denselben Datenvertrag und unterscheiden sich nur in der Silhouette. Jeder Code unten enthält <code>https://tl.estre.so</code>.</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="../assets/type-Y.png" alt="Type Y — einzelner Würfel">
@@ -160,6 +160,11 @@
         <h3>Type O — Sechseckfeld</h3>
         <p class="dim">Die Grundform. Rautenzellen legen sich um ein zentrales Suchmuster nach außen.</p>
         <div class="meta">k = 6 / 8 / 10 / 12 · Nutzdaten netto 18 / 39 / 65 / 97 B</div>
+      </div>
+      <div class="card">
+        <h3>Type C — ultrahohe Kapazität mit Kerbe</h3>
+        <p class="dim">Die Kerbe auf 3 Uhr legt Ausrichtung und Typ schon in der Silhouette fest. C0–C3 sind für Scans im Nahbereich gedacht; ab C1 holen Sie den Code näher heran oder vergrößern ihn.</p>
+        <div class="meta">k = 14 / 16 / 18 / 20 · Netto-Nutzlast 130 / 172 / 220 / 255 B</div>
       </div>
       <div class="card">
         <img src="../assets/type-A.png" alt="Type A — dreieckige Silhouette">
@@ -180,7 +185,7 @@
         <div class="meta">k = 6 / 8 / 10 / 12 · Netto-Nutzlast 43 / 86 / 138 B</div>
       </div>
     </div>
-    <p class="dim" style="margin-top:16px">Die Netto-Nutzdaten gelten für ECC-M. Alle vier Typen können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann.</p>
+    <p class="dim" style="margin-top:16px">Die Netto-Nutzdaten gelten für ECC-M. Alle fünf Typen können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann.</p>
   </section>
 
   <section id="what">

@@ -53,6 +53,33 @@ test('언어 디렉터리의 자산 경로가 한 단계 올라간다', () => {
   }
 });
 
+test('타입 C 초대용량·노치·근접 스캔 카피가 여덟 언어 산출물에 실린다', () => {
+  for (const lang of languages) {
+    const html = read(lang);
+    const t = strings[lang.code];
+    for (const key of ['typeCName', 'typeCDesc', 'typeCMeta']) {
+      assert.ok(html.includes(t[key]), `${lang.code}: ${key} 카피 누락`);
+    }
+    assert.ok(html.indexOf(t.typeOName) < html.indexOf(t.typeCName),
+      `${lang.code}: Type C는 같은 계열인 Type O 바로 뒤에 와야 한다`);
+    assert.ok(html.indexOf(t.typeCName) < html.indexOf(t.typeAName),
+      `${lang.code}: Type C 카드가 Type O와 Type A 사이에 있어야 한다`);
+  }
+});
+
+test('3D 바코드 표기는 각 문서 첫 등장 한 번만 2.5D를 병기한다', () => {
+  for (const lang of languages) {
+    const html = read(lang);
+    const title = /<title>([^<]+)<\/title>/.exec(html);
+    assert.ok(title && title[1].includes('2.5D'), `${lang.code}: 첫 title에 2.5D 병기 누락`);
+    assert.equal((html.match(/2\.5D/g) || []).length, 1, `${lang.code}: 2.5D 병기는 한 번만`);
+  }
+  const en = languages.find((lang) => lang.code === 'en');
+  const html = read(en);
+  assert.equal((html.match(/3D barcode \(actually 2\.5D\)/g) || []).length, 1);
+  assert.ok(html.indexOf('3D barcode (actually 2.5D)') < html.indexOf('An open 3D barcode'));
+});
+
 // nginx 는 `_shared/*` 에 7일 캐시를 주는데 HTML 에는 안 준다. 버전 쿼리가 없으면
 // 재방문자가 **새 HTML + 옛 CSS/JS** 를 받는다 — 실제로 언어 드롭다운이 그 조합으로
 // 모양이 깨지고 클릭이 안 먹었다. 해시가 내용과 함께 움직이는지 지킨다.
