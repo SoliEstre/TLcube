@@ -5173,6 +5173,16 @@ function recastHypothesesByFormat(hypotheses, validated) {
   const byId = new Map(hypotheses.map((hypothesis) => [hypothesis.hypothesisId, hypothesis]));
   const everyIndex = allFormatIndices();
   const seen = new Set();
+  /*
+   * **내용 dedupe** (V4 회귀 수리 2026-08-30) — qr-center 가설은 같은 (후보, 축)
+   * 포즈 H 를 모든 (family, k) 행이 공유하므로, 한 잡음 포즈의 CRC 우연 통과가
+   * 행 수만큼 같은 재라벨 후보를 찍어 낸다 (hex k6/k8/k10/k12 각각 → 동일한
+   * recast-tri-* 3장씩). 검증이 보는 것은 (owner family, k, centerQr, turn, H) 가
+   * 전부라 이 복제들은 결과가 동일하다 — 첫 장만 남기고 FORMAT_RECAST_MAX 예산을
+   * 소비하지 않게 한다. hex 표에 k 가 늘어도 잡음 포즈당 예산 소비가 상수가 되고,
+   * V-CMQ 의 진짜 승자(턴A recast)가 12번째 슬롯 밖으로 밀리지 않는다.
+   */
+  const seenContent = new Set();
   const appendOwnerCandidates = (target, source, proposal, owner) => {
     for (const centerQr of [false, true]) {
       const candidate = {
@@ -5187,6 +5197,13 @@ function recastHypothesesByFormat(hypotheses, validated) {
         + (centerQr ? '-qr' : '');
       if (seen.has(id)) continue;
       seen.add(id);
+      const contentKey = owner.family + '|' + owner.dimension + '|' + centerQr
+        + '|' + (source.turn === true ? 'turn' : 'plain')
+        + '|' + (candidate.H
+          ? Array.from(candidate.H, (value) => Number(value).toPrecision(8)).join(',')
+          : id);
+      if (seenContent.has(contentKey)) continue;
+      seenContent.add(contentKey);
       candidate.hypothesisId = id;
       candidate.source = `${source.source}+format-recast`;
       // 크기 증거는 옛 패밀리 기준이라 그대로 쓰면 안 된다. 없으면 rK=1 로 떨어진다.
