@@ -171,10 +171,12 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 구 값은 normalizeFinderQrState 가 기본 코너로 강하시킨다.
   previousOuterQrPosition: field(DEFAULT_OUTER_QR_POSITION, INTERNAL,
     ['TL', 'TR', 'BL', 'BR', 'none']),
-  // Type C 와이어는 평 C/C*D 두 행만 있어 중앙 QR·centralV0·centralN7 변형을
-  // 싣지 못한다. ultra 진입 당시 그 중앙 변형이 선택돼 있으면 UI가 호환 불스아이로
-  // 잠시 옮기고, 정권을 나갈 때 아래 스냅샷으로 복원한다. 사용자가 C 안에서 다른
-  // 합법 파인더를 명시 선택하면 active를 내리므로 옛 선택을 덮어쓰지 않는다.
+  // Type C 중앙 슬롯 개통 (2026-08-30, PM/027 §5.3·§5.4) — 중앙 TL(centralN7)은
+  // 평 C 행 그대로, 중앙 QR 은 CQ 행(formatIndex 4)으로 실린다. 여전히 못 싣는
+  // 것은 centralV0(중앙 Y0) 하나 — 그 변형이 선택된 채 ultra 에 들어오면 UI가
+  // 호환 불스아이로 잠시 옮기고, 정권을 나갈 때 아래 스냅샷으로 복원한다.
+  // 사용자가 C 안에서 다른 합법 파인더를 명시 선택하면 active를 내리므로 옛
+  // 선택을 덮어쓰지 않는다.
   typeCFinderFallbackActive: field(false, INTERNAL, [false, true]),
   typeCPreviousFinderPatternId: field(GENERATOR_DEFAULT_FINDER_PATTERN_ID, INTERNAL,
     FINDER_CARD_PATTERN_IDS),

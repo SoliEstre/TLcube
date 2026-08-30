@@ -100,6 +100,7 @@ import {
 } from './contracts.js';
 import {
   findAAnchorHypotheses,
+  findCAnchorHypotheses,
   findKAnchorHypotheses,
   findOAnchorHypotheses,
   paintedVertexAnchorsK,
@@ -4054,6 +4055,42 @@ function assembleGeometryHypotheses(
             seeded.length,
           );
           hypotheses.push(...seeded);
+          /*
+           * Type C (k 14/16/18/20) × 중앙 TL — 비컨-어파인 포즈의 스케일 오차 ε 는
+           * 반경 k 에서 ε·k 셀로 증폭된다 (star 의 «꼭짓점 3k» 전례와 같은 축 —
+           * findKAnchorHypotheses 헤더). C 사다리는 k ≥ 14 라 실루엣 seed 의 2%대
+           * 오차만으로 본문 RS 가 전멸하므로 (C0×TL 실측 2026-08-30: cellSize
+           * 11.684 vs 12.0), 세트 B 앵커 3점의 실효 배율 탐색으로 H 를 정합한
+           * 후보를 **추가**한다. 기존 가설(seeded)은 한 비트도 안 바뀐다 —
+           * RS/CRC 가 고른다. ks 는 C 표에서 유도한다 (손 목록 금지).
+           */
+          if (family === 'hex' && finder.centralN7) {
+            const cAnchor = measureHypothesisAssemblyStep(
+              profile,
+              assemblyCall,
+              'beaconCAnchorMs',
+              () => findCAnchorHypotheses(
+                luma, finder, VERSIONS_C.map((spec) => spec.k), options.anchor || {},
+              ),
+            );
+            addHypothesisAssemblyCounter(assemblyCall, 'beaconCAnchorCalls');
+            if (cAnchor.ok) {
+              const refined = cAnchor.hypotheses.map((raw) => ({
+                ...raw,
+                finder,
+                centralN7: finder.centralN7,
+                source: 'central-n7-finder',
+                luma,
+                hypothesisId: raw.hypothesisId + '-central-n7-anchor',
+              }));
+              addHypothesisAssemblyCounter(
+                assemblyCall,
+                'beaconCAnchorOutputs',
+                refined.length,
+              );
+              hypotheses.push(...refined);
+            }
+          }
           // 턴A(내부 타입 V) 쌍둥이 — 중앙 QR 경로(§qr-center)와 **같은 관용구**다.
           // 비컨은 중앙 고정이라 180° 배치 회전에도 포즈 H 가 같고, 표본 자리 사상
           // (turn)만 다르다. 이 쌍이 없으면 ▽ 프레임에서 비컨이 잡혀도 V 인덱스

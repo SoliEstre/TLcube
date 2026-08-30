@@ -30,7 +30,9 @@ import { FINDER_CELL_ORDER } from '../finder-patterns.js';
 import { CORNER_UNIT_OFFSETS, hexCorners, regionCells } from '../hexgrid.js';
 import { VERSIONS } from '../capacity.js';
 import { VERSIONS_A } from '../capacityA.js';
+import { VERSIONS_C } from '../capacityC.js';
 import { VERSIONS_K } from '../capacityK.js';
+import { notchCellsC } from '../notchC.js';
 import { regionCellsK } from '../layoutK.js';
 import { regionCellsA } from '../placementA.js';
 import { decodeSingle } from '../formatinfo.js';
@@ -474,6 +476,28 @@ const UNIT_STAR_OUTER_SUPPORT = (() => {
   return table;
 })();
 
+/**
+ * Type C 노치 실루엣의 단위 지지 반지름 — regionCells(k) − notchCellsC(k) (노치 v2).
+ * k 목록은 손으로 적지 않고 VERSIONS_C 에서, 노치 좌표는 notchC 정본에서 온다 —
+ * UNIT_OUTER_SUPPORT 와 같은 구축 방식이고 실루엣만 다르다. 노치가 3시 코너를
+ * 파내므로 최소 지지 축이 그 코너 축이 되고, 값은 같은 k 의 평 hex 보다 약간 작다 —
+ * 프레임 전경 실측(min-support)과 같은 metric 이라 배율 역산이 정합한다.
+ */
+const UNIT_C_OUTER_SUPPORT = (() => {
+  const table = new Map();
+  const layout = { size: 1, originX: 0, originY: 0 };
+  for (const spec of VERSIONS_C) {
+    const notch = new Set(notchCellsC(spec.k).map((cell) => `${cell.q},${cell.r}`));
+    const points = regionCells(spec.k)
+      .filter((cell) => !notch.has(`${cell.q},${cell.r}`))
+      .flatMap((cell) => hexCorners(cell.q, cell.r, layout));
+    const supports = CORNER_UNIT_OFFSETS.map((axis) => Math.max(...points.map(
+      (point) => point.x * axis.x + point.y * axis.y)));
+    table.set(spec.k, Math.min(...supports));
+  }
+  return table;
+})();
+
 /** Type A/V 삼각 실루엣의 단위 지지 반지름. 180° turn은 같은 지지값을 갖는다. */
 const UNIT_TRI_OUTER_SUPPORT = (() => {
   const table = new Map();
@@ -542,6 +566,9 @@ export function centralN7CenterPriorSeeds(luma, verifiedCoreHits = []) {
   const shrink = centralBeaconGeometry().shrink;
   const tables = [
     ['hex', UNIT_OUTER_SUPPORT],
+    // Type C — payload family 는 hex(비컨=표면 포맷 사본, PM/027 §5.3 안 ①)라 seed
+    // 도 hex 로 라벨한다. k(14/16/18/20)가 legacy hex(6..12)와 겹치지 않아 병기 안전.
+    ['hex', UNIT_C_OUTER_SUPPORT],
     ['tri', UNIT_TRI_OUTER_SUPPORT],
     ['star', UNIT_STAR_OUTER_SUPPORT],
   ];
