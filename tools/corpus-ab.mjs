@@ -164,7 +164,9 @@ async function main() {
     console.error('  워크트리라면 test/output/photos 에 정션을 붙여라 (덤프는 메인 트리에만 있다).');
     process.exit(3);
   }
-  const shardCount = Math.min(shardsRaw, dumps.length);
+  // 하한 1 — 덤프 0건(--expect 0 명시)이어도 순차 빈 루프로 내려가 구판처럼
+  // 빈 출력을 낸다 (워커 0개면 완료 신호가 없어 매달린다).
+  const shardCount = Math.max(1, Math.min(shardsRaw, dumps.length));
   console.log(`덤프 ${dumps.length}건 · frontend = ${frontendPath}`);
   console.log(`샤드 ${shardCount} (논리 CPU ${cpuCount}${shardsFlag === null ? ' · 기본 CPU−2' : ''})`);
 
