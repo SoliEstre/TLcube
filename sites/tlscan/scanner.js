@@ -54,6 +54,8 @@ import {
   cropWindow,
   DEFAULT_USER_ZOOM,
   dotsOutOfBounds,
+  EDGE_UNIT_OFFSETS,
+  GUIDE_OUTER_FRACTION,
   guideDotPositions,
   readTrackCapability,
   readTrackZoom,
@@ -62,6 +64,13 @@ import {
   zoomRangeFor,
   zoomTelemetry,
 } from '/src/scanner-zoom.js';
+import {
+  DEFAULT_SCAN_GUIDE_TYPE,
+  SCAN_GUIDE_TYPE,
+  scanGuideCopyKeys,
+  typeCGuideDotPositions,
+  wireScanGuideType,
+} from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import {
   normalizeCentralFinderId,
@@ -124,7 +133,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-08-30.02';
+export const SCANNER_BUILD = '2026-08-30.03';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -166,6 +175,9 @@ const zoomOutButton = document.getElementById('zoom-out');
 const zoomValue = document.getElementById('zoom-value');
 const zoomErrorBox = document.getElementById('zoom-error');
 const dotLayer = document.getElementById('scan-dot-layer');
+const scanGuideTypeRoot = document.getElementById('scan-guide-type');
+const scanGuideMessage = document.getElementById('scan-guide-message');
+const scanGuideDetail = document.getElementById('scan-guide-detail');
 const scannerPanels = document.getElementById('scanner-panels');
 const steadyMeter = document.getElementById('steady-meter');
 const steadyMeterFill = document.getElementById('steady-meter-fill');
@@ -178,6 +190,7 @@ if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTit
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
     !closeResultSecondaryButton || !zoomControls || !zoomSlider || !zoomInButton ||
     !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer || !scannerPanels ||
+    !scanGuideTypeRoot || !scanGuideMessage || !scanGuideDetail ||
     !steadyMeter || !steadyMeterFill) {
   throw new Error('TLcube scanner markup is incomplete.');
 }
@@ -186,6 +199,7 @@ const frameCanvas = document.createElement('canvas');
 const frameContext = frameCanvas.getContext('2d', { willReadFrequently: true });
 
 let cameraStream = null;
+let scanGuideType = DEFAULT_SCAN_GUIDE_TYPE;
 let animationFrameId = 0;
 let scanSession = 0;
 let isDecoding = false;
@@ -525,7 +539,7 @@ function assertDotLayerStacking() {
 }
 
 /**
- * 3링 18점 조준 가이드 — r3 정사각 뷰 좌표계에 직접 그린다.
+ * K 3링 18점 / C 5점 조준 가이드 — r3 정사각 뷰 좌표계에 직접 그린다.
  *
  * 레이어가 정사각 스테이지(≡ 분석 정사각의 화면 표현) 안에 inset:0 으로 있으므로
  * S = 스테이지 rect 한 변이 곧 분석 정사각 투영이다. 화면 투영 계산(구
@@ -533,8 +547,8 @@ function assertDotLayerStacking() {
  * 구조적으로 동일해 좌표 변환 자체가 없다 (scanner-zoom.js previewSourceWindow 증명).
  *
  * 줌은 다시 그릴 필요가 없다: 트랙 zoom 은 소스가 바뀌고, 크롭 폴백의 CSS scale 은
- * cover 와 함께 정확히 분석 크롭을 보여준다(위 증명). 다시 그리는 트리거는 기하가
- * 실제로 바뀌는 사건뿐(메타데이터·프레임 크기 변화·뷰포트 리사이즈·회전·첫 grab 성공).
+ * cover 와 함께 정확히 분석 크롭을 보여준다(위 증명). 다시 그리는 트리거는 가이드
+ * 유형 선택 또는 기하 변화(메타데이터·프레임 크기·뷰포트·회전·첫 grab 성공)뿐이다.
  */
 function renderGuideDots() {
   if (!cameraStream) {
@@ -550,8 +564,18 @@ function renderGuideDots() {
     return;
   }
   guideRetryCount = 0;
-  const dots = guideDotPositions(side, side / 2, side / 2);
-  if (!dots) {
+  const dots = scanGuideType === SCAN_GUIDE_TYPE.C
+    ? {
+        typeC: typeCGuideDotPositions({
+          screenSide: side,
+          centerX: side / 2,
+          centerY: side / 2,
+          edgeUnitOffsets: EDGE_UNIT_OFFSETS,
+          outerFraction: GUIDE_OUTER_FRACTION,
+        }),
+      }
+    : guideDotPositions(side, side / 2, side / 2);
+  if (!dots || (scanGuideType === SCAN_GUIDE_TYPE.C && !dots.typeC)) {
     dotLayer.replaceChildren();
     return;
   }
@@ -569,9 +593,14 @@ function renderGuideDots() {
       fragment.append(circle);
     }
   };
-  ring(dots.outer, 'dot-outer', outerR);
-  ring(dots.middle, 'dot-middle', outerR * 0.85);
-  ring(dots.inner, 'dot-inner', outerR * 0.72);
+  if (scanGuideType === SCAN_GUIDE_TYPE.C) {
+    ring(dots.typeC, 'dot-type-c', outerR);
+  } else {
+    // K가 기본값이다. 기존 3링 18점과 반지름·스타일·순서를 그대로 보존한다.
+    ring(dots.outer, 'dot-outer', outerR);
+    ring(dots.middle, 'dot-middle', outerR * 0.85);
+    ring(dots.inner, 'dot-inner', outerR * 0.72);
+  }
   dotLayer.replaceChildren(fragment);
 
   // 자가진단 (작업 4): r3 불변식 — 점은 뷰 밖으로 나갈 수 없다(최대 반경 27% < 50%).
@@ -816,6 +845,14 @@ function reportLabFrame(imageData, result, ms, stage, extra) {
   }
 }
 
+function refreshScanGuideCopy() {
+  const keys = scanGuideCopyKeys(scanGuideType);
+  scanGuideMessage.setAttribute('data-i18n', keys.message);
+  scanGuideDetail.setAttribute('data-i18n', keys.detail);
+  scanGuideMessage.textContent = t(keys.message);
+  scanGuideDetail.textContent = t(keys.detail);
+}
+
 /*
  * 언어. 문구가 바뀌면 **이미 떠 있는 화면도 다시 그려야** 한다 — 게이트 문구와 결과
  * 패널은 JS 가 채우므로 `data-i18n` 재적용만으로는 안 돌아온다. onChange 에서 현재
@@ -832,6 +869,7 @@ const i18n = createI18n(SCANNER_STRINGS, {
     // 렌즈 선택지도 JS 가 채운다 — 권한 전에는 기기 이름이 없어 «카메라 1» 같은
     // 대체 이름을 우리가 붙이므로, 언어가 바뀌면 다시 그려야 한다.
     refreshCameraChoices();
+    refreshScanGuideCopy();
   },
 });
 const t = (key) => i18n.t(key);
@@ -2635,6 +2673,15 @@ if (buildTag) buildTag.textContent = SCANNER_BUILD;
 document.documentElement.setAttribute('lang', i18n.lang);
 i18n.apply();
 wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
+wireScanGuideType(scanGuideTypeRoot, {
+  initialType: scanGuideType,
+  onChange(nextType) {
+    scanGuideType = nextType;
+    refreshScanGuideCopy();
+    renderGuideDots();
+  },
+});
+refreshScanGuideCopy();
 
 /*
  * 사용 이벤트 비콘. 페이로드 **내용은 절대 담지 않는다** — 종류(url/text/wifi/card)와
@@ -2807,7 +2854,7 @@ resultPanel.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeResult();
 });
 
-// 3링 가이드는 기하가 실제로 바뀔 때만 다시 그린다 — 비디오 메타데이터 도착,
+// K/C 가이드는 기하가 실제로 바뀌거나 사용자가 유형을 고를 때 다시 그린다 — 비디오 메타데이터 도착,
 // 프레임 크기 변화(HTMLVideoElement 'resize' — 회전 시 vW/vH 스왑), 뷰포트 리사이즈,
 // 그리고 첫 grab 성공(startFrameLoop, 작업 4). 줌 변화는 정사각 뷰 크기와 무관해
 // 트리거가 아니다. 정사각 뷰 한 변은 뷰포트에만 의존하므로 window resize 로 충분하다.
