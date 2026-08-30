@@ -1206,7 +1206,12 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
       y: (reducedOutline.bounds.minY + reducedOutline.bounds.maxY) / 2,
     });
   }
-  const reducedOutlineCanSeed = reducedOutline
+  // disableOutlineSeeds 는 이 경로의 척도 시드에도 닿아야 한다 — 시드가 있으면
+  // scaleSeeds() 가 기하 사다리를 만들지 않으므로(대체·선점), 시드 정권의
+  // «그럴듯한 성공» 을 소생시키는 유일한 길이 frontend 무시드 재시도다.
+  // centerSeeds 는 그대로 둔다: 분산 중심에 더해지는 합집합이라 선점이 없다.
+  const reducedOutlineCanSeed = options.disableOutlineSeeds !== true
+    && reducedOutline
     && !reducedOutline.touchesBorder
     && reducedOutline.borderDisagreement <= reducedOutline.threshold;
   const radiusSeeds = reducedOutlineCanSeed
@@ -1225,7 +1230,10 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
     overrides,
     'cellSizeSeeds',
   );
+  // caller 고정 시드는 outline 시드가 아니다 — 재시도 대상도, 시드 정권 표식도 아니다.
+  let usedOutlineSeeds = cellSizeSeeds !== undefined && !callerFixedScaleSearch;
   if (!detected.ok && cellSizeSeeds !== undefined && !callerFixedScaleSearch) {
+    usedOutlineSeeds = false;
     detected = detectCellFinders(reduced.luma, lineup, {
       centerSeeds,
       ...overrides,
@@ -1239,6 +1247,8 @@ function discoverCellFinders(luma, fullOutline, options, cfg) {
     finders,
     source: reduced.factor === 1 ? 'cell-mask-detected' : 'cell-mask-detected-downsampled',
     downsampleFactor: reduced.factor,
+    // 무시드 재시도 판단용 — 이 finder 들이 outline 척도 시드 위에서 성공했는가.
+    usedOutlineSeeds,
     cellFinderDiagnostics: detected.diagnostics,
   }) : fail(FRONTEND_FAILURE.NO_FINDER, { stage: 'cell-finder-lift' });
 }
@@ -1523,6 +1533,11 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     patternFinders.push(...centralCubeDetected.finders);
   }
   if (cellDetected && cellDetected.ok) patternFinders.push(...cellDetected.finders);
+  // 셀마스크 finder 도 outline 척도 시드 위에서 성공할 수 있다 — 그 사실이
+  // frontend 무시드 재시도 조건(outlineSeedsUsed)까지 닿아야 시드 정권의
+  // «그럴듯한 성공 → 기하 전멸» 프레임이 소생한다 (bullseye ⑥ V2CM 전례와 동형).
+  const cellOutlineSeedsUsed = Boolean(cellDetected && cellDetected.ok
+    && cellDetected.usedOutlineSeeds === true);
   if (!detected.ok) {
     if (patternFinders.length > 0) {
       return ok({
@@ -1530,6 +1545,7 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
         source: centralCubeDetected && centralCubeDetected.ok
           ? 'central-cube-detected'
           : 'cell-mask-detected',
+        usedOutlineSeeds: cellOutlineSeedsUsed,
         centralCubeFinderMerged: Boolean(centralCubeDetected && centralCubeDetected.ok),
         cellFinderMerged: Boolean(cellDetected && cellDetected.ok),
       });
@@ -1606,7 +1622,9 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       : reduced.factor === 1 ? 'detected-multiscale' : 'detected-multiscale-downsampled',
     downsampleFactor: reduced.factor,
     // 무시드 재시도 판단용 (enumerateGeometryHypotheses 실패 detail → frontend).
-    usedOutlineSeeds,
+    // 불스아이가 무시드로 이겼어도 병합된 셀마스크 finder 가 시드 위 성공이면
+    // 시드 정권이다 — 재시도가 그 finder 를 사다리로 다시 세울 수 있어야 한다.
+    usedOutlineSeeds: usedOutlineSeeds || cellOutlineSeedsUsed,
     cellFinderMerged: Boolean(cellDetected && cellDetected.ok),
     centralCubeFinderMerged: Boolean(centralCubeDetected && centralCubeDetected.ok),
   });
