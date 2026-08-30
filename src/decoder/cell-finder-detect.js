@@ -894,6 +894,10 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
       evaluatedCoarse,
       evaluatedRefined: refined.length,
       candidateCount: candidates.length,
+      // 게이트 실효 자(cell-finder-seed-gate)가 재는 값 — 호출자가 outline 척도
+      // 시드를 공급했는가. 탐색 «규모» 비교는 hex 표가 자라며 판별력을 잃었다
+      // (시드 21점이 사다리와 동수가 되는 지점이 실재 — 2026-08-30 실측 3765=3765).
+      suppliedScaleSeeds: Array.isArray(options.cellSizeSeeds) ? options.cellSizeSeeds.length : 0,
     });
   }
   if (candidates.length === 0) {

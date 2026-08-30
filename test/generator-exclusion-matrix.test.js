@@ -96,8 +96,16 @@ test('QR 위치 카드가 상위이고 중앙 파인더 카드가 하위라는 D
     INDEX.indexOf('function renderFinderUi()'),
     INDEX.indexOf('/** 공용 QR 위치 카드 갱신'),
   );
-  assert.match(qrUi, /card\.dataset\.pos === 'inner'[\s\S]*classList\.remove\('disabled'\)/,
-    '안쪽 QR 카드는 모든 타입·모드에서 명시적으로 잠금을 걷어야 한다');
+  // 재조준 (2026-08-30, 타입 C): 구 자는 «항상 remove('disabled')» 철자를 쟀다.
+  // 타입 C 는 와이어에 Q 변형이 없어 안쪽 QR 잠금이 **정당한 유일 예외**다 —
+  // 재는 성질은 «잠금 토글의 축이 정확히 typeCActive 하나» 다. 다른 조건이
+  // 끼어들면(파인더·모드 등) 2026-08-29 위계 확정(«QR 위치가 상위»)의 회귀다.
+  assert.match(qrUi,
+    /card\.dataset\.pos === 'inner'[\s\S]{0,200}classList\.toggle\('disabled', typeCActive\)/,
+    '안쪽 QR 카드 잠금의 축은 typeCActive 하나여야 한다 (그 밖의 정권에선 항상 열림)');
+  assert.doesNotMatch(qrUi.slice(qrUi.indexOf("dataset.pos === 'inner'")),
+    /toggle\('disabled', (?!typeCActive\))/,
+    '안쪽 QR 카드에 typeCActive 밖의 잠금 조건이 끼었다 — 위계 확정의 회귀');
   for (const type of GENERATOR_TYPES) {
     for (const mode of GENERATOR_MODES) {
       assert.equal(GENERATOR_STATE_SCHEMA.qrPosition.exposure, 'both', `${type}/${mode}`);

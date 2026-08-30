@@ -116,13 +116,16 @@ for (const frame of FRAMES) {
     assert.equal(gated.result.text, frame.text, '사다리 경로가 다른 답을 냈다');
     assert.equal(gated.result.family, frame.family);
 
-    // ②(b) 게이트의 행동적 증거 — 시드 삼중점이 아니라 기하 사다리를 훑었다.
-    // 값이 아니라 «엄격 증가» 성질만 잰다: 시드 정권은 시드별 3점(±로그 0.198)만
-    // 보고, 사다리는 min→max 등비 전체를 본다. 게이트가 시드 유도에 안 닿으면
-    // (2026-08-30 수리 전 상태) 두 규모가 같아져 여기서 잡힌다.
+    // ②(b) 게이트의 행동적 증거 — **재조준 (2026-08-30 저녁)**: 구 자는 탐색
+    // «규모 엄격 증가» 를 쟀는데, 타입 C 로 hex 표가 자라며(시드 4→7종 × 3점)
+    // 시드 정권의 탐색이 사다리와 동수가 되는 지점이 생겨 판별력을 잃었다
+    // (실측 3765 = 3765 — 옵션은 실효인데 자가 빨갛다). 재는 성질은 처음부터
+    // «게이트가 척도 시드 **공급**을 끊는다» 였으므로 그 값을 직접 잰다.
     assert.ok(gated.calls.length >= 1, '게이트 경로에서 셀파인더가 호출되지 않았다');
-    assert.ok(gated.calls[0].evaluatedGeometry > seeded.calls[0].evaluatedGeometry,
-      'disableOutlineSeeds 가 cell-finder 척도 시드에 닿지 않는다 — 게이트 탐색 규모('
-      + gated.calls[0].evaluatedGeometry + ') ≤ 시드 정권(' + seeded.calls[0].evaluatedGeometry + ')');
+    assert.ok(seeded.calls[0].suppliedScaleSeeds > 0,
+      '시드 정권인데 outline 척도 시드가 공급되지 않았다 — 이 프레임이 시드 정권 표본이라는 전제 붕괴');
+    assert.equal(gated.calls[0].suppliedScaleSeeds, 0,
+      'disableOutlineSeeds 가 cell-finder 척도 시드 공급을 끊지 못했다 ('
+      + gated.calls[0].suppliedScaleSeeds + '개 공급됨)');
   });
 }
