@@ -268,6 +268,11 @@ ${jsonLd(lang, t)}
         <div class="meta">${t.typeOMeta}</div>
       </div>
       <div class="card">
+        <h3>${t.typeCName}</h3>
+        <p class="dim">${t.typeCDesc}</p>
+        <div class="meta">${t.typeCMeta}</div>
+      </div>
+      <div class="card">
         <img src="${p}assets/type-A.png" alt="${t.typeAName}">
         <h3>${t.typeAName}</h3>
         <p class="dim">${t.typeADesc}</p>
@@ -372,7 +377,7 @@ ${jsonLd(lang, t)}
  * ⚠ `LASTMOD` 는 **상수**다. 오늘 날짜를 쓰면 빌드를 돌릴 때마다 파일이 바뀌어
  *   «동기화 가드» 테스트가 매번 깨진다. 내용이 실제로 바뀐 날에 손으로 올린다.
  */
-const LASTMOD = '2026-08-27';
+const LASTMOD = '2026-08-30';
 
 function sitemap() {
   const alts = languages

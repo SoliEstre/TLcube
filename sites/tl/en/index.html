@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLcube — a 3D barcode that carries data in luminance rank</title>
+<title>TLcube — a 3D barcode (actually 2.5D) that carries data in luminance rank</title>
 <meta name="description" content="An open 3D barcode that splits a hexagonal cell into three rhombic faces and carries data in the relative luminance order of those faces. Spec and reference implementation are published under Apache-2.0.">
 <link rel="canonical" href="https://tl.estre.so/en/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
@@ -126,7 +126,7 @@
   <section id="hero">
     <h1>QR reads well.<br>It has just never been <strong>pretty</strong></h1>
     <p class="lead">Posters, packaging, business cards — QR is everywhere, and dropping a black-and-white square onto a design you spent weeks on has always stung. But QR looks the way it does for a reason: it is what you build when a <strong>1994 camera and 1994 silicon</strong> have to read it at all.</p>
-    <p class="lead">Those constraints have largely lifted. Phone cameras and compute have room to spare now. So instead of chasing recognition alone, we spent that headroom on <strong>being worth looking at</strong>. This is not a replacement for QR — it is <strong>a seat next to it</strong>. The result is a <strong>3D barcode (actually 2.5D)</strong> — printed flat, but read as solid.</p>
+    <p class="lead">Those constraints have largely lifted. Phone cameras and compute have room to spare now. So instead of chasing recognition alone, we spent that headroom on <strong>being worth looking at</strong>. This is not a replacement for QR — it is <strong>a seat next to it</strong>. The result is a <strong>3D barcode</strong> — printed flat, but read as solid.</p>
     <div class="cta">
       <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Make a code</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
@@ -146,8 +146,8 @@
   </section>
 
   <section id="types">
-    <h2>Four types</h2>
-    <p class="dim">Pick by where it will sit. All four share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
+    <h2>Five types</h2>
+    <p class="dim">Pick by where it will sit. All five share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="../assets/type-Y.png" alt="Type Y — single cube">
@@ -160,6 +160,11 @@
         <h3>Type O — hex field</h3>
         <p class="dim">The base form. Rhombic cells tile outward from a central finder.</p>
         <div class="meta">k = 6 / 8 / 10 / 12 · net payload 18 / 39 / 65 / 97 B</div>
+      </div>
+      <div class="card">
+        <h3>Type C — notched ultra-capacity</h3>
+        <p class="dim">The 3 o’clock notch fixes both orientation and type in the silhouette. C0–C3 are for close-range scanning; bring C1 and above closer or zoom in.</p>
+        <div class="meta">k = 14 / 16 / 18 / 20 · net payload 130 / 172 / 220 / 255 B</div>
       </div>
       <div class="card">
         <img src="../assets/type-A.png" alt="Type A — triangular silhouette">
@@ -180,7 +185,7 @@
         <div class="meta">k = 6 / 8 / 10 / 12 · net payload 43 / 86 / 138 B</div>
       </div>
     </div>
-    <p class="dim" style="margin-top:16px">Net payload is at ECC-M. All four types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.</p>
+    <p class="dim" style="margin-top:16px">Net payload is at ECC-M. All five types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.</p>
   </section>
 
   <section id="what">

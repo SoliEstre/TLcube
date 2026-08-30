@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLcube — um código de barras 3D que leva os dados na ordem de luminância</title>
+<title>TLcube — um código de barras 3D (na verdade 2.5D) que leva os dados na ordem de luminância</title>
 <meta name="description" content="Um código de barras 3D aberto que divide uma célula hexagonal em três faces em losango e leva os dados na ordem de luminância relativa dessas faces. A especificação e a implementação de referência estão publicadas sob Apache-2.0.">
 <link rel="canonical" href="https://tl.estre.so/pt/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
@@ -126,7 +126,7 @@
   <section id="hero">
     <h1>O QR lê-se bem.<br>Só nunca foi <strong>bonito</strong></h1>
     <p class="lead">Cartazes, embalagens, cartões de visita — o QR está em todo o lado, e pousar um quadrado a preto e branco sobre um design trabalhado durante semanas sempre custou. Mas o QR tem este aspeto por uma razão: é o que se constrói quando <strong>uma câmara e um processador de 1994</strong> têm de conseguir lê-lo.</p>
-    <p class="lead">Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>. O resultado é um <strong>código de barras 3D (na verdade 2.5D)</strong> — impresso em plano, mas percebido em relevo.</p>
+    <p class="lead">Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>. O resultado é um <strong>código de barras 3D</strong> — impresso em plano, mas percebido em relevo.</p>
     <div class="cta">
       <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Criar um código</a>
       <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
@@ -146,8 +146,8 @@
   </section>
 
   <section id="types">
-    <h2>Quatro tipos</h2>
-    <p class="dim">Escolha consoante o sítio onde vai ficar. Os três partilham o mesmo contrato de dados e diferem apenas na silhueta. Todos os códigos abaixo contêm <code>https://tl.estre.so</code>.</p>
+    <h2>Cinco tipos</h2>
+    <p class="dim">Escolha consoante o sítio onde vai ficar. Os cinco partilham o mesmo contrato de dados e diferem apenas na silhueta. Todos os códigos abaixo contêm <code>https://tl.estre.so</code>.</p>
     <div class="grid" style="margin-top:18px">
       <div class="card">
         <img src="../assets/type-Y.png" alt="Type Y — cubo único">
@@ -160,6 +160,11 @@
         <h3>Type O — campo hexagonal</h3>
         <p class="dim">A forma base. As células em losango estendem-se à volta de um padrão localizador central.</p>
         <div class="meta">k = 6 / 8 / 10 / 12 · carga útil líquida 18 / 39 / 65 / 97 B</div>
+      </div>
+      <div class="card">
+        <h3>Type C — capacidade ultra com entalhe</h3>
+        <p class="dim">O entalhe das 3 horas fixa a orientação e o tipo na própria silhueta. A gama C0–C3 destina-se a leitura de perto; a partir de C1, aproxime o código ou amplie a imagem.</p>
+        <div class="meta">k = 14 / 16 / 18 / 20 · carga útil líquida 130 / 172 / 220 / 255 B</div>
       </div>
       <div class="card">
         <img src="../assets/type-A.png" alt="Type A — silhueta triangular">
@@ -180,7 +185,7 @@
         <div class="meta">k = 6 / 8 / 10 / 12 · carga útil líquida 43 / 86 / 138 B</div>
       </div>
     </div>
-    <p class="dim" style="margin-top:16px">A carga útil líquida é para ECC-M. Os quatro tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.</p>
+    <p class="dim" style="margin-top:16px">A carga útil líquida é para ECC-M. Os cinco tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.</p>
   </section>
 
   <section id="what">
