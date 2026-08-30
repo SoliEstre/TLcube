@@ -231,6 +231,27 @@ export function decodeFrontend(raster, options = {}) {
       message: error instanceof Error ? error.message : String(error),
     });
   }
+  /*
+   * **무시드 재시도 (2026-08-30).** 시드 정권(outline 반지름 힌트)의 finder 가
+   * «그럴듯하게» 성공하면 무시드 사다리 재시도가 영영 안 돌고, 그 어긋난 finder
+   * 위에서 기하 가설이 전멸할 수 있다 — 실측: 턴A V2CM 에서 hex k12 시드(셀수
+   * 469)가 tri k10 참값(496)의 +2.8% 자리에 앉아 이기고, 코너 마커 CO2 톤 6셀이
+   * 전멸했다 (V4 편입 회귀 ⑥). 그런 프레임에 한해 시드를 끄고 딱 한 번 다시 돈다.
+   * ⚠ 시드·사다리 «합집합» 방식은 기각됐다 — 성공하던 한계 프레임(H 톤 k6)의
+   * 승자 finder 를 바꿔 톤 경로를 죽였다 (점수 서열이 톤 정밀도를 보증하지
+   * 않는다). 이 재시도는 «성공 프레임 비트 동일 · 실패 프레임 소생 전용» 이고,
+   * 비용은 기하 전멸 프레임의 탐색 1회 추가뿐이다.
+   */
+  if (!enumerated.ok
+    && enumerated.reason === FRONTEND_FAILURE.NO_ANCHORS
+    && enumerated.detail && enumerated.detail.outlineSeedsUsed === true
+    && bootstrapOptions.disableOutlineSeeds !== true
+    && !priorPoses) {
+    return decodeFrontend(raster, {
+      ...options,
+      bootstrap: { ...bootstrapOptions, disableOutlineSeeds: true },
+    });
+  }
   if (!enumerated.ok) {
     return fail(
       enumerated.reason || FRONTEND_FAILURE.NO_GRID_HYPOTHESIS,

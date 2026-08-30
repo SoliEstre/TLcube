@@ -1290,7 +1290,13 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
     { pass: 'full' },
     () => outlineEvidence(luma, cfg),
   );
-  const outlineCanSeed = fullOutline
+  // disableOutlineSeeds (2026-08-30) — 무시드 재시도 전용 게이트. 시드 정권이
+  // «그럴듯하게» 성공한 finder 로 기하 단계가 전멸하는 프레임(frontend 재시도
+  // 조건 참조)에서만 켜진다. 시드 합집합 방식은 기각됐다 — 성공하던 한계
+  // 프레임(H 톤 k6)의 승자 finder 를 바꿔 톤 경로를 죽였다 (점수 서열이 톤
+  // 정밀도를 보증하지 않는다).
+  const outlineCanSeed = options.disableOutlineSeeds !== true
+    && fullOutline
     && !fullOutline.touchesBorder
     && fullOutline.borderDisagreement <= fullOutline.threshold;
   const finderOverrides = options.finder && typeof options.finder === 'object'
@@ -1599,6 +1605,8 @@ function discoverFinders(luma, familyEvidence, options, cfg) {
       ? reduced.factor === 1 ? 'detected' : 'detected-downsampled'
       : reduced.factor === 1 ? 'detected-multiscale' : 'detected-multiscale-downsampled',
     downsampleFactor: reduced.factor,
+    // 무시드 재시도 판단용 (enumerateGeometryHypotheses 실패 detail → frontend).
+    usedOutlineSeeds,
     cellFinderMerged: Boolean(cellDetected && cellDetected.ok),
     centralCubeFinderMerged: Boolean(centralCubeDetected && centralCubeDetected.ok),
   });
@@ -2464,13 +2472,13 @@ function sharedClassificationKs() {
   return shared;
 }
 
-function classificationDimensions(finders, outline) {
-  if (!outline || finders.length === 0) return sharedClassificationKs();
+function classificationKsFromDomain(domain, finders, outline) {
+  if (!outline || finders.length === 0) return domain;
   const cellSizes = finders.map((finder) => finder.cellSize)
     .filter((value) => Number.isFinite(value) && value > 0);
   const cellSize = median(cellSizes);
-  if (cellSize === null) return sharedClassificationKs();
-  return sharedClassificationKs().map((k) => ({
+  if (cellSize === null) return domain;
+  return domain.map((k) => ({
     k,
     relativeAreaError: Math.abs(
       cellCount(k) * HEX_AREA_COEFF * cellSize * cellSize - outline.area
@@ -2478,6 +2486,26 @@ function classificationDimensions(finders, outline) {
   })).sort((left, right) => left.relativeAreaError - right.relativeAreaError || left.k - right.k)
     .slice(0, 1)
     .map((entry) => entry.k);
+}
+
+function classificationDimensions(finders, outline) {
+  return classificationKsFromDomain(sharedClassificationKs(), finders, outline);
+}
+
+/** 2패스(단계적 확장) 전용 — 전체 hex 표 면적 pick. classifyFamilies 참조. */
+function extendedClassificationDimensions(finders, outline) {
+  return classificationKsFromDomain(uniqueDimensions('hex'), finders, outline);
+}
+
+/** 분류 결과 → 평가 family 집합 (star 사슬 전개 포함). classifyFamilies 의 ok
+ *  분기와 같은 의미론 — 2패스 합집합이 같은 전개를 쓰기 위해 함수로 든다. */
+function familiesOfClassification(classified) {
+  if (classified.ok !== true) return [];
+  if (classified.family !== 'star') return [classified.family];
+  const withoutStar = (classified.diagnostics
+    && Array.isArray(classified.diagnostics.familiesWithoutStar))
+    ? classified.diagnostics.familiesWithoutStar : [];
+  return ['star', ...(withoutStar.length > 0 ? withoutStar : ['hex'])];
 }
 
 /**
@@ -2575,18 +2603,63 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
     });
   }
 
-  const classified = classifyFamily(
+  const primaryKs = classificationDimensions(finders, outline);
+  const starKs = starClassificationDimensions(finders, outline);
+  let classified = classifyFamily(
     luma,
     {
       finder: finders,
       yJunction: familyEvidence && familyEvidence.yJunction,
     },
     {
-      ks: classificationDimensions(finders, outline),
-      starKs: starClassificationDimensions(finders, outline),
+      ks: primaryKs,
+      starKs,
       ...(options.family || {}),
     },
   );
+  /*
+   * **단계적 확장 (V4, 2026-08-30).** 1패스는 공유 k 축(sharedClassificationKs —
+   * k ≤ 10 프레임은 V4 이전과 입력이 비트 동일)이다. 공유축 밖 k(현재 hex k=12)의
+   * 프레임에서 1패스는 hex 를 놓친다 — 실측(G4 V4CM): hex@10 은 «외곽 링 밖 =
+   * 배경» 검사가 깨져 음성(k12 프레임의 링-10 밖엔 셀이 더 있다), star 는 자기
+   * 면적 모델(k8)로 양성이라 분류가 star 로 «성공» 하는데, 그 사슬의 «star 없었
+   * 다면 낸 답» 도 ks=[10] 에선 tri 라 hex 가 평가 집합에서 통째로 빠진다.
+   * 그래서 **확장 pick(전체 hex 표)이 1패스 pick 과 다를 때만** 같은 판별 규율
+   * (hex·tri 동일 k 채점)로 2패스를 돌리고, 그 family 집합(사슬 전개 포함)을
+   * 1패스 집합에 **합집합**한다 — 빼는 건 없다. 1패스가 실패(무후보·AMBIGUOUS)면
+   * 2패스 결과로 대체한다(소생 전용). pick 이 같은 프레임(= k ≤ 10 정상 프레임
+   * 전부)은 2패스가 아예 없어 비트 동일이다. ⚠ 가족별 k 를 갈라 주는 방식은
+   * 금지 — 등면적 오양성이 서로 열려 hex 왕복이 전멸한 실측이 있다.
+   */
+  let extendedFamilies = [];
+  {
+    const extendedKs = extendedClassificationDimensions(finders, outline);
+    if (extendedKs.length > 0 && extendedKs.join(',') !== primaryKs.join(',')) {
+      const retried = classifyFamily(
+        luma,
+        {
+          finder: finders,
+          yJunction: familyEvidence && familyEvidence.yJunction,
+        },
+        {
+          ks: extendedKs,
+          starKs,
+          ...(options.family || {}),
+        },
+      );
+      if (retried.ok === true) {
+        if (classified.ok !== true) classified = retried;
+        else extendedFamilies = familiesOfClassification(retried);
+      }
+    }
+  }
+  const withExtended = (families) => {
+    const merged = [...families];
+    for (const family of extendedFamilies) {
+      if (!merged.includes(family)) merged.push(family);
+    }
+    return merged;
+  };
   if (classified.ok) {
     /*
      * star(K) 분류는 **라벨이지 확정이 아니다** — K ⊃ A ⊃ O 포함 사슬 때문에
@@ -2619,13 +2692,20 @@ function classifyFamilies(luma, finders, familyEvidence, options, outline) {
         ? classified.diagnostics.familiesWithoutStar : [];
       const chain = withoutStar.length > 0 ? withoutStar : ['hex'];
       return ok({
-        families: ['star', ...chain],
+        families: withExtended(['star', ...chain]),
         classification: classified,
         starChainExpansion: true,
         starChainFallbackFamilies: chain,
+        ...(extendedFamilies.length > 0
+          ? { extendedClassificationFamilies: extendedFamilies } : {}),
       });
     }
-    return ok({ families: [classified.family], classification: classified });
+    return ok({
+      families: withExtended([classified.family]),
+      classification: classified,
+      ...(extendedFamilies.length > 0
+        ? { extendedClassificationFamilies: extendedFamilies } : {}),
+    });
   }
   if (classified.reason === FRONTEND_FAILURE.FAMILY_AMBIGUOUS) return classified;
 
@@ -3943,6 +4023,11 @@ function assembleGeometryHypotheses(
       fail(reason, {
         stage: clippingSideCount >= 2 ? 'bootstrap-finder' : 'bootstrap-geometry',
         clippingSideCount,
+        // 무시드 재시도 조건 (frontend) — 이 실패가 «시드 정권의 finder» 위에서
+        // 났는지. 시드가 그럴듯하게 성공하면 무시드 사다리가 영영 안 돌므로,
+        // 기하 전멸일 때 한 번은 사다리 finder 로 다시 재야 한다 (⑥ V2CM 실측).
+        outlineSeedsUsed: Boolean(finderResult && finderResult.ok
+          && finderResult.usedOutlineSeeds === true),
         anchorDiagnostics,
         cubeFailure: cubeResult.ok ? undefined : cubeResult,
         outline: outline && {
