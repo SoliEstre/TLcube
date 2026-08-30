@@ -342,11 +342,13 @@ describe('⑤ 개방 — daehan/sagoae × V4 = V4D (와이어는 V 인덱스 공
     assert.equal(encode('g4 ok', { version: 4, cornerMarker: true }).cornerMarker, true);
   });
 
-  test('배타 유지 — daehan × cornerMarker 는 여전히 원자 거절 (배치 검증 미실시)', () => {
-    assert.throws(
-      () => encode('d x cm', { version: 4, daehanFinder: true, cornerMarker: true }),
-      /중앙 슬롯 점유자는 하나다/,
-    );
+  test('개방 — G4 × daehan 은 CMD 회계로 선다 (세부 자: markerO-daehan)', () => {
+    const encoded = encode('d x cm', { version: 4, daehanFinder: true, cornerMarker: true });
+    assert.equal(encoded.cornerMarker, true);
+    assert.equal(encoded.daehanFinder, true);
+    assert.equal(encoded.capacity.name, 'V4CMD');
+    assert.equal(encoded.capacity.usedSymbols, 114);
+    assert.equal(formatIndexOf(encoded), 0, 'G4의 V*CM formatIndex를 공유해야 한다');
   });
 
   test('개방은 hex 축 한정 — A/K daehan 표에는 k=12 행이 없다 (게이트의 정본이 이 표다)', () => {

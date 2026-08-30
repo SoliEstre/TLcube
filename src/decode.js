@@ -67,6 +67,11 @@ import {
   dataCellsInScanOrderOMarker,
 } from './markerO.js';
 import {
+  VERSIONS_OCM_DAEHAN,
+  capacityForOMarkerDaehan,
+  dataCellsInScanOrderOMarkerDaehan,
+} from './markerOdaehan.js';
+import {
   VERSIONS_ACM,
   capacityForAMarker,
   dataCellsInScanOrderAMarker,
@@ -357,6 +362,30 @@ function resolveProfile(format) {
       capacity,
       rsBlockConfig: capacity.rsBlockConfig,
       scan: dataCellsInScanOrderO(spec.k, typeCReservedCells(spec.k, additional)),
+      coordinates: (cell) => [cell.q, cell.r],
+    });
+  }
+
+  if (type === 'O' && format.daehanFinder === true && format.cornerMarker === true) {
+    // G(CM) × daehan — 와이어는 V*CM(G) index를 그대로 쓴다. daehan 검출 결과가
+    // 추가되면 같은 G index의 평 CM 대신 CMD 회계·scan order를 쓴다. k는 파인더
+    // 템플릿 id가 아니라 프레임 차원이라, daehan 단독 경로와 같이 우선 k로 찾는다.
+    const wantK = format.k === undefined ? undefined : format.k;
+    const spec = wantK === undefined
+      ? VERSIONS_OCM_DAEHAN.find((entry) => entry.version === format.version)
+      : VERSIONS_OCM_DAEHAN.find((entry) => entry.k === wantK);
+    if (!spec) {
+      throw new RangeError(
+        'G×daehan 버전을 모른다: k=' + format.k + ' version=' + format.version
+        + ' (허용 k ' + VERSIONS_OCM_DAEHAN.map((v) => v.k).join(', ') + ')',
+      );
+    }
+    assertOptionalDimension(format.k, 'k', spec.k);
+    return finishProfile({
+      type,
+      eccLevel,
+      capacity: capacityForOMarkerDaehan(spec, eccLevel),
+      scan: dataCellsInScanOrderOMarkerDaehan(spec.k),
       coordinates: (cell) => [cell.q, cell.r],
     });
   }

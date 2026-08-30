@@ -122,6 +122,22 @@ export const NSYM_TABLE_DAEHAN = Object.freeze({
   V4D: Object.freeze({ symbols: 117, L: 16, M: 35, H: 55 }),
 });
 
+/**
+ * G(CM) × daehan 합성 전용 표. 와이어는 V*CM formatIndex를 공유하지만, CM 9셀과
+ * daehan 예약 40/60셀을 함께 제외하면 S=39/69/114가 된다. 따라서 V*CM/V*D 어느
+ * 행도 재사용할 수 없다.
+ *
+ * V2CMD S=39  -> L round(0.12S)=5, M round(0.25S)=10을 홀수화해 11, H round(0.40S)=16
+ * V3CMD S=69  -> L 8, M 17, H 28
+ * V4CMD S=114 -> L 14, M 절차값 29는 데이터 심볼 85가 청킹과 어긋난다. 같은 거리의
+ *                 최근접 홀수 27/31 중 보호가 두꺼운 위쪽 31, H 46
+ */
+export const NSYM_TABLE_OCM_DAEHAN = Object.freeze({
+  V2CMD: Object.freeze({ symbols: 39, L: 5, M: 11, H: 16 }),
+  V3CMD: Object.freeze({ symbols: 69, L: 8, M: 17, H: 28 }),
+  V4CMD: Object.freeze({ symbols: 114, L: 14, M: 31, H: 46 }),
+});
+
 function freezeRsBlockLevel(blockCount, dataSymbolsPerBlock, paritySymbolsPerBlock) {
   return Object.freeze({
     blockCount,

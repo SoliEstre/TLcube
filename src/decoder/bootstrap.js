@@ -75,6 +75,7 @@ import { TURN_A_FORMAT_INDEX, turnASpecFromFormatIndex } from '../turnA.js';
 import { K_MARKER_FORMAT_INDEX, kSpecFromFormatIndex } from '../formatK.js';
 import { C_FORMAT_INDEX, cSpecFromFormatIndex } from '../formatC.js';
 import { dataCellsInScanOrderOMarker } from '../markerO.js';
+import { dataCellsInScanOrderOMarkerDaehan } from '../markerOdaehan.js';
 import { dataCellsInScanOrderAMarker } from '../markerA.js';
 import { VERSIONS_KCM, dataCellsInScanOrderKMarker } from '../markerK.js';
 import { DIGIT_COUNT_V2 } from '../formatinfo.js';
@@ -4927,7 +4928,9 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         // star(Type K)도 같은 규약이다 — K-CM 데이터 셀은 평 K 데이터 셀의 부분집합이라
         // 표본화한 grid 를 재사용해 CM scan order 로 digit 만 다시 뽑는다.
         const scan = hypothesis.family === 'hex'
-          ? dataCellsInScanOrderOMarker(dimension)
+          ? layout.daehanFinder === true
+            ? dataCellsInScanOrderOMarkerDaehan(dimension)
+            : dataCellsInScanOrderOMarker(dimension)
           : hypothesis.family === 'star'
             ? dataCellsInScanOrderKMarker(dimension)
             : dataCellsInScanOrderAMarker(dimension);
