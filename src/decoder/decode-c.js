@@ -23,12 +23,11 @@ import { dataCellsInScanOrder } from '../layout.js';
 import { DEFAULT_MASK_INDEX, maskSub } from '../mask.js';
 import { typeCReservedCells } from '../notchC.js';
 import {
-  assertTypeCSingleBlock,
   capacityForC,
   VERSIONS_C,
   VERSIONS_C_DAEHAN,
 } from '../capacityC.js';
-import { rsDecode } from '../rs211.js';
+import { rsDecodeBlocks } from '../rs211.js';
 
 const ECC_LEVEL_BY_VALUE = Object.freeze({ 0: 'L', 1: 'M', 2: 'H' });
 const ILLEGAL_SYMBOL_PLACEHOLDER = 0;
@@ -97,7 +96,9 @@ function resolveProfile(format) {
 
   const eccLevel = normalizeEccLevel(format.eccLevel);
   const capacity = capacityForC(capacitySpec, eccLevel);
-  assertTypeCSingleBlock(capacity);
+  // 단일 블록 가드는 다중 RS 블록 규약(레인 typec-rs)으로 소멸했다 — C1/C2 의
+  // 블록 분할·재조립은 백엔드(decode.js)가 표 조회로 대칭 처리한다. 이 자리에
+  // 가드를 남기면 개방된 계열을 프런트가 도로 막는다 (리허설 교차 실측).
   const reserved = typeCReservedCells(
     spec.k,
     spec.daehanFinder ? daehanReservedCells(spec.k) : undefined,
@@ -272,9 +273,13 @@ export function decodeCellsC(cellDigits, format, options = {}) {
 
   let rsResult;
   try {
+    // 다중 RS 블록 (레인 typec-rs) — C1/C2 는 블록 분할·인터리빙이라 단일
+    // rsDecode 로 풀면 정당한 프레임이 본문에서 죽는다 (리허설 교차 실측:
+    // 포맷 후보 1 통과 후 BODY_RS_FAILED). 블록 수 1(C0)은 rsDecodeBlocks 가
+    // 기존 rsDecode 반환 계약을 문자 그대로 재사용해 무회귀다.
     rsResult = erasureIndices.length > 0
-      ? rsDecode(received, profile.capacity.nsym, { erasures: erasureIndices })
-      : rsDecode(received, profile.capacity.nsym);
+      ? rsDecodeBlocks(received, profile.capacity.rsBlockConfig, { erasures: erasureIndices })
+      : rsDecodeBlocks(received, profile.capacity.rsBlockConfig);
   } catch (cause) {
     return fail('rs', cause);
   }

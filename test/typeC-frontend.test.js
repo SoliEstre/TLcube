@@ -10,7 +10,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { encode } from '../src/encode.js';
-import { TYPE_C_RS_BLOCK_UNDEFINED_REASON } from '../src/capacityC.js';
 import { decodeCellsC } from '../src/decoder/decode-c.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import { daehanPatternId, daehanReservedCells } from '../src/finder-daehan.js';
@@ -176,7 +175,11 @@ test('C0/M은 0·120·240도 회전에서도 노치 방향 힌트 뒤에 원문�
   }
 });
 
-test('C1/C2와 C1D/C2D는 프런트엔드 후단에서 다중 블록 미정의 사유를 보존한다', () => {
+// **의도적 갱신 (2026-08-30, 리허설 머지)** — 구 자는 «C1/C2 는 다중 블록 미정의
+// 사유를 보존한다» 였다. 레인 typec-rs 가 그 규약을 신설해 사유 자체가 소멸했고
+// (TYPE_C_RS_BLOCK_UNDEFINED_REASON 수출 제거), C1/C2 의 **양성 왕복**은
+// test/typeC-cross.test.js 가 잠근다. 빈 셀 입력의 방어는 아래 성질로 남긴다.
+test('C1/C2 도 이제 열려 있다 — 빈 입력은 사유 있는 실패지 로드 사망이 아니다', () => {
   for (const [k, formatIndex] of [
     [17, 0], [20, 0], [17, 1], [20, 1],
   ]) {
@@ -186,7 +189,9 @@ test('C1/C2와 C1D/C2D는 프런트엔드 후단에서 다중 블록 미정의 �
       formatIndex,
       eccLevel: 'M',
     });
-    assert.equal(result.ok, false, 'k=' + k + ', format=' + formatIndex);
-    assert.ok(result.reason.includes(TYPE_C_RS_BLOCK_UNDEFINED_REASON), result.reason);
+    assert.equal(result.ok, false, 'k=' + k + ', format=' + formatIndex
+      + ' — 빈 셀 입력이 성공으로 둔갑하면 안 된다');
+    assert.equal(typeof result.reason, 'string');
+    assert.ok(result.reason.length > 0, '실패 사유가 비어 있다');
   }
 });
