@@ -157,7 +157,16 @@ test('셀 편집기 ref./format 는 선택 파인더 painted 셀의 autoplace �
   assert.doesNotMatch(INDEX, /buildRoleSets\(/);
   assert.doesNotMatch(INDEX, /from '\.\/src\/placementY\.js'/);
   // 옵션·n 변경 시 즉시 재계산 — 카드 클릭은 syncTypeUi 경유, 버전 select 는 직접 호출.
-  assert.match(INDEX, /syncResTierUi\(\);\s*\n\s*syncTypeYCellEditorUi\(\);/);
+  // 재조준 (2026-08-30): 구 정규식은 syncResTierUi 와의 **인접**을 박은 철자 자라,
+  // 버전 select 핸들러에 다른 동기(renderFinderUi — V4 잠금 재동기)가 끼자 깨졌다.
+  // 재는 성질은 «버전 select 변경 핸들러 안에 셀 편집기 재유도가 있다» 다 —
+  // 핸들러 블록(버전 대입 ~ schedule)을 잡아 그 안에서 확인한다.
+  const versionChangeHandler = INDEX.match(
+    /select\.addEventListener\('change', \(\) => \{[\s\S]*?schedule\(\);/,
+  );
+  assert.ok(versionChangeHandler, '버전 select change 핸들러를 찾지 못했다');
+  assert.match(versionChangeHandler[0], /syncTypeYCellEditorUi\(\);/,
+    '버전 변경 경로에서 셀 편집기 재유도가 빠졌다');
   // 배치 불가 시 명시적 안내 (조용한 빈 표시 금지).
   assert.match(INDEX, /if \(ctx\.error\) \{/);
   assert.match(INDEX, /tf\('g549', \{ message: ctx\.error\.message \}\)/);
