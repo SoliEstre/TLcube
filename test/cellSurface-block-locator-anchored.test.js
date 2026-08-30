@@ -208,9 +208,15 @@ test('v1r2 S-커브 0.6 — R 게인 0.62 에서 복호된다 (2026-08-16 약점
 test('⚠ 알려진 약점 — v1r2 감마 0.7/0.6 도 실패한다 (실패 단계는 커브마다 다르다)', {
   timeout: 300_000,
 }, () => {
-  // 감마 0.7 은 포맷 후보 전멸, 감마 0.6 은 그보다 앞 단계(앵커)에서 죽는다.
-  // 실패 단계가 다르다는 사실 자체가 «한 가지 병목» 이 아니라는 진단 자료다.
-  const expected = { 0.7: 'frontend:no-format-candidate', 0.6: 'frontend:no-anchors' };
+  // 감마 0.7 은 포맷 후보 전멸, 감마 0.6 도 이제 같은 단계다.
+  // **단계 이동 (2026-08-30)**: 0.6 은 종전 앵커(no-anchors)에서 죽었는데, 무시드
+  // 재시도(frontend §무시드 재시도 — 시드 정권의 기하 전멸 프레임을 사다리 finder
+  // 로 한 번 더 돈다)가 기하 단계를 넘겨줘 이제 포맷에서 죽는다. 약점 자체(복호
+  // 실패)는 그대로다 — 핀은 «죽는다» 가 본체고 단계는 진단 기록이다.
+  const expected = {
+    0.7: 'frontend:no-format-candidate',
+    0.6: 'frontend:no-format-candidate',
+  };
   for (const gamma of [0.7, 0.6]) {
     const result = decodeLab(
       distortImage(V1R2_FRAME, { gamma, fill: FILL }), RESTORE_DROPPED,
