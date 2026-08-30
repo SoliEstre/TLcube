@@ -348,7 +348,7 @@ export function daehanKForPatternId(id) {
   // ④b 완전판 포화 — Type C처럼 k>10인 프레임은 새 템플릿/새 그림이 아니라 k10
   // 79셀 정본을 중심 고정으로 그대로 쓴다. legacy DAEHAN_RADII는 늘리지 않는다.
   // 12 = V4D (평 O 대용량 개방 2026-08-30) · 14/17/20 = Type C.
-  for (const k of [12, 14, 17, 20]) {
+  for (const k of [12, 14, 16, 18, 20]) {
     if (daehanFinderCellsFor(k).length !== 79 || daehanReservedCells(k).length !== 60) {
       throw new Error('daehan k=' + k + ': k10 완전판 79/예약60 포화가 성립하지 않는다');
     }
