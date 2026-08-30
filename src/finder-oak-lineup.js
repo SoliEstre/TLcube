@@ -10,7 +10,8 @@
  *  · `dead`    — 구 Nitrogen. margin 0.0351 = 게이트 동률 사망(정본 `_status`,
  *                2026-08-15) + 운영자 폐기 확정 (2026-08-17, 재논의 금지 —
  *                «r2 가 같은 19셀 발자국의 재도색 결과물이므로 재도색 선택지는 소진»).
- *  · `dropped` — Xylene. 정본 `_default_policy` «탈락 확정: Xylene(v2r2 하회)».
+ *  · `dropped` — Nitrogen r2·Aspirin·Benzene·Xylene. 생성기 카드에서 내리되,
+ *                패턴 표현과 디코더 수용은 발행 프레임 호환을 위해 보존한다.
  *
  * daehan 편입 (2026-08-17, 운영자 확정 + 통합자 실측을 이 레인이 재현):
  *  · margin 0.6452 (게이트 0.035 의 18.4×) — 재현: claude-oak2-daehan.mjs §B
@@ -64,11 +65,12 @@ export const OAK_LINEUP = Object.freeze([
     note: '정본 _status dead (margin = 게이트 동률) · 운영자 폐기 확정 2026-08-17 — 차단이지 삭제가 아니다',
   }),
   entry({
-    name: 'Nitrogen r2', id: 'O-1r2-central3tone', type: 'O', status: 'active',
+    name: 'Nitrogen r2', id: 'O-1r2-central3tone', type: 'O', status: 'dropped',
     finderMode: 'full-surface', finderStarter: 'central-cube-3tone',
     counts: { total: 61, detector: 19 },
     margin: 0.2982, mirrorAgreement: 0.8246,
-    note: '구 Nitrogen 승계판 (같은 19셀 발자국 재도색) — 거울 공변 7후보 중 최저',
+    note: '운영자 드랍 2026-08-30 — O4 실기에서 Footprint 만 성공, 실익 없음 판정. '
+      + '구 Nitrogen 승계판(같은 19셀 발자국 재도색)이므로 생성은 닫고 판독은 유지',
   }),
   entry({
     name: 'Aspirin', id: 'O-2-central3tone', type: 'O', status: 'dropped',
@@ -135,7 +137,7 @@ export const OAK_LINEUP = Object.freeze([
   }),
 ]);
 
-/** 살아 있는 후보만 — dead(구 Nitrogen)·dropped(Xylene)는 여기 안 나온다. */
+/** 살아 있는 후보만 — dead(구 Nitrogen)·dropped 후보는 여기 안 나온다. */
 export function liveOakCandidates() {
   return OAK_LINEUP.filter((e) => e.status === 'active');
 }
