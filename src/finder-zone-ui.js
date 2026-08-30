@@ -13,11 +13,14 @@
  * 분류 정본과의 일치는 test/finder-zone-ui.test.js 가 Node 쪽에서 전수 대조한다
  * («유도하거나 규칙을 적어라» — 유도가 막힌 자리는 검증되는 사본으로).
  *
- * 구역 규약 (운영자 확정 3분류, 2026-08-21 + W2 설계 ①):
+ * 구역 규약 (운영자 확정 3분류, 2026-08-21 + W2 설계 ① + T4 심부 분리 2026-08-31):
  *   · 중앙 = 분류 1 — 카드 DOM 은 기존 FINDER_CARD_GROUPS 경로 승계.
  *     taegeuk 단독 카드는 만들지 않는다 (통합자 C2b 게이트 보류 — 브리프 §2 탈출구).
- *   · 내곽 = 분류 2 — 없음(기본) · O-CM(type O) · sagoae(O·A, 기존 daehan
- *     예약 회계/formatIndex 공유 + C2c 합성 검증).
+ *   · 내곽 = 분류 2 의 **꼭짓점 기준** 갈래 — 없음(기본) · O-CM(type O).
+ *   · **심부(deep) = 분류 2 의 «중심부 기준» 갈래** (T4, PM/028 §2) — 없음(기본) ·
+ *     sagoae(O·A, 링 6/8/10 예약 — 기존 daehan 회계/formatIndex 공유 + C2c 검증).
+ *     구 내곽 슬롯에 얹혀 있어 H(코너 tetrad)와 배타이던 것을 자기 축으로 분리했다 —
+ *     내곽×심부 **동시 선택 개방은 아직 아니다** (T3 C×H · cx-g4daehan 뒤 조합 몫).
  *   · 외곽 = 분류 3 seat — 없음(기본) · A-CM(type A) · V-CM(type A × turnA) ·
  *     K-CM(type K — **와이어는 실재, 생성기 타입 K 가 아직 없어 상태값은 아니다**).
  *   분류 3 의 파인더 행(H · H2O · H2CO3)은 seat 카드가 아니다 — 그 자리를 채우는
@@ -145,18 +148,22 @@ export function zoneCards() {
   const inner = [
     NONE_CARD,
     ...markerSeat('inner'),
-    // sagoae — 분류 2 의 내곽 파인더. 기존 daehan 예약 회계/formatIndex 를 공유하고
-    // 장면이 선택된 중앙 cell-mask 바깥에 고리만 합성한다. 디코더는 C2c 검증으로
-    // 같은 포즈에서 예약 회계를 연다. 별도 renderKind·formatIndex 는 만들지 않는다.
-    Object.freeze({
-      id: SAGOAE_ID, name: SAGOAE_ID, types: Object.freeze(['O', 'A']),
-      ready: true, absent: false,
-    }),
     // H 는 **카드가 아니다** (운영자 2026-08-24 아침 검수 3 — A-CM=H2O 문법):
     // o-cm 선택이 곧 «자리 + H 심볼 톤» 이다 (buildConfig 가 markerTones 를 함께
     // 싣는다). 분류 2 의 심볼 파인더(H)는 자리(o-cm)의 기본 심볼로 흡수된다 —
     // SEAT_DEFAULT_FINDER 가 그 매핑의 정본이고, zone 대조 테스트는 분류 2 에서
     // 자리 기본 심볼을 **제외한** 집합과 1:1 을 잰다 (외곽의 H2O 와 같은 규칙).
+  ];
+  const deep = [
+    NONE_CARD,
+    // sagoae — 분류 2 «중심부 기준» 갈래의 심부 자리 (T4 재편 2026-08-31, PM/028 §2 —
+    // 구 내곽 행에서 이사). 기존 daehan 예약 회계/formatIndex 를 공유하고 장면이
+    // 선택된 중앙(독립 cell-mask + 정식 3종) 바깥에 고리만 합성한다. 디코더는 C2c
+    // 검증으로 같은 포즈에서 예약 회계를 연다. 별도 renderKind·formatIndex 없음.
+    Object.freeze({
+      id: SAGOAE_ID, name: SAGOAE_ID, types: Object.freeze(['O', 'A']),
+      ready: true, absent: false,
+    }),
   ];
   const outer = [
     NONE_CARD,
@@ -177,6 +184,7 @@ export function zoneCards() {
         })),
     ),
     inner: Object.freeze(inner),
+    deep: Object.freeze(deep),
     outer: Object.freeze(outer),
   });
 }
@@ -188,6 +196,10 @@ const ZONES = zoneCards();
  *  표시 게이트이지 값의 무효가 아니다. */
 export const INNER_SEAT_OPTIONS = Object.freeze(
   ZONES.inner.filter((card) => !card.absent && card.stateValue !== false)
+    .map((card) => card.id),
+);
+export const DEEP_SEAT_OPTIONS = Object.freeze(
+  ZONES.deep.filter((card) => !card.absent && card.stateValue !== false)
     .map((card) => card.id),
 );
 export const OUTER_SEAT_OPTIONS = Object.freeze(
@@ -259,7 +271,8 @@ export function cmqWireExists(family) {
 
 /* ── 자기검증 (모듈 로드 시 — 브라우저 안전 원천만으로) ─────────────────── */
 {
-  if (ZONES.inner[0].id !== SEAT_NONE || ZONES.outer[0].id !== SEAT_NONE) {
+  if (ZONES.inner[0].id !== SEAT_NONE || ZONES.deep[0].id !== SEAT_NONE
+    || ZONES.outer[0].id !== SEAT_NONE) {
     throw new Error('seat 구역의 첫 카드는 없음이어야 한다');
   }
   // C5 — 정식 normal 3장이 전부 실재하고, advancedOnly 여집합이 비어 있지 않다.
@@ -273,12 +286,16 @@ export function cmqWireExists(family) {
     throw new Error('advancedOnly 유도가 비었다 — formal 행이 전부 정식 normal 이 됐다면 '
       + 'OFFICIAL_NORMAL_CENTRAL_IDS 확정을 다시 봐야 한다');
   }
-  if (!INNER_SEAT_OPTIONS.includes('o-cm') || !INNER_SEAT_OPTIONS.includes(SAGOAE_ID)
+  // T4 (2026-08-31) — sagoae 는 내곽이 아니라 심부 허용값이다. 내곽에 남거나
+  // 심부에서 빠지면 자리 재편이 반쪽이다.
+  if (!INNER_SEAT_OPTIONS.includes('o-cm') || INNER_SEAT_OPTIONS.includes(SAGOAE_ID)
+    || !DEEP_SEAT_OPTIONS.includes(SAGOAE_ID)
     || !OUTER_SEAT_OPTIONS.includes('a-cm') || !OUTER_SEAT_OPTIONS.includes('v-cm')) {
     throw new Error('seat 허용값 유도가 깨졌다: inner=['
-      + INNER_SEAT_OPTIONS.join(',') + '] outer=[' + OUTER_SEAT_OPTIONS.join(',') + ']');
+      + INNER_SEAT_OPTIONS.join(',') + '] deep=[' + DEEP_SEAT_OPTIONS.join(',')
+      + '] outer=[' + OUTER_SEAT_OPTIONS.join(',') + ']');
   }
-  for (const card of [...ZONES.inner, ...ZONES.outer]) {
+  for (const card of [...ZONES.inner, ...ZONES.deep, ...ZONES.outer]) {
     if (!card.types || card.types.length === 0) {
       throw new Error('seat 카드 ' + card.id + ' 에 타입 부합 표가 없다');
     }
@@ -288,10 +305,13 @@ export function cmqWireExists(family) {
   // 로드 시점에 던진다.
   const schemaEq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
   if (!schemaEq([...GENERATOR_STATE_SCHEMA.innerSeat.options], [...INNER_SEAT_OPTIONS])
+    || !schemaEq([...GENERATOR_STATE_SCHEMA.deepSeat.options], [...DEEP_SEAT_OPTIONS])
     || !schemaEq([...GENERATOR_STATE_SCHEMA.outerSeat.options], [...OUTER_SEAT_OPTIONS])) {
     throw new Error('generator-state 의 seat options 사본이 zone 유도와 어긋났다: '
       + 'inner ' + GENERATOR_STATE_SCHEMA.innerSeat.options.join(',') + ' vs '
-      + INNER_SEAT_OPTIONS.join(',') + ' · outer '
+      + INNER_SEAT_OPTIONS.join(',') + ' · deep '
+      + GENERATOR_STATE_SCHEMA.deepSeat.options.join(',') + ' vs '
+      + DEEP_SEAT_OPTIONS.join(',') + ' · outer '
       + GENERATOR_STATE_SCHEMA.outerSeat.options.join(',') + ' vs '
       + OUTER_SEAT_OPTIONS.join(','));
   }

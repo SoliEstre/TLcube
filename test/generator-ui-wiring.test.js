@@ -517,13 +517,21 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
 // encodeOptsFor 순서 자(generator-corner-marker)와 같은 문법이다.
 
 test('§6.3 buildConfig·매퍼가 사괘를 두 타입 모두 싣는다 — «켰는데 안 먹는» 재발 방지', () => {
-  assert.match(INDEX, /sagoae: \(type === 'O' \|\| type === 'A'\) && generatorState\.innerSeat === 'sagoae'/,
-    'buildConfig 이 innerSeat=sagoae 를 인코더 옵션으로 파생하지 않는다');
-  // O·A 매퍼 각각에 사괘 디스패치가 실재한다 (강등 규칙 포함 — cfg.sagoae 분기).
+  // T4 (2026-08-31): 파생 축은 innerSeat → **deepSeat** (자리 재편, PM/028 §2).
+  assert.match(INDEX, /sagoae: \(type === 'O' \|\| type === 'A'\) && generatorState\.deepSeat === 'sagoae'/,
+    'buildConfig 이 deepSeat=sagoae 를 인코더 옵션으로 파생하지 않는다');
+  assert.ok(!/generatorState\.innerSeat === 'sagoae'/.test(INDEX),
+    '구 축(innerSeat=sagoae) 소비가 남았다 — 이관 뒤 두 축을 함께 읽으면 갈린다');
+  // O·A 매퍼 각각에 사괘 디스패치가 실재한다. ⚠ **의도적 갱신 (T2 2026-08-30)** —
+  // 구 철자 `&& !opts.centerQr` 는 정식 중앙 3종 개통(사괘×중앙 QR 와이어 공유)으로
+  // 걷혔다. O·A 는 무조건 싣고, centerQr 강등이 남는 곳은 C 분기(CDQ 행 부재)뿐이다.
   const oBranch = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
-  const matches = oBranch.match(/else if \(cfg\.sagoae === true && !opts\.centerQr\) \{/g) || [];
+  const matches = oBranch.match(/else if \(cfg\.sagoae === true\) \{/g) || [];
   assert.equal(matches.length, 2,
     '사괘 디스패치가 O·A 두 분기에 있어야 한다 (현재 ' + matches.length + ')');
+  const cMatches = oBranch.match(/if \(cfg\.sagoae === true && !opts\.centerQr\) opts\.sagoae = true;/g) || [];
+  assert.equal(cMatches.length, 1,
+    'C 분기의 CDQ 강등(와이어 행 부재)이 한 곳이어야 한다 (현재 ' + cMatches.length + ')');
 });
 
 test('§6.3 버전 잠금은 표 유도 술어 한 겹뿐이다 — 손 겹은 V4D 개방으로 걷었다', () => {
@@ -545,6 +553,30 @@ test('§6.3 버전 잠금은 표 유도 술어 한 겹뿐이다 — 손 겹은 V
   // 버전 변경이 파인더 카드 잠금을 재동기한다 (실기에서 안 걸리던 그 구멍).
   assert.match(INDEX, /버전은 daehan·사괘 잠금의 입력이다/,
     '버전 변경 경로가 renderFinderUi 재동기를 잃었다');
+});
+
+test('§6.4 심부(deep) 자리 구역 — DOM·배선·상태 키·라벨 8언어가 한 벌이다 (T4)', () => {
+  // 구역 DOM + 카드 행 실재.
+  assert.match(INDEX, /<div id="finderDeepZone" hidden>/,
+    '심부 구역 DOM 이 없다');
+  assert.match(INDEX, /<div class="card-row" id="deepSeatCards"><\/div>/,
+    '심부 카드 행이 없다');
+  // 클릭 사슬 — 컨테이너 위임 배선과 자동 정책 갈래가 함께 있어야 «클릭이 상태에
+  // 실리는» 사슬이 완성된다 (wireSeatCards 3구역 + deepSeatAuto 분기).
+  assert.match(INDEX, /wireSeatCards\(els\.deepSeatCards, 'deepSeat'\);/,
+    '심부 카드 배선이 없다 — 카드는 서는데 클릭이 상태에 안 실린다');
+  assert.match(INDEX, /else if \(seatKey === 'deepSeat'\) deepSeatAuto = isAutoCard;/,
+    '심부 자동 정책 분기가 없다');
+  assert.match(INDEX, /if \(deepSeatAuto\) generatorState\.deepSeat = auto\.deep;/,
+    '자동 기준표의 deep 칸이 상태로 안 흐른다');
+  assert.match(INDEX, /sync\(els\.deepSeatCards, generatorState\.deepSeat, deepSeatAuto\);/,
+    '심부 카드 sync 가 없다 — 선택이 화면에 안 비친다');
+  // 노출 대조 — data-state-keys 에 deepSeat (generator-state 노출 자와 한 벌).
+  assert.match(INDEX, /<div id="sharedControls" data-state-keys="[^"]*\bdeepSeat\b/,
+    'sharedControls 의 data-state-keys 에 deepSeat 가 없다');
+  // 섹션 라벨 8언어.
+  const labels = [...INDEX.matchAll(/"g1024": "([^"]*)"/g)].map((m) => m[1]);
+  assert.equal(labels.length, 8, 'g1024(심부 라벨)가 8언어에 다 있어야 한다 (현재 ' + labels.length + ')');
 });
 
 test('§6.3 사괘 중앙 파트너 잠금은 scene 계약을 유도한다 — 사본 조건 금지', () => {

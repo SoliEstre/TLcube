@@ -1438,7 +1438,7 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat outerSeat centralN7Emphasis bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
+    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
            도메인·자동 규칙은 전부 src/export-options.js 단일 정의를 소비한다 — UI 인라인
            재구현 금지 (교훈 .agent/_lessons/009: 손으로 적은 규칙은 테스트가 못 잠근다).
@@ -2064,6 +2064,23 @@
             </button>
           </div>
           <div class="card-row" id="innerSeatCards"></div>
+        </div>
+        <!-- 심부(deep) 자리 (T4 2026-08-31, PM/028 §2) — 내곽 카드 행에 얹혀 있던
+             사괘(링 6/8/10 예약)를 자기 축으로 분리했다. 내곽(코너 tetrad)과의
+             동시 선택은 아직 없다 — T3(C×H)·cx-g4daehan 결과 뒤의 조합 개방 몫.
+             «?» 는 내곽(g579)·외곽(g858) 문법 그대로 — 사괘 특성 고지 g855 를 단다. -->
+        <div id="finderDeepZone" hidden>
+          <div class="section-heading-row">
+            <label class="section-heading" data-i18n="g1024">내곽 심부 자리</label>
+            <button type="button" class="help-dot" data-help="g855" aria-expanded="false"
+                    aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+                <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+              </svg>
+            </button>
+          </div>
+          <div class="card-row" id="deepSeatCards"></div>
         </div>
         <div id="finderOuterZone" hidden>
           <!-- 내곽(g579)과 **대칭**이어야 한다 — 한쪽만 «?» 면 두 구역이 서로 다른
@@ -2753,7 +2770,7 @@ const GENERATOR_STRINGS = {
     "g1010": "최대 97 B",
     "g1011": "이 버전에는 daehan·사괘 회계 정의가 없어요 — 회계표에 있는 버전에서 쓸 수 있어요.",
     "g1012": "daehan·사괘 선택과 함께 쓸 수 없는 버전이에요 — 회계 정의가 없어요.",
-    "g1013": "사괘 단독은 후보 계열(독립 cell-mask) 중앙과만 합성돼요 — 정식 중앙(불스아이·TL·QR) 합성은 검증기 확장을 기다려요.",
+    "g1013": "사괘 단독은 이 중앙과는 아직 합성되지 않아요 — 독립 cell-mask 후보나 정식 중앙(불스아이·TL·QR)에서 쓸 수 있어요.",
     "g1014": "초 대용량",
     "g1015": "C0~C3 · 최대 255 B",
     "g1016": "C0 (k=14 · 130 B)",
@@ -2764,6 +2781,7 @@ const GENERATOR_STRINGS = {
     "g1021": "Type C에서는 중앙 Y0(비컨)를 아직 쓸 수 없어요 — C 실루엣에서 v0 비컨 검증이 없어요. 중앙 TL·중앙 QR은 사용 가능해요.",
     "g1022": "Type C는 근접 스캔 전용이며 C2·C3는 확대가 필요할 수 있어요. 호환을 위해 중앙 파인더를 불스아이로 잠시 바꿨어요.",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "내곽 심부 자리",
     "g924": "내용에 맞춰",
     "g925": "손상에 강함",
     "g926": "균형",
@@ -3223,7 +3241,7 @@ const GENERATOR_STRINGS = {
     "g1010": "Up to 97 B",
     "g1011": "daehan and sagoae are not defined for this version — available for versions in the accounting table.",
     "g1012": "Unavailable while daehan or sagoae is selected — this version has no accounting definition.",
-    "g1013": "Standalone sagoae composes only with candidate-series (independent cell-mask) centres — composition with the regular centres (bullseye · TL · QR) awaits a verifier extension.",
+    "g1013": "Standalone sagoae does not yet compose with this centre — available with candidate-series (independent cell-mask) centres and the regular centres (bullseye · TL · QR).",
     "g1014": "Ultra capacity",
     "g1015": "C0–C3 · up to 255 B",
     "g1016": "C0 (k=14 · 130 B)",
@@ -3234,6 +3252,7 @@ const GENERATOR_STRINGS = {
     "g1021": "Centre Y0 is not yet available for Type C — the v0 beacon is unverified on the C silhouette. Centre TL and Centre QR are available.",
     "g1022": "Type C is for close-range scanning and C2·C3 may require zoom. The centre finder was temporarily switched to the compatible bullseye.",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "Inner deep seat",
     "g924": "Fits content",
     "g925": "Damage tolerant",
     "g926": "Balanced",
@@ -3693,7 +3712,7 @@ const GENERATOR_STRINGS = {
     "g1010": "最大 97 B",
     "g1011": "このバージョンには daehan・四卦の定義がありません — 会計表にあるバージョンで使えます。",
     "g1012": "daehan・四卦の選択中はこのバージョンを使えません — 会計の定義がありません。",
-    "g1013": "四卦単独は候補系列（独立セルマスク）の中央とのみ合成できます — 正式中央（ブルズアイ・TL・QR）との合成は検証器の拡張待ちです。",
+    "g1013": "四卦単独はこの中央とはまだ合成できません — 候補系列（独立セルマスク）と正式中央（ブルズアイ・TL・QR）で使えます。",
     "g1014": "超大容量",
     "g1015": "C0〜C3・最大 255 B",
     "g1016": "C0（k=14・130 B）",
@@ -3704,6 +3723,7 @@ const GENERATOR_STRINGS = {
     "g1021": "Type C では中央Y0（ビーコン）はまだ使えません — C シルエットでの v0 ビーコン検証が未実施です。中央TL・中央QRは利用できます。",
     "g1022": "Type C は近距離スキャン専用で、C2·C3はズームが必要な場合があります。互換性のため中央ファインダーを一時的にブルズアイへ切り替えました。",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "内郭深部シート",
     "g924": "内容に合わせて",
     "g925": "損傷に強い",
     "g926": "バランス",
@@ -4162,7 +4182,7 @@ const GENERATOR_STRINGS = {
     "g1010": "Jusqu'à 97 B",
     "g1011": "daehan et sagoae ne sont pas définis pour cette version — disponibles pour les versions de la table de capacité.",
     "g1012": "Indisponible pendant la sélection de daehan ou sagoae — cette version n'a pas de définition.",
-    "g1013": "Le sagoae seul ne se compose qu'avec les centres de la série candidate (cell-mask indépendant) — la composition avec les centres officiels (bullseye · TL · QR) attend une extension du vérificateur.",
+    "g1013": "Le sagoae seul ne se compose pas encore avec ce centre — disponible avec les centres de la série candidate (cell-mask indépendant) et les centres officiels (bullseye · TL · QR).",
     "g1014": "Très grande capacité",
     "g1015": "C0–C3 · jusqu'à 255 B",
     "g1016": "C0 (k=14 · 130 B)",
@@ -4173,6 +4193,7 @@ const GENERATOR_STRINGS = {
     "g1021": "Le centre Y0 n'est pas encore disponible pour le Type C — la balise v0 n'est pas vérifiée sur la silhouette C. Les centres TL et QR sont disponibles.",
     "g1022": "Le Type C est réservé au scan rapproché et C2·C3 peut nécessiter un zoom. Le repère central a été temporairement remplacé par le bullseye compatible.",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "Siège intérieur profond",
     "g924": "Selon le contenu",
     "g925": "Tolérant aux dommages",
     "g926": "Équilibré",
@@ -4631,7 +4652,7 @@ const GENERATOR_STRINGS = {
     "g1010": "Fino a 97 B",
     "g1011": "daehan e sagoae non sono definiti per questa versione — disponibili per le versioni nella tabella di capacità.",
     "g1012": "Non disponibile con daehan o sagoae selezionati — questa versione non ha definizione.",
-    "g1013": "Il sagoae da solo si compone solo con i centri della serie candidata (cell-mask indipendente) — la composizione con i centri ufficiali (bullseye · TL · QR) attende un'estensione del verificatore.",
+    "g1013": "Il sagoae da solo non si compone ancora con questo centro — disponibile con i centri della serie candidata (cell-mask indipendente) e i centri ufficiali (bullseye · TL · QR).",
     "g1014": "Capacità ultra",
     "g1015": "C0–C3 · fino a 255 B",
     "g1016": "C0 (k=14 · 130 B)",
@@ -4642,6 +4663,7 @@ const GENERATOR_STRINGS = {
     "g1021": "Il Centro Y0 non è ancora disponibile per il Tipo C — il beacon v0 non è verificato sulla silhouette C. Centro TL e Centro QR sono disponibili.",
     "g1022": "Il Tipo C è riservato alla scansione ravvicinata e C2·C3 può richiedere lo zoom. Il finder centrale è stato temporaneamente sostituito dal bullseye compatibile.",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "Posto interno profondo",
     "g924": "In base al contenuto",
     "g925": "Tollera i danni",
     "g926": "Equilibrata",
@@ -5100,7 +5122,7 @@ const GENERATOR_STRINGS = {
     "g1010": "Bis zu 97 B",
     "g1011": "daehan und sagoae sind für diese Version nicht definiert — verfügbar für Versionen in der Kapazitätstabelle.",
     "g1012": "Nicht verfügbar, solange daehan oder sagoae gewählt ist — diese Version hat keine Definition.",
-    "g1013": "Sagoae allein lässt sich nur mit Zentren der Kandidatenreihe (unabhängige Cell-Mask) kombinieren — die Kombination mit den regulären Zentren (Bullseye · TL · QR) wartet auf eine Verifizierer-Erweiterung.",
+    "g1013": "Sagoae allein lässt sich mit diesem Zentrum noch nicht kombinieren — verfügbar mit Zentren der Kandidatenreihe (unabhängige Cell-Mask) und den regulären Zentren (Bullseye · TL · QR).",
     "g1014": "Ultrahohe Kapazität",
     "g1015": "C0–C3 · bis zu 255 B",
     "g1016": "C0 (k=14 · 130 B)",
@@ -5111,6 +5133,7 @@ const GENERATOR_STRINGS = {
     "g1021": "Zentrum Y0 ist für Typ C noch nicht verfügbar — das v0-Beacon ist auf der C-Silhouette nicht verifiziert. Zentrum TL und Zentrum QR sind verfügbar.",
     "g1022": "Typ C ist für Scans im Nahbereich gedacht und C2·C3 kann eine Vergrößerung erfordern. Der zentrale Finder wurde vorübergehend auf das kompatible Bullseye umgestellt.",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "Tiefer innerer Platz",
     "g924": "Passend zum Inhalt",
     "g925": "Schadenstolerant",
     "g926": "Ausgewogen",
@@ -5569,7 +5592,7 @@ const GENERATOR_STRINGS = {
     "g1010": "Hasta 97 B",
     "g1011": "daehan y sagoae no están definidos para esta versión — disponibles para las versiones de la tabla de capacidad.",
     "g1012": "No disponible mientras daehan o sagoae esté seleccionado — esta versión no tiene definición.",
-    "g1013": "El sagoae solo se compone únicamente con centros de la serie candidata (cell-mask independiente) — la composición con los centros oficiales (bullseye · TL · QR) espera una extensión del verificador.",
+    "g1013": "El sagoae solo aún no se compone con este centro — disponible con los centros de la serie candidata (cell-mask independiente) y los centros oficiales (bullseye · TL · QR).",
     "g1014": "Capacidad ultra",
     "g1015": "C0–C3 · hasta 255 B",
     "g1016": "C0 (k=14 · 130 B)",
@@ -5580,6 +5603,7 @@ const GENERATOR_STRINGS = {
     "g1021": "El Centro Y0 aún no está disponible para el Tipo C — el beacon v0 no está verificado en la silueta C. Centro TL y Centro QR están disponibles.",
     "g1022": "El Tipo C está pensado para escaneo a corta distancia y C2·C3 puede requerir zoom. El localizador central cambió temporalmente al bullseye compatible.",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "Asiento interior profundo",
     "g924": "Según el contenido",
     "g925": "Tolera daños",
     "g926": "Equilibrado",
@@ -6038,7 +6062,7 @@ const GENERATOR_STRINGS = {
     "g1010": "Até 97 B",
     "g1011": "daehan e sagoae não estão definidos para esta versão — disponíveis para as versões da tabela de capacidade.",
     "g1012": "Indisponível enquanto daehan ou sagoae estiver selecionado — esta versão não tem definição.",
-    "g1013": "O sagoae sozinho só se compõe com centros da série candidata (cell-mask independente) — a composição com os centros oficiais (bullseye · TL · QR) aguarda uma extensão do verificador.",
+    "g1013": "O sagoae sozinho ainda não se compõe com este centro — disponível com os centros da série candidata (cell-mask independente) e os centros oficiais (bullseye · TL · QR).",
     "g1014": "Capacidade ultra",
     "g1015": "C0–C3 · até 255 B",
     "g1016": "C0 (k=14 · 130 B)",
@@ -6049,6 +6073,7 @@ const GENERATOR_STRINGS = {
     "g1021": "O Centro Y0 ainda não está disponível para o Tipo C — o beacon v0 não foi verificado na silhueta C. Centro TL e Centro QR estão disponíveis.",
     "g1022": "O Tipo C destina-se a leitura de perto e C2·C3 pode exigir zoom. O localizador central foi temporariamente trocado pelo bullseye compatível.",
     "g1023": "C3 (k=20 · 255 B)",
+    "g1024": "Assento interno profundo",
     "g924": "Conforme o conteúdo",
     "g925": "Tolera danos",
     "g926": "Equilibrado",
@@ -6592,7 +6617,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-08-30.04';
+const GENERATOR_BUILD = '2026-08-31.01';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -6681,6 +6706,7 @@ const els = {
   turnASection: $('turnASection'), turnACards: $('turnACards'),
   // 검출기 seat 구역 (W2 C4 — 구 cornerMarkerSection 승계)
   finderInnerZone: $('finderInnerZone'), innerSeatCards: $('innerSeatCards'),
+  finderDeepZone: $('finderDeepZone'), deepSeatCards: $('deepSeatCards'),
   // innerSeatHint 는 없앴다 (2026-08-26 — g579 가 «?» 로 갔다). $() 는 없는 id 에
   // null 을 주므로 남겨 둬도 안 터지지만, 그 null 이 «있는데 아직 안 그렸다» 처럼 읽힌다.
   finderOuterZone: $('finderOuterZone'), outerSeatCards: $('outerSeatCards'),
@@ -8404,6 +8430,7 @@ const SEAT_AUTO_ICON = '<svg viewBox="0 0 24 24" width="26" height="26" fill="no
  *   const/let 을 첫 소비자보다 뒤에 두지 않는다.
  */
 let innerSeatAuto = true;
+let deepSeatAuto = true;
 let outerSeatAuto = true;
 
 // SEAT_ZONE_TYPES 는 finder-zone-ui 로 올라갔다 (2026-08-30) — 자리 축 정본이
@@ -8439,6 +8466,7 @@ function ensureSeatCards() {
     container.append(card);
   };
   buildAuto(els.innerSeatCards);
+  buildAuto(els.deepSeatCards);
   buildAuto(els.outerSeatCards);
   const build = (container, cards) => {
     for (const desc of cards) {
@@ -8464,6 +8492,7 @@ function ensureSeatCards() {
     }
   };
   build(els.innerSeatCards, zones.inner);
+  build(els.deepSeatCards, zones.deep);
   build(els.outerSeatCards, zones.outer);
 }
 
@@ -9585,6 +9614,7 @@ function wireSeatCards(container, seatKey) {
     //    기준표에서 유도하므로 여기서 쓰지 않는다 — 두 곳에서 쓰면 갈린다.
     const isAutoCard = card.dataset.seat === SEAT_AUTO;
     if (seatKey === 'innerSeat') innerSeatAuto = isAutoCard;
+    else if (seatKey === 'deepSeat') deepSeatAuto = isAutoCard;
     else outerSeatAuto = isAutoCard;
     if (!isAutoCard) generatorState[seatKey] = card.dataset.seat;
     // 방향-자리 일관성 (Wave 3 ④ — 구 «a-cm 이 turnA 를 끈다» 의 재편):
@@ -9600,6 +9630,7 @@ function wireSeatCards(container, seatKey) {
   });
 }
 wireSeatCards(els.innerSeatCards, 'innerSeat');
+wireSeatCards(els.deepSeatCards, 'deepSeat');
 wireSeatCards(els.outerSeatCards, 'outerSeat');
 
 const Y_CELL_TONE_FILL = Object.freeze(['#2a303c', '#8b93a7', '#e8ebf2']);
@@ -11024,7 +11055,7 @@ function syncTypeUi() {
   {
     const daehanAccounting = type === 'O'
       && (isDaehanFinderPatternId(generatorState.finderPatternId)
-        || generatorState.innerSeat === 'sagoae');
+        || generatorState.deepSeat === 'sagoae');
     const manualCm = type === 'O' && !innerSeatAuto && generatorState.innerSeat === 'o-cm';
     for (const option of els.versionO.options) {
       const candidate = option.value === 'auto' || option.value === 'ultra'
@@ -11152,9 +11183,13 @@ function syncSeatUi() {
   }
   if (auto !== null) {
     if (innerSeatAuto) generatorState.innerSeat = auto.inner;
+    if (deepSeatAuto) generatorState.deepSeat = auto.deep;
     if (outerSeatAuto) generatorState.outerSeat = auto.outer;
   }
   els.finderInnerZone.hidden = !show;
+  // 심부(사괘) 구역은 후보가 실재하는 타입(O·A·V)에서만 — 판정은 기준표가 낸다
+  // (T4, 외곽의 O 숨김과 같은 문법).
+  els.finderDeepZone.hidden = !show || auto === null || !auto.deepSectionVisible;
   // O 는 외곽 자리 섹션 자체를 안 보인다 (운영자 명세) — 판정은 기준표가 낸다.
   els.finderOuterZone.hidden = !show || auto === null || !auto.outerSectionVisible;
   if (!show) return;
@@ -11196,8 +11231,8 @@ function syncSeatUi() {
         );
       const typeCCmLocked = seat === 'o-cm' && typeCGeneratorActive();
       // sagoae × 중앙 파트너 — 렌더·C2c 계약(scene.sagoaeComposableWith 유도):
-      // 독립 cell-mask 중앙(후보 계열)과만 합성된다. 정식 중앙(불스아이·TL·QR)
-      // 합성은 검증기 확장 대기 (운영자 실기 신고 2026-08-30 의 잔여 축).
+      // 독립 cell-mask 후보 + 정식 중앙 3종(불스아이·TL·QR — T2 개통 2026-08-30,
+      // PM/028 §4)과 합성된다. 남은 잠금은 큐브 계열(3톤·하이브리드)·중앙 Y0.
       const sagoaePartnerLocked = seat === 'sagoae'
         && !sagoaeComposableWith(generatorState.finderPatternId);
       const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone && !isAutoCard)
@@ -11228,6 +11263,7 @@ function syncSeatUi() {
     }
   };
   sync(els.innerSeatCards, generatorState.innerSeat, innerSeatAuto);
+  sync(els.deepSeatCards, generatorState.deepSeat, deepSeatAuto);
   sync(els.outerSeatCards, generatorState.outerSeat, outerSeatAuto);
   // 내곽 g579 · 외곽 g858 **둘 다** «?»(help-dot) 로 갔다 (2026-08-26). 팝오버는
   // 열릴 때 t() 를 부르므로 여기서 다시 칠할 대상이 없다.
@@ -11813,7 +11849,9 @@ function buildConfig() {
     // 이미 지원하는데(sagoae-roundtrip 39/39) 이 소비자가 옵션을 안 실어 «카드는
     // 켜지는데 아무 일도 없는» 상태였다 (배타를 열면 소비자도 쓸어라의 그 형태).
     // O·A 공통 — encodeA 도 같은 옵션 키를 받는다. K 는 encodeK 명시 거절 유지.
-    sagoae: (type === 'O' || type === 'A') && generatorState.innerSeat === 'sagoae',
+    // ⭐ T4 (2026-08-31): 유도 축이 innerSeat → **deepSeat** (사괘의 자기 축 —
+    //    PM/028 §2 재편. 구 innerSeat='sagoae' 는 createGeneratorState 가 이관).
+    sagoae: (type === 'O' || type === 'A') && generatorState.deepSeat === 'sagoae',
     // CO2 앵커 3셀의 조건부 기본값은 encodeA가 중앙 슬롯 점유자의
     // `suppliesOuterFormat` 성질에서 유도한다. 생성기가 파인더 id 목록을 다시 적거나
     // boolean을 넘기면 다음 중앙 공급자에서 사본이 갈린다 — 여기서는 옵션을 만들지 않는다.
@@ -11902,9 +11940,11 @@ function encodeOptsFor(cfg) {
     // «Type C × centralV0 미개통» 사유로 명시 거절한다 (조용한 강등 금지).
     Object.assign(opts, centralBeaconEncoderOptions(cfg.finderPatternId, opts.centerQr));
     if (cfg.cornerMarker === true) opts.cornerMarker = true;
-    // 사괘 × 중앙 QR(CDQ)는 와이어 행이 없다 (검증기 확장 트랙 몫) — O 분기의 같은
-    // 강등 규칙: QR 이 더 최근 선택이고 폴백 경로라 잃으면 손해가 크다. CM 은 C 에서
-    // 원천 배타라 강등 없이 그대로 실어 엔진 공용 사유로 명시 거절되게 한다.
+    // 사괘 × 중앙 QR(CDQ)는 **여전히 와이어 행이 없다** (formatC C_FORMAT_INDEX —
+    // T2 는 와이어 불변 트랙이라 CDQ 행을 만들지 않았다). 강등 규칙 유지: QR 이
+    // 더 최근 선택이고 폴백 경로라 잃으면 손해가 크다. 사괘 × 중앙 TL 은 T2 로
+    // 개통 — centralN7 는 위 공유 유도가 독립으로 싣는다. CM 은 C 에서 원천
+    // 배타라 강등 없이 그대로 실어 엔진 공용 사유로 명시 거절되게 한다.
     if (cfg.sagoae === true && !opts.centerQr) opts.sagoae = true;
     return { fn: encode, opts };
   }
@@ -11945,11 +11985,12 @@ function encodeOptsFor(cfg) {
         // CO2 앵커 톤은 encodeA가 중앙 점유자의 형식 공급 성질에서 직접 유도한다.
         // 이 매핑 층에서 다시 싣지 않는다 — 명시 override는 라이브러리 호출자용이다.
       }
-    } else if (cfg.sagoae === true && !opts.centerQr) {
-      // 사괘 단독 (2026-08-30) — O 분기와 같은 자리·같은 강등 규칙. 외곽 코너
-      // 자리(a-cm/v-cm)가 이기면(위 분기) 사괘는 떨군다 — encodeA 가 «중앙 슬롯
-      // 점유자는 하나다» 로 던지는 조합이라 이 매퍼가 안 만든다. turnA 병용은
-      // 개설돼 있다 (2026-08-29 브리프 C — daehan 과 같은 180° 자기대칭 근거).
+    } else if (cfg.sagoae === true) {
+      // 사괘 단독 (2026-08-30) — O 분기와 같은 자리. ⭐ centerQr 병용 개설
+      // (T2 2026-08-30, O 분기와 같은 근거 — A*D 도 +2 Q 오프셋을 레거시와 공유).
+      // 외곽 코너 자리(a-cm/v-cm)가 이기면(위 분기) 사괘는 떨군다 — encodeA 의
+      // 남은 배타(daehan/sagoae × cornerMarker) 조합을 이 매퍼가 안 만든다.
+      // turnA 병용은 개설돼 있다 (2026-08-29 브리프 C — 180° 자기대칭 근거).
       opts.sagoae = true;
       if (cfg.turnA === true) opts.turnA = true;
     } else if (cfg.turnA === true) {
@@ -12017,11 +12058,13 @@ function encodeOptsFor(cfg) {
     opts.cornerMarker = true; // C2a — centerQr 병용 개설
     // H 심볼 (2026-08-24) — 자리 예약이 실릴 때만 톤도 실린다 (encode 계약).
     if (cfg.markerTones === true) opts.markerTones = true;
-  } else if (cfg.sagoae === true && !opts.centerQr) {
-    // 사괘 단독 (2026-08-30, 운영자 실기 신고) — daehan 예약 회계를 공유하므로
-    // (V*D 와이어, Q 변형 없음) centerQr 병용은 이 매퍼가 떨군다 — 위 코너 마커
-    // × 중앙 QR 강등과 같은 전례다. daehan 카드가 이기면(위 분기) 사괘는 이미
-    // 포함이라 따로 안 싣는다.
+  } else if (cfg.sagoae === true) {
+    // 사괘 단독 (2026-08-30, 운영자 실기 신고) — daehan 예약 회계를 공유한다.
+    // ⭐ **centerQr 병용 개설 (T2 2026-08-30)** — 구 «Q 변형 없음» 강등은 사실이
+    //   바뀌어 걷었다: V*D 는 레거시와 같은 +4 Q 오프셋을 그대로 받아 V*Q 인덱스를
+    //   공유하고, 디코더는 qr-center 포즈 위 C2c 검증으로 회계를 연다
+    //   (test/sagoae-roundtrip §정식 중앙). daehan 카드가 이기면(위 분기) 사괘는
+    //   이미 포함이라 따로 안 싣는다.
     opts.sagoae = true;
   }
   return { fn: encode, opts };

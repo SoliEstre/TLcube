@@ -265,9 +265,11 @@ export function encode(text, options = {}) {
   //     표면 포맷의 사본(family 1 digit + 바깥 5-digit 코드워드)이라 평 C 행
   //     (formatIndex 0..3)이 현행 코덱 그대로 실린다 (안 ①, 와이어 변경 0).
   //   · 중앙 QR(centerQr)은 전용 CQ 행(formatIndex 4, 평 C 전용)이 formatC 표에 있다.
-  //   · C*D × (centralN7·centerQr) 는 아래 centralSlotOccupants 단일 점유 가드가
-  //     거절한다 (daehan/sagoae 가 중앙 슬롯을 이미 점유) — CDQ·C*D×TL 은
-  //     sagoae×정식 중앙 검증기 확장 트랙 몫이다.
+  //   · C*D(사괘 분해) × 중앙 TL — **개통** (T2 2026-08-30, PM/028 §4): sagoae 가
+  //     중앙 점유자 목록에서 빠지면서(고리는 링 6/8/10 점유 — 중앙 슬롯 밖) 성립.
+  //     TL 은 C 에서 formatIndex 무변이라 와이어도 그대로다 (자: sagoae-roundtrip C).
+  //   · C*D × 중앙 QR(CDQ)는 **와이어 행이 없어** 여전히 닫혀 있다 — 아래
+  //     cFormatSpec 호출이 «CDQ 행 없음» 사유로 명시 거절한다 (formatC.js 표 정본).
   //   · 남는 배타는 centralV0 하나 — C 실루엣에서 n=13 비컨의 발견·검증이 미실측이다.
   if (notchC && centralV0) {
     throw new RangeError(
@@ -281,14 +283,33 @@ export function encode(text, options = {}) {
   // 끝나 개설됐다 (C2a 2026-08-23, PM/022 항목 1ⓑ): 마커 tetrad(링 k·k−1)와 중앙
   // 슬롯(ring ≤2)은 서로소이고 OMarker 재배치 셀이 중앙을 침범하지 않음을
   // test/markerG-centerqr.test.js 가 전 k 실측으로 잠근다. 와이어는 CMQ 6칸(markerG).
+  // sagoae × centralV0 — 3종 밖 잔여 배타 (T2 2026-08-30): v0 비컨 포즈 위의 C2c
+  // 검증이 미실측이라 정식 3종(불스아이·TL·QR)과 달리 열지 않는다. sagoae 가 아래
+  // 점유자 목록에서 빠지면서 이 조합이 조용히 통과하게 되므로 명시 거절로 남긴다
+  // (scene 의 sagoaeComposableWith 도 같은 성질로 잠근다 — 두 끝이 같은 계약).
+  if (sagoae && centralV0) {
+    throw new RangeError(
+      'sagoae × centralV0(중앙 Y0 비컨) 는 미개통이다 — v0 비컨 포즈 위 C2c 검증 미실측 '
+      + '(정식 중앙 3종: 불스아이·중앙 TL·중앙 QR 만 개통, PM/028 §4)',
+    );
+  }
   // 중앙 슬롯 점유자는 하나다. 목록에서 활성 점유자를 유도해 새 점유자가 늘어도
   // pair 조건을 손으로 빠뜨리지 않는다. cornerMarker(Type G)는 바깥 tetrad라 이
-  // 목록에 없다. G×daehan은 별도 배치·회계·오독 검증을 통과한 G2~G4만 허용한다.
+  // 목록에 없다 — G×daehan 은 별도 배치·회계·오독 검증을 통과한 G2~G4 만 허용한다
+  // (V*CMD, 2026-08-31).
+  // ⚠ **sagoae 는 점유자가 아니다** (T2 2026-08-30 — 구 'daehan/sagoae' 락의 양성
+  //   전환): 분해 합성의 고리는 링 6/8/10 을 점유하고 중앙 슬롯은 호출자가 고른
+  //   중앙(불스아이·TL·QR·cell-mask)이 점유한다 — 기하 서로소는 scene 로드/렌더
+  //   단언이 잰다. 원자 daehan 은 taegeuk 이 슬롯을 점유하므로 목록에 남는다.
+  //   합성 회계 주의: CM(D)·사괘·중앙 슬롯의 회계는 «슬롯 19 = 항상 비데이터,
+  //   사괘 60 = 예약, tetrad = CM 행» 으로 중앙 점유자가 무엇이든 동일하다 —
+  //   V*CMD 표는 그래서 taegeuk 중앙이 아니어도 유효하다. 광학(디코더) 검증이
+  //   안 된 3중 조합은 RS/CRC 가 거르며, UI 노출은 별도 게이트 몫이다.
   const centralSlotOccupants = [
     centerQr ? 'centerQr' : null,
     centralV0 ? 'centralV0' : null,
     centralN7 ? 'centralN7' : null,
-    usesDaehanLayout ? 'daehan/sagoae' : null,
+    daehanFinder ? 'daehan' : null,
   ].filter(Boolean);
   if (centralSlotOccupants.length > 1) {
     throw new RangeError(

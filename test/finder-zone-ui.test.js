@@ -11,11 +11,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  ADVANCED_ONLY_CENTRAL_IDS, INNER_SEAT_OPTIONS, OFFICIAL_NORMAL_CENTRAL_IDS,
+  ADVANCED_ONLY_CENTRAL_IDS, DEEP_SEAT_OPTIONS, INNER_SEAT_OPTIONS,
+  OFFICIAL_NORMAL_CENTRAL_IDS,
   OUTER_SEAT_OPTIONS, SEAT_NONE, cmqWireExists, zoneCards,
 } from '../src/finder-zone-ui.js';
 import {
-  FINDER_TAXONOMY, KIND_ABSENT, KIND_SEAT, SEAT_DEFAULT_FINDER, taxonomyByClass,
+  COORD_CENTER, FINDER_TAXONOMY, KIND_ABSENT, KIND_SEAT, SEAT_DEFAULT_FINDER,
+  taxonomyByClass,
 } from '../src/finder-taxonomy.js';
 import { TAEGUK_ID, DAEHAN_FINDER_PATTERN_IDS } from '../src/finder-daehan.js';
 import {
@@ -26,17 +28,28 @@ import {
 } from '../src/finder-card-ui.js';
 import { K_FORMAT_INDEX } from '../src/formatK.js';
 
-test('내곽/외곽 seat 유도가 분류 정본(분류 2·3 + KIND_ABSENT)과 1:1 이다', () => {
+test('내곽/심부/외곽 seat 유도가 분류 정본(분류 2·3 + KIND_ABSENT)과 1:1 이다', () => {
   const zones = zoneCards();
-  // 내곽 = 없음 + 분류 2 − **자리 기본 심볼** (H 는 o-cm 선택에 흡수 — 외곽의
-  // H2O 와 같은 규칙. 정본 매핑 = SEAT_DEFAULT_FINDER, 2026-08-24 운영자 확정).
+  // T4 (2026-08-31, PM/028 §2) — 분류 2 는 UI 에서 두 구역으로 갈린다. 가르는
+  // 축은 분류 정본이 이미 든 **좌표 기준**이다 (내부 구분 «중심부/꼭짓점»):
+  //   · 내곽 = 분류 2 의 꼭짓점 기준 − 자리 기본 심볼 (H 는 o-cm 에 흡수 —
+  //     외곽의 H2O 와 같은 규칙. 정본 매핑 = SEAT_DEFAULT_FINDER).
+  //   · 심부 = 분류 2 의 중심부 기준 (사괘 — 링 예약 계열).
   const seatSymbols = Object.values(SEAT_DEFAULT_FINDER);
-  const class2Ids = taxonomyByClass(2).map((row) => row.id)
-    .filter((id) => !seatSymbols.includes(id)).sort();
+  const class2 = taxonomyByClass(2).filter((row) => !seatSymbols.includes(row.id));
+  const innerIds = class2.filter((row) => row.coordBasis !== COORD_CENTER)
+    .map((row) => row.id).sort();
+  const deepIds = class2.filter((row) => row.coordBasis === COORD_CENTER)
+    .map((row) => row.id).sort();
   assert.deepEqual(
     zones.inner.filter((card) => card.id !== SEAT_NONE).map((card) => card.id).sort(),
-    class2Ids,
-    '내곽 유도가 분류 2(자리 심볼 제외)와 어긋났다 — 분류 정본이 늘었으면 zone 유도도 따라와야 한다');
+    innerIds,
+    '내곽 유도가 분류 2(꼭짓점 기준, 자리 심볼 제외)와 어긋났다 — 분류 정본이 늘었으면 zone 유도도 따라와야 한다');
+  assert.deepEqual(
+    zones.deep.filter((card) => card.id !== SEAT_NONE).map((card) => card.id).sort(),
+    deepIds,
+    '심부 유도가 분류 2(중심부 기준)와 어긋났다');
+  assert.ok(deepIds.length > 0, '심부 구역이 비었다 — 사괘 행이 분류 정본에서 사라졌나');
   // 외곽 = 없음 + 분류 3 의 seat 행 + KIND_ABSENT 행.
   const class3Seats = taxonomyByClass(3)
     .filter((row) => row.kind === KIND_SEAT).map((row) => row.id);
@@ -99,6 +112,7 @@ test('중앙 = 분류 1 — 카드 목록과 분류 정본의 차이는 taegeuk�
 
 test('상태 스키마 seat options 는 zone 유도와 같다 (검증되는 사본)', () => {
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.innerSeat.options], [...INNER_SEAT_OPTIONS]);
+  assert.deepEqual([...GENERATOR_STATE_SCHEMA.deepSeat.options], [...DEEP_SEAT_OPTIONS]);
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.outerSeat.options], [...OUTER_SEAT_OPTIONS]);
 });
 

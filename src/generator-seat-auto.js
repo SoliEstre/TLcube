@@ -43,28 +43,47 @@ export const SEAT_V_CM = 'v-cm';
 export const SEAT_K_CM = 'k-cm';
 export const SEAT_SAGOAE = 'sagoae';
 
-/** 중앙 파인더가 taegeuk 이면 타입과 **무관하게** 이 행이 이긴다 (명세 «공통으로»). */
+/** 중앙 파인더가 taegeuk 이면 타입과 **무관하게** 이 행이 이긴다 (명세 «공통으로»).
+ *  ⭐ T4 (2026-08-31, PM/028 §2): 사괘가 내곽에서 **심부(deep) 축**으로 이사 —
+ *  taegeuk 자동의 사괘 선택도 deep 칸으로 옮긴다 (내곽은 없음). */
 const TAEGEUK_ROW = Object.freeze({
-  inner: SEAT_SAGOAE,
+  inner: SEAT_NONE,
+  deep: SEAT_SAGOAE,
   outer: SEAT_NONE,
   outerSectionVisible: true,
+  deepSectionVisible: true,
   blocked: null,
 });
 
 /**
  * 타입별 자동 기준. `type` 은 **유효 편집 타입**이다 — 턴A 를 켠 Type A 는 `V` 다
  * (index.html effectiveEditorTypeFromGenerator 와 같은 축).
+ * `deepSectionVisible` — 심부 자리 카드(sagoae)가 실재하는 타입(O·A·V)에서만
+ * 구역을 보인다 (외곽의 O 숨김과 같은 문법 — 없음·자동만 남는 구역은 소음이다).
  */
 const BY_TYPE = Object.freeze({
   // O 는 외곽 자리 섹션 자체를 안 보인다 (명세).
-  O: Object.freeze({ inner: SEAT_O_CM, outer: SEAT_NONE, outerSectionVisible: false, blocked: null }),
-  A: Object.freeze({ inner: SEAT_NONE, outer: SEAT_A_CM, outerSectionVisible: true, blocked: null }),
-  V: Object.freeze({ inner: SEAT_NONE, outer: SEAT_V_CM, outerSectionVisible: true, blocked: null }),
-  K: Object.freeze({ inner: SEAT_NONE, outer: SEAT_K_CM, outerSectionVisible: true, blocked: null }),
+  O: Object.freeze({
+    inner: SEAT_O_CM, deep: SEAT_NONE, outer: SEAT_NONE,
+    outerSectionVisible: false, deepSectionVisible: true, blocked: null,
+  }),
+  A: Object.freeze({
+    inner: SEAT_NONE, deep: SEAT_NONE, outer: SEAT_A_CM,
+    outerSectionVisible: true, deepSectionVisible: true, blocked: null,
+  }),
+  V: Object.freeze({
+    inner: SEAT_NONE, deep: SEAT_NONE, outer: SEAT_V_CM,
+    outerSectionVisible: true, deepSectionVisible: true, blocked: null,
+  }),
+  // K — 심부 후보(sagoae)가 encodeK 배타라 구역을 안 보인다.
+  K: Object.freeze({
+    inner: SEAT_NONE, deep: SEAT_NONE, outer: SEAT_K_CM,
+    outerSectionVisible: true, deepSectionVisible: false, blocked: null,
+  }),
 });
 
 /** 막힌 칸의 안전 폴백 — «없음». 자동이 스캔 불가 코드를 기본값으로 만들지 않는다. */
-const SAFE_FALLBACK = Object.freeze({ inner: SEAT_NONE, outer: SEAT_NONE });
+const SAFE_FALLBACK = Object.freeze({ inner: SEAT_NONE, deep: SEAT_NONE, outer: SEAT_NONE });
 
 /**
  * 자동이 고를 자리.
@@ -72,25 +91,32 @@ const SAFE_FALLBACK = Object.freeze({ inner: SEAT_NONE, outer: SEAT_NONE });
  * @param {{type:'O'|'A'|'V'|'K', centralFinderIsTaegeuk?:boolean, allowBlocked?:boolean}} state
  *   `allowBlocked` 는 시험판(/lab/)처럼 «안 되는 것도 눌러 보는» 표면을 위한 문이다.
  *   기본값 false — 정식 화면의 자동은 절대 막힌 칸을 고르지 않는다.
- * @returns {{inner:string, outer:string, outerSectionVisible:boolean, blocked:string|null,
- *            appliedFallback:boolean}}
+ * @returns {{inner:string, deep:string, outer:string, outerSectionVisible:boolean,
+ *            deepSectionVisible:boolean, blocked:string|null, appliedFallback:boolean}}
  */
 export function autoSeatsFor({ type, centralFinderIsTaegeuk = false, allowBlocked = false }) {
   const row = centralFinderIsTaegeuk ? TAEGEUK_ROW : BY_TYPE[type];
   if (!row) throw new RangeError('자동 자리 기준표에 없는 타입: ' + type);
+  // 심부 구역 표시는 taegeuk 특례가 아니라 **타입의 성질**이다 — taegeuk 행이
+  // 이겨도 K 에서는 구역이 없다 (K 는 sagoae 가 encodeK 배타 — 소비자 가드와 일치).
+  const deepSectionVisible = (BY_TYPE[type] || row).deepSectionVisible;
   if (row.blocked !== null && !allowBlocked) {
     return {
       inner: SAFE_FALLBACK.inner,
+      deep: SAFE_FALLBACK.deep,
       outer: SAFE_FALLBACK.outer,
       outerSectionVisible: row.outerSectionVisible,
+      deepSectionVisible,
       blocked: row.blocked,
       appliedFallback: true,
     };
   }
   return {
     inner: row.inner,
+    deep: row.deep,
     outer: row.outer,
     outerSectionVisible: row.outerSectionVisible,
+    deepSectionVisible,
     blocked: row.blocked,
     appliedFallback: false,
   };

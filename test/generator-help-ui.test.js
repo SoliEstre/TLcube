@@ -574,6 +574,9 @@ test('O/A 파인더 도움말은 그 섹션에 실재하는 것만 설명한다'
     g907: 'finderLegacyRow',
     g571: 'finderDaehan',
     g579: 'finderInnerZone',
+    // T4 (2026-08-31) — 심부 자리 구역의 «?». 키는 신설이 아니라 sagoae 특성 고지
+    // g855 재사용이다 (내곽 g579·외곽 g858 대칭 문법 — 대상 finderDeepZone 실재).
+    g855: 'finderDeepZone',
     g858: 'finderOuterZone',
   };
   assert.deepEqual(finderKeys, Object.keys(FINDER_HELP_OWNERS),

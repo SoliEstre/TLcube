@@ -210,14 +210,26 @@ export function encodeA(text, options = {}) {
   if (typeof centralN7 !== 'boolean') {
     throw new TypeError(`centralN7 는 boolean 이어야 한다: ${typeof centralN7}`);
   }
+  // sagoae × centralV0 — 3종 밖 잔여 배타 (T2 2026-08-30, encode.js 와 같은 문장):
+  // v0 비컨 포즈 위 C2c 검증이 미실측이라 정식 3종(불스아이·TL·QR)과 달리 열지
+  // 않는다. sagoae 가 점유자 목록에서 빠지며 조용히 통과하게 되므로 명시 거절.
+  if (sagoae && centralV0) {
+    throw new RangeError(
+      'sagoae × centralV0(중앙 Y0 비컨) 는 미개통이다 — v0 비컨 포즈 위 C2c 검증 미실측 '
+      + '(정식 중앙 3종: 불스아이·중앙 TL·중앙 QR 만 개통, PM/028 §4)',
+    );
+  }
   // 중앙 점유자 행은 배타와 **기능 성질**의 SSoT 다. 새 점유자는 어차피 배타를 위해
   // 이 행에 들어와야 하며, 바깥 형식을 공급하는지 여기서 함께 선언한다. CO2 쪽에
   // 파인더 id 목록을 따로 두지 않는다 — 다음 공급자가 생겨도 CO2 분기는 안 바뀐다.
+  // ⚠ **sagoae 는 점유자가 아니다** (T2 2026-08-30 — encode.js 와 같은 양성 전환):
+  //   고리는 링 6/8/10 점유, 중앙 슬롯은 호출자가 고른 중앙이 점유한다. 원자
+  //   daehan 은 taegeuk 이 슬롯을 점유하므로 목록에 남는다.
   const centralSlotOccupants = [
     centerQr ? { name: 'centerQr', suppliesOuterFormat: false } : null,
     centralV0 ? { name: 'centralV0', suppliesOuterFormat: false } : null,
     centralN7 ? { name: 'centralN7', suppliesOuterFormat: true } : null,
-    usesDaehanLayout ? { name: 'daehan/sagoae', suppliesOuterFormat: false } : null,
+    daehanFinder ? { name: 'daehan', suppliesOuterFormat: false } : null,
   ].filter(Boolean);
   if (centralSlotOccupants.length > 1) {
     throw new RangeError(
