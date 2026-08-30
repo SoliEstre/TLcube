@@ -239,7 +239,20 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // ⚠ outerSeat a-cm 은 turnA 와 상호배제 (encodeA 가 둘 다 참이면 던진다).
   // v-cm (2026-08-24 실체 전환) 은 그 쌍대다 — **turnA 를 요구**한다 (V-CM =
   // 턴A + 코너 자리 예약. turnA off + v-cm 조합은 UI sync 가 잠근다).
-  innerSeat: field('none', BOTH, ['none', 'o-cm', 'sagoae']),
+  // ⭐ **T4 자리 재편 (2026-08-31, PM/028 §2)** — sagoae 가 내곽 허용값에서
+  // **심부(deepSeat) 축으로 이사**했다. 내곽은 코너 tetrad 계열(o-cm=H)만 남는다.
+  innerSeat: field('none', BOTH, ['none', 'o-cm']),
+  // ── 심부(deep) seat 축 (T4 신설 2026-08-31, PM/028 §2) ─────────────────────
+  // 분류 2 의 «중심부 기준» 갈래 — 사괘(링 6/8/10 예약)의 전용 축. 3축 모형 =
+  // 외곽(앵커 톤) · 내곽(코너 tetrad) · 심부(링 예약), 각 축 독립 선택.
+  // 허용값 정본은 finder-zone-ui(DEEP_SEAT_OPTIONS) — innerSeat 와 같은 순환
+  // 제약이라 **검증되는 사본**이다 (어긋나면 zone-ui 로드 자기검증이 던진다).
+  // 확장 가능 표: 심부 후보가 늘면 값이 는다 (none | sagoae | …).
+  // ⚠ 내곽(o-cm 등 tetrad 계열)과의 **동시 선택은 아직 열지 않는다** — 기하는
+  // k ≥ 12 서로소(PM/028 §1)지만 조합 개방은 T3(C×H)·cx-g4daehan 결과 뒤의
+  // 몫이다. 지금은 축 분리 + 단독 동작 무회귀까지 (UI sync 가 배타를 지킨다).
+  // 구 innerSeat==='sagoae' 상태는 createGeneratorState 가 이 축으로 이관한다.
+  deepSeat: field('none', BOTH, ['none', 'sagoae']),
   // ⭐ **k-cm 편입 (2026-08-25)** — 자리는 2026-08-24 부터 와이어에 실재했지만
   // 부트스트랩이 star 축 포맷 8 을 안 열어 «생성은 되고 스캔이 안 되는» 값이었다.
   // 레인 KCM 이 그 한 줄(familyProfiles('star') 가 VERSIONS_KCM 미소유)을 닫아
@@ -343,6 +356,14 @@ export function createGeneratorState(overrides = {}) {
   for (const [key, value] of Object.entries(overrides)) {
     if (!(key in GENERATOR_STATE_SCHEMA)) throw new RangeError('알 수 없는 생성기 상태 키: ' + key);
     state[key] = value;
+  }
+  // T4 마이그레이션 (2026-08-31, PM/028 §2) — 구 축의 innerSeat='sagoae' 는 심부
+  // 자리로 **이관해 읽는다** (조용한 유실 금지: 버리면 사괘 선택이 소리 없이
+  // 평 코드가 된다). 명시 deepSeat override 가 함께 오면 새 축이 이긴다 —
+  // 이관은 구 상태의 독법이지 새 선택의 상전이 아니다.
+  if (state.innerSeat === 'sagoae') {
+    state.innerSeat = 'none';
+    if (overrides.deepSeat === undefined) state.deepSeat = 'sagoae';
   }
   // 드랍된 중앙 M7이 옛 저장·URL에 남아 있으면 새 기본(중앙 TL)로 명시 정화한다.
   // 그 밖의 유효한 옛 선택은 건드리지 않는다. lab=true는 «lab 전용은 허용» 뜻이고,

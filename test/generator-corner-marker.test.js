@@ -27,7 +27,8 @@ import { readFileSync } from 'node:fs';
 
 import { createGeneratorState, GENERATOR_STATE_SCHEMA, exposedGeneratorStateKeys } from '../src/generator-state.js';
 import {
-  INNER_SEAT_OPTIONS, OUTER_SEAT_OPTIONS, cmqWireExists, seatCardShown, zoneCards,
+  DEEP_SEAT_OPTIONS, INNER_SEAT_OPTIONS, OUTER_SEAT_OPTIONS, cmqWireExists,
+  seatCardShown, zoneCards,
 } from '../src/finder-zone-ui.js';
 import { SEAT_DEFAULT_FINDER } from '../src/finder-taxonomy.js';
 import { LAB_OUTER_FINDER_IDS } from '../src/lab-expected-axes.js';
@@ -49,6 +50,7 @@ test('① seat 구역 UI 와 배선이 있고 i18n 8언어 사전이 다 있다'
   // «?»(help-dot)로 갔기 때문이다 (운영자 «두 줄 넘어가는 설명은 ?버튼으로»).
   // 구역이 설명을 **갖고 있는가** 는 그대로 잰다 — 자리만 문단에서 버튼으로 옮겼다.
   for (const id of ['finderInnerZone', 'innerSeatCards',
+    'finderDeepZone', 'deepSeatCards',
     'finderOuterZone', 'outerSeatCards']) {
     assert.ok(finderSection.includes('id="' + id + '"'),
       id + ' 가 #finderSection 안에 없다');
@@ -84,11 +86,13 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
   const zones = zoneCards();
   // H 는 카드가 아니다 (운영자 2026-08-24 확정 2차) — o-cm 선택이 곧 «자리 + H
   // 심볼» 이다 (A-CM=H2O 문법). 별도 카드·별도 상태 값이 다시 생기면 회귀다.
-  assert.deepEqual(zones.inner.map((c) => c.id), ['none', 'o-cm', 'sagoae']);
+  // T4 (2026-08-31, PM/028 §2) — sagoae 는 내곽 행에서 **심부(deep) 행**으로 이사.
+  assert.deepEqual(zones.inner.map((c) => c.id), ['none', 'o-cm']);
+  assert.deepEqual(zones.deep.map((c) => c.id), ['none', 'sagoae']);
   assert.deepEqual(zones.outer.map((c) => c.id), ['none', 'a-cm', 'v-cm', 'k-cm']);
   // sagoae 는 기존 daehan 예약 회계/formatIndex 공유 + C2c 합성 왕복이 서서
   // 구 `ready:false` 락이 양성 카드 단언으로 뒤집혔다.
-  assert.equal(zones.inner.find((c) => c.id === 'sagoae').ready, true);
+  assert.equal(zones.deep.find((c) => c.id === 'sagoae').ready, true);
   assert.equal(INNER_SEAT_OPTIONS.includes('H'), false,
     'H 가 상태 값으로 되살아났다 — o-cm 통합(2026-08-24)의 회귀');
   // v-cm · k-cm — 실체 전환 (2026-08-24, 배타 개설 정형 ③): 부재 카드 단언(구 락)을
@@ -116,7 +120,7 @@ test('①-b seat 카드 유도가 분류 정본·기대축과 정합한다', () 
   // ⚠ v-cm 제외 (2026-08-24): 스캐너 기대축 등재는 sites/tlscan 버튼 + 8언어
   // 동반이라 **통합자 몫**이다 (턴A 레인은 스캐너 소스 접촉 금지). 등재되면
   // 아래 부재 단언이 터진다 — 그때 이 제외를 걷어라 (부재에는 이유·날짜).
-  for (const id of [...INNER_SEAT_OPTIONS, ...OUTER_SEAT_OPTIONS]) {
+  for (const id of [...INNER_SEAT_OPTIONS, ...DEEP_SEAT_OPTIONS, ...OUTER_SEAT_OPTIONS]) {
     const labId = id === 'sagoae' ? 'daehan' : id;
     assert.ok(LAB_OUTER_FINDER_IDS.includes(labId),
       'LAB_OUTER_FINDER_IDS 에 ' + labId + ' 가 없다 — 기대축과 seat 유도가 어긋났다');
@@ -222,13 +226,22 @@ test('③ turnA 상호배제의 재편 — a-cm 은 배제, v-cm(=turnA+CM) 은 
 test('④ seat 상태 필드는 정식 노출(BOTH)·유도 options 다', () => {
   const state = createGeneratorState();
   assert.equal(state.innerSeat, 'none', '기본값은 없음이어야 한다');
+  assert.equal(state.deepSeat, 'none', '기본값은 없음이어야 한다');
   assert.equal(state.outerSeat, 'none', '기본값은 없음이어야 한다');
+  // T4 마이그레이션 — 구 innerSeat='sagoae' 는 심부로 이관해 읽는다 (조용한 유실
+  // 금지). 명시 deepSeat 가 함께 오면 새 축이 이긴다.
+  const migrated = createGeneratorState({ innerSeat: 'sagoae' });
+  assert.equal(migrated.innerSeat, 'none', '구 sagoae 상태가 내곽에 남았다');
+  assert.equal(migrated.deepSeat, 'sagoae', '구 sagoae 상태가 심부로 이관되지 않았다 — 조용한 유실');
+  const explicit = createGeneratorState({ innerSeat: 'sagoae', deepSeat: 'none' });
+  assert.equal(explicit.deepSeat, 'none', '명시 deepSeat 보다 이관이 이겼다');
   // 구 boolean 필드는 스키마에서 내렸다 (생성기 상태는 저장되지 않는다 —
   // 하위호환은 finder-selection.normalizeFinderQrState 의 이관이 진다).
   assert.equal('cornerMarker' in GENERATOR_STATE_SCHEMA, false,
     'cornerMarker 필드가 스키마에 남아 있다 — seat 이관이 안 끝났다');
   // options 는 유도 배열이다 (F-37 규약 — 손 목록 금지).
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.innerSeat.options], [...INNER_SEAT_OPTIONS]);
+  assert.deepEqual([...GENERATOR_STATE_SCHEMA.deepSeat.options], [...DEEP_SEAT_OPTIONS]);
   assert.deepEqual([...GENERATOR_STATE_SCHEMA.outerSeat.options], [...OUTER_SEAT_OPTIONS]);
   // ⭐ **정식 노출로 뒤집힌 락 (운영자 지시 2026-08-30)** — 구 단언은 «두 모드 다
   // 노출 false» 였고 사유는 «실기기 라운드를 아직 안 돌았다» 였다. 그 라운드가
@@ -236,7 +249,7 @@ test('④ seat 상태 필드는 정식 노출(BOTH)·유도 options 다', () => 
   // v-cm V*CM 왕복, sagoae sagoae-roundtrip ③, daehan 운영자 라이브) 배타를 연다.
   // 노출 대조를 **유도**한다 — 상수를 손으로 적으면 exposure 값 이름이 바뀔 때 썩는다.
   for (const mode of ['normal', 'advanced']) {
-    for (const key of ['innerSeat', 'outerSeat']) {
+    for (const key of ['innerSeat', 'deepSeat', 'outerSeat']) {
       assert.equal(exposedGeneratorStateKeys(mode).includes(key), true,
         key + ' 가 ' + mode + ' 모드에서 빠졌다 — 자리 축이 다시 lab 뒤로 숨었다'
         + ' (운영자 지시 2026-08-30: 정식 일반 노출)');
@@ -262,6 +275,15 @@ test('⑥ 자리 카드는 정식 빌드에서 보인다 — 표시 술어에 la
     assert.equal(shownFor(card, 'O', false), true,
       '내곽 ' + card.id + ' 카드가 O 에서 안 보인다');
   }
+  // 심부(T4) — sagoae 는 O·A 에서 보이고 K 는 타입 부합에서 닫힌다.
+  for (const card of zones.deep) {
+    assert.equal(shownFor(card, 'O', false), true,
+      '심부 ' + card.id + ' 카드가 O 에서 안 보인다');
+  }
+  assert.equal(shownFor(zones.deep.find((c) => c.id === 'sagoae'), 'A', false), true,
+    '심부 sagoae 카드가 A 에서 안 보인다');
+  assert.equal(shownFor(zones.deep.find((c) => c.id === 'sagoae'), 'K', false), false,
+    'sagoae 가 Type K 에서 보인다 — 타입 부합 표가 무시됐다');
   // 외곽 — 정삼각이면 a-cm(H2O), 역삼각이면 v-cm(CO2), K 면 k-cm(H2CO3).
   assert.equal(shownFor(zones.outer.find((c) => c.id === 'a-cm'), 'A', false), true,
     '외곽 H2O(a-cm) 카드가 정삼각에서 안 보인다');
