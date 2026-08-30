@@ -94,7 +94,8 @@ export const MODULE_ORDER = [
   // 소비자가 한 종류만 catch 하게 하려는 선택이고, 그 대가로 두 모듈이 여기서 앞당겨진다.
   // 둘 다 로컬 의존이 없거나(placementY) placementY 하나뿐이라(autoplaceY) 위상 정렬은
   // 그대로 성립한다. markerO 는 capacity·rs211·header·bullseye·placement·lehmer·
-  // autoplaceHex 를 쓰므로 그 전부의 뒤, encode 의 앞이다.
+  // autoplaceHex 를 쓰므로 그 전부의 뒤, encode 의 앞이다. markerOdaehan 은 markerO와
+  // capacityDaehan의 합성 회계라 markerO 바로 뒤, encode/decode의 앞에 둔다.
   'placementY', 'autoplaceY', 'autoplaceHex',
   // turnA 는 **encodeA 앞**이다 (2026-08-18 턴A 편입) — encodeA 가 formatIndex 를
   // 표에서 조회한다. 의존은 capacity·capacityA 둘뿐이라 여기서 위상 정렬이 성립한다.
@@ -104,7 +105,7 @@ export const MODULE_ORDER = [
   // 발자국 회계를 markerA(markerCellsA·markerPositionSetA)에서 유도하고 encodeA 가
   // V-CM 톤 적재로 소비한다. 나머지 의존(hexgrid·placement·placementA·capacityA)은
   // 전부 이미 이 앞에 있어 위상 정렬이 그대로 성립한다.
-  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'formatC', 'capacityC', 'markerO', 'finder-H', 'markerA', 'finder-CO2', 'encodeA',
+  'placementA', 'layoutA', 'capacityA', 'turnA', 'markerG', 'formatC', 'capacityC', 'markerO', 'markerOdaehan', 'finder-H', 'markerA', 'finder-CO2', 'encodeA',
   // Type K (2026-08-24) — 셀 편집기가 VERSIONS_K 를 읽는다 (편집 타입 K).
   // placementK 는 capacityK 앞 (capacityK 가 회계를 placementK 에서 유도한다).
   //

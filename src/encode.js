@@ -32,6 +32,12 @@ import {
   dataCellsInScanOrderOMarker,
   fillerCellsOMarker,
 } from './markerO.js';
+import {
+  VERSIONS_OCM_DAEHAN,
+  capacityForOMarkerDaehan,
+  dataCellsInScanOrderOMarkerDaehan,
+  fillerCellsOMarkerDaehan,
+} from './markerOdaehan.js';
 import { VERSIONS_DAEHAN, capacityForDaehan } from './capacityDaehan.js';
 import { daehanReservedCells } from './finder-daehan.js';
 import { typeCReservedCells } from './notchC.js';
@@ -77,6 +83,27 @@ function layoutProviderFor(
       format: formatCells,
       reference: referenceCellsAll,
       fixed: (k) => anchorCells(k).map((c) => ({ ...c, role: 'anchor' })),
+    };
+  }
+  if (cornerMarker && daehanFinder) {
+    // G(CM) × daehan — CM tetrad는 외곽, daehan은 중앙 파인더의 바깥 예약이다.
+    // 두 역할 집합의 교집합 0·합성 회계·상호 오독 거절을 검증해 G2~G4만 열었다.
+    // formatIndex는 새로 만들지 않고 V*CM(G) 행을 공유한다. daehan 광학 검출과
+    // RS/CRC가 같은 와이어의 평 G와 CMD 회계를 가른다.
+    return {
+      versions: VERSIONS_OCM_DAEHAN,
+      capacity: capacityForOMarkerDaehan,
+      scan: dataCellsInScanOrderOMarkerDaehan,
+      filler: fillerCellsOMarkerDaehan,
+      format: formatCellsOMarker,
+      reference: referenceCellsOMarker,
+      fixed: markerTones
+        ? (k) => markerCells(k, hTonesByKeyO(k)).map((c) => ({
+          q: c.q, r: c.r, digit: c.digit, role: c.role, tones: c.tones,
+        }))
+        : (k) => markerCells(k).map((c) => ({
+          q: c.q, r: c.r, digit: c.digit, role: c.role,
+        })),
     };
   }
   if (daehanFinder) {
@@ -254,15 +281,9 @@ export function encode(text, options = {}) {
   // 끝나 개설됐다 (C2a 2026-08-23, PM/022 항목 1ⓑ): 마커 tetrad(링 k·k−1)와 중앙
   // 슬롯(ring ≤2)은 서로소이고 OMarker 재배치 셀이 중앙을 침범하지 않음을
   // test/markerG-centerqr.test.js 가 전 k 실측으로 잠근다. 와이어는 CMQ 6칸(markerG).
-  // daehanFinder 는 와이어 플래그(광학+RS/CRC, formatIndex 공유). 분류 층에서는
-  // taegeuk(내부 19, 분류 1) + sagoae(예약 셀, 분류 2) 로 갈린다. 중앙 QR(링3
-  // 점유)과도, 코너 자리 예약(링 k·k−1 점유)과도 겹친다. 조합 검증을 안 했으므로
-  // 조용히 허용하지 않는다.
-  if (usesDaehanLayout && cornerMarker) {
-    throw new RangeError('중앙 슬롯 점유자는 하나다 — daehan/sagoae 예약 레이아웃과 cornerMarker 를 동시에 켤 수 없다 — 배치 검증 미실시 조합이다');
-  }
   // 중앙 슬롯 점유자는 하나다. 목록에서 활성 점유자를 유도해 새 점유자가 늘어도
-  // pair 조건을 손으로 빠뜨리지 않는다. cornerMarker(Type G)는 바깥 링 점유자다.
+  // pair 조건을 손으로 빠뜨리지 않는다. cornerMarker(Type G)는 바깥 tetrad라 이
+  // 목록에 없다. G×daehan은 별도 배치·회계·오독 검증을 통과한 G2~G4만 허용한다.
   const centralSlotOccupants = [
     centerQr ? 'centerQr' : null,
     centralV0 ? 'centralV0' : null,
