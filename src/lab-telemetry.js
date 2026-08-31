@@ -1074,15 +1074,33 @@ export function extractGeometry(result, width, height) {
     geo.occupancy = outline.fillRatio;
   }
 
+  // clipSide 는 **심볼 경계를 알 때만** 낸다 (PM/032).
+  //
+  // 종전에는 hypothesis 가 없으면 bbox 가 `outline.bounds` 로 떨어지고, 그 상자로
+  // 잘림을 판정했다. 그런데 outline.bounds 는 심볼의 경계가 아니라 «배경 중앙값과
+  // 다른 모든 픽셀» 의 **프레임 전역** 상자다 (연결성분이 아니라 행 단위 min/max 의
+  // 합집합이라, 좌상단·우하단에 점 하나씩만 있어도 화면 전체가 된다). 게다가 전경
+  // 문턱이 강건 동적범위의 2% 라 실기 프레임의 90\~98% 가 전경으로 잡힌다 —
+  // 실기 덤프 673장 전수에서 touchesBorder 가 673/673 참이고 bounds 가 프레임의
+  // 100% 인 것이 637/673 이었다.
+  //
+  // 그 결과 **복호가 실패하기만 하면** clipSide='multi' 가 되고, 소비자
+  // (sites/tlscan/scanner.js — 0.96초 연속이면 「조금 뒤로」)가 코드 위치와 무관하게
+  // 잘림 안내를 띄웠다. 판정에 코드의 위치가 한 번도 들어가지 않았다.
+  //
+  // 그래서 outline 폴백을 없앤다. 진짜 잘림은 `clippingSideCount`(파인더 투영 —
+  // 심볼 기반)가 여전히 낸다. 심볼을 못 잡은 프레임은 «모른다»(null)가 정직하다.
   if (Number.isInteger(detail.clippingSideCount)) {
     if (detail.clippingSideCount <= 0) geo.clipSide = 'none';
     else if (detail.clippingSideCount >= 2) geo.clipSide = 'multi';
     else geo.clipSide = clipSideFromBbox(bbox, w, h);
-  } else if (outline && outline.touchesBorder === true) {
-    geo.clipSide = clipSideFromBbox(bbox, w, h) || 'border';
-  } else if (outline && outline.touchesBorder === false) {
-    geo.clipSide = 'none';
+  } else if (corners) {
+    // 심볼 경계를 아는 프레임은 **그 상자로** 판정한다 — 이것이 정당한 축이다.
+    // (잘린 변이 없으면 clipSideFromBbox 가 null 을 주므로 'none' 으로 확정한다.)
+    geo.clipSide = clipSideFromBbox(bbox, w, h) || 'none';
   }
+  // corners 도 clippingSideCount 도 없으면 geo.clipSide 는 null 그대로 —
+  // 「심볼을 못 잡았다」와 「잘렸다」는 다른 말이고, 후자를 아는 척하지 않는다.
 
   if (hypothesis && Number.isFinite(hypothesis.rotationDegrees)) {
     geo.rotationDeg = hypothesis.rotationDegrees;
