@@ -18,6 +18,75 @@ export const DEFAULT_R2_PARAMS = Object.freeze({
   // 가설: 수치적으로 0인 rank likelihood를 막는 Q8.8 log floor다.
   rankLogFloorQ8: -32 * Q8_ONE,
 
+  // 가설: glyph 적분 버퍼가 수용할 최대 luma 폭이다(자원 상한, px).
+  glyphMaxFrameWidth: 1280,
+
+  // 가설: glyph 적분 버퍼가 수용할 최대 luma 높이다(자원 상한, px).
+  glyphMaxFrameHeight: 720,
+
+  // 가설: 한 프레임에서 보존할 중앙 glyph 후보 상한이다.
+  glyphMaxCandidates: 64,
+
+  // 가설: scale·phase 커널 하나당 refinement에 넘길 coarse peak 상한은 16이다.
+  glyphMaxKernelProposals: 16,
+
+  // 가설: 정본 폴리곤을 소형 상관 커널로 내릴 때 셀 피치당 표본 수다.
+  glyphKernelSamplesPerPitch: 3,
+
+  // 가설: coarse scan도 모든 unique row-run을 읽어 noise/grid 우연 상관을 과대평가하지 않는다.
+  glyphCoarseFeatureStep: 1,
+
+  // 가설: 멀티스케일 탐색의 최소 바깥 셀 중심 피치는 3 px다(Q16.16).
+  glyphMinCellPitchQ16: 3 * Q16_ONE,
+
+  // 가설: 멀티스케일 탐색의 최대 바깥 셀 중심 피치는 128 px다(Q16.16).
+  glyphMaxCellPitchQ16: 128 * Q16_ONE,
+
+  // 가설: 인접 scale 비 1.04는 최근접 rung 양자화 오차를 약 2% 안에 둔다(Q1.15).
+  glyphScaleStepQ15: Math.round(1.04 * Q15_ONE),
+
+  // 가설: coarse scan 간격은 셀 피치의 0.50배이고 계층적으로 1 px까지 재탐색한다(Q1.15).
+  glyphScanStrideQ15: Math.round(0.50 * Q15_ONE),
+
+  // 가설: sub-pixel finder peak가 좁은 QR은 셀 피치의 0.15배로 훑는다(Q1.15).
+  glyphQrScanStrideQ15: Math.round(0.15 * Q15_ONE),
+
+  // 가설: unique-pixel glyph NCC의 정식 후보 수용 하한은 0.52다(Q1.15).
+  glyphScoreThresholdQ15: Math.round(0.52 * Q15_ONE),
+
+  // 가설: coarse 위치에서 0.28 이상이면 계층적 위치 refinement를 수행한다(Q1.15).
+  glyphCoarseScoreThresholdQ15: Math.round(0.28 * Q15_ONE),
+
+  // 가설: 방사형 bullseye는 coarse 격자 위상 손실을 감안해 0.12부터 보정한다(Q1.15).
+  glyphBullseyeCoarseScoreThresholdQ15: Math.round(0.12 * Q15_ONE),
+
+  // 가설: sub-pixel 충돌이 큰 5 px 미만 QR은 3-finder Haar NCC 0.42를 요구한다(Q1.15).
+  glyphQrCoarseScoreThresholdQ15: Math.round(0.42 * Q15_ONE),
+
+  // 가설: 5 px 이상 QR은 finder/separator NCC 0.60을 요구한다(Q1.15).
+  glyphQrFineScoreThresholdQ15: Math.round(0.60 * Q15_ONE),
+
+  // 가설: QR finder module이 안정적으로 분리되는 바깥 셀 피치는 5 px다(Q16.16).
+  glyphQrFineCellPitchQ16: 5 * Q16_ONE,
+
+  // 가설: 16 px 이하 피치는 area-aware unique-pixel kernel로 내린다(Q16.16).
+  glyphDenseKernelMaxCellPitchQ16: 16 * Q16_ONE,
+
+  // 가설: 한 pixel의 정본 support가 15% 미만이면 경계 잡음으로 버린다(Q1.15).
+  glyphKernelMinCoverageQ15: Math.round(0.15 * Q15_ONE),
+
+  // 가설: patch 표준편차가 luma 5 미만이면 상관 분모가 불안정하다고 본다(Q8.8).
+  glyphMinStddevLumaQ8: 5 * Q8_ONE,
+
+  // 가설: 같은 어휘의 중심이 셀 피치 0.12 안이면 같은 sub-pixel peak로 합친다(Q1.15).
+  glyphNmsRadiusQ15: Math.round(0.12 * Q15_ONE),
+
+  // 가설: 1.04 ladder의 이웃 scale은 pose 검증 전 보존하고 1.015 안만 합친다(Q1.15).
+  glyphNmsScaleRatioQ15: Math.round(1.015 * Q15_ONE),
+
+  // 가설: 중앙 QR 보호 사각을 슬롯 접촉점에서 0.5% 줄인다(Q1.15).
+  glyphQrSlotSafetyQ15: Math.round(0.995 * Q15_ONE),
+
   // 가설: 비정상 조명과 자세 변화를 잊는 λ=0.9 초기값이다.
   lambdaQ15: Math.round(0.9 * Q15_ONE),
 
