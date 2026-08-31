@@ -2029,9 +2029,9 @@
           <p class="hint finder-baseline-evidence" id="finderBaselineEvidence" style="display:none"></p>
           <p class="hint finder-score-note" data-i18n="g492">이 값은 모형 점수이며 인식률 예측이 아니에요.</p>
         </div>
-        <!-- ── 내곽·외곽 구역 (W2 C4 — 검출기 3구역, 설계서 ①) ─────────────────
+        <!-- ── 심부·내곽·외곽 구역 (W2 C4 + T4 — 자리 3축) ─────────────────────
              한 제목 «검출기 선택» 아래 3구역: 위의 formal 행 + 서랍 = **중앙**(분류 1,
-             기존 구조 승계), 아래 둘 = **내곽**(분류 2) · **외곽**(분류 3 + 부재).
+             기존 구조 승계), 아래 자리 행 = **심부** · **내곽**(분류 2) · **외곽**(분류 3).
              카드는 finder-zone-ui.zoneCards() 가 FINDER_TAXONOMY 에서 유도해
              §ensureSeatCards 가 채운다 (수기 사본 철폐).
              노출: **정식 일반** (운영자 지시 2026-08-30). 구 규약은 «lab 유지»
@@ -2049,6 +2049,23 @@
              a-cm 숨김·v-cm 개방. 방향 전환 시 선택이 a-cm ↔ v-cm 으로 승계된다.
              centerQr 병용: a-cm 은 C2a 로 합법 (cmqWireExists 게이트) · v-cm 은
              **가능** (V-CMQ 개설 2026-08-24 — V*CM 인덱스 공유, turnA.js §turnASpec). -->
+        <!-- 심부(deep) 자리 (T4 2026-08-31, PM/028 §2) — 내곽 카드 행에 얹혀 있던
+             사괘(링 6/8/10 예약)를 자기 축으로 분리했다. 내곽(코너 tetrad)과의
+             동시 선택은 G2~G4에서 개방한다. G1은 좌표 4셀 충돌이라 배타다.
+             «?» 는 내곽(g579)·외곽(g858) 문법 그대로 — 사괘 특성 고지 g855 를 단다. -->
+        <div id="finderDeepZone" hidden>
+          <div class="section-heading-row">
+            <label class="section-heading" data-i18n="g1024">내곽 심부 자리</label>
+            <button type="button" class="help-dot" data-help="g855" aria-expanded="false"
+                    aria-label="설명 보기" data-i18n-attr="aria-label:g931">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
+                <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
+              </svg>
+            </button>
+          </div>
+          <div class="card-row" id="deepSeatCards"></div>
+        </div>
         <div id="finderInnerZone" hidden>
           <!-- 3줄짜리 g579 힌트를 «?» 로 이관했다 (운영자 지시 2026-08-26). 문구 키는
                그대로 g579 다 — 자리만 옮겼지 사실이 바뀐 게 아니다. 8언어 존재는
@@ -2064,23 +2081,6 @@
             </button>
           </div>
           <div class="card-row" id="innerSeatCards"></div>
-        </div>
-        <!-- 심부(deep) 자리 (T4 2026-08-31, PM/028 §2) — 내곽 카드 행에 얹혀 있던
-             사괘(링 6/8/10 예약)를 자기 축으로 분리했다. 내곽(코너 tetrad)과의
-             동시 선택은 아직 없다 — T3(C×H)·cx-g4daehan 결과 뒤의 조합 개방 몫.
-             «?» 는 내곽(g579)·외곽(g858) 문법 그대로 — 사괘 특성 고지 g855 를 단다. -->
-        <div id="finderDeepZone" hidden>
-          <div class="section-heading-row">
-            <label class="section-heading" data-i18n="g1024">내곽 심부 자리</label>
-            <button type="button" class="help-dot" data-help="g855" aria-expanded="false"
-                    aria-label="설명 보기" data-i18n-attr="aria-label:g931">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
-                <circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/>
-              </svg>
-            </button>
-          </div>
-          <div class="card-row" id="deepSeatCards"></div>
         </div>
         <div id="finderOuterZone" hidden>
           <!-- 내곽(g579)과 **대칭**이어야 한다 — 한쪽만 «?» 면 두 구역이 서로 다른
@@ -2776,12 +2776,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0 (k=14 · 130 B)",
     "g1017": "C1 (k=16 · 172 B)",
     "g1018": "C2 (k=18 · 220 B)",
-    "g1019": "Type C에서는 CM 자리를 쓸 수 없어요 — 3시 노치가 CM 3셀과 겹쳐요.",
+    "g1019": "Type C에서는 CM 자리를 쓸 수 없어요 — 3시 노치가 CM 4셀과 겹쳐요.",
     "g1020": "Type C는 근접 스캔 전용이에요. C2(k=20)는 확대가 필요할 수 있어요.",
     "g1021": "Type C에서는 중앙 Y0(비컨)를 아직 쓸 수 없어요 — C 실루엣에서 v0 비컨 검증이 없어요. 중앙 TL·중앙 QR은 사용 가능해요.",
     "g1022": "Type C는 근접 스캔 전용이며 C2·C3는 확대가 필요할 수 있어요. 호환을 위해 중앙 파인더를 불스아이로 잠시 바꿨어요.",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "내곽 심부 자리",
+    "g1025": "G1에서는 H와 daehan·사괘가 4셀 겹쳐 함께 쓸 수 없어요 — G2–G4에서 함께 쓸 수 있어요.",
     "g924": "내용에 맞춰",
     "g925": "손상에 강함",
     "g926": "균형",
@@ -3247,12 +3248,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0 (k=14 · 130 B)",
     "g1017": "C1 (k=16 · 172 B)",
     "g1018": "C2 (k=18 · 220 B)",
-    "g1019": "CM placement is unavailable for Type C — the 3 o'clock notch overlaps three CM cells.",
+    "g1019": "CM placement is unavailable for Type C — the 3 o'clock notch overlaps four CM cells.",
     "g1020": "Type C is for close-range scanning. C2 (k=20) may require zoom.",
     "g1021": "Centre Y0 is not yet available for Type C — the v0 beacon is unverified on the C silhouette. Centre TL and Centre QR are available.",
     "g1022": "Type C is for close-range scanning and C2·C3 may require zoom. The centre finder was temporarily switched to the compatible bullseye.",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "Inner deep seat",
+    "g1025": "In G1, H overlaps daehan and sagoae by 4 cells, so they cannot be combined — use them together in G2–G4.",
     "g924": "Fits content",
     "g925": "Damage tolerant",
     "g926": "Balanced",
@@ -3718,12 +3720,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0（k=14・130 B）",
     "g1017": "C1（k=16・172 B）",
     "g1018": "C2（k=18・220 B）",
-    "g1019": "Type C では CM 配置を使えません — 3時方向のノッチが CM の3セルと重なります。",
+    "g1019": "Type C では CM 配置を使えません — 3時方向のノッチが CM の4セルと重なります。",
     "g1020": "Type C は近距離スキャン専用です。C2（k=20）はズームが必要な場合があります。",
     "g1021": "Type C では中央Y0（ビーコン）はまだ使えません — C シルエットでの v0 ビーコン検証が未実施です。中央TL・中央QRは利用できます。",
     "g1022": "Type C は近距離スキャン専用で、C2·C3はズームが必要な場合があります。互換性のため中央ファインダーを一時的にブルズアイへ切り替えました。",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "内郭深部シート",
+    "g1025": "G1では H と daehan・四卦が4セル重なるため併用できません — G2–G4では併用できます。",
     "g924": "内容に合わせて",
     "g925": "損傷に強い",
     "g926": "バランス",
@@ -4188,12 +4191,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0 (k=14 · 130 B)",
     "g1017": "C1 (k=16 · 172 B)",
     "g1018": "C2 (k=18 · 220 B)",
-    "g1019": "L'emplacement CM n'est pas disponible pour le Type C — l'encoche à 3 h chevauche trois cellules CM.",
+    "g1019": "L'emplacement CM n'est pas disponible pour le Type C — l'encoche à 3 h chevauche quatre cellules CM.",
     "g1020": "Le Type C est réservé au scan rapproché. C2 (k=20) peut nécessiter un zoom.",
     "g1021": "Le centre Y0 n'est pas encore disponible pour le Type C — la balise v0 n'est pas vérifiée sur la silhouette C. Les centres TL et QR sont disponibles.",
     "g1022": "Le Type C est réservé au scan rapproché et C2·C3 peut nécessiter un zoom. Le repère central a été temporairement remplacé par le bullseye compatible.",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "Siège intérieur profond",
+    "g1025": "En G1, H chevauche daehan et sagoae sur 4 cellules, ils ne peuvent donc pas être combinés — utilisez-les ensemble en G2–G4.",
     "g924": "Selon le contenu",
     "g925": "Tolérant aux dommages",
     "g926": "Équilibré",
@@ -4658,12 +4662,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0 (k=14 · 130 B)",
     "g1017": "C1 (k=16 · 172 B)",
     "g1018": "C2 (k=18 · 220 B)",
-    "g1019": "Il posizionamento CM non è disponibile per il Tipo C — la tacca a ore 3 si sovrappone a tre celle CM.",
+    "g1019": "Il posizionamento CM non è disponibile per il Tipo C — la tacca a ore 3 si sovrappone a quattro celle CM.",
     "g1020": "Il Tipo C è riservato alla scansione ravvicinata. C2 (k=20) può richiedere lo zoom.",
     "g1021": "Il Centro Y0 non è ancora disponibile per il Tipo C — il beacon v0 non è verificato sulla silhouette C. Centro TL e Centro QR sono disponibili.",
     "g1022": "Il Tipo C è riservato alla scansione ravvicinata e C2·C3 può richiedere lo zoom. Il finder centrale è stato temporaneamente sostituito dal bullseye compatibile.",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "Posto interno profondo",
+    "g1025": "In G1, H si sovrappone a daehan e sagoae su 4 celle, quindi non possono essere combinati — usali insieme in G2–G4.",
     "g924": "In base al contenuto",
     "g925": "Tollera i danni",
     "g926": "Equilibrata",
@@ -5128,12 +5133,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0 (k=14 · 130 B)",
     "g1017": "C1 (k=16 · 172 B)",
     "g1018": "C2 (k=18 · 220 B)",
-    "g1019": "Die CM-Position ist für Typ C nicht verfügbar — die Kerbe auf 3 Uhr überlappt drei CM-Zellen.",
+    "g1019": "Die CM-Position ist für Typ C nicht verfügbar — die Kerbe auf 3 Uhr überlappt vier CM-Zellen.",
     "g1020": "Typ C ist für Scans im Nahbereich gedacht. C2 (k=20) kann eine Vergrößerung erfordern.",
     "g1021": "Zentrum Y0 ist für Typ C noch nicht verfügbar — das v0-Beacon ist auf der C-Silhouette nicht verifiziert. Zentrum TL und Zentrum QR sind verfügbar.",
     "g1022": "Typ C ist für Scans im Nahbereich gedacht und C2·C3 kann eine Vergrößerung erfordern. Der zentrale Finder wurde vorübergehend auf das kompatible Bullseye umgestellt.",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "Tiefer innerer Platz",
+    "g1025": "In G1 überlappt H daehan und sagoae in 4 Zellen, daher lassen sie sich nicht kombinieren — in G2–G4 können sie zusammen verwendet werden.",
     "g924": "Passend zum Inhalt",
     "g925": "Schadenstolerant",
     "g926": "Ausgewogen",
@@ -5598,12 +5604,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0 (k=14 · 130 B)",
     "g1017": "C1 (k=16 · 172 B)",
     "g1018": "C2 (k=18 · 220 B)",
-    "g1019": "La posición CM no está disponible para el Tipo C — la muesca de las 3 en punto se superpone a tres celdas CM.",
+    "g1019": "La posición CM no está disponible para el Tipo C — la muesca de las 3 en punto se superpone a cuatro celdas CM.",
     "g1020": "El Tipo C está pensado para escaneo a corta distancia. C2 (k=20) puede requerir zoom.",
     "g1021": "El Centro Y0 aún no está disponible para el Tipo C — el beacon v0 no está verificado en la silueta C. Centro TL y Centro QR están disponibles.",
     "g1022": "El Tipo C está pensado para escaneo a corta distancia y C2·C3 puede requerir zoom. El localizador central cambió temporalmente al bullseye compatible.",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "Asiento interior profundo",
+    "g1025": "En G1, H se solapa con daehan y sagoae en 4 celdas, por lo que no pueden combinarse — úsalos juntos en G2–G4.",
     "g924": "Según el contenido",
     "g925": "Tolera daños",
     "g926": "Equilibrado",
@@ -6068,12 +6075,13 @@ const GENERATOR_STRINGS = {
     "g1016": "C0 (k=14 · 130 B)",
     "g1017": "C1 (k=16 · 172 B)",
     "g1018": "C2 (k=18 · 220 B)",
-    "g1019": "A posição CM não está disponível para o Tipo C — o entalhe das 3 horas sobrepõe-se a três células CM.",
+    "g1019": "A posição CM não está disponível para o Tipo C — o entalhe das 3 horas sobrepõe-se a quatro células CM.",
     "g1020": "O Tipo C destina-se a leitura de perto. C2 (k=20) pode exigir zoom.",
     "g1021": "O Centro Y0 ainda não está disponível para o Tipo C — o beacon v0 não foi verificado na silhueta C. Centro TL e Centro QR estão disponíveis.",
     "g1022": "O Tipo C destina-se a leitura de perto e C2·C3 pode exigir zoom. O localizador central foi temporariamente trocado pelo bullseye compatível.",
     "g1023": "C3 (k=20 · 255 B)",
     "g1024": "Assento interno profundo",
+    "g1025": "Em G1, H sobrepõe-se a daehan e sagoae em 4 células, por isso não podem ser combinados — use-os juntos em G2–G4.",
     "g924": "Conforme o conteúdo",
     "g925": "Tolera danos",
     "g926": "Equilibrado",
@@ -6492,6 +6500,7 @@ import {
 } from './src/finder-daehan.js';
 import { VERSIONS_DAEHAN } from './src/capacityDaehan.js';
 import { VERSIONS_C, VERSIONS_C_DAEHAN } from './src/capacityC.js';
+import { VERSIONS_OCM_DAEHAN } from './src/markerOdaehan.js';
 import { TYPE_C_CM_UNSUPPORTED_REASON } from './src/formatC.js';
 // daehan(·사괘 — 같은 예약 회계) 이 정의된 버전 집합 — 손 상수가 아니라 각 회계표
 // 유도다. V4D 개방(2026-08-30)으로 평 O 전 버전 + Type C 전 행이 열려 있다 —
@@ -6503,9 +6512,22 @@ function daehanSupportsGeneratorVersion(versionO, versionC) {
   if (versionO === 'ultra') return DAEHAN_C_VERSIONS.has(Number(versionC));
   return versionO === 'auto' || DAEHAN_O_VERSIONS.has(Number(versionO));
 }
+// H(o-cm) × daehan/sagoae 합성은 전용 회계표가 가진 G2~G4에서만 열린다.
+// G1(k=6)은 좌표 정본 실측에서 H 12셀과 sagoae 예약이 4셀 겹친다. 버전 목록을
+// 손으로 옮겨 적지 않고 VERSIONS_OCM_DAEHAN에서 유도해 카드·해상도 잠금이 같이 쓴다.
+const MARKER_DAEHAN_O_VERSIONS = new Set(
+  VERSIONS_OCM_DAEHAN.map((spec) => spec.version),
+);
+function markerDaehanSupportsGeneratorVersion(versionO) {
+  return versionO === 'auto' || MARKER_DAEHAN_O_VERSIONS.has(Number(versionO));
+}
+function markerDaehanCombinationActive(state = generatorState) {
+  return state.type === 'O' && state.innerSeat === 'o-cm'
+    && (state.deepSeat === 'sagoae' || isDaehanFinderPatternId(state.finderPatternId));
+}
 // 자리 «자동» 기준표 (운영자 2026-08-25). 표는 순수 모듈에 있다 — 인라인에 두면
 // 테스트가 못 닿는다 (generator-auto-y·generator-locator-options 와 같은 처방).
-import { autoSeatsFor } from './src/generator-seat-auto.js';
+import { autoSeatsFor, safeAutoInnerSeat } from './src/generator-seat-auto.js';
 import {
   CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID, DEFAULT_OUTER_QR_POSITION,
   commitFinderQrTransition,
@@ -6577,7 +6599,7 @@ import {
 import {
   GENERATOR_DEFAULT_FINDER_PATTERN_ID,
   createGeneratorState, resolutionTierAvailable, resolutionTierForVersion,
-  transitionGeneratorMode, versionForResolutionTier, versionStateKey,
+  syncAfterSeatChange, transitionGeneratorMode, versionForResolutionTier, versionStateKey,
 } from './src/generator-state.js';
 import { CORNER_UNIT_OFFSETS, FACES, facePolygon } from './src/hexgrid.js';
 import { maxSafeRadius } from './src/bullseye.js';
@@ -8631,18 +8653,25 @@ function renderFinderUi() {
     // 술어가 저절로 잠근다. 손 목록 금지).
     const daehanVersionLocked = isDaehanFinderPatternId(fid)
       && !daehanSupportsGeneratorVersion(generatorState.versionO, generatorState.versionC);
+    // G1(k=6)은 H tetrad와 sagoae 예약이 4셀 겹친다. daehan 자체는 G1에서
+    // 합법이어도, o-cm(H)이 함께 선택된 경우에는 합성 회계표(G2~G4)가 없으므로 잠근다.
+    const markerDaehanVersionLocked = isDaehanFinderPatternId(fid)
+      && generatorState.innerSeat === 'o-cm'
+      && !markerDaehanSupportsGeneratorVersion(generatorState.versionO);
     // Type C 중앙 슬롯 개통 (2026-08-30, PM/027 §5.3·§5.4) — 중앙 TL(centralN7)과
     // 중앙 QR 은 C 에서 정식 선택 가능이다. 남은 잠금은 centralV0(중앙 Y0) 하나 —
     // C 실루엣 v0 비컨 검증 미실측. 판정은 중앙 비컨 정본 유도에서 그대로 온다.
     const typeCCentralLocked = typeCGeneratorActive()
       && centralBeaconEncoderOptions(fid, false).centralV0 === true;
-    const finderLocked = daehanVersionLocked || typeCCentralLocked;
+    const finderLocked = daehanVersionLocked || markerDaehanVersionLocked
+      || typeCCentralLocked;
     card.style.display = '';
     card.classList.toggle('disabled', finderLocked);
     card.setAttribute('aria-disabled', String(finderLocked));
     card.title = typeCCentralLocked ? t('g1021')
-      : daehanVersionLocked ? t('g1011')
-      : finderRestoresOuterQr ? t('g581') : '';
+      : markerDaehanVersionLocked ? t('g1025')
+        : daehanVersionLocked ? t('g1011')
+          : finderRestoresOuterQr ? t('g581') : '';
     const active = fid === generatorState.finderPatternId;
     card.classList.toggle('active', active);
     card.setAttribute('aria-pressed', String(active));
@@ -8900,11 +8929,13 @@ function renderQrPositionUi() {
 function syncFinderQrUi() {
   // 언어·모드 재표시는 상태를 정규화하지 않는다. 사용자 선택 이벤트의 commit만 쓴다.
   renderQrPositionUi();
-  renderFinderUi();
   // ⚠ **의도적 갱신 (W2 C4)** — 여기엔 «중앙 QR 이면 코너 마커 강제 소등» 이 적혀
   // 있었다. C2a 가 그 배타를 해제했으므로 (CM+Q 합법) 소등은 없다 — seat 구역의
   // 표시·와이어 술어 게이트만 재동기화한다 (syncSeatUi 의 cmqWireExists).
+  // 자리 자동 유도는 파인더 잠금의 입력이다. 먼저 자리를 확정해야 첫 로드 G1에서
+  // 자동 H를 못 본 daehan 카드가 활성으로 남지 않는다.
   syncSeatUi();
+  renderFinderUi();
 }
 
 /** 타입 카드 배선 — 일반·고급이 **같은 함수**를 쓴다 (2026-08-24: 고급도 버튼). */
@@ -9096,13 +9127,20 @@ function syncResTierUi() {
   // 사용자가 명시한 o-cm만 양방향 잠금 대상으로 삼아 C+CM 던짐 조합을 막는다.
   const manualCmActive = type === 'O' && !innerSeatAuto
     && generatorState.innerSeat === 'o-cm';
+  // H×daehan/sagoae가 이미 켜진 상태에서는 합성 표가 없는 G1(k=6)과 Type C로
+  // 이동할 수 없다. 지원 티어는 VERSIONS_OCM_DAEHAN에서 유도한다.
+  const markerDaehanActive = markerDaehanCombinationActive();
+  const markerDaehanTierLocked = (res) => markerDaehanActive
+    && res !== 'ultra'
+    && !markerDaehanSupportsGeneratorVersion(versionForResolutionTier('O', res));
   const isOff = (res) =>
     (res === 'ultra' && manualCmActive) ? true
-      : cellSurfaceV0 ? res === 'high'
-        : cellSurfaceV0ty ? res === 'low'
-          : cellSurfaceV0t ? false
-            : windowLocked ? (res === 'low' || res === 'mid')
-              : false;
+      : markerDaehanTierLocked(res) ? true
+        : cellSurfaceV0 ? res === 'high'
+          : cellSurfaceV0ty ? res === 'low'
+            : cellSurfaceV0t ? false
+              : windowLocked ? (res === 'low' || res === 'mid')
+                : false;
   // ⭐ 선택 표시도 **실제 버전을 따라간다** — 'mid' 를 박아 두면 사용자가 «고» 를 눌러
   //    Y2 로 갔는데 카드는 «중» 이 켜진 채인 «표시 ≠ 와이어» 가 된다.
   const selectedTier = typeCActive
@@ -9127,7 +9165,8 @@ function syncResTierUi() {
     card.classList.toggle('active', res === selectedTier);
     // 잠긴 이유를 카드가 말한다 — ultra는 CM 노치 겹침. («대용량» daehan 잠금은
     // V4D 개방으로 소멸 — g1012 는 select 옵션 잠금 툴팁으로만 남는다.)
-    card.title = res === 'ultra' && manualCmActive ? typeCCmUnsupportedMessage() : '';
+    card.title = res === 'ultra' && manualCmActive ? typeCCmUnsupportedMessage()
+      : markerDaehanTierLocked(res) ? t('g1025') : '';
   }
   els.resTierHint.textContent =
     typeCActive
@@ -9624,8 +9663,13 @@ function wireSeatCards(container, seatKey) {
     // 안전망이다 (조용한 던짐 조합 생성 금지 — encodeA V-CMQ 만 남은 배타).
     if (generatorState.outerSeat === 'a-cm') generatorState.turnA = false;
     if (generatorState.outerSeat === 'v-cm') generatorState.turnA = true;
-    syncSeatUi();
-    syncTurnAUi();
+    syncAfterSeatChange({
+      syncSeatUi,
+      syncTurnAUi,
+      syncTypeUi,
+      syncResTierUi,
+      renderFinderUi,
+    });
     schedule();
   });
 }
@@ -11063,9 +11107,15 @@ function syncTypeUi() {
       const cmLocked = candidate === 'ultra' && manualCm;
       const daehanLocked = daehanAccounting
         && !daehanSupportsGeneratorVersion(candidate, generatorState.versionC);
-      option.disabled = cmLocked || daehanLocked;
+      // G1은 daehan/sagoae 단독 회계는 있지만 H와 4셀 겹쳐 합성 표가 없다.
+      // ultra 자동 진입은 syncSeatUi가 o-cm을 none으로 유도하므로 여기서 이중 잠금하지 않는다.
+      const markerDaehanLocked = candidate !== 'ultra' && daehanAccounting
+        && generatorState.innerSeat === 'o-cm'
+        && !markerDaehanSupportsGeneratorVersion(candidate);
+      option.disabled = cmLocked || daehanLocked || markerDaehanLocked;
       option.title = cmLocked ? typeCCmUnsupportedMessage()
-        : daehanLocked ? t('g1012') : '';
+        : markerDaehanLocked ? t('g1025')
+          : daehanLocked ? t('g1012') : '';
     }
     for (const option of els.versionC.options) {
       const daehanLocked = daehanAccounting
@@ -11175,11 +11225,23 @@ function syncSeatUi() {
       allowBlocked: lab,
     })
     : null;
-  // O 자동 기본은 o-cm(H)이지만 Type C에서는 3시 노치와 CM 3셀이 겹친다.
-  // 자동 선택은 사용자의 명시 CM 선택이 아니므로, ultra 정권에서 안전한 none으로
-  // 유도한다. taegeuk의 자동 sagoae 행은 C*D 회계가 실재하므로 그대로 둔다.
-  if (auto !== null && typeCGeneratorActive() && auto.inner === 'o-cm') {
-    auto = { ...auto, inner: SEAT_NONE };
+  // 자동 H는 충돌 조합을 기본값으로 만들지 않는다. Type C에서는 노치×H, G1에서는
+  // H×daehan/sagoae가 각각 4셀 겹친다. 상대 축은 보존하고 H만 none으로 내리며,
+  // G2–G4로 돌아오면 기준표의 H가 다시 복원된다.
+  if (auto !== null) {
+    const nextDeepSeat = deepSeatAuto ? auto.deep : generatorState.deepSeat;
+    auto = {
+      ...auto,
+      inner: safeAutoInnerSeat({
+        proposedInner: auto.inner,
+        typeCActive: typeCGeneratorActive(),
+        markerDaehanVersionSupported: markerDaehanSupportsGeneratorVersion(
+          generatorState.versionO,
+        ),
+        deepSeat: nextDeepSeat,
+        daehanFinder: isDaehanFinderPatternId(generatorState.finderPatternId),
+      }),
+    };
   }
   if (auto !== null) {
     if (innerSeatAuto) generatorState.innerSeat = auto.inner;
@@ -11205,23 +11267,31 @@ function syncSeatUi() {
   // turnA.js §turnASpec 근거·왕복 실측). 운영자 요구 «중앙 QR 일 때 V-CM 선택
   // 가능해야 됨» 의 이행이다.
   const turnAOn = generatorState.turnA === true;
+  const atomicDaehanSelected = isDaehanFinderPatternId(generatorState.finderPatternId);
+  const markerDaehanVersionSupported = markerDaehanSupportsGeneratorVersion(
+    generatorState.versionO,
+  );
   const sync = (container, seatValue, autoOn) => {
     for (const card of container.children) {
       const seat = card.dataset.seat;
       const isAutoCard = seat === SEAT_AUTO;
       const isNone = seat === SEAT_NONE;
+      // Type C는 상태 타입을 O로 공유하므로 seatCardShown의 타입 표만으로는 o-cm이
+      // 보인다. 실제 좌표는 노치×H 4셀 충돌이므로 브리프 계약대로 카드를 숨긴다.
+      const typeCCmLocked = seat === 'o-cm' && typeCGeneratorActive();
       // 표시 판정은 **finder-zone-ui.seatCardShown 하나**가 낸다 (2026-08-30) —
       // 타입 부합 · 방향 스왑(a-cm ↔ v-cm) · 부재를 그 술어가 다 안다. 여기 인라인
       // 조건으로 두면 자가 «index.html 의 철자» 를 재게 되어 다음 리팩터링까지만
       // 산다. 구 `officialHidden`(정식에선 자동·없음만) 은 철폐됐다 — 근거·경위는
       // 그 술어의 §정식 노출 주석.
-      card.style.display = seatCardShown({
+      const seatShown = seatCardShown({
         seat,
         type,
         seatTypes: card.dataset.seatTypes.split(' '),
         turnA: turnAOn,
         absent: card.dataset.seatAbsent === '1',
-      }) ? '' : 'none';
+      });
+      card.style.display = seatShown && !typeCCmLocked ? '' : 'none';
       const vcmLocked = seat === 'v-cm' && !turnAOn;
       // sagoae 버전 잠금 — daehan 카드 잠금과 같은 표 유도 술어 (던짐 조합을 UI 가
       // 안 만든다). V4D 개방(2026-08-30) 후 평 O 전 버전이 열려 실효 잠금은 없다.
@@ -11229,14 +11299,21 @@ function syncSeatUi() {
         && !daehanSupportsGeneratorVersion(
           generatorState.versionO, generatorState.versionC,
         );
-      const typeCCmLocked = seat === 'o-cm' && typeCGeneratorActive();
+      // G1(k=6)만 H×sagoae 4셀 충돌이다. 상대 축이 선택됐을 때 해당 카드만
+      // 잠그고, G2~G4/auto에서는 두 카드를 독립적으로 누를 수 있게 둔다.
+      const markerDaehanVersionLocked = type === 'O' && !typeCGeneratorActive()
+        && !markerDaehanVersionSupported
+        && ((seat === 'o-cm'
+          && (generatorState.deepSeat === 'sagoae' || atomicDaehanSelected))
+          || (seat === 'sagoae' && generatorState.innerSeat === 'o-cm'));
       // sagoae × 중앙 파트너 — 렌더·C2c 계약(scene.sagoaeComposableWith 유도):
       // 독립 cell-mask 후보 + 정식 중앙 3종(불스아이·TL·QR — T2 개통 2026-08-30,
       // PM/028 §4)과 합성된다. 남은 잠금은 큐브 계열(3톤·하이브리드)·중앙 Y0.
       const sagoaePartnerLocked = seat === 'sagoae'
         && !sagoaeComposableWith(generatorState.finderPatternId);
       const locked = card.dataset.seatReady !== '1' || (wireLocked && !isNone && !isAutoCard)
-        || vcmLocked || sagoaeV4Locked || sagoaePartnerLocked || typeCCmLocked;
+        || vcmLocked || sagoaeV4Locked || sagoaePartnerLocked || typeCCmLocked
+        || markerDaehanVersionLocked;
       card.classList.toggle('disabled', locked);
       // 자동이 켜져 있으면 **자동 카드만** 켜진다 — 자동이 고른 결과 카드까지 함께
       // 켜면 «둘 다 골라져 있는» 화면이 되고, 무엇이 이기는지가 안 보인다.
@@ -11252,9 +11329,11 @@ function syncSeatUi() {
       //   서서 양성 선택지다. 문구도 «자리만 예약» 에서 특성 고지로 바꿨다.
       const seatNote = card.dataset.seatAbsent === '1' ? t('g858')
         : seat === 'v-cm' ? (!turnAOn ? t('g875') : '')
-          : seat === 'sagoae' ? (sagoaeV4Locked ? t('g1011')
-            : sagoaePartnerLocked ? t('g1013') : t('g855'))
-            : seat === 'o-cm' ? (typeCCmLocked ? typeCCmUnsupportedMessage() : t('g871'))
+          : seat === 'sagoae' ? (markerDaehanVersionLocked ? t('g1025')
+            : sagoaeV4Locked ? t('g1011')
+              : sagoaePartnerLocked ? t('g1013') : t('g855'))
+            : seat === 'o-cm' ? (typeCCmLocked ? typeCCmUnsupportedMessage()
+              : markerDaehanVersionLocked ? t('g1025') : t('g871'))
               : (wireLocked && !isNone) ? t('g580') : '';
       // 자리명은 자동·없음에는 없다 (그 둘은 자리가 아니라 자리를 고르는 방식이다).
       const seatName = isAutoCard || isNone ? '' : (card.dataset.seatName || '');
@@ -11833,9 +11912,10 @@ function buildConfig() {
     // 코너 마커는 seat 파생이다 (W2 C4): O 는 내곽 o-cm, A 는 외곽 a-cm 이 켠다.
     // Y 는 자기 로케이터 문법을 쓰므로 seat 구역 자체가 안 뜬다 — 타입 술어가
     // 종전의 «다른 타입에서 켜진 채 새는» 것을 같은 규약으로 죽인다.
-    // sagoae 는 자리 예약 값이라 와이어를 켜지 않는다 (생성측 합성 렌더 전까지).
     // O-CM = 자리 + H 심볼 톤 **통합** (운영자 2026-08-24 아침 검수 3 — A-CM 이
     // H2O 를 항상 싣는 것과 같은 문법. encode 계약상 톤은 자리와 함께만 실린다).
+    // H×sagoae/daehan은 두 축을 그대로 함께 내린다. G2~G4 합성 공급자가 회계를
+    // 한 번만 세며, G1과 Type C의 좌표 충돌은 UI·인코더 경계가 명시적으로 막는다.
     // (Wave 3 ④) 외곽 코너 자리는 방향과 짝이다: a-cm 은 정삼각(turnA off) 에서만,
     // v-cm 은 역삼각(turnA on) 에서만 마커를 켠다 — 어긋난 이관·URL 상태는 마커
     // 없이 방향만 살린다 (조용한 던짐 조합 생성 금지).
@@ -12053,24 +12133,24 @@ function encodeOptsFor(cfg) {
   // 중앙 비컨 플래그는 **공유 유도** 하나에서 온다 (generator-render-config.js).
   Object.assign(opts, centralBeaconEncoderOptions(cfg.finderPatternId, Boolean(opts.centerQr)));
   if (isDaehanFinderPatternId(cfg.finderPatternId) && !opts.centerQr) opts.daehanFinder = true;
-  // daehan 과 코너 마커는 둘 다 layoutProviderFor 를 갈아끼운다(src/encode.js:47) —
-  // 같이 주면 회계가 두 번 갈린다. daehan 이 파인더 선택에서 오므로 그쪽을 우선한다.
+  // H(o-cm) × daehan/sagoae — G2~G4 합성 공급자(VERSIONS_OCM_DAEHAN)가 두 예약
+  // 집합을 한 번만 세고 V*CMD 회계를 쓴다. G1은 좌표 4셀 충돌이라 UI가 막고,
+  // 저장·URL 우회 상태는 인코더의 «알 수 없는 버전» 거절로 조용히 강등되지 않는다.
   // 중앙 v0는 기존 불스아이 19셀을 교체할 뿐이라 cornerMarker(Type G)와 함께 싣는다.
-  // ⚠ 중앙 QR 과도 상호배제다 — UI 가 이미 막지만, 저장·URL 로 옛 조합이 들어와도
-  //   인코더가 던지는 대신 여기서 코너 마커를 떨군다 (중앙 QR 이 사용자가 더 최근에
-  //   고른 것이고, QR 은 폴백 경로라 잃으면 손해가 크다).
-  else if (cfg.cornerMarker === true) {
+  if (cfg.cornerMarker === true) {
     opts.cornerMarker = true; // C2a — centerQr 병용 개설
     // H 심볼 (2026-08-24) — 자리 예약이 실릴 때만 톤도 실린다 (encode 계약).
     if (cfg.markerTones === true) opts.markerTones = true;
-  } else if (cfg.sagoae === true) {
+  }
+  if (cfg.sagoae === true) {
     // 사괘 단독 (2026-08-30, 운영자 실기 신고) — daehan 예약 회계를 공유한다.
     // ⭐ **centerQr 병용 개설 (T2 2026-08-30)** — 구 «Q 변형 없음» 강등은 사실이
     //   바뀌어 걷었다: V*D 는 레거시와 같은 +4 Q 오프셋을 그대로 받아 V*Q 인덱스를
     //   공유하고, 디코더는 qr-center 포즈 위 C2c 검증으로 회계를 연다
     //   (test/sagoae-roundtrip §정식 중앙). daehan 카드가 이기면(위 분기) 사괘는
     //   이미 포함이라 따로 안 싣는다.
-    opts.sagoae = true;
+    // 원자 daehan은 이미 고리를 포함하므로 별도 메타를 중복으로 싣지 않는다.
+    if (opts.daehanFinder !== true) opts.sagoae = true;
   }
   return { fn: encode, opts };
 }

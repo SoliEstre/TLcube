@@ -55,6 +55,11 @@ test('① seat 구역 UI 와 배선이 있고 i18n 8언어 사전이 다 있다'
     assert.ok(finderSection.includes('id="' + id + '"'),
       id + ' 가 #finderSection 안에 없다');
   }
+  const deepAt = finderSection.indexOf('id="finderDeepZone"');
+  const innerAt = finderSection.indexOf('id="finderInnerZone"');
+  const outerAt = finderSection.indexOf('id="finderOuterZone"');
+  assert.ok(deepAt < innerAt && innerAt < outerAt,
+    '자리 섹션 표시 순서가 심부 → 내곽 → 외곽이 아니다');
   // 두 구역은 **대칭**이어야 한다 — 한쪽만 «?» 면 서로 다른 종류의 컨트롤로 읽힌다.
   // (처음엔 내곽만 옮겼다. 한국어에선 외곽 힌트가 2줄이라 규칙에 안 걸렸고,
   //  8언어로 다시 재서야 독일어 3줄이 드러났다 — 한 언어는 계약이 아니다.)

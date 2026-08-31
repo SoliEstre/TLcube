@@ -28,7 +28,7 @@ export const TYPE_C_RESERVED_FORMAT_INDEXES = Object.freeze([
 
 /** CM 병용 공용 거절 사유 — 표 조회와 인코더가 같은 문자열을 쓴다. */
 export const TYPE_C_CM_UNSUPPORTED_REASON =
-  'Type C × cornerMarker(CM) 는 이번 범위 밖이다 — 3시 노치가 CM tetrad 3셀과 겹쳐 배치·회계·검출을 검증하지 않았다';
+  'Type C × cornerMarker(CM) 는 지원하지 않는다 — 3시 노치가 CM tetrad 4셀과 겹친다';
 
 /**
  * Type C 와이어 표. 평 4행 → C*D 4행 → CQ(중앙 QR) 4행.

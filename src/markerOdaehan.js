@@ -33,7 +33,7 @@ function key(cell) {
   return `${cell.q},${cell.r}`;
 }
 
-/** 합성 G×daehan에서 허용한 G2~G4 행. G1은 이 검증 트랙의 범위 밖이다. */
+/** 합성 G×daehan에서 허용한 G2–G4 행. G1은 H와 고리 예약이 4셀 겹쳐 제외한다. */
 const MARKER_SPECS = Object.freeze(VERSIONS_OCM.filter((spec) => spec.version >= 2));
 
 /**

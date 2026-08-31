@@ -122,5 +122,25 @@ export function autoSeatsFor({ type, centralFinderIsTaegeuk = false, allowBlocke
   };
 }
 
+/**
+ * 자동이 제안한 내곽 자리를 현재 조합에 안전하게 맞춘다.
+ *
+ * Type C는 노치×H가 4셀 겹치고, G1은 H×daehan/sagoae가 4셀 겹친다. 명시
+ * 선택은 엔진이 거절해야 하지만 자동 선택은 충돌 코드를 기본값으로 만들면 안 된다.
+ * 상대 축은 보존하고 H만 없음으로 내리며, 지원 버전으로 돌아오면 원 제안이 복원된다.
+ */
+export function safeAutoInnerSeat({
+  proposedInner,
+  typeCActive = false,
+  markerDaehanVersionSupported = true,
+  deepSeat = SEAT_NONE,
+  daehanFinder = false,
+}) {
+  if (proposedInner !== SEAT_O_CM) return proposedInner;
+  if (typeCActive) return SEAT_NONE;
+  const combined = deepSeat === SEAT_SAGOAE || daehanFinder;
+  return combined && !markerDaehanVersionSupported ? SEAT_NONE : proposedInner;
+}
+
 /** 표에 등재된 타입 (테스트가 전수를 돌 때 쓴다 — 손 목록 금지). */
 export const AUTO_SEAT_TYPES = Object.freeze(Object.keys(BY_TYPE));
