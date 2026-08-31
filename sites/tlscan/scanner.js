@@ -800,8 +800,9 @@ function reportLabFrame(imageData, result, ms, stage, extra) {
   // 안 깨지지만 **ClickHouse 에 컬럼이 생기기 전까지는 저장되지 않는다.**
   if (expectedCentralFinder) expected.finderPatternId = expectedCentralFinder;
   if (expectedOuterFinder) expected.outerFinderId = expectedOuterFinder;
-  // 축 ④ (2026-08-29). CONFIG_SIDE_KEYS 에 centralN7Emphasis 가 열려 있어야
-  // normalizeConfigSide 를 지나 relay(expected_emphasis)에 닿는다 — 011 ALTER 선행.
+  // 축 ④ (2026-08-29). 일반 검출기 강조도 기존 wire 키 centralN7Emphasis 로 싣는다.
+  // CONFIG_SIDE_KEYS 에 이 키가 열려 있어야 normalizeConfigSide 를 지나
+  // relay(expected_emphasis)에 닿는다 — 011 ALTER 선행.
   if (expectedEmphasis) expected.centralN7Emphasis = expectedEmphasis;
   if (cellSurface && expectedLocatorLayout && !cellSurface.expectedLayout) {
     cellSurface.expectedLayout = expectedLocatorLayout;
@@ -2762,8 +2763,8 @@ if (expectedOuterRoot && isLabPath()) {
   }
 }
 
-// 축 ④ 중앙 강조 변이 (2026-08-29) — 파인더/외곽 카드와 같은 배선. 정본 판정은
-// src/lab-expected-axes.js(normalizeExpectedEmphasis, centralN7Emphasis.js 에서 유도).
+// 축 ④ 검출기 강조 변이 (2026-08-29) — 파인더/외곽 카드와 같은 배선. 정본 판정은
+// src/lab-expected-axes.js(normalizeExpectedEmphasis, detectorEmphasis.js 에서 유도).
 // 라인업 밖 값은 null(모름)로 떨어진다.
 let expectedEmphasis = null;
 const expectedEmphasisRoot = document.getElementById('lab-expected-emphasis');
