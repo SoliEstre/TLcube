@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>영상 프레임 복호 프로브</title>
+<!--
+  실기 **동영상**의 프레임을 스캐너가 보는 방식으로 디코더에 물린다.
+
+  video-probe.html 과 다른 것: 저쪽은 .luma 덤프를 «굽고», 여기는 프레임을 **바로 복호**한다.
+  「이 영상이 읽히는가」를 한 번에 답하는 용도다.
+
+  쓰는 법:
+    node tools/dev-server.mjs
+    http://localhost:8765/tools/warp/video-decode.html?src=/test/output/video/clip.mp4
+  (영상은 서버 루트 아래 아무 데나 두면 된다. test/output/ 은 gitignore 라 편하다.)
+  ffmpeg 이 없어서 브라우저의 video 디코더를 프레임 추출기로 쓴다.
+
+  스캐너 규약을 그대로 따른다: 정사각 크롭 + 긴 변 960px(FRAME_MAX_SIDE).
+  코드 위치를 모르므로 **중심 기준 여러 크롭 크기**를 훑는다 — 손으로 찍은 영상이라
+  코드가 정확히 중앙에 없을 수 있어 중심 오프셋도 몇 점 같이 본다.
+
+  결과는 console 로 낸다 (에이전트가 read_console_messages 로 읽는다).
+-->
+<body style="font:14px system-ui;margin:20px">
+<h3>영상 프레임 복호 프로브</h3>
+<div id="log" style="white-space:pre;font-family:ui-monospace,monospace;font-size:12px"></div>
+<script type="module">
+import { decodeFrontend } from '/src/decoder/frontend.js';
+import { FRAME_MAX_SIDE } from '/src/scanner-zoom.js';
+
+const logEl = document.getElementById('log');
+const say = (s) => { console.log(s); logEl.textContent += s + '\n'; };
+
+const v = document.createElement('video');
+v.muted = true; v.playsInline = true; v.preload = 'auto';
+// 영상 경로는 쿼리로 받는다: ?src=/test/output/video/clip.mp4
+const SRC = new URLSearchParams(location.search).get('src') || '/test/output/video/clip.mp4';
+v.src = SRC;
+
+await new Promise((res, rej) => {
+  v.onloadedmetadata = res;
+  v.onerror = () => rej(new Error('video load failed'));
+});
+say(`영상 ${v.videoWidth}×${v.videoHeight} · ${v.duration.toFixed(2)}초`);
+
+const cv = document.createElement('canvas');
+const cx = cv.getContext('2d', { willReadFrequently: true });
+
+function seek(t) {
+  return new Promise((res) => { v.onseeked = () => res(); v.currentTime = t; });
+}
+
+// 정사각 크롭 + 960px 축소 → decodeFrontend
+function tryFrame(side, ox, oy) {
+  const target = Math.min(FRAME_MAX_SIDE, side);
+  cv.width = target; cv.height = target;
+  const sx = Math.max(0, Math.min(v.videoWidth - side, (v.videoWidth - side) / 2 + ox));
+  const sy = Math.max(0, Math.min(v.videoHeight - side, (v.videoHeight - side) / 2 + oy));
+  cx.drawImage(v, sx, sy, side, side, 0, 0, target, target);
+  const img = cx.getImageData(0, 0, target, target);
+  try {
+    const d = decodeFrontend({ width: target, height: target, pixels: img.data }, {});
+    if (d && d.ok) return { ok: true, text: String(d.text) };
+    return { ok: false, reason: String(d && d.reason || 'fail').replace('frontend:', '') };
+  } catch (e) { return { ok: false, reason: 'throw:' + e.message.slice(0, 24) }; }
+}
+
+const full = Math.min(v.videoWidth, v.videoHeight);
+// 코드가 프레임의 얼마를 차지하는지 모르므로 크롭 크기를 훑는다.
+const SIDES = [full, full * 0.7, full * 0.5, full * 0.35, full * 0.25].map((s) => Math.round(s));
+const OFFSETS = [[0, 0], [0, -full * 0.15], [0, full * 0.15], [-full * 0.15, 0], [full * 0.15, 0]];
+const N = 12;
+let success = 0;
+const seen = new Set();
+
+for (let k = 0; k < N; k += 1) {
+  const t = (v.duration * (k + 0.5)) / N;
+  await seek(t);
+  let hit = null;
+  const tried = [];
+  for (const side of SIDES) {
+    for (const [ox, oy] of OFFSETS) {
+      const r = tryFrame(side, Math.round(ox), Math.round(oy));
+      if (r.ok) { hit = { side, ox, oy, text: r.text }; break; }
+      tried.push(r.reason);
+    }
+    if (hit) break;
+  }
+  if (hit) {
+    success += 1; seen.add(hit.text);
+    say(`t=${t.toFixed(2)}s  ✓ ok  크롭 ${hit.side}px @(${hit.ox},${hit.oy})  "${hit.text}"`);
+  } else {
+    const counts = {};
+    for (const r of tried) counts[r] = (counts[r] || 0) + 1;
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([r, n]) => `${r}×${n}`).join(' · ');
+    say(`t=${t.toFixed(2)}s  ✗ (${tried.length}조합)  ${top}`);
+  }
+}
+say(`\n프레임 ${N}장 중 성공 ${success}장 · 복호된 문자열: ${[...seen].join(' | ') || '없음'}`);
+say('DONE');
+</script>
+</body>
