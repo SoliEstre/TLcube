@@ -672,6 +672,11 @@
   #y3dBar[hidden] { display: none; }
   #y3dBar > * { pointer-events: auto; }
   .y3d-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  /* ⚠ 저자 스타일의 display 는 UA 의 `[hidden]{display:none}` 을 **오리진 우선순위로**
+     이긴다 — 그래서 .y3d-row 를 단 행은 hidden 을 걸어도 안 숨는다. 위 #y3dBar[hidden]
+     와 아래 .toggle-card[hidden] 이 손으로 박혀 있는 것이 같은 이유다. 이 줄이 없으면
+     2.5D 모드(= Type Y 기본 상태)에서 3D 전용 행들이 그대로 떠 있었다. */
+  .y3d-row[hidden] { display: none; }
   .y3d-label { font-size: 11px; color: var(--dim); margin-right: 4px; }
   .y3d-btn {
     display: inline-flex; align-items: center; gap: 4px;
@@ -685,9 +690,24 @@
   }
   .y3d-btn:hover { border-color: var(--accent); }
   .y3d-digit { min-width: 28px; justify-content: center; font-variant-numeric: tabular-nums; }
+  /* ⚠ 전용 폭이 **필요하고, 선택자가 `#y3dBar` 로 시작해야 한다.** 아래 «컨트롤» 절의
+     전역 `input[type="range"] { width: 100% }` 는 **뒤에** 있어서, 명시도가 같으면
+     그쪽이 이긴다 — 실기 확인에서 슬라이더가 275px 로 행을 찢고 3면/6면 버튼을
+     다음 줄로 밀어냈다(2026-08-31). id 명시도로 순서와 무관하게 고정한다. */
+  #y3dBar .y3d-range { width: 108px; accent-color: var(--accent); }
+  /* 복사 성공 표시 — `.icon-btn.copied` 와 같은 규약이라 `flashCopied()` 를 그대로 쓴다. */
+  .y3d-btn.copied { color: var(--ok); border-color: var(--ok); }
+  .y3d-btn[disabled] { opacity: .45; cursor: default; }
+  .y3d-btn[disabled]:hover { border-color: var(--line); }
   @media (max-width: 760px) {
-    #y3dBar { left: 10px; right: 10px; bottom: 10px; }
+    /* ⚠ 행이 넷이 되면서 좁은 화면에서 캔버스를 절반 넘게 가렸다 (375px 실측: 51%).
+       바는 오버레이라 겹침 자체는 피할 수 없지만, 캡션이 두 줄로 접히는 게 비용의
+       대부분이었다 — 글자·간격을 줄여 되돌린다. */
+    #y3dBar { left: 10px; right: 10px; bottom: 10px; gap: 4px; }
+    .y3d-row { gap: 4px; }
     .y3d-btn { padding: 4px 8px; font-size: 11px; }
+    #y3dBar .y3d-range { width: 84px; }
+    #y3dSnapRow .y3d-label { font-size: 10px; line-height: 1.25; flex: 1 1 100%; }
   }
   footer { color: var(--dim); font-size: 11px; padding-bottom: 24px; text-align: center; }
   footer .copyright { display: block; margin-top: 4px; font-size: 10px; opacity: .75; }
@@ -2544,6 +2564,27 @@
         </span>
         <button type="button" class="y3d-btn" id="y3dReset" data-i18n="g884">아이소메트릭 (정위치)</button>
       </div>
+      <!-- 보기 축 (V1 원근 · V3 6면). row2 는 이미 버튼이 아홉이라 모바일에서 접힌다 —
+           행을 나눈다. 두 행 모두 #y3dOrbitRow 와 **같은 조건**으로 hidden 을 토글한다. -->
+      <div class="y3d-row" id="y3dViewRow" hidden>
+        <span class="y3d-label" data-i18n="g888">원근</span>
+        <!-- ⚠ 노브는 카메라 거리 d 가 아니라 **반각 α** 다 (0 = 평면 · 100 = 60°).
+             d 를 그대로 쓰면 radius3d 가 n 에 비례해 같은 위치가 n=13 과 n=25 에서
+             전혀 다른 왜곡이 된다 — 「평면↔초광각」 바가 버전마다 다른 뜻이 돼 버린다. -->
+        <input type="range" id="y3dPersp" class="y3d-range" min="0" max="100" step="1" value="0"
+               data-i18n-attr="aria-label:g889" aria-label="원근 정도 (평면에서 초광각까지)">
+        <span class="y3d-label" id="y3dPerspValue">평면</span>
+        <button type="button" class="y3d-btn on" id="y3dFaces3" data-i18n="g891">3면</button>
+        <button type="button" class="y3d-btn" id="y3dFaces6" data-i18n="g892">6면</button>
+      </div>
+      <!-- ⚠ **여기가 자리다** — 패널의 «TL큐브 다운로드 / 복사하기» 그룹에 넣으면 안 된다.
+           그쪽은 «코드 내보내기» 계약 표면이고, 뷰 스냅샷을 거기 섞는 것이 바로 불변
+           계약이 막으려는 혼동이다. 라벨에 «스냅샷» 이 박혀 있고 캡션이 한 줄 더 말한다. -->
+      <div class="y3d-row" id="y3dSnapRow" hidden>
+        <button type="button" class="y3d-btn" id="y3dSnapSave" data-i18n="g893">스냅샷 PNG</button>
+        <button type="button" class="y3d-btn" id="y3dSnapCopy" data-i18n="g894">스냅샷 복사</button>
+        <span class="y3d-label" data-i18n="g895">보이는 화면의 스냅샷이에요 — 내보내는 코드는 항상 2.5D 예요</span>
+      </div>
     </div>
   </div>
 </main>
@@ -3016,8 +3057,18 @@ const GENERATOR_STRINGS = {
     "g883": "코드 렌더",
     "g884": "아이소메트릭 (정위치)",
     "g885": "Y 미리보기",
-    "g886": "3D 는 보기 층입니다. 내보내는 PNG·SVG 는 항상 2.5D 아이소메트릭 그대로입니다.\n한 셀을 돌려 세 면의 휘도 순위를 볼 수 있고, 필드는 지금 만든 코드 전체를 궤도로 돌립니다.\n드래그로 돌리고 휠로 여백을 조절합니다. 0–5 는 digit 입니다.",
+    "g886": "3D 는 보기 층입니다. 내보내는 PNG·SVG 는 항상 2.5D 아이소메트릭 그대로입니다.\n한 셀을 돌려 세 면의 휘도 순위를 볼 수 있고, 필드는 지금 만든 코드 전체를 궤도로 돌립니다.\n드래그로 돌리고, 휠은 여백, Shift+휠 또는 Shift+드래그는 Z축 회전입니다 (키보드는 [ 와 ]). 0–5 는 digit 입니다.\n원근 슬라이더는 평면에서 초광각까지 갑니다. 6면은 뒤쪽 세 면에도 같은 코드를 얹습니다. 정위치 버튼은 카메라만 되돌리고 면 수는 그대로 둡니다.\n스냅샷 버튼은 지금 보이는 화면을 그대로 PNG 로 저장·복사합니다 — 코드 내보내기가 아닙니다.",
     "g887": "Type Y 큐브 궤도 보기",
+    "g888": "원근",
+    "g889": "원근 정도 (평면에서 초광각까지)",
+    "g890": "평면",
+    "g891": "3면",
+    "g892": "6면",
+    "g893": "스냅샷 PNG",
+    "g894": "스냅샷 복사",
+    "g895": "보이는 화면의 스냅샷이에요 — 내보내는 코드는 항상 2.5D 예요",
+    "g896": "화각 {deg}°",
+    "g897": "이 환경에는 클립보드 이미지 쓰기가 없어요",
     "g955": "셀 표면 v0TR (Y1/Y2)",
     "g956": "v0TR. v0T 재설계예요 — 3코너 동심 사각을 둘로 두었어요 (바깥 = v0T 자리, 안쪽 = 그것을 큰브 안쪽으로 옮긴 사본). K3 계보 중앙 16셀 + 동심 사각 68셀 + 먼 코너 위상 마커 9셀 = 102셀 · 데이터 309 이에요. 대신 v0T 의 안쪽 비대칭 블록·북쪽 팔·서쪽 블록이 없어서 방향 여유(margin)는 0.098 이에요 (게이트의 2.80배 — v0T 보다도 높아요). 코너 앵커는 바깥 동심 사각이라 반경이 v0T 계열과 같고, 그래서 계열은 거리가 아니라 무늬 정합으로 갈려요. Y1(n=21)·Y2(n=25) 둘 다 돼요 — n=25 에서도 파인더 셀 수는 같고 데이터만 493 으로 늘어요. 성능을 보장하지 않아요.",
     "g957": "겹사각 2 + 마커",
@@ -3488,8 +3539,18 @@ const GENERATOR_STRINGS = {
     "g883": "Code render",
     "g884": "Isometric (home view)",
     "g885": "Y preview",
-    "g886": "3D is a viewer layer. Exported PNG and SVG stay on the frozen 2.5D isometric projection.\nSpin one cell to see the three-face luminance rank, or orbit the whole code you just made.\nDrag to orbit and use the wheel to change the margin. Keys 0–5 set the digit.",
+    "g886": "3D is a viewer layer. Exported PNG and SVG stay on the frozen 2.5D isometric projection.\nSpin one cell to see the three-face luminance rank, or orbit the whole code you just made.\nDrag to orbit; the wheel changes the margin, and Shift+wheel or Shift+drag rolls around the Z axis (keys [ and ]). Keys 0–5 set the digit.\nThe perspective slider runs from flat to ultra-wide. Six faces puts the same code on the three rear faces too. The home-view button resets the camera only and keeps the face count.\nThe snapshot buttons save or copy exactly what is on screen as a PNG — that is not a code export.",
     "g887": "Type Y cube orbit view",
+    "g888": "Perspective",
+    "g889": "Perspective amount (flat to ultra-wide)",
+    "g890": "Flat",
+    "g891": "3 faces",
+    "g892": "6 faces",
+    "g893": "Snapshot PNG",
+    "g894": "Copy snapshot",
+    "g895": "A snapshot of the view — exported codes stay 2.5D",
+    "g896": "FOV {deg}°",
+    "g897": "This environment cannot write images to the clipboard",
     "g955": "Cell surface v0TR (Y1/Y2)",
     "g956": "v0TR. The v0T redesign — it carries two sets of three-corner concentric squares (the outer one where v0T had it, the inner one the same square moved toward the cube centre). A K3-lineage centre (16 cells), the concentric squares (68 cells) and a far-corner phase marker (9 cells) — 102 cells, 309 data. In exchange v0T’s inner asymmetric block, north arm and west block are gone, so the orientation margin is 0.098 (2.80× the gate — higher than v0T itself). The corner anchor is the outer concentric square, so the radius matches the v0T family and the families are separated by pattern correlation, not by distance. Works at both Y1 (n=21) and Y2 (n=25) — at n=25 the finder cell count is the same and only the data grows, to 493. Does not guarantee performance.",
     "g957": "Two squares + marker",
@@ -3960,8 +4021,18 @@ const GENERATOR_STRINGS = {
     "g883": "コード描画",
     "g884": "アイソメトリック (初期位置)",
     "g885": "Yプレビュー",
-    "g886": "3D は表示レイヤです。書き出す PNG・SVG は常に 2.5D アイソメトリックのままです。\n1セルを回して三面の輝度順位を見られ、フィールドは今作ったコード全体を軌道で回します。\nドラッグで回転、ホイールで余白。0–5 は digit です。",
+    "g886": "3D は表示レイヤです。書き出す PNG・SVG は常に 2.5D アイソメトリックのままです。\n1セルを回して三面の輝度順位を見られ、フィールドは今作ったコード全体を軌道で回します。\nドラッグで回転、ホイールで余白、Shift+ホイールまたは Shift+ドラッグで Z 軸回転です（キーは [ と ]）。0–5 は digit です。\n遠近スライダーは平面から超広角まで動きます。6面は後ろの三面にも同じコードを載せます。初期位置ボタンはカメラだけ戻し、面数はそのままです。\nスナップショットは今見えている画面をそのまま PNG で保存・コピーします — コードの書き出しではありません。",
     "g887": "Type Y キューブ軌道ビュー",
+    "g888": "遠近",
+    "g889": "遠近の強さ（平面から超広角まで）",
+    "g890": "平面",
+    "g891": "3面",
+    "g892": "6面",
+    "g893": "スナップショット PNG",
+    "g894": "スナップショットをコピー",
+    "g895": "表示中の画面のスナップショットです — 書き出すコードは常に 2.5D です",
+    "g896": "画角 {deg}°",
+    "g897": "この環境ではクリップボードへの画像書き込みができません",
     "g955": "セル表面 v0TR (Y1/Y2)",
     "g956": "v0TR。v0T の再設計です — 3コーナー同心四角を2組置きました（外側は v0T と同じ位置、内側はそれをキューブ中心寄りに移した写し）。K3 系譜の中央 16セル + 同心四角 68セル + 遠コーナー位相マーカ 9セル = 102セル・データ309。代わりに v0T の内側非対称ブロック・北の腕・西ブロックが無く、方向余裕（margin）は 0.098 です（ゲートの2.80倍 — v0T よりも高い）。コーナーアンカーは外側の同心四角なので半径は v0T 系列と同じで、系列はパターン整合で分かれます（距離では分かれません）。Y1(n=21)・Y2(n=25) の両方で使えます — n=25 でもファインダのセル数は同じで、データだけ 493 に増えます。性能は保証しません。",
     "g957": "同心四角2+マーカ",
@@ -4431,8 +4502,18 @@ const GENERATOR_STRINGS = {
     "g883": "Rendu du code",
     "g884": "Isométrique (vue initiale)",
     "g885": "Aperçu Y",
-    "g886": "Le 3D est une couche de visualisation. Les PNG et SVG exportés restent sur la projection isométrique 2.5D figée.\nFaites tourner une cellule pour voir le rang de luminance des trois faces, ou mettez en orbite le code entier.\nGlissez pour orbiter, molette pour la marge. Les touches 0–5 choisissent le digit.",
+    "g886": "Le 3D est une couche de visualisation. Les PNG et SVG exportés restent sur la projection isométrique 2.5D figée.\nFaites tourner une cellule pour voir le rang de luminance des trois faces, ou mettez en orbite le code entier.\nGlissez pour orbiter ; la molette règle la marge, et Maj+molette ou Maj+glisser fait pivoter autour de l’axe Z (touches [ et ]). Les touches 0–5 choisissent le digit.\nLe curseur de perspective va du plat à l’ultra grand-angle. Six faces pose le même code sur les trois faces arrière. Le bouton vue initiale ne réinitialise que la caméra et garde le nombre de faces.\nLes boutons d’instantané enregistrent ou copient l’écran tel quel en PNG — ce n’est pas un export de code.",
     "g887": "Vue en orbite du cube Type Y",
+    "g888": "Perspective",
+    "g889": "Intensité de la perspective (du plat à l’ultra grand-angle)",
+    "g890": "Plat",
+    "g891": "3 faces",
+    "g892": "6 faces",
+    "g893": "PNG d’instantané",
+    "g894": "Copier l’instantané",
+    "g895": "Un instantané de la vue — les codes exportés restent en 2.5D",
+    "g896": "Champ {deg}°",
+    "g897": "Cet environnement ne peut pas écrire d’images dans le presse-papiers",
     "g955": "Surface de cellules v0TR (Y1/Y2)",
     "g956": "v0TR. La refonte de v0T — elle porte deux jeux de carrés concentriques à trois coins (l’extérieur là où v0T l’avait, l’intérieur étant le même carré déplacé vers le centre du cube). Un centre de lignée K3 (16 cellules), les carrés concentriques (68 cellules) et un marqueur de phase au coin éloigné (9 cellules) — 102 cellules, 309 données. En contrepartie, le bloc asymétrique intérieur, le bras nord et le bloc ouest de v0T ont disparu : la marge d’orientation est de 0,098 (2,80× le seuil — plus élevée que celle de v0T). L’ancre de coin est le carré concentrique extérieur : le rayon est donc identique à celui de la famille v0T, et les familles sont séparées par corrélation de motif, pas par la distance. Utilisable en Y1 (n=21) comme en Y2 (n=25) — à n=25, le nombre de cellules du motif est identique et seules les données montent, à 493. Les performances ne sont pas garanties.",
     "g957": "Deux carrés + marqueur",
@@ -4902,8 +4983,18 @@ const GENERATOR_STRINGS = {
     "g883": "Render del codice",
     "g884": "Isometrico (vista iniziale)",
     "g885": "Anteprima Y",
-    "g886": "Il 3D è uno strato di visualizzazione. PNG e SVG esportati restano sulla proiezione isometrica 2.5D congelata.\nRuota una cella per vedere il rango di luminanza delle tre facce, oppure metti in orbita l’intero codice.\nTrascina per orbitare, rotella per il margine. I tasti 0–5 impostano il digit.",
+    "g886": "Il 3D è uno strato di visualizzazione. PNG e SVG esportati restano sulla proiezione isometrica 2.5D congelata.\nRuota una cella per vedere il rango di luminanza delle tre facce, oppure metti in orbita l’intero codice.\nTrascina per orbitare; la rotella regola il margine e Maiusc+rotella o Maiusc+trascinamento ruota attorno all’asse Z (tasti [ e ]). I tasti 0–5 impostano il digit.\nIl cursore della prospettiva va dal piatto al grandangolo estremo. Sei facce mette lo stesso codice anche sulle tre facce posteriori. Il pulsante vista iniziale reimposta solo la camera e mantiene il numero di facce.\nI pulsanti istantanea salvano o copiano lo schermo così com’è in PNG — non è un’esportazione del codice.",
     "g887": "Vista in orbita del cubo Type Y",
+    "g888": "Prospettiva",
+    "g889": "Intensità della prospettiva (dal piatto al grandangolo estremo)",
+    "g890": "Piatto",
+    "g891": "3 facce",
+    "g892": "6 facce",
+    "g893": "PNG istantanea",
+    "g894": "Copia istantanea",
+    "g895": "Un’istantanea della vista — i codici esportati restano 2.5D",
+    "g896": "Campo {deg}°",
+    "g897": "Questo ambiente non può scrivere immagini negli appunti",
     "g955": "Superficie a celle v0TR (Y1/Y2)",
     "g956": "v0TR. La riprogettazione di v0T — porta due serie di quadrati concentrici a tre angoli (quello esterno dove stava in v0T, quello interno è lo stesso quadrato spostato verso il centro del cubo). Un centro di stirpe K3 (16 celle), i quadrati concentrici (68 celle) e un marcatore di fase nell’angolo lontano (9 celle) — 102 celle, 309 dati. In cambio spariscono il blocco asimmetrico interno, il braccio nord e il blocco ovest di v0T: il margine di orientamento è 0,098 (2,80× la soglia — più alto di quello di v0T). L’ancora d’angolo è il quadrato concentrico esterno: il raggio coincide con quello della famiglia v0T e le famiglie si separano per correlazione di motivo, non per distanza. Utilizzabile sia in Y1 (n=21) sia in Y2 (n=25) — a n=25 le celle del pattern sono le stesse e crescono solo i dati, a 493. Le prestazioni non sono garantite.",
     "g957": "Due quadrati + marcatore",
@@ -5373,8 +5464,18 @@ const GENERATOR_STRINGS = {
     "g883": "Code-Rendering",
     "g884": "Isometrisch (Ausgangsansicht)",
     "g885": "Y-Vorschau",
-    "g886": "3D ist eine Betrachtungsebene. Exportierte PNG- und SVG-Dateien bleiben bei der eingefrorenen 2.5D-Isometrie.\nDrehen Sie eine Zelle, um den Luminanzrang der drei Flächen zu sehen, oder umrunden Sie den ganzen Code.\nZiehen zum Drehen, Rad für den Rand. Die Tasten 0–5 setzen die Ziffer.",
+    "g886": "3D ist eine Betrachtungsebene. Exportierte PNG- und SVG-Dateien bleiben bei der eingefrorenen 2.5D-Isometrie.\nDrehen Sie eine Zelle, um den Luminanzrang der drei Flächen zu sehen, oder umrunden Sie den ganzen Code.\nZiehen zum Drehen; das Rad ändert den Rand, Umschalt+Rad oder Umschalt+Ziehen dreht um die Z-Achse (Tasten [ und ]). Die Tasten 0–5 setzen die Ziffer.\nDer Perspektivregler reicht von flach bis Ultraweitwinkel. Sechs Flächen legt denselben Code auch auf die drei hinteren Flächen. Die Schaltfläche Ausgangsansicht setzt nur die Kamera zurück und behält die Flächenzahl.\nDie Schnappschuss-Schaltflächen speichern oder kopieren genau das, was auf dem Bildschirm steht, als PNG — das ist kein Code-Export.",
     "g887": "Type-Y-Würfel in der Umlaufansicht",
+    "g888": "Perspektive",
+    "g889": "Perspektivstärke (flach bis Ultraweitwinkel)",
+    "g890": "Flach",
+    "g891": "3 Flächen",
+    "g892": "6 Flächen",
+    "g893": "Schnappschuss-PNG",
+    "g894": "Schnappschuss kopieren",
+    "g895": "Ein Schnappschuss der Ansicht — exportierte Codes bleiben 2.5D",
+    "g896": "Bildwinkel {deg}°",
+    "g897": "Diese Umgebung kann keine Bilder in die Zwischenablage schreiben",
     "g955": "Zellfläche v0TR (Y1/Y2)",
     "g956": "v0TR. Die Neuauslegung von v0T — sie trägt zwei Sätze konzentrischer Quadrate an drei Ecken (das äußere dort, wo v0T es hatte, das innere ist dasselbe Quadrat, zur Würfelmitte verschoben). Ein Zentrum der K3-Linie (16 Zellen), die konzentrischen Quadrate (68 Zellen) und ein Phasenmarker an der fernen Ecke (9 Zellen) — 102 Zellen, 309 Daten. Dafür fehlen v0Ts innerer asymmetrischer Block, Nordarm und Westblock: die Orientierungsmarge beträgt 0,098 (2,80× die Schwelle — höher als bei v0T). Der Eckanker ist das äußere konzentrische Quadrat: der Radius entspricht dem der v0T-Familie, und die Familien werden über Musterkorrelation getrennt, nicht über die Distanz. Für Y1 (n=21) und Y2 (n=25) nutzbar — bei n=25 bleibt die Zahl der Finder-Zellen gleich, nur die Daten steigen auf 493. Leistung wird nicht zugesichert.",
     "g957": "Zwei Quadrate + Marker",
@@ -5844,8 +5945,18 @@ const GENERATOR_STRINGS = {
     "g883": "Render del código",
     "g884": "Isométrico (vista inicial)",
     "g885": "Vista Y",
-    "g886": "El 3D es una capa de visualización. Los PNG y SVG exportados siguen en la proyección isométrica 2.5D congelada.\nGire una celda para ver el rango de luminancia de las tres caras, u orbite el código entero.\nArrastre para orbitar y use la rueda para el margen. Las teclas 0–5 eligen el dígito.",
+    "g886": "El 3D es una capa de visualización. Los PNG y SVG exportados siguen en la proyección isométrica 2.5D congelada.\nGire una celda para ver el rango de luminancia de las tres caras, u orbite el código entero.\nArrastre para orbitar; la rueda cambia el margen y Mayús+rueda o Mayús+arrastrar gira sobre el eje Z (teclas [ y ]). Las teclas 0–5 eligen el dígito.\nEl control de perspectiva va de plano a gran angular extremo. Seis caras pone el mismo código también en las tres caras traseras. El botón de vista inicial solo reinicia la cámara y mantiene el número de caras.\nLos botones de instantánea guardan o copian tal cual lo que se ve en pantalla como PNG — no es una exportación del código.",
     "g887": "Vista orbital del cubo Type Y",
+    "g888": "Perspectiva",
+    "g889": "Cantidad de perspectiva (de plano a gran angular extremo)",
+    "g890": "Plano",
+    "g891": "3 caras",
+    "g892": "6 caras",
+    "g893": "PNG de instantánea",
+    "g894": "Copiar instantánea",
+    "g895": "Una instantánea de la vista — los códigos exportados siguen en 2.5D",
+    "g896": "Campo {deg}°",
+    "g897": "Este entorno no puede escribir imágenes en el portapapeles",
     "g955": "Superficie de celdas v0TR (Y1/Y2)",
     "g956": "v0TR. El rediseño de v0T — lleva dos juegos de cuadrados concéntricos en tres esquinas (el exterior donde lo tenía v0T, el interior es ese mismo cuadrado desplazado hacia el centro del cubo). Un centro de linaje K3 (16 celdas), los cuadrados concéntricos (68 celdas) y un marcador de fase en la esquina lejana (9 celdas) — 102 celdas, 309 datos. A cambio desaparecen el bloque asimétrico interior, el brazo norte y el bloque oeste de v0T: el margen de orientación es 0,098 (2,80× el umbral — más alto que el de v0T). El ancla de esquina es el cuadrado concéntrico exterior: el radio coincide con el de la familia v0T y las familias se separan por correlación de patrón, no por distancia. Se puede usar tanto en Y1 (n=21) como en Y2 (n=25): con n=25 el número de celdas de patrón es el mismo y solo suben los datos, a 493. No se garantiza el rendimiento.",
     "g957": "Dos cuadrados + marcador",
@@ -6315,8 +6426,18 @@ const GENERATOR_STRINGS = {
     "g883": "Render do código",
     "g884": "Isométrico (vista inicial)",
     "g885": "Pré-visualização Y",
-    "g886": "O 3D é uma camada de visualização. Os PNG e SVG exportados ficam na projeção isométrica 2.5D congelada.\nRode uma célula para ver a ordem de luminância das três faces, ou ponha o código inteiro em órbita.\nArraste para orbitar e use a roda para a margem. As teclas 0–5 definem o dígito.",
+    "g886": "O 3D é uma camada de visualização. Os PNG e SVG exportados ficam na projeção isométrica 2.5D congelada.\nRode uma célula para ver a ordem de luminância das três faces, ou ponha o código inteiro em órbita.\nArraste para orbitar; a roda muda a margem e Shift+roda ou Shift+arrastar roda em torno do eixo Z (teclas [ e ]). As teclas 0–5 definem o dígito.\nO cursor de perspetiva vai do plano ao grande angular extremo. Seis faces coloca o mesmo código também nas três faces traseiras. O botão de vista inicial só repõe a câmara e mantém o número de faces.\nOs botões de instantâneo guardam ou copiam exatamente o que está no ecrã como PNG — não é uma exportação do código.",
     "g887": "Vista em órbita do cubo Type Y",
+    "g888": "Perspetiva",
+    "g889": "Intensidade da perspetiva (do plano ao grande angular extremo)",
+    "g890": "Plano",
+    "g891": "3 faces",
+    "g892": "6 faces",
+    "g893": "PNG de instantâneo",
+    "g894": "Copiar instantâneo",
+    "g895": "Um instantâneo da vista — os códigos exportados ficam em 2.5D",
+    "g896": "Campo {deg}°",
+    "g897": "Este ambiente não consegue escrever imagens na área de transferência",
     "g955": "Superfície de células v0TR (Y1/Y2)",
     "g956": "v0TR. A reformulação do v0T — leva dois conjuntos de quadrados concêntricos em três cantos (o exterior onde o v0T o tinha, o interior é esse mesmo quadrado deslocado para o centro do cubo). Um centro de linhagem K3 (16 células), os quadrados concêntricos (68 células) e um marcador de fase no canto distante (9 células) — 102 células, 309 dados. Em troca desaparecem o bloco assimétrico interior, o braço norte e o bloco oeste do v0T: a margem de orientação é 0,098 (2,80× o limiar — mais alta do que a do v0T). A âncora de canto é o quadrado concêntrico exterior: o raio coincide com o da família v0T e as famílias separam-se por correlação de padrão, não pela distância. Pode usar-se tanto em Y1 (n=21) como em Y2 (n=25): com n=25 o número de células de padrão é o mesmo e só os dados sobem, para 493. O desempenho não é garantido.",
     "g957": "Dois quadrados + marcador",
@@ -6397,12 +6518,29 @@ const y3dPreview = {
   digit: 3,
   yaw: 0,
   pitch: 0,
+  // Z축 회전(roll). 화면 법선 = 시선축이라 깊이·정렬이 roll 에 불변이다 (y3d-viewer.js).
+  roll: 0,
+  // 원근 노브 0~100 → 반각 α = (persp/100)·60°. **0 이 정확히 평행투영**이라
+  // 기본 상태 렌더는 종전과 픽셀 동일하다 (모듈이 early return 으로 보장).
+  persp: 0,
+  // 3 = 데이터 세 면 · 6 = 뒤 세 면에 같은 코드.
+  // ⚠ 축은 «Y축» 이 아니라 **화면-오른쪽 (1,−1,0)** 의 180° 고유회전이다 (y3d-viewer.js
+  //    § M). 그 축이라야 pitch 와 합성돼 새 수학이 0 이고, 거울이 안 된다.
+  faces: 3,
   pad: 48,
   // ⛔ 셀 커서(노란 테두리)는 없앴다 (2026-08-26 운영자 지시). 클릭은 «한 셀» 모드에서
   //    숫자를 고르는 데만 쓰고, 어느 칸이 골렸는지 화면에 표시하지 않는다.
   view: null,
   mesh: null,
+  // 마지막으로 칠한 입력 — 스냅샷이 **같은 mesh 를 같은 규약으로** 다시 칠할 때 쓴다.
+  layout: null,
+  bg: null,
   dragging: false,
+  // ⚠ **pointerdown 에서 래치한다.** pointermove 에서 ev.shiftKey 를 읽으면 드래그 도중
+  //    Shift 를 떼는 순간 회전축이 바뀌어 큐브가 튄다.
+  dragMode: 'orbit',
+  rollStart: 0,
+  rollAngle0: 0,
   lastX: 0,
   lastY: 0,
 };
@@ -6763,6 +6901,9 @@ const els = {
   y3dBar: $('y3dBar'), y3dMode25: $('y3dMode25'), y3dMode3d: $('y3dMode3d'),
   y3dOrbitRow: $('y3dOrbitRow'), y3dCell: $('y3dCell'), y3dField: $('y3dField'),
   y3dDigits: $('y3dDigits'), y3dReset: $('y3dReset'),
+  y3dViewRow: $('y3dViewRow'), y3dPersp: $('y3dPersp'), y3dPerspValue: $('y3dPerspValue'),
+  y3dFaces3: $('y3dFaces3'), y3dFaces6: $('y3dFaces6'),
+  y3dSnapRow: $('y3dSnapRow'), y3dSnapSave: $('y3dSnapSave'), y3dSnapCopy: $('y3dSnapCopy'),
   exportPng: $('exportPng'), exportSvg: $('exportSvg'),
   downloadToast: $('downloadToast'),
 };
@@ -7490,6 +7631,16 @@ function applyPreviewFit() {
 // ── Y 3D 미리보기 (레인 Y3DW) ──────────────────────────────────────────
 // 보기 층만. generatorState 에 안 넣는다 — encode/scene 옵션으로 새면 안 된다.
 // 기본 on:false = 2.5D. 토글은 schedule() 을 부르지 않는다.
+
+/** 원근 슬라이더 100 = 반각 60°. 모듈의 `perspectiveInvDist` 와 같은 상한이다. */
+const Y3D_PERSP_MAX_DEG = 60;
+/** Shift+휠 한 칸의 roll. **크기가 아니라 부호만** 쓴다 — deltaMode 가 브라우저마다
+ *  다르고(Firefox 는 LINE) 트랙패드는 소수 delta 를 준다. 현행 pad 경로와 같은 관행. */
+const Y3D_ROLL_STEP = 3 * Math.PI / 180;
+/** 스냅샷 PNG 의 고정 변 길이. 라이브 캔버스를 그대로 toBlob 하면 저장 해상도가
+ *  `clientWidth × dpr(≤2)` 라 **사용자 창 크기에 따라 조용히 달라진다**. */
+const Y3D_SNAPSHOT_SIZE = 1024;
+
 function syncOrbitPreviewUi() {
   const isY = generatorState.type === 'Y';
   if (!isY) y3dPreview.on = false;
@@ -7497,9 +7648,28 @@ function syncOrbitPreviewUi() {
   els.y3dMode25.classList.toggle('on', !y3dPreview.on);
   els.y3dMode3d.classList.toggle('on', y3dPreview.on);
   els.y3dOrbitRow.hidden = !isY || !y3dPreview.on;
+  els.y3dViewRow.hidden = !isY || !y3dPreview.on;
+  els.y3dSnapRow.hidden = !isY || !y3dPreview.on;
   els.view3d.classList.toggle('on', isY && y3dPreview.on);
   els.y3dCell.classList.toggle('on', y3dPreview.mode === 'cell');
   els.y3dField.classList.toggle('on', y3dPreview.mode === 'field');
+  els.y3dFaces3.classList.toggle('on', y3dPreview.faces !== 6);
+  els.y3dFaces6.classList.toggle('on', y3dPreview.faces === 6);
+  els.y3dPersp.value = String(y3dPreview.persp);
+  // 0 은 «평면» — 그 자리에서 0° 라고 쓰면 «원근이 0도» 처럼 읽혀 축이 헷갈린다.
+  els.y3dPerspValue.textContent = y3dPreview.persp === 0
+    ? t('g890')
+    : tf('g896', { deg: Math.round(y3dPreview.persp * Y3D_PERSP_MAX_DEG / 100) });
+  // ⚠ `current` 를 여기서 읽지 않는다 — 이 함수는 TEXT_SYNCERS 로 초기화 도중에도
+  //    불릴 수 있고 `current` 는 아래에서 `let` 으로 선언돼 TDZ 에 걸린다.
+  //    mesh 는 paintY3dPreview 가 «그릴 게 있을 때만» 채우고 아니면 null 로 지운다.
+  // 3D 를 껐는데 mesh 가 남아 있을 수 있다 (2.5D 토글이 paint 를 거치지 않는 경로).
+  // 그때 버튼이 살아 있으면 **화면에 보이는 2.5D 가 아니라 마지막 3D 프레임**이
+  // 저장된다 — 「보이는 화면의 스냅샷」이라는 약속과 정반대다. 그래서 «켜져 있고
+  // 그릴 것이 있을 때» 로 잰다.
+  const canSnap = y3dPreview.on && !!y3dPreview.mesh;
+  els.y3dSnapSave.disabled = !canSnap;
+  els.y3dSnapCopy.disabled = !canSnap;
   const cellMode = y3dPreview.mode === 'cell';
   els.y3dDigits.hidden = !cellMode;
   for (const btn of els.y3dDigits.querySelectorAll('.y3d-digit')) {
@@ -7508,9 +7678,15 @@ function syncOrbitPreviewUi() {
 }
 
 function paintY3dPreview() {
-  syncOrbitPreviewUi();
   const show = generatorState.type === 'Y' && y3dPreview.on
     && current && current.type === 'Y' && current.encoded;
+  if (!show) {
+    // ⚠ mesh·view 를 **지운다**. 스냅샷 버튼의 활성 조건이 mesh 이므로, 남겨 두면
+    //    그릴 게 없는데도 버튼이 살아 있어 옛 화면을 저장한다.
+    y3dPreview.mesh = null;
+    y3dPreview.view = null;
+  }
+  syncOrbitPreviewUi();
   els.view3d.classList.toggle('on', !!show);
   if (!show) return;
   const canvas = els.view3d;
@@ -7558,12 +7734,22 @@ function paintY3dPreview() {
     layout,
     yaw: y3dPreview.yaw,
     pitch: y3dPreview.pitch,
+    roll: y3dPreview.roll,
+    // ⚠ **정규화된 노브를 넘긴다** (0~1 = 반각 0~60°). 카메라 거리 d 나 invDist 를
+    //    여기서 계산하면 radius3d 유도식이 UI 에 사본으로 생기고, n 이 바뀔 때
+    //    슬라이더 뜻이 조용히 달라진다. 모듈이 radius3d 로 정규화하게 둔다.
+    perspective: y3dPreview.persp / 100,
+    faces: y3dPreview.faces,
     digitAt,
     levelAt,
     includeBack: true,
   });
   const ctx = canvas.getContext('2d', { alpha: false });
   const bg = pal.background || { r: 14, g: 16, b: 24 };
+  // 스냅샷이 **같은 mesh 를 다시 칠하려면** 이 둘이 필요하다. 다시 build 하지 않는다 —
+  // points2d 는 layout 공간이고 paintQuads 가 캔버스 크기로 매핑하므로 재빌드는 낭비다.
+  y3dPreview.layout = layout;
+  y3dPreview.bg = bg;
   y3dPreview.view = paintQuads(ctx, y3dPreview.mesh, {
     background: bg,
     pad: y3dPreview.pad,
@@ -7574,7 +7760,95 @@ function paintY3dPreview() {
     selected: null,
     labels: y3dPreview.mode === 'cell',
   });
+  // ⚠ **한 번 더 부른다.** 위쪽 sync 는 mesh 를 만들기 **전**에 돌아서, 스냅샷 버튼의
+  //    활성 조건(mesh 유무)이 항상 한 번 뒤처졌다 — 실기에서 3D 를 켠 직후 두 버튼이
+  //    비활성인 채로 남았다(2026-08-31 브라우저 확인). sync 는 paint 를 안 부르므로
+  //    재귀는 없고, 하는 일은 클래스·문구 갱신뿐이라 값이 싸다.
+  syncOrbitPreviewUi();
 }
+
+/*
+ * ── V2 미리보기 스냅샷 (PNG) ────────────────────────────────────────────────
+ *
+ * 🔴 **이것은 코드 내보내기가 아니다.** 내보내는 PNG·SVG 는 어떤 뷰 상태에서도 항상
+ *    2.5D 아이소메트릭이다 (그 경로는 `exportPlanFor`/`renderExportPng` 이고 이 함수를
+ *    모른다). 여기서 나오는 것은 «지금 화면» 의 사진이다. UI 에서 그 구분이 보이도록
+ *    ① 버튼 라벨에 «스냅샷» 이 박혀 있고 ② 같은 행에 캡션 한 줄이 있고
+ *    ③ 파일명이 `..._Y-view_snapshot_...` 이고 ④ g886 도움말 첫 문장이 계약을 말한다.
+ *
+ * ⚠ 라이브 캔버스를 그대로 `toBlob` 하지 않는다 — 저장 해상도가 창 크기에 좌우된다.
+ *   고정 크기 오프스크린에 **같은 mesh 를 다시 칠한다**. 그때 `pad` 는 픽셀 단위라
+ *   비례 축소해야 화면과 같은 여백이 나온다 (`fitViewStable` 이 min(w,h)/2 − pad 를 쓴다).
+ */
+function y3dSnapshotBlob() {
+  return new Promise((resolve, reject) => {
+    if (!y3dPreview.mesh || !y3dPreview.layout) {
+      reject(new Error('no y3d mesh'));
+      return;
+    }
+    const size = Y3D_SNAPSHOT_SIZE;
+    const live = Math.min(els.view3d.width, els.view3d.height);
+    const off = document.createElement('canvas');
+    off.width = size;
+    off.height = size;
+    paintQuads(off.getContext('2d', { alpha: false }), y3dPreview.mesh, {
+      background: y3dPreview.bg,
+      pad: y3dPreview.pad * (size / Math.max(live, 1)),
+      layout: y3dPreview.layout,
+      selected: null,
+      labels: y3dPreview.mode === 'cell',
+    });
+    off.toBlob((blob) => (blob ? resolve(blob) : reject(new Error(t('g405')))), 'image/png');
+  });
+}
+
+async function y3dSnapshotDownload() {
+  const blob = await y3dSnapshotBlob();
+  // 파일명 부품이 «코드 내보내기» 와 다르다 — type 'Y-view' · version 'snapshot'.
+  // 같은 초에 여러 번 눌러도 `_02` 순번이 공짜로 붙는다.
+  const name = nextExportFilename({
+    extension: 'png',
+    type: 'Y-view',
+    version: 'snapshot',
+    finder: current ? exportFinderLabel(current) : 'y-seam',
+  });
+  download(new Uint8Array(await blob.arrayBuffer()), 'image/png', name);
+}
+
+els.y3dSnapSave.addEventListener('click', async () => {
+  if (!y3dPreview.mesh) return;
+  try {
+    await y3dSnapshotDownload();
+  } catch (err) {
+    els.error.textContent = String(err && err.message ? err.message : err);
+  }
+});
+
+els.y3dSnapCopy.addEventListener('click', async () => {
+  if (!y3dPreview.mesh) return;
+  try {
+    if (typeof ClipboardItem === 'undefined'
+      || !navigator.clipboard || !navigator.clipboard.write) {
+      // ⚠ `file://` 에는 `navigator.clipboard` 가 없다. SPEC §8 이 생성기의 file://
+      //    개봉을 요구하므로 **폴백은 예외 처리가 아니라 그 환경의 정상 경로**다.
+      throw new Error(t('g897'));
+    }
+    // ⚠ Safari 는 await 를 건너면 사용자 제스처를 잃는다. `toBlob` 이 비동기라
+    //    ClipboardItem 에 **프로미스 자체**를 넘긴다 — 기존 copyPng(동기 바이트)를
+    //    그대로 따라 하면 여기서만 조용히 실패한다.
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': y3dSnapshotBlob() })]);
+    flashCopied(els.y3dSnapCopy);
+  } catch (err) {
+    // **조용히 실패하지 않는다** — 사유를 띄우고 다운로드로 떨어뜨린다.
+    els.error.textContent = tf('g430', { msg: err && err.message ? err.message : err });
+    try {
+      await y3dSnapshotDownload();
+    } catch { /* 다운로드까지 막히면 위 문구가 남는다 */ }
+  }
+});
+
+// ⛔ `emitProductExport` 는 부르지 않는다. 그건 «코드를 내보냈다» 제품 퍼널이라
+//    뷰 스냅샷을 섞으면 export 지표가 조용히 부풀어 오른다 (결정: 생략).
 
 els.y3dMode25.addEventListener('click', () => {
   y3dPreview.on = false;
@@ -7595,9 +7869,30 @@ els.y3dField.addEventListener('click', () => {
   syncOrbitPreviewUi();
   paintY3dPreview();
 });
+els.y3dFaces3.addEventListener('click', () => {
+  y3dPreview.faces = 3;
+  syncOrbitPreviewUi();
+  paintY3dPreview();
+});
+els.y3dFaces6.addEventListener('click', () => {
+  y3dPreview.faces = 6;
+  syncOrbitPreviewUi();
+  paintY3dPreview();
+});
+// 'input' 이다 — 'change' 면 손을 뗄 때까지 화면이 안 따라온다.
+els.y3dPersp.addEventListener('input', () => {
+  const v = Number(els.y3dPersp.value);
+  y3dPreview.persp = Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0;
+  paintY3dPreview();
+});
 els.y3dReset.addEventListener('click', () => {
   y3dPreview.yaw = 0;
   y3dPreview.pitch = 0;
+  // ⚠ roll·원근도 0 으로 돌린다 — 안 그러면 g884 「아이소메트릭 (정위치)」가 거짓말이
+  //    된다. 면 수(3/6)는 **카메라 위치가 아니라 «무엇을 보나»** 라서 남긴다
+  //    (코드 렌더 ↔ 면 배치와 같은 부류). 그 구분은 g886 도움말에 적어 뒀다.
+  y3dPreview.roll = 0;
+  y3dPreview.persp = 0;
   y3dPreview.pad = 48;
   paintY3dPreview();
 });
@@ -7610,6 +7905,16 @@ for (const btn of els.y3dDigits.querySelectorAll('.y3d-digit')) {
   });
 }
 
+/** 캔버스 중심에서 포인터까지의 각도. roll 드래그는 dx 선형이 아니라 **이 각도의 차**를
+ *  쓴다 — 선형이면 yaw 드래그와 조작감이 싸우고, 큐브가 손을 안 따라온다. */
+function y3dPointerAngle(ev) {
+  const rect = els.view3d.getBoundingClientRect();
+  return Math.atan2(
+    ev.clientY - (rect.top + rect.height / 2),
+    ev.clientX - (rect.left + rect.width / 2),
+  );
+}
+
 els.view3d.addEventListener('pointerdown', (ev) => {
   if (!y3dPreview.on) return;
   ev.stopPropagation();
@@ -7617,6 +7922,16 @@ els.view3d.addEventListener('pointerdown', (ev) => {
   y3dPreview.dragging = true;
   y3dPreview.lastX = ev.clientX;
   y3dPreview.lastY = ev.clientY;
+  // ⚠ 축은 **여기서 래치한다.** pointermove 에서 ev.shiftKey 를 읽으면 드래그 도중
+  //    Shift 를 떼는 순간 프레임 중간에 회전축이 바뀌어 큐브가 튄다.
+  y3dPreview.dragMode = ev.shiftKey ? 'roll' : 'orbit';
+  if (y3dPreview.dragMode === 'roll') {
+    y3dPreview.rollStart = y3dPreview.roll;
+    y3dPreview.rollAngle0 = y3dPointerAngle(ev);
+    // ⚠ **여기서 반드시 빠져나간다.** 안 그러면 아래 «한 셀» hitTest 가 같이 돌아
+    //    Shift+클릭으로 roll 을 시작할 때마다 선택 숫자가 바뀐다.
+    return;
+  }
   // 클릭이 남은 이유는 «한 셀» 모드에서 숫자를 고르기 위해서다. 필드 모드에서는
   // 아무 표시도 하지 않는다 — 커서를 없앴으므로 여기서 할 일이 없다.
   if (y3dPreview.mode !== 'cell') return;
@@ -7634,6 +7949,13 @@ els.view3d.addEventListener('pointerdown', (ev) => {
 els.view3d.addEventListener('pointermove', (ev) => {
   if (!y3dPreview.dragging) return;
   ev.stopPropagation();
+  if (y3dPreview.dragMode === 'roll') {
+    // 화면 CCW 가 양수 roll 이고 캔버스 y 는 아래가 양수라, 포인터 각의 증가는
+    // 화면에서 시계 방향이다 — 그래서 부호를 뒤집어 손을 따라오게 한다.
+    y3dPreview.roll = y3dPreview.rollStart - (y3dPointerAngle(ev) - y3dPreview.rollAngle0);
+    paintY3dPreview();
+    return;
+  }
   const dx = ev.clientX - y3dPreview.lastX;
   const dy = ev.clientY - y3dPreview.lastY;
   y3dPreview.lastX = ev.clientX;
@@ -7649,6 +7971,7 @@ const endY3dPointer = (ev) => {
   if (!y3dPreview.dragging) return;
   ev.stopPropagation();
   y3dPreview.dragging = false;
+  y3dPreview.dragMode = 'orbit';
 };
 els.view3d.addEventListener('pointerup', endY3dPointer);
 els.view3d.addEventListener('pointercancel', endY3dPointer);
@@ -7656,7 +7979,15 @@ els.view3d.addEventListener('wheel', (ev) => {
   if (!y3dPreview.on) return;
   ev.preventDefault();
   ev.stopPropagation();
-  y3dPreview.pad = Math.min(160, Math.max(12, y3dPreview.pad + (ev.deltaY > 0 ? 6 : -6)));
+  // ⚠ **Shift+휠은 브라우저가 가로 스크롤로 리매핑한다** — Chrome·Edge·Firefox 가
+  //    deltaY=0, deltaX=± 로 준다. deltaY 만 읽으면 roll 이 아예 안 돈다.
+  const d = ev.deltaY || ev.deltaX;
+  if (ev.shiftKey) {
+    // 부호만 쓴다 (deltaMode LINE·트랙패드 소수 delta 에 안 휘둘리게).
+    y3dPreview.roll += (d > 0 ? 1 : -1) * Y3D_ROLL_STEP;
+  } else {
+    y3dPreview.pad = Math.min(160, Math.max(12, y3dPreview.pad + (d > 0 ? 6 : -6)));
+  }
   paintY3dPreview();
 }, { passive: false });
 
@@ -7667,6 +7998,15 @@ els.view3d.addEventListener('wheel', (ev) => {
 //    캔버스가 키를 받으려면 포커스가 필요해서 `tabindex="0"` 을 함께 줬다.
 els.view3d.addEventListener('keydown', (ev) => {
   if (!y3dPreview.on || generatorState.type !== 'Y') return;
+  // roll 은 Shift+휠·Shift+드래그가 주 경로지만 **둘 다 포인터 전용**이다. 키보드
+  // 사용자에게 roll 경로가 아예 없으면 그 축을 못 만진다. digit 분기와 달리 여기서
+  // mode 를 'cell' 로 바꾸지 않는다 — roll 은 «무엇을 보나» 가 아니라 카메라다.
+  if (ev.key === '[' || ev.key === ']') {
+    ev.preventDefault();
+    y3dPreview.roll += (ev.key === ']' ? 1 : -1) * Y3D_ROLL_STEP;
+    paintY3dPreview();
+    return;
+  }
   if (ev.key >= '0' && ev.key <= '5') {
     ev.preventDefault();
     y3dPreview.digit = Number(ev.key);
