@@ -303,7 +303,14 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   qrText: field(TL_READER_URL, ADVANCED,
     [TL_READER_URL, 'https://example.com/fallback']),
   qrCornerToo: field(false, ADVANCED, [false, true]),
-  // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 보여 주지 않고 항상 off.
+  // 시험판(/lab/) Type Y 로케이터. 안정판 UI 는 이 키를 **보여 주지 않는다**
+  // (#yLocatorSection 이 lab 전용).
+  //
+  // ⚠ 「항상 off」가 아니다 — 이 기본값 'off' 는 **원시 상태값일 뿐**이고, 첫 로드에서
+  //   `detectorAutoY = true` 가 `applyAutoLocatorProfileY()` 를 lab 게이트 없이 불러
+  //   `cell-surface-v0` 로 덮는다. 즉 사용자가 생성기를 그냥 열면 로케이터는 **켜져 있다.**
+  //   (2026-09-01: 이 주석이 「항상 off」라고 말해서, 마인크래프트 빌드 조사 때 「기본값은
+  //   우리 사다리와 다른 재료다」라는 오진이 나왔다. 실제로는 같은 v0 이고 ECC 만 다르다.)
   // 라인업(2026-08-17 v0T 편입·v0W 계열 전체 드랍까지 반영): v0 = Y0(n=13) ·
   // v0T = **Y1 최종 파인더** · v0TY = v0T 파생(먼 코너 QR 슬롯).
   //
