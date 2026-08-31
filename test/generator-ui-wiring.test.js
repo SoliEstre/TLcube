@@ -526,12 +526,28 @@ test('§6.3 buildConfig·매퍼가 사괘를 두 타입 모두 싣는다 — «�
   // 구 철자 `&& !opts.centerQr` 는 정식 중앙 3종 개통(사괘×중앙 QR 와이어 공유)으로
   // 걷혔다. O·A 는 무조건 싣고, centerQr 강등이 남는 곳은 C 분기(CDQ 행 부재)뿐이다.
   const oBranch = INDEX.slice(INDEX.indexOf('function encodeOptsFor'));
-  const matches = oBranch.match(/else if \(cfg\.sagoae === true\) \{/g) || [];
-  assert.equal(matches.length, 2,
-    '사괘 디스패치가 O·A 두 분기에 있어야 한다 (현재 ' + matches.length + ')');
+  const exclusiveMatches = oBranch.match(/else if \(cfg\.sagoae === true\) \{/g) || [];
+  assert.equal(exclusiveMatches.length, 1,
+    'A 분기의 배타 사괘 디스패치가 한 곳이어야 한다 (현재 ' + exclusiveMatches.length + ')');
+  const independentMatches = oBranch.match(/\n  if \(cfg\.sagoae === true\) \{/g) || [];
+  assert.equal(independentMatches.length, 1,
+    'O 분기의 독립 사괘 디스패치가 한 곳이어야 한다 (현재 ' + independentMatches.length + ')');
   const cMatches = oBranch.match(/if \(cfg\.sagoae === true && !opts\.centerQr\) opts\.sagoae = true;/g) || [];
   assert.equal(cMatches.length, 1,
     'C 분기의 CDQ 강등(와이어 행 부재)이 한 곳이어야 한다 (현재 ' + cMatches.length + ')');
+  // O의 H(o-cm)와 심부 sagoae는 G2~G4 합성 공급자가 함께 받는다. 두 독립
+  // if가 같은 옵션 객체에 실어야 우선순위 체인이 둘째 축을 조용히 버리지 않는다.
+  assert.match(oBranch,
+    /if \(cfg\.cornerMarker === true\) \{[\s\S]*?opts\.cornerMarker = true;[\s\S]*?opts\.markerTones = true;/,
+    'O 매퍼가 H 옵션을 싣지 않는다');
+  assert.match(oBranch,
+    /\n  if \(cfg\.sagoae === true\) \{[\s\S]*?if \(opts\.daehanFinder !== true\) opts\.sagoae = true;/,
+    'O 매퍼가 H와 독립으로 sagoae 옵션을 싣지 않는다');
+  // 원자 daehan도 같은 합성 공급자를 쓴다. daehan 분기 뒤의 cornerMarker가
+  // else-if면 G4(H)+daehan 신고가 그대로 재발한다.
+  assert.doesNotMatch(oBranch,
+    /if \(isDaehanFinderPatternId\(cfg\.finderPatternId\)[^\n]*\) opts\.daehanFinder = true;\s*else if \(cfg\.cornerMarker/,
+    '원자 daehan이 H 옵션을 우선순위 else-if로 떨군다');
 });
 
 test('§6.3 버전 잠금은 표 유도 술어 한 겹뿐이다 — 손 겹은 V4D 개방으로 걷었다', () => {

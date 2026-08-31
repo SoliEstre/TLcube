@@ -248,9 +248,9 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 허용값 정본은 finder-zone-ui(DEEP_SEAT_OPTIONS) — innerSeat 와 같은 순환
   // 제약이라 **검증되는 사본**이다 (어긋나면 zone-ui 로드 자기검증이 던진다).
   // 확장 가능 표: 심부 후보가 늘면 값이 는다 (none | sagoae | …).
-  // ⚠ 내곽(o-cm 등 tetrad 계열)과의 **동시 선택은 아직 열지 않는다** — 기하는
-  // k ≥ 12 서로소(PM/028 §1)지만 조합 개방은 T3(C×H)·cx-g4daehan 결과 뒤의
-  // 몫이다. 지금은 축 분리 + 단독 동작 무회귀까지 (UI sync 가 배타를 지킨다).
+  // 내곽 o-cm(H)과의 동시 선택은 좌표 정본·합성 회계·왕복이 모두 선 G2~G4
+  // (k=8/10/12)에서 개방한다. G1(k=6)은 H×sagoae 교집합 4셀이라 UI가 배타로
+  // 남기고, Type C는 노치×H 교집합 4셀이라 o-cm 자체를 노출하지 않는다.
   // 구 innerSeat==='sagoae' 상태는 createGeneratorState 가 이 축으로 이관한다.
   deepSeat: field('none', BOTH, ['none', 'sagoae']),
   // ⭐ **k-cm 편입 (2026-08-25)** — 자리는 2026-08-24 부터 와이어에 실재했지만
@@ -412,4 +412,25 @@ export function resolutionTierForVersion(type, version) {
     .find(([, candidate]) => String(candidate) === String(version));
   if (!entry) throw new RangeError('Type ' + type + '에 없는 버전: ' + version);
   return entry[0];
+}
+
+/**
+ * 자리 축 하나가 바뀌면 그 조합을 입력으로 삼는 UI를 한 상전이로 다시 맞춘다.
+ *
+ * seat 카드 자체만 동기화하면 H/사괘 선택 직후 버전 select·해상도 카드·중앙
+ * 파인더 카드에 직전 잠금이 남는다. 호출 순서를 이 함수 하나로 잠가 새 소비자가
+ * 생길 때 이벤트 핸들러 일부만 늙는 일을 막는다.
+ */
+export function syncAfterSeatChange({
+  syncSeatUi,
+  syncTurnAUi,
+  syncTypeUi,
+  syncResTierUi,
+  renderFinderUi,
+}) {
+  syncSeatUi();
+  syncTurnAUi();
+  syncTypeUi();
+  syncResTierUi();
+  renderFinderUi();
 }

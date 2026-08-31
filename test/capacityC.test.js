@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import { hexDistance } from '../src/hexgrid.js';
 import { anchorCells } from '../src/placement.js';
-import { tetradBase } from '../src/markerO.js';
+import { markerCells } from '../src/markerO.js';
 import {
   TYPE_C_MIN_RADIUS, notchCellCountC, notchCellsC, typeCReservedCells,
 } from '../src/notchC.js';
@@ -128,14 +128,15 @@ describe('Type C 와이어 표와 CM 거절', () => {
     }
   });
 
-  test('CM tetrad와 노치가 전 C 반경에서 겹쳐 동일 사유로 거절된다', () => {
-    // 거절의 근거는 «겹침의 존재»다 — 정확한 셀 목록은 기하 개정마다 바뀌므로
-    // 철자 대신 성질(비어 있지 않음)을 잰다.
+  test('H 12셀과 노치가 전 C 반경에서 정확히 4셀 겹쳐 동일 사유로 거절된다', () => {
+    // 좌표는 손 목록이 아니라 markerCells/notchCellsC 두 정본에서 유도한다.
+    // 네 셀은 3시 코너 tetrad 전체다 — 수가 바뀌면 공개 거절 사유도 함께 재검토한다.
     for (const k of TYPE_C_RADII) {
       const notch = new Set(notchCellsC(k).map(key));
-      const overlap = Object.values(tetradBase(k)).map(key)
+      const overlap = markerCells(k).map(key)
         .filter((cellKey) => notch.has(cellKey));
-      assert.ok(overlap.length > 0, `k=${k}: CM tetrad 와 노치가 겹치지 않으면 거절 사유가 낡은 것이다`);
+      assert.equal(overlap.length, 4,
+        `k=${k}: H 12셀 × 노치 교집합이 4셀이 아니다 (${overlap.length})`);
     }
     for (const options of [
       { cornerMarker: true },
