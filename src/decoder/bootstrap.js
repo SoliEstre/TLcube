@@ -3099,6 +3099,23 @@ function reprojectionResidual(luma, hypothesis, referenceResult, options, cfg) {
   return 1;
 }
 
+/**
+ * 오정정 의심 판정 (PM/030 §4 조치 ②).
+ *
+ * 「빈 페이로드 + 정정 필요」 조합만 본다. 두 축 중 하나만 쓰면 안 되는 이유:
+ *  · corrected 단독 임계는 정상 복호를 죽인다 — 실측에서 정상 최대 26(A2 영상 구간),
+ *    오독 최소 28 로 여유가 2뿐이다.
+ *  · 빈 텍스트 단독은 정당한 빈 페이로드를 죽인다 — 빈 코드는 유효하게 인코드된다.
+ * 둘의 **동시 성립**만이 격자 오검출의 서명이다.
+ */
+export function isMiscorrectionSuspect(candidate) {
+  if (candidate === null || typeof candidate !== 'object') return false;
+  const text = typeof candidate.text === 'string' ? candidate.text : '';
+  if (text.length > 0) return false;
+  const corrected = Number(candidate.corrected);
+  return Number.isFinite(corrected) && corrected > 0;
+}
+
 function scoreTerms(candidate, cfg) {
   const rsCost = candidate.crsDistance;
   const reprojection = 1 - clamp01(candidate.rH / Math.max(cfg.tauH, EPSILON));
@@ -5220,6 +5237,23 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         rH,
         rK,
       };
+      // 오정정(miscorrection) 방어 — PM/030. 격자를 틀리게 맞춘 프레임은 셀이 전부
+      // 어긋난 채 RS 가 대량 «정정» 해 **빈 페이로드를 성공으로** 만들어 낸다
+      // (실측: C3 코드가 hex-14 격자로 잡혀 versionName=C0 · text='' · corrected 28~34).
+      // 관측 근거: 정상 복호는 정지 코퍼스 204건·영상 구간 전부에서 **예외 없이**
+      // 비어 있지 않았고(빈 텍스트 성공 0건), 오독은 예외 없이 비어 있었다. 그래서
+      // 「빈 페이로드인데 정정이 필요했다」는 조합만 거부한다 — 무결점으로 읽힌
+      // 빈 코드(corrected 0)는 그대로 통과하므로 정당한 빈 페이로드는 살아 있다.
+      // ⚠ 이것은 증상 방어다. 근본 원인은 격자 오검출이고 그쪽은 별도 트랙이다.
+      if (isMiscorrectionSuspect(candidate)) {
+        diagnostics.bodyFailures.push({
+          hypothesisId: candidate.hypothesisId,
+          reason: 'miscorrection-suspect',
+          stage: 'body-acceptance',
+          corrected: candidate.corrected,
+        });
+        continue;
+      }
       Object.assign(candidate, scoreTerms(candidate, cfg));
       bodyValid.push(candidate);
     }

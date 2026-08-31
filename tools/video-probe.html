@@ -50,6 +50,11 @@
 <fieldset>
   <legend>입력</legend>
   <label>동영상 <input type="file" id="file" accept="video/*"></label>
+  <div class="sub" style="margin:8px 0 0">
+    또는 <code>test/output/photos/videos/</code> 에 넣고 아래 「서버 목록 일괄」 —
+    파일 선택 대화상자는 자동화가 안 되므로 통합자·레인은 이쪽을 쓴다.
+    목록 정본은 그 폴더의 <code>manifest.json</code> (없으면 만들어라).
+  </div>
   <video id="video" controls muted playsinline></video>
 </fieldset>
 
@@ -66,6 +71,7 @@
 </fieldset>
 
 <button id="dump" disabled>덤프</button>
+<button id="dumpAll">서버 목록 일괄</button>
 <div id="status"></div>
 <table><thead><tr><th>#</th><th>t (s)</th><th>크기</th><th>상태</th><th>경로</th></tr></thead><tbody id="rows"></tbody></table>
 
@@ -154,6 +160,90 @@ function addRow(index, time, size, ok, path) {
   els.rows.appendChild(tr);
   return tr;
 }
+
+/** 한 영상을 프레임 시퀀스로 굽는다. `video` 는 이미 메타데이터가 로드된 상태여야 한다. */
+async function dumpSequence(video, name) {
+  const fps = Math.max(1, Number(els.fps.value) || 10);
+  const from = Math.max(0, Number(els.from.value) || 0);
+  const spanRaw = Number(els.span.value) || 0;
+  const maxSide = Number(els.maxSide.value) || 1440;
+  const end = spanRaw > 0 ? Math.min(video.duration, from + spanRaw) : video.duration;
+
+  const scale = Math.min(1, maxSide / Math.max(video.videoWidth, video.videoHeight));
+  const w = Math.max(1, Math.round(video.videoWidth * scale));
+  const h = Math.max(1, Math.round(video.videoHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const step = 1 / fps;
+  const frames = [];
+  let index = 0;
+  for (let t = from; t < end - 1e-6; t += step, index += 1) {
+    els.status.textContent = `${name} — 프레임 ${index} @ ${t.toFixed(3)}s`;
+    await seekTo(video, t);
+    ctx.drawImage(video, 0, 0, w, h);
+    const stamp = String(index).padStart(4, '0');
+    const target = `test/output/photos/luma/${name}/${name}.f${stamp}.${maxSide}.luma`;
+    const bytes = await dumpFrame(canvas, ctx, target);
+    // 요청한 시각(t)이 아니라 **실제로 도달한 시각**을 적는다 — 브라우저는 가장 가까운
+    // 샘플로 이동하므로 둘이 어긋난다. LTC 의 시간 축은 실제 값이어야 한다.
+    frames.push({ index, requested: t, actual: video.currentTime, bytes });
+    if (index % 10 === 0) addRow(index, video.currentTime, `${w}×${h}`, true, target);
+  }
+
+  await putJson(`test/output/photos/luma/${name}/${name}.seq.json`, {
+    _note: 'LTC 프레임 시퀀스. actual 이 실제 도달 시각이다 (requested 와 어긋날 수 있다).',
+    name,
+    maxSide,
+    requestedFps: fps,
+    source: { width: video.videoWidth, height: video.videoHeight, duration: video.duration },
+    frames,
+  });
+  return frames.length;
+}
+
+function loadVideo(video, src) {
+  return new Promise((resolve, reject) => {
+    const onLoaded = () => { cleanup(); resolve(); };
+    const onError = () => { cleanup(); reject(new Error(`영상 로드 실패: ${src}`)); };
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', onLoaded);
+      video.removeEventListener('error', onError);
+    };
+    video.addEventListener('loadedmetadata', onLoaded, { once: true });
+    video.addEventListener('error', onError, { once: true });
+    video.src = src;
+  });
+}
+
+// 자동화 경로 — 파일 선택 대화상자를 못 쓰는 통합자·레인이 쓴다.
+// 진행 상태는 window.__videoProbe 로도 노출한다 (브라우저 자동화가 폴링한다).
+window.__videoProbe = { done: false, results: [], error: null };
+document.getElementById('dumpAll').addEventListener('click', async () => {
+  const button = document.getElementById('dumpAll');
+  button.disabled = true;
+  els.rows.replaceChildren();
+  window.__videoProbe = { done: false, results: [], error: null };
+  try {
+    const base = '/test/output/photos/videos/';
+    const names = await (await fetch(`${base}manifest.json`)).json();
+    for (const file of names) {
+      const name = file.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+      els.status.textContent = `${file} 로드`;
+      await loadVideo(els.video, base + encodeURIComponent(file));
+      const count = await dumpSequence(els.video, name);
+      window.__videoProbe.results.push({ file, name, frames: count });
+    }
+    els.status.textContent = `일괄 완료 — ${window.__videoProbe.results.length}개 시퀀스`;
+  } catch (error) {
+    window.__videoProbe.error = error.message;
+    els.status.textContent = `실패: ${error.message}`;
+  } finally {
+    window.__videoProbe.done = true;
+    button.disabled = false;
+  }
+});
 
 els.dump.addEventListener('click', async () => {
   els.dump.disabled = true;
