@@ -246,7 +246,8 @@ function paeth(a, b, c) {
 }
 
 /** PNG를 decodeFrontend와 크롭 계산이 소비할 RGBA 래스터로 되푼다. */
-function pngToRaster(bytes) {
+// tools/warp/scan-photo.mjs 가 실물 사진을 물릴 때 이걸 쓴다 — 손 사본을 만들면 어긋난다.
+export function pngToRaster(bytes) {
   const data = Buffer.from(bytes);
   const meta = pngMeta(data);
   if (meta.bitDepth !== 8 || ![2, 6].includes(meta.colorType)) {
