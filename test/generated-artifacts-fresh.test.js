@@ -30,7 +30,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 import { buildScannerHtml } from '../tools/build-scanner.mjs';
 import { buildLabVariants, LAB_OUTPUTS } from '../tools/build-lab.mjs';
@@ -135,7 +136,7 @@ const COVERED_ELSEWHERE = Object.freeze({
   'build-single.mjs': 'test/gen-variants.test.js',
 });
 
-test('**모든 빌더**가 어딘가에서 신선도로 잠긴다', () => {
+test('**모든 빌더**가 어딘가에서 신선도로 잠긴다', async () => {
   // ⚠ 이 테스트는 원래 내가 손으로 적은 이름 4개만 확인했다. 그러고 나서 전체 스위트가
   //   `build-cell-editor` · `build-gen-variants` 산출물의 stale 로 **2건 빨개졌다** —
   //   즉 이 «커버리지» 테스트 자신이 커버리지 구멍을 갖고 있었다. 오늘 세 번째로 같은
@@ -149,7 +150,34 @@ test('**모든 빌더**가 어딘가에서 신선도로 잠긴다', () => {
   mine.add('build-scan-variants.mjs');            // scan-new.html 을 위 테스트가 따로 잠근다
   mine.add('build-print-poster.mjs');             // test/print-poster.test.js:92 가 잠근다
 
-  const orphans = builders.filter((b) => !mine.has(b) && !COVERED_ELSEWHERE[b]);
+  // 산출물이 **전부 gitignore 영역**인 빌더는 신선도 대상이 아니다 — 「커밋된 바이트 ==
+  // 지금 빌드」를 잴 커밋된 바이트가 아예 없기 때문이다 (build-layout-packs 는 팩을
+  // test/output/ 아래에만 굽는다). 이것도 손 목록으로 두지 않고 **빌더의 OUTPUTS 선언에서
+  // 유도**한다 — 위 주석이 말하는 그 교훈의 연장이다.
+  const ignoredOnly = new Set();
+  for (const builder of builders) {
+    const file = path.join(ROOT, 'tools', builder);
+    let outputs = null;
+    try {
+      if (!/export\s+const\s+OUTPUTS/.test(readFileSync(file, 'utf8'))) continue;
+      ({ OUTPUTS: outputs } = await import(pathToFileURL(file).href));
+    } catch { continue; }
+    if (!Array.isArray(outputs) || outputs.length === 0) continue;
+    const allIgnored = outputs.every((out) => {
+      const rel = String(out).replace(/\\/g, '/');
+      try {
+        execFileSync('git', ['check-ignore', '-q', rel], { cwd: ROOT, stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (allIgnored) ignoredOnly.add(builder);
+  }
+
+  const orphans = builders.filter(
+    (b) => !mine.has(b) && !COVERED_ELSEWHERE[b] && !ignoredOnly.has(b),
+  );
   assert.deepEqual(orphans, [],
     '이 빌더들의 산출물을 아무도 신선도로 안 잠근다 — 조용히 stale 이 된다: '
     + orphans.join(', '));

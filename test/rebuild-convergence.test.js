@@ -35,12 +35,31 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 import {
   listBuilders, collectDeclaredOutputs, fingerprintOutputs,
 } from '../tools/rebuild-all.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * gitignore 산출물의 **생성**을 잠그는 테스트들 (청구서 — 면제부가 아니다).
+ * 여기 이름을 올리려면 그 테스트가 실제로 빌더를 돌려 산출물을 확인해야 한다.
+ */
+const GENERATION_COVERED_BY = Object.freeze({
+  'build-layout-packs.mjs': 'test/r2-layout-pack.test.js',
+});
+
+/** repo 상대 경로가 gitignore 대상인가. 철자가 아니라 git 에 직접 묻는다. */
+function isGitIgnored(rel) {
+  try {
+    execFileSync('git', ['check-ignore', '-q', rel], { cwd: ROOT, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function withTempDir(fn) {
   const dir = mkdtempSync(path.join(tmpdir(), 'tlcube-convergence-'));
@@ -98,11 +117,27 @@ test('산출물 대상은 빌더 OUTPUTS 선언의 합집합에서 유도된다 
 
   // 유도 결과는 repo 상대 POSIX 여야 하고(러너가 그렇게 정규화한다), 전부 실재해야 한다
   // — 실재하지 않는 선언은 오타이거나 커밋 안 된 산출물이다.
+  //
+  // ⚠ 예외 하나: **gitignore 영역 산출물**은 존재를 요구하지 않는다. 커밋되지 않는 것이
+  //    의도이므로(레이아웃 팩은 test/output/ 아래에만 굽는다) 클린 체크아웃에는 없는 게
+  //    정상이고, 여기서 존재를 요구하면 「빌드 전엔 항상 빨강」이 된다.
+  //    대신 **청구서**를 남긴다 — 그 산출물의 생성은 아래 GENERATION_COVERED_BY 가
+  //    가리키는 테스트가 실제로 굽고 확인한다. 면제부가 아니라 이관이다.
+  const ignoredDecls = [];
   for (const rel of outputs) {
     assert.ok(!path.isAbsolute(rel) && !rel.includes('\\'),
       rel + ' — repo 상대 POSIX 가 아니다');
+    if (isGitIgnored(rel)) { ignoredDecls.push(rel); continue; }
     assert.ok(existsSync(path.join(ROOT, rel)),
       rel + ' — 선언은 됐는데 실재하지 않는다 (빌더의 OUTPUTS 가 쓰기와 어긋났다)');
+  }
+
+  // 청구서 회수: gitignore 산출물이 있으면 그 생성을 잠그는 테스트가 **실재**해야 한다.
+  if (ignoredDecls.length > 0) {
+    for (const testFile of Object.values(GENERATION_COVERED_BY)) {
+      assert.ok(existsSync(path.join(ROOT, testFile)),
+        testFile + ' 가 없다 — gitignore 산출물의 생성을 아무도 안 잠근다');
+    }
   }
 
   // 사고 파일이 대상 안에 있는지 못박는다 — 08-29 에 낡은 채 통과한 바로 그 파일이
