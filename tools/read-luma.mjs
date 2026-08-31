@@ -21,7 +21,7 @@
  */
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -112,16 +112,76 @@ export function lumaToRaster(luma) {
  */
 export function listLumaDumps() {
   if (!existsSync(LUMA_DIR)) return [];
+  return walkLuma((name) => !SEQUENCE_FRAME_RE.test(name));
+}
+
+/**
+ * 동영상 프레임은 **정지사진 코퍼스가 아니다.**
+ *
+ * `video-probe.html` 이 굽는 프레임은 `<이름>.f0000.<maxSide>.luma` 형이고 한 영상이
+ * 수백 개를 만든다. `listLumaDumps()` 가 재귀라 이것들이 그대로 섞이면 코퍼스 지문
+ * (`test/photo-corpus-fingerprint.json`)이 깨지고 전수 시간이 폭증한다 — 정지사진
+ * 통계와 라이브 누적은 **애초에 다른 축**이라 한 자에 담으면 둘 다 못 잰다.
+ * 그래서 파일명 패턴으로 두 축을 가른다.
+ */
+const SEQUENCE_FRAME_RE = /\.f\d{4}\.\d+\.luma$/;
+
+/** 두 축의 판별자. 테스트가 파일 없이도 분류 성질을 잴 수 있게 내보낸다. */
+export function isSequenceFrameName(name) {
+  return SEQUENCE_FRAME_RE.test(name);
+}
+
+function walkLuma(accept) {
   const walk = (directory, prefix) => {
     const found = [];
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.isDirectory()) {
         found.push(...walk(join(directory, entry.name), `${prefix}${entry.name}/`));
-      } else if (entry.name.endsWith('.luma')) {
+      } else if (entry.name.endsWith('.luma') && accept(entry.name)) {
         found.push({ name: prefix + entry.name, path: join(directory, entry.name) });
       }
     }
     return found;
   };
   return walk(LUMA_DIR, '').sort((left, right) => (left.name < right.name ? -1 : 1));
+}
+
+/**
+ * LTC 용 프레임 시퀀스 목록. 시퀀스 하나 = `{ name, frames[] }` 이고 frames 는
+ * **프레임 번호 오름차순**이다 (LTC 는 순서가 의미를 갖는다).
+ *
+ * `timestampsMs` 는 `<이름>.seq.json` 의 `actual`(실제 도달 시각)에서 온다 — 요청한
+ * 시각이 아니다. 브라우저 seek 은 가장 가까운 샘플로 가므로 둘이 어긋나고, λ 감쇠·
+ * coast 만료는 실제 간격을 써야 한다. seq.json 이 없으면 null 을 준다 (지어내지 않는다).
+ */
+export function listLumaSequences() {
+  if (!existsSync(LUMA_DIR)) return [];
+  const byGroup = new Map();
+  for (const frame of walkLuma((name) => SEQUENCE_FRAME_RE.test(name))) {
+    const group = frame.name.slice(0, frame.name.lastIndexOf('/') + 1)
+      + frame.name.slice(frame.name.lastIndexOf('/') + 1).replace(SEQUENCE_FRAME_RE, '');
+    if (!byGroup.has(group)) byGroup.set(group, []);
+    byGroup.get(group).push(frame);
+  }
+  return [...byGroup.entries()].map(([name, frames]) => {
+    const meta = readSequenceMeta(frames[0].path, name);
+    return {
+      name,
+      frames: frames.sort((left, right) => (left.name < right.name ? -1 : 1)),
+      timestampsMs: meta === null ? null
+        : meta.frames.map((entry) => Math.round(entry.actual * 1000)),
+    };
+  }).sort((left, right) => (left.name < right.name ? -1 : 1));
+}
+
+function readSequenceMeta(anyFramePath, group) {
+  const base = group.slice(group.lastIndexOf('/') + 1);
+  const path = join(dirname(anyFramePath), `${base}.seq.json`);
+  if (!existsSync(path)) return null;
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    return Array.isArray(parsed.frames) ? parsed : null;
+  } catch {
+    return null; // 깨진 사이드카는 «모른다» 다 — 시간 축을 지어내면 캘리브레이션이 오염된다.
+  }
 }

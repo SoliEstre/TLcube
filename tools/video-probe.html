@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>TLcube — 동영상 프레임 휘도 덤프</title>
+<!--
+  video-probe.html — 실기 **동영상**에서 연속 프레임 휘도 덤프를 굽는다.
+
+  왜 있나: R2 의 LTC(Long-Term Completion)는 «같은 코드를 여러 프레임 관측해 누적»
+  하는 것이 본체다. 그런데 기존 코퍼스는 전부 «한 코드당 정지 1장»이라 누적 알고리즘을
+  만들 재료도, 이득을 잴 자도 없다 (photo-probe.html 은 단일 이미지 전용).
+  여기서 동영상을 프레임 시퀀스로 풀어 두면 레인이 `read-luma.mjs` 의 시퀀스 헬퍼로
+  «프레임 0..N 을 순서대로» 먹일 수 있다.
+
+  ⚠ 정지사진 통계로 라이브 스캔을 단정하지 마라 — 축이 다르다. 이 도구는 그 간극을
+  좁히려는 것이지 없애지 않는다 (손떨림·롤링셔터는 담기고, 카메라 AE/AF 의 실시간
+  반응은 촬영 시점에 이미 고정돼 있다).
+
+  형식은 photo-probe.html 과 **동일**하다 (TLL2 · u32 w · u32 h · u16[w*h], 값 = 상대휘도×65535).
+  다른 것은 이름뿐: `<basename>.f0000.<maxSide>.luma` 로 프레임 번호가 붙고,
+  같은 폴더에 `<basename>.seq.json` (프레임별 실제 타임스탬프)이 함께 떨어진다 —
+  LTC 는 프레임 «순서»만이 아니라 «간격»도 쓰기 때문이다 (λ 감쇠·coast 만료가 시간 축).
+
+  쓰는 법:
+    node tools/dev-server.mjs   → http://localhost:8080/tools/video-probe.html
+    동영상 파일 고르고 「덤프」. 저장 위치는 test/output/photos/luma/<이름>/ 아래.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.6 system-ui, sans-serif; margin: 24px; max-width: 900px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { opacity: .7; margin-bottom: 16px; }
+  fieldset { border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: 8px; margin-bottom: 14px; }
+  label { display: inline-flex; gap: 6px; align-items: center; margin-right: 14px; }
+  input[type=number] { width: 5.5em; }
+  button { padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); font-variant-numeric: tabular-nums; }
+  .ok { color: #1a7f37; font-weight: 600; }
+  .err { color: #b3261e; font-weight: 600; }
+  #status { margin-top: 10px; min-height: 1.4em; }
+  video { max-width: 320px; display: block; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>동영상 프레임 휘도 덤프</h1>
+<div class="sub">LTC 개발용 — 연속 프레임을 <code>TLL2</code> 덤프 시퀀스로 굽는다. 저장은 <code>test/output/</code> 아래로만 열려 있다.</div>
+
+<fieldset>
+  <legend>입력</legend>
+  <label>동영상 <input type="file" id="file" accept="video/*"></label>
+  <video id="video" controls muted playsinline></video>
+</fieldset>
+
+<fieldset>
+  <legend>추출 설정</legend>
+  <label>초당 프레임 <input type="number" id="fps" value="10" min="1" max="60" step="1"></label>
+  <label>시작(초) <input type="number" id="from" value="0" min="0" step="0.1"></label>
+  <label>길이(초, 0=끝까지) <input type="number" id="span" value="0" min="0" step="0.1"></label>
+  <label>최대 변 <select id="maxSide"><option>960</option><option selected>1440</option><option>1920</option></select></label>
+  <div class="sub" style="margin:8px 0 0">
+    10 fps 면 15초 영상이 150프레임이다. LTC 는 «움직임이 곧 다이버시티» 라 촬영 중
+    손떨림·거리 변화가 있는 편이 정보량이 많다.
+  </div>
+</fieldset>
+
+<button id="dump" disabled>덤프</button>
+<div id="status"></div>
+<table><thead><tr><th>#</th><th>t (s)</th><th>크기</th><th>상태</th><th>경로</th></tr></thead><tbody id="rows"></tbody></table>
+
+<script type="module">
+const els = {
+  file: document.getElementById('file'),
+  video: document.getElementById('video'),
+  fps: document.getElementById('fps'),
+  from: document.getElementById('from'),
+  span: document.getElementById('span'),
+  maxSide: document.getElementById('maxSide'),
+  dump: document.getElementById('dump'),
+  status: document.getElementById('status'),
+  rows: document.getElementById('rows'),
+};
+
+let baseName = '';
+
+els.file.addEventListener('change', () => {
+  const file = els.file.files && els.file.files[0];
+  if (!file) return;
+  // 파일명이 곧 시퀀스 이름이다 — 확장자와 경로 위험 문자만 턴다.
+  baseName = file.name.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_');
+  els.video.src = URL.createObjectURL(file);
+  els.dump.disabled = false;
+  els.status.textContent = `${file.name} — 메타데이터 로드 대기`;
+});
+
+els.video.addEventListener('loadedmetadata', () => {
+  els.status.textContent = `길이 ${els.video.duration.toFixed(2)}s · ${els.video.videoWidth}×${els.video.videoHeight}`;
+});
+
+/** 정확한 시각으로 이동한다. seeked 를 기다려야 그 프레임이 canvas 에 올라온다. */
+function seekTo(video, time) {
+  return new Promise((resolve, reject) => {
+    const onSeeked = () => { cleanup(); resolve(); };
+    const onError = () => { cleanup(); reject(new Error(`seek 실패 @${time}`)); };
+    const cleanup = () => {
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onError);
+    };
+    video.addEventListener('seeked', onSeeked, { once: true });
+    video.addEventListener('error', onError, { once: true });
+    video.currentTime = time;
+  });
+}
+
+/**
+ * photo-probe.html 의 dumpLuma 와 **같은 형식**을 쓴다 (TLL2 · 16비트).
+ * 8비트 양자화는 실제로 복호를 깨뜨린 전력이 있어 여기서도 16비트를 유지한다.
+ */
+async function dumpFrame(canvas, ctx, target) {
+  const { toRelativeLuminance } = await import('/src/decoder/luma.js');
+  const { width: w, height: h } = canvas;
+  const image = ctx.getImageData(0, 0, w, h);
+  const luma = toRelativeLuminance({ width: w, height: h, pixels: image.data }, {});
+
+  const out = new Uint8Array(12 + (w * h * 2));
+  const view = new DataView(out.buffer);
+  out.set([0x54, 0x4c, 0x4c, 0x32], 0); // "TLL2"
+  view.setUint32(4, w, true);
+  view.setUint32(8, h, true);
+  for (let i = 0; i < w * h; i += 1) {
+    const v = Math.max(0, Math.min(65535, Math.round(luma.data[i] * 65535)));
+    view.setUint16(12 + (i * 2), v, true);
+  }
+  const res = await fetch(`/__luma?path=${encodeURIComponent(target)}`, { method: 'PUT', body: out });
+  if (!res.ok) throw new Error(`덤프 실패 ${res.status}: ${await res.text()}`);
+  return Number(await res.text());
+}
+
+async function putJson(target, value) {
+  const body = new TextEncoder().encode(JSON.stringify(value, null, 2));
+  const res = await fetch(`/__luma?path=${encodeURIComponent(target)}`, { method: 'PUT', body });
+  if (!res.ok) throw new Error(`시퀀스 기록 실패 ${res.status}`);
+}
+
+function addRow(index, time, size, ok, path) {
+  const tr = document.createElement('tr');
+  for (const text of [String(index), time.toFixed(3), size, '', path]) {
+    const td = document.createElement('td');
+    td.textContent = text;
+    tr.appendChild(td);
+  }
+  tr.children[3].innerHTML = ok ? '<span class="ok">DUMP</span>' : '<span class="err">FAIL</span>';
+  els.rows.appendChild(tr);
+  return tr;
+}
+
+els.dump.addEventListener('click', async () => {
+  els.dump.disabled = true;
+  els.rows.replaceChildren();
+  const video = els.video;
+  try {
+    const fps = Math.max(1, Number(els.fps.value) || 10);
+    const from = Math.max(0, Number(els.from.value) || 0);
+    const spanRaw = Number(els.span.value) || 0;
+    const maxSide = Number(els.maxSide.value) || 1440;
+    const end = spanRaw > 0 ? Math.min(video.duration, from + spanRaw) : video.duration;
+
+    const scale = Math.min(1, maxSide / Math.max(video.videoWidth, video.videoHeight));
+    const w = Math.max(1, Math.round(video.videoWidth * scale));
+    const h = Math.max(1, Math.round(video.videoHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const step = 1 / fps;
+    const frames = [];
+    let index = 0;
+    for (let t = from; t < end - 1e-6; t += step, index += 1) {
+      els.status.textContent = `프레임 ${index} @ ${t.toFixed(3)}s`;
+      await seekTo(video, t);
+      ctx.drawImage(video, 0, 0, w, h);
+      const stamp = String(index).padStart(4, '0');
+      const target = `test/output/photos/luma/${baseName}/${baseName}.f${stamp}.${maxSide}.luma`;
+      const bytes = await dumpFrame(canvas, ctx, target);
+      // 요청한 시각(t)이 아니라 **실제로 도달한 시각**을 적는다 — 브라우저는 가장 가까운
+      // 키프레임/샘플로 이동하므로 둘이 어긋난다. LTC 의 시간 축은 실제 값이어야 한다.
+      frames.push({ index, requested: t, actual: video.currentTime, bytes });
+      addRow(index, video.currentTime, `${w}×${h}`, true, target);
+    }
+
+    await putJson(`test/output/photos/luma/${baseName}/${baseName}.seq.json`, {
+      _note: 'LTC 프레임 시퀀스. actual 이 실제 도달 시각이다 (requested 와 어긋날 수 있다).',
+      name: baseName,
+      maxSide,
+      requestedFps: fps,
+      source: { width: video.videoWidth, height: video.videoHeight, duration: video.duration },
+      frames,
+    });
+    els.status.textContent = `완료 — ${frames.length}프레임. read-luma.mjs 의 listLumaSequences() 로 읽는다`;
+  } catch (error) {
+    els.status.textContent = `실패: ${error.message}`;
+  } finally {
+    els.dump.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
