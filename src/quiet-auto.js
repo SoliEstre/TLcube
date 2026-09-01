@@ -120,6 +120,15 @@ export const QUIET_CELL_SEPARATION_FLOOR = 0.05;
 export const QUIET_COLOR_WHITE = 'white';
 export const QUIET_COLOR_BLACK = 'black';
 export const QUIET_COLOR_NONE = 'none';
+/**
+ * **표면 색** — 배치 미리보기 사진에서 잰 코드 주변 지면의 평균 색 (운영자 결정
+ * 2026-09-01). 이 모듈은 색을 모른다(순수 함수) — 이름만 내고 RGB 는 호출자가 준다.
+ *
+ * 왜 Type Y 에 이것이 답인가: §13 법칙은 「판 색이 프레임 테두리 띠에 없으면 해롭고,
+ * 있으면 무해」다. 표면 색 판은 **정의상 그 띠 안의 색**이라 전경 덩어리가 되지 않으면서,
+ * 무늬 있는 지면(포스터)을 코드 둘레에서만 **국소 균일화**해 준다. 흑/백 판은 그 반대다.
+ */
+export const QUIET_COLOR_SURFACE = 'surface';
 
 /**
  * 흰/검 결정. **순수 함수** — 여기 들어오는 수치 넷이 전부다.
@@ -223,31 +232,81 @@ export function decideQuietColor(input) {
  * @returns {{color:'white'|'black'|'none', reason:string,
  *            scoreWhite:number|null, scoreBlack:number|null}}
  */
+function plain(color, reason) {
+  return {
+    color, reason, scoreWhite: null, scoreBlack: null,
+  };
+}
+
+/**
+ * 표면 색을 쓸 수 있는가. **사진이 있어야 안다** — 배치 미리보기를 안 넣었으면
+ * 지면의 색을 잴 방법이 없다. 그 경우는 «없음» 이 정직한 답이고, 화면이 사진을
+ * 넣으라고 안내한다 (조용히 흑/백으로 강등하지 않는다 — 그게 이 결정이 없앤 것이다).
+ */
+function surfaceKnown(input) {
+  return Number.isFinite(input.surfaceSeparation);
+}
+
+/** 지면이 셀 레벨과 충분히 안 갈리는가 = 「주변 배경이 해롭다」. */
+function surfaceHarmful(input) {
+  if (!surfaceKnown(input)) return false;
+  const floor = input.separationFloor === undefined
+    ? QUIET_CELL_SEPARATION_FLOOR : input.separationFloor;
+  return input.surfaceSeparation < floor;
+}
+
 export function resolveQuietZoneChoice(input) {
-  const { quietMode, bgMode } = input;
-  if (quietMode === 'none') {
-    return {
-      color: QUIET_COLOR_NONE, reason: 'user-none', scoreWhite: null, scoreBlack: null,
-    };
+  const { bgMode } = input;
+  const isY = input.type === 'Y';
+  /*
+   * 🔴 **타입을 바꾸면 그 타입에 없는 카드의 상태가 남는다** — 양방향으로 푼다.
+   *   · Y 가 아닌데 'surface' : 그 카드는 Y 전용이라 화면에 없다. 사용자가 되돌릴
+   *     방법이 없으므로 기본값 'auto' 로 본다 (여기서 안 풀면 O/A 가 «카드 하나도
+   *     안 켜진 채 안전영역이 안 들어가는» 상태가 된다 — 실측으로 났다).
+   *   · Y 인데 white/black/contrast : 아래 분기가 표면 색으로 사상한다.
+   * 상태 자체는 안 건드린다 — 타입을 되돌리면 고른 값이 살아난다.
+   */
+  const quietMode = (!isY && input.quietMode === QUIET_COLOR_SURFACE)
+    ? 'auto' : input.quietMode;
+
+  if (quietMode === 'none') return plain(QUIET_COLOR_NONE, 'user-none');
+
+  /*
+   * ⭐ **Type Y 의 흑/백 축은 내려갔다** (운영자 결정 2026-09-01). 카드가 «자동 ·
+   *    없음 · 표면 색» 셋이라 UI 로는 white/black/contrast 가 안 들어온다. 그래도
+   *    낡은 상태·공유 URL·타입 전환 잔존으로 들어올 수 있으므로 여기서 **표면 색으로
+   *    사상**한다. 조용히 통과시키면 「카드는 없는데 흰 판이 깔리는」 상태가 되고,
+   *    그건 이 결정이 없애려던 바로 그 그림이다 (배타를 열면 소비자도 쓸어라).
+   */
+  if (isY && (quietMode === QUIET_COLOR_WHITE || quietMode === QUIET_COLOR_BLACK
+    || quietMode === 'contrast')) {
+    return surfaceKnown(input)
+      ? plain(QUIET_COLOR_SURFACE, 'y-legacy-to-surface')
+      : plain(QUIET_COLOR_NONE, 'y-legacy-surface-unknown');
+  }
+
+  if (quietMode === QUIET_COLOR_SURFACE) {
+    return surfaceKnown(input)
+      ? plain(QUIET_COLOR_SURFACE, 'user-surface')
+      : plain(QUIET_COLOR_NONE, 'surface-unknown');
   }
   if (quietMode === QUIET_COLOR_WHITE || quietMode === QUIET_COLOR_BLACK) {
-    return {
-      color: quietMode, reason: 'user-fixed', scoreWhite: null, scoreBlack: null,
-    };
+    return plain(quietMode, 'user-fixed');
   }
   if (quietMode === 'auto' && bgMode !== 'transparent') {
     // 불투명 배경은 실효 배경이 확정돼 있어 분리가 이미 보증된다.
-    return {
-      color: QUIET_COLOR_NONE, reason: 'auto-opaque-background', scoreWhite: null, scoreBlack: null,
-    };
+    return plain(QUIET_COLOR_NONE, 'auto-opaque-background');
   }
-  if (quietMode === 'auto' && input.type === 'Y') {
-    // Type Y decode-safe: auto 흰/검 안전영역은 전경 실루엣 검출을 깨 복호를 죽인다
-    // (§Type Y). auto 는 색을 안 넣는다. 명시 선택(none/white/black/contrast)은 위
-    // 분기에서 이미 처리됐다.
-    return {
-      color: QUIET_COLOR_NONE, reason: 'auto-y-silhouette', scoreWhite: null, scoreBlack: null,
-    };
+  if (quietMode === 'auto' && isY) {
+    /*
+     * Type Y decode-safe: auto 흰/검 안전영역은 전경 실루엣 검출을 깨 복호를 죽인다
+     * (§Type Y). **기본은 «없음»** 이고, 운영자 결정 2026-09-01 로 예외가 하나 생겼다 —
+     * 지면이 셀 레벨과 안 갈리면(=해로우면) **표면 색**으로 국소 균일화한다.
+     * 표면 색 판은 테두리 띠 안의 색이라 실루엣을 안 깬다 (§QUIET_COLOR_SURFACE).
+     */
+    return surfaceHarmful(input)
+      ? plain(QUIET_COLOR_SURFACE, 'auto-y-surface-harmful')
+      : plain(QUIET_COLOR_NONE, 'auto-y-silhouette');
   }
   if (quietMode !== 'auto' && quietMode !== 'contrast') {
     throw new RangeError('알 수 없는 안전영역 모드: ' + quietMode);

@@ -1776,6 +1776,10 @@
         <div class="toggle-card" data-quiet="white"><span class="swatch-mini" style="background:#fff"></span><span data-i18n="g202">흰색</span></div>
         <div class="toggle-card" data-quiet="black"><span class="swatch-mini" style="background:#000"></span><span data-i18n="g203">검정</span></div>
         <div class="toggle-card" data-quiet="contrast"><svg class="swatch-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3 A9 9 0 0 1 12 21 Z" fill="currentColor" stroke="none"/></svg><span data-i18n="g081">고대비</span></div>
+        <!-- 표면 색 — **Type Y 전용** (운영자 결정 2026-09-01). 흑/백 판은 Type Y 에서
+             전경 실루엣을 깨므로 그 셋을 숨기고 이 카드를 낸다. 한 줄에 보이는 카드는
+             여전히 최대 다섯이다 (Y 는 셋, O/A 는 다섯). 견본 색은 측정값으로 채운다. -->
+        <div class="toggle-card" data-quiet="surface"><span class="swatch-mini" id="quietSurfaceSwatch" style="background:repeating-linear-gradient(135deg,#7d8490 0 4px,#aab1bd 4px 8px)"></span><span data-i18n="g002">표면 색</span></div>
       </div>
       <p class="hint" id="quietModeHint"></p>
 
@@ -2638,6 +2642,10 @@ function tf(key, vars) {
 const GENERATOR_STRINGS = {
   ko: {
     "g001": "페이지 테마 (코드 렌더와 무관)",
+    "g002": "표면 색",
+    "g003": "코드 둘레 {cells}칸을 지면 평균색으로 채워요. 무늬만 지우고 실루엣은 그대로 둬요.",
+    "g004": "지면이 셀과 잘 안 갈려서(분리 {sep}) 코드 둘레 {cells}칸을 표면 색으로 자동으로 채웠어요.",
+    "g005": "배치 미리보기 이미지를 넣으면 지면 색을 재서 채워요. 지금은 안전영역을 안 넣어요.",
     "g013": "배경 이미지 제거",
     "g019": "좌측 이미지 제거",
     "g020": "우측 이미지 제거",
@@ -3120,6 +3128,10 @@ const GENERATOR_STRINGS = {
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
+    "g002": "Surface color",
+    "g003": "Fills {cells} cells around the code with the surface's average color — it flattens patterns without breaking the silhouette.",
+    "g004": "The surface barely separates from the cells (separation {sep}), so {cells} cells around the code were filled with the surface color automatically.",
+    "g005": "Add a placement preview image and the surface color will be measured and used. For now no quiet zone is added.",
     "g013": "Remove background image",
     "g019": "Remove left image",
     "g020": "Remove right image",
@@ -3602,6 +3614,10 @@ const GENERATOR_STRINGS = {
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
+    "g002": "表面の色",
+    "g003": "コードの周囲 {cells} セルを下地の平均色で塗ります。模様だけを消し、シルエットは保ちます。",
+    "g004": "下地とセルの差が小さいため（分離 {sep}）、コードの周囲 {cells} セルを自動で表面の色で塗りました。",
+    "g005": "配置プレビュー画像を追加すると下地の色を測って塗ります。今は安全領域を入れません。",
     "g013": "背景画像を削除",
     "g019": "左の画像を削除",
     "g020": "右の画像を削除",
@@ -4084,6 +4100,10 @@ const GENERATOR_STRINGS = {
   },
   fr: {
     "g001": "Thème de la page (sans effet sur le rendu du code)",
+    "g002": "Couleur du support",
+    "g003": "Remplit {cells} cellules autour du code avec la couleur moyenne du support — cela efface les motifs sans casser la silhouette.",
+    "g004": "Le support se distingue mal des cellules (séparation {sep}) : {cells} cellules autour du code ont été remplies automatiquement avec la couleur du support.",
+    "g005": "Ajoutez une image d'aperçu de placement pour mesurer et utiliser la couleur du support. Pour l'instant, aucune zone de silence n'est ajoutée.",
     "g013": "Retirer l'image d'arrière-plan",
     "g019": "Retirer l'image de gauche",
     "g020": "Retirer l'image de droite",
@@ -4565,6 +4585,10 @@ const GENERATOR_STRINGS = {
   },
   it: {
     "g001": "Tema della pagina (non incide sul rendering del codice)",
+    "g002": "Colore della superficie",
+    "g003": "Riempie {cells} celle attorno al codice con il colore medio della superficie: elimina i motivi senza rompere la silhouette.",
+    "g004": "La superficie si distingue poco dalle celle (separazione {sep}): {cells} celle attorno al codice sono state riempite automaticamente con il colore della superficie.",
+    "g005": "Aggiungi un'immagine di anteprima del posizionamento per misurare e usare il colore della superficie. Per ora non viene aggiunta alcuna zona di silenzio.",
     "g013": "Rimuovi l'immagine di sfondo",
     "g019": "Rimuovi l'immagine di sinistra",
     "g020": "Rimuovi l'immagine di destra",
@@ -5046,6 +5070,10 @@ const GENERATOR_STRINGS = {
   },
   de: {
     "g001": "Seitenthema (ohne Einfluss auf das Rendering des Codes)",
+    "g002": "Untergrundfarbe",
+    "g003": "Füllt {cells} Zellen um den Code mit der Durchschnittsfarbe des Untergrunds — glättet Muster, ohne die Silhouette zu zerstören.",
+    "g004": "Der Untergrund hebt sich kaum von den Zellen ab (Trennung {sep}); {cells} Zellen um den Code wurden automatisch mit der Untergrundfarbe gefüllt.",
+    "g005": "Fügen Sie ein Platzierungs-Vorschaubild hinzu, damit die Untergrundfarbe gemessen und verwendet wird. Derzeit wird keine Ruhezone hinzugefügt.",
     "g013": "Hintergrundbild entfernen",
     "g019": "Linkes Bild entfernen",
     "g020": "Rechtes Bild entfernen",
@@ -5527,6 +5555,10 @@ const GENERATOR_STRINGS = {
   },
   es: {
     "g001": "Tema de la página (no afecta al renderizado del código)",
+    "g002": "Color de la superficie",
+    "g003": "Rellena {cells} celdas alrededor del código con el color medio de la superficie: borra los patrones sin romper la silueta.",
+    "g004": "La superficie apenas se distingue de las celdas (separación {sep}), así que {cells} celdas alrededor del código se rellenaron automáticamente con el color de la superficie.",
+    "g005": "Añade una imagen de vista previa de colocación para medir y usar el color de la superficie. Por ahora no se añade zona de silencio.",
     "g013": "Quitar la imagen de fondo",
     "g019": "Quitar la imagen izquierda",
     "g020": "Quitar la imagen derecha",
@@ -6008,6 +6040,10 @@ const GENERATOR_STRINGS = {
   },
   pt: {
     "g001": "Tema da página (não afeta a renderização do código)",
+    "g002": "Cor da superfície",
+    "g003": "Preenche {cells} células ao redor do código com a cor média da superfície — apaga padrões sem quebrar a silhueta.",
+    "g004": "A superfície mal se distingue das células (separação {sep}), por isso {cells} células ao redor do código foram preenchidas automaticamente com a cor da superfície.",
+    "g005": "Adicione uma imagem de pré-visualização de posicionamento para medir e usar a cor da superfície. Por enquanto não é adicionada zona de silêncio.",
     "g013": "Remover a imagem de fundo",
     "g019": "Remover a imagem da esquerda",
     "g020": "Remover a imagem da direita",
@@ -6764,7 +6800,7 @@ import {
 import { buildTrimmedScene, renderExportPng, renderExportSvg } from './src/export-render.js';
 import { addQuietZone } from './src/quietzone.js';
 import { SHADING_ON, addShading } from './src/shading.js';
-import { resolveQuietZoneChoice } from './src/quiet-auto.js';
+import { QUIET_COLOR_SURFACE, resolveQuietZoneChoice } from './src/quiet-auto.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
 import { verifyRasterY } from './src/verifyY.js';
@@ -6778,7 +6814,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-01.02';
+const GENERATOR_BUILD = '2026-09-01.03';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -6833,6 +6869,7 @@ const els = {
   shadingHint: $('shadingHint'),
   bgModeCards: $('bgModeCards'), bgModeHint: $('bgModeHint'),
   quietModeCards: $('quietModeCards'), quietModeHint: $('quietModeHint'),
+  quietSurfaceSwatch: $('quietSurfaceSwatch'),
   canvasWrap: $('canvasWrap'), backdropCanvas: $('backdropCanvas'),
   stageBackdropPick: $('stageBackdropPick'), stageBackdropPickLabel: $('stageBackdropPickLabel'),
   backdropGestureHint: $('backdropGestureHint'),
@@ -6992,9 +7029,21 @@ const backdrop = { bitmap: null, name: null };
 const backdropView = { x: 0, y: 0, scale: 1 };
 /** 마지막으로 실측한 배치 표면의 대표 상대휘도 — 고대비 권장색의 2순위 근거. */
 let lastBackdropLuminance = null;
-/** 지금 미리보기·내보내기 그림에 실제로 구워진 안전영역 색 ('white'|'black'|'none').
+/**
+ * 코드 주변 지면의 **평균 색** — 표면 색 안전영역 판이 쓰는 RGB (운영자 결정
+ * 2026-09-01). 휘도만으로는 판을 못 칠한다. 사진이 없으면 null.
+ */
+let lastBackdropColor = null;
+/** 그 지면과 셀 레벨 사이 **최소 분리** — 「주변 배경이 해로운가」의 자. 없으면 null. */
+let lastBackdropSeparation = null;
+/** 지금 미리보기·내보내기 그림에 실제로 구워진 안전영역 색 ('white'|'black'|'surface'|'none').
  *  표면 휘도 되먹임(maybeRerenderForQuietAuto)이 «그린 색 ↔ 지금 규칙의 색» 을 비교한다. */
 let quietColorAtRender = null;
+/*
+ * ⚠ **'surface' 는 이름이 안 변한다** — 측정 RGB 가 움직여도 색 «이름» 은 그대로라
+ *    되먹임이 즉시 수렴한다. 그건 결함이 아니라 옳은 쪽이다: 판을 깔기 **전**에 잰
+ *    색이 가려지지 않은 진짜 지면 색이고, 판을 깐 뒤 다시 재면 자기 판을 재게 된다.
+ */
 /** 되먹임 재렌더 횟수 (진동 상한). 색이 수렴하면 0 으로 되돌아간다. */
 let quietAutoRerenders = 0;
 /** 배치 사진이 미리보기에 «떠 있었는가» — 조작 안내(B-4)의 에지 검출용. */
@@ -9690,6 +9739,9 @@ function quietChoiceInput() {
     sepWhite: separationFromLevels(QUIET_WHITE),
     sepBlack: separationFromLevels(QUIET_BLACK),
     surfaceLuminance: lastBackdropLuminance,
+    // 표면 색 갈래의 입력 (운영자 결정 2026-09-01). 「해로운가」의 **판정은 순수
+    // 모듈**이 한다 — 여기서 임계와 비교하면 자가 두 곳에 적힌다.
+    surfaceSeparation: lastBackdropSeparation,
     // 바닥은 이 화면이 이미 사용자에게 보여 주고 있는 계약값이다. 두 곳에 다른 수가
     // 적히지 않도록 상수를 **넘겨준다** (quiet-auto.js 는 폴백만 들고 있다).
     separationFloor: BG_SEPARATION_MIN,
@@ -9703,9 +9755,14 @@ function quietChoice() {
 
 /** 현재 설정의 안전영역 색 — null 이면 안전영역을 안 넣는다. */
 function resolveQuietColor() {
-  const choice = quietChoice();
+  return quietColorOf(quietChoice());
+}
+
+/** 결정의 색 이름 → 실제 RGB. 표면 색은 **측정값**이라 여기서만 알 수 있다. */
+function quietColorOf(choice) {
   if (choice.color === 'white') return QUIET_WHITE;
   if (choice.color === 'black') return QUIET_BLACK;
+  if (choice.color === QUIET_COLOR_SURFACE) return lastBackdropColor;
   return null;
 }
 
@@ -9724,7 +9781,7 @@ function withQuietZone(scene) {
   // (maybeRerenderForQuietAuto).
   quietColorAtRender = choice.color;
   return addQuietZone(scene, {
-    color: choice.color === 'white' ? QUIET_WHITE : choice.color === 'black' ? QUIET_BLACK : null,
+    color: quietColorOf(choice),
     margin: QUIET_MARGIN_CELLS,
     selfQuietColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
   });
@@ -9752,20 +9809,63 @@ function withShading(scene, type) {
 }
 
 function syncQuietModeUi() {
+  /*
+   * ⭐ **카드 라인업이 타입에 따라 갈린다** (운영자 결정 2026-09-01).
+   *   · Type Y : 자동 · 없음 · **표면 색**   (흑/백 판은 실루엣을 깨서 축 자체를 내렸다)
+   *   · O/A/K  : 자동 · 없음 · 흰색 · 검정 · 고대비  (종전 그대로)
+   * 어느 쪽이든 한 줄에 다섯 이하라 #quietModeCards 의 nowrap 계약은 유지된다.
+   */
+  const isY = currentType() === 'Y';
+  const mode = generatorState.quietMode;
+  // 낡은 흑/백/고대비 상태는 Y 에서 표면 색으로 **풀린다**(quiet-auto). 카드도 그렇게
+  // 보여야 한다 — 안 그러면 아무 카드도 안 켜진 채 판이 깔린다.
+  // quiet-auto 의 «타입에 없는 카드 풀기» 와 **같은 사상**이다 (양방향).
+  let shownMode = mode;
+  if (isY && (mode === 'white' || mode === 'black' || mode === 'contrast')) {
+    shownMode = QUIET_COLOR_SURFACE;
+  } else if (!isY && mode === QUIET_COLOR_SURFACE) {
+    shownMode = 'auto';
+  }
   for (const card of els.quietModeCards.children) {
-    card.classList.toggle('active', card.dataset.quiet === generatorState.quietMode);
+    const q = card.dataset.quiet;
+    const hidden = q === QUIET_COLOR_SURFACE
+      ? !isY
+      : (isY && (q === 'white' || q === 'black' || q === 'contrast'));
+    card.style.display = hidden ? 'none' : '';
+    card.classList.toggle('active', q === shownMode);
   }
   const choice = quietChoice();
-  const color = choice.color === 'white' ? QUIET_WHITE : choice.color === 'black' ? QUIET_BLACK : null;
+  // 표면 색 견본은 **측정값**이다 — 사진이 없으면 「모름」 무늬를 그대로 둔다.
+  if (els.quietSurfaceSwatch && lastBackdropColor) {
+    els.quietSurfaceSwatch.style.background =
+      `rgb(${lastBackdropColor.r},${lastBackdropColor.g},${lastBackdropColor.b})`;
+  } else if (els.quietSurfaceSwatch) {
+    els.quietSurfaceSwatch.style.background =
+      'repeating-linear-gradient(135deg,#7d8490 0 4px,#aab1bd 4px 8px)';
+  }
+  if (choice.color === QUIET_COLOR_SURFACE) {
+    // 왜 이 색인지를 적는다 — 자동으로 켜진 경우와 직접 고른 경우가 다르다.
+    els.quietModeHint.textContent = choice.reason === 'auto-y-surface-harmful'
+      ? tf('g004', {
+        cells: QUIET_MARGIN_CELLS,
+        sep: lastBackdropSeparation === null ? '—' : lastBackdropSeparation.toFixed(3),
+      })
+      : tf('g003', { cells: QUIET_MARGIN_CELLS });
+    return;
+  }
+  const color = quietColorOf(choice);
   if (!color) {
-    els.quietModeHint.textContent = generatorState.quietMode === 'none'
-      ? t('g413')
-      : t('g414');
+    // 「표면 색을 골랐는데 사진이 없다」는 별도 안내다 — 그냥 «안 넣어요» 로 뭉치면
+    // 사용자가 무엇을 하면 되는지 화면이 대답하지 못한다.
+    els.quietModeHint.textContent = (choice.reason === 'surface-unknown'
+      || choice.reason === 'y-legacy-surface-unknown')
+      ? t('g005')
+      : (mode === 'none' ? t('g413') : t('g414'));
     return;
   }
   const isWhite = color.r === 255;
   const sep = separationFromLevels(color);
-  const picked = generatorState.quietMode === 'white' || generatorState.quietMode === 'black'
+  const picked = mode === 'white' || mode === 'black'
     ? '' : tf('g434', { color: isWhite ? t('g415') : t('g416') });
   // 사진이 실제로 결정을 갈랐을 때만 그렇게 적는다 — «사진을 넣었다» 가 아니라
   // «사진이 이 색을 골랐다» 일 때만이다 (reason 이 그 사실을 들고 온다).
@@ -11044,12 +11144,15 @@ function measureBackdrop() {
 
   const levelYs = currentLevels().map(relativeLuminance);
   let minSep = Infinity; let sumY = 0; let n = 0; let below = 0;
+  // 표면 색 판의 색. 휘도 평균과 **따로** 모은다 — 휘도에서 색을 되돌릴 수는 없다.
+  let sumR = 0; let sumG = 0; let sumB = 0;
   for (let y = y0; y <= y1; y += stride) {
     for (let x = x0; x <= x1; x += stride) {
       const i = (y * c.width + x) * 4;
       if (vd[i + 3] !== 0) continue; // 코드가 덮은 곳은 표면이 안 보인다
       const yy = relativeLuminance({ r: bd[i], g: bd[i + 1], b: bd[i + 2] });
       sumY += yy; n += 1;
+      sumR += bd[i]; sumG += bd[i + 1]; sumB += bd[i + 2];
       let sep = Infinity;
       for (const ly of levelYs) sep = Math.min(sep, Math.abs(ly - yy));
       if (sep < minSep) minSep = sep;
@@ -11057,7 +11160,15 @@ function measureBackdrop() {
     }
   }
   if (n === 0) return null;
-  return { minSep, meanY: sumY / n, samples: n, belowRatio: below / n };
+  return {
+    minSep,
+    meanY: sumY / n,
+    meanColor: {
+      r: Math.round(sumR / n), g: Math.round(sumG / n), b: Math.round(sumB / n),
+    },
+    samples: n,
+    belowRatio: below / n,
+  };
 }
 
 /*
@@ -11087,11 +11198,22 @@ function maybeRerenderForQuietAuto() {
   schedule();
 }
 
+/**
+ * 표면 측정 셋을 한꺼번에 지운다. **손으로 세 줄을 적는 자리를 안 만든다** — 종전엔
+ * 휘도 하나뿐이라 네 곳에 흩어져 있었고, 색·분리가 붙으면서 「한 곳만 빠뜨려 지운
+ * 사진의 색으로 판을 칠하는」 형태가 생길 자리가 됐다.
+ */
+function clearBackdropMeasure() {
+  lastBackdropLuminance = null;
+  lastBackdropColor = null;
+  lastBackdropSeparation = null;
+}
+
 /** drawScene 직후에 호출 — 배경 레이어 크기·그리기·판정을 한 번에 맞춘다. */
 function syncBackdropLayer() {
   syncBackdropUi();
   if (generatorState.bgMode !== 'transparent' || !backdrop.bitmap) {
-    lastBackdropLuminance = null;
+    clearBackdropMeasure();
     // 사진이 빠진 프레임에 힌트도 같이 되돌린다 — 안 그러면 이미 지운 사진의 휘도를
     // 근거로 «검정» 을 계속 주장해 화면이 산출물과 모순된다 (검증 렌즈 실측 결함).
     syncQuietModeUi();
@@ -11101,13 +11223,15 @@ function syncBackdropLayer() {
   drawBackdrop();
   const m = measureBackdrop();
   if (!m) {
-    lastBackdropLuminance = null;
+    clearBackdropMeasure();
     syncQuietModeUi();
     maybeRerenderForQuietAuto();
     els.backdropVerdict.style.display = 'none';
     return;
   }
   lastBackdropLuminance = m.meanY;
+  lastBackdropColor = m.meanColor;
+  lastBackdropSeparation = m.minSep;
   // 힌트는 지금 값으로 다시 쓴다 — 사진이 색을 갈랐다는 사실이 화면에 남아야 한다.
   syncQuietModeUi();
   maybeRerenderForQuietAuto();
@@ -11151,7 +11275,7 @@ els.backdropFile.addEventListener('change', async () => {
 els.backdropClear.addEventListener('click', () => {
   backdrop.bitmap = null;
   backdrop.name = null;
-  lastBackdropLuminance = null;
+  clearBackdropMeasure();
   syncBackdropUi();
   schedule();
 });

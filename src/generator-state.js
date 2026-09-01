@@ -261,7 +261,10 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
-  quietMode: field('auto', BOTH, ['auto', 'none', 'white', 'black', 'contrast']),
+  // 'surface' = 배치 미리보기에서 잰 지면 색 판 — **Type Y 전용 카드**다 (운영자
+  // 결정 2026-09-01). 스키마는 타입을 모르므로 허용값에만 넣고, 어느 타입에서 카드가
+  // 보이는지는 UI 가, 어떻게 푸는지는 quiet-auto 의 resolveQuietZoneChoice 가 진다.
+  quietMode: field('auto', BOTH, ['auto', 'none', 'white', 'black', 'contrast', 'surface']),
   tone: field(3, BOTH, [2, 3]),
   // 큐브 입체감 (구 «렌더 프로파일», 2026-08-19 개편 — 과업 #16 → 내보내기 옵션 ④).
   // 카드는 자동-강-중-약-평면 순서이고 «강(오리지널)» 은 lab 카드로만 뜬다. 허용값에는

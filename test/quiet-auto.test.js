@@ -182,13 +182,81 @@ test('Type Y — auto 는 안전영역을 안 넣고, 명시 선택은 그대로
   assert.equal(resolveQuietZoneChoice({
     quietMode: 'auto', bgMode: 'white', ...sep, surfaceLuminance: null, type: 'Y',
   }).reason, 'auto-opaque-background');
-  // 명시 선택은 Type Y 에서도 존중된다 (명시 > 자동 기본값).
-  assert.equal(choose({ quietMode: 'white', type: 'Y' }).color, 'white');
-  assert.equal(choose({ quietMode: 'black', type: 'Y' }).color, 'black');
   assert.equal(choose({ quietMode: 'none', type: 'Y' }).color, 'none');
   assert.equal(choose({ quietMode: 'none', type: 'Y' }).reason, 'user-none');
-  // 대비(contrast)도 명시 요구라 Y 에서도 색을 고른다.
-  assert.equal(choose({ quietMode: 'contrast', type: 'Y' }).color, 'white');
+
+  /*
+   * ⚠ **의도적 갱신 (운영자 결정 2026-09-01)** — 여기엔 「명시 선택은 Type Y 에서도
+   *    존중된다」로 white/black/contrast 가 색을 낸다고 적혀 있었다. 그 축이 **내려갔다**:
+   *    Type Y 의 안전영역 카드는 «자동 · 없음 · 표면 색» 셋이고, 흑/백 판은 §Type Y 의
+   *    실루엣 문제를 그대로 재현하기 때문이다. 낡은 상태가 들어오면 표면 색으로 사상한다.
+   */
+  const legacy = ['white', 'black', 'contrast'];
+  for (const m of legacy) {
+    // 사진이 없으면 표면 색을 모른다 ⇒ 없음 (조용히 흑/백으로 강등하지 않는다).
+    assert.equal(choose({ quietMode: m, type: 'Y' }).color, 'none', m);
+    assert.equal(choose({ quietMode: m, type: 'Y' }).reason, 'y-legacy-surface-unknown', m);
+    // 사진이 있으면 표면 색.
+    const withPhoto = choose({ quietMode: m, type: 'Y', surfaceSeparation: 0.4 });
+    assert.equal(withPhoto.color, 'surface', m);
+    assert.equal(withPhoto.reason, 'y-legacy-to-surface', m);
+  }
+  // O/A 는 종전 그대로다 — 이 결정은 Type Y 한정이다.
+  assert.equal(choose({ quietMode: 'white', type: 'O' }).color, 'white');
+  assert.equal(choose({ quietMode: 'contrast', type: 'O' }).color, 'white');
+});
+
+test('Type Y 표면 색 — auto 는 «없음» 이 기본이고 지면이 해로울 때만 켠다', () => {
+  // 운영자 결정 2026-09-01. §13 법칙(판 색이 테두리 띠에 있으면 무해)의 직접 귀결.
+  const sep = separations('slate');
+  const choose = (extra) => resolveQuietZoneChoice({
+    bgMode: 'transparent', ...sep, surfaceLuminance: 0.5, separationFloor: 0.05,
+    quietMode: 'auto', type: 'Y', ...extra,
+  });
+  // 사진 없음 → 잴 수가 없다 ⇒ 없음.
+  assert.equal(choose({ surfaceSeparation: null }).reason, 'auto-y-silhouette');
+  // 지면이 셀과 충분히 갈린다(0.4 > 0.05) ⇒ 굳이 판을 안 깐다.
+  assert.equal(choose({ surfaceSeparation: 0.4 }).color, 'none');
+  assert.equal(choose({ surfaceSeparation: 0.4 }).reason, 'auto-y-silhouette');
+  // 안 갈린다(0.01 < 0.05) = 해롭다 ⇒ 표면 색으로 국소 균일화.
+  const harmful = choose({ surfaceSeparation: 0.01 });
+  assert.equal(harmful.color, 'surface');
+  assert.equal(harmful.reason, 'auto-y-surface-harmful');
+  // 🔴 경계는 **호출자가 준 바닥**이다 — 모듈이 자기 상수로 판정하면 화면과 갈린다.
+  assert.equal(choose({ surfaceSeparation: 0.2, separationFloor: 0.3 }).color, 'surface');
+  assert.equal(choose({ surfaceSeparation: 0.2, separationFloor: 0.1 }).color, 'none');
+  // 대조군 — 같은 입력이라도 O 는 표면 색 갈래를 안 탄다.
+  assert.equal(choose({ surfaceSeparation: 0.01, type: 'O' }).color !== 'surface', true);
+});
+
+test('표면 색은 Type Y 전용 — 다른 타입에 남으면 기본값으로 풀린다', () => {
+  // 카드가 없는 모드가 상태에 남으면 사용자가 되돌릴 방법이 없다. 실측으로 났다:
+  // Y 에서 «표면 색» 을 고르고 Type O 로 바꾸면 O 카드 다섯 중 아무것도 안 켜졌다.
+  const sep = separations('slate');
+  const choose = (type) => resolveQuietZoneChoice({
+    quietMode: 'surface', bgMode: 'transparent', ...sep,
+    surfaceLuminance: 0.95, surfaceSeparation: 0.4, type,
+  });
+  // O 는 'auto' 로 풀린다 ⇒ 투명 배경 + 밝은 표면이면 검정을 고른다 (종전 규칙).
+  const o = choose('O');
+  assert.notEqual(o.color, 'surface');
+  assert.equal(o.reason, 'surface-separation');
+  // Y 는 그대로 표면 색.
+  assert.equal(choose('Y').color, 'surface');
+});
+
+test('표면 색 명시 선택 — 사진이 있어야 켜지고, 없으면 정직하게 «없음»', () => {
+  const sep = separations('slate');
+  const choose = (extra) => resolveQuietZoneChoice({
+    bgMode: 'transparent', ...sep, surfaceLuminance: 0.5, quietMode: 'surface', ...extra,
+  });
+  assert.equal(choose({ type: 'Y', surfaceSeparation: 0.02 }).color, 'surface');
+  assert.equal(choose({ type: 'Y', surfaceSeparation: 0.02 }).reason, 'user-surface');
+  // 지면이 «해롭지 않아도» 명시 선택은 존중된다 — auto 와 다른 축이다.
+  assert.equal(choose({ type: 'Y', surfaceSeparation: 0.9 }).color, 'surface');
+  const noPhoto = choose({ type: 'Y', surfaceSeparation: null });
+  assert.equal(noPhoto.color, 'none');
+  assert.equal(noPhoto.reason, 'surface-unknown');
 });
 
 test('사용자 고정 색은 «사용자가 골랐다» 는 사유를 들고 온다', () => {
@@ -212,8 +280,16 @@ test('알 수 없는 모드·값은 던진다 (조용히 흰색으로 떨어지�
 // ── 생성기 배선 · 문구 ─────────────────────────────────────────────────────
 
 test('생성기가 규칙 모듈을 쓰고, 죽은 분기를 인라인으로 남겨 두지 않았다', () => {
-  assert.match(INDEX, /import \{ resolveQuietZoneChoice \} from '\.\/src\/quiet-auto\.js';/);
+  // ⚠ **의도적 갱신 (2026-09-01)** — 여기엔 import 문을 **글자 그대로** 재는 정규식이
+  //    있었다(`import { resolveQuietZoneChoice } from …`). 표면 색 갈래가 붙으면서
+  //    같은 모듈에서 상수를 하나 더 가져오자 그 자가 빨개졌다 — 재던 성질(「규칙을
+  //    모듈에서 가져온다」)은 그대로인데 **쓴 방식**을 고정하고 있었다. 성질만 잰다.
+  assert.match(INDEX, /from '\.\/src\/quiet-auto\.js';/);
+  assert.match(INDEX, /\bresolveQuietZoneChoice\(/);
   assert.match(INDEX, /surfaceLuminance: lastBackdropLuminance/);
+  // 표면 색은 **측정값**이라 색 해석이 한 곳에 모여 있어야 한다.
+  assert.match(INDEX, /function quietColorOf\(choice\)/);
+  assert.match(INDEX, /surfaceSeparation: lastBackdropSeparation/);
   assert.equal(INDEX.includes('function highContrastQuietColor'), false,
     '옛 인라인 규칙이 남아 있으면 어느 쪽이 진짜인지 화면이 대답 못 한다');
 });

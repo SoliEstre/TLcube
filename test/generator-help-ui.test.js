@@ -694,11 +694,31 @@ test('배치 사진이 빠지면 안전영역 힌트도 같은 프레임에 되�
   );
   assert.ok(fn.length > 0, 'syncBackdropLayer 를 못 찾았다');
   const early = fn.slice(fn.indexOf("!backdrop.bitmap) {"), fn.indexOf('drawBackdrop();'));
-  assert.ok(early.includes('lastBackdropLuminance = null;'), '이른 반환 가지가 휘도를 안 지운다');
+  assert.ok(early.includes('clearBackdropMeasure();'), '이른 반환 가지가 낡은 측정을 안 지운다');
   assert.ok(early.includes('syncQuietModeUi();'), '이른 반환 가지가 힌트를 재동기화하지 않는다');
   const noMeasure = fn.slice(fn.indexOf('if (!m) {'), fn.indexOf('lastBackdropLuminance = m.meanY;'));
-  assert.ok(noMeasure.includes('lastBackdropLuminance = null;'), '측정 실패 가지가 휘도를 안 지운다');
+  assert.ok(noMeasure.includes('clearBackdropMeasure();'), '측정 실패 가지가 낡은 측정을 안 지운다');
   assert.ok(noMeasure.includes('syncQuietModeUi();'), '측정 실패 가지가 힌트를 재동기화하지 않는다');
+
+  /*
+   * ⚠ **의도적 갱신 (2026-09-01)** — 두 가지가 `lastBackdropLuminance = null;` 을
+   *    **글자 그대로** 들고 있는지 재고 있었다. 표면 색 갈래가 붙으면서 지울 것이 셋
+   *    (휘도·색·분리)이 되어 `clearBackdropMeasure()` 하나로 모았고, 그러자 이 자가
+   *    빨개졌다 — 재던 성질(「낡은 근거가 안 남는다」)은 그대로인데 **쓴 방식**을
+   *    고정하고 있었다. 그래서 «가지가 지우기를 부른다» 로 옮기고, 그 함수가 정말
+   *    **전부** 지우는지를 아래에서 따로 잰다. 넷째 필드가 붙는 날 여기가 잡는다.
+   */
+  const clearFn = INDEX.slice(
+    INDEX.indexOf('function clearBackdropMeasure()'),
+    INDEX.indexOf('/** drawScene 직후에 호출'),
+  );
+  assert.ok(clearFn.length > 0, 'clearBackdropMeasure 를 못 찾았다');
+  const measured = [...INDEX.matchAll(/^let (lastBackdrop\w+) = null;$/gm)].map((m) => m[1]);
+  assert.ok(measured.length >= 3, `표면 측정 필드를 ${measured.length}개만 찾았다`);
+  for (const field of measured) {
+    assert.ok(clearFn.includes(`${field} = null;`),
+      `clearBackdropMeasure 가 ${field} 를 안 지운다 — 지운 사진의 근거가 남는다`);
+  }
 });
 
 test('사전 값에 마크다운 강조(**)가 없다 — 팝오버는 textContent 렌더다', () => {
