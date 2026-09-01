@@ -6746,6 +6746,7 @@ import { makeCustomPalette } from './src/palette-hue.js';
 import { buildScene, sagoaeComposableWith } from './src/scene.js';
 import { buildSceneY } from './src/sceneY.js';
 import { buildOrbitMesh, paintQuads, hitTest } from './src/y3d-viewer.js';
+import { slotQrFaceQuads } from './src/y3d-slot-qr.js';
 import {
   RENDER_PROFILE_AUTO, RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_PRINT,
   RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT,
@@ -6777,7 +6778,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-01.01';
+const GENERATOR_BUILD = '2026-09-01.02';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -7727,6 +7728,21 @@ function paintY3dPreview() {
     const lv = entry.tones[face];
     return Number.isInteger(lv) ? lv : null;
   };
+  /*
+   * ⭐ **슬롯 QR** (운영자 신고 2026-09-01 「안쪽 QR 은 QR 이 표시 안 됨」).
+   *
+   * 슬롯 칸은 digit·tones 를 **둘 다 안 든다** (2.5D 는 QR 을 셀보다 잘게 따로 얹어
+   * 그리므로 셀을 안 그린다). 그래서 위 levelAt 이 아무리 촘촘해도 이 자리는 못 메운다
+   * — 3D 는 그 칸을 건너뛰어 **검은 구멍**이 됐다. 셀 격자 밖 사각형으로 넘긴다.
+   *
+   * 「한 셀」 모드(n=1)에는 슬롯 개념이 없다 — 레이아웃 id 를 안 넘겨 빈 배열이 된다.
+   */
+  const faceQuads = y3dPreview.mode === 'cell' ? [] : slotQrFaceQuads({
+    layoutId: encoded.cellSurfaceLayout,
+    n: encoded.n,
+    qrText: current.sceneOpts ? current.sceneOpts.qrText : undefined,
+    palette: pal,
+  });
   y3dPreview.mesh = buildOrbitMesh({
     n,
     tones,
@@ -7742,6 +7758,7 @@ function paintY3dPreview() {
     faces: y3dPreview.faces,
     digitAt,
     levelAt,
+    faceQuads,
     includeBack: true,
   });
   const ctx = canvas.getContext('2d', { alpha: false });

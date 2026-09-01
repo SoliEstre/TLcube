@@ -255,6 +255,19 @@ export function buildOrbitMesh(options) {
   /** (i,j,face) → 절대 레벨 인덱스 | null. 로케이터 칸용. 없으면 digit 경로만 쓴다. */
   const levelAt = options.levelAt;
   const includeBack = options.includeBack !== false;
+  /*
+   * ⭐ **faceQuads — 셀 격자와 무관한 면 사각형** (2026-09-01, 슬롯 QR 구멍 수리).
+   *
+   * 셀 단위 `digitAt`/`levelAt` 으로는 **1 셀보다 잔** 것을 못 그린다. QR 슬롯이
+   * 그렇다 (모듈 피치 = slotCells/29 ≈ 0.28 셀) — 그래서 슬롯 칸이 digit·level 을
+   * 둘 다 안 들어 통째로 건너뛰어졌고, 3D 미리보기에서 **검은 구멍**이 됐다
+   * (운영자 신고 「안쪽 QR 은 QR 이 표시 안 됨」). 기하는 `y3d-slot-qr.js` 가 낸다 —
+   * 이 모듈은 «어디에 무슨 색» 만 받고 QR·레이아웃을 모른다.
+   *
+   * 각 항목: {face:'T'|'L'|'R', a, b, size, color}. (a,b) 는 `cubePoint` 파라메트릭
+   * 좌표(= `facePointFor` 와 같은 공간)이고 소수 좌표가 그대로 유효하다.
+   */
+  const faceQuads = Array.isArray(options.faceQuads) ? options.faceQuads : [];
   const faces = options.faces === 6 ? 6 : 3;
   if (!Number.isInteger(n) || n <= 0) {
     throw new RangeError(`n 은 1 이상의 정수여야 한다: ${n}`);
@@ -378,7 +391,26 @@ export function buildOrbitMesh(options) {
     }
   }
 
-  // ── 칠하는 순서: ①등진 면 먼저 ②그 안에서 먼 것부터 ────────────────────────
+  /*
+   * 면 사각형 — 셀 루프가 끝난 뒤 emit 한다. `kind: 'overlay'` 는 정렬에서 **같은
+   * 무리의 맨 마지막**으로 가므로(아래 비교자), 3면 모드에서 비어 있는 슬롯 자리든
+   * 6면 모드에서 BACK_COLOR 필러가 깔린 자리든 항상 그 위에 얹힌다.
+   *
+   * 뒤 3면(6면 모드)에는 안 얹는다 — 2.5D 에도 뒷면 QR 이 없다. 한 코드에 QR 이
+   * 여섯 개가 되는 쪽이 «같은 그림» 에서 더 멀다.
+   */
+  for (const q of faceQuads) {
+    const raw = [
+      cubePoint(q.face, q.a, q.b),
+      cubePoint(q.face, q.a + q.size, q.b),
+      cubePoint(q.face, q.a + q.size, q.b + q.size),
+      cubePoint(q.face, q.a, q.b + q.size),
+    ];
+    const corners = raw.map((p) => orbitPoint(p, yaw, pitch, center, roll));
+    emit('overlay', q.face, -1, -1, 'front', null, q.color, corners);
+  }
+
+  // ── 칠하는 순서: ①등진 면 먼저 ②오버레이는 맨 뒤 ③그 안에서 먼 것부터 ────────
   //
   // ⚠ **depth 만으로는 못 가른다** (2026-08-26 운영자 신고 「특정 각도 넘어가면 셀이
   //    투명해진다」). 뒷면은 n×n 을 통째로 덮는 **큰 사각 한 장**이라 depth 가 «중심
@@ -401,6 +433,15 @@ export function buildOrbitMesh(options) {
     const af = a.facing < 0 ? 1 : 0; // 1 = 카메라를 마주 본다
     const bf = b.facing < 0 ? 1 : 0;
     if (af !== bf) return af - bf; // 등진 면(0) 을 먼저 칠한다
+    // 오버레이는 자기가 얹힌 면과 **완전 동일 평면**이라 depth 로는 못 가른다
+    // (뒷면 필러에서 이미 같은 실패를 겪었다 — 위 § 참조). 무리 안에서 맨 마지막.
+    const ao = a.kind === 'overlay' ? 1 : 0;
+    const bo = b.kind === 'overlay' ? 1 : 0;
+    if (ao !== bo) return ao - bo;
+    // 🔴 오버레이끼리는 **방출 순서를 그대로 둔다** (Array.sort 는 ES2019 부터 안정).
+    //    콰이어트 판과 그 위 다크 모듈은 완전 동일 평면이라 depth 대표점이 사실상
+    //    같고, 정렬에 맡기면 다크가 판 뒤로 밀려 사라진다. 순서는 공급자가 안다.
+    if (ao === 1) return 0;
     return b.depth - a.depth;
   });
 
@@ -661,9 +702,17 @@ export function paintQuads(ctx, mesh, options) {
       && q.i === selected.i
       && q.j === selected.j
       && (selected.side === undefined || q.side === selected.side);
-    ctx.strokeStyle = hit ? '#ffe08a' : 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = hit ? 2.5 : 0.6;
-    ctx.stroke();
+    // ⚠ **오버레이는 긋지 않는다** (운영자 2026-09-01 「QR이 좀 어두운데? 배경까지?」).
+    //    검은 실선 0.6px 은 셀(≈8px)에는 격자 구분이지만 QR 모듈(≈2px)에는 면적의
+    //    절반을 먹어 흰 콰이어트가 회색이 된다 — 실측: 캔버스에 순백이 **0 픽셀**이었다.
+    //    자기 색으로 긋는 대안(2.5D drawScene 의 관용구)은 다크 모듈을 사방 0.3px 씩
+    //    불려 면적 +60% 의 **도트게인**이 되므로 더 나쁘다. 오버레이는 서로 겹치지
+    //    않거나(콰이어트 판 ↔ 다크 모듈은 부모-자식) 같은 색끼리만 맞닿아 심이 안 보인다.
+    if (q.kind !== 'overlay') {
+      ctx.strokeStyle = hit ? '#ffe08a' : 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = hit ? 2.5 : 0.6;
+      ctx.stroke();
+    }
   }
   if (opts.labels && mesh.n === 1) {
     // 앞을 보는 면만 라벨을 단다. 6면 모드에서는 module quad 가 여섯이고, 라벨은

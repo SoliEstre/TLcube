@@ -367,8 +367,14 @@ const LAYOUT_DEFAULT_LOCATOR_PROFILE = Object.freeze({
   v1r2d: LOCATOR_PROFILE_CELL_SURFACE_V1R2,
 });
 
-/** L/R 슬롯 면 채움 — 'data-dark'(기본, 윈도 β 와 동일) | 'quiet'. §조정 여지 ③. */
-const CENTER_QR_SIDE_FILL = 'data-dark';
+/**
+ * L/R 슬롯 면 채움 — 'data-dark'(기본, 윈도 β 와 동일) | 'quiet'. §조정 여지 ③.
+ *
+ * ⭐ **export 로 연다 (2026-09-01)** — 3D 미리보기(`y3d-slot-qr.js`)가 같은 슬롯을
+ *    그리는데, 이 값을 그쪽에 손으로 옮겨 적으면 «조정 여지» 를 쓰는 날 두 렌더가
+ *    조용히 갈린다. 조정 지점은 여전히 여기 한 곳이다.
+ */
+export const CENTER_QR_SIDE_FILL = 'data-dark';
 
 /**
  * 슬롯 QR 을 T 면 파라메트릭 좌표에 그린다.
