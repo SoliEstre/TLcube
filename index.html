@@ -2685,7 +2685,7 @@ const GENERATOR_STRINGS = {
     "g001": "페이지 테마 (코드 렌더와 무관)",
     "g002": "표면 색",
     "g003": "코드 둘레 {cells}칸을 지면 평균색으로 채워요. 무늬만 지우고 실루엣은 그대로 둬요.",
-    "g004": "지면이 셀과 잘 안 갈려서(분리 {sep}) 코드 둘레 {cells}칸을 표면 색으로 자동으로 채웠어요.",
+    "g004": "타입 Y 는 큐브 실루엣으로 코드를 찾아서, 자동일 땐 안전영역을 안 넣어요 — 실측에서 그게 가장 잘 읽혔어요.",
     "g005": "배치 미리보기 이미지를 넣으면 지면 색을 재서 채워요. 지금은 안전영역을 안 넣어요.",
     "g006": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\nType Y 는 흰색·검정 판을 안 써요 — 그 판 색이 촬영 프레임 테두리에 없으면 배경이 아니라 전경 덩어리로 잡혀서 큐브 실루엣 검출이 깨지거든요. 대신 «표면 색» 을 써요.\n자동 = 기본은 여백 없음. «TL 배치 미리보기» 사진에서 잰 지면이 셀 색과 충분히 안 갈릴 때만 표면 색을 자동으로 깔아요.\n없음 = 여백 없이 코드만.\n표면 색 = 사진에서 잰 지면 평균색으로 코드 둘레를 채워요. 무늬만 지우고 실루엣은 그대로 둬요. 사진이 없으면 지면 색을 알 수 없어 여백을 안 넣어요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
     "g007": "장식/인쇄 여백",
@@ -3176,7 +3176,7 @@ const GENERATOR_STRINGS = {
     "g001": "Page theme (unrelated to code rendering)",
     "g002": "Surface color",
     "g003": "Fills {cells} cells around the code with the surface's average color — it flattens patterns without breaking the silhouette.",
-    "g004": "The surface barely separates from the cells (separation {sep}), so {cells} cells around the code were filled with the surface color automatically.",
+    "g004": "Type Y finds the code by its cube silhouette, so auto adds no quiet zone — that scanned best in our measurements.",
     "g005": "Add a placement preview image and the surface color will be measured and used. For now no quiet zone is added.",
     "g006": "The margin around the code — the equivalent of a QR quiet zone.\nType Y does not use white or black plates. If the plate colour is absent from the border band of the camera frame it is read as a foreground blob rather than background, which breaks cube silhouette detection. It uses the surface colour instead.\nAuto = no margin by default. The surface colour is applied automatically only when the ground measured in the placement preview does not separate enough from the cell levels.\nNone = no margin, code only.\nSurface colour = fills the ring around the code with the average ground colour measured from the photo. It flattens patterns without breaking the silhouette. With no photo the ground colour is unknown, so no margin is added.\nThe fallback QR block is excluded — it carries its own quiet zone.",
     "g007": "Decorative / print margin",
@@ -3667,7 +3667,7 @@ const GENERATOR_STRINGS = {
     "g001": "ページのテーマ（コード描画とは無関係）",
     "g002": "表面の色",
     "g003": "コードの周囲 {cells} セルを下地の平均色で塗ります。模様だけを消し、シルエットは保ちます。",
-    "g004": "下地とセルの差が小さいため（分離 {sep}）、コードの周囲 {cells} セルを自動で表面の色で塗りました。",
+    "g004": "タイプ Y はキューブのシルエットでコードを探すため、自動では余白を追加しません — 実測でそれが最もよく読み取れました。",
     "g005": "配置プレビュー画像を追加すると下地の色を測って塗ります。今は安全領域を入れません。",
     "g006": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\nType Y は白・黒のプレートを使いません。プレートの色が撮影フレームの縁の帯に無いと、背景ではなく前景の塊として拾われ、キューブのシルエット検出が壊れるからです。代わりに「表面の色」を使います。\n自動 = 既定は余白なし。「TL 配置プレビュー」の写真で測った下地がセルの色と十分に分離しないときだけ、表面の色を自動で敷きます。\nなし = 余白なしでコードのみ。\n表面の色 = 写真で測った下地の平均色でコードの周囲を塗ります。模様だけを消し、シルエットは保ちます。写真が無いと下地の色が分からないので余白を入れません。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
     "g007": "装飾・印刷の余白",
@@ -4158,7 +4158,7 @@ const GENERATOR_STRINGS = {
     "g001": "Thème de la page (sans effet sur le rendu du code)",
     "g002": "Couleur du support",
     "g003": "Remplit {cells} cellules autour du code avec la couleur moyenne du support — cela efface les motifs sans casser la silhouette.",
-    "g004": "Le support se distingue mal des cellules (séparation {sep}) : {cells} cellules autour du code ont été remplies automatiquement avec la couleur du support.",
+    "g004": "Le type Y repère le code à la silhouette du cube : en mode auto, aucune zone de silence n'est ajoutée — c'est ce qui a été le mieux lu lors des mesures.",
     "g005": "Ajoutez une image d'aperçu de placement pour mesurer et utiliser la couleur du support. Pour l'instant, aucune zone de silence n'est ajoutée.",
     "g006": "La marge autour du code — l'équivalent d'une zone de silence QR.\nLe Type Y n'utilise pas de plaque blanche ou noire. Si la couleur de la plaque est absente de la bande de bordure de l'image, elle est lue comme un bloc de premier plan et non comme un arrière-plan, ce qui casse la détection de la silhouette du cube. Il utilise la couleur du support à la place.\nAuto = aucune marge par défaut. La couleur du support n'est appliquée automatiquement que si le support mesuré dans l'aperçu de placement ne se distingue pas assez des cellules.\nAucune = pas de marge, uniquement le code.\nCouleur du support = remplit le pourtour du code avec la couleur moyenne du support mesurée sur la photo. Cela efface les motifs sans casser la silhouette. Sans photo, la couleur du support est inconnue et aucune marge n'est ajoutée.\nLe bloc QR de repli est exclu — il possède sa propre zone de silence.",
     "g007": "Marge décorative / d'impression",
@@ -4648,7 +4648,7 @@ const GENERATOR_STRINGS = {
     "g001": "Tema della pagina (non incide sul rendering del codice)",
     "g002": "Colore della superficie",
     "g003": "Riempie {cells} celle attorno al codice con il colore medio della superficie: elimina i motivi senza rompere la silhouette.",
-    "g004": "La superficie si distingue poco dalle celle (separazione {sep}): {cells} celle attorno al codice sono state riempite automaticamente con il colore della superficie.",
+    "g004": "Il tipo Y individua il codice dalla sagoma del cubo, quindi in automatico non aggiunge alcuna zona di rispetto: nelle misurazioni è la scelta letta meglio.",
     "g005": "Aggiungi un'immagine di anteprima del posizionamento per misurare e usare il colore della superficie. Per ora non viene aggiunta alcuna zona di silenzio.",
     "g006": "Il margine attorno al codice — equivalente alla zona di silenzio del QR.\nIl Type Y non usa piastre bianche o nere. Se il colore della piastra è assente dalla banda di bordo dell'inquadratura, viene letto come blocco di primo piano anziché come sfondo, e la rilevazione della silhouette del cubo si rompe. Usa invece il colore della superficie.\nAuto = nessun margine per impostazione predefinita. Il colore della superficie viene applicato automaticamente solo quando la superficie misurata nell'anteprima di posizionamento non si separa abbastanza dalle celle.\nNessuno = nessun margine, solo il codice.\nColore della superficie = riempie l'anello attorno al codice con il colore medio della superficie misurato dalla foto. Elimina i motivi senza rompere la silhouette. Senza foto il colore è ignoto, quindi non viene aggiunto alcun margine.\nIl blocco QR di riserva è escluso: ha una propria zona di silenzio.",
     "g007": "Margine decorativo / di stampa",
@@ -5138,7 +5138,7 @@ const GENERATOR_STRINGS = {
     "g001": "Seitenthema (ohne Einfluss auf das Rendering des Codes)",
     "g002": "Untergrundfarbe",
     "g003": "Füllt {cells} Zellen um den Code mit der Durchschnittsfarbe des Untergrunds — glättet Muster, ohne die Silhouette zu zerstören.",
-    "g004": "Der Untergrund hebt sich kaum von den Zellen ab (Trennung {sep}); {cells} Zellen um den Code wurden automatisch mit der Untergrundfarbe gefüllt.",
+    "g004": "Typ Y erkennt den Code an der Würfel-Silhouette, daher fügt der Automatik-Modus keine Ruhezone hinzu — das wurde in den Messungen am besten gelesen.",
     "g005": "Fügen Sie ein Platzierungs-Vorschaubild hinzu, damit die Untergrundfarbe gemessen und verwendet wird. Derzeit wird keine Ruhezone hinzugefügt.",
     "g006": "Der Rand um den Code — das Gegenstück zur QR-Ruhezone.\nTyp Y verwendet keine weißen oder schwarzen Platten. Fehlt die Plattenfarbe im Randstreifen des Kamerabildes, wird sie als Vordergrundfläche statt als Hintergrund gelesen, und die Silhouettenerkennung des Würfels bricht. Stattdessen wird die Untergrundfarbe verwendet.\nAutomatisch = standardmäßig kein Rand. Die Untergrundfarbe wird nur dann automatisch gesetzt, wenn der in der Platzierungsvorschau gemessene Untergrund sich nicht ausreichend von den Zellen abhebt.\nKeiner = kein Rand, nur der Code.\nUntergrundfarbe = füllt den Ring um den Code mit der aus dem Foto gemessenen Durchschnittsfarbe. Das glättet Muster, ohne die Silhouette zu zerstören. Ohne Foto ist die Farbe unbekannt, daher wird kein Rand hinzugefügt.\nDer Fallback-QR-Block ist ausgenommen — er bringt seine eigene Ruhezone mit.",
     "g007": "Dekorativer / Druckrand",
@@ -5628,7 +5628,7 @@ const GENERATOR_STRINGS = {
     "g001": "Tema de la página (no afecta al renderizado del código)",
     "g002": "Color de la superficie",
     "g003": "Rellena {cells} celdas alrededor del código con el color medio de la superficie: borra los patrones sin romper la silueta.",
-    "g004": "La superficie apenas se distingue de las celdas (separación {sep}), así que {cells} celdas alrededor del código se rellenaron automáticamente con el color de la superficie.",
+    "g004": "El tipo Y localiza el código por la silueta del cubo, así que en automático no añade zona de silencio: fue lo que mejor se leyó en las mediciones.",
     "g005": "Añade una imagen de vista previa de colocación para medir y usar el color de la superficie. Por ahora no se añade zona de silencio.",
     "g006": "El margen alrededor del código — el equivalente a la zona de silencio de un QR.\nEl Tipo Y no usa placas blancas ni negras. Si el color de la placa no está en la banda del borde del encuadre, se lee como una mancha de primer plano en lugar de fondo, y la detección de la silueta del cubo se rompe. En su lugar usa el color de la superficie.\nAutomático = sin margen por defecto. El color de la superficie se aplica automáticamente solo cuando la superficie medida en la vista previa de colocación no se separa lo suficiente de las celdas.\nNinguno = sin margen, solo el código.\nColor de la superficie = rellena el anillo alrededor del código con el color medio de la superficie medido en la foto. Borra los patrones sin romper la silueta. Sin foto se desconoce el color, así que no se añade margen.\nEl bloque QR de respaldo queda excluido: lleva su propia zona de silencio.",
     "g007": "Margen decorativo / de impresión",
@@ -6118,7 +6118,7 @@ const GENERATOR_STRINGS = {
     "g001": "Tema da página (não afeta a renderização do código)",
     "g002": "Cor da superfície",
     "g003": "Preenche {cells} células ao redor do código com a cor média da superfície — apaga padrões sem quebrar a silhueta.",
-    "g004": "A superfície mal se distingue das células (separação {sep}), por isso {cells} células ao redor do código foram preenchidas automaticamente com a cor da superfície.",
+    "g004": "O tipo Y localiza o código pela silhueta do cubo, por isso no automático não adiciona zona de silêncio — foi o que melhor se leu nas medições.",
     "g005": "Adicione uma imagem de pré-visualização de posicionamento para medir e usar a cor da superfície. Por enquanto não é adicionada zona de silêncio.",
     "g006": "A margem ao redor do código — o equivalente à zona de silêncio do QR.\nO Tipo Y não usa placas brancas nem pretas. Se a cor da placa não estiver na faixa de borda do enquadramento, ela é lida como um bloco de primeiro plano em vez de fundo, e a detecção da silhueta do cubo quebra. Em vez disso usa a cor da superfície.\nAutomático = sem margem por padrão. A cor da superfície é aplicada automaticamente apenas quando a superfície medida na pré-visualização de posicionamento não se separa o suficiente das células.\nNenhuma = sem margem, apenas o código.\nCor da superfície = preenche o anel ao redor do código com a cor média da superfície medida na foto. Apaga padrões sem quebrar a silhueta. Sem foto a cor é desconhecida, então nenhuma margem é adicionada.\nO bloco QR de reserva fica excluído — ele traz a própria zona de silêncio.",
     "g007": "Margem decorativa / de impressão",
@@ -6899,7 +6899,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-01.07';
+const GENERATOR_BUILD = '2026-09-01.08';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -9971,23 +9971,30 @@ function syncQuietModeUi() {
       'repeating-linear-gradient(135deg,#7d8490 0 4px,#aab1bd 4px 8px)';
   }
   if (choice.color === QUIET_COLOR_SURFACE) {
-    // 왜 이 색인지를 적는다 — 자동으로 켜진 경우와 직접 고른 경우가 다르다.
-    els.quietModeHint.textContent = choice.reason === 'auto-y-surface-harmful'
-      ? tf('g004', {
-        cells: quietMarginCells(),
-        sep: lastBackdropSeparation === null ? '—' : lastBackdropSeparation.toFixed(3),
-      })
-      : tf('g003', { cells: quietMarginCells() });
+    /*
+     * 사유 갈래가 **하나**다 — 표면 색은 이제 사용자가 직접 고를 때만 켜진다.
+     * (auto 가 지면이 해로울 때 자동으로 판을 깔던 §17 분기가 여기 있었다. 통제 실험에서
+     *  그 조건에서도 «없음» 이 이겨 분기째 내려갔다 — quiet-auto.js §QUIET_COLOR_SURFACE.)
+     */
+    els.quietModeHint.textContent = tf('g003', { cells: quietMarginCells() });
     return;
   }
   const color = quietColorOf(choice);
   if (!color) {
     // 「표면 색을 골랐는데 사진이 없다」는 별도 안내다 — 그냥 «안 넣어요» 로 뭉치면
     // 사용자가 무엇을 하면 되는지 화면이 대답하지 못한다.
+    /*
+     * 🔴 사유마다 **자기 문구**를 준다. 여기 흘러내림이 있었다: Type Y 의 auto(=기본)는
+     *    'auto-y-silhouette' 인데 전용 문구가 없어 g414 「배경이 불투명이라…」로 떨어졌다.
+     *    투명 배경에서도 그 문장이 떠서 **화면이 거짓 사유를 말했다** (실물 확인으로 잡힘,
+     *    테스트는 전부 초록이었다 — 테스트는 모델을 재고 사용자는 문장을 읽는다).
+     */
     els.quietModeHint.textContent = (choice.reason === 'surface-unknown'
       || choice.reason === 'y-legacy-surface-unknown')
       ? t('g005')
-      : (mode === 'none' ? t('g413') : t('g414'));
+      : choice.reason === 'auto-y-silhouette'
+        ? t('g004')
+        : (mode === 'none' ? t('g413') : t('g414'));
     return;
   }
   const isWhite = color.r === 255;

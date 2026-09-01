@@ -127,6 +127,22 @@ export const QUIET_COLOR_NONE = 'none';
  * 왜 Type Y 에 이것이 답인가: §13 법칙은 「판 색이 프레임 테두리 띠에 없으면 해롭고,
  * 있으면 무해」다. 표면 색 판은 **정의상 그 띠 안의 색**이라 전경 덩어리가 되지 않으면서,
  * 무늬 있는 지면(포스터)을 코드 둘레에서만 **국소 균일화**해 준다. 흑/백 판은 그 반대다.
+ *
+ * ### 🔴 그런데 그 «이론상 무해» 가 실측에 졌다 (운영자 결정 2026-09-01 밤)
+ *
+ * 위 문단은 **왜 해롭지 않은가**를 설명하지, **이득이 있는가**를 말하지 않는다. 통제
+ * 실험(PM/031 §18.9 — 브라우저 스크린샷 14장 × 점유율 46점 성공률)이 그 둘을 갈랐다:
+ *
+ *   안전영역 **없음 65.2%** ≫ 표면 색 최선(1.09배) 58.7% · 자동이 노리던 1.5배 39.1%
+ *                                                        · 최저(1.23배) 15.2%
+ *
+ * 지면 분리 0.000 — 즉 이 모듈이 「해롭다」고 판정하던 **바로 그 조건**에서 찍은
+ * 표본인데도 «없음» 이 이겼다. 「해로우면 판을 깔아라」가 이 데이터로 안 선다.
+ *
+ * ⇒ **auto 는 판을 안 깐다** (아래 auto+Y 분기). 표면 색은 사용자가 카드를 직접 고르는
+ *   **수동 opt-in** 으로만 남는다 — 「무해하다」는 여전히 참이므로 카드는 안 없앤다.
+ *   기전은 미해소다: §13 법칙대로면 표면 색 판은 무해해야 하는데 실측은 **손해**라고
+ *   말한다. 법칙 쪽이 좁혀져야 할 수 있다 — 「무해」 ≠ 「무비용」.
  */
 export const QUIET_COLOR_SURFACE = 'surface';
 
@@ -247,13 +263,16 @@ function surfaceKnown(input) {
   return Number.isFinite(input.surfaceSeparation);
 }
 
-/** 지면이 셀 레벨과 충분히 안 갈리는가 = 「주변 배경이 해롭다」. */
-function surfaceHarmful(input) {
-  if (!surfaceKnown(input)) return false;
-  const floor = input.separationFloor === undefined
-    ? QUIET_CELL_SEPARATION_FLOOR : input.separationFloor;
-  return input.surfaceSeparation < floor;
-}
+/*
+ * 🗑 **`surfaceHarmful()` 이 여기 있었다** (2026-09-01 낮 → 밤에 제거). 「지면 분리가
+ *    바닥 미만이면 auto 가 표면 색 판을 깐다」는 §17 분기의 판정자였다. 지운 이유는
+ *    리팩터링이 아니라 **실측 반박**이다 — 그 조건에서 찍은 통제 표본에서 «없음» 이
+ *    이겼다 (§QUIET_COLOR_SURFACE 의 정정). 판정자만 남겨 두면 다음 사람이 「왜 안
+ *    쓰지?」를 못 푼다. 되살리려면 그 자리에 **새 실측**이 필요하다.
+ *
+ *    `surfaceSeparation` 입력 자체는 남는다 — `surfaceKnown()` 이 「사진이 있는가」의
+ *    대용으로 계속 쓴다.
+ */
 
 export function resolveQuietZoneChoice(input) {
   const { bgMode } = input;
@@ -299,14 +318,17 @@ export function resolveQuietZoneChoice(input) {
   }
   if (quietMode === 'auto' && isY) {
     /*
-     * Type Y decode-safe: auto 흰/검 안전영역은 전경 실루엣 검출을 깨 복호를 죽인다
-     * (§Type Y). **기본은 «없음»** 이고, 운영자 결정 2026-09-01 로 예외가 하나 생겼다 —
-     * 지면이 셀 레벨과 안 갈리면(=해로우면) **표면 색**으로 국소 균일화한다.
-     * 표면 색 판은 테두리 띠 안의 색이라 실루엣을 안 깬다 (§QUIET_COLOR_SURFACE).
+     * Type Y decode-safe: auto 는 **어떤 판도 안 깐다.**
+     *
+     * 흰/검은 전경 실루엣 검출을 깨 복호를 죽이고(§Type Y), 표면 색은 실루엣을 깨진
+     * 않지만 **그래도 «없음» 보다 나쁘다** (§QUIET_COLOR_SURFACE 의 실측 정정 —
+     * 없음 65.2% vs 표면 색 최선 58.7%, 자동이 노리던 1.5배는 39.1%).
+     *
+     * 🔴 이 분기는 2026-09-01 낮에 «지면이 해로우면 표면 색» 예외를 한 번 가졌다가
+     *    같은 날 밤 실측으로 **되돌아왔다**. 지면 분리는 이제 이 결정에 안 들어온다 —
+     *    되살리려면 그 축을 재는 새 표본이 먼저다.
      */
-    return surfaceHarmful(input)
-      ? plain(QUIET_COLOR_SURFACE, 'auto-y-surface-harmful')
-      : plain(QUIET_COLOR_NONE, 'auto-y-silhouette');
+    return plain(QUIET_COLOR_NONE, 'auto-y-silhouette');
   }
   if (quietMode !== 'auto' && quietMode !== 'contrast') {
     throw new RangeError('알 수 없는 안전영역 모드: ' + quietMode);

@@ -206,27 +206,37 @@ test('Type Y — auto 는 안전영역을 안 넣고, 명시 선택은 그대로
   assert.equal(choose({ quietMode: 'contrast', type: 'O' }).color, 'white');
 });
 
-test('Type Y 표면 색 — auto 는 «없음» 이 기본이고 지면이 해로울 때만 켠다', () => {
-  // 운영자 결정 2026-09-01. §13 법칙(판 색이 테두리 띠에 있으면 무해)의 직접 귀결.
+test('Type Y auto 는 **어떤 지면에서도** 판을 안 깐다 (지면 분리는 이 결정에 안 들어온다)', () => {
+  /*
+   * ⚠ **의도적 갱신 (운영자 결정 2026-09-01 밤)** — 이 테스트는 「auto 는 «없음» 이
+   *    기본이고 **지면이 해로울 때만** 표면 색을 켠다」를 잠그고 있었다(§17). 그 예외가
+   *    통제 실험에 반박돼 내려갔다: 지면 분리 0.000 에서 찍은 표본에서도 «없음» 65.2% 가
+   *    표면 색(최선 58.7% · 자동 목표 1.5배 39.1%)을 이겼다 — PM/031 §18.9.
+   *
+   * 🔴 그래서 이 테스트가 재는 성질이 바뀌었다: 「지면에 따라 갈린다」 → **「지면에
+   *    상관없이 안 깐다」**. 분리 값을 축으로 훑어 **한 점도 표면 색이 안 나오는지**를
+   *    본다. 한 점만 찍으면 예외가 되살아나도 초록일 수 있다.
+   */
   const sep = separations('slate');
   const choose = (extra) => resolveQuietZoneChoice({
     bgMode: 'transparent', ...sep, surfaceLuminance: 0.5, separationFloor: 0.05,
     quietMode: 'auto', type: 'Y', ...extra,
   });
-  // 사진 없음 → 잴 수가 없다 ⇒ 없음.
+  // 사진 없음 → 없음.
   assert.equal(choose({ surfaceSeparation: null }).reason, 'auto-y-silhouette');
-  // 지면이 셀과 충분히 갈린다(0.4 > 0.05) ⇒ 굳이 판을 안 깐다.
-  assert.equal(choose({ surfaceSeparation: 0.4 }).color, 'none');
-  assert.equal(choose({ surfaceSeparation: 0.4 }).reason, 'auto-y-silhouette');
-  // 안 갈린다(0.01 < 0.05) = 해롭다 ⇒ 표면 색으로 국소 균일화.
-  const harmful = choose({ surfaceSeparation: 0.01 });
-  assert.equal(harmful.color, 'surface');
-  assert.equal(harmful.reason, 'auto-y-surface-harmful');
-  // 🔴 경계는 **호출자가 준 바닥**이다 — 모듈이 자기 상수로 판정하면 화면과 갈린다.
-  assert.equal(choose({ surfaceSeparation: 0.2, separationFloor: 0.3 }).color, 'surface');
+  // 지면 분리를 0 부터 1 까지 훑는다 — 옛 예외가 살아 있으면 0.05 아래에서 빨개진다.
+  for (let s = 0; s <= 1.0001; s += 0.01) {
+    const got = choose({ surfaceSeparation: s });
+    assert.equal(got.color, 'none', `분리 ${s.toFixed(2)} 에서 판이 깔렸다 (${got.reason})`);
+    assert.equal(got.reason, 'auto-y-silhouette', `분리 ${s.toFixed(2)}`);
+  }
+  // 바닥을 어떻게 넘겨도 결정이 안 바뀐다 — 분리는 더 이상 이 갈림의 입력이 아니다.
+  assert.equal(choose({ surfaceSeparation: 0.2, separationFloor: 0.3 }).color, 'none');
   assert.equal(choose({ surfaceSeparation: 0.2, separationFloor: 0.1 }).color, 'none');
-  // 대조군 — 같은 입력이라도 O 는 표면 색 갈래를 안 탄다.
-  assert.equal(choose({ surfaceSeparation: 0.01, type: 'O' }).color !== 'surface', true);
+  // 대조군 — 같은 입력이라도 O 는 이 갈래 자체를 안 탄다 (여전히 색을 고른다).
+  assert.equal(choose({ surfaceSeparation: 0.01, type: 'O' }).color !== 'none', true);
+  // 자 검증 — **수동** 표면 색은 여전히 켜진다. 이 테스트가 그것까지 막으면 과잉이다.
+  assert.equal(choose({ surfaceSeparation: 0.01, quietMode: 'surface' }).color, 'surface');
 });
 
 test('표면 색은 Type Y 전용 — 다른 타입에 남으면 기본값으로 풀린다', () => {
@@ -327,4 +337,33 @@ test('g903·g904 가 «사진이 안전영역 색을 정한다» 는 사실을 �
   for (const key of ['g904', 'g903', 'g991']) {
     assert.equal(INDEX.match(new RegExp(`"${key}":`, 'g'))?.length, 8, `${key} 8언어`);
   }
+});
+
+test('🔴 안전영역 «안 넣는» 사유마다 자기 문구가 있다 (흘러내리면 화면이 거짓 사유를 말한다)', () => {
+  /*
+   * 실물 확인으로 잡힌 결함이다. Type Y 의 기본 상태(auto · **투명** 배경)는 사유가
+   * `auto-y-silhouette` 인데 전용 문구가 없어 g414 「**배경이 불투명이라** 캔버스 전체가
+   * 이미 균일한 여백이에요」로 떨어졌다 — 투명 배경에서 「불투명이라」를 읽는다.
+   * 스위트 3021개가 전부 초록인 채로 났다: 테스트는 **결정 모델**을 재고 사용자는
+   * **문장**을 읽는다.
+   *
+   * 그래서 이 테스트는 문구 철자가 아니라 **배선의 성질**을 잰다 — 「색이 없다」로
+   * 뭉뚱그리는 자리에서 사유 넷이 서로 다른 키로 갈리는가.
+   */
+  assert.match(INDEX, /choice\.reason === 'auto-y-silhouette'/,
+    'auto-y-silhouette 이 자기 문구로 안 갈리면 불투명-배경 문구로 흘러내린다');
+  // 네 사유가 네 문구로 간다: 사진 없음 g005 · Y auto g004 · 명시 없음 g413 · 불투명 g414.
+  for (const key of ['g003', 'g004', 'g005', 'g413', 'g414']) {
+    assert.equal(INDEX.match(new RegExp(`"${key}":`, 'g'))?.length, 8, `${key} 8언어`);
+  }
+  // 🔴 g004 는 **재사용된 슬롯**이다 — 옛 문구(「지면이 안 갈려서 자동으로 채웠어요」)가
+  //    남아 있으면 없어진 §17 자동 전환을 화면이 계속 약속하는 것이 된다.
+  assert.equal(INDEX.includes('자동으로 채웠어요'), false,
+    '옛 g004(자동 표면 색 전환) 문구가 살아 있다 — 그 분기는 §18.10 에서 내려갔다');
+  /*
+   * ⛔ 여기 `INDEX.includes('auto-y-surface-harmful') === false` 를 쓰려다 **뺐다.**
+   *    그 이름은 주석에도 나오므로(왜 내려갔는지의 기록) 그 자는 «쓴 방식» 을 재지
+   *    «성질» 을 안 재고, 다음 사람이 역사를 지워야 초록이 된다. 내려간 것을 재는 일은
+   *    위의 quiet-auto 스윕 테스트(분리 0\~1 에서 한 점도 판이 안 깔린다)가 이미 한다.
+   */
 });
