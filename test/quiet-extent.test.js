@@ -8,7 +8,8 @@ import { buildScene } from '../src/scene.js';
 import { addQuietZone } from '../src/quietzone.js';
 import {
   QUIET_MARGIN_DEFAULT, QUIET_MARGIN_MAX, QUIET_MARGIN_MIN,
-  RECOMMENDED_UNIFORM_MULTIPLE, clampQuietMargin, quietCoverage,
+  AUTO_TARGET_MULTIPLE, RECOMMENDED_UNIFORM_MULTIPLE, autoQuietMargin, clampQuietMargin,
+  quietCoverage,
 } from '../src/quiet-extent.js';
 import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
@@ -155,4 +156,32 @@ test('⑥ 권장 판정이 배수와 일관된다', () => {
   const atDefault = quietCoverage(withQuiet(base, QUIET_MARGIN_DEFAULT), SELF_QUIET);
   assert.equal(atDefault.meetsRecommendation, false,
     '기본값이 권장을 충족한다면 이 지표가 아무것도 안 알려 준다 — 값이 바뀌었는지 확인하라');
+});
+
+test('⑦ 자동 두께 — 목표 배수를 맞추고, 링이 없으면 손대지 않는다', () => {
+  const base = sceneY('v0t', 2);
+  // 어떤 시작 두께에서 출발해도 같은 답에 닿아야 한다 (닫힌 형태라 한 번에 수렴).
+  const answers = new Set();
+  for (const start of [1, 2, 5, 12]) {
+    const cov = quietCoverage(withQuiet(base, start), SELF_QUIET);
+    const want = autoQuietMargin(cov, start);
+    answers.add(want);
+    // 그 두께로 실제로 다시 재면 목표를 넘겨야 한다 — 식이 맞는지 **재서** 확인한다.
+    const after = quietCoverage(withQuiet(base, want), SELF_QUIET);
+    assert.ok(
+      after.multiple >= AUTO_TARGET_MULTIPLE - 1e-9,
+      `시작 ${start}셀 → ${want}셀 인데 배수가 ${after.multiple.toFixed(3)} 로 목표(${AUTO_TARGET_MULTIPLE}) 미달`,
+    );
+  }
+  assert.equal(answers.size, 1, `시작값에 따라 답이 갈린다: ${[...answers].join(',')}`);
+
+  /*
+   * 🔴 링이 없으면(«없음» 선택) 역산이 성립하지 않는다 — quietWidth = codeWidth 라
+   *    아래 식이 대상을 2·margin 작게 본다. 실측 결함: 「없음」에서 자동이 6 을 넣어
+   *    뒀고 색을 켜는 순간 그 값이 쓰일 참이었다.
+   */
+  const none = addQuietZone(base, { color: null, margin: 4 });
+  const covNone = quietCoverage(none, SELF_QUIET);
+  assert.equal(autoQuietMargin(covNone, 4), 4, '링이 없는데 두께를 바꿨다');
+  assert.equal(autoQuietMargin(null, 4), QUIET_MARGIN_DEFAULT);
 });

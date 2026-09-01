@@ -53,6 +53,61 @@ export const QUIET_MARGIN_MAX = 20;
 /** 기본 두께 — 종전 상수(index.html QUIET_MARGIN_CELLS)를 그대로 승계한다. */
 export const QUIET_MARGIN_DEFAULT = 2;
 
+/**
+ * **자동 두께가 노리는 배수** — 운영자 표본 14장 실측 (2026-09-01 저녁).
+ *
+ * 실험: 같은 코드를 여백만 바꿔 화면 촬영 → 스캐너 규약(정사각 크롭 + 960px)으로 물림.
+ *   · n=25 (Y2): 1.05·1.09 는 점유율 70% 를 요구하고 1.18 은 80%, **1.37 부터 조준
+ *     가이드(54%)로 통과**. 1.55·1.74·1.92 도 통과.
+ *   · n=13 (Y0): **1.09 에서 이미 통과** (2.77 까지 전부).
+ * ⇒ 문턱은 n=25 에서 **1.18\~1.37 사이**, n=13 은 그보다 훨씬 아래다.
+ *
+ * 1.5 를 고른 이유: 검증된 최저 통과값(1.37) **위**에 한 단 여유를 둔다. 각 배수는
+ * **사진 한 장**이라 문턱을 그보다 정밀하게 못 짚는다 (실제로 1.18 이 1.09 보다 나빴다 —
+ * 표본 운으로 볼 만한 비단조다). 그리고 표면 색 판은 §13 법칙상 무해하므로 **크게 잡는
+ * 쪽의 비용은 이미지 크기뿐**이다 — 작게 잡는 쪽의 비용(복호 실패)보다 싸다.
+ *
+ * ⚠ `RECOMMENDED_UNIFORM_MULTIPLE`(1.85)와 **다른 수다.** 그쪽은 마인크래프트 실물
+ * (지형 배경 = 훨씬 나쁜 조건)에서 나왔고 화면에 «권장» 으로 계속 보인다. 이쪽은
+ * 자동이 실제로 맞추는 값이다. 둘을 하나로 합치지 마라 — 근거가 다른 매체다.
+ */
+export const AUTO_TARGET_MULTIPLE = 1.5;
+
+/**
+ * 목표 배수를 맞추는 두께(셀)를 **닫힌 형태로** 푼다.
+ *
+ * 링은 대상을 margin 만큼 바깥으로 민 것이라 (클립 전) 축마다 `대상 + 2·margin` 이다.
+ * 정사각이 구속하므로 작은 축이 목표를 넘겨야 한다:
+ *   min(subjW, subjH) + 2·m = T · subjW   ⇒   m = (T·subjW − min(subjW, subjH)) / 2
+ * 그래서 **후보마다 scene 을 다시 만들 필요가 없다** — 한 번 잰 값으로 바로 나온다.
+ * (이분탐색을 돌리면 렌더마다 addQuietZone 을 대여섯 번 더 부르게 된다.)
+ *
+ * @param {{codeWidth:number, quietWidth:number, quietHeight:number}} coverage
+ *   `quietCoverage` 결과. **클립되지 않은** 측정이라야 역산이 성립한다 — 클립된
+ *   측정으로 풀면 대상이 실제보다 작게 나와 두께를 적게 잡는다.
+ * @param {number} margin 그 측정이 쓰인 두께.
+ * @param {number} [target] 목표 배수.
+ * @returns {number} 눈금 안으로 접힌 두께.
+ */
+export function autoQuietMargin(coverage, margin, target = AUTO_TARGET_MULTIPLE) {
+  if (coverage === null || typeof coverage !== 'object') return QUIET_MARGIN_DEFAULT;
+  const { codeWidth, quietWidth, quietHeight } = coverage;
+  if (!(codeWidth > 0) || !Number.isFinite(margin)) return QUIET_MARGIN_DEFAULT;
+  /*
+   * 🔴 **링이 없으면 역산이 성립하지 않는다.** 안전영역 «없음» 이면 quietCoverage 가
+   *    quietWidth = codeWidth 를 돌려주므로(배수 1), 아래 식이 대상을 2·margin 만큼
+   *    작게 보고 엉뚱한 두께를 낸다. 실측: 「없음」 상태에서 자동이 6 을 넣어 뒀고,
+   *    색을 켜는 순간 그 값이 쓰일 참이었다. 링이 없으면 **손대지 않는다**.
+   */
+  if (!(quietWidth > codeWidth + 1e-9)) return clampQuietMargin(margin);
+  // 측정에서 대상 치수를 되돌린다 (링 = 대상 + 2·margin).
+  const subjW = quietWidth - 2 * margin;
+  const subjH = quietHeight - 2 * margin;
+  if (!(subjW > 0) || !(subjH > 0)) return QUIET_MARGIN_DEFAULT;
+  const needed = (target * subjW - Math.min(subjW, subjH)) / 2;
+  return clampQuietMargin(Math.ceil(needed));
+}
+
 /** 게이지 값을 눈금 안으로 접는다. 정수가 아니면 기본값으로 떨어진다. */
 export function clampQuietMargin(value) {
   const n = Math.round(Number(value));

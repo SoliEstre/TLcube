@@ -271,6 +271,9 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // 눈금·기본값의 근거는 quiet-extent.js (하한 1 = margin 0 이 터진다 · 상한 20 = 캔버스 클립).
   // options 는 왕복 테스트가 훑을 표본이다 (기본 · 중간 · 상한).
   quietMargin: field(QUIET_MARGIN_DEFAULT, BOTH, [QUIET_MARGIN_DEFAULT, 10, QUIET_MARGIN_MAX]),
+  // 두께 **자동** — 기본 켬 (운영자 지시 2026-09-01 「자동 옵션을 기본값으로」).
+  // 스캔이 되는 최소 두께로 맞춘다. 목표 배수의 근거는 quiet-extent.js AUTO_TARGET_MULTIPLE.
+  quietMarginAuto: field(true, BOTH, [true, false]),
   tone: field(3, BOTH, [2, 3]),
   // 큐브 입체감 (구 «렌더 프로파일», 2026-08-19 개편 — 과업 #16 → 내보내기 옵션 ④).
   // 카드는 자동-강-중-약-평면 순서이고 «강(오리지널)» 은 lab 카드로만 뜬다. 허용값에는

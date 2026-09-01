@@ -772,6 +772,7 @@
   .gauge-row input[type="range"] { flex: 1 1 auto; min-width: 0; }
   .gauge-label { font-size: 12px; white-space: nowrap; }
   .gauge-value { font-size: 12px; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+  .gauge-auto { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; white-space: nowrap; cursor: pointer; }
   #quietModeCards { flex-wrap: nowrap; gap: 6px; }
   #quietModeCards .toggle-card { min-width: 0; padding-inline: 2px; font-size: 10px; }
   @media (max-width: 420px) {
@@ -1480,7 +1481,7 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
+    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin quietMarginAuto renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
            도메인·자동 규칙은 전부 src/export-options.js 단일 정의를 소비한다 — UI 인라인
            재구현 금지 (교훈 .agent/_lessons/009: 손으로 적은 규칙은 테스트가 못 잠근다).
@@ -1815,6 +1816,8 @@
       -->
       <div class="gauge-row" id="quietMarginRow">
         <label class="gauge-label" for="quietMarginRange" data-i18n="g007">장식/인쇄 여백</label>
+        <!-- 자동 = 스캔이 되는 최소 두께. 근거는 운영자 표본 14장 (quiet-extent.js). -->
+        <label class="gauge-auto"><input type="checkbox" id="quietMarginAuto" checked><span data-i18n="g028">자동</span></label>
         <input type="range" id="quietMarginRange" min="1" max="20" step="1" value="2">
         <output class="gauge-value" id="quietMarginValue">2</output>
       </div>
@@ -6880,8 +6883,8 @@ import { addQuietZone } from './src/quietzone.js';
 import { SHADING_ON, addShading } from './src/shading.js';
 import { QUIET_COLOR_SURFACE, resolveQuietZoneChoice } from './src/quiet-auto.js';
 import {
-  QUIET_MARGIN_MAX, QUIET_MARGIN_MIN, RECOMMENDED_UNIFORM_MULTIPLE,
-  clampQuietMargin, quietCoverage,
+  AUTO_TARGET_MULTIPLE, QUIET_MARGIN_MAX, QUIET_MARGIN_MIN, RECOMMENDED_UNIFORM_MULTIPLE,
+  autoQuietMargin, clampQuietMargin, quietCoverage,
 } from './src/quiet-extent.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
@@ -6896,7 +6899,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-01.06';
+const GENERATOR_BUILD = '2026-09-01.07';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -6954,6 +6957,7 @@ const els = {
   quietSurfaceSwatch: $('quietSurfaceSwatch'), quietHelpDot: $('quietHelpDot'),
   quietMarginRow: $('quietMarginRow'), quietMarginRange: $('quietMarginRange'),
   quietMarginValue: $('quietMarginValue'), quietCoverageHint: $('quietCoverageHint'),
+  quietMarginAuto: $('quietMarginAuto'),
   canvasWrap: $('canvasWrap'), backdropCanvas: $('backdropCanvas'),
   stageBackdropPick: $('stageBackdropPick'), stageBackdropPickLabel: $('stageBackdropPickLabel'),
   backdropGestureHint: $('backdropGestureHint'),
@@ -9952,7 +9956,10 @@ function syncQuietModeUi() {
   const drawsQuiet = choice.color !== 'none';
   if (els.quietMarginRow) {
     els.quietMarginRow.classList.toggle('off', !drawsQuiet);
-    els.quietMarginRange.disabled = !drawsQuiet;
+    els.quietMarginAuto.checked = generatorState.quietMarginAuto === true;
+    els.quietMarginAuto.disabled = !drawsQuiet;
+    // 자동이면 슬라이더를 잠근다 — 만질 수 있는데 값이 되돌아가면 «안 먹는» 손잡이다.
+    els.quietMarginRange.disabled = !drawsQuiet || generatorState.quietMarginAuto === true;
   }
   syncQuietGaugeReadout();
   // 표면 색 견본은 **측정값**이다 — 사진이 없으면 「모름」 무늬를 그대로 둔다.
@@ -10015,7 +10022,15 @@ for (const card of els.quietModeCards.children) {
 els.quietMarginRange.min = String(QUIET_MARGIN_MIN);
 els.quietMarginRange.max = String(QUIET_MARGIN_MAX);
 els.quietMarginRange.addEventListener('input', () => {
+  // 손잡이를 만지면 자동을 끈다. 안 그러면 다음 렌더가 값을 되돌려 «켰는데 안 먹는» 이 된다.
+  generatorState.quietMarginAuto = false;
   generatorState.quietMargin = clampQuietMargin(els.quietMarginRange.value);
+  syncQuietModeUi();
+  schedule();
+});
+els.quietMarginAuto.addEventListener('change', () => {
+  generatorState.quietMarginAuto = els.quietMarginAuto.checked;
+  quietAutoMarginPasses = 0;
   syncQuietModeUi();
   schedule();
 });
@@ -10025,6 +10040,14 @@ els.quietMarginRange.addEventListener('input', () => {
  * 이건 복호 쪽 근거라, 한 줄에 합치면 「두께를 올리면 읽힌다」는 보증으로 읽힌다.
  * 아직 그 보증을 못 한다 (권장 1.85 는 **표본 1개**다 — quiet-extent.js 주석).
  */
+/*
+ * 자동 두께 되먹임의 상한. 색 되먹임(QUIET_AUTO_RERENDER_LIMIT)과 **같은 이유**로 둔다 —
+ * 다만 이쪽은 닫힌 형태라 한 번에 수렴한다(목표 두께가 대상 치수만으로 정해지고, 대상은
+ * 두께와 무관하다). 그래도 클립·비-볼록 hull 같은 경계에서 진동할 여지를 남기지 않는다.
+ */
+let quietAutoMarginPasses = 0;
+const QUIET_AUTO_MARGIN_LIMIT = 2;
+
 function syncQuietGaugeReadout() {
   if (!els.quietCoverageHint) return;
   const cells = quietMarginCells();
@@ -10043,6 +10066,22 @@ function syncQuietGaugeReadout() {
   if (cov.clipped) text += t('g010');
   els.quietCoverageHint.textContent = text;
   els.quietCoverageHint.style.color = cov.meetsRecommendation ? 'var(--ok)' : '';
+
+  /*
+   * 자동 두께 — 잰 값에서 목표 배수를 맞추는 두께를 역산해 맞춘다. 클립된 측정으로는
+   * 역산이 성립하지 않으므로(대상이 실제보다 작게 나온다) 그 경우는 손대지 않는다:
+   * 이미 캔버스 끝이라 더 넓힐 수도 없다.
+   */
+  if (generatorState.quietMarginAuto && !cov.clipped) {
+    const want = autoQuietMargin(cov, cells);
+    if (want !== cells && quietAutoMarginPasses < QUIET_AUTO_MARGIN_LIMIT) {
+      quietAutoMarginPasses += 1;
+      generatorState.quietMargin = want;
+      schedule();
+      return;
+    }
+  }
+  quietAutoMarginPasses = 0;
 }
 syncQuietModeUi();
 
