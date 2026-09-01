@@ -562,8 +562,17 @@ export function quietZonePolygons(scene, margin, selfQuietColors) {
 export function addQuietZone(scene, opts) {
   const { color, margin = 2, selfQuietColors } = opts || {};
   if (!color) return scene;
-  if (!Number.isFinite(margin) || margin < 0) {
-    throw new RangeError(`margin 은 0 이상 유한수여야 한다: ${margin}`);
+  /*
+   * ⚠ **margin 0 은 «없음» 이 아니라 폭탄이었다** (2026-09-01 실측). 계약은 «0 이상» 을
+   *    허용한다고 적혀 있었는데, `clusterShapes` 의 격자 셀이 `Math.max(gap, EPS)` 라
+   *    gap=0 이면 EPS 격자가 되어 버킷 Map 이 최대 크기를 넘겨 **터진다**
+   *    (RangeError: Map maximum size exceeded — 두께 게이지에 0 눈금을 두려다 밟았다).
+   *    「여백 없음」의 정본 표현은 `color: null` 이다. 그걸 말해 주고 죽는다.
+   */
+  if (!Number.isFinite(margin) || margin <= 0) {
+    throw new RangeError(
+      `margin 은 0 보다 큰 유한수여야 한다: ${margin} — 「여백 없음」은 color: null 로 준다`,
+    );
   }
   const polys = quietZonePolygons(scene, margin, selfQuietColors);
   if (polys.length === 0) return scene;

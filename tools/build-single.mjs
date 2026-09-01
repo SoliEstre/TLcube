@@ -180,6 +180,9 @@ export const MODULE_ORDER = [
   // export-options 는 최종 cell-surface n 정본을 읽는다. generator-state 는 그 옵션을
   // 읽으므로 둘 다 cellSurfaceFinal 뒤에 둔다. 순서를 어기면 단일 파일 로더의 specifier
   // 치환이 조용히 남아 브라우저에서만 실패한다.
+  // quiet-extent 는 의존 0 인 잎이고 generator-state(기본값·눈금)와 index.html(지표)이
+  // 소비한다 — generator-state **앞**이어야 한다.
+  'quiet-extent',
   'export-options', 'generator-state', 'finder-zone-ui', 'export-filename',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: `encodeY` 와 잎 모듈 `tonemap` 이
   // `encode`·`scene` **앞**으로 왔다. scene.js 가 중앙 슬롯을 완전한 v0 코드로

@@ -767,6 +767,11 @@
   .toggle-card[hidden] { display: none; }
   /* 안전영역은 정확히 5개 선택지다. 이 행만 공용 64px 최소폭을 풀어 사이드바와
      모바일 모두에서 다섯 버튼을 한 줄에 유지한다. */
+  .gauge-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .gauge-row.off { opacity: 0.45; }
+  .gauge-row input[type="range"] { flex: 1 1 auto; min-width: 0; }
+  .gauge-label { font-size: 12px; white-space: nowrap; }
+  .gauge-value { font-size: 12px; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
   #quietModeCards { flex-wrap: nowrap; gap: 6px; }
   #quietModeCards .toggle-card { min-width: 0; padding-inline: 2px; font-size: 10px; }
   @media (max-width: 420px) {
@@ -1475,7 +1480,7 @@
     </div>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
+    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
            도메인·자동 규칙은 전부 src/export-options.js 단일 정의를 소비한다 — UI 인라인
            재구현 금지 (교훈 .agent/_lessons/009: 손으로 적은 규칙은 테스트가 못 잠근다).
@@ -1802,6 +1807,18 @@
              여전히 최대 다섯이다 (Y 는 셋, O/A 는 다섯). 견본 색은 측정값으로 채운다. -->
         <div class="toggle-card" data-quiet="surface"><span class="swatch-mini" id="quietSurfaceSwatch" style="background:repeating-linear-gradient(135deg,#7d8490 0 4px,#aab1bd 4px 8px)"></span><span data-i18n="g002">표면 색</span></div>
       </div>
+      <!--
+        두께 게이지 (운영자 지시 2026-09-01). **색 축과 이름을 갈랐다** — 이 손잡이는
+        「장식·인쇄 여백」이고 **복호를 보증하지 않는다**. 복호 쪽 근거는 바로 아래
+        «균일 면» 지표가 따로 말한다 (배수는 유도가 아니라 실제 도형에서 잰다 —
+        src/quiet-extent.js §왜 유도하지 않고 재는가).
+      -->
+      <div class="gauge-row" id="quietMarginRow">
+        <label class="gauge-label" for="quietMarginRange" data-i18n="g007">장식/인쇄 여백</label>
+        <input type="range" id="quietMarginRange" min="1" max="20" step="1" value="2">
+        <output class="gauge-value" id="quietMarginValue">2</output>
+      </div>
+      <p class="hint" id="quietCoverageHint"></p>
       <p class="hint" id="quietModeHint"></p>
 
       <section id="qrLinkSection" aria-labelledby="qrLinkHeading">
@@ -2668,6 +2685,10 @@ const GENERATOR_STRINGS = {
     "g004": "지면이 셀과 잘 안 갈려서(분리 {sep}) 코드 둘레 {cells}칸을 표면 색으로 자동으로 채웠어요.",
     "g005": "배치 미리보기 이미지를 넣으면 지면 색을 재서 채워요. 지금은 안전영역을 안 넣어요.",
     "g006": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\nType Y 는 흰색·검정 판을 안 써요 — 그 판 색이 촬영 프레임 테두리에 없으면 배경이 아니라 전경 덩어리로 잡혀서 큐브 실루엣 검출이 깨지거든요. 대신 «표면 색» 을 써요.\n자동 = 기본은 여백 없음. «TL 배치 미리보기» 사진에서 잰 지면이 셀 색과 충분히 안 갈릴 때만 표면 색을 자동으로 깔아요.\n없음 = 여백 없이 코드만.\n표면 색 = 사진에서 잰 지면 평균색으로 코드 둘레를 채워요. 무늬만 지우고 실루엣은 그대로 둬요. 사진이 없으면 지면 색을 알 수 없어 여백을 안 넣어요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
+    "g007": "장식/인쇄 여백",
+    "g008": "{cells}셀",
+    "g009": "균일 면 = 코드 폭의 {mult}배 (스캔 권장 {need}배)",
+    "g010": " · 캔버스 끝에 닿아 더 안 넓어져요",
     "g013": "배경 이미지 제거",
     "g019": "좌측 이미지 제거",
     "g020": "우측 이미지 제거",
@@ -3155,6 +3176,10 @@ const GENERATOR_STRINGS = {
     "g004": "The surface barely separates from the cells (separation {sep}), so {cells} cells around the code were filled with the surface color automatically.",
     "g005": "Add a placement preview image and the surface color will be measured and used. For now no quiet zone is added.",
     "g006": "The margin around the code — the equivalent of a QR quiet zone.\nType Y does not use white or black plates. If the plate colour is absent from the border band of the camera frame it is read as a foreground blob rather than background, which breaks cube silhouette detection. It uses the surface colour instead.\nAuto = no margin by default. The surface colour is applied automatically only when the ground measured in the placement preview does not separate enough from the cell levels.\nNone = no margin, code only.\nSurface colour = fills the ring around the code with the average ground colour measured from the photo. It flattens patterns without breaking the silhouette. With no photo the ground colour is unknown, so no margin is added.\nThe fallback QR block is excluded — it carries its own quiet zone.",
+    "g007": "Decorative / print margin",
+    "g008": "{cells} cells",
+    "g009": "Uniform area = {mult}× the code width (scan guideline {need}×)",
+    "g010": " · reached the canvas edge — it cannot widen further",
     "g013": "Remove background image",
     "g019": "Remove left image",
     "g020": "Remove right image",
@@ -3642,6 +3667,10 @@ const GENERATOR_STRINGS = {
     "g004": "下地とセルの差が小さいため（分離 {sep}）、コードの周囲 {cells} セルを自動で表面の色で塗りました。",
     "g005": "配置プレビュー画像を追加すると下地の色を測って塗ります。今は安全領域を入れません。",
     "g006": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\nType Y は白・黒のプレートを使いません。プレートの色が撮影フレームの縁の帯に無いと、背景ではなく前景の塊として拾われ、キューブのシルエット検出が壊れるからです。代わりに「表面の色」を使います。\n自動 = 既定は余白なし。「TL 配置プレビュー」の写真で測った下地がセルの色と十分に分離しないときだけ、表面の色を自動で敷きます。\nなし = 余白なしでコードのみ。\n表面の色 = 写真で測った下地の平均色でコードの周囲を塗ります。模様だけを消し、シルエットは保ちます。写真が無いと下地の色が分からないので余白を入れません。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
+    "g007": "装飾・印刷の余白",
+    "g008": "{cells} セル",
+    "g009": "均一な面 = コード幅の {mult} 倍（スキャン目安 {need} 倍）",
+    "g010": "・キャンバスの端に達したのでこれ以上広がりません",
     "g013": "背景画像を削除",
     "g019": "左の画像を削除",
     "g020": "右の画像を削除",
@@ -4129,6 +4158,10 @@ const GENERATOR_STRINGS = {
     "g004": "Le support se distingue mal des cellules (séparation {sep}) : {cells} cellules autour du code ont été remplies automatiquement avec la couleur du support.",
     "g005": "Ajoutez une image d'aperçu de placement pour mesurer et utiliser la couleur du support. Pour l'instant, aucune zone de silence n'est ajoutée.",
     "g006": "La marge autour du code — l'équivalent d'une zone de silence QR.\nLe Type Y n'utilise pas de plaque blanche ou noire. Si la couleur de la plaque est absente de la bande de bordure de l'image, elle est lue comme un bloc de premier plan et non comme un arrière-plan, ce qui casse la détection de la silhouette du cube. Il utilise la couleur du support à la place.\nAuto = aucune marge par défaut. La couleur du support n'est appliquée automatiquement que si le support mesuré dans l'aperçu de placement ne se distingue pas assez des cellules.\nAucune = pas de marge, uniquement le code.\nCouleur du support = remplit le pourtour du code avec la couleur moyenne du support mesurée sur la photo. Cela efface les motifs sans casser la silhouette. Sans photo, la couleur du support est inconnue et aucune marge n'est ajoutée.\nLe bloc QR de repli est exclu — il possède sa propre zone de silence.",
+    "g007": "Marge décorative / d'impression",
+    "g008": "{cells} cellules",
+    "g009": "Zone uniforme = {mult}× la largeur du code (repère de scan {need}×)",
+    "g010": " · atteint le bord du canevas — impossible d'élargir davantage",
     "g013": "Retirer l'image d'arrière-plan",
     "g019": "Retirer l'image de gauche",
     "g020": "Retirer l'image de droite",
@@ -4615,6 +4648,10 @@ const GENERATOR_STRINGS = {
     "g004": "La superficie si distingue poco dalle celle (separazione {sep}): {cells} celle attorno al codice sono state riempite automaticamente con il colore della superficie.",
     "g005": "Aggiungi un'immagine di anteprima del posizionamento per misurare e usare il colore della superficie. Per ora non viene aggiunta alcuna zona di silenzio.",
     "g006": "Il margine attorno al codice — equivalente alla zona di silenzio del QR.\nIl Type Y non usa piastre bianche o nere. Se il colore della piastra è assente dalla banda di bordo dell'inquadratura, viene letto come blocco di primo piano anziché come sfondo, e la rilevazione della silhouette del cubo si rompe. Usa invece il colore della superficie.\nAuto = nessun margine per impostazione predefinita. Il colore della superficie viene applicato automaticamente solo quando la superficie misurata nell'anteprima di posizionamento non si separa abbastanza dalle celle.\nNessuno = nessun margine, solo il codice.\nColore della superficie = riempie l'anello attorno al codice con il colore medio della superficie misurato dalla foto. Elimina i motivi senza rompere la silhouette. Senza foto il colore è ignoto, quindi non viene aggiunto alcun margine.\nIl blocco QR di riserva è escluso: ha una propria zona di silenzio.",
+    "g007": "Margine decorativo / di stampa",
+    "g008": "{cells} celle",
+    "g009": "Area uniforme = {mult}× la larghezza del codice (riferimento di scansione {need}×)",
+    "g010": " · ha raggiunto il bordo della tela — non può allargarsi oltre",
     "g013": "Rimuovi l'immagine di sfondo",
     "g019": "Rimuovi l'immagine di sinistra",
     "g020": "Rimuovi l'immagine di destra",
@@ -5101,6 +5138,10 @@ const GENERATOR_STRINGS = {
     "g004": "Der Untergrund hebt sich kaum von den Zellen ab (Trennung {sep}); {cells} Zellen um den Code wurden automatisch mit der Untergrundfarbe gefüllt.",
     "g005": "Fügen Sie ein Platzierungs-Vorschaubild hinzu, damit die Untergrundfarbe gemessen und verwendet wird. Derzeit wird keine Ruhezone hinzugefügt.",
     "g006": "Der Rand um den Code — das Gegenstück zur QR-Ruhezone.\nTyp Y verwendet keine weißen oder schwarzen Platten. Fehlt die Plattenfarbe im Randstreifen des Kamerabildes, wird sie als Vordergrundfläche statt als Hintergrund gelesen, und die Silhouettenerkennung des Würfels bricht. Stattdessen wird die Untergrundfarbe verwendet.\nAutomatisch = standardmäßig kein Rand. Die Untergrundfarbe wird nur dann automatisch gesetzt, wenn der in der Platzierungsvorschau gemessene Untergrund sich nicht ausreichend von den Zellen abhebt.\nKeiner = kein Rand, nur der Code.\nUntergrundfarbe = füllt den Ring um den Code mit der aus dem Foto gemessenen Durchschnittsfarbe. Das glättet Muster, ohne die Silhouette zu zerstören. Ohne Foto ist die Farbe unbekannt, daher wird kein Rand hinzugefügt.\nDer Fallback-QR-Block ist ausgenommen — er bringt seine eigene Ruhezone mit.",
+    "g007": "Dekorativer / Druckrand",
+    "g008": "{cells} Zellen",
+    "g009": "Gleichmäßige Fläche = {mult}× der Codebreite (Scan-Richtwert {need}×)",
+    "g010": " · Rand der Zeichenfläche erreicht — keine weitere Verbreiterung möglich",
     "g013": "Hintergrundbild entfernen",
     "g019": "Linkes Bild entfernen",
     "g020": "Rechtes Bild entfernen",
@@ -5587,6 +5628,10 @@ const GENERATOR_STRINGS = {
     "g004": "La superficie apenas se distingue de las celdas (separación {sep}), así que {cells} celdas alrededor del código se rellenaron automáticamente con el color de la superficie.",
     "g005": "Añade una imagen de vista previa de colocación para medir y usar el color de la superficie. Por ahora no se añade zona de silencio.",
     "g006": "El margen alrededor del código — el equivalente a la zona de silencio de un QR.\nEl Tipo Y no usa placas blancas ni negras. Si el color de la placa no está en la banda del borde del encuadre, se lee como una mancha de primer plano en lugar de fondo, y la detección de la silueta del cubo se rompe. En su lugar usa el color de la superficie.\nAutomático = sin margen por defecto. El color de la superficie se aplica automáticamente solo cuando la superficie medida en la vista previa de colocación no se separa lo suficiente de las celdas.\nNinguno = sin margen, solo el código.\nColor de la superficie = rellena el anillo alrededor del código con el color medio de la superficie medido en la foto. Borra los patrones sin romper la silueta. Sin foto se desconoce el color, así que no se añade margen.\nEl bloque QR de respaldo queda excluido: lleva su propia zona de silencio.",
+    "g007": "Margen decorativo / de impresión",
+    "g008": "{cells} celdas",
+    "g009": "Área uniforme = {mult}× el ancho del código (referencia de escaneo {need}×)",
+    "g010": " · alcanzó el borde del lienzo — no puede ensancharse más",
     "g013": "Quitar la imagen de fondo",
     "g019": "Quitar la imagen izquierda",
     "g020": "Quitar la imagen derecha",
@@ -6073,6 +6118,10 @@ const GENERATOR_STRINGS = {
     "g004": "A superfície mal se distingue das células (separação {sep}), por isso {cells} células ao redor do código foram preenchidas automaticamente com a cor da superfície.",
     "g005": "Adicione uma imagem de pré-visualização de posicionamento para medir e usar a cor da superfície. Por enquanto não é adicionada zona de silêncio.",
     "g006": "A margem ao redor do código — o equivalente à zona de silêncio do QR.\nO Tipo Y não usa placas brancas nem pretas. Se a cor da placa não estiver na faixa de borda do enquadramento, ela é lida como um bloco de primeiro plano em vez de fundo, e a detecção da silhueta do cubo quebra. Em vez disso usa a cor da superfície.\nAutomático = sem margem por padrão. A cor da superfície é aplicada automaticamente apenas quando a superfície medida na pré-visualização de posicionamento não se separa o suficiente das células.\nNenhuma = sem margem, apenas o código.\nCor da superfície = preenche o anel ao redor do código com a cor média da superfície medida na foto. Apaga padrões sem quebrar a silhueta. Sem foto a cor é desconhecida, então nenhuma margem é adicionada.\nO bloco QR de reserva fica excluído — ele traz a própria zona de silêncio.",
+    "g007": "Margem decorativa / de impressão",
+    "g008": "{cells} células",
+    "g009": "Área uniforme = {mult}× a largura do código (referência de leitura {need}×)",
+    "g010": " · atingiu a borda da tela — não pode alargar mais",
     "g013": "Remover a imagem de fundo",
     "g019": "Remover a imagem da esquerda",
     "g020": "Remover a imagem da direita",
@@ -6612,7 +6661,7 @@ const y3dPreview = {
 
 const TEXT_SYNCERS = [
   syncStyleUi, syncContentTabUi, syncFinderQrUi, syncResTierUi, syncBgModeUi,
-  syncQuietModeUi, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
+  syncQuietModeUi, syncQuietGaugeReadout, syncBackdropUi, syncBackdropLayer, syncDecorUi, syncTypeUi,
   syncFaceGainLabel, syncRenderProfileUi, syncExportOptionsUi, syncExportPpiHint,
   syncShadingUi, syncYLocatorUi, syncTurnAUi, syncSeatUi,
   syncTypeYCellEditorUi,
@@ -6830,6 +6879,10 @@ import { buildTrimmedScene, renderExportPng, renderExportSvg } from './src/expor
 import { addQuietZone } from './src/quietzone.js';
 import { SHADING_ON, addShading } from './src/shading.js';
 import { QUIET_COLOR_SURFACE, resolveQuietZoneChoice } from './src/quiet-auto.js';
+import {
+  QUIET_MARGIN_MAX, QUIET_MARGIN_MIN, RECOMMENDED_UNIFORM_MULTIPLE,
+  clampQuietMargin, quietCoverage,
+} from './src/quiet-extent.js';
 import { rasterize } from './src/raster.js';
 import { verifyRaster } from './src/verify.js';
 import { verifyRasterY } from './src/verifyY.js';
@@ -6843,7 +6896,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-01.05';
+const GENERATOR_BUILD = '2026-09-01.06';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -6899,6 +6952,8 @@ const els = {
   bgModeCards: $('bgModeCards'), bgModeHint: $('bgModeHint'),
   quietModeCards: $('quietModeCards'), quietModeHint: $('quietModeHint'),
   quietSurfaceSwatch: $('quietSurfaceSwatch'), quietHelpDot: $('quietHelpDot'),
+  quietMarginRow: $('quietMarginRow'), quietMarginRange: $('quietMarginRange'),
+  quietMarginValue: $('quietMarginValue'), quietCoverageHint: $('quietCoverageHint'),
   canvasWrap: $('canvasWrap'), backdropCanvas: $('backdropCanvas'),
   stageBackdropPick: $('stageBackdropPick'), stageBackdropPickLabel: $('stageBackdropPickLabel'),
   backdropGestureHint: $('backdropGestureHint'),
@@ -7051,7 +7106,16 @@ const BG_MODE_COLORS = {
 const BG_SEPARATION_MIN = 0.05;
 
 /** 안전영역 여백 (scene 단위 = 셀 크기 1 기준 "셀 몇 개분"). QR 콰이어트 존 4모듈 상당. */
-const QUIET_MARGIN_CELLS = 2;
+/**
+ * 안전영역 **두께** (셀) — 종전엔 상수 2 였고 이제 게이지 축이다 (운영자 지시
+ * 2026-09-01 「일단 설정할 수 있는 UI부터」). 눈금·기본값의 정본은 quiet-extent.js.
+ *
+ * ⚠ 색 축(quietMode)과 **별개**다. 「여백 없음」은 색 축이 지고, 이 값은 1 미만으로
+ *    안 내려간다 — margin 0 은 addQuietZone 을 터뜨린다 (그 함수 주석 참조).
+ */
+function quietMarginCells() {
+  return clampQuietMargin(generatorState.quietMargin);
+}
 
 /** 배치 미리보기 상태 — 배경 이미지와 그 팬/줌 (캔버스 픽셀 기준). 렌더 산출물과 무관. */
 const backdrop = { bitmap: null, name: null };
@@ -9829,7 +9893,7 @@ function withQuietZone(scene) {
   quietColorAtRender = choice.color;
   return addQuietZone(scene, {
     color: quietColorOf(choice),
-    margin: QUIET_MARGIN_CELLS,
+    margin: quietMarginCells(),
     selfQuietColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
   });
 }
@@ -9848,7 +9912,7 @@ function withShading(scene, type) {
   return addShading(scene, {
     mode: generatorState.shading,
     rim: generatorState.shadingRim === true,
-    clusterGap: QUIET_MARGIN_CELLS,
+    clusterGap: quietMarginCells(),
     // QR 제외 (운영자 판정 2026-08-17) — 안전영역과 같은 목록. QR 은 그림자를
     // 갖지 않는다 (자기 콰이어트 존 위에 안전영역 없는 음영 링이 얹히던 결함).
     selfQuietColors: [BULLSEYE_LIGHT, BULLSEYE_DARK],
@@ -9884,6 +9948,13 @@ function syncQuietModeUi() {
   // 도움말도 카드 라인업을 따라간다 — 화면에 없는 «고대비» 를 설명하면 거짓이 된다.
   if (els.quietHelpDot) els.quietHelpDot.dataset.help = isY ? 'g006' : 'g904';
   const choice = quietChoice();
+  // 색이 «없음» 이면 두께는 아무 데도 안 쓰인다 — 살아 있는 무동작 손잡이를 안 만든다.
+  const drawsQuiet = choice.color !== 'none';
+  if (els.quietMarginRow) {
+    els.quietMarginRow.classList.toggle('off', !drawsQuiet);
+    els.quietMarginRange.disabled = !drawsQuiet;
+  }
+  syncQuietGaugeReadout();
   // 표면 색 견본은 **측정값**이다 — 사진이 없으면 「모름」 무늬를 그대로 둔다.
   if (els.quietSurfaceSwatch && lastBackdropColor) {
     els.quietSurfaceSwatch.style.background =
@@ -9896,10 +9967,10 @@ function syncQuietModeUi() {
     // 왜 이 색인지를 적는다 — 자동으로 켜진 경우와 직접 고른 경우가 다르다.
     els.quietModeHint.textContent = choice.reason === 'auto-y-surface-harmful'
       ? tf('g004', {
-        cells: QUIET_MARGIN_CELLS,
+        cells: quietMarginCells(),
         sep: lastBackdropSeparation === null ? '—' : lastBackdropSeparation.toFixed(3),
       })
-      : tf('g003', { cells: QUIET_MARGIN_CELLS });
+      : tf('g003', { cells: quietMarginCells() });
     return;
   }
   const color = quietColorOf(choice);
@@ -9921,7 +9992,7 @@ function syncQuietModeUi() {
   const bySurface = choice.reason === 'surface-separation'
     ? tf('g991', { mean: lastBackdropLuminance === null ? '—' : lastBackdropLuminance.toFixed(3) })
     : '';
-  els.quietModeHint.innerHTML = tf('g435', { cells: QUIET_MARGIN_CELLS, picked })
+  els.quietModeHint.innerHTML = tf('g435', { cells: quietMarginCells(), picked })
     + bySurface
     + t('g417')
     + tf('g436', { sep: sep.toFixed(3), warn: sep >= BG_SEPARATION_MIN ? '' : t('g428') })
@@ -9934,6 +10005,44 @@ for (const card of els.quietModeCards.children) {
     syncQuietModeUi();
     schedule();
   });
+}
+
+/*
+ * 두께 게이지. 값은 **셀 수**이고, 화면이 함께 보이는 «배수» 는 렌더된 도형에서 잰다 —
+ * 셀 수에서 배수를 유도하면 n 마다 다른 사본을 들고 있어야 한다 (n=13 은 10셀에서
+ * 1.89배인데 n=25 는 같은 10셀이 1.46배다 — 실측).
+ */
+els.quietMarginRange.min = String(QUIET_MARGIN_MIN);
+els.quietMarginRange.max = String(QUIET_MARGIN_MAX);
+els.quietMarginRange.addEventListener('input', () => {
+  generatorState.quietMargin = clampQuietMargin(els.quietMarginRange.value);
+  syncQuietModeUi();
+  schedule();
+});
+
+/**
+ * «균일 면 = 코드 폭의 N배» 지표. 게이지와 **다른 줄**에 둔다 — 게이지는 장식 여백이고
+ * 이건 복호 쪽 근거라, 한 줄에 합치면 「두께를 올리면 읽힌다」는 보증으로 읽힌다.
+ * 아직 그 보증을 못 한다 (권장 1.85 는 **표본 1개**다 — quiet-extent.js 주석).
+ */
+function syncQuietGaugeReadout() {
+  if (!els.quietCoverageHint) return;
+  const cells = quietMarginCells();
+  els.quietMarginRange.value = String(cells);
+  els.quietMarginValue.textContent = tf('g008', { cells });
+
+  // ⚠ 배제 색을 **addQuietZone 에 넘긴 것과 같은 값**으로 넘긴다 — 다르면 지표가
+  //    다른 대상을 잰다 (실측: 코너 QR 을 코드 폭에 넣어 0.67배가 찍혔다).
+  const cov = current && current.scene
+    ? quietCoverage(current.scene, [BULLSEYE_LIGHT, BULLSEYE_DARK]) : null;
+  if (cov === null) { els.quietCoverageHint.textContent = ''; return; }
+  let text = tf('g009', {
+    mult: cov.multiple.toFixed(2),
+    need: RECOMMENDED_UNIFORM_MULTIPLE.toFixed(2),
+  });
+  if (cov.clipped) text += t('g010');
+  els.quietCoverageHint.textContent = text;
+  els.quietCoverageHint.style.color = cov.meetsRecommendation ? 'var(--ok)' : '';
 }
 syncQuietModeUi();
 
@@ -13070,6 +13179,8 @@ function render() {
     };
     // ③ 물리 크기 힌트는 scene 치수·타입에 의존한다 — 새 렌더마다 재계산 (§3 수리).
     syncExportPpiHint();
+    // 균일 면 배수도 같은 이유로 새 렌더마다 다시 잰다 — 도형이 바뀌면 값이 바뀐다.
+    syncQuietGaugeReadout();
     if (result.type === 'Y' && result.encoded && result.encoded.n) {
       const prevN = lastEncodedYn;
       lastEncodedYn = result.encoded.n;
