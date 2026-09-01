@@ -5,18 +5,41 @@
 // 프로덕션 검출기가 아니라 «실물 픽셀도 면별 역샘플링을 견디는가»만 가르는 도구다.
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { pngToRaster } from '../../../tools/asset-render.mjs';
+// 🔴 이 경로가 `../../../tools/asset-render.mjs` 였다 — 이식할 때 한 단 더 올라가
+//    **바깥 private repo 루트**를 가리켰고 `ERR_MODULE_NOT_FOUND` 로 죽었다.
+//    형제 이식본(inverse-warp-study.mjs)은 멀쩡했다 — 둘 중 하나만 돌았다는 뜻이고,
+//    「옮겼다」가 「건졌다」를 뜻하지 않는 그 자리다. 배포 사전검증이 잡았다.
+import { pngToRaster } from '../asset-render.mjs';
 import { rasterToPng } from '../../src/png.js';
 import { decodeFrontend } from '../../src/decoder/frontend.js';
 import { FRAME_MAX_SIDE } from '../../src/scanner-zoom.js';
 
 const OUT = 'test/output/inverse-warp-study';
+
+/*
+ * 사진 원본은 **운영자 로컬 캡처**라 이 public repo 에 없다. 경로를 박아 두면
+ * ① 남의 머신 경로가 공개 이력에 남고 ② 다른 사람에겐 무조건 죽는 스크립트가 된다.
+ * 그래서 디렉터리를 밖에서 받는다:
+ *   TL_PHOTO_DIR=<디렉터리> node tools/warp/inverse-warp-photo-probe.mjs
+ *   node tools/warp/inverse-warp-photo-probe.mjs --photos=<디렉터리>
+ * 파일 이름은 캡처 시각이라 그대로 둔다 (좌표 사본이 그 두 장에 묶여 있다).
+ */
+const PHOTO_DIR = process.env.TL_PHOTO_DIR
+  ?? process.argv.find((a) => a.startsWith('--photos='))?.slice('--photos='.length);
+if (!PHOTO_DIR) {
+  throw new Error(
+    '사진 디렉터리가 필요하다. TL_PHOTO_DIR=<dir> 또는 --photos=<dir>.\n'
+    + '  필요한 파일: 2026-09-01_00.03.15.png · 2026-09-01_00.06.21.png\n'
+    + '  (운영자 로컬 캡처 — repo 에 없다. 아래 observed 좌표가 그 두 장에 묶여 있다.)',
+  );
+}
+const photoPath = (name) => `${PHOTO_DIR.replace(/[\\/]+$/, '')}/${name}`;
 const PAYLOAD = 'https://tl.estre.so';
 const OCCUPANCIES = Object.freeze([0.70, 0.54]);
 const PHOTOS = Object.freeze([
   {
     id: 'close',
-    file: 'E:/Dev/temp/2026-09-01_00.03.15.png',
+    file: photoPath('2026-09-01_00.03.15.png'),
     centre: { x: 1924, y: 1081 },
     codePx: 501,
     // 원본 3840×2160 좌표. 800px 진단 크롭에서 수동 판독한 실루엣이다.
@@ -29,7 +52,7 @@ const PHOTOS = Object.freeze([
   },
   {
     id: 'far',
-    file: 'E:/Dev/temp/2026-09-01_00.06.21.png',
+    file: photoPath('2026-09-01_00.06.21.png'),
     centre: { x: 1919, y: 1065 },
     codePx: 340,
     observed: {
