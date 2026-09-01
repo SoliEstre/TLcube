@@ -671,9 +671,24 @@ export function paintQuads(ctx, mesh, options) {
   const opts = options || {};
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
+  /*
+    * ⭐ **투명 배경** (운영자 신고 2026-09-01 「삽입 이미지가 표시 안 됨」).
+    *
+    * 3D 캔버스는 배치 미리보기(`#backdropCanvas`) **위**에 쌓인다(z-index 2 vs 0).
+    * 여기서 배경을 전면 채우면 그 사진이 통째로 가려진다 — 「코드를 얹을 표면 위에
+    * 놓아 본다」는 기능의 존재 이유가 3D 에서만 사라지는 것이다.
+    *
+    * 기본은 종전대로 **불투명**이다 (스냅샷·일반 미리보기는 바이트 동일). 호출자가
+    * 사진을 깔고 있을 때만 `transparent: true` 를 준다. 채우기 대신 **지우기**를
+    * 하므로 직전 프레임이 남지도 않는다.
+    */
   const bg = opts.background || { r: 14, g: 16, b: 24 };
-  ctx.fillStyle = hexOf(bg);
-  ctx.fillRect(0, 0, width, height);
+  if (opts.transparent === true) {
+    ctx.clearRect(0, 0, width, height);
+  } else {
+    ctx.fillStyle = hexOf(bg);
+    ctx.fillRect(0, 0, width, height);
+  }
   // ⚠ **원근 ON + layout 없음은 막는다.** 이 폴백(bbox 맞춤)은 회전·원근에 따라 크기가
   //    변해서, 슬라이더를 움직일 때마다 그림이 펌프질한다 — `fitViewStable` 을 만든
   //    이유(2026-08-26 「크기 보존 안 됨」)와 **같은 증상**이라 «고친 걸 또 겪는» 모양이

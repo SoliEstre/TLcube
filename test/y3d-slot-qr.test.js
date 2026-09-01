@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { encodeY } from '../src/encodeY.js';
 import { buildSceneY } from '../src/sceneY.js';
@@ -297,4 +298,103 @@ test('⑥ 오버레이는 테두리를 안 긋는다 — 얇은 모듈이 검은
   // 배경 fillRect 1회는 fills 에 안 들어간다 (fill() 만 센다).
   assert.equal(fills.length, quads.length, '오버레이가 전부 칠해져야 한다');
   assert.equal(strokes.length, 0, `오버레이에 stroke 가 ${strokes.length}회 걸렸다`);
+});
+
+// ── §7 배치 미리보기 위에 얹기 ──────────────────────────────────────────────
+//
+// 운영자 신고 2026-09-01 「삽입 이미지가 표시 안 됨」. 3D 캔버스는 배치 미리보기
+// (`#backdropCanvas`) **위**에 쌓이는데(z-index 2 vs 0) 배경을 전면 채우고 있었다 —
+// 「코드를 얹을 표면 위에 놓아 본다」는 기능이 3D 에서만 통째로 사라졌다.
+
+function recordingCtx() {
+  const calls = [];
+  return {
+    calls,
+    canvas: { width: 400, height: 400 },
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 0,
+    beginPath() {}, moveTo() {}, lineTo() {}, closePath() {},
+    fill() {}, stroke() {},
+    fillRect() { calls.push('fillRect'); },
+    clearRect() { calls.push('clearRect'); },
+  };
+}
+
+function meshForPaint() {
+  const { encoded, quads } = quadsFor('v0trq');
+  const layout = layoutForCube(encoded.n, { size: 1, margin: 0.25 });
+  return {
+    layout,
+    mesh: buildOrbitMesh({
+      n: encoded.n,
+      tones: 3,
+      levels: preset.levels,
+      layout,
+      digitAt: () => null,
+      levelAt: () => null,
+      faceQuads: quads,
+      includeBack: false,
+    }),
+  };
+}
+
+test('⑦ 기본은 불투명 — 종전 동작을 안 건드린다 (대조군)', () => {
+  const { mesh, layout } = meshForPaint();
+  const ctx = recordingCtx();
+  paintQuads(ctx, mesh, { layout, background: preset.background });
+  assert.deepEqual(ctx.calls, ['fillRect'], '기본 경로가 배경을 안 채우거나 지운다');
+});
+
+test('⑧ transparent 면 배경을 **지운다** — 뒤에 깔린 배치 사진이 보여야 한다', () => {
+  const { mesh, layout } = meshForPaint();
+  const ctx = recordingCtx();
+  paintQuads(ctx, mesh, { layout, background: preset.background, transparent: true });
+  // 🔴 «안 채운다» 로는 부족하다 — 직전 프레임이 남는다. 반드시 지워야 한다.
+  assert.deepEqual(ctx.calls, ['clearRect'], 'transparent 가 지우지 않거나 채우기도 한다');
+});
+
+test('⑨ 생성기 배선 — 사진이 떠 있을 때만 투명, 그리고 알파 있는 컨텍스트', () => {
+  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  // 🔴 함수 **전체**를 잘라야 한다. 처음엔 buildOrbitMesh 호출부만 잘랐는데
+  //    paintQuads 는 그 뒤에 있어 «없다» 가 나왔다 — 자를 잘못 댄 것이지 배선 결함이
+  //    아니었다. 느슨한 전역 정규식으로 도망가면 가지 밖 호출에 걸려 거짓 통과가 된다.
+  const start = index.indexOf('function paintY3dPreview() {');
+  assert.ok(start >= 0, 'paintY3dPreview 를 못 찾았다');
+  const next = index.indexOf('\nfunction ', start + 1);
+  const fn = index.slice(start, next > 0 ? next : start + 8000);
+  assert.ok(fn.includes('paintQuads(ctx'), '슬라이스가 paintQuads 호출을 안 담았다');
+  assert.match(fn, /transparent: backdropShowing\(\)/);
+  /*
+   * 🔴 술어는 **정본 하나**여야 한다. 「투명 배경 + 사진 있음」을 세 곳이 손으로 적고
+   *    있었고 이 배선이 넷째가 될 참이었다 (체커보드 억제 · 3D 투명 · 팬 조작).
+   *    사본이 늘면 조건 하나를 바꿀 때 한 곳만 고쳐진다 — 반복된 실패 유형이다.
+   */
+  const copies = index.split("generatorState.bgMode === 'transparent' && backdrop.bitmap !== null").length - 1;
+  assert.equal(copies, 1, `술어 사본이 ${copies}개 — 정본 backdropShowing() 하나여야 한다`);
+  assert.match(index, /function backdropShowing\(\) \{/);
+  /*
+   * 🔴 컨텍스트의 alpha 는 **최초 생성 때 고정**이라 나중에 못 바꾼다. `alpha: false`
+   *    로 열면 위 transparent 분기가 아무 일도 안 하는 «켰는데 안 먹는» 상태가 된다 —
+   *    그리고 테스트 ⑧ 은 그래도 초록이다 (모듈만 재니까). 그래서 여기서 잰다.
+   */
+  assert.equal(
+    fn.includes("getContext('2d', { alpha: false })"), false,
+    '#view3d 를 alpha:false 로 열면 투명 분기가 무효가 된다 (알파는 최초 생성 때 고정)',
+  );
+  assert.match(fn, /getContext\('2d'\)/);
+});
+
+test('⑩ 3D 가 켜지면 2.5D 캔버스가 화면에서 빠진다 — 안 그러면 큐브가 둘로 보인다', () => {
+  // 3D 가 불투명하던 동안에는 완전히 가려져 안 보였다. 투명해지는 순간 그 밑의
+  // 2.5D 큐브가 배치 사진과 함께 비친다 — 이 규칙이 없으면 «수리가 새 결함을 만든다».
+  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(index, /#view3d\.on ~ #view \{ visibility: hidden; \}/);
+  // :has() 폴백은 **별도 규칙**이어야 한다 — 쉼표로 묶으면 :has() 를 모르는 브라우저가
+  // 선택자 목록 전체를 버려서 위 규칙까지 같이 죽는다.
+  assert.match(index, /#view:has\(~ #view3d\.on\) \{ visibility: hidden; \}/);
+  assert.equal(
+    /#view3d\.on ~ #view,\s*#view:has/.test(index), false,
+    ':has() 폴백을 쉼표로 묶으면 미지원 브라우저에서 두 규칙이 함께 죽는다',
+  );
 });

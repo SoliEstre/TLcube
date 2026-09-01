@@ -663,6 +663,23 @@
      PNG·SVG 경로와 접점 0. CM 레인이 만지는 파인더·자리·톤 축과 다른 자리(무대). */
   #view3d { display: none; z-index: 2; cursor: grab; }
   #view3d.on { display: block; }
+  /*
+   * 3D 가 켜지면 2.5D 캔버스를 **숨긴다** (운영자 신고 2026-09-01 「삽입 이미지가
+   * 표시 안 됨」의 후속). 3D 가 불투명하던 동안에는 어차피 완전히 가려져 눈에 안
+   * 띄었지만, 배치 사진 위에 얹으려고 3D 를 투명하게 만드는 순간 **그 밑의 2.5D
+   * 큐브가 같이 비친다** — 큐브가 둘로 보인다.
+   *
+   * display 가 아니라 visibility 다: measureBackdrop 이 #view 의 ImageData 로 코드
+   * 실루엣을 잡는데(내보내는 그림은 항상 2.5D 라 그게 맞는 실루엣이다), 캔버스
+   * 내용은 어느 쪽으로 숨겨도 남지만 «화면에서만 뺀다» 는 뜻이 더 정확하다.
+   *
+   * CSS 유도로 쓴다 — 토글 지점이 둘(syncOrbitPreviewUi · paintY3dPreview)이라
+   * JS 로 적으면 한쪽을 빠뜨릴 자리가 생긴다 (반복된 손 사본 실패).
+   */
+  #view3d.on ~ #view { visibility: hidden; }
+  /* DOM 순서가 #view → #view3d 인 경우 (지금이 그렇다). **쉼표로 묶지 않는다** —
+     :has() 를 모르는 브라우저는 선택자 목록 전체를 버려 위 규칙까지 같이 죽는다. */
+  #view:has(~ #view3d.on) { visibility: hidden; }
   #view3d:active { cursor: grabbing; }
   #y3dBar {
     position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 3;
@@ -6814,7 +6831,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-01.03';
+const GENERATOR_BUILD = '2026-09-01.04';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -7026,6 +7043,17 @@ const QUIET_MARGIN_CELLS = 2;
 
 /** 배치 미리보기 상태 — 배경 이미지와 그 팬/줌 (캔버스 픽셀 기준). 렌더 산출물과 무관. */
 const backdrop = { bitmap: null, name: null };
+
+/**
+ * 배치 미리보기가 **지금 화면에 떠 있는가**. 소비자가 셋이다:
+ *   ① 체커보드 억제 (사진이 실효 배경이라 체커를 깔면 안 된다)
+ *   ② 3D 캔버스 투명 (안 그러면 3D 가 그 사진을 통째로 가린다 — 2026-09-01)
+ *   ③ 팬/휠 조작 활성 (3D 중에는 추가로 끈다)
+ * 셋이 같은 식을 손으로 적고 있었고, ②를 붙이면서 넷이 될 참이었다. 정본 하나로 모은다.
+ */
+function backdropShowing() {
+  return generatorState.bgMode === 'transparent' && backdrop.bitmap !== null;
+}
 const backdropView = { x: 0, y: 0, scale: 1 };
 /** 마지막으로 실측한 배치 표면의 대표 상대휘도 — 고대비 권장색의 2순위 근거. */
 let lastBackdropLuminance = null;
@@ -7609,8 +7637,7 @@ function drawScene(scene, canvas, ppu) {
   ctx.clearRect(0, 0, scene.width, scene.height);
   // ⚠ .checker 는 **view 캔버스 자신의 CSS 배경**이라 backdrop 레이어보다 위에 깔린다.
   //    배치 미리보기 이미지가 올라와 있으면 체커를 꺼야 그 이미지가 보인다.
-  const backdropShowing = generatorState.bgMode === 'transparent' && backdrop.bitmap !== null;
-  canvas.classList.toggle('checker', scene.background === null && !backdropShowing);
+  canvas.classList.toggle('checker', scene.background === null && !backdropShowing());
   if (scene.background !== null) {
     ctx.fillStyle = rgbCss(scene.background);
     ctx.fillRect(0, 0, scene.width, scene.height);
@@ -7810,14 +7837,22 @@ function paintY3dPreview() {
     faceQuads,
     includeBack: true,
   });
-  const ctx = canvas.getContext('2d', { alpha: false });
+  /*
+   * ⚠ **alpha: true 로 연다** — 컨텍스트의 alpha 속성은 **최초 생성 때 고정**이라
+   *    나중에 못 바꾼다. 사진을 깔았을 때만 투명하게 그리려면 처음부터 알파가 있어야
+   *    한다. 사진이 없으면 아래 paintQuads 가 종전대로 배경을 채우므로 그림은 같다.
+   *    (스냅샷 경로는 자기 오프스크린 캔버스를 alpha:false 로 따로 만든다 — 무변.)
+   */
+  const ctx = canvas.getContext('2d');
   const bg = pal.background || { r: 14, g: 16, b: 24 };
   // 스냅샷이 **같은 mesh 를 다시 칠하려면** 이 둘이 필요하다. 다시 build 하지 않는다 —
   // points2d 는 layout 공간이고 paintQuads 가 캔버스 크기로 매핑하므로 재빌드는 낭비다.
   y3dPreview.layout = layout;
   y3dPreview.bg = bg;
+  // 배치 미리보기가 떠 있으면 3D 도 그 위에 **얹혀야** 한다 (z-index 2 라 안 그러면 가린다).
   y3dPreview.view = paintQuads(ctx, y3dPreview.mesh, {
     background: bg,
+    transparent: backdropShowing(),
     pad: y3dPreview.pad,
     // layout 을 넘기면 **회전 불변 스케일**(fitViewStable)을 쓴다 — 안 넘기면 종전
     // bbox 맞춤이라 돌릴 때마다 크기가 변한다 (2026-08-26 운영자 신고).
@@ -11296,7 +11331,7 @@ els.backdropFit.addEventListener('click', () => {
   const points = new Map();
   let dragging = false;
   let pinch = null; // { dist, cx, cy } — 직전 프레임의 두 점 거리·중점 (클라이언트 좌표)
-  const active = () => generatorState.bgMode === 'transparent' && backdrop.bitmap !== null && !y3dPreview.on;
+  const active = () => backdropShowing() && !y3dPreview.on;
   /** CSS 픽셀 → 캔버스 픽셀 배율 (미리보기가 축소돼 있어도 이동량이 어긋나지 않게).
    *  B-1 이후 요소 박스 == 그려진 그림이라 이 비율이 실제 표시 배율과 정확히 같다.
    *  (그 전에는 레터박스 때문에 최대 45% 어긋났다 — 드래그가 그만큼 덜 따라왔다.) */
