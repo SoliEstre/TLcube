@@ -59,7 +59,31 @@ function judge(raster) {
   } catch (e) { return { ok: false, s: `✗ throw ${e.message.slice(0, 44)}` }; }
 }
 
-const OCCUPANCIES = [0.90, 0.80, 0.70, GUIDE_OUTER_FRACTION, 0.45, 0.35, 0.25];
+/*
+ * 🔴 **한 점유율의 통과/실패는 잡음이다** (2026-09-01 실측). 같은 이미지에서
+ *    90⛔ 80⛔ 70✅ 54⛔ 45✅ 로 **번갈아** 나온다 — 재샘플링 배율에 따라 셀 경계가
+ *    픽셀 격자에 어떻게 얹히느냐가 매번 달라지기 때문이다. 문턱이 아니라 앨리어싱이다.
+ *    ⇒ 「가이드 54% 통과 여부」 한 칸으로 판정하면 **동전 던지기를 재는 것**이다.
+ *      다섯 세트의 사진 사다리가 세션마다 뒤집힌 것도 이걸로 설명된다.
+ *
+ * 그래서 촘촘히 훑어 **성공률**을 낼 수 있게 열어 둔다:
+ *   --occ=<시작>:<끝>:<간격>   (백분율, 예 --occ=40:95:1)
+ * 안 주면 종전 7칸 그대로다 (기본 동작 바이트 동일).
+ */
+function parseOccSpec() {
+  const arg = process.argv.find((a2) => a2.startsWith('--occ='));
+  if (arg === undefined) return null;
+  const [lo, hi, step] = arg.slice('--occ='.length).split(':').map(Number);
+  if (![lo, hi, step].every(Number.isFinite) || step <= 0 || hi < lo) {
+    throw new RangeError(`--occ=<시작>:<끝>:<간격> 형식이어야 한다: ${arg}`);
+  }
+  const out = [];
+  for (let v = lo; v <= hi + 1e-9; v += step) out.push(v / 100);
+  return out;
+}
+const OCC_SPEC = parseOccSpec();
+const OCCUPANCIES = OCC_SPEC
+  ?? [0.90, 0.80, 0.70, GUIDE_OUTER_FRACTION, 0.45, 0.35, 0.25];
 
 const [file, CX, CY, CODEPX] = process.argv.slice(2);
 if (!file || !existsSync(file)) {
@@ -74,8 +98,10 @@ const codePx = Number.isFinite(+CODEPX) ? +CODEPX : Math.round(src.width * 0.1);
 console.log(`${basename(file)}  ${src.width}×${src.height}`);
 console.log(`코드 중심 (${Math.round(cx)},${Math.round(cy)}) · 폭 ${codePx}px = 프레임의 ${(codePx / src.width * 100).toFixed(1)}%`);
 console.log(`스캐너 규약: 조준 가이드 = 분석 정사각의 ${(GUIDE_OUTER_FRACTION * 100).toFixed(0)}% · 프레임 상한 ${FRAME_MAX_SIDE}px\n`);
-console.log('점유율   분석변    판정');
+if (OCC_SPEC === null) console.log('점유율   분석변    판정');
 let best = null;
+let tried = 0;
+let hits = 0;
 for (const occ of OCCUPANCIES) {
   const side = Math.round(codePx / occ);
   if (side > Math.min(src.width, src.height)) {
@@ -87,10 +113,21 @@ for (const occ of OCCUPANCIES) {
   const r = resample(src, sx, sy, side, Math.min(FRAME_MAX_SIDE, side));
   const v = judge(r);
   const tag = occ === GUIDE_OUTER_FRACTION ? '  ← 가이드 규약' : '';
-  console.log(`${(occ * 100).toFixed(0).padStart(5)}%   ${String(side).padStart(5)}    ${v.s}${tag}`);
+  if (OCC_SPEC === null) {
+    console.log(`${(occ * 100).toFixed(0).padStart(5)}%   ${String(side).padStart(5)}    ${v.s}${tag}`);
+  }
+  tried += 1;
+  if (v.ok) hits += 1;
   // OCCUPANCIES 는 내림차순이라 성공할 때마다 덮어써야 **가장 낮은** 성공이 남는다.
   // (`best === null` 로 막으면 첫 성공인 90% 에서 굳어 70% 를 놓친다 — 실제로 그랬다.)
   if (v.ok) best = occ;
+}
+if (OCC_SPEC !== null) {
+  /*
+   * 촘촘 모드의 판정은 **성공률**이다. 한 점유율의 통과/실패는 앨리어싱 잡음이라
+   * (파일 머리 §--occ 주석) 한 칸으로는 아무것도 못 말한다.
+   */
+  console.log(`성공률 ${hits}/${tried} = ${(hits / Math.max(tried, 1) * 100).toFixed(1)}%`);
 }
 console.log(best === null
   ? '\n어느 점유율에서도 안 읽힌다.'
