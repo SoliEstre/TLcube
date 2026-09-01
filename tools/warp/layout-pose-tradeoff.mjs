@@ -112,31 +112,47 @@ function render(m, view, withSlotQr) {
   }, { pixelsPerUnit: PPU, supersample: 2 });
 }
 
+/*
+ * 🔴 **사유를 버리지 않는다** (2026-09-01 운영자 관측). 처음엔 boolean 만 냈는데,
+ *    운영자가 「v0T/v0TR 은 `no-grid-hypothesis`, 읽힐 여지가 있으면 `no-format-candidate`
+ *    위주」라는 **다른 축**을 보고 있었다. 그 축이 있어야 「왜 이 레이아웃만 최하인가」를
+ *    묻을 수 있다 — 실패 «코드» 집계는 라벨 집계지만, 여기서는 그 라벨이 곧 실패 **단계**다.
+ *    사유는 같은 decodeFrontend 호출에서 공짜로 나온다.
+ */
 function judge(raster) {
   try {
     const d = decodeFrontend({
       width: raster.width, height: raster.height, pixels: raster.pixels,
     }, {});
-    return d && d.ok && String(d.text) === PAYLOAD;
-  } catch {
-    return false;
+    if (d && d.ok) return String(d.text) === PAYLOAD ? 'ok' : 'wrong-payload';
+    return String((d && (d.reason || d.code)) || 'fail').replace(/^frontend:/, '');
+  } catch (e) {
+    return 'throw:' + String(e.message).slice(0, 24);
   }
 }
 
 /** 연속 통과 구간만 상한으로 친다 — 불연속이면 그 사실을 같이 낸다. */
 function sweep(m, axis, withSlotQr) {
   const ok = [];
+  const reasons = new Map();
   for (let deg = -SPAN; deg <= SPAN; deg += 1) {
     const view = { yaw: 0, pitch: 0, [axis]: deg * DEG };
-    if (judge(render(m, view, withSlotQr))) ok.push(deg);
+    const why = judge(render(m, view, withSlotQr));
+    reasons.set(why, (reasons.get(why) || 0) + 1);
+    if (why === 'ok') ok.push(deg);
   }
-  if (ok.length === 0) return { span: '없음', width: 0, contiguous: true, ok };
+  if (ok.length === 0) return { span: '없음', width: 0, contiguous: true, ok, reasons };
   const lo = Math.min(...ok);
   const hi = Math.max(...ok);
   const width = hi - lo + 1;
   return {
-    span: `${lo}°\~${hi}°`, width, contiguous: ok.length === width, ok,
+    span: `${lo}°\~${hi}°`, width, contiguous: ok.length === width, ok, reasons,
   };
+}
+
+/** 사유 히스토그램을 «많은 것부터» 한 줄로. */
+function reasonLine(reasons) {
+  return [...reasons].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(' · ');
 }
 
 const rows = [];
@@ -184,6 +200,21 @@ for (const r of rows) {
     + `${r.span || ''}${r.yaw.span.padEnd(9)}(${r.yaw.width}칸)${r.yaw.contiguous ? '' : '⚠불연속'}`.padEnd(16)
     + `${r.pitch.span.padEnd(9)}(${r.pitch.width}칸)${r.pitch.contiguous ? '' : '⚠불연속'}`,
   );
+}
+
+// ── 실패 사유 교차표 — 운영자 가설(§19.3)의 시험대 ─────────────────────────
+//
+// 가설: 격자 적합은 전역 모델 하나를 세우므로 셀마다 왜곡 편차가 크면 어느 가설도 안 선다
+//       (no-grid-hypothesis). 슬롯이 **극단값 쪽 셀을 들어내면** 편차가 좁아져 가설이 선다.
+// 예측: 슬롯 없음(v0T·v0TR) 은 no-grid-hypothesis 비중이 제일 크고,
+//       슬롯본은 그 비중이 줄고 no-format-candidate 쪽으로 옮겨 간다.
+console.log('\n── 실패 사유 (yaw 축) ──');
+for (const r of rows) {
+  console.log(`${r.id.padEnd(7)}${r.variant.padEnd(6)}${reasonLine(r.yaw.reasons)}`);
+}
+console.log('\n── 실패 사유 (pitch 축) ──');
+for (const r of rows) {
+  console.log(`${r.id.padEnd(7)}${r.variant.padEnd(6)}${reasonLine(r.pitch.reasons)}`);
 }
 
 // ── 🔴 자 검증 — 표가 한 값으로 몰리면 재는 대상이 아니라 자를 의심한다 ─────────
