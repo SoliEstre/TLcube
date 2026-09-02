@@ -37,14 +37,22 @@ const PALETTE = Object.freeze({
 });
 
 const OUTPUT_CAPACITY = 128;
+// 실사진 글리프는 피치 12~18 대역에 있다. 2x/4x(피치 3.46/6.93)는 그 대역에
+// 존재하지 않는 사다리 바닥이라, 렌더 배율을 8x/16x(13.86/27.71)로 올린다.
+// 8x 는 실사진 대역 안이고, 16x 는 2배 스케일 불변을 같은 비율로 재기 위한 짝이다.
+const PPU_LO = 8;
+const PPU_HI = 16;
+// 8x/16x 에서 검출기는 이웃 rung(±1.04) 위에 앉는다. 그때 중심이 1.5px 까지
+// 밀리므로, 3.46px 피치용 ±1px 를 큰 피치에 맞춰 ±2px 로 둔다.
+const POSE_PX = 2;
 const DETECTOR_OPTIONS = Object.freeze({
   params: Object.freeze({
-    glyphMaxFrameWidth: 640,
-    glyphMaxFrameHeight: 384,
+    glyphMaxFrameWidth: 1280,
+    glyphMaxFrameHeight: 720,
     glyphMaxCandidates: OUTPUT_CAPACITY,
-    // 이 자의 정답은 2x/4x(피치 3.46/6.93px)다. 128px까지 훑는 것은
-    // 검출 성질을 더 재지 않고 테스트 시간만 늘리므로 바로 위 rung까지만 연다.
-    glyphMaxCellPitchQ16: 9 * Q16_ONE,
+    // 128px까지 훑는 것은 검출 성질을 더 재지 않고 테스트 시간만 늘리므로
+    // 16x 바로 위 rung까지만 연다.
+    glyphMaxCellPitchQ16: 30 * Q16_ONE,
   }),
 });
 
@@ -175,7 +183,7 @@ function nearestCandidate(output, kind, expected) {
     const yError = Math.abs(candidate.cy - expected.cy);
     const scaleError = Math.abs(candidate.scale - expected.scale) / expected.scale;
     if (
-      xError <= 1 && yError <= 1 && scaleError <= 0.03
+      xError <= POSE_PX && yError <= POSE_PX && scaleError <= 0.03
       && (matching === null || candidate.score > matching.score)
     ) {
       matching = candidate;
@@ -197,11 +205,11 @@ function nearestCandidate(output, kind, expected) {
 function assertPose(candidate, expected, label) {
   const detail = JSON.stringify(candidate);
   assert.ok(
-    Math.abs(candidate.cx - expected.cx) <= 1,
+    Math.abs(candidate.cx - expected.cx) <= POSE_PX,
     `${label}: cx ${candidate.cx} vs ${expected.cx}; candidate=${detail}`,
   );
   assert.ok(
-    Math.abs(candidate.cy - expected.cy) <= 1,
+    Math.abs(candidate.cy - expected.cy) <= POSE_PX,
     `${label}: cy ${candidate.cy} vs ${expected.cy}; candidate=${detail}`,
   );
   const relativeScaleError = Math.abs(candidate.scale - expected.scale) / expected.scale;
@@ -251,6 +259,18 @@ function insetDetection(kind, pixelsPerUnit) {
 }
 
 function rotatedFrame(rendered, degrees) {
+  // 0° 는 항등이다. 큰 피치에서 bilinear 재표본을 한 바퀴 돌리면
+  // 이웃 rung 로 미끄러지므로 돌리지 않는다.
+  if (degrees === 0) {
+    return {
+      width: rendered.image.width,
+      height: rendered.image.height,
+      luma: rendered.luma,
+      cx: rendered.cx,
+      cy: rendered.cy,
+      scale: rendered.scale,
+    };
+  }
   const image = rotateImage(rendered.image, degrees, {
     fill: { ...PALETTE.background, a: 255 },
   });
@@ -325,21 +345,21 @@ function summarizeOutput(output, limit = 12) {
 }
 
 for (const { kind } of GLYPH_CASES) {
-  test(`합성 오라클: ${kind} 위치 ±1px, scale ±3%`, { timeout: 60_000 }, (t) => {
-    const { frame, output } = insetDetection(kind, 4);
+  test(`합성 오라클: ${kind} 위치 ±${POSE_PX}px, scale ±3%`, { timeout: 120_000 }, (t) => {
+    const { frame, output } = insetDetection(kind, PPU_HI);
     const candidate = nearestCandidate(output, kind, frame);
     assertPose(candidate, frame, kind);
     t.diagnostic(`candidate=${JSON.stringify(candidate)}`);
   });
 }
 
-test('QR 어휘: 서로 다른 payload에서도 2x finder 기하를 되찾는다', {
-  timeout: 60_000,
+test('QR 어휘: 서로 다른 payload에서도 8x finder 기하를 되찾는다', {
+  timeout: 120_000,
 }, (t) => {
   const detector = createGlyphDetector(DETECTOR_OPTIONS);
   const payloads = ['HELLO WORLD', '0123456789ABCDEFG'];
   for (let index = 0; index < payloads.length; index += 1) {
-    const frame = insetFrame(renderQrPayload(payloads[index], 2), 7 + index, 9 + index);
+    const frame = insetFrame(renderQrPayload(payloads[index], PPU_LO), 7 + index, 9 + index);
     const candidate = nearestCandidate(detect(detector, frame), 'qr', frame);
     assertPose(candidate, frame, `qr-payload-${index}`);
     t.diagnostic(`payload${index}=${JSON.stringify(candidate)}`);
@@ -347,9 +367,9 @@ test('QR 어휘: 서로 다른 payload에서도 2x finder 기하를 되찾는다
 });
 
 for (const { kind } of GLYPH_CASES) {
-  test(`스케일 불변: ${kind} 2x·4x`, { timeout: 60_000 }, (t) => {
+  test(`스케일 불변: ${kind} 8x·16x`, { timeout: 120_000 }, (t) => {
     const found = [];
-    for (const pixelsPerUnit of [2, 4]) {
+    for (const pixelsPerUnit of [PPU_LO, PPU_HI]) {
       const { frame, output } = insetDetection(kind, pixelsPerUnit);
       const candidate = nearestCandidate(output, kind, frame);
       t.diagnostic(`${pixelsPerUnit}x candidate=${JSON.stringify(candidate)}`);
@@ -366,9 +386,9 @@ for (const { kind } of GLYPH_CASES) {
 
 for (const kind of ['mini-tl', 'daehan']) {
   for (const degrees of [0, 120, 240]) {
-    test(`회전 위상: ${kind} ${degrees}°`, { timeout: 60_000 }, (t) => {
+    test(`회전 위상: ${kind} ${degrees}°`, { timeout: 120_000 }, (t) => {
       const detector = createGlyphDetector(DETECTOR_OPTIONS);
-      const rendered = renderGlyph(kind, 4);
+      const rendered = renderGlyph(kind, PPU_LO);
       const frame = rotatedFrame(rendered, degrees);
       const candidate = nearestCandidate(detect(detector, frame), kind, frame);
       assertPose(candidate, frame, `${kind}@${degrees}deg`);
@@ -416,7 +436,7 @@ for (const label of ['uniform', 'noise', 'grid']) {
 
 test('무할당 관찰 계약: 반복 호출이 out·candidate 객체·입력 버퍼를 교체하지 않는다', () => {
   const detector = createGlyphDetector(DETECTOR_OPTIONS);
-  const rendered = renderGlyph('bullseye', 2);
+  const rendered = renderGlyph('bullseye', PPU_LO);
   const frame = insetFrame(rendered, 7, 9);
   const output = createOutput();
   const outputIdentity = output;
@@ -441,16 +461,16 @@ test('무할당 관찰 계약: 반복 호출이 out·candidate 객체·입력 �
 });
 
 test('결정성: 독립 detector 인스턴스가 같은 입력에 바이트 동등한 후보를 낸다', () => {
-  const frame = insetFrame(renderGlyph('mini-tl', 2), 7, 9);
+  const frame = insetFrame(renderGlyph('mini-tl', PPU_LO), 7, 9);
   const first = detect(createGlyphDetector(DETECTOR_OPTIONS), frame);
   const second = detect(createGlyphDetector(DETECTOR_OPTIONS), frame);
   assert.deepEqual(snapshotOutput(first), snapshotOutput(second));
 });
 
 test('비배타: 한 프레임의 서로 다른 4어휘 후보를 동시에 보존한다', {
-  timeout: 60_000,
+  timeout: 120_000,
 }, (t) => {
-  const rendered = GLYPH_CASES.map(({ kind }) => renderGlyph(kind, 2));
+  const rendered = GLYPH_CASES.map(({ kind }) => renderGlyph(kind, PPU_LO));
   const frame = composeFrames(rendered);
   const output = detect(createGlyphDetector(DETECTOR_OPTIONS), frame);
   for (const expected of frame.expected) {

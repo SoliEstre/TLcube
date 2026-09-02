@@ -36,8 +36,8 @@ export const DEFAULT_R2_PARAMS = Object.freeze({
   // 가설: coarse scan도 모든 unique row-run을 읽어 noise/grid 우연 상관을 과대평가하지 않는다.
   glyphCoarseFeatureStep: 1,
 
-  // 가설: 멀티스케일 탐색의 최소 바깥 셀 중심 피치는 3 px다(Q16.16).
-  glyphMinCellPitchQ16: 3 * Q16_ONE,
+  // 가설: 멀티스케일 탐색의 최소 바깥 셀 중심 피치는 8 px다(Q16.16).
+  glyphMinCellPitchQ16: 8 * Q16_ONE,
 
   // 가설: 멀티스케일 탐색의 최대 바깥 셀 중심 피치는 128 px다(Q16.16).
   glyphMaxCellPitchQ16: 128 * Q16_ONE,
