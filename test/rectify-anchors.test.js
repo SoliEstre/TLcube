@@ -27,9 +27,11 @@ import {
 } from '../src/y3d-viewer.js';
 import {
   RECTIFY_ANCHOR_IDS,
+  RECTIFY_ANCHOR_INTERNALS,
   detectRectifyAnchors,
 } from '../src/decoder/rectify-anchors.js';
 import { projectPoint as projectPoint2d } from '../src/decoder/homography.js';
+import { addGaussianNoise, cameraTiltImage } from './harness/distort.mjs';
 
 const FRAME_SIDE = 960;
 const PPU = 17;
@@ -38,6 +40,8 @@ const DEGREE = Math.PI / 180;
 const FACES = Object.freeze(['T', 'L', 'R']);
 let baselinePassed = false;
 const baselineLadderRows = [];
+const poseLadderRows = [];
+const planarLadderRows = [];
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
   background: PRESET.background,
@@ -182,6 +186,67 @@ function polygonArea(points) {
   return Math.abs(twiceArea) / 2;
 }
 
+// cameraTiltImage의 픽셀 인덱스 좌표 투영식을 경계 좌표로 옮긴다.
+// lane-out 판정자 산출물은 import하지 않고 필요한 자와 참 기대좌표만 여기서 독립 재현한다.
+function tiltForward(frame, degrees, axis, distanceRatio) {
+  const centerX = (frame.width - 1) / 2;
+  const centerY = (frame.height - 1) / 2;
+  const extent = Math.max(Math.min(centerX, centerY), 0.5);
+  const distance = distanceRatio * extent;
+  const phi = ({ horizontal: 0, vertical: 90, diagonal: 45 })[axis] * DEGREE;
+  const ax = Math.cos(phi);
+  const ay = Math.sin(phi);
+  const nx = -Math.sin(phi);
+  const ny = Math.cos(phi);
+  const theta = degrees * DEGREE;
+  const cosine = Math.cos(theta);
+  const sine = Math.sin(theta);
+  return (boundaryX, boundaryY) => {
+    const ux = boundaryX - 0.5 - centerX;
+    const uy = boundaryY - 0.5 - centerY;
+    const alongAxis = ux * ax + uy * ay;
+    const acrossAxis = ux * nx + uy * ny;
+    const denominator = 1 + (acrossAxis * sine) / distance;
+    const projectedAlong = alongAxis / denominator;
+    const projectedAcross = (acrossAxis * cosine) / denominator;
+    return {
+      x: centerX + projectedAlong * ax + projectedAcross * nx + 0.5,
+      y: centerY + projectedAlong * ay + projectedAcross * ny + 0.5,
+    };
+  };
+}
+
+function tiltedExpected(expected, forward) {
+  return expected.map((anchor) => {
+    const center = forward(anchor.x, anchor.y);
+    const alongI = forward(
+      anchor.x + anchor.basisI.x,
+      anchor.y + anchor.basisI.y,
+    );
+    const alongJ = forward(
+      anchor.x + anchor.basisJ.x,
+      anchor.y + anchor.basisJ.y,
+    );
+    const quad = [
+      [-0.5, -0.5],
+      [0.5, -0.5],
+      [0.5, 0.5],
+      [-0.5, 0.5],
+    ].map(([i, j]) => forward(
+      anchor.x + anchor.basisI.x * i + anchor.basisJ.x * j,
+      anchor.y + anchor.basisI.y * i + anchor.basisJ.y * j,
+    ));
+    return {
+      id: anchor.id,
+      x: center.x,
+      y: center.y,
+      cellPitch: Math.sqrt(polygonArea(quad)),
+      basisI: { x: alongI.x - center.x, y: alongI.y - center.y },
+      basisJ: { x: alongJ.x - center.x, y: alongJ.y - center.y },
+    };
+  });
+}
+
 function expectedPoseAnchors(rendered) {
   const center3d = cubeCenter(CENTRAL_V0_SOURCE_N);
   const invDist = perspectiveInvDist(
@@ -290,7 +355,9 @@ function failStages(trace) {
     const stage = trace?.shapeCount === 0 ? 'no-seed' : 'no-adopted-shape';
     return RECTIFY_ANCHOR_IDS.map(() => stage);
   }
-  return patches.map((patch) => {
+  const reseedAdopted = new Set(trace?.adopted?.reseed?.adoptedIndices ?? []);
+  return patches.map((patch, index) => {
+    if (reseedAdopted.has(index)) return 'reseed:ok';
     const stage = patch.exit === 'ok' || !patch.exitRound
       ? patch.exit : `${patch.exitRound}:${patch.exit}`;
     return patch.affineFallback ? `${stage}+affine-fallback:${patch.affineFallback}` : stage;
@@ -302,7 +369,31 @@ function finiteMaximum(values) {
   return finite.length === 0 ? null : Math.max(...finite);
 }
 
-function measurementRow(id, pose, expected, result, trace) {
+function shiftedControlResidual(anchors, index = 4, cells = 2) {
+  if (anchors[index] === null) return null;
+  const shifted = anchors.map((anchor) => (
+    anchor === null ? null : { ...anchor }
+  ));
+  shifted[index].x += cells * shifted[index].cellPitch;
+  return RECTIFY_ANCHOR_INTERNALS.reprojectionResidualForAnchors(shifted);
+}
+
+function assertResidualBelowShiftedControl(result, context) {
+  const shiftedControl = shiftedControlResidual(result.anchors);
+  assert.notEqual(shiftedControl, null, `${context}: 2셀 이동 대조군 residual 객체`);
+  assert.ok(Number.isFinite(shiftedControl.maxCells),
+    `${context}: 2셀 이동 대조군 maxCells`);
+  assert.ok(shiftedControl.maxCells >= 1,
+    `${context}: 2셀 이동 대조군 maxCells ${shiftedControl.maxCells} < 1`);
+  assert.ok(
+    Number.isFinite(result.residual?.maxCells)
+      && result.residual.maxCells < shiftedControl.maxCells,
+    `${context}: 정상 ${result.residual?.maxCells} >= 대조 ${shiftedControl.maxCells}`,
+  );
+  return shiftedControl;
+}
+
+function measurementRow(id, pose, expected, result, trace, msPerCall) {
   const centerResiduals = [];
   const pitchResiduals = [];
   for (let index = 0; index < expected.length; index += 1) {
@@ -319,6 +410,8 @@ function measurementRow(id, pose, expected, result, trace) {
   const maximum = (values) => values.length === 0 ? null : Math.max(...values);
   const rounded = (value) => value === null ? null : Number(value.toFixed(3));
   const geometry = seedGeometryMetrics(expected, trace);
+  const centerRmsPixels = rounded(rms(centerResiduals));
+  const centerMaxPixels = rounded(maximum(centerResiduals));
   return {
     id,
     perspective: pose.perspective,
@@ -326,8 +419,8 @@ function measurementRow(id, pose, expected, result, trace) {
     pitchDegrees: pose.pitchDegrees,
     minCellPixels: rounded(Math.min(...expected.map((anchor) => anchor.cellPitch))),
     detected: result.detectedCount,
-    centerRmsPixels: rounded(rms(centerResiduals)),
-    centerMaxPixels: rounded(maximum(centerResiduals)),
+    centerRmsPixels,
+    centerMaxPixels,
     pitchRmsPixels: rounded(rms(pitchResiduals)),
     pitchMaxPixels: rounded(maximum(pitchResiduals)),
     shapes: trace?.shapeCount ?? 0,
@@ -344,19 +437,27 @@ function measurementRow(id, pose, expected, result, trace) {
     anisotropy: geometry.anisotropy.map(rounded),
     shearMax: rounded(finiteMaximum(geometry.shear)),
     shear: geometry.shear.map(rounded),
+    trueCenterMaxPx: centerMaxPixels,
+    reseeded: result.reseeded,
+    residualMaxCells: rounded(result.residual?.maxCells ?? null),
+    residualRmsCells: rounded(result.residual?.rmsCells ?? null),
+    gate: result.residual?.gate ?? null,
+    msPerCall: rounded(msPerCall),
   };
 }
 
-function normalizeLadderRows(rows, currentRows) {
-  const singularValuesById = new Map(currentRows.map(
-    (row) => [row.id, row.singularValues ?? []],
-  ));
+function normalizeLadderRows(rows) {
   return rows.map((row) => {
     const normalized = { ...row };
     delete normalized.centerResidualsPixels;
     delete normalized.pitchResidualsPixels;
-    normalized.singularValues = singularValuesById.get(row.id)
-      ?? normalized.singularValues ?? [];
+    normalized.singularValues ??= [];
+    normalized.trueCenterMaxPx ??= normalized.centerMaxPixels ?? null;
+    if (!Object.hasOwn(normalized, 'reseeded')) normalized.reseeded = null;
+    if (!Object.hasOwn(normalized, 'residualMaxCells')) normalized.residualMaxCells = null;
+    if (!Object.hasOwn(normalized, 'residualRmsCells')) normalized.residualRmsCells = null;
+    if (!Object.hasOwn(normalized, 'gate')) normalized.gate = null;
+    if (!Object.hasOwn(normalized, 'msPerCall')) normalized.msPerCall = null;
     return normalized;
   });
 }
@@ -375,12 +476,13 @@ function writeLadder(rows) {
   } catch {
     // 첫 실행에는 원자료 파일이 없다.
   }
-  const phase = rows.some((entry) => entry.gateTrace?.adopted?.patches?.some(
-    (patch) => patch.rounds?.some((round) => round.model !== 'isotropic'),
-  )) ? 'after' : 'before';
+  const phase = process.env.RECTIFY_LADDER_PHASE ?? 'after';
+  if (phase !== 'before' && phase !== 'after') {
+    throw new Error(`RECTIFY_LADDER_PHASE must be before or after, got ${phase}`);
+  }
   artifact[phase] = rows;
-  artifact.before = normalizeLadderRows(artifact.before, rows);
-  artifact.after = normalizeLadderRows(artifact.after, rows);
+  artifact.before = normalizeLadderRows(artifact.before);
+  artifact.after = normalizeLadderRows(artifact.after);
   writeFileSync(path, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
 }
 
@@ -392,7 +494,9 @@ test('정면 960px v0 프레임에서 6개 앵커 중심을 1px 이내로 찾는
     assert.deepEqual(expected.map((anchor) => anchor.id), RECTIFY_ANCHOR_IDS);
 
     const trace = {};
+    const startedAt = performance.now();
     const result = detectRectifyAnchors(frame, CENTRAL_V0_SOURCE_N, { trace });
+    const msPerCall = performance.now() - startedAt;
     assert.equal(
       result.detectedCount,
       6,
@@ -400,6 +504,7 @@ test('정면 960px v0 프레임에서 6개 앵커 중심을 1px 이내로 찾는
     );
     assert.equal(result.reason, null);
     assert.equal(result.anchors.length, 6);
+    assertResidualBelowShiftedControl(result, `tones=${tones}`);
     const residuals = [];
     const rawCenterResiduals = [];
     const rawPitchResiduals = [];
@@ -441,6 +546,7 @@ test('정면 960px v0 프레임에서 6개 앵커 중심을 1px 이내로 찾는
       expected,
       result,
       trace,
+      msPerCall,
     );
     assert.ok(row.minCellPixels > 9);
     baselineLadderRows.push({ ...row, gateTrace: trace });
@@ -480,7 +586,6 @@ test('원근·자세 프레임의 검출 수와 독립 기대좌표 잔차를 �
     },
   ];
   const rows = [];
-  const ladderRows = [];
   for (const pose of poses) {
     const rendered = renderPoseFrame(pose);
     const expected = expectedPoseAnchors(rendered);
@@ -490,20 +595,55 @@ test('원근·자세 프레임의 검출 수와 독립 기대좌표 잔차를 �
       `${pose.id}: 자가 9px 하한 미달 (${minimumPitch.toFixed(3)}px)`,
     );
     const trace = {};
+    const startedAt = performance.now();
     const result = detectRectifyAnchors(
       rendered.frame, CENTRAL_V0_SOURCE_N, { trace },
     );
+    const msPerCall = performance.now() - startedAt;
+    assert.equal(trace.reseed, trace.adopted?.reseed ?? null,
+      `${pose.id}: 최종 후보 reseed trace 별칭`);
     assert.equal(result.anchors.length, RECTIFY_ANCHOR_IDS.length);
     assert.equal(
       result.detectedCount,
       result.anchors.filter((anchor) => anchor !== null).length,
     );
-    const row = measurementRow(pose.id, pose, expected, result, trace);
+    const row = measurementRow(pose.id, pose, expected, result, trace, msPerCall);
     rows.push(row);
-    ladderRows.push({ ...row, gateTrace: trace });
+    poseLadderRows.push({ ...row, gateTrace: trace });
+    if (result.detectedCount >= 4 && result.detectedCount < RECTIFY_ANCHOR_IDS.length) {
+      assert.notEqual(result.residual, null, `${pose.id}: 부분 결과 residual 객체`);
+    }
+    if (pose.id === 'pose-3deg') {
+      const reseed = trace.adopted?.reseed;
+      t.diagnostic(`RESEED_METRIC ${JSON.stringify({
+        attempted: reseed?.attempted ?? false,
+        adoptedIndices: reseed?.adoptedIndices ?? [],
+        patches: reseed?.patches?.map((patch) => ({
+          id: patch.id,
+          predicted: patch.predicted,
+          predictedOffsetCells: patch.predicted && Number.isInteger(patch.index)
+            ? Number((Math.hypot(
+              patch.predicted.x - expected[patch.index].x,
+              patch.predicted.y - expected[patch.index].y,
+            ) / expected[patch.index].cellPitch).toFixed(3))
+            : null,
+          exit: patch.exit,
+          exitRound: patch.exitRound,
+          affineFailure: patch.affineFailure,
+        })) ?? [],
+      })}`);
+    }
+    // 이 행들은 평면 인쇄물이 아닌 3D 큐브 렌더다. 정상 6/6의 fail은 현재 자의
+    // 알려진 비평면 지표이며, 유효성 퇴행으로 오독하지 않도록 방향을 기록한다.
+    if (result.detectedCount === RECTIFY_ANCHOR_IDS.length) {
+      assert.ok(
+        Number.isFinite(result.residual?.maxCells)
+          && result.residual.maxCells > result.residual.thresholdCells,
+        `${pose.id}: 3D residual ${result.residual?.maxCells} <= 문턱 ${result.residual?.thresholdCells}`,
+      );
+    }
     t.diagnostic(`RECTIFY_METRIC ${JSON.stringify(row)}`);
   }
-  writeLadder([...baselineLadderRows, ...ladderRows]);
   const pose2 = rows.find((row) => row.id === 'pose-2deg');
   assert.equal(pose2.detected, RECTIFY_ANCHOR_IDS.length,
     '자세 2도(t=0.1) 6/6 이 퇴행했다');
@@ -526,8 +666,154 @@ test('원근·자세 프레임의 검출 수와 독립 기대좌표 잔차를 �
     '저원근(t=0.1) 6/6 이 퇴행했다');
   assert.ok(lowPerspective.centerMaxPixels <= 1,
     `저원근(t=0.1) 중심 잔차 max ${lowPerspective.centerMaxPixels}px > 1px`);
+  const pose3 = rows.find((row) => row.id === 'pose-3deg');
+  assert.equal(typeof pose3.reseeded, 'boolean');
   assert.ok(new Set(rows.map((row) => row.minCellPixels)).size > 1,
     '왜곡 자가 한 값으로 몰렸다');
+});
+
+test('평면 인쇄물 카메라 기울기에서 잔차가 2셀 이동 대조군보다 작다', (t) => {
+  assert.equal(baselinePassed, true);
+  const { frame, scene, offsetX, offsetY } = renderFrontFrame(3);
+  const frontExpected = expectedFrontAnchors(scene, offsetX, offsetY);
+  const cases = [
+    { axis: 'horizontal', degrees: 10, distanceRatio: 4 },
+    { axis: 'horizontal', degrees: 20, distanceRatio: 4 },
+    { axis: 'diagonal', degrees: 20, distanceRatio: 4 },
+  ];
+  for (const tilt of cases) {
+    const id = `planar-tilt-${tilt.axis}-${tilt.degrees}deg-dr${tilt.distanceRatio}`;
+    const tilted = cameraTiltImage(frame, tilt.degrees, {
+      axis: tilt.axis,
+      distanceRatio: tilt.distanceRatio,
+    });
+    const expected = tiltedExpected(
+      frontExpected,
+      tiltForward(frame, tilt.degrees, tilt.axis, tilt.distanceRatio),
+    );
+    const trace = {};
+    const startedAt = performance.now();
+    const result = detectRectifyAnchors(
+      tilted, CENTRAL_V0_SOURCE_N, { trace },
+    );
+    const msPerCall = performance.now() - startedAt;
+    assert.equal(result.detectedCount, RECTIFY_ANCHOR_IDS.length, `${id}: 검출 6/6`);
+    const shiftedControl = assertResidualBelowShiftedControl(result, id);
+    const row = {
+      ...measurementRow(
+        id,
+        { perspective: 0, yawDegrees: 0, pitchDegrees: 0 },
+        expected,
+        result,
+        trace,
+        msPerCall,
+      ),
+      tiltAxis: tilt.axis,
+      tiltDegrees: tilt.degrees,
+      distanceRatio: tilt.distanceRatio,
+      control2cellMaxCells: Number(shiftedControl.maxCells.toFixed(3)),
+      control2cellGate: shiftedControl.gate,
+    };
+    planarLadderRows.push({ ...row, gateTrace: trace });
+    // 평면 기울기의 중심 max <= 1.5 px는 값 잠금 없이 사다리에만 기록한다.
+    t.diagnostic(`RECTIFY_PLANAR_METRIC ${JSON.stringify(row)}`);
+  }
+});
+
+test('정면 PPU 17 잡음 사다리에서 잔차와 참 중심 오차를 함께 잰다', (t) => {
+  assert.equal(baselinePassed, true);
+  const { frame, scene, offsetX, offsetY } = renderFrontFrame(3);
+  const expected = expectedFrontAnchors(scene, offsetX, offsetY);
+  const noiseRows = [];
+  for (const sigma of [4, 8, 12, 16, 24]) {
+    const noisyFrame = addGaussianNoise(frame, sigma, { seed: 0x41505249 + sigma });
+    const trace = {};
+    const startedAt = performance.now();
+    const result = detectRectifyAnchors(
+      noisyFrame, CENTRAL_V0_SOURCE_N, { trace },
+    );
+    const msPerCall = performance.now() - startedAt;
+    assert.equal(result.detectedCount, RECTIFY_ANCHOR_IDS.length,
+      `가우시안 sigma=${sigma}: 6/6 퇴행`);
+    assert.notEqual(result.residual, null, `가우시안 sigma=${sigma}: residual 객체`);
+    assert.ok(Number.isFinite(result.residual.maxCells));
+    assert.ok(Number.isFinite(result.residual.rmsCells));
+    assertResidualBelowShiftedControl(result, `가우시안 sigma=${sigma}`);
+    const row = {
+      ...measurementRow(
+        `noise-sigma-${sigma}`,
+        { perspective: 0, yawDegrees: 0, pitchDegrees: 0 },
+        expected,
+        result,
+        trace,
+        msPerCall,
+      ),
+      noiseSigma: sigma,
+    };
+    noiseRows.push({ ...row, gateTrace: trace });
+    t.diagnostic(`RECTIFY_NOISE_METRIC ${JSON.stringify(row)}`);
+  }
+  writeLadder([
+    ...baselineLadderRows,
+    ...poseLadderRows,
+    ...noiseRows,
+    ...planarLadderRows,
+  ]);
+});
+
+test('잔차 자는 2셀 대조군과 4·5개 부분 결과의 식별 한계를 기록한다', (t) => {
+  const { frame } = renderFrontFrame(3);
+  const detected = detectRectifyAnchors(frame, CENTRAL_V0_SOURCE_N);
+  assert.equal(detected.detectedCount, RECTIFY_ANCHOR_IDS.length);
+
+  const fiveAnchors = detected.anchors.slice();
+  fiveAnchors[5] = null;
+  const fiveResidual = RECTIFY_ANCHOR_INTERNALS
+    .reprojectionResidualForAnchors(fiveAnchors);
+  assert.notEqual(fiveResidual, null);
+  assert.equal(fiveResidual.perAnchorCells.filter(Number.isFinite).length, 5);
+  assert.ok(Number.isFinite(fiveResidual.maxCells));
+  assert.ok(Number.isFinite(fiveResidual.rmsCells));
+  assert.ok(Number.isFinite(fiveResidual.perFace.T));
+  assert.ok(Number.isFinite(fiveResidual.perFace.L));
+  assert.equal(fiveResidual.perFace.R, null);
+
+  const fourAnchors = fiveAnchors.slice();
+  fourAnchors[4] = null;
+  const fourResidual = RECTIFY_ANCHOR_INTERNALS
+    .reprojectionResidualForAnchors(fourAnchors);
+  assert.notEqual(fourResidual, null);
+  assert.deepEqual(fourResidual.perAnchorCells, Array(RECTIFY_ANCHOR_IDS.length).fill(null));
+  assert.equal(fourResidual.maxCells, null);
+  assert.equal(fourResidual.rmsCells, null);
+  assert.deepEqual(fourResidual.perFace, { T: null, L: null, R: null });
+  assert.equal(fourResidual.gate, null);
+
+  const threeAnchors = fourAnchors.slice();
+  threeAnchors[3] = null;
+  assert.equal(
+    RECTIFY_ANCHOR_INTERNALS.reprojectionResidualForAnchors(threeAnchors),
+    null,
+  );
+
+  const shiftedResidual = shiftedControlResidual(detected.anchors);
+  assert.notEqual(shiftedResidual, null);
+  assert.equal(shiftedResidual.gate, 'fail');
+  assert.ok(shiftedResidual.maxCells >= 1);
+  const positiveMaxCells = finiteMaximum(
+    [...baselineLadderRows, ...poseLadderRows]
+      .filter((row) => row.detected === RECTIFY_ANCHOR_IDS.length)
+      .map((row) => row.residualMaxCells),
+  );
+  t.diagnostic(`RECTIFY_CONTROL ${JSON.stringify({
+    shiftedAnchor: RECTIFY_ANCHOR_IDS[4],
+    shiftCells: 2,
+    residualMaxCells: Number(shiftedResidual.maxCells.toFixed(3)),
+    residualRmsCells: Number(shiftedResidual.rmsCells.toFixed(3)),
+    gate: shiftedResidual.gate,
+    thresholdCells: shiftedResidual.thresholdCells,
+    currentPositiveMaxCells: positiveMaxCells,
+  })}`);
 });
 
 test('같은 n의 다른 레이아웃은 v0 앵커로 오인하지 않는다', () => {
@@ -536,6 +822,8 @@ test('같은 n의 다른 레이아웃은 v0 앵커로 오인하지 않는다', (
   );
   assert.equal(result.detectedCount, 0);
   assert.equal(result.reason, 'not-found');
+  assert.equal(result.reseeded, false);
+  assert.equal(result.residual, null);
   assert.deepEqual(result.anchors, Array(RECTIFY_ANCHOR_IDS.length).fill(null));
 });
 
@@ -551,6 +839,8 @@ test('잘못된 입력과 지원하지 않는 n은 던지지 않고 null 슬롯�
     assert.doesNotThrow(() => { result = detectRectifyAnchors(frame, n); });
     assert.equal(result.reason, reason);
     assert.equal(result.detectedCount, 0);
+    assert.equal(result.reseeded, false);
+    assert.equal(result.residual, null);
     assert.deepEqual(result.anchors, Array(RECTIFY_ANCHOR_IDS.length).fill(null));
   }
 });

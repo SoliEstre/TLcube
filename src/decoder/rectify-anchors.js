@@ -16,7 +16,16 @@
  *     rank 게이트를 다시 잰다. 게이트·정족수·scale 범위는 편입 시점 그대로다.
  *   - PPU 17 에서 정면 2/3톤 · 원근 t=0.1 · 자세 ±2°(t=0.1, t=0) · 원근 t=0.2 는 6/6 이며
  *     잠근 중심 상한 안이다. 같은 기하를 다른 PPU 로 그리면 점이 흔들린다: t=0.2@PPU22 5/6
- *     (중심 max 1.76 px), ±2°@PPU20 4/6, ±1° 5/6, ±3° 5/6(outer-L 시드 1.4셀 밖), ±5° 0/6.
+ *     (중심 max 1.76 px), ±2°@PPU20 5/6(A′ 전 4/6), ±1° 5/6, ±3° 5/6, ±5° 0/6.
+ *   - 전역 H LOO 잔차는 평면 인쇄물(카메라 기울기 2~30° · 거리비 4/8 · σ≤24)에서
+ *     정상 6/6 max 0.66셀과 2셀 이동 대조군 ≥2.5셀을 가른다. 3D 큐브 렌더(t≥0.1 또는
+ *     자세 ≥2°)에서는 정상 6/6이 6.8~25셀(in-sample 비평면성 ≤0.33셀 — LOO 외삽이
+ *     35~70× 증폭)이므로 유효성 게이트가 아니고 «비평면 표적» 지표다. 검출 정확히 4개면
+ *     값은 null이고, 3개 이하면 residual 자체가 null이다.
+ *   - A′ 는 후보마다 최초 4~5개 검출 앵커로 전역 H를 한 번 재적합해 null 슬롯만 같은 refine 경로로
+ *     재시도하고 그 결과를 후보 순위에 반영한다. 전역 H라 큐브에서는 중앙 앵커 보간만 살리며
+ *     outer 외삽(pose-3/5deg 실패형)은 구조적으로 못 살린다(재예측 5.074셀 + 피치 모델
+ *     1.35× 오염).
  *   - 정면 셀 크기 구멍 (AFF 후 재측정): 3톤 19.5 px(PPU 21) 는 **여전히 0/6** (boundary
  *     정족수). 2톤 11.2·12.1 px 5/6→6/6, 3톤 22.3 px 4/6→6/6(중심 max 2.09→1.46 px) 는 좋아졌고,
  *     2톤 22.3 px 중심 max 0.55→1.42 px · 24.2 px 1.26→1.54 px · 3톤 12.1 px 0.52→1.09 px 는
@@ -61,6 +70,10 @@ const PATCH_SAMPLE_FRACTIONS = Object.freeze(
 const PATCH_EDGE_FRACTIONS = Object.freeze([0.2, 0.4, 0.6, 0.8]);
 const PIXEL_CENTER_OFFSET = 0.5;
 const EPSILON = 1e-12;
+// 평면 인쇄물의 정상 max 0.663셀과 2셀 이동 대조군 min 2.499셀 사이,
+// 즉 사다리 간격 [0.663, 2.499] 안쪽에 둔 문턱이다.
+// 추정 — PPU 17·3톤·단일축 기울기만 잰 값이다.
+const REPROJECTION_RESIDUAL_THRESHOLD_CELLS = 1.0;
 
 export const RECTIFY_ANCHOR_IDS = Object.freeze([
   'central-T', 'central-L', 'central-R',
@@ -74,6 +87,8 @@ function emptyResult(n, reason) {
     anchors: RECTIFY_ANCHOR_IDS.map(() => null),
     detectedCount: 0,
     reason,
+    reseeded: false,
+    residual: null,
   };
 }
 
@@ -1364,6 +1379,70 @@ function homographyForShape(shape, n) {
   return estimateHomographyN(canonical, shape.vertices);
 }
 
+function homographyForAnchors(patches, anchors, excludedIndex = -1) {
+  const canonical = [];
+  const image = [];
+  for (let index = 0; index < patches.length; index += 1) {
+    if (index === excludedIndex || anchors[index] === null) continue;
+    const anchor = anchors[index];
+    if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) continue;
+    canonical.push(patches[index].anchor);
+    image.push({
+      x: anchor.x - PIXEL_CENTER_OFFSET,
+      y: anchor.y - PIXEL_CENTER_OFFSET,
+    });
+  }
+  return canonical.length < 4 ? null : estimateHomographyN(canonical, image);
+}
+
+function reprojectionResidual(patches, anchors) {
+  const detectedCount = anchors.filter((anchor) => anchor !== null).length;
+  if (detectedCount < 4) return null;
+
+  const perAnchorCells = RECTIFY_ANCHOR_IDS.map(() => null);
+  // Projective H는 4점이 최소다. 검출 4개에서 하나를 빼면 3점뿐이므로
+  // strict LOO는 식별 불가능하다. 객체는 유지하되 수치와 gate를 null로 둔다.
+  if (detectedCount >= 5) {
+    for (let index = 0; index < patches.length; index += 1) {
+      const anchor = anchors[index];
+      if (anchor === null || !(anchor.cellPitch > 0)) continue;
+      const H = homographyForAnchors(patches, anchors, index);
+      if (H === null) continue;
+      const predicted = projectPoint(H, patches[index].anchor);
+      if (predicted === null) continue;
+      const residualPixels = Math.hypot(
+        predicted.x + PIXEL_CENTER_OFFSET - anchor.x,
+        predicted.y + PIXEL_CENTER_OFFSET - anchor.y,
+      );
+      const residualCells = residualPixels / anchor.cellPitch;
+      if (Number.isFinite(residualCells)) perAnchorCells[index] = residualCells;
+    }
+  }
+
+  const finite = perAnchorCells.filter(Number.isFinite);
+  const complete = finite.length === detectedCount;
+  const maxCells = !complete ? null : Math.max(...finite);
+  const rmsCells = !complete ? null : Math.sqrt(
+    finite.reduce((sum, value) => sum + value * value, 0) / finite.length,
+  );
+  const perFace = Object.fromEntries(FACES.map((face, faceIndex) => {
+    const central = perAnchorCells[faceIndex];
+    const outer = perAnchorCells[faceIndex + FACES.length];
+    if (!Number.isFinite(central) || !Number.isFinite(outer)) return [face, null];
+    const sum = central + outer;
+    return [face, sum <= EPSILON ? 0 : Math.abs(central - outer) / sum];
+  }));
+  return {
+    perAnchorCells,
+    maxCells,
+    rmsCells,
+    perFace,
+    gate: maxCells === null ? null
+      : maxCells <= REPROJECTION_RESIDUAL_THRESHOLD_CELLS ? 'pass' : 'fail',
+    thresholdCells: REPROJECTION_RESIDUAL_THRESHOLD_CELLS,
+  };
+}
+
 function resultForShape(luma, shape, n, patches, trace) {
   const H = homographyForShape(shape, n);
   if (H === null) return null;
@@ -1375,7 +1454,55 @@ function resultForShape(luma, shape, n, patches, trace) {
   const anchors = patches.map((patch, index) => refinePatch(
     luma, H, patch, trace?.patches[index],
   ));
+  const initialDetectedCount = anchors.filter((anchor) => anchor !== null).length;
+  let reseeded = false;
+  if (trace) {
+    trace.reseed = {
+      attempted: false,
+      sourceDetectedCount: initialDetectedCount,
+      sourceIndices: anchors.flatMap((anchor, index) => anchor === null ? [] : [index]),
+      missingIndices: anchors.flatMap((anchor, index) => anchor === null ? [index] : []),
+      H: null,
+      patches: [],
+      adoptedIndices: [],
+      detectedAfter: initialDetectedCount,
+      reason: initialDetectedCount < 4 ? 'insufficient-anchors'
+        : initialDetectedCount === patches.length ? 'not-needed' : 'not-attempted',
+    };
+  }
+  if (initialDetectedCount >= 4 && initialDetectedCount < patches.length) {
+    const reseedH = homographyForAnchors(patches, anchors);
+    if (trace) {
+      trace.reseed.attempted = true;
+      trace.reseed.H = reseedH === null ? null : Array.from(reseedH);
+      trace.reseed.reason = reseedH === null ? 'homography-null' : 'no-adoption';
+    }
+    if (reseedH !== null) {
+      for (let index = 0; index < patches.length; index += 1) {
+        if (anchors[index] !== null) continue;
+        const patchTrace = trace ? { id: patches[index].id } : null;
+        const predicted = projectPoint(reseedH, patches[index].anchor);
+        if (patchTrace) {
+          patchTrace.index = index;
+          patchTrace.predicted = predicted === null ? null : {
+            x: predicted.x + PIXEL_CENTER_OFFSET,
+            y: predicted.y + PIXEL_CENTER_OFFSET,
+          };
+          trace.reseed.patches.push(patchTrace);
+        }
+        const anchor = refinePatch(luma, reseedH, patches[index], patchTrace);
+        if (anchor === null) continue;
+        anchors[index] = anchor;
+        reseeded = true;
+        if (trace) trace.reseed.adoptedIndices.push(index);
+      }
+    }
+  }
   const detectedCount = anchors.filter((anchor) => anchor !== null).length;
+  if (trace) {
+    trace.reseed.detectedAfter = detectedCount;
+    if (reseeded) trace.reseed.reason = 'adopted';
+  }
   const correlationSum = anchors.reduce(
     (sum, anchor) => sum + (anchor === null ? 0 : anchor.correlation),
     0,
@@ -1383,11 +1510,13 @@ function resultForShape(luma, shape, n, patches, trace) {
   const result = {
     anchors,
     detectedCount,
+    reseeded,
     correlationSum,
     shapeScore: Number.isFinite(shape.score) ? shape.score : -Infinity,
   };
   if (trace) {
     trace.detectedCount = detectedCount;
+    trace.reseeded = reseeded;
     trace.correlationSum = correlationSum;
     result.trace = trace;
   }
@@ -1400,8 +1529,13 @@ function resultForShape(luma, shape, n, patches, trace) {
  * @param {{trace?:object}} [options] trace는 반환 계약 밖의 선택 진단 sink다.
  * @description 반환 x/y는 입력 raster의 경계 좌표계다. 배열 인덱스 k의 픽셀 중심은 k+0.5다.
  * 성공 앵커의 localAffine은 H의 이미지 상대벡터에 곱하는 row-major 2x2 행렬이다.
+ * residual.gate는 진단 전용이다. 3D 큐브 정상 6/6에서도 fail로 돌아오므로 유효성 판정에
+ * 쓰지 말 것.
  * @returns {{n:number|null,layoutId:string,anchors:(object|null)[],detectedCount:number,
- *            reason:null|'invalid-input'|'unsupported-n'|'invalid-canonical'|'not-found'|'partial'}}
+ *            reason:null|'invalid-input'|'unsupported-n'|'invalid-canonical'|'not-found'|'partial',
+ *            reseeded:boolean,residual:null|{perAnchorCells:(number|null)[],maxCells:number|null,
+ *            rmsCells:number|null,perFace:{T:number|null,L:number|null,R:number|null},
+ *            gate:'pass'|'fail'|null,thresholdCells:number}}}
  */
 export function detectRectifyAnchors(frame, n, options) {
   try {
@@ -1413,6 +1547,8 @@ export function detectRectifyAnchors(frame, n, options) {
         shapes: [],
         candidates: [],
         adopted: null,
+        reseed: null,
+        residual: null,
         resultReason: null,
       });
     }
@@ -1456,6 +1592,7 @@ export function detectRectifyAnchors(frame, n, options) {
       }
     }
     if (trace) trace.adopted = best?.trace || null;
+    if (trace) trace.reseed = best?.trace?.reseed || null;
     if (best === null || best.detectedCount < MIN_DETECTED_ANCHORS) {
       if (trace) trace.resultReason = 'not-found';
       return emptyResult(n, 'not-found');
@@ -1464,16 +1601,34 @@ export function detectRectifyAnchors(frame, n, options) {
       trace.resultReason = best.detectedCount === RECTIFY_ANCHOR_IDS.length
         ? null : 'partial';
     }
+    const residual = reprojectionResidual(patches, best.anchors);
+    if (trace) {
+      trace.residual = residual;
+      if (best.trace) best.trace.residual = residual;
+    }
     return {
       n,
       layoutId: CELL_SURFACE_FINAL_V0,
       anchors: best.anchors,
       detectedCount: best.detectedCount,
       reason: best.detectedCount === RECTIFY_ANCHOR_IDS.length ? null : 'partial',
+      reseeded: best.reseeded,
+      residual,
     };
   } catch {
     return emptyResult(n, 'invalid-input');
   }
 }
+
+// 합성 대조군이 검출기의 픽셀 탐색과 섞이지 않고 잔차 자 자체를 검증하도록
+// 좁은 테스트 표면만 공개한다. 프로덕션 소비 계약은 detectRectifyAnchors다.
+export const RECTIFY_ANCHOR_INTERNALS = Object.freeze({
+  reprojectionResidualForAnchors(anchors) {
+    const patches = canonicalPatches();
+    if (patches === null || !Array.isArray(anchors)
+      || anchors.length !== patches.length) return null;
+    return reprojectionResidual(patches, anchors);
+  },
+});
 
 export default detectRectifyAnchors;
