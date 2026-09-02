@@ -249,8 +249,17 @@ if (!isMainThread) {
     rows.push({ file, name: f, label, mult: Number(label), photo, code });
     process.stderr.write(`  ${label.padStart(5)}  code ${code.w}x${code.h} @(${code.cx},${code.cy})\n`);
   }
-  const geomSame = rows.every((r) => r.code.w === rows[0].code.w && r.code.cx === rows[0].code.cx && r.code.cy === rows[0].code.cy);
-  process.stderr.write(`[ladder] 코드 기하 ${geomSame ? '전 장 동일 — 통제 실험 성립' : '🔴 장마다 다름 — 통제 실패, 결과를 두께 탓으로 읽지 마라'}\n`);
+  /*
+   * 통제 확인 — 사다리 안에서 코드가 같은 크기·같은 자리여야 «판만 바뀐» 실험이다.
+   * ⚠ 엄격한 동일 비교는 **너무 빡빡했다** (2026-09-02 A1 실측): 판이 없으면 코드 가장자리가
+   *   사진에 직접 닿아 톤 판별자가 한 열을 더 잡아 787 vs 785 px 가 나온다. 0.25% 차이를
+   *   «통제 실패» 로 찍으면 진짜 실패(운영자가 사다리 중간에 확대/이동한 경우)와 구분이 안 된다.
+   *   그래서 **폭 1% · 중심 4px** 를 허용하고, 실제 흔들림 폭을 항상 같이 찍는다.
+   */
+  const wSpread = Math.max(...rows.map((r) => r.code.w)) - Math.min(...rows.map((r) => r.code.w));
+  const cSpread = Math.max(...rows.map((r) => Math.abs(r.code.cx - rows[0].code.cx) + Math.abs(r.code.cy - rows[0].code.cy)));
+  const geomSame = wSpread <= rows[0].code.w * 0.01 && cSpread <= 4;
+  process.stderr.write(`[ladder] 코드 기하 흔들림: 폭 ${wSpread}px · 중심 ${cSpread}px → ${geomSame ? '통제 실험 성립' : '🔴 통제 실패 — 결과를 두께 탓으로 읽지 마라'}\n`);
 
   const occs = [];
   for (let o = lo; o <= hi + 1e-9; o += step) occs.push(o);
@@ -294,7 +303,7 @@ if (!isMainThread) {
   say(`# 안전영역 사다리 — ${prefix}`);
   say('');
   say(`점유율 ${lo}\\~${hi} step ${step} (${occs.length}점 중 유효 ${validIdx.length}점) · 기대 원문 ${expect ? `\`${expect}\`` : '(미지정 — raw ok)'}`);
-  say(`코드 기하: ${rows[0].code.w}×${rows[0].code.h} @(${rows[0].code.cx},${rows[0].code.cy}) · ${geomSame ? '전 장 동일' : '🔴 장마다 다름'}`);
+  say(`코드 기하: ${rows[0].code.w}×${rows[0].code.h} @(${rows[0].code.cx},${rows[0].code.cy}) · 흔들림 폭 ${wSpread}px·중심 ${cSpread}px → ${geomSame ? "통제 성립" : "🔴 통제 실패"}`);
   const anyLow = summary.some((s) => s.medianCellPx !== null && s.medianCellPx < CELL_PX_FLOOR);
   say(`셀 px 중앙값 ${summary[0].medianCellPx ?? '—'}${anyLow ? ' 🔴 일부 칸이 9px 하한 아래 — 해상도 실험이 섞였다' : ` (9px 하한 위 — 배경 축 실험이 맞다)`}`);
   say('');
