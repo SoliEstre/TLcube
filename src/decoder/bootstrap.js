@@ -3704,7 +3704,24 @@ function enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile)
       });
   }
 
-  if (!finderResult.ok && !cubeResult.ok && !qrResult.ok) {
+  /*
+   * central-n7은 일반 finder/cube/QR과 독립된 coded locator다. 종전에는 세 경로가
+   * 모두 실패하면 아래에서 즉시 NO_FINDER를 반환해, assemble 단계에 이미 마련된
+   * central-n7 입구까지 도달하지 못했다. 어두운 지면 + ember/mono + 큰 ss1 셀이
+   * 대표 표본이고(2026-09-02 재현기 72칸 중 14칸), slate + 흰 배경 + ppu 12/16 도
+   * 같은 경로에서 죽었다 — «어두운 지면 전용» 수리가 아니다. codeword까지 검증한
+   * finder만 조기 반환을 열며, 결과는 아래 beacon 조립에서 재탐색하지 않고 그대로
+   * 소비한다. 비용은 세 경로가 전멸한 프레임에서만 discoverCentralN7Finders 1회
+   * (프레임 기존 비용과 같은 자릿수 — searchMaxSide 1920 이라 1440 승격 프레임이 가장
+   * 비싸다). 실사진 정지 코퍼스는 QR 프로브가 양성이라 이 분기에 도달하지 않았고,
+   * 실사진 n7 실패는 다른 경로(bootstrap-validation)다. 수치는 PM/028 §5.2 참조.
+   */
+  const isolatedCentralN7Finders = !finderResult.ok && !cubeResult.ok && !qrResult.ok
+    ? discoverCentralN7Finders(luma, options)
+    : [];
+
+  if (!finderResult.ok && !cubeResult.ok && !qrResult.ok
+    && isolatedCentralN7Finders.length === 0) {
     const finderSawCandidates = finderResult.detail
       && Number.isFinite(finderResult.detail.evaluatedRaw)
       && finderResult.detail.evaluatedRaw > 0
@@ -3783,6 +3800,7 @@ function enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile)
         shouldProbeQr,
         classified,
         finders,
+        isolatedCentralN7Finders,
         profile,
       ));
   }
@@ -3798,6 +3816,7 @@ function enumerateGeometryHypothesesImpl(luma, familyEvidence, options, profile)
     shouldProbeQr,
     classified,
     finders,
+    isolatedCentralN7Finders,
     null,
   );
 }
@@ -3814,6 +3833,7 @@ function assembleGeometryHypotheses(
   shouldProbeQr,
   classified,
   finders,
+  isolatedCentralN7Finders,
   profile,
 ) {
   const assemblyCall = hypothesisAssemblyCallProfile(
@@ -4077,9 +4097,11 @@ function assembleGeometryHypotheses(
         profile,
         assemblyCall,
         'beaconDiscoveryMs',
-        () => beaconEligible
-          ? discoverCentralBeaconFinders(luma, options)
-          : discoverCentralN7Finders(luma, options),
+        () => isolatedCentralN7Finders.length > 0
+          ? isolatedCentralN7Finders
+          : beaconEligible
+            ? discoverCentralBeaconFinders(luma, options)
+            : discoverCentralN7Finders(luma, options),
       );
       addHypothesisAssemblyCounter(assemblyCall, 'beaconFinderCount', beaconFinders.length);
       for (const finder of beaconFinders) {
@@ -4285,8 +4307,13 @@ function assembleGeometryHypotheses(
     return ok({
       hypotheses: unique,
       diagnostics: {
-        finderSource: finderResult.ok ? finderResult.source : 'none-cube-positive',
+        finderSource: finderResult.ok
+          ? finderResult.source
+          : isolatedCentralN7Finders.length > 0
+            ? 'central-n7-isolated-fallback'
+            : 'none-cube-positive',
         finderCount: finders.length,
+        centralN7FallbackCount: isolatedCentralN7Finders.length,
         finderFailure: finderResult.ok ? undefined : finderResult,
         // 무시드 재시도 조건 (frontend) — 성공 기하가 시드 정권 위에서 섰는지.
         // 검증 단계 실패(NO_FORMAT_CANDIDATE)로 접혀도 이 플래그가 승계돼야
@@ -5859,6 +5886,9 @@ export function enumerateGridHypotheses(luma, familyEvidence, options = {}) {
      *   · 정상 프레임 비용·판정 불변 — 검증이 성공하면 여기 안 온다.
      *   · 게이트 완화 아님 — 수용 게이트는 같은 validateGridHypotheses 그대로다.
      *   · 실패 → 성공 소생만 가능한 안전망이다 (retryCubeAlternatives 와 같은 문법).
+     *   · finderSource 가 'central-n7-isolated-fallback'(세 경로 전멸 + n7 선행 발견) 인
+     *     프레임은 의도적으로 제외한다 — cube 실패 프레임이라 alwaysCompareFinders 재열거는
+     *     같은 열거의 반복(+ 선행 n7 탐색 1회)일 뿐이다. 라벨이 제어 신호임에 유의.
      */
     const retryFinderComparison = options._finderComparisonRetry !== false
       && options.alwaysCompareFinders !== true
