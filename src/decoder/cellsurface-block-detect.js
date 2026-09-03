@@ -79,6 +79,28 @@ import { estimateHomography4, projectPoint } from './homography.js';
 import { downsampleLumaForSeed, otsuThreshold } from './finder-seed.js';
 
 export const UNVERIFIED_CS_BLOCK_LOCATOR = Object.freeze({
+  // 🔴 중앙 창 **기본 선언** (2026-09-04). 아래 `inCentreWindow` 의 계약을 기본값으로
+  // 올린다 — 「찾는 블록은 프레임 중앙에 있다」.
+  //
+  // 왜: 화면 촬영 프레임의 **모서리 QR 코드가 v0 불스아이 점수를 1.000 으로 포화**시켜
+  // `centres.slice(0, 3)` 예산을 점거하고, 진짜 Type Y 중앙(0.81~0.94)이 컷에서 잘린다.
+  // 이 상수를 안 걸면 그 코드는 **검출 자체가 안 된다**.
+  //
+  // 실측 (Y 계열 영상 4편, `decodeFrontend` 단발):
+  //   y0  0/108 → **12/12**   y1 89/111 → 13/13   y2 42/110 → 10/13
+  //   y2-p9rot 0 → 0 (별개 병 — QR 도 체커 배경도 없다)
+  // 무회귀 (실사진 673장 A/B): ok 204/673 → 204/673 ·
+  //   **죽음 0 · 소생 0 · 원문 플립 0 · 패밀리 플립 0**. 로케이터 테스트 81/81.
+  //
+  // ⚠ **값의 근거는 성질이 아니라 기하다.** y0 의 QR 이 (90, 81) 이라 960 프레임에서
+  // 경계가 `cw < 0.8125` 이고, 사다리는 1.0·0.95·0.90 에서 y0 이 **전부 0** · 0.75 에서
+  // 108/108 이다. 0.75 는 그 경계 아래 여유값이다. QR 이 더 안쪽인 촬영에서는 안 듣는다.
+  //
+  // ⚠ **못 덮는 축**: 「코드가 프레임 가장자리에 있을 때」. 이 창은 그런 코드를 뺀다.
+  // 로케이터 테스트는 `embed960` 으로 코드를 정중앙에 놓고, 673장 코퍼스도 무플립이라
+  // **그 축을 지나지 않는다** — 즉 「무회귀」는 «그 축이 없다» 는 뜻이지 초록이 아니다.
+  // 끄는 법: 호출자가 `calibration.csBlockLocator.centreWindowFraction` 을 1 로 준다.
+  centreWindowFraction: 0.75,
   searchMaxSide: 480,
   minimumCoreUnitPx: 1.2,
   minimumClusterSupport: 2,
