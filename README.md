@@ -33,7 +33,11 @@ The data contract is only **the order between faces** and a **minimum separation
 
 That freedom is the point of the format.
 
-## Four types
+<!-- Do not put a type COUNT in this heading or the prose below (2026-09-03).
+     It rotted: the heading still read "Four types" over a five-row table after Type C
+     landed. The table is the source of truth for how many types there are, and
+     test/readme-types.test.js fails if the prose asserts a count the table disagrees with. -->
+## Types
 
 | Type | Silhouette | Net payload (ECC-M) |
 |---|---|---|
@@ -43,7 +47,7 @@ That freedom is the point of the format.
 | **Y** | Single isometric cube | 31 / 98 / 141 B (n = 13 / 21 / 25) |
 | **C** | Notched hexagon (Type O family, close-range) | 130 / 172 / 220 / 255 B (k = 14 / 16 / 18 / 20) |
 
-All four share the same data contract and differ only in silhouette. Each can carry a
+All types share the same data contract and differ only in silhouette. Each can carry a
 **fallback QR** printed alongside, so a reader that cannot decode the TL code still has a path.
 
 **K** is a triangle unioned with its 180-degree image. At the same k it holds more cells

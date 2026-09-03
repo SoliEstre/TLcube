@@ -53,6 +53,20 @@ test('언어 디렉터리의 자산 경로가 한 단계 올라간다', () => {
   }
 });
 
+// `statusLead`·`rowCenterQr` 의 «네 타입 / all four / les quatre / …» 는 **개수 표기가
+// 아니라 측정 범위**다 — 포맷 타입 총수는 `typesTitle` 의 «타입 5종» 이고, 둘이 다른 건
+// `measuredOn`(2026-08-27) 코퍼스가 타입 C 신설(2026-08-30)보다 앞서기 때문이다.
+// 그래서 이 자는 «4» 를 «5» 로 고치라고 하지 않는다. 대신 **재는 대상이 늘어나는 순간**
+// 실패해서 여덟 언어 문구를 함께 손보게 만든다 (숫자 철자를 훑지 않으므로 표현이
+// 바뀌어도 안 썩는다 — 잠그는 건 개수라는 «양» 이다).
+test('현황표가 재는 타입 수가 바뀌면 여덟 언어 «네 타입» 문구를 다시 보게 한다', () => {
+  assert.equal(Object.keys(stats.types).length, 4,
+    'stats.types 가 재는 타입 수가 바뀌었다 — 여덟 언어의 statusLead·rowCenterQr 에 박힌'
+    + ' «네 타입 / all four / 4 タイプ / les quatre / tutti e quattro / alle vier /'
+    + ' los cuatro / os quatro» 를 새 개수로 고치거나, 그 문구가 여전히 «측정 범위»로'
+    + ' 맞는지 확인하라 (tools/hub-content.mjs stats 주석)');
+});
+
 test('타입 C 초대용량·노치·근접 스캔 카피가 여덟 언어 산출물에 실린다', () => {
   for (const lang of languages) {
     const html = read(lang);
