@@ -36,6 +36,31 @@ export const GRID_LOCK_GATE_F = 10;
 export const GRID_LOCK_PEAK_F = 100;
 
 /**
+ * 로케이터에 선언하는 **중앙 창**. R2 는 라이브 스캐너이고 화면이 「코드를 프레임 안에
+ * 맞춰 주세요」를 이미 요구하므로, 「찾는 블록이 중앙에 있다」는 계약을 선언할 수 있다.
+ * 로케이터는 이 창 밖의 v0-center 후보를 **상위 컷을 다투기 전에** 뺀다
+ * (`cellsurface-block-detect.js` 의 `inCentreWindow`). 미선언이면 그 필터가 항등이다.
+ *
+ * 🔴 **왜 필요한가** (2026-09-03 실측): 화면 촬영 프레임의 **모서리 QR 코드가 v0 불스아이
+ * 점수를 1.000 으로 포화**시켜 `centres.slice(0,3)` 예산을 점거한다. 진짜 Type Y 중앙은
+ * 0.81\~0.94 라 컷에서 잘리고, 그러면 **어댑터에는 큐브 후보가 도착조차 하지 않아**
+ * `pickShape` 의 F 재정렬로도 못 고친다. 실측 (전수 438프레임, 조준 aim ≤ 0.25):
+ *   y0 0/108 → 108/108 (aimError 2.332 → 0.040 · F 14.8 → 597.3)
+ *   y2 45/110 → 97/110 · y1 84/111 → 110/111
+ *
+ * ⚠ **이 값은 성질이 아니라 «그 QR 이 어디 있었나» 로 정해졌다.** 사다리는
+ * 1.0 / 0.95 / 0.90 에서 y0 이 **전부 0** 이고 0.75 에서만 산다 — y0 의 QR 이 (90, 81)
+ * 이라 960 프레임에서 `960·cw/2 < 390`, 즉 **cw < 0.81** 이 경계이기 때문이다.
+ * QR 이 더 안쪽에 있는 촬영에서는 이 창이 안 듣는다. 근본 처방은 **후보 순위가 위치가
+ * 아니라 «그것이 코드인가» 를 재는 것**이고 그건 검출 축의 별도 과업이다 (PM/029B §15).
+ *
+ * ⚠ **못 덮는 축**: 로케이터 테스트는 `embed960` 으로 코드를 정중앙에 놓아
+ * **「코드가 프레임 가장자리에 있을 때」를 구조적으로 시험하지 않는다.** 이 값에서는
+ * 코드 중심이 프레임 중앙 75% 밖이면 R2 가 못 잡는다 (960 기준 x·y ∈ [120, 840]).
+ */
+export const CENTRE_WINDOW_FRACTION = 0.75;
+
+/**
  * relocateEveryFrame=false 에서 F 가 게이트 미만인 프레임이 이 횟수 연속이면
  * 어댑터가 스스로 락을 푼다. 1 은 한 프레임 블러에 락을 버리고, 세션
  * hardDrop 보다 긴 N 은 조준 실수(QR 미끼)에 들러붙는다. 3 ≈ 100ms@30fps.
@@ -269,6 +294,9 @@ function clearAlignOutput(output) {
  * @param {number} [options.n] 알려진 n. 로케이터 n 과 맞을 때 우선.
  * @param {boolean} [options.relocateEveryFrame] 측정용. true 면 매 프레임 로케이터.
  * @param {object} [options.locatorOptions] detectCellSurfaceBlockShapes 로 전달.
+ *   `calibration.csBlockLocator` 를 주면 아래 중앙 창 기본값보다 우선한다.
+ * @param {number|null} [options.centreWindow] 중앙 창 비율. 생략하면
+ *   `CENTRE_WINDOW_FRACTION`, **`null` 이면 선언하지 않는다**(로케이터 항등).
  * @param {number} [options.gateF]
  * @param {number} [options.peakF]
  */
@@ -276,9 +304,35 @@ export function createA3Adapters(options) {
   const opts = options && typeof options === 'object' ? options : {};
   const preferN = Number(opts.n) > 0 ? Number(opts.n) : 0;
   const relocateEveryFrame = opts.relocateEveryFrame === true;
-  const locatorOptions = opts.locatorOptions && typeof opts.locatorOptions === 'object'
+  // 중앙 창을 **기본으로 선언**한다. 호출자가 `locatorOptions.calibration.csBlockLocator`
+  // 로 직접 주면 그쪽이 이긴다 (`centreWindow: null` 로 끌 수도 있다).
+  // ⚠ 중첩이 깊은 데엔 이유가 있다 — 로케이터의 `calibration(options)` 이
+  // `options.calibration.csBlockLocator` 를 읽는다. 한 층 얕게 넣으면 **조용히 무시된다**
+  // (통합자가 이 함정을 한 번 밟아 A/B 두 팔이 비트 동일로 나왔다).
+  const suppliedLocator = opts.locatorOptions && typeof opts.locatorOptions === 'object'
     ? opts.locatorOptions
     : {};
+  const suppliedCalibration = suppliedLocator.calibration && typeof suppliedLocator.calibration === 'object'
+    ? suppliedLocator.calibration
+    : {};
+  const suppliedCsBlock = suppliedCalibration.csBlockLocator
+    && typeof suppliedCalibration.csBlockLocator === 'object'
+    ? suppliedCalibration.csBlockLocator
+    : {};
+  const centreWindow = opts.centreWindow === null ? null
+    : (Number(opts.centreWindow) > 0 && Number(opts.centreWindow) <= 1
+      ? Number(opts.centreWindow)
+      : CENTRE_WINDOW_FRACTION);
+  const locatorOptions = {
+    ...suppliedLocator,
+    calibration: {
+      ...suppliedCalibration,
+      csBlockLocator: {
+        ...(centreWindow === null ? {} : { centreWindowFraction: centreWindow }),
+        ...suppliedCsBlock,
+      },
+    },
+  };
   const gateF = Number(opts.gateF) > 0 ? Number(opts.gateF) : GRID_LOCK_GATE_F;
   const peakF = Number(opts.peakF) > 0 ? Number(opts.peakF) : GRID_LOCK_PEAK_F;
 

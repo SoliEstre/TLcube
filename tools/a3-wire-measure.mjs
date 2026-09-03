@@ -80,9 +80,14 @@ function centerOfH(H) {
 
 function measureSequence(seq) {
   const paths = listFrames(seq.dir);
+  // 중앙 창 손잡이 — 로케이터의 v0-center 후보를 프레임 중앙 창으로 제한한다.
+  // QR 파인더가 v0 불스아이 점수를 포화시켜 centres.slice(0,3) 예산을 점거하는 것에 대한
+  // 소비자측 대응이다 (로케이터 소스 무변경, 미선언이면 항등).
+  const cw = Number(process.env.TL_CENTRE_WINDOW);
   const adapters = createA3Adapters({
     n: seq.n,
     relocateEveryFrame: true,
+    ...(Number.isFinite(cw) && cw > 0 && cw <= 1 ? { locatorOptions: { calibration: { csBlockLocator: { centreWindowFraction: cw } } } } : {}),
   });
   const cellCount = dataCellsInScanOrderCellSurfaceFinal(seq.n, seq.layoutId).length;
   const detection = { found: 0, family: 0 };
