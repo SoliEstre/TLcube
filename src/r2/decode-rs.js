@@ -41,6 +41,7 @@
  * @module r2/decode-rs
  */
 import { byteLengthForSymbolCount, decodeChunkInto } from '../base211.js';
+import { unframe } from '../header.js';
 import { createR2Params } from './params.js';
 import {
   RS_SOFT_STATUS,
@@ -163,6 +164,49 @@ export function createRsDecodeInto(options = undefined) {
       if (payloadBuffer[i] !== 0) { allZero = 0; break; }
     }
     if (allZero === 1 && out.correctedCount > 0) return R2_SESSION_STATUS.OK;
+
+    // ── 프레이밍 검증 (2026-09-03) ──
+    // 🔴 위 «빈 페이로드» 검사가 이 경로의 **유일한** 정합 검사였고, 그래서 **내용 있는
+    // 쓰레기가 확신에 찬 DONE 으로 통과했다.** 실측: 시퀀스 y0(단발 0/108)을 세션에
+    // 구동하니 ecc×tones×mask 18조합 중 2조합이 프레임 6에서 DONE 을 내고 페이로드가
+    // `öÓ§µ…` 였다 (길이 접두 23 + 쓰레기). 사용자에게 «성공» 으로 보인다.
+    //
+    // R1(`decodeFrontend`)에는 이 방어가 **이미 있다** — PM/030 §10 이 잰 대로
+    // 프레이밍 3층(base211·header·utf8)이 margin=0 쓰레기를 전량 막는다
+    // (차단 분포 utf8 1029 · header 417 · base211 513 / 2000). R2 만 그 층이 없었다.
+    //
+    // 그래서 와이어를 바꿀 필요가 없다 — R1 의 `unframe` 을 **그대로 부른다**.
+    // 재구현하면 그 사본이 R1 과 어긋난다. SPEC [H1] 이 「페이로드는 UTF-8 텍스트 고정」
+    // 이라 못박으므로 UTF-8 거부는 규범적으로 옳다.
+    //
+    // ⚠ 비용: `unframe` 은 문자열을 하나 만든다. 이 함수는 **프레임마다 안 돈다**
+    // (이 파일 머리 참조) — 누적이 D=1 에 닿은 뒤 복호를 시도할 때만이다.
+    // ⚠ **계층**: 이 파일 머리(§페이로드 길이)가 「상위 포맷 헤더가 붙으면 그쪽이
+    // 이겨야 한다 — 포맷 계층의 자리다」라고 적는다. 그래서 이 검사는 **기본 꺼짐**이고,
+    // «내 페이로드는 프레임돼 있다» 를 **아는 호출자만** `layout.framed` 로 선언한다.
+    // (`layout.payloadBytes` 를 다루는 방식과 같다.) 선언 안 하면 이 함수는 종전대로
+    // 원시 바이트 in/out 이라 `test/r2-decode-rs.test.js` 의 계약이 그대로 산다.
+    // **유도한다 — 손 선언을 남기지 않는다.** `maskDigits` 가 있다는 것은 호출자가
+    // 이 코드의 레이아웃을 안다는 뜻이고, 실물 Y 코드는 인코더가 `frame(text, dataBytes)`
+    // 한 뒤 RS 를 씌우므로(`src/encodeY.js:251,365,470`) 페이로드가 **항상 프레임돼 있다.**
+    // 반면 RS 계층만 재는 단위 테스트는 `maskDigits` 없이 원시 바이트를 넣는다.
+    // 그래서 그 존재가 곧 「프레임돼 있나」의 답이다 — 배선이 플래그를 잊을 수 없다.
+    // 명시 선언이 언제나 이긴다 (`false` 로 끌 수 있다).
+    const framed = layout?.framed === true
+      || (layout?.framed !== false && layout?.maskDigits !== undefined);
+    if (!framed) {
+      output.accepted = 1;
+      output.payloadLength = capped;
+      output.tResidual = out.tResidual;
+      return R2_SESSION_STATUS.OK;
+    }
+    try {
+      unframe(payloadBuffer.subarray(0, capped));
+    } catch {
+      // 길이 필드가 가용 바이트를 넘거나, 페이로드가 유효한 UTF-8 이 아니다.
+      // 둘 다 «RS 가 수용했지만 본문이 쓰레기» 의 신호다.
+      return R2_SESSION_STATUS.OK;
+    }
 
     output.accepted = 1;
     output.payloadLength = capped;
