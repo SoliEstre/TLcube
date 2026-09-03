@@ -1,0 +1,42 @@
+{
+  "aimErrorMax": 0.25,
+  "note": "시퀀스별 참 코드 중심·반경. aimError = |채택중심 − (cx,cy)| / R. test/output 은 gitignore 라 이 파일이 추적본이다. 확인: tools/a3-wire-aim-overlay.mjs 가 초록(참) vs 빨강(채택) 을 그린다. y0 (478,490) R=214 — 편입 검증 실측, 초록이 큐브 3면 꼭짓점에 앉음. y1 (493.3,493.0) R=282.2 — 채택 육각이 큐브 외곽에 겹침. y2 (490,500) R=305 — f0000 렌더, 초록 점이 3면 꼭짓점·육각이 실루엣. y2-p9rot (495,485) R=350 — f0000 렌더, 초록 점이 회전 큐브의 3면 꼭짓점 (축정렬 육각은 실루엣을 안 따름).",
+  "sequences": {
+    "y0": {
+      "n": 13,
+      "layoutId": "v0",
+      "cx": 478,
+      "cy": 490,
+      "R": 214,
+      "dir": "y0",
+      "framesExpected": 108
+    },
+    "y1": {
+      "n": 21,
+      "layoutId": "v0tr",
+      "cx": 493.3,
+      "cy": 493.0,
+      "R": 282.2,
+      "dir": "y1",
+      "framesExpected": 111
+    },
+    "y2": {
+      "n": 25,
+      "layoutId": "v0tr",
+      "cx": 490,
+      "cy": 500,
+      "R": 305,
+      "dir": "y2",
+      "framesExpected": 110
+    },
+    "y2-p9rot": {
+      "n": 25,
+      "layoutId": "v0tr",
+      "cx": 495,
+      "cy": 485,
+      "R": 350,
+      "dir": "y2-p9rot",
+      "framesExpected": 109
+    }
+  }
+}
