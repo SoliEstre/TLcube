@@ -3107,6 +3107,23 @@ function reprojectionResidual(luma, hypothesis, referenceResult, options, cfg) {
  *    오독 최소 28 로 여유가 2뿐이다.
  *  · 빈 텍스트 단독은 정당한 빈 페이로드를 죽인다 — 빈 코드는 유효하게 인코드된다.
  * 둘의 **동시 성립**만이 격자 오검출의 서명이다.
+ *
+ * ⛔ 잔여 마진 δ 를 이 게이트에 다시 얹지 마라. R2 `acceptDecode` 를 R1 에 이식한
+ * 적이 있다. 결과는 위험 모델이 아니라 nsym 홀짝이었다.
+ *   · δ=2 는 실사진 2장을 죽였다 (margin=1 인 정상 복호: "TLCUBE OK" · URL).
+ *   · δ=1 은 RS 공칭 최대 정정점(u = ⌊nsym/2⌋, e = 0)에서 바이트 정확한 복호를
+ *     **nsym 이 짝수일 때만** 거부한다. Type C 는 nsym 이 전 행 짝수라 그 점이
+ *     항상 거부된다. 소거 포화(e = nsym, u = 0) 에서는 바이트 정확한 "TLCUBE OK"
+ *     를 V1/V2/V3 × L/M/H 9/9 전부 거부한다 — SPEC 소거 복호 `e ≤ nsym` 정규
+ *     경로와 `test/decode.test.js` 절벽 계약(`crsDistance === nsym` → ok:true)을
+ *     깨는 자리였다.
+ *   · 이득 0/2000 · 비용 2000/2000 으로 측정됐다. margin=0 은 프레이밍 3층
+ *     (base211·header·utf8)이 이미 전량 막는다.
+ * 마진은 이미 `scoreTerms` 가 `rsCost = crsDistance` 로 연성 벌점에 넣는다.
+ * R1 의 `nsym` 은 `profile.capacity.nsym` = **전 블록 패리티 합**이라, R2 가
+ * 보는 코드워드 1개와 다중 블록 Type C 에서 같은 축이 아니다. 신뢰도 정합
+ * 21줄은 R1 본문 경로가 `correctedPositions`/`symbolConfidenceQ8` 을 안 실어
+ * 구조적 도달 불가였다 (전수 469 후보 hp=0 hc=0).
  */
 export function isMiscorrectionSuspect(candidate) {
   if (candidate === null || typeof candidate !== 'object') return false;
@@ -5240,6 +5257,7 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
         text: accepted.decoded.text,
         corrected: accepted.decoded.corrected,
         crsDistance: accepted.decoded.crsDistance,
+        nsym: accepted.decoded.nsym,
         ...(notchHint === null ? {} : { notchC: true, notchHint }),
         erasureFallback: accepted.decoded.erasureFallback,
         cubeSamplingFallback: cubeUnreadableCells.length > 0 || unsampledCells.length > 0
@@ -5272,12 +5290,15 @@ function validateGridHypotheses(luma, hypotheses, options = {}) {
       // 「빈 페이로드인데 정정이 필요했다」는 조합만 거부한다 — 무결점으로 읽힌
       // 빈 코드(corrected 0)는 그대로 통과하므로 정당한 빈 페이로드는 살아 있다.
       // ⚠ 이것은 증상 방어다. 근본 원인은 격자 오검출이고 그쪽은 별도 트랙이다.
+      // 잔여 마진 δ 는 게이트가 아니다 — isMiscorrectionSuspect 옆 주석.
       if (isMiscorrectionSuspect(candidate)) {
         diagnostics.bodyFailures.push({
           hypothesisId: candidate.hypothesisId,
           reason: 'miscorrection-suspect',
           stage: 'body-acceptance',
           corrected: candidate.corrected,
+          crsDistance: candidate.crsDistance,
+          nsym: candidate.nsym,
         });
         continue;
       }

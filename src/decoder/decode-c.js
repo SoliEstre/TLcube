@@ -321,6 +321,7 @@ export function decodeCellsC(cellDigits, format, options = {}) {
     text: payload.text,
     corrected: rsResult.errorCount,
     crsDistance: 2 * rsResult.errorCount + erasureCount,
+    nsym: profile.capacity.nsym,
   };
   if (packed.illegalIndices.length > 0 || declaredErasures.length > 0) {
     result.erasureFallback = {

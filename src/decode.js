@@ -955,6 +955,7 @@ function assertZeroPadding(framed, payloadLength) {
  *   text:string,
  *   corrected:number,
  *   crsDistance:number,
+ *   nsym:number,
  *   erasureFallback?: {
  *     mode:'erasure'|'error-only-fallback',
  *     illegalSymbolIndices:number[],
@@ -1073,6 +1074,8 @@ export function decodeCells(cellDigits, format, options = {}) {
     // rsResult.errorCount는 rs211.js가 고친 **위치 미상** 오류 수 u다.
     // C_RS = 2u + e — 소거 e개는 패리티를 1개씩만 쓴다. 점수 계약은 이 필드를 쓴다.
     crsDistance: 2 * rsResult.errorCount + erasureCount,
+    // 패리티 심볼 수. 점수·진단 입력 (nsym − crsDistance). 하드 게이트가 아니다.
+    nsym: profile.capacity.nsym,
   };
   if (rsResult.blockResults) {
     result.blockCorrections = rsResult.blockResults.map((block, blockIndex) => ({

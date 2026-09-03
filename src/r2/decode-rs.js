@@ -35,6 +35,9 @@
  * 헤더(길이 필드 · CRC)가 붙으면 그쪽이 이겨야 한다 — 포맷 계층의 자리다.
  * `layout.payloadBytes` 를 주면 그 값으로 자른다.
  *
+ * `crcStatus` 소켓(`rs-soft.js` `acceptDecode`)은 배선 완료 · 급전 없음이다.
+ * 프레이밍 v2 가 열릴 때 여기에 값이 온다. 트리거는 SPEC §3.3 예약절.
+ *
  * @module r2/decode-rs
  */
 import { byteLengthForSymbolCount, decodeChunkInto } from '../base211.js';

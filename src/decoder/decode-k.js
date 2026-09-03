@@ -263,7 +263,7 @@ function assertZeroPadding(framed, payloadLength) {
 
 /**
  * scan order-K digit 배열을 UTF-8 텍스트로 복호한다. 계약은 decode.decodeCells
- * 와 같다 — format.type 만 'K'(생략 가능), 소거·결과 모양 동일.
+ * 와 같다 — format.type 만 'K'(생략 가능), 소거·결과 모양 동일 (`nsym` 포함).
  *
  * @param {Uint8Array|number[]} cellDigits
  * @param {{type?:'K', version?:number, formatIndex?:number, eccLevel:'L'|'M'|'H'|0|1|2,
@@ -354,6 +354,7 @@ export function decodeCellsK(cellDigits, format, options = {}) {
     text: payload.text,
     corrected: rsResult.errorCount,
     crsDistance: 2 * rsResult.errorCount + erasureCount,
+    nsym: profile.capacity.nsym,
   };
   if (packed.illegalIndices.length > 0 || declaredErasures.length > 0) {
     result.erasureFallback = {

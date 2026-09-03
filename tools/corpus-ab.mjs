@@ -67,13 +67,19 @@ function measureRow(decodeFrontend, lumaToRaster, readLumaDump, decodeOpts, { na
     result = { ok: false, reason: { code: `THROW:${err?.message ?? 'unknown'}` } };
   }
   const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  const ok = Boolean(result.ok);
+  const text = ok ? (result.text ?? null) : null;
+  const textLen = ok ? (typeof text === 'string' ? text.length : 0) : null;
+  const correctedRaw = Number(result.corrected);
   return {
     name,
-    ok: Boolean(result.ok),
-    text: result.ok ? (result.text ?? null) : null,
-    family: result.ok ? (result.family ?? null) : null,
-    hyp: result.ok ? (result.hypothesis?.id ?? null) : null,
-    reason: result.ok ? null : (typeof result.reason === 'string' ? result.reason : result.reason?.code ?? null),
+    ok,
+    text,
+    textLen,
+    corrected: Number.isFinite(correctedRaw) ? correctedRaw : null,
+    family: ok ? (result.family ?? null) : null,
+    hyp: ok ? (result.hypothesis?.id ?? null) : null,
+    reason: ok ? null : (typeof result.reason === 'string' ? result.reason : result.reason?.code ?? null),
     ms: Math.round(ms),
   };
 }
@@ -192,6 +198,7 @@ async function main() {
   const okCount = rows.filter((r) => r.ok).length;
   const totalMs = rows.reduce((a, r) => a + r.ms, 0);
   console.log(`[${label}] ok ${okCount}/${rows.length} · 장별 ms 합 ${Math.round(totalMs / 1000)}s · 벽시계 ${Math.round(wallMs / 1000)}s · 샤드 ${shardCount} → ${outPath}`);
+  printObservationSummary(rows);
 
   // ── A/B ───────────────────────────────────────────────────────────
   if (!basePath) process.exit(0);
@@ -262,6 +269,28 @@ async function main() {
     process.exit(1);
   }
   console.log('✓ 게이트 통과 (죽음 0 · 원문 플립 0)');
+}
+
+/**
+ * 오정정 축 관측 (게이트 아님). 빈 텍스트 성공 수와 corrected 분위수를 찍는다.
+ * exit 조건은 손대지 않는다 — 양쪽 팔에 같이 있는 오정정은 여기서도 안 보인다.
+ */
+function printObservationSummary(rows) {
+  const emptyTextOk = rows.filter((row) => row.ok && row.textLen === 0).length;
+  const corrected = rows
+    .filter((row) => row.ok && Number.isFinite(row.corrected))
+    .map((row) => row.corrected)
+    .sort((left, right) => left - right);
+  console.log(`빈 텍스트 성공 ${emptyTextOk}`);
+  if (corrected.length === 0) {
+    console.log('corrected 분위수 없음 (ok 행 0)');
+    return;
+  }
+  const at = (p) => corrected[Math.min(corrected.length - 1, Math.floor(p * (corrected.length - 1)))];
+  console.log(
+    `corrected 분위수 (ok n=${corrected.length})`
+    + ` min=${corrected[0]} p50=${at(0.5)} p90=${at(0.9)} p99=${at(0.99)} max=${corrected[corrected.length - 1]}`,
+  );
 }
 
 /** 종전 순차 경로 그대로 (`--shards 1`). 시간 A/B 의 순수 기준이기도 하다. */

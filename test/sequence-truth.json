@@ -1,0 +1,32 @@
+{
+  "_note": "라벨된 영상 시퀀스의 단발 정답. 러너는 tools/seq-truth.mjs. expect 가 null 인 시퀀스는 falseAccept 집계에서 제외한다.",
+  "c3-tl": {
+    "expect": "https://tl.estre.so",
+    "note": "단발 ok 는 전부 C3 · 원문 URL (실측 2/108)"
+  },
+  "c3-daehan": {
+    "expect": null,
+    "note": "C3+daehan — 단발 실패가 정상"
+  },
+  "swap-c3tl-c3daehan": {
+    "expect": "https://tl.estre.so",
+    "note": "단발 ok 는 전부 C3 · 원문 URL (실측 14/109)"
+  },
+  "swap-multi-c3-k2-v2-y2": {
+    "expect": "https://tl.estre.so"
+  },
+  "y0": {
+    "expect": null,
+    "note": "미확인 — 단발 0회"
+  },
+  "y1": {
+    "expect": "https://tl.estre.so"
+  },
+  "y2": {
+    "expect": "https://tl.estre.so"
+  },
+  "y2-p9rot": {
+    "expect": null,
+    "note": "미확인 — 단발 0회"
+  }
+}

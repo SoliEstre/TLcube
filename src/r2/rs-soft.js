@@ -825,6 +825,9 @@ export function decodeGmdLadder(received, symbolConfidenceQ8, nsym, out) {
  * Candidate acceptance without CRC logic. crcStatus is a reserved tri-state
  * hook: -1 means not checked by this layer, 0 lets a future format layer veto,
  * and 1 records an external pass.
+ *
+ * 배선 완료 · 급전 없음. 프레이밍 v2 가 열릴 때 여기에 값이 온다.
+ * 트리거는 SPEC §3.3 예약절 (공개 SPEC) / 문서 repo SPEC §4.5 예약절.
  */
 export function acceptDecode(candidate, symbolConfidenceQ8, tResidual) {
   if (
@@ -868,6 +871,8 @@ export function acceptDecode(candidate, symbolConfidenceQ8, tResidual) {
   }
   const delta = normalizedDelta(candidate);
   if (parityMargin < delta) return false;
+  // crcStatus === 0 은 포맷 계층 veto. 프레이밍 v2 가 열릴 때 값이 온다
+  // (SPEC §3.3 예약절). 지금은 항상 -1 (미검사) 이라 이 분기는 죽지 않는다.
   if (candidate.crcStatus === 0) return false;
 
   const thresholdRaw = Number(candidate.params?.erasureMarginQ8);
