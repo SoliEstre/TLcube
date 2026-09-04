@@ -8,7 +8,17 @@
  *
  * 입력은 `materializeSymbolsInto`(accumulate.js)가 이미 GF(211) 심볼 · Q8 신뢰도 ·
  * 소거 플래그로 만들어 둔 상태다. 이 모듈이 하는 일은 셋뿐이다:
- *   ① `decodeGmdLadder` 로 RS 복호 (soft erasure 사다리)
+ *   ① `decodeGmdLadder` 로 RS 복호 (신뢰도 «순위» 로 사다리가 **자체** 소거를 고른다)
+ *
+ * 🔴 **입력 소거 플래그는 RS 로 안 간다** (2026-09-04 실측). `decodeGmdLadder` 는
+ * 소거 슬롯이 없고(arity 4, `rs-soft.js`), 그 안에서 `selectErasures` 로 가는 것은
+ * **리터럴 null** 이다. 그래서 이 파일의 `erasuresCellMapOnly` 는 형태만 검사된다.
+ * 진행률(`progress.view.D`)에도 안 닿는다 — `progress.js` 에 소거 입력이 없다.
+ * 세션이 그 값으로 하는 일은 셀맵 칠하기 하나다 (`session.js`).
+ *
+ * ⚠ **「소거는 쓸모없다」가 아니다.** R1 은 구조적 소거를 실제로 쓴다
+ * (`src/decode.js` 가 `illegalIndices` 를 병합해 `rsDecode` 로 넘긴다).
+ * 정확한 서술은 「**이** 벡터(트리거 = 신뢰도 < `erasureMarginQ8`)가 아직 안 연결됐다」다.
  *   ② 메시지 심볼 → 바이트 (base-211 청크)
  *   ③ **오정정 거부** — 아래 참조
  *
@@ -91,7 +101,10 @@ export function createRsDecodeInto(options = undefined) {
   return function decodeInto(
     symbolValues,
     symbolConfidenceQ8,
-    erasures,
+    // 🔴 RS 로 안 간다 (이 파일 머리 참조). 세션이 **셀맵**에 쓰는 값이고
+    // 여기서는 형태만 검사한다. 이름으로 그 사실을 못박아 다음 사람이
+    // 「소거를 넘겼으니 RS 가 쓰겠지」로 읽지 않게 한다.
+    erasuresCellMapOnly,
     symbolCount,
     layout,
     output,
@@ -105,7 +118,7 @@ export function createRsDecodeInto(options = undefined) {
     if (
       !isIndexable(symbolValues)
       || !isIndexable(symbolConfidenceQ8)
-      || !isIndexable(erasures)
+      || !isIndexable(erasuresCellMapOnly)   // 형태만 — 값은 안 쓴다
       || !isIndexable(payloadBuffer)
       || !positiveInteger(symbolCount)
       || symbolValues.length < symbolCount
@@ -164,6 +177,32 @@ export function createRsDecodeInto(options = undefined) {
       if (payloadBuffer[i] !== 0) { allZero = 0; break; }
     }
     if (allZero === 1 && out.correctedCount > 0) return R2_SESSION_STATUS.OK;
+
+    // ── 🔴 전부-0 코드워드 거부 (2026-09-04) ────────────────────────────
+    // 위 규칙은 «빈 페이로드 ∧ 정정 > 0» 의 **동시** 성립을 요구하는데, 전부-0
+    // 워드에서는 뒤 절이 **구조적으로** 안 선다: 0 벡터는 어떤 선형부호에서도
+    // 유효한 코드워드라 신드롬이 전부 0 이고 `correctedCount === 0` 이다.
+    // 그래서 이 워드는 확률이 아니라 **계수 1** 로 통과했다.
+    //
+    // 실측 2026-09-04 (수정 전, `cellsurface` 라인업 60행 전수): 심볼 전부 0 ·
+    // 신뢰도 전부 0 · 소거 전량 1 을 넣으면 **59/60 행이 accepted=1** 이었다.
+    // 유일한 거부가 `v0@13/L` 이고, 그 거부의 이유는 이 검사가 아니라
+    // `rs-soft.js` 의 `MIN_RESIDUAL_CORRECTIONS` 였다 — 즉 **우연한 방패**다.
+    // 그 상수를 고치면(PM/029B §18.5 ①) 60/60 이 된다. 그래서 이 검사가 먼저다.
+    //
+    // 그리고 이 워드는 «적대적 입력» 이 아니라 **누적기가 증거 0 일 때 내놓는 값**이다
+    // (`accumulate.js` 의 `materializeSymbolsInto`: 점수가 전부 동점이면 엄격 비교
+    // 때문에 값이 0 에 머물고, 신뢰도 0 이라 소거 플래그가 1 이 된다).
+    // 즉 세션이 「나는 아무것도 못 봤다」를 말하는 그 벡터가 DONE 으로 수용됐다.
+    //
+    // ⚠ 대가: 이 검사는 **본문이 빈 코드**(`frame('', …)`)도 거부한다. 그 코드의
+    // 코드워드가 실제로 전부 0 이라 구분할 방법이 없다. 데이터를 안 싣는 코드를
+    // 잃는 대가로 「증거 0 이 성공으로 보이는」 경로를 닫는다.
+    let codewordAllZero = 1;
+    for (let i = 0; i < symbolCount; i += 1) {
+      if (out.codeword[i] !== 0) { codewordAllZero = 0; break; }
+    }
+    if (codewordAllZero === 1) return R2_SESSION_STATUS.OK;
 
     // ── 프레이밍 검증 (2026-09-03) ──
     // 🔴 위 «빈 페이로드» 검사가 이 경로의 **유일한** 정합 검사였고, 그래서 **내용 있는

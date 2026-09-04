@@ -767,6 +767,14 @@ export function decodeGmdLadder(received, symbolConfidenceQ8, nsym, out) {
   // T3: adaptive single trial. This public signature has no erasure-flag input,
   // so it ranks only the explicit confidence vector. Call selectErasures
   // separately when an adapter also has upstream C2 flags.
+  //
+  // ⚠ **2026-09-04 실측 — 위 안내는 이 경로에서 효과가 없다.** 바로 아래가
+  // `selectErasures(symbolConfidenceQ8, null, …)` 를 **무조건** 불러 같은 `out` 의
+  // `erasureFlags`·`rankPositions`·`selectedErasureCount`·`maxAdmissibleErasureCount`
+  // 를 전부 덮어쓴다. 어댑터가 미리 부른 결과는 조용히 지워진다.
+  // ⇒ C2 소거를 실제로 쓰려면 «따로 부르기» 가 아니라 **사다리에 소거 슬롯을 내는**
+  //   변경이 필요하다 (PM/029B §18.5 ③). 그때까지 `decode-rs.js` 의 입력 소거는
+  //   셀맵 전용이다.
   const selectionStatus = selectErasures(
     symbolConfidenceQ8,
     null,
