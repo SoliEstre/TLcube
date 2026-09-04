@@ -334,6 +334,58 @@ test('K/m 없는 layout 도 D=1 에 도달하고 복호를 시도한다', () => 
   assert.ok(decodeCalls > 0, '분모가 도달 불가면 복호가 한 번도 시도되지 않는다');
 });
 
+/*
+ * 🔴 위 테스트의 `decodeCalls > 0` 은 **도달가능성의 대리 지표**이지 도달가능성 자체가
+ * 아니다 (2026-09-04, 출하 결함 워크플로 지적). 「복호를 언제 시도하나」를 바꾸는 변경
+ * (PM/029B §18.5 ② 가 정확히 그것이다)이 들어오면 저 단언은 **공허해진다** — 시도가
+ * 분모에 안 걸리는 순간 denominatorCap(session.js) 을 통째로 지워도 초록이다.
+ *
+ * 그래서 도달가능성을 **성질로** 다시 잰다: 어떤 layout 조합에서도 `internalD` 가
+ * 정확히 1 에 닿아야 한다. 이 단언은 시도 술어와 **무관**하므로 ② 뒤에도 산다.
+ */
+test('진행률 분모는 어떤 layout 조합에서도 도달 가능하다 (internalD 가 정확히 1 에 닿는다)', () => {
+  const luma = new Uint8Array([128]);
+  // K·m 을 «주는 경우 / 안 주는 경우 / 과하게 주는 경우» 를 격자로 돈다.
+  // 한 점만 재면 통과도 실패도 표본 운이다.
+  const cases = [];
+  for (const cellCount of [12, 36, 63]) {
+    const symbolCount = Math.floor(cellCount / 3);
+    for (const required of [undefined, 1, Math.ceil(symbolCount / 2), symbolCount, symbolCount + 8]) {
+      for (const safety of [undefined, 0, 4, symbolCount + 4]) {
+        cases.push({ cellCount, required, safety, symbolCount });
+      }
+    }
+  }
+  assert.ok(cases.length >= 40, `격자가 ${cases.length}점뿐이다 — 유도가 무너졌다`);
+
+  const unreachable = [];
+  for (const testCase of cases) {
+    const layout = { cellCount: testCase.cellCount };
+    if (testCase.required !== undefined) layout.requiredSymbolCount = testCase.required;
+    if (testCase.safety !== undefined) layout.safetySymbolCount = testCase.safety;
+    const session = createR2Session({
+      layout,
+      params: { tauCellQ8: 256, erasureMarginQ8: 256 },
+      ...createSessionAdapters({ detected: true, gatePassed: true }),
+    });
+    // 심볼 수보다 넉넉히 돌린다 — 「느려서 못 닿았다」와 「도달 불가」를 가른다.
+    for (let frame = 0; frame < testCase.symbolCount + 40; frame += 1) {
+      session.pushFrame(luma, 1, 1, frame * 33, undefined);
+    }
+    if (session.result.progress.internalD !== 1) {
+      unreachable.push(
+        `cellCount=${testCase.cellCount} K=${testCase.required} m=${testCase.safety}`
+        + ` → internalD=${session.result.progress.internalD}`,
+      );
+    }
+  }
+  assert.deepEqual(unreachable, [],
+    `분모가 도달 불가한 조합이 ${unreachable.length}건이다: `
+    + `${unreachable.join(' | ')} `
+    + '→ D=1 이 수학적으로 도달 불가면 누적이 영원히 끝나지 않는다. '
+    + 'session.js 의 denominatorCap 이 지워졌거나 상한 유도가 깨졌다.');
+});
+
 test('진행률 분모는 달성 가능 상한(symbolCount)을 넘지 않는다', () => {
   // K 를 크게 주고 m 을 안 주는 조합에서도 D=1 이 도달 가능해야 한다.
   const session = createR2Session({
