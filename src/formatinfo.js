@@ -83,6 +83,25 @@ export const DIGIT_BASE = 6;
 /** ECC 레벨 열거값. 3(예약)은 인코더가 거부하고 디코더는 ok:false 로 처리한다 (SPEC §6). */
 export const ECC_LEVEL = Object.freeze({ L: 0, M: 1, H: 2, RESERVED: 3 });
 
+/**
+ * ECC 값 → 이름. **`ECC_LEVEL` 에서 유도한다** — 손으로 적으면 어긋난다.
+ *
+ * 🔴 2026-09-04: 저장소에 이 역표의 손 사본이 이미 셋 있다
+ * (`src/decode.js` · `src/decoder/decode-c.js` · `src/decoder/decode-k.js` 의
+ * `ECC_LEVEL_BY_VALUE`). 넷째를 만들지 않으려고 여기 원본 옆에 유도해 둔다.
+ * 새 소비자는 이것을 쓴다. 기존 셋의 통합은 별건이다.
+ *
+ * ⚠ `RESERVED` 는 **뺀다.** 이름으로 내보내면 소비자가 그대로 용량 API 에 넘기고
+ * `capacityForCellSurfaceFinal(..., 'RESERVED', ...)` 가 RangeError 를 던진다.
+ * 오늘은 `format-proposals.js` 가 RESERVED 후보를 먼저 버려 잠복이지만,
+ * 그건 **우연한 방패**이지 이 표의 방어가 아니다.
+ */
+export const ECC_NAME_BY_VALUE = Object.freeze(Object.fromEntries(
+  Object.entries(ECC_LEVEL)
+    .filter(([name]) => name !== 'RESERVED')
+    .map(([name, value]) => [value, name]),
+));
+
 // ── CRC-6 — 선정된 다항식 (측정표는 파일 하단) ──────────────────────────────
 
 /** 선정된 CRC-6 다항식 (CRC-6/CDMA2000-B, 6bit, 암묵적 최상위 항 제외). */
