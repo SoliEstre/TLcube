@@ -69,6 +69,7 @@ import {
   typeCGuideRingPositions,
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
+import { createR2ScanRuntime } from '/src/r2-scan-runtime.js';
 import {
   normalizeCentralFinderId,
   normalizeExpectedEmphasis,
@@ -130,7 +131,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-04.03';
+export const SCANNER_BUILD = '2026-09-04.04';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -258,6 +259,24 @@ const debugOverlay = createDebugOverlay({
   toggleButton: document.getElementById('lab-debug-toggle'),
   doc: document,
 });
+
+/*
+ * R2(LTC) 누적 복호기 — **시험판 한정 · 기본 꺼짐** (S5 · PM/029B §22·§23).
+ *
+ * 코퍼스 실측 (`tools/r2-runtime-probe.mjs`, 2026-09-04): 후보 5개를 동시에 돌려도
+ * **참 격자가 이긴다** — y0 f6/143 ms · y1 f5/221 ms · y2 f4/248 ms, 전부 정답이고
+ * 레이아웃도 맞다. 같은 코퍼스의 단발 첫 성공이 1,440\~2,768 ms 이므로 **9.3\~12.5×**.
+ * 락 뒤 프레임당 3\~5 ms (후보 5개 합).
+ *
+ * 후보를 여럿 돌리는 이유: 라이브에서 `layoutId` 를 알 수 없고, **포맷 CRC 는 그것을
+ * 전혀 못 가른다** (PM/029B §23.6 실측). 레이아웃은 본문 RS 로만 갈린다.
+ * 안전 근거: 틀린 격자가 낸 DONE 이 후보 5 × ecc×mask 9 × 3시퀀스 전수에서 **0건**
+ * (`tools/wrong-grid-probe.mjs`).
+ *
+ * ⚠ `isLabPath()` 로만 켠다. 정식 경로에서는 `enabled === false` 라 프레임 루프의
+ * R2 블록이 첫 줄에서 반환하고 **grab 도 안 한다** — 제어 흐름이 완전히 불변이다.
+ */
+const r2Runtime = createR2ScanRuntime({ enabled: isLabPath() });
 
 /*
  * ── 안정 유지 트리거 + 가이드-사전 스캔 (운영자 요청 2026-08-16) ─────────────────
@@ -1942,6 +1961,51 @@ function startFrameLoop(session) {
   const nextFrame = (timestamp) => {
     if (session !== scanSession || !cameraStream || document.visibilityState === 'hidden') {
       return;
+    }
+
+    /*
+     * ── R2(LTC) 독립 캐던스 (S5 · PM/029B §22·§23) ─────────────────────────
+     *
+     * 🔴 **`!isDecoding` 게이트 «밖»** 이어야 한다. 옛 안(S2)은 그 안에 있었고,
+     * 그래서 R2 가 「카메라 프레임당」이 아니라 「단발 복호 1사이클당」 한 장을 받았다 —
+     * 복호가 1.4\~2.8초이므로 누적기가 단발보다 프레임을 더 볼 방법이 **구조적으로
+     * 없었다** (PM/029 §6.5.1). 여기가 그 수리다.
+     *
+     * ⚠ **플래그가 꺼져 있으면 아래 R1 블록의 제어 흐름이 완전히 불변**이다.
+     * `r2Runtime.enabled` 가 false 면 이 블록은 첫 줄에서 반환하고 grab 도 안 한다.
+     * 그 성질을 `test/r2-scan-runtime.test.js` 가 잰다.
+     *
+     * ⚠ grab 을 R1 과 **공유하지 않는다.** 공유하려면 R1 의 캐던스·비용 계산을
+     * 건드려야 하고, 그건 플래그 off 에서도 동작이 달라진다는 뜻이다. 시험판
+     * 한정 기능을 위해 정식 경로의 타이밍을 바꾸지 않는다 — 중복 grab 비용은
+     * 시험판에서만 든다.
+     */
+    if (r2Runtime.enabled) {
+      const r2Image = grabVideoFrame(nowMs());
+      if (r2Image) {
+        try {
+          const r2Luma = toRelativeLuminance({
+            width: r2Image.width,
+            height: r2Image.height,
+            pixels: r2Image.data,
+          }, { rejectLowDynamicRange: false });
+          if (r2Luma && r2Luma.ok !== false) {
+            const hit = r2Runtime.pushFrame(r2Luma, timestamp);
+            if (hit && typeof hit.text === 'string') {
+              // R2 가 먼저 읽었다. 결과 경로는 R1 과 **같은 문**을 쓴다 —
+              // 새 표시 경로를 만들면 두 경로가 어긋난다.
+              handleDecodeResult(
+                { ok: true, text: hit.text, source: 'r2' },
+                'camera',
+                session,
+              );
+              return;
+            }
+          }
+        } catch {
+          // R2 는 부가 경로다. 어떤 실패도 단발 스캔을 막지 않는다.
+        }
+      }
     }
 
     const intervalMs = adaptiveFrameIntervalMs(lastFrameCostMs);
