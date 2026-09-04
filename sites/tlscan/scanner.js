@@ -131,7 +131,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-04.04';
+export const SCANNER_BUILD = '2026-09-05.01';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -276,7 +276,14 @@ const debugOverlay = createDebugOverlay({
  * ⚠ `isLabPath()` 로만 켠다. 정식 경로에서는 `enabled === false` 라 프레임 루프의
  * R2 블록이 첫 줄에서 반환하고 **grab 도 안 한다** — 제어 흐름이 완전히 불변이다.
  */
-const r2Runtime = createR2ScanRuntime({ enabled: isLabPath() });
+const R2_TOGGLE_KEY = 'tlscan.lab.r2Accumulate';
+let r2Wanted = true;   // 시험판 기본은 **켬** — 이 표면의 존재 이유가 R2 실기다.
+try {
+  // 저장된 값이 '0' 일 때만 끈다. 없으면 켬 (daehan 토글과 기본값이 반대인 이유는
+  // 그쪽이 «구멍이 있는 옵트인» 이고 이쪽은 «시험판의 주 기능» 이라서다).
+  if (window.localStorage.getItem(R2_TOGGLE_KEY) === '0') r2Wanted = false;
+} catch { /* 저장소 접근 불가는 스캔을 막지 않는다 — 기본 켬 */ }
+const r2Runtime = createR2ScanRuntime({ enabled: isLabPath() && r2Wanted });
 
 /*
  * ── 안정 유지 트리거 + 가이드-사전 스캔 (운영자 요청 2026-08-16) ─────────────────
@@ -1991,6 +1998,7 @@ function startFrameLoop(session) {
           }, { rejectLowDynamicRange: false });
           if (r2Luma && r2Luma.ok !== false) {
             const hit = r2Runtime.pushFrame(r2Luma, timestamp);
+            renderR2Progress();
             if (hit && typeof hit.text === 'string') {
               // R2 가 먼저 읽었다. 결과 경로는 R1 과 **같은 문**을 쓴다 —
               // 새 표시 경로를 만들면 두 경로가 어긋난다.
@@ -2909,6 +2917,65 @@ if (daehanToggle && isLabPath()) {
   });
 }
 
+/*
+ * R1/R2 토글 (2026-09-04, 운영자 요구). **시험판 전용 · 기본 켬.**
+ *
+ * 왜 있나: ① 「R2 가 R1 을 완전대체 가능할거라고 생각하지 않기 때문에」 —
+ * 실제로 실기 1차에서 **Y0 은 R1 이 더 빠르고 Y1·Y2 는 R2 가 훨씬 빠르다**는
+ * 관측이 나왔다 (PM/029B §25.1). ② 같은 코드로 A/B 하려면 앱을 다시 띄우지 않고
+ * 전환돼야 한다.
+ *
+ * ⚠ 끄면 런타임이 후보 세션을 **버린다** — 껐다 켰을 때 옛 누적이 살아 있으면
+ * 「껐다고 생각했는데 그때 모은 증거로 풀린」 프레임이 섞여 A/B 가 오염된다.
+ */
+/*
+ * R2 진행 인디케이터 렌더 (PM/029 §17). **시험판 전용.**
+ *
+ * 표시 후퇴 금지(A6): D 가 내려가도 폭을 줄이지 않는다 — 사용자에게 「되돌아갔다」는
+ * 신호는 조준을 망친다. 드랍(후보 폐기)일 때만 0 으로 되돌린다.
+ * 값은 기기 안 로컬 계산이고 전송 경로가 없다 (안정 게이지와 같은 규약).
+ */
+const r2ProgressRoot = document.getElementById("r2-progress");
+const r2ProgressFill = document.getElementById("r2-progress-fill");
+const r2ProgressNote = document.getElementById("r2-progress-note");
+let r2ShownD = 0;
+function renderR2Progress() {
+  if (!r2ProgressRoot || !isLabPath()) return;
+  if (!r2Runtime.enabled) {
+    r2ProgressRoot.hidden = true;
+    r2ShownD = 0;
+    return;
+  }
+  r2ProgressRoot.hidden = false;
+  const stats = r2Runtime.stats;
+  // 후보가 없으면(락 없음·폐기) 0 으로 되돌린다 — 후보가 없는데 막대가 차 있으면 거짓말이다.
+  const d = stats.candidateCount > 0 ? stats.progressD : 0;
+  r2ShownD = d === 0 ? 0 : Math.max(r2ShownD, d);
+  if (r2ProgressFill) r2ProgressFill.style.width = `${Math.round(Math.min(1, r2ShownD) * 100)}%`;
+  if (r2ProgressNote) {
+    r2ProgressNote.textContent = stats.candidateCount > 0
+      ? `n${stats.lockedN}·${stats.candidateCount}`
+      : "";
+  }
+}
+
+const r2Toggle = document.getElementById('lab-r2-toggle');
+if (r2Toggle && isLabPath()) {
+  r2Toggle.hidden = false;
+  const paintR2 = () => {
+    r2Toggle.setAttribute('aria-pressed', String(r2Runtime.enabled));
+    r2Toggle.classList.toggle('active', r2Runtime.enabled);
+  };
+  paintR2();
+  r2Toggle.addEventListener('click', () => {
+    r2Runtime.setEnabled(!r2Runtime.enabled);
+    try { window.localStorage.setItem(R2_TOGGLE_KEY, r2Runtime.enabled ? '1' : '0'); }
+    catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
+    paintR2();
+    // 인디케이터도 즉시 반영한다 — 끄면 숨고, 켜면 0 부터 다시 찬다.
+    renderR2Progress();
+  });
+}
 // 기대 톤 — 레이아웃 카드와 같은 배선. 2·3 만 유효, 그 외(모름 포함)는 null(미상)이다.
 let expectedTones = null;
 const expectedTonesRoot = document.getElementById('lab-expected-tones');

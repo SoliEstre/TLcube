@@ -70,7 +70,15 @@ function buildLayout(n, layoutId, eccName, maskIndex) {
  * @param {number} [options.maxCandidates] 안전 상한.
  */
 export function createR2ScanRuntime(options = {}) {
-  const enabled = options.enabled === true;
+  /*
+   * 🔴 **런타임 중에 껐다 켤 수 있어야 한다** (2026-09-04 운영자 요구).
+   * 「R2 가 R1 을 완전대체 가능할거라고 생각하지 않기 때문에도 있고, 비교하기 쉽게
+   * 하기 위한것도」 — 같은 코드로 A/B 하려면 앱을 다시 띄우지 않고 전환돼야 한다.
+   *
+   * ⚠ 끄면 **후보 세션을 버린다.** 껐다 켰을 때 옛 누적이 살아 있으면 A/B 가
+   * 오염된다 — 「껐다고 생각했는데 그때 모은 증거로 풀린」 프레임이 섞인다.
+   */
+  let enabled = options.enabled === true;
   const intervalMs = Number.isFinite(options.intervalMs) ? Number(options.intervalMs) : 0;
   const defaultEcc = typeof options.eccName === 'string' ? options.eccName : 'H';
   const defaultMask = Number.isInteger(options.maskIndex) ? options.maskIndex : 0;
@@ -93,6 +101,9 @@ export function createR2ScanRuntime(options = {}) {
     doneLayoutId: '',
     doneFrame: -1,
     text: null,
+    // 표시용 (PM/029 §17\~19). 데이터는 A6·C5 가 이미 낸다 — 없는 건 그리는 층이다.
+    progressD: 0,
+    indicator: 0,
   };
 
   function disposeCandidates() {
@@ -100,6 +111,8 @@ export function createR2ScanRuntime(options = {}) {
     boundN = 0;
     framesSinceBind = 0;
     stats.candidateCount = 0;
+    // 진행률도 같이 버린다 — 후보가 없는데 막대가 차 있으면 거짓말이다.
+    stats.progressD = 0;
   }
 
   /**
@@ -180,6 +193,10 @@ export function createR2ScanRuntime(options = {}) {
     if (candidates.length === 0) return null;
 
     framesSinceBind += 1;
+    // 표시용 — 후보 중 **가장 앞선** 진행률을 남긴다. 사용자에게 「몇 개 후보를 돌리는
+    // 중인지」는 관심사가 아니고 「얼마나 찼는지」가 관심사다 (PM/029 §17).
+    let bestD = 0;
+    let bestIndicator = R2_INDICATOR.SEARCHING;
     for (const candidate of candidates) {
       if (!candidate.alive) continue;
       let result;
@@ -188,6 +205,11 @@ export function createR2ScanRuntime(options = {}) {
       } catch {
         candidate.alive = false;
         continue;
+      }
+      const d = result.progress && Number.isFinite(result.progress.D) ? result.progress.D : 0;
+      if (d > bestD) {
+        bestD = d;
+        bestIndicator = result.indicator;
       }
       if (result.indicator !== R2_INDICATOR.DONE) continue;
       let text = null;
@@ -203,6 +225,9 @@ export function createR2ScanRuntime(options = {}) {
       return { text, layoutId: candidate.layoutId, n: boundN, frame: stats.doneFrame };
     }
 
+    stats.progressD = bestD;
+    stats.indicator = bestIndicator;
+
     // 오래 붙들고도 아무도 못 풀면 접는다 — 락이 틀렸을 수 있고, 그때는 어댑터의
     // F 게이트가 락을 걷어내 다음 bind 가 다른 n 으로 온다.
     if (framesSinceBind > CANDIDATE_PATIENCE_FRAMES) disposeCandidates();
@@ -214,10 +239,27 @@ export function createR2ScanRuntime(options = {}) {
     disposeCandidates();
     lastAt = -Infinity;
     stats.frames = 0;
+    stats.progressD = 0;
+    stats.indicator = 0;
     stats.doneLayoutId = '';
     stats.doneFrame = -1;
     stats.text = null;
   }
 
-  return { enabled, pushFrame, reset, stats };
+  function setEnabled(next) {
+    const flag = next === true;
+    if (flag === enabled) return;
+    enabled = flag;
+    // 켜든 끄든 누적을 버린다 — 전환 전 증거가 전환 후 답에 섞이면 A/B 가 오염된다.
+    disposeCandidates();
+    lastAt = -Infinity;
+  }
+
+  return {
+    get enabled() { return enabled; },
+    setEnabled,
+    pushFrame,
+    reset,
+    stats,
+  };
 }

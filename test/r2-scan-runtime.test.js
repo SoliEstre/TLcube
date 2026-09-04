@@ -110,3 +110,38 @@ test('ⓑ 배선이 R2 결과를 R1 과 **같은 문**으로 보내고, 플래�
     + '프레임당이 아니라 **단발 복호 1사이클당** 한 장을 받고, 누적기가 단발보다 '
     + '프레임을 더 볼 방법이 구조적으로 사라진다 (PM/029 §6.5.1 의 S2 탈락 사유)');
 });
+
+test('ⓔ 런타임 중 껐다 켤 수 있고, 끌 때 누적을 버린다', (t) => {
+  const frames = firstFrames('y2', 4);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
+  assert.ok(runtime.stats.candidateCount > 0, '켠 상태에서 후보가 안 생겼다');
+
+  runtime.setEnabled(false);
+  assert.equal(runtime.enabled, false);
+  assert.equal(runtime.stats.candidateCount, 0,
+    '껐는데 후보가 남았다 — 껐다 켰을 때 옛 누적으로 풀리면 A/B 가 오염된다');
+  assert.equal(runtime.stats.progressD, 0, '껐는데 진행률이 남았다 — 막대가 거짓말한다');
+
+  // 꺼진 동안에는 프레임을 세지 않는다.
+  const before = runtime.stats.frames;
+  runtime.pushFrame(frames[0], 9999);
+  assert.equal(runtime.stats.frames, before, '꺼져 있는데 프레임을 셌다');
+});
+
+test('ⓕ 시험판 UI — 토글과 진행 인디케이터가 배선돼 있다', () => {
+  const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
+  const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+  // 운영자 요구 (2026-09-04): R1/R2 토글 + 좌하단 «채워져 가는» 인디케이터.
+  assert.ok(html.includes('id="lab-r2-toggle"'), 'R2 토글 마크업이 없다');
+  assert.ok(html.includes('id="r2-progress"'), '진행 인디케이터 마크업이 없다');
+  assert.ok(js.includes('r2Runtime.setEnabled('), '토글이 런타임을 못 끈다');
+  assert.ok(js.includes('renderR2Progress()'), '진행 인디케이터를 아무도 안 그린다');
+  // 🔴 인디케이터는 **매 프레임** 갱신돼야 한다 — 토글에서만 그리면 스캔 중에 안 움직인다.
+  const blockAt = js.indexOf('if (r2Runtime.enabled) {');
+  assert.ok(blockAt > 0);
+  const block = js.slice(blockAt, blockAt + 1800);
+  assert.ok(block.includes('renderR2Progress()'),
+    '프레임 루프의 R2 블록이 인디케이터를 안 그린다 — 스캔 중에 막대가 멈춰 있다');
+});

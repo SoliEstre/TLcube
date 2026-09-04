@@ -392,6 +392,30 @@
    * ⚠ 폭은 JS 가 인라인 `width` 로만 준다(0%\~100%). transition 은 게이지가 프레임
    *   주기(320ms)로 갱신되므로 그보다 짧게 — 아니면 항상 뒤처져 보인다.
    */
+  /* R2 진행 인디케이터 — 좌하단. 조준을 방해하지 않게 반투명·소형으로 둔다. */
+  .r2-progress {
+    position: absolute; left: 10px; bottom: 10px; z-index: 6;
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 8px; border-radius: 999px;
+    background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
+    font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #7ef9d0; letter-spacing: .04em;
+    pointer-events: none;
+  }
+  .r2-progress-label { opacity: .75; }
+  .r2-progress-track {
+    display: inline-block; width: 68px; height: 4px; border-radius: 2px;
+    background: rgb(126 249 208 / .22); overflow: hidden;
+  }
+  .r2-progress-fill {
+    display: block; height: 100%; width: 0%;
+    background: linear-gradient(90deg, #7ef9d0, #4ad8ff);
+    /* 후퇴 금지(A6) — 값이 내려가도 폭은 트랜지션으로만 움직인다. */
+    transition: width 120ms linear;
+  }
+  .r2-progress.is-done .r2-progress-fill { background: #7ef9d0; }
+  .r2-progress-note { opacity: .6; font-size: 10px; }
+
   .steady-meter {
     position: absolute;
     left: 12%;
@@ -1312,6 +1336,12 @@
            선택은 localStorage 에 남는다 — 실기기에서 앱을 껐다 켜도 유지돼야
            비교 측정이 된다. -->
       <button type="button" id="lab-daehan-toggle" class="lab-debug-toggle" hidden aria-pressed="false" data-i18n="lab.daehan.toggle">taegeuk + sagoae</button>
+      <!-- R2(LTC 다중프레임 누적) 토글 (2026-09-04, 운영자 요구). 기본 **켬** —
+           시험판의 존재 이유가 R2 실기다. 끄면 정식(`/`)과 같은 단발 경로만 돈다.
+           운영자 근거: 「R2 가 R1 을 완전대체 가능할거라고 생각하지 않기 때문에도 있고,
+           비교하기 쉽게 하기 위한것도」. 선택은 localStorage 에 남는다 — 앱을 껐다
+           켜도 유지돼야 A/B 가 성립한다 (daehan 토글과 같은 규약). -->
+      <button type="button" id="lab-r2-toggle" class="lab-debug-toggle" hidden aria-pressed="true" data-i18n="lab.r2.toggle">R2 누적 복호</button>
     </aside>
 
     <!-- r3 정사각 뷰: 프리뷰(cover) ≡ 분석 정사각(cropWindow crop=1). K/C 가이드와
@@ -1329,6 +1359,19 @@
              장식이라 aria-hidden — 상태 문구(.scan-status)가 낭독을 맡는다. -->
         <div class="steady-meter" id="steady-meter" aria-hidden="true">
           <span class="steady-meter-fill" id="steady-meter-fill"></span>
+        </div>
+        <!-- R2 누적 진행 인디케이터 (2026-09-04, PM/029 §17 "수집된 코드 정보
+             인디케이터 (채워져 가는)"). **시험판 전용** — authored hidden 이고
+             scanner.js 가 isLabPath() 에서만 연다.
+             목적(§18\~19): QR 대비 긴 스캔에서 **사용자 인내심 유지**. R2 는 여러
+             프레임을 모아야 답을 내는데 그동안 화면이 아무 말도 안 하면 실제 시간과
+             무관하게 느리게 «느껴진다» — 운영자 실기 1차의 Y0 관측이 그 자리다.
+             장식이 아니라 **진단 도구**이기도 하다: D 가 차는데 복호가 안 되면
+             크기 하한이 로케이터가 아니라 그 뒤에 있다는 신호다 (§25.4.3). -->
+        <div class="r2-progress" id="r2-progress" aria-hidden="true" hidden>
+          <span class="r2-progress-label" id="r2-progress-label">R2</span>
+          <span class="r2-progress-track"><span class="r2-progress-fill" id="r2-progress-fill"></span></span>
+          <span class="r2-progress-note" id="r2-progress-note"></span>
         </div>
         <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색
              + 로케이터 앵커 마커. 안정판에선 hidden 그대로. -->
