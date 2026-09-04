@@ -4907,8 +4907,15 @@ function failurePoseFromValidation(hypotheses, diagnostics) {
 
 /**
  * 기하 가설마다 포맷 전 후보와 본문 RS를 모두 평가한 뒤 body-valid 후보만 반환한다.
- * readFormatForHypothesis를 공개 경계로 유지하면서 전체 bootstrap 루프도 이 함수가
- * 소유한다.
+ * readFormatForHypothesis 를 **모듈 안의** 경계로 유지하면서 전체 bootstrap 루프도
+ * 이 함수가 소유한다.
+ *
+ * ⚠ 2026-09-04 정정: 여기 「공개 경계」라고 적혀 있었는데 사실이 아니었다 —
+ * `readFormatForHypothesis` 는 이 모듈 밖으로 **export 되지 않는다**. 그 문장을 믿고
+ * 「이미 공개 API 니까 부르면 된다」로 읽으면 안 된다.
+ * 그리고 export 하는 것은 한 줄짜리 일이 아니다: 이 파일은 **82파일 폐포**라
+ * import 하는 순간 `src/decode.js`(R1 복호기)와 `src/encodeY.js`(인코더)가 딸려 온다.
+ * R2 가 이 함수를 쓰려던 시도(P2)가 그 지점에서 멈췄다 — PM/029B §21.
  */
 function validateGridHypotheses(luma, hypotheses, options = {}) {
   const cfg = calibration(options);
