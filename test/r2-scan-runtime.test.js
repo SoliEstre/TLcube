@@ -145,3 +145,50 @@ test('ⓕ 시험판 UI — 토글과 진행 인디케이터가 배선돼 있다'
   assert.ok(block.includes('renderR2Progress()'),
     '프레임 루프의 R2 블록이 인디케이터를 안 그린다 — 스캔 중에 막대가 멈춰 있다');
 });
+
+test('ⓖ 우하단 셀맵 뷰 — 선두 후보의 셀맵과 사영 좌표를 내보내고, 좌표는 프레임 안이다', (t) => {
+  const frames = firstFrames('y2', 4);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
+  const view = runtime.view;
+  assert.ok(view.cellCount > 0, '락 뒤인데 뷰 cellCount 가 0 이다 — 어댑터 사영이 안 됐다');
+  assert.ok(view.cellMap instanceof Uint8Array && view.cellMap.length >= view.cellCount,
+    '셀맵이 세션 버퍼 참조가 아니다');
+  // 좌표는 **어댑터가 정합에 쓰는 같은 H·격자**에서 나와야 한다 — 프레임 안에 있어야 한다.
+  const { width, height } = frames[0];
+  let finite = 0;
+  let inside = 0;
+  for (let c = 0; c < view.cellCount; c += 1) {
+    const x = view.cellCentres[c * 2];
+    const y = view.cellCentres[c * 2 + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    finite += 1;
+    if (x >= 0 && x <= width && y >= 0 && y <= height) inside += 1;
+  }
+  assert.ok(finite >= view.cellCount * 0.9,
+    `사영된 셀이 ${finite}/${view.cellCount} 뿐이다 — cellCoord→canonicalXY→projectInto 사슬이 끊겼다`);
+  assert.ok(inside >= finite * 0.9,
+    `프레임 밖 좌표가 ${finite - inside}/${finite} 다 — H 가 엉뚱하거나 격자가 틀렸다`);
+  // 셀맵은 실제로 칠해져 있어야 한다 — 전부 UNOBSERVED(0) 면 세션이 셀을 안 칠했다.
+  let painted = 0;
+  for (let c = 0; c < view.cellCount; c += 1) if (view.cellMap[c] !== 0) painted += 1;
+  assert.ok(painted > 0, '셀맵이 전부 미관측이다 — 세션이 셀을 안 칠했다 (session.js 매 프레임 CONFIRMED/CANDIDATE)');
+  // 끄면 뷰도 비운다 — 옛 그림이 화면에 눌러앉으면 안 된다.
+  runtime.setEnabled(false);
+  assert.equal(runtime.view.cellCount, 0, '껐는데 셀맵 뷰가 남았다');
+});
+
+test('ⓗ 시험판 UI — 셀맵 캔버스가 배선돼 있고 프레임 루프에서 매 프레임 그린다', () => {
+  const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
+  const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+  assert.ok(html.includes('id="r2-cellmap"'), '셀맵 캔버스 마크업이 없다');
+  assert.ok(js.includes('function renderR2CellMap()'), '셀맵 렌더러가 없다');
+  // 색 표는 CELL_MAP_STATE 를 **키로** 써야 한다 — 숫자 손 사본은 상태값이 바뀌면 조용히 틀린다.
+  assert.ok(/\[CELL_MAP_STATE\.CONFIRMED\]/.test(js), '셀 색 표가 CELL_MAP_STATE 를 키로 안 쓴다 (숫자 손 사본)');
+  const blockAt = js.indexOf('if (r2Runtime.enabled) {');
+  assert.ok(blockAt > 0);
+  const block = js.slice(blockAt, blockAt + 1800);
+  assert.ok(block.includes('renderR2CellMap()'),
+    '프레임 루프의 R2 블록이 셀맵을 안 그린다 — 스캔 중에 그림이 멈춰 있다');
+});

@@ -93,6 +93,23 @@ export function createR2ScanRuntime(options = {}) {
   let boundN = 0;
   let lastAt = -Infinity;
   let framesSinceBind = 0;
+  /*
+   * 표시용 뷰 (PM/029 §18\~19 우하단 셀맵 렌더). **선두 후보**(D 최대)의 셀맵과
+   * 셀 중심 사영 좌표를 내보낸다. 셀맵은 세션 버퍼 **참조**라 복사가 없고, 좌표 버퍼는
+   * bind 때 한 번 잡는다 — 핫 경로 할당 금지.
+   * ⚠ 셀맵은 `session.js` 가 매 프레임 `margin >= tauCellQ8 ? CONFIRMED : CANDIDATE` 로
+   * 칠한다. 벽에 붙은 세트는 전 셀 CANDIDATE 다 (PM/029B §25.7) — 그것이 이 렌더가
+   * 보여 줘야 할 바로 그 그림이다.
+   */
+  let centres = new Float32Array(0);
+  const view = {
+    cellMap: null,
+    cellCentres: null,
+    cellCount: 0,
+    frameWidth: 0,
+    frameHeight: 0,
+    layoutId: '',
+  };
   const stats = {
     frames: 0,
     binds: 0,
@@ -113,6 +130,10 @@ export function createR2ScanRuntime(options = {}) {
     stats.candidateCount = 0;
     // 진행률도 같이 버린다 — 후보가 없는데 막대가 차 있으면 거짓말이다.
     stats.progressD = 0;
+    view.cellMap = null;
+    view.cellCentres = null;
+    view.cellCount = 0;
+    view.layoutId = '';
   }
 
   /**
@@ -153,6 +174,13 @@ export function createR2ScanRuntime(options = {}) {
     boundN = n;
     stats.binds += 1;
     stats.candidateCount = candidates.length;
+    // 좌표 버퍼는 후보 중 가장 큰 격자에 맞춰 **한 번** 잡는다.
+    let maxCells = 0;
+    for (const candidate of candidates) {
+      const count = candidate.session.layout.cellCount;
+      if (count > maxCells) maxCells = count;
+    }
+    if (centres.length < maxCells * 2) centres = new Float32Array(maxCells * 2);
   }
 
   /**
@@ -197,8 +225,11 @@ export function createR2ScanRuntime(options = {}) {
     // 중인지」는 관심사가 아니고 「얼마나 찼는지」가 관심사다 (PM/029 §17).
     let bestD = 0;
     let bestIndicator = R2_INDICATOR.SEARCHING;
+    // 선두 후보 — D 가 전부 0 이어도 첫 후보를 그린다 (락 직후 «전 셀 미관측» 도 정보다).
+    let leading = null;
     for (const candidate of candidates) {
       if (!candidate.alive) continue;
+      if (leading === null) leading = candidate;
       let result;
       try {
         result = candidate.session.pushFrame(luma.data, luma.width, luma.height, timestamp, null);
@@ -210,6 +241,7 @@ export function createR2ScanRuntime(options = {}) {
       if (d > bestD) {
         bestD = d;
         bestIndicator = result.indicator;
+        leading = candidate;
       }
       if (result.indicator !== R2_INDICATOR.DONE) continue;
       let text = null;
@@ -227,6 +259,18 @@ export function createR2ScanRuntime(options = {}) {
 
     stats.progressD = bestD;
     stats.indicator = bestIndicator;
+
+    // 표시용 뷰 갱신 — 선두 후보의 셀맵(참조) + 어댑터가 사영한 셀 중심.
+    if (leading !== null) {
+      const cellCount = leading.session.layout.cellCount;
+      const mapped = adapters.projectCellCentres(centres, cellCount);
+      view.cellMap = leading.session.result.progress.cellMap;
+      view.cellCentres = centres;
+      view.cellCount = mapped > 0 ? cellCount : 0;
+      view.frameWidth = luma.width;
+      view.frameHeight = luma.height;
+      view.layoutId = leading.layoutId;
+    }
 
     // 오래 붙들고도 아무도 못 풀면 접는다 — 락이 틀렸을 수 있고, 그때는 어댑터의
     // F 게이트가 락을 걷어내 다음 bind 가 다른 n 으로 온다.
@@ -261,5 +305,6 @@ export function createR2ScanRuntime(options = {}) {
     pushFrame,
     reset,
     stats,
+    view,
   };
 }

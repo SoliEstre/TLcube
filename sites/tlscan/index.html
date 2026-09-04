@@ -415,6 +415,14 @@
   }
   .r2-progress.is-done .r2-progress-fill { background: #7ef9d0; }
   .r2-progress-note { opacity: .6; font-size: 10px; }
+  /* R2 셀맵 — 우하단. 조준을 가리지 않게 작고 반투명하게. */
+  .r2-cellmap {
+    position: absolute; right: 10px; bottom: 10px; z-index: 6;
+    width: 112px; height: 112px; border-radius: 10px;
+    background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
+    box-shadow: 0 0 0 1px rgb(126 249 208 / .25), 0 0 14px rgb(74 216 255 / .18);
+    pointer-events: none;
+  }
 
   .steady-meter {
     position: absolute;
@@ -1373,6 +1381,14 @@
           <span class="r2-progress-track"><span class="r2-progress-fill" id="r2-progress-fill"></span></span>
           <span class="r2-progress-note" id="r2-progress-note"></span>
         </div>
+        <!-- R2 셀맵 렌더 — 우하단 (2026-09-05, PM/029 §18\~19 "확인/확정된 … 영역을
+             셀 편집기풍 실시간 렌더 (사이버틱)"). **시험판 전용**, authored hidden.
+             그리는 것: 선두 후보의 셀을 **정합이 실제로 표본한 사영 자리**에 놓고 상태
+             (미관측·후보·확정·소거)로 칠한다. 목적 둘 — ① 긴 스캔에서 인내심 유지
+             ② 진단: 벽에 붙은 스캔은 전 셀 «후보» 로 멈춰 있고(PM/029B §25.7), 그 그림이
+             「어느 셀이 안 서는지」를 실기에서 바로 보여 준다.
+             A6 규율: 코드 사영 영역만 · 플래시 금지 · 확정은 정적. -->
+        <canvas class="r2-cellmap" id="r2-cellmap" width="112" height="112" aria-hidden="true" hidden></canvas>
         <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색
              + 로케이터 앵커 마커. 안정판에선 hidden 그대로. -->
         <svg class="lab-debug-layer" id="lab-debug-layer" aria-hidden="true" hidden></svg>

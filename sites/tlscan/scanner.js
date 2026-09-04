@@ -70,6 +70,7 @@ import {
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import { createR2ScanRuntime } from '/src/r2-scan-runtime.js';
+import { CELL_MAP_STATE } from '/src/r2/progress.js';
 import {
   normalizeCentralFinderId,
   normalizeExpectedEmphasis,
@@ -131,7 +132,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.01';
+export const SCANNER_BUILD = '2026-09-05.02';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -1999,6 +2000,7 @@ function startFrameLoop(session) {
           if (r2Luma && r2Luma.ok !== false) {
             const hit = r2Runtime.pushFrame(r2Luma, timestamp);
             renderR2Progress();
+            renderR2CellMap();
             if (hit && typeof hit.text === 'string') {
               // R2 가 먼저 읽었다. 결과 경로는 R1 과 **같은 문**을 쓴다 —
               // 새 표시 경로를 만들면 두 경로가 어긋난다.
@@ -2959,6 +2961,72 @@ function renderR2Progress() {
   }
 }
 
+/*
+ * R2 셀맵 렌더 (PM/029 §18\~19 우하단). **시험판 전용.**
+ *
+ * 셀 자리는 런타임 뷰가 준 **사영 좌표**다 — 어댑터가 정합에 쓰는 것과 같은 H·격자
+ * (`adapter-locator.js` projectCellCentres). 따로 계산하지 않는다: 두 그림이 어긋나면
+ * 사용자는 「정합이 보는 곳」이 아니라 「내가 그린 곳」을 본다.
+ *
+ * 색은 `CELL_MAP_STATE` 를 **키로** 쓴다 — 숫자 손 사본 금지. 상태값이 바뀌면 여기가
+ * 자동으로 따라간다(없는 상태는 미관측 색으로 떨어진다).
+ * A6 규율: 코드 사영 영역만(bbox 안) · 플래시 금지(상태 색만 바뀜) · 확정은 정적.
+ */
+const R2_CELL_COLOR = Object.freeze({
+  [CELL_MAP_STATE.UNOBSERVED]: 'rgba(126,249,208,0.14)',
+  [CELL_MAP_STATE.CANDIDATE]: 'rgba(255,196,64,0.75)',
+  [CELL_MAP_STATE.CONFIRMED]: 'rgba(126,249,208,0.95)',
+  [CELL_MAP_STATE.ERASURE]: 'rgba(255,90,170,0.85)',
+});
+const r2CellMapCanvas = document.getElementById('r2-cellmap');
+function renderR2CellMap() {
+  if (!r2CellMapCanvas || !isLabPath()) return;
+  const view = r2Runtime.view;
+  if (!r2Runtime.enabled || !view || view.cellCount === 0 || !view.cellMap || !view.cellCentres) {
+    r2CellMapCanvas.hidden = true;
+    return;
+  }
+  r2CellMapCanvas.hidden = false;
+  const ctx = r2CellMapCanvas.getContext('2d');
+  if (!ctx) return;
+  const width = r2CellMapCanvas.width;
+  const height = r2CellMapCanvas.height;
+  ctx.clearRect(0, 0, width, height);
+
+  // 코드 사영 영역(bbox)만 캔버스에 맞춘다 — 프레임 전체를 그리지 않는다 (A6).
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let cell = 0; cell < view.cellCount; cell += 1) {
+    const x = view.cellCentres[cell * 2];
+    const y = view.cellCentres[cell * 2 + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  if (!(maxX > minX) || !(maxY > minY)) return;
+  const pad = 8;
+  const scale = Math.min((width - 2 * pad) / (maxX - minX), (height - 2 * pad) / (maxY - minY));
+  const originX = pad + ((width - 2 * pad) - (maxX - minX) * scale) / 2;
+  const originY = pad + ((height - 2 * pad) - (maxY - minY) * scale) / 2;
+
+  ctx.strokeStyle = 'rgba(126,249,208,0.30)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(originX - 3, originY - 3, (maxX - minX) * scale + 6, (maxY - minY) * scale + 6);
+
+  const dot = Math.max(2, Math.min(6, scale * 0.9));
+  for (let cell = 0; cell < view.cellCount; cell += 1) {
+    const x = view.cellCentres[cell * 2];
+    const y = view.cellCentres[cell * 2 + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    ctx.fillStyle = R2_CELL_COLOR[view.cellMap[cell]] || R2_CELL_COLOR[CELL_MAP_STATE.UNOBSERVED];
+    ctx.fillRect(originX + (x - minX) * scale - dot / 2, originY + (y - minY) * scale - dot / 2, dot, dot);
+  }
+}
+
 const r2Toggle = document.getElementById('lab-r2-toggle');
 if (r2Toggle && isLabPath()) {
   r2Toggle.hidden = false;
@@ -2972,8 +3040,9 @@ if (r2Toggle && isLabPath()) {
     try { window.localStorage.setItem(R2_TOGGLE_KEY, r2Runtime.enabled ? '1' : '0'); }
     catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
     paintR2();
-    // 인디케이터도 즉시 반영한다 — 끄면 숨고, 켜면 0 부터 다시 찬다.
+    // 인디케이터·셀맵도 즉시 반영한다 — 끄면 숨고, 켜면 0 부터 다시 찬다.
     renderR2Progress();
+    renderR2CellMap();
   });
 }
 // 기대 톤 — 레이아웃 카드와 같은 배선. 2·3 만 유효, 그 외(모름 포함)는 null(미상)이다.
