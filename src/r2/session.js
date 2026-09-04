@@ -304,6 +304,28 @@ export function createR2Session(options = undefined) {
       return syncResult();
     }
 
+    /*
+     * ── 🔴 드랍에서의 재획득 (2026-09-04) ────────────────────────────────
+     * `observeIdentity` 는 `state === DROPPED` 면 조기 반환한다 — 즉 **흡수 상태**다.
+     * 그런데 `resetIdentity` 는 `reset()` 한 곳에서만 불리고, `hardDropReset` 은
+     * 누적기·진행률만 되돌린다. 결과: 실측(코드를 nCoast 프레임 가린 뒤 되돌림)에서
+     * 코드가 다시 보여도 **8프레임 내내 `DROPPED · D=0 · 복호 시도 0`** 이었다.
+     * ⇒ 라이브 카메라에서 손이 흔들려 코드를 ≈0.4초 놓치면 누적 세션이 **영구히**
+     *   끝났다. 이 층의 존재 이유가 사라지는 결함이다.
+     *
+     * 계약 근거: PM/029B §4 의 A4 행이 「ACTIVE/COAST/DROPPED · **재개는 검증 후**」다.
+     * 재개는 설계에 있다. 「검증 후」는 여기서 지켜진다 — `hardDropReset` 이 누적기를
+     * 비웠으므로 증거가 0 부터 다시 쌓이고, D 가 1 에 닿기 전엔 복호를 시도하지 않는다.
+     *
+     * ⚠ **자리가 중요하다.** 이걸 `hardDropReset` 안에 넣으면 코드가 **안 보이는
+     * 동안에도** 매 nCoast 프레임마다 ACTIVE 로 돌아가 DROPPED 표시가 깜빡인다
+     * (실측으로 확인했다). 재획득은 「검출이 **다시 됐을 때**」 일어나야 한다.
+     * 그래서 게이트를 «검출 성공» 쪽에 둔다 — 코드가 없으면 DROPPED 가 그대로 선다.
+     */
+    if (detectionOutput.found && identity.state === IDENTITY_STATE.DROPPED) {
+      resetIdentity(identity, IDENTITY_STATE.ACTIVE);
+    }
+
     if (!detectionOutput.found) {
       observeIdentity(identity, false, false, 0, 0);
       if (identity.state === IDENTITY_STATE.DROPPED) hardDropReset();

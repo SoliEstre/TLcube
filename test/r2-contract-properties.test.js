@@ -307,6 +307,84 @@ test('세션 coast 만료: nCoast 프레임 뒤 드랍으로 넘어간다', () =
   assert.equal(frames, createR2Params().nCoast);
 });
 
+/*
+ * 🔴 드랍은 **흡수 상태가 아니어야 한다** (2026-09-04, 출하 결함 워크플로 §19.8-3).
+ * `observeIdentity` 가 `state === DROPPED` 면 조기 반환하는데 `resetIdentity` 는
+ * `reset()` 한 곳에서만 불렸다 ⇒ 실측: coast 만료 뒤 코드가 다시 보여도 8프레임 내내
+ * `DROPPED · D=0 · 복호 시도 0`. 라이브 카메라에서 손이 흔들려 ≈0.4초 놓치면 누적
+ * 세션이 **영구히** 끝났다 — 이 층의 존재 이유가 사라진다.
+ * 계약 근거: PM/029B §4 A4 「ACTIVE/COAST/DROPPED · **재개는 검증 후**」.
+ *
+ * ⚠ 이 테스트는 **자리**도 잰다. 재획득을 `hardDropReset` 안에 넣으면 코드가 안 보이는
+ * 동안에도 매 nCoast 마다 ACTIVE 로 돌아가 DROPPED 표시가 **깜빡인다.** 아래 ② 가 그걸
+ * 잡는다 — 없으면 잘못된 자리의 수정이 초록으로 착지한다.
+ */
+test('드랍 뒤 코드가 다시 보이면 세션이 재획득한다 — 그리고 안 보이는 동안엔 안 깜빡인다', () => {
+  let seeing = true;
+  let decodeCalls = 0;
+  const session = createR2Session({
+    layout: { cellCount: 36, requiredSymbolCount: 6 },
+    params: { tauCellQ8: 256, erasureMarginQ8: 256 },
+    detectInto(luma, width, height, timestamp, pose, output) {
+      output.found = seeing ? 1 : 0;
+      output.family = 7;
+      return R2_SESSION_STATUS.OK;
+    },
+    alignInto(luma, width, height, timestamp, pose, detection, output, faceLuma, visibleCells) {
+      output.gatePassed = seeing ? 1 : 0;
+      output.weightQ15 = seeing ? Q15_ONE : 0;
+      output.mismatchCount = 0;
+      output.matchCount = seeing ? visibleCells.length : 0;
+      output.visibleCount = visibleCells.length;
+      for (let cell = 0; cell < visibleCells.length; cell += 1) {
+        visibleCells[cell] = 1;
+        faceLuma[cell * 3] = 255;
+        faceLuma[(cell * 3) + 1] = 128;
+        faceLuma[(cell * 3) + 2] = 0;
+      }
+      return R2_SESSION_STATUS.OK;
+    },
+    decodeInto(symbolValues, symbolConfidenceQ8, erasures, symbolCount, layout, output) {
+      decodeCalls += 1;
+      output.accepted = 0;
+      output.payloadLength = 0;
+      return R2_SESSION_STATUS.OK;
+    },
+  });
+
+  const luma = new Uint8Array([128]);
+  const nCoast = createR2Params().nCoast;
+  let frame = 0;
+  const push = () => { const r = session.pushFrame(luma, 1, 1, frame * 33, undefined); frame += 1; return r; };
+
+  // ① 정상 관측 — 누적이 서고 복호를 시도한다 (공허 방지)
+  for (let i = 0; i < 6; i += 1) push();
+  assert.equal(session.result.state, IDENTITY_STATE.ACTIVE, '정상 관측에서 ACTIVE 가 아니다 — 하네스가 게이트를 못 넘는다');
+  const callsBeforeDrop = decodeCalls;
+  assert.ok(callsBeforeDrop > 0, '드랍 전에 복호 시도가 없다 — 이 테스트는 아무것도 안 쟀다');
+
+  // ② 코드를 잃는다 → 드랍. 그리고 **계속 안 보이는 동안 DROPPED 가 유지된다**
+  seeing = false;
+  for (let i = 0; i < nCoast + 1; i += 1) push();
+  assert.equal(session.result.state, IDENTITY_STATE.DROPPED, `${nCoast + 1}프레임을 못 봤는데 드랍이 아니다`);
+  for (let i = 0; i < nCoast + 3; i += 1) {
+    push();
+    assert.equal(session.result.state, IDENTITY_STATE.DROPPED,
+      '코드가 안 보이는데 드랍이 풀렸다 — 재획득 게이트가 «검출 성공» 이 아니라 '
+      + '드랍 처리 쪽에 붙었다. 그러면 DROPPED 표시가 매 nCoast 마다 깜빡인다');
+  }
+
+  // ③ 코드가 다시 보인다 → 재획득
+  seeing = true;
+  for (let i = 0; i < 8; i += 1) push();
+  assert.equal(session.result.state, IDENTITY_STATE.ACTIVE,
+    '코드가 8프레임째 다시 보이는데 세션이 안 살아났다 — 드랍이 흡수 상태다. '
+    + '라이브에서 첫 드롭이 누적을 영구히 끝낸다는 뜻이다');
+  assert.ok(decodeCalls > callsBeforeDrop,
+    `재획득 뒤 복호 시도가 안 늘었다 (${callsBeforeDrop} → ${decodeCalls}) — `
+    + '상태만 살고 누적이 안 도는 것이다');
+});
+
 // ── 진행률 분모의 도달 가능성 (A6 · 브리프 「임계 도달 순간 D=1」) ────────
 // C_eff 상한은 정확히 symbolCount 다. 분모가 그보다 크면 D=1 이 수학적으로
 // 도달 불가라 decodeInto 가 영원히 안 불린다 — K/m 을 안 준 layout 의 폴백이
