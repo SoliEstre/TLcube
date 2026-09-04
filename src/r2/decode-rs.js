@@ -178,32 +178,6 @@ export function createRsDecodeInto(options = undefined) {
     }
     if (allZero === 1 && out.correctedCount > 0) return R2_SESSION_STATUS.OK;
 
-    // ── 🔴 전부-0 코드워드 거부 (2026-09-04) ────────────────────────────
-    // 위 규칙은 «빈 페이로드 ∧ 정정 > 0» 의 **동시** 성립을 요구하는데, 전부-0
-    // 워드에서는 뒤 절이 **구조적으로** 안 선다: 0 벡터는 어떤 선형부호에서도
-    // 유효한 코드워드라 신드롬이 전부 0 이고 `correctedCount === 0` 이다.
-    // 그래서 이 워드는 확률이 아니라 **계수 1** 로 통과했다.
-    //
-    // 실측 2026-09-04 (수정 전, `cellsurface` 라인업 60행 전수): 심볼 전부 0 ·
-    // 신뢰도 전부 0 · 소거 전량 1 을 넣으면 **59/60 행이 accepted=1** 이었다.
-    // 유일한 거부가 `v0@13/L` 이고, 그 거부의 이유는 이 검사가 아니라
-    // `rs-soft.js` 의 `MIN_RESIDUAL_CORRECTIONS` 였다 — 즉 **우연한 방패**다.
-    // 그 상수를 고치면(PM/029B §18.5 ①) 60/60 이 된다. 그래서 이 검사가 먼저다.
-    //
-    // 그리고 이 워드는 «적대적 입력» 이 아니라 **누적기가 증거 0 일 때 내놓는 값**이다
-    // (`accumulate.js` 의 `materializeSymbolsInto`: 점수가 전부 동점이면 엄격 비교
-    // 때문에 값이 0 에 머물고, 신뢰도 0 이라 소거 플래그가 1 이 된다).
-    // 즉 세션이 「나는 아무것도 못 봤다」를 말하는 그 벡터가 DONE 으로 수용됐다.
-    //
-    // ⚠ 대가: 이 검사는 **본문이 빈 코드**(`frame('', …)`)도 거부한다. 그 코드의
-    // 코드워드가 실제로 전부 0 이라 구분할 방법이 없다. 데이터를 안 싣는 코드를
-    // 잃는 대가로 「증거 0 이 성공으로 보이는」 경로를 닫는다.
-    let codewordAllZero = 1;
-    for (let i = 0; i < symbolCount; i += 1) {
-      if (out.codeword[i] !== 0) { codewordAllZero = 0; break; }
-    }
-    if (codewordAllZero === 1) return R2_SESSION_STATUS.OK;
-
     // ── 프레이밍 검증 (2026-09-03) ──
     // 🔴 위 «빈 페이로드» 검사가 이 경로의 **유일한** 정합 검사였고, 그래서 **내용 있는
     // 쓰레기가 확신에 찬 DONE 으로 통과했다.** 실측: 시퀀스 y0(단발 0/108)을 세션에
@@ -239,6 +213,37 @@ export function createRsDecodeInto(options = undefined) {
       output.tResidual = out.tResidual;
       return R2_SESSION_STATUS.OK;
     }
+    // ── 🔴 전부-0 코드워드 거부 (2026-09-04) ────────────────────────────
+    // 위 규칙은 «빈 페이로드 ∧ 정정 > 0» 의 **동시** 성립을 요구하는데, 전부-0
+    // 워드에서는 뒤 절이 **구조적으로** 안 선다: 0 벡터는 어떤 선형부호에서도
+    // 유효한 코드워드라 신드롬이 전부 0 이고 `correctedCount === 0` 이다.
+    // 그래서 이 워드는 확률이 아니라 **계수 1** 로 통과했다.
+    //
+    // 실측 2026-09-04 (수정 전, `cellsurface` 라인업 60행 전수): 심볼 전부 0 ·
+    // 신뢰도 전부 0 · 소거 전량 1 을 넣으면 **59/60 행이 accepted=1** 이었다.
+    // 유일한 거부가 `v0@13/L` 이고, 그 거부의 이유는 이 검사가 아니라
+    // `rs-soft.js` 의 `MIN_RESIDUAL_CORRECTIONS` 였다 — 즉 **우연한 방패**다.
+    // 그 상수를 고치면(PM/029B §18.5 ①) 60/60 이 된다. 그래서 이 검사가 먼저다.
+    //
+    // 그리고 이 워드는 «적대적 입력» 이 아니라 **누적기가 증거 0 일 때 내놓는 값**이다
+    // (`accumulate.js` 의 `materializeSymbolsInto`: 점수가 전부 동점이면 엄격 비교
+    // 때문에 값이 0 에 머물고, 신뢰도 0 이라 소거 플래그가 1 이 된다).
+    // 즉 세션이 「나는 아무것도 못 봤다」를 말하는 그 벡터가 DONE 으로 수용됐다.
+    //
+    // ⚠ 대가: 이 검사는 **본문이 빈 코드**(`frame('', …)`)도 거부한다. 그 코드의
+    // 코드워드가 실제로 전부 0 이라 구분할 방법이 없다. 데이터를 안 싣는 코드를
+    // 잃는 대가로 「증거 0 이 성공으로 보이는」 경로를 닫는다.
+    //
+    // ⚠ **framed 경로 한정이다.** 원시 경로(`maskDigits` 없음)의 계약은 「원시
+    // 바이트 in/out」이라 전부-0 페이로드가 합법 데이터다 — `r2-decode-rs.test.js`
+    // 의 ④-b 대조군이 그 계약을 잠근다. 그리고 증거-0 벡터가 착지하는 곳은
+    // framed 쪽이다: 실물 Y 코드는 인코더가 `frame(text, dataBytes)` 를 씌우고
+    // 세션이 `maskDigits` 를 넘긴다. 넓게 걸면 계약을 깨면서 얻는 게 없다.
+    let codewordAllZero = 1;
+    for (let i = 0; i < symbolCount; i += 1) {
+      if (out.codeword[i] !== 0) { codewordAllZero = 0; break; }
+    }
+    if (codewordAllZero === 1) return R2_SESSION_STATUS.OK;
     try {
       unframe(payloadBuffer.subarray(0, capped));
     } catch {

@@ -19,6 +19,26 @@ import {
 // The contract fixes delta >= 2. Use the smallest permitted deterministic default.
 const DEFAULT_DETECTION_MARGIN = 2;
 const MIN_RESIDUAL_CORRECTIONS = 3;
+
+/**
+ * **수용 축**의 잔여 하한. 「이 부호가 원래 줄 수 있는 것보다 더 요구하지 않는다」.
+ *
+ * 🔴 2026-09-04: `acceptDecode` 가 `tResidual < 3` 을 무조건 요구해서
+ * `nsym < 6` 이면 **오류 0 인 코드워드도 거부**했다 (`tResidual = ⌊(nsym−소거)/2⌋`).
+ * 출하 라인업에서 nsym < 6 은 정확히 하나 — **Y0 · v0 · ECC L (nsym 4)** 이고,
+ * 그 행은 R2 로 «어려운» 게 아니라 «불가능» 이었다.
+ * 실제 인코더 왕복 실측(cellsurface 60행): 수정 전 59/60, 유일한 빨강이 그 행.
+ *
+ * ⚠ **`selectErasures` 의 `maximumByResidual` 과 상수는 공유하지만 유도는 공유하지
+ * 않는다.** 그쪽은 «소거 예산 상한» 축이고 여기는 «이 부호에 자격이 있나» 축이다.
+ * 예산 축을 같이 열면 표적(nsym 4)에는 이득이 **0** 인데 — nsym=4 에서
+ * `maximumByResidual = 4 − 4 = 0` 이라 열 것이 없다 — nsym=3 에 e=1 rung 이 새로
+ * 생겨 균등 랜덤 워드 오수용이 **0/1e6 → 16/1e6** 이 된다 (실측, 배포 전 워크플로).
+ * 그래서 630 행은 원문 그대로 둔다.
+ */
+function acceptanceResidualFloor(nsym) {
+  return Math.min(MIN_RESIDUAL_CORRECTIONS, Math.floor(nsym / 2));
+}
 const CRC_NOT_CHECKED = -1;
 
 // symbolConfidenceQ8 is a non-negative log-likelihood gap. Convert it once to
@@ -847,8 +867,10 @@ export function acceptDecode(candidate, symbolConfidenceQ8, tResidual) {
     || candidate.codewordLength <= 0
     || symbolConfidenceQ8.length < candidate.codewordLength
     || !Number.isInteger(tResidual)
-    || tResidual < MIN_RESIDUAL_CORRECTIONS
+    // ⚠ nsym 정수 검사가 **잔여 비교보다 먼저**여야 한다 —
+    // acceptanceResidualFloor(비정수) 는 NaN 이고 `x < NaN` 은 false 라 절이 무력해진다.
     || !Number.isInteger(candidate.nsym)
+    || tResidual < acceptanceResidualFloor(candidate.nsym)
     || candidate.nsym <= 0
     || candidate.nsym >= candidate.codewordLength
     || !Number.isInteger(candidate.erasureCount)

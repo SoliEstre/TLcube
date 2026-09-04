@@ -147,9 +147,17 @@ export const DEFAULT_R2_PARAMS = Object.freeze({
   progressSafetySymbols: 4,
 
   // 예약 가설군: 아래 decoder/UI 값은 후속 Chase·GMD·coaching wave의
-  // calibration inventory이며 이번 R2 core scaffold는 아직 소비하지 않는다.
-  // 가설: 소거 뒤에도 남겨 둘 최소 RS correction radius다.
-  minResidualCorrections: 4,
+  // calibration inventory다.
+  // ⚠ **「아직 소비하지 않는다」가 이 블록 전체에 대해 참이 아니다** (2026-09-04 실측):
+  // 바로 아래 `gmdDepth` 는 `rs-soft.js` 가 읽어 **오늘 실제로 T3·T4 rung 을 돌린다.**
+  // 즉 이 블록은 폭발 반경이 0 이 아니다 — 값을 바꾸기 전에 소비처를 grep 해라.
+  //
+  // 🔴 `minResidualCorrections: 4` 는 여기서 **지웠다** (2026-09-04). 저장소 전체에서
+  // 참조가 0 이었고, 살아 있는 값은 `rs-soft.js` 의 상수 `MIN_RESIDUAL_CORRECTIONS = 3`
+  // 이라 **값도 달랐다.** 배선했다면 F = min(4, ⌊nsym/2⌋) 가 되어 라인업의 nsym ≥ 8
+  // 전 조합에서 소거 예산이 줄었을 것이다 (nsym 8 → 0칸, 10 → 2칸, 14 → 6칸).
+  // ⚠ 「3 이 맞고 4 가 오타」인지 「4 가 목표고 3 이 잠정」인지는 git 으로 안 갈린다.
+  //    다시 넣을 거면 그 답을 먼저 정해라 — 지금은 rs-soft.js 가 상수로 갖는다.
 
   // 가설: 후속 symbol-Chase 후보 수 상한은 η=8이다.
   chaseEtaMax: 8,
