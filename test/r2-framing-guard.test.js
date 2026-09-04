@@ -45,9 +45,12 @@ test('R2 세션이 y0 에서 오수용을 내지 않는다', { timeout: 1_800_00
   }
   const N = 13;
   const LAYOUT = 'v0';
+  const EXPECT = 'https://tl.estre.so';
   const scan = dataCellsInScanOrderCellSurfaceFinal(N, LAYOUT);
   const frames = seq.frames.slice(0, 40);
   let falseAccepts = 0;
+  let dones = 0;
+  let corrects = 0;
 
   for (const ecc of ['L', 'M', 'H']) {
     const cap = capacityForCellSurfaceFinal(N, ecc, 2, LAYOUT);
@@ -61,8 +64,14 @@ test('R2 세션이 y0 에서 오수용을 내지 않는다', { timeout: 1_800_00
           requiredSymbolCount: cap.dataSymbols,
           nsym: cap.nsym,
           maskDigits,
-          maxPayloadBytes: cap.maxPayloadBytes,
-          payloadBytes: cap.maxPayloadBytes,
+          // 🔴 **`dataBytes` 다** (2026-09-04 정정). RS 메시지는 인코더가
+          // `frame(text, dataBytes)` 로 만든 길이이고 `maxPayloadBytes = dataBytes − 1` 이다.
+          // 1 바이트 짧게 주면 base-211 청크(27B↔28심볼)가 통째로 다르게 풀려
+          // **DONE 이 아예 안 나고**, 그러면 이 테스트는 아래 `unframe` 단언에
+          // **도달조차 못 한 채 초록**이 된다. 실제로 그랬다 — 이 파일이 그 오설정을
+          // 자에서 복사해 왔고, 같은 오설정이 「n=13 한정 R2 결함」이라는 **오진**을 낳았다.
+          maxPayloadBytes: cap.dataBytes,
+          payloadBytes: cap.dataBytes,
         },
         detectInto: adapters.detectInto,
         alignInto: adapters.alignInto,
@@ -77,12 +86,24 @@ test('R2 세션이 y0 에서 오수용을 내지 않는다', { timeout: 1_800_00
         i += 1;
       }
       if (!done) continue;
-      // DONE 이 났다면 본문이 정상 프레이밍이어야 한다. y0 의 정답은 미확인이지만
-      // «유효한 UTF-8 · 길이 타당» 은 정답을 몰라도 요구할 수 있다.
+      dones += 1;
+      // DONE 이 났다면 본문이 정상 프레이밍이어야 한다.
       const res = session.result;
       const bytes = Uint8Array.from(res.payload.slice(0, res.payloadLength));
-      try { unframe(bytes); } catch { falseAccepts += 1; }
+      let text = null;
+      try { text = unframe(bytes).text; } catch { falseAccepts += 1; }
+      if (text === EXPECT) corrects += 1;
     }
   }
+  // 🔴 **「값이 있나」를 「값이 맞나」보다 먼저 묻는다.** 아래 두 단언이 이 순서로 있어야
+  // 「DONE 이 하나도 안 나서 오수용도 0」인 **공허한 초록**을 막는다. 실제로 그 상태로
+  // 한 번 커밋됐다 (`payloadBytes` 오설정 — 위 주석).
+  assert.ok(dones > 0,
+    'y0 에서 DONE 이 한 번도 안 났다 — 이 테스트는 아무것도 안 재고 있다. '
+    + '가장 흔한 원인은 layout 오설정(payloadBytes)이지 프레이밍 검증이 아니다');
   assert.equal(falseAccepts, 0, `y0 오수용 ${falseAccepts}건 — 프레이밍 검증이 뚫렸다`);
+  // y0 의 정답은 2026-09-04 에 확인됐다 (단발 108/108). 그러니 이제 **정답까지** 요구한다 —
+  // 「프레이밍이 유효하다」만 요구하면 «유효한데 틀린 글자» 를 통과시킨다.
+  assert.ok(corrects > 0,
+    `DONE 이 ${dones}건 났는데 원문과 일치한 것이 0건이다 — 프레이밍은 통과했지만 내용이 틀렸다`);
 });

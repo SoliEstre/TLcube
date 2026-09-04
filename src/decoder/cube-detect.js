@@ -3298,8 +3298,13 @@ function detectCubeFromSilhouette(luma, yJunction, options = {}) {
 
   // CS 파인더 블록 로케이터 — 마스크·실루엣 무의존으로 블록을 직접 찾아 기하를
   // 재정렬한다 (강한 톤 시프트에서 hull 이 0.5셀+ 어긋나는 병목의 원리 해법).
-  // lab 전용. 산출 shape 는 cellSurfaceOnly 라 셀 표면 평가만 받고, 수용은
-  // 기존 CS 게이트가 그대로 결정한다.
+  // 🔴 **lab 전용이 아니다** (2026-09-04 정정 — 2026-08-19 부터 거짓이었다).
+  // 게이트는 `enableCellSurfaceY` 인데 :3182 가 그것을 **켜짐 기본**으로 접는다
+  // (운영자 결정 2026-08-19). 즉 이 로케이터는 **정식 스캐너의 실사용자 경로에 있다.**
+  // 이 줄이 「lab 전용」이라 말하는 동안 그 계약을 이 주석으로 확인한 사람은
+  // 「이 수정이 실사용자에게 가는가」에 «아니오» 라 답하게 되고, 그러면 로케이터
+  // 기본값 변경의 심각도를 통째로 잘못 매긴다. 실제로 그럴 뻔했다.
+  // 산출 shape 는 cellSurfaceOnly 라 셀 표면 평가만 받고, 수용은 기존 CS 게이트가 결정한다.
   const attemptedBeforeLocator = geometryReports.some((entry) => entry.attempted === true);
   let blockLocator = null;
   let locatorAccepted = false;

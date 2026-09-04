@@ -50,8 +50,11 @@
  *   게이트(0.78/0.035)는 **한 값도 완화하지 않는다**.
  *
  * 결정성: RNG 없음, 모든 순회·정렬 고정 순서, 동점은 (score desc, y, x) 으로 깬다.
- * 노출: cube-detect 의 lab 경로(enableCellSurfaceY)에서만 호출된다. 산출 shape 는
- * cellSurfaceOnly=true 라 셀 표면 평가만 받는다 — 수용은 기존 CS 게이트가 결정한다.
+ * 노출: cube-detect 가 `enableCellSurfaceY` 아래에서 부른다. 🔴 **그 스위치는 2026-08-19 부터
+ * «켜짐 기본»이다** (`cube-detect.js` 의 normalizeCubeSurfaceDefault) — 즉 이 파일은
+ * **lab 전용이 아니라 정식 스캐너의 실사용자 경로에 있다.** 여기 기본값을 바꾸면
+ * 카메라 경로와 사진 업로드 경로 **둘 다** 즉시 영향을 받는다 (2026-09-04 정정).
+ * 산출 shape 는 cellSurfaceOnly=true 라 셀 표면 평가만 받는다 — 수용은 기존 CS 게이트가 결정한다.
  *
  * 모든 임계값은 합성 실험용 [미검증]이며 options.calibration.csBlockLocator 로 덮을 수 있다.
  */

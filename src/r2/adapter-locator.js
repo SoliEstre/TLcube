@@ -18,7 +18,10 @@ import { CORNER_UNIT_OFFSETS } from '../hexgrid.js';
 import {
   dataCellsInScanOrderCellSurfaceFinal,
 } from '../cellSurfaceFinal.js';
-import { detectCellSurfaceBlockShapes } from '../decoder/cellsurface-block-detect.js';
+import {
+  UNVERIFIED_CS_BLOCK_LOCATOR,
+  detectCellSurfaceBlockShapes,
+} from '../decoder/cellsurface-block-detect.js';
 import { estimateHomography4, estimateHomographyN } from '../decoder/homography.js';
 import { Q15_ONE } from './params.js';
 import { R2_SESSION_STATUS } from './session.js';
@@ -57,8 +60,13 @@ export const GRID_LOCK_PEAK_F = 100;
  * ⚠ **못 덮는 축**: 로케이터 테스트는 `embed960` 으로 코드를 정중앙에 놓아
  * **「코드가 프레임 가장자리에 있을 때」를 구조적으로 시험하지 않는다.** 이 값에서는
  * 코드 중심이 프레임 중앙 75% 밖이면 R2 가 못 잡는다 (960 기준 x·y ∈ [120, 840]).
+ *
+ * ⚠ **이 값은 로케이터 기본값에서 «유도»한다 — 손으로 적은 사본이 아니다** (2026-09-04).
+ * 잠깐 `0.75` 를 여기 직접 적어 뒀는데, 그 순간 같은 숫자가 두 곳에 살아 **어느 쪽도
+ * 다른 쪽에서 유도하지 않는** 상태가 됐다. 나란히 유지하는 값은 반드시 어긋난다.
+ * 계약을 바꿀 거면 `UNVERIFIED_CS_BLOCK_LOCATOR` 한 곳만 바꿔라.
  */
-export const CENTRE_WINDOW_FRACTION = 0.75;
+export const CENTRE_WINDOW_FRACTION = UNVERIFIED_CS_BLOCK_LOCATOR.centreWindowFraction;
 
 /**
  * relocateEveryFrame=false 에서 F 가 게이트 미만인 프레임이 이 횟수 연속이면

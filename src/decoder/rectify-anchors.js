@@ -1562,6 +1562,12 @@ export function detectRectifyAnchors(frame, n, options) {
       return emptyResult(n, 'invalid-canonical');
     }
 
+    // ⚠ 옵션 없이 부르므로 **로케이터 기본값을 그대로 받는다** — 2026-09-04 에 들어간
+    // `centreWindowFraction: 0.75` 포함이다. 그 기본값을 넣은 커밋의 근거 집합(영상 4편 ·
+    // 실사진 673장 A/B · 로케이터 스위트)에 이 호출자는 **없었다.**
+    // 지금 위험이 없는 이유는 하나뿐이다: 이 함수의 **생산 소비자가 0건**이라는 것
+    // (`detectRectifyAnchors` 를 부르는 곳은 테스트/랩뿐이다). 생산 경로가 생기면
+    // 창을 명시적으로 선언해라 — 여기 프레임은 중앙 정사각 크롭을 지나지 않는다.
     const detected = detectCellSurfaceBlockShapes(luma);
     const shapes = Array.isArray(detected?.shapes)
       ? detected.shapes.filter((shape) =>

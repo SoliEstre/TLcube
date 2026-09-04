@@ -16,8 +16,8 @@
     "expect": "https://tl.estre.so"
   },
   "y0": {
-    "expect": null,
-    "note": "미확인 — 단발 0회"
+    "expect": "https://tl.estre.so",
+    "note": "🔴 2026-09-04 정정. 옛 라벨은 `null`(「미확인 — 단발 0회」)이었는데 그 0회가 검출 버그였다 — 로케이터가 모서리 QR 을 큐브로 오인했다(TLcube f3c142c). 중앙 창 선언 뒤 단발이 Y0T-CS-V0 · ecc H · tones 3 · corrected 0 으로 깨끗이 읽는다. 즉 «미확인» 은 코드의 성질이 아니라 자의 상태였다."
   },
   "y1": {
     "expect": "https://tl.estre.so"
@@ -27,6 +27,7 @@
   },
   "y2-p9rot": {
     "expect": null,
-    "note": "미확인 — 단발 0회"
+    "expectDerived": "https://tl.estre.so",
+    "note": "단발 0/109 (2026-09-04 전수 재측정). `expect` 는 **여전히 null 이다** — 이 시퀀스를 독립으로 복호한 적이 없다. `expectDerived` 는 «운영자가 Y2 를 원근 9도 아래 회전시켜 찍었다» 는 촬영자 진술 + y2 가 Y2T-CS-V0TR·같은 URL 이라는 사실에서 **유도한** 값이고 측정이 아니다. 자에 쓸 땐 유도임을 표시해라 — 다른 글자가 나오면 그건 오수용이 아니라 이 유도를 다시 보라는 신호다."
   }
 }

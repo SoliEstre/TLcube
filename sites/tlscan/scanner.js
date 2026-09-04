@@ -130,7 +130,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-04.01';
+export const SCANNER_BUILD = '2026-09-04.02';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -939,6 +939,15 @@ let daehanFallbackState = DAEHAN_FALLBACK_INITIAL_STATE;
  *   새 호출자가 실수로 무제한 2차 패스를 여는 일이 없다.
  * @returns {Promise<{ ok: boolean, payload?: string, reason?: string }>}
  */
+/**
+ * 사진 업로드 경로가 로케이터에 선언하는 보정 — **중앙 창을 항등으로 되돌린다.**
+ * 근거는 `runPass` 안의 주석. 싱글턴인 이유는 `family.js` 의 cube 타일링 캐시가
+ * 옵션을 `Object.is` 로 비교해서다 — 매 호출 새 객체를 만들면 캐시가 어긋난다.
+ */
+const STILL_LOCATOR_CALIBRATION = Object.freeze({
+  csBlockLocator: Object.freeze({ centreWindowFraction: 1 }),
+});
+
 async function decodeFrame(imageData, settings = {}) {
   if (!imageData || !imageData.data || !imageData.width || !imageData.height) {
     const failed = { ok: false, reason: 'frame-invalid' };
@@ -991,7 +1000,28 @@ async function decodeFrame(imageData, settings = {}) {
         // (2026-08-19). 같은 뜻을 두 곳에 적으면 언젠가 한쪽만 바뀐다.
         // `enableLocatorY` 는 여전히 시험판 전용이다 — 둘은 다른 축이고, 한 줄에
         // 있었다고 해서 같이 움직일 이유가 없다.
-        family: { cube: { enableLocatorY: isLabPath() } },
+        //
+        // 🔴 **사진 업로드는 중앙 창을 끈다** (2026-09-04, 배포 전 독립 사전검증이 잡음).
+        // 로케이터 기본값 `centreWindowFraction: 0.75` 의 전제는
+        // `cellsurface-block-detect.js` 가 적은 「찾는 블록은 프레임 중앙에 있다」이고,
+        // 그 전제는 **라이브 카메라에서만** 참이다 — `imageDataCenterSquare` 가 중앙
+        // 정사각을 잘라 주기 때문이다. 반면 `imageDataWhole`(바로 위 docstring)은
+        // 「사진은 코드가 가운데 있으리란 보장이 없다」며 **일부러 안 자른다.**
+        // 두 계약이 정면 충돌하므로 업로드 경로에서는 창을 항등(=1)으로 되돌린다.
+        //
+        // ⚠ 이 선언이 로케이터까지 **실제로 닿는** 경로: `bootstrap.family.cube` →
+        // `family.js` 의 `scoreCubeTiling`(`options.cube` 가 있으면 그것이 통째로
+        // `cubeOptions` 가 된다) → `detectCubeHypotheses` →
+        // `detectCellSurfaceBlockShapes(luma, options)` → `calibration(options)` 이
+        // `options.calibration.csBlockLocator` 를 읽는다. **최상위나 `bootstrap` 바로
+        // 아래에 두면 조용히 무시된다** — 바로 위 `cellFinderDaehan` 주석과 같은 함정이고,
+        // 통합자가 R2 어댑터에서 한 층 얕게 넣어 A/B 두 팔이 비트 동일로 나온 적이 있다.
+        family: {
+          cube: {
+            enableLocatorY: isLabPath(),
+            ...(settings.source === 'still' ? { calibration: STILL_LOCATOR_CALIBRATION } : {}),
+          },
+        },
       },
       // 가이드-사전 포즈. 없으면 이 객체 키 자체가 안 생겨 종전 경로와 동일하다.
       ...(Array.isArray(settings.priorPoses) ? { priorPoses: settings.priorPoses } : {}),
