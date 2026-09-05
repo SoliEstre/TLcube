@@ -713,9 +713,64 @@ function clusterCoresLinear(candidates, cfg) {
       });
     }
   }
-  clusters.sort((left, right) =>
-    right.count - left.count || left.y - right.y || left.x - right.x);
+  clusters.sort(compareClusters(cfg));
   return clusters;
+}
+
+/**
+ * K3 클러스터 정렬 키의 u 하한 계수 — `cfg.minimumCoreUnitPx` 배수 (기본 1.2 × 2 = 2.4 px).
+ *
+ * 왜 하한이 필요한가: 밀도(`count/u`)는 스케일 불변이지만, u 가 **표본화 한계**에 닿으면
+ * (K3 분기 문턱이 `max(1, 0.8·minimumCoreUnitPx)` = 1.0 px) 분모가 1 px 언저리에서 굳어
+ * 「반경당」이 뜻을 잃는다. 그 구간의 «밀도» 는 밀도가 아니라 잡음 증폭이다.
+ *
+ * ⚠ 하한이 **안 하는 일** — 하한 아래 클러스터의 키를 0 으로 만들지 않는다. `count/2.4` 로
+ * **동결**할 뿐이라 소-u 군중은 여전히 **raw count** 로 참과 다툰다. 참이 사는 조건은
+ * 「참 키 > 소-u 군중 최대 키」이지 「하한이 막아 준다」가 아니다. 실측(12 tl 프레임 ·
+ * 비컨 cfg · 2026-09-06): 소-u 군중 최대 count 10\~15 vs 참 count 12\~30 인데
+ * `K1-near.960`·`K2-near.960`·`K2-tele.960` 은 그 여유가 **0** 이고, `K2-near.1440` 은
+ * 소-u 하나(u 2.38 · count 15 · 키 6.25)가 참(6.03)을 **이미 이긴다**(그래도 참 순위 9).
+ * 참 자신의 u 가 하한 아래인 칸도 3/6(960)이라 그 칸에서는 참 키도 `count/2.4` 로 퇴화해
+ * 동률이 y → x 로 갈린다. 이 여유를 `test/k3-cluster-order.test.js` ⓓ 가 성질로 잰다.
+ *
+ * ⚠ 「저해상 축소 패스에서는 이 키가 항등」은 **틀렸다** — 2026-09-06 실측으로 반박됐다
+ * (armB-density-u.md §8 가 그 가설을 적어 뒀다). 기본 `searchMaxSide: 480` 축소판에서도
+ * k3 의 12\~92 % 가 하한 **위**라 정렬이 실제로 바뀐다: 덤프 24장 전부에서 첫 차이가
+ * 0\~2 번째 원소에서 나고 상위 80 이 49\~73/80 만 겹친다(축소판 u 중앙값 1.58\~3.97).
+ * 즉 R1 사진·R1 라이브·R2 어댑터(`r2/adapter-locator.js` 는 `searchMaxSide` 를 안 덮어
+ * 480 을 탄다)가 **전부** 이 키를 탄다. 무회귀는 «구조적 항등» 이 아니라 오직 **측정**
+ * (덤프 자 20 파일 · `r2-scan-runtime` · k26 54행 · 코퍼스 A/B)으로만 담보된다.
+ */
+const K3_DENSITY_U_FLOOR_FACTOR = 2;
+
+/**
+ * 클러스터 정렬 값 — **K3 만** «지지 개수» 대신 «반경당 지지 밀도».
+ *
+ * 왜: 코어 스캔은 반경 u 인 동심 코어를 반경에 비례하는 수의 스캔라인으로 지난다
+ * (지지 ∝ u). 그래서 count 정렬은 **큰 것**을 위로 올리고, 참 불스아이(비컨 cfg =
+ * 축소 없음이라 `factor` 1 좌표에서 u 1.77\~4.27)는 데이터 필드의 큰 우연 코어들 뒤로
+ * 밀린다 — 12 tl 프레임 실측 참 순위 count 축 **960 33\~249**(6장 중 4장이 예산 80 밖) ·
+ * 1440 19\~77. 밀도로 바꾸면 12/12 가 ≤80 에 든다 (최악 33 = `K2-near.960`).
+ * K5 는 브리프 범위 밖이라 `count` 그대로 — K5 끼리의 상대 순서는 한 칸도 안 바뀐다.
+ * (종류 간 끼워넣기 순서는 바뀌지만 예산·`occupied` 가 둘 다 **종류별**이라 무해하다.)
+ *
+ * 성질 자: `test/k3-cluster-order.test.js` — 전순서·결정성 ⓐ · K5 불변 ⓑ · 하한이 cfg 에서
+ * 유도됨 ⓒ · 참 순위와 소-u 여유 ⓓ · k26 끝단 ⓔ · 선형판 ≡ 격자판 ⓕ.
+ */
+function clusterOrderValue(cluster, cfg) {
+  if (cluster.kind !== 'k3') return cluster.count;
+  const floor = K3_DENSITY_U_FLOOR_FACTOR * cfg.minimumCoreUnitPx;
+  return cluster.count / Math.max(cluster.u, floor);
+}
+
+/**
+ * 선형판·격자판이 **같은 정렬**을 쓰게 하는 단일 비교자.
+ * 등가 검산은 `test/k3-cluster-order.test.js` ⓕ(합성 후보, 덤프 없이도 돈다)와
+ * ⓓ(실사진 12장, 덤프 필요)가 선다 — 정렬을 여기서 바꾸면 그 둘이 같이 빨개진다.
+ */
+function compareClusters(cfg) {
+  return (left, right) => clusterOrderValue(right, cfg) - clusterOrderValue(left, cfg)
+    || left.y - right.y || left.x - right.x;
 }
 
 /**
@@ -763,7 +818,8 @@ const CLUSTER_BUCKET_PX = 16;
  * (`break`), 격자판도 후보 버킷 이웃에서 모은 매치 중 **삽입 인덱스가 가장 작은**
  * 것을 고른다. 두 판이 같은 술어(`clusterAccepts`)와 같은 반경 상한
  * (`clusterSearchRadius`)을 쓰고, `clusterCoresLinear` 를 INTERNALS 로 노출해
- * 테스트가 실사진에서 **동일성을 직접 검산**한다.
+ * `test/k3-cluster-order.test.js` 가 **동일성을 직접 검산**한다 — ⓕ 는 합성 후보로
+ * (덤프 없는 체크아웃에서도 돈다), ⓓ 는 실사진 12장으로 전 원소를 대조한다.
  */
 function clusterCores(candidates, cfg) {
   const byKind = new Map();
@@ -843,8 +899,7 @@ function clusterCores(candidates, cfg) {
       });
     }
   }
-  clusters.sort((left, right) =>
-    right.count - left.count || left.y - right.y || left.x - right.x);
+  clusters.sort(compareClusters(cfg));
   return clusters;
 }
 
@@ -3985,6 +4040,9 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   // dedupe 로 걷어내는 안은 **측정으로 기각**했다: 중복이 차지하던 상위 슬롯에
   // 데이터 필드의 우연 K3 가 들어와, 실패 정합 + v0 스윕 비용이 중복 성공 정합보다
   // 비쌌다 (v1r2 클린 벤치 724→1620 ms). 상위 3/4 슬라이스가 사실상의 비용 캡이다.
+  // 2026-09-06 재측정(REPORT_r1-type-limits §11.2·§12): 이 캡은 **3/4 그대로 둔다**.
+  // 컷 3→5·8 A/B 가 위 실패 모드를 재확증했고(불스아이 `video-t22.1440` OK→FAIL, 순증 0),
+  // 대신 고친 것은 **예산이 아니라 K3 클러스터의 정렬 축**이다 — `clusterOrderValue()` 참조.
   // 중앙 창 제한 (2026-08-24) — `centreWindowFraction` 을 준 호출자는 «찾는 블록이
   // 중앙 고정» 이라는 **계약**을 선언한 것이다 (비컨 어댑터). 그 창 밖 후보는 상위
   // 컷을 다투기 전에 빠진다 — 점수 컷은 비용 캡이지 «누가 진짜인가» 의 자가 아니다
@@ -4258,6 +4316,11 @@ export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
   clusterCores,
   // 격자판 등가 검산용 선형 참조판 (§clusterCoresLinear). 런타임 경로는 안 쓴다.
   clusterCoresLinear,
+  // K3 정렬 키 (2026-09-06 처방 B) — 「전순서·결정성 · K5 불변 · 키가 cfg 에서 유도」 를
+  // 성질로 잠그는 입력이다 (`k3-cluster-order.test.js`).
+  clusterOrderValue,
+  compareClusters,
+  K3_DENSITY_U_FLOOR_FACTOR,
   verifyV2r2Cluster,
   verifyV0Cluster,
   verifyV0xqCornerCluster,
