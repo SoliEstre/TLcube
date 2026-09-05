@@ -21,6 +21,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { createR2ScanRuntime, r2HitToDecodeResult, R2_CAPABILITIES } from '../src/r2-scan-runtime.js';
+import { createA3Adapters } from '../src/r2/adapter-locator.js';
+import { R2_INDICATOR, R2_SESSION_STATUS } from '../src/r2/session.js';
 import { normalizeDecodePayload, scanScopeCopyKey } from '../src/scanner-scan-assist.js';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 import { finalLayoutIdsForN } from '../src/cellSurfaceFinal.js';
@@ -148,37 +150,36 @@ test('ⓕ 시험판 UI — 토글과 진행 인디케이터가 배선돼 있다'
     '프레임 루프의 R2 블록이 인디케이터를 안 그린다 — 스캔 중에 막대가 멈춰 있다');
 });
 
-test('ⓖ 우하단 셀맵 뷰 — 선두 후보의 셀맵과 사영 좌표를 내보내고, 좌표는 프레임 안이다', (t) => {
+test('ⓖ 우하단 셀맵 뷰 — 선두 후보의 셀맵과 세 면 사영 좌표를 내보내고, 좌표는 프레임 안이며 **붕괴하지 않는다**', (t) => {
   const frames = firstFrames('y2', 4);
   if (!frames) { t.skip('휘도 덤프 없음'); return; }
   const runtime = createR2ScanRuntime({ enabled: true });
   for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
   const view = runtime.view;
-  assert.ok(view.cellCount > 0, '락 뒤인데 뷰 cellCount 가 0 이다 — 어댑터 사영이 안 됐다');
-  assert.ok(view.cellMap instanceof Uint8Array && view.cellMap.length >= view.cellCount,
-    '셀맵이 세션 버퍼 참조가 아니다');
-  // 좌표는 **어댑터가 정합에 쓰는 같은 H·격자**에서 나와야 한다 — 프레임 안에 있어야 한다.
-  const { width, height } = frames[0];
+  assert.ok(view.cellCount > 0, '락 뒤에도 셀 수가 0 — 뷰가 안 채워진다');
+  assert.ok(view.cellMap && view.cellMap.length >= view.cellCount, '셀맵이 없다');
+  assert.ok(view.cellFaceCentres && view.cellFaceCentres.length >= view.cellCount * 6, '세 면 좌표 버퍼가 작다');
+  assert.equal(view.frameWidth, frames[0].width);
   let finite = 0;
-  let inside = 0;
-  for (let c = 0; c < view.cellCount; c += 1) {
-    const x = view.cellCentres[c * 2];
-    const y = view.cellCentres[c * 2 + 1];
+  let minX = Infinity; let maxX = -Infinity; let minY = Infinity; let maxY = -Infinity;
+  for (let p = 0; p < view.cellCount * 3; p += 1) {
+    const x = view.cellFaceCentres[p * 2];
+    const y = view.cellFaceCentres[p * 2 + 1];
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     finite += 1;
-    if (x >= 0 && x <= width && y >= 0 && y <= height) inside += 1;
+    assert.ok(x >= -1 && x <= view.frameWidth + 1 && y >= -1 && y <= view.frameHeight + 1, '사영 좌표가 프레임 밖');
+    if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
   }
-  assert.ok(finite >= view.cellCount * 0.9,
-    `사영된 셀이 ${finite}/${view.cellCount} 뿐이다 — cellCoord→canonicalXY→projectInto 사슬이 끊겼다`);
-  assert.ok(inside >= finite * 0.9,
-    `프레임 밖 좌표가 ${finite - inside}/${finite} 다 — H 가 엉뚱하거나 격자가 틀렸다`);
-  // 셀맵은 실제로 칠해져 있어야 한다 — 전부 UNOBSERVED(0) 면 세션이 셀을 안 칠했다.
+  assert.ok(finite >= view.cellCount * 3 * 0.9, '세 면 좌표의 90% 이상이 유한해야 한다 (' + finite + ')');
+  // 붕괴 자 — 옛 «세 면 평균» 은 y2 실물에서 퍼짐이 0.09×1.31 px 였다. 코드가 프레임의 ~절반이면 수백 px 여야 한다.
+  assert.ok(maxX - minX > view.frameWidth * 0.2 && maxY - minY > view.frameHeight * 0.2,
+    '사영 좌표가 한 점으로 붕괴했다 (' + (maxX - minX).toFixed(1) + '×' + (maxY - minY).toFixed(1) + ' px)');
   let painted = 0;
   for (let c = 0; c < view.cellCount; c += 1) if (view.cellMap[c] !== 0) painted += 1;
-  assert.ok(painted > 0, '셀맵이 전부 미관측이다 — 세션이 셀을 안 칠했다 (session.js 매 프레임 CONFIRMED/CANDIDATE)');
-  // 끄면 뷰도 비운다 — 옛 그림이 화면에 눌러앉으면 안 된다.
+  assert.ok(painted > 0, '누적 뒤에도 전 셀 UNOBSERVED — 셀맵이 칠해지지 않는다');
   runtime.setEnabled(false);
-  assert.equal(runtime.view.cellCount, 0, '껐는데 셀맵 뷰가 남았다');
+  assert.equal(runtime.view.cellCount, 0, '껐는데 뷰가 남았다');
+  assert.equal(runtime.view.H, null, '껐는데 H 참조가 남았다');
 });
 
 test('ⓗ 시험판 UI — 셀맵 캔버스가 배선돼 있고 프레임 루프에서 매 프레임 그린다', () => {
@@ -283,4 +284,120 @@ test('ⓛ 범위 안내가 R2 토글을 따르고 배선이 살아 있다 (운�
   assert.ok(handler.includes('refreshScanGuideCopy()'), '토글이 범위 안내를 안 바꾼다');
   const fn = js.slice(js.indexOf('function refreshScanGuideCopy()'), js.indexOf('const i18n = createI18n'));
   assert.ok(fn.includes('scanScopeCopyKey(r2Runtime.enabled'), 'refreshScanGuideCopy 가 토글 상태를 안 읽는다');
+});
+
+/*
+ * 2a (PM/029B §27.4) — 좌 패널·HUD 가 읽을 «확정/변동» 표면. 전부 기존 값 전달, 핫 경로 할당 0.
+ */
+
+test('ⓜ stats 표면 — 필수 키 ⊆ 키 집합, 꺼진 런타임은 프레임을 밀어도 초기값 그대로', () => {
+  const fresh = createR2ScanRuntime({ enabled: false });
+  const keys = new Set(Object.keys(fresh.stats));
+  for (const k of ['frames', 'binds', 'candidateCount', 'lockedN', 'doneLayoutId', 'doneFrame', 'text', 'progressD', 'indicator',
+    'locked', 'lockF', 'layoutIdLocked', 'leadingLayoutId', 'candidates']) {
+    assert.ok(keys.has(k), 'stats 에 ' + k + ' 가 없다');
+  }
+  const before = JSON.stringify(fresh.stats);
+  const fake = { width: 4, height: 4, data: new Float32Array(16) };
+  for (let i = 0; i < 3; i += 1) fresh.pushFrame(fake, i * 100);
+  assert.equal(JSON.stringify(fresh.stats), before, '꺼진 런타임의 stats 가 변했다 — 정식 경로 불변 위반');
+  for (const k of ['H', 'n', 'lockRevision', 'cellFaceCentres', 'cellMap', 'cellCount']) assert.ok(k in fresh.view, 'view 에 ' + k + ' 가 없다');
+});
+
+test('ⓝ 락은 됐는데 증거가 0 인 첫 프레임 — indicator 는 세션 값 그대로(SEARCHING 아님), 어댑터 락 상태가 stats 로 전달된다', (t) => {
+  // 코퍼스는 락 프레임에 이미 D>0 이라 이 상태를 못 만든다 — 가짜 어댑터: 검출은 되고(n=13) 정합 게이트는 안 열린다.
+  const fakeStats = { n: 13, locked: 1, gridLockF: 0.5, layoutId: 'v0', lockRevision: 1 };
+  const fake = {
+    stats: fakeStats,
+    H: Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    detectInto(luma, width, height, timestamp, pose, output) { output.found = 1; output.n = 13; return R2_SESSION_STATUS.OK; },
+    alignInto() { return R2_SESSION_STATUS.OK; },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+  };
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const luma = { width: 8, height: 8, data: new Float32Array(64) };
+  runtime.pushFrame(luma, 0);
+  const s = runtime.stats;
+  assert.equal(s.candidateCount, 1, 'n=13 은 후보 1개(v0)여야 한다');
+  assert.equal(s.progressD, 0, '증거 0 인데 D 가 0 이 아니다 — 시나리오가 아니다');
+  assert.equal(s.locked, 1, '어댑터 락이 stats 로 전달되지 않는다');
+  assert.equal(s.lockF, 0.5);
+  assert.equal(s.layoutIdLocked, 'v0');
+  assert.equal(s.leadingLayoutId, 'v0');
+  assert.notEqual(s.indicator, R2_INDICATOR.SEARCHING, '락됐는데 indicator 가 SEARCHING — 패널이 «탐색 중» 으로 거짓말한다 (bestIndicator 결함)');
+  assert.equal(s.indicator, s.candidates[0].indicator, '선두 후보의 indicator 를 그대로 전달해야 한다');
+
+  // 실물 대조군: y0 락 프레임에서도 같은 전달이 성립한다.
+  const frames = firstFrames('y0', 6);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const real = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) { real.pushFrame(frames[i], i * 100); if (real.stats.candidateCount > 0) break; }
+  assert.equal(real.stats.locked, 1);
+  assert.equal(typeof real.stats.layoutIdLocked, 'string');
+  assert.notEqual(real.stats.indicator, R2_INDICATOR.SEARCHING);
+});
+
+test('ⓞ view 기하 원천 — 락 뒤 H(9)·n·lockRevision, reset 뒤 비움', (t) => {
+  const frames = firstFrames('y2', 3);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
+  const v = runtime.view;
+  assert.ok(v.H instanceof Float64Array && v.H.length >= 9, 'H 가 Float64Array(9) 가 아니다');
+  assert.equal(v.n, runtime.stats.lockedN, 'view.n 이 락 n 과 다르다');
+  assert.ok(v.lockRevision >= 1, '락이 걸렸는데 lockRevision 이 0');
+  const rev = v.lockRevision;
+  runtime.pushFrame(frames[frames.length - 1], 9000);
+  assert.equal(runtime.view.lockRevision, rev, '락 유지 프레임에서 lockRevision 이 움직였다 — HUD 가 매 프레임 재사영한다');
+  runtime.reset();
+  assert.equal(runtime.view.H, null);
+  assert.equal(runtime.view.n, 0);
+  assert.equal(runtime.view.cellCount, 0);
+});
+
+test('ⓟ 후보 배열 — 길이·모양·선두 일치, 최대 D = progressD', (t) => {
+  const frames = firstFrames('y2', 4);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
+  const s = runtime.stats;
+  assert.ok(s.candidateCount > 1, 'y2 는 후보가 여럿이어야 한다');
+  assert.equal(s.candidates.length, s.candidateCount);
+  let maxD = -1;
+  for (const c of s.candidates) {
+    assert.equal(typeof c.layoutId, 'string');
+    assert.ok(Number.isFinite(c.D) && c.D >= 0);
+    assert.ok(Number.isInteger(c.indicator));
+    assert.equal(typeof c.alive, 'boolean');
+    if (c.alive && c.D > maxD) maxD = c.D;
+  }
+  assert.equal(maxD, s.progressD, '후보 최대 D 와 progressD 가 다르다 — 후보 항목이 갱신되지 않는다');
+  assert.ok(s.candidates.some((c) => c.layoutId === s.leadingLayoutId), '선두 id 가 후보 밖');
+  runtime.setEnabled(false);
+  assert.equal(runtime.stats.candidates.length, 0, '껐는데 후보 배열이 남았다');
+});
+
+test('ⓠ 세 면 중심은 붕괴하지 않고, 그 평균은 항등적으로 Y-심이다 — 옛 projectCellCentres 를 버린 이유', () => {
+  const a = createA3Adapters({});
+  const identity = Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  a.installHomography(identity, 25, 'v0tr');
+  assert.equal(a.stats.lockRevision, 1, 'installHomography 가 lockRevision 을 안 올린다');
+  const cellCount = 493;
+  const out = new Float32Array(cellCount * 6);
+  const mapped = a.projectCellFaceCentres(out, cellCount);
+  assert.equal(mapped, cellCount);
+  let spread = 0; let meanMax = 0;
+  for (let c = 0; c < cellCount; c += 1) {
+    const b = c * 6;
+    const mx = (out[b] + out[b + 2] + out[b + 4]) / 3;
+    const my = (out[b + 1] + out[b + 3] + out[b + 5]) / 3;
+    meanMax = Math.max(meanMax, Math.abs(mx), Math.abs(my));
+    spread = Math.max(spread, Math.abs(out[b] - out[b + 2]), Math.abs(out[b + 1] - out[b + 3]));
+  }
+  assert.ok(meanMax < 1e-4, '세 면 평균이 Y-심(원점)이 아니다 — 붕괴 기록이 틀렸다면 이 자를 다시 보라 (' + meanMax + ')');
+  assert.ok(spread > 1, '세 면 중심이 서로 떨어져 있지 않다 — 3점 사영이 한 점을 반복한다');
+  a.reset();
+  assert.equal(a.stats.lockRevision, 2, 'clearLock 이 lockRevision 을 안 올린다');
+  assert.equal(a.projectCellFaceCentres(out, cellCount), 0, '락이 없는데 사영했다');
 });

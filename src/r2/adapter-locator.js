@@ -361,6 +361,8 @@ export function createA3Adapters(options) {
     shapeCount: 0,
     homographyOk: 0,
     scanMapped: 0,
+    // 락 설치·해제마다 1 증가 — HUD 가 «사영을 다시 할 프레임» 을 이 값의 변화로 안다 (2a).
+    lockRevision: 0,
   };
 
   let locked = 0;
@@ -418,6 +420,7 @@ export function createA3Adapters(options) {
     stats.homographyOk = 1;
     locked = 1;
     stats.locked = 1;
+    stats.lockRevision += 1;
     lockMisses = 0;
     rebuildScanMaps(n, layoutId);
   }
@@ -428,6 +431,7 @@ export function createA3Adapters(options) {
     scanCount = 0;
     lockMisses = 0;
     stats.locked = 0;
+    stats.lockRevision += 1;
     stats.n = 0;
     stats.layoutId = '';
     stats.homographyOk = 0;
@@ -687,42 +691,40 @@ export function createA3Adapters(options) {
   }
 
   /**
-   * 셀 중심의 **사영 픽셀 좌표**를 채운다 — 표시용 (PM/029 §18\~19 우하단 셀맵 렌더).
+   * 셀의 **세 면 마름모 중심** 사영 — 셀당 3점 (face 0·1·2 순), `out` 길이 ≥ cellCount×6.
    *
-   * `alignInto` 와 **같은 사슬**(`cellCoord` → `canonicalXY` → `projectInto(H)`)을 탄다.
-   * 셀 중심 = 세 면 중심의 사영 평균. 정확한 육각 중심은 아니지만(사영은 비선형) 표시에는
-   * 충분하고, 무엇보다 **정합이 실제로 표본한 자리**와 같은 H·같은 격자를 쓴다 —
-   * 그래서 화면의 점이 「정합이 보는 곳」이다. 따로 계산하면 두 그림이 어긋난다.
+   * ⚠ 옛 `projectCellCentres`(세 면 중심의 **평균**)는 2026-09-05 에 퇴역했다: Type Y 셀의 세 마름모는
+   * Y-심을 중심으로 120° 로 흩어져 있어 canonical 좌표의 합이 **항등적으로 0** 이다(EI·EJ 합 0). 즉 아핀
+   * H 면 모든 셀의 «중심» 이 정확히 한 점으로 붕괴하고, 실제 H 에선 원근 잔차(y2 실측 0.09×1.31 px)만
+   * 남는다 — 시험판 .02 의 우하단 셀맵은 그 잔차를 112 px 로 늘린 그림이었다(PM/029B §24.8 정정).
+   * 세 점을 따로 내면 육각 실루엣이 정직하게 나온다. 폴리곤(마름모 꼭짓점)은 HUD 3a 에서.
    *
-   * @param {Float32Array} out  길이 ≥ cellCount×2. 못 사영한 셀은 NaN.
-   * @returns {number} 사영된 셀 수. 락이 없으면 0.
+   * 무엇보다 **정합이 실제로 표본한 자리**와 같은 H·같은 격자를 쓴다 — 화면의 점이 「정합이 보는 곳」이다.
+   *
+   * @param {Float32Array} out  길이 ≥ cellCount×6. 못 사영한 점은 NaN.
+   * @returns {number} 한 면 이상 사영된 셀 수. 락이 없으면 0.
    */
-  function projectCellCentres(out, cellCount) {
+  function projectCellFaceCentres(out, cellCount) {
     if (!locked || gridN <= 0 || !out) return 0;
     const n = gridN;
-    const limit = Math.min(cellCount, (out.length / 2) | 0);
+    const limit = Math.min(cellCount, (out.length / 6) | 0);
     let mapped = 0;
     for (let cell = 0; cell < limit; cell += 1) {
-      out[cell * 2] = NaN;
-      out[cell * 2 + 1] = NaN;
+      const base = cell * 6;
+      for (let k = 0; k < 6; k += 1) out[base + k] = NaN;
       if (!cellCoord(cell, cellCount, xy)) continue;
       const i = xy[0];
       const j = xy[1];
       if (i < 0 || j < 0 || i >= n || j >= n) continue;
-      let sx = 0;
-      let sy = 0;
       let faces = 0;
       for (let face = 0; face < 3; face += 1) {
         canonicalXY(face, i + 0.5, j + 0.5, xy);
         if (!projectInto(H, xy[0], xy[1], quad, 0)) continue;
-        sx += quad[0];
-        sy += quad[1];
+        out[base + face * 2] = quad[0];
+        out[base + face * 2 + 1] = quad[1];
         faces += 1;
       }
-      if (faces === 0) continue;
-      out[cell * 2] = sx / faces;
-      out[cell * 2 + 1] = sy / faces;
-      mapped += 1;
+      if (faces > 0) mapped += 1;
     }
     return mapped;
   }
@@ -746,7 +748,7 @@ export function createA3Adapters(options) {
     alignInto,
     reset,
     installHomography,
-    projectCellCentres,
+    projectCellFaceCentres,
     H,
     stats,
     faceLabels: FACE_LABELS,

@@ -137,7 +137,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.05';
+export const SCANNER_BUILD = '2026-09-05.06';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -3079,7 +3079,7 @@ function renderR2Progress() {
  * R2 셀맵 렌더 (PM/029 §18\~19 우하단). **시험판 전용.**
  *
  * 셀 자리는 런타임 뷰가 준 **사영 좌표**다 — 어댑터가 정합에 쓰는 것과 같은 H·격자
- * (`adapter-locator.js` projectCellCentres). 따로 계산하지 않는다: 두 그림이 어긋나면
+ * (`adapter-locator.js` projectCellFaceCentres — 셀당 세 면 3점). 따로 계산하지 않는다: 두 그림이 어긋나면
  * 사용자는 「정합이 보는 곳」이 아니라 「내가 그린 곳」을 본다.
  *
  * 색은 `CELL_MAP_STATE` 를 **키로** 쓴다 — 숫자 손 사본 금지. 상태값이 바뀌면 여기가
@@ -3096,7 +3096,7 @@ const r2CellMapCanvas = document.getElementById('r2-cellmap');
 function renderR2CellMap() {
   if (!r2CellMapCanvas || !isLabPath()) return;
   const view = r2Runtime.view;
-  if (!r2Runtime.enabled || !view || view.cellCount === 0 || !view.cellMap || !view.cellCentres) {
+  if (!r2Runtime.enabled || !view || view.cellCount === 0 || !view.cellMap || !view.cellFaceCentres) {
     r2CellMapCanvas.hidden = true;
     return;
   }
@@ -3112,9 +3112,11 @@ function renderR2CellMap() {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (let cell = 0; cell < view.cellCount; cell += 1) {
-    const x = view.cellCentres[cell * 2];
-    const y = view.cellCentres[cell * 2 + 1];
+  // 셀당 세 면 마름모 중심 3점 — 옛 «셀 중심 평균» 은 Y-심 한 점으로 붕괴해 bbox 가 잔차였다 (2a 정정).
+  const points = view.cellCount * 3;
+  for (let p = 0; p < points; p += 1) {
+    const x = view.cellFaceCentres[p * 2];
+    const y = view.cellFaceCentres[p * 2 + 1];
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     if (x < minX) minX = x;
     if (y < minY) minY = y;
@@ -3131,13 +3133,15 @@ function renderR2CellMap() {
   ctx.lineWidth = 1;
   ctx.strokeRect(originX - 3, originY - 3, (maxX - minX) * scale + 6, (maxY - minY) * scale + 6);
 
-  const dot = Math.max(2, Math.min(6, scale * 0.9));
+  const dot = Math.max(1.5, Math.min(4, scale * 0.6));
   for (let cell = 0; cell < view.cellCount; cell += 1) {
-    const x = view.cellCentres[cell * 2];
-    const y = view.cellCentres[cell * 2 + 1];
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     ctx.fillStyle = R2_CELL_COLOR[view.cellMap[cell]] || R2_CELL_COLOR[CELL_MAP_STATE.UNOBSERVED];
-    ctx.fillRect(originX + (x - minX) * scale - dot / 2, originY + (y - minY) * scale - dot / 2, dot, dot);
+    for (let face = 0; face < 3; face += 1) {
+      const x = view.cellFaceCentres[cell * 6 + face * 2];
+      const y = view.cellFaceCentres[cell * 6 + face * 2 + 1];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      ctx.fillRect(originX + (x - minX) * scale - dot / 2, originY + (y - minY) * scale - dot / 2, dot, dot);
+    }
   }
 }
 

@@ -104,11 +104,16 @@ export function createR2ScanRuntime(options = {}) {
   let centres = new Float32Array(0);
   const view = {
     cellMap: null,
-    cellCentres: null,
+    /** 셀당 세 면 마름모 중심 (cellCount×6). 옛 «셀 중심 평균» 은 Y-심으로 붕괴해 퇴역 (adapter 주석). */
+    cellFaceCentres: null,
     cellCount: 0,
     frameWidth: 0,
     frameHeight: 0,
     layoutId: '',
+    // 2a — HUD 기하 원천. H 는 어댑터 내부 버퍼의 **읽기 전용 참조**(쓰지 마라), lockRevision 이 바뀐 프레임에만 다시 사영한다.
+    H: null,
+    n: 0,
+    lockRevision: 0,
   };
   const stats = {
     frames: 0,
@@ -121,6 +126,13 @@ export function createR2ScanRuntime(options = {}) {
     // 표시용 (PM/029 §17\~19). 데이터는 A6·C5 가 이미 낸다 — 없는 건 그리는 층이다.
     progressD: 0,
     indicator: 0,
+    // 2a — 좌 패널·HUD 가 읽는 «확정/변동» 원천 (전부 기존 값 전달, 핫 경로 할당 0).
+    locked: 0,
+    lockF: 0,
+    layoutIdLocked: '',
+    leadingLayoutId: '',
+    /** 후보별 [{layoutId, D, indicator, alive}] — bind 때 한 번 만들고 매 프레임 덧쓴다. */
+    candidates: [],
   };
 
   function disposeCandidates() {
@@ -131,9 +143,13 @@ export function createR2ScanRuntime(options = {}) {
     // 진행률도 같이 버린다 — 후보가 없는데 막대가 차 있으면 거짓말이다.
     stats.progressD = 0;
     view.cellMap = null;
-    view.cellCentres = null;
+    view.cellFaceCentres = null;
     view.cellCount = 0;
     view.layoutId = '';
+    view.H = null;
+    view.n = 0;
+    stats.candidates.length = 0;
+    stats.leadingLayoutId = '';
   }
 
   /**
@@ -174,13 +190,14 @@ export function createR2ScanRuntime(options = {}) {
     boundN = n;
     stats.binds += 1;
     stats.candidateCount = candidates.length;
+    stats.candidates = candidates.map((c) => ({ layoutId: c.layoutId, D: 0, indicator: R2_INDICATOR.LOCKED, alive: true }));
     // 좌표 버퍼는 후보 중 가장 큰 격자에 맞춰 **한 번** 잡는다.
     let maxCells = 0;
     for (const candidate of candidates) {
       const count = candidate.session.layout.cellCount;
       if (count > maxCells) maxCells = count;
     }
-    if (centres.length < maxCells * 2) centres = new Float32Array(maxCells * 2);
+    if (centres.length < maxCells * 6) centres = new Float32Array(maxCells * 6);
   }
 
   /**
@@ -194,7 +211,8 @@ export function createR2ScanRuntime(options = {}) {
     lastAt = Number.isFinite(timestamp) ? timestamp : lastAt;
     stats.frames += 1;
 
-    if (adapters === null) adapters = createA3Adapters({});
+    // options.adapters 는 **테스트 주입용** — 코퍼스가 못 만드는 상태(락은 됐는데 증거 0)를 가짜 어댑터로 만든다 (ⓝ).
+    if (adapters === null) adapters = options.adapters || createA3Adapters({});
 
     /*
      * 🔴 **검출을 여기서 직접 한 번 돌린다.** 안 그러면 닫힌 고리가 된다 —
@@ -217,27 +235,35 @@ export function createR2ScanRuntime(options = {}) {
     // 락이 준 n 을 읽는다. 후보 세션이 없거나 n 이 바뀌었으면 다시 묶는다 (ⓐ).
     const lockedN = detection.found ? adapters.stats.n : 0;
     stats.lockedN = lockedN;
+    stats.locked = adapters.stats.locked;
+    stats.lockF = adapters.stats.gridLockF;
+    stats.layoutIdLocked = adapters.stats.layoutId;
     if (lockedN > 0 && lockedN !== boundN) bind(lockedN);
     if (candidates.length === 0) return null;
 
     framesSinceBind += 1;
     // 표시용 — 후보 중 **가장 앞선** 진행률을 남긴다. 사용자에게 「몇 개 후보를 돌리는
     // 중인지」는 관심사가 아니고 「얼마나 찼는지」가 관심사다 (PM/029 §17).
-    let bestD = 0;
+    // bestD 를 -1 에서 시작한다 — 첫 살아 있는 후보가 D=0 이어도 선두가 되고 **그 indicator 가 나간다**.
+    // (옛 코드는 0 에서 시작해 D 가 전부 0 이면 SEARCHING 으로 남았다: 락 직후 «전 셀 미관측» 인데
+    // 패널은 «탐색 중» — 2a 수리.) 동률은 안 바꾼다(strict >) 라 선두 = 첫 살아 있는 후보.
+    let bestD = -1;
     let bestIndicator = R2_INDICATOR.SEARCHING;
-    // 선두 후보 — D 가 전부 0 이어도 첫 후보를 그린다 (락 직후 «전 셀 미관측» 도 정보다).
     let leading = null;
-    for (const candidate of candidates) {
-      if (!candidate.alive) continue;
-      if (leading === null) leading = candidate;
+    for (let idx = 0; idx < candidates.length; idx += 1) {
+      const candidate = candidates[idx];
+      const entry = stats.candidates[idx];
+      if (!candidate.alive) { if (entry) entry.alive = false; continue; }
       let result;
       try {
         result = candidate.session.pushFrame(luma.data, luma.width, luma.height, timestamp, null);
       } catch {
         candidate.alive = false;
+        if (entry) entry.alive = false;
         continue;
       }
       const d = result.progress && Number.isFinite(result.progress.D) ? result.progress.D : 0;
+      if (entry) { entry.D = d; entry.indicator = result.indicator; entry.alive = true; }
       if (d > bestD) {
         bestD = d;
         bestIndicator = result.indicator;
@@ -257,16 +283,20 @@ export function createR2ScanRuntime(options = {}) {
       return { text, layoutId: candidate.layoutId, n: boundN, frame: stats.doneFrame };
     }
 
-    stats.progressD = bestD;
-    stats.indicator = bestIndicator;
+    stats.progressD = bestD < 0 ? 0 : bestD;
+    stats.indicator = leading === null ? R2_INDICATOR.SEARCHING : bestIndicator;
+    stats.leadingLayoutId = leading === null ? '' : leading.layoutId;
 
     // 표시용 뷰 갱신 — 선두 후보의 셀맵(참조) + 어댑터가 사영한 셀 중심.
     if (leading !== null) {
       const cellCount = leading.session.layout.cellCount;
-      const mapped = adapters.projectCellCentres(centres, cellCount);
+      const mapped = adapters.projectCellFaceCentres(centres, cellCount);
       view.cellMap = leading.session.result.progress.cellMap;
-      view.cellCentres = centres;
+      view.cellFaceCentres = centres;
       view.cellCount = mapped > 0 ? cellCount : 0;
+      view.H = adapters.H;
+      view.n = boundN;
+      view.lockRevision = adapters.stats.lockRevision;
       view.frameWidth = luma.width;
       view.frameHeight = luma.height;
       view.layoutId = leading.layoutId;
