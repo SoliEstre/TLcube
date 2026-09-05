@@ -332,11 +332,14 @@ export function r2HitToDecodeResult(hit) {
  * R2 가 지금 «할 수 있다»고 말해도 되는 것 — 시험판 범위 안내 문구(`guide.scope.r2`)는
  * 이 원장과 묶인다 (`test/r2-scan-runtime.test.js` ⓛ). 능력이 바뀌면 여기부터 바꾸고,
  * 문구는 자가 빨개진 뒤 따라온다.
- *  · readsQr: 일반 QR 복호기는 repo 에 없다 (PM/029B §2 ① 단계 미구현, BarcodeDetector 미사용).
+ *  · readsQr: 일반 QR 을 읽는다 — 단 readsQrVia 의 브라우저 BarcodeDetector 에 위임해서(§26),
+ *    자체 복호기는 없다. qrRuntimeGated: 가용 여부가 실행 시 판정이라 문구는 3상태다 (`scanScopeCopyKey`).
  *  · accumulatesFamilies: 누적 후보는 `finalLayoutIdsForN` 의 라인업 = Type Y 계열뿐이다.
  *    다른 타입(A·V·K·O·C·daehan)은 R2 on 에서도 R1 단발로만 읽힌다.
  */
 export const R2_CAPABILITIES = Object.freeze({
-  readsQr: false,
+  readsQr: true,
+  readsQrVia: 'BarcodeDetector',
+  qrRuntimeGated: true,
   accumulatesFamilies: Object.freeze(['Y']),
 });

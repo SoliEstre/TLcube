@@ -20,7 +20,9 @@ import { decodeFrontend } from '/src/decoder/frontend.js';
 import { detectQrFinderTriples } from '/src/decoder/bootstrap.js';
 import { toRelativeLuminance } from '/src/decoder/luma.js';
 import { localizeCornerQrAssist } from '/src/decoder/corner-qr-assist.js';
-import { immediateCornerQrHint, normalizeDecodePayload, scanScopeCopyKey } from '/src/scanner-scan-assist.js';
+import {
+  immediateCornerQrHint, normalizeDecodePayload, scanScopeCopyKey, scanViaOf, resultAutoOpen,
+} from '/src/scanner-scan-assist.js';
 import {
   cameraLiveness,
   gatePresentation,
@@ -70,6 +72,7 @@ import {
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import { createR2ScanRuntime, r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
+import { createQrBridge, qrHitToDecodeResult, qrFrameGateOpen, routeQrHits } from '/src/qr-bridge.js';
 import { CELL_MAP_STATE } from '/src/r2/progress.js';
 import {
   normalizeCentralFinderId,
@@ -132,7 +135,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.03';
+export const SCANNER_BUILD = '2026-09-05.04';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -163,6 +166,8 @@ const resultPanel = document.getElementById('scan-result');
 const resultTitle = document.getElementById('result-title');
 const resultContent = document.getElementById('result-content');
 const popupFallback = document.getElementById('popup-fallback');
+// «브라우저가 새 탭을 열지 못했어요» 문단 — 자동으로 열지 않은(QR) 결과에선 거짓이라 숨긴다. 하드 가드 밖.
+const popupBlockedNote = document.getElementById('popup-blocked-note');
 const openUrlLink = document.getElementById('open-url');
 const rescanButton = document.getElementById('rescan');
 const closeResultButton = document.getElementById('close-result');
@@ -286,6 +291,24 @@ try {
   if (window.localStorage.getItem(R2_TOGGLE_KEY) === '0') r2Wanted = false;
 } catch { /* 저장소 접근 불가는 스캔을 막지 않는다 — 기본 켬 */ }
 const r2Runtime = createR2ScanRuntime({ enabled: isLabPath() && r2Wanted });
+/*
+ * 일반 QR 브리지 (PM/029B §2 ①단계 · §26). 브라우저 BarcodeDetector 에 위임 — 의존성 0,
+ * 능력은 실행 시 판정(Android Chrome 가용, Firefox·Windows 데스크톱 불가). R2 토글 아래
+ * 시험판에서만 돈다. TL 리더 QR 은 결과로 노출하지 않고 R1 의 가족 힌트로만 쓴다.
+ */
+const qrBridge = createQrBridge();
+/**
+ * QR 브리지가 준 가족 힌트 `{ evidence, at }`. URL 경로 힌트(scannerFamilyEvidence)보다 앞선다 —
+ * «지금 카메라가 보는 코드» 가 «페이지로 데려온 코드» 보다 확실하다. 다만 **TTL** 이 있다:
+ * 스트림 내내 살리면 카메라를 다른 가족의 코드로 옮겼을 때 틀린 힌트가 광학 실패 프레임의
+ * 후보를 하나로 접는다. 브리지가 250 ms 마다 다시 보므로 코드가 프레임에 있으면 자연히 갱신된다.
+ */
+let runtimeFamilyHint = null;
+const QR_HINT_TTL_MS = 3000;
+function liveFamilyEvidence() {
+  if (runtimeFamilyHint === null) return null;
+  return nowMs() - runtimeFamilyHint.at <= QR_HINT_TTL_MS ? runtimeFamilyHint.evidence : null;
+}
 
 /*
  * ── 안정 유지 트리거 + 가이드-사전 스캔 (운영자 요청 2026-08-16) ─────────────────
@@ -387,11 +410,9 @@ function scanContentKind(payload) {
   return ['url', 'text', 'wifi', 'card'].includes(kind) ? kind : 'text';
 }
 
+// 값 집합은 `src/scanner-scan-assist.js` 의 SCAN_VIA_VALUES 가 잠근다 (PM/026 §via enum 갱신).
 function scanVia(result) {
-  const hypothesis = result && result.hypothesis;
-  return hypothesis && (hypothesis.centerQr === true || /qr/i.test(hypothesis.source || ''))
-    ? 'qr'
-    : 'cube';
+  return scanViaOf(result);
 }
 
 function finishProductScanOk(result, payload) {
@@ -882,9 +903,11 @@ function refreshScanGuideCopy() {
   // 범위 안내는 R2 토글을 따른다 (운영자 요구 ②, 2026-09-04). data-i18n 도 같이 바꿔야
   // 언어 전환의 전수 재적용이 되돌리지 않는다. `t()` 는 리터럴 두 번 — 삼항을 안에 넣으면
   // scanner-i18n 의 «사전에 없는 키» 자가 못 본다. 정식 경로는 R2 가 항상 꺼져 있어 불변.
-  const scopeKey = scanScopeCopyKey(r2Runtime.enabled);
+  const scopeKey = scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported);
   scanGuideScope.setAttribute('data-i18n', scopeKey);
-  scanGuideScope.textContent = scopeKey === 'guide.scope.r2' ? t('guide.scope.r2') : t('guide.tlcubeOnly');
+  if (scopeKey === 'guide.scope.r2qr') scanGuideScope.textContent = t('guide.scope.r2qr');
+  else if (scopeKey === 'guide.scope.r2') scanGuideScope.textContent = t('guide.scope.r2');
+  else scanGuideScope.textContent = t('guide.tlcubeOnly');
 }
 
 /*
@@ -898,7 +921,7 @@ const i18n = createI18n(SCANNER_STRINGS, {
       if (cameraGatePhase === 'preparing') showPreparingCameraGate();
       else showSupportedStartGate();
     }
-    if (!resultPanel.hidden && lastResult !== null) showResult(lastResult);
+    if (!resultPanel.hidden && lastResult !== null) showResult(lastResult, lastResultOptions);
     if (!zoomControls.hidden) refreshZoomChrome();
     // 렌즈 선택지도 JS 가 채운다 — 권한 전에는 기기 이름이 없어 «카메라 1» 같은
     // 대체 이름을 우리가 붙이므로, 언어가 바뀌면 다시 그려야 한다.
@@ -908,6 +931,8 @@ const i18n = createI18n(SCANNER_STRINGS, {
 });
 const t = (key) => i18n.t(key);
 let lastResult = null;
+/** 마지막 결과의 표시 옵션(autoOpen 등) — 언어 전환 재렌더가 URL 을 다시 열지 않게 같이 보관한다. */
+let lastResultOptions = {};
 let selectedCameraId = '';
 let knownCameras = [];
 
@@ -1005,11 +1030,15 @@ async function decodeFrame(imageData, settings = {}) {
      * 시계도 하나를 공유한다: 보고는 한 행이고 total 이 두 패스의 합이므로
      * 단계 시간도 합이어야 앞뒤가 맞는다.
      */
+    // 실행 시 힌트(QR 브리지, TTL)가 있으면 그것이, 없으면 URL 경로 힌트가. 한 번만 읽어 두 패스가
+    // 같은 힌트로 돌고, 조건과 값이 어긋나(TTL 이 그 사이 만료) null 키가 붙는 일이 없다.
+    const familyEvidence = liveFamilyEvidence() || scannerFamilyEvidence;
     const runPass = (daehan) => decodeFrontend(raster, {
       onStage: (stageName, phase) => clock.onStage(stageName, phase),
       // QR 힌트는 선택지를 줄이는 보조 증거일 뿐이다. 미지·부재는 키 자체를 생략해
       // 종전의 무힌트 탐색 경로를 바이트 단위로 보존한다.
-      ...(scannerFamilyEvidence === null ? {} : { familyEvidence: scannerFamilyEvidence }),
+      // 둘 다 없으면 키 자체를 생략해 종전의 무힌트 탐색 경로를 바이트 단위로 보존한다.
+      ...(familyEvidence === null ? {} : { familyEvidence }),
       // Type Y 강화 로케이터는 /lab/ 시험판에서만 켠다. 정식 스캐너의 **1차 패스**는
       // 종전 검출 계약과 프레임 비용을 그대로 유지한다 (daehan 은 실패한 프레임의
       // 2차 패스로만 붙는다 — 아래 폴백).
@@ -1544,6 +1573,8 @@ function stopCamera() {
   // R2 누적도 스트림 수명에 묶인다 — 세션은 DONE 뒤 흡수 상태라 비우지 않으면 다음
   // 카메라의 첫 프레임에 옛 글자가 결과로 다시 뜬다. 인디케이터·셀맵 잔상도 같이 지운다.
   r2Runtime.reset();
+  qrBridge.reset();
+  runtimeFamilyHint = null;
   renderR2Progress();
   renderR2CellMap();
 }
@@ -1799,6 +1830,19 @@ function imageDataWhole(source, width, height) {
  * 빠르게 돌리고, 안 될 때만 비싸게 한 번 더 본다.
  */
 const FRAME_ESCALATED_SIDE = 1440;
+/**
+ * 사용자에게 **보이는** 비디오 영역(비디오 픽셀). 프리뷰는 정사각 스테이지 + `object-fit: cover`
+ * + `effectiveCropZoom` 배율이라, 센서 프레임의 가운데 정사각을 배율로 나눈 것이다 —
+ * R1 의 `imageDataCenterSquare` 와 같은 기하. QR 브리지는 이 밖의 코드를 버린다: 화면에 없는
+ * 코드가 읽혀 결과로 뜨면 사용자는 «겨누지도 않은 링크» 를 받는다.
+ */
+function visibleVideoRegion() {
+  const vw = cameraVideo.videoWidth;
+  const vh = cameraVideo.videoHeight;
+  if (!(vw > 0) || !(vh > 0)) return null;
+  const side = Math.min(vw, vh) / effectiveCropZoom();
+  return { x: (vw - side) / 2, y: (vh - side) / 2, width: side, height: side };
+}
 function grabVideoFrame(atMs = nowMs()) {
   const escalate = escalationDue(atMs, nextEscalationAt);
   const maxSide = escalate ? FRAME_ESCALATED_SIDE : FRAME_MAX_SIDE;
@@ -1967,7 +2011,9 @@ function handleDecodeResult(result, source, session) {
 
   finishProductScanOk(result, payload);
   stopCamera();
-  showResult(payload);
+  // URL 자동 열기는 **허용 목록**이다 — TL 출처(R1·R2)만 열고, 일반 QR·미지의 출처는 사용자가 누른다
+  // (겨누지도 않은 링크가 열리면 피싱 벡터). 정식 경로엔 TL 출처뿐이라 불변.
+  showResult(payload, { autoOpen: resultAutoOpen(result) });
   setStatus(t('status.decoded'));
 }
 
@@ -1979,6 +2025,8 @@ function startFrameLoop(session) {
   // 새 카메라 세션의 첫 프레임 전에 R2 를 비운다 — stopCamera 를 안 거친 경로(트랙
   // ended 등)도 덮는다. 비우지 않으면 옛 DONE 이 첫 프레임에 결과로 되살아난다 (ⓚ).
   r2Runtime.reset();
+  qrBridge.reset();
+  runtimeFamilyHint = null;
 
   const nextFrame = (timestamp) => {
     if (session !== scanSession || !cameraStream || document.visibilityState === 'hidden') {
@@ -2033,6 +2081,30 @@ function startFrameLoop(session) {
           // R2 는 부가 경로다. 어떤 실패도 단발 스캔을 막지 않는다.
         }
       }
+    }
+
+    /*
+     * ── 일반 QR (BarcodeDetector 위임, PM/029B §26) ── R2 토글 아래 · 브라우저가 지원할 때만.
+     * <video> 를 그대로 넘긴다 — grab 중복 없음, 전체 해상도. 결과는 비동기라 콜백에서
+     * 세션을 다시 확인한다. TL 리더 QR(HTTPS://TLSCAN.ESTRE.SO[/x]) 은 «TL 코드가 있다»
+     * 신호라 노출하지 않고 가족 힌트로만 쓴다 (§2 ①). 그 밖은 R1·R2 와 같은 문.
+     */
+    if (qrFrameGateOpen({
+      r2Enabled: r2Runtime.enabled,
+      qrSupported: qrBridge.supported,
+      readyState: cameraVideo.readyState,
+    })) {
+      qrBridge.pushFrame(cameraVideo, timestamp, (hits) => {
+        // 비동기 콜백 — 세션과 토글을 다시 본다 (토글 off 직후 늦은 결과가 새면 안 된다).
+        if (session !== scanSession || !r2Runtime.enabled) return;
+        const route = routeQrHits(hits);
+        if (route.family !== null) {
+          runtimeFamilyHint = { evidence: Object.freeze({ family: route.family }), at: nowMs() };
+        }
+        if (route.expose !== null) {
+          handleDecodeResult(qrHitToDecodeResult(route.expose), 'camera', session);
+        }
+      }, { region: visibleVideoRegion() });
     }
 
     const intervalMs = adaptiveFrameIntervalMs(lastFrameCostMs);
@@ -2410,15 +2482,20 @@ function tryOpenUrl(url) {
   }
 }
 
-function renderUrlPayload(payload) {
+function renderUrlPayload(payload, autoOpen = true) {
   const url = payload.trim();
-  const opened = tryOpenUrl(url);
+  // autoOpen=false(일반 QR): 열지 않고 링크·«열기» 버튼만 보인다. 사용자가 URL 을 보고 누른다.
+  const opened = autoOpen ? tryOpenUrl(url) : false;
   activeUrl = url;
   openUrlLink.href = url;
   popupFallback.hidden = opened;
+  // 자동으로 열지 않은 결과엔 «열지 못했어요» 가 거짓이다 — 버튼만 남기고 문단은 숨긴다.
+  if (popupBlockedNote) popupBlockedNote.hidden = !autoOpen;
 
   setResultTitle(t('result.url.title'));
-  addResultIntro(opened ? t('result.url.opened') : t('result.url.manual'));
+  if (opened) addResultIntro(t('result.url.opened'));
+  else if (autoOpen) addResultIntro(t('result.url.manual'));
+  else addResultIntro(t('result.url.qrManual'));
 
   const link = document.createElement('a');
   link.className = 'payload-url';
@@ -2472,9 +2549,13 @@ function renderCardPayload(data) {
   }
 }
 
-function showResult(payload) {
-  // 언어 전환 시 이 패널을 같은 내용으로 다시 그리기 위해 보관한다.
+function showResult(payload, options) {
+  const settings = options || {};
+  // 언어 전환 시 이 패널을 같은 내용으로 다시 그리기 위해 보관한다 (옵션도 같이 — 재렌더에서
+  // URL 을 또 열면 안 된다).
   lastResult = payload;
+  lastResultOptions = settings;
+  const autoOpen = settings.autoOpen !== false;
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   activeUrl = '';
   popupFallback.hidden = true;
@@ -2489,7 +2570,7 @@ function showResult(payload) {
   }
 
   if (sniffed.kind === 'url') {
-    renderUrlPayload(payload);
+    renderUrlPayload(payload, autoOpen);
   } else if (sniffed.kind === 'wifi') {
     renderWifiPayload(sniffed.data);
   } else if (sniffed.kind === 'card') {
@@ -2798,6 +2879,9 @@ document.documentElement.setAttribute('lang', i18n.lang);
 i18n.apply();
 wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
 refreshScanGuideCopy();
+// BarcodeDetector 판정은 비동기다 — 끝나면 범위 문구를 3상태로 다시 그린다 (§26). 시험판에서만:
+// 정식 경로는 QR 을 안 돌리므로 검출기를 만드는 것조차 «불변» 위반이다.
+if (isLabPath()) void qrBridge.probe().then(() => refreshScanGuideCopy());
 
 /*
  * 사용 이벤트 비콘. 페이로드 **내용은 절대 담지 않는다** — 종류(url/text/wifi/card)와
@@ -3055,6 +3139,10 @@ if (r2Toggle && isLabPath()) {
   paintR2();
   r2Toggle.addEventListener('click', () => {
     r2Runtime.setEnabled(!r2Runtime.enabled);
+    // 켜든 끄든 QR 브리지·힌트도 버린다 — off 직후 늦은 QR 결과가 뜨거나 옛 힌트가 R1 을 계속
+    // 편향하면 «R2 off = 기준선» 이 거짓이 된다 (R2 의 setEnabled 와 같은 «전환 시 증거 폐기»).
+    qrBridge.reset();
+    runtimeFamilyHint = null;
     try { window.localStorage.setItem(R2_TOGGLE_KEY, r2Runtime.enabled ? '1' : '0'); }
     catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
     paintR2();

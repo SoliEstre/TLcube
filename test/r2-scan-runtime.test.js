@@ -260,24 +260,18 @@ test('ⓙ 배선 — 거부된 R2 결과가 루프를 죽이지 않고 R2 를 �
   assert.ok(loop.includes('r2Runtime.reset()'), 'startFrameLoop 이 R2 를 안 비운다');
 });
 
-test('ⓛ 범위 안내가 R2 토글을 따르고, 문구의 주장이 능력 원장과 맞는다 (운영자 요구 ②)', () => {
+test('ⓛ 범위 안내가 R2 토글을 따르고 배선이 살아 있다 (운영자 요구 ② · 3상태는 qr-bridge.test ⓔ)', () => {
   assert.equal(scanScopeCopyKey(false), 'guide.tlcubeOnly', 'off 는 정식 문구 그대로여야 한다');
   assert.equal(scanScopeCopyKey(undefined), 'guide.tlcubeOnly', '모름은 정식 문구다');
   assert.notEqual(scanScopeCopyKey(true), scanScopeCopyKey(false), 'on 인데 문구가 안 바뀐다');
-  const onKey = scanScopeCopyKey(true);
-  for (const lang of Object.keys(SCANNER_STRINGS)) {
-    assert.equal(typeof SCANNER_STRINGS[lang][onKey], 'string', lang + ' 에 on 문구가 없다');
-  }
-  const ko = SCANNER_STRINGS.ko[onKey];
-  // 정직 자: 원장이 바뀌면 문구도 바뀌어야 한다. QR 을 못 읽는 동안 문구는 «아직» 못 읽는다고 말한다.
-  if (R2_CAPABILITIES.readsQr === false) {
-    assert.match(ko, /QR/, 'QR 을 못 읽는데 문구가 QR 을 안 말한다');
-    assert.match(ko, /아직/, 'QR 을 못 읽는데 «아직» 이 없다 — 능력 약속(PM/029B §2 ①)과 어긋난다');
-  } else {
-    assert.doesNotMatch(ko, /읽히지 않아요/, 'QR 을 읽는데 문구가 못 읽는다고 말한다');
+  for (const key of [scanScopeCopyKey(true, false), scanScopeCopyKey(true, true)]) {
+    for (const lang of Object.keys(SCANNER_STRINGS)) {
+      assert.equal(typeof SCANNER_STRINGS[lang][key], 'string', lang + ' 에 ' + key + ' 가 없다');
+    }
+    assert.match(SCANNER_STRINGS.ko[key], /타입 Y/, '누적 대상이 Type Y 뿐인데 문구가 그걸 안 말한다 — 과대주장');
   }
   assert.ok(R2_CAPABILITIES.accumulatesFamilies.includes('Y'));
-  assert.match(ko, /타입 Y/, '누적 대상이 Type Y 뿐인데 문구가 그걸 안 말한다 — 과대주장');
+  assert.equal(typeof R2_CAPABILITIES.readsQrVia, 'string', 'QR 을 어떻게 읽는지 원장에 없다');
 
   const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
   const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
@@ -288,5 +282,5 @@ test('ⓛ 범위 안내가 R2 토글을 따르고, 문구의 주장이 능력 �
   const handler = js.slice(toggleAt, js.indexOf('});', toggleAt));
   assert.ok(handler.includes('refreshScanGuideCopy()'), '토글이 범위 안내를 안 바꾼다');
   const fn = js.slice(js.indexOf('function refreshScanGuideCopy()'), js.indexOf('const i18n = createI18n'));
-  assert.ok(fn.includes('scanScopeCopyKey(r2Runtime.enabled)'), 'refreshScanGuideCopy 가 토글 상태를 안 읽는다');
+  assert.ok(fn.includes('scanScopeCopyKey(r2Runtime.enabled'), 'refreshScanGuideCopy 가 토글 상태를 안 읽는다');
 });

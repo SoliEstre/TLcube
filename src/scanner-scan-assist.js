@@ -37,10 +37,39 @@ export function normalizeDecodePayload(result) {
 }
 
 /**
- * 스캔 범위 안내(«QR 및 다른 바코드는 읽히지 않아요»)의 문구 키. R2 누적이 켜져 있으면
- * 그 상태를 말하는 키로 바뀐다 (운영자 요구 ②, 2026-09-04). off · 모름은 정식 문구 그대로 —
- * 정식 경로(/)는 R2 가 항상 꺼져 있어 이 함수가 정식 문구 밖을 낼 수 없다.
+ * 스캔 범위 안내(«QR 및 다른 바코드는 읽히지 않아요»)의 문구 키 — 3상태. R2 누적이 켜져 있으면
+ * 브라우저의 QR 능력(BarcodeDetector)에 따라 «QR 도 읽어요» / «이 브라우저에선 못 읽어요» 로
+ * 갈린다 (운영자 요구 ② · §26). off · 모름은 정식 문구 그대로 — 정식 경로(/)는 R2 가 항상
+ * 꺼져 있어 이 함수가 정식 문구 밖을 낼 수 없다.
  */
-export function scanScopeCopyKey(r2Enabled) {
-  return r2Enabled === true ? 'guide.scope.r2' : 'guide.tlcubeOnly';
+export function scanScopeCopyKey(r2Enabled, qrCapable) {
+  if (r2Enabled !== true) return 'guide.tlcubeOnly';
+  // on 은 브라우저 능력에 따라 둘 — BarcodeDetector 가 있으면 QR 도 읽는다 (§26). 판정 전(모름)은 못 읽는 쪽.
+  return qrCapable === true ? 'guide.scope.r2qr' : 'guide.scope.r2';
+}
+
+/**
+ * 텔레메트리 `via` — 결과가 어느 경로로 왔는가. 값 집합은 아래 상수가 잠근다 (PM/026 · PM/010 의
+ * `via enum` 은 이 집합을 따른다). R2 누적·일반 QR 은 hypothesis 가 없으므로 경로 이름으로 가른다.
+ * 페이로드 내용은 어디에도 싣지 않는다 — 이 값은 경로 라벨뿐이다.
+ */
+export const SCAN_VIA_VALUES = Object.freeze(['cube', 'qr', 'qr-direct', 'r2']);
+
+export function scanViaOf(result) {
+  if (result && result.source === 'r2') return 'r2';
+  if (result && result.source === 'qr') return 'qr-direct';
+  const hypothesis = result && result.hypothesis;
+  return hypothesis && (hypothesis.centerQr === true || /qr/i.test(hypothesis.source || ''))
+    ? 'qr'
+    : 'cube';
+}
+
+/**
+ * 결과 URL 을 **자동으로** 열어도 되는가 — 허용 목록이다. TL 출처(R1: top-level source 없음 · R2:
+ * 'r2')만 열고, 일반 QR('qr')과 미지의 출처는 사용자가 누른다. 결과가 `autoOpen: false` 를 직접
+ * 실으면 언제나 그것이 이긴다. 기본값이 «연다» 쪽이 아니라서 새 출처가 표시를 잊어도 안전하다.
+ */
+export function resultAutoOpen(result) {
+  if (!result || result.autoOpen === false) return false;
+  return result.source === undefined || result.source === 'r2';
 }
