@@ -395,17 +395,18 @@
    * ⚠ 폭은 JS 가 인라인 `width` 로만 준다(0%\~100%). transition 은 게이지가 프레임
    *   주기(320ms)로 갱신되므로 그보다 짧게 — 아니면 항상 뒤처져 보인다.
    */
-  /* R2 진행 인디케이터 — 좌하단. 조준을 방해하지 않게 반투명·소형으로 둔다. */
-  /* 뷰파인더 상단 행 (§27.4 1단계): 좌 R2 진행 | 중앙 엔진 스위치 | 우 셀맵. 트랙은 전부 유연 —
-     320px 폰(정사각 ≈287px)에서도 넘치지 않는다(좌 알약은 min-width 0 으로 접힌다). 자식이 전부 hidden 이면
+  /* 뷰파인더 상단 행 (§27.4 1단계 · 2b): 좌 R2 점진 확정 패널 | 중앙 엔진 스위치 | 우 셀맵. 트랙은 전부 유연 —
+     320px 폰(정사각 ≈287px)에서도 넘치지 않는다(좌 패널은 min-width 0 으로 접힌다). 좌·우 트랙이 **같은 문자열**
+     이라 스위치가 정중앙에 온다(운영자 요구 — engine-switch.test ⓒ 가 대칭을 잰다). 우 칸의 셀맵 상한(140px)은
+     트랙이 아니라 .r2-cellmap 자기 규칙이 진다(옛 clamp() 트랙의 성질이 그쪽으로 옮겨갔다). 자식이 전부 hidden 이면
      행도 비어 정식 렌더는 그대로다. CSS 변수 유도 없이 리터럴 — 부트 전 계산 시점 문제를 피한다. */
   .stage-top-row {
     position: absolute; left: 8px; right: 8px; top: 8px; z-index: 6;
-    display: grid; grid-template-columns: minmax(0, 1fr) fit-content(112px) minmax(0, clamp(84px, 32%, 140px));
+    display: grid; grid-template-columns: minmax(0, 1fr) fit-content(112px) minmax(0, 1fr);
     column-gap: 6px; align-items: start; pointer-events: none;
   }
   .stage-top-left { min-width: 0; display: flex; }
-  .stage-top-right { min-width: 0; }
+  .stage-top-right { min-width: 0; display: flex; justify-content: flex-end; align-items: flex-start; }
   .engine-switch {
     min-width: 0; max-width: 100%;
     pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -429,14 +430,43 @@
     background: linear-gradient(90deg, #7ef9d0, #4ad8ff); transition: transform 160ms ease;
   }
   .engine-switch-control[data-engine="r2"] .engine-switch-knob { transform: translateX(100%); }
+  /* 좌 패널 (2b · PM/029B §27.4) — 세로 컨테이너: 위 = 확정/변동 칩 행(.r2-rows), 아래 = 진행 막대 행(.r2-progress-bar).
+     칩 행은 가로 흐름 + 자동 줄바꿈이 기본, ≤320px 에선 세로 한 줄씩(아래 미디어 규칙). */
   .r2-progress {
-    position: static; min-width: 0; overflow: hidden;
-    display: flex; align-items: center; gap: 6px;
-    padding: 5px 8px; border-radius: 999px;
+    position: static; min-width: 0; max-width: 100%; overflow: hidden;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding: 5px 8px; border-radius: 12px;
     background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
     font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     color: #7ef9d0; letter-spacing: .04em;
     pointer-events: none;
+  }
+  .r2-rows { display: flex; flex-wrap: wrap; gap: 3px 6px; min-width: 0; max-width: 100%; }
+  /* 칩 색은 scanner.js 가 셀맵 색표(R2_CELL_COLOR)에서 **유도**해 심는 변수만 본다 — 색 리터럴 사본 금지
+     (engine-switch.test ⓖ). 확정 = 셀맵 확정색 · 변동 = 후보색 · 정정 강조(운영자 ⑧) = 소거색에서 제자리 색으로.
+     @keyframes 에 to 가 없는 것이 요점 — 끝 값은 요소 자신의 계산값(data-state 색)이다. */
+  /* 칩은 열 폭을 넘지 못하고(max-width) 넘치면 말줄임으로 **드러낸다** — 좌 트랙 내용 폭은 320px 폰에서 59~69px 라 잘림이 기본
+     상태다 (적대 검토 F7 실측: progress 칩 «D 0.62 · <상태>» 가 8언어 전부 17~60px 넘쳤고 390px 에서도 6/8 언어). engine-switch.test ⓗ. */
+  .r2-chip {
+    display: inline-block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 10px; line-height: 1.2; letter-spacing: .03em;
+  }
+  /* progress 칩만 줄바꿈 허용 — «D 0.62 ·» 뒤에서 접혀 상태 라벨(r2.state.*)이 다음 줄에 온전히 보인다. 한 단어가 열보다 길면
+     (it «finalizzazione») 그 줄만 말줄임. 다른 칩(Type Y · Y2 (n25) · v0TRQ)은 한 줄에 들어간다. */
+  .r2-chip[data-key="progress"] { white-space: normal; }
+  .r2-chip[data-state="confirmed"] { color: var(--r2-fixed); }
+  .r2-chip[data-state="tentative"] { color: var(--r2-live); opacity: .9; }
+  .r2-chip.is-corrected { animation: r2-correct 700ms ease-out; }
+  @keyframes r2-correct { from { color: var(--r2-fix); } }
+  .r2-progress-bar { display: flex; align-items: center; gap: 6px; align-self: stretch; min-width: 0; }
+  /* ≤320px — 운영자 답 ④ «정보를 세로로 표시» 의 통합자 해석(실기 뒤 조정 가능): 좌 패널 칩을 세로 한 줄씩 쌓는다.
+     3열 구조는 유지 — 열을 합치면 스위치 정중앙이 깨진다.
+     ⚠ 기준은 **뷰포트** 폭이다(운영자 답의 글자 그대로). 실제 압박은 스테이지 폭이고 --tl-square-side 는 높이에도 묶이므로
+     360×640 은 320×640 과 같은 287px 스테이지인데 이 규칙 밖(가로 흐름)이고, 320×568 은 더 좁은 252px 인데 규칙은 같다
+     (적대 검토 F9). 그래도 깨지지 않는 이유는 위 칩 규칙의 max-width·말줄임과 .r2-rows 의 wrap 이다 — 칩(24~50px)이
+     트랙 내용 폭(~65px)에 한 줄에 하나씩 접혀 사실상 세로가 된다. 스테이지 폭 기준(@container)으로 옮길지는 실기 뒤 결정. */
+  @media (max-width: 320px) {
+    .r2-rows { flex-direction: column; align-items: flex-start; }
   }
   .r2-progress-label { opacity: .75; }
   .r2-progress-track {
@@ -451,10 +481,11 @@
   }
   .r2-progress.is-done .r2-progress-fill { background: #7ef9d0; }
   .r2-progress-note { opacity: .6; font-size: 10px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  /* R2 셀맵 — 상단 행 우측 칸을 채운다(정사각). 조준을 가리지 않게 작고 반투명하게. */
+  /* R2 셀맵 — 상단 행 우측 칸(정사각). 열 폭 이하로만 줄고 140px 상한 — HUD 크기 상한은 트랙이 아니라 여기가 진다
+     (우 트랙이 좌와 같은 1fr 이어야 스위치가 정중앙이라, 캔버스가 스스로 갇힌다). 조준을 가리지 않게 작고 반투명하게. */
   .r2-cellmap {
     position: static; display: block;
-    width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 10px;
+    width: min(100%, 140px); height: auto; aspect-ratio: 1 / 1; border-radius: 10px;
     background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
     box-shadow: 0 0 0 1px rgb(126 249 208 / .25), 0 0 14px rgb(74 216 255 / .18);
     pointer-events: none;
@@ -499,6 +530,8 @@
     .engine-switch-knob {
       transition: none;
     }
+    /* 정정 강조도 움직임이다 — 색만 즉시 바뀐다 (scanner.js 는 animationend 대신 타이머로 클래스를 뗀다). */
+    .r2-chip.is-corrected { animation: none; }
   }
 
   /*
@@ -984,6 +1017,15 @@
     margin-top: 22px;
   }
 
+  /* 결과 카드의 R2 확정 요약 (F8 · 운영자 ⑧) — 스테이지 좌 패널과 같은 칩 규칙(변수 색)을 쓰고 크기만 카드에 맞춘다.
+     색 리터럴 없음 — 확정색은 var(--r2-fixed), 정정 강조는 @keyframes r2-correct 그대로 (engine-switch.test ⓖ). */
+  .result-r2-rows {
+    margin-top: 12px;
+    font: 600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .04em;
+  }
+  .result-r2-rows .r2-chip { font-size: 12px; }
+
   .result-intro {
     margin: 0;
     color: rgb(255 255 255 / .68);
@@ -1407,16 +1449,22 @@
              셀맵: 선두 후보의 셀을 정합이 표본한 사영 자리(세 면 3점)에 상태색으로. A6: 코드 영역만 · 확정은 정적. -->
         <div class="stage-top-row" id="stage-top-row">
           <div class="stage-top-left" id="stage-top-left">
+            <!-- 좌 패널 (2b): 위 = 점진 확정 칩(타입 → 버전 → 레이아웃 → 진행 — scanner.js 가 src/r2-confirmation-model.js 의
+                 행에서 만든다 · 확정 = 락 시점, 레이아웃 변종은 DONE 까지 변동) · 아래 = 진행 막대 행. id 들은 자가 찍는다. -->
             <div class="r2-progress" id="r2-progress" aria-hidden="true" hidden>
-              <span class="r2-progress-label" id="r2-progress-label">R2</span>
-              <span class="r2-progress-track"><span class="r2-progress-fill" id="r2-progress-fill"></span></span>
-              <span class="r2-progress-note" id="r2-progress-note"></span>
+              <div class="r2-rows" id="r2-rows"></div>
+              <div class="r2-progress-bar" id="r2-progress-bar">
+                <span class="r2-progress-label" id="r2-progress-label">R2</span>
+                <span class="r2-progress-track"><span class="r2-progress-fill" id="r2-progress-fill"></span></span>
+                <span class="r2-progress-note" id="r2-progress-note"></span>
+              </div>
             </div>
           </div>
-          <!-- 엔진 스위치: R1 = 단발만 · R2 = R1+R2+QR 병행(결정 2 기본안). 정식엔 승격 플래그 전까지 hidden. -->
+          <!-- 엔진 스위치: R1 = 단발만(모든 타입) · R2 = R2 누적(타입 Y) + QR 만, R1 단발 끔 (운영자 결정 ②).
+               정식엔 승격 플래그 전까지 hidden. -->
           <div class="engine-switch" id="engine-switch" hidden>
             <span class="engine-switch-label" id="engine-switch-label" data-i18n="engine.label">스캐너 엔진 선택</span>
-            <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — 켜면 R2 누적 복호와 QR 읽기가 추가돼요</span>
+            <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — R1 은 모든 타입을 단발로 읽고, R2 는 타입 Y 를 여러 프레임 누적으로 읽으며 QR 도 읽어요</span>
             <button type="button" class="engine-switch-control" id="engine-switch-control" role="switch" aria-checked="true" data-engine="r2" aria-labelledby="engine-switch-label" aria-describedby="engine-switch-desc">
               <span class="engine-switch-opt" data-i18n="engine.r1">R1</span>
               <span class="engine-switch-opt" data-i18n="engine.r2">R2</span>
@@ -1505,6 +1553,10 @@
          문구는 그 전 상태의 기본값이라 거의 안 보이지만, data-i18n 을 걸어 두지 않으면
          패널을 띄우는 경로가 하나라도 생겼을 때 한국어가 샌다. -->
     <h2 id="result-title" data-i18n="result.generic">내용을 읽었어요</h2>
+    <!-- R2 확정 요약 (운영자 ⑧ · 적대 검토 F8) — Type Y · Y2 (n25) · v0TR · DONE 칩. 카메라가 닫힌 뒤 확정색·«정정» 강조가
+         실제로 보이는 유일한 표면(스테이지 좌 패널은 결과 시트·카메라 게이트 아래다). R2 출처 결과에만 scanner.js 가 채우고
+         그 외엔 authored hidden 그대로 — 정식(/)엔 R2 출처가 없어 렌더 불변. 칩은 scanner.js 가 만든다. -->
+    <div class="r2-rows result-r2-rows" id="result-r2-rows" hidden></div>
     <div class="result-content" id="result-content"></div>
     <div class="popup-fallback" id="popup-fallback" hidden>
       <p id="popup-blocked-note" data-i18n="result.popupBlocked">브라우저가 자동으로 새 탭을 열지 못했어요. 아래 버튼을 탭해서 열어 주세요.</p>

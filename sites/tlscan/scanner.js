@@ -77,6 +77,12 @@ import {
   createQrBridge, qrHitToDecodeResult, qrFrameGateOpen, routeQrHits, frameYieldForQr, summarizeQrBridge,
 } from '/src/qr-bridge.js';
 import { CELL_MAP_STATE } from '/src/r2/progress.js';
+// 좌 패널 «확정/변동» 행 모델 + R2 위치 상태줄 전이·늦은 결과 문 (2b · PM/029B §27.4). 규칙은 전부 저 파일에 있고 여기는
+// 색·라벨을 붙이고 setStatus / return 만 한다.
+import {
+  CONFIRM_STATE, confirmationRows, leadingWithHysteresis, progressNote,
+  R2_STATUS_ACTION, r2StatusStep, r2StatusOnReject, lateResultAdmitted,
+} from '/src/r2-confirmation-model.js';
 import {
   normalizeCentralFinderId,
   normalizeExpectedEmphasis,
@@ -138,7 +144,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.07';
+export const SCANNER_BUILD = '2026-09-05.08';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -311,6 +317,24 @@ const qrBridge = createQrBridge();
  */
 let runtimeFamilyHint = null;
 const QR_HINT_TTL_MS = 3000;
+/**
+ * R2 DONE 래치 `{ layoutId, n, leadingId }` (2b · PM/029B §27.4) — R2 적중을 결과 문에 넘기기 **직전** 스냅샷.
+ * 문이 받아들이면 stopCamera 가 r2Runtime.reset() 을 먼저 불러 stats 가 비므로, 결과 카드의 확정 요약
+ * (Type Y · Y2 (n25) · v0TR · DONE) 이 읽을 값은 이것뿐이다. `leadingId` 는 적중 프레임에 좌 패널이 보이던 레이아웃 선두 —
+ * DONE 의 layoutId 와 다르면 «정정»(운영자 ⑧, renderResultR2Summary 가 강조).
+ * ⚠ 스테이지 좌 패널은 카메라가 닫히면 **숨는다**. 옛 안은 거기에 «확정 칩만» 남겼지만 그 칩은 결과 시트(z10)·카메라 게이트
+ * (z2 — 스테이지는 isolation: isolate 라 안의 z6 행이 위로 못 올라온다) 아래라 아무도 못 봤다 (적대 검토 F8 실측:
+ * elementFromPoint 가 시트·게이트를 돌려줬다). ⑧ 의 «DONE 확정색 / 정정 강조» 가 보이는 표면은 결과 카드다.
+ * startFrameLoop(새 세션) · 스위치 핸들러 · 거부된 적중 뒤에 null. 선언이 여기(프레임 루프보다 앞)인 이유: 대입하는 쪽이 먼저 읽힌다.
+ */
+let r2Latched = null;
+/** R2 모드 상태 문구 위상 — «모으는 중» 을 이미 말했는가 (syncR2Status · 전이 때만 setStatus). */
+let r2StatusCollecting = false;
+/**
+ * 상태 문구 유예 시각 — 거부된 적중(비컨만 등) 뒤 handleDecodeResult 가 쓴 처방을 R2 전이(aim · r2Collecting)가 이 시각까지
+ * 덮지 않는다 (F1). 전이 규칙은 r2-confirmation-model 의 r2StatusStep / r2StatusOnReject (순수 함수) 에 있다.
+ */
+let r2StatusHoldUntil = -Infinity;
 function liveFamilyEvidence() {
   if (runtimeFamilyHint === null) return null;
   return nowMs() - runtimeFamilyHint.at <= QR_HINT_TTL_MS ? runtimeFamilyHint.evidence : null;
@@ -2021,7 +2045,9 @@ function handleDecodeResult(result, source, session) {
   stopCamera();
   // URL 자동 열기는 **허용 목록**이다 — TL 출처(R1·R2)만 열고, 일반 QR·미지의 출처는 사용자가 누른다
   // (겨누지도 않은 링크가 열리면 피싱 벡터). 정식 경로엔 TL 출처뿐이라 불변.
-  showResult(payload, { autoOpen: resultAutoOpen(result) });
+  // R2 출처면 확정 요약(래치)을 결과 카드에 같이 넘긴다 (F8 · 운영자 ⑧) — 정식엔 R2 출처가 없어 항상 null (렌더 불변).
+  // 래치를 결과에 묶는 이유: 옛 R2 DONE 뒤 사진 결과가 뜰 때 남은 래치가 사진 결과의 요약으로 읽히면 안 된다.
+  showResult(payload, { autoOpen: resultAutoOpen(result), r2Summary: result.source === 'r2' ? r2Latched : null });
   setStatus(t('status.decoded'));
 }
 
@@ -2035,6 +2061,15 @@ function startFrameLoop(session) {
   r2Runtime.reset();
   qrBridge.reset();
   runtimeFamilyHint = null;
+  // DONE 래치·상태 문구 위상·거부 유예도 새 세션에서 비운다 — 옛 확정 값이 새 카메라의 결과로 읽히면
+  // «이미 읽었다» 가 된다 (2b · r2-scan-runtime.test ⓡ).
+  r2Latched = null;
+  r2StatusCollecting = false;
+  r2StatusHoldUntil = -Infinity;
+  // 비운 것을 **지금** 그린다 (F3) — 안 그리면 첫 성공 pushFrame(grab ∧ luma ok) 까지 옛 칩·막대가 새 카메라 위에 남는다.
+  // stopCamera 를 안 거친 경로(트랙 ended 등)에선 마지막 라이브 렌더가 그대로 있다. cameraStream 은 이미 세팅돼 있어 NONE 행 렌더.
+  renderR2Progress();
+  renderR2CellMap();
 
   const nextFrame = (timestamp) => {
     if (session !== scanSession || !cameraStream || document.visibilityState === 'hidden') {
@@ -2083,7 +2118,12 @@ function startFrameLoop(session) {
      *
      * ⚠ **플래그가 꺼져 있으면 아래 R1 블록의 제어 흐름이 완전히 불변**이다.
      * `r2Runtime.enabled` 가 false 면 이 블록은 첫 줄에서 반환하고 grab 도 안 한다.
-     * 그 성질을 `test/r2-scan-runtime.test.js` 가 잰다.
+     * 그 성질을 `test/r2-scan-runtime.test.js` 가 잰다. **켜져 있으면 R1 블록은 건너뛴다**
+     * (운영자 결정 ② · 2026-09-05: 스위치 R2 위치 = R2 누적 + QR 만, R1 단발 끔). 그래서
+     * R1 이 맡던 부수 효과 — 첫 grab 뒤 가이드 점 재렌더, 시험판 fps 줄 — 를 이 블록이 대신
+     * 맡는다. `noteProductFrame()` 은 R1 «복호 시도 회계» 라 여기서 부르지 않는다: R2 는
+     * 프레임을 누적하지 시도하지 않고, 부르면 시험판 시도 수가 정식과 다른 뜻이 된다.
+     * (⑫ 부수 효과: 토글·줌 입력 지연의 원인이던 R1 동기 복호가 R2 위치에선 안 돈다.)
      *
      * ⚠ grab 을 R1 과 **공유하지 않는다.** 공유하려면 R1 의 캐던스·비용 계산을
      * 건드려야 하고, 그건 플래그 off 에서도 동작이 달라진다는 뜻이다. 시험판
@@ -2093,6 +2133,11 @@ function startFrameLoop(session) {
     if (r2Runtime.enabled) {
       const r2Image = yieldForQr ? null : grabVideoFrame(nowMs());
       if (r2Image) {
+        // R1 대신 (②): 첫 grab 이 곧 레이아웃 실재의 증거 — 안 그리면 조준 가이드가 사라진다.
+        if (!firstGrabRendered) {
+          firstGrabRendered = true;
+          renderGuideDots();
+        }
         try {
           const r2Luma = toRelativeLuminance({
             width: r2Image.width,
@@ -2103,7 +2148,12 @@ function startFrameLoop(session) {
             const hit = r2Runtime.pushFrame(r2Luma, timestamp);
             renderR2Progress();
             renderR2CellMap();
+            syncR2Status();
             if (hit && typeof hit.text === 'string') {
+              // DONE 스냅샷은 문 **앞**에서 — 문이 받아들이면 stopCamera 가 r2Runtime.reset() 을
+              // 먼저 불러 stats 가 비므로, 결과 카드의 확정 요약이 읽을 값은 여기서 잡아 둔다 (ⓡ).
+              // leadingId = 이 프레임 좌 패널의 레이아웃 선두 (renderR2Progress 가 바로 위에서 갱신) — DONE 과 다르면 «정정»(⑧).
+              r2Latched = { layoutId: hit.layoutId, n: hit.n, leadingId: r2LeadingId };
               // R2 가 먼저 읽었다. 결과 경로는 R1 과 **같은 문**을 쓴다 —
               // 새 표시 경로를 만들면 두 경로가 어긋난다.
               handleDecodeResult(r2HitToDecodeResult(hit), 'camera', session);
@@ -2115,79 +2165,102 @@ function startFrameLoop(session) {
               // 죽었다 (.04~.05.02 시험판, PM/029B §24.9). ⓘ·ⓙ 가 잰다.
               if (session !== scanSession) return;
               r2Runtime.reset();
+              // 거부된 적중은 확정이 아니다 — 래치도 되돌린다.
+              r2Latched = null;
+              // 거부 = 락 해제의 다른 이름인데 처방 문구(beaconOnly 등)는 문이 이미 잡았다 — 다음 프레임의 release 전이가
+              // status.aim 으로 덮지 않게 위상을 내리고, 재락의 r2Collecting 이 처방을 즉시 덮지 않게 잠시 유예한다
+              // (F1 · 규칙은 r2-confirmation-model.r2StatusOnReject — r2-confirmation-model.test (xii) 가 값으로 잰다).
+              const afterReject = r2StatusOnReject(nowMs());
+              r2StatusCollecting = afterReject.collecting;
+              r2StatusHoldUntil = afterReject.holdUntil;
             }
           }
         } catch {
           // R2 는 부가 경로다. 어떤 실패도 단발 스캔을 막지 않는다.
         }
+        // R1 대신 (②): 시험판 fps 줄 — «초당 처리 프레임». R2 모드에선 누적 프레임이 곧 처리 프레임이다.
+        noteFrameProcessed();
       }
     }
 
-    const intervalMs = adaptiveFrameIntervalMs(lastFrameCostMs);
-    if (!isDecoding && timestamp - lastDecodeAt >= intervalMs) {
-      const frameStartedAt = nowMs();
-      const imageData = yieldForQr ? null : grabVideoFrame(frameStartedAt);
+    /*
+     * ── R1 단발 복호 ── 운영자 결정 ②: 스위치가 R2 위치면 돌지 않는다. 정식(/)은 R2 가 항상
+     * 꺼져 있어(`r2Available` false) 이 조건이 항상 참 — 안의 제어 흐름은 바이트 그대로 불변이다.
+     * 게이트 줄 `if (!isDecoding && …)` 은 r2-scan-runtime.test ⓑ 가 R2 블록과의 순서를 찍는다.
+     */
+    if (!r2Runtime.enabled) {
+      const intervalMs = adaptiveFrameIntervalMs(lastFrameCostMs);
+      if (!isDecoding && timestamp - lastDecodeAt >= intervalMs) {
+        const frameStartedAt = nowMs();
+        const imageData = yieldForQr ? null : grabVideoFrame(frameStartedAt);
 
-      if (imageData) {
-        noteProductFrame();
-        if (!firstGrabRendered) {
-          firstGrabRendered = true;
-          renderGuideDots();
-        }
-        lastDecodeAt = timestamp;
-        isDecoding = true;
-
-        /*
-         * 안정 유지 판정 — 복호보다 **먼저** 한다. 복호는 수십 ms\~수 초 걸리므로 그 뒤에
-         * 재면 프레임 사이 간격이 복호 시간에 오염된다(같은 뷰인데 「움직였다」 가 된다).
-         * 서명 만들기는 stride 4 다운샘플이라 프레임 grab 비용에 묻힌다.
-         */
-        const steadyState = steady.observeFrame({ frame: imageData, timeMs: timestamp });
-        renderSteadyMeter(steadyState);
-        const usePrior = steadyState.trigger && !priorInFlight;
-        if (usePrior) {
-          steady.markTriggered(timestamp);
-          priorInFlight = true;
-          if (!statusOwnedBySteady) {
-            statusOwnedBySteady = true;
-            setStatus(t('status.steadyScan'));
+        if (imageData) {
+          noteProductFrame();
+          if (!firstGrabRendered) {
+            firstGrabRendered = true;
+            renderGuideDots();
           }
+          lastDecodeAt = timestamp;
+          isDecoding = true;
+
+          /*
+           * 안정 유지 판정 — 복호보다 **먼저** 한다. 복호는 수십 ms\~수 초 걸리므로 그 뒤에
+           * 재면 프레임 사이 간격이 복호 시간에 오염된다(같은 뷰인데 「움직였다」 가 된다).
+           * 서명 만들기는 stride 4 다운샘플이라 프레임 grab 비용에 묻힌다.
+           */
+          const steadyState = steady.observeFrame({ frame: imageData, timeMs: timestamp });
+          renderSteadyMeter(steadyState);
+          const usePrior = steadyState.trigger && !priorInFlight;
+          if (usePrior) {
+            steady.markTriggered(timestamp);
+            priorInFlight = true;
+            if (!statusOwnedBySteady) {
+              statusOwnedBySteady = true;
+              setStatus(t('status.steadyScan'));
+            }
+          }
+
+          const attempt = lastFramePose
+            ? attemptCarriedPoseScan(imageData, usePrior)
+            : usePrior
+              ? attemptGuidePriorScan(imageData)
+              : decodeFrame(imageData);
+
+          attempt
+            .then((result) => {
+              // 늦은 결과 문 (F2) — 스위치가 R2 로 넘어간 뒤 완주한 R1 복호는 결과도, 그 실패가 만드는 상태 문구도 버린다
+              // (QR 콜백의 세션·토글 재확인과 같은 규약 · 규칙은 r2-confirmation-model.lateResultAdmitted). 정식(/)은 R2 가
+              // 항상 꺼져 있어 «세션이 같으면 통과» 로 환원된다 — 아래 제어 흐름 불변. finally 는 그대로 비용 회계를 닫는다.
+              if (!lateResultAdmitted('r1', { sameSession: session === scanSession, r2Enabled: r2Runtime.enabled })) return;
+              result = attachCornerQrScanAssist(result, imageData);
+              if (session === scanSession) rememberFramePose(result, imageData);
+              if (usePrior && !result.ok && session === scanSession && statusOwnedBySteady) {
+                // 사전이 실패하면 원래 조준 안내로 되돌린다 — 「시도 중」 이 눌러앉으면
+                // 사용자는 무엇을 바꿔야 할지 모른 채 기다리게 된다.
+                statusOwnedBySteady = false;
+                setStatus(t('status.aim'));
+              }
+              handleDecodeResult(result, 'camera', session);
+            })
+            .catch(() => {
+              // 같은 늦은 결과 문 — R2 위치에서 완주한 R1 의 예외로 R2 세션의 카메라를 끄면 안 된다.
+              // ⚠ 정식(/)에서도 한 가지는 바뀐다: 옛 세션의 늦은 예외가 «새» 카메라를 끄던 잠재 결함이 같은 문에 막힌다 — 의도된 변경(PM/029B §27.9).
+              if (!lateResultAdmitted('r1', { sameSession: session === scanSession, r2Enabled: r2Runtime.enabled })) return;
+              lastFramePose = null;
+              finishProductScanFail('decoder-error');
+              stopCamera();
+              setStatus(t('status.frameError'));
+              showSupportedStartGate(t('status.restart'));
+            })
+            .finally(() => {
+              if (usePrior) priorInFlight = false;
+              if (session === scanSession) {
+                lastFrameCostMs = Math.max(0, nowMs() - frameStartedAt);
+                isDecoding = false;
+              }
+              noteFrameProcessed();
+            });
         }
-
-        const attempt = lastFramePose
-          ? attemptCarriedPoseScan(imageData, usePrior)
-          : usePrior
-            ? attemptGuidePriorScan(imageData)
-            : decodeFrame(imageData);
-
-        attempt
-          .then((result) => {
-            result = attachCornerQrScanAssist(result, imageData);
-            if (session === scanSession) rememberFramePose(result, imageData);
-            if (usePrior && !result.ok && session === scanSession && statusOwnedBySteady) {
-              // 사전이 실패하면 원래 조준 안내로 되돌린다 — 「시도 중」 이 눌러앉으면
-              // 사용자는 무엇을 바꿔야 할지 모른 채 기다리게 된다.
-              statusOwnedBySteady = false;
-              setStatus(t('status.aim'));
-            }
-            handleDecodeResult(result, 'camera', session);
-          })
-          .catch(() => {
-            if (session !== scanSession) return;
-            lastFramePose = null;
-            finishProductScanFail('decoder-error');
-            stopCamera();
-            setStatus(t('status.frameError'));
-            showSupportedStartGate(t('status.restart'));
-          })
-          .finally(() => {
-            if (usePrior) priorInFlight = false;
-            if (session === scanSession) {
-              lastFrameCostMs = Math.max(0, nowMs() - frameStartedAt);
-              isDecoding = false;
-            }
-            noteFrameProcessed();
-          });
       }
     }
 
@@ -2577,6 +2650,8 @@ function showResult(payload, options) {
   popupFallback.hidden = true;
   openUrlLink.href = '#';
   resultContent.replaceChildren();
+  // R2 확정 요약 (F8) — R2 출처 결과에만 채워지고 그 외엔 숨긴 채다. 언어 전환 재렌더도 이 경로라 r2.state 라벨이 같이 바뀐다.
+  renderResultR2Summary(settings.r2Summary || null);
 
   let sniffed = { kind: 'text' };
   try {
@@ -2606,6 +2681,7 @@ function hideResult(options) {
   activeUrl = '';
   openUrlLink.href = '#';
   resultContent.replaceChildren();
+  renderResultR2Summary(null);
 
   if (settings.restoreFocus !== false && returnFocus && document.contains(returnFocus)) {
     returnFocus.focus({ preventScroll: true });
@@ -3048,35 +3124,178 @@ if (daehanToggle && isLabPath()) {
  * 「껐다고 생각했는데 그때 모은 증거로 풀린」 프레임이 섞여 A/B 가 오염된다.
  */
 /*
- * R2 진행 인디케이터 렌더 (PM/029 §17). **시험판 전용.**
+ * R2 좌 패널 — 점진 확정 칩 + 진행 인디케이터 (PM/029 §17 · PM/029B §27.4 2b). **시험판 전용.**
  *
- * 표시 후퇴 금지(A6): D 가 내려가도 폭을 줄이지 않는다 — 사용자에게 「되돌아갔다」는
+ * 칩 네 행(타입 · 버전 · 레이아웃 · 진행)의 **규칙은 `src/r2-confirmation-model.js` 에만** 있다 —
+ * 여기는 행 배열을 받아 DOM 에 옮기고 색·라벨을 붙인다. 운영자 결정 ⑦(표기 «Type Y» → «Y2 (n25)») ·
+ * ⑧(확정 = 락 시점, 레이아웃 변종은 DONE 까지 변동, DONE 의 변종이 직전 선두와 다르면 «정정»)은
+ * 모델의 state 와 아래 «정정 효과» 로 나타난다.
+ *
+ * 표시 후퇴 금지(A6): D 가 내려가도 막대 폭을 줄이지 않는다 — 사용자에게 「되돌아갔다」는
  * 신호는 조준을 망친다. 드랍(후보 폐기)일 때만 0 으로 되돌린다.
  * 값은 기기 안 로컬 계산이고 전송 경로가 없다 (안정 게이지와 같은 규약).
+ *
+ * DOM 은 값이 달라졌을 때만 만진다 — 매 프레임 textContent 를 다시 쓰면 레이아웃이 매 틱 흔들린다.
  */
 const r2ProgressRoot = document.getElementById("r2-progress");
+const r2ProgressRows = document.getElementById("r2-rows");
+const r2ProgressBar = document.getElementById("r2-progress-bar");
 const r2ProgressFill = document.getElementById("r2-progress-fill");
 const r2ProgressNote = document.getElementById("r2-progress-note");
 let r2ShownD = 0;
+// r2Latched(DONE 래치) · r2StatusCollecting 은 r2Runtime 곁(위쪽)에 선언돼 있다.
+/** 레이아웃 선두의 히스테리시스 상태 — 후보 0 이거나 락 세대(lockRevision)가 바뀌면 '' 로 리셋. */
+let r2LeadingId = '';
+let r2LeadingLockRevision = 0;
+/** 정정 강조 타이머 — 칩 요소별. animationend 대신 타이머인 이유: reduced-motion 에선 애니메이션이 없어 끝 사건도 없다. */
+const r2ChipCorrectTimers = new WeakMap();
+const R2_CHIP_CORRECT_MS = 700;
+/**
+ * 행 키 → 칩 요소, **컨테이너별**. 모델이 주는 행 순서(type → version → layout → progress)대로 처음 만날 때 만들어 붙인다.
+ * 두 컨테이너: 스테이지 좌 패널(라이브 · 변동/확정)과 결과 카드의 확정 요약(DONE 뒤 · F8). 같은 칩 규칙(.r2-chip)을 쓴다.
+ */
+const r2Chips = new Map();
+/** 결과 카드의 확정 요약 컨테이너 (index.html `#result-r2-rows`, authored hidden) — 카메라가 닫힌 뒤 ⑧ 이 실제로 보이는 표면. */
+const resultR2Rows = document.getElementById('result-r2-rows');
+const resultR2Chips = new Map();
+
+function chipFor(container, chips, key) {
+  if (!container) return null;
+  let chip = chips.get(key);
+  if (!chip) {
+    chip = document.createElement('span');
+    chip.className = 'r2-chip';
+    chip.dataset.key = key;
+    chip.dataset.state = CONFIRM_STATE.NONE;
+    chip.hidden = true;
+    container.appendChild(chip);
+    chips.set(key, chip);
+  }
+  return chip;
+}
+
+/** 한 행의 텍스트가 «비어 있지 않은 값 → 다른 값» 으로 바뀌면 잠시 강조색(정정, ⑧). */
+function flagR2ChipCorrected(chip) {
+  const pending = r2ChipCorrectTimers.get(chip);
+  if (pending) {
+    clearTimeout(pending);
+    chip.classList.remove('is-corrected');
+    void chip.offsetWidth; // 애니메이션 재시작 — 클래스를 같은 틱에 떼고 붙이면 브라우저가 합쳐 버린다.
+  }
+  chip.classList.add('is-corrected');
+  r2ChipCorrectTimers.set(chip, setTimeout(() => {
+    chip.classList.remove('is-corrected');
+    r2ChipCorrectTimers.delete(chip);
+  }, R2_CHIP_CORRECT_MS));
+}
+
+function renderConfirmationChips(container, chips, rows) {
+  for (const row of rows) {
+    const chip = chipFor(container, chips, row.key);
+    if (!chip) continue;
+    if (row.state === CONFIRM_STATE.NONE) {
+      if (!chip.hidden) {
+        chip.hidden = true;
+        chip.textContent = '';
+        chip.dataset.state = CONFIRM_STATE.NONE;
+      }
+      continue;
+    }
+    // progress 행만 상태 라벨이 붙는다 — 동적 키라 scanner-i18n 의 «R2 상태 칩 동적 키» 자가 사전을 잰다.
+    const text = row.key === 'progress' && row.stateKey
+      ? `${row.text} · ${t('r2.state.' + row.stateKey)}`
+      : row.text;
+    if (chip.textContent !== text) {
+      // 정정(⑧) = **확정** 행의 값이 «비어 있지 않은 다른 값» 을 갈아치울 때 — DONE 의 변종이 직전 선두와
+      // 다르거나 재락으로 버전이 바뀐 경우. 변동(tentative) 행의 선두 교체는 변동색 그대로고, progress 행은
+      // 매 프레임 D 가 움직이는 계기라 정정 대상이 아니다 (통합자 해석 — 매 틱 깜빡이면 강조가 뜻을 잃는다).
+      if (row.state === CONFIRM_STATE.CONFIRMED && row.key !== 'progress' && chip.textContent !== '' && !chip.hidden) {
+        flagR2ChipCorrected(chip);
+      }
+      chip.textContent = text;
+    }
+    if (chip.dataset.state !== row.state) chip.dataset.state = row.state;
+    if (chip.hidden) chip.hidden = false;
+  }
+}
+
 function renderR2Progress() {
   if (!r2ProgressRoot || !r2Available) return;
-  // 카메라가 닫혀 있으면 숨긴다 — 결과 패널·게이트 뒤에 마지막 막대가 남으면 «아직 모으는 중» 으로 읽힌다.
-  if (!r2Runtime.enabled || !cameraStream) {
+  if (!r2Runtime.enabled) {
     r2ProgressRoot.hidden = true;
     r2ShownD = 0;
+    r2LeadingId = '';
+    return;
+  }
+  const stats = r2Runtime.stats;
+  const view = r2Runtime.view;
+  // 카메라가 닫혀 있으면 **숨긴다**. 옛 안은 DONE 래치가 있을 때 «확정 칩만» 남겼지만 그 칩은 결과 시트(z10)·카메라 게이트(z2)
+  // 아래라 아무도 못 봤다 (F8 실측) — 확정 요약은 결과 카드가 그린다 (renderResultR2Summary). 마지막 막대가 남아도 같은 이유로 안 보이지만
+  // 재스캔의 첫 프레임(startFrameLoop 의 재렌더) 전까지 «아직 모으는 중» 상태를 DOM 에 남기지 않는다.
+  if (!cameraStream) {
+    r2ShownD = 0;
+    r2LeadingId = '';
+    r2ProgressRoot.hidden = true;
     return;
   }
   r2ProgressRoot.hidden = false;
-  const stats = r2Runtime.stats;
+  // 선두 히스테리시스 — 후보가 없거나 락 세대가 바뀌면 처음부터.
+  if (stats.candidateCount === 0 || view.lockRevision !== r2LeadingLockRevision) {
+    r2LeadingId = '';
+    r2LeadingLockRevision = view.lockRevision;
+  }
+  r2LeadingId = leadingWithHysteresis(r2LeadingId, stats.candidates);
+  // 래치는 결과 카드의 몫 — 라이브 패널은 stats·view 만 본다 (래치가 있는 순간은 문 → stopCamera 안이라 이미 카메라가 닫혀 있다).
+  renderConfirmationChips(r2ProgressRows, r2Chips, confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId }));
   // 후보가 없으면(락 없음·폐기) 0 으로 되돌린다 — 후보가 없는데 막대가 차 있으면 거짓말이다.
   const d = stats.candidateCount > 0 ? stats.progressD : 0;
   r2ShownD = d === 0 ? 0 : Math.max(r2ShownD, d);
   if (r2ProgressFill) r2ProgressFill.style.width = `${Math.round(Math.min(1, r2ShownD) * 100)}%`;
-  if (r2ProgressNote) {
-    r2ProgressNote.textContent = stats.candidateCount > 0
-      ? `n${stats.lockedN}·${stats.candidateCount}`
-      : "";
+  // 메모는 칩과 **같은 락 판정**(progressNote — view.n 우선)에서 나온다: 락 상실 코스팅 중 «칩 없음 · n0·5» 모순이 없다 (F5).
+  if (r2ProgressNote) r2ProgressNote.textContent = progressNote({ stats, view });
+}
+
+/**
+ * 결과 카드의 R2 확정 요약 (F8 · 운영자 ⑧) — R2 출처 결과에만. 래치 `{ layoutId, n, leadingId }` 로 네 행 전부 확정색
+ * (Type Y · Y2 (n25) · v0TR · DONE · <r2.state.done>). DONE 의 layoutId 가 적중 프레임의 선두와 다르면 레이아웃 칩에 «정정» 강조 —
+ * **첫 표시에서만** (언어 전환 재렌더에 다시 깜빡이지 않게). 래치가 없으면(R1·QR·사진 결과) 숨긴다 — 정식엔 R2 출처가 없어
+ * 항상 이 분기고 컨테이너는 authored hidden 그대로 (렌더 불변).
+ */
+function renderResultR2Summary(latched) {
+  if (!resultR2Rows) return;
+  if (!latched || !r2Available) {
+    if (!resultR2Rows.hidden) {
+      resultR2Rows.hidden = true;
+      for (const chip of resultR2Chips.values()) {
+        chip.hidden = true;
+        chip.textContent = '';
+        chip.dataset.state = CONFIRM_STATE.NONE;
+      }
+    }
+    return;
   }
+  const firstShow = resultR2Rows.hidden;
+  renderConfirmationChips(resultR2Rows, resultR2Chips, confirmationRows({ latched }));
+  resultR2Rows.hidden = false;
+  if (firstShow && typeof latched.leadingId === 'string' && latched.leadingId !== '' && latched.leadingId !== latched.layoutId) {
+    const layoutChip = resultR2Chips.get('layout');
+    if (layoutChip) flagR2ChipCorrected(layoutChip);
+  }
+}
+
+/*
+ * R2 모드의 상태 문구 (2b · 변경 2). R2 위치에선 R1 상태 기계(status.aim/closer/clipped…)가 멈추므로
+ * 인디케이터 **전이** 때만 한 번 setStatus 한다 — 매 프레임 쓰면 낭독기가 매 틱 다시 읽는다.
+ *   락 진입(LOCKED | COLLECTING | FINALIZING, 후보 > 0) → status.r2Collecting 1회
+ *   락 해제(후보 0 또는 DROPPED | FAILED)             → status.aim 1회
+ *   거부된 적중 뒤 유예(r2StatusHoldUntil) 중            → 둘 다 침묵 — 문이 쓴 처방(beaconOnly 등)이 산다 (F1)
+ * 규칙은 r2-confirmation-model.r2StatusStep (순수) — 여기는 action 대로 setStatus 하고 위상을 되쓴다.
+ */
+function syncR2Status() {
+  const step = r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, r2Runtime.stats, nowMs());
+  r2StatusCollecting = step.collecting;
+  if (step.action === R2_STATUS_ACTION.COLLECTING) setStatus(t('status.r2Collecting'));
+  else if (step.action === R2_STATUS_ACTION.AIM) setStatus(t('status.aim'));
 }
 
 /*
@@ -3096,6 +3315,17 @@ const R2_CELL_COLOR = Object.freeze({
   [CELL_MAP_STATE.CONFIRMED]: 'rgba(126,249,208,0.95)',
   [CELL_MAP_STATE.ERASURE]: 'rgba(255,90,170,0.85)',
 });
+/*
+ * 좌 패널 칩 색은 셀맵 색표에서 **유도**한다 (사본 금지 — 확정·변동·정정이 셀맵의 확정·후보·소거와 같은 색이어야
+ * 두 그림이 한 어휘로 읽힌다). CSS 는 var(--r2-fixed / --r2-live / --r2-fix) 만 본다 — engine-switch.test ⓖ.
+ * r2Available 게이트 안 — 정식(/) 의 <html> 인라인 스타일에 변수 3개가 심기면 렌더는 같아도 DOM 스냅샷이 변경 전과
+ * 달라진다 (F4 · 운영자 결정 ①·② 의 «정식 불변» 은 DOM 까지다). 칩은 R2 가 켜졌을 때만 만들어지므로 게이트 밖에 둘 이유가 없다.
+ */
+if (r2Available) {
+  document.documentElement.style.setProperty('--r2-fixed', R2_CELL_COLOR[CELL_MAP_STATE.CONFIRMED]);
+  document.documentElement.style.setProperty('--r2-live', R2_CELL_COLOR[CELL_MAP_STATE.CANDIDATE]);
+  document.documentElement.style.setProperty('--r2-fix', R2_CELL_COLOR[CELL_MAP_STATE.ERASURE]);
+}
 const r2CellMapCanvas = document.getElementById('r2-cellmap');
 function renderR2CellMap() {
   if (!r2CellMapCanvas || !r2Available) return;
@@ -3151,8 +3381,10 @@ function renderR2CellMap() {
 
 /*
  * 엔진 스위치 — 제품 컴포넌트 (§27.4 1단계 · 운영자 요구 ⑤). 뷰파인더 상단 중앙 «스캐너 엔진 선택»
- * role=switch. R2 위치 = R1+R2+QR 병행(결정 2 기본안), R1 위치 = 단발만. 정식(/)엔 승격 플래그가
- * 열기 전까지 authored hidden 그대로(결정 1 기본안 — 정식 렌더 동일). 선택은 localStorage(새 키).
+ * role=switch. **R2 위치 = R2 누적 + QR 만, R1 단발 끔 · R1 위치 = R1 단발만** (운영자 결정 ② · 2026-09-05,
+ * 잠긴 결론 — R2 위치에서 다른 TL 타입(K·C·Y 단발)은 읽히지 않는다). 정식(/)엔 승격 플래그가 열기 전까지
+ * authored hidden 그대로(결정 ① — 정식 렌더 동일). 승격 후 기본 엔진은 R2(③ · resolveEngineChoice 기본 켬).
+ * 선택은 localStorage(새 키).
  */
 const engineSwitch = document.getElementById('engine-switch');
 const engineSwitchControl = document.getElementById('engine-switch-control');
@@ -3169,6 +3401,15 @@ if (engineSwitch && engineSwitchControl && r2Available) {
     // 편향하면 «R2 off = 기준선» 이 거짓이 된다 (R2 의 setEnabled 와 같은 «전환 시 증거 폐기»).
     qrBridge.reset();
     runtimeFamilyHint = null;
+    // DONE 래치도 버린다 — 엔진을 바꾼 뒤 옛 확정 값이 남으면 다른 엔진의 결과처럼 읽힌다.
+    r2Latched = null;
+    // 거부 유예도 버린다 — 그 처방은 옛 엔진 위치의 것이다.
+    r2StatusHoldUntil = -Infinity;
+    // R2 가 상태줄을 «모으는 중» 으로 잡고 있었다면 돌려준다 — R1 위치에선 R1 상태 기계가 다시 맡는다.
+    if (r2StatusCollecting) {
+      r2StatusCollecting = false;
+      if (cameraStream) setStatus(t('status.aim'));
+    }
     try { window.localStorage.setItem(ENGINE_STORAGE_KEY, r2Runtime.enabled ? '1' : '0'); }
     catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
     paintEngineSwitch();

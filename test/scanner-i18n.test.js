@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 import { SUPPORTED_LANGUAGES } from '../src/i18n.js';
+import { R2_INDICATOR } from '../src/r2/session.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SCANNER_JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
@@ -131,4 +132,24 @@ test('사진 스캔 실패 두 경로가 모두 토스트를 띄운다', () => {
   );
   assert.ok(cameraBranch.length > 0, 'camera 분기를 못 찾았다');
   assert.doesNotMatch(cameraBranch, /showScanToast/);
+});
+
+// R2 좌 패널 progress 칩 (2b, PM/029B §27.4): `t('r2.state.' + row.stateKey)` 는 **동적 키**라 위의
+// «t() 리터럴» 자가 못 본다. 키 집합은 손 목록이 아니라 R2_INDICATOR 의 이름에서 유도한다 — 인디케이터가
+// 늘면 여기가 빨개져 여덟 언어를 채우게 한다.
+test('R2 상태 칩 동적 키 — Object.keys(R2_INDICATOR) 소문자마다 r2.state.<key> 가 여덟 언어 전부에 있다', () => {
+  assert.ok(SCANNER_JS.includes("t('r2.state.' +"), 'scanner.js 가 r2.state 동적 키를 안 만든다 — 이 자의 대상이 없다');
+  const names = Object.keys(R2_INDICATOR);
+  assert.ok(names.length >= 8, 'R2_INDICATOR 가 ' + names.length + '개뿐 — 원본을 잘못 읽었다');
+  for (const name of names) {
+    const key = 'r2.state.' + name.toLowerCase();
+    for (const lang of LANGS) {
+      assert.equal(typeof SCANNER_STRINGS[lang][key], 'string', lang + ' 에 ' + key + ' 가 없다');
+      assert.ok(SCANNER_STRINGS[lang][key].trim().length > 0, lang + '/' + key + ' 가 비어 있다');
+    }
+  }
+  // 반대 방향 — 인디케이터에 없는 이름의 r2.state.* 는 죽은 문구다.
+  const wanted = new Set(names.map((n) => 'r2.state.' + n.toLowerCase()));
+  const dead = Object.keys(SCANNER_STRINGS.ko).filter((k) => k.startsWith('r2.state.') && !wanted.has(k));
+  assert.deepEqual(dead, [], '인디케이터에 없는 상태 문구');
 });

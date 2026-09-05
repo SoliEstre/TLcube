@@ -25,7 +25,8 @@ import { createA3Adapters } from '../src/r2/adapter-locator.js';
 import { R2_INDICATOR, R2_SESSION_STATUS } from '../src/r2/session.js';
 import { normalizeDecodePayload, scanScopeCopyKey } from '../src/scanner-scan-assist.js';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
-import { finalLayoutIdsForN } from '../src/cellSurfaceFinal.js';
+import { finalLayoutIdsForN, versionForFinalN } from '../src/cellSurfaceFinal.js';
+import { CONFIRM_STATE, confirmationRows, progressNote } from '../src/r2-confirmation-model.js';
 import { listLumaSequences, readLumaDump } from '../tools/read-luma.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -244,7 +245,8 @@ test('ⓚ DONE 뒤 세션은 흡수 상태다 — reset 없이는 같은 답을 
 test('ⓙ 배선 — 거부된 R2 결과가 루프를 죽이지 않고 R2 를 비우며, 카메라 정지·시작에서 비운다 (⚠ 철자 자 — 브라우저 밖)', () => {
   const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
   const start = js.indexOf('if (r2Runtime.enabled) {');
-  const block = js.slice(start, start + 2600);
+  // 블록은 `} catch` 까지 — 고정 길이 슬라이스는 주석이 늘면 꼬리를 잃는다.
+  const block = js.slice(start, js.indexOf('} catch', start) + '} catch'.length);
   const callAt = block.indexOf('handleDecodeResult(');
   assert.ok(callAt > 0, 'R2 블록에 문 호출이 없다');
   assert.ok(block.slice(callAt, callAt + 80).includes('r2HitToDecodeResult(hit)'),
@@ -400,4 +402,113 @@ test('ⓠ 세 면 중심은 붕괴하지 않고, 그 평균은 항등적으로 Y
   a.reset();
   assert.equal(a.stats.lockRevision, 2, 'clearLock 이 lockRevision 을 안 올린다');
   assert.equal(a.projectCellFaceCentres(out, cellCount), 0, '락이 없는데 사영했다');
+});
+
+/*
+ * 2b (PM/029B §27.4 · 운영자 결정 ⑧) — DONE 래치. 행 규칙은 src/r2-confirmation-model.js 가 갖고
+ * (test/r2-confirmation-model.test.js), 여기서는 **배선**만 찍는다.
+ * 적대 검토 F8 (2026-09-05) 뒤 래치가 그려지는 표면은 스테이지 좌 패널이 아니라 **결과 카드**다 — 좌 패널은 결과 시트(z10)·카메라
+ * 게이트(z2, 스테이지 isolate) 아래라 카메라가 닫힌 뒤엔 아무도 못 본다. 그래서 (a) 좌 패널은 카메라가 닫히면 숨고 래치를 안 그린다,
+ * (b) 결과 문이 R2 출처 결과에 래치를 실어 showResult 가 확정 요약을 그린다, (c) 래치엔 «정정» 판별용 leadingId 가 실린다.
+ */
+
+test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 handleDecodeResult 호출 **앞**이고, startFrameLoop·스위치·거부 뒤에 null, 표면은 결과 카드 (⚠ 철자 자 — 브라우저 밖)', () => {
+  const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+  const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
+  const start = js.indexOf('if (r2Runtime.enabled) {');
+  assert.ok(start > 0);
+  const block = js.slice(start, js.indexOf('} catch', start) + '} catch'.length);
+  const latchAt = block.indexOf('r2Latched = { layoutId: hit.layoutId, n: hit.n, leadingId: r2LeadingId }');
+  const callAt = block.indexOf('handleDecodeResult(');
+  assert.ok(latchAt > 0, 'R2 블록에 DONE 스냅샷(layoutId · n · leadingId)이 없다 — 결과 카드의 확정 요약이 읽을 값이 없다');
+  assert.ok(callAt > 0);
+  assert.ok(latchAt < callAt,
+    '스냅샷이 문 **뒤**다 — 문이 받아들이면 stopCamera 가 r2Runtime.reset() 을 먼저 불러 stats 가 비므로 요약이 빈 값을 읽는다');
+  const renderAt = block.indexOf('renderR2Progress()');
+  assert.ok(renderAt > 0 && renderAt < latchAt, '스냅샷이 같은 프레임의 renderR2Progress 보다 앞이다 — leadingId 가 한 프레임 묵은 선두다');
+  const tail = block.slice(callAt, block.indexOf('} catch', callAt));
+  assert.ok(tail.includes('r2Latched = null'), '거부된 적중(비컨만·빈 페이로드) 뒤 래치를 안 되돌린다 — 확정이 아닌 것이 확정으로 남는다');
+  // F1 — 거부 뒤 상태줄 위상·유예 (규칙은 모델 r2StatusOnReject, 값은 r2-confirmation-model.test (xii)).
+  assert.ok(tail.includes('r2StatusOnReject(nowMs())'), '거부 뒤 상태줄 위상을 안 내린다 — 다음 프레임의 release 전이가 beaconOnly 처방을 aim 으로 덮는다');
+  assert.ok(js.includes('r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, r2Runtime.stats, nowMs())'),
+    'syncR2Status 가 모델의 전이 규칙을 안 쓴다 — 유예가 배선되지 않는다');
+  const loop = js.slice(js.indexOf('function startFrameLoop('), js.indexOf('const nextFrame ='));
+  assert.ok(loop.includes('r2Latched = null'), 'startFrameLoop 이 래치를 안 비운다 — 옛 확정 값이 새 카메라의 결과처럼 읽힌다');
+  assert.ok(loop.includes('r2StatusHoldUntil = -Infinity'), 'startFrameLoop 이 거부 유예를 안 비운다');
+  // F3 — 비운 것을 즉시 그린다 (안 그리면 첫 성공 pushFrame 까지 옛 칩·막대가 새 카메라 위에 남는다).
+  assert.ok(loop.includes('renderR2Progress()') && loop.includes('renderR2CellMap()'), 'startFrameLoop 이 비운 패널·셀맵을 즉시 안 그린다');
+  const toggleAt = js.indexOf("engineSwitchControl.addEventListener('click'");
+  const handler = js.slice(toggleAt, js.indexOf('\n  });', toggleAt));
+  assert.ok(handler.includes('r2Latched = null'), '엔진 스위치가 래치를 안 비운다 — 다른 엔진의 결과처럼 읽힌다');
+  assert.ok(handler.includes('r2StatusHoldUntil = -Infinity'), '엔진 스위치가 거부 유예를 안 비운다');
+  // 렌더는 행 규칙을 다시 쓰지 않고 모델을 쓴다.
+  assert.ok(js.includes("from '/src/r2-confirmation-model.js'"), 'scanner.js 가 확정 행 모델을 안 문다');
+  assert.ok(js.includes('leadingWithHysteresis('), '선두 히스테리시스를 안 쓴다 — 근소한 역전마다 레이아웃 칩이 깜빡인다');
+  // F8 — (a) 좌 패널은 라이브만: 래치를 모델에 넘기지 않고, 카메라가 닫히면 숨긴다.
+  const progressFn = js.slice(js.indexOf('function renderR2Progress()'), js.indexOf('function renderResultR2Summary('));
+  assert.ok(progressFn.length > 0, 'renderR2Progress / renderResultR2Summary 를 못 찾았다');
+  assert.ok(progressFn.includes('confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId })'), '좌 패널이 래치를 그린다 — 그 칩은 시트·게이트 아래라 아무도 못 본다');
+  assert.ok(!progressFn.includes('latched: r2Latched'), '좌 패널이 래치를 모델에 넘긴다');
+  assert.ok(/if \(!cameraStream\) \{[^}]*r2ProgressRoot\.hidden = true;/.test(progressFn), '카메라가 닫혔는데 좌 패널을 숨기지 않는다');
+  // F5 — 막대 메모는 칩과 같은 락 판정(progressNote).
+  assert.ok(progressFn.includes('progressNote({ stats, view })'), '메모가 stats.lockedN 을 직접 쓴다 — 코스팅 중 «칩 없음 · n0·5» 모순');
+  // (b) 결과 문이 R2 출처에만 래치를 싣고, showResult 가 요약을 그리며, hideResult 가 지운다.
+  assert.ok(js.includes("r2Summary: result.source === 'r2' ? r2Latched : null"), '결과 문이 R2 출처 결과에 래치를 안 싣는다 (또는 사진 결과에도 싣는다)');
+  const show = js.slice(js.indexOf('function showResult('), js.indexOf('function hideResult('));
+  assert.ok(show.includes('renderResultR2Summary(settings.r2Summary || null)'), 'showResult 가 확정 요약을 안 그린다');
+  const hide = js.slice(js.indexOf('function hideResult('), js.indexOf('function closeResult('));
+  assert.ok(hide.includes('renderResultR2Summary(null)'), 'hideResult 가 확정 요약을 안 지운다 — 다음 결과에 옛 요약이 남는다');
+  const summaryFn = js.slice(js.indexOf('function renderResultR2Summary('), js.indexOf('/*', js.indexOf('function renderResultR2Summary(')));
+  assert.ok(summaryFn.includes('confirmationRows({ latched })'), '결과 카드 요약이 모델(래치 → 전 행 확정)을 안 쓴다');
+  assert.ok(summaryFn.includes('latched.leadingId !== latched.layoutId') && summaryFn.includes('flagR2ChipCorrected('),
+    'DONE 의 변종이 적중 프레임 선두와 다를 때 «정정» 강조가 없다 (운영자 ⑧)');
+  assert.ok(html.includes('id="result-r2-rows"'), '결과 카드에 확정 요약 컨테이너가 없다');
+});
+
+test('ⓢ 락 상실 코스팅 — 가짜 어댑터로 lockedN 0 · 후보 생존 상태를 만들면 칩·메모·막대가 한 이야기를 한다 (F5)', () => {
+  // 코퍼스는 이 상태(어댑터는 락을 걷었는데 후보는 patience 안이라 살아 있음)를 재현 못 한다 — 가짜 어댑터: 두 프레임 검출(n=25) 뒤 미검출.
+  const ids = finalLayoutIdsForN(25);
+  const fakeStats = { n: 25, locked: 1, gridLockF: 0.5, layoutId: ids[0], lockRevision: 1 };
+  let found = 1;
+  const fake = {
+    stats: fakeStats,
+    H: Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    detectInto(luma, width, height, timestamp, pose, output) { output.found = found; output.n = found ? 25 : 0; return R2_SESSION_STATUS.OK; },
+    alignInto() { return R2_SESSION_STATUS.OK; },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+  };
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const luma = { width: 8, height: 8, data: new Float32Array(64) };
+  runtime.pushFrame(luma, 0);
+  runtime.pushFrame(luma, 100);
+  assert.equal(runtime.stats.lockedN, 25, '전제: 락');
+  assert.equal(runtime.stats.candidateCount, ids.length, '전제: n=25 라인업 수만큼 후보');
+  assert.equal(runtime.view.n, 25, '전제: 뷰가 묶인 n 을 든다');
+
+  // 락 상실 — 어댑터는 found=0 (LOCK_MISS_LIMIT 뒤 clearLock 과 같은 관측), 런타임은 후보를 살려 둔다.
+  found = 0; fakeStats.locked = 0;
+  for (let i = 2; i < 6; i += 1) runtime.pushFrame(luma, i * 100);
+  const { stats, view } = runtime;
+  assert.equal(stats.lockedN, 0, '시나리오가 아니다 — lockedN 이 0 이 아니다');
+  assert.equal(stats.candidateCount, ids.length, '시나리오가 아니다 — 후보가 죽었다 (patience 안이어야 한다)');
+  assert.equal(view.n, 25, '뷰의 묶인 n 이 사라졌다 — 코스팅 중 메모·칩의 원천이 없다');
+
+  const rows = {};
+  for (const r of confirmationRows({ stats, view, latched: null, leadingId: '' })) rows[r.key] = r;
+  const note = progressNote({ stats, view });
+  const barShown = (stats.candidateCount > 0 ? stats.progressD : 0) > 0 || stats.candidateCount > 0;
+  assert.equal(rows.type.state, CONFIRM_STATE.CONFIRMED, '코스팅 중 타입 칩이 사라졌다 — 재락마다 «확정» 이 깜빡인다');
+  assert.equal(rows.version.text, R2_CAPABILITIES.accumulatesFamilies[0] + versionForFinalN(25) + ' (n25)');
+  assert.equal(note, 'n25·' + ids.length, '메모가 «n0·5» 처럼 락 없음을 말한다');
+  assert.equal(rows.type.state !== CONFIRM_STATE.NONE, note !== '', '칩과 메모가 갈린다');
+  assert.equal(barShown, true, '막대 조건(candidateCount > 0)이 칩·메모와 갈린다');
+  assert.equal(rows.layout.state, CONFIRM_STATE.TENTATIVE, '레이아웃은 DONE 전이라 변동');
+
+  // patience 를 넘기면 후보 폐기 → 세 표면 모두 빈다.
+  for (let i = 6; i < 60; i += 1) runtime.pushFrame(luma, i * 100);
+  assert.equal(runtime.stats.candidateCount, 0, 'patience 뒤에도 후보가 남았다');
+  assert.equal(runtime.view.n, 0);
+  for (const r of confirmationRows({ stats: runtime.stats, view: runtime.view, latched: null, leadingId: '' })) assert.equal(r.state, CONFIRM_STATE.NONE, r.key);
+  assert.equal(progressNote({ stats: runtime.stats, view: runtime.view }), '');
 });
