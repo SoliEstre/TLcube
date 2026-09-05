@@ -20,8 +20,9 @@ import { fileURLToPath } from 'node:url';
 
 import {
   QR_VALUE_KIND, classifyQrValue, qrHitToDecodeResult, probeQrDetector, createQrBridge,
-  qrFrameGateOpen, routeQrHits,
+  qrFrameGateOpen, routeQrHits, frameYieldForQr, summarizeQrBridge,
 } from '../src/qr-bridge.js';
+import { summarizeFrameDebug } from '../src/scanner-debug-overlay.js';
 import { TL_READER_HINT_REGISTRY, TL_READER_URL, tlReaderUrlWithHint } from '../src/qr.js';
 import {
   normalizeDecodePayload, scanScopeCopyKey, scanViaOf, SCAN_VIA_VALUES, resultAutoOpen,
@@ -286,4 +287,76 @@ test('ⓕ 배선 — 순수 함수 호출 · 영역 · 세션+토글 재확인 �
   assert.ok(js.includes('popupBlockedNote.hidden = !autoOpen'), '자동으로 안 연 결과에 «새 탭을 열지 못했어요» 가 같이 뜬다 — intro 와 모순');
   assert.ok(readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8').includes('id="popup-blocked-note"'), '팝업 차단 문단에 id 가 없다');
   assert.ok(js.includes('showResult(lastResult, lastResultOptions)'), '언어 전환 재렌더가 autoOpen 을 잃는다 — 재렌더에서 URL 이 열린다');
+});
+
+/*
+ * 0단계 (PM/029B §27.4) — «QR 이 TL 처럼 오래 걸린다». 두 복호기가 동기라 detect 결과가 R1 뒤로 밀린다.
+ * ⓘ 유예 진리표 · ⓙ 타이밍 통계 · ⓚ 요약이 키 전부를 찍는다 · ⓕ' 제출 순서(QR → R2 → R1)와 유예 배선.
+ */
+
+test('ⓘ frameYieldForQr — 비행 중이고 제출 뒤 cap 안일 때만 true, 그 밖은 전부 false', () => {
+  assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: 1010 }), true);
+  assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: 1149 }), true);
+  assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: 1150 }), false, 'cap 에 닿으면 굶기지 않는다');
+  assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: 1050 }, 40), false, 'cap 인자');
+  assert.equal(frameYieldForQr({ inFlight: false, submittedAt: 1000, now: 1010 }), false, '비행 중이 아닌데 유예 — 정식 경로가 느려진다');
+  assert.equal(frameYieldForQr({ inFlight: true, submittedAt: NaN, now: 1010 }), false, 'reset 뒤(submittedAt NaN) 유예');
+  assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: NaN }), false);
+  assert.equal(frameYieldForQr(null), false);
+});
+
+test('ⓙ 타이밍 통계 — 제출 시각 · 왕복 ms · settle 수, reset 이 제출 시각을 지운다', async () => {
+  let clock = 5000;
+  const results = [{ rawValue: 'https://example.com/t', boundingBox: box(10, 10) }];
+  const bridge = createQrBridge({ BarcodeDetector: fakeDetectorClass({ results, delayMs: 15 }), intervalMs: 0, now: () => clock });
+  await bridge.probe();
+  assert.equal(Number.isNaN(bridge.stats.submittedAt), true, '제출 전 submittedAt 이 NaN 이 아니다');
+  assert.equal(bridge.pushFrame({}, 0, () => {}), true);
+  assert.equal(bridge.stats.submittedAt, 5000);
+  clock = 5087;
+  await sleep(30);
+  assert.equal(bridge.stats.lastDetectMs, 87, '왕복 ms 가 now() 차이가 아니다');
+  assert.equal(bridge.stats.maxDetectMs, 87);
+  assert.equal(bridge.stats.settled, 1);
+  clock = 6000;
+  bridge.pushFrame({}, 1, () => {});
+  clock = 6020;
+  await sleep(30);
+  assert.equal(bridge.stats.lastDetectMs, 20);
+  assert.equal(bridge.stats.maxDetectMs, 87, '최대가 내려갔다');
+  assert.equal(bridge.stats.settled, 2);
+  bridge.reset();
+  assert.equal(Number.isNaN(bridge.stats.submittedAt), true, 'reset 뒤 옛 제출 시각이 남아 유예를 만든다');
+  // 실패 settle 도 시간을 센다.
+  const failing = createQrBridge({ BarcodeDetector: fakeDetectorClass({ reject: true }), intervalMs: 0, now: () => clock });
+  await failing.probe();
+  clock = 7000; failing.pushFrame({}, 0, () => {}); clock = 7033;
+  await sleep(5);
+  assert.equal(failing.stats.lastDetectMs, 33);
+  assert.equal(failing.stats.settled, 1);
+});
+
+test('ⓚ summarizeQrBridge 가 stats 의 키 전부를 찍고, 디버그 패널이 그 줄을 받는다', async () => {
+  const bridge = createQrBridge({ BarcodeDetector: fakeDetectorClass(), intervalMs: 0 });
+  await bridge.probe();
+  const line = summarizeQrBridge(bridge.stats, bridge.supported);
+  assert.ok(line.startsWith('qr on'));
+  for (const key of Object.keys(bridge.stats)) assert.ok(line.includes(key + ' '), '요약에 ' + key + ' 가 없다 — 키가 늘면 손 목록이 썩는다');
+  assert.ok(summarizeQrBridge({ a: NaN, b: 'x' }, false).startsWith('qr off · a — · b x'));
+  const lines = summarizeFrameDebug({ qr: line });
+  assert.ok(lines.includes(line), '디버그 패널이 qr 줄을 안 그린다');
+  assert.ok(!summarizeFrameDebug({}).some((l) => l.startsWith('qr ')), 'qr 줄이 없을 때 빈 줄을 그린다');
+});
+
+test("ⓕ' 배선 — QR 제출이 R2·R1 보다 앞이고, 유예가 두 grab 을 건너뛰며, 패널에 qr 줄이 간다 (⚠ 철자 자)", () => {
+  const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+  const qrAt = js.indexOf('qrBridge.pushFrame(');
+  const r2At = js.indexOf('r2Runtime.pushFrame(');
+  const r1At = js.indexOf('adaptiveFrameIntervalMs(lastFrameCostMs)');
+  assert.ok(qrAt > 0 && r2At > 0 && r1At > 0);
+  assert.ok(qrAt < r2At && r2At < r1At, 'QR 제출이 두 복호기보다 뒤다 — 같은 틱의 동기 복호가 detect 결과를 밀어낸다');
+  const yieldAt = js.indexOf('const yieldForQr = frameYieldForQr({');
+  assert.ok(yieldAt > qrAt && yieldAt < r2At, '유예 판정이 QR 제출 뒤·R2 앞이 아니다');
+  assert.equal(js.split('yieldForQr ? null : grabVideoFrame(').length - 1, 2, 'R2·R1 두 grab 이 유예를 안 본다');
+  assert.ok(js.includes('qr: isLabPath() ? summarizeQrBridge(qrBridge.stats, qrBridge.supported)'), '디버그 패널에 qr 통계가 안 간다');
 });

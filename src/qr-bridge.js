@@ -84,6 +84,30 @@ export function qrFrameGateOpen(state) {
 }
 
 /**
+ * detect 가 비행 중이면 짧게 R1·R2 의 시작을 미룰지 — 순수. 스캐너의 두 복호기는 동기라, 같은 틱에
+ * 시작하면 detect 결과가 그 뒤(R1 1.4~2.8 s)로 밀린다. 상한 capMs 가 있어 느린 detect(콜드 스타트)에
+ * 굶지 않는다. inFlight 가 아니면 언제나 false — 정식 경로(브리지 미가동)의 불변 근거.
+ */
+export function frameYieldForQr(state, capMs = 150) {
+  if (!state || state.inFlight !== true) return false;
+  if (!Number.isFinite(state.submittedAt) || !Number.isFinite(state.now)) return false;
+  return state.now - state.submittedAt < capMs;
+}
+
+/**
+ * 브리지 통계 한 줄 — 시험판 하단 패널용. 키를 손으로 고르지 않고 stats 의 키 전부를 찍는다
+ * (사본 목록 금지 — 키가 늘면 자동으로 따라온다).
+ */
+export function summarizeQrBridge(stats, supported) {
+  const parts = [];
+  for (const key of Object.keys(stats || {})) {
+    const v = stats[key];
+    parts.push(key + ' ' + (typeof v === 'number' ? (Number.isFinite(v) ? String(Math.round(v)) : '—') : String(v || '—')));
+  }
+  return 'qr ' + (supported ? 'on' : 'off') + ' · ' + parts.join(' · ');
+}
+
+/**
  * 한 프레임의 분류된 적중들을 «힌트» 와 «노출» 로 나눈다 (순수).
  *  · TL 종류는 전부 힌트 — 가족이 있는 마지막 것을 채택한다.
  *  · TL 종류가 하나라도 있으면 **아무것도 노출하지 않는다** — TL 코드를 겨눈 사용자 의도가
@@ -156,8 +180,13 @@ function detectedCentre(code) {
  *    항목은 살리되 `stats.unlocated` 로 센다.
  *  · 실패(detect 가 던짐 · 콜백이 던짐)는 세기만 하고 삼킨다. 부가 경로가 단발을 막지 않는다.
  */
+function defaultNow() {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
+}
+
 export function createQrBridge(options = {}) {
   const intervalMs = Number.isFinite(options.intervalMs) ? Math.max(0, options.intervalMs) : 250;
+  const now = typeof options.now === 'function' ? options.now : defaultNow;
   const Ctor = options.BarcodeDetector !== undefined
     ? options.BarcodeDetector
     : (typeof globalThis !== 'undefined' ? globalThis.BarcodeDetector : undefined);
@@ -168,7 +197,11 @@ export function createQrBridge(options = {}) {
   let inFlight = false;
   let lastAt = -Infinity;
   let session = 0;
-  const stats = { detects: 0, hits: 0, errors: 0, dropped: 0, outside: 0, unlocated: 0, lastKind: '' };
+  const stats = {
+    detects: 0, hits: 0, errors: 0, dropped: 0, outside: 0, unlocated: 0, lastKind: '',
+    // 타이밍 — 제출 시각(유예 판정용) · 마지막/최대 왕복 ms · settle 수. Android 실측이 여기 쌓인다 (§27.4 0a).
+    submittedAt: NaN, lastDetectMs: NaN, maxDetectMs: 0, settled: 0,
+  };
 
   async function probe() {
     const verdict = await probeQrDetector(Ctor);
@@ -191,6 +224,14 @@ export function createQrBridge(options = {}) {
     session += 1;
     inFlight = false;
     lastAt = -Infinity;
+    stats.submittedAt = NaN;
+  }
+
+  function noteSettled(t0) {
+    const dt = now() - t0;
+    stats.lastDetectMs = dt;
+    if (dt > stats.maxDetectMs) stats.maxDetectMs = dt;
+    stats.settled += 1;
   }
 
   function selectVisible(codes, region) {
@@ -226,6 +267,8 @@ export function createQrBridge(options = {}) {
     lastAt = timestamp;
     inFlight = true;
     const token = session;
+    const t0 = now();
+    stats.submittedAt = t0;
     const region = frameOptions && frameOptions.region ? frameOptions.region : null;
     stats.detects += 1;
     let promise;
@@ -239,6 +282,7 @@ export function createQrBridge(options = {}) {
     promise.then((codes) => {
       if (token !== session) { stats.dropped += 1; return; }
       inFlight = false;
+      noteSettled(t0);
       const visible = selectVisible(codes, region);
       if (visible.length === 0) return;
       const classified = visible.map((c) => classifyQrValue(c.rawValue));
@@ -254,6 +298,7 @@ export function createQrBridge(options = {}) {
     }, () => {
       if (token !== session) { stats.dropped += 1; return; }
       inFlight = false;
+      noteSettled(t0);
       stats.errors += 1;
     });
     return true;

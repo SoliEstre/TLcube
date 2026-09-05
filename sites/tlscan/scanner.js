@@ -72,7 +72,9 @@ import {
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import { createR2ScanRuntime, r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
-import { createQrBridge, qrHitToDecodeResult, qrFrameGateOpen, routeQrHits } from '/src/qr-bridge.js';
+import {
+  createQrBridge, qrHitToDecodeResult, qrFrameGateOpen, routeQrHits, frameYieldForQr, summarizeQrBridge,
+} from '/src/qr-bridge.js';
 import { CELL_MAP_STATE } from '/src/r2/progress.js';
 import {
   normalizeCentralFinderId,
@@ -135,7 +137,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.04';
+export const SCANNER_BUILD = '2026-09-05.05';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -1341,6 +1343,8 @@ function updateDebugOverlay(imageData, result, stage, ms) {
     cellSurface: extractCellSurfaceProbe(result),
     anchors: extractCsAnchors(result),
     zoom: currentZoomTelemetry(),
+    // QR 브리지 통계 (시험판) — 「왜 안 읽히나」 를 보이게 (§27.4 0a). 통계는 라벨·수치뿐, 페이로드 없음.
+    qr: isLabPath() ? summarizeQrBridge(qrBridge.stats, qrBridge.supported) : '',
     // 안정 게이지·트리거 상태 (lab 전용 표시). 스냅샷은 프레임 루프가 이미 만든
     // 로컬 값이고 새 전송 경로가 없다 — 안정판에선 debugOverlay 가 no-op 다.
     // holdMs 는 **추적기가 실제로 쓰는 값**을 넘긴다 (모듈 상수를 넘기면 옵션으로
@@ -2034,6 +2038,38 @@ function startFrameLoop(session) {
     }
 
     /*
+     * ── 일반 QR (BarcodeDetector 위임, PM/029B §26) ── R2 토글 아래 · 브라우저가 지원할 때만.
+     * <video> 를 그대로 넘긴다 — grab 중복 없음, 전체 해상도. 결과는 비동기라 콜백에서
+     * 세션을 다시 확인한다. TL 리더 QR(HTTPS://TLSCAN.ESTRE.SO[/x]) 은 «TL 코드가 있다»
+     * 신호라 노출하지 않고 가족 힌트로만 쓴다 (§2 ①). 그 밖은 R1·R2 와 같은 문.
+     */
+    if (qrFrameGateOpen({
+      r2Enabled: r2Runtime.enabled,
+      qrSupported: qrBridge.supported,
+      readyState: cameraVideo.readyState,
+    })) {
+      qrBridge.pushFrame(cameraVideo, timestamp, (hits) => {
+        // 비동기 콜백 — 세션과 토글을 다시 본다 (토글 off 직후 늦은 결과가 새면 안 된다).
+        if (session !== scanSession || !r2Runtime.enabled) return;
+        const route = routeQrHits(hits);
+        if (route.family !== null) {
+          runtimeFamilyHint = { evidence: Object.freeze({ family: route.family }), at: nowMs() };
+        }
+        if (route.expose !== null) {
+          handleDecodeResult(qrHitToDecodeResult(route.expose), 'camera', session);
+        }
+      }, { region: visibleVideoRegion() });
+    }
+
+    // detect 가 비행 중이면 짧게(≤150 ms) R1·R2 의 grab 을 건너뛴다 — 둘 다 동기 복호라 같은 틱에 시작하면
+    // detect 결과가 R1 시간(1.4~2.8 s)만큼 밀린다. 정식 경로는 브리지가 안 돌아 inFlight=false → 항상 false.
+    const yieldForQr = frameYieldForQr({
+      inFlight: qrBridge.inFlight,
+      submittedAt: qrBridge.stats.submittedAt,
+      now: nowMs(),
+    });
+
+    /*
      * ── R2(LTC) 독립 캐던스 (S5 · PM/029B §22·§23) ─────────────────────────
      *
      * 🔴 **`!isDecoding` 게이트 «밖»** 이어야 한다. 옛 안(S2)은 그 안에 있었고,
@@ -2051,7 +2087,7 @@ function startFrameLoop(session) {
      * 시험판에서만 든다.
      */
     if (r2Runtime.enabled) {
-      const r2Image = grabVideoFrame(nowMs());
+      const r2Image = yieldForQr ? null : grabVideoFrame(nowMs());
       if (r2Image) {
         try {
           const r2Luma = toRelativeLuminance({
@@ -2083,34 +2119,10 @@ function startFrameLoop(session) {
       }
     }
 
-    /*
-     * ── 일반 QR (BarcodeDetector 위임, PM/029B §26) ── R2 토글 아래 · 브라우저가 지원할 때만.
-     * <video> 를 그대로 넘긴다 — grab 중복 없음, 전체 해상도. 결과는 비동기라 콜백에서
-     * 세션을 다시 확인한다. TL 리더 QR(HTTPS://TLSCAN.ESTRE.SO[/x]) 은 «TL 코드가 있다»
-     * 신호라 노출하지 않고 가족 힌트로만 쓴다 (§2 ①). 그 밖은 R1·R2 와 같은 문.
-     */
-    if (qrFrameGateOpen({
-      r2Enabled: r2Runtime.enabled,
-      qrSupported: qrBridge.supported,
-      readyState: cameraVideo.readyState,
-    })) {
-      qrBridge.pushFrame(cameraVideo, timestamp, (hits) => {
-        // 비동기 콜백 — 세션과 토글을 다시 본다 (토글 off 직후 늦은 결과가 새면 안 된다).
-        if (session !== scanSession || !r2Runtime.enabled) return;
-        const route = routeQrHits(hits);
-        if (route.family !== null) {
-          runtimeFamilyHint = { evidence: Object.freeze({ family: route.family }), at: nowMs() };
-        }
-        if (route.expose !== null) {
-          handleDecodeResult(qrHitToDecodeResult(route.expose), 'camera', session);
-        }
-      }, { region: visibleVideoRegion() });
-    }
-
     const intervalMs = adaptiveFrameIntervalMs(lastFrameCostMs);
     if (!isDecoding && timestamp - lastDecodeAt >= intervalMs) {
       const frameStartedAt = nowMs();
-      const imageData = grabVideoFrame(frameStartedAt);
+      const imageData = yieldForQr ? null : grabVideoFrame(frameStartedAt);
 
       if (imageData) {
         noteProductFrame();

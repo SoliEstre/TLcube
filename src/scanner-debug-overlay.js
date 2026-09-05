@@ -86,6 +86,7 @@ export function summarizeFrameDebug({
   zoom,
   steady,
   prior,
+  qr,
 } = {}) {
   const geo = geometry || {};
   const cs = cellSurface || {};
@@ -120,6 +121,8 @@ export function summarizeFrameDebug({
     + (ok ? ' · OK' : (reason ? ' · ' + reason : '')),
   );
   if (steady) lines.push(steadyLine(steady, prior));
+  // QR 브리지 통계 (시험판, §27.4 0a) — 문자열 한 줄을 그대로 받는다.
+  if (typeof qr === 'string' && qr) lines.push(qr);
   return lines;
 }
 
