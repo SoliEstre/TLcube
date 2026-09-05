@@ -22,6 +22,7 @@ import { toRelativeLuminance } from '/src/decoder/luma.js';
 import { localizeCornerQrAssist } from '/src/decoder/corner-qr-assist.js';
 import {
   immediateCornerQrHint, normalizeDecodePayload, scanScopeCopyKey, scanViaOf, resultAutoOpen,
+  ENGINE_SWITCH_PRODUCT_ENABLED, engineSwitchAvailable, ENGINE_STORAGE_KEY, ENGINE_STORAGE_KEY_LEGACY, resolveEngineChoice,
 } from '/src/scanner-scan-assist.js';
 import {
   cameraLiveness,
@@ -137,7 +138,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.06';
+export const SCANNER_BUILD = '2026-09-05.07';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -282,17 +283,20 @@ const debugOverlay = createDebugOverlay({
  * 안전 근거: 틀린 격자가 낸 DONE 이 후보 5 × ecc×mask 9 × 3시퀀스 전수에서 **0건**
  * (`tools/wrong-grid-probe.mjs`).
  *
- * ⚠ `isLabPath()` 로만 켠다. 정식 경로에서는 `enabled === false` 라 프레임 루프의
- * R2 블록이 첫 줄에서 반환하고 **grab 도 안 한다** — 제어 흐름이 완전히 불변이다.
+ * ⚠ `r2Available`(engineSwitchAvailable — 승격 전 = 시험판만) 로만 켠다. 정식 경로에서는 `enabled === false` 라
+ * 프레임 루프의 R2 블록이 첫 줄에서 반환하고 **grab 도 안 한다** — 제어 흐름이 완전히 불변이다.
  */
-const R2_TOGGLE_KEY = 'tlscan.lab.r2Accumulate';
-let r2Wanted = true;   // 시험판 기본은 **켬** — 이 표면의 존재 이유가 R2 실기다.
+// «R2 가용» — 시험판이거나 승격됐으면. 이 하나가 런타임·QR probe·패널·스위치·디버그 줄을 다 연다 (§27.4 1단계).
+const r2Available = engineSwitchAvailable({ labPath: isLabPath(), productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED });
+let r2Wanted = true;
 try {
-  // 저장된 값이 '0' 일 때만 끈다. 없으면 켬 (daehan 토글과 기본값이 반대인 이유는
-  // 그쪽이 «구멍이 있는 옵트인» 이고 이쪽은 «시험판의 주 기능» 이라서다).
-  if (window.localStorage.getItem(R2_TOGGLE_KEY) === '0') r2Wanted = false;
+  // 새 키가 있으면 그것, 없으면 옛 시험판 키(1회 이관), 둘 다 없으면 켬.
+  r2Wanted = resolveEngineChoice(
+    window.localStorage.getItem(ENGINE_STORAGE_KEY),
+    window.localStorage.getItem(ENGINE_STORAGE_KEY_LEGACY),
+  );
 } catch { /* 저장소 접근 불가는 스캔을 막지 않는다 — 기본 켬 */ }
-const r2Runtime = createR2ScanRuntime({ enabled: isLabPath() && r2Wanted });
+const r2Runtime = createR2ScanRuntime({ enabled: r2Available && r2Wanted });
 /*
  * 일반 QR 브리지 (PM/029B §2 ①단계 · §26). 브라우저 BarcodeDetector 에 위임 — 의존성 0,
  * 능력은 실행 시 판정(Android Chrome 가용, Firefox·Windows 데스크톱 불가). R2 토글 아래
@@ -1344,7 +1348,7 @@ function updateDebugOverlay(imageData, result, stage, ms) {
     anchors: extractCsAnchors(result),
     zoom: currentZoomTelemetry(),
     // QR 브리지 통계 (시험판) — 「왜 안 읽히나」 를 보이게 (§27.4 0a). 통계는 라벨·수치뿐, 페이로드 없음.
-    qr: isLabPath() ? summarizeQrBridge(qrBridge.stats, qrBridge.supported) : '',
+    qr: r2Available ? summarizeQrBridge(qrBridge.stats, qrBridge.supported) : '',
     // 안정 게이지·트리거 상태 (lab 전용 표시). 스냅샷은 프레임 루프가 이미 만든
     // 로컬 값이고 새 전송 경로가 없다 — 안정판에선 debugOverlay 가 no-op 다.
     // holdMs 는 **추적기가 실제로 쓰는 값**을 넘긴다 (모듈 상수를 넘기면 옵션으로
@@ -2893,7 +2897,7 @@ wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
 refreshScanGuideCopy();
 // BarcodeDetector 판정은 비동기다 — 끝나면 범위 문구를 3상태로 다시 그린다 (§26). 시험판에서만:
 // 정식 경로는 QR 을 안 돌리므로 검출기를 만드는 것조차 «불변» 위반이다.
-if (isLabPath()) void qrBridge.probe().then(() => refreshScanGuideCopy());
+if (r2Available) void qrBridge.probe().then(() => refreshScanGuideCopy());
 
 /*
  * 사용 이벤트 비콘. 페이로드 **내용은 절대 담지 않는다** — 종류(url/text/wifi/card)와
@@ -3055,7 +3059,7 @@ const r2ProgressFill = document.getElementById("r2-progress-fill");
 const r2ProgressNote = document.getElementById("r2-progress-note");
 let r2ShownD = 0;
 function renderR2Progress() {
-  if (!r2ProgressRoot || !isLabPath()) return;
+  if (!r2ProgressRoot || !r2Available) return;
   // 카메라가 닫혀 있으면 숨긴다 — 결과 패널·게이트 뒤에 마지막 막대가 남으면 «아직 모으는 중» 으로 읽힌다.
   if (!r2Runtime.enabled || !cameraStream) {
     r2ProgressRoot.hidden = true;
@@ -3094,7 +3098,7 @@ const R2_CELL_COLOR = Object.freeze({
 });
 const r2CellMapCanvas = document.getElementById('r2-cellmap');
 function renderR2CellMap() {
-  if (!r2CellMapCanvas || !isLabPath()) return;
+  if (!r2CellMapCanvas || !r2Available) return;
   const view = r2Runtime.view;
   if (!r2Runtime.enabled || !view || view.cellCount === 0 || !view.cellMap || !view.cellFaceCentres) {
     r2CellMapCanvas.hidden = true;
@@ -3145,27 +3149,33 @@ function renderR2CellMap() {
   }
 }
 
-const r2Toggle = document.getElementById('lab-r2-toggle');
-if (r2Toggle && isLabPath()) {
-  r2Toggle.hidden = false;
-  const paintR2 = () => {
-    r2Toggle.setAttribute('aria-pressed', String(r2Runtime.enabled));
-    r2Toggle.classList.toggle('active', r2Runtime.enabled);
+/*
+ * 엔진 스위치 — 제품 컴포넌트 (§27.4 1단계 · 운영자 요구 ⑤). 뷰파인더 상단 중앙 «스캐너 엔진 선택»
+ * role=switch. R2 위치 = R1+R2+QR 병행(결정 2 기본안), R1 위치 = 단발만. 정식(/)엔 승격 플래그가
+ * 열기 전까지 authored hidden 그대로(결정 1 기본안 — 정식 렌더 동일). 선택은 localStorage(새 키).
+ */
+const engineSwitch = document.getElementById('engine-switch');
+const engineSwitchControl = document.getElementById('engine-switch-control');
+if (engineSwitch && engineSwitchControl && r2Available) {
+  engineSwitch.hidden = false;
+  const paintEngineSwitch = () => {
+    engineSwitchControl.setAttribute('aria-checked', String(r2Runtime.enabled));
+    engineSwitchControl.dataset.engine = r2Runtime.enabled ? 'r2' : 'r1';
   };
-  paintR2();
-  r2Toggle.addEventListener('click', () => {
+  paintEngineSwitch();
+  engineSwitchControl.addEventListener('click', () => {
     r2Runtime.setEnabled(!r2Runtime.enabled);
     // 켜든 끄든 QR 브리지·힌트도 버린다 — off 직후 늦은 QR 결과가 뜨거나 옛 힌트가 R1 을 계속
     // 편향하면 «R2 off = 기준선» 이 거짓이 된다 (R2 의 setEnabled 와 같은 «전환 시 증거 폐기»).
     qrBridge.reset();
     runtimeFamilyHint = null;
-    try { window.localStorage.setItem(R2_TOGGLE_KEY, r2Runtime.enabled ? '1' : '0'); }
+    try { window.localStorage.setItem(ENGINE_STORAGE_KEY, r2Runtime.enabled ? '1' : '0'); }
     catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
-    paintR2();
+    paintEngineSwitch();
     // 인디케이터·셀맵도 즉시 반영한다 — 끄면 숨고, 켜면 0 부터 다시 찬다.
     renderR2Progress();
     renderR2CellMap();
-    // 범위 안내도 토글을 따른다 (요구 ②).
+    // 범위 안내도 스위치를 따른다 (요구 ②).
     refreshScanGuideCopy();
   });
 }

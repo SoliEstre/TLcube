@@ -249,6 +249,9 @@
 
   .square-stage {
     position: relative;
+    /* 자기 스태킹 컨텍스트 — 안의 오버레이(z6 상단 행·z4 디버그 패널)가 형제 카메라 게이트(z2) 위로
+       새지 않는다. 카메라가 꺼지면 «게이트가 뷰파인더를 덮는다» 가 위젯별 hidden 규칙 없이 구조로 선다. */
+    isolation: isolate;
     width: var(--tl-square-side);
     aspect-ratio: 1 / 1;
     overflow: hidden;
@@ -393,8 +396,41 @@
    *   주기(320ms)로 갱신되므로 그보다 짧게 — 아니면 항상 뒤처져 보인다.
    */
   /* R2 진행 인디케이터 — 좌하단. 조준을 방해하지 않게 반투명·소형으로 둔다. */
+  /* 뷰파인더 상단 행 (§27.4 1단계): 좌 R2 진행 | 중앙 엔진 스위치 | 우 셀맵. 트랙은 전부 유연 —
+     320px 폰(정사각 ≈287px)에서도 넘치지 않는다(좌 알약은 min-width 0 으로 접힌다). 자식이 전부 hidden 이면
+     행도 비어 정식 렌더는 그대로다. CSS 변수 유도 없이 리터럴 — 부트 전 계산 시점 문제를 피한다. */
+  .stage-top-row {
+    position: absolute; left: 8px; right: 8px; top: 8px; z-index: 6;
+    display: grid; grid-template-columns: minmax(0, 1fr) fit-content(112px) minmax(0, clamp(84px, 32%, 140px));
+    column-gap: 6px; align-items: start; pointer-events: none;
+  }
+  .stage-top-left { min-width: 0; display: flex; }
+  .stage-top-right { min-width: 0; }
+  .engine-switch {
+    min-width: 0; max-width: 100%;
+    pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 4px 6px; border-radius: 12px;
+    background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
+    color: #e9f6ff; font: 600 10px/1 system-ui, sans-serif; letter-spacing: .02em;
+  }
+  .engine-switch-label { opacity: .8; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .engine-switch-control {
+    position: relative; display: grid; grid-template-columns: 1fr 1fr; align-items: center;
+    width: 72px; height: 24px; padding: 0;
+    border: 1px solid rgb(126 249 208 / .45); border-radius: 999px;
+    background: rgb(255 255 255 / .08); color: #cfe;
+    font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer;
+  }
+  .engine-switch-opt { position: relative; z-index: 1; text-align: center; opacity: .55; }
+  .engine-switch-control[data-engine="r1"] .engine-switch-opt:nth-child(1),
+  .engine-switch-control[data-engine="r2"] .engine-switch-opt:nth-child(2) { opacity: 1; color: #041a14; }
+  .engine-switch-knob {
+    position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); border-radius: 999px;
+    background: linear-gradient(90deg, #7ef9d0, #4ad8ff); transition: transform 160ms ease;
+  }
+  .engine-switch-control[data-engine="r2"] .engine-switch-knob { transform: translateX(100%); }
   .r2-progress {
-    position: absolute; left: 10px; bottom: 10px; z-index: 6;
+    position: static; min-width: 0; overflow: hidden;
     display: flex; align-items: center; gap: 6px;
     padding: 5px 8px; border-radius: 999px;
     background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
@@ -404,7 +440,7 @@
   }
   .r2-progress-label { opacity: .75; }
   .r2-progress-track {
-    display: inline-block; width: 68px; height: 4px; border-radius: 2px;
+    display: inline-block; flex: 1 1 40px; min-width: 32px; max-width: 68px; height: 4px; border-radius: 2px;
     background: rgb(126 249 208 / .22); overflow: hidden;
   }
   .r2-progress-fill {
@@ -414,11 +450,11 @@
     transition: width 120ms linear;
   }
   .r2-progress.is-done .r2-progress-fill { background: #7ef9d0; }
-  .r2-progress-note { opacity: .6; font-size: 10px; }
-  /* R2 셀맵 — 우하단. 조준을 가리지 않게 작고 반투명하게. */
+  .r2-progress-note { opacity: .6; font-size: 10px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* R2 셀맵 — 상단 행 우측 칸을 채운다(정사각). 조준을 가리지 않게 작고 반투명하게. */
   .r2-cellmap {
-    position: absolute; right: 10px; bottom: 10px; z-index: 6;
-    width: 112px; height: 112px; border-radius: 10px;
+    position: static; display: block;
+    width: 100%; height: auto; aspect-ratio: 1 / 1; border-radius: 10px;
     background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
     box-shadow: 0 0 0 1px rgb(126 249 208 / .25), 0 0 14px rgb(74 216 255 / .18);
     pointer-events: none;
@@ -459,7 +495,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .steady-meter,
-    .steady-meter-fill {
+    .steady-meter-fill,
+    .engine-switch-knob {
       transition: none;
     }
   }
@@ -1344,12 +1381,6 @@
            선택은 localStorage 에 남는다 — 실기기에서 앱을 껐다 켜도 유지돼야
            비교 측정이 된다. -->
       <button type="button" id="lab-daehan-toggle" class="lab-debug-toggle" hidden aria-pressed="false" data-i18n="lab.daehan.toggle">taegeuk + sagoae</button>
-      <!-- R2(LTC 다중프레임 누적) 토글 (2026-09-04, 운영자 요구). 기본 **켬** —
-           시험판의 존재 이유가 R2 실기다. 끄면 정식(`/`)과 같은 단발 경로만 돈다.
-           운영자 근거: 「R2 가 R1 을 완전대체 가능할거라고 생각하지 않기 때문에도 있고,
-           비교하기 쉽게 하기 위한것도」. 선택은 localStorage 에 남는다 — 앱을 껐다
-           켜도 유지돼야 A/B 가 성립한다 (daehan 토글과 같은 규약). -->
-      <button type="button" id="lab-r2-toggle" class="lab-debug-toggle" hidden aria-pressed="true" data-i18n="lab.r2.toggle">R2 누적 복호</button>
     </aside>
 
     <!-- r3 정사각 뷰: 프리뷰(cover) ≡ 분석 정사각(cropWindow crop=1). K/C 가이드와
@@ -1368,27 +1399,34 @@
         <div class="steady-meter" id="steady-meter" aria-hidden="true">
           <span class="steady-meter-fill" id="steady-meter-fill"></span>
         </div>
-        <!-- R2 누적 진행 인디케이터 (2026-09-04, PM/029 §17 "수집된 코드 정보
-             인디케이터 (채워져 가는)"). **시험판 전용** — authored hidden 이고
-             scanner.js 가 isLabPath() 에서만 연다.
-             목적(§18\~19): QR 대비 긴 스캔에서 **사용자 인내심 유지**. R2 는 여러
-             프레임을 모아야 답을 내는데 그동안 화면이 아무 말도 안 하면 실제 시간과
-             무관하게 느리게 «느껴진다» — 운영자 실기 1차의 Y0 관측이 그 자리다.
-             장식이 아니라 **진단 도구**이기도 하다: D 가 차는데 복호가 안 되면
-             크기 하한이 로케이터가 아니라 그 뒤에 있다는 신호다 (§25.4.3). -->
-        <div class="r2-progress" id="r2-progress" aria-hidden="true" hidden>
-          <span class="r2-progress-label" id="r2-progress-label">R2</span>
-          <span class="r2-progress-track"><span class="r2-progress-fill" id="r2-progress-fill"></span></span>
-          <span class="r2-progress-note" id="r2-progress-note"></span>
+        <!-- 뷰파인더 상단 행 (2026-09-05, PM/029B §27.4 1단계 · 운영자 요구 ⑤⑥):
+             좌 = R2 누적 진행 인디케이터(PM/029 §17) · 중앙 = 엔진 스위치(제품 컴포넌트) · 우 = R2 셀맵(§18~19).
+             시험판 하단 정보 패널(#lab-debug-panel)과 겹치지 않게 위로 올렸다. 자식이 전부 authored hidden
+             이라 정식(/) 렌더는 그대로다 — scanner.js 가 r2Available(시험판 또는 승격) 에서만 연다.
+             인디케이터 목적(§18~19): 긴 스캔에서 인내심 유지 + 진단(D 가 차는데 복호가 안 되면 §25.4.3).
+             셀맵: 선두 후보의 셀을 정합이 표본한 사영 자리(세 면 3점)에 상태색으로. A6: 코드 영역만 · 확정은 정적. -->
+        <div class="stage-top-row" id="stage-top-row">
+          <div class="stage-top-left" id="stage-top-left">
+            <div class="r2-progress" id="r2-progress" aria-hidden="true" hidden>
+              <span class="r2-progress-label" id="r2-progress-label">R2</span>
+              <span class="r2-progress-track"><span class="r2-progress-fill" id="r2-progress-fill"></span></span>
+              <span class="r2-progress-note" id="r2-progress-note"></span>
+            </div>
+          </div>
+          <!-- 엔진 스위치: R1 = 단발만 · R2 = R1+R2+QR 병행(결정 2 기본안). 정식엔 승격 플래그 전까지 hidden. -->
+          <div class="engine-switch" id="engine-switch" hidden>
+            <span class="engine-switch-label" id="engine-switch-label" data-i18n="engine.label">스캐너 엔진 선택</span>
+            <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — 켜면 R2 누적 복호와 QR 읽기가 추가돼요</span>
+            <button type="button" class="engine-switch-control" id="engine-switch-control" role="switch" aria-checked="true" data-engine="r2" aria-labelledby="engine-switch-label" aria-describedby="engine-switch-desc">
+              <span class="engine-switch-opt" data-i18n="engine.r1">R1</span>
+              <span class="engine-switch-opt" data-i18n="engine.r2">R2</span>
+              <span class="engine-switch-knob" aria-hidden="true"></span>
+            </button>
+          </div>
+          <div class="stage-top-right" id="stage-top-right">
+            <canvas class="r2-cellmap" id="r2-cellmap" width="112" height="112" aria-hidden="true" hidden></canvas>
+          </div>
         </div>
-        <!-- R2 셀맵 렌더 — 우하단 (2026-09-05, PM/029 §18\~19 "확인/확정된 … 영역을
-             셀 편집기풍 실시간 렌더 (사이버틱)"). **시험판 전용**, authored hidden.
-             그리는 것: 선두 후보의 셀을 **정합이 실제로 표본한 사영 자리**에 놓고 상태
-             (미관측·후보·확정·소거)로 칠한다. 목적 둘 — ① 긴 스캔에서 인내심 유지
-             ② 진단: 벽에 붙은 스캔은 전 셀 «후보» 로 멈춰 있고(PM/029B §25.7), 그 그림이
-             「어느 셀이 안 서는지」를 실기에서 바로 보여 준다.
-             A6 규율: 코드 사영 영역만 · 플래시 금지 · 확정은 정적. -->
-        <canvas class="r2-cellmap" id="r2-cellmap" width="112" height="112" aria-hidden="true" hidden></canvas>
         <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색
              + 로케이터 앵커 마커. 안정판에선 hidden 그대로. -->
         <svg class="lab-debug-layer" id="lab-debug-layer" aria-hidden="true" hidden></svg>

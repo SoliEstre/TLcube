@@ -138,7 +138,7 @@ test('ⓕ 시험판 UI — 토글과 진행 인디케이터가 배선돼 있다'
   const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
   const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
   // 운영자 요구 (2026-09-04): R1/R2 토글 + 좌하단 «채워져 가는» 인디케이터.
-  assert.ok(html.includes('id="lab-r2-toggle"'), 'R2 토글 마크업이 없다');
+  assert.ok(html.includes('id="engine-switch-control"'), '엔진 스위치 마크업이 없다');
   assert.ok(html.includes('id="r2-progress"'), '진행 인디케이터 마크업이 없다');
   assert.ok(js.includes('r2Runtime.setEnabled('), '토글이 런타임을 못 끈다');
   assert.ok(js.includes('renderR2Progress()'), '진행 인디케이터를 아무도 안 그린다');
@@ -278,8 +278,8 @@ test('ⓛ 범위 안내가 R2 토글을 따르고 배선이 살아 있다 (운�
   const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
   assert.ok(html.includes('id="scan-guide-scope"'), '범위 안내 요소에 id 가 없다');
   assert.ok(js.includes('!scanGuideScope'), '범위 안내 요소가 하드 가드 밖이다 — 없는 변형 페이지에서 조용히 죽는다');
-  const toggleAt = js.indexOf("r2Toggle.addEventListener('click'");
-  assert.ok(toggleAt > 0, '토글 핸들러가 없다');
+  const toggleAt = js.indexOf("engineSwitchControl.addEventListener('click'");
+  assert.ok(toggleAt > 0, '엔진 스위치 핸들러가 없다');
   const handler = js.slice(toggleAt, js.indexOf('});', toggleAt));
   assert.ok(handler.includes('refreshScanGuideCopy()'), '토글이 범위 안내를 안 바꾼다');
   const fn = js.slice(js.indexOf('function refreshScanGuideCopy()'), js.indexOf('const i18n = createI18n'));

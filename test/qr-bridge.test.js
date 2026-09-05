@@ -276,12 +276,12 @@ test('ⓕ 배선 — 순수 함수 호출 · 영역 · 세션+토글 재확인 �
   const stop = js.slice(js.indexOf('function stopCamera()'), js.indexOf('function cameraFailure('));
   assert.ok(stop.includes('qrBridge.reset()') && stop.includes('runtimeFamilyHint = null'),
     'stopCamera 가 브리지·힌트를 안 비운다 — 다음 세션에 옛 QR·옛 힌트가 산다');
-  const toggleAt = js.indexOf("r2Toggle.addEventListener('click'");
+  const toggleAt = js.indexOf("engineSwitchControl.addEventListener('click'");
   const toggle = js.slice(toggleAt, js.indexOf('\n  });', toggleAt));
   assert.ok(toggle.includes('qrBridge.reset()') && toggle.includes('runtimeFamilyHint = null'),
     'R2 토글이 브리지·힌트를 안 비운다 — off 직후 QR 결과가 뜨고 옛 힌트가 R1 을 편향한다');
   assert.ok(js.includes('scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported)'), '문구가 브라우저 능력을 안 본다');
-  assert.ok(js.includes('if (isLabPath()) void qrBridge.probe().then('), '정식 경로에서도 BarcodeDetector 를 만든다 — 정식 불변 위반');
+  assert.ok(js.includes('if (r2Available) void qrBridge.probe().then('), '정식 경로에서도 BarcodeDetector 를 만든다 — 정식 불변 위반 (게이트는 r2Available 하나)');
   assert.ok(js.includes('autoOpen: resultAutoOpen(result)'), 'URL 자동 열기가 허용 목록(resultAutoOpen)을 안 거친다 — QR·미지 출처가 열린다');
   assert.ok(js.includes('autoOpen ? tryOpenUrl(url) : false'), 'renderUrlPayload 가 autoOpen 을 안 본다');
   assert.ok(js.includes('popupBlockedNote.hidden = !autoOpen'), '자동으로 안 연 결과에 «새 탭을 열지 못했어요» 가 같이 뜬다 — intro 와 모순');
@@ -358,5 +358,5 @@ test("ⓕ' 배선 — QR 제출이 R2·R1 보다 앞이고, 유예가 두 grab �
   const yieldAt = js.indexOf('const yieldForQr = frameYieldForQr({');
   assert.ok(yieldAt > qrAt && yieldAt < r2At, '유예 판정이 QR 제출 뒤·R2 앞이 아니다');
   assert.equal(js.split('yieldForQr ? null : grabVideoFrame(').length - 1, 2, 'R2·R1 두 grab 이 유예를 안 본다');
-  assert.ok(js.includes('qr: isLabPath() ? summarizeQrBridge(qrBridge.stats, qrBridge.supported)'), '디버그 패널에 qr 통계가 안 간다');
+  assert.ok(js.includes('qr: r2Available ? summarizeQrBridge(qrBridge.stats, qrBridge.supported)'), '디버그 패널에 qr 통계가 안 간다');
 });

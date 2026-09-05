@@ -73,3 +73,33 @@ export function resultAutoOpen(result) {
   if (!result || result.autoOpen === false) return false;
   return result.source === undefined || result.source === 'r2';
 }
+
+/**
+ * 승격 플래그 — 정식(/)에 엔진 스위치와 R2 를 연다. 승격 커밋에서 true 로 바꾼다(그때 «승격 전 핀» 자가
+ * 빨개져 사람이 본다). 능력 원장(R2_CAPABILITIES)과 섞지 않는다 — 능력과 출시 결정은 다른 것이다.
+ */
+export const ENGINE_SWITCH_PRODUCT_ENABLED = false;
+
+/**
+ * «R2 가용» 진리표 — 시험판이거나 승격됐으면 참. 런타임 enabled · QR probe · 패널 렌더 · 스위치 표시 ·
+ * 디버그 qr 줄이 **전부 이것 하나**를 본다 (배타를 열면 소비자도 쓸어라 — 한 곳이 isLabPath 를 따로 보면
+ * 승격 날 «켰는데 안 먹는» 상태가 된다).
+ */
+export function engineSwitchAvailable(state) {
+  return Boolean(state) && (state.labPath === true || state.productEnabled === true);
+}
+
+/** 엔진 선택 저장 키 — 새 키. 옛 시험판 키는 1회 이관용으로만 읽는다. */
+export const ENGINE_STORAGE_KEY = 'tlscan.engine.r2';
+export const ENGINE_STORAGE_KEY_LEGACY = 'tlscan.lab.r2Accumulate';
+
+/**
+ * 저장된 엔진 선택을 푼다 — 새 키가 있으면 그것, 없으면 옛 키, 둘 다 없으면 **켬**(시험판의 존재
+ * 이유가 R2 실기다; 승격 후 기본은 결정 3 에서 다시 정한다).
+ */
+export function resolveEngineChoice(stored, legacy) {
+  if (stored === '1') return true;
+  if (stored === '0') return false;
+  if (legacy === '0') return false;
+  return true;
+}
