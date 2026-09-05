@@ -20,7 +20,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { createR2ScanRuntime } from '../src/r2-scan-runtime.js';
+import { createR2ScanRuntime, r2HitToDecodeResult, R2_CAPABILITIES } from '../src/r2-scan-runtime.js';
+import { normalizeDecodePayload, scanScopeCopyKey } from '../src/scanner-scan-assist.js';
+import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 import { finalLayoutIdsForN } from '../src/cellSurfaceFinal.js';
 import { listLumaSequences, readLumaDump } from '../tools/read-luma.mjs';
 
@@ -191,4 +193,100 @@ test('ⓗ 시험판 UI — 셀맵 캔버스가 배선돼 있고 프레임 루프
   const block = js.slice(blockAt, blockAt + 1800);
   assert.ok(block.includes('renderR2CellMap()'),
     '프레임 루프의 R2 블록이 셀맵을 안 그린다 — 스캔 중에 그림이 멈춰 있다');
+});
+
+/*
+ * ⓘ~ⓛ (2026-09-05, PM/029B §24.9) — 시험판 .04~.05.02 에서 R2 성공이 화면에 도달한 적이
+ * 없었다. 배선은 `{ text }` 를 넘겼고 문은 `payload` 만 봤다. ⓑ 는 `handleDecodeResult(`
+ * 철자만 재서 초록이었다. 그래서 ⓘ 는 **실제 문에 실제 적중을 값으로** 넣는다.
+ */
+
+test('ⓘ R2 적중이 R1 과 같은 문(normalizeDecodePayload)을 **통과**한다 — 철자가 아니라 값으로', (t) => {
+  assert.equal(r2HitToDecodeResult(null), null);
+  assert.equal(normalizeDecodePayload(r2HitToDecodeResult({ text: '' })), null, '빈 글자는 문에서 막혀야 한다');
+  const shaped = r2HitToDecodeResult({ text: 'abc', layoutId: 'v0', n: 13, frame: 5 });
+  assert.equal(normalizeDecodePayload(shaped), 'abc');
+  assert.equal(shaped.source, 'r2');
+  // 옛 결함 모양은 문에서 죽는다 — 자가 무엇을 막는지 값으로 남긴다.
+  assert.equal(normalizeDecodePayload({ ok: true, text: 'abc', source: 'r2' }), null);
+
+  const frames = firstFrames('y2', 8);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  let hit = null;
+  for (let i = 0; i < frames.length && hit === null; i += 1) hit = runtime.pushFrame(frames[i], i * 100);
+  assert.ok(hit && typeof hit.text === 'string', 'y2 에서 적중이 없다 — ⓐ 가 먼저 빨개져야 한다');
+  assert.equal(normalizeDecodePayload(r2HitToDecodeResult(hit)), hit.text,
+    'R2 적중이 결과 문을 못 지난다 — 성공이 실패 분기로 떨어진다');
+});
+
+test('ⓚ DONE 뒤 세션은 흡수 상태다 — reset 없이는 같은 답을 되돌리고, reset 뒤엔 되돌리지 않는다', (t) => {
+  const frames = firstFrames('y2', 8);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  let hit = null;
+  let i = 0;
+  for (; i < frames.length && hit === null; i += 1) hit = runtime.pushFrame(frames[i], i * 100);
+  assert.ok(hit, 'y2 에서 적중이 없다');
+  // 흡수: 다음 프레임에도 같은 글자가 «새 적중» 으로 돌아온다. 스캐너가 비우지 않으면 거부된
+  // 결과(비컨만 등)가 매 프레임 반복되고, 다음 카메라 세션의 첫 프레임에 옛 글자가 뜬다.
+  const again = runtime.pushFrame(frames[i - 1], i * 100 + 100);
+  assert.ok(again && again.text === hit.text,
+    '흡수 전제가 깨졌다 — 스캐너의 reset 배선(ⓙ) 근거를 다시 봐야 한다');
+  runtime.reset();
+  assert.equal(runtime.stats.candidateCount, 0, 'reset 이 후보를 안 버렸다');
+  assert.equal(runtime.stats.text, null, 'reset 이 옛 글자를 남겼다');
+  const after = runtime.pushFrame(frames[0], 99999);
+  assert.equal(after, null, 'reset 뒤 첫 프레임에서 옛 답이 되살아났다');
+});
+
+test('ⓙ 배선 — 거부된 R2 결과가 루프를 죽이지 않고 R2 를 비우며, 카메라 정지·시작에서 비운다 (⚠ 철자 자 — 브라우저 밖)', () => {
+  const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+  const start = js.indexOf('if (r2Runtime.enabled) {');
+  const block = js.slice(start, start + 2600);
+  const callAt = block.indexOf('handleDecodeResult(');
+  assert.ok(callAt > 0, 'R2 블록에 문 호출이 없다');
+  assert.ok(block.slice(callAt, callAt + 80).includes('r2HitToDecodeResult(hit)'),
+    'R2 적중이 모양 변환 없이 문으로 간다 — ⓘ 의 삼킴이 되살아난다');
+  const tail = block.slice(callAt, block.indexOf('} catch', callAt));
+  assert.ok(tail.includes('if (session !== scanSession) return;'), '수용 여부를 안 보고 return 한다');
+  assert.ok(tail.includes('r2Runtime.reset()'), '거부된 뒤 R2 를 안 비운다 — 흡수 상태라 같은 답이 반복된다 (ⓚ)');
+  const bare = tail.indexOf('return;');
+  assert.ok(bare < 0 || tail.slice(0, bare).includes('session !== scanSession'),
+    '무조건 return — rAF 재예약을 건너뛰어 루프가 죽는다');
+  const stop = js.slice(js.indexOf('function stopCamera()'), js.indexOf('function cameraFailure('));
+  assert.ok(stop.includes('r2Runtime.reset()'), 'stopCamera 가 R2 를 안 비운다 — 다음 카메라의 첫 프레임에 옛 글자가 뜬다');
+  const loop = js.slice(js.indexOf('function startFrameLoop('), js.indexOf('const nextFrame ='));
+  assert.ok(loop.includes('r2Runtime.reset()'), 'startFrameLoop 이 R2 를 안 비운다');
+});
+
+test('ⓛ 범위 안내가 R2 토글을 따르고, 문구의 주장이 능력 원장과 맞는다 (운영자 요구 ②)', () => {
+  assert.equal(scanScopeCopyKey(false), 'guide.tlcubeOnly', 'off 는 정식 문구 그대로여야 한다');
+  assert.equal(scanScopeCopyKey(undefined), 'guide.tlcubeOnly', '모름은 정식 문구다');
+  assert.notEqual(scanScopeCopyKey(true), scanScopeCopyKey(false), 'on 인데 문구가 안 바뀐다');
+  const onKey = scanScopeCopyKey(true);
+  for (const lang of Object.keys(SCANNER_STRINGS)) {
+    assert.equal(typeof SCANNER_STRINGS[lang][onKey], 'string', lang + ' 에 on 문구가 없다');
+  }
+  const ko = SCANNER_STRINGS.ko[onKey];
+  // 정직 자: 원장이 바뀌면 문구도 바뀌어야 한다. QR 을 못 읽는 동안 문구는 «아직» 못 읽는다고 말한다.
+  if (R2_CAPABILITIES.readsQr === false) {
+    assert.match(ko, /QR/, 'QR 을 못 읽는데 문구가 QR 을 안 말한다');
+    assert.match(ko, /아직/, 'QR 을 못 읽는데 «아직» 이 없다 — 능력 약속(PM/029B §2 ①)과 어긋난다');
+  } else {
+    assert.doesNotMatch(ko, /읽히지 않아요/, 'QR 을 읽는데 문구가 못 읽는다고 말한다');
+  }
+  assert.ok(R2_CAPABILITIES.accumulatesFamilies.includes('Y'));
+  assert.match(ko, /타입 Y/, '누적 대상이 Type Y 뿐인데 문구가 그걸 안 말한다 — 과대주장');
+
+  const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
+  const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+  assert.ok(html.includes('id="scan-guide-scope"'), '범위 안내 요소에 id 가 없다');
+  assert.ok(js.includes('!scanGuideScope'), '범위 안내 요소가 하드 가드 밖이다 — 없는 변형 페이지에서 조용히 죽는다');
+  const toggleAt = js.indexOf("r2Toggle.addEventListener('click'");
+  assert.ok(toggleAt > 0, '토글 핸들러가 없다');
+  const handler = js.slice(toggleAt, js.indexOf('});', toggleAt));
+  assert.ok(handler.includes('refreshScanGuideCopy()'), '토글이 범위 안내를 안 바꾼다');
+  const fn = js.slice(js.indexOf('function refreshScanGuideCopy()'), js.indexOf('const i18n = createI18n'));
+  assert.ok(fn.includes('scanScopeCopyKey(r2Runtime.enabled)'), 'refreshScanGuideCopy 가 토글 상태를 안 읽는다');
 });

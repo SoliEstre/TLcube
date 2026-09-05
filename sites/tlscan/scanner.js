@@ -20,7 +20,7 @@ import { decodeFrontend } from '/src/decoder/frontend.js';
 import { detectQrFinderTriples } from '/src/decoder/bootstrap.js';
 import { toRelativeLuminance } from '/src/decoder/luma.js';
 import { localizeCornerQrAssist } from '/src/decoder/corner-qr-assist.js';
-import { immediateCornerQrHint } from '/src/scanner-scan-assist.js';
+import { immediateCornerQrHint, normalizeDecodePayload, scanScopeCopyKey } from '/src/scanner-scan-assist.js';
 import {
   cameraLiveness,
   gatePresentation,
@@ -69,7 +69,7 @@ import {
   typeCGuideRingPositions,
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
-import { createR2ScanRuntime } from '/src/r2-scan-runtime.js';
+import { createR2ScanRuntime, r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
 import { CELL_MAP_STATE } from '/src/r2/progress.js';
 import {
   normalizeCentralFinderId,
@@ -132,7 +132,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.02';
+export const SCANNER_BUILD = '2026-09-05.03';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -176,6 +176,7 @@ const zoomErrorBox = document.getElementById('zoom-error');
 const dotLayer = document.getElementById('scan-dot-layer');
 const scanGuideMessage = document.getElementById('scan-guide-message');
 const scanGuideDetail = document.getElementById('scan-guide-detail');
+const scanGuideScope = document.getElementById('scan-guide-scope');
 const scannerPanels = document.getElementById('scanner-panels');
 const steadyMeter = document.getElementById('steady-meter');
 const steadyMeterFill = document.getElementById('steady-meter-fill');
@@ -188,7 +189,7 @@ if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTit
     !popupFallback || !openUrlLink || !rescanButton || !closeResultButton ||
     !closeResultSecondaryButton || !zoomControls || !zoomSlider || !zoomInButton ||
     !zoomOutButton || !zoomValue || !zoomErrorBox || !dotLayer || !scannerPanels ||
-    !scanGuideMessage || !scanGuideDetail ||
+    !scanGuideMessage || !scanGuideDetail || !scanGuideScope ||
     !steadyMeter || !steadyMeterFill) {
   throw new Error('TLcube scanner markup is incomplete.');
 }
@@ -878,6 +879,12 @@ function refreshScanGuideCopy() {
   scanGuideDetail.setAttribute('data-i18n', 'guide.dots');
   scanGuideMessage.textContent = t('guide.message');
   scanGuideDetail.textContent = t('guide.dots');
+  // 범위 안내는 R2 토글을 따른다 (운영자 요구 ②, 2026-09-04). data-i18n 도 같이 바꿔야
+  // 언어 전환의 전수 재적용이 되돌리지 않는다. `t()` 는 리터럴 두 번 — 삼항을 안에 넣으면
+  // scanner-i18n 의 «사전에 없는 키» 자가 못 본다. 정식 경로는 R2 가 항상 꺼져 있어 불변.
+  const scopeKey = scanScopeCopyKey(r2Runtime.enabled);
+  scanGuideScope.setAttribute('data-i18n', scopeKey);
+  scanGuideScope.textContent = scopeKey === 'guide.scope.r2' ? t('guide.scope.r2') : t('guide.tlcubeOnly');
 }
 
 /*
@@ -1534,6 +1541,11 @@ function stopCamera() {
   lastPriorSummary = null;
   clearSteadyMeter();
   renderGuideDots();
+  // R2 누적도 스트림 수명에 묶인다 — 세션은 DONE 뒤 흡수 상태라 비우지 않으면 다음
+  // 카메라의 첫 프레임에 옛 글자가 결과로 다시 뜬다. 인디케이터·셀맵 잔상도 같이 지운다.
+  r2Runtime.reset();
+  renderR2Progress();
+  renderR2CellMap();
 }
 
 function cameraFailure(error) {
@@ -1831,11 +1843,10 @@ function grabVideoFrame(atMs = nowMs()) {
   return null;
 }
 
+// 문은 하나다 — 본체는 `src/scanner-scan-assist.js`. 옮긴 이유: 테스트가 R2 적중 객체를
+// **이 함수에** 넣어 본다 (2026-09-05 삼킴, PM/029B §24.9).
 function normalizePayload(result) {
-  if (!result || result.ok !== true || typeof result.payload !== 'string' || result.payload === '') {
-    return null;
-  }
-  return result.payload;
+  return normalizeDecodePayload(result);
 }
 
 /**
@@ -1965,6 +1976,9 @@ function startFrameLoop(session) {
   // 레이아웃 확립보다 이르다 — grab 이 성공했다는 것은 videoWidth/Height 와 스테이지
   // 레이아웃이 실재한다는 가장 강한 증거라, 그 시점에 한 번 더 그린다.
   let firstGrabRendered = false;
+  // 새 카메라 세션의 첫 프레임 전에 R2 를 비운다 — stopCamera 를 안 거친 경로(트랙
+  // ended 등)도 덮는다. 비우지 않으면 옛 DONE 이 첫 프레임에 결과로 되살아난다 (ⓚ).
+  r2Runtime.reset();
 
   const nextFrame = (timestamp) => {
     if (session !== scanSession || !cameraStream || document.visibilityState === 'hidden') {
@@ -2004,12 +2018,15 @@ function startFrameLoop(session) {
             if (hit && typeof hit.text === 'string') {
               // R2 가 먼저 읽었다. 결과 경로는 R1 과 **같은 문**을 쓴다 —
               // 새 표시 경로를 만들면 두 경로가 어긋난다.
-              handleDecodeResult(
-                { ok: true, text: hit.text, source: 'r2' },
-                'camera',
-                session,
-              );
-              return;
+              handleDecodeResult(r2HitToDecodeResult(hit), 'camera', session);
+              // 문이 받아들였으면 stopCamera 가 세션을 올렸다 — 여기서 끝. 거부됐으면
+              // (비컨만 · 빈 페이로드) 루프를 **계속 돌리고** R2 를 비운다: 세션은 DONE 뒤
+              // 흡수 상태라 비우지 않으면 매 프레임 같은 답을 되돌려 영원히 갇힌다 (ⓚ).
+              // ⚠ 옛 코드는 `{ text }` 를 넘기고 무조건 return 했다 — 문은 `payload` 만
+              // 보므로 성공이 실패로 떨어졌고, return 이 rAF 재예약을 건너뛰어 루프가
+              // 죽었다 (.04~.05.02 시험판, PM/029B §24.9). ⓘ·ⓙ 가 잰다.
+              if (session !== scanSession) return;
+              r2Runtime.reset();
             }
           }
         } catch {
@@ -2943,7 +2960,8 @@ const r2ProgressNote = document.getElementById("r2-progress-note");
 let r2ShownD = 0;
 function renderR2Progress() {
   if (!r2ProgressRoot || !isLabPath()) return;
-  if (!r2Runtime.enabled) {
+  // 카메라가 닫혀 있으면 숨긴다 — 결과 패널·게이트 뒤에 마지막 막대가 남으면 «아직 모으는 중» 으로 읽힌다.
+  if (!r2Runtime.enabled || !cameraStream) {
     r2ProgressRoot.hidden = true;
     r2ShownD = 0;
     return;
@@ -3043,6 +3061,8 @@ if (r2Toggle && isLabPath()) {
     // 인디케이터·셀맵도 즉시 반영한다 — 끄면 숨고, 켜면 0 부터 다시 찬다.
     renderR2Progress();
     renderR2CellMap();
+    // 범위 안내도 토글을 따른다 (요구 ②).
+    refreshScanGuideCopy();
   });
 }
 // 기대 톤 — 레이아웃 카드와 같은 배선. 2·3 만 유효, 그 외(모름 포함)는 null(미상)이다.

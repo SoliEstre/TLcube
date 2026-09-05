@@ -308,3 +308,35 @@ export function createR2ScanRuntime(options = {}) {
     view,
   };
 }
+
+/**
+ * R2 적중을 R1 과 **같은 문**(handleDecodeResult → normalizeDecodePayload)이 받는 모양으로
+ * 만든다. R1 은 `payload: result.text` 로 감싼다 (scanner.js 단발 경로). `text` 를 그대로
+ * 넘기면 문이 `payload` 만 보므로 성공이 실패로 떨어진다 — 2026-09-05 시험판에서 실제로
+ * 그랬고(.04~.05.02), 자 ⓑ 는 `handleDecodeResult(` 철자만 재서 초록이었다. 이제 ⓘ 가
+ * 이 함수의 출력을 그 문에 **값으로** 넣어 본다.
+ */
+export function r2HitToDecodeResult(hit) {
+  if (!hit || typeof hit.text !== 'string') return null;
+  return {
+    ok: true,
+    payload: hit.text,
+    source: 'r2',
+    layoutId: hit.layoutId,
+    n: hit.n,
+    r2Frame: hit.frame,
+  };
+}
+
+/**
+ * R2 가 지금 «할 수 있다»고 말해도 되는 것 — 시험판 범위 안내 문구(`guide.scope.r2`)는
+ * 이 원장과 묶인다 (`test/r2-scan-runtime.test.js` ⓛ). 능력이 바뀌면 여기부터 바꾸고,
+ * 문구는 자가 빨개진 뒤 따라온다.
+ *  · readsQr: 일반 QR 복호기는 repo 에 없다 (PM/029B §2 ① 단계 미구현, BarcodeDetector 미사용).
+ *  · accumulatesFamilies: 누적 후보는 `finalLayoutIdsForN` 의 라인업 = Type Y 계열뿐이다.
+ *    다른 타입(A·V·K·O·C·daehan)은 R2 on 에서도 R1 단발로만 읽힌다.
+ */
+export const R2_CAPABILITIES = Object.freeze({
+  readsQr: false,
+  accumulatesFamilies: Object.freeze(['Y']),
+});
