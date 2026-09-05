@@ -150,6 +150,33 @@ test('프레임 요약 라인 — 파이프라인 도달(geo→cs→stage)·cell
   assert.match(idle[3], /stage decode · OK/);
 });
 
+/*
+ * 선택 줄(qr · hud, §27.4 0a·3a) — **«있을 때만» 규약**. 정식(`/`)에선 두 인자가 빈 문자열이므로 줄 수가
+ * 기본 4줄 그대로여야 한다. 여기서 재는 것은 문자열 내용이 아니라 «없으면 늘지 않는다» 는 성질이다.
+ */
+test('선택 줄(hud) — 있으면 마지막 줄로 붙고, 없으면 줄 수가 안 변한다', () => {
+  const base = summarizeFrameDebug({ cellSurface: { attempted: false }, ok: true, stage: 'decode' });
+  assert.equal(base.length, 4);
+  for (const empty of [undefined, '', null, 0, 42]) {
+    assert.equal(
+      summarizeFrameDebug({ cellSurface: { attempted: false }, ok: true, stage: 'decode', hud: empty }).length,
+      base.length,
+      'hud 가 ' + String(empty) + ' 인데 줄이 늘었다 — 정식 패널이 빈 줄을 얻는다',
+    );
+  }
+  const withHud = summarizeFrameDebug({
+    cellSurface: { attempted: false }, ok: true, stage: 'decode', hud: 'hud data · 1.2ms (max 3.4) · n25 v0TR',
+  });
+  assert.equal(withHud.length, base.length + 1);
+  assert.equal(withHud[withHud.length - 1], 'hud data · 1.2ms (max 3.4) · n25 v0TR');
+  assert.deepEqual(withHud.slice(0, base.length), base, '앞 줄들이 hud 때문에 바뀌었다');
+  // qr 과 hud 가 둘 다 있으면 qr → hud 순 (패널을 읽는 사람의 순서가 고정이어야 한다).
+  const both = summarizeFrameDebug({
+    cellSurface: { attempted: false }, ok: true, stage: 'decode', qr: 'qr line', hud: 'hud line',
+  });
+  assert.deepEqual(both.slice(base.length), ['qr line', 'hud line']);
+});
+
 test('안정판 불활성 — enabled=false 면 어떤 DOM 도 만지지 않는 동결 no-op 이다', () => {
   const layer = stubElement('layer');
   const panel = stubElement('panel');

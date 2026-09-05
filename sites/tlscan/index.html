@@ -397,8 +397,8 @@
    */
   /* 뷰파인더 상단 행 (§27.4 1단계 · 2b): 좌 R2 점진 확정 패널 | 중앙 엔진 스위치 | 우 셀맵. 트랙은 전부 유연 —
      320px 폰(정사각 ≈287px)에서도 넘치지 않는다(좌 패널은 min-width 0 으로 접힌다). 좌·우 트랙이 **같은 문자열**
-     이라 스위치가 정중앙에 온다(운영자 요구 — engine-switch.test ⓒ 가 대칭을 잰다). 우 칸의 셀맵 상한(140px)은
-     트랙이 아니라 .r2-cellmap 자기 규칙이 진다(옛 clamp() 트랙의 성질이 그쪽으로 옮겨갔다). 자식이 전부 hidden 이면
+     이라 스위치가 정중앙에 온다(운영자 요구 — engine-switch.test ⓒ 가 대칭을 잰다). 우 칸의 HUD 상한(140px)은
+     트랙이 아니라 .r2-hud-mini 자기 규칙이 진다(옛 clamp() 트랙의 성질이 그쪽으로 옮겨갔다). 자식이 전부 hidden 이면
      행도 비어 정식 렌더는 그대로다. CSS 변수 유도 없이 리터럴 — 부트 전 계산 시점 문제를 피한다. */
   .stage-top-row {
     position: absolute; left: 8px; right: 8px; top: 8px; z-index: 6;
@@ -481,13 +481,41 @@
   }
   .r2-progress.is-done .r2-progress-fill { background: #7ef9d0; }
   .r2-progress-note { opacity: .6; font-size: 10px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  /* R2 셀맵 — 상단 행 우측 칸(정사각). 열 폭 이하로만 줄고 140px 상한 — HUD 크기 상한은 트랙이 아니라 여기가 진다
-     (우 트랙이 좌와 같은 1fr 이어야 스위치가 정중앙이라, 캔버스가 스스로 갇힌다). 조준을 가리지 않게 작고 반투명하게. */
-  .r2-cellmap {
-    position: static; display: block;
-    width: min(100%, 140px); height: auto; aspect-ratio: 1 / 1; border-radius: 10px;
+  /* R2 미니 HUD — 상단 행 우측 칸(정사각). 열 폭 이하로만 줄고 140px 상한 — HUD 크기 상한은 트랙이 아니라 여기가 진다
+     (우 트랙이 좌와 같은 1fr 이어야 스위치가 정중앙이라, 상자가 스스로 갇힌다). 조준을 가리지 않게 작고 반투명하게.
+     [3a] 상한·배경·모서리는 상자(.r2-hud-mini)로 옮겼다 — 캔버스는 그 안을 채우고, 스캔선이 형제로 같이 잘린다. */
+  .r2-hud-mini {
+    position: relative;
+    width: min(100%, 140px); aspect-ratio: 1 / 1;
+    border-radius: 10px; overflow: hidden;
     background: rgb(0 0 0 / .55); backdrop-filter: blur(4px);
     box-shadow: 0 0 0 1px rgb(126 249 208 / .25), 0 0 14px rgb(74 216 255 / .18);
+    pointer-events: none;
+  }
+  .r2-cellmap {
+    width: 100%; height: 100%; display: block;
+  }
+  /* 사이버 효과 — SEARCHING(락 전) 동안만 스캔선이 흐른다. 위상은 scanner.js 가 data-phase 로 준다.
+     ⚠ 애니메이션 선언은 **위상 규칙 안**에 있다: 기본 규칙에 걸면 안 보이는(opacity:0) 선의 top 이 다른
+        위상(GRID·DATA·FINALIZING) 내내 60fps 로 갱신돼 미니 상자가 매 프레임 레이아웃을 다시 잡는다.
+     움직임이므로 reduced-motion 에선 애니메이션도 선도 없다(아래 블록). */
+  .r2-hud-scan {
+    position: absolute; left: 0; right: 0; top: -2px; height: 2px;
+    background: linear-gradient(90deg, transparent, rgb(126 249 208 / .9), transparent);
+    animation: none;
+    opacity: 0;
+  }
+  .r2-hud-mini[data-phase="searching"] .r2-hud-scan { animation: r2-hud-scan 1.6s linear infinite; opacity: 1; }
+  @keyframes r2-hud-scan { from { top: -2px; } to { top: 100%; } }
+
+  /* R2 전면 HUD 캔버스 — 스테이지 전면. z 는 «점 레이어(2)·디버그(3·4) 위, 상단 행(6) 아래» 가 성질이다
+     (test/r2-hud.test.js 가 세 숫자를 파싱해 비교한다). 표시용이라 pointer-events 없음. */
+  .r2-hud {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
   }
 
@@ -532,6 +560,12 @@
     }
     /* 정정 강조도 움직임이다 — 색만 즉시 바뀐다 (scanner.js 는 animationend 대신 타이머로 클래스를 뗀다). */
     .r2-chip.is-corrected { animation: none; }
+    /* 미니 HUD 의 스캔선은 순수 장식 — reduced-motion 에선 멈추는 게 아니라 아예 안 보인다
+       (멈춘 선은 «저기 무언가 있다» 는 거짓 신호가 된다).
+       ⚠ 위상 선택자(.r2-hud-mini[data-phase] .r2-hud-scan)를 **같이 적는다** — 미디어 쿼리는 특이도를
+         올리지 않아서 `.r2-hud-scan` 단독으로는 그 규칙의 opacity:1 을 못 이긴다. */
+    .r2-hud-scan,
+    .r2-hud-mini[data-phase="searching"] .r2-hud-scan { animation: none; opacity: 0; }
   }
 
   /*
@@ -1441,6 +1475,12 @@
         <div class="steady-meter" id="steady-meter" aria-hidden="true">
           <span class="steady-meter-fill" id="steady-meter-fill"></span>
         </div>
+        <!-- R2 전면 HUD (2026-09-05, PM/029B §27.4 3a · 운영자 결정 ⑨): 락 H 로 사영한 **실제 자리**에
+             세 면 마름모(역할색·데이터 상태색) + 격자선 + 육각 실루엣을 그린다. «가이드가 있어야 할 자리»
+             가 아니다 — 코드가 가이드보다 크든 작든 정합이 본 그 자리에 그린다.
+             z5 = 점 레이어(2)·시험판 디버그(3·4) 위, 상단 행(6) 아래. 장식이라 aria-hidden,
+             authored hidden 이라 정식(/) 렌더는 그대로다 (scanner.js 가 r2Available 에서만 연다). -->
+        <canvas class="r2-hud" id="r2-hud" aria-hidden="true" hidden></canvas>
         <!-- 뷰파인더 상단 행 (2026-09-05, PM/029B §27.4 1단계 · 운영자 요구 ⑤⑥):
              좌 = R2 누적 진행 인디케이터(PM/029 §17) · 중앙 = 엔진 스위치(제품 컴포넌트) · 우 = R2 셀맵(§18~19).
              시험판 하단 정보 패널(#lab-debug-panel)과 겹치지 않게 위로 올렸다. 자식이 전부 authored hidden
@@ -1472,7 +1512,13 @@
             </button>
           </div>
           <div class="stage-top-right" id="stage-top-right">
-            <canvas class="r2-cellmap" id="r2-cellmap" width="112" height="112" aria-hidden="true" hidden></canvas>
+            <!-- 우측 미니 HUD (3a): 기존 셀맵 캔버스를 감싼 상자다. 상자가 크기 상한·배경·모서리를
+                 맡고 캔버스는 그 안을 100% 채운다 — backing 픽셀은 scanner.js 가 dpr 로 잡으므로
+                 width/height 속성 고정(옛 112)은 폐기했다. data-phase 로 SEARCHING 동안만 스캔선이 돈다. -->
+            <div class="r2-hud-mini" id="r2-hud-mini" aria-hidden="true" hidden>
+              <canvas class="r2-cellmap" id="r2-cellmap" aria-hidden="true" hidden></canvas>
+              <span class="r2-hud-scan" aria-hidden="true"></span>
+            </div>
           </div>
         </div>
         <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색

@@ -80,9 +80,18 @@ import { CELL_MAP_STATE } from '/src/r2/progress.js';
 // 좌 패널 «확정/변동» 행 모델 + R2 위치 상태줄 전이·늦은 결과 문 (2b · PM/029B §27.4). 규칙은 전부 저 파일에 있고 여기는
 // 색·라벨을 붙이고 setStatus / return 만 한다.
 import {
-  CONFIRM_STATE, confirmationRows, leadingWithHysteresis, progressNote,
+  CONFIRM_STATE, confirmationRows, layoutDisplayId, leadingWithHysteresis, progressNote,
   R2_STATUS_ACTION, r2StatusStep, r2StatusOnReject, lateResultAdmitted,
 } from '/src/r2-confirmation-model.js';
+// HUD 기하(순수 · 할당 0) — 락 H 로 canonical 격자를 **분석 프레임 px** 로 사영한다. 그리기·좌표 변환은 여기 몫이다.
+import {
+  HUD_FACES, faceQuadFloats, faceQuadSlot, finiteBoundsInto,
+  gridLineCount, gridLineFloats, projectFaceQuadsInto, projectGridLinesInto, projectOutlineInto,
+} from '/src/r2/hud-geometry.js';
+// HUD 역할·위상 모델(순수) — «무엇을 어떤 묶음으로 그리는가» 는 전부 저기서 유도된다.
+import {
+  HUD_BUCKETS, HUD_PHASE, HUD_ROLE, buildRoleGrids, bucketKey, countObserved, fadeAlpha, hudPhase,
+} from '/src/r2-hud-model.js';
 import {
   normalizeCentralFinderId,
   normalizeExpectedEmphasis,
@@ -144,7 +153,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-05.08';
+export const SCANNER_BUILD = '2026-09-06.01';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -1373,6 +1382,8 @@ function updateDebugOverlay(imageData, result, stage, ms) {
     zoom: currentZoomTelemetry(),
     // QR 브리지 통계 (시험판) — 「왜 안 읽히나」 를 보이게 (§27.4 0a). 통계는 라벨·수치뿐, 페이로드 없음.
     qr: r2Available ? summarizeQrBridge(qrBridge.stats, qrBridge.supported) : '',
+    // HUD 위상·비용 (시험판, §27.4 3a) — 「지금 무엇을 그리고 있고 한 프레임에 얼마 드나」. 빈 문자열이면 줄이 안 붙는다.
+    hud: r2Available ? r2HudDebugLine() : '',
     // 안정 게이지·트리거 상태 (lab 전용 표시). 스냅샷은 프레임 루프가 이미 만든
     // 로컬 값이고 새 전송 경로가 없다 — 안정판에선 debugOverlay 가 no-op 다.
     // holdMs 는 **추적기가 실제로 쓰는 값**을 넘긴다 (모듈 상수를 넘기면 옵션으로
@@ -2131,7 +2142,8 @@ function startFrameLoop(session) {
      * 시험판에서만 든다.
      */
     if (r2Runtime.enabled) {
-      const r2Image = yieldForQr ? null : grabVideoFrame(nowMs());
+      const r2FrameStartedAt = nowMs();
+      const r2Image = yieldForQr ? null : grabVideoFrame(r2FrameStartedAt);
       if (r2Image) {
         // R1 대신 (②): 첫 grab 이 곧 레이아웃 실재의 증거 — 안 그리면 조준 가이드가 사라진다.
         if (!firstGrabRendered) {
@@ -2180,6 +2192,13 @@ function startFrameLoop(session) {
         }
         // R1 대신 (②): 시험판 fps 줄 — «초당 처리 프레임». R2 모드에선 누적 프레임이 곧 처리 프레임이다.
         noteFrameProcessed();
+        /*
+         * R1 대신 (②): 시험판 하단 패널의 **프레임 요약**. 갱신 호출이 R1 경로(decodeFrame·flushPriorReport)에만
+         * 있어서, R2 위치에선 패널이 영원히 안 바뀌었다 — hud·qr 줄이 화면에 도달할 수 없었다 (§27.6 적대 검토).
+         * geometry·cs 는 R1 복호의 산물이라 이 위치엔 **없다**: null 을 넘겨 «none / not-attempted» 로 정직하게
+         * 비운다 (거짓 0 금지). 안정판에선 debugOverlay 가 no-op 라 이 줄 전체가 불활성이다.
+         */
+        updateDebugOverlay(r2Image, null, 'r2', { total: nowMs() - r2FrameStartedAt });
       }
     }
 
@@ -3299,15 +3318,21 @@ function syncR2Status() {
 }
 
 /*
- * R2 셀맵 렌더 (PM/029 §18\~19 우하단). **시험판 전용.**
+ * R2 HUD 렌더 (PM/029 §18\~19 → §27.4 3a). **시험판 전용.**
  *
- * 셀 자리는 런타임 뷰가 준 **사영 좌표**다 — 어댑터가 정합에 쓰는 것과 같은 H·격자
- * (`adapter-locator.js` projectCellFaceCentres — 셀당 세 면 3점). 따로 계산하지 않는다: 두 그림이 어긋나면
- * 사용자는 「정합이 보는 곳」이 아니라 「내가 그린 곳」을 본다.
+ * 두 표면을 `renderR2CellMap()` **한 함수**가 그린다 (이름·프레임 루프 호출은 2b 그대로 — 바꾸면 호출처 넷이
+ * 같이 흔들린다):
+ *   · 전면 오버레이(`#r2-hud`, 스테이지 전면) — 락 H 로 사영한 **실제 자리**에 세 면 마름모 + 격자선 + 실루엣 (⑨).
+ *   · 우측 미니 HUD(`#r2-cellmap`, 상단 행 우 칸) — 같은 Path2D 를 bbox 에 맞춰 축소, 위상별 점진 표시.
  *
- * 색은 `CELL_MAP_STATE` 를 **키로** 쓴다 — 숫자 손 사본 금지. 상태값이 바뀌면 여기가
+ * 자리는 **어댑터가 정합에 쓰는 것과 같은 H·같은 canonical 기저**에서 온다 (`src/r2/hud-geometry.js` 가
+ * `ygrid.faceBasis` · `hexgrid.CORNER_UNIT_OFFSETS` 에서 유도 — 사본 상수 없음). 두 그림이 어긋나면 사용자는
+ * 「정합이 보는 곳」이 아니라 「내가 그린 곳」을 본다.
+ *
+ * 색은 `CELL_MAP_STATE` 와 `HUD_ROLE` 을 **키로** 쓴다 — 숫자 손 사본 금지. 상태·역할이 늘면 여기가
  * 자동으로 따라간다(없는 상태는 미관측 색으로 떨어진다).
- * A6 규율: 코드 사영 영역만(bbox 안) · 플래시 금지(상태 색만 바뀜) · 확정은 정적.
+ * A6 규율: 코드 사영 영역만(bbox 안) · 플래시 금지(상태 색만 바뀜) · 확정은 정적. 유일한 시간 기반 효과는
+ * 락 직후 페이드인(`fadeAlpha`, 300 ms)과 SEARCHING 스캔선(CSS · reduced-motion 이면 없음)이다.
  */
 const R2_CELL_COLOR = Object.freeze({
   [CELL_MAP_STATE.UNOBSERVED]: 'rgba(126,249,208,0.14)',
@@ -3327,56 +3352,366 @@ if (r2Available) {
   document.documentElement.style.setProperty('--r2-fix', R2_CELL_COLOR[CELL_MAP_STATE.ERASURE]);
 }
 const r2CellMapCanvas = document.getElementById('r2-cellmap');
+const r2HudCanvas = document.getElementById('r2-hud');
+const r2HudMini = document.getElementById('r2-hud-mini');
+
+/**
+ * 역할색 (운영자 결정 ⑩ · 2026-09-05, 실기 뒤 조정). 키는 **HUD_ROLE 에서** 온다 — 리터럴 숫자 키를
+ * 적으면 역할 값이 바뀌는 날 아무도 모르게 어긋난다 (test/r2-hud.test.js 가 그 유도를 잰다).
+ *
+ * ⚠ locator 의 `rgb(255 225 143)` 은 CSS 의 조준 가이드 점(`.dot-type-c` · index.html)과 **같은 값이지만
+ *   계약이 아니다** — 짝을 묶는 자가 없고, 한쪽만 바꿔도 아무 데도 빨개지지 않는다. 둘을 정말 한 어휘로
+ *   묶으려면 2b 가 --r2-fixed 로 한 것처럼 여기서 `--r2-role-locator` 를 심고 CSS 가 그 변수를 보게 해야
+ *   한다 (알파가 셋 다 달라 `rgb(from …)` 이 필요 — 후속). 지금은 «우연히 같은 황색» 이다.
+ */
+const R2_HUD_ROLE_COLOR = Object.freeze({
+  [HUD_ROLE.LOCATOR]: 'rgb(255 225 143)',
+  [HUD_ROLE.REFERENCE]: 'rgb(190 140 255)',
+  [HUD_ROLE.FORMAT]: '#4ad8ff',
+  [HUD_ROLE.SLOT]: 'rgb(120 140 170)',
+});
+/** 락 직후 페이드인(⑩ 사이버 효과) 길이 · 격자선/외곽선 색. */
+const R2_HUD_FADE_MS = 300;
+const R2_HUD_GRID_STROKE = 'rgba(233,246,255,0.18)';
+const R2_HUD_OUTLINE_STROKE = 'rgba(126,249,208,0.7)';
+/**
+ * 묶음 키 → { 색, 알파 }. 키 문자열을 손으로 다시 적지 않는다 — `bucketKey` 로 **유도**한다.
+ * 역할은 변동(DONE 전) 0.55 · 확정 0.95 (⑧·⑩), 데이터 셀은 셀맵 상태색 그대로(1).
+ * ⚠ 확정(`:c`) 절반은 **이 표면에서 칠해지지 않는다** — 렌더 시점의 래치는 항상 null 이다(renderR2CellMap 의
+ *   `tentative` 주석). 표를 그래도 전부 채워 두는 이유: 색표가 HUD_BUCKETS 를 다 덮어야 «색 없는 묶음» 이라는
+ *   조용한 구멍이 안 생긴다(ⓒ 와 같은 규율). 만드는 비용은 로드 때 한 번이고 매 프레임 경로엔 없다.
+ */
+const R2_HUD_BUCKET_PAINT = new Map();
+for (const [role, color] of Object.entries(R2_HUD_ROLE_COLOR)) {
+  for (const tentative of [true, false]) {
+    const key = bucketKey(Number(role), CELL_MAP_STATE.UNOBSERVED, tentative);
+    if (key) R2_HUD_BUCKET_PAINT.set(key, { color, alpha: tentative ? 0.55 : 0.95 });
+  }
+}
+for (const state of Object.values(CELL_MAP_STATE)) {
+  const key = bucketKey(HUD_ROLE.DATA, state, false);
+  if (key) R2_HUD_BUCKET_PAINT.set(key, { color: R2_CELL_COLOR[state], alpha: 1 });
+}
+/** 묶음별 Path2D — Map 은 재사용하고 Path2D 만 매 프레임 새로. fill 호출 수 = 묶음 수(마름모 수가 아니라). */
+const r2HudPaths = new Map();
+/** 항등 H — SEARCHING 에는 락 H 가 없으니 canonical 실루엣을 그대로(px ≡ canonical) 얻는 데 쓴다. */
+const R2_HUD_IDENTITY_H = Object.freeze([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+const r2HudIdleOutline = new Float64Array(12);
+const r2HudBounds = new Float64Array(4);
+/**
+ * HUD 렌더 상태. 사영 버퍼는 **n 이 바뀔 때만** 새로 잡고, 재사영은 **락 세대(lockRevision)가 바뀔 때만** —
+ * 락 뒤 H 는 고정이라(트래킹 없음) 매 프레임 다시 풀 이유가 없다.
+ */
+const r2Hud = {
+  // ⚠ frameW/frameH 는 «지금 프레임» 이 아니라 **락 프레임**의 폭·높이다 — H 는 락 시점 프레임의 px 좌표계이고
+  // (adapter-locator installLock · 트래킹 없음) 사영 버퍼도 그때 푼 값이다. view.frameWidth 는 매 프레임 현재
+  // luma 폭으로 덧써지므로(r2-scan-runtime pushFrame · r2-scan-runtime.test ⓣ), 그것으로 나누면 해상도 승격
+  // 프레임(960↔1440)에서 그림이 다른 배율로 그려진다. 그래서 재사영과 **같은 자리에서만** 갱신한다.
+  lockRevision: -1, n: 0, frameW: 0, frameH: 0, layoutId: '', gridN: 0,
+  quads: null, lines: null, outline: new Float64Array(12), roleGrids: null,
+  lockedAt: 0, phase: '', lastMs: 0, maxMs: 0,
+};
+
+/*
+ * 정사각 한 변 캐시 (스테이지 · 미니 상자). 렌더는 프레임마다 DOM 을 먼저 쓴 뒤(hidden·data-phase·칩) 크기를
+ * 읽는다 — 그 순서면 `getBoundingClientRect` 가 **강제 동기 레이아웃**을 프레임마다 부른다. 크기가 바뀌는
+ * 계기는 리사이즈뿐이므로 ResizeObserver 를 **무효화 신호로만** 쓰고, 값은 여전히 같은 rect 로 잰다
+ * (관측 박스 대신 rect 를 쓰는 이유: 스테이지엔 1px 테두리가 있어 border-box ≠ contentRect 다).
+ * ResizeObserver 가 없는 브라우저면 예전처럼 매 프레임 잰다 — 회전 뒤 자가 틀리는 것보다 낫다.
+ */
+const R2_SIDE_STAGE = 0;
+const R2_SIDE_MINI = 1;
+const r2SideCache = [-1, -1];
+// r2Available 게이트 안 — 정식(/)에는 HUD 가 없으니 관측자도 만들지 않는다 (정식 경로 불변).
+const r2SideObserved = r2Available && typeof ResizeObserver === 'function';
+if (r2SideObserved) {
+  const observer = new ResizeObserver(() => { r2SideCache[R2_SIDE_STAGE] = -1; r2SideCache[R2_SIDE_MINI] = -1; });
+  if (cameraStage) observer.observe(cameraStage);
+  if (r2CellMapCanvas) observer.observe(r2CellMapCanvas);
+}
+function squareSideOf(element, slot) {
+  if (r2SideObserved && r2SideCache[slot] >= 0) return r2SideCache[slot];
+  const rect = element.getBoundingClientRect();
+  const side = Math.min(rect.width, rect.height);
+  r2SideCache[slot] = side;
+  return side;
+}
+
+/** 꺼짐 / 카메라 없음 — 캔버스 둘을 숨기고 재사영 상태를 되돌린다. */
+function hideR2Hud() {
+  if (r2HudMini) r2HudMini.hidden = true;
+  if (r2CellMapCanvas) r2CellMapCanvas.hidden = true;
+  if (r2HudCanvas) r2HudCanvas.hidden = true;
+  r2Hud.lockRevision = -1;
+  r2Hud.roleGrids = null;
+  r2Hud.layoutId = '';
+  r2Hud.gridN = 0;
+  r2Hud.maxMs = 0;
+  r2Hud.phase = '';
+  // 락 폭도 같이 버린다 — 다음 락의 재사영이 자기 프레임 폭을 다시 심는다.
+  r2Hud.frameW = 0;
+  r2Hud.frameH = 0;
+}
+
+/** 묶음 채우기 — 순서는 HUD_BUCKETS 고정(역할 → 데이터 상태). alpha 는 락 페이드인. */
+function paintR2HudBuckets(ctx, alpha) {
+  for (const key of HUD_BUCKETS) {
+    const path = r2HudPaths.get(key);
+    const paint = R2_HUD_BUCKET_PAINT.get(key);
+    if (!path || !paint) continue;
+    ctx.globalAlpha = alpha * paint.alpha;
+    ctx.fillStyle = paint.color;
+    ctx.fill(path);
+  }
+  ctx.globalAlpha = alpha;
+}
+
+/** 시험판 하단 패널의 hud 줄 — 비어 있으면 패널이 줄을 안 붙인다 (qr 과 같은 «있을 때만» 규약). */
+function r2HudDebugLine() {
+  if (!r2Available || r2Hud.phase === '') return '';
+  return 'hud ' + r2Hud.phase
+    + ' · ' + r2Hud.lastMs.toFixed(1) + 'ms (max ' + r2Hud.maxMs.toFixed(1) + ')'
+    + ' · n' + r2Hud.n + ' ' + layoutDisplayId(r2Hud.layoutId);
+}
+
 function renderR2CellMap() {
-  if (!r2CellMapCanvas || !r2Available) return;
+  if (!r2CellMapCanvas || !r2HudCanvas || !r2HudMini || !r2Available) return;
+  const startedAt = nowMs();
   const view = r2Runtime.view;
-  if (!r2Runtime.enabled || !view || view.cellCount === 0 || !view.cellMap || !view.cellFaceCentres) {
-    r2CellMapCanvas.hidden = true;
-    return;
-  }
-  r2CellMapCanvas.hidden = false;
-  const ctx = r2CellMapCanvas.getContext('2d');
-  if (!ctx) return;
-  const width = r2CellMapCanvas.width;
-  const height = r2CellMapCanvas.height;
-  ctx.clearRect(0, 0, width, height);
+  const stats = r2Runtime.stats;
+  if (!r2Runtime.enabled || !cameraStream || !view) {
+    hideR2Hud();
+  } else {
+    const phase = hudPhase({
+      locked: stats.locked,
+      candidateCount: stats.candidateCount,
+      cellCount: view.cellCount,
+      observedCells: countObserved(view.cellMap, view.cellCount),
+      indicator: stats.indicator,
+      latched: r2Latched !== null,
+    });
+    r2Hud.phase = phase;
+    // 미니 HUD 는 R2 켬 + 카메라면 **항상** 보인다 (점진 표시가 SEARCHING 부터 시작한다). 위상은 CSS 가 읽는다(스캔선).
+    r2HudMini.hidden = false;
+    r2CellMapCanvas.hidden = false;
+    if (r2HudMini.dataset.phase !== phase) r2HudMini.dataset.phase = phase;
+    // 전면 오버레이는 «그릴 H 가 있을 때» 만 — SEARCHING/DROPPED 엔 자리가 없고, DONE 뒤엔 결과 시트가 덮는다.
+    const overlayOn = phase !== HUD_PHASE.SEARCHING && phase !== HUD_PHASE.DROPPED && phase !== HUD_PHASE.DONE;
+    r2HudCanvas.hidden = !overlayOn;
 
-  // 코드 사영 영역(bbox)만 캔버스에 맞춘다 — 프레임 전체를 그리지 않는다 (A6).
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  // 셀당 세 면 마름모 중심 3점 — 옛 «셀 중심 평균» 은 Y-심 한 점으로 붕괴해 bbox 가 잔차였다 (2a 정정).
-  const points = view.cellCount * 3;
-  for (let p = 0; p < points; p += 1) {
-    const x = view.cellFaceCentres[p * 2];
-    const y = view.cellFaceCentres[p * 2 + 1];
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    if (x < minX) minX = x;
-    if (y < minY) minY = y;
-    if (x > maxX) maxX = x;
-    if (y > maxY) maxY = y;
-  }
-  if (!(maxX > minX) || !(maxY > minY)) return;
-  const pad = 8;
-  const scale = Math.min((width - 2 * pad) / (maxX - minX), (height - 2 * pad) / (maxY - minY));
-  const originX = pad + ((width - 2 * pad) - (maxX - minX) * scale) / 2;
-  const originY = pad + ((height - 2 * pad) - (maxY - minY) * scale) / 2;
+    const n = Number.isInteger(view.n) && view.n > 0 ? view.n : 0;
+    if (view.H && n > 0) {
+      if (n !== r2Hud.n || r2Hud.quads === null) {
+        r2Hud.quads = new Float64Array(faceQuadFloats(n));
+        r2Hud.lines = new Float64Array(gridLineFloats(n));
+      }
+      if (view.lockRevision !== r2Hud.lockRevision || n !== r2Hud.n) {
+        projectFaceQuadsInto(view.H, n, r2Hud.quads);
+        projectGridLinesInto(view.H, n, r2Hud.lines);
+        projectOutlineInto(view.H, n, r2Hud.outline);
+        r2Hud.lockRevision = view.lockRevision;
+        r2Hud.n = n;
+        r2Hud.lockedAt = nowMs();
+        // 방금 푼 사영의 좌표계 = **이 프레임**의 폭·높이. 화면 변환은 이 값으로만 나눈다.
+        r2Hud.frameW = view.frameWidth;
+        r2Hud.frameH = view.frameHeight;
+      }
+    }
+    /*
+     * 역할 격자의 선두는 좌 패널과 **같은 히스테리시스 값**(r2LeadingId) «뿐» 이다 — 선두가 바뀌면 역할색이
+     * 통째로 바뀌므로(⑧), 좌 패널이 NONE 인 프레임에 HUD 가 옛 선두로 색을 칠하면 두 표면이 다른 레이아웃을
+     * 말한다. r2LeadingId 가 '' 이면(살아 있는 후보 0) 역할 격자를 **버린다** — 격자선·실루엣은 그대로 그린다.
+     */
+    const leadingId = r2LeadingId;
+    if (leadingId === '') {
+      r2Hud.roleGrids = null;
+      r2Hud.layoutId = '';
+      r2Hud.gridN = 0;
+    } else if (n > 0 && (r2Hud.layoutId !== leadingId || r2Hud.gridN !== n)) {
+      r2Hud.roleGrids = buildRoleGrids(n, leadingId);
+      r2Hud.layoutId = leadingId;
+      r2Hud.gridN = n;
+    }
 
-  ctx.strokeStyle = 'rgba(126,249,208,0.30)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(originX - 3, originY - 3, (maxX - minX) * scale + 6, (maxY - minY) * scale + 6);
+    const gridPath = new Path2D();
+    const outlinePath = new Path2D();
+    const grids = r2Hud.roleGrids;
+    const quads = r2Hud.quads;
+    /*
+     * 레이아웃 변종은 DONE 까지 변동(⑧). ⚠ 이 표면에서 `tentative` 는 **항상 true** 다: 렌더 호출 넷이 전부
+     * 래치가 null 인 자리에 있다(프레임 루프는 래치 설정 **앞**, 수용되면 stopCamera → 카메라 없음, 거부되면
+     * 다시 null, 스위치·startFrameLoop 도 null 로 만든 뒤 그린다). 확정 알파(0.95)·확정 묶음(`:c`)은 결과
+     * 카드의 몫이다 (운영자 결정 ⑨ — DONE 뒤엔 결과 시트가 HUD 를 덮는다). 그래서 아래에 DONE 분기가 없다.
+     */
+    const tentative = r2Latched === null;
+    /*
+     * 채움을 **아무도 안 그릴 위상**(SEARCHING·DROPPED)에서는 Path2D 를 만들지도 않는다. 락 상실 코스팅 중에는
+     * view.n 이 남아 있어서 조건이 서고, n=25 면 마름모 1875개를 매 프레임 헛만든다 — 가장 흔한 위상에서.
+     * 묶음 Path2D 도 **실제로 쓰는 것만** 지연 생성한다 (12개 중 확정 6개는 위 이유로 영원히 비어 있었다).
+     * 남는 매 프레임 할당은 격자선·실루엣 경로 둘뿐이다 — 세그먼트를 안 넣어도 stroke 호출부가 객체를 받는다.
+     */
+    const wantFills = Boolean(view.H) && overlayOn;
+    r2HudPaths.clear();
+    if (wantFills && grids && quads && r2Hud.n === n && n > 0) {
+      for (let j = 0; j < n; j += 1) {
+        for (let i = 0; i < n; i += 1) {
+          const idx = j * n + i;
+          const role = grids.roleGrid[idx];
+          if (role === HUD_ROLE.EMPTY) continue;
+          let state = CELL_MAP_STATE.UNOBSERVED;
+          if (role === HUD_ROLE.DATA) {
+            const k = grids.scanGrid[idx];
+            if (k >= 0 && view.cellMap && k < view.cellMap.length) state = view.cellMap[k];
+          }
+          const key = bucketKey(role, state, tentative);
+          if (key === null) continue;
+          let path = r2HudPaths.get(key);
+          if (path === undefined) {
+            // 색이 없는 묶음은 그리지 않는다 — 경로도 만들지 않는다 (r2-hud.test ⓒ 가 «색표 ≡ HUD_BUCKETS» 를 잰다).
+            if (!R2_HUD_BUCKET_PAINT.has(key)) continue;
+            path = new Path2D();
+            r2HudPaths.set(key, path);
+          }
+          for (let f = 0; f < HUD_FACES.length; f += 1) {
+            const slot = faceQuadSlot(n, f, i, j);
+            const x0 = quads[slot]; const y0 = quads[slot + 1];
+            const x1 = quads[slot + 2]; const y1 = quads[slot + 3];
+            const x2 = quads[slot + 4]; const y2 = quads[slot + 5];
+            const x3 = quads[slot + 6]; const y3 = quads[slot + 7];
+            // 꼭짓점 하나라도 NaN 이면 그 마름모는 건너뛴다 — NaN 은 «사영 불가» 의 표현이다.
+            if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)
+              || !Number.isFinite(x2) || !Number.isFinite(y2) || !Number.isFinite(x3) || !Number.isFinite(y3)) continue;
+            path.moveTo(x0, y0);
+            path.lineTo(x1, y1);
+            path.lineTo(x2, y2);
+            path.lineTo(x3, y3);
+            path.closePath();
+          }
+        }
+      }
+    }
+    if (wantFills && r2Hud.lines && r2Hud.n === n && n > 0) {
+      const segments = gridLineCount(n);
+      for (let s = 0; s < segments; s += 1) {
+        const o = s * 4;
+        const ax = r2Hud.lines[o]; const ay = r2Hud.lines[o + 1];
+        const bx = r2Hud.lines[o + 2]; const by = r2Hud.lines[o + 3];
+        if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(bx) || !Number.isFinite(by)) continue;
+        gridPath.moveTo(ax, ay);
+        gridPath.lineTo(bx, by);
+      }
+    }
+    let haveOutline = false;
+    if (view.H && r2Hud.n === n && n > 0) {
+      haveOutline = finiteBoundsInto(r2Hud.outline, 6, r2HudBounds);
+      if (haveOutline) {
+        for (let c = 0; c < 6; c += 1) {
+          const x = r2Hud.outline[c * 2];
+          const y = r2Hud.outline[c * 2 + 1];
+          if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+          if (c === 0) outlinePath.moveTo(x, y);
+          else outlinePath.lineTo(x, y);
+        }
+        outlinePath.closePath();
+      }
+    }
 
-  const dot = Math.max(1.5, Math.min(4, scale * 0.6));
-  for (let cell = 0; cell < view.cellCount; cell += 1) {
-    ctx.fillStyle = R2_CELL_COLOR[view.cellMap[cell]] || R2_CELL_COLOR[CELL_MAP_STATE.UNOBSERVED];
-    for (let face = 0; face < 3; face += 1) {
-      const x = view.cellFaceCentres[cell * 6 + face * 2];
-      const y = view.cellFaceCentres[cell * 6 + face * 2 + 1];
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      ctx.fillRect(originX + (x - minX) * scale - dot / 2, originY + (y - minY) * scale - dot / 2, dot, dot);
+    // 스테이지 정사각 한 변 — renderGuideDots 와 **같은 방식**이다 (분석 프레임 ≡ 화면 정사각, 설계 불변식).
+    // 다만 매 프레임 재는 대신 캐시를 읽는다 (바로 위에서 hidden·data-phase 를 썼고 칩도 방금 바뀌어, 여기서
+    // rect 를 읽으면 프레임마다 **강제 동기 레이아웃**이 든다 — 크기는 리사이즈에만 바뀐다).
+    const side = squareSideOf(cameraStage, R2_SIDE_STAGE);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const alpha = fadeAlpha(nowMs(), r2Hud.lockedAt, R2_HUD_FADE_MS);
+    if (overlayOn && side > 0 && r2Hud.frameW > 0 && r2Hud.frameH > 0) {
+      const backing = Math.round(side * dpr);
+      // width/height 대입은 캔버스를 **지운다** — 달라졌을 때만 건드린다.
+      if (r2HudCanvas.width !== backing) r2HudCanvas.width = backing;
+      if (r2HudCanvas.height !== backing) r2HudCanvas.height = backing;
+      const ctx = r2HudCanvas.getContext('2d');
+      if (ctx) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, backing, backing);
+        // ⚠ 나누는 폭은 **락 프레임**의 것이다 (r2Hud.frameW). view.frameWidth 는 매 프레임 현재 luma 폭이라
+        // 해상도 승격(960↔1440) 프레임에서 그림이 2/3 크기로 좌상단에 붙는다 — 사영은 그대로인데 자만 바뀌므로.
+        const sx = backing / r2Hud.frameW;
+        const sy = backing / r2Hud.frameH;
+        ctx.setTransform(sx, 0, 0, sy, 0, 0);
+        paintR2HudBuckets(ctx, alpha);
+        // 선폭은 화면 CSS px 고정 — 변환 역수로 되돌린다(dpr 은 backing 에 이미 들어 있다).
+        ctx.strokeStyle = R2_HUD_GRID_STROKE;
+        ctx.lineWidth = dpr / sx;
+        ctx.stroke(gridPath);
+        ctx.strokeStyle = R2_HUD_OUTLINE_STROKE;
+        ctx.lineWidth = (2 * dpr) / sx;
+        ctx.stroke(outlinePath);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // 우측 미니 HUD — **같은 Path2D** 를 bbox 에 맞춰 다시 채운다 (사영은 재계산하지 않는다). 한 변은 캐시.
+    const miniSide = squareSideOf(r2CellMapCanvas, R2_SIDE_MINI);
+    if (miniSide > 0) {
+      const miniBacking = Math.round(miniSide * dpr);
+      if (r2CellMapCanvas.width !== miniBacking) r2CellMapCanvas.width = miniBacking;
+      if (r2CellMapCanvas.height !== miniBacking) r2CellMapCanvas.height = miniBacking;
+      const mctx = r2CellMapCanvas.getContext('2d');
+      if (mctx) {
+        mctx.setTransform(1, 0, 0, 1, 0, 0);
+        mctx.clearRect(0, 0, miniBacking, miniBacking);
+        // 락 H 가 없으면(SEARCHING) canonical 항등 실루엣을 옅게 — «찾는 중» 의 자리만 알린다. 스캔선은 CSS 가 맡는다.
+        let idle = false;
+        if (!haveOutline) {
+          projectOutlineInto(R2_HUD_IDENTITY_H, n > 0 ? n : 1, r2HudIdleOutline);
+          idle = finiteBoundsInto(r2HudIdleOutline, 6, r2HudBounds);
+        }
+        const boxW = r2HudBounds[2] - r2HudBounds[0];
+        const boxH = r2HudBounds[3] - r2HudBounds[1];
+        if ((haveOutline || idle) && boxW > 0 && boxH > 0) {
+          const pad = 8 * dpr;
+          const scale = Math.min((miniBacking - 2 * pad) / boxW, (miniBacking - 2 * pad) / boxH);
+          const originX = (miniBacking - boxW * scale) / 2 - r2HudBounds[0] * scale;
+          const originY = (miniBacking - boxH * scale) / 2 - r2HudBounds[1] * scale;
+          mctx.setTransform(scale, 0, 0, scale, originX, originY);
+          if (idle) {
+            const idlePath = new Path2D();
+            for (let c = 0; c < 6; c += 1) {
+              const x = r2HudIdleOutline[c * 2];
+              const y = r2HudIdleOutline[c * 2 + 1];
+              if (c === 0) idlePath.moveTo(x, y);
+              else idlePath.lineTo(x, y);
+            }
+            idlePath.closePath();
+            mctx.globalAlpha = 0.35;
+            mctx.strokeStyle = R2_HUD_OUTLINE_STROKE;
+            mctx.lineWidth = dpr / scale;
+            mctx.stroke(idlePath);
+            mctx.globalAlpha = 1;
+          } else {
+            // 점진 표시(운영자 원 요구): 실루엣 → 격자 → 역할색 → 데이터. 위상이 그 순서를 탄다.
+            // DONE 은 여기 없다 — 래치는 렌더 뒤에 서고(위 `tentative` 주석), DONE 뒤엔 결과 시트가 덮는다(⑨).
+            const drawFills = phase === HUD_PHASE.DATA || phase === HUD_PHASE.FINALIZING;
+            const drawGrid = drawFills || phase === HUD_PHASE.GRID;
+            if (drawFills) paintR2HudBuckets(mctx, alpha);
+            if (drawGrid) {
+              mctx.globalAlpha = alpha;
+              mctx.strokeStyle = R2_HUD_GRID_STROKE;
+              mctx.lineWidth = dpr / scale;
+              mctx.stroke(gridPath);
+            }
+            mctx.globalAlpha = alpha;
+            mctx.strokeStyle = R2_HUD_OUTLINE_STROKE;
+            mctx.lineWidth = (2 * dpr) / scale;
+            mctx.stroke(outlinePath);
+            mctx.globalAlpha = 1;
+          }
+        }
+      }
     }
   }
+  // 비용 — 한 번의 ms 와 세션 최대. 시험판 하단 패널의 hud 줄이 이 둘을 읽는다.
+  const ms = nowMs() - startedAt;
+  r2Hud.lastMs = ms;
+  if (ms > r2Hud.maxMs) r2Hud.maxMs = ms;
 }
 
 /*

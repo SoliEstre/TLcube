@@ -27,6 +27,8 @@ import { normalizeDecodePayload, scanScopeCopyKey } from '../src/scanner-scan-as
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 import { finalLayoutIdsForN, versionForFinalN } from '../src/cellSurfaceFinal.js';
 import { CONFIRM_STATE, confirmationRows, progressNote } from '../src/r2-confirmation-model.js';
+import { HUD_ROLE, buildRoleGrids } from '../src/r2-hud-model.js';
+import { HUD_FACES, faceQuadFloats, faceQuadSlot, projectFaceQuadsInto } from '../src/r2/hud-geometry.js';
 import { listLumaSequences, readLumaDump } from '../tools/read-luma.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -181,6 +183,78 @@ test('ⓖ 우하단 셀맵 뷰 — 선두 후보의 셀맵과 세 면 사영 좌
   runtime.setEnabled(false);
   assert.equal(runtime.view.cellCount, 0, '껐는데 뷰가 남았다');
   assert.equal(runtime.view.H, null, '껐는데 H 참조가 남았다');
+});
+
+/**
+ * ⓖ-b (3a) — **HUD 가 그리는 자리 ≡ 정합이 표본한 자리.**
+ *
+ * 이것이 3a 의 유일한 하중 성질이다(운영자 결정 ⑨). HUD 는 `src/r2/hud-geometry.js` 로 canonical 격자를
+ * 따로 사영하고, 어댑터는 `cellFaceCentres` 를 자기 경로로 사영한다 — **다른 두 코드가 같은 자리를 말해야**
+ * 「정합이 보는 곳」과 「내가 그린 곳」이 같다. 그래서 셀 k·면 f 의 어댑터 표본점이 HUD 가 그 (f,i,j) 로 만든
+ * 마름모 **안에** 있는지를 값으로 잰다. 면 순서나 (i,j) 색인이 어긋나면 여기가 즉시 빨개진다
+ * (bbox 비교는 면을 뒤섞어도 통과해서 못 잡는다).
+ */
+test('ⓖ-b HUD 사영 ≡ 어댑터 표본 자리 — 셀 k·면 f 의 표본점이 HUD 마름모 (f,i,j) 안에 있다', (t) => {
+  const frames = firstFrames('y2', 4);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
+  const view = runtime.view;
+  if (!view.H || view.cellCount === 0) { t.skip('락이 안 걸린 시퀀스'); return; }
+
+  const grids = buildRoleGrids(view.n, view.layoutId);
+  assert.ok(grids, 'HUD 역할 격자를 못 만든다 (n=' + view.n + ', ' + view.layoutId + ')');
+  // 데이터 칸 수 = 런타임이 세는 셀 수. 두 수가 다르면 어느 한쪽이 다른 레이아웃을 읽고 있다.
+  assert.equal(grids.counts.data, view.cellCount, 'HUD 의 데이터 칸 수와 런타임 셀 수가 다르다');
+  // scanGrid 는 0..cellCount-1 을 정확히 한 번씩 쓴다 — 빠지거나 겹치면 셀 상태가 엉뚱한 칸에 칠해진다.
+  const seen = new Set();
+  for (let idx = 0; idx < grids.scanGrid.length; idx += 1) {
+    const k = grids.scanGrid[idx];
+    if (k < 0) continue;
+    assert.equal(grids.roleGrid[idx], HUD_ROLE.DATA, 'scanGrid 가 데이터 아닌 칸을 가리킨다');
+    assert.ok(k < view.cellCount && !seen.has(k), 'scanGrid 순번이 중복이거나 범위 밖이다: ' + k);
+    seen.add(k);
+  }
+  assert.equal(seen.size, view.cellCount);
+
+  const quads = new Float64Array(faceQuadFloats(view.n));
+  projectFaceQuadsInto(view.H, view.n, quads);
+  /** 볼록 사각형 안인가 — 네 변의 외적 부호가 모두 같으면 안(경계 포함). */
+  const inside = (px, py, q, o) => {
+    let neg = 0;
+    let pos = 0;
+    for (let e = 0; e < 4; e += 1) {
+      const ax = q[o + e * 2]; const ay = q[o + e * 2 + 1];
+      const bx = q[o + ((e + 1) % 4) * 2]; const by = q[o + ((e + 1) % 4) * 2 + 1];
+      if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(bx) || !Number.isFinite(by)) return null;
+      const cross = (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+      if (cross > 1e-9) pos += 1;
+      else if (cross < -1e-9) neg += 1;
+    }
+    return pos === 0 || neg === 0;
+  };
+
+  let tested = 0;
+  let hit = 0;
+  for (let idx = 0; idx < grids.scanGrid.length; idx += 1) {
+    const k = grids.scanGrid[idx];
+    if (k < 0) continue;
+    const i = idx % view.n;
+    const j = (idx - i) / view.n;
+    for (let f = 0; f < HUD_FACES.length; f += 1) {
+      const px = view.cellFaceCentres[k * 6 + f * 2];
+      const py = view.cellFaceCentres[k * 6 + f * 2 + 1];
+      if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+      const verdict = inside(px, py, quads, faceQuadSlot(view.n, f, i, j));
+      if (verdict === null) continue;
+      tested += 1;
+      if (verdict) hit += 1;
+    }
+  }
+  assert.ok(tested > view.cellCount * 2, '비교한 표본이 너무 적다 (' + tested + ')');
+  // 전수 일치를 요구한다 — 한 칸이라도 밖이면 그건 «거의 맞다» 가 아니라 색인이 어긋났다는 뜻이다.
+  assert.equal(hit, tested,
+    'HUD 마름모 밖에 있는 어댑터 표본점이 ' + (tested - hit) + '/' + tested + ' 개 — HUD 가 정합과 다른 자리를 그린다');
 });
 
 test('ⓗ 시험판 UI — 셀맵 캔버스가 배선돼 있고 프레임 루프에서 매 프레임 그린다', () => {
@@ -511,4 +585,42 @@ test('ⓢ 락 상실 코스팅 — 가짜 어댑터로 lockedN 0 · 후보 생�
   assert.equal(runtime.view.n, 0);
   for (const r of confirmationRows({ stats: runtime.stats, view: runtime.view, latched: null, leadingId: '' })) assert.equal(r.state, CONFIRM_STATE.NONE, r.key);
   assert.equal(progressNote({ stats: runtime.stats, view: runtime.view }), '');
+});
+
+test('ⓣ view.frameWidth/Height 는 «지금 프레임» 이다 — 락 뒤 폭이 바뀌어도 H·lockRevision 은 그대로 (HUD 는 락 폭을 스스로 기억해야 한다)', () => {
+  /*
+   * 왜 이 성질이 자로 남아야 하나: HUD 는 락 H 로 **한 번** 사영해 두고(lockRevision 게이트) 화면 변환에서
+   * 그 좌표계를 프레임 폭으로 나눈다. 그 분모로 `view.frameWidth` 를 쓰면, 실기 경로가 실패 스트릭마다 내는
+   * 해상도 승격 프레임(960 ↔ 1440, scanner.js FRAME_ESCALATED_SIDE)에서 **자만 바뀌고 그림은 그대로**라
+   * HUD 가 2/3 크기로 좌상단에 붙는다. 여기서 재는 것은 그 전제 — 런타임은 락 폭을 기억해 주지 않는다.
+   * (가짜 어댑터: 락은 한 번만 걸리고 이후 H·lockRevision 불변 — ⓢ 와 같은 방식.)
+   */
+  const fakeStats = { n: 25, locked: 1, gridLockF: 0.5, layoutId: finalLayoutIdsForN(25)[0], lockRevision: 1 };
+  const H = Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+  const fake = {
+    stats: fakeStats,
+    H,
+    detectInto(luma, width, height, timestamp, pose, output) { output.found = 1; output.n = 25; return R2_SESSION_STATUS.OK; },
+    alignInto() { return R2_SESSION_STATUS.OK; },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+  };
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const lumaOf = (side) => ({ width: side, height: side, data: new Float32Array(side * side) });
+  // 실기 두 폭의 비(2:3)만 같으면 성질은 같다 — 자에서 96·144 로 줄여 잰다.
+  runtime.pushFrame(lumaOf(96), 0);
+  runtime.pushFrame(lumaOf(96), 100);
+  assert.equal(runtime.view.n, 25, '전제: 락 뒤 뷰가 섰다');
+  assert.equal(runtime.view.frameWidth, 96, '전제: 뷰가 첫 폭을 든다');
+  const rev = runtime.view.lockRevision;
+
+  runtime.pushFrame(lumaOf(144), 200);
+  assert.equal(runtime.view.lockRevision, rev,
+    '락 세대가 움직였다 — 이 시나리오(같은 락, 다른 프레임 폭)가 아니다');
+  assert.equal(runtime.view.H, H, 'H 참조가 바뀌었다 — 락 뒤 사영이 다시 풀린다는 뜻이다');
+  assert.equal(runtime.view.frameWidth, 144,
+    'view.frameWidth 가 현재 프레임 폭을 안 따른다 — 이 자의 전제가 무너졌으니 HUD 쪽 결론도 다시 봐라');
+  assert.equal(runtime.view.frameHeight, 144);
+  // 결론: «H 의 좌표계 폭» 은 view 에 없다. HUD 는 재사영하는 프레임에 그 폭을 스스로 적어 둬야 한다
+  // (scanner.js r2Hud.frameW · r2-hud.test ⓓ 가 그 자리를 찍는다).
 });

@@ -87,6 +87,7 @@ export function summarizeFrameDebug({
   steady,
   prior,
   qr,
+  hud,
 } = {}) {
   const geo = geometry || {};
   const cs = cellSurface || {};
@@ -123,6 +124,9 @@ export function summarizeFrameDebug({
   if (steady) lines.push(steadyLine(steady, prior));
   // QR 브리지 통계 (시험판, §27.4 0a) — 문자열 한 줄을 그대로 받는다.
   if (typeof qr === 'string' && qr) lines.push(qr);
+  // R2 HUD 위상·비용 (시험판, §27.4 3a) — qr 과 **같은 «있을 때만» 규약**이다. 빈 문자열이면 줄 수가 안 변하므로
+  // 기본 4줄 핀(scanner-debug-overlay.test.js)이 그대로 산다.
+  if (typeof hud === 'string' && hud) lines.push(hud);
   return lines;
 }
 

@@ -9,7 +9,8 @@
  *   ⓔ 핸들러(⚠ 철자 자) — 켜든 끄든 런타임·브리지·힌트·패널·문구를 함께 움직이고 새 키에 저장한다.
  *   ⓕ R1 off 모드(⚠ 철자 자, 2b · 운영자 결정 ②) — R1 게이트가 `if (!r2Runtime.enabled) {` 안, R2 블록이 가이드 점·fps 를 맡는다.
  *   ⓖ 칩 색 유도(2b) — --r2-fixed/--r2-live/--r2-fix 가 R2_CELL_COLOR[CELL_MAP_STATE.X] 에서 심기고 CSS 는 변수만 본다.
- *      ⓒ 의 그리드 단언도 2b 에서 «좌·우 트랙 동일(정중앙) + 셀맵 자기 상한» 으로 바뀌었다.
+ *      ⓒ 의 그리드 단언도 2b 에서 «좌·우 트랙 동일(정중앙) + 우 칸 위젯 자기 상한» 으로 바뀌었다
+ *      (3a: 그 상한을 재는 자리가 .r2-cellmap → .r2-hud-mini 로 옮겨갔다 — HUD 는 test/r2-hud.test.js 가 맡는다).
  *      + setProperty 3줄이 r2Available 게이트 **안** (적대 검토 F4 — 정식 DOM 불변은 <html> 인라인 스타일까지다).
  *   ⓗ 칩 넘침(적대 검토 F7·F9) — 칩은 열 폭을 못 넘고 넘치면 말줄임, progress 칩은 줄바꿈 허용. 결과 카드에 확정 요약 컨테이너(F8).
  *   ⓘ 늦은 결과 문(적대 검토 F2) — R1 .then/.catch 가 QR 콜백과 같은 «세션·스위치 재확인» 을 lateResultAdmitted 로 한다.
@@ -104,8 +105,10 @@ test('ⓒ 마크업 — 상단 행이 스테이지 안, 순서 [진행|스위치
   assert.equal(JS.split('lab-r2-toggle').length - 1, 0);
   // 상단 행 트랙의 «성질» (2b 갱신): 좌·우 트랙이 **같은 문자열**(대칭 → 스위치 정중앙), 중앙은 fit-content 상한,
   // 좌는 0 까지 줄고, 고정 px 트랙 없음. 고정 폭 3열은 320px 폰에서 넘치고, 상한 없는 auto 는 긴 언어 라벨이
-  // 좌 열을 밀어낸다 (반박자 실측). 옛 «우 열 clamp()» 단언은 뺐다 — HUD 상한(140px)은 트랙이 아니라 .r2-cellmap 의
-  // `width: min(100%, <px>)` 가 진다(우 트랙이 좌와 같아야 정중앙이 성립하므로 캔버스가 스스로 갇힌다). 아래에서 잰다.
+  // 좌 열을 밀어낸다 (반박자 실측). 옛 «우 열 clamp()» 단언은 뺐다 — HUD 상한(140px)은 트랙이 아니라 우 칸 위젯의
+  // `width: min(100%, <px>)` 가 진다(우 트랙이 좌와 같아야 정중앙이 성립하므로 위젯이 스스로 갇힌다). 아래에서 잰다.
+  // ⚠ [3a] 그 상한이 **.r2-cellmap → .r2-hud-mini 로 옮겨갔다**: 캔버스는 이제 상자 안을 100% 채우고,
+  //   크기·배경·모서리·스캔선 잘라내기는 상자가 맡는다. 재는 것은 여전히 «우 칸 위젯이 스스로 갇히는가» 하나다.
   const cols = (cssBlock('.stage-top-row').match(/grid-template-columns:([^;]+);/) || [])[1] || '';
   const tracks = splitTracks(cols);
   assert.equal(tracks.length, 3, '상단 행이 3열이 아니다: ' + cols);
@@ -113,9 +116,9 @@ test('ⓒ 마크업 — 상단 행이 스테이지 안, 순서 [진행|스위치
   assert.ok(tracks[0].startsWith('minmax(0,'), '좌 열이 0 까지 못 줄어든다: ' + cols);
   assert.ok(tracks[1].startsWith('fit-content('), '중앙 열에 상한이 없다 — 긴 라벨이 좌 열을 밀어낸다: ' + cols);
   assert.ok(!/\s\d+px\s/.test(cols + ' '), '고정 px 트랙이 있다: ' + cols);
-  const cellmapWidth = (cssBlock('.r2-cellmap').match(/(?:^|[\s;])width:([^;]+);/) || [])[1] || '';
-  assert.ok(/min\(/.test(cellmapWidth) && /\d+px/.test(cellmapWidth),
-    '셀맵이 «열 폭 이하 · px 상한» 으로 갇히지 않았다 (트랙이 1fr 이라 캔버스가 스스로 갇혀야 한다): ' + cellmapWidth);
+  const miniWidth = (cssBlock('.r2-hud-mini').match(/(?:^|[\s;])width:([^;]+);/) || [])[1] || '';
+  assert.ok(/min\(/.test(miniWidth) && /\d+px/.test(miniWidth),
+    '미니 HUD 가 «열 폭 이하 · px 상한» 으로 갇히지 않았다 (트랙이 1fr 이라 위젯이 스스로 갇혀야 한다): ' + miniWidth);
   // 좌 알약은 실제로 접혀야 한다 — 상자만 줄고 내용물이 새면 스위치 아래로 비친다.
   assert.match(cssBlock('.r2-progress'), /overflow: hidden/, '좌 알약 내용물이 열 밖으로 샌다');
   assert.match(cssBlock('.r2-progress-note'), /min-width: 0/, 'note 가 줄어들지 못한다');
