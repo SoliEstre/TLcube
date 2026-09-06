@@ -176,7 +176,14 @@ export const MODULE_ORDER = [
   // 중앙 n=7 스키마는 cellSurfaceFinal 의 중앙 v0 정본에서 로케이터를 유도한다.
   // 코덱은 formatinfo 와 스키마를 소비한다. finder-card-ui·scene·생성기 설정이 모두
   // 이 둘을 쓰므로 여기서 의존 순서대로 싣고 소비자보다 앞에 둔다.
-  'centralN7Schema', 'centralN7Codec', 'centralN7Emphasis', 'finder-card-ui',
+  'centralN7Schema', 'centralN7Codec', 'centralN7Emphasis',
+  // finder-render-kind 는 «finderPatternId → renderKind» 의 정본이고 소비자가
+  // `scene`(그린다) 과 `generator-render-config`(분류한다) **둘**이라 그 앞이다
+  // (2026-09-06 — 종전엔 두 벌의 손 사본이었다). 의존은 finder-patterns ·
+  // finder-selection · centralMarkerN7 · centralN7Schema · finder-oak-patterns ·
+  // finder-daehan 이고 전부 이미 이 앞에 있다.
+  'finder-render-kind',
+  'finder-card-ui',
   // export-options 는 최종 cell-surface n 정본을 읽는다. generator-state 는 그 옵션을
   // 읽으므로 둘 다 cellSurfaceFinal 뒤에 둔다. 순서를 어기면 단일 파일 로더의 specifier
   // 치환이 조용히 남아 브라우저에서만 실패한다.
@@ -206,6 +213,10 @@ export const MODULE_ORDER = [
   // 자리 자동 기준표 — import 가 하나도 없는 순수 상수라 위상 제약이 없다.
   'generator-seat-auto',
   'generator-render-config',
+  // 「검출기 강조」 섹션의 결정 로직 — generator-render-config(판정) · generator-types ·
+  // centralN7Emphasis 뒤여야 한다. 소비자는 index.html 뿐이다 (인라인에 두면 자가
+  // 철자만 재고 성질을 못 잰다 — 2026-09-06 F3).
+  'detector-emphasis-ui-model',
   'sceneY', 'verifyY',
   // y3d-viewer 는 보기 층 (레인 Y3DW). hexgrid·ygrid·lehmer·tonemap 만 쓰고
   // scene/sceneY 는 import 하지 않는다 — 3D 는 opt-in 미리보기이고 PNG·SVG 경로와

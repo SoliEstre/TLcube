@@ -109,6 +109,18 @@ export const COORD_CENTER = '중심부';
 export const COORD_VERTEX = '꼭짓점';
 
 export const TONE_FINDER_BWG = '흑백회(finder)';
+/**
+ * 면을 **프리셋이 아닌 고정 상수 `FINDER_CUBE_TONES`** 로 칠하는 화법
+ * (`central-cube-3tone` · 하이브리드 `cube-bullseye`). 종전엔 두 행 다
+ * `TONE_FINDER_BWG` 라고 적혀 있었는데, 그건 (하이브리드의 경우) 링만 보고 쓴
+ * 주장이었다 — scene.js 의 cube-bullseye 분기는 밴드를 `palette.bullseyeDark/Light`
+ * 로 그린 **뒤** 안쪽 큐브 3면을 `FINDER_CUBE_TONES` 로 덮는다 (028A §3 실측
+ * «큐브 최암면 Y=0.1008» — 순검정도 순백도 아니다).
+ * 접두가 TONE_FINDER_BWG 와 **다른 것이 계약**이다: 강조 사유 자
+ * (test/detector-emphasis-ui.test.js ①)가 `startsWith(TONE_FINDER_BWG)` 로 대조하고,
+ * 하이브리드는 «흑백» 주장이 성립하지 않아 사유 `bwg` 에서 빠진다 (2026-09-06 F1).
+ */
+export const TONE_FINDER_CUBE_FIXED = '큐브 3톤 고정색(FINDER_CUBE_TONES)';
 export const TONE_CELL_COLOR = '셀 컬러(palette.levels)';
 export const TONE_CANONICAL_NONPERM = '정본 비순열 · 현행 미렌더';
 
@@ -218,7 +230,10 @@ function buildItems() {
       renderPath: 'src/scene.js resolveFinderRenderPattern → ' + renderKind,
       coordBasis: COORD_CENTER,
       innerSplit: null,
-      toneAxis: TONE_FINDER_BWG,
+      // 톤 축은 **renderKind 에서 유도**한다 — 카드 이름이나 «중앙 카드는 흑백» 이라는
+      // 통념이 아니라. 큐브 톤을 쓰는 화법(toneRanks 를 가진 패턴)은 그 사실이 축에 남는다.
+      toneAxis: pattern && pattern.toneRanks !== undefined
+        ? TONE_FINDER_CUBE_FIXED : TONE_FINDER_BWG,
       cells: desc.id === CENTER_QR_FINDER_PATTERN_ID ? 'QR 21×21 중앙 슬롯'
         : desc.id === LEGACY_FINDER_PATTERN_ID ? '불스아이 밴드 (19셀 슬롯)'
           : '19셀 슬롯',

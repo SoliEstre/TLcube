@@ -20,7 +20,7 @@ import {
 } from './hexgrid.js';
 import { HYBRID_INNER_CUBE_BANDS, bandRadii, hybridCubeRadius } from './bullseye.js';
 import {
-  DEFAULT_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
+  DEFAULT_FINDER_PATTERN_ID,
   FINDER_CELL_ORDER, FINDER_FACE_BITS, getFinderPattern,
   THREE_TONE_CUBE_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
@@ -34,18 +34,18 @@ import { notchCellsC } from './notchC.js';
 import { moduleQuad } from './ygrid.js';
 import { CENTRAL_V0_SOURCE_N } from './cellSurfaceFinal.js';
 import { centralBeaconGeometry } from './centralBeaconWire.js';
-import { CENTRAL_V0_FINDER_PATTERN_ID } from './finder-selection.js';
+// 중앙 QR 자리의 정본 id — 종전엔 이 파일 안에 리터럴 사본이 있었다 (2026-09-06 철폐).
+import { CENTER_QR_FINDER_PATTERN_ID } from './finder-selection.js';
+import { OUT_OF_TABLE_FINDER_RENDER_KINDS } from './finder-render-kind.js';
 import { digitToPattern } from './tonemap.js';
 import { kSpecFromFormatIndex } from './formatK.js';
 import { encodeCentralBeacon } from './centralBeacon.js';
 import {
-  CENTRAL_MARKER_N7_FINDER_PATTERN_ID,
   CENTRAL_MARKER_N7_SIZE,
   centralMarkerN7State,
 } from './centralMarkerN7.js';
 import {
   CENTRAL_N7_DATA_SCAN_ORDER,
-  CENTRAL_N7_FINDER_PATTERN_ID,
   CENTRAL_N7_LOCATOR_CELLS,
   CENTRAL_N7_SIZE,
 } from './centralN7Schema.js';
@@ -103,9 +103,6 @@ const CORNER_QR_MIN_CLEARANCE_CELLS = 3.5;
 /** 코너 QR 블록이 캔버스 변에서 유지할 최소 여백 (셀). 0 이면 잘린 것처럼 보인다. */
 const CORNER_QR_MIN_EDGE_INSET_CELLS = 2;
 
-// 기준선·실험 후보를 모두 명시적 렌더 표현으로 정규화한다.
-const CENTER_QR_FINDER_PATTERN_ID = 'center-qr';
-
 /**
  * 기본 파인더는 일반 O/A 경로에만 적용한다. 중앙 QR은 자신의 렌더 표현을 명시해
  * 실험판 기본 cell-mask가 중앙 슬롯으로 역류하는 모순을 막는다.
@@ -117,16 +114,19 @@ export function resolveSceneFinderPatternId(
   return centerQr ? CENTER_QR_FINDER_PATTERN_ID : defaultFinderPatternId;
 }
 
-function resolveFinderRenderPattern(id) {
-  if (id === LEGACY_FINDER_PATTERN_ID) return { id, renderKind: 'bullseye' };
-  if (id === CENTER_QR_FINDER_PATTERN_ID) return { id, renderKind: 'center-qr' };
-  if (id === CENTRAL_V0_FINDER_PATTERN_ID) return { id, renderKind: 'central-v0' };
-  if (id === CENTRAL_MARKER_N7_FINDER_PATTERN_ID) {
-    return { id, renderKind: 'central-marker-n7' };
-  }
-  if (id === CENTRAL_N7_FINDER_PATTERN_ID) {
-    return { id, renderKind: 'central-n7-payload' };
-  }
+/**
+ * 렌더가 이 id 를 **무엇으로 그리는가**. export 인 이유는 자 하나 때문이다
+ * (test/detector-emphasis-ui.test.js) — 분류하는 쪽(generator-render-config)이 같은
+ * renderKind 를 보고 있는지 재려면 그리는 쪽의 답을 직접 물어야 한다. 종전엔 둘이
+ * 손 사본이었고 어긋남을 재는 자가 없었다 (2026-09-06 F4).
+ */
+export function resolveFinderRenderPattern(id) {
+  // 표 밖 중앙 id 의 renderKind 는 **여기서 안 적는다** — 정본은
+  // finder-render-kind.js 의 OUT_OF_TABLE_FINDER_RENDER_KINDS 하나이고,
+  // 분류하는 쪽(generator-render-config.detectorEmphasisApplicability)도 같은
+  // 표를 읽는다. 종전엔 두 벌이라 한쪽만 늙어도 아무 자가 안 죽었다 (2026-09-06).
+  const outOfTable = OUT_OF_TABLE_FINDER_RENDER_KINDS[id];
+  if (outOfTable !== undefined) return { id, renderKind: outOfTable };
   // OAK 후보(2026-08-18)는 생성 도구 산출물이 아니라 별도 표라 PATTERN_BY_ID 에
   // 없다. 여기서 먼저 풀고, 아니면 기존 조회가 «알 수 없는 id» 로 정확히 죽는다.
   const oak = getOakFinderPattern(id);

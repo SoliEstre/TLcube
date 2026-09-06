@@ -2163,29 +2163,48 @@
           <div class="card-row" id="outerSeatCards"></div>
         </div>
       </div>
-      <!-- 중앙 파인더의 **렌더 색만** 바꾸는 강조 축. O/A/K 에서 중앙 TL · 중앙 Y0
-           중 하나가 활성일 때 보인다 (정본 술어 centralN7EmphasisAppliesTo —
-           운영자 결정 2026-08-29 §4. 3톤 큐브는 §2.4 왕복 자 거부 — 강조 순검정이
-           어두운 배경 마스크에 먹혀 실루엣 검출 전패, generator-render-config 주석).
-           기본값은 «전체 강조»(같은 날 §3 — 실기 A2). 포맷·용량·셀 순위는 어떤
-           모드에서도 바뀌지 않는다. 카드 안 스와치는 syncCentralN7EmphasisUi 가
-           centralN7Emphasis.js 함수로 채운다 (§5 아이콘). -->
+      <!-- 검출기의 **렌더 색만** 바꾸는 강조 축. 포맷·용량·셀 순위는 어떤 모드에서도
+           바뀌지 않는다. 카드 안 스와치는 syncCentralN7EmphasisUi 가
+           centralN7Emphasis.js 함수로 채운다 (§5 아이콘).
+
+           ⭐ **UI 정직 개편 (운영자 결정 ⑭ 2026-09-06 · PM/029B §27.14).** 종전엔
+           대상 검출기(중앙 TL · 중앙 Y0)가 아니면 섹션이 **통째로 사라졌다** —
+           화면에서 «그런 축이 없다» 와 «지금 고른 검출기에선 못 쓴다» 가 똑같이
+           보였다. 지금은 O/A/K/Y 어느 검출기에서도 **자리를 지키고**, 대상이 아니면
+           카드 3장을 비활성으로 두고 #detectorEmphasisNote 가 사유를 말한다.
+           대상 여부·사유의 정본은 generator-render-config
+           `detectorEmphasisApplicability` — 손 목록이 아니라 renderKind 축에서
+           유도된다 (`centralN7EmphasisAppliesTo` 는 그 함수의 applies 다).
+
+           ⚠ 자리(#finderSection / #yLocatorSection 바로 밑)는 **타입마다 다르다.**
+           요소는 하나뿐이고 호스트만 갈아탄다 — placeModeHostedSections 와 같은
+           관용구다. 두 벌을 두면 어느 쪽이 최신인지가 화면마다 갈리고, lab 기대 축 ④
+           (test/lab-expected-emphasis-ui.test.js)가 세는 data-n7-emphasis 값 집합도
+           깨진다.
+
+           카드 순서 = 기본 → 강조 → (고급 전용) 로케이터만. 기본값은 «강조»
+           (GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS — 운영자 실기 A2 2026-08-29 §3).
+           «로케이터만» 은 그 A2 비교에서 «강조» 에 밀린 중간 단계라 정식 화면에서
+           내렸고, **마크업에는 남는다** (고급 모드 노출 + 폐쇄집합 3택 유지). -->
       <div id="centralN7EmphasisSection" hidden>
-        <label class="section-heading" data-i18n="g1002">중앙 강조색</label>
+        <label class="section-heading" data-i18n="g1002">검출기 강조</label>
         <div class="card-row" id="centralN7EmphasisCards">
           <div class="toggle-card" data-n7-emphasis="default" role="button" tabindex="0" aria-pressed="false">
             <span data-i18n="g1003">기본</span>
-            <span class="card-sub" data-i18n="g1004">강조 없이 원래 색 그대로 그려요.</span>
-          </div>
-          <div class="toggle-card" data-n7-emphasis="locator" role="button" tabindex="0" aria-pressed="false">
-            <span data-i18n="g1005">로케이터만 강조</span>
-            <span class="card-sub" data-i18n="g1006">로케이터 셀만 검정 기준으로 대비를 높여요.</span>
+            <span class="card-sub" data-i18n="g1004">검출기를 강조 없이 원래 색 그대로 그려요.</span>
           </div>
           <div class="toggle-card active" data-n7-emphasis="all" role="button" tabindex="0" aria-pressed="true">
-            <span data-i18n="g1007">전체 강조</span>
-            <span class="card-sub" data-i18n="g1008">로케이터와 데이터 셀 모두 같은 강조 팔레트를 써요.</span>
+            <span data-i18n="g1007">강조</span>
+            <span class="card-sub" data-i18n="g1008">검출기 전체를 검정 기준으로 대비를 높여 그려요.</span>
+          </div>
+          <div class="toggle-card" data-n7-emphasis="locator" data-advanced-only="true" role="button" tabindex="0" aria-pressed="false">
+            <span data-i18n="g1005">로케이터만 강조</span>
+            <span class="card-sub" data-i18n="g1006">검출기 안 로케이터 셀만 대비를 높이고 데이터 셀은 그대로 둬요.</span>
           </div>
         </div>
+        <!-- 비활성 사유 · 고급 전용 숨김-active 안내. 조용한 무시 금지 — 카드를
+             흐리게만 두면 «왜 안 눌리는가» 가 화면 밖에 남는다. -->
+        <p class="hint" id="detectorEmphasisNote" role="status" style="display:none"></p>
       </div>
       <p class="experimental-warning" id="finderExperimentalWarning" role="status" style="display:none">
         <strong data-i18n="g469">실험 — 셀 파인더 스캔 경로 연결됨</strong><br>
@@ -3048,13 +3067,18 @@ const GENERATOR_STRINGS = {
     "g582": "중앙 Y0",
     "g1000": "중앙 M7",
     "g1001": "중앙 TL",
-    "g1002": "중앙 강조색",
+    "g1002": "검출기 강조",
     "g1003": "기본",
-    "g1004": "강조 없이 원래 색 그대로 그려요.",
+    "g1004": "검출기를 강조 없이 원래 색 그대로 그려요.",
     "g1005": "로케이터만 강조",
-    "g1006": "로케이터 셀만 검정 기준으로 대비를 높여요.",
-    "g1007": "전체 강조",
-    "g1008": "로케이터와 데이터 셀 모두 같은 강조 팔레트를 써요.",
+    "g1006": "검출기 안 로케이터 셀만 대비를 높이고 데이터 셀은 그대로 둬요.",
+    "g1007": "강조",
+    "g1008": "검출기 전체를 검정 기준으로 대비를 높여 그려요.",
+    "g1026": "3톤 큐브 검출기는 강조하면 어두운 배경에 먹혀 검출이 안 돼요 — 그래서 강조를 안 걸어요.",
+    "g1027": "이 검출기는 이미 흑·백·회 파인더 톤으로 그려져요 — 강조를 더하면 대비가 되레 줄어요.",
+    "g1028": "이 검출기의 강조는 아직 실측·배선되지 않았어요.",
+    "g1029": "«로케이터만 강조» 는 고급 모드 카드예요 — 카드는 숨겨져 있지만 선택은 그대로 살아 있어요.",
+    "g1030": "이 타입에는 검출기 강조 배선이 없어요.",
     "g572": "실루엣 방향",
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
@@ -3539,13 +3563,18 @@ const GENERATOR_STRINGS = {
     "g582": "Centre Y0",
     "g1000": "Centre M7",
     "g1001": "Centre TL",
-    "g1002": "Centre emphasis colours",
+    "g1002": "Detector emphasis",
     "g1003": "Default",
-    "g1004": "Draws the original colours with no emphasis.",
+    "g1004": "Draws the detector in its original colours with no emphasis.",
     "g1005": "Emphasize locator only",
-    "g1006": "Raises contrast against black for the locator cells only.",
-    "g1007": "Emphasize all",
-    "g1008": "Uses the same emphasis palette for locator and data cells.",
+    "g1006": "Raises contrast for the locator cells only and leaves the data cells as they are.",
+    "g1007": "Emphasize",
+    "g1008": "Raises contrast against black across the whole detector.",
+    "g1026": "The three-tone cube detector sinks into a dark background when emphasized, so emphasis is not applied to it.",
+    "g1027": "This detector is already drawn in the black, grey and white finder tones — emphasis would only lower its contrast.",
+    "g1028": "Emphasis has not yet been measured or wired for this detector.",
+    "g1029": "“Emphasize locator only” is an advanced-mode card — the card is hidden, but your selection stays.",
+    "g1030": "This code type has no detector-emphasis wiring.",
     "g572": "Silhouette direction",
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
@@ -4030,13 +4059,18 @@ const GENERATOR_STRINGS = {
     "g582": "中央Y0",
     "g1000": "中央M7",
     "g1001": "中央TL",
-    "g1002": "中央の強調色",
+    "g1002": "検出器の強調",
     "g1003": "標準",
-    "g1004": "強調なしで元の色のまま描きます。",
+    "g1004": "検出器を強調なしで元の色のまま描きます。",
     "g1005": "ロケータのみ強調",
-    "g1006": "ロケータセルだけを黒基準で高コントラストにします。",
-    "g1007": "すべてを強調",
-    "g1008": "ロケータとデータセルの両方に同じ強調パレットを使います。",
+    "g1006": "検出器内のロケータセルだけコントラストを上げ、データセルはそのままにします。",
+    "g1007": "強調",
+    "g1008": "検出器全体を黒基準で高コントラストに描きます。",
+    "g1026": "3トーンキューブの検出器は強調すると暗い背景に溶けて検出できなくなるため、強調をかけません。",
+    "g1027": "この検出器はすでに黒・グレー・白の検出トーンで描かれます — 強調してもコントラストはむしろ下がります。",
+    "g1028": "この検出器の強調はまだ実測も配線もされていません。",
+    "g1029": "「ロケータのみ強調」は上級モードのカードです — カードは隠れていますが選択はそのまま残ります。",
+    "g1030": "このタイプには検出器強調の配線がありません。",
     "g572": "シルエット方向",
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
@@ -4520,13 +4554,18 @@ const GENERATOR_STRINGS = {
     "g582": "Y0 central",
     "g1000": "M7 central",
     "g1001": "TL central",
-    "g1002": "Couleurs d'accent du centre",
+    "g1002": "Accentuation du détecteur",
     "g1003": "Par défaut",
-    "g1004": "Dessine les couleurs d'origine sans accentuation.",
+    "g1004": "Dessine le détecteur dans ses couleurs d'origine, sans accentuation.",
     "g1005": "Accentuer le repère uniquement",
-    "g1006": "Augmente le contraste avec le noir pour les cellules du repère uniquement.",
-    "g1007": "Tout accentuer",
-    "g1008": "Applique la même palette accentuée au repère et aux cellules de données.",
+    "g1006": "Augmente le contraste des seules cellules du repère et laisse les cellules de données inchangées.",
+    "g1007": "Accentuer",
+    "g1008": "Augmente le contraste avec le noir sur tout le détecteur.",
+    "g1026": "Le détecteur cube trois tons se fond dans un fond sombre lorsqu'il est accentué : l'accentuation ne lui est donc pas appliquée.",
+    "g1027": "Ce détecteur est déjà dessiné dans les tons noir, gris et blanc du repère — l'accentuation ne ferait que réduire son contraste.",
+    "g1028": "L'accentuation n'a encore été ni mesurée ni câblée pour ce détecteur.",
+    "g1029": "« Accentuer le repère uniquement » est une carte du mode avancé — la carte est masquée, mais votre choix reste actif.",
+    "g1030": "Ce type ne dispose d'aucun câblage d'accentuation du détecteur.",
     "g572": "Orientation de la silhouette",
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
@@ -5010,13 +5049,18 @@ const GENERATOR_STRINGS = {
     "g582": "Y0 centrale",
     "g1000": "M7 centrale",
     "g1001": "TL centrale",
-    "g1002": "Colori di enfasi del centro",
+    "g1002": "Enfasi del rilevatore",
     "g1003": "Predefinita",
-    "g1004": "Disegna i colori originali senza enfasi.",
+    "g1004": "Disegna il rilevatore nei colori originali, senza enfasi.",
     "g1005": "Enfatizza solo il localizzatore",
-    "g1006": "Aumenta il contrasto sul nero solo per le celle del localizzatore.",
-    "g1007": "Enfatizza tutto",
-    "g1008": "Usa la stessa tavolozza enfatizzata per localizzatore e celle dati.",
+    "g1006": "Aumenta il contrasto solo per le celle del localizzatore e lascia invariate quelle dei dati.",
+    "g1007": "Enfatizza",
+    "g1008": "Aumenta il contrasto sul nero su tutto il rilevatore.",
+    "g1026": "Il rilevatore a cubo tre toni si confonde con lo sfondo scuro quando è enfatizzato, quindi l’enfasi non viene applicata.",
+    "g1027": "Questo rilevatore è già disegnato nei toni nero, grigio e bianco — l’enfasi ne ridurrebbe il contrasto.",
+    "g1028": "L’enfasi non è ancora stata misurata né collegata per questo rilevatore.",
+    "g1029": "«Enfatizza solo il localizzatore» è una scheda della modalità avanzata — la scheda è nascosta, ma la selezione resta attiva.",
+    "g1030": "Questo tipo non ha alcun collegamento per l’enfasi del rilevatore.",
     "g572": "Direzione della sagoma",
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
@@ -5500,13 +5544,18 @@ const GENERATOR_STRINGS = {
     "g582": "Zentrales Y0",
     "g1000": "Zentraler M7",
     "g1001": "Zentraler TL",
-    "g1002": "Betonungsfarben der Mitte",
+    "g1002": "Detektor-Hervorhebung",
     "g1003": "Standard",
-    "g1004": "Zeichnet die Originalfarben ohne Hervorhebung.",
+    "g1004": "Zeichnet den Detektor ohne Hervorhebung in den Originalfarben.",
     "g1005": "Nur Locator hervorheben",
-    "g1006": "Erhöht nur bei den Locator-Zellen den Kontrast zu Schwarz.",
-    "g1007": "Alles hervorheben",
-    "g1008": "Verwendet dieselbe Hervorhebungspalette für Locator- und Datenzellen.",
+    "g1006": "Erhöht den Kontrast nur bei den Locator-Zellen und lässt die Datenzellen unverändert.",
+    "g1007": "Hervorheben",
+    "g1008": "Erhöht im gesamten Detektor den Kontrast zu Schwarz.",
+    "g1026": "Der Dreiton-Würfel-Detektor verschwindet bei Hervorhebung im dunklen Hintergrund, daher wird sie hier nicht angewendet.",
+    "g1027": "Dieser Detektor wird bereits in den Schwarz-, Grau- und Weißtönen gezeichnet — eine Hervorhebung würde den Kontrast nur verringern.",
+    "g1028": "Für diesen Detektor wurde die Hervorhebung noch nicht gemessen und noch nicht angebunden.",
+    "g1029": "„Nur Locator hervorheben“ ist eine Karte des erweiterten Modus — die Karte ist ausgeblendet, Ihre Auswahl bleibt jedoch erhalten.",
+    "g1030": "Dieser Typ verfügt über keine Anbindung für die Detektor-Hervorhebung.",
     "g572": "Silhouettenrichtung",
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
@@ -5990,13 +6039,18 @@ const GENERATOR_STRINGS = {
     "g582": "Y0 central",
     "g1000": "M7 central",
     "g1001": "TL central",
-    "g1002": "Colores de énfasis del centro",
+    "g1002": "Énfasis del detector",
     "g1003": "Predeterminado",
-    "g1004": "Dibuja los colores originales sin énfasis.",
+    "g1004": "Dibuja el detector con sus colores originales, sin énfasis.",
     "g1005": "Enfatizar solo el localizador",
-    "g1006": "Aumenta el contraste con negro solo en las celdas del localizador.",
-    "g1007": "Enfatizar todo",
-    "g1008": "Usa la misma paleta enfatizada en el localizador y las celdas de datos.",
+    "g1006": "Aumenta el contraste solo en las celdas del localizador y deja las celdas de datos sin cambios.",
+    "g1007": "Enfatizar",
+    "g1008": "Aumenta el contraste con negro en todo el detector.",
+    "g1026": "El detector de cubo de tres tonos se funde con el fondo oscuro al enfatizarlo, por lo que el énfasis no se aplica.",
+    "g1027": "Este detector ya se dibuja en los tonos negro, gris y blanco — el énfasis solo reduciría su contraste.",
+    "g1028": "El énfasis aún no se ha medido ni conectado para este detector.",
+    "g1029": "«Enfatizar solo el localizador» es una tarjeta del modo avanzado — la tarjeta está oculta, pero su selección se mantiene.",
+    "g1030": "Este tipo no tiene conexión para el énfasis del detector.",
     "g572": "Orientación de la silueta",
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
@@ -6480,13 +6534,18 @@ const GENERATOR_STRINGS = {
     "g582": "Y0 central",
     "g1000": "M7 central",
     "g1001": "TL central",
-    "g1002": "Cores de destaque do centro",
+    "g1002": "Destaque do detector",
     "g1003": "Padrão",
-    "g1004": "Desenha as cores originais sem destaque.",
+    "g1004": "Desenha o detector nas cores originais, sem destaque.",
     "g1005": "Destacar apenas o localizador",
-    "g1006": "Aumenta o contraste com preto apenas nas células do localizador.",
-    "g1007": "Destacar tudo",
-    "g1008": "Usa a mesma paleta de destaque no localizador e nas células de dados.",
+    "g1006": "Aumenta o contraste apenas nas células do localizador e deixa as células de dados inalteradas.",
+    "g1007": "Destacar",
+    "g1008": "Aumenta o contraste com preto em todo o detector.",
+    "g1026": "O detector de cubo de três tons funde-se com o fundo escuro quando é destacado, por isso o destaque não é aplicado.",
+    "g1027": "Este detector já é desenhado nos tons preto, cinzento e branco — o destaque só reduziria o seu contraste.",
+    "g1028": "O destaque ainda não foi medido nem ligado para este detector.",
+    "g1029": "«Destacar apenas o localizador» é um cartão do modo avançado — o cartão está oculto, mas a sua seleção mantém-se.",
+    "g1030": "Este tipo não tem ligação para o destaque do detector.",
     "g572": "Orientação da silhueta",
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
@@ -6811,9 +6870,13 @@ import {
   cmqWireExists, seatCardShown, zoneCards,
 } from './src/finder-zone-ui.js';
 import {
-  centralN7EmphasisAppliesTo, centralN7FamilyForType, encodeOptionsForY,
+  centralN7EmphasisAppliesTo, centralN7FamilyForType,
+  encodeOptionsForY,
   sceneOptionsForOA, centralBeaconEncoderOptions,
 } from './src/generator-render-config.js';
+import {
+  emphasisSectionModel, hasCentralFinderAxis,
+} from './src/detector-emphasis-ui-model.js';
 
 /** O 화면 안에서 Type C(ultra) 정권이 활성인가. DOM class가 아니라 상태만 본다. */
 function typeCGeneratorActive(state = generatorState) {
@@ -6977,6 +7040,7 @@ const els = {
   finderSection: $('finderSection'), finderLegacyRow: $('finderLegacyRow'),
   centralN7EmphasisSection: $('centralN7EmphasisSection'),
   centralN7EmphasisCards: $('centralN7EmphasisCards'),
+  detectorEmphasisNote: $('detectorEmphasisNote'),
   finderAdvancedOnlyHint: $('finderAdvancedOnlyHint'),
   kcmBeaconNote: $('kcmBeaconNote'),
   finderPatternCards: $('finderPatternCards'),
@@ -8233,6 +8297,22 @@ function placeModeHostedSections() {
   }
 }
 
+/**
+ * 고급 전용 카드가 보이는가 — 고급 모드이거나, 시험판(finder-experiment)이면 모드 무관.
+ *
+ * ⚠ **이 규칙의 정본은 이 함수 하나다** (2026-09-06). 소비자는 셋이다:
+ * ① applyFinderExperimentVisibility 의 `hideAdvancedOnly`, ② 검출기 강조 섹션의
+ * `advancedCardsVisible`(emphasisSectionModel 인자), ③ #finderAdvancedOnlyHint 의
+ * 숨김-active 안내. ③ 은 리뷰 전까지 `mode !== 'advanced' && edition !== …` 라는
+ * **부정형 손 사본**이었다 — 「사본은 반드시 어긋난다」 를 적어 놓고 옆에 하나 남긴
+ * 상태였다. 다른 곳의 finder-experiment 조건들(실험 경고 노출·seat 구역 lab 게이트)은
+ * **다른 질문에 답하므로** 여기 소비자가 아니다 (같은 철자, 다른 계약).
+ */
+function advancedOnlyCardsVisible() {
+  return mode === 'advanced'
+    || document.body.dataset.generatorEdition === 'finder-experiment';
+}
+
 function setMode(next) {
   // 모드는 오직 노출만 바꾼다. generatorState를 DOM에서 읽어 덮거나 정규화하지 않는다.
   mode = transitionGeneratorMode(next);
@@ -8310,9 +8390,9 @@ function applyFinderExperimentVisibility() {
   // advancedOnly(= formal 여집합 유도 — finder-zone-ui)는 **표시 게이트**로만
   // 숨긴다: 스키마·active 는 BOTH 유지 (숨김-active 는 renderFinderUi 가 배지로
   // 말한다 — 조용한 무시 금지, 강제 리셋도 없음: 파인더는 사용자 명시 선택이다).
-  // 시험판(finder-experiment)은 전 카드 유지 (모드 무관).
-  const trialBuild = document.body.dataset.generatorEdition === 'finder-experiment';
-  const hideAdvancedOnly = !show && !trialBuild;
+  // 시험판(finder-experiment)은 전 카드 유지 (모드 무관) — 규칙 정본은
+  // advancedOnlyCardsVisible() 하나다 (검출기 강조의 고급 전용 카드도 그걸 쓴다).
+  const hideAdvancedOnly = !advancedOnlyCardsVisible();
   for (const id of ADVANCED_ONLY_CENTRAL_IDS) {
     const card = els.finderLegacyRow.querySelector('[data-finder-id="' + id + '"]');
     if (card) card.style.display = hideAdvancedOnly ? 'none' : '';
@@ -9082,23 +9162,67 @@ function ensureCentralN7EmphasisSwatch(card) {
   return svg;
 }
 
+/**
+ * 「검출기 강조」 섹션의 **현재 모형** — 결정은 전부 순수 함수가 한다.
+ *
+ * ⚠ 규칙을 여기 인라인으로 두면 자가 «성질» 이 아니라 **철자**를 잰다: 종전엔 소스
+ * 정규식으로 가시성 게이트·키보드 가드·노트 배선을 확인했는데, 셋 다 지워도 스위트가
+ * 초록이었다 (2026-09-06 리뷰 변이 m3·m4·M4·M8). 정본은
+ * `src/detector-emphasis-ui-model.js` 의 `emphasisSectionModel` 이고, 여기는
+ * **칠하기만** 한다. 고급 노출 규칙만 DOM 축이라 이쪽에서 계산해 넘긴다
+ * (정본은 `advancedOnlyCardsVisible()` 하나).
+ */
+function currentEmphasisSectionModel() {
+  return emphasisSectionModel(generatorState, {
+    advancedCardsVisible: advancedOnlyCardsVisible(),
+  });
+}
+
+/** 강조 축을 **지금 바꿀 수 있는가** — 모형의 이름일 뿐, 두 번째 판정이 아니다. */
+function centralN7EmphasisEditable() {
+  return currentEmphasisSectionModel().editable;
+}
+
 function syncCentralN7EmphasisUi() {
   if (!els.centralN7EmphasisSection || !els.centralN7EmphasisCards) return;
-  // 노출: O/A/K × (중앙 TL · 중앙 Y0) — 정본 술어 하나만 묻는다 (운영자 2026-08-29
-  // §4, centralN7EmphasisAppliesTo — 3톤 큐브는 §2.4 왕복 자 거부라 대상 밖).
-  // Y 는 해당 없음 — 실측: Y 는 중앙 파인더 축 자체가 없다 (finderSection 이 Y 에서
-  // 통째로 닫힌다).
-  const visible = ['O', 'A', 'K'].includes(generatorState.type)
-    && centralN7EmphasisAppliesTo(generatorState.finderPatternId);
-  els.centralN7EmphasisSection.hidden = !visible;
+  const section = els.centralN7EmphasisSection;
+  const model = currentEmphasisSectionModel();
+  // ── 자리 (운영자 «검출기 선택 밑에», 결정 ⑭) ─────────────────────────────
+  // 검출기를 고르는 섹션은 타입마다 다른 요소다 — 중앙 파인더 축이 있는 타입은
+  // #finderSection, Type Y 는 #yLocatorSection. 요소는 하나만 두고 호스트만
+  // 갈아탄다(두 벌 금지 — lab 기대 축 ④ 가 data-n7-emphasis 값 집합을 센다).
+  const anchor = model.anchor === 'finder' ? els.finderSection : els.yLocatorSection;
+  if (anchor && anchor.parentElement && anchor.nextElementSibling !== section) {
+    anchor.after(section);
+  }
+  // ── 노출 ────────────────────────────────────────────────────────────────
+  // **상시 표시** (결정 ⑭ (A) UI 정직 개편). 종전엔 대상 검출기가 아니면 섹션이
+  // 통째로 사라져 «그런 축이 없다» 와 «이 검출기에선 못 쓴다» 가 같아 보였다.
+  section.hidden = model.hidden;
+
   for (const card of els.centralN7EmphasisCards.children) {
-    const active = card.dataset.n7Emphasis === generatorState.centralN7Emphasis;
-    card.classList.toggle('active', active);
-    card.setAttribute('aria-pressed', String(active));
+    const cardMode = card.dataset.n7Emphasis;
+    const entry = model.cards.find((item) => item.mode === cardMode);
+    if (!entry) continue;
+    // 고급 전용 카드는 숨기기만 하고 선택은 안 건드린다 (기존 관례).
+    card.style.display = entry.visible ? '' : 'none';
+    card.classList.toggle('active', entry.active);
+    card.setAttribute('aria-pressed', String(entry.active));
+    // 비대상 검출기에서는 흐리게 + 클릭 무시 (.toggle-card.disabled = opacity .35 ·
+    // pointer-events none). 상태는 안 건드린다 — 검출기를 되돌리면 그대로 살아난다.
+    card.classList.toggle('disabled', entry.disabled);
+    card.setAttribute('aria-disabled', String(entry.disabled));
+    card.tabIndex = entry.disabled ? -1 : 0;
     // §5 스와치 — 현재 프리셋·hue 의 실제 색. 팔레트가 바뀌면 syncStyleUi 가 다시 부른다.
     const rects = ensureCentralN7EmphasisSwatch(card).children;
-    const tones = centralN7EmphasisSwatchTones(card.dataset.n7Emphasis);
+    const tones = centralN7EmphasisSwatchTones(cardMode);
     for (let i = 0; i < 3; i += 1) rects[i].setAttribute('fill', rgbCss(tones[i]));
+  }
+
+  // ── 사유 한 줄 (조용한 무시 금지) ────────────────────────────────────────
+  if (els.detectorEmphasisNote) {
+    els.detectorEmphasisNote.style.display = model.noteKey ? '' : 'none';
+    if (model.noteKey) els.detectorEmphasisNote.textContent = t(model.noteKey);
   }
 }
 
@@ -9106,6 +9230,9 @@ for (const card of els.centralN7EmphasisCards.children) {
   const activate = () => {
     const value = card.dataset.n7Emphasis;
     if (!CENTRAL_N7_EMPHASIS_MODES.includes(value)) return;
+    // 비대상 검출기에서는 무시한다 — CSS pointer-events 는 마우스만 막고 키보드
+    // (Enter/Space)는 그대로 들어온다. 사유는 #detectorEmphasisNote 가 말한다.
+    if (!centralN7EmphasisEditable()) return;
     generatorState.centralN7Emphasis = value;
     syncCentralN7EmphasisUi();
     schedule();
@@ -9122,7 +9249,10 @@ for (const card of els.centralN7EmphasisCards.children) {
 function renderFinderUi() {
   ensureFinderCards();
   syncCentralN7EmphasisUi();
-  const visible = currentType() !== 'Y';
+  // «중앙 파인더 축이 있는 타입인가» — 강조 섹션의 앵커 판정과 **같은 술어**다
+  // (종전엔 같은 축이 `currentType() !== 'Y'` 와 `['O','A','K'].includes(type)` 두
+  //  철자로 적혀 있었다 — 2026-09-06 F7).
+  const visible = hasCentralFinderAxis(currentType());
   els.finderSection.style.display = visible ? '' : 'none';
 
   // ⚠ 예전엔 finderPatternCards 만 돌아서 **손그림·OAK 서랍의 패밀리 제목이 공백**
@@ -9207,8 +9337,7 @@ function renderFinderUi() {
   // (URL·이전 세션 경로) 카드는 안 보이는데 선택은 산다. 강제 리셋은 하지 않는다 —
   // 모드 전환은 사용자 명시 선택을 조용히 리셋하지 않는다. 대신 이유를 말한다.
   if (els.finderAdvancedOnlyHint) {
-    const hiddenActive = mode !== 'advanced'
-      && document.body.dataset.generatorEdition !== 'finder-experiment'
+    const hiddenActive = !advancedOnlyCardsVisible()
       && ADVANCED_ONLY_CENTRAL_IDS.includes(generatorState.finderPatternId);
     els.finderAdvancedOnlyHint.style.display = hiddenActive ? '' : 'none';
     if (hiddenActive) els.finderAdvancedOnlyHint.textContent = t('g870');
@@ -12143,6 +12272,10 @@ function syncYLocatorUi() {
             ? t('g520')
             : t('g519');
   }
+  // 검출기 강조 섹션은 **이 섹션 바로 밑**이 자리이고(Type Y), 사유 판정의 입력도
+  // 여기서 고르는 로케이터 프로파일이다 — 트리거를 손 목록으로 유지하지 않으려고
+  // 자리·사유를 만든 곳에서 바로 부른다 (파생값은 트리거도 필요하다).
+  syncCentralN7EmphasisUi();
 }
 
 // (구 #codeType select 의 change 핸들러는 카드 배선(wireTypeCards)으로 대체됐다.)

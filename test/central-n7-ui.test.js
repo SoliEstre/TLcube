@@ -26,6 +26,10 @@ import {
   CENTRAL_N7_EMPHASIS_MODES, GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS,
 } from '../src/centralN7Emphasis.js';
 import { centralN7EmphasisAppliesTo } from '../src/generator-render-config.js';
+import {
+  emphasisSectionModel, hasCentralFinderAxis,
+} from '../src/detector-emphasis-ui-model.js';
+import { GENERATOR_TYPES } from '../src/generator-types.js';
 import { CENTER_QR_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 import {
   CUBE_BULLSEYE_FINDER_PATTERN_ID, LEGACY_FINDER_PATTERN_ID,
@@ -187,7 +191,12 @@ test('생성기 i18n은 8개 언어 모두에 후보 B·새 카드 키가 존재
   }
 });
 
-test('중앙 강조 UI는 3택 상태와 O/A/K × 적용 파인더 가시성에 배선된다', () => {
+test('«검출기 강조» UI는 3택 상태와 편집 가능 술어(모형)에 배선된다', () => {
+  // **자 교정 ② (2026-09-06, 완화 아님)** — 제목·메시지가 «가시성» 을 말하고 있었는데
+  // 결정 ⑭ 이후 섹션은 **상시 표시**이고 술어가 결정하는 것은 «편집 가능» 이다.
+  // 그리고 그 결정 로직은 이제 index.html 인라인이 아니라 순수 모형
+  // (src/detector-emphasis-ui-model.js)이라, 소스 철자 대신 **모형의 값**으로 잰다.
+  //
   // **자 교정 (2026-08-29, 완화 아님)** — 종전 단언은 가시성 술어를 «중앙 TL 하나»
   // 라는 배치로 고정했다. 운영자 결정 §4(3톤 큐브·중앙 Y0 확장)로 재는 성질을
   // «정본 술어(centralN7EmphasisAppliesTo)를 소비하는가» + 그 술어의 값 표로 재조준.
@@ -199,9 +208,21 @@ test('중앙 강조 UI는 3택 상태와 O/A/K × 적용 파인더 가시성에 
   for (const mode of CENTRAL_N7_EMPHASIS_MODES) {
     assert.match(source, new RegExp(`data-n7-emphasis="${mode}"`));
   }
-  assert.match(source, /\['O', 'A', 'K'\]\.includes\(generatorState\.type\)/);
-  assert.match(source, /centralN7EmphasisAppliesTo\(generatorState\.finderPatternId\)/,
-    '강조 섹션 가시성이 정본 술어를 안 쓴다 — 손 사본이 생겼다');
+  // 화면이 소비하는 것은 **모형 하나**다 (index.html 은 칠하기만 한다).
+  assert.match(source, /emphasisSectionModel\(generatorState, \{/,
+    '강조 섹션이 정본 모형을 안 쓴다 — 인라인 손 사본이 생겼다');
+  // 그 모형의 편집 가능 술어는 타입 축 × 검출기 축의 곱이다 — 값으로 잰다.
+  const editableOf = (type, finderPatternId) => emphasisSectionModel(
+    { type, finderPatternId, locatorProfileY: 'off', centralN7Emphasis: 'all' },
+    { advancedCardsVisible: true },
+  ).editable;
+  for (const type of GENERATOR_TYPES) {
+    assert.equal(editableOf(type, CENTRAL_N7_FINDER_PATTERN_ID),
+      hasCentralFinderAxis(type),
+      type + ': 중앙 파인더 축이 있는 타입에서만 편집 가능해야 한다');
+  }
+  assert.equal(editableOf('O', CENTER_QR_FINDER_PATTERN_ID), false,
+    '비대상 검출기에서 편집 가능이면 «켰는데 안 먹는» 상태다');
   assert.match(source, /centralN7Emphasis: cfg\.centralN7Emphasis/);
   assert.match(source, /sceneOpts\.centralN7Emphasis = cfg\.centralN7Emphasis/);
   // 적용 대상의 정본 값 표 (2026-08-29 §4) — 소스 철자가 아니라 술어 값으로 잰다.

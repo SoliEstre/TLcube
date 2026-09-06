@@ -56,6 +56,9 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   // scene 의 중앙 n=7 렌더 경로: 스키마는 cellSurfaceFinal 뒤, 코덱은 이미 앞에 있는
   // formatinfo 와 스키마 뒤에 둔다. 이 편집기는 finder-card-ui 를 싣지 않는다.
   'centralN7Schema', 'centralN7Codec', 'centralN7Emphasis',
+  // finder-render-kind — scene.js 가 «표 밖 중앙 id → renderKind» 정본을 여기서
+  // 읽는다 (2026-09-06 사본 철폐). scene 앞이고 로컬 의존은 전부 이 앞에 있다.
+  'finder-render-kind',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: scene.js 가 중앙 슬롯을 완전한
   // v0 코드로 채우려고 encodeY·centralBeacon 을 부르고, 데이터 셀 톤에 tonemap 을
   // 쓴다. encodeY 의 로컬 의존 layoutY 도 여기 온다 (capacityY 옆 — cell-editor

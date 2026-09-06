@@ -5,6 +5,10 @@ import {
   centralMarkerN7FamilyForType, isCentralMarkerN7FinderPatternId,
 } from './centralMarkerN7.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from './centralN7Schema.js';
+import {
+  FINDER_PATTERNS, THREE_TONE_CUBE_FINDER_PATTERN_ID,
+} from './finder-patterns.js';
+import { finderRenderKindOf } from './finder-render-kind.js';
 import { WINDOW_SUPPORTED_TONES, WINDOW_SUPPORTED_VERSION } from './capacityY.js';
 import {
   CELL_SURFACE_FINAL_V0,
@@ -68,10 +72,116 @@ export function centralN7FamilyForType(type) {
  * 큐브는 옵션 무시(픽셀 동일)를 잠근다. cube-bullseye·bullseye·cell-mask 계보는
  * 결정 범위 밖. 소비자: sceneOptionsForOA · index.html 의 K 디스패치 · 강조 섹션
  * 가시성 · lab 텔레메트리 — 손 사본을 두지 말고 이걸 불러라.
+ *
+ * ⚠ **정본은 이제 아래 `detectorEmphasisApplicability` 다** (운영자 결정 ⑭
+ * 2026-09-06). 이 술어는 그 함수의 `applies` 를 그대로 돌려주는 얇은 이름이다 —
+ * 값 표(중앙 TL · 중앙 Y0 만 true)는 안 바뀌었고, 바뀐 것은 «아니면 왜 아닌가» 를
+ * 같은 자리에서 답할 수 있게 된 것뿐이다.
  */
 export function centralN7EmphasisAppliesTo(finderPatternId) {
-  return finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID
-    || isCentralV0FinderPatternId(finderPatternId);
+  return detectorEmphasisApplicability(finderPatternId).applies;
+}
+
+/**
+ * 강조가 **안 되는** 사유의 폐쇄집합 (운영자 결정 ⑭ 2026-09-06 · PM/029B §27.14).
+ *
+ * 화면이 «없는 축» 과 «지금은 못 쓰는 축» 을 구별해 말하려면 사유가 필요하다. 이
+ * 목록은 UI 문구 키의 정본이기도 하다 — 소비자는 여기서 유도하고 손 목록을 두지 마라.
+ */
+export const DETECTOR_EMPHASIS_REASONS = Object.freeze(['cube-3tone', 'bwg', 'not-yet']);
+
+/**
+ * **파인더 축(palette.bullseyeDark / BULLSEYE_MID / bullseyeLight)의 링·격자로
+ * 그려지는** renderKind 들 — 즉 dark 가 이미 순검정(BULLSEYE_DARK = rgb 0,0,0)인 화법.
+ *
+ * 실측 근거는 `scene.js` 의 렌더 분기다: cell-mask 는 level/mask → bullseyeLight ·
+ * BULLSEYE_MID · bullseyeDark, cube-bullseye 의 링과 bullseye 의 6밴드는
+ * `i % 2 === 0 ? palette.bullseyeDark : palette.bullseyeLight`, center-qr 블록은
+ * `pushQrBlock` 이 bullseyeLight 바탕 위에 bullseyeDark 모듈을 깐다.
+ *
+ * ⚠ **이 집합만으로는 «강조가 줄 것이 없다» 가 성립하지 않는다** (2026-09-06, 010
+ * 리뷰 F1). `cube-bullseye` 는 링만 파인더 축이고 **안쪽 큐브 3면은 프리셋이 아닌
+ * 고정 상수 `FINDER_CUBE_TONES`** 로 그린다 (scene.js cube-bullseye 분기 — 028A §3
+ * 실측 «큐브 최암면 Y=0.1008», 순검정이 아니다). 그래서 사유 `bwg` 는 아래
+ * `CUBE_TONE_RENDER_KINDS` 를 **빼고** 정의한다 = «모든 면이 bullseye 축에서 나온다».
+ * 하이브리드는 어느 쪽 주장도 실측이 없으므로 `not-yet` 으로 떨어진다.
+ */
+const BULLSEYE_AXIS_RENDER_KINDS = Object.freeze([
+  'cell-mask', 'cube-bullseye', 'bullseye', 'center-qr',
+]);
+
+/**
+ * 면을 **고정 상수 `FINDER_CUBE_TONES`** 로 칠하는 renderKind 들 — 손 목록이 아니라
+ * 정본 표의 불변식에서 유도한다.
+ *
+ * `finder-patterns.definePattern` 은 `toneRanks`(0/1/2 순열)를 renderKind 가
+ * three-tone-cube · cube-bullseye 일 때만 요구하고 그 밖에서는 금지한다. 그리고
+ * scene.js 는 그 `toneRanks` 를 그대로 `FINDER_CUBE_TONES[...]` 의 첨자로 쓴다 —
+ * 즉 «toneRanks 를 가진 패턴 = 큐브 톤으로 칠하는 패턴» 이 표의 성질이다.
+ */
+const CUBE_TONE_RENDER_KINDS = Object.freeze([...new Set(
+  FINDER_PATTERNS.filter((pattern) => pattern.toneRanks !== undefined)
+    .map((pattern) => pattern.renderKind),
+)]);
+
+/** 3톤 큐브의 renderKind — 철자를 옮겨 적지 않고 정본 표에서 뽑는다. */
+const THREE_TONE_CUBE_RENDER_KIND = FINDER_PATTERNS
+  .find((pattern) => pattern.id === THREE_TONE_CUBE_FINDER_PATTERN_ID).renderKind;
+
+/**
+ * finderPatternId → renderKind — **정본은 `finder-render-kind.js` 하나**다.
+ *
+ * 종전엔 scene.js `resolveFinderRenderPattern` 의 조회 순서를 여기 옮겨 적었고
+ * (표 밖 중앙 id 2개는 리터럴), 둘의 어긋남을 재는 자가 없었다 (2026-09-06 010
+ * 리뷰 F4 — LEGACY 를 다른 renderKind 로 바꿔도 스위트 전부 초록이었다). 이제
+ * 그리는 쪽과 분류하는 쪽이 같은 표를 읽는다.
+ *
+ * 여기가 렌더와 다른 점은 «모르는 id 에서 죽지 않는다» 뿐이다 — 분류 쪽에는
+ * 자리 예약 id(o-cm…)·Y 로케이터 프로파일 id 처럼 중앙 파인더가 아닌 값도
+ * 들어오고, 그런 값의 답은 «아직 대상 아님» 이지 예외가 아니다.
+ */
+function detectorRenderKind(finderPatternId) {
+  return finderRenderKindOf(finderPatternId);
+}
+
+const APPLICABILITY_YES = Object.freeze({ applies: true, reason: null });
+const APPLICABILITY_NO = Object.freeze(Object.fromEntries(
+  DETECTOR_EMPHASIS_REASONS.map((reason) => [reason, Object.freeze({ applies: false, reason })]),
+));
+
+/**
+ * 이 검출기에 «검출기 강조» 축이 적용되는가, 아니면 **왜** 아닌가.
+ *
+ * `centralN7EmphasisAppliesTo` 의 상위 함수다 — 그쪽은 이 함수의 `applies` 를 그대로
+ * 돌려준다. 렌더 사슬(sceneOptionsForOA · index.html K 디스패치)이 쓰는 판정은
+ * 하나뿐이고, 화면은 그 판정에 **사유 한 줄**을 덧붙여 말한다 (운영자 결정 ⑭).
+ *
+ * 사유는 라벨이 아니라 **렌더 축에서 유도**된다:
+ *   · `cube-3tone` — 3톤 큐브 화법. 강조 dark(순검정)가 어두운 프리셋 배경과 차
+ *     0.0053 < 마스크 허용오차 0.018 로 먹혀 실루엣 검출이 전패한다 (2026-08-29
+ *     §2.4 왕복 자 거부 — 위 `centralN7EmphasisAppliesTo` 주석의 실측).
+ *   · `bwg` — **모든 면이** 파인더 축에서 나오는 화법 (BULLSEYE_AXIS_RENDER_KINDS
+ *     빼기 CUBE_TONE_RENDER_KINDS). dark 가 이미 순검정이라 강조가 light 를 낮추는
+ *     방향밖에 못 간다 (= 대비 감소. 정책상 안 한다). 링 + 고정 큐브 톤 하이브리드는
+ *     이 주장이 성립하지 않아 여기 안 들어온다 (2026-09-06 F1).
+ *   · `not-yet` — 그 밖. 합성 왕복만 통과했거나 미배선·미측정이다. «못 한다» 가
+ *     아니라 «아직 안 쟀다» 이므로, 실측이 서면 이 함수의 답이 먼저 바뀐다.
+ *
+ * @param {string} finderPatternId
+ * @returns {{applies: boolean, reason: null | 'cube-3tone' | 'bwg' | 'not-yet'}}
+ */
+export function detectorEmphasisApplicability(finderPatternId) {
+  if (finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID
+    || isCentralV0FinderPatternId(finderPatternId)) {
+    return APPLICABILITY_YES;
+  }
+  const renderKind = detectorRenderKind(finderPatternId);
+  if (renderKind === THREE_TONE_CUBE_RENDER_KIND) return APPLICABILITY_NO['cube-3tone'];
+  // «모든 면이 bullseye 축에서 나온다» 가 조건이다 — 링만 파인더 축이고 안쪽을
+  // FINDER_CUBE_TONES 로 칠하는 하이브리드(cube-bullseye)는 여기서 빠져 not-yet 이 된다.
+  if (BULLSEYE_AXIS_RENDER_KINDS.includes(renderKind)
+    && !CUBE_TONE_RENDER_KINDS.includes(renderKind)) return APPLICABILITY_NO.bwg;
+  return APPLICABILITY_NO['not-yet'];
 }
 
 /**
