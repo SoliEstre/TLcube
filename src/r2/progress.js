@@ -64,6 +64,25 @@ export function updateProgress(progress, cEff, requiredUnits, marginUnits) {
   return progress.view;
 }
 
+/**
+ * 🔴 **단조 유지(hold)를 푼다** — `view.D` 를 지금의 `internalD` 로 되돌린다 (2026-09-06 검토 R3c, 결함 5).
+ *
+ * `updateProgress` 의 D 는 단조다(내려가면 옛 값을 붙든다). 「모으는 중에는 막대가 뒷걸음질하지
+ * 않는다」가 그 이유이고, **같은 코드를 계속 보는 동안**에는 옳다. 옳지 않은 자리가 둘 있다:
+ *   · 드랍(신원을 잃음) — 「같은 코드다」의 근거가 사라졌는데 막대는 그대로다.
+ *   · 오염(같은 n·layout·ecc·mask 의 **다른** 코드로 갈아탐) — 실측(review-R-out-swap/contam)에서
+ *     교체 첫 프레임에 `internalD ≥ 1` 이 나와 D 가 **1.00 으로 뛴 뒤 영구 고정**됐다. 화면은
+ *     「다 찼는데 안 풀림」인데, 그 뒤 수십 프레임의 RS 는 전부 실패다.
+ * 여기서 되돌리면 그 뒤의 D 는 다시 **지금 증거의 이야기**를 한다. 되돌린 값이 곧바로 다시 오르면
+ * 그건 증거가 실제로 있는 것이다 — 잃는 것이 없다.
+ */
+export function releaseProgressHold(progress) {
+  if (progress === null || progress === undefined) return undefined;
+  progress.view.D = progress.view.internalD;
+  progress.view.hold = 0;
+  return progress.view;
+}
+
 export function holdProgress(progress) {
   if (progress === null || progress === undefined) return undefined;
   progress.view.hold = 1;

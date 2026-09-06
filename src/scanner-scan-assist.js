@@ -90,6 +90,59 @@ export function resultAutoOpen(result) {
 }
 
 /**
+ * 🔴 **분석 배율** — 프레임에 실제로 걸린 확대의 전부 (2026-09-06 검토 R3c, 결함 15).
+ *
+ * `zoomPlan` 에는 확대가 **두 길**로 실린다:
+ *   · `mode:'track'`  — 카메라 트랙이 광학/디지털로 당긴다. `cropApplied` 는 **1** 이다.
+ *   · `mode:'crop*'`  — 트랙이 못 해서 우리가 자른다. `trackApplied` 는 native(보통 1) 다.
+ * 거기에 자동 사다리(`autoCropZoom`)가 곱해진다.
+ *
+ * 옛 게이트는 `effectiveCropZoom()`(크롭 × 자동)만 봤다 — 즉 **track 줌을 못 봤다.**
+ * `zoomCapability` 가 있는 기기에서 1× → 2× 커밋은 전후 모두 크롭 1 이라 「안 바뀜」으로 읽혔고,
+ * 어댑터의 크기 가드(luma 폭 동일)도 안 걸려, 남는 것은 감도 약한 F 게이트뿐이었다.
+ * 즉 실기의 대다수 기기에서 운영자 요구 ①(줌 뒤 실루엣이 안 움직인다)의 수리가 **불발**이었다.
+ *
+ * 잘못된 입력·1 미만은 **1** 로 읽는다 (모르는 값 때문에 락을 흔들지 않는다).
+ */
+export function analysisScaleOf(plan, autoCropZoom) {
+  const norm = (value) => {
+    const v = Number(value);
+    return Number.isFinite(v) && v > 1.001 ? v : 1;
+  };
+  return norm(plan && plan.trackApplied) * norm(plan && plan.cropApplied) * norm(autoCropZoom);
+}
+
+/**
+ * 뷰파인더 **중앙 탭**의 기본 반경 — 정사각 한 변에 대한 비율. 0.25 = 「중심에서 한 변의 25 % 안」
+ * (운영자 요구 ⑫ · 실기 3차). 값이 여기 하나뿐이라 스캐너와 자가 같은 수를 본다.
+ */
+export const STAGE_CENTRE_TAP_FRACTION = 0.25;
+
+/**
+ * 스테이지 안의 (x, y) 가 **중앙 탭 영역**인가 — 순수 판정. 좌표는 스테이지 좌상단 기준 CSS px,
+ * `side` 는 정사각 한 변이다. 원 안(중심에서 `frac × side` 이하)이면 참 — 경계는 **포함**한다.
+ *
+ * 여기서 재지 않는 것: 카메라가 켜졌는가 · 상단 행이나 버튼 위를 눌렀는가. 그건 DOM 이 아는 것이고
+ * (이벤트 표적), 이 함수는 «기하» 만 답한다 — 그래야 브라우저 없이 진리표를 잴 수 있다.
+ *
+ * 잘못된 입력(비유한 좌표 · side ≤ 0 · frac ≤ 0)은 **거짓**이다: 모르는 상태에서 리셋을 트리거하면
+ * 사용자가 «아무 데나 눌렀는데 스캔이 처음부터» 를 겪는다.
+ */
+export function stageTapIsCentre(x, y, side, frac = STAGE_CENTRE_TAP_FRACTION) {
+  const px = Number(x);
+  const py = Number(y);
+  const edge = Number(side);
+  const ratio = Number(frac);
+  if (!Number.isFinite(px) || !Number.isFinite(py)) return false;
+  if (!Number.isFinite(edge) || edge <= 0) return false;
+  if (!Number.isFinite(ratio) || ratio <= 0) return false;
+  const dx = px - edge / 2;
+  const dy = py - edge / 2;
+  const radius = ratio * edge;
+  return dx * dx + dy * dy <= radius * radius;
+}
+
+/**
  * 승격 플래그 — 정식(/)에 엔진 스위치와 R2 를 연다. 승격 커밋에서 true 로 바꾼다(그때 «승격 전 핀» 자가
  * 빨개져 사람이 본다). 능력 원장(R2_CAPABILITIES)과 섞지 않는다 — 능력과 출시 결정은 다른 것이다.
  */

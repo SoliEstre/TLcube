@@ -16,6 +16,9 @@ import { fileURLToPath } from 'node:url';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 import { SUPPORTED_LANGUAGES } from '../src/i18n.js';
 import { R2_INDICATOR } from '../src/r2/session.js';
+// 인디케이터 이름 **밖**의 상태 단어 (3d «격자 불신»). 원본은 HUD 모델 한 곳이다 — 여기 손 목록을 두면
+// 사전과 원본이 어긋나는 날 이 자가 그 어긋남을 못 본다.
+import { HUD_DISTRUST_STATE_KEY, HUD_STATE_KEYS_BEYOND_INDICATOR } from '../src/r2-hud-model.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const SCANNER_JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
@@ -148,8 +151,58 @@ test('R2 상태 칩 동적 키 — Object.keys(R2_INDICATOR) 소문자마다 r2.
       assert.ok(SCANNER_STRINGS[lang][key].trim().length > 0, lang + '/' + key + ' 가 비어 있다');
     }
   }
-  // 반대 방향 — 인디케이터에 없는 이름의 r2.state.* 는 죽은 문구다.
-  const wanted = new Set(names.map((n) => 'r2.state.' + n.toLowerCase()));
+  /*
+   * 반대 방향 — 원본에 없는 이름의 r2.state.* 는 죽은 문구다.
+   * ⚠ **의도적 확장 (3d)**: 원본이 둘이 됐다. 인디케이터(«후보가 어디까지 왔나») 에 더해
+   *   `HUD_STATE_KEYS_BEYOND_INDICATOR`(«락을 믿을 수 있나») 가 있다 — 두 축은 배타가 아니라
+   *   동시에 성립할 수 있어서(모으는 중인데 격자를 못 믿는다) 한 열거로 합칠 수 없었다.
+   *   목록은 여전히 **유도**다: 두 원본을 합칠 뿐 이 파일에 문자열을 적지 않는다.
+   */
+  const wanted = new Set([
+    ...names.map((n) => 'r2.state.' + n.toLowerCase()),
+    ...HUD_STATE_KEYS_BEYOND_INDICATOR.map((key) => 'r2.state.' + key),
+  ]);
   const dead = Object.keys(SCANNER_STRINGS.ko).filter((k) => k.startsWith('r2.state.') && !wanted.has(k));
   assert.deepEqual(dead, [], '인디케이터에 없는 상태 문구');
+});
+
+// 수동 리셋 버튼(⑫ · 실기 3차)의 낭독 문구. 버튼 내용은 아이콘(↺)뿐이라 **aria-label 이 유일한 이름**이다 —
+// 한 언어라도 빠지면 그 언어권에서 「버튼」 으로만 읽힌다. de·es 는 **존댓말**(2인칭 반말 명령형 금지):
+// 두 언어의 UI 관례인 부정형(„Scan neu starten“ · «Reiniciar el escaneo»)을 쓴다.
+test('수동 리셋 버튼의 aria-label 이 여덟 언어에 있고, 마크업이 그 키를 참조한다', () => {
+  assert.match(SCANNER_HTML, /id="scan-reset"[\s\S]{0,200}?data-i18n-attr="aria-label:reset\.label"/,
+    '리셋 버튼이 reset.label 을 aria-label 로 안 묶는다');
+  for (const lang of LANGS) {
+    const value = SCANNER_STRINGS[lang]['reset.label'];
+    assert.equal(typeof value, 'string', lang + ' 에 reset.label 이 없다');
+    assert.ok(value.trim().length > 0, lang + '/reset.label 이 비어 있다');
+  }
+  // 반말 명령형이면 첫 낱말이 du/tú 형(„starte …“ · «reinicia …»)이 된다. 부정형은 -en / -ar 로 끝난다.
+  assert.doesNotMatch(SCANNER_STRINGS.de['reset.label'], /^\s*[Ss]tarte\b/,
+    'de 가 du 형 명령형이다 — 존댓말이어야 한다');
+  assert.doesNotMatch(SCANNER_STRINGS.es['reset.label'], /^\s*[Rr]einicia\b/,
+    'es 가 tú 형 명령형이다 — 존댓말이어야 한다');
+});
+
+/*
+ * 3d — «격자 불신» 의 상태 단어. 인디케이터에서 유도되지 않는 **유일한** progress 상태라, 위 자의
+ * 「죽은 문구」 판정이 예외로 통과시킨 자리다. 그래서 여기서 여덟 언어를 따로 못 박는다 —
+ * 예외를 만들었으면 그 예외를 지키는 자도 있어야 한다.
+ */
+test('3d — r2.state.distrust 가 여덟 언어에 있고, 스캐너가 그 키를 **원본 상수에서** 만든다', () => {
+  const key = 'r2.state.' + HUD_DISTRUST_STATE_KEY;
+  for (const lang of LANGS) {
+    const value = SCANNER_STRINGS[lang][key];
+    assert.equal(typeof value, 'string', lang + ' 에 ' + key + ' 가 없다');
+    assert.ok(value.trim().length > 0, lang + '/' + key + ' 가 비어 있다');
+  }
+  /*
+   * ⚠ **철자 자** — 이 층은 브라우저 밖에서 실행할 수 없다. 지키려는 명제는 「스캐너가 키 문자열
+   * 'distrust' 를 **다시 적지 않는다**」 하나다: 다시 적으면 상수를 바꾸는 날 화면만 옛 키를 부르고
+   * 사전엔 새 키가 있어 «빈 라벨» 이 된다 (사전 완전성 자는 그것을 못 본다 — 키는 다 있으니까).
+   */
+  assert.match(SCANNER_JS, /row\.stateKey = HUD_DISTRUST_STATE_KEY/,
+    '스캐너가 불신 상태 단어를 원본 상수로 안 붙인다');
+  assert.doesNotMatch(SCANNER_JS, /'r2\.state\.distrust'/,
+    '스캐너가 사전 키를 문자열로 다시 적는다 — 상수와 어긋나는 날 빈 라벨이 된다');
 });

@@ -205,7 +205,17 @@ test('ⓖ 좌 패널 칩 색은 셀맵 색표에서 **유도**된다 — setProp
     assert.ok(at > defAt, variable + ' 가 R2_CELL_COLOR[CELL_MAP_STATE.' + state + '] 에서 유도되지 않거나 정의보다 앞에서 읽힌다');
     lastSetAt = Math.max(lastSetAt, at);
   }
-  assert.equal((JS.match(/setProperty\('--r2-/g) || []).length, Object.keys(pairs).length, '--r2-* 변수 수가 짝 표와 다르다');
+  /*
+   * 3d 검토 결함 6 — 네 번째 변수 `--r2-fix-glow` 는 짝 표에 안 들어간다: 그것은 상태의 색이 아니라
+   * **같은 소거색의 알파를 낮춘 유도값**이다(세기만 다르다). 유도 함수 자체는 순수 모델이라
+   * `test/r2-hud.test.js` ⓛ 가 **값으로** 재고, 여기서는 «그 유도자를 거쳐 심는가» 를 잰다.
+   */
+  const glowAt = JS.search(/setProperty\('--r2-fix-glow', r2FixGlow\)/);
+  assert.ok(glowAt > defAt, '--r2-fix-glow 가 안 심긴다 — 미니 불신 테두리의 글로우가 CSS 색 리터럴로 돌아간다');
+  assert.match(JS, /const r2FixGlow = scaleColorAlpha\(R2_CELL_COLOR\[CELL_MAP_STATE\.ERASURE\], R2_HUD_DISTRUST_GLOW_RATIO\)/,
+    '글로우가 셀맵 소거색에서 안 유도된다 (사본 색)');
+  lastSetAt = Math.max(lastSetAt, glowAt);
+  assert.equal((JS.match(/setProperty\('--r2-/g) || []).length, Object.keys(pairs).length + 1, '--r2-* 변수 수가 짝 표 + 유도 1 과 다르다');
   // F4 — 세 줄이 전부 `if (r2Available) {` 블록 안: 정식(/) 의 <html> 인라인 스타일에 변수를 심지 않는다 (렌더는 같아도 DOM 이 달라진다).
   const firstSetAt = JS.search(/setProperty\('--r2-/);
   const gateAt = JS.lastIndexOf('if (r2Available) {', firstSetAt);

@@ -23,9 +23,15 @@ import { fileURLToPath } from 'node:url';
 import { createR2ScanRuntime, r2HitToDecodeResult, R2_CAPABILITIES } from '../src/r2-scan-runtime.js';
 import { createA3Adapters } from '../src/r2/adapter-locator.js';
 import { R2_INDICATOR, R2_SESSION_STATUS } from '../src/r2/session.js';
+import { Q15_ONE } from '../src/r2/params.js';
 import { normalizeDecodePayload, scanScopeCopyKey } from '../src/scanner-scan-assist.js';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
-import { finalLayoutIdsForN, versionForFinalN } from '../src/cellSurfaceFinal.js';
+import {
+  capacityForCellSurfaceFinal,
+  dataCellsInScanOrderCellSurfaceFinal,
+  finalLayoutIdsForN,
+  versionForFinalN,
+} from '../src/cellSurfaceFinal.js';
 import { CONFIRM_STATE, confirmationRows, progressNote } from '../src/r2-confirmation-model.js';
 import { HUD_ROLE, buildRoleGrids } from '../src/r2-hud-model.js';
 import { HUD_FACES, faceQuadFloats, faceQuadSlot, projectFaceQuadsInto } from '../src/r2/hud-geometry.js';
@@ -33,10 +39,12 @@ import { listLumaSequences, readLumaDump } from '../tools/read-luma.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-function firstFrames(name, count) {
+function firstFrames(name, count, start = 0) {
   const seq = listLumaSequences().find((s) => s.name.split('/').pop() === name);
   if (!seq || !seq.frames.length) return null;
-  return seq.frames.slice(0, count).map((f) => readLumaDump(f.path));
+  const frames = seq.frames.slice(start, start + count);
+  if (frames.length === 0) return null;
+  return frames.map((f) => readLumaDump(f.path));
 }
 
 test('ⓓ 플래그가 꺼져 있으면 아무 일도 하지 않는다', () => {
@@ -623,4 +631,627 @@ test('ⓣ view.frameWidth/Height 는 «지금 프레임» 이다 — 락 뒤 폭
   assert.equal(runtime.view.frameHeight, 144);
   // 결론: «H 의 좌표계 폭» 은 view 에 없다. HUD 는 재사영하는 프레임에 그 폭을 스스로 적어 둬야 한다
   // (scanner.js r2Hud.frameW · r2-hud.test ⓓ 가 그 자리를 찍는다).
+});
+
+/*
+ * ════════════════════════════════════════════════════════════════════════════
+ * 3c (2026-09-06, 레인 R) — **런타임 생명주기.** 운영자 실기 3차 ①·③·④ 가 지목한
+ * 「락이 안 움직인다 / 모으다 말고 리셋 / 새로 잡힐 때만 읽힌다」의 기전을 값으로 잠근다.
+ *
+ * ⚠ **이 블록이 못 재는 축을 먼저 적는다**: 실기 프레임률(7\~15 FPS)·손떨림·줌 UI.
+ * 브라우저 밖이다. 여기서 재는 것은 그 상황을 만드는 **상태 전이**다.
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+
+test('ⓤ R1a 락 신선도 — 프레임 크기가 바뀌면 락을 버린다 (줌 승격이 곧 좌표계 교체)', (t) => {
+  const frames = firstFrames('y2', 2);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const a = createA3Adapters({});
+  const det = { found: 0, family: 0 };
+  a.detectInto(frames[0].data, frames[0].width, frames[0].height, 0, null, det);
+  assert.equal(a.stats.locked, 1, '전제: 실물 프레임에서 락이 걸린다');
+  assert.equal(a.stats.lockWidth, frames[0].width, '락이 자기 프레임 폭을 기억하지 않는다');
+  assert.equal(a.stats.counters.sizeClears, 0);
+
+  // 대조군 — **같은 크기**의 다음 프레임은 락을 유지한다 (가드가 항상 참이면 이 줄이 빨개진다).
+  a.detectInto(frames[1].data, frames[1].width, frames[1].height, 100, null, det);
+  assert.equal(a.stats.locked, 1, '같은 크기인데 락을 버렸다 — 가드가 크기를 안 보고 있다');
+  assert.equal(a.stats.counters.sizeClears, 0);
+  const revBefore = a.stats.lockRevision;
+
+  // 표적 — 다른 크기(줌 승격 960 → 720). 옛 코드는 이 신호를 아예 못 받아 **옛 크롭 좌표의
+  // H 로 락을 유지**했고, 그래서 화면의 실루엣·격자가 줌 뒤에도 안 움직였다.
+  const side = Math.round(frames[0].width * 0.75);
+  const smaller = new Float32Array(side * side);
+  smaller.fill(0.5);
+  a.detectInto(smaller, side, side, 200, null, det);
+  assert.equal(a.stats.counters.sizeClears, 1, '프레임 크기가 바뀌었는데 락을 안 버렸다');
+  assert.equal(a.stats.locked, 0, '빈 프레임이라 다시 락이 걸릴 수 없다 — 그런데 락이 남았다');
+  assert.ok(a.stats.lockRevision > revBefore, '락을 버렸는데 세대가 안 올랐다 — HUD 가 재사영 안 한다');
+  assert.equal(det.found, 0);
+});
+
+test('ⓥ R1d invalidateLock — 락만 푼다: 후보·증거·bind 는 살아 있고 세대만 오른다', (t) => {
+  // ① 어댑터 층 — 성질만.
+  const a = createA3Adapters({});
+  a.installHomography(Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]), 25, 'v0tr');
+  assert.equal(a.stats.locked, 1);
+  const rev = a.stats.lockRevision;
+  assert.equal(a.invalidateLock(), 1);
+  assert.equal(a.stats.locked, 0);
+  assert.equal(a.stats.lockRevision, rev + 1, 'invalidateLock 이 세대를 안 올린다');
+  assert.equal(a.invalidateLock(), 0, '락이 없는데 또 풀었다 — 세대가 헛돈다');
+  assert.equal(a.stats.lockRevision, rev + 1);
+
+  // ② 런타임 층 — **증거를 안 버린다**. 이것이 reset() 과 갈리는 이유 전부다.
+  const frames = firstFrames('y2', 3);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
+  assert.ok(runtime.stats.candidateCount > 0, '전제: 후보가 섰다');
+  assert.ok(runtime.stats.progressD > 0, '전제: 증거가 쌓였다');
+  const bindsBefore = runtime.stats.binds;
+  const candidatesBefore = runtime.stats.candidateCount;
+  const dBefore = runtime.stats.progressD;
+  const lockKeyBefore = runtime.view.lockKey;
+
+  assert.equal(runtime.invalidateLock(), 1);
+  assert.equal(runtime.stats.locked, 0, '락이 안 풀렸다');
+  assert.equal(runtime.stats.candidateCount, candidatesBefore,
+    'invalidateLock 이 후보를 버렸다 — 그럼 reset() 과 같은 문이라 존재 이유가 없다');
+  assert.notEqual(runtime.view.lockKey, lockKeyBefore, 'lockKey 가 안 움직였다 — HUD 가 옛 사영을 유지한다');
+
+  // 다음 프레임에 재락 → n 이 같으므로 **bind 는 그대로**, 진행률도 후퇴하지 않는다.
+  runtime.pushFrame(frames[frames.length - 1], 9000);
+  assert.equal(runtime.stats.lockedN, 25, '재락이 안 됐다');
+  assert.equal(runtime.stats.binds, bindsBefore,
+    'n 이 같은데 다시 묶었다 — 재락마다 증거가 0 으로 돌아간다 (운영자 요구 ③ 위반)');
+  assert.ok(runtime.stats.progressD >= dBefore, '재락 뒤 진행률이 후퇴했다');
+});
+
+test('ⓦ R2 인내 재정의 — 락이 살아 있으면 100프레임이 지나도 후보를 안 버린다', () => {
+  /*
+   * 옛 뜻은 «bind 이후 총 프레임» 이라 락이 멀쩡해도 42프레임마다 후보가 전부 폐기되고,
+   * 락이 남아 있으니 같은 프레임에 즉시 재bind 됐다 — 즉 3\~4초마다 증거가 0 이 됐다.
+   * 그 회귀는 아래 `binds` 단언에서 빨개진다(옛 코드라면 100프레임에 binds 가 여러 번이다).
+   * 코퍼스는 이 상태(락 유지 × 장시간)를 재현 못 한다 — 가짜 어댑터로 만든다.
+   */
+  const ids = finalLayoutIdsForN(25);
+  const fakeStats = { n: 25, locked: 1, gridLockF: 50, layoutId: ids[0], lockRevision: 1 };
+  const fake = {
+    stats: fakeStats,
+    H: Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    detectInto(luma, width, height, timestamp, pose, output) {
+      output.found = fakeStats.locked;
+      output.n = fakeStats.locked ? 25 : 0;
+      return R2_SESSION_STATUS.OK;
+    },
+    alignInto() { return R2_SESSION_STATUS.OK; },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+  };
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const luma = { width: 8, height: 8, data: new Float32Array(64) };
+  for (let i = 0; i < 100; i += 1) runtime.pushFrame(luma, i * 100);
+  assert.equal(runtime.stats.candidateCount, ids.length,
+    '락이 살아 있는데 100프레임 뒤 후보가 ' + runtime.stats.candidateCount + '개다 — '
+    + '인내가 아직 «bind 이후 총 프레임» 을 센다');
+  assert.equal(runtime.stats.binds, 1,
+    '100프레임 동안 bind 가 ' + runtime.stats.binds + '회다 — 폐기·재bind 가 반복됐다는 뜻이고, '
+    + '그때마다 누적 증거가 0 으로 돌아간다 (운영자 실기 3차 ③)');
+
+  // 반대쪽 자 — 락을 잃으면 인내가 실제로 돈다 (ⓢ 와 같은 축, 여기선 새 뜻으로).
+  fakeStats.locked = 0;
+  for (let i = 100; i < 145; i += 1) runtime.pushFrame(luma, i * 100);
+  assert.equal(runtime.stats.candidateCount, 0,
+    '락 없는 프레임이 인내를 넘겼는데 후보가 남았다 — 이제 아무것도 안 센다');
+});
+
+test('ⓧ R5 후보별 스캔맵 — 후보 5개가 **각자의** cellCount 로 매핑된다 (옛 코드는 1개뿐)', (t) => {
+  const frames = firstFrames('y2', 1);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const a = createA3Adapters({});
+  const det = { found: 0, family: 0 };
+  a.detectInto(frames[0].data, frames[0].width, frames[0].height, 0, null, det);
+  assert.equal(a.stats.locked, 1, '전제: 락');
+  const n = a.stats.n;
+  const ids = finalLayoutIdsForN(n);
+  assert.ok(ids.length >= 3, '전제: n=' + n + ' 은 후보가 여럿이다');
+
+  const counts = ids.map((id) => dataCellsInScanOrderCellSurfaceFinal(n, id).length);
+  // 공허 방지 — cellCount 가 전부 같으면 이 자는 아무것도 안 가른다.
+  assert.ok(new Set(counts).size > 1,
+    '후보들의 cellCount 가 전부 같다 (' + counts.join(',') + ') — 라인업이 바뀌었으면 이 자를 다시 봐라');
+
+  const missed = [];
+  for (let k = 0; k < ids.length; k += 1) {
+    const cellCount = counts[k];
+    const faceLuma = new Uint16Array(cellCount * 3);
+    const visible = new Uint8Array(cellCount);
+    const out = {
+      gatePassed: 0, weightQ15: 0, mismatchCount: 0, matchCount: 0, visibleCount: 0,
+    };
+    a.alignInto(
+      frames[0].data, frames[0].width, frames[0].height, 100, null,
+      { found: 1, family: 6, sessionLayoutId: ids[k] },
+      out, faceLuma, visible,
+    );
+    if (a.stats.scanMappedCells !== cellCount) {
+      missed.push(ids[k] + ' -> ' + a.stats.scanMappedCells + ' (기대 ' + cellCount + ')');
+    }
+  }
+  assert.deepEqual(missed, [],
+    '자기 스캔순서로 표본되지 않은 후보: ' + missed.join(' | ') + '\n'
+    + '    어댑터가 락의 레이아웃 하나로만 스캔맵을 세우면 그 한 후보만 참 순서이고 나머지는\n'
+    + '    raster 폴백(i = cell % n)이다 — 「후보 여럿을 병렬로 돌려 먼저 풀리는 쪽」이라는\n'
+    + '    이 설계의 전제가 나머지 후보에서는 성립하지 않는다.');
+});
+
+test('ⓧ-b R5 참 격자만 이긴다 — 후보가 각자 참 순서로 표본해도 «틀린 격자 DONE» 은 0 이다', (t) => {
+  /*
+   * R5 가 여는 위험을 그대로 잰다: 이제 5개 후보가 **전부** 자기 참 스캔순서로 표본하므로,
+   * 「틀린 격자는 raster 폴백이라 어차피 못 푼다」가 더 이상 안전의 근거가 아니다.
+   * 안전의 근거는 오직 **본문 RS** 여야 한다 (§23.6 의 전제).
+   */
+  const frames = firstFrames('y2', 12);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  const wrongDone = [];
+  let hit = null;
+  for (let i = 0; i < frames.length && hit === null; i += 1) {
+    hit = runtime.pushFrame(frames[i], i * 100);
+    for (const c of runtime.stats.candidates) {
+      if (c.indicator === R2_INDICATOR.DONE && c.layoutId !== 'v0tr') wrongDone.push(c.layoutId);
+    }
+  }
+  assert.deepEqual(wrongDone, [], '틀린 격자가 DONE 을 냈다: ' + wrongDone.join(' '));
+  assert.ok(hit && hit.layoutId === 'v0tr' && hit.text === 'https://tl.estre.so',
+    '참 격자가 못 이겼다 — ' + JSON.stringify(hit));
+});
+
+test('ⓩ R7 표면 — counters·format·phaseMs·bindRevision·lockKey 가 서고, 값이 프레임마다 움직인다', (t) => {
+  const fresh = createR2ScanRuntime({ enabled: false });
+  for (const k of ['counters', 'format', 'phaseMs', 'bindRevision']) {
+    assert.ok(k in fresh.stats, 'stats 에 ' + k + ' 가 없다');
+  }
+  for (const k of ['hardDrops', 'coastFrames', 'lockClears', 'relocates', 'binds', 'decodeAttempts', 'decodeFailures']) {
+    assert.equal(typeof fresh.stats.counters[k], 'number', 'counters 에 ' + k + ' 가 없다');
+  }
+  for (const k of ['source', 'eccName', 'maskIndex', 'candidateCount']) {
+    assert.ok(k in fresh.stats.format, 'format 에 ' + k + ' 가 없다');
+  }
+  for (const k of ['detect', 'align', 'decode']) {
+    assert.equal(typeof fresh.stats.phaseMs[k], 'number', 'phaseMs 에 ' + k + ' 가 없다');
+  }
+  for (const k of ['bindRevision', 'lockKey']) assert.ok(k in fresh.view, 'view 에 ' + k + ' 가 없다');
+  assert.equal(typeof fresh.invalidateLock, 'function', '런타임에 invalidateLock 이 없다 (레인 H 계약)');
+
+  const frames = firstFrames('y2', 3);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  for (let i = 0; i < frames.length; i += 1) runtime.pushFrame(frames[i], i * 100);
+  assert.equal(runtime.stats.counters.binds, 1, 'bind 카운터가 안 돈다');
+  assert.ok(runtime.stats.bindRevision >= 1, 'bindRevision 이 안 올랐다');
+  assert.equal(runtime.view.bindRevision, runtime.stats.bindRevision, 'view 와 stats 의 bind 세대가 다르다');
+  assert.equal(runtime.view.lockKey, (runtime.view.lockRevision * 1000) + runtime.stats.bindRevision,
+    'lockKey 가 (lockRevision, bindRevision) 에서 유도되지 않는다');
+  // 단계 ms 는 «잰 값» 이다 — 0 으로 못박히면 시험판 패널이 아무것도 못 가른다.
+  assert.ok(runtime.stats.phaseMs.align > 0, 'align ms 가 0 이다 — 안 재고 있다');
+  assert.ok(runtime.stats.phaseMs.detect >= 0 && Number.isFinite(runtime.stats.phaseMs.detect));
+
+  // 🔴 bindRevision 은 «후보 집합이 갈렸다» 를 표현해야 한다 — 폐기도 사건이다.
+  const before = runtime.stats.bindRevision;
+  runtime.setEnabled(false);
+  assert.ok(runtime.stats.bindRevision > before,
+    '후보를 통째로 버렸는데 bind 세대가 그대로다 — HUD 비교식(lockRevision·n)이 같은 값이라 '
+    + '재사영이 안 일어난다 (운영자 실기 3차 ①)');
+});
+
+test('ⓤ-b R1c 락 유지 중 재검출 — 안 움직였으면 옛 락을 지키고, 뚜렷이 움직였으면 다시 건다 (n 같으면 세션 유지)', (t) => {
+  /*
+   * 옛 거동: 락이 있으면 `detectInto` 가 **옛 H 를 그대로** 돌려줬다. 그래서 코드가
+   * 화면에서 움직여도 F 게이트(감도 약함)에 안 걸리는 한 실루엣·격자가 그 자리에 붙어
+   * 있었다 — 운영자 실기 3차 ①·④.
+   *
+   * ⚠ 여기서는 주기를 **1프레임**으로 낮춰 채택 규칙만 단독으로 잰다. 정식 기본값은
+   *   RELOCATE_EVERY_FRAMES(=96) · RELOCATE_MIN_GAP_FRAMES(=24) 이고, 그 값의 근거는
+   *   재검출 1회의 실측 비용(중앙값 436\~1001 ms)이다 — 어댑터 상수 주석 참조.
+   */
+  const frames = firstFrames('y2', 1);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const base = frames[0];
+  const shiftBy = (src, d) => {
+    const out = new Float32Array(src.data.length);
+    out.fill(0.5);
+    for (let y = 0; y < src.height; y += 1) {
+      const ty = y + d;
+      if (ty < 0 || ty >= src.height) continue;
+      for (let x = 0; x < src.width; x += 1) {
+        const tx = x + d;
+        if (tx < 0 || tx >= src.width) continue;
+        out[ty * src.width + tx] = src.data[y * src.width + x];
+      }
+    }
+    return out;
+  };
+  const lockOn = () => {
+    const a = createA3Adapters({ relocateEveryFrames: 1, relocateMinGapFrames: 0 });
+    const det = { found: 0, family: 0 };
+    a.detectInto(base.data, base.width, base.height, 0, null, det);
+    assert.equal(a.stats.locked, 1, '전제: 락');
+    assert.equal(a.stats.n, 25, '전제: y2 는 n=25');
+    assert.ok(a.stats.lockF0 > 0, '락 시점 F 가 기록되지 않는다 — 재검출 조건의 기준선이 없다');
+    return { a, det };
+  };
+
+  // ① 안 움직였다 — 재검출은 **돌지만** 채택하지 않는다. 채택하면 HUD 가 매번 깜빡인다.
+  const still = lockOn();
+  const revStill = still.a.stats.lockRevision;
+  still.a.detectInto(base.data, base.width, base.height, 100, null, still.det);
+  assert.equal(still.a.stats.counters.relocates, 1, '주기가 됐는데 재검출을 안 돌렸다');
+  assert.equal(still.a.stats.counters.relocateAdopts, 0,
+    '같은 프레임인데 새 락을 채택했다 — 잡음마다 락 세대가 올라 HUD 가 깜빡인다');
+  assert.equal(still.a.stats.lockRevision, revStill, '채택 안 했는데 세대가 올랐다');
+  assert.equal(still.a.stats.locked, 1, '채택 안 했는데 락을 잃었다');
+
+  // ② 뚜렷이 움직였다 — 다시 건다. n 이 같으므로 런타임의 bind 는 유지된다(세션 보존).
+  const moved = lockOn();
+  const revMoved = moved.a.stats.lockRevision;
+  moved.a.detectInto(shiftBy(base, 40), base.width, base.height, 100, null, moved.det);
+  assert.equal(moved.a.stats.counters.relocateAdopts, 1,
+    '코드가 40 px 움직였는데 옛 H 를 유지했다 — 실루엣·격자가 화면에서 안 따라간다');
+  assert.equal(moved.a.stats.lockRevision, revMoved + 1, '다시 걸었는데 세대가 안 올랐다');
+  assert.equal(moved.a.stats.n, 25, 'n 이 바뀌었다 — 이 시나리오는 세션 유지여야 한다');
+  assert.equal(moved.a.stats.locked, 1);
+});
+
+test('ⓩ-b R7 카운터는 재bind 를 건넌다 — 후보를 버려도 «몇 번 있었나» 가 0 으로 안 돌아간다', () => {
+  /*
+   * 세션 카운터는 세션 수명이다. 런타임이 후보를 버리고 다시 묶으면 새 세션은 0 에서
+   * 시작하므로, 합계만 내면 재bind 한 프레임에 「드랍 47회」가 조용히 「0회」가 된다 —
+   * HUD 가 «왜 리셋됐나» 를 묻는데 화면이 거짓말을 한다. 은퇴분을 이월하는지 값으로 잰다.
+   */
+  const ids = finalLayoutIdsForN(25);
+  const fakeStats = { n: 25, locked: 1, gridLockF: 0.5, layoutId: ids[0], lockRevision: 1 };
+  const fake = {
+    stats: fakeStats,
+    H: Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    detectInto(luma, width, height, timestamp, pose, output) {
+      output.found = fakeStats.locked;
+      output.n = fakeStats.locked ? 25 : 0;
+      return R2_SESSION_STATUS.OK;
+    },
+    // 게이트를 안 여는 정합 — 세션은 COAST 로 가고 nCoast 뒤 드랍한다.
+    alignInto() { return R2_SESSION_STATUS.OK; },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+  };
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const luma = { width: 8, height: 8, data: new Float32Array(64) };
+  for (let i = 0; i < 40; i += 1) runtime.pushFrame(luma, i * 100);
+  const coastBefore = runtime.stats.counters.coastFrames;
+  const dropsBefore = runtime.stats.counters.hardDrops;
+  assert.ok(coastBefore > 0, '전제: coast 프레임이 쌓였다');
+  assert.ok(dropsBefore > 0, '전제: 드랍이 있었다');
+
+  // 락을 잃어 후보가 폐기되고, 다시 잡혀 새로 묶인다.
+  fakeStats.locked = 0;
+  for (let i = 40; i < 90; i += 1) runtime.pushFrame(luma, i * 100);
+  assert.equal(runtime.stats.candidateCount, 0, '전제: 후보가 폐기됐다');
+  fakeStats.locked = 1;
+  runtime.pushFrame(luma, 9000);
+  assert.equal(runtime.stats.candidateCount, ids.length, '전제: 다시 묶였다');
+
+  assert.ok(runtime.stats.counters.coastFrames >= coastBefore,
+    'coast 카운터가 재bind 에서 후퇴했다 (' + coastBefore + ' → '
+    + runtime.stats.counters.coastFrames + ') — 세션 수명 값을 그대로 합치고 있다');
+  assert.ok(runtime.stats.counters.hardDrops >= dropsBefore,
+    '드랍 카운터가 재bind 에서 후퇴했다 (' + dropsBefore + ' → '
+    + runtime.stats.counters.hardDrops + ')');
+
+  // 반대쪽 — 명시적 reset() 은 정말 0 으로 되돌린다.
+  runtime.reset();
+  assert.equal(runtime.stats.counters.coastFrames, 0, 'reset 이 카운터를 안 비웠다');
+  assert.equal(runtime.stats.counters.hardDrops, 0);
+});
+
+/*
+ * ── 2026-09-06 검토 R3c — 생애주기 결함 1·3·9b·8 의 자 ──────────────────────────
+ * 전부 **코퍼스가 못 만드는 상태**라 가짜 어댑터로 만든다(ⓝ 와 같은 수법).
+ */
+function lifecycleAdapters(n = 13, layoutId = 'v0') {
+  const stats = {
+    n, locked: 1, gridLockF: 500, layoutId, lockRevision: 1,
+    // 프레임 신원(timestamp)으로 «조금씩 넓히는» 관측을 만든다 — 위 alignInto 참조.
+    frameIndex: 0, lastStamp: NaN,
+    counters: { lockClears: 0, relocates: 0 },
+    phaseMs: { detect: 0, align: 0 },
+    format: {
+      source: 'locator', eccName: 'H', maskIndex: 0, candidateCount: 1, formatWireVersion: 2, reason: '',
+    },
+  };
+  return {
+    stats,
+    H: Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    detectInto(luma, width, height, timestamp, pose, output) {
+      output.found = stats.locked ? 1 : 0;
+      output.n = stats.locked ? stats.n : 0;
+      output.layoutId = stats.layoutId;
+      return R2_SESSION_STATUS.OK;
+    },
+    /*
+     * 🔴 정합이 **실제로 증거를 쌓는다 — 그것도 조금씩.** 안 쌓으면 「선반에서 되살렸다」와
+     * 「똑같이 다시 묶었다」가 구분되지 않는다: 후보 수도 레이아웃 집합도 같기 때문이다
+     * (돌연변이로 확인했다 — `restoreShelf()` 를 `shelveAndBind()` 로 바꿔도 그 두 단언은 초록이었다).
+     * 가르는 것은 **누적된 D** 하나다. 그리고 한 프레임에 전 셀을 주면 D 가 곧바로 1 에 붙어
+     * 역시 아무것도 안 갈리므로, 프레임마다 **보이는 셀을 조금씩 넓힌다**.
+     */
+    alignInto(luma, width, height, timestamp, pose, detection, output, faceLuma, visibleCells) {
+      if (timestamp !== stats.lastStamp) {
+        stats.lastStamp = timestamp;
+        stats.frameIndex += 1;
+      }
+      const total = visibleCells.length;
+      const step = Math.max(1, Math.ceil(total / 40));
+      const limit = Math.min(total, stats.frameIndex * step);
+      output.gatePassed = 1;
+      output.weightQ15 = Q15_ONE;
+      output.mismatchCount = 0;
+      output.matchCount = limit;
+      output.visibleCount = limit;
+      for (let cell = 0; cell < limit; cell += 1) {
+        visibleCells[cell] = 1;
+        faceLuma[cell * 3] = 255;
+        faceLuma[cell * 3 + 1] = 128;
+        faceLuma[cell * 3 + 2] = 0;
+      }
+      return R2_SESSION_STATUS.OK;
+    },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+    invalidateLock() { return 1; },
+  };
+}
+
+test('ⓞ 결함 1 — 같은 n 이라도 **포맷이 바뀐 재락**은 다시 묶는다 (mask 0 세션으로 mask 2 코드를 영원히 못 풀던 결함)', () => {
+  const fake = lifecycleAdapters(13, 'v0');
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const luma = { width: 4, height: 4, data: new Float32Array(16) };
+
+  runtime.pushFrame(luma, 0);
+  assert.equal(runtime.stats.candidateCount, finalLayoutIdsForN(13).length, '전제: 묶였다');
+  assert.equal(runtime.stats.format.maskIndex, 0, '전제: mask 0 으로 묶였다');
+  const bindsAfterFirst = runtime.stats.binds;
+
+  // 같은 포맷이 계속 오면 **다시 묶지 않는다** (공허 방지 — 매 프레임 재bind 면 아래가 무의미하다).
+  for (let i = 1; i < 5; i += 1) runtime.pushFrame(luma, i * 100);
+  assert.equal(runtime.stats.binds, bindsAfterFirst, '포맷이 그대로인데 매 프레임 다시 묶는다');
+
+  // 재락이 다른 mask 를 읽었다 — «다른 코드» 이므로 폐기가 옳다.
+  fake.stats.format.maskIndex = 2;
+  fake.stats.lockRevision += 1;
+  runtime.pushFrame(luma, 500);
+  assert.ok(runtime.stats.binds > bindsAfterFirst,
+    '포맷이 바뀐 재락에서 다시 묶지 않았다 — mask 0 layout 으로 mask 2 코드를 영원히 못 푼다');
+  assert.equal(runtime.stats.format.maskIndex, 2, 'stats 가 새 mask 를 안 말한다');
+
+  // 반대쪽 — 포맷을 **못 읽은** 재락은 「모른다」이지 「다르다」가 아니다. 증거를 버리면 안 된다.
+  const bindsAfterSwap = runtime.stats.binds;
+  fake.stats.format.source = 'default';
+  fake.stats.format.eccName = '';
+  fake.stats.lockRevision += 1;
+  for (let i = 0; i < 3; i += 1) runtime.pushFrame(luma, 600 + i * 100);
+  assert.equal(runtime.stats.binds, bindsAfterSwap,
+    '포맷 읽기 실패를 «다른 코드» 로 읽었다 — 읽기가 흔들릴 때마다 증거가 사라진다');
+});
+
+test('ⓟ 결함 3·9b — n 이 한 프레임 튀었다 돌아오면 **선반**에서 옛 후보가 되살아난다', () => {
+  const fake = lifecycleAdapters(25, 'v0t');
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const luma = { width: 4, height: 4, data: new Float32Array(16) };
+
+  for (let i = 0; i < 5; i += 1) runtime.pushFrame(luma, i * 100);
+  const n25Count = runtime.stats.candidateCount;
+  assert.equal(n25Count, finalLayoutIdsForN(25).length, '전제: n=25 로 묶였다');
+  const shelvedSessions = runtime.stats.candidates.map((c) => c.layoutId).join(' ');
+  const shelvedD = runtime.stats.progressD;
+  assert.ok(shelvedD > 0, '전제: n=25 후보가 증거를 쌓았다 (' + shelvedD + ') — 안 쌓으면 아래가 공허하다');
+  /*
+   * 🔴 **가르는 자는 셀맵 버퍼의 정체성**이다. 후보 수도 레이아웃 집합도 새로 묶으면 똑같고,
+   * D 크기 비교는 n 마다 분모가 달라 신뢰할 수 없다(n=13 은 요구 심볼이 적어 같은 프레임 수에서
+   * 오히려 D 가 높다 — 실측으로 확인했다). 선반은 **세션 객체 그대로**를 되살리므로 그 세션의
+   * 누적 버퍼가 같은 객체여야 한다. 새로 묶으면 반드시 다른 객체다.
+   */
+  const shelvedCellMap = runtime.view.cellMap;
+  assert.ok(shelvedCellMap instanceof Uint8Array, '전제: 뷰가 선두 후보의 셀맵을 낸다');
+
+  /*
+   * 잡음 한 프레임 — 로케이터가 n=13 을 낸다. 새 n 으로 **곧바로** 묶는다(진짜 코드 교체에서
+   * 가장 좋은 첫 프레임을 버리지 않기 위해 — 창 스윕에서 「지연」안이 창 하나를 잃었다).
+   * 대신 옛 후보는 버리지 않고 얼린다.
+   */
+  fake.stats.n = 13;
+  fake.stats.layoutId = 'v0';
+  runtime.pushFrame(luma, 500);
+  assert.equal(runtime.stats.candidateCount, finalLayoutIdsForN(13).length,
+    '새 n 으로 즉시 안 묶는다 — 진짜 코드 교체에서 가장 좋은 프레임을 버린다');
+  assert.notEqual(runtime.view.cellMap, shelvedCellMap, '전제: 새 n 은 다른 세션이다');
+
+  // 돌아왔다 — 얼린 세션 **그대로** 되살아나야 한다 (새로 만든 것이 아니다).
+  fake.stats.n = 25;
+  fake.stats.layoutId = 'v0t';
+  runtime.pushFrame(luma, 600);
+  assert.equal(runtime.stats.candidateCount, n25Count, '되돌아온 n 의 후보 수가 다르다');
+  assert.equal(runtime.stats.candidates.map((c) => c.layoutId).join(' '), shelvedSessions,
+    '되살린 후보의 레이아웃 집합이 다르다');
+  assert.equal(runtime.view.cellMap, shelvedCellMap,
+    '되살린 셀맵이 **다른 버퍼**다 — 선반이 아니라 새로 묶었다. 잡음 한 프레임이 수백 프레임 치 증거를 죽인다');
+  assert.ok(runtime.stats.progressD >= shelvedD,
+    '되살린 뒤 D 가 ' + runtime.stats.progressD + ' 로 떨어졌다 (얼린 값 ' + shelvedD + ')');
+
+  /*
+   * 반대쪽 — 확인 창(BIND_N_CONFIRM_FRAMES)을 넘겨 안 돌아오면 선반은 **버려진다**.
+   * 그때의 복귀는 새 bind 여야 한다 (얼린 증거를 무한정 들고 있으면 그게 오염이다).
+   */
+  const late = lifecycleAdapters(25, 'v0t');
+  const other = createR2ScanRuntime({ enabled: true, adapters: late });
+  for (let i = 0; i < 5; i += 1) other.pushFrame(luma, i * 100);
+  const lateCellMap = other.view.cellMap;
+  assert.ok(lateCellMap instanceof Uint8Array, '전제: 두 번째 런타임도 묶였다');
+  late.stats.n = 13;
+  late.stats.layoutId = 'v0';
+  for (let i = 5; i <= 12; i += 1) other.pushFrame(luma, i * 100);
+  late.stats.n = 25;
+  late.stats.layoutId = 'v0t';
+  other.pushFrame(luma, 1300);
+  assert.notEqual(other.view.cellMap, lateCellMap,
+    '확인 창을 넘겼는데도 옛 세션이 되살아났다 — 얼린 증거를 무한정 들고 있으면 그게 오염이다');
+});
+
+test('ⓠ ⚠ 철자 자 — unframe 실패 경로가 세션의 complete 를 되돌린다 (결함 8 의 배선)', () => {
+  /*
+   * 값 자는 세션 쪽에 있다(`r2-session.test.js` 의 rejectPayload 자). 여기서는 **배선**만 본다 —
+   * 「RS 는 섰는데 프레이밍이 막는」 프레임을 가짜 어댑터로 만들려면 복호 가능한 심볼열을 통째로
+   * 합성해야 하고, 그 자는 이 파일의 층이 아니다. 철자 자인 이유를 이렇게 적어 둔다.
+   */
+  const RUNTIME_SRC = readFileSync(ROOT + 'src/r2-scan-runtime.js', 'utf8');
+  const at = RUNTIME_SRC.indexOf('text = unframe(');
+  assert.ok(at > 0, 'unframe 호출을 못 찾았다 — 이 자가 죽었다');
+  const tail = RUNTIME_SRC.slice(at, at + 900);
+  assert.ok(tail.includes('rejectPayload()'),
+    'unframe 실패 경로가 rejectPayload 를 안 부른다 — 「세션은 살려 둔다」 주석이 다시 거짓이 된다');
+});
+
+test('ⓡ 결함 10 — `phaseMs.detect` 는 **프레임 안의 로케이터 실행 시간 합**이다 (프레임 중간 재검출이 0 을 남기던 결함)', (t) => {
+  /*
+   * 🔴 무엇이 문제였나: 어댑터는 `if (newFrame) phaseMs.detect = …` 로 프레임의 **첫**
+   * `detectInto` 만 기록했다. 그런데 락이 프레임 중간에 풀리면 (정합 미스 경로가 `clearLock`)
+   * **다음 후보 세션의 detectInto** 가 그 프레임 안에서 로케이터를 통째로 돌린다 — 그때
+   * `newFrame=0` 이라 화면의 det 는 **0** 이었다. 실측(수정 전 y2@066): f8 pushFrame 298.0 ms ↔
+   * 단계 [0, 2.7, 0] · 미계상 295.3 ms. 단계별 ms 는 정확히 「왜 멈췄나」를 가르려고 만든 수인데
+   * **그 프레임에서** 거짓말을 했다.
+   *
+   * 자는 **어댑터를 직접** 몬다: 같은 timestamp(= 한 프레임) 안에서 락을 풀고 다시 검출하면
+   * 로케이터가 두 번 도므로, `phaseMs.detect` 는 첫 값보다 **커야** 한다. 런타임을 통해 재면
+   * 이 상태가 코퍼스 창에 안 나타날 수도 있어(다른 수정들이 그 프레임을 없앴다) 공허해진다.
+   */
+  const frames = firstFrames('y2', 1, 66);
+  if (!frames) { t.skip('휘도 덤프 없음 — 통합자 기기에서만 돈다'); return; }
+  const luma = frames[0];
+  const adapters = createA3Adapters({});
+  const det = { found: 0, family: 0, n: 0 };
+
+  adapters.detectInto(luma.data, luma.width, luma.height, 0, null, det);
+  const firstDetect = adapters.stats.phaseMs.detect;
+  assert.ok(firstDetect > 0, '전제: 첫 검출이 로케이터를 돌렸다 (' + firstDetect + ' ms)');
+
+  // 같은 프레임(같은 timestamp) 안에서 락이 풀리고 다음 세션이 다시 검출한다.
+  adapters.invalidateLock();
+  adapters.detectInto(luma.data, luma.width, luma.height, 0, null, det);
+  assert.ok(adapters.stats.phaseMs.detect > firstDetect,
+    '한 프레임 안의 두 번째 로케이터 실행이 det 에 안 실린다 ('
+    + adapters.stats.phaseMs.detect + ' ≤ ' + firstDetect + ') — 시험판 패널이 그 프레임에서 0 을 보인다');
+  assert.ok(adapters.stats.phaseMs.detect >= firstDetect + adapters.stats.lastDetectMs * 0.5,
+    'det 가 «합» 이 아니라 «마지막 값» 이다');
+
+  // 그리고 다음 프레임에서는 0 부터 다시 센다 (누적이 페이지 수명 동안 자라면 그것도 거짓말이다).
+  adapters.detectInto(luma.data, luma.width, luma.height, 100, null, det);
+  assert.ok(adapters.stats.phaseMs.detect <= adapters.stats.lastDetectMs + 1e-6,
+    'det 가 프레임 경계에서 0 으로 안 돌아간다 — 값이 프레임이 아니라 세션 누적이 된다');
+});
+
+test('ⓢ 결함 10-b — 파이프라인 수준: 비싼 프레임의 시간이 단계 합으로 설명된다', (t) => {
+  /*
+   * ⓡ 이 어댑터 계약이라면 이것은 **런타임까지 이어졌는가** 다 (런타임이 어댑터의 누적값을
+   * 읽는가 — 자기 계측으로 덮으면 다시 첫 호출만 남는다).
+   * ⚠ 이 자는 **프레임 중간 재검출을 더는 안 탄다**: 같은 커밋의 락 설치 게이트·붕괴 재검출
+   *   수정이 y2@066 에서 그 프레임을 없앴다(수정 전 f2·f8 → 수정 후 f2·f6 이고 둘 다 프레임의
+   *   **첫** 호출이다). 그래서 이것은 ⓡ 의 대체가 아니라 **회귀 가드**다 — 어느 쪽 경로로
+   *   비싸지든 화면이 그 시간을 설명해야 한다.
+   */
+  const frames = firstFrames('y2', 10, 66);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  let expensiveFrames = 0;
+  for (let i = 0; i < frames.length; i += 1) {
+    const t0 = performance.now();
+    const hit = runtime.pushFrame(frames[i], i * 100);
+    const wall = performance.now() - t0;
+    const phase = runtime.stats.phaseMs;
+    const accounted = phase.detect + phase.align + phase.decode;
+    if (wall > 50) {
+      expensiveFrames += 1;
+      const unaccounted = (wall - accounted) / wall;
+      // 절대 ms 가 아니라 **비율** — 기계 속도에 안 묶인다. 수정 전 0.98 vs 수정 후 ≈0.03.
+      assert.ok(unaccounted < 0.5,
+        'f' + i + ' 가 ' + wall.toFixed(1) + ' ms 인데 단계 합이 ' + accounted.toFixed(1)
+        + ' ms 다 (미계상 ' + (unaccounted * 100).toFixed(0) + '%) — 패널이 「왜 멈췄나」를 못 가른다');
+    }
+    if (hit) break;
+  }
+  assert.ok(expensiveFrames >= 1,
+    '이 창에 50 ms 넘는 프레임이 없다 — 자가 아무것도 안 쟀다 (기계나 코퍼스가 바뀌었으면 창을 다시 골라라)');
+});
+
+/*
+ * ── 3d 1440 승격(escalate) 의 자리 ────────────────────────────────────────────
+ *
+ * 🔴 **이 자는 시키는 대로 안 적었다 — 그 명제가 거짓이기 때문이다.**
+ *
+ * 레인 브리프가 요구한 명제는 「`scheduleNextEscalationAt` / `nextEscalationAt` 대입이 R1 블록
+ * (`if (!r2Runtime.enabled) {`) **안에만** 있다」였다. 소스를 열어 세면 대입은 다섯 자리이고
+ * **R1 블록 안에는 하나도 없다** — 전부 함수 셋에 있다:
+ *   · 선언(`let nextEscalationAt = null`) · `resetFailureTiming`(비우기)
+ *   · `grabVideoFrame` 2자리(승격 프레임을 실제로 잡았을 때 다음 시각 예약)
+ *   · `handleDecodeResult` 1자리(카메라 실패 스트릭이 시작될 때)
+ * 그리고 **R2 블록이 그 둘을 다 부른다**: 자기 `grabVideoFrame(r2FrameStartedAt)` 을 부르고,
+ * 거부된 적중(비컨만·빈 페이로드)은 `handleDecodeResult` 의 실패 분기를 탄다. 즉
+ * **«R2 는 escalate 프레임을 만들지 않는다» 는 거짓**이다 — 승격 사다리는 두 엔진이 **공유**한다
+ * (실기 관측 「K1 은 1440 승격으로 읽힘」이 그 공유의 산물이다).
+ *
+ * 그래서 잠그는 명제를 바꿔 적는다: **R2 는 자기 승격 사다리를 «만들지» 않고, 공유되는 그 사다리는
+ * 함수 셋 안에만 산다.** 새 대입이 어디든 생기면 이 자가 빨개진다 — 그때 물어야 할 것은
+ * 「그 자리를 두 엔진 중 누가 밟나」다.
+ *
+ * ⚠ **철자 자**(브라우저 밖에서 실행 불가). 재는 것은 값이 아니라 소스의 배치다.
+ */
+test('ⓢ ⚠ 철자 자 — 1440 승격 예약은 함수 셋 안에만 있고, R2 블록은 자기 예약을 안 만든다 (사다리는 **공유**다)', () => {
+  const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
+
+  // ① 대입의 **전수**와 그 자리. 위치는 「가장 가까운 앞선 최상위 function」으로 정한다.
+  const fns = [...js.matchAll(/^(?:async )?function ([A-Za-z0-9_]+)\s*\(/gm)]
+    .map((m) => ({ at: m.index, name: m[1] }));
+  assert.ok(fns.length > 20, '최상위 함수를 ' + fns.length + '개만 찾았다 — 훑기가 깨졌다');
+  const sites = [];
+  for (const m of js.matchAll(/nextEscalationAt\s*=/g)) {
+    const owner = fns.filter((f) => f.at < m.index).pop();
+    sites.push(owner ? owner.name : '(top)');
+  }
+  assert.deepEqual(sites, ['(top)', 'resetFailureTiming', 'grabVideoFrame', 'grabVideoFrame', 'handleDecodeResult'],
+    '1440 승격 예약의 자리가 바뀌었다. 새 자리가 생겼다면 물어라 — **그 자리를 R2 도 밟나?** '
+    + '(R2 블록은 grabVideoFrame 과 handleDecodeResult 를 둘 다 부른다)');
+
+  // ② R2 블록 본문에는 예약이 **없다** — R2 가 자기 사다리를 만들지 않는다.
+  const at = js.indexOf('if (r2Runtime.enabled) {');
+  assert.ok(at > 0, '프레임 루프의 R2 블록이 없다');
+  let depth = 0;
+  let end = at;
+  for (let i = js.indexOf('{', at); i < js.length; i += 1) {
+    if (js[i] === '{') depth += 1;
+    else if (js[i] === '}') { depth -= 1; if (depth === 0) { end = i + 1; break; } }
+  }
+  const block = js.slice(at, end);
+  assert.ok(!/nextEscalationAt\s*=/.test(block),
+    'R2 블록이 자기 승격 예약을 만든다 — 그러면 두 엔진이 서로 다른 사다리를 탄다');
+  assert.ok(!/scheduleNextEscalationAt\(/.test(block),
+    'R2 블록이 승격 시각을 직접 잡는다');
+
+  /*
+   * ③ 그러나 **공유는 사실이다.** 이 두 단언이 없으면 ② 가 「R2 는 승격을 안 한다」로 읽힌다 —
+   * 그것이 이 파일이 고쳐 적은 바로 그 오해다.
+   */
+  assert.ok(/grabVideoFrame\(r2FrameStartedAt\)/.test(block),
+    'R2 블록이 grabVideoFrame 을 안 부른다 — 그렇다면 ③ 의 «공유» 서술이 낡았다');
+  assert.ok(/handleDecodeResult\(/.test(block),
+    'R2 블록이 handleDecodeResult 를 안 부른다 — 그렇다면 ③ 의 «공유» 서술이 낡았다');
 });

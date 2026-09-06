@@ -1,6 +1,12 @@
 // PM/029B §4 의 계약 C1~C6 과 브리프 「자」 절의 성질 중, 모듈별 테스트가
 // 구조적으로 덮지 못하는 축을 잰다. 전부 적대적 리뷰(2026-08-31)가 «자가 없어
 // 회귀가 통과한다» 고 지목한 자리다 — 각 테스트는 그 회귀를 실제로 잡는다.
+//
+// ⚠ **계약 갱신 이력**
+//  · 2026-09-06 (레인 R, 변경 R3) — C4·C6 의 「드랍이 누적·진행·셀맵을 리셋한다」를
+//    「**드랍은 신원만, 증거는 명시적 reset / 새 bind 에서만**」으로 바꿨다.
+//    근거는 운영자 실기 3차 요구 ③ 「가이드 크기(큰 코드)에서 수집은 되나 리셋 반복 —
+//    읽은 데이터를 버리지 말고 재정정」. 해당 자의 본문 주석에 기전까지 적어 뒀다.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -233,7 +239,22 @@ function createGapSession(behavior) {
   });
 }
 
-test('세션 드랍: 신원 드랍이 누적·진행·셀맵을 리셋한다 (C4·C6)', () => {
+/*
+ * 🔴 **계약 C4·C6 갱신** (2026-09-06, 레인 R 변경 R3 · 운영자 실기 3차 ③).
+ *
+ * 운영자 원문: 「가이드 크기(큰 코드)에서 수집은 되나 리셋 반복 — **읽은 데이터를 버리지
+ * 말고 재정정**」.
+ *
+ * 옛 계약: 「드랍이 누적·진행·셀맵을 리셋한다」. 그 계약은 신원 드랍이 「다른 코드로
+ * 갈아탔다」를 뜻할 때만 옳은데, 실제로 R2 를 드랍시키던 유일한 경로는 COAST 만료
+ * (= 손이 흔들려 12프레임 놓쳤다 = **같은 코드**)였다. 거기서 수백 프레임 치 증거를
+ * 버렸으므로 화면에는 「모으다 말고 리셋」이 무한 반복됐다.
+ *
+ * 새 계약: **드랍은 신원만, 증거는 명시적 `reset()` / 새 bind 에서만.**
+ * 그래서 아래 자는 두 축을 다 잰다 — 표시는 DROPPED 로 내려가고(옛 축), 증거·진행·셀맵은
+ * **살아 있다**(새 축). 「버린다」로 되돌리는 회귀는 뒷쪽 단언에서 빨개진다.
+ */
+test('세션 드랍: 신원 드랍은 표시만 내리고 증거·진행·셀맵을 **보존한다** (C4·C6 갱신)', () => {
   const behavior = { detected: true, gatePassed: true, mismatchCount: 0 };
   const session = createGapSession(behavior);
   const luma = new Uint8Array([128]);
@@ -241,6 +262,10 @@ test('세션 드랍: 신원 드랍이 누적·진행·셀맵을 리셋한다 (C4
   for (let frame = 0; frame < 6; frame += 1) session.pushFrame(luma, 1, 1, frame * 33, undefined);
   assert.ok(session.result.progress.D > 0, '드랍 전에는 진행이 있어야 한다');
   assert.ok(session.buffers.observations[0] > 0);
+  const dBefore = session.result.progress.D;
+  const observationsBefore = session.buffers.observations.slice();
+  const cellMapBefore = session.result.progress.cellMap.slice();
+  assert.ok(cellMapBefore.some((s) => s !== 0), '전제: 드랍 전 셀맵이 칠해져 있다');
 
   behavior.mismatchCount = 12; // 순불일치 폭주 → SPRT 드랍
   let state = session.result.state;
@@ -249,12 +274,21 @@ test('세션 드랍: 신원 드랍이 누적·진행·셀맵을 리셋한다 (C4
   }
 
   assert.equal(state, IDENTITY_STATE.DROPPED);
-  assert.equal(session.result.indicator, R2_INDICATOR.DROPPED);
-  assert.equal(session.result.progress.D, 0, '드랍은 표시를 명시적으로 리셋한다');
-  assert.equal(session.result.progress.internalD, 0);
-  assert.equal(session.result.payloadLength, 0);
-  for (const value of session.buffers.observations) assert.equal(value, 0);
-  for (const state2 of session.result.progress.cellMap) assert.equal(state2, 0);
+  assert.equal(session.result.indicator, R2_INDICATOR.DROPPED, '표시는 여전히 DROPPED 다');
+  assert.equal(session.result.payloadLength, 0, '드랍 프레임은 답을 내지 않는다');
+  assert.equal(session.result.progress.D, dBefore,
+    '드랍이 진행률을 버렸다 — 운영자 요구 ③ 「읽은 데이터를 버리지 말고 재정정」 위반');
+  assert.deepEqual(session.buffers.observations, observationsBefore,
+    '드랍이 누적 관측을 버렸다 — 손이 0.4초 흔들릴 때마다 증거가 0 으로 돌아간다');
+  assert.deepEqual(session.result.progress.cellMap, cellMapBefore, '드랍이 셀맵을 버렸다');
+  assert.ok(session.counters.hardDrops > 0, '드랍이 카운터로 안 남는다 (R7)');
+
+  // 반대쪽 자 — **명시적 reset() 은 정말 버린다.** 이게 없으면 위 단언들이
+  // 「아무도 아무것도 안 버린다」를 통과시켜 준다.
+  session.reset();
+  assert.equal(session.result.progress.D, 0, 'reset 이 진행률을 안 버렸다');
+  for (const value of session.buffers.observations) assert.equal(value, 0, 'reset 이 누적을 안 버렸다');
+  for (const s of session.result.progress.cellMap) assert.equal(s, 0, 'reset 이 셀맵을 안 버렸다');
 });
 
 // coast 의 표시는 두 갈래다 — 대상을 못 찾으면 SEARCHING(«조준하세요»), 찾았지만
@@ -474,4 +508,92 @@ test('진행률 분모는 달성 가능 상한(symbolCount)을 넘지 않는다'
   const luma = new Uint8Array([128]);
   for (let frame = 0; frame < 40; frame += 1) session.pushFrame(luma, 1, 1, frame * 33, undefined);
   assert.equal(session.result.progress.internalD, 1);
+});
+
+/*
+ * ── R3 COAST 해제 (2026-09-06, 레인 R) ──────────────────────────────────────
+ * 🔴 옛 결함: 어댑터가 `matchCount`/`mismatchCount` 를 **0 으로 못박아** 세션의 SPRT 가
+ * 영구 불활성이었다. `observeIdentity(…, true, true, 0, 0)` 은 delta=0 이라 COAST 에서
+ * 「결론 없음」으로 떨어져 `advanceCoast` 를 부른다 ⇒ **게이트를 통과한 프레임도 coast 를
+ * 밀어 올렸고, COAST 는 절대 안 풀렸다.** nCoast(12) 프레임 뒤 무조건 드랍이다.
+ * 그래서 실기에서 「수집은 되나 리셋 반복」이 보였다 (운영자 실기 3차 ③).
+ *
+ * 새 계약: 게이트를 통과한 프레임은 `matchCount = 가시 셀 수`, `mismatchCount = 0`.
+ * SPRT 의 match 증분이 음수(log((1−5/6)/(1−0.05)) < 0)라 COAST 의 release 경계를 넘어
+ * **한 프레임에 ACTIVE 로 돌아온다**. 드랍 가드는 mismatch 0 이라 여전히 불활성이다.
+ */
+
+test('R3 COAST 해제 — 게이트 통과 1프레임이면 COAST 가 풀리고, 만료 뒤에도 누적기 값이 남는다', () => {
+  const behavior = { detected: true, gatePassed: true, mismatchCount: 0 };
+  // createSessionAdapters 는 matchCount 를 0 으로 낸다 (옛 어댑터의 모양) — 그래서 여기서는
+  // **어댑터가 새 계약대로 낼 때**를 직접 만든다: gatePassed 프레임에 match = 가시 셀 수.
+  const session = createR2Session({
+    layout: {
+      cellCount: 3, requiredSymbolCount: 1, safetySymbolCount: 0, maxPayloadBytes: 8,
+    },
+    params: { tauCellQ8: 256, erasureMarginQ8: 256 },
+    detectInto(luma, width, height, timestamp, pose, output) {
+      output.found = behavior.detected ? 1 : 0;
+      output.family = 7;
+      return R2_SESSION_STATUS.OK;
+    },
+    alignInto(luma, width, height, timestamp, pose, detection, output, faceLuma, visibleCells) {
+      const gate = behavior.gatePassed ? 1 : 0;
+      output.gatePassed = gate;
+      output.weightQ15 = gate ? Q15_ONE : 0;
+      output.mismatchCount = 0;
+      // R3 의 신호 — 게이트를 통과한 프레임만 match 를 싣는다.
+      output.matchCount = gate ? visibleCells.length : 0;
+      output.visibleCount = visibleCells.length;
+      for (let cell = 0; cell < visibleCells.length; cell += 1) {
+        visibleCells[cell] = gate;
+        faceLuma[cell * 3] = 255;
+        faceLuma[(cell * 3) + 1] = 128;
+        faceLuma[(cell * 3) + 2] = 0;
+      }
+      return R2_SESSION_STATUS.OK;
+    },
+    decodeInto(symbolValues, symbolConfidenceQ8, erasures, symbolCount, layout, output) {
+      output.accepted = 0;
+      output.payloadLength = 0;
+      return R2_SESSION_STATUS.OK;
+    },
+  });
+
+  const luma = new Uint8Array([128]);
+  let frame = 0;
+  const push = () => {
+    const r = session.pushFrame(luma, 1, 1, frame * 33, undefined);
+    frame += 1;
+    return r;
+  };
+
+  // ① 정상 관측으로 증거를 세운다.
+  for (let i = 0; i < 6; i += 1) push();
+  assert.equal(session.result.state, IDENTITY_STATE.ACTIVE, '전제: ACTIVE');
+  const observationsBefore = session.buffers.observations.slice();
+  assert.ok(observationsBefore[0] > 0, '전제: 증거가 있다');
+
+  // ② 정합 게이트를 몇 프레임 놓친다 → COAST.
+  behavior.gatePassed = false;
+  push();
+  assert.equal(session.result.state, IDENTITY_STATE.COAST, '게이트 실패가 COAST 를 안 만든다');
+
+  // ③ 🔴 **게이트 통과 한 프레임**이면 COAST 가 풀린다. 옛 코드(match 0 고정)에서는
+  //    여기가 계속 COAST 이고 nCoast 만 채워졌다.
+  behavior.gatePassed = true;
+  const released = push();
+  assert.equal(released.state, IDENTITY_STATE.ACTIVE,
+    '게이트를 통과했는데 COAST 가 안 풀렸다 — 어댑터가 matchCount 를 0 으로 못박고 있다. '
+    + '그러면 nCoast 프레임마다 무조건 드랍이고, 그것이 「수집은 되나 리셋 반복」이다');
+
+  // ④ COAST 만료(= 계속 못 봄)까지 밀어도 **증거는 남는다** (계약 갱신).
+  behavior.detected = false;
+  behavior.gatePassed = false;
+  const nCoast = createR2Params().nCoast;
+  for (let i = 0; i < nCoast + 2; i += 1) push();
+  assert.equal(session.result.state, IDENTITY_STATE.DROPPED, '전제: coast 만료로 드랍');
+  assert.ok(session.buffers.observations[0] >= observationsBefore[0],
+    'coast 만료가 누적기를 비웠다 — 손이 0.4초 흔들릴 때마다 증거가 0 으로 돌아간다');
+  assert.ok(session.counters.coastFrames > 0, 'coast 프레임이 카운터로 안 남는다 (R7)');
 });

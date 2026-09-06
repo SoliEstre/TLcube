@@ -87,6 +87,13 @@
        막는다 (캡이 걸리면 패널이 내부 스크롤을 갖는다). */
     --tl-ui-min-w: min(300px, 42vw);
     --tl-square-side: max(96px, min(var(--tl-vmin-cap), var(--tl-avail-w), calc(var(--tl-avail-h) - var(--tl-ui-min-h))));
+    /* 시험판 하단 패널의 기하 — `.lab-debug-panel` 과 `.scan-reset` 이 **같은 수**를 본다 (결함 14). */
+    --lab-panel-bottom: 6px;
+    --lab-panel-font: 10px;
+    --lab-panel-line: 1.45;
+    --lab-panel-pad-y: 6px;
+    /* 논리 4줄 기준 최소 높이 — 줄 수는 scanner-debug-overlay.test 의 4줄 핀과 짝이다. */
+    --lab-panel-min-h: calc(4 * var(--lab-panel-font) * var(--lab-panel-line) + 2 * var(--lab-panel-pad-y));
   }
 
   /*
@@ -512,6 +519,17 @@
   }
   .r2-hud-mini[data-phase="searching"] .r2-hud-scan { animation: r2-hud-scan 1.6s linear infinite; opacity: 1; }
   @keyframes r2-hud-scan { from { top: -2px; } to { top: 100%; } }
+  /* 격자 불신(3d) — 마진 게이트 미달. 캔버스 안은 분홍 점선이고, 140px 상자에서는 그것만으론 눈에 안 들어
+     테두리 색도 같이 간다. 색은 **둘 다** scanner.js 가 셀맵 색표(ERASURE)에서 심는다 — 테두리는 `--r2-fix`,
+     바깥 번짐은 같은 색의 알파만 낮춘 `--r2-fix-glow`(scaleColorAlpha, src/r2-hud-model.js).
+     ⚠ 여기에 rgba 를 적으면 안 된다 — 3c 는 글로우와 폴백에 `rgb(255 90 170 / …)` 를 옮겨 적었고, 그것이
+     셀맵 색을 바꾸는 날 이 두 자리만 옛 색으로 남는 사본이었다(3d 검토 결함 6).
+     폴백도 두지 않는다: 이 규칙은 `.r2-hud-mini` 가 있는 시험판에서만 걸리고, 정식(/)에는 그 요소도
+     `--r2-*` 변수도 없다 — 「걸리지 않는 규칙」을 위해 색 사본을 남기는 것이 더 비싸다.
+     움직임이 아니라 **색만** 바뀐다 — A6 플래시 금지 · reduced-motion 무관. */
+  .r2-hud-mini[data-distrust="1"] {
+    box-shadow: 0 0 0 1px var(--r2-fix), 0 0 14px var(--r2-fix-glow);
+  }
 
   /* R2 전면 HUD 캔버스 — 스테이지 전면. z 는 «점 레이어(2)·디버그(3·4) 위, 상단 행(6) 아래» 가 성질이다
      (test/r2-hud.test.js 가 세 숫자를 파싱해 비교한다). 표시용이라 pointer-events 없음. */
@@ -522,6 +540,37 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
+  }
+
+  /* 수동 리셋 버튼 (2026-09-06, 운영자 요구 ⑫ · 실기 3차) — 스테이지 **안** 우하단.
+     자리 규칙(세 가지, test/r2-hud.test.js 가 숫자를 파싱해 잰다):
+       · 상단 행(top:8px 앵커)과 반대 모서리에 붙는다 — 아래 앵커라 짧은 폰에서도 겹칠 수 없다.
+       · 안정 게이지(bottom:6px · height:2px)보다 **위**다 — bottom ≥ 6+2.
+       · 🔴 **시험판 하단 패널(.lab-debug-panel)보다 위**다 (2026-09-06 검토 R3c, 결함 14).
+         옛 값(bottom:14px · 36px)은 14\~50px 띠를 잡았는데 패널은 bottom:6px 에서 최소 4줄
+         (4×14.5 + 12 ≈ 70px)이라 6\~76px 전폭 띠다 — z6 > z4 라 **버튼이 패널의 마지막 줄을
+         가렸다.** 그 마지막 줄이 하필 이번에 늘린 hud 줄(det/ali/dec · 카운터 · fmt)이고,
+         **버튼이 보이는 유일한 표면이 시험판**이라 항상 겹쳤다.
+         그래서 패널 높이를 CSS 변수로 선언하고 버튼을 그 위에 앉힌다 — 자가 두 수를 파싱해
+         `reset.bottom ≥ panel.bottom + 최소높이` 를 잰다.
+     표시용 층(.r2-hud · .r2-hud-mini)과 달리 **눌려야** 하므로 pointer-events 를 자기 규칙으로 켠다.
+     정식(/)엔 authored hidden 그대로 — scanner.js 가 r2Available 에서만 연다(엔진 스위치와 같은 게이트). */
+  .scan-reset {
+    position: absolute;
+    right: 8px;
+    bottom: calc(var(--lab-panel-bottom) + var(--lab-panel-min-h) + 8px);
+    z-index: 6;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid rgb(126 249 208 / .45);
+    border-radius: 999px;
+    background: rgb(0 0 0 / .55);
+    backdrop-filter: blur(4px);
+    color: #e9f6ff;
+    font: 600 17px/1 system-ui, sans-serif;
+    cursor: pointer;
+    pointer-events: auto;
   }
 
   .steady-meter {
@@ -593,20 +642,24 @@
     filter: drop-shadow(0 0 4px rgb(0 0 0 / .8));
   }
 
+  /* 🔴 패널의 자리·높이는 **변수**로 선언한다 (2026-09-06 검토 R3c, 결함 14) — 리셋 버튼이 그 위에
+     앉으려면 두 수가 한 곳에서 나와야 한다(사본 금지). `--lab-panel-min-h` 는 «논리 4줄» 의 높이다:
+     4 × (10px × 1.45) + 6px × 2(패딩) = 70px. 패널은 줄이 접히면 더 커지지만, 버튼이 그때도 안 겹치는
+     것을 CSS 만으로 보장할 수는 없다 — 그래서 **줄 길이 예산**(R2_HUD_DEBUG_LINE_BUDGET)이 짝이다. */
   .lab-debug-panel {
     position: absolute;
     left: 6px;
     right: 6px;
-    bottom: 6px;
+    bottom: var(--lab-panel-bottom);
     z-index: 4;
     margin: 0;
-    padding: 6px 8px;
+    padding: var(--lab-panel-pad-y) 8px;
     border-radius: 10px;
     background: rgb(0 0 0 / .62);
     color: #d9f2ff;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: var(--lab-panel-font);
+    line-height: var(--lab-panel-line);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     pointer-events: none;
@@ -1526,6 +1579,12 @@
             </div>
           </div>
         </div>
+        <!-- 수동 리셋 (2026-09-06, 운영자 요구 ⑫): 「지금까지 모은 것을 버리고 처음부터」. 실기 3차에서
+             큰 코드가 리셋을 반복하는 동안 사용자가 **개입할 방법이 없었다** — 그 손잡이다.
+             뷰파인더 중앙 탭도 같은 동작을 부른다(scanner.js manualRescan). 아이콘 ↺ 는 장식이고
+             낭독은 aria-label(i18n reset.label)이 맡는다. authored hidden — 정식(/) 렌더는 그대로다. -->
+        <button type="button" class="scan-reset" id="scan-reset" hidden
+                data-i18n-attr="aria-label:reset.label" aria-label="스캔 다시 시작">↺</button>
         <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색
              + 로케이터 앵커 마커. 안정판에선 hidden 그대로. -->
         <svg class="lab-debug-layer" id="lab-debug-layer" aria-hidden="true" hidden></svg>

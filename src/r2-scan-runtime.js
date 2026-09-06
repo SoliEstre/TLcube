@@ -41,23 +41,60 @@ import {
 import { maskValue } from './mask.js';
 import { unframe } from './header.js';
 
-/** 한 후보가 살아 있는 채로 소비할 수 있는 최대 프레임. 넘으면 접는다. */
+/**
+ * 후보를 접기 전에 참는 **락 없는 연속 프레임** 수 (R2, 2026-09-06).
+ *
+ * 🔴 옛 뜻은 «bind 이후 총 프레임» 이었다. 그러면 락이 멀쩡히 살아 있어도 42프레임마다
+ * 후보가 전부 폐기되고, 락이 남아 있으니 **같은 프레임에 즉시 재bind** 된다 — 즉
+ * 3\~4초마다 누적 증거가 0 으로 돌아갔다. 운영자 실기 3차 ③ 「수집은 되나 리셋 반복」의
+ * 두 기전 중 하나다(다른 하나는 COAST 만료 → R3).
+ *
+ * 이 상수가 답해야 하는 질문은 「락을 잃은 채 얼마나 기다렸다 접나」 하나다.
+ * 40프레임 ≈ 3\~5초 @7\~15 fps — 손이 흔들려 놓친 시간과 「다른 코드로 옮겼다」를 가르는
+ * 자리다. 락이 살아 있는 동안은 0 으로 리셋된다.
+ */
 const CANDIDATE_PATIENCE_FRAMES = 40;
 
-function buildLayout(n, layoutId, eccName, maskIndex) {
-  const scan = dataCellsInScanOrderCellSurfaceFinal(n, layoutId);
-  const capacity = capacityForCellSurfaceFinal(n, eccName, 2, layoutId);
+/**
+ * 🔴 **n 이 바뀌었을 때 옛 후보를 «선반» 에 두는 프레임 수** (2026-09-06 검토 R3c, 결함 3·9b).
+ *
+ * 왜: 재bind 는 증거를 통째로 버린다. 그런데 락이 한 프레임 흔들려 로케이터가 잡음 shape 을
+ * 내면 그 **한 프레임**이 수백 프레임 치 누적을 죽였다 — 실측 y2@066: n=25 로 D 0.62 까지
+ * 모은 뒤 f8 한 프레임의 n=13 검출이 bind(13) 을 불러 D 0.36 에 영원히 정체했다.
+ *
+ * ⚠ **왜 «지연» 이 아니라 «선반» 인가 — 사다리를 양쪽 끝까지 재고 골랐다** (실측, 창 스윕
+ * `y0 y1 y2 y2-p9rot swap-multi` × stride 6 · 길이 45 = 104창):
+ *   · 아무것도 안 함(즉시 bind, 옛 거동)  : DONE 59 · 개선 16 · 악화 0
+ *   · 「연속 3프레임 확인 뒤 bind」(지연)  : DONE 58 · 개선 16 · **악화 1**
+ *     — swap-multi@132 에서 n25 로 바뀐 **첫 두 프레임(F 1990·2854)** 이 확인을 기다리다 버려져
+ *       DONE f44 를 놓쳤다. 지연은 옛 증거를 지키려고 **새 증거의 가장 좋은 프레임**을 버린다.
+ *   · 선반(즉시 bind + 옛 후보 보류)      : DONE 59 · 개선 16 · 악화 0  ← 채택
+ * 즉 새 `n` 으로는 **곧바로** 모으되, 옛 후보는 버리지 않고 이 프레임 수만큼 얼려 둔다.
+ * 그 사이에 락이 옛 `n`(+같은 포맷)으로 돌아오면 얼린 증거를 그대로 되살린다.
+ *
+ * ⚠ 후보가 **없을 때**(첫 락)는 선반이 비어 있다 — 지킬 증거가 없다.
+ */
+const BIND_N_CONFIRM_FRAMES = 3;
+
+function buildLayout(n, layoutId, eccName, maskIndex, formatWire) {
+  const scan = dataCellsInScanOrderCellSurfaceFinal(n, layoutId, formatWire);
+  const capacity = capacityForCellSurfaceFinal(n, eccName, 2, layoutId, formatWire);
   const maskDigits = new Uint8Array(scan.length);
   for (let k = 0; k < scan.length; k += 1) {
     maskDigits[k] = maskValue(scan[k].i, scan[k].j, maskIndex);
   }
   return {
+    // R5 — 어댑터가 이 후보의 스캔순서로 표본하려면 자기 이름을 알아야 한다.
+    layoutId,
     cellCount: scan.length,
     requiredSymbolCount: capacity.dataSymbols,
     nsym: capacity.nsym,
     maskDigits,
     maxPayloadBytes: capacity.dataBytes,
     payloadBytes: capacity.dataBytes,
+    eccName,
+    maskIndex,
+    formatWire,
   };
 }
 
@@ -91,8 +128,22 @@ export function createR2ScanRuntime(options = {}) {
     found: 0, family: 0, n: 0, H: null, layoutId: '', faceLabels: null,
   };
   let boundN = 0;
+  /*
+   * R3c 결함 1 — bind 키의 나머지 반쪽. `n` 만으로는 **같은 n 의 다른 포맷**(mask·ecc·wire)을
+   * 가르지 못한다. 어댑터는 재락마다 포맷을 다시 읽는데(adapter-locator `readFormatAt`) 런타임이
+   * 그것을 소비하지 않아, mask 0 코드로 묶인 세션이 mask 2 코드를 계속 받으며 **영구히** 못 풀었다
+   * (실측 review-R-out-swapmask: rtFmt=H/0 이 150프레임 유지, decodeAttempts 30 = decodeFailures 30,
+   * DONE 0). 인내 폐기(빈 45프레임)로 후보가 접힌 **뒤에야** 정상으로 돌아왔다.
+   */
+  let boundFormatKey = '';
+  /**
+   * 얼린 옛 후보 (BIND_N_CONFIRM_FRAMES 프레임). `{ n, formatKey, format, candidates, age }`.
+   * 얼린 동안 프레임을 안 받으므로 누적기는 얼린 시점 그대로다.
+   */
+  let shelf = null;
   let lastAt = -Infinity;
-  let framesSinceBind = 0;
+  /** R2 — «락이 없는 연속 프레임». 락이 살아 있는 프레임마다 0 으로 돌아간다. */
+  let framesWithoutLock = 0;
   /*
    * 표시용 뷰 (PM/029 §18\~19 우하단 셀맵 렌더). **선두 후보**(D 최대)의 셀맵과
    * 셀 중심 사영 좌표를 내보낸다. 셀맵은 세션 버퍼 **참조**라 복사가 없고, 좌표 버퍼는
@@ -114,10 +165,20 @@ export function createR2ScanRuntime(options = {}) {
     H: null,
     n: 0,
     lockRevision: 0,
+    /*
+     * R7 — HUD 재사영 조건의 나머지 반쪽. `lockRevision` 은 **어댑터 락 세대**라
+     * 「같은 락 위에서 후보를 다시 묶었다」(레이아웃·cellCount·셀맵 버퍼가 통째로 바뀐다)를
+     * 표현하지 못한다. `disposeCandidates` 는 `view.H`·`n` 만 비우고 세대를 안 올려서
+     * 재bind 뒤 HUD 비교식(lockRevision·n)이 **같은 값**이 되고 재사영이 일어나지 않았다.
+     * 그래서 bind 세대를 따로 낸다. 소비자는 둘 다 봐도 되고 `lockKey` 하나만 봐도 된다.
+     */
+    bindRevision: 0,
+    lockKey: 0,
   };
   const stats = {
     frames: 0,
     binds: 0,
+    bindRevision: 0,
     candidateCount: 0,
     lockedN: 0,
     doneLayoutId: '',
@@ -129,16 +190,76 @@ export function createR2ScanRuntime(options = {}) {
     // 2a — 좌 패널·HUD 가 읽는 «확정/변동» 원천 (전부 기존 값 전달, 핫 경로 할당 0).
     locked: 0,
     lockF: 0,
+    /**
+     * 3d — 어댑터의 락 마진 `F_1위/F_2위`. **미측정은 NaN** (락이 없거나 아직 정합 프레임이 없다).
+     * 화면은 이 수를 「왜 안 모으나」의 답으로 읽는다 — F 는 통과했는데 막대가 안 차는 프레임의 이유다.
+     */
+    lockMargin: NaN,
+    /**
+     * 3d — 마진 게이트 미달 = «격자를 못 믿는 중». 어댑터가 매 정합 프레임에 정한다.
+     * ⚠ 후보가 하나도 없어 `alignInto` 가 안 불린 프레임에서는 **직전 판정이 그대로 남는다**
+     * (락이 걷히면 어댑터가 false 로 되돌린다) — 「이 락에 대한 마지막 정합의 판정」이 뜻이다.
+     */
+    lockDistrusted: false,
     layoutIdLocked: '',
     leadingLayoutId: '',
     /** 후보별 [{layoutId, D, indicator, alive}] — bind 때 한 번 만들고 매 프레임 덧쓴다. */
     candidates: [],
+    /*
+     * R7 — 「무엇이 몇 번 일어났나」. HUD 프로그램이 «왜 리셋됐나» 를 화면에서 가르려면
+     * 라벨(indicator)이 아니라 이 수가 필요하다. 전부 누적값이고 `reset()` 에서만 0 이다.
+     */
+    counters: {
+      hardDrops: 0,
+      coastFrames: 0,
+      lockClears: 0,
+      relocates: 0,
+      binds: 0,
+      decodeAttempts: 0,
+      decodeFailures: 0,
+    },
+    /** R6 — 이번 락에 쓰인 ecc·mask 의 출처. 'default' 면 코드가 말해 주지 않은 것이다. */
+    format: {
+      source: 'default', eccName: '', maskIndex: 0, candidateCount: 0,
+    },
+    /** R7 — 프레임 단위 ms. 시험판 패널의 frame 총합을 단계별로 가른다. */
+    phaseMs: { detect: 0, align: 0, decode: 0 },
   };
 
+  /*
+   * R7 — 세션 카운터는 **세션 수명**이라 후보를 버리면 0 으로 돌아간다. HUD 가 묻는 것은
+   * 「이 스캔에서 몇 번 리셋됐나」이므로, 버리기 전에 은퇴분을 여기 더해 둔다.
+   * 안 하면 「많이 드랍됐다」가 재bind 한 번에 조용히 0 이 되고, 그 화면은 거짓말이다.
+   */
+  const retired = {
+    hardDrops: 0, coastFrames: 0, decodeAttempts: 0, decodeFailures: 0,
+  };
+
+  /** 후보 배열의 세션 카운터를 은퇴분에 더한다 — 「버리는 순간 화면의 수가 0 이 되는」 것을 막는다. */
+  function retireCounters(list) {
+    for (const candidate of list) {
+      const cc = candidate.session && candidate.session.counters;
+      if (!cc) continue;
+      retired.hardDrops += cc.hardDrops;
+      retired.coastFrames += cc.coastFrames;
+      retired.decodeAttempts += cc.decodeAttempts;
+      retired.decodeFailures += cc.decodeFailures;
+    }
+  }
+
+  /** 선반을 비운다 (되살리지 않고 버릴 때). 카운터는 은퇴분으로 옮긴다. */
+  function retireShelf() {
+    if (shelf === null) return;
+    retireCounters(shelf.candidates);
+    shelf = null;
+  }
+
   function disposeCandidates() {
+    retireCounters(candidates);
     candidates = [];
     boundN = 0;
-    framesSinceBind = 0;
+    boundFormatKey = '';
+    framesWithoutLock = 0;
     stats.candidateCount = 0;
     // 진행률도 같이 버린다 — 후보가 없는데 막대가 차 있으면 거짓말이다.
     stats.progressD = 0;
@@ -150,12 +271,91 @@ export function createR2ScanRuntime(options = {}) {
     view.n = 0;
     stats.candidates.length = 0;
     stats.leadingLayoutId = '';
+    // 후보가 사라지는 것도 «HUD 가 다시 그려야 할 사건» 이다 — 세대를 올린다.
+    bumpBindRevision();
+  }
+
+  /**
+   * 후보와 **선반**을 같이 버린다. 「이 스캔의 증거를 전부 버린다」가 뜻인 자리
+   * (인내 폐기 · 엔진 토글 · `reset()`)는 이쪽을 부른다 — 선반만 남으면 다음 n 복귀에
+   * 「버렸다고 생각한 증거」가 되살아난다.
+   */
+  function disposeAll() {
+    retireShelf();
+    disposeCandidates();
+  }
+
+  /**
+   * 3d — 어댑터의 «이 락을 믿을 수 있나» 를 그대로 올린다.
+   *
+   * 함수로 두는 이유: 부르는 자리가 **둘**(적중 프레임 · 평시 프레임)이고, 그 둘은 이미
+   * 카운터·phaseMs 를 각자 베껴 적고 있다. 두 줄을 한 번 더 베끼면 다음 사람이 한쪽만 고친다.
+   * 자 주입 가짜 어댑터는 이 필드가 없을 수 있다 — 없으면 «미측정(NaN)·안 불신» 이다.
+   */
+  function noteLockTrust() {
+    const margin = adapters && adapters.stats ? adapters.stats.lockMargin : undefined;
+    stats.lockMargin = typeof margin === 'number' ? margin : NaN;
+    stats.lockDistrusted = Boolean(adapters && adapters.stats && adapters.stats.lockDistrusted);
+  }
+
+  function bumpBindRevision() {
+    stats.bindRevision += 1;
+    view.bindRevision = stats.bindRevision;
+    view.lockKey = (view.lockRevision * 1000) + stats.bindRevision;
   }
 
   /**
    * ⓐ·ⓒ — 락이 준 `n` 으로 후보를 **유도**해 세션을 만든다.
    * `n` 이 바뀌면 이전 후보를 통째로 버린다 (틀린 격자 위 누적은 못 되산다).
    */
+  /**
+   * ⓐ·ⓒ 에 더해 R6 — ecc·mask 를 **락 시점에 읽은 포맷**에서 가져온다.
+   *
+   * 🔴 왜: 옛 코드는 `defaultEcc`('H') · `defaultMask`(0) 를 못박았고 인코더의 `auto` 는
+   * 용량이 되면 H, 길면 M/L 을 쓴다 ⇒ **ecc M/L 코드는 R2 가 구조적으로 DONE 불가**였다
+   * (`buildLayout` 의 nsym 이 곧 RS 패리티 수라 틀리면 본문 RS 가 절대 안 선다).
+   * 포맷이 안 읽히면 옛 기본값 그대로다 — 나빠지는 축이 없다.
+   */
+  function formatChoice() {
+    const f = adapters && adapters.stats && adapters.stats.format
+      ? adapters.stats.format : null;
+    if (f && f.source === 'locator' && typeof f.eccName === 'string' && f.eccName !== '') {
+      return {
+        source: 'locator',
+        eccName: f.eccName,
+        maskIndex: Number.isInteger(f.maskIndex) ? f.maskIndex : 0,
+        candidateCount: Number(f.candidateCount) || 0,
+        formatWire: f.formatWireVersion === 1 || f.formatWireVersion === 2
+          ? f.formatWireVersion : undefined,
+      };
+    }
+    return {
+      source: 'default',
+      eccName: defaultEcc,
+      maskIndex: defaultMask,
+      candidateCount: 0,
+      formatWire: undefined,
+    };
+  }
+
+  /**
+   * bind 키의 포맷 부분. **문자열을 손으로 조립하는 곳이 여기 하나**여야 bind 시점 값과
+   * 비교 시점 값이 같은 규칙으로 만들어진다.
+   */
+  function formatKeyOf(choice) {
+    return choice.eccName + '|' + choice.maskIndex + '|' + (choice.formatWire === undefined ? '-' : choice.formatWire);
+  }
+
+  /**
+   * 락 `n` 에 대해 지금 비교에 쓸 포맷 키. locator 가 말하지 않았으면 「모른다」이므로
+   * 선반의 키를 그대로 인정한다 — 「읽기 실패」를 「다른 코드」로 읽으면 증거를 헛되이 버린다.
+   */
+  function boundFormatKeyFor() {
+    const nowChoice = formatChoice();
+    if (nowChoice.source !== 'locator') return shelf === null ? '' : shelf.formatKey;
+    return formatKeyOf(nowChoice);
+  }
+
   function bind(n) {
     disposeCandidates();
     let ids;
@@ -165,10 +365,17 @@ export function createR2ScanRuntime(options = {}) {
       return;
     }
     if (!Array.isArray(ids) || ids.length === 0) return;
+    const choice = formatChoice();
+    stats.format.source = choice.source;
+    stats.format.eccName = choice.eccName;
+    stats.format.maskIndex = choice.maskIndex;
+    stats.format.candidateCount = choice.candidateCount;
     for (const layoutId of ids.slice(0, maxCandidates)) {
       let layout;
       try {
-        layout = buildLayout(n, layoutId, defaultEcc, defaultMask);
+        layout = buildLayout(
+          n, layoutId, choice.eccName, choice.maskIndex, choice.formatWire,
+        );
       } catch {
         continue;
       }
@@ -188,9 +395,22 @@ export function createR2ScanRuntime(options = {}) {
       });
     }
     boundN = n;
+    boundFormatKey = formatKeyOf(choice);
+    seatCandidates();
+  }
+
+  /**
+   * 지금 `candidates` 를 표시·버퍼에 앉힌다. `bind` 와 **선반 복원**이 같은 규칙을 쓰도록
+   * 한 자리에 둔다 — 두 곳에 적으면 복원 경로만 조용히 어긋난다.
+   */
+  function seatCandidates() {
     stats.binds += 1;
+    stats.counters.binds += 1;
+    bumpBindRevision();
     stats.candidateCount = candidates.length;
-    stats.candidates = candidates.map((c) => ({ layoutId: c.layoutId, D: 0, indicator: R2_INDICATOR.LOCKED, alive: true }));
+    stats.candidates = candidates.map((c) => ({
+      layoutId: c.layoutId, D: 0, indicator: R2_INDICATOR.LOCKED, alive: c.alive !== false,
+    }));
     // 좌표 버퍼는 후보 중 가장 큰 격자에 맞춰 **한 번** 잡는다.
     let maxCells = 0;
     for (const candidate of candidates) {
@@ -198,6 +418,41 @@ export function createR2ScanRuntime(options = {}) {
       if (count > maxCells) maxCells = count;
     }
     if (centres.length < maxCells * 6) centres = new Float32Array(maxCells * 6);
+  }
+
+  /**
+   * 🔴 **n 이 바뀐 재bind** — 옛 후보를 버리지 않고 선반에 얼린다 (R3c 결함 3·9b).
+   * 소유권을 선반으로 넘긴 뒤 `bind` 를 부른다: 그래야 `disposeCandidates` 가 같은 세션을
+   * **두 번** 은퇴시키지 않는다(카운터 이중 계상).
+   */
+  function shelveAndBind(n) {
+    retireShelf();
+    if (candidates.length > 0) {
+      shelf = {
+        n: boundN,
+        formatKey: boundFormatKey,
+        format: { ...stats.format },
+        candidates,
+        age: 0,
+      };
+      candidates = [];
+    }
+    bind(n);
+  }
+
+  /** 선반의 후보를 되살린다 — 얼린 시점의 누적기 그대로. 지금 후보는 은퇴시킨다. */
+  function restoreShelf() {
+    const kept = shelf;
+    shelf = null;
+    disposeCandidates();
+    candidates = kept.candidates;
+    boundN = kept.n;
+    boundFormatKey = kept.formatKey;
+    stats.format.source = kept.format.source;
+    stats.format.eccName = kept.format.eccName;
+    stats.format.maskIndex = kept.format.maskIndex;
+    stats.format.candidateCount = kept.format.candidateCount;
+    seatCandidates();
   }
 
   /**
@@ -226,11 +481,19 @@ export function createR2ScanRuntime(options = {}) {
      */
     detection.found = 0;
     detection.n = 0;
+    const detectAt = performance.now();
     try {
       adapters.detectInto(luma.data, luma.width, luma.height, timestamp, null, detection);
     } catch {
       return null;
     }
+    /*
+     * R3c 결함 10 — 이 값은 **여기서 확정하지 않는다**. 프레임 중간에 락이 풀리면 그 뒤 세션이
+     * 부르는 `detectInto` 가 로케이터를 통째로 돌리는데(session.js 의 검출 호출) 그 시간은 이
+     * 호출 밖이다. 어댑터가 프레임 합으로 세므로 프레임 **끝**에서 그 값을 읽는다(아래 두 자리).
+     * 어댑터가 그것을 안 내면(자 주입 가짜) 이 자기 계측이 폴백이다.
+     */
+    stats.phaseMs.detect = performance.now() - detectAt;
 
     // 락이 준 n 을 읽는다. 후보 세션이 없거나 n 이 바뀌었으면 다시 묶는다 (ⓐ).
     const lockedN = detection.found ? adapters.stats.n : 0;
@@ -238,10 +501,51 @@ export function createR2ScanRuntime(options = {}) {
     stats.locked = adapters.stats.locked;
     stats.lockF = adapters.stats.gridLockF;
     stats.layoutIdLocked = adapters.stats.layoutId;
-    if (lockedN > 0 && lockedN !== boundN) bind(lockedN);
+    /*
+     * ⓐ + R5 — bind 키는 **n 하나**다. 후보 집합은 `finalLayoutIdsForN(n)` 에서 유도되므로
+     * 어댑터가 재락에서 다른 `layoutId` 를 지목해도 **후보 집합은 같고**, 그때 세션을
+     * 버리면 그건 「자기 레이아웃 순서로 잘 모으던 후보들」을 이유 없이 죽이는 것이다.
+     * (옛 코드는 어댑터 layoutId 를 세션 전체의 스캔순서로 썼기 때문에 이 재락이 오염이었다.
+     *  R5 로 후보마다 자기 순서를 갖게 된 뒤에는 오염이 아니다.)
+     */
+    /*
+     * ⓐ + R5 + R3c(결함 1·3·9b) — bind 키는 **(n, ecc, mask, wire)** 다.
+     *   · 후보 집합은 `finalLayoutIdsForN(n)` 에서 유도되므로 어댑터가 재락에서 다른 `layoutId`
+     *     를 지목해도 후보 집합은 같다 — 그때 세션을 버리는 것은 「자기 레이아웃 순서로 잘 모으던
+     *     후보들」을 이유 없이 죽이는 것이다(R5 로 후보마다 자기 순서를 갖게 된 뒤에는 오염이 아니다).
+     *   · 반면 **포맷이 바뀐 재락은 «다른 코드»** 다. 같은 n·layout 이라도 mask/ecc/wire 가 다르면
+     *     쌓아 둔 심볼은 되살릴 수 없다 — 버리는 것이 옳다. 포맷을 «locator 가 실제로 말했을 때만»
+     *     본다: 읽기 실패는 「다르다」가 아니라 「모른다」이므로 기본값 폴백으로 세션을 죽이지 않는다.
+     *   · `n` 변화는 **연속 확인** 뒤에만 (한 프레임 잡음이 증거를 죽였다 — 상수 주석 참조).
+     */
+    if (shelf !== null) shelf.age += 1;
+    if (lockedN > 0 && lockedN !== boundN) {
+      // 선반이 지키던 n 으로 **돌아왔다** — 얼린 증거를 되살린다 (잡음 한 프레임의 왕복).
+      if (shelf !== null && shelf.n === lockedN && shelf.formatKey === boundFormatKeyFor(lockedN)) {
+        restoreShelf();
+      } else {
+        shelveAndBind(lockedN);
+      }
+    } else if (lockedN > 0 && candidates.length > 0) {
+      const nowChoice = formatChoice();
+      if (nowChoice.source === 'locator' && formatKeyOf(nowChoice) !== boundFormatKey) {
+        // 포맷이 바뀐 재락은 «다른 코드» 다 — 되살릴 여지가 없으므로 선반도 같이 버린다.
+        retireShelf();
+        bind(lockedN);
+      }
+    }
+    // 선반은 오래 못 간다 — 확인 창을 넘기면 「그 n 은 안 돌아온다」로 읽고 버린다.
+    if (shelf !== null && shelf.age > BIND_N_CONFIRM_FRAMES) retireShelf();
     if (candidates.length === 0) return null;
 
-    framesSinceBind += 1;
+    // R2 — 락이 살아 있는 동안은 인내 카운터가 0 이다.
+    if (stats.locked) framesWithoutLock = 0;
+    else framesWithoutLock += 1;
+    let decodeMs = 0;
+    let hardDrops = retired.hardDrops;
+    let coastFrames = retired.coastFrames;
+    let decodeAttempts = retired.decodeAttempts;
+    let decodeFailures = retired.decodeFailures;
     // 표시용 — 후보 중 **가장 앞선** 진행률을 남긴다. 사용자에게 「몇 개 후보를 돌리는
     // 중인지」는 관심사가 아니고 「얼마나 찼는지」가 관심사다 (PM/029 §17).
     // bestD 를 -1 에서 시작한다 — 첫 살아 있는 후보가 D=0 이어도 선두가 되고 **그 indicator 가 나간다**.
@@ -262,6 +566,14 @@ export function createR2ScanRuntime(options = {}) {
         if (entry) entry.alive = false;
         continue;
       }
+      const cc = candidate.session.counters;
+      if (cc) {
+        hardDrops += cc.hardDrops;
+        coastFrames += cc.coastFrames;
+        decodeAttempts += cc.decodeAttempts;
+        decodeFailures += cc.decodeFailures;
+      }
+      if (candidate.session.frameMs) decodeMs += candidate.session.frameMs.decode;
       const d = result.progress && Number.isFinite(result.progress.D) ? result.progress.D : 0;
       if (entry) { entry.D = d; entry.indicator = result.indicator; entry.alive = true; }
       if (d > bestD) {
@@ -274,43 +586,85 @@ export function createR2ScanRuntime(options = {}) {
       try {
         text = unframe(Uint8Array.from(result.payload.slice(0, result.payloadLength))).text;
       } catch {
-        // 프레이밍이 막았다 — 이 후보는 이번 프레임에 답이 아니다. 세션은 살려 둔다.
+        /*
+         * 프레이밍이 막았다 — 이 후보는 이번 프레임에 답이 아니다.
+         * 🔴 「세션은 살려 둔다」가 **거짓이었다** (R3c 결함 8): RS 가 선 순간 세션은
+         * `complete = 1` 이라 이후 `pushFrame` 이 즉시 반환한다 — 같은 payload 를 되돌릴 뿐
+         * 누적하지 않는다. n=13 은 후보 1개라 그 순간 R2 가 `reset()` 까지 죽었다.
+         * `rejectPayload()` 가 `complete` 만 되돌린다 (증거·셀맵·개정은 유지).
+         */
+        if (typeof candidate.session.rejectPayload === 'function') candidate.session.rejectPayload();
         continue;
       }
       stats.doneLayoutId = candidate.layoutId;
       stats.doneFrame = stats.frames - 1;
       stats.text = text;
+      // 적중 프레임에도 카운터를 낸다 — 안 그러면 「무엇이 몇 번 있었나」가 DONE 직전
+      // 프레임 값으로 얼어붙어, 결과 카드가 읽는 수가 한 프레임 묵는다.
+      stats.counters.hardDrops = hardDrops;
+      stats.counters.coastFrames = coastFrames;
+      stats.counters.decodeAttempts = decodeAttempts;
+      stats.counters.decodeFailures = decodeFailures;
+      stats.counters.lockClears = adapters.stats.counters ? adapters.stats.counters.lockClears : 0;
+      stats.counters.relocates = adapters.stats.counters ? adapters.stats.counters.relocates : 0;
+      noteLockTrust();
+      if (adapters.stats.phaseMs) {
+        stats.phaseMs.detect = adapters.stats.phaseMs.detect;
+        stats.phaseMs.align = adapters.stats.phaseMs.align;
+      } else {
+        stats.phaseMs.align = 0;
+      }
+      stats.phaseMs.decode = decodeMs;
       return { text, layoutId: candidate.layoutId, n: boundN, frame: stats.doneFrame };
     }
 
     stats.progressD = bestD < 0 ? 0 : bestD;
     stats.indicator = leading === null ? R2_INDICATOR.SEARCHING : bestIndicator;
     stats.leadingLayoutId = leading === null ? '' : leading.layoutId;
+    stats.counters.hardDrops = hardDrops;
+    stats.counters.coastFrames = coastFrames;
+    stats.counters.decodeAttempts = decodeAttempts;
+    stats.counters.decodeFailures = decodeFailures;
+    stats.counters.lockClears = adapters.stats.counters ? adapters.stats.counters.lockClears : 0;
+    stats.counters.relocates = adapters.stats.counters ? adapters.stats.counters.relocates : 0;
+    noteLockTrust();
+    if (adapters.stats.phaseMs) {
+      stats.phaseMs.detect = adapters.stats.phaseMs.detect;
+      stats.phaseMs.align = adapters.stats.phaseMs.align;
+    } else {
+      stats.phaseMs.align = 0;
+    }
+    stats.phaseMs.decode = decodeMs;
 
     // 표시용 뷰 갱신 — 선두 후보의 셀맵(참조) + 어댑터가 사영한 셀 중심.
     if (leading !== null) {
       const cellCount = leading.session.layout.cellCount;
-      const mapped = adapters.projectCellFaceCentres(centres, cellCount);
+      // R5 — 선두 후보의 **자기 스캔순서**로 사영해야 HUD 가 그 후보의 셀맵과 맞는다.
+      const mapped = adapters.projectCellFaceCentres(centres, cellCount, leading.layoutId);
       view.cellMap = leading.session.result.progress.cellMap;
       view.cellFaceCentres = centres;
       view.cellCount = mapped > 0 ? cellCount : 0;
       view.H = adapters.H;
       view.n = boundN;
       view.lockRevision = adapters.stats.lockRevision;
+      view.lockKey = (view.lockRevision * 1000) + stats.bindRevision;
+      view.bindRevision = stats.bindRevision;
       view.frameWidth = luma.width;
       view.frameHeight = luma.height;
       view.layoutId = leading.layoutId;
     }
 
-    // 오래 붙들고도 아무도 못 풀면 접는다 — 락이 틀렸을 수 있고, 그때는 어댑터의
-    // F 게이트가 락을 걷어내 다음 bind 가 다른 n 으로 온다.
-    if (framesSinceBind > CANDIDATE_PATIENCE_FRAMES) disposeCandidates();
+    /*
+     * R2 — **락이 없는 채로** 오래 버티면 접는다. 락이 살아 있으면 위에서 0 으로
+     * 리셋됐으므로 여기 안 걸린다. 접고 나면 다음 락에서 새 bind 가 온다.
+     */
+    if (framesWithoutLock > CANDIDATE_PATIENCE_FRAMES) disposeAll();
     return null;
   }
 
   function reset() {
     if (adapters !== null) adapters.reset();
-    disposeCandidates();
+    disposeAll();
     lastAt = -Infinity;
     stats.frames = 0;
     stats.progressD = 0;
@@ -318,6 +672,51 @@ export function createR2ScanRuntime(options = {}) {
     stats.doneLayoutId = '';
     stats.doneFrame = -1;
     stats.text = null;
+    stats.counters.hardDrops = 0;
+    stats.counters.coastFrames = 0;
+    stats.counters.lockClears = 0;
+    stats.counters.relocates = 0;
+    stats.counters.binds = 0;
+    stats.counters.decodeAttempts = 0;
+    stats.counters.decodeFailures = 0;
+    retired.hardDrops = 0;
+    retired.coastFrames = 0;
+    retired.decodeAttempts = 0;
+    retired.decodeFailures = 0;
+    stats.format.source = 'default';
+    stats.format.eccName = '';
+    stats.format.maskIndex = 0;
+    stats.format.candidateCount = 0;
+    stats.phaseMs.detect = 0;
+    stats.phaseMs.align = 0;
+    stats.phaseMs.decode = 0;
+    // 3d — 락이 없어졌으니 마진도 «미측정» 이다 (거짓 0 금지 · 어댑터 reset 과 같은 뜻).
+    stats.lockMargin = NaN;
+    stats.lockDistrusted = false;
+  }
+
+  /**
+   * R1(d) — **락만** 푼다. 세션·증거·후보는 그대로다 (레인 H 는 줌 커밋에서 이걸 부르고,
+   * 수동 리셋에서는 `reset()` 을 부른다).
+   *
+   * 🔴 왜 두 문이 갈려야 하나: 줌은 「좌표계가 바뀌었다」이지 「다른 코드다」가 아니다.
+   * 여기서 `reset()` 을 부르면 운영자 요구 ③ 「읽은 데이터를 버리지 말라」를 정면으로 어긴다.
+   * 락이 풀리면 다음 프레임에 로케이터가 새 H 를 세우고, n 이 같으면 bind 도 유지된다.
+   */
+  function invalidateLock() {
+    if (adapters === null) return 0;
+    const cleared = typeof adapters.invalidateLock === 'function'
+      ? adapters.invalidateLock() : 0;
+    if (cleared) {
+      stats.locked = 0;
+      stats.lockedN = 0;
+      stats.layoutIdLocked = '';
+      // 3d — 락과 함께 그 락의 신뢰 판정도 사라진다 (어댑터 clearLock 이 이미 되돌렸다).
+      noteLockTrust();
+      view.lockRevision = adapters.stats.lockRevision;
+      view.lockKey = (view.lockRevision * 1000) + stats.bindRevision;
+    }
+    return cleared;
   }
 
   function setEnabled(next) {
@@ -325,7 +724,7 @@ export function createR2ScanRuntime(options = {}) {
     if (flag === enabled) return;
     enabled = flag;
     // 켜든 끄든 누적을 버린다 — 전환 전 증거가 전환 후 답에 섞이면 A/B 가 오염된다.
-    disposeCandidates();
+    disposeAll();
     lastAt = -Infinity;
   }
 
@@ -334,6 +733,7 @@ export function createR2ScanRuntime(options = {}) {
     setEnabled,
     pushFrame,
     reset,
+    invalidateLock,
     stats,
     view,
   };
