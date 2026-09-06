@@ -397,7 +397,7 @@
   }
 
   /*
-   * 안정 유지 게이지 (2026-08-16). 정식 화면의 최소 인디케이터 — 뷰 하단 2px 선.
+   * 안정 유지 게이지 (2026-08-16). 조준 중 늘 떠 있는 최소 인디케이터 — 뷰 하단 2px 선.
    * z-index 는 점 레이어(2)와 같은 층에 두되 하단 가장자리라 겹치지 않는다.
    * ⚠ 폭은 JS 가 인라인 `width` 로만 준다(0%\~100%). transition 은 게이지가 프레임
    *   주기(320ms)로 갱신되므로 그보다 짧게 — 아니면 항상 뒤처져 보인다.
@@ -406,7 +406,7 @@
      320px 폰(정사각 ≈287px)에서도 넘치지 않는다(좌 패널은 min-width 0 으로 접힌다). 좌·우 트랙이 **같은 문자열**
      이라 스위치가 정중앙에 온다(운영자 요구 — engine-switch.test ⓒ 가 대칭을 잰다). 우 칸의 HUD 상한(140px)은
      트랙이 아니라 .r2-hud-mini 자기 규칙이 진다(옛 clamp() 트랙의 성질이 그쪽으로 옮겨갔다). 자식이 전부 hidden 이면
-     행도 비어 정식 렌더는 그대로다. CSS 변수 유도 없이 리터럴 — 부트 전 계산 시점 문제를 피한다. */
+     행도 비어 authored 렌더는 그대로다 (승격 뒤 정식에서도 scanner.js 가 런타임에 연다). CSS 변수 유도 없이 리터럴 — 부트 전 계산 시점 문제를 피한다. */
   .stage-top-row {
     position: absolute; left: 8px; right: 8px; top: 8px; z-index: 6;
     display: grid; grid-template-columns: minmax(0, 1fr) fit-content(112px) minmax(0, 1fr);
@@ -432,7 +432,8 @@
   /* 눌림 피드백 — 탭한 순간 «받았다» 를 준다. R1 위치에선 동기 복호(1.4~2.8 s)가 프레임을
      거의 다 먹어서 knob 이동 페인트가 늦을 수 있는데, :active 는 브라우저가 스크립트 없이
      그리므로 그 지연 앞에 선다. transition 없음 — 지연 보상이 목적이라 즉시여야 한다.
-     정식(/)엔 #engine-switch 가 authored hidden 이라 이 규칙은 무해(도달 불가)하다. */
+     #engine-switch 는 authored hidden 이고 scanner.js 가 r2Available 에서 연다 — **2026-09-06 승격**
+     뒤로는 정식에서도 열리므로 이 규칙은 정식에서도 실제로 걸린다(그것이 요구 ⑤ 의 목적이다). */
   .engine-switch-control:active { background: rgb(255 255 255 / .26); }
   .engine-switch-opt { position: relative; z-index: 1; text-align: center; opacity: .55; }
   .engine-switch-control[data-engine="r1"] .engine-switch-opt:nth-child(1),
@@ -528,8 +529,10 @@
      바깥 번짐은 같은 색의 알파만 낮춘 `--r2-fix-glow`(scaleColorAlpha, src/r2-hud-model.js).
      ⚠ 여기에 rgba 를 적으면 안 된다 — 3c 는 글로우와 폴백에 `rgb(255 90 170 / …)` 를 옮겨 적었고, 그것이
      셀맵 색을 바꾸는 날 이 두 자리만 옛 색으로 남는 사본이었다(3d 검토 결함 6).
-     폴백도 두지 않는다: 이 규칙은 `.r2-hud-mini` 가 있는 시험판에서만 걸리고, 정식(/)에는 그 요소도
-     `--r2-*` 변수도 없다 — 「걸리지 않는 규칙」을 위해 색 사본을 남기는 것이 더 비싸다.
+     폴백도 두지 않는다: 이 규칙은 `.r2-hud-mini` 와 `--r2-*` 변수가 **둘 다 실재할 때만** 걸리는데,
+     그 둘을 심는 것은 `r2Available` 한 게이트다 (**2026-09-06 승격** 뒤로는 시험판·정식 둘 다).
+     승격을 되돌리면 요소도 변수도 없어 규칙 자체가 도달 불가가 된다 — 그 상태를 위해 색 사본을
+     남기는 것이 더 비싸다.
      움직임이 아니라 **색만** 바뀐다 — A6 플래시 금지 · reduced-motion 무관. */
   .r2-hud-mini[data-distrust="1"] {
     box-shadow: 0 0 0 1px var(--r2-fix), 0 0 14px var(--r2-fix-glow);
@@ -558,7 +561,8 @@
          그래서 패널 높이를 CSS 변수로 선언하고 버튼을 그 위에 앉힌다 — 자가 두 수를 파싱해
          `reset.bottom ≥ panel.bottom + 최소높이` 를 잰다.
      표시용 층(.r2-hud · .r2-hud-mini)과 달리 **눌려야** 하므로 pointer-events 를 자기 규칙으로 켠다.
-     정식(/)엔 authored hidden 그대로 — scanner.js 가 r2Available 에서만 연다(엔진 스위치와 같은 게이트). */
+     authored hidden 이고 scanner.js 가 r2Available 에서만 연다(엔진 스위치와 같은 게이트) —
+     **2026-09-06 승격** 뒤로는 정식에서도 열린다. */
   .scan-reset {
     position: absolute;
     right: 8px;
@@ -1530,7 +1534,7 @@
              (2026-08-30 토글 폐지). 순수 시각 보조라 aria-hidden 이고 circle 은
              scanner.js renderGuideDots()가 채운다. -->
         <svg class="scan-dot-layer" id="scan-dot-layer" aria-hidden="true"></svg>
-        <!-- 안정 유지 게이지 (2026-08-16). 정식 화면의 **유일한** 추가 UI 이고, 표시는
+        <!-- 안정 유지 게이지 (2026-08-16). 승격(2026-09-06) 전 정식 화면의 **유일한** 추가 UI 였고, 표시는
              뷰 하단 2px 선 하나다 — 조준을 방해하지 않는 최소치. 유지 0 이면 폭 0 이라
              사실상 없는 것과 같다. 값은 기기 안 로컬 계산이며 전송 경로가 없다.
              장식이라 aria-hidden — 상태 문구(.scan-status)가 낭독을 맡는다. -->
@@ -1541,12 +1545,13 @@
              세 면 마름모(역할색·데이터 상태색) + 격자선 + 육각 실루엣을 그린다. «가이드가 있어야 할 자리»
              가 아니다 — 코드가 가이드보다 크든 작든 정합이 본 그 자리에 그린다.
              z5 = 점 레이어(2)·시험판 디버그(3·4) 위, 상단 행(6) 아래. 장식이라 aria-hidden,
-             authored hidden 이라 정식(/) 렌더는 그대로다 (scanner.js 가 r2Available 에서만 연다). -->
+             authored hidden 이고 scanner.js 가 r2Available 에서만 연다 — **2026-09-06 승격** 뒤로는
+             정식에서도 열린다(승격을 되돌리면 authored 상태 그대로 남는다). -->
         <canvas class="r2-hud" id="r2-hud" aria-hidden="true" hidden></canvas>
         <!-- 뷰파인더 상단 행 (2026-09-05, PM/029B §27.4 1단계 · 운영자 요구 ⑤⑥):
              좌 = R2 누적 진행 인디케이터(PM/029 §17) · 중앙 = 엔진 스위치(제품 컴포넌트) · 우 = R2 셀맵(§18~19).
              시험판 하단 정보 패널(#lab-debug-panel)과 겹치지 않게 위로 올렸다. 자식이 전부 authored hidden
-             이라 정식(/) 렌더는 그대로다 — scanner.js 가 r2Available(시험판 또는 승격) 에서만 연다.
+             이고 scanner.js 가 r2Available 에서만 연다 — **2026-09-06 승격** 뒤로는 정식에서도 열린다.
              인디케이터 목적(§18~19): 긴 스캔에서 인내심 유지 + 진단(D 가 차는데 복호가 안 되면 §25.4.3).
              셀맵: 선두 후보의 셀을 정합이 표본한 사영 자리(세 면 3점)에 상태색으로. A6: 코드 영역만 · 확정은 정적. -->
         <div class="stage-top-row" id="stage-top-row">
@@ -1563,7 +1568,7 @@
             </div>
           </div>
           <!-- 엔진 스위치: R1 = 단발만(모든 타입) · R2 = R2 누적(타입 Y) + QR 만, R1 단발 끔 (운영자 결정 ②).
-               정식엔 승격 플래그 전까지 hidden. -->
+               authored hidden 이고 scanner.js 가 연다. **2026-09-06 승격**으로 정식에서도 뜬다. -->
           <div class="engine-switch" id="engine-switch" hidden>
             <span class="engine-switch-label" id="engine-switch-label" data-i18n="engine.label">스캐너 엔진 선택</span>
             <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — R1 은 모든 타입을 단발로 읽고, R2 는 타입 Y 를 여러 프레임 누적으로 읽으며 QR 도 읽어요</span>
@@ -1586,7 +1591,8 @@
         <!-- 수동 리셋 (2026-09-06, 운영자 요구 ⑫): 「지금까지 모은 것을 버리고 처음부터」. 실기 3차에서
              큰 코드가 리셋을 반복하는 동안 사용자가 **개입할 방법이 없었다** — 그 손잡이다.
              뷰파인더 중앙 탭도 같은 동작을 부른다(scanner.js manualRescan). 아이콘 ↺ 는 장식이고
-             낭독은 aria-label(i18n reset.label)이 맡는다. authored hidden — 정식(/) 렌더는 그대로다. -->
+             낭독은 aria-label(i18n reset.label)이 맡는다. authored hidden 이고 «카메라 켜짐 ∧ r2Available»
+             에서 뜬다 — **2026-09-06 승격** 뒤로는 정식에서도. -->
         <button type="button" class="scan-reset" id="scan-reset" hidden
                 data-i18n-attr="aria-label:reset.label" aria-label="스캔 다시 시작">↺</button>
         <!-- lab 디버그 오버레이 (작업 1): 분석 정사각 외곽선(= 뷰 경계) + clipSide 색
@@ -1669,7 +1675,8 @@
     <h2 id="result-title" data-i18n="result.generic">내용을 읽었어요</h2>
     <!-- R2 확정 요약 (운영자 ⑧ · 적대 검토 F8) — Type Y · Y2 (n25) · v0TR · DONE 칩. 카메라가 닫힌 뒤 확정색·«정정» 강조가
          실제로 보이는 유일한 표면(스테이지 좌 패널은 결과 시트·카메라 게이트 아래다). R2 출처 결과에만 scanner.js 가 채우고
-         그 외엔 authored hidden 그대로 — 정식(/)엔 R2 출처가 없어 렌더 불변. 칩은 scanner.js 가 만든다. -->
+         그 외엔 authored hidden 그대로 (R2 출처가 아닌 결과는 이 행이 비어 있다). **2026-09-06 승격** 뒤로는
+         정식에서도 R2 출처가 실재하므로 이 표면이 실제로 채워진다. 칩은 scanner.js 가 만든다. -->
     <div class="r2-rows result-r2-rows" id="result-r2-rows" hidden></div>
     <div class="result-content" id="result-content"></div>
     <div class="popup-fallback" id="popup-fallback" hidden>

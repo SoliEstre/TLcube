@@ -1,7 +1,9 @@
 /**
  * engine-switch.test.js — 엔진 스위치(제품 컴포넌트)와 «R2 가용» 게이트의 계약 (PM/029B §27.4 1단계).
  *
- *   ⓐ 진리표 — engineSwitchAvailable 은 시험판 ∨ 승격. 승격 전 핀(false)은 승격 커밋에서 빨개져 사람이 본다.
+ *   ⓐ 진리표 — engineSwitchAvailable 은 시험판 ∨ 승격. **2026-09-06 승격 뒤** 핀은 true 를 지킨다:
+ *      되돌리면 정식에서 R2 가 통째로 사라지므로 그 되돌림은 결정 ① 을 다시 여는 일이다.
+ *      같은 자가 «정식 = 시험판» 을 **값으로** 잰다 (정식 입력으로 진리표를 실제로 통과시켜서).
  *   ⓑ 저장 선택 — 새 키 우선, 옛 키 1회 이관, 둘 다 없으면 켬.
  *   ⓒ 마크업 — 상단 행이 카메라 스테이지 안에 있고 [좌 진행 | 스위치 | 우 셀맵] 순서, 스위치는 authored hidden ·
  *      role=switch · aria-checked. 옛 lab-r2-toggle 은 0건. 8언어 키는 scanner-i18n 자가 자동으로 잰다.
@@ -11,11 +13,15 @@
  *   ⓖ 칩 색 유도(2b) — --r2-fixed/--r2-live/--r2-fix 가 R2_CELL_COLOR[CELL_MAP_STATE.X] 에서 심기고 CSS 는 변수만 본다.
  *      ⓒ 의 그리드 단언도 2b 에서 «좌·우 트랙 동일(정중앙) + 우 칸 위젯 자기 상한» 으로 바뀌었다
  *      (3a: 그 상한을 재는 자리가 .r2-cellmap → .r2-hud-mini 로 옮겨갔다 — HUD 는 test/r2-hud.test.js 가 맡는다).
- *      + setProperty 3줄이 r2Available 게이트 **안** (적대 검토 F4 — 정식 DOM 불변은 <html> 인라인 스타일까지다).
+ *      + setProperty 3줄이 r2Available 게이트 **안** (적대 검토 F4). 승격 뒤 그 게이트는 정식에서도 참이라
+ *      정식 <html> 에 변수가 **심긴다** — 게이트가 지키는 것은 이제 «승격을 되돌리면 <html> 이 승격 전과
+ *      바이트 동일로 돌아온다» 다.
  *   ⓗ 칩 넘침(적대 검토 F7·F9) — 칩은 열 폭을 못 넘고 넘치면 말줄임, progress 칩은 줄바꿈 허용. 결과 카드에 확정 요약 컨테이너(F8).
  *   ⓘ 늦은 결과 문(적대 검토 F2) — R1 .then/.catch 가 QR 콜백과 같은 «세션·스위치 재확인» 을 lateResultAdmitted 로 한다.
  *   ⓙ 하단 카드 한 장(운영자 관측 2026-09-06) — R1 위치 = 조준(detail) · R2 위치 = 범위(scope). 값은 guideCardVisibility,
- *      철자는 refreshScanGuideCopy 가 그 값에서 hidden 을 정한다(리터럴 불리언 복사 금지). 정식 off 는 둘 다 보임으로 환원.
+ *      철자는 refreshScanGuideCopy 가 그 값에서 hidden 을 정한다(리터럴 불리언 복사 금지).
+ *      ⚠ **승격(2026-09-06) 으로 이 자의 «정식» 문장이 바뀌었다**: 정식도 이제 두 위치를 다 가지므로
+ *      「정식의 입력은 false 하나뿐」은 거짓이다 — 정식 화면 = 시험판 화면이고, 정식 첫 방문의 기본은 R2 위치다.
  *   ⓚ 탭 즉시 반영(⑤ · ⚠ 철자 자) — 핸들러가 paintEngineSwitch 를 무거운 렌더보다 **먼저** 하고 끝에 yieldFrameOnce 를 세우며,
  *      nextFrame 첫머리(세션·카메라 가드 뒤)가 그 플래그를 내리고 QR·R2·R1 을 건너뛴 채 rAF 만 재예약하며,
  *      stopCamera 가 그 플래그를 세션과 함께 비운다(안 비우면 다음 세션의 첫 프레임을 삼킨다).
@@ -70,8 +76,25 @@ test('ⓐ «R2 가용» 진리표 — 시험판 ∨ 승격; 승격 전 핀', () 
   assert.equal(engineSwitchAvailable({ labPath: true, productEnabled: true }), true);
   assert.equal(engineSwitchAvailable({}), false, '모름은 닫힘');
   assert.equal(engineSwitchAvailable(null), false);
-  // ⚠ 승격 전 핀 — 정식(/)엔 스위치도 R2 도 없다. 승격 커밋이 이 줄을 바꾸며, 그때 사람이 정식 화면을 본다.
-  assert.equal(ENGINE_SWITCH_PRODUCT_ENABLED, false, '승격 플래그가 켜졌다 — 정식 화면·정식 불변 자를 사람이 확인했는가');
+  /*
+   * ⚠ **승격 핀** (2026-09-06, 운영자 실기 4차 판정). 승격 **전** 이 자리는 false 를 핀했고 승격 커밋이
+   * 그것을 빨갛게 만들어 사람이 정식 화면을 보게 했다. 승격 **뒤** 지켜야 하는 명제는 반대다:
+   * 되돌리면 정식에서 스위치·R2 패널·HUD·QR 브리지·R1 유휴 창(결정 ⑮)이 **한꺼번에** 사라진다.
+   * 그래서 이 핀은 「되돌릴 땐 사람이 결정 ① 을 다시 본다」를 강제한다 (게이지는 줄지 않는다).
+   */
+  assert.equal(ENGINE_SWITCH_PRODUCT_ENABLED, true,
+    '승격 플래그를 되돌렸다 — 정식에서 R2 가 사라진다(스위치·패널·HUD·QR·유휴 창). 결정 ① 을 다시 보고 있는가');
+  /*
+   * 그리고 그 승격이 **실제로 정식 화면을 연다** 는 것을 값으로 잰다 — 플래그만 켜고 진리표가 그것을
+   * 안 읽으면 「켰는데 안 먹는」 상태다 (memory: 배타를 열면 소비자도 쓸어라).
+   */
+  assert.equal(engineSwitchAvailable({ labPath: false, productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED }), true,
+    '정식 입력(labPath=false)이 R2 가용으로 안 풀린다 — 정식 화면에 스위치·R2 패널·HUD 가 안 열린다');
+  // 정식과 시험판이 **같은 값**을 받는다 — 승격의 뜻이 「정식 화면 = 시험판 화면」이다.
+  assert.equal(
+    engineSwitchAvailable({ labPath: false, productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED }),
+    engineSwitchAvailable({ labPath: true, productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED }),
+    '승격 뒤에도 정식과 시험판의 R2 가용이 갈린다');
 });
 
 test('ⓑ 저장 선택 — 새 키 우선 · 옛 키 1회 이관 · 기본 켬', () => {
@@ -82,6 +105,15 @@ test('ⓑ 저장 선택 — 새 키 우선 · 옛 키 1회 이관 · 기본 켬'
   assert.equal(resolveEngineChoice(null, '1'), true);
   assert.equal(resolveEngineChoice(null, null), true, '기본은 켬(시험판의 존재 이유)');
   assert.equal(resolveEngineChoice(undefined, undefined), true);
+  /*
+   * 승격(2026-09-06 · 결정 ①) — **정식의 기본 엔진 = R2**. 새 코드로 정하지 않았다: «저장값 없음 → 켬»
+   * 이라는 이 한 규칙이 그대로 정식의 기본이 된다. 그 성립을 값으로 잰다 — 저장소를 못 읽는 브라우저
+   * (localStorage 예외 → null 두 개)도 같은 답을 받아야 한다.
+   */
+  const productFirstVisit = engineSwitchAvailable({ labPath: false, productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED })
+    && resolveEngineChoice(null, null);
+  assert.equal(productFirstVisit, true,
+    '정식 첫 방문(저장값 없음)의 기본 엔진이 R2 가 아니다 — 결정 ① 이 코드에 안 서 있다');
   assert.notEqual(ENGINE_STORAGE_KEY, ENGINE_STORAGE_KEY_LEGACY);
   assert.ok(!ENGINE_STORAGE_KEY.includes('lab'), '새 키 이름에 lab 이 남았다 — 제품 컴포넌트다');
 });
@@ -99,7 +131,7 @@ test('ⓒ 마크업 — 상단 행이 스테이지 안, 순서 [진행|스위치
   assert.ok(rowAt > 0, '상단 행이 스테이지 안에 없다');
   assert.ok(rowAt < progressAt && progressAt < switchAt && switchAt < controlAt && controlAt < cellmapAt,
     '상단 행 순서가 [좌 진행 | 중앙 스위치 | 우 셀맵] 이 아니다');
-  assert.match(stage, /id="engine-switch"[^>]*hidden/, '스위치가 authored hidden 이 아니다 — 정식 렌더가 바뀐다');
+  assert.match(stage, /id="engine-switch"[^>]*hidden/, '스위치가 authored hidden 이 아니다 — r2Available 이 거짓인 화면(승격 되돌림)에서도 뜬다');
   assert.match(stage, /id="engine-switch-control"[^>]*role="switch"/, 'role=switch 가 없다');
   assert.match(stage, /id="engine-switch-control"[^>]*aria-checked=/, 'aria-checked 가 없다');
   assert.match(stage, /id="engine-switch-control"[^>]*aria-labelledby="engine-switch-label"/, '시각 라벨이 접근성 이름이 아니다');
@@ -128,9 +160,9 @@ test('ⓒ 마크업 — 상단 행이 스테이지 안, 순서 [진행|스위치
   assert.match(cssBlock('.r2-progress'), /overflow: hidden/, '좌 알약 내용물이 열 밖으로 샌다');
   assert.match(cssBlock('.r2-progress-note'), /min-width: 0/, 'note 가 줄어들지 못한다');
   assert.match(cssBlock('.engine-switch-label'), /text-overflow: ellipsis/, '긴 라벨이 말줄임되지 않는다');
-  // 정식에서 «아무것도 안 그린다» 는 CSS 의 부재에 기댄다 — 그 부재를 성질로 잠근다.
+  // 자식이 전부 hidden 일 때 «아무것도 안 그린다» 는 CSS 의 부재에 기댄다 — 그 부재를 성질로 잠근다.
   for (const sel of ['.stage-top-row', '.stage-top-left', '.stage-top-right']) {
-    assert.ok(!/background|border|padding|box-shadow|min-height|height:/.test(cssBlock(sel)), sel + ' 이 정식 뷰파인더에 무언가를 그린다');
+    assert.ok(!/background|border|padding|box-shadow|min-height|height:/.test(cssBlock(sel)), sel + ' 이 (자식이 전부 hidden 인 화면에서도) 뷰파인더에 무언가를 그린다');
   }
   // 스테이지는 자기 스태킹 컨텍스트 — 안의 z6 행이 카메라 게이트(z2) 위로 새지 않는다.
   assert.match(cssBlock('.square-stage'), /isolation: isolate/, '상단 행이 카메라 게이트 위에 뜬다 (스태킹 컨텍스트 없음)');
@@ -179,17 +211,17 @@ test('ⓕ R1 off 모드(②) — R1 게이트가 `if (!r2Runtime.enabled) {` 안
   assert.ok(wrapAt > r2At, 'R1-off 감싸기가 없거나 R2 블록보다 앞이다 — R2 위치에서 R1 동기 복호가 같이 돈다(②·⑫ 위반)');
   assert.ok(r1At > wrapAt, 'R1 게이트가 감싸기보다 앞이다');
   const wrapEnd = braceEnd(loop, loop.indexOf('{', wrapAt));
-  assert.ok(r1At < wrapEnd, 'R1 게이트가 `if (!r2Runtime.enabled) {` 블록 밖이다 — 정식은 불변이지만 R2 위치에서 R1 이 돈다');
-  // 정식 불변: R1 블록 안의 부수 효과 셋은 그대로다.
+  assert.ok(r1At < wrapEnd, 'R1 게이트가 `if (!r2Runtime.enabled) {` 블록 밖이다 — R2 위치에서 R1 단발이 같이 돈다(결정 ② 위반)');
+  // R1 **위치** 불변: R1 블록 안의 부수 효과 셋은 그대로다 (승격 전 정식의 유일한 갈래가 이것이었다).
   const r1Block = loop.slice(wrapAt, wrapEnd);
   for (const needle of ['noteProductFrame()', 'renderGuideDots()', 'noteFrameProcessed()']) {
-    assert.ok(r1Block.includes(needle), 'R1 블록에서 ' + needle + ' 가 사라졌다 — 정식 제어 흐름이 바뀌었다');
+    assert.ok(r1Block.includes(needle), 'R1 블록에서 ' + needle + ' 가 사라졌다 — R1 위치의 제어 흐름이 바뀌었다');
   }
   // R2 위치에서 R1 이 안 도니 R2 블록이 (a) 첫 grab 가이드 재렌더 (b) fps 줄을 맡는다. (c) 시도 회계는 안 부른다.
   const r2Block = loop.slice(r2At, braceEnd(loop, loop.indexOf('{', r2At)));
   assert.ok(r2Block.includes('renderGuideDots()'), 'R2 블록이 첫 grab 뒤 가이드 점을 안 그린다 — R2 위치에서 조준 가이드가 사라진다');
   assert.ok(r2Block.includes('noteFrameProcessed()'), 'R2 블록이 fps 줄을 안 올린다 — R2 위치에서 시험판 fps 가 «—» 로 멈춘다');
-  assert.ok(!r2Block.includes('noteProductFrame()'), 'R2 블록이 R1 «복호 시도 회계» 를 부른다 — 시도 수의 뜻이 정식과 갈린다');
+  assert.ok(!r2Block.includes('noteProductFrame()'), 'R2 블록이 R1 «복호 시도 회계» 를 부른다 — 시도 수의 뜻이 R1 위치와 갈린다');
   assert.ok(r2Block.includes('yieldForQr ? null : grabVideoFrame('), 'R2 grab 이 QR 유예를 안 본다');
 });
 
@@ -226,10 +258,15 @@ test('ⓖ 좌 패널 칩 색은 셀맵 색표에서 **유도**된다 — setProp
   assert.ok(rsfixAt > defAt, '--r2-rsfix 가 팔레트에서 안 심긴다 — 결과 카드 «RS 정정» 색이 CSS 리터럴로 돌아간다');
   lastSetAt = Math.max(lastSetAt, rsfixAt);
   assert.equal((JS.match(/setProperty\('--r2-/g) || []).length, Object.keys(pairs).length + 2, '--r2-* 변수 수가 짝 표 + 유도 2 와 다르다');
-  // F4 — 세 줄이 전부 `if (r2Available) {` 블록 안: 정식(/) 의 <html> 인라인 스타일에 변수를 심지 않는다 (렌더는 같아도 DOM 이 달라진다).
+  /*
+   * F4 — 세 줄이 전부 `if (r2Available) {` 블록 안. 승격(2026-09-06) **전**엔 그 명제가 «정식(/) 의
+   * <html> 에 변수를 심지 않는다» 였고, 지금 정식은 그 게이트가 참이라 **심는다**(승격의 정의다).
+   * 그래도 게이트가 남아야 하는 이유는 그대로다: 승격을 되돌리면 `<html>` 의 인라인 스타일이
+   * 승격 전과 **바이트 동일**로 돌아와야 한다. 게이트 밖으로 새면 되돌림이 DOM 을 안 되돌린다.
+   */
   const firstSetAt = JS.search(/setProperty\('--r2-/);
   const gateAt = JS.lastIndexOf('if (r2Available) {', firstSetAt);
-  assert.ok(gateAt > defAt, 'setProperty 앞에 r2Available 게이트가 없다 — 정식 DOM 에 --r2-* 변수가 심긴다');
+  assert.ok(gateAt > defAt, 'setProperty 앞에 r2Available 게이트가 없다 — 승격을 되돌려도 <html> 에 --r2-* 변수가 남는다');
   assert.ok(braceEnd(JS, JS.indexOf('{', gateAt)) > lastSetAt, 'setProperty 셋이 r2Available 게이트 블록 밖으로 새 있다');
   // CSS: 확정·변동 칩은 변수만, 정정 키프레임은 --r2-fix 에서 시작하고 `to` 가 없다(끝 값 = 요소 자신의 색).
   assert.match(HTML, /\.r2-chip\[data-state="confirmed"\]\s*\{[^}]*color:\s*var\(--r2-fixed\)/, '확정 칩 색이 --r2-fixed 가 아니다');
@@ -283,15 +320,15 @@ test('ⓗ 칩 넘침 — 칩은 max-width 100% · overflow hidden · ellipsis, p
   const contentAt = HTML.indexOf('id="result-content"');
   const titleAt = HTML.indexOf('id="result-title"');
   assert.ok(cardAt > 0 && summaryAt > cardAt && titleAt < summaryAt && summaryAt < contentAt, '결과 카드 안 [제목 | 확정 요약 | 본문] 순서가 아니다');
-  assert.match(HTML, /id="result-r2-rows"[^>]*hidden/, '확정 요약 컨테이너가 authored hidden 이 아니다 — 정식 렌더가 바뀐다');
+  assert.match(HTML, /id="result-r2-rows"[^>]*hidden/, '확정 요약 컨테이너가 authored hidden 이 아니다 — R2 출처가 아닌 결과에도 빈 행이 뜬다');
   assert.match(HTML, /class="r2-rows result-r2-rows"/, '확정 요약이 칩 행 규칙(.r2-rows)을 안 쓴다 — 두 표면이 다른 어휘로 그려진다');
   assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(cssBlock('.result-r2-rows')), '결과 카드 요약 규칙에 색 리터럴이 있다 — 확정색은 변수(ⓖ)');
 });
 
 test('ⓘ 늦은 결과 문 — R1 .then/.catch 첫 줄이 lateResultAdmitted(\'r1\', …) 이고, 그 술어는 QR 콜백의 인라인 규칙과 같은 표다 (F2 · ⚠ 철자 자 + 값)', () => {
-  // 값: 스위치가 R2 로 넘어간 뒤 완주한 R1 은 버리고, R1 위치에서는 세션만 같으면 통과(정식 환원).
+  // 값: 스위치가 R2 로 넘어간 뒤 완주한 R1 은 버리고, R1 위치에서는 세션만 같으면 통과(승격 전 정식의 환원).
   assert.equal(lateResultAdmitted('r1', { sameSession: true, r2Enabled: true }), false, 'R2 위치에서 늦은 R1 결과가 문을 지난다');
-  assert.equal(lateResultAdmitted('r1', { sameSession: true, r2Enabled: false }), true, '정식(R2 항상 꺼짐)에서 R1 이 막힌다 — 정식 제어 흐름이 바뀐다');
+  assert.equal(lateResultAdmitted('r1', { sameSession: true, r2Enabled: false }), true, 'R1 위치(R2 꺼짐)에서 R1 이 막힌다 — 그 위치의 제어 흐름이 바뀐다');
   assert.equal(lateResultAdmitted('r1', { sameSession: false, r2Enabled: false }), false);
   assert.equal(lateResultAdmitted('qr', { sameSession: true, r2Enabled: false }), false, 'R1 위치에서 늦은 QR 결과가 문을 지난다');
   // 철자: R1 블록의 .then 과 .catch 가 첫 문장으로 그 술어를 부른다 (QR 콜백은 qr-bridge.test 가 인라인 철자를 핀).
@@ -315,9 +352,13 @@ test('ⓘ 늦은 결과 문 — R1 .then/.catch 첫 줄이 lateResultAdmitted(\'
  * §27.6 2b′ (운영자 관측 2026-09-06) — 하단 안내가 R2 위치에서 «두 카드» 로 보인 것의 수리, 그리고 탭 반응.
  */
 
-test('ⓙ 하단 카드는 위치마다 한 장 — R1 = 조준(detail) · R2 = 범위(scope); 정식 off 는 현행 환원 (값 + ⚠ 철자 자)', () => {
-  // 값 — 순수 함수가 규칙을 쥔다. 정식(/)의 입력은 false 하나뿐이고 거기서 현행 화면(둘 다 보임)이 나온다.
-  assert.deepEqual(guideCardVisibility(false), { detail: true, scope: true }, '정식(R2 항상 꺼짐)에서 조준 카드가 사라진다');
+test('ⓙ 하단 카드는 위치마다 한 장 — R1 = 조준(detail) · R2 = 범위(scope); 승격 뒤 정식도 두 입력을 다 받는다 (값 + ⚠ 철자 자)', () => {
+  /*
+   * 값 — 순수 함수가 규칙을 쥔다. 승격 **전**엔 정식의 입력이 false 하나뿐이었고 그래서 이 자는
+   * 「정식은 현행 그대로」를 지켰다. 승격 **뒤** 정식은 스위치를 갖고 두 위치를 오가므로, 지켜야 하는
+   * 명제는 「두 입력이 각각 옳다」이고 그것이 곧 «정식 화면 = 시험판 화면» 이다.
+   */
+  assert.deepEqual(guideCardVisibility(false), { detail: true, scope: true }, 'R1 위치에서 조준 카드가 사라진다');
   assert.deepEqual(guideCardVisibility(true), { detail: false, scope: true }, 'R2 위치에서 조준 카드가 남아 «두 카드» 가 된다');
   // 모름·비불리언은 정식 쪽 — 부팅 순간의 undefined 가 조준 안내를 지우면 안 된다.
   for (const unknown of [undefined, null, 0, '', 'true']) {
@@ -325,6 +366,14 @@ test('ⓙ 하단 카드는 위치마다 한 장 — R1 = 조준(detail) · R2 = 
   }
   // 범위 카드는 어느 위치에서도 사라지지 않는다 — 문구만 scanScopeCopyKey 가 갈아끼운다.
   for (const value of [true, false, undefined]) assert.equal(guideCardVisibility(value).scope, true);
+  /*
+   * 승격 뒤 «정식이 실제로 보는 입력» 을 값으로 잰다 — 정식 첫 방문은 R2 위치(스위치 실재 ∧ 기본 켬)라
+   * 조준 카드가 숨는다. 승격 전이라면 이 조합이 성립하지 않아 정식은 언제나 둘 다 보임이었다.
+   */
+  const productDefaultR2 = engineSwitchAvailable({ labPath: false, productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED })
+    && resolveEngineChoice(null, null);
+  assert.deepEqual(guideCardVisibility(productDefaultR2), { detail: false, scope: true },
+    '정식 첫 방문의 하단 카드가 R2 위치의 것이 아니다 — 승격이 화면까지 안 갔다');
 
   // 철자 — refreshScanGuideCopy 가 그 값에서 hidden 을 **유도**한다. 리터럴 복사(= r2Runtime.enabled)면 사본이 썩는다.
   const at = JS.indexOf('function refreshScanGuideCopy()');
@@ -397,7 +446,7 @@ test('ⓚ 탭 즉시 반영 — 핸들러가 paint 를 먼저, 끝에 yieldFrame
     '양보 플래그 리셋이 다른 프레임 상태(lastDecodeAt·lastFrameCostMs) 와 떨어져 있다');
   assert.equal((JS.match(/yieldFrameOnce = true;/g) || []).length, 1, '플래그를 세우는 곳이 둘 이상 — 스위치 밖에서도 프레임을 버린다');
 
-  // (4) 눌림 피드백 — 스크립트 없이 브라우저가 그리는 즉시 응답. 정식엔 스위치가 hidden 이라 무해.
+  // (4) 눌림 피드백 — 스크립트 없이 브라우저가 그리는 즉시 응답. 승격 뒤로는 정식에서도 실제로 걸린다.
   assert.ok(/\.engine-switch-control:active\s*\{[^}]*background:/.test(HTML),
     ':active 배경 피드백이 없다 — 탭한 순간 «받았다» 가 없다');
 });

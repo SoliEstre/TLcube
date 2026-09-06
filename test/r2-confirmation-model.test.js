@@ -434,7 +434,7 @@ test('(xiii) 늦은 결과 문 — R1 은 R2 꺼짐에서만, QR·R2 는 R2 켜�
       assert.equal(lateResultAdmitted('r1', ctx) && lateResultAdmitted('qr', ctx), false, '같은 상태에서 두 엔진이 동시에 통과하면 결과가 겹친다');
     }
   }
-  // 정식(/) 환원: R2 가 항상 꺼져 있으면 r1 은 «세션이 같으면 통과».
+  // R1 위치 환원(승격 전 정식이 언제나 이 갈래였다): R2 가 꺼져 있으면 r1 은 «세션이 같으면 통과».
   assert.equal(lateResultAdmitted('r1', { sameSession: true, r2Enabled: false }), true);
   assert.equal(lateResultAdmitted('r1', { sameSession: false, r2Enabled: false }), false);
   for (const bad of ['', 'cube', undefined, null, 42]) assert.equal(lateResultAdmitted(bad, { sameSession: true, r2Enabled: true }), false, String(bad));

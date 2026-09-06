@@ -412,6 +412,39 @@ export function hudDistrusted(input) {
 }
 
 /**
+ * **HUD 세 표면의 표시 판정** (⑯(i) · 2026-09-06 승격).
+ *
+ * 옛 자리는 `renderR2CellMap` 안의 세 대입이었고, 그래서 「유예 중 오버레이가 열려 있는가」를
+ * 재는 방법이 **철자밖에** 없었다 (`r2HudCanvas.hidden = !(overlayOn || corrFresh)`). 결정 (i) 가
+ * 여는 표면이 바로 그 한 프레임이라 — 재는 축이 철자면 그 표면이 살아 있는지 아무도 모른다.
+ * 그래서 규칙을 값으로 옮긴다.
+ *
+ * 규칙:
+ *   · 그릴 근거가 없으면(스트림 없음 · 런타임 꺼짐 · 뷰 없음) **셋 다 숨김**. 이것이 `hideR2Hud` 의
+ *     «hidden» 부분이기도 하다 — 그쪽이 이 함수를 부르므로 규칙이 두 곳에 살지 않는다.
+ *   · 미니 상자와 셀맵은 살아 있는 동안 **항상** 보인다 (점진 표시가 SEARCHING 부터 시작한다).
+ *   · 전면 오버레이는 «그릴 H 가 있는 위상» 이거나 **정정 강조가 살아 있을 때**. 후자가 ⑯(i) 의
+ *     표면이다: 위상은 DONE(그리기를 멈추는 위상)인데 그리라고 말하는 유일한 입력이 `corrFresh` 다.
+ *
+ * @param {{hasStream?: boolean, runtimeEnabled?: boolean, hasView?: boolean, phase?: string, corrFresh?: boolean}} input
+ * @returns {{overlayHidden: boolean, miniHidden: boolean, cellMapHidden: boolean}}
+ */
+export function hudSurfaceVisibility(input) {
+  const src = (input !== null && typeof input === 'object') ? input : {};
+  const live = src.hasStream === true && src.runtimeEnabled === true && src.hasView === true;
+  if (!live) return { overlayHidden: true, miniHidden: true, cellMapHidden: true };
+  const phase = src.phase;
+  const overlayOn = phase !== HUD_PHASE.SEARCHING
+    && phase !== HUD_PHASE.DROPPED
+    && phase !== HUD_PHASE.DONE;
+  return {
+    overlayHidden: !(overlayOn || src.corrFresh === true),
+    miniHidden: false,
+    cellMapHidden: false,
+  };
+}
+
+/**
  * **같은 색, 알파만 배율** (3d 검토 결함 6). «불신» 을 그리는 표면이 셋인데(캔버스 선 ·
  * 미니 상자 CSS 테두리 · 그 테두리의 바깥 번짐) 색상은 셀맵의 «정정»(ERASURE) 하나여야 한다.
  * 세기만 다른 자리를 rgba 리터럴로 다시 적으면 셀맵 색을 바꾸는 날 그 자리만 옛 색으로 남는다

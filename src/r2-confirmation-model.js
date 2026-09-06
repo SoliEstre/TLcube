@@ -333,7 +333,8 @@ export function r2StatusOnReject(now) {
  *   · 세션이 바뀌었으면 어느 엔진이든 거부.
  *   · 'r1' 은 R2 가 꺼져 있을 때만 · 'qr'·'r2' 는 R2 가 켜져 있을 때만 (QR 콜백의 `session !== scanSession || !r2Runtime.enabled` 와 같은 표).
  *   · 모르는 엔진은 거부.
- * 정식(/)은 R2 가 항상 꺼져 있어 'r1' 은 «세션이 같으면 통과» 로 환원된다 — 정식 제어 흐름 불변.
+ * R1 **위치**(r2Enabled=false)에서는 'r1' 이 «세션이 같으면 통과» 로 환원된다 — 승격 전 정식의
+ * 제어 흐름이 정확히 그 환원이었다. **2026-09-06 승격** 뒤 정식은 위치에 따라 두 갈래를 다 탄다.
  * @param {'r1'|'qr'|'r2'} engine
  * @param {{sameSession:boolean, r2Enabled:boolean}} ctx
  */

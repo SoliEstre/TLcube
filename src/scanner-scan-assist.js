@@ -39,8 +39,9 @@ export function normalizeDecodePayload(result) {
 /**
  * 스캔 범위 안내(«QR 및 다른 바코드는 읽히지 않아요»)의 문구 키 — 3상태. R2 누적이 켜져 있으면
  * 브라우저의 QR 능력(BarcodeDetector)에 따라 «QR 도 읽어요» / «이 브라우저에선 못 읽어요» 로
- * 갈린다 (운영자 요구 ② · §26). off · 모름은 정식 문구 그대로 — 정식 경로(/)는 R2 가 항상
- * 꺼져 있어 이 함수가 정식 문구 밖을 낼 수 없다.
+ * 갈린다 (운영자 요구 ② · §26). off · 모름은 R1 위치의 문구(«TL 큐브만»)다.
+ * ⚠ **2026-09-06 승격** 뒤 이 함수의 입력은 정식에서도 두 값을 다 받는다 — 정식 첫 방문은
+ * R2 위치라 기본 문구가 `guide.scope.r2*` 쪽이다. 「정식은 언제나 tlcubeOnly」는 거짓이 됐다.
  */
 export function scanScopeCopyKey(r2Enabled, qrCapable) {
   if (r2Enabled !== true) return 'guide.tlcubeOnly';
@@ -56,8 +57,9 @@ export function scanScopeCopyKey(r2Enabled, qrCapable) {
  * 단발이 꼭짓점·고리·중앙을 한 장에서 맞춰야 하기 때문에 있는 문구다 — R2 누적은 여러 프레임을
  * 모으므로 그 지시가 그 위치의 지시가 아니다. 그래서 R1 위치 = 조준, R2 위치 = 범위.
  *
- * 정식(/)은 `r2Enabled` 가 **항상 false** 라 `{ detail: true, scope: true }` — 현행(조준 + 「QR 및
- * 다른 바코드는 읽히지 않아요」) 그대로다. 이 함수가 정식 화면을 바꿀 수 있는 입력은 없다.
+ * ⚠ **2026-09-06 승격** 뒤 정식도 스위치를 갖는다 — `r2Enabled` 가 두 값을 다 받고, 저장값 없는
+ * 첫 방문은 R2 위치라 정식의 기본 카드가 `{ detail: false, scope: true }`(범위 한 장)로 바뀌었다.
+ * 승격 전의 「정식 입력은 false 하나뿐」은 이제 거짓이다 (test/engine-switch.test ⓙ 가 값으로 잰다).
  */
 export function guideCardVisibility(r2Enabled) {
   return { detail: r2Enabled !== true, scope: true };
@@ -143,10 +145,16 @@ export function stageTapIsCentre(x, y, side, frac = STAGE_CENTRE_TAP_FRACTION) {
 }
 
 /**
- * 승격 플래그 — 정식(/)에 엔진 스위치와 R2 를 연다. 승격 커밋에서 true 로 바꾼다(그때 «승격 전 핀» 자가
- * 빨개져 사람이 본다). 능력 원장(R2_CAPABILITIES)과 섞지 않는다 — 능력과 출시 결정은 다른 것이다.
+ * 승격 플래그 — 정식(/)에 엔진 스위치와 R2 를 연다. **2026-09-06 승격**(운영자 실기 4차 판정 · 결정 ①):
+ * 정식 화면 = 시험판 화면(스위치 · R2 좌 패널 · HUD · 수동 리셋)이고, 저장값이 없는 첫 방문의 기본 엔진은
+ * `resolveEngineChoice` 의 기본값 그대로 **R2** 다. 능력 원장(R2_CAPABILITIES)과 섞지 않는다 — 능력과
+ * 출시 결정은 다른 것이다.
+ *
+ * ⚠ 되돌리면(false) 정식에서 R2 가 통째로 사라진다 — 스위치·패널·HUD·QR 브리지·R1 유휴 창(결정 ⑮)까지
+ *   한꺼번에 닫힌다. 그래서 이 값을 되돌리는 것은 «플래그 한 줄» 이 아니라 결정 ① 을 다시 여는 일이다
+ *   (`test/engine-switch.test.js` ⓐ 의 핀이 그때 빨개진다).
  */
-export const ENGINE_SWITCH_PRODUCT_ENABLED = false;
+export const ENGINE_SWITCH_PRODUCT_ENABLED = true;
 
 /**
  * «R2 가용» 진리표 — 시험판이거나 승격됐으면 참. 런타임 enabled · QR probe · 패널 렌더 · 스위치 표시 ·
@@ -162,8 +170,11 @@ export const ENGINE_STORAGE_KEY = 'tlscan.engine.r2';
 export const ENGINE_STORAGE_KEY_LEGACY = 'tlscan.lab.r2Accumulate';
 
 /**
- * 저장된 엔진 선택을 푼다 — 새 키가 있으면 그것, 없으면 옛 키, 둘 다 없으면 **켬**(시험판의 존재
- * 이유가 R2 실기다; 승격 후 기본은 결정 3 에서 다시 정한다).
+ * 저장된 엔진 선택을 푼다 — 새 키가 있으면 그것, 없으면 옛 키, 둘 다 없으면 **켬**.
+ *
+ * 승격(2026-09-06) 뒤 이 기본값이 곧 **정식의 기본 엔진 = R2** 다 (결정 ①). 새 코드로 정하지 않는다:
+ * «저장값 없음 → 켬» 이라는 이 한 규칙이 시험판과 정식 양쪽의 기본을 동시에 쥔다. 그 성질을
+ * `test/engine-switch.test.js` ⓑ 가 값으로 잰다.
  */
 export function resolveEngineChoice(stored, legacy) {
   if (stored === '1') return true;

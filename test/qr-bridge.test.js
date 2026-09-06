@@ -10,7 +10,8 @@
  *   ⓖ 게이트 진리표 · 프레임 라우팅(TL 우선·비노출·첫 OTHER) · 가시 영역 필터와 정렬.
  *   ⓗ 텔레메트리 via 값 집합이 잠긴다.
  *   ⓕ 배선 (⚠ 철자 자 — 브라우저 밖): 순수 함수를 부르는지, 영역을 넘기는지, 토글·정지에서 비우는지,
- *      정식에서 probe 를 안 하는지, QR URL 을 자동으로 안 여는지.
+ *      R2 가 **미가용**인 화면(승격 되돌림)에서 probe 를 안 하는지, QR URL 을 자동으로 안 여는지.
+ *      (승격 2026-09-06 뒤 정식은 r2Available 이라 probe 를 **한다** — 게이트는 그 하나뿐이다.)
  */
 
 import test from 'node:test';
@@ -198,7 +199,7 @@ test('ⓖ 게이트 진리표 · 프레임 라우팅(TL 우선·비노출) · �
   // 게이트: 셋 다 참일 때만.
   assert.equal(qrFrameGateOpen({ r2Enabled: true, qrSupported: true, readyState: 2 }), true);
   assert.equal(qrFrameGateOpen({ r2Enabled: true, qrSupported: true, readyState: 4 }), true);
-  assert.equal(qrFrameGateOpen({ r2Enabled: false, qrSupported: true, readyState: 4 }), false, '정식 경로(R2 off)에서 QR 이 돈다');
+  assert.equal(qrFrameGateOpen({ r2Enabled: false, qrSupported: true, readyState: 4 }), false, 'R1 위치(R2 off)에서 QR 이 돈다');
   assert.equal(qrFrameGateOpen({ r2Enabled: true, qrSupported: false, readyState: 4 }), false);
   assert.equal(qrFrameGateOpen({ r2Enabled: true, qrSupported: true, readyState: 1 }), false, 'HAVE_METADATA 에서 detect 를 던진다');
   assert.equal(qrFrameGateOpen({ r2Enabled: true, qrSupported: true }), false);
@@ -256,12 +257,12 @@ test('ⓗ 텔레메트리 via — 경로 이름으로 가르고, 값 집합이 �
   }
 });
 
-test('ⓕ 배선 — 순수 함수 호출 · 영역 · 세션+토글 재확인 · 토글·정지에서 비움 · 정식 probe 없음 · QR URL 자동 열기 없음 (⚠ 철자 자)', () => {
+test('ⓕ 배선 — 순수 함수 호출 · 영역 · 세션+토글 재확인 · 토글·정지에서 비움 · R2 미가용 화면엔 probe 없음 · QR URL 자동 열기 없음 (⚠ 철자 자)', () => {
   const js = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
   const at = js.indexOf('qrBridge.pushFrame(');
   assert.ok(at > 0, 'QR 브리지가 프레임을 못 받는다');
   const gate = js.slice(js.lastIndexOf('\n    if (', at), at);
-  assert.ok(gate.includes('qrFrameGateOpen({'), '게이트가 진리표 함수를 안 쓴다 — 조건이 손으로 조립되면 정식 불변을 자가 못 잰다');
+  assert.ok(gate.includes('qrFrameGateOpen({'), '게이트가 진리표 함수를 안 쓴다 — 조건이 손으로 조립되면 이 불변을 자가 못 잰다');
   const blockEnd = js.indexOf('\n    }\n', at);
   assert.ok(blockEnd > at, 'QR 블록의 닫는 줄을 못 찾았다');
   const call = js.slice(at, blockEnd);
@@ -281,7 +282,7 @@ test('ⓕ 배선 — 순수 함수 호출 · 영역 · 세션+토글 재확인 �
   assert.ok(toggle.includes('qrBridge.reset()') && toggle.includes('runtimeFamilyHint = null'),
     'R2 토글이 브리지·힌트를 안 비운다 — off 직후 QR 결과가 뜨고 옛 힌트가 R1 을 편향한다');
   assert.ok(js.includes('scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported)'), '문구가 브라우저 능력을 안 본다');
-  assert.ok(js.includes('if (r2Available) void qrBridge.probe().then('), '정식 경로에서도 BarcodeDetector 를 만든다 — 정식 불변 위반 (게이트는 r2Available 하나)');
+  assert.ok(js.includes('if (r2Available) void qrBridge.probe().then('), '게이트 없이 BarcodeDetector 를 만든다 — 승격을 되돌려도 probe 가 남는다 (게이트는 r2Available 하나)');
   assert.ok(js.includes('autoOpen: resultAutoOpen(result)'), 'URL 자동 열기가 허용 목록(resultAutoOpen)을 안 거친다 — QR·미지 출처가 열린다');
   assert.ok(js.includes('autoOpen ? tryOpenUrl(url) : false'), 'renderUrlPayload 가 autoOpen 을 안 본다');
   assert.ok(js.includes('popupBlockedNote.hidden = !autoOpen'), '자동으로 안 연 결과에 «새 탭을 열지 못했어요» 가 같이 뜬다 — intro 와 모순');
@@ -299,7 +300,7 @@ test('ⓘ frameYieldForQr — 비행 중이고 제출 뒤 cap 안일 때만 true
   assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: 1149 }), true);
   assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: 1150 }), false, 'cap 에 닿으면 굶기지 않는다');
   assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: 1050 }, 40), false, 'cap 인자');
-  assert.equal(frameYieldForQr({ inFlight: false, submittedAt: 1000, now: 1010 }), false, '비행 중이 아닌데 유예 — 정식 경로가 느려진다');
+  assert.equal(frameYieldForQr({ inFlight: false, submittedAt: 1000, now: 1010 }), false, '비행 중이 아닌데 유예 — 스캔 경로가 공짜로 느려진다');
   assert.equal(frameYieldForQr({ inFlight: true, submittedAt: NaN, now: 1010 }), false, 'reset 뒤(submittedAt NaN) 유예');
   assert.equal(frameYieldForQr({ inFlight: true, submittedAt: 1000, now: NaN }), false);
   assert.equal(frameYieldForQr(null), false);

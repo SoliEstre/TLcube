@@ -151,8 +151,10 @@ test('프레임 요약 라인 — 파이프라인 도달(geo→cs→stage)·cell
 });
 
 /*
- * 선택 줄(qr · hud, §27.4 0a·3a) — **«있을 때만» 규약**. 정식(`/`)에선 두 인자가 빈 문자열이므로 줄 수가
- * 기본 4줄 그대로여야 한다. 여기서 재는 것은 문자열 내용이 아니라 «없으면 늘지 않는다» 는 성질이다.
+ * 선택 줄(qr · hud, §27.4 0a·3a) — **«있을 때만» 규약**. 두 인자가 빈 문자열이면 줄 수가 기본 4줄
+ * 그대로여야 한다. 여기서 재는 것은 문자열 내용이 아니라 «없으면 늘지 않는다» 는 성질이다.
+ * ⚠ 승격(2026-09-06) 뒤 정식도 `r2Available` 이라 두 인자가 **채워진다** — 정식에서 이 오버레이가
+ * 아무 DOM 도 안 만지는 근거는 「인자가 비었다」가 아니라 `createDebugOverlay({enabled: isLabPath()})` 다.
  */
 test('선택 줄(hud) — 있으면 마지막 줄로 붙고, 없으면 줄 수가 안 변한다', () => {
   const base = summarizeFrameDebug({ cellSurface: { attempted: false }, ok: true, stage: 'decode' });
@@ -161,7 +163,7 @@ test('선택 줄(hud) — 있으면 마지막 줄로 붙고, 없으면 줄 수�
     assert.equal(
       summarizeFrameDebug({ cellSurface: { attempted: false }, ok: true, stage: 'decode', hud: empty }).length,
       base.length,
-      'hud 가 ' + String(empty) + ' 인데 줄이 늘었다 — 정식 패널이 빈 줄을 얻는다',
+      'hud 가 ' + String(empty) + ' 인데 줄이 늘었다 — 패널이 빈 줄을 얻는다',
     );
   }
   const withHud = summarizeFrameDebug({

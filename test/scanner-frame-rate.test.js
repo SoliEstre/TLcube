@@ -7,8 +7,11 @@
  *      scanner.js 가 두 함수를 겹쳐 부르는 이유가 이것이다: 옛 철자(adaptiveFrameIntervalMs(lastFrameCostMs))
  *      를 앵커로 찍는 두 자(qr-bridge ⓕ' · scanner-fpscap)를 살린 채 뜻만 바꾼다. 이 자가 빨개지면
  *      **겹쳐 부르는 것이 더는 항등이 아니다** — 그때 scanner.js 는 바깥 한 겹을 벗겨야 한다.
- *   ⓓ 배선(⚠ 철자 자) — 캐던스·기준점이 `r2Available` 로 갈린다(스위치 실재 = 유휴 창, 정식 = 옛 시작 기준),
+ *   ⓓ 배선(⚠ 철자 자) — 캐던스·기준점이 `r2Available` 로 갈린다(스위치 실재 = 유휴 창),
  *      갱신은 `.finally` 한 곳, 옛 철자 `lastDecodeAt = timestamp` 는 0건.
+ *      ⚠ **승격(2026-09-06)으로 이 자의 «정식» 문장이 바뀌었다**: 갈래는 그대로지만 정식도 스위치를
+ *      가지므로(ENGINE_SWITCH_PRODUCT_ENABLED) 정식이 서는 쪽은 **유휴 창**이다 — 결정 ⑮ 는 새 코드
+ *      없이 승격으로 시험판 동작 그대로 넘어간다. 어느 쪽에 서는지는 아래에서 **값으로** 잰다.
  *   ⓔ 거래가 주석에 적혀 있고 그 수치가 R1_IDLE_FRACTION 에서 **유도**된다 — 처리율을 판다는 사실이
  *      소스에 없으면 다음 사람이 «회귀» 로 되돌리고, 손으로 적은 수치는 비율을 바꾸면 조용히 썩는다.
  */
@@ -24,6 +27,8 @@ import {
   adaptiveFrameIntervalMs,
   idleAfterDecodeMs,
 } from '../src/scanner-frame-rate.js';
+// 승격(2026-09-06) 뒤 «정식이 어느 갈래에 서는가» 는 진리표에서 나온다 — 손으로 적으면 그 사본이 썩는다.
+import { ENGINE_SWITCH_PRODUCT_ENABLED, engineSwitchAvailable } from '../src/scanner-scan-assist.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
@@ -76,12 +81,31 @@ test('ⓓ 배선 — 캐던스는 `r2Available` 로 갈리고, 기준점 갱신�
   const loop = JS.slice(loopAt, JS.indexOf('async function startCamera(', loopAt));
   assert.ok(loop.length > 0, '프레임 루프를 못 찾았다');
 
-  // 두 갈래 — 스위치가 실재할 때만 유휴 창을 산다. 정식(/)은 옛 «시작 시각 기준» 간격 그대로다.
-  // ⚠ 이 자가 지키는 것: 시험판 반응성(⑤)을 위해 **스위치가 없는 정식의 처리율을 팔지 않는다**.
+  /*
+   * 두 갈래 — 유휴 창은 «스위치가 실재하는가»(r2Available)에 매인다. 그 매임이 이 자가 지키는 것이다:
+   * 스위치가 없는 화면에서는 반응성을 살 이유가 없으므로 −33 % 를 치르지 않는다.
+   * 승격(2026-09-06) 뒤 정식은 스위치를 갖는다 → 정식도 유휴 창 쪽이다 (결정 ⑮ 가 그대로 넘어간다).
+   * 갈래 자체는 지운 게 아니라 **입력이 옮겨 간 것**이다 — 되돌리면 정식이 다시 옛 간격으로 간다.
+   */
   assert.ok(/const intervalMs = r2Available\s*\n?\s*\? idleAfterDecodeMs\(adaptiveFrameIntervalMs\(lastFrameCostMs\)\)\s*\n?\s*: adaptiveFrameIntervalMs\(lastFrameCostMs\);/.test(loop),
     '캐던스가 r2Available 로 갈리지 않는다 — 스위치가 hidden 인 정식이 유휴 창의 −33 % 를 대신 치른다');
   assert.ok(/lastDecodeAt = r2Available \? frameStartedAt \+ lastFrameCostMs : frameStartedAt;/.test(loop),
     '기준점이 캐던스와 짝이 아니다 — 한쪽만 완료 기준이면 간격의 뜻이 갈린다');
+
+  /*
+   * **값** — 정식이 실제로 어느 갈래에 서는가 (승격 2026-09-06 · 결정 ⑮). 위 두 단언은 갈래의 **철자**만
+   * 재므로, 갈래가 살아 있는 채로 정식이 엉뚱한 쪽에 서 있어도 초록이다. 그래서 진리표를 정식 입력으로
+   * 실제로 통과시켜 「정식이 유휴 창을 산다」를 잰다 — 승격을 되돌리면 이 줄이 먼저 빨개진다.
+   */
+  const productR2Available = engineSwitchAvailable({ labPath: false, productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED });
+  assert.equal(productR2Available, true,
+    '정식이 유휴 창 갈래에 안 선다 — 결정 ⑮ 가 승격으로 안 넘어갔다(정식은 옛 시작 시각 기준 그대로다)');
+  // 그리고 그 갈래에서 실제로 사는 간격이 옛 간격보다 크다 — «−33 %» 의 값 쪽 얼굴이다.
+  for (const cost of [400, 1400, 2800]) {
+    const chosen = productR2Available ? idleAfterDecodeMs(adaptiveFrameIntervalMs(cost)) : adaptiveFrameIntervalMs(cost);
+    assert.ok(chosen > 0 && chosen === idleAfterDecodeMs(cost),
+      cost + 'ms 에서 정식이 사는 유휴가 유휴 창의 값이 아니다');
+  }
 
   // 정식 분기는 rAF `timestamp` 가 아니라 같은 콜백의 `frameStartedAt` 을 쓴다(차이 <1 ms). 옛 철자 부활 금지.
   assert.ok(!/lastDecodeAt\s*=\s*timestamp/.test(JS),
@@ -115,7 +139,15 @@ test('ⓔ 거래가 소스에 적혀 있다 — 그리고 적힌 수치가 상�
   const loop = JS.slice(loopAt, JS.indexOf('async function startCamera(', loopAt));
   assert.ok(written.test(loop),
     'scanner.js 의 캐던스 자리 수치가 R1_IDLE_FRACTION 과 어긋난다 (기대 −' + pct + ' %)');
-  // 그리고 그 거래를 «누가 치르는가» 도 적혀 있어야 한다 — 정식은 안 치른다는 사실이 이 레인의 결론이다.
-  assert.ok(/r2Available/.test(loop) && /정식/.test(loop),
-    '캐던스 주석이 «정식은 이 거래를 치르지 않는다» 를 안 적었다 — 다음 사람이 갈래를 지운다');
+  /*
+   * 그리고 그 거래를 «누가 치르는가» 도 적혀 있어야 한다. 승격(2026-09-06) **전**엔 그 답이 «정식은
+   * 안 치른다» 였고 지금은 정반대다 — 스위치가 정식에 섰으므로 결정 ⑮ 가 새 코드 없이 넘어가 정식의
+   * R1 위치도 −33 % 를 치른다. 그래서 여기서 재는 것은 「정식」이라는 **글자**가 아니라 ① 갈래의
+   * 입력(`r2Available`) ② 갈래를 옮긴 사건(승격 날짜)이 적혀 있는가, 그리고 ③ 승격 전의 거짓 문장이
+   * 되살아나지 **않았는가** 다. 값 쪽 얼굴은 ⓓ 가 잰다(정식 입력이 실제로 유휴 창 갈래에 선다).
+   */
+  assert.ok(/r2Available/.test(loop) && /2026-09-06/.test(loop),
+    '캐던스 주석이 «누가 이 거래를 치르는가»(갈래 입력 + 승격 사건)를 안 적었다 — 다음 사람이 갈래를 지운다');
+  assert.ok(!/정식[^\n]{0,20}(안 치른다|치르지 않는다)/.test(loop),
+    '캐던스 주석이 승격 전의 거짓 문장(«정식은 이 거래를 치르지 않는다»)으로 되돌아갔다 — 승격 뒤 정식도 치른다');
 });

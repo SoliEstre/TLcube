@@ -118,6 +118,48 @@ test('생성기와 스캐너의 /lab/ HTML은 exact alias와 no-store로 서빙�
   }
 });
 
+/*
+ * 정식 스캐너 한 장(`/`)의 캐시 — **승격 2026-09-06** 에 붙인 자.
+ *
+ * 왜 자가 필요한가: 헤더가 **없는 것**은 화면에서 안 보인다. 헤더가 없으면 nginx 는
+ * Last-Modified 만 실어 보내고 브라우저가 휴리스틱 캐시(대략 age/10)를 쓰므로, 배포 뒤
+ * 재방문이 옛 번들을 그대로 받는다 — 「배포했는데 안 바뀌었다」의 정확한 경로다.
+ * 서비스 워커는 이 구멍을 못 막는다(network-first 여도 `fetch(request)` 가 HTTP 캐시를 지난다).
+ * 재는 것은 **성질**이다: `/` 가 재검증을 강제하는 캐시 지시자를 갖고, 7일 public 이 아니다.
+ * 「no-cache 라고 적혀 있나」가 아니라 no-store 로 바꿔도 통과한다(둘 다 옛 번들을 막는다).
+ */
+function validateProductRootCache(source) {
+  const [block] = exactLocationBlocks(source, '/');
+  assert.ok(block, '정식 루트(/)에 exact location 이 없다 — 캐시 헤더를 걸 자리가 없어 휴리스틱 캐시가 옛 번들을 낸다');
+  assert.match(block, /add_header\s+Cache-Control\s+"(no-cache|no-store)"/,
+    '정식 루트(/)가 재검증을 강제하지 않는다 — 배포 뒤 재방문이 옛 dist/tlscan.html 을 받는다');
+  assert.doesNotMatch(block, /expires\s+\d|Cache-Control\s+"public/,
+    '정식 루트(/)에 만료 캐시가 걸렸다 — 승격 배포가 사용자에게 안 간다');
+  assert.match(block, /try_files\s+\/index\.html\s+=404;/,
+    '정식 루트(/)가 index.html 을 안 내보낸다 — exact location 이 문서 루트 서빙을 가로챘다');
+  return block;
+}
+
+test('정식 루트(/)는 재검증을 강제해 옛 번들이 남지 않는다 (승격 2026-09-06)', () => {
+  validateProductRootCache(read('deploy/estre-so/projects/tlcube/static.conf'));
+});
+
+test('가드 반증: 정식 루트(/)의 캐시 지시자를 7일 public 으로 바꾸면 검증이 실패한다', () => {
+  const source = read('deploy/estre-so/projects/tlcube/static.conf');
+  // ⚠ 지금 적힌 지시자를 **찾아서** 바꾼다 — 여기에 'no-cache' 를 적으면 no-store 로 고쳐 쓴
+  //   정답이 반증 mutation 을 못 만들어 자가 엉뚱한 축에서 빨개진다(자기 철자에 묶인 자).
+  const mutated = source.replace(
+    /add_header\s+Cache-Control\s+"(?:no-cache|no-store)"\s+always;/,
+    'expires 7d;\n        add_header Cache-Control "public";',
+  );
+  assert.notEqual(mutated, source, '반증용 mutation이 적용되지 않았다');
+  assert.throws(() => validateProductRootCache(mutated));
+  // 그리고 블록을 통째로 지워도(= 승격 전 상태) 빨개진다 — 「부재」가 곧 결함이다.
+  const removed = source.replace(/    location = \/ \{[\s\S]*?\n    \}\n\n/, '');
+  assert.notEqual(removed, source, '반증용 삭제가 적용되지 않았다');
+  assert.throws(() => validateProductRootCache(removed));
+});
+
 test('기존 _shared 7일 캐시는 유지되지만 /lab/ 블록 안으로 들어오지 않는다', () => {
   for (const file of [...new Set(ROUTES.map((route) => route.file))]) {
     const source = read(file);

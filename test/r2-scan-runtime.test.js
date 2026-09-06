@@ -9,7 +9,7 @@
  *      `alignInto` 안에만 있어 잘못된 락이 영구 동결된다 (§21.3 F1, 닫힌 고리).
  *   ⓒ 후보 수를 `finalLayoutIdsForN` 에서 **유도**한다 — 상수로 박으면 n=13(후보 1개)이
  *      쓸데없이 비싸진다 (§23.6.1).
- *   ⓓ **플래그가 꺼져 있으면 아무 일도 하지 않는다** — 정식 경로의 제어 흐름 불변.
+ *   ⓓ **플래그가 꺼져 있으면 아무 일도 하지 않는다** — R1 위치(승격 전 정식의 유일한 갈래)의 제어 흐름 불변.
  *
  * ⚠ 이 파일이 못 재는 축: 라이브 프레임률·손떨림·grab 비용. 브라우저 밖이다.
  * 실물 거동은 `tools/r2-runtime-probe.mjs` 가 코퍼스로 잰다.
@@ -50,7 +50,7 @@ function firstFrames(name, count, start = 0) {
 test('ⓓ 플래그가 꺼져 있으면 아무 일도 하지 않는다', () => {
   const runtime = createR2ScanRuntime({ enabled: false });
   assert.equal(runtime.enabled, false);
-  // 프레임을 밀어도 세션을 만들지 않는다 — 정식 경로에서 이것이 곧 «불변» 이다.
+  // 프레임을 밀어도 세션을 만들지 않는다 — R1 위치에서 이것이 곧 «불변» 이다.
   const fake = { width: 4, height: 4, data: new Float32Array(16) };
   for (let i = 0; i < 5; i += 1) {
     assert.equal(runtime.pushFrame(fake, i * 33), null);
@@ -118,7 +118,7 @@ test('ⓑ 배선이 R2 결과를 R1 과 **같은 문**으로 보내고, 플래�
   // grab 이 **블록 안**에 있어야 플래그 off 에서 비용이 0 이다.
   assert.ok(/grabVideoFrame\(/.test(block),
     'R2 블록이 자기 grab 을 안 한다 — R1 의 grab 을 공유하면 플래그 off 에서도 '
-    + '정식 경로의 타이밍이 달라진다');
+    + 'R1 위치의 타이밍이 달라진다');
   // 결과는 R1 과 같은 문으로 나가야 한다 — 새 표시 경로를 만들면 두 경로가 어긋난다.
   assert.ok(/handleDecodeResult\(/.test(block),
     'R2 결과가 handleDecodeResult 를 안 거친다 — 표시 경로가 갈라진다');
@@ -363,8 +363,8 @@ test('ⓙ 배선 — 거부된 R2 결과가 루프를 죽이지 않고 R2 를 �
 });
 
 test('ⓛ 범위 안내가 R2 토글을 따르고 배선이 살아 있다 (운영자 요구 ② · 3상태는 qr-bridge.test ⓔ)', () => {
-  assert.equal(scanScopeCopyKey(false), 'guide.tlcubeOnly', 'off 는 정식 문구 그대로여야 한다');
-  assert.equal(scanScopeCopyKey(undefined), 'guide.tlcubeOnly', '모름은 정식 문구다');
+  assert.equal(scanScopeCopyKey(false), 'guide.tlcubeOnly', 'off 는 «TL 큐브만» 문구여야 한다');
+  assert.equal(scanScopeCopyKey(undefined), 'guide.tlcubeOnly', '모름도 «TL 큐브만» 문구다');
   assert.notEqual(scanScopeCopyKey(true), scanScopeCopyKey(false), 'on 인데 문구가 안 바뀐다');
   for (const key of [scanScopeCopyKey(true, false), scanScopeCopyKey(true, true)]) {
     for (const lang of Object.keys(SCANNER_STRINGS)) {
@@ -401,7 +401,7 @@ test('ⓜ stats 표면 — 필수 키 ⊆ 키 집합, 꺼진 런타임은 프레
   const before = JSON.stringify(fresh.stats);
   const fake = { width: 4, height: 4, data: new Float32Array(16) };
   for (let i = 0; i < 3; i += 1) fresh.pushFrame(fake, i * 100);
-  assert.equal(JSON.stringify(fresh.stats), before, '꺼진 런타임의 stats 가 변했다 — 정식 경로 불변 위반');
+  assert.equal(JSON.stringify(fresh.stats), before, '꺼진 런타임의 stats 가 변했다 — R1 위치 불변 위반');
   for (const k of ['H', 'n', 'lockRevision', 'cellFaceCentres', 'cellMap', 'cellCount']) assert.ok(k in fresh.view, 'view 에 ' + k + ' 가 없다');
 });
 
@@ -565,7 +565,18 @@ test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 
   // F5 — 막대 메모는 칩과 같은 락 판정(progressNote).
   assert.ok(progressFn.includes('progressNote({ stats, view })'), '메모가 stats.lockedN 을 직접 쓴다 — 코스팅 중 «칩 없음 · n0·5» 모순');
   // (b) 결과 문이 R2 출처에만 래치를 싣고, showResult 가 요약을 그리며, hideResult 가 지운다.
-  assert.ok(js.includes("r2Summary: result.source === 'r2' ? r2Latched : null"), '결과 문이 R2 출처 결과에 래치를 안 싣는다 (또는 사진 결과에도 싣는다)');
+  /*
+   * 규칙은 «R2 출처일 때만 래치, 아니면 null» 이고 자는 그 **규칙**을 잰다 — 인라인으로 쓰든 변수로
+   * 붙잡든 통과해야 한다. (⑯(i) 유예가 들어오면서 이 식은 결과 시트 클로저 **밖**으로 나와 수용
+   * 시점에 값으로 붙잡힌다: 유예 600 ms 중 래치를 비우는 입구가 카드를 지우기 때문이다. 그
+   * «클로저가 래치를 안 읽는다» 쪽은 scanner-accept-delay ⓗ 가 잰다.)
+   */
+  const doorAt = js.indexOf('function handleDecodeResult(');
+  const door = js.slice(doorAt, js.indexOf('function startFrameLoop(', doorAt));
+  assert.ok(/result\.source === 'r2' \? r2Latched : null/.test(door),
+    '결과 문이 R2 출처 결과에 래치를 안 싣는다 (또는 사진 결과에도 싣는다)');
+  assert.ok(/r2Summary:\s*[A-Za-z_$][\w$.]*/.test(door),
+    '결과 시트 호출이 그 요약을 안 넘긴다 — 규칙만 있고 표면에 도달하지 않는다');
   const show = js.slice(js.indexOf('function showResult('), js.indexOf('function hideResult('));
   assert.ok(show.includes('renderResultR2Summary(settings.r2Summary || null)'), 'showResult 가 확정 요약을 안 그린다');
   const hide = js.slice(js.indexOf('function hideResult('), js.indexOf('function closeResult('));

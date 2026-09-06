@@ -17,8 +17,8 @@ export const CLIP_HINT_MS = 960;
 export const ESCALATE_INTERVAL_MS = 1600;
 
 /**
- * 하한 100 으로 묶은 직전 전체 프레임 비용. 두 뜻으로 쓰인다 — 정식(/) R1 은 이 값을 그대로
- * «복호 **시작** 시각 사이의 간격» 으로 쓰고, 스위치가 실재하는 화면(시험판·승격)은 이 값을
+ * 하한 100 으로 묶은 직전 전체 프레임 비용. 두 뜻으로 쓰인다 — 스위치가 **없는** 화면의 R1 은 이
+ * 값을 그대로 «복호 **시작** 시각 사이의 간격» 으로 쓰고, 스위치가 실재하는 화면은 이 값을
  * `idleAfterDecodeMs` 의 입력, 즉 **완료 뒤 유휴 창**의 재료로 쓴다 (sites/tlscan/scanner.js R1 캐던스).
  */
 export function adaptiveFrameIntervalMs(previousFrameCostMs) {
@@ -40,8 +40,10 @@ export function adaptiveFrameIntervalMs(previousFrameCostMs) {
  * 복호 사이에 cost × 비율의 유휴가 생겨 입력·페인트·rAF 가 실제로 돈다. 밀도가 아니라 반응성을 산다.
  * (수치는 비율에서 유도된다 — scanner-frame-rate.test ⓔ 가 상수와 이 문장을 함께 잰다.)
  *
- * ⚠ **누가 이 거래를 치르나**: 엔진 스위치가 실재하는 화면(`r2Available` — 시험판, 승격 후 정식)만.
- * 스위치가 없는 지금의 정식(/)은 살 반응성이 없으므로 옛 시작 시각 기준 캐던스를 그대로 쓴다
+ * ⚠ **누가 이 거래를 치르나**: 엔진 스위치가 실재하는 화면(`r2Available`)만. **2026-09-06 승격**
+ * 뒤로는 시험판·정식 **둘 다**가 그 화면이라, R1 위치를 고른 정식 사용자의 처리율도 −33 % 다
+ * (결정 ⑮ 가 새 코드 없이 이 갈래를 타고 넘어갔다). 스위치가 없는 화면 — 승격을 되돌린 정식 —
+ * 만 옛 시작 시각 기준 캐던스로 돌아간다
  * (sites/tlscan/scanner.js 의 `const intervalMs = r2Available ? … : …`).
  */
 export const R1_IDLE_FRACTION = 0.5;

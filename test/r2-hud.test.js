@@ -28,7 +28,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { HUD_BUCKETS, HUD_PHASE, HUD_ROLE, bucketKey } from '../src/r2-hud-model.js';
+import { HUD_BUCKETS, HUD_PHASE, HUD_ROLE, bucketKey, hudSurfaceVisibility } from '../src/r2-hud-model.js';
 // 중앙 탭 판정은 순수 함수라 여기서 **값으로** 잰다 (r2-hud*.test 가 이 레인의 자리다 — ⓖ).
 import { STAGE_CENTRE_TAP_FRACTION, stageTapIsCentre, analysisScaleOf } from '../src/scanner-scan-assist.js';
 // 줌 계획은 순수 모듈이 만든다 — ⓙ 가 «track 줌» 을 **값으로** 재려면 그 계획이 필요하다 (결함 15).
@@ -163,7 +163,7 @@ test('ⓐ 마크업 — 전면 HUD 캔버스가 스테이지 안·상단 행 앞
   const mutated = '<canvas class="r2-hud" id="r2-hud" aria-hidden="true"></canvas>';
   assert.ok(!authoredHiddenRe('r2-hud').test(mutated),
     'authored-hidden 자가 aria-hidden 에 걸려 통과한다 — 이 자는 hidden 제거를 못 잡는다');
-  assert.match(stage, authoredHiddenRe('r2-hud'), '전면 HUD 가 authored hidden 이 아니다 — 정식(/) 렌더가 바뀐다');
+  assert.match(stage, authoredHiddenRe('r2-hud'), '전면 HUD 가 authored hidden 이 아니다 — r2Available 이 거짓인 화면(승격 되돌림)에서도 뜬다');
   assert.match(stage, /id="r2-hud"[^>]*aria-hidden="true"/, '장식 캔버스가 낭독 대상이다');
 
   // 미니 상자 — 셀맵 캔버스와 스캔선을 **한 상자 안에** 담아야 상자가 둘을 같이 잘라낸다.
@@ -378,7 +378,7 @@ test('ⓕ 수동 리셋 — 스테이지 안 · authored hidden · 눌리는 층
   assert.ok(stage.includes('id="scan-reset"'),
     '수동 리셋 버튼이 스테이지 안에 없다 — 밖이면 중앙 탭과 좌표계가 다르고 뷰파인더를 안 따라간다');
   assert.match(stage, authoredHiddenRe('scan-reset'),
-    '리셋 버튼이 authored hidden 이 아니다 — 정식(/) 렌더가 바뀐다');
+    '리셋 버튼이 authored hidden 이 아니다 — r2Available 이 거짓인 화면(승격 되돌림)에서도 뜬다');
   assert.match(stage, /id="scan-reset"[^>]*type="button"|type="button"[^>]*id="scan-reset"/,
     '리셋 버튼에 type="button" 이 없다 — 폼 안에 들어가는 날 submit 이 된다');
   // 낭독은 아이콘(↺)이 아니라 문구가 맡는다 — 여덟 언어 값은 scanner-i18n.test 가 잰다.
@@ -412,7 +412,7 @@ test('ⓕ 수동 리셋 — 스테이지 안 · authored hidden · 눌리는 층
   );
   const meter = cssBlock('.steady-meter');
   assert.ok(resetBottom >= px(meter, 'bottom') + px(meter, 'height'),
-    '리셋 버튼이 안정 게이지와 겹친다 — 정식 화면의 유일한 인디케이터를 가린다');
+    '리셋 버튼이 안정 게이지와 겹친다 — 조준 중 유일하게 늘 떠 있는 인디케이터를 가린다');
   assert.ok(!/(?:^|[\s;{])top:/.test(reset),
     '리셋 버튼이 top 앵커다 — 상단 행과 같은 모서리를 잡으면 짧은 폰에서 겹친다');
   const miniMax = Number((cssBlock('.r2-hud-mini').match(/width:\s*min\([^,]+,\s*(\d+)px\)/) || [])[1]);
@@ -586,7 +586,7 @@ test('ⓙ ⚠ 철자 자 — 줌 커밋은 락만 무효화(H4)하고, 리셋 �
   assert.equal(analysisScaleOf(null, undefined), 1, '모르는 입력이 1 이 아니다 — 모르는 값으로 락을 흔든다');
 
   assert.ok(/r2Runtime\.enabled && currentAnalysisScale\(\) !== scaleBefore/.test(zoom),
-    '줌 커밋이 «분석 배율이 실제로 바뀌었을 때 · R2 켜짐» 을 안 가린다 — 정식 경로가 흔들리거나 매 커밋마다 락이 풀린다');
+    '줌 커밋이 «분석 배율이 실제로 바뀌었을 때 · R2 켜짐» 을 안 가린다 — R1 위치가 흔들리거나 매 커밋마다 락이 풀린다');
   assert.ok(/function currentAnalysisScale\(\)[\s\S]{0,400}?analysisScaleOf\(zoomPlan, autoCropZoomFor\(autoCropIndex\)\)/.test(JS),
     '스캐너가 순수 식(analysisScaleOf)을 안 쓴다 — 배율 계산이 또 두 곳에 산다');
   assert.ok(zoom.includes('r2Runtime.invalidateLock()'),
@@ -610,9 +610,9 @@ test('ⓙ ⚠ 철자 자 — 줌 커밋은 락만 무효화(H4)하고, 리셋 �
     '중앙 탭이 순수 판정을 안 쓴다 — 기하가 브라우저 안에 갇힌다');
   assert.ok(/closest\('#stage-top-row, #scan-reset'\)/.test(JS),
     '중앙 탭이 상단 행·버튼 위를 안 가린다 — 스위치를 누르면 스캔이 리셋된다');
-  // 표시는 카메라 수명에 묶이고, 정식(/)에서는 열리지 않는다.
+  // 표시는 카메라 수명에 묶이고, `r2Available` 이 거짓인 화면(승격 되돌림)에서는 열리지 않는다.
   assert.ok(/scanResetButton\.hidden = !\(active && r2Available\)/.test(JS),
-    '리셋 버튼 표시가 «카메라 켜짐 ∧ r2Available» 이 아니다 — 정식 렌더가 바뀌거나 카메라 없이 뜬다');
+    '리셋 버튼 표시가 «카메라 켜짐 ∧ r2Available» 이 아니다 — 게이트 없이 뜨거나 카메라 없이 뜬다');
 });
 
 test('ⓚ 시험판 hud 줄 — 순수 빌더의 **출력**을 값으로 잰다 (있을 때만 · 길이 예산 · 카운터 유도)', () => {
@@ -861,8 +861,29 @@ test('ⓞ ⚠ 철자 자 — 정정 강조의 붓·α·두 표면·비우기가 
     '오버레이 채움이 정정 프레임에서 안 열린다 — 강조가 맥락 없이 뜬다');
   assert.match(body, /const miniFills = [^;]*\|\| corrFresh\)/,
     '미니 채움이 정정 프레임에서 안 열린다');
-  assert.match(body, /r2HudCanvas\.hidden = !\(overlayOn \|\| corrFresh\)/,
-    '오버레이 캔버스가 정정 프레임에 안 열린다');
+  /*
+   * ⚠ **의도적 갱신 (2026-09-06 승격 · ⑯(i))** — 옛 자는 `r2HudCanvas.hidden = !(overlayOn || corrFresh)`
+   * 라는 **철자**를 요구했다. 결정 (i) 가 여는 표면이 정확히 이 한 프레임이라, 재는 축이 철자면
+   * 「그 표면이 살아 있는가」를 아무도 모른다 (memory: 철자를 재는 자는 썩는다). 판정은 순수 함수로
+   * 옮겼고 여기서는 **값**으로 잰다 — 정답을 다르게 써도 통과해야 한다.
+   */
+  const live = { hasStream: true, runtimeEnabled: true, hasView: true };
+  // DONE 위상은 원래 오버레이가 닫히는 자리다 — 정정 강조 하나가 그것을 연다. 그게 이 표면의 전부다.
+  assert.equal(hudSurfaceVisibility({ ...live, phase: HUD_PHASE.DONE, corrFresh: false }).overlayHidden, true,
+    '정정 없는 DONE 에서 오버레이가 열린다 — 결과 시트 아래에 빈 그림이 남는다');
+  assert.equal(hudSurfaceVisibility({ ...live, phase: HUD_PHASE.DONE, corrFresh: true }).overlayHidden, false,
+    '정정 강조가 살아 있는 DONE 프레임에 오버레이가 안 열린다 — ⑯(i) 가 산 600 ms 가 빈 화면이 된다');
+  // 그릴 H 가 없는 두 위상은 정정이 없으면 닫힌 채다.
+  for (const phase of [HUD_PHASE.SEARCHING, HUD_PHASE.DROPPED]) {
+    assert.equal(hudSurfaceVisibility({ ...live, phase, corrFresh: false }).overlayHidden, true, phase + ' 에서 오버레이가 열린다');
+  }
+  // 그리고 배선 — 렌더러가 그 판정을 **직접** 다시 쓰지 않고 순수 함수에서 읽는다.
+  assert.ok(body.includes('hudSurfaceVisibility('),
+    '렌더러가 표시 판정을 손으로 다시 적는다 — 규칙이 두 곳에 산다');
+  assert.ok(body.includes('r2HudCanvas.hidden = surfaces.overlayHidden'),
+    '오버레이 캔버스 표시가 순수 판정의 출력이 아니다');
+  assert.ok(!/r2HudCanvas\.hidden\s*=\s*!?\(?(overlayOn|true|false)/.test(body),
+    '오버레이 표시를 위상·리터럴에서 직접 복사한다 — 정정 프레임이 다시 닫힌다');
 
   /*
    * ⑧ **경로 객체는 그릴 게 있을 때만 만든다** (3b 검토 F16). 위 채움 경로가 세운 규율과 같다 —

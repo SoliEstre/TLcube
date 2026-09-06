@@ -25,6 +25,7 @@ import {
   hudDistrusted,
   hudPhase,
   hudProjectionChanged,
+  hudSurfaceVisibility,
   hudToneSlot,
   countObserved,
   fadeAlpha,
@@ -529,4 +530,55 @@ test('3d hud 줄 — 마진은 **불신일 때만** 실리고, 가르는 구간�
   // 미측정은 «—» 다 (거짓 0 금지).
   assert.ok(r2HudDebugLine(hud, { lockF: 18, lockMargin: NaN, lockDistrusted: true }).includes('!M—'),
     '미측정 마진이 숫자로 보인다');
+});
+
+/*
+ * ⑯(i) (2026-09-06 승격) — **HUD 세 표면의 표시 판정**. 옛 자리는 렌더러 안의 세 대입이었고, 그래서
+ * 「유예 창에서 오버레이가 열려 있는가」를 재는 방법이 철자밖에 없었다 — 결정 (i) 가 여는 표면이
+ * 정확히 그 프레임이라, 그 축은 값으로 재야 한다 (memory: 철자를 재는 자는 썩는다).
+ */
+
+test('⑯(i) hudSurfaceVisibility — 그릴 근거가 없으면 셋 다 숨김 (hideR2Hud 와 같은 규칙)', () => {
+  const all = { overlayHidden: true, miniHidden: true, cellMapHidden: true };
+  // 스트림·런타임·뷰 중 **하나라도** 없으면 닫힌다 — 세 축을 각각 흔들어 본다(하나라도 안 보면 그 축이 영원히 안 보인다).
+  assert.deepEqual(hudSurfaceVisibility({ hasStream: false, runtimeEnabled: true, hasView: true, phase: HUD_PHASE.DATA }), all);
+  assert.deepEqual(hudSurfaceVisibility({ hasStream: true, runtimeEnabled: false, hasView: true, phase: HUD_PHASE.DATA }), all);
+  assert.deepEqual(hudSurfaceVisibility({ hasStream: true, runtimeEnabled: true, hasView: false, phase: HUD_PHASE.DATA }), all);
+  // 정정 강조가 살아 있어도 카메라가 없으면 그릴 곳이 없다 — 결과 시트 위에 유령 캔버스가 뜨면 안 된다.
+  assert.deepEqual(hudSurfaceVisibility({ hasStream: false, runtimeEnabled: true, hasView: true, phase: HUD_PHASE.DONE, corrFresh: true }), all);
+  // 모름·비객체는 닫힘 쪽 (부팅 순간의 undefined 가 캔버스를 열면 안 된다).
+  for (const bad of [undefined, null, 0, 'x', {}, []]) assert.deepEqual(hudSurfaceVisibility(bad), all, String(bad));
+  // 비불리언 참값도 «참» 이 아니다 — 명시적 true 만 산다.
+  assert.deepEqual(hudSurfaceVisibility({ hasStream: 1, runtimeEnabled: 1, hasView: 1, phase: HUD_PHASE.DATA }), all);
+});
+
+test('⑯(i) hudSurfaceVisibility — 살아 있으면 미니·셀맵은 항상 열리고, 오버레이는 위상 ∨ 정정 강조', () => {
+  const live = { hasStream: true, runtimeEnabled: true, hasView: true };
+  // 미니·셀맵은 **모든 위상에서** 열린다 (점진 표시가 SEARCHING 부터 시작한다).
+  for (const phase of Object.values(HUD_PHASE)) {
+    const v = hudSurfaceVisibility({ ...live, phase });
+    assert.equal(v.miniHidden, false, phase + ' 에서 미니 HUD 가 닫힌다 — 점진 표시가 사라진다');
+    assert.equal(v.cellMapHidden, false, phase + ' 에서 셀맵이 닫힌다');
+  }
+  // 오버레이 — «그릴 H 가 있는 위상» 셋만 연다.
+  const closedPhases = [HUD_PHASE.SEARCHING, HUD_PHASE.DROPPED, HUD_PHASE.DONE];
+  for (const phase of Object.values(HUD_PHASE)) {
+    const expected = closedPhases.includes(phase);
+    assert.equal(hudSurfaceVisibility({ ...live, phase }).overlayHidden, expected,
+      phase + ' 위상의 오버레이 표시가 뒤집혔다');
+  }
+  /*
+   * 🔴 **⑯(i) 의 표면** — 정정 강조는 위상 밖의 층이라 DONE 에서도 오버레이를 연다. 그 프레임이
+   * 실제로 합성되도록 수용 경로가 stopCamera 를 R2_HUD_CORRECTION_MS 만큼 미룬다
+   * (규칙·불변식은 test/scanner-accept-delay.test.js).
+   */
+  assert.equal(hudSurfaceVisibility({ ...live, phase: HUD_PHASE.DONE, corrFresh: true }).overlayHidden, false,
+    '정정 강조가 DONE 오버레이를 못 연다 — ⑯(i) 가 산 시간이 빈 화면이 된다');
+  // 그리고 «열려 있는» 위상에서는 corrFresh 가 아무것도 안 바꾼다 (덧셈이지 대체가 아니다).
+  for (const phase of Object.values(HUD_PHASE)) {
+    const withCorr = hudSurfaceVisibility({ ...live, phase, corrFresh: true });
+    assert.equal(withCorr.overlayHidden, false, phase + ' 에서 정정 강조가 오버레이를 못 연다');
+  }
+  // 알 수 없는 위상은 «그릴 H 가 있는 위상» 쪽으로 떨어진다 — 위상이 늘어도 그림이 사라지지 않는다.
+  assert.equal(hudSurfaceVisibility({ ...live, phase: 'zzz-new-phase' }).overlayHidden, false);
 });

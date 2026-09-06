@@ -72,7 +72,8 @@ export function qrHitToDecodeResult(hit) {
 
 /**
  * 프레임 루프의 QR 게이트 — 세 조건이 **모두** 참일 때만 detect 를 제출한다.
- *  · r2Enabled: 시험판 R2 토글(정식 경로는 항상 false → 정식 불변).
+ *  · r2Enabled: 엔진 스위치의 R2 위치. **2026-09-06 승격** 뒤에는 정식에서도 참일 수 있다
+ *    (승격 전에는 정식이 항상 false 였다). R1 위치면 여전히 detect 를 한 번도 안 부른다.
  *  · qrSupported: 실행 시 판정.
  *  · readyState ≥ 2(HAVE_CURRENT_DATA): 그 아래에서 `detect(<video>)` 는 InvalidStateError 다.
  */
@@ -86,7 +87,7 @@ export function qrFrameGateOpen(state) {
 /**
  * detect 가 비행 중이면 짧게 R1·R2 의 시작을 미룰지 — 순수. 스캐너의 두 복호기는 동기라, 같은 틱에
  * 시작하면 detect 결과가 그 뒤(R1 1.4~2.8 s)로 밀린다. 상한 capMs 가 있어 느린 detect(콜드 스타트)에
- * 굶지 않는다. inFlight 가 아니면 언제나 false — 정식 경로(브리지 미가동)의 불변 근거.
+ * 굶지 않는다. inFlight 가 아니면 언제나 false — 브리지가 안 도는 화면(R1 위치)의 불변 근거.
  */
 export function frameYieldForQr(state, capMs = 150) {
   if (!state || state.inFlight !== true) return false;
