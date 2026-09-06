@@ -16,11 +16,45 @@ export const CLIP_HINT_MS = 960;
 /** 구 5프레임 × 320ms — 1440px 승격의 기존 비용 주기를 보존한다. */
 export const ESCALATE_INTERVAL_MS = 1600;
 
-/** 직전 전체 프레임 비용으로 다음 시작 간격을 정한다. */
+/**
+ * 하한 100 으로 묶은 직전 전체 프레임 비용. 두 뜻으로 쓰인다 — 정식(/) R1 은 이 값을 그대로
+ * «복호 **시작** 시각 사이의 간격» 으로 쓰고, 스위치가 실재하는 화면(시험판·승격)은 이 값을
+ * `idleAfterDecodeMs` 의 입력, 즉 **완료 뒤 유휴 창**의 재료로 쓴다 (sites/tlscan/scanner.js R1 캐던스).
+ */
 export function adaptiveFrameIntervalMs(previousFrameCostMs) {
   const cost = Number(previousFrameCostMs);
   return Number.isFinite(cost) && cost > 0
     ? Math.max(FRAME_MIN_INTERVAL_MS, cost)
+    : FRAME_MIN_INTERVAL_MS;
+}
+
+/**
+ * R1 단발 복호가 끝난 뒤 **쉬는 창**의 비율 (직전 프레임 비용 대비).
+ *
+ * 왜 있나: R1 단발 복호는 rAF 콜백 **안**의 동기 호출이라 1.4\~2.8 s 동안 메인 스레드를
+ * 붙잡는다. 옛 캐던스는 간격을 «복호 **시작** 시각» 에서 재서, 간격 == 비용이면 복호가 끝나는
+ * 순간 이미 다음 grab 이 도래해 있었다 — duty ≈ 99 %, 유휴는 한 프레임뿐. 그 한 프레임에
+ * 입력(탭)은 접수돼도 **페인트**가 다음 복호 뒤로 밀린다.
+ *
+ * 거래(의도된 것): 사이클이 cost → cost × (1 + R1_IDLE_FRACTION) 가 되어 **처리율 ≈ −33 %**. 그 대가로
+ * 복호 사이에 cost × 비율의 유휴가 생겨 입력·페인트·rAF 가 실제로 돈다. 밀도가 아니라 반응성을 산다.
+ * (수치는 비율에서 유도된다 — scanner-frame-rate.test ⓔ 가 상수와 이 문장을 함께 잰다.)
+ *
+ * ⚠ **누가 이 거래를 치르나**: 엔진 스위치가 실재하는 화면(`r2Available` — 시험판, 승격 후 정식)만.
+ * 스위치가 없는 지금의 정식(/)은 살 반응성이 없으므로 옛 시작 시각 기준 캐던스를 그대로 쓴다
+ * (sites/tlscan/scanner.js 의 `const intervalMs = r2Available ? … : …`).
+ */
+export const R1_IDLE_FRACTION = 0.5;
+
+/**
+ * 복호 **완료 시각**부터 다음 grab 까지의 최소 유휴 시간. 하한은 `FRAME_MIN_INTERVAL_MS` —
+ * 빠른 기기에서 유휴가 0 으로 붕괴하지 않게 한다(그러면 옛 duty 99 % 로 되돌아간다).
+ * 비유한·0 이하(= 아직 실측 없음)는 하한.
+ */
+export function idleAfterDecodeMs(previousFrameCostMs) {
+  const cost = Number(previousFrameCostMs);
+  return Number.isFinite(cost) && cost > 0
+    ? Math.max(FRAME_MIN_INTERVAL_MS, Math.round(cost * R1_IDLE_FRACTION))
     : FRAME_MIN_INTERVAL_MS;
 }
 

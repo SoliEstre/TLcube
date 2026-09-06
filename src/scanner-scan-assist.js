@@ -49,6 +49,21 @@ export function scanScopeCopyKey(r2Enabled, qrCapable) {
 }
 
 /**
+ * 하단 안내 카드 두 장의 표시 — 스위치 위치마다 **한 장씩**.
+ *
+ * 운영자 관측(2026-09-06): R2 위치에서 조준 지시(`#scan-guide-detail`, guide.dots)와 범위 안내
+ * (`#scan-guide-scope`, guide.scope.r2*)가 **둘 다** 떠서 «카드 두 장» 이 됐다. 조준 지시는 R1
+ * 단발이 꼭짓점·고리·중앙을 한 장에서 맞춰야 하기 때문에 있는 문구다 — R2 누적은 여러 프레임을
+ * 모으므로 그 지시가 그 위치의 지시가 아니다. 그래서 R1 위치 = 조준, R2 위치 = 범위.
+ *
+ * 정식(/)은 `r2Enabled` 가 **항상 false** 라 `{ detail: true, scope: true }` — 현행(조준 + 「QR 및
+ * 다른 바코드는 읽히지 않아요」) 그대로다. 이 함수가 정식 화면을 바꿀 수 있는 입력은 없다.
+ */
+export function guideCardVisibility(r2Enabled) {
+  return { detail: r2Enabled !== true, scope: true };
+}
+
+/**
  * 텔레메트리 `via` — 결과가 어느 경로로 왔는가. 값 집합은 아래 상수가 잠근다 (PM/026 · PM/010 의
  * `via enum` 은 이 집합을 따른다). R2 누적·일반 QR 은 hypothesis 가 없으므로 경로 이름으로 가른다.
  * 페이로드 내용은 어디에도 싣지 않는다 — 이 값은 경로 라벨뿐이다.

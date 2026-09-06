@@ -14,6 +14,11 @@
  *      + setProperty 3줄이 r2Available 게이트 **안** (적대 검토 F4 — 정식 DOM 불변은 <html> 인라인 스타일까지다).
  *   ⓗ 칩 넘침(적대 검토 F7·F9) — 칩은 열 폭을 못 넘고 넘치면 말줄임, progress 칩은 줄바꿈 허용. 결과 카드에 확정 요약 컨테이너(F8).
  *   ⓘ 늦은 결과 문(적대 검토 F2) — R1 .then/.catch 가 QR 콜백과 같은 «세션·스위치 재확인» 을 lateResultAdmitted 로 한다.
+ *   ⓙ 하단 카드 한 장(운영자 관측 2026-09-06) — R1 위치 = 조준(detail) · R2 위치 = 범위(scope). 값은 guideCardVisibility,
+ *      철자는 refreshScanGuideCopy 가 그 값에서 hidden 을 정한다(리터럴 불리언 복사 금지). 정식 off 는 둘 다 보임으로 환원.
+ *   ⓚ 탭 즉시 반영(⑤ · ⚠ 철자 자) — 핸들러가 paintEngineSwitch 를 무거운 렌더보다 **먼저** 하고 끝에 yieldFrameOnce 를 세우며,
+ *      nextFrame 첫머리(세션·카메라 가드 뒤)가 그 플래그를 내리고 QR·R2·R1 을 건너뛴 채 rAF 만 재예약하며,
+ *      stopCamera 가 그 플래그를 세션과 함께 비운다(안 비우면 다음 세션의 첫 프레임을 삼킨다).
  */
 
 import test from 'node:test';
@@ -23,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   ENGINE_SWITCH_PRODUCT_ENABLED, engineSwitchAvailable, resolveEngineChoice,
-  ENGINE_STORAGE_KEY, ENGINE_STORAGE_KEY_LEGACY,
+  ENGINE_STORAGE_KEY, ENGINE_STORAGE_KEY_LEGACY, guideCardVisibility,
 } from '../src/scanner-scan-assist.js';
 import { lateResultAdmitted } from '../src/r2-confirmation-model.js';
 
@@ -281,4 +286,95 @@ test('ⓘ 늦은 결과 문 — R1 .then/.catch 첫 줄이 lateResultAdmitted(\'
   assert.ok(finallyAt > catchAt, 'finally 가 없다');
   const fin = loop.slice(finallyAt, braceEnd(loop, loop.indexOf('{', finallyAt)));
   assert.ok(fin.includes('isDecoding = false') && !fin.includes('lateResultAdmitted'), 'finally 가 회계를 안 닫거나 늦은 결과 문을 본다');
+});
+
+/*
+ * §27.6 2b′ (운영자 관측 2026-09-06) — 하단 안내가 R2 위치에서 «두 카드» 로 보인 것의 수리, 그리고 탭 반응.
+ */
+
+test('ⓙ 하단 카드는 위치마다 한 장 — R1 = 조준(detail) · R2 = 범위(scope); 정식 off 는 현행 환원 (값 + ⚠ 철자 자)', () => {
+  // 값 — 순수 함수가 규칙을 쥔다. 정식(/)의 입력은 false 하나뿐이고 거기서 현행 화면(둘 다 보임)이 나온다.
+  assert.deepEqual(guideCardVisibility(false), { detail: true, scope: true }, '정식(R2 항상 꺼짐)에서 조준 카드가 사라진다');
+  assert.deepEqual(guideCardVisibility(true), { detail: false, scope: true }, 'R2 위치에서 조준 카드가 남아 «두 카드» 가 된다');
+  // 모름·비불리언은 정식 쪽 — 부팅 순간의 undefined 가 조준 안내를 지우면 안 된다.
+  for (const unknown of [undefined, null, 0, '', 'true']) {
+    assert.deepEqual(guideCardVisibility(unknown), { detail: true, scope: true }, String(unknown) + ' 가 R2 위치로 읽힌다');
+  }
+  // 범위 카드는 어느 위치에서도 사라지지 않는다 — 문구만 scanScopeCopyKey 가 갈아끼운다.
+  for (const value of [true, false, undefined]) assert.equal(guideCardVisibility(value).scope, true);
+
+  // 철자 — refreshScanGuideCopy 가 그 값에서 hidden 을 **유도**한다. 리터럴 복사(= r2Runtime.enabled)면 사본이 썩는다.
+  const at = JS.indexOf('function refreshScanGuideCopy()');
+  assert.ok(at > 0, 'refreshScanGuideCopy 가 없다');
+  const body = JS.slice(at, braceEnd(JS, JS.indexOf('{', at)));
+  assert.ok(/const cards = guideCardVisibility\(r2Runtime\.enabled\);/.test(body),
+    'refreshScanGuideCopy 가 카드 표시를 guideCardVisibility 에서 안 얻는다');
+  assert.ok(body.includes('scanGuideDetail.hidden = !cards.detail;'), '조준 카드 표시가 유도값을 안 따른다');
+  assert.ok(body.includes('scanGuideScope.hidden = !cards.scope;'), '범위 카드 표시가 유도값을 안 따른다');
+  assert.ok(!/scanGuide(Detail|Scope)\.hidden\s*=\s*(!?\s*r2Runtime\.enabled|true|false)/.test(JS),
+    'hidden 을 r2Runtime.enabled 나 리터럴에서 직접 복사한다 — 규칙이 두 곳이 된다');
+
+  // 마크업 — 두 카드가 같은 래퍼 안에 있고 `[hidden]{display:none!important}` 가 실제로 존재한다(display 를 다시 켜는 CSS 를 이긴다).
+  const wrapAt = HTML.indexOf('<div class="scan-guide-wrap">');
+  assert.ok(wrapAt > 0, '.scan-guide-wrap 이 없다');
+  const wrap = HTML.slice(wrapAt, HTML.indexOf('</div>', wrapAt));
+  assert.ok(wrap.includes('id="scan-guide-detail"') && wrap.includes('id="scan-guide-scope"'), '두 카드가 같은 래퍼 안이 아니다');
+  assert.ok(/\[hidden\]\s*\{\s*display:\s*none\s*!important/.test(HTML),
+    '[hidden] 강제 규칙이 없다 — .scan-scope-note 의 자기 display 가 hidden 을 이긴다');
+});
+
+test('ⓚ 탭 즉시 반영 — 핸들러가 paint 를 먼저, 끝에 yieldFrameOnce; nextFrame 첫머리가 그것을 소비한다 (⚠ 철자 자)', () => {
+  const at = JS.indexOf("engineSwitchControl.addEventListener('click'");
+  assert.ok(at > 0, '핸들러가 없다');
+  const body = JS.slice(at, JS.indexOf('\n  });', at));
+
+  // (1) 시각 상태가 무거운 렌더보다 앞. 스위치 페인트가 패널·셀맵·문구 뒤에 있으면 그만큼 늦게 보인다.
+  const paintAt = body.indexOf('paintEngineSwitch()');
+  assert.ok(paintAt > 0, '핸들러가 paintEngineSwitch 를 안 부른다');
+  assert.equal(body.split('paintEngineSwitch()').length - 1, 1, 'paintEngineSwitch 가 핸들러 안에 두 번 — 어느 쪽이 «먼저» 인지 흐려진다');
+  for (const heavy of ['renderR2Progress()', 'renderR2CellMap()', 'refreshScanGuideCopy()']) {
+    assert.ok(paintAt < body.indexOf(heavy), 'paintEngineSwitch 가 ' + heavy + ' 보다 뒤다 — 탭의 시각 응답이 무거운 렌더 뒤로 밀린다');
+  }
+  // setEnabled 뒤여야 새 위치를 그린다(같은 함수가 런타임을 읽는다).
+  assert.ok(body.indexOf('r2Runtime.setEnabled(') < paintAt, 'paintEngineSwitch 가 setEnabled 앞이라 옛 위치를 그린다');
+
+  // (2) 플래그는 핸들러 **끝**에 선다 — 중간에 세우면 그 아래 렌더가 같은 태스크에 남아 양보의 뜻이 흐려진다.
+  const flagAt = body.indexOf('yieldFrameOnce = true;');
+  assert.ok(flagAt > 0, '핸들러가 프레임 양보 플래그를 안 세운다 — R1 위치에서 페인트가 다음 동기 복호 뒤로 밀린다');
+  for (const heavy of ['renderR2Progress()', 'renderR2CellMap()', 'refreshScanGuideCopy()']) {
+    assert.ok(flagAt > body.indexOf(heavy), '양보 플래그가 ' + heavy + ' 보다 앞이다');
+  }
+
+  // (3) 소비 — nextFrame 첫머리, 세션·카메라 가드 **뒤**, QR 제출 **앞**. 그리고 rAF 는 반드시 다시 건다(안 걸면 루프가 죽는다).
+  const loopAt = JS.indexOf('function startFrameLoop(');
+  const loop = JS.slice(loopAt, JS.indexOf('async function startCamera(', loopAt));
+  const nextAt = loop.indexOf('const nextFrame = (timestamp) => {');
+  const guardAt = loop.indexOf("if (session !== scanSession || !cameraStream || document.visibilityState === 'hidden') {", nextAt);
+  const consumeAt = loop.indexOf('if (yieldFrameOnce) {', nextAt);
+  const qrAt = loop.indexOf('qrBridge.pushFrame(', nextAt);
+  const r2At = loop.indexOf('if (r2Runtime.enabled) {', nextAt);
+  assert.ok(nextAt > 0 && guardAt > nextAt, 'nextFrame 의 세션·카메라 가드를 못 찾았다');
+  assert.ok(consumeAt > guardAt, '양보 소비가 세션·카메라 가드보다 앞이다 — 죽은 세션이 플래그를 삼킨다');
+  assert.ok(consumeAt < qrAt && consumeAt < r2At, '양보 소비가 QR·R2 제출보다 뒤다 — 그 프레임이 이미 일을 시작한다');
+  const consume = loop.slice(consumeAt, braceEnd(loop, loop.indexOf('{', consumeAt)));
+  assert.ok(consume.includes('yieldFrameOnce = false;'), '소비가 플래그를 안 내린다 — 루프가 영원히 양보만 한다');
+  assert.ok(consume.includes('animationFrameId = requestAnimationFrame(nextFrame);') && consume.includes('return;'),
+    '양보 프레임이 rAF 를 다시 걸지 않거나 반환하지 않는다 — 루프가 죽거나 그 프레임이 그대로 복호한다');
+  // 성질: 선언은 false 로 시작 · **루프 안에서 내리는 곳은 정확히 하나**(소비 지점이 흐려지지 않는다)
+  //      · 세션을 끊는 stopCamera 는 플래그도 비운다(살아남으면 다음 세션의 첫 프레임을 삼킨다).
+  // ⚠ 예전의 «파일 전체에서 2건» 개수 자는 정답(stopCamera 리셋)을 거부했다 — 자리를 세지 말고 역할을 재라.
+  assert.ok(JS.includes('let yieldFrameOnce = false;'), '플래그 선언이 없거나 초기값이 true 다 — 첫 프레임을 이유 없이 버린다');
+  assert.equal((loop.match(/yieldFrameOnce = false;/g) || []).length, 1,
+    '프레임 루프 안에서 플래그를 내리는 곳이 하나가 아니다 — 소비 지점이 흐려진다');
+  const stopAt = JS.indexOf('function stopCamera() {');
+  const stopBody = JS.slice(stopAt, braceEnd(JS, JS.indexOf('{', stopAt)));
+  assert.ok(stopAt > 0 && /yieldFrameOnce = false;/.test(stopBody),
+    'stopCamera 가 양보 플래그를 안 비운다 — 탭 직후 가시성 전환이면 다음 세션의 첫 프레임이 통째로 버려진다');
+  assert.ok(/lastFrameCostMs = 0;[\s\S]{0,400}yieldFrameOnce = false;/.test(stopBody),
+    '양보 플래그 리셋이 다른 프레임 상태(lastDecodeAt·lastFrameCostMs) 와 떨어져 있다');
+  assert.equal((JS.match(/yieldFrameOnce = true;/g) || []).length, 1, '플래그를 세우는 곳이 둘 이상 — 스위치 밖에서도 프레임을 버린다');
+
+  // (4) 눌림 피드백 — 스크립트 없이 브라우저가 그리는 즉시 응답. 정식엔 스위치가 hidden 이라 무해.
+  assert.ok(/\.engine-switch-control:active\s*\{[^}]*background:/.test(HTML),
+    ':active 배경 피드백이 없다 — 탭한 순간 «받았다» 가 없다');
 });

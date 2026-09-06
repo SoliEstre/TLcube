@@ -21,7 +21,7 @@ import { detectQrFinderTriples } from '/src/decoder/bootstrap.js';
 import { toRelativeLuminance } from '/src/decoder/luma.js';
 import { localizeCornerQrAssist } from '/src/decoder/corner-qr-assist.js';
 import {
-  immediateCornerQrHint, normalizeDecodePayload, scanScopeCopyKey, scanViaOf, resultAutoOpen,
+  immediateCornerQrHint, normalizeDecodePayload, guideCardVisibility, scanScopeCopyKey, scanViaOf, resultAutoOpen,
   ENGINE_SWITCH_PRODUCT_ENABLED, engineSwitchAvailable, ENGINE_STORAGE_KEY, ENGINE_STORAGE_KEY_LEGACY, resolveEngineChoice,
 } from '/src/scanner-scan-assist.js';
 import {
@@ -114,6 +114,7 @@ import {
 } from '/src/scan-guide-prior.js';
 import {
   adaptiveFrameIntervalMs,
+  idleAfterDecodeMs,
   CLIP_HINT_MS,
   CLOSER_HINT_MS,
   elapsedSinceMs,
@@ -153,7 +154,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-06.02';
+export const SCANNER_BUILD = '2026-09-06.03';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -230,9 +231,19 @@ let animationFrameId = 0;
 let scanSession = 0;
 let isDecoding = false;
 let cameraRequestPending = false;
+/**
+ * 마지막 R1 단발 복호가 **끝난** 시각. ⚠ 시작 시각이 아니다 — 유휴 창을 완료 시각에서 재야
+ * 복호와 복호 사이에 실제로 빈 시간이 생긴다 (src/scanner-frame-rate.js R1_IDLE_FRACTION 참조).
+ */
 let lastDecodeAt = 0;
-/** 직전 grab부터 결과 처리까지의 전체 프레임 비용. 다음 시작 간격의 적응 입력이다. */
+/** 직전 grab부터 결과 처리까지의 전체 프레임 비용. 다음 유휴 창의 적응 입력이다. */
 let lastFrameCostMs = 0;
+/**
+ * 「이번 rAF 한 번은 통째로 양보한다」 일회용 플래그. 엔진 스위치 탭 핸들러가 세우고
+ * `nextFrame` 첫머리가 내린다 — 그 한 프레임에 브라우저가 스위치 페인트를 끝낸다.
+ * 정식(/)에는 스위치 자체가 없어 이 플래그를 세우는 코드가 도달 불가다.
+ */
+let yieldFrameOnce = false;
 let stoppedForVisibility = false;
 let hadCameraThisSession = false;
 let resumeAttemptsThisTransition = 0;
@@ -944,6 +955,12 @@ function refreshScanGuideCopy() {
   // scanner-i18n 의 «사전에 없는 키» 자가 못 본다. 정식 경로는 R2 가 항상 꺼져 있어 불변.
   const scopeKey = scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported);
   scanGuideScope.setAttribute('data-i18n', scopeKey);
+  // 카드는 위치마다 한 장 (운영자 관측 2026-09-06 — R2 위치에서 조준 + 범위가 겹쳐 «두 카드»).
+  // 어느 장이 보이는지는 여기서 정하지 않는다 — `guideCardVisibility` 가 값으로 잠근다(사본 금지).
+  // 정식(/)은 r2Runtime.enabled 가 항상 false → { detail: true, scope: true } 로 환원돼 현행 화면 그대로다.
+  const cards = guideCardVisibility(r2Runtime.enabled);
+  scanGuideDetail.hidden = !cards.detail;
+  scanGuideScope.hidden = !cards.scope;
   if (scopeKey === 'guide.scope.r2qr') scanGuideScope.textContent = t('guide.scope.r2qr');
   else if (scopeKey === 'guide.scope.r2') scanGuideScope.textContent = t('guide.scope.r2');
   else scanGuideScope.textContent = t('guide.tlcubeOnly');
@@ -1586,6 +1603,9 @@ function stopCamera() {
   isDecoding = false;
   lastDecodeAt = 0;
   lastFrameCostMs = 0;
+  // 프레임 양보도 세션에 묶인다 — 탭 뒤 rAF 가 돌기 전에 세션이 끊기면(가시성 전환 → 재개)
+  // 살아남은 플래그를 **다음 세션의 첫 프레임**이 삼켜 첫 grab·가이드 점이 한 프레임 밀린다.
+  yieldFrameOnce = false;
 
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
@@ -2088,6 +2108,20 @@ function startFrameLoop(session) {
     }
 
     /*
+     * ── 한 프레임 양보 (⑤ 엔진 스위치 반응) ─────────────────────────────
+     * 탭 핸들러가 `yieldFrameOnce` 를 세우면 이 프레임은 QR·R2·R1 을 **전부 건너뛰고** rAF 만
+     * 다시 건다. 이유: R1 위치의 동기 복호가 콜백 안에서 1.4\~2.8 s 를 잡아, 탭은 복호 사이
+     * 태스크 경계에서 접수돼도 핸들러 직후 첫 프레임이 다시 복호를 시작해 **페인트가 다음 복호
+     * 뒤로 밀렸다**. 여기서 한 프레임을 비워 그 페인트 창을 만든다.
+     * ⚠ 플래그를 내리는 자리는 **여기 하나** — 세우는 곳(핸들러)과 짝이다 (engine-switch.test ⓙ).
+     */
+    if (yieldFrameOnce) {
+      yieldFrameOnce = false;
+      animationFrameId = requestAnimationFrame(nextFrame);
+      return;
+    }
+
+    /*
      * ── 일반 QR (BarcodeDetector 위임, PM/029B §26) ── R2 토글 아래 · 브라우저가 지원할 때만.
      * <video> 를 그대로 넘긴다 — grab 중복 없음, 전체 해상도. 결과는 비동기라 콜백에서
      * 세션을 다시 확인한다. TL 리더 QR(HTTPS://TLSCAN.ESTRE.SO[/x]) 은 «TL 코드가 있다»
@@ -2127,8 +2161,9 @@ function startFrameLoop(session) {
      * 복호가 1.4\~2.8초이므로 누적기가 단발보다 프레임을 더 볼 방법이 **구조적으로
      * 없었다** (PM/029 §6.5.1). 여기가 그 수리다.
      *
-     * ⚠ **플래그가 꺼져 있으면 아래 R1 블록의 제어 흐름이 완전히 불변**이다.
-     * `r2Runtime.enabled` 가 false 면 이 블록은 첫 줄에서 반환하고 grab 도 안 한다.
+     * ⚠ **플래그가 꺼져 있으면 이 블록은 통째로 없는 것과 같다** — `r2Runtime.enabled` 가 false 면
+     * 첫 줄에서 반환하고 grab 도 안 한다. (아래 R1 블록의 캐던스는 이 플래그가 아니라
+     * `r2Available`(스위치 실재)로 갈린다 — 정식은 옛 시작 시각 기준 그대로다. 2026-09-06 §27.6.)
      * 그 성질을 `test/r2-scan-runtime.test.js` 가 잰다. **켜져 있으면 R1 블록은 건너뛴다**
      * (운영자 결정 ② · 2026-09-05: 스위치 R2 위치 = R2 누적 + QR 만, R1 단발 끔). 그래서
      * R1 이 맡던 부수 효과 — 첫 grab 뒤 가이드 점 재렌더, 시험판 fps 줄 — 를 이 블록이 대신
@@ -2204,11 +2239,45 @@ function startFrameLoop(session) {
 
     /*
      * ── R1 단발 복호 ── 운영자 결정 ②: 스위치가 R2 위치면 돌지 않는다. 정식(/)은 R2 가 항상
-     * 꺼져 있어(`r2Available` false) 이 조건이 항상 참 — 안의 제어 흐름은 바이트 그대로 불변이다.
+     * 꺼져 있어(`r2Available` false) 이 조건이 항상 참 — 즉 **정식은 언제나 이 블록을 돈다**.
+     * 그래서 이 안의 캐던스는 `r2Available` 로 한 겹 더 갈린다(아래). 정식은 옛 «시작 시각 기준»
+     * 그대로고, 유휴 창은 스위치가 **실재하는** 경우(시험판/승격)에만 산다.
      * 게이트 줄 `if (!isDecoding && …)` 은 r2-scan-runtime.test ⓑ 가 R2 블록과의 순서를 찍는다.
      */
     if (!r2Runtime.enabled) {
-      const intervalMs = adaptiveFrameIntervalMs(lastFrameCostMs);
+      /*
+       * 캐던스는 두 갈래다 — **스위치가 실재하는가**(`r2Available`)로 가른다.
+       *
+       *  (1) 시험판·승격 (r2Available true) = **완료 시각 기준 유휴 창**. `lastDecodeAt` 은 아래
+       *      `.finally` 에서 복호가 끝난 시각으로 갱신되고, 여기서 그 뒤 `idleAfterDecodeMs` 만큼
+       *      지나야 다음 grab 이 도래한다.
+       *        거래: 사이클 cost → cost × 1.5, 즉 **처리율 ≈ −33 %**. 그 값으로 복호 사이에 cost/2 의
+       *        유휴를 사서 입력·페인트·rAF 가 실제로 돈다 (옛 캐던스는 duty ≈ 99 % 라 유휴가 한 프레임).
+       *        사는 것은 밀도가 아니라 **엔진 스위치·줌의 반응성** — 스위치가 없는 화면에서는 살 이유가
+       *        없으므로 정식은 이 거래를 치르지 않는다. R1_IDLE_FRACTION 의 근거·하한은
+       *        src/scanner-frame-rate.js 에 있다.
+       *  (2) 정식 (r2Available false) = 옛 **시작 시각 기준** 간격(`adaptiveFrameIntervalMs`).
+       *      기준점은 아래 `.finally` 에서 `frameStartedAt` — 옛 코드의 rAF `timestamp` 자리이고
+       *      차이는 콜백 진입\~grab 사이(1 ms 미만)뿐이다. 정식 처리율은 이 레인 이전과 같다.
+       *
+       * ⚠ 파생 효과(시험판 한정, 미측정) — 1440 승격은 **벽시계** 주기다(ESCALATE_INTERVAL_MS 1600,
+       *   프레임 수가 아니다). 승격이 **매 프레임** 걸리는 경계가 사이클 기준으로 내려온다:
+       *   옛 캐던스(사이클 = cost)는 cost ≥ 1600 ms 부터, 유휴 창(사이클 = 1.5 × cost)은 cost ≥ 1067 ms
+       *   부터다. 즉 실제로 승격 빈도가 바뀌는 대역은 **1.07\~1.6 s** 하나고, 1.6 s 이상은 옛 것도
+       *   이미 매 프레임이었다. 그 대역에선 1440 비용이 얹혀 저하가 −33 % 를 넘고, 반대로 셀당 픽셀은
+       *   늘어 성공률은 오를 수 있다. 어느 쪽인지는 합성 자로 못 잰다 — 실기 타이밍 통계(§27.5)에
+       *   960/1440 비율 컬럼을 넣어 이 대역을 따로 봐라.
+       * ⚠ `adaptiveFrameIntervalMs(lastFrameCostMs)` 를 그대로 감싼다 — 그것은 «하한 100 으로 묶은
+       *   직전 비용» 이고, 유휴 창은 그 값을 R1_IDLE_FRACTION 으로 접은 것이다. 두 함수의 합성은
+       *   `idleAfterDecodeMs(lastFrameCostMs)` 와 **모든 입력에서 같다**(scanner-frame-rate.test ⓒ 가
+       *   격자로 잰다) — 감싸는 이유는 이 철자를 앵커로 찍는 두 자(qr-bridge.test ⓕ' 의 R1 위치
+       *   앵커 · scanner-fpscap.test 의 «직전 전체 비용 소비») 를 살아 있게 두기 위해서다.
+       * ⚠ 아래 게이트 리터럴은 r2-scan-runtime.test ⓑ · engine-switch.test ⓕ 가 indexOf 로 찍는다 —
+       *   글자를 바꾸지 마라.
+       */
+      const intervalMs = r2Available
+        ? idleAfterDecodeMs(adaptiveFrameIntervalMs(lastFrameCostMs))
+        : adaptiveFrameIntervalMs(lastFrameCostMs);
       if (!isDecoding && timestamp - lastDecodeAt >= intervalMs) {
         const frameStartedAt = nowMs();
         const imageData = yieldForQr ? null : grabVideoFrame(frameStartedAt);
@@ -2219,7 +2288,6 @@ function startFrameLoop(session) {
             firstGrabRendered = true;
             renderGuideDots();
           }
-          lastDecodeAt = timestamp;
           isDecoding = true;
 
           /*
@@ -2275,6 +2343,15 @@ function startFrameLoop(session) {
               if (usePrior) priorInFlight = false;
               if (session === scanSession) {
                 lastFrameCostMs = Math.max(0, nowMs() - frameStartedAt);
+                // ⚠ 캐던스 기준점 — 위 `intervalMs` 의 두 갈래와 **짝**이다. 스위치가 실재하면(r2Available)
+                // 복호 **완료** 시각(시작 + 실측 비용): 간격이 유휴 창이 되려면 기준이 완료여야 한다.
+                // 정식은 옛 **시작** 시각 그대로 — 간격 == 비용이라 복호가 끝나는 순간 다음 grab 이 이미
+                // 도래한다(duty ≈ 99 %). 이 레인은 정식의 그 성질을 바꾸지 않는다.
+                // 값은 시계를 한 번 더 읽지 않고 시작(+ 실측 비용)으로 잡는다 — 위 두 줄과 어긋날 수 없다.
+                // (rAF `timestamp` 와 `nowMs()` 는 같은 performance.now() 원점이라 비교가 성립한다.
+                //  옛 코드의 `= timestamp` 대신 `frameStartedAt` 을 쓰는 것이 정식의 유일한 차이 —
+                //  같은 콜백 안 grab 직전의 시계라 차이는 1 ms 미만이다.)
+                lastDecodeAt = r2Available ? frameStartedAt + lastFrameCostMs : frameStartedAt;
                 isDecoding = false;
               }
               noteFrameProcessed();
@@ -3732,6 +3809,9 @@ if (engineSwitch && engineSwitchControl && r2Available) {
   paintEngineSwitch();
   engineSwitchControl.addEventListener('click', () => {
     r2Runtime.setEnabled(!r2Runtime.enabled);
+    // ⚠ **시각 상태를 먼저** (⑤) — 아래의 무거운 렌더(패널·셀맵·문구)보다 앞이어야 이 태스크가
+    // 끝나는 순간 스위치가 이미 새 위치에 있다. 순서만 바뀌었고 하는 일은 같다.
+    paintEngineSwitch();
     // 켜든 끄든 QR 브리지·힌트도 버린다 — off 직후 늦은 QR 결과가 뜨거나 옛 힌트가 R1 을 계속
     // 편향하면 «R2 off = 기준선» 이 거짓이 된다 (R2 의 setEnabled 와 같은 «전환 시 증거 폐기»).
     qrBridge.reset();
@@ -3747,12 +3827,14 @@ if (engineSwitch && engineSwitchControl && r2Available) {
     }
     try { window.localStorage.setItem(ENGINE_STORAGE_KEY, r2Runtime.enabled ? '1' : '0'); }
     catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
-    paintEngineSwitch();
     // 인디케이터·셀맵도 즉시 반영한다 — 끄면 숨고, 켜면 0 부터 다시 찬다.
     renderR2Progress();
     renderR2CellMap();
-    // 범위 안내도 스위치를 따른다 (요구 ②).
+    // 범위 안내도 스위치를 따른다 (요구 ②). 하단 카드 한 장 규칙도 여기서 다시 적용된다.
     refreshScanGuideCopy();
+    // ⚠ 마지막 줄 — 다음 rAF 한 번을 통째로 양보해 위의 페인트가 실제로 화면에 닿게 한다.
+    // R1 위치에선 이 한 프레임이 없으면 페인트가 다음 동기 복호(1.4\~2.8 s) 뒤로 밀린다.
+    yieldFrameOnce = true;
   });
 }
 // 기대 톤 — 레이아웃 카드와 같은 배선. 2·3 만 유효, 그 외(모름 포함)는 null(미상)이다.
