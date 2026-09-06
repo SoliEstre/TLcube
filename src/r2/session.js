@@ -123,6 +123,7 @@ export function stubDecodeInto(
   output.accepted = 0;
   output.payloadLength = 0;
   output.tResidual = 0;
+  output.correctedCount = 0;
   return R2_SESSION_STATUS.OK;
 }
 
@@ -194,6 +195,12 @@ export function createR2Session(options = undefined) {
   const symbolConfidenceQ8 = new Int16Array(symbolCount);
   const erasures = new Uint8Array(symbolCount);
   const payloadBuffer = new Uint8Array(maxPayloadBytes);
+  /*
+   * 3b — **RS 가 고친 코드워드 위치**. `decodeInto` 가 수용한 프레임에만 채운다.
+   * caller-owned 인 이유는 payload 와 같다: 프레임 경로에서 배열을 새로 만들지 않는다.
+   * 값의 단위는 **RS 심볼 위치**(0..symbolCount-1)다 — 셀로 옮기는 것은 `r2/corrections.js`.
+   */
+  const correctedPositions = new Uint16Array(symbolCount);
 
   const detectionOutput = {
     found: 0,
@@ -219,6 +226,9 @@ export function createR2Session(options = undefined) {
     accepted: 0,
     payloadLength: 0,
     tResidual: 0,
+    /** 3b — 수용된 복호가 고친 심볼 수. 수용 아닌 시도는 0 (거짓 잔상 금지). */
+    correctedCount: 0,
+    correctedPositions,
   };
 
   const result = {
@@ -228,6 +238,18 @@ export function createR2Session(options = undefined) {
     indicator: R2_INDICATOR.SEARCHING,
     payload: undefined,
     payloadLength: 0,
+    /*
+     * 3b — **수명은 `payload` 와 같다** (3b 검토 F12 정정): DONE 프레임에서 서고, DONE 뒤 흡수
+     * 프레임에서도 유효하며(`if (complete) return syncResult()` 가 프레임별 초기화를 건너뛴다 —
+     * payload 도 같은 이유로 남는다), `reset()` · `rejectPayload()` 뒤에 0 이다. 그 밖의 프레임은 0.
+     * 「DONE 프레임에만」이라고 적었던 옛 문구는 흡수 구간에서 거짓이었다.
+     *
+     * `correctedPositions` 는 **세션 수명 동안 같은 참조**라 (payload 와 같은 규약) 호출자가
+     * `correctedCount` 개만 읽는다. 나머지 프레임의 버퍼 내용은 옛 값이 남아 있을 수 있다 —
+     * 그래서 개수가 곧 유효 범위다.
+     */
+    correctedCount: 0,
+    correctedPositions,
   };
 
   const buffers = Object.freeze({
@@ -241,6 +263,7 @@ export function createR2Session(options = undefined) {
     symbolConfidenceQ8,
     erasures,
     payload: payloadBuffer,
+    correctedPositions,
     detectionOutput,
     alignmentOutput,
     decodeOutput,
@@ -305,6 +328,18 @@ export function createR2Session(options = undefined) {
    *   · 진짜로 «다른 코드»면 격자(n)가 바뀌고, 그때는 런타임이 bind 를 갈아 세션을
    *     통째로 새로 만든다 (버리는 자리가 여기가 아니라 거기다).
    */
+  /**
+   * 🔴 **«payload 수명» 을 가진 결과 필드를 한 자리에서 비운다** (3b 검토 F2·F12).
+   * `correctedCount` 는 payload 와 같은 수명이다 — 같은 수용이 낳고, 같은 무름·리셋이 지운다.
+   * 비우는 자리를 손 목록으로 나란히 두면 반드시 한 곳이 빠진다(실제로 `reset()` 이 빠져 있었다).
+   * 그래서 **비우기를 함수 하나로** 만들고 모든 자리가 그것을 부른다.
+   */
+  function clearPayloadResult() {
+    result.payload = undefined;
+    result.payloadLength = 0;
+    result.correctedCount = 0;
+  }
+
   function hardDropReset() {
     /*
      * 🔴 카운터는 «드랍 **횟수**» 다 (2026-09-06 검토 R3c, 결함 4). 옛 코드는 무조건 +1 이었는데,
@@ -320,8 +355,7 @@ export function createR2Session(options = undefined) {
      */
     releaseProgressHold(progress);
     decodeFailStreak = 0;
-    result.payload = undefined;
-    result.payloadLength = 0;
+    clearPayloadResult();
     result.indicator = R2_INDICATOR.DROPPED;
   }
 
@@ -344,8 +378,9 @@ export function createR2Session(options = undefined) {
     result.status = configValid ? R2_SESSION_STATUS.OK : R2_SESSION_STATUS.INVALID_CONFIG;
     result.state = identity.state;
     result.indicator = R2_INDICATOR.SEARCHING;
-    result.payload = undefined;
-    result.payloadLength = 0;
+    // 3b — 정정 수도 여기서 내려간다 (payload 와 같은 수명). 안 내리면 SEARCHING 인데 옛 DONE 의
+    // 정정 수가 남아 「지금 이 화면이 k 개를 고쳤다」로 읽힌다 (3b 검토 F2·F11b).
+    clearPayloadResult();
     counters.hardDrops = 0;
     counters.coastFrames = 0;
     counters.decodeAttempts = 0;
@@ -364,8 +399,10 @@ export function createR2Session(options = undefined) {
     if (complete) return syncResult();
 
     result.status = R2_SESSION_STATUS.OK;
-    result.payload = undefined;
-    result.payloadLength = 0;
+    // 3b — 정정 수도 프레임마다 0 으로 내린다 (payload 와 같은 수명·같은 함수). ⚠ 위 `complete`
+    // 조기 반환이 이 줄을 건너뛰므로 **흡수 프레임에서는 DONE 의 값이 그대로 남는다** — payload 와
+    // 똑같은 성질이고, 그것이 계약이다 (3b 검토 F12: 옛 「나머지 프레임은 0」 문구가 거짓이었다).
+    clearPayloadResult();
 
     if (
       luma === null
@@ -595,6 +632,7 @@ export function createR2Session(options = undefined) {
       decodeOutput.accepted = 0;
       decodeOutput.payloadLength = 0;
       decodeOutput.tResidual = 0;
+      decodeOutput.correctedCount = 0;
       result.indicator = R2_INDICATOR.FINALIZING;
       lastDecodeRevision = evidenceRevision;
       counters.decodeAttempts += 1;
@@ -625,6 +663,12 @@ export function createR2Session(options = undefined) {
         decodeFailStreak = 0;
         result.payload = payloadBuffer;
         result.payloadLength = length;
+        // 3b — 정정 위치는 **여기서만** 밖으로 나간다 (수용된 복호 = DONE 프레임). 버퍼는
+        // decodeOutput 과 같은 객체라 복사가 없다 — 계약은 「개수가 유효 범위」다.
+        const correctedRaw = Number(decodeOutput.correctedCount);
+        result.correctedCount = Number.isFinite(correctedRaw)
+          ? Math.max(0, Math.min(correctedPositions.length, Math.trunc(correctedRaw)))
+          : 0;
         result.indicator = R2_INDICATOR.DONE;
       } else {
         // RS 실패는 **아무것도 안 버린다** — 다음 시도는 위 되물림 간격 뒤다.
@@ -653,8 +697,9 @@ export function createR2Session(options = undefined) {
     if (!complete) return 0;
     complete = 0;
     decodeFailStreak += 1;
-    result.payload = undefined;
-    result.payloadLength = 0;
+    // 3b — 무른 복호가 「고쳤다」고 지목한 자리를 남기면 다음 프레임의 HUD·칩이 없는 결함을
+    // 가리킨다. payload 와 같은 수명이라 같은 함수가 비운다 (3b 검토 F12).
+    clearPayloadResult();
     result.indicator = R2_INDICATOR.COLLECTING;
     return 1;
   }

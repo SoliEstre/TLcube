@@ -91,10 +91,10 @@ import {
 } from '/src/r2/hud-geometry.js';
 // HUD 역할·위상 모델(순수) — «무엇을 어떤 묶음으로 그리는가» 는 전부 저기서 유도된다.
 import {
-  HUD_DISTRUST_STATE_KEY,
-  HUD_PHASE, HUD_ROLE, HUD_TONE_NONE, buildRoleGrids, bucketKey, countObserved, fadeAlpha,
-  hudCaptureProjection, hudDistrusted, hudPhase, hudProjectionChanged, hudToneSlot,
-  scaleColorAlpha,
+  HUD_DISTRUST_STATE_KEY, HUD_RSFIX_STATE_KEY,
+  HUD_PHASE, HUD_ROLE, HUD_TONE_NONE, buildRoleGrids, bucketKey, countObserved, fadeAlpha, fillCount,
+  hudCaptureProjection, hudCorrectionAlpha, hudDistrusted, hudPhase, hudProjectionChanged, hudToneSlot,
+  invertScanGrid, scaleColorAlpha,
   r2HudDebugLine as r2HudDebugLineOf,
 } from '/src/r2-hud-model.js';
 import {
@@ -159,7 +159,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-06.04';
+export const SCANNER_BUILD = '2026-09-06.05';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -353,6 +353,22 @@ const QR_HINT_TTL_MS = 3000;
  * startFrameLoop(새 세션) · 스위치 핸들러 · 거부된 적중 뒤에 null. 선언이 여기(프레임 루프보다 앞)인 이유: 대입하는 쪽이 먼저 읽힌다.
  */
 let r2Latched = null;
+/**
+ * 🔴 **RS 정정 강조 래치** (3b · 운영자 결정 ⑦). DONE 적중이 세우고 `hudCorrectionAlpha` 가
+ * `R2_HUD_CORRECTION_MS` 뒤 0 으로 내린다. 모양: `{ at, count, cells, layoutId, n }` —
+ * `cells` 는 런타임 스크래치의 **뷰**라 다음 DONE 까지만 유효하다(래치도 그때 갈린다).
+ *
+ * ⚠ **지금 이 그림은 화면에 도달하지 않는다 — 한 프레임도** (3b 검토 F1, 미해소. 옛 주석은
+ * 「DONE 프레임 한 장은 남는다」고 적었는데 그것도 거짓이다). 수용된 적중은 같은 태스크에서
+ * `handleDecodeResult` → `stopCamera()` 로 이어지고, 그 안의 `renderR2CellMap()` 이
+ * `cameraStream === null` 을 보고 캔버스 둘을 `hidden = true` 로 세운다 — 합성 **전**이라
+ * 브라우저가 한 장도 안 보여 준다. 거부된 적중은 그리기 전에 이 래치를 null 로 만든다.
+ * 배선(래치 → α → 경로 → 붓)은 여기까지 옳고, 표면을 여는 결정은 운영자 몫이다:
+ * (i) R2 수용 경로의 `stopCamera()` 를 `R2_HUD_CORRECTION_MS` 만큼 미룸, 또는
+ * (ii) 결과 시트에 미니 HUD(항등 H)를 얹고 거기 그림.
+ * 그전까지 운영자가 실제로 수를 읽는 표면은 **결과 카드의 DONE 칩(«RS 정정 k»)** 하나다.
+ */
+let r2Correction = null;
 /** R2 모드 상태 문구 위상 — «모으는 중» 을 이미 말했는가 (syncR2Status · 전이 때만 setStatus). */
 let r2StatusCollecting = false;
 /**
@@ -2129,6 +2145,7 @@ function startFrameLoop(session) {
   // DONE 래치·상태 문구 위상·거부 유예도 새 세션에서 비운다 — 옛 확정 값이 새 카메라의 결과로 읽히면
   // «이미 읽었다» 가 된다 (2b · r2-scan-runtime.test ⓡ).
   r2Latched = null;
+  r2Correction = null;
   r2StatusCollecting = false;
   r2StatusHoldUntil = -Infinity;
   // 비운 것을 **지금** 그린다 (F3) — 안 그리면 첫 성공 pushFrame(grab ∧ luma ok) 까지 옛 칩·막대가 새 카메라 위에 남는다.
@@ -2234,7 +2251,20 @@ function startFrameLoop(session) {
               // DONE 스냅샷은 문 **앞**에서 — 문이 받아들이면 stopCamera 가 r2Runtime.reset() 을
               // 먼저 불러 stats 가 비므로, 결과 카드의 확정 요약이 읽을 값은 여기서 잡아 둔다 (ⓡ).
               // leadingId = 이 프레임 좌 패널의 레이아웃 선두 (renderR2Progress 가 바로 위에서 갱신) — DONE 과 다르면 «정정»(⑧).
-              r2Latched = { layoutId: hit.layoutId, n: hit.n, leadingId: r2LeadingId };
+              r2Latched = {
+                layoutId: hit.layoutId,
+                n: hit.n,
+                leadingId: r2LeadingId,
+                // 3b — 결과 카드 DONE 칩이 읽는 수 (0 이면 칩에 아무 접미도 안 붙는다).
+                correctedCount: Number.isInteger(hit.correctedCount) ? hit.correctedCount : 0,
+              };
+              /*
+               * 3b — 정정 강조 래치. 셀이 0개면 **아예 안 세운다** — 빈 래치는 「그릴 게 있다」로
+               * 읽히고 그 프레임의 렌더가 헛돈다. 시각은 여기 하나(순수 함수에 주입한다).
+               */
+              r2Correction = (r2Latched.correctedCount > 0 && hit.correctedCells && hit.correctedCells.length > 0)
+                ? { at: nowMs(), count: r2Latched.correctedCount, cells: hit.correctedCells, layoutId: hit.layoutId, n: hit.n }
+                : null;
               // R2 가 먼저 읽었다. 결과 경로는 R1 과 **같은 문**을 쓴다 —
               // 새 표시 경로를 만들면 두 경로가 어긋난다.
               handleDecodeResult(r2HitToDecodeResult(hit), 'camera', session);
@@ -2244,10 +2274,28 @@ function startFrameLoop(session) {
               // ⚠ 옛 코드는 `{ text }` 를 넘기고 무조건 return 했다 — 문은 `payload` 만
               // 보므로 성공이 실패로 떨어졌고, return 이 rAF 재예약을 건너뛰어 루프가
               // 죽었다 (.04~.05.02 시험판, PM/029B §24.9). ⓘ·ⓙ 가 잰다.
-              if (session !== scanSession) return;
+              if (session !== scanSession) {
+                /*
+                 * 🔴 **정정 강조는 문이 «받아들인» 뒤에만 그린다** (3b 검토 F13). 옛 자리는 문 **앞**
+                 * 이라, 거부될 적중(비컨만·빈 페이로드)의 강조가 캔버스에 먼저 찍히고 그 뒤에야
+                 * `r2Correction = null` 이 돌았다 — 아래 주석이 스스로 금지한 그 거짓말이다.
+                 *
+                 * ⚠ **그리고 이 그림은 지금 구조에서 화면에 도달하지 못한다** (3b 검토 F1, 미해소):
+                 * 바로 위 `handleDecodeResult` → `stopCamera()` 가 같은 태스크에서 `cameraStream = null`
+                 * 로 만들고 그 안의 `renderR2CellMap()` 이 캔버스 둘을 `hidden = true` 로 세운다.
+                 * 즉 브라우저는 이 프레임을 한 번도 합성하지 않는다. 그래도 호출을 **남겨 두는** 이유:
+                 * 배선(래치 → α → 경로 → 붓)은 여기까지 옳고, 표면을 여는 결정((i) 수용 경로의
+                 * stopCamera 를 R2_HUD_CORRECTION_MS 만큼 미룸 · (ii) 결과 시트에 미니 HUD)은
+                 * 운영자 몫이라 이 레인이 정하지 않는다. 결정이 서면 이 한 줄이 곧 그 표면이 된다.
+                 */
+                if (r2Correction !== null) renderR2CellMap();
+                return;
+              }
               r2Runtime.reset();
-              // 거부된 적중은 확정이 아니다 — 래치도 되돌린다.
+              // 거부된 적중은 확정이 아니다 — 래치도 되돌린다. 정정 강조도 같이: 거부된 복호가
+              // «고쳤다» 고 지목한 셀은 그 복호가 틀렸다는 뜻이라 화면에 남기면 거짓말이다.
               r2Latched = null;
+              r2Correction = null;
               // 거부 = 락 해제의 다른 이름인데 처방 문구(beaconOnly 등)는 문이 이미 잡았다 — 다음 프레임의 release 전이가
               // status.aim 으로 덮지 않게 위상을 내리고, 재락의 r2Collecting 이 처방을 즉시 덮지 않게 잠시 유예한다
               // (F1 · 규칙은 r2-confirmation-model.r2StatusOnReject — r2-confirmation-model.test (xii) 가 값으로 잰다).
@@ -3328,13 +3376,23 @@ function renderConfirmationChips(container, chips, rows) {
         chip.hidden = true;
         chip.textContent = '';
         chip.dataset.state = CONFIRM_STATE.NONE;
+        chip.dataset.rsfix = '0';
       }
       continue;
     }
     // progress 행만 상태 라벨이 붙는다 — 동적 키라 scanner-i18n 의 «R2 상태 칩 동적 키» 자가 사전을 잰다.
-    const text = row.key === 'progress' && row.stateKey
+    let text = row.key === 'progress' && row.stateKey
       ? `${row.text} · ${t('r2.state.' + row.stateKey)}`
       : row.text;
+    /*
+     * 3b — **RS 정정 수** (운영자 결정 ⑦ · 단위 = 심볼). 모델이 0 이면 키 자체를 안 싣는다
+     * («있을 때만» 규약). 낱말도 키도 상수에서 온다 — 문자열을 여기 다시 적으면 상수를 바꾸는 날
+     * 화면만 옛 키를 불러 «빈 라벨» 이 된다 (불신 상태 단어와 같은 규율).
+     */
+    const rsfix = Number.isInteger(row.correctedCount) && row.correctedCount > 0 ? row.correctedCount : 0;
+    if (rsfix > 0) text += ' · ' + fillCount(t('r2.state.' + HUD_RSFIX_STATE_KEY), rsfix);
+    const rsfixFlag = rsfix > 0 ? '1' : '0';
+    if (chip.dataset.rsfix !== rsfixFlag) chip.dataset.rsfix = rsfixFlag;
     if (chip.textContent !== text) {
       // 정정(⑧) = **확정** 행의 값이 «비어 있지 않은 다른 값» 을 갈아치울 때 — DONE 의 변종이 직전 선두와
       // 다르거나 재락으로 버전이 바뀐 경우. 변동(tentative) 행의 선두 교체는 변동색 그대로고, progress 행은
@@ -3415,6 +3473,7 @@ function renderResultR2Summary(latched) {
         chip.hidden = true;
         chip.textContent = '';
         chip.dataset.state = CONFIRM_STATE.NONE;
+        chip.dataset.rsfix = '0';
       }
     }
     return;
@@ -3458,8 +3517,10 @@ function syncR2Status() {
  *
  * 색은 `CELL_MAP_STATE` 와 `HUD_ROLE` 을 **키로** 쓴다 — 숫자 손 사본 금지. 상태·역할이 늘면 여기가
  * 자동으로 따라간다(없는 상태는 미관측 색으로 떨어진다).
- * A6 규율: 코드 사영 영역만(bbox 안) · 플래시 금지(상태 색만 바뀜) · 확정은 정적. 유일한 시간 기반 효과는
- * 락 직후 페이드인(`fadeAlpha`, 300 ms)과 SEARCHING 스캔선(CSS · reduced-motion 이면 없음)이다.
+ * A6 규율: 코드 사영 영역만(bbox 안) · **반복** 플래시 금지(상태 색만 바뀜) · 확정은 정적. 시간 기반 효과는
+ * 셋뿐이다: 락 직후 페이드인(`fadeAlpha`, 300 ms) · SEARCHING 스캔선(CSS · reduced-motion 이면 없음) ·
+ * **DONE 직후 RS 정정 강조**(`hudCorrectionAlpha`, 600 ms — 3b · 운영자 결정 ⑦). 셋 다 «상태 전이 1회» 라
+ * 주기적으로 깜빡이지 않는다 — A6 이 금지한 것은 그 깜빡임이다.
  */
 /**
  * 미니 상자 불신 테두리의 글로우 알파 배율. 3c 가 손으로 고른 두 알파(테두리 0.85 · 글로우 0.18)의
@@ -3471,6 +3532,18 @@ const R2_CELL_COLOR = Object.freeze({
   [CELL_MAP_STATE.CANDIDATE]: 'rgba(255,196,64,0.75)',
   [CELL_MAP_STATE.CONFIRMED]: 'rgba(126,249,208,0.95)',
   [CELL_MAP_STATE.ERASURE]: 'rgba(255,90,170,0.85)',
+  /*
+   * 🔴 **RS 정정** (3b · 운영자 결정 ⑦). 키가 `CELL_MAP_STATE` 값이 **아닌** 이유: 이것은 셀의
+   * «상태» 가 아니라 DONE 한 순간의 **지목**이다. 상태 열거에 끼우면 `HUD_BUCKETS` · 셀맵 칠하기가
+   * 있지도 않은 상태를 하나 더 갖게 되고, 누적기가 그 값을 절대 안 써서 «죽은 묶음» 이 생긴다.
+   * 그래서 키는 `HUD_RSFIX_STATE_KEY`(사전·CSS·팔레트가 공유하는 그 한 낱말)다.
+   *
+   * 색: **소거 분홍과 갈려야 한다** — 두 그림이 같은 화면에 뜨고(격자 불신 점선 · 정정 강조) 뜻이
+   * 반대다(「못 믿는다」 vs 「고쳤다」). 색상환에서 또 한 자리를 빼앗는 대신 **채도 0 · 최대 명도**로
+   * 지목한다: 팔레트의 넷은 전부 유채색이라 흰색은 어느 것과도 안 섞이고, 카메라 영상 위에서
+   * 외곽 실선과 함께 가장 잘 읽힌다. `test/r2-corrections.test.js` ⓒ 가 «갈린다» 를 값으로 잰다.
+   */
+  [HUD_RSFIX_STATE_KEY]: 'rgba(255,255,255,0.92)',
 });
 /*
  * 좌 패널 칩 색은 셀맵 색표에서 **유도**한다 (사본 금지 — 확정·변동·정정이 셀맵의 확정·후보·소거와 같은 색이어야
@@ -3489,6 +3562,8 @@ if (r2Available) {
    */
   const r2FixGlow = scaleColorAlpha(R2_CELL_COLOR[CELL_MAP_STATE.ERASURE], R2_HUD_DISTRUST_GLOW_RATIO);
   document.documentElement.style.setProperty('--r2-fix-glow', r2FixGlow);
+  // 3b — 결과 카드 DONE 칩의 «RS 정정 k» 색. 캔버스 강조와 **같은 값**이라 두 표면이 한 어휘로 읽힌다.
+  document.documentElement.style.setProperty('--r2-rsfix', R2_CELL_COLOR[HUD_RSFIX_STATE_KEY]);
 }
 const r2CellMapCanvas = document.getElementById('r2-cellmap');
 const r2HudCanvas = document.getElementById('r2-hud');
@@ -3552,6 +3627,13 @@ const R2_HUD_OUTLINE_STROKE = 'rgba(126,249,208,0.7)';
  *   · α 는 채움에 곱한다: 「보이긴 하는데 확정처럼 보이지 않는다」.
  */
 const R2_HUD_DISTRUST_STROKE = R2_CELL_COLOR[CELL_MAP_STATE.ERASURE];
+/**
+ * **RS 정정 강조의 붓** (3b). 색은 팔레트의 «rsfix» 항목 하나에서 오고(사본 금지 — 좌 패널 칩의
+ * `--r2-rsfix` 도 같은 값), 채움은 외곽선보다 옅다: 「여기가 그 셀이다」를 외곽이 말하고 채움은
+ * 그 안을 알아보게만 한다. 배율은 «색» 이 아니라 «세기» 라 여기 산다 (불신 글로우와 같은 규약).
+ */
+const R2_HUD_CORRECTION_COLOR = R2_CELL_COLOR[HUD_RSFIX_STATE_KEY];
+const R2_HUD_CORRECTION_FILL = 0.45;
 const R2_HUD_DISTRUST_ALPHA = 0.45;
 /** 점선 간격은 **화면 CSS px** 다 — 선폭과 같은 이유로 변환 역수로 되돌려 쓴다. */
 const R2_HUD_DISTRUST_DASH = Object.freeze([6, 4]);
@@ -3575,9 +3657,10 @@ function setR2HudStroke(ctx, distrusted, baseColor, unitPx) {
 /**
  * 묶음 키 → { 색, 알파 }. 키 문자열을 손으로 다시 적지 않는다 — `bucketKey` 로 **유도**한다.
  * 역할은 변동(DONE 전) 0.55 · 확정 0.95 (⑧·⑩), 데이터 셀은 셀맵 상태색 그대로(1).
- * ⚠ 확정(`:c`) 절반은 **이 표면에서 칠해지지 않는다** — 렌더 시점의 래치는 항상 null 이다(renderR2CellMap 의
- *   `tentative` 주석). 표를 그래도 전부 채워 두는 이유: 색표가 묶음(역할×변동/확정 × 톤 ∪ 데이터×상태)을 다 덮어야 «색 없는 묶음» 이라는
- *   조용한 구멍이 안 생긴다(ⓒ 와 같은 규율). 만드는 비용은 로드 때 한 번이고 매 프레임 경로엔 없다.
+ * ⚠ 확정(`:c`) 절반은 **DONE 정정 강조 재렌더에서만** 칠해진다 (3b) — 다른 넷은 래치가 null 인 자리라
+ *   변동색만 쓴다(renderR2CellMap 의 `tentative` 주석). 3d 까지는 「이 표면에서 아예 안 칠해진다」였다.
+ *   표를 전부 채워 두는 이유는 그때나 지금이나 같다: 색표가 묶음(역할×변동/확정 × 톤 ∪ 데이터×상태)을 다
+ *   덮어야 «색 없는 묶음» 이라는 조용한 구멍이 안 생긴다(ⓒ 와 같은 규율). 만드는 비용은 로드 때 한 번이다.
  */
 const R2_HUD_BUCKET_PAINT = new Map();
 /** 칠하는 순서 = 이 배열의 순서. `R2_HUD_BUCKET_PAINT` 와 **같은 자리에서** 자라므로 색 없는 키가 생길 수 없다. */
@@ -3632,6 +3715,8 @@ const r2Hud = {
   lockRevision: -1, bindRevision: -1, n: 0, frameW: 0, frameH: 0, H: null,
   layoutId: '', gridN: 0,
   quads: null, lines: null, outline: new Float64Array(12), roleGrids: null,
+  /** 3b — 스캔 순번 k → 격자 인덱스. `roleGrids` 와 **같은 자리에서** 다시 만든다 (유도, 사본 아님). */
+  scanInverse: null,
   lockedAt: 0, phase: '', lastMs: 0, maxMs: 0,
 };
 /**
@@ -3675,6 +3760,7 @@ function hideR2Hud() {
   // H 스냅샷도 버린다 — 남기면 다음 락의 H 가 우연히 같은 9값일 때 재사영이 «필요 없음» 으로 읽힌다.
   r2Hud.H = null;
   r2Hud.roleGrids = null;
+  r2Hud.scanInverse = null;
   r2Hud.layoutId = '';
   r2Hud.gridN = 0;
   r2Hud.maxMs = 0;
@@ -3702,22 +3788,48 @@ function paintR2HudBuckets(ctx, alpha, paths) {
  * NaN 은 「사영 불가」의 표현이다(hud-geometry 규약). 경로는 실제로 쓸 때만 만든다.
  */
 function appendR2HudQuad(paths, key, buffer, slot) {
-  const x0 = buffer[slot]; const y0 = buffer[slot + 1];
-  const x1 = buffer[slot + 2]; const y1 = buffer[slot + 3];
-  const x2 = buffer[slot + 4]; const y2 = buffer[slot + 5];
-  const x3 = buffer[slot + 6]; const y3 = buffer[slot + 7];
-  if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)
-    || !Number.isFinite(x2) || !Number.isFinite(y2) || !Number.isFinite(x3) || !Number.isFinite(y3)) return;
+  if (!quadFinite(buffer, slot)) return;
   let path = paths.get(key);
   if (path === undefined) {
     path = new Path2D();
     paths.set(key, path);
   }
-  path.moveTo(x0, y0);
-  path.lineTo(x1, y1);
-  path.lineTo(x2, y2);
-  path.lineTo(x3, y3);
+  appendR2HudQuadInto(path, buffer, slot);
+}
+
+/** 꼭짓점 넷이 전부 유한한가 — «사영 불가» 판정의 **정본**. 묶음 경로와 정정 경로가 같이 쓴다. */
+function quadFinite(buffer, slot) {
+  for (let k = 0; k < 8; k += 1) {
+    if (!Number.isFinite(buffer[slot + k])) return false;
+  }
+  return true;
+}
+
+/** 마름모 한 장을 **주어진** 경로에 잇는다 (3b 정정 강조 — 묶음 Map 을 거치지 않는 자리). */
+function appendR2HudQuadInto(path, buffer, slot) {
+  if (!quadFinite(buffer, slot)) return;
+  path.moveTo(buffer[slot], buffer[slot + 1]);
+  path.lineTo(buffer[slot + 2], buffer[slot + 3]);
+  path.lineTo(buffer[slot + 4], buffer[slot + 5]);
+  path.lineTo(buffer[slot + 6], buffer[slot + 7]);
   path.closePath();
+}
+
+/**
+ * **정정 강조 한 표면** — 채움(α × 배율) + 실선 외곽. 오버레이와 미니가 **같은 함수**를 쓴다:
+ * 한쪽만 고치면 「같은 상태의 두 그림」이 다른 말을 한다 (불신 α 와 같은 규율).
+ * 선폭 단위는 호출자가 준다 (변환 역수 — 화면 CSS px 고정).
+ */
+function paintR2Correction(ctx, path, alpha, unitPx) {
+  ctx.setLineDash(R2_HUD_SOLID_DASH);
+  ctx.globalAlpha = alpha * R2_HUD_CORRECTION_FILL;
+  ctx.fillStyle = R2_HUD_CORRECTION_COLOR;
+  ctx.fill(path);
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = R2_HUD_CORRECTION_COLOR;
+  ctx.lineWidth = 2 * unitPx;
+  ctx.stroke(path);
+  ctx.globalAlpha = 1;
 }
 
 /** 격자선 — 선분 버퍼(끝점 2개)를 그대로 잇는다. NaN 선분은 건너뛴다. */
@@ -3765,6 +3877,15 @@ function r2HudDebugLine() {
     maxMs: r2Hud.maxMs,
     n: r2Hud.n,
     layoutId: layoutDisplayId(r2Hud.layoutId),
+    /*
+     * 3b — RS 정정 수. 원천은 래치라 600 ms 창과 무관하다.
+     * ⚠ **지금 구조에선 이 값이 줄에 실릴 수 없다** (3b 검토 F10 · 잠자는 경로): R2 위치에서 hud 줄을
+     * 만드는 유일한 호출처(`updateDebugOverlay(r2Image, …)`)는 프레임 루프 끝인데, 그 앞에서
+     * 수용이면 `return` 하고 거부면 `r2Latched = null` 이 먼저 돈다. 즉 이 자리의 래치는 언제나
+     * null 이다. 3b 검토 F1 의 표면 결정((i) stopCamera 유예 · (ii) 결과 시트 HUD)이 서면 그때
+     * 실제로 뜬다 — 그전까지는 배선만 서 있다.
+     */
+    corrected: r2Latched && Number.isInteger(r2Latched.correctedCount) ? r2Latched.correctedCount : 0,
   }, r2Runtime.stats);
 }
 
@@ -3792,6 +3913,13 @@ function renderR2CellMap() {
     const phase = hudPhase(hudInput);
     // «격자 불신» — 마진 게이트 미달. 판정은 순수 모듈이 하고(그릴 게 없는 위상은 스스로 뺀다) 여기는 그린다.
     const distrusted = hudDistrusted(hudInput);
+    /*
+     * 🔴 **정정 강조는 위상 밖의 층이다** (3b). 위상은 «후보가 어디까지 왔나» 라 DONE 에서 그리기를
+     * 멈추는데(아래 `overlayOn`), 정정 강조가 있어야 하는 자리가 바로 그 DONE 이다. 그래서 α 는
+     * 위상이 아니라 **래치 시각**에서만 나온다 — 시계는 여기서 주입하고 규칙은 순수 함수에 있다.
+     */
+    const corrAlpha = r2Correction === null ? 0 : hudCorrectionAlpha(nowMs(), r2Correction.at);
+    const corrFresh = corrAlpha > 0 && r2Correction !== null && r2Correction.count > 0;
     r2Hud.phase = phase;
     // 미니 HUD 는 R2 켬 + 카메라면 **항상** 보인다 (점진 표시가 SEARCHING 부터 시작한다). 위상은 CSS 가 읽는다(스캔선).
     r2HudMini.hidden = false;
@@ -3802,7 +3930,8 @@ function renderR2CellMap() {
     if (r2HudMini.dataset.distrust !== distrustFlag) r2HudMini.dataset.distrust = distrustFlag;
     // 전면 오버레이는 «그릴 H 가 있을 때» 만 — SEARCHING/DROPPED 엔 자리가 없고, DONE 뒤엔 결과 시트가 덮는다.
     const overlayOn = phase !== HUD_PHASE.SEARCHING && phase !== HUD_PHASE.DROPPED && phase !== HUD_PHASE.DONE;
-    r2HudCanvas.hidden = !overlayOn;
+    // 정정 강조가 살아 있으면 DONE 위상에서도 오버레이를 연다 — 그것이 이 그림의 유일한 자리다.
+    r2HudCanvas.hidden = !(overlayOn || corrFresh);
 
     const n = Number.isInteger(view.n) && view.n > 0 ? view.n : 0;
     if (view.H && n > 0) {
@@ -3858,10 +3987,24 @@ function renderR2CellMap() {
     const leadingId = r2LeadingId;
     if (leadingId === '') {
       r2Hud.roleGrids = null;
+      r2Hud.scanInverse = null;
       r2Hud.layoutId = '';
       r2Hud.gridN = 0;
     } else if (n > 0 && (r2Hud.layoutId !== leadingId || r2Hud.gridN !== n)) {
       r2Hud.roleGrids = buildRoleGrids(n, leadingId);
+      /*
+       * 3b — 정정 강조는 「이 스캔 순번들만」이라 `scanGrid` 를 **거꾸로** 물어야 한다. 격자를 통째로
+       * 훑는 소거 색칠과 달리 역표가 필요하고, 표는 `scanGrid` 에서 유도한다 (순수 함수 — 사본 금지).
+       * 여기서 한 번 만든다: 선두·n 이 그대로면 다시 만들 이유가 없다.
+       */
+      r2Hud.scanInverse = null;
+      if (r2Hud.roleGrids) {
+        const dataCells = r2Hud.roleGrids.counts.data;
+        if (Number.isInteger(dataCells) && dataCells > 0) {
+          const inverse = new Int32Array(dataCells);
+          if (invertScanGrid(r2Hud.roleGrids.scanGrid, inverse) > 0) r2Hud.scanInverse = inverse;
+        }
+      }
       r2Hud.layoutId = leadingId;
       r2Hud.gridN = n;
     }
@@ -3873,10 +4016,12 @@ function renderR2CellMap() {
     const grids = r2Hud.roleGrids;
     const quads = r2Hud.quads;
     /*
-     * 레이아웃 변종은 DONE 까지 변동(⑧). ⚠ 이 표면에서 `tentative` 는 **항상 true** 다: 렌더 호출 넷이 전부
-     * 래치가 null 인 자리에 있다(프레임 루프는 래치 설정 **앞**, 수용되면 stopCamera → 카메라 없음, 거부되면
-     * 다시 null, 스위치·startFrameLoop 도 null 로 만든 뒤 그린다). 확정 알파(0.95)·확정 묶음(`:c`)은 결과
-     * 카드의 몫이다 (운영자 결정 ⑨ — DONE 뒤엔 결과 시트가 HUD 를 덮는다). 그래서 아래에 DONE 분기가 없다.
+     * 레이아웃 변종은 DONE 까지 변동(⑧). 렌더 호출은 **다섯**이고 그중 넷은 래치가 null 인 자리다
+     * (프레임 루프는 래치 설정 **앞** · 스위치 · startFrameLoop · manualRescan 은 null 로 만든 뒤 그린다).
+     * ⚠ **다섯 번째가 예외다** (3b): 수용된 DONE 뒤의 정정 강조 재렌더는 래치가 **선 채**로 들어오므로
+     * 거기서 `tentative === false` 이고, 확정 알파(0.95)·확정 묶음(`:c`)이 그 한 장에서 실제로 쓰인다
+     * (운영자 결정 ⑨·⑩ 이 이미 정의해 둔 색). 그 한 장이 화면에 도달하는지는 3b 검토 F1 — 운영자 결정
+     * 대기다. 옛 주석은 「항상 true」라고 적어 두었는데 3b 가 다섯 번째 호출처를 만든 순간 거짓이 됐다.
      */
     const tentative = r2Latched === null;
     /*
@@ -3885,8 +4030,16 @@ function renderR2CellMap() {
      * 미니의 채움 위상은 오버레이와 다르다(점진 표시의 마지막 두 칸뿐) — 그래서 조건을 따로 판정하고,
      * 둘 중 하나라도 참일 때만 격자를 한 번 걷는다. 둘 다 참인 프레임(DATA·FINALIZING)에서만 마름모가 두 벌이다.
      */
-    const wantFills = Boolean(view.H) && overlayOn && quads !== null && r2Hud.n === n;
-    const miniFills = n > 0 && (phase === HUD_PHASE.DATA || phase === HUD_PHASE.FINALIZING);
+    // 「오버레이 기하가 있나」와 「그릴 위상인가」를 가른다 — 정정 강조는 앞의 것만 필요하다(3b).
+    const overlayGeom = Boolean(view.H) && quads !== null && r2Hud.n === n;
+    /*
+     * 🔴 **정정 강조 프레임에는 채움·격자도 연다** (3b 검토 F6). 위상이 DONE 이면 원래 모든 채움
+     * 게이트가 닫히는데, 정정 강조가 그려지는 프레임이 바로 그 DONE 이다 — 그러면 「어느 셀이
+     * 틀렸나」가 **맥락 없는 흰 마름모**로만 뜬다. 그 물음은 주변 셀·격자가 있어야 읽힌다.
+     * 그래서 `corrFresh` 를 채움·격자의 **또 하나의 참 조건**으로 넣는다 (위상 판정은 그대로다).
+     */
+    const wantFills = overlayGeom && (overlayOn || corrFresh);
+    const miniFills = n > 0 && (phase === HUD_PHASE.DATA || phase === HUD_PHASE.FINALIZING || corrFresh);
     const miniGridOn = miniFills || (n > 0 && phase === HUD_PHASE.GRID);
     r2HudPaths.clear();
     r2HudMiniPaths.clear();
@@ -3919,6 +4072,51 @@ function renderR2CellMap() {
         }
       }
     }
+    /*
+     * 🔴 **RS 정정 강조의 경로** (3b). 셀 목록이 짧아서(정정 수 × 3) 격자를 다시 걷지 않는다 —
+     * 스캔 순번 → 격자 칸을 역표로 곧장 물어 그 칸의 세 면만 잇는다.
+     *
+     * ⚠ **선두가 DONE 의 변종과 다르면 안 그린다.** 역표·기하는 `r2Hud.layoutId`(좌 패널과 같은
+     * 히스테리시스 선두)의 것이고, DONE 이 다른 변종으로 섰다면 그 격자 위의 셀 번호를 이 격자에
+     * 찍는 것은 **다른 칸을 지목하는 일**이다 (운영자 ⑧ 의 «정정» 이 바로 그 어긋남이다).
+     * 그때 화면에 남는 것은 결과 카드의 «RS 정정 k» 뿐이다 — 수는 맞고 자리는 안 그린다.
+     */
+    const corrGridOk = corrFresh
+      && grids !== null
+      && n > 0
+      && r2Hud.gridN === n
+      && r2Hud.scanInverse !== null
+      && r2Correction.n === n
+      && r2Hud.layoutId === r2Correction.layoutId;
+    /*
+     * ⚠ 경로 객체는 **그릴 게 있을 때만** 만든다 (3b 검토 F16). 위 채움 경로가 세운 규율과 같다:
+     * 정정 없는 프레임(거의 전부)에서 Path2D 두 개를 헛만들면 그것이 매 프레임 할당이다.
+     */
+    let corrPath = null;
+    let corrMiniPath = null;
+    let corrCells = 0;
+    if (corrGridOk) {
+      corrPath = new Path2D();
+      corrMiniPath = new Path2D();
+      const inverse = r2Hud.scanInverse;
+      const isoOk = r2HudIso.n === n && r2HudIso.quads !== null;
+      for (let c = 0; c < r2Correction.cells.length; c += 1) {
+        const k = r2Correction.cells[c];
+        const idx = (Number.isInteger(k) && k >= 0 && k < inverse.length) ? inverse[k] : -1;
+        if (idx < 0) continue;
+        const i = idx % n;
+        const j = (idx - i) / n;
+        corrCells += 1;
+        for (let f = 0; f < HUD_FACES.length; f += 1) {
+          const slot = faceQuadSlot(n, f, i, j);
+          if (overlayGeom) appendR2HudQuadInto(corrPath, quads, slot);
+          if (isoOk) appendR2HudQuadInto(corrMiniPath, r2HudIso.quads, slot);
+        }
+      }
+    }
+    const corrOverlay = corrCells > 0 && overlayGeom && corrPath !== null;
+    const corrMini = corrCells > 0 && r2HudIso.n === n && corrMiniPath !== null;
+
     if (wantFills && r2Hud.lines) appendR2HudLines(gridPath, r2Hud.lines, gridLineCount(n));
     if (miniGridOn && r2HudIso.lines && r2HudIso.n === n) {
       appendR2HudLines(miniGridPath, r2HudIso.lines, gridLineCount(n));
@@ -3939,7 +4137,12 @@ function renderR2CellMap() {
      * 두 표면(오버레이·미니)이 같은 수를 쓴다 — 한쪽만 눕히면 「같은 상태의 두 그림」이 다른 말을 한다.
      */
     const paintAlpha = distrusted ? alpha * R2_HUD_DISTRUST_ALPHA : alpha;
-    if (overlayOn && side > 0 && r2Hud.frameW > 0 && r2Hud.frameH > 0) {
+    /*
+     * ⚠ 게이트가 `corrOverlay` 가 아니라 **`corrFresh`** 인 이유: 위에서 캔버스를 `corrFresh` 로
+     * 열었으므로, 여기서 더 좁은 조건을 쓰면 「보이는데 안 지운 캔버스」(옛 프레임 잔상)가 남는다.
+     * 그릴 게 없으면 `clearRect` 만 하고 끝난다 — 그것이 이 자리의 옳은 일이다.
+     */
+    if ((overlayOn || corrFresh) && side > 0 && r2Hud.frameW > 0 && r2Hud.frameH > 0) {
       const backing = Math.round(side * dpr);
       // width/height 대입은 캔버스를 **지운다** — 달라졌을 때만 건드린다.
       if (r2HudCanvas.width !== backing) r2HudCanvas.width = backing;
@@ -3961,6 +4164,8 @@ function renderR2CellMap() {
         setR2HudStroke(ctx, distrusted, R2_HUD_OUTLINE_STROKE, dpr / sx);
         ctx.lineWidth = (2 * dpr) / sx;
         ctx.stroke(outlinePath);
+        // 3b — 정정 강조는 **맨 위**다: 아래 층(역할·데이터 색)이 그 셀을 이미 칠했으므로 덮어야 보인다.
+        if (corrOverlay) paintR2Correction(ctx, corrPath, corrAlpha, dpr / sx);
         // 점선은 이 캔버스 컨텍스트에 남는다 — 다음 프레임이 실선으로 돌아가도 되게 여기서 되돌린다.
         ctx.setLineDash(R2_HUD_SOLID_DASH);
         ctx.globalAlpha = 1;
@@ -3996,7 +4201,8 @@ function renderR2CellMap() {
             mctx.globalAlpha = 1;
           } else {
             // 점진 표시(운영자 원 요구): 실루엣 → 격자 → 역할색 → 데이터. 위상이 그 순서를 탄다.
-            // DONE 은 여기 없다 — 래치는 렌더 뒤에 서고(위 `tentative` 주석), DONE 뒤엔 결과 시트가 덮는다(⑨).
+            // DONE 위상이 여기 오는 경로는 하나뿐이다 — 정정 강조 재렌더(3b · `corrFresh` 가 채움을 연다).
+            // 그 밖의 DONE 뒤엔 결과 시트가 덮는다(⑨).
             if (miniFills) paintR2HudBuckets(mctx, paintAlpha, r2HudMiniPaths);
             if (miniGridOn) {
               mctx.globalAlpha = alpha;
@@ -4008,6 +4214,8 @@ function renderR2CellMap() {
             setR2HudStroke(mctx, distrusted, R2_HUD_OUTLINE_STROKE, dpr / scale);
             mctx.lineWidth = (2 * dpr) / scale;
             mctx.stroke(miniOutlinePath);
+            // 3b — 오버레이와 **같은 함수·같은 α**. 미니는 항등 H 라 카메라 자세와 무관하게 같은 칸을 짚는다.
+            if (corrMini) paintR2Correction(mctx, corrMiniPath, corrAlpha, dpr / scale);
             mctx.setLineDash(R2_HUD_SOLID_DASH);
             mctx.globalAlpha = 1;
           }
@@ -4048,6 +4256,7 @@ if (engineSwitch && engineSwitchControl && r2Available) {
     runtimeFamilyHint = null;
     // DONE 래치도 버린다 — 엔진을 바꾼 뒤 옛 확정 값이 남으면 다른 엔진의 결과처럼 읽힌다.
     r2Latched = null;
+    r2Correction = null;
     // 거부 유예도 버린다 — 그 처방은 옛 엔진 위치의 것이다.
     r2StatusHoldUntil = -Infinity;
     // R2 가 상태줄을 «모으는 중» 으로 잡고 있었다면 돌려준다 — R1 위치에선 R1 상태 기계가 다시 맡는다.
@@ -4088,6 +4297,9 @@ function manualRescan() {
   qrBridge.reset();
   runtimeFamilyHint = null;
   r2Latched = null;
+  // 3b 검토 F11 — 정정 강조도 같이 버린다. 「처음부터」라고 해 놓고 옛 DONE 이 지목한 셀이
+  // 남으면 새 화면이 없는 결함을 가리킨다 (`startFrameLoop` · 스위치 · 거부와 **같은 목록**).
+  r2Correction = null;
   r2StatusCollecting = false;
   r2StatusHoldUntil = -Infinity;
   /*

@@ -144,8 +144,20 @@ test('R2 상태 칩 동적 키 — Object.keys(R2_INDICATOR) 소문자마다 r2.
   assert.ok(SCANNER_JS.includes("t('r2.state.' +"), 'scanner.js 가 r2.state 동적 키를 안 만든다 — 이 자의 대상이 없다');
   const names = Object.keys(R2_INDICATOR);
   assert.ok(names.length >= 8, 'R2_INDICATOR 가 ' + names.length + '개뿐 — 원본을 잘못 읽었다');
-  for (const name of names) {
-    const key = 'r2.state.' + name.toLowerCase();
+  /*
+   * 🔴 **원본이 둘이고 루프는 하나다** (3b 검토 F15). 옛 자는 `HUD_STATE_KEYS_BEYOND_INDICATOR` 를
+   * 아래 «죽은 문구» 허용 집합으로만 썼고, 「여덟 언어에 다 있나」는 키마다 자를 새로 쓰는 방식이었다
+   * (distrust 는 이 파일 아래, rsfix 는 r2-corrections ⓕ). 그래서 그 목록에 세 번째 키를 넣고
+   * 사전엔 한 언어도 안 넣어도 전부 초록이었다 — 목록이 **무방비**였다.
+   * 이제 두 원본을 합쳐 **같은 루프**로 잰다: 목록이 늘면 여덟 언어를 채우라고 여기가 빨개진다.
+   */
+  const stateKeys = [
+    ...names.map((name) => 'r2.state.' + name.toLowerCase()),
+    ...HUD_STATE_KEYS_BEYOND_INDICATOR.map((key) => 'r2.state.' + key),
+  ];
+  assert.equal(new Set(stateKeys).size, stateKeys.length,
+    '인디케이터 이름과 «인디케이터 밖» 목록이 같은 키를 가리킨다 — 두 원본이 겹쳤다');
+  for (const key of stateKeys) {
     for (const lang of LANGS) {
       assert.equal(typeof SCANNER_STRINGS[lang][key], 'string', lang + ' 에 ' + key + ' 가 없다');
       assert.ok(SCANNER_STRINGS[lang][key].trim().length > 0, lang + '/' + key + ' 가 비어 있다');
@@ -158,10 +170,7 @@ test('R2 상태 칩 동적 키 — Object.keys(R2_INDICATOR) 소문자마다 r2.
    *   동시에 성립할 수 있어서(모으는 중인데 격자를 못 믿는다) 한 열거로 합칠 수 없었다.
    *   목록은 여전히 **유도**다: 두 원본을 합칠 뿐 이 파일에 문자열을 적지 않는다.
    */
-  const wanted = new Set([
-    ...names.map((n) => 'r2.state.' + n.toLowerCase()),
-    ...HUD_STATE_KEYS_BEYOND_INDICATOR.map((key) => 'r2.state.' + key),
-  ]);
+  const wanted = new Set(stateKeys);
   const dead = Object.keys(SCANNER_STRINGS.ko).filter((k) => k.startsWith('r2.state.') && !wanted.has(k));
   assert.deepEqual(dead, [], '인디케이터에 없는 상태 문구');
 });

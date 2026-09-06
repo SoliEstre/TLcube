@@ -75,6 +75,26 @@ function positiveInteger(value) {
 }
 
 /**
+ * 🔴 **정정 위치를 밖으로 낸다** (3b · 운영자 결정 ⑦ — 표시 단위는 RS 심볼 = 셀 3개).
+ *
+ * `rs-soft` 의 `out.correctedPositions` 는 이 모듈이 닫고 있는 작업 메모리라 세션이 볼 수 없다.
+ * 세션은 caller-owned 버퍼(`output.correctedPositions`)를 들고 오고, 여기서 **수용된 프레임에만**
+ * 그 안으로 복사한다 — 거부된 시도의 위치를 남기면 HUD 가 「고쳐진 자리」라고 거짓말한다.
+ *
+ * 할당 없음. 버퍼가 없거나 짧으면 담기는 만큼만 담고 그 수를 돌려준다 (거짓 0 도, 예외도 없다).
+ */
+function publishCorrections(out, output) {
+  output.correctedCount = 0;
+  const source = out.correctedPositions;
+  const target = output.correctedPositions;
+  const count = Number.isInteger(out.correctedCount) && out.correctedCount > 0 ? out.correctedCount : 0;
+  if (count === 0 || !isIndexable(source) || !isIndexable(target)) return;
+  const limit = Math.min(count, source.length, target.length);
+  for (let i = 0; i < limit; i += 1) target[i] = source[i];
+  output.correctedCount = limit;
+}
+
+/**
  * `layout` 에서 패리티 심볼 수를 뽑는다. 명시값이 이기고, 없으면 K 에서 유도한다.
  * 둘 다 없으면 0 을 돌려 호출자가 «복호 불가» 로 처리하게 한다 (지어내지 않는다).
  */
@@ -114,6 +134,7 @@ export function createRsDecodeInto(options = undefined) {
     output.accepted = 0;
     output.payloadLength = 0;
     output.tResidual = 0;
+    output.correctedCount = 0;
 
     if (
       !isIndexable(symbolValues)
@@ -211,6 +232,7 @@ export function createRsDecodeInto(options = undefined) {
       output.accepted = 1;
       output.payloadLength = capped;
       output.tResidual = out.tResidual;
+      publishCorrections(out, output);
       return R2_SESSION_STATUS.OK;
     }
     // ── 🔴 전부-0 코드워드 거부 (2026-09-04) ────────────────────────────
@@ -255,6 +277,7 @@ export function createRsDecodeInto(options = undefined) {
     output.accepted = 1;
     output.payloadLength = capped;
     output.tResidual = out.tResidual;
+    publishCorrections(out, output);
     return R2_SESSION_STATUS.OK;
   };
 }

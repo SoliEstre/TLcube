@@ -470,6 +470,10 @@
   .r2-chip[data-state="tentative"] { color: var(--r2-live); opacity: .9; }
   .r2-chip.is-corrected { animation: r2-correct 700ms ease-out; }
   @keyframes r2-correct { from { color: var(--r2-fix); } }
+  /* 3b — **RS 정정 수가 실린 DONE 칩**. 위 `.is-corrected`(레이아웃 변종 오인의 1회 플래시)와 **다른 축**이다:
+     이것은 정적 색이고, 「이 결과는 RS 가 k 개를 고쳐서 섰다」를 결과 카드에 남긴다. 색은 캔버스 강조와 같은
+     값(`--r2-rsfix`, scanner.js 가 R2_CELL_COLOR[HUD_RSFIX_STATE_KEY] 에서 심는다) — 리터럴 사본 없음. */
+  .r2-chip[data-state="confirmed"][data-rsfix="1"] { color: var(--r2-rsfix); }
   .r2-progress-bar { display: flex; align-items: center; gap: 6px; align-self: stretch; min-width: 0; }
   /* ≤320px — 운영자 답 ④ «정보를 세로로 표시» 의 통합자 해석(실기 뒤 조정 가능): 좌 패널 칩을 세로 한 줄씩 쌓는다.
      3열 구조는 유지 — 열을 합치면 스위치 정중앙이 깨진다.

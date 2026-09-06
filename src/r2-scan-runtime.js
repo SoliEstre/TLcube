@@ -33,6 +33,7 @@
 import { createA3Adapters } from './r2/adapter-locator.js';
 import { createR2Session, R2_INDICATOR } from './r2/session.js';
 import { createRsDecodeInto } from './r2/decode-rs.js';
+import { correctedCellsForHit } from './r2/corrections.js';
 import {
   capacityForCellSurfaceFinal,
   dataCellsInScanOrderCellSurfaceFinal,
@@ -123,6 +124,13 @@ export function createR2ScanRuntime(options = {}) {
 
   let adapters = null;
   let candidates = [];
+  /*
+   * 3b — 정정 셀 보관함. DONE 에서만 쓰이고 스크래치는 필요한 만큼만 자란다 (줄어들지 않는다 —
+   * 재bind 마다 다시 잡으면 그것도 할당이다). 적중이 돌려주는 것은 이 버퍼의 **뷰**다.
+   * 채우는 규칙은 `r2/corrections.js` 의 `correctedCellsForHit` 하나다 — 여기서 다시 적지 않는다
+   * (그래야 코퍼스가 못 지나는 이 분기를 자가 값으로 지난다 · 3b 검토 F4).
+   */
+  const correctedHolder = { scratch: new Uint16Array(0), count: 0, cells: new Uint16Array(0) };
   // 검출 출력 스크래치 — 프레임마다 새로 만들지 않는다 (핫 경로 할당 금지).
   const detection = {
     found: 0, family: 0, n: 0, H: null, layoutId: '', faceLabels: null,
@@ -615,7 +623,22 @@ export function createR2ScanRuntime(options = {}) {
         stats.phaseMs.align = 0;
       }
       stats.phaseMs.decode = decodeMs;
-      return { text, layoutId: candidate.layoutId, n: boundN, frame: stats.doneFrame };
+      /*
+       * 🔴 **정정 심볼 → 스캔 순서 셀** (3b). DONE 프레임에서 **한 번** 편다 — 프레임 경로가
+       * 아니다. 규칙은 `r2/corrections.js` 한 곳이고(소거 셀맵과 같은 식) 여기서 다시 세지 않는다.
+       * 스크래치는 런타임이 들고 있다가 필요한 만큼만 키운다; 적중은 그 앞부분을 가리키는
+       * 뷰라 소비자가 `correctedCells.length` 로 곧장 순회할 수 있다.
+       */
+      // 매핑 불가(-1)면 `cells` 가 비고 `count` 는 남는다 — **수는 맞고 자리는 모른다**.
+      correctedCellsForHit(candidate.session.result, candidate.session.layout, correctedHolder);
+      return {
+        text,
+        layoutId: candidate.layoutId,
+        n: boundN,
+        frame: stats.doneFrame,
+        correctedCount: correctedHolder.count,
+        correctedCells: correctedHolder.cells,
+      };
     }
 
     stats.progressD = bestD < 0 ? 0 : bestD;
@@ -755,6 +778,8 @@ export function r2HitToDecodeResult(hit) {
     layoutId: hit.layoutId,
     n: hit.n,
     r2Frame: hit.frame,
+    // 3b — 결과 카드용은 **수** 하나다. 셀 목록은 HUD 의 몫이라 문을 지나가지 않는다.
+    r2Corrected: Number.isInteger(hit.correctedCount) && hit.correctedCount > 0 ? hit.correctedCount : 0,
   };
 }
 

@@ -155,7 +155,8 @@ function versionText(family, version, n) {
  * @param {object} input
  * @param {object} input.stats `r2-scan-runtime` 의 stats (lockedN · candidateCount · indicator · progressD · candidates)
  * @param {{layoutId:string, n?:number}} [input.view] `r2-scan-runtime` 의 view — 묶인 n(`n`)의 원천, 선두 id 가 없을 때의 대체 원천
- * @param {null|{layoutId:string, n:number}} [input.latched] DONE 스냅샷. 있으면 전 행 확정.
+ * @param {null|{layoutId:string, n:number, correctedCount?:number}} [input.latched] DONE 스냅샷. 있으면 전 행 확정.
+ *   `correctedCount` > 0 이면 progress 행에 그 수가 실린다 (3b · RS 가 고친 **심볼** 수).
  * @param {string} [input.leadingId] `leadingWithHysteresis` 결과
  * @param {string} [input.family] 누적 계열 문자. 기본 `R2_CAPABILITIES.accumulatesFamilies[0]` ('Y')
  * @returns {Array<{key:string, text:string, state:string, stateKey?:string}>}
@@ -168,7 +169,7 @@ function versionText(family, version, n) {
  *   version  : 래치 → CONFIRMED 'Y<v> (n<latched.n>)' · locked → CONFIRMED 'Y<v> (n<n>)' · 아니면 NONE
  *   layout   : 래치 → CONFIRMED (래치가 선두를 이긴다) · locked → TENTATIVE (leadingId, 없으면 **살아 있는 후보가 있을 때만** view.layoutId)
  *              · 아니면 NONE
- *   progress : 래치 → CONFIRMED 'DONE' (stateKey 'done') · locked → TENTATIVE 'D 0.62' (stateKey = indicator 이름) · 아니면 NONE
+ *   progress : 래치 → CONFIRMED 'DONE' (stateKey 'done', 정정 > 0 이면 `correctedCount`) · locked → TENTATIVE 'D 0.62' (stateKey = indicator 이름) · 아니면 NONE
  * 예외 없음 — 잘못된 입력은 NONE 행.
  */
 export function confirmationRows(input) {
@@ -230,7 +231,17 @@ export function confirmationRows(input) {
     }
     // progress
     if (latched !== null) {
-      rows.push({ ...row(key, CONFIRM_STATE.CONFIRMED, 'DONE'), stateKey: indicatorStateKey(R2_INDICATOR.DONE) });
+      /*
+       * 3b — DONE 행에 **RS 정정 수**를 싣는다 (운영자 결정 ⑦ · 단위 = 심볼). 0 이면 아예 없다:
+       * «있을 때만» 규약이라 «정정 0» 은 안 적는다 (그 줄이 매번 붙으면 «고쳤다» 가 눈에 안 든다).
+       * 낱말은 렌더 층이 사전에서 붙인다 — 이 모델은 언어를 모른다 (다른 행과 같은 규약).
+       */
+      const corrected = Number.isInteger(latched.correctedCount) && latched.correctedCount > 0
+        ? latched.correctedCount
+        : 0;
+      const progressRow = { ...row(key, CONFIRM_STATE.CONFIRMED, 'DONE'), stateKey: indicatorStateKey(R2_INDICATOR.DONE) };
+      if (corrected > 0) progressRow.correctedCount = corrected;
+      rows.push(progressRow);
     } else if (locked) {
       const d = stats && Number.isFinite(stats.progressD) ? stats.progressD : 0;
       rows.push({

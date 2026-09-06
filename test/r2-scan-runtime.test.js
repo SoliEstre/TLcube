@@ -106,7 +106,14 @@ test('ⓑ 배선이 R2 결과를 R1 과 **같은 문**으로 보내고, 플래�
   const source = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
   const start = source.indexOf('if (r2Runtime.enabled) {');
   assert.ok(start > 0, 'scanner.js 에 R2 블록이 없다 — 배선이 지워졌다');
-  const block = source.slice(start, start + 1600);
+  /*
+   * ⚠ **의도적 갱신 (3b)** — 옛 창은 `start + 1600` 이라는 **글자 수**였고, 그 블록에 줄이 늘자
+   * `handleDecodeResult(` 가 창 밖으로 밀려 이 자가 「배선이 지워졌다」고 거짓말했다 (memory:
+   * 철자를 재는 자는 썩는다). 지키려는 명제는 「R2 블록 **안**에서 부른다」이므로 경계도
+   * 블록의 실제 끝(`} catch`)에서 온다 — 아래 ⓡ 가 이미 쓰는 방식과 같다.
+   */
+  const block = source.slice(start, source.indexOf('} catch', start));
+  assert.ok(block.length > 400, 'R2 블록을 못 잘랐다 — 이 자가 공허해진다');
 
   // grab 이 **블록 안**에 있어야 플래그 off 에서 비용이 0 이다.
   assert.ok(/grabVideoFrame\(/.test(block),
@@ -334,11 +341,21 @@ test('ⓙ 배선 — 거부된 R2 결과가 루프를 죽이지 않고 R2 를 �
   assert.ok(block.slice(callAt, callAt + 80).includes('r2HitToDecodeResult(hit)'),
     'R2 적중이 모양 변환 없이 문으로 간다 — ⓘ 의 삼킴이 되살아난다');
   const tail = block.slice(callAt, block.indexOf('} catch', callAt));
-  assert.ok(tail.includes('if (session !== scanSession) return;'), '수용 여부를 안 보고 return 한다');
-  assert.ok(tail.includes('r2Runtime.reset()'), '거부된 뒤 R2 를 안 비운다 — 흡수 상태라 같은 답이 반복된다 (ⓚ)');
+  /*
+   * ⚠ 옛 자는 `if (session !== scanSession) return;` 이라는 **한 줄의 철자**를 요구했다. 3b 가 그
+   * 가드를 블록으로 넓히자(수용된 프레임에서 정정 강조를 한 번 더 그린다 — 3b 검토 F13) 정답이
+   * 거부됐다. 그래서 재는 것을 «배치» 에서 **순서라는 성질**로 바꾼다:
+   *   ① 수용 여부를 보는 가드가 있다 · ② 첫 `return;` 은 그 가드 **뒤**다 (무조건 return 금지) ·
+   *   ③ `r2Runtime.reset()` 은 그 return **뒤**다 (거부 경로만 비운다 — 수용은 stopCamera 가 한다).
+   */
+  const guardAt = tail.indexOf('if (session !== scanSession)');
+  assert.ok(guardAt >= 0, '수용 여부를 안 보고 return 한다');
   const bare = tail.indexOf('return;');
-  assert.ok(bare < 0 || tail.slice(0, bare).includes('session !== scanSession'),
-    '무조건 return — rAF 재예약을 건너뛰어 루프가 죽는다');
+  assert.ok(bare > guardAt, '무조건 return — rAF 재예약을 건너뛰어 루프가 죽는다');
+  const resetAt = tail.indexOf('r2Runtime.reset()');
+  assert.ok(resetAt > 0, '거부된 뒤 R2 를 안 비운다 — 흡수 상태라 같은 답이 반복된다 (ⓚ)');
+  assert.ok(resetAt > bare,
+    '수용 가드가 return 하기 전에 R2 를 비운다 — 수용된 결과의 정리를 거부 경로가 대신 한다');
   const stop = js.slice(js.indexOf('function stopCamera()'), js.indexOf('function cameraFailure('));
   assert.ok(stop.includes('r2Runtime.reset()'), 'stopCamera 가 R2 를 안 비운다 — 다음 카메라의 첫 프레임에 옛 글자가 뜬다');
   const loop = js.slice(js.indexOf('function startFrameLoop('), js.indexOf('const nextFrame ='));
@@ -500,9 +517,22 @@ test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 
   const start = js.indexOf('if (r2Runtime.enabled) {');
   assert.ok(start > 0);
   const block = js.slice(start, js.indexOf('} catch', start) + '} catch'.length);
-  const latchAt = block.indexOf('r2Latched = { layoutId: hit.layoutId, n: hit.n, leadingId: r2LeadingId }');
+  /*
+   * ⚠ **의도적 갱신 (3b)** — 옛 판은 스냅샷 객체를 **한 줄 철자 그대로** 찾았고, 3b 가 필드를
+   * 하나(`correctedCount`) 더하며 줄이 갈리자 「스냅샷이 없다」로 빨개졌다. 지키려는 명제는
+   * 「그 세 값이 hit·선두에서 온다」지 「한 줄에 적혀 있다」가 아니다 — 그래서 **필드별로** 잰다.
+   */
+  const latchAt = block.indexOf('r2Latched = {');
   const callAt = block.indexOf('handleDecodeResult(');
-  assert.ok(latchAt > 0, 'R2 블록에 DONE 스냅샷(layoutId · n · leadingId)이 없다 — 결과 카드의 확정 요약이 읽을 값이 없다');
+  assert.ok(latchAt > 0, 'R2 블록에 DONE 스냅샷이 없다 — 결과 카드의 확정 요약이 읽을 값이 없다');
+  const latchObject = block.slice(latchAt, block.indexOf('};', latchAt));
+  for (const field of ['layoutId: hit.layoutId', 'n: hit.n', 'leadingId: r2LeadingId']) {
+    assert.ok(latchObject.includes(field),
+      'DONE 스냅샷에 `' + field + '` 가 없다 — 결과 카드의 확정 요약이 그 값을 못 읽는다');
+  }
+  // 3b — RS 정정 수도 같은 스냅샷에 실린다 (결과 카드 DONE 칩의 «RS 정정 k»).
+  assert.ok(/correctedCount:.*hit\.correctedCount/.test(latchObject),
+    'DONE 스냅샷에 hit 의 정정 수가 없다 — 결과 카드가 「RS 가 몇 개를 고쳤나」를 못 말한다');
   assert.ok(callAt > 0);
   assert.ok(latchAt < callAt,
     '스냅샷이 문 **뒤**다 — 문이 받아들이면 stopCamera 가 r2Runtime.reset() 을 먼저 불러 stats 가 비므로 요약이 빈 값을 읽는다');

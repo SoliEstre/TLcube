@@ -215,7 +215,17 @@ test('ⓖ 좌 패널 칩 색은 셀맵 색표에서 **유도**된다 — setProp
   assert.match(JS, /const r2FixGlow = scaleColorAlpha\(R2_CELL_COLOR\[CELL_MAP_STATE\.ERASURE\], R2_HUD_DISTRUST_GLOW_RATIO\)/,
     '글로우가 셀맵 소거색에서 안 유도된다 (사본 색)');
   lastSetAt = Math.max(lastSetAt, glowAt);
-  assert.equal((JS.match(/setProperty\('--r2-/g) || []).length, Object.keys(pairs).length + 1, '--r2-* 변수 수가 짝 표 + 유도 1 과 다르다');
+  /*
+   * 3b — 다섯 번째 변수 `--r2-rsfix` 도 짝 표에 안 들어간다: 키가 `CELL_MAP_STATE` 값이 아니라
+   * **`HUD_RSFIX_STATE_KEY`** 다 (RS 정정은 셀의 «상태» 가 아니라 DONE 한 순간의 지목이라
+   * 상태 열거에 끼우면 누적기가 절대 안 쓰는 죽은 묶음이 생긴다 — scanner.js 팔레트 주석).
+   * 여기서 재는 것은 「팔레트 그 항목에서 심는가」이고, «소거 분홍과 갈리는가» 는
+   * `test/r2-corrections.test.js` ⓒ 가 **값으로** 잰다.
+   */
+  const rsfixAt = JS.search(/setProperty\('--r2-rsfix', R2_CELL_COLOR\[HUD_RSFIX_STATE_KEY\]\)/);
+  assert.ok(rsfixAt > defAt, '--r2-rsfix 가 팔레트에서 안 심긴다 — 결과 카드 «RS 정정» 색이 CSS 리터럴로 돌아간다');
+  lastSetAt = Math.max(lastSetAt, rsfixAt);
+  assert.equal((JS.match(/setProperty\('--r2-/g) || []).length, Object.keys(pairs).length + 2, '--r2-* 변수 수가 짝 표 + 유도 2 와 다르다');
   // F4 — 세 줄이 전부 `if (r2Available) {` 블록 안: 정식(/) 의 <html> 인라인 스타일에 변수를 심지 않는다 (렌더는 같아도 DOM 이 달라진다).
   const firstSetAt = JS.search(/setProperty\('--r2-/);
   const gateAt = JS.lastIndexOf('if (r2Available) {', firstSetAt);
@@ -232,6 +242,9 @@ test('ⓖ 좌 패널 칩 색은 셀맵 색표에서 **유도**된다 — setProp
   assert.ok(chipRules.length >= 3, '칩 규칙이 ' + chipRules.length + '개뿐');
   for (const rule of chipRules) assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(rule), '칩 규칙에 색 리터럴 사본이 있다: ' + rule);
   assert.match(HTML, /\.r2-chip\.is-corrected\s*\{[^}]*animation:\s*r2-correct/, '정정 클래스가 키프레임을 안 쓴다');
+  // 3b — RS 정정 수가 실린 DONE 칩은 **정적 색**이다 (플래시가 아니다). 확정색보다 세게 잡혀야 이긴다.
+  assert.match(HTML, /\.r2-chip\[data-state="confirmed"\]\[data-rsfix="1"\]\s*\{[^}]*color:\s*var\(--r2-rsfix\)/,
+    'RS 정정 칩 색이 --r2-rsfix 가 아니거나 확정색을 못 이긴다');
   // reduced-motion 블록 안에서 정정 애니메이션이 꺼진다.
   const mediaAt = HTML.indexOf('@media (prefers-reduced-motion: reduce)');
   assert.ok(mediaAt > 0);

@@ -676,10 +676,19 @@ test('ⓚ 시험판 hud 줄 — 순수 빌더의 **출력**을 값으로 잰다 
    */
   stats.lockDistrusted = true;
   stats.lockMargin = 1.36;
-  const worst = r2HudDebugLine(
-    { phase: 'finalizing', lastMs: 12.3, maxMs: 456.7, n: 25, layoutId: 'v0TRQ' }, stats,
-  );
+  /*
+   * 3b — 최악에는 **RS 정정 수**도 실린다 (` c=999`, 6자). 이 필드도 «있을 때만» 이라 기본값으로
+   * 재면 예산이 6자 헐거워진다 — 3d 가 불신 마진에서 겪은 그 함정이다 (3b 검토 F9).
+   * ⚠ 위상은 최장 이름(`finalizing`)으로 둔다: 정정 수는 래치에서 오고 위상은 **마지막 렌더**의
+   * 것이라 둘이 어긋날 수 있다 — 「done 이 6자 짧아 우연히 상쇄된다」에 예산을 걸지 않는다.
+   */
+  const worstHud = { phase: 'finalizing', lastMs: 12.3, maxMs: 456.7, n: 25, layoutId: 'v0TRQ', corrected: 999 };
+  const worst = r2HudDebugLine(worstHud, stats);
   assert.ok(worst.includes('!M'), '최악에 불신 마진이 안 실렸다 — 예산을 실제 최악으로 재고 있지 않다');
+  assert.ok(worst.includes('c=999'), '최악에 RS 정정 수가 안 실렸다 — 예산이 6자만큼 거짓이다');
+  // «있을 때만» — 0 은 안 적는다. 이 규약이 깨지면 위 최악이 **상시** 최악이 된다.
+  assert.ok(!r2HudDebugLine({ ...worstHud, corrected: 0 }, stats).includes('c='),
+    '정정 0 을 줄에 적는다 — «있을 때만» 규약이 깨졌다');
   assert.ok(worst.length <= R2_HUD_DEBUG_LINE_BUDGET,
     'hud 줄 최악이 ' + worst.length + '자다 (예산 ' + R2_HUD_DEBUG_LINE_BUDGET + ') — '
     + '287px 스테이지에서 ≈45자/시각 줄이라 패널이 스테이지를 먹는다:\n      ' + worst);
@@ -775,4 +784,116 @@ test('ⓜ ⚠ 철자 자 — 좌 패널 progress 행의 «격자 재확인» 이
    */
   assert.match(fn, /row\.key === 'progress' && row\.stateKey/,
     '불신 단어가 progress 행 밖에도 붙는다');
+});
+
+/*
+ * ── 3b «RS 정정 강조» 의 그림 ─────────────────────────────────────────────────
+ * ⚠ **철자 자** — 3d ⓛ 와 같은 층·같은 한계다. 3b 검토 F7 이 잡은 구멍이 이것이었다:
+ * `paintR2Correction` 호출 두 줄을 통째로 지워도 R2 자 전부가 초록이었다(82/82). 즉
+ * «정정 위치 → 셀» 까지만 자가 있었고 **그리는 표면**엔 자가 하나도 없었다.
+ * 여기서 잠그는 명제: 붓 색이 팔레트에서 유도되고 · 두 표면이 같은 함수·같은 α 를 쓰고 ·
+ * 래치가 «그릴 게 있을 때만» 서고 · 래치를 비우는 자리마다 정정 래치도 같이 비고 ·
+ * 정정 프레임에서 채움 게이트가 열린다(F6).
+ */
+test('ⓞ ⚠ 철자 자 — 정정 강조의 붓·α·두 표면·비우기가 전부 유도에서 온다 (3b)', () => {
+  const body = renderBody();
+
+  // ① 붓 색은 팔레트의 «rsfix» 항목에서 온다 — rgba 를 다시 적으면 좌 패널 칩(--r2-rsfix)과 갈라진다.
+  assert.match(JS, /const R2_HUD_CORRECTION_COLOR = R2_CELL_COLOR\[HUD_RSFIX_STATE_KEY\]/,
+    '정정 붓 색이 셀맵 색표에서 안 온다 (사본 색)');
+  assert.match(JS, /setProperty\('--r2-rsfix', R2_CELL_COLOR\[HUD_RSFIX_STATE_KEY\]\)/,
+    'CSS 변수 --r2-rsfix 가 같은 정본에서 안 심긴다 — 캔버스와 칩이 다른 색이 된다');
+
+  // ② 그 붓 함수 안에 색 리터럴이 없다 (사본이 어느 자리로 돌아와도 빨개진다).
+  const at = JS.indexOf('function paintR2Correction(');
+  assert.ok(at > 0, 'paintR2Correction 이 없다 — 정정 강조를 그리는 함수가 사라졌다');
+  const brush = JS.slice(at, braceEnd(JS, JS.indexOf('{', at)) + 1);
+  assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(brush),
+    '정정 붓에 색 리터럴 사본이 있다: ' + brush);
+  for (const prop of ['fillStyle', 'strokeStyle']) {
+    assert.match(brush, new RegExp('ctx\.' + prop + ' = R2_HUD_CORRECTION_COLOR'),
+      '정정 붓의 ' + prop + ' 이 정본 상수에서 안 온다');
+  }
+
+  // ③ α 는 순수 함수가 낸다 — 시계는 렌더러가 주입한다 (자가 시간을 넣어 값으로 잴 수 있게).
+  assert.match(body, /const corrAlpha = r2Correction === null \? 0 : hudCorrectionAlpha\(nowMs\(\), r2Correction\.at\)/,
+    '정정 α 가 순수 함수·주입 시계에서 안 온다');
+
+  /*
+   * ④ **두 표면이 같은 함수·같은 α 를 쓴다.** 이것이 F7 의 돌연변이가 지나간 자리다 —
+   *    한쪽만 지워도(또는 α 를 따로 세워도) 「같은 상태의 두 그림」이 다른 말을 한다.
+   */
+  const calls = [...body.matchAll(/paintR2Correction\((\w+), (\w+), (\w+),/g)];
+  assert.equal(calls.length, 2,
+    '정정 강조를 그리는 자리가 둘(오버레이·미니)이 아니다 — ' + calls.length + '자리');
+  assert.deepEqual(calls.map((m) => m[1]), ['ctx', 'mctx'], '오버레이·미니 두 컨텍스트가 아니다');
+  assert.deepEqual(calls.map((m) => m[3]), ['corrAlpha', 'corrAlpha'], '두 표면이 다른 α 를 쓴다');
+  assert.equal(new Set(calls.map((m) => m[2])).size, 2, '두 표면이 같은 경로 객체를 그린다 (사영이 하나뿐)');
+  assert.match(body, /if \(corrOverlay\) paintR2Correction\(ctx,/, '오버레이 게이트가 corrOverlay 가 아니다');
+  assert.match(body, /if \(corrMini\) paintR2Correction\(mctx,/, '미니 게이트가 corrMini 가 아니다');
+
+  // ⑤ 래치는 «그릴 게 있을 때만» 선다 — 정정 0 이면 아무것도 안 그린다 (잠긴 설계 7).
+  assert.match(JS, /r2Correction = \(r2Latched\.correctedCount > 0 && hit\.correctedCells && hit\.correctedCells\.length > 0\)/,
+    '정정 래치가 «수 > 0 ∧ 셀 > 0» 을 안 본다 — 빈 강조가 선다');
+
+  /*
+   * ⑥ **비우는 자리는 손 목록이 아니다** (3b 검토 F11): DONE 래치를 비우는 **모든** 자리에서
+   *    정정 래치도 같이 빈다. 목록을 여기 적지 않고 `r2Latched = null` 을 훑어 유도한다 —
+   *    새 리셋 경로가 생기면 그 자리도 자동으로 이 규칙 아래 들어온다.
+   */
+  // 선언(`let r2Latched = null;`)은 «비우는 자리» 가 아니다 — 대입만 훑는다.
+  const latchClears = [...JS.matchAll(/(?<!let )r2Latched = null;/g)];
+  assert.ok(latchClears.length >= 4,
+    'DONE 래치를 비우는 자리가 ' + latchClears.length + '곳뿐이다 — 훑기가 깨졌다');
+  for (const m of latchClears) {
+    const near = JS.slice(m.index, m.index + 600);
+    assert.ok(near.includes('r2Correction = null;'),
+      'r2Latched 를 비우면서 정정 강조를 안 비우는 자리가 있다 (offset ' + m.index + '): '
+      + JS.slice(Math.max(0, m.index - 120), m.index + 120));
+  }
+
+  /*
+   * ⑦ **정정 프레임에는 채움·격자도 열린다** (3b 검토 F6). 안 열면 위상이 DONE 이라 모든 채움
+   *    게이트가 닫혀, 강조가 «맥락 없는 흰 마름모» 로만 뜬다 — 「어느 셀이 틀렸나」는 주변 셀과
+   *    격자가 있어야 읽힌다.
+   */
+  assert.match(body, /const wantFills = overlayGeom && \(overlayOn \|\| corrFresh\)/,
+    '오버레이 채움이 정정 프레임에서 안 열린다 — 강조가 맥락 없이 뜬다');
+  assert.match(body, /const miniFills = [^;]*\|\| corrFresh\)/,
+    '미니 채움이 정정 프레임에서 안 열린다');
+  assert.match(body, /r2HudCanvas\.hidden = !\(overlayOn \|\| corrFresh\)/,
+    '오버레이 캔버스가 정정 프레임에 안 열린다');
+
+  /*
+   * ⑧ **경로 객체는 그릴 게 있을 때만 만든다** (3b 검토 F16). 위 채움 경로가 세운 규율과 같다 —
+   *    정정 없는 프레임(거의 전부)에서 Path2D 두 개를 헛만들면 그것이 매 프레임 할당이다.
+   */
+  const pathMake = body.indexOf('corrPath = new Path2D()');
+  assert.ok(pathMake > 0, '정정 경로를 만드는 자리가 없다');
+  assert.ok(body.slice(0, pathMake).lastIndexOf('if (corrGridOk) {') > body.slice(0, pathMake).lastIndexOf('}'),
+    '정정 Path2D 를 corrGridOk 게이트 **밖**에서 만든다 — 정정 없는 프레임마다 두 개씩 헛만든다');
+});
+
+/*
+ * 3b — 좌·결과 카드의 «RS 정정 k» 접미. 칩 렌더러는 브라우저 밖에서 못 돌지만, 접미가 **모델의
+ * 값**(row.correctedCount)에서 오는지와 낱말·키가 상수에서 오는지는 여기서 잠글 수 있다.
+ * F7 의 돌연변이 ②(접미 조건 무력화)가 지나간 자리다.
+ */
+test('ⓟ ⚠ 철자 자 — 결과 카드 칩의 «RS 정정 k» 가 모델 값에서 오고 게이트가 실재한다 (3b)', () => {
+  const at = JS.indexOf('function renderConfirmationChips(');
+  assert.ok(at > 0, 'renderConfirmationChips 가 없다');
+  const chips = JS.slice(at, braceEnd(JS, JS.indexOf('{', at)) + 1);
+  // 접미의 원천은 **모델의 행 값**이다 — 렌더가 스스로 세면 두 표면이 다른 수를 말한다.
+  assert.match(chips, /row\.correctedCount/, '칩 접미가 모델의 correctedCount 를 안 읽는다');
+  // 게이트는 «> 0 일 때만» 이다 (잠긴 설계 7 — 정정 0 이면 접미가 없다).
+  assert.match(chips, /rsfix > 0/, '칩 접미가 «있을 때만» 게이트를 안 지난다');
+  assert.match(chips, /if \(rsfix > 0\) text \+= /, '접미를 붙이는 자리가 게이트 뒤에 없다');
+  // 낱말·키는 상수에서 — 사전 키를 다시 적으면 상수를 바꾸는 날 빈 라벨이 된다 (r2-corrections ⓕ 와 짝).
+  assert.match(chips, /fillCount\(t\('r2\.state\.' \+ HUD_RSFIX_STATE_KEY\), rsfix\)/,
+    '칩 접미가 사전 문구·개수 자리를 원본 상수에서 안 만든다');
+  // CSS 도 그 게이트를 읽는다 — dataset 이 안 서면 색이 영영 안 바뀐다.
+  assert.match(chips, /chip\.dataset\.rsfix/, '칩에 rsfix 상태를 안 내린다');
+  const css = cssBlock('.r2-chip[data-state="confirmed"][data-rsfix="1"]');
+  assert.ok(/var\(--r2-rsfix\)/.test(css), '칩 색이 --r2-rsfix 에서 안 온다');
+  assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(css), '칩 색 규칙에 리터럴 사본이 있다: ' + css);
 });

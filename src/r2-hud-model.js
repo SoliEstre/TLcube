@@ -200,6 +200,38 @@ export function buildRoleGrids(n, layoutId) {
   return { n: size, layoutId, roleGrid, scanGrid, toneGrid, counts };
 }
 
+/**
+ * **`scanGrid` 의 역함수** — 스캔 순번 k → 격자 인덱스 `j*n + i`. `out[k]` 가 그 칸이고,
+ * 그 순번의 데이터 셀이 격자에 없으면 −1 이다.
+ *
+ * 왜 필요한가 (3b): R2 가 말하는 «셀» 은 스캔 순번(셀맵 인덱스 k)이고 HUD 가 그리는 단위는
+ * 격자 칸 (i, j) 다. 소거 색칠은 격자를 통째로 걸으며 `scanGrid[idx]` 를 **읽는** 방향이라
+ * 역표가 필요 없었지만, 정정 강조는 「이 k 들만」이라 **거꾸로** 물어야 한다.
+ * n² 을 매번 훑지 않으려고 표를 만든다 — 표는 `scanGrid` 에서 **유도**한다 (사본 목록 금지).
+ *
+ * 같은 순번이 두 칸에 있으면 **먼저 나온 칸이 이긴다** (스캔 순서의 정의상 있을 수 없지만,
+ * 조용히 마지막 칸으로 덮이면 「어느 셀이 틀렸나」가 뒤집힌다).
+ *
+ * @param {ArrayLike<number>} scanGrid `buildRoleGrids` 의 scanGrid
+ * @param {ArrayLike<number>} out 길이 = 데이터 셀 수 이상인 caller-owned 버퍼
+ * @returns {number} 채운 칸 수. 입력이 잘못됐으면 −1 (예외 없음).
+ */
+export function invertScanGrid(scanGrid, out) {
+  const okIn = scanGrid !== null && scanGrid !== undefined && Number.isInteger(scanGrid.length);
+  const okOut = out !== null && out !== undefined && Number.isInteger(out.length);
+  if (!okIn || !okOut) return -1;
+  for (let k = 0; k < out.length; k += 1) out[k] = -1;
+  let mapped = 0;
+  for (let idx = 0; idx < scanGrid.length; idx += 1) {
+    const k = scanGrid[idx];
+    if (!Number.isInteger(k) || k < 0 || k >= out.length) continue;
+    if (out[k] >= 0) continue;
+    out[k] = idx;
+    mapped += 1;
+  }
+  return mapped;
+}
+
 /** 호모그래피 원소 수 (row-major 3×3). */
 export const HUD_H_LENGTH = 9;
 
@@ -328,7 +360,37 @@ export const HUD_DISTRUST_STATE_KEY = 'distrust';
  * 판정이 이 목록을 인디케이터 이름에 더해 «있어야 하는 키» 를 만든다 — 사전에 손 목록을
  * 두지 않기 위한 원본이다. 늘리면 여덟 언어를 채우라고 그 자가 빨개진다.
  */
-export const HUD_STATE_KEYS_BEYOND_INDICATOR = Object.freeze([HUD_DISTRUST_STATE_KEY]);
+/**
+ * 🔴 **«RS 가 고쳤다» 의 상태 단어** (3b). 인디케이터가 아니다 — 인디케이터는 «후보가 어디까지
+ * 왔나» 이고 이것은 «DONE 이 몇 개를 고쳐서 섰나» 라 다른 축이다 (불신과 같은 이유).
+ *
+ * ⚠ 이름을 `corrected` 로 하지 않았다: 스캐너에는 이미 **다른 뜻**의 «정정» 이 있다 —
+ * `.r2-chip.is-corrected` 는 「확정 행의 값이 갈렸다」(레이아웃 변종 오인, 운영자 ⑧) 의
+ * 분홍 플래시다. 두 축에 같은 식별자를 쓰면 CSS·DOM 에서 조용히 섞인다. 사용자에게 보이는
+ * 낱말은 사전이 정하고(«RS 정정 3»), 코드가 쓰는 이름은 이 한 곳이 정본이다.
+ *
+ * 사전 키는 `r2.state.<이 값>` 이고 값에는 개수 자리(`HUD_COUNT_PLACEHOLDER`)가 있다.
+ */
+export const HUD_RSFIX_STATE_KEY = 'rsfix';
+
+/** 사전 문구 안의 «개수» 자리. 사전과 스캐너가 **같은 상수**를 봐야 한 쪽만 바뀌지 않는다. */
+export const HUD_COUNT_PLACEHOLDER = '{n}';
+
+/**
+ * 개수 자리를 채운다. 자리가 없는 문구(번역 누락)는 **그대로** 돌려준다 — 숫자를 잃는 것이
+ * 문구를 잃는 것보다 낫고, 자리 존재는 `test/r2-corrections.test.js` 가 여덟 언어에서 잰다.
+ */
+export function fillCount(template, count) {
+  if (typeof template !== 'string') return '';
+  const value = Number(count);
+  const text = Number.isFinite(value) ? String(Math.trunc(value)) : '0';
+  return template.split(HUD_COUNT_PLACEHOLDER).join(text);
+}
+
+export const HUD_STATE_KEYS_BEYOND_INDICATOR = Object.freeze([
+  HUD_DISTRUST_STATE_KEY,
+  HUD_RSFIX_STATE_KEY,
+]);
 
 /**
  * **«격자 불신» 을 그릴 프레임인가** (3d · 요구 3).
@@ -405,6 +467,35 @@ export function flashAlpha(nowMs, startedMs, durationMs = 600) {
 }
 
 /**
+ * 🔴 **RS 정정 강조의 수명** (3b · 운영자 결정 ⑦). DONE 직후 이 시간 동안 HUD 가 「RS 가 고친
+ * 심볼」의 셀을 지목한다. 그 뒤에는 아무것도 안 그린다 — 강조가 눌러앉으면 「지금 일어난 일」이
+ * 아니라 「이 코드의 성질」로 읽힌다.
+ */
+export const R2_HUD_CORRECTION_MS = 600;
+
+/**
+ * 정정 강조 α. `flashAlpha` 의 감쇠를 그대로 쓰되(사본 금지) **래치 전(now < at)은 0** 이다 —
+ * `flashAlpha` 는 「아직 안 시작했다」를 1 로 읽는데(페이드인과 짝이 되는 규약), 정정 강조에서
+ * 그 값은 「DONE 도 아닌데 셀이 빨갛다」가 된다.
+ *
+ * 시계는 **호출자가 넣는다** — 그래야 자가 시간을 주입해 값으로 잴 수 있다 (A6 의 시간 기반
+ * 효과는 전부 이 규약이다: `fadeAlpha` · `flashAlpha`).
+ *
+ * @param {number} nowMs 지금
+ * @param {number} latchedAtMs DONE 래치 시각
+ * @param {number} [durationMs] 수명
+ * @returns {number} (at, at+duration) 에서 1 → 0 단조 감소, 밖에서는 0.
+ */
+export function hudCorrectionAlpha(nowMs, latchedAtMs, durationMs = R2_HUD_CORRECTION_MS) {
+  const now = Number(nowMs);
+  const at = Number(latchedAtMs);
+  const duration = Number(durationMs);
+  if (!Number.isFinite(now) || !Number.isFinite(at) || !Number.isFinite(duration)) return 0;
+  if (duration <= 0 || now < at || now - at >= duration) return 0;
+  return flashAlpha(now, at, duration);
+}
+
+/**
  * 🔴 **시험판 하단 패널의 hud 줄 — 순수 빌더** (2026-09-06 검토 R3c, 결함 16).
  *
  * 옛 자리는 `scanner.js` 안이었고 길이 자는 `
@@ -424,11 +515,15 @@ export function flashAlpha(nowMs, startedMs, durationMs = 600) {
 /**
  * ⚠ **예산의 유도** — 패널은 287px 스테이지에서 ≈45자/시각 줄이다(10px 모노 · `overflow-wrap:anywhere`).
  *   · 옛 줄: 대표값 **188자 ≈ 4.2 시각 줄** (기본 4줄 + steady + qr 과 합쳐 스테이지의 55%).
- *   · 지금:  대표값 **68자 ≈ 1.5줄** · **최악 111자 ≈ 2.5줄** (카운터 7개가 전부 두 자리인 경우).
- * 120 은 그 최악에 세 자리 카운터 하나 분량의 여유를 둔 수다. 자(`test/r2-hud.test.js`)는 이 숫자를
- * 철자가 아니라 **런타임의 진짜 카운터 집합으로 만든 줄의 길이**로 잰다 — 카운터가 늘면 빨개진다.
+ *   · 3d:    대표값 **68자 ≈ 1.5줄** · **최악 116자 ≈ 2.6줄** (카운터 7개 두 자리 + 불신 마진).
+ *   · 3b:    최악 **122자 ≈ 2.7줄** — 위 최악에 RS 정정 수(` c=999`, 6자)가 더해진다. 그 6자가
+ *            다른 최악과 동시에 설 수 있다는 것은 3b 검토 F9 가 실측으로 잡았다(옛 주석은 반대로
+ *            적어 두었다). 126 은 그 최악에 한 자리 분량의 여유를 둔 수다.
+ * 자(`test/r2-hud.test.js` ⓚ④)는 이 숫자를 철자가 아니라 **런타임의 진짜 카운터 집합 + 실제로
+ * 실리는 필드 전부로 만든 줄의 길이**로 잰다 — 필드나 카운터가 늘면 빨개진다.
+ * ⚠ 위쪽 상한(시각 3줄 ≈ 135자)은 자가 따로 못 박는다 — 예산을 늘려 초록을 사는 길을 막는다.
  */
-export const R2_HUD_DEBUG_LINE_BUDGET = 120;
+export const R2_HUD_DEBUG_LINE_BUDGET = 126;
 
 /**
  * 카운터 이름 → 2\~3글자 약어. camelCase 를 단어로 갈라 머리글자를, 한 단어면 앞 두 글자를.
@@ -481,6 +576,16 @@ export function r2HudDebugLine(hud, stats) {
    * 예산의 5자를 상수로 먹는데, 이 수가 답하는 질문은 「F 는 넘었는데 왜 안 모으나」 하나다.
    */
   if (st.lockDistrusted) line += '!M' + hudMargin(st.lockMargin);
+  /*
+   * 3b — RS 정정 수. «있을 때만» 규약이라 0 이면 안 적는다 (그리고 DONE 전에는 값 자체가 없다).
+   * 예산에 미치는 최악은 세 자리 + ' c=' = **6자이고, 그 6자는 다른 최악과 동시에 선다**
+   * (3b 검토 F9 정정). 카운터는 세션 누적이라 DONE 프레임에도 그대로 서 있고(`r2Runtime.reset()`
+   * 은 그 뒤에 온다), 위상 이름은 이 빌더에 `hud.phase`(**마지막 렌더**의 위상)로 오므로 래치와
+   * 어긋날 수 있다. 옛 주석은 「동시에 서지 않는다」고 적어 예산을 6자만큼 낙관했다 —
+   * 자(ⓚ④)가 이제 이 6자를 최악에 같이 넣는다.
+   */
+  const corrected = Number(hud.corrected);
+  if (Number.isFinite(corrected) && corrected > 0) line += ' c=' + Math.trunc(corrected);
   const counters = st.counters;
   if (counters) {
     const used = new Set();
