@@ -162,6 +162,18 @@ export function createRsDecodeInto(options = undefined) {
     // 여기서 DECODER_ERROR 를 돌려주면 세션이 FAILED 로 죽어 누적을 포기한다.
     if (status !== RS_SOFT_STATUS.OK || out.accepted !== 1) return R2_SESSION_STATUS.OK;
 
+    return decodeRsPayloadInto(out, symbolCount, layout, output, payloadBuffer);
+  };
+}
+
+/**
+ * 수용된 RS 결과의 메시지 접두를 바이트/프레이밍으로 검증한다.
+ * 호출자는 단일 코드워드 또는 모든 블록이 수용된 합성 결과만 넘긴다.
+ * 합성 결과의 codeword는 메시지(block-concat) 접두와 패리티 꼬리이며,
+ * correctedPositions는 원래 와이어 인덱스다. 본문 검증 규칙은 공유한다.
+ * BigInt/문자열 할당에 관한 기존 예외는 이 경로에서도 같다.
+ */
+export function decodeRsPayloadInto(out, symbolCount, layout, output, payloadBuffer) {
     const messageLength = out.messageLength;
     if (!positiveInteger(messageLength) || messageLength > symbolCount) {
       return R2_SESSION_STATUS.OK;
@@ -279,5 +291,4 @@ export function createRsDecodeInto(options = undefined) {
     output.tResidual = out.tResidual;
     publishCorrections(out, output);
     return R2_SESSION_STATUS.OK;
-  };
 }

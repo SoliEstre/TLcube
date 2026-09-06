@@ -60,7 +60,15 @@ const BRIDGE_ALLOWED = Object.freeze([
  * ⚠ 이 수는 «세는 숫자» 다 — 다리를 늘리거나 decoder 쪽 리팩터가 import 를 늘리면 움직인다.
  * 움직였을 때 할 일은 이 수를 올리는 것이 아니라 **무엇이 들어왔는지 적는 것**이다.
  */
-const CLOSURE_CEILING = 66;
+const LEGACY_CLOSURE_CEILING = 66;
+// 2026-09-07: 재귀 탐색으로 모든 R2 모듈을 진입점으로 삼는다.
+// 기존 전체 범위 76 → 80: mask.js + candidate-key.js + decode-rs-blocks.js + profiles/c.js.
+// 옛 session+adapter 범위는 61 그대로이며 상한 66도 유지한다. 전체 범위는 여유 없이 80.
+// 기존 범위 밖 15파일이 재귀 감사로 드러난 것이지 새 decoder 의존 15개가 아니다.
+// 전체 여유 0은 의도다: 새 프로필 파일 1개도 폐포 증가를 검토하는 계기로 삼는다.
+// 다음 프로필 레인은 파일 추가 때 전체 폐포를 재측정하고, 증가 목록·사유와 상한 갱신을
+// 같은 커밋에 담아야 한다. 기존 다리의 여유 5를 전체 프로필 범위에 자동 승계하지 않는다.
+const FULL_CLOSURE_CEILING = 80;
 
 /**
  * ⚠ **주석을 먼저 벗긴다** (2026-09-06 검토 R3c).
@@ -79,13 +87,18 @@ function stripComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
-function decoderImportsIn(source) {
-  return [...stripComments(source).matchAll(/from\s+['"](\.\.\/decoder\/[^'"]+)['"]/g)]
-    .map((m) => m[1]).sort();
+function decoderImportsIn(source, file = resolve(ROOT, 'src/r2/probe.js')) {
+  const decoderDir = posix(resolve(ROOT, 'src/decoder'));
+  return [...stripComments(source).matchAll(/from\s+['"](\.[^'"]+)['"]/g)]
+    .map((m) => m[1])
+    .filter((specifier) => {
+      const target = posix(resolve(dirname(file), specifier));
+      return target === decoderDir || target.startsWith(`${decoderDir}/`);
+    }).sort();
 }
 
 function decoderImportsOf(file) {
-  return decoderImportsIn(readFileSync(file, 'utf8'));
+  return decoderImportsIn(readFileSync(file, 'utf8'), file);
 }
 
 function closureOf(entries) {
@@ -105,7 +118,20 @@ function closureOf(entries) {
 }
 
 const R2_DIR = resolve(ROOT, 'src/r2');
-const R2_FILES = readdirSync(R2_DIR).filter((f) => f.endsWith('.js'));
+// 프로필 종류의 손 목록을 만들지 않는다. 새 하위 폴더도 같은 경계를 통과한다.
+function jsFilesBelow(root, readDirectory = readdirSync) {
+  const files = [], pending = [root];
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    for (const entry of readDirectory(directory, { withFileTypes: true })) {
+      const file = resolve(directory, entry.name);
+      if (entry.isDirectory()) pending.push(file);
+      else if (entry.isFile() && entry.name.endsWith('.js')) files.push(file);
+    }
+  }
+  return files.sort();
+}
+const R2_FILES = jsFilesBelow(R2_DIR).map((file) => posix(relative(R2_DIR, file)));
 
 test('클린룸 ① — `src/r2/**` 에서 decoder 를 보는 파일은 다리 하나뿐이다', () => {
   // 공허 방지: 훑기가 무너지면 「위반이 없다」가 아니라 「잴 게 없다」가 된다.
@@ -138,10 +164,10 @@ test('클린룸 ② — 다리가 끌어오는 decoder 모듈은 허용목록과
 });
 
 test('클린룸 ③ — R2 의 의존 폐포에 R1 복호기·인코더가 없다', () => {
-  const closure = closureOf([
-    posix(resolve(R2_DIR, 'session.js')),
-    posix(resolve(R2_DIR, BRIDGE)),
-  ]);
+  const legacy = closureOf(['session.js', BRIDGE].map((file) => posix(resolve(R2_DIR, file))));
+  assert.ok(legacy.size <= LEGACY_CLOSURE_CEILING,
+    `기존 session+adapter 폐포 ${legacy.size} (상한 ${LEGACY_CLOSURE_CEILING})`);
+  const closure = closureOf(R2_FILES.map((file) => posix(resolve(R2_DIR, file))));
   const names = new Set([...closure].map(rel));
 
   // 공허 방지: 폐포가 안 걸어지면 「없다」가 공짜로 참이 된다.
@@ -149,8 +175,8 @@ test('클린룸 ③ — R2 의 의존 폐포에 R1 복호기·인코더가 없�
     `폐포가 ${closure.size}파일뿐이다 — import 추적이 죽었다`);
 
   // 🔴 상한 (2026-09-06 신설). 하한만 있으면 다리를 늘려 폐포가 두 배가 돼도 초록이다.
-  assert.ok(closure.size <= CLOSURE_CEILING,
-    `R2 폐포가 ${closure.size}파일이다 (상한 ${CLOSURE_CEILING}).\n`
+  assert.ok(closure.size <= FULL_CLOSURE_CEILING,
+    `전체 R2 폐포가 ${closure.size}파일이다 (상한 ${FULL_CLOSURE_CEILING}).\n`
     + '    클린룸의 존재 이유는 **C++ 이식 범위 봉쇄**다 — 금지목록에 없어도 폐포가\n'
     + '    커지는 것 자체가 그 목표를 갉는다. 무엇이 새로 들어왔는지 먼저 세고,\n'
     + '    그 이유를 위 BRIDGE_ALLOWED 주석에 적은 뒤에 이 수를 옮겨라.');
@@ -158,6 +184,7 @@ test('클린룸 ③ — R2 의 의존 폐포에 R1 복호기·인코더가 없�
   // 🔴 이식 범위를 정하는 축. 이름을 붙여 둔다 — 「무엇이 들어오면 안 되나」.
   const FORBIDDEN = Object.freeze([
     'src/decode.js',          // R1 하드결정 복호 — R2 가 대체하려고 존재하는 것
+    'src/encode.js',         // 타입 공통 인코더도 순수 프로필 표의 의존이 아니다
     'src/encodeY.js',         // 인코더. 스캐너 폐포에 있을 이유가 없다
     'src/decoder/bootstrap.js', // 82파일 폐포의 입구
     'src/decoder/decode-k.js',
@@ -192,4 +219,32 @@ test('클린룸 ⓐ — 훑기가 주석 속 경로를 import 로 세지 않는�
   // 그리고 주석이 **진짜 import 를 가리지도** 않는다 (벗기기가 너무 세면 반대 방향 결함이다).
   assert.deepEqual(decoderImportsIn(blockComment + '\n' + real), ['../decoder/homography.js'],
     '주석을 벗기면서 그 뒤의 진짜 import 까지 지운다');
+});
+
+test('클린룸 ⓑ — 새 프로필과 더 깊은 폴더를 손 목록 없이 발견한다', () => {
+  const root = resolve(ROOT, 'virtual-r2');
+  const file = (name) => ({ name, isDirectory: () => false, isFile: () => true });
+  const directory = (name) => ({ name, isDirectory: () => true, isFile: () => false });
+  const tree = new Map([
+    [root, [file('session.js'), directory('profiles')]],
+    [resolve(root, 'profiles'), [file('future.js'), file('README.md'), directory('nested')]],
+    [resolve(root, 'profiles/nested'), [file('other.js')]],
+  ]);
+  const found = jsFilesBelow(root, (path) => {
+    assert.ok(tree.has(path), `가상 파일 목록의 경로가 아니다: ${path}`);
+    return tree.get(path);
+  }).map((path) => posix(relative(root, path))).sort();
+  assert.deepEqual(found, ['profiles/future.js', 'profiles/nested/other.js', 'session.js']);
+});
+
+test('클린룸 ⓒ — 중첩 프로필의 상위 경로를 실제 decoder 디렉터리로 해석한다', () => {
+  const file = resolve(R2_DIR, 'profiles/future.js');
+  const bad = "import { x } from '../../decoder/bootstrap.js';";
+  assert.deepEqual(decoderImportsIn(bad, file), ['../../decoder/bootstrap.js']);
+  assert.deepEqual(decoderImportsIn(`// ${bad}`, file), []);
+  assert.deepEqual(decoderImportsIn("import { x } from '../../capacityC.js';", file), []);
+  assert.deepEqual(decoderImportsIn("import { x } from '../../decoder-extra/helpers.js';", file), []);
+  const deeper = resolve(R2_DIR, 'profiles/nested/other.js');
+  assert.deepEqual(decoderImportsIn("export { x } from '../../../decoder/homography.js';", deeper),
+    ['../../../decoder/homography.js']);
 });
