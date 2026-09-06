@@ -13,17 +13,24 @@
  *   ⓕ 선형 참조판 ≡ 격자판 — 정렬을 바꿨으니 등가를 **덤프 없이도** 검산한다.
  *   ⓖ 하한이 **안 하는 일** — 소-u 군중을 `count/하한` 으로 동결할 뿐 0 으로 안 만든다.
  *      count 가 큰 소-u 잡음은 참을 이길 수 있다 (반례를 자로 굳혀 둔다).
+ *   ⓗ 비컨 어댑터의 `csBlockLocator` 오버레이는 **정본 하나**다 — `central-beacon-adapt.js`
+ *      소스(주석 벗긴 코드)에서 그 키들의 `key:` 리터럴이 `BEACON_CS_BLOCK_LOCATOR` 정의
+ *      **밖**에 0건. ⚠ **철자 자**다 — 값이 아니라 «손 사본이 돌아오지 않았다» 를 잰다.
  *
  * ⚠ 이 파일은 **값이 아니라 성질**을 잰다. ⓒ 는 하한 리터럴(2.4)을 적지 않고
  * `K3_DENSITY_U_FLOOR_FACTOR × cfg.minimumCoreUnitPx` 에서 유도하며, ⓔ 의 기대표는
- * 손으로 옮긴 목록이 아니라 측정 산출 JSONL 에서 **읽어 만든다**.
+ * 손으로 옮긴 목록이 아니라 측정 산출 JSONL 에서 **읽어 만든다**. ⓓ 의 cfg 는 어댑터가
+ * export 하는 `BEACON_CS_BLOCK_LOCATOR` 를 import 해 만들고(1920 을 여기 적지 않는다),
+ * ⓗ 가 재는 키 목록도 그 상수의 `Object.keys` 에서 유도한다.
  *
  * ⚠ 이 자가 **안 덮는 축**: ① 기본 축소 패스(`searchMaxSide` 480)의 순서 — 거기서도
  * 키는 항등이 **아니고**(덤프 24장 전부에서 상위 80 이 49\~73/80 만 겹친다) 무회귀는
- * 코퍼스 A/B 로만 담보된다. ② 비컨 어댑터가 실제로 주는 오버레이 값 — ⓓ 는 「축소 없음」
- * 이라는 **성질**을 프레임마다 유도해 쓰고 `factor === 1` 을 단언할 뿐, 어댑터의
- * `searchMaxSide: 1920` 이 바뀌어도 안 빨개진다 (`central-beacon-adapt.js` 가 그 오버레이를
- * export 하면 그때 여기서 import 해 잠근다).
+ * 코퍼스 A/B 로만 담보된다.
+ * ✔ 닫힌 축 (2026-09-06): ② 비컨 어댑터가 실제로 주는 오버레이 값 — 종전 ⓓ 는 「축소 없음」
+ * 을 프레임 크기에서 유도해 써서 어댑터가 480 으로 내려가도 안 빨개졌다. 이제
+ * `central-beacon-adapt.js` 가 `BEACON_CS_BLOCK_LOCATOR` 를 export 하므로 ⓓ 가 그 값으로
+ * cfg 를 만들고 `factor === 1` 을 단언한다 — 어댑터가 내려가면 ⓓ 가 빨개지고, 두 입구가
+ * 다시 손 사본으로 갈리면 ⓗ 가 빨개진다.
  *
  * ⓓ·ⓔ 는 실사진 **휘도 덤프**(`test/output/photos/luma`, gitignore)가 있어야 돈다.
  * 없으면 skip 하고 이름이 그렇게 말한다 — 통합자는 skipped 수를 본다.
@@ -36,6 +43,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import { BEACON_CS_BLOCK_LOCATOR } from '../src/decoder/central-beacon-adapt.js';
 import {
   CS_BLOCK_LOCATOR_INTERNALS, UNVERIFIED_CS_BLOCK_LOCATOR,
 } from '../src/decoder/cellsurface-block-detect.js';
@@ -316,6 +324,44 @@ test('ⓕ 격자판과 선형 참조판이 같은 클러스터를 **같은 순�
     + ` (k3 ${grid.filter((c) => c.kind === 'k3').length})`);
 });
 
+/**
+ * ⓗ — ⚠ **철자 자**다. 값이 아니라 «손 사본이 돌아오지 않았다» 를 잰다.
+ *
+ * `central-beacon-adapt.js` 의 두 발견 입구는 2026-09-06 까지 `csBlockLocator` 오버레이
+ * (`maximumPosesPerFamily`·`centreWindowFraction`·`searchMaxSide`)를 서로 손 사본으로 들고
+ * 있었다 (REPORT_r1-type-limits §13 적대 검토). 정본을 `BEACON_CS_BLOCK_LOCATOR` 하나로
+ * 뽑았으니, 그 정의 **밖**에 이 키들의 `key:` 리터럴이 다시 생기면 사본이 돌아온 것이다.
+ *
+ * 재는 법: 주석을 벗긴 **코드**만 본다 (산문 속 `searchMaxSide: 480` 은 사본이 아니다).
+ * 키 목록은 import 한 상수의 `Object.keys` 에서 유도한다 — 상수에 키가 늘면 자도 따라 늘고,
+ * 정의 블록을 못 찾으면 통과가 아니라 **실패**다 (이름·모양이 바뀌면 이 자를 같이 옮겨라).
+ * 이 자가 못 덮는 것: 한 입구가 스프레드 자체를 빼 버리는 회귀 — 그건 어댑터 동작 자
+ * (`central-v0-beacon-detect.test.js`·`central-n7-detect.test.js`) 의 몫이다.
+ */
+test('ⓗ 어댑터 csBlockLocator 오버레이는 정본 하나 — 키 리터럴이 BEACON_CS_BLOCK_LOCATOR 정의 밖에 0건 (철자 자)', () => {
+  const keys = Object.keys(BEACON_CS_BLOCK_LOCATOR);
+  assert.ok(keys.includes('searchMaxSide'), '이 자를 열게 한 키(searchMaxSide)가 상수에 없다');
+  assert.ok(Object.isFrozen(BEACON_CS_BLOCK_LOCATOR), '정본은 동결이어야 한다 — 런타임에 갈리면 정본이 아니다');
+
+  const src = readFileSync(new URL('../src/decoder/central-beacon-adapt.js', import.meta.url), 'utf8');
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const definition = code.match(/export const BEACON_CS_BLOCK_LOCATOR = Object\.freeze\(\{[\s\S]*?\}\);/);
+  assert.ok(definition,
+    'BEACON_CS_BLOCK_LOCATOR 의 `export const … = Object.freeze({…});` 정의를 못 찾았다 — 이름·모양이 바뀌었으면 이 자를 같이 옮겨라');
+
+  const keyLiteral = new RegExp(`\\b(${keys.join('|')})\\s*:`, 'g');
+  const inside = [...definition[0].matchAll(keyLiteral)].map((m) => m[1]).sort();
+  assert.deepEqual(inside, keys.slice().sort(), '정본 안에 각 키가 정확히 한 번씩 있어야 한다');
+
+  const outside = code.replace(definition[0], '');
+  const leaks = [...outside.matchAll(keyLiteral)].map((m) => {
+    const line = outside.slice(0, m.index).split('\n').length;
+    return `${m[1]} (주석 벗긴 코드 ${line} 행 근처)`;
+  });
+  assert.deepEqual(leaks, [],
+    'central-beacon-adapt.js 에 오버레이 키의 손 사본이 돌아왔다 — BEACON_CS_BLOCK_LOCATOR 를 스프레드하라');
+});
+
 // ─────────────────── ⓓ·ⓔ 실사진 덤프가 필요한 성질 ───────────────────
 
 const DUMPS = listLumaDumps();
@@ -336,17 +382,21 @@ const TL_TRUTH_960 = Object.freeze({
 });
 
 /**
- * ⓓ 가 재는 경로 = «**축소 없는** 코어 스캔». 비컨 어댑터(`central-beacon-adapt.js`)가
- * `searchMaxSide: 1920` 으로 여는 그 경로이고, 이 코퍼스(짧은 변 960·1440)에서는
- * `factor === 1` 이 된다 — 그 성질을 프레임마다 **유도**하고 아래에서 단언한다.
+ * ⓓ 가 재는 경로 = 비컨 어댑터(`central-beacon-adapt.js`)가 **실제로 여는** 코어 스캔.
+ * cfg 는 어댑터가 export 하는 `BEACON_CS_BLOCK_LOCATOR` 를 기본 로케이터 설정 위에 얹어
+ * 만든다 — 어댑터가 `calibration.csBlockLocator` 로 넘긴 오버레이를 `calibration()` 이 기본값
+ * 위에 병합하는 그 모양이다. 이 코퍼스(짧은 변 960·1440)에서 그 오버레이는 «축소 없음»
+ * (`factor === 1`) 이어야 하고, 아래에서 프레임마다 단언한다. 어댑터가 `searchMaxSide` 를
+ * 480 으로 내리면 **여기서 빨개진다** — 2026-09-06 까지는 «축소 없음» 을 프레임 크기에서
+ * 유도해 써서 안 빨개졌다 (파일 머리의 닫힌 축 ②).
  *
- * ⚠ 어댑터 상수를 손으로 옮겨 적지 **않는다** (사본은 썩는다). 어댑터의 나머지 오버레이
- * (`centreWindowFraction`·`maximumPosesPerFamily`)는 `detectCellSurfaceBlockShapes` 단계의
- * 값이라 여기서 부르는 `scanConcentricCores`·`clusterCores`·`verifyV0Cluster` 가 읽지 않는다.
- * 그 대가로 이 자는 **어댑터가 480 으로 내려가도 안 빨개진다** — 그 축은 코퍼스 A/B 몫이다.
+ * ⚠ 어댑터 상수를 손으로 옮겨 적지 **않는다** (사본은 썩는다) — import 다. 어댑터의 나머지
+ * 오버레이(`centreWindowFraction`·`maximumPosesPerFamily`)는 `detectCellSurfaceBlockShapes`
+ * 단계의 값이라 여기서 부르는 `scanConcentricCores`·`clusterCores`·`verifyV0Cluster` 는 읽지
+ * 않는다 — cfg 에 실려 있어도 이 자에는 무해하다.
  */
-function noDownsampleCfg(luma) {
-  return { ...UNVERIFIED_CS_BLOCK_LOCATOR, searchMaxSide: Math.max(luma.width, luma.height) };
+function beaconAdapterCfg() {
+  return { ...UNVERIFIED_CS_BLOCK_LOCATOR, ...BEACON_CS_BLOCK_LOCATOR };
 }
 
 const TL_FRAMES = Object.keys(TL_TRUTH_960)
@@ -359,17 +409,18 @@ test('ⓓ 12 tl 프레임의 참 K3 가 예산 안에 들고, 소-u 군중에 co
 }, (t) => {
   const budget = UNVERIFIED_CS_BLOCK_LOCATOR.maximumVerifiedPerKind;
   const floor = K3_DENSITY_U_FLOOR_FACTOR * UNVERIFIED_CS_BLOCK_LOCATOR.minimumCoreUnitPx;
+  const cfg = beaconAdapterCfg();
   const ranks = [];
 
   for (const frame of TL_FRAMES) {
     const luma = readLumaDump(dumpByName.get(frame.name).path);
     assert.equal(luma.bitDepth, 16, `${frame.name} 은 16비트 직행 덤프여야 한다`);
-    const cfg = noDownsampleCfg(luma);
 
     // armB-verify-rank.mjs 와 **같은 방식** — INTERNALS 로 코어 스캔 → 클러스터 → 소스 정렬.
     const reduced = downsampleLumaForSeed(luma, cfg.searchMaxSide);
     assert.equal(reduced.factor, 1,
-      `${frame.name}: 축소가 걸렸다 — ⓓ 는 «축소 없는» 경로를 재는 자다`);
+      `${frame.name} (${luma.width}×${luma.height}): 축소가 걸렸다 (factor ${reduced.factor})`
+      + ` — 어댑터 오버레이 searchMaxSide=${cfg.searchMaxSide} 는 이 코퍼스에서 «축소 없음» 이어야 한다`);
     const reducedLuma = reduced.luma;
     const cut = otsuThreshold(reducedLuma);
     const cores = scanConcentricCores(reducedLuma, cut, cfg);
