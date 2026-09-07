@@ -190,7 +190,12 @@ export const MODULE_ORDER = [
   // quiet-extent 는 의존 0 인 잎이고 generator-state(기본값·눈금)와 index.html(지표)이
   // 소비한다 — generator-state **앞**이어야 한다.
   'quiet-extent',
-  'export-options', 'generator-state', 'finder-zone-ui', 'export-filename',
+  // generator-shot-presets(촬영 프리셋 선언, 2026-09-07)는 **generator-state 앞**이다 —
+  // 상태 스키마가 `shotPreset` 허용값을 그 선언에서 유도한다. 의존은 locatorY ·
+  // luminance · quiet-auto · render-profile · shading 다섯이고 전부 이미 이 앞에 있다.
+  // 반대 방향 import 는 없다 — 있으면 순환이라 위상 정렬 자체가 불가능해진다.
+  'export-options', 'generator-shot-presets', 'generator-state',
+  'finder-zone-ui', 'export-filename',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: `encodeY` 와 잎 모듈 `tonemap` 이
   // `encode`·`scene` **앞**으로 왔다. scene.js 가 중앙 슬롯을 완전한 v0 코드로
   // 채우려고 `encodeY` 를 그대로 부르고(`centralBeacon`), 데이터 셀 톤은

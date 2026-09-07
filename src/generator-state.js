@@ -61,6 +61,12 @@ import {
 } from './locatorY.js';
 
 import { GENERATOR_TYPES } from './generator-types.js';
+// 촬영 프리셋 선언 — `shotPreset` 허용값의 **유일한 출처**. 이 방향(state → presets)
+// 만 존재한다: 반대로 shot-presets 가 이 파일을 읽으면 순환이다.
+import {
+  SHOT_PRESET_NONE, SHOT_PRESET_STATE_VALUES,
+  assertNoEmphasisFields, assertShotPresetFields,
+} from './generator-shot-presets.js';
 
 export const GENERATOR_MODES = Object.freeze(['normal', 'advanced']);
 // 타입 목록의 정의는 generator-types.js 하나다 (순환 회피 + 손 사본 철폐).
@@ -373,7 +379,28 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
       // QR 위치 카드로 오는 것과 같은 문법이다 (index.html §qrPositionCards).
       LOCATOR_PROFILE_CELL_SURFACE_V0TRY,
     ]),
+  // ── 촬영 프리셋 (2026-09-07, 운영자 답 카드 `d-3d-observation-layer`) ────────
+  //
+  // ⚠ 위의 `preset`(휘도 스타일)과 **다른 축이다.** 저쪽은 팔레트 하나를 고르고
+  //   이쪽은 여러 필드를 한 번에 세운다. 이탈 표지도 다르다 ('custom' vs 'none').
+  //
+  // **INTERNAL 인 이유**: 촬영 프리셋 섹션은 시험판(`isLabPath()`) 전용이다
+  //   (운영자가 「시험판 생성기에」로 지정). INTERNAL 이면 `exposedGeneratorStateKeys`
+  //   가 이 키를 안 내보내고, 그러면 `#panelNormal`/`#panelAdvanced`/`#sharedControls`
+  //   의 `data-state-keys` 엄격 동치 대조(test/generator-state.test.js)가 «정식 노출 0»
+  //   을 **유도로** 잠근다. locatorProfileY 가 같은 이유로 INTERNAL 이다.
+  //
+  // 허용값은 손 목록이 아니라 선언에서 온다 — 프리셋을 더하면 여기가 따라온다.
+  shotPreset: field(SHOT_PRESET_NONE, INTERNAL, SHOT_PRESET_STATE_VALUES),
 });
+
+// 선언 ↔ 스키마 자기검증 (로드 시점). 프리셋이 없는 키를 세우거나 허용값 밖 값을
+// 세우면 **여기서 던진다** — 조용히 두면 「고르면 아무 일도 안 일어나는」 프리셋이
+// 되고, 그 침묵은 화면에서만 보인다 (교훈 「배타를 열면 소비자도 쓸어라」).
+// 방향에 주의: 이 파일이 shot-presets 를 읽고, shot-presets 는 이 파일을 **안 읽는다**
+// (순환 회피 — finder-zone-ui 의 «검증되는 사본» 과 같은 처방).
+assertShotPresetFields(GENERATOR_STATE_SCHEMA);
+assertNoEmphasisFields();
 
 export function createGeneratorState(overrides = {}) {
   const state = {};

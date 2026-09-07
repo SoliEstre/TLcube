@@ -1480,6 +1480,31 @@
       </div>
     </div>
 
+    <!-- ═══ 촬영 프리셋 (시험판 전용) ═══════════════════════════════════════════
+         운영자 답 카드 `d-3d-observation-layer` (2026-09-07 17:32 KST):
+         「적절한 조건의 렌더 프리셋을 시험판 생성기에 프리셋 섹션을 추가해서 항목
+          선택하면 해당 프리셋으로 선택되게 해줘.」
+
+         ⚠ 위쪽 «스타일 프리셋»(#preset · #presetSwatches)과 **다른 축이다.**
+           저쪽은 팔레트 하나, 이쪽은 상태 필드 **묶음**. 상태 키도 갈렸다
+           (preset / shotPreset), 이탈 표지도 갈렸다 ('custom' / 'none').
+
+         ⚠ **카드가 여기 없다.** 목록·순서·개수는 `src/generator-shot-presets.js` 의
+           선언에서 만든다 (§wireShotPresetCards). 여기에 id 를 적는 순간 그것이
+           손 목록이 되고 선언과 어긋날 수 있다 — 교훈 「사본 목록은 썩는다」.
+
+         게이트는 `isLabPath()` — #yLocatorSection 이 세운 선례와 같은 술어다.
+         상태 키 shotPreset 은 INTERNAL 이라 아래 data-state-keys 목록에 **안 든다**
+         (그 대조가 «정식 노출 0» 을 유도로 잠근다 — test/generator-state.test.js). -->
+    <div id="shotPresetSection" hidden>
+      <div class="section-heading-row">
+        <label class="section-heading" data-i18n="g1031">촬영 프리셋 (시험판)</label>
+      </div>
+      <p class="hint" data-i18n="g1032">항목을 고르면 촬영 조건 묶음이 한 번에 적용돼요. 코드 자체의 지면 색까지 함께 세우니, 그 색과 같은 무지 배경 위에 놓고 찍어 주세요.</p>
+      <div class="card-row" id="shotPresetCards"></div>
+      <p class="hint" id="shotPresetDrift" hidden data-i18n="g1037">프리셋에서 벗어났어요 — 고른 뒤에 옵션을 직접 바꿨어요.</p>
+    </div>
+
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
     <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin quietMarginAuto renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
@@ -3195,6 +3220,13 @@ const GENERATOR_STRINGS = {
     "g561": "한 단계 되돌렸어요.",
     "g562": "한 단계 다시 적용했어요.",
     "g563": "언어",
+    "g1031": "촬영 프리셋 (시험판)",
+    "g1032": "항목을 고르면 촬영 조건 묶음이 한 번에 적용돼요. 코드 자체의 지면 색까지 함께 세우니, 그 색과 같은 무지 배경 위에 놓고 찍어 주세요.",
+    "g1033": "3D 촬영 · 어두운 배경",
+    "g1034": "Y2T · v0TR · ECC H · 검은 지면",
+    "g1035": "3D 촬영 · 밝은 배경",
+    "g1036": "Y2T · v0TR · ECC H · 흰 지면",
+    "g1037": "프리셋에서 벗어났어요 — 고른 뒤에 옵션을 직접 바꿨어요.",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -3691,6 +3723,13 @@ const GENERATOR_STRINGS = {
     "g561": "Stepped back one edit.",
     "g562": "Reapplied one edit.",
     "g563": "Language",
+    "g1031": "Capture preset (lab)",
+    "g1032": "Picking one applies a whole set of capture conditions at once. It also sets the code’s own ground colour, so shoot it on a plain backdrop of that same colour.",
+    "g1033": "3D capture · dark backdrop",
+    "g1034": "Y2T · v0TR · ECC H · black ground",
+    "g1035": "3D capture · light backdrop",
+    "g1036": "Y2T · v0TR · ECC H · white ground",
+    "g1037": "Off preset — options were changed by hand after picking it.",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -4187,6 +4226,13 @@ const GENERATOR_STRINGS = {
     "g561": "1段階戻しました。",
     "g562": "1段階やり直しました。",
     "g563": "言語",
+    "g1031": "撮影プリセット（試験版）",
+    "g1032": "項目を選ぶと撮影条件のまとまりが一度に適用されます。コード自体の地色も設定するので、その色と同じ無地の背景に置いて撮ってください。",
+    "g1033": "3D 撮影・暗い背景",
+    "g1034": "Y2T · v0TR · ECC H · 黒い地色",
+    "g1035": "3D 撮影・明るい背景",
+    "g1036": "Y2T · v0TR · ECC H · 白い地色",
+    "g1037": "プリセットから外れています — 選んだあとにオプションを手で変えました。",
   },
   fr: {
     "g001": "Thème de la page (sans effet sur le rendu du code)",
@@ -4682,6 +4728,13 @@ const GENERATOR_STRINGS = {
     "g561": "Une modification annulée.",
     "g562": "Une modification rétablie.",
     "g563": "Langue",
+    "g1031": "Préréglage de prise de vue (labo)",
+    "g1032": "Choisir une entrée applique tout un jeu de conditions de prise de vue d’un coup. Elle règle aussi la couleur de fond du code lui-même : photographiez-le sur un fond uni de cette même couleur.",
+    "g1033": "Prise de vue 3D · fond sombre",
+    "g1034": "Y2T · v0TR · ECC H · fond noir",
+    "g1035": "Prise de vue 3D · fond clair",
+    "g1036": "Y2T · v0TR · ECC H · fond blanc",
+    "g1037": "Hors préréglage — des options ont été modifiées à la main après le choix.",
   },
   it: {
     "g001": "Tema della pagina (non incide sul rendering del codice)",
@@ -5177,6 +5230,13 @@ const GENERATOR_STRINGS = {
     "g561": "Annullata una modifica.",
     "g562": "Riapplicata una modifica.",
     "g563": "Lingua",
+    "g1031": "Preset di ripresa (lab)",
+    "g1032": "Scegliendo una voce si applica in una volta sola un intero gruppo di condizioni di ripresa. Imposta anche il colore di fondo del codice stesso: fotografalo su uno sfondo uniforme dello stesso colore.",
+    "g1033": "Ripresa 3D · sfondo scuro",
+    "g1034": "Y2T · v0TR · ECC H · fondo nero",
+    "g1035": "Ripresa 3D · sfondo chiaro",
+    "g1036": "Y2T · v0TR · ECC H · fondo bianco",
+    "g1037": "Fuori preset — dopo la scelta alcune opzioni sono state cambiate a mano.",
   },
   de: {
     "g001": "Seitenthema (ohne Einfluss auf das Rendering des Codes)",
@@ -5672,6 +5732,13 @@ const GENERATOR_STRINGS = {
     "g561": "Einen Schritt rückgängig gemacht.",
     "g562": "Einen Schritt wiederhergestellt.",
     "g563": "Sprache",
+    "g1031": "Aufnahme-Preset (Laborversion)",
+    "g1032": "Ein Eintrag setzt ein ganzes Bündel von Aufnahmebedingungen auf einmal. Er legt auch die Grundfarbe des Codes selbst fest — fotografiere ihn auf einem einfarbigen Hintergrund in genau dieser Farbe.",
+    "g1033": "3D-Aufnahme · dunkler Hintergrund",
+    "g1034": "Y2T · v0TR · ECC H · schwarzer Grund",
+    "g1035": "3D-Aufnahme · heller Hintergrund",
+    "g1036": "Y2T · v0TR · ECC H · weißer Grund",
+    "g1037": "Vom Preset abgewichen — nach der Auswahl wurden Optionen von Hand geändert.",
   },
   es: {
     "g001": "Tema de la página (no afecta al renderizado del código)",
@@ -6167,6 +6234,13 @@ const GENERATOR_STRINGS = {
     "g561": "Se ha deshecho un paso.",
     "g562": "Se ha rehecho un paso.",
     "g563": "Idioma",
+    "g1031": "Preajuste de captura (laboratorio)",
+    "g1032": "Elegir una entrada aplica de golpe todo un conjunto de condiciones de captura. También fija el color de fondo del propio código: fotografíalo sobre un fondo liso de ese mismo color.",
+    "g1033": "Captura 3D · fondo oscuro",
+    "g1034": "Y2T · v0TR · ECC H · fondo negro",
+    "g1035": "Captura 3D · fondo claro",
+    "g1036": "Y2T · v0TR · ECC H · fondo blanco",
+    "g1037": "Fuera del preajuste: se cambiaron opciones a mano después de elegirlo.",
   },
   pt: {
     "g001": "Tema da página (não afeta a renderização do código)",
@@ -6662,6 +6736,13 @@ const GENERATOR_STRINGS = {
     "g561": "Desfeito um passo.",
     "g562": "Refeito um passo.",
     "g563": "Idioma",
+    "g1031": "Predefinição de captura (laboratório)",
+    "g1032": "Escolher uma entrada aplica de uma só vez todo um conjunto de condições de captura. Também define a cor de fundo do próprio código: fotografe-o sobre um fundo liso dessa mesma cor.",
+    "g1033": "Captura 3D · fundo escuro",
+    "g1034": "Y2T · v0TR · ECC H · fundo preto",
+    "g1035": "Captura 3D · fundo claro",
+    "g1036": "Y2T · v0TR · ECC H · fundo branco",
+    "g1037": "Fora da predefinição — as opções foram alteradas à mão depois de a escolher.",
   },
 };
 
@@ -6729,6 +6810,7 @@ const TEXT_SYNCERS = [
   syncTypeYCellEditorUi,
   syncHelpPopover,
   syncOrbitPreviewUi,
+  syncShotPresetUi,
 ];
 
 const genI18n = createI18n(GENERATOR_STRINGS, {
@@ -6742,6 +6824,10 @@ import {
   createGenerateDebounceState, reduceGenerateDebounce,
 } from './src/generate-debounce.js';
 import { createLabTelemetry, isLabPath } from './src/lab-telemetry.js';
+// 촬영 프리셋 — 선언·적용·이탈 판정의 정본. 이 파일에는 프리셋 id 사본이 없다.
+import {
+  applyShotPresetToState, shotPresetPinsLocator, shotPresetUiModel,
+} from './src/generator-shot-presets.js';
 import { wireSelectAllOnActivate } from './src/input-select-all.js';
 import { createHelpPopover } from './src/help-popover.js';
 import { encode } from './src/encode.js';
@@ -6962,7 +7048,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-07.03';
+const GENERATOR_BUILD = '2026-09-07.04';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -12687,6 +12773,107 @@ function resolveFallback(type, position) {
   return { mode: 'corner', corner: position };
 }
 
+/*
+ * ── 촬영 프리셋 (시험판 전용) ────────────────────────────────────────────────
+ *
+ * 무엇을 하는가: 선언(`src/generator-shot-presets.js`)이 든 상태 필드 묶음을
+ * **상태 계층을 거쳐** 한 번에 세우고, 화면 전체를 그 상태에서 되그린다.
+ *
+ * ⚠ DOM 을 직접 찌르지 않는다. 이 화면의 카드·select 는 전부 sync*Ui() 가 상태에서
+ *   되그리므로, 상태를 안 거치고 DOM 만 바꾸면 다음 sync 한 번에 지워진다
+ *   (「켰는데 안 먹는」의 정확한 형태 — 교훈 「배타를 열면 소비자도 쓸어라」).
+ *
+ * ⚠ **소비자 쓸기를 손 목록으로 하지 않는다.** 프리셋이 건드리는 축은 13개이고
+ *   그 축마다 sync 함수가 다르다. 손으로 적으면 새 필드를 더할 때 하나가 빠진다.
+ *   대신 `TEXT_SYNCERS` 를 그대로 돈다 — 그 목록은 「인자 없는 sync* 함수가 전부
+ *   등록돼 있다」가 **이미 자로 잠겨 있는**(test/i18n-coverage.test.js) 유일한
+ *   «모든 UI 를 상태에서 되그린다» 목록이다.
+ */
+
+/** 카드 하나 — 라벨은 data-i18n 으로 두고 applyTranslations 가 채운다. */
+function createShotPresetCard(model) {
+  const card = document.createElement('div');
+  card.className = 'toggle-card';
+  card.dataset.shotPreset = model.id;
+  const label = document.createElement('span');
+  label.dataset.i18n = model.labelKey;
+  label.textContent = t(model.labelKey);
+  const sub = document.createElement('span');
+  sub.className = 'card-sub';
+  sub.dataset.i18n = model.subKey;
+  sub.textContent = t(model.subKey);
+  card.appendChild(label);
+  card.appendChild(sub);
+  // 이 카드들은 §toggle-card 일괄 키보드 배선(스크립트 앞부분)보다 **늦게** 생기므로
+  // 접근성 속성을 여기서 직접 단다 — 그 루프에 기대면 조용히 키보드로 못 누른다.
+  card.setAttribute('role', 'button');
+  card.setAttribute('tabindex', '0');
+  card.addEventListener('click', () => applyShotPreset(model.id));
+  card.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    card.click();
+  });
+  return card;
+}
+
+function wireShotPresetCards() {
+  const host = $('shotPresetCards');
+  if (!host) return;
+  for (const model of shotPresetUiModel(generatorState).cards) {
+    host.appendChild(createShotPresetCard(model));
+  }
+}
+wireShotPresetCards();
+
+/** 프리셋 적용 — 상태에 얹고, 로케이터 «자동» 정책을 내리고, 화면 전체를 되그린다. */
+function applyShotPreset(id) {
+  const next = applyShotPresetToState(id, generatorState);
+  for (const [key, value] of Object.entries(next)) generatorState[key] = value;
+  /*
+   * detectorAutoY 는 **generatorState 밖의 UI 정책 플래그**다(§applyAutoLocatorProfileY).
+   * 켜진 채로 두면 다음 QR 위치·버전·타입 변경이 프리셋이 세운 locatorProfileY 를
+   * 조용히 덮어쓴다 — 상태 계층만 훑는 자로는 안 보이는 소비자다.
+   */
+  if (shotPresetPinsLocator(id)) detectorAutoY = false;
+  for (const sync of TEXT_SYNCERS) sync();
+  schedule();
+}
+
+/**
+ * 카드 활성 + 이탈 표시 + lab 게이트.
+ *
+ * 활성은 «무엇을 눌렀나» 가 아니라 **«지금 상태가 무엇인가»** 다(shotPresetUiModel).
+ * 눌린 값을 그대로 그리면 옵션을 되돌린 화면이 계속 활성으로 보여 그림이 거짓말한다.
+ */
+function syncShotPresetUi() {
+  const section = $('shotPresetSection');
+  if (!section) return;
+  // 시험판 전용 — 운영자가 「시험판 생성기에」로 지정했다. #yLocatorSection 과 같은 술어.
+  const lab = isLabPath();
+  section.hidden = !lab;
+  if (!lab) return;
+  const model = shotPresetUiModel(generatorState);
+  const host = $('shotPresetCards');
+  if (host) {
+    for (const card of host.children) {
+      const hit = model.cards.find((entry) => entry.id === card.dataset.shotPreset);
+      card.classList.toggle('active', hit !== undefined && hit.active);
+    }
+  }
+  const drift = $('shotPresetDrift');
+  if (drift) drift.hidden = !model.drifted;
+  /*
+   * ⚠ 여기서 `generatorState.shotPreset` 을 «미선택» 으로 내리지 **않는다.**
+   *   한 번 내리면 다음 렌더에서 drifted 가 false 가 되어 **경고가 한 번 깜빡이고
+   *   사라진다** — 사용자가 옵션을 되돌리지도 않았는데 화면이 「정상」이라고 말한다.
+   *   `shotPreset` 은 «무엇에서 벗어났나» 를 기억하는 자리이고(휘도 스타일의 'custom'
+   *   과 같은 성질), 벗어남의 **판정**은 언제나 지금 상태에서 다시 유도된다.
+   *   ⇒ 이 함수는 **상태를 한 글자도 안 쓴다** (자ⓕ 가 그 성질을 잰다).
+   */
+}
+syncShotPresetUi();
+
 function buildConfig() {
   const type = generatorState.type;
   const typeC = typeCGeneratorActive();
@@ -13327,6 +13514,10 @@ function isCapacityError(err) {
 }
 
 function render() {
+  // 촬영 프리셋 이탈 표시는 **모든 옵션 변경 뒤**에 다시 재야 한다 — 어느 축을
+  // 건드렸는지 목록으로 들지 않기 위해 렌더 진입 한 곳에서 잰다 (모든 옵션 핸들러가
+  // schedule() → render() 를 지나간다).
+  syncShotPresetUi();
   let keptPayload = null; // 절단 렌더 시 실제로 실린 페이로드 문자열
   renderWithErrorDisplay(els.error, () => {
     syncFaceGainLabel();
