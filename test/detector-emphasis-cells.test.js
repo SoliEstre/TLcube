@@ -68,7 +68,7 @@ import {
   isDetectorToneCell,
 } from '../src/centralN7Emphasis.js';
 import {
-  centralBeaconEncoderOptions, detectorEmphasisApplicability,
+  centralBeaconEncoderOptions, detectorEmphasisApplicability, sceneOptionsForOA,
 } from '../src/generator-render-config.js';
 import { FINDER_PATTERN_IDS } from '../src/finder-patterns.js';
 import { OAK_ALL_FINDER_PATTERNS } from '../src/finder-oak-patterns.js';
@@ -79,6 +79,7 @@ import {
   OUT_OF_TABLE_FINDER_RENDER_KINDS, finderRenderKindOf,
 } from '../src/finder-render-kind.js';
 import { CENTER_QR_FINDER_PATTERN_ID } from '../src/finder-selection.js';
+import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from '../src/centralMarkerN7.js';
 import { hTonesByKeyO } from '../src/finder-H.js';
@@ -219,6 +220,17 @@ test('ⓐ 셀 팔레트 축이다 ⟺ applies ⟺ 강조 렌더가 다르다 —
   for (const id of RENDER_REACHABLE_IDS) {
     const encoded = encodedFor(id);
     const opts = sceneOptionsFor(id);
+    /*
+     * ⚠ **이 등식이 «검출기 자신» 을 재는 이유를 값으로 잠근다** (2026-09-07
+     *   emph-centerqr). `changed` 는 **장면 전체**의 차분이라, 이 호스트 코드가 바깥
+     *   마커 검출 셀을 싣고 있으면 비대상 검출기에서도 참이 된다 — 그러면 이 자는
+     *   «검출기 자신» 이 아니라 «코드 어딘가» 를 재게 되고, 위 세 값의 등식이 우연히
+     *   성립하던 것이 우연히 깨진다. 지금 성립하는 근거는 «이 호스트가 마커를 안
+     *   싣는다» 이고, 그건 주석이 아니라 여기서 재야 하는 사실이다.
+     */
+    assert.equal([...encoded.cellDigits].filter(([, e]) => isDetectorToneCell(e)).length, 0,
+      `${id}: 판정 호스트가 마커 검출 셀을 싣는다 — 이 자의 «검출기 자신» 전제가 깨졌다 `
+      + '(마커 축은 ⓗ 가 따로 잰다)');
     const base = colorsOf(sceneOf(encoded, opts, DEFAULT_CENTRAL_N7_EMPHASIS));
     const all = colorsOf(sceneOf(encoded, opts, 'all'));
     const changed = all.join('|') !== base.join('|');
@@ -319,6 +331,11 @@ const MARKER_HOSTS = Object.freeze([
     bareEncoded: () => encode(TEXT, {
       version: 1, eccLevel: 'M', cornerMarker: true, markerTones: true,
     }),
+    // ⭐ **중앙 QR × 마커 (2026-09-07 emph-centerqr)** — 운영자가 신고한 바로 그
+    //   조합이다. 옛 주석은 「못 태운다」였는데 실측은 검출 톤 셀 12 였다.
+    centerQrEncoded: () => encode(TEXT, {
+      version: 2, eccLevel: 'M', centerQr: true, cornerMarker: true, markerTones: true,
+    }),
     toneCount: (encoded) => hTonesByKeyO(encoded.k).size,
     toneCanon: (encoded) => hTonesByKeyO(encoded.k),
     finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
@@ -330,6 +347,9 @@ const MARKER_HOSTS = Object.freeze([
       version: 1, eccLevel: 'M', centralN7: true, cornerMarker: true,
     }),
     bareEncoded: () => encodeA(TEXT, { version: 1, eccLevel: 'M', cornerMarker: true }),
+    centerQrEncoded: () => encodeA(TEXT, {
+      version: 1, eccLevel: 'M', centerQr: true, cornerMarker: true,
+    }),
     toneCount: (encoded) => h2oTonesByKeyA(encoded.k).size,
     toneCanon: (encoded) => h2oTonesByKeyA(encoded.k),
     finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
@@ -345,6 +365,9 @@ const MARKER_HOSTS = Object.freeze([
     bareEncoded: () => encodeA(TEXT, {
       version: 1, eccLevel: 'M', turnA: true, cornerMarker: true,
     }),
+    centerQrEncoded: () => encodeA(TEXT, {
+      version: 1, eccLevel: 'M', centerQr: true, turnA: true, cornerMarker: true,
+    }),
     toneCount: () => CO2_CELL_COUNT,
     // ⚠ CO2 정본은 **canonical 좌표** 표다 (`co2TonesByKeyTurnA` 는 이미지 좌표라
     //   cellDigits 키와 안 맞는다 — 실측 확인). 렌더가 turnA 사상을 하고 인코더
@@ -359,6 +382,9 @@ const MARKER_HOSTS = Object.freeze([
       version: 1, eccLevel: 'M', centralN7: true, cornerMarker: true,
     }),
     bareEncoded: () => encodeK(TEXT, { version: 1, eccLevel: 'M', cornerMarker: true }),
+    centerQrEncoded: () => encodeK(TEXT, {
+      version: 1, eccLevel: 'M', centerQr: true, cornerMarker: true,
+    }),
     toneCount: (encoded) => h2co3TonesByKeyK(encoded.k, {
       includeVertex: h2co3IncludeVertexK({ cornerMarker: true, centralV0: false }),
     }).size,
@@ -676,42 +702,106 @@ test('ⓔ C 노치 림 — 이름 붙인 집합이 어떤 모드에서도 안 �
 // 사실**을 행동으로 재 둔다: 사실이 바뀌면 여기가 빨개지고, 그때 사람이 문구를 다시
 // 읽게 된다 (2026-09-07 검토 F1·F2 — 라벨 스윕이 절반만 됐던 이유가 이 자의 부재다).
 
-test('ⓗ g1026·g1027·g1028: 비대상 검출기를 고르면 마커가 있어도 코드 전체가 안 바뀐다', () => {
-  // 사유 문구가 「이 검출기를 고르면 **코드 전체 강조까지 함께 꺼져요**」라고 말한다.
-  // 그 말이 참인지는 «마커 검출 셀이 실재하는 코드» 에서만 물을 수 있다 — 셀이 0 이면
-  // 안 바뀌는 게 당연해서 공허 통과다.
-  const inertIds = RENDER_REACHABLE_IDS
-    // ⚠ 중앙 QR 은 자기 전용 인코더 옵션(centerQr)이 필요해 마커 호스트에 못 태운다.
-    .filter((id) => id !== CENTER_QR_FINDER_PATTERN_ID && !detectorDrawsFromLevels(id));
+test('ⓗ g1026·g1027·g1028: 비대상 검출기는 **자신만** 안 바뀌고, 마커 검출 셀은 강조된다', () => {
+  /*
+   * ⭐ **주장이 뒤집혔다 (2026-09-07 emph-centerqr · 운영자 실기 20:1x)** — 자를
+   *   지우지 않고 **성질**을 바꾼다 (emph-c 전례).
+   *
+   *   옛 주장: 「비대상 검출기를 고르면 마커가 있어도 **코드 전체**가 안 바뀐다」.
+   *   그것이 운영자가 신고한 결함 자체였다 — 「O/A/K에서 중앙 QR일 때는 적용이
+   *   안되던데」. 이 자는 그 결함을 **게이트로 굳히고** 있었다 (교훈 «레인은 내
+   *   잘못된 지시를 자로 굳힌다»).
+   *
+   *   새 주장 (두 갈래를 따로 잰다):
+   *     ① 검출기 **자신의 셰이프**는 3택 전부에서 한 점도 안 바뀐다 — 사유 문구
+   *        (g1026·g1027·g1028 «이 검출기 자신에는 강조를 안 걸어요»)가 여전히 참이다.
+   *     ② 그 코드의 **바깥 마커 검출 셀**은 강조된다 — 범위 문구(g1038)가 참이다.
+   *   ①만 재면 옛 결함이 돌아와도 초록이고, ②만 재면 사유 문구가 거짓이 돼도 초록이다.
+   *
+   * ⚠ **중앙 QR 이 표본에 들어왔다.** 옛 주석은 「중앙 QR 은 자기 전용 인코더
+   *   옵션(centerQr)이 필요해 마커 호스트에 못 태운다」였는데, 실측하니 «못 한다» 가
+   *   아니라 «그때 안 했다» 였다 (O/A/V/K 전부 centerQr × cornerMarker 가 인코드·렌더
+   *   된다 — 검출 톤 셀 12·21·6·30). 운영자가 본 자리가 바로 그 조합이라, 그 조합이
+   *   표본에서 빠져 있던 것이 이 결함이 안 보인 이유의 절반이다.
+   */
+  const inertIds = RENDER_REACHABLE_IDS.filter((id) => !detectorDrawsFromLevels(id));
   const byKind = new Map();
   for (const id of inertIds) {
     const kind = finderRenderKindOf(id);
     if (!byKind.has(kind)) byKind.set(kind, id);
   }
   assert.ok(byKind.size >= 3, `비대상 화법 표본이 ${byKind.size} 뿐이다`);
+  assert.ok([...byKind.values()].includes(CENTER_QR_FINDER_PATTERN_ID)
+    || byKind.has('center-qr'),
+  '중앙 QR 이 비대상 표본에서 빠졌다 — 운영자가 신고한 바로 그 자리다');
+  let centralAnchors = 0;
+  let markerAnchors = 0;
   for (const host of MARKER_HOSTS) {
-    // 중앙 슬롯을 비운 판을 쓴다 — 중앙 점유자는 하나뿐이라 centralN7 을 켠 채로는
-    // 다른 검출기를 못 고른다 (buildScene 이 RangeError 로 거절한다).
-    const encoded = host.bareEncoded();
-    const canon = new Set(host.toneCanon(encoded).keys());
-    const toneKeys = [...encoded.cellDigits]
-      .filter(([, entry]) => isDetectorToneCell(entry)).map(([key]) => key);
-    assert.ok(toneKeys.length > 0,
-      `${host.label}: 중앙을 비우니 마커 검출 셀이 0 이 됐다 — 공허 통과다`);
-    for (const key of toneKeys) {
-      assert.ok(canon.has(key),
-        `${host.label}: 검출 셀 ${key} 가 심볼 정본 표 밖이다`);
-    }
     for (const id of byKind.values()) {
+      // 중앙 점유자는 하나뿐이라, 다른 검출기를 고르려면 중앙 슬롯을 비운 판이
+      // 필요하다 (buildScene 이 RangeError 로 거절한다). 중앙 QR 은 자기 옵션을
+      // 켠 판이 따로 있다.
+      const centerQr = id === CENTER_QR_FINDER_PATTERN_ID;
+      const encoded = centerQr ? host.centerQrEncoded() : host.bareEncoded();
+      const canon = host.toneCanon(encoded);
+      const toneKeys = [...encoded.cellDigits]
+        .filter(([, entry]) => isDetectorToneCell(entry)).map(([key]) => key);
+      assert.ok(toneKeys.length > 0,
+        `${host.label} × ${id}: 마커 검출 셀이 0 이 됐다 — 공허 통과다`);
+      for (const key of toneKeys) {
+        assert.ok(canon.has(key), `${host.label}: 검출 셀 ${key} 가 심볼 정본 표 밖이다`);
+      }
       const opts = { palette: PALETTE, margin: 20, finderPatternId: id };
+      if (centerQr) {
+        opts.centerQr = true;
+        opts.qrText = TEXT;
+      }
       const base = sceneOf(encoded, opts, DEFAULT_CENTRAL_N7_EMPHASIS);
+      const faces = outerCellFaceIndex(encoded, base);
+      const outerAt = new Set([...faces.values()].map((hit) => hit.at));
       for (const mode of CENTRAL_N7_EMPHASIS_MODES) {
-        assert.deepEqual(sceneOf(encoded, opts, mode).shapes, base.shapes,
-          `${host.label} × ${id}: 화면은 «이 검출기엔 강조를 안 건다» 고 말하는데 `
-          + `${mode} 렌더가 달라졌다 — 사유 문구가 거짓이 된다`);
+        const withMode = sceneOf(encoded, opts, mode);
+        // ① 검출기 자신 — 셀 루프 몫을 좌표로 뺀 나머지가 한 점도 안 바뀐다.
+        for (let i = 0; i < base.shapes.length; i += 1) {
+          if (outerAt.has(i)) continue;
+          assert.deepEqual(withMode.shapes[i], base.shapes[i],
+            `${host.label} × ${id}/${mode}: 화면은 «이 검출기 자신에는 강조를 안 건다» 고 `
+            + '말하는데 검출기 셰이프가 달라졌다 — 사유 문구가 거짓이 된다');
+        }
+        centralAnchors += 1;
+        if (mode === DEFAULT_CENTRAL_N7_EMPHASIS) continue;
+        // ② 바깥 마커 검출 셀 — 실제로 강조된다. 「바뀔 수 있었던 면」(밝은 레벨이
+        //    아닌 면)이 실재해야 이 단언이 공허하지 않다.
+        //    ⚠ 톤 **값**은 심볼 정본 표(canon)가 주고, «이 판이 실제로 실은 셀» 은
+        //      위에서 canon 의 부분집합임을 확인한 `toneKeys` 다. 둘을 가르는 이유는
+        //      CO2 다 — 중앙을 비우면 꼭짓점 앵커 톤이 빠져 정본 9 셀 중 6 만 실린다
+        //      (MARKER_HOSTS 의 그 주석). canon 전수로 세면 안 실린 3 셀이 «안
+        //      바뀌었다» 로 잡혀 자가 정답을 거부한다.
+        const carriedTones = new Map(toneKeys.map((key) => [key, canon.get(key)]));
+        let detectorFacesChanged = 0;
+        let detectorFacesAtRisk = 0;
+        for (const [label, { at, entry }] of faces) {
+          const cellKey = label.slice(0, label.indexOf('|'));
+          if (!carriedTones.has(cellKey)) continue;
+          const face = label.slice(label.indexOf('|') + 1);
+          if (faceShouldChange(entry, face, carriedTones.get(cellKey))) {
+            detectorFacesAtRisk += 1;
+          }
+          if (rgbKey(withMode.shapes[at].color) !== rgbKey(base.shapes[at].color)) {
+            detectorFacesChanged += 1;
+          }
+        }
+        assert.ok(detectorFacesAtRisk > 0,
+          `${host.label} × ${id}/${mode}: 강조가 바꿀 수 있었던 검출 면이 0 이다 — 공허하다`);
+        assert.equal(detectorFacesChanged, detectorFacesAtRisk,
+          `${host.label} × ${id}/${mode}: 마커 검출 면 ${detectorFacesAtRisk} 중 `
+          + `${detectorFacesChanged} 만 강조됐다 — 범위 문구(g1038)가 거짓이 된다`);
+        markerAnchors += 1;
       }
     }
   }
+  assert.ok(centralAnchors >= 12 && markerAnchors >= 8,
+    `앵커 표본이 줄었다 (중앙 ${centralAnchors} · 마커 ${markerAnchors})`);
 });
 
 test('ⓗ g1006: locator 팔은 **검출기 밖**(코너 심볼) 셀도 바꾼다', () => {
@@ -1073,6 +1163,279 @@ test('ⓙ Y: 독립 출처 — 로케이터가 palette.levels 축이다 ⟺ appl
     assert.equal(detectorEmphasisApplicability(profile).applies,
       isCellSurfaceLocatorProfileY(profile),
       `${profile}: 분류가 셀 표면 로케이터 여부와 어긋난다`);
+  }
+});
+
+// ── ⓚ 관문 입도: «중앙 파인더 선택» 과 «검출 셀» 은 다른 축이다 ──────────
+//
+// 2026-09-07 emph-centerqr · 운영자 실기 20:1x 「O/A/K에서 중앙 QR일 때는 적용이
+// 안되던데 적용되게 해야 할 듯」. 종전 관문은 `renderKind` 하나로 **코드 전체**를
+// 껐고, 그래서 중앙 QR 을 고르면 바깥 마커 검출 셀까지 평 팔레트로 갔다.
+// 아래 넷은 그 정정이 «맞게 열렸는가» 를 네 축으로 따로 잰다.
+
+/** 중앙 QR × 마커 4종 — 운영자가 본 바로 그 조합. */
+const CENTER_QR_HOSTS = Object.freeze(MARKER_HOSTS.map((host) => ({
+  label: `${host.label} × 중앙 QR`,
+  encoded: host.centerQrEncoded,
+  toneCanon: host.toneCanon,
+})));
+
+const centerQrSceneOptions = () => ({
+  palette: PALETTE, margin: 20,
+  finderPatternId: CENTER_QR_FINDER_PATTERN_ID, centerQr: true, qrText: TEXT,
+});
+
+test('ⓚ① 중앙 QR 코드에서 마커 검출 셀이 강조된다 — 면 단위 절대 대조', () => {
+  // 「검출 셀만, 그리고 전부」를 **차분이 아니라 값**으로 잰다 (ⓔ 와 같은 규약):
+  // 기본은 palette.levels[level], locator/all 은 EMPHASIZED[level] 이어야 한다.
+  let hostsSeen = 0;
+  for (const host of CENTER_QR_HOSTS) {
+    const encoded = host.encoded();
+    const canon = host.toneCanon(encoded);
+    const carried = [...encoded.cellDigits]
+      .filter(([, entry]) => isDetectorToneCell(entry)).map(([key]) => key);
+    assert.ok(carried.length > 0, `${host.label}: 검출 톤 셀이 0 이다 — 공허 통과다`);
+    for (const key of carried) {
+      assert.ok(canon.has(key), `${host.label}: 검출 셀 ${key} 가 심볼 정본 표 밖이다`);
+    }
+    const tones = new Map(carried.map((key) => [key, canon.get(key)]));
+    const opts = centerQrSceneOptions();
+    const base = sceneOf(encoded, opts, DEFAULT_CENTRAL_N7_EMPHASIS);
+    const faces = outerCellFaceIndex(encoded, base);
+    let changedFaces = 0;
+    for (const mode of ['locator', 'all']) {
+      const withMode = sceneOf(encoded, opts, mode);
+      for (const [label, { at, entry }] of faces) {
+        const cellKey = label.slice(0, label.indexOf('|'));
+        if (!tones.has(cellKey)) continue;
+        const face = label.slice(label.indexOf('|') + 1);
+        const level = faceLevel(entry, face, tones.get(cellKey));
+        assert.equal(rgbKey(base.shapes[at].color), LEVEL_KEYS[level],
+          `${host.label}: ${label} 의 기본 색이 palette.levels[${level}] 가 아니다`);
+        assert.equal(rgbKey(withMode.shapes[at].color), EMPHASIZED_KEYS[level],
+          `${host.label}/${mode}: ${label} 의 강조 색이 계약과 다르다 — `
+          + '중앙 QR 을 고르면 마커 강조가 꺼지던 그 결함이다');
+        if (mode === 'locator' && level !== 2) changedFaces += 1;
+      }
+    }
+    assert.ok(changedFaces > 0, `${host.label}: 강조가 바꾼 검출 면이 0 이다`);
+    hostsSeen += 1;
+  }
+  assert.equal(hostsSeen, 4, '중앙 QR 마커 호스트가 4 종(H·H2O·CO2·H2CO3)이 아니다');
+});
+
+test('ⓚ② 중앙 QR **자신**은 3택 전부에서 안 바뀐다 — 그리고 levels 축이 아니다', () => {
+  // 제외 사유(bwg)는 **중앙 QR 자신**에 대해서는 사실이다. 그 사실을 두 출처로 잰다:
+  //   ㉠ 강조 3택에서 중앙 슬롯 셰이프가 한 점도 안 바뀐다 (행동).
+  //   ㉡ 강조를 한 번도 안 켜고 `palette.levels` 만 바꿔도 안 움직인다 (독립 프로브).
+  assert.equal(detectorDrawsFromLevels(CENTER_QR_FINDER_PATTERN_ID), false,
+    '중앙 QR 이 palette.levels 축이 됐다 — 사유 bwg 를 다시 실측해야 한다');
+  for (const host of CENTER_QR_HOSTS) {
+    const encoded = host.encoded();
+    const opts = centerQrSceneOptions();
+    const base = sceneOf(encoded, opts, DEFAULT_CENTRAL_N7_EMPHASIS);
+    const outerAt = new Set([...outerCellFaceIndex(encoded, base).values()]
+      .map((hit) => hit.at));
+    let slotShapes = 0;
+    for (const mode of CENTRAL_N7_EMPHASIS_MODES) {
+      const withMode = sceneOf(encoded, opts, mode);
+      for (let i = 0; i < base.shapes.length; i += 1) {
+        if (outerAt.has(i)) continue;
+        slotShapes += 1;
+        assert.deepEqual(withMode.shapes[i], base.shapes[i],
+          `${host.label}/${mode}: 중앙 QR 슬롯 셰이프 ${i} 가 바뀌었다`);
+      }
+    }
+    assert.ok(slotShapes > 0, `${host.label}: 중앙 슬롯 셰이프가 0 이다 — 빈 비교다`);
+  }
+});
+
+test('ⓚ③ 중앙 QR 코드의 페이로드 면은 어떤 모드에서도 0면 (emph-c 규약)', () => {
+  for (const host of CENTER_QR_HOSTS) {
+    const encoded = host.encoded();
+    const canon = host.toneCanon(encoded);
+    const opts = centerQrSceneOptions();
+    const base = sceneOf(encoded, opts, DEFAULT_CENTRAL_N7_EMPHASIS);
+    const faces = outerCellFaceIndex(encoded, base);
+    for (const mode of CENTRAL_N7_EMPHASIS_MODES) {
+      const withMode = sceneOf(encoded, opts, mode);
+      let payloadChanged = 0;
+      let payloadAtRisk = 0;
+      for (const [label, { at, entry }] of faces) {
+        if (canon.has(label.slice(0, label.indexOf('|')))) continue;
+        if (faceShouldChange(entry, label.slice(label.indexOf('|') + 1))) payloadAtRisk += 1;
+        if (rgbKey(withMode.shapes[at].color) !== rgbKey(base.shapes[at].color)) {
+          payloadChanged += 1;
+        }
+      }
+      assert.ok(payloadAtRisk > 0,
+        `${host.label}/${mode}: 강조가 바꿀 수 있었던 페이로드 면이 0 이다 — 공허하다`);
+      assert.equal(payloadChanged, 0,
+        `${host.label}/${mode}: 페이로드 면이 ${payloadChanged} 장 바뀌었다 — `
+        + '관문 입도를 낮추면서 «코드 전체 강조» 로 되돌아갔다');
+    }
+  }
+});
+
+test('ⓚ④ 무회귀: 검출 셀이 없는 코드는 전 화법 × 3택에서 **래스터 바이트 동일**', () => {
+  /*
+   * 관문을 지운 정정의 무회귀 조건은 하나다 — «검출 셀이 0 인 코드에서는 아무것도
+   * 안 바뀐다». 그 성질이 성립하면 종전 `cellPalettes === null` 갈래와 결과가 같다.
+   * 위 ⓐ 형제들은 색(셰이프)까지만 보므로, 여기서는 화법 대표마다 **래스터**로
+   * 좌표·순서·덮임까지 잰다.
+   */
+  const byKind = new Map();
+  for (const id of RENDER_REACHABLE_IDS) {
+    const kind = finderRenderKindOf(id);
+    if (!byKind.has(kind)) byKind.set(kind, id);
+  }
+  assert.ok(byKind.size >= 5, `화법 대표가 ${byKind.size} 뿐이다`);
+  for (const id of byKind.values()) {
+    const encoded = encodedFor(id);
+    assert.equal([...encoded.cellDigits].filter(([, e]) => isDetectorToneCell(e)).length, 0,
+      `${id}: 무회귀 호스트가 검출 셀을 싣는다 — 이 자의 전제가 깨졌다`);
+    const opts = sceneOptionsFor(id);
+    const applies = detectorEmphasisApplicability(id).applies;
+    const base = rasterize(sceneOf(encoded, opts, DEFAULT_CENTRAL_N7_EMPHASIS),
+      { pixelsPerUnit: 8, supersample: 1 });
+    for (const mode of CENTRAL_N7_EMPHASIS_MODES) {
+      const withMode = rasterize(sceneOf(encoded, opts, mode),
+        { pixelsPerUnit: 8, supersample: 1 });
+      const same = Buffer.from(withMode.pixels).equals(Buffer.from(base.pixels));
+      // 대상 검출기는 **자기 슬롯**이 바뀌므로 동일할 이유가 없다 — 그쪽은 «안
+      // 바뀌면» 배선이 빠진 것이다. 비대상은 반대로 «바뀌면» 회귀다.
+      if (applies) {
+        assert.equal(same, mode === DEFAULT_CENTRAL_N7_EMPHASIS,
+          `${id}/${mode}: 대상 검출기의 슬롯 강조가 사라졌다(또는 default 가 움직였다)`);
+      } else {
+        assert.ok(same, `${id}/${mode}: 검출 셀이 없는 코드인데 래스터가 달라졌다 — 무회귀 위반`);
+      }
+    }
+  }
+});
+
+test('ⓚ⑤ 화면의 마커 술어가 참이면 **와이어에 검출 셀이 실린다** — 두 층을 잇는다', () => {
+  /*
+   * 화면(`emphasisSectionModel`)은 `cornerMarkerSeatActive` 하나로 «강조할 검출 셀이
+   * 있다» 고 판단해 카드를 연다. 그 판단이 인코더 산출물과 어긋나면 «켰는데 안 먹는»
+   * 이 된다 — 화면 쪽 자(값 격자)로는 절대 안 보이는 종류의 어긋남이다.
+   *
+   * 그래서 술어가 참인 seat 조합마다 **실제로 인코드해서** 검출 톤 셀 수를 센다.
+   * 인코더 옵션 사슬(buildConfig → encodeOptsFor)은 index.html 에 있어 여기서 못
+   * 부르므로, 같은 옵션을 손으로 만들되 **술어의 참/거짓을 축으로** 돈다.
+   */
+  const cases = [
+    { seat: { type: 'O', innerSeat: 'o-cm' },
+      enc: () => encode(TEXT, { version: 1, eccLevel: 'M', cornerMarker: true, markerTones: true }) },
+    { seat: { type: 'A', outerSeat: 'a-cm', turnA: false },
+      enc: () => encodeA(TEXT, { version: 1, eccLevel: 'M', cornerMarker: true }) },
+    { seat: { type: 'A', outerSeat: 'v-cm', turnA: true },
+      enc: () => encodeA(TEXT, { version: 1, eccLevel: 'M', turnA: true, cornerMarker: true }) },
+    { seat: { type: 'K', outerSeat: 'k-cm' },
+      enc: () => encodeK(TEXT, { version: 1, eccLevel: 'M', cornerMarker: true }) },
+  ];
+  for (const { seat, enc } of cases) {
+    assert.equal(cornerMarkerSeatActive(seat), true,
+      `${JSON.stringify(seat)}: 술어가 거짓이다 — 자리 철자가 늙었다`);
+    const toneCells = [...enc().cellDigits].filter(([, e]) => isDetectorToneCell(e)).length;
+    assert.ok(toneCells > 0,
+      `${JSON.stringify(seat)}: 화면은 «강조할 검출 셀이 있다» 는데 와이어의 톤 셀이 0 이다`);
+  }
+  // 반대 방향 — 술어가 거짓인 자리에서는 마커 옵션 자체가 안 실린다(= 톤 셀 0).
+  assert.equal(cornerMarkerSeatActive({ type: 'O', innerSeat: 'none' }), false);
+  const bare = encode(TEXT, { version: 1, eccLevel: 'M' });
+  assert.equal([...bare.cellDigits].filter(([, e]) => isDetectorToneCell(e)).length, 0,
+    '마커를 안 켠 코드에 검출 톤 셀이 있다 — 이 자의 대조군이 깨졌다');
+});
+
+test('ⓚ⑥ 화면 좌석이 **조립한 옵션**으로 그려도 마커가 강조된다 — 게이트가 내 축을 지나는가', () => {
+  /*
+   * ⚠ **이 자가 없으면 위 ⓚ①\~⑤ 는 «엉뚱한 축에서 초록» 이다** (2026-09-07
+   *   emph-centerqr 실측). 렌더 관문을 낮춘 뒤에도 화면은 그대로였다 — 조립 좌석
+   *   (`sceneOptionsForOA`)이 `centralN7EmphasisAppliesTo(finderPatternId)` 로
+   *   **옵션 전달 자체**를 막고 있었기 때문이다. 그 자리의 주석은 결과까지 정확히
+   *   적고 있었다: 「centerQr 이면 finderPatternId 가 center-qr 로 이미 양보돼 있어
+   *   여기서 걸리지 않는다」.
+   *
+   *   원자료 `.agent/lanes/emph-centerqr/cqr-consumer-sweep-before.jsonl`:
+   *     QR «중앙» → emphasisPassed=false · 마커 검출 면 **0/24**
+   *     QR «없음» → emphasisPassed=true  · 마커 검출 면 **24/24**
+   *
+   *   그래서 여기서는 buildScene 옵션을 손으로 만들지 않고 **화면이 쓰는 그 함수**를
+   *   불러 그 결과로 그린다 (교훈 `opening-an-exclusion-needs-a-consumer-sweep` ·
+   *   `gates-can-be-green-on-the-wrong-axis`).
+   */
+  const hosts = [
+    {
+      label: 'O × QR 중앙 (운영자가 본 자리)',
+      encoded: () => encode(TEXT, {
+        version: 2, eccLevel: 'M', centerQr: true, cornerMarker: true, markerTones: true,
+      }),
+      fallback: { mode: 'center', cornerToo: false },
+      finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
+      expectRendered: CENTER_QR_FINDER_PATTERN_ID,
+    },
+    {
+      label: 'O × 불스아이 (대조군 — 다른 비대상 검출기)',
+      encoded: () => encode(TEXT, {
+        version: 2, eccLevel: 'M', cornerMarker: true, markerTones: true,
+      }),
+      fallback: { mode: 'none' },
+      finderPatternId: 'bullseye',
+      expectRendered: 'bullseye',
+    },
+    {
+      label: 'O × 중앙 TL (대조군 — 종전에도 걸리던 자리)',
+      encoded: () => encode(TEXT, {
+        version: 2, eccLevel: 'M', centralN7: true, cornerMarker: true, markerTones: true,
+      }),
+      fallback: { mode: 'none' },
+      finderPatternId: CENTRAL_N7_FINDER_PATTERN_ID,
+      expectRendered: CENTRAL_N7_FINDER_PATTERN_ID,
+    },
+  ];
+  for (const host of hosts) {
+    const encoded = host.encoded();
+    const canon = hTonesByKeyO(encoded.k);
+    const carried = new Set([...encoded.cellDigits]
+      .filter(([, entry]) => isDetectorToneCell(entry)).map(([key]) => key));
+    assert.ok(carried.size > 0, `${host.label}: 마커 검출 셀이 0 이다 — 공허 통과다`);
+    const optsFor = (emphasis) => sceneOptionsForOA({
+      centralN7Emphasis: emphasis,
+      fallback: { ...host.fallback },
+      finderPatternId: host.finderPatternId,
+      palette: PALETTE,
+      qrText: TEXT,
+      type: 'O',
+    });
+    const optsAll = optsFor('all');
+    assert.equal(optsAll.finderPatternId, host.expectRendered,
+      `${host.label}: 조립이 고른 렌더 검출기가 다르다 — 이 자의 전제가 깨졌다`);
+    // ① 조립 층 — 옵션이 실제로 실린다.
+    assert.equal(optsAll.centralN7Emphasis, 'all',
+      `${host.label}: 조립 좌석이 강조 옵션을 안 실었다 — 렌더를 고쳐도 화면은 그대로다`);
+    // ② 렌더 층 — 그 옵션으로 그린 장면에서 마커 검출 면이 **전부** 바뀐다.
+    const base = buildScene(encoded, optsFor(DEFAULT_CENTRAL_N7_EMPHASIS));
+    const all = buildScene(encoded, optsAll);
+    let changed = 0;
+    let atRisk = 0;
+    let payloadChanged = 0;
+    for (const [label, { at, entry }] of outerCellFaceIndex(encoded, base)) {
+      const cellKey = label.slice(0, label.indexOf('|'));
+      const face = label.slice(label.indexOf('|') + 1);
+      const same = rgbKey(base.shapes[at].color) === rgbKey(all.shapes[at].color);
+      if (!carried.has(cellKey)) {
+        if (!same) payloadChanged += 1;
+        continue;
+      }
+      if (faceShouldChange(entry, face, canon.get(cellKey))) atRisk += 1;
+      if (!same) changed += 1;
+    }
+    assert.ok(atRisk > 0, `${host.label}: 바꿀 수 있었던 검출 면이 0 이다`);
+    assert.equal(changed, atRisk,
+      `${host.label}: 화면 좌석 경로에서 마커 검출 면 ${atRisk} 중 ${changed} 만 강조됐다`);
+    assert.equal(payloadChanged, 0,
+      `${host.label}: 화면 좌석 경로에서 페이로드 면이 ${payloadChanged} 장 바뀌었다`);
   }
 });
 

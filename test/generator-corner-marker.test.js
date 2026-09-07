@@ -27,8 +27,8 @@ import { readFileSync } from 'node:fs';
 
 import { createGeneratorState, GENERATOR_STATE_SCHEMA, exposedGeneratorStateKeys } from '../src/generator-state.js';
 import {
-  DEEP_SEAT_OPTIONS, INNER_SEAT_OPTIONS, OUTER_SEAT_OPTIONS, cmqWireExists,
-  seatCardShown, zoneCards,
+  DEEP_SEAT_OPTIONS, INNER_SEAT_OPTIONS, OUTER_SEAT_OPTIONS, SEAT_NONE,
+  cmqWireExists, cornerMarkerSeatActive, seatCardShown, zoneCards,
 } from '../src/finder-zone-ui.js';
 import { SEAT_DEFAULT_FINDER } from '../src/finder-taxonomy.js';
 import { LAB_OUTER_FINDER_IDS } from '../src/lab-expected-axes.js';
@@ -154,13 +154,38 @@ test('② encodeOptsFor 가 O·A 에서만 cornerMarker 를 싣는다 — cfg �
     'Type Y 분기에 cornerMarker 가 들어갔다 — Y 는 자기 로케이터 문법을 쓴다');
   assert.match(body, /cfg\.cornerMarker === true/,
     'cornerMarker 를 cfg 에서 읽는 줄이 없다 — UI 가 인코더에 안 닿는다');
-  // cfg 조립: seat 파생 (W2 C4 · Wave 3 ④ 재편) — O 는 내곽 o-cm, A 는 외곽
-  // 코너 자리가 방향과 짝일 때만 켠다: a-cm×정삼각 / v-cm×역삼각.
-  // **의도적 갱신 (2026-08-25)** — K 절(k-cm)이 O 와 A 사이에 들어왔다. K 는 방향 축이
-  // 없으므로(육각별은 turnA 가 성립 안 한다) 자리 하나로 끝난다.
-  assert.match(INDEX,
-    /cornerMarker: \(type === 'O' && generatorState\.innerSeat === 'o-cm'\)\s*\|\| \(type === 'K' && generatorState\.outerSeat === 'k-cm'\)\s*\|\| \(type === 'A' && \(\(generatorState\.outerSeat === 'a-cm' && generatorState\.turnA !== true\)\s*\|\| \(generatorState\.outerSeat === 'v-cm' && generatorState\.turnA === true\)\)\)/,
-    'cfg 조립이 seat×방향 파생이 아니다 — 어긋난 상태가 던짐 조합으로 새어 나간다');
+  /*
+   * cfg 조립: seat 파생 (W2 C4 · Wave 3 ④ 재편) — O 는 내곽 o-cm, K 는 외곽 k-cm,
+   * A 는 외곽 코너 자리가 방향과 짝일 때만: a-cm×정삼각 / v-cm×역삼각.
+   *
+   * ⭐ **자가 «철자» 에서 «성질» 로 바뀌었다 (2026-09-07 emph-centerqr)**. 종전 이 자리는
+   *    인라인 삼항식의 **정규식 전문**이었고, 그래서 그 술어를 모듈로 올리는 정정을
+   *    거부했다 (교훈 «철자를 재는 자는 썩는다»). 술어는 이제
+   *    `finder-zone-ui.cornerMarkerSeatActive` 하나이고 Node 에서 직접 부를 수 있으므로,
+   *    **값 표를 잰다** — 인라인 정규식이 못 재던 «틀린 조합» 까지 여기서 죽는다.
+   *    (술어를 모듈로 올린 이유: 「검출기 강조」 섹션이 그 사실을 읽어야 했다.
+   *     인라인이던 동안 마커가 켜져 있어도 강조 카드가 잠겼다 — 운영자 신고 20:1x.)
+   */
+  for (const [state, expected, why] of [
+    [{ type: 'O', innerSeat: 'o-cm' }, true, 'O 내곽 o-cm'],
+    [{ type: 'O', innerSeat: SEAT_NONE }, false, 'O 자리 없음'],
+    [{ type: 'K', outerSeat: 'k-cm' }, true, 'K 외곽 k-cm'],
+    [{ type: 'K', outerSeat: SEAT_NONE }, false, 'K 자리 없음'],
+    [{ type: 'A', outerSeat: 'a-cm', turnA: false }, true, 'A a-cm × 정삼각'],
+    [{ type: 'A', outerSeat: 'a-cm', turnA: true }, false, 'A a-cm × 역삼각 (짝이 아니다)'],
+    [{ type: 'A', outerSeat: 'v-cm', turnA: true }, true, 'A v-cm × 역삼각'],
+    [{ type: 'A', outerSeat: 'v-cm', turnA: false }, false, 'A v-cm × 정삼각 (짝이 아니다)'],
+    // 타입이 안 맞는 자리는 «켠 채로 새지» 않는다 — 던짐 조합을 UI 가 안 만든다.
+    [{ type: 'O', outerSeat: 'k-cm' }, false, 'O 인데 K 자리'],
+    [{ type: 'K', innerSeat: 'o-cm' }, false, 'K 인데 O 자리'],
+    [{ type: 'Y', innerSeat: 'o-cm', outerSeat: 'k-cm' }, false, 'Y 는 자리 축이 없다'],
+  ]) {
+    assert.equal(cornerMarkerSeatActive(state), expected,
+      `마커 seat 술어가 «${why}» 에서 ${!expected} 를 답했다`);
+  }
+  // 배선 축 — cfg 조립이 그 정본을 **실제로 부른다** (사본이 되살아나면 여기서 죽는다).
+  assert.match(INDEX, /cornerMarker: cornerMarkerSeatActive\(generatorState\)/,
+    'cfg 조립이 seat 술어 정본을 안 부른다 — 인라인 사본이 되살아났다');
   // o-cm = 자리 + H 심볼 통합 (2026-08-24 확정 2차, A-CM=H2O 문법) — markerTones
   // 는 o-cm 과 함께만 실린다 (encode 계약: 자리 없이 톤 불가).
   assert.match(INDEX, /markerTones: type === 'O' && generatorState\.innerSeat === 'o-cm'/,

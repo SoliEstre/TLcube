@@ -270,8 +270,47 @@ export function cmqWireExists(family) {
   );
 }
 
+/**
+ * 이 상태가 **바깥 코너 마커 심볼**(H · H2O · CO2 · H2CO3)을 코드에 싣는가.
+ *
+ * ⭐ **왜 모듈로 나왔나 (2026-09-07 emph-centerqr)**: 이 술어는 그때까지
+ * `index.html buildConfig` 의 `cornerMarker:` 한 줄에만 있었고, 그래서 **화면의 다른
+ * 소비자가 못 읽었다**. 「검출기 강조」 섹션이 그 대표다 — 강조는 중앙 파인더가
+ * 비대상이어도 **마커 검출 셀**에는 걸리는데(scene.js 셀 루프), 섹션은 그 사실을 몰라
+ * 카드를 통째로 잠그고 「강조 축 자체를 못 켜요」라고 말하고 있었다. 운영자 신고
+ * 「O/A/K에서 중앙 QR일 때는 적용이 안되던데」의 화면 쪽 절반이 이 자리다.
+ *
+ * 사본을 만들지 않으려고 `buildConfig` 가 **이 함수를 부른다** — 두 벌이 되면
+ * 「화면은 켤 수 있다는데 와이어엔 마커가 없다」가 조용히 생긴다.
+ *
+ * 유도 규약(승계 그대로): O 는 내곽 `o-cm`, K 는 외곽 `k-cm`, A 는 외곽 코너 자리가
+ * 실루엣 방향과 짝이다 — `a-cm` 은 정삼각(turnA off), `v-cm` 은 역삼각(turnA on)
+ * 에서만 마커를 켠다 (어긋난 이관·URL 상태는 마커 없이 방향만 살린다).
+ * Type Y 는 seat 구역 자체가 없다 (`SEAT_ZONE_TYPES`) — 언제나 false 다.
+ *
+ * @param {{type?: string, innerSeat?: string, outerSeat?: string, turnA?: boolean}} state
+ */
+export function cornerMarkerSeatActive(state) {
+  if (state === null || typeof state !== 'object') return false;
+  const type = state.type;
+  if (!SEAT_ZONE_TYPES.includes(type)) return false;
+  if (type === 'O') return state.innerSeat === 'o-cm';
+  if (type === 'K') return state.outerSeat === 'k-cm';
+  // Type A — 외곽 자리 × 실루엣 방향의 짝.
+  return (state.outerSeat === 'a-cm' && state.turnA !== true)
+    || (state.outerSeat === 'v-cm' && state.turnA === true);
+}
+
 /* ── 자기검증 (모듈 로드 시 — 브라우저 안전 원천만으로) ─────────────────── */
 {
+  // 마커 seat 술어가 쓰는 철자가 전부 **허용값 정본** 안에 있다 — 자리 id 가 바뀌면
+  // 여기서 죽는다 (그냥 두면 술어가 조용히 항상 false 가 된다).
+  for (const [seat, options] of [['o-cm', INNER_SEAT_OPTIONS],
+    ['k-cm', OUTER_SEAT_OPTIONS], ['a-cm', OUTER_SEAT_OPTIONS], ['v-cm', OUTER_SEAT_OPTIONS]]) {
+    if (!options.includes(seat)) {
+      throw new Error('마커 seat 술어의 자리 ' + seat + ' 가 허용값 정본에 없다');
+    }
+  }
   if (ZONES.inner[0].id !== SEAT_NONE || ZONES.deep[0].id !== SEAT_NONE
     || ZONES.outer[0].id !== SEAT_NONE) {
     throw new Error('seat 구역의 첫 카드는 없음이어야 한다');

@@ -746,6 +746,20 @@
 
   /* ── 카드 토글 공용 ──────────────────────────────────────────── */
   .card-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+
+  /* 촬영 프리셋(시험판) — 배경 2 그룹 × 자세 8 = 16장.
+     ⚠ 그냥 `.card-row`(flex 1 1 0 + wrap)에 여덟을 넣으면 폭에 따라 3+3+2 처럼
+     제멋대로 끊겨 «자세가 여덟» 이라는 것이 화면에서 안 보인다. 4열 격자로 고정해
+     그룹마다 정확히 2행이 되게 한다 (좁은 화면은 2열 → 4행). */
+  .shot-preset-group + .shot-preset-group { margin-top: 10px; }
+  .shot-preset-group-heading { margin-bottom: 4px; }
+  .card-row.shot-preset-cards {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .shot-preset-card { min-width: 0; }
+  @media (max-width: 520px) {
+    .card-row.shot-preset-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
   .toggle-card {
     flex: 1 1 0; min-width: 64px; display: flex; flex-direction: column;
     align-items: center; gap: 4px; padding: 10px 6px;
@@ -1501,7 +1515,12 @@
         <label class="section-heading" data-i18n="g1031">촬영 프리셋 (시험판)</label>
       </div>
       <p class="hint" data-i18n="g1032">항목을 고르면 촬영 조건 묶음이 한 번에 적용돼요. 코드 자체의 지면 색까지 함께 세우니, 그 색과 같은 무지 배경 위에 놓고 찍어 주세요.</p>
-      <div class="card-row" id="shotPresetCards"></div>
+      <p class="hint" data-i18n="g1038">카드 이름이 곧 파일 이름이에요 — sil3d-&lt;dark|light&gt;-&lt;카드 이름&gt;-&lt;near|far&gt;.jpg 로 저장해 주세요. near 는 가이드 크기, far 는 1.5배 멀리예요.</p>
+      <!-- ⚠ **그룹도 카드도 여기 없다.** 배경 2 × 자세 8 = 16장을 JS 가 선언에서
+           만든다(§wireShotPresetCards). 그룹 제목·부제만 사전을 타고(g1033~g1036),
+           카드 라벨은 **자세 토큰 그대로**다 — 그 낱말이 촬영 파일명 토큰이라
+           번역하면 옮겨 적기가 깨진다. -->
+      <div id="shotPresetGroups"></div>
       <p class="hint" id="shotPresetDrift" hidden data-i18n="g1037">프리셋에서 벗어났어요 — 고른 뒤에 옵션을 직접 바꿨어요.</p>
     </div>
 
@@ -3099,11 +3118,12 @@ const GENERATOR_STRINGS = {
     "g1006": "레이아웃이 톤을 고정한 검출 셀(로케이터·코너 심볼)만 대비를 높이고, 검출기 안 데이터 셀까지 그대로 둬요.",
     "g1007": "강조",
     "g1008": "검출기 셀과 검출기 안 데이터 셀까지 검정 기준으로 대비를 높여요 — 코드 데이터 셀은 그대로 둬요.",
-    "g1026": "3톤 큐브 검출기는 강조하면 어두운 배경에 먹혀 검출이 안 돼요 — 그래서 이 검출기를 고르면 강조 축 자체를 못 켜요.",
-    "g1027": "이 검출기는 이미 흑·백·회 파인더 톤으로 그려져요 — 강조를 더하면 대비가 되레 줄어서, 이 검출기를 고르면 강조 축 자체를 못 켜요.",
-    "g1028": "강조가 바꿀 셀 레벨 면이 이 검출기에 없거나, 아직 실측·배선되지 않았어요 — 이 검출기를 고르면 강조 축 자체를 못 켜요.",
+    "g1026": "3톤 큐브 검출기는 강조하면 어두운 배경에 먹혀 검출이 안 돼요 — 그래서 이 검출기 자신에는 강조를 안 걸어요.",
+    "g1027": "이 검출기는 이미 흑·백·회 파인더 톤으로 그려져요 — 강조를 더하면 대비가 되레 줄어서, 이 검출기 자신에는 강조를 안 걸어요.",
+    "g1028": "강조가 바꿀 셀 레벨 면이 이 검출기에 없거나, 아직 실측·배선되지 않았어요 — 그래서 이 검출기 자신에는 강조를 안 걸어요.",
     "g1029": "«로케이터만 강조» 는 고급 모드 카드예요 — 카드는 숨겨져 있지만 선택은 그대로 살아 있어요.",
     "g1030": "이 검출기의 강조는 실측에서 검출 회귀가 나와 정식 화면에서 내려 뒀어요 — 고급 모드·시험판에서만 켤 수 있어요.",
+    "g1039": "이 검출기 자신에는 강조를 안 걸지만, 켜 둔 코너 마커(H·H2O·CO2·H2CO3)의 검출 셀에는 걸려요 — 강조 범위가 그만큼이에요.",
     "g572": "실루엣 방향",
     "g573": "정삼각 (기본)",
     "g574": "역삼각 (턴A)",
@@ -3227,6 +3247,7 @@ const GENERATOR_STRINGS = {
     "g1035": "3D 자세 촬영용 · 밝은 배경",
     "g1036": "Y2T · v0TR · ECC H · 흰 지면",
     "g1037": "프리셋에서 벗어났어요 — 고른 뒤에 옵션을 직접 바꿨어요.",
+    "g1038": "카드 이름이 곧 파일 이름이에요 — sil3d-<dark|light>-<카드 이름>-<near|far>.jpg 로 저장해 주세요. near 는 가이드 크기, far 는 1.5배 멀리예요.",
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -3602,11 +3623,12 @@ const GENERATOR_STRINGS = {
     "g1006": "Raises contrast only for the detection cells whose tones the layout fixes — locator and corner symbol — and leaves every data cell, inside the detector included, as it is.",
     "g1007": "Emphasize",
     "g1008": "Raises contrast against black for the detector cells and the data cells inside the detector — the code’s own data cells stay as they are.",
-    "g1026": "The three-tone cube detector sinks into a dark background when emphasized — so picking it leaves the emphasis axis unavailable.",
-    "g1027": "This detector is already drawn in the black, grey and white finder tones — emphasis would only lower its contrast, so picking it leaves the emphasis axis unavailable.",
-    "g1028": "This detector has no cell-level faces for emphasis to change, or has not been measured and wired yet — picking it leaves the emphasis axis unavailable.",
+    "g1026": "The three-tone cube detector sinks into a dark background when emphasized — so the detector itself is left unemphasized.",
+    "g1027": "This detector is already drawn in the black, grey and white finder tones — emphasis would only lower its contrast, so the detector itself is left unemphasized.",
+    "g1028": "This detector has no cell-level faces for emphasis to change, or has not been measured and wired yet — so the detector itself is left unemphasized.",
     "g1029": "“Emphasize locator only” is an advanced-mode card — the card is hidden, but your selection stays.",
     "g1030": "Emphasis for this detector regressed detection in measurement, so it is off in the standard view — you can turn it on in advanced mode or the lab build.",
+    "g1039": "The detector itself is left unemphasized, but the detection cells of the corner markers you turned on (H, H2O, CO2, H2CO3) are emphasized — that is the whole scope.",
     "g572": "Silhouette direction",
     "g573": "Upright triangle (default)",
     "g574": "Inverted triangle (turnA)",
@@ -3730,6 +3752,7 @@ const GENERATOR_STRINGS = {
     "g1035": "For 3D-pose capture · light backdrop",
     "g1036": "Y2T · v0TR · ECC H · white ground",
     "g1037": "Off preset — options were changed by hand after picking it.",
+    "g1038": "The card name is the file name — save each shot as sil3d-<dark|light>-<card name>-<near|far>.jpg. near is guide size, far is 1.5× further away.",
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -4105,11 +4128,12 @@ const GENERATOR_STRINGS = {
     "g1006": "レイアウトがトーンを固定した検出セル（ロケータとコーナー記号）だけコントラストを上げ、検出器内のものも含めてデータセルはそのままにします。",
     "g1007": "強調",
     "g1008": "検出器のセルと検出器内のデータセルを黒基準で高コントラストに描きます — コード側のデータセルはそのままです。",
-    "g1026": "3トーンキューブの検出器は強調すると暗い背景に溶けて検出できなくなります — そのため、この検出器を選ぶと強調の軸自体が使えません。",
-    "g1027": "この検出器はすでに黒・グレー・白の検出トーンで描かれます — 強調してもコントラストはむしろ下がるため、この検出器を選ぶと強調の軸自体が使えません。",
-    "g1028": "この検出器には強調が変えるセルレベルの面がないか、まだ実測・配線されていません — この検出器を選ぶと強調の軸自体が使えません。",
+    "g1026": "3トーンキューブの検出器は強調すると暗い背景に溶けて検出できなくなります — そのため、この検出器そのものには強調をかけません。",
+    "g1027": "この検出器はすでに黒・グレー・白の検出トーンで描かれます — 強調してもコントラストはむしろ下がるため、この検出器そのものには強調をかけません。",
+    "g1028": "この検出器には強調が変えるセルレベルの面がないか、まだ実測・配線されていません — そのため、この検出器そのものには強調をかけません。",
     "g1029": "「ロケータのみ強調」は上級モードのカードです — カードは隠れていますが選択はそのまま残ります。",
     "g1030": "この検出器の強調は実測で検出が悪化したため、通常画面では下げてあります — 上級モードと試験版でのみオンにできます。",
+    "g1039": "この検出器そのものには強調をかけませんが、オンにしたコーナーマーカー（H・H2O・CO2・H2CO3）の検出セルには強調がかかります — 強調の範囲はそこまでです。",
     "g572": "シルエット方向",
     "g573": "正三角（既定）",
     "g574": "逆三角（turnA）",
@@ -4233,6 +4257,7 @@ const GENERATOR_STRINGS = {
     "g1035": "3D 姿勢撮影用・明るい背景",
     "g1036": "Y2T · v0TR · ECC H · 白い地色",
     "g1037": "プリセットから外れています — 選んだあとにオプションを手で変えました。",
+    "g1038": "カード名がそのままファイル名です — sil3d-<dark|light>-<カード名>-<near|far>.jpg で保存してください。near はガイドサイズ、far は 1.5 倍遠くです。",
   },
   fr: {
     "g001": "Thème de la page (sans effet sur le rendu du code)",
@@ -4607,11 +4632,12 @@ const GENERATOR_STRINGS = {
     "g1006": "Augmente le contraste des seules cellules de détection dont la mise en page fixe les tons — repère et symbole d'angle — et laisse inchangées toutes les cellules de données, y compris celles du détecteur.",
     "g1007": "Accentuer",
     "g1008": "Augmente le contraste avec le noir pour les cellules du détecteur et les cellules de données situées dans le détecteur — les cellules de données du code restent inchangées.",
-    "g1026": "Le détecteur cube trois tons se fond dans un fond sombre lorsqu'il est accentué : le choisir rend donc l'axe d'accentuation indisponible.",
-    "g1027": "Ce détecteur est déjà dessiné dans les tons noir, gris et blanc du repère — l'accentuation ne ferait que réduire son contraste, donc le choisir rend l'axe d'accentuation indisponible.",
-    "g1028": "Ce détecteur n'a aucune face de niveau de cellule que l'accentuation puisse modifier, ou n'a pas encore été mesuré ni câblé — le choisir rend l'axe d'accentuation indisponible.",
+    "g1026": "Le détecteur cube trois tons se fond dans un fond sombre lorsqu'il est accentué : le détecteur lui-même reste donc sans accentuation.",
+    "g1027": "Ce détecteur est déjà dessiné dans les tons noir, gris et blanc du repère — l'accentuation ne ferait que réduire son contraste, donc le détecteur lui-même reste sans accentuation.",
+    "g1028": "Ce détecteur n'a aucune face de niveau de cellule que l'accentuation puisse modifier, ou n'a pas encore été mesuré ni câblé — le détecteur lui-même reste donc sans accentuation.",
     "g1029": "« Accentuer le repère uniquement » est une carte du mode avancé — la carte est masquée, mais votre choix reste actif.",
     "g1030": "L’accentuation de ce détecteur a dégradé la détection lors des mesures : elle est donc retirée de l’écran standard et disponible uniquement en mode avancé ou dans la version d’essai.",
+    "g1039": "Le détecteur lui-même reste sans accentuation, mais les cellules de détection des marqueurs d'angle activés (H, H2O, CO2, H2CO3) sont accentuées : c'est toute la portée de l'accentuation.",
     "g572": "Orientation de la silhouette",
     "g573": "Triangle droit (par défaut)",
     "g574": "Triangle inversé (turnA)",
@@ -4735,6 +4761,7 @@ const GENERATOR_STRINGS = {
     "g1035": "Pour capture en poses 3D · fond clair",
     "g1036": "Y2T · v0TR · ECC H · fond blanc",
     "g1037": "Hors préréglage — des options ont été modifiées à la main après le choix.",
+    "g1038": "Le nom de la carte est le nom du fichier — enregistrez chaque photo sous sil3d-<dark|light>-<nom de la carte>-<near|far>.jpg. near = taille du guide, far = 1,5× plus loin.",
   },
   it: {
     "g001": "Tema della pagina (non incide sul rendering del codice)",
@@ -5109,11 +5136,12 @@ const GENERATOR_STRINGS = {
     "g1006": "Aumenta il contrasto solo per le celle di rilevamento con toni fissati dal layout — localizzatore e simbolo d’angolo — e lascia invariate tutte le celle dati, comprese quelle interne al rilevatore.",
     "g1007": "Enfatizza",
     "g1008": "Aumenta il contrasto rispetto al nero nelle celle del rilevatore e nelle celle dati interne al rilevatore — le celle dati del codice restano invariate.",
-    "g1026": "Il rilevatore a cubo tre toni si confonde con lo sfondo scuro quando è enfatizzato: sceglierlo rende quindi non disponibile l’asse dell’enfasi.",
-    "g1027": "Questo rilevatore è già disegnato nei toni nero, grigio e bianco — l’enfasi ne ridurrebbe il contrasto, quindi sceglierlo rende non disponibile l’asse dell’enfasi.",
-    "g1028": "Questo rilevatore non ha facce a livello di cella che l’enfasi possa modificare, oppure non è ancora stato misurato né collegato — sceglierlo rende non disponibile l’asse dell’enfasi.",
+    "g1026": "Il rilevatore a cubo tre toni si confonde con lo sfondo scuro quando è enfatizzato: il rilevatore stesso resta quindi senza enfasi.",
+    "g1027": "Questo rilevatore è già disegnato nei toni nero, grigio e bianco — l’enfasi ne ridurrebbe il contrasto, quindi il rilevatore stesso resta senza enfasi.",
+    "g1028": "Questo rilevatore non ha facce a livello di cella che l’enfasi possa modificare, oppure non è ancora stato misurato né collegato — il rilevatore stesso resta quindi senza enfasi.",
     "g1029": "«Enfatizza solo il localizzatore» è una scheda della modalità avanzata — la scheda è nascosta, ma la selezione resta attiva.",
     "g1030": "L’enfasi di questo rilevatore ha peggiorato il rilevamento nelle misure, quindi è disattivata nella schermata standard — si può attivare in modalità avanzata o nella build di prova.",
+    "g1039": "Il rilevatore stesso resta senza enfasi, ma le celle di rilevamento dei marcatori d’angolo attivati (H, H2O, CO2, H2CO3) vengono enfatizzate: questa è tutta la portata dell’enfasi.",
     "g572": "Direzione della sagoma",
     "g573": "Triangolo dritto (predefinito)",
     "g574": "Triangolo invertito (turnA)",
@@ -5237,6 +5265,7 @@ const GENERATOR_STRINGS = {
     "g1035": "Per riprese in pose 3D · sfondo chiaro",
     "g1036": "Y2T · v0TR · ECC H · fondo bianco",
     "g1037": "Fuori preset — dopo la scelta alcune opzioni sono state cambiate a mano.",
+    "g1038": "Il nome della scheda è il nome del file — salva ogni scatto come sil3d-<dark|light>-<nome scheda>-<near|far>.jpg. near = dimensione della guida, far = 1,5× più lontano.",
   },
   de: {
     "g001": "Seitenthema (ohne Einfluss auf das Rendering des Codes)",
@@ -5611,11 +5640,12 @@ const GENERATOR_STRINGS = {
     "g1006": "Erhöht den Kontrast nur bei den Erkennungszellen, deren Töne das Layout festlegt — Locator und Ecksymbol — und lässt alle Datenzellen unverändert, auch die im Detektor.",
     "g1007": "Hervorheben",
     "g1008": "Erhöht den Kontrast gegen Schwarz bei den Detektorzellen und den Datenzellen im Detektor — die Datenzellen des Codes bleiben unverändert.",
-    "g1026": "Der Dreiton-Würfel-Detektor verschwindet bei Hervorhebung im dunklen Hintergrund — wer ihn wählt, kann die Hervorhebungsachse nicht nutzen.",
-    "g1027": "Dieser Detektor wird bereits in den Schwarz-, Grau- und Weißtönen gezeichnet — eine Hervorhebung würde den Kontrast nur verringern; wer ihn wählt, kann die Hervorhebungsachse nicht nutzen.",
-    "g1028": "Dieser Detektor hat keine Zellstufen-Flächen, die die Hervorhebung ändern könnte, oder wurde noch nicht gemessen und angebunden — wer ihn wählt, kann die Hervorhebungsachse nicht nutzen.",
+    "g1026": "Der Dreiton-Würfel-Detektor verschwindet bei Hervorhebung im dunklen Hintergrund — der Detektor selbst bleibt daher ohne Hervorhebung.",
+    "g1027": "Dieser Detektor wird bereits in den Schwarz-, Grau- und Weißtönen gezeichnet — eine Hervorhebung würde den Kontrast nur verringern; der Detektor selbst bleibt daher ohne Hervorhebung.",
+    "g1028": "Dieser Detektor hat keine Zellstufen-Flächen, die die Hervorhebung ändern könnte, oder wurde noch nicht gemessen und angebunden — der Detektor selbst bleibt daher ohne Hervorhebung.",
     "g1029": "„Nur Locator hervorheben“ ist eine Karte des erweiterten Modus — die Karte ist ausgeblendet, Ihre Auswahl bleibt jedoch erhalten.",
     "g1030": "Die Hervorhebung dieses Detektors hat die Erkennung in der Messung verschlechtert und ist daher in der Standardansicht deaktiviert — im erweiterten Modus und in der Testversion lässt sie sich einschalten.",
+    "g1039": "Der Detektor selbst bleibt ohne Hervorhebung, aber die Erkennungszellen der eingeschalteten Eckmarker (H, H2O, CO2, H2CO3) werden hervorgehoben — mehr umfasst die Hervorhebung nicht.",
     "g572": "Silhouettenrichtung",
     "g573": "Aufrechtes Dreieck (Standard)",
     "g574": "Umgekehrtes Dreieck (turnA)",
@@ -5739,6 +5769,7 @@ const GENERATOR_STRINGS = {
     "g1035": "Für 3D-Lagenaufnahmen · heller Hintergrund",
     "g1036": "Y2T · v0TR · ECC H · weißer Grund",
     "g1037": "Vom Preset abgewichen — nach der Auswahl wurden Optionen von Hand geändert.",
+    "g1038": "Der Kartenname ist der Dateiname — speichere jede Aufnahme als sil3d-<dark|light>-<Kartenname>-<near|far>.jpg. near = Führungsgröße, far = 1,5× weiter entfernt.",
   },
   es: {
     "g001": "Tema de la página (no afecta al renderizado del código)",
@@ -6113,11 +6144,12 @@ const GENERATOR_STRINGS = {
     "g1006": "Aumenta el contraste solo en las celdas de detección cuyos tonos fija el diseño — localizador y símbolo de esquina — y deja sin cambios todas las celdas de datos, incluidas las del interior del detector.",
     "g1007": "Enfatizar",
     "g1008": "Aumenta el contraste frente al negro en las celdas del detector y en las celdas de datos que están dentro del detector; las celdas de datos del código se mantienen igual.",
-    "g1026": "El detector de cubo de tres tonos se funde con el fondo oscuro al enfatizarlo, así que elegirlo deja el eje de énfasis no disponible.",
-    "g1027": "Este detector ya se dibuja en los tonos negro, gris y blanco — el énfasis solo reduciría su contraste, así que elegirlo deja el eje de énfasis no disponible.",
-    "g1028": "Este detector no tiene caras de nivel de celda que el énfasis pueda cambiar, o aún no se ha medido ni conectado — elegirlo deja el eje de énfasis no disponible.",
+    "g1026": "El detector de cubo de tres tonos se funde con el fondo oscuro al enfatizarlo, así que el detector en sí se deja sin énfasis.",
+    "g1027": "Este detector ya se dibuja en los tonos negro, gris y blanco — el énfasis solo reduciría su contraste, así que el detector en sí se deja sin énfasis.",
+    "g1028": "Este detector no tiene caras de nivel de celda que el énfasis pueda cambiar, o aún no se ha medido ni conectado — así que el detector en sí se deja sin énfasis.",
     "g1029": "«Enfatizar solo el localizador» es una tarjeta del modo avanzado — la tarjeta está oculta, pero su selección se mantiene.",
     "g1030": "El énfasis de este detector empeoró la detección en las mediciones, así que está desactivado en la vista estándar; puede activarlo en el modo avanzado o en la versión de prueba.",
+    "g1039": "El detector en sí se deja sin énfasis, pero las celdas de detección de los marcadores de esquina activados (H, H2O, CO2, H2CO3) sí se enfatizan: ese es todo el alcance.",
     "g572": "Orientación de la silueta",
     "g573": "Triángulo recto (predeterminado)",
     "g574": "Triángulo invertido (turnA)",
@@ -6241,6 +6273,7 @@ const GENERATOR_STRINGS = {
     "g1035": "Para captura en poses 3D · fondo claro",
     "g1036": "Y2T · v0TR · ECC H · fondo blanco",
     "g1037": "Fuera del preajuste: se cambiaron opciones a mano después de elegirlo.",
+    "g1038": "El nombre de la tarjeta es el nombre del archivo — guarda cada foto como sil3d-<dark|light>-<nombre de la tarjeta>-<near|far>.jpg. near = tamaño de la guía, far = 1,5× más lejos.",
   },
   pt: {
     "g001": "Tema da página (não afeta a renderização do código)",
@@ -6615,11 +6648,12 @@ const GENERATOR_STRINGS = {
     "g1006": "Aumenta o contraste apenas nas células de deteção cujos tons o esquema fixa — localizador e símbolo de canto — e deixa inalteradas todas as células de dados, incluindo as do interior do detetor.",
     "g1007": "Destacar",
     "g1008": "Aumenta o contraste em relação ao preto nas células do detector e nas células de dados dentro do detector — as células de dados do código ficam inalteradas.",
-    "g1026": "O detector de cubo de três tons funde-se com o fundo escuro quando é destacado, por isso escolhê-lo deixa o eixo de destaque indisponível.",
-    "g1027": "Este detector já é desenhado nos tons preto, cinzento e branco — o destaque só reduziria o seu contraste, por isso escolhê-lo deixa o eixo de destaque indisponível.",
-    "g1028": "Este detector não tem faces de nível de célula que o destaque possa alterar, ou ainda não foi medido nem ligado — escolhê-lo deixa o eixo de destaque indisponível.",
+    "g1026": "O detector de cubo de três tons funde-se com o fundo escuro quando é destacado, por isso o próprio detetor fica sem destaque.",
+    "g1027": "Este detector já é desenhado nos tons preto, cinzento e branco — o destaque só reduziria o seu contraste, por isso o próprio detetor fica sem destaque.",
+    "g1028": "Este detector não tem faces de nível de célula que o destaque possa alterar, ou ainda não foi medido nem ligado — por isso o próprio detetor fica sem destaque.",
     "g1029": "«Destacar apenas o localizador» é um cartão do modo avançado — o cartão está oculto, mas a sua seleção mantém-se.",
     "g1030": "O destaque deste detetor piorou a deteção nas medições, por isso está desativado no ecrã padrão — pode ativá-lo no modo avançado ou na versão de ensaio.",
+    "g1039": "O próprio detetor fica sem destaque, mas as células de deteção dos marcadores de canto ativados (H, H2O, CO2, H2CO3) são destacadas — é esse todo o alcance do destaque.",
     "g572": "Orientação da silhueta",
     "g573": "Triângulo para cima (padrão)",
     "g574": "Triângulo invertido (turnA)",
@@ -6743,6 +6777,7 @@ const GENERATOR_STRINGS = {
     "g1035": "Para captura em poses 3D · fundo claro",
     "g1036": "Y2T · v0TR · ECC H · fundo branco",
     "g1037": "Fora da predefinição — as opções foram alteradas à mão depois de a escolher.",
+    "g1038": "O nome do cartão é o nome do ficheiro — guarde cada foto como sil3d-<dark|light>-<nome do cartão>-<near|far>.jpg. near = tamanho do guia, far = 1,5× mais longe.",
   },
 };
 
@@ -6775,19 +6810,22 @@ let detectorAutoY = true; // 운영자 확정 2026-08-24: 자동이 기본값 (�
  */
 const Y3D_PAD_BASE = 48;
 
-/** Y 3D 미리보기 상태. generatorState 가 아니다 — encode/scene 에 새면 안 된다. */
+/**
+ * Y 3D 미리보기 상태. encode/scene 에 새면 안 되는 **뷰 축**이다.
+ *
+ * ⚠ **궤도 다섯(`on`·`yaw`·`pitch`·`roll`·`persp`)은 여기 없다.** 아래
+ *   `defineOrbitViewAccessors` 가 그 이름들을 **generatorState 로 넘기는 접근자**로
+ *   세운다 (상태 키 `orbitView`·`orbitYaw`·`orbitPitch`·`orbitRoll`·`orbitPersp`).
+ *   여기에 다시 적으면 **집이 둘**이 되어 ① 드래그로 촬영 프리셋을 벗어나도 이탈
+ *   표시가 안 뜨고 ② 두 값이 어긋난다 — 그래서 그 함수가 자기 속성을 발견하면
+ *   로드 시점에 던진다. 이 객체가 계속 자기 값으로 드는 것은 «자세가 아닌» 축
+ *   (모드·숫자·면 수·pad·드래그 래치)뿐이다.
+ *   단위는 뷰어 쪽 그대로다: 각은 라디안, `persp` 는 노브 0~100.
+ */
 const y3dPreview = {
-  on: false,
   // 기본은 **필드**(내 코드 전체)다 — 위 버튼 순서와 한 벌이다. 한 셀은 교육용 보조.
   mode: 'field',
   digit: 3,
-  yaw: 0,
-  pitch: 0,
-  // Z축 회전(roll). 화면 법선 = 시선축이라 깊이·정렬이 roll 에 불변이다 (y3d-viewer.js).
-  roll: 0,
-  // 원근 노브 0~100 → 반각 α = (persp/100)·60°. **0 이 정확히 평행투영**이라
-  // 기본 상태 렌더는 종전과 픽셀 동일하다 (모듈이 early return 으로 보장).
-  persp: 0,
   // 3 = 데이터 세 면 · 6 = 뒤 세 면에 같은 코드.
   // ⚠ 축은 «Y축» 이 아니라 **화면-오른쪽 (1,−1,0)** 의 180° 고유회전이다 (y3d-viewer.js
   //    § M). 그 축이라야 pitch 와 합성돼 새 수학이 0 이고, 거울이 안 된다.
@@ -6843,6 +6881,10 @@ import { createLabTelemetry, isLabPath } from './src/lab-telemetry.js';
 import {
   applyShotPresetToState, shotPresetPinsLocator, shotPresetUiModel,
 } from './src/generator-shot-presets.js';
+// 궤도 자세 — 상태(도·노브) ↔ 뷰어(라디안·정규화 t) 변환의 **유일한** 자리.
+import {
+  defineOrbitViewAccessors, orbitPerspToDeg, orbitPerspToT,
+} from './src/generator-orbit-view.js';
 import { wireSelectAllOnActivate } from './src/input-select-all.js';
 import { createHelpPopover } from './src/help-popover.js';
 import { encode } from './src/encode.js';
@@ -6968,7 +7010,7 @@ import {
 } from './src/centralN7Emphasis.js';
 import {
   ADVANCED_ONLY_CENTRAL_IDS, SEAT_NONE, SEAT_ZONE_TYPES,
-  cmqWireExists, seatCardShown, zoneCards,
+  cmqWireExists, cornerMarkerSeatActive, seatCardShown, zoneCards,
 } from './src/finder-zone-ui.js';
 import {
   centralN7EmphasisAppliesTo, centralN7FamilyForType, detectorEmphasisRequiresAdvanced,
@@ -7063,7 +7105,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-07.05';
+const GENERATOR_BUILD = '2026-09-07.06';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -7260,6 +7302,18 @@ const generatorState = createGeneratorState();
 Object.assign(generatorState, sanitizeFinderCardState(
   generatorState, isLabPath(), GENERATOR_DEFAULT_FINDER_PATTERN_ID,
 ));
+/*
+ * 궤도 자세 다섯을 **상태로 넘긴다** (2026-09-07, 촬영 프리셋 16장).
+ *
+ * `y3dPreview.on/yaw/pitch/roll/persp` 는 이제 자기 값이 아니라 generatorState 를
+ * 읽고 쓰는 접근자다. 그래서 ① 촬영 프리셋이 상태만 세우면 3D 뷰가 따라오고
+ * ② 사용자가 3D 바를 손으로 만지면 그 쓰기도 상태에 남아 **이탈 판정이 본다**.
+ * 뷰어 쪽 이름·단위(라디안·노브)는 그대로라 아래 사용처는 한 줄도 안 바뀐다.
+ *
+ * ⚠ 자리를 여기 둔 이유: `generatorState` 가 만들어진 **뒤**여야 하고
+ *   (위 두 줄), 궤도 값을 처음 읽는 `syncOrbitPreviewUi()` 보다는 **앞**이어야 한다.
+ */
+defineOrbitViewAccessors(y3dPreview, generatorState);
 const nextExportFilename = createExportFilenameFactory();
 let downloadToastTimer = 0;
 
@@ -7954,8 +8008,9 @@ function applyPreviewFit() {
 // 보기 층만. generatorState 에 안 넣는다 — encode/scene 옵션으로 새면 안 된다.
 // 기본 on:false = 2.5D. 토글은 schedule() 을 부르지 않는다.
 
-/** 원근 슬라이더 100 = 반각 60°. 모듈의 `perspectiveInvDist` 와 같은 상한이다. */
-const Y3D_PERSP_MAX_DEG = 60;
+/* ⛔ `Y3D_PERSP_MAX_DEG = 60` 은 여기서 없앴다 — 노브→반각 유도가 이 파일과
+ *    `generator-orbit-view.js` 에 **두 벌**로 살면 상한이 바뀌는 날 한쪽만 늙는다.
+ *    지금은 `orbitPerspToDeg()` / `orbitPerspToT()` 를 부른다. */
 /** Shift+휠 한 칸의 roll. **크기가 아니라 부호만** 쓴다 — deltaMode 가 브라우저마다
  *  다르고(Firefox 는 LINE) 트랙패드는 소수 delta 를 준다. 현행 pad 경로와 같은 관행. */
 const Y3D_ROLL_STEP = 3 * Math.PI / 180;
@@ -7981,7 +8036,7 @@ function syncOrbitPreviewUi() {
   // 0 은 «평면» — 그 자리에서 0° 라고 쓰면 «원근이 0도» 처럼 읽혀 축이 헷갈린다.
   els.y3dPerspValue.textContent = y3dPreview.persp === 0
     ? t('g890')
-    : tf('g896', { deg: Math.round(y3dPreview.persp * Y3D_PERSP_MAX_DEG / 100) });
+    : tf('g896', { deg: Math.round(orbitPerspToDeg(y3dPreview.persp)) });
   // ⚠ `current` 를 여기서 읽지 않는다 — 이 함수는 TEXT_SYNCERS 로 초기화 도중에도
   //    불릴 수 있고 `current` 는 아래에서 `let` 으로 선언돼 TDZ 에 걸린다.
   //    mesh 는 paintY3dPreview 가 «그릴 게 있을 때만» 채우고 아니면 null 로 지운다.
@@ -7997,6 +8052,26 @@ function syncOrbitPreviewUi() {
   for (const btn of els.y3dDigits.querySelectorAll('.y3d-digit')) {
     btn.classList.toggle('on', Number(btn.dataset.digit) === y3dPreview.digit);
   }
+  /*
+   * 🔴 **촬영 프리셋 표시를 여기서 다시 잰다** (2026-09-07, 브라우저 실검으로 잡음).
+   *
+   * 궤도 다섯이 상태로 올라오면서 3D 바는 **촬영 프리셋이 선언한 축**을 만지게 됐다.
+   * 그런데 이 바의 조작 경로는 `schedule()` 을 **일부러 안 부른다**(위 §토글 주석) —
+   * 즉 `render()` 를 안 지나고, `syncShotPresetUi()` 는 `render()` 진입과 TEXT_SYNCERS
+   * 에서만 돌았다. 그래서 큐브를 끌어 자세를 바꿔도 **카드가 계속 활성이고 이탈 문구가
+   * 안 떴다** — 화면이 「이 프리셋이에요」라고 거짓말한다.
+   *
+   * ⚠ Node 자는 이걸 **구조적으로 못 봤다**: 모형(`shotPresetUiModel`)은 정확히
+   *   «이탈» 이라고 답하고 있었고, 못 물어본 쪽은 화면이었다
+   *   (「초록 테스트는 동작하는 UI 가 아니다」 · 「배타를 열면 소비자도 쓸어라」).
+   *
+   * 여기가 자리인 이유: 3D 바의 **모든** 조작 경로가 이 함수로 모인다 — 버튼은 직접
+   * 부르고, 슬라이더·드래그·리셋·휠은 `paintY3dPreview()` 를 지나며 그 함수가 처음과
+   * 끝에서 이 함수를 부른다. 손 목록을 만들지 않으려고 그 깔때기를 쓴다.
+   * `syncShotPresetUi()` 는 **상태를 한 글자도 안 쓰는** 순수 표시라(자ⓕ) 재귀도
+   * 부작용도 없다.
+   */
+  syncShotPresetUi();
 }
 
 function paintY3dPreview() {
@@ -8121,7 +8196,8 @@ function paintY3dPreview() {
     // ⚠ **정규화된 노브를 넘긴다** (0~1 = 반각 0~60°). 카메라 거리 d 나 invDist 를
     //    여기서 계산하면 radius3d 유도식이 UI 에 사본으로 생기고, n 이 바뀔 때
     //    슬라이더 뜻이 조용히 달라진다. 모듈이 radius3d 로 정규화하게 둔다.
-    perspective: y3dPreview.persp / 100,
+    //    노브→t 도 같은 이유로 `orbitPerspToT()` 다 — `/100` 을 여기 적으면 사본이다.
+    perspective: orbitPerspToT(y3dPreview.persp),
     faces: y3dPreview.faces,
     digitAt,
     levelAt,
@@ -9325,8 +9401,14 @@ function ensureSeatCards() {
 /**
  * 강조 카드 스와치의 3칩 색 — **centralN7Emphasis.js 함수만 소비한다** (§5 아이콘,
  * 2026-08-29). UI 가 자체 계산하면 렌더와 사본이 어긋난다 (브리프 ⚠).
- * 적용 대상은 중앙 TL · 중앙 Y0 뿐이다 (3톤 큐브는 §2.4 왕복 자 거부 —
- * generator-render-config.centralN7EmphasisAppliesTo 주석 실측).
+ *
+ * ⚠ **적용 대상 목록을 여기서 걷었다 (2026-09-07 emph-centerqr)** — 종전 줄은
+ *   「적용 대상은 중앙 TL · 중앙 Y0 뿐이다」였는데 두 번 늙었다: (B) 가 중앙 M7 을,
+ *   (C) 가 Y 셀 표면 로케이터를 넣었고, 이 라운드는 **바깥 마커 검출 셀**을 검출기
+ *   선택과 무관하게 열었다. 스와치는 «이 모드가 팔레트를 어떻게 바꾸나» 만 그리므로
+ *   애초에 대상 목록과 무관하다 — 목록의 정본은
+ *   `generator-render-config.detectorEmphasisApplicability`(검출기 자신) 와
+ *   `centralN7Emphasis.isDetectorToneCell`(셀) 둘이고, 여기에 사본을 두지 않는다.
  */
 function centralN7EmphasisSwatchTones(mode) {
   const levels = (generatorState.preset === 'custom'
@@ -12907,18 +12989,22 @@ function resolveFallback(type, position) {
  *   «모든 UI 를 상태에서 되그린다» 목록이다.
  */
 
-/** 카드 하나 — 라벨은 data-i18n 으로 두고 applyTranslations 가 채운다. */
+/**
+ * 카드 하나.
+ *
+ * ⚠ **라벨에 `data-i18n` 이 없다 — 의도다.** 라벨은 자세 토큰(`yawp15`)이고 그것이
+ *   촬영 파일명에 그대로 들어가는 낱말이며, 부제는 각도 수치다. 둘 다 번역 대상이
+ *   아니다 (선언 모듈 §SHOT_3D_POSES 의 근거 참조). 그룹 제목·부제는 사전을 탄다.
+ */
 function createShotPresetCard(model) {
   const card = document.createElement('div');
-  card.className = 'toggle-card';
+  card.className = 'toggle-card shot-preset-card';
   card.dataset.shotPreset = model.id;
   const label = document.createElement('span');
-  label.dataset.i18n = model.labelKey;
-  label.textContent = t(model.labelKey);
+  label.textContent = model.label;
   const sub = document.createElement('span');
   sub.className = 'card-sub';
-  sub.dataset.i18n = model.subKey;
-  sub.textContent = t(model.subKey);
+  sub.textContent = model.sub;
   card.appendChild(label);
   card.appendChild(sub);
   // 이 카드들은 §toggle-card 일괄 키보드 배선(스크립트 앞부분)보다 **늦게** 생기므로
@@ -12934,11 +13020,36 @@ function createShotPresetCard(model) {
   return card;
 }
 
+/**
+ * 그룹(배경 2) × 카드(자세 8) 을 선언에서 만든다.
+ *
+ * ⚠ **16장을 한 줄로 늘어놓지 않는다** (운영자 지시는 장수 16이지 한 줄이 아니다).
+ *   배경으로 묶는 이유는 그것이 **촬영 세션의 단위**이기 때문이다 — 어두운 무지
+ *   바탕을 깔고 여덟 장, 바탕을 갈고 다시 여덟 장. 자세로 묶으면 바탕을 열여섯 번
+ *   갈아야 한다. 그룹 순서·개수·소속은 전부 선언 유도이고 여기에 사본이 없다.
+ */
 function wireShotPresetCards() {
-  const host = $('shotPresetCards');
+  const host = $('shotPresetGroups');
   if (!host) return;
-  for (const model of shotPresetUiModel(generatorState).cards) {
-    host.appendChild(createShotPresetCard(model));
+  for (const group of shotPresetUiModel(generatorState).groups) {
+    const box = document.createElement('div');
+    box.className = 'shot-preset-group';
+    const heading = document.createElement('p');
+    heading.className = 'hint shot-preset-group-heading';
+    heading.dataset.i18n = group.headingKey;
+    heading.textContent = t(group.headingKey);
+    const sub = document.createElement('span');
+    sub.className = 'card-sub';
+    sub.dataset.i18n = group.headingSubKey;
+    sub.textContent = t(group.headingSubKey);
+    heading.appendChild(document.createTextNode(' '));
+    heading.appendChild(sub);
+    const row = document.createElement('div');
+    row.className = 'card-row shot-preset-cards';
+    for (const model of group.cards) row.appendChild(createShotPresetCard(model));
+    box.appendChild(heading);
+    box.appendChild(row);
+    host.appendChild(box);
   }
 }
 wireShotPresetCards();
@@ -12971,9 +13082,11 @@ function syncShotPresetUi() {
   section.hidden = !lab;
   if (!lab) return;
   const model = shotPresetUiModel(generatorState);
-  const host = $('shotPresetCards');
+  const host = $('shotPresetGroups');
   if (host) {
-    for (const card of host.children) {
+    // ⚠ `host.children` 이 아니라 **속성으로 찾는다** — 카드가 그룹 상자 안에 한 겹
+    //   더 들어가면서 직계 자식이 아니게 됐다. 직계로 두면 조용히 0개를 훑는다.
+    for (const card of host.querySelectorAll('[data-shot-preset]')) {
       const hit = model.cards.find((entry) => entry.id === card.dataset.shotPreset);
       card.classList.toggle('active', hit !== undefined && hit.active);
     }
@@ -13044,10 +13157,10 @@ function buildConfig() {
     // ⭐ **K 추가 (2026-08-25)** — k-cm 자리가 열렸는데 이 술어가 O·A 만 봐서, 자동이
     //    k-cm 을 골라도 **와이어에 안 실렸다**. 「켰는데 안 먹는」의 정확한 형태다:
     //    카드는 켜지고 상태도 들어가는데 소비자가 그 축을 안 읽는다.
-    cornerMarker: (type === 'O' && generatorState.innerSeat === 'o-cm')
-      || (type === 'K' && generatorState.outerSeat === 'k-cm')
-      || (type === 'A' && ((generatorState.outerSeat === 'a-cm' && generatorState.turnA !== true)
-        || (generatorState.outerSeat === 'v-cm' && generatorState.turnA === true))),
+    //    ⭐ **술어가 모듈로 올라갔다 (2026-09-07 emph-centerqr)** — 여기 인라인으로
+    //    있는 동안 「검출기 강조」 섹션이 그것을 못 읽어, 마커가 켜져 있어도 카드를
+    //    잠그고 「강조 축 자체를 못 켜요」라고 말했다. 정본은 finder-zone-ui 하나다.
+    cornerMarker: cornerMarkerSeatActive(generatorState),
     markerTones: type === 'O' && generatorState.innerSeat === 'o-cm',
     // sagoae 단독 (2026-08-30, 운영자 실기 신고 «렌더링 안 됨») — 인코더·scene 은
     // 이미 지원하는데(sagoae-roundtrip 39/39) 이 소비자가 옵션을 안 실어 «카드는
@@ -13444,8 +13557,12 @@ function renderTypeK(cfg) {
     sceneOpts.centralN7Family = centralN7FamilyForType(cfg.type);
   }
   // 강조 축은 family 보다 넓다 (2026-08-29 §4 — 중앙 TL · 3톤 큐브 · 중앙 Y0).
-  // sceneOptionsForOA 와 같은 정본 술어를 쓴다 — 손 조립 «빠뜨림» 방지.
-  if (centralN7EmphasisAppliesTo(cfg.finderPatternId)) {
+  // ⭐ **판정 게이트를 걷었다 (2026-09-07 emph-centerqr)** — `sceneOptionsForOA` 와
+  //    **같은 모양**을 유지한다(그쪽 주석이 이 정정의 실측·근거를 갖고 있다).
+  //    종전은 `centralN7EmphasisAppliesTo(cfg.finderPatternId)` 게이트였고, 그래서
+  //    중앙 QR·불스아이를 고른 K 코드에서는 마커 검출 셀 강조가 렌더까지 못 갔다.
+  //    옵션은 «요청» 이고 무엇이 바뀌는지는 렌더가 정한다 (검출 셀 0 이면 픽셀 동일).
+  if (cfg.centralN7Emphasis !== undefined) {
     sceneOpts.centralN7Emphasis = cfg.centralN7Emphasis;
   }
   // ⭐ **중앙 QR 개설 (2026-08-25, 레인 KEX)** — sceneOptionsForOA 와 **같은 모양**으로
@@ -13780,8 +13897,12 @@ function emitLabGen(result, cfg) {
     qrPosition: generatorState.qrPosition,
     bgMode: generatorState.bgMode,
     quietMode: generatorState.quietMode,
-    centralN7Emphasis: centralN7EmphasisAppliesTo(result.finderPatternId || cfg.finderPatternId)
-      ? generatorState.centralN7Emphasis : undefined,
+    // ⭐ **판정 게이트를 걷었다 (2026-09-07 emph-centerqr)** — 봉투는 «이 렌더에 어떤
+    //    강조 값이 걸렸나» 를 말해야 하고, 그 값은 이제 검출기 선택과 무관하게 렌더로
+    //    간다 (두 좌석 모두 같은 정정 — sceneOptionsForOA 주석에 실측이 있다).
+    //    옛 식은 중앙 QR 을 고른 A/B 두 팔을 **둘 다 undefined** 로 접어, 강조가 실제로
+    //    바뀐 프레임을 «축이 없었다» 로 보고했다.
+    centralN7Emphasis: generatorState.centralN7Emphasis,
     // 렌더 프로파일은 A/B 재스캔에서 **가장 먼저 알아야 하는 축**이다 (같은 심볼이
     // 다른 게인으로 나가므로). 프로파일 이름만 싣는다 — 게인 수치는 이 이름의 함수다.
     // ⚠ 이 두 줄(그리고 위 renderProfile)은 **지금 전송되지 않는다.**

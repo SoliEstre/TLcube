@@ -47,10 +47,12 @@ import {
   ADVANCED_ONLY_EMPHASIS_MODES,
   DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY,
   DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY,
+  DETECTOR_EMPHASIS_MARKER_SCOPE_KEY,
   DETECTOR_EMPHASIS_REASON_KEYS,
   emphasisSectionModel,
   hasCentralFinderAxis,
 } from '../src/detector-emphasis-ui-model.js';
+import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
 import {
   CENTRAL_N7_EMPHASIS_MODES, GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS,
 } from '../src/centralN7Emphasis.js';
@@ -143,12 +145,25 @@ function modelOf({
   type = 'O', finderPatternId = CENTRAL_N7_FINDER_PATTERN_ID,
   locatorProfileY = 'off', centralN7Emphasis = GENERATOR_DEFAULT_CENTRAL_N7_EMPHASIS,
   advancedCardsVisible = true,
+  // 검출기 seat 축 (2026-09-07 emph-centerqr) — 기본은 «마커 없음» 이라, 이 인자를
+  // 안 주는 기존 격자는 종전과 같은 자리를 계속 잰다.
+  innerSeat = 'none', outerSeat = 'none', turnA = false,
 } = {}) {
   return emphasisSectionModel(
-    { type, finderPatternId, locatorProfileY, centralN7Emphasis },
+    {
+      type, finderPatternId, locatorProfileY, centralN7Emphasis,
+      innerSeat, outerSeat, turnA,
+    },
     { advancedCardsVisible },
   );
 }
+
+/** 이 타입에서 마커를 실제로 켜는 seat 조합 — 술어 정본이 참인 값을 쓴다. */
+const MARKER_SEAT_BY_TYPE = Object.freeze({
+  O: { innerSeat: 'o-cm' },
+  A: { outerSeat: 'a-cm' },
+  K: { outerSeat: 'k-cm' },
+});
 
 // ── ① 적용 여부와 사유는 렌더 축에서 유도된다 ────────────────────────────
 
@@ -328,11 +343,40 @@ test('② 편집 가능 = **검출기 축 하나** — 타입 × 검출기 전�
       const expected = detectorEmphasisApplicability(id).applies;
       assert.equal(model.editable, expected, `${type}/${id}: 편집 가능이 어긋난다`);
       assert.equal(model.detectorId, id, `${type}/${id}: 판정에 들어간 검출기 id 가 다르다`);
+      assert.equal(model.markerCells, false,
+        `${type}/${id}: seat 를 안 준 상태인데 마커 축이 참이다 — 이 격자의 전제가 깨졌다`);
       // 비활성은 **모든 카드**에 걸린다 — 한 장만 살아 있으면 «켰는데 안 먹는» 자리다.
       for (const card of model.cards) {
         assert.equal(card.disabled, !expected, `${type}/${id}/${card.mode}: 비활성 누락`);
       }
       if (expected) editableSeen += 1;
+
+      /*
+       * ⭐ **축 ② — 켜 둔 코너 마커 (2026-09-07 emph-centerqr)**.
+       *
+       * 렌더는 마커 검출 셀을 **중앙 파인더 선택과 무관하게** 강조한다
+       * (detector-emphasis-cells ⓚ①). 그러니 화면도 그때는 켤 수 있어야 한다 —
+       * 종전엔 축 ① 하나가 카드를 잠가서 «렌더는 먹는데 화면은 못 켜는» 자리였고,
+       * 그게 운영자 신고(「O/A/K에서 중앙 QR일 때는 적용이 안되던데」)의 화면 쪽 절반이다.
+       */
+      const markerSeat = MARKER_SEAT_BY_TYPE[type];
+      if (markerSeat) {
+        const withMarker = modelOf({
+          type, ...seat, ...markerSeat, advancedCardsVisible: true,
+        });
+        assert.equal(withMarker.markerCells, true,
+          `${type}/${id}: 마커 seat 를 켰는데 축 ② 가 거짓이다`);
+        assert.equal(withMarker.editable, true,
+          `${type}/${id}: 마커를 켰는데 강조를 못 켠다 — 렌더는 그 셀을 강조한다`);
+        for (const card of withMarker.cards) {
+          assert.equal(card.disabled, false,
+            `${type}/${id}/${card.mode}: 마커가 있는데 카드가 잠겼다`);
+        }
+        // 검출기 자신이 비대상이면 화면은 **범위**를 말한다 (사유 줄이 아니라).
+        assert.equal(withMarker.noteKey,
+          expected ? null : DETECTOR_EMPHASIS_MARKER_SCOPE_KEY,
+          `${type}/${id}: 마커만 강조되는 자리에서 화면이 옛 사유 문구를 말한다`);
+      }
     }
     // 타입마다 «켤 수 있는» 검출기가 실재해야 한다 — Y 가 0 이면 (C) 가 안 걸린 것이다.
     assert.ok(editableSeen > 0, `${type}: 강조를 켤 수 있는 검출기가 하나도 없다`);
@@ -429,6 +473,84 @@ test('② 노트 키는 총함수다 — 조용한 무시가 없다', () => {
   const off = modelOf({ type: 'Y', locatorProfileY: 'off' });
   assert.equal(off.editable, false);
   assert.equal(off.noteKey, DETECTOR_EMPHASIS_REASON_KEYS['not-yet']);
+  // ⭐ **마커 범위 줄 (2026-09-07 emph-centerqr)** — 운영자가 신고한 자리 그대로:
+  //   Type O × 중앙 QR × 내곽 H. 검출기 자신은 비대상(bwg)인데 마커가 켜져 있다.
+  const qrWithMarker = modelOf({
+    type: 'O', finderPatternId: 'center-qr', innerSeat: 'o-cm',
+  });
+  assert.equal(qrWithMarker.reason, 'bwg', '중앙 QR 자신의 사유가 바뀌었다');
+  assert.equal(qrWithMarker.editable, true,
+    '중앙 QR × 마커에서 강조를 못 켠다 — 운영자 신고 그 자리다');
+  assert.equal(qrWithMarker.noteKey, DETECTOR_EMPHASIS_MARKER_SCOPE_KEY,
+    '마커만 강조되는 자리에서 화면이 «강조 축 자체를 못 켜요» 를 말한다');
+  // 마커를 끄면 다시 비활성 + **사유** 줄이다 (범위 줄이 상시로 새면 안 된다).
+  const qrNoMarker = modelOf({ type: 'O', finderPatternId: 'center-qr' });
+  assert.equal(qrNoMarker.editable, false);
+  assert.equal(qrNoMarker.noteKey, DETECTOR_EMPHASIS_REASON_KEYS.bwg);
+  // Type Y 는 코너 자리 축이 없다 — 범위 줄이 Y 에 새면 «못 하는 안내» 가 된다.
+  for (const profile of LOCATOR_PROFILES_Y) {
+    const yModel = modelOf({ type: 'Y', locatorProfileY: profile, innerSeat: 'o-cm', outerSeat: 'k-cm' });
+    assert.equal(yModel.markerCells, false, `Y/${profile}: 코너 마커 축이 새어 들어왔다`);
+    assert.notEqual(yModel.noteKey, DETECTOR_EMPHASIS_MARKER_SCOPE_KEY,
+      `Y/${profile}: 코너 자리가 없는 타입에 마커 범위 줄이 떴다`);
+  }
+});
+
+test('② 마커 seat 술어는 **정본 한 벌**이고 index.html 이 그것을 소비한다', () => {
+  // 값 축 — 술어가 타입·자리·방향의 짝을 지킨다 (turnA 는 a-cm/v-cm 을 가른다).
+  assert.equal(cornerMarkerSeatActive({ type: 'O', innerSeat: 'o-cm' }), true);
+  assert.equal(cornerMarkerSeatActive({ type: 'O', innerSeat: 'none' }), false);
+  assert.equal(cornerMarkerSeatActive({ type: 'K', outerSeat: 'k-cm' }), true);
+  assert.equal(cornerMarkerSeatActive({ type: 'A', outerSeat: 'a-cm', turnA: false }), true);
+  assert.equal(cornerMarkerSeatActive({ type: 'A', outerSeat: 'a-cm', turnA: true }), false);
+  assert.equal(cornerMarkerSeatActive({ type: 'A', outerSeat: 'v-cm', turnA: true }), true);
+  assert.equal(cornerMarkerSeatActive({ type: 'A', outerSeat: 'v-cm', turnA: false }), false);
+  assert.equal(cornerMarkerSeatActive({ type: 'Y', innerSeat: 'o-cm', outerSeat: 'k-cm' }), false);
+  /*
+   * **트리거 축** — 파생값은 트리거도 필요하다. 자리 카드 경로는
+   * syncAfterSeatChange → renderFinderUi → syncCentralN7EmphasisUi 로 섹션을 다시
+   * 칠하지만, **방향(turnA) 카드 경로는 그 사슬을 안 탄다**. 그래도 되는 근거는
+   * 값이다: 그 핸들러는 방향을 뒤집으면서 자리도 함께 정규화하므로(a-cm⇄v-cm)
+   * 이 술어의 답이 **안 바뀐다**. 그 불변식이 깨지면 트리거를 붙여야 하니 여기서 잰다.
+   */
+  for (const outerSeat of ['none', 'a-cm', 'v-cm']) {
+    const before = cornerMarkerSeatActive({ type: 'A', outerSeat, turnA: outerSeat === 'v-cm' });
+    // 핸들러의 정규화: 방향을 켜면 a-cm → v-cm, 끄면 v-cm → a-cm.
+    const flippedSeat = outerSeat === 'a-cm' ? 'v-cm' : outerSeat === 'v-cm' ? 'a-cm' : outerSeat;
+    const after = cornerMarkerSeatActive({
+      type: 'A', outerSeat: flippedSeat, turnA: flippedSeat === 'v-cm',
+    });
+    assert.equal(after, before,
+      `A/${outerSeat}: 방향을 뒤집으면 마커 축이 바뀐다 — 그 경로에 강조 섹션 트리거가 없다`);
+  }
+  // 배선 축 — 인코더 옵션을 만드는 자리(buildConfig)가 **같은 함수**를 부른다.
+  //   ⚠ 여기만 소스 철자다. 사본이 생기면 «화면은 켤 수 있다는데 와이어엔 마커가
+  //     없다» 가 조용히 생기고, 그건 이 파일의 어떤 값 자로도 안 보인다.
+  assert.match(INDEX, /cornerMarker: cornerMarkerSeatActive\(generatorState\)/,
+    'buildConfig 가 마커 seat 술어 정본을 안 부른다 — 인라인 사본이 되살아났다');
+  assert.doesNotMatch(INDEX, /cornerMarker: \(type === 'O' && generatorState\.innerSeat/,
+    '구 인라인 술어가 남아 있다');
+});
+
+test('② 렌더 좌석 셋이 강조 옵션을 **판정으로 막지 않는다** — 소비자 스윕', () => {
+  /*
+   * 값 축은 detector-emphasis-cells ⓚ⑥ 이 잰다 (조립 함수를 불러 실제로 그린다).
+   * 여기는 **손 조립 좌석**(index.html 의 Type K 디스패치 · lab 봉투)만 본다 — 그 둘은
+   * 모듈이 아니라 인라인이라 값 자로 못 닿는다. 2026-09-07 emph-centerqr 실측에서
+   * 이 게이트가 렌더 정정을 통째로 무력화하고 있었다 (QR 중앙: 마커 검출 면 0/24).
+   */
+  assert.doesNotMatch(INDEX, /if \(centralN7EmphasisAppliesTo\(cfg\.finderPatternId\)\) \{/,
+    'Type K 디스패치가 아직 판정으로 강조 옵션을 막는다 — 렌더를 고쳐도 화면은 그대로다');
+  assert.match(
+    INDEX,
+    /if \(cfg\.centralN7Emphasis !== undefined\) \{\s+sceneOpts\.centralN7Emphasis = cfg\.centralN7Emphasis;/,
+    'Type K 디스패치가 강조 옵션을 안 싣는다',
+  );
+  assert.doesNotMatch(INDEX, /centralN7Emphasis: centralN7EmphasisAppliesTo\(/,
+    'lab 봉투가 아직 판정으로 강조 값을 접는다 — A/B 두 팔이 둘 다 undefined 로 보고된다');
+  // Y 좌석의 게이트는 **다른 축**이라 그대로 산다 (고급 전용 검출기 — 실측 회귀).
+  assert.match(INDEX, /if \(centralN7EmphasisAppliesTo\(yDetectorId\)/,
+    'Y 좌석의 검출기 게이트가 사라졌다 — 그쪽은 실측 회귀로 내려 둔 자리다');
 });
 
 // ── ③ 마크업 — 폐쇄집합·기본값·표식을 모형에서 유도한다 ───────────────────
@@ -501,6 +623,7 @@ const SECTION_KEYS = Object.freeze([
   ...Object.values(DETECTOR_EMPHASIS_REASON_KEYS),
   DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY,
   DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY,
+  DETECTOR_EMPHASIS_MARKER_SCOPE_KEY,
 ]);
 
 test('④ 섹션 문구가 8언어 전부에 있다 (사유가 늘면 자동으로 잰다)', () => {

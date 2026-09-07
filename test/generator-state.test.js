@@ -97,11 +97,23 @@ test('모드·타입 혼합 왕복이 모든 상태 키를 항목별로 보존�
   const coupledToFinder = new Set(['inner']);
   for (const key of Object.keys(state)) {
     const descriptor = GENERATOR_STATE_SCHEMA[key];
-    const alternative = descriptor.options.find(
-      (candidate) => !Object.is(candidate, state[key])
-        && !(key === 'qrPosition' && coupledToFinder.has(candidate)),
-    );
+    /*
+     * ⚠ **`options` 가 없는 필드가 생겼다** (2026-09-07, 궤도 자세 축 `orbitYaw`·
+     *   `orbitPitch`·`orbitRoll`·`orbitPersp`). 연속값이라 열거가 없다 — 드래그가
+     *   임의의 각을 만든다. 종전 이 줄은 `descriptor.options.find` 를 무조건 불러서
+     *   그런 필드에서 `undefined.find` 로 **터졌다**. 이 자의 계약은 「스키마의 모든
+     *   키를 왕복시킨다」이지 「모든 키가 열거형이다」가 아니므로, 열거가 없으면
+     *   값을 흔들어 대안을 만든다. 여기서 키를 건너뛰면 그 축은 **왕복 자에서
+     *   영원히 빠진다** — 「부재에도 이유가 필요하다」.
+     */
+    const alternative = descriptor.options === undefined
+      ? (typeof state[key] === 'number' ? state[key] + 7 : !state[key])
+      : descriptor.options.find(
+        (candidate) => !Object.is(candidate, state[key])
+          && !(key === 'qrPosition' && coupledToFinder.has(candidate)),
+      );
     assert.notEqual(alternative, undefined, key + '에 기본값과 다른 테스트 선택지가 필요함');
+    assert.notEqual(alternative, state[key], key + '의 테스트 선택지가 기본값과 같음');
     state[key] = alternative;
   }
   assert.equal(state.type, 'O');

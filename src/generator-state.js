@@ -61,6 +61,10 @@ import {
 } from './locatorY.js';
 
 import { GENERATOR_TYPES } from './generator-types.js';
+// 궤도 자세 축(Y 3D 미리보기) 정본 — 허용값·기본값·검사가 전부 거기서 온다.
+import {
+  ORBIT_STATE_DEFAULTS, ORBIT_VIEW_CHOICES, assertOrbitStateFields,
+} from './generator-orbit-view.js';
 // 촬영 프리셋 선언 — `shotPreset` 허용값의 **유일한 출처**. 이 방향(state → presets)
 // 만 존재한다: 반대로 shot-presets 가 이 파일을 읽으면 순환이다.
 import {
@@ -392,6 +396,41 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   //
   // 허용값은 손 목록이 아니라 선언에서 온다 — 프리셋을 더하면 여기가 따라온다.
   shotPreset: field(SHOT_PRESET_NONE, INTERNAL, SHOT_PRESET_STATE_VALUES),
+
+  /*
+   * ── 궤도 자세 (Y 3D 미리보기) — 2026-09-07 21:0x, 촬영 프리셋 16장 ──────────
+   *
+   * **왜 상태로 올라왔나.** 이 다섯은 `index.html` 의 `y3dPreview` 안에만 살았고
+   * (드래그·리셋·슬라이더가 직접 썼다), 그래서 촬영 프리셋이 **닿을 자리가 없었다.**
+   * 그런데 자세 8은 카메라가 아니라 «렌더의 궤도 회전» 이라(`GUIDE_3d-shoot-32.md`
+   * §1) 프리셋이 반드시 세워야 하는 축이다.
+   *
+   * **왜 읽기만이 아니라 쓰기도 여기인가.** 뷰어가 자기 값을 계속 들고 있으면
+   * 집이 둘이 되고, 무엇보다 «드래그로 프리셋을 벗어남» 을 이탈 판정이 구조적으로
+   * 못 본다(`shotPresetIdForState` 는 상태만 읽는다). index.html 은 이 다섯을
+   * `defineOrbitViewAccessors` 로 넘겨받는다 — 뷰어 쪽 이름·단위(라디안·노브)는
+   * 그 접근자가 유지하고, **값의 집은 여기 하나**다.
+   *
+   * **단위**: 각은 **도(°)** — 가이드 표·카드 라벨·사람이 쓰는 단위다. 뷰어가 받는
+   * 라디안 변환은 `generator-orbit-view.js` 한 곳에만 있다.
+   * `orbitPersp` 는 슬라이더 노브 0~100 이고 t = 노브/100, 반각 α = t·60°.
+   *
+   * **INTERNAL 인 이유**: `shotPreset` 과 같다 — 시험판 전용이고, INTERNAL 이면
+   * `data-state-keys` 엄격 동치 대조가 «정식 노출 0» 을 유도로 잠근다. 정식 화면에는
+   * 이 축을 쓸 UI 자체가 없다(`#y3dBar` 는 상태 컨테이너 밖의 별개 표면이다).
+   *
+   * ⚠ **기본값은 전부 0 / 2.5D** 라 프리셋을 안 고른 화면은 종전과 픽셀 동일이다
+   *   (원근 0 은 `y3d-viewer.js` 가 early return 으로 정확히 평행투영임을 보장한다).
+   *
+   * ⚠ 각도 축에는 `options` 가 **없다**(연속값). 그래서 프리셋 값 검사는
+   *   `assertShotPresetFields` 가 아니라 `assertOrbitPresetFields` 가 한다 —
+   *   빠뜨리면 그 축만 조용히 무검사가 된다.
+   */
+  orbitView: field(ORBIT_STATE_DEFAULTS.orbitView, INTERNAL, ORBIT_VIEW_CHOICES),
+  orbitYaw: field(ORBIT_STATE_DEFAULTS.orbitYaw, INTERNAL),
+  orbitPitch: field(ORBIT_STATE_DEFAULTS.orbitPitch, INTERNAL),
+  orbitRoll: field(ORBIT_STATE_DEFAULTS.orbitRoll, INTERNAL),
+  orbitPersp: field(ORBIT_STATE_DEFAULTS.orbitPersp, INTERNAL),
 });
 
 // 선언 ↔ 스키마 자기검증 (로드 시점). 프리셋이 없는 키를 세우거나 허용값 밖 값을
@@ -401,6 +440,9 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
 // (순환 회피 — finder-zone-ui 의 «검증되는 사본» 과 같은 처방).
 assertShotPresetFields(GENERATOR_STATE_SCHEMA);
 assertNoEmphasisFields();
+// 궤도 축이 스키마에 실재하고 `orbitView` 허용값이 선언 유도인가. 이게 없으면
+// 「고르면 3D 로 안 바뀌는」 프리셋이 조용히 선다 — 상태 대조 자로는 안 보인다.
+assertOrbitStateFields(GENERATOR_STATE_SCHEMA);
 
 export function createGeneratorState(overrides = {}) {
   const state = {};

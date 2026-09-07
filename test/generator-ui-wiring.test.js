@@ -29,6 +29,7 @@ import {
   BULLSEYE_DARK, BULLSEYE_LIGHT, DEFAULT_PRESET, getPreset,
 } from '../src/luminance.js';
 import { FINDER_CARD_GROUPS, isLabOnlyFinderPatternId } from '../src/finder-card-ui.js';
+import { cornerMarkerSeatActive } from '../src/finder-zone-ui.js';
 import { CENTER_QR_FINDER_PATTERN_ID } from '../src/finder-selection.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from '../src/centralN7Schema.js';
 import { daehanPatternId, isDaehanFinderPatternId } from '../src/finder-daehan.js';
@@ -502,8 +503,17 @@ test('Type K 생성기 편입 — 카드·버전축·인코더 디스패치가 *
   // 아니므로, 분기 하나가 들어갈 만큼 넓힌다.
   assert.match(index, /opts\.cornerMarker = true;[\s\S]{0,400}encodeK/,
     'K 분기가 cornerMarker 를 안 싣는다 — 자리를 열어 놓고 인코더에 안 넘기면 무동작이다');
-  assert.match(index, /type === 'K' && generatorState\.outerSeat === 'k-cm'/,
-    'buildConfig 이 K 의 k-cm 자리를 cornerMarker 로 파생하지 않는다');
+  // ⭐ **철자 → 성질 (2026-09-07 emph-centerqr)** — 종전 이 줄은 buildConfig 인라인
+  //    삼항식의 K 절 철자였다. 술어가 `finder-zone-ui.cornerMarkerSeatActive` 로
+  //    올라갔으므로(「검출기 강조」 섹션이 그 사실을 읽어야 했다 — 인라인이던 동안
+  //    마커가 켜져 있어도 강조 카드가 잠겼다) **값으로** 잰다.
+  assert.equal(cornerMarkerSeatActive({ type: 'K', outerSeat: 'k-cm' }), true,
+    'K 의 k-cm 자리가 cornerMarker 로 파생되지 않는다');
+  assert.equal(cornerMarkerSeatActive({ type: 'K', outerSeat: 'none' }), false,
+    'K 의 «자리 없음» 이 cornerMarker 를 켠다');
+  // 그리고 buildConfig 가 그 정본을 실제로 부른다 (사본이 되살아나면 여기서 죽는다).
+  assert.match(index, /cornerMarker: cornerMarkerSeatActive\(generatorState\)/,
+    'buildConfig 이 마커 seat 술어 정본을 안 부른다 — 인라인 사본이 되살아났다');
 });
 
 // ── §6.3 사괘 단독 배선 + V4 상호 잠금 (운영자 실기 신고 2026-08-30) ────────────

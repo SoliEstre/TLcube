@@ -51,7 +51,12 @@ import {
 } from './centralN7Schema.js';
 import { encodeCentralN7 } from './centralN7Codec.js';
 import {
-  DETECTOR_EMPHASIS_RENDER_KINDS,
+  // ⚠ `DETECTOR_EMPHASIS_RENDER_KINDS` 는 **의도적으로 안 읽는다** (2026-09-07
+  //   emph-centerqr). 그 집합은 «중앙 파인더 자신이 강조 대상인가» 의 답이고, 바깥
+  //   셀 루프가 묻는 것은 «이 셀이 검출 셀인가» 다 — 두 질문을 한 게이트로 묶었더니
+  //   중앙 QR 을 고른 코드에서 마커 강조가 통째로 꺼졌다 (buildScene 셀 루프 주석).
+  //   중앙 슬롯 세 분기는 각자 자기 renderKind 로 갈리고, 그 갈래가 이 집합과 같다는
+  //   것은 test/detector-emphasis-cells.test.js ⓐ 가 **독립 프로브**로 대조한다.
   centralN7LevelPalettes,
   detectorCellLevelPalettes,
   emphasisLevelsForCell,
@@ -480,12 +485,16 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   qrText?: string, centerQr?: boolean, cornerToo?: boolean,
  *   finderPatternId?: string,
  *   centralN7Family?: 'hex'|'tri'|'star',
- *   // 소비 조건 = 고른 검출기의 renderKind 가 DETECTOR_EMPHASIS_RENDER_KINDS 안일 것
- *   // (중앙 TL · 중앙 v0 · 중앙 M7). 그때 중앙 슬롯 **과 바깥 코드 셀 전부**가 같은
- *   // 팔레트 치환을 받는다 — 검출 셀(entry.tones: H·H2O·CO2·H2CO3)은 'locator' 부터,
- *   // 페이로드 셀(앵커·레퍼런스·포맷·데이터·노치 림)은 'all' 에서 (2026-09-07 결정 ⑭ (B)).
- *   // 3톤 큐브는 실측 거부(2026-08-29 §2.4), BWG 계열은 줄 것이 없어 제외 — 그 검출기를
- *   // 고르면 이 옵션은 **아무것도 안 바꾼다**(픽셀 동일).
+ *   // 소비처가 **둘**이고 조건이 서로 다르다 (2026-09-07 emph-centerqr — 관문 입도 정정):
+ *   //  ① 바깥 코드 셀 루프 — 조건은 «그 셀이 검출 셀인가»(entry.tones) 하나다. 중앙
+ *   //     파인더가 무엇이든 마커 검출 셀(H·H2O·CO2·H2CO3)은 'locator' 부터 치환되고,
+ *   //     코드 페이로드(앵커·레퍼런스·포맷·데이터·노치 림)는 **어떤 모드에서도** 안
+ *   //     바뀐다 (2026-09-07 운영자 카드 `d-emph-b-default`). 검출 셀이 0 인 코드는
+ *   //     세 모드가 전부 픽셀 동일이다.
+ *   //  ② 중앙 슬롯 — 조건은 고른 검출기의 renderKind 가 DETECTOR_EMPHASIS_RENDER_KINDS
+ *   //     안일 것 (중앙 TL · 중앙 v0 · 중앙 M7 · Y 셀 표면 로케이터). 3톤 큐브는 실측
+ *   //     거부(2026-08-29 §2.4), BWG 계열(중앙 QR·불스아이)은 palette.levels 면이 한
+ *   //     장도 없어 제외 — 그 중앙을 고르면 **중앙 슬롯은** 픽셀 동일이다.
  *   centralN7Emphasis?: 'default'|'locator'|'all',
  *   centralMarkerN7Family?: 'hex'|'tri'|'star',
  *   centralMarkerN7Turn?: 0|1|2, centralMarkerN7Parity?: 0|1,
@@ -708,11 +717,36 @@ export function buildScene(encoded, options) {
    * middle → sRGB 중점. 순위 0<1<2 는 보존되므로 디코더는 여전히 강조를 모른다
    * (포맷·용량·digit 순열 불변 — test/detector-emphasis-cells.test.js ⓒ).
    *
-   * **게이트가 renderKind 인 이유**: 강조는 «고른 검출기» 의 축이다. 3톤 큐브는 실측
-   * 거부(아래 ⛔), BWG 계열은 dark 가 이미 순검정이라 줄 것이 없다 — 그 검출기를 고른
-   * 코드에서 강조가 조용히 뭔가를 하면 화면의 «이 검출기는 대상이 아님» 이 거짓말이
-   * 된다. 그래서 판정은 분류 쪽(generator-render-config.detectorEmphasisApplicability)과
-   * **같은 집합** 하나를 본다.
+   * ⭐⭐ **관문 입도 정정 (2026-09-07, 운영자 실기 피드백 20:1x · 레인 emph-centerqr)**
+   *
+   * 종전 이 자리의 게이트는 `DETECTOR_EMPHASIS_RENDER_KINDS.includes(renderKind)` 였고,
+   * 거짓이면 `cellPalettes = null` 이라 **그 코드의 모든 셀**(바깥 마커 검출 셀 포함)이
+   * 평 팔레트로 갔다. 운영자 신고: 「O/A/K에서 중앙 QR일 때는 적용이 안되던데」.
+   *
+   * 실측(`.agent/lanes/emph-centerqr/cqr-status.jsonl`, 26 화법 × 마커 4종 전수):
+   *   · `center-qr` 을 고른 O/A/V/K 코드는 마커 검출 셀 12·21·6·30 개를 **싣고 있는데도**
+   *     강조 3택 전부에서 바뀌는 면이 **0** 이었다 (바뀔 수 있었던 면 24·36·8·51).
+   *   · 그 자리는 화면에서 도달 가능하다 — «중앙 QR × 코너 예약» 배타는 C2a(2026-08-23)
+   *     에서 이미 해제됐다 (`syncSeatUi` 주석).
+   *   · 중앙 QR **자신**은 `levels` 를 바꿔도 0/227 셰이프가 움직인다(= 안 움직인다) —
+   *     제외 사유(`bwg`)는 **중앙 파인더 자신에 대해서는 사실**이다.
+   *   · 같은 결함이 `cell-mask` 17종 · `bullseye` · `cube-bullseye` · `three-tone-cube`
+   *     에도 그대로 있었다 — 중앙 QR 한 종이 아니라 **입도** 문제였다.
+   *
+   * **그래서 두 질문을 가른다**: «중앙 파인더 자신이 강조 대상인가»(= renderKind 축,
+   * 분류 `detectorEmphasisApplicability` 의 답)와 «이 셀이 검출 셀인가»(= `entry.tones`
+   * 축)는 다른 질문이다. 이 루프는 **뒤쪽만** 묻는다 — 앞쪽은 이 루프가 안 그리는
+   * 중앙 슬롯의 성질이라, 여기서 물으면 마커 강조가 중앙 선택에 인질로 잡힌다.
+   *
+   * 그래서 게이트를 지우고 `detectorCellLevelPalettes` 를 **언제나** 물린다. 그 함수는
+   * 검출 셀(`entry.tones`)만 치환하고 데이터 팔은 어떤 모드에서도 `palette.levels` 라,
+   * 검출 셀이 0 인 코드에서는 **바이트 동일**이다 (= 종전 `null` 갈래와 같은 결과).
+   * 중앙 슬롯 세 블록(중앙 TL · 중앙 v0 · 중앙 M7)의 처리는 **손대지 않았다** — 그쪽은
+   * 아래 각 분기가 `centralN7LevelPalettes` 로 따로 판단하고, 중앙 QR·불스아이·3톤
+   * 큐브는 애초에 `palette.levels` 면이 없어 여기 정정과 무관하다.
+   *
+   * ⛔ 3톤 큐브 실측 거부(아래 ⛔)는 **큐브 자신의 면**에 대한 판정이라 그대로 산다 —
+   *   이 정정은 그 슬롯을 한 면도 안 건드린다.
    *
    * `default` 는 두 팔레트가 `palette.levels` 그대로라 이전 출력과 **바이트 동일**이다.
    *
@@ -724,9 +758,7 @@ export function buildScene(encoded, options) {
    * 어떤 모드에서도 `palette.levels` 다. **중앙 슬롯 세 블록은 안 바뀐다** (그쪽
    * 페이로드는 코드가 아니라 검출기 자신의 몸이다 — 그 함수 주석의 표면 구분).
    */
-  const cellPalettes = DETECTOR_EMPHASIS_RENDER_KINDS.includes(finderPattern.renderKind)
-    ? detectorCellLevelPalettes(palette.levels, opts.centralN7Emphasis)
-    : null;
+  const cellPalettes = detectorCellLevelPalettes(palette.levels, opts.centralN7Emphasis);
   for (const [key, entry] of cellDigits) {
     const commaIdx = key.indexOf(',');
     const q = Number(key.slice(0, commaIdx));
@@ -737,8 +769,7 @@ export function buildScene(encoded, options) {
     // 검출 셀(절대 톤)은 로케이터 팔, 페이로드 셀은 데이터 팔 — 중앙 v0 비컨 분기와
     // **같은 함수**(`emphasisLevelsForCell`)를 부른다. 사본은 0 이다 (2026-09-07
     // 검토 F5 수리 — 그전엔 비컨 분기가 `entry.tones` 삼항 사본을 들고 있었다).
-    const cellPalette = cellPalettes === null
-      ? palette : { levels: emphasisLevelsForCell(entry, cellPalettes) };
+    const cellPalette = { levels: emphasisLevelsForCell(entry, cellPalettes) };
     for (const face of FACES) {
       const points = facePolygon(drawQ, drawR, face, layout);
       for (const p of points) {
@@ -804,9 +835,15 @@ export function buildScene(encoded, options) {
     // 큐브가 2면 쐐기가 되고 실루엣 검출이 죽는다 (합성 왕복 ppu 10/12/16/24 전패
     // `frontend:no-finder` · 대조군: 흰 배경에서는 전부 통과 — FINDER_CUBE_SEAM
     // 주석의 바로 그 문턱 기전이다). 그래서 이 분기는 opts.centralN7Emphasis 를
-    // **소비하지 않는다** — 정본 술어 centralN7EmphasisAppliesTo(generator-render-config)
-    // 가 큐브를 대상에서 빼서 옵션이 애초에 오지 않고, 와도 무시된다
-    // (test/central-emphasis-roundtrip.test.js 가 그 무시를 픽셀 동일성으로 잠근다).
+    // **소비하지 않는다** — 이 분기엔 `opts.centralN7Emphasis` 를 읽는 줄이 하나도 없어
+    // 값이 와도 그림이 같다 (test/central-emphasis-roundtrip.test.js 가 그 무시를 픽셀
+    // 동일성으로 잠근다).
+    // ⚠ **2026-09-07 emph-centerqr 정정** — 종전 이 주석은 「정본 술어
+    //   centralN7EmphasisAppliesTo 가 큐브를 대상에서 빼서 **옵션이 애초에 오지
+    //   않는다**」였는데 그 절반이 거짓이 됐다. 조립 좌석(sceneOptionsForOA · K 디스패치)
+    //   의 판정 게이트를 걷었으므로 옵션은 **언제나 온다** — 그 게이트가 마커 검출 셀
+    //   강조까지 막고 있었기 때문이다. 실측 거부(§2.4)를 지키는 것은 이제 «안 오게
+    //   한다» 가 아니라 «와도 안 읽는다» 하나다.
     for (const face of FACES) {
       shapes.push({
         kind: 'polygon',

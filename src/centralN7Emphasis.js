@@ -111,9 +111,20 @@ export function detectorCellLevelPalettes(levels, emphasis = DEFAULT_CENTRAL_N7_
 }
 
 /**
- * 강조 팔레트를 **실제로 소비하는 renderKind** — 렌더(scene.js)와 분류
+ * **검출기 자신의 몸**이 강조 팔레트를 소비하는 renderKind — 중앙 슬롯 렌더
+ * (scene.js 의 중앙 세 분기 · sceneY.js 의 셀 표면 로케이터)와 분류
  * (generator-render-config.detectorEmphasisApplicability)의 **공통 계약**이다
  * (2026-09-07, 결정 ⑭ (B) · PM/029B §27.14.2).
+ *
+ * ⭐ **범위가 «검출기 자신» 으로 좁혀졌다 (2026-09-07 emph-centerqr · 운영자 실기 20:1x)**.
+ * 종전엔 `scene.js` 의 **바깥 셀 루프**도 이 집합을 게이트로 썼고, 그래서 목록에 없는
+ * 중앙(중앙 QR · 불스아이 · cell-mask · 3톤 큐브)을 고르면 **바깥 마커 검출 셀까지**
+ * 강조가 꺼졌다 — 실측: `center-qr` × H·H2O·CO2·H2CO3 에서 검출 셀 12·21·6·30 개가
+ * 실려 있는데 바뀐 면이 0 이었다(바뀔 수 있었던 면 24·36·8·51).
+ * 원자료 `.agent/lanes/emph-centerqr/cqr-status.jsonl`.
+ * 바깥 셀 루프가 묻는 질문은 «이 셀이 검출 셀인가»(`isDetectorToneCell`) 하나이고 이
+ * 집합과 **무관**하다. 아래 「안 들어오는 것과 이유」도 전부 **검출기 자신**에 대한
+ * 판단이지, 그 검출기를 고른 코드 전체에 대한 판단이 아니다.
  *
  * 왜 여기인가: 이 목록은 «강조가 무엇을 바꾸는가» 의 정의라 팔레트 소유자와 같은
  * 층이다. 분류 쪽은 `finder-taxonomy` 를 못 읽고(node:url top-level import 라 브라우저
@@ -148,11 +159,14 @@ export function detectorCellLevelPalettes(levels, emphasis = DEFAULT_CENTRAL_N7_
  *     페이로드가 없어 **로케이터/데이터 구분이 없다** — `locator` 와 `all` 이 같은
  *     그림이고, 그 «해당 없음» 을 자 ⓕ 가 잠근다.
  *
- * 안 들어오는 것과 이유:
+ * 안 들어오는 것과 이유 (**전부 «그 검출기 자신» 에 대한 판단이다** — 그 검출기를
+ * 고른 코드의 바깥 마커 검출 셀은 이 목록과 무관하게 강조된다):
  *   · `three-tone-cube` — 고정 상수 `FINDER_CUBE_TONES`. 강조 dark(순검정)가 어두운
  *     배경에 먹혀 실루엣 검출 전패 (2026-08-29 §2.4 실측 거부, 아래 ⛔ 주석).
  *   · `cell-mask` · `bullseye` · `center-qr` — 파인더 축(bullseyeDark = 순검정)이라
- *     강조가 light 를 낮추는 방향밖에 못 간다.
+ *     강조가 light 를 낮추는 방향밖에 못 간다. 2026-09-07 재실측으로 **값이 붙었다**:
+ *     `center-qr` 은 `palette.levels` 세 색만 바꿔도 자기 셰이프 **0/227** 이 움직인다
+ *     (= 안 움직인다). 즉 사유는 사실이고, 좁혀진 것은 그 사유의 **적용 범위**다.
  *   · `cube-bullseye` — 링은 파인더 축, 안쪽 3면은 `FINDER_CUBE_TONES`. `palette.levels`
  *     면이 **한 장도 없다** (2026-09-06 F1 실측).
  */

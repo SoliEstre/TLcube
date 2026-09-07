@@ -194,7 +194,11 @@ export const MODULE_ORDER = [
   // 상태 스키마가 `shotPreset` 허용값을 그 선언에서 유도한다. 의존은 locatorY ·
   // luminance · quiet-auto · render-profile · shading 다섯이고 전부 이미 이 앞에 있다.
   // 반대 방향 import 는 없다 — 있으면 순환이라 위상 정렬 자체가 불가능해진다.
-  'export-options', 'generator-shot-presets', 'generator-state',
+  // generator-orbit-view(궤도 자세 축, 2026-09-07 16장 프리셋)는 **둘 다의 앞**이다 —
+  // shot-presets 가 `ORBIT_VIEW_3D`·`assertOrbitPresetFields` 를, generator-state 가
+  // 허용값·기본값·`assertOrbitStateFields` 를 읽는다. 이 모듈의 의존은 **0** 이다
+  // (y3d-viewer 도 generator-state 도 안 읽는다 — 순환과 레인 경계를 둘 다 피한다).
+  'export-options', 'generator-orbit-view', 'generator-shot-presets', 'generator-state',
   'finder-zone-ui', 'export-filename',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: `encodeY` 와 잎 모듈 `tonemap` 이
   // `encode`·`scene` **앞**으로 왔다. scene.js 가 중앙 슬롯을 완전한 v0 코드로

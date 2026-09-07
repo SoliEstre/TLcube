@@ -28,6 +28,9 @@ import {
   buildOrbitMesh, meshToGltf, fitViewStable, hexOf, paintQuads, hitTest,
   projectPoint, perspectiveInvDist, BETA_MAX, fitView,
 } from '../src/y3d-viewer.js';
+// 궤도 자세의 **새 집** (2026-09-07, 촬영 프리셋 16장). 아래 «시작 상태 중립» 자가
+// index.html 리터럴이 아니라 여기서 기본값을 읽는다 — 이유는 그 자의 주석에 있다.
+import { ORBIT_STATE_DEFAULTS, ORBIT_VIEW_25D } from '../src/generator-orbit-view.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -247,11 +250,31 @@ describe('생성기 배선 — 3D 는 opt-in, 기본은 2.5D', () => {
   });
 
   test('시작 상태가 중립이다 — roll 0 · 원근 0 · 3면 (픽셀 동일 계약의 절반)', () => {
+    /*
+     * ⚠ **의도적 갱신 (2026-09-07, 촬영 프리셋 16장 — 레인 gen-presets-16).**
+     *
+     * 재는 **성질은 그대로**다: 「기본 미리보기는 2.5D 이고 회전·원근이 0 이라
+     * 종전과 픽셀 동일하다」. 바뀐 것은 **그 값이 사는 집**이다 — 궤도 다섯
+     * (`on`·`yaw`·`pitch`·`roll`·`persp`)이 `generatorState` 로 올라갔고
+     * `y3dPreview` 는 그 이름들을 접근자로만 들고 있다. 촬영 프리셋이 궤도 자세를
+     * 세우려면 상태를 거쳐야 하고, 사용자가 3D 바를 손으로 만진 것도 상태에 남아야
+     * «프리셋 이탈» 판정이 그걸 본다.
+     *
+     * 종전 판은 index.html 리터럴에서 `roll: 0` · `persp: 0` 이라는 **철자**를 찾았다.
+     * 그건 「값이 0 이다」가 아니라 「그 파일에 그렇게 적혀 있다」를 잰 것이라, 값이
+     * 옮겨 가면 **정답인데 빨개진다** (교훈 「철자를 재는 자는 썩는다」).
+     * 지금은 선언 정본에서 값을 읽는다 — 집이 또 옮겨 가도 이 자는 산다.
+     * 면 수(`faces`)는 여전히 뷰어 지역 값이라 리터럴에서 본다.
+     */
+    assert.equal(ORBIT_STATE_DEFAULTS.orbitRoll, 0, 'roll 기본값이 0 이 아니다');
+    assert.equal(ORBIT_STATE_DEFAULTS.orbitPersp, 0, '원근 기본값이 0 이 아니다');
+    assert.equal(ORBIT_STATE_DEFAULTS.orbitYaw, 0, 'yaw 기본값이 0 이 아니다');
+    assert.equal(ORBIT_STATE_DEFAULTS.orbitPitch, 0, 'pitch 기본값이 0 이 아니다');
+    assert.equal(ORBIT_STATE_DEFAULTS.orbitView, ORBIT_VIEW_25D,
+      '기본 미리보기가 2.5D 가 아니다 — opt-in 계약이 깨진다');
     const at = html.indexOf('const y3dPreview = {');
     assert.ok(at > 0);
     const body = html.slice(at, html.indexOf('\n};', at));
-    assert.match(body, /\broll:\s*0\b/, 'roll 기본값이 0 이 아니다');
-    assert.match(body, /\bpersp:\s*0\b/, '원근 기본값이 0 이 아니다');
     assert.match(body, /\bfaces:\s*3\b/, '면 수 기본값이 3 이 아니다');
   });
 
@@ -260,7 +283,20 @@ describe('생성기 배선 — 3D 는 opt-in, 기본은 2.5D', () => {
     assert.ok(at > 0, 'buildOrbitMesh 호출을 못 찾았다');
     const call = html.slice(at, html.indexOf('});', at));
     assert.match(call, /roll:\s*y3dPreview\.roll/, 'roll 을 안 넘긴다');
-    assert.match(call, /perspective:\s*y3dPreview\.persp\s*\/\s*100/, '원근 노브를 안 넘긴다');
+    /*
+     * ⚠ **의도적 갱신 (2026-09-07, 레인 gen-presets-16).** 종전 판은
+     * `perspective: y3dPreview.persp / 100` 이라는 **철자**를 요구했다. 그 `/100` 은
+     * 「노브 → 정규화 t」 유도의 **사본**이었고, 상한이 바뀌는 날 index.html 만 늙는
+     * 자리였다. 지금은 그 유도가 `generator-orbit-view.js` 한 곳에 살고 여기서는
+     * `orbitPerspToT(...)` 를 부른다.
+     *
+     * 재는 성질은 그대로다 — **원근 노브가 실제로 넘어가는가**. 그래서 「어떻게
+     * 적었나」가 아니라 「`y3dPreview.persp` 에서 온 값인가」를 잰다. 사본으로 되돌려도
+     * 통과하지만(그건 이 자의 질문이 아니다), 아예 **안 넘기면** 여기서 빨개진다.
+     * 사본 금지는 `generator-shot-presets.test.js` 자ⓖ 가 따로 잰다 —
+     * 「형제 가드는 상수를 공유해도 일은 다르다」.
+     */
+    assert.match(call, /perspective:\s*[^,]*y3dPreview\.persp/, '원근 노브를 안 넘긴다');
     assert.match(call, /faces:\s*y3dPreview\.faces/, '면 수를 안 넘긴다');
   });
 

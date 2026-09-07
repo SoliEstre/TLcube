@@ -462,12 +462,27 @@ export function sceneOptionsForOA({
   if (opts.finderPatternId === CENTRAL_N7_FINDER_PATTERN_ID) {
     opts.centralN7Family = centralN7FamilyForType(type);
   }
-  // 강조 축은 family 보다 넓다 — 정본 판정은 renderKind 유도이고 (2026-09-07 (B))
-  // 오늘의 값 표는 중앙 TL · 중앙 Y0 · 중앙 M7 이다 (3톤 큐브는 2026-08-29 §2.4 실측
-  // 거부라 여기 없다). 참이면 중앙 슬롯뿐 아니라 **바깥 코드 셀 전부**가 같은 치환을
-  // 받는다 — 그래서 이 한 줄이 «검출기 강조» 의 실질 게이트다.
-  // centerQr 이면 finderPatternId 가 center-qr 로 이미 양보돼 있어 여기서 걸리지 않는다.
-  if (centralN7EmphasisAppliesTo(opts.finderPatternId) && centralN7Emphasis !== undefined) {
+  /*
+   * ⭐⭐ **판정 게이트를 걷었다 (2026-09-07 emph-centerqr · 운영자 실기 20:1x)**
+   *
+   * 종전은 `centralN7EmphasisAppliesTo(opts.finderPatternId) && …` 였고, 그 주석은
+   * 「centerQr 이면 finderPatternId 가 center-qr 로 이미 양보돼 있어 **여기서 걸리지
+   * 않는다**」라고 그 결과를 정확히 적고 있었다. 그것이 운영자가 본 상태다 —
+   * 「O/A/K에서 중앙 QR일 때는 적용이 안되던데」.
+   *
+   * 실측(`.agent/lanes/emph-centerqr/cqr-consumer-sweep.jsonl`, Type O × 코너 마커 H):
+   *   · QR 위치 «중앙»  → `emphasisPassed=false` · 마커 검출 면 **0/24**
+   *   · QR 위치 «없음»(중앙 TL) → `emphasisPassed=true` · 마커 검출 면 **24/24**
+   * 즉 렌더(scene.js)의 관문을 낮춰도 **옵션이 여기서 막혀** 화면은 그대로였다
+   * (교훈 `opening-an-exclusion-needs-a-consumer-sweep`).
+   *
+   * 왜 그냥 넘겨도 되는가: 옵션은 «요청» 이고 **무엇이 바뀌는지는 렌더가 정한다**.
+   * 검출 셀이 0 인 코드에서는 세 모드가 전부 픽셀 동일이므로(자 ⓚ④ 가 화법 대표 ×
+   * 3택을 래스터 바이트로 잠근다) 이 게이트는 «아무것도 안 바꾸는 값을 안 넘긴다» 는
+   * 최적화였을 뿐이고, 그 최적화가 «바꿀 수 있는 값까지» 막고 있었다.
+   * 값 자체는 `assertCentralN7Emphasis` 가 buildScene 안에서 검증한다.
+   */
+  if (centralN7Emphasis !== undefined) {
     opts.centralN7Emphasis = centralN7Emphasis;
   }
   let needsCornerQr = false;

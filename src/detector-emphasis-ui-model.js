@@ -15,6 +15,9 @@ import {
   DETECTOR_EMPHASIS_REASONS, detectorEmphasisApplicability,
   detectorEmphasisRequiresAdvanced,
 } from './generator-render-config.js';
+// 마커 seat 술어의 **정본** — `index.html buildConfig` 가 부르는 바로 그 함수다
+// (사본 금지: 두 벌이면 «화면은 켤 수 있다는데 와이어엔 마커가 없다» 가 생긴다).
+import { cornerMarkerSeatActive } from './finder-zone-ui.js';
 
 /**
  * 검출기 «선택» 이 중앙 파인더가 아니라 **로케이터 프로파일**인 타입.
@@ -78,6 +81,22 @@ export const DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY = 'g1029';
 export const DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY = 'g1030';
 
 /**
+ * «검출기 자신은 대상이 아닌데 **켜 둔 코너 마커의 검출 셀**에는 걸린다» — 강조의
+ * **범위**를 말하는 줄 (2026-09-07 emph-centerqr · 운영자 실기 20:1x).
+ *
+ * 왜 새 키인가: 종전엔 이 상태가 «비활성 + 사유» 하나로 뭉개져 있었고, 화면은
+ * 「이 검출기를 고르면 **강조 축 자체를 못 켜요**」라고 말했다. 렌더 실측으로 그
+ * 문장이 거짓이 됐다 — 중앙 QR 을 고른 O/A/V/K 코드에서도 마커 검출 셀
+ * (H·H2O·CO2·H2CO3)은 강조된다 (`.agent/lanes/emph-centerqr/cqr-status.jsonl`).
+ * 사유 세 줄(g1026·g1027·g1028)은 **검출기 자신**에 대한 판단이라 그대로 살아 있고,
+ * 이 줄은 «그럼 무엇이 강조되는가» 를 말한다.
+ *
+ * ⚠ 이 줄은 «마커가 실제로 켜져 있을 때» 만 뜬다 — 안 그러면 Type Y 처럼 코너 자리
+ *   자체가 없는 화면에 「코너 마커를 켜세요」라는 못 하는 안내가 남는다.
+ */
+export const DETECTOR_EMPHASIS_MARKER_SCOPE_KEY = 'g1039';
+
+/**
  * 정식(일반) 화면에서 **내리는** 강조 모드 — 고급 모드·시험판에서만 보인다.
  *
  * 운영자 실기 A2(2026-08-29 §3)에서 «로케이터만» 이 «강조» 에 밀린 중간 단계라
@@ -105,12 +124,14 @@ export function detectorEmphasisDetectorId(state) {
  * 「검출기 강조」 섹션이 **어떻게 보여야 하는가** — 순수 함수 하나.
  *
  * @param {{type: string, finderPatternId?: string, locatorProfileY?: string,
- *          centralN7Emphasis?: string}} state 생성기 정규 상태 (읽기만 한다)
+ *          centralN7Emphasis?: string, innerSeat?: string, outerSeat?: string,
+ *          turnA?: boolean}} state 생성기 정규 상태 (읽기만 한다)
  * @param {{advancedCardsVisible: boolean}} view 고급 전용 카드가 지금 보이는가
  *        (규칙 정본은 index.html `advancedOnlyCardsVisible()` — 모드·에디션은 DOM 축이라
  *         여기로 안 들인다. 이 함수는 그 **결과**만 받는다.)
  * @returns {{hidden: boolean, anchor: 'finder'|'yLocator', detectorId: string|undefined,
- *            editable: boolean, reason: null|string, advancedHiddenActive: boolean,
+ *            editable: boolean, reason: null|string, markerCells: boolean,
+ *            advancedHiddenActive: boolean,
  *            cards: ReadonlyArray<{mode: string, advancedOnly: boolean, visible: boolean,
  *                                  active: boolean, disabled: boolean}>,
  *            noteKey: string|null}}
@@ -139,7 +160,21 @@ export function emphasisSectionModel(state, view) {
    */
   const advancedOnlyDetector = detectorEmphasisRequiresAdvanced(detectorId);
   const gatedByAdvanced = advancedOnlyDetector && !advancedCardsVisible;
-  const editable = known && applicability.applies && !gatedByAdvanced;
+  /*
+   * ⭐ **강조 대상은 두 축이다 (2026-09-07 emph-centerqr · 운영자 실기 20:1x)**.
+   *
+   *   ① 검출기 자신 — `applicability.applies` (renderKind 축).
+   *   ② **바깥 마커 검출 셀** — 켜 둔 코너 자리(H·H2O·CO2·H2CO3)의 톤 셀. 렌더는
+   *      이 축을 중앙 파인더 선택과 **무관하게** 강조한다 (scene.js 셀 루프의 조건은
+   *      «이 셀이 검출 셀인가» 하나다).
+   *
+   * 종전엔 ① 하나가 카드 전체를 잠갔고, 그래서 중앙 QR 을 고른 O/A/K 코드에서
+   * 「강조 축 자체를 못 켜요」로 막혀 있었다 — 렌더는 마커를 강조할 수 있는데
+   * 화면이 못 켜게 했으니 «먹는데 못 켠다» 였다 (운영자 신고의 화면 쪽 절반).
+   * 지금은 둘 중 하나라도 있으면 켤 수 있고, ① 이 없을 때 화면이 **범위**를 말한다.
+   */
+  const markerCells = cornerMarkerSeatActive(state);
+  const editable = known && (applicability.applies || markerCells) && !gatedByAdvanced;
   // 사유는 언제나 검출기가 준다 (폐쇄집합 3택). «사유 없는 비활성» 은 이제 구조적으로
   // 못 생긴다 — 고급 게이트로 막힌 자리는 아래 noteKey 가 따로 말한다.
   const reason = applicability.applies ? null : applicability.reason;
@@ -153,7 +188,11 @@ export function emphasisSectionModel(state, view) {
     return Object.freeze({ mode, advancedOnly, visible, active, disabled: !editable });
   });
 
-  const noteKey = reason ? DETECTOR_EMPHASIS_REASON_KEYS[reason]
+  // 사유가 있는데 **켤 수 있다** = 축 ② 만으로 열린 자리다. 그때 화면은 «왜 이
+  // 검출기가 비대상인가» 가 아니라 «그럼 무엇이 강조되는가» 를 말해야 한다.
+  // (`reason && editable` ⟺ `!applies && markerCells && !gatedByAdvanced`.)
+  const noteKey = reason
+    ? (editable ? DETECTOR_EMPHASIS_MARKER_SCOPE_KEY : DETECTOR_EMPHASIS_REASON_KEYS[reason])
     : gatedByAdvanced ? DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY
       : advancedHiddenActive ? DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY
         : null;
@@ -172,6 +211,9 @@ export function emphasisSectionModel(state, view) {
     detectorId,
     editable,
     reason,
+    // 축 ② — 켜 둔 코너 자리의 마커 검출 셀이 실재하는가. 화면은 이 값으로 «강조가
+    // 이 코드에서 무엇을 바꾸는가» 를 말한다 (noteKey 가 그 표현이다).
+    markerCells,
     advancedHiddenActive,
     cards: Object.freeze(cards),
     noteKey,

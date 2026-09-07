@@ -35,6 +35,9 @@
  * @module generator-shot-presets
  */
 
+import {
+  ORBIT_VIEW_3D, assertOrbitPresetFields, orbitPerspToDeg,
+} from './generator-orbit-view.js';
 import { LOCATOR_PROFILE_CELL_SURFACE_V0TR } from './locatorY.js';
 import { DEFAULT_PRESET } from './luminance.js';
 import { QUIET_COLOR_NONE } from './quiet-auto.js';
@@ -98,7 +101,82 @@ const SHOT_3D_COMMON = Object.freeze({
   quietMarginAuto: false,
   shading: SHADING_OFF,
   shadingRim: false,
+  // ─ 궤도 축 (2026-09-07 21:0x, 운영자 지시 「8개 자세 x 2 배경」) ────────────
+  // **자세 8은 카메라가 아니라 렌더의 궤도 회전이다** (`GUIDE_3d-shoot-32.md` §1):
+  // 인쇄물을 비스듬히 찍으면 큐브 세 면이 여전히 한 평면이라 단일 H 로 풀리고,
+  // 3D 관측층이 필요해지는 «면별 H» 는 렌더가 돌았을 때만 생긴다.
+  orbitView: ORBIT_VIEW_3D,
+  // roll 0 — y2-p9rot 실측도 roll ≈ 0 이었고, roll 축은 이번 코퍼스 밖이다
+  // (`rot-analysis.md` §0 · `GUIDE_3d-shoot-32.md` §2).
+  orbitRoll: 0,
+  // 원근 노브 15 = t 0.15 = 반각 α 9° — `rot-analysis.md` §0 의 「p9」.
+  // 전 자세 공통으로 못 박는 이유는 **유일한 성공 사례와 한 축만 다르게** 두기
+  // 위해서다(「대조군은 한 축만 바꿔라」). 유도식은 generator-orbit-view.js 가
+  // 로드 시점에 자기검증한다 — 여기서 9 를 다시 적지 않는다.
+  orbitPersp: 15,
 });
+
+/**
+ * 자세 8 — **`GUIDE_3d-shoot-32.md` §2 표와 값이 같아야 한다** (N-way sync).
+ *
+ * `pose` 문자열은 UI 카드 라벨이자 **촬영 파일명 토큰**이다:
+ * `sil3d-<dark|light>-<pose>-<near|far>.jpg` (GUIDE §4-5). 그래서 이 낱말은
+ * 번역하지 않는다 — 촬영자가 화면에서 그대로 옮겨 적어야 하고, 번역된 라벨은
+ * 그 옮겨 적기를 깨뜨린다.
+ *
+ * 각 값의 근거:
+ *   · `front` 0/0 — 기준선. 여기서 안 읽히면 나머지는 볼 필요가 없다.
+ *   · `yawp15`/`yawm15` — yaw 단독 중간 + **부호 대칭**(추출기 비대칭이 여기서 갈린다).
+ *   · `yawp30` — 합성 한계 ±35° 바로 안쪽. 실물이 합성만큼 버티는지.
+ *   · `pitchm20` — y2-p9rot 의 pitch 성분(−19.7°) 단독. `pitchp20` 은 그 부호 대칭.
+ *   · `known` −5/−20 — **y2-p9rot 재현**(실측 yaw −4.9 · pitch −19.7). 화면 촬영 →
+ *     인쇄 촬영으로 축이 하나 바뀔 때 값이 유지되는지 보는 **다리**다.
+ *   · `hard` +30/−30 — 합성에서도 파단 근처인 복합. **실패를 재는 축**이고,
+ *     전부 성공하면 사다리를 더 벌려야 한다는 신호다(「사다리 범위가 결론을 정한다」).
+ */
+export const SHOT_3D_POSES = Object.freeze([
+  Object.freeze({ pose: 'front', yaw: 0, pitch: 0 }),
+  Object.freeze({ pose: 'yawp15', yaw: 15, pitch: 0 }),
+  Object.freeze({ pose: 'yawm15', yaw: -15, pitch: 0 }),
+  Object.freeze({ pose: 'yawp30', yaw: 30, pitch: 0 }),
+  Object.freeze({ pose: 'pitchm20', yaw: 0, pitch: -20 }),
+  Object.freeze({ pose: 'pitchp20', yaw: 0, pitch: 20 }),
+  Object.freeze({ pose: 'known', yaw: -5, pitch: -20 }),
+  Object.freeze({ pose: 'hard', yaw: 30, pitch: -30 }),
+]);
+
+/**
+ * 배경 2 — 카드 **그룹**이자 파일명의 첫 토큰.
+ *
+ * ─ 왜 두 그룹인가 (한쪽은 «실패를 재는 자» 다) ──────────────────────────────
+ * `REPORT_extractor-v3.md` §0-1-4·5 실측: **정면 실물(밝은 배경)은 전역 문턱
+ * 6후보 전부에서 큐브가 안 갈라진다** — 전경 0.78~3.01% · 채움률 1.3~7.1% ·
+ * 본문 36/36 실패(대조: y2-p9rot 은 전경 52.3% · 채움률 69.7%). 막는 것은 극성이
+ * 아니라 «배경↔큐브의 전역 휘도 분리가 없는 장면» 이다. 밝은 배경을 빼면 그
+ * 한계선을 실물에서 다시 못 잰다.
+ *
+ * ⚠ **사전 키는 새로 안 만든다.** `g1033`~`g1036` 은 종전 두 카드의 라벨·부제였고
+ *   문구가 그대로 그룹 제목·부제다(「3D 촬영 · 어두운 배경」 / 「Y2T · v0TR ·
+ *   ECC H · 검은 지면」). 8언어 번역이 이미 서 있는 것을 버리고 새로 만들 이유가
+ *   없다 — 뜻도 한 글자 안 바뀐다.
+ */
+export const SHOT_3D_BACKDROPS = Object.freeze([
+  // 코드 자신의 지면을 검정으로 채운다 → 어두운 무지 배경 위에 놓으면 프레임
+  // 테두리 띠와 지면이 **같은 색**이 되어 큐브만 남는 전역 분리가 생긴다
+  // (quiet-auto §13 법칙의 «띠에 있는 색» 조건을 지면 전체로 만족시킨다).
+  Object.freeze({
+    backdrop: 'dark', bgMode: 'black', headingKey: 'g1033', headingSubKey: 'g1034',
+  }),
+  // 위의 거울상. **알려진 어려운 축**이다 — 실패를 재기 위해 남긴다.
+  Object.freeze({
+    backdrop: 'light', bgMode: 'white', headingKey: 'g1035', headingSubKey: 'g1036',
+  }),
+]);
+
+/** 각도 표기 — 부호를 항상 보인다(`+15°` / `-15°` / `0°`). 번역 대상이 아니다. */
+function signedDeg(value) {
+  return (value > 0 ? '+' : '') + value + '°';
+}
 
 /**
  * 촬영 프리셋 선언 — **이 배열이 정본이다.**
@@ -106,42 +184,46 @@ const SHOT_3D_COMMON = Object.freeze({
  * `fields` 의 키는 전부 `GENERATOR_STATE_SCHEMA` 의 키여야 하고 값도 그 허용값
  * 안이어야 한다 (`assertShotPresetFields` 가 로드 시점에 검사한다).
  *
- * ─ 두 배경이 다 필요한 이유 (한쪽은 «실패를 재는 자» 다) ────────────────────
- * `REPORT_extractor-v3.md` §0-1-4·5 실측: **정면 실물(밝은 배경)은 전역 문턱
- * 6후보 전부에서 큐브가 안 갈라진다** — 전경 0.78\~3.01% · 채움률 1.3\~7.1% ·
- * 본문 36/36 실패(대조: y2-p9rot 은 전경 52.3% · 채움률 69.7%). 막는 것은 극성이
- * 아니라 «배경↔큐브의 전역 휘도 분리가 없는 장면» 이다. 밝은 배경 프리셋을 빼면
- * 그 한계선을 실물에서 다시 못 잰다.
+ * ─ 이 배열은 손으로 안 적는다: **표 둘의 곱**이다 ──────────────────────────
+ * `SHOT_3D_BACKDROPS`(2) × `SHOT_3D_POSES`(8) = **16장** (운영자 지시 2026-09-07
+ * 21:0x 「8개 자세 x 2 배경 해서 16개 프리셋 카드」). 장수·순서·소속·id·라벨이
+ * 전부 두 표에서 유도되므로 자세를 하나 더하면 **카드도·허용값도·자도 함께 는다.**
+ * 값의 근거는 각 표 옆에 적혀 있다 — 여기 다시 적으면 그게 사본이고 곧 어긋난다
+ * (밝은 배경이 왜 «실패를 재는 자» 인지는 `SHOT_3D_BACKDROPS` 주석).
  *
- * 두 프리셋이 다른 것은 `bgMode` **한 축**뿐이다 — 「대조군은 한 축만 바꿔라」.
+ * ─ 대조 구조 (「대조군은 한 축만 바꿔라」) ──────────────────────────────────
+ *   · 같은 자세의 dark ↔ light 는 `bgMode` **한 축**만 다르다.
+ *   · 같은 배경의 자세 여덟은 `orbitYaw`·`orbitPitch` **두 축**만 다르다.
+ * 자①(dark/light 전수)과 자①-3D(자세 전수 지문)가 그 둘을 각각 잰다.
  */
-export const SHOT_PRESETS = Object.freeze([
-  Object.freeze({
-    id: 'shot-3d-dark',
+export const SHOT_PRESETS = Object.freeze(SHOT_3D_BACKDROPS.flatMap((bg) =>
+  SHOT_3D_POSES.map((p) => Object.freeze({
+    // id 규칙: `shot-3d-<pose>-<dark|light>`. **pose 이름이 촬영 파일명 토큰과 같아야**
+    // 촬영자가 화면에서 그대로 옮겨 적는다 (`sil3d-<bg>-<pose>-<near|far>.jpg`).
+    id: 'shot-3d-' + p.pose + '-' + bg.backdrop,
     family: SHOT_PRESET_FAMILY_3D,
-    // ⚠ 카드 사전 키는 **섹션 자신의 키(g1031 제목 · g1032 힌트 · g1037 이탈)와 겹치면
-    //   안 된다.** 처음에 g1031/g1032 를 여기 적었다가, 카드 라벨에 섹션 제목
-    //   «촬영 프리셋 (시험판)» 이 그대로 찍히는 상태를 만들었다. 사전 커버리지 자는
-    //   「키가 8언어에 다 있나」만 보므로 **전부 초록이었다** —
-    //   「게이트가 엉뚱한 축에서 초록일 수 있다」의 정확한 형태다. 지금은
-    //   `test/generator-shot-presets.test.js` 자② 가 그 겹침을 잰다.
-    labelKey: 'g1033',
-    subKey: 'g1034',
-    // 코드 자신의 지면을 검정으로 채운다 → 어두운 무지 배경 위에 놓으면 프레임
-    // 테두리 띠와 지면이 **같은 색**이 되어, 큐브만 남는 전역 분리가 생긴다
-    // (quiet-auto §13 법칙의 «띠에 있는 색» 조건을 지면 전체로 만족시킨다).
-    fields: Object.freeze({ ...SHOT_3D_COMMON, bgMode: 'black' }),
-  }),
-  Object.freeze({
-    id: 'shot-3d-light',
-    family: SHOT_PRESET_FAMILY_3D,
-    labelKey: 'g1035',
-    subKey: 'g1036',
-    // 위의 거울상. **알려진 어려운 축**이다 — 정면·밝은 배경에서 전역 문턱이
-    // 전부 실패했다(§0-1-4·5). 실패를 재기 위해 남긴다.
-    fields: Object.freeze({ ...SHOT_3D_COMMON, bgMode: 'white' }),
-  }),
-]);
+    group: bg.backdrop,
+    pose: p.pose,
+    /*
+     * ⚠ **라벨에 사전 키가 없다 — 의도다.**
+     *
+     * 종전 두 장은 `labelKey`/`subKey` 로 8언어 사전을 탔다. 16장으로 늘리면서
+     * 그 방식을 버렸는데, 이유가 둘이다:
+     *   ① 카드에 적히는 것이 **번역할 문장이 아니라 식별자와 수**다. `yawp15` 는
+     *      촬영 파일명 토큰이고(위), `+15°` 는 숫자다. 번역하면 옮겨 적기가 깨진다.
+     *   ② 16장 × 2키 × 8언어 = **256줄의 사전**이 생기고, 자세를 하나 더할 때마다
+     *      16줄이 따라온다 — 「사본 목록은 썩는다」가 사전으로 번진다.
+     * 그룹 제목·부제(사람 말)는 그대로 사전을 탄다 — `SHOT_3D_BACKDROPS`.
+     */
+    label: p.pose,
+    sub: 'yaw ' + signedDeg(p.yaw) + ' · pitch ' + signedDeg(p.pitch),
+    fields: Object.freeze({
+      ...SHOT_3D_COMMON,
+      bgMode: bg.bgMode,
+      orbitYaw: p.yaw,
+      orbitPitch: p.pitch,
+    }),
+  }))));
 
 /** 선언에서 유도한 id 목록 (UI 카드 순서 = 이 순서). */
 export const SHOT_PRESET_IDS = Object.freeze(SHOT_PRESETS.map((p) => p.id));
@@ -195,6 +277,13 @@ export function assertShotPresetFields(schema) {
           + String(value) + ' (허용 ' + descriptor.options.join(', ') + ')');
       }
     }
+    /*
+     * ⚠ **궤도 각도 축은 위 검사가 원리적으로 못 본다.** 연속값이라 스키마에
+     *   `options` 가 없고, `descriptor.options !== undefined` 가 false 라 그냥
+     *   지나간다 — 「시스템 자신의 «없음» 출력이 곧 입력이다」의 정확한 형태다.
+     *   대답하는 질문이 다르므로 형제 가드를 따로 부른다.
+     */
+    assertOrbitPresetFields(preset.fields);
   }
   return true;
 }
@@ -297,17 +386,49 @@ export function shotPresetUiModel(state) {
   }
   const claimed = state.shotPreset;
   const actual = shotPresetIdForState(state);
+  const cardOf = (preset) => Object.freeze({
+    id: preset.id,
+    label: preset.label,
+    sub: preset.sub,
+    family: preset.family,
+    group: preset.group,
+    pose: preset.pose,
+    // 활성은 «고른 값» 이 아니라 **«지금 상태가 그것인가»** 다. 골라 놓고 옵션을
+    // 되돌린 화면이 계속 활성으로 보이면 그림이 거짓말을 한다.
+    active: actual === preset.id,
+  });
+  const cards = SHOT_PRESETS.map(cardOf);
+  /*
+   * ⭐ **그룹은 배경 2 × 자세 8** (운영자 지시 「8개 자세 x 2 배경 해서 16개」).
+   *
+   * 16장을 한 줄로 늘어놓으면 못 고른다. 배경으로 묶는 이유는 그것이 **촬영
+   * 세션의 단위**이기 때문이다 — 어두운 무지 바탕을 깔아 두고 여덟 장, 바탕을
+   * 갈고 다시 여덟 장. 자세로 묶으면 바탕을 열여섯 번 갈아야 한다.
+   *
+   * ⚠ `cards`(평평한 16)와 `groups` 는 **같은 선언에서 같은 함수로** 유도된다.
+   *   둘 다 손 목록이 아니고, 어느 쪽도 상대의 사본이 아니다.
+   */
+  const groups = SHOT_3D_BACKDROPS.map((bg) => Object.freeze({
+    group: bg.backdrop,
+    headingKey: bg.headingKey,
+    headingSubKey: bg.headingSubKey,
+    cards: Object.freeze(cards.filter((card) => card.group === bg.backdrop)),
+  }));
   return Object.freeze({
-    cards: Object.freeze(SHOT_PRESETS.map((preset) => Object.freeze({
-      id: preset.id,
-      labelKey: preset.labelKey,
-      subKey: preset.subKey,
-      family: preset.family,
-      // 활성은 «고른 값» 이 아니라 **«지금 상태가 그것인가»** 다. 골라 놓고 옵션을
-      // 되돌린 화면이 계속 활성으로 보이면 그림이 거짓말을 한다.
-      active: actual === preset.id,
-    }))),
+    cards: Object.freeze(cards),
+    groups: Object.freeze(groups),
     selected: actual,
     drifted: claimed !== SHOT_PRESET_NONE && claimed !== actual,
   });
+}
+
+// ── 로드 시점 자기검증 ────────────────────────────────────────────────────────
+// 선언이 «배경 2 × 자세 8 = 16» 을 실제로 낳았는가. 운영자 지시가 장수라서,
+// 유도가 조용히 줄어드는 것(예: 표에서 한 줄이 빠짐)을 여기서 바로 잡는다.
+if (SHOT_PRESETS.length !== SHOT_3D_BACKDROPS.length * SHOT_3D_POSES.length) {
+  throw new Error('촬영 프리셋 장수가 배경 × 자세 유도와 다르다: ' + SHOT_PRESETS.length);
+}
+// 카드 부제가 원근을 안 적는 대신, 공통값이 「p9」인지 여기서 확인한다.
+if (orbitPerspToDeg(SHOT_3D_COMMON.orbitPersp) !== 9) {
+  throw new Error('3D 촬영 공통 원근이 반각 9° 가 아니다 — y2-p9rot 과 축이 둘 갈린다');
 }
