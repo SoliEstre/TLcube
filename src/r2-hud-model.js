@@ -27,6 +27,8 @@ import {
   finalLayoutIdsForN,
   locatorCellsCellSurfaceFinal,
   referenceCellsCellSurfaceFinal,
+  CELL_SURFACE_FINAL_FORMAT_WIRE,
+  resolveFormatWire,
 } from './cellSurfaceFinal.js';
 import { REFERENCE_GROUP_DIGITS_2T } from './placementY.js';
 import { digitToRanks } from './lehmer.js';
@@ -131,7 +133,8 @@ function writeTones(toneGrid, n, i, j, tones) {
 }
 
 /**
- * (n, layoutId) → HUD 가 그릴 역할 격자. 라인업 밖 n · 그 n 에 없는 id 는 **null** (예외 없음).
+ * (n, layoutId, formatWire) → HUD 가 그릴 역할 격자. 라인업 밖 n · 그 n 에 없는 id ·
+ * **그 레이아웃에 없는 세대**는 전부 **null** (예외 없음).
  *
  * - `roleGrid` : Uint8Array(n*n), 인덱스 `j*n + i`, 값 = HUD_ROLE.
  * - `scanGrid` : Int16Array(n*n), 데이터 셀이면 `dataCellsInScanOrderCellSurfaceFinal` 순번
@@ -142,10 +145,18 @@ function writeTones(toneGrid, n, i, j, tones) {
  *   `REFERENCE_GROUP_DIGITS_2T` → `digitToRanks` 로 **유도**한다 (사본 표 금지).
  *   format 은 ecc·mask 를 알아야 정해지므로 지금은 톤 없음이다 (Format (a) 뒤 후속).
  * - `counts`   : 역할별 칸 수 (합 = n²).
+ * - `formatWire` : 이 격자가 선 세대. 호출자가 캐시 무효화에 쓴다 (사본 금지).
+ *
+ * 🔴 **왜 세대가 입력인가** (빚 3 · 3a 유산): 포맷 v1 은 포맷 셀이 15칸, v2 는 18칸이라
+ * **데이터 셀 좌표까지** 달라진다 (`cellSurfaceFinal.js` §CELL_SURFACE_FINAL_FORMAT_WIRES).
+ * 세대를 안 받으면 격자는 언제나 현행 세대의 순서를 그리는데, 런타임은 락 시점에 읽은
+ * 세대로 후보를 묶는다(`r2-scan-runtime.buildLayout`) — 레거시 프레임에서 두 표가 어긋나
+ * 정정 강조·소거 색칠이 **다른 칸**을 지목했다 (v0@13 은 순번 7 부터).
  */
-export function buildRoleGrids(n, layoutId) {
+export function buildRoleGrids(n, layoutId, formatWire = CELL_SURFACE_FINAL_FORMAT_WIRE) {
   const size = Number(n);
   if (!Number.isInteger(size) || size <= 0) return null;
+  const wire = resolveFormatWire(formatWire);
   let ids;
   try {
     ids = finalLayoutIdsForN(size);
@@ -159,8 +170,10 @@ export function buildRoleGrids(n, layoutId) {
   let locator;
   let reference;
   try {
-    map = layoutMapCellSurfaceFinal(size, layoutId);
-    scan = dataCellsInScanOrderCellSurfaceFinal(size, layoutId);
+    // ⚠ 로케이터·레퍼런스는 세대 인자를 **안 받는다** — 그 좌표는 세대와 무관하다
+    //   (`cellSurfaceFinal.js` 의 접근자 서명이 정본이다). 세대가 가르는 것은 포맷·데이터다.
+    map = layoutMapCellSurfaceFinal(size, layoutId, wire);
+    scan = dataCellsInScanOrderCellSurfaceFinal(size, layoutId, wire);
     locator = locatorCellsCellSurfaceFinal(size, layoutId);
     reference = referenceCellsCellSurfaceFinal(size, layoutId);
   } catch {
@@ -197,7 +210,9 @@ export function buildRoleGrids(n, layoutId) {
     writeTones(toneGrid, size, cell.i, cell.j, digitToRanks(digit));
   }
 
-  return { n: size, layoutId, roleGrid, scanGrid, toneGrid, counts };
+  return {
+    n: size, layoutId, formatWire: wire, roleGrid, scanGrid, toneGrid, counts,
+  };
 }
 
 /**
@@ -230,6 +245,140 @@ export function invertScanGrid(scanGrid, out) {
     mapped += 1;
   }
   return mapped;
+}
+
+/**
+ * 역할 격자 캐시를 비운다 — 다섯 칸이 **한 자리에서** 빈다.
+ * 손으로 다섯 줄을 적는 자리가 둘이면(렌더러·`hideR2Hud`) 한쪽만 새 칸을 잊는다.
+ *
+ * @param {{roleGrids:?object, scanInverse:?ArrayLike<number>, layoutId:string, gridN:number, gridWire:number}} cache
+ * @returns {boolean} 이 호출이 캐시를 **바꿨는가** (이미 비었으면 false).
+ */
+export function clearHudRoleGrids(cache) {
+  if (cache === null || typeof cache !== 'object') return false;
+  const wasEmpty = cache.roleGrids === null && cache.scanInverse === null
+    && cache.layoutId === '' && cache.gridN === 0 && cache.gridWire === 0;
+  cache.roleGrids = null;
+  cache.scanInverse = null;
+  cache.layoutId = '';
+  cache.gridN = 0;
+  cache.gridWire = 0;
+  return !wasEmpty;
+}
+
+/**
+ * 🔴 **역할 격자·역표 캐시** — (n · layoutId · formatWire) 셋 중 하나라도 바뀌면 다시 만든다.
+ *
+ * 왜 순수 함수인가 (빚 3): 격자는 매 프레임 만들 수 없어(핫 경로 할당 금지) 캐시되는데, 그
+ * 캐시의 키가 (n · layoutId) 뿐이면 **세대만 바뀐 재bind** 가 옛 격자를 그대로 쓴다 — 유도식을
+ * 고쳐도 사용자에겐 「안 고쳐진 것」이다 (memory: 파생값은 트리거도 필요하다). 규칙이 렌더러 안에
+ * 있으면 그 트리거를 **철자로만** 잴 수 있어서, 규칙째로 여기 둔다.
+ *
+ * 규약 (옛 렌더러 분기와 **같은 행동**):
+ *   · `layoutId` 가 빈 문자열이면(살아 있는 후보 0) 캐시를 비운다.
+ *   · `n` 을 모르면(락 전·코스팅) **아무것도 안 한다** — 옛 격자를 지우지도 새로 만들지도 않는다.
+ *   · 만들 수 없는 조합(라인업 밖 · 없는 세대)은 캐시를 비운다 (그릴 수 없는 격자를 안 남긴다).
+ *
+ * @param {{roleGrids:?object, scanInverse:?ArrayLike<number>, layoutId:string, gridN:number, gridWire:number}} cache caller-owned
+ * @param {{n?:number, layoutId?:string, formatWire?:number}} input
+ * @returns {boolean} 이 호출이 캐시를 바꿨는가. 예외 없음.
+ */
+export function hudRoleGridsInto(cache, input) {
+  if (cache === null || typeof cache !== 'object') return false;
+  if (input === null || typeof input !== 'object') return false;
+  const layoutId = typeof input.layoutId === 'string' ? input.layoutId : '';
+  if (layoutId === '') return clearHudRoleGrids(cache);
+  const size = Number(input.n);
+  if (!Number.isInteger(size) || size <= 0) return false;
+  const wire = resolveFormatWire(input.formatWire);
+  if (cache.roleGrids !== null && cache.roleGrids !== undefined
+    && cache.gridN === size && cache.layoutId === layoutId && cache.gridWire === wire) {
+    return false;
+  }
+  const grids = buildRoleGrids(size, layoutId, wire);
+  if (grids === null) return clearHudRoleGrids(cache);
+  cache.roleGrids = grids;
+  /*
+   * 정정 강조는 「이 스캔 순번들만」이라 `scanGrid` 를 **거꾸로** 물어야 한다. 격자를 통째로 훑는
+   * 소거 색칠과 달리 역표가 필요하고, 표는 `scanGrid` 에서 유도한다 (사본 목록 금지).
+   * 격자와 **같은 호출**에서 만든다 — 한쪽만 갱신하면 셀 번호와 칸이 어긋난다.
+   */
+  cache.scanInverse = null;
+  const dataCells = grids.counts.data;
+  if (Number.isInteger(dataCells) && dataCells > 0) {
+    const inverse = new Int32Array(dataCells);
+    if (invertScanGrid(grids.scanGrid, inverse) > 0) cache.scanInverse = inverse;
+  }
+  cache.layoutId = layoutId;
+  cache.gridN = size;
+  cache.gridWire = wire;
+  return true;
+}
+
+/**
+ * 🔴 **정정 강조 래치** — DONE 적중 하나에서 「그릴 게 있나」를 판정하고, 그 셀 번호가 **어느
+ * 좌표계의 번호인지**를 통째로 붙잡는다 (빚 3 · 3b 검토 rulers F2).
+ *
+ * 왜 순수 함수인가: 옛 자리는 스캐너의 객체 리터럴이었고, 그래서 붙잡는 칸이 하나 빠졌는지를
+ * 재는 방법이 **철자**밖에 없었다. 실제로 `formatWire` 한 줄을 지우면 소비자
+ * (`hudCorrectionGridOk`)가 영원히 거짓이 되어 **정정 강조가 한 픽셀도 안 그려지는데** 자
+ * 전부가 초록이었다. 이제 「무엇을 붙잡나」와 「그것으로 무엇을 묻나」가 값으로 이어진다.
+ *
+ * 규약: 셀이 0개면 **null** — 빈 래치는 「그릴 게 있다」로 읽히고 그 프레임의 렌더가 헛돈다
+ * (잠긴 설계 7). 시각은 **주입**받는다(위상 밖의 층이라 래치 시각이 수명의 유일한 원천이다).
+ *
+ * @param {{correctedCount?:number, correctedCells?:ArrayLike<number>, layoutId?:string,
+ *          n?:number, formatWire?:number}} hit DONE 적중
+ * @param {number} nowMs 래치 시각 (호출자가 주입)
+ * @returns {?{at:number, count:number, cells:ArrayLike<number>, layoutId:string, n:number, formatWire:number}}
+ */
+export function hudCorrectionLatch(hit, nowMs) {
+  if (hit === null || typeof hit !== 'object') return null;
+  const count = Number.isInteger(hit.correctedCount) ? hit.correctedCount : 0;
+  const cells = hit.correctedCells;
+  if (count <= 0 || !cells || !Number.isInteger(cells.length) || cells.length <= 0) return null;
+  return {
+    at: nowMs,
+    count,
+    cells,
+    /*
+     * 아래 셋이 «이 셀 번호의 좌표계» 다 — 소비자가 「같은 격자인가」를 물을 때 비교하는 값과
+     * **같은 목록**이어야 한다. 하나라도 빠지면 그 축의 어긋남을 소비자가 구조적으로 못 본다.
+     */
+    layoutId: hit.layoutId,
+    n: hit.n,
+    formatWire: hit.formatWire,
+  };
+}
+
+/**
+ * 🔴 **이 격자에 정정 강조를 찍어도 되는가** (빚 3 · 3b 검토 F2 / rulers F2).
+ *
+ * 역표·기하는 `cache`(좌 패널과 같은 히스테리시스 선두)의 것이고, DONE 이 **다른 변종·다른
+ * 세대**로 섰다면 그 격자 위의 셀 번호를 이 격자에 찍는 것은 다른 칸을 지목하는 일이다.
+ * 그때 화면에 남는 것은 결과 카드의 «RS 정정 k» 뿐 — 수는 맞고 자리는 안 그린다.
+ *
+ * 옛 자리는 렌더러의 지역 논리곱 여덟이었고 **아무 자도 못 봤다**: 세대 항 한 줄을 지워도,
+ * 래치가 세대를 안 붙잡아도 자 전부가 초록이었다(정정 강조가 통째로 꺼지는 변이다). 입력이
+ * 평범한 객체·수뿐이라 DOM 이 하나도 없다 — 순수 함수가 있어야 할 자리였다.
+ *
+ * 「지금 그릴 α 가 있나」는 **여기 없다** — 그것은 계획(`hudPaintPlan`)이 판정한다.
+ *
+ * @param {?{roleGrids:?object, scanInverse:?ArrayLike<number>, layoutId:string, gridN:number, gridWire:number}} cache
+ * @param {?{layoutId?:string, n?:number, formatWire?:number}} correction 정정 래치
+ * @param {number} n 이 프레임의 락 n
+ * @returns {boolean} 예외 없음.
+ */
+export function hudCorrectionGridOk(cache, correction, n) {
+  if (cache === null || typeof cache !== 'object') return false;
+  if (correction === null || typeof correction !== 'object') return false;
+  if (!Number.isInteger(n) || n <= 0) return false;
+  return cache.roleGrids !== null && cache.roleGrids !== undefined
+    && cache.scanInverse !== null && cache.scanInverse !== undefined
+    && cache.gridN === n
+    && correction.n === n
+    && cache.layoutId === correction.layoutId
+    && cache.gridWire === correction.formatWire;
 }
 
 /** 호모그래피 원소 수 (row-major 3×3). */

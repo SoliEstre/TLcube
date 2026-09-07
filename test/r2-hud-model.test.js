@@ -21,6 +21,10 @@ import {
   HUD_PROJECTION_SCALARS,
   bucketKey,
   buildRoleGrids,
+  clearHudRoleGrids,
+  hudRoleGridsInto,
+  hudCorrectionGridOk,
+  hudCorrectionLatch,
   hudCaptureProjection,
   hudDistrusted,
   hudPhase,
@@ -38,6 +42,13 @@ import {
   finalLayoutIdsForN,
   locatorCellsCellSurfaceFinal,
   referenceCellsCellSurfaceFinal,
+  // 빚 3 — 와이어 세대. 「격자가 세대를 받는가」를 값으로 재려면 세대 상수·선언 용량·포맷 셀이 필요하다.
+  CELL_SURFACE_FINAL_FORMAT_WIRE,
+  CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
+  CELL_SURFACE_FINAL_FORMAT_WIRES,
+  capacityForCellSurfaceFinal,
+  formatCellsCellSurfaceFinal,
+  hasLegacyFormatWire,
 } from '../src/cellSurfaceFinal.js';
 // 톤·인덱스 규약은 «원본에서 다시 유도해» 대조한다 — 사본 표를 들면 인코더가 바뀌는 날 HUD 만 옛 무늬를 그린다.
 import { REFERENCE_GROUP_DIGITS_2T } from '../src/placementY.js';
@@ -123,6 +134,287 @@ test('buildRoleGrids: 라인업 밖 입력은 throw 없이 null', () => {
   assert.equal(buildRoleGrids(NaN, 'v0'), null);
   assert.equal(buildRoleGrids(undefined, undefined), null);
   assert.equal(buildRoleGrids(13, null), null);
+});
+
+/** 레거시(포맷 v1) 판독 세대를 갖는 (n, id) 쌍 — 손 목록이 아니라 원본에서 거른다. */
+function legacyWirePairs() {
+  return lineupPairs().filter(({ id }) => hasLegacyFormatWire(id));
+}
+
+/*
+ * ── 빚 3 (3b) — **와이어 세대는 역할 격자의 입력이다** ────────────────────────────────────
+ *
+ * 3a 유산의 결함: `buildRoleGrids` 가 세대를 모른 채 **현행 세대(2)로만** 격자를 만들었다.
+ * 레거시 와이어(1) 로 발행된 프레임은 포맷 셀이 15칸(18 아님)이라 데이터 스캔 순서가 앞쪽부터
+ * 밀리는데, HUD 는 세대 2 의 순서로 칠했다 — 정정 강조도 소거 색칠도 **다른 칸**을 지목한다.
+ * (런타임은 이미 세대를 안다: `r2-scan-runtime.buildLayout` 이 `formatWire` 를 넘긴다.)
+ *
+ * 재는 성질 — 전부 **값**이고, 기대값의 출처는 스캔 순서 함수가 **아닌** 표다:
+ *   ① 두 세대의 격자가 실제로 **다르다** (세대 인자를 무시하면 같아져 즉시 빨개진다).
+ *   ② 데이터 칸 수 = 그 세대의 **선언 용량**(`capacityForCellSurfaceFinal(...).dataCells`,
+ *      정본은 `DECLARED_DATA` 표) — 스캔 순서를 다시 세는 동어반복이 아니다.
+ *   ③ FORMAT 역할 칸 = 그 세대의 `formatCellsCellSurfaceFinal` 집합과 **정확히** 같다.
+ *   ④ 생략하면 현행 세대 — 옛 호출자(인자 둘)가 오늘과 같은 격자를 받는다.
+ */
+test('빚3 buildRoleGrids: 와이어 세대가 격자를 가른다 — 데이터 수는 선언 용량, 포맷 칸은 그 세대의 포맷 셀', () => {
+  const pairs = legacyWirePairs();
+  assert.ok(pairs.length >= 1,
+    '레거시 와이어를 가진 라인업이 0개다 — 이 자가 공허해진다 (CELL_SURFACE_FINAL_LEGACY_IDS 확인)');
+  for (const { n, id } of pairs) {
+    const byWire = new Map();
+    for (const wire of CELL_SURFACE_FINAL_FORMAT_WIRES) {
+      const grids = buildRoleGrids(n, id, wire);
+      assert.ok(grids !== null, n + '@' + id + ' wire' + wire + ': null 이면 안 된다');
+      assert.equal(grids.formatWire, wire, n + '@' + id + ': 격자가 자기 세대를 안 싣는다');
+
+      // ② 데이터 칸 수 — 선언 용량 표에서 온다.
+      const declared = capacityForCellSurfaceFinal(n, 'H', 2, id, wire).dataCells;
+      assert.equal(grids.counts.data, declared,
+        n + '@' + id + ' wire' + wire + ': 데이터 칸 수가 선언 용량(' + declared + ')과 다르다');
+
+      // ③ FORMAT 역할 칸 = 그 세대의 포맷 셀 집합.
+      const wantFormat = new Set(
+        formatCellsCellSurfaceFinal(n, id, wire).map((cell) => cell.j * n + cell.i),
+      );
+      const gotFormat = new Set();
+      for (let idx = 0; idx < grids.roleGrid.length; idx += 1) {
+        if (grids.roleGrid[idx] === HUD_ROLE.FORMAT) gotFormat.add(idx);
+      }
+      assert.deepEqual([...gotFormat].sort((a, b) => a - b), [...wantFormat].sort((a, b) => a - b),
+        n + '@' + id + ' wire' + wire + ': FORMAT 칸 집합이 그 세대의 포맷 셀과 다르다');
+      byWire.set(wire, grids);
+    }
+
+    // ① 두 세대가 실제로 다르다 — 첫 어긋남 순번을 값으로 낸다.
+    const now = byWire.get(CELL_SURFACE_FINAL_FORMAT_WIRE);
+    const legacy = byWire.get(CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY);
+    assert.notEqual(now.counts.data, legacy.counts.data,
+      n + '@' + id + ': 두 세대의 데이터 칸 수가 같다 — 세대 인자가 무시되고 있다');
+    const inverseOf = (grids) => {
+      const out = new Int32Array(grids.counts.data).fill(-1);
+      for (let idx = 0; idx < grids.scanGrid.length; idx += 1) {
+        const k = grids.scanGrid[idx];
+        if (k >= 0 && k < out.length && out[k] < 0) out[k] = idx;
+      }
+      return out;
+    };
+    const invNow = inverseOf(now);
+    const invLegacy = inverseOf(legacy);
+    let firstDiff = -1;
+    for (let k = 0; k < Math.min(invNow.length, invLegacy.length); k += 1) {
+      if (invNow[k] !== invLegacy[k]) { firstDiff = k; break; }
+    }
+    assert.ok(firstDiff >= 0,
+      n + '@' + id + ': 두 세대의 역표가 완전히 같다 — 세대 인자가 격자에 안 닿았다');
+    /*
+     * 그 어긋남은 **포맷 셀이 갈리는 자리부터** 시작한다: 세대 2 가 더 쓰는 포맷 칸을 세대 1 은
+     * 데이터로 쓰므로, 그 칸이 스캔 순서에 처음 나오는 순번이 곧 첫 어긋남이다.
+     * 값 자체(v0@13 = 7)는 배치라 안 못 박고, 「0 보다 크고 둘 다의 길이 안」만 잰다.
+     */
+    assert.ok(firstDiff > 0 && firstDiff < invNow.length,
+      n + '@' + id + ': 첫 어긋남 순번이 ' + firstDiff + ' 이다 — 격자 앞부분까지 갈리면 파인더가 바뀐 것');
+  }
+});
+
+test('빚3 buildRoleGrids: 세대를 생략하면 현행 세대 — 옛 호출자(인자 둘)가 같은 격자를 받는다', () => {
+  for (const { n, id } of lineupPairs()) {
+    assert.deepEqual(buildRoleGrids(n, id), buildRoleGrids(n, id, CELL_SURFACE_FINAL_FORMAT_WIRE),
+      n + '@' + id + ': 생략 기본값이 현행 세대가 아니다');
+  }
+  // 세대가 아닌 값은 «모른다» → 현행 세대로 떨어진다 (예외 없음 · 그림을 잃지 않는다).
+  const { n, id } = lineupPairs()[0];
+  for (const bad of [0, 3, -1, 1.5, NaN, 'x', null, {}]) {
+    assert.deepEqual(buildRoleGrids(n, id, bad), buildRoleGrids(n, id, CELL_SURFACE_FINAL_FORMAT_WIRE),
+      '세대 ' + String(bad) + ' 가 현행 세대로 안 떨어진다');
+  }
+  // 레거시 세대가 **없는** 레이아웃에 1 을 주면 null (예외 없음) — 런타임도 그 후보를 안 만든다.
+  const noLegacy = lineupPairs().find((p) => !hasLegacyFormatWire(p.id));
+  assert.ok(noLegacy, '레거시 없는 레이아웃이 라인업에 0개다 — 이 단언이 공허해진다');
+  assert.equal(buildRoleGrids(noLegacy.n, noLegacy.id, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY), null,
+    noLegacy.n + '@' + noLegacy.id + ': 없는 세대 조합이 null 이 아니다');
+});
+
+/*
+ * ── 빚 3 (3b) — **파생값에는 무효화 트리거도 필요하다** ──────────────────────────────────
+ *
+ * 격자와 역표는 매 프레임 만들 수 없어(핫 경로 할당 금지) 캐시된다. 그 캐시의 키가
+ * (n · layoutId) 뿐이면 **세대만 바뀐 재bind** 가 옛 격자를 그대로 쓴다 — 유도식을 고쳐도
+ * 사용자에게는 «안 고쳐진 것» 이다 (memory: 파생값은 트리거도 필요하다).
+ * 그래서 캐시 규칙 자체를 순수 함수로 두고 **값으로** 잰다: 세대 한 축만 흔들어 다시 만드는지.
+ */
+test('빚3 hudRoleGridsInto: 캐시 키는 (n · layoutId · 세대) 셋 — 세대만 바뀌어도 다시 만든다', () => {
+  const pair = legacyWirePairs()[0];
+  assert.ok(pair, '레거시 세대를 가진 라인업이 없다 — 이 자가 공허해진다');
+  const { n, id } = pair;
+  const cache = {
+    roleGrids: null, scanInverse: null, layoutId: '', gridN: 0, gridWire: 0,
+  };
+
+  // ① 첫 호출 — 만든다.
+  assert.equal(hudRoleGridsInto(cache, { n, layoutId: id, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE }), true);
+  assert.ok(cache.roleGrids, '격자를 안 만들었다');
+  assert.ok(cache.scanInverse, '역표를 안 만들었다');
+  assert.equal(cache.roleGrids.formatWire, CELL_SURFACE_FINAL_FORMAT_WIRE);
+  const first = cache.roleGrids;
+  const firstInverse = cache.scanInverse;
+
+  // ② 같은 셋 — 다시 만들지 않는다 (핫 경로 할당 금지).
+  assert.equal(hudRoleGridsInto(cache, { n, layoutId: id, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE }), false);
+  assert.equal(cache.roleGrids, first, '같은 키인데 격자를 다시 만들었다');
+  assert.equal(cache.scanInverse, firstInverse, '같은 키인데 역표를 다시 만들었다');
+
+  // ③ 🔴 **세대 한 축만** 바꾼다 — 여기가 이 자의 존재 이유다.
+  assert.equal(hudRoleGridsInto(cache, { n, layoutId: id, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY }), true,
+    '세대가 바뀌었는데 캐시를 그대로 쓴다 — 레거시 프레임의 강조가 옛 세대의 칸을 지목한다');
+  assert.equal(cache.gridWire, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY);
+  assert.notEqual(cache.roleGrids, first);
+  assert.notEqual(cache.roleGrids.counts.data, first.counts.data,
+    '세대를 바꿨는데 데이터 칸 수가 같다 — 캐시가 세대를 안 넘겼다');
+  // 역표도 그 세대의 것이다 (한쪽만 갱신하면 셀 번호와 칸이 어긋난다).
+  assert.equal(cache.scanInverse.length, cache.roleGrids.counts.data);
+  for (let k = 0; k < cache.scanInverse.length; k += 1) {
+    assert.equal(cache.roleGrids.scanGrid[cache.scanInverse[k]], k, 'k=' + k + ' 역표가 격자의 역함수가 아니다');
+  }
+
+  // ④ 선두가 없으면(빈 문자열) 캐시를 **비운다** — 옛 선두의 색으로 칠하면 두 표면이 다른 말을 한다.
+  assert.equal(hudRoleGridsInto(cache, { n, layoutId: '', formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE }), true);
+  assert.equal(cache.roleGrids, null);
+  assert.equal(cache.scanInverse, null);
+  assert.equal(cache.layoutId, '');
+  assert.equal(cache.gridN, 0);
+  assert.equal(cache.gridWire, 0);
+
+  // ⑤ n 을 모르면(락 전·코스팅) **아무것도 안 한다** — 옛 격자를 지우지도 새로 만들지도 않는다.
+  hudRoleGridsInto(cache, { n, layoutId: id, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE });
+  const kept = cache.roleGrids;
+  assert.equal(hudRoleGridsInto(cache, { n: 0, layoutId: id, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE }), false);
+  assert.equal(cache.roleGrids, kept, 'n 을 모르는 프레임이 캐시를 건드렸다');
+
+  // ⑥ 잘못된 입력은 예외 없이 false. 캐시가 아니면 아무 일도 없다.
+  assert.equal(hudRoleGridsInto(null, { n, layoutId: id }), false);
+  assert.equal(hudRoleGridsInto(cache, null), false);
+  // 없는 세대 조합(레거시 없는 레이아웃 × 1)은 캐시를 **비운다** — 그릴 수 없는 격자를 남기지 않는다.
+  const noLegacy = lineupPairs().find((p) => !hasLegacyFormatWire(p.id));
+  assert.equal(hudRoleGridsInto(cache, { n: noLegacy.n, layoutId: noLegacy.id, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY }), true);
+  assert.equal(cache.roleGrids, null, '만들 수 없는 조합인데 옛 격자가 남았다');
+});
+
+test('빚3 clearHudRoleGrids: 캐시 다섯 칸을 한 자리에서 비운다 (hideR2Hud 와 같은 규칙)', () => {
+  const pair = legacyWirePairs()[0];
+  const cache = {
+    roleGrids: null, scanInverse: null, layoutId: '', gridN: 0, gridWire: 0,
+  };
+  hudRoleGridsInto(cache, { n: pair.n, layoutId: pair.id, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY });
+  assert.ok(cache.roleGrids && cache.gridWire === CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY);
+  assert.equal(clearHudRoleGrids(cache), true, '비울 것이 있는데 «안 바뀌었다» 고 답했다');
+  assert.deepEqual(cache, {
+    roleGrids: null, scanInverse: null, layoutId: '', gridN: 0, gridWire: 0,
+  });
+  // 이미 비어 있으면 «안 바뀌었다» — 호출자가 헛렌더를 안 해도 된다.
+  assert.equal(clearHudRoleGrids(cache), false);
+  assert.equal(clearHudRoleGrids(null), false);
+});
+
+/*
+ * ── 빚 3 (3b) — **끝단 소비 사슬: 적중 → 래치 → 소비** ────────────────────────────────────
+ *
+ * 3b 검토 F2 / rulers F2 가 잡은 구멍: 상류(`buildRoleGrids` · `hudRoleGridsInto`)는 값으로
+ * 잠겼는데 **그 세대를 확인하는 쪽**이 전부 렌더러 지역 코드라 무자였다. 실측으로:
+ *   · 래치에서 `formatWire` 한 줄을 지우면 → 소비 판정이 영원히 거짓 → **정정 강조가 한
+ *     픽셀도 안 그려지는데** 표적 87/87 초록.
+ *   · 8항 논리곱의 세대 항을 지워도 → 초록 (레거시 프레임에서 다른 칸을 칠하게 된다).
+ * 두 규칙이 순수 함수로 올라왔으므로 아래 둘이 **값으로** 잰다 — 그리고 둘을 사슬로 잇는다:
+ * 래치가 안 붙잡은 칸은 소비자가 구조적으로 못 본다.
+ */
+
+/** 세대 w 를 묶은 격자 캐시 하나 — 소비 판정의 «이쪽» 입력. */
+function gridCacheFor(pair, wire) {
+  const cache = {
+    roleGrids: null, scanInverse: null, layoutId: '', gridN: 0, gridWire: 0,
+  };
+  hudRoleGridsInto(cache, { n: pair.n, layoutId: pair.id, formatWire: wire });
+  assert.ok(cache.roleGrids !== null,
+    '자 자신의 준비가 실패했다 (' + pair.id + '@' + pair.n + ' wire ' + wire + ')');
+  return cache;
+}
+
+/** DONE 적중 하나 — 정정 셀 3칸 (`buildR2Hit` 이 내는 모양). */
+function hitFor(pair, wire, count = 3) {
+  return {
+    text: 'x',
+    layoutId: pair.id,
+    n: pair.n,
+    frame: 6,
+    correctedCount: count,
+    correctedCells: Int32Array.from([1, 2, 3]),
+    formatWire: wire,
+  };
+}
+
+test('빚3 hudCorrectionLatch: 셀 번호의 «좌표계» 셋을 통째로 붙잡는다 — 소비자가 비교하는 목록과 같다', () => {
+  const pair = legacyWirePairs()[0];
+  const hit = hitFor(pair, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY);
+  const latch = hudCorrectionLatch(hit, 1234);
+  assert.ok(latch !== null, '그릴 셀이 있는 적중인데 래치가 안 섰다');
+  assert.equal(latch.at, 1234, '시각이 주입값이 아니다 — 그것이 강조 수명의 유일한 원천이다');
+  assert.equal(latch.count, 3);
+  assert.equal(latch.cells, hit.correctedCells, '셀 목록을 복사했다 (핫 경로 할당)');
+  /*
+   * 🔴 붙잡는 좌표계 셋 — **소비자가 비교하는 축**과 같은 목록이어야 한다. 하나라도 빠지면
+   * 그 축의 어긋남을 `hudCorrectionGridOk` 가 구조적으로 못 본다 (그리고 «세대» 가 빠지면
+   * 비교가 `undefined` 와의 대조가 되어 강조가 **통째로** 꺼진다 — 아래 사슬 단언).
+   */
+  for (const key of ['layoutId', 'n', 'formatWire']) {
+    assert.equal(latch[key], hit[key], '래치가 ' + key + ' 를 안 붙잡는다 — 셀 번호의 좌표계를 잃는다');
+  }
+  // 「그릴 게 있을 때만」 — 빈 래치는 「그릴 게 있다」로 읽혀 그 프레임의 렌더가 헛돈다.
+  assert.equal(hudCorrectionLatch({ ...hit, correctedCount: 0 }, 0), null, '정정 0 인데 래치가 섰다');
+  assert.equal(hudCorrectionLatch({ ...hit, correctedCells: Int32Array.of() }, 0), null, '셀 0칸인데 래치가 섰다');
+  assert.equal(hudCorrectionLatch({ ...hit, correctedCells: null }, 0), null);
+  assert.equal(hudCorrectionLatch({ ...hit, correctedCount: 1.5 }, 0), null, '정수가 아닌 수를 세었다');
+  for (const bad of [null, undefined, 0, 'x']) assert.equal(hudCorrectionLatch(bad, 0), null, String(bad));
+});
+
+test('빚3 hudCorrectionGridOk: 축 하나만 틀려도 거짓 — 세대만 달라도 (3b 검토 F2 · 강조를 통째로 끄는 스위치)', () => {
+  const pair = legacyWirePairs()[0];
+  const legacy = CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY;
+  const cache = gridCacheFor(pair, legacy);
+  const latch = hudCorrectionLatch(hitFor(pair, legacy), 0);
+  assert.equal(hudCorrectionGridOk(cache, latch, pair.n), true, '같은 격자·같은 세대인데 강조를 막는다');
+
+  /*
+   * 🔴 **한 축씩** — 「이 셀 번호를 이 격자에 찍어도 되는가」의 축을 따로 흔든다. 어느 항을
+   * 지우든(= 실측된 변이 X3) 여기서 빨개진다.
+   */
+  const worse = [
+    ['격자 없음', { ...cache, roleGrids: null }, latch, pair.n],
+    ['역표 없음', { ...cache, scanInverse: null }, latch, pair.n],
+    ['캐시 n 어긋남', { ...cache, gridN: pair.n + 1 }, latch, pair.n],
+    ['래치 n 어긋남', cache, { ...latch, n: pair.n + 1 }, pair.n],
+    ['변종 어긋남', cache, { ...latch, layoutId: latch.layoutId + 'x' }, pair.n],
+    ['세대 어긋남', cache, { ...latch, formatWire: CELL_SURFACE_FINAL_FORMAT_WIRE }, pair.n],
+    ['래치 없음', cache, null, pair.n],
+    ['n 미상', cache, latch, 0],
+  ];
+  for (const [name, c, corr, n] of worse) {
+    assert.equal(hudCorrectionGridOk(c, corr, n), false, name + ': 어긋난 격자에 강조를 찍는다');
+  }
+  /*
+   * 🔴 **사슬** — 래치가 세대를 안 붙잡으면(그 한 줄을 지우면) 소비자가 «같은 격자» 를 절대
+   * 인정하지 않는다: 화면에서는 「정정 강조가 통째로 안 뜬다」로 보이고 상류 자는 전부 초록이다.
+   */
+  const latchWithoutWire = { at: latch.at, count: latch.count, cells: latch.cells, layoutId: latch.layoutId, n: latch.n };
+  assert.equal(hudCorrectionGridOk(cache, latchWithoutWire, pair.n), false,
+    '세대를 안 붙잡은 래치를 소비자가 «같은 격자» 로 인정한다');
+  // 그리고 **다른 세대의 격자**로 그리면 거짓 — 이것이 빚 3 이 막는 그림이다.
+  assert.equal(hudCorrectionGridOk(gridCacheFor(pair, CELL_SURFACE_FINAL_FORMAT_WIRE), latch, pair.n), false,
+    '레거시 셀 번호를 현행 세대 격자에 찍는다 — 순번 7 부터 다른 칸이다');
+  // 잘못된 입력에 안 던진다.
+  for (const bad of [null, undefined, 0, 'x']) {
+    assert.equal(hudCorrectionGridOk(bad, latch, pair.n), false, String(bad));
+    assert.equal(hudCorrectionGridOk(cache, bad, pair.n), false, String(bad));
+    assert.equal(hudCorrectionGridOk(cache, latch, bad), false, String(bad));
+  }
 });
 
 test('hudPhase: 우선순위 진리표', () => {

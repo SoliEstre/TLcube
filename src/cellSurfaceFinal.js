@@ -187,6 +187,18 @@ export const CELL_SURFACE_FINAL_FORMAT_WIRES = Object.freeze([
   CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
 ]);
 
+/**
+ * **「모르는 세대」의 해석** — 세대 목록에 없는 값(미판독 `undefined`·0·잘못된 입력)은
+ * 현행 세대로 떨어진다. 소비자(HUD 역할 격자 · R2 런타임 bind · 어댑터 표본)가 **같은 규칙**을
+ * 써야 「런타임이 묶은 세대」와 「HUD 가 그리는 세대」가 안 갈린다 (빚 3 · 3a 유산).
+ * 목록에서 유도하므로 세대가 늘면 이 함수가 따라온다 — 여기에 1·2 를 적지 않는다.
+ */
+export function resolveFormatWire(formatWire) {
+  return CELL_SURFACE_FINAL_FORMAT_WIRES.includes(formatWire)
+    ? formatWire
+    : CELL_SURFACE_FINAL_FORMAT_WIRE;
+}
+
 /** 세대 → autoplace 복제 길이. 다른 값은 없다. */
 export function formatBlockLengthForWire(formatWire) {
   if (formatWire === CELL_SURFACE_FINAL_FORMAT_WIRE) return FORMAT_BLOCK_LENGTH_V2;

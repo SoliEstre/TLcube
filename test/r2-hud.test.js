@@ -37,6 +37,8 @@ import { resolveZoomPlan } from '../src/scanner-zoom.js';
 import { R2_HUD_DEBUG_LINE_BUDGET, counterAbbrev, r2HudDebugLine } from '../src/r2-hud-model.js';
 // 불신 색의 «세기만 다른 자리» 도 순수 유도자를 거친다 — ⓛ ⑥ 가 **값으로** 잰다 (3d 검토 결함 6).
 import { scaleColorAlpha } from '../src/r2-hud-model.js';
+// 계획의 **키 집합**이 ⓠ⑥ 의 «소비 훑기» 목록을 유도한다 (손 목록 금지 — 필드가 늘면 따라온다).
+import { hudPaintPlan } from '../src/r2-hud-paint.js';
 import { createR2ScanRuntime } from '../src/r2-scan-runtime.js';
 import { CELL_MAP_STATE } from '../src/r2/progress.js';
 
@@ -271,10 +273,34 @@ test('ⓒ 묶음 전수 — HUD_BUCKETS 의 모든 키가 렌더러의 유도(�
 
 test('ⓓ ⚠ 철자 자 — 렌더러가 순수 모듈을 부르고, 재사영을 사영 입력 여섯으로 게이트하고, 좌 패널과 같은 선두를 쓴다', () => {
   const body = renderBody();
-  for (const needle of ['hudPhase(', 'countObserved(', 'buildRoleGrids(', 'bucketKey(',
+  /*
+   * ⚠ **의도적 갱신 (빚 3)** — 옛 목록은 `buildRoleGrids(` 를 요구했다. 격자 캐시의 **무효화 규칙**이
+   * 렌더러 안에 살아 있었기 때문인데, 그 키가 (n · layoutId) 뿐이라 «세대만 바뀐 재bind» 를 못 봤다.
+   * 이제 규칙째로 순수 모듈에 있고(`hudRoleGridsInto`), 트리거는 값으로 잰다(r2-hud-model.test 빚3).
+   * 여기서는 여전히 «렌더러가 그 규칙을 손으로 다시 적지 않았는가» 만 본다.
+   */
+  for (const needle of ['hudPhase(', 'countObserved(', 'hudRoleGridsInto(', 'bucketKey(',
     'projectFaceQuadsInto(', 'projectGridLinesInto(', 'projectOutlineInto(', 'faceQuadSlot(', 'finiteBoundsInto(']) {
     assert.ok(body.includes(needle), 'renderR2CellMap 이 ' + needle + ' 를 안 부른다 — 그 규칙을 손으로 다시 적었다는 뜻이다');
   }
+  // 그리고 격자를 다시 만드는 유일한 자리다 — 렌더러가 따로 `buildRoleGrids` 를 부르면 규칙이 둘이 된다.
+  assert.ok(!body.includes('buildRoleGrids('),
+    '렌더러가 캐시 규칙을 우회해 격자를 직접 만든다 — 무효화 트리거가 두 곳에 산다');
+  /*
+   * 🔴 **빚 3 의 배선** — 격자를 만드는 세대는 런타임이 후보를 묶은 세대여야 한다. 세대를 안 먹이면
+   * 격자는 늘 현행 세대로 서고, 레거시(와이어 1) 프레임의 정정 강조·소거 색칠이 다른 칸을 지목한다.
+   * (세대가 실제로 격자를 가른다는 것은 r2-hud-model.test 빚3 가 **값으로** 잰다.)
+   *
+   * ⚠ **의도적 완화 (3b 검토 rulers F7 · FP4)**: 옛 자는 `formatWire: view.formatWire` 라는 철자를
+   * 요구해서 «생산자·소비자·값 자를 한꺼번에 개명» 하는 정상 변경을 거부했다. 재는 성질은 필드
+   * **이름**이 아니라 «격자 호출이 세대를 **뷰에서** 읽고, 리터럴로 못박지 않는다» 다.
+   */
+  const gridCall = /hudRoleGridsInto\(\s*\w+,\s*\{([^}]*)\}/.exec(body);
+  assert.ok(gridCall, 'HUD 격자 호출을 못 찾았다 — 캐시 규칙 호출이 사라졌나');
+  assert.ok(/view\.\w+/.test(gridCall[1]),
+    'HUD 격자에 포맷 세대를 안 먹인다 (' + gridCall[1].trim() + ') — 레거시 와이어 프레임에서 순번 7 부터 다른 칸을 칠한다');
+  assert.ok(!/:\s*\d/.test(gridCall[1]),
+    'HUD 격자 호출에 세대·크기 리터럴이 박혔다 — 그 축은 프레임을 안 따라간다');
   /*
    * 재사영은 «사영 입력이 바뀔 때만» (H5). **의도적 갱신 2026-09-06**: 예전 자는 `lockRevision !== ` 라는
    * 철자를 요구했는데, 그 조건 하나로는 «후보 폐기 → 같은 락으로 재bind» 를 못 본다 (disposeCandidates 는
@@ -311,7 +337,15 @@ test('ⓓ ⚠ 철자 자 — 렌더러가 순수 모듈을 부르고, 재사영�
   assert.ok(!/r2Hud\.frameW\s*=/.test(body),
     '렌더 본문이 사영 프레임 폭을 직접 대입한다 — 기록은 hudCaptureProjection 한 곳이어야 한다');
   const captureAt = body.indexOf('hudCaptureProjection(');
-  assert.ok(captureAt > body.indexOf('projectOutlineInto(') && captureAt < body.indexOf('const leadingId'),
+  /*
+   * 끝 표식은 «선두 판정» 단계다 — 빚 3 뒤 그 단계는 `hudRoleGridsInto(` 한 줄이다 (옛 표식
+   * `const leadingId`). ⚠ **이것은 함정을 없앤 것이 아니라 새 랜드마크로 옮긴 것이다**
+   * (3b 검토 rulers F10): 이 자는 «소스 위치» 로 블록 경계를 짐작하므로, 그 단계가 또 움직이면
+   * 다시 만료되고 이번에도 «사영 기록이 블록 밖» 이라는 **엉뚱한 진단**으로 빨개진다. 옳은 형태는
+   * ⓠ⑤ 처럼 중괄호 균형으로 «조건문 안인가» 를 재는 것인데, 여기 조건문은 사영 셋을 감싸는 블록이라
+   * 그 수법을 그대로 못 쓴다 — 빚으로 남긴다 (다음에 이 자가 빨개지면 **표식부터** 의심하라).
+   */
+  assert.ok(captureAt > body.indexOf('projectOutlineInto(') && captureAt < body.indexOf('hudRoleGridsInto('),
     '사영 기록이 재사영 블록(사영 셋 ~ 선두 판정) 밖이다 — 조건은 참인데 기록이 없으면 매 프레임 재사영이다');
   assert.equal((body.match(/hudCaptureProjection\(/g) || []).length, 1,
     '사영 기록이 두 곳이다 — 하나는 조건 밖에서 스냅샷을 덮는다');
@@ -719,11 +753,20 @@ test('ⓛ ⚠ 철자 자 — 불신 판정은 순수 모델에서 오고, 색은
   assert.match(JS, /const R2_HUD_DISTRUST_STROKE = R2_CELL_COLOR\[CELL_MAP_STATE\.ERASURE\]/,
     '불신 색이 셀맵 색표에서 안 온다 (사본 색)');
 
-  // ③ 두 표면이 같은 α 를 쓴다 — 한쪽만 눕히면 같은 상태의 두 그림이 다른 말을 한다.
-  assert.match(body, /const paintAlpha = distrusted \? alpha \* R2_HUD_DISTRUST_ALPHA : alpha/,
-    '불신 α 를 두 표면이 공유하는 자리가 없다');
+  /*
+   * ③ 두 표면이 같은 α 를 쓴다 — 한쪽만 눕히면 같은 상태의 두 그림이 다른 말을 한다.
+   * ⚠ **의도적 갱신 (빚 2)** — 옛 자는 `distrusted ? alpha * R2_HUD_DISTRUST_ALPHA : alpha` 라는
+   * **철자**를 요구했다. 이제 그 유도는 순수 계획이 쥐고(`hudPaintPlan`) 배율·«채움만 눕는다» 는
+   * `test/r2-hud-paint.test.js` ⓐ⑤ 가 **값으로** 잰다. 여기 남는 명제는 배선 하나다:
+   * 두 표면이 계획의 **같은 한 수**를 쓴다.
+   */
+  assert.match(body, /const paintAlpha = plan\.paintAlpha;/,
+    '불신 α 가 순수 계획에서 안 온다 — 유도가 렌더러로 되돌아왔다');
   assert.match(body, /paintR2HudBuckets\(ctx, paintAlpha, r2HudPaths\)/, '오버레이가 불신 α 를 안 쓴다');
   assert.match(body, /paintR2HudBuckets\(mctx, paintAlpha, r2HudMiniPaths\)/, '미니가 불신 α 를 안 쓴다');
+  // 배율을 렌더러가 다시 곱하지 않는다 (α 를 만드는 자리는 계획 하나다 — `distrustFlag` 같은 분기는 무관).
+  assert.ok(!/distrusted \? [\w.]+ \*/.test(body),
+    '렌더러가 불신 α 를 스스로 다시 계산한다 — 규칙이 두 곳에 산다');
 
   // ④ 선은 점선으로 갈린다 — 그리고 그 붓은 한 함수다 (색·점선을 두 곳에서 각자 세우면 어긋난다).
   assert.ok(/function setR2HudStroke\(ctx, distrusted, baseColor, unitPx\)/.test(JS),
@@ -787,57 +830,104 @@ test('ⓜ ⚠ 철자 자 — 좌 패널 progress 행의 «격자 재확인» 이
 });
 
 /*
- * ── 3b «RS 정정 강조» 의 그림 ─────────────────────────────────────────────────
- * ⚠ **철자 자** — 3d ⓛ 와 같은 층·같은 한계다. 3b 검토 F7 이 잡은 구멍이 이것이었다:
- * `paintR2Correction` 호출 두 줄을 통째로 지워도 R2 자 전부가 초록이었다(82/82). 즉
- * «정정 위치 → 셀» 까지만 자가 있었고 **그리는 표면**엔 자가 하나도 없었다.
- * 여기서 잠그는 명제: 붓 색이 팔레트에서 유도되고 · 두 표면이 같은 함수·같은 α 를 쓰고 ·
- * 래치가 «그릴 게 있을 때만» 서고 · 래치를 비우는 자리마다 정정 래치도 같이 비고 ·
- * 정정 프레임에서 채움 게이트가 열린다(F6).
+ * ── 3b «RS 정정 강조» 의 그림 — **ⓞ 는 퇴역했다** (빚 2, 2026-09-07) ──────────────────────
+ *
+ * 🔴 **퇴역 사유**: ⓞ 는 «채움이 열리는가» 가 아니라 «`corrFresh` 라고 썼는가» 를 정규식으로 재는
+ * 철자 자였고, 그래서 **정상 개명**(`corrFresh` → `corrLive`)을 거부했다 (3b 검토 M7 ·
+ * memory: 철자를 재는 자는 썩는다). 대체는 «재는 축» 을 바꾼 자다 — 판정과 붓질을 캔버스에서 떼어
+ * 값과 행동으로 잰다:
+ *   · `test/r2-hud-paint.test.js` ⓐ — 층 열림·α (계획의 **값**). ⓞ ③④⑦ 의 «모델» 절반이 여기로 왔다.
+ *   · `test/r2-hud-paint.test.js` ⓑ①ⓑ② — 붓질 (가짜 ctx 의 **행동**).
+ *   · `test/r2-hud-paint.test.js` ⓑ③ — ⓞ ② (붓 파일에 색 리터럴 0). ⚠ **정정 (3b 검토 rulers F4)**:
+ *     퇴역 당시 여기엔 «붓에 색 자체가 없어 리터럴 사본이 구조적으로 못 앉는다» 고 적었는데 거짓이었다 —
+ *     `ctx.shadowColor` 에 사본을 앉히면 전부 초록이었다(ⓑ① 은 fill/stroke 색만 본다). 그래서 ⓞ② 의
+ *     소스 훑기를 ⓑ③ 으로 **되살렸다**: 대상이 순수 모듈 한 파일이라 «철자» 가 아니라 «금지 어휘» 다.
+ *   · `test/r2-hud-paint.test.js` ⓓ — ⑯(i) 표면 판정이 **실제 `hidden` 이 되는가** (값).
+ *     ⚠ **정정 (3b 검토 F1)**: 퇴역 당시 이 명제는 `r2-hud-model.test` ⑯(i) 로 옮겼다고 적었지만
+ *     그것은 «판정» 만 재고 «대입» 은 안 잰다. ⓞ 가 갖고 있던 두 줄(`r2HudCanvas.hidden =
+ *     surfaces.overlayHidden` 의 존재 · 리터럴 금지)이 대체 없이 사라졌고, 오버레이를 `hidden = true`
+ *     로 못박아도 표적 134/134 가 초록이었다 — ⑯(i) 가 막으려던 결함 그 자체다. 이제 대입이 순수
+ *     이음새(`applyHudSurfaces`)라 ⓓ 가 **값으로** 잰다 (+ 아래 ⓠ⑥ 이 리터럴 재진입을 훑는다).
+ *   · `test/r2-hud-model.test.js` ⑯(i) — 표면 표시 «판정» (값).
+ *   · `test/r2-hud-model.test.js` 빚3 `hudCorrectionLatch`·`hudCorrectionGridOk` — ⓞ⑤ 의 래치 규칙과,
+ *     ⓞ 가 아예 못 보던 «정정 강조를 통째로 끄는 스위치» (3b 검토 F2).
+ *   · CSS 변수 `--r2-rsfix` 의 유도는 `test/engine-switch.test.js` ⓖ 가 이미 잰다.
+ * 여기 남는 것이 아래 ⓠ 다. ⚠ 그 «나머지» 의 정확한 이름은 «브라우저 밖에서 실행할 수 없는 층» 이
+ * 아니라 **«`sites/tlscan/scanner.js` 가 노드에서 import 되지 않는 층»** 이다 (rulers F5 의 정정) —
+ * 그중 진짜 브라우저 축은 Path2D 할당 하나뿐이고, 붓 색 정본은 팔레트가 `scanner.js` 에 사는 탓이다.
  */
-test('ⓞ ⚠ 철자 자 — 정정 강조의 붓·α·두 표면·비우기가 전부 유도에서 온다 (3b)', () => {
+test('ⓠ ⚠ 철자 자 — 정정 강조의 «래치 배선 · 붓 색 · 계획 소비 · 할당 규율» (값으로 못 재는 나머지 · 빚 2)', () => {
   const body = renderBody();
 
-  // ① 붓 색은 팔레트의 «rsfix» 항목에서 온다 — rgba 를 다시 적으면 좌 패널 칩(--r2-rsfix)과 갈라진다.
-  assert.match(JS, /const R2_HUD_CORRECTION_COLOR = R2_CELL_COLOR\[HUD_RSFIX_STATE_KEY\]/,
+  /*
+   * ① 붓 색은 팔레트의 «rsfix» 항목에서 온다. 붓 함수 자체엔 색이 없으므로(순수 모듈) 이 자리가
+   *    그 색을 **값으로 건네는** 유일한 곳이다 — 여기서 rgba 를 다시 적으면 좌 패널 칩과 갈라진다.
+   */
+  assert.match(JS, /const R2_HUD_CORRECTION_STYLE = Object\.freeze\(\{ color: R2_CELL_COLOR\[HUD_RSFIX_STATE_KEY\] \}\)/,
     '정정 붓 색이 셀맵 색표에서 안 온다 (사본 색)');
   assert.match(JS, /setProperty\('--r2-rsfix', R2_CELL_COLOR\[HUD_RSFIX_STATE_KEY\]\)/,
     'CSS 변수 --r2-rsfix 가 같은 정본에서 안 심긴다 — 캔버스와 칩이 다른 색이 된다');
-
-  // ② 그 붓 함수 안에 색 리터럴이 없다 (사본이 어느 자리로 돌아와도 빨개진다).
-  const at = JS.indexOf('function paintR2Correction(');
-  assert.ok(at > 0, 'paintR2Correction 이 없다 — 정정 강조를 그리는 함수가 사라졌다');
-  const brush = JS.slice(at, braceEnd(JS, JS.indexOf('{', at)) + 1);
-  assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(brush),
-    '정정 붓에 색 리터럴 사본이 있다: ' + brush);
-  for (const prop of ['fillStyle', 'strokeStyle']) {
-    assert.match(brush, new RegExp('ctx\.' + prop + ' = R2_HUD_CORRECTION_COLOR'),
-      '정정 붓의 ' + prop + ' 이 정본 상수에서 안 온다');
-  }
-
-  // ③ α 는 순수 함수가 낸다 — 시계는 렌더러가 주입한다 (자가 시간을 넣어 값으로 잴 수 있게).
-  assert.match(body, /const corrAlpha = r2Correction === null \? 0 : hudCorrectionAlpha\(nowMs\(\), r2Correction\.at\)/,
-    '정정 α 가 순수 함수·주입 시계에서 안 온다');
-
   /*
-   * ④ **두 표면이 같은 함수·같은 α 를 쓴다.** 이것이 F7 의 돌연변이가 지나간 자리다 —
-   *    한쪽만 지워도(또는 α 를 따로 세워도) 「같은 상태의 두 그림」이 다른 말을 한다.
+   * 그 붓은 **한 함수**다 — 두 표면이 각자 fill/stroke 를 세우면 「같은 상태의 두 그림」이 갈린다.
+   * ⚠ **의도적 완화 (3b 검토 rulers F7)**: 옛 정규식은 «인자 다섯이 한 줄에, 스타일이 맨 이름» 을
+   * 요구해서 포매터가 줄을 접거나(FP1) 색·시각에 중간 이름을 붙이면(FP6) 동작이 같은데도 거부했다 —
+   * 퇴역시킨 ⓞ 를 죽인 그 성질이다. 이제 (a) 공백·후행 쉼표를 넘기고, (b) 이름을 못박는 대신
+   * **«그 이름이 정본에서 온 것인가»** 를 대입까지 따라가 본다.
    */
-  const calls = [...body.matchAll(/paintR2Correction\((\w+), (\w+), (\w+),/g)];
-  assert.equal(calls.length, 2,
-    '정정 강조를 그리는 자리가 둘(오버레이·미니)이 아니다 — ' + calls.length + '자리');
-  assert.deepEqual(calls.map((m) => m[1]), ['ctx', 'mctx'], '오버레이·미니 두 컨텍스트가 아니다');
-  assert.deepEqual(calls.map((m) => m[3]), ['corrAlpha', 'corrAlpha'], '두 표면이 다른 α 를 쓴다');
-  assert.equal(new Set(calls.map((m) => m[2])).size, 2, '두 표면이 같은 경로 객체를 그린다 (사영이 하나뿐)');
-  assert.match(body, /if \(corrOverlay\) paintR2Correction\(ctx,/, '오버레이 게이트가 corrOverlay 가 아니다');
-  assert.match(body, /if \(corrMini\) paintR2Correction\(mctx,/, '미니 게이트가 corrMini 가 아니다');
-
-  // ⑤ 래치는 «그릴 게 있을 때만» 선다 — 정정 0 이면 아무것도 안 그린다 (잠긴 설계 7).
-  assert.match(JS, /r2Correction = \(r2Latched\.correctedCount > 0 && hit\.correctedCells && hit\.correctedCells\.length > 0\)/,
-    '정정 래치가 «수 > 0 ∧ 셀 > 0» 을 안 본다 — 빈 강조가 선다');
+  /** 이름 하나를 «정본» 까지 따라간다 — 중간 이름(`const x = 정본;`)은 정본과 같은 것으로 읽는다. */
+  const resolves = (name, canonical) => name === canonical
+    || new RegExp('\\b' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*=\\s*'
+      + canonical.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(JS);
+  const brushCalls = [...body.matchAll(
+    /paintCorrectionLayer\(\s*([\w.]+),\s*([\w.]+),\s*([\w.]+),\s*[^,]+,\s*([\w.]+),?\s*\)/g)];
+  assert.equal(brushCalls.length, 2,
+    '정정 강조를 그리는 자리가 둘(오버레이·미니)이 아니다 — ' + brushCalls.length + '자리');
+  assert.equal(new Set(brushCalls.map((m) => m[1])).size, 2, '두 붓질이 같은 컨텍스트에 그린다');
+  for (const m of brushCalls) {
+    assert.ok(resolves(m[3], 'plan.correctionAlpha'),
+      '붓 α 가 계획의 정정 α 에서 안 온다 (' + m[3] + ') — 렌더러가 강조 수명을 스스로 만든다');
+    assert.ok(resolves(m[4], 'R2_HUD_CORRECTION_STYLE'),
+      '붓 색이 팔레트 정본에서 안 온다 (' + m[4] + ') — 두 표면이 다른 색을 말한다');
+  }
+  assert.equal(new Set(brushCalls.map((m) => m[2])).size, 2,
+    '두 표면이 같은 경로 객체를 그린다 (사영이 하나뿐)');
+  // 렌더러가 붓질을 직접 다시 적지 않는다 — 색·배율이 두 곳에 살면 한쪽만 바뀐다.
+  assert.ok(!/ctx\.fillStyle = R2_HUD_CORRECTION/.test(JS),
+    '렌더러가 정정 강조를 직접 칠한다 — 붓은 순수 모듈 하나여야 한다');
 
   /*
-   * ⑥ **비우는 자리는 손 목록이 아니다** (3b 검토 F11): DONE 래치를 비우는 **모든** 자리에서
+   * ② α 는 순수 계획이 낸다 — **시계는 렌더러가 주입한다**. 이 한 줄이 빚 1 의 배선이다:
+   *    시각이 인자면 자가 프레임을 여러 장 밀어 「유예 창에 오버레이가 몇 프레임 살았나」를
+   *    값으로 셀 수 있다 (`test/scanner-accept-delay.test.js` ⓘ).
+   *    ⚠ **의도적 완화 (rulers F7 · FP3)**: `nowMs: nowMs(),` 라는 철자 대신 «리터럴이 아닌 것을
+   *    먹인다» 를 본다 — 프레임 안 시각 일관성을 위해 지역 상수로 hoist 하는 것은 **개선**이다.
+   */
+  const clockArg = /nowMs:\s*([^,\n]+),/.exec(body);
+  assert.ok(clockArg, '계획에 시각을 안 먹인다 — 정정 강조 수명을 자가 값으로 못 잰다');
+  assert.ok(!/^[\d.]+$/.test(clockArg[1].trim()) && !/^(performance|Date)\./.test(clockArg[1].trim()),
+    '계획의 시각이 리터럴이거나 벽시계를 직접 읽는다 (' + clockArg[1].trim() + ') — 주입이 아니면 자가 프레임을 못 민다');
+  assert.ok(/correction:\s*r2Correction,/.test(body),
+    '계획에 정정 래치를 안 먹인다 — 층 열림 판정이 렌더러로 되돌아왔다');
+  // 그리고 렌더러가 α 를 스스로 다시 만들지 않는다 (규칙이 두 곳에 살면 한쪽만 바뀐다).
+  assert.ok(!/hudCorrectionAlpha\(/.test(body),
+    '렌더러가 정정 α 를 직접 계산한다 — 계획이 그 규칙의 유일한 자리다');
+
+  /*
+   * ③ **래치는 순수 함수가 만든다** (3b 검토 rulers F2). 옛 자는 객체 리터럴의 조건식을 철자로
+   *    재서 「붙잡는 칸이 하나 빠졌다」를 못 봤다 — `formatWire` 한 줄을 지우면 정정 강조가 한
+   *    픽셀도 안 그려지는데 87/87 초록이었다. 규칙(수 > 0 ∧ 셀 > 0 · 좌표계 셋)은 이제
+   *    `r2-hud-model.test` 빚3 `hudCorrectionLatch` 가 **값으로** 잰다. 여기는 배선만.
+   */
+  assert.ok(/r2Correction = hudCorrectionLatch\(/.test(JS),
+    '정정 래치를 순수 함수가 안 만든다 — 붙잡는 칸이 빠져도 아무 자도 못 본다');
+  assert.ok(!/r2Correction = \{|r2Correction = \(/.test(JS),
+    '정정 래치를 렌더 경로에서 손으로 다시 조립한다 — 규칙이 두 곳에 산다');
+  // 소비 쪽도 순수 함수다 — 8항 논리곱이 지역 변수로 돌아오면 그 축이 통째로 무자가 된다.
+  assert.ok(/hudCorrectionGridOk\(/.test(body),
+    '「이 격자에 찍어도 되는가」를 렌더러가 스스로 판정한다 — 정정 강조를 통째로 끄는 스위치가 무자가 된다');
+
+  /*
+   * ④ **비우는 자리는 손 목록이 아니다** (3b 검토 F11): DONE 래치를 비우는 **모든** 자리에서
    *    정정 래치도 같이 빈다. 목록을 여기 적지 않고 `r2Latched = null` 을 훑어 유도한다 —
    *    새 리셋 경로가 생기면 그 자리도 자동으로 이 규칙 아래 들어온다.
    */
@@ -853,53 +943,72 @@ test('ⓞ ⚠ 철자 자 — 정정 강조의 붓·α·두 표면·비우기가 
   }
 
   /*
-   * ⑦ **정정 프레임에는 채움·격자도 열린다** (3b 검토 F6). 안 열면 위상이 DONE 이라 모든 채움
-   *    게이트가 닫혀, 강조가 «맥락 없는 흰 마름모» 로만 뜬다 — 「어느 셀이 틀렸나」는 주변 셀과
-   *    격자가 있어야 읽힌다.
-   */
-  assert.match(body, /const wantFills = overlayGeom && \(overlayOn \|\| corrFresh\)/,
-    '오버레이 채움이 정정 프레임에서 안 열린다 — 강조가 맥락 없이 뜬다');
-  assert.match(body, /const miniFills = [^;]*\|\| corrFresh\)/,
-    '미니 채움이 정정 프레임에서 안 열린다');
-  /*
-   * ⚠ **의도적 갱신 (2026-09-06 승격 · ⑯(i))** — 옛 자는 `r2HudCanvas.hidden = !(overlayOn || corrFresh)`
-   * 라는 **철자**를 요구했다. 결정 (i) 가 여는 표면이 정확히 이 한 프레임이라, 재는 축이 철자면
-   * 「그 표면이 살아 있는가」를 아무도 모른다 (memory: 철자를 재는 자는 썩는다). 판정은 순수 함수로
-   * 옮겼고 여기서는 **값**으로 잰다 — 정답을 다르게 써도 통과해야 한다.
-   */
-  const live = { hasStream: true, runtimeEnabled: true, hasView: true };
-  // DONE 위상은 원래 오버레이가 닫히는 자리다 — 정정 강조 하나가 그것을 연다. 그게 이 표면의 전부다.
-  assert.equal(hudSurfaceVisibility({ ...live, phase: HUD_PHASE.DONE, corrFresh: false }).overlayHidden, true,
-    '정정 없는 DONE 에서 오버레이가 열린다 — 결과 시트 아래에 빈 그림이 남는다');
-  assert.equal(hudSurfaceVisibility({ ...live, phase: HUD_PHASE.DONE, corrFresh: true }).overlayHidden, false,
-    '정정 강조가 살아 있는 DONE 프레임에 오버레이가 안 열린다 — ⑯(i) 가 산 600 ms 가 빈 화면이 된다');
-  // 그릴 H 가 없는 두 위상은 정정이 없으면 닫힌 채다.
-  for (const phase of [HUD_PHASE.SEARCHING, HUD_PHASE.DROPPED]) {
-    assert.equal(hudSurfaceVisibility({ ...live, phase, corrFresh: false }).overlayHidden, true, phase + ' 에서 오버레이가 열린다');
-  }
-  // 그리고 배선 — 렌더러가 그 판정을 **직접** 다시 쓰지 않고 순수 함수에서 읽는다.
-  assert.ok(body.includes('hudSurfaceVisibility('),
-    '렌더러가 표시 판정을 손으로 다시 적는다 — 규칙이 두 곳에 산다');
-  assert.ok(body.includes('r2HudCanvas.hidden = surfaces.overlayHidden'),
-    '오버레이 캔버스 표시가 순수 판정의 출력이 아니다');
-  assert.ok(!/r2HudCanvas\.hidden\s*=\s*!?\(?(overlayOn|true|false)/.test(body),
-    '오버레이 표시를 위상·리터럴에서 직접 복사한다 — 정정 프레임이 다시 닫힌다');
-
-  /*
-   * ⑧ **경로 객체는 그릴 게 있을 때만 만든다** (3b 검토 F16). 위 채움 경로가 세운 규율과 같다 —
-   *    정정 없는 프레임(거의 전부)에서 Path2D 두 개를 헛만들면 그것이 매 프레임 할당이다.
+   * ⑤ **경로 객체는 그릴 게 있을 때만 만든다** (3b 검토 F16). 할당은 브라우저 밖에서 못 세므로
+   *    이 명제만은 소스 모양으로 남는다 — 정정 없는 프레임(거의 전부)에서 Path2D 두 개를
+   *    헛만들면 그것이 매 프레임 할당이다. 「열렸나」의 판정은 계획이 이미 값으로 답했다.
    */
   const pathMake = body.indexOf('corrPath = new Path2D()');
   assert.ok(pathMake > 0, '정정 경로를 만드는 자리가 없다');
-  assert.ok(body.slice(0, pathMake).lastIndexOf('if (corrGridOk) {') > body.slice(0, pathMake).lastIndexOf('}'),
-    '정정 Path2D 를 corrGridOk 게이트 **밖**에서 만든다 — 정정 없는 프레임마다 두 개씩 헛만든다');
+  const before = body.slice(0, pathMake);
+  /*
+   * ⚠ **의도적 완화 (rulers F7 · FP2)**: 옛 자는 게이트 조건을 글자 그대로 요구해서 `||` 양변을
+   * 바꾸기만 해도 거부했다. 이제 «직전에 열린 조건문이 두 정정 필드를 **집합으로** 본다» 를 잰다.
+   */
+  const gateAt = before.lastIndexOf('if (');
+  assert.ok(gateAt > before.lastIndexOf('}'),
+    '정정 Path2D 를 조건문 **밖**에서 만든다 — 정정 없는 프레임마다 두 개씩 헛만든다');
+  const gate = before.slice(gateAt, before.indexOf('{', gateAt));
+  for (const field of ['plan.overlayCorrection', 'plan.miniCorrection']) {
+    assert.ok(gate.includes(field),
+      '정정 경로 게이트가 ' + field + ' 를 안 본다 (' + gate.trim() + ') — 한 표면만 열려도 두 개를 만든다');
+  }
+
+  /*
+   * ⑥ 🔴 **계획의 소비** (3b 검토 F1·F3 / rulers F3). 두 가지를 훑는다 — 둘 다 «금지 어휘»·
+   *    «유도한 목록» 이라 이름·배치 리팩터링에 안 썩는다.
+   *
+   *    (a) 표시는 **판정에서만** 온다: 렌더 경로 어디에도 `hidden` 리터럴 대입이 없다. 이것이
+   *        ⓞ 가 갖고 있다가 대체 없이 사라졌던 명제고, 그 사이 `hidden = true` 못박기가
+   *        표적 전부를 통과했다. 값 쪽은 `r2-hud-paint.test` ⓓ 가 잰다.
+   *    (b) 계획이 내는 **모든 필드**를 렌더러가 읽는다. 목록은 계획의 출력 키에서 유도하므로
+   *        손 목록이 아니다 — 필드를 늘리고 아무도 안 읽으면(죽은 계획) 여기서 빨개진다.
+   *        ⚠ 못 잠그는 것: «그 필드가 **어느 조건에** 쓰였나». 바꿔치기는 브라우저 밖에서 안 보인다.
+   */
+  const hudPaths = [body, JS.slice(JS.indexOf('function hideR2Hud()'), JS.indexOf('function paintR2HudBuckets'))];
+  for (const chunk of hudPaths) {
+    const literal = /\.hidden\s*=\s*(true|false)\b/.exec(chunk);
+    assert.equal(literal, null, 'HUD 표면의 표시를 리터럴로 못박았다 (' + (literal && literal[0]) + ') — 판정이 화면에 안 닿는다');
+  }
+  assert.ok(/applyHudSurfaces\(/.test(body) && /applyHudSurfaces\(/.test(hudPaths[1]),
+    '표시 판정을 `hidden` 으로 옮기는 이음새를 안 쓴다 — 두 경로(렌더·숨김)가 각자 대입하면 한쪽만 바뀐다');
+
+  const planFields = new Set(Object.keys(hudPaintPlan({
+    hasStream: true, runtimeEnabled: true, hasView: true, phase: HUD_PHASE.DATA, n: 13,
+  })));
+  const consumed = new Set();
+  for (const m of body.matchAll(/\bplan\.(\w+)/g)) consumed.add(m[1]);
+  for (const m of body.matchAll(/const \{([^}]*)\} = plan\b/g)) {
+    for (const name of m[1].split(',')) {
+      const clean = name.split(':').pop().trim();
+      if (clean) consumed.add(clean);
+    }
+  }
+  /*
+   * 안 읽는 필드에는 **이유가 있어야 한다** (부재에도 이유가 필요하다). `live` 는 계획이 스스로
+   * 「그릴 근거가 있나」를 담아 두는 칸이고 그 뜻은 `surfaces` 로 이미 화면에 닿는다. `corrFresh`
+   * 는 계획 안에서 층 열림으로 이미 풀린 중간값이라 렌더러가 다시 볼 일이 없다.
+   */
+  const unreadByDesign = new Set(['live', 'corrFresh']);
+  for (const field of planFields) {
+    if (unreadByDesign.has(field)) {
+      assert.ok(!consumed.has(field), field + ' 는 «안 읽는다» 고 적어 뒀는데 렌더러가 읽는다 — 목록을 고쳐라');
+      continue;
+    }
+    assert.ok(consumed.has(field),
+      '계획이 내는 plan.' + field + ' 를 렌더러가 하나도 안 읽는다 — 그 층은 화면에 도달하지 않는다');
+  }
 });
 
-/*
- * 3b — 좌·결과 카드의 «RS 정정 k» 접미. 칩 렌더러는 브라우저 밖에서 못 돌지만, 접미가 **모델의
- * 값**(row.correctedCount)에서 오는지와 낱말·키가 상수에서 오는지는 여기서 잠글 수 있다.
- * F7 의 돌연변이 ②(접미 조건 무력화)가 지나간 자리다.
- */
 test('ⓟ ⚠ 철자 자 — 결과 카드 칩의 «RS 정정 k» 가 모델 값에서 오고 게이트가 실재한다 (3b)', () => {
   const at = JS.indexOf('function renderConfirmationChips(');
   assert.ok(at > 0, 'renderConfirmationChips 가 없다');

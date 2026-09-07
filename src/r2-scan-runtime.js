@@ -38,6 +38,7 @@ import {
   capacityForCellSurfaceFinal,
   dataCellsInScanOrderCellSurfaceFinal,
   finalLayoutIdsForN,
+  resolveFormatWire,
 } from './cellSurfaceFinal.js';
 import { maskValue } from './mask.js';
 import { unframe } from './header.js';
@@ -182,6 +183,13 @@ export function createR2ScanRuntime(options = {}) {
      */
     bindRevision: 0,
     lockKey: 0,
+    /*
+     * 빚 3 — **이 후보들이 묶인 포맷 세대**. HUD 는 이 값으로 역할 격자를 만든다: 격자가 세대를
+     * 모르면 레거시(와이어 1) 프레임에서 정정 강조·소거 색칠이 **다른 칸**을 지목한다 (3a 유산).
+     * 「모른다」는 없다 — 포맷을 못 읽은 프레임은 현행 세대로 묶이므로(`resolveFormatWire`)
+     * 그 값이 그대로 실린다. 격자를 만든 세대와 후보를 묶은 세대가 **같은 수**여야 한다.
+     */
+    formatWire: resolveFormatWire(undefined),
   };
   const stats = {
     frames: 0,
@@ -229,6 +237,9 @@ export function createR2ScanRuntime(options = {}) {
     /** R6 — 이번 락에 쓰인 ecc·mask 의 출처. 'default' 면 코드가 말해 주지 않은 것이다. */
     format: {
       source: 'default', eccName: '', maskIndex: 0, candidateCount: 0,
+      // 빚 3 — bind 가 실제로 쓴 세대(해석 뒤). `formatWireVersion`(어댑터의 «읽었나») 과 달리
+      // 여기 값은 언제나 유효한 세대다 — 소비자(HUD)가 «모름» 을 다시 해석하지 않게.
+      formatWire: resolveFormatWire(undefined),
     },
     /** R7 — 프레임 단위 ms. 시험판 패널의 frame 총합을 단계별로 가른다. */
     phaseMs: { detect: 0, align: 0, decode: 0 },
@@ -275,6 +286,8 @@ export function createR2ScanRuntime(options = {}) {
     view.cellFaceCentres = null;
     view.cellCount = 0;
     view.layoutId = '';
+    // 빚 3 — 세대도 「모른다」로 돌린다. 남기면 다음 락이 세대를 못 읽은 프레임에 옛 세대로 그린다.
+    view.formatWire = resolveFormatWire(undefined);
     view.H = null;
     view.n = 0;
     stats.candidates.length = 0;
@@ -378,6 +391,12 @@ export function createR2ScanRuntime(options = {}) {
     stats.format.eccName = choice.eccName;
     stats.format.maskIndex = choice.maskIndex;
     stats.format.candidateCount = choice.candidateCount;
+    /*
+     * 빚 3 — `buildLayout` 이 `choice.formatWire` 를 그대로 넘기고, 그 안의 접근자가 `undefined` 를
+     * 현행 세대로 해석한다. HUD 는 «해석 뒤» 값을 필요로 하므로 여기서 같은 규칙으로 한 번 편다 —
+     * 두 층이 다른 규칙을 쓰면 「런타임이 묶은 세대」와 「HUD 가 그린 세대」가 조용히 갈린다.
+     */
+    stats.format.formatWire = resolveFormatWire(choice.formatWire);
     for (const layoutId of ids.slice(0, maxCandidates)) {
       let layout;
       try {
@@ -456,10 +475,9 @@ export function createR2ScanRuntime(options = {}) {
     candidates = kept.candidates;
     boundN = kept.n;
     boundFormatKey = kept.formatKey;
-    stats.format.source = kept.format.source;
-    stats.format.eccName = kept.format.eccName;
-    stats.format.maskIndex = kept.format.maskIndex;
-    stats.format.candidateCount = kept.format.candidateCount;
+    // 필드 목록을 손으로 적지 않는다 — 선반은 `{ ...stats.format }` 로 얼렸으므로 같은 키 집합이다
+    // (사본 목록은 썩는다: 옛 판은 넷을 적어 두어 새 칸 `formatWire` 가 복원에서만 빠질 뻔했다).
+    for (const key of Object.keys(stats.format)) stats.format[key] = kept.format[key];
     seatCandidates();
   }
 
@@ -631,14 +649,14 @@ export function createR2ScanRuntime(options = {}) {
        */
       // 매핑 불가(-1)면 `cells` 가 비고 `count` 는 남는다 — **수는 맞고 자리는 모른다**.
       correctedCellsForHit(candidate.session.result, candidate.session.layout, correctedHolder);
-      return {
+      // 적중 표면은 순수 함수가 만든다 — 세대 칸이 「지금 묶은 세대」에서 온다는 것을 자가 값으로 잰다.
+      return buildR2Hit(stats, {
         text,
         layoutId: candidate.layoutId,
         n: boundN,
-        frame: stats.doneFrame,
         correctedCount: correctedHolder.count,
         correctedCells: correctedHolder.cells,
-      };
+      });
     }
 
     stats.progressD = bestD < 0 ? 0 : bestD;
@@ -675,6 +693,8 @@ export function createR2ScanRuntime(options = {}) {
       view.frameWidth = luma.width;
       view.frameHeight = luma.height;
       view.layoutId = leading.layoutId;
+      // 빚 3 — 격자를 만들 세대. layoutId 와 **같은 자리**에서 실어야 HUD 가 둘을 한 프레임의 것으로 읽는다.
+      view.formatWire = stats.format.formatWire;
     }
 
     /*
@@ -710,6 +730,7 @@ export function createR2ScanRuntime(options = {}) {
     stats.format.eccName = '';
     stats.format.maskIndex = 0;
     stats.format.candidateCount = 0;
+    stats.format.formatWire = resolveFormatWire(undefined);
     stats.phaseMs.detect = 0;
     stats.phaseMs.align = 0;
     stats.phaseMs.decode = 0;
@@ -759,6 +780,37 @@ export function createR2ScanRuntime(options = {}) {
     invalidateLock,
     stats,
     view,
+  };
+}
+
+/**
+ * 🔴 **DONE 적중의 표면** (빚 3 · 3b 검토 F2). 한 자리에서 만든다.
+ *
+ * 여기 있는 이유는 `formatWire` 한 칸 때문이다 — 그 값은 「이 셀 번호들이 **어느 세대의 스캔
+ * 순서** 안의 번호인가」이고, `stats.format`(런타임이 **지금 묶은** 세대)에서만 와야 한다.
+ * 상수를 적으면 레거시 프레임에서 정정 강조 래치가 다른 세대를 붙잡고, 소비자
+ * (`hudCorrectionGridOk`)가 「격자와 어긋난다」고 판정해 강조가 통째로 꺼진다 — 코퍼스가
+ * 전부 세대 2 라 끝단 자에 안 걸리는 종류의 침묵이다. 순수 함수로 빼 두면 자가 «세대 1 을
+ * 묶은 stats» 를 넣어 **값으로** 확인한다.
+ *
+ * ⚠ 이 함수가 닫는 것은 **유도**뿐이다. 「세대 1 로 DONE 까지 가는 실물·합성 프레임」은
+ * 여전히 없다 (보고서 §6.1 — 레거시 인코더 미보유).
+ *
+ * @param {{doneFrame:number, format:{formatWire:number}}} stats 런타임 표면 (읽기만 한다)
+ * @param {{text:string, layoutId:string, n:number, correctedCount:number,
+ *          correctedCells:ArrayLike<number>}} parts 이 프레임이 만든 값
+ */
+export function buildR2Hit(stats, parts) {
+  return {
+    text: parts.text,
+    layoutId: parts.layoutId,
+    n: parts.n,
+    frame: stats.doneFrame,
+    correctedCount: parts.correctedCount,
+    correctedCells: parts.correctedCells,
+    // 빚 3 — 정정 강조 래치가 이 값을 같이 붙잡아야 유예 창 중 세대가 바뀐 재bind 가 와도
+    // 「다른 세대의 격자에 옛 셀 번호」를 안 찍는다.
+    formatWire: stats.format.formatWire,
   };
 }
 

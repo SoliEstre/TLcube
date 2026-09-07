@@ -20,7 +20,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { createR2ScanRuntime, r2HitToDecodeResult, R2_CAPABILITIES } from '../src/r2-scan-runtime.js';
+import {
+  buildR2Hit, createR2ScanRuntime, r2HitToDecodeResult, R2_CAPABILITIES,
+} from '../src/r2-scan-runtime.js';
 import { createA3Adapters } from '../src/r2/adapter-locator.js';
 import { R2_INDICATOR, R2_SESSION_STATUS } from '../src/r2/session.js';
 import { Q15_ONE } from '../src/r2/params.js';
@@ -437,6 +439,159 @@ test('ⓝ 락은 됐는데 증거가 0 인 첫 프레임 — indicator 는 세�
   assert.equal(real.stats.locked, 1);
   assert.equal(typeof real.stats.layoutIdLocked, 'string');
   assert.notEqual(real.stats.indicator, R2_INDICATOR.SEARCHING);
+});
+
+/*
+ * ── 빚 3 (3b) — **묶은 세대를 표면에 싣는다** ─────────────────────────────────────────────
+ *
+ * `buildLayout` 은 이미 세대를 받는다(`formatWire`). 빠져 있던 것은 **그 세대를 밖으로 내는 일**
+ * 이다 — HUD 는 역할 격자를 만들 때 같은 세대를 써야 하는데, 표면에 없으니 늘 현행 세대로 그렸고
+ * 레거시(와이어 1) 프레임에서 정정 강조·소거 색칠이 순번 7 부터 다른 칸을 지목했다.
+ *
+ * 코퍼스는 전부 세대 2 라 이 축을 **못 가른다**(2 를 못박아도 초록이다). 그래서 가짜 어댑터로
+ * «세대 1 을 읽은 프레임» 을 만들어 값으로 잰다 — 실물 없이 만들 수 있는 상태다.
+ */
+test('빚3 stats.format.formatWire · view.formatWire — 읽은 세대가 표면에 실린다 (가짜 어댑터: 세대 1)', () => {
+  const wireOneFormat = {
+    source: 'locator', eccName: 'H', maskIndex: 0, candidateCount: 1, formatWireVersion: 1,
+  };
+  const fakeStats = {
+    n: 13, locked: 1, gridLockF: 0.5, layoutId: 'v0', lockRevision: 1, format: wireOneFormat,
+  };
+  const fake = {
+    stats: fakeStats,
+    H: Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    detectInto(luma, width, height, timestamp, pose, output) { output.found = 1; output.n = 13; return R2_SESSION_STATUS.OK; },
+    alignInto() { return R2_SESSION_STATUS.OK; },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+  };
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  runtime.pushFrame({ width: 8, height: 8, data: new Float32Array(64) }, 0);
+  assert.equal(runtime.stats.candidateCount, 1, 'v0@13 은 레거시 세대가 있어 후보가 서야 한다');
+  assert.equal(runtime.stats.format.formatWire, 1,
+    '읽은 세대(1)가 stats 에 안 실린다 — HUD 가 현행 세대로 격자를 그린다');
+  assert.equal(runtime.view.formatWire, 1,
+    'view 가 묶은 세대를 안 싣는다 — 격자와 후보가 다른 세대를 말한다');
+  // 후보를 버리면 세대도 「모른다」로 돌아간다 — 남기면 다음 락이 옛 세대로 그린다.
+  runtime.reset();
+  assert.equal(runtime.stats.format.formatWire, 2, 'reset 뒤 세대가 현행으로 안 돌아온다');
+  assert.equal(runtime.view.formatWire, 2, 'reset 뒤 view 세대가 현행으로 안 돌아온다');
+});
+
+test('빚3 적중은 자기 세대를 싣는다 — 정정 셀 번호가 «어느 세대의 스캔 순서» 인지 (코퍼스)', (t) => {
+  const frames = firstFrames('y0', 12);
+  if (!frames) { t.skip('휘도 덤프 없음'); return; }
+  const runtime = createR2ScanRuntime({ enabled: true });
+  let hit = null;
+  for (let i = 0; i < frames.length && hit === null; i += 1) hit = runtime.pushFrame(frames[i], i * 100);
+  assert.ok(hit !== null, 'y0 가 12프레임 안에 안 풀렸다 — 실측은 f6 이다');
+  assert.equal(hit.formatWire, runtime.stats.format.formatWire,
+    '적중의 세대가 런타임이 묶은 세대와 다르다 — 정정 셀 번호의 좌표계를 잃는다');
+  /*
+   * 🔴 **그리고 그 적중은 순수 빌더가 만든 것이다** (3b 검토 F2 / X8). 코퍼스는 전부 세대 2 라
+   * 위 단언만으로는 `formatWire: 2` 못박기를 **못 가른다**. 표면 목록을 빌더에서 **유도해**
+   * 대조하면, 적중을 빌더 밖에서 손으로 다시 조립하는 순간 여기서 갈린다.
+   */
+  const shape = buildR2Hit(runtime.stats, {
+    text: hit.text, layoutId: hit.layoutId, n: hit.n,
+    correctedCount: hit.correctedCount, correctedCells: hit.correctedCells,
+  });
+  assert.deepEqual(Object.keys(hit).sort(), Object.keys(shape).sort(),
+    '실물 적중의 표면이 순수 빌더의 출력과 다르다 — 어느 한쪽이 손으로 조립됐다');
+  for (const key of Object.keys(shape)) {
+    assert.equal(hit[key], shape[key], '적중의 ' + key + ' 가 빌더의 값과 다르다');
+  }
+  /*
+   * ⚠ **여기까지 와도 못 덮는 축**: 세대 1 로 **DONE 까지** 가는 실물·합성 프레임이 없다
+   * (레거시 인코더 미보유 — 빚). 그래서 「끝단에서 세대 1 이 실린다」는 여전히 미측정이고,
+   * 아래 자가 «유도» 만 값으로 닫는다.
+   */
+});
+
+test('빚3 buildR2Hit: 적중의 세대는 «지금 묶은 세대» 에서만 온다 — 상수를 적으면 강조가 통째로 꺼진다 (X8)', () => {
+  /*
+   * 🔴 3b 검토 F2. `formatWire: stats.format.formatWire` 를 `2` 로 못박아도 코퍼스 자 전부가
+   * 초록이었다(코퍼스가 전부 세대 2 다). 유도를 순수 함수로 빼면 «세대 1 을 묶은 stats» 를
+   * 넣어 값으로 가른다 — 못박은 판은 여기서 두 팔이 같아져 즉시 빨개진다.
+   */
+  const parts = {
+    text: 'hello', layoutId: 'v0', n: 13, correctedCount: 3, correctedCells: Int32Array.from([1, 2, 3]),
+  };
+  const legacy = buildR2Hit({ doneFrame: 6, format: { formatWire: 1 } }, parts);
+  const current = buildR2Hit({ doneFrame: 9, format: { formatWire: 2 } }, parts);
+  assert.equal(legacy.formatWire, 1, '레거시 세대를 묶은 프레임의 적중이 그 세대를 안 싣는다');
+  assert.equal(current.formatWire, 2);
+  assert.notEqual(legacy.formatWire, current.formatWire,
+    '두 세대의 적중이 같은 값을 싣는다 — 세대가 상수로 못박혔다');
+  // 프레임 번호도 런타임 표면에서 온다 (적중이 «몇 번째 프레임의 답인가»).
+  assert.equal(legacy.frame, 6);
+  assert.equal(current.frame, 9);
+  // 나머지 칸은 이 프레임이 만든 값 그대로 — 셀 목록은 **복사하지 않는다**(핫 경로 할당).
+  assert.equal(legacy.correctedCells, parts.correctedCells);
+  assert.equal(legacy.text, 'hello');
+  assert.equal(legacy.layoutId, 'v0');
+  assert.equal(legacy.n, 13);
+});
+
+/*
+ * 🔴 **선반 왕복** (3b 검토 F3) — 보고서가 «유도로 바꿨다» 고 성과로 적은 자리인데 무자였다.
+ * 옛 손 목록 넷(`source`·`eccName`·`maskIndex`·`candidateCount`)으로 되돌려도 자 전부가
+ * 초록이었다(변이 X1). 그 상태에서 왕복이 일어나면 `candidates` 는 **얼린 세대**의 것인데
+ * `stats.format.formatWire` 는 그 사이 `bind()` 가 심은 **새 세대**로 남는다 — 다음 프레임의
+ * `view.formatWire` 가 그것을 HUD 에 실어 「후보의 스캔 순서」와 「격자의 세대」가 갈린다.
+ * 빚 3 이 고치려던 결함이 복원 경로에 그대로 재현되는 것이다.
+ *
+ * 코퍼스로는 못 만든다(왕복도, 세대 1 도). 가짜 어댑터로 프레임 셋을 짠다:
+ *   ① n=13 · locator(H|0|wire1) → bind. ② n=21 · locator(H|1|wire2) → 선반에 얼리고 재bind.
+ *   ③ n=13 · **포맷 미해결**(source≠locator) → `boundFormatKeyFor` 가 선반 키를 인정 → 복원.
+ */
+test('빚3 restoreShelf: 선반 왕복 뒤 stats.format 의 **모든** 칸이 얼린 값으로 돌아온다 (X1)', () => {
+  const fakeStats = {
+    n: 13, locked: 1, gridLockF: 0.5, layoutId: 'v0', lockRevision: 1,
+    format: { source: 'locator', eccName: 'H', maskIndex: 0, candidateCount: 1, formatWireVersion: 1 },
+  };
+  const fake = {
+    stats: fakeStats,
+    H: Float64Array.from([1, 0, 0, 0, 1, 0, 0, 0, 1]),
+    detectInto(luma, width, height, timestamp, pose, output) { output.found = 1; output.n = fakeStats.n; return R2_SESSION_STATUS.OK; },
+    alignInto() { return R2_SESSION_STATUS.OK; },
+    reset() {},
+    projectCellFaceCentres() { return 0; },
+  };
+  const runtime = createR2ScanRuntime({ enabled: true, adapters: fake });
+  const luma = { width: 8, height: 8, data: new Float32Array(64) };
+
+  // ① 세대 1 을 묶는다.
+  runtime.pushFrame(luma, 0);
+  assert.equal(runtime.stats.candidateCount, 1, 'v0@13 후보가 안 섰다 — 시나리오가 아니다');
+  // 기대값은 **이 순간의 표면 전체**다 (손 목록 금지 — 새 칸이 생기면 자동으로 따라온다).
+  const frozen = { ...runtime.stats.format };
+  assert.equal(frozen.formatWire, 1, '자 자신의 준비가 실패했다 (세대 1 을 안 묶었다)');
+  assert.ok(Object.keys(frozen).length >= 5, 'format 표면이 다섯 칸 미만이다 — 자가 공허해졌다');
+
+  // ② n 이 바뀐 재락 — 옛 후보는 선반에 얼고, 지금 표면은 **다른 포맷**으로 덧써진다.
+  fakeStats.n = 21;
+  fakeStats.format = {
+    source: 'locator', eccName: 'H', maskIndex: 1, candidateCount: 4, formatWireVersion: 2,
+  };
+  runtime.pushFrame(luma, 100);
+  assert.notDeepEqual({ ...runtime.stats.format }, frozen, '재bind 가 표면을 안 바꿨다 — 왕복이 무의미해진다');
+  assert.equal(runtime.stats.format.formatWire, 2);
+
+  // ③ 같은 n 으로 돌아온다 + 포맷 미해결 → 선반 키를 인정 → 복원.
+  fakeStats.n = 13;
+  fakeStats.format = { source: 'none', eccName: '', maskIndex: 0, candidateCount: 0 };
+  runtime.pushFrame(luma, 200);
+
+  /*
+   * 🔴 **얼린 표면 전체**가 돌아와야 한다. 손 목록으로 되돌린 판은 `formatWire` 만 새 세대(2)로
+   * 남아 여기서 갈린다 — 그리고 그것이 사용자에겐 「강조가 다른 칸을 짚는다」로 보인다.
+   */
+  assert.deepEqual({ ...runtime.stats.format }, frozen,
+    '선반 복원이 format 의 일부만 되돌렸다 — 후보의 스캔 순서와 격자의 세대가 갈린다');
+  assert.equal(runtime.view.formatWire, frozen.formatWire,
+    '복원 프레임의 view 세대가 얼린 세대가 아니다 — HUD 가 다른 세대로 격자를 그린다');
 });
 
 test('ⓞ view 기하 원천 — 락 뒤 H(9)·n·lockRevision, reset 뒤 비움', (t) => {

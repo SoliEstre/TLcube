@@ -51,6 +51,9 @@ import {
 import { confirmationRows } from '../src/r2-confirmation-model.js';
 import {
   capacityForCellSurfaceFinal, dataCellsInScanOrderCellSurfaceFinal, finalLayoutIdsForN,
+  // ⓙ (빚 3) — 정정 강조가 «그 프레임의 포맷 세대» 를 따르는지 재려면 세대 상수와 레이아웃 맵이 필요하다.
+  CELL_SURFACE_FINAL_FORMAT_WIRE, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY,
+  hasLegacyFormatWire, layoutMapCellSurfaceFinal,
 } from '../src/cellSurfaceFinal.js';
 import { SCANNER_STRINGS } from '../sites/tlscan/strings.js';
 
@@ -313,6 +316,88 @@ test('ⓔ 역표 — invertScanGrid 가 scanGrid 의 역함수다 (라인업 전
   assert.ok(measured >= 4, '라인업을 ' + measured + '개만 봤다');
   assert.equal(invertScanGrid(null, new Int32Array(2)), -1);
   assert.equal(invertScanGrid(new Int16Array(2), null), -1);
+});
+
+/*
+ * ── ⓙ 빚 3 — **정정 강조는 그 프레임의 포맷 세대 위에서만 참이다** ────────────────────────
+ *
+ * 사슬의 앞쪽(`correctedCellsFromPositions`)은 «스캔 순번» 을 낸다 — 세대와 무관한 번호다.
+ * 세대가 들어오는 곳은 **그 번호를 격자 칸으로 바꾸는 자리**(HUD 역표)다. 3a 유산으로 그 자리가
+ * 세대를 몰랐고, 레거시(와이어 1) 프레임에서 정정 강조가 **다른 칸**을 지목했다.
+ *
+ * 여기서 잠그는 성질 (인코더를 안 부른다 — 기대값은 레이아웃 맵의 `{role:'data', index:k}` 다):
+ *   ① 세대 w 의 역표가 짚는 칸은 **세대 w 의 맵에서 그 순번의 데이터 칸**이다.
+ *   ② 두 세대는 실제로 다른 칸을 짚는다 — 그리고 첫 어긋남부터는 **정정 셀이 통째로 옮겨간다**.
+ *   ③ 🔴 **틀린 세대의 격자로 그리면 «데이터가 아닌 칸» 을 칠한다** — 그것이 이 결함의 피해다.
+ */
+test('ⓙ 빚3 — 정정 셀 → 격자 칸이 포맷 세대를 따른다 (와이어 1 vs 2, 순번이 갈리는 지점부터)', () => {
+  const pairs = [];
+  for (const n of [13, 21, 25]) {
+    for (const id of finalLayoutIdsForN(n)) if (hasLegacyFormatWire(id)) pairs.push({ n, id });
+  }
+  assert.ok(pairs.length >= 1, '레거시 세대를 가진 라인업이 0개다 — 이 자가 공허해진다');
+
+  for (const { n, id } of pairs) {
+    const grid = new Map();
+    for (const wire of [CELL_SURFACE_FINAL_FORMAT_WIRE, CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY]) {
+      const grids = buildRoleGrids(n, id, wire);
+      const inverse = new Int32Array(grids.counts.data);
+      assert.equal(invertScanGrid(grids.scanGrid, inverse), grids.counts.data);
+      // ① 세대 w 의 칸은 세대 w 의 맵에서 그 순번의 데이터 칸이다 (기대값의 출처가 다른 함수다).
+      const map = layoutMapCellSurfaceFinal(n, id, wire);
+      for (let k = 0; k < inverse.length; k += 1) {
+        const i = inverse[k] % n;
+        const j = (inverse[k] - i) / n;
+        const entry = map.get(i + ',' + j);
+        assert.ok(entry && entry.role === 'data' && entry.index === k,
+          n + '@' + id + ' wire' + wire + ': 순번 ' + k + ' 가 데이터 칸 ' + k + ' 가 아니다');
+      }
+      grid.set(wire, { grids, inverse, map });
+    }
+
+    const now = grid.get(CELL_SURFACE_FINAL_FORMAT_WIRE);
+    const legacy = grid.get(CELL_SURFACE_FINAL_FORMAT_WIRE_LEGACY);
+    const shared = Math.min(now.inverse.length, legacy.inverse.length);
+    let firstDiff = -1;
+    for (let k = 0; k < shared; k += 1) {
+      if (now.inverse[k] !== legacy.inverse[k]) { firstDiff = k; break; }
+    }
+    assert.ok(firstDiff >= 0, n + '@' + id + ': 두 세대의 역표가 같다 — 세대가 격자에 안 닿았다');
+
+    /*
+     * ② 첫 어긋남을 **포함하는 심볼**부터 잡는다. 정정은 심볼 단위(셀 3칸)라, 그 심볼의 세 칸이
+     *    통째로 옮겨간 것을 확인해야 「강조가 다른 자리에 뜬다」가 성립한다.
+     */
+    const symbol = Math.floor(firstDiff / R2_CELLS_PER_SYMBOL);
+    const symbolCount = Math.floor(shared / R2_CELLS_PER_SYMBOL);
+    assert.ok(symbol < symbolCount, n + '@' + id + ': 어긋나는 심볼이 범위 밖이다');
+    const cells = new Uint16Array(R2_CELLS_PER_SYMBOL);
+    assert.equal(
+      correctedCellsFromPositions(Uint16Array.from([symbol]), 1, symbolCount, cells),
+      R2_CELLS_PER_SYMBOL,
+      '정정 셀 매핑이 거절됐다 — 이 자가 공허해진다',
+    );
+
+    let moved = 0;
+    let landedOffData = 0;
+    for (const cell of cells) {
+      const idxNow = now.inverse[cell];
+      const idxLegacy = legacy.inverse[cell];
+      if (idxNow !== idxLegacy) moved += 1;
+      /*
+       * ③ 피해의 정의 — **레거시 프레임을 현행 세대의 격자로** 그리면, 그 칸이 레거시 맵에서
+       *    데이터 칸 `cell` 이 아니다 (포맷 칸이거나 다른 순번의 데이터 칸이다).
+       */
+      const i = idxNow % n;
+      const j = (idxNow - i) / n;
+      const entry = legacy.map.get(i + ',' + j);
+      if (!entry || entry.role !== 'data' || entry.index !== cell) landedOffData += 1;
+    }
+    assert.ok(moved > 0,
+      n + '@' + id + ': 심볼 ' + symbol + ' 의 셀이 두 세대에서 같은 칸이다 — 세대가 강조에 안 닿는다');
+    assert.ok(landedOffData > 0,
+      n + '@' + id + ': 틀린 세대로 그려도 참 칸에 떨어진다 — 이 결함의 피해가 재현되지 않는다');
+  }
 });
 
 test('ⓕ 사전 — r2.state.rsfix 가 여덟 언어에 있고 **개수 자리**를 갖는다 · 스캐너는 키를 상수에서 만든다', () => {

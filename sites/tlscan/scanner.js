@@ -92,12 +92,21 @@ import {
 // HUD 역할·위상 모델(순수) — «무엇을 어떤 묶음으로 그리는가» 는 전부 저기서 유도된다.
 import {
   HUD_DISTRUST_STATE_KEY, HUD_RSFIX_STATE_KEY,
-  HUD_PHASE, HUD_ROLE, HUD_TONE_NONE, buildRoleGrids, bucketKey, countObserved, fadeAlpha, fillCount,
-  hudCaptureProjection, hudCorrectionAlpha, hudDistrusted, hudPhase, hudProjectionChanged,
-  hudSurfaceVisibility, hudToneSlot,
-  invertScanGrid, scaleColorAlpha,
+  HUD_PHASE, HUD_ROLE, HUD_TONE_NONE, bucketKey, clearHudRoleGrids, countObserved, fadeAlpha, fillCount,
+  hudCaptureProjection, hudCorrectionGridOk, hudCorrectionLatch, hudDistrusted, hudPhase, hudProjectionChanged,
+  hudRoleGridsInto, hudSurfaceVisibility, hudToneSlot,
+  scaleColorAlpha,
   r2HudDebugLine as r2HudDebugLineOf,
 } from '/src/r2-hud-model.js';
+/*
+ * 빚 2 — «무엇을 어떤 알파로 칠하는가» 는 순수 모듈이 정한다. 옛 판은 그 규칙이 렌더러 안에
+ * 흩어져 있어서 「채움이 열리는가」를 재는 방법이 **철자**밖에 없었다 (r2-hud.test ⓞ, 퇴역).
+ * 붓도 여기서 나간다 — `ctx` 를 받으므로 가짜 ctx 로 붓질을 셀 수 있다.
+ * `applyHudSurfaces` 는 «표시 판정 → hidden» 이음새 (3b 검토 F1) — 그 한 칸이 값으로 잰다.
+ */
+import {
+  R2_HUD_SOLID_DASH, applyHudSurfaces, hudPaintPlan, paintCorrectionLayer,
+} from '/src/r2-hud-paint.js';
 /*
  * ⑯(i) — R2 수용 뒤 «닫기» 유예 (운영자 결정, 실기 4차 2026-09-06). 규칙은 순수 모듈이 쥐고
  * 여기서는 시계(setTimeout)와 표면(stopCamera · 결과 시트)만 연결한다.
@@ -165,7 +174,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-07.01';
+export const SCANNER_BUILD = '2026-09-07.02';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -2331,12 +2340,14 @@ function startFrameLoop(session) {
                 correctedCount: Number.isInteger(hit.correctedCount) ? hit.correctedCount : 0,
               };
               /*
-               * 3b — 정정 강조 래치. 셀이 0개면 **아예 안 세운다** — 빈 래치는 「그릴 게 있다」로
-               * 읽히고 그 프레임의 렌더가 헛돈다. 시각은 여기 하나(순수 함수에 주입한다).
+               * 3b — 정정 강조 래치. 규칙은 순수 모듈이 쥔다 (`hudCorrectionLatch`): 셀이 0개면
+               * **아예 안 세우고**(빈 래치는 「그릴 게 있다」로 읽혀 렌더가 헛돈다), 그 셀 번호의
+               * 좌표계 셋(변종·n·세대)을 통째로 붙잡는다. 시각은 여기서 주입한다.
+               * 🔴 옛 자리는 객체 리터럴이라 «붙잡는 칸이 하나 빠졌다» 를 재는 자가 없었다 —
+               * `formatWire` 한 줄을 지우면 정정 강조가 한 픽셀도 안 그려지는데 87/87 초록이었다
+               * (3b 검토 rulers F2). 이제 소비자(`hudCorrectionGridOk`)까지 값으로 이어진다.
                */
-              r2Correction = (r2Latched.correctedCount > 0 && hit.correctedCells && hit.correctedCells.length > 0)
-                ? { at: nowMs(), count: r2Latched.correctedCount, cells: hit.correctedCells, layoutId: hit.layoutId, n: hit.n }
-                : null;
+              r2Correction = hudCorrectionLatch(hit, nowMs());
               // R2 가 먼저 읽었다. 결과 경로는 R1 과 **같은 문**을 쓴다 —
               // 새 표시 경로를 만들면 두 경로가 어긋난다.
               handleDecodeResult(r2HitToDecodeResult(hit), 'camera', session);
@@ -3671,6 +3682,17 @@ if (r2Available) {
 const r2CellMapCanvas = document.getElementById('r2-cellmap');
 const r2HudCanvas = document.getElementById('r2-hud');
 const r2HudMini = document.getElementById('r2-hud-mini');
+/*
+ * 🔴 **표시 판정이 닿는 세 표면** (3b 검토 F1). 이름은 `hudSurfaceVisibility` 의 출력 키에서
+ * 접미 `Hidden` 을 뗀 것이다 — 짝짓기는 `applyHudSurfaces` 가 유도하므로 여기 손 목록이 아니라
+ * «어느 요소가 어느 표면인가» 만 적는다. **한 번만 만든다**: 프레임마다 만들면 그것이 매 프레임
+ * 할당이고, 요소 참조는 세션 내내 안 바뀐다.
+ */
+const r2HudSurfaces = Object.freeze({
+  overlay: r2HudCanvas,
+  mini: r2HudMini,
+  cellMap: r2CellMapCanvas,
+});
 
 /**
  * **디자인 톤 명암** (운영자 요구 ⑧ — 「로케이터 초록 + 디자인(휘도)」). 인덱스 = 그 면의 설계 톤
@@ -3731,19 +3753,18 @@ const R2_HUD_OUTLINE_STROKE = 'rgba(126,249,208,0.7)';
  */
 const R2_HUD_DISTRUST_STROKE = R2_CELL_COLOR[CELL_MAP_STATE.ERASURE];
 /**
- * **RS 정정 강조의 붓** (3b). 색은 팔레트의 «rsfix» 항목 하나에서 오고(사본 금지 — 좌 패널 칩의
- * `--r2-rsfix` 도 같은 값), 채움은 외곽선보다 옅다: 「여기가 그 셀이다」를 외곽이 말하고 채움은
- * 그 안을 알아보게만 한다. 배율은 «색» 이 아니라 «세기» 라 여기 산다 (불신 글로우와 같은 규약).
+ * **RS 정정 강조의 붓 색** (3b). 색은 팔레트의 «rsfix» 항목 하나에서 온다 (사본 금지 — 좌 패널 칩의
+ * `--r2-rsfix` 도 같은 값). 붓질 자체(채움 배율·외곽 굵기·실선)는 `src/r2-hud-paint.js` 가 쥔다 —
+ * 그 파일엔 색이 하나도 없고 여기서 **값으로** 건네므로, 가짜 ctx 로 붓질을 셀 수 있다 (빚 2).
  */
-const R2_HUD_CORRECTION_COLOR = R2_CELL_COLOR[HUD_RSFIX_STATE_KEY];
-const R2_HUD_CORRECTION_FILL = 0.45;
-const R2_HUD_DISTRUST_ALPHA = 0.45;
+const R2_HUD_CORRECTION_STYLE = Object.freeze({ color: R2_CELL_COLOR[HUD_RSFIX_STATE_KEY] });
+/** 미니 실루엣만 그리는 위상(락 전·DROPPED)의 α — «찾는 중» 의 자리만 알린다. */
+const R2_HUD_MINI_IDLE_ALPHA = 0.35;
 /** 점선 간격은 **화면 CSS px** 다 — 선폭과 같은 이유로 변환 역수로 되돌려 쓴다. */
 const R2_HUD_DISTRUST_DASH = Object.freeze([6, 4]);
 
 /** 점선 스크래치 — `setLineDash` 는 인자를 **복사**하므로 한 배열을 계속 덧써도 된다 (핫 경로 할당 금지). */
 const r2HudDashScratch = [0, 0];
-const R2_HUD_SOLID_DASH = Object.freeze([]);
 
 /** 격자·실루엣 선의 붓 — 불신이면 분홍 점선, 아니면 기존 색의 실선. `ctx` 를 그 자리에서 세운다. */
 function setR2HudStroke(ctx, distrusted, baseColor, unitPx) {
@@ -3816,7 +3837,12 @@ const r2Hud = {
   // 프레임 현재 luma 폭으로 덧써지므로(r2-scan-runtime pushFrame · r2-scan-runtime.test ⓣ), 그것으로 나누면
   // 사영과 자가 다른 프레임을 말한다. 그래서 재사영과 **같은 자리에서만**(hudCaptureProjection) 갱신한다.
   lockRevision: -1, bindRevision: -1, n: 0, frameW: 0, frameH: 0, H: null,
-  layoutId: '', gridN: 0,
+  /*
+   * 역할 격자 캐시의 키는 **셋**이다 (빚 3): n · 선두 레이아웃 · **포맷 세대**. 세대가 빠지면
+   * 세대만 바뀐 재bind 가 옛 격자를 그대로 써서, 레거시(와이어 1) 프레임의 정정 강조·소거
+   * 색칠이 순번 7 부터 다른 칸을 지목한다. 규칙과 무효화는 순수 모듈이 쥔다(`hudRoleGridsInto`).
+   */
+  layoutId: '', gridN: 0, gridWire: 0,
   quads: null, lines: null, outline: new Float64Array(12), roleGrids: null,
   /** 3b — 스캔 순번 k → 격자 인덱스. `roleGrids` 와 **같은 자리에서** 다시 만든다 (유도, 사본 아님). */
   scanInverse: null,
@@ -3855,20 +3881,15 @@ function squareSideOf(element, slot) {
 
 /** 꺼짐 / 카메라 없음 — 캔버스 둘을 숨기고 재사영 상태를 되돌린다. */
 function hideR2Hud() {
-  // «그릴 근거가 없다» 는 입력 하나로 셋을 다 닫는다 — 규칙은 renderR2CellMap 과 **같은 순수 함수**다
-  // (여기서 `true` 셋을 손으로 적으면 표시 규칙이 두 곳에 살고, 한쪽만 바뀌는 날 조용히 갈린다).
-  const surfaces = hudSurfaceVisibility({ hasStream: false });
-  if (r2HudMini) r2HudMini.hidden = surfaces.miniHidden;
-  if (r2CellMapCanvas) r2CellMapCanvas.hidden = surfaces.cellMapHidden;
-  if (r2HudCanvas) r2HudCanvas.hidden = surfaces.overlayHidden;
+  // «그릴 근거가 없다» 는 입력 하나로 셋을 다 닫는다 — 규칙은 renderR2CellMap 과 **같은 순수 함수**고,
+  // 판정을 `hidden` 으로 옮기는 이음새도 **같은 함수**다 (없는 요소는 그쪽이 건너뛴다).
+  applyHudSurfaces(r2HudSurfaces, hudSurfaceVisibility({ hasStream: false }));
   r2Hud.lockRevision = -1;
   r2Hud.bindRevision = -1;
   // H 스냅샷도 버린다 — 남기면 다음 락의 H 가 우연히 같은 9값일 때 재사영이 «필요 없음» 으로 읽힌다.
   r2Hud.H = null;
-  r2Hud.roleGrids = null;
-  r2Hud.scanInverse = null;
-  r2Hud.layoutId = '';
-  r2Hud.gridN = 0;
+  // 격자 캐시 다섯 칸은 **한 함수**가 비운다 — 렌더러와 여기가 각자 적으면 새 칸(세대)을 한쪽만 잊는다.
+  clearHudRoleGrids(r2Hud);
   r2Hud.maxMs = 0;
   r2Hud.phase = '';
   // 락 폭도 같이 버린다 — 다음 락의 재사영이 자기 프레임 폭을 다시 심는다.
@@ -3919,23 +3940,6 @@ function appendR2HudQuadInto(path, buffer, slot) {
   path.lineTo(buffer[slot + 4], buffer[slot + 5]);
   path.lineTo(buffer[slot + 6], buffer[slot + 7]);
   path.closePath();
-}
-
-/**
- * **정정 강조 한 표면** — 채움(α × 배율) + 실선 외곽. 오버레이와 미니가 **같은 함수**를 쓴다:
- * 한쪽만 고치면 「같은 상태의 두 그림」이 다른 말을 한다 (불신 α 와 같은 규율).
- * 선폭 단위는 호출자가 준다 (변환 역수 — 화면 CSS px 고정).
- */
-function paintR2Correction(ctx, path, alpha, unitPx) {
-  ctx.setLineDash(R2_HUD_SOLID_DASH);
-  ctx.globalAlpha = alpha * R2_HUD_CORRECTION_FILL;
-  ctx.fillStyle = R2_HUD_CORRECTION_COLOR;
-  ctx.fill(path);
-  ctx.globalAlpha = alpha;
-  ctx.strokeStyle = R2_HUD_CORRECTION_COLOR;
-  ctx.lineWidth = 2 * unitPx;
-  ctx.stroke(path);
-  ctx.globalAlpha = 1;
 }
 
 /** 격자선 — 선분 버퍼(끝점 2개)를 그대로 잇는다. NaN 선분은 건너뛴다. */
@@ -4019,35 +4023,7 @@ function renderR2CellMap() {
     const phase = hudPhase(hudInput);
     // «격자 불신» — 마진 게이트 미달. 판정은 순수 모듈이 하고(그릴 게 없는 위상은 스스로 뺀다) 여기는 그린다.
     const distrusted = hudDistrusted(hudInput);
-    /*
-     * 🔴 **정정 강조는 위상 밖의 층이다** (3b). 위상은 «후보가 어디까지 왔나» 라 DONE 에서 그리기를
-     * 멈추는데(아래 `overlayOn`), 정정 강조가 있어야 하는 자리가 바로 그 DONE 이다. 그래서 α 는
-     * 위상이 아니라 **래치 시각**에서만 나온다 — 시계는 여기서 주입하고 규칙은 순수 함수에 있다.
-     */
-    const corrAlpha = r2Correction === null ? 0 : hudCorrectionAlpha(nowMs(), r2Correction.at);
-    const corrFresh = corrAlpha > 0 && r2Correction !== null && r2Correction.count > 0;
     r2Hud.phase = phase;
-    /*
-     * 표시 판정은 **순수 함수**에 있다 (⑯(i) · hudSurfaceVisibility). 옛 자리는 여기 세 대입이었고,
-     * 그래서 「유예 창에서 오버레이가 열려 있는가」를 재는 방법이 철자밖에 없었다 — 결정 (i) 가 여는
-     * 표면이 정확히 그 한 프레임이라, 그 축은 값으로 재야 한다 (test/r2-hud-model.test.js).
-     *   · 미니 HUD·셀맵은 R2 켬 + 카메라면 **항상** 보인다 (점진 표시가 SEARCHING 부터 시작한다).
-     *   · 전면 오버레이는 «그릴 H 가 있는 위상» ∨ «정정 강조가 살아 있음». 후자가 DONE 위상에서도
-     *     오버레이를 여는 유일한 입력이고, 그 프레임이 실제로 합성되도록 ⑯(i) 가 닫기를 미룬다.
-     * 위상은 CSS 가 읽는다(스캔선).
-     */
-    const surfaces = hudSurfaceVisibility({
-      hasStream: true, runtimeEnabled: true, hasView: true, phase, corrFresh,
-    });
-    r2HudMini.hidden = surfaces.miniHidden;
-    r2CellMapCanvas.hidden = surfaces.cellMapHidden;
-    if (r2HudMini.dataset.phase !== phase) r2HudMini.dataset.phase = phase;
-    // 상자 테두리도 같이 갈린다 — 캔버스 안 점선만으로는 140px 미니에서 눈에 안 든다 (CSS 는 index.html).
-    const distrustFlag = distrusted ? '1' : '0';
-    if (r2HudMini.dataset.distrust !== distrustFlag) r2HudMini.dataset.distrust = distrustFlag;
-    // 채움·격자의 게이트가 쓰는 위상 판정 — 캔버스 표시와 **같은 규칙**이라 순수 함수의 출력에서 되읽는다.
-    const overlayOn = !hudSurfaceVisibility({ hasStream: true, runtimeEnabled: true, hasView: true, phase }).overlayHidden;
-    r2HudCanvas.hidden = surfaces.overlayHidden;
 
     const n = Number.isInteger(view.n) && view.n > 0 ? view.n : 0;
     if (view.H && n > 0) {
@@ -4100,35 +4076,14 @@ function renderR2CellMap() {
      * 통째로 바뀌므로(⑧), 좌 패널이 NONE 인 프레임에 HUD 가 옛 선두로 색을 칠하면 두 표면이 다른 레이아웃을
      * 말한다. r2LeadingId 가 '' 이면(살아 있는 후보 0) 역할 격자를 **버린다** — 격자선·실루엣은 그대로 그린다.
      */
-    const leadingId = r2LeadingId;
-    if (leadingId === '') {
-      r2Hud.roleGrids = null;
-      r2Hud.scanInverse = null;
-      r2Hud.layoutId = '';
-      r2Hud.gridN = 0;
-    } else if (n > 0 && (r2Hud.layoutId !== leadingId || r2Hud.gridN !== n)) {
-      r2Hud.roleGrids = buildRoleGrids(n, leadingId);
-      /*
-       * 3b — 정정 강조는 「이 스캔 순번들만」이라 `scanGrid` 를 **거꾸로** 물어야 한다. 격자를 통째로
-       * 훑는 소거 색칠과 달리 역표가 필요하고, 표는 `scanGrid` 에서 유도한다 (순수 함수 — 사본 금지).
-       * 여기서 한 번 만든다: 선두·n 이 그대로면 다시 만들 이유가 없다.
-       */
-      r2Hud.scanInverse = null;
-      if (r2Hud.roleGrids) {
-        const dataCells = r2Hud.roleGrids.counts.data;
-        if (Number.isInteger(dataCells) && dataCells > 0) {
-          const inverse = new Int32Array(dataCells);
-          if (invertScanGrid(r2Hud.roleGrids.scanGrid, inverse) > 0) r2Hud.scanInverse = inverse;
-        }
-      }
-      r2Hud.layoutId = leadingId;
-      r2Hud.gridN = n;
-    }
+    /*
+     * 🔴 **빚 3** — 격자를 만드는 세대는 런타임이 후보를 묶은 세대다 (`view.formatWire`). 규칙·캐시
+     * 무효화는 순수 모듈이 쥐고(`hudRoleGridsInto`) 여기서는 「무엇을 먹여 주나」만 안다: 선두 ·
+     * 락 n · 그 세대. 역표(정정 강조가 거꾸로 묻는 표)도 같은 호출에서 같이 만들어진다 —
+     * 한쪽만 갱신하면 셀 번호와 칸이 어긋난다.
+     */
+    hudRoleGridsInto(r2Hud, { n, layoutId: r2LeadingId, formatWire: view.formatWire });
 
-    const gridPath = new Path2D();
-    const outlinePath = new Path2D();
-    const miniGridPath = new Path2D();
-    const miniOutlinePath = new Path2D();
     const grids = r2Hud.roleGrids;
     const quads = r2Hud.quads;
     /*
@@ -4140,26 +4095,80 @@ function renderR2CellMap() {
      * 대기다. 옛 주석은 「항상 true」라고 적어 두었는데 3b 가 다섯 번째 호출처를 만든 순간 거짓이 됐다.
      */
     const tentative = r2Latched === null;
+    // 「오버레이 기하가 있나」와 「그릴 위상인가」를 가른다 — 정정 강조는 앞의 것만 필요하다(3b).
+    const overlayGeom = Boolean(view.H) && quads !== null && r2Hud.n === n;
+    const isoGeom = r2HudIso.n === n && r2HudIso.quads !== null;
+    /*
+     * 🔴 **RS 정정 강조를 «이 격자에» 찍어도 되는가** (3b · 빚 3). 규칙은 순수 모듈이 쥔다
+     * (`hudCorrectionGridOk` — 입력이 평범한 객체·수뿐이라 DOM 이 없다). 옛 자리는 여기 지역
+     * 논리곱 여덟이었고 **아무 자도 못 봤다**: 세대 항 한 줄을 지워도 자 전부가 초록이었는데,
+     * 그 변이는 정정 강조를 통째로 끄는 변이다 (3b 검토 F2). 이제 값으로 재진다.
+     * 「지금 그릴 α 가 있나」는 여기 없다 — 그것은 계획이 판정한다.
+     */
+    const corrGridOk = hudCorrectionGridOk(r2Hud, r2Correction, n);
+    /*
+     * 🔴 **칠 계획** (빚 2) — 「어느 층이 열리고 어떤 α 인가」는 순수 모듈이 정한다(`hudPaintPlan`).
+     * 옛 자리는 여기 대여섯 개의 지역 상수였고, 그래서 「채움이 열리는가」를 재는 방법이 **철자**밖에
+     * 없었다 (r2-hud.test ⓞ — 정상 개명을 거부하던 자다). 이제 그 규칙은 값으로 재진다
+     * (`test/r2-hud-paint.test.js`) 그리고 여기는 계획대로 그리기만 한다.
+     *
+     * 계획이 답하는 것: 정정 강조가 살아 있나 · 오버레이를 열까 · 채움/격자를 그릴까(오버레이·미니
+     * 규칙이 다르다) · 정정 강조를 어느 표면에 그릴까 · 불신을 어떤 α 로 눕힐까.
+     * 계획이 **모르는 것**: 캔버스·좌표·색 — 전부 이 자리의 몫이다.
+     */
+    const plan = hudPaintPlan({
+      /*
+       * 🔴 **시계 주입** (빚 1). 정정 강조 α 는 위상이 아니라 **래치 시각**에서 나오고(위상 밖의 층),
+       * 그 α 하나가 ⑯(i) 유예 창에서 오버레이를 여는 유일한 입력이다. 시각을 인자로 넣으므로
+       * 자가 프레임을 여러 장 밀어 「hidden=false 인 프레임이 몇 장이었나」를 값으로 셀 수 있다
+       * (`test/scanner-accept-delay.test.js` ⓘ).
+       */
+      nowMs: nowMs(),
+      correction: r2Correction,
+      // 그릴 근거 셋 — 이 갈래에선 다 참이지만, 계획이 «꺼진 프레임» 도 표현할 수 있어야
+      // 유예가 끝난 다음 프레임(카메라 정지)을 자가 같은 함수로 잰다.
+      hasStream: Boolean(cameraStream),
+      runtimeEnabled: r2Runtime.enabled,
+      hasView: Boolean(view),
+      phase,
+      n,
+      overlayGeom,
+      isoGeom,
+      corrGridOk,
+      // 페이드인 α (⑩) — 시계는 여기서 주입한다. 재사영이 아니라 «새 락» 이 시각을 잡는다.
+      lockAlpha: fadeAlpha(nowMs(), r2Hud.lockedAt, R2_HUD_FADE_MS),
+      distrusted,
+    });
+    /*
+     * 표시 판정은 **순수 함수**에 있고(⑯(i) · hudSurfaceVisibility, 이제 계획 안), 그 값을 세
+     * 표면의 `hidden` 으로 옮기는 것도 **순수 이음새**다 (`applyHudSurfaces`). 옛 자리는 여기
+     * 세 대입이었고 — 판정이 계획으로 옮겨간 뒤에도 그 세 줄만은 무자로 남아, 오버레이를
+     * `hidden = true` 로 못박아도 표적 전부가 초록이었다 (3b 검토 F1). 이제 이음새 하나를
+     * 평범한 객체 셋으로 밀어 「판정 → 실제 표시」를 값으로 잰다.
+     *   · 미니 HUD·셀맵은 R2 켬 + 카메라면 **항상** 보인다 (점진 표시가 SEARCHING 부터 시작한다).
+     *   · 전면 오버레이는 «그릴 H 가 있는 위상» ∨ «정정 강조가 살아 있음». 후자가 DONE 위상에서도
+     *     오버레이를 여는 유일한 입력이고, 그 프레임이 실제로 합성되도록 ⑯(i) 가 닫기를 미룬다.
+     * 위상은 CSS 가 읽는다(스캔선).
+     */
+    applyHudSurfaces(r2HudSurfaces, plan.surfaces);
+    if (r2HudMini.dataset.phase !== phase) r2HudMini.dataset.phase = phase;
+    // 상자 테두리도 같이 갈린다 — 캔버스 안 점선만으로는 140px 미니에서 눈에 안 든다 (CSS 는 index.html).
+    const distrustFlag = distrusted ? '1' : '0';
+    if (r2HudMini.dataset.distrust !== distrustFlag) r2HudMini.dataset.distrust = distrustFlag;
+
     /*
      * 채움을 **아무도 안 그릴 위상**(SEARCHING·DROPPED)에서는 Path2D 를 만들지도 않는다. 락 상실 코스팅 중에는
      * view.n 이 남아 있어서 조건이 서고, n=25 면 마름모 1875개를 매 프레임 헛만든다 — 가장 흔한 위상에서.
-     * 미니의 채움 위상은 오버레이와 다르다(점진 표시의 마지막 두 칸뿐) — 그래서 조건을 따로 판정하고,
+     * 미니의 채움 위상은 오버레이와 다르다(점진 표시의 마지막 두 칸뿐) — 그래서 계획이 조건을 따로 내고,
      * 둘 중 하나라도 참일 때만 격자를 한 번 걷는다. 둘 다 참인 프레임(DATA·FINALIZING)에서만 마름모가 두 벌이다.
      */
-    // 「오버레이 기하가 있나」와 「그릴 위상인가」를 가른다 — 정정 강조는 앞의 것만 필요하다(3b).
-    const overlayGeom = Boolean(view.H) && quads !== null && r2Hud.n === n;
-    /*
-     * 🔴 **정정 강조 프레임에는 채움·격자도 연다** (3b 검토 F6). 위상이 DONE 이면 원래 모든 채움
-     * 게이트가 닫히는데, 정정 강조가 그려지는 프레임이 바로 그 DONE 이다 — 그러면 「어느 셀이
-     * 틀렸나」가 **맥락 없는 흰 마름모**로만 뜬다. 그 물음은 주변 셀·격자가 있어야 읽힌다.
-     * 그래서 `corrFresh` 를 채움·격자의 **또 하나의 참 조건**으로 넣는다 (위상 판정은 그대로다).
-     */
-    const wantFills = overlayGeom && (overlayOn || corrFresh);
-    const miniFills = n > 0 && (phase === HUD_PHASE.DATA || phase === HUD_PHASE.FINALIZING || corrFresh);
-    const miniGridOn = miniFills || (n > 0 && phase === HUD_PHASE.GRID);
+    const gridPath = new Path2D();
+    const outlinePath = new Path2D();
+    const miniGridPath = new Path2D();
+    const miniOutlinePath = new Path2D();
     r2HudPaths.clear();
     r2HudMiniPaths.clear();
-    if (grids && n > 0 && r2HudIso.n === n && (wantFills || miniFills)) {
+    if (grids && n > 0 && r2HudIso.n === n && (plan.overlayFills || plan.miniFills)) {
       for (let j = 0; j < n; j += 1) {
         for (let i = 0; i < n; i += 1) {
           const idx = j * n + i;
@@ -4182,8 +4191,8 @@ function renderR2CellMap() {
             const paintKey = tone === HUD_TONE_NONE ? key : key + R2_HUD_TONE_SEP + tone;
             if (!R2_HUD_BUCKET_PAINT.has(paintKey)) continue;
             const slot = faceQuadSlot(n, f, i, j);
-            if (wantFills) appendR2HudQuad(r2HudPaths, paintKey, quads, slot);
-            if (miniFills) appendR2HudQuad(r2HudMiniPaths, paintKey, r2HudIso.quads, slot);
+            if (plan.overlayFills) appendR2HudQuad(r2HudPaths, paintKey, quads, slot);
+            if (plan.miniFills) appendR2HudQuad(r2HudMiniPaths, paintKey, r2HudIso.quads, slot);
           }
         }
       }
@@ -4192,30 +4201,17 @@ function renderR2CellMap() {
      * 🔴 **RS 정정 강조의 경로** (3b). 셀 목록이 짧아서(정정 수 × 3) 격자를 다시 걷지 않는다 —
      * 스캔 순번 → 격자 칸을 역표로 곧장 물어 그 칸의 세 면만 잇는다.
      *
-     * ⚠ **선두가 DONE 의 변종과 다르면 안 그린다.** 역표·기하는 `r2Hud.layoutId`(좌 패널과 같은
-     * 히스테리시스 선두)의 것이고, DONE 이 다른 변종으로 섰다면 그 격자 위의 셀 번호를 이 격자에
-     * 찍는 것은 **다른 칸을 지목하는 일**이다 (운영자 ⑧ 의 «정정» 이 바로 그 어긋남이다).
-     * 그때 화면에 남는 것은 결과 카드의 «RS 정정 k» 뿐이다 — 수는 맞고 자리는 안 그린다.
-     */
-    const corrGridOk = corrFresh
-      && grids !== null
-      && n > 0
-      && r2Hud.gridN === n
-      && r2Hud.scanInverse !== null
-      && r2Correction.n === n
-      && r2Hud.layoutId === r2Correction.layoutId;
-    /*
      * ⚠ 경로 객체는 **그릴 게 있을 때만** 만든다 (3b 검토 F16). 위 채움 경로가 세운 규율과 같다:
      * 정정 없는 프레임(거의 전부)에서 Path2D 두 개를 헛만들면 그것이 매 프레임 할당이다.
+     * 「그릴 게 있나」는 계획이 이미 답했다 — 두 표면 중 하나라도 열렸을 때만 걷는다.
      */
     let corrPath = null;
     let corrMiniPath = null;
     let corrCells = 0;
-    if (corrGridOk) {
+    if (plan.overlayCorrection || plan.miniCorrection) {
       corrPath = new Path2D();
       corrMiniPath = new Path2D();
       const inverse = r2Hud.scanInverse;
-      const isoOk = r2HudIso.n === n && r2HudIso.quads !== null;
       for (let c = 0; c < r2Correction.cells.length; c += 1) {
         const k = r2Correction.cells[c];
         const idx = (Number.isInteger(k) && k >= 0 && k < inverse.length) ? inverse[k] : -1;
@@ -4225,16 +4221,17 @@ function renderR2CellMap() {
         corrCells += 1;
         for (let f = 0; f < HUD_FACES.length; f += 1) {
           const slot = faceQuadSlot(n, f, i, j);
-          if (overlayGeom) appendR2HudQuadInto(corrPath, quads, slot);
-          if (isoOk) appendR2HudQuadInto(corrMiniPath, r2HudIso.quads, slot);
+          if (plan.overlayCorrection) appendR2HudQuadInto(corrPath, quads, slot);
+          if (plan.miniCorrection) appendR2HudQuadInto(corrMiniPath, r2HudIso.quads, slot);
         }
       }
     }
-    const corrOverlay = corrCells > 0 && overlayGeom && corrPath !== null;
-    const corrMini = corrCells > 0 && r2HudIso.n === n && corrMiniPath !== null;
+    // 계획이 «그린다» 고 해도 역표가 한 칸도 못 짚으면 그릴 것이 없다 (수는 맞고 자리는 모른다).
+    const corrOverlay = corrCells > 0 && plan.overlayCorrection;
+    const corrMini = corrCells > 0 && plan.miniCorrection;
 
-    if (wantFills && r2Hud.lines) appendR2HudLines(gridPath, r2Hud.lines, gridLineCount(n));
-    if (miniGridOn && r2HudIso.lines && r2HudIso.n === n) {
+    if (plan.overlayGrid && r2Hud.lines) appendR2HudLines(gridPath, r2Hud.lines, gridLineCount(n));
+    if (plan.miniGrid && r2HudIso.lines && r2HudIso.n === n) {
       appendR2HudLines(miniGridPath, r2HudIso.lines, gridLineCount(n));
     }
     if (view.H && r2Hud.n === n && n > 0) appendR2HudOutline(outlinePath, r2Hud.outline);
@@ -4247,18 +4244,18 @@ function renderR2CellMap() {
     // rect 를 읽으면 프레임마다 **강제 동기 레이아웃**이 든다 — 크기는 리사이즈에만 바뀐다).
     const side = squareSideOf(cameraStage, R2_SIDE_STAGE);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const alpha = fadeAlpha(nowMs(), r2Hud.lockedAt, R2_HUD_FADE_MS);
     /*
      * 3d — 불신이면 **채움만** 더 눕힌다: 선은 색·점선으로 갈리고 채움은 α 로 갈린다.
-     * 두 표면(오버레이·미니)이 같은 수를 쓴다 — 한쪽만 눕히면 「같은 상태의 두 그림」이 다른 말을 한다.
+     * 두 표면(오버레이·미니)이 계획의 **같은 수**를 쓴다 — 한쪽만 눕히면 「같은 상태의 두 그림」이
+     * 다른 말을 한다 (배율·유도는 `hudPaintPlan` 이 쥐고, test/r2-hud-paint.test ⓐ⑤ 가 값으로 잰다).
      */
-    const paintAlpha = distrusted ? alpha * R2_HUD_DISTRUST_ALPHA : alpha;
+    const paintAlpha = plan.paintAlpha;
     /*
-     * ⚠ 게이트가 `corrOverlay` 가 아니라 **`corrFresh`** 인 이유: 위에서 캔버스를 `corrFresh` 로
+     * ⚠ 게이트가 `corrOverlay` 가 아니라 **`plan.overlayOpen`** 인 이유: 위에서 캔버스를 같은 판정으로
      * 열었으므로, 여기서 더 좁은 조건을 쓰면 「보이는데 안 지운 캔버스」(옛 프레임 잔상)가 남는다.
      * 그릴 게 없으면 `clearRect` 만 하고 끝난다 — 그것이 이 자리의 옳은 일이다.
      */
-    if ((overlayOn || corrFresh) && side > 0 && r2Hud.frameW > 0 && r2Hud.frameH > 0) {
+    if (plan.overlayOpen && side > 0 && r2Hud.frameW > 0 && r2Hud.frameH > 0) {
       const backing = Math.round(side * dpr);
       // width/height 대입은 캔버스를 **지운다** — 달라졌을 때만 건드린다.
       if (r2HudCanvas.width !== backing) r2HudCanvas.width = backing;
@@ -4281,7 +4278,9 @@ function renderR2CellMap() {
         ctx.lineWidth = (2 * dpr) / sx;
         ctx.stroke(outlinePath);
         // 3b — 정정 강조는 **맨 위**다: 아래 층(역할·데이터 색)이 그 셀을 이미 칠했으므로 덮어야 보인다.
-        if (corrOverlay) paintR2Correction(ctx, corrPath, corrAlpha, dpr / sx);
+        if (corrOverlay) {
+          paintCorrectionLayer(ctx, corrPath, plan.correctionAlpha, dpr / sx, R2_HUD_CORRECTION_STYLE);
+        }
         // 점선은 이 캔버스 컨텍스트에 남는다 — 다음 프레임이 실선으로 돌아가도 되게 여기서 되돌린다.
         ctx.setLineDash(R2_HUD_SOLID_DASH);
         ctx.globalAlpha = 1;
@@ -4307,9 +4306,8 @@ function renderR2CellMap() {
           const originY = (miniBacking - boxH * scale) / 2 - r2HudBounds[1] * scale;
           mctx.setTransform(scale, 0, 0, scale, originX, originY);
           // 락 전(n 미상)·DROPPED 엔 실루엣만 옅게 — «찾는 중» 의 자리만 알린다. 스캔선은 CSS 가 맡는다.
-          const idle = n <= 0 || phase === HUD_PHASE.SEARCHING || phase === HUD_PHASE.DROPPED;
-          if (idle) {
-            mctx.globalAlpha = 0.35;
+          if (plan.miniIdle) {
+            mctx.globalAlpha = R2_HUD_MINI_IDLE_ALPHA;
             // idle 위상(SEARCHING·DROPPED)에는 «불신» 이 뜻이 없다 — hudDistrusted 가 이미 그 셋을 뺐다.
             setR2HudStroke(mctx, false, R2_HUD_OUTLINE_STROKE, dpr / scale);
             mctx.lineWidth = dpr / scale;
@@ -4317,21 +4315,23 @@ function renderR2CellMap() {
             mctx.globalAlpha = 1;
           } else {
             // 점진 표시(운영자 원 요구): 실루엣 → 격자 → 역할색 → 데이터. 위상이 그 순서를 탄다.
-            // DONE 위상이 여기 오는 경로는 하나뿐이다 — 정정 강조 재렌더(3b · `corrFresh` 가 채움을 연다).
+            // DONE 위상이 여기 오는 경로는 하나뿐이다 — 정정 강조 재렌더(3b · 계획이 채움을 연다).
             // 그 밖의 DONE 뒤엔 결과 시트가 덮는다(⑨).
-            if (miniFills) paintR2HudBuckets(mctx, paintAlpha, r2HudMiniPaths);
-            if (miniGridOn) {
-              mctx.globalAlpha = alpha;
+            if (plan.miniFills) paintR2HudBuckets(mctx, paintAlpha, r2HudMiniPaths);
+            if (plan.miniGrid) {
+              mctx.globalAlpha = plan.lockAlpha;
               setR2HudStroke(mctx, distrusted, R2_HUD_GRID_STROKE, dpr / scale);
               mctx.lineWidth = dpr / scale;
               mctx.stroke(miniGridPath);
             }
-            mctx.globalAlpha = alpha;
+            mctx.globalAlpha = plan.lockAlpha;
             setR2HudStroke(mctx, distrusted, R2_HUD_OUTLINE_STROKE, dpr / scale);
             mctx.lineWidth = (2 * dpr) / scale;
             mctx.stroke(miniOutlinePath);
             // 3b — 오버레이와 **같은 함수·같은 α**. 미니는 항등 H 라 카메라 자세와 무관하게 같은 칸을 짚는다.
-            if (corrMini) paintR2Correction(mctx, corrMiniPath, corrAlpha, dpr / scale);
+            if (corrMini) {
+              paintCorrectionLayer(mctx, corrMiniPath, plan.correctionAlpha, dpr / scale, R2_HUD_CORRECTION_STYLE);
+            }
             mctx.setLineDash(R2_HUD_SOLID_DASH);
             mctx.globalAlpha = 1;
           }

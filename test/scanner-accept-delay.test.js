@@ -12,10 +12,14 @@
  *   ⓔ 유예를 안 걸었을 때 — `arm()` 이 false 고 `isPending()` 은 거짓: 호출자는 종전처럼 즉시 닫는다.
  *   ⓕ 스캐너 배선 (⚠ 철자 자 — 브라우저 밖) — 세 자리(문의 수용, 프레임 루프의 두 갈래, stopCamera 의 회수)에
  *      실제로 연결돼 있다. 값으로 잴 수 있는 것은 위 다섯이고 **연결**은 소스로만 볼 수 있다.
+ *   ⓘ 🔴 **행동 자 (빚 1, 2026-09-07)** — 세 모듈(`acceptStopDelayMs` → `createAcceptStopGate` →
+ *      `hudPaintPlan`)을 실제로 이어 붙여 프레임을 밀고, **오버레이가 `hidden=false` 인 프레임 수**를
+ *      센다. 승격 전 결함(F1)은 그 수가 0 이었던 것이고, ⓐ\~ⓕ 는 각자 초록이어도 **이은 창**을
+ *      아무도 안 쟀다. 대조군(정정 0 = 승격 전 경로)이 0장을 내므로 이 자는 실패를 볼 수 있다.
  *
  * ⚠ 이 파일이 **못** 재는 축 (이름을 붙여 둔다):
- *   · 브라우저가 유예 창의 프레임을 실제로 **합성**하는가. rAF·페인트는 노드 밖이다 — 여기서 재는 것은
- *     「루프가 죽지 않게 배선했는가」(ⓕ)와 「그 프레임의 오버레이 표시가 열림인가」(r2-hud.test ⓞ 의 값)까지다.
+ *   · 브라우저가 유예 창의 프레임을 실제로 **합성**하는가. rAF·페인트는 노드 밖이다 — ⓘ 가 재는 것은
+ *     「그 프레임의 표시 판정이 열림이었나」까지고, 그 위는 운영자 실기 4차가 답했다.
  *   · 600 ms 가 사람 눈에 **충분한가**. 그것은 실기 판정이고, 결정 ⑯ 이 이미 답이다.
  */
 
@@ -25,7 +29,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { acceptStopDelayMs, createAcceptStopGate } from '../src/scanner-accept-delay.js';
-import { R2_HUD_CORRECTION_MS } from '../src/r2-hud-model.js';
+import { HUD_PHASE, R2_HUD_CORRECTION_MS } from '../src/r2-hud-model.js';
+// ⓘ (빚 1) — 한 프레임의 표시 판정. 시계를 주입받으므로 유예 창을 프레임 단위로 밀어 볼 수 있다.
+import { hudPaintPlan } from '../src/r2-hud-paint.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
@@ -281,3 +287,197 @@ test('ⓗ 지연 클로저는 R2 가변 상태를 참조하지 않는다 — 요
   assert.ok(statusAt > doorAt && statusAt < armAt, '«읽었다» 문구가 유예를 건 뒤에 온다');
 });
 
+
+/*
+ * ── ⓘ 빚 1 — 🔴 **«캔버스가 hidden=false 로 ≥1 프레임 산다»** (행동 자) ────────────────────
+ *
+ * 승격 전 결함(3b 검토 F1): 수용이 같은 태스크에서 `stopCamera()` → `renderR2CellMap()` →
+ * `hideR2Hud()` 로 이어져 정정 강조가 **한 프레임도 합성되지 않았다**. 결정 ⑯(i) 가 닫기를
+ * 미뤄 그 표면을 열었는데, 「실제로 열려 있었나」를 재는 자가 없었다 — 유예 길이(ⓐ\~ⓔ)와
+ * 표시 규칙(r2-hud-model)이 각자 초록이어도 **둘을 이은 창**은 아무도 안 쟀다.
+ *
+ * 여기서는 실제 세 모듈을 그대로 이어 붙여 **프레임을 민다**:
+ *   `acceptStopDelayMs` → `createAcceptStopGate`(가짜 시계) → 프레임마다 `hudPaintPlan`.
+ * 재는 값: 「오버레이가 `hidden=false` 인 프레임 수」.
+ *
+ * ⚠ 못 재는 축 — 브라우저가 그 프레임을 실제로 **합성**했는가. 여기서 재는 것은 「그 프레임에
+ * 표시 판정이 열림이었나」까지다. 그 위(rAF·페인트)는 실기 판정이고 운영자 4차가 이미 답했다.
+ *
+ * ⚠ 제품 명제(«캔버스가 산다»)의 사슬은 넷이고 이 자는 **②** 만 닫는다 (3b 검토 F1 / rulers §4):
+ *   ① 유예 창 동안 프레임 루프가 산다 — `r2-scan-runtime.test` ⓕ (철자).
+ *   ② 그 프레임의 계획이 «열림» 을 낸다 — **여기**.
+ *   ③ 렌더러가 그 값을 캔버스의 `hidden` 에 쓴다 — `r2-hud-paint.test` ⓓ (값 · 2026-09-07 신설).
+ *      ⚠ 이 자를 처음 세울 때 ③ 은 **무자였다**: 그것을 덮던 ⓞ 의 두 줄이 같은 커밋에서 대체 없이
+ *      사라져, 오버레이를 `hidden = true` 로 못박아도 표적 134/134 가 초록이었다.
+ *   ④ 브라우저가 합성한다 — 자 없음 (실기).
+ * 그리고 이 하네스는 `corrGridOk`·`overlayGeom`·`isoGeom`·`phase`·`n` 을 **상수로 못박으므로**
+ * 「정정 강조가 실제로 켜지는 조건」은 여기로 안 지난다 — 그 축은 `r2-hud-model.test` 빚3
+ * `hudCorrectionGridOk` 가 값으로 잰다.
+ */
+
+/** 만기 시각을 아는 가짜 시계 — 프레임 루프가 시간을 밀 때 그때 도래한 타이머만 돈다. */
+function fakeFrameClock() {
+  const timers = new Map();
+  let seq = 1;
+  let now = 0;
+  return {
+    now() { return now; },
+    setTimer(fn, ms) {
+      const id = seq;
+      seq += 1;
+      timers.set(id, { due: now + Number(ms), fn });
+      return id;
+    },
+    clearTimer(id) { timers.delete(id); },
+    /** 시각을 t 로 밀고, 그때까지 도래한 타이머를 만기 순서대로 돌린다. */
+    advanceTo(t) {
+      now = t;
+      const due = [...timers.entries()].filter(([, timer]) => timer.due <= now);
+      due.sort((a, b) => a[1].due - b[1].due);
+      for (const [id, timer] of due) {
+        timers.delete(id);
+        timer.fn();
+      }
+    },
+    live() { return timers.size; },
+  };
+}
+
+/**
+ * 수용 한 번을 그대로 재현한다 — 스캐너의 문(handleDecodeResult 꼬리)과 **같은 순서**:
+ * 유예 길이 판정 → arm(성공하면 return, 실패하면 즉시 stopCamera → 결과 시트) → 프레임 루프.
+ */
+function runAcceptWindow({ correctedCount, frames = 60, stepMs = 16 }) {
+  const clock = fakeFrameClock();
+  const gate = createAcceptStopGate({
+    setTimer: (fn, ms) => clock.setTimer(fn, ms),
+    clearTimer: (id) => clock.clearTimer(id),
+  });
+  const state = { cameraOn: true, sheets: 0, stops: 0, order: [] };
+  const showAccepted = () => { state.sheets += 1; state.order.push('sheet'); };
+  const stopCamera = () => {
+    state.stops += 1;
+    state.order.push('stop');
+    state.cameraOn = false;
+    const rest = gate.take();
+    if (rest) rest();
+  };
+
+  // 정정 강조 래치 — 스캐너는 문 **앞**에서 세운다 (수용된 그 프레임의 시각).
+  const correction = correctedCount > 0 ? { at: clock.now(), count: correctedCount } : null;
+  const delayMs = acceptStopDelayMs({ engineR2: true, correctedCount });
+  if (!gate.arm(delayMs, showAccepted, stopCamera)) {
+    stopCamera();
+    showAccepted();
+  }
+
+  const visibleAt = [];
+  for (let f = 0; f < frames; f += 1) {
+    // 프레임 루프는 유예 창 동안 계속 돈다 (갈래 ② 는 return 하지 않는다).
+    clock.advanceTo(f * stepMs);
+    const plan = hudPaintPlan({
+      nowMs: clock.now(),
+      correction,
+      hasStream: state.cameraOn,
+      runtimeEnabled: true,
+      hasView: true,
+      // DONE 위상 — 수용된 뒤라 래치가 서 있다. 원래 오버레이가 닫히는 위상이다.
+      phase: HUD_PHASE.DONE,
+      n: 13,
+      overlayGeom: true,
+      isoGeom: true,
+      corrGridOk: true,
+      lockAlpha: 1,
+    });
+    if (!plan.surfaces.overlayHidden) visibleAt.push(clock.now());
+  }
+  return {
+    delayMs,
+    visibleFrames: visibleAt.length,
+    firstVisibleMs: visibleAt.length > 0 ? visibleAt[0] : -1,
+    lastVisibleMs: visibleAt.length > 0 ? visibleAt[visibleAt.length - 1] : -1,
+    ...state,
+  };
+}
+
+test('ⓘ 빚1 — 정정이 있는 수용은 오버레이가 hidden=false 인 프레임을 **적어도 하나** 남긴다', () => {
+  const run = runAcceptWindow({ correctedCount: 2 });
+  assert.equal(run.delayMs, R2_HUD_CORRECTION_MS, '유예가 안 걸렸다 — 시나리오가 아니다');
+  // 🔴 이 한 줄이 빚 1 이다.
+  assert.ok(run.visibleFrames >= 1,
+    '유예 창에 오버레이가 열린 프레임이 0장이다 — ⑯(i) 가 산 600 ms 가 빈 화면이다');
+  // 첫 프레임부터 열려 있다 — 「수용 직후」가 이 표면의 존재 이유다.
+  assert.equal(run.firstVisibleMs, 0, '수용 직후 첫 프레임이 닫혀 있다');
+  // 그리고 강조는 유예보다 **오래 안 산다** — 두 창이 같은 상수를 쓴다 (사본 금지의 값 확인).
+  assert.ok(run.lastVisibleMs < R2_HUD_CORRECTION_MS,
+    '강조가 유예 창(' + R2_HUD_CORRECTION_MS + 'ms) 밖에서도 열려 있다: ' + run.lastVisibleMs + 'ms');
+  // 창이 «한 프레임 운» 이 아니다 — 16 ms 캐던스면 수십 장이다 (공허 방지).
+  assert.ok(run.visibleFrames >= 10,
+    '열린 프레임이 ' + run.visibleFrames + '장뿐이다 — 창이 표본 운으로 좁아졌다');
+  // 닫기는 정확히 한 번, 순서는 승격 전과 같다: 정지 → 결과 시트.
+  assert.equal(run.stops, 1, 'stopCamera 가 ' + run.stops + '번 돌았다');
+  assert.equal(run.sheets, 1, '결과 시트가 ' + run.sheets + '번 떴다');
+  assert.deepEqual(run.order, ['stop', 'sheet'], '정지와 결과 시트의 순서가 뒤집혔다');
+  assert.equal(run.cameraOn, false, '유예가 끝났는데 카메라가 살아 있다');
+});
+
+test('ⓘ-b 대조군 — 정정 0(=승격 전 경로)은 열린 프레임이 **0장**이다 (자가 실패를 본다)', () => {
+  const run = runAcceptWindow({ correctedCount: 0 });
+  assert.equal(run.delayMs, 0, '정정 0 인데 유예가 걸렸다 — 결과가 늦게 뜬다');
+  /*
+   * 🔴 이 0 이 «자가 실패를 볼 수 있다» 는 증거다. 같은 하네스로 잰 두 팔이 **38 대 0** 이면
+   * 위 자의 초록은 유예가 실제로 만든 것이지 하네스가 늘 참을 내는 것이 아니다.
+   * (600 ms 유예 ÷ 16 ms 캐던스 → 0…592 ms 의 38장. 옛 주석의 «37» 은 실측과 어긋났다 —
+   *  3b 검토 rulers F8. 단언은 `>= 10` 이라 이 수 자체가 자를 깨지는 않는다.)
+   */
+  assert.equal(run.visibleFrames, 0,
+    '그릴 것이 없는데 오버레이가 열렸다 — 결과 시트 아래에 빈 그림이 남는다');
+  assert.equal(run.stops, 1);
+  assert.equal(run.sheets, 1);
+  assert.deepEqual(run.order, ['stop', 'sheet'], '즉시 닫는 갈래의 순서도 정지 → 결과 시트다');
+});
+
+test('ⓘ-c 유예를 가로채면(리셋·가시성) 그 프레임부터 닫힌다 — 늦은 타이머는 안 돈다', () => {
+  const clock = fakeFrameClock();
+  const gate = createAcceptStopGate({
+    setTimer: (fn, ms) => clock.setTimer(fn, ms),
+    clearTimer: (id) => clock.clearTimer(id),
+  });
+  let cameraOn = true;
+  let sheets = 0;
+  const stopCamera = () => {
+    cameraOn = false;
+    const rest = gate.take();
+    if (rest) rest();
+  };
+  const correction = { at: 0, count: 3 };
+  assert.equal(gate.arm(R2_HUD_CORRECTION_MS, () => { sheets += 1; }, stopCamera), true);
+
+  const frameOpen = (at) => {
+    clock.advanceTo(at);
+    return !hudPaintPlan({
+      nowMs: clock.now(),
+      correction,
+      hasStream: cameraOn,
+      runtimeEnabled: true,
+      hasView: true,
+      phase: HUD_PHASE.DONE,
+      n: 13,
+      overlayGeom: true,
+      isoGeom: true,
+      corrGridOk: true,
+      lockAlpha: 1,
+    }).surfaces.overlayHidden;
+  };
+
+  assert.equal(frameOpen(0), true, '유예 첫 프레임이 닫혀 있다');
+  assert.equal(frameOpen(100), true, '유예 중 프레임이 닫혔다');
+  // 리셋·가시성 전환이 유예를 가로챈다 — 읽은 결과는 그대로 확정된다.
+  stopCamera();
+  assert.equal(sheets, 1, '가로챈 정지가 읽은 결과를 버렸다');
+  assert.equal(frameOpen(116), false, '카메라가 꺼졌는데 오버레이가 열려 있다');
+  // 늦은 타이머는 죽었다 — 두 번째 닫기가 없다.
+  clock.advanceTo(R2_HUD_CORRECTION_MS + 100);
+  assert.equal(clock.live(), 0, '늦은 타이머가 살아 있다');
+  assert.equal(sheets, 1, '결과 시트가 두 번 떴다');
+});
