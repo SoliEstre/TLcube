@@ -93,26 +93,18 @@ describe('frozen isometric = ygrid.moduleQuad', () => {
 });
 
 describe('scene · 포맷 무영향', () => {
-  test('src/scene.js 가 HEAD 와 바이트 동일하다', () => {
-    const disk = execFileSync('git', ['hash-object', 'src/scene.js'], {
-      cwd: ROOT, encoding: 'utf8',
-    }).trim();
-    const head = execFileSync('git', ['rev-parse', 'HEAD:src/scene.js'], {
-      cwd: ROOT, encoding: 'utf8',
-    }).trim();
-    assert.equal(disk, head);
-  });
-
-  test('src/sceneY.js 가 HEAD 와 바이트 동일하다', () => {
-    const disk = execFileSync('git', ['hash-object', 'src/sceneY.js'], {
-      cwd: ROOT, encoding: 'utf8',
-    }).trim();
-    const head = execFileSync('git', ['rev-parse', 'HEAD:src/sceneY.js'], {
-      cwd: ROOT, encoding: 'utf8',
-    }).trim();
-    assert.equal(disk, head);
-  });
-
+  /*
+   * 퇴역 (2026-09-07): 「src/scene.js · src/sceneY.js 가 HEAD 와 바이트 동일하다」 두 자.
+   *
+   * 그 둘은 3D 뷰어 레인이 «우리는 scene.js 를 안 건드렸다» 를 증명하려고 넣은 레인 시점의
+   * 주장이었고, 재는 것은 «포맷 무영향» 이 아니라 **«작업 트리에 미커밋 변경이 없다»** 였다.
+   * 그래서 scene.js 를 정당하게 고치는 모든 착지(예: 2026-09-07 «검출기 강조» (B) —
+   * 중앙 v0 분기의 판정 사본 제거, 26 id × 4 모드 직렬화 104/104 바이트 동일)가 커밋 전엔
+   * 전수에서 빨갛고 커밋 뒤엔 저절로 초록이 된다 — 「커밋 자체가 측정을 바꾼다」의
+   * 반대 방향 함정. 성질을 재는 자는 아래 둘이 이미 맡는다: 뷰어가 scene(Y).js 를 import
+   * 하지 않는다 · 뷰어를 돌린 뒤에도 PNG/SVG 가 바이트 동일하다. 포맷·용량·digit 순열
+   * 불변은 test/detector-emphasis-cells.test.js ⓒ 가 잰다.
+   */
   test('뷰어 모듈이 scene.js / sceneY.js / three 를 import 하지 않는다', () => {
     const src = readFileSync(path.join(ROOT, 'src', 'y3d-viewer.js'), 'utf8');
     assert.equal(/from ['"][^'"]*scene(?:Y)?\.js['"]/.test(src), false);

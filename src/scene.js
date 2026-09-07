@@ -50,7 +50,12 @@ import {
   CENTRAL_N7_SIZE,
 } from './centralN7Schema.js';
 import { encodeCentralN7 } from './centralN7Codec.js';
-import { centralN7LevelPalettes } from './centralN7Emphasis.js';
+import {
+  DETECTOR_EMPHASIS_RENDER_KINDS,
+  centralN7LevelPalettes,
+  emphasisLevelsForCell,
+  isDetectorToneCell,
+} from './centralN7Emphasis.js';
 
 // `cellLevels` 삼중 [T, L, R] 의 면 → 인덱스. 검출기(cell-finder-detect.js 의
 // FACE_LEVEL_INDEX)와 **같은 표**여야 하며, `FACES` 배열의 나열 순서에 기대지
@@ -474,7 +479,13 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   qrText?: string, centerQr?: boolean, cornerToo?: boolean,
  *   finderPatternId?: string,
  *   centralN7Family?: 'hex'|'tri'|'star',
- *   centralN7Emphasis?: 'default'|'locator'|'all',  // 중앙 TL · 중앙 v0 가 소비 (2026-08-29 §4 — 3톤 큐브는 실측 거부)
+ *   // 소비 조건 = 고른 검출기의 renderKind 가 DETECTOR_EMPHASIS_RENDER_KINDS 안일 것
+ *   // (중앙 TL · 중앙 v0 · 중앙 M7). 그때 중앙 슬롯 **과 바깥 코드 셀 전부**가 같은
+ *   // 팔레트 치환을 받는다 — 검출 셀(entry.tones: H·H2O·CO2·H2CO3)은 'locator' 부터,
+ *   // 페이로드 셀(앵커·레퍼런스·포맷·데이터·노치 림)은 'all' 에서 (2026-09-07 결정 ⑭ (B)).
+ *   // 3톤 큐브는 실측 거부(2026-08-29 §2.4), BWG 계열은 줄 것이 없어 제외 — 그 검출기를
+ *   // 고르면 이 옵션은 **아무것도 안 바꾼다**(픽셀 동일).
+ *   centralN7Emphasis?: 'default'|'locator'|'all',
  *   centralMarkerN7Family?: 'hex'|'tri'|'star',
  *   centralMarkerN7Turn?: 0|1|2, centralMarkerN7Parity?: 0|1,
  *   qrCorner?: 'TL'|'TR'|'BL'|'BR',
@@ -687,6 +698,26 @@ export function buildScene(encoded, options) {
   let cellMinY = Infinity;
   let cellMaxX = -Infinity;
   let cellMaxY = -Infinity;
+  /*
+   * 「검출기 강조」 실체 확장 (2026-09-07, 결정 ⑭ (B) · PM/029B §27.14.1).
+   *
+   * 이 루프가 그리는 셀 면은 **전부 `palette.levels` 축**이다 (`faceColor` — tones 면
+   * 절대 톤, 아니면 digit 순위, 어느 쪽이든 levels). 그래서 중앙 슬롯 두 분기(중앙 TL ·
+   * 중앙 v0)와 **같은 팔레트 치환**이 그대로 성립한다: light 유지 · dark → 순검정 ·
+   * middle → sRGB 중점. 순위 0<1<2 는 보존되므로 디코더는 여전히 강조를 모른다
+   * (포맷·용량·digit 순열 불변 — test/detector-emphasis-cells.test.js ⓒ).
+   *
+   * **게이트가 renderKind 인 이유**: 강조는 «고른 검출기» 의 축이다. 3톤 큐브는 실측
+   * 거부(아래 ⛔), BWG 계열은 dark 가 이미 순검정이라 줄 것이 없다 — 그 검출기를 고른
+   * 코드에서 강조가 조용히 뭔가를 하면 화면의 «이 검출기는 대상이 아님» 이 거짓말이
+   * 된다. 그래서 판정은 분류 쪽(generator-render-config.detectorEmphasisApplicability)과
+   * **같은 집합** 하나를 본다.
+   *
+   * `default` 는 두 팔레트가 `palette.levels` 그대로라 이전 출력과 **바이트 동일**이다.
+   */
+  const cellPalettes = DETECTOR_EMPHASIS_RENDER_KINDS.includes(finderPattern.renderKind)
+    ? centralN7LevelPalettes(palette.levels, opts.centralN7Emphasis)
+    : null;
   for (const [key, entry] of cellDigits) {
     const commaIdx = key.indexOf(',');
     const q = Number(key.slice(0, commaIdx));
@@ -694,6 +725,11 @@ export function buildScene(encoded, options) {
     // 턴A: 배치 사상 (q,r) → (−q,−r). 면 폴리곤 자체는 정립 그대로다 (위 규약).
     const drawQ = turnA ? -q : q;
     const drawR = turnA ? -r : r;
+    // 검출 셀(절대 톤)은 로케이터 팔, 페이로드 셀은 데이터 팔 — 중앙 v0 비컨 분기와
+    // **같은 함수**(`emphasisLevelsForCell`)를 부른다. 사본은 0 이다 (2026-09-07
+    // 검토 F5 수리 — 그전엔 비컨 분기가 `entry.tones` 삼항 사본을 들고 있었다).
+    const cellPalette = cellPalettes === null
+      ? palette : { levels: emphasisLevelsForCell(entry, cellPalettes) };
     for (const face of FACES) {
       const points = facePolygon(drawQ, drawR, face, layout);
       for (const p of points) {
@@ -705,7 +741,7 @@ export function buildScene(encoded, options) {
       shapes.push({
         kind: 'polygon',
         points,
-        color: faceColor(entry, face, palette),
+        color: faceColor(entry, face, cellPalette),
       });
     }
   }
@@ -948,12 +984,24 @@ export function buildScene(encoded, options) {
     const markerPoints = (points) => marker.mirrored
       ? points.map((point) => ({ x: 2 * center.x - point.x, y: point.y }))
       : points;
+    /*
+     * 강조 3택 (결정 ⑭ (B), 2026-09-07) — 중앙 TL·중앙 v0 와 **같은 함수**를 쓴다.
+     *
+     * ⚠ 여기엔 **로케이터/데이터 구분이 없다**: 코드북 49셀이 전부 고정 톤이고
+     * 페이로드 셀이 0 개라(오버헤드 60셀 > 49셀 — 데이터 프레임이 산술적으로 불가능,
+     * finder-taxonomy §중앙 M7) `locator` 와 `all` 이 **같은 그림**이다. 브리프가 말한
+     * «중앙/로케이터 구분이 없는 검출기» 의 실례이고, 그 항등을 자 ⓕ 가 잠근다 —
+     * 여기서 `.data` 를 쓰면 «로케이터만» 이 조용히 아무것도 안 하게 된다.
+     */
+    const markerPalettes = centralN7LevelPalettes(
+      palette.levels, opts.centralN7Emphasis,
+    );
     for (const cell of marker.cells) {
       for (const face of FACES) {
         shapes.push({
           kind: 'polygon',
           points: markerPoints(moduleQuad(face, cell.i, cell.j, markerLayout)),
-          color: palette.levels[cell[face]],
+          color: markerPalettes.locator[cell[face]],
         });
       }
     }
@@ -1030,15 +1078,20 @@ export function buildScene(encoded, options) {
         if (entry === undefined) {
           throw new Error(`중앙 v0 비컨 셀 (${i},${j}) 이 없다`);
         }
+        // 팔(로케이터/데이터) 선택은 셀 루프와 **같은 술어**에서 나온다.
+        // ⚠ 2026-09-07 검토 F5: 여기엔 `entry.tones` 삼항의 **사본**이 있었고,
+        //   그 사본의 로케이터 팔을 데이터 팔로 갈아치우는 변이(N3)를 어느 자도
+        //   못 봤다. 사본을 걷어 `emphasisLevelsForCell` 하나로 모으면 M5·M10 이
+        //   이 축까지 덮고, 자 ⓘ 가 비컨 블록의 두 팔을 따로 한 번 더 잰다.
+        const levels = emphasisLevelsForCell(entry, beaconPalettes);
         for (const face of FACES) {
           let color;
-          if (entry.tones) {
-            color = faceColor(entry, face, { levels: beaconPalettes.locator });
-          } else if (beacon.tones === 2) {
+          if (!isDetectorToneCell(entry) && beacon.tones === 2) {
+            // 2톤 비컨의 **데이터 셀만** digit → 면 패턴(두 끝 레벨)으로 간다.
             const pattern = digitToPattern(entry.digit);
-            color = beaconPalettes.data[pattern[face] ? 2 : 0];
+            color = levels[pattern[face] ? 2 : 0];
           } else {
-            color = faceColor(entry, face, { levels: beaconPalettes.data });
+            color = faceColor(entry, face, { levels });
           }
           shapes.push({
             kind: 'polygon',

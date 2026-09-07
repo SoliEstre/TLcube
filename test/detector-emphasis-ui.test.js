@@ -2,7 +2,14 @@
  * detector-emphasis-ui.test.js — 「검출기 강조」 UI 정직 개편의 계약
  * (운영자 결정 ⑭ 2026-09-06 · PM/029B §27.14 (A)).
  *
- * 무엇이 바뀌었나 (라이브러리·와이어는 **한 줄도 안 바뀌었다**):
+ * ⚠ **머리말 정정 (2026-09-07, (B) 실체 확장)**: 아래 「라이브러리·와이어는 한 줄도
+ *   안 바뀌었다」는 (A) 라운드 시점의 사실이고 **지금은 거짓**이다. (B) 가 렌더를
+ *   바꿨다 — 적용 대상이 renderKind 유도로 넓어졌고(중앙 M7 편입), 대상 검출기에서는
+ *   바깥 코드 셀까지 같은 팔레트 치환을 받는다. 그 축의 자는
+ *   `test/detector-emphasis-cells.test.js` 다. 여기서 여전히 안 바뀐 것은 **3택
+ *   폐쇄집합·라이브러리 기본값·lab 기대 축** 셋이다.
+ *
+ * 무엇이 바뀌었나 ((A) 라운드 기준):
  *   라이브러리 3택(CENTRAL_N7_EMPHASIS_MODES) · 기본값(GENERATOR_DEFAULT_…='all') ·
  *   lab 기대 축 ④ · relay 폐쇄집합은 그대로. 바뀐 것은 생성기 UI 의 «모양과 정직함» 뿐:
  *     ① 제목이 «중앙 강조색» → «검출기 강조» (중앙 전제 제거)
@@ -177,13 +184,45 @@ test('① applicability 는 전수에 대해 총함수이고 applies 는 정본 
         `${id}: 폐쇄집합 밖 사유 ${JSON.stringify(verdict.reason)}`);
     }
   }
-  // 적용 대상의 값 표는 안 바뀌었다 (결정 ⑭ 는 «UI 의 모양» 만 바꾼다).
+  /*
+   * 적용 대상 집합 — **손 목록으로 잠그지 않는다** (2026-09-07 (B) 갱신).
+   *
+   * 종전판은 `[중앙 TL, 중앙 Y0]` 리터럴이었다. (A) 라운드에서는 그게 «값 표가 안
+   * 바뀌었다» 를 잠그는 옳은 자였지만, 집합이 실제로 넓어지는 라운드가 오면 그 자는
+   * **정답을 거부하고** 손으로 고쳐질 뿐이다 (교훈 «레인은 내 잘못된 지시를 자로
+   * 굳힌다»). 그래서 «무엇이 들어 있나» 가 아니라 «어떤 성질이면 들어오나» 를 잰다.
+   *
+   * ⚠ **이 대조는 «선언 대 선언» 이다** (2026-09-07 검토 F4 — 정직하게 적어 둔다).
+   *   구현은 renderKind(= DETECTOR_EMPHASIS_RENDER_KINDS)에서 유도하고, 여기서는
+   *   운영자 3분류 정본(finder-taxonomy)의 `toneAxis` **산문에 `palette.levels` 가
+   *   들어 있는가**로 다시 잰다. 한쪽만 늙으면 여기서 죽지만 **둘을 같이 넓히면
+   *   통과한다** — 실측 변이 N9b(집합에 `bullseye` 를 넣고 그 행 산문에도
+   *   `palette.levels` 를 덧붙임)가 형제 7파일 54/54 초록이었다. 산문 부분문자열은
+   *   뜻이 아니라 철자라 「(palette.levels 아님)」을 붙여도 매칭된다(변이 N8).
+   *
+   *   **행동 앵커는 다른 파일에 있다**: `test/detector-emphasis-cells.test.js` ⓐ 가
+   *   강조 상수를 한 번도 안 읽는 **독립 프로브**(levels 세 색만 바꾼 두 팔레트에서
+   *   검출기 자신의 그림이 움직이는가)로 같은 집합을 재고, 비대상 전수 × 3택의
+   *   셰이프·래스터 동일까지 잠근다. N9b 는 이제 그쪽에서 죽는다 — 여기가 잡는 것은
+   *   «두 선언이 갈라지는 것» 하나로 한정된다.
+   */
   const applying = RENDER_REACHABLE_IDS.filter(
     (id) => detectorEmphasisApplicability(id).applies,
   ).sort();
-  assert.deepEqual(applying,
-    [CENTRAL_N7_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID].sort(),
-    '적용 대상 집합이 바뀌었다 — 이 라운드는 라이브러리 축을 안 건드린다');
+  const toneById = new Map(FINDER_TAXONOMY.map((item) => [item.id, item.toneAxis]));
+  for (const id of applying) {
+    assert.ok(toneById.has(id),
+      `${id}: 적용 대상인데 분류 정본(finder-taxonomy)에 행이 없다 — 대조가 못 닿는다`);
+  }
+  const byTaxonomy = RENDER_REACHABLE_IDS
+    .filter((id) => (toneById.get(id) || '').includes('palette.levels')).sort();
+  assert.deepEqual(applying, byTaxonomy,
+    '적용 대상이 분류 정본의 palette.levels 축 행과 어긋난다');
+  assert.ok(applying.length >= 3, '적용 대상 표본이 줄었다 — 대조가 빈 집합으로 초록이 됐다');
+  // 결정 ⑭ (A) 의 둘은 계속 대상이다 (넓히기만 했지 빼지 않았다).
+  for (const id of [CENTRAL_N7_FINDER_PATTERN_ID, CENTRAL_V0_FINDER_PATTERN_ID]) {
+    assert.ok(applying.includes(id), `${id}: (A) 부터 대상이던 검출기가 빠졌다`);
+  }
 });
 
 test('① 사유 cube-3tone 은 renderKind 축에서 나온다 (라벨이 아니라)', () => {
@@ -357,6 +396,20 @@ test('③ 카드 값 집합·고급 표식·기본 선택이 정본에서 유도
     '기본값 카드가 고급 전용이다 — 일반 모드에서 선택 상태를 볼 수 없다');
   assert.match(SECTION_HTML, /id="detectorEmphasisNote"/,
     '사유 한 줄(#detectorEmphasisNote)이 섹션 안에 없다');
+});
+
+test('③ 정적 DOM 문구가 ko 사전과 **전부** 같다 — 첫 페인트 rot 금지', () => {
+  // 사전만 고치면 첫 페인트가 옛 문구로 뜬다 ((A) 레인 규약). 종전엔 이 대조가 섹션
+  // 제목(g1002) **한 줄**뿐이라, 카드 부제(g1006·g1008)의 정적 span 이 사전과 갈려도
+  // 아무 자가 안 봤다 — 손으로 유지하는 사본 두 벌이었다 (2026-09-07 (B) 라운드에서
+  // 실제로 g1006·g1008 을 둘 다 고쳐야 했다).
+  const spans = [...SECTION_HTML.matchAll(/data-i18n="(g\d+)"[^>]*>([^<]*)</g)];
+  assert.ok(spans.length >= 6,
+    `정적 문구 표본이 ${spans.length} 뿐이다 — 정규식이 늙었거나 마크업이 바뀌었다`);
+  for (const [, key, text] of spans) {
+    assert.equal(text, GENERATOR_STRINGS.ko[key],
+      `정적 DOM 의 ${key} 가 ko 사전과 다르다 — 첫 페인트가 옛 문구다`);
+  }
 });
 
 test('③ index.html 은 모형을 **소비만** 한다 — 규칙의 두 번째 사본 금지', () => {
