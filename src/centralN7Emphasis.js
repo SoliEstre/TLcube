@@ -76,6 +76,41 @@ export function centralN7LevelPalettes(levels, emphasis = DEFAULT_CENTRAL_N7_EMP
 }
 
 /**
+ * «강조를 켠 모드에서 **검출 셀만** 치환하는» 모드 — 팔 선택의 이름이지 UI 선택지가
+ * 아니다. 철자를 옮겨 적지 않으려고 폐쇄집합에서 뽑는다.
+ */
+export const DETECTOR_ONLY_EMPHASIS_MODE = CENTRAL_N7_EMPHASIS_MODES[1];
+if (DETECTOR_ONLY_EMPHASIS_MODE === DEFAULT_CENTRAL_N7_EMPHASIS) {
+  throw new Error('검출 셀 전용 팔 선택이 기본 모드와 같다 — 폐쇄집합 순서가 바뀌었다');
+}
+
+/**
+ * **코드 셀 표면**(바깥 셀 루프 · Type Y 셀 표면)이 쓰는 팔 선택 —
+ * 「강조는 검출기 셀에만, 코드 페이로드는 어떤 모드에서도 안 건드린다」.
+ *
+ * ⭐ **왜 `centralN7LevelPalettes` 와 다른 함수인가 (운영자 카드 `d-emph-b-default`,
+ *    2026-09-07 17:25 KST)**: (B) 는 바깥 셀 루프에 `centralN7LevelPalettes` 를 그대로
+ *    물려, `'all'` 에서 **코드 페이로드 셀까지** 강조 팔레트를 받게 했다 (실측: 코드
+ *    면의 45\~61 % — O V1 216면 · K K1 819면 · C0 노치 1184면). 운영자 판정은
+ *    「H·H2O·CO2·H2CO3 같은 파인더만 강조되어야 하는데 모든 코드 영역이 강조가 됐다」다.
+ *
+ *    그래서 **표면마다 «페이로드» 의 뜻이 다르다**:
+ *      · 중앙 슬롯(중앙 TL 49셀 · 중앙 v0 비컨) — 그 페이로드는 **검출기 자신의 몸**이라
+ *        `'all'` 이 여전히 치환한다 (`centralN7LevelPalettes` 그대로 · (B) 착지본과
+ *        바이트 동일). 이것이 `'all'` 과 `'locator'` 를 가르는 유일한 자리다.
+ *      · 코드 셀 표면 — 그 페이로드는 **코드 그 자체**라 안 건드린다 (이 함수).
+ *
+ *    즉 이 함수는 «`'all'` 을 `'locator'` 로 낮춘다» 가 아니라 «이 표면에는 강조할
+ *    데이터 팔이 없다» 는 성질의 이름이다. `'default'` 는 두 팔이 `levels` 그대로라
+ *    이전 출력과 바이트 동일이다.
+ */
+export function detectorCellLevelPalettes(levels, emphasis = DEFAULT_CENTRAL_N7_EMPHASIS) {
+  const mode = assertCentralN7Emphasis(emphasis);
+  return centralN7LevelPalettes(levels, mode === DEFAULT_CENTRAL_N7_EMPHASIS
+    ? mode : DETECTOR_ONLY_EMPHASIS_MODE);
+}
+
+/**
  * 강조 팔레트를 **실제로 소비하는 renderKind** — 렌더(scene.js)와 분류
  * (generator-render-config.detectorEmphasisApplicability)의 **공통 계약**이다
  * (2026-09-07, 결정 ⑭ (B) · PM/029B §27.14.2).
@@ -102,6 +137,13 @@ export function centralN7LevelPalettes(levels, emphasis = DEFAULT_CENTRAL_N7_EMP
  * 근거(실측, scene.js 분기):
  *   · `central-n7-payload` — 로케이터 30 + 데이터 19 를 `palette.levels` 로 그린다.
  *   · `central-v0` — 비컨 로케이터(tones) + 데이터(digit)를 `palette.levels` 로 그린다.
+ *   · `cell-surface-locator` — **Type Y** (`sceneY.js`). 레이아웃이 톤을 고정한 로케이터
+ *     셀(`role === 'locator'`)을 `gainedLevels[face][levelIndex]` 로 그린다 — 게인만
+ *     얹힌 `palette.levels` 축이다. 배선은 2026-09-07 (C) (운영자 「Y 의 경우는 v0 이나
+ *     v0T, v0TR 같은 로케이터 강조가 되어야 하는데 이쪽은 미지원 상태」). 여기엔
+ *     페이로드 팔이 없다 — Y 데이터 셀은 digit 순위라 안 건드리고, 중앙 슬롯 QR 은
+ *     레벨 축이 아니다. 그래서 `locator` 와 `all` 이 **같은 그림**이다 (중앙 M7 과 같은
+ *     «해당 없음» — 자 ⓙ 가 잠근다).
  *   · `central-marker-n7` — 고정 코드북 49셀을 `palette.levels[cell[face]]` 로 그린다.
  *     페이로드가 없어 **로케이터/데이터 구분이 없다** — `locator` 와 `all` 이 같은
  *     그림이고, 그 «해당 없음» 을 자 ⓕ 가 잠근다.
@@ -114,8 +156,21 @@ export function centralN7LevelPalettes(levels, emphasis = DEFAULT_CENTRAL_N7_EMP
  *   · `cube-bullseye` — 링은 파인더 축, 안쪽 3면은 `FINDER_CUBE_TONES`. `palette.levels`
  *     면이 **한 장도 없다** (2026-09-06 F1 실측).
  */
+/**
+ * Type Y 의 «검출기» 화법 — 셀 표면 로케이터(블록 로케이터). 중앙 파인더가 아니라
+ * **셀 격자 위에 레이아웃이 톤을 고정한 셀들**이 검출기라, id 축이 `finderPatternId`
+ * 가 아니라 `locatorProfileY`(= `cell-surface-*`)다.
+ *
+ * 철자를 여기 두는 이유: 이 상수는 `DETECTOR_EMPHASIS_RENDER_KINDS` 의 원소라
+ * **집합 소유자와 같은 층**이어야 한다. `finder-render-kind.js` 가 이걸 가져다
+ * «Y 로케이터 프로파일 id → 이 화법» 을 답하므로, 분류(applicability)·렌더(sceneY)·
+ * 화면이 전부 한 출처를 본다 (사본 금지 — (A) 레인 F4 사고).
+ */
+export const CELL_SURFACE_LOCATOR_RENDER_KIND = 'cell-surface-locator';
+
 export const DETECTOR_EMPHASIS_RENDER_KINDS = Object.freeze([
   'central-n7-payload', 'central-v0', 'central-marker-n7',
+  CELL_SURFACE_LOCATOR_RENDER_KIND,
 ]);
 
 /**

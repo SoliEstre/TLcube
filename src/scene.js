@@ -53,6 +53,7 @@ import { encodeCentralN7 } from './centralN7Codec.js';
 import {
   DETECTOR_EMPHASIS_RENDER_KINDS,
   centralN7LevelPalettes,
+  detectorCellLevelPalettes,
   emphasisLevelsForCell,
   isDetectorToneCell,
 } from './centralN7Emphasis.js';
@@ -714,9 +715,17 @@ export function buildScene(encoded, options) {
    * **같은 집합** 하나를 본다.
    *
    * `default` 는 두 팔레트가 `palette.levels` 그대로라 이전 출력과 **바이트 동일**이다.
+   *
+   * ⭐ **범위 정정 (2026-09-07, 운영자 카드 `d-emph-b-default` 17:25 KST)** — (B) 는
+   * 여기에 `centralN7LevelPalettes` 를 그대로 물려서 `'all'` 이 **코드 페이로드 셀까지**
+   * 강조했다 (실측: 코드 면의 45\~61 % — O V1 216면 · K K1 819면 · C0 노치 1184면).
+   * 운영자 판정은 「H·H2O·CO2·H2CO3 같은 파인더만 강조되어야 한다」이므로 이 루프는
+   * `detectorCellLevelPalettes` 를 쓴다 — 검출 셀(`entry.tones`)만 치환하고 데이터 팔은
+   * 어떤 모드에서도 `palette.levels` 다. **중앙 슬롯 세 블록은 안 바뀐다** (그쪽
+   * 페이로드는 코드가 아니라 검출기 자신의 몸이다 — 그 함수 주석의 표면 구분).
    */
   const cellPalettes = DETECTOR_EMPHASIS_RENDER_KINDS.includes(finderPattern.renderKind)
-    ? centralN7LevelPalettes(palette.levels, opts.centralN7Emphasis)
+    ? detectorCellLevelPalettes(palette.levels, opts.centralN7Emphasis)
     : null;
   for (const [key, entry] of cellDigits) {
     const commaIdx = key.indexOf(',');

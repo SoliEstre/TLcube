@@ -18,6 +18,8 @@ import { CENTRAL_MARKER_N7_FINDER_PATTERN_ID } from './centralMarkerN7.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from './centralN7Schema.js';
 import { getOakFinderPattern } from './finder-oak-patterns.js';
 import { getDaehanFinderPattern } from './finder-daehan.js';
+import { CELL_SURFACE_LOCATOR_RENDER_KIND } from './centralN7Emphasis.js';
+import { isCellSurfaceLocatorProfileY } from './locatorY.js';
 
 /**
  * **생성 도구 표 밖**에서 렌더가 직접 푸는 중앙 id → renderKind.
@@ -38,15 +40,26 @@ export const OUT_OF_TABLE_FINDER_RENDER_KINDS = Object.freeze({
 /**
  * finderPatternId → renderKind, **모르는 id 에서는 null**.
  *
- * 조회 순서는 렌더와 같다 (표 밖 중앙 id → OAK 표 → daehan 표 → 생성 도구 표).
- * 렌더와 다른 점은 «모르면 죽지 않는다» 하나다 — 분류 쪽에는 중앙 파인더가 아닌
- * 값(자리 예약 id · Type Y 로케이터 프로파일 id)도 들어오고, 그 답은 예외가
+ * 조회 순서는 렌더와 같다 (표 밖 중앙 id → **Y 셀 표면 로케이터** → OAK 표 →
+ * daehan 표 → 생성 도구 표). 렌더와 다른 점은 «모르면 죽지 않는다» 하나다 —
+ * 분류 쪽에는 중앙 파인더가 아닌 값(자리 예약 id)도 들어오고, 그 답은 예외가
  * 아니라 «해당 없음» 이다.
+ *
+ * ⭐ **Type Y 가 여기서 답을 받는다 (2026-09-07 (C), 운영자 「Y 의 경우는 v0 이나
+ * v0T, v0TR 같은 로케이터 강조가 되어야 하는데 이쪽은 미지원 상태」)** — Y 의 검출기
+ * «선택» 은 `finderPatternId` 가 아니라 `locatorProfileY`(= `cell-surface-*`)이고
+ * (`detector-emphasis-ui-model.detectorEmphasisDetectorId`), 그것을 그리는 화법이
+ * `cell-surface-locator` 다. 종전엔 그 id 가 표 어디에도 없어 `null` → «아직 대상 아님»
+ * 으로 떨어졌고, 그게 화면의 «미지원» 이었다. 판정은 손 목록이 아니라 로케이터 정본
+ * 술어(`isCellSurfaceLocatorProfileY`)에서 유도하므로 프로파일이 늘면 분류·렌더·화면이
+ * 같이 안다. 셀 표면이 아닌 Y 프로파일(`off` · `hex-frame-v1`)은 계속 `null` — 그 둘은
+ * 레이아웃이 톤을 고정한 **셀**이 아니라 별도 도형이라 이 축의 실측이 없다.
  */
 export function finderRenderKindOf(finderPatternId) {
   if (typeof finderPatternId !== 'string') return null;
   const outOfTable = OUT_OF_TABLE_FINDER_RENDER_KINDS[finderPatternId];
   if (outOfTable !== undefined) return outOfTable;
+  if (isCellSurfaceLocatorProfileY(finderPatternId)) return CELL_SURFACE_LOCATOR_RENDER_KIND;
   const oak = getOakFinderPattern(finderPatternId);
   if (oak) return oak.renderKind;
   const daehan = getDaehanFinderPattern(finderPatternId);

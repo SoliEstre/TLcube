@@ -41,11 +41,12 @@ import {
   DETECTOR_EMPHASIS_REASONS,
   centralN7EmphasisAppliesTo,
   detectorEmphasisApplicability,
+  detectorEmphasisRequiresAdvanced,
 } from '../src/generator-render-config.js';
 import {
   ADVANCED_ONLY_EMPHASIS_MODES,
+  DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY,
   DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY,
-  DETECTOR_EMPHASIS_NO_AXIS_KEY,
   DETECTOR_EMPHASIS_REASON_KEYS,
   emphasisSectionModel,
   hasCentralFinderAxis,
@@ -65,7 +66,9 @@ import {
   OUT_OF_TABLE_FINDER_RENDER_KINDS, finderRenderKindOf,
 } from '../src/finder-render-kind.js';
 import { resolveFinderRenderPattern } from '../src/scene.js';
-import { LOCATOR_PROFILES_Y } from '../src/locatorY.js';
+import {
+  LOCATOR_PROFILES_Y, isCellSurfaceLocatorProfileY,
+} from '../src/locatorY.js';
 import { FINDER_TAXONOMY, TONE_FINDER_BWG } from '../src/finder-taxonomy.js';
 import { SUPPORTED_LANGUAGES } from '../src/i18n.js';
 
@@ -276,32 +279,63 @@ test('① 폐쇄집합의 사유가 전부 실재한다 — 죽은 사유·못 �
     ['bwg', 'cube-3tone', 'not-yet'], '사유 폐쇄집합이 바뀌었다 — 문구·자를 같이 늘려라');
 });
 
-test('① Type Y 로케이터 프로파일은 **전부** «아직 대상 아님» 이다', () => {
-  // ⚠ 한 개만 재면 표본 운이다 (2026-09-06 F6 — 종전판은 'cell-surface-v0t' 하나였다).
-  //   Y 렌더 경로(src/sceneY.js)에 centralN7Emphasis 소비자가 0 건이므로 전수가 답이다.
+test('① Type Y: 셀 표면 로케이터는 **전부 대상**, 그 밖은 «아직 대상 아님»', () => {
+  /*
+   * ⭐ **주장이 뒤집혔다 (2026-09-07 (C))** — 종전 이 자는 「Y 로케이터 프로파일은
+   *   **전부** 아직 대상 아님」을 잠갔고, 그 근거가 「Y 렌더 경로에 소비자가 0 건」
+   *   이었다. 운영자 판정(「Y 의 경우는 v0 이나 v0T, v0TR 같은 로케이터 강조가 되어야
+   *   하는데 이쪽은 미지원 상태」)에 따라 이 라운드가 `sceneY.js` 에 소비자를 넣었으므로
+   *   근거가 사라졌다. 자를 지우지 않고 **가르는 선**을 새로 잠근다 — 셀 표면 로케이터
+   *   (레이아웃이 톤을 고정한 셀)는 대상, `off`·`hex-frame-v1`(별도 도형)은 비대상.
+   *
+   * ⚠ 한 개만 재면 표본 운이다 (2026-09-06 F6 — 종전판은 'cell-surface-v0t' 하나였다).
+   */
   assert.ok(LOCATOR_PROFILES_Y.length >= 10, 'Y 로케이터 전수가 줄었다 — 출처를 확인하라');
+  let applied = 0;
+  let notYet = 0;
   for (const profile of LOCATOR_PROFILES_Y) {
     const verdict = detectorEmphasisApplicability(profile);
-    assert.equal(verdict.applies, false, `${profile}: Y 로케이터는 강조 배선이 없다`);
-    assert.equal(verdict.reason, 'not-yet',
-      `${profile}: Y 로케이터의 답은 «아직 대상 아님» 이어야 한다`);
+    // 판정 축은 **로케이터 정본 술어**다 — 이 자가 id 목록을 손으로 다시 적지 않는다.
+    const cellSurface = isCellSurfaceLocatorProfileY(profile);
+    assert.equal(verdict.applies, cellSurface,
+      `${profile}: 셀 표면 로케이터 여부와 강조 대상 여부가 어긋난다`);
+    assert.equal(verdict.reason, cellSurface ? null : 'not-yet',
+      `${profile}: 비대상의 답은 «아직 대상 아님» 이어야 한다`);
+    if (cellSurface) applied += 1; else notYet += 1;
   }
+  // 양쪽 표본이 실재해야 «가르는 선» 이 의미가 있다 (한쪽이 0 이면 공허 통과).
+  assert.ok(applied >= 10, `대상 Y 로케이터 표본이 ${applied} 뿐이다`);
+  assert.ok(notYet >= 2, `비대상 Y 로케이터 표본이 ${notYet} 뿐이다 (off · hex-frame-v1)`);
 });
 
 // ── ② 모형의 표 (index.html 철자가 아니라 값) ────────────────────────────
 
-test('② 편집 가능 = 타입 축 × 검출기 축 — 전수 격자', () => {
+test('② 편집 가능 = **검출기 축 하나** — 타입 × 검출기 전수 격자', () => {
+  /*
+   * ⭐ **축이 하나로 줄었다 (2026-09-07 (C))** — 종전은 «타입 축 × 검출기 축» 이었고
+   *   그 타입 축이 Type Y 를 통째로 막았다(= 운영자가 본 «Y 미지원»). 지금은 검출기
+   *   축 하나가 답하고, 타입은 앵커에만 남는다. 그래서 이 격자는 **타입마다 그 타입의
+   *   검출기 id 축**을 돈다 — Y 는 `locatorProfileY`, 나머지는 `finderPatternId`.
+   */
   for (const type of GENERATOR_TYPES) {
-    for (const id of RENDER_REACHABLE_IDS) {
-      const model = modelOf({ type, finderPatternId: id });
-      const expected = hasCentralFinderAxis(type)
-        && detectorEmphasisApplicability(id).applies;
+    const isY = !hasCentralFinderAxis(type);
+    const ids = isY ? LOCATOR_PROFILES_Y : RENDER_REACHABLE_IDS;
+    let editableSeen = 0;
+    for (const id of ids) {
+      const seat = isY ? { locatorProfileY: id } : { finderPatternId: id };
+      // 고급 카드가 보이는 화면 기준 — 고급 게이트 자체는 아래 자가 따로 잰다.
+      const model = modelOf({ type, ...seat, advancedCardsVisible: true });
+      const expected = detectorEmphasisApplicability(id).applies;
       assert.equal(model.editable, expected, `${type}/${id}: 편집 가능이 어긋난다`);
+      assert.equal(model.detectorId, id, `${type}/${id}: 판정에 들어간 검출기 id 가 다르다`);
       // 비활성은 **모든 카드**에 걸린다 — 한 장만 살아 있으면 «켰는데 안 먹는» 자리다.
       for (const card of model.cards) {
         assert.equal(card.disabled, !expected, `${type}/${id}/${card.mode}: 비활성 누락`);
       }
+      if (expected) editableSeen += 1;
     }
+    // 타입마다 «켤 수 있는» 검출기가 실재해야 한다 — Y 가 0 이면 (C) 가 안 걸린 것이다.
+    assert.ok(editableSeen > 0, `${type}: 강조를 켤 수 있는 검출기가 하나도 없다`);
   }
 });
 
@@ -335,23 +369,39 @@ test('② 고급 전용 카드 가시성 진리표 — 4조합 전부', () => {
 });
 
 test('② 노트 키는 총함수다 — 조용한 무시가 없다', () => {
-  // 사유가 있는 자리: 사유 키. 사유 없는 비활성: «이 타입엔 배선이 없다».
-  // 편집 가능 + 고급 전용 active 숨김: 안내. 그 밖: null.
+  // 사유가 있는 자리: 사유 키. 편집 가능 + 고급 전용 active 숨김: 안내. 그 밖: null.
+  //
+  // ⭐ **«사유 없는 비활성» 갈래가 사라졌다 (2026-09-07 (C))** — 그 상태의 유일한
+  //   실례가 Type Y 였고, 이 라운드가 Y 를 배선해 타입 게이트를 걷었다. 이제 비활성의
+  //   답은 **언제나 검출기 사유**다 (폐쇄집합 3택). 그래서 옛 g1030 은 폐기됐고,
+  //   그 상태가 다시 생기면 모형이 **던진다**(모형 안 자기검증) — 아래 «비활성인데
+  //   사유 줄이 없다» 단언은 그 던짐 앞의 두 번째 그물이다.
+  let editableSeen = 0;
+  let disabledSeen = 0;
   for (const type of GENERATOR_TYPES) {
-    for (const id of RENDER_REACHABLE_IDS) {
+    const isY = !hasCentralFinderAxis(type);
+    const ids = isY ? LOCATOR_PROFILES_Y : RENDER_REACHABLE_IDS;
+    for (const id of ids) {
       for (const emphasis of CENTRAL_N7_EMPHASIS_MODES) {
         for (const advancedCardsVisible of [true, false]) {
+          const seat = isY ? { locatorProfileY: id } : { finderPatternId: id };
           const model = modelOf({
-            type, finderPatternId: id, centralN7Emphasis: emphasis, advancedCardsVisible,
+            type, ...seat, centralN7Emphasis: emphasis, advancedCardsVisible,
           });
           if (!model.editable) {
+            disabledSeen += 1;
             assert.ok(model.noteKey, `${type}/${id}: 비활성인데 사유 줄이 없다`);
+          } else {
+            editableSeen += 1;
           }
+          // 고급 게이트로 막힌 자리 — «축은 있는데 정식 화면에서 내려 뒀다».
+          const gated = detectorEmphasisRequiresAdvanced(id) && !advancedCardsVisible;
           if (model.reason) {
             assert.equal(model.noteKey, DETECTOR_EMPHASIS_REASON_KEYS[model.reason]);
-          } else if (!model.editable) {
-            assert.equal(model.noteKey, DETECTOR_EMPHASIS_NO_AXIS_KEY,
-              `${type}/${id}: 사유 없는 비활성의 답은 «배선 없음» 이어야 한다`);
+          } else if (gated) {
+            assert.equal(model.noteKey, DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY,
+              `${type}/${id}: 고급 전용 검출기인데 그 사실을 말하지 않는다`);
+            assert.equal(model.editable, false, `${type}/${id}: 고급 게이트가 안 걸렸다`);
           } else if (model.advancedHiddenActive) {
             assert.equal(model.noteKey, DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY);
           } else {
@@ -361,9 +411,24 @@ test('② 노트 키는 총함수다 — 조용한 무시가 없다', () => {
       }
     }
   }
-  // Y 는 검출기 사유가 아니라 «축이 없다» 로 답한다 — 언젠가 Y 로케이터 실측이 서서
-  // applicability 가 뒤집혀도 «사유 없는 비활성» 으로 안 떨어진다 (F2).
-  assert.equal(modelOf({ type: 'Y' }).noteKey, DETECTOR_EMPHASIS_NO_AXIS_KEY);
+  assert.ok(editableSeen > 0 && disabledSeen > 0, '격자에 한쪽 표본이 없다 — 공허 통과다');
+  // Y 의 셀 표면 로케이터는 **고급 화면에서 켤 수 있고 할 말이 없다** — (C) 가 연 자리.
+  const y = modelOf({ type: 'Y', locatorProfileY: 'cell-surface-v0tr', advancedCardsVisible: true });
+  assert.equal(y.editable, true, 'Y v0TR 에서 강조를 못 켠다 — (C) 배선이 끊겼다');
+  assert.equal(y.reason, null);
+  assert.equal(y.anchor, 'yLocator', 'Y 섹션 앵커가 검출기 섹션 쪽으로 갔다');
+  // 정식 화면(고급 카드 비노출)에서는 **못 켜고**, 그 사실을 화면이 말한다 —
+  // 실측 회귀(v0TR 8점) 때문에 내려 둔 자리다 (브리프 §8 「기본 off + 라벨에」).
+  const yPlain = modelOf({
+    type: 'Y', locatorProfileY: 'cell-surface-v0tr', advancedCardsVisible: false,
+  });
+  assert.equal(yPlain.editable, false, 'Y 강조가 정식 화면에서 켜진다 — 실측 회귀가 새 나간다');
+  assert.equal(yPlain.noteKey, DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY);
+  assert.equal(yPlain.reason, null, '고급 게이트는 «검출기 사유» 가 아니다');
+  // 로케이터를 끈 Y 는 여전히 비대상이고, 그 사유는 검출기가 말한다.
+  const off = modelOf({ type: 'Y', locatorProfileY: 'off' });
+  assert.equal(off.editable, false);
+  assert.equal(off.noteKey, DETECTOR_EMPHASIS_REASON_KEYS['not-yet']);
 });
 
 // ── ③ 마크업 — 폐쇄집합·기본값·표식을 모형에서 유도한다 ───────────────────
@@ -435,7 +500,7 @@ const SECTION_KEYS = Object.freeze([
   'g1002', 'g1003', 'g1004', 'g1005', 'g1006', 'g1007', 'g1008',
   ...Object.values(DETECTOR_EMPHASIS_REASON_KEYS),
   DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY,
-  DETECTOR_EMPHASIS_NO_AXIS_KEY,
+  DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY,
 ]);
 
 test('④ 섹션 문구가 8언어 전부에 있다 (사유가 늘면 자동으로 잰다)', () => {

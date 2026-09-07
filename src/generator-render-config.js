@@ -5,7 +5,9 @@ import {
   centralMarkerN7FamilyForType, isCentralMarkerN7FinderPatternId,
 } from './centralMarkerN7.js';
 import { CENTRAL_N7_FINDER_PATTERN_ID } from './centralN7Schema.js';
-import { DETECTOR_EMPHASIS_RENDER_KINDS } from './centralN7Emphasis.js';
+import {
+  CELL_SURFACE_LOCATOR_RENDER_KIND, DETECTOR_EMPHASIS_RENDER_KINDS,
+} from './centralN7Emphasis.js';
 import {
   FINDER_PATTERNS, THREE_TONE_CUBE_FINDER_PATTERN_ID,
 } from './finder-patterns.js';
@@ -195,6 +197,44 @@ export function detectorEmphasisApplicability(finderPatternId) {
   if (BULLSEYE_AXIS_RENDER_KINDS.includes(renderKind)
     && !CUBE_TONE_RENDER_KINDS.includes(renderKind)) return APPLICABILITY_NO.bwg;
   return APPLICABILITY_NO['not-yet'];
+}
+
+/**
+ * 강조 축은 **있는데** 정식 화면에서는 내려 둔 화법 — 고급 모드·시험판에서만 켠다.
+ *
+ * ⭐ **`cell-surface-locator`(Type Y) 실측 (2026-09-07 (C), 레인 emph-c)**
+ *
+ * Y 로케이터 강조는 배선했고 렌더는 정확하다(자 ⓙ). 그런데 **합성 왕복에서 검출
+ * 회귀**가 나왔다 — 레이아웃 × ppu 20점 격자, 기본 프리셋(slate) 바탕:
+ *   · v0 (n13) · v0T (n21·n25) — 회귀 0 (15/15 원문 일치, 3택 전부)
+ *   · **v0TR (n21·n25) — 회귀 8점** (`default` 가 복호하는 자리에서 `locator`/`all`
+ *     이 실패. 실패 코드는 전부 `frontend:no-grid-hypothesis` ·
+ *     `frontend:no-format-candidate` = **검출(그리드 가설) 단계**)
+ * 원자료: `.agent/lanes/emph-c/emphc-y-roundtrip.jsonl`.
+ *
+ * 기전(가설, 미확증): Y 로케이터 셀은 레벨 0·2 만 쓰고 레벨 1 은 **한 장도 안 쓴다**
+ * (전 레이아웃 실측). 그래서 강조가 바꾸는 것은 오직 어두운 면이고, 그 방향이
+ * 순검정(Y 0.0000)이라 프리셋 배경(slate Y 0.0053)과 붙는다 — 3톤 큐브 거부
+ * (2026-08-29 §2.4)와 같은 «배경에 먹힘» 이다. **흰 바탕 대조군은 결론을 못 준다**
+ * (기준선까지 3/6 으로 흔들렸다 — `emphc-y-roundtrip-white.jsonl`).
+ *
+ * 그래서 이 라운드의 착지는 «배선은 만들되 기본 off» 다 (브리프 §8). 축을 **없다고**
+ * 말하지 않는 이유: 없는 게 아니라 정식 화면에서 내린 것이고, 고급·시험판에서는
+ * 실제로 켜지며 렌더도 정확하다. 되돌릴 조건: v0TR 회귀의 원인이 검출기 쪽에서
+ * 닫히거나(그리드 가설 단계), 실사진 A/B 가 무해를 보이면 이 목록에서 뺀다.
+ */
+export const DETECTOR_EMPHASIS_ADVANCED_ONLY_RENDER_KINDS = Object.freeze([
+  CELL_SURFACE_LOCATOR_RENDER_KIND,
+]);
+
+/**
+ * 이 검출기의 강조는 **고급 모드·시험판에서만** 켤 수 있는가 — 화면(모형)과 렌더
+ * 좌석(index.html `renderTypeY`)이 **같은 술어**를 본다. 두 벌이 되면 «화면은 켤 수
+ * 있다는데 렌더는 안 먹는» / 그 반대가 생긴다.
+ */
+export function detectorEmphasisRequiresAdvanced(finderPatternId) {
+  return DETECTOR_EMPHASIS_ADVANCED_ONLY_RENDER_KINDS
+    .includes(detectorRenderKind(finderPatternId));
 }
 
 /**

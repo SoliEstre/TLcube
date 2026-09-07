@@ -54,6 +54,10 @@ import {
   centerQrSlotPlacementFor, hasCenterQrSlot,
   isCellSurfaceFinalId, locatorToneCellSurfaceFinal,
 } from './cellSurfaceFinal.js';
+import {
+  DETECTOR_EMPHASIS_RENDER_KINDS, detectorCellLevelPalettes,
+} from './centralN7Emphasis.js';
+import { finderRenderKindOf } from './finder-render-kind.js';
 
 // ── 면 게인 (SPEC §14 §4.4-Y: 렌더러는 γ ≤ 2 를 지켜야 한다) ────────────────
 
@@ -120,8 +124,13 @@ function linearChannelToSrgb8(linear) {
  * 레벨 색 {r,g,b} 에 면 게인을 적용한 색. 채널별 sRGB→선형→×gain→sRGB.
  * 게인은 면 단위 스칼라라 동일 면 안에서는 모든 레벨에 똑같이 곱해진다 —
  * 선형 곱은 단조 함수이므로 면 내부 순위(0<1<2)는 자동으로 보존된다.
+ *
+ * ⭐ **export (2026-09-07 (C))** — 「검출기 강조」 Y 자
+ * (`test/detector-emphasis-cells.test.js` ⓙ)가 기대 색을 **정본에서** 만들어야
+ * 한다. 안 열면 자가 게인 공식을 옮겨 적게 되고, 그 사본은 다음 게인 변경까지만
+ * 산다 (교훈 「철자를 재는 자는 썩는다」).
  */
-function applyFaceGain(rgb, gain) {
+export function applyFaceGain(rgb, gain) {
   return {
     r: linearChannelToSrgb8(srgbChannelToLinear(rgb.r) * gain),
     g: linearChannelToSrgb8(srgbChannelToLinear(rgb.g) * gain),
@@ -565,10 +574,37 @@ export function buildSceneY(encoded, options) {
 
   const layout = layoutForCube(n, { size: cellSize, margin });
 
+  /*
+   * 「검출기 강조」 Type Y 배선 (2026-09-07 (C) · 운영자 원문 「Y 의 경우는 v0 이나
+   * v0T, v0TR 같은 로케이터 강조가 되어야 하는데 이쪽은 미지원 상태인 것 같고」).
+   *
+   * **게이트는 O/A/K 와 같은 집합**이다 — `DETECTOR_EMPHASIS_RENDER_KINDS` 에
+   * `finderRenderKindOf(<Y 검출기 id>)` 를 물어본다. Y 의 검출기 id 는
+   * `finderPatternId` 가 아니라 **셀 표면 로케이터 프로파일**이라, 그 매핑은
+   * `finder-render-kind.js` 가 로케이터 정본 술어에서 유도한다. 화면(분류)과 렌더가
+   * 손 목록 두 벌을 드는 사고((A) 레인 F4)를 구조적으로 막는다.
+   *
+   * **팔은 하나뿐이다** — `detectorCellLevelPalettes` 의 `locator` 팔만 쓴다:
+   *   · 로케이터 셀(`role === 'locator'`) = 레이아웃이 톤을 고정한 검출 셀 → 치환.
+   *   · 데이터·레퍼런스·포맷·필러 = digit 알파벳(코드 그 자체) → **어떤 모드에서도
+   *     안 건드린다**. 그래서 Y 에서는 `locator` 와 `all` 이 같은 그림이다.
+   *
+   * 게인은 **치환 뒤에** 얹는다 — 게인은 조명 축이고 강조는 팔레트 축이라 순서가
+   * 이 방향이어야 «순검정 dark» 가 게인으로 살아나지 않는다. `default` 는 두 팔이
+   * `palette.levels` 그대로라 이전 출력과 **바이트 동일**이다.
+   */
+  const detectorPalettes = DETECTOR_EMPHASIS_RENDER_KINDS
+    .includes(finderRenderKindOf(locatorProfile))
+    ? detectorCellLevelPalettes(palette.levels, opts.centralN7Emphasis)
+    : null;
+
   // 게인 적용된 레벨 색(면당 3개) — 셀마다 다시 계산하지 않도록 미리 캐시한다.
   const gainedLevels = {};
+  const gainedLocatorLevels = {};
   for (const face of YFACES) {
     gainedLevels[face] = palette.levels.map((rgb) => applyFaceGain(rgb, faceGains[face]));
+    gainedLocatorLevels[face] = detectorPalettes === null ? gainedLevels[face]
+      : detectorPalettes.locator.map((rgb) => applyFaceGain(rgb, faceGains[face]));
   }
 
   const shapes = [];
@@ -601,7 +637,8 @@ export function buildSceneY(encoded, options) {
           shapes.push({
             kind: 'polygon',
             points: moduleQuad(face, i, j, layout),
-            color: gainedLevels[face][levelIndex],
+            // **검출 셀 팔** — 강조가 꺼져 있으면 `gainedLevels` 와 같은 배열이다.
+            color: gainedLocatorLevels[face][levelIndex],
           });
         }
         continue;

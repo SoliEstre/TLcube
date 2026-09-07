@@ -23,7 +23,12 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
   'centralMarkerN7',
   // finder-oak-lineup/-patterns 는 scene.js 가 OAK 후보를 렌더하려고 쓴다 (2026-08-18).
   // finder-patterns 뒤 · scene 앞이어야 한다.
-  'hexgrid', 'finder-patterns', 'finder-oak-lineup',
+  // locatorY (2026-09-07, 강조 정정 emph-c) — `finder-render-kind` 가 Y 로케이터
+  // 프로파일 술어(`isCellSurfaceLocatorProfileY`)를 여기서 유도한다(손 목록 대신).
+  // 의존은 `hexgrid` 하나뿐이라 그 바로 뒤가 자리다. 위 ⚠ 그대로, 이 목록은
+  // build-single.mjs 의 MODULE_ORDER 와 별개의 손 사본이고 — 이번에도 그 한쪽만
+  // 채워진 채로 왔다가 위상 검사가 «finder-render-kind -> locatorY (missing)» 로 잡았다.
+  'hexgrid', 'locatorY', 'finder-patterns', 'finder-oak-lineup',
   'finder-editor-pattern', 'lehmer', 'gfp', 'rs211', 'base211',
   'mask', 'formatinfo', 'header', 'placement', 'notchC', 'bullseye', 'layout', 'capacity',
   // daehan (2026-08-18) — scene.js 가 finder-daehan 을, encode.js 가 capacityDaehan 을

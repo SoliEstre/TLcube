@@ -49,6 +49,15 @@ import { FACES, facePolygon, neighbors } from '../src/hexgrid.js';
 import { digitToRanks } from '../src/lehmer.js';
 import { TYPE_C_MIN_RADIUS, notchCellsC } from '../src/notchC.js';
 import { buildScene } from '../src/scene.js';
+import { encodeY } from '../src/encodeY.js';
+import { DEFAULT_FACE_GAINS, applyFaceGain, buildSceneY } from '../src/sceneY.js';
+import { YFACES, moduleQuad } from '../src/ygrid.js';
+import {
+  hasCenterQrSlot, locatorCellsCellSurfaceFinal,
+} from '../src/cellSurfaceFinal.js';
+import {
+  LOCATOR_PROFILES_Y, isCellSurfaceLocatorProfileY,
+} from '../src/locatorY.js';
 import { rasterize } from '../src/raster.js';
 import { decodeFrontend } from '../src/decoder/frontend.js';
 import {
@@ -526,7 +535,7 @@ function faceLevel(entry, face, tones) {
 /** 밝은 레벨(2)은 강조가 보존한다 — 그래서 그 면은 색이 안 바뀐다. */
 const faceShouldChange = (entry, face, tones) => faceLevel(entry, face, tones) !== 2;
 
-test('ⓔ 바깥 코드: locator 는 검출 셀만, all 은 페이로드 셀까지 — 면 단위 전수', () => {
+test('ⓔ 바깥 코드: 세 모드 전부 검출 셀만 바꾸고 페이로드는 안 바꾼다 — 면 단위 전수', () => {
   for (const host of ALL_HOSTS) {
     const encoded = host.encoded();
     /*
@@ -562,6 +571,7 @@ test('ⓔ 바깥 코드: locator 는 검출 셀만, all 은 페이로드 셀까�
 
     let detectorFacesChanged = 0;
     let payloadFacesChanged = 0;
+    let payloadFacesAtRisk = 0;
     for (const [label, { at, entry }] of faces) {
       const cut = label.indexOf('|');
       const cellKey = label.slice(0, cut);
@@ -576,8 +586,14 @@ test('ⓔ 바깥 코드: locator 는 검출 셀만, all 은 페이로드 셀까�
       assert.equal(rgbKey(locator.shapes[at].color),
         detector ? EMPHASIZED_KEYS[level] : LEVEL_KEYS[level],
         `${host.label}: ${label} 의 locator 색이 계약과 다르다`);
-      assert.equal(rgbKey(all.shapes[at].color), EMPHASIZED_KEYS[level],
+      // **`all` 도 검출 셀만** — 바깥 코드 표면에는 강조할 데이터 팔이 없다
+      // (`detectorCellLevelPalettes`, 운영자 카드 `d-emph-b-default`).
+      assert.equal(rgbKey(all.shapes[at].color),
+        detector ? EMPHASIZED_KEYS[level] : LEVEL_KEYS[level],
         `${host.label}: ${label} 의 all 색이 계약과 다르다`);
+      // 두 팔이 **바깥에서** 면 단위로 같다 — 두 모드의 차이는 중앙 슬롯에만 있다.
+      assert.equal(rgbKey(all.shapes[at].color), rgbKey(locator.shapes[at].color),
+        `${host.label}: ${label} 에서 locator 와 all 이 갈렸다 — 바깥은 같아야 한다`);
 
       const changedLocator = rgbKey(locator.shapes[at].color) !== rgbKey(base.shapes[at].color);
       const changedAll = rgbKey(all.shapes[at].color) !== rgbKey(base.shapes[at].color);
@@ -585,23 +601,38 @@ test('ⓔ 바깥 코드: locator 는 검출 셀만, all 은 페이로드 셀까�
       // locator 팔: 검출 셀의 «밝지 않은» 면만.
       assert.equal(changedLocator, detector && shouldChange,
         `${host.label}: ${label} 의 locator 결과가 계약과 다르다`);
-      // all 팔: 모든 셀의 «밝지 않은» 면.
-      assert.equal(changedAll, shouldChange,
+      // all 팔: **같다** (바깥에는 데이터 팔이 없다).
+      assert.equal(changedAll, detector && shouldChange,
         `${host.label}: ${label} 의 all 결과가 계약과 다르다`);
       if (changedLocator) detectorFacesChanged += 1;
       if (changedAll && !detector) payloadFacesChanged += 1;
+      // **공허 방지** — 「안 바뀐다」를 세려면 «바뀔 수 있었던» 면이 있어야 한다.
+      // 강조가 보존하는 밝은 면(level 2)만 남은 코드에서는 0 == 0 이 무의미하다.
+      if (!detector && shouldChange) payloadFacesAtRisk += 1;
     }
-    assert.ok(payloadFacesChanged > 0,
-      `${host.label}: all 팔이 바깥 페이로드 면을 하나도 안 바꿨다`);
+    // ⭐ **정정된 계약** (운영자 카드 `d-emph-b-default`, 2026-09-07): 종전 이 줄은
+    //   `payloadFacesChanged > 0` 이었고, 그것이 «많이 열었지 맞게 열지 않았다» 를
+    //   자로 굳히고 있었다. 자를 지우지 않고 **주장을 새 정책으로 바꾼다**.
+    assert.equal(payloadFacesChanged, 0,
+      `${host.label}: 바깥 페이로드 면이 ${payloadFacesChanged} 장 바뀌었다 — `
+      + '강조는 검출기 셀만 바꿔야 한다');
+    assert.ok(payloadFacesAtRisk > 0,
+      `${host.label}: 강조가 바꿀 수 있었던 페이로드 면이 0 이다 — 위 단언이 공허하다`);
     assert.equal(detectorFacesChanged > 0, toneCells > 0,
       `${host.label}: locator 팔의 바깥 변화와 검출 셀 유무가 어긋난다`);
   }
 });
 
-test('ⓔ C 노치 림 — 브리프가 이름 붙인 집합이 실제로 치환된다', () => {
+test('ⓔ C 노치 림 — 이름 붙인 집합이 어떤 모드에서도 안 바뀐다', () => {
   // 「노치 림」은 정본 함수가 없고 **파생이 계약**이다 (028A §4 — notchCellsC 의
   // 이웃 ∩ cellDigits). 이름을 부른 집합이 위 격자 안에서 진짜로 걸리는지 따로 잰다 —
-  // 안 그러면 «전부 바뀐다» 라는 넓은 단언 뒤에 숨어 이 집합만 빠져도 안 보인다.
+  // 안 그러면 «전부 안 바뀐다» 라는 넓은 단언 뒤에 숨어 이 집합만 새도 안 보인다.
+  //
+  // ⭐ **주장이 뒤집혔다 (2026-09-07, 운영자 카드 `d-emph-b-default`)**: (B) 판은
+  //   「`all` 팔이 림을 치환한다」를 잠갔다. 림은 digit 알파벳으로 그려지는 **코드
+  //   페이로드**이고, 운영자 판정은 「파인더만 강조」다. 그래서 이 자가 재는 성질이
+  //   «치환된다» → «어떤 모드에서도 안 치환된다» 로 바뀌었다 (자를 지우지 않는다 —
+  //   브리프 §8). 이 집합이 C 코드 면의 최대 덩어리라(실측 1184면) 새면 여기서 잡힌다.
   const encoded = encode(TEXT, { version: 0, eccLevel: 'M', notchC: true, centralN7: true });
   assert.ok(encoded.k >= TYPE_C_MIN_RADIUS, '노치 호스트의 k 가 최소 반경 미만이다');
   const notch = new Set(notchCellsC(encoded.k).map((cell) => `${cell.q},${cell.r}`));
@@ -621,20 +652,21 @@ test('ⓔ C 노치 림 — 브리프가 이름 붙인 집합이 실제로 치환
   const all = sceneOf(encoded, opts, 'all');
   const locator = sceneOf(encoded, opts, 'locator');
   const faces = outerCellFaceIndex(encoded, base);
-  let rimFacesChanged = 0;
+  let rimFacesAtRisk = 0;
   for (const key of rim) {
     for (const face of FACES) {
       const { at, entry } = faces.get(`${key}|${face}`);
-      const changedAll = rgbKey(all.shapes[at].color) !== rgbKey(base.shapes[at].color);
-      assert.equal(changedAll, faceShouldChange(entry, face),
-        `노치 림 ${key} 면 ${face}: all 팔 결과가 계약과 다르다`);
+      assert.equal(rgbKey(all.shapes[at].color), rgbKey(base.shapes[at].color),
+        `노치 림 ${key} 면 ${face}: 림은 코드 페이로드인데 all 팔이 바꿨다`);
       assert.equal(rgbKey(locator.shapes[at].color), rgbKey(base.shapes[at].color),
         `노치 림 ${key} 면 ${face}: 림은 digit 알파벳이라 locator 팔에서 안 바뀌어야 한다`);
-      if (changedAll) rimFacesChanged += 1;
+      // 공허 방지 — 강조가 «바꿀 수 있었던» 면(밝지 않은 면)이 실제로 있어야 한다.
+      if (faceShouldChange(entry, face)) rimFacesAtRisk += 1;
     }
   }
-  assert.ok(rimFacesChanged >= 2 * rim.size,
-    `노치 림에서 바뀐 면이 너무 적다 (${rimFacesChanged}) — 순열 셀은 셀당 2면이 바뀐다`);
+  assert.ok(rimFacesAtRisk >= 2 * rim.size,
+    `노치 림에서 강조가 바꿀 수 있었던 면이 너무 적다 (${rimFacesAtRisk}) — `
+    + '순열 셀은 셀당 2면이 위험 면이다. 이 수가 0 이면 위 단언이 공허하다');
 });
 
 // ── ⓗ 화면 라벨이 «주장하는 범위» 를 행동으로 잰다 ────────────────────────
@@ -706,21 +738,46 @@ test('ⓗ g1006: locator 팔은 **검출기 밖**(코너 심볼) 셀도 바꾼�
   }
 });
 
-test('ⓗ g1008: all 팔은 데이터 셀까지 «코드 전체» 를 바꾼다', () => {
-  // 「검출기 셀과 데이터 셀까지 코드 전체를」이라는 문구의 뒷부분.
+test('ⓗ g1008: all 팔은 **검출기 안 데이터 셀까지** 바꾸고 코드는 안 바꾼다', () => {
+  /*
+   * 「검출기 셀과 **검출기 안** 데이터 셀까지」라는 문구의 뒷부분 — 그리고
+   * `locator` 와 `all` 을 가르는 **유일한** 자리다.
+   *
+   * ⭐ **주장이 좁아졌다 (2026-09-07, 운영자 카드 `d-emph-b-default`)**: (B) 판은
+   *   「all 이 바깥 코드 데이터 셀을 바꾼다」를 잠갔고, 그게 곧 «모든 코드 영역이
+   *   강조됨» 이었다. 지금 재는 성질은 두 개다 —
+   *     ① 바깥 코드 페이로드는 `all` 에서도 **한 면도** 안 바뀐다(= 자 ①, ⓔ 와 이중),
+   *     ② 그래도 `all` 은 `locator` 보다 **더** 바꾼다 — 그 차이는 전부 검출기 자신의
+   *        슬롯 안이다(중앙 TL 데이터 19셀 · 중앙 v0 비컨 데이터 셀). 이 ②가 없으면
+   *        두 모드가 완전히 같아져 모드 집합을 줄여야 한다는 뜻이 된다.
+   */
   for (const host of ALL_HOSTS) {
     const encoded = host.encoded();
     const canon = host.toneCanon ? host.toneCanon(encoded) : new Map();
     const opts = hostSceneOptions(host);
     const base = sceneOf(encoded, opts, DEFAULT_CENTRAL_N7_EMPHASIS);
     const all = sceneOf(encoded, opts, 'all');
+    const locator = sceneOf(encoded, opts, 'locator');
+    const outer = outerCellFaceIndex(encoded, base);
     let payloadChanged = 0;
-    for (const [label, { at }] of outerCellFaceIndex(encoded, base)) {
+    for (const [label, { at }] of outer) {
       if (canon.has(label.slice(0, label.indexOf('|')))) continue;
       if (rgbKey(all.shapes[at].color) !== rgbKey(base.shapes[at].color)) payloadChanged += 1;
     }
-    assert.ok(payloadChanged > 0,
-      `${host.label}: all 팔이 데이터 셀을 한 면도 안 바꿨다 — g1008 이 거짓이 된다`);
+    assert.equal(payloadChanged, 0,
+      `${host.label}: all 팔이 바깥 코드 데이터 셀을 ${payloadChanged} 면 바꿨다 — `
+      + 'g1008 이 «코드 전체» 로 되돌아간 상태다');
+
+    // ② 검출기 자신(슬롯) 안에서는 all 이 locator 를 **진짜로** 넘어선다.
+    const outerAt = new Set([...outer.values()].map((hit) => hit.at));
+    let slotOnlyInAll = 0;
+    for (let i = 0; i < base.shapes.length; i += 1) {
+      if (outerAt.has(i)) continue;
+      if (rgbKey(all.shapes[i].color) !== rgbKey(locator.shapes[i].color)) slotOnlyInAll += 1;
+    }
+    assert.ok(slotOnlyInAll > 0,
+      `${host.label}: all 과 locator 가 검출기 안에서도 같아졌다 — `
+      + '두 모드의 차이가 사라졌다(모드 집합 재검토가 필요한 상태다)');
   }
 });
 
@@ -815,10 +872,220 @@ test('ⓘ 중앙 v0 비컨 블록: locator 는 tones 블록만, all 은 비컨 �
   }
 });
 
+// ── ⓙ Type Y 셀 표면 로케이터 — (C) 가 새로 배선한 화법 ──────────────────
+//
+// 운영자 원문 (2026-09-07): 「Y 의 경우는 v0 이나 v0T, v0TR 같은 로케이터 강조가
+// 되어야 하는데 이쪽은 미지원 상태인 것 같고」. (B) 까지 `sceneY.js` 에는
+// `centralN7Emphasis` 소비자가 **0 건**이었다.
+//
+// Y 에는 «검출기 안 페이로드» 가 없다 — 로케이터 셀은 레이아웃이 톤을 고정하고,
+// 나머지(데이터·레퍼런스·포맷·필러)는 전부 digit 알파벳 = 코드 그 자체다. 그래서
+// `locator` 와 `all` 이 **같은 그림**이고(중앙 M7 과 같은 «해당 없음»), 코드 셀은
+// 어떤 모드에서도 안 바뀐다.
+
+const Y_TEXT = 'HTTPS://TL.ESTRE.SO';
+const Y_PALETTE = Object.freeze({ ...PALETTE, faceGains: DEFAULT_FACE_GAINS });
+const Y_PROBE_PALETTE = Object.freeze({ ...Y_PALETTE, levels: PROBE_LEVELS });
+
+/** 레이아웃 × n 격자 — 한 점만 재면 표본 운이다 (교훈 「한 점은 계약이 아니다」). */
+const Y_HOSTS = Object.freeze([
+  { label: 'Y n13 v0', layout: 'v0', version: 0 },
+  { label: 'Y n21 v0T', layout: 'v0t', version: 1 },
+  { label: 'Y n21 v0TR', layout: 'v0tr', version: 1 },
+  { label: 'Y n25 v0T', layout: 'v0t', version: 2 },
+  { label: 'Y n25 v0TR', layout: 'v0tr', version: 2 },
+  { label: 'Y n25 v0TRQ', layout: 'v0trq', version: 2 },
+  { label: 'Y n25 v0TRY', layout: 'v0try', version: 2 },
+]);
+
+const encodeYHost = (host) => encodeY(Y_TEXT, {
+  cellSurfaceLayout: host.layout, version: host.version, tones: 2, eccLevel: 'M',
+});
+
+function sceneYOf(encoded, emphasis, palette = Y_PALETTE) {
+  const opts = { palette, margin: 4 };
+  // QR 슬롯 레이아웃은 슬롯이 **레이아웃 정의**라 텍스트가 선택 사항이 아니다.
+  if (hasCenterQrSlot(encoded.cellSurfaceLayout)) opts.qrText = Y_TEXT;
+  return buildSceneY(encoded, emphasis === undefined
+    ? opts : { ...opts, centralN7Emphasis: emphasis });
+}
+
+/** Y 셀 (i,j)|face → 셰이프 인덱스. 그리는 **순서**가 아니라 좌표로 찾는다. */
+function yFaceIndex(encoded, scene) {
+  const pointsKey = (points) => points
+    .map((p) => `${p.x.toFixed(6)},${p.y.toFixed(6)}`).join(';');
+  const byPoints = new Map();
+  scene.shapes.forEach((shape, index) => {
+    if (!Array.isArray(shape.points)) return;
+    const key = pointsKey(shape.points);
+    if (!byPoints.has(key)) byPoints.set(key, index);
+  });
+  const index = new Map();
+  for (const [key, entry] of encoded.cellDigits) {
+    if (entry.role === 'slot') continue;
+    const commaAt = key.indexOf(',');
+    const i = Number(key.slice(0, commaAt));
+    const j = Number(key.slice(commaAt + 1));
+    for (const face of YFACES) {
+      const at = byPoints.get(pointsKey(moduleQuad(face, i, j, scene.layout)));
+      assert.ok(at !== undefined, `Y 셀 ${key} 면 ${face} 의 셰이프를 못 찾았다`);
+      index.set(`${key}|${face}`, { at, entry });
+    }
+  }
+  return index;
+}
+
+/** 게인까지 얹은 기대 색 — 렌더를 안 믿고 팔레트·게인 정본에서 직접 만든다. */
+const yExpected = (levels, face, levelIndex) => rgbKey(
+  applyFaceGain(levels[levelIndex], DEFAULT_FACE_GAINS[face]),
+);
+
+test('ⓙ Y: 로케이터 톤 셀만 바뀌고 코드 셀은 3택 전부 그대로 — 면 단위 전수', () => {
+  for (const host of Y_HOSTS) {
+    const encoded = encodeYHost(host);
+    /*
+     * **독립 출처** — «어느 셀이 로케이터이고 그 절대 톤이 무엇인가» 를 인코더 산출물이
+     * 아니라 **레이아웃 정본**(`locatorCellsCellSurfaceFinal`)에서 받는다. 인코더가 실은
+     * role 로만 재면 인코더를 인코더로 재는 셈이다 (검토 F9 와 같은 함정).
+     */
+    const canon = new Map(locatorCellsCellSurfaceFinal(encoded.n, host.layout)
+      .map((cell) => [`${cell.i},${cell.j}`, cell]));
+    assert.ok(canon.size > 0, `${host.label}: 레이아웃 정본의 로케이터 셀이 0 이다`);
+    const carried = [...encoded.cellDigits]
+      .filter(([, entry]) => entry.role === 'locator').map(([key]) => key);
+    assert.deepEqual([...carried].sort(), [...canon.keys()].sort(),
+      `${host.label}: 인코더의 로케이터 셀 집합이 레이아웃 정본과 다르다`);
+
+    const base = sceneYOf(encoded, DEFAULT_CENTRAL_N7_EMPHASIS);
+    const locator = sceneYOf(encoded, 'locator');
+    const all = sceneYOf(encoded, 'all');
+    const faces = yFaceIndex(encoded, base);
+
+    let locatorFacesChanged = 0;
+    let codeFacesChanged = 0;
+    let codeFacesAtRisk = 0;
+    for (const [label, { at, entry }] of faces) {
+      const cut = label.indexOf('|');
+      const cell = canon.get(label.slice(0, cut));
+      const face = label.slice(cut + 1);
+      const baseKey = rgbKey(base.shapes[at].color);
+      if (cell) {
+        // **절대 대조** — 차분이 아니라 값으로. 세 모드가 같이 틀린 경우를 잡는다.
+        const level = cell[face];
+        assert.equal(baseKey, yExpected(PRESET.levels, face, level),
+          `${host.label}: ${label} 의 기본 색이 레이아웃 톤과 다르다`);
+        const want = yExpected(EMPHASIZED, face, level);
+        assert.equal(rgbKey(locator.shapes[at].color), want,
+          `${host.label}: ${label} 의 locator 색이 계약과 다르다`);
+        assert.equal(rgbKey(all.shapes[at].color), want,
+          `${host.label}: ${label} 의 all 색이 계약과 다르다`);
+        if (want !== baseKey) locatorFacesChanged += 1;
+      } else {
+        assert.equal(rgbKey(locator.shapes[at].color), baseKey,
+          `${host.label}: ${label} 은 코드 셀인데 locator 팔이 바꿨다`);
+        assert.equal(rgbKey(all.shapes[at].color), baseKey,
+          `${host.label}: ${label} 은 코드 셀인데 all 팔이 바꿨다`);
+        if (baseKey !== rgbKey(applyFaceGain(PRESET.levels[2], DEFAULT_FACE_GAINS[face]))) {
+          // 밝은 레벨(2)은 강조가 보존한다 — 그 밖의 면이 «바뀔 수 있었던» 면이다.
+          codeFacesAtRisk += 1;
+        }
+        if (rgbKey(all.shapes[at].color) !== baseKey) codeFacesChanged += 1;
+      }
+    }
+    assert.ok(locatorFacesChanged > 0,
+      `${host.label}: 로케이터 면이 한 장도 안 바뀌었다 — (C) 배선이 끊겼다`);
+    assert.equal(codeFacesChanged, 0, `${host.label}: 코드 면이 바뀌었다`);
+    assert.ok(codeFacesAtRisk > 0,
+      `${host.label}: 강조가 바꿀 수 있었던 코드 면이 0 이다 — 위 단언이 공허하다`);
+  }
+});
+
+test('ⓙ Y: locator ≡ all («검출기 안 페이로드» 가 없다) · 옵션 부재 ≡ default', () => {
+  for (const host of Y_HOSTS) {
+    const encoded = encodeYHost(host);
+    const base = sceneYOf(encoded, DEFAULT_CENTRAL_N7_EMPHASIS);
+    assert.deepEqual(sceneYOf(encoded, 'all').shapes, sceneYOf(encoded, 'locator').shapes,
+      `${host.label}: Y 에서 두 팔이 갈렸다 — Y 에는 검출기 안 페이로드가 없다`);
+    // 임베더 계약 — 옵션을 안 준 호출은 이전 출력과 **바이트 동일**이어야 한다.
+    assert.deepEqual(sceneYOf(encoded, undefined).shapes, base.shapes,
+      `${host.label}: 옵션 부재가 default 와 다르다 — 기존 발행물 재생성이 달라진다`);
+  }
+});
+
+test('ⓙ Y: 강조는 인코더 산출물·기하를 안 건드린다 (순위 보존)', () => {
+  for (const host of Y_HOSTS) {
+    const encoded = encodeYHost(host);
+    const before = JSON.stringify([...encoded.cellDigits]);
+    const base = sceneYOf(encoded, DEFAULT_CENTRAL_N7_EMPHASIS);
+    const all = sceneYOf(encoded, 'all');
+    assert.equal(JSON.stringify([...encoded.cellDigits]), before,
+      `${host.label}: 렌더가 인코더 산출물을 건드렸다`);
+    assert.equal(all.shapes.length, base.shapes.length, `${host.label}: 셰이프 수가 달라졌다`);
+    for (let i = 0; i < base.shapes.length; i += 1) {
+      assert.deepEqual(all.shapes[i].points, base.shapes[i].points,
+        `${host.label}: 셰이프 ${i} 의 기하가 움직였다 — 강조는 색 축이다`);
+    }
+    // 치환은 **레벨 자리에서만** — 강조본의 색은 강조 팔레트 3색(게인 얹은) 안에 있다.
+    const allowed = new Set();
+    for (const face of YFACES) {
+      for (let level = 0; level < 3; level += 1) {
+        allowed.add(yExpected(EMPHASIZED, face, level));
+        allowed.add(yExpected(PRESET.levels, face, level));
+      }
+    }
+    const faces = yFaceIndex(encoded, base);
+    for (const [label, { at }] of faces) {
+      assert.ok(allowed.has(rgbKey(all.shapes[at].color)),
+        `${host.label}: ${label} 이 팔레트 밖 색이다 — 순위 보존이 깨졌다`);
+    }
+  }
+});
+
+test('ⓙ Y: 독립 출처 — 로케이터가 palette.levels 축이다 ⟺ applies (전수)', () => {
+  /*
+   * ⓐ 의 Y 판이다. 강조 상수도 판정 함수도 **한 번도 안 읽고**, `levels` 세 색만 바꾼
+   * 두 팔레트로 같은 코드를 그려 로케이터 셀이 움직이는지만 본다. 그 답을 분류
+   * (`detectorEmphasisApplicability`)와 대조한다 — 양변이 한 상수에서 나오는
+   * 항진명제를 피하는 것이 이 자의 존재 이유다 (검토 F3).
+   */
+  let moved = 0;
+  for (const host of Y_HOSTS) {
+    const encoded = encodeYHost(host);
+    const withPreset = sceneYOf(encoded, DEFAULT_CENTRAL_N7_EMPHASIS);
+    const withProbe = sceneYOf(encoded, DEFAULT_CENTRAL_N7_EMPHASIS, Y_PROBE_PALETTE);
+    const faces = yFaceIndex(encoded, withPreset);
+    const canon = new Set(locatorCellsCellSurfaceFinal(encoded.n, host.layout)
+      .map((cell) => `${cell.i},${cell.j}`));
+    let locatorMoved = 0;
+    for (const [label, { at }] of faces) {
+      if (!canon.has(label.slice(0, label.indexOf('|')))) continue;
+      if (rgbKey(withPreset.shapes[at].color) !== rgbKey(withProbe.shapes[at].color)) {
+        locatorMoved += 1;
+      }
+    }
+    assert.ok(locatorMoved > 0,
+      `${host.label}: 로케이터가 palette.levels 축이 아니다 — 프로브 전제가 깨졌다`);
+    moved += 1;
+  }
+  assert.equal(moved, Y_HOSTS.length);
+  // 분류가 같은 답을 낸다 — 프로파일 전수로 (id 축은 locatorProfileY 다).
+  for (const profile of LOCATOR_PROFILES_Y) {
+    assert.equal(detectorEmphasisApplicability(profile).applies,
+      isCellSurfaceLocatorProfileY(profile),
+      `${profile}: 분류가 셀 표면 로케이터 여부와 어긋난다`);
+  }
+});
+
 // ── ⓖ 판정 집합의 총함수성 ──────────────────────────────────────────────
 
 test('ⓖ DETECTOR_EMPHASIS_RENDER_KINDS 에 죽은 원소가 없다', () => {
-  const reachableKinds = new Set(RENDER_REACHABLE_IDS.map(finderRenderKindOf));
+  // ⭐ 전수에 **Y 로케이터 프로파일**을 더한다 (2026-09-07 (C)) — Y 의 검출기 id 축은
+  //   `finderPatternId` 가 아니라 `locatorProfileY` 라, 안 더하면 새 화법
+  //   `cell-surface-locator` 가 «죽은 원소» 로 잘못 보인다. 그리고 이 합집합이
+  //   판정(`detectorEmphasisApplicability`)이 실제로 받는 id 의 전수다.
+  const reachableKinds = new Set(
+    [...RENDER_REACHABLE_IDS, ...LOCATOR_PROFILES_Y].map(finderRenderKindOf),
+  );
   for (const kind of DETECTOR_EMPHASIS_RENDER_KINDS) {
     assert.ok(reachableKinds.has(kind),
       `${kind}: 렌더 전수 어디에서도 안 나오는 renderKind 다 — 죽은 원소`);
@@ -828,7 +1095,7 @@ test('ⓖ DETECTOR_EMPHASIS_RENDER_KINDS 에 죽은 원소가 없다', () => {
 });
 
 test('ⓖ 분류 네 갈래가 전수를 덮고, 적용은 정확히 이 집합이다', () => {
-  for (const id of RENDER_REACHABLE_IDS) {
+  for (const id of [...RENDER_REACHABLE_IDS, ...LOCATOR_PROFILES_Y]) {
     const verdict = detectorEmphasisApplicability(id);
     const kind = finderRenderKindOf(id);
     assert.equal(verdict.applies, DETECTOR_EMPHASIS_RENDER_KINDS.includes(kind),

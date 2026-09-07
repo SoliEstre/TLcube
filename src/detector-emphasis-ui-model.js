@@ -13,6 +13,7 @@ import { GENERATOR_TYPES } from './generator-types.js';
 import { CENTRAL_N7_EMPHASIS_MODES } from './centralN7Emphasis.js';
 import {
   DETECTOR_EMPHASIS_REASONS, detectorEmphasisApplicability,
+  detectorEmphasisRequiresAdvanced,
 } from './generator-render-config.js';
 
 /**
@@ -28,7 +29,15 @@ if (!GENERATOR_TYPES.includes(LOCATOR_DETECTOR_TYPE)) {
   throw new Error('LOCATOR_DETECTOR_TYPE 이 GENERATOR_TYPES 에 없다');
 }
 
-/** 이 타입의 검출기가 **중앙 파인더**인가 (= 강조 축을 실을 수 있는 자리인가). */
+/**
+ * 이 타입의 검출기가 **중앙 파인더**인가.
+ *
+ * ⚠ 종전 주석은 «= 강조 축을 실을 수 있는 자리인가» 였고, **2026-09-07 (C) 로 그
+ * 등식이 깨졌다** — Type Y 도 강조 축을 갖는다(셀 표면 로케이터). 지금 이 술어가
+ * 답하는 것은 **앵커 하나**다: 강조 섹션이 `#finderSection` 뒤에 서는가
+ * `#yLocatorSection` 뒤에 서는가. 편집 가능 여부는 검출기 축(applicability)
+ * 하나에서 나온다 — 타입은 그 판정에 더 이상 안 낀다.
+ */
 export function hasCentralFinderAxis(type) {
   return GENERATOR_TYPES.includes(type) && type !== LOCATOR_DETECTOR_TYPE;
 }
@@ -52,14 +61,21 @@ for (const reason of DETECTOR_EMPHASIS_REASONS) {
 export const DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY = 'g1029';
 
 /**
- * «이 타입엔 강조 배선이 아예 없다» — 타입 게이트에서 떨어졌는데 사유가 없을 때.
+ * «축은 있는데 정식 화면에서 내려 뒀다» — 고급 모드·시험판에서만 켤 수 있는 검출기.
  *
- * 이 키가 필요한 이유 (F2): 종전 코드는 `editable ? null : applicability(...).reason`
- * 이라, 언젠가 Y 로케이터 강조가 실측돼 applicability 가 `applies:true` 로 뒤집히면
- * **사유 없는 비활성**(= 조용한 무시)으로 떨어졌다. 화면은 «왜 안 눌리는가» 를 못
- * 말하고, 그 상태를 금지한 주석만 남는다.
+ * ⭐ **문구 키 `g1030` 의 뜻이 바뀌었다 (2026-09-07 (C))**. 옛 뜻은 «이 타입엔 강조
+ *    배선이 아예 없다» 였고, 그 상태의 유일한 실례가 Type Y 였다 (F2 가 예언한
+ *    그대로: 「언젠가 Y 로케이터 강조가 실측되면…」). 이 라운드가 Y 를 배선해
+ *    타입 게이트를 걷었으므로 옛 뜻은 **도달 불가능**해졌다 — 키를 버리는 대신,
+ *    같은 라운드의 실측이 만든 **새 상태**에 붙였다:
+ *
+ *    Y 로케이터 강조는 렌더가 정확하지만(자 ⓙ) 합성 왕복에서 v0TR 검출 회귀 8점이
+ *    나왔다 (`generator-render-config.DETECTOR_EMPHASIS_ADVANCED_ONLY_RENDER_KINDS`
+ *    주석의 표). 그래서 정식 화면에서는 못 켜고, 고급 모드·시험판에서는 켤 수 있다.
+ *    화면은 그 사실을 **말해야** 한다 — 조용히 흐리게만 두면 «왜 안 눌리는가» 가
+ *    화면 밖에 남는다.
  */
-export const DETECTOR_EMPHASIS_NO_AXIS_KEY = 'g1030';
+export const DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY = 'g1030';
 
 /**
  * 정식(일반) 화면에서 **내리는** 강조 모드 — 고급 모드·시험판에서만 보인다.
@@ -107,13 +123,27 @@ export function emphasisSectionModel(state, view) {
   // 렌더 사슬이 쓰는 술어와 **같은 것**이다 (sceneOptionsForOA · K 디스패치).
   // 화면이 다른 술어를 쓰면 «켰는데 안 먹는» 상태가 된다.
   const applicability = detectorEmphasisApplicability(detectorId);
-  const editable = centralAxis && applicability.applies;
-  // 사유는 «축이 있는 타입» 에서만 검출기를 탓한다. 축 자체가 없는 타입(Y)의 답은
-  // 검출기 사유가 아니라 «배선이 없다» 다 — 검출기 사유를 갖다 붙이면, 그 검출기의
-  // 실측이 서는 날 화면이 조용히 «사유 없는 비활성» 으로 떨어진다.
-  const reason = editable ? null : (centralAxis ? applicability.reason : null);
-
+  /*
+   * ⭐ **판정에서 타입 게이트를 걷었다 (2026-09-07 (C))** — 종전은
+   * `centralAxis && applies` 였고, 그 `centralAxis` 가 Type Y 를 통째로 막고 있었다
+   * (운영자: 「Y 의 경우는 v0/v0T/v0TR 같은 로케이터 강조가 되어야 하는데 미지원」).
+   * 지금 «강조를 걸 수 있는가» 는 **검출기 하나**가 답한다 — Y 의 검출기 id 는
+   * `locatorProfileY` 이고 그 답은 `cell-surface-locator` 화법에서 나온다.
+   * 타입은 앵커(`anchor`)에만 남는다.
+   */
   const advancedCardsVisible = view.advancedCardsVisible === true;
+  /*
+   * 정식 화면에서 내려 둔 검출기 (2026-09-07 (C) 실측 — Y v0TR 검출 회귀). 렌더
+   * 좌석(index.html `renderTypeY`)이 **같은 술어 × 같은 플래그**를 보므로 «화면은
+   * 켤 수 있다는데 렌더는 안 먹는» 이 안 생긴다.
+   */
+  const advancedOnlyDetector = detectorEmphasisRequiresAdvanced(detectorId);
+  const gatedByAdvanced = advancedOnlyDetector && !advancedCardsVisible;
+  const editable = known && applicability.applies && !gatedByAdvanced;
+  // 사유는 언제나 검출기가 준다 (폐쇄집합 3택). «사유 없는 비활성» 은 이제 구조적으로
+  // 못 생긴다 — 고급 게이트로 막힌 자리는 아래 noteKey 가 따로 말한다.
+  const reason = applicability.applies ? null : applicability.reason;
+
   let advancedHiddenActive = false;
   const cards = CENTRAL_N7_EMPHASIS_MODES.map((mode) => {
     const advancedOnly = ADVANCED_ONLY_EMPHASIS_MODES.includes(mode);
@@ -124,9 +154,14 @@ export function emphasisSectionModel(state, view) {
   });
 
   const noteKey = reason ? DETECTOR_EMPHASIS_REASON_KEYS[reason]
-    : !editable ? DETECTOR_EMPHASIS_NO_AXIS_KEY
+    : gatedByAdvanced ? DETECTOR_EMPHASIS_ADVANCED_DETECTOR_KEY
       : advancedHiddenActive ? DETECTOR_EMPHASIS_ADVANCED_HIDDEN_KEY
         : null;
+  // 자기검증 — «비활성인데 할 말이 없다» 는 조용한 무시다. 갈래를 하나 걷어낸
+  // 자리라, 그 상태가 다시 생기면 여기서 죽는다 (주석이 아니라 값으로).
+  if (known && !editable && noteKey === null) {
+    throw new Error('검출기 강조: 비활성인데 사유 줄이 없다 — ' + String(detectorId));
+  }
 
   return Object.freeze({
     // 섹션은 **사라지지 않는다** (결정 ⑭ (A)). 다만 생성기 타입이 아닌 값에서는
