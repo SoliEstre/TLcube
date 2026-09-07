@@ -354,7 +354,7 @@ test('⑧ transparent 면 배경을 **지운다** — 뒤에 깔린 배치 사�
   assert.deepEqual(ctx.calls, ['clearRect'], 'transparent 가 지우지 않거나 채우기도 한다');
 });
 
-test('⑨ 생성기 배선 — 사진이 떠 있을 때만 투명, 그리고 알파 있는 컨텍스트', () => {
+test('⑨ 생성기 배선 — 사진 또는 «투명» 배경이면 투명, 그리고 알파 있는 컨텍스트', () => {
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   // 🔴 함수 **전체**를 잘라야 한다. 처음엔 buildOrbitMesh 호출부만 잘랐는데
   //    paintQuads 는 그 뒤에 있어 «없다» 가 나왔다 — 자를 잘못 댄 것이지 배선 결함이
@@ -364,7 +364,31 @@ test('⑨ 생성기 배선 — 사진이 떠 있을 때만 투명, 그리고 알
   const next = index.indexOf('\nfunction ', start + 1);
   const fn = index.slice(start, next > 0 ? next : start + 8000);
   assert.ok(fn.includes('paintQuads(ctx'), '슬라이스가 paintQuads 호출을 안 담았다');
-  assert.match(fn, /transparent: backdropShowing\(\)/);
+  /*
+   * ⭐ **배타를 열었다** (2026-09-07 render3d-parity, 운영자 실기 20:1x 「배경색 선택이
+   *    3D 에 동일하게 반영되지 않는다」).
+   *
+   * 종전 자는 `transparent: backdropShowing()` 이라는 **철자**를 잠갔다. 그 잠금이
+   * 「배경 3택의 «투명»」을 막고 있었다 — 실측: `BG_MODE_COLORS.transparent === null`
+   * 이라 3D 는 `|| {14,16,24}` 폴백으로 **남색을 칠했고**, 같은 자리에서 2.5D 는
+   * `clearRect` + `.checker` 였다. 사진이 없는 «투명» 이 3D 에서만 불투명이었던 것이다.
+   *
+   * 그래서 값이 아니라 **성질** 두 개로 바꾼다 (「레인은 내 잘못된 지시를 자로 굳힌다」):
+   *   ① 사진이 떠 있으면 **반드시** 투명이다 — 정본 술어 `backdropShowing()` 를 탄다.
+   *   ② 배경 3택의 «투명»(= `null`) 도 같은 분기를 탄다.
+   * 구 잠금은 사라지지 않고 ① 의 **양성 단언**으로 남는다 (「배타를 여는 데는 정형이 있다」).
+   */
+  // ⚠ **식별자를 따라간다** — `fn` 어딘가에 두 낱말이 있기만 하면 통과하는 자는
+  //    「`transparent:` 에 실제로 그 조건이 실렸나」를 못 잰다 (체커 토글 줄에도 같은
+  //    술어가 있어 거짓 통과가 된다). 넘긴 이름을 잡아 **그 정의**를 본다.
+  const passed = fn.match(/transparent:\s*([A-Za-z_$][\w$]*)/);
+  assert.ok(passed, 'paintQuads 에 transparent 를 안 넘긴다');
+  const defined = new RegExp(`const\\s+${passed[1]}\\s*=([^;]*);`).exec(fn);
+  assert.ok(defined, `${passed[1]} 의 정의를 못 찾았다 — 자를 잘못 댄 것일 수 있다`);
+  assert.match(defined[1], /backdropShowing\(\)/,
+    '사진이 떠 있어도 3D 가 배경을 채운다 — 배치 미리보기가 가려진다');
+  assert.match(defined[1], /transparentBg|pal\.background === null/,
+    '배경 3택의 «투명» 이 3D 에서 폴백 색으로 칠해진다 (2.5D 는 clearRect + .checker)');
   /*
    * 🔴 술어는 **정본 하나**여야 한다. 「투명 배경 + 사진 있음」을 세 곳이 손으로 적고
    *    있었고 이 배선이 넷째가 될 참이었다 (체커보드 억제 · 3D 투명 · 팬 조작).

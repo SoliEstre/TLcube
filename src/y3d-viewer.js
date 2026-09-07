@@ -175,13 +175,49 @@ function colorOfDigit(digit, face, tones, levels) {
  *
  * `levelAt(i, j, face)` 는 호출자가 주는 «절대 레벨 인덱스 또는 null» 이다.
  * null 이면 digit 경로로 떨어진다 — 로케이터가 없는 구성에서는 종전과 완전히 같다.
+ *
+ * ⭐ **레벨 표가 둘이다** (2026-09-07 render3d-parity). 2.5D(`sceneY.js`)는 같은 자리에서
+ * `gainedLocatorLevels`(검출 셀)와 `gainedLevels`(데이터 셀)를 갈라 쓴다 — 검출기 강조가
+ * 로케이터 팔만 치환하기 때문이다. 3D 가 표 하나만 들면 강조가 **조용히 무시된다**
+ * (실측: 같은 코드에서 2.5D 는 44/507 면이 달라지는데 3D 는 0/507 이었다).
+ *
+ * 두 배열은 **이미 면 게인이 얹힌** 것이다 — 게인을 여기서 얹지 않는 이유는
+ * «강조 먼저, 게인 나중» 이라는 순서가 2.5D 의 계약이고 그 순서를 두 곳에서 각자 적으면
+ * 사본이 되기 때문이다. 호출자가 `sceneY.yLevelTables` **하나**에서 받아 넘긴다.
  */
-function colorOfCell(digit, face, tones, levels, levelAt, i, j) {
+function colorOfCell(digit, face, tones, dataLevels, locatorLevels, levelAt, i, j) {
   if (typeof levelAt === 'function') {
     const lv = levelAt(i, j, face);
-    if (Number.isInteger(lv) && lv >= 0 && lv < levels.length) return levels[lv];
+    if (Number.isInteger(lv) && lv >= 0 && lv < locatorLevels.length) return locatorLevels[lv];
   }
-  return colorOfDigit(digit, face, tones, levels);
+  return colorOfDigit(digit, face, tones, dataLevels);
+}
+
+/**
+ * 면별 레벨 표를 편다. `faceLevels` 가 없으면 세 면이 `levels` **하나를 공유**한다 —
+ * 그 경로는 배열 참조까지 같아서 종전 출력과 바이트 동일이다.
+ *
+ * ⚠ 모양이 어긋나면 **던진다**. 조용히 `levels` 로 떨어지면 「켰는데 안 먹는」 상태가
+ *   되고, 두 팔이 비트 동일이라 A/B 가 «차이 없음» 으로 초록이 된다
+ *   (교훈 「옵션은 «중첩까지» 가 계약이다」).
+ */
+function resolveFaceLevels(levels, faceLevels, label) {
+  const table = {};
+  for (const face of YFACES) {
+    if (faceLevels === undefined || faceLevels === null) {
+      table[face] = levels;
+      continue;
+    }
+    const arr = faceLevels[face];
+    if (!Array.isArray(arr) || arr.length !== levels.length) {
+      throw new RangeError(
+        `${label}.${face} 는 levels 와 같은 길이(${levels.length})의 배열이어야 한다: `
+        + JSON.stringify(arr),
+      );
+    }
+    table[face] = arr;
+  }
+  return table;
 }
 
 function quadDepth(corners) {
@@ -255,6 +291,21 @@ export function buildOrbitMesh(options) {
   /** (i,j,face) → 절대 레벨 인덱스 | null. 로케이터 칸용. 없으면 digit 경로만 쓴다. */
   const levelAt = options.levelAt;
   const includeBack = options.includeBack !== false;
+  /*
+   * ⭐ **면 게인 · 검출기 강조 파리티** (2026-09-07 render3d-parity, 운영자 실기 20:1x
+   *    「3D 렌더에서 파인더/로케이터 강조가 동일하게 반영되지 않는다」).
+   *
+   * `faceLevels` = 면별 데이터 레벨 표 · `locatorFaceLevels` = 면별 **검출 셀** 레벨 표.
+   * 둘 다 `{T:[…],L:[…],R:[…]}` 이고 **게인이 이미 얹힌** 값이다. 정본은
+   * `sceneY.yLevelTables` 하나 — 2.5D 가 쓰는 바로 그 함수다.
+   *
+   * 생략하면 세 면이 `levels` 를 공유하고 검출 셀도 같은 표를 쓴다 = **종전과 바이트 동일**.
+   */
+  const faceLevels = resolveFaceLevels(levels, options.faceLevels, 'faceLevels');
+  const locatorFaceLevels = options.locatorFaceLevels === undefined
+    || options.locatorFaceLevels === null
+    ? faceLevels
+    : resolveFaceLevels(levels, options.locatorFaceLevels, 'locatorFaceLevels');
   /*
    * ⭐ **faceQuads — 셀 격자와 무관한 면 사각형** (2026-09-01, 슬롯 QR 구멍 수리).
    *
@@ -360,7 +411,11 @@ export function buildOrbitMesh(options) {
           emit(
             kind, face, i, j, s.side,
             kind === 'module' ? digit : null,
-            kind === 'module' ? colorOfCell(digit, face, tones, levels, levelAt, i, j) : BACK_COLOR,
+            kind === 'module'
+              ? colorOfCell(
+                digit, face, tones, faceLevels[face], locatorFaceLevels[face], levelAt, i, j,
+              )
+              : BACK_COLOR,
             corners,
           );
         }
@@ -639,6 +694,53 @@ export function fitViewStable(mesh, width, height, pad, layout) {
   };
 }
 
+/**
+ * **지면(scene rect) 맞춤** — 2.5D 와 «같은 크기» 를 내는 변환 (2026-09-07 운영자 실기
+ * 20:1x 「3D 일 때 렌더링되는 큐브 크기도 아이소메트릭 기준, 2.5D 일 때 크기와 동일하게」).
+ *
+ * ─ 왜 `fitViewStable` 로는 못 맞추나 ────────────────────────────────────────────
+ * `fitViewStable` 은 **외접구 실루엣**을 캔버스에 맞춘다. 2.5D 는 **지면 rect**
+ * (`scene.width × scene.height` = 큐브 + 여백)를 상자에 맞춘다. 여백이 큐브보다 훨씬
+ * 두꺼워서(실측 n=13: 지면 62.5×66 에 큐브 22.5×26) 두 규칙의 배율이 **2.0923×** 갈렸다.
+ * layout 을 맞춰도 안 닫힌다 — `fitViewStable` 은 layout 의 margin 을 아예 안 읽는다.
+ *
+ * ─ 픽셀 일치가 성립하는 근거 ────────────────────────────────────────────────────
+ * ① 두 캔버스는 `#canvasWrap` 안에 `inset:0` 으로 완전히 겹치고, 상자 종횡비는 2.5D
+ *    캔버스가 정한다(`applyPreviewFit`). ② `points2d` 는 **layout 공간**이라, 호출자가
+ *    2.5D scene 의 layout 을 그대로 넘기면 `moduleQuad` 와 같은 좌표다(모듈 서두 계약).
+ *    ③ 2.5D 는 그 좌표에 `ppu·dpr` 만 곱한다(오프셋 0). ⇒ 같은 rect 를 같은 상자에
+ *    contain 하면 정의상 같은 픽셀이다.
+ *
+ * ─ 회전 안정성 ─────────────────────────────────────────────────────────────────
+ * 스케일이 **각도의 함수가 아니다**(상수). 2026-08-26 「돌릴 때마다 크기가 변한다」의
+ * 처방이 그대로 유지되고, 오히려 더 강하다. 잘림도 없다 — 회전 실루엣 최대 반경은
+ * `radius3d × projMax`(n=13 → 13.789)이고 지면 반높이는 33 이다. 원근 최대(β=sin60°)에서
+ * 1/cos60° = 2배가 돼도 27.6 < 33.
+ *
+ * @param {number} width  캔버스 픽셀 폭
+ * @param {number} height 캔버스 픽셀 높이
+ * @param {{width:number, height:number, zoom?:number}} rect  2.5D scene 의 지면 rect.
+ *   `zoom` 은 그 위의 배율이다 (기본 1 = 2.5D 와 정확히 같은 크기). 휠 확대가 파리티를
+ *   없애지 않게 «기본이 파리티, 조작은 그 위» 로 분리한 것이다.
+ */
+export function fitViewScene(width, height, rect) {
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) {
+    throw new RangeError(`fitScene 은 양수 width·height 가 필요하다: ${JSON.stringify(rect)}`);
+  }
+  const zoom = rect.zoom === undefined ? 1 : rect.zoom;
+  if (!(zoom > 0) || !Number.isFinite(zoom)) {
+    throw new RangeError(`fitScene.zoom 은 유한한 양수여야 한다: ${zoom}`);
+  }
+  const scale = Math.min(width / rect.width, height / rect.height) * zoom;
+  // 지면 rect 의 중심을 캔버스 중심에 못 박는다. zoom=1 이면 2.5D 의 레터박스와 같다.
+  const ox = width / 2 - (rect.width / 2) * scale;
+  const oy = height / 2 - (rect.height / 2) * scale;
+  return {
+    scale,
+    map(p) { return { x: p.x * scale + ox, y: p.y * scale + oy }; },
+  };
+}
+
 /** 투영점의 축정렬 bbox → 캔버스 맞춤 변환. ⚠ 회전하면 스케일이 변한다 —
  *  회전 UI 에는 `fitViewStable` 을 쓴다. 정지 렌더(내보내기 등)용으로만 남긴다. */
 export function fitView(quads, width, height, pad) {
@@ -693,13 +795,16 @@ export function paintQuads(ctx, mesh, options) {
   //    변해서, 슬라이더를 움직일 때마다 그림이 펌프질한다 — `fitViewStable` 을 만든
   //    이유(2026-08-26 「크기 보존 안 됨」)와 **같은 증상**이라 «고친 걸 또 겪는» 모양이
   //    된다. 조용히 떨어지지 않게 여기서 던진다.
-  if (mesh.invDist > 0 && !opts.layout) {
+  if (mesh.invDist > 0 && !opts.layout && !opts.fitScene) {
     throw new RangeError('원근(invDist>0)에는 layout 이 필요하다 — bbox 폴백은 크기가 흔들린다');
   }
-  // 회전 UI 는 **안정 맞춤**을 쓴다 (크기가 안 흔들린다). layout 이 없으면 종전 경로.
-  const view = (opts.layout && mesh.radius3d && mesh.center)
-    ? fitViewStable(mesh, width, height, opts.pad, opts.layout)
-    : fitView(mesh.quads, width, height, opts.pad);
+  // 지면 맞춤이 **가장 강한 규칙**이다 — 2.5D 와 픽셀이 같아야 하는 화면(생성기 미리보기)
+  // 은 이 경로를 탄다. 안 주면 종전 그대로다 (회전 UI = 안정 맞춤, layout 도 없으면 bbox).
+  const view = opts.fitScene
+    ? fitViewScene(width, height, opts.fitScene)
+    : (opts.layout && mesh.radius3d && mesh.center)
+      ? fitViewStable(mesh, width, height, opts.pad, opts.layout)
+      : fitView(mesh.quads, width, height, opts.pad);
   const selected = opts.selected;
   for (const q of mesh.quads) {
     const pts = q.points2d.map(view.map);
@@ -746,6 +851,39 @@ export function paintQuads(ctx, mesh, options) {
       ctx.fillStyle = q.color.r + q.color.g + q.color.b > 360 ? '#1a1d24' : '#f4f6fb';
       ctx.fillText(q.face, cx, cy);
     }
+  }
+  /*
+   * ⭐ **지면 도형 (코너 QR)** — 2026-09-07 render3d-parity, 운영자 실기 20:1x
+   *    「코너 QR 출력 등이 동일하게 반영되지 않는다」.
+   *
+   * ─ 왜 «어느 면에 놓나» 가 묻지 않아도 되는 물음인가 ─────────────────────────
+   * 코너 QR 은 큐브 **표면이 아니다**. `sceneY` §④ 가 그것을 `layout.width/height` 의
+   * 코너에, 큐브 실루엣과 **겹치면 던지는** 자리에 놓는다 — 큐브가 아니라 **지면**의
+   * 물건이다. 그래서 3D 라고 어느 마름모에 올릴지 고를 것이 없다. 위 `fitScene`
+   * 파리티가 3D 에 2.5D 와 같은 지면 좌표계를 준 뒤로는, 「같은 자리에 그대로」가
+   * 유일하게 정직한 답이다.
+   *
+   * ⚠ 그래서 **투영하지 않는다** — `points` 는 이미 layout 공간이고 `view.map` 만 탄다.
+   *    회전·원근은 큐브에만 걸린다 (지면은 지면이다).
+   * ⚠ 큐브 **다음**에 칠한다. 정위치에서는 애초에 안 겹치고(위 가드), 크게 돌리거나
+   *    원근을 최대로 밀면 큐브 실루엣이 여백을 침범할 수 있는데 그때 QR 이 묻히면
+   *    「QR 이 사라졌다」가 된다. QR 은 읽혀야 하는 물건이라 위가 맞다.
+   * ⚠ 안전영역·음영은 여기 **안 들어온다** — 그 둘은 큐브 실루엣에서 **유도된** 껍질이라
+   *    정위치에서만 맞고, 돌리면 그림자가 큐브에서 떨어져 나온다. 지면에 붙박이인
+   *    코너 QR 과 «대답하는 질문» 이 다르다 (레인 보고서 §5).
+   */
+  const flatShapes = Array.isArray(opts.flatShapes) ? opts.flatShapes : [];
+  for (const s of flatShapes) {
+    if (!s || !Array.isArray(s.points) || s.points.length < 3) continue;
+    const pts = s.points.map(view.map);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let k = 1; k < pts.length; k += 1) ctx.lineTo(pts[k].x, pts[k].y);
+    ctx.closePath();
+    ctx.fillStyle = hexOf(s.color);
+    ctx.fill();
+    // 테두리를 안 긋는다 — QR 모듈은 셀보다 훨씬 잘아서 0.6px 실선이 콰이어트를 회색으로
+    // 만든다 (오버레이와 같은 이유, 2026-09-01 「QR이 좀 어두운데?」).
   }
   return view;
 }

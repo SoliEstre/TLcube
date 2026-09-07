@@ -514,6 +514,58 @@ function assertPalette(palette) {
 // ── 조립 ────────────────────────────────────────────────────────────────
 
 /**
+ * Type Y 의 **면별 레벨 표 두 벌** — 데이터 셀용과 검출(로케이터) 셀용.
+ *
+ * 「검출기 강조」 Type Y 배선 (2026-09-07 (C) · 운영자 원문 「Y 의 경우는 v0 이나
+ * v0T, v0TR 같은 로케이터 강조가 되어야 하는데 이쪽은 미지원 상태인 것 같고」).
+ *
+ * **게이트는 O/A/K 와 같은 집합**이다 — `DETECTOR_EMPHASIS_RENDER_KINDS` 에
+ * `finderRenderKindOf(<Y 검출기 id>)` 를 물어본다. Y 의 검출기 id 는
+ * `finderPatternId` 가 아니라 **셀 표면 로케이터 프로파일**이라, 그 매핑은
+ * `finder-render-kind.js` 가 로케이터 정본 술어에서 유도한다. 화면(분류)과 렌더가
+ * 손 목록 두 벌을 드는 사고((A) 레인 F4)를 구조적으로 막는다.
+ *
+ * **팔은 하나뿐이다** — `detectorCellLevelPalettes` 의 `locator` 팔만 쓴다:
+ *   · 로케이터 셀(`role === 'locator'`) = 레이아웃이 톤을 고정한 검출 셀 → 치환.
+ *   · 데이터·레퍼런스·포맷·필러 = digit 알파벳(코드 그 자체) → **어떤 모드에서도
+ *     안 건드린다**. 그래서 Y 에서는 `locator` 와 `all` 이 같은 그림이다.
+ *
+ * 게인은 **치환 뒤에** 얹는다 — 게인은 조명 축이고 강조는 팔레트 축이라 순서가
+ * 이 방향이어야 «순검정 dark» 가 게인으로 살아나지 않는다. `default` 는 두 팔이
+ * `palette.levels` 그대로라 이전 출력과 **바이트 동일**이다.
+ *
+ * ⭐ **왜 함수로 꺼냈나** (2026-09-07 render3d-parity): 3D 뷰어(`y3d-viewer.js`)가
+ *    **같은 표**를 써야 한다. 종전 3D 는 `palette.levels` 원본 하나만 들어서
+ *    ① 검출기 강조가 조용히 무시되고(2.5D 44/507 면 ↔ 3D 0/507)
+ *    ② 면 게인이 통째로 빠졌다(338/507 면 불일치 — L·R 전부).
+ *    호출자 두 곳이 각자 「강조 → 게인」을 다시 적으면 그게 사본이다.
+ *
+ * ⚠ `detectorPalettes === null` 일 때 두 표는 **같은 배열 참조**를 공유한다 —
+ *    옮겨 적은 게 아니라 「이 구성엔 강조 팔이 없다」는 성질의 표현이다.
+ *
+ * @param {{levels: Array, faceGains?: {T:number,L:number,R:number}}} palette
+ * @param {string} locatorProfile  해소된 로케이터 프로파일 (`scene.locatorProfile`)
+ * @param {string} [centralN7Emphasis]  강조 모드. 없으면 라이브러리 기본('default').
+ * @returns {{data: {T:Array,L:Array,R:Array}, locator: {T:Array,L:Array,R:Array}}}
+ */
+export function yLevelTables(palette, locatorProfile, centralN7Emphasis) {
+  const faceGains = palette.faceGains === undefined ? DEFAULT_FACE_GAINS : palette.faceGains;
+  assertFaceGains(faceGains);
+  const detectorPalettes = DETECTOR_EMPHASIS_RENDER_KINDS
+    .includes(finderRenderKindOf(locatorProfile))
+    ? detectorCellLevelPalettes(palette.levels, centralN7Emphasis)
+    : null;
+  const data = {};
+  const locator = {};
+  for (const face of YFACES) {
+    data[face] = palette.levels.map((rgb) => applyFaceGain(rgb, faceGains[face]));
+    locator[face] = detectorPalettes === null ? data[face]
+      : detectorPalettes.locator.map((rgb) => applyFaceGain(rgb, faceGains[face]));
+  }
+  return { data, locator };
+}
+
+/**
  * Type Y 인코딩 결과로부터 scene 을 조립한다.
  *
  * @param {{n: number, cellDigits: Map<string, {digit: number, role: string}>}} encoded
@@ -574,38 +626,11 @@ export function buildSceneY(encoded, options) {
 
   const layout = layoutForCube(n, { size: cellSize, margin });
 
-  /*
-   * 「검출기 강조」 Type Y 배선 (2026-09-07 (C) · 운영자 원문 「Y 의 경우는 v0 이나
-   * v0T, v0TR 같은 로케이터 강조가 되어야 하는데 이쪽은 미지원 상태인 것 같고」).
-   *
-   * **게이트는 O/A/K 와 같은 집합**이다 — `DETECTOR_EMPHASIS_RENDER_KINDS` 에
-   * `finderRenderKindOf(<Y 검출기 id>)` 를 물어본다. Y 의 검출기 id 는
-   * `finderPatternId` 가 아니라 **셀 표면 로케이터 프로파일**이라, 그 매핑은
-   * `finder-render-kind.js` 가 로케이터 정본 술어에서 유도한다. 화면(분류)과 렌더가
-   * 손 목록 두 벌을 드는 사고((A) 레인 F4)를 구조적으로 막는다.
-   *
-   * **팔은 하나뿐이다** — `detectorCellLevelPalettes` 의 `locator` 팔만 쓴다:
-   *   · 로케이터 셀(`role === 'locator'`) = 레이아웃이 톤을 고정한 검출 셀 → 치환.
-   *   · 데이터·레퍼런스·포맷·필러 = digit 알파벳(코드 그 자체) → **어떤 모드에서도
-   *     안 건드린다**. 그래서 Y 에서는 `locator` 와 `all` 이 같은 그림이다.
-   *
-   * 게인은 **치환 뒤에** 얹는다 — 게인은 조명 축이고 강조는 팔레트 축이라 순서가
-   * 이 방향이어야 «순검정 dark» 가 게인으로 살아나지 않는다. `default` 는 두 팔이
-   * `palette.levels` 그대로라 이전 출력과 **바이트 동일**이다.
-   */
-  const detectorPalettes = DETECTOR_EMPHASIS_RENDER_KINDS
-    .includes(finderRenderKindOf(locatorProfile))
-    ? detectorCellLevelPalettes(palette.levels, opts.centralN7Emphasis)
-    : null;
-
   // 게인 적용된 레벨 색(면당 3개) — 셀마다 다시 계산하지 않도록 미리 캐시한다.
-  const gainedLevels = {};
-  const gainedLocatorLevels = {};
-  for (const face of YFACES) {
-    gainedLevels[face] = palette.levels.map((rgb) => applyFaceGain(rgb, faceGains[face]));
-    gainedLocatorLevels[face] = detectorPalettes === null ? gainedLevels[face]
-      : detectorPalettes.locator.map((rgb) => applyFaceGain(rgb, faceGains[face]));
-  }
+  // 유도는 `yLevelTables` **하나**다 (3D 뷰어가 같은 함수를 부른다 — 사본 금지).
+  const { data: gainedLevels, locator: gainedLocatorLevels } = yLevelTables(
+    palette, locatorProfile, opts.centralN7Emphasis,
+  );
 
   const shapes = [];
 

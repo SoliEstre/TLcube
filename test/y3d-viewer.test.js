@@ -351,7 +351,17 @@ describe('생성기 배선 — 3D 는 opt-in, 기본은 2.5D', () => {
     assert.match(html, /paintY3dPreview\(\);/);
     const at = html.indexOf('function paintY3dPreview(');
     assert.ok(at > 0, 'paintY3dPreview 가 없다');
-    const body = html.slice(at, html.indexOf('\n}\n', at));
+    /*
+     * ⚠ **주석을 벗기고 잰다** (2026-09-07 render3d-parity). 이 자가 재는 것은 「3D 가
+     *   scene 을 다시 조립하는가」인데, 원문 그대로 훑으면 **그 사실을 설명하는 주석
+     *   한 줄**에 걸려 빨개진다 (「이 값은 조립이 해소한 것이다」라고 적자마자 났다).
+     *   주장이 약해지는 게 아니다 — 주석에 이름이 나오는 것은 애초에 위반이 아니었고
+     *   지금은 **코드**만 본다. 「철자를 재는 자는 썩는다」의 완화.
+     *   벗기다 코드까지 지우면 자가 헛도므로 «남았나» 를 먼저 단언한다.
+     */
+    const raw = html.slice(at, html.indexOf('\n}\n', at));
+    const body = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|\n)\s*\/\/[^\n]*/g, '$1');
+    assert.ok(body.includes('paintQuads('), '주석 제거가 코드까지 지웠다 — 자가 헛돈다');
     assert.equal(body.includes('buildSceneY'), false);
     assert.equal(body.includes('encodeY('), false);
     assert.equal(body.includes('buildScene('), false);
