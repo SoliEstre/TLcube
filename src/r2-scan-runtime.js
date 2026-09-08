@@ -34,14 +34,10 @@ import { createA3Adapters } from './r2/adapter-locator.js';
 import { createR2Session, R2_INDICATOR } from './r2/session.js';
 import { createRsDecodeInto } from './r2/decode-rs.js';
 import { correctedCellsForHit } from './r2/corrections.js';
-import {
-  capacityForCellSurfaceFinal,
-  dataCellsInScanOrderCellSurfaceFinal,
-  finalLayoutIdsForN,
-  resolveFormatWire,
-} from './cellSurfaceFinal.js';
-import { maskValue } from './mask.js';
+import { finalLayoutIdsForN, resolveFormatWire } from './cellSurfaceFinal.js';
+import { buildYLayout as buildLayout } from './r2/y-layout.js';
 import { unframe } from './header.js';
+import { createR2TypeExpansionRuntime } from './r2/type-expansion-runtime.js';
 
 /**
  * 후보를 접기 전에 참는 **락 없는 연속 프레임** 수 (R2, 2026-09-06).
@@ -78,28 +74,6 @@ const CANDIDATE_PATIENCE_FRAMES = 40;
  */
 const BIND_N_CONFIRM_FRAMES = 3;
 
-function buildLayout(n, layoutId, eccName, maskIndex, formatWire) {
-  const scan = dataCellsInScanOrderCellSurfaceFinal(n, layoutId, formatWire);
-  const capacity = capacityForCellSurfaceFinal(n, eccName, 2, layoutId, formatWire);
-  const maskDigits = new Uint8Array(scan.length);
-  for (let k = 0; k < scan.length; k += 1) {
-    maskDigits[k] = maskValue(scan[k].i, scan[k].j, maskIndex);
-  }
-  return {
-    // R5 — 어댑터가 이 후보의 스캔순서로 표본하려면 자기 이름을 알아야 한다.
-    layoutId,
-    cellCount: scan.length,
-    requiredSymbolCount: capacity.dataSymbols,
-    nsym: capacity.nsym,
-    maskDigits,
-    maxPayloadBytes: capacity.dataBytes,
-    payloadBytes: capacity.dataBytes,
-    eccName,
-    maskIndex,
-    formatWire,
-  };
-}
-
 /**
  * @param {object} [options]
  * @param {boolean} [options.enabled] 꺼져 있으면 이 런타임은 **아무것도 하지 않는다**.
@@ -109,6 +83,16 @@ function buildLayout(n, layoutId, eccName, maskIndex, formatWire) {
  * @param {number} [options.maxCandidates] 안전 상한.
  */
 export function createR2ScanRuntime(options = {}) {
+  if (options.expansion?.enabled === true) {
+    // 격리 평가용 명시적 설정만 받으며 기존 기본 실행과 capability는 유지해요.
+    return createR2TypeExpansionRuntime({
+      yRuntime: createR2ScanRuntime({ ...options, expansion: undefined }),
+      maxCandidates: options.expansion.maxCandidates,
+      maxTrustedFrames: options.expansion.maxTrustedFrames,
+      maxStalledFrames: options.expansion.maxStalledFrames,
+      cOptions: options.expansion.cOptions,
+    });
+  }
   /*
    * 🔴 **런타임 중에 껐다 켤 수 있어야 한다** (2026-09-04 운영자 요구).
    * 「R2 가 R1 을 완전대체 가능할거라고 생각하지 않기 때문에도 있고, 비교하기 쉽게
@@ -125,6 +109,9 @@ export function createR2ScanRuntime(options = {}) {
 
   let adapters = null;
   let candidates = [];
+  // 선택적 조합기만 쓴다. Y 후보의 생성/복원 직전에 다른 관측기 좌석을 비워요.
+  // 콜백이 없으면 기존 Y 순서·후보·누적에는 아무 영향이 없어요.
+  let reserveCandidates = null;
   /*
    * HUD 후보 feed는 복호 세션의 표현 사본만 소유한다. ID는 layoutId나 배열 위치가 아니라
    * 이 런타임 안에서 단조 증가하는 세대 번호다. reset/bind 뒤에도 되감지 않는다.
@@ -408,6 +395,7 @@ export function createR2ScanRuntime(options = {}) {
     stats.leadingLayoutId = '';
     // 후보가 사라지는 것도 «HUD 가 다시 그려야 할 사건» 이다 — 세대를 올린다.
     bumpBindRevision();
+    if (reserveCandidates) reserveCandidates(0);
   }
 
   /**
@@ -511,6 +499,7 @@ export function createR2ScanRuntime(options = {}) {
      * 두 층이 다른 규칙을 쓰면 「런타임이 묶은 세대」와 「HUD 가 그린 세대」가 조용히 갈린다.
      */
     stats.format.formatWire = resolveFormatWire(choice.formatWire);
+    const prepared = [];
     for (const layoutId of ids.slice(0, maxCandidates)) {
       let layout;
       try {
@@ -520,27 +509,40 @@ export function createR2ScanRuntime(options = {}) {
       } catch {
         continue;
       }
-      const decodeInto = createRsDecodeInto({
-        codewordCapacity: Math.floor(layout.cellCount / 3),
-      });
-      candidates.push({
-        layoutId,
-        n,
-        formatWire: stats.format.formatWire,
-        alive: true,
-        session: createR2Session({
-          layout,
-          // 🔴 어댑터를 **공유**한다 — 검출·락이 후보 수만큼 중복되지 않는다.
-          detectInto: adapters.detectInto,
-          alignInto: adapters.alignInto,
-          decodeInto,
-        }),
-      });
-      const candidate = candidates[candidates.length - 1];
-      candidate.hudHardDrops = candidate.session.counters ? candidate.session.counters.hardDrops : 0;
-      candidate.hudNeedsGeneration = false;
-      newHudGeneration(candidate);
+      prepared.push({ layoutId, layout });
     }
+    // 예약은 전체 집합에 한 번만 한다. 생성 중 예외가 나도 반쪽 후보를 공개하지 않아요.
+    if (reserveCandidates) reserveCandidates(prepared.length);
+    const nextCandidates = [];
+    try {
+      for (const { layoutId, layout } of prepared) {
+        const decodeInto = createRsDecodeInto({
+          codewordCapacity: Math.floor(layout.cellCount / 3),
+        });
+        nextCandidates.push({
+          layoutId,
+          n,
+          formatWire: stats.format.formatWire,
+          alive: true,
+          session: createR2Session({
+            layout,
+            // 🔴 어댑터를 **공유**한다 — 검출·락이 후보 수만큼 중복되지 않는다.
+            detectInto: adapters.detectInto,
+            alignInto: adapters.alignInto,
+            decodeInto,
+          }),
+        });
+        const candidate = nextCandidates[nextCandidates.length - 1];
+        candidate.hudHardDrops = candidate.session.counters ? candidate.session.counters.hardDrops : 0;
+        candidate.hudNeedsGeneration = false;
+        newHudGeneration(candidate);
+      }
+    } catch (error) {
+      for (const candidate of nextCandidates) candidate.session.reset();
+      if (reserveCandidates) reserveCandidates(0);
+      throw error;
+    }
+    candidates = nextCandidates;
     boundN = n;
     boundFormatKey = formatKeyOf(choice);
     seatCandidates();
@@ -595,8 +597,9 @@ export function createR2ScanRuntime(options = {}) {
   /** 선반의 후보를 되살린다 — 얼린 시점의 누적기 그대로. 지금 후보는 은퇴시킨다. */
   function restoreShelf() {
     const kept = shelf;
-    shelf = null;
     disposeCandidates();
+    if (reserveCandidates) reserveCandidates(kept.candidates.length);
+    shelf = null;
     candidates = kept.candidates;
     boundN = kept.n;
     boundFormatKey = kept.formatKey;
@@ -918,9 +921,18 @@ export function createR2ScanRuntime(options = {}) {
     lastAt = -Infinity;
   }
 
+  function setCandidateReservation(callback) {
+    if (callback !== null && typeof callback !== 'function') {
+      throw new TypeError('후보 예약은 함수 또는 null이어야 해요');
+    }
+    if (callback) callback(candidates.length);
+    reserveCandidates = callback;
+  }
+
   return {
     get enabled() { return enabled; },
     setEnabled,
+    setCandidateReservation,
     pushFrame,
     reset,
     invalidateLock,

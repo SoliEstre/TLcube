@@ -41,6 +41,81 @@ import { listLumaSequences, readLumaDump } from '../tools/read-luma.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
+test('합산 K 예약 — 새 Y 세션을 만들기 전에 가용 좌석을 확보한다', () => {
+  const runtime = createR2ScanRuntime({ enabled: true, intervalMs: 0,
+    adapters: lifecycleAdapters(25, 'v0tr') });
+  const failure = new Error('예약 거부');
+  runtime.setCandidateReservation((count) => { if (count > 0) throw failure; });
+  const field = { width: 4, height: 4, data: new Float32Array(16) };
+  assert.throws(() => runtime.pushFrame(field, 0), (error) => error === failure);
+  let currentCount = -1;
+  runtime.setCandidateReservation((count) => { currentCount = count; });
+  assert.equal(currentCount, 0, '예약 실패 뒤에도 새 세션이 남았다 — 생성 후 예약한 것이다');
+  assert.equal(runtime.stats.binds, 0);
+});
+
+test('합산 K 예약 — 새 bind와 선반 복원 모두 먼저 예약하고 Y 증거는 보존한다', () => {
+  const adapters = lifecycleAdapters(25, 'v0tr');
+  const runtime = createR2ScanRuntime({ enabled: true, intervalMs: 0, adapters });
+  const reservations = [];
+  runtime.setCandidateReservation((count) => reservations.push(count));
+  const field = { width: 4, height: 4, data: new Float32Array(16) };
+  runtime.pushFrame(field, 0);
+  const originalCount = runtime.stats.candidateCount;
+  assert.equal(originalCount, finalLayoutIdsForN(25).length);
+  assert.deepEqual(reservations.filter((count) => count > 0),
+    [originalCount], '준비된 후보 전체를 정확히 한 번 예약해야 한다');
+  const originalMap = runtime.view.cellMap;
+  adapters.stats.n = 13; adapters.stats.layoutId = 'v0';
+  runtime.pushFrame(field, 100);
+  adapters.stats.n = 25; adapters.stats.layoutId = 'v0tr';
+  const previous = reservations.length;
+  runtime.pushFrame(field, 200);
+  assert.equal(runtime.stats.candidateCount, originalCount);
+  assert.equal(runtime.view.cellMap, originalMap, '선반 대신 새 세션을 만들었다');
+  assert.deepEqual(reservations.slice(previous), [0, originalCount], '선반 복원을 예약하지 않았다');
+  runtime.reset();
+  assert.equal(reservations.at(-1), 0);
+  assert.throws(() => runtime.setCandidateReservation(1), TypeError);
+  runtime.setCandidateReservation(null);
+});
+
+test('합산 K 예약 — 여러 좌석 거부도 부분 세션을 남기지 않는다', () => {
+  const field = { width: 4, height: 4, data: new Float32Array(16) };
+  const denied = createR2ScanRuntime({ enabled: true, intervalMs: 0,
+    adapters: lifecycleAdapters(25, 'v0tr'), maxCandidates: 3 });
+  denied.setCandidateReservation((count) => { if (count >= 3) throw new Error('세 좌석 거부'); });
+  assert.throws(() => denied.pushFrame(field, 0), /세 좌석 거부/);
+  let countAfterDenied = -1;
+  denied.setCandidateReservation((count) => { countAfterDenied = count; });
+  assert.equal(countAfterDenied, 0, '후속 예약 거부 때 일부 세션이 남았다');
+  assert.equal(denied.stats.candidateCount, 0);
+});
+
+test('합산 K 예약 — 두 번째 세션 생성 예외도 원자적으로 롤백한다', () => {
+  const field = { width: 4, height: 4, data: new Float32Array(16) };
+  const adapters = lifecycleAdapters(25, 'v0tr');
+  const realDetect = adapters.detectInto;
+  let constructing = false, socketsRead = 0;
+  Object.defineProperty(adapters, 'detectInto', { get() {
+    if (constructing && ++socketsRead === 2) throw new Error('두 번째 소켓 실패');
+    return realDetect;
+  }});
+  const runtime = createR2ScanRuntime({ enabled: true, intervalMs: 0, adapters });
+  const reservations = [];
+  runtime.setCandidateReservation((count) => {
+    reservations.push(count);
+    if (count > 0) constructing = true;
+  });
+  assert.throws(() => runtime.pushFrame(field, 0), /두 번째 소켓 실패/);
+  let countAfterFailure = -1;
+  runtime.setCandidateReservation((count) => { countAfterFailure = count; });
+  assert.equal(countAfterFailure, 0, '생성 실패 뒤 부분 세션이 노출됐다');
+  assert.equal(reservations.at(-1), 0, '실패한 예약 좌석을 반환하지 않았다');
+  assert.equal(runtime.stats.candidateCount, 0);
+  assert.equal(runtime.stats.binds, 0);
+});
+
 function firstFrames(name, count, start = 0) {
   const seq = listLumaSequences().find((s) => s.name.split('/').pop() === name);
   if (!seq || !seq.frames.length) return null;

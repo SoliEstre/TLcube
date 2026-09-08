@@ -61,7 +61,7 @@ import {
   hexKey,
   hexLayoutFrom,
   hexRotationHypotheses,
-  scoreSampledOrientation,
+  scoreSampledOrientationPhase,
 } from './orientation-scorer.js';
 
 const FACE_NAMES = Object.freeze(['T', 'L', 'R']);
@@ -306,13 +306,13 @@ function scoreTetradAt(luma, H, cells, sampleOpts, tieEpsilon, scorerOptions) {
     // 판정기로 쓸 때의 게이트라 묶음(≤7셀) 단위에서는 구조적으로 못 서고, 그것을
     // 여기 게이트로 쓰면 절대 톤 마커가 전부 죽는다 — 게이트 «값» 은 어느 것도 바꾸지
     // 않으며 완화도 아니다 (전체 수준 판정은 scoreSampledOrientation 소비자 몫).
-    const scored = scoreSampledOrientation(
+    const scored = scoreSampledOrientationPhase(
       hexLayoutFrom(toneCells),
-      HEX_ROTATION_HYPOTHESES,
+      HEX_ROTATION_HYPOTHESES[0],
       (key) => toneSamples.get(key) || null,
       scorerOptions,
     );
-    agree += scored.phases[0].matches;
+    agree += scored.matches;
   }
   return { agree, sampled };
 }
@@ -404,11 +404,27 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
     // 2단 탐색 — ① 전 배율 × 성긴 오프셋 ② 이긴 배율의 이웃 3개 × 촘촘한 오프셋.
     // 한 번에 (배율 × 촘촘한 오프셋) 전수를 도는 것보다 표본 수가 한 자릿수 적고,
     // 순회 순서가 고정이라 결정성은 그대로다.
-    const evaluate = (scale, offset) => {
+    const shiftedMemo = new Map();
+    const memoNumber = (value) => Object.is(value, -0) ? '-0' : String(value);
+    const shiftedFor = (scale, offset) => {
+      if (!Number.isFinite(scale) || !Number.isFinite(offset.dx) || !Number.isFinite(offset.dy)) {
+        return multiply(
+          translationHomography(offset.dx * cellSize, offset.dy * cellSize),
+          multiply(H, scaleHomography(scale)),
+        );
+      }
+      const key = memoNumber(scale) + '|' + memoNumber(offset.dx) + '|' + memoNumber(offset.dy);
+      const cached = shiftedMemo.get(key);
+      if (cached !== undefined) return cached;
       const shifted = multiply(
         translationHomography(offset.dx * cellSize, offset.dy * cellSize),
         multiply(H, scaleHomography(scale)),
       );
+      shiftedMemo.set(key, shifted);
+      return shifted;
+    };
+    const evaluate = (scale, offset) => {
+      const shifted = shiftedFor(scale, offset);
       const scored = scoreTetradAt(luma, shifted, tetrad.cells, sampleOpts, tieEpsilon, scorerOptions);
       return { ...scored, offset, scale, shifted };
     };

@@ -35,7 +35,7 @@ const rel = (p) => posix(relative(ROOT, p));
 
 // 다리가 오늘 끌어오는 decoder 모듈. **손 목록이 아니라 계약이다.**
 const BRIDGE = 'adapter-locator.js';
-const BRIDGE_ALLOWED = Object.freeze([
+const Y_BRIDGE_ALLOWED = Object.freeze([
   '../decoder/cellsurface-block-detect.js',
   '../decoder/homography.js',
   /*
@@ -53,6 +53,37 @@ const BRIDGE_ALLOWED = Object.freeze([
   '../decoder/locator-format.js',
 ]);
 
+// C 관측 전용 두 번째 다리. Y 목록/소스/호출은 바꾸지 않아요.
+// 80→88 합집합 delta: adapter-c 자체 + centralN7Codec + n7 관측/공유 모듈
+// + v3 커서 + anchor-detect + luma + luminance. grid-sample/format-read는 기존 폐포예요.
+// 2026-09-08 격리 실측 88→101(+13):
+//   r2: bound-candidate-session, c-candidate-runtime, type-expansion-runtime, router, cursor-budget (+5)
+//   decoder: c-body-track, c-photometric-track (+2; 현재 영상 기하 재관측)
+//   decoder: cq-observe, qr-finder-observe, qr-center-geometry (+3; R1 순수 함수 공유)
+//   decoder: c-daehan-observe, cell-finder-detect (+2; 실제 대한 파인더 관측)
+//   decoder: cq-structural-refine (+1; caller opt-in, 전체 셀 구조 점수 cursor)
+// 2026-09-09 격리 실측 101→102(+1): r2/y-layout만 추가예요.
+// 기존 r2-scan-runtime의 buildLayout을 순수 추출해 공용 조립식으로 사용해요.
+// d3160ec 원함수와 registry102 반환/구형미지원10 예외가 정확히 같고,
+// 새 decoder 직접 import 및 금지 모듈 유입은 0개예요.
+// cellsurface-block-detect 직접 사용은 기존 합집합에 있어 delta 0이에요.
+// 기본 Y 소스/직접 다리3개, legacy 상한66은 보존하고 두 다리 밖 decoder import는 금지해요.
+const C_BRIDGE = 'adapter-c.js';
+const C_BRIDGE_ALLOWED = Object.freeze([
+  '../decoder/anchor-detect.js',
+  '../decoder/c-body-track.js',
+  '../decoder/c-daehan-observe.js',
+  '../decoder/cellsurface-block-detect.js',
+  '../decoder/central-beacon-observation-shared.js',
+  '../decoder/central-n7-observe.js',
+  '../decoder/cq-observe.js',
+  '../decoder/cq-structural-refine.js',
+  '../decoder/cs-verified-cursor-v3-prototype.js',
+  '../decoder/format-read.js',
+  '../decoder/grid-sample.js',
+]);
+const BRIDGE_ALLOWED = Object.freeze([...new Set([...Y_BRIDGE_ALLOWED, ...C_BRIDGE_ALLOWED])]);
+
 /*
  * 폐포 «상한». 여태 ③ 은 하한(20)만 재서 「공허 방지」였고, 다리를 늘려 폐포가 두 배가
  * 돼도 아무 자도 안 빨개졌다. 이식 범위 봉쇄가 목적이라면 **위쪽**이 본론이다.
@@ -68,7 +99,7 @@ const LEGACY_CLOSURE_CEILING = 66;
 // 전체 여유 0은 의도다: 새 프로필 파일 1개도 폐포 증가를 검토하는 계기로 삼는다.
 // 다음 프로필 레인은 파일 추가 때 전체 폐포를 재측정하고, 증가 목록·사유와 상한 갱신을
 // 같은 커밋에 담아야 한다. 기존 다리의 여유 5를 전체 프로필 범위에 자동 승계하지 않는다.
-const FULL_CLOSURE_CEILING = 80;
+const FULL_CLOSURE_CEILING = 102;
 
 /**
  * ⚠ **주석을 먼저 벗긴다** (2026-09-06 검토 R3c).
@@ -133,7 +164,7 @@ function jsFilesBelow(root, readDirectory = readdirSync) {
 }
 const R2_FILES = jsFilesBelow(R2_DIR).map((file) => posix(relative(R2_DIR, file)));
 
-test('클린룸 ① — `src/r2/**` 에서 decoder 를 보는 파일은 다리 하나뿐이다', () => {
+test('클린룸 ① — `src/r2/**` 에서 decoder 를 보는 파일은 승인된 Y/C 다리뿐이다', () => {
   // 공허 방지: 훑기가 무너지면 「위반이 없다」가 아니라 「잴 게 없다」가 된다.
   assert.ok(R2_FILES.length >= 8,
     `src/r2 에 파일이 ${R2_FILES.length}개뿐이다 — 훑기가 무너졌다`);
@@ -141,17 +172,21 @@ test('클린룸 ① — `src/r2/**` 에서 decoder 를 보는 파일은 다리 �
   const violations = [];
   for (const name of R2_FILES) {
     const imports = decoderImportsOf(resolve(R2_DIR, name));
-    if (name === BRIDGE) continue;
+    if (name === BRIDGE || name === C_BRIDGE) continue;
     if (imports.length > 0) violations.push(`${name}: ${imports.join(' ')}`);
   }
   assert.deepEqual(violations, [],
     `클린룸이 뚫렸다:\n      ${violations.join('\n      ')}\n`
-    + `    다리는 src/r2/${BRIDGE} 하나다. 다른 파일이 decoder 를 봐야 한다면 `
+    + `    다리는 src/r2/${BRIDGE}와 ${C_BRIDGE}뿐이다. 다른 파일이 decoder 를 봐야 한다면 `
     + '그것은 설계 변경이지 import 한 줄이 아니다 (PM/029B §13.6).');
 });
 
 test('클린룸 ② — 다리가 끌어오는 decoder 모듈은 허용목록과 정확히 같다', () => {
-  const imports = decoderImportsOf(resolve(R2_DIR, BRIDGE));
+  const yImports = decoderImportsOf(resolve(R2_DIR, BRIDGE));
+  const cImports = decoderImportsOf(resolve(R2_DIR, C_BRIDGE));
+  assert.deepEqual(yImports, [...Y_BRIDGE_ALLOWED].sort(), '기존 Y 다리는 바뀌지 않아요');
+  assert.deepEqual(cImports, [...C_BRIDGE_ALLOWED].sort(), 'C 실제 import만 정확하게 승인해요');
+  const imports = [...new Set([...yImports, ...cImports])].sort();
   assert.ok(imports.length > 0, `${BRIDGE} 가 decoder 를 하나도 안 본다 — 정규식이 죽었다`);
   assert.deepEqual(imports, [...BRIDGE_ALLOWED].sort(),
     '다리의 decoder import 가 허용목록과 다르다.\n'
@@ -189,6 +224,7 @@ test('클린룸 ③ — R2 의 의존 폐포에 R1 복호기·인코더가 없�
     'src/decoder/bootstrap.js', // 82파일 폐포의 입구
     'src/decoder/decode-k.js',
     'src/decoder/decode-c.js',
+    'src/decoder/central-beacon-adapt.js', // n7는 순수 관측 모듈만 다리로 열어요
   ]);
   const leaked = FORBIDDEN.filter((f) => names.has(f));
   assert.deepEqual(leaked, [],

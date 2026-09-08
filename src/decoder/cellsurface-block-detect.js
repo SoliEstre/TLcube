@@ -1818,6 +1818,11 @@ function affineCentralN7Homography(center, modulePitch, degrees) {
   ]);
 }
 
+const CENTRAL_N7_REFINE_ROUNDS = Object.freeze([
+  Object.freeze({ offsets: Object.freeze([-0.5, 0, 0.5]), scales: Object.freeze([0.96, 1, 1.04]), angles: Object.freeze([-3, 0, 3]) }),
+  Object.freeze({ offsets: Object.freeze([-0.2, 0, 0.2]), scales: Object.freeze([0.985, 1, 1.015]), angles: Object.freeze([-1, 0, 1]) }),
+]);
+
 function refineCentralN7Seed(luma, seed) {
   if (!seed || !seed.center || !(seed.modulePitch > 0)
     || !Number.isFinite(seed.degrees)) return null;
@@ -1829,11 +1834,7 @@ function refineCentralN7Seed(luma, seed) {
   };
   if (best.score === null) return null;
 
-  const rounds = [
-    { offsets: [-0.5, 0, 0.5], scales: [0.96, 1, 1.04], angles: [-3, 0, 3] },
-    { offsets: [-0.2, 0, 0.2], scales: [0.985, 1, 1.015], angles: [-1, 0, 1] },
-  ];
-  for (const round of rounds) {
+  for (const round of CENTRAL_N7_REFINE_ROUNDS) {
     const base = best;
     for (const oy of round.offsets) {
       for (const ox of round.offsets) {
@@ -1933,6 +1934,210 @@ export function detectCentralN7BlockShapes(luma, seeds = []) {
       shapeCount: shapes.length,
     },
   };
+}
+
+function sameCentralN7Epoch(left, right) {
+  return !!right && left.width === right.width && left.height === right.height
+    && left.generation === right.generation;
+}
+
+function sameCentralN7Frame(left, right) {
+  return sameCentralN7Epoch(left, right)
+    && left.frameId === right.frameId && left.timestamp === right.timestamp;
+}
+
+/**
+ * `detectCentralN7BlockShapes`와 결과가 같은 재개형 프로토타입.
+ * 전역 top-12 선택은 보존하고, 비싼 refinement만 90면 score 한 번씩 나눈다.
+ */
+export function createCentralN7BlockCursor(luma, seeds = [], origin, options = {}) {
+  if (!origin || !(typeof origin.frameId === 'string' || Number.isSafeInteger(origin.frameId))
+    || !Number.isFinite(origin.timestamp) || origin.generation == null
+    || origin.width !== luma?.width || origin.height !== luma?.height
+    || !Number.isInteger(luma?.width) || !Number.isInteger(luma?.height) || luma.width <= 0 || luma.height <= 0
+    || !(luma.data instanceof Float32Array) || luma.data.length !== luma.width * luma.height
+    || (luma.alpha && (!(luma.alpha instanceof Uint8Array) || luma.alpha.length !== luma.data.length))
+    || !Array.isArray(seeds)) {
+    throw new TypeError('완전한 원본 프레임 identity, 픽셀, seed가 필요해요');
+  }
+  const identity = Object.freeze({ frameId: origin.frameId, timestamp: origin.timestamp,
+    width: origin.width, height: origin.height, generation: origin.generation });
+  const timing = typeof options.timing === 'function' ? options.timing : null;
+  const copyAt = performance.now();
+  let snapshot = { width: luma.width, height: luma.height,
+    data: luma.data.slice(), alpha: luma.alpha?.slice() || null };
+  let seedSnapshot = seeds.map((seed) => ({ ...seed,
+    center: seed?.center ? { x: seed.center.x, y: seed.center.y } : seed?.center }));
+  const copyMs = performance.now() - copyAt;
+  const snapshotBytes = snapshot.data.byteLength + (snapshot.alpha?.byteLength || 0);
+  const seedCount = seedSnapshot.length;
+  let snapshotRetainedBytes = seedCount === 0 ? 0 : snapshotBytes;
+  let phase = seedCount === 0 ? 'done' : 'expand';
+  let disposalReason = null, steps = 0, maxUnitMs = copyMs, lastTimestamp = identity.timestamp;
+  let expanded = [], scored = [], refined = [], shapes = [];
+  let index = 0, refineState = null;
+  let result = seedCount === 0
+    ? Object.freeze({ shapes: Object.freeze([]),
+      diagnostics: Object.freeze({ source: 'central-n7-block-locator', seedCount: 0 }) })
+    : null;
+  if (seedCount === 0) { snapshot = null; seedSnapshot = null; }
+
+  function discard(reason = 'invalidateLock') {
+    phase = 'discarded'; disposalReason = reason;
+    snapshotRetainedBytes = 0;
+    snapshot = seedSnapshot = expanded = scored = refined = shapes = refineState = result = null;
+  }
+
+  function finishRefinement() {
+    const state = refineState;
+    refined.push({
+      ...state.seed,
+      n: CENTRAL_N7_SIZE,
+      family: CENTRAL_N7_PATTERN_FAMILY_ID,
+      layoutId: CENTRAL_N7_SCHEMA_ID,
+      center: state.best.center,
+      modulePitch: state.best.modulePitch,
+      degrees: state.best.degrees,
+      score: state.best.score,
+      H: affineCentralN7Homography(state.best.center, state.best.modulePitch, state.best.degrees),
+    });
+    refineState = null;
+    index += 1;
+  }
+
+  function advanceRefinement() {
+    const state = refineState;
+    const round = CENTRAL_N7_REFINE_ROUNDS[state.round];
+    state.angle += 1;
+    if (state.angle < round.angles.length) return;
+    state.angle = 0; state.scale += 1;
+    if (state.scale < round.scales.length) return;
+    state.scale = 0; state.ox += 1;
+    if (state.ox < round.offsets.length) return;
+    state.ox = 0; state.oy += 1;
+    if (state.oy < round.offsets.length) return;
+    state.round += 1;
+    if (state.round === CENTRAL_N7_REFINE_ROUNDS.length) { finishRefinement(); return; }
+    state.oy = 0;
+    state.base = state.best;
+  }
+
+  function resume(current = identity) {
+    if (phase === 'discarded') return { state: phase, reason: disposalReason };
+    if (!sameCentralN7Epoch(identity, current)) {
+      discard('resize-or-generation'); return { state: phase, reason: disposalReason };
+    }
+    if (!(typeof current.frameId === 'string' || Number.isSafeInteger(current.frameId))
+      || !Number.isFinite(current.timestamp) || current.timestamp < lastTimestamp) {
+      discard('invalid-time'); return { state: phase, reason: disposalReason };
+    }
+    lastTimestamp = current.timestamp;
+    if (phase === 'done') {
+      return { state: phase, originFrameId: identity.frameId,
+        ageMs: current.timestamp - identity.timestamp };
+    }
+
+    let unit = phase;
+    const started = performance.now();
+    if (phase === 'expand') {
+      if (index === seedSnapshot.length) { index = 0; phase = 'score'; }
+      else {
+        const seed = seedSnapshot[index++];
+        const radius = Number.isInteger(seed.searchRadiusCells) && seed.searchRadiusCells > 0
+          ? seed.searchRadiusCells : 0;
+        const step = radius > 0 ? 0.5 : 1;
+        for (let oy = -radius; oy <= radius; oy += step) {
+          for (let ox = -radius; ox <= radius; ox += step) {
+            expanded.push({ ...seed, center: {
+              x: seed.center.x + ox * seed.modulePitch,
+              y: seed.center.y + oy * seed.modulePitch,
+            }, searchRadiusCells: 0 });
+          }
+        }
+      }
+    } else if (phase === 'score') {
+      if (index === expanded.length) { index = 0; phase = 'scored-sort'; }
+      else {
+        const seed = expanded[index++];
+        const score = centralN7PatchScore(snapshot, seed.center, seed.modulePitch, seed.degrees);
+        if (score !== null) scored.push({ seed, score });
+      }
+    } else if (phase === 'scored-sort') {
+      scored.sort((left, right) => right.score - left.score
+        || left.seed.modulePitch - right.seed.modulePitch
+        || left.seed.degrees - right.seed.degrees);
+      index = 0; phase = 'refine';
+    } else if (phase === 'refine') {
+      if (index === Math.min(12, scored.length)) { index = 0; phase = 'refined-sort'; }
+      else if (refineState === null) {
+        unit = 'refine-initial-score';
+        const seed = scored[index].seed;
+        const score = centralN7PatchScore(snapshot, seed.center, seed.modulePitch, seed.degrees);
+        if (score === null) index += 1;
+        else refineState = { seed, best: { center: { x: seed.center.x, y: seed.center.y },
+          modulePitch: seed.modulePitch, degrees: seed.degrees, score },
+        base: null, round: 0, oy: 0, ox: 0, scale: 0, angle: 0 };
+        if (refineState) refineState.base = refineState.best;
+      } else {
+        unit = 'refine-candidate-score';
+        const state = refineState;
+        const round = CENTRAL_N7_REFINE_ROUNDS[state.round];
+        const candidate = {
+          center: {
+            x: state.base.center.x + round.offsets[state.ox] * state.base.modulePitch,
+            y: state.base.center.y + round.offsets[state.oy] * state.base.modulePitch,
+          },
+          modulePitch: state.base.modulePitch * round.scales[state.scale],
+          degrees: state.base.degrees + round.angles[state.angle],
+        };
+        const score = centralN7PatchScore(
+          snapshot, candidate.center, candidate.modulePitch, candidate.degrees,
+        );
+        if (score !== null && score > state.best.score) state.best = { ...candidate, score };
+        advanceRefinement();
+      }
+    } else if (phase === 'refined-sort') {
+      refined.sort((left, right) => right.score - left.score
+        || left.modulePitch - right.modulePitch || left.degrees - right.degrees);
+      index = 0; phase = 'shape';
+    } else if (phase === 'shape') {
+      if (index === refined.length) {
+        result = Object.freeze({ shapes: Object.freeze(shapes), diagnostics: Object.freeze({ source: 'central-n7-block-locator', seedCount,
+          expandedSeedCount: expanded.length, scoredSeedCount: scored.length,
+          refinedCount: refined.length, shapeCount: shapes.length }) });
+        phase = 'done';
+        snapshotRetainedBytes = 0;
+        snapshot = seedSnapshot = expanded = scored = refined = shapes = refineState = null;
+      } else {
+        const pose = refined[index++];
+        const shape = shapeFromPose(pose, shapes.length);
+        if (shape) {
+          shape.componentSource = 'central-n7-block-locator';
+          shape.blockLocator.schemaId = CENTRAL_N7_SCHEMA_ID;
+          shape.blockLocator.outerFamily = pose.outerFamily;
+          shape.blockLocator.outerK = pose.outerK;
+          shape.blockLocator.seedCellSize = pose.outerCellSize;
+          shape.blockLocator.modulePitch = pose.modulePitch;
+          shape.blockLocator.rotationDegrees = pose.degrees;
+          shapes.push(shape);
+        }
+      }
+    }
+    const ms = performance.now() - started;
+    steps += 1; maxUnitMs = Math.max(maxUnitMs, ms);
+    if (timing) timing({ stage: `cursor.${unit}`, ms });
+    return { state: phase, unit, ms, originFrameId: identity.frameId,
+      ageMs: current.timestamp - identity.timestamp };
+  }
+
+  return Object.freeze({ resume, discard, reset: () => discard('reset'),
+    takeForFrame(current) {
+      if (!sameCentralN7Epoch(identity, current)) { discard('resize-or-generation'); return null; }
+      return phase === 'done' && sameCentralN7Frame(identity, current) ? result : null;
+    },
+    get status() { return { phase, origin: identity, snapshotBytes, copyMs, seedCount,
+      snapshotRetainedBytes, steps, maxUnitMs, disposalReason }; },
+  });
 }
 
 function pearson(values, expected, count) {
@@ -3993,12 +4198,23 @@ function shapeFromPose(pose, index) {
  * @returns {{shapes: object[], diagnostics: object}}
  */
 export function detectCellSurfaceBlockShapes(luma, options = {}) {
+  // 진단 콜백은 기본 off이며 반환값·검출 옵션에는 섞지 않는다.
+  const timing = typeof options.timing === 'function' ? options.timing : null;
+  let started = timing ? performance.now() : 0;
+  const mark = timing ? (stage) => {
+    timing({ stage: `cs.${stage}`, ms: performance.now() - started });
+    started = performance.now();
+  } : null;
   const cfg = calibration(options);
   const reduced = downsampleLumaForSeed(luma, cfg.searchMaxSide);
+  if (mark) mark('downsample');
   const { width, height } = reduced.luma;
   const globalCut = otsuThreshold(reduced.luma);
+  if (mark) mark('otsu');
   const cores = scanConcentricCores(reduced.luma, globalCut, cfg);
+  if (mark) mark('scan');
   const clusters = clusterCores(cores, cfg);
+  if (mark) mark('cluster');
 
   const verified = [];
   const occupied = [];
@@ -4033,6 +4249,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   verified.sort((left, right) =>
     right.score - left.score || right.count - left.count
     || left.y - right.y || left.x - right.x);
+  if (mark) mark('verify');
 
   // 조기 분기 (2026-08-16 중앙 통일): 공유 K3 중앙 × K5 원거리 코어 쌍으로 앵커드
   // 패밀리를 먼저 세우고, 앵커드 포즈가 선 중앙은 v0 360° 스윕에서 뺀다.
@@ -4090,6 +4307,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       || left.y - right.y || left.x - right.x);
   }
 
+  if (mark) mark('loose-corners');
   // 조기 분기 (2026-08-16 중앙 통일): 공유 K3 중앙 × K5 원거리 코어 쌍으로 앵커드
   // 패밀리를 세운다.
   const {
@@ -4101,6 +4319,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
     // 동반자 게이트 전용 풀 — 잘리지 않은 엄격 코너 전체 (§squareRingUsesFullCornerPool).
     verified.filter((hit) => hit.kind === 'v2r2-corner'),
   );
+  if (mark) mark('anchored-poses');
   // ★ 중앙 불스아이 확증 (과업 3 ③) — 엄격 코너가 3개를 못 채워 사각 링 게이트가
   // 구조적으로 0 이 된 중앙만 구제한다. 엄격 경로가 이미 세운 중앙은 건드리지 않는다.
   const confirmed = cfg.centreBullseyeConfirmedPoses === false
@@ -4125,6 +4344,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       luma, reduced.factor, cfg,
       partialTelemetry,
     );
+  if (mark) mark('confirmed-poses');
   posesV0x.push(...confirmed.posesV0x);
   posesV0w.push(...confirmed.posesV0w);
   posesV0w2.push(...confirmed.posesV0w2);
@@ -4139,6 +4359,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   const posesV0 = assembleV0Poses(
     centres, sweptExclusions, reduced.luma, luma, reduced.factor, cfg, partialTelemetry,
   );
+  if (mark) mark('v0-poses');
   // ⚠ `centres` 를 넘긴다 — 중앙 불스아이 거부권(§centreQrBullseyeVeto)의 입력이다.
   // 이미 검증된 배열이라 이미지 연산은 늘지 않는다.
   const emptyCentreQr = {
@@ -4150,6 +4371,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry, centres,
     );
   const posesV0xq = v0xq.poses;
+  if (mark) mark('v0xq-poses');
   // v0wq — v0xq 와 **같은 코너 히트**를 쓴다. 코너 검증(verifyV0xqCornerCluster)은 한 번만
   // 돌고, 삼중점 탐색도 같은 배열에서 다시 돈다. 즉 편입 비용은 «코너 재탐색» 이 아니라
   // «삼중점당 중앙 게이트 + refinePose 한 벌» 이다 — 벤치가 재는 것이 그 값이다.
@@ -4162,6 +4384,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry, centres,
     );
   const posesV0wq = v0wq.poses;
+  if (mark) mark('v0wq-poses');
   // v0trq — 같은 코너 배열을 쓰되 **슬라이스가 넓다** (§v0trqCornerBudget).
   // v0TR 프레임은 면당 동심 사각이 둘이라 참 코너가 6개 뜨고, 상위 4개가 두 반경으로
   // 섞이면 «내 반경(√129)» 의 삼중점이 구조적으로 못 선다. 넓힌 것은 이 호출부뿐이라
@@ -4173,6 +4396,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       partialTelemetry, centres,
     );
   const posesV0trq = v0trq.poses;
+  if (mark) mark('v0trq-poses');
 
   const shapes = [];
   // 순서 = 셰이프 후보 순서. v0W 는 **v0X 뒤**다 — 라인업 기본이 v0X 인 것과 같은
@@ -4196,6 +4420,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
     }
   }
 
+  if (mark) mark('shape-output');
   return {
     shapes,
     diagnostics: {
@@ -4306,6 +4531,11 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
 
 /** 단위 테스트·진단 전용 내부 노출 — 런타임 경로는 detectCellSurfaceBlockShapes 만 쓴다. */
 export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
+  clusterSearchRadius,
+  clusterAccepts,
+  CLUSTER_BUCKET_PX,
+  calibration,
+  scanLineForCores,
   binarizeSeries,
   makeSeriesScratch,
   registerPatch,

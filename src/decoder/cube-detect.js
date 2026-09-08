@@ -1153,6 +1153,107 @@ function liftPoint(point, factor) {
   };
 }
 
+const RAW_CUBE_SHAPE_SOURCE = Object.freeze({
+  kind: 'observed-contour-y-junction',
+  contour: 'component-boundary',
+  support: 'pixel-seam-evidence',
+  regeneratedFromHomography: false,
+});
+
+function rawCubeShapePoint(point, factor, width, height) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  const lifted = liftPoint(point, factor);
+  if (!Number.isFinite(lifted.x) || !Number.isFinite(lifted.y)
+    || lifted.x < 0 || lifted.y < 0
+    || lifted.x > width - 1 || lifted.y > height - 1) return null;
+  return lifted;
+}
+
+function copyRawCubeShape(shape, factor, width, height) {
+  if (!shape || !Array.isArray(shape.vertices) || shape.vertices.length !== 6
+    || !Array.isArray(shape.seamVertices) || shape.seamVertices.length !== 3) return null;
+  const center = rawCubeShapePoint(shape.center, factor, width, height);
+  const vertices = shape.vertices.map((point) =>
+    rawCubeShapePoint(point, factor, width, height));
+  const seamVertices = shape.seamVertices.map((point) =>
+    rawCubeShapePoint(point, factor, width, height));
+  if (!center || vertices.some((point) => point === null)
+    || seamVertices.some((point) => point === null)
+    || !(Math.abs(polygonArea(vertices)) > EPSILON)) return null;
+  return {
+    componentIndex: shape.componentIndex,
+    componentSource: shape.componentSource,
+    center,
+    vertices,
+    seamParity: shape.seamParity,
+    seamVertices,
+    radius: shape.radius * factor,
+    score: shape.score,
+    maskFill: shape.maskFill,
+    concurrencyResidual: shape.concurrencyResidual,
+  };
+}
+
+/**
+ * 원화소 contour와 Y-junction support에서 직접 얻은 6점 후보만 조기에 반환한다.
+ * n·layout·format·본문 및 H/정규육각 재생성 경로는 이 함수의 호출 그래프에 없다.
+ *
+ * @param {import('./contracts.js').LumaField} luma
+ * @param {{maxCandidates:number, calibration?:object}} options
+ * @returns {{ok:true, source:object, candidates:Array, diagnostics:object}|{ok:false}}
+ * @throws {RangeError} maxCandidates가 기존 component 자원 경계를 벗어난 경우
+ */
+export function detectRawCubeShapes(luma, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'cube-raw-shape',
+      message: error.message,
+    });
+  }
+  const cfg = calibration(options);
+  if (!Number.isInteger(cfg.maximumComponents) || cfg.maximumComponents <= 0) {
+    throw new RangeError('calibration.maximumComponents는 양의 정수여야 한다');
+  }
+  if (!Number.isInteger(options.maxCandidates) || options.maxCandidates <= 0
+    || options.maxCandidates > cfg.maximumComponents) {
+    throw new RangeError(
+      'maxCandidates는 1 이상 calibration.maximumComponents 이하의 정수여야 한다',
+    );
+  }
+
+  const reduced = downsampleLuma(luma, cfg.maxDimension);
+  const measured = shapeCandidates(reduced.luma, cfg);
+  const candidates = [];
+  let validCandidateCount = 0;
+  let invalidCandidateCount = 0;
+  for (const shape of measured.candidates) {
+    const candidate = copyRawCubeShape(
+      shape, reduced.factor, luma.width, luma.height,
+    );
+    if (!candidate) {
+      invalidCandidateCount += 1;
+      continue;
+    }
+    validCandidateCount += 1;
+    if (candidates.length < options.maxCandidates) candidates.push(candidate);
+  }
+  return ok({
+    source: RAW_CUBE_SHAPE_SOURCE,
+    candidates,
+    diagnostics: {
+      stage: 'raw-shape',
+      downsampleFactor: reduced.factor,
+      measuredCandidateCount: measured.candidates.length,
+      validCandidateCount,
+      emittedCandidateCount: candidates.length,
+      invalidCandidateCount,
+      truncated: validCandidateCount > candidates.length,
+    },
+  });
+}
+
 function vertexSetResidual(H, n, observedVertices) {
   const predicted = CORNER_UNIT_OFFSETS.map((corner) =>
     projectPoint(H, { x: corner.x * n, y: corner.y * n }));
@@ -1279,6 +1380,15 @@ export function sampleCubeCell(luma, geometry, i, j, options = {}) {
       cause: 'missing-homography',
     });
   }
+  const hasFaceHs = geometry.faceHs !== undefined;
+  if (hasFaceHs && (!Array.isArray(geometry.faceHs) || geometry.faceHs.length !== 3
+    || geometry.faceHs.some((H) => !(H instanceof Float64Array)
+      || H.length !== 9 || !Array.from(H).every(Number.isFinite)))) {
+    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+      stage: 'cube-cell-sampling',
+      cause: 'invalid-face-homographies',
+    });
+  }
 
   const faces = {};
   for (const face of YFACES) {
@@ -1289,7 +1399,8 @@ export function sampleCubeCell(luma, geometry, i, j, options = {}) {
       { size: 1, originX: 0, originY: 0 },
       options.disc || {},
     );
-    const sampled = sampleProjectedDisc(luma, geometry.H, disc, options);
+    const projectedH = hasFaceHs ? geometry.faceHs[TONE_FACE_INDEX[face]] : geometry.H;
+    const sampled = sampleProjectedDisc(luma, projectedH, disc, options);
     if (!sampled.ok) {
       return fail(sampled.reason, {
         stage: 'cube-cell-sampling',
