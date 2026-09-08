@@ -253,6 +253,7 @@ export function createR2ScanRuntime(options = {}) {
     candidate.hud = {
       id: 'r2-y-' + nextHudCandidateId,
       type: 'Y',
+      geometryMode: 'y-grid',
       n: candidate.n,
       layoutId: candidate.layoutId,
       D: 0,
@@ -798,6 +799,7 @@ export function createR2ScanRuntime(options = {}) {
         text,
         layoutId: candidate.layoutId,
         candidateId: candidate.hud.id,
+        revision: candidate.hud.revision,
         n: boundN,
         correctedCount: correctedHolder.count,
         correctedCells: correctedHolder.cells,
@@ -973,6 +975,7 @@ export function buildR2Hit(stats, parts) {
   };
   // 공급한 호출만 새 식별자를 받는다. 미공급 호출의 기존 exact shape는 그대로다.
   if (typeof parts.candidateId === 'string') hit.candidateId = parts.candidateId;
+  if (Number.isSafeInteger(parts.revision)) hit.revision = parts.revision;
   return hit;
 }
 

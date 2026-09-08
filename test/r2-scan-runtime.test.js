@@ -571,8 +571,12 @@ test('빚3 적중은 자기 세대를 싣는다 — 정정 셀 번호가 «어�
   const shape = buildR2Hit(runtime.stats, {
     text: hit.text, layoutId: hit.layoutId, n: hit.n,
     candidateId: hit.candidateId,
+    revision: hit.revision,
     correctedCount: hit.correctedCount, correctedCells: hit.correctedCells,
   });
+  const winner = runtime.hudCandidates.find(row => row.id === hit.candidateId);
+  assert.ok(winner);
+  assert.equal(hit.revision, winner.revision, '정정은 적중 시점의 후보 snapshot revision을 가리켜요');
   assert.deepEqual(Object.keys(hit).sort(), Object.keys(shape).sort(),
     '실물 적중의 표면이 순수 빌더의 출력과 다르다 — 어느 한쪽이 손으로 조립됐다');
   for (const key of Object.keys(shape)) {
