@@ -495,6 +495,7 @@ test('빚3 적중은 자기 세대를 싣는다 — 정정 셀 번호가 «어�
    */
   const shape = buildR2Hit(runtime.stats, {
     text: hit.text, layoutId: hit.layoutId, n: hit.n,
+    candidateId: hit.candidateId,
     correctedCount: hit.correctedCount, correctedCells: hit.correctedCells,
   });
   assert.deepEqual(Object.keys(hit).sort(), Object.keys(shape).sort(),

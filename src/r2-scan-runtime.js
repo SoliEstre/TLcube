@@ -126,6 +126,13 @@ export function createR2ScanRuntime(options = {}) {
   let adapters = null;
   let candidates = [];
   /*
+   * HUD 후보 feed는 복호 세션의 표현 사본만 소유한다. ID는 layoutId나 배열 위치가 아니라
+   * 이 런타임 안에서 단조 증가하는 세대 번호다. reset/bind 뒤에도 되감지 않는다.
+   */
+  let nextHudCandidateId = 1;
+  const hudCandidateRows = [];
+  let currentLockValid = false;
+  /*
    * 3b — 정정 셀 보관함. DONE 에서만 쓰이고 스크래치는 필요한 만큼만 자란다 (줄어들지 않는다 —
    * 재bind 마다 다시 잡으면 그것도 할당이다). 적중이 돌려주는 것은 이 버퍼의 **뷰**다.
    * 채우는 규칙은 `r2/corrections.js` 의 `correctedCellsForHit` 하나다 — 여기서 다시 적지 않는다
@@ -253,6 +260,113 @@ export function createR2ScanRuntime(options = {}) {
   const retired = {
     hardDrops: 0, coastFrames: 0, decodeAttempts: 0, decodeFailures: 0,
   };
+
+  function newHudGeneration(candidate) {
+    const cellCount = candidate.session.layout.cellCount;
+    candidate.hud = {
+      id: 'r2-y-' + nextHudCandidateId,
+      type: 'Y',
+      n: candidate.n,
+      layoutId: candidate.layoutId,
+      D: 0,
+      indicator: R2_INDICATOR.LOCKED,
+      tracking: false,
+      retained: true,
+      alive: candidate.alive !== false,
+      // 세션 progress 버퍼를 밖으로 직접 내보내지 않는다. 후보 세대가 이 사본을 단독 소유한다.
+      cellMap: new Uint8Array(cellCount),
+      cellCount,
+      H: null,
+      frameWidth: 0,
+      frameHeight: 0,
+      formatWire: candidate.formatWire,
+      revision: 0,
+    };
+    nextHudCandidateId += 1;
+    candidate.hudNeedsGeneration = false;
+  }
+
+  function indicatorTracks(indicator) {
+    return indicator !== R2_INDICATOR.HOLD
+      && indicator !== R2_INDICATOR.DROPPED
+      && indicator !== R2_INDICATOR.SEARCHING
+      && indicator !== R2_INDICATOR.FAILED;
+  }
+
+  function updateHudCandidate(candidate, result, luma) {
+    const hardDrops = candidate.session.counters
+      ? candidate.session.counters.hardDrops : 0;
+    if (hardDrops > candidate.hudHardDrops) {
+      candidate.hudHardDrops = hardDrops;
+      candidate.hudNeedsGeneration = true;
+    }
+    // DROPPED 행은 옛 세대 ID로 한 번 보인다. 재획득/재초기화가 시작되는 순간 새 ID를 준다.
+    if (candidate.hudNeedsGeneration && result.indicator !== R2_INDICATOR.DROPPED) {
+      newHudGeneration(candidate);
+    }
+
+    const row = candidate.hud;
+    const progress = result && result.progress;
+    const sourceMap = progress && progress.cellMap;
+    if (sourceMap && sourceMap.length >= row.cellCount) {
+      if (sourceMap.length === row.cellCount) row.cellMap.set(sourceMap);
+      else for (let i = 0; i < row.cellCount; i += 1) row.cellMap[i] = sourceMap[i];
+    }
+    row.D = progress && Number.isFinite(progress.D) ? progress.D : 0;
+    row.indicator = result.indicator;
+    row.alive = candidate.alive !== false;
+    const freshLock = currentLockValid && Boolean(adapters && adapters.stats && adapters.stats.locked);
+    currentLockValid = freshLock;
+    const freshH = Boolean(adapters && adapters.H && adapters.H.length >= 9);
+    row.tracking = row.alive && freshLock && freshH && indicatorTracks(row.indicator);
+    row.retained = !row.tracking;
+    if (row.tracking) {
+      if (row.H === null) row.H = new Float64Array(9);
+      for (let i = 0; i < 9; i += 1) row.H[i] = adapters.H[i];
+      row.frameWidth = luma.width;
+      row.frameHeight = luma.height;
+    }
+    row.revision += 1;
+  }
+
+  function markActiveHudNotTracking() {
+    for (const candidate of candidates) {
+      if (!candidate.hud || (!candidate.hud.tracking && candidate.hud.retained)) continue;
+      candidate.hud.tracking = false;
+      candidate.hud.retained = true;
+      candidate.hud.revision += 1;
+    }
+  }
+
+  function hudCandidates() {
+    let count = 0;
+    for (const candidate of candidates) {
+      if (candidate.alive === false) continue;
+      const row = candidate.hud;
+      if (!currentLockValid && row.tracking) {
+        row.tracking = false;
+        row.retained = true;
+        row.revision += 1;
+      }
+      hudCandidateRows[count] = row;
+      count += 1;
+    }
+    if (shelf !== null) {
+      for (const candidate of shelf.candidates) {
+        if (candidate.alive === false) continue;
+        const row = candidate.hud;
+        if (row.tracking || !row.retained) {
+          row.tracking = false;
+          row.retained = true;
+          row.revision += 1;
+        }
+        hudCandidateRows[count] = row;
+        count += 1;
+      }
+    }
+    hudCandidateRows.length = count;
+    return hudCandidateRows;
+  }
 
   /** 후보 배열의 세션 카운터를 은퇴분에 더한다 — 「버리는 순간 화면의 수가 0 이 되는」 것을 막는다. */
   function retireCounters(list) {
@@ -411,6 +525,8 @@ export function createR2ScanRuntime(options = {}) {
       });
       candidates.push({
         layoutId,
+        n,
+        formatWire: stats.format.formatWire,
         alive: true,
         session: createR2Session({
           layout,
@@ -420,6 +536,10 @@ export function createR2ScanRuntime(options = {}) {
           decodeInto,
         }),
       });
+      const candidate = candidates[candidates.length - 1];
+      candidate.hudHardDrops = candidate.session.counters ? candidate.session.counters.hardDrops : 0;
+      candidate.hudNeedsGeneration = false;
+      newHudGeneration(candidate);
     }
     boundN = n;
     boundFormatKey = formatKeyOf(choice);
@@ -462,6 +582,11 @@ export function createR2ScanRuntime(options = {}) {
         candidates,
         age: 0,
       };
+      for (const candidate of shelf.candidates) {
+        candidate.hud.tracking = false;
+        candidate.hud.retained = true;
+        candidate.hud.revision += 1;
+      }
       candidates = [];
     }
     bind(n);
@@ -507,10 +632,12 @@ export function createR2ScanRuntime(options = {}) {
      */
     detection.found = 0;
     detection.n = 0;
+    currentLockValid = false;
     const detectAt = performance.now();
     try {
       adapters.detectInto(luma.data, luma.width, luma.height, timestamp, null, detection);
     } catch {
+      markActiveHudNotTracking();
       return null;
     }
     /*
@@ -527,6 +654,7 @@ export function createR2ScanRuntime(options = {}) {
     stats.locked = adapters.stats.locked;
     stats.lockF = adapters.stats.gridLockF;
     stats.layoutIdLocked = adapters.stats.layoutId;
+    currentLockValid = Boolean(detection.found && adapters.stats.locked);
     /*
      * ⓐ + R5 — bind 키는 **n 하나**다. 후보 집합은 `finalLayoutIdsForN(n)` 에서 유도되므로
      * 어댑터가 재락에서 다른 `layoutId` 를 지목해도 **후보 집합은 같고**, 그때 세션을
@@ -589,6 +717,12 @@ export function createR2ScanRuntime(options = {}) {
         result = candidate.session.pushFrame(luma.data, luma.width, luma.height, timestamp, null);
       } catch {
         candidate.alive = false;
+        if (candidate.hud) {
+          candidate.hud.alive = false;
+          candidate.hud.tracking = false;
+          candidate.hud.retained = true;
+          candidate.hud.revision += 1;
+        }
         if (entry) entry.alive = false;
         continue;
       }
@@ -607,7 +741,10 @@ export function createR2ScanRuntime(options = {}) {
         bestIndicator = result.indicator;
         leading = candidate;
       }
-      if (result.indicator !== R2_INDICATOR.DONE) continue;
+      if (result.indicator !== R2_INDICATOR.DONE) {
+        updateHudCandidate(candidate, result, luma);
+        continue;
+      }
       let text = null;
       try {
         text = unframe(Uint8Array.from(result.payload.slice(0, result.payloadLength))).text;
@@ -620,8 +757,12 @@ export function createR2ScanRuntime(options = {}) {
          * `rejectPayload()` 가 `complete` 만 되돌린다 (증거·셀맵·개정은 유지).
          */
         if (typeof candidate.session.rejectPayload === 'function') candidate.session.rejectPayload();
+        // RS의 DONE을 프레이밍이 거부했다. feed에는 scanner가 수용하지 않은 성공을 내보내지 않는다.
+        updateHudCandidate(candidate, candidate.session.result, luma);
         continue;
       }
+      // scanner framing까지 수용된 뒤에만 HUD 행이 DONE이 된다.
+      updateHudCandidate(candidate, result, luma);
       stats.doneLayoutId = candidate.layoutId;
       stats.doneFrame = stats.frames - 1;
       stats.text = text;
@@ -653,6 +794,7 @@ export function createR2ScanRuntime(options = {}) {
       return buildR2Hit(stats, {
         text,
         layoutId: candidate.layoutId,
+        candidateId: candidate.hud.id,
         n: boundN,
         correctedCount: correctedHolder.count,
         correctedCells: correctedHolder.cells,
@@ -707,6 +849,7 @@ export function createR2ScanRuntime(options = {}) {
 
   function reset() {
     if (adapters !== null) adapters.reset();
+    currentLockValid = false;
     disposeAll();
     lastAt = -Infinity;
     stats.frames = 0;
@@ -752,6 +895,8 @@ export function createR2ScanRuntime(options = {}) {
     const cleared = typeof adapters.invalidateLock === 'function'
       ? adapters.invalidateLock() : 0;
     if (cleared) {
+      currentLockValid = false;
+      markActiveHudNotTracking();
       stats.locked = 0;
       stats.lockedN = 0;
       stats.layoutIdLocked = '';
@@ -767,6 +912,7 @@ export function createR2ScanRuntime(options = {}) {
     const flag = next === true;
     if (flag === enabled) return;
     enabled = flag;
+    currentLockValid = false;
     // 켜든 끄든 누적을 버린다 — 전환 전 증거가 전환 후 답에 섞이면 A/B 가 오염된다.
     disposeAll();
     lastAt = -Infinity;
@@ -778,6 +924,7 @@ export function createR2ScanRuntime(options = {}) {
     pushFrame,
     reset,
     invalidateLock,
+    get hudCandidates() { return hudCandidates(); },
     stats,
     view,
   };
@@ -797,11 +944,11 @@ export function createR2ScanRuntime(options = {}) {
  * 여전히 없다 (보고서 §6.1 — 레거시 인코더 미보유).
  *
  * @param {{doneFrame:number, format:{formatWire:number}}} stats 런타임 표면 (읽기만 한다)
- * @param {{text:string, layoutId:string, n:number, correctedCount:number,
+ * @param {{text:string, layoutId:string, candidateId?:string, n:number, correctedCount:number,
  *          correctedCells:ArrayLike<number>}} parts 이 프레임이 만든 값
  */
 export function buildR2Hit(stats, parts) {
-  return {
+  const hit = {
     text: parts.text,
     layoutId: parts.layoutId,
     n: parts.n,
@@ -812,6 +959,9 @@ export function buildR2Hit(stats, parts) {
     // 「다른 세대의 격자에 옛 셀 번호」를 안 찍는다.
     formatWire: stats.format.formatWire,
   };
+  // 공급한 호출만 새 식별자를 받는다. 미공급 호출의 기존 exact shape는 그대로다.
+  if (typeof parts.candidateId === 'string') hit.candidateId = parts.candidateId;
+  return hit;
 }
 
 /**

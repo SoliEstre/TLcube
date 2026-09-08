@@ -19,6 +19,7 @@
  */
 
 import { R2_HUD_CORRECTION_MS } from './r2-hud-model.js';
+import { R2_CANDIDATE_SUCCESS_MS } from './r2-candidate-hud-model.js';
 
 /** 객체가 아니면 빈 객체 — 어떤 입력에도 예외를 내지 않는다. */
 function asObject(value) {
@@ -39,6 +40,8 @@ function asObject(value) {
 export function acceptStopDelayMs(input) {
   const src = asObject(input);
   if (src.engineR2 !== true) return 0;
+  // 후보 HUD의 초록 성공 표시는 정정 유무와 무관하며 기존 유예에 더하지 않아요.
+  if (src.candidateHud === true) return R2_CANDIDATE_SUCCESS_MS;
   const count = Number(src.correctedCount);
   if (!Number.isFinite(count) || count <= 0) return 0;
   const delay = src.delayMs === undefined ? R2_HUD_CORRECTION_MS : Number(src.delayMs);

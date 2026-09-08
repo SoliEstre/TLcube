@@ -48,7 +48,9 @@ const JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
 
 /** `sel {` 로 시작하는 첫 CSS 블록의 본문 (중첩 없는 규칙용). */
 function cssBlock(sel) {
-  const a = HTML.indexOf(sel + ' {');
+  // 복합 선택자의 접미사가 아니라 정확한 단독 선택자를 읽어요.
+  const escaped = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const a = HTML.search(new RegExp('^\\s*' + escaped + ' \\{', 'm'));
   assert.ok(a > 0, sel + ' 블록이 없다');
   return HTML.slice(a, HTML.indexOf('}', a));
 }

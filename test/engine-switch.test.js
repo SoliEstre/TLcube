@@ -222,7 +222,8 @@ test('ⓕ R1 off 모드(②) — R1 게이트가 `if (!r2Runtime.enabled) {` 안
   assert.ok(r2Block.includes('renderGuideDots()'), 'R2 블록이 첫 grab 뒤 가이드 점을 안 그린다 — R2 위치에서 조준 가이드가 사라진다');
   assert.ok(r2Block.includes('noteFrameProcessed()'), 'R2 블록이 fps 줄을 안 올린다 — R2 위치에서 시험판 fps 가 «—» 로 멈춘다');
   assert.ok(!r2Block.includes('noteProductFrame()'), 'R2 블록이 R1 «복호 시도 회계» 를 부른다 — 시도 수의 뜻이 R1 위치와 갈린다');
-  assert.ok(r2Block.includes('yieldForQr ? null : grabVideoFrame('), 'R2 grab 이 QR 유예를 안 본다');
+  assert.ok(r2Block.includes('yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame('),
+    'R2 grab이 QR 감지 또는 수용 뒤 성공 표시 유예를 무시한다');
 });
 
 test('ⓖ 좌 패널 칩 색은 셀맵 색표에서 **유도**된다 — setProperty 인자가 리터럴이 아니라 R2_CELL_COLOR[CELL_MAP_STATE.X], CSS 는 변수만 본다 · setProperty 는 r2Available 게이트 안 (⚠ 철자 자)', () => {

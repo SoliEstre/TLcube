@@ -74,6 +74,7 @@ import {
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import { createR2ScanRuntime, r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
+import { createCandidateHudRenderer } from '/src/r2-candidate-hud-renderer.js';
 import {
   createQrBridge, qrHitToDecodeResult, qrFrameGateOpen, routeQrHits, frameYieldForQr, summarizeQrBridge,
 } from '/src/qr-bridge.js';
@@ -174,7 +175,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-08.02';
+export const SCANNER_BUILD = '2026-09-09.01';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -2175,7 +2176,7 @@ function handleDecodeResult(result, source, session) {
    * R2 출처면 확정 요약(래치)을 결과 카드에 같이 넘긴다 (F8 · 운영자 ⑧).
    * 래치를 결과에 묶는 이유: 옛 R2 DONE 뒤 사진 결과가 뜰 때 남은 래치가 사진 결과의 요약으로 읽히면 안 된다.
    *
-   * ⚠ 요약은 **수용한 이 순간에** 값으로 붙잡는다. 유예를 걸면 아래 클로저가 600 ms 뒤에 도는데,
+   * ⚠ 요약은 **수용한 이 순간에** 값으로 붙잡는다. 아래 클로저는 후보 HUD의 150 ms 유예 뒤에 도는데,
    * 그 사이에 래치를 비우는 입구가 실재한다(엔진 스위치 · 리셋 · 새 세션). 클로저가 `r2Latched` 를
    * **호출 시점에** 읽으면 그 입구 하나가 결과 카드의 «Type/n/DONE/RS 정정 k» 를 통째로 지운다 —
    * 유예를 만든 이유(정정을 보여 준다)와 정확히 반대다. 값으로 붙잡으면 누가 언제 래치를 비우든
@@ -2187,14 +2188,14 @@ function handleDecodeResult(result, source, session) {
   };
   /*
    * 상태줄은 **유예보다 앞**이다. 유예 창의 상태줄은 «읽었다» 여야 한다 — 정정 강조가 «이 셀들을
-   * 고쳤다» 를 그리는 600 ms 동안 문구가 «모으는 중» 이면 두 표면이 서로 다른 말을 한다.
+   * 고쳤다» 를 그리는 유예 동안 문구가 «모으는 중» 이면 두 표면이 서로 다른 말을 한다.
    * 즉시 닫는 갈래도 같은 순서다(`showResult` 는 상태줄을 안 건드리고, `stopCamera` 도 안 건드린다).
    * 유예 중 매 프레임 도는 `syncR2Status()` 는 DONE 위상에서 action='none' 이라 이 문구를 안 덮는다.
    */
   setStatus(t('status.decoded'));
   /*
-   * ⑯(i) 수용 뒤 «닫기» 유예 (운영자 결정 · 실기 4차 2026-09-06). 미루는 조건은 순수 함수가 쥔다:
-   * R2 출처 ∧ 정정 셀이 실재. `r2Correction` 은 «그릴 것이 있다» 래치(수 > 0 ∧ 셀 ≥ 1)라 그 수가 곧
+   * 수용 뒤 «닫기» 유예: 후보 HUD는 정정 유무와 무관하게 성공색을 150 ms 보여 준다.
+   * 종전 정정 전용 fallback도 순수 함수에 보존한다. `r2Correction`의 수는 그릴 정정 셀의 근거이며
    * 조건이다 — 수만 있고 셀 매핑이 없으면 미뤄도 화면에 아무 일이 없고 결과만 늦게 뜬다.
    * 미루는 동안 프레임 루프는 계속 돌아 강조가 매 프레임 옅어진다(그게 이 표면의 전부다), 문은
    * 위에서 닫혀 있고, 만료·리셋·가시성 전환 중 무엇이 오든 stopCamera 가 정확히 한 번 돈다.
@@ -2202,7 +2203,12 @@ function handleDecodeResult(result, source, session) {
   const delayMs = acceptStopDelayMs({
     engineR2: result.source === 'r2',
     correctedCount: r2Correction === null ? 0 : r2Correction.count,
+    candidateHud: result.source === 'r2',
   });
+  if (result.source === 'r2') {
+    r2CandidateHud.accept(r2Latched?.candidateId, nowMs());
+    renderR2CellMap();
+  }
   if (acceptStopGate.arm(delayMs, showAccepted, stopCamera)) return;
   stopCamera();
   showAccepted();
@@ -2304,7 +2310,9 @@ function startFrameLoop(session) {
      */
     if (r2Runtime.enabled) {
       const r2FrameStartedAt = nowMs();
-      const r2Image = yieldForQr ? null : grabVideoFrame(r2FrameStartedAt);
+      // 성공 카드를 그리는 짧은 유예 중에는 무거운 복호를 다시 돌리지 않아요.
+      const r2Image = yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame(r2FrameStartedAt);
+      if (acceptStopGate.isPending()) renderR2CellMap();
       if (r2Image) {
         // R1 대신 (②): 첫 grab 이 곧 레이아웃 실재의 증거 — 안 그리면 조준 가이드가 사라진다.
         if (!firstGrabRendered) {
@@ -2333,6 +2341,7 @@ function startFrameLoop(session) {
               // 먼저 불러 stats 가 비므로, 결과 카드의 확정 요약이 읽을 값은 여기서 잡아 둔다 (ⓡ).
               // leadingId = 이 프레임 좌 패널의 레이아웃 선두 (renderR2Progress 가 바로 위에서 갱신) — DONE 과 다르면 «정정»(⑧).
               r2Latched = {
+                candidateId: hit.candidateId,
                 layoutId: hit.layoutId,
                 n: hit.n,
                 leadingId: r2LeadingId,
@@ -3881,6 +3890,7 @@ function squareSideOf(element, slot) {
 
 /** 꺼짐 / 카메라 없음 — 캔버스 둘을 숨기고 재사영 상태를 되돌린다. */
 function hideR2Hud() {
+  r2CandidateHud.reset();
   // «그릴 근거가 없다» 는 입력 하나로 셋을 다 닫는다 — 규칙은 renderR2CellMap 과 **같은 순수 함수**고,
   // 판정을 `hidden` 으로 옮기는 이음새도 **같은 함수**다 (없는 요소는 그쪽이 건너뛴다).
   applyHudSurfaces(r2HudSurfaces, hudSurfaceVisibility({ hasStream: false }));
@@ -3999,7 +4009,52 @@ function r2HudDebugLine() {
   }, r2Runtime.stats);
 }
 
+// 외곽 12좌석과 겹치던 조작부는 뷰파인더 위, 진단은 기존 스크롤 패널로 옮겨요.
+if (r2Available) {
+  const dock = document.createElement('div');
+  dock.className = 'candidate-control-dock';
+  const engine = document.getElementById('engine-switch');
+  const reset = document.getElementById('scan-reset');
+  if (engine) dock.append(engine);
+  if (reset) dock.append(reset);
+  cameraStage.parentElement.insertBefore(dock, cameraStage);
+  cameraStage.parentElement.classList.add('has-candidate-dock');
+  const debug = document.getElementById('lab-debug-panel');
+  const panels = document.getElementById('scanner-panels');
+  if (debug && panels) panels.append(debug);
+}
+
+const r2CandidateHud = r2Available ? createCandidateHudRenderer({
+  container: document.getElementById('r2-candidate-ring'),
+  overlay: r2HudCanvas,
+  stage: cameraStage,
+  labelFor: (key) => t('r2.state.' + key),
+  paintFor(role, state, tone, corrected) {
+    if (corrected) return { color: R2_HUD_CORRECTION_STYLE.color, alpha: 1 };
+    const key = bucketKey(role, state, true);
+    return R2_HUD_BUCKET_PAINT.get(tone === null ? key : key + R2_HUD_TONE_SEP + tone);
+  },
+}) : Object.freeze({ render() {}, reset() {}, accept() { return false; }, model: null });
+
+function renderCandidateR2CellMap() {
+    r2HudMini.hidden = true;
+    r2CellMapCanvas.hidden = true;
+    const paintStartedAt = nowMs();
+    r2CandidateHud.render(r2Runtime.hudCandidates || [], paintStartedAt, {
+      enabled: r2Runtime.enabled && Boolean(cameraStream),
+      correction: r2Correction && r2Latched ? { ...r2Correction, candidateId: r2Latched.candidateId } : null,
+    });
+    const leader = r2CandidateHud.model.slots.find((slot) => slot?.id === r2CandidateHud.model.leaderId);
+    r2LeadingId = leader?.candidate.layoutId || '';
+    r2Hud.n = leader?.candidate.n || 0;
+    r2Hud.layoutId = r2LeadingId;
+    r2Hud.phase = leader?.status || 'searching';
+    r2Hud.lastMs = nowMs() - paintStartedAt;
+    r2Hud.maxMs = Math.max(r2Hud.maxMs, r2Hud.lastMs);
+}
+
 function renderR2CellMap() {
+  if (r2Available) { renderCandidateR2CellMap(); return; }
   if (!r2CellMapCanvas || !r2HudCanvas || !r2HudMini || !r2Available) return;
   const startedAt = nowMs();
   const view = r2Runtime.view;
