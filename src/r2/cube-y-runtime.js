@@ -103,7 +103,7 @@ export function createCubeYCandidateRuntime(options = {}) {
       layoutId: candidate.layoutId, format: { ...candidate.format }, formatKey: formatKey(candidate.format),
       bound: candidate.bound, scan: candidate.scan.map((point) => ({ ...point })), key: candidate.key,
       faceHs: ownHs(candidate.faceHs), previousField: frame, previousObservation: null,
-      current: null, tracking: candidate.acquisitionTracking ?? null,
+      current: null, tracking: false, trackingDetail: candidate.acquisitionTracking ?? null,
       comparison: candidate.acquisitionComparison ?? null, idleFrames: 0, bestD: 0,
       alive: true, retained: true, retireReason: null, lastResult: null,
       lastAttempts: 0, lastFailures: 0, correctionHolder: { scratch: new Uint16Array(0), count: 0, cells: new Uint16Array(0) } };
@@ -157,7 +157,7 @@ export function createCubeYCandidateRuntime(options = {}) {
   }
   function prepareExisting(node, frame) {
     const tracking = trackCubeYFaces(node.previousField, frame, node.faceHs, options.motion);
-    node.tracking = tracking;
+    node.trackingDetail = tracking;
     if (!tracking.ok || !(tracking.after.ncc >= continuity.minTrackedNcc) || !(tracking.gain > 0)) {
       return 'tracking-unproven';
     }
@@ -177,15 +177,13 @@ export function createCubeYCandidateRuntime(options = {}) {
       frameWidth: lastFrame?.width ?? 0, frameHeight: lastFrame?.height ?? 0,
       D: result?.progress?.D ?? 0, indicator: result?.indicator ?? R2_INDICATOR.SEARCHING,
       cellMap: result?.progress?.cellMap ? new Uint8Array(result.progress.cellMap) : new Uint8Array(node.bound.cellCount),
-      tracking: node.tracking === false ? false : copyTracking(node.tracking), retained: node.retained, alive: node.alive,
+      tracking: node.tracking === true, trackingDetail: copyTracking(node.trackingDetail),
+      retained: node.retained, alive: node.alive,
       continuity: node.comparison ? { ...node.comparison, policy: { ...node.comparison.policy } } : null };
   }
   function copyHud(row) {
     return { ...row, faceHs: ownHs(row.faceHs), cellMap: new Uint8Array(row.cellMap),
-      tracking: row.tracking === false ? false : row.tracking ? { ...row.tracking,
-        before: row.tracking.before ? { ...row.tracking.before } : null,
-        after: row.tracking.after ? { ...row.tracking.after } : null,
-        motion: row.tracking.motion ? Float64Array.from(row.tracking.motion) : null } : null,
+      tracking: row.tracking === true, trackingDetail: copyTracking(row.trackingDetail),
       continuity: row.continuity ? { ...row.continuity, policy: { ...row.continuity.policy } } : null };
   }
   function refreshHud(extra = null) {
@@ -206,6 +204,8 @@ export function createCubeYCandidateRuntime(options = {}) {
     stats.decodeAttempts += node.session.counters.decodeAttempts - beforeAttempts;
     stats.decodeFailures += node.session.counters.decodeFailures - beforeFailures;
     node.lastResult = result; node.revision++;
+    // 실제 current 관측이 valid gate를 지나 세션에 들어간 프레임만 HUD active예요.
+    node.tracking = true; node.retained = false;
     const D = Number.isFinite(result.progress?.D) ? result.progress.D : 0;
     if (D > node.bestD) { node.bestD = D; node.idleFrames = 0; } else node.idleFrames++;
     node.previousField = frame; node.previousObservation = node.current.observation;

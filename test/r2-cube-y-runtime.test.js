@@ -4,6 +4,7 @@ import { snapshotCubeYObservation, compareCubeYObservations } from '../src/r2/cu
 import { createCubeYAcquisition, observeCubeYCandidates } from '../src/r2/cube-y-acquisition.js';
 import { createCubeYCandidateRuntime } from '../src/r2/cube-y-runtime.js';
 import { cubeYFaceTrackingPoints } from '../src/r2/cube-y-motion.js';
+import { createCandidateHudModel } from '../src/r2-candidate-hud-model.js';
 import { encodeY } from '../src/encodeY.js';
 import { buildOrbitMesh } from '../src/y3d-viewer.js';
 import { layoutForCube } from '../src/ygrid.js';
@@ -197,8 +198,15 @@ test('3D Y 런타임은 프레임당 한 번 누적하고 DONE snapshot을 후�
 test('deferFrame과 cap 0은 세션 증거를 만들지 않고 HUD 보존만 개정한다', () => {
   const field = render('https://tl.estre.so/a');
   const runtime = createCubeYCandidateRuntime();
+  const model = createCandidateHudModel();
   runtime.pushFrame(field, 0, { frameId: 0, runDetect: true, maxCandidates: 8, budgetMs: Infinity });
   assert.ok(runtime.stats.candidateCount > 0 && runtime.stats.candidateCount <= 8);
+  assert.ok(runtime.hudCandidates.every((row) => row.tracking === true && row.retained === false),
+    '실제 push/valid gate를 지난 행이 active가 아니다');
+  const liveId = runtime.hudCandidates[0].id;
+  model.update(runtime.hudCandidates, 0);
+  assert.equal(model.slots[0].id, liveId); assert.equal(model.slots[0].status, 'active');
+  assert.equal(model.slots[0].opacity, 1);
   const pushes = runtime.stats.sessionPushes;
   const before = runtime.hudCandidates.map((row) => ({ id: row.id, revision: row.revision }));
   runtime.deferFrame();
@@ -206,13 +214,29 @@ test('deferFrame과 cap 0은 세션 증거를 만들지 않고 HUD 보존만 개
   assert.deepEqual(runtime.hudCandidates.map((row) => ({ id: row.id, revision: row.revision })),
     before.map((row) => ({ ...row, revision: row.revision + 1 })));
   assert.ok(runtime.hudCandidates.every((row) => row.tracking === false && row.retained === true));
+  model.update(runtime.hudCandidates, 1);
+  assert.equal(model.slots[0].id, liveId); assert.equal(model.slots[0].status, 'retained');
+  assert.equal(model.slots[0].opacity, 0.38);
+  runtime.pushFrame(field, 100, { frameId: 1, runDetect: false, maxCandidates: 8, budgetMs: Infinity });
+  const liveRows = runtime.hudCandidates.filter((row) => row.indicator !== 4);
+  assert.ok(liveRows.length > 0 && liveRows.every((row) => row.tracking === true && row.retained === false),
+    'defer 뒤 valid live 표본이 active로 복귀하지 않았다');
+  assert.ok(liveRows.every((row) => row.trackingDetail?.ok === true),
+    'boolean tracking과 상세 광도 추적 증거가 분리되지 않았다');
+  model.update(runtime.hudCandidates, 2);
+  assert.equal(model.slots[0].id, liveId); assert.equal(model.slots[0].status, 'active');
+  assert.equal(model.slots[0].opacity, 1);
+  runtime.reset();
+  runtime.pushFrame(field, 0, { frameId: 'cap-origin', runDetect: true,
+    maxCandidates: 8, budgetMs: Infinity });
+  const capPushes = runtime.stats.sessionPushes;
   runtime.setCapacity(0);
   assert.equal(runtime.stats.candidateCount, 0);
   assert.equal(runtime.hudCandidates.length, 0, '직접 capacity 축소 뒤 retired HUD 행이 남았다');
-  runtime.pushFrame(field, 100, { frameId: 1, runDetect: true, maxCandidates: 0, budgetMs: Infinity });
+  runtime.pushFrame(field, 200, { frameId: 2, runDetect: true, maxCandidates: 0, budgetMs: Infinity });
   assert.equal(runtime.stats.candidateCount, 0);
-  assert.equal(runtime.stats.sessionPushes, pushes);
-  runtime.pushFrame(field, 200, { frameId: 2, runDetect: true, maxCandidates: 8, budgetMs: Infinity });
+  assert.equal(runtime.stats.sessionPushes, capPushes);
+  runtime.pushFrame(field, 300, { frameId: 3, runDetect: true, maxCandidates: 8, budgetMs: Infinity });
   assert.ok(runtime.stats.candidateCount > 0 && runtime.stats.candidateCount <= 8,
     'setCapacity(0)이 뒤 프레임의 새 8좌석을 영구 잠갔다');
 });
