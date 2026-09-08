@@ -3,9 +3,7 @@ import { createCubeYAcquisition } from './cube-y-acquisition.js';
 import { trackCubeYFaces } from './cube-y-motion.js';
 import { snapshotCubeYObservation, compareCubeYObservations,
   DEFAULT_CUBE_Y_CONTINUITY } from './cube-y-identity.js';
-import { measureFaceGridConfidence } from '../decoder/cube-face-confidence.js';
-import { sampleUnitFaceHsInto } from '../decoder/cube-face-geometry.js';
-import { readFormatFromLocator } from '../decoder/locator-format.js';
+import { measureFaceGridConfidence, sampleUnitFaceHsInto, readFormatFromLocator } from './adapter-cube-y.js';
 import { LINEUP_NS, GRID_LOCK_GATE_F, GRID_LOCK_PEAK_F, A3_FAMILY_Y } from './adapter-locator.js';
 import { DEFAULT_R2_PARAMS, Q15_ONE } from './params.js';
 import { createR2Session, R2_INDICATOR, R2_SESSION_STATUS } from './session.js';

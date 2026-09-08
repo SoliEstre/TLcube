@@ -1,5 +1,5 @@
 /** unit-face H 세 면을 직전→현재 광도 추적으로 함께 옮겨요. */
-import { multiply3, trackPhotometric } from '../decoder/c-photometric-track.js';
+import { multiply3, trackPhotometric } from './adapter-cube-y.js';
 
 const SQRT3_HALF = Math.sqrt(3) / 2;
 const EI_X = Object.freeze([SQRT3_HALF, -SQRT3_HALF, 0]);

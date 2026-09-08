@@ -1,8 +1,6 @@
 /** 3D Y 외곽 관측을 budget 사이에서 재개 가능한 unit-face H + CRC 후보로 bind해요. */
-import { detectSeedlessBgLinefitCandidates } from '../decoder/cube-silhouette-observe.js';
-import { iterateCubeFaceGeometry, sampleUnitFaceHsInto } from '../decoder/cube-face-geometry.js';
-import { measureFaceGridConfidence } from '../decoder/cube-face-confidence.js';
-import { readFormatFromLocator } from '../decoder/locator-format.js';
+import { detectSeedlessBgLinefitCandidates, iterateCubeFaceGeometry, sampleUnitFaceHsInto,
+  measureFaceGridConfidence, readFormatFromLocator } from './adapter-cube-y.js';
 import { finalLayoutIdsForN, dataCellsInScanOrderCellSurfaceFinal } from '../cellSurfaceFinal.js';
 import { LINEUP_NS, GRID_LOCK_GATE_F } from './adapter-locator.js';
 import { DEFAULT_R2_PARAMS } from './params.js';
