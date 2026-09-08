@@ -151,9 +151,9 @@ function failure(direction, method, reason, residual) {
 
 /**
  * @param {Array<{x:number,y:number}>} rawVertices 원화소 외곽점 6개
- * @returns {Array<object>} 항상 D6×2 = 24개. 실패 가지도 ok:false로 보존한다.
+ * @returns {Generator<object>} 항상 D6×2 = 24개를 기존 순서로 낸다.
  */
-export function enumerateCubeFaceGeometry(rawVertices) {
+export function* iterateCubeFaceGeometry(rawVertices) {
   if (!validVertices(rawVertices)) {
     throw new TypeError('유한한 외곽점 6개가 필요하다');
   }
@@ -177,36 +177,35 @@ export function enumerateCubeFaceGeometry(rawVertices) {
     }
   }
 
-  const output = [];
   for (const direction of directions) {
     let pose;
     try {
       pose = fitUnitPose(direction.sil6);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      output.push(failure(direction, 'pose-faceH', reason, null));
-      output.push(failure(direction, 'sil3-nearpoint', reason, null));
+      yield failure(direction, 'pose-faceH', reason, null);
+      yield failure(direction, 'sil3-nearpoint', reason, null);
       continue;
     }
     if (!pose || !pose.params || !pose.residual) {
       const reason = pose && pose.reason ? String(pose.reason) : 'unit-pose-failed';
-      output.push(failure(direction, 'pose-faceH', reason, pose && pose.residual));
-      output.push(failure(direction, 'sil3-nearpoint', reason, pose && pose.residual));
+      yield failure(direction, 'pose-faceH', reason, pose && pose.residual);
+      yield failure(direction, 'sil3-nearpoint', reason, pose && pose.residual);
       continue;
     }
     const residual = { ...pose.residual };
     const near = unitProjector(pose.params)({ x: 0, y: 0, z: 0 });
-    const methods = [
-      ['pose-faceH', poseFaceHs(pose.params)],
-      ['sil3-nearpoint', silhouetteFaceHs(direction.sil6, near)],
-    ];
-    for (const [method, candidateHs] of methods) {
+    for (const method of ['pose-faceH', 'sil3-nearpoint']) {
+      // 한 next()가 한 mode만 계산한다. 기존 배열 API는 아래에서 이 generator를 끝까지 소비해요.
+      const candidateHs = method === 'pose-faceH'
+        ? poseFaceHs(pose.params)
+        : silhouetteFaceHs(direction.sil6, near);
       const faceHs = ownFiniteHomographies(candidateHs);
       if (!faceHs) {
-        output.push(failure(direction, method, 'degenerate-or-nonfinite-face-H', residual));
+        yield failure(direction, method, 'degenerate-or-nonfinite-face-H', residual);
         continue;
       }
-      output.push({
+      yield {
         ok: true,
         direction: {
           id: direction.id,
@@ -218,10 +217,14 @@ export function enumerateCubeFaceGeometry(rawVertices) {
         faceHs,
         unitPoseResidual: { ...residual },
         reason: null,
-      });
+      };
     }
   }
-  return output;
+}
+
+/** 기존 동기 소비자의 배열·순서·소유권 계약을 그대로 보존해요. */
+export function enumerateCubeFaceGeometry(rawVertices) {
+  return Array.from(iterateCubeFaceGeometry(rawVertices));
 }
 
 function lumaScaleOf(data) {

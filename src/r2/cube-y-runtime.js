@@ -1,5 +1,5 @@
 /** 3D Y 후보별 unit-face H, 관측 연속성, 실제 R2/RS를 묶는 선택적 런타임이에요. */
-import { observeCubeYCandidates } from './cube-y-acquisition.js';
+import { createCubeYAcquisition } from './cube-y-acquisition.js';
 import { trackCubeYFaces } from './cube-y-motion.js';
 import { snapshotCubeYObservation, compareCubeYObservations,
   DEFAULT_CUBE_Y_CONTINUITY } from './cube-y-identity.js';
@@ -41,14 +41,17 @@ export function createCubeYCandidateRuntime(options = {}) {
   const continuity = { ...DEFAULT_CUBE_Y_CONTINUITY, ...(options.continuity ?? {}) };
   const maxIdleFrames = Number.isSafeInteger(options.maxIdleFrames) && options.maxIdleFrames > 0
     ? options.maxIdleFrames : 60;
-  let nodes = [], capacity = 0, generation = 0, nextId = 1, frameOrdinal = 0;
+  let nodes = [], capacity = 0, generation = 0, acquisitionEpoch = 0, nextId = 1, frameOrdinal = 0;
   let lastFrame = null, accepted = null;
+  const acquisition = createCubeYAcquisition();
   const stats = { frames: 0, detectCalls: 0, observations: 0, binds: 0, retired: 0,
     capacitySkips: 0, candidateCount: 0, progressD: 0, indicator: R2_INDICATOR.SEARCHING,
     decodeAttempts: 0, decodeFailures: 0, done: 0, deferredFrames: 0, sessionPushes: 0,
     lastDetectMs: 0, maxDetectMs: 0, detectBudgetOverrunMs: 0,
     lastTrackingMs: 0, maxTrackingMs: 0, lastSessionMs: 0, maxSessionMs: 0,
     lastRsMs: 0, maxRsMs: 0,
+    acquisitionRebases: 0, acquisitionRebaseRejects: 0,
+    acquisitionPhase: 'idle', maxAcquisitionUnitMs: 0, maxAcquisitionUnitKind: null,
     lastError: null };
   let hudCandidates = [];
 
@@ -63,20 +66,24 @@ export function createCubeYCandidateRuntime(options = {}) {
   }
   function reset() {
     clearNodes('reset');
-    generation++; frameOrdinal = 0; lastFrame = null; accepted = null; hudCandidates = [];
+    generation++; frameOrdinal = 0; lastFrame = null; accepted = null; hudCandidates = []; acquisition.reset();
     Object.assign(stats, { frames: 0, detectCalls: 0, observations: 0, binds: 0, retired: 0,
       capacitySkips: 0, candidateCount: 0, progressD: 0, indicator: R2_INDICATOR.SEARCHING,
       decodeAttempts: 0, decodeFailures: 0, done: 0, deferredFrames: 0, sessionPushes: 0,
       lastDetectMs: 0, maxDetectMs: 0, detectBudgetOverrunMs: 0,
       lastTrackingMs: 0, maxTrackingMs: 0, lastSessionMs: 0, maxSessionMs: 0,
       lastRsMs: 0, maxRsMs: 0,
+      acquisitionRebases: 0, acquisitionRebaseRejects: 0,
+      acquisitionPhase: 'idle', maxAcquisitionUnitMs: 0, maxAcquisitionUnitKind: null,
       lastError: null });
   }
   function setCapacity(value) {
     if (!Number.isSafeInteger(value) || value < 0) throw new TypeError('현재 3D Y 후보 가용 수가 필요해요');
     capacity = value;
+    if (capacity === 0) acquisition.reset();
     while (nodes.length > capacity) retire(nodes.pop(), 'combined-capacity');
     stats.candidateCount = nodes.length;
+    refreshHud();
   }
   function measure(node, field, faceHs) {
     const faceLuma = new Uint8Array(node.scan.length * 3);
@@ -89,21 +96,22 @@ export function createCubeYCandidateRuntime(options = {}) {
     const read = readFormatFromLocator(field,
       { H: perCellHs[0], faceHs: perCellHs, n: node.n, layoutId: node.layoutId });
     const formatValid = Boolean(read.ok)
-      && read.candidates.some((format) => formatKey(format) === node.formatKey);
+      && read.candidates.some((format) => formatKey(format) === (node.formatKey ?? formatKey(node.format)));
     return { faceLuma, visibleCells, visibleCount, F, margin, formatValid,
-      observation: snapshotCubeYObservation(faceLuma, visibleCells) };
+      observation: snapshotCubeYObservation(faceLuma, visibleCells, node.format.tones) };
   }
   function makeNode(candidate, frame) {
     const node = { id: `y3d-${generation}-${nextId++}`, revision: 0, n: candidate.n,
       layoutId: candidate.layoutId, format: { ...candidate.format }, formatKey: formatKey(candidate.format),
       bound: candidate.bound, scan: candidate.scan.map((point) => ({ ...point })), key: candidate.key,
       faceHs: ownHs(candidate.faceHs), previousField: frame, previousObservation: null,
-      current: null, tracking: null, comparison: null, idleFrames: 0, bestD: 0,
+      current: null, tracking: candidate.acquisitionTracking ?? null,
+      comparison: candidate.acquisitionComparison ?? null, idleFrames: 0, bestD: 0,
       alive: true, retained: true, retireReason: null, lastResult: null,
       lastAttempts: 0, lastFailures: 0, correctionHolder: { scratch: new Uint16Array(0), count: 0, cells: new Uint16Array(0) } };
     const first = { faceLuma: new Uint8Array(candidate.faceLuma), visibleCells: new Uint8Array(candidate.visibleCells),
       visibleCount: candidate.visibleCount, F: candidate.F, margin: candidate.margin, formatValid: true };
-    first.observation = snapshotCubeYObservation(first.faceLuma, first.visibleCells);
+    first.observation = snapshotCubeYObservation(first.faceLuma, first.visibleCells, node.format.tones);
     node.previousObservation = first.observation;
     node.current = first;
     const decode = createRsDecodeInto({ codewordCapacity: Math.floor(node.bound.cellCount / 3) });
@@ -131,6 +139,23 @@ export function createCubeYCandidateRuntime(options = {}) {
         return R2_SESSION_STATUS.OK;
       }, decodeInto: decode });
     return node;
+  }
+  function rebaseAcquiredCandidate(candidate, origin, frame, frameId, timestamp) {
+    if (origin.frameId === frameId && origin.timestamp === timestamp) return candidate;
+    stats.acquisitionRebases++;
+    const tracking = trackCubeYFaces(origin.field, frame, candidate.faceHs, options.motion);
+    if (!tracking.ok || !(tracking.after.ncc >= continuity.minTrackedNcc) || !(tracking.gain > 0)) {
+      stats.acquisitionRebaseRejects++; return null;
+    }
+    const current = measure(candidate, frame, tracking.faceHs);
+    if (!(current.F >= GRID_LOCK_GATE_F) || !(current.margin >= DEFAULT_R2_PARAMS.lockMarginMin)
+      || !current.formatValid) { stats.acquisitionRebaseRejects++; return null; }
+    const previous = snapshotCubeYObservation(candidate.faceLuma, candidate.visibleCells, candidate.format.tones);
+    const comparison = compareCubeYObservations(previous, current.observation, continuity);
+    if (!comparison.ok) { stats.acquisitionRebaseRejects++; return null; }
+    return { ...candidate, faceHs: ownHs(tracking.faceHs), faceLuma: current.faceLuma,
+      visibleCells: current.visibleCells, visibleCount: current.visibleCount, F: current.F, margin: current.margin,
+      acquisitionTracking: tracking, acquisitionComparison: comparison };
   }
   function prepareExisting(node, frame) {
     const tracking = trackCubeYFaces(node.previousField, frame, node.faceHs, options.motion);
@@ -188,13 +213,14 @@ export function createCubeYCandidateRuntime(options = {}) {
     node.previousField = frame; node.previousObservation = node.current.observation;
     return result;
   }
-  function acceptHit(node, result) {
+  function decodeHit(node, result) {
     let text;
     try { text = unframe(result.payload.subarray(0, result.payloadLength)).text; }
     catch { node.session.rejectPayload(); return null; }
     correctedCellsForHit(result, node.bound, node.correctionHolder);
     const snapshot = ownHud(node, result);
-    snapshot.alive = false; snapshot.retained = true;
+    // 세션은 바로 retire되지만 DONE 표시사본은 수용 surface에서 살아 있어요.
+    snapshot.alive = true; snapshot.retained = true;
     const hit = { candidateId: node.id, revision: node.revision, text,
       profile: 'Y', n: node.n, layoutId: node.layoutId, formatWire: node.format.formatWireVersion,
       correctedCount: node.correctionHolder.count,
@@ -203,10 +229,8 @@ export function createCubeYCandidateRuntime(options = {}) {
         decodeAttempts: node.session.counters.decodeAttempts,
         decodeFailures: node.session.counters.decodeFailures,
         decodeMs: node.session.frameMs.decode } };
-    accepted = { hit: { ...hit, correctedCells: new Uint16Array(hit.correctedCells),
-      cells: new Uint8Array(hit.cells), actualRS: { ...hit.actualRS } }, snapshot };
-    stats.done++;
-    return hit;
+    hit.hudSnapshot = copyHud(snapshot);
+    return { hit, snapshot };
   }
   function pushFrame(input, timestamp, { frameId = timestamp, runDetect = false,
     maxCandidates = capacity, budgetMs = Infinity } = {}) {
@@ -239,11 +263,21 @@ export function createCubeYCandidateRuntime(options = {}) {
       stats.detectCalls++;
       const detectAt = performance.now();
       try {
-        const found = observeCubeYCandidates(frame, { maxCandidates: capacity });
-        stats.observations += found.observed;
-        for (const candidate of found.candidates) {
-          if (nodes.length >= capacity) { stats.capacitySkips++; break; }
-          nodes.push(makeNode(candidate, frame)); stats.binds++;
+        if (!acquisition.active) acquisition.start(frame, { frameId, timestamp,
+          epoch: `${generation}-${++acquisitionEpoch}` });
+        const resumed = acquisition.resume({ maxAdditionalMs: budgetMs, maxWorkUnits: options.maxAcquisitionWorkUnits ?? Infinity });
+        stats.acquisitionPhase = resumed.phase;
+        stats.maxAcquisitionUnitMs = resumed.maxUnitMs;
+        stats.maxAcquisitionUnitKind = resumed.maxUnitKind;
+        if (resumed.complete) {
+          const found = acquisition.takeCompleted({ maxCandidates: capacity });
+          stats.acquisitionPhase = 'idle'; stats.observations += found.observed;
+          for (const originCandidate of found.candidates) {
+            if (nodes.length >= capacity) { stats.capacitySkips++; break; }
+            const candidate = rebaseAcquiredCandidate(originCandidate, found.origin, frame, frameId, timestamp);
+            if (!candidate) continue;
+            nodes.push(makeNode(candidate, frame)); stats.binds++;
+          }
         }
       } catch (error) { stats.lastError = `detect: ${error.message}`; }
       stats.lastDetectMs = performance.now() - detectAt;
@@ -259,9 +293,16 @@ export function createCubeYCandidateRuntime(options = {}) {
       const D = Number.isFinite(result.progress?.D) ? result.progress.D : 0;
       if (!leading || D > leading.D) leading = { D, result, node };
       if (result.indicator === R2_INDICATOR.DONE) {
-        const currentHit = acceptHit(node, result);
-        if (currentHit && !hit) { hit = currentHit; acceptedHud = accepted.snapshot; }
-        retire(node, currentHit ? 'done-consumed' : 'unframe-rejected');
+        const decoded = decodeHit(node, result);
+        if (decoded && !hit && !accepted) {
+          hit = decoded.hit;
+          accepted = { hit: { ...hit, correctedCells: new Uint16Array(hit.correctedCells),
+            cells: new Uint8Array(hit.cells), actualRS: { ...hit.actualRS },
+            hudSnapshot: copyHud(hit.hudSnapshot) }, snapshot: copyHud(decoded.snapshot) };
+          acceptedHud = accepted.snapshot;
+          stats.done++;
+        }
+        retire(node, decoded ? 'done-consumed' : 'unframe-rejected');
       } else if (node.idleFrames >= maxIdleFrames) retire(node, 'no-progress');
       else survivors.push(node);
     }
