@@ -267,7 +267,7 @@ export function centralN7CenterPriorSeeds(luma, verifiedCoreHits = []) {
   const shrink = centralBeaconGeometry().shrink;
   const tables = [
     ['hex', UNIT_OUTER_SUPPORT],
-    // Type C — payload family 는 hex(비컨=표면 포맷 사본, PM/027 §5.3 안 ①)라 seed
+    // Type C — payload family 는 hex(비컨은 표면 포맷 사본)라 seed
     // 도 hex 로 라벨한다. k(14/16/18/20)가 legacy hex(6..12)와 겹치지 않아 병기 안전.
     ['hex', UNIT_C_OUTER_SUPPORT],
     ['tri', UNIT_TRI_OUTER_SUPPORT],
