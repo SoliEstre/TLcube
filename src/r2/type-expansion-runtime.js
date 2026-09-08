@@ -60,8 +60,10 @@ export function createR2TypeExpansionRuntime({ yRuntime, cRuntime, cubeYRuntime 
       while (cTarget + cubeTarget > available) {
         if (cubeTarget > cTarget) cubeTarget--; else cTarget--;
       }
-      cubeYRuntime.setCapacity(cubeTarget);
-      c.setCapacity(cTarget);
+      // 후보 0개가 '획득 중인 cursor도 없다'는 뜻은 아니에요. 여유가 있는데
+      // setCapacity(0)을 반복하면 아직 bind 전인 획득을 매 프레임 취소해 버려요.
+      if (cubeTarget < cubeCount() || available === 0) cubeYRuntime.setCapacity(cubeTarget);
+      if (cTarget < c.stats.candidateCount || available === 0) c.setCapacity(cTarget);
     } else c.setCapacity(available);
   }
   function reset() {

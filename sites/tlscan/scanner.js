@@ -73,7 +73,8 @@ import {
   typeCGuideRingPositions,
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
-import { createR2ScanRuntime, r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
+import { r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
+import { createScannerR2Runtime, r2ExpansionDebugLine } from '/src/r2-expansion-engine.js';
 import { candidateDisplayState } from '/src/r2-candidate-display.js';
 import { createCandidateHudRenderer } from '/src/r2-candidate-hud-renderer.js';
 import {
@@ -346,7 +347,8 @@ try {
     window.localStorage.getItem(ENGINE_STORAGE_KEY_LEGACY),
   );
 } catch { /* 저장소 접근 불가는 스캔을 막지 않는다 — 기본 켬 */ }
-const r2Runtime = createR2ScanRuntime({ enabled: r2Available && r2Wanted });
+const r2Expanded = isLabPath();
+const r2Runtime = createScannerR2Runtime({ enabled: r2Available && r2Wanted, trial: r2Expanded });
 /*
  * 일반 QR 브리지 (PM/029B §2 ①단계 · §26). 브라우저 BarcodeDetector 에 위임 — 의존성 0,
  * 능력은 실행 시 판정(Android Chrome 가용, Firefox·Windows 데스크톱 불가). R2 토글 아래에서만
@@ -1027,7 +1029,7 @@ function refreshScanGuideCopy() {
   // 범위 안내는 R2 토글을 따른다 (운영자 요구 ②, 2026-09-04). data-i18n 도 같이 바꿔야
   // 언어 전환의 전수 재적용이 되돌리지 않는다. `t()` 는 리터럴 두 번 — 삼항을 안에 넣으면
   // scanner-i18n 의 «사전에 없는 키» 자가 못 본다. R1 위치면 문구가 옛 것으로 환원된다.
-  const scopeKey = scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported);
+  const scopeKey = scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported, r2Expanded);
   scanGuideScope.setAttribute('data-i18n', scopeKey);
   // 카드는 위치마다 한 장 (운영자 관측 2026-09-06 — R2 위치에서 조준 + 범위가 겹쳐 «두 카드»).
   // 어느 장이 보이는지는 여기서 정하지 않는다 — `guideCardVisibility` 가 값으로 잠근다(사본 금지).
@@ -1035,7 +1037,9 @@ function refreshScanGuideCopy() {
   const cards = guideCardVisibility(r2Runtime.enabled);
   scanGuideDetail.hidden = !cards.detail;
   scanGuideScope.hidden = !cards.scope;
-  if (scopeKey === 'guide.scope.r2qr') scanGuideScope.textContent = t('guide.scope.r2qr');
+  if (scopeKey === 'guide.scope.r2expandedQr') scanGuideScope.textContent = t('guide.scope.r2expandedQr');
+  else if (scopeKey === 'guide.scope.r2expanded') scanGuideScope.textContent = t('guide.scope.r2expanded');
+  else if (scopeKey === 'guide.scope.r2qr') scanGuideScope.textContent = t('guide.scope.r2qr');
   else if (scopeKey === 'guide.scope.r2') scanGuideScope.textContent = t('guide.scope.r2');
   else scanGuideScope.textContent = t('guide.tlcubeOnly');
 }
@@ -4005,7 +4009,7 @@ function appendR2HudOutline(path, buffer) {
  */
 function r2HudDebugLine() {
   if (!r2Available) return '';
-  return r2HudDebugLineOf({
+  const base = r2HudDebugLineOf({
     phase: r2Hud.phase,
     lastMs: r2Hud.lastMs,
     maxMs: r2Hud.maxMs,
@@ -4021,6 +4025,8 @@ function r2HudDebugLine() {
      */
     corrected: r2Latched && Number.isInteger(r2Latched.correctedCount) ? r2Latched.correctedCount : 0,
   }, r2Runtime.stats);
+  const expansion = r2ExpansionDebugLine(r2Runtime.expansionStats);
+  return expansion ? base + '\n' + expansion : base;
 }
 
 // 외곽 12좌석과 겹치던 조작부는 뷰파인더 위, 진단은 기존 스크롤 패널로 옮겨요.

@@ -143,3 +143,15 @@ test('한 서비스 DONE 뒤 나머지는 같은 프레임의 실행과 HUD defe
   assert.equal(f.cube.deferred, 0);
   assert.equal(f.runtime.expansionStats.cubeYDeferredFrames, 0);
 });
+
+test('bind 후보가 아직0이어도 여유가 있는 획득 cursor를 용량0으로 취소하지 않아요', () => {
+  const f = fixtures();
+  f.runtime.pushFrame(field, 0); f.runtime.pushFrame(field, 100);
+  assert.equal(f.c.capacityCalls.includes(0), false);
+  assert.equal(f.cube.capacityCalls.includes(0), false);
+  assert.equal(f.c.calls.length, 2); assert.equal(f.cube.calls.length, 2);
+  const full = fixtures({ yCounts: [8] });
+  full.runtime.pushFrame(field, 0);
+  assert.ok(full.c.capacityCalls.includes(0));
+  assert.ok(full.cube.capacityCalls.includes(0));
+});
