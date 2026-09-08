@@ -54,12 +54,16 @@ test('여러 프레임에 걸친 실제 획득은 원본을 보존하고 현재 
   const adapter=createCAdapters({budget:{detectMs:32},maxHypotheses:8,tracking:{minNcc:.96}});
   const output={};let timestamp=0,moved=false,row=null;
   for(;timestamp<1000;timestamp++){
-    if(adapter.stats.resumeCursor?.phase==='hypotheses')moved=true;
+    if(timestamp===1)moved=true;
     adapter.detectInto(moved?target:field,field.width,field.height,timestamp,{frameId:timestamp},output);
     if(output.found&&output.format.layoutId==='C0'){row={...output};break;}
   }
   assert.ok(moved);assert.ok(row,'실제 커서가 이동 뒤 현재 H를 발행해야 해요');
   assert.equal(row.observation.originFrameId,0);assert.ok(row.observation.ageFrames>0);
+  assert.equal(adapter.stats.acquisitionCheckpointUses,1);
+  const fieldBytes=field.data.byteLength+(field.alpha?.byteLength??0);
+  assert.ok(adapter.stats.acquisitionCheckpointBytes>=fieldBytes);
+  assert.equal(adapter.stats.acquisitionCheckpointRetainedBytes,fieldBytes);
   assert.ok(adapter.stats.acquisitionTrackingMs>0);assert.ok(adapter.stats.acquisitionTrackingRetainedBytes>0);
   const candidate=adapter.bindCandidate(row.observation,row.format);assert.ok(candidate);
   const current=alignCandidate(candidate,target,timestamp);assert.equal(current.output.gatePassed,1);

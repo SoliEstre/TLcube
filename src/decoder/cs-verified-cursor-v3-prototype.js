@@ -30,13 +30,15 @@ export const SORT_CURSOR_PROTOTYPE_INTERNALS = Object.freeze({ stableSortSteps }
 
 // v3 실험: v2와 같은 군집 문장 중 안정 정렬만 재개 가능한 병합 정렬로 대체한다.
 const { clusterSearchRadius, clusterAccepts, CLUSTER_BUCKET_PX, compareClusters } = I;
-function* clusterSteps(candidates, cfg, sortMoveChunk) {
+function* clusterSteps(candidates, cfg, sortMoveChunk, workChunk) {
   const byKind = new Map();
+  let work = 0;
   for (const candidate of candidates) {
     if (!byKind.has(candidate.kind)) byKind.set(candidate.kind, []);
     byKind.get(candidate.kind).push(candidate);
-    yield 'cluster-partition';
+    if (++work === workChunk) { work = 0; yield 'cluster-partition-batch'; }
   }
+  if (work) { work = 0; yield 'cluster-partition-batch'; }
   const clusters = [];
   for (const kind of ['k5', 'k3']) {
     const list = byKind.get(kind) || [];
@@ -89,7 +91,7 @@ function* clusterSteps(candidates, cfg, sortMoveChunk) {
           }
           home.bucketKey = place(bestIndex, home.sumX / home.count, home.sumY / home.count);
         }
-        yield 'cluster-candidate';
+        if (++work === workChunk) { work = 0; yield 'cluster-candidate-batch'; }
         continue;
       }
       home = { kind, count: 0, sumX: 0, sumY: 0, sumU: 0, bucketKey: 0 };
@@ -99,19 +101,22 @@ function* clusterSteps(candidates, cfg, sortMoveChunk) {
       home.sumX += candidate.x;
       home.sumY += candidate.y;
       home.sumU += candidate.u;
-      yield 'cluster-candidate';
+      if (++work === workChunk) { work = 0; yield 'cluster-candidate-batch'; }
     }
+    if (work) { work = 0; yield 'cluster-candidate-batch'; }
     for (const cluster of kindClusters) {
-      yield 'cluster-output';
-      if (cluster.count < cfg.minimumClusterSupport) continue;
-      clusters.push({
-        kind,
-        count: cluster.count,
-        x: cluster.sumX / cluster.count,
-        y: cluster.sumY / cluster.count,
-        u: cluster.sumU / cluster.count,
-      });
+      if (cluster.count >= cfg.minimumClusterSupport) {
+        clusters.push({
+          kind,
+          count: cluster.count,
+          x: cluster.sumX / cluster.count,
+          y: cluster.sumY / cluster.count,
+          u: cluster.sumU / cluster.count,
+        });
+      }
+      if (++work === workChunk) { work = 0; yield 'cluster-output-batch'; }
     }
+    if (work) { work = 0; yield 'cluster-output-batch'; }
   }
   yield* stableSortSteps(clusters, compareClusters(cfg), sortMoveChunk);
   yield 'cluster-sort-result';
@@ -141,6 +146,12 @@ export function createVerifiedCursorPrototypeV3(luma, origin, options = {}) {
   const timing = typeof options.timing === 'function' ? options.timing : null;
   const sortMoveChunk = options.sortMoveChunk ?? 128;
   if (!Number.isSafeInteger(sortMoveChunk) || sortMoveChunk < 1) throw new TypeError('sortMoveChunk는 양의 정수여야 해요');
+  // raw core 하나마다 yield하면 실물 f0에서 같은 군집 문장을 40만 회 넘게 잘게 쪼갠다.
+  // 의미·순서는 그대로 두고 고정 개수만 한 원자 작업으로 묶는다. 시간 예산은 호출자가 계속 쥔다.
+  const clusterWorkChunk = options.clusterWorkChunk ?? 128;
+  if (!Number.isSafeInteger(clusterWorkChunk) || clusterWorkChunk < 1) {
+    throw new TypeError('clusterWorkChunk는 양의 정수여야 해요');
+  }
   const copyAt = performance.now();
   let snapshot = { width: luma.width, height: luma.height, data: luma.data.slice(), alpha: luma.alpha?.slice() || null };
   const copyMs = performance.now() - copyAt;
@@ -172,7 +183,10 @@ export function createVerifiedCursorPrototypeV3(luma, origin, options = {}) {
       scratch = I.makeSeriesScratch(Math.max(reduced.luma.width, reduced.luma.height)); phase = 'scan-line';
     } else if (phase === 'scan-line') {
       const next = scan.next();
-      if (next.done) { phase = 'cluster'; scan = scratch = null; clustering = clusterSteps(cores, cfg, sortMoveChunk); }
+      if (next.done) {
+        phase = 'cluster'; scan = scratch = null;
+        clustering = clusterSteps(cores, cfg, sortMoveChunk, clusterWorkChunk);
+      }
       else I.scanLineForCores(reduced.luma, ...next.value, cut, scratch, cfg, cores);
     } else if (phase === 'cluster') {
       const step = clustering.next();
@@ -214,6 +228,9 @@ export function createVerifiedCursorPrototypeV3(luma, origin, options = {}) {
       if (!sameEpoch(identity, current)) { discard('resize-or-generation'); return null; }
       return phase === 'done' && sameFrame(identity, current) ? result : null;
     },
-    get status() { return { phase, origin: identity, snapshotBytes, copyMs, steps, maxUnitMs, disposalReason }; },
+    get status() {
+      return { phase, origin: identity, snapshotBytes, copyMs, steps, maxUnitMs,
+        sortMoveChunk, clusterWorkChunk, disposalReason };
+    },
   });
 }

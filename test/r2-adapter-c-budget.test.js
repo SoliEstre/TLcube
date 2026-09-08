@@ -52,6 +52,35 @@ test('0 예산은 snapshot을 만들되 cursor resume을 시작하지 않는다'
   });
 });
 
+test('공유 0 예산은 새 snapshot도 만들지 않고 다음 프레임에 그대로 시작한다', () => {
+  withTickingPerformance(1, () => {
+    const adapter = createCAdapters({ budget: { detectMs: 14 } });
+    callDetect(adapter, blankField(), 0, {}, 0, { budgetMs: 0 });
+    assert.equal(adapter.stats.snapshotCopies, 0);
+    assert.equal(adapter.stats.resumeCursor, null);
+    assert.equal(adapter.stats.budgetHits, 0);
+    callDetect(adapter, blankField(), 1, {}, 1, { budgetMs: 14 });
+    assert.ok(adapter.stats.snapshotCopies > 0);
+    assert.ok(adapter.stats.resumeCursor.steps > 0);
+  });
+});
+
+test('공유 예산은 기존 개별 예산의 상한을 넘기지 않고 잘못된 값은 거부한다', () => {
+  withTickingPerformance(1, () => {
+    const adapter = createCAdapters({ budget: { detectMs: 14 } });
+    callDetect(adapter, blankField(), 0, {}, 0, { budgetMs: 7 });
+    assert.equal(adapter.stats.resumeCursor.steps, 1);
+  });
+  const unlimited = createCAdapters({ budget: { detectMs: 14 } });
+  callDetect(unlimited, blankField(), 0, {}, 0, { budgetMs: Infinity });
+  assert.ok(unlimited.stats.resumeCursor.steps > 0);
+  for (const budgetMs of [-1, NaN, '5']) {
+    const adapter = createCAdapters({ budget: { detectMs: 14 } });
+    assert.throws(() => callDetect(adapter, blankField(), 0, {}, 0, { budgetMs }), TypeError);
+    assert.equal(adapter.stats.snapshotCopies, 0);
+  }
+});
+
 test('남은 예산보다 긴 원자 하나 뒤 즉시 멈추고 초과·원자 최대를 기록한다', () => {
   withTickingPerformance(1, () => {
     const adapter = createCAdapters({ budget: { detectMs: 7 } });

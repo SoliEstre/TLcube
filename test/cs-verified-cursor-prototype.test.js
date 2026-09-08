@@ -109,6 +109,18 @@ test('v3도 원본/alpha 교체와 현재 프레임 보류·세대 폐기를 보
   assert.equal(invalidTimingCalls,0);
 });
 
+test('v3 군집 작업 묶음은 결과를 보존하면서 raw-core 단위 호출 수를 줄인다',()=>{
+  const l=make(),m=identity(l);
+  const fine=createVerifiedCursorPrototypeV3(l,m,{clusterWorkChunk:1});finish(fine,m);
+  const batched=createVerifiedCursorPrototypeV3(l,m,{clusterWorkChunk:128});finish(batched,m);
+  const fineOut=fine.takeForFrame(m),batchedOut=batched.takeForFrame(m);
+  assert.deepEqual(batchedOut,fineOut);
+  assert.ok(batched.status.steps<fine.status.steps,
+    `묶은 커서 ${batched.status.steps}가 1건 커서 ${fine.status.steps}보다 작아야 해요`);
+  assert.equal(batched.status.clusterWorkChunk,128);
+  assert.throws(()=>createVerifiedCursorPrototypeV3(l,m,{clusterWorkChunk:0}),TypeError);
+});
+
 test('종료·폐기는 실제 클로저의 스냅샷·파생 캐시 참조를 해제한다',async()=>{
   // cleanup 문장의 철자를 읽지 않아요. Node Inspector로 다음 resume 진입 시
   // 살아 있는 lexical 슬롯을 관측해요. 중단 조건은 항상 false라 실행을 멈추지 않아요.

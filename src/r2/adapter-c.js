@@ -31,6 +31,8 @@ const contradiction = reason => Object.freeze({ kind: 'contradiction', reason })
 const equalFrame = (a, b) => !!a && !!b && a.frameId === b.frameId && a.timestamp === b.timestamp;
 const validH = H => H instanceof Float64Array && H.length === 9 && H.every(Number.isFinite);
 const byte = value => Math.max(0, Math.min(255, Math.round(value * 255)));
+const copyField = field => ({ width: field.width, height: field.height,
+  data: field.data.slice(), alpha: field.alpha?.slice() ?? null });
 
 /** v1의 mask는 CRC로 읽힌 와이어의 고정 속성이에요. unknown에 mask를 주입하지 않아요. */
 export function readFormatC(field, H, k, hint = null) {
@@ -146,6 +148,8 @@ export function createCAdapters(options = {}) {
     trackingMs: 0, trackingCopyMs: 0, trackingSnapshotBytes: 0, trackingRetainedBytes: 0,
     trackingObservations: 0, trackingRejects: 0, acquisitionTrackingMs: 0,
     acquisitionTrackingCopyMs: 0, acquisitionTrackingRetainedBytes: 0, acquisitionTrackingRejects: 0,
+    acquisitionCheckpointCopyMs: 0, acquisitionCheckpointBytes: 0,
+    acquisitionCheckpointRetainedBytes: 0, acquisitionCheckpointUses: 0,
     cqRefineQueued: 0, cqRefineCompleted: 0, cqRefineEvaluations: 0, cqRefineMs: 0,
     cqRefineCopyMs: 0, cqRefineSnapshotBytes: 0, cqRefineRetainedBytes: 0,
     maxUnitMs: 0, maxUnit: null, lastUnit: null, lastHypothesesTried: 0,
@@ -188,7 +192,8 @@ export function createCAdapters(options = {}) {
     for (const own of observationRecords) invalidateObservation(own, reason);
     observationRecords.clear();
     generation++; lastOutput = null; lastDetectionFrame = null;
-    stats.snapshotRetainedBytes = 0; stats.resumeCursor = null; stats.scanComplete = false;
+    stats.snapshotRetainedBytes = 0; stats.acquisitionCheckpointRetainedBytes = 0;
+    stats.resumeCursor = null; stats.scanComplete = false;
     stats.discarded++;
     clearObserved();
   }
@@ -233,7 +238,17 @@ export function createCAdapters(options = {}) {
     stats.scanComplete = false;
     job = { snapshot, origin, cursor, phase: includeN7 ? 'cursor' : 'extra', tasks: [], index: 0,
       extraIndex: 0, extraIterator: null, refinements: [], refineIndex: 0, refineCursor: null,
-      outputs: [], replay: 0, bytes };
+      outputs: [], replay: 0, bytes, checkpoint: null };
+  }
+  function captureAcquisitionCheckpoint(field) {
+    if (!tracking || !job || samePixels(field, job.snapshot)) return;
+    const at = performance.now(), snapshot = copyField(field), copyMs = performance.now() - at;
+    const bytes = snapshot.data.byteLength + (snapshot.alpha?.byteLength ?? 0);
+    job.checkpoint = { field: snapshot, current: Object.freeze({ ...frame, generation }), bytes };
+    stats.snapshotCopyMs += copyMs; stats.snapshotBytes += bytes; stats.snapshotCopies++;
+    stats.acquisitionCheckpointCopyMs += copyMs; stats.acquisitionCheckpointBytes += bytes;
+    stats.acquisitionCheckpointRetainedBytes = bytes;
+    recordMaxUnit(copyMs, 'acquisition-checkpoint-copy');
   }
   function currentVerified(field, snapshot) {
     const at = performance.now(), pass = samePixels(field, snapshot);
@@ -245,7 +260,17 @@ export function createCAdapters(options = {}) {
       stats.acquisitionTrackingRetainedBytes -= own.trackerBytes;
       own.tracker.discard(reason); own.tracker = null; own.trackerBytes = 0;
     }
-    own.invalidated = reason; own.snapshot = null; own.finder = null; own.H = null; own.notch = null;
+    own.invalidated = reason; own.snapshot = null; own.checkpoint = null;
+    own.finder = null; own.H = null; own.notch = null;
+  }
+  function observeAcquisitionTracker(own, field, current) {
+    const copyBefore = own.tracker.stats.copyMs, trackBefore = own.tracker.stats.trackMs;
+    const proof = own.tracker.observe(field, current);
+    stats.acquisitionTrackingCopyMs += own.tracker.stats.copyMs - copyBefore;
+    stats.acquisitionTrackingMs += own.tracker.stats.trackMs - trackBefore;
+    stats.acquisitionTrackingRetainedBytes += own.tracker.stats.snapshotBytes - own.trackerBytes;
+    own.trackerBytes = own.tracker.stats.snapshotBytes;
+    return proof;
   }
   function verifyObservation(own, field) {
     if (!own || own.invalidated || own.generation !== generation) return false;
@@ -257,12 +282,16 @@ export function createCAdapters(options = {}) {
       stats.acquisitionTrackingCopyMs += own.tracker.stats.copyMs;
       stats.acquisitionTrackingRetainedBytes += own.trackerBytes;
     }
-    const copyBefore = own.tracker.stats.copyMs, trackBefore = own.tracker.stats.trackMs;
-    const proof = own.tracker.observe(field, { ...frame, generation });
-    stats.acquisitionTrackingCopyMs += own.tracker.stats.copyMs - copyBefore;
-    stats.acquisitionTrackingMs += own.tracker.stats.trackMs - trackBefore;
-    stats.acquisitionTrackingRetainedBytes += own.tracker.stats.snapshotBytes - own.trackerBytes;
-    own.trackerBytes = own.tracker.stats.snapshotBytes;
+    if (own.checkpoint) {
+      const bridge = observeAcquisitionTracker(own, own.checkpoint.field, own.checkpoint.current);
+      own.checkpoint = null;
+      if (!bridge.ok) {
+        stats.acquisitionTrackingRejects++; invalidateObservation(own, bridge.reason); return false;
+      }
+      if (!bridge.samePixels) { own.H = bridge.H; own.revision++; }
+      stats.acquisitionCheckpointUses++;
+    }
+    const proof = observeAcquisitionTracker(own, field, { ...frame, generation });
     if (!proof.ok) {
       stats.acquisitionTrackingRejects++; invalidateObservation(own, proof.reason); return false;
     }
@@ -314,6 +343,7 @@ export function createCAdapters(options = {}) {
     const own = { H, k: task.k, finder: task.finder ?? null, orientation: task.orientation ?? task.finder?.orientation ?? 0, notch, format, layoutHint,
       sourceKind: task.sourceKind, sourceIdentity: `c-acquisition-${generation}`,
       generation, origin: job.origin, snapshot: job.snapshot, revision: job.outputs.length + 1,
+      checkpoint: job.checkpoint,
       tracker: null, trackerBytes: 0, invalidated: null };
     if (!verifyObservation(own, field)) {
       invalidateObservation(own, 'acquisition-unproven');
@@ -331,6 +361,12 @@ export function createCAdapters(options = {}) {
   function detectInto(luma, width, height, timestamp, pose, output) {
     const started = performance.now();
     const field = beginFrame(luma, width, height, timestamp, pose);
+    const sharedBudgetMs = pose?.budgetMs;
+    if (sharedBudgetMs !== undefined && (typeof sharedBudgetMs !== 'number'
+      || Number.isNaN(sharedBudgetMs) || sharedBudgetMs < 0)) {
+      throw new TypeError('공유 C 관측 예산은 0 이상 또는 Infinity여야 해요');
+    }
+    const frameDetectMs = sharedBudgetMs === undefined ? detectMs : Math.min(detectMs, sharedBudgetMs);
     resetOutput(output);
     if (equalFrame(lastDetectionFrame, frame)) {
       if (lastOutput?.found && !verifyObservation(observations.get(lastOutput.observation), field)) {
@@ -342,21 +378,24 @@ export function createCAdapters(options = {}) {
     }
     lastDetectionFrame = { ...frame }; stats.cTries++; clearObserved();
     const beforeHypotheses = stats.hypothesesTried, beforeAnchors = stats.anchorSearches;
-    let cursorBatchMeasured = false;
+    let cursorBatchMeasured = false, budgetWorkStarted = false;
     try {
+      // 공유 스케줄러가 좌석을 주지 않은 프레임은 snapshot도 만들지 않고 기존 작업도 그대로 둬요.
+      if (sharedBudgetMs === 0) return;
+      budgetWorkStarted = true;
       if (!job) { createJob(field); job.origin = Object.freeze({ ...job.origin, ordinal: frameOrdinal }); }
       stats.lastUnit = job.phase;
       if (job.phase === 'cursor') {
         const current = { ...frame, generation };
         let progress;
-        if (detectMs === Infinity) {
+        if (frameDetectMs === Infinity) {
           progress = job.cursor.resume(current);
           recordMaxUnit(progress.ms, progress.unit);
         } else {
           cursorBatchMeasured = true;
           const spentMs = performance.now() - started;
           const batch = resumeCursorWithinBudget(job.cursor, current, {
-            budgetMs: Math.max(0, detectMs - spentMs),
+            budgetMs: Math.max(0, frameDetectMs - spentMs),
             now: () => performance.now(),
           });
           progress = batch.lastProgress ?? { state: batch.state };
@@ -370,10 +409,11 @@ export function createCAdapters(options = {}) {
           job.verified = result?.verified ?? [];
           stats.coreCandidates = result?.coreCandidates ?? 0; stats.clusterCount = result?.clusterCount ?? 0;
           stats.shapeCount = job.verified.length; job.phase = 'n7';
-          stats.snapshotRetainedBytes = job.bytes;
+          captureAcquisitionCheckpoint(field);
+          stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0);
         }
       } else if (job.phase === 'n7') {
-        if (detectMs === Infinity) {
+        if (frameDetectMs === Infinity) {
           const finders = centralN7Finders(job.snapshot, job.verified).filter(f => f.centralN7.family === 'hex');
           for (const finder of finders) for (const k of TYPE_C_RADII) {
             job.tasks.push({ kind: 'evaluate', H: finder.H, k, finder, sourceKind: 'c-central-n7-seed' });
@@ -391,7 +431,8 @@ export function createCAdapters(options = {}) {
           stats.snapshotCopyMs += job.n7Cursor.status.copyMs;
           stats.snapshotBytes += job.n7Cursor.status.snapshotBytes;
           stats.snapshotCopies++;
-          stats.snapshotRetainedBytes = job.bytes + job.n7Cursor.status.snapshotRetainedBytes;
+          stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0)
+            + job.n7Cursor.status.snapshotRetainedBytes;
           recordMaxUnit(job.n7Cursor.status.copyMs, 'n7-cursor-snapshot-copy');
           job.phase = 'n7-cursor';
         }
@@ -400,7 +441,7 @@ export function createCAdapters(options = {}) {
         const current = { ...frame, generation };
         const spentMs = performance.now() - started;
         const batch = resumeCursorWithinBudget(job.n7Cursor, current, {
-          budgetMs: Math.max(0, detectMs - spentMs),
+          budgetMs: Math.max(0, frameDetectMs - spentMs),
           now: () => performance.now(),
         });
         const progress = batch.lastProgress ?? { state: batch.state };
@@ -411,11 +452,12 @@ export function createCAdapters(options = {}) {
           stats.n7MaxUnit = batch.maxStepUnit;
         }
         recordMaxUnit(batch.maxStepMs, batch.maxStepUnit);
-        stats.snapshotRetainedBytes = job.bytes + job.n7Cursor.status.snapshotRetainedBytes;
+        stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0)
+          + job.n7Cursor.status.snapshotRetainedBytes;
         if (progress.state === 'done') {
           const result = job.n7Cursor.takeForFrame(job.n7Cursor.status.origin);
           job.n7Shapes = result?.shapes ?? [];
-          stats.snapshotRetainedBytes = job.bytes;
+          stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0);
           job.phase = 'n7-finalize';
         }
       } else if (job.phase === 'n7-finalize') {
@@ -442,7 +484,7 @@ export function createCAdapters(options = {}) {
             const observation = observeTask(task, field);
             if (observation) { publish(observation, output); break; }
           }
-          if (performance.now() - started > detectMs) break;
+          if (performance.now() - started > frameDetectMs) break;
         }
         if (job && job.index === job.tasks.length) {
           if (extraSources.length) job.phase = 'extra'; else finishGeometrySources();
@@ -459,7 +501,7 @@ export function createCAdapters(options = {}) {
             const observation = observeTask(next.value, field);
             if (observation) { publish(observation, output); break; }
           }
-          if (performance.now() - started > detectMs) break;
+          if (performance.now() - started > frameDetectMs) break;
         }
         if (job && job.extraIndex === extraSources.length) finishGeometrySources();
       } else if (job.phase === 'cq-refine') {
@@ -473,13 +515,13 @@ export function createCAdapters(options = {}) {
           recordMaxUnit(job.refineCursor.status.copyMs, 'cq-refine-snapshot-copy');
         }
         const beforeEvaluations = job.refineCursor.status.evaluations, refineAt = performance.now();
-        if (detectMs === Infinity) {
+        if (frameDetectMs === Infinity) {
           const progress = job.refineCursor.resume({ ...frame, generation });
           recordMaxUnit(progress.ms, progress.unit);
         } else {
           cursorBatchMeasured = true;
           const batch = resumeCursorWithinBudget(job.refineCursor, { ...frame, generation }, {
-            budgetMs: Math.max(0, detectMs - (performance.now() - started)), now: () => performance.now() });
+            budgetMs: Math.max(0, frameDetectMs - (performance.now() - started)), now: () => performance.now() });
           recordMaxUnit(batch.maxStepMs, batch.maxStepUnit);
         }
         stats.cqRefineMs += performance.now() - refineAt;
@@ -513,7 +555,9 @@ export function createCAdapters(options = {}) {
       if (!cursorBatchMeasured) recordMaxUnit(stats.lastDetectMs, stats.lastUnit);
       stats.lastHypothesesTried = stats.hypothesesTried - beforeHypotheses;
       stats.lastAnchorSearches = stats.anchorSearches - beforeAnchors;
-      if (stats.lastDetectMs > detectMs) { stats.budgetHits++; stats.budgetOverrunMs += stats.lastDetectMs - detectMs; }
+      if (budgetWorkStarted && stats.lastDetectMs > frameDetectMs) {
+        stats.budgetHits++; stats.budgetOverrunMs += stats.lastDetectMs - frameDetectMs;
+      }
       lastOutput = { ...output, H: output.H?.slice() ?? null };
       if (typeof options.timing === 'function') options.timing({ unit: stats.lastUnit, ms: stats.lastDetectMs,
         frameId: frame.frameId, hypotheses: stats.lastHypothesesTried, anchors: stats.lastAnchorSearches });
