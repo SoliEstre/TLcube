@@ -777,7 +777,7 @@ test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 
   assert.ok(tail.includes('r2Latched = null'), '거부된 적중(비컨만·빈 페이로드) 뒤 래치를 안 되돌린다 — 확정이 아닌 것이 확정으로 남는다');
   // F1 — 거부 뒤 상태줄 위상·유예 (규칙은 모델 r2StatusOnReject, 값은 r2-confirmation-model.test (xii)).
   assert.ok(tail.includes('r2StatusOnReject(nowMs())'), '거부 뒤 상태줄 위상을 안 내린다 — 다음 프레임의 release 전이가 beaconOnly 처방을 aim 으로 덮는다');
-  assert.ok(js.includes('r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, r2Runtime.stats, nowMs())'),
+  assert.ok(js.includes('r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, liveR2Display().stats, nowMs())'),
     'syncR2Status 가 모델의 전이 규칙을 안 쓴다 — 유예가 배선되지 않는다');
   const loop = js.slice(js.indexOf('function startFrameLoop('), js.indexOf('const nextFrame ='));
   assert.ok(loop.includes('r2Latched = null'), 'startFrameLoop 이 래치를 안 비운다 — 옛 확정 값이 새 카메라의 결과처럼 읽힌다');
@@ -794,7 +794,7 @@ test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 
   // F8 — (a) 좌 패널은 라이브만: 래치를 모델에 넘기지 않고, 카메라가 닫히면 숨긴다.
   const progressFn = js.slice(js.indexOf('function renderR2Progress()'), js.indexOf('function renderResultR2Summary('));
   assert.ok(progressFn.length > 0, 'renderR2Progress / renderResultR2Summary 를 못 찾았다');
-  assert.ok(progressFn.includes('confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId })'), '좌 패널이 래치를 그린다 — 그 칩은 시트·게이트 아래라 아무도 못 본다');
+  assert.ok(progressFn.includes('confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId, family: display.family })'), '좌 패널이 래치를 그린다 — 그 칩은 시트·게이트 아래라 아무도 못 본다');
   assert.ok(!progressFn.includes('latched: r2Latched'), '좌 패널이 래치를 모델에 넘긴다');
   assert.ok(/if \(!cameraStream\) \{[^}]*r2ProgressRoot\.hidden = true;/.test(progressFn), '카메라가 닫혔는데 좌 패널을 숨기지 않는다');
   // F5 — 막대 메모는 칩과 같은 락 판정(progressNote).

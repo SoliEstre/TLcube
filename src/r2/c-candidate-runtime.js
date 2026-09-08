@@ -74,6 +74,12 @@ export function createCCandidateRuntime(options = {}) {
     hudRows.length = count;
     return hudRows;
   }
+  function deferFrame() {
+    for (const node of nodes) {
+      if (!node.hud.tracking) continue;
+      node.hud.tracking = false; node.hud.retained = true; node.hud.revision++;
+    }
+  }
 
   function retire(node, reason) {
     if (node.hud && reason !== 'done-consumed') node.hud.alive = false;
@@ -110,7 +116,7 @@ export function createCCandidateRuntime(options = {}) {
     while (nodes.length > maxCandidates) retire(nodes.pop(), 'combined-capacity');
     syncLiveStats();
   }
-  function pushFrame(field, timestamp, { frameId = timestamp, runDetect = false, maxCandidates } = {}) {
+  function pushFrame(field, timestamp, { frameId = timestamp, runDetect = false, maxCandidates, budgetMs } = {}) {
     if (!Number.isSafeInteger(maxCandidates) || maxCandidates < 0) throw new TypeError('현재 C 후보 가용 수가 필요해요');
     if (!Number.isFinite(timestamp) || !(typeof frameId === 'string' || Number.isSafeInteger(frameId))) throw new TypeError('유효한 프레임 identity가 필요해요');
     setCapacity(maxCandidates);
@@ -141,7 +147,7 @@ export function createCCandidateRuntime(options = {}) {
       output.found = 0; output.observation = null;
       stats.detectCalls++;
       try {
-        adapters.detectInto(field, field.width, field.height, timestamp, { frameId }, output);
+        adapters.detectInto(field, field.width, field.height, timestamp, { frameId, budgetMs }, output);
         if (output.found && output.observation) {
           stats.observations++;
           if (!seen.has(output.observation) && output.format?.kind === 'read') {
@@ -219,6 +225,6 @@ export function createCCandidateRuntime(options = {}) {
     if (leading?.node.runtime.disposed) leading = null;
     return hit;
   }
-  return Object.freeze({ pushFrame, reset, setCapacity, stats, adapters,
+  return Object.freeze({ pushFrame, reset, setCapacity, deferFrame, stats, adapters,
     get leading() { return leading; }, get hudCandidates() { return hudCandidates(); } });
 }

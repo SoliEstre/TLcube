@@ -337,7 +337,7 @@ export function hudCorrectionLatch(hit, nowMs) {
   const count = Number.isInteger(hit.correctedCount) ? hit.correctedCount : 0;
   const cells = hit.correctedCells;
   if (count <= 0 || !cells || !Number.isInteger(cells.length) || cells.length <= 0) return null;
-  return {
+  const latch = {
     at: nowMs,
     count,
     cells,
@@ -349,6 +349,9 @@ export function hudCorrectionLatch(hit, nowMs) {
     n: hit.n,
     formatWire: hit.formatWire,
   };
+  if (typeof hit.candidateId === 'string') latch.candidateId = hit.candidateId;
+  if (Number.isSafeInteger(hit.revision)) latch.revision = hit.revision;
+  return latch;
 }
 
 /**
