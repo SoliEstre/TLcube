@@ -108,6 +108,7 @@ import {
 } from './anchor-detect.js';
 import {
   findACornerMarkerHypotheses,
+  findKCornerMarkerHypotheses,
   findOCornerMarkerHypotheses,
 } from './corner-marker-detect.js';
 import { HYBRID_INNER_CUBE_BANDS } from '../bullseye.js';
@@ -2135,12 +2136,21 @@ function weakAnchorHypotheses(luma, finder, family, options) {
 }
 
 /*
- * 코너 마커(O-CM / A-CM) 가설 — `corner-marker-detect.js` 배선.
+ * 코너 마커(O-CM / A-CM / **K-CM**) 가설 — `corner-marker-detect.js` 배선.
+ * (K-CM = star 는 2026-09-08 배선. 그 전까지 star 는 `null` 로 떨어져
+ *  `skipped: 'family-unsupported'` 였고, H2CO3 30셀이 그려지기만 하고 안 읽혔다.)
  *
  * 왜 «앵커가 0일 때만» 인가: 코너 마커는 앵커와 **같은 자리를 겨루는 가설**이라,
  * 무조건 합치면 지금 통과하는 프레임의 선택이 바뀔 수 있다. 그건 이득이 아니라
- * 교환이고, 교환은 실측 없이 하지 않는다. 앵커가 하나도 없을 때만 열면
- * **현재 성공분의 결과는 정의상 불변**이고 순증만 남는다.
+ * 교환이고, 교환은 실측 없이 하지 않는다.
+ *
+ * ⚠ **2026-09-08 정정 — 여기 있던 「현재 성공분의 결과는 정의상 불변」은 거짓이었다.**
+ * star 배선 레인이 실측했다: 끝단에서 성공하는 프레임도 **중간에 `NO_ANCHORS` 를 지나며
+ * 이 게이트를 연다**(K2 성공 프레임에서 진입 1~2회). 그리고 승자가 실제로 바뀐다
+ * (`star-10-0` → `star-10-0-cm`). 관측 가능한 결과(원문·버전·k)는 K2 24프레임 + 비-star
+ * 53행 + k26 54덤프에서 전부 동일했지만, 그것은 **측정된 사실**이지 «정의상» 이 아니다.
+ * 「앵커 0 일 때만 열린다」는 참이고, 거기서 「성공 프레임에는 도달하지 않는다」를
+ * 유도한 것이 틀렸다. 무회귀는 **재서** 주장한다 (교훈 「주석의 주장은 사실이어야 한다」).
  * (합집합 배선은 실사진 census 로 이득/손실을 재고 나서 판단한다.)
  *
  * 코너 마커 자체는 약한 가설이 아니다 — `verifyCornerMarkers` 의 agreement 게이트를
@@ -2150,7 +2160,8 @@ function weakAnchorHypotheses(luma, finder, family, options) {
 function cornerMarkerHypotheses(luma, finder, family, options) {
   const detector = family === 'tri' ? findACornerMarkerHypotheses
     : family === 'hex' ? findOCornerMarkerHypotheses
-      : null;
+      : family === 'star' ? findKCornerMarkerHypotheses
+        : null;
   if (!detector) return { hypotheses: [], diagnostics: { skipped: 'family-unsupported' } };
 
   const result = detector(luma, finder, uniqueDimensions(family), options.cornerMarker || {});
@@ -2160,7 +2171,13 @@ function cornerMarkerHypotheses(luma, finder, family, options) {
   for (const record of result.hypotheses) {
     // 확정 H 를 쓴다 — refine 이 성공했을 때만 confirm 을 통과하므로 항상 있다.
     const H = record.refinedH || record.H;
-    const canonicalAnchors = anchorCells(record.k).map((cell) => ({ q: cell.q, r: cell.r }));
+    // 앵커 계보는 **패밀리마다 다르다** — star 의 앵커 계약(K-2)은 별 꼭짓점 6점이고
+    // 육각 코너 3점(`anchorCells`)이 아니다. `findKAnchorHypotheses` 가 내는
+    // canonicalAnchors 와 같은 목록을 써야 하류(진단·텔레메트리)가 두 경로를
+    // 같은 자로 읽는다.
+    const canonicalAnchors = (family === 'star'
+      ? vertexAnchorsK(record.k)
+      : anchorCells(record.k)).map((cell) => ({ q: cell.q, r: cell.r }));
     const anchors = canonicalAnchors.map((cell) =>
       projectPoint(H, canonicalCenter(cell.q, cell.r)));
     // 앵커를 못 투영하면 하류(정렬·진단)가 null 을 만난다. 버린다.

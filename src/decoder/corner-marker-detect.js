@@ -52,10 +52,11 @@ import { axialToPixel } from '../hexgrid.js';
 import { digitToRanks } from '../lehmer.js';
 import { markerCells, markerTetrads } from '../markerO.js';
 import { markerCellsA, markerGroupsA } from '../markerA.js';
+import { h2co3TonesByKeyK, markerCellsK, markerGroupsK } from '../markerK.js';
 import { hTonesByKeyO } from '../finder-H.js';
 import { co2SeatMarkerCellsTurnA, co2SeatMarkerGroupsTurnA } from '../finder-CO2.js';
 import { sampleHexCell } from './grid-sample.js';
-import { estimateHomography4 } from './homography.js';
+import { estimateHomographyN } from './homography.js';
 import {
   hexKey,
   hexLayoutFrom,
@@ -489,9 +490,16 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
 }
 
 /**
- * 코너 3점 + 불스아이 중심으로 H 를 4점 DLT 재적합한다.
+ * 코너 N점(≥3) + 불스아이 중심으로 H 를 DLT 재적합한다.
  * 실패하면 null 을 돌려주고 호출자는 기저 H 를 계속 쓴다 (조용한 열화 금지 —
  * 재적합 성패는 결과 객체에 실린다).
+ *
+ * ⭐ **N 일반화 (2026-09-08, star 배선)** — O·A 는 코너 3개(= 4점)라 종전 그대로
+ * `estimateHomography4` 로 **위임**된다(`estimateHomographyN` 의 N=4 분기가 그
+ * 함수를 그대로 부른다). 바뀐 것은 «코너가 3개가 아니면 무조건 null» 이라는 **상한**
+ * 뿐이다: Type K 의 H2CO3 는 묶음이 **6개**(A 계열 3 + 반전 3)라, 이 상한이 남아
+ * 있으면 K 는 refine 이 항상 null → confirm 이 항상 null → **어떤 가설도 수락될 수
+ * 없다**. 즉 이 한 줄이 없으면 K 배선은 구조적으로 0건이다.
  */
 export function refineHomographyFromCorners(centerImagePoint, verification) {
   const canonicalPoints = [{ x: 0, y: 0 }];
@@ -501,9 +509,9 @@ export function refineHomographyFromCorners(centerImagePoint, verification) {
     canonicalPoints.push(corner.canonical);
     imagePoints.push(corner.imagePoint);
   }
-  if (canonicalPoints.length !== 4) return null;
+  if (canonicalPoints.length < 4) return null;
   try {
-    return estimateHomography4(canonicalPoints, imagePoints);
+    return estimateHomographyN(canonicalPoints, imagePoints);
   } catch (error) {
     return null;
   }
@@ -682,5 +690,75 @@ export function findACornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
       // 게이트 0.78 바로 아래다. 6셀은 톤으로 · 15셀은 digit 으로 재야 맞다.
       { turn: true, groups: co2SeatMarkerGroupsTurnA, cells: co2SeatMarkerCellsTurnA },
     ],
+  );
+}
+
+/**
+ * ⭐ **기대 톤 1(중간)인 면은 이 분류기로 원리적으로 못 맞는다 — 그래서 뺀다.**
+ *
+ * `orientation-scorer.classifyTone` 의 mid 밴드는 dark→bright 구간의 **가운데**에
+ * `classifyMidFraction`(0.28) 폭으로 서므로 `[0.36, 0.64]` 다. 그런데 세 프리셋의
+ * levels[1] 이 그 구간에 **하나도 안 들어온다** (상대휘도로 정규화한 위치):
+ *
+ *   slate 0.2574 · mono 0.2861 · ember 0.3175   (전부 0.36 미만)
+ *
+ * 실측이 그대로다 — 합성 렌더(픽셀 완전, 포즈 완전)에서 기대 톤 1 슬롯 **12/12 가
+ * 전부 0 으로 분류**됐고(`.agent/lanes/typek-inner/synth-tone.jsonl`), 실사진 성공
+ * 프레임 5장에서도 mid 정규화 중앙값이 0.287\~0.293 으로 같은 자리에 있었다
+ * (`tone-truth.jsonl`).
+ *
+ * 그 결과 H2CO3 30셀 정본은 **완전한 합성 렌더에서도 수락될 수 없다**: 코너 1·2 가
+ * 각각 21슬롯 중 6슬롯을 기대 톤 1 로 갖고 있어 상한이 15/21 = 0.7143 이고, 코너
+ * alive 게이트 0.75 를 **원리적으로** 못 넘는다 (전체 agreement 는 0.8667 로 0.78 을
+ * 넘는데도 네 번째 게이트에서 죽는다 — DEFAULT_CORNER_AGREEMENT 주석의 «alive 가
+ * 유일한 사살자» 사례가 K 에서 재현된 것이다).
+ *
+ * ⛔ 게이트 상수는 **한 개도 안 낮춘다.** 대신 «정보가 0 인 슬롯을 분모에서 뺀다» —
+ * A-CM 턴A 가 CO2 6셀을 digit 이 아니라 톤으로 옮겨 0.7143 고정을 푼 것과 **같은
+ * 층위의 수리**다. 다만 여기서는 옮겨 갈 채점기가 없으므로(중간 톤을 맞힐 수 있는
+ * 경로가 이 코드베이스에 없다) 셀을 뺀다.
+ *
+ * 왜 «손 목록» 이 아니라 성질인가 — 톤 표가 바뀌면 이 필터가 **자동으로 따라간다**.
+ * 좌표를 적어 두면 다음 개정에서 조용히 어긋난다.
+ *
+ * 남는 것: k 무관하게 30셀 중 **18셀**(A 계열 코너0 7셀 + 코너1·2 의 Z 각 1셀 +
+ * 반전 삼각 9셀), 묶음 6개 그대로. 실측 (`synth-accept.jsonl`, 합성 4프레임군):
+ *   · K0CM/K1CM/K2CM — agreement 1.0000 · confirm 1.0000 로 정답 k 만 수락
+ *   · 평 K0/K1/K2 · Type A1 · Type O(V2) — **수락 0** (최고 0.6667, 게이트 0.78 아래)
+ */
+function isExtremeToneCellK(cell) {
+  return cell.tones !== undefined
+    && FACE_NAMES.every((face) => cell.tones[face] !== 1);
+}
+
+function markerCellsKExtreme(k) {
+  return markerCellsK(k, h2co3TonesByKeyK(k)).filter(isExtremeToneCellK);
+}
+
+function markerGroupsKExtreme(k) {
+  const groups = [];
+  for (const group of markerGroupsK(k, h2co3TonesByKeyK(k))) {
+    const cells = group.cells.filter(isExtremeToneCellK);
+    // 기준점 셀(anchorLabel)이 안 남은 묶음은 `verifyCornerMarkers` 가 좌표를 못 잡는다.
+    // 지금 표에서는 6/6 이 남지만, 표가 바뀌어 사라지면 **조용히 죽는 대신 빠진다**.
+    if (cells.some((cell) => cell.label === group.anchorLabel)) groups.push({ ...group, cells });
+  }
+  return groups;
+}
+
+/**
+ * Type K(육각별) 코너 마커 가설 전수 평가.
+ *
+ * star 는 턴이 없다(별 배치는 ρ-궤도로 유도된다). 변형은 하나 —
+ * H2CO3 정본 톤 중 **극단 톤 셀만**(위 주석의 근거). 정본 30셀 변형은
+ * 합성에서도 수락이 불가능해 목록에 두지 않는다 — 평가 비용만 늘고 결과가 없다.
+ *
+ * ⚠ 묶음이 **6개**다 (O·A 는 3개). `refineHomographyFromCorners` 의 N 일반화가
+ * 그 전제다.
+ */
+export function findKCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
+  return findMarkerHypotheses(
+    luma, bullseye, ks, options, 'star-marker',
+    [{ turn: false, tag: 'h2co3x', groups: markerGroupsKExtreme, cells: markerCellsKExtreme }],
   );
 }

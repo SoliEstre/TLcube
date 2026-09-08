@@ -317,10 +317,16 @@ export function markerPositionSetK(k) {
 }
 
 /** 코너별 묶음 6개 — 검출기가 «코너 단위» 로 다룬다 (`corner-marker-detect` 의
- *  groupsFor 공급자 규약). 기준점은 A 계열이 링 중심 Z, 반전 계열이 꼭짓점 W 다. */
-export function markerGroupsK(k) {
+ *  groupsFor 공급자 규약). 기준점은 A 계열이 링 중심 Z, 반전 계열이 꼭짓점 W 다.
+ *
+ *  `tonesByKey` 는 `markerCellsK` 와 **같은 계약**이다 — 주면 표에 있는 셀에만
+ *  절대 톤 `tones` 가 실린다. 생략하면 종전과 바이트 동일이라 기존 호출부는
+ *  한 줄도 안 바뀐다. 검출기가 톤 기대값을 쓰려면 셀 목록과 묶음 목록이 **같은 표**를
+ *  봐야 하므로, 소비 지점에서 키 문자열을 다시 조립하는 것보다 여기에 인자를 두는
+ *  편이 안전하다 (키 형식은 이 모듈의 사정이다). */
+export function markerGroupsK(k, tonesByKey) {
   const groups = [];
-  for (const cell of markerCellsK(k)) {
+  for (const cell of markerCellsK(k, tonesByKey)) {
     if (!groups[cell.corner]) {
       groups[cell.corner] = {
         corner: cell.corner,
