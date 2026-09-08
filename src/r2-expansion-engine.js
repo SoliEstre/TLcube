@@ -38,7 +38,7 @@ export function createScannerR2Runtime({ enabled = false, trial = false } = {}) 
     maxAdditionalMs: settings.maxAdditionalMs,
     cOptions: { maxIdleFrames: settings.maxIdleFrames, observation: {
       budget: { detectMs: settings.maxAdditionalMs }, maxHypotheses: settings.maxCandidates,
-      geometrySources: ['n7', 'cq', 'daehan'], refineCq: true,
+      geometrySources: ['n7', 'cq', 'daehan'], refineCq: true, refineN7: true,
       tracking: { minNcc: settings.minTrackedNcc },
     } },
   });

@@ -25,6 +25,10 @@ import { resumeCursorWithinBudget } from './cursor-budget.js';
 
 // 0=없음, hex 팩 1..5, Y=6. 후보 key의 profile과는 별도인 관측 태그다.
 export const FAMILY_C = 7;
+export const C_ACQUISITION_CHECKPOINT_LIMITS = Object.freeze({
+  everyFrames: 8, maxFrames: 64, maxMs: 10_000, maxSnapshots: 8, maxBytes: 48 * 1024 * 1024,
+});
+export const C_N7_REFINE_SERVICE_QUANTUM = 3;
 const FACES = Object.freeze(['T', 'L', 'R']);
 const UNKNOWN = Object.freeze({ kind: 'unknown' });
 const contradiction = reason => Object.freeze({ kind: 'contradiction', reason });
@@ -133,6 +137,9 @@ export function createCAdapters(options = {}) {
   const extraSources = geometrySources.filter(source => source !== 'n7');
   if (options.refineCq !== undefined && typeof options.refineCq !== 'boolean') throw new TypeError('CQ 보정은 명시적 boolean 옵션이에요');
   const refineCq = options.refineCq === true;
+  if (options.refineN7 !== undefined && typeof options.refineN7 !== 'boolean') throw new TypeError('N7 보정은 명시적 boolean 옵션이에요');
+  const refineN7 = options.refineN7 === true;
+  const checkpointChain = !!tracking && refineN7;
   let generation = 1, acquisition = 0, frame = null, frameOrdinal = 0, job = null, lastDetectionFrame = null;
   let lastOutput = null, lastExternalGeneration;
   const observations = new WeakMap(), observationRecords = new Set(), candidateStates = new WeakMap(), candidates = new Set();
@@ -150,10 +157,15 @@ export function createCAdapters(options = {}) {
     acquisitionTrackingCopyMs: 0, acquisitionTrackingRetainedBytes: 0, acquisitionTrackingRejects: 0,
     acquisitionCheckpointCopyMs: 0, acquisitionCheckpointBytes: 0,
     acquisitionCheckpointRetainedBytes: 0, acquisitionCheckpointUses: 0,
+    acquisitionCheckpointPeakBytes: 0, acquisitionCheckpointCount: 0, acquisitionExpirations: 0,
     cqRefineQueued: 0, cqRefineCompleted: 0, cqRefineEvaluations: 0, cqRefineMs: 0,
     cqRefineCopyMs: 0, cqRefineSnapshotBytes: 0, cqRefineRetainedBytes: 0,
     maxUnitMs: 0, maxUnit: null, lastUnit: null, lastHypothesesTried: 0,
     lastAnchorSearches: 0, scanComplete: false, discarded: 0 };
+  Object.defineProperty(stats, 'totalRetainedBytes', { enumerable: true, get() {
+    return stats.snapshotRetainedBytes + stats.cqRefineRetainedBytes
+      + stats.trackingRetainedBytes + stats.acquisitionTrackingRetainedBytes;
+  } });
 
   function recordMaxUnit(ms, unit) {
     if (Number.isFinite(ms) && ms > stats.maxUnitMs) {
@@ -193,6 +205,7 @@ export function createCAdapters(options = {}) {
     observationRecords.clear();
     generation++; lastOutput = null; lastDetectionFrame = null;
     stats.snapshotRetainedBytes = 0; stats.acquisitionCheckpointRetainedBytes = 0;
+    stats.acquisitionCheckpointCount = 0;
     stats.resumeCursor = null; stats.scanComplete = false;
     stats.discarded++;
     clearObserved();
@@ -237,18 +250,29 @@ export function createCAdapters(options = {}) {
     recordMaxUnit(cursor.status.copyMs, 'cursor-snapshot-copy');
     stats.scanComplete = false;
     job = { acquisition, snapshot, origin, cursor, phase: includeN7 ? 'cursor' : 'extra', tasks: [], index: 0,
-      extraIndex: 0, extraIterator: null, refinements: [], refineIndex: 0, refineCursor: null,
-      outputs: [], replay: 0, bytes, checkpoint: null, restartNextFrame: false,
+      extraIndex: 0, extraIterator: null, refinements: [], refineIndex: 0, refineCursor: null, refineTurns: 0,
+      outputs: [], replay: 0, bytes, checkpoint: null, checkpoints: [], checkpointBytes: 0, restartNextFrame: false,
     };
   }
   function captureAcquisitionCheckpoint(field) {
     if (!tracking || !job || samePixels(field, job.snapshot)) return;
+    if (checkpointChain && frameOrdinal - (job.checkpoints.at(-1)?.current.ordinal ?? job.origin.ordinal)
+      < C_ACQUISITION_CHECKPOINT_LIMITS.everyFrames) return;
+    const bytes = field.data.byteLength + (field.alpha?.byteLength ?? 0);
+    if (checkpointChain && (job.checkpoints.length >= C_ACQUISITION_CHECKPOINT_LIMITS.maxSnapshots
+      || job.checkpointBytes + bytes > C_ACQUISITION_CHECKPOINT_LIMITS.maxBytes)) return;
     const at = performance.now(), snapshot = copyField(field), copyMs = performance.now() - at;
-    const bytes = snapshot.data.byteLength + (snapshot.alpha?.byteLength ?? 0);
-    job.checkpoint = { field: snapshot, current: Object.freeze({ ...frame, generation }), bytes };
+    job.checkpoint = { field: snapshot, current: Object.freeze({ ...frame, generation, ordinal: frameOrdinal }), bytes };
+    if (checkpointChain) { job.checkpoints.push(job.checkpoint); job.checkpointBytes += bytes; }
     stats.snapshotCopyMs += copyMs; stats.snapshotBytes += bytes; stats.snapshotCopies++;
     stats.acquisitionCheckpointCopyMs += copyMs; stats.acquisitionCheckpointBytes += bytes;
-    stats.acquisitionCheckpointRetainedBytes = bytes;
+    stats.acquisitionCheckpointRetainedBytes = checkpointChain ? job.checkpointBytes : bytes;
+    stats.acquisitionCheckpointCount = checkpointChain ? job.checkpoints.length : 1;
+    stats.acquisitionCheckpointPeakBytes = Math.max(stats.acquisitionCheckpointPeakBytes, stats.acquisitionCheckpointRetainedBytes);
+    // snapshotRetainedBytes는 cursor/origin과 checkpoint 전부의 합이에요.
+    stats.snapshotRetainedBytes = job.bytes + stats.acquisitionCheckpointRetainedBytes
+      + (job.cursor.status.phase !== 'done' ? job.cursor.status.snapshotBytes : 0)
+      + (job.n7Cursor?.status.snapshotRetainedBytes ?? 0);
     recordMaxUnit(copyMs, 'acquisition-checkpoint-copy');
   }
   function currentVerified(field, snapshot) {
@@ -261,7 +285,7 @@ export function createCAdapters(options = {}) {
       stats.acquisitionTrackingRetainedBytes -= own.trackerBytes;
       own.tracker.discard(reason); own.tracker = null; own.trackerBytes = 0;
     }
-    own.invalidated = reason; own.snapshot = null; own.checkpoint = null;
+    own.invalidated = reason; own.snapshot = null; own.checkpoint = null; own.checkpoints = null;
     own.finder = null; own.H = null; own.notch = null;
   }
   function observeAcquisitionTracker(own, field, current) {
@@ -283,9 +307,11 @@ export function createCAdapters(options = {}) {
       stats.acquisitionTrackingCopyMs += own.tracker.stats.copyMs;
       stats.acquisitionTrackingRetainedBytes += own.trackerBytes;
     }
-    if (own.checkpoint) {
-      const bridge = observeAcquisitionTracker(own, own.checkpoint.field, own.checkpoint.current);
-      own.checkpoint = null;
+    const checkpoints = own.checkpoints ?? (own.checkpoint ? [own.checkpoint] : []);
+    // 모든 링크는 실제 입력의 불변 사본이에요. 부분 성공을 다른 후보에 넘기지 않아요.
+    own.checkpoint = null; own.checkpoints = null;
+    for (const checkpoint of checkpoints) {
+      const bridge = observeAcquisitionTracker(own, checkpoint.field, checkpoint.current);
       if (!bridge.ok) {
         stats.acquisitionTrackingRejects++; invalidateObservation(own, bridge.reason); return false;
       }
@@ -318,21 +344,34 @@ export function createCAdapters(options = {}) {
       lockDistrusted: own.format.kind !== 'read', sourceKind: own.sourceKind, sourceIdentity: own.sourceIdentity });
   }
   function queueCqRefinement(task, format) {
-    if (!refineCq || task.sourceKind !== 'c-cq' || task.refined === true || format.kind !== 'read') return;
+    const eligible = (refineCq && task.sourceKind === 'c-cq')
+      || (refineN7 && task.sourceKind?.startsWith('c-central-n7-'));
+    if (!eligible || task.refined === true || format.kind !== 'read') return;
     const bound = R2_TYPE_C_PROFILE.bind({ profile: 'C', layoutId: format.layoutId,
       dimensionKind: 'radius-k', dimension: task.k, ecc: format.ecc,
       maskIndex: format.maskIndex, wire: format.wire, tones: TYPE_C_DATA_TONES,
-      orientation: task.orientation ?? 0, sourceIdentity: `c-acquisition-${job.acquisition}` });
+      orientation: task.orientation ?? task.finder?.orientation ?? 0, sourceIdentity: `c-acquisition-${job.acquisition}` });
     if (!bound) return;
-    job.refinements.push({ task: { ...task, H: task.H.slice(), refined: true }, cellCoord: bound.cellCoord });
+    job.refinements.push({ task: { ...task, H: task.H.slice(), refined: true }, cellCoord: bound.cellCoord,
+      quality: task.notchQuality ?? 0 });
     stats.cqRefineQueued++;
   }
-  function finishGeometrySources() {
-    job.phase = job.refinements.length ? 'cq-refine' : 'complete';
+  function finishGeometrySources(preferRefine = true) {
+    // 수용 기준과 무관한 실행 순서예요. 높은 노치 관측부터 시도하되 어떤 k/H도 없애지 않아요.
+    if (refineN7 && !job.refineCursor && job.refineIndex < job.refinements.length) {
+      const pending = job.refinements.splice(job.refineIndex);
+      pending.sort((a, b) => b.quality - a.quality);
+      job.refinements.push(...pending);
+    }
+    const pendingRefine = job.refineIndex < job.refinements.length;
+    const pendingExtra = job.extraIndex < extraSources.length;
+    job.phase = pendingRefine && (!pendingExtra || (refineN7
+      && (preferRefine || job.refineTurns < C_N7_REFINE_SERVICE_QUANTUM))) ? 'cq-refine'
+      : pendingExtra ? 'extra' : 'complete';
     stats.scanComplete = job.phase === 'complete';
   }
   function releaseCompletedJob(reason) {
-    if (!job || job.phase !== 'complete') return;
+    if (!job) return;
     job.refineCursor?.discard(reason);
     job.n7Cursor?.discard(reason);
     job.cursor?.discard(reason);
@@ -345,6 +384,7 @@ export function createCAdapters(options = {}) {
     job = null;
     stats.snapshotRetainedBytes = 0;
     stats.acquisitionCheckpointRetainedBytes = 0;
+    stats.acquisitionCheckpointCount = 0;
     stats.cqRefineRetainedBytes = 0;
     stats.resumeCursor = null;
     stats.scanComplete = false;
@@ -352,17 +392,23 @@ export function createCAdapters(options = {}) {
   function observeTask(task, field) {
     stats.hypothesesTried++;
     const H = task.H.slice(), notch = readCNotch(job.snapshot, H, task.k);
-    if (!notch?.ok) { stats.notchRejects++; stats.formatRejects++; return null; }
+    if (!notch?.ok && !(refineN7 && task.sourceKind?.startsWith('c-central-n7-') && !task.refined)) {
+      stats.notchRejects++; stats.formatRejects++; return null;
+    }
     const decoded = task.finder?.centralN7 ? decodeSingle(task.finder.centralN7.outerFormat) : { ok: false };
     const layoutHint = decoded.ok ? C_FORMAT_INDEX.filter(row => row.formatIndex === decoded.version)
       .map(row => row.name) : [];
     const format = readFormatC(job.snapshot, H, task.k, { k: task.k, layoutHint: layoutHint.length ? layoutHint : undefined });
     if (format.kind === 'read') stats.formatReads++; else stats.formatRejects++;
-    queueCqRefinement(task, format);
+    if (task.sourceKind === 'c-cq' || !notch?.ok) queueCqRefinement({ ...task, notchQuality: notch?.backgroundRate ?? 0 }, format);
+    // 보정 준비용 포맷 읽기는 관측 publish가 아니에요. 최종 H도 같은 노치 문턱을 통과해야 해요.
+    if (!notch?.ok) { stats.notchRejects++; return null; }
     const own = { H, k: task.k, finder: task.finder ?? null, orientation: task.orientation ?? task.finder?.orientation ?? 0, notch, format, layoutHint,
-      sourceKind: task.sourceKind, sourceIdentity: `c-acquisition-${job.acquisition}`,
+      sourceKind: task.sourceKind, sourceIdentity: checkpointChain
+        ? `c-acquisition-${job.acquisition}-observation-${job.outputs.length + 1}` : `c-acquisition-${job.acquisition}`,
       generation, origin: job.origin, snapshot: job.snapshot, revision: job.outputs.length + 1,
       checkpoint: job.checkpoint,
+      checkpoints: checkpointChain ? job.checkpoints.slice() : null,
       tracker: null, trackerBytes: 0, invalidated: null };
     if (!verifyObservation(own, field)) {
       invalidateObservation(own, 'acquisition-unproven');
@@ -402,10 +448,19 @@ export function createCAdapters(options = {}) {
       // 공유 스케줄러가 좌석을 주지 않은 프레임은 snapshot도 만들지 않고 기존 작업도 그대로 둬요.
       if (sharedBudgetMs === 0) return;
       budgetWorkStarted = true;
+      if (checkpointChain && job && (frameOrdinal - job.origin.ordinal > C_ACQUISITION_CHECKPOINT_LIMITS.maxFrames
+        || frame.timestamp - job.origin.timestamp > C_ACQUISITION_CHECKPOINT_LIMITS.maxMs)
+        && !samePixels(field, job.snapshot)) {
+        // 완전히 같은 현재 영상은 낡은 H 이월이 아니에요. 정지 입력의 긴 탐색을 굶기지 않아요.
+        // 획득만 새로 시작해요. 이미 bind된 후보는 독립 tracker 사본으로 계속 살아 있어요.
+        stats.acquisitionExpirations++;
+        releaseCompletedJob('acquisition-expired');
+      }
       if (tracking && job?.phase === 'complete' && job.restartNextFrame) {
         releaseCompletedJob('continuous-acquisition');
       }
       if (!job) { createJob(field); job.origin = Object.freeze({ ...job.origin, ordinal: frameOrdinal }); }
+      if (checkpointChain) captureAcquisitionCheckpoint(field);
       stats.lastUnit = job.phase;
       if (job.phase === 'cursor') {
         const current = { ...frame, generation };
@@ -432,7 +487,7 @@ export function createCAdapters(options = {}) {
           stats.coreCandidates = result?.coreCandidates ?? 0; stats.clusterCount = result?.clusterCount ?? 0;
           stats.shapeCount = job.verified.length; job.phase = 'n7';
           captureAcquisitionCheckpoint(field);
-          stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0);
+          stats.snapshotRetainedBytes = job.bytes + stats.acquisitionCheckpointRetainedBytes;
         }
       } else if (job.phase === 'n7') {
         if (frameDetectMs === Infinity) {
@@ -455,7 +510,7 @@ export function createCAdapters(options = {}) {
           stats.snapshotCopyMs += job.n7Cursor.status.copyMs;
           stats.snapshotBytes += job.n7Cursor.status.snapshotBytes;
           stats.snapshotCopies++;
-          stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0)
+          stats.snapshotRetainedBytes = job.bytes + stats.acquisitionCheckpointRetainedBytes
             + job.n7Cursor.status.snapshotRetainedBytes;
           recordMaxUnit(job.n7Cursor.status.copyMs, 'n7-cursor-snapshot-copy');
           job.phase = 'n7-cursor';
@@ -476,12 +531,12 @@ export function createCAdapters(options = {}) {
           stats.n7MaxUnit = batch.maxStepUnit;
         }
         recordMaxUnit(batch.maxStepMs, batch.maxStepUnit);
-        stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0)
+        stats.snapshotRetainedBytes = job.bytes + stats.acquisitionCheckpointRetainedBytes
           + job.n7Cursor.status.snapshotRetainedBytes;
         if (progress.state === 'done') {
           const result = job.n7Cursor.takeForFrame(job.n7Cursor.status.origin);
           job.n7Shapes = result?.shapes ?? [];
-          stats.snapshotRetainedBytes = job.bytes + (job.checkpoint?.bytes ?? 0);
+          stats.snapshotRetainedBytes = job.bytes + stats.acquisitionCheckpointRetainedBytes;
           job.phase = 'n7-finalize';
         }
       } else if (job.phase === 'n7-finalize') {
@@ -514,9 +569,10 @@ export function createCAdapters(options = {}) {
           if (performance.now() - started > frameDetectMs) break;
         }
         if (job && job.index === job.tasks.length) {
-          if (extraSources.length) job.phase = 'extra'; else finishGeometrySources();
+          finishGeometrySources();
         }
       } else if (job.phase === 'extra') {
+        job.refineTurns = 0;
         let evaluated = 0;
         while (job && job.extraIndex < extraSources.length && evaluated < maxHypotheses) {
           const source = extraSources[job.extraIndex]; stats.lastUnit = `geometry-${source}`;
@@ -530,8 +586,9 @@ export function createCAdapters(options = {}) {
           }
           if (performance.now() - started > frameDetectMs) break;
         }
-        if (job && job.extraIndex === extraSources.length) finishGeometrySources();
+        if (job && (refineN7 || job.extraIndex === extraSources.length)) finishGeometrySources();
       } else if (job.phase === 'cq-refine') {
+        job.refineTurns++;
         const queued = job.refinements[job.refineIndex];
         stats.lastUnit = 'cq-refine';
         if (!job.refineCursor) {
@@ -562,8 +619,9 @@ export function createCAdapters(options = {}) {
             const observation = observeTask({ ...queued.task, H: result.H }, field);
             if (observation) publish(observation, output);
           }
-          if (job && job.refineIndex === job.refinements.length) { job.phase = 'complete'; stats.scanComplete = true; }
         }
+        // 최대 세 보정 서비스 뒤 CQ/대한에 한 차례를 줘 유한 대기시간을 유지해요.
+        if (job) finishGeometrySources(false);
       } else if (job.phase === 'complete') {
         if (!tracking && !currentVerified(field, job.snapshot)) discard('snapshot-content-changed');
         else if (job.outputs.length) {
