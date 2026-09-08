@@ -8,6 +8,8 @@ test('C seed/anchor 풀 공존·origin/age 보존·마지막 가설까지 공정
   const run = observeAll(syntheticC().field), rows = run.rows;
   assert.ok(rows.some(row => row.observation.sourceKind === 'c-central-n7-seed'));
   assert.ok(rows.some(row => row.observation.sourceKind === 'c-central-n7-anchor'));
+  assert.equal(rows[0].observation.sourceKind, 'c-central-n7-anchor',
+    '몸체 누적 runway를 seed 뒤에서 잃지 않도록 검증된 anchor 해를 먼저 내야 해요');
   const first = rows[0].observation;
   assert.equal(first.originFrameId, 0); assert.equal(first.originTimestamp, 0);
   assert.equal(first.ageFrames, rows[0].frameId); assert.equal(first.ageMs, rows[0].frameId);

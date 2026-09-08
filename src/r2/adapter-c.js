@@ -133,7 +133,7 @@ export function createCAdapters(options = {}) {
   const extraSources = geometrySources.filter(source => source !== 'n7');
   if (options.refineCq !== undefined && typeof options.refineCq !== 'boolean') throw new TypeError('CQ 보정은 명시적 boolean 옵션이에요');
   const refineCq = options.refineCq === true;
-  let generation = 0, frame = null, frameOrdinal = 0, job = null, lastDetectionFrame = null;
+  let generation = 1, acquisition = 0, frame = null, frameOrdinal = 0, job = null, lastDetectionFrame = null;
   let lastOutput = null, lastExternalGeneration;
   const observations = new WeakMap(), observationRecords = new Set(), candidateStates = new WeakMap(), candidates = new Set();
   const stats = { n: 0, layoutHint: [], locked: 0, gridLockF: 0, lockMargin: 0,
@@ -220,7 +220,7 @@ export function createCAdapters(options = {}) {
     return field;
   }
   function createJob(field) {
-    generation++;
+    acquisition++;
     const at = performance.now();
     const snapshot = { width: field.width, height: field.height, data: field.data.slice(), alpha: field.alpha?.slice() ?? null };
     const copyMs = performance.now() - at;
@@ -236,9 +236,10 @@ export function createCAdapters(options = {}) {
     recordMaxUnit(copyMs, 'snapshot-copy');
     recordMaxUnit(cursor.status.copyMs, 'cursor-snapshot-copy');
     stats.scanComplete = false;
-    job = { snapshot, origin, cursor, phase: includeN7 ? 'cursor' : 'extra', tasks: [], index: 0,
+    job = { acquisition, snapshot, origin, cursor, phase: includeN7 ? 'cursor' : 'extra', tasks: [], index: 0,
       extraIndex: 0, extraIterator: null, refinements: [], refineIndex: 0, refineCursor: null,
-      outputs: [], replay: 0, bytes, checkpoint: null };
+      outputs: [], replay: 0, bytes, checkpoint: null, restartNextFrame: false,
+    };
   }
   function captureAcquisitionCheckpoint(field) {
     if (!tracking || !job || samePixels(field, job.snapshot)) return;
@@ -321,7 +322,7 @@ export function createCAdapters(options = {}) {
     const bound = R2_TYPE_C_PROFILE.bind({ profile: 'C', layoutId: format.layoutId,
       dimensionKind: 'radius-k', dimension: task.k, ecc: format.ecc,
       maskIndex: format.maskIndex, wire: format.wire, tones: TYPE_C_DATA_TONES,
-      orientation: task.orientation ?? 0, sourceIdentity: `c-acquisition-${generation}` });
+      orientation: task.orientation ?? 0, sourceIdentity: `c-acquisition-${job.acquisition}` });
     if (!bound) return;
     job.refinements.push({ task: { ...task, H: task.H.slice(), refined: true }, cellCoord: bound.cellCoord });
     stats.cqRefineQueued++;
@@ -329,6 +330,24 @@ export function createCAdapters(options = {}) {
   function finishGeometrySources() {
     job.phase = job.refinements.length ? 'cq-refine' : 'complete';
     stats.scanComplete = job.phase === 'complete';
+  }
+  function releaseCompletedJob(reason) {
+    if (!job || job.phase !== 'complete') return;
+    job.refineCursor?.discard(reason);
+    job.n7Cursor?.discard(reason);
+    job.cursor?.discard(reason);
+    for (const observation of job.outputs) {
+      const own = observations.get(observation);
+      if (!own) continue;
+      invalidateObservation(own, reason);
+      observationRecords.delete(own);
+    }
+    job = null;
+    stats.snapshotRetainedBytes = 0;
+    stats.acquisitionCheckpointRetainedBytes = 0;
+    stats.cqRefineRetainedBytes = 0;
+    stats.resumeCursor = null;
+    stats.scanComplete = false;
   }
   function observeTask(task, field) {
     stats.hypothesesTried++;
@@ -341,7 +360,7 @@ export function createCAdapters(options = {}) {
     if (format.kind === 'read') stats.formatReads++; else stats.formatRejects++;
     queueCqRefinement(task, format);
     const own = { H, k: task.k, finder: task.finder ?? null, orientation: task.orientation ?? task.finder?.orientation ?? 0, notch, format, layoutHint,
-      sourceKind: task.sourceKind, sourceIdentity: `c-acquisition-${generation}`,
+      sourceKind: task.sourceKind, sourceIdentity: `c-acquisition-${job.acquisition}`,
       generation, origin: job.origin, snapshot: job.snapshot, revision: job.outputs.length + 1,
       checkpoint: job.checkpoint,
       tracker: null, trackerBytes: 0, invalidated: null };
@@ -383,6 +402,9 @@ export function createCAdapters(options = {}) {
       // 공유 스케줄러가 좌석을 주지 않은 프레임은 snapshot도 만들지 않고 기존 작업도 그대로 둬요.
       if (sharedBudgetMs === 0) return;
       budgetWorkStarted = true;
+      if (tracking && job?.phase === 'complete' && job.restartNextFrame) {
+        releaseCompletedJob('continuous-acquisition');
+      }
       if (!job) { createJob(field); job.origin = Object.freeze({ ...job.origin, ordinal: frameOrdinal }); }
       stats.lastUnit = job.phase;
       if (job.phase === 'cursor') {
@@ -416,8 +438,10 @@ export function createCAdapters(options = {}) {
         if (frameDetectMs === Infinity) {
           const finders = centralN7Finders(job.snapshot, job.verified).filter(f => f.centralN7.family === 'hex');
           for (const finder of finders) for (const k of TYPE_C_RADII) {
-            job.tasks.push({ kind: 'evaluate', H: finder.H, k, finder, sourceKind: 'c-central-n7-seed' });
             job.tasks.push({ kind: 'anchors', k, finder });
+          }
+          for (const finder of finders) for (const k of TYPE_C_RADII) {
+            job.tasks.push({ kind: 'evaluate', H: finder.H, k, finder, sourceKind: 'c-central-n7-seed' });
           }
           job.phase = 'hypotheses';
         } else {
@@ -464,8 +488,10 @@ export function createCAdapters(options = {}) {
         const finders = centralN7FindersFromShapes(job.snapshot, job.n7Shapes)
           .filter(f => f.centralN7.family === 'hex');
         for (const finder of finders) for (const k of TYPE_C_RADII) {
-          job.tasks.push({ kind: 'evaluate', H: finder.H, k, finder, sourceKind: 'c-central-n7-seed' });
           job.tasks.push({ kind: 'anchors', k, finder });
+        }
+        for (const finder of finders) for (const k of TYPE_C_RADII) {
+          job.tasks.push({ kind: 'evaluate', H: finder.H, k, finder, sourceKind: 'c-central-n7-seed' });
         }
         job.n7Shapes = null;
         job.phase = 'hypotheses';
@@ -477,9 +503,10 @@ export function createCAdapters(options = {}) {
           if (task.kind === 'anchors') {
             stats.anchorSearches++;
             const anchored = findCAnchorHypotheses(job.snapshot, task.finder, [task.k], {});
-            for (const h of anchored.hypotheses ?? []) job.tasks.push({ kind: 'evaluate',
+            const evaluations = (anchored.hypotheses ?? []).map(h => ({ kind: 'evaluate',
               H: h.H, k: task.k, finder: task.finder, orientation: (task.finder.orientation + h.orientation) % 3,
-              sourceKind: 'c-central-n7-anchor' });
+              sourceKind: 'c-central-n7-anchor' }));
+            job.tasks.splice(job.index, 0, ...evaluations);
           } else {
             const observation = observeTask(task, field);
             if (observation) { publish(observation, output); break; }
@@ -543,6 +570,7 @@ export function createCAdapters(options = {}) {
           const observation = job.outputs[job.replay++ % job.outputs.length];
           if (verifyObservation(observations.get(observation), field)) publish(observation, output);
         }
+        if (tracking) job.restartNextFrame = true;
       }
       if (job) stats.resumeCursor = { phase: job.phase, index: job.index, total: job.tasks.length,
         steps: job.phase === 'n7-cursor' ? job.n7Cursor.status.steps : job.cursor.status.steps,

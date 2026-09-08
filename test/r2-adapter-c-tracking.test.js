@@ -15,7 +15,7 @@ function acquisition(text='tracking-C0') {
   const {field}=syntheticC(0,text),acquired=observeAll(field,{budget:{detectMs:32},maxHypotheses:8,tracking:{minNcc:.96}});
   const row=acquired.rows.find(r=>r.format.kind==='read'&&r.format.layoutId==='C0');assert.ok(row);
   const candidate=acquired.adapter.bindCandidate(row.observation,row.format);assert.ok(candidate);
-  return {field,adapter:acquired.adapter,candidate};
+  return {field,adapter:acquired.adapter,candidate,row,calls:acquired.calls};
 }
 test('tracking 수치는 명시한 평가값만 받고 기본 옵션을 몰래 채우지 않는다',()=>{
   for(const tracking of [{},true,null,{minNcc:NaN},{minNcc:-1},{minNcc:2}])assert.throws(()=>createCAdapters({tracking}));
@@ -34,6 +34,21 @@ test('실제 C 관측 후보가 이동 프레임의 H를 갱신하고 같은 key
   assert.equal(adapter.stats.trackingObservations,count);assert.equal(adapter.stats.sampleComputations,computations);
   assert.ok(adapter.stats.trackingCopyMs>=0);assert.ok(adapter.stats.trackingRetainedBytes>=field.data.byteLength);
   assert.equal(candidate.dispose(),true);assert.equal(candidate.dispose(),false);assert.equal(adapter.stats.trackingRetainedBytes,0);
+});
+test('완료 획득 회전은 옛 관측 사본만 해제하고 bind된 후보 추적은 보존한다',()=>{
+  const {field,adapter,candidate,row,calls}=acquisition('continuous-acquisition');
+  assert.equal(adapter.stats.scanComplete,true);
+  const output={};
+  adapter.detectInto(field,field.width,field.height,calls,{frameId:calls},output);
+  assert.equal(adapter.stats.scanComplete,true,'완료된 획득의 관측은 한 번 더 replay해요');
+  adapter.detectInto(field,field.width,field.height,calls+1,{frameId:calls+1},output);
+  assert.equal(adapter.stats.scanComplete,false);
+  assert.equal(adapter.stats.resumeCursor.originFrameId,calls+1);
+  assert.equal(adapter.bindCandidate(row.observation,row.format),null,'회전 전 관측 토큰은 다시 bind되지 않아요');
+  const current=alignCandidate(candidate,field,calls+1);
+  assert.equal(candidate.invalidated,null);
+  assert.equal(current.output.gatePassed,1);
+  candidate.dispose();
 });
 test('같은 프레임 ID/시간 내용 교체는 추적을 켜도 수용하지 않는다',()=>{
   const {field,adapter,candidate}=acquisition();alignCandidate(candidate,field,100000);

@@ -89,7 +89,9 @@ function queuedObservedCandidates(count, { doneIndex = null } = {}) {
     alignInto(...args) {
       aligns[index]++;
       const status = candidate.alignInto(...args);
-      if (doneIndex !== null && index !== doneIndex) args[6].weightQ15 = 0;
+      // capacity 회계 시험은 우연한 payload 완주와 분리하고, DONE 생존 시험에서만
+      // 지정한 한 후보를 열어요. 더 정확한 anchor H가 먼저 와도 회계 의미는 같아야 해요.
+      if (doneIndex === null || index !== doneIndex) args[6].weightQ15 = 0;
       return status;
     },
     dispose() { disposed.push(index + 1); candidate.dispose(); },
