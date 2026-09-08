@@ -189,8 +189,12 @@ test('ⓕ 스캐너 배선 — 문·프레임 루프·stopCamera·리셋에 연�
     '유예 조건이 순수 함수에서 안 온다 — 규칙이 두 곳에 산다');
   assert.ok(JS.includes('correctedCount: r2Correction === null ? 0 : r2Correction.count'),
     '정정 수가 «그릴 것이 있다» 래치에서 안 온다 — 수만 있고 셀이 없는 적중까지 미룬다');
-  assert.ok(JS.includes('if (acceptStopGate.arm(delayMs, showAccepted, stopCamera)) return;'),
+  assert.ok(JS.includes('if (acceptStopGate.arm(delayMs, showAccepted, stopCamera, ready)) return;'),
     '유예를 걸고 나서 그대로 닫는다 — 미루는 뜻이 없다');
+  assert.ok(JS.includes('if (!r2CandidateHud.accept(acceptedCandidateId, nowMs())) return false;'),
+    '실제로 표시된 성공 후보 없이 150ms 타이머를 시작해요');
+  assert.ok(JS.includes('renderR2CellMap(); acceptStopGate.poll();'),
+    '좌석 소멸 뒤 표시 수용 대기를 다시 시도하지 않아요');
 
   // ③ stopCamera — 회수한 «나머지 절반» 을 정지 **뒤**에 잇는다 (순서 (d)).
   const stopAt = JS.indexOf('function stopCamera()');

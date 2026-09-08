@@ -375,8 +375,10 @@ const QR_HINT_TTL_MS = 3000;
 let r2Latched = null;
 let r2DisplayedCandidateId = '';
 function liveR2Display() {
+  const shown = r2CandidateHud.model?.slots.filter((slot) => slot && slot.status !== 'dropped')
+    .map((slot) => slot.candidate) || [];
   return candidateDisplayState(r2Runtime.stats, r2Runtime.view,
-    r2Runtime.hudCandidates || [], r2DisplayedCandidateId);
+    shown, r2DisplayedCandidateId, { visibleOnly: true });
 }
 /**
  * 🔴 **RS 정정 강조 래치** (3b · 운영자 결정 ⑦). DONE 적중이 세우고 `hudCorrectionAlpha` 가
@@ -2211,11 +2213,14 @@ function handleDecodeResult(result, source, session) {
     correctedCount: r2Correction === null ? 0 : r2Correction.count,
     candidateHud: result.source === 'r2',
   });
-  if (result.source === 'r2') {
-    r2CandidateHud.accept(r2Latched?.candidateId, nowMs());
+  const acceptedCandidateId = acceptedR2Summary?.candidateId;
+  const ready = result.source === 'r2' ? () => {
     renderR2CellMap();
-  }
-  if (acceptStopGate.arm(delayMs, showAccepted, stopCamera)) return;
+    if (!r2CandidateHud.accept(acceptedCandidateId, nowMs())) return false;
+    renderR2CellMap();
+    return true;
+  } : null;
+  if (acceptStopGate.arm(delayMs, showAccepted, stopCamera, ready)) return;
   stopCamera();
   showAccepted();
 }
@@ -2318,7 +2323,7 @@ function startFrameLoop(session) {
       const r2FrameStartedAt = nowMs();
       // 성공 카드를 그리는 짧은 유예 중에는 무거운 복호를 다시 돌리지 않아요.
       const r2Image = yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame(r2FrameStartedAt);
-      if (acceptStopGate.isPending()) renderR2CellMap();
+      if (acceptStopGate.isPending()) { renderR2CellMap(); acceptStopGate.poll(); }
       if (r2Image) {
         // R1 대신 (②): 첫 grab 이 곧 레이아웃 실재의 증거 — 안 그리면 조준 가이드가 사라진다.
         if (!firstGrabRendered) {
@@ -2333,8 +2338,8 @@ function startFrameLoop(session) {
           }, { rejectLowDynamicRange: false });
           if (r2Luma && r2Luma.ok !== false) {
             const hit = r2Runtime.pushFrame(r2Luma, timestamp);
-            renderR2Progress();
             renderR2CellMap();
+            renderR2Progress();
             syncR2Status();
             /*
              * ⑯(i) — 유예 중이면 이 hit 는 **이미 받아들인 그 답**이다 (누적기는 DONE 뒤 흡수 상태라

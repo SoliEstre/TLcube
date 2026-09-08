@@ -4,7 +4,8 @@ import { createR2TypeExpansionRuntime } from '../src/r2/type-expansion-runtime.j
 
 const field = { width: 1, height: 1, data: new Float32Array([1]) };
 function fixtures({ yCounts = [0], cCount = 0, cubeCount = 0, cMs = 0, cubeMs = 0,
-  yDone = false, cDone = false, cubeDone = false, budget = 10, maxCandidates = 8 } = {}) {
+  yDone = false, cDone = false, cubeDone = false, budget = 10, maxCandidates = 8,
+  maxHudCandidates = Infinity, yHudCount = 1 } = {}) {
   let clock = 0, reserve = null;
   const order = [], totals = [];
   function service(name, count, cost, done) {
@@ -22,7 +23,7 @@ function fixtures({ yCounts = [0], cCount = 0, cubeCount = 0, cMs = 0, cubeMs = 
       } };
   }
   const c = service('C', cCount, cMs, cDone), cube = service('Y3D', cubeCount, cubeMs, cubeDone);
-  const y = { enabled: true, view: {}, hudCandidates: [{ id: 'Y-own' }],
+  const y = { enabled: true, view: {}, hudCandidates: Array.from({ length: yHudCount }, (_, i) => ({ id: i === 0 ? 'Y-own' : `Y-shelf-${i}` })),
     stats: { frames: 0, candidateCount: yCounts[0], locked: 0, lockDistrusted: true, format: { source: 'default' }, progressD: 0 },
     setCandidateReservation(fn) { fn(this.stats.candidateCount); reserve = fn; },
     setEnabled(v) { this.enabled = v; },
@@ -36,7 +37,7 @@ function fixtures({ yCounts = [0], cCount = 0, cubeCount = 0, cMs = 0, cubeMs = 
       return yDone ? { text: 'Y winner', candidateId: 'Y-own' } : null;
     } };
   const runtime = createR2TypeExpansionRuntime({ yRuntime: y, cRuntime: c, cubeYRuntime: cube,
-    maxCandidates, maxTrustedFrames: 3, maxStalledFrames: 10, maxAdditionalMs: budget, now: () => clock });
+    maxCandidates, maxHudCandidates, maxTrustedFrames: 3, maxStalledFrames: 10, maxAdditionalMs: budget, now: () => clock });
   return { runtime, y, c, cube, totals, order };
 }
 
@@ -118,4 +119,27 @@ test('disable/reset/invalidate는 확장 후보와 스케줄 상태를 함께 �
 test('상한 또는 예산을 가장하는 잘못된 소켓은 즉시 거부해요', () => {
   assert.throws(() => fixtures({ budget: 0 }), TypeError);
   assert.throws(() => fixtures({ maxCandidates: 0 }), TypeError);
+  assert.throws(() => fixtures({ maxHudCandidates: 7 }), TypeError);
+});
+
+test('Y 활성5+보존5는 그대로 두고 추가 후보를2개까지 허용해 HUD12칸을 지켜요', () => {
+  const f = fixtures({ yCounts: [5], cCount: 2, cubeCount: 1, yHudCount: 10, maxHudCandidates: 12 });
+  f.runtime.pushFrame(field, 0);
+  assert.equal(f.y.hudCandidates.length, 10, '보존 Y 증거를 버리지 않아요');
+  assert.equal(f.c.stats.candidateCount + f.cube.stats.candidateCount, 2);
+  assert.equal(f.runtime.expansionStats.totalCandidateCount, 7);
+  for (const call of f.c.calls) assert.equal(call.maxCandidates, 1);
+  for (const call of f.cube.calls) assert.equal(call.maxCandidates, 1);
+  f.y.hudCandidates.length = 5;
+  f.runtime.pushFrame(field, 100);
+  assert.equal(f.c.calls.at(-1).maxCandidates, 2, '선반이 비면 활성 K까지 여유를 다시 줘요');
+  assert.equal(f.cube.calls.at(-1).maxCandidates, 2);
+});
+
+test('한 서비스 DONE 뒤 나머지는 같은 프레임의 실행과 HUD defer 모두 건너뛰어요', () => {
+  const f = fixtures({ cDone: true });
+  f.runtime.pushFrame(field, 0);
+  assert.deepEqual(f.order, ['C']);
+  assert.equal(f.cube.deferred, 0);
+  assert.equal(f.runtime.expansionStats.cubeYDeferredFrames, 0);
 });

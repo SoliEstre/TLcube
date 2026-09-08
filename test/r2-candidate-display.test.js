@@ -51,6 +51,10 @@ test('3D Y는 Type Y를 유지하고 최대 D/보존/동률 선두가 HUD와 같
   assert.equal(candidateDisplayState(stats, view, [other, dropped], faces.id).candidateId, other.id);
   const empty = candidateDisplayState(stats, view, []);
   assert.equal(empty.stats, stats); assert.equal(empty.view, view);
+  const hidden = candidateDisplayState(stats, view, [], '', { visibleOnly: true });
+  assert.equal(hidden.stats.candidateCount, 0);
+  assert.equal(hidden.stats.progressD, 0);
+  assert.ok(confirmationRows(hidden).every(row => row.state === CONFIRM_STATE.NONE));
 });
 
 test('정정 래치는 ID/revision 둘 다 보존하고 미공급 legacy 표면을 바꾸지 않아요', () => {

@@ -3,7 +3,7 @@ import { createR2Router } from './router.js';
 import { createCCandidateRuntime } from './c-candidate-runtime.js';
 
 export function createR2TypeExpansionRuntime({ yRuntime, cRuntime, cubeYRuntime = null, maxCandidates,
-  maxTrustedFrames, maxStalledFrames, cOptions, maxAdditionalMs = Infinity,
+  maxTrustedFrames, maxStalledFrames, cOptions, maxAdditionalMs = Infinity, maxHudCandidates = Infinity,
   now = () => performance.now() } = {}) {
   if (!yRuntime || typeof yRuntime.pushFrame !== 'function'
     || typeof yRuntime.setCandidateReservation !== 'function'
@@ -17,6 +17,8 @@ export function createR2TypeExpansionRuntime({ yRuntime, cRuntime, cubeYRuntime 
     throw new TypeError('3D Y 실행/용량/리셋 소켓이 필요해요');
   }
   if (!(maxAdditionalMs > 0) || typeof now !== 'function') throw new TypeError('추가 서비스 예산/시계가 필요해요');
+  if (maxHudCandidates !== Infinity && (!Number.isSafeInteger(maxHudCandidates)
+    || maxHudCandidates < maxCandidates)) throw new TypeError('HUD 후보 한도는 활성 후보 상한 이상이어야 해요');
   let lastFrameId = null;
   let reservationMs = 0, nextService = 0;
   const hudRows = [];
@@ -47,7 +49,11 @@ export function createR2TypeExpansionRuntime({ yRuntime, cRuntime, cubeYRuntime 
     const at = now();
     // 새 Y 후보가 만들어지기 전 C 최신 후보를 내려요. 검출/누적/나이는 진행하지 않아요.
     // 이 상한은 활성 실행 후보이며 기존 Y의 얼린 shelf 메모리와는 별개예요.
-    const available = maxCandidates - nextCount;
+    trimExtraPools(maxCandidates - nextCount);
+    reservationMs += now() - at;
+    noteCandidateCounts(nextCount);
+  }
+  function trimExtraPools(available) {
     // 이미 존재하는 확장 후보가 많으면 큰 풀부터 줄여요. Y 자체 실행과 shelf는 보존해요.
     if (cubeYRuntime) {
       let cTarget = c.stats.candidateCount, cubeTarget = cubeCount();
@@ -57,8 +63,6 @@ export function createR2TypeExpansionRuntime({ yRuntime, cRuntime, cubeYRuntime 
       cubeYRuntime.setCapacity(cubeTarget);
       c.setCapacity(cTarget);
     } else c.setCapacity(available);
-    reservationMs += now() - at;
-    noteCandidateCounts(nextCount);
   }
   function reset() {
     yRuntime.reset(); c.reset(); cubeYRuntime?.reset(); router.reset(); cubeRouter?.reset();
@@ -89,6 +93,11 @@ export function createR2TypeExpansionRuntime({ yRuntime, cRuntime, cubeYRuntime 
     stats.lastCubeYMs = 0; stats.lastAdditionalMs = 0; stats.cubeYRouterReason = null;
     stats.lastReservationMs = reservationMs; // lastYMs 안에 포함된 C 폐기 비용, 합산 금지
     const yCount = yRuntime.stats.candidateCount ?? 0;
+    // Y 생성/선반 복원은 원래대로 끝낸 뒤 실제 HUD 행을 세어요. 선반을 활성 후보로
+    // 다시 세지 않으며, 12칸 표면을 위해 기존 Y 증거를 버리거나 카드를 축출하지 않아요.
+    const yHudCount = yRuntime.hudCandidates?.length ?? yCount;
+    const additionalCapacity = Math.max(0, Math.min(maxCandidates - yCount, maxHudCandidates - yHudCount));
+    trimExtraPools(additionalCapacity);
     noteCandidateCounts(yCount);
     if (yHit) { stats.lastWinner = 'Y'; stats.routerReason = 'y-done'; return yHit; }
     const routeInput = { frameId,
@@ -124,7 +133,7 @@ export function createR2TypeExpansionRuntime({ yRuntime, cRuntime, cubeYRuntime 
       const otherCount = isC ? cubeCount() : c.stats.candidateCount;
       const at = now();
       const result = runtime.pushFrame(field, timestamp, { frameId, runDetect: due.runC,
-        maxCandidates: maxCandidates - yCount - otherCount,
+        maxCandidates: additionalCapacity - otherCount,
         budgetMs: Math.max(0, maxAdditionalMs - elapsed) });
       const elapsedMs = now() - at;
       if (isC) stats.lastCMs = elapsedMs; else stats.lastCubeYMs = elapsedMs;

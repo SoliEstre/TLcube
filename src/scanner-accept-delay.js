@@ -68,6 +68,18 @@ export function createAcceptStopGate(options) {
 
   let timer = null;
   let pending = null;
+  let readiness = null;
+  let startTimer = null;
+
+  function poll() {
+    if (pending === null || startTimer === null) return false;
+    if (readiness !== null && !readiness()) return false;
+    const start = startTimer;
+    startTimer = null;
+    readiness = null;
+    start();
+    return true;
+  }
 
   return {
     /** 유예 중인가 — 프레임 루프와 결과 문이 「두 번째 수용 금지」를 이 하나로 읽는다. */
@@ -83,18 +95,28 @@ export function createAcceptStopGate(options) {
      * @param {Function} rest 닫기의 나머지 절반 (결과 시트). 보관만 하고 여기서 부르지 않는다.
      * @param {Function} onExpire 만료 시 호출자가 돌릴 것 (stopCamera).
      */
-    arm(delayMs, rest, onExpire) {
+    arm(delayMs, rest, onExpire, ready = null) {
       if (pending !== null) return false;
       if (typeof rest !== 'function' || typeof onExpire !== 'function') return false;
+      if (ready !== null && typeof ready !== 'function') return false;
       const ms = Number(delayMs);
       if (!Number.isFinite(ms) || ms <= 0) return false;
       pending = rest;
-      timer = setTimer(() => {
-        timer = null;
-        onExpire();
-      }, ms);
+      readiness = ready;
+      // 이미 수용된 결과만 기다려요. 카드를 축출하지 않고 빈자리가 날 때까지
+      // pending을 유지하며, 초록이 실제로 켜진 때부터 표시 시간을 세어요.
+      startTimer = () => {
+        timer = setTimer(() => {
+          timer = null;
+          onExpire();
+        }, ms);
+      };
+      poll();
       return true;
     },
+
+    /** rAF 표시 뒤 재시도해요. 이미 시작했거나 회수된 타이머는 다시 걸지 않아요. */
+    poll,
 
     /**
      * 유예를 회수한다 — 타이머를 지우고 나머지 절반을 돌려준다(없으면 null).
@@ -103,6 +125,8 @@ export function createAcceptStopGate(options) {
     take() {
       const rest = pending;
       pending = null;
+      readiness = null;
+      startTimer = null;
       if (timer !== null) {
         clearTimer(timer);
         timer = null;
