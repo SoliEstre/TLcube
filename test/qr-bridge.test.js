@@ -358,6 +358,8 @@ test("ⓕ' 배선 — QR 제출이 R2·R1 보다 앞이고, 유예가 두 grab �
   assert.ok(qrAt < r2At && r2At < r1At, 'QR 제출이 두 복호기보다 뒤다 — 같은 틱의 동기 복호가 detect 결과를 밀어낸다');
   const yieldAt = js.indexOf('const yieldForQr = frameYieldForQr({');
   assert.ok(yieldAt > qrAt && yieldAt < r2At, '유예 판정이 QR 제출 뒤·R2 앞이 아니다');
-  assert.equal(js.split('yieldForQr ? null : grabVideoFrame(').length - 1, 2, 'R2·R1 두 grab 이 유예를 안 본다');
+  assert.equal(js.split('yieldForQr ? null : grabVideoFrame(').length - 1, 1, 'R1 grab이 QR 유예를 안 본다');
+  assert.equal(js.split('yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame(').length - 1, 1,
+    'R2 grab이 QR 유예 또는 수용 표시 대기를 안 본다');
   assert.ok(js.includes('qr: r2Available ? summarizeQrBridge(qrBridge.stats, qrBridge.supported)'), '디버그 패널에 qr 통계가 안 간다');
 });
