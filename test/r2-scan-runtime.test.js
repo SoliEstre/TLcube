@@ -41,81 +41,6 @@ import { listLumaSequences, readLumaDump } from '../tools/read-luma.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
-test('합산 K 예약 — 새 Y 세션을 만들기 전에 가용 좌석을 확보한다', () => {
-  const runtime = createR2ScanRuntime({ enabled: true, intervalMs: 0,
-    adapters: lifecycleAdapters(25, 'v0tr') });
-  const failure = new Error('예약 거부');
-  runtime.setCandidateReservation((count) => { if (count > 0) throw failure; });
-  const field = { width: 4, height: 4, data: new Float32Array(16) };
-  assert.throws(() => runtime.pushFrame(field, 0), (error) => error === failure);
-  let currentCount = -1;
-  runtime.setCandidateReservation((count) => { currentCount = count; });
-  assert.equal(currentCount, 0, '예약 실패 뒤에도 새 세션이 남았다 — 생성 후 예약한 것이다');
-  assert.equal(runtime.stats.binds, 0);
-});
-
-test('합산 K 예약 — 새 bind와 선반 복원 모두 먼저 예약하고 Y 증거는 보존한다', () => {
-  const adapters = lifecycleAdapters(25, 'v0tr');
-  const runtime = createR2ScanRuntime({ enabled: true, intervalMs: 0, adapters });
-  const reservations = [];
-  runtime.setCandidateReservation((count) => reservations.push(count));
-  const field = { width: 4, height: 4, data: new Float32Array(16) };
-  runtime.pushFrame(field, 0);
-  const originalCount = runtime.stats.candidateCount;
-  assert.equal(originalCount, finalLayoutIdsForN(25).length);
-  assert.deepEqual(reservations.filter((count) => count > 0),
-    [originalCount], '준비된 후보 전체를 정확히 한 번 예약해야 한다');
-  const originalMap = runtime.view.cellMap;
-  adapters.stats.n = 13; adapters.stats.layoutId = 'v0';
-  runtime.pushFrame(field, 100);
-  adapters.stats.n = 25; adapters.stats.layoutId = 'v0tr';
-  const previous = reservations.length;
-  runtime.pushFrame(field, 200);
-  assert.equal(runtime.stats.candidateCount, originalCount);
-  assert.equal(runtime.view.cellMap, originalMap, '선반 대신 새 세션을 만들었다');
-  assert.deepEqual(reservations.slice(previous), [0, originalCount], '선반 복원을 예약하지 않았다');
-  runtime.reset();
-  assert.equal(reservations.at(-1), 0);
-  assert.throws(() => runtime.setCandidateReservation(1), TypeError);
-  runtime.setCandidateReservation(null);
-});
-
-test('합산 K 예약 — 여러 좌석 거부도 부분 세션을 남기지 않는다', () => {
-  const field = { width: 4, height: 4, data: new Float32Array(16) };
-  const denied = createR2ScanRuntime({ enabled: true, intervalMs: 0,
-    adapters: lifecycleAdapters(25, 'v0tr'), maxCandidates: 3 });
-  denied.setCandidateReservation((count) => { if (count >= 3) throw new Error('세 좌석 거부'); });
-  assert.throws(() => denied.pushFrame(field, 0), /세 좌석 거부/);
-  let countAfterDenied = -1;
-  denied.setCandidateReservation((count) => { countAfterDenied = count; });
-  assert.equal(countAfterDenied, 0, '후속 예약 거부 때 일부 세션이 남았다');
-  assert.equal(denied.stats.candidateCount, 0);
-});
-
-test('합산 K 예약 — 두 번째 세션 생성 예외도 원자적으로 롤백한다', () => {
-  const field = { width: 4, height: 4, data: new Float32Array(16) };
-  const adapters = lifecycleAdapters(25, 'v0tr');
-  const realDetect = adapters.detectInto;
-  let constructing = false, socketsRead = 0;
-  Object.defineProperty(adapters, 'detectInto', { get() {
-    if (constructing && ++socketsRead === 2) throw new Error('두 번째 소켓 실패');
-    return realDetect;
-  }});
-  const runtime = createR2ScanRuntime({ enabled: true, intervalMs: 0, adapters });
-  const reservations = [];
-  runtime.setCandidateReservation((count) => {
-    reservations.push(count);
-    if (count > 0) constructing = true;
-  });
-  assert.throws(() => runtime.pushFrame(field, 0), /두 번째 소켓 실패/);
-  let countAfterFailure = -1;
-  runtime.setCandidateReservation((count) => { countAfterFailure = count; });
-  assert.equal(countAfterFailure, 0, '생성 실패 뒤 부분 세션이 노출됐다');
-  assert.equal(reservations.at(-1), 0, '실패한 예약 좌석을 반환하지 않았다');
-  assert.equal(runtime.stats.candidateCount, 0);
-  assert.equal(runtime.stats.binds, 0);
-});
-
 function firstFrames(name, count, start = 0) {
   const seq = listLumaSequences().find((s) => s.name.split('/').pop() === name);
   if (!seq || !seq.frames.length) return null;
@@ -571,12 +496,8 @@ test('빚3 적중은 자기 세대를 싣는다 — 정정 셀 번호가 «어�
   const shape = buildR2Hit(runtime.stats, {
     text: hit.text, layoutId: hit.layoutId, n: hit.n,
     candidateId: hit.candidateId,
-    revision: hit.revision,
     correctedCount: hit.correctedCount, correctedCells: hit.correctedCells,
   });
-  const winner = runtime.hudCandidates.find(row => row.id === hit.candidateId);
-  assert.ok(winner);
-  assert.equal(hit.revision, winner.revision, '정정은 적중 시점의 후보 snapshot revision을 가리켜요');
   assert.deepEqual(Object.keys(hit).sort(), Object.keys(shape).sort(),
     '실물 적중의 표면이 순수 빌더의 출력과 다르다 — 어느 한쪽이 손으로 조립됐다');
   for (const key of Object.keys(shape)) {
@@ -777,7 +698,7 @@ test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 
   assert.ok(tail.includes('r2Latched = null'), '거부된 적중(비컨만·빈 페이로드) 뒤 래치를 안 되돌린다 — 확정이 아닌 것이 확정으로 남는다');
   // F1 — 거부 뒤 상태줄 위상·유예 (규칙은 모델 r2StatusOnReject, 값은 r2-confirmation-model.test (xii)).
   assert.ok(tail.includes('r2StatusOnReject(nowMs())'), '거부 뒤 상태줄 위상을 안 내린다 — 다음 프레임의 release 전이가 beaconOnly 처방을 aim 으로 덮는다');
-  assert.ok(js.includes('r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, liveR2Display().stats, nowMs())'),
+  assert.ok(js.includes('r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, r2Runtime.stats, nowMs())'),
     'syncR2Status 가 모델의 전이 규칙을 안 쓴다 — 유예가 배선되지 않는다');
   const loop = js.slice(js.indexOf('function startFrameLoop('), js.indexOf('const nextFrame ='));
   assert.ok(loop.includes('r2Latched = null'), 'startFrameLoop 이 래치를 안 비운다 — 옛 확정 값이 새 카메라의 결과처럼 읽힌다');
@@ -794,7 +715,7 @@ test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 
   // F8 — (a) 좌 패널은 라이브만: 래치를 모델에 넘기지 않고, 카메라가 닫히면 숨긴다.
   const progressFn = js.slice(js.indexOf('function renderR2Progress()'), js.indexOf('function renderResultR2Summary('));
   assert.ok(progressFn.length > 0, 'renderR2Progress / renderResultR2Summary 를 못 찾았다');
-  assert.ok(progressFn.includes('confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId, family: display.family })'), '좌 패널이 래치를 그린다 — 그 칩은 시트·게이트 아래라 아무도 못 본다');
+  assert.ok(progressFn.includes('confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId })'), '좌 패널이 래치를 그린다 — 그 칩은 시트·게이트 아래라 아무도 못 본다');
   assert.ok(!progressFn.includes('latched: r2Latched'), '좌 패널이 래치를 모델에 넘긴다');
   assert.ok(/if \(!cameraStream\) \{[^}]*r2ProgressRoot\.hidden = true;/.test(progressFn), '카메라가 닫혔는데 좌 패널을 숨기지 않는다');
   // F5 — 막대 메모는 칩과 같은 락 판정(progressNote).

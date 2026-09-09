@@ -3,12 +3,6 @@ import assert from 'node:assert/strict';
 import { createCandidateHudRenderer } from '../src/r2-candidate-hud-renderer.js';
 import { createCandidateHudModel, R2_CANDIDATE_SUCCESS_MS } from '../src/r2-candidate-hud-model.js';
 import { acceptStopDelayMs, createAcceptStopGate } from '../src/scanner-accept-delay.js';
-import { R2_TYPE_C_PROFILE } from '../src/r2/profiles/c.js';
-import { syntheticC } from './r2-c-fixtures.js';
-import { enumerateCubeFaceGeometry } from '../src/decoder/cube-face-geometry.js';
-import { hexCorners } from '../src/hexgrid.js';
-import { candidateHudGeometry, candidateHudQuadSlot } from '../src/r2/candidate-hud-geometry.js';
-import { HUD_ROLE, HUD_TONE_NONE } from '../src/r2-hud-model.js';
 
 class Path {
   points = [];
@@ -109,67 +103,6 @@ test('지원하지 않는 타입/사영은 꾸며 그리지 않고 정정은 해
     r.render([row('Y', .5)], 2, { correction: { candidateId: 'Y', cells: [0] } });
     assert.ok(overlay.context.calls.some((c) => c.color === '#ff00ff'));
     assert.equal(container.children[0].dataset.state, 'success');
-  } finally { globalThis.Path2D = old; }
-});
-
-test('생산자가 명시한 C 육각과 3D Y face-H만 소비하고 정정 revision을 정확히 맞춰요', () => {
-  const old = globalThis.Path2D; globalThis.Path2D = Path;
-  try {
-    const { renderer: r, container, overlay } = fixture();
-    const source = syntheticC(0);
-    const bound = R2_TYPE_C_PROFILE.bind({ profile: 'C', layoutId: 'C0', dimension: source.k,
-      ecc: 'M', wire: 1, tones: 3, maskIndex: 0, orientation: 0, sourceIdentity: 'hud-render-test' });
-    const c = { id: 'C', revision: 4, type: 'C', geometryMode: 'c-hex', k: source.k, n: source.k,
-      dimensionKind: 'radius-k', H: source.H, cellCount: bound.cellCount, cellCoord: Int32Array.from(bound.cellCoord),
-      cellMap: new Uint8Array(bound.cellCount).fill(2), D: .9, tracking: true, retained: false, alive: true,
-      frameWidth: source.field.width, frameHeight: source.field.height };
-    r.render([c], 0, { correction: { candidateId: 'C', revision: 3, cells: [0] } });
-    assert.equal(container.children[0].dataset.candidateId, 'C');
-    assert.ok(!overlay.context.calls.some((call) => call.color === '#ff00ff'), '이전 revision 정정은 재사용하지 않는다');
-    r.render([c], 1, { correction: { candidateId: 'C', revision: 4, cells: [0] } });
-    assert.ok(overlay.context.calls.some((call) => call.color === '#ff00ff'));
-    const branch = enumerateCubeFaceGeometry(hexCorners(0, 0, { size: 120, originX: 180, originY: 180 })).find((entry) => entry.ok);
-    const y3d = row('Y3D', .6, { geometryMode: 'y-faces', revision: 1, faceHs: branch.faceHs, H: null });
-    r.render([y3d], 2);
-    assert.ok(container.children.some((card) => card.dataset.candidateId === 'Y3D'));
-    assert.ok(overlay.context.calls.some((call) => call.op === 'stroke'), 'face-H는 own H 없이도 실제 사영 윤곽을 그린다');
-  } finally { globalThis.Path2D = old; }
-});
-
-test('Y role-grid는 cell index, tone-grid는 동일 마름모 slot으로 읽어요', () => {
-  const old = globalThis.Path2D; globalThis.Path2D = Path;
-  try {
-    const seen = [];
-    const { container, overlay, stage } = fixture();
-    const renderer = createCandidateHudRenderer({ container, overlay, stage, labelFor: (key) => key,
-      paintFor(role, _state, tone) { seen.push([role, tone]); return { color: `${role}/${tone}`, alpha: 1 }; } });
-    const candidate = row('tones', .8);
-    const geometry = candidateHudGeometry(candidate);
-    const expected = [];
-    for (let cell = 0; cell < geometry.count; cell += 1) for (let face = 0; face < 3; face += 1) {
-      const role = geometry.roleGrid[cell];
-      if (role !== HUD_ROLE.EMPTY) expected.push([role, geometry.toneGrid[candidateHudQuadSlot(geometry, cell, face) / 8] === HUD_TONE_NONE
-        ? null : geometry.toneGrid[candidateHudQuadSlot(geometry, cell, face) / 8]]);
-    }
-    renderer.render([candidate], 0);
-    assert.deepEqual(seen.slice(0, expected.length), expected);
-    assert.ok(expected.some(([, tone]) => tone !== null), '실제 role grid에 face별 tone이 있어야 한다');
-  } finally { globalThis.Path2D = old; }
-});
-
-test('정지 Y는 canonical과 image 기하 버퍼를 재사용하고 H 변경 때만 image 기하를 갱신해요', () => {
-  const old = globalThis.Path2D; globalThis.Path2D = Path;
-  try {
-    const { renderer } = fixture();
-    const candidate = row('cache', .8, { revision: 1 });
-    renderer.render([candidate], 0);
-    const first = renderer.cacheStats;
-    renderer.render([candidate], 1);
-    assert.deepEqual(renderer.cacheStats, first);
-    candidate.H = [...candidate.H]; candidate.H[2] += 1;
-    renderer.render([candidate], 2);
-    assert.equal(renderer.cacheStats.canonicalBuilds, first.canonicalBuilds);
-    assert.equal(renderer.cacheStats.frameBuilds, first.frameBuilds + 1);
   } finally { globalThis.Path2D = old; }
 });
 

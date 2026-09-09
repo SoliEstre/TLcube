@@ -179,7 +179,7 @@ test('ⓓ 소비자 스윕 — R2/QR 관련 줄이 isLabPath() 를 따로 보지
     '승격 날 «켰는데 안 먹는» 상태를 만드는 줄 — 전부 r2Available 로');
   assert.ok(JS.includes('const r2Available = engineSwitchAvailable({ labPath: isLabPath(), productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED })'),
     'r2Available 이 진리표에서 유도되지 않는다');
-  assert.ok(JS.includes('createScannerR2Runtime({ enabled: r2Available && r2Wanted, trial: r2Expanded })'), '런타임이 r2Available 을 안 본다');
+  assert.ok(JS.includes('createR2ScanRuntime({ enabled: r2Available && r2Wanted })'), '런타임이 r2Available 을 안 본다');
 });
 
 test('ⓔ 핸들러 — 켜든 끄든 런타임·브리지·힌트·패널·문구를 함께 움직이고 새 키에 저장한다 (⚠ 철자 자)', () => {

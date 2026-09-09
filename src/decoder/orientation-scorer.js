@@ -145,91 +145,6 @@ function classifyTone(value, dark, bright, midFraction) {
   return 1;
 }
 
-/** 한 방향 가설의 표본 점수. 다상 판정과 단상 소비자가 같은 계산을 공유해요. */
-function scoreSampledPhase(layout, h, sampleByKey, options, cfg, byKey) {
-  assertHypothesis(h);
-  // 가설 사상으로 옮긴 기대 톤 표: 관측 슬롯 (key,face) ← 기대 tones[mapKey][faceMap]
-  const expectations = [];
-  for (const entry of layout) {
-    const mappedKey = h.mapKey(entry.key);
-    const mapped = mappedKey === null || mappedKey === undefined ? null : byKey.get(mappedKey);
-    for (const face of FACES3) {
-      expectations.push({
-        key: entry.key,
-        face,
-        expected: mapped ? mapped.tones[h.faceMap[face]] : null,
-      });
-    }
-  }
-  const darkByFace = { T: [], L: [], R: [] };
-  const brightByFace = { T: [], L: [], R: [] };
-  for (const slot of expectations) {
-    const sample = sampleByKey(slot.key);
-    const value = sample && Number.isFinite(sample[slot.face]) ? sample[slot.face] : null;
-    if (value === null || slot.expected === null) continue;
-    if (slot.expected === 0) darkByFace[slot.face].push(value);
-    else if (slot.expected === 2) brightByFace[slot.face].push(value);
-  }
-  // ⭐ **앵커 주입 (2026-08-25, F-111)** — `options.toneAnchors` 가 있으면 그것을
-  // 쓴다. 없으면 종전과 **한 비트도 다르지 않게** 이 layout 에서 유도한다.
-  //
-  // 왜 필요한가: 절대 톤 분류의 dark/bright 앵커는 «이 프레임에서 무엇이 어둡고
-  // 무엇이 밝은가» 라는 **프레임 수준 성질**인데, 호출자가 layout 을 작게 쪼개
-  // 부르면 (면,톤) 조합당 표본이 1\~2개로 떨어져 중앙값이 잡음이 된다.
-  // 실측(코너 마커 × CO2): 묶음당 톤 셀 2개(6슬롯)면 49/63, 마커 전체 6셀
-  // (18슬롯)로 풀링하면 **18/18 → 63/63**. 게이트 값은 아무것도 안 바꾼다 —
-  // 바뀌는 것은 «무엇을 표본으로 삼아 앵커를 세우는가» 뿐이다.
-  const injected = options && options.toneAnchors;
-  const anchors = {};
-  const sampleCounts = {};
-  for (const face of FACES3) {
-    anchors[face] = injected && injected[face]
-      ? { dark: injected[face].dark, bright: injected[face].bright }
-      : { dark: median(darkByFace[face]), bright: median(brightByFace[face]) };
-    // ⚠ sampleCounts 는 언제나 **이 layout 이 직접 본 것**을 센다 — 앵커를 주입받아도
-    // 그대로다. 주입 시엔 앵커의 출처가 여기가 아니므로, 이 수를 «앵커가 굶었다» 의
-    // 근거로 읽으면 오진이다. 그래서 anchorsInjected 를 함께 낸다.
-    sampleCounts[face] = { dark: darkByFace[face].length, bright: brightByFace[face].length };
-  }
-  let matches = 0;
-  let total = 0;
-  for (const slot of expectations) {
-    if (slot.expected === null) { total += 1; continue; } // 집합 밖 사상 = 불일치
-    const sample = sampleByKey(slot.key);
-    const value = sample && Number.isFinite(sample[slot.face]) ? sample[slot.face] : null;
-    if (value === null) continue; // 관측 없음 — 분모 제외 (소거)
-    const observed = classifyTone(
-      value, anchors[slot.face].dark, anchors[slot.face].bright, cfg.classifyMidFraction,
-    );
-    total += 1;
-    if (observed === slot.expected) matches += 1;
-  }
-  const enoughSamples = FACES3.every((face) =>
-    sampleCounts[face].dark >= cfg.minimumSamplesPerTone
-    && sampleCounts[face].bright >= cfg.minimumSamplesPerTone);
-  return {
-    id: h.id,
-    agreement: total > 0 ? matches / total : 0,
-    matches,
-    total,
-    anchors,
-    anchorsInjected: Boolean(injected),
-    sampleCounts,
-    enoughSamples,
-  };
-}
-
-/**
- * 이미 방향이 정해진 소비자용 단상 점수예요. 방향 채택/라이벌 게이트를 대신하지 않아요.
- * 반환값은 같은 입력의 scoreSampledOrientation(...).phases 해당 항목과 같아요.
- */
-export function scoreSampledOrientationPhase(layout, hypothesis, sampleByKey, options) {
-  assertLayout(layout);
-  const cfg = cfgFor(options);
-  const byKey = new Map(layout.map((entry) => [entry.key, entry]));
-  return scoreSampledPhase(layout, hypothesis, sampleByKey, options, cfg, byKey);
-}
-
 /**
  * 표본 채점 — sampleByKey: key → { T: number|null, L, R } (면별 median 상대휘도).
  * 가설별로 기대 톤 0/2 슬롯에서 dark/bright 앵커(median)를 세우고 classifyTone 으로
@@ -244,7 +159,78 @@ export function scoreSampledOrientation(layout, hypotheses, sampleByKey, options
   const cfg = cfgFor(options);
   const byKey = new Map(layout.map((entry) => [entry.key, entry]));
 
-  const phases = hypotheses.map((h) => scoreSampledPhase(layout, h, sampleByKey, options, cfg, byKey));
+  const phases = hypotheses.map((h) => {
+    assertHypothesis(h);
+    // 가설 사상으로 옮긴 기대 톤 표: 관측 슬롯 (key,face) ← 기대 tones[mapKey][faceMap]
+    const expectations = [];
+    for (const entry of layout) {
+      const mappedKey = h.mapKey(entry.key);
+      const mapped = mappedKey === null || mappedKey === undefined ? null : byKey.get(mappedKey);
+      for (const face of FACES3) {
+        expectations.push({
+          key: entry.key,
+          face,
+          expected: mapped ? mapped.tones[h.faceMap[face]] : null,
+        });
+      }
+    }
+    const darkByFace = { T: [], L: [], R: [] };
+    const brightByFace = { T: [], L: [], R: [] };
+    for (const slot of expectations) {
+      const sample = sampleByKey(slot.key);
+      const value = sample && Number.isFinite(sample[slot.face]) ? sample[slot.face] : null;
+      if (value === null || slot.expected === null) continue;
+      if (slot.expected === 0) darkByFace[slot.face].push(value);
+      else if (slot.expected === 2) brightByFace[slot.face].push(value);
+    }
+    // ⭐ **앵커 주입 (2026-08-25, F-111)** — `options.toneAnchors` 가 있으면 그것을
+    // 쓴다. 없으면 종전과 **한 비트도 다르지 않게** 이 layout 에서 유도한다.
+    //
+    // 왜 필요한가: 절대 톤 분류의 dark/bright 앵커는 «이 프레임에서 무엇이 어둡고
+    // 무엇이 밝은가» 라는 **프레임 수준 성질**인데, 호출자가 layout 을 작게 쪼개
+    // 부르면 (면,톤) 조합당 표본이 1\~2개로 떨어져 중앙값이 잡음이 된다.
+    // 실측(코너 마커 × CO2): 묶음당 톤 셀 2개(6슬롯)면 49/63, 마커 전체 6셀
+    // (18슬롯)로 풀링하면 **18/18 → 63/63**. 게이트 값은 아무것도 안 바꾼다 —
+    // 바뀌는 것은 «무엇을 표본으로 삼아 앵커를 세우는가» 뿐이다.
+    const injected = options && options.toneAnchors;
+    const anchors = {};
+    const sampleCounts = {};
+    for (const face of FACES3) {
+      anchors[face] = injected && injected[face]
+        ? { dark: injected[face].dark, bright: injected[face].bright }
+        : { dark: median(darkByFace[face]), bright: median(brightByFace[face]) };
+      // ⚠ sampleCounts 는 언제나 **이 layout 이 직접 본 것**을 센다 — 앵커를 주입받아도
+      // 그대로다. 주입 시엔 앵커의 출처가 여기가 아니므로, 이 수를 «앵커가 굶었다» 의
+      // 근거로 읽으면 오진이다. 그래서 anchorsInjected 를 함께 낸다.
+      sampleCounts[face] = { dark: darkByFace[face].length, bright: brightByFace[face].length };
+    }
+    let matches = 0;
+    let total = 0;
+    for (const slot of expectations) {
+      if (slot.expected === null) { total += 1; continue; } // 집합 밖 사상 = 불일치
+      const sample = sampleByKey(slot.key);
+      const value = sample && Number.isFinite(sample[slot.face]) ? sample[slot.face] : null;
+      if (value === null) continue; // 관측 없음 — 분모 제외 (소거)
+      const observed = classifyTone(
+        value, anchors[slot.face].dark, anchors[slot.face].bright, cfg.classifyMidFraction,
+      );
+      total += 1;
+      if (observed === slot.expected) matches += 1;
+    }
+    const enoughSamples = FACES3.every((face) =>
+      sampleCounts[face].dark >= cfg.minimumSamplesPerTone
+      && sampleCounts[face].bright >= cfg.minimumSamplesPerTone);
+    return {
+      id: h.id,
+      agreement: total > 0 ? matches / total : 0,
+      matches,
+      total,
+      anchors,
+      anchorsInjected: Boolean(injected),
+      sampleCounts,
+      enoughSamples,
+    };
+  });
 
   const ranked = phases.slice().sort((a, b) => b.agreement - a.agreement);
   const claimed = ranked[0];

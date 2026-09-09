@@ -43,9 +43,8 @@ export function normalizeDecodePayload(result) {
  * ⚠ **2026-09-06 승격** 뒤 이 함수의 입력은 정식에서도 두 값을 다 받는다 — 정식 첫 방문은
  * R2 위치라 기본 문구가 `guide.scope.r2*` 쪽이다. 「정식은 언제나 tlcubeOnly」는 거짓이 됐다.
  */
-export function scanScopeCopyKey(r2Enabled, qrCapable, expanded = false) {
+export function scanScopeCopyKey(r2Enabled, qrCapable) {
   if (r2Enabled !== true) return 'guide.tlcubeOnly';
-  if (expanded === true) return qrCapable === true ? 'guide.scope.r2expandedQr' : 'guide.scope.r2expanded';
   // on 은 브라우저 능력에 따라 둘 — BarcodeDetector 가 있으면 QR 도 읽는다 (§26). 판정 전(모름)은 못 읽는 쪽.
   return qrCapable === true ? 'guide.scope.r2qr' : 'guide.scope.r2';
 }

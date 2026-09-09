@@ -73,9 +73,7 @@ import {
   typeCGuideRingPositions,
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
-import { r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
-import { createScannerR2Runtime, r2ExpansionDebugLine } from '/src/r2-expansion-engine.js';
-import { candidateDisplayState } from '/src/r2-candidate-display.js';
+import { createR2ScanRuntime, r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
 import { createCandidateHudRenderer } from '/src/r2-candidate-hud-renderer.js';
 import {
   createQrBridge, qrHitToDecodeResult, qrFrameGateOpen, routeQrHits, frameYieldForQr, summarizeQrBridge,
@@ -177,7 +175,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-09.02';
+export const SCANNER_BUILD = '2026-09-09.01';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -347,8 +345,7 @@ try {
     window.localStorage.getItem(ENGINE_STORAGE_KEY_LEGACY),
   );
 } catch { /* 저장소 접근 불가는 스캔을 막지 않는다 — 기본 켬 */ }
-const r2Expanded = isLabPath();
-const r2Runtime = createScannerR2Runtime({ enabled: r2Available && r2Wanted, trial: r2Expanded });
+const r2Runtime = createR2ScanRuntime({ enabled: r2Available && r2Wanted });
 /*
  * 일반 QR 브리지 (PM/029B §2 ①단계 · §26). 브라우저 BarcodeDetector 에 위임 — 의존성 0,
  * 능력은 실행 시 판정(Android Chrome 가용, Firefox·Windows 데스크톱 불가). R2 토글 아래에서만
@@ -375,13 +372,6 @@ const QR_HINT_TTL_MS = 3000;
  * startFrameLoop(새 세션) · 스위치 핸들러 · 거부된 적중 뒤에 null. 선언이 여기(프레임 루프보다 앞)인 이유: 대입하는 쪽이 먼저 읽힌다.
  */
 let r2Latched = null;
-let r2DisplayedCandidateId = '';
-function liveR2Display() {
-  const shown = r2CandidateHud.model?.slots.filter((slot) => slot && slot.status !== 'dropped')
-    .map((slot) => slot.candidate) || [];
-  return candidateDisplayState(r2Runtime.stats, r2Runtime.view,
-    shown, r2DisplayedCandidateId, { visibleOnly: true });
-}
 /**
  * 🔴 **RS 정정 강조 래치** (3b · 운영자 결정 ⑦). DONE 적중이 세우고 `hudCorrectionAlpha` 가
  * `R2_HUD_CORRECTION_MS` 뒤 0 으로 내린다. 모양: `{ at, count, cells, layoutId, n }` —
@@ -1029,7 +1019,7 @@ function refreshScanGuideCopy() {
   // 범위 안내는 R2 토글을 따른다 (운영자 요구 ②, 2026-09-04). data-i18n 도 같이 바꿔야
   // 언어 전환의 전수 재적용이 되돌리지 않는다. `t()` 는 리터럴 두 번 — 삼항을 안에 넣으면
   // scanner-i18n 의 «사전에 없는 키» 자가 못 본다. R1 위치면 문구가 옛 것으로 환원된다.
-  const scopeKey = scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported, r2Expanded);
+  const scopeKey = scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported);
   scanGuideScope.setAttribute('data-i18n', scopeKey);
   // 카드는 위치마다 한 장 (운영자 관측 2026-09-06 — R2 위치에서 조준 + 범위가 겹쳐 «두 카드»).
   // 어느 장이 보이는지는 여기서 정하지 않는다 — `guideCardVisibility` 가 값으로 잠근다(사본 금지).
@@ -1037,9 +1027,7 @@ function refreshScanGuideCopy() {
   const cards = guideCardVisibility(r2Runtime.enabled);
   scanGuideDetail.hidden = !cards.detail;
   scanGuideScope.hidden = !cards.scope;
-  if (scopeKey === 'guide.scope.r2expandedQr') scanGuideScope.textContent = t('guide.scope.r2expandedQr');
-  else if (scopeKey === 'guide.scope.r2expanded') scanGuideScope.textContent = t('guide.scope.r2expanded');
-  else if (scopeKey === 'guide.scope.r2qr') scanGuideScope.textContent = t('guide.scope.r2qr');
+  if (scopeKey === 'guide.scope.r2qr') scanGuideScope.textContent = t('guide.scope.r2qr');
   else if (scopeKey === 'guide.scope.r2') scanGuideScope.textContent = t('guide.scope.r2');
   else scanGuideScope.textContent = t('guide.tlcubeOnly');
 }
@@ -2217,14 +2205,11 @@ function handleDecodeResult(result, source, session) {
     correctedCount: r2Correction === null ? 0 : r2Correction.count,
     candidateHud: result.source === 'r2',
   });
-  const acceptedCandidateId = acceptedR2Summary?.candidateId;
-  const ready = result.source === 'r2' ? () => {
+  if (result.source === 'r2') {
+    r2CandidateHud.accept(r2Latched?.candidateId, nowMs());
     renderR2CellMap();
-    if (!r2CandidateHud.accept(acceptedCandidateId, nowMs())) return false;
-    renderR2CellMap();
-    return true;
-  } : null;
-  if (acceptStopGate.arm(delayMs, showAccepted, stopCamera, ready)) return;
+  }
+  if (acceptStopGate.arm(delayMs, showAccepted, stopCamera)) return;
   stopCamera();
   showAccepted();
 }
@@ -2327,7 +2312,7 @@ function startFrameLoop(session) {
       const r2FrameStartedAt = nowMs();
       // 성공 카드를 그리는 짧은 유예 중에는 무거운 복호를 다시 돌리지 않아요.
       const r2Image = yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame(r2FrameStartedAt);
-      if (acceptStopGate.isPending()) { renderR2CellMap(); acceptStopGate.poll(); }
+      if (acceptStopGate.isPending()) renderR2CellMap();
       if (r2Image) {
         // R1 대신 (②): 첫 grab 이 곧 레이아웃 실재의 증거 — 안 그리면 조준 가이드가 사라진다.
         if (!firstGrabRendered) {
@@ -2342,8 +2327,8 @@ function startFrameLoop(session) {
           }, { rejectLowDynamicRange: false });
           if (r2Luma && r2Luma.ok !== false) {
             const hit = r2Runtime.pushFrame(r2Luma, timestamp);
-            renderR2CellMap();
             renderR2Progress();
+            renderR2CellMap();
             syncR2Status();
             /*
              * ⑯(i) — 유예 중이면 이 hit 는 **이미 받아들인 그 답**이다 (누적기는 DONE 뒤 흡수 상태라
@@ -2357,9 +2342,6 @@ function startFrameLoop(session) {
               // leadingId = 이 프레임 좌 패널의 레이아웃 선두 (renderR2Progress 가 바로 위에서 갱신) — DONE 과 다르면 «정정»(⑧).
               r2Latched = {
                 candidateId: hit.candidateId,
-                revision: hit.revision,
-                profile: hit.profile || 'Y',
-                geometryMode: hit.hudSnapshot?.geometryMode,
                 layoutId: hit.layoutId,
                 n: hit.n,
                 leadingId: r2LeadingId,
@@ -3554,8 +3536,8 @@ function renderR2Progress() {
     r2LeadingId = '';
     return;
   }
-  const display = liveR2Display();
-  const { stats, view } = display;
+  const stats = r2Runtime.stats;
+  const view = r2Runtime.view;
   // 카메라가 닫혀 있으면 **숨긴다**. 옛 안은 DONE 래치가 있을 때 «확정 칩만» 남겼지만 그 칩은 결과 시트(z10)·카메라 게이트(z2)
   // 아래라 아무도 못 봤다 (F8 실측) — 확정 요약은 결과 카드가 그린다 (renderResultR2Summary). 마지막 막대가 남아도 같은 이유로 안 보이지만
   // 재스캔의 첫 프레임(startFrameLoop 의 재렌더) 전까지 «아직 모으는 중» 상태를 DOM 에 남기지 않는다.
@@ -3571,9 +3553,9 @@ function renderR2Progress() {
     r2LeadingId = '';
     r2LeadingLockRevision = view.lockRevision;
   }
-  r2LeadingId = display.candidateId ? display.leadingId : leadingWithHysteresis(r2LeadingId, stats.candidates);
+  r2LeadingId = leadingWithHysteresis(r2LeadingId, stats.candidates);
   // 래치는 결과 카드의 몫 — 라이브 패널은 stats·view 만 본다 (래치가 있는 순간은 문 → stopCamera 안이라 이미 카메라가 닫혀 있다).
-  const rows = confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId, family: display.family });
+  const rows = confirmationRows({ stats, view, latched: null, leadingId: r2LeadingId });
   /*
    * 3d — «격자 재확인». progress 행의 상태 단어를 불신일 때만 갈아 끼운다.
    *
@@ -3635,7 +3617,7 @@ function renderResultR2Summary(latched) {
  * 규칙은 r2-confirmation-model.r2StatusStep (순수) — 여기는 action 대로 setStatus 하고 위상을 되쓴다.
  */
 function syncR2Status() {
-  const step = r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, liveR2Display().stats, nowMs());
+  const step = r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, r2Runtime.stats, nowMs());
   r2StatusCollecting = step.collecting;
   if (step.action === R2_STATUS_ACTION.COLLECTING) setStatus(t('status.r2Collecting'));
   else if (step.action === R2_STATUS_ACTION.AIM) setStatus(t('status.aim'));
@@ -4009,7 +3991,7 @@ function appendR2HudOutline(path, buffer) {
  */
 function r2HudDebugLine() {
   if (!r2Available) return '';
-  const base = r2HudDebugLineOf({
+  return r2HudDebugLineOf({
     phase: r2Hud.phase,
     lastMs: r2Hud.lastMs,
     maxMs: r2Hud.maxMs,
@@ -4025,8 +4007,6 @@ function r2HudDebugLine() {
      */
     corrected: r2Latched && Number.isInteger(r2Latched.correctedCount) ? r2Latched.correctedCount : 0,
   }, r2Runtime.stats);
-  const expansion = r2ExpansionDebugLine(r2Runtime.expansionStats);
-  return expansion ? base + '\n' + expansion : base;
 }
 
 // 외곽 12좌석과 겹치던 조작부는 뷰파인더 위, 진단은 기존 스크롤 패널로 옮겨요.
@@ -4062,11 +4042,9 @@ function renderCandidateR2CellMap() {
     const paintStartedAt = nowMs();
     r2CandidateHud.render(r2Runtime.hudCandidates || [], paintStartedAt, {
       enabled: r2Runtime.enabled && Boolean(cameraStream),
-      correction: r2Correction && r2Latched ? { ...r2Correction,
-        candidateId: r2Latched.candidateId, revision: r2Latched.revision } : null,
+      correction: r2Correction && r2Latched ? { ...r2Correction, candidateId: r2Latched.candidateId } : null,
     });
     const leader = r2CandidateHud.model.slots.find((slot) => slot?.id === r2CandidateHud.model.leaderId);
-    r2DisplayedCandidateId = leader?.id || '';
     r2LeadingId = leader?.candidate.layoutId || '';
     r2Hud.n = leader?.candidate.n || 0;
     r2Hud.layoutId = r2LeadingId;

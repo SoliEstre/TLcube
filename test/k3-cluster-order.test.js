@@ -343,16 +343,11 @@ test('ⓗ 어댑터 csBlockLocator 오버레이는 정본 하나 — 키 리터�
   assert.ok(keys.includes('searchMaxSide'), '이 자를 열게 한 키(searchMaxSide)가 상수에 없다');
   assert.ok(Object.isFrozen(BEACON_CS_BLOCK_LOCATOR), '정본은 동결이어야 한다 — 런타임에 갈리면 정본이 아니다');
 
-  const src = [
-    'central-beacon-adapt.js',
-    'central-beacon-observation-shared.js',
-    'central-n7-observe.js',
-  ].map((file) => readFileSync(new URL(`../src/decoder/${file}`, import.meta.url), 'utf8')).join('\n');
+  const src = readFileSync(new URL('../src/decoder/central-beacon-adapt.js', import.meta.url), 'utf8');
   const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  const definitions = [...code.matchAll(/export const BEACON_CS_BLOCK_LOCATOR = Object\.freeze\(\{[\s\S]*?\}\);/g)];
-  assert.equal(definitions.length, 1,
-    '관측 모듈 전체에서 BEACON_CS_BLOCK_LOCATOR 의 정본 정의가 정확히 하나여야 한다');
-  const definition = definitions[0];
+  const definition = code.match(/export const BEACON_CS_BLOCK_LOCATOR = Object\.freeze\(\{[\s\S]*?\}\);/);
+  assert.ok(definition,
+    'BEACON_CS_BLOCK_LOCATOR 의 `export const … = Object.freeze({…});` 정의를 못 찾았다 — 이름·모양이 바뀌었으면 이 자를 같이 옮겨라');
 
   const keyLiteral = new RegExp(`\\b(${keys.join('|')})\\s*:`, 'g');
   const inside = [...definition[0].matchAll(keyLiteral)].map((m) => m[1]).sort();
@@ -364,7 +359,7 @@ test('ⓗ 어댑터 csBlockLocator 오버레이는 정본 하나 — 키 리터�
     return `${m[1]} (주석 벗긴 코드 ${line} 행 근처)`;
   });
   assert.deepEqual(leaks, [],
-    '비컨 관측 모듈에 오버레이 키의 손 사본이 돌아왔다 — BEACON_CS_BLOCK_LOCATOR 를 스프레드하라');
+    'central-beacon-adapt.js 에 오버레이 키의 손 사본이 돌아왔다 — BEACON_CS_BLOCK_LOCATOR 를 스프레드하라');
 });
 
 // ─────────────────── ⓓ·ⓔ 실사진 덤프가 필요한 성질 ───────────────────

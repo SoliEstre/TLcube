@@ -71,12 +71,11 @@ test('HUD feed는 후보별 소유 snapshot과 재사용 배열을 내고, 프�
   assert.equal(rows, feed, 'bind 뒤 새 feed 배열을 할당했다');
   assert.equal(rows.length, finalLayoutIdsForN(25).length);
   assert.deepEqual(Object.keys(rows[0]).sort(), [
-    'D', 'H', 'alive', 'cellCount', 'cellMap', 'formatWire', 'frameHeight', 'frameWidth', 'geometryMode',
+    'D', 'H', 'alive', 'cellCount', 'cellMap', 'formatWire', 'frameHeight', 'frameWidth',
     'id', 'indicator', 'layoutId', 'n', 'retained', 'revision', 'tracking', 'type',
   ].sort(), 'HUD 후보 행의 additive contract shape가 다르다');
   assert.equal(new Set(rows.map((row) => row.id)).size, rows.length, '후보 ID가 layout/index 충돌을 냈다');
-  assert.ok(rows.every((row) => row.type === 'Y' && row.geometryMode === 'y-grid' && row.n === 25),
-    '평면 Y 후보는 제품 타입을 유지하고 자기 기하모드를 명시해야 한다');
+  assert.ok(rows.every((row) => row.type === 'Y' && row.n === 25));
   assert.ok(rows.every((row) => row.formatWire === 2 && Number.isFinite(row.D)
     && Number.isInteger(row.indicator) && Number.isInteger(row.revision)));
   assert.ok(rows.every((row) => row.frameWidth === LUMA.width && row.frameHeight === LUMA.height));
@@ -98,7 +97,6 @@ test('HUD feed는 후보별 소유 snapshot과 재사용 배열을 내고, 프�
     assert.equal(rows[i].cellMap, maps[i], '프레임마다 cellMap을 재할당했다');
     assert.equal(rows[i].H, homographies[i], '프레임마다 H를 재할당했다');
     assert.equal(rows[i].H[2], 9, 'fresh H를 소유 사본에 갱신하지 않았다');
-    assert.equal(rows[i].geometryMode, 'y-grid', '프레임 갱신이 평면 Y의 기하모드를 바꿨다');
     assert.ok(rows[i].revision > revisions[i], '프레임 갱신에서 revision이 안 올랐다');
   }
 });

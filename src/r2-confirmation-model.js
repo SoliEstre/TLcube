@@ -37,7 +37,6 @@
 import { versionForFinalN } from './cellSurfaceFinal.js';
 import { R2_INDICATOR } from './r2/session.js';
 import { R2_CAPABILITIES } from './r2-scan-runtime.js';
-import { C_FORMAT_INDEX } from './formatC.js';
 
 export const CONFIRM_STATE = Object.freeze({
   NONE: 'none',
@@ -147,7 +146,7 @@ function noneRow(key) {
 }
 
 function versionText(family, version, n) {
-  return family + version + (family === 'C' ? ' (k' : ' (n') + n + ')';
+  return family + version + ' (n' + n + ')';
 }
 
 /**
@@ -177,6 +176,9 @@ export function confirmationRows(input) {
   const arg = input && typeof input === 'object' ? input : {};
   const stats = arg.stats && typeof arg.stats === 'object' ? arg.stats : null;
   const view = arg.view && typeof arg.view === 'object' ? arg.view : null;
+  const family = typeof arg.family === 'string' && arg.family !== ''
+    ? arg.family
+    : R2_CAPABILITIES.accumulatesFamilies[0];
 
   // ⚠ `locked` 의 candidateCount > 0 이 곧 «n 이 라인업 안» 의 보증이다 (머리말). 가드 없이 versionForFinalN 을 부르지 마라.
   const lock = lockState(stats, view);
@@ -191,8 +193,6 @@ export function confirmationRows(input) {
 
   const leadingId = typeof arg.leadingId === 'string' ? arg.leadingId : '';
   const viewId = view && typeof view.layoutId === 'string' ? view.layoutId : '';
-  const family = typeof arg.family === 'string' && arg.family !== '' ? arg.family
-    : latched?.profile === 'C' || view?.profile === 'C' ? 'C' : R2_CAPABILITIES.accumulatesFamilies[0];
 
   const rows = [];
   for (const key of ROW_KEYS) {
@@ -204,10 +204,7 @@ export function confirmationRows(input) {
     }
     if (key === 'version') {
       const n = latched !== null ? latched.n : (locked ? lockedN : 0);
-      const layoutId = latched?.layoutId ?? (leadingId || viewId);
-      const version = family === 'C'
-        ? C_FORMAT_INDEX.find(spec => spec.name === layoutId && spec.k === n)?.version ?? -1
-        : n > 0 ? safeVersion(n) : -1;
+      const version = n > 0 ? safeVersion(n) : -1;
       rows.push(version >= 0
         ? row(key, CONFIRM_STATE.CONFIRMED, versionText(family, version, n))
         : noneRow(key));
@@ -268,8 +265,7 @@ export function progressNote(input) {
   const stats = arg.stats && typeof arg.stats === 'object' ? arg.stats : null;
   const view = arg.view && typeof arg.view === 'object' ? arg.view : null;
   const lock = lockState(stats, view);
-  const dimension = arg.family === 'C' || view?.profile === 'C' || view?.dimensionKind === 'radius-k' ? 'k' : 'n';
-  return lock.locked ? dimension + lock.n + '·' + lock.candidateCount : '';
+  return lock.locked ? 'n' + lock.n + '·' + lock.candidateCount : '';
 }
 
 /*
