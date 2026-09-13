@@ -229,7 +229,8 @@ test('ⓕ R1 off 모드(②) — R1 게이트는 감싸기 안, R2 가이드 점
   // R2 위치의 첫 grab은 가이드만 그려요. fps는 큐 제출이 아니라 Worker 처리 완료에서 세요.
   const r2Block = loop.slice(r2At, braceEnd(loop, loop.indexOf('{', r2At)));
   assert.ok(r2Block.includes('renderGuideDots()'), 'R2 블록이 첫 grab 뒤 가이드 점을 안 그린다 — R2 위치에서 조준 가이드가 사라진다');
-  assert.match(r2WorkerOptions(), /\bonProcessed\s*:\s*\(\)\s*=>\s*(?:\{\s*)?noteFrameProcessed\(\)/,
+  // .05 부터 완료 콜백은 timing 을 받아 처리 fps 창에 넘겨요 — 자는 «완료가 noteFrameProcessed 를 부른다» 만 재요(인자 유무 무관).
+  assert.match(r2WorkerOptions(), /\bonProcessed\s*:\s*(?:\(\s*\w*\s*\)|\w+)\s*=>\s*(?:\{\s*)?noteFrameProcessed\(\s*\w*\s*\)/,
     'Worker 처리 완료가 fps 줄을 올리지 않는다');
   assert.doesNotMatch(r2Block, /\bnoteFrameProcessed\(/,
     'Worker에 제출만 한 입력을 처리 완료로 중복 계수하면 안 된다');

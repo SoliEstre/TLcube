@@ -376,7 +376,9 @@ test('ⓛ 범위 안내가 R2 토글을 따르고 배선이 살아 있다 (운�
       assert.equal(typeof SCANNER_STRINGS[lang][key], 'string', lang + ' 에 ' + key + ' 가 없다');
     }
     assert.match(SCANNER_STRINGS.ko[key], /TL/, '실제 TL 누적 범위를 안내해야 해요');
-    assert.match(SCANNER_STRINGS.ko[key], /Y 전용/);
+    // .05 부터 R2 는 Y 와 H 를 누적해요(정식 hAvailable = r2Available) — 안내 문구는 두 타입을 다 말해야 해요.
+    assert.match(SCANNER_STRINGS.ko[key], /Y·H 누적/, 'R2 범위 안내가 Y·H 누적을 말하지 않는다');
+    assert.match(SCANNER_STRINGS.ko[key], /Y와 H 타입/, 'R2 범위 안내가 Y 와 H 타입을 함께 말하지 않는다');
   }
   assert.deepEqual(R2_CAPABILITIES.accumulatesFamilies, ['Y']);
   assert.equal(typeof R2_CAPABILITIES.readsQrVia, 'string', 'QR 을 어떻게 읽는지 원장에 없다');
