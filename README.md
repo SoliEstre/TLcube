@@ -101,6 +101,15 @@ temporarily switch the camera to R1 without changing the saved R2 preference; re
 Unhinted QR content is not used to guess the family. Synthetic and worker checks are not a real-camera
 recognition-rate or mobile-FPS guarantee.
 
+The camera FPS badge counts completed processing results in a five-second window, not camera frames
+or H detector calls. It resets on session/engine changes and dims when results stop. Expand Performance
+diagnostics for local-only rates and preparation/service/queue timing; no image, decoded content or device
+identifier is included. The scanner avoids unused luminance percentile work without changing pixel values.
+An experimental two-frame preparation queue is **lab-only and off by default**: developers may set
+`localStorage.setItem('tlscan.r2.pipelineDepth', '2')` on the lab origin and reload; remove that key to restore
+the default. Formal pages always use depth one. More overlap can raise CPU use and result age, so this is
+not a claim of higher recognition rate or 10 FPS on phones. H detection intervals and Y/QR routing stay unchanged.
+
 ## Status
 
 | Milestone | Scope | Status |

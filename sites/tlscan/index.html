@@ -805,6 +805,11 @@
     line-height: 1.4;
     font-variant-numeric: tabular-nums;
   }
+  .proc-fps[data-state="stale"] { opacity: .4; }
+  .scan-performance { width: min(100%, 460px); min-width: 0; color: #dce5ef; font-size: 11px; }
+  .scan-performance summary { cursor: pointer; text-align: center; padding: 4px 10px; }
+  .scan-performance p { padding: 0 8px; }
+  .scan-performance pre { max-height: 220px; overflow: auto; padding: 8px; background: rgb(0 0 0 / .45); border-radius: 8px; text-align: left; font-size: 10px; }
 
   .scan-status {
     max-width: min(100%, 460px);
@@ -1641,7 +1646,7 @@
                authored hidden 이고 scanner.js 가 연다. **2026-09-06 승격**으로 정식에서도 뜬다. -->
           <div class="engine-switch" id="engine-switch" hidden>
             <span class="engine-switch-label" id="engine-switch-label" data-i18n="engine.label">스캐너 엔진 선택</span>
-            <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — R1은 TL 코드를 한 프레임으로 읽고, R2는 TL 코드를 여러 프레임에 걸쳐 누적하며 지원 브라우저에서 QR도 읽어요</span>
+            <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — R1은 TL 코드를 한 프레임으로 읽고, R2는 Y와 H 타입을 여러 프레임에 걸쳐 누적하며 지원 브라우저에서 QR도 읽어요</span>
             <button type="button" class="engine-switch-control" id="engine-switch-control" role="switch" aria-checked="true" data-engine="r2" aria-labelledby="engine-switch-label" aria-describedby="engine-switch-desc">
               <span class="engine-switch-opt" data-i18n="engine.r1">R1</span>
               <span class="engine-switch-opt" data-i18n="engine.r2">R2</span>
@@ -1690,7 +1695,12 @@
         <!-- 처리 fps (운영자 지시 2026-08-17): 초당 복호 시도 수. 수집 오버헤드 진단과
              실사용자 피드백 («몇 fps 나오나요») 을 위한 상시 표시 — 카메라 활성 중에만.
              aria-hidden: 초당 갱신되는 수치라 낭독하면 소음이다. -->
-        <span class="proc-fps" id="proc-fps" hidden aria-hidden="true" data-i18n-attr="title:fps.title" title="초당 처리 프레임 (복호 시도)">—</span>
+        <span class="proc-fps" id="proc-fps" hidden aria-hidden="true" data-i18n-attr="title:fps.title" title="초당 완료 결과 수 — 카메라·H 검출 빈도와는 달라요">—</span>
+        <details class="scan-performance" id="scan-performance" hidden>
+          <summary data-i18n="perf.title">성능 진단</summary>
+          <p data-i18n="perf.note">펼친 동안만 이 기기에서 계측해요. 이미지·읽은 내용·기기 식별자는 저장하지 않아요. 완료·H 검출·Y 분석·영상 표시 빈도는 서로 다른 값이에요.</p>
+          <pre id="scan-performance-output" aria-live="off"></pre>
+        </details>
         <div class="zoom-controls" id="zoom-controls" hidden>
           <button type="button" id="zoom-out" data-i18n-attr="aria-label:zoom.out" aria-label="축소">−</button>
           <input id="zoom-slider" type="range" min="1" max="8" step="0.1" value="1" data-i18n-attr="aria-label:zoom.slider" aria-label="확대 배율">

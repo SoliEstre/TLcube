@@ -79,26 +79,11 @@ function normalizeQuantiles(quantiles) {
   return normalized;
 }
 
-/**
- * alpha=0은 배경 마스크다. RGB가 남아 있어도 합성 배경을 추측하지 않으므로
- * robust range의 표본으로 세지 않는다. alpha가 null이면 모든 표본이 유효하다.
- * @param {{data: Float32Array, alpha: Uint8Array | null | undefined}} luma
- * @returns {number}
- */
-function opaqueSampleCount(luma) {
-  if (luma.alpha === null || luma.alpha === undefined) return luma.data.length;
-  let count = 0;
-  for (let i = 0; i < luma.alpha.length; i += 1) {
-    if (luma.alpha[i] !== 0) count += 1;
-  }
-  return count;
-}
-
 /*
  * histogram 은 quantile 과 무관하다 — 같은 LumaField 면 같은 표다.
  *
- * 한 복호에서 `robustPercentiles` 는 최소 두 번 불린다(`toRelativeLuminance` 의
- * 동적범위 검사, `outlineEvidence` 의 전경 임계값). 그때마다 전 픽셀을 다시 훑을
+ * 한 복호에서 `robustPercentiles` 는 여러 번 불릴 수 있다(`toRelativeLuminance` 의
+ * 선택적 동적범위 검사, `outlineEvidence` 의 전경 임계값). 그때마다 전 픽셀을 다시 훑을
  * 이유가 없다. grid-sample 의 표본 캐시와 같은 «LumaField = 불변» 전제를 따른다.
  */
 const percentileHistogramCache = new WeakMap();
@@ -242,6 +227,7 @@ export function toRelativeLuminance(raster, options = {}) {
 
   const data = new Float32Array(pixelCount);
   const alpha = new Uint8Array(pixelCount);
+  let opaquePixels = 0;
 
   for (let pixelIndex = 0, offset = 0; pixelIndex < pixelCount; pixelIndex += 1, offset += 4) {
     // relativeLuminance8 은 relativeLuminance 와 같은 sRGB 표·계수·덧셈 순서를 쓴다.
@@ -253,33 +239,35 @@ export function toRelativeLuminance(raster, options = {}) {
       pixels[offset + 2],
     );
     alpha[pixelIndex] = pixels[offset + 3];
+    if (alpha[pixelIndex] !== 0) opaquePixels += 1;
   }
 
   const luma = { width, height, data, alpha };
-  const percentiles = robustPercentiles(luma, DEFAULT_ROBUST_QUANTILES);
-  const opaquePixels = opaqueSampleCount(luma);
-  if (percentiles === null || opaquePixels === 0) {
-    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
-      stage: 'luma',
-      opaquePixels,
-    });
+  if (opaquePixels === 0) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, { stage: 'luma', opaquePixels });
   }
 
-  const [p01, p50, p99] = percentiles;
-  const robustSpan = p99 - p01;
-  if (
-    normalizedOptions.rejectLowDynamicRange
-    && robustSpan < normalizedOptions.lowDynamicRangeThreshold
-  ) {
-    return fail(FRONTEND_FAILURE.LUMA_DEGENERATE, {
-      stage: 'luma',
-      p01,
-      p50,
-      p99,
-      robustSpan,
-      threshold: normalizedOptions.lowDynamicRangeThreshold,
-      opaquePixels,
-    });
+  // RGBA8의 relativeLuminance8 → Float32는 유한한 0..1이에요.
+  // 저대비 거부를 끈 호출은 percentile 값을 소비하지 않으므로 여기서 만들지 않아요.
+  // LumaField 불변 계약 아래 이후 robustPercentiles 호출이 기존 캐시를 처음 채워요.
+  if (normalizedOptions.rejectLowDynamicRange) {
+    const percentiles = robustPercentiles(luma, DEFAULT_ROBUST_QUANTILES);
+    if (percentiles === null) {
+      return fail(FRONTEND_FAILURE.EMPTY_INPUT, { stage: 'luma', opaquePixels });
+    }
+    const [p01, p50, p99] = percentiles;
+    const robustSpan = p99 - p01;
+    if (robustSpan < normalizedOptions.lowDynamicRangeThreshold) {
+      return fail(FRONTEND_FAILURE.LUMA_DEGENERATE, {
+        stage: 'luma',
+        p01,
+        p50,
+        p99,
+        robustSpan,
+        threshold: normalizedOptions.lowDynamicRangeThreshold,
+        opaquePixels,
+      });
+    }
   }
 
   // 반환 직전 계약 단언은 내부 변경이 alpha/data 정렬을 깨도 이 모듈 안에서

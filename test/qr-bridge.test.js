@@ -193,13 +193,18 @@ test('ⓔ 범위 문구 키 3상태 — off 는 정식, on 은 브라우저 능�
   assert.match(SCANNER_STRINGS.ko['guide.scope.r2qr'], /다른 바코드/, 'QR 만 읽고 다른 바코드는 아직이라는 한계가 빠졌다');
   for (const key of ['guide.scope.r2', 'guide.scope.r2qr']) {
     assert.match(SCANNER_STRINGS.ko[key], /TL 코드/);
-    assert.match(SCANNER_STRINGS.ko[key], /Y 전용/);
+    assert.match(SCANNER_STRINGS.ko[key], /Y·H 누적/);
     assert.match(SCANNER_STRINGS.ko[key], /다른 TL 타입은 R1/);
   }
+  // 이 원장은 Y 단일 runtime의 계약이고, 제품 scanner는 H composite를 함께 켜요.
   assert.deepEqual(R2_CAPABILITIES.accumulatesFamilies, ['Y']);
+  const scanner = readFileSync(new URL('../sites/tlscan/scanner.js', import.meta.url), 'utf8');
+  assert.match(scanner, /const hAvailable = r2Available/);
+  assert.match(scanner, /enableH:\s*hAvailable/);
   for (const strings of Object.values(SCANNER_STRINGS)) {
     for (const key of ['guide.scope.r2', 'guide.scope.r2qr', 'engine.aria']) {
-      assert.match(strings[key], /Y/, `${key}: 기본 Y 전용 범위 누락`);
+      assert.match(strings[key], /Y/, `${key}: Y 범위 누락`);
+      assert.match(strings[key], /H/, `${key}: H composite 범위 누락`);
     }
   }
 });

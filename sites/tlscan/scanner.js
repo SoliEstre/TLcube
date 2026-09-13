@@ -76,6 +76,8 @@ import {
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
 import { r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
 import { createR2WorkerRuntime } from '/src/r2-worker-runtime.js';
+import { createProcessingFpsTracker } from '/src/scanner-processing-fps.js';
+import { createScannerPerformanceMetrics } from '/src/scanner-performance-metrics.js';
 import { hHitToDecodeResult, isVerifiedHDecodeResult } from '/src/h-scan-runtime.js';
 import { resolveUrlResultPresentation } from '/src/scanner-url-result.js';
 import { createHPhotoReader } from '/src/h-photo-reader.js';
@@ -183,7 +185,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-14.04';
+export const SCANNER_BUILD = '2026-09-14.05';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -235,6 +237,8 @@ const steadyMeter = document.getElementById('steady-meter');
 const steadyMeterFill = document.getElementById('steady-meter-fill');
 // 처리 fps 배지 — 없는 변형 페이지가 있어도 스캐너는 살아야 하므로 하드 가드 밖.
 const procFpsEl = document.getElementById('proc-fps');
+const perfDetails = document.getElementById('scan-performance');
+const perfOutput = document.getElementById('scan-performance-output');
 
 if (!scannerApp || !cameraStage || !cameraVideo || !cameraGate || !cameraGateTitle ||
     !cameraGateMessage || !startCameraButton || !chooseImageButton || !gateChooseImageButton ||
@@ -359,8 +363,12 @@ try {
   );
 } catch { /* 저장소 접근 불가는 스캔을 막지 않는다 — 기본 켬 */ }
 const r2Runtime = createR2WorkerRuntime({ enabled: r2Available && r2Wanted,
+  // 겹침은 아직 기기별 A/B 실험이에요. 정식은 저장값과 무관하게 한 장만 처리해요.
+  workerQueueDepth: (() => { try {
+    return isLabPath() && window.localStorage.getItem('tlscan.r2.pipelineDepth') === '2' ? 2 : 1;
+  } catch { return 1; } })(),
   engineOptions: { candidateScope: 'y', enableH: hAvailable, autoRouteR1: true },
-  onProcessed: () => { noteFrameProcessed(); renderHProgress();
+  onProcessed: timing => { noteFrameProcessed(timing); renderHProgress();
     const evidence = r2Runtime.stats.engineRoute;
     if (validEngineRouteEvidence(evidence, nowMs())) autoRouteToR1(evidence.family);
   } });
@@ -1659,36 +1667,93 @@ function setCameraStageActive(active) {
 }
 
 /*
- * 처리 fps (운영자 지시 2026-08-17) — «초당 몇 프레임을 복호 시도하는가».
- * 카메라 프레임률이 아니라 **복호 완료 기준**이다: 수집·복호 오버헤드가 그대로
- * 반영되므로 시험판(수집 있음)과 정식·스테이징(수집 없음)의 체감 차이를 이 수치로
- * 직접 비교할 수 있다. 5초 롤링 창 · 표시 500ms 스로틀 · 표본 2개 전에는 «—».
+ * 완료 FPS는 카메라/그리기/H 검출 빈도와 다른 값이에요. due로 검출을 생략한
+ * Worker 결과도 완료에 포함돼요. 엔진·세대·세션 창을 분리하고 정지 시 흐리게
+ * 표시해요. 실제 단계별 계측은 사용자가 진단을 펼친 동안만 메모리에 남겨요.
  */
-const PROC_FPS_WINDOW_MS = 5000;
-const procFpsTimes = [];
-let procFpsShownAt = 0;
+const procFpsTracker = createProcessingFpsTracker();
+const perfMetrics = createScannerPerformanceMetrics();
+let procFpsShownAt = -Infinity;
+let procFpsKey = null;
+let perfVideoRequest = null;
+let perfVideoEpoch = 0;
 
-function noteFrameProcessed() {
-  if (!procFpsEl) return;
-  const now = performance.now();
-  procFpsTimes.push(now);
-  while (procFpsTimes.length > 0 && now - procFpsTimes[0] > PROC_FPS_WINDOW_MS) {
-    procFpsTimes.shift();
+function syncProcessingKey(now) {
+  const key = `${scanSession}:${r2Runtime.enabled ? 'r2:' + r2Runtime.processingKey : 'r1'}`;
+  if (key !== procFpsKey) {
+    procFpsKey = key;
+    procFpsTracker.reset(); perfMetrics.reset(now); procFpsShownAt = -Infinity;
   }
-  if (procFpsTimes.length < 2 || now - procFpsShownAt < 500) return;
+  return key;
+}
+
+function renderProcessingFps(now = nowMs()) {
+  const key = syncProcessingKey(now);
+  if (now - procFpsShownAt < 500) return;
   procFpsShownAt = now;
-  const spanSec = (now - procFpsTimes[0]) / 1000;
-  const fps = spanSec > 0 ? (procFpsTimes.length - 1) / spanSec : 0;
-  procFpsEl.textContent = fps.toFixed(1) + ' fps';
+  const reading = procFpsTracker.sample(now, key);
+  if (procFpsEl) {
+    procFpsEl.textContent = reading.fps === null ? '—' : reading.fps.toFixed(1) + ' fps';
+    procFpsEl.dataset.state = reading.state;
+  }
+  if (perfDetails?.open && perfOutput && cameraStream) {
+    let settings = {};
+    try { settings = activeVideoTrack()?.getSettings?.() ?? {}; } catch { /* 진단 실패는 스캔을 막지 않아요. */ }
+    // 트랙의 개인 식별자·label·URL·복호 원문은 저장하거나 출력하지 않아요.
+    const finite = value => Number.isFinite(value) ? value : null;
+    perfOutput.textContent = JSON.stringify({ build: SCANNER_BUILD, engine: r2Runtime.enabled ? 'R2' : 'R1',
+      completedFps: reading.fps, badgeState: reading.state,
+      video: { width: finite(cameraVideo.videoWidth), height: finite(cameraVideo.videoHeight) },
+      trackSettings: { width: finite(settings.width), height: finite(settings.height), frameRate: finite(settings.frameRate) },
+      ...perfMetrics.snapshot(now) }, null, 2);
+  }
+}
+
+function noteFrameProcessed(timing = null) {
+  if (!cameraStream) return;
+  const now = nowMs(), key = syncProcessingKey(now);
+  procFpsTracker.note(now, key);
+  if (perfDetails?.open) perfMetrics.noteResult(now,
+    timing ?? { serviceMs: lastFrameCostMs }, r2Runtime.enabled ? r2Runtime.stats : {});
+  renderProcessingFps(now);
+}
+
+function stopPerformanceVideoProbe() {
+  perfVideoEpoch++;
+  if (perfVideoRequest !== null) {
+    try { cameraVideo.cancelVideoFrameCallback?.(perfVideoRequest); } catch { /* 지원 여부와 무관하게 정리해요. */ }
+  }
+  perfVideoRequest = null;
+}
+
+function startPerformanceVideoProbe() {
+  stopPerformanceVideoProbe();
+  if (!perfDetails?.open || !cameraStream || typeof cameraVideo.requestVideoFrameCallback !== 'function') return;
+  const epoch = perfVideoEpoch;
+  const next = (now, metadata) => {
+    if (epoch !== perfVideoEpoch || !cameraStream || !perfDetails.open) return;
+    perfVideoRequest = null;
+    perfMetrics.noteVideo(nowMs(), metadata.presentedFrames);
+    // rVFC는 계측에만 써요. 캡처/디코더의 기존 rAF 스케줄은 바꾸지 않아요.
+    try { perfVideoRequest = cameraVideo.requestVideoFrameCallback(next); } catch { stopPerformanceVideoProbe(); }
+  };
+  try { perfVideoRequest = cameraVideo.requestVideoFrameCallback(next); } catch { stopPerformanceVideoProbe(); }
 }
 
 function resetProcFps(visible) {
-  if (!procFpsEl) return;
-  procFpsTimes.length = 0;
-  procFpsShownAt = 0;
-  procFpsEl.textContent = '—';
-  procFpsEl.hidden = !visible;
+  procFpsTracker.reset(); perfMetrics.reset(nowMs()); procFpsKey = null; procFpsShownAt = -Infinity;
+  if (procFpsEl) { procFpsEl.textContent = '—'; procFpsEl.hidden = !visible; procFpsEl.dataset.state = 'warming'; }
+  if (perfDetails) perfDetails.hidden = !visible;
+  if (perfOutput) perfOutput.textContent = '';
+  if (visible) startPerformanceVideoProbe(); else stopPerformanceVideoProbe();
 }
+
+perfDetails?.addEventListener('toggle', () => {
+  perfMetrics.reset(nowMs());
+  if (perfOutput) perfOutput.textContent = '';
+  startPerformanceVideoProbe(); procFpsShownAt = -Infinity;
+  if (cameraStream) renderProcessingFps();
+});
 
 function showCameraGate(settings) {
   const options = settings || {};
@@ -2375,6 +2440,9 @@ function startFrameLoop(session) {
     if (session !== scanSession || !cameraStream || document.visibilityState === 'hidden') {
       return;
     }
+    const perfNow = nowMs();
+    renderProcessingFps(perfNow);
+    if (perfDetails?.open) perfMetrics.noteRaf(perfNow);
 
     /*
      * ── 한 프레임 양보 (⑤ 엔진 스위치 반응) ─────────────────────────────
@@ -2481,6 +2549,8 @@ function startFrameLoop(session) {
                 height:cameraVideo.videoHeight,previewZoom:effectiveCropZoom()});
               if(hHudFrames.size>32)hHudFrames.delete(hHudFrames.keys().next().value);
             }
+            if (perfDetails?.open) perfMetrics.notePrepare(nowMs(), nowMs() - r2FrameStartedAt,
+              { ySide: r2Luma.width, hSide: hField && hField.ok !== false ? hField.width : null });
             const hit = r2Runtime.pushFrame(r2Luma, timestamp, { ownedInput: true,
               ...(hField&&hField.ok!==false?{hField,ownedHInput:true}:{}) });
             renderR2Progress();
@@ -2710,7 +2780,7 @@ function startFrameLoop(session) {
                 lastDecodeAt = r2Available ? frameStartedAt + lastFrameCostMs : frameStartedAt;
                 isDecoding = false;
               }
-              noteFrameProcessed();
+              if (session === scanSession && !r2Runtime.enabled) noteFrameProcessed();
             });
         }
       }
