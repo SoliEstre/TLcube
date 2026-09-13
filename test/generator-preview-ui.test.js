@@ -102,8 +102,9 @@ test('무대 높이와 --fit-h 가 산술적으로 일치한다 (패딩 40 + 테
     `--fit-h 최소값(${fitMin})이 무대 최소값(${stageMin}) − ${inset} 가 아니다`);
 });
 
-test('데스크톱 무대는 열 전체 폭을 채우고, 빈 면 편집은 같은 카드의 일반 흐름으로 이어져요', () => {
-  // 이미지 편집기를 무대 안으로 옮긴 뒤에는 sticky/고정 높이가 아래 카드를 가려요.
+test('데스크톱 무대는 열 전체 폭을 채우고 뷰포트 한 판을 넘지 않으며, 빈 면 편집이 열리면 같은 카드의 일반 흐름으로 이어져요', () => {
+  // 2026-09-14 운영자 지시: 카드는 sticky 로 스크롤을 따라오고 높이는 내용만큼(그림이 폭에 걸리면 카드가 줄고,
+  // 높이에 걸리면 그림이 줄어요). 이미지 편집기가 열리면 카드가 길어지므로 sticky/max-height 를 풀어요.
   // selector의 쉼표·줄바꿈 대신 적용 대상과 레이아웃 계약을 검사해요.
   const style = INDEX.match(/<style[^>]*>([\s\S]*?)<\/style>/)[1].replace(/\/\*[\s\S]*?\*\//g, '');
   const rules = [...style.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
@@ -118,11 +119,16 @@ test('데스크톱 무대는 열 전체 폭을 채우고, 빈 면 편집은 같�
   assert.ok(block, '직접 무대와 previewColumn 안 무대에 적용되는 데스크톱 규칙이 없다');
   assert.match(block.declarations, /position:\s*relative;/);
   assert.match(block.declarations, /top:\s*0;/);
-  assert.match(block.declarations, /height:\s*max\(420px, calc\(100vh - 80px\)\);/);
+  assert.match(block.declarations, /(?:^|;)\s*height:\s*auto;/, '카드 높이가 내용을 따르지 않는다 — 위아래 빈 칸이 생긴다');
+  assert.match(block.declarations, /max-height:\s*max\(420px, calc\(100vh - 16px\)\);/, '카드가 뷰포트 한 판으로 제한되지 않는다');
+  const sticky = rules.find((rule) => rule.selectors.includes('#previewColumn:has(> #stage > #hFaceImagesPanel[hidden])'));
+  assert.ok(sticky, '이미지 편집이 닫힌 previewColumn 의 sticky 규칙이 없다');
+  assert.match(sticky.declarations, /position:\s*sticky;/);
+  assert.match(sticky.declarations, /top:\s*8px;/);
   const expanded = rules.find((rule) => rule.selectors.includes('#previewColumn > #stage:has(> #hFaceImagesPanel:not([hidden]))'));
   assert.ok(expanded, '이미지 편집기가 열린 무대 규칙이 없다');
   assert.match(expanded.declarations, /(?:^|;)\s*height:\s*auto;/);
-  assert.match(expanded.declarations, /min-height:\s*max\(420px, calc\(100vh - 80px\)\);/);
+  assert.match(expanded.declarations, /max-height:\s*none;/, '이미지 편집이 열린 카드가 뷰포트 높이에 잘린다');
 });
 
 test('두 캔버스가 같은 상자를 정확히 덮는다 (backdrop 정합 · 포인터 좌표)', () => {

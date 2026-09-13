@@ -578,17 +578,24 @@
   /* 가용 높이는 «무대 높이 − 패딩 40 − 테두리 2». 아래 두 미디어 쿼리가 무대 높이와
      이 값을 **같이** 정의한다 — 한쪽만 고치면 다시 레터박스가 생기니 붙여 둔다. */
   @media (min-width: 761px) {
+    /* 카드는 «뷰포트 한 판» 을 넘지 않고 스크롤을 따라와요(sticky). 높이는 내용만큼이라 그림이 폭에
+       걸리면 카드가 줄어 하단 도구 모음이 그림 바로 아래 붙고, 높이에 걸리면 그림(1:1)이 줄어 카드
+       가운데 서요 — 어느 쪽이든 위아래 빈 칸이 없어요 (운영자 지시 2026-09-14). 빈 면 이미지 편집이
+       열리면 카드가 길어지므로 그때는 sticky 와 max-height 를 풀고 페이지와 함께 흘러요. */
+    #previewColumn:has(> #stage > #hFaceImagesPanel[hidden]) { position: sticky; top: 8px; }
     main > #stage, #previewColumn > #stage {
       align-self: start;
       position: relative; top: 0;
-      height: max(420px, calc(100vh - 80px));
+      height: auto; min-height: 240px;
+      max-height: max(420px, calc(100vh - 16px));
     }
     /* 이미지 편집은 같은 카드 아래에 이어지고, 큐브의 화면 높이 예산과 분리해요. */
     #previewColumn > #stage:has(> #hFaceImagesPanel:not([hidden])) {
       height: auto;
-      min-height: max(420px, calc(100vh - 80px));
+      max-height: none;
     }
-    #canvasWrap { --fit-h: max(378px, calc(100vh - 122px)); }
+    /* 가용 높이 = 카드 max-height(100vh − 16) − 패딩 40 − 테두리 2 = 100vh − 58. */
+    #canvasWrap { --fit-h: max(378px, calc(100vh - 58px)); }
   }
   @media (max-width: 760px) {
     /* 1열에서는 무대가 내용을 감싼다(높이 고정 없음). --fit-h 는 «세로로 이 이상은
@@ -719,7 +726,7 @@
   #y3dBar .h-control-label { min-width:0; }
   #hRotationModeCards { gap:4px; }
   #hRotationModeCards .y3d-btn { padding:5px 6px; font-size:11px; }
-  #hAutoRotate { min-width:36px;min-height:34px;justify-content:center; }
+  #hAutoRotate { min-width:36px;min-height:34px;justify-content:center;gap:6px;padding:5px 10px;white-space:nowrap; }
   #hRotationDirections { margin-left:auto; }
   .h-face-toggle { display:flex;flex-wrap:nowrap;gap:5px;margin-left:auto; }
   .h-face-toggle[hidden] { display:none; }
@@ -1013,6 +1020,7 @@
   .h-export-format { font-size:9px;opacity:.75; }
   .h-image-card .hint { overflow-wrap:anywhere;margin:0; }
   #hFaceImagesPanel { flex:none;width:100%;box-sizing:border-box;margin-top:12px;padding:12px;background:var(--panel);border:1px solid var(--line,#d8deea);border-radius:10px; }
+  #hFaceImagesPanel > .section-heading-row:first-child { margin-top: 0; }
   #hFaceImagesPanel .y3d-btn { font-size:11px; }
   #hFaceImagesPanel[hidden], #hMaskOptions[hidden], #cubeBlockScaleOptions[hidden], #cubeVideoOptions[hidden], #hVersionCards button[hidden] { display:none; }
   #cubeVideoToggle { margin-left:auto;flex:none; }
@@ -2936,7 +2944,7 @@
       </div>
       <div id="hPreviewRotationControls" class="y3d-rotation h-tool-group" hidden>
         <div class="y3d-row">
-          <button type="button" class="y3d-btn" id="hAutoRotate" aria-pressed="false" aria-keyshortcuts="Space" aria-label="자동 회전 재생"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m8 4 12 8-12 8Z" fill="currentColor"/></svg></button>
+          <button type="button" class="y3d-btn" id="hAutoRotate" aria-pressed="false" aria-keyshortcuts="Space" aria-label="자동 회전 재생"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m8 4 12 8-12 8Z" fill="currentColor"/></svg><span class="h-rotate-caption">자동 회전</span></button>
           <div class="y3d-row" id="hRotationModeCards" role="group" data-h-aria-label="rotationAxis" aria-label="회전 축">
             <button type="button" class="y3d-btn" data-h-rotation-mode="x" data-h-label="axisX" aria-pressed="false">X축</button>
             <button type="button" class="y3d-btn on" data-h-rotation-mode="y" data-h-label="axisY" aria-pressed="true">Y축</button>
@@ -7425,7 +7433,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-14.05';
+const GENERATOR_BUILD = '2026-09-14.06';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -7727,8 +7735,9 @@ function schedulePreviewSquare(){
     if(!matchMedia('(min-width: 761px)').matches){$('stage').style.removeProperty('--preview-square');previewSquareLast=-1;return;}
     const stage=$('stage'),bar=$('y3dBar'),style=getComputedStyle(stage);
     const padding=parseFloat(style.paddingTop)+parseFloat(style.paddingBottom);
-    // 이미지 카드가 늘려 준 stage 높이를 다시 큐브 크기에 더하지 않아요.
-    const previewHeight=$('hFaceImagesPanel').hidden?stage.clientHeight:Math.max(420,innerHeight-80)-2;
+    // 카드 높이는 내용을 따르므로(height:auto) stage.clientHeight 를 읽으면 순환해요 — 카드 max-height
+    // (100vh − 16, 테두리 2 제외) 를 예산으로 써요. 이미지 카드가 늘려 준 높이도 큐브 크기에 더하지 않아요.
+    const previewHeight=Math.max(420,innerHeight-16)-2;
     const side=hPreviewSquareSide({width:stage.clientWidth,height:previewHeight,
       toolbarHeight:bar.hidden?0:bar.getBoundingClientRect().height,padding,gap:bar.hidden?0:12});
     if(side===previewSquareLast)return;
@@ -7875,6 +7884,8 @@ function syncHUi(){
     button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
   }
   $('hAutoRotate').innerHTML=hControlIcon(generatorState.hAutoRotate?'pause':'play');
+  // 아이콘만으로는 재생/정지가 구분되지 않아요(운영자 2026-09-14) — 짧은 글자를 같이 둬요. 전체 문구는 title/aria 에.
+  {const caption=document.createElement('span');caption.className='h-rotate-caption';caption.textContent=hText(generatorState.hAutoRotate?'pauseRotationShort':'playRotationShort');$('hAutoRotate').append(caption);}
   $('hAutoRotate').setAttribute('aria-pressed',String(generatorState.hAutoRotate));
   $('hAutoRotate').title=hText(generatorState.hAutoRotate?'pauseRotation':'playRotation')+' (Space)';
   $('hAutoRotate').setAttribute('aria-label',$('hAutoRotate').title);

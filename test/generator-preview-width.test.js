@@ -56,7 +56,9 @@ test('빈 면 이미지 패널은 미리보기 카드 안에서 도구 모음 �
 test('이미지 패널은 외곽 카드 높이만 늘리고 큐브 크기와 순환하지 않아요', () => {
   const stage=cssRule('#previewColumn > #stage:has(> #hFaceImagesPanel:not([hidden]))');
   assert.match(stage,/height\s*:\s*auto\s*;/);
-  assert.match(stage,/min-height\s*:\s*max\(420px,\s*calc\(100vh - 80px\)\)\s*;/);
-  assert.match(INDEX,/const previewHeight=\$\('hFaceImagesPanel'\)\.hidden\?stage\.clientHeight:Math\.max\(420,innerHeight-80\)-2;/);
+  assert.match(stage,/max-height\s*:\s*none\s*;/);
+  // 카드 높이가 내용을 따르므로 정사각 예산은 stage.clientHeight 가 아니라 뷰포트(카드 max-height 100vh−16)에서 잰다.
+  assert.match(INDEX,/const previewHeight=Math\.max\(420,innerHeight-16\)-2;/);
+  assert.doesNotMatch(INDEX,/previewHeight=[^\n]*stage\.clientHeight/,'정사각 예산이 카드 높이를 읽어 순환한다');
   assert.match(INDEX,/hPreviewSquareSide\(\{width:stage\.clientWidth,height:previewHeight,/);
 });
