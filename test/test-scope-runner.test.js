@@ -24,9 +24,9 @@ test('runner CLI는 중복/알 수 없는 flag를 거부하고 bench 상속을 f
 });
 
 test('원격 full gate는 명시한 양의 정수 동시성만 Node에 전달해요', () => {
-  assert.deepEqual(testArgs({}), ['--test', 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js']);
+  assert.deepEqual(testArgs({}), ['--test', '--test-reporter=tap', 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js']);
   assert.deepEqual(testArgs({TL_TEST_CONCURRENCY: '2'}),
-    ['--test', '--test-concurrency=2', 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js']);
+    ['--test', '--test-reporter=tap', '--test-concurrency=2', 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js']);
   for (const value of ['0', '-1', '1.5', ' 2', '2 ', 'two', '9007199254740992']) {
     assert.throws(() => testArgs({TL_TEST_CONCURRENCY: value}), /TL_TEST_CONCURRENCY/);
   }

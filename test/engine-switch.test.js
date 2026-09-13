@@ -234,8 +234,10 @@ test('ⓕ R1 off 모드(②) — R1 게이트는 감싸기 안, R2 가이드 점
   assert.doesNotMatch(r2Block, /\bnoteFrameProcessed\(/,
     'Worker에 제출만 한 입력을 처리 완료로 중복 계수하면 안 된다');
   assert.ok(!r2Block.includes('noteProductFrame()'), 'R2 블록이 R1 «복호 시도 회계» 를 부른다 — 시도 수의 뜻이 R1 위치와 갈린다');
-  assert.ok(r2Block.includes('yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame('),
-    'R2 grab이 QR 감지 또는 수용 뒤 성공 표시 유예를 무시한다');
+  assert.match(r2Block, /const r2CanAccept\s*=\s*r2Runtime\.canAcceptFrame\(timestamp\)/,
+    'Worker가 현재 입력을 받을 수 있는지 grab 전에 묻지 않는다');
+  assert.match(r2Block, /const r2Image\s*=\s*r2CanAccept\s*&&\s*!yieldForQr\s*&&\s*!acceptStopGate\.isPending\(\)\s*\?\s*grabVideoFrame\(r2FrameStartedAt\)\s*:\s*null/,
+    'R2 grab이 Worker 수요·QR 유예·수용 표시 유예를 모두 통과한 뒤에만 일어나지 않는다');
 });
 
 test('ⓖ 좌 패널 칩 색은 셀맵 색표에서 **유도**된다 — setProperty 인자가 리터럴이 아니라 R2_CELL_COLOR[CELL_MAP_STATE.X], CSS 는 변수만 본다 · setProperty 는 r2Available 게이트 안 (⚠ 철자 자)', () => {

@@ -370,7 +370,14 @@ test("ⓕ' 배선 — QR 제출이 R2·R1 보다 앞이고, 유예가 두 grab �
   const yieldAt = js.indexOf('const yieldForQr = frameYieldForQr({');
   assert.ok(yieldAt > qrAt && yieldAt < r2At, '유예 판정이 QR 제출 뒤·R2 앞이 아니다');
   assert.equal(js.split('yieldForQr ? null : grabVideoFrame(').length - 1, 1, 'R1 grab이 QR 유예를 안 본다');
-  assert.equal(js.split('yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame(').length - 1, 1,
-    'R2 grab이 QR 유예 또는 수용 표시 대기를 안 본다');
+  const r2DemandAt = js.indexOf('const r2CanAccept = r2Runtime.canAcceptFrame(timestamp);');
+  const r2ImageAt = js.indexOf('const r2Image = r2CanAccept && !yieldForQr && !acceptStopGate.isPending()', r2DemandAt);
+  assert.ok(r2DemandAt > yieldAt && r2ImageAt > r2DemandAt,
+    'R2가 Worker 수요를 QR 유예 뒤·grab 조건 앞에서 묻지 않는다');
+  const r2Gate = js.slice(r2ImageAt, js.indexOf(';', r2ImageAt) + 1);
+  assert.match(r2Gate, /r2CanAccept\s*&&\s*!yieldForQr\s*&&\s*!acceptStopGate\.isPending\(\)/,
+    'R2 grab이 Worker 수요·QR 유예·수용 표시 유예를 함께 지키지 않는다');
+  assert.match(r2Gate, /\?\s*grabVideoFrame\(r2FrameStartedAt\)\s*:\s*null/,
+    'R2 준비 전에도 frame capture를 수행한다');
   assert.ok(js.includes('qr: r2Available ? summarizeQrBridge(qrBridge.stats, qrBridge.supported)'), '디버그 패널에 qr 통계가 안 간다');
 });

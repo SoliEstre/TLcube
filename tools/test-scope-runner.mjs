@@ -4,7 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
-const TEST_ARGS = ['--test', 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js'];
+// Node 24의 spec 출력은 실패 목록을 summary 뒤에 붙여 full gate의 끝-summary 파서를 흔든다.
+// TAP을 명시하면 summary가 최종 레코드가 되어 skipped=0 검사가 형식에 의존하지 않는다.
+const TEST_ARGS = ['--test', '--test-reporter=tap', 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js'];
 
 /** 원격/저사양 좌석이 명시한 양의 안전 정수만 Node의 test worker 수로 쓴다. */
 export function testArgs(baseEnv) {
@@ -17,7 +19,7 @@ export function testArgs(baseEnv) {
   if (!Number.isSafeInteger(concurrency)) {
     throw new Error('TL_TEST_CONCURRENCY는 안전한 양의 정수여야 한다');
   }
-  return ['--test', `--test-concurrency=${concurrency}`, 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js'];
+  return ['--test', '--test-reporter=tap', `--test-concurrency=${concurrency}`, 'test/*.test.js', 'test/harness/*.test.js', 'relay/*.test.js'];
 }
 
 export function skippedCount(stdout) {

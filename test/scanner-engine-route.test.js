@@ -27,7 +27,7 @@ function node() { return { hidden: true, dataset: {}, attrs: {}, events: {},
 function context() {
   const writes=[], events=[], control=node();
   const ctx = vm.createContext({
-    engineSwitch:node(),engineSwitchControl:control,r2Available:true,r2Wanted:true,
+    scannerApp:node(),engineSwitch:node(),engineSwitchControl:control,r2Available:true,hAvailable:true,r2Wanted:true,
     transientEngineSwitch:false,autoR1Active:false,cameraStream:{},scanSession:5,
     r2Runtime:{enabled:true,stats:{},setEnabled(v){this.enabled=v;events.push(['engine',v]);},reset(){events.push(['reset']);}},
     acceptStopGate:{isPending:()=>false},stopCamera(){ctx.cameraStream=null;ctx.scanSession++;},

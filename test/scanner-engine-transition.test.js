@@ -15,7 +15,7 @@ function section(startToken,endToken){
 function node(){return {hidden:false,dataset:{},events:{},setAttribute(){},addEventListener(name,handler){this.events[name]=handler;}};}
 function context({enabled=false,shortSide=1080}={}){
   const ctx=vm.createContext({
-    engineSwitch:node(),engineSwitchControl:node(),r2Available:true,
+    scannerApp:node(),engineSwitch:node(),engineSwitchControl:node(),r2Available:true,hAvailable:true,
     transientEngineSwitch:false,autoR1Active:false,r2Wanted:enabled,
     r2Runtime:{enabled,setEnabled(value){this.enabled=value;}},
     acceptStopGate:{isPending:()=>false},stopCamera(){},cameraStream:{},scanSession:3,
