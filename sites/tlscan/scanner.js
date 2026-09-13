@@ -183,7 +183,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-14.03';
+export const SCANNER_BUILD = '2026-09-14.04';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -346,7 +346,8 @@ const debugOverlay = createDebugOverlay({
  */
 // «R2 가용» — 시험판이거나 승격됐으면. 이 하나가 런타임·QR probe·패널·스위치·디버그 줄을 다 연다 (§27.4 1단계).
 const r2Available = engineSwitchAvailable({ labPath: isLabPath(), productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED });
-const hAvailable = isLabPath();
+// H 카메라·사진 수집은 정식 R2 가용성을 따라요. Y 시험용 로케이터·텔레메트리와는 별개예요.
+const hAvailable = r2Available;
 let r2Wanted = true;
 let transientEngineSwitch = false;
 let autoR1Active = false;

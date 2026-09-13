@@ -102,12 +102,27 @@ test('무대 높이와 --fit-h 가 산술적으로 일치한다 (패딩 40 + 테
     `--fit-h 최소값(${fitMin})이 무대 최소값(${stageMin}) − ${inset} 가 아니다`);
 });
 
-test('데스크톱 무대는 sticky 라 긴 패널을 스크롤해도 코드가 남는다', () => {
-  // ⚠ `main > #stage` 는 order 규칙에도 있다 — 2열 미디어 쿼리 안쪽 것만 본다.
-  const block = INDEX.match(/main > #stage \{\s*\n\s*align-self: start;[\s\S]*?\}/);
-  assert.ok(block, '2열 레이아웃의 #stage 규칙을 못 찾았다');
-  assert.match(block[0], /position: sticky; top: 12px;/);
-  assert.match(block[0], /height: max\(420px, calc\(100vh - 80px\)\);/);
+test('데스크톱 무대는 열 전체 폭을 채우고, 빈 면 편집은 같은 카드의 일반 흐름으로 이어져요', () => {
+  // 이미지 편집기를 무대 안으로 옮긴 뒤에는 sticky/고정 높이가 아래 카드를 가려요.
+  // selector의 쉼표·줄바꿈 대신 적용 대상과 레이아웃 계약을 검사해요.
+  const style = INDEX.match(/<style[^>]*>([\s\S]*?)<\/style>/)[1].replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...style.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, selectors, declarations]) => ({ selectors: selectors.split(',').map((s) => s.trim()), declarations }));
+  const base = rules.find((rule) => rule.selectors.includes('#stage') && /width\s*:/.test(rule.declarations));
+  assert.ok(base, '무대 기본 규칙이 없다');
+  assert.match(base.declarations, /(?:^|;)\s*width:\s*100%;/);
+  assert.match(base.declarations, /overflow:\s*hidden;/, '무대 안에 별도 스크롤이 생기면 안 된다');
+  assert.match(base.declarations, /min-width:\s*0;/);
+  const block = rules.find((rule) => rule.selectors.includes('main > #stage')
+    && rule.selectors.includes('#previewColumn > #stage'));
+  assert.ok(block, '직접 무대와 previewColumn 안 무대에 적용되는 데스크톱 규칙이 없다');
+  assert.match(block.declarations, /position:\s*relative;/);
+  assert.match(block.declarations, /top:\s*0;/);
+  assert.match(block.declarations, /height:\s*max\(420px, calc\(100vh - 80px\)\);/);
+  const expanded = rules.find((rule) => rule.selectors.includes('#previewColumn > #stage:has(> #hFaceImagesPanel:not([hidden]))'));
+  assert.ok(expanded, '이미지 편집기가 열린 무대 규칙이 없다');
+  assert.match(expanded.declarations, /(?:^|;)\s*height:\s*auto;/);
+  assert.match(expanded.declarations, /min-height:\s*max\(420px, calc\(100vh - 80px\)\);/);
 });
 
 test('두 캔버스가 같은 상자를 정확히 덮는다 (backdrop 정합 · 포인터 좌표)', () => {

@@ -194,7 +194,7 @@ const KO={true3d:'True 3D 여부',faces:'면 수',face1:'1면',face2:'2면',face
   speedDecrease:'회전 속도를 초당 1도씩 낮추기',speedIncrease:'회전 속도를 초당 1도씩 높이기',
   speedValue:'초당 {speed}도',resetPose:'정위치',plane:'평면',perspectiveDecrease:'원근을 1도 줄이기',perspectiveIncrease:'원근을 1도 높이기',
   profile:'H · 면 프레임 또는 네 모서리 파인더 + 면 ID',
-  frame:'1·2·3·4·5면 H5 이상·6면 H7은 같은 면 격자 안에 사각 파인더 4개를 넣어요. 작은 크기는 면 프레임을 유지해요. 내보내기 바깥 2셀 간격은 그대로예요. Y 안전영역·검출기 강조 옵션은 적용하지 않아요.',
+  frame:'1·2·3·4·5면 H5 이상·6면 H7 이상은 같은 면 격자 안에 사각 파인더 4개를 넣어요. 작은 크기는 면 프레임을 유지해요. 내보내기 바깥 2셀 간격은 그대로예요. Y 안전영역·검출기 강조 옵션은 적용하지 않아요.',
   viewer:'H 큐브 미리보기',perspective:'원근 강도',
   notice:'선택한 고유 데이터 면을 모두 모아야 본문 검증이 끝나요. 2면·6면 렌더는 반대편에 본문을 반복하고 위아래 이미지를 공유해요. 코너 QR은 지원하고, 안쪽 QR·Y 전용 로케이터·장식 음영은 적용하지 않아요.',
   videoHeading:'3D 회전 영상 다운로드',videoDownload:'한 바퀴 MP4 다운로드',videoCancel:'렌더링 취소',

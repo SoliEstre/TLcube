@@ -13,8 +13,8 @@
  *   ⓕ 선형 참조판 ≡ 격자판 — 정렬을 바꿨으니 등가를 **덤프 없이도** 검산한다.
  *   ⓖ 하한이 **안 하는 일** — 소-u 군중을 `count/하한` 으로 동결할 뿐 0 으로 안 만든다.
  *      count 가 큰 소-u 잡음은 참을 이길 수 있다 (반례를 자로 굳혀 둔다).
- *   ⓗ 비컨 어댑터의 `csBlockLocator` 오버레이는 **정본 하나**다 — `central-beacon-adapt.js`
- *      소스(주석 벗긴 코드)에서 그 키들의 `key:` 리터럴이 `BEACON_CS_BLOCK_LOCATOR` 정의
+ *   ⓗ 비컨 어댑터의 `csBlockLocator` 오버레이는 **정본 하나**다 — 공유 정본·v0/n7 관측·
+ *      재노출 어댑터 소스(주석 벗긴 코드)에서 키 리터럴이 `BEACON_CS_BLOCK_LOCATOR` 정의
  *      **밖**에 0건. ⚠ **철자 자**다 — 값이 아니라 «손 사본이 돌아오지 않았다» 를 잰다.
  *
  * ⚠ 이 파일은 **값이 아니라 성질**을 잰다. ⓒ 는 하한 리터럴(2.4)을 적지 않고
@@ -44,6 +44,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { BEACON_CS_BLOCK_LOCATOR } from '../src/decoder/central-beacon-adapt.js';
+import { BEACON_CS_BLOCK_LOCATOR as SHARED_BEACON_CS_BLOCK_LOCATOR } from '../src/decoder/central-beacon-observation-shared.js';
 import {
   CS_BLOCK_LOCATOR_INTERNALS, UNVERIFIED_CS_BLOCK_LOCATOR,
 } from '../src/decoder/cellsurface-block-detect.js';
@@ -331,6 +332,8 @@ test('ⓕ 격자판과 선형 참조판이 같은 클러스터를 **같은 순�
  * (`maximumPosesPerFamily`·`centreWindowFraction`·`searchMaxSide`)를 서로 손 사본으로 들고
  * 있었다 (REPORT_r1-type-limits §13 적대 검토). 정본을 `BEACON_CS_BLOCK_LOCATOR` 하나로
  * 뽑았으니, 그 정의 **밖**에 이 키들의 `key:` 리터럴이 다시 생기면 사본이 돌아온 것이다.
+ * 관측 모듈 분리 후에는 정본이 공유 모듈에 있고 어댑터는 같은 객체를 재노출한다.
+ * 옛 어댑터만 검사하면 실제 소비자인 v0/n7에 손 사본이 생겨도 놓치므로 모두 검사한다.
  *
  * 재는 법: 주석을 벗긴 **코드**만 본다 (산문 속 `searchMaxSide: 480` 은 사본이 아니다).
  * 키 목록은 import 한 상수의 `Object.keys` 에서 유도한다 — 상수에 키가 늘면 자도 따라 늘고,
@@ -342,24 +345,35 @@ test('ⓗ 어댑터 csBlockLocator 오버레이는 정본 하나 — 키 리터�
   const keys = Object.keys(BEACON_CS_BLOCK_LOCATOR);
   assert.ok(keys.includes('searchMaxSide'), '이 자를 열게 한 키(searchMaxSide)가 상수에 없다');
   assert.ok(Object.isFrozen(BEACON_CS_BLOCK_LOCATOR), '정본은 동결이어야 한다 — 런타임에 갈리면 정본이 아니다');
+  assert.equal(BEACON_CS_BLOCK_LOCATOR, SHARED_BEACON_CS_BLOCK_LOCATOR,
+    '어댑터가 공유 정본과 다른 객체를 재노출한다');
 
-  const src = readFileSync(new URL('../src/decoder/central-beacon-adapt.js', import.meta.url), 'utf8');
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  const definition = code.match(/export const BEACON_CS_BLOCK_LOCATOR = Object\.freeze\(\{[\s\S]*?\}\);/);
-  assert.ok(definition,
-    'BEACON_CS_BLOCK_LOCATOR 의 `export const … = Object.freeze({…});` 정의를 못 찾았다 — 이름·모양이 바뀌었으면 이 자를 같이 옮겨라');
+  const sourceNames = ['central-beacon-observation-shared.js', 'central-beacon-adapt.js',
+    'central-v0-observe.js', 'central-n7-observe.js'];
+  const sources = sourceNames.map((name) => ({ name, code: readFileSync(
+    new URL(`../src/decoder/${name}`, import.meta.url), 'utf8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '') }));
+  const definitions = [...sources[0].code.matchAll(/export const BEACON_CS_BLOCK_LOCATOR = Object\.freeze\(\{[\s\S]*?\}\);/g)];
+  assert.equal(definitions.length, 1, '공유 모듈에는 동결 오버레이 정본 정의가 정확히 하나 있어야 한다');
+  const definition = definitions[0];
 
   const keyLiteral = new RegExp(`\\b(${keys.join('|')})\\s*:`, 'g');
   const inside = [...definition[0].matchAll(keyLiteral)].map((m) => m[1]).sort();
   assert.deepEqual(inside, keys.slice().sort(), '정본 안에 각 키가 정확히 한 번씩 있어야 한다');
 
-  const outside = code.replace(definition[0], '');
-  const leaks = [...outside.matchAll(keyLiteral)].map((m) => {
-    const line = outside.slice(0, m.index).split('\n').length;
-    return `${m[1]} (주석 벗긴 코드 ${line} 행 근처)`;
+  const leaks = sources.flatMap(({ name, code }, index) => {
+    const outside = index === 0 ? code.replace(definition[0], '') : code;
+    return [...outside.matchAll(keyLiteral)].map((m) => {
+      const line = outside.slice(0, m.index).split('\n').length;
+      return `${name}: ${m[1]} (주석 벗긴 코드 ${line} 행 근처)`;
+    });
   });
   assert.deepEqual(leaks, [],
-    'central-beacon-adapt.js 에 오버레이 키의 손 사본이 돌아왔다 — BEACON_CS_BLOCK_LOCATOR 를 스프레드하라');
+    '비컨 관측/어댑터에 오버레이 키의 손 사본이 돌아왔다 — BEACON_CS_BLOCK_LOCATOR 를 스프레드하라');
+  for (const { name, code } of sources.slice(2)) {
+    assert.match(code, /\.\.\.BEACON_CS_BLOCK_LOCATOR,\s*\.\.\.\(callerCalibration\.csBlockLocator \|\| \{\}\)/,
+      `${name}: 공유 정본 뒤에 호출자 덮어쓰기를 적용해야 한다`);
+  }
 });
 
 // ─────────────────── ⓓ·ⓔ 실사진 덤프가 필요한 성질 ───────────────────

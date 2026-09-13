@@ -4,7 +4,7 @@ import { encodeH } from '../src/h-codec.js';
 import { createHCollector } from '../src/h-collector.js';
 import { detectH } from '../src/h-detect.js';
 import { buildHScene } from '../src/h-render.js';
-import { hScreenSpin } from '../src/h-rotation.js';
+import { H_ROTATION_TILT_DEFAULT_DEG, hScreenSpin } from '../src/h-rotation.js';
 import { rasterize } from '../src/raster.js';
 import { relativeLuminance8 } from '../src/luminance.js';
 
@@ -13,9 +13,9 @@ const SIDE = 640;
 const SPEED = 75;
 const POSES = Object.freeze([
   Object.freeze({ name: 'initial', rotation: Object.freeze({}) }),
-  Object.freeze({ name: 'screen-y-180', rotation: Object.freeze(hScreenSpin(180_000 / SPEED, { axis: 'y', speed: SPEED })) }),
-  Object.freeze({ name: 'screen-x-35', rotation: Object.freeze(hScreenSpin(35_000 / SPEED, { axis: 'x', speed: SPEED })) }),
-  Object.freeze({ name: 'screen-x-215', rotation: Object.freeze(hScreenSpin(215_000 / SPEED, { axis: 'x', speed: SPEED })) }),
+  Object.freeze({ name: 'screen-y-180', rotation: Object.freeze(hScreenSpin(180_000 / SPEED, { axis: 'y', speed: SPEED, tiltDeg: H_ROTATION_TILT_DEFAULT_DEG })) }),
+  Object.freeze({ name: 'screen-x-35', rotation: Object.freeze(hScreenSpin(35_000 / SPEED, { axis: 'x', speed: SPEED, tiltDeg: H_ROTATION_TILT_DEFAULT_DEG })) }),
+  Object.freeze({ name: 'screen-x-215', rotation: Object.freeze(hScreenSpin(215_000 / SPEED, { axis: 'x', speed: SPEED, tiltDeg: H_ROTATION_TILT_DEFAULT_DEG })) }),
 ]);
 const LIGHTING_PASSES = Object.freeze([
   Object.freeze({ profile: 'screen', fillOnEvenPose: false }),

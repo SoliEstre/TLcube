@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createGeneratorState,versionStateKey} from '../src/generator-state.js';
 import {selectQrPosition,selectGeneratorType,commitFinderQrTransition} from '../src/finder-selection.js';
-import {isHGenerator,hPreviewOptions,hUiLabel,clampHRotationSpeed,selectHRepresentation} from '../src/generator-h.js';
+import {isHGenerator,hPreviewOptions,hUiLabel,hMaskLuminance,clampHRotationSpeed,selectHRepresentation} from '../src/generator-h.js';
 import {encodeH,decodeH} from '../src/h-codec.js';
 import {buildHScene} from '../src/h-render.js';
 import {withHCornerQr,hQrPosition} from '../src/generator-h-qr.js';
@@ -14,8 +14,9 @@ import {renderWithErrorDisplay} from '../src/render-status.js';
 import {payloadByteLength} from '../src/header.js';
 import {minRoundtripPpu,resolveExportPpi,resolveExportSize} from '../src/export-options.js';
 import {cubeVideoDurationMs} from '../src/cube-video-export.js';
+import {hControlIcon} from '../src/h-preview-controls.js';
 import {generatorCubeModel} from '../src/generator-cube-export.js';
-import {hPlanarPreviewOptions} from '../src/h-preview-decor.js';
+import {hPlanarPreviewOptions,reconcileHPositionMode} from '../src/h-preview-decor.js';
 const sourceUrl=new URL('../index.html',import.meta.url),source=readFileSync(sourceUrl,'utf8');
 const sha=text=>createHash('sha256').update(text).digest('hex');
 const imageEntries=["els.exportPng.addEventListener('click', async () => {","els.exportSvg.addEventListener('click', () => {","$('copyPng').addEventListener('click', async () => {","$('copySvg').addEventListener('click', async () => {"];
@@ -33,13 +34,13 @@ function harness(text,overrides={}){
   const palette={levels:[{r:104,g:104,b:104},{r:173,g:173,b:173},{r:226,g:226,b:226}],background:{r:255,g:255,b:255}};
   const c={console,Math,Number,String,Error,RangeError,TypeError,TextEncoder,AbortController,structuredClone,Blob,Uint8Array,
     generatorState:state,current:null,mode:'advanced',timer:0,palette,draws,pending,downloads,lastEncodedYn:0,lastEncodedKA:0,lastEncodedKO:0,
-    hAnimation:{elapsed:500,scene:null},hFaceImages:Object.freeze({}),hGpuRenderer:null,
+    hAnimation:{elapsed:500,scene:null},hFaceImages:Object.freeze({}),hGpuRenderer:null,hFacePositionMode:'outside',hPositionProfile:null,
     createHPreviewRenderer:()=>({draw:()=>false}),backdropShowing:()=>false,
     Y3D_PAD_BASE:24,y3dPreview:{on:true,pad:24},window:{devicePixelRatio:1},document:{createElement:()=>({width:0,height:0}),querySelectorAll:selector=>selector==='[data-video-size]'?[node('exportCubeVideo')]:[]},
     hImageEditor:{flush(){}},
-    resolvedRenderProfile:()=> 'screen',hPlanarPreviewOptions,paintHPositionLabels:()=>{},
+    resolvedRenderProfile:()=> 'screen',hPlanarPreviewOptions,reconcileHPositionMode,hControlIcon,paintHPositionLabels:()=>{},videoToggle:node('cubeVideoToggle'),
     els:new Proxy({qrPositionCards:node('qrPositionCards'),qrFacePlacementCards:node('qrFacePlacementCards'),qrPosInner:node('qr-inner')},{get:(o,k)=>o[k]??node(String(k))}),$:node,
-    isHGenerator,hQrPosition,withHCornerQr,buildHScene,encodeH,decodeH,hPreviewOptions,hText:key=>hUiLabel(key,'ko'),clampHRotationSpeed,cubeVideoDurationMs,
+    isHGenerator,hQrPosition,withHCornerQr,buildHScene,encodeH,decodeH,hPreviewOptions,hMaskLuminance,hText:key=>hUiLabel(key,'ko'),clampHRotationSpeed,cubeVideoDurationMs,
     selectQrPosition,selectGeneratorType,commitFinderQrTransition,GENERATOR_DEFAULT_FINDER_PATTERN_ID:state.finderPatternId,
     TL_READER_URL,tlReaderUrlWithHint,payloadByteLength,versionStateKey,renderWithErrorDisplay,
     minRoundtripPpu,resolveExportPpi,resolveExportSize,EXPORT_MARGIN_TRIM:'trim',
@@ -55,7 +56,7 @@ function harness(text,overrides={}){
     paintY3dPreview:()=>{if(c.y3dPreview.on&&c.current?.type==='H')vm.runInContext('drawHPreviewFrame()',c);},
     exportCubeMp4:async args=>{args.renderFrame({canvas:{width:720,height:720},context:{drawImage(){}},timestampMs:0});return new Blob(['mock-codec']);},
   };
-  for(const name of ['syncShotPresetUi','syncFaceGainLabel','syncExportPpiHint','syncQuietGaugeReadout','syncTypeYCellEditorUi','emitProductGenerate','emitGeneratorFail','emitLabGen','applyPreviewFit','syncBackdropLayer','updateGauge','updateOverflowHighlight','syncTypeUi','renderFinderUi','syncResTierUi','syncYLocatorUi','applyAutoLocatorProfileY','syncSeatUi','deriveYLocatorForQrPosition','stopHAnimation'])c[name]=()=>{};
+  for(const name of ['syncShotPresetUi','syncFaceGainLabel','syncExportPpiHint','syncQuietGaugeReadout','syncTypeYCellEditorUi','syncHFaceImagesUi','syncHUi','emitProductGenerate','emitGeneratorFail','emitLabGen','applyPreviewFit','syncBackdropLayer','updateGauge','updateOverflowHighlight','syncTypeUi','renderFinderUi','syncResTierUi','syncYLocatorUi','applyAutoLocatorProfileY','syncSeatUi','deriveYLocatorForQrPosition','stopHAnimation'])c[name]=()=>{};
   vm.createContext(c);
   for(const name of ['resolveFallback','buildConfig','encodeWithEcc','encodeOptsFor','renderTypeH','isCapacityError','eccTierLabel','render','hSceneOptions','drawHPreviewFrame','exportPlanFor','renderQrPositionUi','commitFinderQrUi','cancelScheduledRender','runScheduledRender','flushScheduledRender','schedule'])vm.runInContext(fn(text,name),c);
   const cardsStart=text.indexOf('for (const card of els.qrPositionCards.children) {',text.indexOf('// ── 일반 모드: QR 링크'));

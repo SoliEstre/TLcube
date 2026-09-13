@@ -1049,7 +1049,7 @@
        새 창으로 여는 이유: 생성기는 입력해 둔 내용이 있는 작업 화면이라, 같은 탭에서
        나가면 그 상태가 사라진다. 크로스링크는 세 사이트 모두 같은 규약을 쓴다. -->
   <h1>TrilLuminance <a class="brand-link" href="https://tl.estre.so" target="_blank" rel="noopener noreferrer">/ TLcube</a></h1>
-  <span class="sub" data-i18n="g023">3면 휘도 순위 2.5D 코드 (코드네임 Trilume) — M0 인코더 프리뷰</span>
+  <span class="sub" data-i18n="g023">3면 휘도 순위 3D 바코드(기본 Type Y는 2.5D)와 True 3D H 큐브 (코드네임 Trilume) — 브라우저 인코더</span>
   <span class="spacer"></span>
   <!-- 3사이트 크로스링크 (PM/008 §1) — 절대 URL 이라 file:// 단일 파일에서도 동작한다. -->
   <nav class="site-nav">
@@ -2994,7 +2994,7 @@
   <div class="help-popover-body" id="helpPopoverBody"></div>
 </div>
 <footer>
-  <span data-i18n="g301">동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐</span>
+  <span data-i18n="g301">동일 입력 → 결정적 출력 · 데이터 계약은 SPEC을 따르며 H는 §13에 정의돼요</span>
   <!-- F-99 (2026-08-23): 생성기도 익명 pageview 비콘을 보낸다(src/beacon.js — 경로·코드
        내용은 안 실리고 file:// 경로는 F-66 수리로 비운다). 고지 0건이던 것을 상시 고지. -->
   <span data-i18n="g999">· 익명 사용 신호만 전송해요 — 코드 내용은 안 보내요</span>
@@ -3046,7 +3046,7 @@ const GENERATOR_STRINGS = {
     "g020": "우측 이미지 제거",
     "g021": "PNG를 클립보드에 복사",
     "g022": "SVG 마크업을 클립보드에 복사",
-    "g023": "3면 휘도 순위 3D 바코드(실은 2.5D) (코드네임 Trilume) — M0 인코더 프리뷰",
+    "g023": "3면 휘도 순위 3D 바코드(기본 Type Y는 2.5D)와 True 3D H 큐브 (코드네임 Trilume) — 브라우저 인코더",
     "g024": "소개",
     "g025": "스캐너",
     "g026": "일반",
@@ -3118,7 +3118,7 @@ const GENERATOR_STRINGS = {
     "g206": "드래그로 이동",
     "g207": "휠 또는 핀치로 확대/축소",
     "g300": "미리보기에서 <b>드래그로 이동</b>, <b>휠 또는 핀치로 확대/축소</b><span>할 수 있어요.</span>",
-    "g301": "동일 입력 → 결정적 출력 · 데이터 계약은 SPEC §4.4 (원판 median 순서 + Δmin) / §14 (Type Y) 뿐",
+    "g301": "동일 입력 → 결정적 출력 · 데이터 계약은 SPEC을 따르며 H는 §13에 정의돼요",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · 코드네임 Trilume",
 
     "g400": "슬레이트 블루 (Slate Blue)",
@@ -3553,7 +3553,7 @@ const GENERATOR_STRINGS = {
     "g020": "Remove right image",
     "g021": "Copy PNG to clipboard",
     "g022": "Copy SVG markup to clipboard",
-    "g023": "3D barcode (actually 2.5D) from three-face luminance rank (codename Trilume) — M0 encoder preview",
+    "g023": "3D barcode from three-face luminance rank (base Type Y is 2.5D) and True 3D H cube (codename Trilume) — browser encoder",
     "g024": "About",
     "g025": "Scanner",
     "g026": "Basic",
@@ -3625,7 +3625,7 @@ const GENERATOR_STRINGS = {
     "g206": "drag to move",
     "g207": "scroll or pinch to zoom",
     "g300": "You can <b>drag to move</b> and <b>scroll or pinch to zoom</b><span> in the preview.</span>",
-    "g301": "Same input → deterministic output · the data contract is only SPEC §4.4 (disc median order + Δmin) / §14 (Type Y)",
+    "g301": "Same input → deterministic output · data contracts follow the SPEC; H is defined in §13",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · codename Trilume",
 
     "g400": "Slate Blue",
@@ -4060,7 +4060,7 @@ const GENERATOR_STRINGS = {
     "g020": "右の画像を削除",
     "g021": "PNG をクリップボードにコピー",
     "g022": "SVG マークアップをクリップボードにコピー",
-    "g023": "3面の輝度順序による3Dバーコード（実際は2.5D）— コードネーム Trilume — M0 エンコーダプレビュー",
+    "g023": "3面の輝度順序による3Dバーコード（基本 Type Y は 2.5D）と True 3D H キューブ — コードネーム Trilume — ブラウザーエンコーダ",
     "g024": "紹介",
     "g025": "スキャナ",
     "g026": "標準",
@@ -4132,7 +4132,7 @@ const GENERATOR_STRINGS = {
     "g206": "ドラッグで移動",
     "g207": "ホイールまたはピンチで拡大縮小",
     "g300": "プレビューでは <b>ドラッグで移動</b>、<b>ホイールまたはピンチで拡大縮小</b><span>できます。</span>",
-    "g301": "同じ入力 → 決定的な出力 · データ契約は SPEC §4.4（円板 median の順序 + Δmin）/ §14（Type Y）のみ",
+    "g301": "同じ入力 → 決定的な出力 · データ契約は SPEC に従い、H は §13 で定義されます",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · コードネーム Trilume",
 
     "g400": "スレートブルー (Slate Blue)",
@@ -4567,7 +4567,7 @@ const GENERATOR_STRINGS = {
     "g020": "Retirer l'image de droite",
     "g021": "Copier le PNG dans le presse-papiers",
     "g022": "Copier le balisage SVG dans le presse-papiers",
-    "g023": "Un code-barres 3D (en réalité 2.5D) fondé sur le rang de luminance de trois faces (nom de code Trilume) — aperçu de l'encodeur M0",
+    "g023": "Code-barres 3D fondé sur le rang de luminance de trois faces (Type Y de base en 2.5D) et cube True 3D H (nom de code Trilume) — encodeur dans le navigateur",
     "g024": "À propos",
     "g025": "Scanner",
     "g026": "Simple",
@@ -4639,7 +4639,7 @@ const GENERATOR_STRINGS = {
     "g206": "faire glisser pour déplacer",
     "g207": "zoomer à la molette ou par pincement",
     "g300": "Vous pouvez <b>faire glisser pour déplacer</b> et <b>zoomer à la molette ou par pincement</b><span> dans l'aperçu.</span>",
-    "g301": "Même entrée → même sortie · le contrat de données se limite à SPEC §4.4 (ordre des médianes de disque + Δmin) / §14 (Type Y)",
+    "g301": "Même entrée → même sortie · les contrats de données suivent la SPEC ; H est défini au §13",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · nom de code Trilume",
     "g400": "Bleu ardoise (Slate Blue)",
     "g401": "Ambre (Ember)",
@@ -5073,7 +5073,7 @@ const GENERATOR_STRINGS = {
     "g020": "Rimuovi l'immagine di destra",
     "g021": "Copia il PNG negli appunti",
     "g022": "Copia il markup SVG negli appunti",
-    "g023": "Un codice a barre 3D (in realtà 2.5D) basato sul rango di luminanza di tre facce (nome in codice Trilume) — anteprima dell'encoder M0",
+    "g023": "Codice a barre 3D basato sul rango di luminanza di tre facce (Type Y di base in 2.5D) e cubo True 3D H (nome in codice Trilume) — encoder nel browser",
     "g024": "Informazioni",
     "g025": "Scanner",
     "g026": "Base",
@@ -5145,7 +5145,7 @@ const GENERATOR_STRINGS = {
     "g206": "trascinare per spostare",
     "g207": "zoomare con rotella o pizzico",
     "g300": "È possibile <b>trascinare per spostare</b> e <b>zoomare con rotella o pizzico</b><span> nell'anteprima.</span>",
-    "g301": "Stesso input → stesso output · il contratto sui dati è solo SPEC §4.4 (ordine delle mediane del disco + Δmin) / §14 (Tipo Y)",
+    "g301": "Stesso input → stesso output · i contratti dati seguono la SPEC; H è definito nel §13",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · nome in codice Trilume",
     "g400": "Blu ardesia (Slate Blue)",
     "g401": "Ambra (Ember)",
@@ -5579,7 +5579,7 @@ const GENERATOR_STRINGS = {
     "g020": "Rechtes Bild entfernen",
     "g021": "PNG in die Zwischenablage kopieren",
     "g022": "SVG-Markup in die Zwischenablage kopieren",
-    "g023": "3D-Barcode (eigentlich 2.5D) aus dem Luminanzrang dreier Flächen (Codename Trilume) — Vorschau des M0-Encoders",
+    "g023": "3D-Barcode aus dem Luminanzrang dreier Flächen (Basis-Type-Y ist 2.5D) und True-3D-H-Würfel (Codename Trilume) — Browser-Encoder",
     "g024": "Info",
     "g025": "Scanner",
     "g026": "Einfach",
@@ -5651,7 +5651,7 @@ const GENERATOR_STRINGS = {
     "g206": "Ziehen zum Verschieben",
     "g207": "Mausrad oder Pinch-Geste zum Zoomen",
     "g300": "<b>Ziehen zum Verschieben</b>, <b>Mausrad oder Pinch-Geste zum Zoomen</b><span> — in der Vorschau.</span>",
-    "g301": "Gleiche Eingabe → gleiches Ergebnis · der Datenvertrag umfasst nur SPEC §4.4 (Median-Reihenfolge der Scheiben + Δmin) / §14 (Typ Y)",
+    "g301": "Gleiche Eingabe → gleiches Ergebnis · Datenverträge folgen der SPEC; H ist in §13 definiert",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · Codename Trilume",
     "g400": "Schieferblau (Slate Blue)",
     "g401": "Bernstein (Ember)",
@@ -6085,7 +6085,7 @@ const GENERATOR_STRINGS = {
     "g020": "Quitar la imagen derecha",
     "g021": "Copiar el PNG al portapapeles",
     "g022": "Copiar el marcado SVG al portapapeles",
-    "g023": "Un código de barras 3D (en realidad 2.5D) basado en el rango de luminancia de tres caras (nombre en clave Trilume) — vista previa del codificador M0",
+    "g023": "Código de barras 3D basado en el rango de luminancia de tres caras (Type Y base en 2.5D) y cubo True 3D H (nombre en clave Trilume) — codificador en el navegador",
     "g024": "Acerca de",
     "g025": "Escáner",
     "g026": "Básico",
@@ -6157,7 +6157,7 @@ const GENERATOR_STRINGS = {
     "g206": "arrastrar para mover",
     "g207": "rueda o pellizco para hacer zoom",
     "g300": "Puede <b>arrastrar para mover</b> y usar la <b>rueda o pellizco para hacer zoom</b><span> en la vista previa.</span>",
-    "g301": "Misma entrada → misma salida · el contrato de datos se limita a SPEC §4.4 (orden de medianas del disco + Δmin) / §14 (Tipo Y)",
+    "g301": "Misma entrada → misma salida · los contratos de datos siguen la SPEC; H se define en §13",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · nombre en clave Trilume",
     "g400": "Azul pizarra (Slate Blue)",
     "g401": "Ámbar (Ember)",
@@ -6591,7 +6591,7 @@ const GENERATOR_STRINGS = {
     "g020": "Remover a imagem da direita",
     "g021": "Copiar o PNG para a área de transferência",
     "g022": "Copiar a marcação SVG para a área de transferência",
-    "g023": "Um código de barras 3D (na verdade 2.5D) baseado na ordem de luminância de três faces (nome de código Trilume) — pré-visualização do codificador M0",
+    "g023": "Código de barras 3D baseado na ordem de luminância de três faces (Type Y base em 2.5D) e cubo True 3D H (nome de código Trilume) — codificador no navegador",
     "g024": "Sobre",
     "g025": "Scanner",
     "g026": "Básico",
@@ -6663,7 +6663,7 @@ const GENERATOR_STRINGS = {
     "g206": "arrastar para mover",
     "g207": "roda ou pinça para ampliar",
     "g300": "É possível <b>arrastar para mover</b> e usar a <b>roda ou pinça para ampliar</b><span> na pré-visualização.</span>",
-    "g301": "Mesma entrada → mesma saída · o contrato de dados limita-se a SPEC §4.4 (ordem das medianas do disco + Δmin) / §14 (Tipo Y)",
+    "g301": "Mesma entrada → mesma saída · os contratos de dados seguem a SPEC; H é definido na §13",
     "g302": "© 2026 SoliEstre — TrilLuminance (cube) · nome de código Trilume",
     "g400": "Azul ardósia (Slate Blue)",
     "g401": "Âmbar (Ember)",
@@ -7425,7 +7425,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-14.03';
+const GENERATOR_BUILD = '2026-09-14.04';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터

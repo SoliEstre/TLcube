@@ -130,7 +130,8 @@ const ALLOWED = {
   // 없으면 로드 시점에 던지는 내부 불변식이라 화면에 안 나간다 (헤더의 «내부
   // 불변식 throw» 부류). 이 throw 가 필요한 이유: 매핑은 유도가 아니라 표현 층의
   // 사본이고, 조용히 빠지면 카드가 라벨 없이 선다.
-  'index.html': 9, // JSON-LD 7 + 편집기 파인더 폴백 console.warn 1 + seat 표현 불변식 throw 1
+  // H 포맷·3D 출력의 정적 SEO 소개 2종 추가. 아래 별도 자가 실제 JSON-LD 출처까지 확인해요.
+  'index.html': 11, // JSON-LD 9 + 편집기 파인더 폴백 console.warn 1 + seat 표현 불변식 throw 1
   'sites/tlscan/scanner.js': 0,
   'src/luminance.js': 7, // 프리셋 표시명 3 + 내부 불변식 throw 4
   // **의도적 갱신 (2026-08-21, 중앙 v0 편입)**: 9 → 11. 더해진 것은 throw **하나**인데
@@ -140,6 +141,22 @@ const ALLOWED = {
   // 앱이 안 뜬 뒤다). 위 `실계산 사용 심볼…` 도 같은 이유로 2종을 차지한다.
   'src/capacity.js': 11, // 전부 내부 불변식 throw
 };
+
+test('생성기 사전 밖 한국어 예외는 JSON-LD 메타와 알려진 개발자 메시지에만 있어요', () => {
+  const raw = readFileSync(ROOT + 'index.html', 'utf8');
+  const metadata = [...raw.matchAll(/<script\b[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)];
+  assert.equal(metadata.length, 1);
+  const strings = [];
+  const visit = (value) => {
+    if (typeof value === 'string' && HANGUL.test(value)) strings.push(value.replace(/\s+/g, ' ').trim());
+    else if (Array.isArray(value)) value.forEach(visit);
+    else if (value && typeof value === 'object') Object.values(value).forEach(visit);
+  };
+  visit(JSON.parse(metadata[0][1]));
+  assert.equal(new Set(strings).size, 9, '추가 H 문구는 실행 UI가 아닌 구조화 메타예요');
+  const expected = [...new Set([...strings, 'seat 카드 표현 누락:', '[cell-editor] 편집기가 못 태우는 파인더 id — 불스아이로 되돌아갔다:'])].sort();
+  assert.deepEqual(analyze('index.html', { htmlScripts: true }).outside.sort(), expected);
+});
 
 for (const [rel, allowed] of Object.entries(ALLOWED)) {
   test(`${rel} — 사전 밖 한국어 문자열이 알려진 예외뿐이다`, () => {

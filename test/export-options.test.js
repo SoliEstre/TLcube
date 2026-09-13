@@ -19,6 +19,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { runInNewContext } from 'node:vm';
 
 import { createGeneratorState } from '../src/generator-state.js';
 import {
@@ -675,8 +676,26 @@ test('§10 물리 크기 힌트 — 헬퍼 값 · 경계 · UI 배선', () => {
   const assignment = /current = \{([\s\S]*?)\n\s*\};/.exec(renderSource);
   assert.ok(assignment, '새 장면 current 대입이 없다');
   assert.match(assignment[1], /sceneOpts: result\.sceneOpts,/);
-  assert.match(renderSource.slice(assignment.index + assignment[0].length),
-    /^\s*\/\/[^\n]*\n\s*syncExportPpiHint\(\);/);
+  // H 상태 동기화 등 독립 처리가 사이에 와도 허용해요. 잠글 것은 줄의 인접성이
+  // 아니라 실제 새 current로 힌트를 한 번 갱신한 뒤 첫 draw에 도달하는 순서예요.
+  const firstDraw = renderSource.indexOf('drawScene(result.scene, els.canvas, 26);', assignment.index);
+  assert.ok(firstDraw > assignment.index, '새 장면을 그리는 호출이 없다');
+  const beforeDraw = renderSource.slice(assignment.index, firstDraw);
+  for (const type of ['O', 'A', 'K', 'Y', 'H']) {
+    const result = { type, encoded: {}, scene: { width: 360, height: 240 }, sceneOpts: {} };
+    const calls = [];
+    const context = {
+      result, cfg: { faceGains: [1, 1, 1] }, current: { scene: { width: 1, height: 1 } },
+      keptPayload: null, hFacePositionMode: 'off', hPositionProfile: null,
+      reconcileHPositionMode: (mode) => mode,
+      syncHUi() {}, syncQuietGaugeReadout() {}, emitProductGenerate() {}, emitLabGen() {},
+      syncExportPpiHint() { calls.push({ scene: context.current.scene, type: context.current.type }); },
+    };
+    runInNewContext(beforeDraw, context, { timeout: 1000 });
+    assert.equal(calls.length, 1, `${type}: 첫 draw 전에 물리 크기 힌트를 정확히 한 번 갱신해야 한다`);
+    assert.equal(calls[0].scene, result.scene, `${type}: 힌트가 이전 장면의 크기를 읽는다`);
+    assert.equal(calls[0].type, type, `${type}: 힌트가 이전 타입을 읽는다`);
+  }
 });
 
 test('index.html — 새 상태 키가 노출 표에 있고 sync 가 등록돼 있다', () => {
