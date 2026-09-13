@@ -6,7 +6,9 @@
   "description": "2.5D visual code — data encoded in the luminance rank permutation of three rhombic faces per hexagonal cell",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "node --test \"test/*.test.js\" \"test/harness/*.test.js\" \"relay/*.test.js\""
+    "test": "node tools/test-scope-runner.mjs",
+    "test:full": "node tools/test-scope-runner.mjs --full",
+    "test:bench": "node tools/test-scope-runner.mjs --bench"
   },
   "dependencies": {},
   "devDependencies": {}

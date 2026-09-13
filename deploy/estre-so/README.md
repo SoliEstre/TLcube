@@ -49,6 +49,16 @@ docker compose --env-file ~/.secrets/estre.so.env \
   -f compose.yml -f projects/tlcube/docker-compose.yml restart tlcube-gen tlcube-scan
 ```
 
+### 승격 전 테스트 게이트
+
+정식 `/` 표면으로 restart 하기 전에는 코퍼스가 연결된 실행 좌석에서
+`npm run test:full`을 실행한다. 이 명령은 `TL_TEST_SCOPE=full`을 셸 독립적으로
+전달하고, TAP `skipped`가 0이 아니면 실패한다. 기본 `npm test`는 빠른 커밋
+피드백용이며 덤프 부재 skip을 승격 통과로 해석하지 않는다. 성능 숫자가 필요할 때만
+별도로 `npm run test:bench`를 실행한다; 측정은 기능 게이트의 대체가 아니다.
+`TL_TEST_CONCURRENCY`에 양의 정수를 지정하면 테스트 worker 수를 제한한다.
+진단 JSON 저장은 `TL_TEST_DIAGNOSTICS=1`로 명시 선택한다. 기본/전수 검증의 assertion은 동일하다.
+
 ### 표면 우선순위 (운영자 정정 2026-08-17)
 
 **시험판 (/lab/) 이 항상 최신이다 — 스테이징·정식보다 우선.** 세 표면의 갱신 기전:
