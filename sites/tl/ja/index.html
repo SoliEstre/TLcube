@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TLcube — 輝度の順序でデータを載せる3Dバーコード（実際は2.5D）</title>
-<meta name="description" content="六角形のセルを 3 つの菱形の面に分け、面どうしの相対輝度の順序にデータを載せるオープンな3Dバーコード。仕様とリファレンス実装は Apache-2.0 で公開しています。">
+<meta name="description" content="六角形のセルを 3 つの菱形の面に分け、面どうしの相対輝度の順序にデータを載せるオープンな3Dバーコード。仕様とリファレンス実装は Apache-2.0 で公開しています。 True 3D H — Y グループの実立方体拡張.">
 <link rel="canonical" href="https://tl.estre.so/ja/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube — 輝度の順序でデータを載せる3Dバーコード">
-<meta property="og:description" content="絶対的な明るさではなく、3 面の順序にデータを載せます。順序さえ保たれれば値は生き残ります。">
+<meta property="og:description" content="絶対的な明るさではなく、3 面の順序にデータを載せます。順序さえ保たれれば値は生き残ります。 True 3D H — Y グループの実立方体拡張.">
 <meta property="og:url" content="https://tl.estre.so/ja/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -58,7 +58,7 @@
     {
       "@type": "TechArticle",
       "headline": "TLcube — 絶対輝度ではなく順序にデータを載せる3Dバーコード",
-      "description": "六角形のセルを 3 つの菱形の面に分け、その相対輝度の順序（3! = 6 通り）を base-6 シンボル 1 つとして使うオープンな3Dバーコード。単調なトーン変換に対して不変です。",
+      "description": "六角形のセルを 3 つの菱形の面に分け、その相対輝度の順序（3! = 6 通り）を base-6 シンボル 1 つとして使うオープンな3Dバーコード。単調なトーン変換に対して不変です。 True 3D H — Y グループの実立方体拡張.",
       "url": "https://tl.estre.so/ja/",
       "inLanguage": "ja",
       "isPartOf": {
@@ -154,6 +154,11 @@
         <h3>Type Y — 単一キューブ</h3>
         <p class="dim">3 面がそれぞれ n×n の格子。ひと塊なので看板やグッズに向きます。</p>
         <div class="meta">n = 13 / 21 / 25 · 正味ペイロード 31 / 98 / 141 B</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>True 3D H — Y グループの実立方体拡張</h4>
+          <p class="dim">平面の Type Y とは別形式で、H0…H8 の格子と固有データ面 1…6 面を使います。空き面の画像やループ回転を設定し、PNG/SVG 展開図、glTF、MP4、Minecraft .schem 構造物を出力できます。</p>
+          <p class="meta">必要な面が揃い、RS/CRC 検証を通過してから結果を表示します。下の静止写真の測定に H は含まれず、実カメラの認識率や FPS を保証しません。</p>
+        </div>
       </div>
       <div class="card">
         <img src="../assets/type-O.png" alt="Type O — 六角フィールド">
@@ -229,7 +234,7 @@
 
   <section id="spec">
     <h2>仕様と実装</h2>
-    <p class="lead">フォーマット仕様とリファレンス実装は <strong>Apache License 2.0</strong> で公開しています。バニラ JavaScript、ビルドツールチェーンなし、ランタイム依存 0 — 単一の HTML ファイルで動きます。</p>
+    <p class="lead">フォーマット仕様とリファレンス実装は <strong>Apache License 2.0</strong> で公開しています。バニラ JavaScript、リポジトリ内の Node.js ビルドスクリプト、ランタイム依存 0 — 単一の HTML ファイルで動きます。</p>
     <p class="lead"><strong>デコーダだけの実装でも適合実装</strong>とみなします。普及は読む側から始まるからです。</p>
     <div class="cta">
       <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">仕様を読む</a>

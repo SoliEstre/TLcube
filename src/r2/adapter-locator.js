@@ -30,6 +30,7 @@ import { estimateHomography4, estimateHomographyN } from '../decoder/homography.
 import { readFormatFromLocator } from '../decoder/locator-format.js';
 import { Q15_ONE, createR2Params } from './params.js';
 import { R2_SESSION_STATUS } from './session.js';
+import { createYReacquireScene } from './y-reacquire-scene.js';
 
 /** session.detectionOutput.family 에 싣는 Type Y 값. hex 팩 1..5 다음. */
 export const A3_FAMILY_Y = 6;
@@ -484,6 +485,7 @@ export function createA3Adapters(options) {
   const relocateMinGapFrames = Number.isFinite(Number(opts.relocateMinGapFrames))
     && Number(opts.relocateMinGapFrames) >= 0
     ? Math.trunc(Number(opts.relocateMinGapFrames)) : RELOCATE_MIN_GAP_FRAMES;
+  const reacquireScene = createYReacquireScene({ minGapFrames: relocateMinGapFrames });
   const relocateFFraction = Number(opts.relocateFFraction) > 0
     ? Number(opts.relocateFFraction) : RELOCATE_F_FRACTION;
   // 1 을 허용한다 — 「지금보다 나쁘지만 않으면 채택」을 자에서 만들 수 있어야 채택 규칙을 단독으로 잰다.
@@ -536,6 +538,8 @@ export function createA3Adapters(options) {
      * COAST/DROPPED 를 굴리지 않게 한다 («코드를 놓쳤다» 와 «격자를 못 믿는다» 는 다른 축이다).
      */
     lockDistrusted: false,
+    /** 불신 장면 재탐색의 비용 힌트 통계. 수용 confidence가 아니다. */
+    reacquireScene: reacquireScene.stats,
     /** R7 — 누적 카운터. 프레임마다 리셋하지 않는다. */
     counters: {
       lockClears: 0,
@@ -543,6 +547,8 @@ export function createA3Adapters(options) {
       relocateAdopts: 0,
       formatReads: 0,
       sizeClears: 0,
+      /** 신뢰 자세의 연속 F 미달로 최소 대기 중 한 번 더 확인한 횟수. 수용 횟수가 아니다. */
+      trustedRescues: 0,
     },
     /** R7 — 프레임 단위 ms. detect 는 프레임의 첫 호출, align 은 후보 전체 합. */
     phaseMs: { detect: 0, align: 0 },
@@ -561,9 +567,15 @@ export function createA3Adapters(options) {
   let gridN = 0;
   let lockScan = null;
   let lockMisses = 0;
+  // 현재 자세/재탐색 이후 관측한 신뢰 F 미스의 포화 누계다. 정상 한 프레임이
+  // 중간에 끼어도 남기며, 연속 미스의 락 해제 판정(lockMisses)과는 분리한다.
+  let trustedMissHistory = 0;
   let floatScratch = null;
   let framesSinceLock = 0;
   let framesSinceRelocate = relocateMinGapFrames;
+  // 재탐색으로 얻은 신뢰 자세가 곧바로 무너질 때 쓸 별도 1회 예산이다.
+  // 락 교체/해제로 재충전하지 않는다. 수용/신뢰 상태가 아니라 작업량 제한이다.
+  let framesSinceTrustedRescue = relocateMinGapFrames;
 
   /*
    * ── 락 마진 (3d) ──────────────────────────────────────────────────────────
@@ -662,6 +674,7 @@ export function createA3Adapters(options) {
   }
 
   function installLock(nextH, n, layoutId, width, height) {
+    reacquireScene.invalidate();
     copy9(nextH, H);
     stats.n = n;
     stats.layoutId = layoutId || '';
@@ -672,6 +685,7 @@ export function createA3Adapters(options) {
     stats.lockWidth = Number(width) > 0 ? Math.trunc(Number(width)) : 0;
     stats.lockHeight = Number(height) > 0 ? Math.trunc(Number(height)) : 0;
     lockMisses = 0;
+    trustedMissHistory = 0;
     framesSinceLock = 0;
     // 🔴 0 이 아니라 «간격만큼 전» 이다 (결함 9a) — 상수 주석의 유도 참조. 0 으로 두면 락 직후
     // 24프레임 동안 재검출이 잠겨, 락 걸고 곧바로 F 가 무너지는 창에서 회복 경로가 통째로 막힌다.
@@ -690,11 +704,13 @@ export function createA3Adapters(options) {
   }
 
   function clearLock() {
+    reacquireScene.invalidate();
     if (locked) stats.counters.lockClears += 1;
     locked = 0;
     gridN = 0;
     lockScan = null;
     lockMisses = 0;
+    trustedMissHistory = 0;
     stats.locked = 0;
     stats.lockRevision += 1;
     stats.n = 0;
@@ -935,6 +951,8 @@ export function createA3Adapters(options) {
     // NaN !== NaN 이라 timestamp 가 없으면 매 호출이 새 프레임이다 (옛 거동 보존).
     if (timestamp === frameStamp) return 0;
     frameStamp = timestamp;
+    reacquireScene.advanceFrame();
+    framesSinceTrustedRescue = Math.min(relocateMinGapFrames, framesSinceTrustedRescue + 1);
     frameJudged = 0;
     fStamp = NaN;
     stats.phaseMs.align = 0;
@@ -1082,6 +1100,7 @@ export function createA3Adapters(options) {
      * 덮어야 하므로 설치 **뒤**여야 한다. 반대로 «검출로 새로 건 락» 에는 안 걸린다.
      */
     framesSinceRelocate = 0;
+    trustedMissHistory = 0;
     // 프레임 F 캐시는 H 가 어느 쪽으로 정해졌든 무효다 — 위에서 후보 F 를 재느라 H 를 흔들었다.
     fStamp = NaN;
     return adopted;
@@ -1123,7 +1142,24 @@ export function createA3Adapters(options) {
        * 간격(`relocateMinGapFrames` = 24)은 그대로 둔다 — 듀티비 상한은 여전히 그 하나가 정한다.
        */
       const distrust = stats.lockDistrusted;
-      if ((fStale || due || distrust) && framesSinceRelocate >= relocateMinGapFrames) {
+      // 불신 격자의 F는 실제 코드 교체에도 그대로일 수 있다. 장면 요약의 급변은
+      // 기존 간격 중 한 번만 추가 재탐색을 열며 n/H/포맷/수용은 기존 경로가 다시 잰다.
+      const sceneChanged = distrust && reacquireScene.observe(luma, width, height);
+      if (!distrust) reacquireScene.invalidate();
+      // 새 신뢰 자세의 F 저하·직전/현재 게이트 미달뿐 아니라, 현재 자세/probe 뒤
+      // 기존 미스 한도만큼 실제 실패를 관측해야 추가 탐색을 연다. 직전까지의
+      // 비연속 누계에 현재 미스를 더해 세며, 짧은 두 프레임 흔들림은 제외한다.
+      // 연속 미스 해제·신뢰/본문 수용 문턱과 24입력 추가예산은 바꾸지 않는다.
+      // 현재 F는 필요할 때만 읽고 같은 프레임의 alignInto가 캐시를 재사용한다.
+      const trustedRescue = !distrust && fStale && trustedMissHistory >= LOCK_MISS_LIMIT - 1
+        && framesSinceRelocate < relocateMinGapFrames
+        && framesSinceTrustedRescue >= relocateMinGapFrames && fNow < gateF && luma != null
+        && frameGridLockF(luma.data instanceof Float32Array ? luma.data : luma, width, height, gridN) < gateF;
+      if (trustedRescue) {
+        framesSinceTrustedRescue = 0;
+        stats.counters.trustedRescues += 1;
+      }
+      if (sceneChanged || trustedRescue || ((fStale || due || distrust) && framesSinceRelocate >= relocateMinGapFrames)) {
         relocateProbe(luma, width, height);
       }
     }
@@ -1439,6 +1475,7 @@ export function createA3Adapters(options) {
       if (!frameJudged) {
         frameJudged = 1;
         lockMisses += 1;
+        if (!distrusted) trustedMissHistory = Math.min(LOCK_MISS_LIMIT, trustedMissHistory + 1);
         if (lockMisses >= LOCK_MISS_LIMIT) clearLock();
       }
     }
@@ -1491,6 +1528,7 @@ export function createA3Adapters(options) {
 
   function reset() {
     clearLock();
+    reacquireScene.reset();
     stats.gridLockF = 0;
     stats.lastAlignMs = 0;
     stats.lastDetectMs = 0;
@@ -1507,6 +1545,8 @@ export function createA3Adapters(options) {
     frameJudged = 0;
     fStamp = NaN;
     framesSinceRelocate = relocateMinGapFrames;
+    framesSinceTrustedRescue = relocateMinGapFrames;
+    trustedMissHistory = 0;
   }
 
   /**

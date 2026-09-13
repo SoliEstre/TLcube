@@ -32,19 +32,14 @@ import {
   assertOrbitPresetFields, assertOrbitStateFields, defineOrbitViewAccessors,
   orbitPerspToDeg, orbitStateToViewerInput,
 } from '../src/generator-orbit-view.js';
-import { buildOrbitMesh } from '../src/y3d-viewer.js';
-import { layoutForCube } from '../src/ygrid.js';
 import {
   GENERATOR_STATE_SCHEMA, createGeneratorState, exposedGeneratorStateKeys,
 } from '../src/generator-state.js';
-import { encodeOptionsForY } from '../src/generator-render-config.js';
-import { encodeY } from '../src/encodeY.js';
-import { buildSceneY } from '../src/sceneY.js';
+import { encodeH } from '../src/h-codec.js';
+import { hPreviewOptions, hOrbitFromRotation } from '../src/generator-h.js';
+import { buildHScene } from '../src/h-render.js';
 import { rasterize } from '../src/raster.js';
-import { BULLSEYE_DARK, BULLSEYE_LIGHT, getPreset } from '../src/luminance.js';
-import { RENDER_PROFILE_FACE_GAINS } from '../src/render-profile.js';
-import { QUIET_COLOR_NONE, resolveQuietZoneChoice } from '../src/quiet-auto.js';
-import { SHADING_OFF } from '../src/shading.js';
+import { getPreset } from '../src/luminance.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const INDEX = readFileSync(ROOT + 'index.html', 'utf8');
@@ -60,32 +55,17 @@ const BG_MODE_COLORS = { transparent: null, white: { r: 255, g: 255, b: 255 }, b
  * 여기서 다시 재지 않는다; 프리셋이 'none' 을 세우는지는 자 ① 이 따로 본다.
  */
 function renderFromState(state, text = 'https://tl.estre.so') {
-  const fallback = state.qrPosition === 'none' ? { mode: 'off' } : { mode: 'corner', corner: state.qrPosition };
-  const opts = encodeOptionsForY({
-    tone: state.tone,
-    versionY: state.versionY,
-    fallback,
-    locatorProfileY: state.locatorProfileY,
-  });
-  const encoded = encodeY(text, { ...opts, eccLevel: state.eccLevel });
+  const opts = { version: state.versionH, mode: state.hFaces, tones: state.tone,
+    eccLevel: state.eccLevel, mask: state.hMask };
+  const encoded = encodeH(text, opts);
   // 촬영 프리셋은 구체 스타일만 세운다 — 'custom'(hue 슬라이더) 경로는 여기 안 온다.
   assert.notEqual(state.preset, 'custom', '촬영 프리셋이 custom 스타일을 세운다 — 재현이 안 된다');
   const base = getPreset(state.preset);
-  const palette = {
-    background: BG_MODE_COLORS[state.bgMode],
-    levels: base.levels,
-    bullseyeDark: BULLSEYE_DARK,
-    bullseyeLight: BULLSEYE_LIGHT,
-    // «자동» 이 아닌 구체 프로파일이라 내보내기 문맥과 무관하게 이 게인이다.
-    faceGains: RENDER_PROFILE_FACE_GAINS[state.renderProfile],
-  };
-  const sceneOpts = { palette };
-  if (typeof state.locatorProfileY === 'string' && state.locatorProfileY.startsWith('cell-surface-')) {
-    sceneOpts.locatorProfile = state.locatorProfileY;
-  }
-  const scene = buildSceneY(encoded, sceneOpts);
+  const scene = buildHScene(encoded, hPreviewOptions(state, {
+    palette: { background: BG_MODE_COLORS[state.bgMode], levels: base.levels },
+  }));
   const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 2 });
-  return { opts, encoded, scene, raster };
+  return { opts, encoded, scene, raster, view: orbitStateToViewerInput(state) };
 }
 
 /**
@@ -120,37 +100,6 @@ function opaque(color) {
  * 슬롯 QR 면(faceQuads)은 안 넘긴다 — 이 가족은 `qrPosition: 'none'` 이라 슬롯이
  * 아예 없다. 넘겨도 빈 배열이고, 안 넘기는 편이 재는 축이 궤도 하나로 좁혀진다.
  */
-function meshFromState(state) {
-  const { encoded } = renderFromState(state);
-  const view = orbitStateToViewerInput(state);
-  const layout = layoutForCube(encoded.n, { size: 1, margin: 0.25 });
-  const digitAt = (i, j) => {
-    const entry = encoded.cellDigits.get(`${i},${j}`);
-    return entry ? entry.digit : null;
-  };
-  const levelAt = (i, j, face) => {
-    const entry = encoded.cellDigits.get(`${i},${j}`);
-    if (!entry || !entry.tones) return null;
-    const lv = entry.tones[face];
-    return Number.isInteger(lv) ? lv : null;
-  };
-  const mesh = buildOrbitMesh({
-    n: encoded.n,
-    tones: encoded.tones === 2 ? 2 : 3,
-    levels: getPreset(state.preset).levels,
-    layout,
-    yaw: view.yaw,
-    pitch: view.pitch,
-    roll: view.roll,
-    perspective: view.perspective,
-    faces: 3,
-    digitAt,
-    levelAt,
-    includeBack: true,
-  });
-  return { mesh, view, encoded };
-}
-
 /**
  * 메시의 «그림» 을 수 하나로 요약한다 — 정점 좌표 전수의 반올림 지문.
  *
@@ -158,10 +107,11 @@ function meshFromState(state) {
  * 실제로 **다른 자세면 다른 꼭짓점**이 나와야 한다 (「합격 축은 제품의 목적에서
  * 나온다」 — 촬영자가 얻는 것은 그림이다).
  */
-function meshFingerprint(mesh) {
+function sceneFingerprint(scene) {
   const parts = [];
-  for (const quad of mesh.quads) {
-    for (const p of quad.points2d) parts.push(p.x.toFixed(6), p.y.toFixed(6));
+  for (const shape of scene.shapes) {
+    parts.push(shape.kind, shape.face || 'opaque');
+    for (const p of shape.points) parts.push(p.x.toFixed(6), p.y.toFixed(6));
   }
   return parts.join(',');
 }
@@ -177,17 +127,16 @@ test('자① 선언 전수 — 프리셋을 고르면 그 필드가 렌더 산�
     const { opts, encoded, scene, raster } = renderFromState(state);
 
     // (a) 인코더 옵션 — 「옵션은 중첩까지가 계약」. 상태값이 그대로 옵션에 도달했나.
-    assert.equal(opts.cellSurface, true, preset.id + ': 셀 표면 로케이터가 옵션에 안 실렸다');
-    assert.equal(opts.cellSurfaceLayout, preset.fields.locatorProfileY.slice('cell-surface-'.length),
-      preset.id + ': locatorProfileY 가 인코더 레이아웃에 도달 안 했다');
     assert.equal(opts.tones, preset.fields.tone, preset.id + ': tone 이 옵션에 도달 안 했다');
-    assert.equal(opts.version, preset.fields.versionY, preset.id + ': versionY 가 옵션에 도달 안 했다');
+    assert.equal(opts.version, preset.fields.versionH, preset.id + ': versionH 가 옵션에 안 실렸다');
+    assert.equal(opts.mode, preset.fields.hFaces, preset.id + ': hFaces 가 옵션에 안 실렸다');
 
     // (b) 인코딩 결과 — 와이어에 실린 값. y2 실측 조건(n25 · ecc H · tones 3)과 같아야 한다.
-    assert.equal(encoded.n, 25, preset.id + ': n 이 25 가 아니다 (y2 실물 조건)');
+    assert.equal(encoded.n, 25, preset.id + ': H3 n 이 25 가 아니다');
     assert.equal(encoded.eccLevel, preset.fields.eccLevel, preset.id + ': eccLevel 이 와이어에 안 실렸다');
     assert.equal(encoded.tones, 3, preset.id + ': 3톤이 아니다');
-    assert.equal(encoded.cellSurface, true, preset.id + ': 셀 표면이 아니다');
+    assert.equal(encoded.mode, 3, preset.id + ': 3면 H가 아니다');
+    assert.deepEqual(Object.keys(encoded.faces), ['ZM', 'XM', 'YM'], preset.id + ': H 3면 본문이 아니다');
 
     // (c) **렌더 산출물** — scene.background 와 실제 래스터 코너 픽셀.
     //     상태도 옵션도 아닌, 사람이 사진으로 찍게 될 바로 그 화소다.
@@ -200,30 +149,11 @@ test('자① 선언 전수 — 프리셋을 고르면 그 필드가 렌더 산�
     assert.deepEqual(pixelAt(raster, raster.width - 1, 0), opaque(want),
       preset.id + ': 래스터 우상단 화소가 bgMode 와 다르다');
 
-    // (d) 안전영역 — Type Y 는 «없음» 이 실측 최선이고, 흑·백 판은 실루엣을 깬다.
-    const quiet = resolveQuietZoneChoice({
-      quietMode: state.quietMode,
-      bgMode: state.bgMode,
-      type: state.type,
-      sepWhite: 1,
-      sepBlack: 1,
-      surfaceLuminance: null,
-      surfaceSeparation: null,
-      separationFloor: 0.05,
-    });
-    assert.equal(quiet.color, QUIET_COLOR_NONE,
-      preset.id + ': 안전영역 판이 그려진다 — 판 색이 촬영 프레임 테두리 띠에 없으면'
-      + ' 배경이 아니라 경쟁 전경 덩어리가 되어 큐브 실루엣 검출이 깨진다');
-    assert.equal(state.quietMode, QUIET_COLOR_NONE, preset.id + ': quietMode 가 «없음» 이 아니다');
-    assert.equal(state.quietMarginAuto, false,
-      preset.id + ': 두께 자동이 켜져 있다 — 렌더 뒤 quietMargin 을 되써서 기하가 흔들린다');
+    // H 미지원 Y 설정은 이전값을 보존하고 H 픽셀에는 영향을 주지 않아요.
+    const old=createGeneratorState();
+    for(const key of ['locatorProfileY','renderProfile','quietMode','quietMarginAuto','shading','shadingRim'])
+      assert.equal(state[key],old[key],preset.id+': H가 기존Y 설정을 바꿨다: '+key);
 
-    // (e) 음영 — 켜면 배경·안전영역을 채워 Y 전경 실루엣 검출이 죽는다.
-    assert.equal(state.shading, SHADING_OFF, preset.id + ': 음영이 꺼져 있지 않다');
-    assert.equal(state.shadingRim, false, preset.id + ': T면 아웃라인이 켜져 있다');
-    assert.equal(scene.shading === undefined || scene.shading === null
-      || (Array.isArray(scene.shading) && scene.shading.length === 0), true,
-    preset.id + ': scene 에 음영 레이어가 실렸다');
   }
 });
 
@@ -239,12 +169,12 @@ test('자① 같은 자세의 dark/light 는 **지면만** 다르다 (배경 축
 
     const a = renderFromState(applyShotPresetToState(dark.id, createGeneratorState()));
     const b = renderFromState(applyShotPresetToState(light.id, createGeneratorState()));
-    assert.deepEqual(a.encoded.cellDigits, b.encoded.cellDigits, p.pose + ': 셀 값이 다르다');
+    assert.deepEqual(a.encoded.faces, b.encoded.faces, p.pose + ': 셀 값이 다르다');
     assert.notDeepEqual(pixelAt(a.raster, 0, 0), pixelAt(b.raster, 0, 0),
       p.pose + ': 배경 축이 산출물에서 안 갈린다 — 두 프리셋이 같은 그림을 낸다');
     // 그리고 **3D 쪽은 같은 자세**여야 한다 — 배경이 궤도를 흔들면 대조가 깨진다.
-    assert.equal(meshFingerprint(meshFromState(applyShotPresetToState(dark.id, createGeneratorState())).mesh),
-      meshFingerprint(meshFromState(applyShotPresetToState(light.id, createGeneratorState())).mesh),
+    assert.equal(sceneFingerprint(renderFromState(applyShotPresetToState(dark.id, createGeneratorState())).scene),
+      sceneFingerprint(renderFromState(applyShotPresetToState(light.id, createGeneratorState())).scene),
       p.pose + ': 배경만 다른데 3D 자세까지 달라졌다');
   }
 });
@@ -261,7 +191,7 @@ test('자①-3D 선언 16장 전수 — 고른 자세가 메시 꼭짓점까지 
     const state = applyShotPresetToState(preset.id, createGeneratorState());
 
     // (a) 상태 → 뷰어 입력의 이음매. **도(°)가 라디안으로 풀려야** 한다.
-    const { mesh, view } = meshFromState(state);
+    const { scene, view } = renderFromState(state);
     assert.equal(view.on, true, preset.id + ': 3D 가 안 켜진다 — 2.5D 로 남으면 면별 H 가 없다');
     assert.equal(state.orbitView, ORBIT_VIEW_3D, preset.id + ': orbitView 가 3D 가 아니다');
     assert.ok(Math.abs(view.yaw - preset.fields.orbitYaw * Math.PI / 180) < 1e-12,
@@ -270,15 +200,17 @@ test('자①-3D 선언 16장 전수 — 고른 자세가 메시 꼭짓점까지 
       preset.id + ': pitch 가 라디안으로 안 풀렸다');
     assert.equal(view.roll, 0, preset.id + ': roll 이 0 이 아니다 — 이번 코퍼스 밖 축이다');
 
-    // (b) **메시가 그 값을 실제로 들었나.** buildOrbitMesh 는 받은 각을 되돌려 준다.
-    assert.equal(mesh.yaw, view.yaw, preset.id + ': 메시가 yaw 를 안 받았다');
-    assert.equal(mesh.pitch, view.pitch, preset.id + ': 메시가 pitch 를 안 받았다');
+    // (b) H 물리 회전은 상태의 화면 궤도와 다른 기저예요. 역변환으로 상태 의미를 확인해요.
+    // Y의 실제 투영 꼭짓점과의 독립 대조는 h-pose-drag.test.js에서 전수 검사해요.
+    const orbit = hOrbitFromRotation(scene.hModel.projection);
+    assert.ok(Math.abs(orbit.yaw-view.yaw)<1e-12, preset.id + ': 메시가 yaw 를 안 받았다');
+    assert.ok(Math.abs(orbit.pitch-view.pitch)<1e-12, preset.id + ': 메시가 pitch 를 안 받았다');
     // 원근은 **α 9°** 로 고정 — y2-p9rot 과 한 축만 다르게 두기 위한 조건이다.
     assert.equal(orbitPerspToDeg(state.orbitPersp), 9, preset.id + ': 원근이 9° 가 아니다');
-    assert.ok(mesh.invDist > 0, preset.id + ': 원근이 0 이다 — 평행투영이면 p9 가 아니다');
+    assert.ok(scene.hModel.projection.perspective > 0, preset.id + ': 원근이 0 이다 — 평행투영이면 p9 가 아니다');
 
     // (c) 꼭짓점 지문 — 자세마다 **다른 그림**이어야 한다.
-    const print = meshFingerprint(mesh);
+    const print = sceneFingerprint(scene);
     assert.ok(print.length > 1000, preset.id + ': 메시가 비었다 — 잴 그림이 없다');
     const key = preset.pose;
     if (seen.has(key)) {
@@ -293,12 +225,12 @@ test('자①-3D 선언 16장 전수 — 고른 자세가 메시 꼭짓점까지 
 });
 
 test('자①-3D front 와 hard 는 서로 다른 그림이다 (브리프 §4-① 의 명시 표적)', () => {
-  const front = meshFromState(applyShotPresetToState('shot-3d-front-dark', createGeneratorState()));
-  const hard = meshFromState(applyShotPresetToState('shot-3d-hard-dark', createGeneratorState()));
-  assert.notEqual(meshFingerprint(front.mesh), meshFingerprint(hard.mesh),
+  const front = renderFromState(applyShotPresetToState('shot-3d-front-dark', createGeneratorState()));
+  const hard = renderFromState(applyShotPresetToState('shot-3d-hard-dark', createGeneratorState()));
+  assert.notEqual(sceneFingerprint(front.scene), sceneFingerprint(hard.scene),
     'front 와 hard 가 같은 그림이다 — 궤도가 렌더에 안 실렸다');
   // 「대조군이 진단을 가른다」: 같은 코드·같은 배경인데 **자세 축만** 갈렸음을 못 박는다.
-  assert.deepEqual(front.encoded.cellDigits, hard.encoded.cellDigits, '코드 자체가 달라졌다');
+  assert.deepEqual(front.encoded.faces, hard.encoded.faces, '코드 자체가 달라졌다');
 });
 
 test('자①-3D **대조군** — 궤도가 0 이면 2.5D 와 같은 그림이다 (자가 자세를 재는지 확인)', () => {
@@ -309,9 +241,9 @@ test('자①-3D **대조군** — 궤도가 0 이면 2.5D 와 같은 그림이�
    */
   const front = applyShotPresetToState('shot-3d-front-dark', createGeneratorState());
   const flat = { ...front, orbitPersp: 0 };
-  assert.notEqual(meshFingerprint(meshFromState(front).mesh), meshFingerprint(meshFromState(flat).mesh),
+  assert.notEqual(sceneFingerprint(renderFromState(front).scene), sceneFingerprint(renderFromState(flat).scene),
     '원근 9° 와 평행투영이 같은 그림이다 — 원근 축이 렌더에 안 실렸다');
-  assert.equal(meshFromState(flat).mesh.invDist, 0, '노브 0 이 정확히 평행투영이 아니다');
+  assert.equal(renderFromState(flat).scene.hModel.projection.perspective, 0, '노브 0 이 정확히 평행투영이 아니다');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -392,7 +324,7 @@ test('자② 카드 사전 키가 섹션 자신의 키와 안 겹치고 8언어�
    * 사전 커버리지 자는 「키가 8언어에 다 있나」만 보므로 **전부 초록이었다**.
    * 「게이트가 엉뚱한 축에서 초록일 수 있다」 — 그래서 겹침 자체를 여기서 잰다.
    */
-  const sectionAt = INDEX.indexOf('<div id="shotPresetSection"');
+  const sectionAt = INDEX.indexOf('<details id="shotPresetSection"');
   assert.notEqual(sectionAt, -1, '#shotPresetSection 이 사라졌다');
   const section = INDEX.slice(sectionAt, INDEX.indexOf('\n    </div>', sectionAt));
   const markupKeys = new Set([...section.matchAll(/data-i18n="(g\d+)"/g)].map((m) => m[1]));
@@ -498,7 +430,7 @@ test('자③ 정식 화면 노출 0 — 상태 키는 INTERNAL, 섹션은 isLabP
   const at = INDEX.indexOf('function syncShotPresetUi()');
   assert.notEqual(at, -1, 'syncShotPresetUi 가 사라졌다');
   const body = INDEX.slice(at, INDEX.indexOf('\n}', at));
-  assert.match(body, /const lab = isLabPath\(\);/, '촬영 프리셋 섹션이 lab 게이트를 안 쓴다');
+  assert.match(body, /const lab = isLabPath\(\) && hGeneratorActive\(\);/, '촬영 프리셋은 lab의H에서만 보인다');
   assert.match(body, /section\.hidden = !lab;/, 'lab 게이트가 표시에 소비되지 않는다');
 });
 
@@ -512,7 +444,7 @@ test('자④ 무회귀 — 프리셋을 안 고른 기본 상태는 shotPreset �
   // 프리셋이 세우는 축의 기본값이 프리셋 값 때문에 움직이지 않았나 — 스키마 기본값 대조.
   // (프리셋 도입 전 기본값. 하나라도 프리셋 값으로 «몰래 승격» 되면 여기서 빨개진다.)
   const untouched = {
-    type: 'Y', versionY: 'auto', tone: 3, eccLevel: 'auto',
+    type: 'Y', yRepresentation: '2.5d', versionY: 'auto', versionH: 'auto', hFaces: 3, hMask: 7, hAutoRotate: false, tone: 3, eccLevel: 'auto',
     qrPosition: 'TL', preset: 'slate', renderProfile: 'auto',
     quietMode: 'auto', quietMarginAuto: true, shading: 'off', shadingRim: false,
     bgMode: 'transparent', locatorProfileY: 'off',
@@ -534,8 +466,7 @@ test('자④ 무회귀 — 기본 상태의 렌더 산출물이 프리셋 코드
   // 아무것도 증명하지 않는다. 기본은 투명 배경 · auto ecc · 로케이터 off 다.
   const base = createGeneratorState();
   assert.equal(BG_MODE_COLORS[base.bgMode], null, '기본 배경이 투명이 아니다');
-  assert.equal(base.locatorProfileY.startsWith('cell-surface-'), false,
-    '기본 로케이터가 이미 셀 표면이다 — 자① 의 로케이터 축이 대조를 잃는다');
+  assert.equal(base.yRepresentation, ORBIT_VIEW_25D, '기본은 H가 아닌 기존Y다');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -591,11 +522,11 @@ test('자⑤ 선언 **밖** 축을 바꾸는 것은 이탈이 아니다', () => 
 // 자 ⓕ — 상태 밖 소비자(detectorAutoY) 를 함께 쓸었나
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('자ⓕ 로케이터를 지정한 프리셋은 «자동» UI 정책도 함께 내린다', () => {
+test('자ⓕ H 프리셋은 Y 로케이터 자동 정책을 보존하고 소비자 UI를 동기화한다', () => {
   // 왜: applyAutoLocatorProfileY() 는 자동이 켜져 있으면 QR 위치·버전·타입이 바뀔
   // 때마다 locatorProfileY 를 덮어쓴다. 상태 계층만 훑는 자로는 안 보이는 소비자다.
   for (const id of SHOT_PRESET_IDS) {
-    assert.equal(shotPresetPinsLocator(id), true, id + ': 로케이터를 안 세운다');
+    assert.equal(shotPresetPinsLocator(id), false, id + ': H 프리셋이 Y 로케이터 정책을 건드린다');
   }
   assert.equal(shotPresetPinsLocator(SHOT_PRESET_NONE), false);
   const at = INDEX.indexOf('function applyShotPreset(');
@@ -603,7 +534,7 @@ test('자ⓕ 로케이터를 지정한 프리셋은 «자동» UI 정책도 함�
   const body = INDEX.slice(at, INDEX.indexOf('\n}', at));
   assert.match(body, /shotPresetPinsLocator\(id\)/,
     '적용 경로가 로케이터 고정 여부를 안 묻는다 — 자동이 프리셋을 덮어쓴다');
-  assert.match(body, /detectorAutoY = false/, '자동 플래그를 안 내린다');
+  assert.match(body, /if \(shotPresetPinsLocator\(id\)\) detectorAutoY = false/, 'H는 기존Y 자동 정책을 보존한다');
   // 소비자 쓸기는 손 목록이 아니라 TEXT_SYNCERS 전수여야 한다.
   assert.match(body, /for \(const sync of TEXT_SYNCERS\) sync\(\);/,
     '적용 뒤 UI 되그리기가 손 목록이다 — 새 필드를 더하면 하나가 빠진다');
@@ -779,13 +710,19 @@ test('자ⓖ 3D 바 조작이 촬영 프리셋 표시를 **다시 재게** 한�
   // ② 그림 경로도 그 바닥으로 모인다 (슬라이더·드래그·리셋·휠이 여기로 온다).
   assert.match(bodyOf('paintY3dPreview'), /syncOrbitPreviewUi\(\);/,
     '3D 그림 경로가 궤도 UI 동기화를 안 지난다 — 깔때기가 끊겼다');
+  assert.match(bodyOf('setY3dPerspectiveDegrees'), /paintY3dPreview\(\);/,
+    '원근 공통 helper가 그림/촬영 프리셋 동기화 경로를 잃었다');
+  for (const name of ['y3dPerspPlane', 'y3dPerspDown', 'y3dPerspUp']) {
+    assert.ok(INDEX.includes("els." + name + ".addEventListener('click',()=>setY3dPerspectiveDegrees("),
+      name + ' 단추가 검증된 원근 helper를 안 지난다');
+  }
   // ③ 그리고 3D 바의 **모든** 리스너가 둘 중 하나로 끝나야 한다 — 손 목록이 아니라
   //    소스에서 훑는다. 하나라도 빠지면 그 버튼만 조용히 거짓말한다.
   const listeners = [...INDEX.matchAll(/els\.(y3d[A-Za-z0-9]*)\.addEventListener\('(\w+)', \(\w*\) => \{([\s\S]*?)\n\}\);/g)];
   assert.ok(listeners.length >= 6, '3D 바 리스너를 너무 적게 찾았다(' + listeners.length + ') — 파서가 깨졌다');
   for (const [, el, type, body] of listeners) {
     if (type !== 'click' && type !== 'input') continue;
-    assert.equal(/syncOrbitPreviewUi\(\)|paintY3dPreview\(\)/.test(body), true,
+    assert.equal(/syncOrbitPreviewUi\(\)|paintY3dPreview\(\)|setY3dPerspectiveDegrees\(/.test(body), true,
       'els.' + el + ' 의 ' + type + ' 리스너가 깔때기를 안 지난다 — 그 버튼만 이탈을 안 알린다');
   }
 });

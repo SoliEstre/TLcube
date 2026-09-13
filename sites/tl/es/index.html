@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TLcube — un código de barras 3D (en realidad 2.5D) que lleva los datos en el rango de luminancia</title>
-<meta name="description" content="Un código de barras 3D abierto que divide una celda hexagonal en tres caras romboidales y lleva los datos en el orden de luminancia relativa de esas caras. La especificación y la implementación de referencia se publican bajo Apache-2.0.">
+<meta name="description" content="Un código de barras 3D abierto que divide una celda hexagonal en tres caras romboidales y lleva los datos en el orden de luminancia relativa de esas caras. La especificación y la implementación de referencia se publican bajo Apache-2.0. True 3D H — extensión de cubo real del grupo Y.">
 <link rel="canonical" href="https://tl.estre.so/es/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube — un código de barras 3D que lleva los datos en el rango de luminancia">
-<meta property="og:description" content="Los datos viajan en el orden de las tres caras, no en el brillo absoluto. Mientras el orden sobreviva, el valor sobrevive.">
+<meta property="og:description" content="Los datos viajan en el orden de las tres caras, no en el brillo absoluto. Mientras el orden sobreviva, el valor sobrevive. True 3D H — extensión de cubo real del grupo Y.">
 <meta property="og:url" content="https://tl.estre.so/es/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -58,7 +58,7 @@
     {
       "@type": "TechArticle",
       "headline": "TLcube — un código de barras 3D que lleva los datos en el rango, no en el brillo absoluto",
-      "description": "Un código de barras 3D abierto que divide una celda hexagonal en tres caras romboidales y usa su orden de luminancia relativa (3! = 6) como un símbolo en base 6. Invariante ante transformaciones tonales monótonas.",
+      "description": "Un código de barras 3D abierto que divide una celda hexagonal en tres caras romboidales y usa su orden de luminancia relativa (3! = 6) como un símbolo en base 6. Invariante ante transformaciones tonales monótonas. True 3D H — extensión de cubo real del grupo Y.",
       "url": "https://tl.estre.so/es/",
       "inLanguage": "es",
       "isPartOf": {
@@ -154,6 +154,11 @@
         <h3>Type Y — cubo único</h3>
         <p class="dim">Tres caras n×n. Una marca de una sola pieza, buena para rotulación y merchandising.</p>
         <div class="meta">n = 13 / 21 / 25 · carga útil neta 31 / 98 / 141 B</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>True 3D H — extensión de cubo real del grupo Y</h4>
+          <p class="dim">Un formato distinto del Type Y plano, con cuadrículas H0…H8 y 1…6 caras de datos únicas. Añada imágenes a las caras libres, configure la rotación en bucle y exporte desarrollos PNG/SVG, glTF, MP4 o estructuras Minecraft .schem.</p>
+          <p class="meta">El escáner muestra resultados solo tras reunir las caras necesarias y superar las comprobaciones RS/CRC. Las mediciones fotográficas siguientes no incluyen H ni garantizan tasas de reconocimiento o FPS con cámaras reales.</p>
+        </div>
       </div>
       <div class="card">
         <img src="../assets/type-O.png" alt="Type O — campo hexagonal">
@@ -229,7 +234,7 @@
 
   <section id="spec">
     <h2>Especificación e implementación</h2>
-    <p class="lead">La especificación del formato y la implementación de referencia se publican bajo la <strong>Licencia Apache 2.0</strong>. JavaScript puro, sin cadena de compilación, cero dependencias en ejecución — funciona como un único archivo HTML.</p>
+    <p class="lead">La especificación del formato y la implementación de referencia se publican bajo la <strong>Licencia Apache 2.0</strong>. JavaScript puro, scripts de compilación Node.js en el repositorio, cero dependencias en ejecución — funciona como un único archivo HTML.</p>
     <p class="lead"><strong>Implementar solo el decodificador ya cuenta como implementación conforme.</strong> La adopción empieza por el lado que lee.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">Leer la especificación</a>

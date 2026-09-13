@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "baselineRevision": "3c3d9c5",
+  "opticalBridges": {
+    "adapter-c.js": [
+      "../decoder/anchor-detect.js", "../decoder/c-body-track.js", "../decoder/c-daehan-observe.js",
+      "../decoder/central-beacon-observation-shared.js", "../decoder/central-n7-observe.js",
+      "../decoder/cellsurface-block-detect.js", "../decoder/cq-observe.js", "../decoder/cq-structural-refine.js",
+      "../decoder/cs-verified-cursor-v3-prototype.js", "../decoder/format-read.js", "../decoder/grid-sample.js"
+    ],
+    "adapter-cube-y.js": [
+      "../decoder/c-photometric-track.js", "../decoder/cube-face-confidence.js", "../decoder/cube-face-geometry.js",
+      "../decoder/cube-silhouette-observe.js", "../decoder/locator-format.js"
+    ],
+    "adapter-locator.js": [
+      "../decoder/cellsurface-block-detect.js", "../decoder/homography.js", "../decoder/locator-format.js"
+    ],
+    "adapter-planar.js": [
+      "../decoder/c-body-track.js", "../decoder/cq-structural-refine.js", "../decoder/grid-sample.js", "../decoder/sagoae-refine.js"
+    ],
+    "planar-observe.js": [
+      "../decoder/anchor-detect.js", "../decoder/bullseye-detect.js", "../decoder/cell-finder-detect.js",
+      "../decoder/central-beacon-observation-shared.js", "../decoder/central-n7-observe.js", "../decoder/central-v0-observe.js",
+      "../decoder/cellsurface-block-detect.js", "../decoder/corner-marker-detect.js", "../decoder/cs-verified-cursor-v3-prototype.js",
+      "../decoder/cube-detect.js", "../decoder/format-read.js", "../decoder/qr-center-geometry.js",
+      "../decoder/qr-finder-observe.js", "../decoder/sagoae-verify.js"
+    ],
+    "shared-central-n7.js": [
+      "../decoder/central-beacon-observation-shared.js", "../decoder/central-n7-observe.js",
+      "../decoder/cellsurface-block-detect.js", "../decoder/cs-verified-cursor-v3-prototype.js"
+    ]
+  },
+  "coreFiles": [
+    "accumulate.js", "acquisition-lifetime.js", "bound-candidate-session.js", "c-candidate-runtime.js", "candidate-hud-geometry.js", "candidate-key.js",
+    "corrections.js", "cube-y-acquisition.js", "cube-y-identity.js", "cube-y-motion.js", "cube-y-runtime.js", "cursor-budget.js",
+    "decode-rs-blocks.js", "decode-rs.js", "glyph.js", "hud-geometry.js", "identity.js", "layout-pack.js",
+    "observed-candidate-runtime.js", "params.js", "planar-candidate-runtime.js", "profiles/a.js", "profiles/c.js", "profiles/k.js",
+    "profiles/o.js", "profiles/planar-binding.js", "profiles/v.js", "progress.js", "rank-likelihood.js", "rs-soft.js", "session.js", "y-layout.js", "planar-work-accounting.js", "y-reacquire-scene.js"
+  ],
+  "baselineClosure": [
+    "src/autoplaceHex.js", "src/autoplaceY.js", "src/base211.js", "src/bullseye.js", "src/capacity.js", "src/capacityA.js",
+    "src/capacityC.js", "src/capacityDaehan.js", "src/capacityK.js", "src/capacityY.js", "src/cellSurfaceFinal.js", "src/cellSurfaceLayouts.js",
+    "src/cellSurfaceY.js", "src/centralBeaconWire.js", "src/centralN7Schema.js", "src/decoder/cellSurfaceY-detect.js",
+    "src/decoder/cellsurface-block-detect.js", "src/decoder/contracts.js", "src/decoder/cube-detect.js", "src/decoder/finder-seed.js",
+    "src/decoder/format-read.js", "src/decoder/grid-sample.js", "src/decoder/homography.js", "src/decoder/locator-format.js",
+    "src/decoder/locatorY-detect.js", "src/decoder/orientation-scorer.js", "src/finder-daehan.js", "src/finder-footprint.js",
+    "src/finder-oak-lineup.js", "src/finder-oak-patterns.js", "src/finder-patterns.js", "src/format-proposals.js", "src/formatC.js",
+    "src/formatK.js", "src/formatY.js", "src/formatinfo.js", "src/gf256.js", "src/gfp.js", "src/header.js", "src/hexgrid.js",
+    "src/layout.js", "src/layoutA.js", "src/layoutK.js", "src/layoutY.js", "src/lehmer.js", "src/locatorY.js", "src/markerA.js",
+    "src/markerG.js", "src/markerK.js", "src/markerO.js", "src/markerOdaehan.js", "src/mask.js", "src/notchC.js", "src/placement.js",
+    "src/placementA.js", "src/placementK.js", "src/placementY.js", "src/qr.js", "src/r2/accumulate.js", "src/r2/adapter-locator.js",
+    "src/r2/candidate-key.js", "src/r2/corrections.js", "src/r2/decode-rs-blocks.js", "src/r2/decode-rs.js", "src/r2/glyph.js",
+    "src/r2/hud-geometry.js", "src/r2/identity.js", "src/r2/layout-pack.js", "src/r2/params.js", "src/r2/profiles/c.js",
+    "src/r2/progress.js", "src/r2/rank-likelihood.js", "src/r2/rs-soft.js", "src/r2/session.js", "src/rs.js", "src/rs211.js",
+    "src/tonemap.js", "src/turnA.js", "src/type-y-cell-editor.js", "src/ygrid.js"
+  ],
+  "addedClosure": [
+    "src/centralMarkerN7.js", "src/centralN7Codec.js", "src/cube-outline.js", "src/decoder/anchor-detect.js", "src/decoder/bullseye-detect.js",
+    "src/decoder/c-body-track.js", "src/decoder/c-daehan-observe.js", "src/decoder/c-photometric-track.js", "src/decoder/cell-finder-detect.js",
+    "src/decoder/central-beacon-observation-shared.js", "src/decoder/central-n7-observe.js", "src/decoder/central-v0-observe.js",
+    "src/decoder/corner-marker-detect.js", "src/decoder/cq-observe.js", "src/decoder/cq-structural-refine.js",
+    "src/decoder/cs-verified-cursor-v3-prototype.js", "src/decoder/cube-bullseye.js", "src/decoder/cube-face-confidence.js",
+    "src/decoder/cube-face-geometry.js", "src/decoder/cube-pose.js", "src/decoder/cube-silhouette-observe.js", "src/decoder/luma.js",
+    "src/decoder/qr-center-geometry.js", "src/decoder/qr-finder-observe.js", "src/decoder/quantile-select.js", "src/decoder/sagoae-refine.js",
+    "src/decoder/sagoae-verify.js", "src/finder-CO2.js", "src/finder-H.js", "src/finder-selection.js", "src/generator-types.js",
+    "src/luminance.js", "src/r2-hud-model.js", "src/r2/acquisition-lifetime.js", "src/r2/adapter-c.js", "src/r2/adapter-cube-y.js", "src/r2/adapter-planar.js",
+    "src/r2/bound-candidate-session.js", "src/r2/c-candidate-runtime.js", "src/r2/candidate-hud-geometry.js", "src/r2/cube-y-acquisition.js",
+    "src/r2/cube-y-identity.js", "src/r2/cube-y-motion.js", "src/r2/cube-y-runtime.js", "src/r2/cursor-budget.js",
+    "src/r2/observed-candidate-runtime.js", "src/r2/planar-candidate-runtime.js", "src/r2/planar-observe.js", "src/r2/planar-work-accounting.js", "src/r2/profiles/a.js",
+    "src/r2/profiles/k.js", "src/r2/profiles/o.js", "src/r2/profiles/planar-binding.js", "src/r2/profiles/v.js",
+    "src/r2/shared-central-n7.js", "src/r2/y-layout.js", "src/r2/y-reacquire-scene.js", "src/y3d-viewer.js"
+  ],
+  "currentClosureCount": 138
+}

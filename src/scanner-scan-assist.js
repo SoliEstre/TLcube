@@ -5,6 +5,12 @@
 
 import { CELL_PX_FLOOR } from './scanner-zoom.js';
 
+/** R2 cube collection nudge: never competes with a result/DONE/R1 surface. */
+export function cubeGuideNudge({engine,kind,faceCount=0,required=0,state,lastProgressAt,epoch,now}={}){
+  if(engine!=='r2'||kind!=='cube'||!Number.isInteger(faceCount)||faceCount<1||!Number.isInteger(required)||required<1||faceCount>=required||state==='DONE'||!Number.isFinite(lastProgressAt)||!Number.isFinite(now)||now-lastProgressAt<3000)return null;
+  return {key:'status.cubeGuide',epoch,faceCount,required};
+}
+
 export function immediateCornerQrHint(result, options = {}) {
   const floor = options.cellPxFloor === undefined ? CELL_PX_FLOOR : options.cellPxFloor;
   if (!(floor > 0) || !Number.isFinite(floor)) return null;
@@ -86,10 +92,7 @@ export function scanViaOf(result) {
  * 'r2')만 열고, 일반 QR('qr')과 미지의 출처는 사용자가 누른다. 결과가 `autoOpen: false` 를 직접
  * 실으면 언제나 그것이 이긴다. 기본값이 «연다» 쪽이 아니라서 새 출처가 표시를 잊어도 안전하다.
  */
-export function resultAutoOpen(result) {
-  if (!result || result.autoOpen === false) return false;
-  return result.source === undefined || result.source === 'r2';
-}
+export { resultAutoOpen, urlOriginOf } from './scanner-url-result.js';
 
 /**
  * 🔴 **분석 배율** — 프레임에 실제로 걸린 확대의 전부 (2026-09-06 검토 R3c, 결함 15).

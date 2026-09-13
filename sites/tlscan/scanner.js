@@ -9,6 +9,7 @@
 //    dev 서버는 TLcube 루트를 서빙해서 상대 경로가 **동작해 버리므로** 로컬 검증으로는
 //    잡히지 않는 dev/prod 괴리다. 절대 경로 + nginx alias(`/src/`)로 양쪽을 일치시킨다.
 //    (같은 이유로 `_shared` 도 alias 로 붙인다 — deploy/estre-so/projects/tlcube/static.conf)
+import { confirmedQrEngineFamily, protectsYHEngine, validEngineRouteEvidence } from '/src/scanner-engine-route.js';
 import { sniffPayload } from '/src/payloadform.js';
 import { tlReaderFamilyHintFromPath } from '/src/qr.js';
 import { createI18n, wireLanguageSwitch } from '/src/i18n.js';
@@ -21,7 +22,7 @@ import { detectQrFinderTriples } from '/src/decoder/bootstrap.js';
 import { toRelativeLuminance } from '/src/decoder/luma.js';
 import { localizeCornerQrAssist } from '/src/decoder/corner-qr-assist.js';
 import {
-  immediateCornerQrHint, normalizeDecodePayload, guideCardVisibility, scanScopeCopyKey, scanViaOf, resultAutoOpen,
+  immediateCornerQrHint, normalizeDecodePayload, guideCardVisibility, scanScopeCopyKey, scanViaOf, resultAutoOpen, urlOriginOf,
   ENGINE_SWITCH_PRODUCT_ENABLED, engineSwitchAvailable, ENGINE_STORAGE_KEY, ENGINE_STORAGE_KEY_LEGACY, resolveEngineChoice,
   stageTapIsCentre, analysisScaleOf,
 } from '/src/scanner-scan-assist.js';
@@ -73,7 +74,14 @@ import {
   typeCGuideRingPositions,
 } from './scan-guide-ui.js';
 import { createDebugOverlay } from '/src/scanner-debug-overlay.js';
-import { createR2ScanRuntime, r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
+import { r2HitToDecodeResult } from '/src/r2-scan-runtime.js';
+import { createR2WorkerRuntime } from '/src/r2-worker-runtime.js';
+import { hHitToDecodeResult, isVerifiedHDecodeResult } from '/src/h-scan-runtime.js';
+import { resolveUrlResultPresentation } from '/src/scanner-url-result.js';
+import { createHPhotoReader } from '/src/h-photo-reader.js';
+import { hProgressModel, hScannerText, hCameraActive } from '/src/h-scanner-ui.js';
+import { cubeGuideNudge } from '/src/scanner-scan-assist.js';
+import { hFaceNetModel, hFrameToStageMapping, hLiveFaceLabelsModel } from '/src/h-face-hud.js';
 import { createCandidateHudRenderer } from '/src/r2-candidate-hud-renderer.js';
 import {
   createQrBridge, qrHitToDecodeResult, qrFrameGateOpen, routeQrHits, frameYieldForQr, summarizeQrBridge,
@@ -175,7 +183,7 @@ const PHOTO_MAX_SHORT_SIDE = 1440;
  * 실제로 이 값이 없어서 "배포가 갱신됐나?" 를 바이트수 비교로 확인해야 했다(2026-08-11).
  * 푸터에 표시하고, 갱신할 때 같이 올린다.
  */
-export const SCANNER_BUILD = '2026-09-09.01';
+export const SCANNER_BUILD = '2026-09-14.03';
 
 /*
  * 연속 실패가 7.68초를 넘으면 "더 가까이" 안내를 띄운다.
@@ -248,6 +256,7 @@ const scannerFamilyEvidence = scannerFamilyHint === null
   ? null : Object.freeze({ family: scannerFamilyHint });
 
 let cameraStream = null;
+let cameraMetadataAbort = null;
 let animationFrameId = 0;
 let scanSession = 0;
 let isDecoding = false;
@@ -337,7 +346,10 @@ const debugOverlay = createDebugOverlay({
  */
 // «R2 가용» — 시험판이거나 승격됐으면. 이 하나가 런타임·QR probe·패널·스위치·디버그 줄을 다 연다 (§27.4 1단계).
 const r2Available = engineSwitchAvailable({ labPath: isLabPath(), productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED });
+const hAvailable = isLabPath();
 let r2Wanted = true;
+let transientEngineSwitch = false;
+let autoR1Active = false;
 try {
   // 새 키가 있으면 그것, 없으면 옛 시험판 키(1회 이관), 둘 다 없으면 켬.
   r2Wanted = resolveEngineChoice(
@@ -345,7 +357,113 @@ try {
     window.localStorage.getItem(ENGINE_STORAGE_KEY_LEGACY),
   );
 } catch { /* 저장소 접근 불가는 스캔을 막지 않는다 — 기본 켬 */ }
-const r2Runtime = createR2ScanRuntime({ enabled: r2Available && r2Wanted });
+const r2Runtime = createR2WorkerRuntime({ enabled: r2Available && r2Wanted,
+  engineOptions: { candidateScope: 'y', enableH: hAvailable, autoRouteR1: true },
+  onProcessed: () => { noteFrameProcessed(); renderHProgress();
+    const evidence = r2Runtime.stats.engineRoute;
+    if (validEngineRouteEvidence(evidence, nowMs())) autoRouteToR1(evidence.family);
+  } });
+const hPhotoReader = hAvailable ? createHPhotoReader() : null;
+let hPhotoSnapshot = null;
+let hPhotoActiveSession = null;
+let hPhotoExpiryTimer = null;
+const hCollectionRoot = document.getElementById('h-collection');
+const hCollectionReset = document.getElementById('h-collection-reset');
+const hFaceLabelLayer = document.getElementById('h-face-label-layer');
+const hFaceNet = document.getElementById('h-face-net');
+// Worker 결과 observedAt과 같은 촬영의 crop만 연결해요. 새 프레임 좌표로 추정하지 않아요.
+const hHudFrames = new Map();
+let hHudExpiryTimer = null;
+let hGuideEpoch=0,hGuideCount=0,hGuideProgressAt=0,hGuideTimer=null;
+function clearHFaceHud() {
+  clearTimeout(hGuideTimer);hGuideTimer=null;
+  hGuideCount=0;hGuideProgressAt=0;hGuideEpoch++;
+  clearTimeout(hHudExpiryTimer); hHudExpiryTimer = null; hHudFrames.clear();
+  for (const element of [hFaceLabelLayer,hFaceNet]) if(element) {
+    element.replaceChildren(); element.hidden=true; delete element.dataset.paint;
+  }
+}
+function renderHFaceHud() {
+  clearTimeout(hHudExpiryTimer); hHudExpiryTimer=null;
+  if(!hFaceLabelLayer||!hFaceNet)return;
+  if(!hAvailable||!cameraStream||!r2Runtime.enabled||currentCameraLiveness()!=='live') {
+    clearHFaceHud(); return;
+  }
+  const stats=r2Runtime.stats.h,now=nowMs(),frame=hHudFrames.get(stats?.observedAt);
+  const sameFrame=frame&&frame.session===scanSession&&frame.width===cameraVideo.videoWidth
+    &&frame.height===cameraVideo.videoHeight&&frame.previewZoom===effectiveCropZoom()
+    &&frame.crop.target===stats?.frameWidth&&stats?.frameWidth===stats?.frameHeight;
+  const mapping=sameFrame?hFrameToStageMapping({frameCrop:frame.crop,
+    stageCrop:visibleVideoRegion(),side:cameraStage.clientWidth}):null;
+  const net=hFaceNetModel(stats,now);
+  const labels=hLiveFaceLabelsModel({stats,now,cameraActive:true,runtimeEnabled:true,mapping});
+  const labelPaint=JSON.stringify(labels);
+  if(hFaceLabelLayer.dataset.paint!==labelPaint) {
+    hFaceLabelLayer.replaceChildren(...labels.map(label=>{
+      const el=document.createElement('div'),text=document.createElement('span');
+      el.className='h-face-label'; el.style.transform=label.matrix3d;
+      text.textContent=label.face; el.append(text); return el;
+    })); hFaceLabelLayer.dataset.paint=labelPaint;
+  }
+  hFaceLabelLayer.hidden=labels.length===0;
+  const netPaint=JSON.stringify(net.cells);
+  if(hFaceNet.dataset.paint!==netPaint) {
+    hFaceNet.replaceChildren(...net.cells.map(cell=>{
+      const el=document.createElement('span'); el.className='h-face-net__cell'; el.dataset.state=cell.state;
+      el.style.gridColumn=String(cell.x+1); el.style.gridRow=String(cell.y+1); el.textContent=cell.face; return el;
+    })); hFaceNet.dataset.paint=netPaint;
+  }
+  hFaceNet.hidden=net.required===0;
+  // 처리 프레임이 끊겨도 현재 라벨/밝은 테두리는 500ms 뒤 만료돼요.
+  if(net.live)hHudExpiryTimer=setTimeout(renderHFaceHud,Math.max(1,stats.observedAt+501-now));
+}
+function resetHPhotos() { clearTimeout(hPhotoExpiryTimer); hPhotoExpiryTimer = null;
+  clearHFaceHud();
+  hPhotoReader?.reset(); hPhotoSnapshot = null; hPhotoActiveSession = null; }
+function renderHProgress() {
+  renderHFaceHud();
+  clearTimeout(hPhotoExpiryTimer); hPhotoExpiryTimer = null;
+  if (!hCollectionRoot) return;
+  if (!hAvailable) { hCollectionRoot.hidden = true; return; }
+  const model = hProgressModel(cameraStream ? r2Runtime.stats.h : hPhotoSnapshot, i18n.lang,
+    { source: cameraStream ? 'camera' : 'photos', now: nowMs() });
+  if (!cameraStream && Number.isFinite(model.nextExpiryAt)) {
+    hPhotoExpiryTimer = setTimeout(() => { const next = renderHProgress();
+      if (next && !cameraStream && !hPhotoActiveSession) setStatus(next.summary);
+    }, Math.max(1, model.nextExpiryAt - nowMs()));
+  }
+  hCollectionRoot.hidden = false;
+  if(model.count!==hGuideCount){hGuideCount=model.count;hGuideProgressAt=nowMs();hGuideEpoch++;}
+  const cameraCollecting=Boolean(cameraStream)&&r2Runtime.enabled&&currentCameraLiveness()==='live';
+  const nudge=cameraCollecting?cubeGuideNudge({engine:'r2',kind:'cube',faceCount:model.count,required:model.required,state:model.state,lastProgressAt:hGuideProgressAt,epoch:hGuideEpoch,now:nowMs()}):null;
+  clearTimeout(hGuideTimer);hGuideTimer=null;if(!nudge&&cameraCollecting&&model.count>0&&model.count<model.required)hGuideTimer=setTimeout(renderHProgress,Math.max(1,hGuideProgressAt+3000-nowMs()));
+  const hint=nudge?t(nudge.key):model.hint;
+  for (const [id, text] of [['h-collection-title', model.title], ['h-collection-progress', model.summary],
+    ['h-collection-missing', model.detail], ['h-collection-hint', hint]]) {
+    const element = document.getElementById(id); if (element && element.textContent !== text) element.textContent = text;
+  }
+  if (hCollectionReset) { hCollectionReset.hidden = !model.canReset; hCollectionReset.textContent = model.resetLabel; }
+  const faces = document.getElementById('h-collection-faces');
+  if (faces) {
+    const fingerprint = JSON.stringify(model.faces);
+    if (faces.dataset.faces !== fingerprint) {
+      faces.replaceChildren(...model.faces.map(row => {
+        const chip = document.createElement('span'); chip.className = 'h-face'; chip.textContent = row.face;
+        chip.dataset.present = String(row.present); chip.dataset.current = String(row.current); return chip;
+      })); faces.dataset.faces = fingerprint;
+    }
+    faces.hidden = model.required === 0 || Boolean(cameraStream);
+  }
+  return model;
+}
+function renderHResult(summary) {
+  const element = document.getElementById('result-h-summary'); if (!element) return;
+  element.hidden = !summary || !hAvailable;
+  element.textContent = summary ? hScannerText(i18n.lang, 'summary', summary) : '';
+}
+hCollectionReset?.addEventListener('click', () => {
+  if (cameraStream) manualRescan(); else { scanSession += 1; resetHPhotos(); renderHProgress(); }
+});
 /*
  * 일반 QR 브리지 (PM/029B §2 ①단계 · §26). 브라우저 BarcodeDetector 에 위임 — 의존성 0,
  * 능력은 실행 시 판정(Android Chrome 가용, Firefox·Windows 데스크톱 불가). R2 토글 아래에서만
@@ -1030,6 +1148,10 @@ function refreshScanGuideCopy() {
   if (scopeKey === 'guide.scope.r2qr') scanGuideScope.textContent = t('guide.scope.r2qr');
   else if (scopeKey === 'guide.scope.r2') scanGuideScope.textContent = t('guide.scope.r2');
   else scanGuideScope.textContent = t('guide.tlcubeOnly');
+  if (hAvailable && r2Runtime.enabled) {
+    scanGuideScope.removeAttribute('data-i18n');
+    scanGuideScope.textContent = hScannerText(i18n.lang, 'scope');
+  }
 }
 
 /*
@@ -1049,6 +1171,7 @@ const i18n = createI18n(SCANNER_STRINGS, {
     // 대체 이름을 우리가 붙이므로, 언어가 바뀌면 다시 그려야 한다.
     refreshCameraChoices();
     refreshScanGuideCopy();
+    renderHProgress();
   },
 });
 const t = (key) => i18n.t(key);
@@ -1674,6 +1797,8 @@ function watchCameraTrackEnds(stream, session) {
 const acceptStopGate = createAcceptStopGate();
 
 function stopCamera() {
+  cameraMetadataAbort?.abort(); cameraMetadataAbort = null;
+  clearHFaceHud();
   /*
    * ⑯(i) — 유예 중이었다면 «닫기의 나머지 절반»(결과 시트)을 여기서 회수해 **이 정지 뒤에** 잇는다.
    * 그래서 순서는 승격 전과 같다: stopCamera → 결과 시트. 회수는 한 번뿐이라(gate.take) 늦은 타이머가
@@ -1754,7 +1879,8 @@ function cameraFailure(error) {
   };
 }
 
-function waitForVideoMetadata(video) {
+function waitForVideoMetadata(video, signal) {
+  if (signal?.aborted) return Promise.reject(new DOMException('Camera metadata cancelled', 'AbortError'));
   if (video.readyState >= 1) return Promise.resolve();
 
   return new Promise((resolve, reject) => {
@@ -1766,13 +1892,16 @@ function waitForVideoMetadata(video) {
       cleanup();
       reject(new Error('camera-video-error'));
     };
+    const onAbort = () => { cleanup(); reject(new DOMException('Camera metadata cancelled', 'AbortError')); };
     const cleanup = () => {
       video.removeEventListener('loadedmetadata', onReady);
       video.removeEventListener('error', onError);
+      signal?.removeEventListener('abort', onAbort);
     };
 
     video.addEventListener('loadedmetadata', onReady, { once: true });
     video.addEventListener('error', onError, { once: true });
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
@@ -1907,7 +2036,7 @@ function tryContinuousFocus(stream) {
  *
  * 가이드 밖을 버리므로 잡동사니(주변 UI·책상·손)도 같이 빠져 검출이 쉬워진다.
  */
-function imageDataCenterSquare(source, width, height, maxSide = FRAME_MAX_SIDE, cropZoom = 1) {
+function imageDataCenterSquare(source, width, height, maxSide = FRAME_MAX_SIDE, cropZoom = 1, capture = null) {
   if (!frameContext || !width || !height) return null;
 
   const crop = cropWindow(width, height, cropZoom, maxSide);
@@ -1929,7 +2058,9 @@ function imageDataCenterSquare(source, width, height, maxSide = FRAME_MAX_SIDE, 
       crop.target,
       crop.target,
     );
-    return frameContext.getImageData(0, 0, crop.target, crop.target);
+    const imageData=frameContext.getImageData(0, 0, crop.target, crop.target);
+    if(capture)capture.crop={...crop};
+    return imageData;
   } catch {
     return null;
   }
@@ -2085,7 +2216,7 @@ function handleDecodeResult(result, source, session) {
   // 그대로 보여주면 매직(제어문자) 탓에 **빈 텍스트**가 뜬다 (실기기 재현 2026-08-22).
   // 계약(§4.1): 비컨은 결과가 아니라 «바깥 코드가 있다» 는 신호다 — 종료하지 않고
   // 전체 코드가 잡히게 안내한다.
-  const beaconOnly = payloadRaw !== null && textStartsWithBeaconMagic(payloadRaw);
+  const beaconOnly = result?.source !== 'h' && payloadRaw !== null && textStartsWithBeaconMagic(payloadRaw);
   const payload = beaconOnly ? null : payloadRaw;
 
   // 거리(셀당 픽셀 부족)가 복호 실패의 가장 흔한 원인인데 아무 피드백이 없으면
@@ -2184,7 +2315,10 @@ function handleDecodeResult(result, source, session) {
    */
   const acceptedR2Summary = result.source === 'r2' ? r2Latched : null;
   const showAccepted = () => {
-    showResult(payload, { autoOpen: resultAutoOpen(result), r2Summary: acceptedR2Summary });
+    const provenance = { isVerifiedHResult: isVerifiedHDecodeResult };
+    showResult(payload, { autoOpen: resultAutoOpen(result, provenance),
+      urlOrigin: urlOriginOf(result, provenance), r2Summary: acceptedR2Summary,
+      ...(result.source === 'h' ? { hSummary: result.hSummary } : {}) });
   };
   /*
    * 상태줄은 **유예보다 앞**이다. 유예 창의 상태줄은 «읽었다» 여야 한다 — 정정 강조가 «이 셀들을
@@ -2215,6 +2349,7 @@ function handleDecodeResult(result, source, session) {
 }
 
 function startFrameLoop(session) {
+  restorePreferredEngine();
   // 작업 4: 첫 프레임 grab 성공 시 가이드 재렌더. loadedmetadata 는 기기에 따라
   // 레이아웃 확립보다 이르다 — grab 이 성공했다는 것은 videoWidth/Height 와 스테이지
   // 레이아웃이 실재한다는 가장 강한 증거라, 그 시점에 한 번 더 그린다.
@@ -2269,6 +2404,8 @@ function startFrameLoop(session) {
         // 비동기 콜백 — 세션과 토글을 다시 본다 (토글 off 직후 늦은 결과가 새면 안 된다).
         if (session !== scanSession || !r2Runtime.enabled) return;
         const route = routeQrHits(hits);
+        const confirmedFamily = confirmedQrEngineFamily(hits);
+        if (confirmedFamily && autoRouteToR1(confirmedFamily)) return;
         if (route.family !== null) {
           runtimeFamilyHint = { evidence: Object.freeze({ family: route.family }), at: nowMs() };
         }
@@ -2310,8 +2447,12 @@ function startFrameLoop(session) {
      */
     if (r2Runtime.enabled) {
       const r2FrameStartedAt = nowMs();
+      // Worker 수요가 없으면 grab·Y luma·H overscan luma를 만들지 않는다. 기회 timestamp는
+      // runtime에 남겨 늦은 결과의 tracking을 현재로 오표시하지 않으며 QR/HUD 루프는 계속 돈다.
+      const r2CanAccept = r2Runtime.canAcceptFrame(timestamp);
       // 성공 카드를 그리는 짧은 유예 중에는 무거운 복호를 다시 돌리지 않아요.
-      const r2Image = yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame(r2FrameStartedAt);
+      const r2Image = r2CanAccept && !yieldForQr && !acceptStopGate.isPending()
+        ? grabVideoFrame(r2FrameStartedAt) : null;
       if (acceptStopGate.isPending()) renderR2CellMap();
       if (r2Image) {
         // R1 대신 (②): 첫 grab 이 곧 레이아웃 실재의 증거 — 안 그리면 조준 가이드가 사라진다.
@@ -2326,21 +2467,47 @@ function startFrameLoop(session) {
             pixels: r2Image.data,
           }, { rejectLowDynamicRange: false });
           if (r2Luma && r2Luma.ok !== false) {
-            const hit = r2Runtime.pushFrame(r2Luma, timestamp);
+            // 새 luma 배열의 소유권을 넘겨요. 이후 이 프레임의 data를 다시 읽지 않아요.
+            // H만 주변 20%를 더 읽어요. 기존 Y/QR의 가이드·crop 입력은 그대로 유지해요.
+            // 자동 crop 확대는 H의 큰 면을 자를 수 있으므로 수동/광학 줌 기준만 사용해요.
+            const hCapture={};
+            const hImage=hAvailable?imageDataCenterSquare(cameraVideo,cameraVideo.videoWidth,cameraVideo.videoHeight,
+              Math.min(1728,Math.round(r2Image.width*1.2)),Math.max(1,zoomPlan.cropApplied/1.2),hCapture):null;
+            const hField=hImage?toRelativeLuminance({width:hImage.width,height:hImage.height,pixels:hImage.data},
+              {rejectLowDynamicRange:false}):null;
+            if(hField&&hField.ok!==false&&hCapture.crop) {
+              hHudFrames.set(timestamp,{crop:hCapture.crop,session:scanSession,width:cameraVideo.videoWidth,
+                height:cameraVideo.videoHeight,previewZoom:effectiveCropZoom()});
+              if(hHudFrames.size>32)hHudFrames.delete(hHudFrames.keys().next().value);
+            }
+            const hit = r2Runtime.pushFrame(r2Luma, timestamp, { ownedInput: true,
+              ...(hField&&hField.ok!==false?{hField,ownedHInput:true}:{}) });
             renderR2Progress();
             renderR2CellMap();
             syncR2Status();
+            if (hit?.kind === 'h' && !acceptStopGate.isPending()) {
+              const hResult = hHitToDecodeResult(hit);
+              if (hResult) {
+                r2Latched = null; r2Correction = null;
+                handleDecodeResult(hResult, 'camera', session);
+                if (session !== scanSession) return;
+                // 빈 문자열 등 공통 결과 문이 거절하면 DONE을 재생하지 않아요.
+                r2Runtime.reset(); renderHProgress();
+              }
+            }
             /*
              * ⑯(i) — 유예 중이면 이 hit 는 **이미 받아들인 그 답**이다 (누적기는 DONE 뒤 흡수 상태라
              * 매 프레임 같은 답을 돌려준다 · ⓚ). 문에 다시 넣지 않고 거부 경로도 타지 않는다 —
              * 거부 경로는 래치와 정정 강조를 비우는데, 그 강조가 정확히 지금 그리고 있는 그림이다.
              * 이 프레임의 렌더는 위 `renderR2CellMap()` 이 이미 했다 (α 가 프레임마다 옅어진다).
              */
-            if (hit && typeof hit.text === 'string' && !acceptStopGate.isPending()) {
+            if (hit && hit.kind !== 'h' && typeof hit.text === 'string' && !acceptStopGate.isPending()) {
               // DONE 스냅샷은 문 **앞**에서 — 문이 받아들이면 stopCamera 가 r2Runtime.reset() 을
               // 먼저 불러 stats 가 비므로, 결과 카드의 확정 요약이 읽을 값은 여기서 잡아 둔다 (ⓡ).
               // leadingId = 이 프레임 좌 패널의 레이아웃 선두 (renderR2Progress 가 바로 위에서 갱신) — DONE 과 다르면 «정정»(⑧).
               r2Latched = {
+                profile: hit.profile ?? 'Y', dimensionKind: hit.dimensionKind,
+                revision: hit.revision,
                 candidateId: hit.candidateId,
                 layoutId: hit.layoutId,
                 n: hit.n,
@@ -2409,7 +2576,7 @@ function startFrameLoop(session) {
           // R2 는 부가 경로다. 어떤 실패도 단발 스캔을 막지 않는다.
         }
         // R1 대신 (②): 시험판 fps 줄 — «초당 처리 프레임». R2 모드에선 누적 프레임이 곧 처리 프레임이다.
-        noteFrameProcessed();
+        // 처리 FPS는 Worker 응답에서 세요. 캡처/대기열 제출은 처리 완료가 아니에요.
         /*
          * R1 대신 (②): 시험판 하단 패널의 **프레임 요약**. 갱신 호출이 R1 경로(decodeFrame·flushPriorReport)에만
          * 있어서, R2 위치에선 패널이 영원히 안 바뀌었다 — hud·qr 줄이 화면에 도달할 수 없었다 (§27.6 적대 검토).
@@ -2581,6 +2748,7 @@ async function startCamera(options) {
 
   if (cameraStream || cameraRequestPending) return;
 
+  resetHPhotos();
   const session = ++scanSession;
   resetFrameSeq();
   beginScanAttempt('camera');
@@ -2613,11 +2781,14 @@ async function startCamera(options) {
     // 권한 부여 뒤에야 label 이 채워지므로 여기서 렌즈 목록을 갱신한다.
     refreshCameraChoices().catch(() => {});
     cameraVideo.srcObject = stream;
-    await waitForVideoMetadata(cameraVideo);
+    const metadataAbort = new AbortController(); cameraMetadataAbort = metadataAbort;
+    try { await waitForVideoMetadata(cameraVideo, metadataAbort.signal); }
+    finally { if (cameraMetadataAbort === metadataAbort) cameraMetadataAbort = null; }
+    if (session !== scanSession || cameraStream !== stream) { stopTracks(stream); return; }
     await cameraVideo.play();
 
-    if (session !== scanSession) {
-      stopCamera();
+    if (session !== scanSession || cameraStream !== stream) {
+      stopTracks(stream);
       return;
     }
 
@@ -2681,7 +2852,10 @@ function loadImage(file) {
 
 async function decodeImageFile(file) {
   if (!file) return;
+  restorePreferredEngine();
 
+  // 새 사진 선택이 처리 중 사진을 추월하면 그 작업과 수집 세대를 함께 취소해요.
+  if (cameraStream || hPhotoActiveSession !== null) resetHPhotos();
   finishProductScanFail('source-changed');
   stopCamera();
   hideCameraGate();
@@ -2695,16 +2869,43 @@ async function decodeImageFile(file) {
 
   try {
     const image = await loadImage(file);
+    if (session !== scanSession) return;
     const imageData = imageDataWhole(image, image.naturalWidth, image.naturalHeight);
     if (!imageData) throw new Error('image-data-unavailable');
 
     noteProductFrame();
+    if (hPhotoReader) {
+      hPhotoActiveSession = session;
+      let read;
+      try { read = await hPhotoReader.read(imageData, { timestamp: nowMs() }); }
+      finally { if (hPhotoActiveSession === session) hPhotoActiveSession = null; }
+      if (session !== scanSession) return;
+      hPhotoSnapshot = read.stats;
+      const model = renderHProgress();
+      const hResult = hHitToDecodeResult(read.hit);
+      if (hResult) {
+        resetHPhotos();
+        handleDecodeResult(hResult, 'file', session);
+        return;
+      }
+      if (read.stats.observedFaces?.length > 0) {
+        setStatus(model.summary); hideCameraGate(); return;
+      }
+    }
     // 업로드는 프레임이 한 장뿐이다 — 스로틀할 다음 프레임이 없으므로 실패하면
     // 항상 daehan 2차 패스를 돈다 (`source: 'still'`).
     const result = await decodeFrame(imageData, { source: 'still' });
+    if (session !== scanSession) return;
+    if (!normalizePayload(result) && hPhotoSnapshot?.count > 0) {
+      const model = renderHProgress(); setStatus(model.summary); hideCameraGate();
+      showScanToast(hScannerText(i18n.lang, 'emptyPhoto')); return;
+    }
+    if (normalizePayload(result)) resetHPhotos();
     handleDecodeResult(result, 'file', session);
-  } catch {
+  } catch (error) {
     if (session === scanSession) {
+      hPhotoSnapshot = hPhotoReader?.stats ?? null; renderHProgress();
+      if (error?.name === 'AbortError') return;
       finishProductScanFail('file-read-error');
       setStatus(t('status.photoUnreadable'));
       showScanToast(t('toast.photoUnreadable'));
@@ -2855,20 +3056,16 @@ function tryOpenUrl(url) {
   }
 }
 
-function renderUrlPayload(payload, autoOpen = true) {
+function renderUrlPayload(payload, options = {}) {
   const url = payload.trim();
-  // autoOpen=false(일반 QR): 열지 않고 링크·«열기» 버튼만 보인다. 사용자가 URL 을 보고 누른다.
-  const opened = autoOpen ? tryOpenUrl(url) : false;
+  const presentation = resolveUrlResultPresentation({ ...options, tryOpenUrl: () => tryOpenUrl(url) });
   activeUrl = url;
   openUrlLink.href = url;
-  popupFallback.hidden = opened;
-  // 자동으로 열지 않은 결과엔 «열지 못했어요» 가 거짓이다 — 버튼만 남기고 문단은 숨긴다.
-  if (popupBlockedNote) popupBlockedNote.hidden = !autoOpen;
+  popupFallback.hidden = !presentation.fallbackVisible;
+  if (popupBlockedNote) popupBlockedNote.hidden = !presentation.popupBlockedVisible;
 
   setResultTitle(t('result.url.title'));
-  if (opened) addResultIntro(t('result.url.opened'));
-  else if (autoOpen) addResultIntro(t('result.url.manual'));
-  else addResultIntro(t('result.url.qrManual'));
+  addResultIntro(t(presentation.introKey));
 
   const link = document.createElement('a');
   link.className = 'payload-url';
@@ -2877,6 +3074,7 @@ function renderUrlPayload(payload, autoOpen = true) {
   link.rel = 'noopener noreferrer';
   link.textContent = url;
   resultContent.append(link, createCopyButton(url, t('result.url.field')));
+  return presentation.state;
 }
 
 function renderWifiPayload(data) {
@@ -2928,7 +3126,6 @@ function showResult(payload, options) {
   // URL 을 또 열면 안 된다).
   lastResult = payload;
   lastResultOptions = settings;
-  const autoOpen = settings.autoOpen !== false;
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   activeUrl = '';
   popupFallback.hidden = true;
@@ -2936,6 +3133,7 @@ function showResult(payload, options) {
   resultContent.replaceChildren();
   // R2 확정 요약 (F8) — R2 출처 결과에만 채워지고 그 외엔 숨긴 채다. 언어 전환 재렌더도 이 경로라 r2.state 라벨이 같이 바뀐다.
   renderResultR2Summary(settings.r2Summary || null);
+  renderHResult(settings.hSummary || null);
 
   let sniffed = { kind: 'text' };
   try {
@@ -2945,7 +3143,8 @@ function showResult(payload, options) {
   }
 
   if (sniffed.kind === 'url') {
-    renderUrlPayload(payload, autoOpen);
+    const urlOpenState = renderUrlPayload(payload, settings);
+    lastResultOptions = { ...settings, urlOpenState };
   } else if (sniffed.kind === 'wifi') {
     renderWifiPayload(sniffed.data);
   } else if (sniffed.kind === 'card') {
@@ -2966,6 +3165,7 @@ function hideResult(options) {
   openUrlLink.href = '#';
   resultContent.replaceChildren();
   renderResultR2Summary(null);
+  renderHResult(null);
 
   if (settings.restoreFocus !== false && returnFocus && document.contains(returnFocus)) {
     returnFocus.focus({ preventScroll: true });
@@ -3267,6 +3467,7 @@ document.documentElement.setAttribute('lang', i18n.lang);
 i18n.apply();
 wireLanguageSwitch(document.getElementById('lang-switch'), i18n);
 refreshScanGuideCopy();
+renderHProgress();
 // BarcodeDetector 판정은 비동기다 — 끝나면 범위 문구를 3상태로 다시 그린다 (§26). R2 가용일 때만:
 // R2 가 닫힌 화면(승격 되돌림)은 QR 을 안 돌리므로 검출기를 만드는 것조차 «불변» 위반이다.
 // 승격(2026-09-06) 뒤 정식은 가용이므로 정식에서도 QR 브리지가 돈다.
@@ -3529,8 +3730,9 @@ function renderConfirmationChips(container, chips, rows) {
 }
 
 function renderR2Progress() {
+  renderHProgress();
   if (!r2ProgressRoot || !r2Available) return;
-  if (!r2Runtime.enabled) {
+  if (!r2Runtime.enabled || hCameraActive(r2Runtime.stats.h, nowMs())) {
     r2ProgressRoot.hidden = true;
     r2ShownD = 0;
     r2LeadingId = '';
@@ -3617,6 +3819,12 @@ function renderResultR2Summary(latched) {
  * 규칙은 r2-confirmation-model.r2StatusStep (순수) — 여기는 action 대로 setStatus 하고 위상을 되쓴다.
  */
 function syncR2Status() {
+  const h = r2Runtime.stats.h;
+  if (h?.count > 0 && Number.isFinite(h.observedAt) && nowMs() - h.observedAt <= 500) {
+    const model = hProgressModel(h, i18n.lang, { now: nowMs() });
+    if (statusBox.textContent !== model.summary) setStatus(model.summary);
+    return;
+  }
   const step = r2StatusStep({ collecting: r2StatusCollecting, holdUntil: r2StatusHoldUntil }, r2Runtime.stats, nowMs());
   r2StatusCollecting = step.collecting;
   if (step.action === R2_STATUS_ACTION.COLLECTING) setStatus(t('status.r2Collecting'));
@@ -4041,8 +4249,9 @@ function renderCandidateR2CellMap() {
     r2CellMapCanvas.hidden = true;
     const paintStartedAt = nowMs();
     r2CandidateHud.render(r2Runtime.hudCandidates || [], paintStartedAt, {
-      enabled: r2Runtime.enabled && Boolean(cameraStream),
-      correction: r2Correction && r2Latched ? { ...r2Correction, candidateId: r2Latched.candidateId } : null,
+      enabled: r2Runtime.enabled && Boolean(cameraStream) && !hCameraActive(r2Runtime.stats.h, paintStartedAt),
+      correction: r2Correction && r2Latched ? { ...r2Correction, candidateId: r2Latched.candidateId,
+        revision: r2Latched.revision } : null,
     });
     const leader = r2CandidateHud.model.slots.find((slot) => slot?.id === r2CandidateHud.model.leaderId);
     r2LeadingId = leader?.candidate.layoutId || '';
@@ -4403,17 +4612,40 @@ function renderR2CellMap() {
 /*
  * 엔진 스위치 — 제품 컴포넌트 (§27.4 1단계 · 운영자 요구 ⑤). 뷰파인더 상단 중앙 «스캐너 엔진 선택»
  * role=switch. **R2 위치 = R2 누적 + QR 만, R1 단발 끔 · R1 위치 = R1 단발만** (운영자 결정 ② · 2026-09-05,
- * 잠긴 결론 — R2 위치에서 다른 TL 타입(K·C·Y 단발)은 읽히지 않는다).
+ * R2 위치는 공통 Worker 엔진의 후보 누적과 QR 브리지를 사용해요. R1은 독립 단발 경로예요.
  * **2026-09-06 승격** — 정식에서도 스위치가 뜨고, 저장값이 없는 첫 방문의 기본 엔진은 R2 다
  * (결정 ① · `resolveEngineChoice` 의 기본 켬이 그대로 정식의 기본이다). 선택은 localStorage(새 키).
  */
 const engineSwitch = document.getElementById('engine-switch');
 const engineSwitchControl = document.getElementById('engine-switch-control');
+/** 자동 전환도 같은 UI/Worker 정리 경로를 쓰지만 사용자 선택은 저장하지 않아요. */
+function setTransientEngine(enabled) {
+  if (!r2Available || !engineSwitchControl || typeof engineSwitchControl.click !== 'function') return false;
+  const previous = transientEngineSwitch;
+  transientEngineSwitch = true;
+  try { if (r2Runtime.enabled !== enabled) engineSwitchControl.click(); }
+  finally { transientEngineSwitch = previous; }
+  return r2Runtime.enabled === enabled;
+}
+function autoRouteToR1(family) {
+  if (!['hex', 'tri', 'star'].includes(family) || !cameraStream || !r2Runtime.enabled
+    || acceptStopGate.isPending() || protectsYHEngine(r2Runtime.stats, nowMs())) return false;
+  if (!setTransientEngine(false)) return false;
+  autoR1Active = true;
+  // 전환이 버린 QR 힌트 대신 방금 검증한 family만 새로 보존해요.
+  runtimeFamilyHint = { evidence: Object.freeze({ family }), at: nowMs() };
+  return true;
+}
+function restorePreferredEngine() {
+  if (!autoR1Active) return;
+  if (setTransientEngine(r2Wanted)) autoR1Active = false;
+}
 if (engineSwitch && engineSwitchControl && r2Available) {
   engineSwitch.hidden = false;
   const paintEngineSwitch = () => {
     engineSwitchControl.setAttribute('aria-checked', String(r2Runtime.enabled));
     engineSwitchControl.dataset.engine = r2Runtime.enabled ? 'r2' : 'r1';
+    scannerApp.dataset.engine = engineSwitchControl.dataset.engine;
   };
   paintEngineSwitch();
   engineSwitchControl.addEventListener('click', () => {
@@ -4425,7 +4657,12 @@ if (engineSwitch && engineSwitchControl && r2Available) {
      * 타이머는 죽는다. 엔진 전환 자체는 그 뒤에 그대로 일어난다.
      */
     if (acceptStopGate.isPending()) stopCamera();
+    // 옛 엔진의 실패 승격 타이머를 물려받으면 R2 입력 크기가 960↔1440으로
+    // 바뀌어 Worker가 재생성되고 수집한 H 면까지 잃어요. 전환의 실패 이력도 비워요.
+    resetFailureTiming();
     r2Runtime.setEnabled(!r2Runtime.enabled);
+    if (!cameraStream) scanSession += 1;
+    resetHPhotos();
     // ⚠ **시각 상태를 먼저** (⑤) — 아래의 무거운 렌더(패널·셀맵·문구)보다 앞이어야 이 태스크가
     // 끝나는 순간 스위치가 이미 새 위치에 있다. 순서만 바뀌었고 하는 일은 같다.
     paintEngineSwitch();
@@ -4443,8 +4680,12 @@ if (engineSwitch && engineSwitchControl && r2Available) {
       r2StatusCollecting = false;
       if (cameraStream) setStatus(t('status.aim'));
     }
-    try { window.localStorage.setItem(ENGINE_STORAGE_KEY, r2Runtime.enabled ? '1' : '0'); }
-    catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
+    if (!transientEngineSwitch) {
+      r2Wanted = r2Runtime.enabled;
+      autoR1Active = false;
+      try { window.localStorage.setItem(ENGINE_STORAGE_KEY, r2Runtime.enabled ? '1' : '0'); }
+      catch { /* 저장 실패해도 이번 세션엔 적용된다 */ }
+    }
     // 인디케이터·셀맵도 즉시 반영한다 — 끄면 숨고, 켜면 0 부터 다시 찬다.
     renderR2Progress();
     renderR2CellMap();
@@ -4471,6 +4712,7 @@ if (engineSwitch && engineSwitchControl && r2Available) {
 const scanResetButton = document.getElementById('scan-reset');
 
 function manualRescan() {
+  restorePreferredEngine();
   /*
    * ⑯(i) — 정정 강조 유예 중이면 「처음부터」보다 **이미 읽은 답이 먼저**다. 유예를 지금 끝내
    * (stopCamera 가 gate.take 로 결과 시트를 이어 붙인다) 확정하고, 아래 초기화는 그 뒤의 빈 화면을
@@ -4478,6 +4720,7 @@ function manualRescan() {
    * 늦은 타이머가 카메라를 두 번 끄지도 않는다 — 회수는 한 번뿐이다.
    */
   if (acceptStopGate.isPending()) stopCamera();
+  resetHPhotos();
   // R2 — 누적기·후보·락·래치·상태 위상을 전부 버린다 (startFrameLoop 의 새 세션 비우기와 같은 목록).
   r2Runtime.reset();
   qrBridge.reset();

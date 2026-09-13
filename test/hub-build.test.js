@@ -23,7 +23,7 @@ const read = (lang) => readFileSync(pagePath(lang), 'utf8');
 //   이 테스트는 언어가 늘면 자동으로 넓어진다 — 제목만 주장에 맞춘다.
 test('동기화: build-hub.mjs 를 다시 돌려도 8언어 산출물이 바뀌지 않는다', () => {
   const before = languages.map((l) => read(l));
-  execFileSync(process.execPath, [`${ROOT}tools/build-hub.mjs`], { stdio: 'pipe' });
+  execFileSync(process.execPath, [`${ROOT}tools/build-hub.mjs`, '--check'], { stdio: 'pipe' });
   const after = languages.map((l) => read(l));
   languages.forEach((l, i) => {
     assert.equal(after[i], before[i],
@@ -78,6 +78,20 @@ test('타입 C 초대용량·노치·근접 스캔 카피가 여덟 언어 산�
       `${lang.code}: Type C는 같은 계열인 Type O 바로 뒤에 와야 한다`);
     assert.ok(html.indexOf(t.typeCName) < html.indexOf(t.typeAName),
       `${lang.code}: Type C 카드가 Type O와 Type A 사이에 있어야 한다`);
+  }
+});
+
+test('H 큐브 소개와 한계를 여덟 언어 Y 카드와 메타에 함께 싣는다', () => {
+  for (const lang of languages) {
+    const html = read(lang), t = strings[lang.code];
+    for (const key of ['hCubeTitle', 'hCubeDesc', 'hCubeLimit']) {
+      assert.ok(html.includes(t[key]), `${lang.code}: ${key} 누락`);
+    }
+    assert.ok(html.indexOf(t.typeYName, html.indexOf('<section id="types"')) < html.indexOf('class="h-cube-extension"'));
+    assert.ok(html.indexOf('class="h-cube-extension"') < html.indexOf(`<h3>${t.typeOName}</h3>`));
+    assert.ok(/<meta name="description"[^>]+>/.exec(html)[0].includes(t.hCubeTitle));
+    const ld = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1]);
+    assert.ok(ld['@graph'].find(n => n['@type'] === 'TechArticle').description.includes(t.hCubeTitle));
   }
 });
 

@@ -29,7 +29,7 @@
 //   → sites/_shared/scan-<id>.html 생성. 각 파일은 상단에 버전 선택 바를 갖는다.
 
 import { execFileSync } from 'node:child_process';
-import { rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, lstatSync, readdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -114,6 +114,78 @@ function buildAt(dir) {
   return readFileSync(path.join(dir, 'dist', 'tlscan.html'), 'utf8');
 }
 
+function inside(parent, target) {
+  const relative = path.relative(parent, target);
+  return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative);
+}
+
+// 경로 문자열이 비슷해도 이전 실행 또는 외부 호출자가 만든 디렉터리는 절대 회수하지 않는다.
+const ownedVariantWorkspaces = new WeakSet();
+
+/**
+ * 이번 실행만 소유하는 빈 임시 worktree 디렉터리를 만든다. 고정 이름을 재사용하거나
+ * 기존 경로를 먼저 지우지 않는다.
+ */
+export function createVariantTempDir(tempParent = tmpdir(), fs = { mkdtempSync, realpathSync }) {
+  const requestedParent = path.resolve(tempParent);
+  const parent = fs.realpathSync(requestedParent);
+  if (parent !== requestedParent) throw new Error(`임시 parent 경로가 재해석되었어요: ${requestedParent}`);
+  const dir = fs.mkdtempSync(path.join(parent, 'tlscan-variant-'));
+  const workspace = Object.freeze({ parent, dir: path.resolve(dir) });
+  ownedVariantWorkspaces.add(workspace);
+  return workspace;
+}
+
+/**
+ * `git worktree remove --force` 직전에만 쓰는 경계 검사다.
+ * 새로 만든 direct-child directory 이외에는 절대 정리 대상으로 받아들이지 않고,
+ * 하위에 symbolic link 또는 Windows junction이 하나라도 있으면 중단한다.
+ */
+export function assertSafeVariantTempDir(workspace, fs = { lstatSync, readdirSync, realpathSync }) {
+  if (!workspace || typeof workspace !== 'object' || !ownedVariantWorkspaces.has(workspace)
+    || typeof workspace.parent !== 'string' || typeof workspace.dir !== 'string') {
+    throw new TypeError('이번 실행이 만든 임시 worktree 정보가 필요해요');
+  }
+  const expectedParent = path.resolve(workspace.parent);
+  const parent = fs.realpathSync(expectedParent);
+  const target = path.resolve(workspace.dir);
+  if (parent !== expectedParent) throw new Error(`임시 parent 경로가 재해석되었어요: ${expectedParent}`);
+  if (target === path.parse(target).root || !inside(parent, target) || path.dirname(target) !== parent
+    || !path.basename(target).startsWith('tlscan-variant-')) {
+    throw new Error(`안전하지 않은 variant worktree 경로예요: ${target}`);
+  }
+  const targetStat = fs.lstatSync(target);
+  if (!targetStat.isDirectory() || targetStat.isSymbolicLink()) {
+    throw new Error(`variant worktree는 실제 디렉터리여야 해요: ${target}`);
+  }
+  const resolvedTarget = fs.realpathSync(target);
+  if (resolvedTarget !== target || !inside(parent, resolvedTarget)) {
+    throw new Error(`variant worktree 경로가 재해석되었어요: ${target}`);
+  }
+  const inspect = (dir) => {
+    for (const name of fs.readdirSync(dir)) {
+      const child = path.join(dir, name);
+      const stat = fs.lstatSync(child);
+      if (stat.isSymbolicLink()) throw new Error(`variant worktree에 link/junction이 있어요: ${child}`);
+      const resolvedChild = fs.realpathSync(child);
+      if (resolvedChild !== child) throw new Error(`variant worktree 하위 경로가 재해석되었어요: ${child}`);
+      if (stat.isDirectory()) inspect(child);
+      else if (!stat.isFile()) throw new Error(`variant worktree에 허용되지 않은 특수 항목이 있어요: ${child}`);
+    }
+  };
+  inspect(target);
+  return target;
+}
+
+/** 성공한 이번 worktree 하나만 Git에 제거를 요청한다. 실패 시 보존하고 오류를 올린다. */
+export function removeVariantWorktree(workspace, {
+  fs = { lstatSync, readdirSync, realpathSync },
+  exec = execFileSync,
+} = {}) {
+  const target = assertSafeVariantTempDir(workspace, fs);
+  exec('git', ['worktree', 'remove', '--force', target], { cwd: ROOT, stdio: 'pipe' });
+}
+
 function main() {
   const built = {};
   const tags = {};
@@ -130,17 +202,21 @@ function main() {
        * 죽고, `--force-local` 을 붙이면 이번엔 `-C` 인자의 역슬래시를 망가뜨린다.
        * worktree 는 경로를 git 이 직접 다루므로 인용 문제가 없다.
        */
-      const tmp = path.join(tmpdir(), `tlscan-variant-${v.id}`);
-      rmSync(tmp, { recursive: true, force: true });
-      execFileSync('git', ['worktree', 'add', '--detach', tmp, v.ref], { cwd: ROOT, stdio: 'pipe' });
+      const workspace = createVariantTempDir();
+      // mkdtemp가 만든 빈 direct child에만 detached worktree를 붙인다.
       try {
-        built[v.id] = buildAt(tmp);
-      } finally {
-        // remove 가 실패해도(락 등) 다음 실행이 막히지 않게 prune 까지 돌린다.
-        try { execFileSync('git', ['worktree', 'remove', '--force', tmp], { cwd: ROOT, stdio: 'pipe' }); } catch { /* 아래 prune 이 정리한다 */ }
-        rmSync(tmp, { recursive: true, force: true });
-        try { execFileSync('git', ['worktree', 'prune'], { cwd: ROOT, stdio: 'pipe' }); } catch { /* 정리 실패는 빌드 결과와 무관하다 */ }
+        execFileSync('git', ['worktree', 'add', '--detach', workspace.dir, v.ref], { cwd: ROOT, stdio: 'pipe' });
+      } catch (error) {
+        throw new Error(`${v.id}: worktree add 실패; 조사 경로를 보존했어요: ${workspace.dir}`, { cause: error });
       }
+      try {
+        built[v.id] = buildAt(workspace.dir);
+      } catch (error) {
+        // 빌드 실패의 조사 증거를 보존한다. 삭제·prune으로 실패 원인을 지우지 않는다.
+        throw new Error(`${v.id}: variant build 실패; 조사 경로를 보존했어요: ${workspace.dir}`, { cause: error });
+      }
+      // 성공했을 때만 검증된 이번 worktree 하나를 정확히 한 번 제거한다.
+      removeVariantWorktree(workspace);
     }
     tags[v.id] = buildTagOf(built[v.id]);
   }

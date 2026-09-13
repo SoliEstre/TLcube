@@ -9,7 +9,7 @@
  *      role=switch · aria-checked. 옛 lab-r2-toggle 은 0건. 8언어 키는 scanner-i18n 자가 자동으로 잰다.
  *   ⓓ 소비자 스윕 — scanner.js 에서 R2/QR 관련 줄이 isLabPath() 를 따로 보지 않는다(r2Available 하나).
  *   ⓔ 핸들러(⚠ 철자 자) — 켜든 끄든 런타임·브리지·힌트·패널·문구를 함께 움직이고 새 키에 저장한다.
- *   ⓕ R1 off 모드(⚠ 철자 자, 2b · 운영자 결정 ②) — R1 게이트가 `if (!r2Runtime.enabled) {` 안, R2 블록이 가이드 점·fps 를 맡는다.
+ *   ⓕ R1 off 모드(⚠ 철자 자, 2b · 운영자 결정 ②) — R1 게이트가 `if (!r2Runtime.enabled) {` 안, R2 블록은 가이드 점·Worker 완료 콜백은 fps 를 맡는다.
  *   ⓖ 칩 색 유도(2b) — --r2-fixed/--r2-live/--r2-fix 가 R2_CELL_COLOR[CELL_MAP_STATE.X] 에서 심기고 CSS 는 변수만 본다.
  *      ⓒ 의 그리드 단언도 2b 에서 «좌·우 트랙 동일(정중앙) + 우 칸 위젯 자기 상한» 으로 바뀌었다
  *      (3a: 그 상한을 재는 자리가 .r2-cellmap → .r2-hud-mini 로 옮겨갔다 — HUD 는 test/r2-hud.test.js 가 맡는다).
@@ -67,6 +67,14 @@ function braceEnd(source, open) {
     else if (source[i] === '}') { depth -= 1; if (depth === 0) return i; }
   }
   assert.fail('닫는 중괄호를 못 찾았다');
+}
+
+/** Worker 생성 인자의 실제 블록만 검사해요. 다른 콜백이나 주석의 같은 철자는 근거가 아니에요. */
+function r2WorkerOptions(source = JS) {
+  const at = source.indexOf('const r2Runtime = createR2WorkerRuntime(');
+  assert.ok(at >= 0, '제품 R2 Worker 생성부가 없다');
+  const open = source.indexOf('{', at);
+  return source.slice(open, braceEnd(source, open) + 1);
 }
 
 test('ⓐ «R2 가용» 진리표 — 시험판 ∨ 승격; 승격 전 핀', () => {
@@ -179,7 +187,8 @@ test('ⓓ 소비자 스윕 — R2/QR 관련 줄이 isLabPath() 를 따로 보지
     '승격 날 «켰는데 안 먹는» 상태를 만드는 줄 — 전부 r2Available 로');
   assert.ok(JS.includes('const r2Available = engineSwitchAvailable({ labPath: isLabPath(), productEnabled: ENGINE_SWITCH_PRODUCT_ENABLED })'),
     'r2Available 이 진리표에서 유도되지 않는다');
-  assert.ok(JS.includes('createR2ScanRuntime({ enabled: r2Available && r2Wanted })'), '런타임이 r2Available 을 안 본다');
+  assert.match(r2WorkerOptions(), /\benabled\s*:\s*r2Available\s*&&\s*r2Wanted\b/,
+    'Worker 런타임이 가용 게이트와 저장된 사용자 선택을 함께 보지 않는다');
 });
 
 test('ⓔ 핸들러 — 켜든 끄든 런타임·브리지·힌트·패널·문구를 함께 움직이고 새 키에 저장한다 (⚠ 철자 자)', () => {
@@ -199,7 +208,7 @@ test('ⓔ 핸들러 — 켜든 끄든 런타임·브리지·힌트·패널·문�
  * 2b (PM/029B §27.4 · 운영자 결정 ② ⑧, 2026-09-05) — R1 off 모드 · 좌 패널 칩 색 유도.
  */
 
-test('ⓕ R1 off 모드(②) — R1 게이트가 `if (!r2Runtime.enabled) {` 안에 있고, R2 블록이 가이드 점·fps 부수 효과를 맡는다 (⚠ 철자 자)', () => {
+test('ⓕ R1 off 모드(②) — R1 게이트는 감싸기 안, R2 가이드 점과 Worker 완료 fps가 분리돼요 (⚠ 철자 자)', () => {
   const loopAt = JS.indexOf('function startFrameLoop(');
   const loop = JS.slice(loopAt, JS.indexOf('async function startCamera(', loopAt));
   assert.ok(loop.length > 0, '프레임 루프를 못 찾았다');
@@ -217,10 +226,13 @@ test('ⓕ R1 off 모드(②) — R1 게이트가 `if (!r2Runtime.enabled) {` 안
   for (const needle of ['noteProductFrame()', 'renderGuideDots()', 'noteFrameProcessed()']) {
     assert.ok(r1Block.includes(needle), 'R1 블록에서 ' + needle + ' 가 사라졌다 — R1 위치의 제어 흐름이 바뀌었다');
   }
-  // R2 위치에서 R1 이 안 도니 R2 블록이 (a) 첫 grab 가이드 재렌더 (b) fps 줄을 맡는다. (c) 시도 회계는 안 부른다.
+  // R2 위치의 첫 grab은 가이드만 그려요. fps는 큐 제출이 아니라 Worker 처리 완료에서 세요.
   const r2Block = loop.slice(r2At, braceEnd(loop, loop.indexOf('{', r2At)));
   assert.ok(r2Block.includes('renderGuideDots()'), 'R2 블록이 첫 grab 뒤 가이드 점을 안 그린다 — R2 위치에서 조준 가이드가 사라진다');
-  assert.ok(r2Block.includes('noteFrameProcessed()'), 'R2 블록이 fps 줄을 안 올린다 — R2 위치에서 시험판 fps 가 «—» 로 멈춘다');
+  assert.match(r2WorkerOptions(), /\bonProcessed\s*:\s*\(\)\s*=>\s*(?:\{\s*)?noteFrameProcessed\(\)/,
+    'Worker 처리 완료가 fps 줄을 올리지 않는다');
+  assert.doesNotMatch(r2Block, /\bnoteFrameProcessed\(/,
+    'Worker에 제출만 한 입력을 처리 완료로 중복 계수하면 안 된다');
   assert.ok(!r2Block.includes('noteProductFrame()'), 'R2 블록이 R1 «복호 시도 회계» 를 부른다 — 시도 수의 뜻이 R1 위치와 갈린다');
   assert.ok(r2Block.includes('yieldForQr || acceptStopGate.isPending() ? null : grabVideoFrame('),
     'R2 grab이 QR 감지 또는 수용 뒤 성공 표시 유예를 무시한다');

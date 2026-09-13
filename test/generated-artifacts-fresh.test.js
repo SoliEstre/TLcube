@@ -51,12 +51,14 @@ const ARTIFACTS = [
   },
 ];
 
-// lab 변형들은 한 번의 빌드가 여러 파일을 낸다 — 키가 곧 산출물 이름이다.
+// lab 변형들은 한 번의 빌드가 여러 파일을 낸다. 같은 결정적 입력을 산출물마다 다시
+// 번들하지 말고 한 번 스냅샷한 뒤, 각 커밋 파일은 여전히 **각각** 비교한다.
+const LAB_VARIANTS = buildLabVariants();
 for (const key of Object.keys(LAB_OUTPUTS)) {
   ARTIFACTS.push({
     rel: path.posix.join('sites/_shared', path.basename(LAB_OUTPUTS[key])),
     command: 'node tools/build-lab.mjs',
-    rebuild: () => buildLabVariants()[key],
+    rebuild: () => LAB_VARIANTS[key],
   });
 }
 

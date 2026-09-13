@@ -40,9 +40,6 @@ import {
 } from './generator-orbit-view.js';
 import { LOCATOR_PROFILE_CELL_SURFACE_V0TR } from './locatorY.js';
 import { DEFAULT_PRESET } from './luminance.js';
-import { QUIET_COLOR_NONE } from './quiet-auto.js';
-import { RENDER_PROFILE_SCREEN } from './render-profile.js';
-import { SHADING_OFF } from './shading.js';
 
 /** 프리셋 미선택 = «이 화면은 어떤 촬영 프리셋도 주장하지 않는다». */
 export const SHOT_PRESET_NONE = 'none';
@@ -50,57 +47,20 @@ export const SHOT_PRESET_NONE = 'none';
 /** 가족 — 촬영 목적별 묶음. 늘리는 자리다(강조 가족은 emph-c 착지 뒤). */
 export const SHOT_PRESET_FAMILY_3D = 'shot-3d';
 
-/**
- * 3D 촬영 가족의 **공통 조건**.
- *
- * 값의 근거는 전부 실측이다 (「내 가설은 가설로 표시하라」 — 아래 각 줄의 출처):
- *
- *   · `type: 'Y'` — 3D 실루엣 관측층은 Type Y 큐브 실루엣 축이다
- *     (`REPORT_silhouette-pose.md` 전편).
- *   · `versionY: 2` · `tone: 3` · `eccLevel: 'H'` · `locatorProfileY: v0tr` —
- *     실루엣 경로의 **유일한 실물 표본** `y2-p9rot` 이 그 조건이다:
- *     `test/output/photos/videos/LABELS.md` §2차 「y2 가 Y2T-CS-V0TR」 +
- *     `REPORT_silhouette-pose.md` §72 표 「n25 · v0tr · ecc H · mask 0 · wire 2」.
- *     ⚠ 카드 표기 「y2 = n25 v0tr H」의 **H 는 ECC** 이지 파인더 H 가 아니다.
- *   · `qrPosition: 'none'` — 코너 QR 은 같은 지면 위의 **경쟁 전경 덩어리**다.
- *     실측 근거: LABELS.md y0 정정 「로케이터가 모서리 QR 을 큐브로 오인했다
- *     (TLcube f3c142c)」. 실루엣 추출기는 전경의 볼록껍질을 쓰므로 같은 종류의
- *     오염을 받는다(그쪽은 이 레인이 안 쟀다 — 추론이다).
- *   · `quietMode: 'none'` — Type Y 안전영역은 **«없음» 이 실측 최선**이다
- *     (`src/quiet-auto.js` §131~146: 없음 65.2% ≫ 표면색 최선 58.7% ≫ 39.1%).
- *     그리고 흑·백 판은 프레임 테두리 띠에 그 색이 없으면 배경으로 마스킹되지
- *     못하고 **코드보다 큰 경쟁 실루엣**이 된다(같은 절 §13 법칙, 띠=판색 9/9 ·
- *     띠=없음 0/9). 촬영 프리셋에서는 특히 치명적이다.
- *   · `quietMarginAuto: false` — 자동 두께는 렌더 뒤 피복률을 보고 `quietMargin`
- *     을 **되쓴다**(`index.html` §syncQuietModeUi). 촬영 사이에 기하가 흔들리면
- *     안 되고, 그 되쓰기는 «사용자가 안 건드렸는데 프리셋 이탈» 로도 보인다.
- *   · `preset: DEFAULT_PRESET` — 팔레트를 고정해야 장(場)이 재현된다. 스타일
- *     프리셋의 **의미·기본값은 안 건드린다** — 있는 것 중 하나를 고를 뿐이다.
- *   · `renderProfile: 'screen'` — y2 는 «자동» 으로 렌더됐고 화면 문맥에서 자동은
- *     «중(screen)» 으로 푼다(`export-options.resolveRenderProfile` 실측: auto +
- *     printPurpose=false → screen · true → soft). 촬영본은 **인쇄**하므로 자동인
- *     채로 두면 내보내기 갈래에 따라 면 게인이 soft 로 바뀌어 y2 와 다른 그림이
- *     된다. 구체 프로파일로 못 박아 그 결합을 끊는다.
- *   · `shading: 'off'` · `shadingRim: false` — 음영은 배경·안전영역을 채워
- *     **Y 전경 실루엣 검출을 깬다**(`generator-state.js` §shading 주석 실측).
- *
- * ⛔ 여기 **없는** 것: `centralN7Emphasis`(emph-c 레인) · 내보내기 크기/ppi/여백
- *    (물리 인쇄 크기는 프리셋이 아니라 운영자 안내가 정한다) · `quietMargin`
- *    (색이 «없음» 이라 안 그려지고, 값을 굳히면 이탈 표시가 헛돈다).
- */
+/** H-v2 전용 3D 촬영 조건. 과거Y 촬영 자세의 이름은 유지하지만 성공률을 승계하지 않아요.
+ * H3 / 3면 / 3톤 / ECC H 와 자세·팔레트·배경을 고정하는 재현용 프리셋이에요.
+ * H에서 미지원인 Y 로케이터·게인·안전영역 설정은 기존 사용자 상태를 보존해요. */
 const SHOT_3D_COMMON = Object.freeze({
   type: 'Y',
-  versionY: 2,
+  // H-v2 전용이에요. 아래 자세 이름은 조작값이고 기존Y 실측을 H 성능으로 승계하지 않아요.
+  yRepresentation: '3d',
+  versionH: 3,
+  hFaces: 3,
+  hAutoRotate: false,
   tone: 3,
   eccLevel: 'H',
-  locatorProfileY: LOCATOR_PROFILE_CELL_SURFACE_V0TR,
   qrPosition: 'none',
   preset: DEFAULT_PRESET,
-  renderProfile: RENDER_PROFILE_SCREEN,
-  quietMode: QUIET_COLOR_NONE,
-  quietMarginAuto: false,
-  shading: SHADING_OFF,
-  shadingRim: false,
   // ─ 궤도 축 (2026-09-07 21:0x, 운영자 지시 「8개 자세 x 2 배경」) ────────────
   // **자세 8은 카메라가 아니라 렌더의 궤도 회전이다** (`GUIDE_3d-shoot-32.md` §1):
   // 인쇄물을 비스듬히 찍으면 큐브 세 면이 여전히 한 평면이라 단일 H 로 풀리고,

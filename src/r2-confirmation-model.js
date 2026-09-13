@@ -6,8 +6,8 @@
  * 렌더 층은 이 행 배열을 받아 색·라벨만 붙인다 — 규칙은 전부 여기 한 곳에 있다.
  *
  * ## 운영자 결정 (PM/029B §27 · 2026-09-05 · 잠긴 결론)
- *   ⑦ 표기 규약 = «Type X» 다음 «X<버전>». R2 는 Type Y 만 누적하므로
- *      «Type Y» → «Y2 (n25)» (버전 = `versionForFinalN(n)`: 13→0 · 21→1 · 25→2).
+ *   ⑦ 표기 규약 = «Type X» 다음 «X<버전>». Y는 «Y2 (n25)», 평면·C는 프로필 버전과 k를 표시해요.
+ *      Y 버전 = `versionForFinalN(n)`: 13→0 · 21→1 · 25→2. 프로필 메타데이터가 기본 Y보다 우선해요.
  *   ⑧ **확정 = 락 시점.** 락(`candidateCount > 0 ∧ lockedN > 0`)에서 타입·버전은 확정.
  *      레이아웃 변종(v0T/v0TR/…)은 락이 오인한 실측(`v0tr` 코드에 `v0t` 30/30 —
  *      `r2-scan-runtime.js` 머리말)이 있어 DONE 까지 변동, DONE(래치)에서 확정.
@@ -35,6 +35,11 @@
  */
 
 import { versionForFinalN } from './cellSurfaceFinal.js';
+import { C_FORMAT_INDEX, cSpecFromFormatIndex } from './formatC.js';
+import { R2_TYPE_O_PROFILE } from './r2/profiles/o.js';
+import { R2_TYPE_A_PROFILE } from './r2/profiles/a.js';
+import { R2_TYPE_V_PROFILE } from './r2/profiles/v.js';
+import { R2_TYPE_K_PROFILE } from './r2/profiles/k.js';
 import { R2_INDICATOR } from './r2/session.js';
 import { R2_CAPABILITIES } from './r2-scan-runtime.js';
 
@@ -146,7 +151,24 @@ function noneRow(key) {
 }
 
 function versionText(family, version, n) {
-  return family + version + ' (n' + n + ')';
+  return family + version + ' (' + (['O', 'A', 'V', 'K', 'C'].includes(family) ? 'k' : 'n') + n + ')';
+}
+
+function snapshotFamily(arg, view, latched) {
+  const observed = latched?.profile ?? view?.profile;
+  if (['O', 'A', 'V', 'K', 'C', 'Y'].includes(observed)) return observed;
+  return typeof arg.family === 'string' && arg.family !== '' ? arg.family : R2_CAPABILITIES.accumulatesFamilies[0];
+}
+function versionForSnapshot(family, layoutId, n) {
+  if (!Number.isInteger(n) || n <= 0) return -1;
+  if (family === 'Y' || !['O', 'A', 'V', 'K', 'C'].includes(family)) return safeVersion(n);
+  if (typeof layoutId !== 'string' || layoutId === '') return -1;
+  if (family === 'C') {
+    const entry = C_FORMAT_INDEX.find(row => row.name === layoutId && row.k === n);
+    return entry ? cSpecFromFormatIndex(entry.formatIndex, n)?.version ?? -1 : -1;
+  }
+  const profile = { O: R2_TYPE_O_PROFILE, A: R2_TYPE_A_PROFILE, V: R2_TYPE_V_PROFILE, K: R2_TYPE_K_PROFILE }[family];
+  return profile?.formatEntries.find(entry => entry.layoutId === layoutId && entry.dimension === n)?.version ?? -1;
 }
 
 /**
@@ -176,10 +198,6 @@ export function confirmationRows(input) {
   const arg = input && typeof input === 'object' ? input : {};
   const stats = arg.stats && typeof arg.stats === 'object' ? arg.stats : null;
   const view = arg.view && typeof arg.view === 'object' ? arg.view : null;
-  const family = typeof arg.family === 'string' && arg.family !== ''
-    ? arg.family
-    : R2_CAPABILITIES.accumulatesFamilies[0];
-
   // ⚠ `locked` 의 candidateCount > 0 이 곧 «n 이 라인업 안» 의 보증이다 (머리말). 가드 없이 versionForFinalN 을 부르지 마라.
   const lock = lockState(stats, view);
   const locked = lock.locked;
@@ -190,6 +208,7 @@ export function confirmationRows(input) {
     && Number.isInteger(arg.latched.n) && arg.latched.n > 0
     ? arg.latched
     : null;
+  const family = snapshotFamily(arg, view, latched);
 
   const leadingId = typeof arg.leadingId === 'string' ? arg.leadingId : '';
   const viewId = view && typeof view.layoutId === 'string' ? view.layoutId : '';
@@ -204,7 +223,9 @@ export function confirmationRows(input) {
     }
     if (key === 'version') {
       const n = latched !== null ? latched.n : (locked ? lockedN : 0);
-      const version = n > 0 ? safeVersion(n) : -1;
+      const layoutId = latched !== null ? latched.layoutId : (typeof arg.leadingId === 'string' && arg.leadingId !== ''
+        ? arg.leadingId : viewId);
+      const version = versionForSnapshot(family, layoutId, n);
       rows.push(version >= 0
         ? row(key, CONFIRM_STATE.CONFIRMED, versionText(family, version, n))
         : noneRow(key));
@@ -265,7 +286,11 @@ export function progressNote(input) {
   const stats = arg.stats && typeof arg.stats === 'object' ? arg.stats : null;
   const view = arg.view && typeof arg.view === 'object' ? arg.view : null;
   const lock = lockState(stats, view);
-  return lock.locked ? 'n' + lock.n + '·' + lock.candidateCount : '';
+  const latched = arg.latched && typeof arg.latched === 'object' ? arg.latched : null;
+  const family = snapshotFamily(arg, view, latched);
+  if (!lock.locked) return '';
+  return ['O', 'A', 'V', 'K', 'C'].includes(family) ? family + ' k' + lock.n + '·' + lock.candidateCount
+    : 'n' + lock.n + '·' + lock.candidateCount;
 }
 
 /*

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TLcube — a 3D barcode (actually 2.5D) that carries data in luminance rank</title>
-<meta name="description" content="An open 3D barcode that splits a hexagonal cell into three rhombic faces and carries data in the relative luminance order of those faces. Spec and reference implementation are published under Apache-2.0.">
+<meta name="description" content="An open 3D barcode that splits a hexagonal cell into three rhombic faces and carries data in the relative luminance order of those faces. Spec and reference implementation are published under Apache-2.0. True 3D H — the Y group’s physical cube extension.">
 <link rel="canonical" href="https://tl.estre.so/en/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube — a 3D barcode that carries data in luminance rank">
-<meta property="og:description" content="Data rides on the order of three faces, not on absolute brightness. As long as the order survives, so does the value.">
+<meta property="og:description" content="Data rides on the order of three faces, not on absolute brightness. As long as the order survives, so does the value. True 3D H — the Y group’s physical cube extension.">
 <meta property="og:url" content="https://tl.estre.so/en/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -58,7 +58,7 @@
     {
       "@type": "TechArticle",
       "headline": "TLcube — a 3D barcode carrying data in rank, not absolute brightness",
-      "description": "An open 3D barcode that splits a hexagonal cell into three rhombic faces and uses their relative luminance order (3! = 6) as one base-6 symbol. Invariant under monotonic tone transforms.",
+      "description": "An open 3D barcode that splits a hexagonal cell into three rhombic faces and uses their relative luminance order (3! = 6) as one base-6 symbol. Invariant under monotonic tone transforms. True 3D H — the Y group’s physical cube extension.",
       "url": "https://tl.estre.so/en/",
       "inLanguage": "en",
       "isPartOf": {
@@ -154,6 +154,11 @@
         <h3>Type Y — single cube</h3>
         <p class="dim">Three n×n faces. A single solid mark, good for signage and merch.</p>
         <div class="meta">n = 13 / 21 / 25 · net payload 31 / 98 / 141 B</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>True 3D H — the Y group’s physical cube extension</h4>
+          <p class="dim">A separate format from planar Type Y, with H0…H8 grids and 1…6 unique data faces. Add images to blank faces, configure looping rotation, and export PNG/SVG nets, glTF, MP4 or Minecraft .schem structures.</p>
+          <p class="meta">The scanner releases results only after collecting the required faces and passing RS/CRC checks. The still-photo measurements below do not include H and do not guarantee camera recognition rates or FPS.</p>
+        </div>
       </div>
       <div class="card">
         <img src="../assets/type-O.png" alt="Type O — hex field">
@@ -229,7 +234,7 @@
 
   <section id="spec">
     <h2>Spec and implementation</h2>
-    <p class="lead">The format spec and reference implementation are published under the <strong>Apache License 2.0</strong>. Vanilla JavaScript, no build toolchain, zero runtime dependencies — it runs as a single HTML file.</p>
+    <p class="lead">The format spec and reference implementation are published under the <strong>Apache License 2.0</strong>. Vanilla JavaScript, in-repository Node.js build scripts, zero runtime dependencies — it runs as a single HTML file.</p>
     <p class="lead"><strong>Implementing only the decoder counts as a conforming implementation.</strong> Adoption starts with the reading side.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">Read the spec</a>

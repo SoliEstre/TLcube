@@ -1,11 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 
 import {
   cameraLiveness,
   gatePresentation,
   resumeAction,
 } from '../src/scanner-camera-lifecycle.js';
+
+test('카메라 메타데이터 대기는 취소되고 오래된 시작은 자기 스트림만 정리해요',async()=>{
+  const source=readFileSync(new URL('../sites/tlscan/scanner.js',import.meta.url),'utf8');
+  const body=source.slice(source.indexOf('function waitForVideoMetadata('),source.indexOf('\n/**',source.indexOf('function waitForVideoMetadata(')));
+  const wait=Function(`${body};return waitForVideoMetadata;`)();
+  const video=new EventTarget();video.readyState=0;const controller=new AbortController();
+  const pending=wait(video,controller.signal);const rejected=assert.rejects(pending,{name:'AbortError'});
+  controller.abort();await rejected;video.dispatchEvent(new Event('loadedmetadata'));
+  assert.match(source,/await cameraVideo\.play\(\);\s*if \(session !== scanSession \|\| cameraStream !== stream\) \{\s*stopTracks\(stream\);/);
+  assert.match(source,/function stopCamera\(\) \{\s*cameraMetadataAbort\?\.abort\(\)/);
+});
 
 test('준비 단계는 시작 가능 입력과 무관하게 시작 버튼을 노출하지 않는다', () => {
   for (const requestedCanStart of [undefined, true, false, 0, 1, null]) {

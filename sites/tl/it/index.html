@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TLcube — un codice a barre 3D (in realtà 2.5D) che porta i dati nel rango di luminanza</title>
-<meta name="description" content="Un codice a barre 3D aperto che divide una cella esagonale in tre facce romboidali e porta i dati nell'ordine di luminanza relativa di quelle facce. Specifica e implementazione di riferimento sono pubblicate con licenza Apache-2.0.">
+<meta name="description" content="Un codice a barre 3D aperto che divide una cella esagonale in tre facce romboidali e porta i dati nell'ordine di luminanza relativa di quelle facce. Specifica e implementazione di riferimento sono pubblicate con licenza Apache-2.0. True 3D H — estensione a cubo reale del gruppo Y.">
 <link rel="canonical" href="https://tl.estre.so/it/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube — un codice a barre 3D che porta i dati nel rango di luminanza">
-<meta property="og:description" content="I dati poggiano sull'ordine delle tre facce, non sulla luminosità assoluta. Finché sopravvive l'ordine, sopravvive il valore.">
+<meta property="og:description" content="I dati poggiano sull'ordine delle tre facce, non sulla luminosità assoluta. Finché sopravvive l'ordine, sopravvive il valore. True 3D H — estensione a cubo reale del gruppo Y.">
 <meta property="og:url" content="https://tl.estre.so/it/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -58,7 +58,7 @@
     {
       "@type": "TechArticle",
       "headline": "TLcube — un codice a barre 3D che porta i dati nel rango, non nella luminosità assoluta",
-      "description": "Un codice a barre 3D aperto che divide una cella esagonale in tre facce romboidali e usa il loro ordine di luminanza relativa (3! = 6) come un simbolo in base 6. Invariante rispetto alle trasformazioni tonali monotone.",
+      "description": "Un codice a barre 3D aperto che divide una cella esagonale in tre facce romboidali e usa il loro ordine di luminanza relativa (3! = 6) come un simbolo in base 6. Invariante rispetto alle trasformazioni tonali monotone. True 3D H — estensione a cubo reale del gruppo Y.",
       "url": "https://tl.estre.so/it/",
       "inLanguage": "it",
       "isPartOf": {
@@ -154,6 +154,11 @@
         <h3>Type Y — cubo singolo</h3>
         <p class="dim">Tre facce n×n. Un segno compatto, adatto a insegne e gadget.</p>
         <div class="meta">n = 13 / 21 / 25 · payload netto 31 / 98 / 141 B</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>True 3D H — estensione a cubo reale del gruppo Y</h4>
+          <p class="dim">Un formato distinto dal Type Y piano, con griglie H0…H8 e 1…6 facce dati uniche. Aggiungi immagini alle facce libere, configura la rotazione ciclica ed esporta sviluppi PNG/SVG, glTF, MP4 o strutture Minecraft .schem.</p>
+          <p class="meta">Lo scanner mostra il risultato solo dopo aver raccolto le facce richieste e superato i controlli RS/CRC. Le misure su foto qui sotto non includono H e non garantiscono tassi di riconoscimento o FPS con una fotocamera reale.</p>
+        </div>
       </div>
       <div class="card">
         <img src="../assets/type-O.png" alt="Type O — campo esagonale">
@@ -229,7 +234,7 @@
 
   <section id="spec">
     <h2>Specifica e implementazione</h2>
-    <p class="lead">La specifica del formato e l'implementazione di riferimento sono pubblicate con <strong>licenza Apache 2.0</strong>. JavaScript puro, nessuna toolchain di build, zero dipendenze a runtime — funziona come un singolo file HTML.</p>
+    <p class="lead">La specifica del formato e l'implementazione di riferimento sono pubblicate con <strong>licenza Apache 2.0</strong>. JavaScript puro, script di build Node.js nel repository, zero dipendenze a runtime — funziona come un singolo file HTML.</p>
     <p class="lead"><strong>Implementare solo il decoder basta a essere un'implementazione conforme.</strong> La diffusione parte da chi legge.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">Leggi la specifica</a>

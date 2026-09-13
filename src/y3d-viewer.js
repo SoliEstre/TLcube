@@ -14,6 +14,7 @@ import { CORNER_UNIT_OFFSETS, SQRT3 } from './hexgrid.js';
 import { YFACES } from './ygrid.js';
 import { digitToRanks } from './lehmer.js';
 import { digitToPattern } from './tonemap.js';
+import { cubeOutlineShapes } from './cube-outline.js';
 
 /** 아이소메트릭 세 축 = ygrid FACE_BASIS 가 쓰는 꼭짓점 그대로. */
 const C1 = CORNER_UNIT_OFFSETS[1];
@@ -769,6 +770,25 @@ export function fitView(quads, width, height, pad) {
   };
 }
 
+/** 보이는 실제 큐브 여섯 면의 외곽만 반환해요. 셀별 테두리는 포함하지 않아요. */
+export function yCubeOutline(mesh,layout){
+  const n=mesh.n,quads=[
+    [[0,0,0],[n,0,0],[n,n,0],[0,n,0]],
+    [[0,0,0],[0,n,0],[0,n,n],[0,0,n]],
+    [[0,0,0],[0,0,n],[n,0,n],[n,0,0]],
+    [[0,0,n],[n,0,n],[n,n,n],[0,n,n]],
+    [[n,0,0],[n,n,0],[n,n,n],[n,0,n]],
+    [[0,n,0],[0,n,n],[n,n,n],[n,n,0]],
+  ];
+  const visible=[];
+  for(const quad of quads){
+    const corners=quad.map(([x,y,z])=>orbitPoint({x,y,z},mesh.yaw,mesh.pitch,mesh.center,mesh.roll));
+    if(outwardFacing(corners,mesh.center,mesh.invDist)>=-1e-9)continue;
+    visible.push(corners.map(p=>projectPoint(p,layout,mesh.center,mesh.invDist)));
+  }
+  return cubeOutlineShapes(visible,{width:Math.max(.08,mesh.n*.006)*layout.size});
+}
+
 export function paintQuads(ctx, mesh, options) {
   const opts = options || {};
   const width = ctx.canvas.width;
@@ -833,6 +853,11 @@ export function paintQuads(ctx, mesh, options) {
       ctx.lineWidth = hit ? 2.5 : 0.6;
       ctx.stroke();
     }
+  }
+  if(opts.outline&&opts.layout)for(const shape of yCubeOutline(mesh,opts.layout)){
+    const pts=shape.points.map(view.map);ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+    for(let k=1;k<pts.length;k++)ctx.lineTo(pts[k].x,pts[k].y);
+    ctx.closePath();ctx.fillStyle=hexOf(shape.color);ctx.fill();
   }
   if (opts.labels && mesh.n === 1) {
     // 앞을 보는 면만 라벨을 단다. 6면 모드에서는 module quad 가 여섯이고, 라벨은

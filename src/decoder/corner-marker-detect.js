@@ -361,7 +361,17 @@ function scaleList(options) {
  *   accepted:boolean
  * }}
  */
+function drainSteps(steps) {
+  let next = steps.next();
+  while (!next.done) next = steps.next();
+  return next.value;
+}
+
 export function verifyCornerMarkers(luma, hypothesis, options = {}) {
+  return drainSteps(verifyCornerMarkersSteps(luma, hypothesis, options));
+}
+
+export function* verifyCornerMarkersSteps(luma, hypothesis, options = {}) {
   assertLumaField(luma);
   const H = assertHomography(hypothesis.H);
   const { k } = hypothesis;
@@ -404,20 +414,21 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
     // 2단 탐색 — ① 전 배율 × 성긴 오프셋 ② 이긴 배율의 이웃 3개 × 촘촘한 오프셋.
     // 한 번에 (배율 × 촘촘한 오프셋) 전수를 도는 것보다 표본 수가 한 자릿수 적고,
     // 순회 순서가 고정이라 결정성은 그대로다.
-    const evaluate = (scale, offset) => {
+    function* evaluate(scale, offset) {
       const shifted = multiply(
         translationHomography(offset.dx * cellSize, offset.dy * cellSize),
         multiply(H, scaleHomography(scale)),
       );
       const scored = scoreTetradAt(luma, shifted, tetrad.cells, sampleOpts, tieEpsilon, scorerOptions);
+      yield null;
       return { ...scored, offset, scale, shifted };
-    };
+    }
     let best = null;
     const better = (candidate) => {
       if (best === null || candidate.agree > best.agree) best = candidate;
     };
     for (const scale of scales) {
-      for (const offset of offsetGrid(span, coarseStep, 0, 0)) better(evaluate(scale, offset));
+      for (const offset of offsetGrid(span, coarseStep, 0, 0)) better(yield* evaluate(scale, offset));
     }
     const scaleIndex = scales.indexOf(best.scale);
     const neighbourScales = [best.scale];
@@ -430,7 +441,7 @@ export function verifyCornerMarkers(luma, hypothesis, options = {}) {
     const coarseBest = best.offset;
     for (const scale of neighbourScales) {
       for (const offset of offsetGrid(coarseStep, fineStep, coarseBest.dx, coarseBest.dy)) {
-        better(evaluate(scale, offset));
+        better(yield* evaluate(scale, offset));
       }
     }
     const slots = tetrad.cells.length * 3;
@@ -534,7 +545,7 @@ function markerTetradsH(k) {
  *   배치 방향·기대값 변형 목록. tri 는 정립 + 턴A 역삼각. hex 는 턴이 없고
  *   기대값이 두 갈래다 (H 톤 · digit-only).
  */
-function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
+function* findMarkerHypothesesSteps(luma, bullseye, ks, options, family, variants) {
   if (luma === null || luma === undefined) {
     return fail(FRONTEND_FAILURE.EMPTY_INPUT, { message: 'luma 가 없다' });
   }
@@ -570,7 +581,7 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
     }
     for (const orientation of ORIENTATIONS) {
       const H = baseHomographyFor(normalized, orientation, options);
-      const verification = verifyCornerMarkers(
+      const verification = yield* verifyCornerMarkersSteps(
         luma,
         { H, k, cellSize: normalized.cellSize },
         { ...options, center: normalized.center, groups },
@@ -581,7 +592,7 @@ function findMarkerHypotheses(luma, bullseye, ks, options, family, variants) {
       // 일관성 확인 — 재적합 H 로 **탐색 없이** 다시 잰다. 코너별 국소 탐색이
       // 서로 무관한 자리로 흩어져 얻은 점수라면 하나의 H 로는 재현되지 않는다.
       const confirm = refined
-        ? verifyCornerMarkers(luma, { H: refined, k, cellSize: normalized.cellSize }, {
+        ? yield* verifyCornerMarkersSteps(luma, { H: refined, k, cellSize: normalized.cellSize }, {
           ...options,
           center: normalized.center,
           groups,
@@ -664,7 +675,11 @@ export function findOCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
   //     `if (cell.tones)` 가지는 여기 groups 가 톤을 실어야 프런트가 탄다.
   //   · digit-only — 인코더 API 의 markerTones:false 레거시. 생성기 UI 는 o-cm
   //     선택 시 톤을 항상 싣지만, 자리만 켠 프레임은 여전히 읽혀야 한다.
-  return findMarkerHypotheses(
+  return drainSteps(findOCornerMarkerHypothesesSteps(luma, bullseye, ks, options));
+}
+
+export function* findOCornerMarkerHypothesesSteps(luma, bullseye, ks, options = {}) {
+  return yield* findMarkerHypothesesSteps(
     luma, bullseye, ks, options, 'hex-marker',
     [
       { turn: false, tag: 'h', groups: markerTetradsH, cells: markerCellsH },
@@ -680,7 +695,11 @@ export function findOCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
 export function findACornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
   // 정립(A-CM) + 역삼각(V-CM, 턴A). 좌표 사상이지 H 회전이 **아니다** — 턴A 는
   // «배치만 180° 회전 · 셀은 정립» 이라 H 를 돌리면 면 톤·digit 이 함께 돌아간다.
-  return findMarkerHypotheses(
+  return drainSteps(findACornerMarkerHypothesesSteps(luma, bullseye, ks, options));
+}
+
+export function* findACornerMarkerHypothesesSteps(luma, bullseye, ks, options = {}) {
+  return yield* findMarkerHypothesesSteps(
     luma, bullseye, ks, options, 'tri-marker',
     [
       { turn: false, groups: markerGroupsA, cells: markerCellsA },
@@ -757,7 +776,11 @@ function markerGroupsKExtreme(k) {
  * 그 전제다.
  */
 export function findKCornerMarkerHypotheses(luma, bullseye, ks, options = {}) {
-  return findMarkerHypotheses(
+  return drainSteps(findKCornerMarkerHypothesesSteps(luma, bullseye, ks, options));
+}
+
+export function* findKCornerMarkerHypothesesSteps(luma, bullseye, ks, options = {}) {
+  return yield* findMarkerHypothesesSteps(
     luma, bullseye, ks, options, 'star-marker',
     [{ turn: false, tag: 'h2co3x', groups: markerGroupsKExtreme, cells: markerCellsKExtreme }],
   );

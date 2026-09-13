@@ -97,7 +97,7 @@ function jsonLd(lang, t) {
       {
         '@type': 'TechArticle',
         headline: t.jsonHeadline,
-        description: t.jsonDescription,
+        description: `${t.jsonDescription} ${t.hCubeTitle}.`,
         url: `${ORIGIN}/${lang.dir}`,
         inLanguage: lang.code,
         isPartOf: { '@id': `${ORIGIN}/#website` },
@@ -182,14 +182,14 @@ function render(lang) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${t.title}</title>
-<meta name="description" content="${t.description}">
+<meta name="description" content="${t.description} ${t.hCubeTitle}.">
 <link rel="canonical" href="${ORIGIN}/${lang.dir}">
 ${alternates()}
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="${t.ogTitle}">
-<meta property="og:description" content="${t.ogDescription}">
+<meta property="og:description" content="${t.ogDescription} ${t.hCubeTitle}.">
 <meta property="og:url" content="${ORIGIN}/${lang.dir}">
 <meta property="og:image" content="${ORIGIN}/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -260,6 +260,11 @@ ${jsonLd(lang, t)}
         <h3>${t.typeYName}</h3>
         <p class="dim">${t.typeYDesc}</p>
         <div class="meta">${t.typeYMeta}</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>${t.hCubeTitle}</h4>
+          <p class="dim">${t.hCubeDesc}</p>
+          <p class="meta">${t.hCubeLimit}</p>
+        </div>
       </div>
       <div class="card">
         <img src="${p}assets/type-O.png" alt="${t.typeOName}">
@@ -377,7 +382,7 @@ ${jsonLd(lang, t)}
  * ⚠ `LASTMOD` 는 **상수**다. 오늘 날짜를 쓰면 빌드를 돌릴 때마다 파일이 바뀌어
  *   «동기화 가드» 테스트가 매번 깨진다. 내용이 실제로 바뀐 날에 손으로 올린다.
  */
-const LASTMOD = '2026-08-30';
+const LASTMOD = '2026-09-14';
 
 function sitemap() {
   const alts = languages
@@ -407,7 +412,16 @@ export const OUTPUTS = Object.freeze([
   ROOT + 'sitemap.xml',
 ]);
 
-export function writeHub() {
+export function writeHub({check = false} = {}) {
+  if (check) {
+    const expected = languages.map(lang => [ROOT + lang.dir + 'index.html', render(lang)]);
+    expected.push([ROOT + 'sitemap.xml', sitemap()]);
+    for (const [file, content] of expected) {
+      if (readFileSync(file, 'utf8') !== content) throw new Error(`허브 산출물이 최신이 아니에요: ${file}`);
+    }
+    console.log(`hub check: ${expected.length} artifacts match (read-only)`);
+    return;
+  }
   for (const lang of languages) {
     const dir = ROOT + lang.dir;
     if (lang.dir) mkdirSync(dir, { recursive: true });
@@ -423,4 +437,8 @@ export function writeHub() {
 // rebuild-all.mjs 가 OUTPUTS 를 읽으려고 이 모듈을 import 한다 — import 만으로 빌드가
 // 돌면 안 되므로 CLI 직접 실행일 때만 쓴다 (다른 빌더 8개와 같은 가드).
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) writeHub();
+if (isMain) {
+  const args = process.argv.slice(2);
+  if (args.some(arg => arg !== '--check') || args.length > 1) throw new Error('사용법: build-hub.mjs [--check]');
+  writeHub({check: args.includes('--check')});
+}

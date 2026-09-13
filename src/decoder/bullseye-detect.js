@@ -486,7 +486,7 @@ function checkedLuma(luma) {
  * 2×2 box average 피라미드. level 픽셀 중심을 원본으로 옮길 때
  * original=factor*level+offset, offset=(factor-1)/2다.
  */
-function makePyramid(luma, maxLevels, reusableLevels = null) {
+function* makePyramidSteps(luma, maxLevels, reusableLevels = null) {
   const levels = Array.isArray(reusableLevels) ? reusableLevels : [];
   if (levels.length === 0) levels.push({ ...luma, factor: 1, offset: 0, level: 0 });
   let current = levels[levels.length - 1];
@@ -503,6 +503,7 @@ function makePyramid(luma, maxLevels, reusableLevels = null) {
       const sourceWidth = current.width;
       const sourceData = current.data;
       for (let y = 0; y < height; y += 1) {
+        if (y % 16 === 0) yield null;
         const sourceRow = y * 2 * sourceWidth;
         const targetRow = y * width;
         for (let x = 0; x < width; x += 1) {
@@ -517,6 +518,7 @@ function makePyramid(luma, maxLevels, reusableLevels = null) {
       }
     } else {
     for (let y = 0; y < height; y += 1) {
+      if (y % 16 === 0) yield null;
       for (let x = 0; x < width; x += 1) {
         let sum = 0;
         let count = 0;
@@ -553,7 +555,7 @@ function makePyramid(luma, maxLevels, reusableLevels = null) {
   return levels.slice(0, maxLevels);
 }
 
-function sobelPoints(luma, span) {
+function* sobelPointsSteps(luma, span) {
   const points = [];
   const threshold = span * SOBEL_GRADIENT_SPAN_RATIO;
   const { width, height, data } = luma;
@@ -566,6 +568,7 @@ function sobelPoints(luma, span) {
   for (let tileY = 0; tileY < height; tileY += SOBEL_TILE_SIZE) {
     const yEnd = Math.min(height - 1, tileY + SOBEL_TILE_SIZE);
     for (let tileX = 0; tileX < width; tileX += SOBEL_TILE_SIZE) {
+      yield null;
       const xEnd = Math.min(width - 1, tileX + SOBEL_TILE_SIZE);
       const tile = [];
       for (let y = Math.max(1, tileY); y < yEnd; y += 1) {
@@ -723,10 +726,12 @@ function proposalBoundaries(options) {
 }
 
 /** 내부 경계의 기대 gradient 부호를 이용한 radial-symmetry 중심 투표. */
-function voteScale(level, gradients, outerRadius, boundaries) {
+function* voteScaleSteps(level, gradients, outerRadius, boundaries) {
   const votes = new Float32Array(level.width * level.height);
   const contributionScale = 1 / outerRadius;
+  let pointOrdinal = 0;
   for (const point of gradients) {
+    if (pointOrdinal++ % 256 === 0) yield null;
     const inverseMagnitude = 1 / point.magnitude;
     for (const boundary of boundaries) {
       const expectedSign = boundary % 2 === 1 ? 1 : -1;
@@ -743,10 +748,11 @@ function voteScale(level, gradients, outerRadius, boundaries) {
   return votes;
 }
 
-function localVoteMaxima(level, votes, outerRadius) {
+function* localVoteMaximaSteps(level, votes, outerRadius) {
   const maxima = [];
   const width = level.width;
   for (let y = 2; y < level.height - 2; y += 1) {
+    if (y % 16 === 2) yield null;
     const rowStart = y * width;
     for (let x = 2; x < width - 2; x += 1) {
       const value = votes[rowStart + x];
@@ -816,15 +822,16 @@ function proposalCacheEntry(luma, options, boundaries) {
   return entry;
 }
 
-function collectLevelRawProposals(level, options, boundaries) {
+function* collectLevelRawProposalsSteps(level, options, boundaries, sharedStats = null) {
   const raw = [];
-  const stats = robustStats(level);
+  const stats = sharedStats ?? robustStats(level);
+  yield null;
   if (!(stats.span > 1e-6)) return raw;
-  const gradients = sobelPoints(level, stats.span);
+  const gradients = yield* sobelPointsSteps(level, stats.span);
   if (gradients.length === 0) return raw;
   for (const radius of radiusSeedsForLevel(level, options)) {
-    const votes = voteScale(level, gradients, radius, boundaries);
-    for (const maximum of localVoteMaxima(level, votes, radius)) {
+    const votes = yield* voteScaleSteps(level, gradients, radius, boundaries);
+    for (const maximum of yield* localVoteMaximaSteps(level, votes, radius)) {
       raw.push({
         center: {
           x: maximum.x * level.factor + level.offset,
@@ -840,6 +847,10 @@ function collectLevelRawProposals(level, options, boundaries) {
 }
 
 function collectRawProposals(luma, options) {
+  return drainSteps(collectRawProposalsSteps(luma, options));
+}
+
+function* collectRawProposalsSteps(luma, options, originalStats = null) {
   const maxLevels = options.maxPyramidLevels === undefined
     ? MAX_PYRAMID_LEVELS
     : options.maxPyramidLevels;
@@ -847,7 +858,7 @@ function collectRawProposals(luma, options) {
   const boundaries = proposalBoundaries(options);
   if (boundaries === null) return [];
   const cache = proposalCacheEntry(luma, options, boundaries);
-  const pyramid = makePyramid(luma, maxLevels, cache && cache.levels);
+  const pyramid = yield* makePyramidSteps(luma, maxLevels, cache && cache.levels);
   if (cache) cache.levels = pyramid;
   const raw = [];
 
@@ -857,7 +868,12 @@ function collectRawProposals(luma, options) {
       raw.push(...cache.rawByLevel[level.level]);
       continue;
     }
-    const levelRaw = collectLevelRawProposals(level, options, boundaries);
+    // level0는 원본과 같은 data·크기를 쓴다. 호출 진입에서 이미 계산한 분위수를
+    // 재사용해 큰 영상 한 벌을 다시 훑지 않아요. 축소 레벨은 자체 통계를 그대로 재요.
+    const sameOriginal = level.level === 0 && level.data === luma.data
+      && level.width === luma.width && level.height === luma.height;
+    const levelRaw = yield* collectLevelRawProposalsSteps(level, options, boundaries,
+      sameOriginal ? originalStats : null);
     if (cache) {
       cache.rawByLevel[level.level] = levelRaw;
       options._bullseyeProposalCache.stats.levelMisses += 1;
@@ -1363,8 +1379,15 @@ function scoreParams(luma, params, options, stats) {
   return scored.ok ? candidateFromScore(scored) : null;
 }
 
-function isotropicGridRefine(luma, initialParams, options, stats) {
+function drainSteps(steps) {
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+function* isotropicGridRefineSteps(luma, initialParams, options, stats) {
   let params = initialParams.slice();
+  yield null;
   let current = scoreParams(luma, params, options, stats);
   if (current === null) return fail(FRONTEND_FAILURE.NO_FINDER, {
     message: '등방 격자 정제의 초기 변환이 퇴화했다',
@@ -1390,6 +1413,7 @@ function isotropicGridRefine(luma, initialParams, options, stats) {
           trialParams[1] += dy * localCellSize * step.center;
           trialParams[2] += scaleDirection * step.logScale;
           trialParams[3] += scaleDirection * step.logScale;
+          yield null;
           const trial = scoreParams(luma, trialParams, options, stats);
           if (trial !== null && compareScored(trial, best) < 0) {
             best = trial;
@@ -1404,7 +1428,7 @@ function isotropicGridRefine(luma, initialParams, options, stats) {
   return ok({ candidate: current, params });
 }
 
-function coordinateRefine(luma, initialParams, options, stats) {
+function* coordinateRefineSteps(luma, initialParams, options, stats) {
   const iterations = options.refineIterations === undefined
     ? DEFAULT_REFINE_ITERATIONS
     : options.refineIterations;
@@ -1412,6 +1436,7 @@ function coordinateRefine(luma, initialParams, options, stats) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: 'refineIterations는 0..20 정수여야 한다' });
   }
   let params = initialParams.slice();
+  yield null;
   let current = scoreParams(luma, params, options, stats);
   if (current === null) return fail(FRONTEND_FAILURE.NO_FINDER, { message: '초기 변환이 퇴화했다' });
 
@@ -1436,6 +1461,7 @@ function coordinateRefine(luma, initialParams, options, stats) {
       for (const direction of [-1, 1]) {
         const trialParams = params.slice();
         trialParams[dimension] += direction * steps[dimension];
+        yield null;
         const trial = scoreParams(luma, trialParams, options, stats);
         if (trial !== null && compareScored(trial, best) < 0) {
           best = trial;
@@ -1452,7 +1478,7 @@ function coordinateRefine(luma, initialParams, options, stats) {
   return ok({ candidate: current });
 }
 
-function refineBullseyeCore(luma, initial, options, stats) {
+function* refineBullseyeCoreSteps(luma, initial, options, stats) {
   let baseParams;
   try {
     baseParams = paramsFromHomography(homographyFromInitial(initial));
@@ -1461,7 +1487,7 @@ function refineBullseyeCore(luma, initial, options, stats) {
   }
 
   const fastOptions = lowCostScoreOptions(options);
-  const gridded = isotropicGridRefine(luma, baseParams, fastOptions, stats);
+  const gridded = yield* isotropicGridRefineSteps(luma, baseParams, fastOptions, stats);
   if (!gridded.ok) return gridded;
   baseParams = gridded.params;
 
@@ -1475,6 +1501,7 @@ function refineBullseyeCore(luma, initial, options, stats) {
     const seeded = baseParams.slice();
     seeded[5] = tiltX;
     seeded[6] = tiltY;
+    yield null;
     const candidate = scoreParams(luma, seeded, fastOptions, stats);
     if (candidate !== null) seededCandidates.push({ params: seeded, candidate });
   }
@@ -1482,15 +1509,20 @@ function refineBullseyeCore(luma, initial, options, stats) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '모든 projective seed의 초기 평가가 실패했다' });
   }
   seededCandidates.sort((a, b) => compareScored(a.candidate, b.candidate));
-  const refined = coordinateRefine(luma, seededCandidates[0].params, fastOptions, stats);
+  const refined = yield* coordinateRefineSteps(
+    luma, seededCandidates[0].params, fastOptions, stats,
+  );
   if (!refined.ok) return refined;
 
   // 저비용 표본은 탐색에만 쓴다. 공개 점수와 hard check는 규범 기본 64×48로 다시 계산한다.
   // 격자 결과도 함께 보존해 projective coordinate descent의 저비용 표본 과적합을 막는다.
-  const finalScores = [
-    scoreBullseyeCore(luma, gridded.candidate.transform, options, stats),
-    scoreBullseyeCore(luma, refined.candidate.transform, options, stats),
-  ].filter((entry) => entry.ok).map(candidateFromScore);
+  const finalScores = [];
+  yield null;
+  const griddedScore = scoreBullseyeCore(luma, gridded.candidate.transform, options, stats);
+  if (griddedScore.ok) finalScores.push(candidateFromScore(griddedScore));
+  yield null;
+  const refinedScore = scoreBullseyeCore(luma, refined.candidate.transform, options, stats);
+  if (refinedScore.ok) finalScores.push(candidateFromScore(refinedScore));
   if (finalScores.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '정제 후보의 최종 점수를 만들 수 없다' });
   }
@@ -1509,7 +1541,7 @@ export function refineBullseye(luma, initial, options = {}) {
   if (!(stats.span > 1e-6)) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '휘도 span이 없어 정제할 수 없다' });
   }
-  return refineBullseyeCore(luma, initial, options, stats);
+  return drainSteps(refineBullseyeCoreSteps(luma, initial, options, stats));
 }
 
 function selectRefinementEntries(coarse, limit) {
@@ -1551,6 +1583,14 @@ function finalCandidateNms(candidates) {
  * @returns {{ok:true,candidates:object[]}|{ok:false,reason:string,detail?:object}}
  */
 export function detectBullseyes(luma, options = {}) {
+  return drainSteps(detectBullseyesSteps(luma, options));
+}
+
+/**
+ * 협력형 불스아이 탐색. 각 저수준 점수/기하 평가 직전에 null을 yield해 호출자가
+ * 프레임 예산 단위로 중단할 수 있다. 동기 API는 이 iterator를 끝까지 drain한다.
+ */
+export function* detectBullseyesSteps(luma, options = {}) {
   const checked = checkedLuma(luma);
   if (!checked.ok) return checked;
   const stats = robustStats(luma);
@@ -1558,7 +1598,8 @@ export function detectBullseyes(luma, options = {}) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '유효 휘도 대비가 없다' });
   }
 
-  const raw = collectRawProposals(luma, options);
+  yield null;
+  const raw = yield* collectRawProposalsSteps(luma, options, stats);
   if (raw.length === 0) {
     return fail(FRONTEND_FAILURE.NO_FINDER, { message: '방사 대칭 중심 proposal이 없다' });
   }
@@ -1578,6 +1619,7 @@ export function detectBullseyes(luma, options = {}) {
     if (H === null) continue;
     for (const layout of layouts) {
       const layoutOptions = { ...fastOptions, innerBandsReplaced: layout.firstBand };
+      yield null;
       const scored = scoreBullseyeCore(luma, H, layoutOptions, stats);
       if (scored.ok) {
         coarse.push({
@@ -1609,15 +1651,25 @@ export function detectBullseyes(luma, options = {}) {
     Math.min(refineLimit * layouts.length, MAX_RAW_PROPOSALS),
   );
   const refined = [];
+  const streamCandidates = options.streamCandidates === true;
+  // 최종 후보 집합은 아래의 정렬·순수 링 우선·NMS를 거쳐서만 반환해요. 이 플래그는
+  // 협력 소비자에게 이미 hard check를 통과한 기하 제안만 앞서 전달할 뿐 반환 계약은 바꾸지 않아요.
+  const emitCandidate = function* (candidate, eligible) {
+    if (streamCandidates && eligible && candidate.hardChecksPassed) {
+      yield { kind: 'candidate', candidate: structuredClone(candidate) };
+    }
+  };
   // 첫 통과에서 반환하지 않는다. 점수·방사 투표 순위를 섞은 고정 예산을 모두 정제한다.
   for (const entry of refinementEntries) {
     // 정제도 그 후보를 만든 레이아웃으로 해야 한다 — 섞이면 큐브 자리를 링으로 재고
     // 중심이 그리로 끌려간다.
     const layoutOptions = { ...options, innerBandsReplaced: entry.firstBand };
-    const result = refineBullseyeCore(luma, entry.candidate, layoutOptions, stats);
+    const result = yield* refineBullseyeCoreSteps(luma, entry.candidate, layoutOptions, stats);
     if (!result.ok) continue;
     if (entry.firstBand === 0) {
-      refined.push({ ...result.candidate, innerBandsReplaced: 0 });
+      const candidate = { ...result.candidate, innerBandsReplaced: 0 };
+      refined.push(candidate);
+      yield* emitCandidate(candidate, true);
       continue;
     }
     /*
@@ -1637,10 +1689,14 @@ export function detectBullseyes(luma, options = {}) {
      * ⚠ 'none' 은 뭉개진 순수 불스아이를 이 레이아웃으로 «승격» 시킬 수 있다(그걸 막으려고
      *   큐브 증거를 넣었다). 그래서 호출자는 레이아웃 0 이 통과하면 그쪽을 우선해야 한다.
      */
-    const cube = entry.innerEvidence === 'none' ? null : readCubeOrientation(luma, {
-      transform: result.candidate.transform,
-      innerBandsReplaced: entry.firstBand,
-    });
+    let cube = null;
+    if (entry.innerEvidence !== 'none') {
+      yield null;
+      cube = readCubeOrientation(luma, {
+        transform: result.candidate.transform,
+        innerBandsReplaced: entry.firstBand,
+      });
+    }
     if (entry.innerEvidence !== 'none'
       && (cube === null
         || !(cube.orientationMargin >= MIN_CUBE_TONE_RANK_MARGIN)
@@ -1660,7 +1716,7 @@ export function detectBullseyes(luma, options = {}) {
       });
       continue;
     }
-    refined.push({
+    const candidate = {
       ...result.candidate,
       innerBandsReplaced: entry.firstBand,
       cube: {
@@ -1671,7 +1727,9 @@ export function detectBullseyes(luma, options = {}) {
         faceFlatness: cube.faceFlatness,
         faceMedians: cube.faceMedians,
       },
-    });
+    };
+    refined.push(candidate);
+    yield* emitCandidate(candidate, true);
   }
   refined.sort(compareScored);
 

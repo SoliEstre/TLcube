@@ -51,7 +51,7 @@ import { ECC_NAME_BY_VALUE } from '../formatinfo.js';
 
 /**
  * @param {{width:number, height:number, data:Float32Array}} luma
- * @param {{H:Float64Array, n:number, layoutId:string}} pose 로케이터가 세운 포즈.
+ * @param {{H:Float64Array, faceHs?:Float64Array[], n:number, layoutId:string}} pose 로케이터가 세운 포즈.
  *   `H` 는 **반드시 `Float64Array(9)`** 다 — 평 `Array` 도 `Float32Array` 도
  *   `sampleCubeCell` 이 `missing-homography` 로 거절한다 (실측).
  * @param {object} [options] 디코더 옵션. `calibration` 을 담아 넘길 수 있다.
@@ -69,6 +69,7 @@ export function readFormatFromLocator(luma, pose, options = {}) {
   }
 
   const H = pose && pose.H;
+  const faceHs = pose && pose.faceHs;
   const n = pose && Number(pose.n);
   const layoutId = pose && typeof pose.layoutId === 'string' ? pose.layoutId : '';
   if (!(H instanceof Float64Array) || H.length !== 9
@@ -77,6 +78,15 @@ export function readFormatFromLocator(luma, pose, options = {}) {
       stage: 'locator-format',
       cause: 'locator-pose-invalid',
       hasH: H instanceof Float64Array,
+      n,
+    });
+  }
+  if (faceHs !== undefined && (!Array.isArray(faceHs) || faceHs.length !== 3
+    || faceHs.some((faceH) => !(faceH instanceof Float64Array)
+      || faceH.length !== 9 || !Array.from(faceH).every(Number.isFinite)))) {
+    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+      stage: 'locator-format',
+      cause: 'locator-face-homographies-invalid',
       n,
     });
   }
@@ -91,7 +101,9 @@ export function readFormatFromLocator(luma, pose, options = {}) {
   }
 
   const opts = { ...options, cellSurfaceLayout: layoutId };
-  const base = { family: 'cube', n, H };
+  const base = faceHs === undefined
+    ? { family: 'cube', n, H }
+    : { family: 'cube', n, H, faceHs };
   const sampleOptions = cubeSampleOptions(opts);
   const geometry = evaluateCellSurfaceGeometry(
     base,

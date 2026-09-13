@@ -639,9 +639,10 @@ test('ⓙ ⚠ 철자 자 — 줌 커밋은 락만 무효화(H4)하고, 리셋 �
     'hideR2Hud()', 'renderR2CellMap()']) {
     assert.ok(reset.includes(needle), 'manualRescan 이 ' + needle + ' 를 안 한다 — 리셋이 반쯤이다');
   }
-  // 두 입구가 같은 함수를 부른다 — 갈리면 「버튼은 되는데 탭은 반쯤」 이 된다.
-  assert.equal((JS.match(/manualRescan\(\)/g) || []).length, 3,
-    '수동 리셋의 입구·정의 수가 셋(정의 1 + 버튼 1 + 탭 1)이 아니다 — 입구마다 다른 동작이 생겼다');
+  // 기존 버튼·중앙 탭과 새 H 카메라 초기화가 같은 전체 세션 리셋을 사용해요.
+  assert.equal((JS.match(/manualRescan\(\)/g) || []).length, 4,
+    '수동 리셋의 입구·정의 수가 넷(정의 1 + 버튼 1 + 탭 1 + H 버튼 1)이 아니에요');
+  assert.match(JS,/hCollectionReset\?\.addEventListener\('click',[\s\S]*?if \(cameraStream\) manualRescan\(\)/);
   assert.ok(JS.includes('stageTapIsCentre(x, y, stageSide)'),
     '중앙 탭이 순수 판정을 안 쓴다 — 기하가 브라우저 안에 갇힌다');
   assert.ok(/closest\('#stage-top-row, #scan-reset'\)/.test(JS),

@@ -8,7 +8,7 @@
      같은 값이라는 이유로 키를 합치면 두 소비자의 요구가 갈릴 때 되돌리기 어렵다.
      meta(description·og:*)는 안 건다 — 크롤러가 JS 를 안 돌려 런타임 변경이 무의미하다. -->
 <title data-i18n="document.title">TLcube 스캐너</title>
-<meta name="description" content="TLcube 코드를 카메라나 사진에서 읽는 스캐너입니다.">
+<meta name="description" content="TLcube 코드를 카메라나 사진에서 읽어요. True 3D H 큐브는 필요한 면을 모아 RS/CRC 검증을 통과한 뒤 결과를 보여줘요.">
 <link rel="canonical" href="https://tlscan.estre.so/">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta property="og:type" content="website">
@@ -428,7 +428,11 @@
     font: 600 clamp(7px, 2vw, 10px)/1.25 ui-monospace, monospace;
     contain: layout paint; pointer-events: none;
   }
-  .r2-candidate-card[data-leader="true"] { box-shadow: inset 0 0 0 1px var(--candidate-color); }
+    .r2-candidate-card[data-leader="true"] { box-shadow: inset 0 0 0 1px var(--candidate-color); }
+  /* R2 collects a cube over several frames; only that engine gets the green middle guide. */
+  #scanner-app[data-engine="r2"] .scan-dot-layer .dot-middle {
+    stroke: rgb(126 249 208); filter: drop-shadow(0 0 5px rgb(126 249 208 / .8));
+  }
   .r2-candidate-card[data-state="retained"] { border-style: dashed; }
   .r2-candidate-card[data-state="dropped"] { background: rgb(112 16 30 / .86); }
   .r2-candidate-card[data-state="success"] { background: rgb(10 92 45 / .88); }
@@ -532,6 +536,16 @@
   }
   .r2-progress.is-done .r2-progress-fill { background: #7ef9d0; }
   .r2-progress-note { opacity: .6; font-size: 10px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .h-collection { margin: 8px 0; padding: 10px 12px; border: 1px solid #67bda777; border-radius: 12px; background: #67bda70b; font-size: 12px; }
+  .h-collection[hidden], .h-faces[hidden], .h-result-summary[hidden] { display: none; }
+  .h-collection-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .h-collection p { margin: 6px 0 0; line-height: 1.45; }
+  .h-collection button { padding: 4px 8px; border: 1px solid #67bda777; border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .h-faces { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .h-face { padding: 3px 7px; border: 1px dashed #8996a0; border-radius: 5px; opacity: .55; }
+  .h-face[data-present="true"] { border-style: solid; color: #157759; background: #7ef9d033; opacity: 1; }
+  .h-face[data-current="true"] { outline: 2px solid #61c7ac; outline-offset: 1px; }
+  .h-result-summary { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: #7ef9d022; font-size: 12px; line-height: 1.5; }
   /* R2 미니 HUD — 상단 행 우측 칸(정사각). 열 폭 이하로만 줄고 140px 상한 — HUD 크기 상한은 트랙이 아니라 여기가 진다
      (우 트랙이 좌와 같은 1fr 이어야 스위치가 정중앙이라, 상자가 스스로 갇힌다). 조준을 가리지 않게 작고 반투명하게.
      [3a] 상한·배경·모서리는 상자(.r2-hud-mini)로 옮겼다 — 캔버스는 그 안을 채우고, 스캔선이 형제로 같이 잘린다. */
@@ -582,6 +596,25 @@
     height: 100%;
     pointer-events: none;
   }
+
+  /* H 관측 라벨은 면의 H를 그대로 사영하고, 수집 전개도는 하단 중앙에 고정해요. */
+  .h-face-label-layer { position:absolute; inset:0; z-index:5; pointer-events:none; overflow:hidden; }
+  .h-face-label { position:absolute; width:100px; height:100px; transform-origin:0 0;
+    display:grid; place-items:center; color:#fff; font:700 13px/1 system-ui,sans-serif;
+    text-shadow:0 1px 2px #000,0 0 3px #000; pointer-events:none; }
+  .h-face-label > span { padding:2px 3px; border-radius:3px; background:rgb(15 23 42 / .65); }
+  .h-face-net { position:absolute; left:50%; bottom:max(12px, env(safe-area-inset-bottom));
+    transform:translateX(-50%); z-index:5; display:grid; grid-template-columns:repeat(4,22px);
+    grid-template-rows:repeat(3,22px); gap:1px; pointer-events:none; }
+  .square-stage:has(.lab-debug-panel:not([hidden])) .h-face-net {
+    bottom:calc(var(--lab-panel-bottom) + var(--lab-panel-min-h) + 8px);
+  }
+  .h-face-net__cell { display:grid; place-items:center; border:1px solid rgb(233 246 255 / .6);
+    border-radius:3px; color:#fff; font:700 9px/1 system-ui,sans-serif; background:rgb(15 23 42 / .78); }
+  .h-face-net__cell[data-state="NOT_REQUIRED"] { opacity:.24; }
+  .h-face-net__cell[data-state="PRESENT"] { border-color:#7ef9d0; background:#174b41; }
+  .h-face-net__cell[data-state="CURRENT"] { border:2px solid #4ad8ff; background:#145669; }
+  .h-face-label-layer[hidden], .h-face-net[hidden] { display:none; }
 
   /* 수동 리셋 버튼 (2026-09-06, 운영자 요구 ⑫ · 실기 3차) — 스테이지 **안** 우하단.
      자리 규칙(세 가지, test/r2-hud.test.js 가 숫자를 파싱해 잰다):
@@ -1582,6 +1615,8 @@
              authored hidden 이고 scanner.js 가 r2Available 에서만 연다 — **2026-09-06 승격** 뒤로는
              정식에서도 열린다(승격을 되돌리면 authored 상태 그대로 남는다). -->
         <canvas class="r2-hud" id="r2-hud" aria-hidden="true" hidden></canvas>
+        <div class="h-face-label-layer" id="h-face-label-layer" aria-hidden="true" hidden></div>
+        <div class="h-face-net" id="h-face-net" aria-hidden="true" hidden></div>
         <div class="r2-candidate-ring" id="r2-candidate-ring" aria-hidden="true" hidden></div>
         <!-- 뷰파인더 상단 행 (2026-09-05, PM/029B §27.4 1단계 · 운영자 요구 ⑤⑥):
              좌 = R2 누적 진행 인디케이터(PM/029 §17) · 중앙 = 엔진 스위치(제품 컴포넌트) · 우 = R2 셀맵(§18~19).
@@ -1602,11 +1637,11 @@
               </div>
             </div>
           </div>
-          <!-- 엔진 스위치: R1 = 단발만(모든 타입) · R2 = R2 누적(타입 Y) + QR 만, R1 단발 끔 (운영자 결정 ②).
+          <!-- 엔진 스위치: R1 = TL 단발 · R2 = TL 누적 + 지원 브라우저의 QR, R1 단발 끔.
                authored hidden 이고 scanner.js 가 연다. **2026-09-06 승격**으로 정식에서도 뜬다. -->
           <div class="engine-switch" id="engine-switch" hidden>
             <span class="engine-switch-label" id="engine-switch-label" data-i18n="engine.label">스캐너 엔진 선택</span>
-            <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — R1 은 모든 타입을 단발로 읽고, R2 는 타입 Y 를 여러 프레임 누적으로 읽으며 QR 도 읽어요</span>
+            <span id="engine-switch-desc" data-i18n="engine.aria" hidden>스캐너 엔진 선택 — R1은 TL 코드를 한 프레임으로 읽고, R2는 TL 코드를 여러 프레임에 걸쳐 누적하며 지원 브라우저에서 QR도 읽어요</span>
             <button type="button" class="engine-switch-control" id="engine-switch-control" role="switch" aria-checked="true" data-engine="r2" aria-labelledby="engine-switch-label" aria-describedby="engine-switch-desc">
               <span class="engine-switch-opt" data-i18n="engine.r1">R1</span>
               <span class="engine-switch-opt" data-i18n="engine.r2">R2</span>
@@ -1666,6 +1701,13 @@
         <button class="photo-button" id="choose-image" type="button" data-i18n="button.photo">사진에서 스캔</button>
       </div>
 
+      <section class="h-collection" id="h-collection" aria-labelledby="h-collection-title" hidden>
+        <div class="h-collection-head"><strong id="h-collection-title">H 큐브 수집 · 시험판</strong><button type="button" id="h-collection-reset" hidden>H 수집 초기화</button></div>
+        <p id="h-collection-progress" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div class="h-faces" id="h-collection-faces" aria-hidden="true" hidden></div>
+        <p id="h-collection-missing"></p>
+        <p id="h-collection-hint"></p>
+      </section>
       <section class="scan-center" data-i18n-attr="aria-label:guide.label" aria-label="스캔 가이드">
         <div class="scan-guide-wrap">
           <p class="scan-guide-message" id="scan-guide-message" data-i18n="guide.message">TLcube 코드를 점 가이드에 맞춰 주세요.</p>
@@ -1713,6 +1755,7 @@
          그 외엔 authored hidden 그대로 (R2 출처가 아닌 결과는 이 행이 비어 있다). **2026-09-06 승격** 뒤로는
          정식에서도 R2 출처가 실재하므로 이 표면이 실제로 채워진다. 칩은 scanner.js 가 만든다. -->
     <div class="r2-rows result-r2-rows" id="result-r2-rows" hidden></div>
+    <p class="h-result-summary" id="result-h-summary" hidden></p>
     <div class="result-content" id="result-content"></div>
     <div class="popup-fallback" id="popup-fallback" hidden>
       <p id="popup-blocked-note" data-i18n="result.popupBlocked">브라우저가 자동으로 새 탭을 열지 못했어요. 아래 버튼을 탭해서 열어 주세요.</p>

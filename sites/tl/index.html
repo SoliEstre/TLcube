@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TLcube — 휘도 순위로 데이터를 싣는 3D 바코드(실은 2.5D)</title>
-<meta name="description" content="육각 셀을 마름모 3면으로 나누고, 세 면의 상대 휘도 순서에 데이터를 싣는 오픈 3D 바코드. 스펙과 레퍼런스 구현은 Apache-2.0 으로 공개돼 있습니다.">
+<meta name="description" content="육각 셀을 마름모 3면으로 나누고, 세 면의 상대 휘도 순서에 데이터를 싣는 오픈 3D 바코드. 스펙과 레퍼런스 구현은 Apache-2.0 으로 공개돼 있습니다. True 3D H — Y 그룹의 실제 큐브 확장.">
 <link rel="canonical" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube — 휘도 순위로 데이터를 싣는 3D 바코드">
-<meta property="og:description" content="절대 밝기가 아니라 세 면의 순서에 데이터를 싣습니다. 조명이 흔들려도 순서만 지켜지면 살아남아요.">
+<meta property="og:description" content="절대 밝기가 아니라 세 면의 순서에 데이터를 싣습니다. 조명이 흔들려도 순서만 지켜지면 살아남아요. True 3D H — Y 그룹의 실제 큐브 확장.">
 <meta property="og:url" content="https://tl.estre.so/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -58,7 +58,7 @@
     {
       "@type": "TechArticle",
       "headline": "TLcube — 절대 밝기가 아니라 순서에 데이터를 싣는 3D 바코드",
-      "description": "육각 셀을 마름모 3면으로 나누고 세 면의 상대 휘도 순서(3! = 6가지)를 base-6 심볼로 쓰는 오픈 3D 바코드. 단조 톤 변형에 불변합니다.",
+      "description": "육각 셀을 마름모 3면으로 나누고 세 면의 상대 휘도 순서(3! = 6가지)를 base-6 심볼로 쓰는 오픈 3D 바코드. 단조 톤 변형에 불변합니다. True 3D H — Y 그룹의 실제 큐브 확장.",
       "url": "https://tl.estre.so/",
       "inLanguage": "ko",
       "isPartOf": {
@@ -154,6 +154,11 @@
         <h3>Type Y — 단일 큐브</h3>
         <p class="dim">세 면이 각각 n×n 격자. 한 덩어리라 간판·굿즈에 어울립니다.</p>
         <div class="meta">n = 13 / 21 / 25 · 순 페이로드 31 / 98 / 141 B</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>True 3D H — Y 그룹의 실제 큐브 확장</h4>
+          <p class="dim">평면 Type Y와는 별도 포맷으로, H0…H8 격자의 고유 데이터 1…6면을 사용해요. 빈 면 이미지와 반복 회전을 설정하고, 전개도 PNG/SVG·glTF·MP4·Minecraft .schem 구조물을 내보낼 수 있어요.</p>
+          <p class="meta">스캐너는 필요한 면을 모아 RS/CRC 검증을 통과한 뒤에만 결과를 보여줘요. 아래 정지사진 실측표는 H를 포함하지 않으며, 실카메라 인식률이나 FPS를 보장하지 않아요.</p>
+        </div>
       </div>
       <div class="card">
         <img src="assets/type-O.png" alt="Type O — 육각 필드">
@@ -229,7 +234,7 @@
 
   <section id="spec">
     <h2>스펙과 구현</h2>
-    <p class="lead">포맷 스펙과 레퍼런스 구현은 <strong>Apache License 2.0</strong> 으로 공개돼 있습니다. 바닐라 JavaScript, 빌드 툴체인 없음, 런타임 의존성 0 — 단일 HTML 파일로 동작합니다.</p>
+    <p class="lead">포맷 스펙과 레퍼런스 구현은 <strong>Apache License 2.0</strong> 으로 공개돼 있습니다. 바닐라 JavaScript, 저장소 내 Node.js 빌드 스크립트, 런타임 의존성 0 — 단일 HTML 파일로 동작합니다.</p>
     <p class="lead"><strong>디코더만 구현해도 적합 구현</strong>입니다. 확산은 읽는 쪽부터 시작하니까요.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">포맷 스펙 읽기</a>

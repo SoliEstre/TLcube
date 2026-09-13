@@ -344,15 +344,6 @@ function summarizeOutput(output, limit = 12) {
   };
 }
 
-for (const { kind } of GLYPH_CASES) {
-  test(`합성 오라클: ${kind} 위치 ±${POSE_PX}px, scale ±3%`, { timeout: 120_000 }, (t) => {
-    const { frame, output } = insetDetection(kind, PPU_HI);
-    const candidate = nearestCandidate(output, kind, frame);
-    assertPose(candidate, frame, kind);
-    t.diagnostic(`candidate=${JSON.stringify(candidate)}`);
-  });
-}
-
 test('QR 어휘: 서로 다른 payload에서도 8x finder 기하를 되찾는다', {
   timeout: 120_000,
 }, (t) => {
@@ -367,7 +358,7 @@ test('QR 어휘: 서로 다른 payload에서도 8x finder 기하를 되찾는다
 });
 
 for (const { kind } of GLYPH_CASES) {
-  test(`스케일 불변: ${kind} 8x·16x`, { timeout: 120_000 }, (t) => {
+  test(`합성 오라클·스케일 불변: ${kind} 위치 ±${POSE_PX}px, 8x·16x`, { timeout: 120_000 }, (t) => {
     const found = [];
     for (const pixelsPerUnit of [PPU_LO, PPU_HI]) {
       const { frame, output } = insetDetection(kind, pixelsPerUnit);

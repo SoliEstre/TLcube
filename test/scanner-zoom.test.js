@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { eventRow, parseEnvelope } from '../relay/protocol.mjs';
@@ -27,6 +27,7 @@ import { isInRegionA } from '../src/placementA.js';
 import { isInRegionInvertedA, isInRegionK } from '../src/cell-editor-core.js';
 import { VERSIONS } from '../src/capacity.js';
 import { VERSIONS_A } from '../src/capacityA.js';
+import { isBenchScope } from './helpers/scope.mjs';
 import {
   CELL_PX_FLOOR,
   AUTO_CROP_ENABLED,
@@ -82,6 +83,13 @@ import {
 } from '../src/scanner-zoom.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
+const WRITE_DIAGNOSTICS = process.env.TL_TEST_DIAGNOSTICS === '1';
+
+function writeDiagnostic(name, value) {
+  if (!WRITE_DIAGNOSTICS) return;
+  mkdirSync(ROOT + 'test/output', { recursive: true });
+  writeFileSync(ROOT + 'test/output/' + name, JSON.stringify(value, null, 2) + '\n');
+}
 const SCANNER_JS = readFileSync(ROOT + 'sites/tlscan/scanner.js', 'utf8');
 const SCANNER_HTML = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
 const PRESET = getPreset(DEFAULT_PRESET);
@@ -557,11 +565,7 @@ test('r3 기기 매트릭스 — 시각 여백 상한·18점 포함·프리뷰�
     return ['k' + k, Number(((bboxW * bboxH) / (frame * frame)).toFixed(4))];
   }));
 
-  mkdirSync(ROOT + 'test/output', { recursive: true });
-  writeFileSync(
-    ROOT + 'test/output/claude-square-view-matrix.json',
-    JSON.stringify(matrix, null, 2) + '\n',
-  );
+  writeDiagnostic('claude-square-view-matrix.json', matrix);
 });
 
 test('점 렌더 자가진단 (작업 4) — 재시도·첫 grab 재렌더·스태킹 단언·이탈 경고가 배선돼 있다', () => {
@@ -739,7 +743,7 @@ function median(values) {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-test('확대·크롭이 복호 시간에 주는 영향을 잰다', () => {
+function zoomDecodeFixtures() {
   const encoded = encode('zoom-timing', { version: 1, eccLevel: 'M' });
   const scene = buildScene(encoded, { palette: PALETTE, margin: 2 });
   const raster = rasterize(scene, { pixelsPerUnit: 10, supersample: 1 });
@@ -750,8 +754,17 @@ test('확대·크롭이 복호 시간에 주는 영향을 잰다', () => {
   assert.equal(uncrop.width, 960);
   assert.equal(crop2.width, 540);
 
-  const warmup = decodeFrontend(uncrop);
-  assert.equal(typeof warmup.ok, 'boolean');
+  return { uncrop, crop2 };
+}
+
+test('확대·크롭 기능 — 원본·크롭 입력을 각각 한 번 복호한다', () => {
+  const { uncrop, crop2 } = zoomDecodeFixtures();
+  assert.equal(typeof decodeFrontend(uncrop).ok, 'boolean');
+  assert.equal(typeof decodeFrontend(crop2).ok, 'boolean');
+});
+
+if (isBenchScope()) test('확대·크롭 복호 시간 측정 (bench scope)', () => {
+  const { uncrop, crop2 } = zoomDecodeFixtures();
 
   const times = { uncrop: [], crop2: [] };
   for (let i = 0; i < 5; i += 1) {
@@ -776,11 +789,7 @@ test('확대·크롭이 복호 시간에 주는 영향을 잰다', () => {
     },
   };
   report.cropOverUncrop = Number((report.crop2.medianMs / report.uncrop.medianMs).toFixed(3));
-  mkdirSync(ROOT + 'test/output', { recursive: true });
-  writeFileSync(
-    ROOT + 'test/output/grok-zoom-timing.json',
-    JSON.stringify(report, null, 2) + '\n',
-  );
+  console.log('zoom timing ' + JSON.stringify(report));
   assert.ok(report.uncrop.medianMs > 0);
   assert.ok(report.crop2.medianMs > 0);
 });
@@ -1009,26 +1018,22 @@ test('r4 ③ 수치 — 기기 매트릭스에서 콘텐츠 폭·높이가 뷰�
     });
   }
 
-  mkdirSync(ROOT + 'test/output', { recursive: true });
-  writeFileSync(
-    ROOT + 'test/output/claude-scanui-responsive-matrix.json',
-    JSON.stringify({
-      constants: {
-        SQUARE_VIEW_FRACTION,
-        SQUARE_MIN_SIDE,
-        SPLIT_MIN_ASPECT,
-        SHELL_PAD_MIN,
-        SHELL_GAP,
-        SPLIT_COLUMN_GAP,
-        SPLIT_PANEL_MIN_WIDTH,
-        SPLIT_PANEL_CAP_FRACTION,
-        UI_STACK_BUDGET,
-        UI_STACK_BUDGET_PARTS,
-        UI_BUDGET_CAP_FRACTION,
-      },
-      viewports: rows,
-    }, null, 2) + '\n',
-  );
+  writeDiagnostic('claude-scanui-responsive-matrix.json', {
+    constants: {
+      SQUARE_VIEW_FRACTION,
+      SQUARE_MIN_SIDE,
+      SPLIT_MIN_ASPECT,
+      SHELL_PAD_MIN,
+      SHELL_GAP,
+      SPLIT_COLUMN_GAP,
+      SPLIT_PANEL_MIN_WIDTH,
+      SPLIT_PANEL_CAP_FRACTION,
+      UI_STACK_BUDGET,
+      UI_STACK_BUDGET_PARTS,
+      UI_BUDGET_CAP_FRACTION,
+    },
+    viewports: rows,
+  });
 });
 
 test('r4 ③ 수치 — 구 산식(0.92 × 짧은 변 단일항)이 실제로 넘쳤음을 회귀 증인으로 고정한다', () => {

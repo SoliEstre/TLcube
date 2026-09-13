@@ -609,11 +609,24 @@ function scoreParams(luma, params, template, span) {
   const scored = scoreTemplate(sampled, template, span);
   return { H, ...scored, objective: scored.fit - geometryModelPenalty(params) };
 }
-function refine(luma, coarse, span, geometryMode = 'affine') {
+function drainSteps(steps) {
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+function* pauseBeforeWork(onPause) {
+  const started = onPause ? profileNow() : 0;
+  yield null;
+  if (onPause) onPause(Math.max(0, profileNow() - started));
+}
+
+function* refineSteps(luma, coarse, span, geometryMode = 'affine', onPause) {
   let params = {
     ...coarse.params,
     projectivePenalty: geometryMode === 'projective' ? 1.5 : 2.0,
   };
+  yield* pauseBeforeWork(onPause);
   let best = scoreParams(luma, params, coarse.template, span);
   if (!best) return null;
   // ── 척도 괄호 사전 패스 ── 조대 사다리의 반 간격을 정교화가 반드시 넘게 한다.
@@ -624,6 +637,7 @@ function refine(luma, coarse, span, geometryMode = 'affine') {
   if (bracket > 0) {
     for (const delta of [-bracket, -bracket / 2, bracket / 2, bracket]) {
       const trial = { ...params, logScale: params.logScale + delta };
+      yield* pauseBeforeWork(onPause);
       const scored = scoreParams(luma, trial, coarse.template, span);
       if (scored && scored.objective > best.objective + EPSILON) { params = trial; best = scored; }
     }
@@ -651,6 +665,7 @@ function refine(luma, coarse, span, geometryMode = 'affine') {
         const trial = { ...params, [name]: params[name] + direction * steps[name] };
         if (Math.abs(trial.anisotropy) > 0.32 || Math.abs(trial.shear) > 0.32
           || Math.abs(trial.projectiveX) > 0.08 || Math.abs(trial.projectiveY) > 0.08) continue;
+        yield* pauseBeforeWork(onPause);
         const scored = scoreParams(luma, trial, coarse.template, span);
         if (scored && (scored.objective > chosen.objective + EPSILON
           || (Math.abs(scored.objective - chosen.objective) <= EPSILON
@@ -667,7 +682,7 @@ function refine(luma, coarse, span, geometryMode = 'affine') {
 }
 function degrees(radians) { return ((radians * 180 / Math.PI) % 360 + 360) % 360; }
 function turnOf(radians) { return Math.floor((degrees(radians) + 60) / 120) % 3; }
-function finishCandidate(luma, refined, templates, span, cfg, exemptPairs) {
+function* finishCandidateSteps(luma, refined, templates, span, cfg, exemptPairs, onPause) {
   // 포함쌍은 **전환 경쟁에서도 면제**한다 (C2b 2차, 2026-08-24). NMS 면제만으로는
   // 부족했다 — 여기의 «최고 템플릿으로 전환» 이 상류에서 daehan 정교화 후보를
   // 전부 taegeuk-solo 로 개명해 버려(부분집합은 같은 자리에서 언제나 경쟁력이 있고,
@@ -682,8 +697,8 @@ function finishCandidate(luma, refined, templates, span, cfg, exemptPairs) {
   let final = refined;
   if (!best) return null;
   if (best.template.id !== refined.template.id) {
-    const rerun = refine(
-      luma, { ...refined, template: best.template }, span, refined.geometryMode,
+    const rerun = yield* refineSteps(
+      luma, { ...refined, template: best.template }, span, refined.geometryMode, onPause,
     );
     if (rerun) {
       final = rerun;
@@ -802,6 +817,15 @@ export function scoreCellMaskAtHomography(luma, cellMasks, H, options = {}) {
 }
 
 export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS, options = {}) {
+  return drainSteps(detectCellFindersSteps(luma, patternInput, options));
+}
+
+/**
+ * 협력형 cell-mask 탐색. `next()` 한 번은 값이 없는 양보(null) 하나를 소비하며,
+ * 실제 점수 계산 바로 앞에서만 멈춘다. 따라서 호출자는 프레임 예산을 자를 수 있고,
+ * 동기 래퍼는 같은 열거·정렬·문턱을 끝까지 배수한다.
+ */
+export function* detectCellFindersSteps(luma, patternInput = FINDER_CELL_MASK_PATTERNS, options = {}) {
   const rootProfile = proposalProfile(options);
   const profile = rootProfile ? {
     setupMs: 0,
@@ -862,7 +886,11 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
           };
           const H = HFrom(params);
           addProfileTime(profile, 'enumerateMs', geometryStarted);
+          // 양보 전의 대기 시간은 proposal profile에 넣지 않는다.
+          yield null;
           const evaluationStarted = profile ? profileNow() : 0;
+          // profile 타이머는 실제 scoreBest만 감싼다. 호출자가 양보 사이에서 멈춘
+          // 시간은 proposal 비용으로 회계하지 않는다.
           const scored = scoreBest(luma, H, group, span, false);
           addProfileTime(profile, 'evaluateMs', evaluationStarted);
           evaluatedGeometry += 1;
@@ -876,16 +904,28 @@ export function detectCellFinders(luma, patternInput = FINDER_CELL_MASK_PATTERNS
     groups.push({ coarse, gcfg });
   }
   const refineStarted = profile ? profileNow() : 0;
-  const refined = groups.flatMap(({ coarse, gcfg }) => coarse.slice(0, gcfg.maxRefinedCandidates)
-    .flatMap((candidate) => [
-      refine(luma, candidate, span, 'affine'),
-      refine(luma, candidate, span, 'projective'),
-    ]).filter(Boolean));
+  let refinePausedMs = 0;
+  const onRefinePause = profile ? (elapsed) => { refinePausedMs += elapsed; } : undefined;
+  const refined = [];
+  for (const { coarse, gcfg } of groups) {
+    for (const candidate of coarse.slice(0, gcfg.maxRefinedCandidates)) {
+      const affine = yield* refineSteps(luma, candidate, span, 'affine', onRefinePause);
+      if (affine) refined.push(affine);
+      const projective = yield* refineSteps(luma, candidate, span, 'projective', onRefinePause);
+      if (projective) refined.push(projective);
+    }
+  }
   // 완성·게이트·NMS 는 발자국을 다시 섞어 **전 후보를 한자리에서** 겨룬다 —
   // 그룹 분리는 탐색 단계에만 걸린다.
-  const candidates = nms(refined.map((entry) => finishCandidate(luma, entry, templates, span, cfg, exemptPairs))
-    .filter((entry) => entry && entry.hardChecksPassed), cfg.maxOutputCandidates, exemptPairs);
-  addProfileTime(profile, 'refineMs', refineStarted);
+  const finished = [];
+  for (const entry of refined) {
+    const candidate = yield* finishCandidateSteps(
+      luma, entry, templates, span, cfg, exemptPairs, onRefinePause,
+    );
+    if (candidate && candidate.hardChecksPassed) finished.push(candidate);
+  }
+  const candidates = nms(finished, cfg.maxOutputCandidates, exemptPairs);
+  if (profile) profile.refineMs += Math.max(0, profileNow() - refineStarted - refinePausedMs);
   if (rootProfile) {
     if (!Array.isArray(rootProfile.cellFinderCalls)) rootProfile.cellFinderCalls = [];
     rootProfile.cellFinderCalls.push({

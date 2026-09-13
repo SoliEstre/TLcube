@@ -191,8 +191,17 @@ test('ⓔ 범위 문구 키 3상태 — off 는 정식, on 은 브라우저 능�
   assert.match(SCANNER_STRINGS.ko['guide.scope.r2'], /브라우저/, '미지원이 «이 브라우저» 탓임을 안 말한다');
   assert.ok(SCANNER_STRINGS.ko['guide.scope.r2qr'].includes('QR 코드도 읽어요'));
   assert.match(SCANNER_STRINGS.ko['guide.scope.r2qr'], /다른 바코드/, 'QR 만 읽고 다른 바코드는 아직이라는 한계가 빠졌다');
-  for (const key of ['guide.scope.r2', 'guide.scope.r2qr']) assert.match(SCANNER_STRINGS.ko[key], /타입 Y/);
-  assert.ok(R2_CAPABILITIES.accumulatesFamilies.includes('Y'));
+  for (const key of ['guide.scope.r2', 'guide.scope.r2qr']) {
+    assert.match(SCANNER_STRINGS.ko[key], /TL 코드/);
+    assert.match(SCANNER_STRINGS.ko[key], /Y 전용/);
+    assert.match(SCANNER_STRINGS.ko[key], /다른 TL 타입은 R1/);
+  }
+  assert.deepEqual(R2_CAPABILITIES.accumulatesFamilies, ['Y']);
+  for (const strings of Object.values(SCANNER_STRINGS)) {
+    for (const key of ['guide.scope.r2', 'guide.scope.r2qr', 'engine.aria']) {
+      assert.match(strings[key], /Y/, `${key}: 기본 Y 전용 범위 누락`);
+    }
+  }
 });
 
 test('ⓖ 게이트 진리표 · 프레임 라우팅(TL 우선·비노출) · 가시 영역 필터와 중심순 정렬', async () => {
@@ -283,9 +292,11 @@ test('ⓕ 배선 — 순수 함수 호출 · 영역 · 세션+토글 재확인 �
     'R2 토글이 브리지·힌트를 안 비운다 — off 직후 QR 결과가 뜨고 옛 힌트가 R1 을 편향한다');
   assert.ok(js.includes('scanScopeCopyKey(r2Runtime.enabled, qrBridge.supported)'), '문구가 브라우저 능력을 안 본다');
   assert.ok(js.includes('if (r2Available) void qrBridge.probe().then('), '게이트 없이 BarcodeDetector 를 만든다 — 승격을 되돌려도 probe 가 남는다 (게이트는 r2Available 하나)');
-  assert.ok(js.includes('autoOpen: resultAutoOpen(result)'), 'URL 자동 열기가 허용 목록(resultAutoOpen)을 안 거친다 — QR·미지 출처가 열린다');
-  assert.ok(js.includes('autoOpen ? tryOpenUrl(url) : false'), 'renderUrlPayload 가 autoOpen 을 안 본다');
-  assert.ok(js.includes('popupBlockedNote.hidden = !autoOpen'), '자동으로 안 연 결과에 «새 탭을 열지 못했어요» 가 같이 뜬다 — intro 와 모순');
+  assert.match(js,/urlOrigin:\s*urlOriginOf\(result,\s*provenance\)/, 'URL 출처 판정');
+  assert.match(js,/autoOpen:\s*resultAutoOpen\(result,\s*provenance\)/, '검증 H/R1/R2 허용 목록');
+  assert.ok(js.includes('urlOpenState'), '언어 재렌더 열기 결과 캐시');
+  assert.ok(!js.includes('autoOpen ? tryOpenUrl(url) : false'), '재렌더에서 중복 열기 금지');
+  assert.ok(!js.includes('popupBlockedNote.hidden = !autoOpen'), '수동 결과를 팝업 차단으로 오표시하지 않음');
   assert.ok(readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8').includes('id="popup-blocked-note"'), '팝업 차단 문단에 id 가 없다');
   assert.ok(js.includes('showResult(lastResult, lastResultOptions)'), '언어 전환 재렌더가 autoOpen 을 잃는다 — 재렌더에서 URL 이 열린다');
 });

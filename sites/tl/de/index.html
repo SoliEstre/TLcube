@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TLcube — ein 3D-Barcode (eigentlich 2.5D), der Daten im Luminanzrang trägt</title>
-<meta name="description" content="Ein offener 3D-Barcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und die Daten in der relativen Luminanzreihenfolge dieser Flächen trägt. Spezifikation und Referenzimplementierung sind unter Apache-2.0 veröffentlicht.">
+<meta name="description" content="Ein offener 3D-Barcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und die Daten in der relativen Luminanzreihenfolge dieser Flächen trägt. Spezifikation und Referenzimplementierung sind unter Apache-2.0 veröffentlicht. True 3D H — echte Würfelerweiterung der Y-Gruppe.">
 <link rel="canonical" href="https://tl.estre.so/de/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube — ein 3D-Barcode, der Daten im Luminanzrang trägt">
-<meta property="og:description" content="Die Daten liegen in der Reihenfolge der drei Flächen, nicht in der absoluten Helligkeit. Solange die Reihenfolge überlebt, überlebt der Wert.">
+<meta property="og:description" content="Die Daten liegen in der Reihenfolge der drei Flächen, nicht in der absoluten Helligkeit. Solange die Reihenfolge überlebt, überlebt der Wert. True 3D H — echte Würfelerweiterung der Y-Gruppe.">
 <meta property="og:url" content="https://tl.estre.so/de/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -58,7 +58,7 @@
     {
       "@type": "TechArticle",
       "headline": "TLcube — ein 3D-Barcode, der Daten im Rang statt in absoluter Helligkeit trägt",
-      "description": "Ein offener 3D-Barcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und deren relative Luminanzreihenfolge (3! = 6) als ein Symbol zur Basis 6 nutzt. Invariant gegenüber monotonen Tonwertänderungen.",
+      "description": "Ein offener 3D-Barcode, der eine sechseckige Zelle in drei rautenförmige Flächen teilt und deren relative Luminanzreihenfolge (3! = 6) als ein Symbol zur Basis 6 nutzt. Invariant gegenüber monotonen Tonwertänderungen. True 3D H — echte Würfelerweiterung der Y-Gruppe.",
       "url": "https://tl.estre.so/de/",
       "inLanguage": "de",
       "isPartOf": {
@@ -154,6 +154,11 @@
         <h3>Type Y — einzelner Würfel</h3>
         <p class="dim">Drei n×n-Flächen. Ein geschlossenes Zeichen, gut für Beschilderung und Merchandise.</p>
         <div class="meta">n = 13 / 21 / 25 · Nutzdaten netto 31 / 98 / 141 B</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>True 3D H — echte Würfelerweiterung der Y-Gruppe</h4>
+          <p class="dim">Ein eigenes Format neben dem flachen Type Y, mit H0…H8-Rastern und 1…6 eindeutigen Datenflächen. Freie Flächen können Bilder tragen; Schleifenrotation sowie PNG/SVG-Netze, glTF, MP4 und Minecraft-.schem-Strukturen werden unterstützt.</p>
+          <p class="meta">Ergebnisse erscheinen erst nach Erfassung aller nötigen Flächen und erfolgreicher RS/CRC-Prüfung. Die Fotomessungen unten enthalten H nicht und garantieren weder Erkennungsraten noch FPS mit realen Kameras.</p>
+        </div>
       </div>
       <div class="card">
         <img src="../assets/type-O.png" alt="Type O — Sechseckfeld">
@@ -229,7 +234,7 @@
 
   <section id="spec">
     <h2>Spezifikation und Implementierung</h2>
-    <p class="lead">Formatspezifikation und Referenzimplementierung sind unter der <strong>Apache License 2.0</strong> veröffentlicht. Reines JavaScript, keine Build-Toolchain, null Laufzeitabhängigkeiten — es läuft als einzelne HTML-Datei.</p>
+    <p class="lead">Formatspezifikation und Referenzimplementierung sind unter der <strong>Apache License 2.0</strong> veröffentlicht. Reines JavaScript, Node.js-Buildskripte im Repository, null Laufzeitabhängigkeiten — es läuft als einzelne HTML-Datei.</p>
     <p class="lead"><strong>Nur den Decoder zu implementieren gilt bereits als konforme Implementierung.</strong> Verbreitung beginnt auf der Leseseite.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">Spezifikation lesen</a>

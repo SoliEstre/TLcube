@@ -165,7 +165,10 @@ test('ⓕ 시험판 UI — 토글과 진행 인디케이터가 배선돼 있다'
   // 🔴 인디케이터는 **매 프레임** 갱신돼야 한다 — 토글에서만 그리면 스캔 중에 안 움직인다.
   const blockAt = js.indexOf('if (r2Runtime.enabled) {');
   assert.ok(blockAt > 0);
-  const block = js.slice(blockAt, blockAt + 1800);
+  // HUD crop 메타데이터가 늘어나도 임의 글자 수가 아니라 hit 처리 전 구간을 검사해요.
+  const hitAt = js.indexOf("if (hit?.kind === 'h'", blockAt);
+  assert.ok(hitAt > blockAt);
+  const block = js.slice(blockAt, hitAt);
   assert.ok(block.includes('renderR2Progress()'),
     '프레임 루프의 R2 블록이 인디케이터를 안 그린다 — 스캔 중에 막대가 멈춰 있다');
 });
@@ -338,7 +341,7 @@ test('ⓙ 배선 — 거부된 R2 결과가 루프를 죽이지 않고 R2 를 �
   const start = js.indexOf('if (r2Runtime.enabled) {');
   // 블록은 `} catch` 까지 — 고정 길이 슬라이스는 주석이 늘면 꼬리를 잃는다.
   const block = js.slice(start, js.indexOf('} catch', start) + '} catch'.length);
-  const callAt = block.indexOf('handleDecodeResult(');
+  const callAt = block.indexOf('handleDecodeResult(r2HitToDecodeResult(hit)');
   assert.ok(callAt > 0, 'R2 블록에 문 호출이 없다');
   assert.ok(block.slice(callAt, callAt + 80).includes('r2HitToDecodeResult(hit)'),
     'R2 적중이 모양 변환 없이 문으로 간다 — ⓘ 의 삼킴이 되살아난다');
@@ -372,9 +375,10 @@ test('ⓛ 범위 안내가 R2 토글을 따르고 배선이 살아 있다 (운�
     for (const lang of Object.keys(SCANNER_STRINGS)) {
       assert.equal(typeof SCANNER_STRINGS[lang][key], 'string', lang + ' 에 ' + key + ' 가 없다');
     }
-    assert.match(SCANNER_STRINGS.ko[key], /타입 Y/, '누적 대상이 Type Y 뿐인데 문구가 그걸 안 말한다 — 과대주장');
+    assert.match(SCANNER_STRINGS.ko[key], /TL/, '실제 TL 누적 범위를 안내해야 해요');
+    assert.match(SCANNER_STRINGS.ko[key], /Y 전용/);
   }
-  assert.ok(R2_CAPABILITIES.accumulatesFamilies.includes('Y'));
+  assert.deepEqual(R2_CAPABILITIES.accumulatesFamilies, ['Y']);
   assert.equal(typeof R2_CAPABILITIES.readsQrVia, 'string', 'QR 을 어떻게 읽는지 원장에 없다');
 
   const html = readFileSync(ROOT + 'sites/tlscan/index.html', 'utf8');
@@ -679,7 +683,7 @@ test('ⓡ DONE 래치 — R2 블록의 r2Latched 스냅샷(leadingId 포함)이 
    * 「그 세 값이 hit·선두에서 온다」지 「한 줄에 적혀 있다」가 아니다 — 그래서 **필드별로** 잰다.
    */
   const latchAt = block.indexOf('r2Latched = {');
-  const callAt = block.indexOf('handleDecodeResult(');
+  const callAt = block.indexOf('handleDecodeResult(r2HitToDecodeResult(hit)');
   assert.ok(latchAt > 0, 'R2 블록에 DONE 스냅샷이 없다 — 결과 카드의 확정 요약이 읽을 값이 없다');
   const latchObject = block.slice(latchAt, block.indexOf('};', latchAt));
   for (const field of ['layoutId: hit.layoutId', 'n: hit.n', 'leadingId: r2LeadingId']) {

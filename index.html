@@ -9,13 +9,13 @@
      실행하지 않아서 런타임에 바꿔도 링크 미리보기엔 반영되지 않는다. 단일 파일이라
      URL 이 하나뿐인 구조의 한계이고, 언어별 SEO 는 허브(tl.estre.so/en/·/ja/)가 맡는다. -->
 <title data-i18n="g457">TLcube 생성기 — TrilLuminance (cube) 코드 만들기</title>
-<meta name="description" content="TrilLuminance (cube) 코드를 브라우저에서 만들고 PNG·SVG 로 내보냅니다. URL·텍스트·Wi-Fi·명함을 Type O / A / K / Y 네 형태로 인코딩하고, 폴백 QR 도 함께 넣을 수 있어요.">
+<meta name="description" content="TrilLuminance (cube) 코드를 브라우저에서 만들어요. Type O·A·K·C·Y와 True 3D H 큐브, 폴백 QR, PNG·SVG·전개도·glTF·반복 MP4 내보내기를 지원해요.">
 <link rel="canonical" href="https://tlcube.estre.so/">
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube 생성기 — 휘도 순위로 데이터를 싣는 3D 바코드 만들기">
-<meta property="og:description" content="절대 밝기가 아니라 세 면의 순서에 데이터를 싣는 오픈 3D 바코드. 브라우저에서 바로 만들고 PNG·SVG 로 내보냅니다.">
+<meta property="og:description" content="휘도 순위의 오픈 3D 바코드와 별도 True 3D H 큐브를 브라우저에서 만들어요. PNG·SVG·큐브 전개도·glTF·반복 MP4를 내보내요.">
 <meta property="og:url" content="https://tlcube.estre.so/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -47,7 +47,9 @@
   "operatingSystem": "Any (web browser)",
   "description": "TrilLuminance (cube) 코드를 브라우저에서 만들고 PNG·SVG 로 내보냅니다. 인코딩은 전부 브라우저 안에서 끝나고 서버로 아무것도 보내지 않습니다.",
   "featureList": [
-    "Type O / Type A / Type Y 세 가지 코드 형태",
+    "Type O / A / K / C / Y와 별도 True 3D H 큐브 포맷",
+    "H0…H8, 고유 1…6면, 빈 면 이미지와 반복 회전",
+    "전개도 PNG/SVG · glTF 2.0 · Minecraft .schem · 반복 MP4",
     "URL · 텍스트 · Wi-Fi · 명함(vCard) 인코딩",
     "Reed-Solomon over GF(211) 오류 정정 (L/M/H)",
     "폴백 QR 중앙 또는 코너 배치",
@@ -67,6 +69,8 @@
   /* 테마: 다크 값이 기본. 라이트 세트는 [data-theme="light"] 또는
      (자동 모드 + OS 라이트) 에서 적용. 코드 렌더(프리셋 배경)와는 독립 — 페이지 크롬만. */
   :root {
+    --generator-max-width: 1900px;
+    --generator-gutter: 24px;
     --bg: #101218;
     --panel: #191c26;
     --line: #2a2f40;
@@ -194,19 +198,21 @@
   .site-nav a:hover { color: var(--text); border-color: var(--line); }
   .mode-switch button, .theme-toggle button { white-space: nowrap; }
   main {
-    /* max-width 1080 → 1840: 화면이 넓어지면 미리보기 열이 함께 넓어진다 (반응형 개선). */
-    width: 100%; max-width: 1840px; padding: 8px 24px 40px;
+    /* 안내 배너와 같은 최대 폭·좌우 여백을 사용해요. */
+    width: 100%; max-width: var(--generator-max-width); padding: 8px var(--generator-gutter) 40px;
     display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px;
   }
   /* 넓은 화면: 미리보기(#stage)가 왼쪽, 컨트롤 패널이 오른쪽 (사용자 지시 2026-08-09).
      DOM 은 패널이 먼저이므로 order 로 스왑한다 — 좁은 화면(1열)에서는 DOM 순서(패널 위)로 복귀. */
   main > .panel { order: 2; }
   main > #stage { order: 1; }
+  #previewColumn { order:1; min-width:0; align-self:start; display:flex; flex-direction:column; gap:12px; }
   @media (max-width: 760px) {
     /* minmax(0,1fr): 캔버스 고유 폭이 min-content 로 새어나와 열을 밀어내는 블로우아웃 방지. */
     main { grid-template-columns: minmax(0, 1fr); }
     main > .panel { order: 1; }
     main > #stage { order: 2; }
+    #previewColumn { order:2; }
   }
   /* 좌우 분할 뷰에서는 결과를 바로 저장할 수 있도록 내보내기 영역을 패널 맨 위에 둔다.
      모바일 1열에서는 panel 을 block 으로 유지해 DOM 위치(설정 아래)를 그대로 따른다. */
@@ -424,7 +430,9 @@
   body[data-generator-edition="finder-experiment"] .finder-experiment-only { display: inline-flex !important; }
   body[data-generator-edition="finder-experiment"] .experiment-banner.finder-experiment-only { display: flex !important; }
   .experiment-banner {
-    width: calc(100% - 48px); max-width: 1792px; margin: 4px 24px 0; padding: 9px 12px;
+    width: calc(100% - 2 * var(--generator-gutter));
+    max-width: calc(var(--generator-max-width) - 2 * var(--generator-gutter));
+    margin: 4px var(--generator-gutter) 0; padding: 9px 12px;
     align-items: center; justify-content: space-between; gap: 14px;
     color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
     background: color-mix(in srgb, var(--warn) 9%, var(--panel)); border-radius: 8px;
@@ -520,7 +528,7 @@
     .finder-score-visual { grid-column: 1 / -1; grid-row: 2; }
   }
   @media (max-width: 420px) {
-    .experiment-banner { width: calc(100% - 32px); margin-inline: 16px; align-items: flex-start; flex-direction: column; }
+    .experiment-banner { align-items: flex-start; flex-direction: column; }
     .finder-family-grid.card-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     /* (W2 C5) nowrap flex 전환 뒤 폰 폭은 #renderProfileCards 관용구를 따른다 —
        간격·패딩만 줄인다 (advanced 5장도 접히지 않고 한 줄을 지킨다). */
@@ -558,19 +566,27 @@
    * 건드리지 않는다 — CSS 표시 크기만 바뀐다.
    */
   #stage {
+    /* 세로 flex 열에서도 툴바의 고유 폭이 아니라 부모 열 전체를 채워요.
+       종횡비/높이 맞춤은 안쪽 #canvasWrap만 담당해요. */
+    width: 100%;
     display: flex; align-items: center; justify-content: center;
     background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 20px; min-height: 420px;
+    padding: 12px; min-height: 240px;
     position: relative;
-    /* overflow:auto 제거 — 캔버스가 공간에 맞춰 스케일되므로 스크롤이 생기지 않는다. */
+    overflow: hidden; min-width: 0; box-sizing: border-box;
   }
   /* 가용 높이는 «무대 높이 − 패딩 40 − 테두리 2». 아래 두 미디어 쿼리가 무대 높이와
      이 값을 **같이** 정의한다 — 한쪽만 고치면 다시 레터박스가 생기니 붙여 둔다. */
   @media (min-width: 761px) {
-    main > #stage {
+    main > #stage, #previewColumn > #stage {
       align-self: start;
-      position: sticky; top: 12px;
+      position: relative; top: 0;
       height: max(420px, calc(100vh - 80px));
+    }
+    /* 이미지 편집은 같은 카드 아래에 이어지고, 큐브의 화면 높이 예산과 분리해요. */
+    #previewColumn > #stage:has(> #hFaceImagesPanel:not([hidden])) {
+      height: auto;
+      min-height: max(420px, calc(100vh - 80px));
     }
     #canvasWrap { --fit-h: max(378px, calc(100vh - 122px)); }
   }
@@ -663,6 +679,9 @@
      PNG·SVG 경로와 접점 0. CM 레인이 만지는 파인더·자리·톤 축과 다른 자리(무대). */
   #view3d { display: none; z-index: 2; cursor: grab; }
   #view3d.on { display: block; }
+  #hPreviewGpu { display: none; z-index: 2; pointer-events: none; }
+  #view3d.on.h-gpu { opacity: 0; }
+  #view3d.on.h-gpu ~ #hPreviewGpu { display: block; }
   /*
    * 3D 가 켜지면 2.5D 캔버스를 **숨긴다** (운영자 신고 2026-09-01 「삽입 이미지가
    * 표시 안 됨」의 후속). 3D 가 불투명하던 동안에는 어차피 완전히 가려져 눈에 안
@@ -682,10 +701,70 @@
   #view:has(~ #view3d.on) { visibility: hidden; }
   #view3d:active { cursor: grabbing; }
   #y3dBar {
-    position: absolute; left: 14px; right: 14px; bottom: 14px; z-index: 3;
-    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-    pointer-events: none;
+    position: relative; z-index: 3; width: 100%; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: stretch; gap: 10px;
+    padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel); margin-top: 12px;
   }
+  #stage.h-editor-active { justify-content: center; }
+  #stage.h-editor-active #canvasWrap { margin:auto; }
+  .h-toolbar-groups { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; min-width:0; }
+  .h-tool-group { flex:1.5 1 350px; min-width:min(100%,320px); box-sizing:border-box; border:1px solid var(--line); padding:10px; border-radius:8px; display:flex;flex-direction:column;gap:8px; }
+  #hPreviewRotationControls.h-tool-group { flex:1 1 290px; min-width:min(100%,280px); display:flex;flex-direction:column;justify-content:center; }
+  #hPreviewRotationControls.h-tool-group[hidden] { display:none; }
+  #y3dSnapRow.h-tool-group { flex:0 1 148px; min-width:132px; justify-content:center; }
+  #y3dBar { flex:none; min-width:0; padding:10px; }
+  #y3dBar .y3d-btn svg { flex:none; }
+  #y3dBar .h-icon-only { width:32px;height:30px;padding:5px;justify-content:center; }
+  #y3dBar .h-control-label { min-width:0; }
+  #hRotationModeCards { gap:4px; }
+  #hRotationModeCards .y3d-btn { padding:5px 6px; font-size:11px; }
+  #hAutoRotate { min-width:36px;min-height:34px;justify-content:center; }
+  #hRotationDirections { margin-left:auto; }
+  .h-face-toggle { display:flex;flex-wrap:nowrap;gap:5px;margin-left:auto; }
+  .h-face-toggle[hidden] { display:none; }
+  #y3dViewRow { display:grid;grid-template-columns:auto 30px minmax(45px,1fr) 30px auto;gap:5px; }
+  #y3dViewRow[hidden] { display:none; }
+  #y3dViewRow > .y3d-label:first-child { display:none; }
+  #y3dBar #y3dViewRow .y3d-range { width:100%;min-width:0; }
+  #hFacePositionCheck { margin-left:auto;display:flex;flex-wrap:nowrap;gap:3px; }
+  #hFacePositionCheck[hidden] { display:none; }
+  #y3dPerspValue { grid-column:5;grid-row:1;white-space:nowrap; }
+  #y3dPerspUp { grid-column:4;grid-row:1; }
+  .h-snapshot-actions { display:flex;flex-wrap:wrap;gap:5px; }
+  #hPreviewRotationControls .y3d-adjust-row { display:grid;grid-template-columns:36px 28px minmax(50px,1fr) 28px auto;gap:5px; }
+  #hRotationSpeedReset, #hRotationTiltReset { justify-self:start; }
+  #hPreviewRotationControls .y3d-adjust-row > label { display:none; }
+  #hPreviewRotationControls .y3d-adjust-row .y3d-range { width:100%;min-width:0; }
+  #hRotationSpeedValue { white-space:nowrap; }
+  #hPreviewRotationControls #hRotationTiltRow { grid-template-columns:auto 36px 28px minmax(40px,1fr) 28px auto; }
+  #hPreviewRotationControls #hRotationTiltRow[hidden] { display:none; }
+  #hPreviewRotationControls #hRotationTiltRow > label { display:block;white-space:nowrap; }
+  #hRotationTiltValue { min-width:34px;white-space:nowrap;text-align:right; }
+  #y3dSnapRow .y3d-label { display:none; }
+  .h-snapshot-heading { font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px; }
+  @media(min-width:761px) { #stage:has(#view3d.on) #canvasWrap { width:var(--preview-square, min(100%,60vh));max-height:none;aspect-ratio:1; } }
+  #y3dBar .y3d-btn { flex-shrink:0; white-space:nowrap; }
+  #hRotationDirections { display:flex;gap:6px;flex-wrap:wrap;align-items:center; }
+  .h-direction { display:flex;gap:3px;align-items:center; }
+  .h-direction[hidden] { display:none; }
+  #hPreviewLabels { position:absolute;inset:0;z-index:3;pointer-events:none;overflow:hidden; }
+  #hPreviewLabels[hidden] { display:none; }
+  .h-preview-face-label { position:absolute;left:0;top:0;width:100px;height:100px;transform-origin:0 0;display:flex;align-items:center;justify-content:center; }
+  .h-preview-face-label span { padding:1px 2px;border-radius:3px;background:#f7f7f7dd;color:#181b21;font:700 12px/1.1 system-ui;box-shadow:0 0 0 .5px #2228; }
+  .h-preview-face-label[hidden] { display:none; }
+  .h-preview-face-label.h-callout { width:64px;height:40px; }
+  .h-preview-face-label.h-callout span { padding:0;background:#f7f7f7;color:#181b21;font:700 24px/40px system-ui;width:64px;text-align:center;box-shadow:none; }
+  .h-preview-label-lines { position:absolute;inset:0;width:100%;height:100%;overflow:hidden;fill:none;stroke:#333;stroke-width:1; }
+  #stage:has(#y3dBar:not([hidden])) { flex-direction: column; }
+  #stage:has(#y3dBar:not([hidden])) #canvasWrap { --fit-h: max(150px, calc(100vh - 410px)); }
+  #stage:has(#y3dOrbitRow[hidden]) #canvasWrap { --fit-h: max(250px, calc(100vh - 210px)); }
+  .y3d-rotation { display: grid; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .y3d-rotation[hidden] { display: none; }
+  .y3d-check { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; margin: 0; }
+  .y3d-check input { margin: 0; }
+  #y3dSnapRow { border-top: 1px solid var(--line); padding-top: 10px; }
+  #y3dSnapRow .y3d-label { flex-basis: 100%; line-height: 1.4; }
   #y3dBar[hidden] { display: none; }
   #y3dBar > * { pointer-events: auto; }
   .y3d-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -694,6 +773,8 @@
      와 아래 .toggle-card[hidden] 이 손으로 박혀 있는 것이 같은 이유다. 이 줄이 없으면
      2.5D 모드(= Type Y 기본 상태)에서 3D 전용 행들이 그대로 떠 있었다. */
   .y3d-row[hidden] { display: none; }
+  #y3dBar .y3d-btn[hidden], #y3dBar .help-dot[hidden], .check-row[hidden] { display: none; }
+  #qrUrlLabel[hidden], #rotationGuidance[hidden], #hFrameHint[hidden] { display: none; }
   .y3d-label { font-size: 11px; color: var(--dim); margin-right: 4px; }
   .y3d-btn {
     display: inline-flex; align-items: center; gap: 4px;
@@ -720,7 +801,8 @@
     /* ⚠ 행이 넷이 되면서 좁은 화면에서 캔버스를 절반 넘게 가렸다 (375px 실측: 51%).
        바는 오버레이라 겹침 자체는 피할 수 없지만, 캡션이 두 줄로 접히는 게 비용의
        대부분이었다 — 글자·간격을 줄여 되돌린다. */
-    #y3dBar { left: 10px; right: 10px; bottom: 10px; gap: 4px; }
+    #y3dBar { padding: 10px; gap: 8px; }
+    #stage:has(#y3dBar:not([hidden])) #canvasWrap { --fit-h: max(240px, calc(100vh - 320px)); }
     .y3d-row { gap: 4px; }
     .y3d-btn { padding: 4px 8px; font-size: 11px; }
     #y3dBar .y3d-range { width: 84px; }
@@ -890,6 +972,56 @@
   .slider-value { font-size: 11px; color: var(--dim); margin-top: 2px; }
 
   /* 저장 확인은 모바일에서 손가락과 멀고, 스크린리더에도 같은 문구가 전달되는 Toast. */
+  .h-card-icon { display: block; width: 22px; height: 22px; color: var(--dim); }
+  .h-card-icon svg { width: 100%; height: 100%; display: block; }
+  .toggle-card.active .h-card-icon { color: var(--text); }
+  #hVersionCards, #hMaskCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* .card-row의 author display가 [hidden] UA rule을 이기므로 H 전용 위치 전환을 명시해요. */
+  #resTierCards[hidden], #hResolutionOptions[hidden], #resolutionHelpDot[hidden] { display: none; }
+  #hArrangementSection[hidden], #hFaceCards [hidden], .h-image-card[hidden], #hAlignHorizontal[hidden], #hAlignVertical[hidden] { display:none; }
+  #hFaceCards { display:grid;grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #hVersionCards .toggle-card, #hMaskCards .toggle-card { min-width: 0; }
+  .h-image-cards { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:8px;width:100%;max-width:1632px;justify-content:center; }
+  .h-image-card { min-width:min(280px,100%);max-width:320px;width:100%;justify-self:center;box-sizing:border-box;border:1px solid var(--line,#d8deea);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px; }
+  .h-image-header,.h-image-actions,.h-image-size-row,.h-image-fit { display:flex;gap:4px;align-items:center;flex-wrap:wrap; }
+  .h-image-header { display:grid;grid-template-columns:1fr auto 1fr; }.h-image-header > button { justify-self:end; }.h-image-size-row { justify-content:space-between; }
+  .h-image-card .y3d-btn svg { width:17px;height:17px;flex:none; }
+  .h-image-fit { flex-wrap:nowrap;gap:2px; }
+  .h-image-fit .y3d-btn,.h-image-actions .y3d-btn { min-width:25px;min-height:27px;padding:3px;justify-content:center; }
+  .h-image-size-row > .hint { font-size:10px; }
+  .h-image-body { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px; }
+  .h-image-left,.h-image-color { min-width:0;display:flex;flex-direction:column;gap:6px; }
+  .h-image-color { border-left:1px solid var(--line);padding-left:8px; }
+  .h-image-well { position:relative;display:flex;align-items:center;justify-content:center;height:126px;background:color-mix(in srgb,var(--dim) 10%,var(--panel));border-radius:5px; }
+  .h-image-card img { width:100%;height:126px;object-fit:contain;border-radius:4px; }
+  .h-image-card [hidden] { display:none!important; }
+  #y3dBar .h-image-card .y3d-btn { font-size:10px;padding:4px 5px;white-space:normal; }
+  #y3dBar .h-image-sample { margin:6px;justify-content:center; }
+  .h-color-pad { height:76px;position:relative;cursor:crosshair;touch-action:none;border:1px solid var(--line);border-radius:4px;background:linear-gradient(to top,hsl(0 0% var(--color-lightness,50%)),transparent),linear-gradient(to right,hsl(0 100% var(--color-lightness,50%)),hsl(60 100% var(--color-lightness,50%)),hsl(120 100% var(--color-lightness,50%)),hsl(180 100% var(--color-lightness,50%)),hsl(240 100% var(--color-lightness,50%)),hsl(300 100% var(--color-lightness,50%)),hsl(360 100% var(--color-lightness,50%))); }
+  .h-color-pad:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+  .h-color-cursor { position:absolute;width:8px;height:8px;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #222;pointer-events:none; }
+  #y3dBar .h-color-brightness { width:100%;height:10px;appearance:none;border-radius:5px;margin:3px 0; }
+  .h-color-fields { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px; }
+  .h-color-fields label { display:flex;flex-direction:column;gap:1px;font-size:9px;margin:0; }
+  .h-color-fields input { width:100%;min-width:0;box-sizing:border-box;padding:3px;font-size:10px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:3px; }
+  .h-color-hex { grid-column:1/-1; }.h-color-fields input[type=number] { appearance:textfield; }
+  .h-color-fields input::-webkit-inner-spin-button { appearance:none; }
+  #cubeExportSection > .export-row + .export-row { margin-top:6px; }
+  #cubeExportSection .export-pair button, #exportCubeSchem { display:flex;align-items:center;justify-content:center;gap:6px; }
+  #cubeExportSection .export-pair .icon-btn { flex:0 0 34px; }
+  #cubeExportSection svg { flex-shrink:0; }
+  .h-export-format { font-size:9px;opacity:.75; }
+  .h-image-card .hint { overflow-wrap:anywhere;margin:0; }
+  #hFaceImagesPanel { flex:none;width:100%;box-sizing:border-box;margin-top:12px;padding:12px;background:var(--panel);border:1px solid var(--line,#d8deea);border-radius:10px; }
+  #hFaceImagesPanel .y3d-btn { font-size:11px; }
+  #hFaceImagesPanel[hidden], #hMaskOptions[hidden], #cubeBlockScaleOptions[hidden], #cubeVideoOptions[hidden], #hVersionCards button[hidden] { display:none; }
+  #cubeVideoToggle { margin-left:auto;flex:none; }
+  #cubeVideoHeading { min-width:0; }
+  #cubeVideoFpsCards { margin:8px 0; }
+  .h-speed-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; gap: 6px; align-items: center; }
+  .h-speed-row .y3d-btn { min-height: 36px; padding: 4px; }
+  .h-speed-row .y3d-range { width: 100%; min-width: 0; margin: 0; }
+  .h-speed-row .y3d-label { grid-column: 1 / -1; text-align: center; margin: 0; }
   .download-toast {
     position: fixed; z-index: 100; left: 50%; bottom: max(18px, env(safe-area-inset-bottom));
     transform: translate(-50%, 14px); width: max-content; max-width: calc(100vw - 32px);
@@ -1146,6 +1278,7 @@
            안 읽힌다. 섹션 자체는 하나만 두고 setMode 가 활성 패널의 호스트로 **옮긴다**
            — 두 벌을 두면 어느 쪽이 최신인지가 화면마다 갈린다 (자체검증 뱃지와 같은 관용구). -->
       <div id="turnAHostNormal"></div>
+      <div id="hHostNormal"></div>
 
       <div id="toneNormalSection" style="display:none">
         <label class="section-heading" data-i18n="g052">톤</label>
@@ -1190,9 +1323,10 @@
         <p class="slider-value" id="hueValue"></p>
       </div>
 
+      <div id="hResolutionHostNormal"><div id="hResolutionSection">
       <div class="section-heading-row">
-        <label class="section-heading" data-i18n="g044">해상도 (모듈 밀도 = 용량)</label>
-        <button type="button" class="help-dot" data-help="g900" aria-expanded="false"
+        <label id="resolutionHeading" class="section-heading" data-i18n="g044">해상도 (모듈 밀도 = 용량)</label>
+        <button type="button" id="resolutionHelpDot" class="help-dot" data-help="g900" aria-expanded="false"
                 aria-label="설명 보기" data-i18n-attr="aria-label:g931">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/>
@@ -1200,6 +1334,20 @@
           </svg>
         </button>
       </div>
+      <div id="hResolutionOptions" hidden>
+        <div id="hVersionCards" class="card-row" role="group" aria-labelledby="resolutionHeading">
+          <button type="button" class="toggle-card" data-h-version="auto" aria-pressed="true"><span class="h-card-icon" data-h-version-icon="auto" aria-hidden="true"></span><span data-h-label="auto">자동</span></button>
+          <button type="button" class="toggle-card" data-h-version="0" aria-pressed="false">H0<span class="card-sub">13 × 13</span></button><button type="button" class="toggle-card" data-h-version="1" aria-pressed="false">H1<span class="card-sub">17 × 17</span></button><button type="button" class="toggle-card" data-h-version="2" aria-pressed="false">H2<span class="card-sub">21 × 21</span></button><button type="button" class="toggle-card" data-h-version="3" aria-pressed="false">H3<span class="card-sub">25 × 25</span></button><button type="button" class="toggle-card" data-h-version="4" aria-pressed="false">H4<span class="card-sub">29 × 29</span></button><button type="button" class="toggle-card" data-h-version="5" aria-pressed="false">H5<span class="card-sub">33 × 33</span></button><button type="button" class="toggle-card" data-h-version="6" aria-pressed="false">H6<span class="card-sub">37 × 37</span></button><button type="button" class="toggle-card" data-h-version="7" aria-pressed="false">H7<span class="card-sub">41 × 41</span></button>
+        </div>
+        <div id="hMaskOptions" hidden>
+        <label id="hMaskHeading" class="section-heading" data-h-label="mask">데이터 마스크</label>
+        <div id="hMaskCards" class="card-row" role="group" aria-labelledby="hMaskHeading">
+          <button type="button" class="toggle-card" data-h-mask="auto" aria-pressed="true"><span class="h-card-icon" data-h-mask-icon="auto" aria-hidden="true"></span><span data-h-label="auto">자동</span></button>
+          <button type="button" class="toggle-card" data-h-mask="0" aria-pressed="false">0</button><button type="button" class="toggle-card" data-h-mask="1" aria-pressed="false">1</button><button type="button" class="toggle-card" data-h-mask="2" aria-pressed="false">2</button><button type="button" class="toggle-card" data-h-mask="3" aria-pressed="false">3</button><button type="button" class="toggle-card" data-h-mask="4" aria-pressed="false">4</button><button type="button" class="toggle-card" data-h-mask="5" aria-pressed="false">5</button><button type="button" class="toggle-card" data-h-mask="6" aria-pressed="false">6</button><button type="button" class="toggle-card" data-h-mask="7" aria-pressed="false">7</button>
+        </div>
+      </div>
+        </div>
+      </div></div>
       <!-- 사용자 지시 2026-08-09: 용량과 다른 축 — 버전(모듈 수) 3단 + 자동(기본).
            저 = 원거리·광고판(모듈 큼) / 중 = 1~3m 인쇄 / 고 = 근거리·대용량(모듈 작음).
            자동 조합 규칙: 해상도를 먼저 올리고, 최대에서도 안 들어가면 용량 단계(ECC)를
@@ -1380,6 +1528,8 @@
       <!-- 실루엣 방향이 붙는 고급 쪽 호스트 — 일반의 #turnAHostNormal 과 짝이다.
            setMode 가 활성 패널 쪽으로 #turnASection 을 옮긴다 (요소는 하나뿐). -->
       <div id="turnAHostAdvanced"></div>
+      <div id="hHostAdvanced"></div>
+      <div id="hResolutionHostAdvanced"></div>
 
       <!-- ⚠ **의도적 갱신 (W2 C4, 2026-08-24)** — 여기 있던 #cornerMarkerSection
            (코너 자리 예약 켬/끔 2카드)은 검출기 3구역 개편으로 소멸했다. O-CM/A-CM
@@ -1482,7 +1632,7 @@
         </div>
       </fieldset>
 
-      <label for="qrUrl" data-i18n="g056">QR 폴백 URL (고급)</label>
+      <label id="qrUrlLabel" for="qrUrl" data-i18n="g056">QR 폴백 URL (고급)</label>
       <input type="text" id="qrUrl" spellcheck="false">
 
       <label class="section-heading" for="preset" data-i18n="g057">스타일 프리셋</label>
@@ -1510,10 +1660,8 @@
          게이트는 `isLabPath()` — #yLocatorSection 이 세운 선례와 같은 술어다.
          상태 키 shotPreset 은 INTERNAL 이라 아래 data-state-keys 목록에 **안 든다**
          (그 대조가 «정식 노출 0» 을 유도로 잠근다 — test/generator-state.test.js). -->
-    <div id="shotPresetSection" hidden>
-      <div class="section-heading-row">
-        <label class="section-heading" data-i18n="g1031">촬영 프리셋 (시험판)</label>
-      </div>
+    <details id="shotPresetSection" hidden>
+      <summary class="section-heading" data-i18n="g1031">촬영 프리셋 (시험판)</summary>
       <p class="hint" data-i18n="g1032">항목을 고르면 촬영 조건 묶음이 한 번에 적용돼요. 코드 자체의 지면 색까지 함께 세우니, 그 색과 같은 무지 배경 위에 놓고 찍어 주세요. 미리보기는 3D 렌더로 바뀌고 그 자세로 돌아가요 — 화면에 보이는 그대로 인쇄해서 찍으시면 돼요.</p>
       <p class="hint" data-i18n="g1038">카드 이름이 곧 파일 이름이에요 — sil3d-&lt;dark|light&gt;-&lt;카드 이름&gt;-&lt;near|far&gt;.jpg 로 저장해 주세요. near 는 가이드 크기, far 는 1.5배 멀리예요.</p>
       <!-- ⚠ **그룹도 카드도 여기 없다.** 배경 2 × 자세 8 = 16장을 JS 가 선언에서
@@ -1522,10 +1670,40 @@
            번역하면 옮겨 적기가 깨진다. -->
       <div id="shotPresetGroups"></div>
       <p class="hint" id="shotPresetDrift" hidden data-i18n="g1037">프리셋에서 벗어났어요 — 고른 뒤에 옵션을 직접 바꿨어요.</p>
-    </div>
+    </details>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin quietMarginAuto renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi">
+    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin quietMarginAuto renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi yRepresentation hArrangement hFaces hRenderFaces versionH hMask hAutoRotate hAutoRotateIntent hRotationMode hRotationDirectionX hRotationDirectionY hRotationSpeed hRotationSpeedIntent hRotationTiltDeg hExportLayout">
+      <section id="hTypeSection" hidden>
+        <label class="section-heading" data-h-label="true3d">True 3D 여부</label>
+        <div class="card-row" id="hRepresentationCards">
+          <button type="button" class="toggle-card active" data-h-representation="2.5d" aria-pressed="true"><span class="h-representation-icon"></span>2.5D<span class="card-sub">Y</span></button>
+          <button type="button" class="toggle-card" data-h-representation="3d" aria-pressed="false"><span class="h-representation-icon"></span>3D<span class="card-sub">H</span></button>
+        </div>
+        <section id="hArrangementSection" hidden aria-labelledby="hArrangementHeading">
+          <div class="section-heading-row">
+            <label id="hArrangementHeading" class="section-heading" data-h-label="arrangement">면 배치</label>
+            <button type="button" class="help-dot" data-h-help="arrangementNote" aria-label="설명 보기" aria-expanded="false">?</button>
+          </div>
+          <div class="card-row" id="hArrangementCards" role="group" aria-labelledby="hArrangementHeading">
+            <button type="button" class="toggle-card active" data-h-arrangement="isometric" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 2 22 8v10l-10 5L2 18V8Zm0 11 10-5M12 13 2 8m10 5v10"/></svg><span data-h-label="isometric">아이소매트릭</span></button>
+            <button type="button" class="toggle-card" data-h-arrangement="horizontal" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2 4h20v16H2ZM12 4v16M5 12h14m-3-3 3 3-3 3m-8-6-3 3 3 3"/></svg><span data-h-label="horizontal">수평 정렬</span></button>
+            <button type="button" class="toggle-card" data-h-arrangement="vertical" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 2h16v20H4ZM4 12h16M12 5v14m-3-3 3 3 3-3m-6-8 3-3 3 3"/></svg><span data-h-label="vertical">수직 정렬</span></button>
+          </div>
+        </section>
+        <label class="section-heading" data-h-label="faces">면 수</label>
+        <div class="card-row" id="hFaceCards">
+          <button type="button" class="toggle-card" data-h-faces="1" data-h-label="face1" aria-pressed="false" hidden>1면</button>
+          <button type="button" class="toggle-card" data-h-faces="2" data-h-label="face2" aria-pressed="false" hidden>2면</button>
+          <button type="button" class="toggle-card active" data-h-faces="3" data-h-label="face3" aria-pressed="true">3면</button>
+          <button type="button" class="toggle-card" data-h-faces="4" data-h-label="face4" aria-pressed="false" hidden>4면</button>
+          <button type="button" class="toggle-card" data-h-faces="5" data-h-label="face5" aria-pressed="false" hidden>5면</button>
+          <button type="button" class="toggle-card" data-h-faces="6" data-h-label="face6" aria-pressed="false">6면</button>
+        </div>
+        <div id="hOptions" hidden>
+          <p class="hint" data-h-label="notice">H는 세 면씩 서로 다른 본문을 담아요. 6면은 모두 모아야 스캔이 끝나요. Y 전용 로케이터·내부 QR·장식 음영은 적용하지 않아요.</p>
+        </div>
+      </section>
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
            도메인·자동 규칙은 전부 src/export-options.js 단일 정의를 소비한다 — UI 인라인
            재구현 금지 (교훈 .agent/_lessons/009: 손으로 적은 규칙은 테스트가 못 잠근다).
@@ -1824,6 +2002,7 @@
            2026-08-26 에 g935 가 은퇴하면서 그 몫이 g903 으로 갔다). -->
 
       <!-- 안전영역 (사용자 지시 2026-08-09): QR 콰이어트 존 상당. 5택, 기본 자동. -->
+      <div id="quietSection">
       <div class="section-heading-row">
         <label class="section-heading" data-i18n="g063">안전영역 (코드 주변 여백)</label>
         <!-- ⭐ 키가 **타입에 따라 갈린다** (2026-09-01): O/A/K 는 g904(흑·백·고대비),
@@ -1867,6 +2046,8 @@
       </div>
       <p class="hint" id="quietCoverageHint"></p>
       <p class="hint" id="quietModeHint"></p>
+      </div>
+      <p class="hint" id="hFrameHint" data-h-label="frame" hidden></p>
 
       <section id="qrLinkSection" aria-labelledby="qrLinkHeading">
         <div class="section-heading-row">
@@ -2554,6 +2735,54 @@
       </div>
     </section>
 
+    <section id="cubeExportSection" class="export-section" aria-labelledby="cubeExportHeading" hidden>
+      <div id="cubeExportHeading" class="export-heading" data-cube-label="heading">3D 데이터 다운로드 / 복사하기</div>
+      <div class="row export-row">
+        <div class="export-pair"><button type="button" id="exportNetPng" data-cube-label="netPng">전개도 PNG ↓</button><button type="button" id="copyNetPng" data-cube-label="copyPng">PNG 복사</button></div>
+        <div class="export-pair"><button type="button" id="exportNetSvg" data-cube-label="netSvg">전개도 SVG ↓</button><button type="button" id="copyNetSvg" data-cube-label="copySvg">SVG 복사</button></div>
+      </div>
+      <div class="row export-row">
+        <div class="export-pair"><button type="button" id="exportCubeGltf" data-cube-label="gltf">큐브 glTF ↓</button><button type="button" id="copyCubeGltf" data-cube-label="copyGltf">glTF 복사</button></div>
+        <button type="button" id="exportCubeSchem" data-cube-label="schem">Minecraft .schem ↓</button>
+      </div>
+      <div id="cubeBlockScaleOptions" hidden>
+      <div class="section-heading-row"><span class="hint" data-cube-label="blockScale">셀당 블록 수</span><button type="button" class="help-dot" data-help="g1040" aria-expanded="false" aria-label="설명 보기" data-i18n-attr="aria-label:g931">?</button></div>
+      <input type="hidden" id="cubeBlockScale" value="1">
+      <div class="card-row" id="cubeBlockScaleCards" role="group" aria-label="셀당 블록 수"><button type="button" class="toggle-card active" data-block-scale="1" aria-pressed="true">1 × 1</button><button type="button" class="toggle-card" data-block-scale="2" aria-pressed="false">2 × 2</button><button type="button" class="toggle-card" data-block-scale="4" aria-pressed="false">4 × 4</button></div>
+      </div>
+      <p id="cubeExportStatus" class="hint" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="cubeVideoSection" class="export-section" aria-labelledby="cubeVideoHeading" hidden>
+      <div class="section-heading-row"><div id="cubeVideoHeading" class="export-heading" data-h-label="videoHeading">3D 회전 영상 다운로드</div><button type="button" class="help-dot" data-help="g1041" aria-expanded="false" aria-label="설명 보기" data-i18n-attr="aria-label:g931"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/><circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/></svg></button></div>
+      <div class="row export-row">
+        <button type="button" id="exportCubeVideo" data-video-size="720" title="720 × 720 MP4">720p MP4</button>
+        <button type="button" id="exportCubeVideo1080" data-video-size="1080" title="1080 × 1080 MP4">1080p MP4</button>
+        <button type="button" id="exportCubeVideo1440" data-video-size="1440" title="1440 × 1440 MP4">1440p MP4</button>
+        <button type="button" id="cancelCubeVideo" data-h-label="videoCancel" hidden>렌더링 취소</button>
+      </div>
+      <p id="cubeVideoDuration" class="hint"></p>
+      <div id="cubeVideoOptions" hidden>
+      <label class="section-heading" data-h-label="videoFps">영상 프레임 수</label>
+      <div id="cubeVideoFpsCards" class="card-row" role="group" aria-label="영상 FPS">
+        <button type="button" class="toggle-card" data-video-fps="24" aria-pressed="false">24 fps</button>
+        <button type="button" class="toggle-card" data-video-fps="30" aria-pressed="false">30 fps</button>
+        <button type="button" class="toggle-card active" data-video-fps="60" aria-pressed="true">60 fps</button>
+        <button type="button" class="toggle-card" data-video-fps="120" aria-pressed="false">120 fps</button>
+      </div>
+      <div id="cubeVideoTransparency" hidden>
+        <label class="section-heading" data-h-label="videoBackground">영상 투명 처리</label>
+        <div id="cubeVideoBackgroundCards" class="card-row">
+          <button type="button" class="toggle-card" data-video-background="checker" aria-pressed="false"><span class="swatch-mini checker" aria-hidden="true"></span><span data-h-label="videoChecker">투명 표시 격자</span></button>
+          <button type="button" class="toggle-card active" data-video-background="green" aria-pressed="true"><span class="swatch-mini" style="background:#00ff00" aria-hidden="true"></span><span data-h-label="videoGreen">그린</span></button>
+          <button type="button" class="toggle-card" data-video-background="blue" aria-pressed="false"><span class="swatch-mini" style="background:#0099ff" aria-hidden="true"></span><span data-h-label="videoBlue">블루</span></button>
+          <button type="button" class="toggle-card" data-video-background="magenta" aria-pressed="false"><span class="swatch-mini" style="background:#ff00ff" aria-hidden="true"></span><span data-h-label="videoMagenta">마젠타</span></button>
+        </div>
+      </div>
+      </div>
+      <p id="cubeVideoStatus" class="hint" role="status" aria-live="polite"></p>
+    </section>
+
     <!-- 배치 미리보기 — 투명 배경 전용 (사용자 지시 2026-08-09). 코드를 얹을 표면 사진을
          깔고 드래그/휠 줌으로 위치를 맞춰, 실루엣 검출이 될 자리인지 **인쇄 전에** 눈과
          수치로 확인한다. 렌더 산출물에는 안 들어간다.
@@ -2601,7 +2830,8 @@
     <div id="info"></div>
     <div id="error"></div>
   </div>
-  <div id="stage">
+  <div id="previewColumn">
+  <div id="stage" tabindex="-1">
     <!-- 배치 미리보기(사용자 지시 2026-08-09): 투명 배경일 때 코드를 얹을 표면 이미지를
          뒤에 깔고 드래그/휠로 위치를 맞춘다. backdrop 은 view 와 **같은 내부 해상도**를
          쓰고 둘 다 object-fit: contain 이라 CSS 축소에서도 픽셀이 정확히 겹친다. -->
@@ -2613,6 +2843,8 @@
            (type-y-cell-editor-lab.test 가 잰다), 그 금지에는 이유가 있다 — 셀 편집기·
            생성기·3D 가 각자 전역으로 키를 물면 서로를 삼킨다. -->
       <canvas id="view3d" tabindex="0" data-i18n-attr="aria-label:g887" aria-label="Type Y 큐브 궤도 보기"></canvas>
+      <canvas id="hPreviewGpu" aria-hidden="true"></canvas>
+      <div id="hPreviewLabels" aria-hidden="true" hidden></div>
     </div>
     <!-- 미리보기 위 오버레이 한 줄 (2026-08-16 운영자 지시 B-3·B-4).
          왼쪽 = 배경 사진을 넣었을 때만 뜨는 조작 안내, 오른쪽 = 투명 배경일 때 뜨는
@@ -2643,6 +2875,8 @@
     <!-- Y 미리보기 토글 (레인 Y3DW). Type Y 에서만 연다. 기본 2.5D · 3D 는 opt-in.
          파인더·자리·톤 축(레인 CM)과 다른 섹션이다. -->
     <div id="y3dBar" hidden>
+      <div class="h-toolbar-groups" id="hToolbarGroups">
+      <div class="h-tool-group" id="hMainPreviewTools">
       <div class="y3d-row">
         <span class="y3d-label" data-i18n="g885">Y 미리보기</span>
         <button type="button" class="y3d-btn on" id="y3dMode25" data-i18n="g880">2.5D</button>
@@ -2671,6 +2905,16 @@
           <button type="button" class="y3d-btn y3d-digit" data-digit="5">5</button>
         </span>
         <button type="button" class="y3d-btn" id="y3dReset" data-i18n="g884">아이소메트릭 (정위치)</button>
+        <button type="button" class="y3d-btn" id="y3dPoseReset" data-h-label="resetPose">정위치</button>
+        <button type="button" class="y3d-btn" id="y3dRollReset" data-h-label="resetRoll">Z축 정위치</button>
+        <button type="button" class="y3d-btn" id="y3dZoomReset" data-h-label="resetZoom">확대/축소 초기화</button>
+        <button type="button" class="y3d-btn" id="hAlignHorizontal" data-h-label="horizontal" hidden>수평 정렬</button>
+        <button type="button" class="y3d-btn" id="hAlignVertical" data-h-label="vertical" hidden>수직 정렬</button>
+        <div id="hFacePositionCheck" role="group" data-h-aria-label="imagePosition" aria-label="위치 확인" aria-controls="hPreviewLabels" hidden>
+          <button type="button" class="y3d-btn" data-h-position-mode="none" data-h-label="positionNone" aria-pressed="false">면 확인 없음</button>
+          <button type="button" class="y3d-btn on" data-h-position-mode="outside" data-h-label="positionOutside" aria-pressed="true">큐브 밖</button>
+          <button type="button" class="y3d-btn" data-h-position-mode="inside" data-h-label="positionInside" aria-pressed="false">큐브 안</button>
+        </div>
       </div>
       <!-- 보기 축 (V1 원근 · V3 6면). row2 는 이미 버튼이 아홉이라 모바일에서 접힌다 —
            행을 나눈다. 두 행 모두 #y3dOrbitRow 와 **같은 조건**으로 hidden 을 토글한다. -->
@@ -2679,21 +2923,63 @@
         <!-- ⚠ 노브는 카메라 거리 d 가 아니라 **반각 α** 다 (0 = 평면 · 100 = 60°).
              d 를 그대로 쓰면 radius3d 가 n 에 비례해 같은 위치가 n=13 과 n=25 에서
              전혀 다른 왜곡이 된다 — 「평면↔초광각」 바가 버전마다 다른 뜻이 돼 버린다. -->
-        <input type="range" id="y3dPersp" class="y3d-range" min="0" max="100" step="1" value="0"
+        <button type="button" class="y3d-btn" id="y3dPerspPlane" data-h-label="plane">평면</button>
+        <button type="button" class="y3d-btn" id="y3dPerspDown" data-h-aria-label="perspectiveDecrease" aria-label="원근을 1도 줄이기">◀</button>
+        <input type="range" id="y3dPersp" class="y3d-range" min="0" max="60" step="1" value="0"
                data-i18n-attr="aria-label:g889" aria-label="원근 정도 (평면에서 초광각까지)">
         <span class="y3d-label" id="y3dPerspValue">평면</span>
-        <button type="button" class="y3d-btn on" id="y3dFaces3" data-i18n="g891">3면</button>
+        <button type="button" class="y3d-btn" id="y3dPerspUp" data-h-aria-label="perspectiveIncrease" aria-label="원근을 1도 높이기">▶</button>
         <button type="button" class="y3d-btn" id="y3dFaces6" data-i18n="g892">6면</button>
+        <button type="button" class="y3d-btn on" id="y3dFaces3" data-i18n="g891">3면</button>
+      </div>
+      </div>
+      </div>
+      <div id="hPreviewRotationControls" class="y3d-rotation h-tool-group" hidden>
+        <div class="y3d-row">
+          <button type="button" class="y3d-btn" id="hAutoRotate" aria-pressed="false" aria-keyshortcuts="Space" aria-label="자동 회전 재생"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m8 4 12 8-12 8Z" fill="currentColor"/></svg></button>
+          <div class="y3d-row" id="hRotationModeCards" role="group" data-h-aria-label="rotationAxis" aria-label="회전 축">
+            <button type="button" class="y3d-btn" data-h-rotation-mode="x" data-h-label="axisX" aria-pressed="false">X축</button>
+            <button type="button" class="y3d-btn on" data-h-rotation-mode="y" data-h-label="axisY" aria-pressed="true">Y축</button>
+            <button type="button" class="y3d-btn" data-h-rotation-mode="gyro" data-h-label="axisGyro" aria-pressed="false">자이로스코프</button>
+          </div>
+          <div id="hRotationDirections" role="group" data-h-aria-label="rotationDirection">
+            <div class="h-direction" data-direction-axis="x"><span class="y3d-label">X</span><button type="button" class="y3d-btn" data-h-direction="1" data-direction-axis="x" data-h-label="forward">정회전</button><button type="button" class="y3d-btn" data-h-direction="-1" data-direction-axis="x" data-h-label="reverse">역회전</button></div>
+            <div class="h-direction" data-direction-axis="y"><span class="y3d-label">Y</span><button type="button" class="y3d-btn" data-h-direction="1" data-direction-axis="y" data-h-label="forward">정회전</button><button type="button" class="y3d-btn" data-h-direction="-1" data-direction-axis="y" data-h-label="reverse">역회전</button></div>
+          </div>
+        </div>
+        <div class="y3d-row y3d-adjust-row">
+          <label class="y3d-label" for="hRotationSpeed" data-h-label="rotationSpeed">회전 속도</label>
+          <button type="button" class="y3d-btn" id="hRotationSpeedReset" data-h-aria-label="speedReset" aria-label="회전 속도 기본값" aria-pressed="true" data-h-title="speedResetNote"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="y3d-btn" id="hRotationSpeedDown" data-h-aria-label="speedDecrease" aria-label="회전 속도를 초당 1도씩 낮추기">◀</button>
+          <input type="range" id="hRotationSpeed" class="y3d-range" min="1" max="90" step="1" value="75" data-h-aria-label="rotationSpeed" aria-label="회전 속도">
+          <button type="button" class="y3d-btn" id="hRotationSpeedUp" data-h-aria-label="speedIncrease" aria-label="회전 속도를 초당 1도씩 높이기">▶</button>
+          <span class="y3d-label" id="hRotationSpeedValue"></span>
+        </div>
+        <div class="y3d-row y3d-adjust-row" id="hRotationTiltRow" data-h-title="tiltNote">
+          <label class="y3d-label" for="hRotationTilt" data-h-label="tiltCorrection">기울임 보정</label>
+          <button type="button" class="y3d-btn" id="hRotationTiltReset" data-h-aria-label="tiltReset" aria-label="기울임 보정 기본값" aria-pressed="true" data-h-title="tiltResetNote"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="y3d-btn" id="hRotationTiltDown" data-h-aria-label="tiltDecrease" aria-label="기울임 보정을 0.5도 줄이기">◀</button>
+          <input type="range" id="hRotationTilt" class="y3d-range" min="0" max="35" step="0.5" value="17.5" data-h-aria-label="tiltCorrection" aria-label="기울임 보정">
+          <button type="button" class="y3d-btn" id="hRotationTiltUp" data-h-aria-label="tiltIncrease" aria-label="기울임 보정을 0.5도 높이기">▶</button>
+          <span class="y3d-label" id="hRotationTiltValue">17.5°</span>
+        </div>
       </div>
       <!-- ⚠ **여기가 자리다** — 패널의 «TL큐브 다운로드 / 복사하기» 그룹에 넣으면 안 된다.
            그쪽은 «코드 내보내기» 계약 표면이고, 뷰 스냅샷을 거기 섞는 것이 바로 불변
            계약이 막으려는 혼동이다. 라벨에 «스냅샷» 이 박혀 있고 캡션이 한 줄 더 말한다. -->
-      <div class="y3d-row" id="y3dSnapRow" hidden>
+      <div class="y3d-row h-tool-group" id="y3dSnapRow" hidden>
         <button type="button" class="y3d-btn" id="y3dSnapSave" data-i18n="g893">스냅샷 PNG</button>
         <button type="button" class="y3d-btn" id="y3dSnapCopy" data-i18n="g894">스냅샷 복사</button>
         <span class="y3d-label" data-i18n="g895">보이는 화면의 스냅샷이에요 — 내보내는 코드는 항상 2.5D 예요</span>
       </div>
     </div>
+    <section id="hFaceImagesPanel" hidden aria-labelledby="hFaceImagesHeading">
+      <div class="section-heading-row"><div id="hFaceImagesHeading" class="section-heading" data-h-label="faceImages">빈 면 이미지</div></div>
+      <div id="hFaceImageCards" class="h-image-cards"></div>
+      <p class="hint" data-h-label="imageNote"></p>
+      <p id="hFaceImageStatus" class="hint" role="status" aria-live="polite"></p>
+    </section>
+  </div>
   </div>
 </main>
 <!-- 섹션 도움말 «?» 의 **공용** 플로팅 창 — 섹션마다 복제하지 않는다 (src/help-popover.js).
@@ -3180,7 +3466,7 @@ const GENERATOR_STRINGS = {
     "g883": "코드 렌더",
     "g884": "아이소메트릭 (정위치)",
     "g885": "Y 미리보기",
-    "g886": "3D 는 보기 층입니다. 내보내는 PNG·SVG 는 항상 2.5D 아이소메트릭 그대로입니다.\n한 셀을 돌려 세 면의 휘도 순위를 볼 수 있고, 필드는 지금 만든 코드 전체를 궤도로 돌립니다.\n드래그로 돌리고, 휠은 여백, Shift+휠 또는 Shift+드래그는 Z축 회전입니다 (키보드는 [ 와 ]). 0–5 는 digit 입니다.\n원근 슬라이더는 평면에서 초광각까지 갑니다. 6면은 뒤쪽 세 면에도 같은 코드를 얹습니다. 정위치 버튼은 카메라만 되돌리고 면 수는 그대로 둡니다.\n스냅샷 버튼은 지금 보이는 화면을 그대로 PNG 로 저장·복사합니다 — 코드 내보내기가 아닙니다.",
+    "g886": "3D 는 보기 층입니다. 내보내는 PNG·SVG 는 항상 2.5D 아이소메트릭 그대로입니다.\n한 셀을 돌려 세 면의 휘도 순위를 볼 수 있고, 필드는 지금 만든 코드 전체를 궤도로 돌립니다.\n드래그로 돌리고, Ctrl+휠은 확대/축소, Ctrl+Shift+휠 또는 Shift+드래그는 Z축 회전입니다 (키보드는 [ 와 ]). 0–5 는 digit 입니다.\n원근 슬라이더는 평면에서 초광각까지 갑니다. 6면은 뒤쪽 세 면에도 같은 코드를 얹습니다. 정위치 버튼은 카메라만 되돌리고 면 수는 그대로 둡니다.\n스냅샷 버튼은 지금 보이는 화면을 그대로 PNG 로 저장·복사합니다 — 코드 내보내기가 아닙니다.",
     "g887": "Type Y 큐브 궤도 보기",
     "g888": "원근",
     "g889": "원근 정도 (평면에서 초광각까지)",
@@ -3190,6 +3476,8 @@ const GENERATOR_STRINGS = {
     "g893": "스냅샷 PNG",
     "g894": "스냅샷 복사",
     "g895": "보이는 화면의 스냅샷이에요 — 내보내는 코드는 항상 2.5D 예요",
+    "g1040": "3D 데이터 파일은 모든 실제 면을 담아요. .schem은 선택색에 가까운 콘크리트 구조물이며 완성 월드가 아니에요. 색 근사는 스캔 성능에 영향을 줄 수 있고, 작은 내부 QR에는 셀당 블록 수를 높여 주세요. 일반 PNG·SVG는 현재 H 시점 또는 Y의 기본 지면이며, 6면 H의 한 시점에는 반대쪽 본문이 보이지 않아요.",
+    "g1041": "무음 MP4는 한 변 720/1080/1440px의 정사각 영상이며 24/30/60/120 fps를 선택할 수 있어요. 두 회전축의 전체 공동 주기를 담아 반복 시 자세가 이어져요. 투명 배경은 선택한 색 또는 격자로 바뀌고 알파 채널은 없어요. 코너 QR은 큐브 밖에 남으며 전개도·모델에는 큐브만 담아요. 현재 길이·속도·진행률·취소·완료 상태는 이 도움말 밖에 계속 표시돼요.",
     "g896": "화각 {deg}°",
     "g897": "이 환경에는 클립보드 이미지 쓰기가 없어요",
     "g955": "셀 표면 v0TR (Y1/Y2)",
@@ -3685,7 +3973,7 @@ const GENERATOR_STRINGS = {
     "g883": "Code render",
     "g884": "Isometric (home view)",
     "g885": "Y preview",
-    "g886": "3D is a viewer layer. Exported PNG and SVG stay on the frozen 2.5D isometric projection.\nSpin one cell to see the three-face luminance rank, or orbit the whole code you just made.\nDrag to orbit; the wheel changes the margin, and Shift+wheel or Shift+drag rolls around the Z axis (keys [ and ]). Keys 0–5 set the digit.\nThe perspective slider runs from flat to ultra-wide. Six faces puts the same code on the three rear faces too. The home-view button resets the camera only and keeps the face count.\nThe snapshot buttons save or copy exactly what is on screen as a PNG — that is not a code export.",
+    "g886": "3D is a viewer layer. Exported PNG and SVG stay on the frozen 2.5D isometric projection.\nSpin one cell to see the three-face luminance rank, or orbit the whole code you just made.\nDrag to orbit; Ctrl+wheel zooms, and Ctrl+Shift+wheel or Shift+drag rolls around the Z axis (keys [ and ]). Keys 0–5 set the digit.\nThe perspective slider runs from flat to ultra-wide. Six faces puts the same code on the three rear faces too. The home-view button resets the camera only and keeps the face count.\nThe snapshot buttons save or copy exactly what is on screen as a PNG — that is not a code export.",
     "g887": "Type Y cube orbit view",
     "g888": "Perspective",
     "g889": "Perspective amount (flat to ultra-wide)",
@@ -3695,6 +3983,8 @@ const GENERATOR_STRINGS = {
     "g893": "Snapshot PNG",
     "g894": "Copy snapshot",
     "g895": "A snapshot of the view — exported codes stay 2.5D",
+    "g1040": "3D data files contain every physical face. The .schem is an approximate concrete structure, not a finished world. Color approximation can affect scanning; increase blocks per cell for a small internal QR. Standard PNG and SVG export the current H view or the default Y plane, and one view of six-face H cannot show payload on the opposite faces.",
+    "g1041": "The silent MP4 is square with a side of 720/1080/1440 px at 24/30/60/120 fps. The full joint rotation period keeps the pose continuous when looped. A transparent background is replaced by the chosen color or checkerboard and has no alpha channel. The corner QR stays outside the cube, while nets and models contain the cube only. Current duration, speed, progress, cancel, and completion status remain visible outside this help.",
     "g896": "FOV {deg}°",
     "g897": "This environment cannot write images to the clipboard",
     "g955": "Cell surface v0TR (Y1/Y2)",
@@ -4190,7 +4480,7 @@ const GENERATOR_STRINGS = {
     "g883": "コード描画",
     "g884": "アイソメトリック (初期位置)",
     "g885": "Yプレビュー",
-    "g886": "3D は表示レイヤです。書き出す PNG・SVG は常に 2.5D アイソメトリックのままです。\n1セルを回して三面の輝度順位を見られ、フィールドは今作ったコード全体を軌道で回します。\nドラッグで回転、ホイールで余白、Shift+ホイールまたは Shift+ドラッグで Z 軸回転です（キーは [ と ]）。0–5 は digit です。\n遠近スライダーは平面から超広角まで動きます。6面は後ろの三面にも同じコードを載せます。初期位置ボタンはカメラだけ戻し、面数はそのままです。\nスナップショットは今見えている画面をそのまま PNG で保存・コピーします — コードの書き出しではありません。",
+    "g886": "3D は表示レイヤです。書き出す PNG・SVG は常に 2.5D アイソメトリックのままです。\n1セルを回して三面の輝度順位を見られ、フィールドは今作ったコード全体を軌道で回します。\nドラッグで回転、Ctrl+ホイールで拡大縮小、Ctrl+Shift+ホイールまたは Shift+ドラッグで Z 軸回転です（キーは [ と ]）。0–5 は digit です。\n遠近スライダーは平面から超広角まで動きます。6面は後ろの三面にも同じコードを載せます。初期位置ボタンはカメラだけ戻し、面数はそのままです。\nスナップショットは今見えている画面をそのまま PNG で保存・コピーします — コードの書き出しではありません。",
     "g887": "Type Y キューブ軌道ビュー",
     "g888": "遠近",
     "g889": "遠近の強さ（平面から超広角まで）",
@@ -4200,6 +4490,8 @@ const GENERATOR_STRINGS = {
     "g893": "スナップショット PNG",
     "g894": "スナップショットをコピー",
     "g895": "表示中の画面のスナップショットです — 書き出すコードは常に 2.5D です",
+    "g1040": "3D データファイルにはすべての実際の面が入ります。.schem は完成したワールドではなく、選択色に近いコンクリート構造です。色の近似はスキャン性能に影響することがあり、小さい内部 QR にはセル当たりのブロック数を増やしてください。通常の PNG・SVG は現在の H 視点または標準 Y 平面を書き出し、6面 H の一視点では反対側の本文は見えません。",
+    "g1041": "無音 MP4 は一辺 720/1080/1440 px の正方形で、24/30/60/120 fps を選べます。両軸の共通回転周期全体を収め、ループ時に姿勢が連続します。透明背景は選択色または市松模様に置き換えられ、アルファチャンネルはありません。コーナー QR はキューブの外に残り、展開図とモデルにはキューブだけが入ります。現在の長さ・速度・進行率・取消・完了状態はこの説明の外に表示されたままです。",
     "g896": "画角 {deg}°",
     "g897": "この環境ではクリップボードへの画像書き込みができません",
     "g955": "セル表面 v0TR (Y1/Y2)",
@@ -4694,7 +4986,7 @@ const GENERATOR_STRINGS = {
     "g883": "Rendu du code",
     "g884": "Isométrique (vue initiale)",
     "g885": "Aperçu Y",
-    "g886": "Le 3D est une couche de visualisation. Les PNG et SVG exportés restent sur la projection isométrique 2.5D figée.\nFaites tourner une cellule pour voir le rang de luminance des trois faces, ou mettez en orbite le code entier.\nGlissez pour orbiter ; la molette règle la marge, et Maj+molette ou Maj+glisser fait pivoter autour de l’axe Z (touches [ et ]). Les touches 0–5 choisissent le digit.\nLe curseur de perspective va du plat à l’ultra grand-angle. Six faces pose le même code sur les trois faces arrière. Le bouton vue initiale ne réinitialise que la caméra et garde le nombre de faces.\nLes boutons d’instantané enregistrent ou copient l’écran tel quel en PNG — ce n’est pas un export de code.",
+    "g886": "Le 3D est une couche de visualisation. Les PNG et SVG exportés restent sur la projection isométrique 2.5D figée.\nFaites tourner une cellule pour voir le rang de luminance des trois faces, ou mettez en orbite le code entier.\nGlissez pour orbiter ; Ctrl+molette zoome, et Ctrl+Maj+molette ou Maj+glisser fait pivoter autour de l’axe Z (touches [ et ]). Les touches 0–5 choisissent le digit.\nLe curseur de perspective va du plat à l’ultra grand-angle. Six faces pose le même code sur les trois faces arrière. Le bouton vue initiale ne réinitialise que la caméra et garde le nombre de faces.\nLes boutons d’instantané enregistrent ou copient l’écran tel quel en PNG — ce n’est pas un export de code.",
     "g887": "Vue en orbite du cube Type Y",
     "g888": "Perspective",
     "g889": "Intensité de la perspective (du plat à l’ultra grand-angle)",
@@ -4704,6 +4996,8 @@ const GENERATOR_STRINGS = {
     "g893": "PNG d’instantané",
     "g894": "Copier l’instantané",
     "g895": "Un instantané de la vue — les codes exportés restent en 2.5D",
+    "g1040": "Les fichiers de données 3D contiennent toutes les faces physiques. Le .schem est une structure en béton aux couleurs approximatives, pas un monde terminé. L’approximation des couleurs peut affecter le scan ; augmentez le nombre de blocs par cellule pour un petit QR interne. Les PNG et SVG standard exportent la vue H actuelle ou le plan Y par défaut, et une vue H à six faces ne montre pas les données des faces opposées.",
+    "g1041": "La vidéo MP4 silencieuse est carrée, de 720/1080/1440 px de côté, à 24/30/60/120 i/s. La période complète des deux axes assure une pose continue en boucle. Un fond transparent est remplacé par la couleur ou la grille choisie et ne contient pas de canal alpha. Le QR de coin reste hors du cube, tandis que les patrons et modèles ne contiennent que le cube. La durée, la vitesse, la progression, l’annulation et l’état final restent visibles hors de cette aide.",
     "g896": "Champ {deg}°",
     "g897": "Cet environnement ne peut pas écrire d’images dans le presse-papiers",
     "g955": "Surface de cellules v0TR (Y1/Y2)",
@@ -5198,7 +5492,7 @@ const GENERATOR_STRINGS = {
     "g883": "Render del codice",
     "g884": "Isometrico (vista iniziale)",
     "g885": "Anteprima Y",
-    "g886": "Il 3D è uno strato di visualizzazione. PNG e SVG esportati restano sulla proiezione isometrica 2.5D congelata.\nRuota una cella per vedere il rango di luminanza delle tre facce, oppure metti in orbita l’intero codice.\nTrascina per orbitare; la rotella regola il margine e Maiusc+rotella o Maiusc+trascinamento ruota attorno all’asse Z (tasti [ e ]). I tasti 0–5 impostano il digit.\nIl cursore della prospettiva va dal piatto al grandangolo estremo. Sei facce mette lo stesso codice anche sulle tre facce posteriori. Il pulsante vista iniziale reimposta solo la camera e mantiene il numero di facce.\nI pulsanti istantanea salvano o copiano lo schermo così com’è in PNG — non è un’esportazione del codice.",
+    "g886": "Il 3D è uno strato di visualizzazione. PNG e SVG esportati restano sulla proiezione isometrica 2.5D congelata.\nRuota una cella per vedere il rango di luminanza delle tre facce, oppure metti in orbita l’intero codice.\nTrascina per orbitare; Ctrl+rotella regola lo zoom e Ctrl+Maiusc+rotella o Maiusc+trascinamento ruota attorno all’asse Z (tasti [ e ]). I tasti 0–5 impostano il digit.\nIl cursore della prospettiva va dal piatto al grandangolo estremo. Sei facce mette lo stesso codice anche sulle tre facce posteriori. Il pulsante vista iniziale reimposta solo la camera e mantiene il numero di facce.\nI pulsanti istantanea salvano o copiano lo schermo così com’è in PNG — non è un’esportazione del codice.",
     "g887": "Vista in orbita del cubo Type Y",
     "g888": "Prospettiva",
     "g889": "Intensità della prospettiva (dal piatto al grandangolo estremo)",
@@ -5208,6 +5502,8 @@ const GENERATOR_STRINGS = {
     "g893": "PNG istantanea",
     "g894": "Copia istantanea",
     "g895": "Un’istantanea della vista — i codici esportati restano 2.5D",
+    "g1040": "I file dati 3D contengono tutte le facce fisiche. Il .schem è una struttura di cemento con colori approssimati, non un mondo completo. L’approssimazione dei colori può influire sulla scansione; aumenta i blocchi per cella per un piccolo QR interno. PNG e SVG standard esportano la vista H corrente o il piano Y predefinito, e una vista H a sei facce non mostra il payload sulle facce opposte.",
+    "g1041": "Il video MP4 senza audio è quadrato, con lato di 720/1080/1440 px, a 24/30/60/120 fps. Il periodo completo di entrambi gli assi garantisce la continuità della posa in loop. Uno sfondo trasparente viene sostituito dal colore o dalla scacchiera scelta e non contiene un canale alfa. Il QR d’angolo resta fuori dal cubo, mentre reti e modelli contengono solo il cubo. Durata, velocità, avanzamento, annullamento e stato finale restano visibili fuori da questo aiuto.",
     "g896": "Campo {deg}°",
     "g897": "Questo ambiente non può scrivere immagini negli appunti",
     "g955": "Superficie a celle v0TR (Y1/Y2)",
@@ -5702,7 +5998,7 @@ const GENERATOR_STRINGS = {
     "g883": "Code-Rendering",
     "g884": "Isometrisch (Ausgangsansicht)",
     "g885": "Y-Vorschau",
-    "g886": "3D ist eine Betrachtungsebene. Exportierte PNG- und SVG-Dateien bleiben bei der eingefrorenen 2.5D-Isometrie.\nDrehen Sie eine Zelle, um den Luminanzrang der drei Flächen zu sehen, oder umrunden Sie den ganzen Code.\nZiehen zum Drehen; das Rad ändert den Rand, Umschalt+Rad oder Umschalt+Ziehen dreht um die Z-Achse (Tasten [ und ]). Die Tasten 0–5 setzen die Ziffer.\nDer Perspektivregler reicht von flach bis Ultraweitwinkel. Sechs Flächen legt denselben Code auch auf die drei hinteren Flächen. Die Schaltfläche Ausgangsansicht setzt nur die Kamera zurück und behält die Flächenzahl.\nDie Schnappschuss-Schaltflächen speichern oder kopieren genau das, was auf dem Bildschirm steht, als PNG — das ist kein Code-Export.",
+    "g886": "3D ist eine Betrachtungsebene. Exportierte PNG- und SVG-Dateien bleiben bei der eingefrorenen 2.5D-Isometrie.\nDrehen Sie eine Zelle, um den Luminanzrang der drei Flächen zu sehen, oder umrunden Sie den ganzen Code.\nZiehen zum Drehen; Strg+Rad zoomt, Strg+Umschalt+Rad oder Umschalt+Ziehen dreht um die Z-Achse (Tasten [ und ]). Die Tasten 0–5 setzen die Ziffer.\nDer Perspektivregler reicht von flach bis Ultraweitwinkel. Sechs Flächen legt denselben Code auch auf die drei hinteren Flächen. Die Schaltfläche Ausgangsansicht setzt nur die Kamera zurück und behält die Flächenzahl.\nDie Schnappschuss-Schaltflächen speichern oder kopieren genau das, was auf dem Bildschirm steht, als PNG — das ist kein Code-Export.",
     "g887": "Type-Y-Würfel in der Umlaufansicht",
     "g888": "Perspektive",
     "g889": "Perspektivstärke (flach bis Ultraweitwinkel)",
@@ -5712,6 +6008,8 @@ const GENERATOR_STRINGS = {
     "g893": "Schnappschuss-PNG",
     "g894": "Schnappschuss kopieren",
     "g895": "Ein Schnappschuss der Ansicht — exportierte Codes bleiben 2.5D",
+    "g1040": "3D-Datendateien enthalten alle physischen Flächen. Die .schem ist eine Betonstruktur mit angenäherten Farben, keine fertige Welt. Farbnäherungen können das Scannen beeinflussen; erhöhen Sie bei einem kleinen internen QR die Blöcke pro Zelle. Standard-PNG und SVG exportieren die aktuelle H-Ansicht oder die Y-Standardebene, und eine Ansicht eines sechsflächigen H zeigt die Nutzdaten der gegenüberliegenden Flächen nicht.",
+    "g1041": "Das stumme MP4 ist quadratisch mit 720/1080/1440 px Seitenlänge bei 24/30/60/120 fps. Die volle gemeinsame Drehperiode sorgt für einen nahtlosen Übergang der Würfelpose. Ein transparenter Hintergrund wird durch die gewählte Farbe oder das Schachbrett ersetzt und enthält keinen Alphakanal. Der Eck-QR bleibt außerhalb des Würfels; Netze und Modelle enthalten nur den Würfel. Aktuelle Dauer, Geschwindigkeit, Fortschritt, Abbrechen und Abschlussstatus bleiben außerhalb dieser Hilfe sichtbar.",
     "g896": "Bildwinkel {deg}°",
     "g897": "Diese Umgebung kann keine Bilder in die Zwischenablage schreiben",
     "g955": "Zellfläche v0TR (Y1/Y2)",
@@ -6206,7 +6504,7 @@ const GENERATOR_STRINGS = {
     "g883": "Render del código",
     "g884": "Isométrico (vista inicial)",
     "g885": "Vista Y",
-    "g886": "El 3D es una capa de visualización. Los PNG y SVG exportados siguen en la proyección isométrica 2.5D congelada.\nGire una celda para ver el rango de luminancia de las tres caras, u orbite el código entero.\nArrastre para orbitar; la rueda cambia el margen y Mayús+rueda o Mayús+arrastrar gira sobre el eje Z (teclas [ y ]). Las teclas 0–5 eligen el dígito.\nEl control de perspectiva va de plano a gran angular extremo. Seis caras pone el mismo código también en las tres caras traseras. El botón de vista inicial solo reinicia la cámara y mantiene el número de caras.\nLos botones de instantánea guardan o copian tal cual lo que se ve en pantalla como PNG — no es una exportación del código.",
+    "g886": "El 3D es una capa de visualización. Los PNG y SVG exportados siguen en la proyección isométrica 2.5D congelada.\nGire una celda para ver el rango de luminancia de las tres caras, u orbite el código entero.\nArrastre para orbitar; Ctrl+rueda cambia el zoom y Ctrl+Mayús+rueda o Mayús+arrastrar gira sobre el eje Z (teclas [ y ]). Las teclas 0–5 eligen el dígito.\nEl control de perspectiva va de plano a gran angular extremo. Seis caras pone el mismo código también en las tres caras traseras. El botón de vista inicial solo reinicia la cámara y mantiene el número de caras.\nLos botones de instantánea guardan o copian tal cual lo que se ve en pantalla como PNG — no es una exportación del código.",
     "g887": "Vista orbital del cubo Type Y",
     "g888": "Perspectiva",
     "g889": "Cantidad de perspectiva (de plano a gran angular extremo)",
@@ -6216,6 +6514,8 @@ const GENERATOR_STRINGS = {
     "g893": "PNG de instantánea",
     "g894": "Copiar instantánea",
     "g895": "Una instantánea de la vista — los códigos exportados siguen en 2.5D",
+    "g1040": "Los archivos de datos 3D contienen todas las caras físicas. El .schem es una estructura de hormigón con colores aproximados, no un mundo terminado. La aproximación de color puede afectar al escaneo; aumente los bloques por celda para un QR interno pequeño. Los PNG y SVG estándar exportan la vista H actual o el plano Y predeterminado, y una vista de H de seis caras no muestra la carga de las caras opuestas.",
+    "g1041": "El MP4 sin sonido es cuadrado, con un lado de 720/1080/1440 px, a 24/30/60/120 fps. El período completo de ambos ejes mantiene la continuidad de la orientación al repetirse. Un fondo transparente se sustituye por el color o la cuadrícula elegidos y no incluye canal alfa. El QR de esquina queda fuera del cubo, mientras que las redes y los modelos solo contienen el cubo. La duración, velocidad, progreso, cancelación y estado final actuales permanecen visibles fuera de esta ayuda.",
     "g896": "Campo {deg}°",
     "g897": "Este entorno no puede escribir imágenes en el portapapeles",
     "g955": "Superficie de celdas v0TR (Y1/Y2)",
@@ -6710,7 +7010,7 @@ const GENERATOR_STRINGS = {
     "g883": "Render do código",
     "g884": "Isométrico (vista inicial)",
     "g885": "Pré-visualização Y",
-    "g886": "O 3D é uma camada de visualização. Os PNG e SVG exportados ficam na projeção isométrica 2.5D congelada.\nRode uma célula para ver a ordem de luminância das três faces, ou ponha o código inteiro em órbita.\nArraste para orbitar; a roda muda a margem e Shift+roda ou Shift+arrastar roda em torno do eixo Z (teclas [ e ]). As teclas 0–5 definem o dígito.\nO cursor de perspetiva vai do plano ao grande angular extremo. Seis faces coloca o mesmo código também nas três faces traseiras. O botão de vista inicial só repõe a câmara e mantém o número de faces.\nOs botões de instantâneo guardam ou copiam exatamente o que está no ecrã como PNG — não é uma exportação do código.",
+    "g886": "O 3D é uma camada de visualização. Os PNG e SVG exportados ficam na projeção isométrica 2.5D congelada.\nRode uma célula para ver a ordem de luminância das três faces, ou ponha o código inteiro em órbita.\nArraste para orbitar; Ctrl+roda muda o zoom e Ctrl+Shift+roda ou Shift+arrastar roda em torno do eixo Z (teclas [ e ]). As teclas 0–5 definem o dígito.\nO cursor de perspetiva vai do plano ao grande angular extremo. Seis faces coloca o mesmo código também nas três faces traseiras. O botão de vista inicial só repõe a câmara e mantém o número de faces.\nOs botões de instantâneo guardam ou copiam exatamente o que está no ecrã como PNG — não é uma exportação do código.",
     "g887": "Vista em órbita do cubo Type Y",
     "g888": "Perspetiva",
     "g889": "Intensidade da perspetiva (do plano ao grande angular extremo)",
@@ -6720,6 +7020,8 @@ const GENERATOR_STRINGS = {
     "g893": "PNG de instantâneo",
     "g894": "Copiar instantâneo",
     "g895": "Um instantâneo da vista — os códigos exportados ficam em 2.5D",
+    "g1040": "Os ficheiros de dados 3D contêm todas as faces físicas. O .schem é uma estrutura de betão com cores aproximadas, não um mundo concluído. A aproximação de cor pode afetar a leitura; aumente os blocos por célula para um QR interno pequeno. Os PNG e SVG normais exportam a vista H atual ou o plano Y predefinido, e uma vista de H com seis faces não mostra a carga das faces opostas.",
+    "g1041": "O MP4 sem som é quadrado, com lado de 720/1080/1440 px, a 24/30/60/120 fps. O período completo de ambos os eixos mantém a continuidade da orientação em repetição. Um fundo transparente é substituído pela cor ou grelha escolhida e não inclui canal alfa. O QR de canto fica fora do cubo, enquanto as redes e os modelos contêm apenas o cubo. A duração, velocidade, progresso, cancelamento e estado final atuais continuam visíveis fora desta ajuda.",
     "g896": "Campo {deg}°",
     "g897": "Este ambiente não consegue escrever imagens na área de transferência",
     "g955": "Superfície de células v0TR (Y1/Y2)",
@@ -6863,6 +7165,8 @@ const TEXT_SYNCERS = [
   syncTypeYCellEditorUi,
   syncHelpPopover,
   syncOrbitPreviewUi,
+  syncCubeVideoUi,
+  syncHUi, syncHFaceImagesUi, syncCubeExportUi,
   syncShotPresetUi,
 ];
 
@@ -6883,12 +7187,25 @@ import {
 } from './src/generator-shot-presets.js';
 // 궤도 자세 — 상태(도·노브) ↔ 뷰어(라디안·정규화 t) 변환의 **유일한** 자리.
 import {
-  defineOrbitViewAccessors, orbitPerspToDeg, orbitPerspToT,
+  defineOrbitViewAccessors, ORBIT_PERSP_MAX_DEG, orbitPerspToDeg, orbitPerspToT, orbitTToPersp,
 } from './src/generator-orbit-view.js';
 import { wireSelectAllOnActivate } from './src/input-select-all.js';
 import { createHelpPopover } from './src/help-popover.js';
 import { encode } from './src/encode.js';
 import { encodeY } from './src/encodeY.js';
+import { encodeH, decodeH, hCapacity } from './src/h-codec.js';
+import { buildHScene, buildHFaceSheet } from './src/h-render.js';
+import {H_IMAGE_FACES,loadHFaceImage} from './src/h-face-images.js';
+import {hImageTargets} from './src/h-face-arrangement.js';
+import {hModeFaces} from './src/h-profile.js';
+import {createHImageEditor} from './src/h-image-editor-ui.js';
+import {hCanPreview25,hPlanarPreviewOptions,hPreviewPositionLabels,reconcileHPositionMode,hCubeIconMarkup,hExportIconMarkup,hBlockIconMarkup} from './src/h-preview-decor.js';
+import {hRotationSpaceKey,hPreviewSquareSide,hBrightestPaletteHex,hControlIcon} from './src/h-preview-controls.js';
+import {drawSceneImage} from './src/scene-image.js';
+import {createHPreviewRenderer} from './src/h-preview-renderer.js';
+import { hQrPosition, withHCornerQr } from './src/generator-h-qr.js';
+import { exportCubeMp4, cubeVideoDurationMs } from './src/cube-video-export.js';
+import { H_ROTATION_TILT_DEFAULT_DEG, clampHRotationSpeed, clampHRotationTilt, selectHRotationTilt, selectHRotationMode, selectHRotationSpeed, selectHRotationSpeedDefault, reconcileHRotationSpeed, hMaskIconMarkup, hMaskLuminance, hPointerDragDelta, hPointerDragPose, hOrbitFromRotation, hVersionIconMarkup, isHGenerator, selectHRepresentation, selectHFaceCount, selectHRenderFaces, selectHArrangement, selectHAlignmentPose, reconcileHContentRotation, H_RESOLUTION_VERSIONS, hUiLabel, hPreviewOptions } from './src/generator-h.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
 import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capacityY.js';
 // 셀 편집기가 여는 O/A 격자 반경 k — 버전 표에서 읽는다 (편집기용 상수 복제 금지).
@@ -7068,8 +7385,11 @@ import { PRESETS, DEFAULT_PRESET, getPreset, BULLSEYE_DARK, BULLSEYE_LIGHT, pres
 import { makeCustomPalette } from './src/palette-hue.js';
 import { buildScene, sagoaeComposableWith } from './src/scene.js';
 import { buildSceneY, yLevelTables } from './src/sceneY.js';
-import { buildOrbitMesh, paintQuads, hitTest } from './src/y3d-viewer.js';
+import { buildOrbitMesh, paintQuads, hitTest, yCubeOutline } from './src/y3d-viewer.js';
 import { slotQrFaceQuads } from './src/y3d-slot-qr.js';
+import { generatorCubeModel } from './src/generator-cube-export.js';
+import { cubeNetScene, cubeModelToGltf } from './src/cube-export.js';
+import { voxelizeCube, gzipSchematic } from './src/minecraft-schematic.js';
 import {
   RENDER_PROFILE_AUTO, RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_PRINT,
   RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT,
@@ -7105,7 +7425,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-09.01';
+const GENERATOR_BUILD = '2026-09-14.03';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -7233,8 +7553,9 @@ const els = {
   view3d: $('view3d'),
   y3dBar: $('y3dBar'), y3dMode25: $('y3dMode25'), y3dMode3d: $('y3dMode3d'),
   y3dOrbitRow: $('y3dOrbitRow'), y3dCell: $('y3dCell'), y3dField: $('y3dField'),
-  y3dDigits: $('y3dDigits'), y3dReset: $('y3dReset'),
+  y3dDigits: $('y3dDigits'), y3dReset: $('y3dReset'), y3dPoseReset: $('y3dPoseReset'),
   y3dViewRow: $('y3dViewRow'), y3dPersp: $('y3dPersp'), y3dPerspValue: $('y3dPerspValue'),
+  y3dPerspPlane: $('y3dPerspPlane'), y3dPerspDown: $('y3dPerspDown'), y3dPerspUp: $('y3dPerspUp'),
   y3dFaces3: $('y3dFaces3'), y3dFaces6: $('y3dFaces6'),
   y3dSnapRow: $('y3dSnapRow'), y3dSnapSave: $('y3dSnapSave'), y3dSnapCopy: $('y3dSnapCopy'),
   exportPng: $('exportPng'), exportSvg: $('exportSvg'),
@@ -7257,9 +7578,9 @@ helpPopoverCtl = createHelpPopover({
   popover: els.helpPopover,
   body: els.helpPopoverBody,
   closeButton: els.helpPopoverClose,
-  linesFor: (button) => t(button.dataset.help).split('\n'),
+  linesFor: (button) => (button.dataset.hHelp?hText(button.dataset.hHelp):t(button.dataset.help)).split('\n'),
 });
-for (const button of document.querySelectorAll('.help-dot[data-help]')) {
+for (const button of document.querySelectorAll('.help-dot[data-help],.help-dot[data-h-help]')) {
   helpPopoverCtl.attach(button);
 }
 
@@ -7382,6 +7703,359 @@ const decor = { L: null, R: null };
 
 /** 마지막 성공 렌더 상태 — export 는 화면과 같은 입력에서 나간다. */
 let current = null;
+const hAnimation = {request:0,last:0,elapsed:0,encoded:null,scene:null};
+let hGpuRenderer=null;
+let hFaceImages=Object.freeze({});
+const hImageEditor=createHImageEditor({container:$('hFaceImageCards'),status:$('hFaceImageStatus'),text:hText,getDefaultBackground:()=>hBrightestPaletteHex(paletteOf(generatorState.preset).levels),
+  onChange(images){hFaceImages=images;Object.assign(generatorState,reconcileHContentRotation(generatorState,images));syncHUi();syncOrbitPreviewUi();schedule();}});
+$('hToolbarGroups').append($('hPreviewRotationControls'),$('y3dSnapRow'));
+const h8Card=document.createElement('button');h8Card.type='button';h8Card.className='toggle-card';h8Card.dataset.hVersion='8';h8Card.setAttribute('aria-pressed','false');h8Card.innerHTML='H8<span class="card-sub">45 × 45</span>';$('hVersionCards').append(h8Card);
+const hFaceToggle=document.createElement('div');hFaceToggle.className='h-face-toggle';hFaceToggle.append($('y3dFaces6'),$('y3dFaces3'));
+$('hMainPreviewTools').firstElementChild.append(hFaceToggle);
+const hSnapshotTitle=document.createElement('div');hSnapshotTitle.className='h-snapshot-heading';
+const hSnapshotName=document.createElement('span');hSnapshotTitle.append(hSnapshotName);
+const hSnapshotHelp=document.createElement('button');hSnapshotHelp.type='button';hSnapshotHelp.className='help-dot';hSnapshotHelp.textContent='?';hSnapshotHelp.dataset.help='g895';hSnapshotHelp.setAttribute('aria-expanded','false');hSnapshotTitle.append(hSnapshotHelp);
+$('y3dSnapRow').prepend(hSnapshotTitle);
+const hSnapshotActions=document.createElement('div');hSnapshotActions.className='h-snapshot-actions';hSnapshotActions.append($('y3dSnapSave'),$('y3dSnapCopy'));hSnapshotTitle.after(hSnapshotActions);
+helpPopoverCtl.attach(hSnapshotHelp);
+const videoToggle=document.createElement('button');videoToggle.id='cubeVideoToggle';videoToggle.type='button';videoToggle.className='y3d-btn';videoToggle.setAttribute('aria-controls','cubeVideoOptions');$('cubeVideoHeading').parentElement.append(videoToggle);
+let previewSquareRequest=0,previewSquareLast=-1;
+function schedulePreviewSquare(){
+  if(previewSquareRequest)return;
+  previewSquareRequest=requestAnimationFrame(()=>{
+    previewSquareRequest=0;
+    if(!matchMedia('(min-width: 761px)').matches){$('stage').style.removeProperty('--preview-square');previewSquareLast=-1;return;}
+    const stage=$('stage'),bar=$('y3dBar'),style=getComputedStyle(stage);
+    const padding=parseFloat(style.paddingTop)+parseFloat(style.paddingBottom);
+    // 이미지 카드가 늘려 준 stage 높이를 다시 큐브 크기에 더하지 않아요.
+    const previewHeight=$('hFaceImagesPanel').hidden?stage.clientHeight:Math.max(420,innerHeight-80)-2;
+    const side=hPreviewSquareSide({width:stage.clientWidth,height:previewHeight,
+      toolbarHeight:bar.hidden?0:bar.getBoundingClientRect().height,padding,gap:bar.hidden?0:12});
+    if(side===previewSquareLast)return;
+    previewSquareLast=side;stage.style.setProperty('--preview-square',`${side}px`);
+    if(y3dPreview.on&&current)paintY3dPreview();
+  });
+}
+const previewSquareObserver=new ResizeObserver(schedulePreviewSquare);
+previewSquareObserver.observe($('stage'));previewSquareObserver.observe($('y3dBar'));
+window.addEventListener('resize',schedulePreviewSquare);
+function decoratePreviewControls(){
+  const decorate=(button,icon,label,only=false,fullLabel=label)=>{
+    if(!button)return;
+    const signature=`${icon}|${label}|${only}|${fullLabel}`;
+    if(button.dataset.controlIcon!==signature||!button.querySelector('svg')){
+      button.innerHTML=hControlIcon(icon);
+      if(!only){const caption=document.createElement('span');caption.textContent=label;button.append(caption);}
+      button.dataset.controlIcon=signature;
+    }
+    button.classList.toggle('h-icon-only',only);
+    button.title=fullLabel;button.setAttribute('aria-label',fullLabel);
+  };
+  decorate($('y3dMode25'),'plane','2.5D',false,$('y3dMode25').disabled?hText('planarUnavailable'):'2.5D');
+  decorate($('y3dMode3d'),'cube','3D');
+  decorate($('y3dField'),'cube',t('g883'));
+  decorate($('y3dCell'),'gyro',t('g882'));
+  decorate($('y3dReset'),'cube',hText('isoShort'),false,t('g884'));
+  decorate($('y3dPoseReset'),'home',hText('resetPose'));
+  decorate($('y3dRollReset'),'rotate','Z',false,hText('resetRoll'));
+  decorate($('y3dZoomReset'),'zoom','',true,hText('resetZoom'));
+  decorate($('hRotationSpeedReset'),'rotate','',true,hText('speedReset')+' — '+hText('speedResetNote'));
+  decorate($('hRotationTiltReset'),'rotate','',true,hText('tiltReset')+' — '+hText('tiltResetNote'));
+  decorate($('hAlignHorizontal'),'y','',true,hText('horizontal'));
+  decorate($('hAlignVertical'),'x','',true,hText('vertical'));
+  decorate($('y3dPerspPlane'),'plane','',true,hText('plane'));
+  const sixLabel=hGeneratorActive()&&generatorState.hFaces<=3?hText('face6Repeat'):t('g892');
+  decorate($('y3dFaces6'),'cube',sixLabel);
+  decorate($('y3dFaces3'),'cube',t('g891'));
+  hFaceToggle.hidden=!y3dPreview.on;
+  for(const button of $('hRotationModeCards').children){
+    const axis=button.dataset.hRotationMode,key={x:'axisX',y:'axisY',gyro:'axisGyro'}[axis];
+    const short=hText({gyro:'gyroShort',x:'axisXShort',y:'axisYShort'}[axis]);
+    decorate(button,axis,short,false,hText(key)+' — '+hText(key+'Note'));
+  }
+  for(const button of $('hRotationDirections').querySelectorAll('button')){
+    const reverse=button.dataset.hDirection==='-1';
+    decorate(button,'rotate','',true,hText(reverse?'reverse':'forward'));
+    button.querySelector('svg').style.transform=reverse?'scaleX(-1)':'';
+  }
+  hSnapshotName.textContent=hText('snapshot');
+  if(hGeneratorActive())hSnapshotHelp.dataset.hHelp='renderNote';else delete hSnapshotHelp.dataset.hHelp;
+  hSnapshotHelp.title=hGeneratorActive()?hText('renderNote'):t('g895');hSnapshotHelp.setAttribute('aria-label',hSnapshotHelp.title);
+  decorate($('y3dSnapSave'),'image','PNG',false,t('g893'));
+  decorate($('y3dSnapCopy'),'copy','',true,t('g894'));
+  for(const button of $('hFacePositionCheck').children){
+    const key={none:'positionNone',outside:'positionOutside',inside:'positionInside'}[button.dataset.hPositionMode];
+    decorate(button,button.dataset.hPositionMode==='none'?'plane':'cube',hText(key),false,hText(key));
+    if(button.dataset.hPositionMode==='inside')button.title=hText('positionInsideNote');
+  }
+}
+let hFacePositionMode='outside';
+let hPositionProfile=null;
+function syncHFaceImagesUi(){
+  hImageEditor.setDefaultBackground(hBrightestPaletteHex(paletteOf(generatorState.preset).levels));
+  const count=hImageEditor.sync(generatorState);
+  $('hFaceImagesPanel').hidden=!hGeneratorActive()||count===0;
+  const positionGroup=$('hFacePositionCheck');
+  positionGroup.hidden=!hGeneratorActive();
+  for(const button of positionGroup.children){
+    const on=button.dataset.hPositionMode===hFacePositionMode;
+    button.classList.toggle('on',on);button.setAttribute('aria-pressed',String(on));
+  }
+}
+for(const button of $('hFacePositionCheck').children)button.addEventListener('click',()=>{
+  hFacePositionMode=button.dataset.hPositionMode;syncHFaceImagesUi();paintY3dPreview();
+});
+function hGeneratorActive(){return isHGenerator(generatorState);}
+function hText(key){return hUiLabel(key,genI18n.lang||document.documentElement.lang||'ko');}
+function paintHCardIcons(){
+  for(const button of $('hRepresentationCards').children)button.querySelector('.h-representation-icon').innerHTML=hCubeIconMarkup({representation:button.dataset.hRepresentation});
+  for(const button of $('hFaceCards').children){
+    button.removeAttribute('data-h-label');
+    button.innerHTML=hCubeIconMarkup({mode:Number(button.dataset.hFaces),arrangement:generatorState.hArrangement,placements:true})+`<span>${hText('face'+button.dataset.hFaces)}</span>`;
+  }
+  for(const button of $('hVersionCards').children){
+    let icon=button.querySelector('.h-card-icon');
+    if(!icon){icon=document.createElement('span');icon.className='h-card-icon';icon.setAttribute('aria-hidden','true');button.prepend(icon);}
+    icon.innerHTML=hVersionIconMarkup(button.dataset.hVersion);
+  }
+  for(const button of $('hMaskCards').children){
+    let icon=button.querySelector('.h-card-icon');
+    if(!icon){icon=document.createElement('span');icon.className='h-card-icon';icon.setAttribute('aria-hidden','true');button.prepend(icon);}
+    icon.innerHTML=hMaskIconMarkup(button.dataset.hMask);
+  }
+}
+function freezeHSpin(){
+  if(generatorState.hAutoRotate){
+    const view=hPreviewOptions(generatorState,{elapsedMs:hAnimation.elapsed});
+    Object.assign(y3dPreview,hOrbitFromRotation(view));
+  }
+  hAnimation.elapsed=0;
+}
+function placeHResolutionControls(active){
+  const host=$(active&&mode==='advanced'?'hResolutionHostAdvanced':'hResolutionHostNormal');
+  if($('hResolutionSection').parentElement!==host)host.append($('hResolutionSection'));
+}
+function syncHUi(){
+  if(hGeneratorActive()){
+    const next=reconcileHRotationSpeed(generatorState,current?.type==='H'?current.encoded.version:undefined);
+    if(next.hRotationSpeed!==generatorState.hRotationSpeed)freezeHSpin();
+    Object.assign(generatorState,next);
+  }
+  syncCubeExportUi();
+  syncCubeVideoUi();
+  const section=$('hTypeSection');if(!section)return;
+  const active=hGeneratorActive();
+  placeHResolutionControls(active);
+  $('stage').classList.toggle('h-editor-active',active);
+  section.hidden=generatorState.type!=='Y';
+  $('hOptions').hidden=!active;
+  $('hArrangementSection').hidden=!active;
+  $('hFaceCards').style.gridTemplateColumns=`repeat(${active?3:2},minmax(0,1fr))`;
+  for(const button of $('hArrangementCards').children){
+    const on=button.dataset.hArrangement===generatorState.hArrangement;
+    button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
+  }
+  $('hResolutionOptions').hidden=!active;
+  $('resolutionHeading').textContent=t('g044');
+  $('resolutionHelpDot').hidden=active;
+  paintHCardIcons();
+  for(const node of document.querySelectorAll('[data-h-label]')){
+    if(node.querySelector('.h-card-icon'))continue;
+    node.textContent=hText(node.dataset.hLabel);
+  }
+  for(const button of section.querySelectorAll('[data-h-representation]')){
+    const on=button.dataset.hRepresentation===generatorState.yRepresentation;
+    button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
+  }
+  for(const button of section.querySelectorAll('[data-h-faces]')){
+    const count=Number(button.dataset.hFaces);
+    button.hidden=!active&&![3,6].includes(count);
+    button.disabled=active&&generatorState.hArrangement!=='isometric'&&count>4;
+    const on=Number(button.dataset.hFaces)===(active?generatorState.hFaces:3);
+    button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
+  }
+  $('hAutoRotate').innerHTML=hControlIcon(generatorState.hAutoRotate?'pause':'play');
+  $('hAutoRotate').setAttribute('aria-pressed',String(generatorState.hAutoRotate));
+  $('hAutoRotate').title=hText(generatorState.hAutoRotate?'pauseRotation':'playRotation')+' (Space)';
+  $('hAutoRotate').setAttribute('aria-label',$('hAutoRotate').title);
+  $('hAutoRotate').disabled=!active;
+  const rotationReady=active;
+  syncHFaceImagesUi();
+  $('hPreviewRotationControls').hidden=!active||!y3dPreview.on;
+  for(const button of $('hRotationModeCards').children){
+    const on=button.dataset.hRotationMode===generatorState.hRotationMode;
+    button.classList.toggle('on',on);button.setAttribute('aria-pressed',String(on));button.disabled=!rotationReady;
+    button.title=hText({x:'axisXNote',y:'axisYNote',gyro:'axisGyroNote'}[button.dataset.hRotationMode]);
+  }
+  for(const group of $('hRotationDirections').children){
+    const axis=group.dataset.directionAxis;
+    group.hidden=generatorState.hRotationMode!=='gyro'&&generatorState.hRotationMode!==axis;
+    group.querySelector('span').hidden=generatorState.hRotationMode!=='gyro';
+    for(const button of group.querySelectorAll('button')){
+      const on=Number(button.dataset.hDirection)===(generatorState[axis==='x'?'hRotationDirectionX':'hRotationDirectionY']??1);
+      button.classList.toggle('on',on);button.setAttribute('aria-pressed',String(on));button.disabled=!active;
+    }
+  }
+  const speed=clampHRotationSpeed(generatorState.hRotationSpeed);
+  generatorState.hRotationSpeed=speed;$('hRotationSpeed').value=String(speed);
+  $('hRotationSpeedValue').textContent=`${speed}°/s`;$('hRotationSpeedValue').title=hText('speedValue').replace('{speed}',String(speed));
+  $('hRotationSpeed').disabled=!rotationReady;
+  $('hRotationSpeedReset').disabled=!rotationReady;
+  $('hRotationSpeedReset').classList.toggle('on',generatorState.hRotationSpeedIntent==='auto');
+  $('hRotationSpeedReset').setAttribute('aria-pressed',String(generatorState.hRotationSpeedIntent==='auto'));
+  $('hRotationSpeedDown').disabled=!rotationReady||speed<=1;$('hRotationSpeedUp').disabled=!rotationReady||speed>=90;
+  const tilt=clampHRotationTilt(generatorState.hRotationTiltDeg),axis=generatorState.hRotationMode;
+  const tiltReady=rotationReady&&axis!=='gyro'&&!((generatorState.hArrangement==='horizontal'&&axis==='y')||(generatorState.hArrangement==='vertical'&&axis==='x'));
+  $('hRotationTiltRow').hidden=axis==='gyro';
+  $('hRotationTiltRow').title=hText('tiltNote');
+  $('hRotationTilt').value=String(tilt);$('hRotationTilt').disabled=!tiltReady;
+  $('hRotationTilt').setAttribute('aria-valuetext',`${tilt}° / 35°`);
+  $('hRotationTiltValue').textContent=`${tilt}°`;
+  $('hRotationTiltReset').disabled=!tiltReady;
+  $('hRotationTiltReset').classList.toggle('on',tilt===H_ROTATION_TILT_DEFAULT_DEG);
+  $('hRotationTiltReset').setAttribute('aria-pressed',String(tilt===H_ROTATION_TILT_DEFAULT_DEG));
+  $('hRotationTiltDown').disabled=!tiltReady||tilt<=0;$('hRotationTiltUp').disabled=!tiltReady||tilt>=35;
+  for(const button of $('hResolutionOptions').querySelectorAll('[data-h-version]')){
+    button.hidden=button.dataset.hVersion==='0'&&mode!=='advanced';
+    const on=button.dataset.hVersion===String(generatorState.versionH);
+    button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
+  }
+  for(const button of $('hResolutionOptions').querySelectorAll('[data-h-mask]')){
+    const on=button.dataset.hMask===String(generatorState.hMask);
+    button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
+  }
+  for(const node of document.querySelectorAll('[data-h-aria-label]'))node.setAttribute('aria-label',hText(node.dataset.hAriaLabel));
+  for(const node of document.querySelectorAll('[data-h-title]')){node.title=hText(node.dataset.hTitle);node.setAttribute('aria-label',node.title);}
+  $('hMaskOptions').hidden=mode!=='advanced';
+  $('cubeBlockScaleOptions').hidden=mode!=='advanced';
+  decoratePreviewControls();schedulePreviewSquare();
+  for(const id of ['qrLinkSection','qrUrl','qrUrlLabel'])$(id).hidden=false;
+  for(const id of ['faceGainRow','quietSection','rotationGuidance'])$(id).hidden=active;
+  $('hFrameHint').hidden=!active;
+  els.qrUrl.disabled=false;els.faceGain.disabled=active;
+  els.exportTrim.disabled=active;
+  els.exportTrim.parentElement.hidden=active;
+  if(!active)stopHAnimation();
+}
+function refreshHSelection(){
+  Object.assign(generatorState,reconcileHContentRotation(generatorState,hFaceImages));
+  hAnimation.elapsed=0;hAnimation.last=0;
+  y3dPreview.faces=generatorState.hRenderFaces;y3dPreview.mode='field';
+  hAnimation.scene=null;
+  syncTypeUi();syncHUi();syncResTierUi();syncOrbitPreviewUi();syncShotPresetUi();
+  renderFinderUi();renderQrPositionUi();syncQuietModeUi();syncCentralN7EmphasisUi();syncFaceGainLabel();schedule();
+}
+for(const button of $('hRepresentationCards').children)button.addEventListener('click',()=>{
+  Object.assign(generatorState,selectHRepresentation(generatorState,button.dataset.hRepresentation));refreshHSelection();
+});
+for(const button of $('hFaceCards').children)button.addEventListener('click',()=>{
+  if(button.disabled)return;
+  Object.assign(generatorState,selectHFaceCount(generatorState,Number(button.dataset.hFaces)));refreshHSelection();
+});
+for(const button of $('hArrangementCards').children)button.addEventListener('click',()=>{
+  Object.assign(generatorState,selectHArrangement(generatorState,button.dataset.hArrangement));refreshHSelection();
+});
+for(const [id,arrangement]of[['hAlignHorizontal','horizontal'],['hAlignVertical','vertical']])$(id).addEventListener('click',()=>{
+  Object.assign(generatorState,selectHAlignmentPose(generatorState,arrangement));hAnimation.elapsed=0;syncHUi();paintY3dPreview();
+});
+function toggleHRotation(){
+  if(!hGeneratorActive())return;
+  freezeHSpin();
+  generatorState.hAutoRotate=!generatorState.hAutoRotate;
+  generatorState.hAutoRotateIntent=generatorState.hAutoRotate?'on':'off';
+  if(generatorState.hAutoRotate)y3dPreview.on=true;
+  syncHUi();paintY3dPreview();
+}
+$('hAutoRotate').addEventListener('click',toggleHRotation);
+document.addEventListener('keydown',event=>{if(hRotationSpaceKey(event,{active:hGeneratorActive(),preview3d:y3dPreview.on})){event.preventDefault();toggleHRotation();}});
+for(const button of $('hRotationModeCards').children)button.addEventListener('click',()=>{
+  const next=button.dataset.hRotationMode;
+  freezeHSpin();
+  Object.assign(generatorState,selectHRotationMode(generatorState,next,current?.type==='H'?current.encoded.version:undefined));syncHUi();paintY3dPreview();
+});
+for(const button of $('hRotationDirections').querySelectorAll('button'))button.addEventListener('click',()=>{
+  freezeHSpin();generatorState[button.dataset.directionAxis==='x'?'hRotationDirectionX':'hRotationDirectionY']=Number(button.dataset.hDirection);
+  syncHUi();paintY3dPreview();
+});
+function setHRotationSpeed(value){
+  freezeHSpin();
+  Object.assign(generatorState,selectHRotationSpeed(generatorState,value));syncHUi();paintY3dPreview();
+}
+$('hRotationSpeed').addEventListener('input',()=>setHRotationSpeed($('hRotationSpeed').value));
+// 수동 속도만 해제해요. 회전 방향·재생/정지·자세·원근 선택은 보존해요.
+$('hRotationSpeedReset').addEventListener('click',()=>{
+  freezeHSpin();
+  Object.assign(generatorState,selectHRotationSpeedDefault(generatorState,current?.type==='H'?current.encoded.version:undefined));
+  syncHUi();paintY3dPreview();
+});
+$('hRotationSpeedDown').addEventListener('click',()=>setHRotationSpeed(generatorState.hRotationSpeed-1));
+$('hRotationSpeedUp').addEventListener('click',()=>setHRotationSpeed(generatorState.hRotationSpeed+1));
+function setHRotationTilt(value){
+  freezeHSpin();
+  Object.assign(generatorState,selectHRotationTilt(generatorState,value));syncHUi();paintY3dPreview();
+}
+$('hRotationTilt').addEventListener('input',()=>setHRotationTilt($('hRotationTilt').value));
+$('hRotationTiltReset').addEventListener('click',()=>setHRotationTilt(H_ROTATION_TILT_DEFAULT_DEG));
+$('hRotationTiltDown').addEventListener('click',()=>setHRotationTilt(generatorState.hRotationTiltDeg-.5));
+$('hRotationTiltUp').addEventListener('click',()=>setHRotationTilt(generatorState.hRotationTiltDeg+.5));
+for(const [id,key]of[['hVersionCards','versionH'],['hMaskCards','hMask']])for(const button of $(id).children)button.addEventListener('click',()=>{
+  generatorState[key]=button.dataset[key==='versionH'?'hVersion':'hMask']==='auto'?'auto':Number(button.dataset[key==='versionH'?'hVersion':'hMask']);refreshHSelection();
+});
+function stopHAnimation(){if(hAnimation.request)cancelAnimationFrame(hAnimation.request);hAnimation.request=0;hAnimation.last=0;}
+function hSceneOptions(){
+  return {...hPreviewOptions(generatorState,{elapsedMs:hAnimation.elapsed,palette:paletteOf(generatorState.preset)}),zoom:Y3D_PAD_BASE/y3dPreview.pad,outline:true,faceImages:hFaceImages,lighting:{profile:resolvedRenderProfile(),shading:generatorState.shading,rotationFill:generatorState.hAutoRotate&&y3dPreview.on}};
+}
+const hPositionNodes=new Map();let hPositionLines=null;
+function paintHPositionLabels(options,cssSide){
+  const host=$('hPreviewLabels');host.hidden=hFacePositionMode==='none'||!hGeneratorActive()||!y3dPreview.on;
+  if(host.hidden||!current?.encoded)return;
+  if(!hPositionLines){hPositionLines=document.createElementNS('http://www.w3.org/2000/svg','svg');hPositionLines.classList.add('h-preview-label-lines');host.append(hPositionLines);}
+  const labels=hPreviewPositionLabels(current.encoded,{...options,qr:current.hQr,positionMode:hFacePositionMode},cssSide),seen=new Set();
+  for(const row of labels){
+    seen.add(row.face);let node=hPositionNodes.get(row.face);
+    if(!node){const child=document.createElement('div'),span=document.createElement('span'),line=document.createElementNS('http://www.w3.org/2000/svg','path');child.dataset.face=row.face;span.textContent=row.face;child.append(span);host.append(child);hPositionLines.append(line);node={child,line};hPositionNodes.set(row.face,node);}
+    node.child.hidden=false;node.child.className='h-preview-face-label'+(row.kind==='callout'?' h-callout':'');node.child.style.transform=row.matrix3d;
+    node.line.style.display=row.line?'':'none';if(row.line)node.line.setAttribute('d',`M${row.line[0].x} ${row.line[0].y}L${row.line[1].x} ${row.line[1].y}`);
+  }
+  for(const [face,node]of hPositionNodes)if(!seen.has(face)){node.child.hidden=true;node.line.style.display='none';}
+}
+function drawHPreviewFrame(){
+  if(!current||current.type!=='H')return;
+  const cssSide=els.canvasWrap.clientWidth,maxPixels=Math.min(1024,Math.max(320,cssSide*(window.devicePixelRatio||1)));
+  const options=hSceneOptions(),gpu=$('hPreviewGpu'),side=Math.round(maxPixels);
+  paintHPositionLabels(options,cssSide);
+  if(gpu.width!==side||gpu.height!==side){gpu.width=side;gpu.height=side;}
+  if(!hGpuRenderer)hGpuRenderer=createHPreviewRenderer(gpu);
+  const accelerated=hGpuRenderer.draw(current.encoded,{...options,qr:current.hQr});
+  els.view3d.classList.toggle('h-gpu',accelerated);
+  if(accelerated){
+    gpu.classList.toggle('checker',options.palette.background===null&&!backdropShowing());
+    // 포인터 좌표와 화면 맞춤은 기존 투명 hit surface를 그대로 사용해요.
+    if(els.view3d.width!==side||els.view3d.height!==side){els.view3d.width=side;els.view3d.height=side;}
+    hAnimation.scene=null;y3dPreview.mesh={hPreview:true};y3dPreview.view=null;return;
+  }
+  const scene=withHCornerQr(buildHScene(current.encoded,options),current.hQr);hAnimation.scene=scene;
+  drawScene(scene,els.view3d,maxPixels/scene.width/(window.devicePixelRatio||1));
+  y3dPreview.mesh={hScene:scene};y3dPreview.view=null;
+}
+function paintHPreview(){
+  stopHAnimation();
+  if(!current||current.type!=='H'||!y3dPreview.on){y3dPreview.mesh=null;els.view3d.classList.remove('on');return;}
+  if(hAnimation.encoded!==current.encoded){hAnimation.encoded=current.encoded;hAnimation.elapsed=0;}
+  els.view3d.classList.add('on');drawHPreviewFrame();syncOrbitPreviewUi();
+  const tick=(now)=>{
+    hAnimation.request=0;
+    if(document.hidden||cubeVideoJob||!hGeneratorActive()||!y3dPreview.on||!generatorState.hAutoRotate){hAnimation.last=0;return;}
+    if(!hAnimation.last)hAnimation.last=now;
+    const dt=now-hAnimation.last;
+    // 중복 좌표/QR 계산을 줄인 뒤 화면 vsync마다 그려요. 긴 정지의 100ms 보정은 유지해요.
+    if(dt>0){hAnimation.elapsed+=Math.min(dt,100);hAnimation.last=now;drawHPreviewFrame();}
+    hAnimation.request=requestAnimationFrame(tick);
+  };
+  if(!document.hidden&&!cubeVideoJob&&generatorState.hAutoRotate)hAnimation.request=requestAnimationFrame(tick);
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopHAnimation();else if(hGeneratorActive())paintHPreview();});
+window.addEventListener('pagehide',stopHAnimation);
 let generateDebounceState = createGenerateDebounceState();
 let generateDebounceTimer = 0;
 let lastGeneratorFailSignature = '';
@@ -7509,6 +8183,7 @@ function download(bytes, mime, filename) {
 }
 
 function exportFinderLabel(cur) {
+  if(cur.type==='H')return `H${cur.encoded.version}-${cur.encoded.mode}F`;
   if (cur.type === 'Y') return 'y-seam';
   if (cur.encoded.centerQr) return 'center-qr';
   return cur.finderPatternId || 'bullseye';
@@ -7591,7 +8266,10 @@ function svgMarkup(cur) {
 function exportPlanFor(format) {
   const ditherBits = exportDitherBits();
   let scene = current.scene;
-  if (generatorState.exportMargin === EXPORT_MARGIN_TRIM) {
+  if(current.type==='H'){
+    scene=y3dPreview.on?withHCornerQr(buildHScene(current.encoded,hSceneOptions()),current.hQr):current.scene;
+  }
+  if (current.type!=='H' && generatorState.exportMargin === EXPORT_MARGIN_TRIM) {
     const startMargin = trimExportMargin(current.type, {
       version: current.encoded.version,
       cornerQr: current.sceneOpts.qrCorner !== undefined,
@@ -7600,6 +8278,7 @@ function exportPlanFor(format) {
       current.type === 'Y' ? buildSceneY : buildScene,
       current.encoded, current.sceneOpts, startMargin,
     ).scene);
+    if(current.type==='Y')scene=outlinedYScene(scene,current.encoded);
   }
   const minPpu = minRoundtripPpu({
     type: current.type,
@@ -7626,6 +8305,7 @@ function exportPlanFor(format) {
 }
 
 els.exportPng.addEventListener('click', async () => {
+  flushScheduledRender();
   if (!current) return;
   if (decorActive(current)) {
     // 장식(β) 경로는 **현행 유지** — 캔버스 파이프라인이라 바이트 결정성 계약 밖이고,
@@ -7653,6 +8333,7 @@ els.exportPng.addEventListener('click', async () => {
 });
 
 els.exportSvg.addEventListener('click', () => {
+  flushScheduledRender();
   if (!current) return;
   if (decorActive(current)) {
     // 장식(β) SVG 경로도 현행 유지 (svgMarkup 이 장식 조각을 주입한다 — 범위 밖).
@@ -7673,12 +8354,129 @@ els.exportSvg.addEventListener('click', () => {
 
 // ── 클립보드 복사 (다운로드와 동일 파이프라인 — PNG 는 이미지, SVG 는 마크업 텍스트) ──
 
+// 회전 영상은 클릭 시점의 본문·색·자세를 고정하고, 라이브 미리보기와 별도 캔버스를 써요.
+let cubeVideoJob=null;
+let cubeVideoBackground='green';
+let cubeVideoFps=60;
+let cubeVideoCollapsed=true;
+function syncCubeVideoUi(){
+  const section=$('cubeVideoSection');if(!section)return;
+  const visible=hGeneratorActive()&&generatorState.hAutoRotate&&y3dPreview.on;
+  section.hidden=!visible&&!cubeVideoJob;
+  $('cubeVideoOptions').hidden=cubeVideoCollapsed;
+  videoToggle.innerHTML=hControlIcon(cubeVideoCollapsed?'down':'up');videoToggle.setAttribute('aria-expanded',String(!cubeVideoCollapsed));
+  videoToggle.title=hText(cubeVideoCollapsed?'expandVideo':'collapseVideo');videoToggle.setAttribute('aria-label',videoToggle.title);
+  $('cubeVideoTransparency').hidden=!visible||generatorState.bgMode!=='transparent';
+  for(const button of document.querySelectorAll('[data-video-size]'))button.disabled=!!cubeVideoJob;
+  $('cancelCubeVideo').hidden=!cubeVideoJob;
+  for(const card of $('cubeVideoFpsCards').children){const selected=Number(card.dataset.videoFps)===cubeVideoFps;card.classList.toggle('active',selected);card.setAttribute('aria-pressed',String(selected));card.disabled=!!cubeVideoJob;}
+  const speed=clampHRotationSpeed(generatorState.hRotationSpeed),seconds=Number((cubeVideoDurationMs({speed,axis:generatorState.hRotationMode})/1000).toFixed(2));
+  $('cubeVideoDuration').textContent=hText('videoDuration').replace('{seconds}',String(seconds)).replace('{speed}',String(speed))
+    +(generatorState.hRotationMode==='gyro'?' · '+hText('videoGyro'):'');
+  for(const card of $('cubeVideoBackgroundCards').children){
+    const on=card.dataset.videoBackground===cubeVideoBackground;
+    card.classList.toggle('active',on);card.setAttribute('aria-pressed',String(on));card.disabled=!!cubeVideoJob;
+  }
+}
+videoToggle.addEventListener('click',()=>{cubeVideoCollapsed=!cubeVideoCollapsed;syncCubeVideoUi();});
+for(const card of $('cubeVideoBackgroundCards').children)card.addEventListener('click',()=>{
+  if(cubeVideoJob)return;cubeVideoBackground=card.dataset.videoBackground;syncCubeVideoUi();
+});
+for(const card of $('cubeVideoFpsCards').children)card.addEventListener('click',()=>{if(cubeVideoJob)return;cubeVideoFps=Number(card.dataset.videoFps);syncCubeVideoUi();});
+$('cancelCubeVideo').addEventListener('click',()=>cubeVideoJob?.abort());
+for(const videoButton of document.querySelectorAll('[data-video-size]'))videoButton.addEventListener('click',async()=>{
+  if(cubeVideoJob)return;
+  let frameCanvas;
+  try{
+    hImageEditor.flush();flushScheduledRender();
+    if(!current||current.type!=='H'||!hGeneratorActive()||!generatorState.hAutoRotate||!y3dPreview.on)return;
+    const state={...generatorState},encoded=current.encoded,palette=structuredClone(paletteOf(state.preset)),qr={...current.hQr},faceImages=hFaceImages,fps=cubeVideoFps;
+    const side=Number(videoButton.dataset.videoSize),lighting={profile:resolvedRenderProfile(),shading:state.shading,rotationFill:true},zoom=Y3D_PAD_BASE/y3dPreview.pad;
+    const elapsed=hAnimation.elapsed,filename=exportFilename('mp4').replace(/\.mp4$/,`_${side}p_${fps}fps.mp4`),background=state.bgMode==='transparent'?cubeVideoBackground:{...palette.background};
+    cubeVideoJob=new AbortController();const signal=cubeVideoJob.signal;
+    frameCanvas=document.createElement('canvas');stopHAnimation();syncCubeVideoUi();
+    const blob=await exportCubeMp4({durationMs:cubeVideoDurationMs({speed:state.hRotationSpeed,axis:state.hRotationMode}),width:side,height:side,fps,background,signal,requireFrameAccuracy:true,
+      renderFrame:({context,canvas,timestampMs})=>{
+        const scene=withHCornerQr(buildHScene(encoded,{...hPreviewOptions(state,{elapsedMs:elapsed+timestampMs,palette}),outline:true,faceImages,lighting,zoom}),qr);
+        drawScene({...scene,background:null},frameCanvas,canvas.width/scene.width/(window.devicePixelRatio||1));
+        context.drawImage(frameCanvas,0,0,canvas.width,canvas.height);
+      },
+      onProgress:({ratio})=>{$('cubeVideoStatus').textContent=hText('videoBusy').replace('{percent}',String(Math.floor(ratio*100)));},
+    });
+    if(signal.aborted)return;
+    download(blob,'video/mp4',filename);$('cubeVideoStatus').textContent=hText('videoDone');
+  }catch(error){$('cubeVideoStatus').textContent=error?.name==='AbortError'?hText('videoCancelled'):String(error?.message??error);}
+  finally{if(frameCanvas){frameCanvas.width=1;frameCanvas.height=1;}cubeVideoJob=null;syncCubeVideoUi();paintY3dPreview();}
+});
+
+const CUBE_EXPORT_IDS=['exportNetPng','copyNetPng','exportNetSvg','copyNetSvg','exportCubeGltf','copyCubeGltf','exportCubeSchem'];
+let cubeExportBusy=false;
+const CUBE_EXPORT_LABELS={
+  ko:{heading:'3D 데이터 다운로드 / 복사하기',netShort:'전개도',netPng:'전개도 PNG ↓',netSvg:'전개도 SVG ↓',copyPng:'PNG 복사',copySvg:'SVG 복사',gltf:'큐브 glTF ↓',copyGltf:'glTF 복사',schem:'Minecraft .schem ↓',blockScale:'셀당 블록 수',
+    note:'전개도·3D 파일은 모든 실제 면을 포함해요. .schem은 선택색과 가까운 콘크리트 구조물이며 완성 월드가 아니에요. 색 근사로 스캔 성능은 달라질 수 있어요. 작은 내부 QR은 셀당 블록 수를 높여 주세요.',
+    snapshot:'위쪽 일반 PNG/SVG는 현재 H 시점 또는 Y의 기본 지면이에요. 6면 H의 한 시점 이미지에는 반대쪽 본문이 보이지 않아요.',unsupported:'이 브라우저는 gzip 압축을 지원하지 않아요. glTF 또는 전개도를 내려받아 주세요.',copied:'복사했어요.',busy:'구조물 파일을 만들고 있어요.'},
+  en:{heading:'3D data download / copy',netShort:'Net',netPng:'Cube net PNG ↓',netSvg:'Cube net SVG ↓',copyPng:'Copy PNG',copySvg:'Copy SVG',gltf:'Cube glTF ↓',copyGltf:'Copy glTF',schem:'Minecraft .schem ↓',blockScale:'Blocks per cell',
+    note:'Net and 3D files contain all physical faces. The .schem file is a concrete structure in approximate selected colors, not a complete world. Color quantization can affect scanning. Increase blocks per cell for small embedded QR codes.',
+    snapshot:'Standard PNG/SVG exports the current H view or the default Y plane. One view of a six-face H code cannot show the data on its opposite faces.',unsupported:'This browser does not support gzip. Download glTF or a cube net instead.',copied:'Copied.',busy:'Building structure file…'},
+};
+function cubeText(key){return (CUBE_EXPORT_LABELS[genI18n.lang]??CUBE_EXPORT_LABELS.en)[key];}
+function syncCubeExportUi(){
+  $('cubeExportSection').hidden=generatorState.type!=='Y';
+  for(const node of document.querySelectorAll('[data-cube-label]'))node.textContent=cubeText(node.dataset.cubeLabel);
+  for(const id of CUBE_EXPORT_IDS)$(id).disabled=cubeExportBusy||(id==='exportCubeSchem'&&typeof CompressionStream!=='function');
+  for(const [id,kind,key,label]of [['exportNetPng','net','netPng',cubeText('netShort')],['exportNetSvg','net','netSvg',cubeText('netShort')],['exportCubeGltf','gltf','gltf','glTF'],['exportCubeSchem','schem','schem','schem'],['copyNetPng','copy','copyPng',''],['copyNetSvg','copy','copySvg',''],['copyCubeGltf','copy','copyGltf','']]){
+    const button=$(id);button.removeAttribute('data-cube-label');button.title=cubeText(key);button.setAttribute('aria-label',cubeText(key));button.innerHTML=hExportIconMarkup(kind)+(label?`<span>${label}</span>`:'');if(kind==='copy')button.classList.add('icon-btn');
+  }
+  for(const button of $('cubeBlockScaleCards').children){const scale=Number(button.dataset.blockScale),on=String(scale)===$('cubeBlockScale').value;button.innerHTML=hBlockIconMarkup(scale)+`<span>${scale} × ${scale}</span>`;button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));button.disabled=cubeExportBusy;}
+  $('exportCubeSchem').title=typeof CompressionStream!=='function'?cubeText('unsupported'):'Sponge v3 · Java 1.20.4+';
+}
+for(const button of $('cubeBlockScaleCards').children)button.addEventListener('click',()=>{if(cubeExportBusy)return;$('cubeBlockScale').value=button.dataset.blockScale;syncCubeExportUi();});
+function cubeExportModel(){return generatorCubeModel(current,paletteOf(generatorState.preset));}
+function cubeNetPlan(format){
+  const scene=cubeNetScene(cubeExportModel()),size=resolveExportSize({mode:generatorState.exportSize,customWidth:generatorState.exportWidth|0,customHeight:generatorState.exportHeight|0,sceneWidth:scene.width,sceneHeight:scene.height,minPpu:4});
+  return {scene,plan:{...size,ditherBits:exportDitherBits(),ppi:format==='png'?resolveExportPpi({purpose:generatorState.exportPpi,detail:generatorState.exportPpiDetail,ditherBits:exportDitherBits()}):undefined}};
+}
+for(const id of CUBE_EXPORT_IDS)$(id).addEventListener('click',async()=>{
+  if(cubeExportBusy)return;
+  const button=$(id),status=$('cubeExportStatus');
+  try{
+    // 입력 직후120ms 대기 중이면 새 본문부터 만든 뒤 스냅샷을 잡아요.
+    hImageEditor.flush();flushScheduledRender();
+    if(!current||!['Y','H'].includes(current.type))return;
+    cubeExportBusy=true;syncCubeExportUi();status.textContent='';
+    // await 뒤에는 current나 옵션을 다시 읽지 않아요. 압축 중 타입을 바꾸거나
+    // 새 입력이 실패해도 완료한 파일의 이름·내용은 클릭 당시 모델에 결속돼요.
+    const extension=id==='exportCubeSchem'?'schem':id.endsWith('Gltf')?'gltf':id.endsWith('Png')?'png':'svg';
+    const filename=id.startsWith('copy')?null:exportFilename(extension);
+    if(id==='exportCubeSchem'){
+      status.textContent=cubeText('busy');
+      const model=cubeExportModel(),voxels=voxelizeCube(model,{scale:Number($('cubeBlockScale').value)}),bytes=await gzipSchematic(voxels,{name:'TLcube'});
+      download(bytes,'application/octet-stream',filename);
+      status.textContent=`${voxels.width} × ${voxels.height} × ${voxels.length} · Sponge v3 · Java 1.20.4+`;
+    }else if(id.endsWith('Gltf')){
+      const text=JSON.stringify(cubeModelToGltf(cubeExportModel()));
+      if(id.startsWith('copy')){await navigator.clipboard.writeText(text);flashCopied(button);status.textContent=cubeText('copied');}
+      else download(new TextEncoder().encode(text),'model/gltf+json',filename);
+    }else{
+      const png=id.endsWith('Png'),{scene,plan}=cubeNetPlan(png?'png':'svg');
+      const data=png?renderExportPng(scene,plan):renderExportSvg(scene,{width:plan.width,height:plan.height});
+      if(id.startsWith('copy')){
+        if(png)await navigator.clipboard.write([new ClipboardItem({'image/png':new Blob([data],{type:'image/png'})})]);
+        else await navigator.clipboard.writeText(data);
+        flashCopied(button);status.textContent=cubeText('copied');
+      }else download(png?data:new TextEncoder().encode(data),png?'image/png':'image/svg+xml',filename.replace(/\.(png|svg)$/,'_net.$1'));
+    }
+  }catch(error){status.textContent=String(error?.message??error);}
+  finally{cubeExportBusy=false;syncCubeExportUi();}
+});
+
 function flashCopied(btn) {
   btn.classList.add('copied');
   setTimeout(() => btn.classList.remove('copied'), 1200);
 }
 
 $('copyPng').addEventListener('click', async () => {
+  flushScheduledRender();
   if (!current) return;
   try {
     let blob;
@@ -7698,6 +8496,7 @@ $('copyPng').addEventListener('click', async () => {
 });
 
 $('copySvg').addEventListener('click', async () => {
+  flushScheduledRender();
   if (!current) return;
   try {
     let markup;
@@ -7943,7 +8742,9 @@ function drawScene(scene, canvas, ppu) {
   }
   ctx.lineJoin = 'round';
   ctx.lineWidth = 0.03;
+  if(scene.hLighting)paintShading(ctx,scene);
   for (const s of scene.shapes) {
+    if(s.kind==='image'){drawSceneImage(ctx,s);continue;}
     ctx.fillStyle = rgbCss(s.color);
     ctx.beginPath();
     if (s.kind === 'polygon') {
@@ -7951,14 +8752,13 @@ function drawScene(scene, canvas, ppu) {
       for (let i = 1; i < s.points.length; i += 1) ctx.lineTo(s.points[i].x, s.points[i].y);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = ctx.fillStyle;
-      ctx.stroke();
+      if(!s.qr){ctx.strokeStyle = ctx.fillStyle;ctx.stroke();}
     } else {
       ctx.arc(s.cx, s.cy, s.r, 0, Math.PI * 2);
       ctx.fill();
     }
   }
-  paintShading(ctx, scene);
+  if(!scene.hLighting)paintShading(ctx, scene);
 }
 
 /**
@@ -8020,23 +8820,46 @@ const Y3D_SNAPSHOT_SIZE = 1024;
 
 function syncOrbitPreviewUi() {
   const isY = generatorState.type === 'Y';
+  const isH = hGeneratorActive();
+  const label=els.y3dBar.querySelector('[data-i18n="g885"]');
+  if(label)label.textContent=isH?hText('viewer'):t('g885');
+  const help=els.y3dBar.querySelector('[data-help="g886"]');if(help)help.hidden=isH;
+  els.view3d.setAttribute('aria-label',isH?hText('viewer'):t('g883'));
   if (!isY) y3dPreview.on = false;
   els.y3dBar.hidden = !isY;
+  syncCubeVideoUi();
   els.y3dMode25.classList.toggle('on', !y3dPreview.on);
+  els.y3dMode25.disabled=isH&&!hCanPreview25(generatorState,hFaceImages);
+  els.y3dMode25.title=els.y3dMode25.disabled?hText('planarUnavailable'):'';
+  $('hPreviewLabels').hidden=!isH||!y3dPreview.on||hFacePositionMode==='none';
   els.y3dMode3d.classList.toggle('on', y3dPreview.on);
   els.y3dOrbitRow.hidden = !isY || !y3dPreview.on;
   els.y3dViewRow.hidden = !isY || !y3dPreview.on;
   els.y3dSnapRow.hidden = !isY || !y3dPreview.on;
   els.view3d.classList.toggle('on', isY && y3dPreview.on);
   els.y3dCell.classList.toggle('on', y3dPreview.mode === 'cell');
+  els.y3dCell.hidden=isH;
+  els.y3dField.hidden=isH;
+  if(isH)y3dPreview.faces=generatorState.hRenderFaces;
   els.y3dField.classList.toggle('on', y3dPreview.mode === 'field');
   els.y3dFaces3.classList.toggle('on', y3dPreview.faces !== 6);
   els.y3dFaces6.classList.toggle('on', y3dPreview.faces === 6);
-  els.y3dPersp.value = String(y3dPreview.persp);
+  els.y3dFaces6.textContent=isH&&generatorState.hFaces<=3?hText('face6Repeat'):t('g892');
+  els.y3dFaces3.disabled=isH&&generatorState.hFaces>3;
+  $('hAlignHorizontal').hidden=!isH;$('hAlignVertical').hidden=!isH;
+  $('hPreviewRotationControls').hidden=!isH||!y3dPreview.on;
+  const perspectiveDegrees=Math.round(orbitPerspToDeg(y3dPreview.persp));
+  els.y3dPersp.value = String(perspectiveDegrees);
   // 0 은 «평면» — 그 자리에서 0° 라고 쓰면 «원근이 0도» 처럼 읽혀 축이 헷갈린다.
   els.y3dPerspValue.textContent = y3dPreview.persp === 0
     ? t('g890')
-    : tf('g896', { deg: Math.round(orbitPerspToDeg(y3dPreview.persp)) });
+    : isH ? `${hText('perspective')} ${perspectiveDegrees}°`
+      : tf('g896', { deg: perspectiveDegrees });
+  els.y3dPoseReset.hidden=false; // Y/H 공통 3D 바에서 자세와 원근을 각각 초기화해요.
+  els.y3dPoseReset.textContent=hText('resetPose');els.y3dPerspPlane.textContent=hText('plane');
+  if(isH){
+    els.y3dPersp.setAttribute('aria-label',hText('perspective'));
+  }
   // ⚠ `current` 를 여기서 읽지 않는다 — 이 함수는 TEXT_SYNCERS 로 초기화 도중에도
   //    불릴 수 있고 `current` 는 아래에서 `let` 으로 선언돼 TDZ 에 걸린다.
   //    mesh 는 paintY3dPreview 가 «그릴 게 있을 때만» 채우고 아니면 null 로 지운다.
@@ -8048,7 +8871,9 @@ function syncOrbitPreviewUi() {
   els.y3dSnapSave.disabled = !canSnap;
   els.y3dSnapCopy.disabled = !canSnap;
   const cellMode = y3dPreview.mode === 'cell';
-  els.y3dDigits.hidden = !cellMode;
+  els.y3dDigits.hidden = isH || !cellMode;
+  const snapHint=els.y3dSnapRow.querySelector('[data-i18n="g895"]');
+  if(snapHint)snapHint.textContent=isH?hText('renderNote'):t('g895');
   for (const btn of els.y3dDigits.querySelectorAll('.y3d-digit')) {
     btn.classList.toggle('on', Number(btn.dataset.digit) === y3dPreview.digit);
   }
@@ -8072,9 +8897,13 @@ function syncOrbitPreviewUi() {
    * 부작용도 없다.
    */
   syncShotPresetUi();
+  decoratePreviewControls();schedulePreviewSquare();
 }
 
 function paintY3dPreview() {
+  if(hGeneratorActive()){paintHPreview();return;}
+  stopHAnimation();
+  els.view3d.classList.remove('h-gpu');
   const show = generatorState.type === 'Y' && y3dPreview.on
     && current && current.type === 'Y' && current.encoded;
   if (!show) {
@@ -8258,6 +9087,7 @@ function paintY3dPreview() {
   y3dPreview.flatShapes = flatShapes;
   // 배치 미리보기가 떠 있으면 3D 도 그 위에 **얹혀야** 한다 (z-index 2 라 안 그러면 가린다).
   y3dPreview.view = paintQuads(ctx, y3dPreview.mesh, {
+    outline:true,
     background: bg,
     transparent: clearInsteadOfFill,
     pad: y3dPreview.pad,
@@ -8292,6 +9122,15 @@ function paintY3dPreview() {
  *   비례 축소해야 화면과 같은 여백이 나온다 (`fitViewStable` 이 min(w,h)/2 − pad 를 쓴다).
  */
 function y3dSnapshotBlob() {
+  if(hGeneratorActive()){
+    flushScheduledRender();
+    return new Promise((resolve,reject)=>{
+      if(!current||current.type!=='H'){reject(new Error('no H preview'));return;}
+      const canvas=document.createElement('canvas'),scene=withHCornerQr(buildHScene(current.encoded,hSceneOptions()),current.hQr);
+      drawScene(scene,canvas,Y3D_SNAPSHOT_SIZE/scene.width/(window.devicePixelRatio||1));
+      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error(t('g405'))),'image/png');
+    });
+  }
   return new Promise((resolve, reject) => {
     if (!y3dPreview.mesh || !y3dPreview.layout) {
       reject(new Error('no y3d mesh'));
@@ -8312,6 +9151,7 @@ function y3dSnapshotBlob() {
      */
     const alpha = y3dPreview.transparent === true;
     paintQuads(off.getContext('2d', { alpha }), y3dPreview.mesh, {
+      outline:true,
       background: y3dPreview.bg,
       transparent: alpha,
       pad: y3dPreview.pad * (size / Math.max(live, 1)),
@@ -8331,7 +9171,7 @@ async function y3dSnapshotDownload() {
   // 같은 초에 여러 번 눌러도 `_02` 순번이 공짜로 붙는다.
   const name = nextExportFilename({
     extension: 'png',
-    type: 'Y-view',
+    type: hGeneratorActive()?'H-view':'Y-view',
     version: 'snapshot',
     finder: current ? exportFinderLabel(current) : 'y-seam',
   });
@@ -8374,8 +9214,16 @@ els.y3dSnapCopy.addEventListener('click', async () => {
 //    뷰 스냅샷을 섞으면 export 지표가 조용히 부풀어 오른다 (결정: 생략).
 
 els.y3dMode25.addEventListener('click', () => {
+  if(hGeneratorActive()&&!hCanPreview25(generatorState,hFaceImages))return;
+  if(hGeneratorActive()&&current?.encoded){
+    const planar=hPlanarPreviewOptions(current.encoded,hSceneOptions(),hFaceImages);if(!planar)return;
+    Object.assign(y3dPreview,hOrbitFromRotation(planar));hAnimation.elapsed=0;
+  }
   y3dPreview.on = false;
+  if(hGeneratorActive()){generatorState.hAutoRotate=false;generatorState.hAutoRotateIntent='off';hAnimation.scene=current?.scene??null;syncHUi();}
+  stopHAnimation();
   syncOrbitPreviewUi();
+  if(hGeneratorActive())schedule();
 });
 els.y3dMode3d.addEventListener('click', () => {
   y3dPreview.on = true;
@@ -8393,22 +9241,41 @@ els.y3dField.addEventListener('click', () => {
   paintY3dPreview();
 });
 els.y3dFaces3.addEventListener('click', () => {
+  if(hGeneratorActive()&&generatorState.hFaces>3)return;
+  if(hGeneratorActive()){Object.assign(generatorState,selectHRenderFaces(generatorState,3));refreshHSelection();return;}
   y3dPreview.faces = 3;
   syncOrbitPreviewUi();
   paintY3dPreview();
 });
 els.y3dFaces6.addEventListener('click', () => {
+  if(hGeneratorActive()){Object.assign(generatorState,selectHRenderFaces(generatorState,6));refreshHSelection();return;}
   y3dPreview.faces = 6;
   syncOrbitPreviewUi();
   paintY3dPreview();
 });
+function setY3dPerspectiveDegrees(value){
+  const degrees=Number.isFinite(Number(value))?Math.min(ORBIT_PERSP_MAX_DEG,Math.max(0,Math.round(Number(value)))):0;
+  y3dPreview.persp=orbitTToPersp(degrees/ORBIT_PERSP_MAX_DEG);
+  paintY3dPreview();
+}
 // 'input' 이다 — 'change' 면 손을 뗄 때까지 화면이 안 따라온다.
 els.y3dPersp.addEventListener('input', () => {
-  const v = Number(els.y3dPersp.value);
-  y3dPreview.persp = Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0;
-  paintY3dPreview();
+  setY3dPerspectiveDegrees(els.y3dPersp.value);
 });
+els.y3dPerspPlane.addEventListener('click',()=>setY3dPerspectiveDegrees(0));
+els.y3dPerspDown.addEventListener('click',()=>setY3dPerspectiveDegrees(Math.round(orbitPerspToDeg(y3dPreview.persp))-1));
+els.y3dPerspUp.addEventListener('click',()=>setY3dPerspectiveDegrees(Math.round(orbitPerspToDeg(y3dPreview.persp))+1));
+els.y3dPoseReset.addEventListener('click',()=>{
+  if(hGeneratorActive()){generatorState.hAutoRotate=false;generatorState.hAutoRotateIntent='off';hAnimation.elapsed=0;syncHUi();}
+  y3dPreview.yaw=0;y3dPreview.pitch=0;y3dPreview.roll=0;paintY3dPreview();
+});
+$('y3dRollReset').addEventListener('click',()=>{
+  if(hGeneratorActive()){freezeHSpin();generatorState.hAutoRotate=false;generatorState.hAutoRotateIntent='off';syncHUi();}
+  y3dPreview.roll=0;paintY3dPreview();
+});
+$('y3dZoomReset').addEventListener('click',()=>{y3dPreview.pad=Y3D_PAD_BASE;paintY3dPreview();});
 els.y3dReset.addEventListener('click', () => {
+  if(hGeneratorActive()){generatorState.hAutoRotate=false;generatorState.hAutoRotateIntent='off';hAnimation.elapsed=0;syncHUi();}
   y3dPreview.yaw = 0;
   y3dPreview.pitch = 0;
   // ⚠ roll·원근도 0 으로 돌린다 — 안 그러면 g884 「아이소메트릭 (정위치)」가 거짓말이
@@ -8441,6 +9308,7 @@ function y3dPointerAngle(ev) {
 
 els.view3d.addEventListener('pointerdown', (ev) => {
   if (!y3dPreview.on) return;
+  if(hGeneratorActive()){freezeHSpin();generatorState.hAutoRotate=false;generatorState.hAutoRotateIntent='off';stopHAnimation();syncHUi();}
   ev.stopPropagation();
   try { els.view3d.setPointerCapture(ev.pointerId); } catch { /* 캡처 없이 진행 */ }
   y3dPreview.dragging = true;
@@ -8476,7 +9344,14 @@ els.view3d.addEventListener('pointermove', (ev) => {
   if (y3dPreview.dragMode === 'roll') {
     // 화면 CCW 가 양수 roll 이고 캔버스 y 는 아래가 양수라, 포인터 각의 증가는
     // 화면에서 시계 방향이다 — 그래서 부호를 뒤집어 손을 따라오게 한다.
-    y3dPreview.roll = y3dPreview.rollStart - (y3dPointerAngle(ev) - y3dPreview.rollAngle0);
+    const angle=y3dPointerAngle(ev);
+    if(hGeneratorActive()){
+      Object.assign(y3dPreview,hPointerDragPose(y3dPreview,{rollDelta:angle-y3dPreview.rollAngle0}));
+      y3dPreview.rollAngle0=angle;
+    }else{
+      const drag=hPointerDragDelta({rollDelta:angle-y3dPreview.rollAngle0});
+      y3dPreview.roll=y3dPreview.rollStart+drag.roll;
+    }
     paintY3dPreview();
     return;
   }
@@ -8484,11 +9359,12 @@ els.view3d.addEventListener('pointermove', (ev) => {
   const dy = ev.clientY - y3dPreview.lastY;
   y3dPreview.lastX = ev.clientX;
   y3dPreview.lastY = ev.clientY;
-  // ⚠ **부호가 음수다 — 「큐브를 끈다」** (2026-08-26 운영자 지시).
-  //    양수면 «카메라를 끈다» 가 되어, 오른쪽으로 끌면 큐브가 왼쪽으로 돈다.
-  //    사용자는 손가락 밑의 물체가 손가락을 따라오길 기대한다.
-  y3dPreview.yaw -= dx * 0.01;
-  y3dPreview.pitch -= dy * 0.01;
+  // Y는 기존 조작을 보존하고 H는 현재 자세에 화면축 증분을 합성해요.
+  if(hGeneratorActive())Object.assign(y3dPreview,hPointerDragPose(y3dPreview,{dx,dy}));
+  else{
+    const drag=hPointerDragDelta({dx,dy});
+    y3dPreview.yaw+=drag.yaw;y3dPreview.pitch+=drag.pitch;
+  }
   paintY3dPreview();
 });
 const endY3dPointer = (ev) => {
@@ -8501,6 +9377,7 @@ els.view3d.addEventListener('pointerup', endY3dPointer);
 els.view3d.addEventListener('pointercancel', endY3dPointer);
 els.view3d.addEventListener('wheel', (ev) => {
   if (!y3dPreview.on) return;
+  if (!ev.ctrlKey) return;
   ev.preventDefault();
   ev.stopPropagation();
   // ⚠ **Shift+휠은 브라우저가 가로 스크롤로 리매핑한다** — Chrome·Edge·Firefox 가
@@ -8531,7 +9408,7 @@ els.view3d.addEventListener('keydown', (ev) => {
     paintY3dPreview();
     return;
   }
-  if (ev.key >= '0' && ev.key <= '5') {
+  if (!hGeneratorActive() && ev.key >= '0' && ev.key <= '5') {
     ev.preventDefault();
     y3dPreview.digit = Number(ev.key);
     y3dPreview.mode = 'cell';
@@ -8556,6 +9433,8 @@ window.addEventListener('resize', () => {
  * 새 «모드별 자리» 섹션이 생기면 여기에만 넣는다 — 리스너에 흩지 마라.
  */
 function placeModeHostedSections() {
+  const hHost=mode==='advanced'?$('hHostAdvanced'):$('hHostNormal');
+  if(hHost&&$('hTypeSection').parentElement!==hHost)hHost.append($('hTypeSection'));
   // 자체검증 뱃지는 «안정성 ⇄ 용량» 바로 아래에 있어야 한다(A-7). 고급 모드에는 그
   // 카드 행이 없으므로 대응 위치(버전·ECC 행 아래)로 **같은 요소를 옮긴다** — 두 벌을
   // 두면 어느 쪽이 최신인지가 화면마다 갈린다.
@@ -9532,6 +10411,9 @@ for (const card of els.centralN7EmphasisCards.children) {
 
 // Type O/A/K 중앙 파인더 선택기 — 정규화 뒤 QR/파인더 UI를 각각 한 번만 그린다.
 function renderFinderUi() {
+  if(hGeneratorActive()){
+    els.finderSection.hidden=true;els.finderExperimentalWarning.style.display='none';return;
+  }
   ensureFinderCards();
   syncCentralN7EmphasisUi();
   // «중앙 파인더 축이 있는 타입인가» — 강조 섹션의 앵커 판정과 **같은 술어**다
@@ -9786,7 +10668,7 @@ function ySlotLocatorActive() {
  *  encodeOptionsForY 가 레이아웃 분기를 먼저 타므로 윈도는 안 실린다 — 이 술어가
  *  encoded.window === true 와 같은 진리값을 낸다 (끔·hex 만 참). */
 function yWindowActive() {
-  return currentType() === 'Y' && generatorState.qrPosition === 'inner'
+  return !hGeneratorActive() && currentType() === 'Y' && generatorState.qrPosition === 'inner'
     && !isCellSurfaceLocatorProfileY(generatorState.locatorProfileY);
 }
 
@@ -9825,6 +10707,8 @@ function deriveYLocatorForQrPosition(pos) {
 }
 
 function renderQrPositionUi() {
+  $('qrLinkSection').hidden=false;
+  const isH=hGeneratorActive();
   const isY = currentType() === 'Y';
   /*
    * QR 위치가 상위 축이다 (2026-08-29 운영자 확정). 안쪽 카드는 타입·모드·현재
@@ -9832,18 +10716,18 @@ function renderQrPositionUi() {
    * center-qr 로 양보시키는 쪽에서 한다. 반대 방향 잠금은 renderFinderUi 가 맡는다.
    * Type Y 에도 O/A/K 의 finderPatternId 스냅샷이 남아 있으므로 여기서 파인더를 보고
    * 잠그면, 숨겨진 검출기 섹션을 열기 위한 안쪽 카드 자체가 영구 잠기는 순환이 된다.
-   * Type C 잠금은 CQ 개통(2026-08-30, formatIndex 4)으로 소멸 — 안쪽 카드는 이제
-   * 어느 정권에서도 잠기지 않는다.
+   * Type C 잠금은 CQ 개통(2026-08-30, formatIndex 4)으로 소멸했다.
+   * 2026-09-12 H만 예외: 물리면의 안쪽 QR은 잠그되 기존 선택값과 다른 타입의 위계는 보존한다.
    */
   els.qrPosInner.title = isY ? t('g406') : t('g407');
   for (const card of els.qrPositionCards.children) {
-    card.classList.toggle('active', card.dataset.pos === generatorState.qrPosition);
+    card.classList.toggle('active', card.dataset.pos === (isH?hQrPosition(generatorState.qrPosition):generatorState.qrPosition));
     if (card.dataset.pos === 'inner') {
-      card.classList.remove('disabled');
-      card.setAttribute('aria-disabled', 'false');
+      card.classList.toggle('disabled',isH);
+      card.setAttribute('aria-disabled', String(isH));
     }
   }
-  const inner = generatorState.qrPosition === 'inner';
+  const inner = !isH&&generatorState.qrPosition === 'inner';
   els.qrCornerToo.checked = generatorState.qrCornerToo;
   els.qrCenterHint.style.display = inner && !isY ? '' : 'none';
   els.cornerTooRow.style.display = mode === 'advanced' && inner && !isY ? '' : 'none';
@@ -9879,8 +10763,10 @@ function wireTypeCards(container) {
   for (const card of container.children) {
     card.addEventListener('click', () => {
       const type = card.dataset.type;
+      const next=selectGeneratorType(generatorState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
+      if(type==='Y'&&isHGenerator(next)&&generatorState.type!=='Y')next.orbitView='3d';
       commitFinderQrUi(
-        selectGeneratorType(generatorState, type, GENERATOR_DEFAULT_FINDER_PATTERN_ID), type,
+        next, type,
       );
     });
   }
@@ -9901,7 +10787,7 @@ for (const card of els.qrPositionCards.children) {
     // plane 카드 삭제와 함께 내렸다. Y 의 안쪽 QR 은 (안쪽 여부) × (면 배치) 로
     // 분해됐고, 로케이터 파생은 §deriveYLocatorForQrPosition 한 방향뿐이다.
     // 자동(기본값)이면 새 위치 기준으로 base 부터 재유도한다 (2026-08-24 승격).
-    if (type === 'Y') {
+    if (type === 'Y'&&!hGeneratorActive()) {
       if (detectorAutoY) applyAutoLocatorProfileY(card.dataset.pos);
       else deriveYLocatorForQrPosition(card.dataset.pos);
     }
@@ -10016,6 +10902,13 @@ for (const card of els.eccTierCards.children) {
 /** 해상도 카드 타입별 가용성 — 전 타입 3단이 열려 있고(ADR 0006 비준),
  *  Y+안쪽(윈도 β)만 Y2 전용이라 저·중을 함께 비활성한다. */
 function syncResTierUi() {
+  const isH=hGeneratorActive();
+  els.resTierCards.hidden=isH;
+  els.resTierHint.hidden=isH;
+  if(isH)return;
+  for(const card of els.resTierCards.children){
+    const sub=card.querySelector('.card-sub[data-i18n]');if(sub)sub.textContent=t(sub.dataset.i18n);
+  }
   const type = currentType();
   const isO = type === 'O';
   const typeCActive = typeCGeneratorActive();
@@ -10119,6 +11012,7 @@ function syncResTierUi() {
 
 for (const card of els.resTierCards.children) {
   card.addEventListener('click', () => {
+    if(hGeneratorActive()){generatorState.versionH=H_RESOLUTION_VERSIONS[card.dataset.res];refreshHSelection();return;}
     if (card.classList.contains('disabled')) return;
     const type = currentType();
     // #22: v0 계열의 해상도 선택은 로케이터 전환이다 — versionY 저장값은 건드리지
@@ -10338,6 +11232,9 @@ function withShading(scene, type) {
 }
 
 function syncQuietModeUi() {
+  $('quietSection').hidden=hGeneratorActive();
+  $('hFrameHint').hidden=!hGeneratorActive();
+  if(hGeneratorActive())return;
   /*
    * ⭐ **카드 라인업이 타입에 따라 갈린다** (운영자 결정 2026-09-01).
    *   · Type Y : 자동 · 없음 · **표면 색**   (흑/백 판은 실루엣을 깨서 축 자체를 내렸다)
@@ -10628,6 +11525,7 @@ function resolveVersionForLayoutSafe() {
 /** 자동이 켜져 있으면 현재 옵션으로 프로파일을 재유도한다 — versionY·QR 위치가
  *  바뀌는 자리마다 부른다 (자동은 상태가 아니라 정책이라 스스로 안 따라온다). */
 function applyAutoLocatorProfileY(pos = generatorState.qrPosition) {
+  if(hGeneratorActive())return;
   if (!detectorAutoY) return;
   generatorState.locatorProfileY = resolveAutoLocatorProfileY(pos);
   deriveYLocatorForQrPosition(pos);
@@ -11456,6 +12354,7 @@ async function copyTypeYCellEditorJson() {
 }
 
 function syncTypeYCellEditorUi() {
+  if(hGeneratorActive()){if(els.yCellEditorSection)els.yCellEditorSection.hidden=true;return;}
   const section = els.yCellEditorSection;
   if (!section) return;
   const followed = effectiveEditorTypeFromGenerator();
@@ -12013,6 +12912,7 @@ els.backdropFit.addEventListener('click', () => {
 
   let wheelTimer = null;
   els.canvasWrap.addEventListener('wheel', (e) => {
+    if(y3dPreview.on)return;
     if (!active()) return;
     e.preventDefault();
     hideGestureHint(false);
@@ -12178,6 +13078,7 @@ function decorSvgFragment(scene, faceGains) {
 // ── 고급 모드: 옵션 패널 표시 전환 (QR 폴백 선택은 공용 6택 카드가 담당) ──
 
 function syncTypeUi() {
+  syncHUi();
   const type = generatorState.type;
   const isY = type === 'Y';
   const isA = type === 'A';
@@ -12254,7 +13155,7 @@ function syncTypeUi() {
   // (O 는 1/2/3 · K 는 0/1/2 라 한 칸 어긋난 k 를 고르게 된다).
   els.versionWrapO.style.display = (isY || isA || isK) ? 'none' : '';
   els.versionWrapC.style.display = isC ? '' : 'none';
-  els.versionWrapY.style.display = isY ? '' : 'none';
+  els.versionWrapY.style.display = isY && !hGeneratorActive() ? '' : 'none';
   els.versionWrapA.style.display = isA ? '' : 'none';
   els.versionWrapK.style.display = isK ? '' : 'none';
   els.optionsY.style.display = isY ? '' : 'none';
@@ -12670,7 +13571,7 @@ function syncFaceGainLabel() {
   // 원칙으로 잠근다 («움직였는데 아무 일도 안 일어난다» 를 만들지 않는다).
   const base = profileFaceGains();
   const flat = base.L === 1 && base.R === 1;
-  els.faceGain.disabled = flat;
+  els.faceGain.disabled = flat || hGeneratorActive();
   els.faceGainRow.classList.toggle('dim', flat);
 }
 syncFaceGainLabel();
@@ -12772,6 +13673,7 @@ function syncShadingUi() {
     card.classList.toggle('active', card.dataset.shading === generatorState.shading);
   }
   const on = generatorState.shading === SHADING_ON;
+  els.shadingRimRow.hidden=hGeneratorActive();
   els.shadingRim.checked = generatorState.shadingRim === true;
   // 음영이 꺼져 있으면 서브옵션은 그림에 아무 영향이 없다. 누를 수 있게 두면
   // «체크했는데 아무 일도 안 일어난다» 가 된다.
@@ -13078,9 +13980,12 @@ function syncShotPresetUi() {
   const section = $('shotPresetSection');
   if (!section) return;
   // 시험판 전용 — 운영자가 「시험판 생성기에」로 지정했다. #yLocatorSection 과 같은 술어.
-  const lab = isLabPath();
+  const lab = isLabPath() && hGeneratorActive();
   section.hidden = !lab;
   if (!lab) return;
+  section.querySelector('[data-i18n="g1031"]').textContent=hText('presets');
+  section.querySelector('[data-i18n="g1032"]').textContent=hText('presetNote');
+  section.querySelector('[data-i18n="g1038"]').hidden=true;
   const model = shotPresetUiModel(generatorState);
   const host = $('shotPresetGroups');
   if (host) {
@@ -13107,16 +14012,16 @@ syncShotPresetUi();
 function buildConfig() {
   const type = generatorState.type;
   const typeC = typeCGeneratorActive();
-  const fallback = resolveFallback(type, generatorState.qrPosition);
+  const fallback = resolveFallback(type, hGeneratorActive()?hQrPosition(generatorState.qrPosition):generatorState.qrPosition);
   const configuredQrText = generatorState.qrText.trim();
-  const useReaderFamilyHint = document.body.dataset.generatorEdition === 'official';
   if (fallback.mode === 'center') fallback.cornerToo = generatorState.qrCornerToo;
 
   const selectedVersion = (candidate) =>
     candidate === 'auto' ? undefined : Number(candidate);
 
   return {
-    type,
+    type:hGeneratorActive()?'H':type,
+    versionH:generatorState.versionH,hFaces:generatorState.hFaces,hMask:generatorState.hMask,
     typeC,
     text: normalPayloadText(), // 콘텐츠 입력은 양 모드가 같은 DOM을 공유한다.
     eccLevel: generatorState.eccLevel,
@@ -13176,7 +14081,7 @@ function buildConfig() {
     // 기본 TL 리더 URL일 때만 실루엣 가족 힌트를 붙인다. 사용자 URL은 한 글자라도
     // 바꾸지 않는다. Type C는 O 화면의 파생이므로 type 값 대신 C 등록부를 고른다.
     qrText: configuredQrText === '' || configuredQrText === TL_READER_URL
-      ? (useReaderFamilyHint ? tlReaderUrlWithHint(typeC ? 'C' : type) : TL_READER_URL)
+      ? tlReaderUrlWithHint(typeC ? 'C' : type)
       : configuredQrText,
     faceGains: currentFaceGains(),
     finderPatternId: generatorState.finderPatternId,
@@ -13233,6 +14138,7 @@ function encodeWithEcc(encodeFn, text, baseOpts, eccLevel) {
 
 /** 타입별 인코더 함수 + 기본 옵션 — 렌더와 용량 초과 절단 프로브가 공유한다. */
 function encodeOptsFor(cfg) {
+  if(cfg.type==='H')return {fn:encodeH,opts:{version:cfg.versionH,mode:cfg.hFaces,tones:cfg.tone,mask:cfg.hMask,finder:'auto',maskLuminance:hMaskLuminance(paletteOf(cfg.presetName),cfg.tone)}};
   if (cfg.type === 'Y') {
     // 윈도 β 의 Y2·2톤 강제는 `encodeOptionsForY` 가 계약으로 들고 있다 — 여기 인라인으로
     // 두었을 때 tones 강제가 빠져 RangeError 로 렌더가 통째로 죽은 적이 있다.
@@ -13437,6 +14343,19 @@ function selfCheckMarkup(check, okKey, okVars, failKey, failVars) {
   return `<span class="badge ${label.cls}">${body}</span>${detail}`;
 }
 
+function renderTypeH(cfg){
+  syncHFaceImagesUi();
+  const {fn,opts}=encodeOptsFor(cfg),encoded=encodeWithEcc(fn,cfg.text,opts,cfg.eccLevel);
+  let sceneOpts={...hPreviewOptions({...generatorState,hAutoRotate:false}),palette:paletteOf(cfg.presetName),outline:true,faceImages:hFaceImages,lighting:{profile:resolvedRenderProfile(),shading:generatorState.shading}};
+  if(!y3dPreview.on)sceneOpts=hPlanarPreviewOptions(encoded,sceneOpts,hFaceImages)??sceneOpts;
+  const hQr=cfg.fallback.mode==='corner'?{text:cfg.qrText,corner:cfg.fallback.corner}:{};
+  const scene=withHCornerQr(buildHScene(encoded,sceneOpts),hQr),check=decodeH(encoded.faces,{version:encoded.version,mode:encoded.mode,tones:encoded.tones,ecc:encoded.ecc,mask:encoded.mask,routeId:encoded.routeId,finder:encoded.finder});
+  if(!check.ok)throw new Error(`${hText('selfCheckFailure')} ${check.reason}`);
+  return {type:'H',encoded,scene,sceneOpts,hQr,
+    info:`H${encoded.version} · ${encoded.n}×${encoded.n} · ${encoded.mode}F · ${encoded.tones} tone · ECC ${encoded.eccLevel} · mask ${encoded.mask} · ${encoded.finder==='corners'?'4▣':'▣'}<br>${payloadByteLength(cfg.text)} B / ${encoded.capacity.maxPayloadBytes} B`,
+    selfCheck:`<span class="badge ok">${hText('selfCheck')}</span>`};
+}
+
 function renderTypeO(cfg) {
   const centerQr = cfg.fallback.mode === 'center';
   const { fn, opts } = encodeOptsFor(cfg);
@@ -13599,6 +14518,10 @@ function renderTypeK(cfg) {
   };
 }
 
+function outlinedYScene(scene,encoded){
+  const n=encoded.n,mesh={n,center:{x:n/2,y:n/2,z:n/2},yaw:0,pitch:0,roll:0,invDist:0};
+  return {...scene,shapes:[...scene.shapes,...yCubeOutline(mesh,scene.layout)]};
+}
 function renderTypeY(cfg) {
   const useWindow = cfg.fallback.mode === 'window';
   const { fn, opts } = encodeOptsFor(cfg);
@@ -13670,7 +14593,7 @@ function renderTypeY(cfg) {
   return {
     // sceneOpts — 내보내기 «여백 없음» 이 최소 안전 margin 으로 재생성할 때 쓰는 원본
     // 옵션 (exportPlanFor). 음영·안전영역은 여백 공간의 층이라 재생성본에는 안 얹는다.
-    type: 'Y', encoded, scene: withQuietZone(withShading(scene, 'Y')), info, selfCheck, sceneOpts,
+    type: 'Y', encoded, scene: outlinedYScene(withQuietZone(withShading(scene, 'Y')),encoded), info, selfCheck, sceneOpts,
   };
 }
 
@@ -13725,6 +14648,7 @@ function runScheduledRender() {
   render();
 }
 function flushScheduledRender() {
+  hImageEditor.flush();
   if (!timer) return false;
   cancelScheduledRender();
   runScheduledRender();
@@ -13759,7 +14683,7 @@ function render() {
     const fullText = cfg.text;
     // ⚠ 폴백이 «나머지 전부 O» 다 — 타입이 늘 때마다 여기 분기를 안 더하면
     // 새 타입이 **조용히 O 로 렌더된다** (2026-08-25 K 에서 실제로 그랬다).
-    const renderCurrent = () => (cfg.type === 'Y' ? renderTypeY(cfg)
+    const renderCurrent = () => (cfg.type === 'H' ? renderTypeH(cfg) : cfg.type === 'Y' ? renderTypeY(cfg)
       : cfg.type === 'A' ? renderTypeA(cfg)
         : cfg.type === 'K' ? renderTypeK(cfg)
           : renderTypeO(cfg));
@@ -13794,7 +14718,15 @@ function render() {
       type: result.type, encoded: result.encoded, scene: result.scene, faceGains: cfg.faceGains,
       // 내보내기 «여백 없음» 의 최소 안전 margin 재생성 입력 (exportPlanFor 가 소비한다).
       sceneOpts: result.sceneOpts,
+      // H 미리보기·현재 시점 이미지·MP4가 장면을 재생성할 때도 코너 QR을 보존해요.
+      hQr: result.hQr,
     };
+    // 자동 해상도가 본문·면수·ECC에 따라 바뀌어도 속도/영상 길이는 실제 H 버전을 따라가요.
+    if(result.type==='H'){
+      hFacePositionMode=reconcileHPositionMode(hFacePositionMode,hPositionProfile,result.encoded);
+      hPositionProfile={version:result.encoded.version,mode:result.encoded.mode,finder:result.encoded.finder};
+      syncHUi();
+    }else hPositionProfile=null;
     // ③ 물리 크기 힌트는 scene 치수·타입에 의존한다 — 새 렌더마다 재계산 (§3 수리).
     syncExportPpiHint();
     // 균일 면 배수도 같은 이유로 새 렌더마다 다시 잰다 — 도형이 바뀌면 값이 바뀐다.
@@ -13845,7 +14777,7 @@ function render() {
         : `${result.type === 'O' ? 'V' : result.type}${result.encoded.version}`;
       const autoBits = [];
       if (!result.encoded.notchC
-        && generatorState[versionStateKey(result.type)] === 'auto') autoBits.push(t('g426'));
+        && generatorState[result.type==='H'?'versionH':versionStateKey(result.type)] === 'auto') autoBits.push(t('g426'));
       if (cfg.eccLevel === 'auto') autoBits.push(t('g427'));
       els.eccTierHint.textContent = autoBits.length
         ? tf('g456', { bits: autoBits.join('·'), ver, ecc: result.encoded.eccLevel, tier: eccTierLabel(result.encoded.eccLevel) })

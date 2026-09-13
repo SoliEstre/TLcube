@@ -275,7 +275,7 @@ test('도움말 창은 문서에 하나뿐이고 닫기 버튼과 role 을 갖�
   assert.match(INDEX, /<div id="helpPopover" class="help-popover" role="tooltip" hidden>/);
   assert.match(INDEX, /id="helpPopoverClose"[\s\S]{0,140}data-i18n-attr="aria-label:g932"/);
   assert.match(INDEX, /createHelpPopover\(\{/);
-  assert.match(INDEX, /linesFor: \(button\) => t\(button\.dataset\.help\)\.split\('\\n'\)/);
+  assert.match(INDEX, /linesFor: \(button\) => \(button\.dataset\.hHelp\?hText\(button\.dataset\.hHelp\):t\(button\.dataset\.help\)\)\.split\('\\n'\)/);
   // 언어 전환 시 열려 있는 본문도 다시 그려야 한다.
   assert.match(INDEX, /syncHelpPopover/);
 });
@@ -729,7 +729,7 @@ test('사전 값에 마크다운 강조(**)가 없다 — 팝오버는 textConte
 });
 
 test('출력물용(3면 동률)에서는 면 게인 슬라이더를 잠근다 — 살아 있는 무동작 컨트롤 금지', () => {
-  assert.match(INDEX, /els\.faceGain\.disabled = flat;/);
+  assert.match(INDEX, /els\.faceGain\.disabled = flat \|\| hGeneratorActive\(\);/);
   assert.match(INDEX, /els\.faceGainRow\.classList\.toggle\('dim', flat\)/);
   assert.match(INDEX, /#faceGainRow\.dim \{ opacity: 0\.45; \}/);
 });

@@ -198,7 +198,11 @@ export const MODULE_ORDER = [
   // shot-presets 가 `ORBIT_VIEW_3D`·`assertOrbitPresetFields` 를, generator-state 가
   // 허용값·기본값·`assertOrbitStateFields` 를 읽는다. 이 모듈의 의존은 **0** 이다
   // (y3d-viewer 도 generator-state 도 안 읽는다 — 순환과 레인 경계를 둘 다 피한다).
-  'export-options', 'generator-orbit-view', 'generator-shot-presets', 'generator-state',
+  'export-options', 'generator-orbit-view', 'generator-shot-presets',
+  'h-mode-codebook', 'h-profile', 'h-corner-layout', 'h-layout', 'h-codec', 'h-face-arrangement', 'cube-outline', 'h-rotation', 'h-lighting', 'png', 'scene-image', 'h-face-images', 'h-render', 'generator-h', 'generator-state',
+  // h-preview-controls는 index.html의 Space/preview/icon helper import가 직접 소비한다.
+  // leaf라 의존 순서는 없지만 누락하면 file:// blob module이 './src/…'를 해석해 live에서 죽는다.
+  'h-preview-decor', 'h-preview-controls', 'h-image-editor', 'h-image-sample', 'h-image-editor-ui',
   'finder-zone-ui', 'export-filename',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: `encodeY` 와 잎 모듈 `tonemap` 이
   // `encode`·`scene` **앞**으로 왔다. scene.js 가 중앙 슬롯을 완전한 v0 코드로
@@ -209,7 +213,7 @@ export const MODULE_ORDER = [
   // 이 앞에 있다. tonemap 은 의존 0 이라 어디에 놓아도 위상 정렬이 성립한다.
   // 안 옮기면 assertTopologicalOrder 가 빌드를 막는다.
   'tonemap', 'encodeY', 'centralBeaconWire', 'centralBeacon',
-  'encode', 'scene', 'raster', 'verify', 'svg', 'png', 'export-render',
+  'encode', 'scene', 'raster', 'verify', 'svg', 'export-render',
   // generator-render-config 는 **capacityY 뒤**여야 한다. 윈도 β 의 Y2·2톤 제약
   // (WINDOW_SUPPORTED_*)을 거기서 가져오기 때문이다 — 상수를 복제하지 않으려는 선택이고,
   // src/ 안에서 이 모듈을 쓰는 곳이 없어(앱만 쓴다) 뒤로 미뤄도 안전하다.
@@ -233,6 +237,7 @@ export const MODULE_ORDER = [
   // y3d-slot-qr 는 cellSurfaceFinal·sceneY·qr 의 뒤, y3d-viewer 의 앞이다.
   'y3d-slot-qr',
   'y3d-viewer',
+  'cube-image-export', 'cube-export', 'minecraft-schematic', 'generator-cube-export', 'generator-h-qr', 'h-preview-renderer', 'cube-video-export',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
   'i18n',
   // generate-debounce 는 의존이 없는 순수 상태 전이다. 앱만 소비하며 시간 축을 고정한다.

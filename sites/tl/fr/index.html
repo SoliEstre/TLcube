@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TLcube — un code-barres 3D (en réalité 2.5D) qui porte les données dans le rang de luminance</title>
-<meta name="description" content="Un code-barres 3D ouvert qui divise une cellule hexagonale en trois faces en losange et porte les données dans l'ordre de luminance relative de ces faces. La spécification et l'implémentation de référence sont publiées sous Apache-2.0.">
+<meta name="description" content="Un code-barres 3D ouvert qui divise une cellule hexagonale en trois faces en losange et porte les données dans l'ordre de luminance relative de ces faces. La spécification et l'implémentation de référence sont publiées sous Apache-2.0. True 3D H — extension en cube réel du groupe Y.">
 <link rel="canonical" href="https://tl.estre.so/fr/">
 <link rel="alternate" hreflang="ko" href="https://tl.estre.so/">
 <link rel="alternate" hreflang="en" href="https://tl.estre.so/en/">
@@ -19,7 +19,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="TLcube">
 <meta property="og:title" content="TLcube — un code-barres 3D qui porte les données dans le rang de luminance">
-<meta property="og:description" content="Les données reposent sur l'ordre des trois faces, pas sur la luminosité absolue. Tant que l'ordre survit, la valeur survit.">
+<meta property="og:description" content="Les données reposent sur l'ordre des trois faces, pas sur la luminosité absolue. Tant que l'ordre survit, la valeur survit. True 3D H — extension en cube réel du groupe Y.">
 <meta property="og:url" content="https://tl.estre.so/fr/">
 <meta property="og:image" content="https://tl.estre.so/assets/og-banner.png">
 <meta property="og:image:width" content="1200">
@@ -58,7 +58,7 @@
     {
       "@type": "TechArticle",
       "headline": "TLcube — un code-barres 3D qui porte les données dans le rang, non dans la luminosité absolue",
-      "description": "Un code-barres 3D ouvert qui divise une cellule hexagonale en trois faces en losange et utilise leur ordre de luminance relative (3! = 6) comme un symbole en base 6. Invariant par transformation tonale monotone.",
+      "description": "Un code-barres 3D ouvert qui divise une cellule hexagonale en trois faces en losange et utilise leur ordre de luminance relative (3! = 6) comme un symbole en base 6. Invariant par transformation tonale monotone. True 3D H — extension en cube réel du groupe Y.",
       "url": "https://tl.estre.so/fr/",
       "inLanguage": "fr",
       "isPartOf": {
@@ -154,6 +154,11 @@
         <h3>Type Y — cube unique</h3>
         <p class="dim">Trois faces n×n. Une marque d'un seul tenant, adaptée à la signalétique et aux objets.</p>
         <div class="meta">n = 13 / 21 / 25 · charge utile nette 31 / 98 / 141 B</div>
+        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
+          <h4>True 3D H — extension en cube réel du groupe Y</h4>
+          <p class="dim">Un format distinct du Type Y plan, avec des grilles H0…H8 et 1…6 faces de données uniques. Ajoutez des images aux faces libres, réglez la rotation en boucle et exportez des patrons PNG/SVG, du glTF, du MP4 ou des structures Minecraft .schem.</p>
+          <p class="meta">Le scanner ne livre le résultat qu’après collecte des faces requises et validation RS/CRC. Les mesures sur photos ci-dessous ne comprennent pas H et ne garantissent ni taux de reconnaissance ni FPS en caméra réelle.</p>
+        </div>
       </div>
       <div class="card">
         <img src="../assets/type-O.png" alt="Type O — champ hexagonal">
@@ -229,7 +234,7 @@
 
   <section id="spec">
     <h2>Spécification et implémentation</h2>
-    <p class="lead">La spécification du format et l'implémentation de référence sont publiées sous <strong>licence Apache 2.0</strong>. JavaScript vanilla, aucune chaîne de build, zéro dépendance à l'exécution — cela tourne dans un seul fichier HTML.</p>
+    <p class="lead">La spécification du format et l'implémentation de référence sont publiées sous <strong>licence Apache 2.0</strong>. JavaScript vanilla, scripts de build Node.js dans le dépôt, zéro dépendance à l'exécution — cela tourne dans un seul fichier HTML.</p>
     <p class="lead"><strong>N'implémenter que le décodeur suffit à être une implémentation conforme.</strong> L'adoption commence par le côté lecture.</p>
     <div class="cta">
       <a class="btn" href="https://github.com/SoliEstre/TLcube/blob/main/SPEC.md" data-out="github">Lire la spécification</a>

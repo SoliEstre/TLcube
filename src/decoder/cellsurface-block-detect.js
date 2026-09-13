@@ -508,9 +508,7 @@ function calibration(options) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /** 단조 deque O(n) sliding min/max — 반지름 radius 샘플. */
-function slidingExtrema(values, count, radius, outMin, outMax) {
-  const dequeMin = new Int32Array(count);
-  const dequeMax = new Int32Array(count);
+function slidingExtrema(values, count, radius, outMin, outMax, dequeMin, dequeMax) {
   let minHead = 0;
   let minTail = 0;
   let maxHead = 0;
@@ -548,7 +546,7 @@ const ALL_DARK_RATIO = 0.4;
 function binarizeSeries(values, count, radius, otsuCut, scratch) {
   const outMin = scratch.min;
   const outMax = scratch.max;
-  slidingExtrema(values, count, radius, outMin, outMax);
+  slidingExtrema(values, count, radius, outMin, outMax, scratch.dequeMin, scratch.dequeMax);
   const cut = Number.isFinite(otsuCut) ? otsuCut : 0.5;
   const allDark = cut * ALL_DARK_RATIO;
   const binary = scratch.binary;
@@ -564,12 +562,62 @@ function binarizeSeries(values, count, radius, otsuCut, scratch) {
   return binary;
 }
 
+/**
+ * `binarizeSeries`와 같은 deque 삽입·제거·비교 순서를 쓰되, min/max 배열을 거치지 않고
+ * binary만 즉시 써요. binary만 소비하는 scan/레이/cursor가 명시적으로 선택해요.
+ * scratch.min/max는 의도적으로 건드리지 않아요.
+ */
+function binarizeSeriesFused(values, count, radius, otsuCut, scratch) {
+  // 실제 scan의 Float32 입력에서만 min/max 저장 반올림이 항등이에요.
+  if (!(values instanceof Float32Array)) return binarizeSeries(values, count, radius, otsuCut, scratch);
+  let minHead = 0;
+  let minTail = 0;
+  let maxHead = 0;
+  let maxTail = 0;
+  let cursor = 0;
+  const cut = Number.isFinite(otsuCut) ? otsuCut : 0.5;
+  const allDark = cut * ALL_DARK_RATIO;
+  const binary = scratch.binary;
+  const dequeMin = scratch.dequeMin;
+  const dequeMax = scratch.dequeMax;
+  for (let index = 0; index < count; index += 1) {
+    const limit = Math.min(count - 1, index + radius);
+    while (cursor <= limit) {
+      const value = values[cursor];
+      while (minTail > minHead && values[dequeMin[minTail - 1]] >= value) minTail -= 1;
+      dequeMin[minTail] = cursor;
+      minTail += 1;
+      while (maxTail > maxHead && values[dequeMax[maxTail - 1]] <= value) maxTail -= 1;
+      dequeMax[maxTail] = cursor;
+      maxTail += 1;
+      cursor += 1;
+    }
+    const from = index - radius;
+    while (dequeMin[minHead] < from) minHead += 1;
+    while (dequeMax[maxHead] < from) maxHead += 1;
+    const low = values[dequeMin[minHead]];
+    const high = values[dequeMax[maxHead]];
+    const value = values[index];
+    if (high < allDark) binary[index] = 1;
+    else if (low > cut) binary[index] = 0;
+    else if (high - low >= FLAT_CONTRAST) binary[index] = value < (low + high) / 2 ? 1 : 0;
+    else binary[index] = value <= cut ? 1 : 0;
+  }
+  return binary;
+}
+
 function makeSeriesScratch(capacity) {
   return {
     values: new Float32Array(capacity),
     min: new Float32Array(capacity),
     max: new Float32Array(capacity),
     binary: new Uint8Array(capacity),
+    // 한 스캔 안의 모든 라인/레이에서 재사용한다. head/tail은 호출마다 0에서 시작한다.
+    dequeMin: new Int32Array(capacity),
+    dequeMax: new Int32Array(capacity),
+    runStarts: new Int32Array(capacity),
+    runLengths: new Int32Array(capacity),
+    runDarks: new Uint8Array(capacity),
   };
 }
 
@@ -579,37 +627,54 @@ function makeSeriesScratch(capacity) {
 
 function scanLineForCores(
   luma, startX, startY, stepX, stepY, length, stepLen, otsuCut, scratch, cfg, out,
+  binarize = binarizeSeries,
 ) {
   if (length < 8) return;
   const { width, data, alpha } = luma;
   const values = scratch.values;
-  for (let position = 0; position < length; position += 1) {
+  // 높이나 배열 길이를 추가로 읽지 않아요. 안전한 정수 끝점 사이의 unit-step은
+  // 원래 곱셈식과 같은 인덱스이므로 stride만 더할 수 있어요. 나머지는 원식이에요.
+  const integral = Number.isSafeInteger(width) && width > 0
+    && Number.isSafeInteger(startX) && Number.isSafeInteger(startY) && Number.isSafeInteger(length)
+    && (stepX === -1 || stepX === 0 || stepX === 1) && (stepY === -1 || stepY === 0 || stepY === 1);
+  const endX = integral ? startX + stepX * (length - 1) : NaN;
+  const endY = integral ? startY + stepY * (length - 1) : NaN;
+  const first = integral ? startY * width + startX : NaN;
+  const last = integral ? endY * width + endX : NaN;
+  if (integral && startX >= 0 && startY >= 0 && startX < width
+    && endX >= 0 && endY >= 0 && endX < width && Number.isSafeInteger(first) && Number.isSafeInteger(last)) {
+    let index = first;
+    const stride = stepY * width + stepX;
+    if (alpha) for (let position = 0; position < length; position += 1, index += stride) values[position] = alpha[index] === 0 ? 0 : data[index];
+    else for (let position = 0; position < length; position += 1, index += stride) values[position] = data[index];
+  } else for (let position = 0; position < length; position += 1) {
     const index = (startY + stepY * position) * width + (startX + stepX * position);
     values[position] = alpha && alpha[index] === 0 ? 0 : data[index];
   }
   // 이진화 창 반지름 ≈ 셀 1.3개(21px/2·stepLen) — 라인은 국소적으로 한 면만 지난다.
   const radius = Math.max(4, Math.round(10.5 / stepLen));
-  const binary = binarizeSeries(values, length, radius, otsuCut, scratch);
+  const binary = binarize(values, length, radius, otsuCut, scratch);
   // 런 수집
   let runStart = 0;
   let runDark = binary[0] === 1;
-  const runs = [];
+  const { runStarts, runLengths, runDarks } = scratch;
+  let runCount = 0;
   for (let position = 1; position <= length; position += 1) {
     const dark = position < length ? binary[position] === 1 : !runDark;
     if (dark === runDark) continue;
-    runs.push({ start: runStart, length: position - runStart, dark: runDark });
+    runStarts[runCount] = runStart;
+    runLengths[runCount] = position - runStart;
+    runDarks[runCount] = runDark ? 1 : 0;
+    runCount += 1;
     runDark = dark;
     runStart = position;
   }
-  for (let index = 1; index + 1 < runs.length; index += 1) {
-    const middle = runs[index];
-    if (!middle.dark) continue;
-    const before = runs[index - 1];
-    const after = runs[index + 1];
-    const a = before.length;
-    const d = middle.length;
-    const b = after.length;
-    const midPosition = middle.start + d / 2;
+  for (let index = 1; index + 1 < runCount; index += 1) {
+    if (runDarks[index] !== 1) continue;
+    const a = runLengths[index - 1];
+    const d = runLengths[index];
+    const b = runLengths[index + 1];
+    const midPosition = runStarts[index] + d / 2;
     const px = startX + stepX * midPosition;
     const py = startY + stepY * midPosition;
     // K5: (B1, D2, B1) — v2r2 중앙·코너 앵커의 회문 코어.
@@ -639,31 +704,33 @@ function scanConcentricCores(luma, otsuCut, cfg, out = []) {
   const { width, height } = luma;
   const scratch = makeSeriesScratch(Math.max(width, height));
   const stepLenDiag = Math.SQRT2;
+  // 이 소비자는 min/max 배열을 읽지 않아요. 직접 scanLine 호출의 기본/주입
+  // 계약은 그대로 두고 소유 scratch의 binary-only 경로만 명시적으로 선택해요.
   for (let y = 0; y < height; y += 1) {
-    scanLineForCores(luma, 0, y, 1, 0, width, 1, otsuCut, scratch, cfg, out);
+    scanLineForCores(luma, 0, y, 1, 0, width, 1, otsuCut, scratch, cfg, out, binarizeSeriesFused);
   }
   for (let x = 0; x < width; x += 1) {
-    scanLineForCores(luma, x, 0, 0, 1, height, 1, otsuCut, scratch, cfg, out);
+    scanLineForCores(luma, x, 0, 0, 1, height, 1, otsuCut, scratch, cfg, out, binarizeSeriesFused);
   }
   for (let y = 0; y < height; y += 1) {
     scanLineForCores(
-      luma, 0, y, 1, 1, Math.min(width, height - y), stepLenDiag, otsuCut, scratch, cfg, out,
+      luma, 0, y, 1, 1, Math.min(width, height - y), stepLenDiag, otsuCut, scratch, cfg, out, binarizeSeriesFused,
     );
   }
   for (let x = 1; x < width; x += 1) {
     scanLineForCores(
-      luma, x, 0, 1, 1, Math.min(width - x, height), stepLenDiag, otsuCut, scratch, cfg, out,
+      luma, x, 0, 1, 1, Math.min(width - x, height), stepLenDiag, otsuCut, scratch, cfg, out, binarizeSeriesFused,
     );
   }
   for (let y = 0; y < height; y += 1) {
     scanLineForCores(
-      luma, 0, y, 1, -1, Math.min(width, y + 1), stepLenDiag, otsuCut, scratch, cfg, out,
+      luma, 0, y, 1, -1, Math.min(width, y + 1), stepLenDiag, otsuCut, scratch, cfg, out, binarizeSeriesFused,
     );
   }
   for (let x = 1; x < width; x += 1) {
     scanLineForCores(
       luma, x, height - 1, 1, -1, Math.min(width - x, height), stepLenDiag, otsuCut, scratch,
-      cfg, out,
+      cfg, out, binarizeSeriesFused,
     );
   }
   return out;
@@ -781,13 +848,21 @@ function clusterAccepts(cluster, candidate) {
   const meanX = cluster.sumX / cluster.count;
   const meanY = cluster.sumY / cluster.count;
   const meanU = cluster.sumU / cluster.count;
+  return clusterAcceptsMeans(meanX, meanY, meanU, candidate);
+}
+
+/** 같은 누적합/개수에서 얻은 평균을 쓰는 재개 커서도 이 술어를 공유해요. */
+function clusterAcceptsMeans(meanX, meanY, meanU, candidate) {
+  // u가 호환되지 않으면 거리 계산 자체가 필요 없어요. 같은 부등식의 단락만
+  // 앞당기고, 평균/도달 반경/경계 수치는 바꾸지 않아요.
+  const uCompatible = candidate.u >= 0.5 * meanU && candidate.u <= 2.0 * meanU;
+  if (!uCompatible) return false;
   // reach 는 좁게 — 데이터 필드의 이웃 우연 코어가 평균을 끌고 가지 않게 한다.
   const reach = 1.2 * Math.max(meanU, candidate.u, 2);
   const dx = candidate.x - meanX;
   const dy = candidate.y - meanY;
   // u 가 크게 다른 코어는 같은 앵커가 아니다 — 체인 스미어 방지.
-  const uCompatible = candidate.u >= 0.5 * meanU && candidate.u <= 2.0 * meanU;
-  return uCompatible && dx * dx + dy * dy <= reach * reach;
+  return dx * dx + dy * dy <= reach * reach;
 }
 
 /**
@@ -844,14 +919,20 @@ function clusterCores(candidates, cfg) {
     };
     for (const candidate of list) {
       const radius = clusterSearchRadius(candidate);
-      // +1 은 부동소수·버킷 경계 여유다. 등가가 정확성의 전부라 인색하게 굴지 않는다.
-      const span = Math.ceil(radius / CLUSTER_BUCKET_PX) + 1;
-      const bx = Math.floor(candidate.x / CLUSTER_BUCKET_PX);
-      const by = Math.floor(candidate.y / CLUSTER_BUCKET_PX);
+      // 이 유한 범위의 반올림 오차보다 보수적인1e-8px 여유를 둬요.
+      // 수용 술어와 반경은 그대로이고 범위 밖은 기존 한 버킷 여유예요.
+      const bounded = Number.isFinite(candidate.x) && Math.abs(candidate.x) <= 1e6
+        && Number.isFinite(candidate.y) && Math.abs(candidate.y) <= 1e6
+        && Number.isFinite(candidate.u) && candidate.u >= 1 && candidate.u <= 1e5
+        && Number.isFinite(radius) && radius <= 1e6;
+      const fromX = bounded ? Math.floor((candidate.x - radius - 1e-8) / CLUSTER_BUCKET_PX) : Math.floor((candidate.x - radius) / CLUSTER_BUCKET_PX) - 1;
+      const toX = bounded ? Math.floor((candidate.x + radius + 1e-8) / CLUSTER_BUCKET_PX) : Math.floor((candidate.x + radius) / CLUSTER_BUCKET_PX) + 1;
+      const fromY = bounded ? Math.floor((candidate.y - radius - 1e-8) / CLUSTER_BUCKET_PX) : Math.floor((candidate.y - radius) / CLUSTER_BUCKET_PX) - 1;
+      const toY = bounded ? Math.floor((candidate.y + radius + 1e-8) / CLUSTER_BUCKET_PX) : Math.floor((candidate.y + radius) / CLUSTER_BUCKET_PX) + 1;
       // 삽입 순서상 **처음** 매치를 고른다 — 선형판의 break 와 같은 선택.
       let bestIndex = -1;
-      for (let gx = bx - span; gx <= bx + span; gx += 1) {
-        for (let gy = by - span; gy <= by + span; gy += 1) {
+      for (let gx = fromX; gx <= toX; gx += 1) {
+        for (let gy = fromY; gy <= toY; gy += 1) {
           const slot = buckets.get((gx * 100003) + gy);
           if (!slot) continue;
           for (const index of slot) {
@@ -937,7 +1018,7 @@ function rayTransitions(luma, otsuCut, cx, cy, dir, maxR) {
   }
   if (count < 8) return { transitions: [], centerDark: false };
   const radius = Math.max(4, Math.round(10.5 / RAY_STEP));
-  const binary = binarizeSeries(values, count, radius, otsuCut, rayScratch);
+  const binary = binarizeSeriesFused(values, count, radius, otsuCut, rayScratch);
   const transitions = [];
   let previous = binary[0];
   let pendingValue = null;
@@ -1765,12 +1846,12 @@ const CENTRAL_N7_PATCH_TEMPLATE = Object.freeze(CENTRAL_N7_LOCATOR_CELLS.flatMap
     expected: cell[face] === 2 ? 1 : -1,
   }))));
 
-function centralN7PatchScore(luma, center, modulePitch, degrees) {
+function centralN7PatchScore(luma, center, modulePitch, degrees, scratch = null) {
   const radians = degrees * Math.PI / 180;
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
-  const values = new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length);
-  const expected = new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length);
+  const values = scratch?.values ?? new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length);
+  const expected = scratch?.expected ?? new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length);
   let count = 0;
   for (const entry of CENTRAL_N7_PATCH_TEMPLATE) {
     const px = entry.point.x * modulePitch;
@@ -1787,15 +1868,33 @@ function centralN7PatchScore(luma, center, modulePitch, degrees) {
   if (count < Math.ceil(CENTRAL_N7_PATCH_TEMPLATE.length * 5 / 6)) return null;
   const correlation = pearson(values, expected, count);
   if (correlation === null) return null;
-  const dark = [];
-  const bright = [];
-  for (let index = 0; index < count; index += 1) {
-    (expected[index] > 0 ? bright : dark).push(values[index]);
+  let darkMedian, brightMedian;
+  if (scratch?.darkMedian instanceof Float64Array && scratch?.brightMedian instanceof Float64Array) {
+    let darkCount = 0, brightCount = 0, finite = true;
+    for (let index = 0; index < count; index += 1) {
+      const value = values[index];
+      // 기본 TypedArray 정렬은 -0/NaN의 순서가 comparator 정렬과 달라요.
+      if (!Number.isFinite(value) || Object.is(value, -0)) { finite = false; break; }
+      if (expected[index] > 0) scratch.brightMedian[brightCount++] = value;
+      else scratch.darkMedian[darkCount++] = value;
+    }
+    if (finite) {
+      darkMedian = scratch.darkMedian.subarray(0, darkCount).sort()[Math.floor(darkCount / 2)];
+      brightMedian = scratch.brightMedian.subarray(0, brightCount).sort()[Math.floor(brightCount / 2)];
+    }
   }
-  dark.sort((left, right) => left - right);
-  bright.sort((left, right) => left - right);
-  const darkMedian = dark[Math.floor(dark.length / 2)];
-  const brightMedian = bright[Math.floor(bright.length / 2)];
+  if (darkMedian === undefined || brightMedian === undefined) {
+    const dark = scratch?.dark ?? [];
+    const bright = scratch?.bright ?? [];
+    dark.length = 0; bright.length = 0;
+    for (let index = 0; index < count; index += 1) {
+      (expected[index] > 0 ? bright : dark).push(values[index]);
+    }
+    dark.sort((left, right) => left - right);
+    bright.sort((left, right) => left - right);
+    darkMedian = dark[Math.floor(dark.length / 2)];
+    brightMedian = bright[Math.floor(bright.length / 2)];
+  }
   if (!(brightMedian > darkMedian)) return null;
   const midpoint = (darkMedian + brightMedian) / 2;
   let agree = 0;
@@ -1818,6 +1917,11 @@ function affineCentralN7Homography(center, modulePitch, degrees) {
   ]);
 }
 
+const CENTRAL_N7_REFINE_ROUNDS = Object.freeze([
+  Object.freeze({ offsets: Object.freeze([-0.5, 0, 0.5]), scales: Object.freeze([0.96, 1, 1.04]), angles: Object.freeze([-3, 0, 3]) }),
+  Object.freeze({ offsets: Object.freeze([-0.2, 0, 0.2]), scales: Object.freeze([0.985, 1, 1.015]), angles: Object.freeze([-1, 0, 1]) }),
+]);
+
 function refineCentralN7Seed(luma, seed) {
   if (!seed || !seed.center || !(seed.modulePitch > 0)
     || !Number.isFinite(seed.degrees)) return null;
@@ -1829,11 +1933,7 @@ function refineCentralN7Seed(luma, seed) {
   };
   if (best.score === null) return null;
 
-  const rounds = [
-    { offsets: [-0.5, 0, 0.5], scales: [0.96, 1, 1.04], angles: [-3, 0, 3] },
-    { offsets: [-0.2, 0, 0.2], scales: [0.985, 1, 1.015], angles: [-1, 0, 1] },
-  ];
-  for (const round of rounds) {
+  for (const round of CENTRAL_N7_REFINE_ROUNDS) {
     const base = best;
     for (const oy of round.offsets) {
       for (const ox of round.offsets) {
@@ -1933,6 +2033,216 @@ export function detectCentralN7BlockShapes(luma, seeds = []) {
       shapeCount: shapes.length,
     },
   };
+}
+
+function sameCentralN7Epoch(left, right) {
+  return !!right && left.width === right.width && left.height === right.height
+    && left.generation === right.generation;
+}
+
+function sameCentralN7Frame(left, right) {
+  return sameCentralN7Epoch(left, right)
+    && left.frameId === right.frameId && left.timestamp === right.timestamp;
+}
+
+/**
+ * `detectCentralN7BlockShapes`와 결과가 같은 재개형 프로토타입.
+ * 전역 top-12 선택은 보존하고, 비싼 refinement만 90면 score 한 번씩 나눈다.
+ */
+export function createCentralN7BlockCursor(luma, seeds = [], origin, options = {}) {
+  if (!origin || !(typeof origin.frameId === 'string' || Number.isSafeInteger(origin.frameId))
+    || !Number.isFinite(origin.timestamp) || origin.generation == null
+    || origin.width !== luma?.width || origin.height !== luma?.height
+    || !Number.isInteger(luma?.width) || !Number.isInteger(luma?.height) || luma.width <= 0 || luma.height <= 0
+    || !(luma.data instanceof Float32Array) || luma.data.length !== luma.width * luma.height
+    || (luma.alpha && (!(luma.alpha instanceof Uint8Array) || luma.alpha.length !== luma.data.length))
+    || !Array.isArray(seeds)) {
+    throw new TypeError('완전한 원본 프레임 identity, 픽셀, seed가 필요해요');
+  }
+  const identity = Object.freeze({ frameId: origin.frameId, timestamp: origin.timestamp,
+    width: origin.width, height: origin.height, generation: origin.generation });
+  const timing = typeof options.timing === 'function' ? options.timing : null;
+  const copyAt = performance.now();
+  let snapshot = { width: luma.width, height: luma.height,
+    data: luma.data.slice(), alpha: luma.alpha?.slice() || null };
+  let seedSnapshot = seeds.map((seed) => ({ ...seed,
+    center: seed?.center ? { x: seed.center.x, y: seed.center.y } : seed?.center }));
+  // 같은 Float64 표본의 상위 median을 구해요. 커서가 독점 소유한
+  // 고정 작업 공간만 재사용하고, 완료/폐기 때 같이 놓아요.
+  let scoreScratch = { values: new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length),
+    expected: new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length), dark: [], bright: [],
+    darkMedian: new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length),
+    brightMedian: new Float64Array(CENTRAL_N7_PATCH_TEMPLATE.length) };
+  const copyMs = performance.now() - copyAt;
+  const snapshotBytes = snapshot.data.byteLength + (snapshot.alpha?.byteLength || 0);
+  const seedCount = seedSnapshot.length;
+  let snapshotRetainedBytes = seedCount === 0 ? 0 : snapshotBytes;
+  let phase = seedCount === 0 ? 'done' : 'expand';
+  let disposalReason = null, steps = 0, maxUnitMs = copyMs, lastTimestamp = identity.timestamp;
+  let expanded = [], scored = [], refined = [], shapes = [];
+  let index = 0, refineState = null;
+  let result = seedCount === 0
+    ? Object.freeze({ shapes: Object.freeze([]),
+      diagnostics: Object.freeze({ source: 'central-n7-block-locator', seedCount: 0 }) })
+    : null;
+  if (seedCount === 0) { snapshot = null; seedSnapshot = null; scoreScratch = null; }
+
+  function discard(reason = 'invalidateLock') {
+    phase = 'discarded'; disposalReason = reason;
+    snapshotRetainedBytes = 0;
+    snapshot = seedSnapshot = scoreScratch = expanded = scored = refined = shapes = refineState = result = null;
+  }
+
+  function finishRefinement() {
+    const state = refineState;
+    refined.push({
+      ...state.seed,
+      n: CENTRAL_N7_SIZE,
+      family: CENTRAL_N7_PATTERN_FAMILY_ID,
+      layoutId: CENTRAL_N7_SCHEMA_ID,
+      center: state.best.center,
+      modulePitch: state.best.modulePitch,
+      degrees: state.best.degrees,
+      score: state.best.score,
+      H: affineCentralN7Homography(state.best.center, state.best.modulePitch, state.best.degrees),
+    });
+    refineState = null;
+    index += 1;
+  }
+
+  function advanceRefinement() {
+    const state = refineState;
+    const round = CENTRAL_N7_REFINE_ROUNDS[state.round];
+    state.angle += 1;
+    if (state.angle < round.angles.length) return;
+    state.angle = 0; state.scale += 1;
+    if (state.scale < round.scales.length) return;
+    state.scale = 0; state.ox += 1;
+    if (state.ox < round.offsets.length) return;
+    state.ox = 0; state.oy += 1;
+    if (state.oy < round.offsets.length) return;
+    state.round += 1;
+    if (state.round === CENTRAL_N7_REFINE_ROUNDS.length) { finishRefinement(); return; }
+    state.oy = 0;
+    state.base = state.best;
+  }
+
+  function resume(current = identity) {
+    if (phase === 'discarded') return { state: phase, reason: disposalReason };
+    if (!sameCentralN7Epoch(identity, current)) {
+      discard('resize-or-generation'); return { state: phase, reason: disposalReason };
+    }
+    if (!(typeof current.frameId === 'string' || Number.isSafeInteger(current.frameId))
+      || !Number.isFinite(current.timestamp) || current.timestamp < lastTimestamp) {
+      discard('invalid-time'); return { state: phase, reason: disposalReason };
+    }
+    lastTimestamp = current.timestamp;
+    if (phase === 'done') {
+      return { state: phase, originFrameId: identity.frameId,
+        ageMs: current.timestamp - identity.timestamp };
+    }
+
+    let unit = phase;
+    const started = performance.now();
+    if (phase === 'expand') {
+      if (index === seedSnapshot.length) { index = 0; phase = 'score'; }
+      else {
+        const seed = seedSnapshot[index++];
+        const radius = Number.isInteger(seed.searchRadiusCells) && seed.searchRadiusCells > 0
+          ? seed.searchRadiusCells : 0;
+        const step = radius > 0 ? 0.5 : 1;
+        for (let oy = -radius; oy <= radius; oy += step) {
+          for (let ox = -radius; ox <= radius; ox += step) {
+            expanded.push({ ...seed, center: {
+              x: seed.center.x + ox * seed.modulePitch,
+              y: seed.center.y + oy * seed.modulePitch,
+            }, searchRadiusCells: 0 });
+          }
+        }
+      }
+    } else if (phase === 'score') {
+      if (index === expanded.length) { index = 0; phase = 'scored-sort'; }
+      else {
+        const seed = expanded[index++];
+        const score = centralN7PatchScore(snapshot, seed.center, seed.modulePitch, seed.degrees, scoreScratch);
+        if (score !== null) scored.push({ seed, score });
+      }
+    } else if (phase === 'scored-sort') {
+      scored.sort((left, right) => right.score - left.score
+        || left.seed.modulePitch - right.seed.modulePitch
+        || left.seed.degrees - right.seed.degrees);
+      index = 0; phase = 'refine';
+    } else if (phase === 'refine') {
+      if (index === Math.min(12, scored.length)) { index = 0; phase = 'refined-sort'; }
+      else if (refineState === null) {
+        unit = 'refine-initial-score';
+        const seed = scored[index].seed;
+        const score = centralN7PatchScore(snapshot, seed.center, seed.modulePitch, seed.degrees, scoreScratch);
+        if (score === null) index += 1;
+        else refineState = { seed, best: { center: { x: seed.center.x, y: seed.center.y },
+          modulePitch: seed.modulePitch, degrees: seed.degrees, score },
+        base: null, round: 0, oy: 0, ox: 0, scale: 0, angle: 0 };
+        if (refineState) refineState.base = refineState.best;
+      } else {
+        unit = 'refine-candidate-score';
+        const state = refineState;
+        const round = CENTRAL_N7_REFINE_ROUNDS[state.round];
+        const candidate = {
+          center: {
+            x: state.base.center.x + round.offsets[state.ox] * state.base.modulePitch,
+            y: state.base.center.y + round.offsets[state.oy] * state.base.modulePitch,
+          },
+          modulePitch: state.base.modulePitch * round.scales[state.scale],
+          degrees: state.base.degrees + round.angles[state.angle],
+        };
+        const score = centralN7PatchScore(
+          snapshot, candidate.center, candidate.modulePitch, candidate.degrees, scoreScratch,
+        );
+        if (score !== null && score > state.best.score) state.best = { ...candidate, score };
+        advanceRefinement();
+      }
+    } else if (phase === 'refined-sort') {
+      refined.sort((left, right) => right.score - left.score
+        || left.modulePitch - right.modulePitch || left.degrees - right.degrees);
+      index = 0; phase = 'shape';
+    } else if (phase === 'shape') {
+      if (index === refined.length) {
+        result = Object.freeze({ shapes: Object.freeze(shapes), diagnostics: Object.freeze({ source: 'central-n7-block-locator', seedCount,
+          expandedSeedCount: expanded.length, scoredSeedCount: scored.length,
+          refinedCount: refined.length, shapeCount: shapes.length }) });
+        phase = 'done';
+        snapshotRetainedBytes = 0;
+        snapshot = seedSnapshot = scoreScratch = expanded = scored = refined = shapes = refineState = null;
+      } else {
+        const pose = refined[index++];
+        const shape = shapeFromPose(pose, shapes.length);
+        if (shape) {
+          shape.componentSource = 'central-n7-block-locator';
+          shape.blockLocator.schemaId = CENTRAL_N7_SCHEMA_ID;
+          shape.blockLocator.outerFamily = pose.outerFamily;
+          shape.blockLocator.outerK = pose.outerK;
+          shape.blockLocator.seedCellSize = pose.outerCellSize;
+          shape.blockLocator.modulePitch = pose.modulePitch;
+          shape.blockLocator.rotationDegrees = pose.degrees;
+          shapes.push(shape);
+        }
+      }
+    }
+    const ms = performance.now() - started;
+    steps += 1; maxUnitMs = Math.max(maxUnitMs, ms);
+    if (timing) timing({ stage: `cursor.${unit}`, ms });
+    return { state: phase, unit, ms, originFrameId: identity.frameId,
+      ageMs: current.timestamp - identity.timestamp };
+  }
+
+  return Object.freeze({ resume, discard, reset: () => discard('reset'),
+    takeForFrame(current) {
+      if (!sameCentralN7Epoch(identity, current)) { discard('resize-or-generation'); return null; }
+      return phase === 'done' && sameCentralN7Frame(identity, current) ? result : null;
+    },
+    get status() { return { phase, origin: identity, snapshotBytes, copyMs, seedCount,
+      snapshotRetainedBytes, steps, maxUnitMs, disposalReason }; },
+  });
 }
 
 function pearson(values, expected, count) {
@@ -3989,50 +4299,12 @@ function shapeFromPose(pose, index) {
 }
 
 /**
- * CS 파인더 블록 로케이터 진입점. luma 만 받는다 — 마스크·실루엣 무의존.
- * @returns {{shapes: object[], diagnostics: object}}
+ * scan/cluster/strict-verify가 이미 끝난 raw 관측을 기존 CS shape 꼬리로 조립한다.
+ * prepared 배열의 소유권은 호출자에게 있고, 이 함수는 원래 동기 꼬리와 같은 순서로만 읽는다.
  */
-export function detectCellSurfaceBlockShapes(luma, options = {}) {
-  const cfg = calibration(options);
-  const reduced = downsampleLumaForSeed(luma, cfg.searchMaxSide);
+export function assembleCellSurfaceBlockShapesFromVerified(luma, prepared, mark = null) {
+  const { reduced, globalCut, cores, clusters, verified, cfg } = prepared;
   const { width, height } = reduced.luma;
-  const globalCut = otsuThreshold(reduced.luma);
-  const cores = scanConcentricCores(reduced.luma, globalCut, cfg);
-  const clusters = clusterCores(cores, cfg);
-
-  const verified = [];
-  const occupied = [];
-  let inspectedK5 = 0;
-  let inspectedK3 = 0;
-  for (const cluster of clusters) {
-    if (cluster.kind === 'k5') {
-      if (inspectedK5 >= cfg.maximumVerifiedPerKind) continue;
-      inspectedK5 += 1;
-    } else {
-      if (inspectedK3 >= cfg.maximumVerifiedPerKind) continue;
-      inspectedK3 += 1;
-    }
-    // 같은 자리·같은 코어 종류의 클러스터 조각들 — 이미 검증된 자리면 건너뛴다.
-    // (다른 종류는 막지 않는다 — k3 오검증이 같은 자리 k5 의 v2r2 검증을 가리면 안 된다.)
-    if (occupied.some((hit) => hit.coreKind === cluster.kind
-      && Math.hypot(hit.x - cluster.x, hit.y - cluster.y)
-        <= 2.2 * Math.max(hit.u, cluster.u))) continue;
-    // 코어 종류 우선 검증 후, 실패하면 교차 검증한다 — 링 침식으로 코어 비율이
-    // 이웃 서명으로 넘어가는 경우(v2r2 중앙 ↔ v0 불스아이)를 회수한다.
-    const native = cluster.kind === 'k5'
-      ? verifyV2r2Cluster(reduced.luma, globalCut, cluster, cfg)
-      : verifyV0Cluster(reduced.luma, globalCut, cluster, cfg);
-    const hit = native || (cluster.kind === 'k5'
-      ? verifyV0Cluster(reduced.luma, globalCut, cluster, cfg)
-      : verifyV2r2Cluster(reduced.luma, globalCut, cluster, cfg));
-    if (hit) {
-      verified.push(hit);
-      occupied.push({ ...hit, coreKind: cluster.kind });
-    }
-  }
-  verified.sort((left, right) =>
-    right.score - left.score || right.count - left.count
-    || left.y - right.y || left.x - right.x);
 
   // 조기 분기 (2026-08-16 중앙 통일): 공유 K3 중앙 × K5 원거리 코어 쌍으로 앵커드
   // 패밀리를 먼저 세우고, 앵커드 포즈가 선 중앙은 v0 360° 스윕에서 뺀다.
@@ -4090,6 +4362,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       || left.y - right.y || left.x - right.x);
   }
 
+  if (mark) mark('loose-corners');
   // 조기 분기 (2026-08-16 중앙 통일): 공유 K3 중앙 × K5 원거리 코어 쌍으로 앵커드
   // 패밀리를 세운다.
   const {
@@ -4101,6 +4374,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
     // 동반자 게이트 전용 풀 — 잘리지 않은 엄격 코너 전체 (§squareRingUsesFullCornerPool).
     verified.filter((hit) => hit.kind === 'v2r2-corner'),
   );
+  if (mark) mark('anchored-poses');
   // ★ 중앙 불스아이 확증 (과업 3 ③) — 엄격 코너가 3개를 못 채워 사각 링 게이트가
   // 구조적으로 0 이 된 중앙만 구제한다. 엄격 경로가 이미 세운 중앙은 건드리지 않는다.
   const confirmed = cfg.centreBullseyeConfirmedPoses === false
@@ -4125,6 +4399,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       luma, reduced.factor, cfg,
       partialTelemetry,
     );
+  if (mark) mark('confirmed-poses');
   posesV0x.push(...confirmed.posesV0x);
   posesV0w.push(...confirmed.posesV0w);
   posesV0w2.push(...confirmed.posesV0w2);
@@ -4139,6 +4414,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   const posesV0 = assembleV0Poses(
     centres, sweptExclusions, reduced.luma, luma, reduced.factor, cfg, partialTelemetry,
   );
+  if (mark) mark('v0-poses');
   // ⚠ `centres` 를 넘긴다 — 중앙 불스아이 거부권(§centreQrBullseyeVeto)의 입력이다.
   // 이미 검증된 배열이라 이미지 연산은 늘지 않는다.
   const emptyCentreQr = {
@@ -4150,6 +4426,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry, centres,
     );
   const posesV0xq = v0xq.poses;
+  if (mark) mark('v0xq-poses');
   // v0wq — v0xq 와 **같은 코너 히트**를 쓴다. 코너 검증(verifyV0xqCornerCluster)은 한 번만
   // 돌고, 삼중점 탐색도 같은 배열에서 다시 돈다. 즉 편입 비용은 «코너 재탐색» 이 아니라
   // «삼중점당 중앙 게이트 + refinePose 한 벌» 이다 — 벤치가 재는 것이 그 값이다.
@@ -4162,6 +4439,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       v0xqCorners.slice(0, 4), luma, reduced.factor, cfg, partialTelemetry, centres,
     );
   const posesV0wq = v0wq.poses;
+  if (mark) mark('v0wq-poses');
   // v0trq — 같은 코너 배열을 쓰되 **슬라이스가 넓다** (§v0trqCornerBudget).
   // v0TR 프레임은 면당 동심 사각이 둘이라 참 코너가 6개 뜨고, 상위 4개가 두 반경으로
   // 섞이면 «내 반경(√129)» 의 삼중점이 구조적으로 못 선다. 넓힌 것은 이 호출부뿐이라
@@ -4173,6 +4451,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
       partialTelemetry, centres,
     );
   const posesV0trq = v0trq.poses;
+  if (mark) mark('v0trq-poses');
 
   const shapes = [];
   // 순서 = 셰이프 후보 순서. v0W 는 **v0X 뒤**다 — 라인업 기본이 v0X 인 것과 같은
@@ -4196,6 +4475,7 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
     }
   }
 
+  if (mark) mark('shape-output');
   return {
     shapes,
     diagnostics: {
@@ -4304,9 +4584,66 @@ export function detectCellSurfaceBlockShapes(luma, options = {}) {
   };
 }
 
+/**
+ * CS 파인더 블록 로케이터 진입점. luma 만 받는다 — 마스크·실루엣 무의존.
+ * 전처리/엄격 검증 뒤에는 공용 exact shape helper로 바로 넘긴다.
+ */
+export function detectCellSurfaceBlockShapes(luma, options = {}) {
+  const timing = typeof options.timing === 'function' ? options.timing : null;
+  let started = timing ? performance.now() : 0;
+  const mark = timing ? (stage) => {
+    timing({ stage: `cs.${stage}`, ms: performance.now() - started });
+    started = performance.now();
+  } : null;
+  const cfg = calibration(options);
+  const reduced = downsampleLumaForSeed(luma, cfg.searchMaxSide);
+  if (mark) mark('downsample');
+  const globalCut = otsuThreshold(reduced.luma);
+  if (mark) mark('otsu');
+  const cores = scanConcentricCores(reduced.luma, globalCut, cfg);
+  if (mark) mark('scan');
+  const clusters = clusterCores(cores, cfg);
+  if (mark) mark('cluster');
+  const verified = [];
+  const occupied = [];
+  let inspectedK5 = 0;
+  let inspectedK3 = 0;
+  for (const cluster of clusters) {
+    if (cluster.kind === 'k5') {
+      if (inspectedK5 >= cfg.maximumVerifiedPerKind) continue;
+      inspectedK5 += 1;
+    } else {
+      if (inspectedK3 >= cfg.maximumVerifiedPerKind) continue;
+      inspectedK3 += 1;
+    }
+    if (occupied.some((hit) => hit.coreKind === cluster.kind
+      && Math.hypot(hit.x - cluster.x, hit.y - cluster.y) <= 2.2 * Math.max(hit.u, cluster.u))) continue;
+    const native = cluster.kind === 'k5'
+      ? verifyV2r2Cluster(reduced.luma, globalCut, cluster, cfg)
+      : verifyV0Cluster(reduced.luma, globalCut, cluster, cfg);
+    const hit = native || (cluster.kind === 'k5'
+      ? verifyV0Cluster(reduced.luma, globalCut, cluster, cfg)
+      : verifyV2r2Cluster(reduced.luma, globalCut, cluster, cfg));
+    if (hit) { verified.push(hit); occupied.push({ ...hit, coreKind: cluster.kind }); }
+  }
+  verified.sort((left, right) => right.score - left.score || right.count - left.count
+    || left.y - right.y || left.x - right.x);
+  if (mark) mark('verify');
+  return assembleCellSurfaceBlockShapesFromVerified(luma, {
+    reduced, globalCut, cores, clusters, verified, cfg,
+  }, mark);
+}
+
 /** 단위 테스트·진단 전용 내부 노출 — 런타임 경로는 detectCellSurfaceBlockShapes 만 쓴다. */
 export const CS_BLOCK_LOCATOR_INTERNALS = Object.freeze({
+  clusterSearchRadius,
+  clusterAccepts,
+  clusterAcceptsMeans,
+  CLUSTER_BUCKET_PX,
+  calibration,
+  scanLineForCores,
   binarizeSeries,
+  binarizeSeriesFused,
   makeSeriesScratch,
   registerPatch,
   refineHomographyWithPatches,

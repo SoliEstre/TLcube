@@ -17,6 +17,7 @@
  * 그라데이션 정의를 명령형으로 구현하고, 둘의 일치는 test/shading.test.js 가 표본으로 잰다.
  */
 
+import {sceneImageSvg} from './scene-image.js';
 const SEAM_STROKE_WIDTH = 0.03;
 
 /**
@@ -132,16 +133,18 @@ export function sceneToSvg(scene, options = {}) {
     }
   }
 
+  let imageIndex=0;
   for (const s of scene.shapes) {
+    if(s.kind==='image'){lines.push(sceneImageSvg(s,`tlimg${imageIndex++}`,precision));continue;}
     const fill = colorToHex(s.color);
     if (s.kind === 'polygon') {
       const pts = s.points.map((p) => `${n(p.x)},${n(p.y)}`).join(' ');
       // stroke-width 는 좌표 precision 과 무관하게 고정 표기 — precision 1 에서
       // num(0.03, 1) = "0.0" 이 되어 심 커버가 소멸하는 코너를 막는다 (검증 라운드 발견).
-      lines.push(
-        `<polygon points="${pts}" fill="${fill}" stroke="${fill}" `
-        + `stroke-width="${SEAM_STROKE_WIDTH}" stroke-linejoin="round"/>`,
-      );
+      lines.push(s.qr
+        ? `<polygon points="${pts}" fill="${fill}"/>`
+        : `<polygon points="${pts}" fill="${fill}" stroke="${fill}" `
+          + `stroke-width="${SEAM_STROKE_WIDTH}" stroke-linejoin="round"/>`);
     } else if (s.kind === 'disc') {
       lines.push(`<circle cx="${n(s.cx)}" cy="${n(s.cy)}" r="${n(s.r)}" fill="${fill}"/>`);
     } else {

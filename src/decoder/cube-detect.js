@@ -378,6 +378,10 @@ function bilinear(luma, x, y) {
 }
 
 function downsampleLuma(luma, maxDimension) {
+  return drainCentralFinderSteps(downsampleLumaSteps(luma, maxDimension, false));
+}
+
+function* downsampleLumaSteps(luma, maxDimension, cooperative = true) {
   const factor = Math.max(1, Math.ceil(Math.max(luma.width, luma.height) / maxDimension));
   if (factor === 1) return { luma, factor };
   const width = Math.ceil(luma.width / factor);
@@ -392,6 +396,7 @@ function downsampleLuma(luma, maxDimension) {
   const sourceAlpha = luma.alpha;
 
   for (let y = 0; y < height; y += 1) {
+    if (cooperative && y % 16 === 0) yield null;
     const yStart = y * factor;
     const yEnd = Math.min(sourceHeight, yStart + factor);
     for (let x = 0; x < width; x += 1) {
@@ -431,9 +436,14 @@ function downsampleLuma(luma, maxDimension) {
 }
 
 function borderValues(luma) {
+  return drainCentralFinderSteps(borderValuesSteps(luma, false));
+}
+
+function* borderValuesSteps(luma, cooperative = true) {
   const values = [];
   const band = Math.max(1, Math.min(6, Math.floor(Math.min(luma.width, luma.height) * 0.015)));
   for (let y = 0; y < luma.height; y += 1) {
+    if (cooperative && y % 16 === 0) yield null;
     for (let x = 0; x < luma.width; x += 1) {
       if (x >= band && x < luma.width - band && y >= band && y < luma.height - band) continue;
       const index = y * luma.width + x;
@@ -446,6 +456,10 @@ function borderValues(luma) {
 }
 
 function backgroundModels(values, cfg) {
+  return drainCentralFinderSteps(backgroundModelsSteps(values, cfg, false));
+}
+
+function* backgroundModelsSteps(values, cfg, cooperative = true) {
   if (values.length === 0) return [];
   const ordered = values.slice().sort((a, b) => a - b);
   const k = Math.max(1, Math.min(cfg.backgroundClusters, ordered.length));
@@ -456,6 +470,7 @@ function backgroundModels(values, cfg) {
 
   let assignments = new Int16Array(values.length);
   for (let iteration = 0; iteration < 12; iteration += 1) {
+    if (cooperative) yield null;
     const sums = new Float64Array(k);
     const counts = new Uint32Array(k);
     for (let index = 0; index < values.length; index += 1) {
@@ -516,12 +531,17 @@ function backgroundModels(values, cfg) {
 // 산발적 잔차는 창 안에서 희석되지만, 코드 면의 비배경 픽셀은 조밀하게 남는다.
 // 원시 마스크 자체는 폐기하지 않고 별도 shape 후보원으로 유지한다.
 function recoverStructuredForeground(rawMask, width, height, cfg) {
+  return drainCentralFinderSteps(recoverStructuredForegroundSteps(rawMask, width, height, cfg, false));
+}
+
+function* recoverStructuredForegroundSteps(rawMask, width, height, cfg, cooperative = true) {
   const radius = Math.max(0, Math.floor(cfg.foregroundDensityRadius));
   if (radius === 0) return { mask: rawMask, recoveredPixels: 0 };
 
   const stride = width + 1;
   const integral = new Uint32Array((width + 1) * (height + 1));
   for (let y = 0; y < height; y += 1) {
+    if (cooperative && y % 16 === 0) yield null;
     let rowSum = 0;
     for (let x = 0; x < width; x += 1) {
       rowSum += rawMask[y * width + x];
@@ -532,6 +552,7 @@ function recoverStructuredForeground(rawMask, width, height, cfg) {
   const mask = rawMask.slice();
   let recoveredPixels = 0;
   for (let y = 0; y < height; y += 1) {
+    if (cooperative && y % 16 === 0) yield null;
     const top = Math.max(0, y - radius);
     const bottom = Math.min(height, y + radius + 1);
     for (let x = 0; x < width; x += 1) {
@@ -554,25 +575,33 @@ function recoverStructuredForeground(rawMask, width, height, cfg) {
 }
 
 function foregroundMask(luma, cfg) {
+  return drainCentralFinderSteps(foregroundMaskSteps(luma, cfg, false));
+}
+
+function* foregroundMaskSteps(luma, cfg, cooperative = true) {
   const length = luma.width * luma.height;
   const mask = new Uint8Array(length);
   let transparent = 0;
   if (luma.alpha) {
     for (let index = 0; index < length; index += 1) {
+    if (cooperative && index % 16384 === 0) yield null;
       if (luma.alpha[index] < 32) transparent += 1;
     }
   }
 
   if (luma.alpha && transparent >= length * 0.02) {
     for (let index = 0; index < length; index += 1) {
+    if (cooperative && index % 16384 === 0) yield null;
       mask[index] = luma.alpha[index] >= 128 ? 1 : 0;
     }
     return { mask, models: [], source: 'alpha' };
   }
 
-  const models = backgroundModels(borderValues(luma), cfg);
+  const border = yield* borderValuesSteps(luma, cooperative);
+  const models = yield* backgroundModelsSteps(border, cfg, cooperative);
   if (models.length === 0) return { mask, models, source: 'none' };
   for (let index = 0; index < length; index += 1) {
+    if (cooperative && index % 16384 === 0) yield null;
     if (luma.alpha && luma.alpha[index] === 0) continue;
     const value = luma.data[index];
     let background = false;
@@ -584,11 +613,12 @@ function foregroundMask(luma, cfg) {
     }
     mask[index] = background ? 0 : 1;
   }
-  const structured = recoverStructuredForeground(
+  const structured = yield* recoverStructuredForegroundSteps(
     mask,
     luma.width,
     luma.height,
     cfg,
+    cooperative,
   );
   return {
     mask,
@@ -601,16 +631,17 @@ function foregroundMask(luma, cfg) {
 }
 
 function closeMask(mask, width, height) {
+  return drainCentralFinderSteps(closeMaskSteps(mask, width, height, false));
+}
+
+function* closeMaskSteps(mask, width, height, cooperative = true) {
   const length = mask.length;
-  ensureShapeScratch(length);
-  const dilated = closeMaskDilatedScratch.length === length
-    ? closeMaskDilatedScratch
-    : closeMaskDilatedScratch.subarray(0, length);
-  const closed = closeMaskClosedScratch.length === length
-    ? closeMaskClosedScratch
-    : closeMaskClosedScratch.subarray(0, length);
+  if (!cooperative) ensureShapeScratch(length);
+  const dilated = cooperative ? new Uint8Array(length) : closeMaskDilatedScratch.subarray(0, length);
+  const closed = cooperative ? new Uint8Array(length) : closeMaskClosedScratch.subarray(0, length);
 
   for (let y = 0; y < height; y += 1) {
+    if (cooperative && y % 16 === 0) yield null;
     for (let x = 0; x < width; x += 1) {
       let on = 0;
       for (let oy = -1; oy <= 1 && on === 0; oy += 1) {
@@ -635,6 +666,7 @@ function closeMask(mask, width, height) {
     }
   }
   for (let y = 1; y < height - 1; y += 1) {
+    if (cooperative && y % 16 === 0) yield null;
     const row = y * width;
     closed[row] = 0;
     if (width > 1) closed[row + width - 1] = 0;
@@ -654,15 +686,18 @@ function closeMask(mask, width, height) {
   return closed;
 }
 function connectedComponents(mask, width, height, cfg) {
-  ensureShapeScratch(mask.length);
-  componentVisitStamp += 1;
-  if (componentVisitStamp > 0xffffffff) {
-    componentVisitedScratch.fill(0);
-    componentVisitStamp = 1;
+  return drainCentralFinderSteps(connectedComponentsSteps(mask, width, height, cfg, false));
+}
+
+function* connectedComponentsSteps(mask, width, height, cfg, cooperative = true) {
+  let stamp, visited, queue;
+  if (cooperative) {
+    stamp = 1; visited = new Uint8Array(mask.length); queue = new Uint32Array(mask.length);
+  } else {
+    ensureShapeScratch(mask.length); componentVisitStamp += 1;
+    if (componentVisitStamp > 0xffffffff) { componentVisitedScratch.fill(0); componentVisitStamp = 1; }
+    stamp = componentVisitStamp; visited = componentVisitedScratch; queue = componentQueueScratch;
   }
-  const stamp = componentVisitStamp;
-  const visited = componentVisitedScratch;
-  const queue = componentQueueScratch;
   const components = [];
   const minimum = Math.max(
     cfg.minimumComponentPixels,
@@ -671,6 +706,7 @@ function connectedComponents(mask, width, height, cfg) {
   const maximum = Math.floor(mask.length * cfg.maximumComponentAreaFraction);
 
   for (let start = 0; start < mask.length; start += 1) {
+    if (cooperative && start % 4096 === 0) yield null;
     if (!mask[start] || visited[start] === stamp) continue;
     let head = 0;
     let tail = 0;
@@ -684,6 +720,7 @@ function connectedComponents(mask, width, height, cfg) {
     const boundary = [];
 
     while (head < tail) {
+      if (cooperative && head % 2048 === 0) yield null;
       const index = queue[head++];
       const x = index % width;
       const y = Math.floor(index / width);
@@ -866,9 +903,14 @@ function diagonalCenter(vertices) {
 }
 
 function lumaSpan(luma) {
+  return drainCentralFinderSteps(lumaSpanSteps(luma, false));
+}
+
+function* lumaSpanSteps(luma, cooperative = true) {
   let min = Infinity;
   let max = -Infinity;
   for (let index = 0; index < luma.data.length; index += 1) {
+    if (cooperative && index % 16384 === 0) yield null;
     const value = luma.data[index];
     if (!Number.isFinite(value)) continue;
     if (value < min || (value === 0 && min === 0 && 1 / value === -Infinity)) min = value;
@@ -929,7 +971,11 @@ function seamEvidence(luma, center, vertices, parity, cachedSpan, cfg = UNVERIFI
 }
 
 function shapeCandidates(luma, cfg) {
-  const foreground = foregroundMask(luma, cfg);
+  return drainCentralFinderSteps(shapeCandidatesSteps(luma, cfg, false));
+}
+
+function* shapeCandidatesSteps(luma, cfg, cooperative = true) {
+  const foreground = yield* foregroundMaskSteps(luma, cfg, cooperative);
   const variants = [{ source: 'raw', mask: foreground.mask }];
   if (foreground.structuredMask && foreground.recoveredForegroundPixels > 0) {
     variants.push({ source: 'structured-density', mask: foreground.structuredMask });
@@ -989,18 +1035,19 @@ function shapeCandidates(luma, cfg) {
       }
       variant.mask = variant.buildMask();
     }
-    const mask = closeMask(variant.mask, luma.width, luma.height);
-    const components = connectedComponents(mask, luma.width, luma.height, cfg);
+    const mask = yield* closeMaskSteps(variant.mask, luma.width, luma.height, cooperative);
+    const components = yield* connectedComponentsSteps(mask, luma.width, luma.height, cfg, cooperative);
     componentCounts[variant.source] = components.length;
     const sourceCandidates = [];
 
-    components.forEach((component, localComponentIndex) => {
+    for (const [localComponentIndex, component] of components.entries()) {
+      if (cooperative) yield null;
       const componentIndex = componentOffset + localComponentIndex;
       const hull = convexHull(component.boundary);
       const vertices = simplifyHullToHex(hull);
       if (!vertices) {
         reject(componentIndex, variant.source, 'hull-not-hexagon', hull.length, 6);
-        return;
+        continue;
       }
       const diagonal = diagonalCenter(vertices);
       if (!diagonal || diagonal.residual > cfg.maximumConcurrencyResidual) {
@@ -1013,16 +1060,16 @@ function shapeCandidates(luma, cfg) {
           vertices,
           componentArea: component.area,
         }, cfg.maximumConcurrencyResidual);
-        return;
+        continue;
       }
       const area = Math.abs(polygonArea(vertices));
       const maskFill = component.area / Math.max(area, EPSILON);
       if (maskFill < cfg.minimumMaskFill) {
         reject(componentIndex, variant.source, 'mask-fill', maskFill, cfg.minimumMaskFill);
-        return;
+        continue;
       }
 
-      if (seamSpan === undefined) seamSpan = lumaSpan(luma);
+      if (seamSpan === undefined) seamSpan = yield* lumaSpanSteps(luma, cooperative);
       const even = seamEvidence(luma, diagonal.center, vertices, 0, seamSpan, cfg);
       const odd = seamEvidence(luma, diagonal.center, vertices, 1, seamSpan, cfg);
       const seamScore = (report) => report.contrast
@@ -1066,7 +1113,7 @@ function shapeCandidates(luma, cfg) {
           seamSupport: cfg.minimumSeamSupport,
           parityMargin: cfg.minimumSeamParityMargin,
         });
-        return;
+        continue;
       }
 
       const emitParityCandidate = (
@@ -1110,7 +1157,7 @@ function shapeCandidates(luma, cfg) {
         && other.support >= cfg.minimumSeamSupport) {
         emitParityCandidate(1 - parity, other, seam, true);
       }
-    });
+    }
     sourceCandidates.sort((left, right) =>
       right.score - left.score
       || right.radius - left.radius
@@ -1151,6 +1198,107 @@ function liftPoint(point, factor) {
     x: point.x * factor + (factor - 1) / 2,
     y: point.y * factor + (factor - 1) / 2,
   };
+}
+
+const RAW_CUBE_SHAPE_SOURCE = Object.freeze({
+  kind: 'observed-contour-y-junction',
+  contour: 'component-boundary',
+  support: 'pixel-seam-evidence',
+  regeneratedFromHomography: false,
+});
+
+function rawCubeShapePoint(point, factor, width, height) {
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  const lifted = liftPoint(point, factor);
+  if (!Number.isFinite(lifted.x) || !Number.isFinite(lifted.y)
+    || lifted.x < 0 || lifted.y < 0
+    || lifted.x > width - 1 || lifted.y > height - 1) return null;
+  return lifted;
+}
+
+function copyRawCubeShape(shape, factor, width, height) {
+  if (!shape || !Array.isArray(shape.vertices) || shape.vertices.length !== 6
+    || !Array.isArray(shape.seamVertices) || shape.seamVertices.length !== 3) return null;
+  const center = rawCubeShapePoint(shape.center, factor, width, height);
+  const vertices = shape.vertices.map((point) =>
+    rawCubeShapePoint(point, factor, width, height));
+  const seamVertices = shape.seamVertices.map((point) =>
+    rawCubeShapePoint(point, factor, width, height));
+  if (!center || vertices.some((point) => point === null)
+    || seamVertices.some((point) => point === null)
+    || !(Math.abs(polygonArea(vertices)) > EPSILON)) return null;
+  return {
+    componentIndex: shape.componentIndex,
+    componentSource: shape.componentSource,
+    center,
+    vertices,
+    seamParity: shape.seamParity,
+    seamVertices,
+    radius: shape.radius * factor,
+    score: shape.score,
+    maskFill: shape.maskFill,
+    concurrencyResidual: shape.concurrencyResidual,
+  };
+}
+
+/**
+ * 원화소 contour와 Y-junction support에서 직접 얻은 6점 후보만 조기에 반환한다.
+ * n·layout·format·본문 및 H/정규육각 재생성 경로는 이 함수의 호출 그래프에 없다.
+ *
+ * @param {import('./contracts.js').LumaField} luma
+ * @param {{maxCandidates:number, calibration?:object}} options
+ * @returns {{ok:true, source:object, candidates:Array, diagnostics:object}|{ok:false}}
+ * @throws {RangeError} maxCandidates가 기존 component 자원 경계를 벗어난 경우
+ */
+export function detectRawCubeShapes(luma, options = {}) {
+  try {
+    assertLumaField(luma);
+  } catch (error) {
+    return fail(FRONTEND_FAILURE.EMPTY_INPUT, {
+      stage: 'cube-raw-shape',
+      message: error.message,
+    });
+  }
+  const cfg = calibration(options);
+  if (!Number.isInteger(cfg.maximumComponents) || cfg.maximumComponents <= 0) {
+    throw new RangeError('calibration.maximumComponents는 양의 정수여야 한다');
+  }
+  if (!Number.isInteger(options.maxCandidates) || options.maxCandidates <= 0
+    || options.maxCandidates > cfg.maximumComponents) {
+    throw new RangeError(
+      'maxCandidates는 1 이상 calibration.maximumComponents 이하의 정수여야 한다',
+    );
+  }
+
+  const reduced = downsampleLuma(luma, cfg.maxDimension);
+  const measured = shapeCandidates(reduced.luma, cfg);
+  const candidates = [];
+  let validCandidateCount = 0;
+  let invalidCandidateCount = 0;
+  for (const shape of measured.candidates) {
+    const candidate = copyRawCubeShape(
+      shape, reduced.factor, luma.width, luma.height,
+    );
+    if (!candidate) {
+      invalidCandidateCount += 1;
+      continue;
+    }
+    validCandidateCount += 1;
+    if (candidates.length < options.maxCandidates) candidates.push(candidate);
+  }
+  return ok({
+    source: RAW_CUBE_SHAPE_SOURCE,
+    candidates,
+    diagnostics: {
+      stage: 'raw-shape',
+      downsampleFactor: reduced.factor,
+      measuredCandidateCount: measured.candidates.length,
+      validCandidateCount,
+      emittedCandidateCount: candidates.length,
+      invalidCandidateCount,
+      truncated: validCandidateCount > candidates.length,
+    },
+  });
 }
 
 function vertexSetResidual(H, n, observedVertices) {
@@ -1280,6 +1428,16 @@ export function sampleCubeCell(luma, geometry, i, j, options = {}) {
     });
   }
 
+  const hasFaceHs = geometry.faceHs !== undefined;
+  if (hasFaceHs && (!Array.isArray(geometry.faceHs) || geometry.faceHs.length !== 3
+    || geometry.faceHs.some((H) => !(H instanceof Float64Array)
+      || H.length !== 9 || !Array.from(H).every(Number.isFinite)))) {
+    return fail(FRONTEND_FAILURE.HOMOGRAPHY_DEGENERATE, {
+      stage: 'cube-cell-sampling',
+      cause: 'invalid-face-homographies',
+    });
+  }
+
   const faces = {};
   for (const face of YFACES) {
     const disc = moduleSampleDisc(
@@ -1289,7 +1447,8 @@ export function sampleCubeCell(luma, geometry, i, j, options = {}) {
       { size: 1, originX: 0, originY: 0 },
       options.disc || {},
     );
-    const sampled = sampleProjectedDisc(luma, geometry.H, disc, options);
+    const projectedH = hasFaceHs ? geometry.faceHs[TONE_FACE_INDEX[face]] : geometry.H;
+    const sampled = sampleProjectedDisc(luma, projectedH, disc, options);
     if (!sampled.ok) {
       return fail(sampled.reason, {
         stage: 'cube-cell-sampling',
@@ -3489,7 +3648,21 @@ function centralCubeRankReport(luma, H, options, cfg, span) {
  * 중앙 3톤 큐브 파인더. Type Y의 실루엣→Y 심→투영기하 단계를 그대로 쓰고,
  * 전용 12셀 레퍼런스 대신 고정 면 순위 T/L/R=밝음/중간/어두움으로 120°를 고른다.
  */
+function drainCentralFinderSteps(steps) {
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
 export function detectCentralCubeFinders(luma, options = {}) {
+  return drainCentralFinderSteps(detectCentralCubeFindersSteps(luma, options));
+}
+
+/**
+ * 중앙 3-tone finder의 협력형 탐색. 후보를 바꾸지 않고 기존의 무거운 기하·순위
+ * 평가 직전에서만 null을 양보한다. 동기 진입점은 이 iterator를 끝까지 소진한다.
+ */
+export function* detectCentralCubeFindersSteps(luma, options = {}) {
   try {
     assertLumaField(luma);
   } catch (error) {
@@ -3499,13 +3672,16 @@ export function detectCentralCubeFinders(luma, options = {}) {
     });
   }
   const cfg = calibration(options);
-  const reduced = downsampleLuma(luma, cfg.maxDimension);
-  const shapes = shapeCandidates(reduced.luma, cfg);
-  const span = Math.max(lumaSpan(luma), EPSILON);
+  yield null;
+  const reduced = yield* downsampleLumaSteps(luma, cfg.maxDimension);
+  yield null;
+  const shapes = yield* shapeCandidatesSteps(reduced.luma, cfg);
+  const span = Math.max(yield* lumaSpanSteps(luma), EPSILON);
   const candidates = [];
   const geometryReports = [];
 
   for (const shape of shapes.candidates) {
+    yield null;
     const center = liftPoint(shape.center, reduced.factor);
     const vertices = shape.vertices.map((point) => liftPoint(point, reduced.factor));
     const bounds = {
@@ -3521,12 +3697,14 @@ export function detectCentralCubeFinders(luma, options = {}) {
     for (let orientation = 0; orientation < 3; orientation += 1) {
       let best = null;
       const seeds = [];
+      yield null;
       const affineH = blockCandidateHomography(
         { bounds }, FINDER_CUBE_RADIUS_CELLS, 1, orientation,
       );
       if (affineH) seeds.push({ id: 'flat-block-affine', H: affineH });
       else skipReasons.push({ orientation, stage: 'no-affine-h' });
       for (const seed of seeds) {
+        yield null;
         const vertexResidual = vertexSetResidual(
           seed.H,
           FINDER_CUBE_RADIUS_CELLS,
@@ -3539,6 +3717,7 @@ export function detectCentralCubeFinders(luma, options = {}) {
           });
           continue;
         }
+        yield null;
         const rank = centralCubeRankReport(luma, seed.H, options, cfg, span);
         if (!rank) {
           skipReasons.push({ orientation, stage: 'rank-sample' });

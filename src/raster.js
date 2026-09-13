@@ -11,6 +11,7 @@
  */
 
 /** 기본 배율(픽셀/scene-단위)·서브샘플 격자 한 변 크기. */
+import {assertSceneImage,imageQuadTransform,inverseImageTransform,projectImagePoint,imageColorOver} from './scene-image.js';
 const DEFAULT_PIXELS_PER_UNIT = 24;
 const DEFAULT_SUPERSAMPLE = 2;
 
@@ -19,7 +20,7 @@ const DEFAULT_SUPERSAMPLE = 2;
  * @returns {{minX, minY, maxX, maxY}}
  */
 function shapeBounds(shape) {
-  if (shape.kind === 'polygon') {
+  if (shape.kind === 'polygon'||shape.kind==='image') {
     let minX = shape.points[0].x;
     let maxX = shape.points[0].x;
     let minY = shape.points[0].y;
@@ -70,7 +71,7 @@ function pointInDisc(x, y, cx, cy, r) {
 }
 
 function pointInShape(x, y, shape) {
-  if (shape.kind === 'polygon') return pointInPolygon(x, y, shape.points);
+  if (shape.kind === 'polygon'||shape.kind==='image') return pointInPolygon(x, y, shape.points);
   return pointInDisc(x, y, shape.cx, shape.cy, shape.r);
 }
 
@@ -238,6 +239,9 @@ export function rasterize(scene, options) {
   }
 
   for (const shape of scene.shapes) {
+    const image=shape.kind==='image'?assertSceneImage(shape.image):null;
+    const imageInverse=image?inverseImageTransform(imageQuadTransform(shape.points)):null;
+    if(image&&!imageInverse)continue;
     const b = shapeBounds(shape);
     const sxMin = Math.max(0, Math.floor(b.minX * ssPixelsPerUnit));
     const sxMax = Math.min(ssWidth - 1, Math.ceil(b.maxX * ssPixelsPerUnit));
@@ -251,9 +255,13 @@ export function rasterize(scene, options) {
         if (!pointInShape(sceneX, sceneY, shape)) continue;
         const i = sy * ssWidth + sx;
         const o = i * 3;
-        sub[o] = shape.color.r;
-        sub[o + 1] = shape.color.g;
-        sub[o + 2] = shape.color.b;
+        const uv=image?projectImagePoint(imageInverse,sceneX,sceneY):null;
+        const sampled=image?imageColorOver(image,uv.x,uv.y,shape.color):shape.color;
+        const gain=image&&Number.isFinite(shape.gain)?Math.min(1,Math.max(0,shape.gain)):1;
+        const color=gain===1?sampled:{r:Math.round(sampled.r*gain),g:Math.round(sampled.g*gain),b:Math.round(sampled.b*gain)};
+        sub[o] = color.r;
+        sub[o + 1] = color.g;
+        sub[o + 2] = color.b;
         if (cov !== null) cov[i] = 1;
         // 도형은 불투명이다 — 음영 위에 덮이면 그 서브픽셀은 완전 불투명이 된다.
         if (alpha !== null) alpha[i] = 1;

@@ -37,6 +37,14 @@ import { existsSync } from 'node:fs';
 import { listLumaDumps, readLumaDump } from '../tools/read-luma.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
+const WRITE_DIAGNOSTICS = process.env.TL_TEST_DIAGNOSTICS === '1';
+
+function writeDiagnostic(name, value) {
+  if (!WRITE_DIAGNOSTICS) return;
+  mkdirSync(ROOT + 'test/output', { recursive: true });
+  writeFileSync(ROOT + 'test/output/' + name, JSON.stringify(value, null, 2) + '\n');
+}
+
 const PRESET = getPreset(DEFAULT_PRESET);
 const PALETTE = Object.freeze({
   background: PRESET.background,
@@ -266,11 +274,7 @@ test('QR 1:1:3:1:1 스캐너는 표준 파인더를 잡고 v2 히트 수를 기�
     v2Luma.height,
   );
   assert.ok(qrHits.length >= 2, `표준 QR 파인더 hit=${qrHits.length}`);
-  mkdirSync(ROOT + 'test/output', { recursive: true });
-  writeFileSync(
-    ROOT + 'test/output/grok-finder-first-qr.json',
-    JSON.stringify({ qrHits: qrHits.length, v2Hits: v2Hits.length }, null, 2) + '\n',
-  );
+  writeDiagnostic('grok-finder-first-qr.json', { qrHits: qrHits.length, v2Hits: v2Hits.length });
   assert.ok(Number.isFinite(v2Hits.length));
 });
 
@@ -384,11 +388,7 @@ test('실루엣 vs 파인더를 깨끗한 배경·베젤 잡음에서 나란히 
     rows,
   };
 
-  mkdirSync(ROOT + 'test/output', { recursive: true });
-  writeFileSync(
-    ROOT + 'test/output/grok-finder-first-measure.json',
-    JSON.stringify(summary, null, 2) + '\n',
-  );
+  writeDiagnostic('grok-finder-first-measure.json', summary);
 
   assert.ok(summary.cleanSilhouette >= summary.cleanN * 0.5, '깨끗한 배경에서 실루엣이 너무 약하다');
   assert.ok(
@@ -428,10 +428,6 @@ test('실사 큐브 휘도 덤프가 있으면 파인더 시드를 센다', () =
     if (find.ok) finderHits += 1;
   }
   const photo = { n, seedHits, silHits, finderHits };
-  mkdirSync(ROOT + 'test/output', { recursive: true });
-  writeFileSync(
-    ROOT + 'test/output/grok-finder-first-photos.json',
-    JSON.stringify(photo, null, 2) + '\n',
-  );
+  writeDiagnostic('grok-finder-first-photos.json', photo);
   assert.ok(n > 0);
 });

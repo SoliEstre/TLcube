@@ -122,6 +122,7 @@ export function createR2ScanRuntime(options = {}) {
   const defaultEcc = typeof options.eccName === 'string' ? options.eccName : 'H';
   const defaultMask = Number.isInteger(options.maskIndex) ? options.maskIndex : 0;
   const maxCandidates = Number.isInteger(options.maxCandidates) ? options.maxCandidates : 6;
+  let candidateReservation = null;
 
   let adapters = null;
   let candidates = [];
@@ -500,6 +501,7 @@ export function createR2ScanRuntime(options = {}) {
       return;
     }
     if (!Array.isArray(ids) || ids.length === 0) return;
+    candidateReservation?.(Math.min(ids.length, maxCandidates));
     const choice = formatChoice();
     stats.format.source = choice.source;
     stats.format.eccName = choice.eccName;
@@ -595,6 +597,7 @@ export function createR2ScanRuntime(options = {}) {
   /** 선반의 후보를 되살린다 — 얼린 시점의 누적기 그대로. 지금 후보는 은퇴시킨다. */
   function restoreShelf() {
     const kept = shelf;
+    candidateReservation?.(kept.candidates.length);
     shelf = null;
     disposeCandidates();
     candidates = kept.candidates;
@@ -924,6 +927,12 @@ export function createR2ScanRuntime(options = {}) {
     pushFrame,
     reset,
     invalidateLock,
+    // 기존 Y 후보를 줄이지 않고 새 입장 전에 공용 pool의 다른 좌석을 비워요.
+    setCandidateReservation(callback) {
+      if (callback !== null && typeof callback !== 'function') throw new TypeError('후보 예약 콜백이 필요해요');
+      candidateReservation = callback;
+    },
+    deferFrame: markActiveHudNotTracking,
     get hudCandidates() { return hudCandidates(); },
     stats,
     view,
@@ -991,8 +1000,9 @@ export function r2HitToDecodeResult(hit) {
  * 문구는 자가 빨개진 뒤 따라온다.
  *  · readsQr: 일반 QR 을 읽는다 — 단 readsQrVia 의 브라우저 BarcodeDetector 에 위임해서(§26),
  *    자체 복호기는 없다. qrRuntimeGated: 가용 여부가 실행 시 판정이라 문구는 3상태다 (`scanScopeCopyKey`).
- *  · accumulatesFamilies: 누적 후보는 `finalLayoutIdsForN` 의 라인업 = Type Y 계열뿐이다.
- *    다른 타입(A·V·K·O·C·daehan)은 R2 on 에서도 R1 단발로만 읽힌다.
+ *  · accumulatesFamilies: 기본 제품 엔진에서 활성화한 Y 누적 프로필 목록이에요.
+ *    Y-grid와 Y-faces만 연결해요. 다른 TL 프로필은 명시적인 개발용 all opt-in에만 남아 있어요.
+ *    활성화된 포맷도 모든 촬영 조건의 성공을 보증하지는 않아요.
  */
 export const R2_CAPABILITIES = Object.freeze({
   readsQr: true,

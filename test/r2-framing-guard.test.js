@@ -47,7 +47,9 @@ test('R2 세션이 y0 에서 오수용을 내지 않는다', { timeout: 1_800_00
   const LAYOUT = 'v0';
   const EXPECT = 'https://tl.estre.so';
   const scan = dataCellsInScanOrderCellSurfaceFinal(N, LAYOUT);
-  const frames = seq.frames.slice(0, 40);
+  // 40장은 이 회귀의 명시적 상한이다. 조합(3 ECC × 3 mask) 전에 한 번만 읽고
+  // 같은 immutable 입력을 재사용한다. 코퍼스 전체를 캐시하지 않아 메모리도 이 경계 안이다.
+  const frames = seq.frames.slice(0, 40).map((frame) => readLumaDump(frame.path));
   let falseAccepts = 0;
   let dones = 0;
   let corrects = 0;
@@ -79,8 +81,7 @@ test('R2 세션이 y0 에서 오수용을 내지 않는다', { timeout: 1_800_00
       });
       let done = false;
       let i = 0;
-      for (const f of frames) {
-        const d = readLumaDump(f.path);
+      for (const d of frames) {
         const r = session.pushFrame(d.data, d.width, d.height, i * 100, null);
         if (r.indicator === R2_INDICATOR.DONE) { done = true; break; }
         i += 1;

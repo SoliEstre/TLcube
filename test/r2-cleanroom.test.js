@@ -32,6 +32,9 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BACKSLASH = String.fromCharCode(92);
 const posix = (p) => p.split(BACKSLASH).join('/');
 const rel = (p) => posix(relative(ROOT, p));
+const OPTICAL_BOUNDARY = Object.freeze(JSON.parse(readFileSync(
+  new URL('./r2-optical-boundary.json', import.meta.url), 'utf8',
+)));
 
 // 다리가 오늘 끌어오는 decoder 모듈. **손 목록이 아니라 계약이다.**
 const BRIDGE = 'adapter-locator.js';
@@ -52,6 +55,8 @@ const BRIDGE_ALLOWED = Object.freeze([
    */
   '../decoder/locator-format.js',
 ]);
+const OPTICAL_BRIDGES = Object.freeze(OPTICAL_BOUNDARY.opticalBridges);
+const CORE_FILES = Object.freeze(new Set(OPTICAL_BOUNDARY.coreFiles));
 
 /*
  * 폐포 «상한». 여태 ③ 은 하한(20)만 재서 「공허 방지」였고, 다리를 늘려 폐포가 두 배가
@@ -68,7 +73,12 @@ const LEGACY_CLOSURE_CEILING = 66;
 // 전체 여유 0은 의도다: 새 프로필 파일 1개도 폐포 증가를 검토하는 계기로 삼는다.
 // 다음 프로필 레인은 파일 추가 때 전체 폐포를 재측정하고, 증가 목록·사유와 상한 갱신을
 // 같은 커밋에 담아야 한다. 기존 다리의 여유 5를 전체 프로필 범위에 자동 승계하지 않는다.
-const FULL_CLOSURE_CEILING = 80;
+const MANIFEST_CLOSURE = Object.freeze([...OPTICAL_BOUNDARY.baselineClosure, ...OPTICAL_BOUNDARY.addedClosure].sort());
+// 2026-09-10: +1 acquisition-lifetime.js는 import 없는 순수 수명 회계예요.
+// 새 decoder/encoder/외부 의존은 없고 기존 session+adapter 상한 66은 그대로예요.
+// 2026-09-12: +1 cube-outline.js는 공유 y3d-viewer를 통한 import 없는 순수 윤곽선 기하예요.
+// R1 복호기/인코더는 추가하지 않고 전체 138, 기존 다리 상한 66을 유지해요.
+const FULL_CLOSURE_CEILING = OPTICAL_BOUNDARY.currentClosureCount;
 
 /**
  * ⚠ **주석을 먼저 벗긴다** (2026-09-06 검토 R3c).
@@ -133,26 +143,45 @@ function jsFilesBelow(root, readDirectory = readdirSync) {
 }
 const R2_FILES = jsFilesBelow(R2_DIR).map((file) => posix(relative(R2_DIR, file)));
 
-test('클린룸 ① — `src/r2/**` 에서 decoder 를 보는 파일은 다리 하나뿐이다', () => {
+function opticalBoundaryViolations(importsByFile) {
+  const violations = [];
+  for (const [name, imports] of importsByFile) {
+    const allowed = OPTICAL_BRIDGES[name];
+    if (imports.length === 0) continue;
+    if (allowed === undefined) {
+      violations.push(`${name}: decoder import 는 optical bridge 선언이 필요하다 (${imports.join(' ')})`);
+      continue;
+    }
+    if (JSON.stringify(imports) !== JSON.stringify([...allowed].sort())) {
+      violations.push(`${name}: 지금 ${imports.join(' ')}; 허용 ${allowed.join(' ')}`);
+    }
+  }
+  return violations;
+}
+
+test('클린룸 ① — core/profile은 decoder-free이고 optical bridge 여섯 파일만 exact import 한다', () => {
   // 공허 방지: 훑기가 무너지면 「위반이 없다」가 아니라 「잴 게 없다」가 된다.
   assert.ok(R2_FILES.length >= 8,
     `src/r2 에 파일이 ${R2_FILES.length}개뿐이다 — 훑기가 무너졌다`);
 
-  const violations = [];
+  const importsByFile = [];
   for (const name of R2_FILES) {
     const imports = decoderImportsOf(resolve(R2_DIR, name));
-    if (name === BRIDGE) continue;
-    if (imports.length > 0) violations.push(`${name}: ${imports.join(' ')}`);
+    importsByFile.push([name, imports]);
   }
-  assert.deepEqual(violations, [],
-    `클린룸이 뚫렸다:\n      ${violations.join('\n      ')}\n`
-    + `    다리는 src/r2/${BRIDGE} 하나다. 다른 파일이 decoder 를 봐야 한다면 `
-    + '그것은 설계 변경이지 import 한 줄이 아니다 (PM/029B §13.6).');
+  assert.deepEqual(opticalBoundaryViolations(importsByFile), [],
+    'core/profile 또는 미선언 optical bridge가 decoder를 본다');
+  const coreLeaks = importsByFile.filter(([name, imports]) => CORE_FILES.has(name) && imports.length > 0);
+  assert.deepEqual(coreLeaks, [], '공통 누적 코어/profile은 GeometryObserver가 아니다');
+  assert.deepEqual(importsByFile.filter(([, imports]) => imports.length > 0).map(([name]) => name).sort(),
+    Object.keys(OPTICAL_BRIDGES).sort(), 'decoder import 파일 집합이 optical bridge 선언과 다르다');
 });
 
 test('클린룸 ② — 다리가 끌어오는 decoder 모듈은 허용목록과 정확히 같다', () => {
   const imports = decoderImportsOf(resolve(R2_DIR, BRIDGE));
   assert.ok(imports.length > 0, `${BRIDGE} 가 decoder 를 하나도 안 본다 — 정규식이 죽었다`);
+  assert.deepEqual([...OPTICAL_BRIDGES[BRIDGE]].sort(), [...BRIDGE_ALLOWED].sort(),
+    'legacy locator allowlist가 optical bridge manifest와 달라졌다');
   assert.deepEqual(imports, [...BRIDGE_ALLOWED].sort(),
     '다리의 decoder import 가 허용목록과 다르다.\n'
     + `    지금: ${imports.join(' ')}\n`
@@ -169,6 +198,14 @@ test('클린룸 ③ — R2 의 의존 폐포에 R1 복호기·인코더가 없�
     `기존 session+adapter 폐포 ${legacy.size} (상한 ${LEGACY_CLOSURE_CEILING})`);
   const closure = closureOf(R2_FILES.map((file) => posix(resolve(R2_DIR, file))));
   const names = new Set([...closure].map(rel));
+  assert.deepEqual([...names].sort(), MANIFEST_CLOSURE,
+    '현재 R2 closure가 public optical boundary manifest와 다르다');
+  assert.equal(closure.size, OPTICAL_BOUNDARY.currentClosureCount,
+    '현재 R2 closure 수가 명시된 138파일과 다르다');
+  assert.equal(OPTICAL_BOUNDARY.baselineClosure.length, 80, '09.01 기준 closure는 80파일이어야 한다');
+  assert.equal(OPTICAL_BOUNDARY.addedClosure.length, 58, '광학 확장54 + 순수 회계/장면 재탐색/획득 수명3 + 공유 윤곽선1파일이어야 한다');
+  assert.deepEqual([...new Set([...OPTICAL_BOUNDARY.baselineClosure, ...OPTICAL_BOUNDARY.addedClosure])].sort(),
+    MANIFEST_CLOSURE, '기준 80 + 추가 58이 전체 closure 138과 다르다');
 
   // 공허 방지: 폐포가 안 걸어지면 「없다」가 공짜로 참이 된다.
   assert.ok(closure.size >= 20,
@@ -185,6 +222,8 @@ test('클린룸 ③ — R2 의 의존 폐포에 R1 복호기·인코더가 없�
   const FORBIDDEN = Object.freeze([
     'src/decode.js',          // R1 하드결정 복호 — R2 가 대체하려고 존재하는 것
     'src/encode.js',         // 타입 공통 인코더도 순수 프로필 표의 의존이 아니다
+    'src/encodeA.js',
+    'src/encodeK.js',
     'src/encodeY.js',         // 인코더. 스캐너 폐포에 있을 이유가 없다
     'src/decoder/bootstrap.js', // 82파일 폐포의 입구
     'src/decoder/decode-k.js',
@@ -195,6 +234,20 @@ test('클린룸 ③ — R2 의 의존 폐포에 R1 복호기·인코더가 없�
     `R2 폐포에 들어오면 안 되는 모듈이 있다: ${leaked.join(' ')}\n`
     + `    폐포 크기 ${closure.size}파일. 클린룸의 존재 이유는 export 개수가 아니라\n`
     + '    **C++ 이식 범위 봉쇄**다 (PM/029B §0:10 · §6).');
+});
+
+test('클린룸 ⓓ — 새 optical bridge·core decoder import는 allowlist 자에서 실패한다', () => {
+  const actual = new Map(R2_FILES.map((name) => [name, decoderImportsOf(resolve(R2_DIR, name))]));
+  const coreMutation = new Map(actual);
+  coreMutation.set('session.js', ['../decoder/bootstrap.js']);
+  assert.deepEqual(opticalBoundaryViolations(coreMutation), [
+    'session.js: decoder import 는 optical bridge 선언이 필요하다 (../decoder/bootstrap.js)',
+  ]);
+  const newBridgeMutation = new Map(actual);
+  newBridgeMutation.set('future-observer.js', ['../decoder/homography.js']);
+  assert.deepEqual(opticalBoundaryViolations(newBridgeMutation), [
+    'future-observer.js: decoder import 는 optical bridge 선언이 필요하다 (../decoder/homography.js)',
+  ]);
 });
 
 /*

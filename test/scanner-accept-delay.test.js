@@ -205,7 +205,7 @@ test('ⓕ 스캐너 배선 — 문·프레임 루프·stopCamera·리셋에 연�
   // ④ 프레임 루프 — 유예 중엔 문에 다시 넣지 않고(흡수 상태), 거부 정리도 안 탄다.
   const loopAt = JS.indexOf('if (r2Runtime.enabled) {');
   const block = JS.slice(loopAt, JS.indexOf('} catch', loopAt));
-  assert.ok(block.includes("if (hit && typeof hit.text === 'string' && !acceptStopGate.isPending()) {"),
+  assert.ok(block.includes("if (hit && hit.kind !== 'h' && typeof hit.text === 'string' && !acceptStopGate.isPending()) {"),
     '유예 중에도 적중을 문에 다시 넣는다 — 흡수 상태의 같은 답이 매 프레임 문을 두드린다');
   const branchAt = block.indexOf('if (!acceptStopGate.isPending()) {');
   const guardAt = block.indexOf('if (session !== scanSession) {');
@@ -266,7 +266,7 @@ test('ⓗ 지연 클로저는 R2 가변 상태를 참조하지 않는다 — 요
   const doorAt = JS.indexOf('function handleDecodeResult(');
   const openAt = JS.indexOf('const showAccepted = () => {', doorAt);
   assert.ok(openAt > doorAt, 'showAccepted 클로저를 못 찾았다');
-  const body = JS.slice(openAt, JS.indexOf('};', openAt));
+  const body = JS.slice(openAt, JS.indexOf('\n  };', openAt));
   for (const mutable of ['r2Latched', 'r2Correction']) {
     assert.ok(!body.includes(mutable),
       '지연 클로저가 ' + mutable + ' 를 호출 시점에 읽는다 — 유예 중 그것을 비우는 입구가 결과 카드를 지운다');

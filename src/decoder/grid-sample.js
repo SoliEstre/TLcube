@@ -45,6 +45,9 @@ const HOMOGENEOUS_EPSILON = 1e-12;
  * 캐시한다. LumaField 자체가 WeakMap 경계라 서로 다른 프레임은 섞이지 않는다.
  */
 const successfulDiscSamplesByLuma = new WeakMap();
+// MAD를 갖는 공개 FaceSample과 median-only hot path는 같은 cache entry를 공유하지
+// 않는다. 부분 결과가 R1의 full diagnostic 결과처럼 보이면 안 된다.
+const successfulDiscMediansByLuma = new WeakMap();
 const homographyCacheKeys = new WeakMap();
 
 function cacheNumberKey(value) {
@@ -88,11 +91,12 @@ function configCacheKeySuffix(config) {
   return lastConfigKeySuffix;
 }
 
-function successfulDiscCacheFor(luma, H) {
-  let byHomography = successfulDiscSamplesByLuma.get(luma);
+function successfulDiscCacheFor(luma, H, mediansOnly = false) {
+  const cache = mediansOnly ? successfulDiscMediansByLuma : successfulDiscSamplesByLuma;
+  let byHomography = cache.get(luma);
   if (byHomography === undefined) {
     byHomography = new Map();
-    successfulDiscSamplesByLuma.set(luma, byHomography);
+    cache.set(luma, byHomography);
   }
   const hKey = homographyCacheKey(H);
   let samples = byHomography.get(hKey);
@@ -609,7 +613,7 @@ function faceStats(face) {
  * @param {object} [options]
  * @returns {{ok:true,median:number,mad:number,count:number,opaqueCount:number,opaqueRatio:number,projectedMinorDiameter:number}|{ok:false,reason:string,detail:object}}
  */
-export function sampleProjectedDisc(luma, H, disc, options = {}) {
+function sampleProjectedDiscInternal(luma, H, disc, options, includeMad) {
   assertLumaField(luma);
   assertOptionalAlpha(luma);
   assertHomography(H);
@@ -618,14 +622,14 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   const profile = sampleProfileBucket(options);
   if (profile) profile.calls += 1;
   // 조회와 저장이 같은 (config, x, y, radius) 경로를 쓴다 (§lookupDiscSample).
-  const discSamples = successfulDiscCacheFor(luma, H);
+  const discSamples = successfulDiscCacheFor(luma, H, !includeMad);
   const cached = lookupDiscSample(discSamples, disc, config);
   if (cached !== undefined) {
     if (profile) {
       profile.cacheHits += 1;
       profile.successCacheHits += 1;
     }
-    return wrapDiscSample(cached);
+    return includeMad ? wrapDiscSample(cached) : { ok: true, median: cached.median };
   }
   if (profile) profile.cacheMisses += 1;
 
@@ -704,12 +708,25 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   let geometricCount = 0;
   let opaqueCount = 0;
 
+  const inverseH8Abs = Math.abs(inverseH[8]);
   for (let y = y0; y <= y1; y += 1) {
+    const py = y + 0.5;
+    const inverseH1Py = inverseH[1] * py;
+    const inverseH4Py = inverseH[4] * py;
+    const inverseH7Py = inverseH[7] * py;
+    const inverseH7PyAbs = Math.abs(inverseH7Py);
     for (let x = x0; x <= x1; x += 1) {
-      const canonical = projectPoint(inverseH, x + 0.5, y + 0.5);
-      if (canonical === null) continue;
-      const dx = canonical.x - disc.x;
-      const dy = canonical.y - disc.y;
+      const px = x + 0.5;
+      const numeratorX = (inverseH[0] * px + inverseH1Py) + inverseH[2];
+      const numeratorY = (inverseH[3] * px + inverseH4Py) + inverseH[5];
+      const denominator = (inverseH[6] * px + inverseH7Py) + inverseH[8];
+      const denominatorScale = Math.max(1, Math.abs(inverseH[6] * px) + inverseH7PyAbs + inverseH8Abs);
+      if (!Number.isFinite(denominator) || Math.abs(denominator) <= HOMOGENEOUS_EPSILON * denominatorScale) continue;
+      const canonicalX = numeratorX / denominator;
+      const canonicalY = numeratorY / denominator;
+      if (!Number.isFinite(canonicalX) || !Number.isFinite(canonicalY)) continue;
+      const dx = canonicalX - disc.x;
+      const dy = canonicalY - disc.y;
       if (dx * dx + dy * dy > radiusSquared) continue;
 
       geometricCount += 1;
@@ -765,7 +782,7 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   const sampleMedian = median(values, valueCount);
   const entry = {
     median: sampleMedian,
-    mad: mad(values, valueCount, sampleMedian),
+    mad: includeMad ? mad(values, valueCount, sampleMedian) : undefined,
     count: opaqueCount,
     opaqueCount,
     opaqueRatio,
@@ -774,7 +791,15 @@ export function sampleProjectedDisc(luma, H, disc, options = {}) {
   };
   if (profile) profile.successComputations += 1;
   cacheSuccessfulDiscSample(discSamples, disc, config, entry);
-  return wrapDiscSample(entry);
+  return includeMad ? wrapDiscSample(entry) : { ok: true, median: entry.median };
+}
+
+/**
+ * 투영된 canonical 원판의 pixel-center 전수 표본과 공개 진단 통계.
+ * full cache는 median-only cache와 분리돼 항상 MAD를 가진 결과만 돌려준다.
+ */
+export function sampleProjectedDisc(luma, H, disc, options = {}) {
+  return sampleProjectedDiscInternal(luma, H, disc, options, true);
 }
 
 /**
@@ -885,6 +910,47 @@ export function sampleHexCell(luma, geometry, q, r, options = {}) {
     separation: rank.separation,
     tie: rank.tie,
   });
+}
+
+/**
+ * C 누적 경로용 T/L/R median-only 표본이에요. full FaceSample cache와 분리해
+ * R1 진단자가 MAD 없는 partial entry를 읽지 않으며, 실패해도 세 face 모두
+ * 실제로 검사한 다음 지정한 Float64Array의 세 output slot을 0으로 비운다.
+ */
+export function sampleHexCellMediansInto(luma, H, q, r, out, offset = 0) {
+  if (!Number.isInteger(q) || !Number.isInteger(r)) {
+    throw new TypeError('q, r 은 정수 axial 좌표여야 한다');
+  }
+  if (!(out instanceof Float64Array)) {
+    throw new TypeError('out 은 raw median 정밀도를 보존하는 Float64Array여야 한다');
+  }
+  if (!Number.isInteger(offset) || offset < 0
+    || out.length < offset + FACES.length) {
+    throw new RangeError('out 은 offset부터 T/L/R 세 median을 담을 수 있어야 한다');
+  }
+  assertLumaField(luma);
+  assertNoCanonicalLayoutOverride(H, {});
+  assertHomography(H);
+  const discs = cellSampleDiscs(q, r);
+  let succeeded = true;
+  let T = 0;
+  let L = 0;
+  let R = 0;
+  // sampleHexCell처럼 전 face를 끝까지 읽는다. 한 face가 실패해도 다음 face의
+  // pixel-center/alpha/failure 조건을 줄이면 full 진단과 관측 범위가 갈라진다.
+  for (const face of FACES) {
+    const result = sampleProjectedDiscInternal(luma, H, discs[face], {}, false);
+    if (!result.ok) { succeeded = false; continue; }
+    if (face === 'T') T = result.median;
+    else if (face === 'L') L = result.median;
+    else R = result.median;
+  }
+  if (!succeeded) {
+    out[offset] = 0; out[offset + 1] = 0; out[offset + 2] = 0;
+    return false;
+  }
+  out[offset] = T; out[offset + 1] = L; out[offset + 2] = R;
+  return true;
 }
 
 function parseLayoutEntry(entry) {

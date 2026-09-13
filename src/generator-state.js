@@ -27,6 +27,9 @@ import {
   DEFAULT_RENDER_PROFILE_CHOICE, RENDER_PROFILE_CHOICES,
 } from './render-profile.js';
 import {
+  H_ROTATION_MODES, H_ROTATION_SPEED_DEFAULT, H_GYRO_ROTATION_SPEED_DEFAULT, H_ROTATION_TILT_DEFAULT_DEG, H_ROTATION_TILT_MAX_DEG, H_PERSPECTIVE_DEFAULT, normalizeHViewControls, reconcileHRotationSpeed,
+} from './generator-h.js';
+import {
   DEFAULT_EXPORT_CUSTOM_PX,
   DEFAULT_EXPORT_DITHER,
   DEFAULT_EXPORT_MARGIN,
@@ -279,6 +282,21 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   // K0CM/K1CM/K2CM 왕복이 전부 서므로 허용값에 든다 (자 = typeK-roundtrip ②).
   outerSeat: field('none', BOTH, ['none', 'a-cm', 'v-cm', 'k-cm']),
   versionY: field('auto', BOTH, ['auto', 0, 1, 2]),
+  yRepresentation: field('2.5d', BOTH, ['2.5d','3d']),
+  hFaces: field(3, BOTH, [1,2,3,4,5,6]),
+  hArrangement: field('isometric', BOTH, ['isometric','horizontal','vertical']),
+  hRenderFaces: field(3, BOTH, [3,6]),
+  versionH: field('auto', BOTH, ['auto',0,1,2,3,4,5,6,7,8]),
+  hMask: field(7, BOTH, ['auto',0,1,2,3,4,5,6,7]),
+  hAutoRotate: field(false, BOTH, [false,true]),
+  hAutoRotateIntent: field('auto', BOTH, ['auto','on','off']),
+  hRotationMode: field('y', BOTH, H_ROTATION_MODES),
+  hRotationDirectionX: field(1, BOTH, [1,-1]),
+  hRotationDirectionY: field(1, BOTH, [1,-1]),
+  hRotationSpeed: field(H_ROTATION_SPEED_DEFAULT, BOTH, [1,H_GYRO_ROTATION_SPEED_DEFAULT,H_ROTATION_SPEED_DEFAULT,90]),
+  hRotationSpeedIntent: field('auto', BOTH, ['auto','manual']),
+  hRotationTiltDeg: field(H_ROTATION_TILT_DEFAULT_DEG, BOTH, [0,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MAX_DEG]),
+  hExportLayout: field('faces', BOTH, ['faces','view']),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),
   // 'surface' = 배치 미리보기에서 잰 지면 색 판 — **Type Y 전용 카드**다 (운영자
@@ -453,6 +471,26 @@ export function createGeneratorState(overrides = {}) {
     if (!(key in GENERATOR_STATE_SCHEMA)) throw new RangeError('알 수 없는 생성기 상태 키: ' + key);
     state[key] = value;
   }
+  // 옛 저장에는 intent가 없었어요. 명시 속도는 사용자가 고른 값으로 읽어 축 전환에서 보존해요.
+  if (overrides.hRotationSpeed !== undefined && overrides.hRotationSpeedIntent === undefined) {
+    state.hRotationSpeedIntent = 'manual';
+  }
+  if (state.hRotationSpeedIntent === 'auto') {
+    Object.assign(state,reconcileHRotationSpeed(state));
+  }
+  // 새 H는 고정 화면보다 회전이 기본이에요. 단, 복원 입력의 false는 명시 pause로
+  // 승격해 이후 내용·면수 변경이 다시 켜지 못하게 해요.
+  if (state.type === 'Y' && state.yRepresentation === '3d') {
+    if (overrides.hAutoRotate === false && overrides.hAutoRotateIntent === undefined) {
+      state.hAutoRotateIntent = 'off';
+    }
+    if (state.hAutoRotateIntent === 'off') state.hAutoRotate = false;
+    else if (state.hAutoRotateIntent === 'on' || overrides.hAutoRotate === undefined) state.hAutoRotate = true;
+  }
+  // H 새 상태의 원근만 4도로 시작해요. 명시한 평면(0)·사용자 각도는 보존해요.
+  if (state.type === 'Y' && state.yRepresentation === '3d' && overrides.orbitPersp === undefined) {
+    state.orbitPersp = H_PERSPECTIVE_DEFAULT;
+  }
   // T4 마이그레이션 (2026-08-31, PM/028 §2) — 구 축의 innerSeat='sagoae' 는 심부
   // 자리로 **이관해 읽는다** (조용한 유실 금지: 버리면 사괘 선택이 소리 없이
   // 평 코드가 된다). 명시 deepSeat override 가 함께 오면 새 축이 이긴다 —
@@ -464,7 +502,7 @@ export function createGeneratorState(overrides = {}) {
   // 드랍된 중앙 M7이 옛 저장·URL에 남아 있으면 새 기본(중앙 TL)로 명시 정화한다.
   // 그 밖의 유효한 옛 선택은 건드리지 않는다. lab=true는 «lab 전용은 허용» 뜻이고,
   // dropped는 surface와 무관하게 언제나 닫힌다.
-  return sanitizeFinderCardState(state, true, GENERATOR_DEFAULT_FINDER_PATTERN_ID);
+  return normalizeHViewControls(sanitizeFinderCardState(state, true, GENERATOR_DEFAULT_FINDER_PATTERN_ID));
 }
 
 /** 일반 노출 키는 고급에서도 모두 노출되고, 고급 전용 키만 뒤에 더해진다. */

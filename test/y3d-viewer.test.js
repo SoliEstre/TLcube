@@ -206,10 +206,11 @@ describe('생성기 배선 — 3D 는 opt-in, 기본은 2.5D', () => {
     assert.ok(MODULE_ORDER.indexOf('lehmer') < iViewer, 'lehmer 가 y3d-viewer 앞이어야 한다');
   });
 
-  test('three.js / OrbitControls / glTF 문자열이 생성기에 없다', () => {
+  test('외부 3D 라이브러리 없이 자체 glTF 다운로드를 제공한다', () => {
     assert.equal(html.includes('three.js'), false);
     assert.equal(/OrbitControls/.test(html), false);
-    assert.equal(/glTF|GLTF/.test(html), false);
+    assert.match(html,/id="exportCubeGltf"/);
+    assert.match(html,/cubeModelToGltf\(cubeExportModel\(\)\)/);
   });
 
   test('기본은 2.5D 이고 3D 캔버스는 꺼진 채 시작한다', () => {
@@ -351,7 +352,7 @@ describe('생성기 배선 — 3D 는 opt-in, 기본은 2.5D', () => {
     assert.equal(body.includes('emitProductExport('), false,
       '스냅샷이 emitProductExport 를 부른다 — export 지표에 뷰 스냅샷이 섞인다');
     // 그리고 파일명이 «코드» 가 아니라 «뷰» 라고 말해야 한다.
-    assert.match(body, /type:\s*'Y-view'/);
+    assert.match(body, /type:\s*hGeneratorActive\(\)\?'H-view':'Y-view'/);
     assert.match(body, /version:\s*'snapshot'/);
     // 클립보드 실패는 **조용히** 넘어가면 안 된다 — 문구 + 다운로드 폴백.
     const copyAt = html.indexOf("els.y3dSnapCopy.addEventListener('click'");
@@ -1218,7 +1219,7 @@ test('index.html: .y3d-row[hidden] 규칙이 있다 — 저자 display 가 UA hi
     checked += 1;
     assert.match(
       css,
-      new RegExp(`\\.${escaped}\\[hidden\\]\\s*\\{[^}]*display:\\s*none`),
+      new RegExp(`\\.${escaped}\\[hidden\\](?:\\s*,[^{}]+)*\\s*\\{[^}]*display:\\s*none`),
       `.${name} 이 display 를 주는데 [hidden] 짝이 없다 — 저자 display 가 UA hidden 을 이겨 안 숨는다`,
     );
   }

@@ -78,7 +78,16 @@ test('seq-truth: falseAccept 0 (와이어 플립 트리거 ①)', {
     encoding: 'utf8',
     timeout: 1_800_000,
   });
-  assert.equal(result.status, 0, (result.stderr || '') + '\n' + (result.stdout || ''));
+  const output = (result.stderr || '') + '\n' + (result.stdout || '');
+  if (result.error?.code === 'ETIMEDOUT') {
+    assert.fail('seq-truth 자식이 1,800,000ms 제한에서 timeout 됐다 — falseAccept 실패가 아니다.\n' + output);
+  }
+  if (result.status === null) {
+    assert.fail('seq-truth 자식이 exit status 없이 끝났다 (signal=' + (result.signal ?? 'unknown')
+      + ') — falseAccept 실패가 아니다.\n' + output);
+  }
+  assert.equal(result.status, 0, 'seq-truth 자식 exit=' + result.status
+    + ' — falseAccept 또는 러너 실패를 확인하라.\n' + output);
   assert.equal(
     typeof result.stdout === 'string' && result.stdout.includes('✓ falseAccept 0'),
     true,

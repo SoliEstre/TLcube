@@ -452,7 +452,13 @@ function anchorProgress(evaluated) {
     + (checks.expectedPattern ? 1 : 0);
 }
 
-function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
+function drainSteps(steps) {
+  let next = steps.next();
+  while (!next.done) next = steps.next();
+  return next.value;
+}
+
+function* findHypothesesSteps(luma, bullseye, ks, options, family, anchorFactory) {
   const inputFailure = validateLuma(luma);
   if (inputFailure) return inputFailure;
   const normalizedBullseye = normalizeBullseye(bullseye, options);
@@ -500,6 +506,7 @@ function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
             scale,
             variant.scaleSupplied === true,
           );
+          yield null;
           // 통과하면 즉시 채택. 아니면 «가장 멀리 간» 것을 진단용으로 남긴다.
           if (probed.hardChecks.all) {
             evaluated = probed;
@@ -564,7 +571,11 @@ function findHypotheses(luma, bullseye, ks, options, family, anchorFactory) {
  * @returns {{ok:true, hypotheses: object[], diagnostics: object}|{ok:false, reason:string, detail?:object}}
  */
 export function findOAnchorHypotheses(luma, bullseye, ks, options = {}) {
-  return findHypotheses(luma, bullseye, ks, options, 'hex',
+  return drainSteps(findOAnchorHypothesesSteps(luma, bullseye, ks, options));
+}
+
+export function* findOAnchorHypothesesSteps(luma, bullseye, ks, options = {}) {
+  return yield* findHypothesesSteps(luma, bullseye, ks, options, 'hex',
     (k) => [{ turn: false, anchors: anchorCells(k) }]);
 }
 
@@ -589,8 +600,8 @@ export function findOAnchorHypotheses(luma, bullseye, ks, options = {}) {
  * @param {object} [options]
  */
 export function findCAnchorHypotheses(luma, bullseye, ks, options = {}) {
-  return findHypotheses(luma, bullseye, ks, options, 'hex',
-    (k) => [{ turn: false, scaleSupplied: true, anchors: anchorCells(k) }]);
+  return drainSteps(findHypothesesSteps(luma, bullseye, ks, options, 'hex',
+    (k) => [{ turn: false, scaleSupplied: true, anchors: anchorCells(k) }]));
 }
 
 /**
@@ -610,7 +621,11 @@ export function findCAnchorHypotheses(luma, bullseye, ks, options = {}) {
  * @param {object} [options]
  */
 export function findAAnchorHypotheses(luma, bullseye, ks, options = {}) {
-  return findHypotheses(luma, bullseye, ks, options, 'tri', (k) => {
+  return drainSteps(findAAnchorHypothesesSteps(luma, bullseye, ks, options));
+}
+
+export function* findAAnchorHypothesesSteps(luma, bullseye, ks, options = {}) {
+  return yield* findHypothesesSteps(luma, bullseye, ks, options, 'tri', (k) => {
     const upright = vertexAnchors(k);
     return [
       { turn: false, anchors: upright },
@@ -657,7 +672,11 @@ export function findKAnchorHypotheses(luma, bullseye, ks, options = {}) {
   // scaleSupplied — star 는 신설 축이라 실효 배율 탐색을 연다 (턴A 전례, evaluate
   // 주석). 앵커가 3k(최대 30셀) 거리라 다운샘플 파인더의 2% 대 스케일 오차만으로
   // 0.6셀 이상 밀려 6/6 이 전멸한다 — K1 합성 왕복 실측 (2026-08-25).
-  return findHypotheses(luma, bullseye, ks, options, 'star',
+  return drainSteps(findKAnchorHypothesesSteps(luma, bullseye, ks, options));
+}
+
+export function* findKAnchorHypothesesSteps(luma, bullseye, ks, options = {}) {
+  return yield* findHypothesesSteps(luma, bullseye, ks, options, 'star',
     (k) => [
       { turn: false, scaleSupplied: true, anchors: vertexAnchorsK(k) },
       // H2CO3 변형 — 반전 꼭짓점 3셀은 digit 순위가 아니라 동률이 기대값이다.

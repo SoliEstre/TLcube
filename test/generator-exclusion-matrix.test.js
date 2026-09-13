@@ -96,16 +96,16 @@ test('QR 위치 카드가 상위이고 중앙 파인더 카드가 하위라는 D
     INDEX.indexOf('function renderFinderUi()'),
     INDEX.indexOf('/** 공용 QR 위치 카드 갱신'),
   );
-  // 재재조준 (2026-08-30 저녁, CQ 개통): 구 자는 «잠금 축 = typeCActive 하나» 를
-  // 쟀다. CQ 행(formatIndex 4)이 열려 그 마지막 예외도 소멸 — 이제 재는 성질은
-  // «안쪽 QR 카드는 어느 정권에서도 잠기지 않는다» 다. 잠금 토글이 다시 생기면
-  // (파인더·모드·타입 C 무엇이든) 2026-08-29 위계 확정(«QR 위치가 상위»)의 회귀다.
+  // 2026-09-12 사용자 후속: H 물리면만 안쪽 QR을 잠가요. 기존 O/A/K/C/Y는
+  // CQ 개통 뒤의 상위 QR 위계를 유지하며 타입·모드·파인더를 새 잠금 축으로 삼지 않아요.
+  assert.match(qrUi, /const isH=hGeneratorActive\(\);/);
   assert.match(qrUi,
-    /card\.dataset\.pos === 'inner'[\s\S]{0,220}classList\.remove\('disabled'\)/,
-    '안쪽 QR 카드는 어느 정권에서도 잠기지 않아야 한다 (CQ 개통 2026-08-30)');
-  assert.doesNotMatch(qrUi.slice(qrUi.indexOf("dataset.pos === 'inner'")),
-    /toggle\('disabled',/,
-    '안쪽 QR 카드에 잠금 조건이 되살아났다 — 위계 확정·CQ 개통의 회귀');
+    /if \(card\.dataset\.pos === 'inner'\) \{\s*card\.classList\.toggle\('disabled',isH\);\s*card\.setAttribute\('aria-disabled', String\(isH\)\);\s*\}/,
+    'H 안쪽 QR만 잠그고 기존 타입과 코너 QR을 유지해야 해요');
+  assert.equal([...qrUi.matchAll(/toggle\('disabled',/g)].length, 1,
+    '파인더·모드·CQ 등에 추가 잠금 조건이 생겼어요');
+  assert.match(qrUi, /const inner = !isH&&generatorState\.qrPosition === 'inner';/,
+    'H에서 안쪽 QR 유효값만 끄고 저장 선택을 덮어쓰지 않아야 해요');
   for (const type of GENERATOR_TYPES) {
     for (const mode of GENERATOR_MODES) {
       assert.equal(GENERATOR_STATE_SCHEMA.qrPosition.exposure, 'both', `${type}/${mode}`);

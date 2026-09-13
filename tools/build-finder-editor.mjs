@@ -73,7 +73,7 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
     // formatK 는 scene 앞 (2026-08-26) — scene.js 가 육망성 외곽 판정을
   // kSpecFromFormatIndex 로 **유도**한다 (손 사본 7·8 철폐).
   'formatK',
-  'gf256', 'rs', 'qr', 'encode', 'scene', 'raster', 'png',
+  'gf256', 'rs', 'qr', 'encode', 'scene', 'png', 'scene-image', 'raster',
 ]);
 
 function replaceExactlyOnce(source, needle, replacement, label) {

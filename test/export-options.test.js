@@ -670,7 +670,13 @@ test('§10 물리 크기 힌트 — 헬퍼 값 · 경계 · UI 배선', () => {
   assert.match(body, /EXPORT_MIN_COMFORT_PRINT_MM/, '경계 상수를 안 쓴다 — 규칙이 UI 에 박힌다');
   assert.match(body, /tf\('g751',/, '경고 문구가 사전을 안 탄다 — 언어 전환에 굳는다');
   // 렌더 직후 재계산 (scene 치수 의존) — current 대입 뒤에 호출이 있어야 한다.
-  assert.match(INDEX_SOURCE, /sceneOpts: result\.sceneOpts,\s*\};\s*\/\/[^\n]*\n\s*syncExportPpiHint\(\);/);
+  // current의 마지막 필드 이름에는 결속하지 않아요. QR 등 새 출력 메타도 들어갈 수 있어요.
+  const renderSource = INDEX_SOURCE.slice(INDEX_SOURCE.indexOf('function render()'));
+  const assignment = /current = \{([\s\S]*?)\n\s*\};/.exec(renderSource);
+  assert.ok(assignment, '새 장면 current 대입이 없다');
+  assert.match(assignment[1], /sceneOpts: result\.sceneOpts,/);
+  assert.match(renderSource.slice(assignment.index + assignment[0].length),
+    /^\s*\/\/[^\n]*\n\s*syncExportPpiHint\(\);/);
 });
 
 test('index.html — 새 상태 키가 노출 표에 있고 sync 가 등록돼 있다', () => {
