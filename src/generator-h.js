@@ -3,8 +3,8 @@ import {orbitStateToViewerInput,orbitTToPersp,orbitRadToDeg,ORBIT_PERSP_MAX_DEG}
 import {hAutoRotation,hPalette} from './h-render.js';
 import {hMaskValue} from './h-profile.js';
 import {H_ARRANGEMENTS} from './h-face-arrangement.js';
-import {composeHRotation,hOrbitRotation,hOrbitFromRotation,hDragRotation,hAlignmentRotation,H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG} from './h-rotation.js';
-export {H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG} from './h-rotation.js';
+import {composeHRotation,hOrbitRotation,hOrbitFromRotation,hDragRotation,hAlignmentRotation,H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
+export {H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
 export {H_ARRANGEMENTS} from './h-face-arrangement.js';
 export {hOrbitFromRotation} from './h-rotation.js';
 export const H_RESOLUTION_VERSIONS=Object.freeze({auto:'auto',low:0,mid:2,high:4,max:6,ultra:8});
@@ -39,11 +39,17 @@ export function clampHRotationTilt(value){
   return Number.isFinite(number)?Math.max(0,Math.min(H_ROTATION_TILT_MAX_DEG,Math.round(number*2)/2)):H_ROTATION_TILT_DEFAULT_DEG;
 }
 export function selectHRotationTilt(state,value){return {...state,hRotationTiltDeg:clampHRotationTilt(value)};}
+/** 기울임 보정 방식 — 옛 저장에 값이 없으면 «회전마다»(기본)예요. */
+export const H_ROTATION_TILT_MODE_DEFAULT='turn';
+export function clampHRotationTiltMode(value){return H_ROTATION_TILT_MODES.includes(value)?value:H_ROTATION_TILT_MODE_DEFAULT;}
+export function selectHRotationTiltMode(state,value){return {...state,hRotationTiltMode:clampHRotationTiltMode(value)};}
 /** 저장 복원·UI 입력이 같은 H 회전 도메인으로 들어오게 해요. */
 export function normalizeHViewControls(state){
-  const hArrangement=H_ARRANGEMENTS.includes(state.hArrangement)?state.hArrangement:'isometric';
-  const hFaces=Math.min([1,2,3,4,5,6].includes(state.hFaces)?state.hFaces:3,hArrangement==='isometric'?6:4);
-  const hRenderFaces=hFaces>3?6:[3,6].includes(state.hRenderFaces)?state.hRenderFaces:3;
+  const requestedFaces=[1,2,3,4,5,6].includes(state.hFaces)?state.hFaces:3;
+  // 대칭은 2면 전용 — 다른 면 수로 저장/복원되면 아이소메트릭으로 돌아가요.
+  const hArrangement=H_ARRANGEMENTS.includes(state.hArrangement)?(state.hArrangement==='symmetric'&&requestedFaces!==2?'isometric':state.hArrangement):'isometric';
+  const hFaces=Math.min(requestedFaces,hArrangement==='isometric'?6:hArrangement==='symmetric'?2:4);
+  const hRenderFaces=hFaces>3||hArrangement==='symmetric'?6:[3,6].includes(state.hRenderFaces)?state.hRenderFaces:3;
   return {...state,
     hArrangement,hFaces,hRenderFaces,
     hRotationMode:H_ROTATION_MODES.includes(state.hRotationMode)?state.hRotationMode:'y',
@@ -51,6 +57,7 @@ export function normalizeHViewControls(state){
     hRotationDirectionY:state.hRotationDirectionY===-1?-1:1,
     hRotationSpeed:clampHRotationSpeed(state.hRotationSpeed),
     hRotationTiltDeg:clampHRotationTilt(state.hRotationTiltDeg),
+    hRotationTiltMode:clampHRotationTiltMode(state.hRotationTiltMode),
     hRotationSpeedIntent:state.hRotationSpeedIntent==='manual'?'manual':'auto'};
 }
 /** 축을 고르면 auto 속도만 현재 버전·축의 기본값으로 바꿔요. */
@@ -124,10 +131,12 @@ export function selectHRepresentation(state,value){
     ...(value==='2.5d'?{hFaces:3,hRenderFaces:3,hArrangement:'isometric',hAutoRotate:false}:{}),orbitYaw:0,orbitPitch:0,orbitRoll:0};
 }
 export function selectHFaceCount(state,count){
-  if(![1,2,3,4,5,6].includes(count)||count>4&&(state.hArrangement??'isometric')!=='isometric')throw new RangeError('H face count');
+  if(![1,2,3,4,5,6].includes(count)||count>4&&!['isometric','symmetric'].includes(state.hArrangement??'isometric'))throw new RangeError('H face count');
   const next=count!==3&&state.yRepresentation!=='3d'?selectHRepresentation(state,'3d'):{...state};
-  const hRenderFaces=count>3?6:(next.hRenderFaces??3);
-  return {...next,hFaces:count,hRenderFaces,orbitView:count>3?'3d':next.orbitView};
+  // 대칭 배치는 2면 전용이라 다른 면 수를 고르면 아이소메트릭으로 돌아가요.
+  const hArrangement=next.hArrangement==='symmetric'&&count!==2?'isometric':(next.hArrangement??'isometric');
+  const hRenderFaces=count>3||hArrangement==='symmetric'?6:(next.hRenderFaces??3);
+  return {...next,hArrangement,hFaces:count,hRenderFaces,orbitView:count>3?'3d':next.orbitView};
 }
 /** 렌더 면 수는 본문의 고유 면 수를 바꾸지 않아요. */
 export function selectHRenderFaces(state,count){
@@ -143,8 +152,8 @@ export function selectHAlignmentPose(state,arrangement){
 export function selectHArrangement(state,arrangement){
   if(!H_ARRANGEMENTS.includes(arrangement))throw new RangeError('H arrangement');
   const next=normalizeHViewControls({...state,hArrangement:arrangement});
-  // 배치 카드는 콘텐츠 선택이지 pause가 아니에요. 정렬 pose만 쓰고 회전 선택은 보존해요.
-  const rotated=selectHRotationMode(next,arrangement==='vertical'?'x':'y');
+  // 배치 카드는 콘텐츠 선택이지 pause가 아니에요. 정렬 pose만 쓰고 회전 선택은 보존해요. 대칭은 축을 강제하지 않아요.
+  const rotated=arrangement==='symmetric'?{...next}:selectHRotationMode(next,arrangement==='vertical'?'x':'y');
   const aligned=selectHAlignmentPose(rotated,arrangement);
   return {...aligned,hAutoRotate:next.hAutoRotate,hAutoRotateIntent:next.hAutoRotateIntent};
 }
@@ -155,14 +164,14 @@ export function hPreviewOptions(state,{elapsedMs=0,palette}={}){
   // 옆 4면 전용 배치는 정렬축을 지켜 Z cap을 숨겨요. 기본 iso에는 읽기용 S 기울임을 적용해요.
   const wobble=!((state.hArrangement==='horizontal'&&axis==='y')||(state.hArrangement==='vertical'&&axis==='x'));
   const auto=state.hAutoRotate&&view.on
-    ?hAutoRotation(elapsedMs,{axis,speed:state.hRotationSpeed??H_ROTATION_SPEED_DEFAULT,directionX:state.hRotationDirectionX??1,directionY:state.hRotationDirectionY??1,wobble,tiltDeg:clampHRotationTilt(state.hRotationTiltDeg)})
+    ?hAutoRotation(elapsedMs,{axis,speed:state.hRotationSpeed??H_ROTATION_SPEED_DEFAULT,directionX:state.hRotationDirectionX??1,directionY:state.hRotationDirectionY??1,wobble,tiltDeg:clampHRotationTilt(state.hRotationTiltDeg),tiltMode:clampHRotationTiltMode(state.hRotationTiltMode),uniformSpeed:true})
     :{rotateX:0,rotateY:0,rotateZ:0};
   const pose=composeHRotation(hOrbitRotation(view),auto);
   return {palette,margin:2,...pose,perspective:view.perspective,arrangement:state.hArrangement??'isometric',renderFaces:state.hRenderFaces??(state.hFaces>3?6:3)};
 }
 const EN={true3d:'True 3D',faces:'Data faces',face1:'1 face',face2:'2 faces',face3:'3 faces',face4:'4 faces',face5:'5 faces',face6:'6 faces',version:'Resolution (module density = capacity)',mask:'Data mask',auto:'Automatic',
-  arrangement:'Face arrangement',isometric:'Isometric',horizontal:'Horizontal alignment',vertical:'Vertical alignment',arrangementNote:'Horizontal/vertical uses the four side faces and hides the Z caps during aligned Y/X rotation. Up to four data faces; changing from five or six selects four.',
-  faceImages:'Blank-face images',imageChoose:'Choose image',imageRemove:'Remove',imageEmpty:'No image',imageBusy:'Loading image…',
+  arrangement:'Face arrangement',isometric:'Isometric',horizontal:'Horizontal alignment',vertical:'Vertical alignment',symmetric:'Opposite faces',arrangementNote:'Horizontal/vertical uses the four side faces and hides the Z caps during aligned Y/X rotation. Up to four data faces; changing from five or six selects four. Opposite faces (two data faces only) puts the two codes on facing sides. Isometric with four faces keeps the two blank faces adjacent (ZP·YP).',
+  faceImages:'Blank-face images',imageChoose:'Choose image',imageRemove:'Remove',imageChooseShort:'Image',imageRemoveShort:'Remove',imageEmpty:'No image',imageBusy:'Loading image…',
   imageNote:'Each image is centered with its aspect ratio preserved (contain). PNG/JPG/WebP, up to 12 MB; normalized to a maximum side of 1024 px. Stored only in this page, not in links or saved settings. Included in views, nets, glTF and video; schematic colors are approximated.',videoFps:'Video frame rate',
   autoRotate:'Auto-rotate',rotationAxis:'Rotation axis',axisX:'X axis',axisY:'Y axis',axisGyro:'Gyroscope',
   axisXNote:'Screen-horizontal axis. From reset pose, a full turn shows all six faces.',axisYNote:'Screen-vertical axis. From reset pose, a full turn shows all six faces.',
@@ -185,8 +194,8 @@ const EN={true3d:'True 3D',faces:'Data faces',face1:'1 face',face2:'2 faces',fac
   presets:'H 3D presets (trial)',presetNote:'These set H geometry and background, not a measured camera success guarantee.',
   pause:'Pause rotation',resume:'Rotate all faces',selfCheck:'Codec self-check passed; camera scan is separate.',unavailable:'This control belongs to the 2.5D Y format.'};
 const KO={true3d:'True 3D 여부',faces:'면 수',face1:'1면',face2:'2면',face3:'3면',face4:'4면',face5:'5면',face6:'6면',version:'해상도 (모듈 밀도 = 용량)',mask:'데이터 마스크',auto:'자동',
-  arrangement:'면 배치',isometric:'아이소매트릭',horizontal:'수평 정렬',vertical:'수직 정렬',arrangementNote:'수평·수직은 옆 4면을 사용하고 정렬된 Y축·X축 회전에서 위아래 Z면을 숨겨요. 최대 4면이며 5·6면에서 바꾸면 4면을 선택해요.',
-  faceImages:'빈 면 이미지',imageChoose:'이미지 선택',imageRemove:'제거',imageEmpty:'이미지 없음',imageBusy:'이미지 읽는 중…',
+  arrangement:'면 배치',isometric:'아이소매트릭',horizontal:'수평 정렬',vertical:'수직 정렬',symmetric:'대칭',arrangementNote:'수평·수직은 옆 4면을 사용하고 정렬된 Y축·X축 회전에서 위아래 Z면을 숨겨요. 최대 4면이며 5·6면에서 바꾸면 4면을 선택해요. 대칭(2면 전용)은 두 코드를 서로 마주보는 면에 둬요. 아이소매트릭 4면은 빈 두 면(ZP·YP)이 이웃해요.',
+  faceImages:'빈 면 이미지',imageChoose:'이미지 선택',imageRemove:'제거',imageChooseShort:'이미지',imageRemoveShort:'제거',imageEmpty:'이미지 없음',imageBusy:'이미지 읽는 중…',
   imageNote:'이미지 비율을 유지해 면 중앙에 contain 배치해요. PNG/JPG/WebP 12MB 이하, 긴 변 최대 1024px로 보관해요. 현재 페이지에서만 유지되며 링크·설정 저장에는 포함하지 않아요. 시점·전개도·glTF·영상에 포함하고 스키매틱은 근사 색으로 바꿔요.',videoFps:'영상 프레임 수',
   autoRotate:'자동 회전',rotationAxis:'회전 축',axisX:'X축',axisY:'Y축',axisGyro:'자이로스코프',
   axisXNote:'화면 가로축이에요. 정위치 기준 한 바퀴에 여섯 면을 보여요.',axisYNote:'화면 세로축이에요. 정위치 기준 한 바퀴에 여섯 면을 보여요.',
@@ -209,6 +218,8 @@ const KO={true3d:'True 3D 여부',faces:'면 수',face1:'1면',face2:'2면',face
   presets:'H 3D 프리셋 (시험판)',presetNote:'H의 자세·배경을 설정해요. 실카메라 인식 성능을 보증하는 프리셋은 아니에요.',
   pause:'회전 멈춤',resume:'6면 자동회전',selfCheck:'본문 자체검증 통과 · 카메라 검증과 별개예요.',unavailable:'2.5D 타입 Y 전용 옵션이에요.'};
 const EDITOR_KO={
+  tiltMode:'보정 방식',tiltNone:'없음',tiltTurn:'회전마다',tiltFace:'면마다',
+  tiltModeNote:'회전마다: 두 바퀴 동안 한 바퀴씩 위·아래 면을 번갈아 넓게 비추고 수평·수직 회전 느낌을 유지해요(기본). 면마다: 바퀴마다 세 번 S자로 흔들려요. 없음: 기울임 없이 돌아요. 자이로에는 적용하지 않아요.',
   tiltCorrection:'기울임 보정',tiltDecrease:'기울임 보정을 0.5도 줄이기',tiltIncrease:'기울임 보정을 0.5도 높이기',
   tiltReset:'기울임 보정 기본값',tiltResetNote:'기울임만 기본값 17.5°로 되돌려요. 회전 속도와 재생 상태는 유지해요.',
   tiltNote:'수평·수직 회전의 S자 기울임이에요. 0°는 보정 없음, 35°는 최대, 기본은 17.5°예요. 영상에도 같은 값을 써요. 수평·수직 면 배치의 정렬축에서는 적용하지 않아요.',
@@ -229,6 +240,8 @@ const EDITOR_KO={
   notice:'고유 데이터 면을 모두 모아 본문을 검증해요. 1·2면의 6면 렌더는 반대편에 코드와 빈 면 이미지를 반복해요. 코너 QR은 지원하며 안쪽 QR·Y 전용 로케이터는 적용하지 않아요.',
 };
 const EDITOR_EN={
+  tiltMode:'Tilt pattern',tiltNone:'None',tiltTurn:'Per turn',tiltFace:'Per face',
+  tiltModeNote:'Per turn: over two turns, tilt toward the top cap for one turn and the bottom cap for the next, keeping the horizontal/vertical feel (default). Per face: three S wobbles per turn. None: no tilt. Not applied to gyro.',
   tiltCorrection:'Tilt correction',tiltDecrease:'Decrease tilt correction by 0.5 degrees',tiltIncrease:'Increase tilt correction by 0.5 degrees',
   tiltReset:'Reset tilt correction',tiltResetNote:'Restore only the tilt correction to 17.5°. Keep the rotation speed and playback state.',
   tiltNote:'S tilt for horizontal/vertical spin: 0° off, 35° maximum, 17.5° default. Video uses the same value. Omitted on the aligned axis of horizontal/vertical face arrangements.',

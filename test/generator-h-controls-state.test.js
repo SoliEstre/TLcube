@@ -44,6 +44,10 @@ function harness(overrides={}){
   const names=['hAutoRotate','hRotationModeCards','hRotationDirections','hRotationSpeed','hRotationSpeedReset','hRotationSpeedDown','hRotationSpeedUp','hRotationTilt','hRotationTiltReset','hRotationTiltDown','hRotationTiltUp','hVersionCards','hMaskCards','hFaceCards','hArrangementCards','hAlignHorizontal','hAlignVertical','y3dPersp','y3dPerspPlane','y3dPerspDown','y3dPerspUp','y3dPoseReset','y3dRollReset','y3dZoomReset','y3dReset'];
   const els=Object.fromEntries([...names,'y3dFaces3','y3dFaces6'].map(id=>[id,node(id)]));
   els.hRotationModeCards.children=cards('hRotationModeCards','data-h-rotation-mode','hRotationMode');
+  // 기울임 보정 방식 토글(없음/회전마다/면마다) — 실제 index.html 카드에서 mock 해요.
+  els.hRotationTiltModeRow=node('hRotationTiltModeRow');
+  els.hRotationTiltModeCards=node('hRotationTiltModeCards');
+  els.hRotationTiltModeCards.children=cards('hRotationTiltModeCards','data-h-tilt-mode','hTiltMode');
   els.hRotationDirections.children=directionGroups();
   els.hRotationDirections.querySelectorAll=function(selector){return selector==='button'?this.children.flatMap(group=>group.querySelectorAll('button')):[];};
   els.hVersionCards.children=cards('hVersionCards','data-h-version','hVersion');

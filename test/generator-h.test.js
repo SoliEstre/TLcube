@@ -61,7 +61,7 @@ test('회전 자세의 도/라디안 소비 및 꺼진뷰 자동회전 중단',(
   assert.deepEqual(hPreviewOptions(off,{elapsedMs:9999}),hPreviewOptions(off));
 });
 test('H 회전 상태는 축 기본값과 초당 도 속도 범위를 보존한다',()=>{
-  assert.deepEqual(normalizeHViewControls({hRotationMode:'bad',hRotationSpeed:Infinity}),{hRotationMode:'y',hRotationSpeed:75,hRotationSpeedIntent:'auto',hRotationTiltDeg:17.5,hFaces:3,hRenderFaces:3,hArrangement:'isometric',hRotationDirectionX:1,hRotationDirectionY:1});
+  assert.deepEqual(normalizeHViewControls({hRotationMode:'bad',hRotationSpeed:Infinity}),{hRotationMode:'y',hRotationSpeed:75,hRotationSpeedIntent:'auto',hRotationTiltDeg:17.5,hRotationTiltMode:'turn',hFaces:3,hRenderFaces:3,hArrangement:'isometric',hRotationDirectionX:1,hRotationDirectionY:1});
   assert.equal(clampHRotationSpeed(-3),1);assert.equal(clampHRotationSpeed(90.4),90);
   const state=selectHFaceCount(createGeneratorState({type:'Y'}),6);
   assert.equal(state.hRotationMode,'y');assert.equal(state.hRotationSpeed,75);

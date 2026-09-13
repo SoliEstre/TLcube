@@ -1,7 +1,8 @@
 /** H의 논리 데이터와 표시 물리면을 분리해 모든 렌더·내보내기가 같은 배치를 사용해요. */
 import {H_FACE_IDS,hModeFaces} from './h-profile.js';
 export const H_DISPLAY_FACES = H_FACE_IDS;
-export const H_ARRANGEMENTS = Object.freeze(['isometric', 'horizontal', 'vertical']);
+/** symmetric: 2면 전용 — 두 논리 면(XM·YM)을 마주보는 물리 XM·XP 에 둬요(운영자 2026-09-14). */
+export const H_ARRANGEMENTS = Object.freeze(['isometric', 'horizontal', 'vertical', 'symmetric']);
 const DISPLAY_FACES = new Set(H_DISPLAY_FACES);
 
 function checkedMode(encoded) {
@@ -10,15 +11,17 @@ function checkedMode(encoded) {
   return mode;
 }
 function checkedArrangement(value = 'isometric') {
-  if (!H_ARRANGEMENTS.includes(value)) throw new RangeError('H arrangement must be isometric, horizontal, or vertical');
+  if (!H_ARRANGEMENTS.includes(value)) throw new RangeError('H arrangement must be isometric, horizontal, vertical, or symmetric');
   return value;
 }
 function checkedRenderFaces(mode, arrangement, value) {
-  const fallback = mode >= 4 ? 6 : 3;
+  const fallback = mode >= 4 || arrangement === 'symmetric' ? 6 : 3;
   const renderFaces = value ?? fallback;
   if (![3, 6].includes(renderFaces)) throw new RangeError('H renderFaces must be 3 or 6');
   if (mode >= 4 && renderFaces !== 6) throw new RangeError('H 4..6 data requires renderFaces=6');
-  if (arrangement !== 'isometric' && mode > 4) throw new RangeError('horizontal/vertical arrangement accepts at most 4 data faces');
+  if (arrangement === 'symmetric') {
+    if (renderFaces !== 6) throw new RangeError('symmetric arrangement requires renderFaces=6');
+  } else if (arrangement !== 'isometric' && mode > 4) throw new RangeError('horizontal/vertical arrangement accepts at most 4 data faces');
   return renderFaces;
 }
 function sourceFaces(encoded, mode) {
@@ -34,19 +37,28 @@ function sourceFaces(encoded, mode) {
  * 배열을 만들 때 복제해 반환하므로 호출자가 map을 변이해도 encoded에는 영향이 없어요.
  */
 export function hDisplayMap(encoded, { arrangement = 'isometric', renderFaces } = {}) {
-  const mode = checkedMode(encoded), resolvedArrangement = checkedArrangement(arrangement);
+  const mode = checkedMode(encoded);
+  // 대칭은 2면 전용이에요. 면 수를 바꾼 직후 재인코딩 전 프레임처럼 mode 가 2가 아니면 아이소메트릭으로 그려요(상태 정규화가 뒤따라요).
+  const resolvedArrangement = checkedArrangement(arrangement) === 'symmetric' && mode !== 2 ? 'isometric' : checkedArrangement(arrangement);
   const resolvedRenderFaces = checkedRenderFaces(mode, resolvedArrangement, renderFaces);
   const present = new Set(sourceFaces(encoded, mode));
   const physicalToLogical = Object.fromEntries(H_DISPLAY_FACES.map(face => [face, null]));
   if (resolvedArrangement === 'isometric') {
     for (const face of present) physicalToLogical[face] = face;
+    // 4면(논리 XM·YM·XP·YP)은 논리 YP 를 물리 ZM 에 두어 빈 면이 ZP·YP 로 이웃하게 해요(운영자 2026-09-14).
+    // 면 tag·wire 는 그대로라 스캐너/HUD 는 계속 논리 ID 를 읽어요 — 수평/수직의 ZM→XP 이동과 같은 부류예요.
+    if (mode === 4) { physicalToLogical.ZM = present.has('YP') ? 'YP' : null; physicalToLogical.YP = null; }
+  } else if (resolvedArrangement === 'symmetric') {
+    // 두 논리 면을 마주보는 물리 XM·XP 에 둬요. 반대편 복제는 하지 않아요 — 나머지 네 면은 이미지 자리예요.
+    physicalToLogical.XM = present.has('XM') ? 'XM' : null;
+    physicalToLogical.XP = present.has('YM') ? 'YM' : null;
   } else {
     // Z-/Z+는 회전축 cap이라 code를 싣지 않아요. logical ZM만 XP로 옮겨요.
     for (const face of ['XM', 'YM', 'XP', 'YP']) if (present.has(face)) physicalToLogical[face] = face;
     if (present.has('ZM')) physicalToLogical.XP = 'ZM';
   }
   // 2F six-render만 반대 side에 code를 복제해요. 이는 표시용이며 encoded.faces에는 쓰지 않아요.
-  if (mode === 2 && resolvedRenderFaces === 6) {
+  if (mode === 2 && resolvedRenderFaces === 6 && resolvedArrangement !== 'symmetric') {
     physicalToLogical.XP = present.has('XM') ? 'XM' : null;
     physicalToLogical.YP = present.has('YM') ? 'YM' : null;
   }
@@ -55,7 +67,7 @@ export function hDisplayMap(encoded, { arrangement = 'isometric', renderFaces } 
   const logicalDataFaces = hModeFaces(mode).filter(face => present.has(face));
   const imageAlias = Object.fromEntries(H_DISPLAY_FACES.map(face => [face, face]));
   // 2F/6-render의 두 cap은 하나의 이미지 선택을 공유해요. ZP는 독립 source가 아니에요.
-  if (mode === 2 && resolvedRenderFaces === 6 && !physicalToLogical.ZM && !physicalToLogical.ZP) imageAlias.ZP = 'ZM';
+  if (mode === 2 && resolvedRenderFaces === 6 && resolvedArrangement !== 'symmetric' && !physicalToLogical.ZM && !physicalToLogical.ZP) imageAlias.ZP = 'ZM';
   if (mode === 1 && resolvedRenderFaces === 6) {
     imageAlias.ZP = 'ZM';
     imageAlias.YP = 'YM';

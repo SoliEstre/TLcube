@@ -41,8 +41,8 @@ function backgroundValue(background) {
 }
 
 /** H 회전 정본의 최소 반복 길이를 그대로 영상 길이로 써서 시작/끝 자세를 맞춰요. */
-export function cubeVideoDurationMs({speed=15,axis='y'}={}) {
-  return hRotationPeriodMs({axis,speed});
+export function cubeVideoDurationMs({speed=15,axis='y',tiltMode='face'}={}) {
+  return hRotationPeriodMs({axis,speed,tiltMode});
 }
 
 function encoderConfig(width,height,fps) {

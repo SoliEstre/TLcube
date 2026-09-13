@@ -746,6 +746,9 @@
   #hRotationSpeedValue { white-space:nowrap; }
   #hPreviewRotationControls #hRotationTiltRow { grid-template-columns:auto 36px 28px minmax(40px,1fr) 28px auto; }
   #hPreviewRotationControls #hRotationTiltRow[hidden] { display:none; }
+  #hRotationTiltModeRow[hidden] { display:none; }
+  #hRotationTiltModeCards { gap:4px; }
+  #hRotationTiltModeCards .y3d-btn { padding:5px 8px; font-size:11px; }
   #hPreviewRotationControls #hRotationTiltRow > label { display:block;white-space:nowrap; }
   #hRotationTiltValue { min-width:34px;white-space:nowrap;text-align:right; }
   #y3dSnapRow .y3d-label { display:none; }
@@ -985,7 +988,7 @@
   #hVersionCards, #hMaskCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   /* .card-row의 author display가 [hidden] UA rule을 이기므로 H 전용 위치 전환을 명시해요. */
   #resTierCards[hidden], #hResolutionOptions[hidden], #resolutionHelpDot[hidden] { display: none; }
-  #hArrangementSection[hidden], #hFaceCards [hidden], .h-image-card[hidden], #hAlignHorizontal[hidden], #hAlignVertical[hidden] { display:none; }
+  #hArrangementSection[hidden], #hFaceCards [hidden], #hArrangementCards [hidden], .h-image-card[hidden], #hAlignHorizontal[hidden], #hAlignVertical[hidden] { display:none; }
   #hFaceCards { display:grid;grid-template-columns:repeat(3,minmax(0,1fr)); }
   #hVersionCards .toggle-card, #hMaskCards .toggle-card { min-width: 0; }
   .h-image-cards { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:8px;width:100%;max-width:1632px;justify-content:center; }
@@ -993,8 +996,13 @@
   .h-image-header,.h-image-actions,.h-image-size-row,.h-image-fit { display:flex;gap:4px;align-items:center;flex-wrap:wrap; }
   .h-image-header { display:grid;grid-template-columns:1fr auto 1fr; }.h-image-header > button { justify-self:end; }.h-image-size-row { justify-content:space-between; }
   .h-image-card .y3d-btn svg { width:17px;height:17px;flex:none; }
+  /* 맞추기/늘이기/채우기 아이콘은 가로로 긴 이미지 전제라 폭 1.5배(24×16 viewBox)예요. */
+  .h-image-fit .y3d-btn svg.h-fit-icon { width:26px;height:17px; }
+  .h-image-actions .y3d-btn .h-image-caption { font-size:10px;white-space:nowrap; }
   .h-image-fit { flex-wrap:nowrap;gap:2px; }
   .h-image-fit .y3d-btn,.h-image-actions .y3d-btn { min-width:25px;min-height:27px;padding:3px;justify-content:center; }
+  .h-image-actions .y3d-btn:has(.h-image-caption) { padding:3px 7px;gap:4px; }
+  .h-image-fit .y3d-btn { min-width:34px; }
   .h-image-size-row > .hint { font-size:10px; }
   .h-image-body { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px; }
   .h-image-left,.h-image-color { min-width:0;display:flex;flex-direction:column;gap:6px; }
@@ -1681,7 +1689,7 @@
     </details>
 
     <!-- ═══ 공용: TL스캐너 QR링크 포함 + 용량 (일반·고급 공통) ═══ -->
-    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin quietMarginAuto renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi yRepresentation hArrangement hFaces hRenderFaces versionH hMask hAutoRotate hAutoRotateIntent hRotationMode hRotationDirectionX hRotationDirectionY hRotationSpeed hRotationSpeedIntent hRotationTiltDeg hExportLayout">
+    <div id="sharedControls" data-state-keys="turnA qrPosition finderPatternId innerSeat deepSeat outerSeat centralN7Emphasis bgMode quietMode quietMargin quietMarginAuto renderProfile shading shadingRim exportSize exportWidth exportHeight exportMargin exportPpi yRepresentation hArrangement hFaces hRenderFaces versionH hMask hAutoRotate hAutoRotateIntent hRotationMode hRotationDirectionX hRotationDirectionY hRotationSpeed hRotationSpeedIntent hRotationTiltDeg hRotationTiltMode hExportLayout">
       <section id="hTypeSection" hidden>
         <label class="section-heading" data-h-label="true3d">True 3D 여부</label>
         <div class="card-row" id="hRepresentationCards">
@@ -1697,6 +1705,7 @@
             <button type="button" class="toggle-card active" data-h-arrangement="isometric" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 2 22 8v10l-10 5L2 18V8Zm0 11 10-5M12 13 2 8m10 5v10"/></svg><span data-h-label="isometric">아이소매트릭</span></button>
             <button type="button" class="toggle-card" data-h-arrangement="horizontal" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M2 4h20v16H2ZM12 4v16M5 12h14m-3-3 3 3-3 3m-8-6-3 3 3 3"/></svg><span data-h-label="horizontal">수평 정렬</span></button>
             <button type="button" class="toggle-card" data-h-arrangement="vertical" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 2h16v20H4ZM4 12h16M12 5v14m-3-3 3 3 3-3m-6-8 3-3 3 3"/></svg><span data-h-label="vertical">수직 정렬</span></button>
+            <button type="button" class="toggle-card" data-h-arrangement="symmetric" aria-pressed="false" hidden><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 2 22 8v10l-10 5L2 18V8Zm0 11 10-5M12 13 2 8m10 5v10M4 9h4M16 15h4"/></svg><span data-h-label="symmetric">대칭</span></button>
           </div>
         </section>
         <label class="section-heading" data-h-label="faces">면 수</label>
@@ -2912,7 +2921,7 @@
           <button type="button" class="y3d-btn y3d-digit" data-digit="4">4</button>
           <button type="button" class="y3d-btn y3d-digit" data-digit="5">5</button>
         </span>
-        <button type="button" class="y3d-btn" id="y3dReset" data-i18n="g884">아이소메트릭 (정위치)</button>
+        <button type="button" class="y3d-btn" id="y3dReset" data-i18n="g884">아이소메트릭 (정위치, 원근 0도)</button>
         <button type="button" class="y3d-btn" id="y3dPoseReset" data-h-label="resetPose">정위치</button>
         <button type="button" class="y3d-btn" id="y3dRollReset" data-h-label="resetRoll">Z축 정위치</button>
         <button type="button" class="y3d-btn" id="y3dZoomReset" data-h-label="resetZoom">확대/축소 초기화</button>
@@ -2962,6 +2971,14 @@
           <input type="range" id="hRotationSpeed" class="y3d-range" min="1" max="90" step="1" value="75" data-h-aria-label="rotationSpeed" aria-label="회전 속도">
           <button type="button" class="y3d-btn" id="hRotationSpeedUp" data-h-aria-label="speedIncrease" aria-label="회전 속도를 초당 1도씩 높이기">▶</button>
           <span class="y3d-label" id="hRotationSpeedValue"></span>
+        </div>
+        <div class="y3d-row" id="hRotationTiltModeRow" data-h-title="tiltModeNote">
+          <span class="y3d-label" data-h-label="tiltMode">보정 방식</span>
+          <div class="y3d-row" id="hRotationTiltModeCards" role="group" data-h-aria-label="tiltMode" aria-label="보정 방식">
+            <button type="button" class="y3d-btn" data-h-tilt-mode="none" data-h-label="tiltNone" aria-pressed="false">없음</button>
+            <button type="button" class="y3d-btn on" data-h-tilt-mode="turn" data-h-label="tiltTurn" aria-pressed="true">회전마다</button>
+            <button type="button" class="y3d-btn" data-h-tilt-mode="face" data-h-label="tiltFace" aria-pressed="false">면마다</button>
+          </div>
         </div>
         <div class="y3d-row y3d-adjust-row" id="hRotationTiltRow" data-h-title="tiltNote">
           <label class="y3d-label" for="hRotationTilt" data-h-label="tiltCorrection">기울임 보정</label>
@@ -3472,7 +3489,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "면 배치 보기",
     "g883": "코드 렌더",
-    "g884": "아이소메트릭 (정위치)",
+    "g884": "아이소메트릭 (정위치, 원근 0도)",
     "g885": "Y 미리보기",
     "g886": "3D 는 보기 층입니다. 내보내는 PNG·SVG 는 항상 2.5D 아이소메트릭 그대로입니다.\n한 셀을 돌려 세 면의 휘도 순위를 볼 수 있고, 필드는 지금 만든 코드 전체를 궤도로 돌립니다.\n드래그로 돌리고, Ctrl+휠은 확대/축소, Ctrl+Shift+휠 또는 Shift+드래그는 Z축 회전입니다 (키보드는 [ 와 ]). 0–5 는 digit 입니다.\n원근 슬라이더는 평면에서 초광각까지 갑니다. 6면은 뒤쪽 세 면에도 같은 코드를 얹습니다. 정위치 버튼은 카메라만 되돌리고 면 수는 그대로 둡니다.\n스냅샷 버튼은 지금 보이는 화면을 그대로 PNG 로 저장·복사합니다 — 코드 내보내기가 아닙니다.",
     "g887": "Type Y 큐브 궤도 보기",
@@ -3979,7 +3996,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "Face layout",
     "g883": "Code render",
-    "g884": "Isometric (home view)",
+    "g884": "Isometric (home view, 0° perspective)",
     "g885": "Y preview",
     "g886": "3D is a viewer layer. Exported PNG and SVG stay on the frozen 2.5D isometric projection.\nSpin one cell to see the three-face luminance rank, or orbit the whole code you just made.\nDrag to orbit; Ctrl+wheel zooms, and Ctrl+Shift+wheel or Shift+drag rolls around the Z axis (keys [ and ]). Keys 0–5 set the digit.\nThe perspective slider runs from flat to ultra-wide. Six faces puts the same code on the three rear faces too. The home-view button resets the camera only and keeps the face count.\nThe snapshot buttons save or copy exactly what is on screen as a PNG — that is not a code export.",
     "g887": "Type Y cube orbit view",
@@ -4486,7 +4503,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "面の配置",
     "g883": "コード描画",
-    "g884": "アイソメトリック (初期位置)",
+    "g884": "アイソメトリック (初期位置、遠近 0°)",
     "g885": "Yプレビュー",
     "g886": "3D は表示レイヤです。書き出す PNG・SVG は常に 2.5D アイソメトリックのままです。\n1セルを回して三面の輝度順位を見られ、フィールドは今作ったコード全体を軌道で回します。\nドラッグで回転、Ctrl+ホイールで拡大縮小、Ctrl+Shift+ホイールまたは Shift+ドラッグで Z 軸回転です（キーは [ と ]）。0–5 は digit です。\n遠近スライダーは平面から超広角まで動きます。6面は後ろの三面にも同じコードを載せます。初期位置ボタンはカメラだけ戻し、面数はそのままです。\nスナップショットは今見えている画面をそのまま PNG で保存・コピーします — コードの書き出しではありません。",
     "g887": "Type Y キューブ軌道ビュー",
@@ -4992,7 +5009,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "Disposition des faces",
     "g883": "Rendu du code",
-    "g884": "Isométrique (vue initiale)",
+    "g884": "Isométrique (vue initiale, perspective 0°)",
     "g885": "Aperçu Y",
     "g886": "Le 3D est une couche de visualisation. Les PNG et SVG exportés restent sur la projection isométrique 2.5D figée.\nFaites tourner une cellule pour voir le rang de luminance des trois faces, ou mettez en orbite le code entier.\nGlissez pour orbiter ; Ctrl+molette zoome, et Ctrl+Maj+molette ou Maj+glisser fait pivoter autour de l’axe Z (touches [ et ]). Les touches 0–5 choisissent le digit.\nLe curseur de perspective va du plat à l’ultra grand-angle. Six faces pose le même code sur les trois faces arrière. Le bouton vue initiale ne réinitialise que la caméra et garde le nombre de faces.\nLes boutons d’instantané enregistrent ou copient l’écran tel quel en PNG — ce n’est pas un export de code.",
     "g887": "Vue en orbite du cube Type Y",
@@ -5498,7 +5515,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "Disposizione facce",
     "g883": "Render del codice",
-    "g884": "Isometrico (vista iniziale)",
+    "g884": "Isometrico (vista iniziale, prospettiva 0°)",
     "g885": "Anteprima Y",
     "g886": "Il 3D è uno strato di visualizzazione. PNG e SVG esportati restano sulla proiezione isometrica 2.5D congelata.\nRuota una cella per vedere il rango di luminanza delle tre facce, oppure metti in orbita l’intero codice.\nTrascina per orbitare; Ctrl+rotella regola lo zoom e Ctrl+Maiusc+rotella o Maiusc+trascinamento ruota attorno all’asse Z (tasti [ e ]). I tasti 0–5 impostano il digit.\nIl cursore della prospettiva va dal piatto al grandangolo estremo. Sei facce mette lo stesso codice anche sulle tre facce posteriori. Il pulsante vista iniziale reimposta solo la camera e mantiene il numero di facce.\nI pulsanti istantanea salvano o copiano lo schermo così com’è in PNG — non è un’esportazione del codice.",
     "g887": "Vista in orbita del cubo Type Y",
@@ -6004,7 +6021,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "Flächenanordnung",
     "g883": "Code-Rendering",
-    "g884": "Isometrisch (Ausgangsansicht)",
+    "g884": "Isometrisch (Ausgangsansicht, Perspektive 0°)",
     "g885": "Y-Vorschau",
     "g886": "3D ist eine Betrachtungsebene. Exportierte PNG- und SVG-Dateien bleiben bei der eingefrorenen 2.5D-Isometrie.\nDrehen Sie eine Zelle, um den Luminanzrang der drei Flächen zu sehen, oder umrunden Sie den ganzen Code.\nZiehen zum Drehen; Strg+Rad zoomt, Strg+Umschalt+Rad oder Umschalt+Ziehen dreht um die Z-Achse (Tasten [ und ]). Die Tasten 0–5 setzen die Ziffer.\nDer Perspektivregler reicht von flach bis Ultraweitwinkel. Sechs Flächen legt denselben Code auch auf die drei hinteren Flächen. Die Schaltfläche Ausgangsansicht setzt nur die Kamera zurück und behält die Flächenzahl.\nDie Schnappschuss-Schaltflächen speichern oder kopieren genau das, was auf dem Bildschirm steht, als PNG — das ist kein Code-Export.",
     "g887": "Type-Y-Würfel in der Umlaufansicht",
@@ -6510,7 +6527,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "Disposición de caras",
     "g883": "Render del código",
-    "g884": "Isométrico (vista inicial)",
+    "g884": "Isométrico (vista inicial, perspectiva 0°)",
     "g885": "Vista Y",
     "g886": "El 3D es una capa de visualización. Los PNG y SVG exportados siguen en la proyección isométrica 2.5D congelada.\nGire una celda para ver el rango de luminancia de las tres caras, u orbite el código entero.\nArrastre para orbitar; Ctrl+rueda cambia el zoom y Ctrl+Mayús+rueda o Mayús+arrastrar gira sobre el eje Z (teclas [ y ]). Las teclas 0–5 eligen el dígito.\nEl control de perspectiva va de plano a gran angular extremo. Seis caras pone el mismo código también en las tres caras traseras. El botón de vista inicial solo reinicia la cámara y mantiene el número de caras.\nLos botones de instantánea guardan o copian tal cual lo que se ve en pantalla como PNG — no es una exportación del código.",
     "g887": "Vista orbital del cubo Type Y",
@@ -7016,7 +7033,7 @@ const GENERATOR_STRINGS = {
     "g881": "3D",
     "g882": "Disposição das faces",
     "g883": "Render do código",
-    "g884": "Isométrico (vista inicial)",
+    "g884": "Isométrico (vista inicial, perspectiva 0°)",
     "g885": "Pré-visualização Y",
     "g886": "O 3D é uma camada de visualização. Os PNG e SVG exportados ficam na projeção isométrica 2.5D congelada.\nRode uma célula para ver a ordem de luminância das três faces, ou ponha o código inteiro em órbita.\nArraste para orbitar; Ctrl+roda muda o zoom e Ctrl+Shift+roda ou Shift+arrastar roda em torno do eixo Z (teclas [ e ]). As teclas 0–5 definem o dígito.\nO cursor de perspetiva vai do plano ao grande angular extremo. Seis faces coloca o mesmo código também nas três faces traseiras. O botão de vista inicial só repõe a câmara e mantém o número de faces.\nOs botões de instantâneo guardam ou copiam exatamente o que está no ecrã como PNG — não é uma exportação do código.",
     "g887": "Vista em órbita do cubo Type Y",
@@ -7213,7 +7230,7 @@ import {drawSceneImage} from './src/scene-image.js';
 import {createHPreviewRenderer} from './src/h-preview-renderer.js';
 import { hQrPosition, withHCornerQr } from './src/generator-h-qr.js';
 import { exportCubeMp4, cubeVideoDurationMs } from './src/cube-video-export.js';
-import { H_ROTATION_TILT_DEFAULT_DEG, clampHRotationSpeed, clampHRotationTilt, selectHRotationTilt, selectHRotationMode, selectHRotationSpeed, selectHRotationSpeedDefault, reconcileHRotationSpeed, hMaskIconMarkup, hMaskLuminance, hPointerDragDelta, hPointerDragPose, hOrbitFromRotation, hVersionIconMarkup, isHGenerator, selectHRepresentation, selectHFaceCount, selectHRenderFaces, selectHArrangement, selectHAlignmentPose, reconcileHContentRotation, H_RESOLUTION_VERSIONS, hUiLabel, hPreviewOptions } from './src/generator-h.js';
+import { H_ROTATION_TILT_DEFAULT_DEG, clampHRotationSpeed, clampHRotationTilt, selectHRotationTilt,clampHRotationTiltMode,selectHRotationTiltMode, selectHRotationMode, selectHRotationSpeed, selectHRotationSpeedDefault, reconcileHRotationSpeed, hMaskIconMarkup, hMaskLuminance, hPointerDragDelta, hPointerDragPose, hOrbitFromRotation, hVersionIconMarkup, isHGenerator, selectHRepresentation, selectHFaceCount, selectHRenderFaces, selectHArrangement, selectHAlignmentPose, reconcileHContentRotation, H_RESOLUTION_VERSIONS, hUiLabel, hPreviewOptions } from './src/generator-h.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
 import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capacityY.js';
 // 셀 편집기가 여는 O/A 격자 반경 k — 버전 표에서 읽는다 (편집기용 상수 복제 금지).
@@ -7433,7 +7450,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-14.06';
+const GENERATOR_BUILD = '2026-09-14.07';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -7863,6 +7880,8 @@ function syncHUi(){
   for(const button of $('hArrangementCards').children){
     const on=button.dataset.hArrangement===generatorState.hArrangement;
     button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
+    // 대칭 카드는 2면 전용이에요.
+    if(button.dataset.hArrangement==='symmetric')button.hidden=generatorState.hFaces!==2;
   }
   $('hResolutionOptions').hidden=!active;
   $('resolutionHeading').textContent=t('g044');
@@ -7879,7 +7898,7 @@ function syncHUi(){
   for(const button of section.querySelectorAll('[data-h-faces]')){
     const count=Number(button.dataset.hFaces);
     button.hidden=!active&&![3,6].includes(count);
-    button.disabled=active&&generatorState.hArrangement!=='isometric'&&count>4;
+    button.disabled=active&&!['isometric','symmetric'].includes(generatorState.hArrangement)&&count>4;
     const on=Number(button.dataset.hFaces)===(active?generatorState.hFaces:3);
     button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));
   }
@@ -7917,15 +7936,22 @@ function syncHUi(){
   $('hRotationSpeedDown').disabled=!rotationReady||speed<=1;$('hRotationSpeedUp').disabled=!rotationReady||speed>=90;
   const tilt=clampHRotationTilt(generatorState.hRotationTiltDeg),axis=generatorState.hRotationMode;
   const tiltReady=rotationReady&&axis!=='gyro'&&!((generatorState.hArrangement==='horizontal'&&axis==='y')||(generatorState.hArrangement==='vertical'&&axis==='x'));
+  const tiltMode=clampHRotationTiltMode(generatorState.hRotationTiltMode);generatorState.hRotationTiltMode=tiltMode;
+  $('hRotationTiltModeRow').hidden=axis==='gyro';$('hRotationTiltModeRow').title=hText('tiltModeNote');
+  for(const button of $('hRotationTiltModeCards').children){
+    const on=button.dataset.hTiltMode===tiltMode;
+    button.classList.toggle('on',on);button.setAttribute('aria-pressed',String(on));button.disabled=!tiltReady;
+    button.textContent=hText({none:'tiltNone',turn:'tiltTurn',face:'tiltFace'}[button.dataset.hTiltMode]);
+  }
   $('hRotationTiltRow').hidden=axis==='gyro';
   $('hRotationTiltRow').title=hText('tiltNote');
-  $('hRotationTilt').value=String(tilt);$('hRotationTilt').disabled=!tiltReady;
+  $('hRotationTilt').value=String(tilt);$('hRotationTilt').disabled=!tiltReady||tiltMode==='none';
   $('hRotationTilt').setAttribute('aria-valuetext',`${tilt}° / 35°`);
   $('hRotationTiltValue').textContent=`${tilt}°`;
   $('hRotationTiltReset').disabled=!tiltReady;
   $('hRotationTiltReset').classList.toggle('on',tilt===H_ROTATION_TILT_DEFAULT_DEG);
   $('hRotationTiltReset').setAttribute('aria-pressed',String(tilt===H_ROTATION_TILT_DEFAULT_DEG));
-  $('hRotationTiltDown').disabled=!tiltReady||tilt<=0;$('hRotationTiltUp').disabled=!tiltReady||tilt>=35;
+  $('hRotationTiltDown').disabled=!tiltReady||tiltMode==='none'||tilt<=0;$('hRotationTiltUp').disabled=!tiltReady||tiltMode==='none'||tilt>=35;
   for(const button of $('hResolutionOptions').querySelectorAll('[data-h-version]')){
     button.hidden=button.dataset.hVersion==='0'&&mode!=='advanced';
     const on=button.dataset.hVersion===String(generatorState.versionH);
@@ -8009,6 +8035,9 @@ $('hRotationTilt').addEventListener('input',()=>setHRotationTilt($('hRotationTil
 $('hRotationTiltReset').addEventListener('click',()=>setHRotationTilt(H_ROTATION_TILT_DEFAULT_DEG));
 $('hRotationTiltDown').addEventListener('click',()=>setHRotationTilt(generatorState.hRotationTiltDeg-.5));
 $('hRotationTiltUp').addEventListener('click',()=>setHRotationTilt(generatorState.hRotationTiltDeg+.5));
+for(const button of $('hRotationTiltModeCards').children)button.addEventListener('click',()=>{
+  freezeHSpin();Object.assign(generatorState,selectHRotationTiltMode(generatorState,button.dataset.hTiltMode));syncHUi();paintY3dPreview();
+});
 for(const [id,key]of[['hVersionCards','versionH'],['hMaskCards','hMask']])for(const button of $(id).children)button.addEventListener('click',()=>{
   generatorState[key]=button.dataset[key==='versionH'?'hVersion':'hMask']==='auto'?'auto':Number(button.dataset[key==='versionH'?'hVersion':'hMask']);refreshHSelection();
 });
@@ -8381,7 +8410,7 @@ function syncCubeVideoUi(){
   for(const button of document.querySelectorAll('[data-video-size]'))button.disabled=!!cubeVideoJob;
   $('cancelCubeVideo').hidden=!cubeVideoJob;
   for(const card of $('cubeVideoFpsCards').children){const selected=Number(card.dataset.videoFps)===cubeVideoFps;card.classList.toggle('active',selected);card.setAttribute('aria-pressed',String(selected));card.disabled=!!cubeVideoJob;}
-  const speed=clampHRotationSpeed(generatorState.hRotationSpeed),seconds=Number((cubeVideoDurationMs({speed,axis:generatorState.hRotationMode})/1000).toFixed(2));
+  const speed=clampHRotationSpeed(generatorState.hRotationSpeed),seconds=Number((cubeVideoDurationMs({speed,axis:generatorState.hRotationMode,tiltMode:clampHRotationTiltMode(generatorState.hRotationTiltMode)})/1000).toFixed(2));
   $('cubeVideoDuration').textContent=hText('videoDuration').replace('{seconds}',String(seconds)).replace('{speed}',String(speed))
     +(generatorState.hRotationMode==='gyro'?' · '+hText('videoGyro'):'');
   for(const card of $('cubeVideoBackgroundCards').children){
@@ -8406,7 +8435,7 @@ for(const videoButton of document.querySelectorAll('[data-video-size]'))videoBut
     const elapsed=hAnimation.elapsed,filename=exportFilename('mp4').replace(/\.mp4$/,`_${side}p_${fps}fps.mp4`),background=state.bgMode==='transparent'?cubeVideoBackground:{...palette.background};
     cubeVideoJob=new AbortController();const signal=cubeVideoJob.signal;
     frameCanvas=document.createElement('canvas');stopHAnimation();syncCubeVideoUi();
-    const blob=await exportCubeMp4({durationMs:cubeVideoDurationMs({speed:state.hRotationSpeed,axis:state.hRotationMode}),width:side,height:side,fps,background,signal,requireFrameAccuracy:true,
+    const blob=await exportCubeMp4({durationMs:cubeVideoDurationMs({speed:state.hRotationSpeed,axis:state.hRotationMode,tiltMode:clampHRotationTiltMode(state.hRotationTiltMode)}),width:side,height:side,fps,background,signal,requireFrameAccuracy:true,
       renderFrame:({context,canvas,timestampMs})=>{
         const scene=withHCornerQr(buildHScene(encoded,{...hPreviewOptions(state,{elapsedMs:elapsed+timestampMs,palette}),outline:true,faceImages,lighting,zoom}),qr);
         drawScene({...scene,background:null},frameCanvas,canvas.width/scene.width/(window.devicePixelRatio||1));

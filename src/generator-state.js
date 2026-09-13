@@ -27,7 +27,7 @@ import {
   DEFAULT_RENDER_PROFILE_CHOICE, RENDER_PROFILE_CHOICES,
 } from './render-profile.js';
 import {
-  H_ROTATION_MODES, H_ROTATION_SPEED_DEFAULT, H_GYRO_ROTATION_SPEED_DEFAULT, H_ROTATION_TILT_DEFAULT_DEG, H_ROTATION_TILT_MAX_DEG, H_PERSPECTIVE_DEFAULT, normalizeHViewControls, reconcileHRotationSpeed,
+  H_ROTATION_MODES, H_ROTATION_SPEED_DEFAULT, H_GYRO_ROTATION_SPEED_DEFAULT, H_ROTATION_TILT_DEFAULT_DEG, H_ROTATION_TILT_MAX_DEG, H_ROTATION_TILT_MODES, H_ROTATION_TILT_MODE_DEFAULT, H_PERSPECTIVE_DEFAULT, normalizeHViewControls, reconcileHRotationSpeed,
 } from './generator-h.js';
 import {
   DEFAULT_EXPORT_CUSTOM_PX,
@@ -296,6 +296,7 @@ export const GENERATOR_STATE_SCHEMA = Object.freeze({
   hRotationSpeed: field(H_ROTATION_SPEED_DEFAULT, BOTH, [1,H_GYRO_ROTATION_SPEED_DEFAULT,H_ROTATION_SPEED_DEFAULT,90]),
   hRotationSpeedIntent: field('auto', BOTH, ['auto','manual']),
   hRotationTiltDeg: field(H_ROTATION_TILT_DEFAULT_DEG, BOTH, [0,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MAX_DEG]),
+  hRotationTiltMode: field(H_ROTATION_TILT_MODE_DEFAULT, BOTH, H_ROTATION_TILT_MODES),
   hExportLayout: field('faces', BOTH, ['faces','view']),
   customHue: field(210, BOTH, [210, 37]),
   bgMode: field('transparent', BOTH, ['transparent', 'white', 'black']),

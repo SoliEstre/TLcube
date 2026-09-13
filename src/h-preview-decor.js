@@ -88,8 +88,10 @@ export function hPreviewPositionLabels(encoded,options={},side=100){
 export function hCubeIconMarkup({representation='2.5d',mode=3,arrangement='isometric',placements=false}={}){
   const projection=hProjection(1,{margin:.13,perspective:representation==='3d'?.15:0,
     rotateX:representation==='3d'?.12:0,rotateY:representation==='3d'?-.14:0,rotateZ:representation==='3d'?.06:0});
-  const safeMode=arrangement!=='isometric'?Math.min(4,mode):mode;
-  const map=hPreviewDisplayMap({hFaces:safeMode,hArrangement:arrangement,hRenderFaces:safeMode>3?6:3});
+  const safeMode=arrangement==='horizontal'||arrangement==='vertical'?Math.min(4,mode):mode;
+  // 대칭은 2면 전용이라 다른 면 수 카드의 아이콘은 아이소메트릭(그 카드를 고르면 돌아갈 배치)으로, 2면 카드는 6면 렌더로 그려요.
+  const iconArrangement=arrangement==='symmetric'&&safeMode!==2?'isometric':arrangement;
+  const map=hPreviewDisplayMap({hFaces:safeMode,hArrangement:iconArrangement,hRenderFaces:safeMode>3||iconArrangement==='symmetric'?6:3});
   const all=H_FACE_IDS.map(face=>({face,points:quad(face,1,projection.project)}));
   const polygons=all.filter(row=>placements?map.physicalDataFaces.includes(row.face):projection.visible.includes(row.face))
     .map(row=>`<polygon data-face="${row.face}" points="${row.points.map(p=>`${p.x},${p.y}`).join(' ')}" fill="currentColor" opacity="${placements?'.23':row.face==='ZM'?'.12':row.face==='XM'?'.28':'.45'}"/>`).join('');

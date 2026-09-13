@@ -31,7 +31,7 @@ test('XY는0에서기울임없음·35에서기존최대·중간에서다른경�
     assert.notDeepEqual(hScreenSpin(379,{...opts,tiltDeg:17.5}),hScreenSpin(379,{...opts,tiltDeg:35}));
     for(const tiltDeg of [0,17.5,35]){
       const s=state({hRotationMode:axis,hRotationSpeed:60,hRotationDirectionX:sign,hRotationDirectionY:sign,hRotationTiltDeg:tiltDeg});
-      close(hPreviewOptions(s,{elapsedMs:379}),hScreenSpin(379,{...opts,tiltDeg}));
+      close(hPreviewOptions(s,{elapsedMs:379}),hScreenSpin(379,{...opts,tiltDeg,tiltMode:s.hRotationTiltMode}));
     }
   }
   for(const tiltDeg of [0,17.5,35])for(const directionX of [-1,1])for(const directionY of [-1,1]){
@@ -42,8 +42,8 @@ test('XY는0에서기울임없음·35에서기존최대·중간에서다른경�
 
 test('모든기울임의영상주기·시작offset을보존하고 정렬4면의cap숨김을바꾸지않아요',()=>{
   for(const axis of ['x','y','gyro'])for(const tiltDeg of [0,.5,17.5,35]){
-    const s=state({hRotationMode:axis,hRotationTiltDeg:tiltDeg}),p=cubeVideoDurationMs({axis,speed:s.hRotationSpeed});
-    assert.equal(p,hRotationPeriodMs({axis,speed:s.hRotationSpeed}));
+    const s=state({hRotationMode:axis,hRotationTiltDeg:tiltDeg}),p=cubeVideoDurationMs({axis,speed:s.hRotationSpeed,tiltMode:s.hRotationTiltMode});
+    assert.equal(p,hRotationPeriodMs({axis,speed:s.hRotationSpeed,tiltMode:s.hRotationTiltMode}));
     for(const offset of [0,389,2499])close(hPreviewOptions(s,{elapsedMs:offset}),hPreviewOptions(s,{elapsedMs:offset+p}));
   }
   for(const arrangement of ['horizontal','vertical']){

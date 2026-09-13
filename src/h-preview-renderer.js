@@ -270,7 +270,7 @@ export function createHPreviewRenderer(canvas) {
         for(const band of ground){
           const g=band.gradient,dx=g.x2-g.x1,dy=g.y2-g.y1,den=dx*dx+dy*dy||1;
           const v=new Float32Array(band.points.flatMap(p=>{const t=clamp01(((p.x-g.x1)*dx+(p.y-g.y1)*dy)/den);return[p.x/view.width*2-1,1-p.y/view.height*2,g.a1+(g.a2-g.a1)*t];}));
-          gl.bufferData(gl.ARRAY_BUFFER,v,gl.STREAM_DRAW);gl.uniform3f(guColor,band.color.r/255,band.color.g/255,band.color.b/255);gl.drawArrays(gl.TRIANGLE_FAN,0,4);
+          gl.bufferData(gl.ARRAY_BUFFER,v,gl.STREAM_DRAW);gl.uniform3f(guColor,band.color.r/255,band.color.g/255,band.color.b/255);gl.drawArrays(gl.TRIANGLE_FAN,0,band.points.length);
         }
       }
       gl.useProgram(handle);

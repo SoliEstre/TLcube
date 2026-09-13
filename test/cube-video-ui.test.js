@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import vm from 'node:vm';
-import {hPreviewOptions,hUiLabel,clampHRotationSpeed} from '../src/generator-h.js';
+import {hPreviewOptions,hUiLabel,clampHRotationSpeed,clampHRotationTiltMode} from '../src/generator-h.js';
 import {hControlIcon} from '../src/h-preview-controls.js';
 import {cubeVideoDurationMs,CUBE_VIDEO_KEY_COLORS} from '../src/cube-video-export.js';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -21,7 +21,7 @@ function harness({exportError=null}={}) {
   const c={AbortController,structuredClone,console,Math,Number,String,hFaceImages:Object.freeze({ZP:{pixels:{id:'old'}}}),
     generatorState:state,palette,current:{type:'H',encoded:{id:'old'},hQr:{text:'https://old.example/',corner:'TL'}},hAnimation:{elapsed:1600},
     Y3D_PAD_BASE:24,y3dPreview:{pad:24,get on(){return state.orbitView==='3d';}},hGeneratorActive:()=>state.type==='Y'&&state.yRepresentation==='3d',
-    hText:key=>hUiLabel(key,c.lang),lang:'ko',genI18n:{lang:'ko'},hControlIcon,videoToggle:node('cubeVideoToggle'),clampHRotationSpeed,hPreviewOptions,cubeVideoDurationMs,
+    hText:key=>hUiLabel(key,c.lang),lang:'ko',genI18n:{lang:'ko'},hControlIcon,videoToggle:node('cubeVideoToggle'),clampHRotationSpeed,clampHRotationTiltMode,hPreviewOptions,cubeVideoDurationMs,
     $:node,resolvedRenderProfile:()=> 'screen',window:{devicePixelRatio:2},document:{querySelectorAll:selector=>selector==='[data-video-size]'?videoButtons:[],createElement(){const canvas={width:0,height:0};canvases.push(canvas);return canvas;}},
     hImageEditor:{flush(){c.imageFlushCount++;}},imageFlushCount:0,
     flushScheduledRender(){c.flushCount++;if(c.flushCallback)c.flushCallback();},flushCount:0,
@@ -68,7 +68,7 @@ test('옵션/타입/QR/본문/색 변경 후에도 시작 시점 snapshot으로 
   const h=harness();const job=h.click('exportCubeVideo');h.frame(0);const before=structuredClone(h.draws[0].scene);
   Object.assign(h.c.generatorState,{type:'O',hRotationMode:'x',hRotationSpeed:1,orbitYaw:100,orbitPitch:40,preset:'custom',bgMode:'black'});
   h.c.current.hQr.text='https://changed.example/';h.c.current.hQr.corner='BR';h.c.current={type:'O',encoded:{id:'changed'}};h.c.palette.levels[0].r=255;h.c.hAnimation.elapsed=999999;h.c.y3dPreview.pad=12;
-  h.frame(0);assert.deepEqual(structuredClone(h.draws[1].scene),before);assert.equal(before.options.zoom,1);assert.equal(before.options.perspective,.15);assert.equal(h.pending[0].args.durationMs,4000);assert.equal(h.pending[0].args.background,'green');assert.equal(h.pending[0].args.requireFrameAccuracy,true);
+  h.frame(0);assert.deepEqual(structuredClone(h.draws[1].scene),before);assert.equal(before.options.zoom,1);assert.equal(before.options.perspective,.15);assert.equal(h.pending[0].args.durationMs,8000,'기본 보정 방식 «회전마다» 는 두 바퀴가 한 주기라 90°/s 에서 8초예요');assert.equal(h.pending[0].args.background,'green');assert.equal(h.pending[0].args.requireFrameAccuracy,true);
   h.run('syncCubeVideoUi()');assert.equal(h.node('cubeVideoSection').hidden,false);assert.equal(h.node('cancelCubeVideo').hidden,false);
   h.pending[0].resolve(new Blob());await job;assert.equal(h.downloads[0].name,'old_720p_60fps.mp4');assert.equal(h.node('cubeVideoSection').hidden,true);assert.equal(h.canvases[0].width,1);
 });

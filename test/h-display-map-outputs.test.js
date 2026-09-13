@@ -42,7 +42,8 @@ test('H3 horizontal/vertical show XM/YM while physical XP reads logical ZM',()=>
 });
 
 test('H4/H5 permit physical blank images only, consistently through net glTF and voxel image quads',()=>{
-  for(const [mode,expectedModules,expectedImages] of [[4,['XM','YM','XP','YP'],['ZM','ZP']],[5,['ZM','XM','YM','XP','YP'],['ZP']]]){const {encoded}=fixture(mode),model=buildHCubeModel(encoded,{palette,faceImages:assets}),net=cubeNetScene(model,{margin:0}),gltf=cubeModelToGltf(model);
+  // 4면: 논리 YP 가 물리 ZM 에 놓여 빈 면이 ZP·YP 로 이웃해요(2026-09-14). 물리 면 순서는 H_DISPLAY_FACES 순이에요.
+  for(const [mode,expectedModules,expectedImages] of [[4,['ZM','XM','YM','XP'],['ZP','YP']],[5,['ZM','XM','YM','XP','YP'],['ZP']]]){const {encoded}=fixture(mode),model=buildHCubeModel(encoded,{palette,faceImages:assets}),net=cubeNetScene(model,{margin:0}),gltf=cubeModelToGltf(model);
     assert.deepEqual(faces(model,'module'),expectedModules);assert.deepEqual(model.images.map(row=>row.face),expectedImages);assert.equal(model.images.some(row=>faces(model,'module').includes(row.face)),false);
     assert.deepEqual(net.shapes.filter(shape=>shape.kind==='image').map(shape=>shape.face),expectedImages);assert.equal(gltf.images.length,expectedImages.length);assertImageOutward(gltf,model);assert.deepEqual([...new Set([...cubeImageVoxelQuads(model,1)].map(q=>q.face))],expectedImages);
   }
