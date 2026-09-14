@@ -1007,11 +1007,22 @@
   .h-image-body { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px; }
   .h-image-left,.h-image-color { min-width:0;display:flex;flex-direction:column;gap:6px; }
   .h-image-color { border-left:1px solid var(--line);padding-left:8px; }
-  .h-image-well { position:relative;display:flex;align-items:center;justify-content:center;height:126px;background:color-mix(in srgb,var(--dim) 10%,var(--panel));border-radius:5px; }
+  .h-image-well { position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;height:126px;background:color-mix(in srgb,var(--dim) 10%,var(--panel));border-radius:5px; }
   .h-image-card img { width:100%;height:126px;object-fit:contain;border-radius:4px; }
   .h-image-card [hidden] { display:none!important; }
   #y3dBar .h-image-card .y3d-btn { font-size:10px;padding:4px 5px;white-space:normal; }
-  #y3dBar .h-image-sample { margin:6px;justify-content:center; }
+  #y3dBar .h-image-sample { margin:3px 6px;justify-content:center; }
+  /* 텍스트 면 — 입력란 + 폰트 검색 콤보(목록은 화살표/검색으로만 열려요). */
+  .h-image-text-row { display:flex;flex-direction:column;gap:4px; }
+  .h-image-text-row textarea,.h-font-combo input { width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--line,#d8deea);border-radius:5px;background:var(--panel);color:inherit; }
+  .h-image-text-row textarea { min-height:44px;resize:vertical; }
+  .h-font-combo { position:relative;display:flex;gap:2px;align-items:stretch; }
+  .h-font-combo input { flex:1;min-width:0; }
+  #y3dBar .h-font-combo .h-font-open { min-width:26px;padding:3px 6px;font-size:12px;flex:none; }
+  .h-font-list { position:absolute;left:0;right:0;top:100%;z-index:30;max-height:220px;overflow:auto;margin:2px 0 0;padding:2px;list-style:none;background:var(--panel);border:1px solid var(--line,#d8deea);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.25); }
+  .h-font-list .h-font-option { padding:4px 7px;font-size:13px;cursor:pointer;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .h-font-list .h-font-option:hover,.h-font-list .h-font-option[aria-selected="true"] { background:color-mix(in srgb,var(--accent,#5b8def) 18%,transparent); }
+  .h-font-list .h-font-group { font-size:10px;opacity:.7;padding:4px 7px 2px;cursor:default; }
   .h-color-pad { height:76px;position:relative;cursor:crosshair;touch-action:none;border:1px solid var(--line);border-radius:4px;background:linear-gradient(to top,hsl(0 0% var(--color-lightness,50%)),transparent),linear-gradient(to right,hsl(0 100% var(--color-lightness,50%)),hsl(60 100% var(--color-lightness,50%)),hsl(120 100% var(--color-lightness,50%)),hsl(180 100% var(--color-lightness,50%)),hsl(240 100% var(--color-lightness,50%)),hsl(300 100% var(--color-lightness,50%)),hsl(360 100% var(--color-lightness,50%))); }
   .h-color-pad:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
   .h-color-cursor { position:absolute;width:8px;height:8px;transform:translate(-50%,-50%);border:1px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #222;pointer-events:none; }
@@ -7450,7 +7461,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-14.07';
+const GENERATOR_BUILD = '2026-09-14.08';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
