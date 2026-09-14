@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {createGeneratorState,versionStateKey} from '../src/generator-state.js';
 import {selectQrPosition,selectGeneratorType,commitFinderQrTransition} from '../src/finder-selection.js';
-import {isHGenerator,hPreviewOptions,hUiLabel,hMaskLuminance,clampHRotationSpeed,selectHRepresentation} from '../src/generator-h.js';
+import {isHGenerator,hPreviewOptions,hUiLabel,hMaskLuminance,clampHRotationSpeed,clampHRotationTiltMode,selectHRepresentation} from '../src/generator-h.js';
 import {encodeH,decodeH} from '../src/h-codec.js';
 import {buildHScene} from '../src/h-render.js';
 import {withHCornerQr,hQrPosition} from '../src/generator-h-qr.js';
@@ -40,7 +40,7 @@ function harness(text,overrides={}){
     hImageEditor:{flush(){}},
     resolvedRenderProfile:()=> 'screen',hPlanarPreviewOptions,reconcileHPositionMode,hControlIcon,paintHPositionLabels:()=>{},videoToggle:node('cubeVideoToggle'),
     els:new Proxy({qrPositionCards:node('qrPositionCards'),qrFacePlacementCards:node('qrFacePlacementCards'),qrPosInner:node('qr-inner')},{get:(o,k)=>o[k]??node(String(k))}),$:node,
-    isHGenerator,hQrPosition,withHCornerQr,buildHScene,encodeH,decodeH,hPreviewOptions,hMaskLuminance,hText:key=>hUiLabel(key,'ko'),clampHRotationSpeed,cubeVideoDurationMs,
+    isHGenerator,hQrPosition,withHCornerQr,buildHScene,encodeH,decodeH,hPreviewOptions,hMaskLuminance,hText:key=>hUiLabel(key,'ko'),clampHRotationSpeed,clampHRotationTiltMode,cubeVideoDurationMs,
     selectQrPosition,selectGeneratorType,commitFinderQrTransition,GENERATOR_DEFAULT_FINDER_PATTERN_ID:state.finderPatternId,
     TL_READER_URL,tlReaderUrlWithHint,payloadByteLength,versionStateKey,renderWithErrorDisplay,
     minRoundtripPpu,resolveExportPpi,resolveExportSize,EXPORT_MARGIN_TRIM:'trim',

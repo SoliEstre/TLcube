@@ -10,7 +10,7 @@ test('H 회전 상태는 저장 복원에서 축을 정화하고 속도를 1~90�
   const fresh=createGeneratorState({hRotationMode:'y',hRotationSpeed:15});
   assert.equal(fresh.hRotationMode,'y');assert.equal(fresh.hRotationSpeed,15);
   assert.equal(clampHRotationSpeed(0),1);assert.equal(clampHRotationSpeed(91),90);
-  assert.deepEqual(normalizeHViewControls({hRotationMode:'gyro',hRotationSpeed:12.6}),{hRotationMode:'gyro',hRotationSpeed:13,hRotationSpeedIntent:'auto',hRotationTiltDeg:17.5,hArrangement:'isometric',hFaces:3,hRenderFaces:3,hRotationDirectionX:1,hRotationDirectionY:1});
+  assert.deepEqual(normalizeHViewControls({hRotationMode:'gyro',hRotationSpeed:12.6}),{hRotationMode:'gyro',hRotationSpeed:13,hRotationSpeedIntent:'auto',hRotationTiltDeg:17.5,hRotationTiltMode:'turn',hArrangement:'isometric',hFaces:3,hRenderFaces:3,hRotationDirectionX:1,hRotationDirectionY:1});
 });
 
 test('H 카드와 속도 조작은 native button이며 범위에서 비활성화해요',()=>{

@@ -51,7 +51,8 @@ test('표시 면적 기준은 임의 수동 자세나 화면 크롭까지 보장
 test('실제 미리보기와 영상은 모든 속도·모드에서 같은 닫힌 경로를 사용해요',()=>{
   for(const version of [6,7,8])for(const axis of ['x','y','gyro']){
     const state=createGeneratorState({type:'Y',yRepresentation:'3d',versionH:version,orbitView:'3d',hAutoRotate:true,hRotationMode:axis});
-    const period=cubeVideoDurationMs({axis,speed:state.hRotationSpeed});
+    // 영상 길이는 생성기와 같이 보정 방식(기본 회전마다 = 두 바퀴)을 넘겨요.
+    const period=cubeVideoDurationMs({axis,speed:state.hRotationSpeed,tiltMode:state.hRotationTiltMode});
     for(const offset of [0,317,2401]){
       const before=hPreviewOptions(state,{elapsedMs:offset}),after=hPreviewOptions(state,{elapsedMs:offset+period});
       for(const field of ['rotateX','rotateY','rotateZ'])assert.ok(Math.abs(before[field]-after[field])<1e-9,`${axis}/${version}/${offset}/${field}`);
