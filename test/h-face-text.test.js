@@ -69,7 +69,7 @@ test('UI·사전 배선: 토글 버튼이 테스트 이미지 아래에, 폰트 
   assert.match(ui,/fontInput\.addEventListener\('input',\(\)=>openList\(fontInput\.value\)\)/);
   assert.doesNotMatch(ui,/fontInput\.addEventListener\('(click|focus)'/,'입력란 클릭/포커스는 목록을 열지 않아요');
   assert.match(ui,/left\.append\(well,textRow,sizeRow,chooseRow,input\)/);
-  assert.match(html,/\.h-font-list \{ position:absolute/);assert.match(html,/GENERATOR_BUILD = '2026-09-14.08';/);
+  assert.match(html,/\.h-font-list \{ position:absolute/);assert.match(html,/GENERATOR_BUILD = '2026-09-14.09';/);
   for(const key of ['imageText','imageTextPlaceholder','imageTextEmpty','imageFont','imageFontSearch','imageFontOpen','imageFontSystem','imageFontWeb','imageFontSans','imageFontSerif','imageFontMono','imageFontNone'])
     for(const lang of ['ko','en'])assert.notEqual(hUiLabel(key,lang),key,`${key}/${lang}`);
   assert.equal(hUiLabel('imageText','ko'),'텍스트 넣기');

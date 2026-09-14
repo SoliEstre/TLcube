@@ -97,7 +97,7 @@ export function createHImageEditor({container,status,text,onChange,getDefaultBac
     const textarea=node('textarea','h-image-text-input');textarea.rows=2;textarea.placeholder=text('imageTextPlaceholder');textarea.setAttribute('aria-label',`${face} ${text('imageText')}`);
     const combo=node('div','h-font-combo'),fontInput=node('input','h-font-input'),fontOpen=node('button','y3d-btn h-font-open'),fontList=node('ul','h-font-list');
     fontInput.type='search';fontInput.placeholder=text('imageFontSearch');fontInput.autocomplete='off';fontInput.setAttribute('role','combobox');fontInput.setAttribute('aria-expanded','false');fontInput.setAttribute('aria-label',`${face} ${text('imageFont')}`);
-    fontOpen.type='button';fontOpen.textContent='▾';fontOpen.title=text('imageFontOpen');fontOpen.setAttribute('aria-label',fontOpen.title);
+    fontOpen.type='button';fontOpen.innerHTML='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.2 5.8 8 10.6l4.8-4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';fontOpen.title=text('imageFontOpen');fontOpen.setAttribute('aria-label',fontOpen.title);
     fontList.hidden=true;fontList.setAttribute('role','listbox');
     combo.append(fontInput,fontOpen,fontList);textRow.append(textarea,combo);
     let textTimer=0;

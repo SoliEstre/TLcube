@@ -1018,7 +1018,8 @@
   .h-image-text-row textarea { min-height:44px;resize:vertical; }
   .h-font-combo { position:relative;display:flex;gap:2px;align-items:stretch; }
   .h-font-combo input { flex:1;min-width:0; }
-  #y3dBar .h-font-combo .h-font-open { min-width:26px;padding:3px 6px;font-size:12px;flex:none; }
+  /* 화살표는 글자(▾)가 아니라 다른 아이콘 버튼과 같은 17px SVG 예요(운영자 2026-09-14: 세모가 너무 작다). */
+  #y3dBar .h-font-combo .h-font-open { min-width:30px;padding:3px 6px;flex:none;justify-content:center; }
   .h-font-list { position:absolute;left:0;right:0;top:100%;z-index:30;max-height:220px;overflow:auto;margin:2px 0 0;padding:2px;list-style:none;background:var(--panel);border:1px solid var(--line,#d8deea);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.25); }
   .h-font-list .h-font-option { padding:4px 7px;font-size:13px;cursor:pointer;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
   .h-font-list .h-font-option:hover,.h-font-list .h-font-option[aria-selected="true"] { background:color-mix(in srgb,var(--accent,#5b8def) 18%,transparent); }
@@ -7461,7 +7462,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-14.08';
+const GENERATOR_BUILD = '2026-09-14.09';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
