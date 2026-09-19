@@ -78,6 +78,8 @@ test('assertProbeOptions — 실행 전 거절: trials ∞/0/과대 · q 범위 
   assert.throws(() => assertProbeOptions({ ...base, trials: 20000, q: '0,0.01,0.02,0.03', dropoutP: '0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08', blocks: '1,2,3,4' }), /총 작업량/);
   assert.throws(() => runRealProbe({ profile: 'X0', trials: Infinity }), /trials/);
   assert.throws(() => runRealProbe({ profile: 'X0', trials: 2, erasureReserve: 2 }), /erasureReserve/); // --real 은 reserve 를 decodeX 에 안 넘겨요 — 거짓 표기 금지
+  assert.throws(() => runRealProbe({ profile: 'X0', trials: 2, crc: 'crc32' }), /crc/);
+  assert.throws(() => runRealProbe({ profile: 'X0', trials: 2, rngSplit: 'maybe' }), /rngSplit/);
   assert.doesNotThrow(() => runRealProbe({ profile: 'X0', trials: 2, erasureReserve: 0, dropoutP: '0.01', blobR: '1.5', q: '0' }));
   // 기본(대리지표) 진입점도 같은 검사를 지나요 — trials 0/∞, 거대 목록, q 목록(legacy 는 scalar) 전부 실행 전 거절
   assert.throws(() => runProbe({ profile: 'X0', trials: Infinity }), /trials/);
@@ -105,6 +107,24 @@ test('runRealProbe — 유효 본문 실복호: q=0·작은 dropout 은 실패 0
   assert.deepEqual(applyEvent('dropout', 0.1, ev, ctx, lit1), applyEvent('dropout', 0.1, ev, ctx, lit0));
   assert.deepEqual(applyEvent('blob', 2, ev, ctx, lit1), applyEvent('blob', 2, ev, ctx, lit0));
   assert.ok(applyEvent('view', 2.5, ev, ctx, lit1).reduce((x, y) => x + y, 0) >= applyEvent('view', 2.5, ev, ctx, lit0).reduce((x, y) => x + y, 0));
+});
+
+test('runRealProbe --crc / --rngSplit — CRC 모드는 verified 까지 성공 조건, payload 26 B; rngSplit 은 payload 길이가 달라도 같은 물리 사건', () => {
+  const base = { profile: 'X0', trials: 8, seed: 5, dropoutP: '0.02', blobR: '2.5', minSep: 2.5, q: '0.01', unknownMode: 'oracle' };
+  const off = runRealProbe(base), on = runRealProbe({ ...base, crc: true });
+  assert.equal(off.crc, null); assert.equal(on.crc, 'x-crc32c-v0'); assert.equal(on.payloadBytes, 26); assert.equal(off.payloadBytes, 30);
+  assert.equal(on.successCriterion.includes('verified'), true);
+  for (const r of on.rows) { assert.equal(r.crc, 'x-crc32c-v0'); assert.ok(Number.isInteger(r.crcRejects)); assert.equal(r.wrongText, 0, 'CRC 모드에서 조용한 오답은 0 이어야 해요'); }
+  for (const r of off.rows) assert.equal(r.crcRejects, null);
+  // 기본(단일 스트림)은 payload 길이가 바뀌면 사건도 달라져요; rngSplit 이면 on/off 의 사건이 같아요 → 미관측 점등 수(unobservedLit 평균)로 확인
+  const offS = runRealProbe({ ...base, rngSplit: true }), onS = runRealProbe({ ...base, rngSplit: true, crc: true });
+  const key = r => `${r.model}|${r.param}|${r.q}|${r.orderId}`;
+  const onMap = new Map(onS.rows.map(r => [key(r), r]));
+  // 사건이 같아도 점등 마스크는 본문에 따라 다르므로 완전 동일은 아니고, dropout 모델의 미관측 «사이트» 수는 같은 u 벡터에서 나와요 — outcomes 의 사건 재현은 drawEvent 결정성으로 검증
+  assert.equal(offS.rngSplit, true); assert.equal(onS.rngSplit, true);
+  assert.ok(offS.rows.every(r => onMap.has(key(r))));
+  // 문서화된 기본값: rngSplit 없음 = 기존 결과와 바이트 동일(결정성 보존)
+  assert.deepEqual(runRealProbe(base).rows, off.rows);
 });
 
 test('runProbe — 작은 실행이 행 수·필드·결정성을 지켜요', () => {

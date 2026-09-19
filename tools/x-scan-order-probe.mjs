@@ -27,6 +27,7 @@ import { join, resolve } from 'node:path';
 import { xProfileLayout, xProfile } from '../src/x-profile.js';
 import { xNsymFor, xDigitFromLevels, X_ERASED, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { packCellDigitsToSymbols } from '../src/base211.js';
+import { X_CRC_ID } from '../src/x-crc.js';
 import { xSiteCoord } from '../src/x-layout.js';
 import { H_BINARY } from '../src/h-profile.js';
 import { xCameraLookAt, xProjectSites, xOverlapMask } from '../src/x-project.js';
@@ -281,11 +282,20 @@ export function runRealProbe(opts) {
   const { qs, dropout, blob } = assertProbeOptions(o);
   // erasureReserve 는 이 경로에서 decodeX 로 전달하지 않아요 — 메타에만 남으면 거짓 표기가 되니(codex 0056) 0/미지정 외엔 거절
   if (o.erasureReserve !== undefined && o.erasureReserve !== 0) throw new RangeError('erasureReserve 는 --real 경로 미지원(decodeX 에 전달하지 않음) — 0 또는 미지정만');
+  // --crc: 프레임 CRC 옵션(rd-5 연구) 을 encode/decode 양쪽에 «명시 전달» — 성공 판정은 ok ∧ text === GT ∧ verified. CLI 는 'true'/'false' 문자열로 와요.
+  const crcRaw = o.crc === 'true' ? true : o.crc === 'false' ? false : o.crc;
+  if (crcRaw !== undefined && crcRaw !== false && crcRaw !== true && crcRaw !== X_CRC_ID) throw new RangeError(`crc 는 true/false/'${X_CRC_ID}' 만`);
+  const crcOpt = (crcRaw === true || crcRaw === X_CRC_ID) ? { crc: X_CRC_ID } : {};
+  // --rngSplit: payload 본문과 물리 사건(dropout 난수·blob 중심·시선·반전 난수)을 «다른 RNG 스트림» 에서 뽑아요 — payload 길이(예: CRC 로 30→26 B)가 바뀌어도
+  // 같은 seed/trial 이 같은 물리 사건이 되게(codex 0118 on/off 대응 표본 설계). 기본 false = 기존 단일 스트림(D-3/D-3b 원자료 재현성 보존).
+  const rngSplitRaw = o.rngSplit === 'true' ? true : o.rngSplit === 'false' ? false : o.rngSplit;
+  if (rngSplitRaw !== undefined && rngSplitRaw !== true && rngSplitRaw !== false) throw new RangeError('rngSplit 은 true/false 만');
+  const rngSplit = rngSplitRaw === true;
   const profile = xProfile(o.profile);
   const N = profile.N, sites = N ** 3;
   const camera = cameraFromFov({ width: o.width, height: o.height, fov: o.fov });
   const ctx = { N, sites, camera, dl: o.dl };
-  const caps = Object.fromEntries(REAL_ORDERS.map(id => [id, xCapacity(profile, { ecc: o.ecc, scanOrderId: id })]));
+  const caps = Object.fromEntries(REAL_ORDERS.map(id => [id, xCapacity(profile, { ecc: o.ecc, scanOrderId: id, ...crcOpt })]));
   const payloadBytes = Math.min(...REAL_ORDERS.map(id => caps[id].payloadBytes));
   const models = [
     ...dropout.map(p => ({ model: 'dropout', param: p })),
@@ -296,17 +306,20 @@ export function runRealProbe(opts) {
   let modelIndex = 0;
   for (const { model, param } of models) {
     for (const q of qs) {
-      const rng = makeRng((o.seed * 1000003 + modelIndex * 101 + Math.round(q * 1000)) % 4294967296);
+      const streamSeed = (o.seed * 1000003 + modelIndex * 101 + Math.round(q * 1000)) % 4294967296;
+      const rng = makeRng(streamSeed);
+      // rngSplit: payload 는 별도 스트림(streamSeed 에 고정 오프셋), 사건은 기존 스트림 — 기본(false) 이면 둘 다 같은 rng(기존 동작)
+      const rngPayload = rngSplit ? makeRng((streamSeed + 0x5bd1e995) % 4294967296) : rng;
       modelIndex += 1;
       const agg = Object.fromEntries(REAL_ORDERS.map(id => [id, { fails: 0, wrongText: 0, erasures: [], corrected: [], unobservedLit: [] }]));
       const perTrial = [];
       const wrongTextEvents = []; // 조용한 오답 사건은 trial·GT·복호 본문·RS 통계까지 보존(D-3 00:42: binary outcome 만으론 재현·진단 불가)
       for (let t = 0; t < o.trials; t += 1) {
-        const text = randomText(rng, payloadBytes);
+        const text = randomText(rngPayload, payloadBytes);
         const event = drawEvent(ctx, rng);
         const outcome = {};
         for (const orderId of REAL_ORDERS) {
-          const enc = encodeX(text, profile, { ecc: o.ecc, scanOrderId: orderId });
+          const enc = encodeX(text, profile, { ecc: o.ecc, scanOrderId: orderId, ...crcOpt });
           const levels = enc.levels;
           const lit = Uint8Array.from(levels, x => (x > 0 ? 1 : 0));
           const U = applyEvent(model, param, event, ctx, lit);
@@ -320,10 +333,11 @@ export function runRealProbe(opts) {
               obs[s] = event.v[s] < q ? 1 - levels[s] : levels[s];
             }
           }
-          const dec = decodeX({ levels: obs }, profile, { ecc: o.ecc, scanOrderId: orderId });
-          const ok = dec.ok && dec.text === text;
+          const dec = decodeX({ levels: obs }, profile, { ecc: o.ecc, scanOrderId: orderId, ...crcOpt });
+          const ok = dec.ok && dec.text === text && (crcOpt.crc ? dec.verified === true : true);
           const a = agg[orderId];
           if (!ok) a.fails += 1;
+          if (crcOpt.crc && !dec.ok && dec.stage === 'crc') a.crcRejects = (a.crcRejects ?? 0) + 1; // CRC 가 잡은 오답 후보(길이/패딩/utf8 단계는 별도)
           if (dec.ok && dec.text !== text) {
             a.wrongText += 1;
             const nullCount = obs.reduce((n, v) => n + (v === null ? 1 : 0), 0);
@@ -357,7 +371,7 @@ export function runRealProbe(opts) {
         const a = agg[orderId];
         rows.push({
           profile: o.profile, N, ecc: o.ecc, symbols: caps[orderId].symbols, nsym: caps[orderId].nsym, payloadBytes, model, param, q, unknownMode: o.unknownMode, orderId,
-          trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), wrongText: a.wrongText,
+          trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), wrongText: a.wrongText, crc: crcOpt.crc ?? null, crcRejects: crcOpt.crc ? (a.crcRejects ?? 0) : null,
           meanErasuresWhenOk: a.erasures.length ? +mean(a.erasures).toFixed(2) : null, meanCorrectedWhenOk: a.corrected.length ? +mean(a.corrected).toFixed(2) : null,
           meanUnobservedLit: +mean(a.unobservedLit).toFixed(1),
         });
@@ -371,7 +385,8 @@ export function runRealProbe(opts) {
   return {
     schemaVersion: 'TLcube:X:scan-order-real:v0', options: o, payloadBytes,
     // 실복호는 v0 단일 RS 블록 — options.blocks 는 이 경로에서 쓰이지 않아요(effectiveBlocks 1). CRC 는 TBD 라 «GT 본문 일치» 로 성공 판정(verified:false).
-    effectiveBlocks: 1, successCriterion: 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 는 pending)',
+    effectiveBlocks: 1, crc: crcOpt.crc ?? null, rngSplit,
+    successCriterion: crcOpt.crc ? 'decodeX ok ∧ text === GT ∧ verified (도메인 결속 CRC 통과)' : 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 없음, verified:false)',
     orderDefinition: { 'cell-order-v0': 'cell centre siteId asc, triples in cell order', 'morton-v0': 'coordinate-sum (Σx,Σy,Σz) bit-interleave x→y→z 8 levels, ties by cell-order index, no rounding — xScanOrderCanonical golden' },
     caps: Object.fromEntries(REAL_ORDERS.map(id => [id, { symbols: caps[id].symbols, nsym: caps[id].nsym }])), rows, pairs, outcomes,
   };
@@ -394,7 +409,8 @@ if (process.argv[1]?.endsWith('x-scan-order-probe.mjs')) {
     const res = runRealProbe(args);
     const outDir = resolve(args.out ?? 'test/output/x-scan-order');
     mkdirSync(outDir, { recursive: true });
-    const path = join(outDir, `${res.options.profile}_real_${res.options.unknownMode}_${res.options.ecc}_s${res.options.seed}_t${res.options.trials}.json`);
+    const tag = `${res.crc ? '_crc' : ''}${res.rngSplit ? '_split' : ''}`; // 파일명에 crc/rngSplit 을 실어 원자료 충돌·오표기 방지
+    const path = join(outDir, `${res.options.profile}_real_${res.options.unknownMode}_${res.options.ecc}_s${res.options.seed}_t${res.options.trials}${tag}.json`);
     writeFileSync(path, JSON.stringify(res, null, 1));
     console.log(`REAL profile ${res.options.profile} · payload ${res.payloadBytes} B · unknownMode ${res.options.unknownMode} · trials ${res.options.trials} → ${path}`);
     console.log('model      param  q      order          pFail   wrong  erasOk  corrOk  unobsLit');

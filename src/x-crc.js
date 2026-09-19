@@ -22,7 +22,8 @@ export const X_WIRE_REVISION = 0;
 export const X_CRC_DOMAIN_PREFIX = 'TLcube:X:crc:v0';
 
 const encoder = new TextEncoder();
-const strictDecoder = new TextDecoder('utf-8', { fatal: true });
+// ignoreBOM: 기본 TextDecoder 는 선두 U+FEFF 를 «소비» 해 원바이트를 CRC 로 검증해도 JS 문자열이 달라져요(codex 0118) — 텍스트 왕복 계약이라 BOM 도 문자로 보존
+const strictDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 function field(name, value) {
   const s = String(value);
@@ -60,6 +61,9 @@ function crcOver(domainBytes, headerAndPayload) {
 export function frameX(text, dataBytes, domainBytes) {
   if (!Number.isInteger(dataBytes) || dataBytes < 5) throw new RangeError(`dataBytes 는 5 이상 정수: ${dataBytes}`);
   if (!(domainBytes instanceof Uint8Array) || domainBytes.length === 0) throw new TypeError('domainBytes 가 필요해요');
+  if (typeof text !== 'string') throw new TypeError('text 는 문자열이어야 해요');
+  // 고립 surrogate 는 TextEncoder 가 U+FFFD 로 바꿔 «조용히 다른 본문» 이 되므로 인코드 단계에서 거절(왕복 계약). NUL·보충평면·내부 BOM 은 그대로 바이트로.
+  if (typeof text.isWellFormed === 'function' ? !text.isWellFormed() : /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text)) throw new RangeError('고립 surrogate 를 포함한 문자열은 인코드할 수 없어요');
   const payload = encoder.encode(text);
   const max = xCrcMaxPayload(dataBytes);
   if (payload.length > max) throw new RangeError(`페이로드 ${payload.length} B > 용량 ${max} B (B ${dataBytes} − 1 − 4)`);
