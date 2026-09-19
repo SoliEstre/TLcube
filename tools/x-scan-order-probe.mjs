@@ -26,6 +26,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { xProfileLayout, xProfile } from '../src/x-profile.js';
 import { xNsymFor, xDigitFromLevels, X_ERASED, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
+import { packCellDigitsToSymbols } from '../src/base211.js';
 import { xSiteCoord } from '../src/x-layout.js';
 import { H_BINARY } from '../src/h-profile.js';
 import { xCameraLookAt, xProjectSites, xOverlapMask } from '../src/x-project.js';
@@ -324,7 +325,24 @@ export function runRealProbe(opts) {
           if (dec.ok && dec.text !== text) {
             a.wrongText += 1;
             const nullCount = obs.reduce((n, v) => n + (v === null ? 1 : 0), 0);
-            wrongTextEvents.push({ model, param, q, orderId, trial: t, text, decoded: dec.text, payloadLength: dec.payloadLength, erasures: dec.erasures, corrected: dec.corrected, nsym: caps[orderId].nsym, unobservedLit, unobservedSites: nullCount, flippedSites: obs.reduce((n, v, s) => n + (v !== null && v !== levels[s] ? 1 : 0), 0) });
+            // GF(211) 심볼 수준 e/s — «2s+e > nsym» 를 직접 입증(codex 0050): 수신 digit → 심볼로 묶어 GT 코드워드와 대조
+            const cap = caps[orderId];
+            const recvDigits = cap.layout.triples.map(tr => xDigitFromLevels(tr.map(s => obs[s])));
+            const used = recvDigits.slice(0, cap.symbols * 3);
+            let symbolErasures = 0, symbolErrors = 0;
+            const erasedSym = new Set();
+            used.forEach((d, i) => { if (!(Number.isInteger(d) && d >= 0 && d < 6)) erasedSym.add(Math.floor(i / 3)); });
+            const packed = packCellDigitsToSymbols(Uint8Array.from(used.map(d => (Number.isInteger(d) && d >= 0 && d < 6 ? d : 0))));
+            for (let i = 0; i < cap.symbols; i += 1) {
+              if (erasedSym.has(i) || packed.symbols[i] >= 211) symbolErasures += 1;
+              else if (packed.symbols[i] !== enc.codeword[i]) symbolErrors += 1;
+            }
+            wrongTextEvents.push({
+              model, param, q, orderId, trial: t, text, decoded: dec.text, payloadLength: dec.payloadLength,
+              erasures: dec.erasures, corrected: dec.corrected, nsym: cap.nsym,
+              symbolErasures, symbolErrors, budget: 2 * symbolErrors + symbolErasures, budgetExceeded: 2 * symbolErrors + symbolErasures > cap.nsym,
+              unobservedLit, unobservedSites: nullCount, flippedSites: obs.reduce((n, v, s) => n + (v !== null && v !== levels[s] ? 1 : 0), 0),
+            });
           }
           if (dec.ok) { a.erasures.push(dec.erasures); a.corrected.push(dec.corrected); }
           a.unobservedLit.push(unobservedLit);
