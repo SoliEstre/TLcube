@@ -188,7 +188,8 @@ export function layoutX({ layoutId, N, c = 0 } = {}) {
     if (c !== 0) throw new RangeError('x8-gpt-v1 은 c=0 고정이에요(표형 — 다른 잔여류를 조용히 무시하지 않아요)');
     return layoutX8Gpt();
   }
-  throw new RangeError(`알 수 없는 layoutId: ${layoutId}`);
+  // 비문자열은 보간하지 않아요(객체의 toString/Symbol.toPrimitive 가 거절 경로에서 실행되지 않게)
+  throw new RangeError(`알 수 없는 layoutId: ${typeof layoutId === 'string' ? JSON.stringify(layoutId) : `<${typeof layoutId}>`}`);
 }
 
 /** 정본 문자열 — golden hash 의 입력(JS↔Python 교차 일치) */

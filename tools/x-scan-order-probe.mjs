@@ -1,0 +1,227 @@
+#!/usr/bin/env node
+/**
+ * x-scan-order-probe — rd-4 «scan order × 블록 배정» 측정 하네스(합성 가림 3모델, 블록별 e/s).
+ *
+ * 질문: 사이트 관측 실패가 공간적으로 뭉칠 때(가림·시야 겹침·손가락) RS 블록 하나에 소거가 몰려 «한 블록 실패 = 프레임 실패» 가
+ * 되는가, 그리고 scan order(digit → 심볼 → 블록 순서)와 블록 배정(연속 vs 인터리브)이 그 확률을 얼마나 바꾸는가.
+ * v0 는 단일 RS 블록(≤210 심볼)이라 순서가 정정 능력에 영향을 주지 않아요 — 그래서 이 하네스는 ① v0 의 e/s 분포(nsym 표 근거)와
+ * ② 가상의 B 블록 분할(N12+ 또는 강제 --blocks) 에서 순서·배정 효과를 함께 재요. 결론을 «scanOrderHash 잠금» 에 쓰려면 rd-4 ledger 로.
+ *
+ * 가림 3모델(사이트 단위 미관측 집합 U):
+ *   dropout   — 독립 Bernoulli(p): 발광체 고장/검출 누락(공간 무상관)
+ *   blob      — 세계 좌표 구(반지름 r·pitch, 중심 무작위) 안 사이트 전부 미관측: 손가락·스티커·근접 가림(공간 뭉침)
+ *   view      — 무작위 시선(방위·고도 균일, D/L, 640×480 fov 40) 순투영의 overlap ∪ outOfView 사이트(기하 자기 가림)
+ * 톤 오류: 관측된 사이트가 확률 q 로 반전 → 트리플 패턴이 불법(000/111)이면 소거, 합법이지만 다른 digit 이면 오류.
+ * 심볼(3 digit) = 소거(한 digit 이라도 소거) / 오류(소거 없고 한 digit 이라도 틀림) / 정상. 블록 b 실패 ⇔ 2·s_b + e_b > nsym_b.
+ *
+ * scan order 후보:
+ *   cell-order-v0 — 중심 siteId 오름차순 셀 순(현행 잠정)
+ *   morton-v0     — 트리플 중심(centroid) 의 Morton(Z-order) 키 순: 공간 국소 순
+ *   stride-v0     — cell-order 를 B 로 stride 인터리브한 순(«순서 자체» 를 흩뿌린 대조군)
+ * 블록 배정: contiguous(연속 구간) · interleaved(i mod B).
+ *
+ * 사용: node tools/x-scan-order-probe.mjs --profile X0 --trials 400 --blocks 1,2,3 --ecc M --seed 1 --out DIR
+ */
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { xProfileLayout } from '../src/x-profile.js';
+import { xNsymFor, xDigitFromLevels, X_ERASED } from '../src/x-codec.js';
+import { xSiteCoord } from '../src/x-layout.js';
+import { H_BINARY } from '../src/h-profile.js';
+import { xCameraLookAt, xProjectSites, xOverlapMask } from '../src/x-project.js';
+import { makeRng, cameraFromFov } from './x-synth-render.mjs';
+
+export const X_SCAN_ORDER_PROBE_SCHEMA = 'TLcube:X:scan-order-probe:v0';
+
+const DEFAULTS = Object.freeze({
+  profile: 'X0', trials: 400, blocks: '1,2,3', ecc: 'M', seed: 1, q: 0.01,
+  dropoutP: '0.02,0.05,0.10', blobR: '1.5,2.5,3.5', dl: 3, width: 640, height: 480, fov: 40, minSep: 5.2,
+});
+
+function morton3(x, y, z) {
+  let key = 0n;
+  for (let i = 0; i < 8; i += 1) {
+    key |= (BigInt((x >> i) & 1) << BigInt(3 * i)) | (BigInt((y >> i) & 1) << BigInt(3 * i + 1)) | (BigInt((z >> i) & 1) << BigInt(3 * i + 2));
+  }
+  return key;
+}
+
+/** 후보 scan order 별 «트리플 순서» — 입력은 profileLayout.triples(cell-order) */
+export function scanOrders(profileLayout, blocks) {
+  const { triples, raw } = profileLayout;
+  const N = raw.N;
+  const centroidKey = t => {
+    const c = t.map(s => xSiteCoord(N, s));
+    // centroid×2 는 정수 — Morton 은 정수 입력
+    const cx = c[0][0] + c[1][0] + c[2][0], cy = c[0][1] + c[1][1] + c[2][1], cz = c[0][2] + c[1][2] + c[2][2];
+    return morton3(Math.round(cx * 2 / 3), Math.round(cy * 2 / 3), Math.round(cz * 2 / 3));
+  };
+  const morton = triples.map((t, i) => ({ t, i, k: centroidKey(t) })).sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i)).map(o => o.t);
+  const stride = [];
+  const B = Math.max(1, blocks);
+  for (let r = 0; r < B; r += 1) for (let i = r; i < triples.length; i += B) stride.push(triples[i]);
+  return { 'cell-order-v0': triples, 'morton-v0': morton, 'stride-v0': stride };
+}
+
+/** 블록 배정: 심볼 인덱스 → 블록 */
+export function blockOf(symbolIndex, symbols, blocks, assignment) {
+  if (blocks <= 1) return 0;
+  return assignment === 'interleaved' ? symbolIndex % blocks : Math.floor(symbolIndex * blocks / symbols);
+}
+
+/** 가림 모델 — 미관측 사이트 마스크 */
+export function occlusionMask(model, param, ctx, rng) {
+  const { N, sites, camera } = ctx;
+  const U = new Uint8Array(sites);
+  if (model === 'dropout') {
+    for (let s = 0; s < sites; s += 1) if (rng() < param) U[s] = 1;
+  } else if (model === 'blob') {
+    const c = [rng() * (N - 1), rng() * (N - 1), rng() * (N - 1)];
+    for (let s = 0; s < sites; s += 1) {
+      const p = xSiteCoord(N, s);
+      if (Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]) <= param) U[s] = 1;
+    }
+  } else if (model === 'view') {
+    const azimuth = rng() * 2 * Math.PI;
+    const elevation = Math.asin(2 * rng() - 1);
+    const pose = xCameraLookAt({ N, distanceOverWidth: ctx.dl, azimuth, elevation });
+    const { points } = xProjectSites({ N, pose, camera });
+    const lit = ctx.lit;
+    const overlap = xOverlapMask(points, lit, param);
+    for (let s = 0; s < sites; s += 1) if (!points[s].inFrame || overlap[s]) U[s] = 1;
+  } else throw new RangeError(`모델: ${model}`);
+  return U;
+}
+
+/** trial 의 «본문»: 트리플별 무작위 합법 digit 과 그로부터 켜지는 사이트(중심 + 패턴의 1) — 겹침 모델이 실제 점등 마스크를 쓰게 해요 */
+export function drawDigits(profileLayout, rng) {
+  const { triples, raw } = profileLayout;
+  const lit = new Uint8Array(raw.N ** 3);
+  for (const cell of raw.cells) lit[cell.centre] = 1;
+  const digits = new Map();
+  for (const t of triples) {
+    const d = Math.floor(rng() * 6);
+    digits.set(t.join(','), d);
+    H_BINARY[d].forEach((v, i) => { if (v) lit[t[i]] = 1; });
+  }
+  return { digits, lit };
+}
+
+/** 한 trial: 순서/배정별 블록 e/s → 실패 여부. digits 는 drawDigits 의 Map(트리플 identity → digit) */
+export function trial({ orders, symbols, blocks, assignments, nsymFor, U, q, rng, sites, digits }) {
+  // 관측 사이트 반전 마스크(모든 순서가 같은 잡음을 공유 — 대응 표본)
+  const flip = new Uint8Array(sites);
+  if (q > 0) for (let s = 0; s < sites; s += 1) if (!U[s] && rng() < q) flip[s] = 1;
+  const results = {};
+  const classifyTriple = t => {
+    const key = t.join(',');
+    const d = digits ? digits.get(key) : 0;
+    if (t.some(s => U[s])) return 'e';
+    const pat = H_BINARY[d].map((v, i) => (flip[t[i]] ? 1 - v : v));
+    const got = xDigitFromLevels(pat);
+    if (got === X_ERASED) return 'e';
+    return got === d ? 'ok' : 's';
+  };
+  // 트리플 분류는 순서와 무관 → 한 번만
+  const cls = new Map();
+  for (const t of orders['cell-order-v0']) cls.set(t.join(','), classifyTriple(t));
+  for (const [orderId, seq] of Object.entries(orders)) {
+    for (const assignment of assignments) {
+      for (const B of blocks) {
+        const e = new Array(B).fill(0), s = new Array(B).fill(0), count = new Array(B).fill(0);
+        for (let i = 0; i < symbols; i += 1) {
+          const b = blockOf(i, symbols, B, assignment);
+          count[b] += 1;
+          let symE = false, symS = false;
+          for (let k = 0; k < 3; k += 1) {
+            const c = cls.get(seq[i * 3 + k].join(','));
+            if (c === 'e') symE = true; else if (c === 's') symS = true;
+          }
+          if (symE) e[b] += 1; else if (symS) s[b] += 1;
+        }
+        let fail = false;
+        for (let b = 0; b < B; b += 1) if (2 * s[b] + e[b] > nsymFor(count[b])) { fail = true; break; }
+        results[`${orderId}|${assignment}|B${B}`] = { fail, e, s, count };
+      }
+    }
+  }
+  return results;
+}
+
+export function runProbe(opts) {
+  const o = { ...DEFAULTS, ...opts };
+  const blocksList = String(o.blocks).split(',').map(Number).filter(b => b >= 1);
+  const pl = xProfileLayout(o.profile);
+  const N = pl.raw.N, sites = N ** 3;
+  const symbols = Math.floor(pl.digits / 3);
+  const camera = cameraFromFov({ width: o.width, height: o.height, fov: o.fov });
+  const ctx = { N, sites, camera, dl: o.dl, lit: null }; // lit 은 trial 마다 실제 본문(drawDigits)에서 — 겹침은 «켜진» 사이트끼리만
+  const nsymCache = new Map();
+  const nsymFor = S => { if (!nsymCache.has(S)) nsymCache.set(S, xNsymFor(S, o.ecc)); return nsymCache.get(S); };
+  const assignments = ['contiguous', 'interleaved'];
+  const models = [
+    ...String(o.dropoutP).split(',').map(Number).map(p => ({ model: 'dropout', param: p })),
+    ...String(o.blobR).split(',').map(Number).map(r => ({ model: 'blob', param: r })),
+    { model: 'view', param: o.minSep },
+  ];
+  const rows = [];
+  for (const { model, param } of models) {
+    const rng = makeRng(o.seed * 1000003 + rows.length);
+    const orders = scanOrders(pl, Math.max(...blocksList));
+    const agg = {};
+    let unobservedSum = 0;
+    for (let t = 0; t < o.trials; t += 1) {
+      const { digits, lit } = drawDigits(pl, rng);
+      const U = occlusionMask(model, param, { ...ctx, lit }, rng);
+      // 소등 사이트의 «미관측» 은 digit 판독에 영향이 없어요(그 자리는 어차피 0) — 점등 사이트만 소거 원인으로 세요
+      for (let s = 0; s < sites; s += 1) if (!lit[s]) U[s] = 0;
+      unobservedSum += U.reduce((a, b) => a + b, 0);
+      const r = trial({ orders, symbols, blocks: blocksList, assignments, nsymFor, U, q: o.q, rng, sites, digits });
+      for (const [key, v] of Object.entries(r)) {
+        if (!agg[key]) agg[key] = { fails: 0, e: [], s: [], maxE: [] };
+        const a = agg[key];
+        if (v.fail) a.fails += 1;
+        a.e.push(v.e.reduce((x, y) => x + y, 0));
+        a.s.push(v.s.reduce((x, y) => x + y, 0));
+        a.maxE.push(Math.max(...v.e));
+      }
+    }
+    const q95 = arr => { const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.ceil(0.95 * s.length) - 1)]; };
+    const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+    for (const [key, a] of Object.entries(agg)) {
+      const [orderId, assignment, B] = key.split('|');
+      rows.push({
+        profile: o.profile, N, symbols, ecc: o.ecc, model, param, orderId, assignment, blocks: Number(B.slice(1)),
+        trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), meanE: +mean(a.e).toFixed(2), p95E: q95(a.e), meanS: +mean(a.s).toFixed(2),
+        meanMaxBlockE: +mean(a.maxE).toFixed(2), meanUnobserved: +(unobservedSum / o.trials).toFixed(1),
+        nsymPerBlock: blocksList.includes(Number(B.slice(1))) ? nsymFor(Math.ceil(symbols / Number(B.slice(1)))) : null,
+      });
+    }
+  }
+  return { schemaVersion: X_SCAN_ORDER_PROBE_SCHEMA, options: o, symbols, digits: pl.digits, rows };
+}
+
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i]; if (!a.startsWith('--')) continue;
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith('--')) { out[a.slice(2)] = true; continue; }
+    out[a.slice(2)] = /^-?\d+(\.\d+)?$/.test(next) ? Number(next) : next; i += 1;
+  }
+  return out;
+}
+
+if (process.argv[1]?.endsWith('x-scan-order-probe.mjs')) {
+  const args = parseArgs(process.argv.slice(2));
+  const res = runProbe(args);
+  const outDir = resolve(args.out ?? 'test/output/x-scan-order');
+  mkdirSync(outDir, { recursive: true });
+  const path = join(outDir, `${res.options.profile}_${res.options.ecc}_s${res.options.seed}_t${res.options.trials}.json`);
+  writeFileSync(path, JSON.stringify(res, null, 1));
+  console.log(`profile ${res.options.profile} · symbols ${res.symbols} · trials ${res.options.trials} → ${path}`);
+  console.log('model      param  order          assign       B  pFail   meanE  p95E  meanS  maxBlkE  unobs');
+  for (const r of res.rows) {
+    console.log(`${r.model.padEnd(10)} ${String(r.param).padEnd(6)} ${r.orderId.padEnd(14)} ${r.assignment.padEnd(12)} ${r.blocks}  ${r.pFail.toFixed(3)}  ${String(r.meanE).padStart(5)}  ${String(r.p95E).padStart(4)}  ${String(r.meanS).padStart(5)}  ${String(r.meanMaxBlockE).padStart(7)}  ${r.meanUnobserved}`);
+  }
+}

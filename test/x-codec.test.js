@@ -3,6 +3,7 @@ import test from 'node:test';
 import { symbolCountForByteLength } from '../src/base211.js';
 import { H_BINARY } from '../src/h-profile.js';
 import { X_PROFILES, X_PROFILE_IDS, xProfile, assertXProfile, xProfileLayout, xLevelsTemplate, xProfileDto } from '../src/x-profile.js';
+import { layoutX } from '../src/x-layout.js';
 import { xCapacity, xNsymFor, encodeX, decodeX, xDigitFromLevels, X_ERASED } from '../src/x-codec.js';
 
 function rng(seed) {
@@ -38,6 +39,26 @@ test('x-profile — 상속 키·비문자열·필드 누락은 미지로 거절(
   // 정상: registry 원본 + 입력 ecc
   assert.deepEqual(assertXProfile({ ...X_PROFILES.X0, ecc: 'H' }), { ...X_PROFILES.X0, ecc: 'H' });
   assert.equal(typeof xProfile('X0').label, 'string');
+});
+
+test('x-profile/x-layout — 변환 함수를 가진 객체 id 는 «거절 + 호출 0»(codex REPORT_005 동류)', () => {
+  const calls = { toString: 0, toPrimitive: 0, valueOf: 0 };
+  const trap = {
+    toString() { calls.toString += 1; return 'X0'; },
+    valueOf() { calls.valueOf += 1; return 'X0'; },
+    [Symbol.toPrimitive]() { calls.toPrimitive += 1; return 'X0'; },
+  };
+  const boxed = new String('X0');
+  for (const bad of [trap, boxed, ['X0'], { toString: () => 'X0' }]) {
+    assert.throws(() => xProfile(bad), RangeError);
+    assert.throws(() => assertXProfile({ ...X_PROFILES.X0, profileId: bad }), RangeError);
+    assert.throws(() => xProfileDto(bad), RangeError);
+    assert.throws(() => layoutX({ layoutId: bad, N: 8 }), RangeError);
+  }
+  assert.deepEqual(calls, { toString: 0, toPrimitive: 0, valueOf: 0 }, '거절 경로에서 변환 함수가 실행됐어요');
+  // 거절 메시지도 값을 문자열화하지 않아요
+  try { xProfile(trap); } catch (e) { assert.ok(e.message.includes('<object>') && !e.message.includes('X0')); }
+  assert.deepEqual(calls, { toString: 0, toPrimitive: 0, valueOf: 0 });
 });
 
 test('x-profile — blind DTO 는 다섯 키 allowlist 만', () => {

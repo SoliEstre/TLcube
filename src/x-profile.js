@@ -29,8 +29,13 @@ export const X_PROFILE_IDS = Object.freeze(Object.keys(X_PROFILES));
 
 /** registry 조회 — 미지 profileId 는 거절(부트스트랩 순환 방지: 후보는 이 표 밖에서 생기지 않아요). 자기 키만 — `__proto__`/`constructor` 같은 상속 키는 미지예요. */
 export function xProfile(profileId) {
-  if (typeof profileId !== 'string' || !Object.hasOwn(X_PROFILES, profileId)) throw new RangeError(`알 수 없는 X profileId: ${String(profileId)}`);
+  if (typeof profileId !== 'string' || !Object.hasOwn(X_PROFILES, profileId)) throw new RangeError(`알 수 없는 X profileId: ${describeId(profileId)}`);
   return { ...X_PROFILES[profileId] };
+}
+
+/** 거절 메시지용 — 비문자열은 «값을 문자열로 만들지 않고» 타입만 적어요(toString/Symbol.toPrimitive 호출 0, codex REPORT_005) */
+function describeId(value) {
+  return typeof value === 'string' ? JSON.stringify(value) : `<${value === null ? 'null' : typeof value}>`;
 }
 
 /** 외부 입력에서 registry 를 검증할 때 반드시 같아야 하는 필드 — 하나라도 빠지면(undefined) 거절해요 */
@@ -39,7 +44,7 @@ export const X_PROFILE_STRICT_KEYS = Object.freeze(['layoutId', 'N', 'c', 'tones
 /** profile 객체 검증(외부 입력용) — registry 항목과 필드가 같아야 해요. 반환은 «registry 원본 + 입력 ecc» 예요. */
 export function assertXProfile(profile) {
   if (!profile || typeof profile !== 'object') throw new TypeError('X profile 객체가 필요해요');
-  if (typeof profile.profileId !== 'string' || !Object.hasOwn(X_PROFILES, profile.profileId)) throw new RangeError(`알 수 없는 X profileId: ${String(profile.profileId)}`);
+  if (typeof profile.profileId !== 'string' || !Object.hasOwn(X_PROFILES, profile.profileId)) throw new RangeError(`알 수 없는 X profileId: ${describeId(profile.profileId)}`);
   const ref = X_PROFILES[profile.profileId];
   for (const key of X_PROFILE_STRICT_KEYS) {
     if (!Object.hasOwn(profile, key)) throw new RangeError(`profile.${key} 가 없어요(strict)`);
