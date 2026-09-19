@@ -417,12 +417,8 @@ export const REAL_STAGES = Object.freeze(['ok', 'wrongText', 'erasure-budget', '
 
 export function classifyStage(dec, gt, crcMode) {
   if (dec.ok) return dec.text === gt ? (crcMode && dec.verified !== true ? 'other' : 'ok') : 'wrongText';
-  if (dec.stage) return REAL_STAGES.includes(dec.stage) ? dec.stage : 'other'; // frameX 단계(length|padding|crc|utf8)
-  const r = String(dec.reason || '');
-  if (r.startsWith('소거')) return 'erasure-budget';
-  if (r.startsWith('symbols-to-bytes')) return 'bytes';
-  if (r.startsWith('unframe')) return 'unframe';
-  return 'rs';
+  // decodeX 는 모든 실패에 명시 stage 를 실어요 — reason 문자열 파싱·rs fallback 없음(미지/누락 stage 는 'other' 로 엄격 분류, codex 0131)
+  return typeof dec.stage === 'string' && REAL_STAGES.includes(dec.stage) && dec.stage !== 'ok' && dec.stage !== 'wrongText' ? dec.stage : 'other';
 }
 
 /** 물리 사건 digest — u/v 난수·blob 중심·시선을 sha256 으로(대응 표본 검증: rngSplit on/off 에서 동일해야 함) */

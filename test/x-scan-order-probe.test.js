@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS, REAL_STAGES, classifyStage } from '../tools/x-scan-order-probe.mjs';
 import { xProfileLayout } from '../src/x-profile.js';
-import { xNsymFor } from '../src/x-codec.js';
+import { xNsymFor, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { makeRng, cameraFromFov } from '../tools/x-synth-render.mjs';
 
 const key = t => t.join(',');
@@ -145,11 +145,21 @@ test('classifyStage — decodeX 결과를 단계 enum 으로', () => {
   assert.equal(classifyStage({ ok: true, text: 'a', verified: false }, 'a', false), 'ok');
   assert.equal(classifyStage({ ok: true, text: 'a', verified: false }, 'a', true), 'other');
   assert.equal(classifyStage({ ok: true, text: 'b' }, 'a', false), 'wrongText');
-  assert.equal(classifyStage({ ok: false, reason: '소거 14 > nsym 13' }, 'a', false), 'erasure-budget');
-  assert.equal(classifyStage({ ok: false, reason: 'symbols-to-bytes: x' }, 'a', false), 'bytes');
-  assert.equal(classifyStage({ ok: false, reason: 'unframe: x' }, 'a', false), 'unframe');
-  assert.equal(classifyStage({ ok: false, reason: 'rs failed' }, 'a', false), 'rs');
-  for (const s of ['length', 'padding', 'crc', 'utf8']) assert.equal(classifyStage({ ok: false, stage: s, reason: 'frameX' }, 'a', true), s);
+  for (const s of ['erasure-budget', 'rs', 'bytes', 'unframe', 'length', 'padding', 'crc', 'utf8']) assert.equal(classifyStage({ ok: false, stage: s, reason: 'x' }, 'a', true), s);
+  // reason 만 있고 stage 가 없거나 미지면 엄격히 'other'(rs fallback 없음)
+  assert.equal(classifyStage({ ok: false, reason: '소거 14 > nsym 13' }, 'a', false), 'other');
+  assert.equal(classifyStage({ ok: false, stage: 'mystery', reason: 'x' }, 'a', false), 'other');
+  assert.equal(classifyStage({ ok: false, stage: 'ok', reason: 'x' }, 'a', false), 'other');
+  // 실제 decodeX 실패 반환은 전부 명시 stage 를 실어요
+  const cap = xCapacity('X0');
+  const enc = encodeX('stage', 'X0');
+  const tooMany = Array.from(enc.levels);
+  for (let i = 0; i <= cap.nsym; i += 1) tooMany[cap.layout.triples[i * 3][0]] = null;
+  assert.equal(decodeX({ levels: tooMany }, 'X0').stage, 'erasure-budget');
+  const digits = Array.from(enc.digits);
+  for (let s = 0; s < cap.symbols; s += 1) digits[s * 3] = (digits[s * 3] + 3) % 6; // 전 심볼 오류 → RS 실패(또는 오정정 → bytes/unframe 단계) — 어쨌든 명시 stage
+  const wrecked = decodeX({ digits }, 'X0');
+  assert.ok(wrecked.ok || REAL_STAGES.includes(wrecked.stage), JSON.stringify(wrecked));
 });
 
 test('runProbe — 작은 실행이 행 수·필드·결정성을 지켜요', () => {

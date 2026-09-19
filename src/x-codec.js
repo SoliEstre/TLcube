@@ -152,26 +152,27 @@ export function decodeX(input, profileOrId, options = {}) {
   const packed = packCellDigitsToSymbols(clean);
   for (const index of packed.illegalIndices) erased.add(index);
   const erasures = [...erased].sort((a, b) => a - b);
-  if (erasures.length > cap.nsym) return { ok: false, reason: `소거 ${erasures.length} > nsym ${cap.nsym}`, erasures: erasures.length };
+  // 모든 실패 반환은 명시 stage 를 실어요(erasure-budget · rs · bytes · length · padding · crc · utf8 · unframe) — 소비자가 reason 문자열을 파싱하지 않게(codex 0131)
+  if (erasures.length > cap.nsym) return { ok: false, stage: 'erasure-budget', reason: `소거 ${erasures.length} > nsym ${cap.nsym}`, erasures: erasures.length };
   // 연구 코덱 임시 가드(D-3 wrongText 사건, REPORT_003 §7): 소거가 패리티를 전부 먹으면(e = nsym) 남은 톤 오류를 검출할 여유가 0 이라
   // «일관되지만 틀린» 코드워드로 수렴할 수 있어요. options.erasureReserve(기본 0 = 현행) 만큼 여유를 남겨요 — 근본 처방은 rd-5 CRC.
-  if (erasures.length > cap.nsym - reserve) return { ok: false, reason: `소거 ${erasures.length} > nsym ${cap.nsym} − reserve ${reserve}`, erasures: erasures.length };
+  if (erasures.length > cap.nsym - reserve) return { ok: false, stage: 'erasure-budget', reason: `소거 ${erasures.length} > nsym ${cap.nsym} − reserve ${reserve}`, erasures: erasures.length };
   const received = packed.symbols;
   for (const index of erasures) received[index] = 0;
   const decoded = rsDecode(received, cap.nsym, erasures.length ? { erasures } : {});
-  if (!decoded.ok) return { ok: false, reason: decoded.reason, erasures: erasures.length };
+  if (!decoded.ok) return { ok: false, stage: 'rs', reason: decoded.reason, erasures: erasures.length };
   const messageSymbolCount = symbolCountForByteLength(cap.dataBytes);
   let framed;
   try { framed = symbolsToBytes(decoded.message.subarray(0, messageSymbolCount), cap.dataBytes); }
-  catch (error) { return { ok: false, reason: `symbols-to-bytes: ${error.message}`, erasures: erasures.length }; }
+  catch (error) { return { ok: false, stage: 'bytes', reason: `symbols-to-bytes: ${error.message}`, erasures: erasures.length }; }
   let unframed;
   if (cap.crc) {
     // 검증 순서(DESIGN_003 v2 §3): 길이/CRC 위치/패딩 → 원바이트 CRC(도메인 결속) → strict UTF-8 → verified:true
     try { unframed = unframeX(framed, cap.crcDomain); }
-    catch (error) { return { ok: false, reason: `frameX ${error.stage ?? 'error'}: ${error.message}`, stage: error.stage ?? null, erasures: erasures.length }; }
+    catch (error) { return { ok: false, stage: error.stage ?? 'unframe', reason: `frameX ${error.stage ?? 'error'}: ${error.message}`, erasures: erasures.length }; }
   } else {
     try { unframed = unframe(framed); }
-    catch (error) { return { ok: false, reason: `unframe: ${error.message}`, erasures: erasures.length }; }
+    catch (error) { return { ok: false, stage: 'unframe', reason: `unframe: ${error.message}`, erasures: erasures.length }; }
   }
   return {
     ok: true, text: unframed.text, payloadLength: unframed.payloadLength,
