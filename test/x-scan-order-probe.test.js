@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS, REAL_STAGES, classifyStage } from '../tools/x-scan-order-probe.mjs';
-import { xProfileLayout } from '../src/x-profile.js';
+import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS, REAL_STAGES, classifyStage, symbolLayoutFor, SYMBOL_COUNT_FIELDS } from '../tools/x-scan-order-probe.mjs';
+import { xProfileLayout, xProfile } from '../src/x-profile.js';
 import { xNsymFor, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { makeRng, cameraFromFov } from '../tools/x-synth-render.mjs';
 
@@ -176,4 +176,54 @@ test('runProbe — 작은 실행이 행 수·필드·결정성을 지켜요', ()
   const byOrder = {};
   for (const r of a.rows.filter(r => r.model === 'blob')) { (byOrder[r.orderId] ||= new Set()).add(r.meanE); }
   for (const [id, set] of Object.entries(byOrder)) assert.equal(set.size, 1, `${id} 총 e 는 블록/배정 무관`);
+});
+
+test('runRealProbe --symbolStats / --decodeCrc false — 심볼 상태 문자열·구간 layout·arm B(encode CRC/decode legacy) ablation', () => {
+  const base = { profile: 'X0', trials: 12, seed: 9, dropoutP: '0.02', blobR: '2.5', minSep: 2.5, q: '0.01', unknownMode: 'oracle', orders: 'cell-order-v0', rngSplit: true, payloadBytes: 26 };
+  const off = runRealProbe({ ...base, symbolStats: true });
+  const on = runRealProbe({ ...base, symbolStats: true, crc: true });
+  const b = runRealProbe({ ...base, symbolStats: true, crc: true, decodeCrc: false });
+  const cap = xCapacity(xProfile('X0'), { ecc: 'M' });
+  // layout: X0 dataBytes 31 = 27(28 심볼) + 4(5 심볼), dataSymbols 33, parity 13 — 합이 xCapacity 와 맞아야 해요
+  const L = off.symbolLayout;
+  assert.equal(L.dataSymbols, cap.dataSymbols); assert.equal(L.nsym, cap.nsym); assert.equal(L.symbols, cap.symbols);
+  assert.deepEqual(L.chunks.map(c => [c.bytes, c.symbols]), [[27, 28], [4, 5]]);
+  assert.equal(L.chunks.reduce((n, c) => n + c.symbols, 0), L.dataSymbols); assert.equal(L.parity.symbolOffset, L.dataSymbols);
+  // 실제 인코더로 layout 주장 확인: off 26 B(1+26 = 27 B 청크 경계) 의 꼬리 청크 심볼 5 개는 전부 0, on(CRC 4 B) 은 아님
+  const text = 'abcdefghijklmnopqrstuvwxyz';
+  const cwOff = Array.from(encodeX(text, xProfile('X0'), { ecc: 'M' }).codeword).slice(28, 33);
+  const cwOn = Array.from(encodeX(text, xProfile('X0'), { ecc: 'M', crc: 'x-crc32c-v0' }).codeword).slice(28, 33);
+  assert.deepEqual(cwOff, [0, 0, 0, 0, 0]); assert.ok(cwOn.some(v => v !== 0));
+  // 심볼 상태: 길이 = symbols, 문자 012, '1' 수 = e, '2' 수 = s, (2s+e ≤ nsym) ⇒ stage ok(정답 복호는 검사도 통과)
+  for (const res of [off, on, b]) {
+    assert.equal(res.symbolStats, true);
+    for (const oc of res.outcomes) {
+      assert.equal(oc.perTrialSymbols.length, 12); assert.equal(oc.perTrialSymbolCounts.length, 12); assert.deepEqual(oc.symbolCountFields, SYMBOL_COUNT_FIELDS);
+      for (let t = 0; t < 12; t += 1) {
+        const st = oc.perTrialSymbols[t][0], cnt = oc.perTrialSymbolCounts[t][0];
+        assert.equal(st.length, cap.symbols); assert.match(st, /^[012]+$/);
+        assert.equal([...st].filter(c => c === '1').length, cnt[0]); assert.equal([...st].filter(c => c === '2').length, cnt[1]);
+        if (2 * cnt[1] + cnt[0] <= cap.nsym) assert.equal(REAL_STAGES[oc.perTrialStage[t][0]], 'ok', 'RS 예산 안이면 정답 복호 + 검사 통과');
+      }
+      for (const e of oc.wrongTextEvents) { const cnt = oc.perTrialSymbolCounts[e.trial][0]; assert.equal(e.symbolErasures, cnt[0]); assert.equal(e.symbolErrors, cnt[1]); assert.equal(e.unobservedSites, cnt[3]); }
+    }
+  }
+  // arm B: encode 는 CRC(payload 26, codeword = on 과 동일), decode 는 legacy — crc 계열 null, 심볼 상태 문자열은 on 과 trial 별로 동일(같은 codeword·사건·관측)
+  assert.equal(b.ablation, 'encode-crc-decode-legacy'); assert.equal(b.crc, 'x-crc32c-v0'); assert.equal(b.decodeCrc, false); assert.equal(on.decodeCrc, true); assert.equal(off.decodeCrc, null);
+  assert.equal(b.payloadBytes, 26); assert.ok(b.successCriterion.includes('legacy'));
+  for (const r of b.rows) { assert.equal(r.decodeCrc, false); assert.equal(r.ablation, 'encode-crc-decode-legacy'); assert.equal(r.crcRejects, null); assert.equal(r.inconsistent, null); assert.equal(r.stages.crc, 0); }
+  for (let i = 0; i < on.outcomes.length; i += 1) {
+    assert.deepEqual(b.outcomes[i].eventDigests, on.outcomes[i].eventDigests);
+    assert.deepEqual(b.outcomes[i].perTrialSymbols, on.outcomes[i].perTrialSymbols, '같은 codeword·사건이면 RS 입력이 같아요');
+    // 검사는 정답 복호를 거절할 수 없어요: B ok ⇒ C ok (구성상) — 위반 0
+    for (let t = 0; t < 12; t += 1) if (b.outcomes[i].perTrial[t][0] === 1) assert.equal(on.outcomes[i].perTrial[t][0], 1, 'arm B 성공인데 arm C 실패 — CRC 검사가 정답을 거절');
+  }
+  // 거절·기본값: decodeCrc 는 crc 와 함께만, 'maybe' 거절, 기본 실행엔 perTrialSymbols 없음 + rows 바이트 동일
+  assert.throws(() => runRealProbe({ ...base, decodeCrc: false }), /decodeCrc/);
+  assert.throws(() => runRealProbe({ ...base, crc: true, decodeCrc: 'maybe' }), /decodeCrc/);
+  assert.throws(() => runRealProbe({ ...base, symbolStats: 'yes' }), /symbolStats/);
+  const plain = runRealProbe(base);
+  assert.equal(plain.symbolStats, false); assert.equal('perTrialSymbols' in plain.outcomes[0], false); assert.equal(plain.ablation, null);
+  assert.deepEqual(plain.rows.map(r => ({ ...r, decodeCrc: undefined, ablation: undefined })), off.rows.map(r => ({ ...r, decodeCrc: undefined, ablation: undefined })));
+  assert.deepEqual(plain.outcomes.map(o => o.perTrial), off.outcomes.map(o => o.perTrial));
 });
