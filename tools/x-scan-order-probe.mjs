@@ -453,8 +453,13 @@ if (process.argv[1]?.endsWith('x-scan-order-probe.mjs')) {
     console.log(`REAL profile ${res.options.profile} · payload ${res.payloadBytes} B · unknownMode ${res.options.unknownMode} · trials ${res.options.trials} → ${path}`);
     console.log('model      param  q      order          pFail   wrong  erasOk  corrOk  unobsLit');
     for (const r of res.rows) console.log(`${r.model.padEnd(10)} ${String(r.param).padEnd(6)} ${String(r.q).padEnd(6)} ${r.orderId.padEnd(14)} ${r.pFail.toFixed(3)}   ${String(r.wrongText).padStart(3)}   ${String(r.meanErasuresWhenOk ?? '-').padStart(5)}   ${String(r.meanCorrectedWhenOk ?? '-').padStart(5)}   ${r.meanUnobservedLit}`);
-    console.log('pairs (A=cell-order-v0, B=morton-v0): aFail_bOk / aOk_bFail / bothFail / bothOk');
-    for (const p of res.pairs) console.log(`  ${p.model.padEnd(8)} ${String(p.param).padEnd(5)} q${String(p.q).padEnd(5)} ${p.aFail_bOk} / ${p.aOk_bFail} / ${p.bothFail} / ${p.bothOk}`);
+    // pairs 제목은 실제 orders 에서 유도 — --orders 로 순서를 뒤집거나 단일 order 면 고정 문구가 거짓이 돼요(codex 0135 비차단)
+    if (res.pairs.length) {
+      console.log(`pairs (A=${res.orders[0]}, B=${res.orders[1]}): aFail_bOk / aOk_bFail / bothFail / bothOk`);
+      for (const p of res.pairs) console.log(`  ${p.model.padEnd(8)} ${String(p.param).padEnd(5)} q${String(p.q).padEnd(5)} ${p.aFail_bOk} / ${p.aOk_bFail} / ${p.bothFail} / ${p.bothOk}`);
+    } else {
+      console.log(`pairs: 없음(orders ${res.orders.join('/')} — 단일 order 는 대응 표본이 없어요)`);
+    }
     process.exit(0);
   }
   const res = runProbe(args);
