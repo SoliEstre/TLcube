@@ -185,6 +185,7 @@ export function layoutX({ layoutId, N, c = 0 } = {}) {
   if (layoutId === 'lee-fo-v1') return layoutLeeFo(N, c);
   if (layoutId === 'x8-gpt-v1') {
     if (N !== undefined && N !== X8_GPT_V1_N) throw new RangeError('x8-gpt-v1 은 N=8 전용이에요');
+    if (c !== 0) throw new RangeError('x8-gpt-v1 은 c=0 고정이에요(표형 — 다른 잔여류를 조용히 무시하지 않아요)');
     return layoutX8Gpt();
   }
   throw new RangeError(`알 수 없는 layoutId: ${layoutId}`);

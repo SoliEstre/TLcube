@@ -99,6 +99,8 @@ test('layoutX 분기와 범위 오류', () => {
   assert.equal(layoutX({ layoutId: 'lee-fo-v1', N: 10, c: 0 }).digits, 271);
   assert.equal(layoutX({ layoutId: 'x8-gpt-v1' }).digits, 134);
   assert.throws(() => layoutX({ layoutId: 'x8-gpt-v1', N: 10 }), RangeError);
+  assert.throws(() => layoutX({ layoutId: 'x8-gpt-v1', N: 8, c: 1 }), /c=0/); // 표형은 다른 잔여류를 조용히 무시하지 않아요
+  assert.equal(layoutX({ layoutId: 'x8-gpt-v1', N: 8, c: 0 }).digits, 134);
   assert.throws(() => layoutX({ layoutId: 'nope', N: 8 }), RangeError);
   assert.throws(() => layoutLeeFo(3, 0), RangeError);
   assert.throws(() => layoutLeeFo(8, 7), RangeError);

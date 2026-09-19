@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { symbolCountForByteLength } from '../src/base211.js';
 import { H_BINARY } from '../src/h-profile.js';
-import { X_PROFILES, X_PROFILE_IDS, xProfile, assertXProfile, xProfileLayout, xLevelsTemplate } from '../src/x-profile.js';
+import { X_PROFILES, X_PROFILE_IDS, xProfile, assertXProfile, xProfileLayout, xLevelsTemplate, xProfileDto } from '../src/x-profile.js';
 import { xCapacity, xNsymFor, encodeX, decodeX, xDigitFromLevels, X_ERASED } from '../src/x-codec.js';
 
 function rng(seed) {
@@ -23,6 +23,40 @@ test('x-profile — 유한 registry 와 거절', () => {
   const levels = xLevelsTemplate(l0);
   assert.equal(levels.length, 512);
   assert.equal([...levels].filter(v => v === 1).length, 74); // 중심만 on
+});
+
+test('x-profile — 상속 키·비문자열·필드 누락은 미지로 거절(codex 2233)', () => {
+  for (const bad of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', '', 0, null, undefined, {}]) {
+    assert.throws(() => xProfile(bad), RangeError, `xProfile(${String(bad)})`);
+    assert.throws(() => assertXProfile({ profileId: bad, ecc: 'M' }), RangeError, `assertXProfile(${String(bad)})`);
+  }
+  // 필드가 빠진 객체(undefined === undefined 로 통과하던 회귀)
+  assert.throws(() => assertXProfile({ profileId: 'X0', ecc: 'M' }), /strict/);
+  const { layoutId, ...missingLayout } = { ...X_PROFILES.X0 };
+  assert.throws(() => assertXProfile(missingLayout), /layoutId/);
+  assert.throws(() => assertXProfile({ ...X_PROFILES.X0, schemaVersion: 'TLcube:X:profile:v9' }), /schemaVersion/);
+  // 정상: registry 원본 + 입력 ecc
+  assert.deepEqual(assertXProfile({ ...X_PROFILES.X0, ecc: 'H' }), { ...X_PROFILES.X0, ecc: 'H' });
+  assert.equal(typeof xProfile('X0').label, 'string');
+});
+
+test('x-profile — blind DTO 는 다섯 키 allowlist 만', () => {
+  assert.deepEqual(xProfileDto('X0g'), { profileId: 'X0g', layoutId: 'x8-gpt-v1', N: 8, c: 0, tones: 2 });
+  assert.deepEqual(Object.keys(xProfileDto({ ...X_PROFILES.X1, ecc: 'L' })), ['profileId', 'layoutId', 'N', 'c', 'tones']);
+  assert.throws(() => xProfileDto('__proto__'), RangeError);
+});
+
+test('x-profile — 구조 지문은 ECC 무관, 프로파일 지문은 ECC 별로 달라요', () => {
+  const m = xProfileLayout({ ...X_PROFILES.X0, ecc: 'M' });
+  const h = xProfileLayout({ ...X_PROFILES.X0, ecc: 'H' });
+  assert.equal(m.structureCanonical, h.structureCanonical);
+  assert.equal(m.rawCanonical, h.rawCanonical);
+  assert.notEqual(m.profileCanonical, h.profileCanonical);
+  assert.ok(m.profileCanonical.includes('"ecc":"M"') && m.profileCanonical.includes('"toneCodebookId":"tl-binary"'));
+  // 문자열 경로 = registry 기본 ecc(M)
+  assert.equal(xProfileLayout('X0').profileCanonical, m.profileCanonical);
+  // 다른 레이아웃은 구조부터 달라요
+  assert.notEqual(xProfileLayout('X0').structureCanonical, xProfileLayout('X0g').structureCanonical);
 });
 
 test('xNsymFor — H 절차(M 홀수화)', () => {
