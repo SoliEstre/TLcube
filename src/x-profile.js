@@ -91,6 +91,8 @@ export function xProfileLayout(profileOrId, options = {}) {
   const finderSpec = finderId === null ? null : xFinderSpec(raw.N, finderId);
   // 실효 spec(codex 0308): 중심과 겹친 구조 사이트는 인코더가 상시 on(tones−1) 으로 실으므로 nominal 비트를 실효값으로 덮고 overrides 로 기록 — 지문·검출기 진리는 실효값
   const finderSpecEffective = finderSpec ? xFinderEffective(finderSpec, centres, base.tones - 1) : null;
+  // search-v1 워드 표에 없는 워드 슬롯은 «중심(실효 1)» 일 때만 허용 — 아니면 표가 이 레이아웃을 덮지 못하는 것(거절, 조용한 타이밍 대체 없음)
+  if (finderSpec && finderSpec.wordTableMissing.some(id => !centres.has(id))) throw new RangeError(`finderId ${finderId}: 워드 표에 없는 비중심 워드 슬롯 ${finderSpec.wordTableMissing.filter(id => !centres.has(id)).slice(0, 6).join(',')}`);
   // 예약 = 구조 사이트 중 중심이 아닌 것(중심은 상시 on 이라 예약 불필요 — 모티프 표시만 그 자리에서 깨져요, 리포트 05 §2). 잔여 사이트는 탈락 없이 예약.
   const reservedSet = new Set(finderSpec ? finderSpec.structureSites.filter(id => !centres.has(id)) : []);
   const droppedTriples = [];

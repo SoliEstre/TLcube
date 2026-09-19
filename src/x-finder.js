@@ -17,6 +17,8 @@
  *   코너는 세 모서리에 공유돼요 — 집합은 중복 제거.
  */
 
+import { X_FINDER_WORDS_V1, X_FINDER_WORDS_V1_ID } from './x-finder-words-v1.js';
+
 export const X_FINDER_SCHEMA = 'TLcube:X:finder:v0';
 export const X_FINDER_WORD_RULE = 'timing-alt-v0';
 
@@ -26,6 +28,10 @@ export const X_FINDER_PATTERNS = Object.freeze({
   'edge-m1s3-v0': Object.freeze({ m: 1, s: 3, phase: 0, symmetric: false, note: '희소 — 모티프 1, 워드 간격 3, 한 방향 stride(N8 lee-fo 140→114 · N10 271→244)' }),
   // symmetric: 워드 위치 = 낮은 코너 쪽 stride ∪ 높은 코너 쪽 stride(양끝 union) — 옛 buildGeom 정의(codex 0308): N8 → 114 · N10 → 234(종합 «희소 234» 재현)
   'edge-m1s3sym-v0': Object.freeze({ m: 1, s: 3, phase: 0, symmetric: true, note: '희소 — 모티프 1, 워드 간격 3, 양끝 stride union(N8 140→114 · N10 271→234)' }),
+  // -w1: 같은 사이트 집합·예약·용량, 워드 «값» 만 탐색 표(x-finder-words-v1.js, F 지도 고정 비트 모순·면 경계 읽기 최적화)로 — 방향·면 ID 연구 후보(rd-3)
+  'edge-m1s3-w1': Object.freeze({ base: 'edge-m1s3-v0', wordRule: X_FINDER_WORDS_V1_ID, note: 'edge-m1s3-v0 사이트 + search-v1 워드(N8 8/8/2 · N10 은 한 방향 stride 라 proper 0 잔존)' }),
+  'edge-m1s3sym-w1': Object.freeze({ base: 'edge-m1s3sym-v0', wordRule: X_FINDER_WORDS_V1_ID, note: 'edge-m1s3sym-v0 사이트 + search-v1 워드(N8 8/8/2 · N10 26/24/8)' }),
+  'edge-all-w1': Object.freeze({ base: 'edge-all-v0', wordRule: X_FINDER_WORDS_V1_ID, note: 'edge-all-v0 사이트 + search-v1 워드(N8 8/8/2 · N10 26/20/7)' }),
 });
 export const X_FINDER_IDS = Object.freeze(Object.keys(X_FINDER_PATTERNS));
 
@@ -34,7 +40,9 @@ const describeId = id => (typeof id === 'string' ? JSON.stringify(id) : `<${type
 /** 파인더 패턴 조회 — 문자열 + 자기 키만(프로토타입 체인·비문자열 거절) */
 export function xFinderPattern(finderId) {
   if (typeof finderId !== 'string' || !Object.hasOwn(X_FINDER_PATTERNS, finderId)) throw new RangeError(`알 수 없는 finderId: ${describeId(finderId)}`);
-  return X_FINDER_PATTERNS[finderId];
+  const p = X_FINDER_PATTERNS[finderId];
+  if (p.base) { const b = xFinderPattern(p.base); return { ...b, base: p.base, wordRule: p.wordRule, note: p.note }; } // 변형 = base 기하 + 다른 워드 규칙
+  return { ...p, base: null, wordRule: X_FINDER_WORD_RULE };
 }
 
 /** siteId = (x·N + y)·N + z (계약 X.2) */
@@ -95,8 +103,17 @@ export function xFinderSpec(N, finderId) {
     return { axis: e.axis, fixed: e.fixed, positions };
   });
   const structureSites = [...new Set([...corners, ...motif, ...word])].sort((a, b) => a - b);
+  // 워드 «값» 규칙: 기본 timing-alt-v0(위 계산) / search-v1 = N 별 표(x-finder-words-v1). 표에 없는 워드 슬롯은 1 로 두고 wordTableMissing 에 기록 — x-profile 이 «그 슬롯이 중심(실효 1)인가» 를 검증해요(조용한 타이밍 대체 없음)
+  const wordTableMissing = [];
+  if (pat.wordRule === X_FINDER_WORDS_V1_ID) {
+    const byN = X_FINDER_WORDS_V1[pat.base]?.[N];
+    if (!byN) throw new RangeError(`finderId ${finderId}: N${N} 워드 표가 없어요(search-v1 은 ${Object.keys(X_FINDER_WORDS_V1[pat.base] ?? {}).join('/') || '없음'})`);
+    const tbl = new Map(byN);
+    for (const id of word) { if (tbl.has(id)) levels.set(id, tbl.get(id)); else { wordTableMissing.push(id); levels.set(id, 1); } }
+    for (const e of edges) for (const p of e.positions) if (p.role === 'word') p.bit = levels.get(p.siteId);
+  }
   return {
-    schema: X_FINDER_SCHEMA, finderId, N, m, s, phase, symmetric: Boolean(symmetric), wordRule: X_FINDER_WORD_RULE,
+    schema: X_FINDER_SCHEMA, finderId, N, m, s, phase, symmetric: Boolean(symmetric), wordRule: pat.wordRule, base: pat.base ?? null, wordTableMissing,
     corners: [...corners].sort((a, b) => a - b), motif: [...motif].sort((a, b) => a - b), word: [...word].sort((a, b) => a - b),
     structureSites, levels, edges,
   };
@@ -104,7 +121,7 @@ export function xFinderSpec(N, finderId) {
 
 /** 정본 문자열(구조 지문용) — 사이트 집합과 레벨만(설명 문구 제외) */
 export function xFinderCanonical(spec) {
-  return JSON.stringify({ schema: spec.schema, finderId: spec.finderId, N: spec.N, m: spec.m, s: spec.s, phase: spec.phase, symmetric: spec.symmetric, wordRule: spec.wordRule, effective: Boolean(spec.effective), sites: spec.structureSites.map(id => [id, spec.levels.get(id)]) });
+  return JSON.stringify({ schema: spec.schema, finderId: spec.finderId, base: spec.base ?? null, N: spec.N, m: spec.m, s: spec.s, phase: spec.phase, symmetric: spec.symmetric, wordRule: spec.wordRule, effective: Boolean(spec.effective), sites: spec.structureSites.map(id => [id, spec.levels.get(id)]) });
 }
 
 /**

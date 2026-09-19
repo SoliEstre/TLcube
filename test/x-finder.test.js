@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { xEdges, xFinderSpec, xFinderPattern, xFinderCanonical, xFinderEffective, X_FINDER_IDS, X_FINDER_PATTERNS } from '../src/x-finder.js';
+import { X_FINDER_WORDS_V1, X_FINDER_WORDS_V1_PROVENANCE } from '../src/x-finder-words-v1.js';
 import { xProfileLayout, xProfile, xProfileDto, X_FINDERS } from '../src/x-profile.js';
 import { xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { layoutX } from '../src/x-layout.js';
@@ -47,7 +48,7 @@ test('xFinderSpec — 패턴별 구조 사이트 수·역할 분리·레벨 규�
       if (m >= 1) { assert.equal(e.positions[1].role, 'motif'); assert.equal(e.positions[1].bit, 0); assert.equal(e.positions[N - 2].bit, 0); }
       for (const p of e.positions) if (p.role !== 'data') assert.equal(spec.levels.get(p.siteId), p.bit);
     }
-    assert.equal(spec.wordRule, 'timing-alt-v0');
+    assert.equal(spec.wordRule, xFinderPattern(id).wordRule);
     assert.equal(typeof xFinderCanonical(spec), 'string');
   }
   assert.throws(() => xFinderSpec(8, 'edge-none'), /finderId/);
@@ -155,4 +156,64 @@ test('symmetric 후보·실효 spec(codex 0308) — edge-m1s3sym-v0 N8 114 / N10
   const nomTable = Object.fromEntries(X1.finderSpec.structureSites.map(id => [id, X1.finderSpec.levels.get(id)]));
   for (const ov of X1.finderSpecEffective.overrides) assert.equal(nomTable[ov.siteId], 0);
   assert.throws(() => xFinderEffective(xFinderSpec(8, 'edge-all-v0'), null), TypeError);
+});
+
+// F 지도 궤도 최소 고정 비트 모순(DESIGN_006 §6.1 정의 압축판 — 'd' 는 세지 않음)
+function orbitMin(L) {
+  const N = L.raw.N, total = N ** 3, eff = L.finderSpecEffective;
+  const known = new Uint8Array(total), bits = new Uint8Array(total);
+  for (const id of eff.structureSites) { known[id] = 1; bits[id] = eff.levels.get(id); }
+  const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+  let minP = Infinity, minI = Infinity;
+  for (const p of perms) for (const sx of [1, -1]) for (const sy of [1, -1]) for (const sz of [1, -1]) {
+    if (p.join('') === '012' && sx === 1 && sy === 1 && sz === 1) continue;
+    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; const sg = [sx, sy, sz]; for (let r = 0; r < 3; r += 1) M[r][p[r]] = sg[r];
+    const det = M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+    let c = 0;
+    for (let id = 0; id < total; id += 1) {
+      if (!known[id]) continue;
+      const x = Math.floor(id / (N * N)), y = Math.floor(id / N) % N, z = id % N; const v = [2 * x - (N - 1), 2 * y - (N - 1), 2 * z - (N - 1)];
+      const w = [0, 1, 2].map(r => M[0][r] * v[0] + M[1][r] * v[1] + M[2][r] * v[2]); const cc = w.map(q => (q + (N - 1)) / 2); const src = (cc[0] * N + cc[1]) * N + cc[2];
+      if (known[src] && bits[src] !== bits[id]) c += 1;
+    }
+    if (det === 1) minP = Math.min(minP, c); else minI = Math.min(minI, c);
+  }
+  return { minProper: minP, minImproper: minI };
+}
+
+test('-w1 워드 변형 — base 와 사이트·예약·용량 동일, 워드 값만 표 · 궤도 최소 모순이 기록된 탐색 점수와 일치(N8 S3 안정자 깨짐) · 누락 슬롯은 중심만 · 거절', () => {
+  const pairs = [['edge-m1s3-w1', 'edge-m1s3-v0'], ['edge-m1s3sym-w1', 'edge-m1s3sym-v0'], ['edge-all-w1', 'edge-all-v0']];
+  for (const [w, b] of pairs) {
+    const pat = xFinderPattern(w); assert.equal(pat.base, b); assert.equal(pat.wordRule, 'search-v1'); assert.equal(xFinderPattern(b).wordRule, 'timing-alt-v0');
+    for (const pid of ['X0', 'X0g', 'X1']) {
+      const LW = xProfileLayout(pid, { finderId: w }), LB = xProfileLayout(pid, { finderId: b });
+      assert.deepEqual(LW.finderSpec.structureSites, LB.finderSpec.structureSites); assert.deepEqual(LW.reservedSites, LB.reservedSites); assert.equal(LW.digits, LB.digits);
+      assert.deepEqual(LW.reservedTriples, LB.reservedTriples);
+      const wordSet = new Set(LW.finderSpec.word);
+      for (const id of LW.finderSpec.structureSites) if (!wordSet.has(id)) assert.equal(LW.finderSpecEffective.levels.get(id), LB.finderSpecEffective.levels.get(id), '워드 외 레벨 불변 site ' + id);
+      const centres = new Set(LW.raw.cells.map(c => c.centre));
+      for (const id of LW.finderSpec.wordTableMissing) assert.ok(centres.has(id), '누락 슬롯은 중심만');
+      assert.notEqual(LW.structureCanonical, LB.structureCanonical); assert.ok(LW.reservations.finder.includes('"wordRule":"search-v1"'));
+      // 인코더 레벨 = 실효 표
+      const enc = encodeX('q', pid, { ecc: 'M', finderId: w });
+      for (const [id, lv] of LW.finderLevels) assert.equal(enc.levels[id], lv);
+      assert.ok(decodeX({ levels: enc.levels }, pid, { ecc: 'M', finderId: w }).ok);
+    }
+  }
+  // 기록된 점수 재계산(탐색한 프로파일: N8 = X0, N10 = X1) — 표가 실제로 그 최소 모순을 내는지 잠금; timing base 는 N8 에서 0/0
+  for (const p of X_FINDER_WORDS_V1_PROVENANCE) {
+    const w = p.base.replace('-v0', '-w1');
+    const L = xProfileLayout(p.profileSearched, { finderId: w });
+    const o = orbitMin(L);
+    assert.equal(o.minProper, p.best.minProper, w + ' ' + p.profileSearched + ' minProper'); assert.equal(o.minImproper, p.best.minImproper, w + ' minImproper');
+  }
+  const o0 = orbitMin(xProfileLayout('X0', { finderId: 'edge-m1s3-v0' })); assert.equal(o0.minProper, 0); assert.equal(o0.minImproper, 0);
+  assert.ok(orbitMin(xProfileLayout('X0', { finderId: 'edge-m1s3-w1' })).minProper >= 8);
+  // X0g 이식(N8 표): 0 보다 큼(안정자 깨짐) — 값은 X0 와 다를 수 있음
+  const og = orbitMin(xProfileLayout('X0g', { finderId: 'edge-m1s3-w1' })); assert.ok(og.minProper > 0 && og.minImproper > 0);
+  // N10 한 방향 stride 는 워드로 못 깨는 proper 회전이 남아요(문서화된 한계)
+  assert.equal(orbitMin(xProfileLayout('X1', { finderId: 'edge-m1s3-w1' })).minProper, 0);
+  assert.ok(orbitMin(xProfileLayout('X1', { finderId: 'edge-m1s3sym-w1' })).minProper >= 20);
+  assert.throws(() => xFinderSpec(6, 'edge-m1s3-w1'), /워드 표/);
+  assert.ok(Object.isFrozen(X_FINDER_WORDS_V1));
 });
