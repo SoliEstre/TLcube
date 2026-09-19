@@ -7,12 +7,15 @@
  * 잠정값이라 이름으로 명시해요.
  */
 import { layoutX, xOrderedTriples, xLayoutCanonical, xScanOrderCanonical, X_SCAN_ORDER_IDS } from './x-layout.js';
+import { xFinderSpec, xFinderCanonical, X_FINDER_IDS } from './x-finder.js';
 
 export const X_PROFILE_SCHEMA = 'TLcube:X:profile:v0';
 export const X_TONE_CODEBOOKS = Object.freeze(['tl-binary', 'tl-lehmer']);
 /** registry 의 정식 값은 'cell-order-v0' 뿐이에요. 'morton-v0' 는 rd-4 연구 후보 — `xProfileLayout(id, {scanOrderId})` 연구 override 로만 쓰고 DTO/registry 로는 안 나가요. */
 export const X_SCAN_ORDERS = X_SCAN_ORDER_IDS;
 export const X_MASKS = Object.freeze(['identity-v0']);
+/** 파인더 패턴 id — 연구 옵션(rd-3). registry 기본 finderId 는 null(예약 0, v0 와이어 불변) */
+export const X_FINDERS = X_FINDER_IDS;
 
 const BASE = Object.freeze({
   schemaVersion: X_PROFILE_SCHEMA, tones: 2, ecc: 'M', toneCodebookId: 'tl-binary',
@@ -78,19 +81,32 @@ export function xProfileLayout(profileOrId, options = {}) {
   // 연구 override(rd-4): scanOrderId 만 바꿔 «같은 registry 프로파일의 다른 심볼 묶음» 을 실제 코덱으로 비교해요. registry·DTO 는 그대로예요.
   const scanOrderId = options.scanOrderId === undefined ? base.scanOrderId : options.scanOrderId; // null 도 «명시된 잘못된 값» — ?? 로 삼키지 않아요
   if (!X_SCAN_ORDERS.includes(scanOrderId)) throw new RangeError(`scanOrderId 는 ${X_SCAN_ORDERS.join('/')} 중 하나여야 해요`);
-  const profile = { ...base, scanOrderId };
+  // 연구 override(rd-3): finderId — 파인더 구조 사이트를 예약하고 그 사이트를 품은 트리플은 «whole-group 탈락»(계약 X.5: 실제 예약 siteId 집합 + 탈락 목록이 계약).
+  // undefined 만 «registry 값»(기본 null = 예약 0). null 은 명시 «예약 없음», 그 외는 X_FINDERS 안이어야 해요.
+  const finderId = options.finderId === undefined ? base.finderId : options.finderId;
+  if (finderId !== null && !X_FINDERS.includes(finderId)) throw new RangeError(`finderId 는 null 또는 ${X_FINDERS.join('/')} 중 하나여야 해요`);
+  const profile = { ...base, scanOrderId, finderId };
   const raw = layoutX({ layoutId: profile.layoutId, N: profile.N, c: profile.c });
-  const triples = xOrderedTriples(raw, scanOrderId);
+  const centres = new Set(raw.cells.map(cell => cell.centre));
+  const finderSpec = finderId === null ? null : xFinderSpec(raw.N, finderId);
+  // 예약 = 구조 사이트 중 중심이 아닌 것(중심은 상시 on 이라 예약 불필요 — 모티프 표시만 그 자리에서 깨져요, 리포트 05 §2). 잔여 사이트는 탈락 없이 예약.
+  const reservedSet = new Set(finderSpec ? finderSpec.structureSites.filter(id => !centres.has(id)) : []);
+  const droppedTriples = [];
+  const kept = { ...raw, cells: raw.cells.map(cell => ({ ...cell, triples: cell.triples.filter(t => { const hit = t.some(id => reservedSet.has(id)); if (hit) droppedTriples.push(t); return !hit; }) })) };
+  const triples = xOrderedTriples(kept, scanOrderId);
   const rawCanonical = xLayoutCanonical(raw);
-  const scanOrderCanonical = xScanOrderCanonical(raw, scanOrderId);
-  const structure = { schema: X_PROFILE_SCHEMA, profileId: profile.profileId, layout: rawCanonical, reservations: [], scanOrderId, scanOrder: scanOrderCanonical, maskId: profile.maskId };
+  const scanOrderCanonical = xScanOrderCanonical(kept, scanOrderId);
+  const reservations = finderSpec ? { finderId, finder: xFinderCanonical(finderSpec), reservedSites: [...reservedSet].sort((a, b) => a - b), droppedTriples, structureOnCentres: finderSpec.structureSites.filter(id => centres.has(id)) } : [];
+  const structure = { schema: X_PROFILE_SCHEMA, profileId: profile.profileId, layout: rawCanonical, reservations, scanOrderId, scanOrder: scanOrderCanonical, maskId: profile.maskId };
   const structureCanonical = JSON.stringify(structure);
   const profileCanonical = JSON.stringify({
     ...structure, ecc: profile.ecc, tones: profile.tones, toneCodebookId: profile.toneCodebookId,
     finderId: profile.finderId, formatId: profile.formatId, observation: profile.observation,
   });
+  // finderLevels: 파인더 구조 사이트의 v0 레벨(중심 제외 — 중심은 xLevelsTemplate 가 톤 최대로). 인코더가 데이터 레벨 뒤에 덮어써요.
+  const finderLevels = new Map(finderSpec ? [...finderSpec.levels].filter(([id]) => !centres.has(id)) : []);
   return {
-    profile, raw, triples, reservedTriples: [], reservations: [], digits: triples.length,
+    profile, raw, triples, reservedTriples: droppedTriples, reservations, reservedSites: [...reservedSet].sort((a, b) => a - b), finderId, finderSpec, finderLevels, digits: triples.length,
     rawCanonical, scanOrderCanonical, structureCanonical, profileCanonical,
   };
 }
