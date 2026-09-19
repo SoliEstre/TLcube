@@ -9,6 +9,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { X_PROFILES, X_PROFILE_IDS } from '../src/x-profile.js';
 
 export const MANIFEST_SCHEMA_VERSION = 1;
 export const MAX_MANIFEST_BYTES = 32 * 1024 * 1024;
@@ -27,11 +28,11 @@ const SAMPLE_STATUSES = new Set(['pending', 'available', 'unsupported', 'not-app
 const STAGE_STATUSES = new Set(['pending', 'unsupported', 'not-applicable', 'unimplemented', 'not-run', 'completed']);
 const SPLITS = new Set(['exploration', 'fixed-regression', 'holdout']);
 const LAYOUTS = new Set(['x8-gpt-v1', 'lee-fo-v1']);
-const PROFILE_REGISTRY = Object.freeze({
-  X0: Object.freeze({ N: 8, c: 0, layoutId: 'lee-fo-v1' }),
-  X0g: Object.freeze({ N: 8, c: 0, layoutId: 'x8-gpt-v1' }),
-  X1: Object.freeze({ N: 10, c: 0, layoutId: 'lee-fo-v1' }),
-});
+// Structural registry (N/c/layoutId) is derived from the producer `src/x-profile.js` — a hand copy drifts silently when
+// X2 lands (integration commit). The closed DTO checks below (exact keys, tones 2/3, candidate cap) stay local on purpose.
+const PROFILE_REGISTRY = Object.freeze(Object.fromEntries(X_PROFILE_IDS.map((id) => [
+  id, Object.freeze({ N: X_PROFILES[id].N, c: X_PROFILES[id].c, layoutId: X_PROFILES[id].layoutId }),
+])));
 const ID_RE = /^[A-Za-z0-9_.:-]{1,64}$/;
 
 function fail(pathName, message) {
@@ -111,6 +112,9 @@ function assertId(value, pathName) {
 
 function assertProfile(profile, pathName, layoutId = null) {
   assertExactKeys(profile, new Set(['profileId', 'N', 'c', 'tones']), ['profileId', 'N', 'c', 'tones'], pathName);
+  // String check BEFORE any registry lookup: arrays, boxed Strings and toString/Symbol.toPrimitive objects were coerced by
+  // ToPropertyKey and their conversion functions ran (REPORT_005). The message never interpolates the value.
+  if (typeof profile.profileId !== 'string') fail(`${pathName}.profileId`, 'must be a string');
   const expected = Object.hasOwn(PROFILE_REGISTRY, profile.profileId) ? PROFILE_REGISTRY[profile.profileId] : null;
   if (!expected) fail(`${pathName}.profileId`, 'is not in the v1 profile registry');
   if (profile.N !== expected.N || profile.c !== expected.c) fail(pathName, 'does not match its bounded profile registry entry');

@@ -4,6 +4,7 @@
  * 이 모듈은 검출기나 진실값을 받지 않아요. 모든 시간값은 같은 세션 단조 시계의
  * 밀리초여야 하고, 관측의 siteId는 검출기가 추론한 출력일 뿐 blind 입력이 아니에요.
  */
+import { X_PROFILES, X_PROFILE_IDS } from './x-profile.js';
 
 export const X_OBSERVER_LIMITS = Object.freeze({
   SCHEMA_VERSION: 1,
@@ -35,11 +36,11 @@ const STATE_REASONS = Object.freeze({
   unknown: new Set(['unknown', 'overlap', 'saturated', 'ghost']),
   missing: new Set(['occluded', 'outOfView']),
 });
-const PROFILE_REGISTRY = Object.freeze({
-  X0: Object.freeze({ N: 8, c: 0, layoutId: 'lee-fo-v1' }),
-  X0g: Object.freeze({ N: 8, c: 0, layoutId: 'x8-gpt-v1' }),
-  X1: Object.freeze({ N: 10, c: 0, layoutId: 'lee-fo-v1' }),
-});
+// 구조 registry(N/c/layoutId) 는 producer `x-profile.js` 에서 «유도» — 손 사본이면 X2 추가 때 조용히 어긋나요(통합 커밋, RT 합의).
+// 외부 DTO 의 폐쇄형 자기 키 검사·tones 2/3·active 후보 ≤2 는 여기 그대로예요(xProfileDto 로 대체하지 않음 — 3톤 관측 연구 경로 보존).
+const PROFILE_REGISTRY = Object.freeze(Object.fromEntries(X_PROFILE_IDS.map((id) => [
+  id, Object.freeze({ N: X_PROFILES[id].N, c: X_PROFILES[id].c, layoutId: X_PROFILES[id].layoutId }),
+])));
 
 function fail(Type, message) { throw new Type(message); }
 function object(value, name) {
@@ -94,7 +95,10 @@ function assertProfile(profile, name, confidenceRequired) {
   const requiredKeys = ['profileId', 'layoutId', 'N', 'c', 'tones'];
   if (confidenceRequired) requiredKeys.push('confidence');
   required(profile, requiredKeys, name);
-  const registry = PROFILE_REGISTRY[profile.profileId];
+  // registry 조회 «전에» 문자열 검사 — 배열·boxed String·toString/Symbol.toPrimitive 객체가 ToPropertyKey 로 강제 변환돼 통과하고
+  // 변환 함수까지 실행되던 결함(REPORT_005). 메시지에 값을 보간하지 않아요(호출 0).
+  if (typeof profile.profileId !== 'string') fail(TypeError, `${name}.profileId 는 문자열이어야 해요`);
+  const registry = Object.hasOwn(PROFILE_REGISTRY, profile.profileId) ? PROFILE_REGISTRY[profile.profileId] : null;
   if (!registry) fail(RangeError, `${name}.profileId 는 유한 registry 밖이에요`);
   if (profile.layoutId !== registry.layoutId) fail(RangeError, `${name}.layoutId 가 profile과 맞지 않아요`);
   integer(profile.N, `${name}.N`, 1, 1_000);
