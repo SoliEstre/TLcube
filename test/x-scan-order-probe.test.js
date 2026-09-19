@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS } from '../tools/x-scan-order-probe.mjs';
+import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS, REAL_STAGES, classifyStage } from '../tools/x-scan-order-probe.mjs';
 import { xProfileLayout } from '../src/x-profile.js';
-import { xNsymFor } from '../src/x-codec.js';
+import { xNsymFor, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { makeRng, cameraFromFov } from '../tools/x-synth-render.mjs';
 
 const key = t => t.join(',');
@@ -77,6 +77,10 @@ test('assertProbeOptions — 실행 전 거절: trials ∞/0/과대 · q 범위 
   assert.throws(() => assertProbeOptions({ ...base, unknownMode: 'magic' }), /unknownMode/);
   assert.throws(() => assertProbeOptions({ ...base, trials: 20000, q: '0,0.01,0.02,0.03', dropoutP: '0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08', blocks: '1,2,3,4' }), /총 작업량/);
   assert.throws(() => runRealProbe({ profile: 'X0', trials: Infinity }), /trials/);
+  assert.throws(() => runRealProbe({ profile: 'X0', trials: 2, erasureReserve: 2 }), /erasureReserve/); // --real 은 reserve 를 decodeX 에 안 넘겨요 — 거짓 표기 금지
+  assert.throws(() => runRealProbe({ profile: 'X0', trials: 2, crc: 'crc32' }), /crc/);
+  assert.throws(() => runRealProbe({ profile: 'X0', trials: 2, rngSplit: 'maybe' }), /rngSplit/);
+  assert.doesNotThrow(() => runRealProbe({ profile: 'X0', trials: 2, erasureReserve: 0, dropoutP: '0.01', blobR: '1.5', q: '0' }));
   // 기본(대리지표) 진입점도 같은 검사를 지나요 — trials 0/∞, 거대 목록, q 목록(legacy 는 scalar) 전부 실행 전 거절
   assert.throws(() => runProbe({ profile: 'X0', trials: Infinity }), /trials/);
   assert.throws(() => runProbe({ profile: 'X0', trials: 0 }), /trials/);
@@ -103,6 +107,59 @@ test('runRealProbe — 유효 본문 실복호: q=0·작은 dropout 은 실패 0
   assert.deepEqual(applyEvent('dropout', 0.1, ev, ctx, lit1), applyEvent('dropout', 0.1, ev, ctx, lit0));
   assert.deepEqual(applyEvent('blob', 2, ev, ctx, lit1), applyEvent('blob', 2, ev, ctx, lit0));
   assert.ok(applyEvent('view', 2.5, ev, ctx, lit1).reduce((x, y) => x + y, 0) >= applyEvent('view', 2.5, ev, ctx, lit0).reduce((x, y) => x + y, 0));
+});
+
+test('runRealProbe --crc / --rngSplit — CRC 모드는 verified 까지 성공 조건, payload 26 B; rngSplit 은 payload 길이가 달라도 같은 물리 사건', () => {
+  const base = { profile: 'X0', trials: 8, seed: 5, dropoutP: '0.02', blobR: '2.5', minSep: 2.5, q: '0.01', unknownMode: 'oracle' };
+  const off = runRealProbe(base), on = runRealProbe({ ...base, crc: true });
+  assert.equal(off.crc, null); assert.equal(on.crc, 'x-crc32c-v0'); assert.equal(on.payloadBytes, 26); assert.equal(off.payloadBytes, 30);
+  assert.equal(on.successCriterion.includes('verified'), true);
+  for (const r of on.rows) { assert.equal(r.crc, 'x-crc32c-v0'); assert.ok(Number.isInteger(r.crcRejects)); assert.equal(r.wrongText, 0, 'CRC 모드에서 조용한 오답은 0 이어야 해요'); }
+  for (const r of off.rows) assert.equal(r.crcRejects, null);
+  // rngSplit: on(26 B)/off(30 B) 가 «같은 물리 사건» 을 공유하는지 사건 digest 배열로 실제 비교(codex 0125) — 기본(단일 스트림)은 길이가 바뀌면 사건이 달라져요
+  const offS = runRealProbe({ ...base, rngSplit: true }), onS = runRealProbe({ ...base, rngSplit: true, crc: true });
+  assert.equal(offS.rngSplit, true); assert.equal(onS.rngSplit, true);
+  for (let i = 0; i < offS.outcomes.length; i += 1) assert.deepEqual(onS.outcomes[i].eventDigests, offS.outcomes[i].eventDigests, `사건 digest ${i}`);
+  assert.notDeepEqual(on.outcomes[0].eventDigests, off.outcomes[0].eventDigests, '단일 스트림은 길이가 다르면 사건이 달라요');
+  // 단계 enum·회계: 각 행 stages 합 = trials, ok 수 = trials − fails, on 모드 inconsistent 0, crcStageTrials 길이 = crcRejects
+  for (const r of [...on.rows, ...off.rows]) {
+    assert.equal(Object.values(r.stages).reduce((x, y) => x + y, 0), r.trials);
+    assert.equal(r.stages.ok, Math.round(r.trials * (1 - r.pFail)));
+  }
+  for (const r of on.rows) { assert.equal(r.inconsistent, 0); assert.equal(r.crcStageTrials.length, r.crcRejects); }
+  assert.deepEqual(on.stageEnum, REAL_STAGES);
+  assert.equal(on.outcomes[0].perTrialStage.length, 8);
+  // --payloadBytes: 양 arm 동일 본문 길이(순수 비교), 범위 검사; --orders 단일이면 pairs 없음
+  const same = runRealProbe({ ...base, payloadBytes: 26 });
+  assert.equal(same.payloadMode, 'fixed-override'); assert.equal(same.payloadBytes, 26); assert.equal(on.payloadMode, 'max-capacity-of-mode');
+  assert.throws(() => runRealProbe({ ...base, crc: true, payloadBytes: 27 }), /payloadBytes/);
+  const single = runRealProbe({ ...base, orders: 'cell-order-v0' });
+  assert.deepEqual(single.orders, ['cell-order-v0']); assert.equal(single.pairs.length, 0); assert.ok(single.rows.every(r => r.orderId === 'cell-order-v0'));
+  assert.throws(() => runRealProbe({ ...base, orders: 'zigzag' }), /orders/);
+  // 문서화된 기본값: rngSplit 없음 = 기존 결과와 바이트 동일(결정성 보존)
+  assert.deepEqual(runRealProbe(base).rows, off.rows);
+});
+
+test('classifyStage — decodeX 결과를 단계 enum 으로', () => {
+  assert.equal(classifyStage({ ok: true, text: 'a', verified: true }, 'a', true), 'ok');
+  assert.equal(classifyStage({ ok: true, text: 'a', verified: false }, 'a', false), 'ok');
+  assert.equal(classifyStage({ ok: true, text: 'a', verified: false }, 'a', true), 'other');
+  assert.equal(classifyStage({ ok: true, text: 'b' }, 'a', false), 'wrongText');
+  for (const s of ['erasure-budget', 'rs', 'bytes', 'unframe', 'length', 'padding', 'crc', 'utf8']) assert.equal(classifyStage({ ok: false, stage: s, reason: 'x' }, 'a', true), s);
+  // reason 만 있고 stage 가 없거나 미지면 엄격히 'other'(rs fallback 없음)
+  assert.equal(classifyStage({ ok: false, reason: '소거 14 > nsym 13' }, 'a', false), 'other');
+  assert.equal(classifyStage({ ok: false, stage: 'mystery', reason: 'x' }, 'a', false), 'other');
+  assert.equal(classifyStage({ ok: false, stage: 'ok', reason: 'x' }, 'a', false), 'other');
+  // 실제 decodeX 실패 반환은 전부 명시 stage 를 실어요
+  const cap = xCapacity('X0');
+  const enc = encodeX('stage', 'X0');
+  const tooMany = Array.from(enc.levels);
+  for (let i = 0; i <= cap.nsym; i += 1) tooMany[cap.layout.triples[i * 3][0]] = null;
+  assert.equal(decodeX({ levels: tooMany }, 'X0').stage, 'erasure-budget');
+  const digits = Array.from(enc.digits);
+  for (let s = 0; s < cap.symbols; s += 1) digits[s * 3] = (digits[s * 3] + 3) % 6; // 전 심볼 오류 → RS 실패(또는 오정정 → bytes/unframe 단계) — 어쨌든 명시 stage
+  const wrecked = decodeX({ digits }, 'X0');
+  assert.ok(wrecked.ok || REAL_STAGES.includes(wrecked.stage), JSON.stringify(wrecked));
 });
 
 test('runProbe — 작은 실행이 행 수·필드·결정성을 지켜요', () => {

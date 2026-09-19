@@ -24,8 +24,11 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { xProfileLayout, xProfile } from '../src/x-profile.js';
 import { xNsymFor, xDigitFromLevels, X_ERASED, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
+import { packCellDigitsToSymbols } from '../src/base211.js';
+import { X_CRC_ID } from '../src/x-crc.js';
 import { xSiteCoord } from '../src/x-layout.js';
 import { H_BINARY } from '../src/h-profile.js';
 import { xCameraLookAt, xProjectSites, xOverlapMask } from '../src/x-project.js';
@@ -278,12 +281,30 @@ function randomText(rng, bytes) {
 export function runRealProbe(opts) {
   const o = { ...DEFAULTS, q: '0,0.01', unknownMode: 'oracle', ...opts };
   const { qs, dropout, blob } = assertProbeOptions(o);
+  // erasureReserve 는 이 경로에서 decodeX 로 전달하지 않아요 — 메타에만 남으면 거짓 표기가 되니(codex 0056) 0/미지정 외엔 거절
+  if (o.erasureReserve !== undefined && o.erasureReserve !== 0) throw new RangeError('erasureReserve 는 --real 경로 미지원(decodeX 에 전달하지 않음) — 0 또는 미지정만');
+  // --crc: 프레임 CRC 옵션(rd-5 연구) 을 encode/decode 양쪽에 «명시 전달» — 성공 판정은 ok ∧ text === GT ∧ verified. CLI 는 'true'/'false' 문자열로 와요.
+  const crcRaw = o.crc === 'true' ? true : o.crc === 'false' ? false : o.crc;
+  if (crcRaw !== undefined && crcRaw !== false && crcRaw !== true && crcRaw !== X_CRC_ID) throw new RangeError(`crc 는 true/false/'${X_CRC_ID}' 만`);
+  const crcOpt = (crcRaw === true || crcRaw === X_CRC_ID) ? { crc: X_CRC_ID } : {};
+  // --rngSplit: payload 본문과 물리 사건(dropout 난수·blob 중심·시선·반전 난수)을 «다른 RNG 스트림» 에서 뽑아요 — payload 길이(예: CRC 로 30→26 B)가 바뀌어도
+  // 같은 seed/trial 이 같은 물리 사건이 되게(codex 0118 on/off 대응 표본 설계). 기본 false = 기존 단일 스트림(D-3/D-3b 원자료 재현성 보존).
+  const rngSplitRaw = o.rngSplit === 'true' ? true : o.rngSplit === 'false' ? false : o.rngSplit;
+  if (rngSplitRaw !== undefined && rngSplitRaw !== true && rngSplitRaw !== false) throw new RangeError('rngSplit 은 true/false 만');
+  const rngSplit = rngSplitRaw === true;
+  // --orders: 후보 부분 집합(예: cell-order-v0 만 — cell-only 예산). 단일이면 pairs 는 비워요.
+  const orders = o.orders === undefined ? [...REAL_ORDERS] : String(o.orders).split(',').map(s => s.trim()).filter(Boolean);
+  if (orders.length < 1 || orders.length > REAL_ORDERS.length || new Set(orders).size !== orders.length || orders.some(id => !REAL_ORDERS.includes(id))) throw new RangeError(`orders 는 ${REAL_ORDERS.join('/')} 의 비어있지 않은 부분 집합`);
   const profile = xProfile(o.profile);
   const N = profile.N, sites = N ** 3;
   const camera = cameraFromFov({ width: o.width, height: o.height, fov: o.fov });
   const ctx = { N, sites, camera, dl: o.dl };
-  const caps = Object.fromEntries(REAL_ORDERS.map(id => [id, xCapacity(profile, { ecc: o.ecc, scanOrderId: id })]));
-  const payloadBytes = Math.min(...REAL_ORDERS.map(id => caps[id].payloadBytes));
+  const caps = Object.fromEntries(orders.map(id => [id, xCapacity(profile, { ecc: o.ecc, scanOrderId: id, ...crcOpt })]));
+  const maxPayload = Math.min(...orders.map(id => caps[id].payloadBytes));
+  // --payloadBytes: 양 arm 공통 본문 길이 override(순수 동일 본문 비교, 예: CRC on/off 를 26 B 로). 없으면 모드 최대 = «최대 용량 운용점 비교» 로 메타에 명시
+  if (o.payloadBytes !== undefined && (!Number.isInteger(o.payloadBytes) || o.payloadBytes < 1 || o.payloadBytes > maxPayload)) throw new RangeError(`payloadBytes 는 1…${maxPayload} 정수`);
+  const payloadBytes = o.payloadBytes === undefined ? maxPayload : o.payloadBytes;
+  const payloadMode = o.payloadBytes === undefined ? 'max-capacity-of-mode' : 'fixed-override';
   const models = [
     ...dropout.map(p => ({ model: 'dropout', param: p })),
     ...blob.map(r => ({ model: 'blob', param: r })),
@@ -293,16 +314,23 @@ export function runRealProbe(opts) {
   let modelIndex = 0;
   for (const { model, param } of models) {
     for (const q of qs) {
-      const rng = makeRng((o.seed * 1000003 + modelIndex * 101 + Math.round(q * 1000)) % 4294967296);
+      const streamSeed = (o.seed * 1000003 + modelIndex * 101 + Math.round(q * 1000)) % 4294967296;
+      const rng = makeRng(streamSeed);
+      // rngSplit: payload 는 별도 스트림(streamSeed 에 고정 오프셋), 사건은 기존 스트림 — 기본(false) 이면 둘 다 같은 rng(기존 동작)
+      const rngPayload = rngSplit ? makeRng((streamSeed + 0x5bd1e995) % 4294967296) : rng;
       modelIndex += 1;
-      const agg = Object.fromEntries(REAL_ORDERS.map(id => [id, { fails: 0, wrongText: 0, erasures: [], corrected: [], unobservedLit: [] }]));
+      const agg = Object.fromEntries(orders.map(id => [id, { fails: 0, wrongText: 0, erasures: [], corrected: [], unobservedLit: [], stages: Object.fromEntries(REAL_STAGES.map(s => [s, 0])), crcStageTrials: [], inconsistent: 0 }]));
       const perTrial = [];
+      const perTrialStage = []; // 단계 enum 인덱스(REAL_STAGES) — 거절 단계 분포·CRC 단계 trial 위치 복원용(codex 0125)
+      const eventDigests = []; // 물리 사건 digest(u·v·centre·az·el) — rngSplit 대응 표본 검증용
+      const wrongTextEvents = []; // 조용한 오답 사건은 trial·GT·복호 본문·RS 통계까지 보존(D-3 00:42: binary outcome 만으론 재현·진단 불가)
       for (let t = 0; t < o.trials; t += 1) {
-        const text = randomText(rng, payloadBytes);
+        const text = randomText(rngPayload, payloadBytes);
         const event = drawEvent(ctx, rng);
-        const outcome = {};
-        for (const orderId of REAL_ORDERS) {
-          const enc = encodeX(text, profile, { ecc: o.ecc, scanOrderId: orderId });
+        eventDigests.push(eventDigest(event));
+        const outcome = {}, stageOf = {};
+        for (const orderId of orders) {
+          const enc = encodeX(text, profile, { ecc: o.ecc, scanOrderId: orderId, ...crcOpt });
           const levels = enc.levels;
           const lit = Uint8Array.from(levels, x => (x > 0 ? 1 : 0));
           const U = applyEvent(model, param, event, ctx, lit);
@@ -316,40 +344,90 @@ export function runRealProbe(opts) {
               obs[s] = event.v[s] < q ? 1 - levels[s] : levels[s];
             }
           }
-          const dec = decodeX({ levels: obs }, profile, { ecc: o.ecc, scanOrderId: orderId });
-          const ok = dec.ok && dec.text === text;
+          const dec = decodeX({ levels: obs }, profile, { ecc: o.ecc, scanOrderId: orderId, ...crcOpt });
+          const ok = dec.ok && dec.text === text && (crcOpt.crc ? dec.verified === true : true);
           const a = agg[orderId];
           if (!ok) a.fails += 1;
-          if (dec.ok && dec.text !== text) a.wrongText += 1;
+          const stage = classifyStage(dec, text, Boolean(crcOpt.crc));
+          a.stages[stage] += 1;
+          stageOf[orderId] = REAL_STAGES.indexOf(stage);
+          if (stage === 'crc') { a.crcRejects = (a.crcRejects ?? 0) + 1; a.crcStageTrials.push(t); }
+          // on 모드 회계 모순: ok 인데 verified 가 아니거나, verified 인데 본문 불일치 — 0 이어야 하고 0 이 아니면 CRC 구현 결함 신호
+          if (crcOpt.crc && dec.ok && (dec.verified !== true || dec.text !== text)) a.inconsistent += 1;
+          if (dec.ok && dec.text !== text) {
+            a.wrongText += 1;
+            const nullCount = obs.reduce((n, v) => n + (v === null ? 1 : 0), 0);
+            // GF(211) 심볼 수준 e/s — «2s+e > nsym» 를 직접 입증(codex 0050): 수신 digit → 심볼로 묶어 GT 코드워드와 대조
+            const cap = caps[orderId];
+            const recvDigits = cap.layout.triples.map(tr => xDigitFromLevels(tr.map(s => obs[s])));
+            const used = recvDigits.slice(0, cap.symbols * 3);
+            let symbolErasures = 0, symbolErrors = 0;
+            const erasedSym = new Set();
+            used.forEach((d, i) => { if (!(Number.isInteger(d) && d >= 0 && d < 6)) erasedSym.add(Math.floor(i / 3)); });
+            const packed = packCellDigitsToSymbols(Uint8Array.from(used.map(d => (Number.isInteger(d) && d >= 0 && d < 6 ? d : 0))));
+            for (let i = 0; i < cap.symbols; i += 1) {
+              if (erasedSym.has(i) || packed.symbols[i] >= 211) symbolErasures += 1;
+              else if (packed.symbols[i] !== enc.codeword[i]) symbolErrors += 1;
+            }
+            wrongTextEvents.push({
+              model, param, q, orderId, trial: t, text, decoded: dec.text, payloadLength: dec.payloadLength,
+              erasures: dec.erasures, corrected: dec.corrected, nsym: cap.nsym,
+              symbolErasures, symbolErrors, budget: 2 * symbolErrors + symbolErasures, budgetExceeded: 2 * symbolErrors + symbolErasures > cap.nsym,
+              unobservedLit, unobservedSites: nullCount, flippedSites: obs.reduce((n, v, s) => n + (v !== null && v !== levels[s] ? 1 : 0), 0),
+            });
+          }
           if (dec.ok) { a.erasures.push(dec.erasures); a.corrected.push(dec.corrected); }
           a.unobservedLit.push(unobservedLit);
           outcome[orderId] = ok ? 1 : 0;
         }
         perTrial.push(outcome);
+        perTrialStage.push(stageOf);
       }
       const mean = arr => (arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null);
-      for (const orderId of REAL_ORDERS) {
+      for (const orderId of orders) {
         const a = agg[orderId];
         rows.push({
-          profile: o.profile, N, ecc: o.ecc, symbols: caps[orderId].symbols, nsym: caps[orderId].nsym, payloadBytes, model, param, q, unknownMode: o.unknownMode, orderId,
-          trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), wrongText: a.wrongText,
+          profile: o.profile, N, ecc: o.ecc, symbols: caps[orderId].symbols, nsym: caps[orderId].nsym, payloadBytes, payloadMode, model, param, q, unknownMode: o.unknownMode, orderId,
+          trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), wrongText: a.wrongText, crc: crcOpt.crc ?? null, crcRejects: crcOpt.crc ? (a.crcRejects ?? 0) : null,
+          stages: a.stages, inconsistent: crcOpt.crc ? a.inconsistent : null, crcStageTrials: crcOpt.crc ? a.crcStageTrials : null,
           meanErasuresWhenOk: a.erasures.length ? +mean(a.erasures).toFixed(2) : null, meanCorrectedWhenOk: a.corrected.length ? +mean(a.corrected).toFixed(2) : null,
           meanUnobservedLit: +mean(a.unobservedLit).toFixed(1),
         });
       }
-      const [A, B] = REAL_ORDERS;
-      const b = perTrial.filter(x => x[A] === 0 && x[B] === 1).length, c = perTrial.filter(x => x[A] === 1 && x[B] === 0).length;
-      pairs.push({ model, param, q, unknownMode: o.unknownMode, A, B, trials: o.trials, aFail_bOk: b, aOk_bFail: c, bothFail: perTrial.filter(x => x[A] === 0 && x[B] === 0).length, bothOk: perTrial.filter(x => x[A] === 1 && x[B] === 1).length });
-      outcomes.push({ model, param, q, perTrial: perTrial.map(x => REAL_ORDERS.map(id => x[id])) });
+      if (orders.length === 2) {
+        const [A, B] = orders;
+        const b = perTrial.filter(x => x[A] === 0 && x[B] === 1).length, c = perTrial.filter(x => x[A] === 1 && x[B] === 0).length;
+        pairs.push({ model, param, q, unknownMode: o.unknownMode, A, B, trials: o.trials, aFail_bOk: b, aOk_bFail: c, bothFail: perTrial.filter(x => x[A] === 0 && x[B] === 0).length, bothOk: perTrial.filter(x => x[A] === 1 && x[B] === 1).length });
+      }
+      outcomes.push({ model, param, q, orders: [...orders], perTrial: perTrial.map(x => orders.map(id => x[id])), perTrialStage: perTrialStage.map(x => orders.map(id => x[id])), stageEnum: [...REAL_STAGES], eventDigests, wrongTextEvents });
     }
   }
   return {
-    schemaVersion: 'TLcube:X:scan-order-real:v0', options: o, payloadBytes,
+    schemaVersion: 'TLcube:X:scan-order-real:v1', options: o, payloadBytes, payloadMode, orders: [...orders],
     // 실복호는 v0 단일 RS 블록 — options.blocks 는 이 경로에서 쓰이지 않아요(effectiveBlocks 1). CRC 는 TBD 라 «GT 본문 일치» 로 성공 판정(verified:false).
-    effectiveBlocks: 1, successCriterion: 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 는 pending)',
+    effectiveBlocks: 1, crc: crcOpt.crc ?? null, rngSplit, stageEnum: [...REAL_STAGES],
+    successCriterion: crcOpt.crc ? 'decodeX ok ∧ text === GT ∧ verified (도메인 결속 CRC 통과)' : 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 없음, verified:false)',
     orderDefinition: { 'cell-order-v0': 'cell centre siteId asc, triples in cell order', 'morton-v0': 'coordinate-sum (Σx,Σy,Σz) bit-interleave x→y→z 8 levels, ties by cell-order index, no rounding — xScanOrderCanonical golden' },
-    caps: Object.fromEntries(REAL_ORDERS.map(id => [id, { symbols: caps[id].symbols, nsym: caps[id].nsym }])), rows, pairs, outcomes,
+    caps: Object.fromEntries(orders.map(id => [id, { symbols: caps[id].symbols, nsym: caps[id].nsym, payloadBytes: caps[id].payloadBytes }])), rows, pairs, outcomes,
   };
+}
+
+/** 결과 단계 enum — 거절 «어느 단계» 를 trial 단위로 보존(codex 0125). 순서는 decodeX 파이프라인 순. */
+export const REAL_STAGES = Object.freeze(['ok', 'wrongText', 'erasure-budget', 'rs', 'bytes', 'length', 'padding', 'crc', 'utf8', 'unframe', 'other']);
+
+export function classifyStage(dec, gt, crcMode) {
+  if (dec.ok) return dec.text === gt ? (crcMode && dec.verified !== true ? 'other' : 'ok') : 'wrongText';
+  // decodeX 는 모든 실패에 명시 stage 를 실어요 — reason 문자열 파싱·rs fallback 없음(미지/누락 stage 는 'other' 로 엄격 분류, codex 0131)
+  return typeof dec.stage === 'string' && REAL_STAGES.includes(dec.stage) && dec.stage !== 'ok' && dec.stage !== 'wrongText' ? dec.stage : 'other';
+}
+
+/** 물리 사건 digest — u/v 난수·blob 중심·시선을 sha256 으로(대응 표본 검증: rngSplit on/off 에서 동일해야 함) */
+export function eventDigest(event) {
+  const h = createHash('sha256');
+  h.update(Buffer.from(event.u.buffer, event.u.byteOffset, event.u.byteLength));
+  h.update(Buffer.from(event.v.buffer, event.v.byteOffset, event.v.byteLength));
+  h.update(JSON.stringify([event.centre, event.azimuth, event.elevation]));
+  return h.digest('hex').slice(0, 16);
 }
 
 function parseArgs(argv) {
@@ -369,7 +447,8 @@ if (process.argv[1]?.endsWith('x-scan-order-probe.mjs')) {
     const res = runRealProbe(args);
     const outDir = resolve(args.out ?? 'test/output/x-scan-order');
     mkdirSync(outDir, { recursive: true });
-    const path = join(outDir, `${res.options.profile}_real_${res.options.unknownMode}_${res.options.ecc}_s${res.options.seed}_t${res.options.trials}.json`);
+    const tag = `${res.crc ? '_crc' : ''}${res.rngSplit ? '_split' : ''}`; // 파일명에 crc/rngSplit 을 실어 원자료 충돌·오표기 방지
+    const path = join(outDir, `${res.options.profile}_real_${res.options.unknownMode}_${res.options.ecc}_s${res.options.seed}_t${res.options.trials}${tag}.json`);
     writeFileSync(path, JSON.stringify(res, null, 1));
     console.log(`REAL profile ${res.options.profile} · payload ${res.payloadBytes} B · unknownMode ${res.options.unknownMode} · trials ${res.options.trials} → ${path}`);
     console.log('model      param  q      order          pFail   wrong  erasOk  corrOk  unobsLit');
