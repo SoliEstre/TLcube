@@ -51,7 +51,8 @@ function resolve(profileOrId, options = {}) {
  */
 export function xCapacity(profileOrId, options = {}) {
   const profile = resolve(profileOrId, options);
-  const layout = xProfileLayout(profile);
+  // options.scanOrderId = rd-4 연구 override(심볼 묶음 순서) — registry/DTO 불변, 같은 프로파일의 다른 와이어 순서를 실제 코덱으로 비교할 때만
+  const layout = xProfileLayout(profile, options.scanOrderId ? { scanOrderId: options.scanOrderId } : {});
   const digits = layout.digits;
   const symbols = Math.floor(digits / DIGITS_PER_SYMBOL);
   if (symbols > MAX_CODEWORD_LEN) throw new RangeError(`단일 RS 블록 한계(${MAX_CODEWORD_LEN})를 넘어요: ${symbols} — 다중 블록은 v1`);

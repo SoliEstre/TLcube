@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { scanOrders, blockOf, occlusionMask, trial, runProbe } from '../tools/x-scan-order-probe.mjs';
+import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS } from '../tools/x-scan-order-probe.mjs';
 import { xProfileLayout } from '../src/x-profile.js';
 import { xNsymFor } from '../src/x-codec.js';
 import { makeRng, cameraFromFov } from '../tools/x-synth-render.mjs';
@@ -59,6 +59,45 @@ test('trial — U 가 비면 실패 없음(q=0), 전부 미관측이면 모든 �
   assert.ok(Object.values(none).every(r => !r.fail && r.e.every(x => x === 0) && r.s.every(x => x === 0)));
   const all = trial({ orders, symbols, blocks: [1, 2], assignments: ['contiguous'], nsymFor, U: new Uint8Array(sites).fill(1), q: 0, rng: makeRng(1), sites });
   assert.ok(Object.values(all).every(r => r.fail && r.e.reduce((a, b) => a + b, 0) === symbols));
+});
+
+test('assertProbeOptions — 실행 전 거절: trials ∞/0/과대 · q 범위 · seed 범위 · blocks 비정수 · 총 작업 cap · unknownMode 어휘', () => {
+  const base = { profile: 'X0', trials: 10, seed: 1, blocks: '1', q: '0,0.01', dropoutP: '0.01', blobR: '1.5', width: 640, height: 480, fov: 40, dl: 3, minSep: 2.5 };
+  assert.doesNotThrow(() => assertProbeOptions(base));
+  assert.throws(() => assertProbeOptions({ ...base, trials: Infinity }), /trials/);
+  assert.throws(() => assertProbeOptions({ ...base, trials: 0 }), /trials/);
+  assert.throws(() => assertProbeOptions({ ...base, trials: 2.5 }), /trials/);
+  assert.throws(() => assertProbeOptions({ ...base, trials: 20001 }), /trials/);
+  assert.throws(() => assertProbeOptions({ ...base, q: '0,2' }), /q/);
+  assert.throws(() => assertProbeOptions({ ...base, q: 'abc' }), /q/);
+  assert.throws(() => assertProbeOptions({ ...base, seed: 5000 }), /seed/);
+  assert.throws(() => assertProbeOptions({ ...base, blocks: '1,2.5' }), /blocks/);
+  assert.throws(() => assertProbeOptions({ ...base, dropoutP: '0.01,NaN' }), /dropoutP/);
+  assert.throws(() => assertProbeOptions({ ...base, minSep: -1 }), /minSep/);
+  assert.throws(() => assertProbeOptions({ ...base, unknownMode: 'magic' }), /unknownMode/);
+  assert.throws(() => assertProbeOptions({ ...base, trials: 20000, q: '0,0.01,0.02,0.03', dropoutP: '0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08', blocks: '1,2,3,4' }), /총 작업량/);
+  assert.throws(() => runRealProbe({ profile: 'X0', trials: Infinity }), /trials/);
+});
+
+test('runRealProbe — 유효 본문 실복호: q=0·작은 dropout 은 실패 0, 결정적, pairs 합 = trials, wrongText 0, 공유 사건은 순서 무관', () => {
+  const opts = { profile: 'X0', trials: 12, seed: 5, dropoutP: '0.01', blobR: '1.5', minSep: 2.5, q: '0,0.01', unknownMode: 'oracle' };
+  const a = runRealProbe(opts), b = runRealProbe(opts);
+  assert.deepEqual(a.rows, b.rows);
+  assert.equal(a.rows.length, 3 * 2 * REAL_ORDERS.length); // 모델 3 × q 2 × 순서 2
+  for (const r of a.rows) { assert.ok(r.pFail >= 0 && r.pFail <= 1); assert.equal(r.wrongText, 0, '조용한 오답 금지'); assert.equal(r.trials, 12); }
+  for (const r of a.rows.filter(r => r.model === 'dropout' && r.q === 0)) assert.equal(r.pFail, 0, 'q=0·p=.01 은 소거 예산 안');
+  for (const p of a.pairs) assert.equal(p.aFail_bOk + p.aOk_bFail + p.bothFail + p.bothOk, 12);
+  assert.equal(a.outcomes.length, a.pairs.length);
+  // conservative 는 oracle 보다 실패가 같거나 많아요(미관측 소등 자리도 소거)
+  const c = runRealProbe({ ...opts, unknownMode: 'conservative' });
+  for (let i = 0; i < a.rows.length; i += 1) assert.ok(c.rows[i].pFail >= a.rows[i].pFail, `${a.rows[i].model} ${a.rows[i].q} ${a.rows[i].orderId}`);
+  // 공유 사건: 같은 event 를 같은 lit 에 적용하면 같은 U, dropout U 는 lit 과 무관
+  const ctx = { N: 8, sites: 512, camera: { model: 'pinhole-rectified', width: 640, height: 480, fx: 800, fy: 800, cx: 320, cy: 240 }, dl: 3 };
+  const ev = drawEvent(ctx, (() => { let i = 0; return () => ((i += 1) * 0.6180339887) % 1; })());
+  const lit1 = new Uint8Array(512).fill(1), lit0 = new Uint8Array(512);
+  assert.deepEqual(applyEvent('dropout', 0.1, ev, ctx, lit1), applyEvent('dropout', 0.1, ev, ctx, lit0));
+  assert.deepEqual(applyEvent('blob', 2, ev, ctx, lit1), applyEvent('blob', 2, ev, ctx, lit0));
+  assert.ok(applyEvent('view', 2.5, ev, ctx, lit1).reduce((x, y) => x + y, 0) >= applyEvent('view', 2.5, ev, ctx, lit0).reduce((x, y) => x + y, 0));
 });
 
 test('runProbe — 작은 실행이 행 수·필드·결정성을 지켜요', () => {

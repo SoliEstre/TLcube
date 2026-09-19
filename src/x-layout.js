@@ -199,8 +199,36 @@ export function xLayoutCanonical(layout) {
 }
 
 /** 순서 있는 트리플 전부(셀 순) — 코덱의 scan order 'cell-order-v0' 입력 */
-export function xOrderedTriples(layout) {
-  return layout.cells.flatMap(cell => cell.triples);
+export function xOrderedTriples(layout, scanOrderId = 'cell-order-v0') {
+  const cellOrder = layout.cells.flatMap(cell => cell.triples);
+  if (scanOrderId === 'cell-order-v0') return cellOrder;
+  if (scanOrderId === 'morton-v0') {
+    return cellOrder.map((t, i) => ({ t, i, k: mortonTripleKey(layout.N, t) }))
+      .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i)).map(o => o.t);
+  }
+  throw new RangeError(`알 수 없는 scanOrderId: ${typeof scanOrderId === 'string' ? JSON.stringify(scanOrderId) : `<${typeof scanOrderId}>`}`);
+}
+
+export const X_SCAN_ORDER_IDS = Object.freeze(['cell-order-v0', 'morton-v0']);
+
+/**
+ * `morton-v0` 키(rd-4 연구 후보) — 트리플 세 점의 **좌표 합** (sx,sy,sz) = Σ(x,y,z) (정수, 0…3(N−1); centroid×3 이라 반올림 없음) 의
+ * 비트 인터리브: 레벨 i 에서 x 비트 → 3i, y 비트 → 3i+1, z 비트 → 3i+2, 8 레벨(합 < 256 ⇔ N ≤ 86). 동률은 cell-order 인덱스.
+ * BigInt 로 24 비트 키. 이 정의와 `xScanOrderCanonical` 의 golden 이 계약이에요 — 이름만 같고 알고리즘이 바뀌면 hash 가 잡아요.
+ */
+export function mortonTripleKey(N, triple) {
+  const c = [0, 0, 0];
+  for (const s of triple) { const p = xSiteCoord(N, s); c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }
+  let key = 0n;
+  for (let i = 0; i < 8; i += 1) {
+    key |= (BigInt((c[0] >> i) & 1) << BigInt(3 * i)) | (BigInt((c[1] >> i) & 1) << BigInt(3 * i + 1)) | (BigInt((c[2] >> i) & 1) << BigInt(3 * i + 2));
+  }
+  return key;
+}
+
+/** scan order 정본 문자열 — orderedTriples «자체» 를 잠가요(scanOrderHash 의 입력) */
+export function xScanOrderCanonical(layout, scanOrderId = 'cell-order-v0') {
+  return JSON.stringify({ schema: 'TLcube:X:scan-order:v1', layoutId: layout.layoutId, N: layout.N, c: layout.c, scanOrderId, triples: xOrderedTriples(layout, scanOrderId) });
 }
 
 /**

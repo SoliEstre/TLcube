@@ -172,6 +172,29 @@ test('decodeX — 소거 nsym 개까지 복원, nsym+1 은 거부, 오류 t 개 
   assert.equal(fixed.corrected, t);
 });
 
+test('scanOrderId 연구 override — registry 는 cell-order-v0 그대로, morton-v0 는 다른 와이어(구조 지문 상이)로 왕복', () => {
+  assert.equal(xProfile('X0').scanOrderId, 'cell-order-v0');
+  const cell = xProfileLayout('X0'), morton = xProfileLayout('X0', { scanOrderId: 'morton-v0' });
+  assert.equal(morton.profile.scanOrderId, 'morton-v0');
+  assert.notEqual(cell.structureCanonical, morton.structureCanonical);
+  assert.equal(cell.rawCanonical, morton.rawCanonical);
+  assert.equal(morton.digits, cell.digits);
+  assert.throws(() => xProfileLayout('X0', { scanOrderId: 'nope' }), RangeError);
+  for (const id of ['X0', 'X1']) {
+    const capC = xCapacity(id), capM = xCapacity(id, { scanOrderId: 'morton-v0' });
+    assert.equal(capM.payloadBytes, capC.payloadBytes);
+    const text = 'morton-' + id;
+    const encC = encodeX(text, id), encM = encodeX(text, id, { scanOrderId: 'morton-v0' });
+    assert.deepEqual(Array.from(encM.codeword), Array.from(encC.codeword), '코드워드는 순서 무관');
+    assert.notDeepEqual(Array.from(encM.levels), Array.from(encC.levels), '사이트 레벨 배치는 달라요');
+    assert.equal(decodeX({ levels: encM.levels }, id, { scanOrderId: 'morton-v0' }).text, text);
+    assert.equal(decodeX({ levels: encC.levels }, id).text, text);
+    // 순서를 섞어 읽으면(morton 레벨을 cell-order 로) 복호가 실패하거나 다른 본문 — 조용한 오답은 아니어야 해요
+    const cross = decodeX({ levels: encM.levels }, id);
+    assert.ok(!cross.ok || cross.text !== text);
+  }
+});
+
 test('encodeX — 프로파일·용량 거절', () => {
   assert.throws(() => encodeX('x', 'X9'), RangeError);
   const cap = xCapacity('X0');

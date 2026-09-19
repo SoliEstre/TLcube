@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import {
-  layoutX, layoutLeeFo, layoutX8Gpt, validateXLayout, xLayoutCanonical, xOrderedTriples,
-  xSiteId, xSiteCoord, leeResidue, X_LAYOUT_IDS,
+  layoutX, layoutLeeFo, layoutX8Gpt, validateXLayout, xLayoutCanonical, xOrderedTriples, xScanOrderCanonical, mortonTripleKey,
+  xSiteId, xSiteCoord, leeResidue, X_LAYOUT_IDS, X_SCAN_ORDER_IDS,
 } from '../src/x-layout.js';
 
 const sha = text => createHash('sha256').update(text, 'utf8').digest('hex');
@@ -93,6 +93,38 @@ test('x8-gpt-v1 — 표형 회귀 배치 회계와 golden', () => {
   const i7 = layout.cells.filter(c => c.kind === 'I7');
   assert.ok(i7.every(c => { const p = xSiteCoord(8, c.centre); return p.every(x => x >= 1 && x <= 6) && leeResidue(p, 0) === 0; }));
   assert.equal(xOrderedTriples(layout).length, 134);
+});
+
+// rd-4 연구 후보 scan order 의 golden — orderedTriples «자체» 의 hash(xScanOrderCanonical). 정의: 좌표 합 (Σx,Σy,Σz) 비트 인터리브 x→y→z 8 레벨, 동률 cell-order 인덱스.
+const SCAN_ORDER_GOLDEN = Object.freeze([
+  { layoutId: 'lee-fo-v1', N: 8, c: 0, order: 'cell-order-v0', sha256: 'de7a8e2e9c8e078d344925ee47095200a962ffbfb18beeec0a593a031f0a8ca0' },
+  { layoutId: 'lee-fo-v1', N: 8, c: 0, order: 'morton-v0', sha256: 'd93473ef0f62844ed2543b442e6881b697a0825f5681f6d548c13e5890f1be3d' },
+  { layoutId: 'lee-fo-v1', N: 10, c: 0, order: 'cell-order-v0', sha256: '6fde79156b0419bfdeead4610803ac937a98df8694cf95b7e36b0f7dadc87cb7' },
+  { layoutId: 'lee-fo-v1', N: 10, c: 0, order: 'morton-v0', sha256: '267da2860707c706e37b557013c4dd8c7e78efedd6a74b1d2469286f8a1c89b5' },
+  { layoutId: 'x8-gpt-v1', N: 8, c: 0, order: 'cell-order-v0', sha256: 'c3133e5bac9a5a5042ebee218a3b5095f02f7b80c1c9294f54fa1fad938ef2a5' },
+  { layoutId: 'x8-gpt-v1', N: 8, c: 0, order: 'morton-v0', sha256: 'da42f47b7cb38bb5f7cda3c82213f46d602cdc1a22522dad876521d2e87aca3f' },
+]);
+
+test('scan order — cell-order-v0/morton-v0 golden 6종, 순열, 키 단조, 동률 규칙, 미지 거절', () => {
+  for (const g of SCAN_ORDER_GOLDEN) {
+    const layout = layoutX({ layoutId: g.layoutId, N: g.N, c: g.c });
+    assert.equal(sha(xScanOrderCanonical(layout, g.order)), g.sha256, `${g.layoutId} N${g.N} ${g.order}`);
+    const seq = xOrderedTriples(layout, g.order);
+    const base = xOrderedTriples(layout);
+    assert.equal(seq.length, base.length);
+    assert.deepEqual(new Set(seq.map(t => t.join(','))), new Set(base.map(t => t.join(','))), '순열');
+    if (g.order === 'morton-v0') {
+      const keys = seq.map(t => mortonTripleKey(g.N, t));
+      for (let i = 1; i < keys.length; i += 1) assert.ok(keys[i] >= keys[i - 1], '키 비감소');
+      // 동률(같은 키)은 cell-order 인덱스 순
+      const index = new Map(base.map((t, i) => [t.join(','), i]));
+      for (let i = 1; i < keys.length; i += 1) if (keys[i] === keys[i - 1]) assert.ok(index.get(seq[i].join(',')) > index.get(seq[i - 1].join(',')), '동률은 cell-order 인덱스');
+    }
+  }
+  assert.deepEqual([...X_SCAN_ORDER_IDS], ['cell-order-v0', 'morton-v0']);
+  assert.throws(() => xOrderedTriples(layoutLeeFo(8, 0), 'zigzag-v9'), RangeError);
+  // 좌표 합 키: (Σx,Σy,Σz) = (1,2,3) → 비트 인터리브 x bit0→0, y bit1→(3·1+1)=4, z bit0→2 · bit1→5 → 0b110101 = 53
+  assert.equal(mortonTripleKey(4, [xSiteId(4, [1, 0, 0]), xSiteId(4, [0, 2, 1]), xSiteId(4, [0, 0, 2])]), 53n);
 });
 
 test('layoutX 분기와 범위 오류', () => {

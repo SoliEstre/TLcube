@@ -6,11 +6,12 @@
  * hash 가 raw hash 와 갈라져요. scan order 'cell-order-v0' 와 mask 'identity-v0' 는 rd-4/마스크 결정 전
  * 잠정값이라 이름으로 명시해요.
  */
-import { layoutX, xOrderedTriples, xLayoutCanonical } from './x-layout.js';
+import { layoutX, xOrderedTriples, xLayoutCanonical, xScanOrderCanonical, X_SCAN_ORDER_IDS } from './x-layout.js';
 
 export const X_PROFILE_SCHEMA = 'TLcube:X:profile:v0';
 export const X_TONE_CODEBOOKS = Object.freeze(['tl-binary', 'tl-lehmer']);
-export const X_SCAN_ORDERS = Object.freeze(['cell-order-v0']);
+/** registry 의 정식 값은 'cell-order-v0' 뿐이에요. 'morton-v0' 는 rd-4 연구 후보 — `xProfileLayout(id, {scanOrderId})` 연구 override 로만 쓰고 DTO/registry 로는 안 나가요. */
+export const X_SCAN_ORDERS = X_SCAN_ORDER_IDS;
 export const X_MASKS = Object.freeze(['identity-v0']);
 
 const BASE = Object.freeze({
@@ -72,12 +73,17 @@ export function xProfileDto(profileOrId) {
  * 만이라 ECC 가 달라도 같고, `profileCanonical` 은 거기에 ecc·tones·코드북·finder/format·관측 profile 까지 더한 최종
  * 프로파일 지문이라 ECC L/M/H 가 서로 달라요. 코드북 호환성 비교는 structure, 왕복 재현성 비교는 profile 로 해요.
  */
-export function xProfileLayout(profileOrId) {
-  const profile = typeof profileOrId === 'string' ? xProfile(profileOrId) : assertXProfile(profileOrId);
+export function xProfileLayout(profileOrId, options = {}) {
+  const base = typeof profileOrId === 'string' ? xProfile(profileOrId) : assertXProfile(profileOrId);
+  // 연구 override(rd-4): scanOrderId 만 바꿔 «같은 registry 프로파일의 다른 심볼 묶음» 을 실제 코덱으로 비교해요. registry·DTO 는 그대로예요.
+  const scanOrderId = options.scanOrderId ?? base.scanOrderId;
+  if (!X_SCAN_ORDERS.includes(scanOrderId)) throw new RangeError(`scanOrderId 는 ${X_SCAN_ORDERS.join('/')} 중 하나여야 해요`);
+  const profile = { ...base, scanOrderId };
   const raw = layoutX({ layoutId: profile.layoutId, N: profile.N, c: profile.c });
-  const triples = xOrderedTriples(raw);
+  const triples = xOrderedTriples(raw, scanOrderId);
   const rawCanonical = xLayoutCanonical(raw);
-  const structure = { schema: X_PROFILE_SCHEMA, profileId: profile.profileId, layout: rawCanonical, reservations: [], scanOrderId: profile.scanOrderId, maskId: profile.maskId };
+  const scanOrderCanonical = xScanOrderCanonical(raw, scanOrderId);
+  const structure = { schema: X_PROFILE_SCHEMA, profileId: profile.profileId, layout: rawCanonical, reservations: [], scanOrderId, scanOrder: scanOrderCanonical, maskId: profile.maskId };
   const structureCanonical = JSON.stringify(structure);
   const profileCanonical = JSON.stringify({
     ...structure, ecc: profile.ecc, tones: profile.tones, toneCodebookId: profile.toneCodebookId,
@@ -85,7 +91,7 @@ export function xProfileLayout(profileOrId) {
   });
   return {
     profile, raw, triples, reservedTriples: [], reservations: [], digits: triples.length,
-    rawCanonical, structureCanonical, profileCanonical,
+    rawCanonical, scanOrderCanonical, structureCanonical, profileCanonical,
   };
 }
 
