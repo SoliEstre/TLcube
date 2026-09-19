@@ -115,6 +115,9 @@ export function encodeX(text, profileOrId, options = {}) {
  */
 export function decodeX(input, profileOrId, options = {}) {
   const cap = xCapacity(profileOrId, options);
+  // 옵션 검증은 입력과 무관하게 «먼저» — 조기 반환(e > nsym) 뒤에 검사하면 불량 옵션 거절이 입력별로 달라져요(codex 0056)
+  const reserve = options.erasureReserve ?? 0;
+  if (!Number.isInteger(reserve) || reserve < 0 || reserve >= cap.nsym) throw new RangeError(`erasureReserve 는 0…nsym−1 정수여야 해요: ${typeof reserve === 'number' ? reserve : `<${typeof reserve}>`}`);
   let digits;
   if (input && input.levels) {
     digits = cap.layout.triples.map(triple => xDigitFromLevels(triple.map(siteId => {
@@ -138,8 +141,6 @@ export function decodeX(input, profileOrId, options = {}) {
   if (erasures.length > cap.nsym) return { ok: false, reason: `소거 ${erasures.length} > nsym ${cap.nsym}`, erasures: erasures.length };
   // 연구 코덱 임시 가드(D-3 wrongText 사건, REPORT_003 §7): 소거가 패리티를 전부 먹으면(e = nsym) 남은 톤 오류를 검출할 여유가 0 이라
   // «일관되지만 틀린» 코드워드로 수렴할 수 있어요. options.erasureReserve(기본 0 = 현행) 만큼 여유를 남겨요 — 근본 처방은 rd-5 CRC.
-  const reserve = options.erasureReserve ?? 0;
-  if (!Number.isInteger(reserve) || reserve < 0 || reserve >= cap.nsym) throw new RangeError(`erasureReserve 는 0…nsym−1 정수여야 해요: ${reserve}`);
   if (erasures.length > cap.nsym - reserve) return { ok: false, reason: `소거 ${erasures.length} > nsym ${cap.nsym} − reserve ${reserve}`, erasures: erasures.length };
   const received = packed.symbols;
   for (const index of erasures) received[index] = 0;

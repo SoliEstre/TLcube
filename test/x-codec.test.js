@@ -223,6 +223,11 @@ test('decodeX erasureReserve — 기본 0 은 현행, reserve 는 e > nsym − r
   for (const symbolIndex of picked) { if (k >= cap.nsym - 2) break; fewer[cap.layout.triples[symbolIndex * 3][0]] = null; k += 1; }
   assert.ok(decodeX({ levels: fewer }, id, { erasureReserve: 2 }).ok);
   for (const bad of [-1, 1.5, cap.nsym, 'x']) assert.throws(() => decodeX({ levels: fewer }, id, { erasureReserve: bad }), RangeError, `reserve ${bad}`);
+  // 불량 옵션 거절은 입력과 무관(e > nsym 인 입력에서도 조기 반환 전에 throw)
+  const tooMany = Array.from(enc.levels);
+  for (let i = 0; i <= cap.nsym; i += 1) tooMany[cap.layout.triples[i * 3][0]] = null;
+  assert.equal(decodeX({ levels: tooMany }, id).ok, false);
+  assert.throws(() => decodeX({ levels: tooMany }, id, { erasureReserve: -1 }), RangeError);
 });
 
 test('encodeX — 프로파일·용량 거절', () => {

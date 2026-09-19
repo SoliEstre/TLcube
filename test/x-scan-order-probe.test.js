@@ -77,6 +77,8 @@ test('assertProbeOptions — 실행 전 거절: trials ∞/0/과대 · q 범위 
   assert.throws(() => assertProbeOptions({ ...base, unknownMode: 'magic' }), /unknownMode/);
   assert.throws(() => assertProbeOptions({ ...base, trials: 20000, q: '0,0.01,0.02,0.03', dropoutP: '0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08', blocks: '1,2,3,4' }), /총 작업량/);
   assert.throws(() => runRealProbe({ profile: 'X0', trials: Infinity }), /trials/);
+  assert.throws(() => runRealProbe({ profile: 'X0', trials: 2, erasureReserve: 2 }), /erasureReserve/); // --real 은 reserve 를 decodeX 에 안 넘겨요 — 거짓 표기 금지
+  assert.doesNotThrow(() => runRealProbe({ profile: 'X0', trials: 2, erasureReserve: 0, dropoutP: '0.01', blobR: '1.5', q: '0' }));
   // 기본(대리지표) 진입점도 같은 검사를 지나요 — trials 0/∞, 거대 목록, q 목록(legacy 는 scalar) 전부 실행 전 거절
   assert.throws(() => runProbe({ profile: 'X0', trials: Infinity }), /trials/);
   assert.throws(() => runProbe({ profile: 'X0', trials: 0 }), /trials/);

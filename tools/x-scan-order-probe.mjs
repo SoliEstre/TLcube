@@ -279,6 +279,8 @@ function randomText(rng, bytes) {
 export function runRealProbe(opts) {
   const o = { ...DEFAULTS, q: '0,0.01', unknownMode: 'oracle', ...opts };
   const { qs, dropout, blob } = assertProbeOptions(o);
+  // erasureReserve 는 이 경로에서 decodeX 로 전달하지 않아요 — 메타에만 남으면 거짓 표기가 되니(codex 0056) 0/미지정 외엔 거절
+  if (o.erasureReserve !== undefined && o.erasureReserve !== 0) throw new RangeError('erasureReserve 는 --real 경로 미지원(decodeX 에 전달하지 않음) — 0 또는 미지정만');
   const profile = xProfile(o.profile);
   const N = profile.N, sites = N ** 3;
   const camera = cameraFromFov({ width: o.width, height: o.height, fov: o.fov });
