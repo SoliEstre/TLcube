@@ -62,7 +62,18 @@ export function assertRenderOptions(o) {
   finitePos(o.kill, 'kill', { min: 0, max: 1 });
   if (!['none', 'front'].includes(o.occlusion)) throw new RangeError(`occlusion: ${o.occlusion}`);
   finitePos(o.seed, 'seed', { min: 0, max: RENDER_LIMITS.MAX_SEED, integer: true });
+  // codec: 코덱 연구 옵션 pass-through(codex 0308 — 안 넘기면 후보 평가가 기본 null 패턴을 렌더해요). 허용 키만, 값 검증은 코덱이(xCapacity 가 거절)
+  if (o.codec !== undefined) {
+    if (o.codec === null || typeof o.codec !== 'object' || Array.isArray(o.codec)) throw new RangeError('codec 은 객체({ecc, finderId, scanOrderId, crc})여야 해요');
+    for (const k of Object.keys(o.codec)) if (!CODEC_OPTION_KEYS.includes(k)) throw new RangeError(`codec 에 알 수 없는 키: ${k} (허용 ${CODEC_OPTION_KEYS.join('/')})`);
+  }
   return o;
+}
+
+/** 렌더 옵션 → 코덱 옵션(xCapacity/encodeX 에 그대로). o.ecc(구 인터페이스) 는 codec.ecc 로 합쳐요 */
+export const CODEC_OPTION_KEYS = Object.freeze(['ecc', 'finderId', 'scanOrderId', 'crc']);
+export function codecOptions(o) {
+  return { ...(o.codec ?? {}), ...(o.ecc !== undefined && (o.codec === undefined || o.codec.ecc === undefined) ? { ecc: o.ecc } : {}) };
 }
 
 /** mulberry32 — 결정적 PRNG. seed 는 uint32 정수만(1 과 4294967297 이 같은 열을 내는 alias 를 계약으로 막아요 — effectiveSeed = seed) */
@@ -155,10 +166,11 @@ function blurGaussian(img, width, height, sigma) {
 export function renderXSynth(opts) {
   const o = assertRenderOptions({ ...RENDER_DEFAULTS, ...opts });
   const profile = xProfile(o.profile);
-  if (o.ecc) profile.ecc = o.ecc;
-  const cap = xCapacity(profile);
+  const codec = codecOptions(o);
+  if (codec.ecc) profile.ecc = codec.ecc;
+  const cap = xCapacity(profile, codec);
   const text = o.text ?? 'https://tl.estre.so/x'.slice(0, cap.payloadBytes);
-  const enc = encodeX(text, profile);
+  const enc = encodeX(text, profile, codec);
   const N = cap.layout.raw.N;
   const levels = Uint8Array.from(enc.levels);
   const rng = makeRng(o.seed);
@@ -242,6 +254,8 @@ export function renderXSynth(opts) {
       seed: 'uint32 정수(effectiveSeed = seed, alias 없음) — split 간 동일 seed 는 동일 잡음',
     },
     profile: { ...xProfileDto(profile), ecc: profile.ecc },
+    // 실제로 인코드에 쓰인 코덱 옵션(연구 옵션 포함) — 후보 평가가 «무엇을 렌더했는가» 를 진리로 남겨요(codex 0308)
+    codec: { ecc: cap.ecc, finderId: cap.layout.finderId ?? null, scanOrderId: cap.scanOrderId, crc: cap.crc ?? null, reservedSites: cap.layout.reservedSites ?? [], digits: cap.digits },
     text, digits: Array.from(enc.digits), levels: Array.from(levels),
     pose: { R: pose.R, t: pose.t, azimuthDeg: o.az, elevationDeg: o.el, rollDeg: o.roll, distanceOverWidth: o.dl, distance: pose.distance, direction: pose.direction, pitch: 1 },
     camera, pitchPx, minSepPx: minSep,
@@ -268,9 +282,11 @@ export function sweepXDirections(opts) {
   const nAz = Math.ceil(360 / o.azStep), nEl = 2 * Math.floor(75 / o.elStep) + 1;
   if (nAz * nEl > RENDER_LIMITS.MAX_SWEEP_DIRECTIONS) throw new RangeError(`방향 수 ${nAz * nEl} 가 상한 ${RENDER_LIMITS.MAX_SWEEP_DIRECTIONS} 을 넘어요`);
   const profile = xProfile(o.profile);
-  const cap = xCapacity(profile);
+  const codec = codecOptions(o);
+  if (codec.ecc) profile.ecc = codec.ecc;
+  const cap = xCapacity(profile, codec);
   const N = cap.layout.raw.N;
-  const enc = encodeX(o.text ?? 'sweep'.padEnd(Math.min(cap.payloadBytes, 5), 'x'), profile);
+  const enc = encodeX(o.text ?? 'sweep'.padEnd(Math.min(cap.payloadBytes, 5), 'x'), profile, codec);
   const lit = Uint8Array.from(enc.levels, v => (v > 0 ? 1 : 0));
   const litCount = lit.reduce((a, b) => a + b, 0);
   const camera = cameraFromFov(o);
@@ -294,7 +310,7 @@ export function sweepXDirections(opts) {
     }
   }
   const bad = rows.filter(r => r.overlapFraction > 0.1).map(r => [r.azDeg, r.elDeg, r.overlapFraction]);
-  return { schemaVersion: X_SYNTH_SWEEP_SCHEMA, profile: xProfileDto(profile), litCount, camera, distanceOverWidth: o.dl, minSepPx: o.minSep, azStep: o.azStep, elStep: o.elStep, rows, badDirections: bad };
+  return { schemaVersion: X_SYNTH_SWEEP_SCHEMA, profile: xProfileDto(profile), codec: { ecc: cap.ecc, finderId: cap.layout.finderId ?? null, scanOrderId: cap.scanOrderId, crc: cap.crc ?? null, digits: cap.digits }, litCount, camera, distanceOverWidth: o.dl, minSepPx: o.minSep, azStep: o.azStep, elStep: o.elStep, rows, badDirections: bad };
 }
 
 function parseArgs(argv) {

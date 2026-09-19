@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { xEdges, xFinderSpec, xFinderPattern, xFinderCanonical, X_FINDER_IDS, X_FINDER_PATTERNS } from '../src/x-finder.js';
+import { xEdges, xFinderSpec, xFinderPattern, xFinderCanonical, xFinderEffective, X_FINDER_IDS, X_FINDER_PATTERNS } from '../src/x-finder.js';
 import { xProfileLayout, xProfile, xProfileDto, X_FINDERS } from '../src/x-profile.js';
 import { xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { layoutX } from '../src/x-layout.js';
@@ -125,4 +125,34 @@ test('codec finderId — 용량 재유도 · 인코드 레벨(코너 1·모티�
   assert.deepEqual(Array.from(a.levels), Array.from(b.levels));
   assert.equal(xCapacity('X0', { ecc: 'M' }).digits, 140);
   assert.throws(() => xCapacity('X0', { ecc: 'M', finderId: 'nope' }), /finderId/);
+});
+
+test('symmetric 후보·실효 spec(codex 0308) — edge-m1s3sym-v0 N8 114 / N10 234 · 중심 위 구조 사이트는 실효 1 · 지문은 실효값 · 인코드 레벨 = 실효', () => {
+  assert.equal(xFinderSpec(8, 'edge-m1s3sym-v0').structureSites.length, 56);
+  assert.equal(xFinderSpec(10, 'edge-m1s3sym-v0').structureSites.length, 80);
+  assert.equal(xProfileLayout('X0', { finderId: 'edge-m1s3sym-v0' }).digits, 114);
+  assert.equal(xProfileLayout('X1', { finderId: 'edge-m1s3sym-v0' }).digits, 234, '종합 «희소 234» = 양끝 stride union');
+  assert.equal(xProfileLayout('X1', { finderId: 'edge-m1s3-v0' }).digits, 244, '한 방향 stride 는 244 — 다른 후보');
+  for (const [pid, fid] of [['X1', 'edge-m1s3-v0'], ['X1', 'edge-all-v0'], ['X0', 'edge-all-v0'], ['X0g', 'edge-m1s3-v0']]) {
+    const L = xProfileLayout(pid, { finderId: fid });
+    const centres = new Set(L.raw.cells.map(c => c.centre));
+    const eff = L.finderSpecEffective, nom = L.finderSpec;
+    assert.equal(eff.effective, true); assert.equal(nom.effective, undefined);
+    assert.deepEqual(eff.structureSites, nom.structureSites, '사이트 집합·역할 불변');
+    assert.equal(eff.overrides.length, nom.structureSites.filter(id => centres.has(id) && nom.levels.get(id) !== 1).length);
+    for (const ov of eff.overrides) { assert.ok(centres.has(ov.siteId)); assert.equal(ov.effective, 1); assert.equal(ov.nominal, 0); assert.equal(eff.levels.get(ov.siteId), 1); }
+    for (const id of nom.structureSites) if (!centres.has(id)) assert.equal(eff.levels.get(id), nom.levels.get(id));
+    for (const e of eff.edges) for (const p of e.positions) if (p.role !== 'data') assert.equal(p.effectiveBit, eff.levels.get(p.siteId));
+    assert.deepEqual(L.reservations.overrides, eff.overrides);
+    assert.ok(L.reservations.finder.includes('"effective":true'));
+    // 인코더 실제 레벨 = 실효 spec(구조 사이트 전부, 중심 포함)
+    const enc = encodeX('z', pid, { ecc: 'M', finderId: fid });
+    for (const id of eff.structureSites) assert.equal(enc.levels[id], eff.levels.get(id), 'site ' + id);
+  }
+  // X1 m1s3: 문서의 예(site 109 모티프·site 499 워드 가 중심) — nominal 0, 실효 1
+  const X1 = xProfileLayout('X1', { finderId: 'edge-m1s3-v0' });
+  assert.ok(X1.finderSpecEffective.overrides.length > 0);
+  const nomTable = Object.fromEntries(X1.finderSpec.structureSites.map(id => [id, X1.finderSpec.levels.get(id)]));
+  for (const ov of X1.finderSpecEffective.overrides) assert.equal(nomTable[ov.siteId], 0);
+  assert.throws(() => xFinderEffective(xFinderSpec(8, 'edge-all-v0'), null), TypeError);
 });
