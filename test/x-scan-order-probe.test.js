@@ -4,6 +4,10 @@ import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, asse
 import { xProfileLayout, xProfile } from '../src/x-profile.js';
 import { xNsymFor, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { makeRng, cameraFromFov } from '../tools/x-synth-render.mjs';
+import { bytesToSymbols, unpackSymbolsToCellDigits } from '../src/base211.js';
+import { rsEncode } from '../src/rs211.js';
+import { H_BINARY } from '../src/h-profile.js';
+import { frameX } from '../src/x-crc.js';
 
 const key = t => t.join(',');
 
@@ -215,8 +219,27 @@ test('runRealProbe --symbolStats / --decodeCrc false — 심볼 상태 문자열
   for (let i = 0; i < on.outcomes.length; i += 1) {
     assert.deepEqual(b.outcomes[i].eventDigests, on.outcomes[i].eventDigests);
     assert.deepEqual(b.outcomes[i].perTrialSymbols, on.outcomes[i].perTrialSymbols, '같은 codeword·사건이면 RS 입력이 같아요');
-    // 검사는 정답 복호를 거절할 수 없어요: B ok ⇒ C ok (구성상) — 위반 0
-    for (let t = 0; t < 12; t += 1) if (b.outcomes[i].perTrial[t][0] === 1) assert.equal(on.outcomes[i].perTrial[t][0], 1, 'arm B 성공인데 arm C 실패 — CRC 검사가 정답을 거절');
+    // 방향 불변식(codex 0214): C ok ⇒ B ok(ASCII GT — 같은 RS 출력을 legacy 파서로 읽으면 같은 본문) · B ok ∧ C fail ⇒ C stage = crc(꼬리 청크+패리티만 바뀐 오정정은 L·본문이 그대로라 B 는 성공, C 는 저장 CRC 불일치로 정상 거절)
+    for (let t = 0; t < 12; t += 1) {
+      const vb = b.outcomes[i].perTrial[t][0], vc = on.outcomes[i].perTrial[t][0];
+      if (vc === 1) assert.equal(vb, 1, 'arm C 성공인데 arm B 실패 — 같은 RS 출력에서 legacy 파서가 실패');
+      if (vb === 1 && vc === 0) assert.equal(REAL_STAGES[on.outcomes[i].perTrialStage[t][0]], 'crc', 'B ok ∧ C fail 이면 C 는 crc 단계여야');
+    }
+  }
+  // 반례 구성(codex 0214): 유효 RS codeword 인데 CRC 4 B 만 다른 프레임 — legacy 파서(arm B)는 정답 본문으로 성공, CRC 파서(arm C)는 crc 단계 거절
+  {
+    const profile = xProfile('X0'), capOn = xCapacity(profile, { ecc: 'M', crc: 'x-crc32c-v0' });
+    const gt = 'abcdefghijklmnopqrstuvwxyz';
+    const framed = frameX(gt, capOn.dataBytes, capOn.crcDomain);
+    framed[1 + gt.length] ^= 0x5a; // CRC 첫 바이트 손상(L·본문 그대로)
+    const message = new Uint8Array(capOn.dataSymbols); message.set(bytesToSymbols(framed));
+    const codeword = rsEncode(message, capOn.nsym);
+    const digits = new Uint8Array(capOn.digits); digits.set(unpackSymbolsToCellDigits(codeword));
+    const levels = Array.from(encodeX(gt, profile, { ecc: 'M', crc: 'x-crc32c-v0' }).levels);
+    capOn.layout.triples.forEach((triple, i) => { const pat = H_BINARY[digits[i]]; triple.forEach((siteId, k) => { levels[siteId] = pat[k]; }); });
+    const legacy = decodeX({ levels }, profile, { ecc: 'M' }), strict = decodeX({ levels }, profile, { ecc: 'M', crc: 'x-crc32c-v0' });
+    assert.equal(legacy.ok, true); assert.equal(legacy.text, gt, 'arm B: 정답 본문');
+    assert.equal(strict.ok, false); assert.equal(strict.stage, 'crc', 'arm C: 저장 CRC 불일치 정상 거절');
   }
   // 거절·기본값: decodeCrc 는 crc 와 함께만, 'maybe' 거절, 기본 실행엔 perTrialSymbols 없음 + rows 바이트 동일
   assert.throws(() => runRealProbe({ ...base, decodeCrc: false }), /decodeCrc/);
