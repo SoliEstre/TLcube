@@ -297,6 +297,7 @@ export function runRealProbe(opts) {
       modelIndex += 1;
       const agg = Object.fromEntries(REAL_ORDERS.map(id => [id, { fails: 0, wrongText: 0, erasures: [], corrected: [], unobservedLit: [] }]));
       const perTrial = [];
+      const wrongTextEvents = []; // 조용한 오답 사건은 trial·GT·복호 본문·RS 통계까지 보존(D-3 00:42: binary outcome 만으론 재현·진단 불가)
       for (let t = 0; t < o.trials; t += 1) {
         const text = randomText(rng, payloadBytes);
         const event = drawEvent(ctx, rng);
@@ -320,7 +321,11 @@ export function runRealProbe(opts) {
           const ok = dec.ok && dec.text === text;
           const a = agg[orderId];
           if (!ok) a.fails += 1;
-          if (dec.ok && dec.text !== text) a.wrongText += 1;
+          if (dec.ok && dec.text !== text) {
+            a.wrongText += 1;
+            const nullCount = obs.reduce((n, v) => n + (v === null ? 1 : 0), 0);
+            wrongTextEvents.push({ model, param, q, orderId, trial: t, text, decoded: dec.text, payloadLength: dec.payloadLength, erasures: dec.erasures, corrected: dec.corrected, nsym: caps[orderId].nsym, unobservedLit, unobservedSites: nullCount, flippedSites: obs.reduce((n, v, s) => n + (v !== null && v !== levels[s] ? 1 : 0), 0) });
+          }
           if (dec.ok) { a.erasures.push(dec.erasures); a.corrected.push(dec.corrected); }
           a.unobservedLit.push(unobservedLit);
           outcome[orderId] = ok ? 1 : 0;
@@ -340,7 +345,7 @@ export function runRealProbe(opts) {
       const [A, B] = REAL_ORDERS;
       const b = perTrial.filter(x => x[A] === 0 && x[B] === 1).length, c = perTrial.filter(x => x[A] === 1 && x[B] === 0).length;
       pairs.push({ model, param, q, unknownMode: o.unknownMode, A, B, trials: o.trials, aFail_bOk: b, aOk_bFail: c, bothFail: perTrial.filter(x => x[A] === 0 && x[B] === 0).length, bothOk: perTrial.filter(x => x[A] === 1 && x[B] === 1).length });
-      outcomes.push({ model, param, q, perTrial: perTrial.map(x => REAL_ORDERS.map(id => x[id])) });
+      outcomes.push({ model, param, q, perTrial: perTrial.map(x => REAL_ORDERS.map(id => x[id])), wrongTextEvents });
     }
   }
   return {
