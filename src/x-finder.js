@@ -108,7 +108,7 @@ export function xFinderSpec(N, finderId) {
   if (pat.wordRule === X_FINDER_WORDS_V1_ID) {
     const byN = X_FINDER_WORDS_V1[pat.base]?.[N];
     if (!byN) throw new RangeError(`finderId ${finderId}: N${N} 워드 표가 없어요(search-v1 은 ${Object.keys(X_FINDER_WORDS_V1[pat.base] ?? {}).join('/') || '없음'})`);
-    const tbl = new Map(byN);
+    const tbl = xFinderValidateWordTable(N, byN, word, `${finderId} N${N}`);
     for (const id of word) { if (tbl.has(id)) levels.set(id, tbl.get(id)); else { wordTableMissing.push(id); levels.set(id, 1); } }
     for (const e of edges) for (const p of e.positions) if (p.role === 'word') p.bit = levels.get(p.siteId);
   }
@@ -119,9 +119,29 @@ export function xFinderSpec(N, finderId) {
   };
 }
 
+/**
+ * 닫힌 워드 표 검증(codex 0400 (4)) — 항목 [siteId, bit]: siteId 는 0…N³−1 정수 · bit 0/1 · 중복 0 · 이 패턴의 워드 슬롯 소속. 위반은 거절(조용한 전파 없음).
+ * @returns {Map<number,0|1>}
+ */
+export function xFinderValidateWordTable(N, table, wordSlots, label = 'word table') {
+  if (!Array.isArray(table)) throw new RangeError(`${label}: 워드 표는 배열이어야 해요`);
+  const total = N ** 3, map = new Map();
+  for (const entry of table) {
+    if (!Array.isArray(entry) || entry.length !== 2) throw new RangeError(`${label}: 항목은 [siteId, bit]`);
+    const [id, bit] = entry;
+    if (!Number.isInteger(id) || id < 0 || id >= total) throw new RangeError(`${label}: siteId ${String(id)} 범위 밖`);
+    if (bit !== 0 && bit !== 1) throw new RangeError(`${label}: site ${id} bit ${String(bit)} 은 0/1 이어야`);
+    if (map.has(id)) throw new RangeError(`${label}: site ${id} 중복`);
+    if (!wordSlots.has(id)) throw new RangeError(`${label}: site ${id} 는 이 패턴의 워드 슬롯이 아니에요`);
+    map.set(id, bit);
+  }
+  return map;
+}
+
 /** 정본 문자열(구조 지문용) — 사이트 집합과 레벨만(설명 문구 제외) */
 export function xFinderCanonical(spec) {
-  return JSON.stringify({ schema: spec.schema, finderId: spec.finderId, base: spec.base ?? null, N: spec.N, m: spec.m, s: spec.s, phase: spec.phase, symmetric: spec.symmetric, wordRule: spec.wordRule, effective: Boolean(spec.effective), sites: spec.structureSites.map(id => [id, spec.levels.get(id)]) });
+  // base 는 변형(-w1)에서만 정본에 실어요 — v0 후보의 finder/structure/profile 지문을 3c82e37 시점과 동일하게 보존(codex 0400 (3): additive 정본 변화도 명시적으로)
+  return JSON.stringify({ schema: spec.schema, finderId: spec.finderId, ...(spec.base ? { base: spec.base } : {}), N: spec.N, m: spec.m, s: spec.s, phase: spec.phase, symmetric: spec.symmetric, wordRule: spec.wordRule, effective: Boolean(spec.effective), sites: spec.structureSites.map(id => [id, spec.levels.get(id)]) });
 }
 
 /**

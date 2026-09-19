@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { xEdges, xFinderSpec, xFinderPattern, xFinderCanonical, xFinderEffective, X_FINDER_IDS, X_FINDER_PATTERNS } from '../src/x-finder.js';
+import { xEdges, xFinderSpec, xFinderPattern, xFinderCanonical, xFinderEffective, xFinderValidateWordTable, X_FINDER_IDS, X_FINDER_PATTERNS } from '../src/x-finder.js';
 import { X_FINDER_WORDS_V1, X_FINDER_WORDS_V1_PROVENANCE } from '../src/x-finder-words-v1.js';
 import { xProfileLayout, xProfile, xProfileDto, X_FINDERS } from '../src/x-profile.js';
 import { xCapacity, encodeX, decodeX } from '../src/x-codec.js';
@@ -216,4 +216,23 @@ test('-w1 워드 변형 — base 와 사이트·예약·용량 동일, 워드 �
   assert.ok(orbitMin(xProfileLayout('X1', { finderId: 'edge-m1s3sym-w1' })).minProper >= 20);
   assert.throws(() => xFinderSpec(6, 'edge-m1s3-w1'), /워드 표/);
   assert.ok(Object.isFrozen(X_FINDER_WORDS_V1));
+});
+
+test('codex 0400 — v0 정본에 base 없음(지문 보존) · -w1 정본에 base 있음 · 워드 표 deep-freeze · 닫힌 표 검증 거절 5종', () => {
+  const v0 = JSON.parse(xFinderCanonical(xFinderSpec(8, 'edge-m1s3-v0')));
+  assert.equal('base' in v0, false, 'v0 정본은 3c82e37 형태 그대로');
+  assert.deepEqual(Object.keys(v0), ['schema', 'finderId', 'N', 'm', 's', 'phase', 'symmetric', 'wordRule', 'effective', 'sites']);
+  const w1 = JSON.parse(xFinderCanonical(xFinderSpec(8, 'edge-m1s3-w1')));
+  assert.equal(w1.base, 'edge-m1s3-v0');
+  assert.equal(xProfileLayout('X0').reservations.length, 0);
+  assert.equal(xProfileLayout('X0', { finderId: 'edge-m1s3-v0' }).reservations.finder.includes('"base"'), false);
+  for (const byN of Object.values(X_FINDER_WORDS_V1)) for (const list of Object.values(byN)) { assert.ok(Object.isFrozen(list)); for (const pair of list) assert.ok(Object.isFrozen(pair)); }
+  const spec = xFinderSpec(8, 'edge-m1s3-v0'); const slots = new Set(spec.word); const okId = spec.word[0];
+  assert.deepEqual([...xFinderValidateWordTable(8, [[okId, 1]], slots)], [[okId, 1]]);
+  assert.throws(() => xFinderValidateWordTable(8, [[okId, 2]], slots), /0\/1/);
+  assert.throws(() => xFinderValidateWordTable(8, [[okId, 1], [okId, 0]], slots), /중복/);
+  assert.throws(() => xFinderValidateWordTable(8, [[spec.corners[0], 1]], slots), /워드 슬롯이 아니/);
+  assert.throws(() => xFinderValidateWordTable(8, [[512, 1]], slots), /범위/);
+  assert.throws(() => xFinderValidateWordTable(8, [[okId]], slots), /\[siteId, bit\]/);
+  assert.throws(() => xFinderValidateWordTable(8, { a: 1 }, slots), /배열/);
 });
