@@ -17,13 +17,22 @@ import {
 import { rsEncode, rsDecode, MAX_CODEWORD_LEN } from './rs211.js';
 import { H_BINARY, H_ECC_RATIOS } from './h-profile.js';
 import { xProfile, assertXProfile, xProfileLayout, xLevelsTemplate } from './x-profile.js';
+import { X_CRC_ID, X_CRC_BYTES, xCrcDomainBytes, xCrcMaxPayload, frameX, unframeX } from './x-crc.js';
 
 export const X_CODEC_SCHEMA = 'TLcube:X:codec:v0;header=1B;base211;rs211-single;tone2=H_BINARY;scan=cell-order-v0;mask=identity-v0;crc=TBD';
 export const X_ERASED = -1;
 
-/** 산출 스키마 문자열은 «실제 쓰인 scan order» 를 실어요 — 연구 override(morton-v0) 산출이 cell-order 라고 오표기되지 않게(codex REPORT_009) */
-export function xCodecSchema(scanOrderId = 'cell-order-v0') {
-  return X_CODEC_SCHEMA.replace('scan=cell-order-v0', `scan=${scanOrderId}`);
+/** 산출 스키마 문자열은 «실제 쓰인 scan order·CRC» 를 실어요 — 연구 override 산출이 기본값이라고 오표기되지 않게(codex REPORT_009) */
+export function xCodecSchema(scanOrderId = 'cell-order-v0', crc = null) {
+  return X_CODEC_SCHEMA.replace('scan=cell-order-v0', `scan=${scanOrderId}`).replace('crc=TBD', `crc=${crc ?? 'TBD'}`);
+}
+
+/** options.crc: undefined/false/null = 현행(CRC 없음, verified:false) · 'x-crc32c-v0' = 프레임 CRC(연구 옵션, 잠금 아님) · 그 외 거절 */
+function resolveCrc(options) {
+  const v = options.crc;
+  if (v === undefined || v === null || v === false) return null;
+  if (v === X_CRC_ID) return X_CRC_ID;
+  throw new RangeError(`crc 옵션은 '${X_CRC_ID}' 또는 미지정만이에요`);
 }
 
 /** H 와 같은 nsym 절차(L .12 · M .25 홀수화 · H .40) — NSYM_TABLE_X 로 잠그기 전의 유도식이에요. */
@@ -66,9 +75,14 @@ export function xCapacity(profileOrId, options = {}) {
   const dataSymbols = symbols - nsym;
   const dataBytes = dataBytesFor(dataSymbols);
   if (dataBytes <= HEADER_BYTES) throw new RangeError('헤더를 뺀 순 용량이 0 이에요');
+  const crc = resolveCrc(options);
+  const payloadBytes = crc ? xCrcMaxPayload(dataBytes) : dataBytes - HEADER_BYTES;
+  if (payloadBytes <= 0) throw new RangeError('CRC 를 뺀 순 용량이 0 이에요');
+  const p = layout.profile;
+  const crcDomain = crc ? xCrcDomainBytes({ profileId: p.profileId, layoutId: p.layoutId, N: p.N, c: p.c, scanOrderId: p.scanOrderId, toneCodebookId: p.toneCodebookId, maskId: p.maskId, ecc: profile.ecc }) : null;
   return {
-    profileId: profile.profileId, ecc: profile.ecc, scanOrderId: layout.profile.scanOrderId, digits, symbols, fillerDigits: digits - symbols * DIGITS_PER_SYMBOL,
-    nsym, dataSymbols, dataBytes, payloadBytes: dataBytes - HEADER_BYTES, layout,
+    profileId: profile.profileId, ecc: profile.ecc, scanOrderId: layout.profile.scanOrderId, crc, crcDomain, digits, symbols, fillerDigits: digits - symbols * DIGITS_PER_SYMBOL,
+    nsym, dataSymbols, dataBytes, payloadBytes, layout,
   };
 }
 
@@ -87,7 +101,7 @@ export function xDigitFromLevels(pattern) {
  */
 export function encodeX(text, profileOrId, options = {}) {
   const cap = xCapacity(profileOrId, options);
-  const framed = frame(text, cap.dataBytes);
+  const framed = cap.crc ? frameX(text, cap.dataBytes, cap.crcDomain) : frame(text, cap.dataBytes);
   const messageSymbols = bytesToSymbols(framed);
   if (messageSymbols.length > cap.dataSymbols) throw new RangeError('메시지 심볼이 데이터 심볼 수를 넘어요');
   const message = new Uint8Array(cap.dataSymbols);
@@ -101,7 +115,7 @@ export function encodeX(text, profileOrId, options = {}) {
     triple.forEach((siteId, k) => { levels[siteId] = pattern[k]; });
   });
   return {
-    schema: xCodecSchema(cap.layout.profile.scanOrderId), scanOrderId: cap.layout.profile.scanOrderId,
+    schema: xCodecSchema(cap.layout.profile.scanOrderId, cap.crc), scanOrderId: cap.layout.profile.scanOrderId, crc: cap.crc,
     profileId: cap.profileId, ecc: cap.ecc, N: cap.layout.raw.N, layoutId: cap.layout.raw.layoutId,
     nsym: cap.nsym, dataSymbols: cap.dataSymbols, dataBytes: cap.dataBytes, payloadLength: new TextEncoder().encode(text).length,
     messageSymbolCount: messageSymbols.length, codeword, digits, levels,
@@ -151,12 +165,19 @@ export function decodeX(input, profileOrId, options = {}) {
   try { framed = symbolsToBytes(decoded.message.subarray(0, messageSymbolCount), cap.dataBytes); }
   catch (error) { return { ok: false, reason: `symbols-to-bytes: ${error.message}`, erasures: erasures.length }; }
   let unframed;
-  try { unframed = unframe(framed); }
-  catch (error) { return { ok: false, reason: `unframe: ${error.message}`, erasures: erasures.length }; }
+  if (cap.crc) {
+    // 검증 순서(DESIGN_003 v2 §3): 길이/CRC 위치/패딩 → 원바이트 CRC(도메인 결속) → strict UTF-8 → verified:true
+    try { unframed = unframeX(framed, cap.crcDomain); }
+    catch (error) { return { ok: false, reason: `frameX ${error.stage ?? 'error'}: ${error.message}`, stage: error.stage ?? null, erasures: erasures.length }; }
+  } else {
+    try { unframed = unframe(framed); }
+    catch (error) { return { ok: false, reason: `unframe: ${error.message}`, erasures: erasures.length }; }
+  }
   return {
     ok: true, text: unframed.text, payloadLength: unframed.payloadLength,
     corrected: decoded.errorCount ?? 0, erasures: erasures.length,
-    schema: xCodecSchema(cap.layout.profile.scanOrderId), scanOrderId: cap.layout.profile.scanOrderId,
-    verified: false, // rd-5 의 X domain/profile/본문 CRC 가 아직 없어요 — 소비자는 성공으로 노출 금지
+    schema: xCodecSchema(cap.layout.profile.scanOrderId, cap.crc), scanOrderId: cap.layout.profile.scanOrderId, crc: cap.crc,
+    // CRC 옵션이면 도메인 결속 CRC 까지 통과한 프레임만 verified:true — 그래도 «연구 옵션» 이라 소비자 hit 노출은 계약 X.4 잠금 뒤
+    verified: Boolean(cap.crc),
   };
 }
