@@ -112,6 +112,14 @@ test('xCameraLookAt/xProjectSites — 비유한·비정수 입력 거절(NaN 투
   assert.throws(() => xProjectSites({ N: 7.5, pose: ok, camera: CAM }), RangeError);
   assert.throws(() => xProjectSites({ N, pitch: -1, pose: ok, camera: CAM }), RangeError);
   assert.throws(() => xProjectSites({ N, pose: ok, camera: { ...CAM, width: 640.5 } }), RangeError);
+  // codex REPORT_004: pitch Infinity · 희소 R(new Array(9)) 은 every 를 통과하던 구멍
+  assert.throws(() => xCameraLookAt({ N, pitch: Infinity }), RangeError);
+  assert.throws(() => xCameraLookAt({ N, distanceOverWidth: Infinity }), RangeError);
+  assert.throws(() => xProjectSites({ N, pitch: Infinity, pose: ok, camera: CAM }), RangeError);
+  assert.throws(() => xProjectSites({ N, pose: { R: new Array(9), t: [0, 0, 5] }, camera: CAM }), RangeError);
+  const sparse = ok.R.slice(); delete sparse[4];
+  assert.throws(() => xProjectSites({ N, pose: { R: sparse, t: ok.t }, camera: CAM }), RangeError);
+  assert.throws(() => xProjectSites({ N, pose: { R: ok.R, t: new Array(3) }, camera: CAM }), RangeError);
 });
 
 test('xProjectSites — 뒤에 있는 점은 inFront=false, 프레임 밖은 inFrame=false, pose 형식 검사', () => {

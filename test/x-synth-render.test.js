@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import { renderXSynth, sweepXDirections, occlusionFactors, cameraFromFov, makeRng, X_SYNTH_TRUTH_SCHEMA } from '../tools/x-synth-render.mjs';
 import { encodeX, decodeX } from '../src/x-codec.js';
 import { xCameraLookAt, xProjectSites } from '../src/x-project.js';
@@ -103,7 +105,53 @@ test('sweepXDirections — 격자 행 수·필드·정면 방향의 minPair 0', 
   assert.deepEqual(sweep.profile, { profileId: 'X0', layoutId: 'lee-fo-v1', N: 8, c: 0, tones: 2 });
 });
 
-test('makeRng — seed 재현', () => {
+test('makeRng — seed 재현, uint32 밖·비정수 seed 는 거절(alias 금지)', () => {
   const a = makeRng(9), b = makeRng(9);
   for (let i = 0; i < 5; i += 1) assert.equal(a(), b());
+  assert.throws(() => makeRng(4294967297), RangeError); // 1 과 같은 열을 내던 alias
+  assert.throws(() => makeRng(1.5), RangeError);
+  assert.throws(() => makeRng(-1), RangeError);
+  assert.throws(() => renderXSynth({ ...SMALL, seed: 4294967297 }), RangeError);
+  assert.equal(renderXSynth(SMALL).truth.render.effectiveSeed, SMALL.seed);
+});
+
+test('renderXSynth/sweep — 자원·범위 경계는 배열 생성 전에 거절(codex REPORT_004)', () => {
+  assert.throws(() => renderXSynth({ ...SMALL, width: 16, height: 16, sat: 0 }), /sat/);
+  assert.throws(() => renderXSynth({ ...SMALL, sat: Infinity }), /sat/);
+  assert.throws(() => renderXSynth({ ...SMALL, width: 2001, height: 2000 }), /px/);
+  assert.throws(() => renderXSynth({ ...SMALL, width: 100.5 }), /width/);
+  assert.throws(() => renderXSynth({ ...SMALL, radius: 1000 }), /radius/);
+  assert.throws(() => renderXSynth({ ...SMALL, psf: NaN }), /psf/);
+  assert.throws(() => renderXSynth({ ...SMALL, occlusion: 'magic' }), /occlusion/);
+  assert.throws(() => renderXSynth({ ...SMALL, kill: 1.5 }), /kill/);
+  assert.throws(() => renderXSynth({ ...SMALL, fov: 180 }), /fov/);
+  assert.throws(() => sweepXDirections({ profile: 'X0', azStep: 0 }), /azStep/);
+  assert.throws(() => sweepXDirections({ profile: 'X0', azStep: -15 }), /azStep/);
+  assert.throws(() => sweepXDirections({ profile: 'X0', elStep: -15 }), /elStep/);
+  assert.throws(() => sweepXDirections({ profile: 'X0', azStep: 0.001, elStep: 0.001 }), /방향 수/);
+  // 16×16 sat 정상값은 유한 luma
+  const tiny = renderXSynth({ ...SMALL, width: 16, height: 16 });
+  assert.ok([...tiny.luma].every(Number.isFinite));
+});
+
+test('renderXSynth — emission 과 visibility 를 구별하고, physicalOcclusion 은 라벨과 무관하게 factor 로 뽑아요', () => {
+  const r = renderXSynth({ ...SMALL, az: 0, el: 0, occlusion: 'front', alphaLit: 0.6, occRadius: 8, width: 320, height: 240 });
+  assert.equal(r.truth.emission.length, 512);
+  assert.ok(r.truth.emission.every(e => ['on', 'off', 'failed'].includes(e)));
+  assert.equal(r.truth.emission.filter(e => e === 'on').length, r.truth.levels.filter(Boolean).length);
+  assert.equal(r.truth.render.occludedThreshold, 0.5);
+  const thr = r.truth.render.occludedThreshold;
+  const byFactor = r.truth.points.filter(p => r.truth.levels[p.siteId] > 0 && r.truth.perSite[p.siteId]?.occlusionFactor < thr).map(p => p.siteId);
+  assert.deepEqual(r.truth.dropout.physicalOcclusion, byFactor);
+  // 정면 + 큰 occRadius: 겹침 라벨을 받은 자리 중에도 감쇠가 큰 사이트가 있고, 그것도 physicalOcclusion 에 들어가요
+  const overlapButOccluded = byFactor.filter(s => r.truth.visibility[s] === 'overlap');
+  assert.ok(overlapButOccluded.length > 0, '겹침 라벨 아래 숨은 감쇠 사건이 dropout 에 남아요');
+  assert.ok(r.truth.conventions.emission.includes('승격 금지'));
+});
+
+test('x-synth-render — argv[1] 없는 node -e import 에서도 throw 하지 않아요(라이브러리 import 회귀)', () => {
+  const { spawnSync } = require('node:child_process');
+  const out = spawnSync(process.execPath, ['-e', "import('./tools/x-synth-render.mjs').then(m => console.log(typeof m.renderXSynth))"], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
+  assert.equal(out.status, 0, out.stderr);
+  assert.equal(out.stdout.trim(), 'function');
 });

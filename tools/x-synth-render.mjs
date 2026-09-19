@@ -21,6 +21,7 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { encodeX, xCapacity } from '../src/x-codec.js';
 import { xProfile, xProfileDto } from '../src/x-profile.js';
@@ -41,8 +42,32 @@ export const RENDER_DEFAULTS = Object.freeze({
   kill: 0, seed: 1,
 });
 
-/** mulberry32 — 결정적 PRNG(seed 로 재현) */
+/** 렌더 자원 상한 — D-2 blind DTO 의 4 Mpx 와 맞추고, 커널/작업량이 무제한이 되지 않게 해요(codex REPORT_004) */
+export const RENDER_LIMITS = Object.freeze({ MAX_PIXELS: 4_000_000, MAX_RADIUS_PX: 64, MAX_PSF_SIGMA_PX: 32, MAX_OCC_RADIUS_PX: 64, MAX_SEED: 0xFFFFFFFF, MAX_SWEEP_DIRECTIONS: 100_000 });
+
+function finitePos(v, name, { min = Number.MIN_VALUE, max = Number.MAX_VALUE, integer = false } = {}) {
+  if (!Number.isFinite(v) || v < min || v > max || (integer && !Number.isInteger(v))) throw new RangeError(`${name} 범위 밖: ${v}`);
+  return v;
+}
+
+/** 옵션 검증 — 배열을 만들기 «전에» 거절해요(sat 0 → NaN luma, 과대 크기 → 성공한 척 하는 D-2 거절 입력 방지) */
+export function assertRenderOptions(o) {
+  finitePos(o.width, 'width', { min: 1, integer: true }); finitePos(o.height, 'height', { min: 1, integer: true });
+  if (o.width * o.height > RENDER_LIMITS.MAX_PIXELS) throw new RangeError(`width×height 가 ${RENDER_LIMITS.MAX_PIXELS} px 를 넘어요`);
+  finitePos(o.fov, 'fov', { max: 179.9 }); finitePos(o.dl, 'dl');
+  for (const k of ['az', 'el', 'roll']) if (!Number.isFinite(o[k])) throw new RangeError(`${k} 가 유한수가 아니에요`);
+  finitePos(o.radius, 'radius', { max: RENDER_LIMITS.MAX_RADIUS_PX }); finitePos(o.psf, 'psf', { min: 0, max: RENDER_LIMITS.MAX_PSF_SIGMA_PX });
+  finitePos(o.gain, 'gain', { min: 0 }); finitePos(o.bg, 'bg', { min: 0 }); finitePos(o.noise, 'noise', { min: 0 }); finitePos(o.sat, 'sat');
+  finitePos(o.alphaLit, 'alphaLit', { min: 0, max: 1 }); finitePos(o.alphaBody, 'alphaBody', { min: 0, max: 1 }); finitePos(o.occRadius, 'occRadius', { min: 0, max: RENDER_LIMITS.MAX_OCC_RADIUS_PX });
+  finitePos(o.kill, 'kill', { min: 0, max: 1 });
+  if (!['none', 'front'].includes(o.occlusion)) throw new RangeError(`occlusion: ${o.occlusion}`);
+  finitePos(o.seed, 'seed', { min: 0, max: RENDER_LIMITS.MAX_SEED, integer: true });
+  return o;
+}
+
+/** mulberry32 — 결정적 PRNG. seed 는 uint32 정수만(1 과 4294967297 이 같은 열을 내는 alias 를 계약으로 막아요 — effectiveSeed = seed) */
 export function makeRng(seed) {
+  if (!Number.isInteger(seed) || seed < 0 || seed > RENDER_LIMITS.MAX_SEED) throw new RangeError(`seed 는 0…2³²−1 정수여야 해요: ${seed}`);
   let a = seed >>> 0;
   return () => { a += 0x6D2B79F5; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
@@ -125,7 +150,7 @@ function blurGaussian(img, width, height, sigma) {
  * truth 는 평가기 전용, blind 는 관측기에 건너가는 것만 담아요(camera + 이미지 메타).
  */
 export function renderXSynth(opts) {
-  const o = { ...RENDER_DEFAULTS, ...opts };
+  const o = assertRenderOptions({ ...RENDER_DEFAULTS, ...opts });
   const profile = xProfile(o.profile);
   if (o.ecc) profile.ecc = o.ecc;
   const cap = xCapacity(profile);
@@ -159,7 +184,7 @@ export function renderXSynth(opts) {
     // 화면 반지름은 깊이에 따라 원근 스케일(중심 깊이에서 radius)
     const rPx = o.radius * (centreDepth / p.z);
     splatDisk(img, width, height, p.u, p.v, rPx, amp);
-    perSite[s] = { amp, rPx, litFront: occ.litFront[s], bodyFront: occ.bodyFront[s] };
+    perSite[s] = { amp, rPx, occlusionFactor: occ.factor[s], litFront: occ.litFront[s], bodyFront: occ.bodyFront[s] };
   }
   blurGaussian(img, width, height, o.psf);
 
@@ -175,17 +200,24 @@ export function renderXSynth(opts) {
   const png = rasterToPng({ width, height, pixels });
   const imageSha256 = createHash('sha256').update(png).digest('hex');
 
-  // 사이트별 가시성 사유(truth 어휘 = X.6): 소등 off · 프레임 밖 outOfView · 겹침 overlap · 가림(감쇠 큰) occluded · 포화 saturated · 그 외 visible
+  // 사이트별 «발광 상태»(emission: on/off/failed — 소등은 관측 증거가 아니라 렌더 사실) 와 «가시성 라벨»(visibility, X.6 어휘, 우선순위
+  // outOfView > overlap > occluded > saturated > visible). 라벨은 하나뿐이라 겹침 자리의 감쇠 사건은 라벨에서 가려지므로,
+  // 감쇠 사실은 perSite.occlusionFactor 에 따로 있고 dropout.physicalOcclusion 은 «라벨과 무관하게» factor < occludedThreshold 로 뽑아요.
+  const OCCLUDED_THRESHOLD = 0.5;
+  const emission = new Array(points.length);
   const visibility = new Array(points.length);
+  const failedSet = new Set(emitterFailure);
   for (const p of points) {
     const s = p.siteId;
+    emission[s] = failedSet.has(s) ? 'failed' : lit[s] ? 'on' : 'off';
     if (!lit[s]) visibility[s] = 'off';
     else if (!p.inFrame) visibility[s] = 'outOfView';
     else if (overlap[s]) visibility[s] = 'overlap';
-    else if (occ.factor[s] < 0.5) visibility[s] = 'occluded';
+    else if (occ.factor[s] < OCCLUDED_THRESHOLD) visibility[s] = 'occluded';
     else if (luma[Math.floor(p.v) * width + Math.floor(p.u)] >= 0.999) visibility[s] = 'saturated'; // 픽셀 (i,j) 는 [i,i+1) — floor
     else visibility[s] = 'visible';
   }
+  const physicalOcclusion = points.filter(p => lit[p.siteId] && occ.factor[p.siteId] < OCCLUDED_THRESHOLD).map(p => p.siteId);
   const counts = {};
   for (const v of visibility) counts[v] = (counts[v] || 0) + 1;
 
@@ -200,19 +232,24 @@ export function renderXSynth(opts) {
       overlap: 'lit 쌍 화면 거리 < minSepPx = 2·radiusPx + 2·psfSigmaPx (양쪽 표시)',
       pitchPx: '큐브 중심 깊이에서 1 pitch 의 화면 길이 — radius/psf/occRadius/minSep 정규화 기준',
       siteId: '(x·N + y)·N + z (계약 X.1, z 가 가장 빠른 축), points 는 siteId 오름차순·고유, xyz 필드에 좌표 동봉',
+      emission: 'on|off|failed 는 렌더의 발광 사실 — 관측 DTO 의 «검증된 off 음의 근거» 로 승격 금지(어댑터는 emission 과 관측 가능성을 구별)',
+      visibility: 'X.6 어휘의 단일 라벨(우선순위 outOfView > overlap > occluded > saturated > visible); 소등 사이트는 off. 감쇠 사실은 perSite.occlusionFactor',
+      physicalOcclusion: 'lit ∧ occlusionFactor < render.occludedThreshold — visibility 라벨과 무관하게 뽑음',
+      roll: '+π/2 픽셀 변환 (du,dv)↦(−dv,du) 는 fx=fy 한정; 일반식 (−fx/fy·dv, fy/fx·du) — 정규화 카메라 평면에서는 항상 (−y,x)',
+      seed: 'uint32 정수(effectiveSeed = seed, alias 없음) — split 간 동일 seed 는 동일 잡음',
     },
     profile: { ...xProfileDto(profile), ecc: profile.ecc },
     text, digits: Array.from(enc.digits), levels: Array.from(levels),
     pose: { R: pose.R, t: pose.t, azimuthDeg: o.az, elevationDeg: o.el, rollDeg: o.roll, distanceOverWidth: o.dl, distance: pose.distance, direction: pose.direction, pitch: 1 },
     camera, pitchPx, minSepPx: minSep,
     points: points.map(p => ({ siteId: p.siteId, xyz: xSiteCoord(N, p.siteId), u: p.inFront ? +p.u.toFixed(4) : null, v: p.inFront ? +p.v.toFixed(4) : null, z: +p.z.toFixed(6), inFrame: p.inFrame })),
-    overlap: Array.from(overlap), visibility, visibilityCounts: counts,
+    overlap: Array.from(overlap), emission, visibility, visibilityCounts: counts,
     perSite,
-    dropout: { emitterFailure, physicalOcclusion: visibility.map((v, s) => (v === 'occluded' ? s : -1)).filter(s => s >= 0), detectorMiss: [] },
+    dropout: { emitterFailure, physicalOcclusion, detectorMiss: [] },
     render: {
       radiusPx: o.radius, psfSigmaPx: o.psf, gain: o.gain, background: o.bg, noiseSigma: o.noise, saturation: o.sat, falloff: !!o.falloff,
-      occlusion: o.occlusion, alphaLit: o.alphaLit, alphaBody: o.alphaBody, occRadiusPx: o.occRadius, kill: o.kill, seed: o.seed,
-      saturatedPixels: saturatedPx,
+      occlusion: o.occlusion, alphaLit: o.alphaLit, alphaBody: o.alphaBody, occRadiusPx: o.occRadius, occludedThreshold: OCCLUDED_THRESHOLD,
+      kill: o.kill, seed: o.seed, effectiveSeed: o.seed, saturatedPixels: saturatedPx,
     },
     imageSha256,
   };
@@ -222,7 +259,11 @@ export function renderXSynth(opts) {
 
 /** 방향 격자 정규화 표 — 이미지 없이 겹침 비율·최소 간격만 재요(«나쁜 방향» 표) */
 export function sweepXDirections(opts) {
-  const o = { ...RENDER_DEFAULTS, azStep: 15, elStep: 15, minSep: 2.5, ...opts };
+  const o = assertRenderOptions({ ...RENDER_DEFAULTS, azStep: 15, elStep: 15, minSep: 2.5, ...opts });
+  // step 은 유한 양수, 방향 수 상한(azStep 0/음수·elStep 음수는 무한 루프 — codex REPORT_004)
+  finitePos(o.azStep, 'azStep'); finitePos(o.elStep, 'elStep'); finitePos(o.minSep, 'minSep', { min: 0 });
+  const nAz = Math.ceil(360 / o.azStep), nEl = 2 * Math.floor(75 / o.elStep) + 1;
+  if (nAz * nEl > RENDER_LIMITS.MAX_SWEEP_DIRECTIONS) throw new RangeError(`방향 수 ${nAz * nEl} 가 상한 ${RENDER_LIMITS.MAX_SWEEP_DIRECTIONS} 을 넘어요`);
   const profile = xProfile(o.profile);
   const cap = xCapacity(profile);
   const N = cap.layout.raw.N;
@@ -295,6 +336,8 @@ async function main() {
   console.log(`${name}: ${r.width}×${r.height} pitchPx ${r.truth.pitchPx.toFixed(2)} · visible ${c.visible || 0} overlap ${c.overlap || 0} occluded ${c.occluded || 0} saturated ${c.saturated || 0} off ${c.off || 0} outOfView ${c.outOfView || 0} · sha ${r.truth.imageSha256.slice(0, 12)}`);
 }
 
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || process.argv[1]?.endsWith('x-synth-render.mjs')) {
+// 직접 실행 가드 — argv[1] 이 없는 `node -e "import(...)"` 에서도 throw 하지 않아요(라이브러리 import 회귀)
+const invoked = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : null;
+if (invoked === import.meta.url) {
   main().catch(err => { console.error(err); process.exit(1); });
 }

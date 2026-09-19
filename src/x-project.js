@@ -57,7 +57,7 @@ export function assertXCamera(camera) {
  */
 export function xCameraLookAt({ N, pitch = 1, distanceOverWidth = 3, azimuth = 0, elevation = 0, roll = 0 }) {
   if (!Number.isInteger(N) || N < 2) throw new RangeError(`N 은 2 이상 정수여야 해요: ${N}`);
-  if (!(pitch > 0) || !(distanceOverWidth > 0)) throw new RangeError('pitch·distanceOverWidth 는 양수여야 해요');
+  if (!(Number.isFinite(pitch) && pitch > 0) || !(Number.isFinite(distanceOverWidth) && distanceOverWidth > 0)) throw new RangeError('pitch·distanceOverWidth 는 유한 양수여야 해요');
   for (const [k, v] of Object.entries({ azimuth, elevation, roll })) if (!Number.isFinite(v)) throw new RangeError(`${k} 가 유한수가 아니에요`);
   const width = pitch * (N - 1);
   const distance = distanceOverWidth * width;
@@ -73,8 +73,8 @@ export function xCameraLookAt({ N, pitch = 1, distanceOverWidth = 3, azimuth = 0
   const yc = cross(zc, xc);
   // R 의 행 = 카메라 축(세계 좌표) → X_c = R·P
   let R = [xc[0], xc[1], xc[2], yc[0], yc[1], yc[2], zc[0], zc[1], zc[2]];
-  // roll 은 카메라 좌표계에서 왼쪽 곱: (X',Y') = (cos r·X − sin r·Y, sin r·X + cos r·Y). +π/2 → (du,dv) ↦ (−dv, du)
-  // — 화면(v 아래) 기준으로 내용이 시계 방향으로 돌아요.
+  // roll 은 카메라 좌표계에서 왼쪽 곱: (X',Y') = (cos r·X − sin r·Y, sin r·X + cos r·Y). 정규화 평면에서 +π/2 → (x,y) ↦ (−y, x);
+  // 픽셀로는 (du,dv) ↦ (−fx/fy·dv, fy/fx·du) — fx=fy 일 때만 (−dv, du). 화면(v 아래) 기준으로 내용이 시계 방향으로 돌아요.
   if (roll) R = mat3Mul([Math.cos(roll), -Math.sin(roll), 0, Math.sin(roll), Math.cos(roll), 0, 0, 0, 1], R);
   const Rc = mat3Apply(R, centre);
   const t = [-Rc[0], -Rc[1], -Rc[2]];
@@ -86,7 +86,9 @@ function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b
 /** pose 검사 — 길이만이 아니라 원소 유한성까지(NaN 원소는 «카메라 뒤» 와 구별이 안 되는 NaN 투영으로 숨어요) */
 export function assertXPose(pose) {
   if (!pose || !Array.isArray(pose.R) || pose.R.length !== 9 || !Array.isArray(pose.t) || pose.t.length !== 3) throw new TypeError('pose 는 {R:9, t:3} 이어야 해요');
-  if (!pose.R.every(Number.isFinite) || !pose.t.every(Number.isFinite)) throw new RangeError('pose.R/t 원소가 유한수가 아니에요');
+  // 인덱스 루프 — `every` 는 희소 배열(new Array(9)) 의 구멍을 건너뛰어 통과시켜요(codex REPORT_004)
+  for (let i = 0; i < 9; i += 1) if (!Number.isFinite(pose.R[i])) throw new RangeError(`pose.R[${i}] 가 유한수가 아니에요`);
+  for (let i = 0; i < 3; i += 1) if (!Number.isFinite(pose.t[i])) throw new RangeError(`pose.t[${i}] 가 유한수가 아니에요`);
   return pose;
 }
 
@@ -98,7 +100,7 @@ export function assertXPose(pose) {
 export function xProjectSites({ N, pitch = 1, pose, camera }) {
   assertXCamera(camera);
   assertXPose(pose);
-  if (!Number.isInteger(N) || N < 2 || !(pitch > 0)) throw new RangeError(`N(정수 ≥2)·pitch(>0) 가 아니에요: ${N}, ${pitch}`);
+  if (!Number.isInteger(N) || N < 2 || !(Number.isFinite(pitch) && pitch > 0)) throw new RangeError(`N(정수 ≥2)·pitch(유한 >0) 가 아니에요: ${N}, ${pitch}`);
   const half = (N - 1) / 2;
   const points = new Array(N ** 3);
   for (let siteId = 0; siteId < N ** 3; siteId += 1) {
