@@ -205,6 +205,26 @@ test('scanOrderId 연구 override — registry 는 cell-order-v0 그대로, mort
   }
 });
 
+test('decodeX erasureReserve — 기본 0 은 현행, reserve 는 e > nsym − reserve 를 거절, 범위 검사(D-3 wrongText 가드)', () => {
+  const id = 'X0';
+  const cap = xCapacity(id);
+  const enc = encodeX('reserve', id);
+  const r = rng(3463);
+  const levels = Array.from(enc.levels);
+  const picked = new Set();
+  while (picked.size < cap.nsym) picked.add(Math.floor(r() * cap.symbols));
+  for (const symbolIndex of picked) levels[cap.layout.triples[symbolIndex * 3][0]] = null; // e = nsym
+  assert.ok(decodeX({ levels }, id).ok, '기본: e = nsym 은 허용(현행)');
+  assert.ok(decodeX({ levels }, id, { erasureReserve: 0 }).ok);
+  const guarded = decodeX({ levels }, id, { erasureReserve: 2 });
+  assert.equal(guarded.ok, false); assert.match(guarded.reason, /reserve 2/);
+  // e = nsym − 2 는 reserve 2 에서 통과
+  const fewer = Array.from(enc.levels); let k = 0;
+  for (const symbolIndex of picked) { if (k >= cap.nsym - 2) break; fewer[cap.layout.triples[symbolIndex * 3][0]] = null; k += 1; }
+  assert.ok(decodeX({ levels: fewer }, id, { erasureReserve: 2 }).ok);
+  for (const bad of [-1, 1.5, cap.nsym, 'x']) assert.throws(() => decodeX({ levels: fewer }, id, { erasureReserve: bad }), RangeError, `reserve ${bad}`);
+});
+
 test('encodeX — 프로파일·용량 거절', () => {
   assert.throws(() => encodeX('x', 'X9'), RangeError);
   const cap = xCapacity('X0');
