@@ -21,6 +21,11 @@ import { xProfile, assertXProfile, xProfileLayout, xLevelsTemplate } from './x-p
 export const X_CODEC_SCHEMA = 'TLcube:X:codec:v0;header=1B;base211;rs211-single;tone2=H_BINARY;scan=cell-order-v0;mask=identity-v0;crc=TBD';
 export const X_ERASED = -1;
 
+/** 산출 스키마 문자열은 «실제 쓰인 scan order» 를 실어요 — 연구 override(morton-v0) 산출이 cell-order 라고 오표기되지 않게(codex REPORT_009) */
+export function xCodecSchema(scanOrderId = 'cell-order-v0') {
+  return X_CODEC_SCHEMA.replace('scan=cell-order-v0', `scan=${scanOrderId}`);
+}
+
 /** H 와 같은 nsym 절차(L .12 · M .25 홀수화 · H .40) — NSYM_TABLE_X 로 잠그기 전의 유도식이에요. */
 export function xNsymFor(symbolCount, ecc) {
   if (!Number.isInteger(symbolCount) || symbolCount < 2) throw new RangeError(`심볼 수: ${symbolCount}`);
@@ -51,7 +56,9 @@ function resolve(profileOrId, options = {}) {
  */
 export function xCapacity(profileOrId, options = {}) {
   const profile = resolve(profileOrId, options);
-  const layout = xProfileLayout(profile);
+  // options.scanOrderId = rd-4 연구 override(심볼 묶음 순서) — registry/DTO 불변, 같은 프로파일의 다른 와이어 순서를 실제 코덱으로 비교할 때만.
+  // undefined 만 «기본값» — 명시된 ''/false/0/NaN 은 그대로 넘겨 enum 검사가 거절하게 해요(truthy 삼항식은 우회로였어요, codex 2351).
+  const layout = xProfileLayout(profile, options.scanOrderId === undefined ? {} : { scanOrderId: options.scanOrderId });
   const digits = layout.digits;
   const symbols = Math.floor(digits / DIGITS_PER_SYMBOL);
   if (symbols > MAX_CODEWORD_LEN) throw new RangeError(`단일 RS 블록 한계(${MAX_CODEWORD_LEN})를 넘어요: ${symbols} — 다중 블록은 v1`);
@@ -60,7 +67,7 @@ export function xCapacity(profileOrId, options = {}) {
   const dataBytes = dataBytesFor(dataSymbols);
   if (dataBytes <= HEADER_BYTES) throw new RangeError('헤더를 뺀 순 용량이 0 이에요');
   return {
-    profileId: profile.profileId, ecc: profile.ecc, digits, symbols, fillerDigits: digits - symbols * DIGITS_PER_SYMBOL,
+    profileId: profile.profileId, ecc: profile.ecc, scanOrderId: layout.profile.scanOrderId, digits, symbols, fillerDigits: digits - symbols * DIGITS_PER_SYMBOL,
     nsym, dataSymbols, dataBytes, payloadBytes: dataBytes - HEADER_BYTES, layout,
   };
 }
@@ -94,7 +101,8 @@ export function encodeX(text, profileOrId, options = {}) {
     triple.forEach((siteId, k) => { levels[siteId] = pattern[k]; });
   });
   return {
-    schema: X_CODEC_SCHEMA, profileId: cap.profileId, ecc: cap.ecc, N: cap.layout.raw.N, layoutId: cap.layout.raw.layoutId,
+    schema: xCodecSchema(cap.layout.profile.scanOrderId), scanOrderId: cap.layout.profile.scanOrderId,
+    profileId: cap.profileId, ecc: cap.ecc, N: cap.layout.raw.N, layoutId: cap.layout.raw.layoutId,
     nsym: cap.nsym, dataSymbols: cap.dataSymbols, dataBytes: cap.dataBytes, payloadLength: new TextEncoder().encode(text).length,
     messageSymbolCount: messageSymbols.length, codeword, digits, levels,
   };
@@ -142,6 +150,7 @@ export function decodeX(input, profileOrId, options = {}) {
   return {
     ok: true, text: unframed.text, payloadLength: unframed.payloadLength,
     corrected: decoded.errorCount ?? 0, erasures: erasures.length,
+    schema: xCodecSchema(cap.layout.profile.scanOrderId), scanOrderId: cap.layout.profile.scanOrderId,
     verified: false, // rd-5 의 X domain/profile/본문 CRC 가 아직 없어요 — 소비자는 성공으로 노출 금지
   };
 }

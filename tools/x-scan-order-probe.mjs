@@ -24,8 +24,8 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { xProfileLayout } from '../src/x-profile.js';
-import { xNsymFor, xDigitFromLevels, X_ERASED } from '../src/x-codec.js';
+import { xProfileLayout, xProfile } from '../src/x-profile.js';
+import { xNsymFor, xDigitFromLevels, X_ERASED, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
 import { xSiteCoord } from '../src/x-layout.js';
 import { H_BINARY } from '../src/h-profile.js';
 import { xCameraLookAt, xProjectSites, xOverlapMask } from '../src/x-project.js';
@@ -60,7 +60,9 @@ export function scanOrders(profileLayout, blocks) {
   const stride = [];
   const B = Math.max(1, blocks);
   for (let r = 0; r < B; r += 1) for (let i = r; i < triples.length; i += B) stride.push(triples[i]);
-  return { 'cell-order-v0': triples, 'morton-v0': morton, 'stride-v0': stride };
+  // 주의: 이 대리지표 경로의 Morton 은 round(2·centroid) 양자화(초기 구현) — 코덱의 `morton-v0`(좌표 합, 반올림 없음)와 «다른 알고리즘» 이라
+  // 이름을 갈라요. 09-19 s1~s4 원자료의 'morton-v0' 라벨은 이 legacy 정의예요(REPORT_003 §3 정정).
+  return { 'cell-order-v0': triples, 'morton-round2-legacy': morton, 'stride-v0': stride };
 }
 
 /** 블록 배정: 심볼 인덱스 → 블록 */
@@ -150,7 +152,10 @@ export function trial({ orders, symbols, blocks, assignments, nsymFor, U, q, rng
 
 export function runProbe(opts) {
   const o = { ...DEFAULTS, ...opts };
-  const blocksList = String(o.blocks).split(',').map(Number).filter(b => b >= 1);
+  // 기본(대리지표) 경로도 실행 «전» 검사 — legacy q 는 유한 scalar 하나(목록이면 거절: 이 경로는 q 를 순회하지 않아요)
+  const checked = assertProbeOptions({ ...o, q: String(o.q) });
+  if (checked.qs.length !== 1) throw new RangeError('runProbe 의 q 는 scalar 하나예요(목록은 --real 경로)');
+  const blocksList = checked.blocks;
   const pl = xProfileLayout(o.profile);
   const N = pl.raw.N, sites = N ** 3;
   const symbols = Math.floor(pl.digits / 3);
@@ -201,6 +206,152 @@ export function runProbe(opts) {
   return { schemaVersion: X_SCAN_ORDER_PROBE_SCHEMA, options: o, symbols, digits: pl.digits, rows };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// --real 모드(codex REPORT_007 뒤): 유효 본문 encodeX → 공유 물리 사건(dropout 난수·blob 중심·시선) → 실제 decodeX.
+// 순서 후보는 코덱이 지원하는 scanOrderId 만(cell-order-v0 · morton-v0), 단일 블록(v0), q 는 0 과 >0 을 갈라 실행.
+// unknownMode: oracle = 소등 사이트의 미관측은 «0 으로 앎»(낙관) · conservative = 미관측이면 소등 여부와 무관하게 null(소거).
+// 결과는 per-trial outcome 을 보존해 paired discordant count(순서 A 실패∧B 성공 / A 성공∧B 실패)를 복원할 수 있어요.
+// ─────────────────────────────────────────────────────────────────────────────
+export const REAL_ORDERS = Object.freeze(['cell-order-v0', 'morton-v0']);
+export const PROBE_LIMITS = Object.freeze({ MAX_TRIALS: 20_000, MAX_WORK: 400_000, MAX_LIST: 16 });
+
+function numList(v, name, { min = 0, max = Number.MAX_VALUE } = {}) {
+  const list = (Array.isArray(v) ? v : String(v).split(',')).map(Number);
+  if (list.length < 1 || list.length > PROBE_LIMITS.MAX_LIST) throw new RangeError(`${name} 목록 길이 1…${PROBE_LIMITS.MAX_LIST}`);
+  for (const x of list) if (!Number.isFinite(x) || x < min || x > max) throw new RangeError(`${name} 값 범위 밖: ${Number.isFinite(x) ? x : '<non-finite>'}`);
+  return list;
+}
+
+/** 실행 «전» 입력 검사 — trials/blocks/q/CSV 유한·정수·총 작업량 cap(무한 루프·과대 할당 금지) */
+export function assertProbeOptions(o) {
+  if (typeof o.profile !== 'string') throw new RangeError('profile 은 문자열이어야 해요');
+  if (!Number.isInteger(o.trials) || o.trials < 1 || o.trials > PROBE_LIMITS.MAX_TRIALS) throw new RangeError(`trials 는 1…${PROBE_LIMITS.MAX_TRIALS} 정수`);
+  if (!Number.isInteger(o.seed) || o.seed < 0 || o.seed > 4294) throw new RangeError('seed 는 0…4294 정수(모델별 파생 seed 가 uint32 안에 들게)');
+  const blocks = numList(o.blocks, 'blocks', { min: 1, max: 8 });
+  if (!blocks.every(Number.isInteger)) throw new RangeError('blocks 는 정수');
+  const qs = numList(o.q, 'q', { min: 0, max: 1 });
+  const dropout = numList(o.dropoutP, 'dropoutP', { min: 0, max: 1 });
+  const blob = numList(o.blobR, 'blobR', { min: 0, max: 64 });
+  for (const [k, v] of Object.entries({ width: o.width, height: o.height })) if (!Number.isInteger(v) || v < 1 || v > 4096) throw new RangeError(`${k} 는 1…4096 정수`);
+  for (const [k, v] of Object.entries({ fov: o.fov, dl: o.dl, minSep: o.minSep })) if (!Number.isFinite(v) || v <= 0) throw new RangeError(`${k} 는 유한 양수`);
+  if (o.unknownMode !== undefined && !['oracle', 'conservative'].includes(o.unknownMode)) throw new RangeError('unknownMode 는 oracle|conservative');
+  const models = dropout.length + blob.length + 1;
+  const work = o.trials * models * qs.length * Math.max(blocks.length, 1) * 3;
+  if (work > PROBE_LIMITS.MAX_WORK) throw new RangeError(`총 작업량 ${work} 이 상한 ${PROBE_LIMITS.MAX_WORK} 을 넘어요`);
+  return { blocks, qs, dropout, blob };
+}
+
+/** 공유 물리 사건(순서 후보끼리 대응 표본): 사이트별 dropout 난수 · blob 중심 · 시선 · 사이트별 반전 난수 */
+export function drawEvent(ctx, rng) {
+  const { sites } = ctx;
+  const u = new Float32Array(sites), v = new Float32Array(sites);
+  for (let s = 0; s < sites; s += 1) u[s] = rng();
+  for (let s = 0; s < sites; s += 1) v[s] = rng();
+  const centre = [rng() * (ctx.N - 1), rng() * (ctx.N - 1), rng() * (ctx.N - 1)];
+  const azimuth = rng() * 2 * Math.PI, elevation = Math.asin(2 * rng() - 1);
+  return { u, v, centre, azimuth, elevation };
+}
+
+/** 사건을 «이 순서의 점등 마스크» 에 적용 → 미관측 U(점등/소등 모두 포함 — unknownMode 는 뒤에서) */
+export function applyEvent(model, param, event, ctx, lit) {
+  const { N, sites } = ctx;
+  const U = new Uint8Array(sites);
+  if (model === 'dropout') { for (let s = 0; s < sites; s += 1) if (event.u[s] < param) U[s] = 1; }
+  else if (model === 'blob') {
+    for (let s = 0; s < sites; s += 1) { const p = xSiteCoord(N, s); if (Math.hypot(p[0] - event.centre[0], p[1] - event.centre[1], p[2] - event.centre[2]) <= param) U[s] = 1; }
+  } else if (model === 'view') {
+    const pose = xCameraLookAt({ N, distanceOverWidth: ctx.dl, azimuth: event.azimuth, elevation: event.elevation });
+    const { points } = xProjectSites({ N, pose, camera: ctx.camera });
+    const overlap = xOverlapMask(points, lit, param);
+    for (let s = 0; s < sites; s += 1) if (!points[s].inFrame || overlap[s]) U[s] = 1;
+  } else throw new RangeError(`모델: ${model}`);
+  return U;
+}
+
+function randomText(rng, bytes) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&()*+,;=%';
+  let s = '';
+  for (let i = 0; i < bytes; i += 1) s += alphabet[Math.floor(rng() * alphabet.length)];
+  return s;
+}
+
+export function runRealProbe(opts) {
+  const o = { ...DEFAULTS, q: '0,0.01', unknownMode: 'oracle', ...opts };
+  const { qs, dropout, blob } = assertProbeOptions(o);
+  const profile = xProfile(o.profile);
+  const N = profile.N, sites = N ** 3;
+  const camera = cameraFromFov({ width: o.width, height: o.height, fov: o.fov });
+  const ctx = { N, sites, camera, dl: o.dl };
+  const caps = Object.fromEntries(REAL_ORDERS.map(id => [id, xCapacity(profile, { ecc: o.ecc, scanOrderId: id })]));
+  const payloadBytes = Math.min(...REAL_ORDERS.map(id => caps[id].payloadBytes));
+  const models = [
+    ...dropout.map(p => ({ model: 'dropout', param: p })),
+    ...blob.map(r => ({ model: 'blob', param: r })),
+    { model: 'view', param: o.minSep },
+  ];
+  const rows = [], pairs = [], outcomes = [];
+  let modelIndex = 0;
+  for (const { model, param } of models) {
+    for (const q of qs) {
+      const rng = makeRng((o.seed * 1000003 + modelIndex * 101 + Math.round(q * 1000)) % 4294967296);
+      modelIndex += 1;
+      const agg = Object.fromEntries(REAL_ORDERS.map(id => [id, { fails: 0, wrongText: 0, erasures: [], corrected: [], unobservedLit: [] }]));
+      const perTrial = [];
+      for (let t = 0; t < o.trials; t += 1) {
+        const text = randomText(rng, payloadBytes);
+        const event = drawEvent(ctx, rng);
+        const outcome = {};
+        for (const orderId of REAL_ORDERS) {
+          const enc = encodeX(text, profile, { ecc: o.ecc, scanOrderId: orderId });
+          const levels = enc.levels;
+          const lit = Uint8Array.from(levels, x => (x > 0 ? 1 : 0));
+          const U = applyEvent(model, param, event, ctx, lit);
+          const obs = new Array(sites);
+          let unobservedLit = 0;
+          for (let s = 0; s < sites; s += 1) {
+            if (U[s]) {
+              if (lit[s]) unobservedLit += 1;
+              obs[s] = (o.unknownMode === 'oracle' && !lit[s]) ? 0 : null; // oracle: 소등 자리는 0 으로 «앎» · conservative: null
+            } else {
+              obs[s] = event.v[s] < q ? 1 - levels[s] : levels[s];
+            }
+          }
+          const dec = decodeX({ levels: obs }, profile, { ecc: o.ecc, scanOrderId: orderId });
+          const ok = dec.ok && dec.text === text;
+          const a = agg[orderId];
+          if (!ok) a.fails += 1;
+          if (dec.ok && dec.text !== text) a.wrongText += 1;
+          if (dec.ok) { a.erasures.push(dec.erasures); a.corrected.push(dec.corrected); }
+          a.unobservedLit.push(unobservedLit);
+          outcome[orderId] = ok ? 1 : 0;
+        }
+        perTrial.push(outcome);
+      }
+      const mean = arr => (arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null);
+      for (const orderId of REAL_ORDERS) {
+        const a = agg[orderId];
+        rows.push({
+          profile: o.profile, N, ecc: o.ecc, symbols: caps[orderId].symbols, nsym: caps[orderId].nsym, payloadBytes, model, param, q, unknownMode: o.unknownMode, orderId,
+          trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), wrongText: a.wrongText,
+          meanErasuresWhenOk: a.erasures.length ? +mean(a.erasures).toFixed(2) : null, meanCorrectedWhenOk: a.corrected.length ? +mean(a.corrected).toFixed(2) : null,
+          meanUnobservedLit: +mean(a.unobservedLit).toFixed(1),
+        });
+      }
+      const [A, B] = REAL_ORDERS;
+      const b = perTrial.filter(x => x[A] === 0 && x[B] === 1).length, c = perTrial.filter(x => x[A] === 1 && x[B] === 0).length;
+      pairs.push({ model, param, q, unknownMode: o.unknownMode, A, B, trials: o.trials, aFail_bOk: b, aOk_bFail: c, bothFail: perTrial.filter(x => x[A] === 0 && x[B] === 0).length, bothOk: perTrial.filter(x => x[A] === 1 && x[B] === 1).length });
+      outcomes.push({ model, param, q, perTrial: perTrial.map(x => REAL_ORDERS.map(id => x[id])) });
+    }
+  }
+  return {
+    schemaVersion: 'TLcube:X:scan-order-real:v0', options: o, payloadBytes,
+    // 실복호는 v0 단일 RS 블록 — options.blocks 는 이 경로에서 쓰이지 않아요(effectiveBlocks 1). CRC 는 TBD 라 «GT 본문 일치» 로 성공 판정(verified:false).
+    effectiveBlocks: 1, successCriterion: 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 는 pending)',
+    orderDefinition: { 'cell-order-v0': 'cell centre siteId asc, triples in cell order', 'morton-v0': 'coordinate-sum (Σx,Σy,Σz) bit-interleave x→y→z 8 levels, ties by cell-order index, no rounding — xScanOrderCanonical golden' },
+    caps: Object.fromEntries(REAL_ORDERS.map(id => [id, { symbols: caps[id].symbols, nsym: caps[id].nsym }])), rows, pairs, outcomes,
+  };
+}
+
 function parseArgs(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -214,6 +365,19 @@ function parseArgs(argv) {
 
 if (process.argv[1]?.endsWith('x-scan-order-probe.mjs')) {
   const args = parseArgs(process.argv.slice(2));
+  if (args.real) {
+    const res = runRealProbe(args);
+    const outDir = resolve(args.out ?? 'test/output/x-scan-order');
+    mkdirSync(outDir, { recursive: true });
+    const path = join(outDir, `${res.options.profile}_real_${res.options.unknownMode}_${res.options.ecc}_s${res.options.seed}_t${res.options.trials}.json`);
+    writeFileSync(path, JSON.stringify(res, null, 1));
+    console.log(`REAL profile ${res.options.profile} · payload ${res.payloadBytes} B · unknownMode ${res.options.unknownMode} · trials ${res.options.trials} → ${path}`);
+    console.log('model      param  q      order          pFail   wrong  erasOk  corrOk  unobsLit');
+    for (const r of res.rows) console.log(`${r.model.padEnd(10)} ${String(r.param).padEnd(6)} ${String(r.q).padEnd(6)} ${r.orderId.padEnd(14)} ${r.pFail.toFixed(3)}   ${String(r.wrongText).padStart(3)}   ${String(r.meanErasuresWhenOk ?? '-').padStart(5)}   ${String(r.meanCorrectedWhenOk ?? '-').padStart(5)}   ${r.meanUnobservedLit}`);
+    console.log('pairs (A=cell-order-v0, B=morton-v0): aFail_bOk / aOk_bFail / bothFail / bothOk');
+    for (const p of res.pairs) console.log(`  ${p.model.padEnd(8)} ${String(p.param).padEnd(5)} q${String(p.q).padEnd(5)} ${p.aFail_bOk} / ${p.aOk_bFail} / ${p.bothFail} / ${p.bothOk}`);
+    process.exit(0);
+  }
   const res = runProbe(args);
   const outDir = resolve(args.out ?? 'test/output/x-scan-order');
   mkdirSync(outDir, { recursive: true });
