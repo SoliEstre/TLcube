@@ -189,8 +189,11 @@ test('renderXSynth/sweep — codec 옵션 pass-through(finderId/scanOrderId/crc/
   const withCrc = renderXSynth({ ...base, codec: { crc: 'x-crc32c-v0', scanOrderId: 'morton-v0' } });
   assert.equal(withCrc.truth.codec.crc, 'x-crc32c-v0'); assert.equal(withCrc.truth.codec.scanOrderId, 'morton-v0');
   assert.ok(decodeX({ levels: withCrc.truth.levels }, 'X0', { crc: 'x-crc32c-v0', scanOrderId: 'morton-v0' }).verified);
-  // 구 인터페이스 o.ecc 는 codec.ecc 로 합쳐져요
+  // 구 인터페이스 o.ecc 는 codec.ecc 로 합쳐져요 · falsy ecc 는 M 으로 삼키지 않고 거절(codex 0317 P2)
   assert.equal(renderXSynth({ ...base, ecc: 'L' }).truth.codec.ecc, 'L');
+  for (const bad of [false, null, '', 0, NaN]) assert.throws(() => renderXSynth({ ...base, codec: { ecc: bad } }), /ecc/, `codec.ecc ${String(bad)}`);
+  for (const bad of [null, '', 0]) assert.throws(() => renderXSynth({ ...base, ecc: bad }), /ecc/, `o.ecc ${String(bad)}`);
+  assert.throws(() => renderXSynth({ ...base, codec: { ecc: 'Z' } }), /ecc/);
   assert.throws(() => renderXSynth({ ...base, codec: { finderId: 'nope' } }), /finderId/);
   assert.throws(() => renderXSynth({ ...base, codec: { finder: 'edge-all-v0' } }), /codec/);
   assert.throws(() => renderXSynth({ ...base, codec: 'edge-all-v0' }), /codec/);

@@ -73,7 +73,9 @@ export function assertRenderOptions(o) {
 /** 렌더 옵션 → 코덱 옵션(xCapacity/encodeX 에 그대로). o.ecc(구 인터페이스) 는 codec.ecc 로 합쳐요 */
 export const CODEC_OPTION_KEYS = Object.freeze(['ecc', 'finderId', 'scanOrderId', 'crc']);
 export function codecOptions(o) {
-  return { ...(o.codec ?? {}), ...(o.ecc !== undefined && (o.codec === undefined || o.codec.ecc === undefined) ? { ecc: o.ecc } : {}) };
+  const merged = { ...(o.codec ?? {}), ...(o.ecc !== undefined && (o.codec === undefined || o.codec.ecc === undefined) ? { ecc: o.ecc } : {}) };
+  if (merged.ecc !== undefined && typeof merged.ecc !== 'string') throw new RangeError(`codec.ecc 는 문자열(L/M/H)이거나 미지정이어야 해요: ${String(merged.ecc)}`);
+  return merged;
 }
 
 /** mulberry32 — 결정적 PRNG. seed 는 uint32 정수만(1 과 4294967297 이 같은 열을 내는 alias 를 계약으로 막아요 — effectiveSeed = seed) */
@@ -167,7 +169,7 @@ export function renderXSynth(opts) {
   const o = assertRenderOptions({ ...RENDER_DEFAULTS, ...opts });
   const profile = xProfile(o.profile);
   const codec = codecOptions(o);
-  if (codec.ecc) profile.ecc = codec.ecc;
+  if (codec.ecc !== undefined) profile.ecc = codec.ecc; // undefined 만 기본값(codex 0317 P2)
   const cap = xCapacity(profile, codec);
   const text = o.text ?? 'https://tl.estre.so/x'.slice(0, cap.payloadBytes);
   const enc = encodeX(text, profile, codec);
@@ -283,7 +285,7 @@ export function sweepXDirections(opts) {
   if (nAz * nEl > RENDER_LIMITS.MAX_SWEEP_DIRECTIONS) throw new RangeError(`방향 수 ${nAz * nEl} 가 상한 ${RENDER_LIMITS.MAX_SWEEP_DIRECTIONS} 을 넘어요`);
   const profile = xProfile(o.profile);
   const codec = codecOptions(o);
-  if (codec.ecc) profile.ecc = codec.ecc;
+  if (codec.ecc !== undefined) profile.ecc = codec.ecc; // undefined 만 기본값(codex 0317 P2)
   const cap = xCapacity(profile, codec);
   const N = cap.layout.raw.N;
   const enc = encodeX(o.text ?? 'sweep'.padEnd(Math.min(cap.payloadBytes, 5), 'x'), profile, codec);
@@ -333,6 +335,8 @@ function writeLuma(path, luma) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // --codec '{"finderId":"edge-m1s3-v0","crc":"x-crc32c-v0"}' — JSON 으로 받아 함수 API 와 같은 검증(assertRenderOptions/코덱 enum) 을 타요(codex 0317)
+  if (typeof args.codec === 'string') { try { args.codec = JSON.parse(args.codec); } catch (e) { throw new RangeError(`--codec 은 JSON 객체 문자열이어야 해요: ${e.message}`); } }
   if (!args.profile) { console.error('usage: --profile X0 [--text ...] --out DIR [--sweep] [render options]'); process.exit(2); }
   const outDir = resolve(args.out ?? 'test/output/x-synth');
   mkdirSync(outDir, { recursive: true });
