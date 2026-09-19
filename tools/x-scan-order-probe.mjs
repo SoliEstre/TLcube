@@ -27,7 +27,7 @@ import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { xProfileLayout, xProfile } from '../src/x-profile.js';
 import { xNsymFor, xDigitFromLevels, X_ERASED, xCapacity, encodeX, decodeX } from '../src/x-codec.js';
-import { packCellDigitsToSymbols } from '../src/base211.js';
+import { packCellDigitsToSymbols, CHUNK_BYTES, CHUNK_SYMBOLS, symbolCountForByteLength } from '../src/base211.js';
 import { X_CRC_ID } from '../src/x-crc.js';
 import { xSiteCoord } from '../src/x-layout.js';
 import { H_BINARY } from '../src/h-profile.js';
@@ -292,6 +292,17 @@ export function runRealProbe(opts) {
   const rngSplitRaw = o.rngSplit === 'true' ? true : o.rngSplit === 'false' ? false : o.rngSplit;
   if (rngSplitRaw !== undefined && rngSplitRaw !== true && rngSplitRaw !== false) throw new RangeError('rngSplit 은 true/false 만');
   const rngSplit = rngSplitRaw === true;
+  // --decodeCrc false: 연구 ablation(codex 0200 arm B) — encode 는 CRC 프레임(on 과 같은 codeword), decode 는 legacy 파서(header.js, 패딩 미검증이라 CRC 4 B 를 패딩으로 무시).
+  // 같은 codeword·같은 사건·같은 관측이면 RS 입력이 on(arm C) 과 동일해 «검사 강화» 만 분리돼요. 제품 와이어가 아니에요(명시 비정규). 기본 = crc 와 같음.
+  const decodeCrcRaw = o.decodeCrc === 'true' ? true : o.decodeCrc === 'false' ? false : o.decodeCrc;
+  if (decodeCrcRaw !== undefined && decodeCrcRaw !== true && decodeCrcRaw !== false) throw new RangeError('decodeCrc 는 true/false 만');
+  if (decodeCrcRaw === false && !crcOpt.crc) throw new RangeError('decodeCrc false 는 --crc 와 함께만(encode CRC / decode legacy ablation)');
+  const decOpt = decodeCrcRaw === false ? {} : crcOpt;
+  const ablation = decodeCrcRaw === false ? 'encode-crc-decode-legacy' : null;
+  // --symbolStats: 모든 trial 에 arm 별 심볼 상태 문자열('0' ok · '1' 소거 · '2' 오류, 길이 = symbols)과 [e, s, unobservedLit, unobservedSites, flippedSites] — 위치 귀속(codex 0202)
+  const symbolStatsRaw = o.symbolStats === 'true' ? true : o.symbolStats === 'false' ? false : o.symbolStats;
+  if (symbolStatsRaw !== undefined && symbolStatsRaw !== true && symbolStatsRaw !== false) throw new RangeError('symbolStats 는 true/false 만');
+  const symbolStats = symbolStatsRaw === true;
   // --orders: 후보 부분 집합(예: cell-order-v0 만 — cell-only 예산). 단일이면 pairs 는 비워요.
   const orders = o.orders === undefined ? [...REAL_ORDERS] : String(o.orders).split(',').map(s => s.trim()).filter(Boolean);
   if (orders.length < 1 || orders.length > REAL_ORDERS.length || new Set(orders).size !== orders.length || orders.some(id => !REAL_ORDERS.includes(id))) throw new RangeError(`orders 는 ${REAL_ORDERS.join('/')} 의 비어있지 않은 부분 집합`);
@@ -322,13 +333,14 @@ export function runRealProbe(opts) {
       const agg = Object.fromEntries(orders.map(id => [id, { fails: 0, wrongText: 0, erasures: [], corrected: [], unobservedLit: [], stages: Object.fromEntries(REAL_STAGES.map(s => [s, 0])), crcStageTrials: [], inconsistent: 0 }]));
       const perTrial = [];
       const perTrialStage = []; // 단계 enum 인덱스(REAL_STAGES) — 거절 단계 분포·CRC 단계 trial 위치 복원용(codex 0125)
+      const perTrialSymbols = [], perTrialSymbolCounts = []; // --symbolStats 일 때만 채움
       const eventDigests = []; // 물리 사건 digest(u·v·centre·az·el) — rngSplit 대응 표본 검증용
       const wrongTextEvents = []; // 조용한 오답 사건은 trial·GT·복호 본문·RS 통계까지 보존(D-3 00:42: binary outcome 만으론 재현·진단 불가)
       for (let t = 0; t < o.trials; t += 1) {
         const text = randomText(rngPayload, payloadBytes);
         const event = drawEvent(ctx, rng);
         eventDigests.push(eventDigest(event));
-        const outcome = {}, stageOf = {};
+        const outcome = {}, stageOf = {}, symOf = {}, symCountOf = {};
         for (const orderId of orders) {
           const enc = encodeX(text, profile, { ecc: o.ecc, scanOrderId: orderId, ...crcOpt });
           const levels = enc.levels;
@@ -344,36 +356,28 @@ export function runRealProbe(opts) {
               obs[s] = event.v[s] < q ? 1 - levels[s] : levels[s];
             }
           }
-          const dec = decodeX({ levels: obs }, profile, { ecc: o.ecc, scanOrderId: orderId, ...crcOpt });
-          const ok = dec.ok && dec.text === text && (crcOpt.crc ? dec.verified === true : true);
+          const dec = decodeX({ levels: obs }, profile, { ecc: o.ecc, scanOrderId: orderId, ...decOpt });
+          const ok = dec.ok && dec.text === text && (decOpt.crc ? dec.verified === true : true);
           const a = agg[orderId];
           if (!ok) a.fails += 1;
-          const stage = classifyStage(dec, text, Boolean(crcOpt.crc));
+          const stage = classifyStage(dec, text, Boolean(decOpt.crc));
           a.stages[stage] += 1;
           stageOf[orderId] = REAL_STAGES.indexOf(stage);
           if (stage === 'crc') { a.crcRejects = (a.crcRejects ?? 0) + 1; a.crcStageTrials.push(t); }
           // on 모드 회계 모순: ok 인데 verified 가 아니거나, verified 인데 본문 불일치 — 0 이어야 하고 0 이 아니면 CRC 구현 결함 신호
-          if (crcOpt.crc && dec.ok && (dec.verified !== true || dec.text !== text)) a.inconsistent += 1;
+          if (decOpt.crc && dec.ok && (dec.verified !== true || dec.text !== text)) a.inconsistent += 1;
+          // GF(211) 심볼 수준 e/s — «2s+e > nsym» 를 직접 입증(codex 0050): 수신 digit → 심볼로 묶어 GT 코드워드와 대조. --symbolStats 면 모든 trial, 아니면 오답 사건만
+          const sym = (symbolStats || (dec.ok && dec.text !== text)) ? symbolStatus(obs, caps[orderId], enc, levels) : null;
+          if (symbolStats) { symOf[orderId] = sym.status; symCountOf[orderId] = [sym.symbolErasures, sym.symbolErrors, unobservedLit, sym.unobservedSites, sym.flippedSites]; }
           if (dec.ok && dec.text !== text) {
             a.wrongText += 1;
-            const nullCount = obs.reduce((n, v) => n + (v === null ? 1 : 0), 0);
-            // GF(211) 심볼 수준 e/s — «2s+e > nsym» 를 직접 입증(codex 0050): 수신 digit → 심볼로 묶어 GT 코드워드와 대조
             const cap = caps[orderId];
-            const recvDigits = cap.layout.triples.map(tr => xDigitFromLevels(tr.map(s => obs[s])));
-            const used = recvDigits.slice(0, cap.symbols * 3);
-            let symbolErasures = 0, symbolErrors = 0;
-            const erasedSym = new Set();
-            used.forEach((d, i) => { if (!(Number.isInteger(d) && d >= 0 && d < 6)) erasedSym.add(Math.floor(i / 3)); });
-            const packed = packCellDigitsToSymbols(Uint8Array.from(used.map(d => (Number.isInteger(d) && d >= 0 && d < 6 ? d : 0))));
-            for (let i = 0; i < cap.symbols; i += 1) {
-              if (erasedSym.has(i) || packed.symbols[i] >= 211) symbolErasures += 1;
-              else if (packed.symbols[i] !== enc.codeword[i]) symbolErrors += 1;
-            }
+            const { symbolErasures, symbolErrors } = sym;
             wrongTextEvents.push({
               model, param, q, orderId, trial: t, text, decoded: dec.text, payloadLength: dec.payloadLength,
               erasures: dec.erasures, corrected: dec.corrected, nsym: cap.nsym,
               symbolErasures, symbolErrors, budget: 2 * symbolErrors + symbolErasures, budgetExceeded: 2 * symbolErrors + symbolErasures > cap.nsym,
-              unobservedLit, unobservedSites: nullCount, flippedSites: obs.reduce((n, v, s) => n + (v !== null && v !== levels[s] ? 1 : 0), 0),
+              unobservedLit, unobservedSites: sym.unobservedSites, flippedSites: sym.flippedSites,
             });
           }
           if (dec.ok) { a.erasures.push(dec.erasures); a.corrected.push(dec.corrected); }
@@ -382,14 +386,15 @@ export function runRealProbe(opts) {
         }
         perTrial.push(outcome);
         perTrialStage.push(stageOf);
+        if (symbolStats) { perTrialSymbols.push(symOf); perTrialSymbolCounts.push(symCountOf); }
       }
       const mean = arr => (arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null);
       for (const orderId of orders) {
         const a = agg[orderId];
         rows.push({
           profile: o.profile, N, ecc: o.ecc, symbols: caps[orderId].symbols, nsym: caps[orderId].nsym, payloadBytes, payloadMode, model, param, q, unknownMode: o.unknownMode, orderId,
-          trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), wrongText: a.wrongText, crc: crcOpt.crc ?? null, crcRejects: crcOpt.crc ? (a.crcRejects ?? 0) : null,
-          stages: a.stages, inconsistent: crcOpt.crc ? a.inconsistent : null, crcStageTrials: crcOpt.crc ? a.crcStageTrials : null,
+          trials: o.trials, pFail: +(a.fails / o.trials).toFixed(4), wrongText: a.wrongText, crc: crcOpt.crc ?? null, decodeCrc: crcOpt.crc ? decodeCrcRaw !== false : null, ablation, crcRejects: decOpt.crc ? (a.crcRejects ?? 0) : null,
+          stages: a.stages, inconsistent: decOpt.crc ? a.inconsistent : null, crcStageTrials: decOpt.crc ? a.crcStageTrials : null,
           meanErasuresWhenOk: a.erasures.length ? +mean(a.erasures).toFixed(2) : null, meanCorrectedWhenOk: a.corrected.length ? +mean(a.corrected).toFixed(2) : null,
           meanUnobservedLit: +mean(a.unobservedLit).toFixed(1),
         });
@@ -399,20 +404,55 @@ export function runRealProbe(opts) {
         const b = perTrial.filter(x => x[A] === 0 && x[B] === 1).length, c = perTrial.filter(x => x[A] === 1 && x[B] === 0).length;
         pairs.push({ model, param, q, unknownMode: o.unknownMode, A, B, trials: o.trials, aFail_bOk: b, aOk_bFail: c, bothFail: perTrial.filter(x => x[A] === 0 && x[B] === 0).length, bothOk: perTrial.filter(x => x[A] === 1 && x[B] === 1).length });
       }
-      outcomes.push({ model, param, q, orders: [...orders], perTrial: perTrial.map(x => orders.map(id => x[id])), perTrialStage: perTrialStage.map(x => orders.map(id => x[id])), stageEnum: [...REAL_STAGES], eventDigests, wrongTextEvents });
+      outcomes.push({ model, param, q, orders: [...orders], perTrial: perTrial.map(x => orders.map(id => x[id])), perTrialStage: perTrialStage.map(x => orders.map(id => x[id])), stageEnum: [...REAL_STAGES], eventDigests, wrongTextEvents, ...(symbolStats ? { perTrialSymbols: perTrialSymbols.map(x => orders.map(id => x[id])), perTrialSymbolCounts: perTrialSymbolCounts.map(x => orders.map(id => x[id])), symbolCountFields: [...SYMBOL_COUNT_FIELDS], symbolStatusLegend: { 0: 'ok', 1: 'erasure(000/111/미관측/불법 ≥211)', 2: 'error' } } : {}) });
     }
   }
   return {
     schemaVersion: 'TLcube:X:scan-order-real:v1', options: o, payloadBytes, payloadMode, orders: [...orders],
     // 실복호는 v0 단일 RS 블록 — options.blocks 는 이 경로에서 쓰이지 않아요(effectiveBlocks 1). CRC 는 TBD 라 «GT 본문 일치» 로 성공 판정(verified:false).
-    effectiveBlocks: 1, crc: crcOpt.crc ?? null, rngSplit, stageEnum: [...REAL_STAGES],
-    successCriterion: crcOpt.crc ? 'decodeX ok ∧ text === GT ∧ verified (도메인 결속 CRC 통과)' : 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 없음, verified:false)',
+    effectiveBlocks: 1, crc: crcOpt.crc ?? null, decodeCrc: crcOpt.crc ? decodeCrcRaw !== false : null, ablation, symbolStats, rngSplit, stageEnum: [...REAL_STAGES],
+    successCriterion: ablation ? 'decodeX(legacy 파서, 패딩 미검증) ok ∧ text === GT — encode 는 CRC 프레임(연구 ablation arm B, 제품 와이어 아님, verified:false)' : crcOpt.crc ? 'decodeX ok ∧ text === GT ∧ verified (도메인 결속 CRC 통과)' : 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 없음, verified:false)',
+    symbolLayout: symbolLayoutFor(caps[orders[0]]),
     orderDefinition: { 'cell-order-v0': 'cell centre siteId asc, triples in cell order', 'morton-v0': 'coordinate-sum (Σx,Σy,Σz) bit-interleave x→y→z 8 levels, ties by cell-order index, no rounding — xScanOrderCanonical golden' },
     caps: Object.fromEntries(orders.map(id => [id, { symbols: caps[id].symbols, nsym: caps[id].nsym, payloadBytes: caps[id].payloadBytes }])), rows, pairs, outcomes,
   };
 }
 
 /** 결과 단계 enum — 거절 «어느 단계» 를 trial 단위로 보존(codex 0125). 순서는 decodeX 파이프라인 순. */
+export const SYMBOL_COUNT_FIELDS = Object.freeze(['symbolErasures', 'symbolErrors', 'unobservedLit', 'unobservedSites', 'flippedSites']);
+
+/** 관측 levels(obs) → 수신 심볼 vs GT codeword 의 심볼별 상태. status[i]: '0' ok · '1' 소거(000/111/미관측 → digit 없음, 또는 불법 심볼 ≥211) · '2' 오류(값 다름) */
+export function symbolStatus(obs, cap, enc, levels) {
+  const recvDigits = cap.layout.triples.map(tr => xDigitFromLevels(tr.map(s => obs[s])));
+  const used = recvDigits.slice(0, cap.symbols * 3);
+  const erasedSym = new Set();
+  used.forEach((d, i) => { if (!(Number.isInteger(d) && d >= 0 && d < 6)) erasedSym.add(Math.floor(i / 3)); });
+  const packed = packCellDigitsToSymbols(Uint8Array.from(used.map(d => (Number.isInteger(d) && d >= 0 && d < 6 ? d : 0))));
+  let symbolErasures = 0, symbolErrors = 0, status = '';
+  for (let i = 0; i < cap.symbols; i += 1) {
+    if (erasedSym.has(i) || packed.symbols[i] >= 211) { symbolErasures += 1; status += '1'; }
+    else if (packed.symbols[i] !== enc.codeword[i]) { symbolErrors += 1; status += '2'; }
+    else status += '0';
+  }
+  const unobservedSites = obs.reduce((n, v) => n + (v === null ? 1 : 0), 0);
+  const flippedSites = obs.reduce((n, v, s) => n + (v !== null && v !== levels[s] ? 1 : 0), 0);
+  return { symbolErasures, symbolErrors, status, unobservedSites, flippedSites };
+}
+
+/** codeword 심볼 구간: base211 청킹(27 B ↔ 28 심볼, 나머지 청크는 symbolCountForByteLength) 그대로 — bytesToSymbols 의 좌→우 청크 순서와 같아요. 합이 dataSymbols 와 다르면 throw */
+export function symbolLayoutFor(cap) {
+  const chunks = [];
+  let byteOffset = 0, symbolOffset = 0;
+  while (byteOffset < cap.dataBytes) {
+    const bytes = Math.min(CHUNK_BYTES, cap.dataBytes - byteOffset);
+    const symbols = bytes === CHUNK_BYTES ? CHUNK_SYMBOLS : symbolCountForByteLength(bytes);
+    chunks.push({ byteOffset, bytes, symbolOffset, symbols });
+    byteOffset += bytes; symbolOffset += symbols;
+  }
+  if (symbolOffset !== cap.dataSymbols) throw new Error(`symbolLayout: 청크 심볼 합 ${symbolOffset} ≠ dataSymbols ${cap.dataSymbols}`);
+  return { symbols: cap.symbols, dataSymbols: cap.dataSymbols, dataBytes: cap.dataBytes, nsym: cap.nsym, chunkBytes: CHUNK_BYTES, chunkSymbols: CHUNK_SYMBOLS, chunks, parity: { symbolOffset: cap.dataSymbols, symbols: cap.nsym } };
+}
+
 export const REAL_STAGES = Object.freeze(['ok', 'wrongText', 'erasure-budget', 'rs', 'bytes', 'length', 'padding', 'crc', 'utf8', 'unframe', 'other']);
 
 export function classifyStage(dec, gt, crcMode) {
@@ -447,7 +487,7 @@ if (process.argv[1]?.endsWith('x-scan-order-probe.mjs')) {
     const res = runRealProbe(args);
     const outDir = resolve(args.out ?? 'test/output/x-scan-order');
     mkdirSync(outDir, { recursive: true });
-    const tag = `${res.crc ? '_crc' : ''}${res.rngSplit ? '_split' : ''}`; // 파일명에 crc/rngSplit 을 실어 원자료 충돌·오표기 방지
+    const tag = `${res.crc ? '_crc' : ''}${res.ablation ? '_ablation-legacy-decode' : ''}${res.rngSplit ? '_split' : ''}${res.symbolStats ? '_sym' : ''}`; // 파일명에 crc/ablation/rngSplit/symbolStats 를 실어 원자료 충돌·오표기 방지
     const path = join(outDir, `${res.options.profile}_real_${res.options.unknownMode}_${res.options.ecc}_s${res.options.seed}_t${res.options.trials}${tag}.json`);
     writeFileSync(path, JSON.stringify(res, null, 1));
     console.log(`REAL profile ${res.options.profile} · payload ${res.payloadBytes} B · unknownMode ${res.options.unknownMode} · trials ${res.options.trials} → ${path}`);
