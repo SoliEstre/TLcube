@@ -180,6 +180,12 @@ test('scanOrderId 연구 override — registry 는 cell-order-v0 그대로, mort
   assert.equal(cell.rawCanonical, morton.rawCanonical);
   assert.equal(morton.digits, cell.digits);
   assert.throws(() => xProfileLayout('X0', { scanOrderId: 'nope' }), RangeError);
+  // 명시된 잘못된 값은 기본값으로 «조용히» 떨어지지 않아요(undefined 만 기본값)
+  for (const bad of ['', false, 0, NaN, null, 'cell-order-v9']) {
+    assert.throws(() => xCapacity('X0', { scanOrderId: bad }), RangeError, `scanOrderId ${String(bad)}`);
+    assert.throws(() => encodeX('x', 'X0', { scanOrderId: bad }), RangeError, `encode scanOrderId ${String(bad)}`);
+  }
+  assert.equal(xCapacity('X0', { scanOrderId: undefined }).scanOrderId, 'cell-order-v0');
   for (const id of ['X0', 'X1']) {
     const capC = xCapacity(id), capM = xCapacity(id, { scanOrderId: 'morton-v0' });
     assert.equal(capM.payloadBytes, capC.payloadBytes);
@@ -189,9 +195,13 @@ test('scanOrderId 연구 override — registry 는 cell-order-v0 그대로, mort
     assert.notDeepEqual(Array.from(encM.levels), Array.from(encC.levels), '사이트 레벨 배치는 달라요');
     assert.equal(decodeX({ levels: encM.levels }, id, { scanOrderId: 'morton-v0' }).text, text);
     assert.equal(decodeX({ levels: encC.levels }, id).text, text);
-    // 순서를 섞어 읽으면(morton 레벨을 cell-order 로) 복호가 실패하거나 다른 본문 — 조용한 오답은 아니어야 해요
+    // 순서를 섞어 읽으면(morton 레벨을 cell-order 로) 복호는 실패해야 하고, 만약 ok 라면 «다른 본문» 이어선 안 돼요(조용한 오답 금지).
+    // CRC 가 TBD 라 일반 교차 입력의 오답 방지는 보장이 아니라 관측이에요 — verified:false 를 같이 단언해요(codex REPORT_009).
     const cross = decodeX({ levels: encM.levels }, id);
-    assert.ok(!cross.ok || cross.text !== text);
+    assert.ok(!cross.ok || cross.text === text, `교차 읽기가 조용한 다른 본문을 냈어요: ${cross.text}`);
+    if (cross.ok) assert.equal(cross.verified, false);
+    assert.equal(encM.scanOrderId, 'morton-v0'); assert.equal(encC.scanOrderId, 'cell-order-v0');
+    assert.ok(encM.schema.includes('scan=morton-v0') && encC.schema.includes('scan=cell-order-v0'), '산출 스키마가 실제 순서를 실어요');
   }
 });
 

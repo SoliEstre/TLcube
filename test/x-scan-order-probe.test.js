@@ -19,7 +19,7 @@ test('scanOrders — 세 순서는 같은 트리플 집합의 순열이고, mort
   const N = pl.raw.N;
   const centroid = t => t.reduce((a, s) => { const x = Math.floor(s / (N * N)), y = Math.floor(s / N) % N, z = s % N; return [a[0] + x / 3, a[1] + y / 3, a[2] + z / 3]; }, [0, 0, 0]);
   const meanStep = seq => { let d = 0; for (let i = 1; i < seq.length; i += 1) { const a = centroid(seq[i - 1]), b = centroid(seq[i]); d += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); } return d / (seq.length - 1); };
-  assert.ok(meanStep(orders['morton-v0']) < meanStep(orders['cell-order-v0']), 'morton 이웃 거리 < cell-order');
+  assert.ok(meanStep(orders['morton-round2-legacy']) < meanStep(orders['cell-order-v0']), 'legacy morton 이웃 거리 < cell-order');
   assert.ok(meanStep(orders['stride-v0']) > meanStep(orders['cell-order-v0']), 'stride 는 흩뿌림');
 });
 
@@ -77,6 +77,11 @@ test('assertProbeOptions — 실행 전 거절: trials ∞/0/과대 · q 범위 
   assert.throws(() => assertProbeOptions({ ...base, unknownMode: 'magic' }), /unknownMode/);
   assert.throws(() => assertProbeOptions({ ...base, trials: 20000, q: '0,0.01,0.02,0.03', dropoutP: '0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08', blocks: '1,2,3,4' }), /총 작업량/);
   assert.throws(() => runRealProbe({ profile: 'X0', trials: Infinity }), /trials/);
+  // 기본(대리지표) 진입점도 같은 검사를 지나요 — trials 0/∞, 거대 목록, q 목록(legacy 는 scalar) 전부 실행 전 거절
+  assert.throws(() => runProbe({ profile: 'X0', trials: Infinity }), /trials/);
+  assert.throws(() => runProbe({ profile: 'X0', trials: 0 }), /trials/);
+  assert.throws(() => runProbe({ profile: 'X0', trials: 2, q: '0,0.01' }), /scalar/);
+  assert.throws(() => runProbe({ profile: 'X0', trials: 2, dropoutP: Array.from({ length: 17 }, () => 0.01).join(',') }), /목록 길이/);
 });
 
 test('runRealProbe — 유효 본문 실복호: q=0·작은 dropout 은 실패 0, 결정적, pairs 합 = trials, wrongText 0, 공유 사건은 순서 무관', () => {

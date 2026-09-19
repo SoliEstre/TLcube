@@ -60,7 +60,9 @@ export function scanOrders(profileLayout, blocks) {
   const stride = [];
   const B = Math.max(1, blocks);
   for (let r = 0; r < B; r += 1) for (let i = r; i < triples.length; i += B) stride.push(triples[i]);
-  return { 'cell-order-v0': triples, 'morton-v0': morton, 'stride-v0': stride };
+  // 주의: 이 대리지표 경로의 Morton 은 round(2·centroid) 양자화(초기 구현) — 코덱의 `morton-v0`(좌표 합, 반올림 없음)와 «다른 알고리즘» 이라
+  // 이름을 갈라요. 09-19 s1~s4 원자료의 'morton-v0' 라벨은 이 legacy 정의예요(REPORT_003 §3 정정).
+  return { 'cell-order-v0': triples, 'morton-round2-legacy': morton, 'stride-v0': stride };
 }
 
 /** 블록 배정: 심볼 인덱스 → 블록 */
@@ -150,7 +152,10 @@ export function trial({ orders, symbols, blocks, assignments, nsymFor, U, q, rng
 
 export function runProbe(opts) {
   const o = { ...DEFAULTS, ...opts };
-  const blocksList = String(o.blocks).split(',').map(Number).filter(b => b >= 1);
+  // 기본(대리지표) 경로도 실행 «전» 검사 — legacy q 는 유한 scalar 하나(목록이면 거절: 이 경로는 q 를 순회하지 않아요)
+  const checked = assertProbeOptions({ ...o, q: String(o.q) });
+  if (checked.qs.length !== 1) throw new RangeError('runProbe 의 q 는 scalar 하나예요(목록은 --real 경로)');
+  const blocksList = checked.blocks;
   const pl = xProfileLayout(o.profile);
   const N = pl.raw.N, sites = N ** 3;
   const symbols = Math.floor(pl.digits / 3);
@@ -338,7 +343,13 @@ export function runRealProbe(opts) {
       outcomes.push({ model, param, q, perTrial: perTrial.map(x => REAL_ORDERS.map(id => x[id])) });
     }
   }
-  return { schemaVersion: 'TLcube:X:scan-order-real:v0', options: o, payloadBytes, caps: Object.fromEntries(REAL_ORDERS.map(id => [id, { symbols: caps[id].symbols, nsym: caps[id].nsym }])), rows, pairs, outcomes };
+  return {
+    schemaVersion: 'TLcube:X:scan-order-real:v0', options: o, payloadBytes,
+    // 실복호는 v0 단일 RS 블록 — options.blocks 는 이 경로에서 쓰이지 않아요(effectiveBlocks 1). CRC 는 TBD 라 «GT 본문 일치» 로 성공 판정(verified:false).
+    effectiveBlocks: 1, successCriterion: 'decodeX ok ∧ text === GT (RS/프레임 복호 + 정답 본문 대조; X domain/profile/본문 CRC 는 pending)',
+    orderDefinition: { 'cell-order-v0': 'cell centre siteId asc, triples in cell order', 'morton-v0': 'coordinate-sum (Σx,Σy,Σz) bit-interleave x→y→z 8 levels, ties by cell-order index, no rounding — xScanOrderCanonical golden' },
+    caps: Object.fromEntries(REAL_ORDERS.map(id => [id, { symbols: caps[id].symbols, nsym: caps[id].nsym }])), rows, pairs, outcomes,
+  };
 }
 
 function parseArgs(argv) {

@@ -76,7 +76,7 @@ export function xProfileDto(profileOrId) {
 export function xProfileLayout(profileOrId, options = {}) {
   const base = typeof profileOrId === 'string' ? xProfile(profileOrId) : assertXProfile(profileOrId);
   // 연구 override(rd-4): scanOrderId 만 바꿔 «같은 registry 프로파일의 다른 심볼 묶음» 을 실제 코덱으로 비교해요. registry·DTO 는 그대로예요.
-  const scanOrderId = options.scanOrderId ?? base.scanOrderId;
+  const scanOrderId = options.scanOrderId === undefined ? base.scanOrderId : options.scanOrderId; // null 도 «명시된 잘못된 값» — ?? 로 삼키지 않아요
   if (!X_SCAN_ORDERS.includes(scanOrderId)) throw new RangeError(`scanOrderId 는 ${X_SCAN_ORDERS.join('/')} 중 하나여야 해요`);
   const profile = { ...base, scanOrderId };
   const raw = layoutX({ layoutId: profile.layoutId, N: profile.N, c: profile.c });
