@@ -115,6 +115,27 @@ test('makeRng — seed 재현, uint32 밖·비정수 seed 는 거절(alias 금�
   assert.equal(renderXSynth(SMALL).truth.render.effectiveSeed, SMALL.seed);
 });
 
+test('PSF underflow·PRNG wrap — 작은 σ 는 no-op 으로 유한 luma, 상태는 매 draw uint32(codex REPORT_006)', () => {
+  const tiny = renderXSynth({ profile: 'X0', text: 'x', width: 16, height: 16, psf: 1e-200, noise: 0 });
+  assert.ok([...tiny.luma].every(Number.isFinite), 'psf 1e-200 → NaN 커널');
+  const noop = renderXSynth({ profile: 'X0', text: 'x', width: 16, height: 16, psf: 0, noise: 0 });
+  assert.deepEqual([...tiny.luma], [...noop.luma], 'σ < PSF_NOOP_SIGMA 는 σ=0 과 같아요');
+  assert.ok([...renderXSynth({ ...SMALL, psf: 0.002 }).luma].every(Number.isFinite));
+  // mulberry32 정본: 상태 a_k = (seed + k·0x6D2B79F5) mod 2³² — k = 4,917,760 에서 wrap 없는 구현은 2⁵³ 위에서 어긋나요
+  const K = 4917760;
+  const rng = makeRng(1);
+  let last = 0;
+  for (let i = 0; i < K; i += 1) last = rng();
+  const a = Number((1n + BigInt(K) * 0x6D2B79F5n) % 4294967296n);
+  let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  const expected = ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  assert.equal(last, expected, `draw ${K} 이 uint32 정본과 달라요`);
+  assert.ok(Math.abs(expected - 0.26924679218791425) < 1e-15, 'codex 재현값');
+  // seed 1 과 2 는 그 지점에서 서로 달라요
+  const r2 = makeRng(2); let last2 = 0; for (let i = 0; i < K; i += 1) last2 = r2();
+  assert.notEqual(last, last2);
+});
+
 test('renderXSynth/sweep — 자원·범위 경계는 배열 생성 전에 거절(codex REPORT_004)', () => {
   assert.throws(() => renderXSynth({ ...SMALL, width: 16, height: 16, sat: 0 }), /sat/);
   assert.throws(() => renderXSynth({ ...SMALL, sat: Infinity }), /sat/);

@@ -69,7 +69,8 @@ export function assertRenderOptions(o) {
 export function makeRng(seed) {
   if (!Number.isInteger(seed) || seed < 0 || seed > RENDER_LIMITS.MAX_SEED) throw new RangeError(`seed 는 0…2³²−1 정수여야 해요: ${seed}`);
   let a = seed >>> 0;
-  return () => { a += 0x6D2B79F5; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  // 상태를 매 draw uint32 로 wrap — 무제한 double 누적은 draw 4,917,759 근처(2⁵³)에서 seed 1/2 상태가 같은 double 로 합쳐졌어요(codex REPORT_006)
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 function gaussian(rng) { const u = 1 - rng(), v = rng(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
 
@@ -124,12 +125,14 @@ function splatDisk(img, width, height, u, v, radius, amp) {
 }
 
 /** 분리 가우시안 블러(σ px, 반경 3σ) — PSF */
+/** σ < PSF_NOOP_SIGMA 는 no-op(픽셀 격자보다 훨씬 좁은 PSF 는 항등) — 1e-200 같은 값은 2σ² 가 0 으로 underflow 해 0/0 커널을 냈어요(codex REPORT_006) */
+export const PSF_NOOP_SIGMA = 1e-3;
 function blurGaussian(img, width, height, sigma) {
-  if (!(sigma > 0)) return img;
+  if (!(sigma >= PSF_NOOP_SIGMA)) return img;
   const rad = Math.max(1, Math.ceil(sigma * 3));
   const k = new Float64Array(rad * 2 + 1);
   let s = 0;
-  for (let i = -rad; i <= rad; i += 1) { k[i + rad] = Math.exp(-(i * i) / (2 * sigma * sigma)); s += k[i + rad]; }
+  for (let i = -rad; i <= rad; i += 1) { const u = i / sigma; k[i + rad] = Math.exp(-0.5 * u * u); s += k[i + rad]; }
   for (let i = 0; i < k.length; i += 1) k[i] /= s;
   const tmp = new Float64Array(img.length);
   for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
