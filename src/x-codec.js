@@ -54,7 +54,7 @@ function dataBytesFor(dataSymbols) {
 
 function resolve(profileOrId, options = {}) {
   const profile = typeof profileOrId === 'string' ? xProfile(profileOrId) : { ...assertXProfile(profileOrId), ecc: profileOrId.ecc };
-  if (options.ecc) profile.ecc = options.ecc;
+  if (options.ecc !== undefined) profile.ecc = options.ecc; // undefined 만 «프로파일 값» — false/null/''/0/NaN 은 enum 검사가 거절(codex 0317 P2, 2351 과 같은 규칙)
   if (profile.tones !== 2) throw new RangeError('v0 코덱은 2톤만 지원해요');
   return profile;
 }

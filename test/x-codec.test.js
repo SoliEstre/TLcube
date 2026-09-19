@@ -236,3 +236,9 @@ test('encodeX — 프로파일·용량 거절', () => {
   assert.throws(() => encodeX('a'.repeat(cap.payloadBytes + 1), 'X0'), RangeError);
   assert.throws(() => decodeX({ digits: new Array(10).fill(0) }, 'X0'), RangeError);
 });
+
+test('options.ecc — undefined 만 프로파일 값, falsy/미지 값은 거절(codex 0317 P2)', () => {
+  assert.equal(xCapacity('X0').ecc, 'M');
+  assert.equal(xCapacity('X0', { ecc: 'L' }).ecc, 'L');
+  for (const bad of [false, null, '', 0, NaN, 'Z']) assert.throws(() => xCapacity('X0', { ecc: bad }), /ecc/, `ecc ${String(bad)}`);
+});
