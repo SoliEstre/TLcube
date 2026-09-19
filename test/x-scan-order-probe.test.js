@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS } from '../tools/x-scan-order-probe.mjs';
+import { scanOrders, blockOf, occlusionMask, trial, runProbe, runRealProbe, assertProbeOptions, drawEvent, applyEvent, REAL_ORDERS, REAL_STAGES, classifyStage } from '../tools/x-scan-order-probe.mjs';
 import { xProfileLayout } from '../src/x-profile.js';
 import { xNsymFor } from '../src/x-codec.js';
 import { makeRng, cameraFromFov } from '../tools/x-synth-render.mjs';
@@ -116,15 +116,40 @@ test('runRealProbe --crc / --rngSplit — CRC 모드는 verified 까지 성공 �
   assert.equal(on.successCriterion.includes('verified'), true);
   for (const r of on.rows) { assert.equal(r.crc, 'x-crc32c-v0'); assert.ok(Number.isInteger(r.crcRejects)); assert.equal(r.wrongText, 0, 'CRC 모드에서 조용한 오답은 0 이어야 해요'); }
   for (const r of off.rows) assert.equal(r.crcRejects, null);
-  // 기본(단일 스트림)은 payload 길이가 바뀌면 사건도 달라져요; rngSplit 이면 on/off 의 사건이 같아요 → 미관측 점등 수(unobservedLit 평균)로 확인
+  // rngSplit: on(26 B)/off(30 B) 가 «같은 물리 사건» 을 공유하는지 사건 digest 배열로 실제 비교(codex 0125) — 기본(단일 스트림)은 길이가 바뀌면 사건이 달라져요
   const offS = runRealProbe({ ...base, rngSplit: true }), onS = runRealProbe({ ...base, rngSplit: true, crc: true });
-  const key = r => `${r.model}|${r.param}|${r.q}|${r.orderId}`;
-  const onMap = new Map(onS.rows.map(r => [key(r), r]));
-  // 사건이 같아도 점등 마스크는 본문에 따라 다르므로 완전 동일은 아니고, dropout 모델의 미관측 «사이트» 수는 같은 u 벡터에서 나와요 — outcomes 의 사건 재현은 drawEvent 결정성으로 검증
   assert.equal(offS.rngSplit, true); assert.equal(onS.rngSplit, true);
-  assert.ok(offS.rows.every(r => onMap.has(key(r))));
+  for (let i = 0; i < offS.outcomes.length; i += 1) assert.deepEqual(onS.outcomes[i].eventDigests, offS.outcomes[i].eventDigests, `사건 digest ${i}`);
+  assert.notDeepEqual(on.outcomes[0].eventDigests, off.outcomes[0].eventDigests, '단일 스트림은 길이가 다르면 사건이 달라요');
+  // 단계 enum·회계: 각 행 stages 합 = trials, ok 수 = trials − fails, on 모드 inconsistent 0, crcStageTrials 길이 = crcRejects
+  for (const r of [...on.rows, ...off.rows]) {
+    assert.equal(Object.values(r.stages).reduce((x, y) => x + y, 0), r.trials);
+    assert.equal(r.stages.ok, Math.round(r.trials * (1 - r.pFail)));
+  }
+  for (const r of on.rows) { assert.equal(r.inconsistent, 0); assert.equal(r.crcStageTrials.length, r.crcRejects); }
+  assert.deepEqual(on.stageEnum, REAL_STAGES);
+  assert.equal(on.outcomes[0].perTrialStage.length, 8);
+  // --payloadBytes: 양 arm 동일 본문 길이(순수 비교), 범위 검사; --orders 단일이면 pairs 없음
+  const same = runRealProbe({ ...base, payloadBytes: 26 });
+  assert.equal(same.payloadMode, 'fixed-override'); assert.equal(same.payloadBytes, 26); assert.equal(on.payloadMode, 'max-capacity-of-mode');
+  assert.throws(() => runRealProbe({ ...base, crc: true, payloadBytes: 27 }), /payloadBytes/);
+  const single = runRealProbe({ ...base, orders: 'cell-order-v0' });
+  assert.deepEqual(single.orders, ['cell-order-v0']); assert.equal(single.pairs.length, 0); assert.ok(single.rows.every(r => r.orderId === 'cell-order-v0'));
+  assert.throws(() => runRealProbe({ ...base, orders: 'zigzag' }), /orders/);
   // 문서화된 기본값: rngSplit 없음 = 기존 결과와 바이트 동일(결정성 보존)
   assert.deepEqual(runRealProbe(base).rows, off.rows);
+});
+
+test('classifyStage — decodeX 결과를 단계 enum 으로', () => {
+  assert.equal(classifyStage({ ok: true, text: 'a', verified: true }, 'a', true), 'ok');
+  assert.equal(classifyStage({ ok: true, text: 'a', verified: false }, 'a', false), 'ok');
+  assert.equal(classifyStage({ ok: true, text: 'a', verified: false }, 'a', true), 'other');
+  assert.equal(classifyStage({ ok: true, text: 'b' }, 'a', false), 'wrongText');
+  assert.equal(classifyStage({ ok: false, reason: '소거 14 > nsym 13' }, 'a', false), 'erasure-budget');
+  assert.equal(classifyStage({ ok: false, reason: 'symbols-to-bytes: x' }, 'a', false), 'bytes');
+  assert.equal(classifyStage({ ok: false, reason: 'unframe: x' }, 'a', false), 'unframe');
+  assert.equal(classifyStage({ ok: false, reason: 'rs failed' }, 'a', false), 'rs');
+  for (const s of ['length', 'padding', 'crc', 'utf8']) assert.equal(classifyStage({ ok: false, stage: s, reason: 'frameX' }, 'a', true), s);
 });
 
 test('runProbe — 작은 실행이 행 수·필드·결정성을 지켜요', () => {
