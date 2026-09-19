@@ -67,7 +67,8 @@ export function xCapacity(profileOrId, options = {}) {
   const profile = resolve(profileOrId, options);
   // options.scanOrderId = rd-4 연구 override(심볼 묶음 순서) — registry/DTO 불변, 같은 프로파일의 다른 와이어 순서를 실제 코덱으로 비교할 때만.
   // undefined 만 «기본값» — 명시된 ''/false/0/NaN 은 그대로 넘겨 enum 검사가 거절하게 해요(truthy 삼항식은 우회로였어요, codex 2351).
-  const layout = xProfileLayout(profile, options.scanOrderId === undefined ? {} : { scanOrderId: options.scanOrderId });
+  // options.finderId = rd-3 연구 override(파인더 예약) — 같은 규칙(undefined 만 기본값). 예약 뒤 digit 수가 줄어 용량이 자동으로 재유도돼요.
+  const layout = xProfileLayout(profile, { ...(options.scanOrderId === undefined ? {} : { scanOrderId: options.scanOrderId }), ...(options.finderId === undefined ? {} : { finderId: options.finderId }) });
   const digits = layout.digits;
   const symbols = Math.floor(digits / DIGITS_PER_SYMBOL);
   if (symbols > MAX_CODEWORD_LEN) throw new RangeError(`단일 RS 블록 한계(${MAX_CODEWORD_LEN})를 넘어요: ${symbols} — 다중 블록은 v1`);
@@ -114,9 +115,11 @@ export function encodeX(text, profileOrId, options = {}) {
     const pattern = H_BINARY[digits[i]];
     triple.forEach((siteId, k) => { levels[siteId] = pattern[k]; });
   });
+  // 파인더 예약 사이트(연구 옵션): 데이터 트리플에서 빠진 자리와 잔여 자리에 구조 레벨을 실어요(중심은 템플릿 그대로 상시 on)
+  for (const [siteId, lv] of cap.layout.finderLevels) levels[siteId] = lv;
   return {
     schema: xCodecSchema(cap.layout.profile.scanOrderId, cap.crc), scanOrderId: cap.layout.profile.scanOrderId, crc: cap.crc,
-    profileId: cap.profileId, ecc: cap.ecc, N: cap.layout.raw.N, layoutId: cap.layout.raw.layoutId,
+    profileId: cap.profileId, ecc: cap.ecc, N: cap.layout.raw.N, layoutId: cap.layout.raw.layoutId, finderId: cap.layout.finderId,
     nsym: cap.nsym, dataSymbols: cap.dataSymbols, dataBytes: cap.dataBytes, payloadLength: new TextEncoder().encode(text).length,
     messageSymbolCount: messageSymbols.length, codeword, digits, levels,
   };
