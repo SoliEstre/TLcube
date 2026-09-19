@@ -21,9 +21,11 @@ export const X_FINDER_SCHEMA = 'TLcube:X:finder:v0';
 export const X_FINDER_WORD_RULE = 'timing-alt-v0';
 
 export const X_FINDER_PATTERNS = Object.freeze({
-  'edge-all-v0': Object.freeze({ m: 2, s: 1, phase: 0, note: '모서리선 전부 구조(코너 + 모티프 2 + 타이밍 워드)' }),
-  'edge-m1s2-v0': Object.freeze({ m: 1, s: 2, phase: 0, note: '희소 — 모티프 1, 워드 간격 2' }),
-  'edge-m1s3-v0': Object.freeze({ m: 1, s: 3, phase: 0, note: '희소 — 모티프 1, 워드 간격 3(N8 lee-fo 140→114, 종합 §3.2 «corrected 114»)' }),
+  'edge-all-v0': Object.freeze({ m: 2, s: 1, phase: 0, symmetric: false, note: '모서리선 전부 구조(코너 + 모티프 2 + 타이밍 워드)' }),
+  'edge-m1s2-v0': Object.freeze({ m: 1, s: 2, phase: 0, symmetric: false, note: '희소 — 모티프 1, 워드 간격 2(낮은 코너 쪽 한 방향 stride)' }),
+  'edge-m1s3-v0': Object.freeze({ m: 1, s: 3, phase: 0, symmetric: false, note: '희소 — 모티프 1, 워드 간격 3, 한 방향 stride(N8 lee-fo 140→114 · N10 271→244)' }),
+  // symmetric: 워드 위치 = 낮은 코너 쪽 stride ∪ 높은 코너 쪽 stride(양끝 union) — 옛 buildGeom 정의(codex 0308): N8 → 114 · N10 → 234(종합 «희소 234» 재현)
+  'edge-m1s3sym-v0': Object.freeze({ m: 1, s: 3, phase: 0, symmetric: true, note: '희소 — 모티프 1, 워드 간격 3, 양끝 stride union(N8 140→114 · N10 271→234)' }),
 });
 export const X_FINDER_IDS = Object.freeze(Object.keys(X_FINDER_PATTERNS));
 
@@ -66,7 +68,7 @@ export function xEdges(N) {
  */
 export function xFinderSpec(N, finderId) {
   const pat = xFinderPattern(finderId);
-  const { m, s, phase } = pat;
+  const { m, s, phase, symmetric } = pat;
   if (!Number.isInteger(N) || N < 2 * m + 2) throw new RangeError(`N ${N} 은 2m+2 = ${2 * m + 2} 이상이어야 해요(finderId ${finderId})`);
   const corners = new Set(), motif = new Set(), word = new Set();
   const levels = new Map();
@@ -79,15 +81,22 @@ export function xFinderSpec(N, finderId) {
       const d = Math.min(i, N - 1 - i);
       if (d === 0) { corners.add(siteId); setLevel(siteId, 1, 'corner'); return { i, siteId, role: 'corner', bit: 1 }; }
       if (d <= m) { const bit = d % 2 === 1 ? 0 : 1; motif.add(siteId); setLevel(siteId, bit, 'motif'); return { i, siteId, role: 'motif', bit }; }
-      const j = i - (m + 1);
-      if (j >= 0 && j <= N - 2 - 2 * m && j % s === phase) { const bit = Math.floor(j / s) % 2 === 0 ? 1 : 0; word.add(siteId); setLevel(siteId, bit, 'word'); return { i, siteId, role: 'word', bit }; }
+      const j = i - (m + 1), jHi = (N - 1 - i) - (m + 1);
+      const lowHit = j >= 0 && j <= N - 2 - 2 * m && j % s === phase;
+      const highHit = symmetric && jHi >= 0 && jHi <= N - 2 - 2 * m && jHi % s === phase;
+      if (lowHit || highHit) {
+        // 비트: 낮은 코너 쪽 stride 에 걸리면 j 로, 아니면(대칭 union 의 높은 쪽만) jHi 로 — 결정적
+        const jj = lowHit ? j : jHi;
+        const bit = Math.floor(jj / s) % 2 === 0 ? 1 : 0;
+        word.add(siteId); setLevel(siteId, bit, 'word'); return { i, siteId, role: 'word', bit };
+      }
       return { i, siteId, role: 'data', bit: null };
     });
     return { axis: e.axis, fixed: e.fixed, positions };
   });
   const structureSites = [...new Set([...corners, ...motif, ...word])].sort((a, b) => a - b);
   return {
-    schema: X_FINDER_SCHEMA, finderId, N, m, s, phase, wordRule: X_FINDER_WORD_RULE,
+    schema: X_FINDER_SCHEMA, finderId, N, m, s, phase, symmetric: Boolean(symmetric), wordRule: X_FINDER_WORD_RULE,
     corners: [...corners].sort((a, b) => a - b), motif: [...motif].sort((a, b) => a - b), word: [...word].sort((a, b) => a - b),
     structureSites, levels, edges,
   };
@@ -95,5 +104,18 @@ export function xFinderSpec(N, finderId) {
 
 /** 정본 문자열(구조 지문용) — 사이트 집합과 레벨만(설명 문구 제외) */
 export function xFinderCanonical(spec) {
-  return JSON.stringify({ schema: spec.schema, finderId: spec.finderId, N: spec.N, m: spec.m, s: spec.s, phase: spec.phase, wordRule: spec.wordRule, sites: spec.structureSites.map(id => [id, spec.levels.get(id)]) });
+  return JSON.stringify({ schema: spec.schema, finderId: spec.finderId, N: spec.N, m: spec.m, s: spec.s, phase: spec.phase, symmetric: spec.symmetric, wordRule: spec.wordRule, effective: Boolean(spec.effective), sites: spec.structureSites.map(id => [id, spec.levels.get(id)]) });
+}
+
+/**
+ * 실효 spec(codex 0308): 구조 사이트가 Lee 중심과 겹치면 인코더는 중심 규칙(상시 on = tones−1)을 따르므로 nominal 비트는 실효 진리가 아니에요.
+ * 중심 집합을 받아 levels 를 실효값으로 덮고, 덮어쓴 자리를 overrides 로 기록해요(edges positions 에 effectiveBit 추가). 사이트 집합·역할은 불변.
+ */
+export function xFinderEffective(spec, centres, onLevel = 1) {
+  const levels = new Map(spec.levels);
+  const overrides = [];
+  const roleOf = new Map([...spec.corners.map(id => [id, 'corner']), ...spec.motif.map(id => [id, 'motif']), ...spec.word.map(id => [id, 'word'])]);
+  for (const id of spec.structureSites) if (centres.has(id)) { const nominal = levels.get(id); levels.set(id, onLevel); if (nominal !== onLevel) overrides.push({ siteId: id, role: roleOf.get(id), nominal, effective: onLevel, reason: 'centre-always-on' }); }
+  const edges = spec.edges.map(e => ({ ...e, positions: e.positions.map(p => ({ ...p, effectiveBit: p.role === 'data' ? null : levels.get(p.siteId) })) }));
+  return { ...spec, levels, edges, overrides, effective: true };
 }

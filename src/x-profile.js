@@ -7,7 +7,7 @@
  * 잠정값이라 이름으로 명시해요.
  */
 import { layoutX, xOrderedTriples, xLayoutCanonical, xScanOrderCanonical, X_SCAN_ORDER_IDS } from './x-layout.js';
-import { xFinderSpec, xFinderCanonical, X_FINDER_IDS } from './x-finder.js';
+import { xFinderSpec, xFinderCanonical, xFinderEffective, X_FINDER_IDS } from './x-finder.js';
 
 export const X_PROFILE_SCHEMA = 'TLcube:X:profile:v0';
 export const X_TONE_CODEBOOKS = Object.freeze(['tl-binary', 'tl-lehmer']);
@@ -89,6 +89,8 @@ export function xProfileLayout(profileOrId, options = {}) {
   const raw = layoutX({ layoutId: profile.layoutId, N: profile.N, c: profile.c });
   const centres = new Set(raw.cells.map(cell => cell.centre));
   const finderSpec = finderId === null ? null : xFinderSpec(raw.N, finderId);
+  // 실효 spec(codex 0308): 중심과 겹친 구조 사이트는 인코더가 상시 on(tones−1) 으로 실으므로 nominal 비트를 실효값으로 덮고 overrides 로 기록 — 지문·검출기 진리는 실효값
+  const finderSpecEffective = finderSpec ? xFinderEffective(finderSpec, centres, base.tones - 1) : null;
   // 예약 = 구조 사이트 중 중심이 아닌 것(중심은 상시 on 이라 예약 불필요 — 모티프 표시만 그 자리에서 깨져요, 리포트 05 §2). 잔여 사이트는 탈락 없이 예약.
   const reservedSet = new Set(finderSpec ? finderSpec.structureSites.filter(id => !centres.has(id)) : []);
   const droppedTriples = [];
@@ -96,7 +98,7 @@ export function xProfileLayout(profileOrId, options = {}) {
   const triples = xOrderedTriples(kept, scanOrderId);
   const rawCanonical = xLayoutCanonical(raw);
   const scanOrderCanonical = xScanOrderCanonical(kept, scanOrderId);
-  const reservations = finderSpec ? { finderId, finder: xFinderCanonical(finderSpec), reservedSites: [...reservedSet].sort((a, b) => a - b), droppedTriples, structureOnCentres: finderSpec.structureSites.filter(id => centres.has(id)) } : [];
+  const reservations = finderSpec ? { finderId, finder: xFinderCanonical(finderSpecEffective), reservedSites: [...reservedSet].sort((a, b) => a - b), droppedTriples, structureOnCentres: finderSpec.structureSites.filter(id => centres.has(id)), overrides: finderSpecEffective.overrides } : [];
   const structure = { schema: X_PROFILE_SCHEMA, profileId: profile.profileId, layout: rawCanonical, reservations, scanOrderId, scanOrder: scanOrderCanonical, maskId: profile.maskId };
   const structureCanonical = JSON.stringify(structure);
   const profileCanonical = JSON.stringify({
@@ -104,9 +106,9 @@ export function xProfileLayout(profileOrId, options = {}) {
     finderId: profile.finderId, formatId: profile.formatId, observation: profile.observation,
   });
   // finderLevels: 파인더 구조 사이트의 v0 레벨(중심 제외 — 중심은 xLevelsTemplate 가 톤 최대로). 인코더가 데이터 레벨 뒤에 덮어써요.
-  const finderLevels = new Map(finderSpec ? [...finderSpec.levels].filter(([id]) => !centres.has(id)) : []);
+  const finderLevels = new Map(finderSpecEffective ? [...finderSpecEffective.levels].filter(([id]) => !centres.has(id)) : []);
   return {
-    profile, raw, triples, reservedTriples: droppedTriples, reservations, reservedSites: [...reservedSet].sort((a, b) => a - b), finderId, finderSpec, finderLevels, digits: triples.length,
+    profile, raw, triples, reservedTriples: droppedTriples, reservations, reservedSites: [...reservedSet].sort((a, b) => a - b), finderId, finderSpec, finderSpecEffective, finderLevels, digits: triples.length,
     rawCanonical, scanOrderCanonical, structureCanonical, profileCanonical,
   };
 }

@@ -176,3 +176,25 @@ test('x-synth-render — argv[1] 없는 node -e import 에서도 throw 하지 �
   assert.equal(out.status, 0, out.stderr);
   assert.equal(out.stdout.trim(), 'function');
 });
+
+test('renderXSynth/sweep — codec 옵션 pass-through(finderId/scanOrderId/crc/ecc) 와 truth.codec(codex 0308: 안 넘기면 후보 평가가 기본 패턴을 렌더)', () => {
+  const base = { ...SMALL };
+  const plain = renderXSynth(base);
+  assert.deepEqual(plain.truth.codec, { ecc: 'M', finderId: null, scanOrderId: 'cell-order-v0', crc: null, reservedSites: [], digits: 140 });
+  const withFinder = renderXSynth({ ...base, codec: { finderId: 'edge-m1s3-v0' } });
+  assert.equal(withFinder.truth.codec.finderId, 'edge-m1s3-v0'); assert.equal(withFinder.truth.codec.digits, 114); assert.equal(withFinder.truth.codec.reservedSites.length, 48);
+  assert.deepEqual(withFinder.truth.levels, Array.from(encodeX(withFinder.truth.text, 'X0', { finderId: 'edge-m1s3-v0' }).levels), 'truth 레벨 = 같은 옵션의 encodeX');
+  assert.notDeepEqual(withFinder.truth.levels, plain.truth.levels);
+  assert.notEqual(withFinder.truth.imageSha256, plain.truth.imageSha256, '다른 패턴은 다른 이미지');
+  const withCrc = renderXSynth({ ...base, codec: { crc: 'x-crc32c-v0', scanOrderId: 'morton-v0' } });
+  assert.equal(withCrc.truth.codec.crc, 'x-crc32c-v0'); assert.equal(withCrc.truth.codec.scanOrderId, 'morton-v0');
+  assert.ok(decodeX({ levels: withCrc.truth.levels }, 'X0', { crc: 'x-crc32c-v0', scanOrderId: 'morton-v0' }).verified);
+  // 구 인터페이스 o.ecc 는 codec.ecc 로 합쳐져요
+  assert.equal(renderXSynth({ ...base, ecc: 'L' }).truth.codec.ecc, 'L');
+  assert.throws(() => renderXSynth({ ...base, codec: { finderId: 'nope' } }), /finderId/);
+  assert.throws(() => renderXSynth({ ...base, codec: { finder: 'edge-all-v0' } }), /codec/);
+  assert.throws(() => renderXSynth({ ...base, codec: 'edge-all-v0' }), /codec/);
+  const sw = sweepXDirections({ profile: 'X0', azStep: 90, elStep: 75, codec: { finderId: 'edge-all-v0' } });
+  assert.equal(sw.codec.finderId, 'edge-all-v0'); assert.equal(sw.codec.digits, 108);
+  assert.equal(sweepXDirections({ profile: 'X0', azStep: 90, elStep: 75 }).codec.finderId, null);
+});
