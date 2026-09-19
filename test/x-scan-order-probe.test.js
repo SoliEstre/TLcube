@@ -219,11 +219,11 @@ test('runRealProbe --symbolStats / --decodeCrc false — 심볼 상태 문자열
   for (let i = 0; i < on.outcomes.length; i += 1) {
     assert.deepEqual(b.outcomes[i].eventDigests, on.outcomes[i].eventDigests);
     assert.deepEqual(b.outcomes[i].perTrialSymbols, on.outcomes[i].perTrialSymbols, '같은 codeword·사건이면 RS 입력이 같아요');
-    // 방향 불변식(codex 0214): C ok ⇒ B ok(ASCII GT — 같은 RS 출력을 legacy 파서로 읽으면 같은 본문) · B ok ∧ C fail ⇒ C stage = crc(꼬리 청크+패리티만 바뀐 오정정은 L·본문이 그대로라 B 는 성공, C 는 저장 CRC 불일치로 정상 거절)
+    // 엄격 불변식(codex 0214/0218)은 ASCII GT 의 «C ok ⇒ B ok» 하나뿐 — 같은 RS 출력을 legacy 파서로 읽으면 같은 본문. B ok ∧ C fail 은 crc(CRC 바이트만 다른 오정정)뿐 아니라
+    // length(legacy 가 선두 BOM 을 소비하는 [L=29|BOM|T] 오정정) 등 프레임 단계 어디서든 정상 거절이 날 수 있어 단계별 서술 대상이지 불변식이 아니에요.
     for (let t = 0; t < 12; t += 1) {
       const vb = b.outcomes[i].perTrial[t][0], vc = on.outcomes[i].perTrial[t][0];
       if (vc === 1) assert.equal(vb, 1, 'arm C 성공인데 arm B 실패 — 같은 RS 출력에서 legacy 파서가 실패');
-      if (vb === 1 && vc === 0) assert.equal(REAL_STAGES[on.outcomes[i].perTrialStage[t][0]], 'crc', 'B ok ∧ C fail 이면 C 는 crc 단계여야');
     }
   }
   // 반례 구성(codex 0214): 유효 RS codeword 인데 CRC 4 B 만 다른 프레임 — legacy 파서(arm B)는 정답 본문으로 성공, CRC 파서(arm C)는 crc 단계 거절
@@ -240,6 +240,14 @@ test('runRealProbe --symbolStats / --decodeCrc false — 심볼 상태 문자열
     const legacy = decodeX({ levels }, profile, { ecc: 'M' }), strict = decodeX({ levels }, profile, { ecc: 'M', crc: 'x-crc32c-v0' });
     assert.equal(legacy.ok, true); assert.equal(legacy.text, gt, 'arm B: 정답 본문');
     assert.equal(strict.ok, false); assert.equal(strict.stage, 'crc', 'arm C: 저장 CRC 불일치 정상 거절');
+    // 반례 2(codex 0218): [L=29 | EF BB BF | T(26) | 0] — legacy 파서는 BOM 을 소비해 T 로 성공, CRC 파서는 L 29 > 26 으로 length 거절 → «B ok ∧ C fail ⇒ crc» 도 불변식이 아님
+    const bom = new Uint8Array(capOn.dataBytes); bom[0] = 29; bom.set([0xef, 0xbb, 0xbf], 1); bom.set(new TextEncoder().encode(gt), 4);
+    const m2 = new Uint8Array(capOn.dataSymbols); m2.set(bytesToSymbols(bom));
+    const d2 = new Uint8Array(capOn.digits); d2.set(unpackSymbolsToCellDigits(rsEncode(m2, capOn.nsym)));
+    const lv2 = Array.from(levels); capOn.layout.triples.forEach((triple, i) => { const pat = H_BINARY[d2[i]]; triple.forEach((siteId, k) => { lv2[siteId] = pat[k]; }); });
+    const legacy2 = decodeX({ levels: lv2 }, profile, { ecc: 'M' }), strict2 = decodeX({ levels: lv2 }, profile, { ecc: 'M', crc: 'x-crc32c-v0' });
+    assert.equal(legacy2.ok, true); assert.equal(legacy2.text, gt, 'arm B: BOM 소비 뒤 정답 본문');
+    assert.equal(strict2.ok, false); assert.equal(strict2.stage, 'length', 'arm C: L 29 > 26 length 거절');
   }
   // 거절·기본값: decodeCrc 는 crc 와 함께만, 'maybe' 거절, 기본 실행엔 perTrialSymbols 없음 + rows 바이트 동일
   assert.throws(() => runRealProbe({ ...base, decodeCrc: false }), /decodeCrc/);
