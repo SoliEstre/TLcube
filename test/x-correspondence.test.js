@@ -37,16 +37,18 @@ function mkBlob(id, u, v, q = {}) {
   return { blobId: id, u, v, bbox: [u - 1, v - 1, u + 1, v + 1], areaPx: 4, scalePx: 2, peakLuma: 1, meanLuma: 0.8, backgroundLuma: 0.1, contrast: 0.7, state: 'lit', visibilityReason: 'visible', levelLikelihood: [0.1, 0.9], quality: { saturated: false, edgeTruncated: false, mergeSuspected: false, ...q } };
 }
 /**
- * 알려진 pose 의 합성 프레임 — registry `F_eff`(known → bits, 데이터 사이트는 seed 난수 50 %) 점등, 간단한 가림(3 px 안 더 가까운 점).
+ * 알려진 pose 의 합성 프레임 — registry `F_eff`(known → bits, 데이터 사이트는 seed 난수 50 % 또는 `dataBits` 규칙) 점등, 간단한 가림(3 px 안 더 가까운 점).
  * blobId 배정(합성 전용): 모서리 사이트는 F(mod 8 ≥ 4), 내부는 V/F 섞음, T 잔여류(0,1)는 아예 안 써요(러너의 T 제거 뒤 모양).
+ * `dataBits(siteId, coord, map) → 0|1` 은 데이터(비-known) 사이트의 결정적 점등 규칙(GT 유래 — 테스트 안에서만), `mirror` 는 점등 패턴을 x ↔ N−1−x 로 반사해요(참 라벨이 improper 가 되는 입력, §6.2b-48 v5).
  */
-function synthFrame({ profile = 'X0', finder = 'edge-all-v0', az = 0.6, el = 0.4, roll = 0.2, seed = 3342300003, dropCorners = false, shift = [0, 0], camera = CAM, distanceOverWidth = 3 } = {}) {
+function synthFrame({ profile = 'X0', finder = 'edge-all-v0', az = 0.6, el = 0.4, roll = 0.2, seed = 3342300003, dropCorners = false, shift = [0, 0], camera = CAM, distanceOverWidth = 3, dataBits = null, mirror = false } = {}) {
   const map = xEffectiveMap(profile, finder);
   const N = map.N;
   const pose = xCameraLookAt({ N, distanceOverWidth, azimuth: az, elevation: el, roll });
   const rng = xMakeRng(seed);
   const lit = new Uint8Array(N ** 3);
-  for (let s = 0; s < N ** 3; s += 1) lit[s] = map.known[s] ? map.bits[s] : (rng() < 0.5 ? 1 : 0);
+  for (let s = 0; s < N ** 3; s += 1) lit[s] = map.known[s] ? map.bits[s] : (dataBits ? dataBits(s, coordOf(N, s), map) : (rng() < 0.5 ? 1 : 0));
+  if (mirror) { const src = lit.slice(); for (let s = 0; s < N ** 3; s += 1) { const c = coordOf(N, s); lit[s] = src[((N - 1 - c[0]) * N + c[1]) * N + c[2]]; } }
   const proj = xProjectSites({ N, pose, camera });
   const pts = proj.points.filter(p => p.inFrame && lit[p.siteId] && !(dropCorners && isCornerSite(N, p.siteId)));
   const visible = pts.filter(p => !pts.some(q => q !== p && q.z < p.z - 0.5 && Math.hypot(q.u - p.u, q.v - p.v) < 3));
@@ -89,6 +91,46 @@ const x1Frame = () => runCached('x1', () => synthFrame({ profile: 'X1', finder: 
 const closeFrame = () => runCached('close', () => synthFrame({ distanceOverWidth: 1.6 }));
 /** 부분 시야 픽스처 — 프레임 밖 blob 을 잘라 낸 근접·편심 뷰(최상위 가설의 offset o ≠ 0 이 실제로 나와요 — §6.1-12 «o ≠ 0 팔» ② 수준) */
 const partialFrame = () => runCached('partial', () => { const fx = synthFrame({ distanceOverWidth: 2, shift: [100, 60] }); return { ...fx, blobs: fx.blobs.filter(b => b.u >= 0 && b.u < FRAME.width && b.v >= 0 && b.v < FRAME.height) }; });
+
+// ───────────────────────────── selected 양성 픽스처(§3.3 조건 7 항 — 결정적 데이터 비트, 전체 시야 · near · 잡음 0) ─────────────────────────────
+/**
+ * 모서리 데이터 사이트 규칙 — 모서리(고정 좌표 2 개) 위 index ∈ `indices` 만 켜고 면 내부 데이터는 전부 꺼요.
+ * X1 · `edge-m1s2-v0` 장면에서 index 5 를 켜면 경쟁 finder 7 개 전부가 보이는 모서리마다 ≥ 1 conflict 를 받아요(w1/all-v0 의 known-0 이 index 2·5·6 에 걸쳐요 — `x-finder.js` 규칙으로
+ * 유도: m1s2 known-1 {0,2,6,7,9} · known-0 {1,4,8} · 데이터 {3,5}); index 3 을 끄면 N8 오축척 삼중 (3,3)·(3,5) 의 부격자 {0,3,6,9} 가 어두워 B4 gate 1 에서 걸려요(N8 finalist 0 — §6.2b-28 (나) 경로).
+ * 원본 {3,5} 를 둘 다 켜지 않는 이유는 그 부격자예요. 데이터 비트가 conflict 를 만들지 못하는 finder 쌍(m1s3-v0 ↔ m1s3-w1: 같은 사이트 집합, 워드 5 비트만 다름 · sym ⊃ 비-sym 포함 관계 · edge-all ⊃ m1s2)은
+ * 이 규칙으로도 못 갈라요 — §3.3 «구조적으로 닿지 못하고» · §8.3-19 의 정직한 결과라 장면 finder 를 m1s2-v0 로 골랐어요(X1 은 형제 profile 이 없어 `ambiguous-profile` 도 없어요).
+ */
+const edgeDataRule = indices => (s, c, map) => { const N = map.N; const fixed = c.filter(x => x === 0 || x === N - 1).length; if (fixed < 2) return 0; const idx = c.find(x => x !== 0 && x !== N - 1) ?? 0; return indices.includes(idx) ? 1 : 0; };
+/** 경쟁 라벨 known-0 규칙 — 같은 N 의 다른 (profile, finder 별칭 클래스) 가 known-0 인 데이터 사이트만 켜요(N8 프레임 팔 — X0/X0g 상호 conflict 시도) */
+const competitorZeroRule = (profile, finder) => {
+  const N = xEffectiveMap(profile, finder).N;
+  const cls = xAliasClasses(profile).find(c => c.includes(X_FINDER_IDS.indexOf(finder)));
+  const comps = [];
+  for (const p of X_PROFILE_IDS) { if (xEffectiveMap(p, X_FINDER_IDS[0]).N !== N) continue; X_FINDER_IDS.forEach((f, fi) => { if (p === profile && cls.includes(fi)) return; comps.push(xEffectiveMap(p, f)); }); }
+  return s => (comps.some(m => m.known[s] && !m.bits[s]) ? 1 : 0);
+};
+/**
+ * 테스트 전용 정책(계약 §9-10 «같은 키 이름의 값 override» — 정본 STAGE2_POLICY 불변). 두 키가 각각 무엇을 제거하는지는 아래 두 와이어 플립 팔이 재요:
+ *   finalistsPerN 1 — 같은 물리 pose 가 면 프레임 3 개(가시 면마다 하나)로 N10 finalist 2 자리를 다 채우면 §3.2 의 «서로 다른 M 2 개 생존» 이 프레임 상대 M 으로 구조상 성립해요(설계 공백 — 아래 A/B 팔).
+ *   mMin 16 — N8 오축척 삼중이 B4 gate 1 을 우연 일치(코너 4 + 부격자)로 넘어 N8 finalist 가 항상 서고, 그러면 §2.9 (ㄴ) «최상위 둘의 N 상이 → 미발동» 이 N8 pose 의 X0/X0g 지도(Ω > 8)를 offset-cap 으로 떨궈 672 unexplored → unresolved 예요.
+ * 봉인 정책(2 · 6) 아래에서는 어떤 전체 시야 합성 프레임도 selected 에 닿지 못했어요(16 뷰 × X1 finder 7 × 데이터 규칙 4 벌 관측 — 보고서). 이 값들은 §4.3 «제안» 문턱이고 정본 상수는 건드리지 않아요.
+ */
+const SEL_POLICY = Object.freeze({ finalistsPerN: 1, mMin: 16 });
+function runCachedWith(key, make, policy) {
+  if (!cache.has(key)) { const fx = make(); const { output, trace } = xStage2Trace(fx.blobs, { width: fx.camera.width, height: fx.camera.height }, fx.camera, policy); cache.set(key, { ...fx, output, trace }); }
+  return cache.get(key);
+}
+const selFixture = () => synthFrame({ profile: 'X1', finder: 'edge-m1s2-v0', dataBits: edgeDataRule([5]) });
+/** 양성 팔: selected(SEL_POLICY) */
+const selFrame = () => runCachedWith('sel', selFixture, SEL_POLICY);
+/** 플립 A: finalistsPerN 만 봉인값(2)으로 되돌림 → 같은 물리 pose 의 두 면 프레임 finalist */
+const selFrameTwoFinalists = () => runCachedWith('sel-2fin', selFixture, { mMin: SEL_POLICY.mMin });
+/** 플립 B: mMin 만 봉인값(6)으로 되돌림 → N8 오축척 finalist */
+const selFrameSealedMMin = () => runCachedWith('sel-mmin6', selFixture, { finalistsPerN: SEL_POLICY.finalistsPerN });
+/** GT 대조: 가설의 geom 대응이 참 siteId 와 일치하는 수 */
+const agreeCount = (fx, h) => h.correspondences.geom.filter(([id, s]) => fx.truthSite.get(id) === s).length;
+/** survivorTransforms 를 (라벨, M) 목록으로 */
+const survivorList = cov => Object.entries(cov.survivorTransforms).flatMap(([lk, ms]) => ms.map(m => [lk, m]));
 const STATUSES = ['selected', 'ambiguous', 'improper-only', 'unsupported', 'support-below-threshold', 'unresolved', 'rejected', 'degenerate-view', 'cap-hit', 'skipped-stage1', 'invalid-input', 'too-few-blobs', 'hull-insufficient', 'not-run'];
 /** 출력 실수 전부가 `round(1e6·x)/1e6` 격자 위인지 */
 function allRounded(v, path = 'output') {
@@ -652,6 +694,164 @@ describe('§6.2b blind(GT 입력 0)', () => {
       observed[o.status] = (observed[o.status] ?? 0) + 1;
     }
     console.log('§6.2b-53 관측치(status 도수):', JSON.stringify(observed));
+  });
+
+  // ═══ selected 양성 팔 — §3.3 조건 7 항을 하나씩 양성 단언(스모크 50 프레임 selected 0 · 단위자 27 종 어디에도 양성 단언 0 이던 결함의 자) ═══
+  test('§6.2b-28 (나) · §6.2b-22 (ㄹ) · §6.2b-48 (ㄷ)+v5(proper) · §6.2b-21 v3.1(cap 0) — selected 양성 팔: X1·edge-m1s2-v0 결정적 데이터 비트(전체 시야·near·잡음 0) + SEL_POLICY → status selected · 조건 7 항 전부 · 선택 가설 = GT(대응 100 % · pose 오차) · N8 finalist 0 → X0/X0g 672 RejectedGeometry · unexplored [] · geometry-pruned', () => {
+    const fx = selFrame();
+    const o = fx.output, cov = o.coverage, d = o.diagnostics;
+    assert.equal(o.status, 'selected', `status ${o.status} reasons ${JSON.stringify(o.rejectReasons)}`);
+    assert.deepEqual(o.rejectReasons, []);
+    assert.ok(Number.isInteger(o.selectedHypothesisId));
+    const h = o.hypotheses.find(x => x.hypothesisId === o.selectedHypothesisId);
+    assert.ok(h, 'selectedHypothesisId 가 hypotheses 안을 가리켜요');
+    // 조건 1 유일 생존 M(대표값 기준) · 조건 3 유일 계열 — 라벨 전체에서 생존 M 이 정확히 하나이고 그것이 선택 가설의 (쌍|finder, M)
+    const surv = survivorList(cov);
+    assert.deepEqual(surv, [[`${h.profile.profileId}|${h.finderId}`, h.addressTransform.transformId]], `survivors ${JSON.stringify(surv)}`);
+    assert.equal(Object.keys(cov.survivorTransforms).length, 1, '유일 계열 (profile, finder 별칭 클래스)');
+    // 조건 2 parity +1
+    assert.equal(h.addressTransform.parity, 1); assert.equal(X_TRANSFORMS[h.addressTransform.transformId].parity, 1);
+    // 조건 4 N 마진 — ambiguous-N 아님(finalist 1 개라 정의상 충족) · (ㄹ) finalist 1 개 → 그 N 에 (ㄱ) 발동, judgedBy 에 그 N 만
+    assert.deepEqual(cov.finalists, { N8: 0, N10: 1 });
+    assert.equal(cov.stage0.fired, true); assert.deepEqual(Object.keys(cov.stage0.judgedBy), ['N10']); assert.equal(cov.stage0.judgedBy.N10, h.poseId);
+    // 조건 5 capHits ∖ {chance-conflict-cap} == [] (여기서는 [] 자체) · §6.2b-48 (ㄷ) eligible ≤ 64 → cap 미발동
+    assert.deepEqual(cov.capHits, []);
+    assert.ok(d.chanceConflictEligible <= STAGE2_POLICY.cConf, `eligible ${d.chanceConflictEligible}`);
+    assert.equal(d.chanceConflictCandidates, d.chanceConflictEligible);
+    // 조건 6 conflictUncorrectedDropped == 0 · 선택 가설은 보정을 받은(top-64) 단위
+    assert.equal(d.conflictUncorrectedDropped, 0); assert.equal(h.conflictUncorrected, false); assert.equal(typeof h.chanceConflict, 'number');
+    // 조건 7 unexplored == [] — (나) N8 finalist 0 → X0·X0g 표지 672 가 RejectedGeometry(«평가된 것»)로, 단계 0 거절 0 → geometry-pruned(«전체 registry 유일» 아님)
+    assert.deepEqual(cov.unexplored, []);
+    assert.equal(cov.addressTestsRejectedGeometry, 672); assert.equal(cov.addressTestsRejectedCrossN, 0); assert.equal(cov.addressTestsRejectedExtent, 0);
+    assert.equal(cov.uniquenessScope, 'geometry-pruned');
+    assert.deepEqual(cov.offsetCap, []);
+    assert.equal(coverageSum(cov), 1008); assert.equal(cov.addressTestsDone, 1008);
+    for (const lk of Object.keys(cov.addressSupport)) assert.ok(lk.startsWith('X1|'), `N8 쌍 라벨은 지도에 없어요: ${lk}`);
+    // §6.2b-21 v3.1 — B5→LM 가지치기는 cap 이 아니고(capHits []) prunedLayer 는 4-튜플 · 그 프레임이 selected 에 닿음(층 모호 근 자체는 이 픽스처에 0 — 관측치)
+    for (const e of d.prunedLayer) { assert.equal(e.length, 4); assert.ok([1, -1].includes(e[3])); }
+    // GT 대조(테스트 안에서만): 선택 가설의 geom 대응 전부가 참 siteId · offset 0 · pose 오차 · profile/finder 가 장면과 같음 · 정본 R 은 SO(3)
+    assert.equal(agreeCount(fx, h), h.correspondences.geom.length, 'geom 대응 100 % 일치');
+    assert.ok(h.correspondences.geom.length >= STAGE2_POLICY.sMin);
+    assert.deepEqual(h.addressTransform.offset, [0, 0, 0]);
+    assert.equal(h.profile.profileId, 'X1'); assert.equal(h.finderId, 'edge-m1s2-v0');
+    assert.ok(xIsRotation(h.R, 1e-5));
+    assert.ok(xRotationAngleDeg(fx.pose.R, h.R) < 0.5, `회전 오차 ${xRotationAngleDeg(fx.pose.R, h.R)}°`);
+    assert.ok(Math.hypot(...h.t.map((x, i) => x - fx.pose.t[i])) < 0.1, `t 오차 ${JSON.stringify(h.t)} vs ${JSON.stringify(fx.pose.t)}`);
+    assert.equal(h.fixedBitConflicts, 0);
+    assert.ok(h.fixedBitSupport >= STAGE2_POLICY.sMin);
+    // 결정성: 같은 입력 2 회 정본 직렬화 동일 · 정본 정책 불변
+    assert.equal(xCanonicalSerialize(xStage2(clone(fx.blobs), FRAME, CAM, SEL_POLICY)), xCanonicalSerialize(o));
+    assert.equal(STAGE2_POLICY.finalistsPerN, 2); assert.equal(STAGE2_POLICY.mMin, 6);
+    console.log('selected 양성 팔 관측치: blobs', fx.blobs.length, 'geom', h.correspondences.geom.length, 'support', h.fixedBitSupport, 'chanceConflict', h.chanceConflict, 'eligible', d.chanceConflictEligible, 'M', h.addressTransform.transformId, 'layerSign', h.addressTransform.layerSign, 'layerBothKept', d.layerBothKept, 'prunedPlanar', d.prunedPlanar, 'rmsPx', h.residualSummary.rmsPx);
+  });
+
+  test('§3.2·§3.3 «서로 다른 M 2 개 생존» 의 정의역 — 와이어 플립 A(finalistsPerN 1→봉인 2, 같은 blob): 같은 물리 pose 의 두 면 프레임이 N10 finalist 둘을 채워 프레임 상대 M 이 갈리고(2-survivors) · eligible 96 > C_conf → dropped ≥ 1 → :uncorrected(§6.2b-48 (ㄱ) 봉인 팔) — 두 생존 가설의 (R, t, geom 대응) 이 같은 물리 라벨링임을 잠가요(설계 공백 기록, 배선 결함 아님)', () => {
+    const fx = selFrameTwoFinalists();
+    const o = fx.output, cov = o.coverage, d = o.diagnostics;
+    assert.deepEqual(cov.finalists, { N8: 0, N10: 2 });
+    assert.equal(o.status, 'ambiguous', o.status);
+    assert.equal(o.selectedHypothesisId, null);
+    assert.ok(o.rejectReasons.includes('ambiguous-address:2-survivors'), JSON.stringify(o.rejectReasons));
+    assert.ok(o.rejectReasons.includes('ambiguous-address:uncorrected'));
+    assert.deepEqual(cov.capHits, ['chance-conflict-cap']);
+    assert.equal(d.chanceConflictEligible, 2 * 48, '두 pose × 48 M 전부 support ≥ s_min(가시 코너 7 이 어느 finder 에서도 known-1 이고 코너 ↔ 코너)');
+    assert.ok(d.conflictUncorrectedDropped >= 1);
+    // 참 라벨의 생존 M 2 개 — 각각 다른 poseRank 에서 왔고, 두 가설의 출력 pose 와 geom 대응(blobId → siteId)이 동일
+    const lk = 'X1|edge-m1s2-v0';
+    assert.equal(cov.survivorTransforms[lk].length, 2, JSON.stringify(cov.survivorTransforms));
+    const hs = cov.survivorTransforms[lk].map(m => o.hypotheses.find(h => h.finderId === 'edge-m1s2-v0' && h.addressTransform.transformId === m));
+    assert.ok(hs.every(Boolean), '두 생존 M 이 hypotheses 에 있어요');
+    assert.notEqual(hs[0].poseId, hs[1].poseId);
+    assert.notEqual(hs[0].faceFrame.faceHypothesisId, hs[1].faceFrame.faceHypothesisId, '다른 면 프레임');
+    assert.ok(xRotationAngleDeg(hs[0].R, hs[1].R) < 0.1, `같은 물리 pose: ΔR ${xRotationAngleDeg(hs[0].R, hs[1].R)}°`);
+    assert.ok(Math.hypot(...hs[0].t.map((x, i) => x - hs[1].t[i])) < 0.05);
+    const g0 = new Map(hs[0].correspondences.geom), g1 = new Map(hs[1].correspondences.geom);
+    const shared = [...g0.keys()].filter(id => g1.has(id));
+    assert.ok(shared.length >= STAGE2_POLICY.sMin);
+    assert.ok(shared.every(id => g0.get(id) === g1.get(id)), '같은 blob 이 같은 정본 siteId 로 — 두 «M» 은 같은 라벨링');
+    for (const h of hs) { assert.equal(agreeCount(fx, h), h.correspondences.geom.length); assert.equal(h.addressTransform.parity, 1); }
+    // 회계는 그대로(§6.2b-28 (나) 의 N8 finalist 0 팔은 이 플립에서도 성립)
+    assert.equal(cov.addressTestsRejectedGeometry, 672); assert.deepEqual(cov.unexplored, []); assert.equal(cov.uniquenessScope, 'geometry-pruned'); assert.equal(coverageSum(cov), 1008);
+    console.log('와이어 플립 A 관측치: survivors', JSON.stringify(cov.survivorTransforms), 'eligible', d.chanceConflictEligible, 'dropped', d.conflictUncorrectedDropped, 'poses', JSON.stringify(hs.map(h => [h.poseId, h.faceFrame.faceHypothesisId, h.addressTransform.layerSign, h.addressTransform.transformId])));
+  });
+
+  test('§6.2b-22 첫 문장(Ω > Ω_max 쌍 → offset-cap + unexplored) · §2.9 (ㄴ) 최상위 둘의 N 상이 → 단계 0 미발동 · §3.3 unresolved 생성 규칙 — 와이어 플립 B(mMin 16→봉인 6, 같은 blob): N8 오축척 근이 B4 를 넘어 N8 finalist 가 서고 그 pose 의 X0/X0g 지도가 Ω > 8 이라 [1,X0]·[1,X0g] offsetCap · 672 unexplored → 유일 생존이어도 unresolved(selected 조건 7 만 미충족)', () => {
+    const fx = selFrameSealedMMin();
+    const o = fx.output, cov = o.coverage;
+    assert.deepEqual(cov.finalists, { N8: 1, N10: 1 });
+    assert.equal(cov.stage0.fired, false); assert.deepEqual(cov.stage0.judgedBy, {});
+    assert.equal(cov.addressTestsRejectedCrossN, 0); assert.equal(cov.addressTestsRejectedExtent, 0); assert.equal(cov.addressTestsRejectedGeometry, 0);
+    assert.equal(o.status, 'unresolved', `${o.status} ${JSON.stringify(o.rejectReasons)}`);
+    assert.deepEqual(o.rejectReasons, ['offset-cap']);
+    assert.equal(o.selectedHypothesisId, null);
+    const n8Pose = fx.trace.finalists.find(r => r[0] === 1);
+    assert.ok(n8Pose, 'poseRank 1 이 N8 finalist');
+    assert.deepEqual(cov.offsetCap.map(x => x.join('|')).sort(), ['1|X0', '1|X0g']);
+    assert.equal(cov.unexplored.length, 672);
+    assert.ok(cov.unexplored.every(([p]) => X_PROFILE_IDS[p] !== 'X1'), 'unexplored 는 N8 쌍 표지뿐');
+    assert.equal(cov.uniquenessScope, 'registry-complete'); assert.equal(coverageSum(cov), 1008);
+    // 조건 1–6 은 충족(유일 생존 · proper · 유일 계열 · N 마진 · cap 0 · dropped 0) — 조건 7 만 unexplored ≠ []
+    const surv = survivorList(cov);
+    assert.equal(surv.length, 1, JSON.stringify(surv));
+    assert.equal(surv[0][0], 'X1|edge-m1s2-v0'); assert.equal(X_TRANSFORMS[surv[0][1]].parity, 1);
+    assert.deepEqual(cov.capHits, []); assert.equal(o.diagnostics.conflictUncorrectedDropped, 0);
+    assert.ok(!o.rejectReasons.some(r => r.startsWith('ambiguous')));
+    assert.equal(o.hypotheses.length, 1); assert.equal(agreeCount(fx, o.hypotheses[0]), o.hypotheses[0].correspondences.geom.length);
+    console.log('와이어 플립 B 관측치: N8 finalist', JSON.stringify(n8Pose), 'offsetCap', JSON.stringify(cov.offsetCap), 'prunedPlanar', o.diagnostics.prunedPlanar);
+  });
+
+  test('§6.2b-48 v6 (ㄱ) 고립 팔 — 양성 픽스처 + cConf 4(테스트 전용): 유일 생존 M 이 top-4 안이고 5 번째 이후 단위 중 보수 κ 탈락 ≥ 1 → capHits [chance-conflict-cap] · status ambiguous · ambiguous-address:uncorrected 만 · selectedHypothesisId null — 같은 blob 이 cConf 64 에서는 selected(위 팔)', () => {
+    const fx = selFrame();
+    const o = xStage2(fx.blobs, FRAME, CAM, { ...SEL_POLICY, cConf: 4 });
+    assert.deepEqual(o.coverage.capHits, ['chance-conflict-cap']);
+    assert.equal(o.diagnostics.chanceConflictCandidates, 4);
+    assert.ok(o.diagnostics.conflictUncorrectedDropped >= 1, `dropped ${o.diagnostics.conflictUncorrectedDropped}`);
+    assert.equal(o.status, 'ambiguous');
+    assert.deepEqual(o.rejectReasons, ['ambiguous-address:uncorrected', 'cap-hit:chance-conflict-cap']);
+    assert.equal(o.selectedHypothesisId, null);
+    assert.deepEqual(survivorList(o.coverage), survivorList(fx.output.coverage), '생존 집합은 그대로(경쟁자 탈락 사건만 유일성 주장을 막아요)');
+    assert.equal(o.hypotheses[0].conflictUncorrected, false, '유일 생존 M 자신은 top-4 안(보정 받음)');
+    console.log('§6.2b-48 (ㄱ) 고립 팔 관측치: dropped', o.diagnostics.conflictUncorrectedDropped, 'eligible', o.diagnostics.chanceConflictEligible);
+  });
+
+  test('§6.2b-48 v5 parity 팔 — 점등 패턴을 x ↔ N−1−x 로 반사한 입력(참 라벨이 improper): 생존 M 전부 det −1 → status improper-only · selectedHypothesisId null · 가설 parity −1 · 회계는 양성 팔과 같음(§3.3 «거울상 아님 을 주장하지 않아요»)', () => {
+    const fx = synthFrame({ profile: 'X1', finder: 'edge-m1s2-v0', dataBits: edgeDataRule([5]), mirror: true });
+    const o = xStage2(fx.blobs, FRAME, CAM, SEL_POLICY);
+    assert.equal(o.status, 'improper-only', `${o.status} ${JSON.stringify(o.rejectReasons)}`);
+    assert.equal(o.selectedHypothesisId, null);
+    assert.ok(o.rejectReasons.includes('improper-only'));
+    const surv = survivorList(o.coverage);
+    assert.ok(surv.length >= 1);
+    for (const [, m] of surv) assert.equal(X_TRANSFORMS[m].parity, -1, `생존 M ${m} 은 improper`);
+    for (const h of o.hypotheses) { assert.equal(h.addressTransform.parity, -1); assert.equal(h.addressTransform.addressMapDet, h.addressTransform.layerSign === -1 ? 1 : -1, 'far 는 det T = −det M'); assert.ok(xIsRotation(h.R, 1e-5), 'improper 여도 R ∈ SO(3)'); }
+    assert.deepEqual(o.coverage.capHits, []); assert.deepEqual(o.coverage.unexplored, []); assert.equal(o.coverage.addressTestsRejectedGeometry, 672);
+    console.log('§6.2b-48 v5 parity 팔 관측치: survivors', JSON.stringify(o.coverage.survivorTransforms), 'top M', o.hypotheses[0]?.addressTransform.transformId, 'support', o.hypotheses[0]?.fixedBitSupport);
+  });
+
+  test('§6.2b-29 v4 팔(R7-16 · O-12) — 다른 근의 gate-1 결과를 바꿔도(mMin 6 → 16 으로 앞 근들을 planar-unsupported 로) 같은 구조 키 (면, 삼중, 근, layerSign) 근의 chanceBaseline·Sd·Se·V·chanceConflict 가 비트 동일(러닝 카운터 구현은 여기서 갈려요) · 결정성 키가 poseId 가 아님', () => {
+    const a = selFrame(), b = selFrameSealedMMin();
+    const keyOf = h => [h.faceFrame.faceHypothesisId, h.faceFrame.kB, h.faceFrame.kD, h.faceFrame.layerSign, h.addressTransform.transformId, h.finderId].join('|');
+    const ha = a.output.hypotheses[0], hb = b.output.hypotheses.find(h => keyOf(h) === keyOf(ha));
+    assert.ok(hb, `같은 구조 키 가설이 두 실행에 있어요: ${keyOf(ha)}`);
+    assert.notEqual(a.output.diagnostics.matchRuns.gate1PassedRoots, b.output.diagnostics.matchRuns.gate1PassedRoots, 'gate-1 통과 근 수가 실제로 달라요');
+    for (const k of ['chanceBaseline', 'chanceBaselineSd', 'chanceBaselineSe', 'chanceBaselineV', 'chanceConflict', 'fixedBitSupport', 'fixedBitConflicts']) assert.deepEqual(hb[k], ha[k], k);
+    assert.deepEqual(hb.faceFrame.R_f, ha.faceFrame.R_f); assert.deepEqual(hb.faceFrame.t_f, ha.faceFrame.t_f);
+    console.log('§6.2b-29 v4 팔 관측치: gate1PassedRoots', a.output.diagnostics.matchRuns.gate1PassedRoots, '→', b.output.diagnostics.matchRuns.gate1PassedRoots, 'chanceBaseline', ha.chanceBaseline);
+  });
+
+  test('§6.2b-22 (ㄴ) ambiguous-N → 단계 0 미발동 · X1 쌍 명시 거절 0 — N8 프레임(X0·edge-m1s3-w1, 경쟁 라벨 known-0 데이터 규칙) + SEL_POLICY: N10 (7,7) 삼중이 N8 코너 기하에 정확히 맞아 N10 finalist 가 서요(§8.3-15) → §6.2b-28 (가) «N10 finalist 0 인 N8 프레임» 은 이 픽스처 계열로 구성 불가(관측 기록) · X0/X0g 상호 conflict 없음 → ambiguous-profile(§8.3-2)', () => {
+    const fx = synthFrame({ profile: 'X0', finder: 'edge-m1s3-w1', dataBits: competitorZeroRule('X0', 'edge-m1s3-w1') });
+    const o = xStage2(fx.blobs, FRAME, CAM, SEL_POLICY);
+    const cov = o.coverage;
+    assert.deepEqual(cov.finalists, { N8: 1, N10: 1 }, JSON.stringify(cov.finalists));
+    assert.ok(o.rejectReasons.includes('ambiguous-N'), JSON.stringify(o.rejectReasons));
+    assert.equal(cov.stage0.fired, false); assert.deepEqual(cov.stage0.judgedBy, {});
+    assert.equal(cov.addressTestsRejectedCrossN, 0); assert.equal(cov.addressTestsRejectedExtent, 0); assert.equal(cov.addressTestsRejectedGeometry, 0);
+    assert.equal(cov.uniquenessScope, 'registry-complete');
+    assert.ok(o.rejectReasons.includes('ambiguous-profile'), 'X0/X0g 는 양의 증거만으로 못 갈라요');
+    assert.notEqual(o.status, 'selected'); assert.equal(o.selectedHypothesisId, null);
+    assert.equal(coverageSum(cov), 1008);
+    console.log('§6.2b-22 (ㄴ) N8 팔 관측치: status', o.status, 'reasons', JSON.stringify(o.rejectReasons), 'unexplored', cov.unexplored.length, 'offsetCap', JSON.stringify(cov.offsetCap), 'blobs', fx.blobs.length);
   });
 });
 
