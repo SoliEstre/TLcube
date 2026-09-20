@@ -278,8 +278,27 @@ test('미완료 공유 획득을 우선해도 다른 광학 lane은 유한 간�
     '이미 살아 있는 다른 후보의 누적은 공유 획득 우선순위로 밀면 안 돼요');
 });
 
+/**
+ * 호스트 부하와 무관한 결정적 가상 시계예요. performance.now를 읽을 때마다 stepMs씩 전진하므로
+ * 엔진의 soft deadline·fairness loan·work 정책이 «벽시계»가 아니라 «시계 읽기 횟수»(≈ 작업 단위 수)로
+ * 잘려요. 제품 예산(11/24/16ms)과 아래 수용 조건(480입력 안 실제 복호)은 그대로예요.
+ * 0.01ms/read는 2026-09-20 로컬 16T 좌석에서 lane별로 잰 읽기 밀도(C ≈ .005 · planar/cube ≈ .013)의
+ * 사이값이에요. 벽시계 수렴(같은 480입력 상한을 실제 호스트에서)은 이 시계 없이 단독 실행으로 재요 —
+ * 마지막 실측 2026-09-20 로컬 단독: O 421 · A 293 · V 409 · K 231 · C 70 · Y 28 프레임이라 여유가 12~15%뿐이고,
+ * 원격 전수(동시성 4)에서는 V가 480을 넘겨 3회 중 2회 실패했어요(20260914-full-010·011).
+ */
+const ENGINE_VIRTUAL_CLOCK_STEP_MS = .01;
+function installVirtualClock(t, stepMs = ENGINE_VIRTUAL_CLOCK_STEP_MS) {
+  let now = 0, reads = 0;
+  const realAt = process.hrtime.bigint();
+  t.mock.method(performance, 'now', () => { reads++; return now += stepMs; });
+  return { stepMs, get reads() { return reads; }, get nowMs() { return now; },
+    get realMs() { return Number(process.hrtime.bigint() - realAt) / 1e6; } };
+}
+
 for (const [type, style] of [['O','cell'], ['A','n7'], ['V','bullseye'], ['K','qr'], ['C','n7'], ['Y','y-faces']]) {
   test(`${type === 'Y' ? '기본 Y 전용' : '개발용 all opt-in'} 엔진 ${type}/${style} 실제 관측→RS`, t => {
+    const clock = installVirtualClock(t);
     const fixture = type === 'C' ? syntheticC(0, 'engine-C')
       : type === 'Y' ? renderCubeY('ENGINE-Y3D-CROSS-TYPE') : renderPlanar(type, { style, text: `engine-${type}` });
     const engine = createR2ExpansionEngine({ enabled: true, ...(type === 'Y' ? {} : { candidateScope: 'all' }) });
@@ -290,7 +309,9 @@ for (const [type, style] of [['O','cell'], ['A','n7'], ['V','bullseye'], ['K','q
       assert.ok(engine.stats.candidateCount <= 12);
     }
     const stats = engine.stats;
+    // totalMs·serviceMs·maxTotalMs는 가상 ms(= 읽기 수 × stepMs)예요. 벽시계는 clock.realMs 하나뿐이에요.
     t.diagnostic(JSON.stringify({ type, style, hit, frames: stats.frames, totalMs: stats.totalMs,
+      clock: { virtual: true, stepMs: clock.stepMs, reads: clock.reads, realMs: Math.round(clock.realMs) },
       maxTotalMs: stats.maxTotalMs, fairnessLoans: stats.fairnessLoans, pool: stats.sharedCentralN7,
       lanes: stats.lanes.map(lane => ({ id: lane.id, calls: lane.calls, serviceMs: lane.serviceMs, stats: lane.stats, observation: lane.observation })) }));
     assert.ok(hit, `${type}/${style}: 전체 엔진의 실제 복호가 없어요`);
