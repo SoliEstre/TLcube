@@ -14,13 +14,14 @@ const current=id=>({id,type:'H',encoded:{version:7,mode:6},scene:{id}});
 function harness({gzip='resolve',clipboard='resolve',compression=true}={}){
   const nodes=new Map(),handlers=new Map(),downloads=[],copies=[],pending=[],voxelCalls=[];
   const node=id=>{
-    if(!nodes.has(id))nodes.set(id,{disabled:false,hidden:false,value:'1',textContent:'',title:'',dataset:{},children:[],innerHTML:'',classList:{add(){},toggle(){}},setAttribute(){},removeAttribute(){},addEventListener:(kind,fn)=>handlers.set(id,fn)});
+    if(!nodes.has(id))nodes.set(id,{disabled:false,hidden:false,value:'1',textContent:'',title:'',dataset:{},children:[],innerHTML:'',classList:{add(){},toggle(){}},attrs:{},setAttribute(k,v){this.attrs[k]=String(v);},removeAttribute(){},addEventListener:(kind,fn)=>handlers.set(id,fn)});
     return nodes.get(id);
   };
   for(const scale of [1,2,4]){const card=node(`block-${scale}`);card.dataset.blockScale=String(scale);node('cubeBlockScaleCards').children.push(card);}
   const c={TextEncoder,TextDecoder,Blob,Error,RangeError,TypeError,CompressionStream:compression?class{}:undefined,
     ClipboardItem:class{constructor(data){this.data=data;}},current:current('old'),generatorState:{type:'Y',preset:'mono',exportSize:'auto',exportWidth:1008,exportHeight:1008},genI18n:{lang:'ko'},
     $:node,document:{querySelectorAll:()=>[]},paletteOf:()=>({}),flashCopied:()=>{},hImageEditor:{flush(){}},hExportIconMarkup:()=>'',hBlockIconMarkup:()=>'',flushes:0,pendingCurrent:null,
+    foldNote:'',hNetFoldNote:()=>c.foldNote,
     flushScheduledRender:()=>{c.flushes++;if(c.pendingCurrent){c.current=c.pendingCurrent;c.pendingCurrent=null;return true;}return false;},
     generatorCubeModel:cur=>({id:cur.id}),cubeModelToGltf:m=>({id:m.id}),cubeNetScene:m=>({id:m.id,width:127,height:168}),
     voxelizeCube:(m,{scale})=>{voxelCalls.push({id:m.id,scale});return{id:m.id,width:43,height:43,length:43};},
@@ -112,4 +113,40 @@ test('PNG는 이미지 Blob으로, SVG와 glTF는 문자열로 복사해요',asy
   const svg=harness();await svg.click('copyNetSvg');assert.equal(svg.copies[0],'<svg>old</svg>');
   const gltf=harness();await gltf.click('copyCubeGltf');assert.deepEqual(JSON.parse(gltf.copies[0]),{id:'old'});
   for(const h of [png,svg,gltf])assert.equal(h.downloads.length,0);
+});
+
+test('타입 H 의 구 전개도 버튼은 설명 꼬리(hNetFoldNote)를 title·aria-label 에 달고, 다른 버튼은 그대로예요', async () => {
+  const NET = ['exportNetPng', 'exportNetSvg', 'copyNetPng', 'copyNetSvg'], OTHER = ['exportCubeGltf', 'copyCubeGltf'];
+  const y = harness(); y.sync();
+  const plain = Object.fromEntries([...NET, ...OTHER].map((id) => [id, {title: y.node(id).title, aria: y.node(id).attrs['aria-label']}]));
+  for (const id of [...NET, ...OTHER]) assert.equal(plain[id].aria, plain[id].title, id + ' 기준선: aria-label = title');
+  const h = harness(); h.c.foldNote = '«접어도 판독 안 됨»';
+  for (let k = 0; k < 2; k += 1) { // 두 번째 동기화에서도 꼬리가 겹쳐 붙지 않아요
+    h.sync();
+    for (const id of NET) { const want = plain[id].title + ' — «접어도 판독 안 됨»'; assert.equal(h.node(id).title, want, id); assert.equal(h.node(id).attrs['aria-label'], want, id + ' aria-label'); }
+    for (const id of OTHER) { assert.equal(h.node(id).title, plain[id].title, id + ' 는 설명이 바뀌면 안 돼요'); assert.equal(h.node(id).attrs['aria-label'], plain[id].aria, id + ' aria-label'); }
+  }
+  const before = harness(); await before.click('exportNetPng');
+  const after = harness(); after.c.foldNote = '«접어도 판독 안 됨»'; after.sync(); await after.click('exportNetPng');
+  assert.equal(after.downloads[0].text, before.downloads[0].text, '클릭 경로가 title·foldNote 를 읽지 않아요');
+});
+
+/** index.html 에서 함수 선언 하나를 괄호 균형으로 잘라요(한 줄 여부·본문 철자에 묶이지 않게). */
+function extractFunction(src, name) {
+  const start = src.indexOf('function ' + name + '(');
+  assert.ok(start >= 0, name + ' 선언이 있어야 해요');
+  let i = src.indexOf('{', start), depth = 0;
+  for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}' && --depth === 0) return {text: src.slice(start, i + 1), start}; }
+  throw new Error(name + ' 괄호가 닫히지 않았어요');
+}
+
+test('hNetFoldNote: 표시 조건 = H · 새 섹션 안내 조건 = 새 섹션이 보임, 전각 마침표 뒤에는 공백 없음', () => {
+  const fn = extractFunction(index, 'hNetFoldNote');
+  assert.ok(fn.start > index.indexOf('function flashCopied('), '구 3D 데이터 슬라이스 밖에 있어야 해요');
+  const run = (hActive, lab, t = (k) => '«' + k + '».') => { const c = {hGeneratorActive: () => hActive, cubeMakeVisible: () => hActive && lab, t}; vm.createContext(c); vm.runInContext(fn.text, c); return vm.runInContext('hNetFoldNote()', c); };
+  for (const lab of [false, true]) assert.equal(run(false, lab), '', 'H 가 아니면 빈 문자열');
+  assert.equal(run(true, false), '«g1131».');
+  assert.equal(run(true, true), '«g1131». «g1132».');
+  const ja = (k) => (k === 'g1131' ? '反転します。' : '「製作用ファイル」を使ってください。');
+  assert.equal(run(true, true, ja), '反転します。「製作用ファイル」を使ってください。', '전각 마침표 뒤에는 공백을 넣지 않아요');
 });

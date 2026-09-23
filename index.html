@@ -3734,7 +3734,9 @@ const GENERATOR_STRINGS = {
     "g1127": "이 방식에는 판이 너무 두꺼워요",
     "g1128": "판 두께가 종이 모듈 이상이에요",
     "g1129": "이 용지에 들어가지 않아요",
-    "g1130": "종이 모듈이 1.0 mm보다 작아요"
+    "g1130": "종이 모듈이 1.0 mm보다 작아요",
+    "g1131": "면마다 화면과 좌우가 반대로 그려진 그림이에요. 인쇄해서 접어도 스캔되지 않아요.",
+    "g1132": "종이로 만들 땐 «만들기용 파일» 섹션의 종이 도안을 쓰세요."
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -4330,7 +4332,9 @@ const GENERATOR_STRINGS = {
     "g1127": "board too thick for this method",
     "g1128": "board at least as thick as a paper module",
     "g1129": "does not fit this paper",
-    "g1130": "paper modules under 1.0 mm"
+    "g1130": "paper modules under 1.0 mm",
+    "g1131": "Each face is drawn mirrored compared with the screen, so it won’t scan, even when printed and folded into a cube.",
+    "g1132": "To build a paper cube, use the paper pattern in the “Maker files” section."
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -4926,7 +4930,9 @@ const GENERATOR_STRINGS = {
     "g1127": "この方式には板が厚すぎます",
     "g1128": "板の厚さが紙のモジュール以上です",
     "g1129": "この用紙に収まりません",
-    "g1130": "紙のモジュールが 1.0 mm 未満です"
+    "g1130": "紙のモジュールが 1.0 mm 未満です",
+    "g1131": "各面が画面と左右反転して描かれた図です。印刷して組み立ててもスキャンできません。",
+    "g1132": "紙で作るときは「製作用ファイル」セクションの紙の展開図を使ってください。"
   },
   fr: {
     "g001": "Thème de la page (sans effet sur le rendu du code)",
@@ -5521,7 +5527,9 @@ const GENERATOR_STRINGS = {
     "g1127": "carton trop épais pour cette méthode",
     "g1128": "carton au moins aussi épais qu’un module",
     "g1129": "ne tient pas sur ce papier",
-    "g1130": "modules de moins de 1,0 mm"
+    "g1130": "modules de moins de 1,0 mm",
+    "g1131": "Chaque face y est dessinée en miroir par rapport à l’écran. Même imprimé et plié en cube, ce dessin ne se scanne pas.",
+    "g1132": "Pour un cube en papier, utilisez le patron de la section « Fichiers de fabrication »."
   },
   it: {
     "g001": "Tema della pagina (non incide sul rendering del codice)",
@@ -6116,7 +6124,9 @@ const GENERATOR_STRINGS = {
     "g1127": "cartone troppo spesso per questo metodo",
     "g1128": "cartone spesso almeno quanto un modulo",
     "g1129": "non entra in questo foglio",
-    "g1130": "moduli sotto 1,0 mm"
+    "g1130": "moduli sotto 1,0 mm",
+    "g1131": "Ogni faccia è disegnata specchiata rispetto allo schermo. Anche stampato e piegato a cubo, il disegno non viene letto.",
+    "g1132": "Per un cubo di carta usa il cartamodello della sezione «File per costruire»."
   },
   de: {
     "g001": "Seitenthema (ohne Einfluss auf das Rendering des Codes)",
@@ -6711,7 +6721,9 @@ const GENERATOR_STRINGS = {
     "g1127": "Platte für diese Methode zu dick",
     "g1128": "Platte mindestens so dick wie ein Modul",
     "g1129": "passt nicht auf dieses Papier",
-    "g1130": "Module unter 1,0 mm"
+    "g1130": "Module unter 1,0 mm",
+    "g1131": "Jede Fläche ist gegenüber dem Bildschirm seitenverkehrt gezeichnet. Auch ausgedruckt und zum Würfel gefaltet lässt sich das Netz nicht scannen.",
+    "g1132": "Für einen Papierwürfel die Papiervorlage im Abschnitt „Bastel- und Druckdateien“ verwenden."
   },
   es: {
     "g001": "Tema de la página (no afecta al renderizado del código)",
@@ -7306,7 +7318,9 @@ const GENERATOR_STRINGS = {
     "g1127": "cartón demasiado grueso para este método",
     "g1128": "cartón al menos tan grueso como un módulo",
     "g1129": "no cabe en este papel",
-    "g1130": "módulos de menos de 1,0 mm"
+    "g1130": "módulos de menos de 1,0 mm",
+    "g1131": "Cada cara está dibujada en espejo respecto a la pantalla. Aunque imprimas este desarrollo y lo dobles en cubo, no se escanea.",
+    "g1132": "Para un cubo de papel, usa la plantilla de la sección «Archivos para fabricar»."
   },
   pt: {
     "g001": "Tema da página (não afeta a renderização do código)",
@@ -7901,7 +7915,9 @@ const GENERATOR_STRINGS = {
     "g1127": "placa demasiado espessa para este método",
     "g1128": "placa pelo menos tão espessa como um módulo",
     "g1129": "não cabe neste papel",
-    "g1130": "módulos abaixo de 1,0 mm"
+    "g1130": "módulos abaixo de 1,0 mm",
+    "g1131": "Cada face está desenhada espelhada em relação ao ecrã. Mesmo impressa e dobrada em cubo, a planificação não é lida.",
+    "g1132": "Para um cubo de papel, use o molde da secção «Ficheiros para construir»."
   },
 };
 
@@ -8262,7 +8278,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-23.01';
+const GENERATOR_BUILD = '2026-09-24.01';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -9282,6 +9298,8 @@ function syncCubeExportUi(){
   }
   for(const button of $('cubeBlockScaleCards').children){const scale=Number(button.dataset.blockScale),on=String(scale)===$('cubeBlockScale').value;button.innerHTML=hBlockIconMarkup(scale)+`<span>${scale} × ${scale}</span>`;button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));button.disabled=cubeExportBusy;}
   $('exportCubeSchem').title=typeof CompressionStream!=='function'?cubeText('unsupported'):'Sponge v3 · Java 1.20.4+';
+  // 타입 H 의 구 전개도는 설명에 «면마다 화면과 좌우 반대 · 접어도 판독 안 됨» 을 달아요(문구·판정은 슬라이스 밖 hNetFoldNote). 산출물은 그대로예요.
+  const foldNote=hNetFoldNote();if(foldNote)for(const id of ['exportNetPng','exportNetSvg','copyNetPng','copyNetSvg']){const button=$(id);button.title=`${button.title} — ${foldNote}`;button.setAttribute('aria-label',button.title);}
 }
 for(const button of $('cubeBlockScaleCards').children)button.addEventListener('click',()=>{if(cubeExportBusy)return;$('cubeBlockScale').value=button.dataset.blockScale;syncCubeExportUi();});
 function cubeExportModel(){return generatorCubeModel(current,paletteOf(generatorState.preset));}
@@ -9712,6 +9730,11 @@ for(const [id,{key,range}] of Object.entries(CUBE_MAKE_INPUTS))$(id).addEventLis
 });
 for(const id of CUBE_MAKE_IDS)$(id).addEventListener('click',()=>runCubeMake(id));
 // ── cubeMake VM 슬라이스 끝 ──
+/** 타입 H 구 전개도 버튼 설명 꼬리. 구 전개도는 2.5D 렌더러 기저(좌수 투영)에 맞춘 면 좌표를 평면에 그대로 펼쳐서,
+ * 평면 도안의 면마다 이미 화면과 좌우가 반대예요(실측: 면을 잘라 복호하면 원본 0면 · 좌우 반전본만 읽힘) — 인쇄해서 접어도 판독되지 않아요.
+ * 교정본은 «만들기용 파일» 섹션(물리 좌표)이 내요 — 그 섹션이 보일 때만 안내를 덧붙여요. H 가 아니면 빈 문자열이에요.
+ * 두 문장 사이는 공백 하나, 앞 문장이 전각 마침표(。．)로 끝나면 공백 없이 이어요. */
+function hNetFoldNote(){if(!hGeneratorActive())return '';const note=t('g1131');if(!cubeMakeVisible())return note;return note+(/[。．]$/.test(note)?'':' ')+t('g1132');}
 
 $('copyPng').addEventListener('click', async () => {
   flushScheduledRender();
