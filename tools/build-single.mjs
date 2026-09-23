@@ -237,7 +237,12 @@ export const MODULE_ORDER = [
   // y3d-slot-qr 는 cellSurfaceFinal·sceneY·qr 의 뒤, y3d-viewer 의 앞이다.
   'y3d-slot-qr',
   'y3d-viewer',
-  'cube-image-export', 'cube-export', 'minecraft-schematic', 'generator-cube-export', 'generator-h-qr', 'h-preview-renderer', 'cube-video-export',
+  'cube-image-export', 'cube-export', 'minecraft-schematic', 'generator-cube-export',
+  // 만들기용 파일(3D 인쇄 · 종이, 2026-09-23). 의존은 h-profile · png · scene-image 와 서로뿐이라
+  // 전부 이 앞에 있어요. print-mesh 는 cube-physical(orientForBed) 뒤, mesh-export 는 png(crc32) · print-mesh(삼각형 상한) 뒤예요.
+  // paper-net · pdf-writer · print-sheet 는 cube-physical 을 import 하지 않아요(PhysCube 객체만 받아요).
+  'cube-physical', 'paper-net', 'pdf-writer', 'print-sheet', 'print-mesh', 'mesh-export',
+  'generator-h-qr', 'h-preview-renderer', 'cube-video-export',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
   'i18n',
   // generate-debounce 는 의존이 없는 순수 상태 전이다. 앱만 소비하며 시간 축을 고정한다.

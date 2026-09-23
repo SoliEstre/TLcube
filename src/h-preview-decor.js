@@ -109,6 +109,12 @@ export function hExportIconMarkup(kind){
   else if(kind==='copy')path='<rect x="8" y="7" width="12" height="14" rx="2"/><path d="M16 7V3H4v14h4"/>';
   else if(kind==='reset')path='<path d="M4 8a9 9 0 1 1 0 9M4 3v5h5"/><path d="M12 7s-4 5-4 7a4 4 0 0 0 8 0c0-2-4-7-4-7Z"/>';
   else if(kind==='schem')path='<rect x="2" y="2" width="20" height="20" rx="1"/><path fill="currentColor" stroke="none" d="M5 6h5v5H5Zm9 0h5v5h-5Zm-4 4h4v4h3v5h-4v-3h-2v3H7v-5h3Z"/>';
+  // 만들기용 파일(설계 §4.2): 3D 인쇄 = 쌓인 층 · 받침대 = 꼭짓점을 세운 큐브 · 종이 = 접힌 모서리 쪽 · PDF = 줄 있는 쪽 · 인쇄 = 프린터.
+  else if(kind==='print3d')path='<path d="M4 8l8-4 8 4-8 4Z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/>';
+  else if(kind==='stand')path='<path d="M12 2l6 6-6 6-6-6Z"/><path d="M8 17h8l2 4H6Z"/>';
+  else if(kind==='paper')path='<path d="M6 2h9l4 4v16H6Z"/><path d="M15 2v4h4M9 13h7M12.5 9.5v7"/>';
+  else if(kind==='pdf')path='<path d="M6 2h9l4 4v16H6Z"/><path d="M15 2v4h4M9 11h7M9 15h7M9 19h4"/>';
+  else if(kind==='printer')path='<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="1"/><path d="M7 14h10v7H7Z"/>';
   else if(kind==='rotateLeft'||kind==='rotateRight')return `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><g${kind==='rotateRight'?' transform="translate(24 0) scale(-1 1)"':''}><path d="M5 9a8 8 0 1 1-1 7M5 3v6h6"/></g></svg>`;
   else return hCubeIconMarkup({representation:'3d'});
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;

@@ -1037,6 +1037,29 @@
   #cubeExportSection .export-pair button, #exportCubeSchem { display:flex;align-items:center;justify-content:center;gap:6px; }
   #cubeExportSection .export-pair .icon-btn { flex:0 0 34px; }
   #cubeExportSection svg { flex-shrink:0; }
+  /* 만들기용 파일(설계 §4.2). ID 스코프 규칙은 새 섹션에 자동으로 안 붙어서 따로 적어요.
+     [hidden] 은 작성자 display 가 hidden 을 이기지 않게 막아요(#hFaceImagesPanel 선례). */
+  #cubeMakeSection > .export-row + .export-row, #cubeMakeSection .make-group > .export-row + .export-row { margin-top:6px; }
+  #cubeMakeSection .export-row button { display:flex;align-items:center;justify-content:center;gap:6px; }
+  #cubeMakeSection svg { flex-shrink:0; }
+  #cubeMakeSection [hidden] { display:none; }
+  #cubeMakeToggle { margin-left:auto;flex:none; }
+  #cubeMakeHeading { min-width:0; }
+  #cubeMakeSection .make-group { margin-top:12px; }
+  #cubeMakeSection .make-field { margin-top:8px; }
+  #cubeMakeSection select, #cubeMakeSection input[type=number] { width:100%;box-sizing:border-box; }
+  /* 전역 입력 테마 규칙(textarea·select·text·password)은 number 칸을 칠하지 않아요 — 같은 묶음의 select 와 어긋나지 않게
+     같은 모양을 새 섹션 number 칸에 줘요(다크 테마에서 흰 막대로 보이던 문제). */
+  #cubeMakeSection input[type=number] { background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px;font:inherit;font-size:13px; }
+  /* 막힌 카드·버튼·칸은 disabled 속성으로 막아요. 전역 button · .toggle-card 저작자 규칙이 UA 의 비활성 모양을 덮고 :hover 강조도
+     그대로 걸어서, 여기서 비활성 모양을 따로 줘요. pointer-events 는 끄지 않아요 — title 의 막힌 사유가 hover 로 보여야 해요. */
+  #cubeMakeSection .toggle-card:disabled, #cubeMakeSection button:disabled, #cubeMakeSection input:disabled { opacity:.4;cursor:not-allowed; }
+  #cubeMakeSection .toggle-card:disabled:not(.active):hover { border-color:var(--line);color:var(--dim); }
+  #cubeMakeSection .export-row button:disabled:hover { border-color:var(--line);color:var(--text); }
+  @media (max-width: 520px) {
+    /* 버튼 7개가 세로 7줄로 쌓이지 않게 새 섹션 행만 2열 격자로 둬요(전역 .export-row 세로 쌓기 대신). */
+    #cubeMakeSection .export-row { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px; }
+  }
   .h-export-format { font-size:9px;opacity:.75; }
   .h-image-card .hint { overflow-wrap:anywhere;margin:0; }
   #hFaceImagesPanel { flex:none;width:100%;box-sizing:border-box;margin-top:12px;padding:12px;background:var(--panel);border:1px solid var(--line,#d8deea);border-radius:10px; }
@@ -2782,6 +2805,56 @@
       <p id="cubeExportStatus" class="hint" role="status" aria-live="polite"></p>
     </section>
 
+    <!-- 만들기용 파일 — 3D 인쇄 · 종이 (설계 §4). 시험판(isLabPath) + 타입 H 에서만 보이고 기본은 접혀 있어요.
+         아이콘 버튼에는 data-i18n 을 달지 않아요 — syncCubeMakeUi 가 아이콘 + 번역 라벨을 그려요. -->
+    <section id="cubeMakeSection" class="export-section" aria-labelledby="cubeMakeHeading" hidden>
+      <div class="section-heading-row"><div id="cubeMakeHeading" class="export-heading" data-i18n="g1042">만들기용 파일 — 3D 인쇄 · 종이</div><button type="button" class="help-dot" data-help="g1043" aria-expanded="false" aria-label="설명 보기" data-i18n-attr="aria-label:g931"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/><circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/></svg></button><button type="button" id="cubeMakeToggle" class="y3d-btn" aria-controls="cubeMakeBody" aria-expanded="false"></button></div>
+      <div id="cubeMakeBody" hidden>
+        <div id="cubeMakePaper" class="make-group">
+          <div class="section-heading-row"><span class="section-heading" data-i18n="g1044">종이로 만들기</span><button type="button" class="help-dot" data-help="g1045" aria-expanded="false" aria-label="설명 보기" data-i18n-attr="aria-label:g931"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/><circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/></svg></button></div>
+          <div class="row export-row"><button type="button" id="makePaperSvg"></button><button type="button" id="makePaperPng"></button><button type="button" id="makePaperPdf"></button></div>
+          <div class="row export-row"><button type="button" id="makePaperPrint"></button></div>
+          <div class="make-field"><label class="section-heading" for="makePaperSize" data-i18n="g1064">용지</label><select id="makePaperSize"></select></div>
+          <div class="make-field"><label class="section-heading" for="makePaperThickness" data-i18n="g1065">두께</label><select id="makePaperThickness"></select></div>
+          <div id="makePaperThicknessCustomRow" class="make-field" hidden><label class="hint" for="makePaperThicknessCustom" data-i18n="g1066">두께 직접 입력(mm)</label><input type="number" id="makePaperThicknessCustom" inputmode="decimal"></div>
+          <div id="makePaperMethodRow" class="make-field" hidden>
+            <label class="section-heading" data-i18n="g1067">만드는 방식</label>
+            <div id="makePaperMethodCards" class="card-row" role="group" data-i18n-attr="aria-label:g1067"><button type="button" class="toggle-card" data-paper-method="skin" aria-pressed="false" data-i18n="g1068">붙이기(감싸기 스킨)</button><button type="button" class="toggle-card" data-paper-method="board" aria-pressed="false" data-i18n="g1069">판에 직접 인쇄</button></div>
+          </div>
+          <div id="makePaperAdvanced" class="make-field" hidden>
+            <label class="section-heading" data-i18n="g1070">한 변</label>
+            <div id="makePaperSideCards" class="card-row" role="group" data-i18n-attr="aria-label:g1070"><button type="button" class="toggle-card" data-paper-side="auto" aria-pressed="false" data-i18n="g1071">자동 최대</button><button type="button" class="toggle-card" data-paper-side="manual" aria-pressed="false" data-i18n="g1072">직접 입력</button></div>
+            <div id="makePaperSideRow" class="make-field" hidden><label class="hint" for="makePaperSide" data-i18n="g1073">한 변(mm)</label><input type="number" id="makePaperSide" inputmode="decimal"></div>
+          </div>
+          <p id="makePaperStatus" class="hint" role="status" aria-live="polite"></p>
+        </div>
+        <div id="cubeMakePrint" class="make-group">
+          <div class="section-heading-row"><span class="section-heading" data-i18n="g1046">3D 인쇄</span><button type="button" class="help-dot" data-help="g1047" aria-expanded="false" aria-label="설명 보기" data-i18n-attr="aria-label:g931"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/><circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/></svg></button></div>
+          <div class="row export-row"><button type="button" id="makePrint3mf"></button><button type="button" id="makePrintStl"></button></div>
+          <div class="row export-row"><button type="button" id="makePrintStand"></button></div>
+          <div class="make-field"><label class="section-heading" for="makeCellMm" data-i18n="g1074">셀 크기(mm)</label><input type="number" id="makeCellMm" inputmode="decimal"></div>
+          <div class="make-field">
+            <label class="section-heading" data-i18n="g1075">매립 깊이</label>
+            <div id="makeDepthCards" class="card-row" role="group" data-i18n-attr="aria-label:g1075"><button type="button" class="toggle-card" data-depth-um="600" aria-pressed="false">0.6 mm</button><button type="button" class="toggle-card" data-depth-um="1000" aria-pressed="false">1.0 mm</button><button type="button" class="toggle-card" data-depth-um="1600" aria-pressed="false">1.6 mm</button><button type="button" class="toggle-card" data-depth-um="2000" aria-pressed="false">2.0 mm</button></div>
+          </div>
+          <div class="make-field">
+            <label class="section-heading" data-i18n="g1076">속 비우기</label>
+            <div id="makeHollowCards" class="card-row" role="group" data-i18n-attr="aria-label:g1076"><button type="button" class="toggle-card" data-hollow="off" aria-pressed="false" data-i18n="g1077">끔</button><button type="button" class="toggle-card" data-hollow="on" aria-pressed="false" data-i18n="g1078">켬</button></div>
+          </div>
+          <div id="makePrintAdvanced" hidden>
+            <div class="make-field"><label class="hint" for="makeWallMm" data-i18n="g1079">구조 벽(mm)</label><input type="number" id="makeWallMm" inputmode="decimal"></div>
+            <div class="make-field"><label class="hint" for="makeCeilingMm" data-i18n="g1080">천장 평탄 폭(mm)</label><input type="number" id="makeCeilingMm" inputmode="decimal"></div>
+            <div class="make-field">
+              <label class="hint" data-i18n="g1081">리브(내부 빔)</label>
+              <div id="makeRibCards" class="card-row" role="group" data-i18n-attr="aria-label:g1081"><button type="button" class="toggle-card" data-ribs="off" aria-pressed="false" data-i18n="g1077">끔</button><button type="button" class="toggle-card" data-ribs="on" aria-pressed="false" data-i18n="g1078">켬</button></div>
+            </div>
+            <div class="make-field"><label class="hint" for="makeVentMm" data-i18n="g1082">숨구멍 한 변(mm)</label><input type="number" id="makeVentMm" inputmode="decimal"></div>
+          </div>
+          <p id="makePrintStatus" class="hint" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
     <section id="cubeVideoSection" class="export-section" aria-labelledby="cubeVideoHeading" hidden>
       <div class="section-heading-row"><div id="cubeVideoHeading" class="export-heading" data-h-label="videoHeading">3D 회전 영상 다운로드</div><button type="button" class="help-dot" data-help="g1041" aria-expanded="false" aria-label="설명 보기" data-i18n-attr="aria-label:g931"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9a3 3 0 1 1 4.2 2.75c-.8.38-1.2 1.1-1.2 2.05v.7"/><circle cx="12" cy="18.2" r="1.15" fill="currentColor" stroke="none"/></svg></button></div>
       <div class="row export-row">
@@ -3573,6 +3646,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · 흰 지면",
     "g1037": "프리셋에서 벗어났어요 — 고른 뒤에 옵션을 직접 바꿨어요.",
     "g1038": "카드 이름이 곧 파일 이름이에요 — sil3d-<dark|light>-<카드 이름>-<near|far>.jpg 로 저장해 주세요. near 는 가이드 크기, far 는 1.5배 멀리예요.",
+    "g1042": "만들기용 파일 — 3D 인쇄 · 종이",
+    "g1043": "이 코드를 손에 잡히는 큐브로 만드는 파일이에요 — 종이 도안과 3D 프린터용 파일.\n모든 파일은 물리 좌표로 만들어서, 바깥에서 보면 각 면이 화면과 같은 방향이에요(거울상이 아니에요).\n시험판 기능이에요. 실물로 만든 큐브의 판독은 아직 검증 중이에요.",
+    "g1044": "종이로 만들기",
+    "g1045": "한 장 전개도(두께 0.45 mm 이하): 실선을 따라 자르고, 날개 밑변의 파선을 산접기하고, 날개에 풀칠해요.\n면 위에는 접는 선을 그리지 않아요(코드를 가리지 않게). 접는 선은 자른 외곽의 오목 꼭짓점 둘을 잇는 선이고, 모든 접기는 인쇄면이 바깥이 되는 산접기예요 — 감싸기 스킨도 같아요.\n접기 전에 뒷면에서 두 오목 꼭짓점에 자를 대고 금을 그어(스코어링) 두세요. 두꺼운 종이는 결 방향으로 그어요.\n0.45 mm보다 두꺼우면 두 방식 중에서 골라요. 붙이기 = 재단표(A·B·C)대로 판을 잘라 맞댄 코어를 스킨 한 장으로 감싸요. 판에 직접 인쇄 = 후면 급지를 지원하는 프린터에서만 써요. 조각 6장을 잘라 맞대요.\n판에 직접 인쇄: 조각 모서리 바깥의 짧은 재단 표시 둘을 이은 선을 따라 잘라요(조각 인쇄 영역에는 선을 긋지 않아요). 자르기 전에 조각 뒷면에 번호와 화살표를 연필로 옮겨 적고, 조립한 뒤 드러나는 절단면은 흰 마커로 칠해요.\n인쇄는 배율 100 %(실제 크기)로 하고 페이지 맞춤·축소와 머리글/바닥글을 꺼요. 인쇄한 뒤 50 mm 막대를 자로 재서 확인해요.\n무광 용지를 권해요. 광택지는 반사 때문에 모듈이 가려져요.",
+    "g1046": "3D 인쇄",
+    "g1047": "슬라이서가 «한 오브젝트의 여러 파트로 불러올까요?»라고 물으면 예를 눌러요 — 아니오를 누르면 파트가 어긋나요. PrusaSlicer에서는 STL 묶음을 써요.\nBambu Studio 2.5 이상: 색 대화상자에서 파트마다 필라멘트를 맞춰요 · OrcaSlicer: 파트별 필라멘트를 확인해요 · Cura: 3MF 그룹 안의 메쉬마다 익스트루더를 정하고, STL이면 전부 선택한 뒤 Merge models를 해요.\nPrusaSlicer·Cura는 3MF 색을 읽지 않아요. 파트 이름에 적힌 색(hex)을 보고 필라멘트를 지정해요.\n밝기 순서만 지키면 돼요: 검정 < 어두운 톤 < 중간 톤 < 밝은 톤 < 흰색. 무광 필라멘트를 권해요.\n속 비우기를 켜면 공동·리브(내부 빔)·방마다 숨구멍이 들어가요. 여섯 면이 모두 데이터면 숨구멍을 둘 면이 없어 솔리드로 내보내요. 끄면 슬라이서 인필(10–15 % gyroid/cubic, 외벽 3–4줄)이 내부 격자 역할을 해요.\n여섯 면이 모두 데이터면 바닥면도 데이터 면이에요 — 텍스처 PEI 판을 쓰고 코끼리발 보정을 0.2 mm로 두세요.\nAMS·MMU 같은 다색 장치가 없으면 이 파일로 색을 넣을 수 없어요.\n셀 크기는 층 높이의 배수로 두세요. 기본값은 층 0.2 mm 기준이에요.\n받침대는 화면에서 보이지 않는 뒤쪽 꼭짓점을 아래로 세워 잡아요. 그 꼭짓점에 닿는 면에 코드가 있으면 포켓이 그 모서리를 가려요 — 판독할 땐 받침대에서 꺼내요.",
+    "g1048": "만들기용 파일 펼치기",
+    "g1049": "만들기용 파일 접기",
+    "g1050": "SVG",
+    "g1051": "실척(mm) SVG 도안을 내려받아요 — 편집·커팅기용",
+    "g1052": "PNG",
+    "g1053": "300 dpi PNG 도안을 내려받아요(실제 크기 정보 포함) — 큰 용지는 만드는 데 몇 초 걸릴 수 있어요",
+    "g1054": "PDF",
+    "g1055": "벡터 PDF 도안을 내려받아요 — 실척 인쇄에 가장 확실해요",
+    "g1056": "인쇄",
+    "g1057": "도안을 바로 인쇄해요 — 배율 100 %(실제 크기)로 인쇄해요",
+    "g1058": "3MF (권장)",
+    "g1059": "색별 파트를 한 오브젝트로 묶은 3MF를 내려받아요 — Bambu · Orca · Cura",
+    "g1060": "STL 묶음",
+    "g1061": "색별 STL을 같은 원점으로 묶은 ZIP을 내려받아요 — PrusaSlicer 권장",
+    "g1062": "받침대 STL",
+    "g1063": "꼭짓점을 아래로 세워 두는 받침대 STL을 내려받아요(단색)",
+    "g1064": "용지",
+    "g1065": "두께",
+    "g1066": "두께 직접 입력(mm)",
+    "g1067": "만드는 방식",
+    "g1068": "붙이기(감싸기 스킨)",
+    "g1069": "판에 직접 인쇄",
+    "g1070": "한 변",
+    "g1071": "자동 최대",
+    "g1072": "직접 입력",
+    "g1073": "한 변(mm)",
+    "g1074": "셀 크기(mm)",
+    "g1075": "매립 깊이",
+    "g1076": "속 비우기",
+    "g1077": "끔",
+    "g1078": "켬",
+    "g1079": "구조 벽(mm)",
+    "g1080": "천장 평탄 폭(mm)",
+    "g1081": "리브(내부 빔)",
+    "g1082": "숨구멍 한 변(mm)",
+    "g1083": "일반지 {mm} mm",
+    "g1084": "카드지 {mm} mm",
+    "g1085": "하드보드 {mm} mm",
+    "g1086": "골판지 {flute} {mm} mm",
+    "g1087": "직접 입력(캘리퍼)",
+    "g1088": "{paper} · 한 변 {side} mm(인쇄 피치 {pitch}) · 모듈 {module} mm",
+    "g1089": "한 장 전개도 · 날개 {tabs}",
+    "g1090": "감싸기 스킨 · 코어 A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "판 직접 인쇄 · 조각 A {a} ×2 · B {b} ×2 · C {c} ×2 · 절단면 띠 {band} mm",
+    "g1092": "한 변 {side} mm · 필라멘트 {count}색",
+    "g1093": "AMS 1대({slots}슬롯) 초과",
+    "g1094": "예상 색 교체 약 {changes}회(층 {layer} mm)",
+    "g1095": "반대면 복제 켬(미리보기 6면 설정)",
+    "g1096": "반대면 복제 끔(미리보기 3면 설정)",
+    "g1097": "속 비우기: 방 {rooms} · 숨구멍 {vents}",
+    "g1098": "삼각형 {triangles} · {size}",
+    "g1099": "모듈이 1.2 mm보다 작아 판독이 어려울 수 있어요",
+    "g1100": "절단면 띠가 넓어요 — 절단면을 흰색으로 칠해요",
+    "g1101": "한 변이 180 mm를 넘어요 — 프린터 빌드 크기를 확인해요",
+    "g1102": "셀이 1.2 mm보다 작아요 — 0.4 mm 노즐로는 뭉개질 수 있어요",
+    "g1103": "면 이미지는 3D 인쇄 파일에 들어가지 않아요",
+    "g1104": "공동이 작아 리브 없이 비워요",
+    "g1105": "셀 크기는 0.8 mm 이상이어야 해요",
+    "g1106": "셀 크기는 0.2 mm 단위여야 해요",
+    "g1107": "매립 깊이는 셀 크기의 0.9배 이하여야 해요",
+    "g1108": "메쉬 자체검사에 실패해 내보내지 않았어요(닫힌 입체가 아니에요)",
+    "g1109": "삼각형이 상한 {cap}개를 넘어요",
+    "g1110": "숨구멍을 둘 빈 면이 없어 속을 비우지 않아요(솔리드로 내보내요)",
+    "g1111": "큐브가 작거나 숨구멍이 커서 속을 비우지 않아요(솔리드로 내보내요)",
+    "g1112": "이 용지에 들어가지 않아요 — 한 변을 줄이거나 큰 용지를 골라요",
+    "g1113": "종이 모듈이 1.0 mm보다 작아요 — 큰 용지나 더 긴 한 변을 골라요",
+    "g1114": "판 두께가 종이 모듈 이상이라 직접 인쇄할 수 없어요",
+    "g1115": "이 방식에는 판이 너무 두꺼워요",
+    "g1116": "파일을 만들지 못했어요({code})",
+    "g1117": "도안을 만들고 있어요…",
+    "g1118": "3D 인쇄 파일을 만들고 있어요…",
+    "g1119": "저장했어요",
+    "g1120": "인쇄: 배율 100 %(실제 크기) · 페이지 맞춤·축소 끔 · 머리글/바닥글 끔 · 인쇄 후 50 mm 막대를 자로 재요",
+    "g1121": "이 브라우저는 압축을 지원하지 않아 압축 없이 저장돼요(파일이 더 커요)",
+    "g1122": "숨구멍 둘 빈 면이 없어 솔리드로 내보내요",
+    "g1123": "큐브가 작거나 숨구멍이 커서 솔리드로 내보내요",
+    "g1124": "받침대가 잡는 꼭짓점에 데이터 면이 닿아 포켓이 그 모서리를 가려요",
+    "g1125": "매립 깊이 {depth} mm(셀에 맞춰 낮춤)",
+    "g1126": "{method} 불가 — {reason}",
+    "g1127": "이 방식에는 판이 너무 두꺼워요",
+    "g1128": "판 두께가 종이 모듈 이상이에요",
+    "g1129": "이 용지에 들어가지 않아요",
+    "g1130": "종이 모듈이 1.0 mm보다 작아요"
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -4080,6 +4242,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · white ground",
     "g1037": "Off preset — options were changed by hand after picking it.",
     "g1038": "The card name is the file name — save each shot as sil3d-<dark|light>-<card name>-<near|far>.jpg. near is guide size, far is 1.5× further away.",
+    "g1042": "Maker files — 3D printing · paper",
+    "g1043": "Files for turning this code into a physical cube — paper patterns and 3D-printer files.\nEvery file is built in physical coordinates, so seen from outside each face matches the screen (not a mirror image).\nLab feature: scanning of real-world cubes is still being verified.",
+    "g1044": "Make it from paper",
+    "g1045": "Single-sheet net (up to 0.45 mm thick): cut along the solid lines, mountain-fold the dashed lines at the base of each tab and glue the tabs.\nFold lines are never drawn on the faces, so they never cover the code. Each fold runs between two concave corners of the cut outline, and every fold is a mountain fold with the printed side outward — the wrap skin too.\nBefore folding, score each fold on the back with a ruler laid across its two concave corners; on thick paper, score along the grain.\nAbove 0.45 mm, choose one of two methods. Wrap = cut board pieces from the cutting list (A·B·C), butt them into a core and wrap it with one skin. Print on board = only for printers with a straight rear feed; cut the six pieces and butt them together.\nPrint on board: cut along the line joining each pair of short crop marks outside the piece corners (no line is printed on the piece itself). Before cutting, copy each piece’s number and arrow onto its back in pencil, and paint the exposed cut edges white after assembly.\nPrint at 100 % scale (actual size) with fit-to-page, shrinking and headers/footers turned off. After printing, measure the 50 mm bar with a ruler.\nMatte paper is recommended; glossy paper hides modules with glare.",
+    "g1046": "3D printing",
+    "g1047": "If the slicer asks “Load as a single object with multiple parts?”, answer Yes — No misaligns the parts. In PrusaSlicer, use the STL bundle.\nBambu Studio 2.5+: match a filament to each part in the color dialog · OrcaSlicer: check the filament of each part · Cura: set an extruder per mesh inside the 3MF group; for STL, select all and use Merge models.\nPrusaSlicer and Cura do not read 3MF colors; assign filaments from the color (hex) in each part name.\nOnly the brightness order matters: black < dark tone < mid tone < light tone < white. Matte filament is recommended.\nHollowing adds a cavity, ribs (inner beams) and one vent hole per chamber. When all six faces carry data there is no face for the vents, so the cube is exported solid. With hollowing off, slicer infill (10–15 % gyroid/cubic, 3–4 walls) acts as the inner lattice.\nWhen all six faces carry data, the bottom face is a data face too — use a textured PEI plate and set elephant-foot compensation to 0.2 mm.\nWithout a multi-material unit such as AMS or MMU, these files cannot add color.\nKeep the cell size a multiple of the layer height; defaults assume 0.2 mm layers.\nThe stand holds the cube on the back corner that is hidden on screen. If a face touching that corner carries code, the pocket covers that corner — take the cube off the stand to scan it.",
+    "g1048": "Show maker files",
+    "g1049": "Hide maker files",
+    "g1050": "SVG",
+    "g1051": "Download the actual-size (mm) SVG pattern — for editing and cutting machines",
+    "g1052": "PNG",
+    "g1053": "Download the 300 dpi PNG pattern (with physical size) — large paper sizes can take a few seconds",
+    "g1054": "PDF",
+    "g1055": "Download the vector PDF pattern — the most reliable way to print at actual size",
+    "g1056": "Print",
+    "g1057": "Print the pattern now — print at 100 % scale (actual size)",
+    "g1058": "3MF (recommended)",
+    "g1059": "Download a 3MF with one part per color in a single object — Bambu · Orca · Cura",
+    "g1060": "STL bundle",
+    "g1061": "Download a ZIP of per-color STLs sharing one origin — recommended for PrusaSlicer",
+    "g1062": "Stand STL",
+    "g1063": "Download a single-color STL stand that holds the cube on a corner",
+    "g1064": "Paper",
+    "g1065": "Thickness",
+    "g1066": "Custom thickness (mm)",
+    "g1067": "Method",
+    "g1068": "Wrap a board core",
+    "g1069": "Print on board",
+    "g1070": "Cube side",
+    "g1071": "Largest that fits",
+    "g1072": "Custom",
+    "g1073": "Side (mm)",
+    "g1074": "Cell size (mm)",
+    "g1075": "Inlay depth",
+    "g1076": "Hollowing",
+    "g1077": "Off",
+    "g1078": "On",
+    "g1079": "Wall (mm)",
+    "g1080": "Flat ceiling width (mm)",
+    "g1081": "Ribs (inner beams)",
+    "g1082": "Vent hole side (mm)",
+    "g1083": "Plain paper {mm} mm",
+    "g1084": "Cardstock {mm} mm",
+    "g1085": "Hardboard {mm} mm",
+    "g1086": "Corrugated {flute} flute {mm} mm",
+    "g1087": "Custom (caliper)",
+    "g1088": "{paper} · side {side} mm (print pitch {pitch}) · module {module} mm",
+    "g1089": "single-sheet net · {tabs} tabs",
+    "g1090": "wrap skin · core A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "print on board · pieces A {a} ×2 · B {b} ×2 · C {c} ×2 · cut-edge band {band} mm",
+    "g1092": "Side {side} mm · {count} filaments",
+    "g1093": "exceeds one AMS ({slots} slots)",
+    "g1094": "about {changes} color changes ({layer} mm layers)",
+    "g1095": "opposite faces duplicated (preview set to 6 faces)",
+    "g1096": "opposite faces not duplicated (preview set to 3 faces)",
+    "g1097": "hollow: {rooms} chambers · {vents} vents",
+    "g1098": "{triangles} triangles · {size}",
+    "g1099": "modules under 1.2 mm may be hard to scan",
+    "g1100": "wide cut-edge band — paint the cut edges white",
+    "g1101": "side over 180 mm — check your printer’s build volume",
+    "g1102": "cells under 1.2 mm may blur with a 0.4 mm nozzle",
+    "g1103": "face images are not included in 3D print files",
+    "g1104": "cavity too small for ribs — hollowed without ribs",
+    "g1105": "Cell size must be at least 0.8 mm.",
+    "g1106": "Cell size must be a multiple of 0.2 mm.",
+    "g1107": "Inlay depth must be at most 0.9 × the cell size.",
+    "g1108": "The mesh self-check failed, so nothing was exported (not a closed solid).",
+    "g1109": "The mesh exceeds the {cap}-triangle limit.",
+    "g1110": "No blank face for vent holes — exported solid, not hollowed.",
+    "g1111": "Cube too small or vent too large to hollow — exported solid.",
+    "g1112": "Does not fit this paper — reduce the side or choose a larger paper.",
+    "g1113": "Paper modules would be under 1.0 mm — choose a larger paper or side.",
+    "g1114": "The board is at least as thick as a paper module, so it cannot be printed directly.",
+    "g1115": "The board is too thick for this method.",
+    "g1116": "Could not create the file ({code}).",
+    "g1117": "Building the pattern…",
+    "g1118": "Building the 3D print file…",
+    "g1119": "Saved.",
+    "g1120": "Print at 100 % (actual size) · fit-to-page and shrinking off · headers/footers off · measure the 50 mm bar afterwards",
+    "g1121": "This browser cannot compress, so files are stored uncompressed (larger).",
+    "g1122": "no blank face for vent holes — exported solid",
+    "g1123": "too small to hollow with this vent — exported solid",
+    "g1124": "a data face touches the corner the stand holds, so the pocket covers that corner",
+    "g1125": "inlay depth {depth} mm (lowered to fit the cell)",
+    "g1126": "{method} unavailable — {reason}",
+    "g1127": "board too thick for this method",
+    "g1128": "board at least as thick as a paper module",
+    "g1129": "does not fit this paper",
+    "g1130": "paper modules under 1.0 mm"
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -4587,6 +4838,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · 白い地色",
     "g1037": "プリセットから外れています — 選んだあとにオプションを手で変えました。",
     "g1038": "カード名がそのままファイル名です — sil3d-<dark|light>-<カード名>-<near|far>.jpg で保存してください。near はガイドサイズ、far は 1.5 倍遠くです。",
+    "g1042": "製作用ファイル — 3D プリント · 紙",
+    "g1043": "このコードを手に取れるキューブにするためのファイルです — 紙の展開図と 3D プリンター用ファイル。\nすべてのファイルは物理座標で作るので、外から見ると各面が画面と同じ向きになります（鏡像ではありません）。\n試験版の機能です。実物キューブの読み取りはまだ検証中です。",
+    "g1044": "紙で作る",
+    "g1045": "1枚展開図（厚さ 0.45 mm 以下）：実線で切り、のりしろの付け根の破線を山折りし、のりしろに糊を付けます。\n面の上には折り線を描きません（コードを隠さないため）。折り線は切り抜いた外形の凹んだ角 2 つを結ぶ線で、折りはすべて印刷面が外側になる山折りです — 包むスキンも同じです。\n折る前に裏面で 2 つの凹んだ角に定規を当てて筋を付け（スコアリング）ておきます。厚い紙は紙目に沿って付けます。\n0.45 mm より厚い場合は 2 つの方式から選びます。貼り付け = 裁断表（A·B·C）どおりに板を切って突き合わせたコアを 1 枚のスキンで包みます。板に直接印刷 = 背面ストレート給紙に対応したプリンター専用です。6 枚のピースを切って突き合わせます。\n板に直接印刷：ピースの角の外側にある短いトンボ 2 つを結ぶ線に沿って切ります（ピースの印刷面には線を引いていません）。切る前に各ピースの裏に番号と矢印を鉛筆で写し、組み立て後に見える切断面は白いマーカーで塗ります。\n印刷は倍率 100 %（実寸）で、ページに合わせる・縮小とヘッダー/フッターをオフにします。印刷後に 50 mm のバーを定規で測って確認します。\nつや消しの紙をおすすめします。光沢紙は反射でモジュールが隠れます。",
+    "g1046": "3D プリント",
+    "g1047": "スライサーが「複数パーツを持つ 1 つのオブジェクトとして読み込みますか?」と尋ねたら「はい」を選びます — 「いいえ」だとパーツがずれます。PrusaSlicer では STL 一式を使います。\nBambu Studio 2.5 以降：カラーダイアログでパーツごとにフィラメントを合わせます · OrcaSlicer：パーツごとのフィラメントを確認します · Cura:3MF グループ内のメッシュごとにエクストルーダーを設定し、STL なら全選択して Merge models を実行します。\nPrusaSlicer と Cura は 3MF の色を読みません。パーツ名の色（hex）を見てフィラメントを割り当てます。\n守るのは明るさの順序だけです：黒 < 暗いトーン < 中間トーン < 明るいトーン < 白。つや消しフィラメントをおすすめします。\n中空化をオンにすると、空洞・リブ（内部ビーム）・部屋ごとの通気孔が入ります。6 面すべてがデータの場合は通気孔を置く面がないため、ソリッドで出力します。オフのときはスライサーのインフィル（10–15 % gyroid/cubic、外壁 3–4 周）が内部格子の役割をします。\n6 面すべてがデータの場合は底面もデータ面です — テクスチャ PEI プレートを使い、エレファントフット補正を 0.2 mm にします。\nAMS や MMU のような多色ユニットがなければ、このファイルで色を付けることはできません。\nセルサイズはレイヤー高さの倍数にしてください。既定値はレイヤー 0.2 mm 基準です。\nスタンドは画面に見えない奥の頂点を下にして支えます。その頂点に接する面にコードがあると、ポケットがその角を隠します — 読み取るときはスタンドから外します。",
+    "g1048": "製作用ファイルを開く",
+    "g1049": "製作用ファイルを閉じる",
+    "g1050": "SVG",
+    "g1051": "実寸（mm）の SVG 展開図をダウンロードします — 編集・カッティングマシン用",
+    "g1052": "PNG",
+    "g1053": "300 dpi の PNG 展開図をダウンロードします（実寸情報付き） — 大きな用紙では数秒かかることがあります",
+    "g1054": "PDF",
+    "g1055": "ベクター PDF の展開図をダウンロードします — 実寸印刷に最も確実です",
+    "g1056": "印刷",
+    "g1057": "展開図をすぐ印刷します — 倍率 100 %（実寸）で印刷してください",
+    "g1058": "3MF（推奨）",
+    "g1059": "色ごとのパーツを 1 つのオブジェクトにまとめた 3MF をダウンロードします — Bambu · Orca · Cura",
+    "g1060": "STL 一式",
+    "g1061": "同じ原点の色別 STL をまとめた ZIP をダウンロードします — PrusaSlicer 推奨",
+    "g1062": "スタンド STL",
+    "g1063": "頂点を下にしてキューブを立てるスタンドの STL をダウンロードします（単色）",
+    "g1064": "用紙",
+    "g1065": "厚さ",
+    "g1066": "厚さを直接入力（mm）",
+    "g1067": "作り方",
+    "g1068": "貼り付け（スキンで包む）",
+    "g1069": "板に直接印刷",
+    "g1070": "一辺",
+    "g1071": "自動（最大）",
+    "g1072": "直接入力",
+    "g1073": "一辺（mm）",
+    "g1074": "セルサイズ（mm）",
+    "g1075": "埋め込み深さ",
+    "g1076": "中空化",
+    "g1077": "オフ",
+    "g1078": "オン",
+    "g1079": "構造壁（mm）",
+    "g1080": "天井の平らな幅（mm）",
+    "g1081": "リブ（内部ビーム）",
+    "g1082": "通気孔の一辺（mm）",
+    "g1083": "普通紙 {mm} mm",
+    "g1084": "カード紙 {mm} mm",
+    "g1085": "ボール紙 {mm} mm",
+    "g1086": "段ボール {flute} フルート {mm} mm",
+    "g1087": "直接入力（ノギス）",
+    "g1088": "{paper} · 一辺 {side} mm（印刷ピッチ {pitch}） · モジュール {module} mm",
+    "g1089": "1枚展開図 · のりしろ {tabs}",
+    "g1090": "スキン · コア A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "板に直接印刷 · ピース A {a} ×2 · B {b} ×2 · C {c} ×2 · 切断面の帯 {band} mm",
+    "g1092": "一辺 {side} mm · フィラメント {count} 色",
+    "g1093": "AMS 1 台（{slots} スロット）を超過",
+    "g1094": "色替え 約 {changes} 回（レイヤー {layer} mm）",
+    "g1095": "反対面の複製 オン（プレビュー 6 面設定）",
+    "g1096": "反対面の複製 オフ（プレビュー 3 面設定）",
+    "g1097": "中空化：部屋 {rooms} · 通気孔 {vents}",
+    "g1098": "三角形 {triangles} · {size}",
+    "g1099": "モジュールが 1.2 mm 未満のため読み取りにくい場合があります",
+    "g1100": "切断面の帯が広いです — 切断面を白く塗ってください",
+    "g1101": "一辺が 180 mm を超えます — プリンターの造形サイズを確認してください",
+    "g1102": "セルが 1.2 mm 未満です — 0.4 mm ノズルでは潰れることがあります",
+    "g1103": "面画像は 3D プリント用ファイルに含まれません",
+    "g1104": "空洞が小さいためリブなしで中空化します",
+    "g1105": "セルサイズは 0.8 mm 以上にしてください。",
+    "g1106": "セルサイズは 0.2 mm 単位にしてください。",
+    "g1107": "埋め込み深さはセルサイズの 0.9 倍以下にしてください。",
+    "g1108": "メッシュの自己検査に失敗したため出力しませんでした（閉じた立体ではありません）。",
+    "g1109": "三角形が上限 {cap} 個を超えています。",
+    "g1110": "通気孔を置く空き面がないため中空化しません（ソリッドで出力します）。",
+    "g1111": "キューブが小さいか通気孔が大きいため中空化しません（ソリッドで出力します）。",
+    "g1112": "この用紙に収まりません — 一辺を小さくするか大きい用紙を選んでください。",
+    "g1113": "紙のモジュールが 1.0 mm 未満になります — 大きい用紙か長い一辺を選んでください。",
+    "g1114": "板の厚さが紙のモジュール以上のため直接印刷できません。",
+    "g1115": "この方式には板が厚すぎます。",
+    "g1116": "ファイルを作成できませんでした（{code}）。",
+    "g1117": "展開図を作成しています…",
+    "g1118": "3D プリント用ファイルを作成しています…",
+    "g1119": "保存しました。",
+    "g1120": "印刷：倍率 100 %（実寸） · ページに合わせる・縮小オフ · ヘッダー/フッターオフ · 印刷後に 50 mm バーを測ります",
+    "g1121": "このブラウザーは圧縮に対応していないため、非圧縮で保存されます（ファイルが大きくなります）。",
+    "g1122": "通気孔を置く空き面がないためソリッドで出力",
+    "g1123": "キューブが小さいか通気孔が大きいためソリッドで出力",
+    "g1124": "スタンドが支える頂点にデータ面が接しているため、ポケットがその角を隠します",
+    "g1125": "埋め込み深さ {depth} mm（セルに合わせて浅く）",
+    "g1126": "{method}は不可 — {reason}",
+    "g1127": "この方式には板が厚すぎます",
+    "g1128": "板の厚さが紙のモジュール以上です",
+    "g1129": "この用紙に収まりません",
+    "g1130": "紙のモジュールが 1.0 mm 未満です"
   },
   fr: {
     "g001": "Thème de la page (sans effet sur le rendu du code)",
@@ -5093,6 +5433,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · fond blanc",
     "g1037": "Hors préréglage — des options ont été modifiées à la main après le choix.",
     "g1038": "Le nom de la carte est le nom du fichier — enregistrez chaque photo sous sil3d-<dark|light>-<nom de la carte>-<near|far>.jpg. near = taille du guide, far = 1,5× plus loin.",
+    "g1042": "Fichiers de fabrication — impression 3D · papier",
+    "g1043": "Fichiers pour transformer ce code en cube réel — patrons papier et fichiers pour imprimante 3D.\nTous les fichiers sont construits en coordonnées physiques : vue de l’extérieur, chaque face correspond à l’écran (pas d’image miroir).\nFonction expérimentale : la lecture des cubes réels est encore en cours de vérification.",
+    "g1044": "Fabriquer en papier",
+    "g1045": "Patron d’une seule feuille (jusqu’à 0,45 mm) : découpez le long des traits pleins, pliez en montagne les pointillés à la base des languettes et collez les languettes.\nAucun pli n’est tracé sur les faces, pour ne jamais couvrir le code. Chaque pli relie deux coins rentrants du contour découpé, et tous les plis sont des plis montagne, face imprimée à l’extérieur — la peau d’habillage aussi.\nAvant de plier, rainez chaque pli au dos avec une règle posée sur ses deux coins rentrants ; sur papier épais, rainez dans le sens des fibres.\nAu-delà de 0,45 mm, choisissez l’une des deux méthodes. Habillage = découpez les plaques selon la liste de coupe (A·B·C), assemblez-les bord à bord en un noyau, puis enveloppez-le d’une seule peau. Impression sur carton = uniquement avec une imprimante à alimentation arrière droite ; découpez les six pièces et assemblez-les bord à bord.\nImpression sur carton : découpez le long de la ligne qui relie deux traits de coupe courts, à l’extérieur des coins de chaque pièce (aucun trait n’est imprimé sur la pièce). Avant de découper, reportez au crayon le numéro et la flèche de chaque pièce au dos, et peignez en blanc les tranches visibles après assemblage.\nImprimez à 100 % (taille réelle), sans ajustement à la page, sans réduction et sans en-têtes/pieds de page. Après impression, mesurez la barre de 50 mm avec une règle.\nLe papier mat est recommandé ; le papier brillant masque les modules par reflet.",
+    "g1046": "Impression 3D",
+    "g1047": "Si le trancheur demande « Charger comme un seul objet à plusieurs pièces ? », répondez Oui — Non décale les pièces. Dans PrusaSlicer, utilisez le lot STL.\nBambu Studio 2.5+ : associez un filament à chaque pièce dans la boîte de dialogue des couleurs · OrcaSlicer : vérifiez le filament de chaque pièce · Cura : réglez un extrudeur par maillage dans le groupe 3MF ; pour les STL, sélectionnez tout puis Merge models.\nPrusaSlicer et Cura ne lisent pas les couleurs 3MF ; attribuez les filaments d’après la couleur (hex) du nom de chaque pièce.\nSeul l’ordre de luminosité compte : noir < ton sombre < ton moyen < ton clair < blanc. Un filament mat est recommandé.\nL’évidement ajoute une cavité, des nervures (poutres internes) et un évent par chambre. Si les six faces portent des données, aucune face ne peut recevoir d’évent : le cube est exporté plein. Sans évidement, le remplissage du trancheur (10–15 % gyroid/cubic, 3–4 parois) sert de treillis interne.\nSi les six faces portent des données, la face du dessous en porte aussi — utilisez un plateau PEI texturé et une compensation de patte d’éléphant de 0,2 mm.\nSans unité multi-matériaux comme AMS ou MMU, ces fichiers ne peuvent pas ajouter de couleur.\nGardez une taille de cellule multiple de la hauteur de couche ; les valeurs par défaut supposent des couches de 0,2 mm.\nLe support tient le cube par le coin arrière invisible à l’écran. Si une face touchant ce coin porte du code, la poche en masque le coin — retirez le cube du support pour le scanner.",
+    "g1048": "Afficher les fichiers de fabrication",
+    "g1049": "Masquer les fichiers de fabrication",
+    "g1050": "SVG",
+    "g1051": "Télécharger le patron SVG à taille réelle (mm) — pour l’édition et les machines de découpe",
+    "g1052": "PNG",
+    "g1053": "Télécharger le patron PNG à 300 dpi (avec la taille physique) — les grands formats peuvent prendre quelques secondes",
+    "g1054": "PDF",
+    "g1055": "Télécharger le patron PDF vectoriel — le moyen le plus sûr d’imprimer à taille réelle",
+    "g1056": "Imprimer",
+    "g1057": "Imprimer le patron maintenant — à l’échelle 100 % (taille réelle)",
+    "g1058": "3MF (recommandé)",
+    "g1059": "Télécharger un 3MF avec une pièce par couleur dans un seul objet — Bambu · Orca · Cura",
+    "g1060": "Lot STL",
+    "g1061": "Télécharger un ZIP de STL par couleur partageant la même origine — recommandé pour PrusaSlicer",
+    "g1062": "Support STL",
+    "g1063": "Télécharger un support STL monochrome qui tient le cube sur un sommet",
+    "g1064": "Papier",
+    "g1065": "Épaisseur",
+    "g1066": "Épaisseur personnalisée (mm)",
+    "g1067": "Méthode",
+    "g1068": "Habillage d’un noyau",
+    "g1069": "Impression sur carton",
+    "g1070": "Côté du cube",
+    "g1071": "Maximum automatique",
+    "g1072": "Personnalisé",
+    "g1073": "Côté (mm)",
+    "g1074": "Taille de cellule (mm)",
+    "g1075": "Profondeur d’incrustation",
+    "g1076": "Évidement",
+    "g1077": "Désactivé",
+    "g1078": "Activé",
+    "g1079": "Paroi (mm)",
+    "g1080": "Largeur du plafond plat (mm)",
+    "g1081": "Nervures (poutres internes)",
+    "g1082": "Côté de l’évent (mm)",
+    "g1083": "Papier ordinaire {mm} mm",
+    "g1084": "Papier cartonné {mm} mm",
+    "g1085": "Carton gris {mm} mm",
+    "g1086": "Carton ondulé cannelure {flute} {mm} mm",
+    "g1087": "Personnalisée (pied à coulisse)",
+    "g1088": "{paper} · côté {side} mm (pas d’impression {pitch}) · module {module} mm",
+    "g1089": "patron d’une feuille · {tabs} languettes",
+    "g1090": "peau d’habillage · noyau A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "impression sur carton · pièces A {a} ×2 · B {b} ×2 · C {c} ×2 · bande de tranche {band} mm",
+    "g1092": "Côté {side} mm · {count} filaments",
+    "g1093": "dépasse un AMS ({slots} emplacements)",
+    "g1094": "environ {changes} changements de couleur (couches de {layer} mm)",
+    "g1095": "faces opposées dupliquées (aperçu réglé sur 6 faces)",
+    "g1096": "faces opposées non dupliquées (aperçu réglé sur 3 faces)",
+    "g1097": "évidé : {rooms} chambres · {vents} évents",
+    "g1098": "{triangles} triangles · {size}",
+    "g1099": "modules de moins de 1,2 mm : lecture parfois difficile",
+    "g1100": "bande de tranche large — peignez les tranches en blanc",
+    "g1101": "côté supérieur à 180 mm — vérifiez le volume d’impression",
+    "g1102": "cellules de moins de 1,2 mm : risque de flou avec une buse de 0,4 mm",
+    "g1103": "les images de face ne sont pas incluses dans les fichiers d’impression 3D",
+    "g1104": "cavité trop petite pour des nervures — évidée sans nervures",
+    "g1105": "La taille de cellule doit être d’au moins 0,8 mm.",
+    "g1106": "La taille de cellule doit être un multiple de 0,2 mm.",
+    "g1107": "La profondeur d’incrustation ne doit pas dépasser 0,9 × la taille de cellule.",
+    "g1108": "L’autocontrôle du maillage a échoué ; rien n’a été exporté (solide non fermé).",
+    "g1109": "Le maillage dépasse la limite de {cap} triangles.",
+    "g1110": "Aucune face vierge pour les évents — exporté plein, sans évidement.",
+    "g1111": "Cube trop petit ou évent trop grand pour l’évidement — exporté plein.",
+    "g1112": "Ne tient pas sur ce papier — réduisez le côté ou choisissez un format plus grand.",
+    "g1113": "Les modules feraient moins de 1,0 mm — choisissez un papier ou un côté plus grand.",
+    "g1114": "Le carton est au moins aussi épais qu’un module ; impression directe impossible.",
+    "g1115": "Le carton est trop épais pour cette méthode.",
+    "g1116": "Impossible de créer le fichier ({code}).",
+    "g1117": "Création du patron…",
+    "g1118": "Création du fichier d’impression 3D…",
+    "g1119": "Enregistré.",
+    "g1120": "Impression : 100 % (taille réelle) · sans ajustement ni réduction · sans en-têtes/pieds de page · mesurez ensuite la barre de 50 mm",
+    "g1121": "Ce navigateur ne sait pas compresser : fichiers enregistrés sans compression (plus volumineux).",
+    "g1122": "aucune face libre pour les évents — exporté plein",
+    "g1123": "trop petit pour être évidé avec cet évent — exporté plein",
+    "g1124": "une face de données touche le coin tenu par le support : la poche en masque le coin",
+    "g1125": "profondeur d’incrustation {depth} mm (réduite pour la cellule)",
+    "g1126": "{method} indisponible — {reason}",
+    "g1127": "carton trop épais pour cette méthode",
+    "g1128": "carton au moins aussi épais qu’un module",
+    "g1129": "ne tient pas sur ce papier",
+    "g1130": "modules de moins de 1,0 mm"
   },
   it: {
     "g001": "Tema della pagina (non incide sul rendering del codice)",
@@ -5599,6 +6028,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · fondo bianco",
     "g1037": "Fuori preset — dopo la scelta alcune opzioni sono state cambiate a mano.",
     "g1038": "Il nome della scheda è il nome del file — salva ogni scatto come sil3d-<dark|light>-<nome scheda>-<near|far>.jpg. near = dimensione della guida, far = 1,5× più lontano.",
+    "g1042": "File per costruire — stampa 3D · carta",
+    "g1043": "File per trasformare questo codice in un cubo reale — cartamodelli e file per stampante 3D.\nTutti i file usano coordinate fisiche: visto dall’esterno, ogni faccia corrisponde allo schermo (non è un’immagine speculare).\nFunzione sperimentale: la lettura dei cubi reali è ancora in fase di verifica.",
+    "g1044": "Costruire in carta",
+    "g1045": "Sviluppo su un solo foglio (fino a 0,45 mm): taglia lungo le linee continue, piega a monte le linee tratteggiate alla base delle alette e incolla le alette.\nSulle facce non è disegnata nessuna piega, per non coprire mai il codice. Ogni piega unisce due angoli rientranti del contorno tagliato e tutte le pieghe sono a monte, con il lato stampato all’esterno — anche per il rivestimento.\nPrima di piegare, cordona ogni piega sul retro con un righello appoggiato ai suoi due angoli rientranti; sulla carta spessa, lungo la fibra.\nOltre 0,45 mm scegli uno dei due metodi. Rivestimento = taglia i pannelli secondo la lista di taglio (A·B·C), accostali di testa in un’anima e avvolgila con un unico foglio. Stampa su cartone = solo con stampanti ad alimentazione posteriore diritta; taglia i sei pezzi e accostali di testa.\nStampa su cartone: taglia lungo la linea che unisce due brevi segni di taglio fuori dagli angoli di ogni pezzo (sul pezzo non è stampata nessuna linea). Prima di tagliare, riporta a matita sul retro di ogni pezzo il numero e la freccia, e dopo il montaggio dipingi di bianco i bordi di taglio visibili.\nStampa al 100 % (dimensioni reali), senza adatta alla pagina, riduzione né intestazioni/piè di pagina. Dopo la stampa misura la barra da 50 mm con un righello.\nSi consiglia carta opaca: la carta lucida nasconde i moduli con i riflessi.",
+    "g1046": "Stampa 3D",
+    "g1047": "Se lo slicer chiede «Caricare come un unico oggetto con più parti?», rispondi Sì — con No le parti si disallineano. In PrusaSlicer usa il pacchetto STL.\nBambu Studio 2.5+: abbina un filamento a ogni parte nella finestra dei colori · OrcaSlicer: controlla il filamento di ogni parte · Cura: imposta un estrusore per ogni mesh nel gruppo 3MF; con gli STL seleziona tutto e usa Merge models.\nPrusaSlicer e Cura non leggono i colori 3MF: assegna i filamenti in base al colore (hex) nel nome di ogni parte.\nConta solo l’ordine di luminosità: nero < tono scuro < tono medio < tono chiaro < bianco. Si consiglia filamento opaco.\nLo svuotamento aggiunge una cavità, nervature (travi interne) e uno sfiato per camera. Se tutte e sei le facce contengono dati non c’è una faccia per gli sfiati, quindi il cubo viene esportato pieno. Senza svuotamento, il riempimento dello slicer (10–15 % gyroid/cubic, 3–4 perimetri) fa da reticolo interno.\nSe tutte e sei le facce contengono dati, anche la faccia inferiore è una faccia dati — usa un piano PEI testurizzato e imposta la compensazione della zampa d’elefante a 0,2 mm.\nSenza un’unità multimateriale come AMS o MMU questi file non possono aggiungere colore.\nMantieni la dimensione della cella multipla dell’altezza di strato; i valori predefiniti presuppongono strati da 0,2 mm.\nIl supporto regge il cubo sull’angolo posteriore non visibile a schermo. Se una faccia che tocca quell’angolo contiene codice, la tasca ne copre l’angolo — togli il cubo dal supporto per scansionarlo.",
+    "g1048": "Mostra i file per costruire",
+    "g1049": "Nascondi i file per costruire",
+    "g1050": "SVG",
+    "g1051": "Scarica il modello SVG in scala reale (mm) — per modifica e plotter da taglio",
+    "g1052": "PNG",
+    "g1053": "Scarica il modello PNG a 300 dpi (con dimensioni fisiche) — i formati grandi possono richiedere alcuni secondi",
+    "g1054": "PDF",
+    "g1055": "Scarica il modello PDF vettoriale — il modo più sicuro per stampare in scala reale",
+    "g1056": "Stampa",
+    "g1057": "Stampa subito il modello — in scala 100 % (dimensioni reali)",
+    "g1058": "3MF (consigliato)",
+    "g1059": "Scarica un 3MF con una parte per colore in un unico oggetto — Bambu · Orca · Cura",
+    "g1060": "Pacchetto STL",
+    "g1061": "Scarica uno ZIP di STL per colore con la stessa origine — consigliato per PrusaSlicer",
+    "g1062": "Supporto STL",
+    "g1063": "Scarica un supporto STL monocolore che regge il cubo su un vertice",
+    "g1064": "Carta",
+    "g1065": "Spessore",
+    "g1066": "Spessore personalizzato (mm)",
+    "g1067": "Metodo",
+    "g1068": "Rivestimento di un’anima",
+    "g1069": "Stampa su cartone",
+    "g1070": "Lato del cubo",
+    "g1071": "Massimo automatico",
+    "g1072": "Personalizzato",
+    "g1073": "Lato (mm)",
+    "g1074": "Dimensione cella (mm)",
+    "g1075": "Profondità di intarsio",
+    "g1076": "Svuotamento",
+    "g1077": "Disattivato",
+    "g1078": "Attivato",
+    "g1079": "Parete (mm)",
+    "g1080": "Larghezza del soffitto piano (mm)",
+    "g1081": "Nervature (travi interne)",
+    "g1082": "Lato dello sfiato (mm)",
+    "g1083": "Carta comune {mm} mm",
+    "g1084": "Cartoncino {mm} mm",
+    "g1085": "Cartone vegetale {mm} mm",
+    "g1086": "Cartone ondulato onda {flute} {mm} mm",
+    "g1087": "Personalizzato (calibro)",
+    "g1088": "{paper} · lato {side} mm (passo di stampa {pitch}) · modulo {module} mm",
+    "g1089": "sviluppo su un foglio · {tabs} alette",
+    "g1090": "rivestimento · anima A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "stampa su cartone · pezzi A {a} ×2 · B {b} ×2 · C {c} ×2 · fascia di taglio {band} mm",
+    "g1092": "Lato {side} mm · {count} filamenti",
+    "g1093": "supera un AMS ({slots} slot)",
+    "g1094": "circa {changes} cambi colore (strati da {layer} mm)",
+    "g1095": "facce opposte duplicate (anteprima a 6 facce)",
+    "g1096": "facce opposte non duplicate (anteprima a 3 facce)",
+    "g1097": "svuotato: {rooms} camere · {vents} sfiati",
+    "g1098": "{triangles} triangoli · {size}",
+    "g1099": "moduli sotto 1,2 mm: la lettura può essere difficile",
+    "g1100": "fascia di taglio larga — dipingi di bianco i bordi",
+    "g1101": "lato oltre 180 mm — verifica il volume di stampa",
+    "g1102": "celle sotto 1,2 mm: possibili sbavature con ugello da 0,4 mm",
+    "g1103": "le immagini delle facce non sono incluse nei file di stampa 3D",
+    "g1104": "cavità troppo piccola per le nervature — svuotato senza nervature",
+    "g1105": "La dimensione della cella deve essere almeno 0,8 mm.",
+    "g1106": "La dimensione della cella deve essere un multiplo di 0,2 mm.",
+    "g1107": "La profondità di intarsio non deve superare 0,9 × la dimensione della cella.",
+    "g1108": "Il controllo della mesh non è riuscito; nulla è stato esportato (solido non chiuso).",
+    "g1109": "La mesh supera il limite di {cap} triangoli.",
+    "g1110": "Nessuna faccia vuota per gli sfiati — esportato pieno, senza svuotamento.",
+    "g1111": "Cubo troppo piccolo o sfiato troppo grande per lo svuotamento — esportato pieno.",
+    "g1112": "Non entra in questo foglio — riduci il lato o scegli un formato più grande.",
+    "g1113": "I moduli sarebbero sotto 1,0 mm — scegli un foglio o un lato più grande.",
+    "g1114": "Il cartone è spesso almeno quanto un modulo: stampa diretta impossibile.",
+    "g1115": "Il cartone è troppo spesso per questo metodo.",
+    "g1116": "Impossibile creare il file ({code}).",
+    "g1117": "Creazione del modello…",
+    "g1118": "Creazione del file di stampa 3D…",
+    "g1119": "Salvato.",
+    "g1120": "Stampa: 100 % (dimensioni reali) · senza adattamento né riduzione · senza intestazioni/piè di pagina · poi misura la barra da 50 mm",
+    "g1121": "Questo browser non comprime: i file vengono salvati senza compressione (più grandi).",
+    "g1122": "nessuna faccia libera per gli sfiati — esportato pieno",
+    "g1123": "troppo piccolo da svuotare con questo sfiato — esportato pieno",
+    "g1124": "una faccia dati tocca l’angolo retto dal supporto, quindi la tasca ne copre l’angolo",
+    "g1125": "profondità di intarsio {depth} mm (ridotta per la cella)",
+    "g1126": "{method} non disponibile — {reason}",
+    "g1127": "cartone troppo spesso per questo metodo",
+    "g1128": "cartone spesso almeno quanto un modulo",
+    "g1129": "non entra in questo foglio",
+    "g1130": "moduli sotto 1,0 mm"
   },
   de: {
     "g001": "Seitenthema (ohne Einfluss auf das Rendering des Codes)",
@@ -6105,6 +6623,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · weißer Grund",
     "g1037": "Vom Preset abgewichen — nach der Auswahl wurden Optionen von Hand geändert.",
     "g1038": "Der Kartenname ist der Dateiname — speichere jede Aufnahme als sil3d-<dark|light>-<Kartenname>-<near|far>.jpg. near = Führungsgröße, far = 1,5× weiter entfernt.",
+    "g1042": "Bastel- und Druckdateien — 3D-Druck · Papier",
+    "g1043": "Dateien, um diesen Code in einen echten Würfel zu verwandeln — Papiervorlagen und Dateien für 3D-Drucker.\nAlle Dateien entstehen in physischen Koordinaten: Von außen betrachtet entspricht jede Fläche dem Bildschirm (kein Spiegelbild).\nLaborfunktion: Das Scannen echter Würfel wird noch überprüft.",
+    "g1044": "Aus Papier bauen",
+    "g1045": "Einzelblatt-Netz (bis 0,45 mm Dicke): entlang der durchgezogenen Linien schneiden, die gestrichelten Linien am Laschenansatz als Bergfalz falten und die Laschen kleben.\nAuf den Flächen sind keine Falzlinien eingezeichnet, damit sie den Code nie verdecken. Jeder Falz verläuft zwischen zwei einspringenden Ecken des Schnittumrisses, und alle Falze sind Bergfalze mit der bedruckten Seite außen — auch bei der Umhüllung.\nVor dem Falzen jeden Falz auf der Rückseite mit einem Lineal an den beiden einspringenden Ecken rillen; dickes Papier in Faserrichtung.\nÜber 0,45 mm eine der beiden Methoden wählen. Umhüllen = Platten laut Zuschnittliste (A·B·C) zuschneiden, stumpf zu einem Kern stoßen und mit einer einzigen Haut umhüllen. Direkt auf Platte drucken = nur mit Druckern mit geradem Einzug hinten; die sechs Teile ausschneiden und stumpf stoßen.\nDirekt auf Platte drucken: entlang der Linie zwischen je zwei kurzen Schnittmarken außerhalb der Teilecken schneiden (auf das Teil selbst wird keine Linie gedruckt). Vor dem Schneiden Nummer und Pfeil jedes Teils mit Bleistift auf die Rückseite übertragen und die sichtbaren Schnittkanten nach dem Zusammenbau weiß anmalen.\nMit 100 % (Originalgröße) drucken, ohne Seitenanpassung, Verkleinerung sowie Kopf- und Fußzeilen. Nach dem Druck den 50-mm-Balken mit einem Lineal nachmessen.\nMattes Papier wird empfohlen; Glanzpapier verdeckt Module durch Spiegelungen.",
+    "g1046": "3D-Druck",
+    "g1047": "Fragt der Slicer „Als ein Objekt mit mehreren Teilen laden?“, mit Ja antworten — bei Nein verrutschen die Teile. In PrusaSlicer das STL-Paket verwenden.\nBambu Studio 2.5+: im Farbdialog jedem Teil ein Filament zuordnen · OrcaSlicer: das Filament jedes Teils prüfen · Cura: im 3MF-Gruppenobjekt je Mesh einen Extruder festlegen; bei STL alles auswählen und Merge models verwenden.\nPrusaSlicer und Cura lesen keine 3MF-Farben; Filamente anhand der Farbe (Hex) im Teilnamen zuweisen.\nNur die Helligkeitsreihenfolge zählt: Schwarz < dunkler Ton < mittlerer Ton < heller Ton < Weiß. Mattes Filament wird empfohlen.\nAushöhlen fügt einen Hohlraum, Rippen (innere Streben) und je Kammer ein Entlüftungsloch hinzu. Tragen alle sechs Flächen Daten, gibt es keine Fläche für Entlüftungslöcher, und der Würfel wird massiv exportiert. Ohne Aushöhlen dient die Füllung des Slicers (10–15 % Gyroid/Cubic, 3–4 Wände) als inneres Gitter.\nTragen alle sechs Flächen Daten, ist auch die Unterseite eine Datenfläche — eine texturierte PEI-Platte verwenden und die Elefantenfuß-Kompensation auf 0,2 mm stellen.\nOhne Mehrfarbeinheit wie AMS oder MMU können diese Dateien keine Farbe einbringen.\nDie Zellgröße als Vielfaches der Schichthöhe wählen; die Standardwerte gehen von 0,2-mm-Schichten aus.\nDer Ständer hält den Würfel an der hinteren, auf dem Bildschirm verdeckten Ecke. Trägt eine an diese Ecke grenzende Fläche Code, verdeckt die Tasche diese Ecke — zum Scannen den Würfel vom Ständer nehmen.",
+    "g1048": "Bastel- und Druckdateien einblenden",
+    "g1049": "Bastel- und Druckdateien ausblenden",
+    "g1050": "SVG",
+    "g1051": "SVG-Vorlage in Originalgröße (mm) herunterladen — zum Bearbeiten und für Schneideplotter",
+    "g1052": "PNG",
+    "g1053": "300-dpi-PNG-Vorlage herunterladen (mit physischer Größe) — große Papierformate können einige Sekunden dauern",
+    "g1054": "PDF",
+    "g1055": "Vektor-PDF-Vorlage herunterladen — der zuverlässigste Weg zum Druck in Originalgröße",
+    "g1056": "Drucken",
+    "g1057": "Vorlage sofort drucken — mit 100 % (Originalgröße)",
+    "g1058": "3MF (empfohlen)",
+    "g1059": "3MF mit einem Teil je Farbe in einem Objekt herunterladen — Bambu · Orca · Cura",
+    "g1060": "STL-Paket",
+    "g1061": "ZIP mit STL je Farbe und gemeinsamem Ursprung herunterladen — empfohlen für PrusaSlicer",
+    "g1062": "Ständer-STL",
+    "g1063": "Einfarbigen STL-Ständer herunterladen, der den Würfel auf einer Ecke hält",
+    "g1064": "Papier",
+    "g1065": "Dicke",
+    "g1066": "Eigene Dicke (mm)",
+    "g1067": "Methode",
+    "g1068": "Kern umhüllen",
+    "g1069": "Direkt auf Platte drucken",
+    "g1070": "Würfelkante",
+    "g1071": "Automatisch maximal",
+    "g1072": "Eigener Wert",
+    "g1073": "Kante (mm)",
+    "g1074": "Zellgröße (mm)",
+    "g1075": "Einlegetiefe",
+    "g1076": "Aushöhlen",
+    "g1077": "Aus",
+    "g1078": "Ein",
+    "g1079": "Wand (mm)",
+    "g1080": "Breite der flachen Decke (mm)",
+    "g1081": "Rippen (innere Streben)",
+    "g1082": "Kante des Entlüftungslochs (mm)",
+    "g1083": "Normalpapier {mm} mm",
+    "g1084": "Karton {mm} mm",
+    "g1085": "Graupappe {mm} mm",
+    "g1086": "Wellpappe {flute}-Welle {mm} mm",
+    "g1087": "Eigene (Messschieber)",
+    "g1088": "{paper} · Kante {side} mm (Druckraster {pitch}) · Modul {module} mm",
+    "g1089": "Einzelblatt-Netz · {tabs} Laschen",
+    "g1090": "Hülle · Kern A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "Plattendruck · Teile A {a} ×2 · B {b} ×2 · C {c} ×2 · Schnittkante {band} mm",
+    "g1092": "Kante {side} mm · {count} Filamente",
+    "g1093": "mehr als ein AMS ({slots} Plätze)",
+    "g1094": "etwa {changes} Farbwechsel ({layer}-mm-Schichten)",
+    "g1095": "Gegenflächen dupliziert (Vorschau auf 6 Flächen)",
+    "g1096": "Gegenflächen nicht dupliziert (Vorschau auf 3 Flächen)",
+    "g1097": "ausgehöhlt: {rooms} Kammern · {vents} Entlüftungslöcher",
+    "g1098": "{triangles} Dreiecke · {size}",
+    "g1099": "Module unter 1,2 mm sind eventuell schwer lesbar",
+    "g1100": "breite Schnittkante — Schnittkanten weiß anmalen",
+    "g1101": "Kante über 180 mm — Bauraum des Druckers prüfen",
+    "g1102": "Zellen unter 1,2 mm können mit 0,4-mm-Düse verlaufen",
+    "g1103": "Flächenbilder sind in 3D-Druckdateien nicht enthalten",
+    "g1104": "Hohlraum zu klein für Rippen — ohne Rippen ausgehöhlt",
+    "g1105": "Die Zellgröße muss mindestens 0,8 mm betragen.",
+    "g1106": "Die Zellgröße muss ein Vielfaches von 0,2 mm sein.",
+    "g1107": "Die Einlegetiefe darf höchstens das 0,9-Fache der Zellgröße betragen.",
+    "g1108": "Die Netzprüfung ist fehlgeschlagen; nichts wurde exportiert (kein geschlossener Körper).",
+    "g1109": "Das Netz überschreitet die Grenze von {cap} Dreiecken.",
+    "g1110": "Keine freie Fläche für Entlüftungslöcher — massiv exportiert, nicht ausgehöhlt.",
+    "g1111": "Würfel zu klein oder Entlüftungsloch zu groß zum Aushöhlen — massiv exportiert.",
+    "g1112": "Passt nicht auf dieses Papier — Kante verkleinern oder größeres Papier wählen.",
+    "g1113": "Die Module wären kleiner als 1,0 mm — größeres Papier oder längere Kante wählen.",
+    "g1114": "Die Platte ist mindestens so dick wie ein Modul; Direktdruck nicht möglich.",
+    "g1115": "Die Platte ist für diese Methode zu dick.",
+    "g1116": "Die Datei konnte nicht erstellt werden ({code}).",
+    "g1117": "Vorlage wird erstellt…",
+    "g1118": "3D-Druckdatei wird erstellt…",
+    "g1119": "Gespeichert.",
+    "g1120": "Druck: 100 % (Originalgröße) · ohne Seitenanpassung und Verkleinerung · ohne Kopf-/Fußzeilen · danach den 50-mm-Balken messen",
+    "g1121": "Dieser Browser kann nicht komprimieren; Dateien werden unkomprimiert (größer) gespeichert.",
+    "g1122": "keine freie Fläche für Entlüftungslöcher — massiv exportiert",
+    "g1123": "zu klein zum Aushöhlen mit diesem Loch — massiv exportiert",
+    "g1124": "eine Datenfläche grenzt an die gehaltene Ecke, daher verdeckt die Tasche diese Ecke",
+    "g1125": "Einlegetiefe {depth} mm (an die Zelle angepasst)",
+    "g1126": "{method} nicht möglich — {reason}",
+    "g1127": "Platte für diese Methode zu dick",
+    "g1128": "Platte mindestens so dick wie ein Modul",
+    "g1129": "passt nicht auf dieses Papier",
+    "g1130": "Module unter 1,0 mm"
   },
   es: {
     "g001": "Tema de la página (no afecta al renderizado del código)",
@@ -6611,6 +7218,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · fondo blanco",
     "g1037": "Fuera del preajuste: se cambiaron opciones a mano después de elegirlo.",
     "g1038": "El nombre de la tarjeta es el nombre del archivo — guarda cada foto como sil3d-<dark|light>-<nombre de la tarjeta>-<near|far>.jpg. near = tamaño de la guía, far = 1,5× más lejos.",
+    "g1042": "Archivos para fabricar — impresión 3D · papel",
+    "g1043": "Archivos para convertir este código en un cubo real — plantillas de papel y archivos para impresora 3D.\nTodos los archivos se generan en coordenadas físicas: visto desde fuera, cada cara coincide con la pantalla (no es una imagen especular).\nFunción experimental: la lectura de cubos reales aún se está verificando.",
+    "g1044": "Hacerlo en papel",
+    "g1045": "Plantilla de una hoja (hasta 0,45 mm): corta por las líneas continuas, dobla en monte las discontinuas de la base de las pestañas y pega las pestañas.\nSobre las caras no se dibuja ningún pliegue, para no tapar nunca el código. Cada pliegue une dos esquinas entrantes del contorno recortado y todos son pliegues en monte, con la cara impresa hacia fuera — también en el forro.\nAntes de doblar, marca cada pliegue por el reverso con una regla apoyada en sus dos esquinas entrantes; en papel grueso, siguiendo la fibra.\nPor encima de 0,45 mm, elige uno de los dos métodos. Forrado = corta las placas según la lista de corte (A·B·C), júntalas a tope en un núcleo y envuélvelo con una sola piel. Impresión sobre cartón = solo con impresoras de alimentación trasera recta; corta las seis piezas y júntalas a tope.\nImpresión sobre cartón: corta por la línea que une dos marcas de corte cortas, fuera de las esquinas de cada pieza (sobre la pieza no se imprime ninguna línea). Antes de cortar, copia a lápiz en el reverso de cada pieza su número y flecha, y pinta de blanco los cantos visibles tras el montaje.\nImprime al 100 % (tamaño real), sin ajustar a la página, sin reducir y sin encabezados/pies de página. Después, mide la barra de 50 mm con una regla.\nSe recomienda papel mate; el papel brillante oculta los módulos con reflejos.",
+    "g1046": "Impresión 3D",
+    "g1047": "Si el laminador pregunta «¿Cargar como un solo objeto con varias piezas?», responde Sí — con No las piezas se desalinean. En PrusaSlicer, usa el paquete STL.\nBambu Studio 2.5+: asigna un filamento a cada pieza en el diálogo de colores · OrcaSlicer: comprueba el filamento de cada pieza · Cura: fija un extrusor por malla dentro del grupo 3MF; con STL, selecciona todo y usa Merge models.\nPrusaSlicer y Cura no leen los colores del 3MF; asigna los filamentos según el color (hex) del nombre de cada pieza.\nSolo importa el orden de brillo: negro < tono oscuro < tono medio < tono claro < blanco. Se recomienda filamento mate.\nEl vaciado añade una cavidad, nervios (vigas internas) y un respiradero por cámara. Si las seis caras llevan datos no hay cara para los respiraderos y el cubo se exporta macizo. Sin vaciado, el relleno del laminador (10–15 % gyroid/cubic, 3–4 perímetros) hace de retícula interna.\nSi las seis caras llevan datos, la cara inferior también es de datos — usa una base PEI texturizada y fija la compensación de pata de elefante en 0,2 mm.\nSin una unidad multimaterial como AMS o MMU, estos archivos no pueden aportar color.\nMantén el tamaño de celda como múltiplo de la altura de capa; los valores predeterminados suponen capas de 0,2 mm.\nEl soporte sujeta el cubo por la esquina trasera que no se ve en pantalla. Si una cara que toca esa esquina lleva código, el hueco tapa esa esquina — saca el cubo del soporte para escanearlo.",
+    "g1048": "Mostrar archivos para fabricar",
+    "g1049": "Ocultar archivos para fabricar",
+    "g1050": "SVG",
+    "g1051": "Descargar la plantilla SVG a tamaño real (mm) — para editar y para plotters de corte",
+    "g1052": "PNG",
+    "g1053": "Descargar la plantilla PNG a 300 ppp (con tamaño físico) — los tamaños grandes pueden tardar unos segundos",
+    "g1054": "PDF",
+    "g1055": "Descargar la plantilla PDF vectorial — la forma más fiable de imprimir a tamaño real",
+    "g1056": "Imprimir",
+    "g1057": "Imprimir la plantilla ahora — a escala 100 % (tamaño real)",
+    "g1058": "3MF (recomendado)",
+    "g1059": "Descargar un 3MF con una pieza por color en un solo objeto — Bambu · Orca · Cura",
+    "g1060": "Paquete STL",
+    "g1061": "Descargar un ZIP de STL por color con el mismo origen — recomendado para PrusaSlicer",
+    "g1062": "Soporte STL",
+    "g1063": "Descargar un soporte STL de un color que sostiene el cubo sobre un vértice",
+    "g1064": "Papel",
+    "g1065": "Grosor",
+    "g1066": "Grosor personalizado (mm)",
+    "g1067": "Método",
+    "g1068": "Forrar un núcleo",
+    "g1069": "Impresión sobre cartón",
+    "g1070": "Lado del cubo",
+    "g1071": "Máximo automático",
+    "g1072": "Personalizado",
+    "g1073": "Lado (mm)",
+    "g1074": "Tamaño de celda (mm)",
+    "g1075": "Profundidad de incrustación",
+    "g1076": "Vaciado",
+    "g1077": "Desactivado",
+    "g1078": "Activado",
+    "g1079": "Pared (mm)",
+    "g1080": "Ancho del techo plano (mm)",
+    "g1081": "Nervios (vigas internas)",
+    "g1082": "Lado del respiradero (mm)",
+    "g1083": "Papel normal {mm} mm",
+    "g1084": "Cartulina {mm} mm",
+    "g1085": "Cartón gris {mm} mm",
+    "g1086": "Cartón corrugado canal {flute} {mm} mm",
+    "g1087": "Personalizado (calibre)",
+    "g1088": "{paper} · lado {side} mm (paso de impresión {pitch}) · módulo {module} mm",
+    "g1089": "plantilla de una hoja · {tabs} pestañas",
+    "g1090": "piel · núcleo A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "impresión sobre cartón · piezas A {a} ×2 · B {b} ×2 · C {c} ×2 · canto visible {band} mm",
+    "g1092": "Lado {side} mm · {count} filamentos",
+    "g1093": "supera un AMS ({slots} ranuras)",
+    "g1094": "unos {changes} cambios de color (capas de {layer} mm)",
+    "g1095": "caras opuestas duplicadas (vista previa con 6 caras)",
+    "g1096": "caras opuestas sin duplicar (vista previa con 3 caras)",
+    "g1097": "vaciado: {rooms} cámaras · {vents} respiraderos",
+    "g1098": "{triangles} triángulos · {size}",
+    "g1099": "módulos de menos de 1,2 mm: la lectura puede costar",
+    "g1100": "canto visible ancho — pinta los cantos de blanco",
+    "g1101": "lado de más de 180 mm — comprueba el volumen de impresión",
+    "g1102": "celdas de menos de 1,2 mm: pueden emborronarse con boquilla de 0,4 mm",
+    "g1103": "las imágenes de cara no se incluyen en los archivos de impresión 3D",
+    "g1104": "cavidad demasiado pequeña para nervios — vaciado sin nervios",
+    "g1105": "El tamaño de celda debe ser de al menos 0,8 mm.",
+    "g1106": "El tamaño de celda debe ser múltiplo de 0,2 mm.",
+    "g1107": "La profundidad de incrustación no debe superar 0,9 × el tamaño de celda.",
+    "g1108": "La autocomprobación de la malla falló y no se exportó nada (no es un sólido cerrado).",
+    "g1109": "La malla supera el límite de {cap} triángulos.",
+    "g1110": "No hay cara libre para respiraderos — se exporta macizo, sin vaciar.",
+    "g1111": "Cubo demasiado pequeño o respiradero demasiado grande para vaciar — se exporta macizo.",
+    "g1112": "No cabe en este papel — reduce el lado o elige un papel más grande.",
+    "g1113": "Los módulos quedarían por debajo de 1,0 mm — elige un papel o un lado mayor.",
+    "g1114": "El cartón es al menos tan grueso como un módulo; no se puede imprimir directamente.",
+    "g1115": "El cartón es demasiado grueso para este método.",
+    "g1116": "No se pudo crear el archivo ({code}).",
+    "g1117": "Creando la plantilla…",
+    "g1118": "Creando el archivo de impresión 3D…",
+    "g1119": "Guardado.",
+    "g1120": "Imprime al 100 % (tamaño real) · sin ajustar ni reducir · sin encabezados/pies · después mide la barra de 50 mm",
+    "g1121": "Este navegador no puede comprimir: los archivos se guardan sin comprimir (más grandes).",
+    "g1122": "sin cara libre para los respiraderos — exportado macizo",
+    "g1123": "demasiado pequeño para vaciar con este respiradero — exportado macizo",
+    "g1124": "una cara de datos toca la esquina que sujeta el soporte, así que el hueco tapa esa esquina",
+    "g1125": "profundidad de incrustación {depth} mm (reducida a la celda)",
+    "g1126": "{method} no disponible — {reason}",
+    "g1127": "cartón demasiado grueso para este método",
+    "g1128": "cartón al menos tan grueso como un módulo",
+    "g1129": "no cabe en este papel",
+    "g1130": "módulos de menos de 1,0 mm"
   },
   pt: {
     "g001": "Tema da página (não afeta a renderização do código)",
@@ -7117,6 +7813,95 @@ const GENERATOR_STRINGS = {
     "g1036": "Y2T · v0TR · ECC H · fundo branco",
     "g1037": "Fora da predefinição — as opções foram alteradas à mão depois de a escolher.",
     "g1038": "O nome do cartão é o nome do ficheiro — guarde cada foto como sil3d-<dark|light>-<nome do cartão>-<near|far>.jpg. near = tamanho do guia, far = 1,5× mais longe.",
+    "g1042": "Ficheiros para construir — impressão 3D · papel",
+    "g1043": "Ficheiros para transformar este código num cubo real — moldes de papel e ficheiros para impressora 3D.\nTodos os ficheiros usam coordenadas físicas: visto de fora, cada face corresponde ao ecrã (não é uma imagem espelhada).\nFunção experimental: a leitura de cubos reais ainda está a ser verificada.",
+    "g1044": "Fazer em papel",
+    "g1045": "Planificação de uma folha (até 0,45 mm): corte pelas linhas contínuas, dobre em monte as tracejadas na base das abas e cole as abas.\nNas faces não se desenha nenhuma dobra, para nunca tapar o código. Cada dobra une dois cantos reentrantes do contorno cortado e todas são dobras em monte, com a face impressa para fora — também no revestimento.\nAntes de dobrar, vinque cada dobra no verso com uma régua apoiada nos seus dois cantos reentrantes; em papel grosso, no sentido da fibra.\nAcima de 0,45 mm, escolha um de dois métodos. Revestir = corte as placas pela lista de corte (A·B·C), junte-as topo a topo num núcleo e envolva-o com uma única pele. Imprimir na placa = só com impressoras de alimentação traseira reta; corte as seis peças e junte-as topo a topo.\nImprimir na placa: corte pela linha que une duas marcas de corte curtas, fora dos cantos de cada peça (na peça não se imprime nenhuma linha). Antes de cortar, copie a lápis no verso de cada peça o número e a seta, e pinte de branco as arestas de corte visíveis após a montagem.\nImprima a 100 % (tamanho real), sem ajustar à página, sem reduzir e sem cabeçalhos/rodapés. Depois, meça a barra de 50 mm com uma régua.\nRecomenda-se papel mate; o papel brilhante esconde os módulos com reflexos.",
+    "g1046": "Impressão 3D",
+    "g1047": "Se o fatiador perguntar «Carregar como um único objeto com várias peças?», responda Sim — com Não as peças desalinham-se. No PrusaSlicer, use o pacote STL.\nBambu Studio 2.5+: associe um filamento a cada peça na caixa de diálogo de cores · OrcaSlicer: confirme o filamento de cada peça · Cura: defina um extrusor por malha dentro do grupo 3MF; com STL, selecione tudo e use Merge models.\nO PrusaSlicer e o Cura não leem as cores do 3MF; atribua os filamentos pela cor (hex) no nome de cada peça.\nSó conta a ordem de brilho: preto < tom escuro < tom médio < tom claro < branco. Recomenda-se filamento mate.\nO esvaziamento acrescenta uma cavidade, nervuras (vigas internas) e um respiro por câmara. Se as seis faces tiverem dados, não há face para os respiros e o cubo é exportado maciço. Sem esvaziamento, o enchimento do fatiador (10–15 % gyroid/cubic, 3–4 paredes) serve de treliça interna.\nSe as seis faces tiverem dados, a face de baixo também é de dados — use uma base PEI texturizada e defina a compensação de pé de elefante em 0,2 mm.\nSem uma unidade multimaterial como AMS ou MMU, estes ficheiros não conseguem acrescentar cor.\nMantenha o tamanho da célula como múltiplo da altura de camada; os valores predefinidos assumem camadas de 0,2 mm.\nO suporte segura o cubo pelo canto traseiro que não se vê no ecrã. Se uma face que toca esse canto tiver código, o encaixe tapa esse canto — tire o cubo do suporte para o digitalizar.",
+    "g1048": "Mostrar ficheiros para construir",
+    "g1049": "Ocultar ficheiros para construir",
+    "g1050": "SVG",
+    "g1051": "Transferir o molde SVG em tamanho real (mm) — para edição e plotters de corte",
+    "g1052": "PNG",
+    "g1053": "Transferir o molde PNG a 300 ppp (com tamanho físico) — os formatos grandes podem demorar alguns segundos",
+    "g1054": "PDF",
+    "g1055": "Transferir o molde PDF vetorial — a forma mais fiável de imprimir em tamanho real",
+    "g1056": "Imprimir",
+    "g1057": "Imprimir o molde agora — à escala de 100 % (tamanho real)",
+    "g1058": "3MF (recomendado)",
+    "g1059": "Transferir um 3MF com uma peça por cor num único objeto — Bambu · Orca · Cura",
+    "g1060": "Pacote STL",
+    "g1061": "Transferir um ZIP de STL por cor com a mesma origem — recomendado para o PrusaSlicer",
+    "g1062": "Suporte STL",
+    "g1063": "Transferir um suporte STL de uma cor que segura o cubo num vértice",
+    "g1064": "Papel",
+    "g1065": "Espessura",
+    "g1066": "Espessura personalizada (mm)",
+    "g1067": "Método",
+    "g1068": "Revestir um núcleo",
+    "g1069": "Imprimir na placa",
+    "g1070": "Lado do cubo",
+    "g1071": "Máximo automático",
+    "g1072": "Personalizado",
+    "g1073": "Lado (mm)",
+    "g1074": "Tamanho da célula (mm)",
+    "g1075": "Profundidade de incrustação",
+    "g1076": "Esvaziamento",
+    "g1077": "Desligado",
+    "g1078": "Ligado",
+    "g1079": "Parede (mm)",
+    "g1080": "Largura do teto plano (mm)",
+    "g1081": "Nervuras (vigas internas)",
+    "g1082": "Lado do respiro (mm)",
+    "g1083": "Papel comum {mm} mm",
+    "g1084": "Cartolina {mm} mm",
+    "g1085": "Cartão cinzento {mm} mm",
+    "g1086": "Cartão canelado canelura {flute} {mm} mm",
+    "g1087": "Personalizada (paquímetro)",
+    "g1088": "{paper} · lado {side} mm (passo de impressão {pitch}) · módulo {module} mm",
+    "g1089": "planificação de uma folha · {tabs} abas",
+    "g1090": "pele · núcleo A {a} ×2 · B {b} ×2 · C {c} ×2",
+    "g1091": "impressão na placa · peças A {a} ×2 · B {b} ×2 · C {c} ×2 · aresta de corte {band} mm",
+    "g1092": "Lado {side} mm · {count} filamentos",
+    "g1093": "excede um AMS ({slots} ranhuras)",
+    "g1094": "cerca de {changes} trocas de cor (camadas de {layer} mm)",
+    "g1095": "faces opostas duplicadas (pré-visualização com 6 faces)",
+    "g1096": "faces opostas não duplicadas (pré-visualização com 3 faces)",
+    "g1097": "esvaziado: {rooms} câmaras · {vents} respiros",
+    "g1098": "{triangles} triângulos · {size}",
+    "g1099": "módulos abaixo de 1,2 mm podem ser difíceis de ler",
+    "g1100": "aresta de corte larga — pinte as arestas de branco",
+    "g1101": "lado acima de 180 mm — verifique o volume de impressão",
+    "g1102": "células abaixo de 1,2 mm podem borrar com bico de 0,4 mm",
+    "g1103": "as imagens das faces não são incluídas nos ficheiros de impressão 3D",
+    "g1104": "cavidade demasiado pequena para nervuras — esvaziado sem nervuras",
+    "g1105": "O tamanho da célula deve ser de pelo menos 0,8 mm.",
+    "g1106": "O tamanho da célula deve ser múltiplo de 0,2 mm.",
+    "g1107": "A profundidade de incrustação não deve exceder 0,9 × o tamanho da célula.",
+    "g1108": "A verificação da malha falhou e nada foi exportado (não é um sólido fechado).",
+    "g1109": "A malha excede o limite de {cap} triângulos.",
+    "g1110": "Não há face livre para respiros — exportado maciço, sem esvaziamento.",
+    "g1111": "Cubo demasiado pequeno ou respiro demasiado grande para esvaziar — exportado maciço.",
+    "g1112": "Não cabe neste papel — reduza o lado ou escolha um papel maior.",
+    "g1113": "Os módulos ficariam abaixo de 1,0 mm — escolha um papel ou lado maior.",
+    "g1114": "A placa é pelo menos tão espessa como um módulo; não é possível imprimir diretamente.",
+    "g1115": "A placa é demasiado espessa para este método.",
+    "g1116": "Não foi possível criar o ficheiro ({code}).",
+    "g1117": "A criar o molde…",
+    "g1118": "A criar o ficheiro de impressão 3D…",
+    "g1119": "Guardado.",
+    "g1120": "Imprima a 100 % (tamanho real) · sem ajustar nem reduzir · sem cabeçalhos/rodapés · depois meça a barra de 50 mm",
+    "g1121": "Este navegador não consegue comprimir: os ficheiros são guardados sem compressão (maiores).",
+    "g1122": "sem face livre para os respiros — exportado maciço",
+    "g1123": "demasiado pequeno para esvaziar com este respiro — exportado maciço",
+    "g1124": "uma face de dados toca o canto que o suporte segura, por isso o encaixe tapa esse canto",
+    "g1125": "profundidade de incrustação {depth} mm (reduzida à célula)",
+    "g1126": "{method} indisponível — {reason}",
+    "g1127": "placa demasiado espessa para este método",
+    "g1128": "placa pelo menos tão espessa como um módulo",
+    "g1129": "não cabe neste papel",
+    "g1130": "módulos abaixo de 1,0 mm"
   },
 };
 
@@ -7203,7 +7988,7 @@ const TEXT_SYNCERS = [
   syncHelpPopover,
   syncOrbitPreviewUi,
   syncCubeVideoUi,
-  syncHUi, syncHFaceImagesUi, syncCubeExportUi,
+  syncHUi, syncHFaceImagesUi, syncCubeExportUi, syncCubeMakeUi,
   syncShotPresetUi,
 ];
 
@@ -7233,7 +8018,7 @@ import { encodeY } from './src/encodeY.js';
 import { encodeH, decodeH, hCapacity } from './src/h-codec.js';
 import { buildHScene, buildHFaceSheet } from './src/h-render.js';
 import {H_IMAGE_FACES,loadHFaceImage} from './src/h-face-images.js';
-import {hImageTargets} from './src/h-face-arrangement.js';
+import {hDisplayMap,hImageTargets} from './src/h-face-arrangement.js';
 import {hModeFaces} from './src/h-profile.js';
 import {createHImageEditor} from './src/h-image-editor-ui.js';
 import {hCanPreview25,hPlanarPreviewOptions,hPreviewPositionLabels,reconcileHPositionMode,hCubeIconMarkup,hExportIconMarkup,hBlockIconMarkup} from './src/h-preview-decor.js';
@@ -7427,6 +8212,21 @@ import { slotQrFaceQuads } from './src/y3d-slot-qr.js';
 import { generatorCubeModel } from './src/generator-cube-export.js';
 import { cubeNetScene, cubeModelToGltf } from './src/cube-export.js';
 import { voxelizeCube, gzipSchematic } from './src/minecraft-schematic.js';
+// 만들기용 파일(3D 인쇄 · 종이, 설계 §4 · §5.3). 핸들러는 «cubeMake VM 슬라이스» 표시 사이에 있어요.
+import { DEFAULT_CELL_UM, PRINT_CELL_MIN_UM, PRINT_CELL_STEP_UM, physicalHCube } from './src/cube-physical.js';
+import {
+  PAPER_SIZES, THICKNESS_PRESETS, PAPER_SIDE_MIN_MM,
+  buildPaperSheet, paperMethodOptions, paperPlan, paperPngPlan, unfoldCube,
+} from './src/paper-net.js';
+import { sceneToPdf } from './src/pdf-writer.js';
+import { printSvgSheet } from './src/print-sheet.js';
+import {
+  PRINT_DEPTH_UM, PRINT_HOLLOW_DEFAULTS, PRINT_LIMITS, PRINT_TRIANGLE_CAP,
+  buildPrintParts, buildVertexStand, colorChangeEstimate, filamentSet, hollowPlan, standCornerFaces,
+} from './src/print-mesh.js';
+import {
+  DEFAULT_3MF_APPLICATION, assertTriangleCap, meshToBinaryStl, partsTo3mfFiles, supportsDeflateRaw, zipDeflate,
+} from './src/mesh-export.js';
 import {
   RENDER_PROFILE_AUTO, RENDER_PROFILE_ORIGINAL, RENDER_PROFILE_PRINT,
   RENDER_PROFILE_SCREEN, RENDER_PROFILE_SOFT,
@@ -7462,7 +8262,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-14.09';
+const GENERATOR_BUILD = '2026-09-23.01';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -7880,6 +8680,7 @@ function syncHUi(){
     Object.assign(generatorState,next);
   }
   syncCubeExportUi();
+  syncCubeMakeUi();
   syncCubeVideoUi();
   const section=$('hTypeSection');if(!section)return;
   const active=hGeneratorActive();
@@ -8526,6 +9327,391 @@ function flashCopied(btn) {
   btn.classList.add('copied');
   setTimeout(() => btn.classList.remove('copied'), 1200);
 }
+
+// ── cubeMake VM 슬라이스 시작 ── 만들기용 파일(3D 인쇄 · 종이, 설계 §4 · §5.3)
+// 기존 두 VM 슬라이스(회전 영상 · 3D 데이터) 밖에 둬요. test/cube-make-ui.test.js 가 이 구간을 잘라
+// 실제 마크업에서 유도한 가짜 DOM + 실제 src 모듈로 실행해요. 그래서 이 구간의 자유 식별자는 그 하네스가
+// 주입하는 것만 써요(새로 쓰면 하네스가 ReferenceError 로 빨개져요).
+const CUBE_MAKE_PAPER_IDS=['makePaperSvg','makePaperPng','makePaperPdf','makePaperPrint'];
+const CUBE_MAKE_PRINT_IDS=['makePrint3mf','makePrintStl','makePrintStand'];
+const CUBE_MAKE_IDS=[...CUBE_MAKE_PAPER_IDS,...CUBE_MAKE_PRINT_IDS];
+/** 버튼 → [아이콘, 라벨 키, 설명 키]. 아이콘 버튼은 data-i18n 없이 여기서 그려요 — applyTranslations 가
+ *  textContent 로 덮으면 아이콘 마크업이 지워지기 때문이에요(설계 §4.2). */
+const CUBE_MAKE_BUTTONS={
+  makePaperSvg:['paper','g1050','g1051'],makePaperPng:['paper','g1052','g1053'],makePaperPdf:['pdf','g1054','g1055'],makePaperPrint:['printer','g1056','g1057'],
+  makePrint3mf:['print3d','g1058','g1059'],makePrintStl:['print3d','g1060','g1061'],makePrintStand:['stand','g1062','g1063'],
+};
+/** src 가 던지거나(err.code) 싣는(경고 · 사유) TLP 코드 → g-키. 표에 없는 코드는 공통 키 + 코드로 떨어져요(설계 §4.3).
+ *  «모든 TLP_* 코드에 키가 있다» 는 src 를 훑는 자(test/cube-make-ui.test.js)가 재요. */
+const CUBE_MAKE_CODE_KEYS={
+  TLP_CELL_MIN:'g1105',TLP_CELL_STEP:'g1106',TLP_DEPTH_GT_CELL:'g1107',TLP_TOPOLOGY:'g1108',TLP_TRI_CAP:'g1109',
+  TLP_NO_VENT_FACE:'g1110',TLP_HOLLOW_SMALL:'g1111',TLP_PAPER_FIT:'g1112',TLP_PAPER_MODULE:'g1113',
+  TLP_BOARD_EDGE:'g1114',TLP_BOARD_THICK:'g1115',TLP_WARN_MODULE_SMALL:'g1099',TLP_WARN_BOARD_EDGE:'g1100',
+};
+/** 상태 줄 « · » 목록 가운데 들어가는 사유는 조각 문구(소문자 · 마침표 없음)로 따로 둬요.
+ *  위 표의 문장 키(대문자 · 마침표)는 오류 문구와 막힌 카드 설명(title)에 써요. 표에 없으면 문장 키로 떨어져요.
+ *  막힌 카드의 사유는 title(hover)에만 있으면 터치 기기에서 안 보여서, 상태 줄에도 조각으로 적어요. */
+const CUBE_MAKE_REASON_KEYS={TLP_NO_VENT_FACE:'g1122',TLP_HOLLOW_SMALL:'g1123',
+  TLP_BOARD_THICK:'g1127',TLP_BOARD_EDGE:'g1128',TLP_PAPER_FIT:'g1129',TLP_PAPER_MODULE:'g1130'};
+const CUBE_MAKE_THICKNESS_KEYS={paper:'g1083',card:'g1084',board:'g1085',corrugated:'g1086'};
+/** 셀 크기 입력 상한(설계 §2.5 표의 UI 범위). 하한·단위는 cube-physical 이 검사하는 상수를 그대로 써요. */
+const CUBE_MAKE_CELL_MAX_UM=5000;
+/** 색 교체 추정의 층 높이(설계 §2.8)와 벽·숨구멍 입력 눈금. */
+const CUBE_MAKE_LAYER_UM=200;
+const CUBE_MAKE_FINE_STEP_UM=100;
+let cubeMakeCollapsed=true;
+/** busy 는 묶음마다 하나예요(도는 버튼 id, 없으면 null) — 종이를 만드는 동안에도 3D 버튼은 살아 있어요(설계 §4.3). */
+const cubeMakeBusy={paper:null,print:null};
+/** 페이지 안 옵션(저장·URL 에 싣지 않아요 — 회전 영상 옵션과 같은 부류). 길이는 µm 정수예요.
+ *  모드는 노출만 바꿔요: 고급 전용 컨트롤이 숨어도 값은 그대로 적용돼요(셀당 블록 수 선례).
+ *  속 비우기 기본값은 print-mesh 의 PRINT_HOLLOW_DEFAULTS(켬 · 리브 · 방별 숨구멍)를 그대로 따라요. */
+const cubeMakeState={
+  paper:PAPER_SIZES[0].id,thickness:THICKNESS_PRESETS[0].id,thicknessCustomUm:THICKNESS_PRESETS[0].thicknessUm,
+  method:null,sideMode:'auto',sideUm:Math.round(PAPER_SIDE_MIN_MM*1000),
+  cellUm:DEFAULT_CELL_UM,depthUm:PRINT_DEPTH_UM,
+  hollow:PRINT_HOLLOW_DEFAULTS.enabled,wallUm:PRINT_HOLLOW_DEFAULTS.wallUm,ceilingUm:PRINT_HOLLOW_DEFAULTS.ceilingUm,
+  ribs:PRINT_HOLLOW_DEFAULTS.ribs,ventUm:PRINT_HOLLOW_DEFAULTS.ventUm,
+};
+/** 숫자 입력(mm 표시) → 상태 키(µm)와 범위. 범위는 src 상수에서 읽어요(사본 없음). */
+const CUBE_MAKE_INPUTS={
+  // 두께 직접 입력은 캘리퍼 값을 µm 로 반올림해요(설계 §3.5).
+  makePaperThicknessCustom:{key:'thicknessCustomUm',range:()=>({min:50,max:10000,step:1})},
+  makePaperSide:{key:'sideUm',range:()=>({min:Math.round(PAPER_SIDE_MIN_MM*1000),step:CUBE_MAKE_FINE_STEP_UM})},
+  makeCellMm:{key:'cellUm',range:()=>({min:PRINT_CELL_MIN_UM,max:CUBE_MAKE_CELL_MAX_UM,step:PRINT_CELL_STEP_UM})},
+  makeWallMm:{key:'wallUm',range:()=>({min:PRINT_LIMITS.wallMinUm,max:PRINT_LIMITS.wallMaxUm,step:CUBE_MAKE_FINE_STEP_UM})},
+  makeCeilingMm:{key:'ceilingUm',range:()=>({min:PRINT_LIMITS.ceilingMinUm,max:PRINT_LIMITS.ceilingMaxUm,step:PRINT_LIMITS.ceilingStepUm})},
+  makeVentMm:{key:'ventUm',range:()=>({min:PRINT_LIMITS.ventMinUm,max:cubeMakeVentMaxUm(),step:CUBE_MAKE_FINE_STEP_UM})},
+};
+let cubeMakeMemo=null;
+/** 마지막 작업 결과 문구. 만든 그 메모(입력 묶음)가 그대로일 때만 상태 줄에 덧붙여요.
+ *  문구는 함수로 들고 있다가 sync 때 그려요 — 언어를 바꾸면 결과 문구도 따라 바뀌어요. */
+const cubeMakeNotes={paper:null,print:null};
+
+function cubeMakeVisible(){return isLabPath()&&hGeneratorActive();}
+function cubeMakeNum(value,minDigits,maxDigits=minDigits){
+  return new Intl.NumberFormat(genI18n.lang||'ko',{minimumFractionDigits:minDigits,maximumFractionDigits:maxDigits}).format(value);
+}
+function cubeMakeMm(um,minDigits=1,maxDigits=minDigits){return cubeMakeNum(um/1000,minDigits,maxDigits);}
+function cubeMakeCodeText(code,vars={}){
+  const key=CUBE_MAKE_CODE_KEYS[code];
+  return key?tf(key,{cap:cubeMakeNum(PRINT_TRIANGLE_CAP,0),...vars}):tf('g1116',{code:String(code)});
+}
+/** 상태 줄 조각용 사유 문구예요. 조각 키가 없으면 문장 키로 떨어져요. */
+function cubeMakeReasonText(code){return CUBE_MAKE_REASON_KEYS[code]?t(CUBE_MAKE_REASON_KEYS[code]):cubeMakeCodeText(code);}
+/** TLP_ 코드는 대응 키로, 그 밖의 예외는 공통 키 + (code ?? name)만 보여요 — src 의 한국어 메시지를 화면에 흘리지 않아요. */
+function cubeMakeErrorText(error){
+  const code=typeof error?.code==='string'?error.code:'';
+  if(code.startsWith('TLP_')&&CUBE_MAKE_CODE_KEYS[code])return cubeMakeCodeText(code,Number.isFinite(error.triangleCap)?{cap:cubeMakeNum(error.triangleCap,0)}:{});
+  return tf('g1116',{code:code||String(error?.name||'Error')});
+}
+function cubeMakeThicknessUm(){
+  if(cubeMakeState.thickness==='custom')return cubeMakeState.thicknessCustomUm;
+  return (THICKNESS_PRESETS.find(p=>p.id===cubeMakeState.thickness)??THICKNESS_PRESETS[0]).thicknessUm;
+}
+function cubeMakeHollowOptions(){
+  const s=cubeMakeState;
+  return {enabled:s.hollow,wallUm:s.wallUm,ceilingUm:s.ceilingUm,ribs:s.ribs,ventUm:s.ventUm};
+}
+/** 매립 깊이 카드 값은 마크업(data-depth-um)이 정본이에요. */
+function cubeMakeDepthChoices(){return [...$('makeDepthCards').children].map(card=>Number(card.dataset.depthUm));}
+/** d ≤ 0.9c 를 넘으면 print-mesh 가 TLP_DEPTH_GT_CELL 을 던져요. 카드 비활성도 같은 한계(PRINT_LIMITS)에서 읽어요. */
+function cubeMakeDepthFits(depthUm,cellUm){return depthUm<=cellUm*PRINT_LIMITS.depthRatioMax;}
+/** 고른 깊이가 셀에 비해 깊으면 들어가는 가장 깊은 카드로 내려요(고른 값 자체는 지우지 않아요). */
+function cubeMakeEffectiveDepthUm(cellUm){
+  if(cubeMakeDepthFits(cubeMakeState.depthUm,cellUm))return cubeMakeState.depthUm;
+  const fits=cubeMakeDepthChoices().filter(d=>cubeMakeDepthFits(d,cellUm));
+  return fits.length?Math.max(...fits):cubeMakeState.depthUm;
+}
+function cubeMakeVentMaxUm(){
+  const max=cubeMakeMemo?.print?.hollowOnPlan?.ventMaxUm;
+  return Number.isFinite(max)&&max>=PRINT_LIMITS.ventMinUm?max:undefined;
+}
+function cubeMakePaperModel(phys){
+  const s=cubeMakeState,thicknessMm=cubeMakeThicknessUm()/1000,sideMm=s.sideMode==='manual'?s.sideUm/1000:undefined;
+  // 방식 카드는 paper-net 이 두께로 정해요(t ≤ 0.45 면 한 장 전개도 하나). 막힌 카드를 고른 채면 첫 가능한 방식으로 가요.
+  const options=paperMethodOptions(phys,{paper:s.paper,thicknessMm,sideMm});
+  const pick=options.find(o=>o.method===s.method&&o.enabled)??options.find(o=>o.enabled)??options[0];
+  const out={phys,options,method:pick.method};
+  try{
+    out.plan=paperPlan(phys,{paper:s.paper,thicknessMm,sideMm,method:pick.method});
+    out.tabs=out.plan.method==='sheet'?unfoldCube(phys).cuts.length:0;
+  }catch(error){out.error=error;}
+  return out;
+}
+function cubeMakePrintModel(phys,cur){
+  const depthUm=cubeMakeEffectiveDepthUm(phys.cellUm),hollow=cubeMakeHollowOptions();
+  const map=hDisplayMap(cur.encoded,{arrangement:cur.sceneOpts?.arrangement,renderFaces:cur.sceneOpts?.renderFaces});
+  // «반대면 복제» 는 1F·2F(대칭 배치 제외)에서만 미리보기 설정이 산출물을 바꿔요(설계 §4.2).
+  const out={phys,depthUm,hollow,renderFaces:map.renderFaces,duplicateNote:(map.mode===1||map.mode===2)&&map.arrangement!=='symmetric'};
+  try{
+    out.hollowPlan=hollowPlan(phys,{depthUm,hollow});
+    // 숨구멍을 둘 빈 면이 있는지는 «켬» 으로 계획해 print-mesh 에게 물어요 — 바닥면 규칙을 여기 옮겨 적지 않아요.
+    out.hollowOnPlan=hollow.enabled?out.hollowPlan:hollowPlan(phys,{depthUm,hollow:{...hollow,enabled:true}});
+    out.ventFace=out.hollowOnPlan.reason!=='TLP_NO_VENT_FACE';
+    out.filaments=filamentSet(phys);
+    out.changes=colorChangeEstimate(phys,{layerUm:CUBE_MAKE_LAYER_UM,depthUm}).changes;
+    out.imagesOmitted=phys.blankFaces.filter(face=>phys.faces[face].image).length;
+    // 받침대가 잡는 꼭짓점(정본 시점에서 숨은 꼭짓점)에 데이터 면이 닿으면 포켓이 그 모서리를 가려요 — 버튼 설명에 알려요.
+    out.standCovered=standCornerFaces(phys).coveredDataFaces;
+  }catch(error){out.error=error;}
+  return out;
+}
+/** 상태 줄 수치는 메쉬 없이 O(n²)로 계산하고, (current 정체성, 옵션)으로 메모해요(설계 §4.3). */
+function cubeMakeModel(){
+  if(!current||current.type!=='H')return null;
+  const key=JSON.stringify(cubeMakeState)+'|'+generatorState.preset;
+  if(cubeMakeMemo&&cubeMakeMemo.current===current&&cubeMakeMemo.key===key)return cubeMakeMemo;
+  const cur=current,memo={current:cur,key,paper:null,print:null};
+  try{
+    const model=generatorCubeModel(cur,paletteOf(generatorState.preset));
+    let phys=null;
+    try{phys=physicalHCube(model,{cellUm:cubeMakeState.cellUm});}catch(error){memo.print={error};}
+    // 종이는 셀 단위 기하만 써서 셀 µm 와 무관해요. 3D 셀 값이 틀려도 종이는 기본 셀로 계속 계산해요.
+    const paperPhys=phys??physicalHCube(model);
+    try{memo.paper=cubeMakePaperModel(paperPhys);}catch(error){memo.paper={error};}
+    if(phys){try{memo.print=cubeMakePrintModel(phys,cur);}catch(error){memo.print={error};}}
+  }catch(error){memo.paper={error};memo.print={error};}
+  cubeMakeMemo=memo;
+  return memo;
+}
+function cubeMakePaperText(p){
+  if(p.error)return cubeMakeErrorText(p.error);
+  const plan=p.plan,dims=(w,h)=>`${cubeMakeMm(w)}×${cubeMakeMm(h)}`;
+  const parts=[tf('g1088',{paper:plan.paper.label,side:cubeMakeMm(plan.sideUm),pitch:cubeMakeMm(plan.pitchUm),module:cubeMakeNum(plan.moduleMm,2)})];
+  if(plan.method==='sheet')parts.push(tf('g1089',{tabs:String(p.tabs)}));
+  else if(plan.method==='skin'){
+    const core={};for(const c of plan.core)core[c.id]=dims(c.wUm,c.hUm);
+    parts.push(tf('g1090',{a:core.A,b:core.B,c:core.C}));
+  }else{
+    const piece={};for(const c of plan.pieces)if(!piece[c.piece])piece[c.piece]=dims(c.wUm,c.hUm);
+    parts.push(tf('g1091',{a:piece.A,b:piece.B,c:piece.C,band:cubeMakeMm(plan.thicknessUm,1,2)}));
+  }
+  for(const code of plan.warnings)parts.push(cubeMakeCodeText(code));
+  // 막힌 방식 카드의 사유(카드가 보일 때만). 라벨 키는 카드 마크업(data-i18n)에서 읽어요.
+  if(p.options.length>1)for(const option of p.options){
+    if(option.enabled)continue;
+    const card=[...$('makePaperMethodCards').children].find(c=>c.dataset.paperMethod===option.method);
+    parts.push(tf('g1126',{method:card?t(card.dataset.i18n):option.method,reason:cubeMakeReasonText(option.reason)}));
+  }
+  return parts.join(' · ');
+}
+function cubeMakePrintText(p){
+  if(p.error)return cubeMakeErrorText(p.error);
+  const h=p.hollowPlan,parts=[tf('g1092',{side:cubeMakeMm(p.phys.sideUm),count:String(p.filaments.length)})];
+  if(p.filaments.length>PRINT_LIMITS.amsSlots)parts.push(tf('g1093',{slots:String(PRINT_LIMITS.amsSlots)}));
+  parts.push(tf('g1094',{changes:cubeMakeNum(p.changes,0),layer:cubeMakeMm(CUBE_MAKE_LAYER_UM)}));
+  if(p.duplicateNote)parts.push(t(p.renderFaces===6?'g1095':'g1096'));
+  // 고른 깊이가 셀에 비해 깊어 낮춰 내보낼 때(카드는 막히고 사유는 title 에만 있어요 — 터치에서도 보이게 적어요).
+  if(p.depthUm!==cubeMakeState.depthUm)parts.push(tf('g1125',{depth:cubeMakeMm(p.depthUm)}));
+  if(h.enabled)parts.push(tf('g1097',{rooms:String(h.rooms.length),vents:String(h.vents.length)}));
+  else if(h.requested&&h.reason)parts.push(cubeMakeReasonText(h.reason));
+  // 숨구멍 면이 없으면(6F) «켬» 카드가 막혀요. «끔» 을 골라 둔 때에도 막힌 사유는 적어요.
+  else if(p.ventFace===false)parts.push(cubeMakeReasonText('TLP_NO_VENT_FACE'));
+  if(h.enabled&&h.ribsRequested&&!h.ribs)parts.push(t('g1104'));
+  if(p.phys.sideUm>PRINT_LIMITS.buildVolumeUm)parts.push(t('g1101'));
+  if(p.phys.cellUm<PRINT_LIMITS.smallCellUm)parts.push(t('g1102'));
+  if(p.imagesOmitted)parts.push(t('g1103'));
+  return parts.join(' · ');
+}
+function cubeMakeStatusText(group,memo,base){
+  // 인쇄는 대화상자가 뜨기 전에 실척 안내를 먼저 보여 줘요(설계 §3.9 «인쇄 전 안내»).
+  const busy=cubeMakeBusy[group],busyText=busy==='makePaperPrint'?t('g1120'):t(group==='paper'?'g1117':'g1118');
+  const note=busy?busyText:cubeMakeNotes[group]?.memo===memo?cubeMakeNotes[group].text():'';
+  return [base,note].filter(Boolean).join(' · ');
+}
+function cubeMakeSetInput(id){
+  const input=$(id),{key,range}=CUBE_MAKE_INPUTS[id],{min,max,step}=range();
+  input.min=String(min/1000);input.step=String(step/1000);
+  if(max===undefined)input.removeAttribute('max');else input.max=String(max/1000);
+  // 입력 중인 칸은 덮지 않아요(다른 컨트롤이 부른 sync 가 타이핑을 지우지 않게).
+  if(document.activeElement!==input)input.value=String(cubeMakeState[key]/1000);
+}
+function cubeMakePressed(card,on){card.classList.toggle('active',on);card.setAttribute('aria-pressed',String(on));}
+/** sync 는 자주 불려요(H 렌더 · 슬라이더 input 마다). 글자 · 마크업 · 설명은 바뀔 때만 써요 — 라이브 영역 재낭독과
+ *  아이콘 SVG 재파싱을 막아요. 마크업은 읽어 비교하지 않고(브라우저가 직렬화를 바꿔요) 마지막으로 쓴 원문을 기억해요. */
+const cubeMakePaintedHtml=new WeakMap();
+function cubeMakeSetText(el,text){if(el.textContent!==text)el.textContent=text;}
+function cubeMakeSetHtml(el,html){if(cubeMakePaintedHtml.get(el)!==html){el.innerHTML=html;cubeMakePaintedHtml.set(el,html);}}
+function cubeMakeSetLabel(el,text){if(el.title!==text)el.title=text;if(el.getAttribute('aria-label')!==text)el.setAttribute('aria-label',text);}
+/** 'deflate-raw' 지원은 런타임 동안 안 바뀌어요 — 처음 한 번만 생성자를 만들어 봐요. */
+let cubeMakeDeflateMemo=null;
+function cubeMakeDeflateOk(){if(cubeMakeDeflateMemo===null)cubeMakeDeflateMemo=supportsDeflateRaw();return cubeMakeDeflateMemo;}
+function cubeMakePaintPaperControls(paper){
+  const s=cubeMakeState,size=$('makePaperSize'),thickness=$('makePaperThickness'),lang=genI18n.lang||'ko';
+  // 치수는 같은 섹션의 두께 · 상태 줄처럼 언어 소수점 표기로 적고, 언어가 바뀌면 다시 채워요.
+  if(size.dataset.lang!==lang){
+    size.innerHTML=PAPER_SIZES.map(p=>`<option value="${p.id}">${p.label} · ${cubeMakeNum(p.widthMm,0,1)} × ${cubeMakeNum(p.heightMm,0,1)} mm</option>`).join('');
+    size.dataset.lang=lang;
+  }
+  size.value=s.paper;
+  if(thickness.dataset.lang!==lang){
+    thickness.innerHTML=THICKNESS_PRESETS.map(p=>`<option value="${p.id}">${tf(CUBE_MAKE_THICKNESS_KEYS[p.kind],{mm:cubeMakeMm(p.thicknessUm),flute:p.id.replace(/^flute/,'')})}</option>`).join('')
+      +`<option value="custom">${t('g1087')}</option>`;
+    thickness.dataset.lang=lang;
+  }
+  thickness.value=s.thickness;
+  $('makePaperThicknessCustomRow').hidden=s.thickness!=='custom';
+  cubeMakeSetInput('makePaperThicknessCustom');
+  const options=paper?.options??[];
+  $('makePaperMethodRow').hidden=options.length<2;
+  for(const card of $('makePaperMethodCards').children){
+    const option=options.find(o=>o.method===card.dataset.paperMethod);
+    card.disabled=!option?.enabled;
+    card.title=option&&!option.enabled?cubeMakeCodeText(option.reason):'';
+    cubeMakePressed(card,paper?.method===card.dataset.paperMethod);
+  }
+  $('makePaperAdvanced').hidden=mode!=='advanced';
+  for(const card of $('makePaperSideCards').children)cubeMakePressed(card,card.dataset.paperSide===s.sideMode);
+  $('makePaperSideRow').hidden=s.sideMode!=='manual';
+  cubeMakeSetInput('makePaperSide');
+}
+function cubeMakePaintPrintControls(print){
+  const s=cubeMakeState;
+  cubeMakeSetInput('makeCellMm');
+  const cellUm=print?.phys?.cellUm??s.cellUm,depthUm=print?.depthUm??s.depthUm;
+  for(const card of $('makeDepthCards').children){
+    const d=Number(card.dataset.depthUm),fits=cubeMakeDepthFits(d,cellUm);
+    // 라벨은 값(data-depth-um)에서 현지화한 소수로 그려요 — 같은 섹션의 상태 줄과 소수점 표기를 맞춰요.
+    cubeMakeSetText(card,`${cubeMakeMm(d)} mm`);
+    card.disabled=!fits;card.title=fits?'':cubeMakeCodeText('TLP_DEPTH_GT_CELL');
+    cubeMakePressed(card,d===depthUm);
+  }
+  // 6F 처럼 숨구멍을 둘 빈 면이 없으면 «켬» 을 막고 사유를 보여요 — 내보내기는 솔리드예요(밀폐 공동 금지).
+  const ventFace=print?.ventFace!==false,hollowOn=s.hollow&&ventFace;
+  for(const card of $('makeHollowCards').children){
+    const on=card.dataset.hollow==='on',blocked=on&&!ventFace;
+    card.disabled=blocked;card.title=blocked?cubeMakeCodeText('TLP_NO_VENT_FACE'):'';
+    cubeMakePressed(card,on===hollowOn);
+  }
+  $('makePrintAdvanced').hidden=mode!=='advanced';
+  for(const id of ['makeWallMm','makeCeilingMm','makeVentMm']){cubeMakeSetInput(id);$(id).disabled=!hollowOn;}
+  for(const card of $('makeRibCards').children){cubeMakePressed(card,(card.dataset.ribs==='on')===s.ribs);card.disabled=!hollowOn;}
+}
+function syncCubeMakeUi(){
+  const section=$('cubeMakeSection');if(!section)return;
+  // 시험판 게이트(설계 §0 · §4.1): 정식 노출은 별도 커밋에서 풀어요.
+  const visible=cubeMakeVisible();
+  section.hidden=!visible;
+  if(!visible)return;
+  const toggle=$('cubeMakeToggle'),toggleLabel=t(cubeMakeCollapsed?'g1048':'g1049');
+  cubeMakeSetHtml(toggle,hControlIcon(cubeMakeCollapsed?'down':'up'));toggle.setAttribute('aria-expanded',String(!cubeMakeCollapsed));
+  cubeMakeSetLabel(toggle,toggleLabel);
+  $('cubeMakeBody').hidden=cubeMakeCollapsed;
+  if(cubeMakeCollapsed)return;
+  // current 가 없거나 H 가 아니면 상태 줄을 비우고 버튼을 모두 막아요.
+  const memo=current?.type==='H'?cubeMakeModel():null,paper=memo?.paper,print=memo?.print;
+  // 'deflate-raw' 가 없어도 3MF·STL 묶음은 STORE 로 살아 있어요 — 설명에만 알려요(설계 §4.3).
+  const deflate=cubeMakeDeflateOk();
+  for(const [id,[kind,label,title]] of Object.entries(CUBE_MAKE_BUTTONS)){
+    const notes=[t(title)];
+    if(!deflate&&(id==='makePrint3mf'||id==='makePrintStl'))notes.push(t('g1121'));
+    if(id==='makePrintStand'&&print?.standCovered?.length)notes.push(t('g1124'));
+    const button=$(id);
+    cubeMakeSetHtml(button,hExportIconMarkup(kind)+`<span>${t(label)}</span>`);cubeMakeSetLabel(button,notes.join(' — '));
+  }
+  for(const id of CUBE_MAKE_PAPER_IDS)$(id).disabled=!paper||!!paper.error||!!cubeMakeBusy.paper;
+  for(const id of CUBE_MAKE_PRINT_IDS)$(id).disabled=!print||!!print.error||!!cubeMakeBusy.print;
+  cubeMakePaintPaperControls(paper);
+  cubeMakePaintPrintControls(print);
+  // 상태 줄은 role=status · aria-live 라 같은 문장을 다시 쓰면 화면 낭독기가 또 읽어요. 바뀔 때만 써요
+  // (syncHUi 는 H 렌더 · 회전 슬라이더 input 마다 불려요).
+  cubeMakeSetText($('makePaperStatus'),memo?cubeMakeStatusText('paper',memo,cubeMakePaperText(paper)):'');
+  cubeMakeSetText($('makePrintStatus'),memo?cubeMakeStatusText('print',memo,cubeMakePrintText(print)):'');
+}
+function cubeMakeSizeText(triangles,byteLength){
+  const size=byteLength<1048576?`${cubeMakeNum(byteLength/1024,1)} KB`:`${cubeMakeNum(byteLength/1048576,2)} MB`;
+  return ()=>tf('g1098',{triangles:cubeMakeNum(triangles,0),size});
+}
+/** 클릭 시점에 파일명·옵션·물리 큐브를 고정하고, 무거운 일은 돌려준 함수가 해요(await 뒤에 current 를 안 읽어요).
+ *  그 함수는 결과 문구를 그리는 함수를 돌려줘요. */
+function cubeMakeJob(id,part){
+  if(CUBE_MAKE_PAPER_IDS.includes(id)){
+    const {phys,plan}=part,ext={makePaperSvg:'svg',makePaperPng:'png',makePaperPdf:'pdf'}[id];
+    // 파일명 접미사는 정수 µm(설계 §4.3) — export-filename 이 '.' 을 '-' 로 바꾸기 때문이에요.
+    const filename=ext?exportFilename(ext).replace(/\.(svg|png|pdf)$/,`_${plan.fileTag}.$1`):null;
+    return async()=>{
+      const scene=buildPaperSheet(phys,plan);
+      if(!ext){await printSvgSheet(sceneToSvg(scene,{unit:'mm'}),plan.paper);return ()=>t('g1120');}
+      if(ext==='svg')download(new TextEncoder().encode(sceneToSvg(scene,{unit:'mm'})),'image/svg+xml',filename);
+      else if(ext==='png')download(renderExportPng(scene,paperPngPlan(scene)),'image/png',filename);
+      else download(await sceneToPdf(scene,{widthMm:plan.widthMm,heightMm:plan.heightMm}),'application/pdf',filename);
+      return ()=>t('g1119');
+    };
+  }
+  const {phys,depthUm,hollow,hollowPlan:plan,renderFaces}=part;
+  if(id==='makePrintStand'){
+    const filename=exportFilename('stl').replace(/\.stl$/,`_stand-L${phys.sideUm}um.stl`);
+    return async()=>{
+      const mesh=buildVertexStand(phys),bytes=meshToBinaryStl(mesh);
+      download(bytes,'model/stl',filename);
+      return cubeMakeSizeText(mesh.indices.length/3,bytes.length);
+    };
+  }
+  const tag=`_print-c${phys.cellUm}um-d${depthUm}um${plan.enabled?'-hollow':''}-rf${renderFaces}`,is3mf=id==='makePrint3mf';
+  const filename=is3mf?exportFilename('3mf').replace(/\.3mf$/,`${tag}.3mf`):exportFilename('zip').replace(/\.zip$/,`${tag}_stl.zip`);
+  return async()=>{
+    // 파트를 만들 때마다 위상 자체검사가 돌아요(print-mesh) — 실패면 TLP_TOPOLOGY 로 멈추고 아무것도 안 내려받아요.
+    const {parts,report}=buildPrintParts(phys,{depthUm,hollow});
+    let bytes;
+    if(is3mf)bytes=await zipDeflate(partsTo3mfFiles(parts,{application:`${DEFAULT_3MF_APPLICATION} ${GENERATOR_BUILD}`}));
+    else{
+      assertTriangleCap(parts);
+      const stem=filename.replace(/_stl\.zip$/,'');
+      bytes=await zipDeflate(parts.map(p=>({name:`${stem}_${p.name}.stl`,data:meshToBinaryStl(p.mesh)})));
+    }
+    download(bytes,is3mf?'model/3mf':'application/zip',filename);
+    return cubeMakeSizeText(report.triangles,bytes.length);
+  };
+}
+async function runCubeMake(id){
+  const group=CUBE_MAKE_PAPER_IDS.includes(id)?'paper':'print';
+  if(cubeMakeBusy[group])return;
+  // 입력 직후 예약 렌더가 있으면 새 본문부터 만든 뒤 스냅샷을 잡아요(3D 데이터 버튼과 같은 순서).
+  hImageEditor.flush();flushScheduledRender();
+  if(!cubeMakeVisible()||!current||current.type!=='H')return;
+  const memo=cubeMakeModel(),part=memo[group];
+  if(!part||part.error){cubeMakeNotes[group]=part?.error?{memo,text:()=>cubeMakeErrorText(part.error)}:null;syncCubeMakeUi();return;}
+  let job;
+  try{job=cubeMakeJob(id,part);}
+  catch(error){cubeMakeNotes[group]={memo,text:()=>cubeMakeErrorText(error)};syncCubeMakeUi();return;}
+  cubeMakeBusy[group]=id;cubeMakeNotes[group]=null;syncCubeMakeUi();
+  try{
+    // 진행 문구가 그려진 뒤 무거운 일을 시작해요 — 한 프레임 양보(설계 §4.3).
+    // 숨은 탭·창에서는 rAF 가 멈춰서 120 ms 타이머 폴백을 같이 걸어요 — 먼저 온 쪽 한 번만 이어 가요.
+    await new Promise(resolve=>{let done=false;const go=()=>{if(done)return;done=true;setTimeout(resolve);};requestAnimationFrame(go);setTimeout(go,120);});
+    cubeMakeNotes[group]={memo,text:await job()};
+  }catch(error){cubeMakeNotes[group]={memo,text:()=>cubeMakeErrorText(error)};}
+  finally{cubeMakeBusy[group]=null;syncCubeMakeUi();}
+}
+$('cubeMakeToggle').addEventListener('click',()=>{cubeMakeCollapsed=!cubeMakeCollapsed;syncCubeMakeUi();});
+$('makePaperSize').addEventListener('change',()=>{cubeMakeState.paper=$('makePaperSize').value;syncCubeMakeUi();});
+$('makePaperThickness').addEventListener('change',()=>{cubeMakeState.thickness=$('makePaperThickness').value;syncCubeMakeUi();});
+for(const card of $('makePaperMethodCards').children)card.addEventListener('click',()=>{cubeMakeState.method=card.dataset.paperMethod;syncCubeMakeUi();});
+for(const card of $('makePaperSideCards').children)card.addEventListener('click',()=>{
+  const manual=card.dataset.paperSide==='manual';
+  // 직접 입력으로 바꾸면 지금 보이는 자동 최대 값에서 시작해요.
+  if(manual&&cubeMakeState.sideMode!=='manual'&&cubeMakeMemo?.paper?.plan)cubeMakeState.sideUm=cubeMakeMemo.paper.plan.sideUm;
+  cubeMakeState.sideMode=manual?'manual':'auto';syncCubeMakeUi();
+});
+for(const card of $('makeDepthCards').children)card.addEventListener('click',()=>{cubeMakeState.depthUm=Number(card.dataset.depthUm);syncCubeMakeUi();});
+for(const card of $('makeHollowCards').children)card.addEventListener('click',()=>{cubeMakeState.hollow=card.dataset.hollow==='on';syncCubeMakeUi();});
+for(const card of $('makeRibCards').children)card.addEventListener('click',()=>{cubeMakeState.ribs=card.dataset.ribs==='on';syncCubeMakeUi();});
+for(const [id,{key,range}] of Object.entries(CUBE_MAKE_INPUTS))$(id).addEventListener('change',()=>{
+  // mm 입력을 µm 눈금에 맞추고 범위 안으로 넣어요. 숫자가 아니면 이전 값으로 되돌려요.
+  const input=$(id),value=Number(input.value),{min,max,step}=range();
+  if(input.value!==''&&Number.isFinite(value)){
+    let um=Math.round(value*1000/step)*step;
+    if(min!==undefined)um=Math.max(min,um);
+    if(max!==undefined)um=Math.min(max,um);
+    cubeMakeState[key]=um;
+  }
+  // 확정한 칸은 여기서 바로 적용값으로 다시 써요. Enter 로 확정하면 포커스가 칸에 남아 sync 의 «입력 중인 칸은 덮지 않음»
+  // 가드가 건너뛰고, 그 뒤 Tab 으로 떠나도 change 가 다시 오지 않아 칸(7)과 적용값(5.0)이 어긋난 채 남아요.
+  input.value=String(cubeMakeState[key]/1000);
+  syncCubeMakeUi();
+});
+for(const id of CUBE_MAKE_IDS)$(id).addEventListener('click',()=>runCubeMake(id));
+// ── cubeMake VM 슬라이스 끝 ──
 
 $('copyPng').addEventListener('click', async () => {
   flushScheduledRender();

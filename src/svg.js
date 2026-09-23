@@ -61,6 +61,9 @@ export function colorToHex(c) {
  *   그대로 쓴다(둘 다 필요). viewBox 비율과 다르면 SVG 기본 preserveAspectRatio
  *   (xMidYMid meet)가 **contain** 배치를 해 준다 — 그래서 별도 letterbox 계산이 없다.
  *   안 주면 종전과 바이트 동일하다 (결정성 핀이 SVG 전문에 걸려 있다).
+ *   unit ('mm', 2026-09-23, 종이 도안): scene 단위 1 = 1 mm 인 실척 문서로 내요. 머리 줄만
+ *   `width="{W}mm" height="{H}mm" viewBox="0 0 {W} {H}"` 로 바뀌고(수는 끝 0 을 뗀 고정 소수),
+ *   도형 직렬화는 그대로예요. widthPx/heightPx 와는 함께 쓸 수 없어요. **안 주면 종전과 바이트 동일**하다.
  * @returns {string}
  */
 export function sceneToSvg(scene, options = {}) {
@@ -80,6 +83,13 @@ export function sceneToSvg(scene, options = {}) {
       throw new RangeError(`${label} 는 1 이상의 정수여야 한다: ${v}`);
     }
   }
+  if (options.unit !== undefined && options.unit !== 'mm') {
+    throw new RangeError(`unit 은 'mm' 만 받는다: ${options.unit}`);
+  }
+  const mm = options.unit === 'mm';
+  if (mm && options.widthPx !== undefined) {
+    throw new RangeError("unit 'mm' 와 widthPx/heightPx 는 함께 줄 수 없다 — 크기가 이중으로 정의된다");
+  }
   const n = (v) => num(v, precision);
   const pxW = options.widthPx === undefined ? Math.round(scene.width * ppu) : options.widthPx;
   const pxH = options.heightPx === undefined ? Math.round(scene.height * ppu) : options.heightPx;
@@ -90,10 +100,19 @@ export function sceneToSvg(scene, options = {}) {
     ? scene.shading : null;
 
   const lines = [];
-  lines.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" `
-    + `viewBox="0 0 ${n(scene.width)} ${n(scene.height)}">`,
-  );
+  if (mm) {
+    // 실척: 사용자 단위 1 = 1 mm (SVG2 좌표계). 고정 소수에서 끝 0 과 점만 떼요 — "210mm", "215.9mm".
+    const d = (v) => n(v).replace(/\.?0+$/, '');
+    lines.push(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${d(scene.width)}mm" height="${d(scene.height)}mm" `
+      + `viewBox="0 0 ${d(scene.width)} ${d(scene.height)}">`,
+    );
+  } else {
+    lines.push(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${pxH}" `
+      + `viewBox="0 0 ${n(scene.width)} ${n(scene.height)}">`,
+    );
+  }
   if (shading !== null) {
     // id 는 인덱스 기반 고정 문자열이라 결정적이다. `tlsh` 접두는 삽입 대상 문서의
     // 기존 id 와 부딪히지 않게 하려는 것 (SVG 를 다른 문서에 붙여 넣는 사용이 있다).

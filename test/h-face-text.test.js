@@ -69,7 +69,10 @@ test('UI·사전 배선: 토글 버튼이 테스트 이미지 아래에, 폰트 
   assert.match(ui,/fontInput\.addEventListener\('input',\(\)=>openList\(fontInput\.value\)\)/);
   assert.doesNotMatch(ui,/fontInput\.addEventListener\('(click|focus)'/,'입력란 클릭/포커스는 목록을 열지 않아요');
   assert.match(ui,/left\.append\(well,textRow,sizeRow,chooseRow,input\)/);
-  assert.match(html,/\.h-font-list \{ position:absolute/);assert.match(html,/GENERATOR_BUILD = '2026-09-14.09';/);
+  assert.match(html,/\.h-font-list \{ position:absolute/);
+  // 스탬프는 «이 배선이 착지한 빌드(2026-09-14.09) 이상» 을 재요. 철자를 박으면 다음 착지의 스탬프 상승이 이 자를 빨갛게 해요.
+  const build=/const GENERATOR_BUILD = '(\d{4}-\d{2}-\d{2}\.\d{2})';/.exec(html)?.[1];
+  assert.ok(build&&build>='2026-09-14.09',`GENERATOR_BUILD ${build} 가 폰트 목록 배선 빌드보다 오래됐어요`);
   for(const key of ['imageText','imageTextPlaceholder','imageTextEmpty','imageFont','imageFontSearch','imageFontOpen','imageFontSystem','imageFontWeb','imageFontSans','imageFontSerif','imageFontMono','imageFontNone'])
     for(const lang of ['ko','en'])assert.notEqual(hUiLabel(key,lang),key,`${key}/${lang}`);
   assert.equal(hUiLabel('imageText','ko'),'텍스트 넣기');
