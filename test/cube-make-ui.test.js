@@ -13,7 +13,8 @@ import {readdirSync, readFileSync} from 'node:fs';
 import {physicalHCube} from '../src/cube-physical.js';
 import {generatorCubeModel} from '../src/generator-cube-export.js';
 import {hDisplayMap, H_ARRANGEMENTS} from '../src/h-face-arrangement.js';
-import {PAPER_SIZES, paperMethodOptions, paperPlan, paperPngPlan, printScaleTag} from '../src/paper-net.js';
+import {PAPER_SIZES, buildPaperSheet, paperMethodOptions, paperPlan, paperPngPlan, printScaleTag} from '../src/paper-net.js';
+import {sceneToSvg} from '../src/svg.js';
 import {buildPrintParts, hollowPlan, printBedPlacement, standCornerFaces} from '../src/print-mesh.js';
 import {hExportIconMarkup} from '../src/h-preview-decor.js';
 import {MODULE_ORDER} from '../tools/build-single.mjs';
@@ -551,9 +552,9 @@ test('표기: 용지 치수는 언어 소수점으로 적고 언어가 바뀌면
     await x.expand();
     assert.match(x.$('makePrintStatus').textContent, /^\p{Lu}/u, `${lang}: 3D 상태 줄 첫 글자`);
   }
-  // ja: 이 섹션 키(g1042–g1130 · 배율 보정 g1133–g1139)에는 반각 콜론(뒤에 숫자 · 슬래시가 오지 않는)이 없어요(기존 g480 선례).
+  // ja: 이 섹션 키(g1042–g1130 · 배율 보정 g1133–g1142)에는 반각 콜론(뒤에 숫자 · 슬래시가 오지 않는)이 없어요(기존 g480 선례).
   // (g1131 · g1132 는 이 섹션 밖 — 구 전개도 버튼 설명 — 이라 범위에서 빠져요.)
-  const sectionKey = (n) => (n >= 1042 && n <= 1130) || (n >= 1133 && n <= 1139);
+  const sectionKey = (n) => (n >= 1042 && n <= 1130) || (n >= 1133 && n <= 1142);
   const halfColon = Object.keys(h.dict.ja).filter((k) => /^g\d{4}$/.test(k) && sectionKey(Number(k.slice(1))) && /:(?![\d/])/.test(h.dict.ja[k]));
   assert.deepEqual(halfColon, []);
 });
@@ -664,9 +665,10 @@ const scaleHead = (h) => h.text('g1135').split('{')[0];
 const barErrorItem = (h, bar, min = '45.0', max = '51.0') => h.text('g1136').replace('{min}', min).replace('{max}', max).replace('{bar}', bar);
 const ko1 = (um) => new Intl.NumberFormat('ko', {minimumFractionDigits: 1, maximumFractionDigits: 1}).format(um / 1000);
 
-test('배율 보정 칸: 기본 50 mm 는 보정 없음(꼬리표 · 조각 없음), 48.3 mm 는 s = 0.966 계획 — 파일명 -k966 · 상태 줄 ×1.035 · SVG · PDF · 인쇄는 용지 크기 그대로', async () => {
+test('배율 보정 칸: 기본 50 mm 는 보정 없음(꼬리표 · 조각 없음), 48.3 mm 는 s = 0.966 계획 — PNG · PDF 파일명 -k966 · 상태 줄 ×1.035 · PNG · PDF · 인쇄는 용지 크기 그대로(도형만 보정)', async () => {
   const current = hCurrent('old', {version: 0, mode: 3});
-  const h = createCubeMakeHarness({current});
+  let pngScene = null;
+  const h = createCubeMakeHarness({current, overrides: {renderExportPng: (scene) => { pngScene = scene; return fakePng; }}});
   await h.expand();
   const bar = h.$('makePaperBarMm'), reset = h.$('makePaperBarReset'), status = () => h.$('makePaperStatus').textContent;
   assert.deepEqual([bar.value, bar.min, bar.max, bar.step, reset.disabled], ['50', '45', '51', '0.1', true]);
@@ -676,6 +678,10 @@ test('배율 보정 칸: 기본 50 mm 는 보정 없음(꼬리표 · 조각 없�
   assert.ok(!status().includes(scaleHead(h)), status());
   await h.click('makePaperSvg');
   assert.equal(h.downloads.at(-1).filename, `old_${plain.fileTag}.svg`);
+  // 보정을 재는 기준 파일은 PDF 예요(SVG 는 보정하지 않아요 — 아래 «SVG 는 보정하지 않아요» 테스트).
+  await h.click('makePaperPdf');
+  const plainPdf = h.downloads.at(-1);
+  assert.equal(plainPdf.filename, `old_${plain.fileTag}.pdf`);
   await h.input('makePaperBarMm', '48.3');
   assert.deepEqual([h.state().barUm, bar.value, reset.disabled, h.storage.map.get(BAR_KEY)], [48300, '48.3', false, '48.3']);
   const scaled = paperPlan(physOf(current), {paper: 'A4', thicknessMm: 0.1, printScale: 0.966});
@@ -685,18 +691,229 @@ test('배율 보정 칸: 기본 50 mm 는 보정 없음(꼬리표 · 조각 없�
   // 상태 줄 한 변 · 피치는 보정한 계획(가상 용지)의 값 = 드라이버가 줄인 뒤 종이 위 치수예요.
   assert.ok(scaled.sideUm < plain.sideUm);
   assert.ok(status().startsWith(h.text('g1088').replace('{paper}', 'A4').replace('{side}', ko1(scaled.sideUm)).replace('{pitch}', ko1(scaled.pitchUm)).split('{')[0]), status());
-  for (const id of ['makePaperSvg', 'makePaperPdf']) await h.click(id);
-  const [svg, pdf] = h.downloads.slice(-2);
-  assert.equal(svg.filename, `old_${scaled.fileTag}.svg`);
-  assert.match(svg.filename, /-t100um-k966\.svg$/);
-  assert.match(new TextDecoder().decode(svg.bytes), /^<svg [^>]*width="210mm" height="297mm" viewBox="0 0 210 297"/);
+  for (const id of ['makePaperPng', 'makePaperPdf']) await h.click(id);
+  const [png, pdf] = h.downloads.slice(-2);
+  assert.equal(png.filename, `old_${scaled.fileTag}.png`);
+  assert.match(png.filename, /-t100um-k966\.png$/);
+  assert.deepEqual([pngScene.width, pngScene.height], [210, 297], 'PNG 장면도 실제 용지 1:1 이에요');
   assert.equal(pdf.filename, `old_${scaled.fileTag}.pdf`);
+  assert.match(pdf.filename, /-t100um-k966\.pdf$/);
   assert.deepEqual(structureFailures(inspectPdf(pdf.bytes)), []);
   await h.click('makePaperPrint');
   assert.equal(h.prints.at(-1).paper, PAPER_SIZES.find((p) => p.id === 'A4'));
   assert.match(h.prints.at(-1).svgText, /^<svg [^>]*width="210mm" height="297mm" viewBox="0 0 210 297"/);
-  // 파일 안 도형은 보정한 장면이에요: 보정 없는 SVG 와 달라요(같으면 보정이 산출물에 안 닿은 거예요).
-  assert.notEqual(new TextDecoder().decode(svg.bytes), new TextDecoder().decode(h.downloads[0].bytes));
+  // 파일 안 도형은 보정한 장면이에요: 보정 없는 PDF 와 달라요(같으면 보정이 산출물에 안 닿은 거예요).
+  assert.notDeepEqual(pdf.bytes, plainPdf.bytes);
+  // 인쇄 · PNG 장면은 보정한 계획의 장면 그대로예요(paper-net 에서 독립으로 유도 — 캡션 끝 k=0.966).
+  const scaledScene = buildPaperSheet(physOf(current), scaled);
+  assert.equal(h.prints.at(-1).svgText, sceneToSvg(scaledScene, {unit: 'mm'}));
+  assert.equal(pngScene.paper.labels.find((l) => l.id === 'caption').text.endsWith(' k=0.966'), true);
+});
+
+/** SVG 가 막대 칸과 무관한 보정 없는 실척 파일인지 — 지금 입력(막대 50 mm)에서 받은 SVG 와 bar 에서 받은 SVG 를 견줘요.
+ *  plain 은 같은 입력의 보정 없는 계획이에요(paper-net 에서 독립으로 유도 · 기본은 A4 · 0.1 mm · 자동 한 변).
+ *  문제 목록을 돌려줘요(자 검증이 같은 함수를 재사용해요). */
+async function svgScaleProblems(h, current, {plain = paperPlan(physOf(current), {paper: 'A4', thicknessMm: 0.1}), bar = '48.3'} = {}) {
+  const out = [], phys = physOf(current);
+  const before = h.downloads.length;
+  await h.click('makePaperSvg');
+  if (h.downloads.length !== before + 1) return ['50 mm 에서 SVG 를 내려받지 못했어요'];
+  const at50 = h.downloads.at(-1);
+  await h.input('makePaperBarMm', bar);
+  await h.click('makePaperSvg');
+  const svg = h.downloads.at(-1);
+  if (svg === at50) return [`${bar} mm 에서 SVG 를 내려받지 못했어요`];
+  if (svg.filename !== `old_${plain.fileTag}.svg`) out.push(`파일명 ${svg.filename} ≠ 보정 없는 old_${plain.fileTag}.svg`);
+  if (/-k\d+/.test(svg.filename)) out.push(`파일명에 보정 꼬리표: ${svg.filename}`);
+  const text = new TextDecoder().decode(svg.bytes);
+  if (text !== new TextDecoder().decode(at50.bytes)) out.push('바이트가 50 mm 에서 받은 SVG 와 달라요');
+  if (text !== sceneToSvg(buildPaperSheet(phys, plain), {unit: 'mm'})) out.push('보정 없는 계획의 장면이 아니에요');
+  return out;
+}
+
+test('SVG 는 보정하지 않아요(운영자 결정 2026-09-24 — 커팅기 · 편집용 실척): 48.3 mm 에서도 꼬리표 없이 50 mm 의 SVG 와 바이트가 같고, 설명에 g1139 가 없어요 — PNG · PDF 는 -k966', async () => {
+  const current = hCurrent('old', {version: 0, mode: 3});
+  const h = createCubeMakeHarness({current, overrides: {renderExportPng: () => fakePng}});
+  await h.expand();
+  assert.deepEqual(await svgScaleProblems(h, current), []);
+  const phys = physOf(current), plain = paperPlan(phys, {paper: 'A4', thicknessMm: 0.1}), scaled = paperPlan(phys, {paper: 'A4', thicknessMm: 0.1, printScale: 0.966});
+  const svg = h.downloads.at(-1);
+  assert.match(new TextDecoder().decode(svg.bytes), /^<svg [^>]*width="210mm" height="297mm" viewBox="0 0 210 297"/);
+  // 자 자체의 대조군: 보정한 장면의 SVG 는 달라요(같으면 위 바이트 비교가 아무것도 가르지 못해요) · 보정 없는 캡션엔 k= 가 없어요.
+  const plainScene = buildPaperSheet(phys, plain), scaledScene = buildPaperSheet(phys, scaled);
+  assert.notEqual(sceneToSvg(plainScene, {unit: 'mm'}), sceneToSvg(scaledScene, {unit: 'mm'}));
+  assert.doesNotMatch(plainScene.paper.labels.find((l) => l.id === 'caption').text, /k=/);
+  // 같은 입력에서 PNG · PDF 는 보정한 계획이에요.
+  for (const id of ['makePaperPng', 'makePaperPdf']) await h.click(id);
+  const [png, pdf] = h.downloads.slice(-2);
+  assert.equal(png.filename, `old_${scaled.fileTag}.png`);
+  assert.match(png.filename, /-k966\.png$/);
+  assert.equal(pdf.filename, `old_${scaled.fileTag}.pdf`);
+  assert.match(pdf.filename, /-k966\.pdf$/);
+  // 설명: SVG 는 g1051 그대로, 상태 줄에 SVG 사유 조각도 없어요(보정 없는 계획이 들어가요).
+  const note = h.text('g1139').replace('{k}', 'k=0.966').replace('{factor}', '1.035');
+  assert.equal(h.$('makePaperSvg').title, h.text('g1051'));
+  assert.ok(!h.$('makePaperSvg').title.includes(note));
+  assert.equal(h.$('makePaperSvg').disabled, false);
+  const svgBlocked = h.text('g1126').replace('{method}', h.text('g1050')).split('{')[0];
+  assert.ok(svgBlocked.length >= 5 && !h.$('makePaperStatus').textContent.includes(svgBlocked), h.$('makePaperStatus').textContent);
+});
+
+/** 언어 소수 한 자리(상태 줄 mm 표기). */
+const mm1 = (lang, um) => new Intl.NumberFormat(lang, {minimumFractionDigits: 1, maximumFractionDigits: 1}).format(um / 1000);
+/** 막힌 PNG · PDF · 인쇄 묶음 이름: 화면의 버튼 라벨(아이콘 뒤 span)에서 읽어요 — 사용자가 보는 이름 그대로예요. */
+const paperRestLabel = (h) => ['makePaperPng', 'makePaperPdf', 'makePaperPrint'].map((id) => /<span>([^<]+)<\/span>/.exec(h.$(id).innerHTML)[1]).join('·');
+
+test('SVG 조각: 자동 한 변은 SVG(보정 없음)가 실제 용지에서 재서 다른 큐브라 상태 줄이 그 한 변을 따로 적고, 같은 큐브(직접 입력)면 안 적어요', async () => {
+  for (const lang of ['ko', 'en']) {
+    const current = hCurrent('old', {version: 0, mode: 3});
+    const h = createCubeMakeHarness({current, lang, uiMode: 'advanced'});
+    await h.expand();
+    const phys = physOf(current), status = () => h.$('makePaperStatus').textContent, head = h.text('g1140').split('{')[0];
+    const plain = paperPlan(phys, {paper: 'A4', thicknessMm: 0.1}), scaled = paperPlan(phys, {paper: 'A4', thicknessMm: 0.1, printScale: 0.966});
+    assert.ok(head.length >= 5 && !status().includes(head), `${lang}: 보정 없음엔 SVG 조각이 없어요 — ${status()}`);
+    await h.input('makePaperBarMm', '48.3');
+    // 자의 대조군: 두 자동 한 변이 같으면 이 자는 아무것도 가르지 못해요.
+    assert.notEqual(plain.sideUm, scaled.sideUm);
+    const item = h.text('g1140').replace('{side}', mm1(lang, plain.sideUm));
+    // 상태 줄 한 변(보정한 계획) 뒤, 배율 조각 바로 다음에 SVG 의 한 변을 적어요.
+    assert.ok(status().startsWith(h.text('g1088').replace('{paper}', 'A4').replace('{side}', mm1(lang, scaled.sideUm)).split('{')[0]), `${lang}: ${status()}`);
+    assert.ok(status().includes(`${scaleItem(h, '1.035', '48.3')} · ${item}`), `${lang}: ${status()}`);
+    assert.deepEqual(status().split(' · ').filter((s) => /[.。]$/.test(s)), [], `${lang}: 상태 줄 조각`);
+    if (lang !== 'ko') assert.doesNotMatch(status(), HANGUL, lang);
+    await h.click('makePaperSvg');
+    assert.equal(h.downloads.at(-1).filename, `old_${plain.fileTag}.svg`, lang);
+    // 직접 입력: s < 1 이면 보정한 자동 최대(작은 쪽)에서 시작하고, 같은 한 변 · 같은 방식이라 같은 큐브 — 조각이 없어요.
+    await h.$('makePaperSideCards').children.find((c) => c.dataset.paperSide === 'manual').fire('click');
+    assert.equal(h.state().sideUm, scaled.sideUm, lang);
+    assert.ok(!status().includes(head), `${lang}: ${status()}`);
+  }
+});
+
+/** 1.0 mm 판 · «붙이기» 카드 · 직접 입력 62.9 mm(막대 50 mm 그대로): 이 한 변에서 «붙이기» 는 가상 용지(×0.966)에서만 막혀요.
+ *  SVG 가 막대 50 mm 때와 같은 방식(붙이기)으로 그리는지 재는 입력이에요. 보정 없는 SVG 계획을 돌려줘요. */
+async function skinOnlyOnRealPaper(h, current) {
+  await h.select('makePaperThickness', 'board10');
+  await h.$('makePaperMethodCards').children.find((c) => c.dataset.paperMethod === 'skin').fire('click');
+  await h.$('makePaperSideCards').children.find((c) => c.dataset.paperSide === 'manual').fire('click');
+  await h.input('makePaperSide', 62.9);
+  return paperPlan(physOf(current), {paper: 'A4', thicknessMm: 1, sideMm: 62.9, method: 'skin'});
+}
+
+test('SVG 방식: 고른 방식이 가상 용지에서만 막히면 PNG · PDF · 인쇄는 가능한 방식으로 가고 SVG 는 고른 방식 그대로 — 50 mm 의 SVG 와 바이트가 같고 상태 줄이 그 방식을 적어요', async () => {
+  const current = hCurrent('old', {version: 0, mode: 3}), phys = physOf(current);
+  const h = createCubeMakeHarness({current, uiMode: 'advanced', overrides: {renderExportPng: () => fakePng}});
+  await h.expand();
+  const plain = await skinOnlyOnRealPaper(h, current);
+  // 입력의 전제는 paper-net 에서 독립으로 재요: 이 한 변에서 «붙이기» 는 가상 용지(×0.966)에서만 막혀요.
+  const at = (printScale) => paperMethodOptions(phys, {paper: 'A4', thicknessMm: 1, sideMm: 62.9, printScale}).map((o) => [o.method, o.enabled]);
+  assert.deepEqual([at(0.966), at(1)], [[['skin', false], ['board', true]], [['skin', true], ['board', true]]]);
+  assert.deepEqual([h.state().method, h.state().sideUm], ['skin', 62900]);
+  assert.deepEqual(await svgScaleProblems(h, current, {plain}), []);
+  assert.match(h.downloads.at(-1).filename, /^old_skin-A4-s62900um-t1000um\.svg$/);
+  await h.click('makePaperPdf');
+  assert.equal(h.downloads.at(-1).filename, `old_${paperPlan(phys, {paper: 'A4', thicknessMm: 1, sideMm: 62.9, method: 'board', printScale: 0.966}).fileTag}.pdf`);
+  const status = h.$('makePaperStatus').textContent;
+  assert.ok(status.includes(h.text('g1141').replace('{method}', h.text('g1068')).replace('{side}', '62.9')), status);
+  assert.ok(!status.includes(h.text('g1140').split('{')[0]), status);
+});
+
+test('SVG 는 보정한 계획이 실패해도 만들어요: s < 1 가상 용지가 작아 PNG · PDF · 인쇄만 막히고(사유 조각) SVG 는 50 mm 의 SVG 와 바이트가 같아요 — 직접 입력 · 자동 한 변', async () => {
+  // 기대값은 paper-net 에서 독립으로 유도해요: 보정한 계획은 던지고, 보정 없는 계획은 서요.
+  const cases = [
+    {lang: 'ko', current: hCurrent('old', {version: 0, mode: 3}), paper: 'A4', bar: '48.3', side: 64.2, code: 'TLP_PAPER_FIT'},
+    {lang: 'en', current: hCurrent('old', {version: 7, mode: 3}), paper: 'A5', bar: '45', side: undefined, code: 'TLP_PAPER_MODULE'},
+  ];
+  for (const {lang, current, paper, bar, side, code} of cases) {
+    const phys = physOf(current), label = `${lang}/${paper}/${side ?? 'auto'}`;
+    assert.throws(() => paperPlan(phys, {paper, thicknessMm: 0.1, sideMm: side, printScale: Number(bar) / 50}), (e) => e.code === code, label);
+    const plain = paperPlan(phys, {paper, thicknessMm: 0.1, sideMm: side});
+    const h = createCubeMakeHarness({current, lang, uiMode: 'advanced', overrides: {renderExportPng: () => fakePng}});
+    await h.expand();
+    const status = () => h.$('makePaperStatus').textContent;
+    await h.select('makePaperSize', paper);
+    if (side !== undefined) {
+      await h.$('makePaperSideCards').children.find((c) => c.dataset.paperSide === 'manual').fire('click');
+      await h.input('makePaperSide', side);
+    }
+    assert.deepEqual(await svgScaleProblems(h, current, {plain, bar}), [], label);
+    assert.deepEqual(PAPER_IDS.map((id) => h.$(id).disabled), [false, true, true, true], label);
+    const reason = h.text({TLP_PAPER_FIT: 'g1129', TLP_PAPER_MODULE: 'g1130'}[code]);
+    const blocked = h.text('g1126').replace('{method}', paperRestLabel(h)).replace('{reason}', reason);
+    const svgItem = h.text('g1140').replace('{side}', mm1(lang, plain.sideUm));
+    assert.ok(status().startsWith(blocked), `${label}: ${status()}`);
+    assert.ok(status().includes(svgItem) && status().includes(h.text('g1135').split('{')[0]), `${label}: ${status()}`);
+    // (끝의 작업 결과 문구 g1119 «Saved.» 는 조각이 아니라 기존 결과 문장이라 빼고 재요.)
+    assert.deepEqual(status().split(' · ').filter((s) => s !== h.text('g1119') && /[.。]$/.test(s)), [], `${label}: 상태 줄 조각`);
+    if (lang !== 'ko') assert.doesNotMatch(status(), HANGUL, label);
+    // 막힌 PDF 를 우회해 불러도(하네스 click 은 disabled 를 안 봐요) 아무것도 안 내려받고, 상태 줄 끝에 오류 문구가 떠요.
+    const count = h.downloads.length;
+    await h.click('makePaperPdf');
+    assert.equal(h.downloads.length, count, label);
+    assert.ok(status().endsWith(h.text({TLP_PAPER_FIT: 'g1112', TLP_PAPER_MODULE: 'g1113'}[code])), `${label}: ${status()}`);
+  }
+});
+
+/** 배율 보정 51.0 mm(s = 1.02)에서 보정한 자동 최대 한 변을 직접 입력해 SVG 만 막히게 해요 — 그 한 변은 가상 용지(×1.02)에는
+ *  들어가도 실제 A4 에는 안 들어가요. 직접 입력은 작은 쪽(SVG)에서 시작하므로 큰 한 변은 칸에 적어요. */
+async function svgBlockedAtBar51(h) {
+  await h.input('makePaperBarMm', '51');
+  await h.$('makePaperSideCards').children.find((c) => c.dataset.paperSide === 'manual').fire('click');
+  const big = paperPlan(physOf(hCurrent('old', {version: 0, mode: 3})), {paper: 'A4', thicknessMm: 0.1, printScale: 1.02});
+  await h.input('makePaperSide', big.sideUm / 1000);
+  return big;
+}
+
+test('배율 보정 > 1(51.0 mm)에 직접 입력한 한 변이 실제 용지에 안 들어가면 SVG 만 막히고 사유가 설명 · 상태 줄에 보여요 — PNG · PDF · 인쇄는 보정한 계획 그대로', async () => {
+  for (const lang of ['ko', 'en']) {
+    const current = hCurrent('old', {version: 0, mode: 3});
+    const h = createCubeMakeHarness({current, lang, uiMode: 'advanced', overrides: {renderExportPng: () => fakePng}});
+    await h.expand();
+    const phys = physOf(current), status = () => h.$('makePaperStatus').textContent;
+    await h.input('makePaperBarMm', '51');
+    const big = paperPlan(phys, {paper: 'A4', thicknessMm: 0.1, printScale: 1.02}), plainAuto = paperPlan(phys, {paper: 'A4', thicknessMm: 0.1});
+    // 직접 입력은 보정한 자동 최대와 SVG(보정 없음) 자동 최대 중 작은 한 변에서 시작해요 — s > 1 이면 SVG 쪽이라 바로 막히지 않아요.
+    assert.ok(big.sideUm > plainAuto.sideUm, '자의 대조군: s > 1 이면 보정한 자동 최대가 커야 해요');
+    await h.$('makePaperSideCards').children.find((c) => c.dataset.paperSide === 'manual').fire('click');
+    assert.equal(h.state().sideUm, plainAuto.sideUm, lang);
+    assert.equal(h.$('makePaperSvg').disabled, false, lang);
+    // 보정한 자동 최대 한 변을 칸에 적어요.
+    await h.input('makePaperSide', big.sideUm / 1000);
+    assert.equal(h.state().sideUm, big.sideUm, lang);
+    // 기대값은 paper-net 에서 독립으로 유도해요: 같은 한 변의 보정 없는 계획은 TLP_PAPER_FIT, 보정한 계획은 들어가요.
+    assert.throws(() => paperPlan(phys, {paper: 'A4', thicknessMm: 0.1, sideMm: big.sideUm / 1000}), (e) => e.code === 'TLP_PAPER_FIT');
+    const manualBig = paperPlan(phys, {paper: 'A4', thicknessMm: 0.1, sideMm: big.sideUm / 1000, printScale: 1.02});
+    const svg = h.$('makePaperSvg'), fit = h.text('g1112');
+    const item = h.text('g1126').replace('{method}', h.text('g1050')).replace('{reason}', h.text('g1129'));
+    assert.equal(svg.disabled, true, lang);
+    assert.equal(svg.title, `${h.text('g1051')} — ${fit}`, lang);
+    assert.equal(svg.getAttribute('aria-label'), svg.title);
+    assert.ok(status().includes(item), `${lang}: ${status()}`);
+    assert.deepEqual(status().split(' · ').filter((s) => /[.。]$/.test(s)), [], `${lang}: 상태 줄 조각`);
+    if (lang !== 'ko') assert.doesNotMatch(status() + svg.title, HANGUL, lang);
+    for (const id of ['makePaperPng', 'makePaperPdf', 'makePaperPrint']) assert.equal(h.$(id).disabled, false, `${lang}/${id}`);
+    // SVG 가 막혔으니 PNG · PDF 설명은 «실척 파일은 SVG» 조각(g1142)을 빼요 — 막힌 버튼을 가리키지 않아요.
+    const note = h.text('g1139').replace('{k}', printScaleTag(1.02)).replace('{factor}', new Intl.NumberFormat(lang, {minimumFractionDigits: 3, maximumFractionDigits: 3}).format(1 / 1.02));
+    for (const [id, desc] of [['makePaperPng', 'g1053'], ['makePaperPdf', 'g1055']]) assert.equal(h.$(id).title, `${h.text(desc)} — ${note}`, `${lang}/${id}`);
+    // 막힌 버튼을 우회해 불러도(하네스 click 은 disabled 를 안 봐요) 아무것도 안 내려받고, 상태 줄 끝에 오류 문구가 떠요.
+    await h.click('makePaperSvg');
+    assert.equal(h.downloads.length, 0, lang);
+    assert.ok(status().endsWith(fit), `${lang}: ${status()}`);
+    // 다른 버튼은 보정한 계획으로 그대로 만들어요.
+    await h.click('makePaperPdf');
+    assert.equal(h.downloads.at(-1).filename, `old_${manualBig.fileTag}.pdf`);
+    assert.match(h.downloads.at(-1).filename, /-k1020\.pdf$/);
+    await h.click('makePaperPrint');
+    assert.equal(h.prints.at(-1).svgText, sceneToSvg(buildPaperSheet(phys, manualBig), {unit: 'mm'}), lang);
+    // 한 변을 줄여 실제 A4 에도 들어가면 SVG 가 다시 열리고 사유가 사라져요.
+    await h.input('makePaperSide', 60);
+    assert.equal(svg.disabled, false, lang);
+    assert.ok(!status().includes(item), `${lang}: ${status()}`);
+    assert.equal(svg.title, h.text('g1051'), lang);
+    for (const [id, desc] of [['makePaperPng', 'g1053'], ['makePaperPdf', 'g1055']]) assert.equal(h.$(id).title, `${h.text(desc)} — ${note} — ${h.text('g1142')}`, `${lang}/${id}`);
+    await h.click('makePaperSvg');
+    assert.equal(h.downloads.at(-1).filename, `old_${paperPlan(phys, {paper: 'A4', thicknessMm: 0.1, sideMm: 60}).fileTag}.svg`, lang);
+  }
 });
 
 test('배율 보정 칸: 범위 밖(45.0–51.0 mm) · 숫자 아님은 마지막 유효 값을 지키고 상태 줄에 사유 조각 — 다음 유효 값에서 사라져요', async () => {
@@ -732,8 +949,10 @@ test('배율 보정 되돌리기: ↺ 버튼 · 빈 칸은 50 mm(보정 없음) 
   assert.deepEqual([h.state().barUm, h.$('makePaperBarMm').value, h.storage.map.has(BAR_KEY), h.$('makePaperBarReset').disabled], [50000, '50', false, true]);
   assert.ok(!h.$('makePaperStatus').textContent.includes(barErrorItem(h, '48.3')), '되돌리면 사유도 지워요');
   assert.ok(!h.$('makePaperStatus').textContent.includes(scaleHead(h)));
-  await h.click('makePaperSvg');
-  assert.doesNotMatch(h.downloads.at(-1).filename, /-k\d+\.svg$/);
+  // 꼬리표는 PDF 로 재요(SVG 는 보정 중에도 꼬리표가 없어서 이 자리를 못 가려요).
+  await h.click('makePaperPdf');
+  assert.match(h.downloads.at(-1).filename, /\.pdf$/);
+  assert.doesNotMatch(h.downloads.at(-1).filename, /-k\d+\.pdf$/);
   await h.input('makePaperBarMm', '49');
   assert.equal(h.storage.map.get(BAR_KEY), '49');
   // 정말 빈 칸(badInput 아님)만 되돌리기예요. 공백 · 틀린 글자는 브라우저에서 badInput 이라 위 사유 조각 쪽이에요.
@@ -770,8 +989,8 @@ test('배율 보정 기억: 저장한 값을 다음에 열 때 읽고, 틀린 �
   await h.expand();
   await h.input('makePaperBarMm', '48.3');
   assert.equal(h.state().barUm, 48300, '저장하지 못해도 이 쪽에서는 적용돼요');
-  await h.click('makePaperSvg');
-  assert.match(h.downloads.at(-1).filename, /-k966\.svg$/);
+  await h.click('makePaperPdf');
+  assert.match(h.downloads.at(-1).filename, /-k966\.pdf$/);
   await h.click('makePaperBarReset');
   assert.equal(h.state().barUm, 50000);
   assert.equal(blocked.calls, 3, '쓰기 · 지우기도 시도했어요');
@@ -790,8 +1009,10 @@ test('배율 보정은 용지 크기마다 따로예요: A4 값이 A3 에 번지
     assert.deepEqual([h.state().paper, h.state().barUm, h.$('makePaperBarMm').value, h.$('makePaperBarReset').disabled], ['A3', 50000, '50', true], label);
     assert.ok(!status().includes(barErrorItem(h, '48.3')), `${label}: 앞 용지의 사유가 남았어요`);
     assert.ok(!status().includes(scaleHead(h)), `${label}: A4 보정이 A3 에 번졌어요 — ${status()}`);
-    await h.click('makePaperSvg');
-    assert.doesNotMatch(h.downloads.at(-1).filename, /-k\d+\.svg$/, label);
+    // 꼬리표는 PDF 로 재요(SVG 는 늘 꼬리표가 없어서 번짐을 못 가려요).
+    await h.click('makePaperPdf');
+    assert.match(h.downloads.at(-1).filename, /-A3-s\d+um-t100um\.pdf$/, label);
+    assert.doesNotMatch(h.downloads.at(-1).filename, /-k\d+\.pdf$/, label);
     await h.input('makePaperBarMm', '48.8');
     assert.ok(status().includes(scaleItem(h, '1.025', '48.8', 'k=0.976')), `${label}: ${status()}`);
     await h.select('makePaperSize', 'A4');
@@ -834,7 +1055,7 @@ test('배율 보정은 절대값이에요: 보정 도안(k=…)을 인쇄하면 
   assert.ok(status().endsWith(h.text('g1120')), status());
 });
 
-test('배율 보정 중 SVG · PNG · PDF 버튼 설명은 «×1.035 로 그린 파일 · 커팅기 · 편집용 실척은 ↺ 후» 를 붙이고, 인쇄 버튼 · 보정 없음에는 안 붙여요', async () => {
+test('배율 보정 중 PNG · PDF 버튼 설명은 «×1.035 로 그린 파일 · 커팅기 · 편집용 실척은 SVG» 를 붙이고, SVG(보정 안 함) · 인쇄 버튼 · 보정 없음에는 안 붙여요', async () => {
   for (const lang of ['ko', 'en']) {
     const h = createCubeMakeHarness({lang});
     await h.expand();
@@ -842,8 +1063,11 @@ test('배율 보정 중 SVG · PNG · PDF 버튼 설명은 «×1.035 로 그린 
     const noted = () => PAPER_IDS.filter((id) => h.$(id).title.includes(note));
     assert.deepEqual(noted(), [], lang);
     await h.input('makePaperBarMm', '48.3');
-    assert.deepEqual(noted(), ['makePaperSvg', 'makePaperPng', 'makePaperPdf'], lang);
-    for (const [id, desc] of [['makePaperSvg', 'g1051'], ['makePaperPng', 'g1053'], ['makePaperPdf', 'g1055']]) assert.equal(h.$(id).title, `${h.text(desc)} — ${note}`, `${lang}/${id}`);
+    assert.deepEqual(noted(), ['makePaperPng', 'makePaperPdf'], lang);
+    // «실척 파일은 SVG» 는 따로 조각(g1142)이에요 — SVG 를 만들 수 있을 때만 붙어요(막히면 빼요: 위 «배율 보정 > 1» 테스트).
+    for (const [id, desc] of [['makePaperPng', 'g1053'], ['makePaperPdf', 'g1055']]) assert.equal(h.$(id).title, `${h.text(desc)} — ${note} — ${h.text('g1142')}`, `${lang}/${id}`);
+    assert.deepEqual(PAPER_IDS.filter((id) => h.$(id).title.includes(h.text('g1142'))), ['makePaperPng', 'makePaperPdf'], lang);
+    assert.equal(h.$('makePaperSvg').title, h.text('g1051'), lang);
     assert.equal(h.$('makePaperPrint').title, h.text('g1057'), lang);
     await h.click('makePaperBarReset');
     assert.deepEqual(noted(), [], lang);
@@ -874,7 +1098,10 @@ test('배율 보정 문구: 여덟 언어의 상태 줄 조각이 마침표로 �
     assert.deepEqual(segments.filter((s) => /[.。]$/.test(s)), [], lang);
     if (lang !== 'ko') assert.doesNotMatch(text, HANGUL, lang);
     const d = h.dict[lang];
-    for (const [key, holes] of [['g1135', ['{k}', '{factor}', '{bar}']], ['g1136', ['{min}', '{max}', '{bar}']], ['g1138', ['{k}']], ['g1139', ['{k}', '{factor}']]]) for (const hole of holes) assert.ok(d[key].includes(hole), `${lang}/${key} ${hole}`);
+    for (const [key, holes] of [['g1135', ['{k}', '{factor}', '{bar}']], ['g1136', ['{min}', '{max}', '{bar}']], ['g1138', ['{k}']], ['g1139', ['{k}', '{factor}']],
+      ['g1140', ['{side}']], ['g1141', ['{side}', '{method}']]]) for (const hole of holes) assert.ok(d[key].includes(hole), `${lang}/${key} ${hole}`);
+    // 상태 줄 · 버튼 설명 조각(SVG 한 변 · 방식 · 실척 안내 · 배율 설명)은 마침표로 끝나지 않고, 한 조각 안에 « · » 구분자가 없어요.
+    for (const key of ['g1139', 'g1140', 'g1141', 'g1142']) assert.ok(!/[.。]$/.test(d[key]) && !d[key].includes(' · '), `${lang}/${key}: ${d[key]}`);
     // 칸 라벨 «배율 보정 — …» 의 앞 이름을 도움말 · 인쇄 전 안내 · PDF 설명이 그대로 불러요(라벨을 바꾸면 안내도 따라가야 해요).
     const fieldName = d.g1133.split(' — ')[0], lower = fieldName.toLowerCase();
     assert.ok(fieldName.length >= 4 && fieldName !== d.g1133, `${lang}: 라벨 «이름 — 설명» 꼴`);
@@ -891,6 +1118,10 @@ test('배율 보정 문구: 여덟 언어의 상태 줄 조각이 마침표로 �
     assert.deepEqual(d.g1138.split(' · ').filter((s) => /[.。]$/.test(s)), [], `${lang}: 인쇄 안내 조각`);
     // PDF 도 같은 드라이버를 거쳐요 — «실척 인쇄에 가장 확실해요» 류 주장을 되살리지 않아요(운영자 실측: 줄임은 드라이버에서 나요).
     assert.doesNotMatch(d.g1055, /가장 확실|most reliable|最も確実|le plus sûr|più sicuro|zuverlässigste|más fiable|mais fiável/, lang);
+    // SVG 는 보정하지 않아요(운영자 결정 2026-09-24): 도움말 · 칸 설명 · PNG · PDF 버튼 설명 조각(g1142)이 실척 파일로 SVG 를 가리켜요(가벼운 자 — 철자는 안 재요).
+    // g1139(×factor 로 그린 파일)는 SVG 를 말하지 않아요 — SVG 가 막혀도 붙는 조각이라, SVG 안내는 따로(g1142) 빼고 넣어야 해요.
+    for (const key of ['g1045', 'g1134', 'g1142']) assert.ok(d[key].includes('SVG'), `${lang}: ${key} 가 SVG 를 말하지 않아요`);
+    assert.ok(!d.g1139.includes('SVG'), `${lang}: g1139 에 SVG 안내가 남았어요`);
   }
 });
 
@@ -912,7 +1143,7 @@ test('배선: 슬라이스가 쓰는 src export 는 index.html 이 그 모듈에
   assert.deepEqual(missing(dropped), ['paper-net:CALIBRATION_BAR_MM', 'paper-net:PRINT_SCALE_MAX', 'paper-net:PRINT_SCALE_MIN']);
 });
 
-test('자 검증: 배율 보정 자는 심은 결함에서 빨개져요(범위 밖을 끝값으로 자르기 · 계획에 s 안 넘기기 · 저장 안 하기 · badInput 무시 · 용지별 값 안 읽기 · 보정 도안 안내 없음)', async () => {
+test('자 검증: 배율 보정 자는 심은 결함에서 빨개져요(범위 밖을 끝값으로 자르기 · 계획에 s 안 넘기기 · 저장 안 하기 · badInput 무시 · 용지별 값 안 읽기 · 보정 도안 안내 없음 · SVG 에 보정 먹이기 · SVG 설명에 g1139 · svgError 에 SVG 안 막기 · 사유 조각 없음)', async () => {
   // ① 범위 밖을 끝값으로 자르는 핸들러: «이전 값을 지켜요» 자가 잡아요.
   {
     const h = createCubeMakeHarness({source: mutate('return um>=min&&um<=max?um:null;', 'return Math.min(max,Math.max(min,um));')});
@@ -921,13 +1152,14 @@ test('자 검증: 배율 보정 자는 심은 결함에서 빨개져요(범위 �
     await h.input('makePaperBarMm', '44.9');
     assert.notEqual(h.state().barUm, 48300, '결함을 심었는데 이전 값이 남았어요 — 자가 비어 있어요');
   }
-  // ② 계획에 printScale 을 안 넘기는 모델: 파일명 꼬리표 자가 잡아요.
+  // ② 계획에 printScale 을 안 넘기는 모델: 파일명 꼬리표 자(PDF — SVG 는 보정하지 않아서 이 결함을 못 가려요)가 잡아요.
   {
     const h = createCubeMakeHarness({source: mutate('method:pick.method,printScale});', 'method:pick.method});')});
     await h.expand();
     await h.input('makePaperBarMm', '48.3');
-    await h.click('makePaperSvg');
-    assert.doesNotMatch(h.downloads.at(-1).filename, /-k966\.svg$/);
+    await h.click('makePaperPdf');
+    assert.match(h.downloads.at(-1).filename, /\.pdf$/);
+    assert.doesNotMatch(h.downloads.at(-1).filename, /-k966\.pdf$/);
   }
   // ③ 저장하지 않는 핸들러: 저장소 자가 잡아요.
   {
@@ -959,6 +1191,85 @@ test('자 검증: 배율 보정 자는 심은 결함에서 빨개져요(범위 �
     await h.input('makePaperBarMm', '48.3');
     await h.click('makePaperPrint');
     assert.ok(h.$('makePaperStatus').textContent.endsWith(h.text('g1120')));
+  }
+  // ⑦ 작업이 SVG 에도 보정한 계획을 먹이는 핸들러: «SVG 는 보정하지 않아요» 자(svgScaleProblems)가 잡아요.
+  // ⑧ 모델이 svgPlan 을 보정한 계획으로 채우는 핸들러: 같은 자가 잡아요.
+  for (const [from, to] of [["plan=ext==='svg'?part.svgPlan:part.plan;", 'plan=part.plan;'],
+    ['out.svgPlan=paperPlan(phys,{paper:s.paper,thicknessMm,sideMm,method:svgPick.method});', 'out.svgPlan=out.plan;']]) {
+    const current = hCurrent('old', {version: 0, mode: 3});
+    const h = createCubeMakeHarness({current, source: mutate(from, to)});
+    await h.expand();
+    assert.notDeepEqual(await svgScaleProblems(h, current), [], `결함을 심었는데 SVG 자가 초록이에요: ${to}`);
+  }
+  // ⑧′ SVG 방식을 보정한 카드 판정(가상 용지)에서 고르는 모델: 방식 자(붙이기가 가상 용지에서만 막히는 한 변)가 잡아요.
+  {
+    const current = hCurrent('old', {version: 0, mode: 3});
+    const h = createCubeMakeHarness({current, uiMode: 'advanced', source: mutate('method:svgPick.method});', 'method:pick.method});')});
+    await h.expand();
+    const plain = await skinOnlyOnRealPaper(h, current);
+    assert.notDeepEqual(await svgScaleProblems(h, current, {plain}), [], '결함을 심었는데 SVG 방식 자가 초록이에요');
+  }
+  // ⑨ SVG 버튼에도 g1139 를 붙이는 sync: 버튼 설명 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({source: mutate("(id==='makePaperPng'||id==='makePaperPdf')", "CUBE_MAKE_PAPER_IDS.includes(id)&&id!=='makePaperPrint'")});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    assert.ok(h.$('makePaperSvg').title.includes(h.text('g1139').replace('{k}', 'k=0.966').replace('{factor}', '1.035')));
+  }
+  // ⑩ SVG 버튼을 보정한 계획(error)으로만 막는 sync · ⑪ 상태 줄에 SVG 사유 조각을 안 적는 문구 · ⑫ SVG 가 막혀도 «실척은 SVG» 를 붙이는 sync:
+  // svgError 자(s > 1 · 큰 직접 입력 한 변)가 잡아요.
+  const pngSvgClause = (h) => h.$('makePaperPng').title.includes(h.text('g1142'));
+  for (const [from, to, check] of [["(id==='makePaperSvg'?!paper.svgPlan:!!paper.error)", '!!paper.error', (h) => h.$('makePaperSvg').disabled === false],
+    ["if(p.svgError)parts.push(cubeMakeBlockedText(t('g1050'),p.svgError));", '',
+      (h) => !h.$('makePaperStatus').textContent.includes(h.text('g1126').replace('{method}', h.text('g1050')).replace('{reason}', h.text('g1129')))],
+    ["const svgNote=paper?.svgPlan?t('g1142'):null;", "const svgNote=t('g1142');", pngSvgClause]]) {
+    const h = createCubeMakeHarness({source: mutate(from, to), uiMode: 'advanced'});
+    await h.expand();
+    await svgBlockedAtBar51(h);
+    assert.ok(check(h), `결함을 심었는데 svgError 자가 초록이에요: ${from}`);
+  }
+  // 대조군: 결함 없는 원문은 같은 입력에서 세 자 모두 초록이에요(위 자들이 입력 탓에 늘 빨간 게 아니에요).
+  {
+    const h = createCubeMakeHarness({uiMode: 'advanced'});
+    await h.expand();
+    await svgBlockedAtBar51(h);
+    assert.deepEqual([h.$('makePaperSvg').disabled, h.$('makePaperStatus').textContent.includes(h.text('g1126').replace('{method}', h.text('g1050')).replace('{reason}', h.text('g1129'))), pngSvgClause(h)], [true, true, false]);
+  }
+  // ⑬ 직접 입력을 큰 쪽(보정한 자동 최대)에서 시작하는 핸들러: s > 1 에서 SVG 가 바로 막혀요 — 시작 값 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({uiMode: 'advanced', source: mutate('cubeMakeState.sideUm=Math.min(...sides);', 'cubeMakeState.sideUm=Math.max(...sides);')});
+    await h.expand();
+    await h.input('makePaperBarMm', '51');
+    await h.$('makePaperSideCards').children.find((c) => c.dataset.paperSide === 'manual').fire('click');
+    assert.equal(h.$('makePaperSvg').disabled, true, '결함을 심었는데 시작 값 자가 초록이에요');
+  }
+  // ⑭ SVG 한 변 조각을 안 적는 문구: 자동 한 변 SVG 조각 자가 잡아요.
+  {
+    const current = hCurrent('old', {version: 0, mode: 3});
+    const h = createCubeMakeHarness({current, source: mutate('if(svgText)parts.push(svgText);', '')});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    const item = h.text('g1140').replace('{side}', mm1('ko', paperPlan(physOf(current), {paper: 'A4', thicknessMm: 0.1}).sideUm));
+    assert.ok(!h.$('makePaperStatus').textContent.includes(item), '결함을 심었는데 SVG 조각 자가 초록이에요');
+  }
+  // ⑮ 보정한 계획이 실패하면 SVG 계획을 안 세우는 모델 · ⑯ 보정한 계획이 실패하면 SVG 도 안 만드는 실행 · ⑰ 그때 상태 줄을 오류 문장 하나로 덮는 문구:
+  // «s < 1 가상 용지가 작아 PNG · PDF · 인쇄만 막혀요» 자(A4 · 직접 입력 64.2 mm · 48.3 mm)가 잡아요.
+  const svgOnly = async (h) => {
+    await h.$('makePaperSideCards').children.find((c) => c.dataset.paperSide === 'manual').fire('click');
+    await h.input('makePaperSide', 64.2);
+    await h.input('makePaperBarMm', '48.3');
+    const before = h.downloads.length;
+    await h.click('makePaperSvg');
+    const blocked = h.text('g1126').replace('{method}', paperRestLabel(h)).replace('{reason}', h.text('g1129'));
+    return {downloaded: h.downloads.length === before + 1, svgEnabled: h.$('makePaperSvg').disabled === false, statusOk: h.$('makePaperStatus').textContent.startsWith(blocked)};
+  };
+  assert.deepEqual(await (async () => { const h = createCubeMakeHarness({uiMode: 'advanced'}); await h.expand(); return svgOnly(h); })(), {downloaded: true, svgEnabled: true, statusOk: true}, '대조군');
+  for (const [from, to, key] of [['else try{\n    const svgPick=', 'else if(!out.error)try{\n    const svgPick=', 'svgEnabled'],
+    ["const failure=id==='makePaperSvg'&&part?.svgPlan?null:part?.error;", 'const failure=part?.error;', 'downloaded'],
+    ['if(!p.svgPlan)return cubeMakeErrorText(p.error);', 'return cubeMakeErrorText(p.error);', 'statusOk']]) {
+    const h = createCubeMakeHarness({uiMode: 'advanced', source: mutate(from, to)});
+    await h.expand();
+    assert.equal((await svgOnly(h))[key], false, `결함을 심었는데 SVG 전용 자가 초록이에요: ${from}`);
   }
 });
 
