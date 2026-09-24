@@ -15,8 +15,10 @@ import {rasterize} from '../src/raster.js';
 import {sceneToSvg} from '../src/svg.js';
 import {
   PAPER_SIZES,THICKNESS_PRESETS,PAPER_METHODS,GLYPH_CHARS,NET_TREE,CROP_MARK_OFFSET_MM,CROP_MARK_LENGTH_MM,BOARD_GAP_MM,
+  PAPER_MARGIN_MM,CALIBRATION_BAR_MM,PRINT_SCALE_MIN,PRINT_SCALE_MAX,printScaleTag,
   paperPlan,paperMethodOptions,paperPngPlan,buildPaperSheet,unfoldCube,assignTabs,strokeGlyphs,measureGlyphs,tabWidthUm,defaultPaperMethod,
 } from '../src/paper-net.js';
+import {PRINT_MARGIN_MM,PRINT_HEIGHT_TRIM_MM} from '../src/print-sheet.js';
 import {fullOnly} from './helpers/scope.mjs';
 import {mirrorOneFace} from './helpers/h-physical-camera.mjs';
 import {foldAgainstPhys,pageHandedness,paperOverlaps,marginViolations,overlap,dot} from './helpers/paper-fold.mjs';
@@ -380,7 +382,8 @@ test('빈 면 이미지는 종이에 들어가요: 시트 틀 그대로(거울 �
 });
 
 test('스트로크 글리프: 허용 문자만 · 문자마다 서로 다른 모양 · 상자 안 · 모르는 문자는 거부',()=>{
-  assert.equal(GLYPH_CHARS,'0123456789.mst=×-ABC↑ ');
+  // 'k' 는 배율 보정 캡션(«k=0.966»)용이에요(2026-09-24). 아래 모양 · 상자 · 캡 단언이 새 글자에도 그대로 걸려요.
+  assert.equal(GLYPH_CHARS,'0123456789.kmst=×-ABC↑ ');
   const h=10,shapesOf=ch=>strokeGlyphs(ch,0,0,h);
   const signature=ch=>{const scene={width:10,height:12,background:{r:255,g:255,b:255},shapes:shapesOf(ch)};const r=rasterize(scene,{pixelsPerUnit:4,supersample:1});let s='';for(let k=0;k<r.pixels.length;k+=4)s+=r.pixels[k]<128?'1':'0';return s;};
   const seen=new Map();
@@ -415,13 +418,13 @@ test('스트로크 글리프: 허용 문자만 · 문자마다 서로 다른 모
  * 계획보다 엄격하면 «버튼은 켜졌는데 눌러도 아무것도 안 내려받는» 상태가 생겨요. 계획 함수를 인자로 받아 심은 결함으로도 돌려요.
  * @returns {{mismatches:string[], built:number}} 계획은 통과했는데 도안 생성이 던진 조합과, 실제로 만든 도안 수
  */
-function planBuildMismatches(phys,{planFn=paperPlan,papers=PAPER_SIZES.map(p=>p.id),thicknessesUm,sides}){
+function planBuildMismatches(phys,{planFn=paperPlan,papers=PAPER_SIZES.map(p=>p.id),thicknessesUm,sides,printScale=1}){
   const mismatches=[];let built=0;
   for(const paper of papers)for(const tUm of thicknessesUm)for(const sideMm of sides){
-    const options=paperMethodOptions(phys,{paper,thicknessMm:tUm/1000,sideMm});
+    const options=paperMethodOptions(phys,{paper,thicknessMm:tUm/1000,sideMm,printScale});
     for(const method of options.map(o=>o.method)){
       let plan;
-      try{plan=planFn(phys,{paper,thicknessMm:tUm/1000,sideMm,method});}
+      try{plan=planFn(phys,{paper,thicknessMm:tUm/1000,sideMm,method,printScale});}
       catch(error){if(!String(error?.code).startsWith('TLP_'))throw error;continue;}
       // 방식 카드가 켜진 것 ⟺ 계획이 통과한 것(같은 판정이어야 카드 · 상태 줄 · 버튼이 어긋나지 않아요).
       if(planFn===paperPlan&&!options.find(o=>o.method===method).enabled)mismatches.push(`${paper} t=${tUm}µm ${method}: 카드는 막혔는데 계획은 통과`);
@@ -511,4 +514,147 @@ test('전개도 결과물은 설계 예시 상태 수치와 맞아요(A4 · 카�
   assert.equal(bar.length,7);
   // 캡션은 «s=65.6 t=0.3» 이에요.
   assert.equal(scene.paper.labels.find(l=>l.id==='caption').text,'s=65.6 t=0.3');
+});
+
+// ── 인쇄 배율 보정 printScale (2026-09-24 운영자 실측: Class Driver 가 쪽 전체를 0.966 배로 줄여요) ─────────────────
+
+/**
+ * 테스트 쪽 독립 역사상: 파일(실제) 좌표 → 드라이버가 쪽을 가운데 기준 s 배로 줄인 뒤의 «가상 용지» 좌표.
+ * 구현의 사상 함수를 되쓰지 않고 장면 메타의 용지 · 가상 용지 치수만 읽어요(보정이 없으면 항등이에요).
+ */
+function virtualOf(scene){
+  const s=scene.paper.printScale??1,W=scene.width,H=scene.height,VW=scene.paper.virtualWidthMm??W,VH=scene.paper.virtualHeightMm??H;
+  return {s,VW,VH,point:q=>({x:VW/2+(q.x-W/2)*s,y:VH/2+(q.y-H/2)*s})};
+}
+/** 줄인 뒤 종이의 면 틀 · 접는 선(접기 자 · P3 자가 읽는 필드만). 셀 단위 crop · layout 은 그대로예요. */
+function printedMeta(scene){
+  const {s,point}=virtualOf(scene),meta=scene.paper,box=r=>{const a=point({x:r.x0,y:r.y0}),b=point({x:r.x1,y:r.y1});return {x0:a.x,y0:a.y,x1:b.x,y1:b.y};};
+  const faces=Object.fromEntries(Object.entries(meta.faces).map(([name,f])=>{const c=point({x:f.corner[0],y:f.corner[1]});
+    return [name,{...f,cellMm:f.cellMm*s,corner:[c.x,c.y],di:f.di.map(v=>v*s),dj:f.dj.map(v=>v*s),rect:box(f.rect),visible:box(f.visible)}];}));
+  return {...meta,faces,folds:meta.folds?.map(f=>({...f,a:point(f.a),b:point(f.b)}))};
+}
+
+test('인쇄 배율 보정 s = 1: printScale 생략과 1 명시가 같은 계획 · 장면 · SVG 이고, 보정 필드 · 꼬리표 · k 캡션이 없어요',()=>{
+  for(const {encoded,options,label} of REPRESENTATIVE){
+    const phys=physOf(encoded,options);
+    for(const [method,t] of [['sheet',0.3],['skin',3.2],['board',1]]){
+      const a=paperPlan(phys,{thicknessMm:t,method}),b=paperPlan(phys,{thicknessMm:t,method,printScale:1});
+      assert.equal(JSON.stringify(b),JSON.stringify(a),`${label} ${method}`);
+      for(const key of ['printScale','virtualWidthMm','virtualHeightMm'])assert.ok(!(key in a),`${label} ${method}: 계획에 ${key}`);
+      assert.match(a.fileTag,/-t\d+um$/);
+      const sa=buildPaperSheet(phys,a),sb=buildPaperSheet(phys,b);
+      assert.equal(sceneToSvg(sb,{unit:'mm'}),sceneToSvg(sa,{unit:'mm'}),`${label} ${method}`);
+      for(const key of ['printScale','virtualWidthMm','virtualHeightMm'])assert.ok(!(key in sa.paper),`${label} ${method}: 장면에 ${key}`);
+      assert.doesNotMatch(sa.paper.labels.find(l=>l.id==='caption').text,/k/);
+    }
+  }
+  const phys=physOf(H0_3F);
+  assert.deepEqual(paperMethodOptions(phys,{thicknessMm:1,printScale:1}),paperMethodOptions(phys,{thicknessMm:1}));
+});
+
+test('인쇄 배율 보정 범위: 0.9–1.02 밖 · 숫자 아님은 code 없는 RangeError 이고(방식 카드 사유가 아니라 입력 오류), 끝값은 받아요',()=>{
+  const phys=physOf(H0_3F);
+  assert.deepEqual([PRINT_SCALE_MIN,PRINT_SCALE_MAX],[0.9,1.02],'UI 범위 45.0–51.0 mm(= s × 50)의 근거예요');
+  for(const bad of [0.899,1.021,0,-1,NaN,Infinity,'0.966',null])
+    assert.throws(()=>paperPlan(phys,{printScale:bad}),e=>e instanceof RangeError&&e.code===undefined,String(bad));
+  assert.throws(()=>paperMethodOptions(phys,{thicknessMm:1,printScale:1.05}),e=>e instanceof RangeError&&e.code===undefined);
+  for(const ok of [PRINT_SCALE_MIN,PRINT_SCALE_MAX])assert.doesNotThrow(()=>buildPaperSheet(phys,paperPlan(phys,{printScale:ok})));
+});
+
+test('인쇄 배율 보정 s(0.9 · 0.966 · 1.02): 가상 용지 W·s × H·s 에서 계획하고, 드라이버가 s 배로 줄인 종이 위에서 막대 50 mm · 면 한 변 · 접기가 설계 그대로예요',()=>{
+  const crop={x0:PRINT_MARGIN_MM,y0:PRINT_MARGIN_MM,x1:210-PRINT_MARGIN_MM,y1:297-PRINT_MARGIN_MM-PRINT_HEIGHT_TRIM_MM};
+  for(const {encoded,options,label:cube} of REPRESENTATIVE){
+    const phys=physOf(encoded,options);
+    for(const s of [PRINT_SCALE_MIN,0.966,PRINT_SCALE_MAX])for(const [method,t] of [['sheet',0.3],['skin',3.2],['board',1]]){
+      const label=`${cube} s=${s} ${method}`,plan=paperPlan(phys,{thicknessMm:t,method,printScale:s});
+      // 계획: widthMm · heightMm 는 실제 용지, 가상 용지는 µm 반올림한 W·s × H·s, 꼬리표 -k{round(s·1000)}.
+      assert.deepEqual([plan.widthMm,plan.heightMm,plan.printScale],[210,297,s],label);
+      assert.deepEqual([plan.virtualWidthMm,plan.virtualHeightMm],[Math.round(210000*s)/1000,Math.round(297000*s)/1000],label);
+      assert.ok(plan.fileTag.endsWith(`-t${plan.thicknessUm}um-k${Math.round(s*1000)}`),plan.fileTag);
+      // 자동 최대는 가상 용지의 최대예요: 0.1 mm 더 키우면 같은 s 에서 TLP_PAPER_FIT, s < 1 이면 보정 없는 최대보다 작아요.
+      assert.throws(()=>paperPlan(phys,{thicknessMm:t,method,printScale:s,sideMm:(plan.sideUm+100)/1000}),e=>e.code==='TLP_PAPER_FIT',label);
+      if(s<1)assert.ok(plan.sideUm<paperPlan(phys,{thicknessMm:t,method}).sideUm,label);
+      const scene=buildPaperSheet(phys,plan),meta=scene.paper,{point}=virtualOf(scene);
+      assert.deepEqual([scene.width,scene.height,meta.widthMm,meta.heightMm,meta.printScale,meta.fileTag],[210,297,210,297,s,plan.fileTag],label);
+      assert.deepEqual([meta.virtualWidthMm,meta.virtualHeightMm],[plan.virtualWidthMm,plan.virtualHeightMm],label);
+      // 도안이 스스로 밝혀요: 캡션 «… k=0.966», 막대 라벨은 «50mm» 그대로(줄인 뒤 50 mm 예요).
+      assert.ok(meta.labels.find(l=>l.id==='caption').text.endsWith(` k=${s.toFixed(3)}`),label);
+      // UI(상태 줄 · 인쇄 안내 · 버튼 설명)는 printScaleTag 로 같은 글자를 적어요 — 캡션과 한 함수예요.
+      assert.ok(printScaleTag(s)===`k=${s.toFixed(3)}`&&meta.labels.find(l=>l.id==='caption').text.endsWith(` ${printScaleTag(s)}`),label);
+      assert.equal(meta.labels.find(l=>l.id==='bar-label').text,'50mm');
+      // 라벨 메타도 파일 좌표예요: 줄인 뒤 글자 높이 2.5 mm · 폭 = 글자열 폭, 왼쪽 위 = 그 글리프 잉크 상자 왼쪽 위(획 굵기 안).
+      for(const l of meta.labels.filter(x=>x.id==='caption'||x.id==='bar-label')){
+        assert.ok(Math.abs(l.h*s-2.5)<1e-9&&Math.abs(l.width*s-measureGlyphs(l.text,2.5).width)<1e-9,`${label} ${l.id} 크기`);
+        const ink=scene.shapes.filter(q=>q.group===l.id).flatMap(q=>q.points),x0=Math.min(...ink.map(p=>p.x)),y0=Math.min(...ink.map(p=>p.y));
+        assert.ok(ink.length>0&&Math.abs(x0-l.x)<0.12*2.5/s&&Math.abs(y0-l.y)<0.12*2.5/s,`${label} ${l.id} 자리 (${x0},${y0}) vs (${l.x},${l.y})`);
+      }
+      // 막대: 파일 좌표에서 50/s mm, 줄인 뒤 50 mm — 메타와 틱 도형(끝 틱 중심 간 거리) 둘 다로 재요.
+      assert.ok(Math.abs(meta.band.barEnd-meta.band.barStart-CALIBRATION_BAR_MM/s)<1e-9,label);
+      const tickX=scene.shapes.filter(q=>q.role==='bar'&&Math.max(...q.points.map(p=>p.x))-Math.min(...q.points.map(p=>p.x))<1).map(q=>q.points.reduce((a,p)=>a+p.x,0)/q.points.length);
+      assert.equal(tickX.length,6,label);
+      assert.ok(Math.abs((Math.max(...tickX)-Math.min(...tickX))*s-CALIBRATION_BAR_MM)<1e-9,`${label}: 줄인 뒤 막대 ${(Math.max(...tickX)-Math.min(...tickX))*s}`);
+      // 가상 좌표로 옮기면 여백 7 mm 안(재단선 잉크만 선폭까지) — 계획이 잰 용지와 같은 용지예요.
+      const virtual={shapes:scene.shapes.map(q=>({...q,points:q.points.map(point)})),paper:{marginMm:PAPER_MARGIN_MM,widthMm:plan.virtualWidthMm,heightMm:plan.virtualHeightMm}};
+      assert.deepEqual(marginViolations(virtual),[],label);
+      // 파일 좌표는 재단선 잉크까지 인쇄 호스트 크롭(가장자리 6.35 · 아래 6.85) 안이에요.
+      assert.deepEqual(scene.shapes.filter(q=>q.points.some(p=>p.x<crop.x0-1e-9||p.x>crop.x1+1e-9||p.y<crop.y0-1e-9||p.y>crop.y1+1e-9)).map(q=>q.role),[],label);
+      // 줄인 뒤 면 한 변 = 설계(sheet · skin 피치, board 조각), 셀 = 한 변 / n. 메타 면 틀이 모듈 도형과 같은 좌표계예요.
+      const side=method==='board'?plan.sideMm:plan.pitchMm,printed=printedMeta(scene);
+      for(const [name,f] of Object.entries(printed.faces)){
+        assert.ok(Math.abs(f.rect.x1-f.rect.x0-side)<1e-9&&Math.abs(f.rect.y1-f.rect.y0-side)<1e-9,`${label} ${name} 한 변`);
+        assert.ok(Math.abs(f.cellMm-side/phys.n)<1e-12&&Math.abs(Math.hypot(...f.di)-side/phys.n)<1e-12&&Math.abs(Math.hypot(...f.dj)-side/phys.n)<1e-12,`${label} ${name} 셀`);
+      }
+      for(const q of scene.shapes.filter(x=>x.role==='module'&&Number.isInteger(x.i))){
+        const f=meta.faces[q.face],at=(i,j)=>({x:f.corner[0]+i*f.di[0]+j*f.dj[0],y:f.corner[1]+i*f.di[1]+j*f.dj[1]});
+        const c=at(Math.max(q.i,f.crop.i0),Math.max(q.j,f.crop.j0));
+        assert.ok(Math.abs(q.points[0].x-c.x)<1e-9&&Math.abs(q.points[0].y-c.y)<1e-9,`${label} ${q.face}(${q.i},${q.j}) 모듈이 메타 면 틀과 어긋나요`);
+      }
+      if(method==='board')assert.deepEqual(boardViolations({shapes:virtual.shapes,paper:printed},phys),[],label);
+      else assert.ok(foldAgainstPhys({paper:printed},phys).properError<1e-9,`${label}: 줄인 뒤 접은 종이가 물리 큐브와 어긋나요`);
+      assert.deepEqual(paperOverlaps(scene).slice(0,5),[],label);
+    }
+  }
+});
+
+test('인쇄 배율 보정: 같은 한 변이면 줄인 뒤 도형이 보정 없는 도안과 합동이에요(평행 이동만) — 모듈 · 이미지 · 재단선 · 접기 · 틱 · 조각 번호 · 재단표',()=>{
+  // 하단 띠(막대 · 캡션)와 board 조립 지도는 여백에 맞춰 붙어서 가운데 기준 이동과 달라요 — 막대는 위 자가 따로 재요.
+  const pixels=Uint8ClampedArray.of(255,0,0,255, 0,255,0,255, 0,0,255,255, 0,0,255,255);
+  const image={width:2,height:2,pixels,href:'data:image/png;base64,'+Buffer.from(rasterToPng({width:2,height:2,pixels})).toString('base64')};
+  const cubes=[...REPRESENTATIVE,{encoded:encodeH('one',{version:3,mode:1,tones:3,ecc:'H',mask:7,finder:'frame'}),options:{faceImages:{ZM:image,YM:image,ZP:image,YP:image}},label:'H3 1F 이미지'}];
+  const kept=q=>!(q.role==='bar'||q.role==='map'||q.group==='caption'||q.group==='bar-label');
+  let compared=0;
+  for(const {encoded,options,label:cube} of cubes){
+    const phys=physOf(encoded,options);
+    for(const [method,t] of [['sheet',0.3],['skin',3.2],['board',1]]){
+      const plain=buildPaperSheet(phys,paperPlan(phys,{thicknessMm:t,method,sideMm:40})).shapes.filter(kept);
+      for(const s of [PRINT_SCALE_MIN,0.966,PRINT_SCALE_MAX]){
+        const label=`${cube} ${method} s=${s}`,scene=buildPaperSheet(phys,paperPlan(phys,{thicknessMm:t,method,sideMm:40,printScale:s}));
+        // 보정이 장면에 닿았는지부터 봐요 — 안 닿으면 역사상이 항등이라 아래 합동이 공짜로 서요.
+        assert.equal(scene.paper.printScale,s,label);
+        const {point,VW,VH}=virtualOf(scene),dx=(VW-210)/2,dy=(VH-297)/2,shapes=scene.shapes.filter(kept);
+        assert.equal(shapes.length,plain.length,label);
+        shapes.forEach((q,k)=>{
+          const p=plain[k];
+          assert.deepEqual([q.kind,q.role,q.face,q.group,q.i,q.j,q.color],[p.kind,p.role,p.face,p.group,p.i,p.j,p.color],`${label} #${k}`);
+          if(q.kind==='image')assert.equal(q.image.href,p.image.href,`${label} #${k} 이미지`);
+          q.points.forEach((r,m)=>{const v=point(r);assert.ok(Math.abs(v.x-dx-p.points[m].x)<1e-9&&Math.abs(v.y-dy-p.points[m].y)<1e-9,`${label} #${k}(${q.role}) 점 ${m}`);});
+          compared+=1;
+        });
+      }
+    }
+  }
+  assert.ok(compared>=5000,`비교한 도형 ${compared}`);
+});
+
+test('계획 통과 ⇒ 도안 생성 통과: 배율 보정 끝값(0.9 · 1.02) — 가상 용지 계획과 조립 · 실제 좌표 크롭 자체 검사가 어긋나지 않아요',()=>{
+  const thicknessesUm=[100,257,450,682,1000,1600,3200],sides=[undefined,13.4,20,33];
+  let built=0;
+  for(const printScale of [PRINT_SCALE_MIN,PRINT_SCALE_MAX])for(const phys of [physOf(H0_3F),physOf(encodeH(Uint8Array.of(1),{version:8,mode:3,tones:2,ecc:'M',mask:0,finder:'frame'}))]){
+    // 격자가 보정한 계획을 실제로 만드는지부터 봐요(보정이 무시되면 s = 1 격자를 다시 재는 셈이에요).
+    assert.equal(buildPaperSheet(phys,paperPlan(phys,{printScale})).paper.printScale,printScale);
+    const r=planBuildMismatches(phys,{thicknessesUm,sides,printScale});
+    assert.deepEqual(r.mismatches.slice(0,5),[],`s=${printScale} n=${phys.n}`);
+    built+=r.built;
+  }
+  assert.ok(built>=500,`만든 도안 ${built}`);
 });

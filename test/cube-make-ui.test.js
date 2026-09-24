@@ -13,7 +13,7 @@ import {readdirSync, readFileSync} from 'node:fs';
 import {physicalHCube} from '../src/cube-physical.js';
 import {generatorCubeModel} from '../src/generator-cube-export.js';
 import {hDisplayMap, H_ARRANGEMENTS} from '../src/h-face-arrangement.js';
-import {PAPER_SIZES, paperMethodOptions, paperPlan, paperPngPlan} from '../src/paper-net.js';
+import {PAPER_SIZES, paperMethodOptions, paperPlan, paperPngPlan, printScaleTag} from '../src/paper-net.js';
 import {buildPrintParts, hollowPlan, printBedPlacement, standCornerFaces} from '../src/print-mesh.js';
 import {hExportIconMarkup} from '../src/h-preview-decor.js';
 import {MODULE_ORDER} from '../tools/build-single.mjs';
@@ -23,8 +23,13 @@ import {surfaceComponents} from './helpers/print-mesh-probe.mjs';
 import {fullOnly} from './helpers/scope.mjs';
 import {
   INDEX, SLICE_START, SLICE_END, codeKeyTable, createCubeMakeHarness, cubeMakeMarkup, cubeMakeSlice,
-  hCurrent, missingCodeKeys, missingMarkupIds, parseMarkup, referencedKeys,
+  hCurrent, memoryStorage, missingCodeKeys, missingMarkupIds, parseMarkup, referencedKeys, throwingStorage,
 } from './helpers/cube-make-harness.mjs';
+import * as cubePhysicalModule from '../src/cube-physical.js';
+import * as paperNetModule from '../src/paper-net.js';
+import * as pdfWriterModule from '../src/pdf-writer.js';
+import * as printMeshModule from '../src/print-mesh.js';
+import * as meshExportModule from '../src/mesh-export.js';
 
 const LANGS = ['ko', 'en', 'ja', 'fr', 'it', 'de', 'es', 'pt'];
 const HANGUL = /[가-힣]/;
@@ -546,8 +551,10 @@ test('표기: 용지 치수는 언어 소수점으로 적고 언어가 바뀌면
     await x.expand();
     assert.match(x.$('makePrintStatus').textContent, /^\p{Lu}/u, `${lang}: 3D 상태 줄 첫 글자`);
   }
-  // ja: 이 섹션 키(g1042–g1130)에는 반각 콜론(뒤에 숫자 · 슬래시가 오지 않는)이 없어요(기존 g480 선례).
-  const halfColon = Object.keys(h.dict.ja).filter((k) => /^g\d{4}$/.test(k) && Number(k.slice(1)) >= 1042 && Number(k.slice(1)) <= 1130 && /:(?![\d/])/.test(h.dict.ja[k]));
+  // ja: 이 섹션 키(g1042–g1130 · 배율 보정 g1133–g1139)에는 반각 콜론(뒤에 숫자 · 슬래시가 오지 않는)이 없어요(기존 g480 선례).
+  // (g1131 · g1132 는 이 섹션 밖 — 구 전개도 버튼 설명 — 이라 범위에서 빠져요.)
+  const sectionKey = (n) => (n >= 1042 && n <= 1130) || (n >= 1133 && n <= 1139);
+  const halfColon = Object.keys(h.dict.ja).filter((k) => /^g\d{4}$/.test(k) && sectionKey(Number(k.slice(1))) && /:(?![\d/])/.test(h.dict.ja[k]));
   assert.deepEqual(halfColon, []);
 });
 
@@ -641,6 +648,318 @@ test('한 변 «직접 입력» 은 지금 자동 최대 값에서 시작하고,
   await h.input('makePaperSide', 500);
   assert.equal(h.$('makePaperSvg').disabled, true, '용지에 안 들어가면 막혀요');
   assert.ok(h.$('makePaperStatus').textContent.includes(h.text('g1112')));
+});
+
+// ── 인쇄 배율 보정(보정 없이 인쇄한 50 mm 막대를 잰 길이 — 절대값 · 용지 크기마다 따로) ─────────────
+// 2026-09-24 운영자 실측: Windows «Class Driver» 가 쪽 전체를 0.966 배로 줄여 막대가 48.3 mm 로 나왔어요(브라우저 설정 무관).
+
+const BAR_PREFIX = 'tlcube-paper-bar-mm';
+/** 저장소 키는 용지 크기마다 따로예요(드라이버가 쪽을 맞추는 비율이 용지마다 달라요). */
+const barKey = (paper) => `${BAR_PREFIX}:${paper}`;
+const BAR_KEY = barKey('A4');
+/** 상태 줄 배율 조각 / 틀린 값 사유 조각(하네스 언어의 사전 원문을 치환해요). k 는 도안 캡션과 같은 글자예요. */
+const scaleItem = (h, factor, bar, k = 'k=0.966') => h.text('g1135').replace('{k}', k).replace('{factor}', factor).replace('{bar}', bar);
+/** g1135 의 앞 이름(«배율 보정 » 등) — 보정이 없으면 상태 줄에 없어야 해요. 자리표시자 앞까지라 번역이 바뀌어도 따라가요. */
+const scaleHead = (h) => h.text('g1135').split('{')[0];
+const barErrorItem = (h, bar, min = '45.0', max = '51.0') => h.text('g1136').replace('{min}', min).replace('{max}', max).replace('{bar}', bar);
+const ko1 = (um) => new Intl.NumberFormat('ko', {minimumFractionDigits: 1, maximumFractionDigits: 1}).format(um / 1000);
+
+test('배율 보정 칸: 기본 50 mm 는 보정 없음(꼬리표 · 조각 없음), 48.3 mm 는 s = 0.966 계획 — 파일명 -k966 · 상태 줄 ×1.035 · SVG · PDF · 인쇄는 용지 크기 그대로', async () => {
+  const current = hCurrent('old', {version: 0, mode: 3});
+  const h = createCubeMakeHarness({current});
+  await h.expand();
+  const bar = h.$('makePaperBarMm'), reset = h.$('makePaperBarReset'), status = () => h.$('makePaperStatus').textContent;
+  assert.deepEqual([bar.value, bar.min, bar.max, bar.step, reset.disabled], ['50', '45', '51', '0.1', true]);
+  assert.equal(h.state().barUm, 50000);
+  const plain = paperPlan(physOf(current), {paper: 'A4', thicknessMm: 0.1});
+  assert.ok(scaleHead(h).trim().length >= 4, scaleHead(h));
+  assert.ok(!status().includes(scaleHead(h)), status());
+  await h.click('makePaperSvg');
+  assert.equal(h.downloads.at(-1).filename, `old_${plain.fileTag}.svg`);
+  await h.input('makePaperBarMm', '48.3');
+  assert.deepEqual([h.state().barUm, bar.value, reset.disabled, h.storage.map.get(BAR_KEY)], [48300, '48.3', false, '48.3']);
+  const scaled = paperPlan(physOf(current), {paper: 'A4', thicknessMm: 0.1, printScale: 0.966});
+  assert.ok(status().includes(scaleItem(h, '1.035', '48.3')), status());
+  // 상태 줄의 k 는 도안 캡션과 같은 글자예요(사용자가 종이 위 «k=0.966» 과 맞춰 봐요).
+  assert.ok(status().includes(printScaleTag(0.966)) && printScaleTag(0.966) === 'k=0.966', status());
+  // 상태 줄 한 변 · 피치는 보정한 계획(가상 용지)의 값 = 드라이버가 줄인 뒤 종이 위 치수예요.
+  assert.ok(scaled.sideUm < plain.sideUm);
+  assert.ok(status().startsWith(h.text('g1088').replace('{paper}', 'A4').replace('{side}', ko1(scaled.sideUm)).replace('{pitch}', ko1(scaled.pitchUm)).split('{')[0]), status());
+  for (const id of ['makePaperSvg', 'makePaperPdf']) await h.click(id);
+  const [svg, pdf] = h.downloads.slice(-2);
+  assert.equal(svg.filename, `old_${scaled.fileTag}.svg`);
+  assert.match(svg.filename, /-t100um-k966\.svg$/);
+  assert.match(new TextDecoder().decode(svg.bytes), /^<svg [^>]*width="210mm" height="297mm" viewBox="0 0 210 297"/);
+  assert.equal(pdf.filename, `old_${scaled.fileTag}.pdf`);
+  assert.deepEqual(structureFailures(inspectPdf(pdf.bytes)), []);
+  await h.click('makePaperPrint');
+  assert.equal(h.prints.at(-1).paper, PAPER_SIZES.find((p) => p.id === 'A4'));
+  assert.match(h.prints.at(-1).svgText, /^<svg [^>]*width="210mm" height="297mm" viewBox="0 0 210 297"/);
+  // 파일 안 도형은 보정한 장면이에요: 보정 없는 SVG 와 달라요(같으면 보정이 산출물에 안 닿은 거예요).
+  assert.notEqual(new TextDecoder().decode(svg.bytes), new TextDecoder().decode(h.downloads[0].bytes));
+});
+
+test('배율 보정 칸: 범위 밖(45.0–51.0 mm) · 숫자 아님은 마지막 유효 값을 지키고 상태 줄에 사유 조각 — 다음 유효 값에서 사라져요', async () => {
+  for (const lang of ['ko', 'en']) {
+    const h = createCubeMakeHarness({lang});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    // 숫자 아닌 글자(abc · 4e · - · 공백)는 하네스가 브라우저처럼 value '' + validity.badInput 으로 넘겨요 — 빈 칸(되돌리기)과 갈라야 해요.
+    for (const bad of ['44.9', '51.1', '0', '-48.3', 'abc', '1e9', '4e', '-', '  ']) {
+      await h.input('makePaperBarMm', bad);
+      const text = h.$('makePaperStatus').textContent;
+      assert.deepEqual([h.state().barUm, h.$('makePaperBarMm').value, h.storage.map.get(BAR_KEY)], [48300, '48.3', '48.3'], `${lang}/${bad}`);
+      assert.ok(text.includes(barErrorItem(h, '48.3')), `${lang}/${bad}: ${text}`);
+      assert.ok(text.includes(scaleItem(h, '1.035', '48.3')), `${lang}/${bad}: 이전 값으로 계속 보정해요`);
+      if (lang !== 'ko') assert.doesNotMatch(text, HANGUL, `${lang}/${bad}`);
+    }
+    // 눈금(0.1 mm)에 맞춘 뒤 범위를 봐요: 44.96 → 45.0 · 51.04 → 51.0 은 받아요.
+    await h.input('makePaperBarMm', '44.96');
+    assert.equal(h.state().barUm, 45000);
+    assert.ok(!h.$('makePaperStatus').textContent.includes(barErrorItem(h, '48.3')), `${lang}: 유효 값이면 사유가 사라져요`);
+    await h.input('makePaperBarMm', '51.04');
+    assert.deepEqual([h.state().barUm, h.$('makePaperBarMm').value], [51000, '51'], lang);
+  }
+});
+
+test('배율 보정 되돌리기: ↺ 버튼 · 빈 칸은 50 mm(보정 없음) — 저장소에서도 지우고, 사유 조각 · 파일명 꼬리표가 사라져요', async () => {
+  const h = createCubeMakeHarness();
+  await h.expand();
+  await h.input('makePaperBarMm', '48.3');
+  await h.input('makePaperBarMm', 'abc');
+  assert.ok(h.$('makePaperStatus').textContent.includes(barErrorItem(h, '48.3')));
+  await h.click('makePaperBarReset');
+  assert.deepEqual([h.state().barUm, h.$('makePaperBarMm').value, h.storage.map.has(BAR_KEY), h.$('makePaperBarReset').disabled], [50000, '50', false, true]);
+  assert.ok(!h.$('makePaperStatus').textContent.includes(barErrorItem(h, '48.3')), '되돌리면 사유도 지워요');
+  assert.ok(!h.$('makePaperStatus').textContent.includes(scaleHead(h)));
+  await h.click('makePaperSvg');
+  assert.doesNotMatch(h.downloads.at(-1).filename, /-k\d+\.svg$/);
+  await h.input('makePaperBarMm', '49');
+  assert.equal(h.storage.map.get(BAR_KEY), '49');
+  // 정말 빈 칸(badInput 아님)만 되돌리기예요. 공백 · 틀린 글자는 브라우저에서 badInput 이라 위 사유 조각 쪽이에요.
+  await h.input('makePaperBarMm', '');
+  assert.deepEqual([h.state().barUm, h.$('makePaperBarMm').value, h.storage.map.has(BAR_KEY)], [50000, '50', false]);
+});
+
+test('배율 보정 ↺: 키보드로 누르면(버튼에 포커스) 막히는 버튼 대신 칸으로 포커스를 옮기고, 포커스가 없던 클릭은 옮기지 않아요', async () => {
+  const h = createCubeMakeHarness();
+  await h.expand();
+  const bar = h.$('makePaperBarMm'), reset = h.$('makePaperBarReset');
+  await h.input('makePaperBarMm', '48.3');
+  h.c.document.activeElement = reset;
+  await h.click('makePaperBarReset');
+  assert.equal(reset.disabled, true);
+  assert.equal(h.c.document.activeElement, bar, '막힌 버튼에 포커스가 남으면 body 로 떨어져요');
+  h.c.document.activeElement = null;
+  await h.input('makePaperBarMm', '48.3');
+  await h.click('makePaperBarReset');
+  assert.equal(h.c.document.activeElement, null);
+});
+
+test('배율 보정 기억: 저장한 값을 다음에 열 때 읽고, 틀린 저장 값 · 던지는 저장소에서도 기본값으로 동작해요(저장에 실패해도 적용은 돼요)', async () => {
+  const saved = createCubeMakeHarness({storage: memoryStorage({[BAR_KEY]: '48.3'})});
+  assert.equal(saved.state().barUm, 48300, '저장소에 실제로 닿아 읽었어요');
+  await saved.expand();
+  assert.equal(saved.$('makePaperBarMm').value, '48.3');
+  assert.ok(saved.$('makePaperStatus').textContent.includes(scaleItem(saved, '1.035', '48.3')));
+  for (const stored of ['abc', '60', '44', '', '48.3mm']) assert.equal(createCubeMakeHarness({storage: memoryStorage({[BAR_KEY]: stored})}).state().barUm, 50000, stored);
+  const blocked = throwingStorage();
+  const h = createCubeMakeHarness({storage: blocked});
+  assert.equal(h.state().barUm, 50000);
+  assert.equal(blocked.calls, 1, '읽기를 한 번 시도했어요');
+  await h.expand();
+  await h.input('makePaperBarMm', '48.3');
+  assert.equal(h.state().barUm, 48300, '저장하지 못해도 이 쪽에서는 적용돼요');
+  await h.click('makePaperSvg');
+  assert.match(h.downloads.at(-1).filename, /-k966\.svg$/);
+  await h.click('makePaperBarReset');
+  assert.equal(h.state().barUm, 50000);
+  assert.equal(blocked.calls, 3, '쓰기 · 지우기도 시도했어요');
+});
+
+test('배율 보정은 용지 크기마다 따로예요: A4 값이 A3 에 번지지 않고, 돌아오면 A4 값이 남아요(저장소가 막혀도) — 용지를 바꾸면 틀린 값 사유도 지워요', async () => {
+  for (const storage of [memoryStorage(), throwingStorage()]) {
+    const label = storage.map ? 'memory' : 'throwing';
+    const h = createCubeMakeHarness({storage});
+    await h.expand();
+    const status = () => h.$('makePaperStatus').textContent;
+    await h.input('makePaperBarMm', '48.3');
+    await h.input('makePaperBarMm', '60');
+    assert.ok(status().includes(barErrorItem(h, '48.3')), label);
+    await h.select('makePaperSize', 'A3');
+    assert.deepEqual([h.state().paper, h.state().barUm, h.$('makePaperBarMm').value, h.$('makePaperBarReset').disabled], ['A3', 50000, '50', true], label);
+    assert.ok(!status().includes(barErrorItem(h, '48.3')), `${label}: 앞 용지의 사유가 남았어요`);
+    assert.ok(!status().includes(scaleHead(h)), `${label}: A4 보정이 A3 에 번졌어요 — ${status()}`);
+    await h.click('makePaperSvg');
+    assert.doesNotMatch(h.downloads.at(-1).filename, /-k\d+\.svg$/, label);
+    await h.input('makePaperBarMm', '48.8');
+    assert.ok(status().includes(scaleItem(h, '1.025', '48.8', 'k=0.976')), `${label}: ${status()}`);
+    await h.select('makePaperSize', 'A4');
+    assert.deepEqual([h.state().barUm, h.$('makePaperBarMm').value], [48300, '48.3'], label);
+    await h.select('makePaperSize', 'A3');
+    assert.equal(h.state().barUm, 48800, label);
+    if (storage.map) assert.deepEqual(Object.fromEntries(storage.map), {[barKey('A4')]: '48.3', [barKey('A3')]: '48.8'});
+  }
+  // 새 페이지(같은 저장소): 용지마다 저장 값을 읽어요. 저장하지 않은 용지는 50 mm(보정 없음)예요.
+  const h = createCubeMakeHarness({storage: memoryStorage({[barKey('A4')]: '48.3', [barKey('A3')]: '48.8'})});
+  assert.equal(h.state().barUm, 48300);
+  await h.expand();
+  for (const [paper, um] of [['A3', 48800], ['Letter', 50000], ['A4', 48300]]) {
+    await h.select('makePaperSize', paper);
+    assert.equal(h.state().barUm, um, paper);
+  }
+});
+
+test('배율 보정은 절대값이에요: 보정 도안(k=…)을 인쇄하면 안내가 «막대가 50 mm 여야 · 다르면 그 길이를 적지 말고 ↺» 로 바뀌고, 보정 중에 적은 값은 겹치지 않고 바뀌어요', async () => {
+  const h = createCubeMakeHarness({raf: 'manual'});
+  await h.expand();
+  const status = () => h.$('makePaperStatus').textContent;
+  await h.input('makePaperBarMm', '48.3');
+  const notice = h.text('g1138').replace('{k}', printScaleTag(0.966));
+  let job = h.click('makePaperPrint');
+  assert.ok(status().endsWith(notice), `인쇄 전: ${status()}`);
+  assert.ok(!status().includes(h.text('g1120')), '보정 도안에 «잰 길이를 칸에 적어요» 안내를 보이면 보정이 덮어써져요');
+  h.release();
+  await job;
+  assert.ok(status().endsWith(notice), `인쇄 후: ${status()}`);
+  // 절대값: 보정 도안에서 잰 49.8 을 적으면 s = 0.996 이에요(0.966 × 0.996 로 겹치지 않아요) — 그래서 안내가 적지 말라고 해요.
+  await h.input('makePaperBarMm', '49.8');
+  assert.equal(h.state().barUm, 49800);
+  assert.ok(status().includes(scaleItem(h, '1.004', '49.8', 'k=0.996')), status());
+  // 되돌리면 안내도 g1120(보정 없는 도안 — 잰 길이를 칸에 적어요)으로 돌아와요.
+  await h.click('makePaperBarReset');
+  job = h.click('makePaperPrint');
+  h.release();
+  await job;
+  assert.ok(status().endsWith(h.text('g1120')), status());
+});
+
+test('배율 보정 중 SVG · PNG · PDF 버튼 설명은 «×1.035 로 그린 파일 · 커팅기 · 편집용 실척은 ↺ 후» 를 붙이고, 인쇄 버튼 · 보정 없음에는 안 붙여요', async () => {
+  for (const lang of ['ko', 'en']) {
+    const h = createCubeMakeHarness({lang});
+    await h.expand();
+    const note = h.text('g1139').replace('{k}', 'k=0.966').replace('{factor}', '1.035');
+    const noted = () => PAPER_IDS.filter((id) => h.$(id).title.includes(note));
+    assert.deepEqual(noted(), [], lang);
+    await h.input('makePaperBarMm', '48.3');
+    assert.deepEqual(noted(), ['makePaperSvg', 'makePaperPng', 'makePaperPdf'], lang);
+    for (const [id, desc] of [['makePaperSvg', 'g1051'], ['makePaperPng', 'g1053'], ['makePaperPdf', 'g1055']]) assert.equal(h.$(id).title, `${h.text(desc)} — ${note}`, `${lang}/${id}`);
+    assert.equal(h.$('makePaperPrint').title, h.text('g1057'), lang);
+    await h.click('makePaperBarReset');
+    assert.deepEqual(noted(), [], lang);
+  }
+});
+
+test('배율 보정 값은 이 브라우저에만: 생성기 저장 · 공유 · URL 상태에 싣지 않아요(저장소 키는 슬라이스 한 곳, data-state-keys 에 없음)', () => {
+  const key = `'${BAR_PREFIX}'`;
+  assert.equal(INDEX.split(key).length - 1, 1, '저장소 키 문자열은 한 곳에서만 써요');
+  assert.ok(SLICE.includes(key));
+  const stateKeys = [...INDEX.matchAll(/data-state-keys="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/));
+  assert.ok(stateKeys.length >= 20, `상태 키 유도가 무너졌어요(${stateKeys.length})`);
+  assert.deepEqual(stateKeys.filter((k) => /bar|scale/i.test(k)), []);
+  const {byId} = parseMarkup(MARKUP);
+  for (const id of ['makePaperBarMm', 'makePaperBarReset']) assert.deepEqual(Object.keys(byId.get(id).attrs).filter((a) => a.startsWith('data-state')), [], id);
+  // 슬라이스는 생성기 상태 · 주소창을 쓰지 않아요(cubeMakeState 는 페이지 안 옵션이에요).
+  assert.doesNotMatch(SLICE.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ''), /generatorState\.[A-Za-z]+\s*=|history\.|location\.|URLSearchParams/);
+});
+
+test('배율 보정 문구: 여덟 언어의 상태 줄 조각이 마침표로 끝나지 않고 자리표시자를 다 갖고, 도움말 g1045 · 인쇄 안내 g1120 · g1138 · PDF 설명 g1055 가 칸 이름과 드라이버 · 절대값 의미를 말해요', async () => {
+  for (const lang of LANGS) {
+    const h = createCubeMakeHarness({lang});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    await h.input('makePaperBarMm', '60');
+    const text = h.$('makePaperStatus').textContent, segments = text.split(' · ');
+    assert.ok(segments.length >= 4, `${lang}: ${text}`);
+    assert.deepEqual(segments.filter((s) => /[.。]$/.test(s)), [], lang);
+    if (lang !== 'ko') assert.doesNotMatch(text, HANGUL, lang);
+    const d = h.dict[lang];
+    for (const [key, holes] of [['g1135', ['{k}', '{factor}', '{bar}']], ['g1136', ['{min}', '{max}', '{bar}']], ['g1138', ['{k}']], ['g1139', ['{k}', '{factor}']]]) for (const hole of holes) assert.ok(d[key].includes(hole), `${lang}/${key} ${hole}`);
+    // 칸 라벨 «배율 보정 — …» 의 앞 이름을 도움말 · 인쇄 전 안내 · PDF 설명이 그대로 불러요(라벨을 바꾸면 안내도 따라가야 해요).
+    const fieldName = d.g1133.split(' — ')[0], lower = fieldName.toLowerCase();
+    assert.ok(fieldName.length >= 4 && fieldName !== d.g1133, `${lang}: 라벨 «이름 — 설명» 꼴`);
+    assert.ok(d.g1045.includes(fieldName), `${lang}: g1045 가 칸 이름(${fieldName})을 안 불러요`);
+    assert.ok(d.g1045.includes('Class Driver'), `${lang}: g1045 드라이버 예`);
+    for (const key of ['g1120', 'g1138', 'g1055']) assert.ok(d[key].toLowerCase().includes(lower), `${lang}: ${key} 가 칸 이름을 안 불러요`);
+    // 절대값 의미: 보정 도안(캡션 k=…)이면 «적지 말고 ↺» — 도움말 · 칸 설명 · 보정 도안 안내가 말하고, 보정 없는 안내 g1120 은 «적어요» 쪽이라 ↺ 가 없어요.
+    for (const key of ['g1045', 'g1134']) assert.ok(d[key].includes('k=0.966') && d[key].includes('↺'), `${lang}: ${key} 가 캡션 k= 와 ↺ 를 설명하지 않아요`);
+    assert.ok(d.g1138.includes('↺') && !d.g1120.includes('↺'), lang);
+    // g1138 의 인쇄 설정 조각은 g1120 에서 유도해요(끝 두 조각 «인쇄 후 재기 · 다르면 적기» 만 달라요) — 설정 문구를 한쪽만 고치면 빨개져요.
+    const settings = d.g1120.split(' · ').slice(0, -2);
+    assert.ok(settings.length >= 4, `${lang}: ${d.g1120}`);
+    assert.deepEqual(d.g1138.split(' · ').slice(0, settings.length), settings, lang);
+    assert.deepEqual(d.g1138.split(' · ').filter((s) => /[.。]$/.test(s)), [], `${lang}: 인쇄 안내 조각`);
+    // PDF 도 같은 드라이버를 거쳐요 — «실척 인쇄에 가장 확실해요» 류 주장을 되살리지 않아요(운영자 실측: 줄임은 드라이버에서 나요).
+    assert.doesNotMatch(d.g1055, /가장 확실|most reliable|最も確実|le plus sûr|più sicuro|zuverlässigste|más fiable|mais fiável/, lang);
+  }
+});
+
+test('배선: 슬라이스가 쓰는 src export 는 index.html 이 그 모듈에서 import 해요 — 하네스는 모듈을 통째로 주입해서 import 누락을 못 봐요(자 검증 포함)', () => {
+  const modules = {'cube-physical': cubePhysicalModule, 'paper-net': paperNetModule, 'pdf-writer': pdfWriterModule, 'print-mesh': printMeshModule, 'mesh-export': meshExportModule};
+  const code = SLICE.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+  const missing = (source) => {
+    const out = [];
+    for (const [name, mod] of Object.entries(modules)) {
+      const m = new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*'\\./src/${name}\\.js'`).exec(source);
+      const imported = new Set((m?.[1] ?? '').split(',').map((s) => s.trim().split(/\s+as\s+/).pop()).filter(Boolean));
+      for (const exp of Object.keys(mod)) if (new RegExp(`\\b${exp}\\b`).test(code) && !imported.has(exp)) out.push(`${name}:${exp}`);
+    }
+    return out.sort();
+  };
+  assert.deepEqual(missing(INDEX), []);
+  const dropped = INDEX.replace('CALIBRATION_BAR_MM, PRINT_SCALE_MIN, PRINT_SCALE_MAX,', '');
+  assert.notEqual(dropped, INDEX, '변이 자리를 못 찾았어요');
+  assert.deepEqual(missing(dropped), ['paper-net:CALIBRATION_BAR_MM', 'paper-net:PRINT_SCALE_MAX', 'paper-net:PRINT_SCALE_MIN']);
+});
+
+test('자 검증: 배율 보정 자는 심은 결함에서 빨개져요(범위 밖을 끝값으로 자르기 · 계획에 s 안 넘기기 · 저장 안 하기 · badInput 무시 · 용지별 값 안 읽기 · 보정 도안 안내 없음)', async () => {
+  // ① 범위 밖을 끝값으로 자르는 핸들러: «이전 값을 지켜요» 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({source: mutate('return um>=min&&um<=max?um:null;', 'return Math.min(max,Math.max(min,um));')});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    await h.input('makePaperBarMm', '44.9');
+    assert.notEqual(h.state().barUm, 48300, '결함을 심었는데 이전 값이 남았어요 — 자가 비어 있어요');
+  }
+  // ② 계획에 printScale 을 안 넘기는 모델: 파일명 꼬리표 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({source: mutate('method:pick.method,printScale});', 'method:pick.method});')});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    await h.click('makePaperSvg');
+    assert.doesNotMatch(h.downloads.at(-1).filename, /-k966\.svg$/);
+  }
+  // ③ 저장하지 않는 핸들러: 저장소 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({source: mutate('cubeMakeState.barUm=um;cubeMakeBarSave(cubeMakeState.paper,um);', 'cubeMakeState.barUm=um;')});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    assert.equal(h.storage.map.has(BAR_KEY), false);
+  }
+  // ④ badInput 을 안 보는 핸들러: 브라우저가 넘기는 '' 를 빈 칸으로 읽어 보정을 끄고 저장 값을 지워요 — «숫자 아님은 이전 값» 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({source: mutate('um=input.validity?.badInput?null:cubeMakeBarParse(input.value);', 'um=cubeMakeBarParse(input.value);')});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    await h.input('makePaperBarMm', 'abc');
+    assert.deepEqual([h.state().barUm, h.storage.map.has(BAR_KEY)], [50000, false], '결함을 심었는데 이전 값이 남았어요 — 하네스가 badInput 을 흉내 내지 않아요');
+  }
+  // ⑤ 용지를 바꿔도 값을 다시 읽지 않는 핸들러: A4 보정이 A3 에 번져요 — 용지별 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({source: mutate('cubeMakeState.paper=paper;cubeMakeState.barUm=cubeMakeBarLoad(paper);', 'cubeMakeState.paper=paper;')});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    await h.select('makePaperSize', 'A3');
+    assert.equal(h.state().barUm, 48300);
+  }
+  // ⑥ 보정 도안에도 «잰 길이를 칸에 적어요» 안내(g1120)를 보이는 인쇄: 절대값 자가 잡아요.
+  {
+    const h = createCubeMakeHarness({source: mutate("function cubeMakePrintNotice(plan){return plan?.printScale===undefined?t('g1120'):tf('g1138',cubeMakeScaleVars(plan));}", "function cubeMakePrintNotice(plan){return t('g1120');}")});
+    await h.expand();
+    await h.input('makePaperBarMm', '48.3');
+    await h.click('makePaperPrint');
+    assert.ok(h.$('makePaperStatus').textContent.endsWith(h.text('g1120')));
+  }
 });
 
 // ── i18n · 코드 표 · 배선 ───────────────────────────────────────────────

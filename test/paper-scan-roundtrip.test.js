@@ -94,9 +94,10 @@ const sheetPng=scene=>decodePng(renderExportPng(scene,paperPngPlan(scene)));
  * 이 자가 지키는 성질이에요. 경고가 난 계획에서 건너뛴 띠는 skipped 로 세요(조용히 버리지 않아요).
  * @returns {{read:number, skipped:number}}
  */
-function paperRoundTrip({encoded,bytes,options={},method,thicknessMm,paper='A4',sideMm,bands=[null],growMm=0,label}){
+function paperRoundTrip({encoded,bytes,options={},method,thicknessMm,paper='A4',sideMm,printScale,bands=[null],growMm=0,label}){
   const phys=physicalHCube(buildHCubeModel(encoded,options)),map=hDisplayMap(encoded,options);
-  const plan=paperPlan(phys,{paper,thicknessMm,method,sideMm}),warned=plan.warnings.includes('TLP_WARN_BOARD_EDGE');
+  const plan=paperPlan(phys,{paper,thicknessMm,method,sideMm,printScale}),warned=plan.warnings.includes('TLP_WARN_BOARD_EDGE');
+  if(printScale!==undefined)assert.equal(plan.printScale,printScale,`${label}: 보정이 계획에 닿지 않았어요`);
   const scene=buildPaperSheet(phys,plan),png=sheetPng(scene);
   let read=0,skipped=0;
   for(const band of bands){
@@ -140,6 +141,12 @@ test('§6-15 P1 한 장 전개도(A4 · 0.1 mm): 세 데이터 면이 거울 없
 
 test('§6-15 P1 3F + 6면(반복): 한 장 전개도의 여섯 면(사본 셋 포함)이 모두 거울 없이 제 논리 면으로 읽혀요',()=>{
   assert.deepEqual(paperRoundTrip({...BASE,options:{renderFaces:6},method:'sheet',thicknessMm:0.1,label:'H0 3F rf6 3톤'}),{read:6,skipped:0});
+});
+
+test('인쇄 배율 보정 s = 0.966(A4 · 0.1 mm 한 장 전개도): 1/s 배로 키운 파일도 세 데이터 면이 거울 없이 읽히고 원문으로 복호돼요',()=>{
+  // 운영자 실측(Class Driver 가 쪽을 0.966 배로 줄임)을 보정한 도안이에요. 판독기는 배율 불변이라 파일 PNG(줄이기 전)를 그대로 재요 —
+  // 보정 사상이 모듈 · 면 틀 · 메타(cellMm 포함)를 같은 좌표계로 옮겼는지가 이 자르기와 판정에서 드러나요.
+  assert.deepEqual(paperRoundTrip({...BASE,method:'sheet',thicknessMm:0.1,printScale:0.966,label:'H0 3F 3톤 k966'}),{read:3,skipped:0});
 });
 
 test('§6-15 P3 판 직접 인쇄(A4 · 1.0 mm): 조각 그대로와 절단면 띠를 합성한 조립 모습 모두 읽혀요',()=>{

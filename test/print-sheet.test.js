@@ -16,6 +16,7 @@ import {buildHCubeModel} from '../src/cube-export.js';
 import {physicalHCube} from '../src/cube-physical.js';
 import {
   paperPlan, paperMethodOptions, buildPaperSheet, PAPER_SIZES, THICKNESS_PRESETS, PAPER_MARGIN_MM, CUT_LINE_MM,
+  PRINT_SCALE_MIN, PRINT_SCALE_MAX,
 } from '../src/paper-net.js';
 import {
   printSvgSheet, clearPrintHost, printSheetSvg, printSheetCss,
@@ -215,6 +216,35 @@ test('§6-22 크롭: 용지 8종 × 두께 프리셋 × 방식 × 한 변(자동
     assert.deepEqual(outsideCrop({...base, shapes: [shape]}), ['0:planted'], JSON.stringify(shape.points[0]));
   }
   assert.deepEqual(outsideCrop({...base, shapes: [sq(c.x + 0.02, c.y + 0.02, {qr: false})]}), []);
+});
+
+test('§6-22 크롭 × 인쇄 배율 보정: s 끝값(0.9 · 1.02)과 실측값 0.966 에서도 그린 도형이 인쇄 크롭 밖으로 나가지 않고, 상한 1.02 는 크롭이 정한 값이에요', () => {
+  // 보정은 가상 여백 7 mm(재단선 잉크 6.8)를 실제 좌표에서 7/s(6.8/s)로 줄여요. 아래 크롭 M + 0.5 가 가장 빡빡해요.
+  // 상한 근거(구성 주장이라 반례 쪽도 적어요): 7/1.02 ≥ 6.85 이고 7/1.03 < 6.85 — 한 칸(0.01) 더 올리면 아래 띠 잉크가 잘려요.
+  assert.ok(PAPER_MARGIN_MM / PRINT_SCALE_MAX >= M + PRINT_HEIGHT_TRIM_MM, `${PAPER_MARGIN_MM / PRINT_SCALE_MAX}`);
+  assert.ok(PAPER_MARGIN_MM / (PRINT_SCALE_MAX + 0.01) < M + PRINT_HEIGHT_TRIM_MM, '상한이 크롭보다 넉넉하면 이 주석의 근거가 틀려요');
+  assert.ok((PAPER_MARGIN_MM - CUT_LINE_MM) / PRINT_SCALE_MAX >= M, '옆 · 위 재단선 잉크');
+  const cubes = [
+    physicalHCube(buildHCubeModel(encodeH(Uint8Array.of(1, 2, 3), {version: 0, mode: 3, tones: 3, ecc: 'M', mask: 0, finder: 'frame'}), {renderFaces: 3})),
+    physicalHCube(buildHCubeModel(encodeH(Uint8Array.of(1), {version: 8, mode: 3, tones: 2, ecc: 'M', mask: 0, finder: 'frame'}), {renderFaces: 6})),
+  ];
+  let built = 0, minBottom = Infinity;
+  const problems = [];
+  for (const printScale of [PRINT_SCALE_MIN, 0.966, PRINT_SCALE_MAX]) for (const phys of cubes) for (const p of PAPER_SIZES) for (const t of THICKNESS_PRESETS) for (const sideMm of [undefined, 13.4, 30]) {
+    for (const o of paperMethodOptions(phys, {paper: p.id, thicknessMm: t.thicknessMm, sideMm, printScale})) {
+      if (!o.enabled) continue;
+      const scene = buildPaperSheet(phys, paperPlan(phys, {paper: p.id, thicknessMm: t.thicknessMm, sideMm, method: o.method, printScale}));
+      assert.deepEqual([scene.width, scene.height], [p.widthMm, p.heightMm], '장면은 실제 용지 크기예요');
+      const bad = outsideCrop(scene);
+      if (bad.length) problems.push(`s=${printScale} n=${phys.n} ${p.id} ${t.id} ${o.method} s=${sideMm ?? 'auto'}: ${bad.slice(0, 3).join(', ')}`);
+      if (printScale === PRINT_SCALE_MAX) minBottom = Math.min(minBottom, ...scene.shapes.flatMap((s) => s.points.map((q) => scene.height - q.y)));
+      built += 1;
+    }
+  }
+  assert.deepEqual(problems.slice(0, 5), []);
+  assert.ok(built >= 600, `만든 도안 ${built}`);
+  // s = 1.02 에서 아래 끝 잉크가 크롭(6.85)에 가장 가까워요 — 여유가 실제로 작다는 것(0.1 mm 미만)도 재요.
+  assert.ok(minBottom >= M + PRINT_HEIGHT_TRIM_MM && minBottom < M + PRINT_HEIGHT_TRIM_MM + 0.1, `s=1.02 아래 끝 ${minBottom}`);
 });
 
 test('§6-22 인쇄 SVG: 루트만 바뀌어 1:1(가장자리 M 크롭) 이고, 본문 바이트는 그대로예요', () => {

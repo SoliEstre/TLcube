@@ -49,6 +49,8 @@ export function generatorStrings(source = INDEX) {
 }
 
 const VOID = new Set(['input', 'br', 'img', 'hr', 'meta', 'link']);
+/** HTML «유효한 부동소수 문자열»(value sanitization 기준). type=number 칸은 이 꼴이 아니면 value 가 '' 이고 validity.badInput 이에요. */
+export const VALID_FLOAT = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?$/;
 function makeNode(tag, attrs) {
   const listeners = new Map();
   const dataset = {};
@@ -58,6 +60,7 @@ function makeNode(tag, attrs) {
     tag, attrs, dataset, children: [], parent: null, text: '',
     hidden: 'hidden' in attrs, disabled: 'disabled' in attrs,
     textContent: '', innerHTML: '', title: attrs.title ?? '', value: attrs.value ?? '', min: '', max: '', step: '',
+    validity: {badInput: false},
     classList: {
       add: (c) => classes.add(c), remove: (c) => classes.delete(c), contains: (c) => classes.has(c),
       toggle: (c, on) => { const v = on === undefined ? !classes.has(c) : !!on; if (v) classes.add(c); else classes.delete(c); return v; },
@@ -125,6 +128,26 @@ export function hCurrent(label, {version = 0, mode = 3, tones = 3, arrangement =
 }
 
 /**
+ * localStorage 모양의 메모리 저장소(getItem · setItem · removeItem). entries 로 처음 값을 넣고, map 으로 들여다봐요.
+ * @param {Record<string,string>} [entries]
+ */
+export function memoryStorage(entries = {}) {
+  const map = new Map(Object.entries(entries));
+  return {
+    map,
+    getItem: (key) => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => { map.set(key, String(value)); },
+    removeItem: (key) => { map.delete(key); },
+  };
+}
+/** 모든 접근이 던지는 저장소(프라이빗 모드 · 막힌 사이트 데이터 흉내). calls 로 닿은 횟수를 세요. */
+export function throwingStorage() {
+  const storage = {calls: 0};
+  for (const name of ['getItem', 'setItem', 'removeItem']) storage[name] = () => { storage.calls += 1; throw new Error('SecurityError: storage blocked'); };
+  return storage;
+}
+
+/**
  * @param {object} [options]
  * @param {string} [options.source] 슬라이스를 자를 원문(자 검증용 변이 원문을 넣을 수 있어요)
  * @param {boolean} [options.lab] isLabPath()
@@ -132,8 +155,11 @@ export function hCurrent(label, {version = 0, mode = 3, tones = 3, arrangement =
  * @param {object|null} [options.current]
  * @param {'manual'|'auto'} [options.raf] manual 이면 한 프레임 양보가 release() 까지 멈춰요
  * @param {object} [options.overrides] 주입 값 덮어쓰기(가짜 src 함수 등)
+ * @param {object} [options.storage] 주입할 localStorage(기본: 빈 메모리 저장소 — memoryStorage()). 던지는 저장소도 넣을 수 있어요.
+ *   슬라이스는 localStorage 를 try/catch 로 감싸서, 주입을 빠뜨려도 ReferenceError 가 삼켜져 «기본값» 으로 조용히 돌아요 —
+ *   그래서 하네스가 늘 저장소를 주입하고, 테스트는 저장소에 실제로 닿았는지(값 읽기 · 쓰기)를 재요.
  */
-export function createCubeMakeHarness({source = INDEX, markup, lab = true, h = true, current = hCurrent('old'), lang = 'ko', uiMode = 'normal', raf = 'auto', overrides = {}} = {}) {
+export function createCubeMakeHarness({source = INDEX, markup, lab = true, h = true, current = hCurrent('old'), lang = 'ko', uiMode = 'normal', raf = 'auto', overrides = {}, storage = memoryStorage()} = {}) {
   const dict = generatorStrings(source);
   const {byId, all} = parseMarkup(markup ?? cubeMakeMarkup(source));
   const downloads = [], prints = [], missingKeys = new Set(), rafQueue = [];
@@ -168,19 +194,29 @@ export function createCubeMakeHarness({source = INDEX, markup, lab = true, h = t
     GENERATOR_BUILD: '2026-01-01.01',
     requestAnimationFrame: (fn) => { if (raf === 'manual') rafQueue.push(fn); else setTimeout(fn, 0); },
     setTimeout, TextEncoder,
+    localStorage: storage,
     ...overrides,
   };
+  // focus() 는 document.activeElement 를 옮겨요(sync 의 «입력 중인 칸은 덮지 않음» 가드와 같은 자리를 봐요).
+  for (const node of all) node.focus = () => { c.document.activeElement = node; };
   vm.createContext(c);
   vm.runInContext(cubeMakeSlice(source), c, {filename: 'index.html#cubeMake'});
   const run = (code) => vm.runInContext(code, c);
   return {
-    c, $, all, dict, downloads, prints, missingKeys,
+    c, $, all, dict, downloads, prints, missingKeys, storage,
     sync: () => run('syncCubeMakeUi()'),
     state: () => run('cubeMakeState'),
     expand() { if (run('cubeMakeCollapsed')) return $('cubeMakeToggle').fire('click'); return Promise.resolve(); },
     click: (id) => $(id).fire('click'),
-    /** 숫자 입력에 값을 넣고 change 를 보내요. */
-    input(id, value) { $(id).value = String(value); return $(id).fire('change'); },
+    /** 숫자 입력에 값을 넣고 change 를 보내요. type=number 칸은 브라우저처럼 값을 정리해요(HTML value sanitization):
+     *  유효한 부동소수 문자열이 아닌 글자(«abc» · «4e» · «-» · 공백 · «48,3»)는 value '' + validity.badInput 이에요 —
+     *  날 글자를 그대로 넘기면 «빈 칸» 과 «틀린 글자» 가 브라우저에서 같은 '' 로 온다는 것을 테스트가 못 봐요. */
+    input(id, value) {
+      const node = $(id), text = String(value);
+      if (node.attrs.type === 'number') { const ok = text === '' || VALID_FLOAT.test(text); node.value = ok ? text : ''; node.validity = {badInput: !ok}; }
+      else node.value = text;
+      return node.fire('change');
+    },
     select(id, value) { $(id).value = String(value); return $(id).fire('change'); },
     /** manual 모드에서 멈춘 프레임 양보를 풀어요. */
     release() { while (rafQueue.length) setTimeout(rafQueue.shift(), 0); },

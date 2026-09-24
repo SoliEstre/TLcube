@@ -16,10 +16,19 @@
  *
  * 수치 규칙: 용지·여백·피치·두께는 µm 정수로 계산하고(자동 최대는 0.1 mm 아래로 버림), 도형 좌표만 mm 실수예요.
  * 오류는 err.code 가 'TLP_' 로 시작하는 RangeError 로 던져요(UI 가 문구 키로 옮겨요).
+ *
+ * 인쇄 배율 보정 printScale = s (PRINT_SCALE_MIN–MAX, 기본 1): 일부 프린터 드라이버는 쪽 전체를 인쇄 가능 영역에 맞춰 줄여요
+ * (운영자 실측 2026-09-24: Windows 기본 «Samsung C470 Series Class Driver» · WSD 에서 50 mm 막대가 48.3 mm = 0.966 배,
+ * 브라우저 여백 · 배율 설정과 무관 — 웹 페이지로는 끌 수 없어요). 그래서 배치(자동 한 변 · 맞춤 판정 · 띠 · 여백 7 mm ·
+ * 자체 검사)는 (W·s) × (H·s) mm «가상 용지» 에서 하고, 도형은 실제 용지 가운데를 기준으로 1/s 배 키워 그려요
+ * (실제 = 실제 가운데 + (가상 − 가상 가운데) / s). 드라이버가 쪽을 가운데 기준 s 배로 줄이면 종이 위 치수가 설계와 같아져요.
+ * 장면 width · height 와 모든 렌더러(SVG mm · PNG 300 dpi · PDF · 인쇄 호스트)는 그대로 실제 용지 1:1 이에요.
+ * s = 1 이면 계획 · 장면 객체가 보정 이전과 바이트까지 같아요(보정 필드는 s ≠ 1 일 때만 붙어요).
  */
 import {H_FACE_IDS} from './h-profile.js';
 import {rasterToPng} from './png.js';
 import {assertSceneImage} from './scene-image.js';
+import {PRINT_MARGIN_MM,PRINT_HEIGHT_TRIM_MM} from './print-sheet.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 상수 (설계 §3.2–§3.6. «제안» 값은 설계 표기를 따라 여기 한곳에 모아요)
@@ -57,6 +66,20 @@ export const FOLD_TICK_MM=3;
 /** 틱을 재단선에서 띄우는 간격이에요(재단선 폭 바깥에서 시작). */
 const TICK_CLEAR_MM=0.5;
 export const CALIBRATION_BAR_MM=50;
+/**
+ * 인쇄 배율 보정 s 의 범위(UI 는 «보정 없이 인쇄한 50 mm 막대를 잰 길이» 45.0–51.0 mm 로 받아요, s = 잰 길이 / 50).
+ * 상한은 인쇄 크롭(print-sheet.js)이 정해요: 가상 여백 7 mm(재단선 잉크 6.8 mm)는 실제 좌표에서 7/s(6.8/s)가 되는데,
+ * 아래 크롭 M + 0.5 = 6.85 mm 보다 안쪽이면 인쇄 호스트가 잘라 내요 — 7 / 1.02 = 6.863 이 마지막으로 남는 값이에요.
+ * 하한 0.9 는 드라이버 축소로 흔한 값(A4 인쇄 가능 영역 약 0.96–0.97)보다 넉넉히 아래이고, 그보다 작으면 잰 값을 의심해요.
+ * buildPaperSheet 는 s 마다 실제 좌표 도형이 인쇄 크롭 안인지 재요(자체 검사).
+ */
+export const PRINT_SCALE_MIN=0.9;
+export const PRINT_SCALE_MAX=1.02;
+/**
+ * 배율 보정 표기 «k=0.966»(s, 소수 셋째 자리 · 늘 '.')예요. 도안 캡션과 UI(상태 줄 · 인쇄 안내 · 버튼 설명)가 이 함수 하나로
+ * 같은 글자를 써서, 사용자가 종이 위 캡션과 화면 문구를 그대로 맞춰 볼 수 있어요(표기를 두 곳에 옮겨 적지 않아요).
+ */
+export const printScaleTag=printScale=>`k=${printScale.toFixed(3)}`;
 /**
  * P3 재단 표시(crop mark). 조각은 인쇄 영역에 붙은 실선 대신 모서리 바깥의 짧은 표시로 재단 위치를 알려요.
  * 조각 가장자리는 흰 링이라, 붙은 회색 선의 가운데를 자르면 약 0.1 mm 회색 잔선이 흰 링과 이웃 판 절단면 사이에 남아
@@ -343,6 +366,8 @@ const GLYPHS=Object.freeze({
   '8':{w:0.6,s:[[[0,0],[0.6,0],[0.6,1],[0,1],[0,0]],[[0,0.5],[0.6,0.5]]]},
   '9':{w:0.6,s:[[[0.6,0.5],[0,0.5],[0,0],[0.6,0],[0.6,1],[0,1]]]},
   '.':{w:0,s:[[[0,1],[0,1]]]},
+  // 'k' 는 배율 보정 캡션(«k=0.966»)용이에요. 줄기 + 팔(x-높이 0.4 → 줄기) + 다리(팔 가운데 → 오른쪽 아래). 대각 획 캡은 줄기 안에 묻혀요.
+  'k':{w:0.45,s:[[[0,0],[0,1]],[[0.45,0.4],[0.06,0.7]],[[0.2,0.6],[0.45,1]]]},
   'm':{w:0.6,s:[[[0,1],[0,0.4],[0.6,0.4],[0.6,1]],[[0.3,0.4],[0.3,1]]]},
   's':{w:0.45,s:[[[0.45,0.4],[0,0.4],[0,0.7],[0.45,0.7],[0.45,1],[0,1]]]},
   't':{w:0.45,s:[[[0.16,0.1],[0.16,1],[0.45,1]],[[0,0.4],[0.42,0.4]]]},
@@ -440,8 +465,8 @@ const formatMm=um=>(um/1000).toFixed(3).replace(/\.?0+$/,'');
 /** 코어 재단표 치수는 0.1 mm 로 적어요 — 손 재단 정밀도이고, 상태 줄(0.1 mm)과 같은 값이에요. */
 const formatMm1=um=>(Math.round(um/100)/10).toFixed(1);
 
-/** 하단 띠 캡션이에요(한 변 · 두께를 µm 그대로). */
-const captionText=(sideUm,tUm)=>`s=${formatMm(sideUm)} t=${formatMm(tUm)}`;
+/** 하단 띠 캡션이에요(한 변 · 두께를 µm 그대로). 배율 보정이 있으면 «k=0.966»(s, 소수 셋째 자리)을 덧붙여 도안이 스스로 밝혀요. */
+const captionText=(sideUm,tUm,printScale=1)=>`s=${formatMm(sideUm)} t=${formatMm(tUm)}`+(printScale===1?'':` ${printScaleTag(printScale)}`);
 /** 조립 지도(board 하단 띠 오른쪽): 라틴 십자 칸 한 변과, 막대·캡션과의 간격(mm). */
 const MAP_CELL_MM=4,MAP_GAP_MM=2;
 /** 라틴 십자를 세로로 놓은 전개도의 칸 수(가로 3 × 세로 4). buildPaperSheet 가 유도한 배치와 같은지 확인해요. */
@@ -469,16 +494,19 @@ function coreTable(core,pitchMm){
 /**
  * 용지·한 변·두께·방식을 정해 도안 계획을 만들어요. 수치는 메쉬나 장면 없이 O(1) 이라 UI 상태 줄에 바로 써요.
  * @param {object} phys PhysCube (n 만 써요)
- * @param {{paper?:string, sideMm?:number, thicknessMm?:number, method?:'sheet'|'skin'|'board'}} [options]
+ * @param {{paper?:string, sideMm?:number, thicknessMm?:number, method?:'sheet'|'skin'|'board', printScale?:number}} [options]
  *   paper: PAPER_SIZES id(기본 'A4'). sideMm: 바깥 한 변 s(생략하면 용지에 맞는 최대). thicknessMm: 종이·판 두께(기본 0.1).
- *   method: 생략하면 defaultPaperMethod(두께).
+ *   method: 생략하면 defaultPaperMethod(두께). printScale: 인쇄 배율 보정 s(기본 1, PRINT_SCALE_MIN–MAX) — 파일 머리 주석을 봐요.
  * @returns Plan — 구조는 이 파일 끝 주석을 봐요.
  * @throws RangeError code TLP_PAPER_FIT(한 변이 하한 미만·용지 초과·날개 불가) · TLP_PAPER_MODULE(종이 모듈 < 1.0 mm) ·
- *   TLP_BOARD_THICK(방식의 두께 상한 초과 · 코어가 두께에 못 미침) · TLP_BOARD_EDGE(P3 에서 t ≥ 모듈)
+ *   TLP_BOARD_THICK(방식의 두께 상한 초과 · 코어가 두께에 못 미침) · TLP_BOARD_EDGE(P3 에서 t ≥ 모듈).
+ *   printScale 이 범위 밖 · 숫자가 아니면 code 없는 RangeError 예요(UI 가 먼저 막는 입력 오류라 방식 카드 사유가 아니에요).
  */
-export function paperPlan(phys,{paper='A4',sideMm,thicknessMm=0.1,method}={}){
+export function paperPlan(phys,{paper='A4',sideMm,thicknessMm=0.1,method,printScale=1}={}){
   checkPhys(phys);
   const sheet=paperSize(typeof paper==='string'?paper:paper?.id);
+  if(typeof printScale!=='number'||!Number.isFinite(printScale)||printScale<PRINT_SCALE_MIN||printScale>PRINT_SCALE_MAX)
+    throw new RangeError(`인쇄 배율 보정은 ${PRINT_SCALE_MIN}–${PRINT_SCALE_MAX} 사이의 수여야 해요: ${printScale}`);
   if(typeof thicknessMm!=='number'||!Number.isFinite(thicknessMm)||thicknessMm<=0)throw new RangeError('두께(mm)는 양수여야 해요');
   const tUm=Math.round(thicknessMm*1000);
   if(tUm<1)throw new RangeError('두께는 1 µm 이상이어야 해요');
@@ -486,7 +514,10 @@ export function paperPlan(phys,{paper='A4',sideMm,thicknessMm=0.1,method}={}){
   if(!PAPER_METHODS.includes(m))throw new RangeError(`도안 방식: ${m}`);
   if(m==='sheet'&&tUm>SHEET_MAX_UM)throw tlpError('TLP_BOARD_THICK',`한 장 전개도는 두께 ${SHEET_MAX_THICKNESS_MM} mm 이하만 돼요`);
   if(m==='board'&&tUm>BOARD_MAX_UM)throw tlpError('TLP_BOARD_THICK',`판 직접 인쇄는 두께 ${BOARD_MAX_THICKNESS_MM} mm 이하만 돼요`);
-  const W=sheet.widthUm,H=sheet.heightUm,n=phys.n,auto=sideMm===undefined||sideMm===null;
+  // 배치는 가상 용지(W·s × H·s, µm 반올림)에서 재요. s = 1 이면 실제 용지 그대로예요.
+  const scaled=printScale!==1;
+  const W=scaled?Math.round(sheet.widthUm*printScale):sheet.widthUm,H=scaled?Math.round(sheet.heightUm*printScale):sheet.heightUm;
+  const n=phys.n,auto=sideMm===undefined||sideMm===null;
   let sideUm,pitchUm;
   if(auto){
     const max=maxPitchUm(m,W,H,tUm);
@@ -524,26 +555,29 @@ export function paperPlan(phys,{paper='A4',sideMm,thicknessMm=0.1,method}={}){
   }
   // 도안 조립(buildPaperSheet)이 다시 재는 배치 제약을 계획에서 같은 함수로 재요 — «계획 통과 ⇒ 도안 생성 통과».
   // 상태 줄 · 버튼은 계획만 보고 켜지므로, 여기서 빠진 제약은 «버튼은 켜졌는데 눌러도 안 되는» 상태가 돼요.
-  if(bandStartX(m,W/1000,0,captionText(sideUm,tUm))===null)throw tlpError('TLP_PAPER_FIT','하단 띠(막대 · 캡션)가 용지 폭에 들어가지 않아요');
+  if(bandStartX(m,W/1000,0,captionText(sideUm,tUm,printScale))===null)throw tlpError('TLP_PAPER_FIT','하단 띠(막대 · 캡션)가 용지 폭에 들어가지 않아요');
   // 재단표를 0.1 mm 로 적는 지금은 한 변 하한(13.4 mm)에서도 글자 높이가 약 1.02 mm 라 이 검사에 걸리는 입력이 없어요
   // (test/paper-net 의 «계획 통과 ⇒ 도안 생성 통과» 격자가 재요). 글리프나 재단표 형식이 바뀌면 조립보다 먼저 여기서 걸려요.
   if(core&&coreTable(core,pitchUm/1000).h<CORE_TABLE_MIN_H_MM)throw tlpError('TLP_PAPER_FIT','코어 재단표 글자가 빈 칸에 들어가지 않아요');
+  // widthMm · heightMm 는 늘 실제 용지예요(렌더러 · PDF 쪽 크기 · 인쇄 호스트가 읽어요). 가상 용지는 보정이 있을 때만 따로 실어요.
   return Object.freeze({kind:'paper-plan',method:m,paper:sheet,n,auto,
-    widthMm:W/1000,heightMm:H/1000,marginMm:PAPER_MARGIN_MM,bandMm:BAND_UM[m]/1000,gapMm:m==='board'?BOARD_GAP_MM:0,
+    widthMm:sheet.widthUm/1000,heightMm:sheet.heightUm/1000,marginMm:PAPER_MARGIN_MM,bandMm:BAND_UM[m]/1000,gapMm:m==='board'?BOARD_GAP_MM:0,
     thicknessUm:tUm,sideUm,pitchUm,tabUm,skinUm:m==='skin'?SKIN_UM:0,
     thicknessMm:tUm/1000,sideMm:sideUm/1000,pitchMm:pitchUm/1000,moduleMm:pitchUm/1000/n,tabMm:tabUm/1000,
     cutBandMm:m==='board'?tUm/1000:0,core,pieces,warnings:Object.freeze(warnings),
-    fileTag:`${m}-${sheet.id}-s${sideUm}um-t${tUm}um`});
+    fileTag:`${m}-${sheet.id}-s${sideUm}um-t${tUm}um`+(scaled?`-k${Math.round(printScale*1000)}`:''),
+    ...(scaled?{printScale,virtualWidthMm:W/1000,virtualHeightMm:H/1000}:{})});
 }
 
 /**
  * 두께·용지에서 고를 수 있는 방식 카드와 막힌 사유(TLP 코드)예요(설계 §3.5). t ≤ 0.45 면 한 장 전개도뿐이에요.
+ * printScale 은 paperPlan 에 그대로 넘겨요(가상 용지에서 판정해요).
  * @returns {{method:string, enabled:boolean, reason:string|null}[]}
  */
-export function paperMethodOptions(phys,{paper='A4',thicknessMm=0.1,sideMm}={}){
+export function paperMethodOptions(phys,{paper='A4',thicknessMm=0.1,sideMm,printScale=1}={}){
   const methods=Math.round(thicknessMm*1000)<=SHEET_MAX_UM?['sheet']:['skin','board'];
   return methods.map(method=>{
-    try{paperPlan(phys,{paper,thicknessMm,sideMm,method});return {method,enabled:true,reason:null};}
+    try{paperPlan(phys,{paper,thicknessMm,sideMm,method,printScale});return {method,enabled:true,reason:null};}
     catch(error){if(typeof error?.code==='string'&&error.code.startsWith('TLP_'))return {method,enabled:false,reason:error.code};throw error;}
   });
 }
@@ -720,7 +754,7 @@ function buildNetSheet(phys,plan){
     ticks.push(tick);shapes.push(tick);
   }
   // 하단 띠: 보정 막대 + 캡션. 가로 자리는 paperPlan 과 같은 함수(bandStartX)로 정해요.
-  const caption=captionText(plan.sideUm,plan.thicknessUm),bandTop=oy+maxY;
+  const caption=captionText(plan.sideUm,plan.thicknessUm,plan.printScale),bandTop=oy+maxY;
   const bandX=bandStartX(plan.method,W,ox+minX,caption);
   if(bandX===null)throw tlpError('TLP_PAPER_FIT','하단 띠(막대 · 캡션)가 용지 폭에 들어가지 않아요');
   const band=drawBand(shapes,labels,bandX,bandTop+2.5,caption);
@@ -795,7 +829,7 @@ function buildBoardSheet(phys,plan){
   }
   // 하단 띠: 막대·캡션(왼쪽) + 조립 지도(오른쪽, 라틴 십자 12 × 16 mm, 칸마다 번호와 화살표).
   // 막대 · 캡션의 가로 자리는 paperPlan 과 같은 함수(bandStartX)로 정해요.
-  const bandTop=oy+3*s+2*g,caption=captionText(plan.sideUm,plan.thicknessUm);
+  const bandTop=oy+3*s+2*g,caption=captionText(plan.sideUm,plan.thicknessUm,plan.printScale);
   const mapCell=MAP_CELL_MM,mapX=W-m-NET_COLS*mapCell,mapY=bandTop+4,bandX=bandStartX('board',W,ox,caption);
   if(bandX===null)throw tlpError('TLP_PAPER_FIT','하단 띠(막대 · 캡션)가 용지 폭에 들어가지 않아요');
   const band=drawBand(shapes,labels,bandX,bandTop+10,caption);
@@ -820,17 +854,65 @@ export function buildPaperSheet(phys,plan){
   checkPhys(phys);
   if(!plan||plan.kind!=='paper-plan')throw new TypeError('paperPlan 결과가 필요해요');
   if(plan.n!==phys.n)throw new RangeError('계획과 큐브의 한 변 셀 수가 달라요');
-  const built=plan.method==='board'?buildBoardSheet(phys,plan):buildNetSheet(phys,plan);
-  const W=plan.widthMm,H=plan.heightMm,m=PAPER_MARGIN_MM;
-  // 자체 검사: 모든 도형이 여백 m 안(재단선 잉크만 바깥쪽 선폭까지)이에요. 프린터 비인쇄 여백에 내용이 잘리지 않게 해요.
+  // 배율 보정이 있으면 조립은 가상 용지에서 해요(paperPlan 이 잰 것과 같은 용지). s = 1 이면 계획 그대로예요.
+  const scaled=plan.printScale!==undefined&&plan.printScale!==1;
+  const layoutPlan=scaled?{...plan,widthMm:plan.virtualWidthMm,heightMm:plan.virtualHeightMm}:plan;
+  const built=plan.method==='board'?buildBoardSheet(phys,layoutPlan):buildNetSheet(phys,layoutPlan);
+  const VW=layoutPlan.widthMm,VH=layoutPlan.heightMm,W=plan.widthMm,H=plan.heightMm,m=PAPER_MARGIN_MM;
+  // 자체 검사: 모든 도형이 (가상) 여백 m 안(재단선 잉크만 바깥쪽 선폭까지)이에요. 프린터 비인쇄 여백에 내용이 잘리지 않게 해요.
   for(const shape of built.shapes){
     const slack=shape.role==='cut'?CUT_LINE_MM+1e-6:1e-6;
-    if(shape.points.some(q=>q.x<m-slack||q.x>W-m+slack||q.y<m-slack||q.y>H-m+slack))throw tlpError('TLP_PAPER_FIT',`도형(${shape.role})이 여백 안에 들어가지 않아요`);
+    if(shape.points.some(q=>q.x<m-slack||q.x>VW-m+slack||q.y<m-slack||q.y>VH-m+slack))throw tlpError('TLP_PAPER_FIT',`도형(${shape.role})이 여백 안에 들어가지 않아요`);
   }
-  const {layout,...rest}=built.meta;
-  return {width:W,height:H,background:WHITE,shapes:built.shapes,
+  const {shapes,meta}=scaled?toRealPaper(built,paperScaleMap(plan)):built;
+  // 자체 검사(실제 좌표): 재단선 잉크까지 모든 도형이 인쇄 호스트 크롭(print-sheet.js: 가장자리 M, 아래 M + 0.5) 안이에요.
+  // s = 1 에서는 위 여백 검사 + 하단 띠 배치(아래 끝 잉크가 가장자리에서 7 mm 이상)로 이미 서요 — 보정이 여백을 7/s 로 줄여도
+  // 크롭을 넘지 않는다는 것(PRINT_SCALE_MAX 의 근거)을 여기서 직접 재요.
+  const cx0=PRINT_MARGIN_MM-1e-6,cy0=PRINT_MARGIN_MM-1e-6,cx1=W-PRINT_MARGIN_MM+1e-6,cy1=H-PRINT_MARGIN_MM-PRINT_HEIGHT_TRIM_MM+1e-6;
+  for(const shape of shapes){
+    if(shape.points.some(q=>q.x<cx0||q.x>cx1||q.y<cy0||q.y>cy1))throw tlpError('TLP_PAPER_FIT',`도형(${shape.role})이 인쇄 크롭 안에 들어가지 않아요`);
+  }
+  const {layout,...rest}=meta;
+  return {width:W,height:H,background:WHITE,shapes,
     paper:Object.freeze({method:plan.method,paper:plan.paper.id,widthMm:W,heightMm:H,marginMm:m,n:phys.n,
-      sideMm:plan.sideMm,pitchMm:plan.pitchMm,thicknessMm:plan.thicknessMm,tabMm:plan.tabMm,fileTag:plan.fileTag,layout,...rest})};
+      sideMm:plan.sideMm,pitchMm:plan.pitchMm,thicknessMm:plan.thicknessMm,tabMm:plan.tabMm,fileTag:plan.fileTag,layout,...rest,
+      ...(scaled?{printScale:plan.printScale,virtualWidthMm:VW,virtualHeightMm:VH}:{})})};
+}
+
+/**
+ * 가상 용지 → 실제 용지 사상(균일 1/s, 가운데 기준): 실제 = 실제 가운데 + (가상 − 가상 가운데) / s.
+ * 드라이버가 쪽 전체를 가운데 기준 s 배로 줄이면 종이 위 점 = 가상 점(설계 mm)이에요.
+ */
+function paperScaleMap(plan){
+  const k=1/plan.printScale,cx=plan.widthMm/2,cy=plan.heightMm/2,vx=plan.virtualWidthMm/2,vy=plan.virtualHeightMm/2;
+  const x=v=>cx+(v-vx)*k,y=v=>cy+(v-vy)*k;
+  return {k,x,y,point:q=>pt(x(q.x),y(q.y)),pair:([a,b])=>Object.freeze([x(a),y(b)]),vec:([a,b])=>Object.freeze([a*k,b*k]),
+    rect:r=>Object.freeze({...r,x0:x(r.x0),y0:y(r.y0),x1:x(r.x1),y1:y(r.y1)})};
+}
+/**
+ * 조립 결과(도형 + 메타데이터)를 실제 용지 좌표로 옮겨요. 메타 키마다 옮기는 법을 적어 두고, 모르는 키가 오면 던져요 —
+ * 새 메타 필드가 가상 좌표로 남아 실제 좌표 도형과 어긋나는 일(조용한 불일치)을 막아요. 셀 단위(crop · layout)는 그대로예요.
+ */
+function toRealPaper(built,T){
+  const freezeAll=list=>Object.freeze(list.map(Object.freeze));
+  const handlers={
+    layout:v=>v,
+    faces:v=>Object.freeze(Object.fromEntries(Object.entries(v).map(([name,f])=>[name,Object.freeze({...f,cellMm:f.cellMm*T.k,corner:T.pair(f.corner),
+      di:T.vec(f.di),dj:T.vec(f.dj),rect:T.rect(f.rect),visible:T.rect(f.visible)})]))),
+    tabs:v=>freezeAll(v.map(t=>({...t,a:T.point(t.a),b:T.point(t.b),base:t.base.map(T.point),polygon:t.polygon.map(T.point)}))),
+    folds:v=>freezeAll(v.map(f=>({...f,a:T.point(f.a),b:T.point(f.b)}))),
+    cuts:v=>freezeAll(v.map(c=>({...c,segments:freezeAll(c.segments.map(s=>({...s,a:T.point(s.a),b:T.point(s.b)})))}))),
+    ticks:v=>freezeAll(v.map(t=>({...t,points:t.points.map(T.point)}))),
+    labels:v=>v.map(l=>Object.freeze({...l,x:T.x(l.x),y:T.y(l.y),h:l.h*T.k,width:l.width*T.k})),
+    map:v=>freezeAll(v.map(T.rect)),
+    band:v=>Object.freeze({...v,x0:T.x(v.x0),x1:T.x(v.x1),barStart:T.x(v.barStart),barEnd:T.x(v.barEnd),y0:T.y(v.y0),y1:T.y(v.y1)}),
+  };
+  const meta={};
+  for(const [key,value] of Object.entries(built.meta)){
+    if(!handlers[key])throw new Error(`배율 보정이 옮기는 법을 모르는 메타 필드예요: ${key}`);
+    meta[key]=handlers[key](value);
+  }
+  return {shapes:built.shapes.map(s=>({...s,points:s.points.map(T.point)})),meta};
 }
 
 /*
@@ -843,10 +925,14 @@ export function buildPaperSheet(phys,plan){
  *   core (skin): [{id:'A'|'B'|'C', count:2, wUm, hUm}] — A s×s · B s×(s−2t) · C (s−2t)²
  *   pieces (board): [{face, number 1–6, piece:'A'|'B'|'C', wUm, hUm}] — 번호순, 물리 z 쌍 A · x 쌍 B · y 쌍 C
  *   warnings: ['TLP_WARN_MODULE_SMALL' (모듈 < 1.2 mm) | 'TLP_WARN_BOARD_EDGE' (board t > 0.4 × 모듈 — 절단면을 흰색으로 칠하라는 안내)]
- *   fileTag: '{method}-{paper.id}-s{sideUm}um-t{thicknessUm}um' (파일명 접미사용)
+ *   fileTag: '{method}-{paper.id}-s{sideUm}um-t{thicknessUm}um' (파일명 접미사용) — 배율 보정이 있으면 '-k{round(s·1000)}' 가 붙어요
+ *   (s ≠ 1 일 때만) printScale · virtualWidthMm · virtualHeightMm — 배치에 쓴 가상 용지(W·s × H·s, µm 반올림). widthMm · heightMm 는
+ *     늘 실제 용지예요. 한 변 · 피치 · 모듈 · 날개 · 재단표 치수는 모두 «드라이버가 줄인 뒤 종이 위» 치수(= 설계)예요.
  *
  * scene.paper (buildPaperSheet 메타데이터)
  *   method · paper(id) · widthMm · heightMm · marginMm · n · sideMm · pitchMm · thicknessMm · tabMm · fileTag · layout (NetLayout)
+ *   (s ≠ 1 일 때만) printScale · virtualWidthMm · virtualHeightMm. 아래 좌표(faces · tabs · … · band)와 도형은 모두 실제 용지
+ *     좌표(파일 mm)예요 — 면 cellMm · di · dj · 라벨 h · width 도 1/s 배예요. marginMm 7 은 가상 용지의 여백이에요.
  *   faces: {면: {face, blank, cellMm, corner:[x,y], di:[x,y], dj:[x,y], rect, visible, crop, (board) number·piece}}
  *     — 시트 (i,j) 의 종이 점 = corner + i·di + j·dj (mm). rect 는 면 전체 정사각형, visible 은 인쇄된 영역(board 는 잘린 조각).
  *   (sheet·skin) tabs · folds · cuts · ticks — 종이 mm. tabs[k] = {cut, face, partner, a, b, outward, base, polygon, outside}
