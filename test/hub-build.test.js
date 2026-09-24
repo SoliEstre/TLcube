@@ -19,6 +19,30 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const pagePath = (lang) => `${ROOT}sites/tl/${lang.dir}index.html`;
 const read = (lang) => readFileSync(pagePath(lang), 'utf8');
 
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+/** 태그 한 개의 속성 → 객체. 값 없는 불리언 속성은 ''. 속성 순서·따옴표 밖 공백에 기대지 않는다. */
+const attrsOf = (tag) => Object.fromEntries(
+  [...tag.matchAll(/\s([\w-]+)(?:="([^"]*)")?/g)].map((m) => [m[1], m[2] ?? '']),
+);
+
+/** `<section id="…">` 한 덩어리. */
+function sectionOf(html, id) {
+  const start = html.indexOf(`<section id="${id}"`);
+  assert.ok(start >= 0, `<section id="${id}"> 를 못 찾았다`);
+  return html.slice(start, html.indexOf('</section>', start));
+}
+
+/** 타입 절의 카드들 — data-type 속성으로 찾는다(클래스·속성 순서 철자에 기대지 않는다). */
+function cardsOf(html) {
+  const types = sectionOf(html, 'types');
+  const starts = [...types.matchAll(/<div\b[^>]*\sdata-type="([A-Z])"[^>]*>/g)];
+  return starts.map((m, i) => ({
+    type: m[1],
+    html: types.slice(m.index, i + 1 < starts.length ? starts[i + 1].index : types.length),
+  }));
+}
+
 // ⚠ **의도적 갱신** (2026-08-17, i18n 5언어 확장): 3 → 8언어. languages 를 순회하므로
 //   이 테스트는 언어가 늘면 자동으로 넓어진다 — 제목만 주장에 맞춘다.
 test('동기화: build-hub.mjs 를 다시 돌려도 8언어 산출물이 바뀌지 않는다', () => {
@@ -42,19 +66,24 @@ test('8언어 모두 자기 언어·정본 URL·hreflang 을 갖는다', () => {
   }
 });
 
+// ⚠ **의도적 갱신** (2026-09-25, 허브 개편): 타입 이미지에 내용 해시 쿼리(`?v=<8 hex>`)가
+//   붙었다 — `/assets/` 도 7일 캐시라 같은 이름으로 다시 만든 그림이 재방문자에게 안
+//   보였다. 경로(한 단계 위로)는 그대로 재고, 쿼리는 형태만 본다. 해시가 **파일 내용과
+//   같은지**는 test/hub-assets.test.js 가 모든 자산에 대해 잰다.
 test('언어 디렉터리의 자산 경로가 한 단계 올라간다', () => {
   for (const lang of languages) {
     const html = read(lang);
     const expected = lang.dir === '' ? 'assets/type-Y.png' : '../assets/type-Y.png';
-    assert.ok(html.includes(`src="${expected}"`),
-      `${lang.code}: 자산 경로가 ${expected} 여야 한다 — 언어 디렉터리에서 흔한 404 원인이다`);
+    assert.match(html, new RegExp(`src="${escapeRe(expected)}\\?v=[0-9a-f]{8}"`),
+      `${lang.code}: 자산 경로가 ${expected}?v=… 여야 한다 — 언어 디렉터리에서 흔한 404 원인이다`);
     const css = lang.dir === '' ? '../_shared/site.css' : '../../_shared/site.css';
     assert.ok(html.includes(`href="${css}?v=`), `${lang.code}: CSS 경로`);
   }
 });
 
 // `statusLead`·`rowCenterQr` 의 «네 타입 / all four / les quatre / …» 는 **개수 표기가
-// 아니라 측정 범위**다 — 포맷 타입 총수는 `typesTitle` 의 «타입 5종» 이고, 둘이 다른 건
+// 아니라 측정 범위**다 — 포맷 타입 총수는 타입 카드(`type*Name` 키) 집합이고(제목에는
+// 개수를 적지 않는다 · README 표와의 일치는 test/readme-types.test.js 가 잰다), 둘이 다른 건
 // `measuredOn`(2026-08-27) 코퍼스가 타입 C 신설(2026-08-30)보다 앞서기 때문이다.
 // 그래서 이 자는 «4» 를 «5» 로 고치라고 하지 않는다. 대신 **재는 대상이 늘어나는 순간**
 // 실패해서 여덟 언어 문구를 함께 손보게 만든다 (숫자 철자를 훑지 않으므로 표현이
@@ -81,17 +110,90 @@ test('타입 C 초대용량·노치·근접 스캔 카피가 여덟 언어 산�
   }
 });
 
-test('H 큐브 소개와 한계를 여덟 언어 Y 카드와 메타에 함께 싣는다', () => {
+// ⚠ **의도적 갱신** (2026-09-25, 허브 개편): H 는 Y 카드 안의 덧붙임 블록
+//   (class="h-cube-extension")이 아니라 **Y 바로 뒤의 자기 카드**가 됐다 — 영상이 들어가고,
+//   넓은 화면에서 Y·H·O / C·A·K 3×2 로 선다. 옛 자는 그 클래스 철자와 «Y 이름 < 블록 < O 제목»
+//   배치를 쟀으므로 그대로는 못 산다. 새 자는 data-type 으로 카드를 찾아 ① 카드 순서
+//   ② H 카드가 소개·메타와 영상(포스터 + MP4 소스)을 함께 싣는지(한계 문장은 아래 갱신으로
+//   스캐너 현황 절로 옮겼다) ③ 메타 설명과
+//   JSON-LD 에 H 가 계속 실리는지(옛 자의 뒤 두 단언 그대로)를 잰다.
+//   H 에 type*Name 키를 만들지 않는다 — README 타입 표에 H 행이 요구된다(readme-types).
+// ⚠ **의도적 갱신** (2026-09-25, 검토 반영): H 카드의 한계 문장(hCubeLimit)을 없앴다. 넓은 화면에서
+//   글이 세 배 긴 H 카드가 첫 줄 높이를 정해 Y·O 카드가 빈 칸(데 528 px)으로 늘어났다. 그래서 H 카드는
+//   다른 카드와 같은 틀(제목 · 소개 · 메타)만 싣고, «표에 H 없음 · 실카메라 인식률·FPS 보장 안 함» 은
+//   스캐너 현황 절의 statusNote4 로 옮겼다 — 아래에서 그 문장이 그 절에 실리는지를 대신 잰다.
+test('타입 카드는 Y·H·O·C·A·K 순이고 H 카드가 영상·소개·메타를 싣고, H 의 한계는 스캐너 현황 절에 있다', () => {
   for (const lang of languages) {
     const html = read(lang), t = strings[lang.code];
-    for (const key of ['hCubeTitle', 'hCubeDesc', 'hCubeLimit']) {
-      assert.ok(html.includes(t[key]), `${lang.code}: ${key} 누락`);
+    const cards = cardsOf(html);
+    assert.deepEqual(cards.map((c) => c.type), ['Y', 'H', 'O', 'C', 'A', 'K'],
+      `${lang.code}: 타입 카드 순서`);
+    const h = cards.find((c) => c.type === 'H').html;
+    for (const key of ['hCubeTitle', 'hCubeDesc', 'hCubeMeta']) {
+      assert.ok(t[key] && h.includes(t[key]), `${lang.code}: H 카드에 ${key} 누락`);
     }
-    assert.ok(html.indexOf(t.typeYName, html.indexOf('<section id="types"')) < html.indexOf('class="h-cube-extension"'));
-    assert.ok(html.indexOf('class="h-cube-extension"') < html.indexOf(`<h3>${t.typeOName}</h3>`));
+    assert.ok(t.statusNote4 && sectionOf(html, 'scanner-status').includes(t.statusNote4),
+      `${lang.code}: H 가 표에 없다는 한계(statusNote4)가 스캐너 현황 절에 없다`);
+    const video = /<video\b[^>]*>/.exec(h);
+    assert.ok(video, `${lang.code}: H 카드에 <video> 가 없다`);
+    assert.match(attrsOf(video[0]).poster || '', /(^|\/)assets\/type-H\.webp\?v=[0-9a-f]{8}$/,
+      `${lang.code}: H 영상 포스터`);
+    const source = /<source\b[^>]*>/.exec(h);
+    assert.ok(source, `${lang.code}: H 영상에 <source> 가 없다`);
+    const src = attrsOf(source[0]);
+    assert.match(src.src || '', /(^|\/)assets\/type-H\.mp4\?v=[0-9a-f]{8}$/, `${lang.code}: H 영상 소스`);
+    assert.equal(src.type, 'video/mp4', `${lang.code}: H 영상 소스 형식`);
     assert.ok(/<meta name="description"[^>]+>/.exec(html)[0].includes(t.hCubeTitle));
     const ld = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)[1]);
     assert.ok(ld['@graph'].find(n => n['@type'] === 'TechArticle').description.includes(t.hCubeTitle));
+  }
+});
+
+// 첫 화면에서 글보다 그림이 먼저 오게 한 개편(2026-09-25)을 잠근다 — 타입 절이 «왜 지금»
+// 논증보다 앞선다. 내비가 같은 순서인지는 아래 «내비 = 본문» 자가 따로 잰다.
+test('타입 절이 «왜 지금» 절보다 먼저 온다', () => {
+  for (const lang of languages) {
+    const html = read(lang);
+    const types = html.indexOf('<section id="types"');
+    const whyNow = html.indexOf('<section id="why-now"');
+    assert.ok(types >= 0 && whyNow >= 0, `${lang.code}: 두 절 중 하나를 못 찾았다`);
+    assert.ok(types < whyNow, `${lang.code}: 타입 절이 «왜 지금» 뒤에 있다`);
+  }
+});
+
+// 좁은 화면의 첫 화면에도 그림이 하나 있게 히어로에 H 포스터를 둔다. 그 그림은 H 카드로
+// 이어지는 링크이고, 카드의 영상 포스터와 **같은 파일**이다(한 번만 받는다 · 두 번째 영상을
+// 돌리지 않는다). alt 는 여덟 언어 문자열에서 온다.
+test('히어로 그림이 H 카드로 이어지고 그 카드의 포스터와 같은 파일이다', () => {
+  for (const lang of languages) {
+    const html = read(lang), t = strings[lang.code];
+    const hero = sectionOf(html, 'hero');
+    const link = /<a\b[^>]*\shref="#([^"]+)"[^>]*>\s*(<img\b[^>]*>)/.exec(hero);
+    assert.ok(link, `${lang.code}: 히어로에 그림 링크가 없다`);
+    assert.doesNotMatch(hero, /<video\b/, `${lang.code}: 히어로에서 영상을 따로 돌리지 않는다`);
+    const h = cardsOf(html).find((c) => c.type === 'H');
+    assert.ok(h, `${lang.code}: H 카드가 없다`);
+    const cardTag = /<div\b[^>]*>/.exec(h.html)[0];
+    assert.equal(attrsOf(cardTag).id, link[1], `${lang.code}: 히어로 링크가 H 카드를 가리키지 않는다`);
+    const img = attrsOf(link[2]);
+    const poster = attrsOf(/<video\b[^>]*>/.exec(h.html)[0]).poster;
+    assert.equal(img.src, poster, `${lang.code}: 히어로 그림과 H 포스터가 다른 URL 이다`);
+    assert.ok(t.heroVisualAlt && img.alt === t.heroVisualAlt.replace(/"/g, '&quot;'),
+      `${lang.code}: 히어로 그림 alt 가 heroVisualAlt 가 아니다`);
+  }
+});
+
+// 페이지 안 링크(#…)는 내비·히어로 그림·현황 배지에 흩어져 있다. 어느 하나가 없는 id 를
+// 가리키면 눌러도 아무 데도 안 간다 — 조용한 결함이라 여기서 전부 대조한다.
+test('페이지 안 링크(#…)가 모두 실제 id 로 이어진다', () => {
+  for (const lang of languages) {
+    const html = read(lang);
+    const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+    const targets = [...html.matchAll(/\shref="#([^"]*)"/g)].map((m) => m[1]);
+    assert.ok(targets.length >= 5, `${lang.code}: 페이지 안 링크가 ${targets.length}개뿐이다 — 정규식이 안 맞는 것일 수 있다`);
+    for (const id of targets) {
+      assert.ok(ids.has(id), `${lang.code}: #${id} 로 가는 링크가 있는데 그 id 가 없다`);
+    }
   }
 });
 

@@ -1,4 +1,7 @@
-// site.js — tl / tlscan 공용 스크립트: 테마 토글 + 사용 이벤트 비콘.
+// site.js — 소개 허브(tl.estre.so) 스크립트: 테마 토글 + 언어 드롭다운 + 사용 이벤트 비콘
+//           + 타입 H 영상 재생 제어(맨 아래 별도 블록).
+//
+// 생성기·스캐너는 단일 HTML 이라 이 파일을 참조하지 않는다 — 그쪽 비콘은 `src/beacon.js` 다.
 //
 // 비콘 설계는 PM/010 확정안을 따른다 (요지):
 //   · 엔드포인트 `/i` — `analytics`·`collect`·`track`·`event` 같은 단어를 쓰면
@@ -221,4 +224,153 @@
   if (site === 'gen' || site === 'scan') {
     window.addEventListener('appinstalled', () => send('pwa_install', { surface: 'pwa' }));
   }
+})();
+
+// ── 타입 H 영상 ─────────────────────────────────────────────
+// ⚠ 위 블록과 **따로 둔다.** 여기서 던져도 테마·비콘은 이미 돌았고, 영상은 마크업만으로
+//   완결돼 있다(포스터 + 네이티브 controls + preload="none").
+//
+// 아무것도 안 하는 경우 — 동작 줄이기(prefers-reduced-motion) · 데이터 절약(Save-Data) ·
+//   IntersectionObserver 없음. 그러면 포스터만 내려오고 MP4 는 사용자가 재생을 누를 때 받는다.
+// 그 밖에는:
+//   · 네이티브 controls 를 걷고 소리 없이(muted) 둔 채 **멈춤/재생 버튼**을 붙인다.
+//     5초 넘게 움직이는 것은 멈출 수단이 있어야 하고(WCAG 2.2.2), 키보드로 닿아야 한다 —
+//     그래서 진짜 <button> 이다. 버튼이나 영상을 누르면 토글된다.
+//   · 화면에 25 % 이상 보일 때만 재생하고, 벗어나거나 탭이 가려지면(visibilitychange) 멈춘다.
+//   · 사용자가 멈추면 다시 화면에 들어와도 스스로 재생하지 않는다.
+//   · 도중에 동작 줄이기가 켜지면 멈추고 네이티브 controls 로 되돌린다(버튼 제거).
+//   · 보임 관찰은 페이지 load 뒤 **한가해진 다음**(requestIdleCallback, 없으면 짧은 타이머)에
+//     시작한다. 세로가 긴 데스크톱에서는 H 카드가 첫 화면에 걸려 있어서, 곧장 관찰하면 1.8 MB
+//     MP4 가 첫 화면 그림·CSS 와 같이 받아진다(첫 로드 약 2.4 MB). 그림이 다 뜬 뒤에 받게 한다.
+//     그 사이에도 버튼은 동작한다 — 사용자가 먼저 누르면 그대로 재생된다.
+// 버튼 이름은 상태에 따라 «재생»/«멈춤» 으로 바뀐다(마크업의 data-label-play/-pause).
+//   이름이 바뀌는 버튼에 aria-pressed 를 겹치면 «멈춤, 눌림» 처럼 뜻이 뒤집혀 읽히므로
+//   쓰지 않는다 — 토글 버튼은 둘 중 하나만 쓴다.
+(() => {
+  'use strict';
+
+  const videos = Array.prototype.slice.call(document.querySelectorAll('video[data-autoplay]'));
+  if (videos.length === 0) return;
+
+  const motion = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
+  const reduced = () => Boolean(motion && motion.matches);
+  const saveData = (() => {
+    try { return Boolean(navigator.connection && navigator.connection.saveData); } catch { return false; }
+  })();
+  if (reduced() || saveData || typeof window.IntersectionObserver !== 'function') return;
+
+  const VISIBLE_RATIO = 0.25;
+  const ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">'
+    + '<path class="icon-pause" d="M4 3h3v10H4zM9 3h3v10H9z"/>'
+    + '<path class="icon-play" d="M5 2.5v11L13.5 8z"/></svg>';
+
+  const players = videos.map((video) => {
+    let visible = false;
+    let userPaused = false;
+    let released = false;
+    const labelPlay = video.getAttribute('data-label-play') || 'Play';
+    const labelPause = video.getAttribute('data-label-pause') || 'Pause';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'video-toggle';
+    button.innerHTML = ICON;
+
+    const render = () => {
+      if (released) return;
+      const playing = !video.paused;
+      const label = playing ? labelPause : labelPlay;
+      button.setAttribute('data-state', playing ? 'playing' : 'paused');
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    };
+    const attempt = () => {
+      let pending = null;
+      try { pending = video.play(); } catch { pending = null; }
+      // 자동 재생 거부(절전 모드 등)는 오류가 아니다 — 버튼이 «재생» 으로 남아 누르면 된다.
+      if (pending && typeof pending.catch === 'function') pending.catch(render);
+    };
+    const sync = () => {
+      if (released) return;
+      const want = visible && !userPaused && document.visibilityState !== 'hidden';
+      if (want && video.paused) attempt();
+      else if (!want && !video.paused) video.pause();
+      render();
+    };
+    const toggle = () => {
+      if (released) return;
+      if (video.paused) {
+        userPaused = false;
+        attempt();
+      } else {
+        userPaused = true;
+        video.pause();
+      }
+      render();
+    };
+
+    video.muted = true;
+    video.controls = false;
+    video.after(button);
+    button.addEventListener('click', toggle);
+    video.addEventListener('click', toggle);
+    video.addEventListener('play', render);
+    video.addEventListener('pause', render);
+    render();
+
+    return {
+      video,
+      sync,
+      setVisible(value) {
+        visible = value;
+        sync();
+      },
+      release() {
+        if (released) return;
+        video.pause();
+        released = true;
+        // 네이티브 controls 는 영상 클릭으로 스스로 토글한다 — 우리 리스너가 남아 있으면
+        // 한 번 누를 때 두 번 토글돼 아무 일도 안 일어난다.
+        video.removeEventListener('click', toggle);
+        video.removeEventListener('play', render);
+        video.removeEventListener('pause', render);
+        video.controls = true;
+        button.remove();
+      },
+    };
+  });
+
+  const byVideo = new Map(players.map((player) => [player.video, player]));
+  const observer = new window.IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const player = byVideo.get(entry.target);
+      // 경계에서 비율이 0.2499… 로 올 수 있어 아주 조금 느슨하게 본다.
+      if (player) player.setVisible(entry.isIntersecting && entry.intersectionRatio >= VISIBLE_RATIO - 0.01);
+    }
+  }, { threshold: [0, VISIBLE_RATIO] });
+
+  let stopped = false;
+  const startObserving = () => {
+    if (stopped) return;
+    players.forEach((player) => observer.observe(player.video));
+  };
+  const whenIdle = () => {
+    if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(startObserving, { timeout: 2000 });
+    else window.setTimeout(startObserving, 200);
+  };
+  if (document.readyState === 'complete') whenIdle();
+  else window.addEventListener('load', whenIdle, { once: true });
+
+  document.addEventListener('visibilitychange', () => players.forEach((player) => player.sync()));
+
+  const onMotionChange = () => {
+    if (!reduced()) return;
+    stopped = true;
+    observer.disconnect();
+    players.forEach((player) => player.release());
+  };
+  if (motion && typeof motion.addEventListener === 'function') motion.addEventListener('change', onMotionChange);
+  else if (motion && typeof motion.addListener === 'function') motion.addListener(onMotionChange);
 })();

@@ -18,7 +18,7 @@
  * 사용: node tools/build-hub.mjs
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +27,14 @@ import { languages, strings, stats } from './hub-content.mjs';
 
 const ROOT = fileURLToPath(new URL('../sites/tl/', import.meta.url));
 const SHARED = fileURLToPath(new URL('../sites/_shared/', import.meta.url));
+const ASSETS = fileURLToPath(new URL('../sites/tl/assets/', import.meta.url));
 const ORIGIN = 'https://tl.estre.so';
+
+/** 타입 H 는 스틸이 아니라 영상이다 — 포스터(첫 프레임)와 MP4. 이름은 매체 도구와 같이 고정한다. */
+const H_POSTER = 'type-H.webp';
+const H_VIDEO = 'type-H.mp4';
+
+const sha8 = (bytes) => createHash('sha256').update(bytes).digest('hex').slice(0, 8);
 
 /*
  * ⚠ 공유 자산은 **내용 해시를 쿼리로 달아야 한다.**
@@ -38,10 +45,85 @@ const ORIGIN = 'https://tl.estre.so';
  * 해시가 바뀌면 URL 이 바뀌므로 HTML 과 자산이 항상 같이 움직인다.
  */
 function assetVersion(name) {
-  return createHash('sha256').update(readFileSync(SHARED + name)).digest('hex').slice(0, 8);
+  return sha8(readFileSync(SHARED + name));
 }
 const SITE_CSS_V = assetVersion('site.css');
 const SITE_JS_V = assetVersion('site.js');
+
+/*
+ * ⚠ `/assets/` 도 같은 7일 캐시다. 그리고 타입 이미지·H 영상은 **같은 이름으로 다시
+ *   만든다** — 이름만 보고는 재방문자가 최대 7일 동안 옛 그림을 본다. 그래서 HTML 이
+ *   가리키는 자산 URL(img src · video poster · source src)에도 내용 해시를 단다.
+ * ⚠ **og:image 에는 달지 않는다.** 링크 미리보기 크롤러는 쿼리가 다르면 다른 이미지로
+ *   보고, test/site-og-image.test.js 는 그 URL 의 경로를 곧장 파일로 되돌려 잰다.
+ * 크기(width/height)도 **파일에서 읽는다.** 스틸은 타입마다 실루엣 비율이 달라 정사각이
+ *   아니고, 다시 만들 때마다 바뀐다 — 손으로 적은 숫자는 다음 재생성에서 틀린다.
+ * 자산은 import 시점이 아니라 **렌더할 때** 읽는다. rebuild-all.mjs 가 OUTPUTS 만 보려고
+ *   이 모듈을 import 하는데, 그때 자산 하나가 없다고 모듈째 죽으면 안 된다.
+ */
+const hubAssets = new Map();
+function hubAsset(name) {
+  let asset = hubAssets.get(name);
+  if (!asset) {
+    const file = ASSETS + name;
+    if (!existsSync(file)) {
+      throw new Error(`허브 자산이 없다: sites/tl/assets/${name} — 타입 이미지·H 영상은 tools/hub-media.mjs 가 만든다`);
+    }
+    const bytes = readFileSync(file);
+    asset = { v: sha8(bytes), size: mediaSize(bytes, name) };
+    hubAssets.set(name, asset);
+  }
+  return asset;
+}
+
+/** 언어 디렉터리 기준 상대 URL + 내용 해시 쿼리. */
+const assetUrl = (p, name) => `${p}assets/${name}?v=${hubAsset(name).v}`;
+
+/** 파일에서 읽은 실제 크기 — 레이아웃 자리를 미리 잡아 둔다(그림이 늦게 와도 글이 안 밀린다). */
+function sizeAttrs(name) {
+  const { size } = hubAsset(name);
+  if (!size) throw new Error(`${name}: 크기를 읽을 수 있는 이미지가 아니다`);
+  return `width="${size.width}" height="${size.height}"`;
+}
+
+/*
+ * 이미지 크기를 헤더에서 읽는다 (의존성 없이).
+ *   PNG  — 시그니처 8 B + 길이 4 B + 'IHDR' 뒤에 폭·높이(big-endian 32비트).
+ *   WebP — 'RIFF' … 'WEBP' 뒤 첫 청크가 셋 중 하나다.
+ *          VP8X(확장) : 캔버스 폭-1·높이-1 을 24비트 LE 로 (Chrome 의 toBlob 은 ICC 를
+ *                       실어 이 형태로 낸다)
+ *          VP8L(무손실): 0x2F 뒤 14비트씩 폭-1·높이-1
+ *          'VP8 '(손실) : 시작 코드 9D 01 2A 뒤 14비트 LE 폭·높이
+ * 이름이 .png/.webp 인데 못 읽으면 던진다 — 조용히 크기 없는 태그를 찍는 것보다 낫다.
+ * 영상(.mp4)은 크기를 갖지 않는다(null). 영상 태그의 크기는 포스터에서 온다.
+ */
+function mediaSize(bytes, name) {
+  const ascii = (from, to) => bytes.toString('latin1', from, to);
+  if (name.endsWith('.png')) {
+    if (bytes.length < 24 || bytes.readUInt32BE(0) !== 0x89504e47 || ascii(12, 16) !== 'IHDR') {
+      throw new Error(`${name}: PNG IHDR 을 못 읽었다`);
+    }
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+  if (name.endsWith('.webp')) {
+    if (bytes.length < 30 || ascii(0, 4) !== 'RIFF' || ascii(8, 12) !== 'WEBP') {
+      throw new Error(`${name}: RIFF/WEBP 머리가 아니다`);
+    }
+    const chunk = ascii(12, 16);
+    if (chunk === 'VP8X') {
+      return { width: 1 + bytes.readUIntLE(24, 3), height: 1 + bytes.readUIntLE(27, 3) };
+    }
+    if (chunk === 'VP8L' && bytes[20] === 0x2f) {
+      const bits = bytes.readUInt32LE(21);
+      return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >>> 14) & 0x3fff) };
+    }
+    if (chunk === 'VP8 ' && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
+      return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+    }
+    throw new Error(`${name}: WebP 첫 청크(${JSON.stringify(chunk)})에서 크기를 못 읽었다`);
+  }
+  return null;
+}
 
 /** 정적 자산은 언어 디렉터리에서 한 단계 위로 올라가야 한다. */
 const prefix = (lang) => (lang.dir === '' ? '' : '../');
@@ -164,6 +246,9 @@ function render(lang) {
    * 들고 있었고, Type K 를 더할 때 이 자리가 통째로 빠졌다 — 손 목록은 반드시 어긋난다.
    * 라벨은 `row<타입>Name` 규약으로 찾고 **없으면 던진다**: 조용히 `undefined` 가 표에
    * 찍히는 것보다 빌드가 죽는 편이 낫다 (8언어 중 한 언어만 빠지는 게 이 파일의 상습 사고).
+   * 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다 — 초기 실기기 텔레메트리에서
+   * 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. 그래서 라이브 칸은 전부
+   * «추가 측정 중» 이다.
    */
   const ogImageAlt = () => {
     if (!t.ogImageAlt) throw new Error(`og:image:alt 문자열이 없다 (${lang.code})`);
@@ -175,6 +260,87 @@ function render(lang) {
     return `<tr><td>${label}</td><td>${badge('ok', s.types[k].decoded)}</td>`
       + `<td>${msOf(k)}</td><td>${badge('warn', t.badgePending)}</td></tr>`;
   }).join('\n          ');
+
+  /* 새로 쓰는 문자열은 **없으면 던진다** (위 row*Name 과 같은 이유). */
+  const need = (key) => {
+    const value = t[key];
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(`허브 문자열 ${key} 이 없다 (${lang.code}) — tools/hub-content.mjs 여덟 언어에 함께 넣는다`);
+    }
+    return value;
+  };
+  /* 속성값(alt · aria-label · data-label-*)에 들어가는 문자열. 태그가 섞였으면 문구 실수라
+     던지고, 큰따옴표만 엔티티로 바꾼다 — 다른 문자열은 이미 HTML 조각으로 쓰여 있다. */
+  const attrText = (key) => {
+    const value = need(key);
+    if (/[<>]/.test(value)) throw new Error(`${key} (${lang.code}): 속성값에 태그를 넣을 수 없다`);
+    return value.replace(/"/g, '&quot;');
+  };
+
+  /*
+   * 타입 카드. 스틸은 타입 문자 하나로 이름·설명·메타·이미지를 찾는다(`type<문자>Name` ·
+   * `assets/type-<문자>.png`) — 이미지가 없는 타입 카드가 다시 생기지 않게 이미지도 같은
+   * 규약으로 찾고, 파일이 없으면 빌드가 죽는다 (타입 C 카드가 그림 없이 한동안 서 있었다).
+   * 첫 줄(Y · H · O)만 즉시 받고 둘째 줄(C · A · K)은 지연 로딩한다.
+   */
+  const stillCard = (letter, { lazy }) => {
+    const file = `type-${letter}.png`;
+    return `<div class="card" data-type="${letter}">
+        <img src="${assetUrl(p, file)}" ${sizeAttrs(file)}${lazy ? ' loading="lazy"' : ''} alt="${attrText(`type${letter}Name`)}">
+        <h3>${need(`type${letter}Name`)}</h3>
+        <p class="dim">${need(`type${letter}Desc`)}</p>
+        <div class="meta">${need(`type${letter}Meta`)}</div>
+      </div>`;
+  };
+
+  /*
+   * True 3D H 는 Y 그룹의 실제 큐브 확장이라 **타입 이름 키(type*Name)를 갖지 않는다** —
+   * 그 키가 생기면 README 두 본의 타입 표에도 H 행이 요구된다(test/readme-types.test.js).
+   * 그래서 카드만 따로 세우고 Y 바로 뒤에 둔다.
+   * 영상은 마크업만으로 완결된다: 포스터 + 네이티브 controls + preload="none". JS 가 없거나
+   * 동작 줄이기·데이터 절약이면 포스터만 내려오고 MP4 는 사용자가 재생을 누를 때 받는다.
+   * 화면에 들어왔을 때의 소리 없는 자동 재생과 멈춤 버튼은 site.js 가 붙인다(data-autoplay).
+   * `type` 에 codecs 는 적지 않는다 — 인코더 프로필이 바뀌면 그 문자열만 조용히 틀린다.
+   * `id="type-h"` 는 히어로 그림 링크의 도착점이다.
+   * 글은 다른 카드와 같은 틀(제목 · 소개 · 메타)만 싣는다. 넓은 화면에서 H 는 Y·O 와 한 줄에
+   *   서는데 카드 높이는 그 줄에서 가장 긴 카드가 정한다 — H 에 한 단락을 더 얹으면 Y·O 가 빈 칸으로
+   *   늘어난다(2026-09-25 에 실제로 그랬다). «표에 H 없음» 같은 한계는 스캐너 현황 절(statusNote4)에 둔다.
+   */
+  const hCard = () => `<div class="card" data-type="H" id="type-h">
+        <div class="card-media">
+          <video ${sizeAttrs(H_POSTER)} controls muted loop playsinline preload="none" poster="${assetUrl(p, H_POSTER)}" aria-label="${attrText('hCubeVideoLabel')}" data-autoplay data-label-play="${attrText('hCubeVideoPlay')}" data-label-pause="${attrText('hCubeVideoPause')}">
+            <source src="${assetUrl(p, H_VIDEO)}" type="video/mp4">
+          </video>
+        </div>
+        <h3>${need('hCubeTitle')}</h3>
+        <p class="dim">${need('hCubeDesc')}</p>
+        <div class="meta">${need('hCubeMeta')}</div>
+      </div>`;
+
+  /*
+   * 히어로 그림 — 좁은 화면에서도 첫 화면에 «그림» 이 하나 있게 한다. H 포스터(영상 첫
+   * 프레임)를 **그대로** 쓴다: 같은 URL 이라 한 번만 받고, 영상 재생은 H 카드 한 곳에서만
+   * 한다(두 군데서 돌리면 받는 양도 두 배다). 좁은 화면에선 제목 바로 뒤, 넓은 화면에선
+   * 글 옆에 놓는 건 site.css 의 .hero-grid 가 정한다.
+   */
+  const heroVisual = () => `<a class="hero-visual" href="#type-h">
+        <img src="${assetUrl(p, H_POSTER)}" ${sizeAttrs(H_POSTER)} alt="${attrText('heroVisualAlt')}">
+      </a>`;
+
+  /*
+   * 섹션 순서: hero → types → why-now → what → scanner-status → spec (2026-09-25 개편).
+   *   타입을 논증보다 먼저 둔다 — 방문자가 «이게 무엇인지» 를 글보다 그림으로 먼저 보게.
+   *   그다음이 «왜 지금» 이다. 이 절은 메커니즘부터 여는 스펙 리드 대신 방문자가 묻는
+   *   «이게 나한테 무슨 일인지» 에 답하려고 생겼다(공감 → 왜 지금 → 가치의 순서).
+   *   원리(what)는 그 뒤에 온다.
+   * ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
+   *   «건너뛴 게 있나» 하고 되짚게 된다. 한쪽만 옮긴 적이 있다(hub-build.test.js 가 잰다).
+   * 카드 순서: Y · H · O · C · A · K. H 는 Y 그룹의 확장이라 Y 바로 뒤, C 는 같은 계열인
+   *   O 바로 뒤, K 는 A 바로 뒤다 — K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이
+   *   이해된다. 넓은 화면에서 3×2 로 선다.
+   * ⚠ 이 설명은 템플릿 밖(JS 주석)에 둔다 — HTML 주석으로 두면 여덟 언어 공개 페이지에
+   *   그대로 실려 나가고, 실린 채로 낡는다(실제로 «카드 순서는 Y·O·A·K» 가 남아 있었다).
+   */
 
   return `<!doctype html>
 <html lang="${lang.htmlLang}" prefix="og: https://ogp.me/ns#">
@@ -210,11 +376,8 @@ ${jsonLd(lang, t)}
   <header class="bar">
     <a class="brand" href="${ORIGIN}/${lang.dir}">TL<span class="mark">cube</span></a>
     <nav>
-      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
-           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
-           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
-      <a href="#why-now">${t.navWhyNow}</a>
       <a href="#types">${t.navTypes}</a>
+      <a href="#why-now">${t.navWhyNow}</a>
       <a href="#what">${t.navWhat}</a>
       <a href="#scanner-status">${t.navStatus}</a>
       <a href="#spec">${t.navSpec}</a>
@@ -230,73 +393,39 @@ ${jsonLd(lang, t)}
   </header>
 
   <section id="hero">
-    <h1>${t.heroTitle}</h1>
-    <p class="lead">${t.heroLead}</p>
-    <p class="lead">${t.heroLead2}</p>
-    <div class="cta">
-      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">${t.ctaMake}</a>
-      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    <div class="hero-grid">
+      <h1>${t.heroTitle}</h1>
+      ${heroVisual()}
+      <div class="hero-body">
+        <p class="lead">${t.heroLead}</p>
+        <p class="lead">${t.heroLead2}</p>
+        <div class="cta">
+          <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">${t.ctaMake}</a>
+          <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+        </div>
+      </div>
     </div>
-  </section>
-
-
-  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
-       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
-       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
-       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
-  <section id="why-now">
-    <h2>${t.whyNowTitle}</h2>
-    <p class="lead">${t.whyNow1}</p>
-    <p class="lead">${t.whyNow2}</p>
-    <p class="lead">${t.whyNow3}</p>
   </section>
 
   <section id="types">
     <h2>${t.typesTitle}</h2>
     <p class="dim">${t.typesLead}</p>
     <div class="grid" style="margin-top:18px">
-      <div class="card">
-        <img src="${p}assets/type-Y.png" alt="${t.typeYName}">
-        <h3>${t.typeYName}</h3>
-        <p class="dim">${t.typeYDesc}</p>
-        <div class="meta">${t.typeYMeta}</div>
-        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
-          <h4>${t.hCubeTitle}</h4>
-          <p class="dim">${t.hCubeDesc}</p>
-          <p class="meta">${t.hCubeLimit}</p>
-        </div>
-      </div>
-      <div class="card">
-        <img src="${p}assets/type-O.png" alt="${t.typeOName}">
-        <h3>${t.typeOName}</h3>
-        <p class="dim">${t.typeODesc}</p>
-        <div class="meta">${t.typeOMeta}</div>
-      </div>
-      <div class="card">
-        <h3>${t.typeCName}</h3>
-        <p class="dim">${t.typeCDesc}</p>
-        <div class="meta">${t.typeCMeta}</div>
-      </div>
-      <div class="card">
-        <img src="${p}assets/type-A.png" alt="${t.typeAName}">
-        <h3>${t.typeAName}</h3>
-        <p class="dim">${t.typeADesc}</p>
-        <div class="meta">${t.typeAMeta}</div>
-      </div>
-      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
-           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
-           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
-              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
-           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
-           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
-      <div class="card">
-        <img src="${p}assets/type-K.png" alt="${t.typeKName}">
-        <h3>${t.typeKName}</h3>
-        <p class="dim">${t.typeKDesc}</p>
-        <div class="meta">${t.typeKMeta}</div>
-      </div>
+      ${stillCard('Y', { lazy: false })}
+      ${hCard()}
+      ${stillCard('O', { lazy: false })}
+      ${stillCard('C', { lazy: true })}
+      ${stillCard('A', { lazy: true })}
+      ${stillCard('K', { lazy: true })}
     </div>
     <p class="dim" style="margin-top:16px">${t.typesFoot}</p>
+  </section>
+
+  <section id="why-now">
+    <h2>${t.whyNowTitle}</h2>
+    <p class="lead">${t.whyNow1}</p>
+    <p class="lead">${t.whyNow2}</p>
+    <p class="lead">${t.whyNow3}</p>
   </section>
 
   <section id="what">
@@ -321,8 +450,6 @@ ${jsonLd(lang, t)}
           <tr><th>${t.thType}</th><th>${t.thDecoded}</th><th>${t.thTime}</th><th>${t.thRealtime}</th></tr>
         </thead>
         <tbody>
-          <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
-               텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
           ${typeRows()}
           <tr><td>${t.rowCenterQr}</td><td>${badge('ok', s.centerQr.decoded)}</td><td>—</td><td>${badge('warn', t.badgePending)}</td></tr>
         </tbody>
@@ -332,6 +459,7 @@ ${jsonLd(lang, t)}
     <p class="dim">${t.statusNote1}</p>
     <p class="dim">${t.statusNote2}</p>
     <p class="dim">${t.statusNote3}</p>
+    <p class="dim">${need('statusNote4')}</p>
     <p class="dim" style="margin-top:16px"><small>${t.statusFoot}</small></p>
   </section>
 
@@ -382,7 +510,7 @@ ${jsonLd(lang, t)}
  * ⚠ `LASTMOD` 는 **상수**다. 오늘 날짜를 쓰면 빌드를 돌릴 때마다 파일이 바뀌어
  *   «동기화 가드» 테스트가 매번 깨진다. 내용이 실제로 바뀐 날에 손으로 올린다.
  */
-const LASTMOD = '2026-09-14';
+const LASTMOD = '2026-09-25';
 
 function sitemap() {
   const alts = languages

@@ -7,6 +7,7 @@
 *.jpg binary
 *.jpeg binary
 *.webp binary
+*.mp4 binary
 *.pdf binary
 
 # 테스트 벡터는 절대 건드리지 않는다

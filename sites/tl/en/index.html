@@ -81,7 +81,7 @@
 }
 </script>
 <link rel="icon" href="../../_shared/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../../_shared/site.css?v=c922e48a">
+<link rel="stylesheet" href="../../_shared/site.css?v=9bd5a1c2">
 </head>
 <body data-site="hub">
 <div class="wrap">
@@ -89,11 +89,8 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/en/">TL<span class="mark">cube</span></a>
     <nav>
-      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
-           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
-           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
-      <a href="#why-now">Why now</a>
       <a href="#types">Types</a>
+      <a href="#why-now">Why now</a>
       <a href="#what">How it works</a>
       <a href="#scanner-status">Scanner status</a>
       <a href="#spec">Spec</a>
@@ -124,73 +121,75 @@
   </header>
 
   <section id="hero">
-    <h1>QR reads well.<br>It has just never been <strong>pretty</strong></h1>
-    <p class="lead">Posters, packaging, business cards — QR is everywhere, and dropping a black-and-white square onto a design you spent weeks on has always stung. But QR looks the way it does for a reason: it is what you build when a <strong>1994 camera and 1994 silicon</strong> have to read it at all.</p>
-    <p class="lead">Those constraints have largely lifted. Phone cameras and compute have room to spare now. So instead of chasing recognition alone, we spent that headroom on <strong>being worth looking at</strong>. This is not a replacement for QR — it is <strong>a seat next to it</strong>. The result is a <strong>3D barcode</strong> — printed flat, but read as solid.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Make a code</a>
-      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    <div class="hero-grid">
+      <h1>QR reads well.<br>It has just never been <strong>pretty</strong></h1>
+      <a class="hero-visual" href="#type-h">
+        <img src="../assets/type-H.webp?v=c2f175b8" width="720" height="720" alt="True 3D H cube code on the transparency checkerboard — go to the H card">
+      </a>
+      <div class="hero-body">
+        <p class="lead">Posters, packaging, business cards — QR is everywhere, and dropping a black-and-white square onto a design you spent weeks on has always stung. But QR looks the way it does for a reason: it is what you build when a <strong>1994 camera and 1994 silicon</strong> have to read it at all.</p>
+        <p class="lead">Those constraints have largely lifted. Phone cameras and compute have room to spare now. So instead of chasing recognition alone, we spent that headroom on <strong>being worth looking at</strong>. This is not a replacement for QR — it is <strong>a seat next to it</strong>. The result is a <strong>3D barcode</strong> — printed flat, but read as solid.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Make a code</a>
+          <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+        </div>
+      </div>
     </div>
   </section>
 
+  <section id="types">
+    <h2>Types</h2>
+    <p class="dim">Pick by where it will sit. The planar types share one data contract and differ only in silhouette; True 3D H is the Y group’s physical cube extension, with a format of its own. Every code below encodes <code>https://tl.estre.so</code>.</p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card" data-type="Y">
+        <img src="../assets/type-Y.png?v=46aa39ab" width="680" height="733" alt="Type Y — single cube">
+        <h3>Type Y — single cube</h3>
+        <p class="dim">Three n×n faces. A single solid mark, good for signage and merch.</p>
+        <div class="meta">n = 13 / 21 / 25 · net payload 31 / 98 / 141&nbsp;B</div>
+      </div>
+      <div class="card" data-type="H" id="type-h">
+        <div class="card-media">
+          <video width="720" height="720" controls muted loop playsinline preload="none" poster="../assets/type-H.webp?v=c2f175b8" aria-label="True 3D H cube rotating on the transparency checkerboard" data-autoplay data-label-play="Play video" data-label-pause="Pause video">
+            <source src="../assets/type-H.mp4?v=c424ed20" type="video/mp4">
+          </video>
+        </div>
+        <h3>True 3D H — the Y group’s physical cube extension</h3>
+        <p class="dim">Its own format for a real cube, with different data on 1…6 faces. The generator also exports a rotation video (MP4), paper patterns and 3D-print files.</p>
+        <div class="meta">H0…H8 · <span class="nowrap">n = 13…45</span> · net payload <span class="nowrap">3 faces 3…333 B</span> · <span class="nowrap">6 faces 6…666 B</span> (ECC-M, 3 tones)</div>
+      </div>
+      <div class="card" data-type="O">
+        <img src="../assets/type-O.png?v=83b89a3a" width="789" height="750" alt="Type O — hex field">
+        <h3>Type O — hex field</h3>
+        <p class="dim">The base form. Rhombic cells tile outward from a central finder.</p>
+        <div class="meta">k = 6 / 8 / 10 / 12 · net payload 18 / 39 / 65 / 97&nbsp;B</div>
+      </div>
+      <div class="card" data-type="C">
+        <img src="../assets/type-C.png?v=83be18d0" width="988" height="937" loading="lazy" alt="Type C — notched ultra-capacity">
+        <h3>Type C — notched ultra-capacity</h3>
+        <p class="dim">The 3 o’clock notch fixes both orientation and type in the silhouette. C0–C3 are for close-range scanning; bring C1 and above closer or zoom in.</p>
+        <div class="meta">k = 14 / 16 / 18 / 20 · net payload 130 / 172 / 220 / 255&nbsp;B</div>
+      </div>
+      <div class="card" data-type="A">
+        <img src="../assets/type-A.png?v=113c44f6" width="781" height="750" loading="lazy" alt="Type A — triangular silhouette">
+        <h3>Type A — triangular silhouette</h3>
+        <p class="dim">A hexagonal core plus corner patches, forming an equilateral triangle.</p>
+        <div class="meta">k = 6 / 8 / 10 · net payload 31 / 62 / 101&nbsp;B</div>
+      </div>
+      <div class="card" data-type="K">
+        <img src="../assets/type-K.png?v=a9a8b997" width="1029" height="1079" loading="lazy" alt="Type K — Hexagram">
+        <h3>Type K — Hexagram</h3>
+        <p class="dim">A triangle unioned with its 180° image. Largest payload at the same k.</p>
+        <div class="meta">k = 6 / 8 / 10 · net payload 43 / 86 / 138&nbsp;B</div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:16px">Net payload is at ECC-M. Every type, H included, can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read. H places it in the top-left corner by default. The Type O and A pictures use the centre-QR finder option, so they look different from the generator’s current default (Centre TL finder with an outer fallback QR in the top-left corner).</p>
+  </section>
 
-  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
-       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
-       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
-       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
   <section id="why-now">
     <h2>Why now</h2>
     <p class="lead"><strong>QR was the right answer for its moment.</strong> Two values, square modules, big finder patterns — every one of those choices existed so a weak camera could still read it. Under those constraints, giving up on looks was rational.</p>
     <p class="lead"><strong>That premise changed.</strong> Phone cameras today are nothing like those, and real-time video processing runs inside a browser. So the headroom could go into density — or it could go into <strong>how it looks</strong>. That is why this exists.</p>
     <p class="lead"><strong>Density was the trade.</strong> Rhombic cells are less area-efficient than square modules. This format does not compete on density. If you need to carry a lot, QR is the right tool.</p>
-  </section>
-
-  <section id="types">
-    <h2>Five types</h2>
-    <p class="dim">Pick by where it will sit. All five share one data contract and differ only in silhouette. Every code below encodes <code>https://tl.estre.so</code>.</p>
-    <div class="grid" style="margin-top:18px">
-      <div class="card">
-        <img src="../assets/type-Y.png" alt="Type Y — single cube">
-        <h3>Type Y — single cube</h3>
-        <p class="dim">Three n×n faces. A single solid mark, good for signage and merch.</p>
-        <div class="meta">n = 13 / 21 / 25 · net payload 31 / 98 / 141 B</div>
-        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
-          <h4>True 3D H — the Y group’s physical cube extension</h4>
-          <p class="dim">A separate format from planar Type Y, with H0…H8 grids and 1…6 unique data faces. Add images to blank faces, configure looping rotation, and export glTF, MP4 or Minecraft .schem structures, plus maker files for a physical cube: paper patterns (SVG, PNG, PDF or direct print) and 3MF/STL for 3D printing.</p>
-          <p class="meta">The scanner releases results only after collecting the required faces and passing RS/CRC checks. The still-photo measurements below do not include H and do not guarantee camera recognition rates or FPS.</p>
-        </div>
-      </div>
-      <div class="card">
-        <img src="../assets/type-O.png" alt="Type O — hex field">
-        <h3>Type O — hex field</h3>
-        <p class="dim">The base form. Rhombic cells tile outward from a central finder.</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · net payload 18 / 39 / 65 / 97 B</div>
-      </div>
-      <div class="card">
-        <h3>Type C — notched ultra-capacity</h3>
-        <p class="dim">The 3 o’clock notch fixes both orientation and type in the silhouette. C0–C3 are for close-range scanning; bring C1 and above closer or zoom in.</p>
-        <div class="meta">k = 14 / 16 / 18 / 20 · net payload 130 / 172 / 220 / 255 B</div>
-      </div>
-      <div class="card">
-        <img src="../assets/type-A.png" alt="Type A — triangular silhouette">
-        <h3>Type A — triangular silhouette</h3>
-        <p class="dim">A hexagonal core plus corner patches, forming an equilateral triangle.</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · net payload 31 / 62 / 101 B</div>
-      </div>
-      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
-           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
-           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
-              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
-           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
-           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
-      <div class="card">
-        <img src="../assets/type-K.png" alt="Type K — Hexagram">
-        <h3>Type K — Hexagram</h3>
-        <p class="dim">A triangle unioned with its 180° image. Largest payload at the same k.</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · net payload 43 / 86 / 138 B</div>
-      </div>
-    </div>
-    <p class="dim" style="margin-top:16px">Net payload is at ECC-M. All five types can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read.</p>
   </section>
 
   <section id="what">
@@ -215,8 +214,6 @@
           <tr><th>Type</th><th>Real photos decoded</th><th>One static-photo decode</th><th>Live validation</th></tr>
         </thead>
         <tbody>
-          <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
-               텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
           <tr><td><strong>Type Y</strong> — single cube</td><td><span class="badge ok">9 / 16</span></td><td>~1.8 s</td><td><span class="badge warn">more data needed</span></td></tr>
           <tr><td><strong>Type O</strong> — hex field</td><td><span class="badge ok">29 / 48</span></td><td>~1.9 s</td><td><span class="badge warn">more data needed</span></td></tr>
           <tr><td><strong>Type A</strong> — triangular silhouette</td><td><span class="badge ok">18 / 19</span></td><td>~2.4 s</td><td><span class="badge warn">more data needed</span></td></tr>
@@ -228,7 +225,8 @@
     <p class="dim" style="margin-top:16px"><strong>One decode of one still photo.</strong> Type O is now the fastest; A, K and Y sit close together behind it. ⚠ An earlier version of this page said Type Y was the fastest — that was a 9-photo sample, and on a wider sample the <strong>order flipped</strong>. Do not read these as live first-lock times.</p>
     <p class="dim"><strong>One static-photo decode time does not predict how live scanning feels.</strong> In the first real-device lab trace, a fast frame could still lead to a slow first lock when many frames were needed before one succeeded, and the type ranking differed from this static-photo table. That trace covers one device and a small sample, so we do not assign live usability grades yet.</p>
     <p class="dim">Shooting conditions matter too. Measured, <strong>9 pixels per cell</strong> was the decode floor, and at the same distance an <strong>ultra-wide lens</strong> frames the code smaller and drops below that line (ultra-wide 7.6 px failed / wide 9.1 px succeeded). That is why the scanner offers a lens picker.</p>
-    <p class="dim">In the <strong>centre-QR variant</strong>, a QR block replaces the central finder. Its finder patterns provide the position and orientation entry point used to decode the surrounding TL body. The generator now uses this validated path by default for Types O and A. By default the QR remains a reader-link fallback; the payload stays in the TL body.</p>
+    <p class="dim">In the <strong>centre-QR variant</strong>, a QR block replaces the central finder. Its finder patterns provide the position and orientation entry point used to decode the surrounding TL body. By default the QR remains a reader-link fallback; the payload stays in the TL body. Since 2026-08-28 the generator’s default for Types O, C, A and K is the <strong>Centre TL</strong> finder with an outer fallback QR in the top-left corner; centre QR remains one of the finder choices. The centre-QR row in the table above measures that variant (2026-08-13 round).</p>
+    <p class="dim">Type C and True 3D H are not in the table above, and H’s camera recognition rates and FPS are not guaranteed. The scanner has two engines: <strong>R1</strong> reads planar TL types one frame at a time, and <strong>R2</strong>, the default, collects Type Y and H across frames. For H it releases a result only after the required faces pass RS/CRC checks. In browsers with BarcodeDetector, R2 also reads <strong>ordinary QR codes</strong>; a link read from a QR code is never opened automatically — check the address, then tap it.</p>
     <p class="dim" style="margin-top:16px"><small>Measured 2026-08-27 · sample of <strong>110 photos</strong> (each tried at 960 · 1440 px short side). ⚠ Most of the sample is <strong>photographed off a monitor</strong>, so these are not print or in-situ numbers. And 123 of the 233 corpus frames are limit/experiment shots kept precisely because they do not decode yet — they are excluded here. Only the centre-QR row is from the older 2026-08-13 round.</small></p>
   </section>
 
@@ -263,7 +261,7 @@
   </footer>
 
 </div>
-<script src="../../_shared/site.js?v=66db2d8b"></script>
+<script src="../../_shared/site.js?v=c6169c99"></script>
 <script>
 /* 언어 자동 선택 — **첫 방문에만** 한다.
    매번 브라우저 언어로 튕기면 사용자가 고른 언어로 돌아올 수 없다. 그래서 링크를

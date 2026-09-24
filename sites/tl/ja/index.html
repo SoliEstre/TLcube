@@ -81,7 +81,7 @@
 }
 </script>
 <link rel="icon" href="../../_shared/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../../_shared/site.css?v=c922e48a">
+<link rel="stylesheet" href="../../_shared/site.css?v=9bd5a1c2">
 </head>
 <body data-site="hub">
 <div class="wrap">
@@ -89,11 +89,8 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/ja/">TL<span class="mark">cube</span></a>
     <nav>
-      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
-           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
-           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
-      <a href="#why-now">なぜ今</a>
       <a href="#types">タイプ</a>
+      <a href="#why-now">なぜ今</a>
       <a href="#what">仕組み</a>
       <a href="#scanner-status">スキャナ状況</a>
       <a href="#spec">仕様</a>
@@ -124,73 +121,75 @@
   </header>
 
   <section id="hero">
-    <h1>QR はよく読めます。<br>ただ<strong>綺麗だった試しがない</strong></h1>
-    <p class="lead">ポスター、パッケージ、名刺 — QR が入らない場所はほとんどありません。けれど何週間もかけたデザインの上に、最後に白黒の四角を置くのはいつも心残りでした。とはいえ QR があの形なのには理由があります。<strong>1994 年のカメラと演算で「とにかく読める」ようにした結果</strong>なのです。</p>
-    <p class="lead">その制約はもうかなり緩みました。カメラも演算も余裕があります。そこで認識性能をさらに追うかわりに、その余裕を<strong>見て気持ちのいいもの</strong>に使ってみました。QR を置き換えるためではなく、<strong>隣にもう一席</strong>つくるためのものです。 できあがるのは<strong>3Dバーコード</strong>——平面に印刷されますが、目には立体に見えます。</p>
-    <div class="cta">
-      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">コードを作ってみる</a>
-      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    <div class="hero-grid">
+      <h1>QR はよく読めます。<br>ただ<strong>綺麗だった試しがない</strong></h1>
+      <a class="hero-visual" href="#type-h">
+        <img src="../assets/type-H.webp?v=c2f175b8" width="720" height="720" alt="透過表示の市松模様の上の True 3D H キューブコード — H のカードへ移動">
+      </a>
+      <div class="hero-body">
+        <p class="lead">ポスター、パッケージ、名刺 — QR が入らない場所はほとんどありません。けれど何週間もかけたデザインの上に、最後に白黒の四角を置くのはいつも心残りでした。とはいえ QR があの形なのには理由があります。<strong>1994 年のカメラと演算で「とにかく読める」ようにした結果</strong>なのです。</p>
+        <p class="lead">その制約はもうかなり緩みました。カメラも演算も余裕があります。そこで認識性能をさらに追うかわりに、その余裕を<strong>見て気持ちのいいもの</strong>に使ってみました。QR を置き換えるためではなく、<strong>隣にもう一席</strong>つくるためのものです。 できあがるのは<strong>3Dバーコード</strong>——平面に印刷されますが、目には立体に見えます。</p>
+        <div class="cta">
+          <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">コードを作ってみる</a>
+          <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+        </div>
+      </div>
     </div>
   </section>
 
+  <section id="types">
+    <h2>タイプ</h2>
+    <p class="dim">どこに載せるかで選んでください。平面タイプはすべて同じデータ契約を共有し、シルエットだけが異なります。True 3D H は Y グループの実立方体拡張で、形式が別になっています。以下のコードにはすべて <code>https://tl.estre.so</code> が入っています。</p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card" data-type="Y">
+        <img src="../assets/type-Y.png?v=46aa39ab" width="680" height="733" alt="Type Y — 単一キューブ">
+        <h3>Type Y — 単一キューブ</h3>
+        <p class="dim">3 面がそれぞれ n×n の格子。ひと塊なので看板やグッズに向きます。</p>
+        <div class="meta">n = 13 / 21 / 25 · 正味ペイロード 31 / 98 / 141&nbsp;B</div>
+      </div>
+      <div class="card" data-type="H" id="type-h">
+        <div class="card-media">
+          <video width="720" height="720" controls muted loop playsinline preload="none" poster="../assets/type-H.webp?v=c2f175b8" aria-label="透過表示の市松模様の上で回転する True 3D H キューブの動画" data-autoplay data-label-play="動画を再生" data-label-pause="動画を一時停止">
+            <source src="../assets/type-H.mp4?v=c424ed20" type="video/mp4">
+          </video>
+        </div>
+        <h3>True 3D H — Y グループの実立方体拡張</h3>
+        <p class="dim">実物のキューブの 1…6 面に別々のデータを載せる独自形式です。ジェネレータから回転動画（MP4）・紙の展開図・3D プリント用ファイルも出力できます。</p>
+        <div class="meta">H0…H8 · <span class="nowrap">n = 13…45</span> · 正味ペイロード <span class="nowrap">3 面 3…333 B</span> · <span class="nowrap">6 面 6…666 B</span>（ECC-M・3 トーン）</div>
+      </div>
+      <div class="card" data-type="O">
+        <img src="../assets/type-O.png?v=83b89a3a" width="789" height="750" alt="Type O — 六角フィールド">
+        <h3>Type O — 六角フィールド</h3>
+        <p class="dim">最も基本の形。中央のファインダを中心に菱形セルが広がります。</p>
+        <div class="meta">k = 6 / 8 / 10 / 12 · 正味ペイロード 18 / 39 / 65 / 97&nbsp;B</div>
+      </div>
+      <div class="card" data-type="C">
+        <img src="../assets/type-C.png?v=83be18d0" width="988" height="937" loading="lazy" alt="Type C — 3時ノッチの超大容量">
+        <h3>Type C — 3時ノッチの超大容量</h3>
+        <p class="dim">3時方向のノッチが、シルエットだけで向きとタイプを確定します。C0〜C3は近距離スキャン専用で、C1以上は近づけるか拡大して読み取ります。</p>
+        <div class="meta">k = 14 / 16 / 18 / 20 · 正味ペイロード 130 / 172 / 220 / 255&nbsp;B</div>
+      </div>
+      <div class="card" data-type="A">
+        <img src="../assets/type-A.png?v=113c44f6" width="781" height="750" loading="lazy" alt="Type A — 三角シルエット">
+        <h3>Type A — 三角シルエット</h3>
+        <p class="dim">六角のコアにコーナーパッチを足して正三角形になります。</p>
+        <div class="meta">k = 6 / 8 / 10 · 正味ペイロード 31 / 62 / 101&nbsp;B</div>
+      </div>
+      <div class="card" data-type="K">
+        <img src="../assets/type-K.png?v=a9a8b997" width="1029" height="1079" loading="lazy" alt="Type K — 六芒星">
+        <h3>Type K — 六芒星</h3>
+        <p class="dim">正三角形とその180°像を合わせた星。同じ k で容量が最大です。</p>
+        <div class="meta">k = 6 / 8 / 10 · 正味ペイロード 43 / 86 / 138&nbsp;B</div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:16px">正味ペイロードは ECC-M 基準です。H を含むすべてのタイプに<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。H は既定で左上の角に QR を置きます。 Type O・A の画像は中央 QR ファインダの選択肢で作ったもので、現在のジェネレータ既定（中央TLファインダ＋外側の左上の角のフォールバック QR）とは見た目が異なります。</p>
+  </section>
 
-  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
-       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
-       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
-       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
   <section id="why-now">
     <h2>なぜ今なのか</h2>
     <p class="lead"><strong>QR は当時の最適解でした。</strong>白黒の 2 値、正方モジュール、大きなファインダ — どれも性能の限られたカメラでも読めるようにするための選択です。その制約の下では、見た目を諦めるのは合理的でした。</p>
     <p class="lead"><strong>その前提が変わりました。</strong>いまのスマートフォンのカメラは当時とは比べものにならず、リアルタイムの映像処理がブラウザの中で動きます。ならばその余裕を密度にではなく、<strong>見え方</strong>に使ってもいいのではないか — それがこれを作った理由です。</p>
     <p class="lead"><strong>代わりに密度は捨てました。</strong>菱形セルは正方モジュールより面積効率で不利です。このフォーマットは密度で競いません。たくさん詰め込みたいなら QR が適しています。</p>
-  </section>
-
-  <section id="types">
-    <h2>タイプ5種</h2>
-    <p class="dim">どこに載せるかで選んでください。5 タイプとも同じデータ契約を共有し、シルエットだけが異なります。以下のコードにはすべて <code>https://tl.estre.so</code> が入っています。</p>
-    <div class="grid" style="margin-top:18px">
-      <div class="card">
-        <img src="../assets/type-Y.png" alt="Type Y — 単一キューブ">
-        <h3>Type Y — 単一キューブ</h3>
-        <p class="dim">3 面がそれぞれ n×n の格子。ひと塊なので看板やグッズに向きます。</p>
-        <div class="meta">n = 13 / 21 / 25 · 正味ペイロード 31 / 98 / 141 B</div>
-        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
-          <h4>True 3D H — Y グループの実立方体拡張</h4>
-          <p class="dim">平面の Type Y とは別形式で、H0…H8 の格子と固有データ面 1…6 面を使います。空き面の画像やループ回転を設定し、glTF、MP4、Minecraft .schem 構造物を出力できます。実物のキューブを作る紙の展開図（SVG・PNG・PDF・直接印刷）と 3D プリント用の 3MF・STL も出力できます。</p>
-          <p class="meta">必要な面が揃い、RS/CRC 検証を通過してから結果を表示します。下の静止写真の測定に H は含まれず、実カメラの認識率や FPS を保証しません。</p>
-        </div>
-      </div>
-      <div class="card">
-        <img src="../assets/type-O.png" alt="Type O — 六角フィールド">
-        <h3>Type O — 六角フィールド</h3>
-        <p class="dim">最も基本の形。中央のファインダを中心に菱形セルが広がります。</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · 正味ペイロード 18 / 39 / 65 / 97 B</div>
-      </div>
-      <div class="card">
-        <h3>Type C — 3時ノッチの超大容量</h3>
-        <p class="dim">3時方向のノッチが、シルエットだけで向きとタイプを確定します。C0〜C3は近距離スキャン専用で、C1以上は近づけるか拡大して読み取ります。</p>
-        <div class="meta">k = 14 / 16 / 18 / 20 · 正味ペイロード 130 / 172 / 220 / 255 B</div>
-      </div>
-      <div class="card">
-        <img src="../assets/type-A.png" alt="Type A — 三角シルエット">
-        <h3>Type A — 三角シルエット</h3>
-        <p class="dim">六角のコアにコーナーパッチを足して正三角形になります。</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · 正味ペイロード 31 / 62 / 101 B</div>
-      </div>
-      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
-           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
-           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
-              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
-           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
-           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
-      <div class="card">
-        <img src="../assets/type-K.png" alt="Type K — 六芒星">
-        <h3>Type K — 六芒星</h3>
-        <p class="dim">正三角形とその180°像を合わせた星。同じ k で容量が最大です。</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · 正味ペイロード 43 / 86 / 138 B</div>
-      </div>
-    </div>
-    <p class="dim" style="margin-top:16px">正味ペイロードは ECC-M 基準です。5 タイプとも<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。</p>
   </section>
 
   <section id="what">
@@ -215,8 +214,6 @@
           <tr><th>タイプ</th><th>実写真の復号</th><th>静止画 1 回の復号</th><th>ライブ検証</th></tr>
         </thead>
         <tbody>
-          <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
-               텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
           <tr><td><strong>Type Y</strong> — 単一キューブ</td><td><span class="badge ok">9 / 16</span></td><td>約 1.8 秒</td><td><span class="badge warn">追加測定中</span></td></tr>
           <tr><td><strong>Type O</strong> — 六角フィールド</td><td><span class="badge ok">29 / 48</span></td><td>約 1.9 秒</td><td><span class="badge warn">追加測定中</span></td></tr>
           <tr><td><strong>Type A</strong> — 三角シルエット</td><td><span class="badge ok">18 / 19</span></td><td>約 2.4 秒</td><td><span class="badge warn">追加測定中</span></td></tr>
@@ -228,7 +225,8 @@
     <p class="dim" style="margin-top:16px"><strong>静止画 1 枚を 1 回読む基準</strong>です。現在は Type O が最も短く、A・K・Y はその後ろで近い値です。⚠ 以前の掲載で「Type Y が最速」と書いたのは写真 9 枚の標本で、標本を広げて測り直すと<strong>順序が逆転</strong>しました。ライブの初回ロック時間として読まないでください。</p>
     <p class="dim"><strong>静止画 1 回の復号時間だけではライブの体感を予測できません。</strong>試験版の初期実機計測では、1 フレームが速くても成功までに多くのフレームを要すると初回ロックが遅くなり、タイプの順序も静止画の表とは異なりました。まだ 1 台の小さな標本なので、ライブの実用性評価は付けず追加測定中としています。</p>
     <p class="dim">撮影条件も大きく効きます。実測では<strong>セルあたり 9 ピクセル</strong>が復号の下限で、同じ距離でも<strong>超広角レンズ</strong>で撮るとコードが小さく写ってこの線を下回りました（超広角 7.6px 失敗 / 広角 9.1px 成功）。スキャナにレンズ選択を入れているのはそのためです。</p>
-    <p class="dim"><strong>中央 QR 変種</strong>では QR ブロックが中央ファインダを置き換え、QR のファインダを位置・方向の入口として周囲の TL 本文を復号します。ジェネレータは Type O・A・K でこの検証済み経路を標準にしました。QR は既定ではリーダーリンクのフォールバックで、ペイロード自体は TL 本文に残ります。</p>
+    <p class="dim"><strong>中央 QR 変種</strong>では QR ブロックが中央ファインダを置き換え、QR のファインダを位置・方向の入口として周囲の TL 本文を復号します。QR は既定ではリーダーリンクのフォールバックで、ペイロード自体は TL 本文に残ります。2026-08-28 以降、Type O・C・A・K のジェネレータ既定は<strong>中央TL</strong>ファインダと、外側の左上の角に置くフォールバック QR です。中央 QR はファインダの選択肢の一つとして残っています。上の表の中央 QR の行は、この変種を測った 2026-08-13 ラウンドの値です。</p>
+    <p class="dim">Type C と True 3D H は上の表に含まれておらず、H の実カメラの認識率や FPS は保証しません。スキャナにはエンジンが 2 つあります。<strong>R1</strong> は平面の TL タイプを 1 フレームずつ読み、既定の <strong>R2</strong> は Type Y と H を複数のフレームにわたって集めて読みます。H は必要な面が揃い、RS/CRC 検証を通過してから結果を表示します。BarcodeDetector に対応したブラウザでは R2 が<strong>通常の QR コード</strong>も読み取り、QR コードから読んだリンクは自動では開きません — アドレスを確認してからタップして開きます。</p>
     <p class="dim" style="margin-top:16px"><small>測定 2026-08-27 · 標本 <strong>110 枚</strong>（各枚を短辺 960 · 1440px の 2 解像度で試行）。⚠ 標本の大半は<strong>モニター画面を撮った写真</strong>で、印刷物や実配置の数値ではありません。またコーパス 233 枚のうち <strong>123 枚</strong>は「今は読めないもの」を意図的に集めた限界・実験フレームなので、性能標本から除いています。中央 QR の行だけ 2026-08-13 の旧ラウンド値です。</small></p>
   </section>
 
@@ -263,7 +261,7 @@
   </footer>
 
 </div>
-<script src="../../_shared/site.js?v=66db2d8b"></script>
+<script src="../../_shared/site.js?v=c6169c99"></script>
 <script>
 /* 언어 자동 선택 — **첫 방문에만** 한다.
    매번 브라우저 언어로 튕기면 사용자가 고른 언어로 돌아올 수 없다. 그래서 링크를

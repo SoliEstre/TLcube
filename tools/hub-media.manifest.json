@@ -1,0 +1,207 @@
+{
+  "$comment": "tools/hub-media.mjs 가 쓴다 — 손으로 고치지 마라. 성질은 test/hub-media.test.js 가 잰다.",
+  "payload": "https://tl.estre.so",
+  "stills": {
+    "generatedFrom": {
+      "head": "dfcea2d9481f0c4fe34920de0f79fbf13cbf199b",
+      "dirty": false,
+      "browser": "Chrome/153.0.8010.53",
+      "toolSha256": "961f444d1f86918638a59f84937268882d6ae2cc232185bc50ee711b39c13e6b",
+      "generatorBuild": "2026-09-24.05"
+    },
+    "config": {
+      "type": "generator default state per type (C = O + ultra)",
+      "exportButton": "#exportPng",
+      "exportSize": 1024,
+      "flattenPreset": "slate",
+      "background": {
+        "r": 14,
+        "g": 16,
+        "b": 24
+      },
+      "cropPad": 48,
+      "gates": [
+        "generator self-check ✓",
+        "scanner photo-upload path decodes the payload"
+      ]
+    },
+    "files": {
+      "type-Y.png": {
+        "sha256": "46aa39ab505840d25081aff76d352110200698fe320c9012756f84ed4ddb1c1f",
+        "bytes": 65881,
+        "width": 680,
+        "height": 733,
+        "colorType": 2,
+        "exported": {
+          "width": 1024,
+          "height": 1024,
+          "bounds": {
+            "x": 104,
+            "y": 77,
+            "width": 584,
+            "height": 637
+          }
+        },
+        "generatorInfo": "Type Y · version Y0T-CS (n=13) · ECC H · tones 3 Payload 19 / 20 B · symbols 22+14",
+        "selfCheck": "self-check ✓ - usable · 139 cells · Δmin-Y 0.182 Gate headroom 33% — under 20% reads as “hard to read”",
+        "scanner": "https://tl.estre.so",
+        "decodeFrontendAdvisory": {
+          "ok": true,
+          "text": "https://tl.estre.so"
+        }
+      },
+      "type-O.png": {
+        "sha256": "83b89a3aa553f1d1ca15700bdd6e2d01423dbf8afa69ccf7b20cdf34f9329314",
+        "bytes": 69412,
+        "keptPrevious": "스캐너 사진 경로가 못 읽었다: No code found in that photo. Choose another one or start the camera.",
+        "width": 789,
+        "height": 750,
+        "colorType": 2,
+        "scanner": "https://tl.estre.so",
+        "rejected": {
+          "sha256": "964c63969b0392cbf1d8d38bd253bc0d0753910ed1b4d614925c5097ba4747b5",
+          "generatorInfo": "Type O · version V2 (k=8) · ECC H Payload 19 / 29 B · symbols 32+21 · preset Δmin 0.182",
+          "selfCheck": "self-check ✓ - usable · 198 cells · Δmin 0.182 Gate headroom 34% — under 20% reads as “hard to read”",
+          "decodeFrontendAdvisory": {
+            "ok": false,
+            "reason": "frontend:no-grid-hypothesis"
+          }
+        }
+      },
+      "type-C.png": {
+        "sha256": "83be18d0c1e2e7e03c543efa0281ef88263227cb42a4045efdabe16e101fa990",
+        "bytes": 181649,
+        "width": 988,
+        "height": 937,
+        "colorType": 2,
+        "exported": {
+          "width": 1024,
+          "height": 1024,
+          "bounds": {
+            "x": 56,
+            "y": 91,
+            "width": 892,
+            "height": 841
+          }
+        },
+        "generatorInfo": "Type O · version C0 (k=14) · ECC H Payload 19 / 105 B · symbols 110+73 · preset Δmin 0.182",
+        "selfCheck": "self-check ✓ - usable · 592 cells · Δmin 0.182 Gate headroom 34% — under 20% reads as “hard to read”",
+        "scanner": "https://tl.estre.so",
+        "decodeFrontendAdvisory": {
+          "ok": true,
+          "text": "https://tl.estre.so"
+        }
+      },
+      "type-A.png": {
+        "sha256": "113c44f6fa296c23e135d3b76e2468dcad50924545989535f9a68ef791a683b6",
+        "bytes": 66681,
+        "keptPrevious": "스캐너 사진 경로가 못 읽었다: No code found in that photo. Choose another one or start the camera.",
+        "width": 781,
+        "height": 750,
+        "colorType": 2,
+        "scanner": "https://tl.estre.so",
+        "rejected": {
+          "sha256": "3a6d47b478a823498d4049e2afd20feafedbcc96386846c181231e79ba6038b1",
+          "generatorInfo": "Type A · version A0 (k=6) · ECC H Payload 19 / 21 B · symbols 23+15 · preset Δmin 0.182",
+          "selfCheck": "self-check ✓ - usable · 171 cells · Δmin 0.182 Gate headroom 34% — under 20% reads as “hard to read”",
+          "decodeFrontendAdvisory": {
+            "ok": false,
+            "reason": "frontend:no-grid-hypothesis"
+          }
+        }
+      },
+      "type-K.png": {
+        "sha256": "a9a8b9977058f3cdb9b261be2076ce48ed0e94f1e31997249ae1331964c03942",
+        "bytes": 134454,
+        "width": 1029,
+        "height": 1079,
+        "colorType": 2,
+        "exported": {
+          "width": 1024,
+          "height": 1024,
+          "bounds": {
+            "x": 33,
+            "y": 20,
+            "width": 933,
+            "height": 983
+          }
+        },
+        "generatorInfo": "Type K · version K0CM (k=6) · ECC H Payload 19 / 29 B · symbols 32+22 · preset Δmin 0.182",
+        "selfCheck": "self-check ✓ - usable · 234 cells · Δmin 0.182 Gate headroom 34% — under 20% reads as “hard to read”",
+        "scanner": "https://tl.estre.so",
+        "decodeFrontendAdvisory": {
+          "ok": true,
+          "text": "https://tl.estre.so"
+        }
+      }
+    }
+  },
+  "video": {
+    "generatedFrom": {
+      "head": "dfcea2d9481f0c4fe34920de0f79fbf13cbf199b",
+      "dirty": false,
+      "browser": "Chrome/153.0.8010.53",
+      "toolSha256": "f6141473b23a0409f7071a9c984d1b7ff86f13e8025cfa58a01b1e47ce948e93",
+      "generatorBuild": "2026-09-24.05"
+    },
+    "config": {
+      "type": "H",
+      "faces": 6,
+      "hVersion": 1,
+      "exportButton": "#exportCubeVideo",
+      "background": "checker",
+      "size": 720,
+      "fps": 30,
+      "rotation": {
+        "axis": "y",
+        "speedDegPerSec": 75,
+        "tiltMode": "turn"
+      },
+      "bitrate": 1500000,
+      "generatorBitrate": 10000000,
+      "deviation": "bitrate override (VideoEncoder.configure in the page) + faststart box reorder (moov before mdat, stco rewritten; mdat bytes unchanged) + start pose reset to rotation 0 (a user download starts at the preview's current rotation); frames and avcC are the generator's own",
+      "faststart": true,
+      "generatorInfo": "H1 · 17×17 · 6F · 3 tone · ECC H · mask 7 · ▣ 19 B / 30 B",
+      "durationText": "9.6 seconds · 75 degrees per second"
+    },
+    "files": {
+      "type-H.mp4": {
+        "sha256": "c424ed20d4c1ed7b5f90039deb77d47284e1d374f13f15f510b2c1edb527a4b7",
+        "bytes": 1794035,
+        "width": 720,
+        "height": 720,
+        "codec": "avc1.42C01F",
+        "frames": 288,
+        "keyframes": 5,
+        "durationMs": 9600,
+        "fps": 30,
+        "layout": "ftyp,moov,mdat",
+        "generatorLayout": "ftyp,mdat,moov",
+        "generatorBytes": 1794035
+      },
+      "type-H.webp": {
+        "sha256": "c2f175b808963a61e979c2eae8b450ee56a9e451f723aa552b5993ffb5548a60",
+        "bytes": 37336,
+        "width": 720,
+        "height": 720,
+        "format": "extended",
+        "source": "export frame at timestamp 0",
+        "quality": 0.85
+      },
+      "type-H-spin.webp": {
+        "sha256": "d2c66802029cf337fd9d78e833a2f611a5d34af50145c20af6de7fa5dd76de7c",
+        "bytes": 1122944,
+        "width": 360,
+        "height": 360,
+        "frames": 72,
+        "fps": 15,
+        "durationMs": 4800,
+        "span": "first-turn",
+        "sourceStep": 2,
+        "loop": 0,
+        "frameCodec": "VP8 ",
+        "quality": 0.85
+      }
+    }
+  }
+}

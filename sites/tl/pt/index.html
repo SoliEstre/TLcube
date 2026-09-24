@@ -81,7 +81,7 @@
 }
 </script>
 <link rel="icon" href="../../_shared/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../../_shared/site.css?v=c922e48a">
+<link rel="stylesheet" href="../../_shared/site.css?v=9bd5a1c2">
 </head>
 <body data-site="hub">
 <div class="wrap">
@@ -89,11 +89,8 @@
   <header class="bar">
     <a class="brand" href="https://tl.estre.so/pt/">TL<span class="mark">cube</span></a>
     <nav>
-      <!-- ⚠ 내비 순서는 **본문 섹션 순서와 같아야 한다** — 목차가 실제 순서와 어긋나면
-           «건너뛴 게 있나» 하고 되짚게 된다. 본문은 why-now → types → what 이다
-           (감이 먼저 오고 그다음 원리). 내비만 옛 순서로 남아 있었다. -->
-      <a href="#why-now">Porquê agora</a>
       <a href="#types">Tipos</a>
+      <a href="#why-now">Porquê agora</a>
       <a href="#what">Como funciona</a>
       <a href="#scanner-status">Estado do scanner</a>
       <a href="#spec">Especificação</a>
@@ -124,73 +121,75 @@
   </header>
 
   <section id="hero">
-    <h1>O QR lê-se bem.<br>Só nunca foi <strong>bonito</strong></h1>
-    <p class="lead">Cartazes, embalagens, cartões de visita — o QR está em todo o lado, e pousar um quadrado a preto e branco sobre um design trabalhado durante semanas sempre custou. Mas o QR tem este aspeto por uma razão: é o que se constrói quando <strong>uma câmara e um processador de 1994</strong> têm de conseguir lê-lo.</p>
-    <p class="lead">Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>. O resultado é um <strong>código de barras 3D</strong> — impresso em plano, mas percebido em relevo.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Criar um código</a>
-      <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+    <div class="hero-grid">
+      <h1>O QR lê-se bem.<br>Só nunca foi <strong>bonito</strong></h1>
+      <a class="hero-visual" href="#type-h">
+        <img src="../assets/type-H.webp?v=c2f175b8" width="720" height="720" alt="Código cubo True 3D H sobre o xadrez de transparência — ir para o cartão H">
+      </a>
+      <div class="hero-body">
+        <p class="lead">Cartazes, embalagens, cartões de visita — o QR está em todo o lado, e pousar um quadrado a preto e branco sobre um design trabalhado durante semanas sempre custou. Mas o QR tem este aspeto por uma razão: é o que se constrói quando <strong>uma câmara e um processador de 1994</strong> têm de conseguir lê-lo.</p>
+        <p class="lead">Essas restrições caíram em grande parte. As câmaras dos telemóveis e o poder de cálculo têm folga. Por isso, em vez de perseguir apenas o reconhecimento, essa folga foi gasta em <strong>valer a pena olhar</strong>. Não é um substituto do QR: é <strong>um lugar ao lado</strong>. O resultado é um <strong>código de barras 3D</strong> — impresso em plano, mas percebido em relevo.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://tlcube.estre.so" target="_blank" rel="noopener noreferrer" data-out="tlcube">Criar um código</a>
+          <a class="btn" href="https://github.com/SoliEstre/TLcube" data-out="github">GitHub</a>
+        </div>
+      </div>
     </div>
   </section>
 
+  <section id="types">
+    <h2>Tipos</h2>
+    <p class="dim">Escolha consoante o sítio onde vai ficar. Os tipos planos partilham o mesmo contrato de dados e diferem apenas na silhueta; True 3D H é a extensão de cubo real do grupo Y, com um formato próprio. Todos os códigos abaixo contêm <code>https://tl.estre.so</code>.</p>
+    <div class="grid" style="margin-top:18px">
+      <div class="card" data-type="Y">
+        <img src="../assets/type-Y.png?v=46aa39ab" width="680" height="733" alt="Type Y — cubo único">
+        <h3>Type Y — cubo único</h3>
+        <p class="dim">Três faces n×n. Uma marca de uma só peça, boa para sinalética e merchandising.</p>
+        <div class="meta">n = 13 / 21 / 25 · carga útil líquida 31 / 98 / 141&nbsp;B</div>
+      </div>
+      <div class="card" data-type="H" id="type-h">
+        <div class="card-media">
+          <video width="720" height="720" controls muted loop playsinline preload="none" poster="../assets/type-H.webp?v=c2f175b8" aria-label="Cubo True 3D H a rodar sobre o xadrez de transparência" data-autoplay data-label-play="Reproduzir o vídeo" data-label-pause="Pausar o vídeo">
+            <source src="../assets/type-H.mp4?v=c424ed20" type="video/mp4">
+          </video>
+        </div>
+        <h3>True 3D H — extensão de cubo real do grupo Y</h3>
+        <p class="dim">Um formato próprio para um cubo real, com dados diferentes em 1…6 faces. O gerador também exporta um vídeo de rotação (MP4), moldes de papel e ficheiros de impressão 3D.</p>
+        <div class="meta">H0…H8 · <span class="nowrap">n = 13…45</span> · carga útil líquida <span class="nowrap">3 faces 3…333 B</span> · <span class="nowrap">6 faces 6…666 B</span> (ECC-M, 3 tons)</div>
+      </div>
+      <div class="card" data-type="O">
+        <img src="../assets/type-O.png?v=83b89a3a" width="789" height="750" alt="Type O — campo hexagonal">
+        <h3>Type O — campo hexagonal</h3>
+        <p class="dim">A forma base. As células em losango estendem-se à volta de um padrão localizador central.</p>
+        <div class="meta">k = 6 / 8 / 10 / 12 · carga útil líquida 18 / 39 / 65 / 97&nbsp;B</div>
+      </div>
+      <div class="card" data-type="C">
+        <img src="../assets/type-C.png?v=83be18d0" width="988" height="937" loading="lazy" alt="Type C — capacidade ultra com entalhe">
+        <h3>Type C — capacidade ultra com entalhe</h3>
+        <p class="dim">O entalhe das 3 horas fixa a orientação e o tipo na própria silhueta. A gama C0–C3 destina-se a leitura de perto; a partir de C1, aproxime o código ou amplie a imagem.</p>
+        <div class="meta">k = 14 / 16 / 18 / 20 · carga útil líquida 130 / 172 / 220 / 255&nbsp;B</div>
+      </div>
+      <div class="card" data-type="A">
+        <img src="../assets/type-A.png?v=113c44f6" width="781" height="750" loading="lazy" alt="Type A — silhueta triangular">
+        <h3>Type A — silhueta triangular</h3>
+        <p class="dim">Um núcleo hexagonal mais remendos de canto, formando um triângulo equilátero.</p>
+        <div class="meta">k = 6 / 8 / 10 · carga útil líquida 31 / 62 / 101&nbsp;B</div>
+      </div>
+      <div class="card" data-type="K">
+        <img src="../assets/type-K.png?v=a9a8b997" width="1029" height="1079" loading="lazy" alt="Type K — Hexagrama">
+        <h3>Type K — Hexagrama</h3>
+        <p class="dim">Um triângulo unido à sua imagem de 180°. Maior carga útil com o mesmo k.</p>
+        <div class="meta">k = 6 / 8 / 10 · carga útil líquida 43 / 86 / 138&nbsp;B</div>
+      </div>
+    </div>
+    <p class="dim" style="margin-top:16px">A carga útil líquida é para ECC-M. Todos os tipos, incluindo H, podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido. Em H fica, por predefinição, no canto superior esquerdo. As imagens dos tipos O e A usam a opção de localizador QR central, por isso diferem da predefinição atual do gerador (localizador TL central com um QR de reserva exterior no canto superior esquerdo).</p>
+  </section>
 
-  <!-- «왜 지금» — 외부 검토(grok·gemini) 공통 진단이었다. 기존 카피는 메커니즘부터
-       시작하는 스펙 리드였고, 방문자가 묻는 «이게 나한테 무슨 일인지»에 답하지 않았다.
-       실제로 만든 사람이 채팅에서 즉석으로 한 설명(공감 → 왜 지금 → 가치)이 훨씬 잘
-       통했다는 관측이 근거다. 그 순서를 사이트에 옮긴 것이 이 섹션이다. -->
   <section id="why-now">
     <h2>Porquê agora</h2>
     <p class="lead"><strong>O QR foi a resposta certa para o seu tempo.</strong> Dois valores, módulos quadrados, padrões localizadores grandes — cada uma dessas escolhas existia para que mesmo uma câmara fraca conseguisse ler. Com essas restrições, abdicar da estética era racional.</p>
     <p class="lead"><strong>Essa premissa mudou.</strong> As câmaras dos telemóveis de hoje não se comparam, e o processamento de vídeo em tempo real corre dentro de um navegador. Essa folga podia ir para a densidade — ou podia ir para <strong>o aspeto</strong>. É por isso que este formato existe.</p>
     <p class="lead"><strong>Em troca, abdicou-se da densidade.</strong> As células em losango aproveitam pior a área do que os módulos quadrados. Este formato não compete em densidade. Se for preciso levar muito, a ferramenta certa é o QR.</p>
-  </section>
-
-  <section id="types">
-    <h2>Cinco tipos</h2>
-    <p class="dim">Escolha consoante o sítio onde vai ficar. Os cinco partilham o mesmo contrato de dados e diferem apenas na silhueta. Todos os códigos abaixo contêm <code>https://tl.estre.so</code>.</p>
-    <div class="grid" style="margin-top:18px">
-      <div class="card">
-        <img src="../assets/type-Y.png" alt="Type Y — cubo único">
-        <h3>Type Y — cubo único</h3>
-        <p class="dim">Três faces n×n. Uma marca de uma só peça, boa para sinalética e merchandising.</p>
-        <div class="meta">n = 13 / 21 / 25 · carga útil líquida 31 / 98 / 141 B</div>
-        <div class="h-cube-extension" style="border-top:1px solid var(--line);margin-top:16px;padding-top:12px">
-          <h4>True 3D H — extensão de cubo real do grupo Y</h4>
-          <p class="dim">Um formato distinto do Type Y plano, com grelhas H0…H8 e 1…6 faces de dados únicas. Adicione imagens às faces livres, configure a rotação em ciclo e exporte glTF, MP4 ou estruturas Minecraft .schem, além de ficheiros para construir um cubo real: moldes de papel (SVG, PNG, PDF ou impressão direta) e 3MF/STL para impressão 3D.</p>
-          <p class="meta">O leitor só apresenta resultados após reunir as faces necessárias e validar RS/CRC. As medições fotográficas abaixo não incluem H nem garantem taxas de reconhecimento ou FPS com câmaras reais.</p>
-        </div>
-      </div>
-      <div class="card">
-        <img src="../assets/type-O.png" alt="Type O — campo hexagonal">
-        <h3>Type O — campo hexagonal</h3>
-        <p class="dim">A forma base. As células em losango estendem-se à volta de um padrão localizador central.</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · carga útil líquida 18 / 39 / 65 / 97 B</div>
-      </div>
-      <div class="card">
-        <h3>Type C — capacidade ultra com entalhe</h3>
-        <p class="dim">O entalhe das 3 horas fixa a orientação e o tipo na própria silhueta. A gama C0–C3 destina-se a leitura de perto; a partir de C1, aproxime o código ou amplie a imagem.</p>
-        <div class="meta">k = 14 / 16 / 18 / 20 · carga útil líquida 130 / 172 / 220 / 255 B</div>
-      </div>
-      <div class="card">
-        <img src="../assets/type-A.png" alt="Type A — silhueta triangular">
-        <h3>Type A — silhueta triangular</h3>
-        <p class="dim">Um núcleo hexagonal mais remendos de canto, formando um triângulo equilátero.</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · carga útil líquida 31 / 62 / 101 B</div>
-      </div>
-      <!-- Type K (2026-08-26 편입). 카드 순서는 Y·O·A·K — A 바로 뒤가 맞다.
-           K = A ∪ 반전 A 라 A 를 본 다음에 읽어야 «그 별» 이 이해된다.
-           ⚠ 이 주석은 **템플릿 리터럴 안**이다 — 백틱을 쓰면 문자열이 그 자리에서
-              닫힌다 (실제로 한 번 밟았다). 파일명은 홑따옴표로 적는다.
-           자산 'assets/type-K.png' 는 인코더 산출이고 자체검증을 통과한 것이다
-           (셀 234 · Δmin 0.1824). 용량 43/86/138 B 는 capacityK.js 실측값이다. -->
-      <div class="card">
-        <img src="../assets/type-K.png" alt="Type K — Hexagrama">
-        <h3>Type K — Hexagrama</h3>
-        <p class="dim">Um triângulo unido à sua imagem de 180°. Maior carga útil com o mesmo k.</p>
-        <div class="meta">k = 6 / 8 / 10 / 12 · carga útil líquida 43 / 86 / 138 B</div>
-      </div>
-    </div>
-    <p class="dim" style="margin-top:16px">A carga útil líquida é para ECC-M. Os cinco tipos podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido.</p>
   </section>
 
   <section id="what">
@@ -215,8 +214,6 @@
           <tr><th>Tipo</th><th>Fotos reais descodificadas</th><th>Uma descodificação em foto fixa</th><th>Validação ao vivo</th></tr>
         </thead>
         <tbody>
-          <!-- 정지사진 1회 복호 시간만으로 라이브 등급을 만들지 않는다. 초기 실기기
-               텔레메트리에서 첫 잠금은 성공까지 필요한 프레임 수에 따라 순위가 뒤집혔다. -->
           <tr><td><strong>Type Y</strong> — cubo único</td><td><span class="badge ok">9 / 16</span></td><td>≈ 1.8 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
           <tr><td><strong>Type O</strong> — campo hexagonal</td><td><span class="badge ok">29 / 48</span></td><td>≈ 1.9 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
           <tr><td><strong>Type A</strong> — silhueta triangular</td><td><span class="badge ok">18 / 19</span></td><td>≈ 2.4 s</td><td><span class="badge warn">faltam mais medições</span></td></tr>
@@ -228,7 +225,8 @@
     <p class="dim" style="margin-top:16px"><strong>Uma descodificação de uma única foto fixa.</strong> O Type O é agora o mais rápido; A, K e Y ficam próximos atrás. ⚠ Uma versão anterior desta página dizia que o Type Y era o mais rápido: era uma amostra de 9 fotos e, com uma amostra mais ampla, a <strong>ordem inverteu-se</strong>. Não leia isto como tempo de primeiro engate em direto.</p>
     <p class="dim"><strong>O tempo de uma descodificação em foto fixa não prevê a sensação da leitura ao vivo.</strong> Nas primeiras medições em dispositivo real, um fotograma rápido podia ainda assim dar uma primeira fixação lenta quando eram precisos muitos fotogramas antes de um bem-sucedido, e a ordem dos tipos diferia desta tabela de foto fixa. Esse registo abrange um só dispositivo e uma amostra pequena, pelo que ainda não atribuímos uma classificação de uso ao vivo.</p>
     <p class="dim">As condições de captura também pesam. Na medição, <strong>9 píxeis por célula</strong> foi o limite inferior de descodificação e, à mesma distância, uma <strong>objetiva ultra grande-angular</strong> enquadra o código mais pequeno e desce abaixo dessa linha (ultra grande-angular 7.6 px falhou / grande-angular 9.1 px conseguiu). É por isso que o scanner oferece a escolha da objetiva.</p>
-    <p class="dim">Na <strong>variante de QR central</strong>, um bloco QR substitui o padrão localizador central. Os seus padrões dão o ponto de entrada de posição e orientação com que se descodifica o corpo TL em redor. O gerador usa agora este caminho validado por predefinição nos tipos O e A. Por predefinição, o QR continua a ser uma reserva com uma ligação para o leitor; a carga útil fica no corpo TL.</p>
+    <p class="dim">Na <strong>variante de QR central</strong>, um bloco QR substitui o padrão localizador central. Os seus padrões dão o ponto de entrada de posição e orientação com que se descodifica o corpo TL em redor. Por predefinição, o QR continua a ser uma reserva com uma ligação para o leitor; a carga útil fica no corpo TL. Desde 2026-08-28, o gerador usa por predefinição, nos tipos O, C, A e K, o localizador <strong>TL central</strong> com um QR de reserva exterior no canto superior esquerdo; o QR central continua a ser uma das opções de localizador. A linha do QR central da tabela acima mede essa variante (ronda de 2026-08-13).</p>
+    <p class="dim">O Type C e o True 3D H não constam da tabela acima; para o H não são garantidas taxas de reconhecimento nem FPS com câmaras reais. O scanner tem dois motores: o <strong>R1</strong> lê os tipos TL planos um fotograma de cada vez e o <strong>R2</strong>, o predefinido, reúne os tipos Y e H ao longo de vários fotogramas. No H só apresenta o resultado depois de as faces necessárias passarem na validação RS/CRC. Nos navegadores com BarcodeDetector, o R2 também lê <strong>códigos QR comuns</strong>; uma ligação lida de um código QR nunca é aberta automaticamente — confirme o endereço e depois toque nela.</p>
     <p class="dim" style="margin-top:16px"><small>Medido a 2026-08-27 · amostra de <strong>110 fotos</strong> (cada uma tentada a 960 · 1440 px de lado curto). ⚠ A maior parte da amostra está <strong>fotografada a partir de um ecrã</strong>: não são números de impressão nem de colocação real. Além disso, 123 dos 233 fotogramas do corpus são capturas-limite guardadas precisamente por ainda não descodificarem — ficam aqui excluídas. Só a linha do QR central vem da ronda anterior de 2026-08-13.</small></p>
   </section>
 
@@ -263,7 +261,7 @@
   </footer>
 
 </div>
-<script src="../../_shared/site.js?v=66db2d8b"></script>
+<script src="../../_shared/site.js?v=c6169c99"></script>
 <script>
 /* 언어 자동 선택 — **첫 방문에만** 한다.
    매번 브라우저 언어로 튕기면 사용자가 고른 언어로 돌아올 수 없다. 그래서 링크를
