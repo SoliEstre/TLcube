@@ -6,9 +6,34 @@
  *
  * 흐름
  * 1. 이전 인쇄의 잔여 호스트·스타일(과 그 정리 리스너)을 먼저 지워요.
- * 2. 인쇄용 SVG 는 다운로드 SVG 와 같은 1:1 척도이고, 높이만 용지보다 0.5 mm 짧아요(viewBox 높이도 같이).
- *    용지와 정확히 같은 높이면 반올림으로 빈 두 번째 쪽이 생길 수 있어요(브라우저별 실측 전). 내용은 여백 안쪽이라
- *    잘리지 않아요.
+ * 2. 인쇄용 SVG 는 다운로드 SVG 와 같은 1:1 척도(사용자 단위 1 = 1 mm)예요. 다만 용지 가장자리 M = PRINT_MARGIN_MM 를
+ *    잘라 낸 영역만 그려요 — viewBox "M M W−2M H−2M−0.5", 크기 (W−2M) × (H−2M−0.5) mm, @page 여백도 M 이에요.
+ *    다운로드 SVG·PNG·PDF 는 용지 전면 그대로예요(이 모듈은 인쇄 경로만 맡아요).
+ *    - 자르는 까닭: 옛 꼴(용지 전면 폭 SVG + @page 여백 0)은 인쇄 대화상자 여백을 «기본값» 이 아닌 값으로 바꾸면
+ *      쪽 영역이 SVG 보다 좁아져 비율로 줄었어요. 2026-09-24 헤드리스 실측(A4, 50 mm 막대): Chrome 153(앱 index.html
+ *      본문 안)은 여백 3.5 mm 에서 0.984 · 4.23 mm 에서 0.980(둘 다 빈 두 번째 쪽까지), Firefox 149(축소 맞춤 켬, 앱 본문
+ *      규칙을 재현한 쪽)는 0.978 · 0.974 였어요. Chromium 소스로는 기본값이 아닌 여백에서 CSS 여백을 무시하고 가로 넘침
+ *      비율로 줄이는 경로예요(print_render_frame_helper.cc ignore_css_margins → pagination_utils.cc
+ *      CalculateOverflowShrinkForPrinting). 이 꼴은 같은 두 브라우저에서 A4 여백 기본값 · 없음 · 최소 3.5 / 4.23 /
+ *      6.35 mm · 비대칭 3·5 mm(Letter 는 그 일부)가 모두 배율 1.000 · 한 쪽이었어요.
+ *    - 못 막는 것: 여백을 «맞춤» 으로 M 보다 넓게 고르면 여전히 줄어요(10 mm 에서 Chrome 0.964 · Firefox 0.958, 실측).
+ *      운영자가 종이에서 잰 0.966(48.3 mm)의 원인은 확인하지 못했어요. 옛 꼴에서 그 값이 나오려면 여백이 Chrome 은
+ *      약 7 mm, Firefox 는 6.35 mm 근처(0.964)여야 해서 흔한 3.5–4.2 mm 로는 설명이 안 되고, 드라이버·OS 의 «인쇄 가능
+ *      영역에 맞춤» 도 후보로 남아요 — 그 경로는 뷰어 뒤(드라이버·OS·IPP)에서 일어나 CSS 로도 PDF 로도 막을 수 없고,
+ *      안내 문구(g1045 · g1120: 맞춤·축소 끄기 · 인쇄 후 50 mm 막대 재기)만 맡아요. PDF 의 /PrintScaling /None 은 기본값이
+ *      «맞춤» 인 PDF 뷰어의 인쇄 대화상자만 바꿔요(pdf-writer.js). 실제 프린터와 Safari(WebKit)는 재지 않았어요.
+ *    - 잘라도 도형은 남아요: 도안은 도형을 용지 가장자리에서 PAPER_MARGIN_MM(7) 안쪽에 두고 재단선 잉크만 6.8 까지
+ *      와요(paper-net 자체 검사, 네 변 같은 허용). 왼쪽·오른쪽·위 크롭(M = 6.35)은 그 검사로 안전하지만 아래 크롭
+ *      (M + 0.5 = 6.85)은 6.8 보다 안쪽이라 자체 검사가 지키지 않아요 — 아래는 하단 띠(PAPER_BAND_MM)가 재단선을 가장자리에서
+ *      떼어 놓는 배치 덕이고, 그걸 재는 자는 test/print-sheet.test.js 의 «크롭» 격자(실제 도안)뿐이에요.
+ *    - M = 6.35 mm = 24 CSS px 예요. 정수 px 가 아니면 Chrome 이 여백을 px 로 맞춰 위치가 밀렸어요(6 mm 에서 0.085 mm, 실측).
+ *    - 높이는 0.5 mm 더 짧아요 — 쪽 영역과 정확히 같은 높이면 반올림으로 빈 두 번째 쪽이 생길 수 있어서예요.
+ *    - 호스트는 쪽 영역(html·body 높이 100%) 가운데에 SVG 를 놓아요. «여백: 없음» 이면 쪽 영역이 용지 전체라
+ *      가운데 = M 이고, 프린터 여백이 대칭인 «최소» 여도 가운데 = M 이에요(실측 위치 차 0.27 mm 이하). 비대칭이면
+ *      (위−아래)/2 만큼 움직여요(3·5 mm 에서 약 1.1 mm). 100vh 는 쓰지 않아요 — Firefox 149 인쇄에서 쪽 영역이 아니었어요
+ *      («여백: 없음» 에서 6.4 mm 위로 밀림). 앱 body 규칙(flex · min-height:100vh · align-items:center)도 인쇄에서 풀어요 —
+ *      Chrome 에서 옛 꼴 «최소 3.5 mm» 가 그 규칙 없이 0.968 · 한 쪽, 앱 안에서 0.984 · 두 쪽으로 달랐어요. SVG 가
+ *      쪽 영역보다 크면 flex 자동 여백이 0 이 되어 왼쪽 위에 붙어요(CSS Flexbox 규칙 — 음수 여백으로 잘리지 않게).
  * 3. body 에 `<style id="tlPrintStyle">` 과 `<div id="tlPrintHost">`(SVG)를 붙여요.
  * 4. 한 프레임 양보한 뒤 print() 를 불러요(진행 문구가 먼저 그려지게).
  * 5. afterprint 나 matchMedia('print') 의 change(false) 에서 지워요. 오지 않으면 다음 인쇄 직전에 지워요.
@@ -23,6 +48,14 @@ export const PRINT_HOST_ID = 'tlPrintHost';
 export const PRINT_STYLE_ID = 'tlPrintStyle';
 /** 인쇄 SVG 를 용지보다 짧게 하는 양(mm). */
 export const PRINT_HEIGHT_TRIM_MM = 0.5;
+/**
+ * @page 여백 = 인쇄 SVG 가 용지 가장자리에서 잘라 내는 폭(mm). 프린터 비인쇄 여백이 이 값 이하면(흔히 알려진 값:
+ * 잉크젯 3–5 mm · 레이저 4.2–5 mm · PCL 1/4 in = 6.35 mm) «여백: 최소» 에서도 쪽 영역이 SVG 보다 좁아지지 않아요.
+ * 상한은 도안 쪽이 정해요: M ≤ PAPER_MARGIN_MM − CUT_LINE_MM(재단선 잉크 6.8) 이고
+ * M + PRINT_HEIGHT_TRIM_MM ≤ PAPER_MARGIN_MM(아래 띠 7) — test/print-sheet.test.js 가 paper-net 상수와 실제 도안 격자로 재요.
+ * 아래쪽 여유는 0.15 mm(격자 실측 가장자리 최소 7.0 − 6.85)라, 도안 배치가 바뀌면 그 격자가 먼저 빨개지는 것이 의도예요.
+ */
+export const PRINT_MARGIN_MM = 6.35;
 
 /**
  * CSS `@page size` 키워드의 치수(mm, 세로). 출처는 CSS Paged Media 규격의 키워드 정의예요.
@@ -57,12 +90,20 @@ const mmText = (v) => {
   return s === '-0' ? '0' : s;
 };
 
+/** 여백 M 을 양쪽에서 잘라 내고도(높이는 0.5 mm 더) 남는 치수여야 해요. */
+const MIN_PAPER_MM = 2 * PRINT_MARGIN_MM + PRINT_HEIGHT_TRIM_MM;
 function checkMm(v, label) {
-  if (typeof v !== 'number' || !Number.isFinite(v) || v <= PRINT_HEIGHT_TRIM_MM) {
-    throw new RangeError(`${label} 는 ${PRINT_HEIGHT_TRIM_MM} mm 보다 큰 유한한 수여야 해요: ${v}`);
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= MIN_PAPER_MM) {
+    throw new RangeError(`${label} 는 ${MIN_PAPER_MM} mm 보다 큰 유한한 수여야 해요: ${v}`);
   }
   return v;
 }
+/** 인쇄 SVG 의 mm 크기(= viewBox 크기) 문자열. */
+const printBox = (widthMm, heightMm) => ({
+  o: mmText(PRINT_MARGIN_MM),
+  w: mmText(widthMm - 2 * PRINT_MARGIN_MM),
+  h: mmText(heightMm - 2 * PRINT_MARGIN_MM - PRINT_HEIGHT_TRIM_MM),
+});
 
 function pageKeywordOf(pageKeyword, widthMm, heightMm) {
   if (pageKeyword === undefined || pageKeyword === null) return null;
@@ -77,8 +118,8 @@ function pageKeywordOf(pageKeyword, widthMm, heightMm) {
 }
 
 /**
- * 다운로드용 mm SVG → 인쇄용 SVG 문자열. 루트의 width·height·viewBox 만 바꿔요:
- * width="{W}mm" height="{H−0.5}mm" viewBox="0 0 {W} {H−0.5}" (사용자 단위 1 = 1 mm 유지).
+ * 다운로드용 mm SVG → 인쇄용 SVG 문자열. 루트의 width·height·viewBox 만 바꿔요(M = PRINT_MARGIN_MM):
+ * width="{W−2M}mm" height="{H−2M−0.5}mm" viewBox="{M} {M} {W−2M} {H−2M−0.5}" (사용자 단위 1 = 1 mm 유지).
  * 입력 viewBox 가 "0 0 W H"(용지와 같은 크기)가 아니면 1:1 을 보장할 수 없어서 거부해요.
  * @param {string} svgText
  * @param {{widthMm: number, heightMm: number}} paper
@@ -101,10 +142,10 @@ export function printSheetSvg(svgText, {widthMm, heightMm} = {}) {
     || Math.abs(box[3] - heightMm) > VIEWBOX_TOLERANCE_MM) {
     throw new RangeError(`SVG viewBox(${box.join(' ')})가 용지(0 0 ${widthMm} ${heightMm})와 달라서 1:1 로 인쇄할 수 없어요`);
   }
-  const w = mmText(widthMm), h = mmText(heightMm - PRINT_HEIGHT_TRIM_MM);
+  const {o, w, h} = printBox(widthMm, heightMm);
   const attrs = root[1].replace(/\s(?:width|height|viewBox)="[^"]*"/g, '');
   const rest = svgText.slice(root.index + root[0].length);
-  return `<svg${attrs} width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${rest}`;
+  return `<svg${attrs} width="${w}mm" height="${h}mm" viewBox="${o} ${o} ${w} ${h}">${rest}`;
 }
 
 /**
@@ -118,14 +159,19 @@ export function printSheetCss({pageKeyword, widthMm, heightMm} = {}) {
   checkMm(heightMm, 'heightMm');
   const keyword = pageKeywordOf(pageKeyword, widthMm, heightMm);
   const size = keyword ? `${keyword} portrait` : `${mmText(widthMm)}mm ${mmText(heightMm)}mm`;
+  const {o, w, h} = printBox(widthMm, heightMm);
   return [
     `@media screen { #${PRINT_HOST_ID} { display:none } }`,
     '@media print {',
-    `  @page { size: ${size}; margin: 0 }`,
-    '  html, body { margin:0; padding:0; background:#fff }',
+    `  @page { size: ${size}; margin: ${o}mm }`,
+    // html·body 높이 100% = 쪽 영역(인쇄의 초기 포함 블록). 100vh 는 Firefox 인쇄에서 쪽 영역이 아니라 못 써요(실측).
+    '  html, body { margin:0; padding:0; background:#fff; height:100% }',
+    // 앱 본문 규칙(body { display:flex; min-height:100vh; align-items:center })을 인쇄에서 풀어요 — 배치는 호스트가 정해요.
+    '  body { display:block; min-height:0 }',
     `  body > *:not(#${PRINT_HOST_ID}) { display:none !important }`,
-    `  #${PRINT_HOST_ID} { display:block; break-inside:avoid; break-after:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact }`,
-    `  #${PRINT_HOST_ID} svg { display:block; width:${mmText(widthMm)}mm; height:${mmText(heightMm - PRINT_HEIGHT_TRIM_MM)}mm }`,
+    // 쪽 영역 가운데. 최소 높이도 0.5 mm 짧게 — «여백: 기본값» 이면 SVG 높이와 같아 위치 = M 이에요.
+    `  #${PRINT_HOST_ID} { display:flex; min-height:calc(100% - ${mmText(PRINT_HEIGHT_TRIM_MM)}mm); break-inside:avoid; break-after:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact }`,
+    `  #${PRINT_HOST_ID} svg { display:block; flex:none; margin:auto; width:${w}mm; height:${h}mm }`,
     '}',
   ].join('\n');
 }

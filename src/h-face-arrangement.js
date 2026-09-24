@@ -4,6 +4,7 @@ export const H_DISPLAY_FACES = H_FACE_IDS;
 /** symmetric: 2면 전용 — 두 논리 면(XM·YM)을 마주보는 물리 XM·XP 에 둬요(운영자 2026-09-14). */
 export const H_ARRANGEMENTS = Object.freeze(['isometric', 'horizontal', 'vertical', 'symmetric']);
 const DISPLAY_FACES = new Set(H_DISPLAY_FACES);
+const H_OPPOSITE_PAIRS = Object.freeze([['ZM', 'ZP'], ['XM', 'XP'], ['YM', 'YP']]);
 
 function checkedMode(encoded) {
   const mode = Number(encoded?.mode);
@@ -57,21 +58,16 @@ export function hDisplayMap(encoded, { arrangement = 'isometric', renderFaces } 
     for (const face of ['XM', 'YM', 'XP', 'YP']) if (present.has(face)) physicalToLogical[face] = face;
     if (present.has('ZM')) physicalToLogical.XP = 'ZM';
   }
-  // 2F six-render만 반대 side에 code를 복제해요. 이는 표시용이며 encoded.faces에는 쓰지 않아요.
-  if (mode === 2 && resolvedRenderFaces === 6 && resolvedArrangement !== 'symmetric') {
-    physicalToLogical.XP = present.has('XM') ? 'XM' : null;
-    physicalToLogical.YP = present.has('YM') ? 'YM' : null;
-  }
-  if (mode === 1 && resolvedRenderFaces === 6) physicalToLogical.XP = present.has('XM') ? 'XM' : null;
+  // 1…3면 + 6면 렌더(«6면 (반복)»)는 코드가 있는 물리면을 마주보는 빈 물리면에 같은 (i,j) 로 복제해요.
+  // 표시용이며 encoded.faces 에는 쓰지 않아요. 수평/수직의 ZM/ZP cap 은 둘 다 비어 있어 자동으로 빠지고,
+  // 대칭은 XM·XP 가 서로 짝이라 복제가 없어요. 4…6면은 «반복» 이 아니라 6면 렌더가 필수라 제외해요.
+  const repeat = mode <= 3 && resolvedRenderFaces === 6 && resolvedArrangement !== 'symmetric';
+  if (repeat) for (const [m, p] of H_OPPOSITE_PAIRS) physicalToLogical[p] ??= physicalToLogical[m];
   const physicalDataFaces = H_DISPLAY_FACES.filter(face => physicalToLogical[face] !== null);
   const logicalDataFaces = hModeFaces(mode).filter(face => present.has(face));
   const imageAlias = Object.fromEntries(H_DISPLAY_FACES.map(face => [face, face]));
-  // 2F/6-render의 두 cap은 하나의 이미지 선택을 공유해요. ZP는 독립 source가 아니에요.
-  if (mode === 2 && resolvedRenderFaces === 6 && resolvedArrangement !== 'symmetric' && !physicalToLogical.ZM && !physicalToLogical.ZP) imageAlias.ZP = 'ZM';
-  if (mode === 1 && resolvedRenderFaces === 6) {
-    imageAlias.ZP = 'ZM';
-    imageAlias.YP = 'YM';
-  }
+  // 반복 렌더에서 둘 다 빈 마주보는 짝은 하나의 이미지 선택을 공유해요(P 는 독립 source 가 아니에요).
+  if (repeat) for (const [m, p] of H_OPPOSITE_PAIRS) if (!physicalToLogical[m] && !physicalToLogical[p]) imageAlias[p] = m;
   const blankFaces = H_DISPLAY_FACES.filter(face => !physicalToLogical[face]);
   const imageTargets = blankFaces.filter(face => imageAlias[face] === face)
     .map(face => Object.freeze({ face, aliases: Object.freeze(blankFaces.filter(other => imageAlias[other] === face)) }));

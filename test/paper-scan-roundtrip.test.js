@@ -138,6 +138,10 @@ test('§6-15 P1 한 장 전개도(A4 · 0.1 mm): 세 데이터 면이 거울 없
   assert.deepEqual(paperRoundTrip({...BASE,method:'sheet',thicknessMm:0.1,label:'H0 3F 3톤'}),{read:3,skipped:0});
 });
 
+test('§6-15 P1 3F + 6면(반복): 한 장 전개도의 여섯 면(사본 셋 포함)이 모두 거울 없이 제 논리 면으로 읽혀요',()=>{
+  assert.deepEqual(paperRoundTrip({...BASE,options:{renderFaces:6},method:'sheet',thicknessMm:0.1,label:'H0 3F rf6 3톤'}),{read:6,skipped:0});
+});
+
 test('§6-15 P3 판 직접 인쇄(A4 · 1.0 mm): 조각 그대로와 절단면 띠를 합성한 조립 모습 모두 읽혀요',()=>{
   assert.deepEqual(paperRoundTrip({...BASE,method:'board',thicknessMm:1,bands:[null,BOARD_EDGE],label:'H0 3F 3톤'}),{read:6,skipped:0});
 });

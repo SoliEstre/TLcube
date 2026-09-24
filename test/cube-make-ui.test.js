@@ -14,7 +14,7 @@ import {physicalHCube} from '../src/cube-physical.js';
 import {generatorCubeModel} from '../src/generator-cube-export.js';
 import {hDisplayMap, H_ARRANGEMENTS} from '../src/h-face-arrangement.js';
 import {PAPER_SIZES, paperMethodOptions, paperPlan, paperPngPlan} from '../src/paper-net.js';
-import {buildPrintParts, hollowPlan, standCornerFaces} from '../src/print-mesh.js';
+import {buildPrintParts, hollowPlan, printBedPlacement, standCornerFaces} from '../src/print-mesh.js';
 import {hExportIconMarkup} from '../src/h-preview-decor.js';
 import {MODULE_ORDER} from '../tools/build-single.mjs';
 import {check3mfZip, parseBinaryStl, readZip, signedVolume} from './helpers/mesh-export-verify.mjs';
@@ -153,6 +153,11 @@ test('3F 기본값: 3MF · STL 묶음 · 받침대 파일명이 설계 §4.3 치
   const {issues, model} = check3mfZip(threeMf.bytes);
   assert.deepEqual(issues, []);
   assert.equal(model.structure, 'components');
+  // 판 배치: 부모 build item 하나에 평행 이동 하나(Cura 는 3MF 원점을 판 앞-왼 모서리에 둬요). 메쉬 좌표는 [0, L] 그대로예요.
+  assert.deepEqual(model.buildTranslations, [[...printBedPlacement(phys.sideUm).translationMm]]);
+  assert.deepEqual(model.buildTranslations, [[37, 37, 0]], 'v0 · 셀 2 mm: 발자국 [37, 63] mm = 100 mm 판 한가운데');
+  const lo3mf = Math.min(...model.objects.filter((o) => o.vertices).flatMap((o) => o.vertices.flatMap((v) => [v[0], v[1], v[2]])));
+  assert.equal(lo3mf, 0, '3MF 메쉬 좌표는 옮기지 않아요');
   assert.equal(stl.filename, 'old_print-c2000um-d1000um-hollow-rf3_stl.zip');
   assert.equal(stl.mime, 'application/zip');
   const zip = readZip(stl.bytes);
@@ -162,6 +167,9 @@ test('3F 기본값: 3MF · STL 묶음 · 받침대 파일명이 설계 §4.3 치
     assert.match(entry.name, /^old_print-c2000um-d1000um-hollow-rf3_\d+-(k|w|t\d+|core)-[0-9a-f]{6}\.stl$/);
     assert.deepEqual(parseBinaryStl(entry.data).issues, [], entry.name);
   }
+  // STL 은 옮기지 않아요(슬라이서가 가운데로 옮기거나 배치해요): 묶음 전체 최소 좌표가 0 이에요.
+  const stlLo = Math.min(...zip.entries.flatMap((entry) => parseBinaryStl(entry.data).triangles.flatMap((t) => t.v.flat())));
+  assert.equal(stlLo, 0);
   assert.equal(stand.filename, `old_stand-L${phys.sideUm}um.stl`);
   assert.equal(stand.mime, 'model/stl');
   assert.deepEqual(parseBinaryStl(stand.bytes).issues, []);
@@ -184,6 +192,23 @@ test('속 비우기 켬(기본)은 공동 있는 코어를, 끔은 솔리드 코
   assert.ok(Math.abs(off.volume - solid.volumeMm3) < 1e-3, `끔 코어 부피 ${off.volume} ≠ 솔리드 ${solid.volumeMm3}`);
   assert.ok(on.volume < off.volume - 1, `켬 코어가 비지 않았어요: ${on.volume} vs ${off.volume}`);
   for (const core of [on, off]) assert.equal(surfaceComponents(core.mesh), 1, '코어 표면이 둘 이상 = 밀폐 공동');
+});
+
+test('3F + 6면(반복): 상태 줄에 «반대면 복제 켬», 빈 면이 없어 «켬» 이 막히고 솔리드 · 파일명 -rf6', async () => {
+  const current = hCurrent('rep', {version: 0, mode: 3, renderFaces: 6});
+  const h = createCubeMakeHarness({current});
+  await h.expand();
+  assert.ok(h.$('makePrintStatus').textContent.includes(h.text('g1095')));
+  const cards = Object.fromEntries(h.$('makeHollowCards').children.map((c) => [c.dataset.hollow, c]));
+  assert.equal(cards.on.disabled, true);
+  assert.equal(cards.on.title, h.text('g1110'));
+  await h.click('makePrint3mf');
+  assert.equal(h.downloads[0].filename, 'rep_print-c2000um-d1000um-rf6.3mf');
+  // 제목의 «솔리드» 를 재요: 코어 부피 = 속 비우기 끔 코어 부피, 표면 성분 1.
+  const core = coreOf(h.downloads[0].bytes);
+  const solid = buildPrintParts(physOf(current, 2000), {depthUm: 1000, hollow: false}).parts.at(-1);
+  assert.ok(Math.abs(core.volume - solid.volumeMm3) < 1e-3, `코어 부피 ${core.volume} ≠ 솔리드 ${solid.volumeMm3}`);
+  assert.equal(surfaceComponents(core.mesh), 1);
 });
 
 test('6F: 숨구멍 면이 없으면 «켬» 이 막히고 사유가 보이며, 솔리드로 내보내요', async () => {
@@ -754,9 +779,11 @@ fullOnly(() => test('full: 모드 1–6 × 톤 2/3 × 배치에서 3MF 파일명
     const label = `${mode}F/${tones}톤/${arrangement}/rf${renderFaces}`;
     assert.equal(h.downloads[0].filename, `m${mode}_print-c2000um-d1000um${plan.enabled ? '-hollow' : ''}-rf${map.renderFaces}.3mf`, label);
     assert.equal(h.$('makeHollowCards').children.find((c) => c.dataset.hollow === 'on').disabled, plan.reason === 'TLP_NO_VENT_FACE', label);
-    assert.equal(surfaceComponents(coreOf(h.downloads[0].bytes).mesh), 1, label);
+    const core = coreOf(h.downloads[0].bytes);
+    assert.equal(surfaceComponents(core.mesh), 1, label);
+    assert.deepEqual(core.model.buildTranslations, [[...printBedPlacement(physOf(current, 2000).sideUm).translationMm]], label);
     const duplicateNote = h.$('makePrintStatus').textContent.includes(h.text(map.renderFaces === 6 ? 'g1095' : 'g1096'));
-    assert.equal(duplicateNote, (mode === 1 || mode === 2) && map.arrangement !== 'symmetric', label);
+    assert.equal(duplicateNote, mode <= 3 && map.arrangement !== 'symmetric', label);
     checked += 1;
   }
   assert.ok(checked >= 20, `조합 유도가 무너졌어요(${checked})`);

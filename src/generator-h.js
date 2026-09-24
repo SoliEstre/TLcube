@@ -181,7 +181,7 @@ const EN={true3d:'True 3D',faces:'Data faces',face1:'1 face',face2:'2 faces',fac
   profile:'H · frame or four-corner finder + face ID',
   frame:'One- to five-face H5+ and six-face H7+ use four square finders inside the same face grid. Smaller sizes retain the frame finder. Exports keep two cells of outer spacing; Y quiet-zone and emphasis controls do not apply.',
   viewer:'H cube preview',perspective:'Perspective',
-  notice:'H needs all selected unique data faces to verify the payload. Two-face six-view repeats the data and shares the image on opposite caps. Corner QR is supported; inset QR, Y locators and shading are unavailable.',
+  notice:'H needs all selected unique data faces to verify the payload. One- to three-face six-view (except the opposite-faces arrangement) repeats the data on the free opposite faces; opposite faces that are both blank share one image. Corner QR is supported; inset QR, Y locators and shading are unavailable.',
   videoHeading:'3D rotation video',videoDownload:'Download one-turn MP4',videoCancel:'Cancel rendering',
   videoBackground:'Video transparency treatment',videoChecker:'Checkerboard',videoGreen:'Green',videoBlue:'Blue',videoMagenta:'Magenta',
   videoNote:'Silent MP4 · 720 × 720 · 24/30/60/120 fps. Transparency is replaced by the selected background, not an alpha channel. 60/120 fps requires WebCodecs AVC support; there is no silent downgrade.',
@@ -205,7 +205,7 @@ const KO={true3d:'True 3D 여부',faces:'면 수',face1:'1면',face2:'2면',face
   profile:'H · 면 프레임 또는 네 모서리 파인더 + 면 ID',
   frame:'1·2·3·4·5면 H5 이상·6면 H7 이상은 같은 면 격자 안에 사각 파인더 4개를 넣어요. 작은 크기는 면 프레임을 유지해요. 내보내기 바깥 2셀 간격은 그대로예요. Y 안전영역·검출기 강조 옵션은 적용하지 않아요.',
   viewer:'H 큐브 미리보기',perspective:'원근 강도',
-  notice:'선택한 고유 데이터 면을 모두 모아야 본문 검증이 끝나요. 2면·6면 렌더는 반대편에 본문을 반복하고 위아래 이미지를 공유해요. 코너 QR은 지원하고, 안쪽 QR·Y 전용 로케이터·장식 음영은 적용하지 않아요.',
+  notice:'선택한 고유 데이터 면을 모두 모아야 본문 검증이 끝나요. 1…3면·6면 렌더(대칭 배치 제외)는 비어 있는 반대편에 본문을 반복하고, 둘 다 빈 마주보는 면은 이미지를 공유해요. 코너 QR은 지원하고, 안쪽 QR·Y 전용 로케이터·장식 음영은 적용하지 않아요.',
   videoHeading:'3D 회전 영상 다운로드',videoDownload:'한 바퀴 MP4 다운로드',videoCancel:'렌더링 취소',
   videoBackground:'영상 투명 처리',videoChecker:'투명 표시 격자',videoGreen:'그린',videoBlue:'블루',videoMagenta:'마젠타',
   videoNote:'무음 MP4 · 720 × 720 · 24/30/60/120 fps예요. 투명 배경은 선택한 색이나 격자로 바뀌며 알파 채널은 포함하지 않아요. 60/120 fps는 WebCodecs AVC 지원이 필요하며 지원하지 않으면 낮은 FPS로 대체하지 않아요.',
@@ -237,7 +237,7 @@ const EDITOR_KO={
   imageNote:'PNG/JPG/WebP/SVG · 12MB 이하 · 최대 1024px예요. 맞추기는 전체 이미지, 채우기는 비율 유지 크롭, 늘이기만 비율을 바꿔요. 회전·맞춤·배경색은 시점·전개도·glTF·영상·스키매틱에 반영돼요. 위치 표시는 미리보기 전용이에요. 이미지는 현재 페이지에서만 유지돼요. 텍스트 넣기는 글자를 여백을 뺀 최대 크기로 가운데 맞춰 면 이미지로 만들고, 글자색은 배경색 대비로 검정/흰색이 골라져요. 웹폰트는 고를 때 CDN(Google Fonts · jsDelivr)에서 받아요.',
   resetRoll:'Z축 정위치',resetZoom:'확대/축소 초기화',face6Repeat:'6면 (반복)',
   planarUnavailable:'코드와 이미지를 한 시점에 모두 보여줄 수 없어 3D 보기를 사용해요.',
-  notice:'고유 데이터 면을 모두 모아 본문을 검증해요. 1·2면의 6면 렌더는 반대편에 코드와 빈 면 이미지를 반복해요. 코너 QR은 지원하며 안쪽 QR·Y 전용 로케이터는 적용하지 않아요.',
+  notice:'고유 데이터 면을 모두 모아 본문을 검증해요. 1…3면의 6면 렌더(대칭 배치 제외)는 비어 있는 반대편에 코드를 반복하고, 둘 다 빈 마주보는 면은 이미지를 공유해요. 코너 QR은 지원하며 안쪽 QR·Y 전용 로케이터는 적용하지 않아요.',
 };
 const EDITOR_EN={
   tiltMode:'Tilt pattern',tiltNone:'None',tiltTurn:'Per turn',tiltFace:'Per face',
@@ -258,6 +258,6 @@ const EDITOR_EN={
   imageFitcontain:'Contain',imageFitfill:'Fill',imageFitcover:'Cover',imageBackground:'Background',imageBackgroundReset:'Reset background color',imageColorPad:'Background: horizontal hue, vertical saturation',imageLightness:'Background lightness (HSL)',imageColorInvalid:'Enter a valid color value.',
   imageNote:'PNG/JPG/WebP/SVG · up to 12 MB · max 1024 px. Contain shows the full image; cover crops with aspect ratio preserved; only fill stretches. Rotation, fit and background apply to views, nets, glTF, video and schematic. Position labels are preview-only. Images stay in this page session only. Add text renders centered text at the largest size that fits inside the margin as a face image; its color is black/white by background contrast. Web fonts are fetched from CDN (Google Fonts · jsDelivr) when selected.',
   resetRoll:'Reset Z rotation',resetZoom:'Reset zoom',face6Repeat:'6 faces (repeat)',planarUnavailable:'The meaningful code/image faces cannot all fit in one view. Use 3D.',
-  notice:'Collect every unique data face to verify the payload. One/two-face six-view repeats code and blank-face images on opposite faces. Corner QR is supported; inset QR and Y locators are not applied.',
+  notice:'Collect every unique data face to verify the payload. One- to three-face six-view (except the opposite-faces arrangement) repeats code on the free opposite faces; opposite faces that are both blank share one image. Corner QR is supported; inset QR and Y locators are not applied.',
 };
 export function hUiLabel(key,lang='ko'){const ko=lang.startsWith('ko');return (ko?EDITOR_KO:EDITOR_EN)[key]??(ko?KO:EN)[key]??key;}

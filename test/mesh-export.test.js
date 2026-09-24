@@ -437,15 +437,65 @@ test('3MF 자: 심은 결함마다 해당 코드로 빨개져요', () => {
     'content-types': withPart('[Content_Types].xml', once(textOf(good.get('[Content_Types].xml')), 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml', 'application/xml')),
     rels: withPart('_rels/.rels', once(textOf(good.get('_rels/.rels')), 'Target="/3D/3dmodel.model"', 'Target="/3D/3DModel.model"')),
   };
+  const item = /<item objectid="\d+"\/>/.exec(model)[0];
+  const itemWith = (transform) => withModel(once(model, item, item.replace('/>', ` transform="${transform}"/>`)));
   const extra = {
     forbidden: withModel(once(model, '<model unit=', '<model requiredextensions="m" unit=')),
     reach: withModel(once(model, '<component objectid="2"/>\n', '')),
     'm-prefix': withModel(once(model, '<m:color color=', '<color color=')),
   };
-  for (const [code, files] of [...Object.entries(cases), ...Object.entries(extra)]) {
+  // build item 변환은 판 위 평행 이동만 받아요: 회전 · 거울 · 배율 · 필드 수 · 수 아님 · ST_Number 밖 표기(16진 · 끝 점 · Infinity)
+  // · 음수 이동(양의 8분 공간 밖) · z 들림은 모두 'transform' 이에요. 결함마다 따로 단언해요(아래 루프).
+  const itemTransforms = [
+    itemWith('0 1 0 -1 0 0 0 0 1 50 50 0'),
+    itemWith('-1 0 0 0 1 0 0 0 1 50 50 0'),
+    itemWith('2 0 0 0 2 0 0 0 2 0 0 0'),
+    itemWith('1 0 0 0 1 0 0 0 1 50 50'),
+    itemWith('1 0 0 0 1 0 0 0 1 50 x 0'),
+    itemWith('1 0 0 0 1 0 0 0 1 0x25 0x25 0'),
+    itemWith('1 0 0 0 1 0 0 0 1 37. 37. 0'),
+    itemWith('1 0 0 0 1 0 0 0 1 Infinity 37 0'),
+    itemWith('1 0 0 0 1 0 0 0 1 -5 -5 0'),
+    itemWith('1 0 0 0 1 0 0 0 1 37 37 5'),
+  ];
+  for (const [code, files] of [...Object.entries(cases), ...Object.entries(extra), ...itemTransforms.map((f) => ['transform', f])]) {
     const codes = issueCodes(check3mf(files).issues);
     assert.ok(codes.includes(code), `${code}: ${codes.join(',')}`);
   }
+  // 대조군: 평행 이동만 있는 item 변환은 깨끗하고 그 이동을 돌려줘요.
+  const moved = check3mf(itemWith('1 0 0 0 1 0 0 0 1 37 37 0'));
+  assert.deepEqual(moved.issues, []);
+  assert.deepEqual(moved.model.buildTranslations, [[37, 37, 0]]);
+  // 대조군: ST_Number 가 허용하는 다른 표기(지수 · 앞 점 · 부호 +)도 깨끗해요 — 자가 표기를 과하게 좁히지 않아요.
+  const spelled = check3mf(itemWith('1 0 0 0 1 0 0 0 1 1e1 .5 +0'));
+  assert.deepEqual(spelled.issues, []);
+  assert.deepEqual(spelled.model.buildTranslations, [[10, 0.5, 0]]);
+  assert.deepEqual(check3mf(good).model.buildTranslations, [null]);
+});
+
+test('3MF 판 배치: buildTranslationMm 은 build item 마다 같은 평행 이동 하나이고, 메쉬 좌표 · component 는 그대로예요', () => {
+  const parts = makeParts();
+  for (const structure of ['components', 'items']) {
+    const files = partsTo3mfFiles(parts, {structure, buildTranslationMm: [37, 37, 0]});
+    const text = textOf(files[2].data);
+    const {issues, model} = check3mfZip(zipStore(files));
+    assert.deepEqual(issues, [], structure);
+    assert.equal(model.structure, structure);
+    assert.deepEqual(model.buildTranslations, model.build.map(() => [37, 37, 0]), structure);
+    assert.equal((text.match(/ transform="1 0 0 0 1 0 0 0 1 37 37 0"/g) ?? []).length, model.build.length, structure);
+    assert.ok(!/<component [^>]*transform=/.test(text), 'component 변환은 여전히 없어요');
+    assertCoordinatesPreserved(model, parts);
+  }
+  // 소수 이동도 좌표와 같은 표기(고정 6자리, 끝 0 제거)예요.
+  assert.ok(textOf(partsTo3mfFiles(parts, {buildTranslationMm: [2.5, 0.125, 0]})[2].data).includes('transform="1 0 0 0 1 0 0 0 1 2.5 0.125 0"'));
+  // 없음 · 0 이동은 속성 자체가 없어요(기존 바이트 그대로).
+  const plain = textOf(partsTo3mfFiles(parts)[2].data);
+  assert.equal(textOf(partsTo3mfFiles(parts, {buildTranslationMm: [0, 0, 0]})[2].data), plain);
+  assert.equal(textOf(partsTo3mfFiles(parts, {buildTranslationMm: null})[2].data), plain);
+  for (const bad of [[1, 2], [1, 2, NaN], [1, 2, Infinity], ['1', 2, 3], [1, 2, 2e6], 5]) assert.throws(() => partsTo3mfFiles(parts, {buildTranslationMm: bad}), RangeError, JSON.stringify(bad));
+  // 판 위 자리만: 음수 x·y(양의 8분 공간 밖)와 z 들림은 쓰지 않아요 — 검증 자가 거부하는 꼴을 직렬화기도 만들지 않아요.
+  for (const bad of [[-1, 0, 0], [0, -0.5, 0], [37, 37, 1], [37, 37, -1]]) assert.throws(() => partsTo3mfFiles(parts, {buildTranslationMm: bad}), RangeError, JSON.stringify(bad));
+  assert.equal(textOf(partsTo3mfFiles(parts, {buildTranslationMm: [-0, 0, -0]})[2].data), plain, '-0 은 0 이에요');
 });
 
 test('XML 자: 잘못된 문서를 거부하고, 이스케이프를 되살려요', () => {

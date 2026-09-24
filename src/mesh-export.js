@@ -3,7 +3,8 @@
  *
  * 기하는 만들지 않아요. 입력은 설계 §5.1 의 Mesh = {positions: Float64Array(mm), indices: Uint32Array} 이고,
  * 파트는 {id, name, role, hex, mesh, volumeMm3} 에서 name·hex·mesh 만 읽어요. 좌표는 옮기지 않아요 —
- * 모든 파트가 같은 원점을 쓰고, 3MF 변환은 전부 항등(속성 없음)이에요(설계 §2.2).
+ * 모든 파트가 같은 원점을 쓰고, 3MF component 변환은 항등(속성 없음)이에요. 판 위 자리는 build item 의 평행 이동 하나로만
+ * 정해요(buildTranslationMm, 설계 §2.2) — Cura 는 3MF 원점을 판 앞-왼 모서리에 두고 옮기지 않아요.
  *
  * 포맷 규약(설계 §2.2):
  * - STL: 80 B 헤더(«solid» 로 시작 금지) + u32 삼각형 수 + 삼각형당 50 B(f32 법선·꼭짓점 3개 + u16 속성 0). 길이 84 + 50T.
@@ -172,6 +173,21 @@ function checkApplication(application){
   return xmlText(application,'application');
 }
 
+/**
+ * build item 의 평행 이동만 쓰는 변환 속성이에요. 3MF 코어 §3.3 의 행 우선 4×4 아핀 행렬에서 앞 3열만 적는 꼴(4행×3열,
+ * «m00 m01 m02 m10 m11 m12 m20 m21 m22 m30 m31 m32»)이고, 이동은 4행(m30 m31 m32)이에요.
+ * 회전·배율은 받지 않아요 — 메쉬는 이미 인쇄 방향 틀이고, 이 변환은 판 위 자리만 정해요. null 이면 속성이 없어요(항등).
+ * 판 위 자리라서 x·y 는 0 이상(양의 8분 공간 — 스펙 §3.3 권고), z 는 0 이에요(바닥이 판에 닿은 채로 둬요).
+ */
+function translationAttr(translation){
+  if(translation==null)return '';
+  if(!Array.isArray(translation)||translation.length!==3||!translation.every(v=>typeof v==='number'&&Number.isFinite(v)&&Math.abs(v)<=MAX_ABS_MM))
+    throw new RangeError('buildTranslationMm 은 유한한 mm 수 3개 [x, y, z] 여야 해요');
+  if(translation[0]<0||translation[1]<0||translation[2]!==0)throw new RangeError('buildTranslationMm 은 판 위 자리예요 — x·y 는 0 이상, z 는 0 이어야 해요');
+  if(translation.every(v=>v===0))return '';
+  return ` transform="1 0 0 0 1 0 0 0 1 ${translation.map(formatMm).join(' ')}"`;
+}
+
 function meshObjectXml(id,name,colorGroupId,mesh,label){
   const {positions,indices,vertexCount,triangleCount}=checkMesh(mesh,label);
   // 3MF 모델 오브젝트는 닫힌 매니폴드여야 하고(삼각형 4개 이상), 삼각형의 세 정점 인덱스가 서로 달라야 해요.
@@ -195,17 +211,19 @@ function meshObjectXml(id,name,colorGroupId,mesh,label){
  * - structure 'components'(기본): 파트 오브젝트 1..K(각자 mesh·pid·pindex=0) 뒤에 mesh 없는 부모 오브젝트 K+1 이
  *   `<components>` 로 파트를 한 번씩 참조하고, build item 은 부모 하나예요.
  * - structure 'items': 부모 없이 파트마다 build item 하나예요.
- * 변환(transform)은 어디에도 쓰지 않아요 — 최종 좌표가 메쉬에 이미 구워져 있어요.
+ * 메쉬 좌표는 옮기지 않아요. component 변환은 쓰지 않고, buildTranslationMm 이 있으면 build item 마다 같은 평행 이동
+ * (판 위 자리 — print-mesh printBedPlacement)을 붙여요. 없으면(기본) 변환 속성이 하나도 없어요.
  * @param {Array<{name?:string, id?:string, hex:string, mesh:{positions:Float64Array, indices:Uint32Array}}>} parts
- * @param {{application?:string, structure?:'components'|'items', modelName?:string, triangleCap?:number}} [options]
+ * @param {{application?:string, structure?:'components'|'items', modelName?:string, triangleCap?:number, buildTranslationMm?:number[]|null}} [options]
  * @returns {Array<{name:string, data:Uint8Array}>} THREEMF_PART_NAMES 순서
  */
-export function partsTo3mfFiles(parts,{application=DEFAULT_3MF_APPLICATION,structure='components',modelName='TrilLuminance H',triangleCap=MAX_EXPORT_TRIANGLES}={}){
+export function partsTo3mfFiles(parts,{application=DEFAULT_3MF_APPLICATION,structure='components',modelName='TrilLuminance H',triangleCap=MAX_EXPORT_TRIANGLES,buildTranslationMm=null}={}){
   if(!Array.isArray(parts)||parts.length===0)throw new RangeError('3MF 에 넣을 파트가 1개 이상 있어야 해요');
   if(parts.length>MAX_3MF_PARTS)throw new RangeError(`3MF 파트는 ${MAX_3MF_PARTS}개 이하여야 해요`);
   if(!THREEMF_STRUCTURES.includes(structure))throw new RangeError(`structure 는 ${THREEMF_STRUCTURES.join(' | ')} 중 하나여야 해요`);
   const applicationXml=checkApplication(application);
   const modelNameXml=xmlText(modelName,'modelName');
+  const itemTransform=translationAttr(buildTranslationMm);
   assertTriangleCap(parts,{triangleCap});
   const groups=[],objects=[],partIds=[];
   parts.forEach((part,k)=>{
@@ -223,9 +241,9 @@ export function partsTo3mfFiles(parts,{application=DEFAULT_3MF_APPLICATION,struc
   if(structure==='components'){
     const parentId=parts.length+1;
     objects.push(`<object id="${parentId}" type="model" name="${modelNameXml}">\n<components>\n${partIds.map(id=>`<component objectid="${id}"/>\n`).join('')}</components>\n</object>\n`);
-    build=`<item objectid="${parentId}"/>\n`;
+    build=`<item objectid="${parentId}"${itemTransform}/>\n`;
   }else{
-    build=partIds.map(id=>`<item objectid="${id}"/>\n`).join('');
+    build=partIds.map(id=>`<item objectid="${id}"${itemTransform}/>\n`).join('');
   }
   const model='<?xml version="1.0" encoding="UTF-8"?>\n'
     +`<model unit="millimeter" xml:lang="en-US" xmlns="${NS_3MF_CORE}" xmlns:m="${NS_3MF_MATERIAL}">\n`

@@ -76,7 +76,7 @@ export function buildHScene(encoded,options={}) {
   const images=new Map(hFaceImagePlacements(encoded,options.faceImages,options).map(image=>[image.face,image]));
   for(const face of view.visible) {
     const levels=surface.faces[face];
-    // 3F의 비데이터 뒷면은 불투명 단색이에요. 내부가 뚫린 큐브나 복제된 본문으로 보이지 않아요.
+    // 빈(비데이터) 물리면은 불투명 단색이에요 — 3면 렌더의 뒷면·수평/수직 cap 등. 반복 사본은 hDisplayMap 이 코드 면으로 넘겨요.
     if(!levels){
       shapes.push({kind:'polygon',color:litColor(palette.colors[5],lighting?.faceGains[face]),...(lighting?{gain:lighting.faceGains[face]}:{}),points:[[0,0],[0,n],[n,n],[n,0]].map(([i,j])=>view.project(hFacePoint(face,i,j,n)))});
       const asset=images.get(face);if(asset)shapes.push({kind:'image',face,...(lighting?{gain:lighting.faceGains[face]}:{}),color:palette.colors[5],image:asset.image,points:asset.corners.map(view.project)});

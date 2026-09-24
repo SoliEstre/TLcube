@@ -115,8 +115,11 @@ test('§6-18 PDF 구조: 헤더 이진 주석 · 객체 걷기 · /Length · xre
   const pdf = sceneToPdfSync(REAL.scene);
   const report = inspectPdf(pdf);
   assert.deepEqual(structureFailures(report), [], report.errors.join('\n'));
-  assert.ok(text(pdf).startsWith('%PDF-1.4\n%'));
+  assert.ok(text(pdf).startsWith('%PDF-1.7\n%'));
   const info = pageInfo(report);
+  // 뷰어 인쇄 기본값 «실제 크기»: /PrintScaling 은 PDF 1.6 키라 헤더도 1.6 이상이에요.
+  assert.match(info.catalog.dict, /\/ViewerPreferences << \/PrintScaling \/None >>/);
+  assert.ok(Number(/^%PDF-1\.(\d)\n/.exec(text(pdf))[1]) >= 6);
   assert.equal(info.count, 1);
   assert.equal(info.parent, dictRef(info.catalog.dict, 'Pages'));
   assert.deepEqual(info.mediaBox, ['0', '0', '595.276', '841.890']);
@@ -149,7 +152,7 @@ test('§6-18 자 검증: 심은 결함마다 해당 구조 필드가 빨개져�
   r = mutate((t) => t.replace(/\/Length (\d+)/, (_, v) => `/Length ${v.endsWith('9') ? Number(v) - 1 : Number(v) + 1}`));
   assert.deepEqual(structureFailures(r), ['lengthsOk']);
   // (4) 이진 표시 주석을 ASCII 로(길이 유지)
-  r = mutate((t) => t.replace(/^(%PDF-1\.4\n%)..../, '$1abcd'));
+  r = mutate((t) => t.replace(/^(%PDF-1\.7\n%)..../, '$1abcd'));
   assert.deepEqual(structureFailures(r), ['binaryCommentOk']);
   // (5) xref 항목 하나를 19 B 로(«n \n» → «n\n»)
   r = mutate((t) => {

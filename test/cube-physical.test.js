@@ -154,12 +154,15 @@ test('빈 면 이미지는 시트 틀 그대로 빈 면에만 실려요',()=>{
   assert.throws(()=>physicalHCube(onData),/빈 면/);
 });
 
-test('generatorCubeModel(H) 경로의 모델도 그대로 받아요',()=>{
+test('generatorCubeModel(H) 경로의 모델도 그대로 받아요 — 3F 6면(반복)은 여섯 물리면 모두 데이터, 논리 면은 셋',()=>{
   const encoded=encodeH('H',{version:0,mode:3});
-  const model=generatorCubeModel({type:'H',encoded,sceneOpts:{renderFaces:6,arrangement:'isometric'}});
-  const phys=physicalHCube(model);
-  assert.deepEqual([...faceHandedness(phys).values()],H_FACE_IDS.map(()=>1));
-  assert.deepEqual(phys.dataFaces,['ZM','XM','YM']);
+  for(const [renderFaces,dataFaces] of [[3,['ZM','XM','YM']],[6,['ZM','XM','YM','ZP','XP','YP']]]){
+    const model=generatorCubeModel({type:'H',encoded,sceneOpts:{renderFaces,arrangement:'isometric'}});
+    const phys=physicalHCube(model);
+    assert.deepEqual([...faceHandedness(phys).values()],H_FACE_IDS.map(()=>1));
+    assert.deepEqual(phys.dataFaces,dataFaces,`rf${renderFaces}`);
+    assert.deepEqual(phys.logicalDataFaces,['ZM','XM','YM'],`rf${renderFaces}`);
+  }
 });
 
 test('형식이 틀린 입력은 거부해요',()=>{

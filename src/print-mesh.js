@@ -31,7 +31,7 @@ export const PRINT_RIB_UM=1350;
 export const PRINT_TRIANGLE_CAP=300000;
 export const PRINT_WHITE='#ffffff';
 /**
- * 속 비우기 기본값. 기본은 «켬»이에요(리브 · 방별 숨구멍 포함). 숨구멍을 둘 빈 면이 없으면(6F) 자동으로 솔리드가 돼요.
+ * 속 비우기 기본값. 기본은 «켬»이에요(리브 · 방별 숨구멍 포함). 숨구멍을 둘 빈 면이 없으면(6F · 3F 6면 반복 아이소메트릭) 자동으로 솔리드가 돼요.
  * wallUm = 구조 벽 t_s, ceilingUm = 평탄 천장 폭 b, ventUm = 숨구멍 한 변 v.
  */
 export const PRINT_HOLLOW_DEFAULTS=Object.freeze({enabled:true,wallUm:1200,ceilingUm:5000,ribs:true,ventUm:2000});
@@ -47,6 +47,16 @@ export const PRINT_LIMITS=Object.freeze({
 });
 /** 받침대 기본값(설계 §2.7). */
 export const PRINT_STAND_DEFAULTS=Object.freeze({clearanceUm:200,wallUm:2000,floorUm:2000,footRatio:0.35,footStepUm:1000});
+/**
+ * 3MF 판 배치(µm). Cura(5.13 까지)는 3MF 좌표를 그대로 써서 원점이 판 앞-왼 모서리에 놓이고, 판 가장자리 금지 띠
+ * (이동 회피 0.625 mm · 서포트 확장 0.8 mm · 뗏목 여백 15 mm)에 걸리면 «빌드 볼륨 밖» 으로 슬라이스를 거부해요.
+ * PrusaSlicer · Bambu Studio · OrcaSlicer 는 프로젝트가 아닌 3MF 를 판 가운데로 옮기므로 이 값과 무관해요.
+ *   smallBedUm: Cura «Custom FFF printer» 기본 판 한 변 · marginUm: 앞-왼 가장자리 여유(뗏목 15 + 서포트 0.8 을 덮어요)
+ *   farMarginUm: 기준 판(PRINT_LIMITS.buildVolumeUm)의 먼 쪽 가장자리에 남길 최소 여유
+ *   edgeMinUm: Cura 기본 설정에서 늘 남는 가장 좁은 금지 띠(이동 회피 travel_avoid_distance 0.625 mm) — 양쪽에 farMargin 을
+ *     못 두는 큐브(기준 − 2·far < L)가 그래도 기준 판에 들어가는지 가르는 경계예요(BuildVolume.getEdgeDisallowedSize).
+ */
+export const PRINT_BED_PLACEMENT=Object.freeze({smallBedUm:100000,marginUm:20000,farMarginUm:2000,edgeMinUm:625});
 
 const INTERIOR=-1,EMPTY=-2,OUTSIDE=-3;
 const COS30=Math.sqrt(3)/2;
@@ -601,8 +611,31 @@ export function buildPrintParts(phys,{depthUm=PRINT_DEPTH_UM,hollow,epsilonUm=PR
     expectedVolumeMm3:cubeVolume-plan.cavityVolumeUm3/1e9-plan.ventVolumeUm3/1e9,
     imagesOmitted:oriented.blankFaces.filter(face=>oriented.faces[face].image).length,
     exceedsBuildVolume:L>lim.buildVolumeUm,smallCell:oriented.cellUm<lim.smallCellUm,amsOverflow:filaments.length>lim.amsSlots,
+    bedPlacement:printBedPlacement(L),
   });
   return {parts,report};
+}
+
+/* ───────────── 판 배치 (메쉬 없음, O(1)) ───────────── */
+
+/**
+ * 파트 발자국 [0, L]² 의 중심을 판 (c, c) 에 두는 3MF build item 평행 이동이에요(메쉬 좌표는 그대로).
+ *   L + 2·far ≤ 기준 판: c = max(작은 판/2, min(L/2 + margin, 기준 − far − L/2))
+ *     — 작은 판(100 mm) 한가운데가 기본이고, 앞-왼 여유 margin 을 지키려고 밀어도 기준 판(180 mm) 먼 쪽을 넘지 않아요.
+ *   L + 2·far > 기준 판이어도 L + 2·edgeMin ≤ 기준 판이면 c = 기준/2 — 기준 판 한가운데라 양쪽 여유 (기준 − L)/2 가
+ *     0.625 mm 이상이에요(예: L 177.6 → 1.2 mm). 양쪽 2 mm 는 못 지켜도 Cura 기본 띠 안쪽에는 들어가요.
+ *   그보다 크면 기준 판에는 Cura 기본 띠 때문에 못 들어가므로 c = L/2 + margin(더 큰 판을 위한 앞-왼 여유)이에요.
+ *   먼 쪽 끝 c + L/2 는 갈래 경계에서도 줄지 않아요(L 176 에서 178 → L 178.75 에서 179.375 → 그 위 L + 20).
+ * @param {number} sideUm 한 변 L(µm, 양의 정수)
+ * @returns {{centerUm:number, offsetUm:number, translationMm:number[]}} offsetUm = c − L/2 (x·y 공통), z 는 0
+ */
+export function printBedPlacement(sideUm){
+  if(!Number.isSafeInteger(sideUm)||sideUm<=0)throw new RangeError('한 변은 양의 정수 µm 예요');
+  const {smallBedUm,marginUm,farMarginUm,edgeMinUm}=PRINT_BED_PLACEMENT,ref=PRINT_LIMITS.buildVolumeUm;
+  const centerUm=sideUm+2*farMarginUm<=ref?Math.max(smallBedUm/2,Math.min(sideUm/2+marginUm,ref-farMarginUm-sideUm/2))
+    :sideUm+2*edgeMinUm<=ref?ref/2:sideUm/2+marginUm;
+  const offsetUm=centerUm-sideUm/2;
+  return Object.freeze({centerUm,offsetUm,translationMm:Object.freeze([offsetUm/1000,offsetUm/1000,0])});
 }
 
 /* ───────────── 색 교체 추정 (메쉬 없음, O(n²)) ───────────── */
@@ -648,7 +681,8 @@ export function colorChangeEstimate(phys,{layerUm=200,depthUm=PRINT_DEPTH_UM,bed
 /**
  * 받침대가 잡는 꼭짓점의 세 면이에요 — 2.5D 정본 시점에서 보이지 않는 꼭짓점 (L,L,L)(물리 좌표, 인쇄 방향 회전 전)이에요.
  * coveredDataFaces 는 그중 데이터 면이에요. 포켓이 그 면의 꼭짓점 쪽 삼각형(다리 ℓ + 3g)을 가려요.
- * isometric 1F–3F 는 0 개지만, 3F horizontal·vertical 과 4F·5F·6F 는 1 개 이상이에요 — 화면이 이것을 알려요.
+ * 3면 렌더의 1F·2F 와 isometric 3F 는 0 개예요. 6면(반복) 렌더(1F: XP · 2F: XP·YP · 3F isometric: ZP·XP·YP)와
+ * 3F horizontal·vertical, 4F·5F·6F 는 1 개 이상이에요 — 화면이 이것을 알려요.
  * @returns {{cornerFaces:string[], coveredDataFaces:string[]}} H_FACE_IDS 순서
  */
 export function standCornerFaces(phys){

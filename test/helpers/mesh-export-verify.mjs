@@ -308,7 +308,7 @@ function* walk(node) {
 /**
  * 3MF 패키지 파트들을 검사해요.
  * @param {Map<string, Uint8Array>} files 이름 → 바이트
- * @returns {{issues, model: null | {application, colorGroups: Map<id, string[]>, objects: Array, build: Array, structure}}}
+ * @returns {{issues, model: null | {application, colorGroups: Map<id, string[]>, objects: Array, build: Array, buildTranslations: Array<number[]|null>, structure}}}
  */
 export function check3mf(files) {
   const issues = [];
@@ -429,8 +429,23 @@ export function check3mf(files) {
     }
     objects.set(id, object);
   }
+  // build item 변환은 «판 위 평행 이동만» 받아요: 앞 9개가 정확히 단위 행렬 문자열이고, 이동 3개(4행 m30 m31 m32)는
+  // 3MF ST_Number 표기이며(16진 «0x25» · 끝 점 «37.» 은 Number() 로는 읽혀도 스펙 밖이에요) x·y ≥ 0(양의 8분 공간, 코어 §3.3
+  // 권고) · z = 0(바닥이 판에 닿은 채)이에요. 회전·배율·거울은 판 배치가 아니라 기하를 바꾸므로 'transform' 이에요.
+  // 이동은 buildTranslations 로 돌려줘요(없으면 null).
+  const ST_NUMBER = /^[-+]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][-+]?[0-9]+)?$/;
+  const buildTranslations = [];
   const build = elementsOf(builds[0], 'item', NS.core).map((item) => {
-    if ('transform' in item.attrs) add('transform', `item ${item.attrs.objectid}`);
+    let translation = null;
+    if ('transform' in item.attrs) {
+      const fields = String(item.attrs.transform).trim().split(/\s+/);
+      const identity = ['1', '0', '0', '0', '1', '0', '0', '0', '1'];
+      const moveFields = fields.slice(9), move = moveFields.map(Number);
+      const moveOk = moveFields.every((f) => ST_NUMBER.test(f)) && move.every(Number.isFinite) && move[0] >= 0 && move[1] >= 0 && move[2] === 0;
+      if (fields.length !== 12 || fields.slice(0, 9).some((f, k) => f !== identity[k]) || !moveOk) add('transform', `item ${item.attrs.objectid}: ${item.attrs.transform}`);
+      else translation = move;
+    }
+    buildTranslations.push(translation);
     const ref = Number(item.attrs.objectid);
     if (!objects.has(ref)) add('build-ref', String(item.attrs.objectid));
     return ref;
@@ -454,7 +469,7 @@ export function check3mf(files) {
   let structure = 'other';
   if (parents.length === 1 && build.length === 1 && build[0] === parents[0].id) structure = 'components';
   else if (parents.length === 0 && build.length === objects.size) structure = 'items';
-  return {issues, model: {application, colorGroups, objects: [...objects.values()], build, structure}};
+  return {issues, model: {application, colorGroups, objects: [...objects.values()], build, buildTranslations, structure}};
 }
 
 /** ZIP 바이트를 읽어 3MF 검사까지 해요. 두 단계 문제를 합쳐 돌려줘요. */

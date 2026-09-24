@@ -79,7 +79,7 @@ Video FPS cards offer 24, 30, 60 (default) and 120; 60/120 requires WebCodecs AV
 X/Y and gyro paths close after 360/speed seconds, including secondary-axis motion, for seamless repetition.
 Isometric (default), horizontal and vertical arrangements separate the physical display from logical face IDs.
 Horizontal/vertical use at most four side faces and offer centered-seam alignment presets with screen Y/X rotation.
-Two-face codes can repeat on opposite sides in six-face rendering, including a shared image on both caps.
+One- to three-face codes repeat on the free opposite sides in six-face rendering ("6 faces (repeat)", except the opposite-faces arrangement); opposite faces that are both blank share one image.
 Other blank faces accept independent PNG/JPEG/WebP/SVG images, 45° rotation, contain/fill/cover and background colors; five-face H has one blank face.
 The capacity figures above describe three-tone 3/6-face modes with the generator's automatic finder policy only. New 1/2/4/5-face modes use separately identified
 pair/group packets and require an updated scanner; existing 3/6-face bytes remain unchanged.

@@ -2,16 +2,17 @@
  * 3D 인쇄 파트 메쉬(print-mesh.js)의 성질이에요(설계 §6-3 · §6-4 · §6-10 · §6-11 · §6-12 · §6-13).
  * 자는 산출 메쉬 그대로를 재요(위상 · 정확 부피 · 연결 성분 · 반직선 탐침). 자마다 심은 결함으로 한 번 빨개지는지도 봐요.
  * 매립 깊이(§6-5)와 모서리 소유(§6-6)는 print-mesh-embed.test.js 에 있어요.
+ * 3MF 판 배치(printBedPlacement)는 끝의 «판 배치» 자들이에요 — 값 표보다 성질(여유 · 캡 · 단조)을 재요.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {encodeH} from '../src/h-codec.js';
-import {H_FACE_IDS} from '../src/h-profile.js';
+import {H_FACE_IDS,normalizeHProfile} from '../src/h-profile.js';
 import {H_ARRANGEMENTS,hDisplayMap} from '../src/h-face-arrangement.js';
 import {buildHCubeModel} from '../src/cube-export.js';
-import {physicalHCube,orientForBed} from '../src/cube-physical.js';
-import {buildPrintParts,buildVertexStand,standCornerFaces,meshTopology,filamentSet,printBlankHex,colorChangeEstimate,hollowPlan,
-  PRINT_HOLLOW_DEFAULTS,PRINT_RIB_UM,PRINT_STAND_DEFAULTS,PRINT_TRIANGLE_CAP,PRINT_WHITE} from '../src/print-mesh.js';
+import {physicalHCube,orientForBed,PRINT_CELL_MIN_UM,PRINT_CELL_STEP_UM} from '../src/cube-physical.js';
+import {buildPrintParts,buildVertexStand,standCornerFaces,meshTopology,filamentSet,printBlankHex,colorChangeEstimate,hollowPlan,printBedPlacement,
+  PRINT_BED_PLACEMENT,PRINT_HOLLOW_DEFAULTS,PRINT_LIMITS,PRINT_RIB_UM,PRINT_STAND_DEFAULTS,PRINT_TRIANGLE_CAP,PRINT_WHITE} from '../src/print-mesh.js';
 import {fullOnly} from './helpers/scope.mjs';
 import {fixtures,exactSixVolume,surfaceComponents,partLocator,triangleArea,triangleNormal,triangleVertices,orientedPhys,modulePoint} from './helpers/print-mesh-probe.mjs';
 
@@ -205,7 +206,7 @@ function displayConfigs(tones=3){
   }
   return out;
 }
-test('§6-11 빈 면 = hDisplayMap.blankFaces, 6F 만 0개(속 비우기 비활성 + TLP_NO_VENT_FACE), 그 밖은 방마다 숨구멍 1개 · 모두 바닥 빈 면 · 코어 표면 1개',()=>{
+test('§6-11 빈 면 = hDisplayMap.blankFaces, 6F 와 3F 6면(반복) 아이소메트릭만 0개(속 비우기 비활성 + TLP_NO_VENT_FACE), 그 밖은 방마다 숨구멍 1개 · 모두 바닥 빈 면 · 코어 표면 1개',()=>{
   const configs=displayConfigs();
   assert.ok(configs.length>=20);
   for(const {encoded,options,map,label} of configs){
@@ -214,7 +215,7 @@ test('§6-11 빈 면 = hDisplayMap.blankFaces, 6F 만 0개(속 비우기 비활�
     const plan=hollowPlan(phys);
     assert.equal(plan.enabled,report.hollow.enabled,label);assert.equal(plan.reason,report.hollow.reason,label);
     if(!map.blankFaces.length){
-      assert.equal(encoded.mode,6,label);
+      assert.ok(encoded.mode===6||(encoded.mode===3&&map.renderFaces===6&&map.arrangement==='isometric'),label);
       assert.equal(report.hollow.requested,true);assert.equal(report.hollow.enabled,false);assert.equal(report.hollow.reason,'TLP_NO_VENT_FACE');
       assert.equal(report.hollow.vents.length,0);assert.equal(parts.at(-1).mesh.indices.length/3,12,'솔리드 코어 상자');
       continue;
@@ -541,3 +542,74 @@ fullOnly(()=>test('삼각형 상한 여유: H8 모든 모드 × 톤 × finder ×
   }
   assert.ok(max<PRINT_TRIANGLE_CAP/2,`${worst}: ${max}`);
 }));
+
+/* ───────────── 3MF 판 배치 ───────────── */
+// Cura(5.13 까지)는 3MF 원점을 판 앞-왼 모서리에 두고 옮기지 않아요. 원점에 붙은 [0, L]² 발자국은 가장자리 금지 띠에 걸려
+// «빌드 볼륨 밖» 이 돼요(2026-09-24 운영자 실측). 그래서 3MF build item 에 평행 이동 하나를 실어요 — 메쉬 좌표는 그대로예요.
+
+/** 제품이 만들 수 있는 모든 한 변(µm): n(H0…H8) × 셀 PRINT_CELL_MIN_UM…5000 µm(PRINT_CELL_STEP_UM 단위). 5000 은 UI 상한 CUBE_MAKE_CELL_MAX_UM(index.html)이에요. */
+const PRODUCT_SIDES_UM=[...new Set([0,1,2,3,4,5,6,7,8].map(version=>normalizeHProfile({version}).n)
+  .flatMap(n=>Array.from({length:(5000-PRINT_CELL_MIN_UM)/PRINT_CELL_STEP_UM+1},(_,k)=>n*(PRINT_CELL_MIN_UM+PRINT_CELL_STEP_UM*k))))].sort((a,b)=>a-b);
+
+test('판 배치: 제품의 모든 한 변에서 앞-왼 여유 · 기준 판 먼 쪽 여유 · 작은 판 한가운데 · 기준 판 한가운데 · 먼 쪽 끝 단조 (성질)',()=>{
+  const {smallBedUm,marginUm,farMarginUm,edgeMinUm}=PRINT_BED_PLACEMENT,ref=PRINT_LIMITS.buildVolumeUm;
+  assert.ok(PRODUCT_SIDES_UM.length>100,`한 변 유도가 무너졌어요(${PRODUCT_SIDES_UM.length})`);
+  let previous=-Infinity,capped=0,small=0,centred=0,large=0;
+  for(const L of PRODUCT_SIDES_UM){
+    const p=printBedPlacement(L),label=`L=${L}`;
+    assert.ok(Number.isSafeInteger(p.centerUm)&&Number.isSafeInteger(p.offsetUm),label);
+    assert.equal(p.offsetUm,p.centerUm-L/2,label);
+    assert.deepEqual(p.translationMm,[p.offsetUm/1000,p.offsetUm/1000,0],label);
+    // 원점에 붙지 않아요: 앞-왼 여유는 늘 Cura 기본 띠(edgeMin) 이상이에요.
+    assert.ok(p.offsetUm>=edgeMinUm,label);
+    // Cura 기본 띠를 양쪽에 두고도 기준 판에 들어갈 크기면 실제로 기준 판 안이에요 — 판 크기로 갈래를 고르지 않고 결과 발자국을 재요.
+    if(L+2*edgeMinUm<=ref)assert.ok(p.offsetUm>=edgeMinUm&&p.offsetUm+L<=ref-edgeMinUm,`${label}: 기준 판 띠 밖`);
+    // 중심 c 는 단조가 아니에요(기준 판 캡 구간에서 뒤로 물러나요). 먼 쪽 끝(c + L/2)만 단조예요.
+    assert.ok(p.centerUm+L/2>=previous,`${label}: 먼 쪽 끝이 줄었어요`);
+    previous=p.centerUm+L/2;
+    if(L+2*farMarginUm<=ref){
+      assert.ok(p.offsetUm>=farMarginUm,label);
+      // 기준 판에 들어갈 수 있는 큐브는 먼 쪽 가장자리에서 farMargin 이상 떨어져요.
+      assert.ok(p.centerUm+L/2<=ref-farMarginUm,label);
+      // 작은 판 한가운데가 앞-왼 여유를 지키면 거기예요.
+      if(L/2+marginUm<=smallBedUm/2){assert.equal(p.centerUm,smallBedUm/2,label);small++;}
+      // 기준 판 먼 쪽이 막지 않으면 앞-왼 여유는 margin 이상이에요.
+      if(L+marginUm+farMarginUm<=ref)assert.ok(p.offsetUm>=marginUm,label);
+      else capped++;
+    }else if(L+2*edgeMinUm<=ref){
+      // 양쪽 2 mm 는 못 둬도 기준 판 한가운데예요(H6 × 4.8 mm = 177.6 mm → 양쪽 1.2 mm). 옛 규칙은 앞-왼 20 mm 로 먼 쪽이 197.6 이었어요.
+      assert.equal(p.centerUm,ref/2,label);centred++;
+    }else{
+      assert.equal(p.offsetUm,marginUm,label);large++;
+    }
+  }
+  // 네 갈래(작은 판 한가운데 · 180 캡 · 180 한가운데 · 기준 판 초과)가 모두 실제로 지나가요 — 어느 갈래도 빈 조건이 아니에요.
+  assert.ok(small>0&&capped>0&&centred>0&&large>0,`small ${small} · capped ${capped} · centred ${centred} · large ${large}`);
+});
+
+test('판 배치: 기본 셀 2 mm 의 H0–H8 대표 값과 입력 계약',()=>{
+  const offsets=[0,1,2,3,4,5,6,7,8].map(version=>printBedPlacement(normalizeHProfile({version}).n*2000).offsetUm/1000);
+  assert.deepEqual(offsets,[37,33,29,25,21,20,20,20,20],'H0 L=26 mm → 발자국 [37, 63] mm = 100 mm 판 한가운데');
+  assert.equal(printBedPlacement(165000).centerUm,95500,'기준 판 먼 쪽 2 mm 캡: 95.5 + 82.5 = 178');
+  assert.equal(printBedPlacement(225000).offsetUm,20000,'기준 판보다 크면 앞-왼 20 mm');
+  // 176 < L ≤ 178.75 는 기준 판 한가운데, 그 위(180 포함)는 Cura 기본 띠 0.625 mm 때문에 기준 판에 못 들어가 앞-왼 20 mm 예요.
+  assert.equal(printBedPlacement(177600).offsetUm,1200,'L 177.6 → 기준 판 한가운데, 양쪽 1.2 mm');
+  assert.equal(printBedPlacement(178750).offsetUm,625,'L 178.75 → 양쪽 0.625 mm(경계 포함)');
+  assert.equal(printBedPlacement(178752).offsetUm,20000,'L 178.752 → 기준 판 불가, 앞-왼 20 mm');
+  assert.equal(printBedPlacement(180000).offsetUm,20000,'L 180 → 기준 판 불가, 앞-왼 20 mm');
+  // 먼 쪽 끝은 갈래 경계에서도 줄지 않아요(µm 한 칸씩 넘겨 봐요).
+  for(const L of [59999,60000,60001,157999,158000,158001,175999,176000,176001,178749,178750,178751,178752]){
+    const far=L0=>printBedPlacement(L0).centerUm+L0/2;
+    assert.ok(far(L+1)>=far(L),`L=${L}: ${far(L)} → ${far(L+1)}`);
+  }
+  for(const bad of [0,-2000,1.5,NaN,'26000',2**60])assert.throws(()=>printBedPlacement(bad),RangeError,String(bad));
+});
+
+test('판 배치: buildPrintParts 보고서가 같은 값을 싣고, 파트 전체 경계 상자는 [0, L]³ 그대로예요(메쉬는 옮기지 않아요)',()=>{
+  const phys=physFor({mode:3}),{parts,report}=buildPrintParts(phys);
+  assert.deepEqual(report.bedPlacement,printBedPlacement(report.sideUm));
+  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
+  for(const {mesh} of parts)for(let k=0;k<mesh.positions.length;k++){lo[k%3]=Math.min(lo[k%3],mesh.positions[k]);hi[k%3]=Math.max(hi[k%3],mesh.positions[k]);}
+  assert.deepEqual(lo,[0,0,0]);
+  assert.deepEqual(hi,[report.sideUm/1000,report.sideUm/1000,report.sideUm/1000]);
+});

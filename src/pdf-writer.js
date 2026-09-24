@@ -6,7 +6,8 @@
  * 음영 레이어(scene.shading)는 종이 도안에 쓰지 않아서 받지 않아요 — 조용히 빠뜨리지 않고 던져요.
  *
  * 뼈대(ISO 32000-1 최소 구성)
- * - `%PDF-1.4` 다음 줄에 128 이상 바이트 4개짜리 주석을 둬요(이진 파일 표시).
+ * - `%PDF-1.7` 다음 줄에 128 이상 바이트 4개짜리 주석을 둬요(이진 파일 표시). 1.7 인 까닭은 카탈로그의
+ *   /ViewerPreferences << /PrintScaling /None >>(PDF 1.6 키)예요 — 뷰어 인쇄 대화상자의 기본 배율을 «없음»(실제 크기)으로 둬요.
  * - 1 Catalog · 2 Pages · 3 Page · 4 콘텐츠 스트림 · 5 이후 면 이미지 XObject(알파가 있으면 바로 뒤에 SMask).
  * - xref 항목은 `oooooooooo 00000 n` + 공백 + LF 로 정확히 20 B 예요. trailer · startxref · %%EOF 로 끝나요.
  * - MediaBox 는 pt = mm·72/25.4 를 소수 3자리로 적어요(A4 → 595.276 841.890).
@@ -439,9 +440,9 @@ function planPdf(scene, opts) {
 // 조립
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** `%PDF-1.4` + 이진 표시 주석(0xE2 0xE3 0xCF 0xD3). */
+/** `%PDF-1.7` + 이진 표시 주석(0xE2 0xE3 0xCF 0xD3). */
 const HEADER = Uint8Array.of(
-  ...ENCODER.encode('%PDF-1.4\n%'), 0xe2, 0xe3, 0xcf, 0xd3, 0x0a,
+  ...ENCODER.encode('%PDF-1.7\n%'), 0xe2, 0xe3, 0xcf, 0xd3, 0x0a,
 );
 
 function assemble(page, content, xobjects) {
@@ -458,7 +459,11 @@ function assemble(page, content, xobjects) {
     imageObjects.push({num, smaskNum, x});
   }
   const resources = imageRefs.length ? `<< /XObject << ${imageRefs.join(' ')} >> >>` : '<< >>';
-  objects.push({dict: '<< /Type /Catalog /Pages 2 0 R >>'});
+  // 인쇄 대화상자 기본 배율 «없음»(실제 크기, ISO 32000-1 표 150 · PDF 1.6). 뷰어 기본값(AppDefault)이 «맞춤» 류면
+  // 용지 전면 쪽을 인쇄 가능 영역으로 줄여요 — 비인쇄 여백 3.5 mm 면 약 0.967(계산). Chrome(PDFium)은 이 키를 읽어
+  // 첫 미리보기에서 «맞춤» 을 꺼요(소스 확인). pdf.js 는 파싱하지만 인쇄에 쓰는 곳은 코드 검색에서 못 찾았어요.
+  // Acrobat 계열의 반영은 이 저장소에서 실측하지 않았어요.
+  objects.push({dict: '<< /Type /Catalog /Pages 2 0 R /ViewerPreferences << /PrintScaling /None >> >>'});
   objects.push({dict: '<< /Type /Pages /Kids [3 0 R] /Count 1 >>'});
   objects.push({
     dict: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.widthPt} ${page.heightPt}] /Resources ${resources} /Contents 4 0 R >>`,

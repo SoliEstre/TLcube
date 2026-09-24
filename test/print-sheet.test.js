@@ -14,10 +14,12 @@ import {rasterToPng} from '../src/png.js';
 import {encodeH} from '../src/h-codec.js';
 import {buildHCubeModel} from '../src/cube-export.js';
 import {physicalHCube} from '../src/cube-physical.js';
-import {paperPlan, buildPaperSheet, PAPER_SIZES} from '../src/paper-net.js';
+import {
+  paperPlan, paperMethodOptions, buildPaperSheet, PAPER_SIZES, THICKNESS_PRESETS, PAPER_MARGIN_MM, CUT_LINE_MM,
+} from '../src/paper-net.js';
 import {
   printSvgSheet, clearPrintHost, printSheetSvg, printSheetCss,
-  PRINT_HOST_ID, PRINT_STYLE_ID, PRINT_HEIGHT_TRIM_MM, CSS_PAGE_SIZES_MM,
+  PRINT_HOST_ID, PRINT_STYLE_ID, PRINT_HEIGHT_TRIM_MM, PRINT_MARGIN_MM, CSS_PAGE_SIZES_MM,
 } from '../src/print-sheet.js';
 
 function makeEnv() {
@@ -126,26 +128,96 @@ function sheetSvg([w, h] = [210, 297]) {
 }
 const mmRoot = (w, h, extra = '') => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">${extra}<rect x="7" y="7" width="10" height="10" fill="#000"/></svg>\n`;
 
-/** 인쇄 SVG 루트가 1:1(사용자 단위 1 = 1 mm)이고 높이 = 용지 − 0.5 인지 재는 자. */
-function oneToOne(svgText, {widthMm, heightMm}) {
+const M = PRINT_MARGIN_MM;
+/** 인쇄 SVG 가 기대하는 루트 치수: 가장자리 M 을 잘라 낸 영역(높이는 0.5 mm 더). */
+const cropOf = ({widthMm, heightMm}) => ({x: M, y: M, w: widthMm - 2 * M, h: heightMm - 2 * M - PRINT_HEIGHT_TRIM_MM});
+/**
+ * 인쇄 SVG 루트가 1:1(사용자 단위 1 = 1 mm)인지 재는 자. viewBox 원점은 (M, M), 크기 = mm 크기 =
+ * (W − 2M) × (H − 2M − 0.5) — 다운로드 SVG 좌표를 그대로 두고 용지 가장자리 M 만 잘라요.
+ */
+function oneToOne(svgText, paper) {
   const root = /^<svg\b([^>]*)>/.exec(svgText);
   if (!root) return {ok: false, why: 'root'};
   const attr = (name) => new RegExp(`\\s${name}="([^"]*)"`).exec(root[1])?.[1];
   const w = attr('width'), h = attr('height'), vb = (attr('viewBox') ?? '').split(/\s+/).map(Number);
   const wmm = w?.endsWith('mm') ? Number(w.slice(0, -2)) : NaN, hmm = h?.endsWith('mm') ? Number(h.slice(0, -2)) : NaN;
-  const ok = vb.length === 4 && vb[0] === 0 && vb[1] === 0 && wmm === vb[2] && hmm === vb[3]
-    && Math.abs(wmm - widthMm) < 1e-9 && Math.abs(hmm - (heightMm - PRINT_HEIGHT_TRIM_MM)) < 1e-9;
+  const c = cropOf(paper), near = (a, b) => Math.abs(a - b) < 1e-9;
+  const ok = vb.length === 4 && near(vb[0], c.x) && near(vb[1], c.y) && wmm === vb[2] && hmm === vb[3]
+    && near(wmm, c.w) && near(hmm, c.h);
   return {ok, wmm, hmm, vb};
 }
+const croppedRoot = ([w, h]) => {
+  const c = cropOf({widthMm: w, heightMm: h});
+  return `<svg width="${c.w}mm" height="${c.h}mm" viewBox="${c.x} ${c.y} ${c.w} ${c.h}"></svg>`;
+};
 
-test('§6-22 자 검증: 1:1 자는 viewBox 와 mm 크기가 어긋난 SVG · 높이를 안 줄인 SVG 를 거부해요', () => {
-  assert.equal(oneToOne(mmRoot(210, 296.5), A4).ok, true);
-  assert.equal(oneToOne('<svg width="210mm" height="296.5mm" viewBox="0 0 210 297"></svg>', A4).ok, false);
-  assert.equal(oneToOne(mmRoot(210, 297), A4).ok, false);
-  assert.equal(oneToOne('<svg width="210" height="296.5" viewBox="0 0 210 296.5"></svg>', A4).ok, false);
+test('§6-22 자 검증: 1:1 자는 viewBox 원점·크기·mm 크기 중 하나만 어긋나도 거부해요(용지 전체 · 여백 0 옛 꼴 포함)', () => {
+  const c = cropOf(A4);
+  assert.equal(oneToOne(croppedRoot([210, 297]), A4).ok, true);
+  // 옛 꼴(용지 전체 폭 · 원점 0 · 높이 −0.5)은 이제 빨개요 — 여백 «최소» 에서 비율 축소되는 꼴이에요.
+  assert.equal(oneToOne(mmRoot(210, 296.5), A4).ok, false);
+  assert.equal(oneToOne(`<svg width="${c.w}mm" height="${c.h}mm" viewBox="0 0 ${c.w} ${c.h}"></svg>`, A4).ok, false); // 원점 0
+  assert.equal(oneToOne(`<svg width="${c.w}mm" height="${c.h}mm" viewBox="${M} ${M} ${c.w} ${c.h + 0.5}"></svg>`, A4).ok, false); // viewBox 높이
+  assert.equal(oneToOne(`<svg width="${c.w}mm" height="${c.h + PRINT_HEIGHT_TRIM_MM}mm" viewBox="${M} ${M} ${c.w} ${c.h + PRINT_HEIGHT_TRIM_MM}"></svg>`, A4).ok, false); // 높이 안 줄임
+  assert.equal(oneToOne(`<svg width="${c.w}" height="${c.h}" viewBox="${M} ${M} ${c.w} ${c.h}"></svg>`, A4).ok, false); // 단위 없음
 });
 
-test('§6-22 인쇄 SVG: 루트만 바뀌어 1:1 · 높이 = 용지 − 0.5 이고, 본문 바이트는 그대로예요', () => {
+test('§6-22 인쇄 여백 M: 도안 여백 안쪽이고(재단선 잉크 · 하단 띠를 자르지 않게) CSS px 정수배예요', () => {
+  // 도안은 모든 도형을 용지 가장자리에서 PAPER_MARGIN_MM 안에 두고, 재단선 잉크만 CUT_LINE_MM 더 바깥까지 가요(paper-net 자체 검사, 네 변 같은 허용).
+  // 왼쪽·오른쪽·위 크롭(M)은 아래 첫 단언으로 재단선 잉크까지 안전해요. 아래 크롭(M + 0.5 = 6.85)은 재단선 허용(6.8)보다 안쪽이라
+  // 두 번째 단언은 재단선 아닌 도형만 지켜요 — 아래 재단선은 하단 띠(PAPER_BAND_MM) 배치가 떼어 놓고, 그건 아래 «크롭» 격자만 재요.
+  // (M + 0.5 ≤ 7 − 0.2 를 계약으로 걸려면 M 을 23 px(6.09 mm) 이하로 내려야 해요 — 6.35 mm(= 1/4 in, 24 px) 선택을 바꾸는 설계 결정이라 여기서 걸지 않아요.)
+  assert.ok(M <= PAPER_MARGIN_MM - CUT_LINE_MM, `M ${M} > 재단선 잉크 ${PAPER_MARGIN_MM - CUT_LINE_MM}`);
+  assert.ok(M + PRINT_HEIGHT_TRIM_MM <= PAPER_MARGIN_MM, `아래 크롭 ${M + PRINT_HEIGHT_TRIM_MM} > 도안 여백 ${PAPER_MARGIN_MM}`);
+  // 흔한 레이저 비인쇄 여백(4.23 mm = 1/6 in)보다 넓어야 «여백: 최소» 에서 쪽 영역이 SVG 보다 좁아지지 않아요.
+  assert.ok(M >= 6, `M ${M} 이 좁으면 «최소» 여백에서 Chromium 이 가로 넘침을 비율로 줄여요`);
+  // Chromium 은 @page 여백을 CSS px 로 맞춰서, 정수 px 가 아니면 종이 위 위치가 0.085 mm(6 mm → 23 px) 밀려요(헤드리스 실측).
+  const px = M * 96 / 25.4;
+  assert.ok(Math.abs(px - Math.round(px)) < 1e-9, `M ${M} mm = ${px} px`);
+});
+
+/** 도형 잉크 상자(qr 아닌 polygon 은 svg.js 이음 stroke 0.03 의 절반을 더해요)가 크롭 밖으로 나간 도형 목록이에요. */
+function outsideCrop(scene) {
+  const c = cropOf({widthMm: scene.width, heightMm: scene.height}), out = [];
+  scene.shapes.forEach((s, k) => {
+    const pad = s.kind === 'polygon' && !s.qr ? 0.015 : 0;
+    const xs = s.points.map((p) => p.x), ys = s.points.map((p) => p.y);
+    if (Math.min(...xs) - pad < c.x - 1e-9 || Math.max(...xs) + pad > c.x + c.w + 1e-9
+      || Math.min(...ys) - pad < c.y - 1e-9 || Math.max(...ys) + pad > c.y + c.h + 1e-9) out.push(`${k}:${s.role}`);
+  });
+  return out;
+}
+
+test('§6-22 크롭: 용지 8종 × 두께 프리셋 × 방식 × 한 변(자동 · 직접)에서 그린 도형이 인쇄 크롭 밖으로 나가지 않아요 — 자 검증 포함', () => {
+  const cubes = [
+    physicalHCube(buildHCubeModel(encodeH(Uint8Array.of(1, 2, 3), {version: 0, mode: 3, tones: 3, ecc: 'M', mask: 0, finder: 'frame'}), {renderFaces: 3})),
+    physicalHCube(buildHCubeModel(encodeH(Uint8Array.of(1), {version: 8, mode: 3, tones: 2, ecc: 'M', mask: 0, finder: 'frame'}), {renderFaces: 6})),
+  ];
+  let built = 0;
+  const problems = [];
+  for (const phys of cubes) for (const p of PAPER_SIZES) for (const t of THICKNESS_PRESETS) for (const sideMm of [undefined, 13.4, 30]) {
+    for (const o of paperMethodOptions(phys, {paper: p.id, thicknessMm: t.thicknessMm, sideMm})) {
+      if (!o.enabled) continue;
+      const scene = buildPaperSheet(phys, paperPlan(phys, {paper: p.id, thicknessMm: t.thicknessMm, sideMm, method: o.method}));
+      const bad = outsideCrop(scene);
+      if (bad.length) problems.push(`n=${phys.n} ${p.id} ${t.id} ${o.method} s=${sideMm ?? 'auto'}: ${bad.slice(0, 3).join(', ')}`);
+      built += 1;
+    }
+  }
+  assert.deepEqual(problems.slice(0, 5), []);
+  assert.ok(built >= 200, `만든 도안 ${built} — 격자가 대부분 계획에서 떨어지면 자가 아무것도 안 재요`);
+  // 자 검증: 크롭 경계 바로 밖(왼쪽 · 오른쪽 · 위 · 아래)에 심은 도형마다 빨개져요.
+  const base = {width: 210, height: 297, shapes: []}, sq = (x, y, extra = {}) => ({kind: 'polygon', qr: true, role: 'planted', ...extra,
+    points: [{x, y}, {x: x + 1, y}, {x: x + 1, y: y + 1}, {x, y: y + 1}]});
+  const c = cropOf(A4);
+  for (const shape of [sq(c.x - 0.01, 100), sq(c.x + c.w - 0.99, 100), sq(100, c.y - 0.01), sq(100, c.y + c.h - 0.99),
+    sq(c.x + 0.005, 100, {qr: false})]) { // 마지막: 이음 stroke 절반(0.015)만큼 넘는 모듈
+    assert.deepEqual(outsideCrop({...base, shapes: [shape]}), ['0:planted'], JSON.stringify(shape.points[0]));
+  }
+  assert.deepEqual(outsideCrop({...base, shapes: [sq(c.x + 0.02, c.y + 0.02, {qr: false})]}), []);
+});
+
+test('§6-22 인쇄 SVG: 루트만 바뀌어 1:1(가장자리 M 크롭) 이고, 본문 바이트는 그대로예요', () => {
   for (const [name, [w, h]] of Object.entries(CSS_PAGE_SIZES_MM)) {
     const src = sheetSvg([w, h]);
     const out = printSheetSvg(src, {widthMm: w, heightMm: h});
@@ -160,14 +232,19 @@ test('§6-22 인쇄 SVG: 루트만 바뀌어 1:1 · 높이 = 용지 − 0.5 이�
   assert.ok(oneToOne(printSheetSvg(mmRoot(210, 297), A4), A4).ok);
 });
 
-test('§6-22 스타일: @page 키워드 · 여백 0 · 화면 숨김 · 인쇄에서 호스트만 · print-color-adjust exact · SVG mm 크기', () => {
+test('§6-22 스타일: @page 키워드 · 여백 M · 화면 숨김 · 인쇄에서 호스트만 · 쪽 영역 가운데 · print-color-adjust exact · SVG mm 크기', () => {
   const css = printSheetCss(A4);
   assert.match(css, /@media screen \{ #tlPrintHost \{ display:none \} \}/);
-  assert.match(css, /@media print \{[\s\S]*@page \{ size: A4 portrait; margin: 0 \}/);
+  assert.match(css, /@media print \{[\s\S]*@page \{ size: A4 portrait; margin: 6\.35mm \}/);
   assert.match(css, /body > \*:not\(#tlPrintHost\) \{ display:none !important \}/);
   assert.match(css, /[^-]print-color-adjust:exact/);
   assert.match(css, /-webkit-print-color-adjust:exact/);
-  assert.match(css, /#tlPrintHost svg \{ display:block; width:210mm; height:296.5mm \}/);
+  // 가운데 맞춤은 초기 포함 블록 퍼센트로 해요 — Firefox 149 인쇄에서 100vh 는 쪽 영역이 아니어서(«여백: 없음» 에서 6.4 mm 위로 밀림, 실측).
+  assert.match(css, /html, body \{ margin:0; padding:0; background:#fff; height:100% \}/);
+  assert.match(css, /body \{ display:block; min-height:0 \}/); // 앱 body { display:flex; min-height:100vh; align-items:center } 무력화
+  assert.match(css, /#tlPrintHost \{ display:flex; min-height:calc\(100% - 0\.5mm\);/);
+  assert.doesNotMatch(css, /\dvh\b/);
+  assert.match(css, /#tlPrintHost svg \{ display:block; flex:none; margin:auto; width:197\.3mm; height:283\.8mm \}/);
   // 키워드는 대소문자 무관하게 받아 규격 표기로 적어요.
   for (const [name, [w, h]] of Object.entries(CSS_PAGE_SIZES_MM)) {
     assert.match(printSheetCss({pageKeyword: name.toLowerCase(), widthMm: w, heightMm: h}), new RegExp(`size: ${name} portrait;`));
