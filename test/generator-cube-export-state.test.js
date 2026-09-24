@@ -143,10 +143,24 @@ function extractFunction(src, name) {
 test('hNetFoldNote: 표시 조건 = H · 새 섹션 안내 조건 = 새 섹션이 보임, 전각 마침표 뒤에는 공백 없음', () => {
   const fn = extractFunction(index, 'hNetFoldNote');
   assert.ok(fn.start > index.indexOf('function flashCopied('), '구 3D 데이터 슬라이스 밖에 있어야 해요');
-  const run = (hActive, lab, t = (k) => '«' + k + '».') => { const c = {hGeneratorActive: () => hActive, cubeMakeVisible: () => hActive && lab, t}; vm.createContext(c); vm.runInContext(fn.text, c); return vm.runInContext('hNetFoldNote()', c); };
-  for (const lab of [false, true]) assert.equal(run(false, lab), '', 'H 가 아니면 빈 문자열');
-  assert.equal(run(true, false), '«g1131».');
+  // 함수 자신의 계약: 섹션 표시 여부(cubeMakeVisible)를 주입해 두 갈래를 모두 재요. 실제 표시 조건과의 조합은 아래 테스트가 재요.
+  const run = (hActive, section, t = (k) => '«' + k + '».') => { const c = {hGeneratorActive: () => hActive, cubeMakeVisible: () => hActive && section, t}; vm.createContext(c); vm.runInContext(fn.text, c); return vm.runInContext('hNetFoldNote()', c); };
+  for (const section of [false, true]) assert.equal(run(false, section), '', 'H 가 아니면 빈 문자열');
+  assert.equal(run(true, false), '«g1131».', '섹션이 숨으면 섹션 안내를 붙이지 않아요');
   assert.equal(run(true, true), '«g1131». «g1132».');
   const ja = (k) => (k === 'g1131' ? '反転します。' : '「製作用ファイル」を使ってください。');
   assert.equal(run(true, true, ja), '反転します。「製作用ファイル」を使ってください。', '전각 마침표 뒤에는 공백을 넣지 않아요');
+});
+
+test('hNetFoldNote × 실제 cubeMakeVisible: 타입 H 면 정식 화면 · 시험판 모두 «만들기용 파일» 안내가 붙어요', () => {
+  const note = extractFunction(index, 'hNetFoldNote'), visible = extractFunction(index, 'cubeMakeVisible');
+  const run = (hActive, lab) => {
+    const c = {hGeneratorActive: () => hActive, isLabPath: () => lab, t: (k) => '«' + k + '».'};
+    vm.createContext(c); vm.runInContext(visible.text + '\n' + note.text, c);
+    return vm.runInContext('hNetFoldNote()', c);
+  };
+  for (const lab of [false, true]) {
+    assert.equal(run(false, lab), '', `lab=${lab}: H 가 아니면 빈 문자열`);
+    assert.equal(run(true, lab), '«g1131». «g1132».', `lab=${lab}: 정식 화면 · 시험판 모두 섹션 안내가 붙어요`);
+  }
 });

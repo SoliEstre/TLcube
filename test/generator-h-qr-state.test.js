@@ -56,7 +56,7 @@ function harness(text,overrides={}){
     paintY3dPreview:()=>{if(c.y3dPreview.on&&c.current?.type==='H')vm.runInContext('drawHPreviewFrame()',c);},
     exportCubeMp4:async args=>{args.renderFrame({canvas:{width:720,height:720},context:{drawImage(){}},timestampMs:0});return new Blob(['mock-codec']);},
   };
-  for(const name of ['syncShotPresetUi','syncFaceGainLabel','syncExportPpiHint','syncQuietGaugeReadout','syncTypeYCellEditorUi','syncHFaceImagesUi','syncHUi','emitProductGenerate','emitGeneratorFail','emitLabGen','applyPreviewFit','syncBackdropLayer','updateGauge','updateOverflowHighlight','syncTypeUi','renderFinderUi','syncResTierUi','syncYLocatorUi','applyAutoLocatorProfileY','syncSeatUi','deriveYLocatorForQrPosition','stopHAnimation'])c[name]=()=>{};
+  for(const name of ['syncShotPresetUi','syncFaceGainLabel','syncExportPpiHint','syncQuietGaugeReadout','syncTypeYCellEditorUi','syncHFaceImagesUi','syncHUi','syncCubeMakeUi','emitProductGenerate','emitGeneratorFail','emitLabGen','applyPreviewFit','syncBackdropLayer','updateGauge','updateOverflowHighlight','syncTypeUi','renderFinderUi','syncResTierUi','syncYLocatorUi','applyAutoLocatorProfileY','syncSeatUi','deriveYLocatorForQrPosition','stopHAnimation'])c[name]=()=>{};
   vm.createContext(c);
   for(const name of ['resolveFallback','buildConfig','encodeWithEcc','encodeOptsFor','renderTypeH','isCapacityError','eccTierLabel','render','hSceneOptions','drawHPreviewFrame','exportPlanFor','renderQrPositionUi','commitFinderQrUi','cancelScheduledRender','runScheduledRender','flushScheduledRender','schedule'])vm.runInContext(fn(text,name),c);
   const cardsStart=text.indexOf('for (const card of els.qrPositionCards.children) {',text.indexOf('// ── 일반 모드: QR 링크'));

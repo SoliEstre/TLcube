@@ -88,6 +88,22 @@ and are included in visible-view exports, full nets, embedded glTF, rotation vid
 The mask defaults to 7 for new generator state; automatic size still prioritizes strong ECC. H previews use cached
 GPU face textures when available, with the exact scene renderer retained for exports and a Canvas fallback.
 See the [H spec](SPEC.md#13-h-v2--y-그룹의-실제-큐브-확장-시험판).
+
+**Maker files (paper and 3D printing).** With H active, the generator offers a collapsed *Maker files* section.
+Every file is built in physical coordinates, so seen from outside the cube each face matches the screen (no mirror image).
+For 3D printing it exports a 3MF with one part per color (Bambu Studio, OrcaSlicer, Cura), the same parts as a
+per-color STL bundle (ZIP, for PrusaSlicer) and a single-color stand STL that holds the cube on a vertex.
+Options cover cell size, embedded code depth (0.6–2.0 mm) and hollowing (on by default) with inner ribs and a vent hole
+per chamber; the 3MF places the cube on the build plate, so slicers that keep file coordinates, such as Cura, open it on the plate.
+Paper patterns come as a one-sheet net with glue tabs (paper up to 0.45 mm), a wrap skin with a board-core cutting list,
+or butt-jointed board pieces, chosen by thickness. They export as millimeter-exact SVG, 300 dpi PNG and vector PDF, or print directly,
+on A3, A4, A5, ISO and JIS B4/B5 and Letter, with plain paper, card, board and corrugated thickness presets or a measured thickness.
+Each pattern carries a 50 mm calibration bar. If a printer driver shrinks the page, enter the measured bar length and the next
+PNG, PDF and direct print are pre-scaled to compensate (remembered per paper size in this browser only). SVG stays unscaled
+as the real-size file for cutting machines and editing.
+A cube folded from the one-sheet net has been read by the scanner; the wrap skin, the board pieces and a 3D-printed cube have not yet been verified with a real scan.
+The older cube nets in the 3D data section are mirrored on every face and do not scan when folded — use these paper patterns instead.
+
 The scanner collects H faces across R2 camera frames or consecutive photos. It releases a
 payload only after all required unique 1–6 faces and full RS/CRC verification; partial faces expire after 90 seconds.
 Y processing pauses while valid H partial collection is active and resumes after reset/expiry.

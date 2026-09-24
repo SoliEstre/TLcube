@@ -150,7 +150,8 @@ export function throwingStorage() {
 /**
  * @param {object} [options]
  * @param {string} [options.source] 슬라이스를 자를 원문(자 검증용 변이 원문을 넣을 수 있어요)
- * @param {boolean} [options.lab] isLabPath()
+ * @param {boolean} [options.lab] isLabPath() — 표시 조건은 경로를 보지 않지만, 정식 · 시험판이 같게 도는지 재고
+ *   옛 시험판 게이트를 되살린 변이 원문을 돌리려고 계속 주입해요.
  * @param {boolean} [options.h] hGeneratorActive()
  * @param {object|null} [options.current]
  * @param {'manual'|'auto'} [options.raf] manual 이면 한 프레임 양보가 release() 까지 멈춰요

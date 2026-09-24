@@ -9,6 +9,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readdirSync, readFileSync} from 'node:fs';
+import vm from 'node:vm';
 
 import {physicalHCube} from '../src/cube-physical.js';
 import {generatorCubeModel} from '../src/generator-cube-export.js';
@@ -110,12 +111,43 @@ test('아이콘 버튼엔 data-i18n 이 없고, 여덟 언어 모두에서 아�
   assert.deepEqual([...h.missingKeys], []);
 });
 
-test('표시 조건: isLabPath() && hGeneratorActive() 일 때만 보여요', () => {
+test('표시 조건: 타입 H 면 정식 화면과 시험판 모두 보이고, H 가 아니면 숨어요(경로는 보지 않아요)', async () => {
   for (const lab of [false, true]) for (const hActive of [false, true]) {
     const h = createCubeMakeHarness({lab, h: hActive});
     h.sync();
-    assert.equal(h.$('cubeMakeSection').hidden, !(lab && hActive), `lab=${lab} H=${hActive}`);
+    assert.equal(h.$('cubeMakeSection').hidden, !hActive, `lab=${lab} H=${hActive}`);
+    // 숨은 섹션은 눌러도 아무것도 만들지 않아요(runCubeMake 도 같은 표시 조건을 봐요).
+    if (!hActive) {
+      await h.expand();
+      for (const id of ALL_IDS) await h.click(id);
+      assert.equal(h.downloads.length + h.prints.length, 0, `lab=${lab}: 숨은 섹션이 파일을 만들었어요`);
+    }
   }
+});
+
+test('정식 화면(isLabPath() = false)에서 섹션이 펼쳐지고 버튼 7개가 살아 있으며, 시험판과 바이트까지 같은 파일을 만들어요', async () => {
+  const CLICKS = ['makePaperSvg', 'makePaperPdf', 'makePaperPrint', 'makePrintStand'];
+  const run = async (lab) => {
+    const h = createCubeMakeHarness({lab});
+    h.sync();
+    assert.equal(h.$('cubeMakeSection').hidden, false, `lab=${lab}: 섹션이 숨었어요`);
+    await h.expand();
+    assert.equal(h.$('cubeMakeBody').hidden, false, `lab=${lab}: 본문이 안 펼쳐졌어요`);
+    for (const id of ALL_IDS) assert.equal(h.$(id).disabled, false, `lab=${lab}/${id} 가 막혔어요`);
+    assert.notEqual(h.$('makePaperStatus').textContent, '', `lab=${lab}: 종이 상태 줄이 비었어요`);
+    assert.notEqual(h.$('makePrintStatus').textContent, '', `lab=${lab}: 3D 상태 줄이 비었어요`);
+    for (const id of CLICKS) await h.click(id);
+    return h;
+  };
+  const formal = await run(false), lab = await run(true);
+  assert.deepEqual(formal.downloads.map((d) => d.filename.split('.').pop()), ['svg', 'pdf', 'stl']);
+  assert.equal(formal.prints.length, 1, '정식 화면의 인쇄 버튼이 인쇄창을 열지 않았어요');
+  // 경로는 산출물에 닿지 않아요 — 정식 화면 파일이 시험판 파일과 이름 · MIME · 바이트까지 같아요.
+  assert.deepEqual(formal.downloads.map((d) => [d.filename, d.mime]), lab.downloads.map((d) => [d.filename, d.mime]));
+  for (let i = 0; i < formal.downloads.length; i += 1) {
+    assert.ok(Buffer.from(formal.downloads[i].bytes).equals(Buffer.from(lab.downloads[i].bytes)), `${formal.downloads[i].filename}: 정식 · 시험판 바이트가 달라요`);
+  }
+  assert.deepEqual(formal.prints, lab.prints);
 });
 
 test('기본은 접혀 있고, 토글이 본문 · aria-expanded · 설명을 함께 바꿔요', async () => {
@@ -1275,6 +1307,82 @@ test('자 검증: 배율 보정 자는 심은 결함에서 빨개져요(범위 �
 
 // ── i18n · 코드 표 · 배선 ───────────────────────────────────────────────
 
+/** 정식 화면에 보이는 섹션이라 스스로를 시험판 · 실험 · 베타 기능이라 부르지 않아요(옛 g1043 문장의 언어별 표기 + 흔한 동의어).
+ *  거꾸로 이번 공개가 기대는 정직성 문장 — «3D 프린터로 뽑은 큐브는 아직 실물 스캔으로 검증하지 않았어요» — 은 g1043 끝 줄에
+ *  남아야 해요(«3D» + 언어별 «아직 … 않았어요»). 문제 목록을 돌려줘요(자 검증이 같은 함수를 재사용해요). */
+const LAB_WORDS = {
+  ko: /시험판|실험 기능|실험적|베타/, en: /\b(lab|trial|beta|experimental)\b/i, ja: /試験版|実験的|ベータ/, fr: /expérimental|\bbêta\b|\bessai\b/i,
+  it: /sperimental|\bbeta\b|\bdi prova\b/i, de: /Labor|[Ee]xperimentell|\bBeta\b|Testversion|Testfunktion/, es: /experimental|\bbeta\b|\bde prueba\b/i, pt: /experimental|\bbeta\b|\bde teste\b/i,
+};
+const NOT_YET = {ko: /아직/, en: /\bnot yet\b/, ja: /まだ/, fr: /pas encore/, it: /non è ancora/, de: /noch nicht/, es: /aún no/, pt: /ainda não/};
+function formalWordingProblems(dict, keys) {
+  const out = [];
+  for (const key of keys) for (const lang of LANGS) if (LAB_WORDS[lang].test(dict[lang][key])) out.push(`${lang}/${key}: 시험판 문구가 남았어요`);
+  for (const lang of LANGS) {
+    const last = dict[lang].g1043.split('\n').at(-1);
+    if (!/3D/.test(last) || !NOT_YET[lang].test(last)) out.push(`${lang}/g1043: 끝 줄에 «3D 인쇄 큐브는 아직 검증 전» 꼬리가 없어요`);
+  }
+  return out;
+}
+
+/** 원문 조각을 느슨한 VM 에서 돌려요 — stubs 에 준 이름만 진짜 값이고, 그 밖의 자유 식별자는 내장(String · Object …)이면 내장,
+ *  아니면 무엇이든 받아 주는 «아무거나» 값으로 풀려요(읽기 · 쓰기 · 호출은 조용히 통과, 순회는 빈 목록, 글자로는 '').
+ *  페이지 함수 하나를 DOM 없이 끝까지 돌려서 «스파이가 불렸나» 만 재려고 써요. with 문을 쓰려고 느슨한 모드로 돌려요. */
+function runLoose(code, stubs) {
+  const anything = new Proxy(function () {}, {
+    get: (target, key) => (key === Symbol.iterator ? function* () {} : key === Symbol.toPrimitive ? () => '' : key === 'then' ? undefined : anything),
+    set: () => true,
+    apply: () => anything,
+    construct: () => anything,
+  });
+  const scope = new Proxy(stubs, {
+    has: () => true,
+    get: (target, key) => (key === Symbol.unscopables ? undefined : key in target ? target[key] : key in globalThis ? globalThis[key] : anything),
+    set: (target, key, value) => { target[key] = value; return true; },
+  });
+  return vm.runInContext(`with (scope) {\n${code}\n}`, vm.createContext({scope}));
+}
+
+/** index.html 의 syncHUi 원문(닫는 중괄호까지). */
+const SYNC_H_UI = (() => {
+  const start = INDEX.indexOf('function syncHUi(){');
+  assert.ok(start >= 0, 'syncHUi 를 못 찾았어요');
+  return INDEX.slice(start, INDEX.indexOf('\n}\n', start) + 2);
+})();
+/** syncHUi 가 정식 · 시험판 × H 켬 · 끔 네 경우 모두에서 syncCubeMakeUi 를 부르는지 재요(H 를 떠날 때도 불러야 섹션이 숨어요).
+ *  타입을 H 로 바꾸는 길(syncTypeUi 옆)과 H 렌더 성공 길이 모두 syncHUi 를 지나서, 여기서 빠지면 정식 화면엔 언어를 바꿀 때까지 섹션이 안 보여요.
+ *  안 부른 경우를 목록으로 돌려줘요(자 검증이 같은 함수를 재사용해요). */
+function syncHUiMakeProblems(text) {
+  const out = [];
+  for (const lab of [false, true]) for (const h of [false, true]) {
+    let calls = 0;
+    runLoose(`${text}\nsyncHUi();`, {
+      syncCubeMakeUi: () => { calls += 1; }, hGeneratorActive: () => h, isLabPath: () => lab, location: {pathname: lab ? '/lab/' : '/'},
+      generatorState: {type: 'Y', hRotationSpeed: 30}, current: null, mode: 'normal', y3dPreview: {on: false},
+    });
+    if (calls === 0) out.push(`lab=${lab} H=${h}: syncHUi 가 syncCubeMakeUi 를 안 불렀어요`);
+  }
+  return out;
+}
+
+/** render() 의 실패 콜백 원문 — renderWithErrorDisplay 의 두 번째 인자 '(error) => { … }' 예요. */
+const RENDER_ON_ERROR = (() => {
+  const start = INDEX.indexOf('}, (error) => {\n    emitGeneratorFail(');
+  assert.ok(start >= 0, 'render 실패 콜백을 못 찾았어요');
+  const end = INDEX.indexOf('\n  });\n}\n', start);
+  assert.ok(end > start, 'render 실패 콜백의 끝을 못 찾았어요');
+  return INDEX.slice(start + 3, end + 4);
+})();
+/** 실패 콜백이 current 를 비운 «뒤에» syncCubeMakeUi 를 부르는지 재요 — 안 부르면 직전 코드의 상태 줄과 살아 있는 버튼이 남아요. */
+function renderFailureMakeProblems(callback) {
+  const seen = [];
+  const stubs = {current: {type: 'H'}, isCapacityError: () => false, syncCubeMakeUi: () => { seen.push(stubs.current); }};
+  runLoose(`(${callback})(new Error('렌더 실패'));`, stubs);
+  if (stubs.current !== null) return ['실패 콜백이 current 를 비우지 않았어요'];
+  if (!seen.includes(null)) return ['실패 콜백이 current 를 비운 뒤 syncCubeMakeUi 를 부르지 않았어요'];
+  return [];
+}
+
 test('TLP 코드 표: src 가 쓰는 모든 TLP_* 에 g-키가 있고 그 키가 여덟 언어에 있어요(자 검증: 한 줄 빼면 잡혀요)', () => {
   const codes = new Set();
   for (const file of readdirSync(new URL('../src/', import.meta.url))) {
@@ -1299,6 +1407,8 @@ test('i18n: 섹션이 부르는 모든 키가 여덟 언어에 있고, 4자리 h
   const missing = (list) => list.filter((key) => LANGS.some((lang) => typeof dict[lang][key] !== 'string'));
   assert.deepEqual(missing(keys), []);
   for (const key of keys) for (const lang of LANGS.slice(1)) assert.doesNotMatch(dict[lang][key], HANGUL, `${lang}/${key}`);
+  // 정식 화면 문구: 시험판 · 실험 · 베타 표기가 없고, g1043 끝 줄에 «3D 인쇄 큐브는 아직 검증 전» 꼬리가 남아 있어요(formalWordingProblems).
+  assert.deepEqual(formalWordingProblems(dict, keys), []);
   // 기존 도움말 자(generator-help-ui)는 3자리 키만 봐요. 4자리 help 키는 여기서 존재 · 유일 · 속성을 재요.
   const dots = [...INDEX.matchAll(/<button type="button" class="help-dot" data-help="(g\d{4})"([^>]*)>/g)];
   assert.ok(dots.length >= 5, `4자리 help 키가 너무 적어요(${dots.length})`);
@@ -1317,11 +1427,15 @@ test('i18n: 섹션이 부르는 모든 키가 여덟 언어에 있고, 4자리 h
   assert.deepEqual(missing(referencedKeys(MARKUP.replace('data-help="g1045"', 'data-help="g9999"'), SLICE).filter((k) => k === 'g9999')), ['g9999']);
 });
 
-test('배선: TEXT_SYNCERS 등록 · syncHUi 가 부름 · 새 모듈 6개가 import 되고 MODULE_ORDER 에 있어요 · 스탬프 형식', () => {
+test('배선: TEXT_SYNCERS 등록 · syncHUi 가 정식 · 시험판 모두 부름 · render 실패 길이 다시 그림 · 새 모듈 6개가 import 되고 MODULE_ORDER 에 있어요 · 스탬프 형식', () => {
   const syncers = /const TEXT_SYNCERS = \[([\s\S]*?)\];/.exec(INDEX)[1].split(',').map((s) => s.trim());
   assert.ok(syncers.includes('syncCubeMakeUi'));
   const syncHUi = INDEX.slice(INDEX.indexOf('function syncHUi(){'), INDEX.indexOf('\n}\n', INDEX.indexOf('function syncHUi(){')));
   assert.match(syncHUi, /syncCubeMakeUi\(\);/);
+  // 철자만 보면 `if(isLabPath())syncCubeMakeUi();` 도 위 자를 통과해요 — 실제로 돌려서 정식 · 시험판 × H 켬 · 끔 모두 부르는지 재요.
+  assert.deepEqual(syncHUiMakeProblems(SYNC_H_UI), []);
+  // render 실패 길도 섹션을 다시 그려요(current 를 비운 뒤).
+  assert.deepEqual(renderFailureMakeProblems(RENDER_ON_ERROR), []);
   const modules = ['cube-physical', 'paper-net', 'pdf-writer', 'print-sheet', 'print-mesh', 'mesh-export'];
   for (const name of modules) {
     assert.match(INDEX, new RegExp(`from '\\./src/${name}\\.js'`), name);
@@ -1330,6 +1444,58 @@ test('배선: TEXT_SYNCERS 등록 · syncHUi 가 부름 · 새 모듈 6개가 im
   }
   assert.ok(MODULE_ORDER.indexOf('print-mesh') > MODULE_ORDER.indexOf('cube-physical'));
   assert.match(/const GENERATOR_BUILD = '([^']+)'/.exec(INDEX)[1], /^\d{4}-\d{2}-\d{2}\.\d{2}$/);
+});
+
+test('render 가 실패해 current 를 잃고 섹션을 다시 그리면, 상태 줄이 비고 버튼 7개가 모두 막히며 눌러도 아무것도 안 만들어요(정식 · 시험판)', async () => {
+  for (const lab of [false, true]) {
+    const h = createCubeMakeHarness({lab});
+    h.sync();
+    await h.expand();
+    assert.notEqual(h.$('makePaperStatus').textContent, '', `lab=${lab}: 성공 뒤 종이 상태 줄이 비었어요`);
+    assert.notEqual(h.$('makePrintStatus').textContent, '', `lab=${lab}: 성공 뒤 3D 상태 줄이 비었어요`);
+    // 실패 콜백이 하는 일(current = null → syncCubeMakeUi())을 그대로 해요 — 콜백이 실제로 부르는지는 배선 자가 재요.
+    h.c.current = null;
+    h.sync();
+    assert.equal(h.$('cubeMakeSection').hidden, false, `lab=${lab}: 섹션은 H 인 동안 그대로 보여요`);
+    assert.equal(h.$('makePaperStatus').textContent, '', `lab=${lab}: 직전 코드의 종이 상태 줄이 남았어요`);
+    assert.equal(h.$('makePrintStatus').textContent, '', `lab=${lab}: 직전 코드의 3D 상태 줄이 남았어요`);
+    for (const id of ALL_IDS) assert.equal(h.$(id).disabled, true, `lab=${lab}/${id}: current 가 없는데 열려 있어요`);
+    for (const id of ALL_IDS) await h.click(id);
+    assert.equal(h.downloads.length + h.prints.length, 0, `lab=${lab}: current 가 없는데 파일을 만들었어요`);
+  }
+});
+
+test('자 검증: syncHUi · render 실패 배선 자와 정식 화면 문구 자는 심은 결함에서 빨개져요', () => {
+  // ① syncHUi 의 호출을 경로 · H 조건으로 감싸거나 지워요(검토에서 철자 자를 통과한 변이가 첫 줄이에요).
+  const call = '\n  syncCubeMakeUi();\n';
+  assert.equal(SYNC_H_UI.split(call).length - 1, 1, `변이 자리를 못 찾았어요: ${call.trim()}`);
+  for (const to of ['\n  if(isLabPath())syncCubeMakeUi();\n', "\n  if(location.pathname.startsWith('/lab/'))syncCubeMakeUi();\n", '\n  if(hGeneratorActive())syncCubeMakeUi();\n', '\n']) {
+    assert.notDeepEqual(syncHUiMakeProblems(SYNC_H_UI.replace(call, to)), [], `결함을 심었는데 syncHUi 배선 자가 초록이에요: ${to.trim() || '(삭제)'}`);
+  }
+  // ② render 실패 콜백에서 호출을 지우거나, current 를 비우기 전으로 옮겨요.
+  const failCall = '\n    syncCubeMakeUi();\n';
+  assert.equal(RENDER_ON_ERROR.split(failCall).length - 1, 1, `변이 자리를 못 찾았어요: ${failCall.trim()}`);
+  const dropped = RENDER_ON_ERROR.replace(failCall, '\n');
+  assert.equal(dropped.split('\n    current = null;').length - 1, 1, '변이 자리를 못 찾았어요: current = null;');
+  for (const mutated of [dropped, dropped.replace('\n    current = null;', '\n    syncCubeMakeUi();\n    current = null;')]) {
+    assert.notDeepEqual(renderFailureMakeProblems(mutated), [], '결함을 심었는데 render 실패 배선 자가 초록이에요');
+  }
+  // ③ 정식 화면 문구 — 시험판 표기를 더하거나 3D 인쇄 «아직 검증 전» 문장을 지워요.
+  const dict = createCubeMakeHarness().dict, keys = referencedKeys(MARKUP, SLICE);
+  const planted = [
+    ['ko', (s) => `${s} 시험판 기능이에요.`],
+    ['en', (s) => `${s} Trial feature.`],
+    ['de', (s) => `${s} Beta-Funktion.`],
+    ['en', (s) => s.replace(' A 3D-printed cube has not yet been verified with a real scan.', '')],
+    ['ko', (s) => s.replace(' 3D 프린터로 뽑은 큐브는 아직 실물 스캔으로 검증하지 않았어요.', '')],
+    ['ja', (s) => s.replace('3D プリンターで出力したキューブは、まだ実物のスキャンで検証していません。', '')],
+  ];
+  for (const [lang, edit] of planted) {
+    const text = edit(dict[lang].g1043);
+    assert.notEqual(text, dict[lang].g1043, `${lang}: 변이 자리를 못 찾았어요`);
+    const mutated = {...dict, [lang]: {...dict[lang], g1043: text}};
+    assert.notDeepEqual(formalWordingProblems(mutated, keys), [], `${lang}: 결함을 심었는데 정식 화면 문구 자가 초록이에요`);
+  }
 });
 
 // ── 자 검증: 핸들러에 결함을 심은 변이 원문 ─────────────────────────────
@@ -1358,11 +1524,15 @@ test('자 검증: 파일명 · busy · 게이트 · 오류 문구 자는 심은 
     h.release();
     await job;
   }
-  // ③ 시험판 게이트를 빼먹은 표시 조건
+  // ③ 표시 조건 결함 두 가지 — (가) 옛 시험판 게이트가 되살아나 정식 화면에서 숨고, (나) H 조건을 빼먹어 H 가 아닐 때도 보여요.
   {
-    const h = createCubeMakeHarness({source: mutate('function cubeMakeVisible(){return isLabPath()&&hGeneratorActive();}', 'function cubeMakeVisible(){return hGeneratorActive();}'), lab: false});
-    h.sync();
-    assert.equal(h.$('cubeMakeSection').hidden, false, '게이트 결함이 드러나야 해요');
+    const visible = 'function cubeMakeVisible(){return hGeneratorActive();}';
+    const labOnly = createCubeMakeHarness({source: mutate(visible, 'function cubeMakeVisible(){return isLabPath()&&hGeneratorActive();}'), lab: false});
+    labOnly.sync();
+    assert.equal(labOnly.$('cubeMakeSection').hidden, true, '정식 화면에서 숨는 게이트 결함이 드러나야 해요');
+    const always = createCubeMakeHarness({source: mutate(visible, 'function cubeMakeVisible(){return true;}'), h: false});
+    always.sync();
+    assert.equal(always.$('cubeMakeSection').hidden, false, 'H 가 아닐 때 보이는 게이트 결함이 드러나야 해요');
   }
   // ④ 예외 원문을 그대로 흘리는 오류 문구
   {

@@ -531,9 +531,12 @@ test('정식 화면의 정적 DOM 에는 내부 후보명이 없다', () => {
 test('정식 화면에서 열 수 있는 도움말 본문에는 내부 후보명이 없다', () => {
   // 이게 실제로 샜던 자리다 — #finderSection(O/A, isLabPath 게이트 **없음**)이
   // lab 전용 Y 로케이터 본문(g906)을 가리키고 있었다.
+  // 4자리 키(g1040 이상)도 같이 재요 — «만들기용 파일» 섹션(g1043 · g1045 · g1047)이 2026-09-24 정식 화면에 열려,
+  // 3자리만 세면 정식 도움말 본문 일부가 이 자 밖에 남아요.
   const labBlock = outerHtmlById(INDEX, 'yLocatorSection');
-  const labKeys = new Set([...labBlock.matchAll(/data-help="(g\d{3})"/g)].map((m) => m[1]));
-  const allKeys = [...INDEX.matchAll(/data-help="(g\d{3})"/g)].map((m) => m[1]);
+  const labKeys = new Set([...labBlock.matchAll(/data-help="(g\d{3,})"/g)].map((m) => m[1]));
+  const allKeys = [...INDEX.matchAll(/data-help="(g\d{3,})"/g)].map((m) => m[1]);
+  for (const key of ['g1043', 'g1045', 'g1047']) assert.ok(allKeys.includes(key), `${key}: 정식 도움말 키 유도에서 빠졌어요`);
   const publicKeys = [...new Set(allKeys.filter((k) => !labKeys.has(k)))];
   assert.ok(publicKeys.length >= 6, `정식 도움말 키가 너무 적다 (${publicKeys.length})`);
 
