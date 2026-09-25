@@ -117,7 +117,9 @@ function mcIndex(mx, my, mz, S) {
 }
 
 /**
- * 모델 공간에서 면을 칠한 뒤 [x,y,z]→[x,S-1-z,y] 로 MC(Y-up)에 올려요. 거울이 아니에요.
+ * 모델 공간에서 면을 칠한 뒤 [x,y,z]→[x,S-1-z,y] 로 MC(Y-up)에 올려요. 이 사상은 회전(det=+1)이라 거울을 더하지 않아요.
+ * 다만 모델 좌표 자체가 오른손 공간에서는 정본 면 시트의 거울상이라(src/cube-physical.js), MC 안에서 바깥에서 보면
+ * 코드 면·면 이미지·면 QR 이 모두 좌우 거울로 보여요(test/h-face-qr.test.js 가 «기존 거울» 로 잠가요).
  * @param {{n:number,quads:object[]}} model
  */
 export function voxelizeCube(model, { scale = 1 } = {}) {

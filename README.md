@@ -60,7 +60,7 @@ so at each of k = 6, 8 and 10 it carries the largest payload, and its six points
 
 In the generator, the Y selector's **True 3D → H** switch turns the isometric drawing into a real cube.
 H is a separate wire format ([H spec, SPEC §13](SPEC.md#13-h-v2--y-그룹의-실제-큐브-확장)) and does not use
-Y's inset QR, locators or shading.
+Y's locators, shading or Y-style inset QR (window β / slot); H's own inset QR goes on blank faces (below).
 
 - **Grid and faces.** 1–6 unique data faces, 2/3 tones, ECC L/M/H and H0…H8 grids (13…45 cells per side).
   In the three- and six-face formats the faces work in groups of three (`ZM, XM, YM`, then `ZP, XP, YP`):
@@ -110,7 +110,15 @@ Y's inset QR, locators or shading.
 - Blank-face images take 45° rotation, contain/fill/cover and a background color; five-face H has one blank face.
   Images are included in visible-view exports, full nets, embedded glTF, rotation video and nearest-concrete schematic output.
 - H has its own lighting controls; rotation fill lights data/reference tones together while protecting black/white finder marks.
-- H supports corner QR, but not inset QR. Corner QR preserves the cube's center and scene size.
+- H supports a corner QR or an inset QR on blank faces. The inset QR puts the same TL scanner link as the corner QR
+  on every blank face without an image or text, as a black-and-white face image (add or remove it per face in the
+  blank-face editor); faces that become blank later are not filled automatically. It replaces the corner QR unless
+  the advanced corner-QR option is on. It reads when a phone sees that face nearly head-on, so still images and 2.5D
+  carry it only when that face is visible; 3D print files (3MF/STL) omit it like other face images.
+  Like the code faces, it comes out mirrored in the model-coordinate outputs (glTF, the 3D-data net and .schem), so phone
+  reading there is not guaranteed; 2.5D PNG/SVG, the GPU preview, rotation video and the paper net are not mirrored.
+  A .schem needs enough blocks per cell for the face QR, and the generator says when it does not have them.
+  Corner QR preserves the cube's center and scene size.
 - Video export needs WebCodecs AVC support at every frame rate, so the loop closes on an exact frame; it never falls back to a lower FPS.
 - The mask defaults to 7 for new generator state; automatic size still prioritizes strong ECC. H previews use cached
   GPU face textures when available, with the exact scene renderer retained for exports and a Canvas fallback.

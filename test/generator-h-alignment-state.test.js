@@ -20,6 +20,10 @@ test('render count changes only display state, and invalid arrangement/count pai
   const two=selectHFaceCount(createGeneratorState({type:'Y',yRepresentation:'3d'}),2),six=selectHRenderFaces(two,6);
   assert.equal(six.hFaces,2);assert.equal(six.hRenderFaces,6);assert.equal(six.hAutoRotate,true);
   assert.throws(()=>selectHRenderFaces(selectHFaceCount(two,4),3),/H render face count/);
+  // «마주보는 면»(symmetric) 2면은 6면 렌더만 돼요 — 3면을 고르면 hDisplayMap 이 던지던 UI 경로를 상태 함수에서 막아요.
+  const sym={...two,hArrangement:'symmetric',hRenderFaces:6};
+  assert.throws(()=>selectHRenderFaces(sym,3),/H render face count/);
+  assert.equal(selectHRenderFaces(sym,6).hRenderFaces,6);
   assert.throws(()=>selectHFaceCount({...two,hArrangement:'horizontal'},5),/H face count/);
 });
 test('H/Y transition resets only the documented H display state and preserves no stale alignment',()=>{

@@ -84,12 +84,13 @@ export function hDisplayMap(encoded, { arrangement = 'isometric', renderFaces } 
 export function hImageTargets(encoded, options = {}) {
   return hDisplayMap(encoded, options).imageTargets.map(target => ({ face: target.face, aliases: [...target.aliases] }));
 }
-/** 코드 logical ID와 사용자가 설정한 image source를 한 큐브 시점에서 모두 보여줄 수 있나요? */
+/** 코드 logical ID와 사용자가 설정한 image source를 한 큐브 시점에서 모두 보여줄 수 있나요?
+ *  TL 스캐너 QR 면(content 'qr')은 모두 같은 QR 이라 공유 id 'qr' 하나로 세요 — 한 장만 보여도 되고, 평면 보기에는 최소 한 장이 보여요. */
 function hFaceContents(encoded,faceImages,options){
   const map=hDisplayMap(encoded,options),contents={};
   for(const face of H_DISPLAY_FACES){
-    const code=map.physicalToLogical[face],image=map.imageAlias[face];
-    contents[face]=code?`code:${code}`:faceImages[image]?`image:${image}`:null;
+    const code=map.physicalToLogical[face],image=map.imageAlias[face],asset=faceImages[image];
+    contents[face]=code?`code:${code}`:asset?(asset.content==='qr'?'qr':`image:${image}`):null;
   }
   return contents;
 }

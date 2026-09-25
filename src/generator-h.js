@@ -138,9 +138,11 @@ export function selectHFaceCount(state,count){
   const hRenderFaces=count>3||hArrangement==='symmetric'?6:(next.hRenderFaces??3);
   return {...next,hArrangement,hFaces:count,hRenderFaces,orbitView:count>3?'3d':next.orbitView};
 }
+/** 3면 렌더를 고를 수 없는 상태예요: 4…6면 데이터이거나 «마주보는 면»(symmetric) 배치(hDisplayMap 이 6면 렌더를 요구해요). */
+export function hRenderFacesLockedToSix(state){return state.hFaces>3||state.hArrangement==='symmetric';}
 /** 렌더 면 수는 본문의 고유 면 수를 바꾸지 않아요. */
 export function selectHRenderFaces(state,count){
-  if(![3,6].includes(count)||count===3&&state.hFaces>3)throw new RangeError('H render face count');
+  if(![3,6].includes(count)||count===3&&hRenderFacesLockedToSix(state))throw new RangeError('H render face count');
   return {...state,hRenderFaces:count,orbitView:'3d'};
 }
 /** 원근·데이터 배치는 그대로 두고 자세만 정렬해요. */
@@ -181,7 +183,7 @@ const EN={true3d:'True 3D',faces:'Data faces',face1:'1 face',face2:'2 faces',fac
   profile:'H · frame or four-corner finder + face ID',
   frame:'One- to five-face H5+ and six-face H7+ use four square finders inside the same face grid. Smaller sizes retain the frame finder. Exports keep two cells of outer spacing; Y quiet-zone and emphasis controls do not apply.',
   viewer:'H cube preview',perspective:'Perspective',
-  notice:'H needs all selected unique data faces to verify the payload. One- to three-face six-view (except the opposite-faces arrangement) repeats the data on the free opposite faces; opposite faces that are both blank share one image. Corner QR is supported; inset QR, Y locators and shading are unavailable.',
+  notice:'H needs all selected unique data faces to verify the payload. One- to three-face six-view (except the opposite-faces arrangement) repeats the data on the free opposite faces; opposite faces that are both blank share one image. Corner QR and inset QR on blank faces (per face) are supported; Y locators and shading are unavailable.',
   videoHeading:'3D rotation video',videoDownload:'Download one-turn MP4',videoCancel:'Cancel rendering',
   videoBackground:'Video transparency treatment',videoChecker:'Checkerboard',videoGreen:'Green',videoBlue:'Blue',videoMagenta:'Magenta',
   videoNote:'Silent MP4 · 720 × 720 · 24/30/60/120 fps. Transparency is replaced by the selected background, not an alpha channel. 60/120 fps requires WebCodecs AVC support; there is no silent downgrade.',
@@ -205,7 +207,7 @@ const KO={true3d:'True 3D 여부',faces:'면 수',face1:'1면',face2:'2면',face
   profile:'H · 면 프레임 또는 네 모서리 파인더 + 면 ID',
   frame:'1·2·3·4·5면 H5 이상·6면 H7 이상은 같은 면 격자 안에 사각 파인더 4개를 넣어요. 작은 크기는 면 프레임을 유지해요. 내보내기 바깥 2셀 간격은 그대로예요. Y 안전영역·검출기 강조 옵션은 적용하지 않아요.',
   viewer:'H 큐브 미리보기',perspective:'원근 강도',
-  notice:'선택한 고유 데이터 면을 모두 모아야 본문 검증이 끝나요. 1…3면·6면 렌더(대칭 배치 제외)는 비어 있는 반대편에 본문을 반복하고, 둘 다 빈 마주보는 면은 이미지를 공유해요. 코너 QR은 지원하고, 안쪽 QR·Y 전용 로케이터·장식 음영은 적용하지 않아요.',
+  notice:'선택한 고유 데이터 면을 모두 모아야 본문 검증이 끝나요. 1…3면·6면 렌더(대칭 배치 제외)는 비어 있는 반대편에 본문을 반복하고, 둘 다 빈 마주보는 면은 이미지를 공유해요. 코너 QR 과 빈 면 안쪽 QR(면별)을 지원하고, Y 전용 로케이터·장식 음영은 적용하지 않아요.',
   videoHeading:'3D 회전 영상 다운로드',videoDownload:'한 바퀴 MP4 다운로드',videoCancel:'렌더링 취소',
   videoBackground:'영상 투명 처리',videoChecker:'투명 표시 격자',videoGreen:'그린',videoBlue:'블루',videoMagenta:'마젠타',
   videoNote:'무음 MP4 · 720 × 720 · 24/30/60/120 fps예요. 투명 배경은 선택한 색이나 격자로 바뀌며 알파 채널은 포함하지 않아요. 60/120 fps는 WebCodecs AVC 지원이 필요하며 지원하지 않으면 낮은 FPS로 대체하지 않아요.',
@@ -232,12 +234,14 @@ const EDITOR_KO={
   axisGyroNote:'기본 X 1회전·Y 2회전에 두 축의 읽기용 기울임을 섞어요. 모든 움직임이 같은 주기로 돌아와 자세·속도가 자연스럽게 이어져요. 속도는 기본 X축 기준이에요.',
   videoGyro:'자이로스코프 · X 1회전 + Y 2회전 + 읽기용 기울임 · 전체 주기 반복',videoDownload:'반복 MP4 다운로드',
   videoNote:'무음 정사각 MP4 · 720p/1080p/1440p · 24/30/60/120 fps예요. 전체 회전 주기를 담아 무한반복할 수 있어요. 투명 배경은 선택한 색이나 격자로 바뀌며 알파 채널은 포함하지 않아요. 고해상도·고FPS 지원 여부는 브라우저와 장치에 따라 달라요. 미지원 시 몰래 낮추지 않아요.',
-  imagePosition:'위치 확인',imageSample:'테스트 이미지 넣어보기',imageText:'텍스트 넣기',imageTextPlaceholder:'글자를 입력하면 면을 채워요 · 줄바꿈은 Enter',imageTextEmpty:'글자를 입력해 주세요',imageFont:'폰트',imageFontSearch:'폰트 검색 · 입력하면 목록이 좁혀져요',imageFontOpen:'폰트 목록 열기',imageFontSystem:'시스템 폰트',imageFontWeb:'웹폰트 (CDN에서 받아요)',imageFontSans:'시스템 산세리프',imageFontSerif:'시스템 세리프',imageFontMono:'시스템 고정폭',imageFontNone:'일치하는 폰트가 없어요',imageRotateLeft:'이미지를 반시계 방향으로 45° 회전',imageRotateRight:'이미지를 시계 방향으로 45° 회전',
+  imagePosition:'위치 확인',imageSample:'테스트 이미지 넣어보기',imageText:'텍스트 넣기',
+  imageQr:'TL 스캐너 QR 넣기',imageQrState:'TL 스캐너 QR',imageQrLocked:'QR 면은 인식을 위해 회전·맞춤·배경색을 고정해요',
+  imageQrInvalid:'QR 링크를 QR 로 만들 수 없어요 — 고급의 QR URL 을 확인해 주세요',imageQrFilled:'빈 면 {count}곳에 TL 스캐너 QR 을 넣었어요',imageQrAdded:'{face} 면에 TL 스캐너 QR 을 넣었어요',imageTextPlaceholder:'글자를 입력하면 면을 채워요 · 줄바꿈은 Enter',imageTextEmpty:'글자를 입력해 주세요',imageFont:'폰트',imageFontSearch:'폰트 검색 · 입력하면 목록이 좁혀져요',imageFontOpen:'폰트 목록 열기',imageFontSystem:'시스템 폰트',imageFontWeb:'웹폰트 (CDN에서 받아요)',imageFontSans:'시스템 산세리프',imageFontSerif:'시스템 세리프',imageFontMono:'시스템 고정폭',imageFontNone:'일치하는 폰트가 없어요',imageRotateLeft:'이미지를 반시계 방향으로 45° 회전',imageRotateRight:'이미지를 시계 방향으로 45° 회전',
   imageFitcontain:'맞추기',imageFitfill:'늘이기',imageFitcover:'채우기',imageBackground:'배경색',imageBackgroundReset:'배경색 기본값',imageColorPad:'배경색: 가로 색상, 세로 채도',imageLightness:'배경색 밝기 (HSL 명도)',imageColorInvalid:'올바른 색상 값을 입력해 주세요.',
-  imageNote:'PNG/JPG/WebP/SVG · 12MB 이하 · 최대 1024px예요. 맞추기는 전체 이미지, 채우기는 비율 유지 크롭, 늘이기만 비율을 바꿔요. 회전·맞춤·배경색은 시점·전개도·glTF·영상·스키매틱에 반영돼요. 위치 표시는 미리보기 전용이에요. 이미지는 현재 페이지에서만 유지돼요. 텍스트 넣기는 글자를 여백을 뺀 최대 크기로 가운데 맞춰 면 이미지로 만들고, 글자색은 배경색 대비로 검정/흰색이 골라져요. 웹폰트는 고를 때 CDN(Google Fonts · jsDelivr)에서 받아요.',
+  imageNote:'PNG/JPG/WebP/SVG · 12MB 이하 · 최대 1024px예요. 맞추기는 전체 이미지, 채우기는 비율 유지 크롭, 늘이기만 비율을 바꿔요. 회전·맞춤·배경색은 시점·전개도·glTF·영상·스키매틱에 반영돼요. 위치 표시는 미리보기 전용이에요. 이미지·텍스트·QR 은 현재 페이지에서만 유지돼요. TL 스캐너 QR 넣기는 코너 QR 과 같은 링크를 흑백 QR 로 면에 넣고, 3D 인쇄 파일에는 들어가지 않아요. glTF·3D 데이터 전개도·.schem 은 모델 좌표라 코드 면처럼 면 이미지·텍스트·QR 도 좌우 거울상으로 나와요 — 거기서는 QR 을 폰으로 읽는다고 보장하지 않아요. 텍스트 넣기는 글자를 여백을 뺀 최대 크기로 가운데 맞춰 면 이미지로 만들고, 글자색은 배경색 대비로 검정/흰색이 골라져요. 웹폰트는 고를 때 CDN(Google Fonts · jsDelivr)에서 받아요.',
   resetRoll:'Z축 정위치',resetZoom:'확대/축소 초기화',face6Repeat:'6면 (반복)',
   planarUnavailable:'코드와 이미지를 한 시점에 모두 보여줄 수 없어 3D 보기를 사용해요.',
-  notice:'고유 데이터 면을 모두 모아 본문을 검증해요. 1…3면의 6면 렌더(대칭 배치 제외)는 비어 있는 반대편에 코드를 반복하고, 둘 다 빈 마주보는 면은 이미지를 공유해요. 코너 QR은 지원하며 안쪽 QR·Y 전용 로케이터는 적용하지 않아요.',
+  notice:'고유 데이터 면을 모두 모아 본문을 검증해요. 1…3면의 6면 렌더(대칭 배치 제외)는 비어 있는 반대편에 코드를 반복하고, 둘 다 빈 마주보는 면은 이미지를 공유해요. 코너 QR 과 빈 면 안쪽 QR(면별)을 지원하며 Y 전용 로케이터는 적용하지 않아요.',
 };
 const EDITOR_EN={
   tiltMode:'Tilt pattern',tiltNone:'None',tiltTurn:'Per turn',tiltFace:'Per face',
@@ -254,10 +258,13 @@ const EDITOR_EN={
   axisGyroNote:'X one turn and Y two turns, plus two-axis scan tilt. All motions share one period with continuous pose and velocity. Speed refers to the main X axis.',
   videoGyro:'Gyroscope · X 1 turn + Y 2 turns + scan tilt · seamless full period',videoDownload:'Download loop MP4',
   videoNote:'Silent square MP4 · 720p/1080p/1440p · 24/30/60/120 fps. Exports the full joint rotation period for looping. Transparency uses the selected color/checkerboard, not alpha. High resolution/FPS depends on browser/device support and is never silently reduced.',
-  imagePosition:'Show positions',imageSample:'Try a sample image',imageText:'Add text',imageTextPlaceholder:'Type to fill the face · Enter for a new line',imageTextEmpty:'Type some text',imageFont:'Font',imageFontSearch:'Search fonts · typing narrows the list',imageFontOpen:'Open font list',imageFontSystem:'System fonts',imageFontWeb:'Web fonts (fetched from CDN)',imageFontSans:'System sans-serif',imageFontSerif:'System serif',imageFontMono:'System monospace',imageFontNone:'No matching font',imageRotateLeft:'Rotate image 45° counterclockwise',imageRotateRight:'Rotate image 45° clockwise',
+  imagePosition:'Show positions',imageSample:'Try a sample image',imageText:'Add text',
+  imageQr:'Add TL scanner QR',imageQrState:'TL scanner QR',imageQrLocked:'QR faces keep rotation, fit and background fixed so they stay readable',
+  imageQrInvalid:'The QR link cannot be made into a QR — check the QR URL under Advanced',imageQrFilled:'Added the TL scanner QR to {count} blank faces',imageQrAdded:'Added the TL scanner QR to face {face}',imageTextPlaceholder:'Type to fill the face · Enter for a new line',imageTextEmpty:'Type some text',imageFont:'Font',imageFontSearch:'Search fonts · typing narrows the list',imageFontOpen:'Open font list',imageFontSystem:'System fonts',imageFontWeb:'Web fonts (fetched from CDN)',imageFontSans:'System sans-serif',imageFontSerif:'System serif',imageFontMono:'System monospace',imageFontNone:'No matching font',imageRotateLeft:'Rotate image 45° counterclockwise',imageRotateRight:'Rotate image 45° clockwise',
   imageFitcontain:'Contain',imageFitfill:'Fill',imageFitcover:'Cover',imageBackground:'Background',imageBackgroundReset:'Reset background color',imageColorPad:'Background: horizontal hue, vertical saturation',imageLightness:'Background lightness (HSL)',imageColorInvalid:'Enter a valid color value.',
-  imageNote:'PNG/JPG/WebP/SVG · up to 12 MB · max 1024 px. Contain shows the full image; cover crops with aspect ratio preserved; only fill stretches. Rotation, fit and background apply to views, nets, glTF, video and schematic. Position labels are preview-only. Images stay in this page session only. Add text renders centered text at the largest size that fits inside the margin as a face image; its color is black/white by background contrast. Web fonts are fetched from CDN (Google Fonts · jsDelivr) when selected.',
+  imageNote:'PNG/JPG/WebP/SVG · up to 12 MB · max 1024 px. Contain shows the full image; cover crops with aspect ratio preserved; only fill stretches. Rotation, fit and background apply to views, nets, glTF, video and schematic. Position labels are preview-only. Images, text and QR stay in this page session only. Add TL scanner QR puts the same link as the corner QR on the face as a black-and-white QR; it is not included in 3D print files. glTF, the 3D-data net and .schem use model coordinates, so like the code faces, face images, text and QR come out mirrored there — phone reading of the QR is not guaranteed in those files. Add text renders centered text at the largest size that fits inside the margin as a face image; its color is black/white by background contrast. Web fonts are fetched from CDN (Google Fonts · jsDelivr) when selected.',
   resetRoll:'Reset Z rotation',resetZoom:'Reset zoom',face6Repeat:'6 faces (repeat)',planarUnavailable:'The meaningful code/image faces cannot all fit in one view. Use 3D.',
-  notice:'Collect every unique data face to verify the payload. One- to three-face six-view (except the opposite-faces arrangement) repeats code on the free opposite faces; opposite faces that are both blank share one image. Corner QR is supported; inset QR and Y locators are not applied.',
+  notice:'Collect every unique data face to verify the payload. One- to three-face six-view (except the opposite-faces arrangement) repeats code on the free opposite faces; opposite faces that are both blank share one image. Corner QR and inset QR on blank faces (per face) are supported; Y locators are not applied.',
 };
+// 편집기 문구(EDITOR_*)는 한국어·영어 두 벌뿐이라 ja·fr·it·de·es·pt 에서는 영어로 보여요 — 알려진 한계예요(8개 언어 g-key 로 올리는 건 후속).
 export function hUiLabel(key,lang='ko'){const ko=lang.startsWith('ko');return (ko?EDITOR_KO:EDITOR_EN)[key]??(ko?KO:EN)[key]??key;}

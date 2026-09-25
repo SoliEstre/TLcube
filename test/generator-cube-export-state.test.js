@@ -22,6 +22,8 @@ function harness({gzip='resolve',clipboard='resolve',compression=true}={}){
     ClipboardItem:class{constructor(data){this.data=data;}},current:current('old'),generatorState:{type:'Y',preset:'mono',exportSize:'auto',exportWidth:1008,exportHeight:1008},genI18n:{lang:'ko'},
     $:node,document:{querySelectorAll:()=>[]},paletteOf:()=>({}),flashCopied:()=>{},hImageEditor:{flush(){}},hExportIconMarkup:()=>'',hBlockIconMarkup:()=>'',flushes:0,pendingCurrent:null,
     foldNote:'',hNetFoldNote:()=>c.foldNote,
+    // 빈 면 QR 의 .schem 블록 수 안내(판정은 슬라이스 밖 hSchemQrNote — generator-h-qr-state 가 실제 함수를 재요).
+    schemNote:'',hSchemQrNote:()=>c.schemNote,
     flushScheduledRender:()=>{c.flushes++;if(c.pendingCurrent){c.current=c.pendingCurrent;c.pendingCurrent=null;return true;}return false;},
     generatorCubeModel:cur=>({id:cur.id}),cubeModelToGltf:m=>({id:m.id}),cubeNetScene:m=>({id:m.id,width:127,height:168}),
     voxelizeCube:(m,{scale})=>{voxelCalls.push({id:m.id,scale});return{id:m.id,width:43,height:43,length:43};},
@@ -129,6 +131,17 @@ test('타입 H 의 구 전개도 버튼은 설명 꼬리(hNetFoldNote)를 title�
   const before = harness(); await before.click('exportNetPng');
   const after = harness(); after.c.foldNote = '«접어도 판독 안 됨»'; after.sync(); await after.click('exportNetPng');
   assert.equal(after.downloads[0].text, before.downloads[0].text, '클릭 경로가 title·foldNote 를 읽지 않아요');
+});
+
+test('.schem 면 QR 안내(hSchemQrNote)는 있을 때만 버튼 옆 줄로 보이고, 없으면 숨고 비워요', async () => {
+  const h = harness(); h.sync();
+  assert.equal(h.node('cubeSchemQrHint').hidden, true); assert.equal(h.node('cubeSchemQrHint').textContent, '');
+  h.c.schemNote = '«셀당 블록 2 × 2 이상»'; h.sync();
+  assert.equal(h.node('cubeSchemQrHint').hidden, false); assert.equal(h.node('cubeSchemQrHint').textContent, '«셀당 블록 2 × 2 이상»');
+  h.c.schemNote = ''; h.sync(); assert.equal(h.node('cubeSchemQrHint').hidden, true); assert.equal(h.node('cubeSchemQrHint').textContent, '');
+  const markup = index.slice(index.indexOf('<section id="cubeExportSection"'), index.indexOf('</section>', index.indexOf('<section id="cubeExportSection"')));
+  assert.match(markup, /id="exportCubeSchem"[^>]*aria-describedby="cubeSchemQrHint"/, '버튼이 안내 줄을 설명으로 가리켜요');
+  assert.ok(markup.indexOf('id="cubeSchemQrHint"') < markup.indexOf('id="cubeBlockScaleOptions"'), '고급 전용 블록 카드 밖(앞)이라 일반 모드에서도 보여요');
 });
 
 /** index.html 에서 함수 선언 하나를 괄호 균형으로 잘라요(한 줄 여부·본문 철자에 묶이지 않게). */

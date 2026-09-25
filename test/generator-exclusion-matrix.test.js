@@ -98,9 +98,15 @@ test('QR 위치 카드가 상위이고 중앙 파인더 카드가 하위라는 D
   );
   // 2026-09-12 사용자 후속: H 물리면만 안쪽 QR을 잠가요. 기존 O/A/K/C/Y는
   // CQ 개통 뒤의 상위 QR 위계를 유지하며 타입·모드·파인더를 새 잠금 축으로 삼지 않아요.
+  // ⚠ **의도적 갱신 (2026-09-26 운영자)** — H «안쪽» 이 빈 면 TL 스캐너 QR 로 열렸어요. 잠금 술어가 `isH` 에서
+  //   «H 이면서 빈 면 QR 을 쓸 수 없을 때»(대상 0 또는 전부 점유)로 좁아졌어요. 잠금이 H 에만 걸린다는 성질은
+  //   술어 정의(`isH && …`)로 그대로 잰다 — 성질 자체는 test/h-face-qr.test.js(대상 표·잠김 조건)와
+  //   test/generator-h-qr-state.test.js(실제 편집기를 꽂은 클릭 결과)가 잰다.
   assert.match(qrUi, /const isH=hGeneratorActive\(\);/);
+  assert.match(qrUi, /const hInnerLocked = isH && !hq\.available;/,
+    'H 안쪽 잠금은 H 에서만, 빈 면 QR 을 쓸 수 없을 때만이어야 해요');
   assert.match(qrUi,
-    /if \(card\.dataset\.pos === 'inner'\) \{\s*card\.classList\.toggle\('disabled',isH\);\s*card\.setAttribute\('aria-disabled', String\(isH\)\);\s*\}/,
+    /if \(card\.dataset\.pos === 'inner'\) \{\s*card\.classList\.toggle\('disabled',hInnerLocked\);\s*card\.setAttribute\('aria-disabled', String\(hInnerLocked\)\);\s*\}/,
     'H 안쪽 QR만 잠그고 기존 타입과 코너 QR을 유지해야 해요');
   assert.equal([...qrUi.matchAll(/toggle\('disabled',/g)].length, 1,
     '파인더·모드·CQ 등에 추가 잠금 조건이 생겼어요');

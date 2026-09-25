@@ -202,7 +202,8 @@ export const MODULE_ORDER = [
   'h-mode-codebook', 'h-profile', 'h-corner-layout', 'h-layout', 'h-codec', 'h-face-arrangement', 'cube-outline', 'h-rotation', 'h-lighting', 'png', 'scene-image', 'h-face-images', 'h-render', 'generator-h', 'generator-state',
   // h-preview-controls는 index.html의 Space/preview/icon helper import가 직접 소비한다.
   // leaf라 의존 순서는 없지만 누락하면 file:// blob module이 './src/…'를 해석해 live에서 죽는다.
-  'h-preview-decor', 'h-preview-controls', 'h-image-editor', 'h-image-sample', 'h-face-text','h-image-editor-ui',
+  // h-face-qr(빈 면 TL 스캐너 QR 자산, 2026-09-26)는 qr·png·scene-image 만 쓰는 잎이고 h-image-editor-ui 가 import 해요 — 그래서 그 앞이에요.
+  'h-preview-decor', 'h-preview-controls', 'h-image-editor', 'h-image-sample', 'h-face-text', 'h-face-qr', 'h-image-editor-ui',
   'finder-zone-ui', 'export-filename',
   // **의도적 이동 (2026-08-21, 중앙 v0 비컨)**: `encodeY` 와 잎 모듈 `tonemap` 이
   // `encode`·`scene` **앞**으로 왔다. scene.js 가 중앙 슬롯을 완전한 v0 코드로

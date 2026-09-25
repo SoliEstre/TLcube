@@ -64,7 +64,8 @@ test('폰트 적재는 DOM 없이 조용히 건너뛰고, 시트는 한 번만 �
 });
 
 test('UI·사전 배선: 토글 버튼이 테스트 이미지 아래에, 폰트 콤보는 화살표/검색으로만 열려요',()=>{
-  assert.match(ui,/well\.append\(preview,sample\);[\s\S]*?textToggle[\s\S]*?well\.append\(textToggle\)/);
+  // ⚠ 의도적 갱신 (2026-09-26): well 맨 위에 «TL 스캐너 QR 넣기»(qrToggle)가 들어왔어요. 텍스트 토글이 테스트 이미지 아래라는 성질은 그대로예요.
+  assert.match(ui,/well\.append\(preview,qrToggle,sample\);[\s\S]*?textToggle[\s\S]*?well\.append\(textToggle\)/);
   assert.match(ui,/fontOpen\.addEventListener\('click',\(\)=>\{if\(fontList\.hidden\)openList\(''\);else closeList\(\);\}\)/);
   assert.match(ui,/fontInput\.addEventListener\('input',\(\)=>openList\(fontInput\.value\)\)/);
   assert.doesNotMatch(ui,/fontInput\.addEventListener\('(click|focus)'/,'입력란 클릭/포커스는 목록을 열지 않아요');

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {createGeneratorState} from '../src/generator-state.js';
-import {hPreviewOptions,hOrbitFromRotation,reconcileHContentRotation,reconcileHRotationSpeed,selectHFaceCount,selectHRenderFaces,selectHArrangement,selectHAlignmentPose,clampHRotationSpeed,clampHRotationTilt,selectHRotationMode,selectHRotationSpeed,selectHRotationSpeedDefault,selectHRotationTilt,H_ROTATION_TILT_DEFAULT_DEG} from '../src/generator-h.js';
+import {hPreviewOptions,hOrbitFromRotation,reconcileHContentRotation,reconcileHRotationSpeed,selectHFaceCount,selectHRenderFaces,hRenderFacesLockedToSix,selectHArrangement,selectHAlignmentPose,clampHRotationSpeed,clampHRotationTilt,selectHRotationMode,selectHRotationSpeed,selectHRotationSpeedDefault,selectHRotationTilt,H_ROTATION_TILT_DEFAULT_DEG} from '../src/generator-h.js';
 import {hAlignmentRotation} from '../src/h-rotation.js';
 import {hDisplayMap} from '../src/h-face-arrangement.js';
 import {hModeFaces} from '../src/h-profile.js';
@@ -61,7 +61,7 @@ function harness(overrides={}){
   const documentEvents={};
   const document={addEventListener(kind,fn){documentEvents[kind]=fn;}};
   const current={type:'H',encoded:{version:6}};
-  const context=vm.createContext({generatorState:state,current,y3dPreview:viewer,hAnimation:animation,els,$:id=>els[id],hPreviewOptions,hOrbitFromRotation,selectHFaceCount,selectHRenderFaces,selectHArrangement,selectHAlignmentPose,clampHRotationSpeed,clampHRotationTilt,selectHRotationMode,selectHRotationSpeed,selectHRotationSpeedDefault,selectHRotationTilt,H_ROTATION_TILT_DEFAULT_DEG,reconcileHRotationSpeed,
+  const context=vm.createContext({generatorState:state,current,y3dPreview:viewer,hAnimation:animation,els,$:id=>els[id],hPreviewOptions,hOrbitFromRotation,selectHFaceCount,selectHRenderFaces,hRenderFacesLockedToSix,selectHArrangement,selectHAlignmentPose,clampHRotationSpeed,clampHRotationTilt,selectHRotationMode,selectHRotationSpeed,selectHRotationSpeedDefault,selectHRotationTilt,H_ROTATION_TILT_DEFAULT_DEG,reconcileHRotationSpeed,
     hGeneratorActive:()=>state.type==='Y'&&state.yRepresentation==='3d',
     syncHUi:()=>{calls.sync++;},paintY3dPreview:()=>{calls.paint++;},refreshHSelection:()=>{
       // production refresh의 상태 전이와 animation reset은 그대로 모사해요.

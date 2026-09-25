@@ -62,7 +62,8 @@ async function countedQrModule(){
     /import\s*\{qrMatrix\}\s*from\s*['"]\.\/qr\.js['"];?/,
     'import {qrMatrix as encodeQrMatrix} from '+JSON.stringify(new URL('../src/qr.js',import.meta.url).href)+';\n'+
     'export let qrCalls=0;function qrMatrix(text){qrCalls++;return encodeQrMatrix(text);}'
-  );
+  // data: URL 에서는 상대 import 가 안 풀려요 — 나머지 './x.js' 는 src 절대 URL 로 바꿔요(2026-09-26: 면 QR 요약이 h-face-arrangement·h-profile 을 import 해요).
+  ).replace(/from\s*['"]\.\/([\w-]+\.js)['"]/g,(match,file)=>'from '+JSON.stringify(new URL('../src/'+file,import.meta.url).href));
   assert.ok(source.includes('export let qrCalls=0;'));
   return import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 }

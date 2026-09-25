@@ -866,6 +866,8 @@
     background: color-mix(in srgb, var(--accent) 12%, var(--bg));
   }
   .toggle-card.disabled { opacity: .35; pointer-events: none; }
+  /* 보조 표시 — 고른 카드(active)는 아니지만 같이 그려지는 자리예요(H 면 QR + «코너 QR 병행» 의 코너). */
+  .toggle-card.also { border-style: dashed; border-color: var(--accent); color: var(--text); }
   /* ⚠ 이 줄이 없으면 `card.hidden = true` 가 **안 듣는다.** `[hidden]` 의 display:none 은
      UA 스타일시트에 있고, 위 `.toggle-card { display: flex }` 는 저작자 규칙이라 언제나
      이긴다. lab 전용 카드(렌더 프로파일 «오리지널»)를 정식 화면에서 감추는 유일한
@@ -1757,7 +1759,7 @@
           <button type="button" class="toggle-card" data-h-faces="6" data-h-label="face6" aria-pressed="false">6면</button>
         </div>
         <div id="hOptions" hidden>
-          <p class="hint" data-h-label="notice">H는 세 면씩 서로 다른 본문을 담아요. 6면은 모두 모아야 스캔이 끝나요. Y 전용 로케이터·내부 QR·장식 음영은 적용하지 않아요.</p>
+          <p class="hint" data-h-label="notice">H는 세 면씩 서로 다른 본문을 담아요. 6면은 모두 모아야 스캔이 끝나요. 코너 QR 과 빈 면 안쪽 QR(면별)을 지원하고, Y 전용 로케이터·장식 음영은 적용하지 않아요.</p>
         </div>
       </section>
       <!-- ══ 내보내기 옵션 ①→④ (운영자 지시 2026-08-19 — 화면 위→아래 순서 = 규칙 순서).
@@ -2139,7 +2141,7 @@
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <rect x="12.5" y="12.5" width="5" height="5" fill="currentColor" stroke="none"/>
             </svg><span data-i18n="g087">우하</span></div>
-          <div class="toggle-card" data-pos="inner" id="qrPosInner">
+          <div class="toggle-card" data-pos="inner" id="qrPosInner" aria-describedby="hQrInnerHint">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
               <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" stroke="none"/>
@@ -2157,6 +2159,8 @@
               <path d="M6.5 17.5 L17.5 6.5"/>
             </svg><span data-i18n="g036">없음</span></div>
         </div>
+        <!-- 타입 H «안쪽» = 빈 면 TL 스캐너 QR 안내·잠김 사유 (2026-09-26). 잠긴 카드는 title 이 안 뜨니 여기 보인다. -->
+        <p class="hint" id="hQrInnerHint" hidden></p>
         <!-- «QR 면 배치» — Y + 안쪽 전용 서브섹션 (W2 C3, 운영자 확정 2026-08-23·24).
              구 '면'(plane) 카드의 승계: 중앙측(seam) 기본 · 코너측(far) = v0TRY 기본.
              로케이터가 v0T 계열일 때만 열린다 — 끔(정식 화면 유일 경로)은 레거시
@@ -2737,7 +2741,7 @@
 
       <div class="check-row" id="cornerTooRow" style="display:none">
         <input type="checkbox" id="qrCornerToo">
-        <label for="qrCornerToo" style="margin:0;color:var(--text)" data-i18n="g071">중앙 QR 과 코너 QR 병행 표시 (고급)</label>
+        <label for="qrCornerToo" id="qrCornerTooLabel" style="margin:0;color:var(--text)" data-i18n="g071">중앙 QR 과 코너 QR 병행 표시 (고급)</label>
       </div>
       <p class="hint" id="qrCenterHint" style="display:none" data-i18n="g072">
         중앙 QR 변형은 불스아이 대신 중앙에 QR 을 배치해요 — 코드 폭 13cm 이상 인쇄를 권장해요.
@@ -2799,8 +2803,10 @@
       </div>
       <div class="row export-row">
         <div class="export-pair"><button type="button" id="exportCubeGltf" data-cube-label="gltf">큐브 glTF ↓</button><button type="button" id="copyCubeGltf" data-cube-label="copyGltf">glTF 복사</button></div>
-        <button type="button" id="exportCubeSchem" data-cube-label="schem">Minecraft .schem ↓</button>
+        <button type="button" id="exportCubeSchem" data-cube-label="schem" aria-describedby="cubeSchemQrHint">Minecraft .schem ↓</button>
       </div>
+      <!-- 빈 면 TL 스캐너 QR 이 지금 셀당 블록 수로는 .schem 에서 깨질 때만 보여요(셀당 블록 카드는 고급 전용이라 일반 모드에서도 보이게). -->
+      <p id="cubeSchemQrHint" class="hint" hidden></p>
       <div id="cubeBlockScaleOptions" hidden>
       <div class="section-heading-row"><span class="hint" data-cube-label="blockScale">셀당 블록 수</span><button type="button" class="help-dot" data-help="g1040" aria-expanded="false" aria-label="설명 보기" data-i18n-attr="aria-label:g931">?</button></div>
       <input type="hidden" id="cubeBlockScale" value="1">
@@ -3318,7 +3324,7 @@ const GENERATOR_STRINGS = {
     "g902": "투명 = 배경 없이 코드만. PNG 는 알파 채널, SVG 는 배경 요소가 아예 없어요.\n흰색 = 밝은 인쇄물·문서 위에 얹을 때. 검정 = 어두운 지면·화면에 얹을 때.\n투명을 고르면 실효 배경이 «코드를 얹는 표면» 이 돼요 — 그 표면과 셀 색의 분리는 생성 시점에 보증할 수 없으니 «TL 배치 미리보기» 로 실측해 보세요.",
     "g903": "코드를 실제로 얹을 자리의 사진을 넣으면 미리보기 뒤에 깔려요.\n미리보기에서 드래그로 이동, 휠 또는 핀치로 확대/축소해 위치를 맞춰 보세요.\n코드 둘레의 표면 휘도와 셀 레벨의 분리를 실측해서, 인쇄 전에 «여기 놓으면 읽히는가» 를 수치로 알려줘요.\n잰 표면 밝기는 «안전영역» 의 «자동»·«고대비» 가 흰색과 검정 중 어느 쪽을 깔지 정하는 데도 쓰여요.\n내보내는 PNG·SVG 에는 이 사진이 안 들어가요.",
     "g904": "코드 주변에 두는 여백이에요 (QR 의 콰이어트 존에 해당).\n자동 = 배경이 투명이면 고대비 색을 깔고, 불투명이면 배경이 이미 안전영역이라 생략해요.\n없음 = 여백 없이 코드만. 흰색·검정 = 그 색으로 고정.\n고대비 = 흰색·검정 중에서 골라요. ① 셀 색과 너무 가까운 쪽을 먼저 떨어뜨려요 — 여백이 코드에 들러붙으면 실루엣이 코드보다 커져요. ② 둘 다 통과하면 «TL 배치 미리보기» 사진에서 잰 표면 밝기와 더 멀리 떨어진 쪽을 골라요. 밝은 표면이면 검정, 어두운 표면이면 흰색이에요.\n사진을 안 넣었으면 ② 를 못 하니 셀 색과 더 멀리 떨어진 쪽으로 정해요.\n폴백 QR 블록은 자기 콰이어트 존이 있어서 여기서 제외돼요.",
-    "g905": "TL스캐너로 스캔이 안 될 때 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.\n좌상·우상·좌하·우하 = 코드 바깥 네 모서리 중 한 곳.\n안쪽 = Type O/A 는 중앙 QR, Type Y 는 Y2 윈도 β.\n없음 = QR 없이 코드만 내보내요.\n중앙 QR 변형은 코드 폭 13 cm 이상 인쇄를 권장해요.",
+    "g905": "TL스캐너로 스캔이 안 될 때 대체 경로가 되는 QR 을 코드에 함께 인쇄해요.\n좌상·우상·좌하·우하 = 코드 바깥 네 모서리 중 한 곳.\n안쪽 = Type O/A 는 중앙 QR, Type Y 는 Y2 윈도 β, Type H 는 이미지·텍스트가 없는 빈 면의 QR(면마다 바꿀 수 있어요).\n없음 = QR 없이 코드만 내보내요.\n중앙 QR 변형은 코드 폭 13 cm 이상 인쇄를 권장해요.",
     "g906": "스캐너가 Type Y 코드의 위치·방향을 먼저 찾는 데 쓰는 셀 표면 로케이터예요.\n자동 = 지금 설정에서 권장하는 것을 씁니다. 정식 승격된 Y 검출기가 아직 없어서 현재 «자동» 은 «끔» 과 같은 결과예요.\n후보별 점유 셀 수와 최대 payload L / M / H (정본 cellSurfaceFinal.js):\n· v0 — 30셀 (n=13) · 29 / 25 / 20 B\n· v0X — 65셀 (n=21) · 96 / 81 / 65 B\n· v0XQ — 파인더 42셀 + 중앙 QR 슬롯 81셀 (n=21) · 80 / 67 / 54 B\n· v1r2 — 80셀 (n=21) · 92 / 77 / 62 B\n· v2r2 — 74셀 (n=21) · 94 / 79 / 63 B (n=25 에서는 145 / 124 / 99 B)\n점유 셀이 적을수록 데이터에 쓸 심볼이 많이 남아요 — n=21 에서는 v0X 가 가장 많이 담고 v0XQ 가 가장 적어요. 슬롯이 없는 세 후보끼리는 차이가 L 기준 4 B 라 용량으로 고를 만한 폭이 아니지만, v0XQ 는 중앙 QR 슬롯에 81셀을 내주느라 v0X 보다 L 기준 16 B 적어요 — 그 대신 스캐너가 못 읽어도 중앙 QR 이 폴백 URL 을 싣습니다.\n실험 항목이라 회전·조명·인쇄·라이브 스캔 성능을 보장하지 않아요.",
     "g907": "Type O/A 코드 한가운데에 넣는 표식이에요 — 스캐너가 코드의 위치·방향을 여기서 먼저 잡아요.\n중앙 QR = 기본값. 폴백 QR 을 파인더 자리에 넣어 방향 기준까지 겸해요 (아래 «TL스캐너 QR링크 포함» 의 «안쪽» 과 같은 자리예요).\n불스아이 = 동심원 표식 · 불스아이 속 큐브 = 링 안에 큐브를 넣은 하이브리드 · 3톤 큐브 = 셀 색 세 톤만으로 만든 표식.\n«고급» 모드에서는 비교용 실험 후보 묶음(«기준 미달 후보» · «스캔 불가 후보»)도 함께 펼쳐져요.\n실기기에서는 카메라나 코드를 회전시키면 인식이 떨어질 수 있어요 — 중앙 QR (안쪽) 이 방향 기준을 주지만 회전 내성을 보장하지는 않아요.\n아래 점수판은 모형 점수예요 — 인식률 예측이 아니에요.",
     "g920": "내용에 맞춰",
@@ -3712,7 +3718,7 @@ const GENERATOR_STRINGS = {
     "g1100": "절단면 띠가 넓어요 — 절단면을 흰색으로 칠해요",
     "g1101": "한 변이 180 mm를 넘어요 — 프린터 빌드 크기를 확인해요",
     "g1102": "셀이 1.2 mm보다 작아요 — 0.4 mm 노즐로는 뭉개질 수 있어요",
-    "g1103": "면 이미지는 3D 인쇄 파일에 들어가지 않아요",
+    "g1103": "면 이미지·텍스트·QR 은 3D 인쇄 파일에 들어가지 않아요",
     "g1104": "공동이 작아 리브 없이 비워요",
     "g1105": "셀 크기는 0.8 mm 이상이어야 해요",
     "g1106": "셀 크기는 0.2 mm 단위여야 해요",
@@ -3751,7 +3757,15 @@ const GENERATOR_STRINGS = {
     "g1139": "배율 보정({k})으로 ×{factor} 그린 파일이라 이 프린터 드라이버로 인쇄할 때만 실제 크기예요",
     "g1140": "SVG는 보정 없이 한 변 {side} mm로 그려요",
     "g1141": "SVG는 보정 없이 «{method}», 한 변 {side} mm로 그려요",
-    "g1142": "커팅기·편집용 실척 파일은 SVG를 받아요(SVG는 보정하지 않아요)"
+    "g1142": "커팅기·편집용 실척 파일은 SVG를 받아요(SVG는 보정하지 않아요)",
+    "g1143": "안쪽 — 이미지·텍스트가 없는 빈 면에 TL 스캐너 QR 을 넣어요 (면마다 빈 면 이미지에서 바꿀 수 있어요)",
+    "g1144": "빈 면이 없어 안쪽 QR 을 쓸 수 없어요 — 데이터 면 수를 줄이거나 3면 렌더로 바꾸면 빈 면이 생겨요",
+    "g1145": "빈 면마다 이미지·텍스트가 있어요 — 빈 면 이미지에서 하나를 제거하면 QR 을 넣을 수 있어요",
+    "g1146": "타입 H 의 안쪽 QR 은 빈 면에 들어가요. 폰으로 그 면을 정면에 가깝게 비출 때 읽혀요 — 정지 이미지·2.5D 에는 그 면이 보일 때만 담기고, 비스듬한 면은 읽히지 않을 수 있어요. 이미지에서 늘 읽혀야 하면 코너를 고르거나 고급의 코너 QR 병행을 켜세요.",
+    "g1147": "안쪽(빈 면) QR 과 코너 QR 병행 표시 (고급)",
+    "g1148": "QR 폴백 URL 을 QR 로 만들 수 없어 안쪽 QR 을 넣지 못했어요. 고급 모드의 «QR 폴백 URL» 을 확인해 주세요.",
+    "g1149": "코너 QR 병행이 켜져 있어 점선 카드의 코너({corner})에도 QR 이 함께 들어가요. 코너를 옮기려면 그 코너 카드를 누른 뒤 «안쪽» 을 다시 누르세요 — 코너 카드만 누르면 면 QR 이 걷혀요.",
+    "g1150": "이 셀당 블록 수로는 .schem 의 면 QR 모듈이 빠져 읽히지 않아요 — 고급 모드에서 셀당 블록 수를 {scale} × {scale} 이상으로 올려 주세요."
   },
   en: {
     "g001": "Page theme (unrelated to code rendering)",
@@ -3926,7 +3940,7 @@ const GENERATOR_STRINGS = {
     "g902": "Transparent = code only. PNG keeps an alpha channel; SVG has no background element at all.\nWhite = for light prints and documents. Black = for dark stock or screens.\nWith transparent, the effective background becomes the surface you put the code on. That separation cannot be guaranteed at generation time, so measure it with the TL placement preview.",
     "g903": "Drop in a photo of the spot where the code will actually go; it sits behind the preview.\nDrag to move and use the wheel (or pinch on touch) to zoom until the placement matches.\nThe preview measures the surface luminance around the code against the cell levels, so you get a number for “will this spot read?” before printing.\nThat surface reading also decides whether Safe area’s Auto and High contrast lay down white or black.\nThe photo never goes into the exported PNG or SVG.",
     "g904": "The margin around the code — the equivalent of a QR quiet zone.\nAuto = lays down a high-contrast colour when the background is transparent, and skips it when the background is opaque (the background is already the quiet zone).\nNone = no margin. White / Black = fixed to that colour.\nHigh contrast = chooses between white and black. (1) A colour that sits too close to the cell levels is dropped first — a margin that blends into the code makes the silhouette larger than the code. (2) If both pass, it picks the one further from the surface brightness measured in the placement preview: black on a bright surface, white on a dark one.\nWith no photo loaded step (2) cannot run, so it falls back to whichever colour separates further from the cell levels.\nThe fallback QR block is excluded — it carries its own quiet zone.",
-    "g905": "Prints a QR alongside the code as a fallback route when the TL scanner cannot read it.\nTop-left / top-right / bottom-left / bottom-right = one of the four outer corners.\nInner = a centre QR on Type O/A, the Y2 window β on Type Y.\nNone = export the code alone, without a QR.\nThe centre-QR variant is meant for prints at least 13 cm wide.",
+    "g905": "Prints a QR alongside the code as a fallback route when the TL scanner cannot read it.\nTop-left / top-right / bottom-left / bottom-right = one of the four outer corners.\nInner = a centre QR on Type O/A, the Y2 window β on Type Y, and a QR on the blank faces without image or text on Type H (changeable per face).\nNone = export the code alone, without a QR.\nThe centre-QR variant is meant for prints at least 13 cm wide.",
     "g906": "The cell-surface locator a scanner uses to find where a Type Y code is and which way it faces.\nAuto = use whatever is recommended for the current settings. No Y detector has been promoted to production yet, so today Auto resolves to the same thing as Off.\nCells occupied and max payload L / M / H per candidate (source: cellSurfaceFinal.js):\n· v0 — 30 cells (n=13) · 29 / 25 / 20 B\n· v0X — 65 cells (n=21) · 96 / 81 / 65 B\n· v0XQ — 42 cells of finder plus an 81-cell centre QR slot (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 cells (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 cells (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B at n=25)\nFewer occupied cells leave more symbols for data — at n=21, v0X holds the most and v0XQ the least. Among the three slotless candidates the spread is only 4 B at L, so capacity is not a reason to pick one; v0XQ gives up 81 cells to the centre QR slot and so holds 16 B less than v0X at L — in exchange, the centre QR carries a fallback URL when the scanner cannot read the code.\nThese are experimental: rotation, lighting, print, and live-scan performance are not guaranteed.",
     "g907": "The marker placed at the centre of a Type O/A code — this is where a scanner locks on to position and orientation.\nCentre QR = the default. It puts the fallback QR in the finder slot so it doubles as the orientation reference (the same slot as “Inside” under “Include TL scanner QR link” below).\nBullseye = concentric rings · Cube in bullseye = a cube inside the ring · Three-tone cube = built from the three cell tones alone.\nAdvanced mode also unfolds the experimental groups kept for comparison (“Below-bar candidates” · “Not scannable”).\nRecognition can drop on real devices when the camera or the code is rotated — the centre QR (Inner) gives an orientation reference but does not guarantee rotation tolerance.\nThe panel below reports model scores — not a prediction of read rate.",
     "g920": "Fits content",
@@ -4320,7 +4334,7 @@ const GENERATOR_STRINGS = {
     "g1100": "wide cut-edge band — paint the cut edges white",
     "g1101": "side over 180 mm — check your printer’s build volume",
     "g1102": "cells under 1.2 mm may blur with a 0.4 mm nozzle",
-    "g1103": "face images are not included in 3D print files",
+    "g1103": "face images, text and QR are not included in 3D print files",
     "g1104": "cavity too small for ribs — hollowed without ribs",
     "g1105": "Cell size must be at least 0.8 mm.",
     "g1106": "Cell size must be a multiple of 0.2 mm.",
@@ -4359,7 +4373,15 @@ const GENERATOR_STRINGS = {
     "g1139": "drawn at ×{factor} for scale correction {k}, so it is actual size only when printed through this printer driver",
     "g1140": "the SVG is drawn uncorrected, side {side} mm",
     "g1141": "the SVG is drawn uncorrected as “{method}”, side {side} mm",
-    "g1142": "for a cutting machine or editing, download the SVG, which is never corrected"
+    "g1142": "for a cutting machine or editing, download the SVG, which is never corrected",
+    "g1143": "Inside — put the TL scanner QR on blank faces that have no image or text (change it per face in the blank-face editor)",
+    "g1144": "No blank face, so the inset QR is unavailable — use fewer data faces or the 3-face render to free a face",
+    "g1145": "Every blank face already has an image or text — remove one in the blank-face editor to add the QR",
+    "g1146": "On Type H the inset QR goes on blank faces. It reads when a phone sees that face nearly head-on — still images and 2.5D include it only when that face is visible, and a slanted face may not read. If it must always read from an image, choose a corner or turn on the advanced corner-QR option.",
+    "g1147": "Show inset (blank-face) QR and corner QR together (advanced)",
+    "g1148": "The inset QR was not added because the QR fallback URL cannot be made into a QR. Check “QR fallback URL” in Advanced mode.",
+    "g1149": "Corner QR is also on, so a QR goes in the dashed corner ({corner}) as well. To move it, press that corner card and then press “Inside” again — pressing a corner card alone removes the face QR.",
+    "g1150": "At this blocks-per-cell setting the face QR loses modules in the .schem and will not read — set blocks per cell to {scale} × {scale} or more in Advanced mode."
   },
   ja: {
     "g001": "ページのテーマ（コード描画とは無関係）",
@@ -4534,7 +4556,7 @@ const GENERATOR_STRINGS = {
     "g902": "透明 = コードだけ。PNG はアルファチャンネル、SVG は背景要素そのものがありません。\n白 = 明るい印刷物・文書の上に置くとき。黒 = 暗い紙面・画面に置くとき。\n透明を選ぶと実効的な背景は「コードを貼る面」になります。その面とセル色の分離は生成時点では保証できないので、「TL 配置プレビュー」で実測してください。",
     "g903": "コードを実際に置く場所の写真を入れると、プレビューの背後に敷かれます。\nプレビュー上でドラッグして移動、ホイールまたはピンチで拡大／縮小して位置を合わせてください。\nコード周囲の面の輝度とセルレベルの分離を実測し、印刷前に「ここに置いて読めるか」を数値で示します。\n測った面の明るさは、「安全領域」の「自動」「高コントラスト」が白と黒のどちらを敷くかを決めるのにも使われます。\n書き出す PNG・SVG にはこの写真は入りません。",
     "g904": "コードの周囲に置く余白です（QR のクワイエットゾーンに相当）。\n自動 = 背景が透明なら高コントラスト色を敷き、不透明なら背景がすでに安全領域なので省略します。\nなし = 余白なし。白・黒 = その色に固定。\n高コントラスト = 白と黒から選びます。① セル色に近すぎる方をまず落とします — 余白がコードに貼り付くとシルエットがコードより大きくなります。② 両方通れば「TL 配置プレビュー」写真で測った面の明るさから遠い方を選びます。明るい面なら黒、暗い面なら白です。\n写真を入れていない場合は ② ができないので、セル色から遠い方に決めます。\nフォールバック QR ブロックは自前のクワイエットゾーンを持つため除外されます。",
-    "g905": "TL スキャナで読めなかったときの代替経路になる QR を、コードと一緒に印刷します。\n左上・右上・左下・右下 = コード外側の四隅のいずれか。\n内側 = Type O/A は中央 QR、Type Y は Y2 ウィンドウ β。\nなし = QR を付けずコードだけ書き出します。\n中央 QR 版はコード幅 13 cm 以上の印刷を推奨します。",
+    "g905": "TL スキャナで読めなかったときの代替経路になる QR を、コードと一緒に印刷します。\n左上・右上・左下・右下 = コード外側の四隅のいずれか。\n内側 = Type O/A は中央 QR、Type Y は Y2 ウィンドウ β、Type H は画像・テキストのない空き面の QR（面ごとに変更可）。\nなし = QR を付けずコードだけ書き出します。\n中央 QR 版はコード幅 13 cm 以上の印刷を推奨します。",
     "g906": "スキャナが Type Y コードの位置と向きを最初に見つけるためのセル表面ロケータです。\n自動 = 現在の設定で推奨されるものを使います。正式採用された Y 検出器がまだないため、今の「自動」は「オフ」と同じ結果です。\n候補ごとの占有セル数と最大 payload L / M / H（正典 cellSurfaceFinal.js）:\n· v0 — 30セル（n=13）· 29 / 25 / 20 B\n· v0X — 65セル（n=21）· 96 / 81 / 65 B\n· v0XQ — ファインダ 42セル + 中央 QR スロット 81セル（n=21）· 80 / 67 / 54 B\n· v1r2 — 80セル（n=21）· 92 / 77 / 62 B\n· v2r2 — 74セル（n=21）· 94 / 79 / 63 B（n=25 では 145 / 124 / 99 B）\n占有セルが少ないほどデータに使えるシンボルが多く残ります — n=21 では v0X が最も多く入り、v0XQ が最も少ないです。スロットのない3候補どうしの差は L 基準で 4 B なので容量で選ぶほどの幅ではありませんが、v0XQ は中央 QR スロットに 81セルを割くため v0X より L 基準で 16 B 少なくなります — その代わり、スキャナが読めないときは中央 QR がフォールバック URL を担います。\n実験項目のため、回転・照明・印刷・ライブスキャンの性能は保証しません。",
     "g907": "Type O/A コードの中央に置く目印です — スキャナはここで位置と向きを最初に捉えます。\n中央QR = 既定値。フォールバック QR をファインダーの位置に置き、向きの基準も兼ねます（下の「TL スキャナ QR リンクを含める」の「内側」と同じ位置です）。\nブルズアイ = 同心円の目印 · ブルズアイの中のキューブ = リングの中にキューブを入れたハイブリッド · 3トーンキューブ = セルの3トーンだけで作った目印。\n「詳細」モードでは比較用の実験候補（「基準未達の候補」・「スキャン不可の候補」）も一緒に展開されます。\n実機ではカメラやコードを回転させると認識しにくくなることがあります — 中央 QR（内側）は向きの基準を与えますが、回転耐性を保証するものではありません。\n下のスコア板は模型スコアです — 認識率の予測ではありません。",
     "g920": "内容に合わせて",
@@ -4928,7 +4950,7 @@ const GENERATOR_STRINGS = {
     "g1100": "切断面の帯が広いです — 切断面を白く塗ってください",
     "g1101": "一辺が 180 mm を超えます — プリンターの造形サイズを確認してください",
     "g1102": "セルが 1.2 mm 未満です — 0.4 mm ノズルでは潰れることがあります",
-    "g1103": "面画像は 3D プリント用ファイルに含まれません",
+    "g1103": "面画像・テキスト・QR は 3D プリント用ファイルに含まれません",
     "g1104": "空洞が小さいためリブなしで中空化します",
     "g1105": "セルサイズは 0.8 mm 以上にしてください。",
     "g1106": "セルサイズは 0.2 mm 単位にしてください。",
@@ -4967,7 +4989,15 @@ const GENERATOR_STRINGS = {
     "g1139": "倍率補正 {k} で ×{factor} に描いたファイルなので、このプリンタードライバーで印刷したときだけ実寸になります",
     "g1140": "SVG は補正なしで一辺 {side} mm に描きます",
     "g1141": "SVG は補正なしで「{method}」、一辺 {side} mm に描きます",
-    "g1142": "カッティングマシン・編集用の実寸ファイルは SVG をダウンロードします（SVG は補正しません）"
+    "g1142": "カッティングマシン・編集用の実寸ファイルは SVG をダウンロードします（SVG は補正しません）",
+    "g1143": "内側 — 画像・テキストのない空き面に TL スキャナ QR を入れます（面ごとに空き面の編集で変更できます）",
+    "g1144": "空き面がないため内側 QR は使えません — データ面を減らすか 3 面レンダーにすると空き面ができます",
+    "g1145": "どの空き面にも画像・テキストがあります — 空き面の編集でひとつ削除すると QR を入れられます",
+    "g1146": "Type H の内側 QR は空き面に入ります。スマホでその面をほぼ正面から写すと読めます — 静止画・2.5D にはその面が見えるときだけ含まれ、斜めの面は読めないことがあります。画像から常に読める必要があるなら、コーナーを選ぶか詳細のコーナー QR 併記をオンにしてください。",
+    "g1147": "内側（空き面）QR とコーナー QR を併記（詳細）",
+    "g1148": "QR フォールバック URL を QR にできないため、内側 QR を入れられませんでした。詳細モードの「QR フォールバック URL」を確認してください。",
+    "g1149": "コーナー QR 併記がオンなので、点線のコーナー（{corner}）にも QR が入ります。コーナーを移すには、そのコーナーのカードを押してから「内側」をもう一度押してください — コーナーのカードだけを押すと面の QR は外れます。",
+    "g1150": "このブロック数では .schem の面 QR のモジュールが欠けて読めません — 詳細モードで {scale} × {scale} 以上を選んでください。"
   },
   fr: {
     "g001": "Thème de la page (sans effet sur le rendu du code)",
@@ -5141,7 +5171,7 @@ const GENERATOR_STRINGS = {
     "g902": "Transparent = le code seul. Le PNG conserve un canal alpha ; le SVG n'a aucun élément d'arrière-plan.\nBlanc = pour les imprimés et documents clairs. Noir = pour les supports sombres et les écrans.\nAvec transparent, l'arrière-plan effectif devient « la surface qui porte le code ». Cette séparation ne peut pas être garantie à la génération : mesurez-la avec l'aperçu de placement TL.",
     "g903": "Déposez une photo de l'endroit où le code ira réellement : elle se place derrière l'aperçu.\nDans l'aperçu, faites glisser pour déplacer et zoomez à la molette ou par pincement jusqu'à ce que le placement corresponde.\nL'aperçu mesure la luminance de la surface autour du code face aux niveaux de cellule : vous obtenez un chiffre pour « est-ce que ça se lira ici ? » avant d'imprimer.\nCette mesure de surface détermine aussi si « Auto » et « Contraste élevé » de la zone de sécurité posent du blanc ou du noir.\nCette photo n'entre jamais dans le PNG ni le SVG exportés.",
     "g904": "La marge autour du code — l'équivalent de la zone de silence d'un QR.\nAuto = pose une couleur très contrastée quand l'arrière-plan est transparent, et s'efface quand il est opaque (l'arrière-plan fait déjà office de zone de silence).\nAucune = pas de marge. Blanc / Noir = fixé à cette couleur.\nContraste élevé = choisit entre blanc et noir. (1) La couleur trop proche des niveaux de cellule est écartée d'abord — une marge qui se fond dans le code rend la silhouette plus grande que le code. (2) Si les deux passent, c'est celle qui s'éloigne le plus de la luminosité mesurée dans l'aperçu de placement : noir sur une surface claire, blanc sur une surface sombre.\nSans photo chargée, l'étape (2) ne peut pas s'exécuter : c'est alors la couleur la plus éloignée des niveaux de cellule qui l'emporte.\nLe bloc du QR de secours est exclu — il porte sa propre zone de silence.",
-    "g905": "Imprime un QR à côté du code comme voie de secours quand le scanner TL n'arrive pas à le lire.\nEn haut à gauche / en haut à droite / en bas à gauche / en bas à droite = l'un des quatre angles extérieurs.\nIntérieur = un QR central sur les Types O/A, la fenêtre Y2 β sur le Type Y.\nAucun = exporte le code seul, sans QR.\nLa variante à QR central vise des impressions d'au moins 13 cm de large.",
+    "g905": "Imprime un QR à côté du code comme voie de secours quand le scanner TL n'arrive pas à le lire.\nEn haut à gauche / en haut à droite / en bas à gauche / en bas à droite = l'un des quatre angles extérieurs.\nIntérieur = un QR central sur les Types O/A, la fenêtre Y2 β sur le Type Y, et un QR sur les faces vides sans image ni texte sur le Type H (modifiable face par face).\nAucun = exporte le code seul, sans QR.\nLa variante à QR central vise des impressions d'au moins 13 cm de large.",
     "g906": "Le localisateur de surface de cellules qu'un scanner utilise pour trouver où est un code Type Y et dans quel sens il est tourné.\nAuto = utilise ce qui est recommandé pour les réglages actuels. Aucun détecteur Y n'a encore été promu en production : aujourd'hui, Auto revient exactement à Désactivé.\nCellules occupées et charge utile maximale L / M / H par candidat (source : cellSurfaceFinal.js) :\n· v0 — 30 cellules (n=13) · 29 / 25 / 20 B\n· v0X — 65 cellules (n=21) · 96 / 81 / 65 B\n· v0XQ — motif de repérage 42 cellules + emplacement QR central 81 cellules (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 cellules (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 cellules (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B à n=25)\nMoins de cellules occupées, plus de symboles restent pour les données — à n=21, v0X en contient le plus et v0XQ le moins. Entre les trois candidats sans emplacement, l'écart n'est que de 4 B en L : la capacité n'est donc pas un critère de choix. v0XQ cède 81 cellules à l'emplacement QR central et contient donc 16 B de moins que v0X en L — en échange, le QR central porte une URL de secours quand le scanner n'arrive pas à lire le code.\nCe sont des candidats expérimentaux : les performances en rotation, éclairage, impression et scan en direct ne sont pas garanties.",
     "g907": "Le repère placé au centre d'un code Type O/A — c'est là qu'un scanner accroche la position et l'orientation.\nQR central = valeur par défaut. Il place le QR de secours dans l'emplacement du repère, qui sert alors aussi de référence d'orientation (le même emplacement que « Intérieur » sous « Inclure le lien QR vers le scanner TL » ci-dessous).\nCible = anneaux concentriques · Cube dans la cible = un cube à l'intérieur de l'anneau · Cube trois tons = construit uniquement avec les trois tons de cellule.\nLe mode avancé déplie aussi les groupes expérimentaux conservés pour comparaison (« Candidats sous la barre » · « Non scannables »).\nSur un appareil réel, la reconnaissance peut baisser si la caméra ou le code pivote — le QR central fournit une référence d'orientation sans garantir la tolérance à la rotation.\nLe panneau ci-dessous donne des scores de modèle — pas une prédiction du taux de lecture.",
     "g920": "Selon le contenu",
@@ -5535,7 +5565,7 @@ const GENERATOR_STRINGS = {
     "g1100": "bande de tranche large — peignez les tranches en blanc",
     "g1101": "côté supérieur à 180 mm — vérifiez le volume d’impression",
     "g1102": "cellules de moins de 1,2 mm : risque de flou avec une buse de 0,4 mm",
-    "g1103": "les images de face ne sont pas incluses dans les fichiers d’impression 3D",
+    "g1103": "les images, textes et QR des faces ne sont pas inclus dans les fichiers d’impression 3D",
     "g1104": "cavité trop petite pour des nervures — évidée sans nervures",
     "g1105": "La taille de cellule doit être d’au moins 0,8 mm.",
     "g1106": "La taille de cellule doit être un multiple de 0,2 mm.",
@@ -5574,7 +5604,15 @@ const GENERATOR_STRINGS = {
     "g1139": "dessiné à ×{factor} pour la correction d’échelle {k} : taille réelle seulement une fois imprimé par ce pilote d’imprimante",
     "g1140": "le SVG est dessiné sans correction, côté {side} mm",
     "g1141": "le SVG est dessiné sans correction en « {method} », côté {side} mm",
-    "g1142": "pour une machine de découpe ou l’édition, téléchargez le SVG, qui n’est jamais corrigé"
+    "g1142": "pour une machine de découpe ou l’édition, téléchargez le SVG, qui n’est jamais corrigé",
+    "g1143": "Intérieur — place le QR du scanner TL sur les faces vides sans image ni texte (modifiable face par face dans l’éditeur des faces vides)",
+    "g1144": "Aucune face vide : le QR intérieur est indisponible — réduisez les faces de données ou passez au rendu 3 faces pour libérer une face",
+    "g1145": "Chaque face vide a déjà une image ou un texte — retirez-en un dans l’éditeur des faces vides pour ajouter le QR",
+    "g1146": "Sur le Type H, le QR intérieur se place sur les faces vides. Il se lit quand le téléphone voit cette face presque de face — les images fixes et la 2.5D ne l’incluent que si la face est visible, et une face inclinée peut ne pas se lire. S’il doit toujours se lire depuis une image, choisissez un angle ou activez l’option avancée QR d’angle en plus.",
+    "g1147": "Afficher ensemble le QR intérieur (faces vides) et le QR d’angle (avancé)",
+    "g1148": "Le QR intérieur n’a pas été ajouté, car l’URL de secours du QR ne peut pas devenir un QR. Vérifiez « URL de secours du QR » en mode Avancé.",
+    "g1149": "Le QR d’angle est aussi activé : un QR va également dans l’angle en pointillés ({corner}). Pour le déplacer, appuyez sur cette carte d’angle puis de nouveau sur « Intérieur » — appuyer seulement sur une carte d’angle retire le QR des faces.",
+    "g1150": "Avec ce nombre de blocs par cellule, le QR de face perd des modules dans le .schem et ne se lit pas — choisissez {scale} × {scale} ou plus en mode Avancé."
   },
   it: {
     "g001": "Tema della pagina (non incide sul rendering del codice)",
@@ -5748,7 +5786,7 @@ const GENERATOR_STRINGS = {
     "g902": "Trasparente = solo il codice. Il PNG mantiene un canale alfa; l'SVG non ha alcun elemento di sfondo.\nBianco = per stampe e documenti chiari. Nero = per supporti scuri e schermi.\nCon trasparente lo sfondo effettivo diventa «la superficie su cui appoggi il codice»: quella separazione non è garantibile in fase di generazione, quindi misurala con l'anteprima di posizionamento TL.",
     "g903": "Inserisci una foto del punto in cui il codice andrà davvero: si dispone dietro l'anteprima.\nNell'anteprima trascina per spostare e zooma con rotella o pizzico finché il posizionamento non corrisponde.\nL'anteprima misura la luminanza della superficie attorno al codice rispetto ai livelli di cella: prima di stampare ottieni un numero per «qui si leggerà?».\nLa misura della superficie determina anche se «Auto» e «Contrasto elevato» dell’area di sicurezza stendono bianco o nero.\nQuesta foto non finisce mai nel PNG o nell'SVG esportati.",
     "g904": "È il margine attorno al codice, l'equivalente della zona di quiete di un QR.\nAuto = stende un colore ad alto contrasto quando lo sfondo è trasparente e lo salta quando lo sfondo è opaco (lo sfondo è già zona di quiete).\nNessuno = nessun margine. Bianco / Nero = fissato a quel colore.\nContrasto elevato = sceglie tra bianco e nero. (1) Il colore troppo vicino ai livelli di cella viene scartato per primo: un margine che si fonde nel codice rende la silhouette più grande del codice. (2) Se passano entrambi, vince quello più lontano dalla luminosità di superficie misurata nell'anteprima di posizionamento: nero su superficie chiara, bianco su superficie scura.\nSenza foto caricata il passo (2) non può essere eseguito, quindi si ripiega sul colore che si separa di più dai livelli di cella.\nIl blocco del QR di riserva è escluso: porta con sé la propria zona di quiete.",
-    "g905": "Stampa un QR accanto al codice come via di riserva quando lo scanner TL non riesce a leggerlo.\nIn alto a sinistra / in alto a destra / in basso a sinistra / in basso a destra = uno dei quattro angoli esterni.\nInterno = QR centrale sui Tipi O/A, finestra Y2 β sul Tipo Y.\nNessuno = esporta il solo codice, senza QR.\nLa variante con QR centrale è pensata per stampe larghe almeno 13 cm.",
+    "g905": "Stampa un QR accanto al codice come via di riserva quando lo scanner TL non riesce a leggerlo.\nIn alto a sinistra / in alto a destra / in basso a sinistra / in basso a destra = uno dei quattro angoli esterni.\nInterno = QR centrale sui Tipi O/A, finestra Y2 β sul Tipo Y, QR sulle facce vuote senza immagine né testo sul Tipo H (modificabile faccia per faccia).\nNessuno = esporta il solo codice, senza QR.\nLa variante con QR centrale è pensata per stampe larghe almeno 13 cm.",
     "g906": "Il localizzatore di superficie a celle che uno scanner usa per trovare dove si trova un codice Tipo Y e come è orientato.\nAuto = usa ciò che è consigliato per le impostazioni correnti. Nessun rilevatore Y è ancora stato promosso in produzione, quindi oggi Auto equivale esattamente a Disattivato.\nCelle occupate e payload massimo L / M / H per candidato (fonte: cellSurfaceFinal.js):\n· v0 — 30 celle (n=13) · 29 / 25 / 20 B\n· v0X — 65 celle (n=21) · 96 / 81 / 65 B\n· v0XQ — pattern di ricerca 42 celle + slot QR centrale 81 celle (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 celle (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 celle (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B con n=25)\nMeno celle occupate, più simboli restano ai dati: con n=21 v0X contiene di più e v0XQ di meno. Fra i tre candidati senza slot lo scarto è di soli 4 B in L, quindi la capacità non è un criterio di scelta; v0XQ cede 81 celle allo slot QR centrale e perciò contiene 16 B in meno di v0X in L — in cambio il QR centrale porta un URL di riserva quando lo scanner non riesce a leggere il codice.\nSono candidati sperimentali: le prestazioni con rotazione, illuminazione, stampa e scansione dal vivo non sono garantite.",
     "g907": "È il segno posto al centro di un codice Tipo O/A: è lì che uno scanner aggancia posizione e orientamento.\nQR centrale = valore predefinito. Mette il QR di riserva nella posizione del pattern, che così fa anche da riferimento di orientamento (la stessa posizione di «Interno» sotto «Includi il link QR allo scanner TL»).\nBersaglio = anelli concentrici · Cubo nel bersaglio = un cubo dentro l'anello · Cubo a tre toni = costruito solo con i tre toni di cella.\nLa modalità avanzata apre anche i gruppi sperimentali tenuti per confronto («Candidati sotto soglia» · «Non scansionabili»).\nSu un dispositivo reale il riconoscimento può calare se la fotocamera o il codice ruota — il QR centrale dà un riferimento di orientamento ma non garantisce la tolleranza alla rotazione.\nIl pannello qui sotto riporta punteggi di modello, non una previsione del tasso di lettura.",
     "g920": "In base al contenuto",
@@ -6142,7 +6180,7 @@ const GENERATOR_STRINGS = {
     "g1100": "fascia di taglio larga — dipingi di bianco i bordi",
     "g1101": "lato oltre 180 mm — verifica il volume di stampa",
     "g1102": "celle sotto 1,2 mm: possibili sbavature con ugello da 0,4 mm",
-    "g1103": "le immagini delle facce non sono incluse nei file di stampa 3D",
+    "g1103": "immagini, testi e QR delle facce non sono inclusi nei file di stampa 3D",
     "g1104": "cavità troppo piccola per le nervature — svuotato senza nervature",
     "g1105": "La dimensione della cella deve essere almeno 0,8 mm.",
     "g1106": "La dimensione della cella deve essere un multiplo di 0,2 mm.",
@@ -6181,7 +6219,15 @@ const GENERATOR_STRINGS = {
     "g1139": "disegnato a ×{factor} per la correzione di scala {k}: è in scala reale solo se stampato con questo driver di stampante",
     "g1140": "l’SVG è disegnato senza correzione, lato {side} mm",
     "g1141": "l’SVG è disegnato senza correzione come «{method}», lato {side} mm",
-    "g1142": "per plotter da taglio o modifica, scarica l’SVG, che non viene mai corretto"
+    "g1142": "per plotter da taglio o modifica, scarica l’SVG, che non viene mai corretto",
+    "g1143": "Interno — inserisce il QR dello scanner TL sulle facce vuote senza immagine né testo (modificabile faccia per faccia nell’editor delle facce vuote)",
+    "g1144": "Nessuna faccia vuota: il QR interno non è disponibile — riduci le facce dati o passa al rendering a 3 facce per liberarne una",
+    "g1145": "Ogni faccia vuota ha già un’immagine o un testo — rimuovine uno nell’editor delle facce vuote per aggiungere il QR",
+    "g1146": "Sul Tipo H il QR interno va sulle facce vuote. Si legge quando il telefono inquadra quella faccia quasi di fronte — le immagini fisse e il 2.5D lo includono solo se la faccia è visibile, e una faccia inclinata può non leggersi. Se deve leggersi sempre da un’immagine, scegli un angolo o attiva l’opzione avanzata del QR d’angolo insieme.",
+    "g1147": "Mostra insieme il QR interno (facce vuote) e il QR d’angolo (avanzato)",
+    "g1148": "Il QR interno non è stato inserito perché l’URL QR di riserva non può diventare un QR. Controlla «URL QR di riserva» in modalità Avanzato.",
+    "g1149": "Anche il QR d’angolo è attivo, quindi un QR va anche nell’angolo tratteggiato ({corner}). Per spostarlo, premi quella scheda d’angolo e poi di nuovo «Interno» — premere solo una scheda d’angolo toglie il QR dalle facce.",
+    "g1150": "Con questo numero di blocchi per cella il QR della faccia perde moduli nel .schem e non si legge — scegli {scale} × {scale} o più in modalità Avanzato."
   },
   de: {
     "g001": "Seitenthema (ohne Einfluss auf das Rendering des Codes)",
@@ -6355,7 +6401,7 @@ const GENERATOR_STRINGS = {
     "g902": "Transparent = nur der Code. Das PNG behält einen Alphakanal, das SVG hat überhaupt kein Hintergrundelement.\nWeiß = für helle Drucke und Dokumente. Schwarz = für dunkle Bedruckstoffe und Bildschirme.\nBei transparent wird die Fläche, auf die Sie den Code legen, zum tatsächlichen Hintergrund. Diese Trennung lässt sich beim Erzeugen nicht garantieren — messen Sie sie mit der TL-Platzierungsvorschau.",
     "g903": "Legen Sie ein Foto der Stelle ein, an die der Code wirklich kommt; es liegt hinter der Vorschau.\nZiehen Sie in der Vorschau zum Verschieben und zoomen Sie mit Mausrad oder Pinch-Geste, bis die Platzierung stimmt.\nDie Vorschau misst die Flächenluminanz rund um den Code gegen die Zellstufen — so bekommen Sie schon vor dem Druck eine Zahl für „wird das hier gelesen?“.\nDer gemessene Flächenwert entscheidet außerdem, ob „Auto“ und „Hoher Kontrast“ des Sicherheitsbereichs Weiß oder Schwarz anlegen.\nDieses Foto landet nie im exportierten PNG oder SVG.",
     "g904": "Der Rand um den Code — das Gegenstück zur Ruhezone eines QR.\nAuto = legt bei transparentem Hintergrund eine kontraststarke Farbe an und entfällt bei deckendem Hintergrund (der Hintergrund ist dann schon die Ruhezone).\nKeine = kein Rand. Weiß / Schwarz = auf diese Farbe festgelegt.\nHoher Kontrast = wählt zwischen Weiß und Schwarz. (1) Die Farbe, die den Zellstufen zu nahe kommt, fällt zuerst weg — ein Rand, der mit dem Code verschmilzt, macht die Silhouette größer als den Code. (2) Bestehen beide, gewinnt die Farbe mit dem größeren Abstand zur Flächenhelligkeit aus der Platzierungsvorschau: Schwarz auf heller, Weiß auf dunkler Fläche.\nOhne geladenes Foto lässt sich Schritt (2) nicht ausführen, dann entscheidet der größere Abstand zu den Zellstufen.\nDer Block des Ersatz-QR bleibt ausgenommen — er bringt seine eigene Ruhezone mit.",
-    "g905": "Druckt neben dem Code einen QR als Ersatzweg, falls der TL-Scanner ihn nicht lesen kann.\nOben links / oben rechts / unten links / unten rechts = eine der vier äußeren Ecken.\nInnen = zentraler QR bei Typ O/A, Y2-Fenster β bei Typ Y.\nKeine = exportiert nur den Code, ohne QR.\nDie Variante mit zentralem QR ist für Drucke ab 13 cm Breite gedacht.",
+    "g905": "Druckt neben dem Code einen QR als Ersatzweg, falls der TL-Scanner ihn nicht lesen kann.\nOben links / oben rechts / unten links / unten rechts = eine der vier äußeren Ecken.\nInnen = zentraler QR bei Typ O/A, Y2-Fenster β bei Typ Y, QR auf leeren Flächen ohne Bild oder Text bei Typ H (pro Fläche änderbar).\nKeine = exportiert nur den Code, ohne QR.\nDie Variante mit zentralem QR ist für Drucke ab 13 cm Breite gedacht.",
     "g906": "Der Zellflächen-Lokator, mit dem ein Scanner zuerst findet, wo ein Typ-Y-Code liegt und wie er gedreht ist.\nAuto = nimmt, was für die aktuellen Einstellungen empfohlen ist. Es wurde noch kein Y-Detektor in den Produktivstand befördert, deshalb entspricht Auto heute genau Aus.\nBelegte Zellen und maximale Nutzdaten L / M / H je Kandidat (Quelle: cellSurfaceFinal.js):\n· v0 — 30 Zellen (n=13) · 29 / 25 / 20 B\n· v0X — 65 Zellen (n=21) · 96 / 81 / 65 B\n· v0XQ — Suchmuster 42 Zellen + zentraler QR-Slot 81 Zellen (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 Zellen (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 Zellen (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B bei n=25)\nJe weniger Zellen belegt sind, desto mehr Symbole bleiben für Daten — bei n=21 fasst v0X am meisten und v0XQ am wenigsten. Zwischen den drei Kandidaten ohne Slot liegen bei L nur 4 B, die Kapazität taugt dort also nicht als Auswahlgrund; v0XQ gibt 81 Zellen an den zentralen QR-Slot ab und fasst bei L deshalb 16 B weniger als v0X — dafür trägt der zentrale QR eine Ersatz-URL, wenn der Scanner den Code nicht lesen kann.\nDas sind Versuchskandidaten: Leistung bei Drehung, Beleuchtung, Druck und Live-Scan ist nicht zugesichert.",
     "g907": "Das Zeichen in der Mitte eines Typ-O/A-Codes — hier rastet ein Scanner auf Position und Ausrichtung ein.\nZentraler QR = Standard. Er setzt den Ersatz-QR an die Stelle des Suchmusters, das damit zugleich als Ausrichtungsreferenz dient (dieselbe Stelle wie „Innen“ unter „QR-Link zum TL-Scanner einschließen“ weiter unten).\nZielscheibe = konzentrische Ringe · Würfel in der Zielscheibe = ein Würfel im Ring · Dreiton-Würfel = allein aus den drei Zelltonwerten gebaut.\nIm erweiterten Modus klappen auch die Versuchsgruppen auf, die zum Vergleich aufbewahrt werden („Kandidaten unter der Latte“ · „Nicht scanbar“).\nAuf realen Geräten kann die Erkennung nachlassen, wenn Kamera oder Code gedreht wird — der zentrale QR liefert eine Orientierungsreferenz, garantiert aber keine Rotationstoleranz.\nDie Tafel unten nennt Modellwerte — keine Vorhersage der Leserate.",
     "g920": "Passend zum Inhalt",
@@ -6749,7 +6795,7 @@ const GENERATOR_STRINGS = {
     "g1100": "breite Schnittkante — Schnittkanten weiß anmalen",
     "g1101": "Kante über 180 mm — Bauraum des Druckers prüfen",
     "g1102": "Zellen unter 1,2 mm können mit 0,4-mm-Düse verlaufen",
-    "g1103": "Flächenbilder sind in 3D-Druckdateien nicht enthalten",
+    "g1103": "Flächenbilder, -texte und QR sind in 3D-Druckdateien nicht enthalten",
     "g1104": "Hohlraum zu klein für Rippen — ohne Rippen ausgehöhlt",
     "g1105": "Die Zellgröße muss mindestens 0,8 mm betragen.",
     "g1106": "Die Zellgröße muss ein Vielfaches von 0,2 mm sein.",
@@ -6788,7 +6834,15 @@ const GENERATOR_STRINGS = {
     "g1139": "für die Skalierungskorrektur {k} mit ×{factor} gezeichnet, daher nur beim Druck über diesen Druckertreiber in Originalgröße",
     "g1140": "die SVG-Datei wird ohne Korrektur gezeichnet, Kante {side} mm",
     "g1141": "die SVG-Datei wird ohne Korrektur als „{method}“ gezeichnet, Kante {side} mm",
-    "g1142": "für Schneideplotter oder zum Bearbeiten die SVG-Datei laden, sie wird nie korrigiert"
+    "g1142": "für Schneideplotter oder zum Bearbeiten die SVG-Datei laden, sie wird nie korrigiert",
+    "g1143": "Innen — setzt den TL-Scanner-QR auf leere Flächen ohne Bild oder Text (pro Fläche im Editor für leere Flächen änderbar)",
+    "g1144": "Keine leere Fläche, daher ist der innere QR nicht verfügbar — weniger Datenflächen oder die 3-Flächen-Darstellung wählen, um eine Fläche frei zu machen",
+    "g1145": "Jede leere Fläche hat bereits Bild oder Text — eines im Editor für leere Flächen entfernen, um den QR einzufügen",
+    "g1146": "Bei Typ H kommt der innere QR auf leere Flächen. Er wird gelesen, wenn das Handy die Fläche fast frontal sieht — Standbilder und 2.5D enthalten ihn nur, wenn die Fläche sichtbar ist, und eine schräge Fläche wird eventuell nicht gelesen. Muss er aus einem Bild immer lesbar sein, eine Ecke wählen oder die erweiterte Option Eck-QR zusätzlich einschalten.",
+    "g1147": "Inneren QR (leere Flächen) und Eck-QR zusammen anzeigen (erweitert)",
+    "g1148": "Der innere QR wurde nicht eingefügt, weil sich die Ersatz-URL für den QR nicht als QR darstellen lässt. „Ersatz-URL für den QR“ unter Erweitert prüfen.",
+    "g1149": "Der Eck-QR ist zusätzlich eingeschaltet, daher kommt auch in die gestrichelte Ecke ({corner}) ein QR. Zum Verschieben diese Eckkarte und danach erneut „Innen“ drücken — nur eine Eckkarte zu drücken entfernt den Flächen-QR.",
+    "g1150": "Mit dieser Blockzahl pro Zelle verliert der Flächen-QR in der .schem Module und ist nicht lesbar — unter Erweitert {scale} × {scale} oder mehr wählen."
   },
   es: {
     "g001": "Tema de la página (no afecta al renderizado del código)",
@@ -6962,7 +7016,7 @@ const GENERATOR_STRINGS = {
     "g902": "Transparente = solo el código. El PNG conserva un canal alfa; el SVG no tiene ningún elemento de fondo.\nBlanco = para impresos y documentos claros. Negro = para soportes oscuros y pantallas.\nCon transparente, el fondo efectivo pasa a ser «la superficie sobre la que apoya el código». Esa separación no se puede garantizar al generar, así que mídala con la vista previa de colocación TL.",
     "g903": "Añada una foto del sitio donde irá realmente el código: se coloca detrás de la vista previa.\nEn la vista previa, arrastre para mover y use la rueda o el pellizco para hacer zoom hasta que la colocación encaje.\nLa vista previa mide la luminancia de la superficie alrededor del código frente a los niveles de celda, de modo que obtiene una cifra para «¿se leerá aquí?» antes de imprimir.\nEsa medida de superficie determina también si «Auto» y «Contraste alto» del área de seguridad ponen blanco o negro.\nEsa foto nunca entra en el PNG ni en el SVG exportados.",
     "g904": "Es el margen alrededor del código, el equivalente de la zona de silencio de un QR.\nAuto = pone un color de alto contraste cuando el fondo es transparente y se omite cuando el fondo es opaco (el fondo ya hace de zona de silencio).\nNinguno = sin margen. Blanco / Negro = fijado a ese color.\nContraste alto = elige entre blanco y negro. (1) Primero se descarta el color que queda demasiado cerca de los niveles de celda: un margen que se funde con el código hace que la silueta sea mayor que el código. (2) Si pasan los dos, gana el que más se aleja del brillo de superficie medido en la vista previa de colocación: negro sobre superficie clara, blanco sobre superficie oscura.\nSin foto cargada no se puede ejecutar el paso (2), así que decide el color que más se separa de los niveles de celda.\nEl bloque del QR de respaldo queda excluido: lleva su propia zona de silencio.",
-    "g905": "Imprime un QR junto al código como vía de respaldo cuando el escáner TL no consigue leerlo.\nArriba a la izquierda / arriba a la derecha / abajo a la izquierda / abajo a la derecha = una de las cuatro esquinas exteriores.\nInterior = QR central en los Tipos O/A, ventana Y2 β en el Tipo Y.\nNinguno = exporta solo el código, sin QR.\nLa variante con QR central está pensada para impresiones de al menos 13 cm de ancho.",
+    "g905": "Imprime un QR junto al código como vía de respaldo cuando el escáner TL no consigue leerlo.\nArriba a la izquierda / arriba a la derecha / abajo a la izquierda / abajo a la derecha = una de las cuatro esquinas exteriores.\nInterior = QR central en los Tipos O/A, ventana Y2 β en el Tipo Y, QR en las caras vacías sin imagen ni texto en el Tipo H (se cambia cara por cara).\nNinguno = exporta solo el código, sin QR.\nLa variante con QR central está pensada para impresiones de al menos 13 cm de ancho.",
     "g906": "El localizador de superficie de celdas que un escáner usa para encontrar dónde está un código Tipo Y y hacia dónde está orientado.\nAuto = usa lo recomendado para los ajustes actuales. Todavía no se ha promovido ningún detector Y a producción, así que hoy Auto equivale exactamente a Desactivado.\nCeldas ocupadas y carga útil máxima L / M / H por candidato (fuente: cellSurfaceFinal.js):\n· v0 — 30 celdas (n=13) · 29 / 25 / 20 B\n· v0X — 65 celdas (n=21) · 96 / 81 / 65 B\n· v0XQ — patrón localizador 42 celdas + ranura QR central 81 celdas (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 celdas (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 celdas (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B con n=25)\nCuantas menos celdas ocupadas, más símbolos quedan para los datos: con n=21, v0X es el que más guarda y v0XQ el que menos. Entre los tres candidatos sin ranura la diferencia es de solo 4 B en L, así que la capacidad no sirve como criterio de elección; v0XQ cede 81 celdas a la ranura del QR central y por eso guarda 16 B menos que v0X en L — a cambio, el QR central lleva una URL de respaldo cuando el escáner no consigue leer el código.\nSon candidatos experimentales: no se garantiza el rendimiento en rotación, iluminación, impresión ni escaneo en vivo.",
     "g907": "Es la marca situada en el centro de un código Tipo O/A: ahí es donde un escáner engancha la posición y la orientación.\nQR central = valor predeterminado. Coloca el QR de respaldo en el hueco del patrón, que así sirve también de referencia de orientación (el mismo hueco que «Interior» en «Incluir el enlace QR al escáner TL», más abajo).\nDiana = anillos concéntricos · Cubo en la diana = un cubo dentro del anillo · Cubo de tres tonos = construido solo con los tres tonos de celda.\nEl modo avanzado despliega además los grupos experimentales que se conservan para comparar («Candidatos por debajo del listón» · «No escaneables»).\nEn un dispositivo real el reconocimiento puede caer si la cámara o el código gira — el QR central da una referencia de orientación pero no garantiza la tolerancia a la rotación.\nEl panel de abajo da puntuaciones de modelo, no una predicción de la tasa de lectura.",
     "g920": "Según el contenido",
@@ -7356,7 +7410,7 @@ const GENERATOR_STRINGS = {
     "g1100": "canto visible ancho — pinta los cantos de blanco",
     "g1101": "lado de más de 180 mm — comprueba el volumen de impresión",
     "g1102": "celdas de menos de 1,2 mm: pueden emborronarse con boquilla de 0,4 mm",
-    "g1103": "las imágenes de cara no se incluyen en los archivos de impresión 3D",
+    "g1103": "las imágenes, textos y QR de las caras no se incluyen en los archivos de impresión 3D",
     "g1104": "cavidad demasiado pequeña para nervios — vaciado sin nervios",
     "g1105": "El tamaño de celda debe ser de al menos 0,8 mm.",
     "g1106": "El tamaño de celda debe ser múltiplo de 0,2 mm.",
@@ -7395,7 +7449,15 @@ const GENERATOR_STRINGS = {
     "g1139": "dibujado a ×{factor} por la corrección de escala {k}: solo sale a tamaño real al imprimirlo con este controlador de impresora",
     "g1140": "el SVG se dibuja sin corrección, lado {side} mm",
     "g1141": "el SVG se dibuja sin corrección como «{method}», lado {side} mm",
-    "g1142": "para plotters de corte o para editar, descarga el SVG, que nunca se corrige"
+    "g1142": "para plotters de corte o para editar, descarga el SVG, que nunca se corrige",
+    "g1143": "Interior — coloca el QR del escáner TL en las caras vacías sin imagen ni texto (se cambia cara por cara en el editor de caras vacías)",
+    "g1144": "No hay caras vacías, así que el QR interior no está disponible — usa menos caras de datos o el render de 3 caras para liberar una",
+    "g1145": "Cada cara vacía ya tiene imagen o texto — quita uno en el editor de caras vacías para añadir el QR",
+    "g1146": "En el Tipo H el QR interior va en las caras vacías. Se lee cuando el móvil ve esa cara casi de frente — las imágenes fijas y el 2.5D solo lo incluyen si la cara es visible, y una cara inclinada puede no leerse. Si debe leerse siempre desde una imagen, elige una esquina o activa la opción avanzada de QR de esquina a la vez.",
+    "g1147": "Mostrar juntos el QR interior (caras vacías) y el QR de esquina (avanzado)",
+    "g1148": "No se añadió el QR interior porque la URL de respaldo del QR no se puede convertir en QR. Revisa «URL de respaldo del QR» en el modo Avanzado.",
+    "g1149": "El QR de esquina también está activado, así que también va un QR en la esquina punteada ({corner}). Para moverlo, pulsa esa tarjeta de esquina y luego «Interior» otra vez — pulsar solo una tarjeta de esquina quita el QR de las caras.",
+    "g1150": "Con este número de bloques por celda el QR de la cara pierde módulos en el .schem y no se lee — elige {scale} × {scale} o más en el modo Avanzado."
   },
   pt: {
     "g001": "Tema da página (não afeta a renderização do código)",
@@ -7569,7 +7631,7 @@ const GENERATOR_STRINGS = {
     "g902": "Transparente = só o código. O PNG mantém um canal alfa; o SVG não tem qualquer elemento de fundo.\nBranco = para impressos e documentos claros. Preto = para suportes escuros e ecrãs.\nCom transparente, o fundo efetivo passa a ser «a superfície onde assenta o código». Essa separação não pode ser garantida no momento da geração, por isso meça-a com a pré-visualização de posicionamento TL.",
     "g903": "Junte uma foto do local onde o código vai ficar mesmo: fica por trás da pré-visualização.\nNa pré-visualização, arraste para mover e amplie com a roda ou com uma pinça até o posicionamento coincidir.\nA pré-visualização mede a luminância da superfície à volta do código face aos níveis de célula, dando um número para «vai ler-se aqui?» antes de imprimir.\nEssa medição de superfície determina também se «Auto» e «Contraste alto» da área de segurança assentam branco ou preto.\nEssa foto nunca entra no PNG nem no SVG exportados.",
     "g904": "É a margem à volta do código, o equivalente à zona de silêncio de um QR.\nAuto = assenta uma cor de contraste elevado quando o fundo é transparente e é dispensada quando o fundo é opaco (o fundo já é a zona de silêncio).\nNenhuma = sem margem. Branco / Preto = fixado nessa cor.\nContraste elevado = escolhe entre branco e preto. (1) A cor que fica demasiado perto dos níveis de célula é descartada primeiro — uma margem que se funde no código faz a silhueta ficar maior do que o código. (2) Se ambas passarem, ganha a que mais se afasta do brilho da superfície medido na pré-visualização de posicionamento: preto sobre superfície clara, branco sobre superfície escura.\nSem foto carregada o passo (2) não pode correr, por isso decide a cor que mais se separa dos níveis de célula.\nO bloco do QR de reserva fica de fora: traz a sua própria zona de silêncio.",
-    "g905": "Imprime um QR ao lado do código como via de reserva quando o Scanner TL não consegue lê-lo.\nCanto superior esquerdo / superior direito / inferior esquerdo / inferior direito = um dos quatro cantos exteriores.\nInterior = QR central nos Tipos O/A, janela Y2 β no Tipo Y.\nNenhum = exporta apenas o código, sem QR.\nA variante com QR central destina-se a impressões com pelo menos 13 cm de largura.",
+    "g905": "Imprime um QR ao lado do código como via de reserva quando o Scanner TL não consegue lê-lo.\nCanto superior esquerdo / superior direito / inferior esquerdo / inferior direito = um dos quatro cantos exteriores.\nInterior = QR central nos Tipos O/A, janela Y2 β no Tipo Y, QR nas faces vazias sem imagem nem texto no Tipo H (alterável face a face).\nNenhum = exporta apenas o código, sem QR.\nA variante com QR central destina-se a impressões com pelo menos 13 cm de largura.",
     "g906": "O localizador de superfície de células que um leitor usa para encontrar onde está um código Tipo Y e para que lado está virado.\nAuto = usa o que é recomendado para as definições atuais. Ainda não foi promovido nenhum detetor Y para produção, por isso hoje Auto equivale exatamente a Desligado.\nCélulas ocupadas e carga útil máxima L / M / H por candidato (fonte: cellSurfaceFinal.js):\n· v0 — 30 células (n=13) · 29 / 25 / 20 B\n· v0X — 65 células (n=21) · 96 / 81 / 65 B\n· v0XQ — padrão localizador 42 células + ranhura QR central 81 células (n=21) · 80 / 67 / 54 B\n· v1r2 — 80 células (n=21) · 92 / 77 / 62 B\n· v2r2 — 74 células (n=21) · 94 / 79 / 63 B (145 / 124 / 99 B com n=25)\nQuantas menos células ocupadas, mais símbolos sobram para os dados — com n=21, v0X é o que leva mais e v0XQ o que leva menos. Entre os três candidatos sem ranhura a diferença é de apenas 4 B em L, pelo que a capacidade não serve de critério de escolha; v0XQ cede 81 células à ranhura do QR central e leva por isso menos 16 B do que v0X em L — em troca, o QR central transporta um URL de reserva quando o leitor não consegue ler o código.\nSão candidatos experimentais: não se garante o desempenho em rotação, iluminação, impressão nem leitura ao vivo.",
     "g907": "É a marca colocada no centro de um código Tipo O/A — é aí que um leitor fixa posição e orientação.\nQR central = valor predefinido. Coloca o QR de reserva no lugar do padrão, que assim serve também de referência de orientação (o mesmo lugar que «Interior» em «Incluir a ligação QR para o Scanner TL», abaixo).\nAlvo = anéis concêntricos · Cubo no alvo = um cubo dentro do anel · Cubo de três tons = construído apenas com os três tons de célula.\nO modo avançado abre também os grupos experimentais guardados para comparação («Candidatos abaixo da fasquia» · «Não legíveis»).\nNum dispositivo real o reconhecimento pode baixar se a câmara ou o código rodar — o QR central fornece uma referência de orientação mas não garante a tolerância à rotação.\nO painel abaixo apresenta pontuações de modelo — não uma previsão da taxa de leitura.",
     "g920": "Conforme o conteúdo",
@@ -7963,7 +8025,7 @@ const GENERATOR_STRINGS = {
     "g1100": "aresta de corte larga — pinte as arestas de branco",
     "g1101": "lado acima de 180 mm — verifique o volume de impressão",
     "g1102": "células abaixo de 1,2 mm podem borrar com bico de 0,4 mm",
-    "g1103": "as imagens das faces não são incluídas nos ficheiros de impressão 3D",
+    "g1103": "as imagens, textos e QR das faces não são incluídos nos ficheiros de impressão 3D",
     "g1104": "cavidade demasiado pequena para nervuras — esvaziado sem nervuras",
     "g1105": "O tamanho da célula deve ser de pelo menos 0,8 mm.",
     "g1106": "O tamanho da célula deve ser múltiplo de 0,2 mm.",
@@ -8002,7 +8064,15 @@ const GENERATOR_STRINGS = {
     "g1139": "desenhado a ×{factor} pela correção de escala {k}: só fica em tamanho real ao imprimir com este controlador de impressora",
     "g1140": "o SVG é desenhado sem correção, lado {side} mm",
     "g1141": "o SVG é desenhado sem correção como «{method}», lado {side} mm",
-    "g1142": "para plotters de corte ou edição, transfira o SVG, que nunca é corrigido"
+    "g1142": "para plotters de corte ou edição, transfira o SVG, que nunca é corrigido",
+    "g1143": "Interior — coloca o QR do Scanner TL nas faces vazias sem imagem nem texto (altere face a face no editor das faces vazias)",
+    "g1144": "Não há faces vazias, por isso o QR interior não está disponível — use menos faces de dados ou a renderização de 3 faces para libertar uma",
+    "g1145": "Cada face vazia já tem imagem ou texto — remova um no editor das faces vazias para adicionar o QR",
+    "g1146": "No Tipo H o QR interior vai nas faces vazias. Lê-se quando o telemóvel vê essa face quase de frente — as imagens fixas e o 2.5D só o incluem se a face estiver visível, e uma face inclinada pode não ser lida. Se tiver de ser sempre lido a partir de uma imagem, escolha um canto ou ative a opção avançada de QR de canto em simultâneo.",
+    "g1147": "Mostrar em conjunto o QR interior (faces vazias) e o QR de canto (avançado)",
+    "g1148": "O QR interior não foi adicionado porque o URL de reserva do QR não pode ser convertido em QR. Verifique «URL de reserva do QR» no modo Avançado.",
+    "g1149": "O QR de canto também está ativo, por isso também vai um QR no canto tracejado ({corner}). Para o mover, prima esse cartão de canto e depois «Interior» outra vez — premir só um cartão de canto retira o QR das faces.",
+    "g1150": "Com este número de blocos por célula o QR da face perde módulos no .schem e não é lido — escolha {scale} × {scale} ou mais no modo Avançado."
   },
 };
 
@@ -8122,13 +8192,14 @@ import {H_IMAGE_FACES,loadHFaceImage} from './src/h-face-images.js';
 import {hDisplayMap,hImageTargets} from './src/h-face-arrangement.js';
 import {hModeFaces} from './src/h-profile.js';
 import {createHImageEditor} from './src/h-image-editor-ui.js';
+import {hFaceQrMinBlockScale} from './src/h-face-qr.js';
 import {hCanPreview25,hPlanarPreviewOptions,hPreviewPositionLabels,reconcileHPositionMode,hCubeIconMarkup,hExportIconMarkup,hBlockIconMarkup} from './src/h-preview-decor.js';
 import {hRotationSpaceKey,hPreviewSquareSide,hBrightestPaletteHex,hControlIcon} from './src/h-preview-controls.js';
 import {drawSceneImage} from './src/scene-image.js';
 import {createHPreviewRenderer} from './src/h-preview-renderer.js';
-import { hQrPosition, withHCornerQr } from './src/generator-h-qr.js';
+import { hQrPosition, withHCornerQr, hFaceQrSummary, hEffectiveQrPosition, hCornerTooCorner } from './src/generator-h-qr.js';
 import { exportCubeMp4, cubeVideoDurationMs } from './src/cube-video-export.js';
-import { H_ROTATION_TILT_DEFAULT_DEG, clampHRotationSpeed, clampHRotationTilt, selectHRotationTilt,clampHRotationTiltMode,selectHRotationTiltMode, selectHRotationMode, selectHRotationSpeed, selectHRotationSpeedDefault, reconcileHRotationSpeed, hMaskIconMarkup, hMaskLuminance, hPointerDragDelta, hPointerDragPose, hOrbitFromRotation, hVersionIconMarkup, isHGenerator, selectHRepresentation, selectHFaceCount, selectHRenderFaces, selectHArrangement, selectHAlignmentPose, reconcileHContentRotation, H_RESOLUTION_VERSIONS, hUiLabel, hPreviewOptions } from './src/generator-h.js';
+import { H_ROTATION_TILT_DEFAULT_DEG, clampHRotationSpeed, clampHRotationTilt, selectHRotationTilt,clampHRotationTiltMode,selectHRotationTiltMode, selectHRotationMode, selectHRotationSpeed, selectHRotationSpeedDefault, reconcileHRotationSpeed, hMaskIconMarkup, hMaskLuminance, hPointerDragDelta, hPointerDragPose, hOrbitFromRotation, hVersionIconMarkup, isHGenerator, selectHRepresentation, selectHFaceCount, selectHRenderFaces,hRenderFacesLockedToSix, selectHArrangement, selectHAlignmentPose, reconcileHContentRotation, H_RESOLUTION_VERSIONS, hUiLabel, hPreviewOptions } from './src/generator-h.js';
 import { startPwaUpdateWatch } from './src/pwa-update.js';
 import { WINDOW_SUPPORTED_TONES as WINDOW_TONES, versionSpecY } from './src/capacityY.js';
 // 셀 편집기가 여는 O/A 격자 반경 k — 버전 표에서 읽는다 (편집기용 상수 복제 금지).
@@ -8357,13 +8428,13 @@ import { payloadByteLength } from './src/header.js';
 // rasterToPng 직접 호출은 2026-08-19 내보내기 옵션 배선에서 사라졌다 — PNG 조립은
 // export-render.renderExportPng 가 맡는다 (png.js 는 그 안에서 소비된다).
 import { sceneToSvg } from './src/svg.js';
-import { TL_READER_URL, tlReaderUrlWithHint } from './src/qr.js';
+import { TL_READER_URL, tlReaderUrlWithHint, qrMatrix } from './src/qr.js';
 import { wifiPayload, cardPayload } from './src/payloadform.js';
 import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js';
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-25.01';
+const GENERATOR_BUILD = '2026-09-26.01';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -8394,7 +8465,8 @@ const els = {
   faceGain: $('faceGain'), faceGainValue: $('faceGainValue'), faceGainRow: $('faceGainRow'),
   qrUrl: $('qrUrl'),
   // 공용 컨트롤 (QR 위치 6택 + 면 배치 + 병행 표시 + 게이지 + 장식 이미지)
-  cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCenterHint: $('qrCenterHint'),
+  cornerTooRow: $('cornerTooRow'), qrCornerToo: $('qrCornerToo'), qrCornerTooLabel: $('qrCornerTooLabel'), qrCenterHint: $('qrCenterHint'),
+  hQrInnerHint: $('hQrInnerHint'),
   qrFacePlacementSection: $('qrFacePlacementSection'),
   qrFacePlacementCards: $('qrFacePlacementCards'),
   decorSection: $('decorSection'),
@@ -8644,8 +8716,14 @@ let current = null;
 const hAnimation = {request:0,last:0,elapsed:0,encoded:null,scene:null};
 let hGpuRenderer=null;
 let hFaceImages=Object.freeze({});
+// H «안쪽» 을 눌렀는데 QR 문구가 QR 로 안 돼 아무것도 못 넣었는가 — 편집기 상태줄은 빈 면 패널 맨 아래라
+// 누른 자리에서 안 보여요. 카드 줄 힌트(#hQrInnerHint)에도 적고, 문구가 QR 이 되면 걷어요(renderQrPositionUi).
+let hQrInnerFailed=false;
+// 빈 면 TL 스캐너 QR(운영자 2026-09-25·26)은 코너 QR 과 같은 resolvedQrText() 를 써요. 면 QR 이 생기거나 없어지면
+// «안쪽» 카드의 파생 표시(활성·잠금·사유)가 바로 바뀌어야 해서 onChange 에서 카드 줄도 다시 그려요.
 const hImageEditor=createHImageEditor({container:$('hFaceImageCards'),status:$('hFaceImageStatus'),text:hText,getDefaultBackground:()=>hBrightestPaletteHex(paletteOf(generatorState.preset).levels),
-  onChange(images){hFaceImages=images;Object.assign(generatorState,reconcileHContentRotation(generatorState,images));syncHUi();syncOrbitPreviewUi();schedule();}});
+  getQrText:()=>resolvedQrText(),
+  onChange(images){hFaceImages=images;Object.assign(generatorState,reconcileHContentRotation(generatorState,images));syncHUi();syncOrbitPreviewUi();renderQrPositionUi();schedule();}});
 $('hToolbarGroups').append($('hPreviewRotationControls'),$('y3dSnapRow'));
 const h8Card=document.createElement('button');h8Card.type='button';h8Card.className='toggle-card';h8Card.dataset.hVersion='8';h8Card.setAttribute('aria-pressed','false');h8Card.innerHTML='H8<span class="card-sub">45 × 45</span>';$('hVersionCards').append(h8Card);
 const hFaceToggle=document.createElement('div');hFaceToggle.className='h-face-toggle';hFaceToggle.append($('y3dFaces6'),$('y3dFaces3'));
@@ -9020,6 +9098,13 @@ function generatedContentKind() {
     : 'text';
 }
 
+/** 보고용 QR 위치 — 타입 H 는 저장값이 아니라 보이는 유효 위치예요(면 QR 이면 'inner', 아니면 코너·none). */
+function reportedQrPosition() {
+  return hGeneratorActive()
+    ? hEffectiveQrPosition(generatorState.qrPosition, hFaceQrSummary(generatorState, hFaceImages))
+    : generatorState.qrPosition;
+}
+
 function generateEventProps(result, cfg) {
   const encoded = result.encoded;
   return {
@@ -9028,7 +9113,7 @@ function generateEventProps(result, cfg) {
     ecc: encoded.eccLevel,
     tones: encoded.tones == null ? 3 : encoded.tones,
     preset: cfg.presetName,
-    qr_pos: generatorState.qrPosition,
+    qr_pos: reportedQrPosition(),
     mode,
     content: generatedContentKind(),
     bytes: payloadByteLength(cfg.text),
@@ -9385,6 +9470,8 @@ function syncCubeExportUi(){
   $('exportCubeSchem').title=typeof CompressionStream!=='function'?cubeText('unsupported'):'Sponge v3 · Java 1.20.4+';
   // 타입 H 의 구 전개도는 설명에 «면마다 화면과 좌우 반대 · 접어도 판독 안 됨» 을 달아요(문구·판정은 슬라이스 밖 hNetFoldNote). 산출물은 그대로예요.
   const foldNote=hNetFoldNote();if(foldNote)for(const id of ['exportNetPng','exportNetSvg','copyNetPng','copyNetSvg']){const button=$(id);button.title=`${button.title} — ${foldNote}`;button.setAttribute('aria-label',button.title);}
+  // 빈 면 QR 이 지금 셀당 블록 수로는 .schem 에서 모듈이 빠질 때만 보이는 안내예요(문구·판정은 슬라이스 밖 hSchemQrNote).
+  const schemQrNote=hSchemQrNote();$('cubeSchemQrHint').hidden=!schemQrNote;$('cubeSchemQrHint').textContent=schemQrNote;
 }
 for(const button of $('cubeBlockScaleCards').children)button.addEventListener('click',()=>{if(cubeExportBusy)return;$('cubeBlockScale').value=button.dataset.blockScale;syncCubeExportUi();});
 function cubeExportModel(){return generatorCubeModel(current,paletteOf(generatorState.preset));}
@@ -9969,6 +10056,18 @@ for(const id of CUBE_MAKE_IDS)$(id).addEventListener('click',()=>runCubeMake(id)
  * 섹션은 타입 H 면 정식 · 시험판 모두 보여서, 지금은 H 면 두 경로 모두 안내가 붙어요). H 가 아니면 빈 문자열이에요.
  * 두 문장 사이는 공백 하나, 앞 문장이 전각 마침표(。．)로 끝나면 공백 없이 이어요. */
 function hNetFoldNote(){if(!hGeneratorActive())return '';const note=t('g1131');if(!cubeMakeVisible())return note;return note+(/[。．]$/.test(note)?'':' ')+t('g1132');}
+/** .schem 면 QR 안내 — 블록 중심 표본이라 면 한 변 블록 수(n × 셀당 블록)가 QR 모듈 수(quiet 포함)보다 적으면 모듈이 빠져 읽히지 않아요.
+ *  그때만 모자람을 덮는 가장 작은 셀당 블록 카드 값을 적어요. 셀당 블록 카드는 고급 전용이라 일반 모드에서도 이 줄로 알려요.
+ *  판정 입력은 .schem 이 실제로 내보내는 것(cubeExportModel = current 의 인코딩·면 이미지·배치)이에요 — 생성기 상태에서 다시 유도하지 않아요. */
+function hSchemQrNote(){
+  if(!hGeneratorActive()||current?.type!=='H')return '';
+  const {encoded,sceneOpts={}}=current;
+  const images=hDisplayMap(encoded,{arrangement:sceneOpts.arrangement,renderFaces:sceneOpts.renderFaces}).imageTargets.map(target=>({image:sceneOpts.faceImages?.[target.face]}));
+  const min=hFaceQrMinBlockScale({n:encoded.n,images});
+  if(Number($('cubeBlockScale').value)>=min)return '';
+  const scale=[...$('cubeBlockScaleCards').children].map(card=>Number(card.dataset.blockScale)).find(value=>value>=min)??min;
+  return tf('g1150',{scale:String(scale)});
+}
 
 $('copyPng').addEventListener('click', async () => {
   flushScheduledRender();
@@ -10340,7 +10439,7 @@ function syncOrbitPreviewUi() {
   els.y3dFaces3.classList.toggle('on', y3dPreview.faces !== 6);
   els.y3dFaces6.classList.toggle('on', y3dPreview.faces === 6);
   els.y3dFaces6.textContent=isH&&generatorState.hFaces<=3?hText('face6Repeat'):t('g892');
-  els.y3dFaces3.disabled=isH&&generatorState.hFaces>3;
+  els.y3dFaces3.disabled=isH&&hRenderFacesLockedToSix(generatorState);
   $('hAlignHorizontal').hidden=!isH;$('hAlignVertical').hidden=!isH;
   $('hPreviewRotationControls').hidden=!isH||!y3dPreview.on;
   const perspectiveDegrees=Math.round(orbitPerspToDeg(y3dPreview.persp));
@@ -10736,7 +10835,7 @@ els.y3dField.addEventListener('click', () => {
   paintY3dPreview();
 });
 els.y3dFaces3.addEventListener('click', () => {
-  if(hGeneratorActive()&&generatorState.hFaces>3)return;
+  if(hGeneratorActive()&&hRenderFacesLockedToSix(generatorState))return;
   if(hGeneratorActive()){Object.assign(generatorState,selectHRenderFaces(generatorState,3));refreshHSelection();return;}
   y3dPreview.faces = 3;
   syncOrbitPreviewUi();
@@ -12213,19 +12312,48 @@ function renderQrPositionUi() {
    * 잠그면, 숨겨진 검출기 섹션을 열기 위한 안쪽 카드 자체가 영구 잠기는 순환이 된다.
    * Type C 잠금은 CQ 개통(2026-08-30, formatIndex 4)으로 소멸했다.
    * 2026-09-12 H만 예외: 물리면의 안쪽 QR은 잠그되 기존 선택값과 다른 타입의 위계는 보존한다.
+   * ⚠ **의도적 갱신 (2026-09-26 운영자)** — H «안쪽» 은 빈 면 TL 스캐너 QR 이다. 빈 면(이미지 대상)이 있고
+   *   그중 비어 있거나 이미 QR 인 면이 있을 때만 열린다(6면·아이소 3면 6면 렌더는 대상 0 → 잠김 + 사유).
+   *   H 의 활성 카드는 저장값이 아니라 면 QR 에서 파생한다(hEffectiveQrPosition) — qrPosition 은 쓰지 않아서
+   *   Y 로 돌아가면 Y 의 안쪽(윈도 β·슬롯) 선택이 그대로다. 잠긴 카드는 pointer-events:none 이라 title 이
+   *   안 뜨므로 같은 사유를 카드 줄 아래 #hQrInnerHint 에 보인다(카드의 aria-describedby 가 가리킨다).
    */
-  els.qrPosInner.title = isY ? t('g406') : t('g407');
+  const hq = isH ? hFaceQrSummary(generatorState, hFaceImages) : null;
+  const hPosition = isH ? hEffectiveQrPosition(generatorState.qrPosition, hq) : null;
+  const hInnerLocked = isH && !hq.available;
+  const hReasonKey = hq?.reason === 'noTargets' ? 'g1144' : hq?.reason === 'occupied' ? 'g1145' : 'g1143';
+  // 면 QR + 고급 «코너 QR 병행» 이면 코너 QR 도 그려져요. 그 코너는 전에 고른 저장값(hCornerTooCorner)이라
+  // 카드 줄에 보이지 않으면 «숨은 상태» 가 돼요 — 그 코너 카드에 보조 표시(점선 'also')를 달고 힌트에 적어요.
+  const hAlsoCorner = hPosition === 'inner' && generatorState.qrCornerToo ? hCornerTooCorner(generatorState.qrPosition) : null;
+  // «안쪽» 을 눌렀는데 문구가 QR 로 안 됐으면 누른 카드 옆에도 알려요. 문구가 고쳐지면(QR 이 되면) 사라져요.
+  const hQrError = isH && hQrInnerFailed && !hQrTextEncodable();
+  els.qrPosInner.title = isH ? t(hReasonKey) : isY ? t('g406') : t('g407');
   for (const card of els.qrPositionCards.children) {
-    card.classList.toggle('active', card.dataset.pos === (isH?hQrPosition(generatorState.qrPosition):generatorState.qrPosition));
+    const on = card.dataset.pos === (isH ? hPosition : generatorState.qrPosition);
+    card.classList.toggle('active', on);
+    card.classList.toggle('also', card.dataset.pos === hAlsoCorner);
+    card.setAttribute('aria-pressed', String(on));
     if (card.dataset.pos === 'inner') {
-      card.classList.toggle('disabled',isH);
-      card.setAttribute('aria-disabled', String(isH));
+      card.classList.toggle('disabled',hInnerLocked);
+      card.setAttribute('aria-disabled', String(hInnerLocked));
     }
   }
+  els.hQrInnerHint.hidden = !isH;
+  els.hQrInnerHint.textContent = isH ? [
+    hQrError ? t('g1148') : '',
+    hInnerLocked ? t(hReasonKey) : '',
+    // 코너 이름은 그 카드 라벨의 사전 키에서 읽어요(손 목록 없이 현재 언어로).
+    hAlsoCorner ? tf('g1149', { corner: t([...els.qrPositionCards.children].find(card => card.dataset.pos === hAlsoCorner)?.querySelector?.('[data-i18n]')?.dataset.i18n ?? '') }) : '',
+    t('g1146'),
+  ].filter(Boolean).join(' ') : '';
   const inner = !isH&&generatorState.qrPosition === 'inner';
   els.qrCornerToo.checked = generatorState.qrCornerToo;
   els.qrCenterHint.style.display = inner && !isY ? '' : 'none';
-  els.cornerTooRow.style.display = mode === 'advanced' && inner && !isY ? '' : 'none';
+  // 코너 병행(고급)은 O/A 중앙 QR 과 H 면 QR 에 열린다(운영자 2026-09-26 «배타 + 병행 옵션»). 라벨도 그 쌍을 말한다.
+  const hInner = hPosition === 'inner';
+  els.cornerTooRow.style.display = mode === 'advanced' && (inner && !isY || hInner) ? '' : 'none';
+  els.qrCornerTooLabel.dataset.i18n = hInner ? 'g1147' : 'g071';
+  els.qrCornerTooLabel.textContent = t(els.qrCornerTooLabel.dataset.i18n);
   // «QR 면 배치» 서브섹션 — Y + 안쪽 + v0T 계열 로케이터에서만 연다 (파생의 입력이
   // 있을 때만 — 끔(윈도 β)·v0 에서 열면 «살아 있는 무동작 컨트롤» 이 된다).
   const placementOpen = inner && isY
@@ -12275,6 +12403,20 @@ for (const card of els.qrPositionCards.children) {
   card.addEventListener('click', () => {
     if (card.classList.contains('disabled')) return;
     const type = currentType();
+    // 타입 H (운영자 2026-09-25·26): «안쪽» 은 누르는 순간 비어 있는 대상 면에 TL 스캐너 QR 을 한 번 넣는다
+    // (멱등 — 나중에 생긴 빈 면은 자동으로 안 채운다). qrPosition 은 쓰지 않아 Y 의 선택이 보존된다.
+    // 코너·없음은 면 QR 을 숨은 슬롯까지 전부 걷은 뒤 기존 경로로 간다 — 한 줄 라디오의 배타다.
+    if (hGeneratorActive()) {
+      if (card.dataset.pos === 'inner') {
+        const added = hImageEditor.fillQr(hFaceQrSummary(generatorState, hFaceImages).fillable);
+        // 문구가 QR 로 안 돼 못 넣었으면 편집기 상태줄 말고 카드 줄 힌트에도 보여요(누른 자리에서 보이게).
+        hQrInnerFailed = !added && !hQrTextEncodable();
+        renderQrPositionUi();
+        return;
+      }
+      hQrInnerFailed = false;
+      hImageEditor.clearQr();
+    }
     // Type C 진입이 자동 보존 중이어도 사용자가 QR 위치를 직접 바꾸면 그 선택이
     // 새 명시 상태다. 정권 이탈 때 옛 중앙 QR 위치를 되살려 덮어쓰지 않는다.
     if (typeCGeneratorActive()) generatorState.typeCFinderFallbackActive = false;
@@ -15009,10 +15151,14 @@ els.faceGain.addEventListener('input', () => {
 });
 els.qrUrl.addEventListener('input', () => {
   generatorState.qrText = els.qrUrl.value;
+  // H «안쪽» 실패 안내가 떠 있으면 문구가 QR 이 되는 순간 걷어요(다시 누르면 넣어져요).
+  if (hQrInnerFailed) { hQrInnerFailed = !hQrTextEncodable(); renderQrPositionUi(); }
   schedule();
 });
 els.qrCornerToo.addEventListener('change', () => {
   generatorState.qrCornerToo = els.qrCornerToo.checked;
+  // H 면 QR 이면 병행 코너를 카드 줄에 점선으로 보여요 — 켜고 끌 때 바로 바뀌어야 해요.
+  renderQrPositionUi();
   schedule();
 });
 syncTypeUi();
@@ -15504,11 +15650,32 @@ function syncShotPresetUi() {
 }
 syncShotPresetUi();
 
+/**
+ * 코너 QR·H 면 QR 이 같이 쓰는 TL 스캐너 QR 문구. 기본 TL 리더 URL일 때만 실루엣 가족 힌트를 붙이고,
+ * 사용자 URL은 한 글자라도 바꾸지 않는다. Type C는 O 화면의 파생이므로 type 값 대신 C 등록부를 고른다.
+ * buildConfig 와 빈 면 편집기(TL 스캐너 QR 넣기)가 이 한 함수를 읽는다 — 두 벌이면 면 QR 과 코너 QR 링크가 갈린다.
+ */
+function resolvedQrText() {
+  const configuredQrText = generatorState.qrText.trim();
+  return configuredQrText === '' || configuredQrText === TL_READER_URL
+    ? tlReaderUrlWithHint(typeCGeneratorActive() ? 'C' : generatorState.type)
+    : configuredQrText;
+}
+/** 지금 문구가 QR 이 되는가 — 면 QR 자산(hFaceQrImage)과 코너 QR 이 던지는 조건이 qrMatrix 하나예요. 래스터는 만들지 않아요. */
+function hQrTextEncodable() {
+  try { qrMatrix(resolvedQrText()); return true; } catch { return false; }
+}
+
 function buildConfig() {
   const type = generatorState.type;
   const typeC = typeCGeneratorActive();
-  const fallback = resolveFallback(type, hGeneratorActive()?hQrPosition(generatorState.qrPosition):generatorState.qrPosition);
-  const configuredQrText = generatorState.qrText.trim();
+  // 타입 H 의 «안쪽» 은 빈 면 QR 이라 Y 의 'inner'(윈도 β·슬롯)로 resolveFallback 에 넘기지 않는다.
+  // 면 QR 이 보이면 코너는 끄고(배타), 고급 «코너 QR 병행» 이 켜져 있으면 코너도 같이 싣는다.
+  const hq = hGeneratorActive() ? hFaceQrSummary(generatorState, hFaceImages) : null;
+  const hPosition = hq ? hEffectiveQrPosition(generatorState.qrPosition, hq) : null;
+  const fallback = resolveFallback(type, !hq ? generatorState.qrPosition
+    : hPosition !== 'inner' ? hPosition
+      : generatorState.qrCornerToo ? hCornerTooCorner(generatorState.qrPosition) : 'none');
   if (fallback.mode === 'center') fallback.cornerToo = generatorState.qrCornerToo;
 
   const selectedVersion = (candidate) =>
@@ -15573,11 +15740,11 @@ function buildConfig() {
     // `suppliesOuterFormat` 성질에서 유도한다. 생성기가 파인더 id 목록을 다시 적거나
     // boolean을 넘기면 다음 중앙 공급자에서 사본이 갈린다 — 여기서는 옵션을 만들지 않는다.
     tone: generatorState.tone,
-    // 기본 TL 리더 URL일 때만 실루엣 가족 힌트를 붙인다. 사용자 URL은 한 글자라도
-    // 바꾸지 않는다. Type C는 O 화면의 파생이므로 type 값 대신 C 등록부를 고른다.
-    qrText: configuredQrText === '' || configuredQrText === TL_READER_URL
-      ? tlReaderUrlWithHint(typeC ? 'C' : type)
-      : configuredQrText,
+    // 문구 규칙은 resolvedQrText 한 곳에 있다(H 면 QR 이 같은 함수를 읽는다).
+    qrText: resolvedQrText(),
+    // H 면 QR 이 보이는가 — 제품 코드는 이 값을 읽지 않는다. 렌더의 코너 억제는 fallback 이 정하고,
+    // 보고(텔레메트리·lab 봉투)는 reportedQrPosition() 을 쓴다. 지금은 테스트가 cfg 에서 이 파생을 재는 자리다.
+    hFaceQr: hPosition === 'inner',
     faceGains: currentFaceGains(),
     finderPatternId: generatorState.finderPatternId,
     centralN7Emphasis: generatorState.centralN7Emphasis,
@@ -15840,6 +16007,9 @@ function selfCheckMarkup(check, okKey, okVars, failKey, failVars) {
 
 function renderTypeH(cfg){
   syncHFaceImagesUi();
+  // 면 QR 문구는 코너 QR 과 같은 cfg.qrText 로 여기서 조용히 다시 맞춰요(유일한 재유도 트리거).
+  // onChange 를 타면 고급 QR URL 을 한 글자 칠 때마다 회전 3D 로 끌려가고 렌더도 두 번 예약돼요.
+  hFaceImages=hImageEditor.syncQrText(cfg.qrText);
   const {fn,opts}=encodeOptsFor(cfg),encoded=encodeWithEcc(fn,cfg.text,opts,cfg.eccLevel);
   let sceneOpts={...hPreviewOptions({...generatorState,hAutoRotate:false}),palette:paletteOf(cfg.presetName),outline:true,faceImages:hFaceImages,lighting:{profile:resolvedRenderProfile(),shading:generatorState.shading}};
   if(!y3dPreview.on)sceneOpts=hPlanarPreviewOptions(encoded,sceneOpts,hFaceImages)??sceneOpts;
@@ -16324,7 +16494,7 @@ function emitLabGen(result, cfg) {
     ecc: result.encoded.eccLevel,
     tones: result.encoded.tones == null ? 3 : result.encoded.tones,
     finderPatternId: result.finderPatternId || cfg.finderPatternId,
-    qrPosition: generatorState.qrPosition,
+    qrPosition: reportedQrPosition(),
     bgMode: generatorState.bgMode,
     quietMode: generatorState.quietMode,
     // ⭐ **판정 게이트를 걷었다 (2026-09-07 emph-centerqr)** — 봉투는 «이 렌더에 어떤
