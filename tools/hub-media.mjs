@@ -12,6 +12,16 @@
  * 산출물 — 전부 sites/tl/assets/, 전부 https://tl.estre.so 를 싣는다
  *   type-{Y,O,C,A,K}.png  각 타입 기본 상태의 1024 PNG → 기본 프리셋 배경에 평탄화 → 내용 경계 + 48 px
  *                         (C 는 O + «초 대용량» = C0)
+ *                         Y 를 뺀 넷(O·C·A·K)은 «안전영역» 의 여백 줄에서 «자동» 을 끄고 4 셀로 맞춘다
+ *                         (STILL_QUIET). 자동 두께는 «스캔이 되는 최소» 를 코드 폭 배수로 맞춘 값이라
+ *                         허브 한 칸에선 흰 테두리가 타입마다 두껍고 제각각이었다. 색 모드는 기본(자동)
+ *                         그대로다. Y 는 기본 상태 그대로 뜬다(Y 의 자동 안전영역은 그리지 않는다).
+ *                         O·A 는 기본 파인더가 스캐너 게이트에서 떨어지면 같은 4 셀로 «중앙 QR»
+ *                         파인더 선택지(QR 위치 «안쪽» 카드)를 한 번 더 시도하고, 매니페스트에
+ *                         finder: 'centre-qr' 와 떨어진 이유를 적는다. 그것도 떨어지면 기존 파일을 둔다.
+ *                         자른 결과의 짧은 변이 하한 아래면 같은 설정을 더 큰 «커스텀» 크기로 한 번 더
+ *                         내보낸다(stillResizeFor) — 게이트를 낮추지 않고 화소를 늘린다. 매니페스트의
+ *                         파일별 exportSize · resizedFrom 이 그 기록이다.
  *   type-H.mp4            타입 H(6면 고유 데이터) 회전 영상 — «투명 표시 격자» 배경 · 720 · 30 fps ·
  *                         기본 회전 한 주기 · moov 를 앞으로 옮김(faststart)
  *   type-H.webp           같은 내보내기의 0 번 프레임(타임스탬프 0) 포스터
@@ -45,8 +55,8 @@
  * ⚠ 수동 도구다. 이름이 build-* 가 아니라서 신선도 테스트·rebuild-all·CI 에 들어가지 않는다 —
  *   H.264 바이트는 브라우저 빌드마다 달라질 수 있어 CI 에서 바이트를 비교할 수 없다.
  *   산출물의 **성질**은 test/hub-media.test.js 가 브라우저 없이 잰다.
- * ⚠ 전부 포그라운드로 돈다(1~2 분). 로컬 서버는 127.0.0.1 에만 열고, 브라우저는 로컬 외
- *   호스트 이름을 못 풀게 띄운다 — 스캐너의 링크 자동 열기·계측 비콘이 밖으로 나가지 않는다.
+ * ⚠ 전부 포그라운드로 돈다(정지 이미지만 3 분 안팎 — O·A 는 두 번 시도한다). 로컬 서버는
+ *   127.0.0.1 에만 열고, 브라우저는 로컬 외 호스트 이름을 못 풀게 띄운다 — 스캐너의 링크 자동 열기·계측 비콘이 밖으로 나가지 않는다.
  */
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -83,7 +93,41 @@ export const STILL = Object.freeze({
   cropPad: 48,
   maxBytes: 200 * KB,
   shortSide: Object.freeze([650, 1100]),
+  // 자른 결과의 짧은 변이 하한에 못 미치면 같은 시도를 이 배수의 «커스텀» 크기로 한 번 더 내보낸다
+  // (stillResizeFor). 중앙 QR 선택지는 모서리 QR 자리를 비워 둔 채 같은 장면 크기를 써서,
+  // 1024 에서 O 의 자른 결과가 648×598 로 하한 아래였다(2026-09-25).
+  resizeStep: 128,
+  resizeMargin: 8,
 });
+
+/**
+ * 짧은 변이 하한(STILL.shortSide[0])에 못 미치는 자른 결과를 하한 + 여유 위로 올리는 내보내기 크기.
+ * 내용(자른 결과 − 양쪽 cropPad)은 내보내기 크기에 비례하므로 거기서 역산하고, resizeStep 의 배수로
+ * 올린다. 하한을 넘으면 null(다시 내보내지 않는다). 다시 낸 결과도 같은 게이트를 다 지난다.
+ */
+export function stillResizeFor(short, exportSize = STILL.exportSize) {
+  if (short >= STILL.shortSide[0]) return null;
+  const content = short - 2 * STILL.cropPad;
+  if (!(content > 0)) throw new Error(`자른 결과의 짧은 변 ${short} px 에 내용이 없다`);
+  const want = STILL.shortSide[0] + STILL.resizeMargin - 2 * STILL.cropPad;
+  return Math.ceil((exportSize * want) / content / STILL.resizeStep) * STILL.resizeStep;
+}
+
+/**
+ * 정지 이미지의 안전영역 여백 — Y 를 뺀 타입은 생성기 «안전영역» 절의 여백 줄에서 «자동»
+ * (#quietMarginAuto)을 끄고 슬라이더(#quietMarginRange)를 이 셀 수로 맞춘다. 사용자가 누르는 그대로다.
+ * Y 는 넣지 않는다 — Y 의 자동 안전영역은 실루엣을 지키려고 그리지 않아서 두께가 아무 데도 안 쓰인다.
+ */
+export const STILL_QUIET = Object.freeze({ cells: 4, types: Object.freeze(['O', 'C', 'A', 'K']) });
+/** 기본 파인더가 스캐너 게이트에서 떨어지면 «중앙 QR» 파인더 선택지로 한 번 더 시도하는 타입. */
+export const STILL_CENTRE_QR_FALLBACK = Object.freeze(['O', 'A']);
+
+/** 한 타입의 시도 목록 — 앞에서부터 게이트를 다 넘는 첫 시도를 쓴다. */
+export function stillAttempts(type) {
+  const quietCells = STILL_QUIET.types.includes(type) ? STILL_QUIET.cells : null;
+  const finders = STILL_CENTRE_QR_FALLBACK.includes(type) ? ['default', 'centre-qr'] : ['default'];
+  return finders.map((finder) => ({ finder, quietCells }));
+}
 
 export const VIDEO = Object.freeze({
   file: 'type-H.mp4',
@@ -696,7 +740,7 @@ function pageHelpers() {
   return { sleep, need, text, settle, setPayload };
 }
 
-async function pageStill({ type, payload, size }, { sleep, need, text, settle, setPayload }) {
+async function pageStill({ type, payload, size, finder, quietCells }, { sleep, need, text, settle, setPayload }) {
   const urlValue = setPayload(payload);
   await settle();
   const base = type === 'C' ? 'O' : type;
@@ -708,10 +752,70 @@ async function pageStill({ type, payload, size }, { sleep, need, text, settle, s
   }
   const activeType = [...document.querySelectorAll('[data-type].active')].map((e) => e.dataset.type);
   if (!activeType.includes(base)) throw new Error(`타입 카드 ${base} 가 활성이 아니다: ${activeType.join(',')}`);
+
+  // 파인더 — 'default' 는 손대지 않는다. 'centre-qr' 는 사용자가 누르는 자리(«TL스캐너 QR링크 포함» 의
+  // «안쪽» 카드)를 누른다. 검출기 절의 «중앙 QR» 카드와 같은 상태다(안쪽 ⟺ 중앙 QR 불변식).
+  const finderUi = () => ({
+    finderId: document.querySelector('[data-finder-id].active')?.dataset.finderId ?? null,
+    qrPosition: document.querySelector('#qrPositionCards [data-pos].active')?.dataset.pos ?? null,
+  });
+  if (finder === 'centre-qr') {
+    const inner = need('#qrPositionCards [data-pos="inner"]');
+    if (inner.classList.contains('disabled')) throw new Error('QR 위치 «안쪽» 카드가 잠겨 있다');
+    inner.click();
+    await settle();
+    const now = finderUi();
+    if (now.qrPosition !== 'inner' || now.finderId !== 'center-qr') {
+      throw new Error(`중앙 QR 선택지가 안 먹었다: 파인더 ${now.finderId} · QR 위치 ${now.qrPosition}`);
+    }
+  } else if (finder !== 'default') throw new Error(`모르는 파인더 선택 ${finder}`);
+
+  // 안전영역 여백 — 색 모드는 기본(자동) 그대로, 여백 줄의 «자동» 체크를 끄고 슬라이더를 맞춘다.
+  const quietReadout = () => {
+    const row = document.querySelector('#quietMarginRow');
+    return {
+      colourMode: document.querySelector('#quietModeCards [data-quiet].active')?.dataset.quiet ?? null,
+      drawn: Boolean(row) && !row.classList.contains('off'),
+      auto: need('#quietMarginAuto').checked,
+      cells: Number(need('#quietMarginRange').value),
+      hint: text('#quietModeHint'),
+      coverage: text('#quietCoverageHint'),
+    };
+  };
+  if (quietCells !== null) {
+    const before = quietReadout();
+    if (before.colourMode !== 'auto') throw new Error(`안전영역 색 모드가 기본(auto)이 아니다: ${before.colourMode}`);
+    if (!before.drawn) throw new Error('안전영역을 그리지 않는 상태다 — 여백 두께가 아무 데도 안 쓰인다');
+    const auto = need('#quietMarginAuto');
+    if (auto.disabled) throw new Error('여백 «자동» 체크가 잠겨 있다');
+    if (auto.checked) auto.click(); // 사용자 클릭 — checked 를 뒤집고 input·change 를 낸다
+    await settle();
+    const range = need('#quietMarginRange');
+    if (range.disabled) throw new Error('«자동» 을 껐는데 여백 슬라이더가 잠겨 있다');
+    range.value = String(quietCells);
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+    range.dispatchEvent(new Event('change', { bubbles: true }));
+    await settle();
+  }
+  const quiet = quietReadout();
+  if (quietCells !== null && (quiet.auto || quiet.cells !== quietCells || !quiet.drawn || quiet.colourMode !== 'auto')) {
+    throw new Error(`안전영역 여백이 ${quietCells} 셀로 안 남았다: ${JSON.stringify({ ...quiet, hint: undefined, coverage: undefined })}`);
+  }
+
+  // 내보내기 크기 — 목록에 있는 크기(1024 등)는 그 항목을, 없는 크기는 «커스텀» 을 고르고 폭·높이를 친다.
   const select = need('#exportSize');
-  select.value = String(size);
+  const preset = [...select.options].some((o) => o.value === String(size));
+  select.value = preset ? String(size) : 'custom';
   select.dispatchEvent(new Event('change', { bubbles: true }));
-  if (select.value !== String(size)) throw new Error(`내보내기 크기가 ${select.value} 로 남았다`);
+  if (select.value !== (preset ? String(size) : 'custom')) throw new Error(`내보내기 크기가 ${select.value} 로 남았다`);
+  if (!preset) {
+    for (const id of ['#exportWidth', '#exportHeight']) {
+      const input = need(id);
+      input.value = String(size);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      if (input.value !== String(size)) throw new Error(`${id} 가 ${input.value} 로 남았다`);
+    }
+  }
   await settle();
   const original = HTMLAnchorElement.prototype.click;
   let captured = null;
@@ -731,11 +835,17 @@ async function pageStill({ type, payload, size }, { sleep, need, text, settle, s
   }
   if (!captured) throw new Error(`PNG 내보내기가 다운로드를 안 냈다: ${text('#error')}`);
   const { name, blob } = await captured;
-  const res = await fetch(`/__sink?name=${encodeURIComponent(`raw-${type}.png`)}`, { method: 'POST', body: blob });
+  const res = await fetch(`/__sink?name=${encodeURIComponent(`raw-${type}-${finder}.png`)}`, { method: 'POST', body: blob });
   if (!res.ok) throw new Error(`싱크 ${res.status}`);
+  // 내보낸 뒤에 다시 읽는다 — 내보내기 직전 렌더가 설정을 되돌렸다면 여기서 드러난다.
+  const quietAfter = quietReadout();
+  if (quietCells !== null && (quietAfter.auto || quietAfter.cells !== quietCells)) {
+    throw new Error(`내보낸 뒤 안전영역 여백이 ${quietAfter.cells} 셀(자동 ${quietAfter.auto})로 바뀌어 있다`);
+  }
   return {
-    exportName: name, bytes: blob.size, urlValue,
+    exportName: name, bytes: blob.size, urlValue, exportSize: select.value === 'custom' ? size : Number(select.value),
     info: text('#info'), selfCheck: text('#selfCheckRow'), build: text('#buildTag'),
+    finderUi: finderUi(), quiet: quietAfter,
   };
 }
 
@@ -914,48 +1024,88 @@ function advisoryDecode(raster) {
   }
 }
 
+/** 시도 하나 — 생성기에서 내보내고, 평탄화·자르기, PNG 성질과 실제 스캐너 게이트를 잰다. */
+async function runStillAttempt({ gen, scan, origin, sink, candidates, background, type, plan }) {
+  const attempt = { finder: plan.finder, quietCells: plan.quietCells, failures: [] };
+  const fail = (message) => attempt.failures.push(message);
+  try {
+    const exportOnce = async (size) => {
+      await gen.send('Page.bringToFront');
+      await gen.goto(`${origin}/index.html`);
+      const generator = await gen.evaluate(pageStill, {
+        type, payload: PAYLOAD, size, finder: plan.finder, quietCells: plan.quietCells,
+      });
+      const source = pngToRaster(await fs.readFile(path.join(sink, `raw-${type}-${plan.finder}.png`)));
+      const { raster, bounds } = flattenAndCrop(source, background, STILL.cropPad);
+      return { generator, source, raster, bounds, png: Buffer.from(rasterToPng(raster)) };
+    };
+    let shot = await exportOnce(STILL.exportSize);
+    const resize = stillResizeFor(Math.min(shot.raster.width, shot.raster.height));
+    if (resize !== null) {
+      // 하한 아래 — 같은 설정을 더 큰 «커스텀» 크기로 다시 낸다. 게이트는 다시 낸 쪽에 건다.
+      attempt.resizedFrom = {
+        exportSize: STILL.exportSize, width: shot.raster.width, height: shot.raster.height, sha256: sha256(shot.png),
+      };
+      shot = await exportOnce(resize);
+    }
+    const { source, raster, bounds, png } = shot;
+    attempt.generator = shot.generator;
+    if (!attempt.generator.selfCheck.includes('✓')) fail(`생성기 자체 검사에 ✓ 가 없다: ${oneLine(attempt.generator.selfCheck)}`);
+    // 후보는 시도마다 따로 둔다 — 드라이런에서 떨어진 쪽도 열어 볼 수 있게.
+    attempt.candidate = path.join(candidates, `type-${type}-${plan.finder}.png`);
+    await fs.writeFile(attempt.candidate, png);
+    const head = pngHeader(png);
+    attempt.output = {
+      sha256: sha256(png), bytes: png.length, width: head.width, height: head.height, colorType: head.colorType,
+      exported: { width: source.width, height: source.height, bounds },
+    };
+    if (head.colorType !== 2) fail(`PNG 색 타입 ${head.colorType} — 불투명 RGB(2)여야 한다`);
+    const short = Math.min(head.width, head.height);
+    if (short < STILL.shortSide[0] || short > STILL.shortSide[1]) fail(`짧은 변 ${short} px 가 ${STILL.shortSide.join('‥')} 밖이다`);
+    if (png.length > STILL.maxBytes) fail(`${png.length} B > ${STILL.maxBytes} B`);
+    await scan.send('Page.bringToFront');
+    attempt.scanner = await scanWithScanner(scan, origin, attempt.candidate);
+    if (attempt.scanner.text === null) {
+      fail(`스캐너 사진 경로가 못 읽었다${attempt.scanner.timeout ? ' (60 초 초과)' : ''}: ${attempt.scanner.status}`);
+    } else if (attempt.scanner.text !== PAYLOAD) {
+      fail(`스캐너 사진 경로가 ${JSON.stringify(attempt.scanner.text)} 로 읽었다 — ${PAYLOAD} 여야 한다`);
+    }
+    attempt.decodeFrontend = advisoryDecode(raster);
+  } catch (error) {
+    fail(oneLine(error?.message ?? error));
+  }
+  attempt.ok = attempt.failures.length === 0;
+  return attempt;
+}
+
 async function runStills({ cdp, origin, sink, out }) {
   const gen = await Page.open(cdp);
   const scan = await Page.open(cdp);
   await scan.send('DOM.enable');
   await scan.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.open = () => null;' });
   const background = getPreset(DEFAULT_PRESET).background;
+  const candidates = path.join(out, 'candidates');
+  await fs.mkdir(candidates, { recursive: true });
   const rows = [];
   for (const type of STILL_TYPES) {
-    const row = { type, file: `type-${type}.png`, failures: [] };
-    const fail = (message) => row.failures.push(message);
-    try {
-      await gen.send('Page.bringToFront');
-      await gen.goto(`${origin}/index.html`);
-      row.generator = await gen.evaluate(pageStill, { type, payload: PAYLOAD, size: STILL.exportSize });
-      if (!row.generator.selfCheck.includes('✓')) fail(`생성기 자체 검사에 ✓ 가 없다: ${oneLine(row.generator.selfCheck)}`);
-      const raw = await fs.readFile(path.join(sink, `raw-${type}.png`));
-      const source = pngToRaster(raw);
-      const { raster, bounds } = flattenAndCrop(source, background, STILL.cropPad);
-      const png = Buffer.from(rasterToPng(raster));
-      const file = path.join(out, row.file);
-      await fs.writeFile(file, png);
-      const head = pngHeader(png);
-      row.output = {
-        sha256: sha256(png), bytes: png.length, width: head.width, height: head.height, colorType: head.colorType,
-        exported: { width: source.width, height: source.height, bounds },
-      };
-      if (head.colorType !== 2) fail(`PNG 색 타입 ${head.colorType} — 불투명 RGB(2)여야 한다`);
-      const short = Math.min(head.width, head.height);
-      if (short < STILL.shortSide[0] || short > STILL.shortSide[1]) fail(`짧은 변 ${short} px 가 ${STILL.shortSide.join('‥')} 밖이다`);
-      if (png.length > STILL.maxBytes) fail(`${png.length} B > ${STILL.maxBytes} B`);
-      await scan.send('Page.bringToFront');
-      row.scanner = await scanWithScanner(scan, origin, file);
-      if (row.scanner.text === null) {
-        fail(`스캐너 사진 경로가 못 읽었다${row.scanner.timeout ? ' (60 초 초과)' : ''}: ${row.scanner.status}`);
-      } else if (row.scanner.text !== PAYLOAD) {
-        fail(`스캐너 사진 경로가 ${JSON.stringify(row.scanner.text)} 로 읽었다 — ${PAYLOAD} 여야 한다`);
-      }
-      row.decodeFrontend = advisoryDecode(raster);
-    } catch (error) {
-      fail(oneLine(error?.message ?? error));
+    const row = { type, file: `type-${type}.png`, attempts: [], failures: [] };
+    for (const plan of stillAttempts(type)) {
+      const attempt = await runStillAttempt({ gen, scan, origin, sink, candidates, background, type, plan });
+      row.attempts.push(attempt);
+      if (attempt.ok) break;
     }
-    row.ok = row.failures.length === 0;
+    const chosen = row.attempts.find((a) => a.ok) ?? null;
+    row.ok = chosen !== null;
+    if (chosen) {
+      Object.assign(row, {
+        finder: chosen.finder, quietCells: chosen.quietCells, generator: chosen.generator,
+        output: chosen.output, scanner: chosen.scanner, decodeFrontend: chosen.decodeFrontend,
+        resizedFrom: chosen.resizedFrom ?? null,
+      });
+      await fs.copyFile(chosen.candidate, path.join(out, row.file));
+    } else {
+      row.failures = row.attempts.flatMap((a) => a.failures.map((f) => `[${a.finder}] ${f}`));
+    }
     if (!row.ok) {
       // 실패하면 커밋된 파일을 둔다 — 그 파일도 같은 스캐너 게이트로 재서 «검증된 대체» 인지 기록한다.
       const committed = path.join(ASSETS, row.file);
@@ -1197,7 +1347,8 @@ export async function main(argv = process.argv.slice(2)) {
     report.video = video;
     if (cdp.exceptions.length) report.pageExceptions = cdp.exceptions.slice(0, 10);
 
-    const build = stills?.find((r) => r.generator?.build)?.generator.build ?? video?.setup?.build ?? null;
+    const build = (stills ?? []).flatMap((r) => r.attempts).find((a) => a.generator?.build)?.generator.build
+      ?? video?.setup?.build ?? null;
     Object.assign(generatedFrom, { generatorBuild: build });
     const failed = [
       ...(stills ?? []).filter((r) => !r.ok).map((r) => ({ file: r.file, failures: r.failures })),
@@ -1218,10 +1369,39 @@ export async function main(argv = process.argv.slice(2)) {
     const toWrite = [];
     if (stills) {
       const files = {};
+      // 게이트에서 떨어진 시도 — 후속 조사(디코더/인코더)의 출발점이다.
+      const rejectedOf = (a) => ({
+        finder: a.finder,
+        quietCells: a.quietCells,
+        reason: reasonOf(a.failures),
+        sha256: a.output?.sha256 ?? null,
+        exportSize: a.generator?.exportSize ?? null,
+        ...(a.resizedFrom ? { resizedFrom: a.resizedFrom } : {}),
+        generatorInfo: a.generator ? oneLine(a.generator.info) : null,
+        selfCheck: a.generator ? oneLine(a.generator.selfCheck) : null,
+        finderUi: a.generator?.finderUi ?? null,
+        decodeFrontendAdvisory: a.decodeFrontend ?? null,
+      });
       for (const row of stills) {
         if (row.ok) {
+          const fellBack = row.attempts.filter((a) => !a.ok);
           files[row.file] = {
             ...row.output,
+            // 'default' = 생성기 기본 파인더 그대로 · 'centre-qr' = QR 위치 «안쪽»(중앙 QR 파인더 선택지)
+            finder: row.finder,
+            ...(fellBack.length ? { finderFallback: fellBack.map(rejectedOf) } : {}),
+            // 안전영역 여백 셀 수 — O·C·A·K 는 «자동» 을 끄고 맞춘 값, Y 는 null(생성기 기본 그대로).
+            quietCells: row.quietCells,
+            quiet: {
+              colourMode: row.generator.quiet.colourMode,
+              auto: row.generator.quiet.auto,
+              cells: row.generator.quiet.cells,
+              drawn: row.generator.quiet.drawn,
+            },
+            finderUi: row.generator.finderUi,
+            // 생성기 내보내기 크기 — 기본은 config.exportSize, 하한 아래였으면 다시 낸 «커스텀» 크기.
+            exportSize: row.generator.exportSize,
+            ...(row.resizedFrom ? { resizedFrom: row.resizedFrom } : {}),
             generatorInfo: oneLine(row.generator.info),
             selfCheck: oneLine(row.generator.selfCheck),
             scanner: row.scanner.text,
@@ -1234,13 +1414,7 @@ export async function main(argv = process.argv.slice(2)) {
             files[row.file] = {
               ...kept,
               scanner: row.previousScanner?.text ?? null,
-              // 이번에 만들었다가 게이트에서 떨어진 후보 — 후속 조사(디코더/인코더)의 출발점이다.
-              rejected: row.generator ? {
-                sha256: row.output?.sha256 ?? null,
-                generatorInfo: oneLine(row.generator.info),
-                selfCheck: oneLine(row.generator.selfCheck),
-                decodeFrontendAdvisory: row.decodeFrontend ?? null,
-              } : null,
+              rejected: row.attempts.map(rejectedOf),
             };
           }
         }
@@ -1248,12 +1422,27 @@ export async function main(argv = process.argv.slice(2)) {
       manifest.stills = {
         generatedFrom,
         config: {
-          type: 'generator default state per type (C = O + ultra)',
+          type: 'generator default state per type (C = O + ultra), quiet margin set per STILL_QUIET; O and A fall back to the centre-QR finder option when the default finder fails the scanner gate',
           exportButton: '#exportPng',
           exportSize: STILL.exportSize,
           flattenPreset: DEFAULT_PRESET,
           background: getPreset(DEFAULT_PRESET).background,
           cropPad: STILL.cropPad,
+          resize: {
+            when: `cropped short side below ${STILL.shortSide[0]} px at exportSize`,
+            to: `smallest multiple of ${STILL.resizeStep} px (generator «custom» size) whose predicted cropped short side clears the floor by ${STILL.resizeMargin} px; the gates run on the re-export`,
+          },
+          quiet: {
+            cells: STILL_QUIET.cells,
+            types: [...STILL_QUIET.types],
+            controls: '#quietMarginAuto unchecked, then #quietMarginRange set (input event); colour mode left at its default (auto)',
+            otherTypes: 'generator default (Y draws no automatic quiet zone)',
+          },
+          finderFallback: {
+            types: [...STILL_CENTRE_QR_FALLBACK],
+            control: '#qrPositionCards [data-pos="inner"] (same state as the centre-QR finder card)',
+            when: 'the default finder fails a gate',
+          },
           gates: ['generator self-check ✓', 'scanner photo-upload path decodes the payload'],
         },
         files,

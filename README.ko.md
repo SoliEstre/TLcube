@@ -30,16 +30,16 @@
   <tr>
     <td align="center" width="33%"><img src="sites/tl/assets/type-Y.png" width="200" alt="타입 Y — 폴백 QR이 붙은 단일 아이소메트릭 큐브"><br><b>Y</b> · 단일 아이소메트릭 큐브</td>
     <td align="center" width="33%"><a href="https://tl.estre.so/assets/type-H.mp4"><img src="sites/tl/assets/type-H.webp" width="200" alt="타입 H — 여섯 면 모두에 데이터를 실은 실제 3D 큐브"></a><br><b>H</b> · 실제 3D 큐브 (Y 그룹)</td>
-    <td align="center" width="33%"><img src="sites/tl/assets/type-O.png" width="200" alt="타입 O — 중앙 QR 파인더를 둘러싼 육각 필드"><br><b>O</b> · 육각 필드</td>
+    <td align="center" width="33%"><img src="sites/tl/assets/type-O.png" width="200" alt="타입 O — 중앙 TL 파인더를 둘러싼 육각 필드와 모서리 폴백 QR"><br><b>O</b> · 육각 필드</td>
   </tr>
   <tr>
     <td align="center" width="33%"><img src="sites/tl/assets/type-C.png" width="200" alt="타입 C — 근접 스캔용 노치 육각 필드"><br><b>C</b> · 노치 육각, 근접 전용 — 확대해서 읽는다</td>
-    <td align="center" width="33%"><img src="sites/tl/assets/type-A.png" width="200" alt="타입 A — 중앙 QR 파인더가 있는 정삼각 실루엣"><br><b>A</b> · 정삼각 실루엣</td>
+    <td align="center" width="33%"><img src="sites/tl/assets/type-A.png" width="200" alt="타입 A — 중앙 TL 파인더와 모서리 폴백 QR 이 있는 정삼각 실루엣"><br><b>A</b> · 정삼각 실루엣</td>
     <td align="center" width="33%"><img src="sites/tl/assets/type-K.png" width="200" alt="타입 K — 폴백 QR이 붙은 육각별"><br><b>K</b> · 육각별 (A ∪ 반전 A)</td>
   </tr>
 </table>
 
-<p align="center"><sub>여기 보이는 코드에는 전부 <code>https://tl.estre.so</code> 가 들어 있다. O·A 그림은 생성기의 현재 기본값(중앙 TL 파인더 + 바깥 모서리 QR)이 아니라 중앙 QR 파인더 선택지로 만든 것이다.</sub></p>
+<p align="center"><sub>여기 보이는 코드에는 전부 <code>https://tl.estre.so</code> 가 들어 있다.</sub></p>
 
 | 타입 | 실루엣 | 순 페이로드 (ECC-M) |
 |---|---|---|

@@ -30,16 +30,16 @@
   <tr>
     <td align="center" width="33%"><img src="sites/tl/assets/type-Y.png" width="200" alt="Type Y — a single isometric cube with a fallback QR"><br><b>Y</b> · single isometric cube</td>
     <td align="center" width="33%"><a href="https://tl.estre.so/assets/type-H.mp4"><img src="sites/tl/assets/type-H.webp" width="200" alt="Type H — a true 3D cube with data on all six faces"></a><br><b>H</b> · true 3D cube (Y group)</td>
-    <td align="center" width="33%"><img src="sites/tl/assets/type-O.png" width="200" alt="Type O — a hexagonal field around a central QR finder"><br><b>O</b> · hexagonal field</td>
+    <td align="center" width="33%"><img src="sites/tl/assets/type-O.png" width="200" alt="Type O — a hexagonal field around the central TL finder, with a corner fallback QR"><br><b>O</b> · hexagonal field</td>
   </tr>
   <tr>
     <td align="center" width="33%"><img src="sites/tl/assets/type-C.png" width="200" alt="Type C — a notched hexagonal field for close-range scanning"><br><b>C</b> · notched hexagon, close range — zoom in to read</td>
-    <td align="center" width="33%"><img src="sites/tl/assets/type-A.png" width="200" alt="Type A — a triangular silhouette with a central QR finder"><br><b>A</b> · triangular silhouette</td>
+    <td align="center" width="33%"><img src="sites/tl/assets/type-A.png" width="200" alt="Type A — a triangular silhouette with the central TL finder and a corner fallback QR"><br><b>A</b> · triangular silhouette</td>
     <td align="center" width="33%"><img src="sites/tl/assets/type-K.png" width="200" alt="Type K — a hexagram with a fallback QR"><br><b>K</b> · hexagram (A union inverted A)</td>
   </tr>
 </table>
 
-<p align="center"><sub>Every code shown encodes <code>https://tl.estre.so</code>. O and A are shown with the centre-QR finder option, not the generator's current default (centre TL finder plus an outer corner QR).</sub></p>
+<p align="center"><sub>Every code shown encodes <code>https://tl.estre.so</code>.</sub></p>
 
 | Type | Silhouette | Net payload (ECC-M) |
 |---|---|---|

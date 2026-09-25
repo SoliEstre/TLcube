@@ -179,6 +179,12 @@ test('허브 미디어: 타입 이미지 — 불투명 RGB · 짧은 변 650‥1
     // 허브 캡션은 «모든 코드가 이 URL 을 싣는다» 고 약속한다. 새로 만든 것이든 둔 것이든 실제
     // 스캐너(사진 업로드 경로)가 읽어 낸 값이 기록돼 있어야 한다.
     assert.equal(e.scanner, PAYLOAD, `${name}: 스캐너 사진 경로가 읽은 값이 ${JSON.stringify(e.scanner)}`);
+    // 허브 타일의 흰 안전영역 폭을 맞춰요: Y 를 뺀 타입은 생성기 기본값(자동) 대신 4셀로 뽑고, 모두 생성기 기본 파인더예요.
+    if (name !== 'type-Y.png') {
+      assert.equal(e.quietCells, 4, `${name}: 안전영역 ${e.quietCells} 셀 — Y 외 타입은 4셀로 통일`);
+      assert.equal(e.quiet?.auto, false, `${name}: 안전영역 자동이 꺼져 있어야 4셀이 실제로 적용돼요`);
+      assert.equal(e.finder, 'default', `${name}: 파인더 ${e.finder} — 허브 그림은 생성기 기본값이어야 해요`);
+    }
   }
 });
 

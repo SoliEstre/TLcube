@@ -178,10 +178,8 @@ export const strings = {
     typeKName: 'Type K — 육각별',
     typeKDesc: '정삼각형과 그 180° 상을 합친 별. 같은 k 에서 용량이 가장 큽니다.',
     typeKMeta: 'k = 6 / 8 / 10 · 순 페이로드 43 / 86 / 138&nbsp;B',
-    // 마지막 문장(Type O·A 그림 = 중앙 QR 선택지)은 그 두 그림이 생성기 기본값으로 바뀌는 날 여덟 언어에서
-    //   함께 지운다. 근거: tools/hub-media.manifest.json 의 type-O/A keptPrevious — 기본값으로 다시 만든 그림을
-    //   스캐너 사진 경로가 못 읽어 08-27 중앙 QR 그림을 그대로 뒀다(2026-09-25).
-    typesFoot: '순 페이로드는 ECC-M 기준이에요. H를 포함한 모든 타입에 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있어서, TL 코드를 못 읽는 환경에서도 최소한의 경로가 남습니다. H는 기본으로 좌상단 모서리에 QR을 넣어요. Type O·A 그림은 중앙 QR 파인더 선택지로 만든 것이라, 지금 생성기 기본값(중앙 TL 파인더 + 바깥 좌상단 모서리의 폴백 QR)과 모양이 달라요.',
+    // 모든 타입 그림은 생성기 기본값(중앙 TL 파인더 + 바깥 좌상단 폴백 QR · 안전영역 4셀)이에요(tools/hub-media.manifest.json).
+    typesFoot: '순 페이로드는 ECC-M 기준이에요. H를 포함한 모든 타입에 <strong>폴백 QR</strong> 을 함께 인쇄할 수 있어서, TL 코드를 못 읽는 환경에서도 최소한의 경로가 남습니다. H는 기본으로 좌상단 모서리에 QR을 넣어요.',
 
     howTitle: '어떻게 동작하나',
     how1Title: '1. 셀 = 마름모 3면', how1Desc: '육각 셀을 rhombille 타일링으로 T·L·R 세 면으로 나눕니다.',
@@ -278,7 +276,7 @@ export const strings = {
     typeKName: 'Type K — Hexagram',
     typeKDesc: 'A triangle unioned with its 180° image. Largest payload at the same k.',
     typeKMeta: 'k = 6 / 8 / 10 · net payload 43 / 86 / 138&nbsp;B',
-    typesFoot: 'Net payload is at ECC-M. Every type, H included, can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read. H places it in the top-left corner by default. The Type O and A pictures use the centre-QR finder option, so they look different from the generator’s current default (Centre TL finder with an outer fallback QR in the top-left corner).',
+    typesFoot: 'Net payload is at ECC-M. Every type, H included, can carry a <strong>fallback QR</strong> alongside, so there is still a path where a TL code cannot be read. H places it in the top-left corner by default.',
 
     howTitle: 'How it works',
     how1Title: '1. Cell = three rhombi', how1Desc: 'A rhombille tiling splits each hexagonal cell into T, L and R faces.',
@@ -364,7 +362,7 @@ export const strings = {
     typeKName: 'Type K — 六芒星',
     typeKDesc: '正三角形とその180°像を合わせた星。同じ k で容量が最大です。',
     typeKMeta: 'k = 6 / 8 / 10 · 正味ペイロード 43 / 86 / 138&nbsp;B',
-    typesFoot: '正味ペイロードは ECC-M 基準です。H を含むすべてのタイプに<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。H は既定で左上の角に QR を置きます。 Type O・A の画像は中央 QR ファインダの選択肢で作ったもので、現在のジェネレータ既定（中央TLファインダ＋外側の左上の角のフォールバック QR）とは見た目が異なります。',
+    typesFoot: '正味ペイロードは ECC-M 基準です。H を含むすべてのタイプに<strong>フォールバック QR</strong> を併記でき、TL コードが読めない環境でも最低限の経路が残ります。H は既定で左上の角に QR を置きます。',
 
     howTitle: '仕組み',
     how1Title: '1. セル = 3 つの菱形', how1Desc: 'rhombille タイリングで六角セルを T・L・R の 3 面に分けます。',
@@ -451,7 +449,7 @@ export const strings = {
     typeKName: 'Type K — Hexagramme',
     typeKDesc: 'Un triangle uni à son image à 180°. Charge utile la plus grande à k égal.',
     typeKMeta: 'k = 6 / 8 / 10 · charge utile nette 43 / 86 / 138&nbsp;B',
-    typesFoot: 'La charge utile nette est donnée pour ECC-M. Tous les types, H compris, peuvent porter un <strong>QR de secours</strong> à côté, si bien qu\'il reste un chemin là où un code TL ne peut pas être lu. Pour H, il se place par défaut dans le coin supérieur gauche. Les images des Types O et A utilisent l’option de repère QR central ; elles diffèrent donc du réglage par défaut actuel du générateur (repère TL central avec un QR de secours extérieur dans le coin supérieur gauche).',
+    typesFoot: 'La charge utile nette est donnée pour ECC-M. Tous les types, H compris, peuvent porter un <strong>QR de secours</strong> à côté, si bien qu\'il reste un chemin là où un code TL ne peut pas être lu. Pour H, il se place par défaut dans le coin supérieur gauche.',
 
     howTitle: 'Fonctionnement',
     how1Title: '1. Cellule = trois losanges', how1Desc: 'Un pavage rhombille divise chaque cellule hexagonale en faces T, L et R.',
@@ -537,7 +535,7 @@ export const strings = {
     typeKName: 'Type K — Esagramma',
     typeKDesc: 'Un triangolo unito alla sua immagine a 180°. Massima capacità a parità di k.',
     typeKMeta: 'k = 6 / 8 / 10 · payload netto 43 / 86 / 138&nbsp;B',
-    typesFoot: 'Il payload netto è riferito a ECC-M. Tutti i tipi, H compreso, possono portare accanto un <strong>QR di riserva</strong>, così resta una via anche dove il codice TL non è leggibile. In H, per impostazione predefinita, sta nell’angolo in alto a sinistra. Le immagini dei tipi O e A usano l’opzione con QR centrale come pattern di ricerca, quindi differiscono dall’impostazione predefinita attuale del generatore (pattern TL centrale con un QR di riserva esterno nell’angolo in alto a sinistra).',
+    typesFoot: 'Il payload netto è riferito a ECC-M. Tutti i tipi, H compreso, possono portare accanto un <strong>QR di riserva</strong>, così resta una via anche dove il codice TL non è leggibile. In H, per impostazione predefinita, sta nell’angolo in alto a sinistra.',
 
     howTitle: 'Come funziona',
     how1Title: '1. Cella = tre rombi', how1Desc: 'Una tassellatura rhombille divide ogni cella esagonale nelle facce T, L e R.',
@@ -624,7 +622,7 @@ export const strings = {
     typeKName: 'Type K — Hexagramm',
     typeKDesc: 'Ein Dreieck vereinigt mit seinem 180°-Bild. Größte Nutzlast bei gleichem k.',
     typeKMeta: 'k = 6 / 8 / 10 · Netto-Nutzlast 43 / 86 / 138&nbsp;B',
-    typesFoot: 'Die Netto-Nutzdaten gelten für ECC-M. Alle Typen, auch H, können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann. Bei H sitzt er standardmäßig in der linken oberen Ecke. Die Bilder von Type O und A nutzen die Option mit zentralem QR als Suchmuster und sehen daher anders aus als die aktuelle Standardeinstellung des Generators (Zentraler TL mit einem äußeren Ersatz-QR in der linken oberen Ecke).',
+    typesFoot: 'Die Netto-Nutzdaten gelten für ECC-M. Alle Typen, auch H, können einen <strong>Ersatz-QR</strong> danebentragen, sodass ein Weg bleibt, wo ein TL-Code nicht gelesen werden kann. Bei H sitzt er standardmäßig in der linken oberen Ecke.',
 
     howTitle: 'Funktionsweise',
     how1Title: '1. Zelle = drei Rauten', how1Desc: 'Eine Rhombille-Parkettierung teilt jede sechseckige Zelle in die Flächen T, L und R.',
@@ -711,7 +709,7 @@ export const strings = {
     typeKName: 'Type K — Hexagrama',
     typeKDesc: 'Un triángulo unido con su imagen a 180°. Mayor carga útil con la misma k.',
     typeKMeta: 'k = 6 / 8 / 10 · carga útil neta 43 / 86 / 138&nbsp;B',
-    typesFoot: 'La carga útil neta es con ECC-M. Todos los tipos, H incluido, pueden llevar al lado un <strong>QR de respaldo</strong>, de modo que quede una vía donde un código TL no se pueda leer. En H va por defecto en la esquina superior izquierda. Las imágenes de los tipos O y A usan la opción de localizador QR central, así que se ven distintas del valor predeterminado actual del generador (localizador TL central con un QR de respaldo exterior en la esquina superior izquierda).',
+    typesFoot: 'La carga útil neta es con ECC-M. Todos los tipos, H incluido, pueden llevar al lado un <strong>QR de respaldo</strong>, de modo que quede una vía donde un código TL no se pueda leer. En H va por defecto en la esquina superior izquierda.',
 
     howTitle: 'Cómo funciona',
     how1Title: '1. Celda = tres rombos', how1Desc: 'Un teselado rhombille divide cada celda hexagonal en las caras T, L y R.',
@@ -798,7 +796,7 @@ export const strings = {
     typeKName: 'Type K — Hexagrama',
     typeKDesc: 'Um triângulo unido à sua imagem de 180°. Maior carga útil com o mesmo k.',
     typeKMeta: 'k = 6 / 8 / 10 · carga útil líquida 43 / 86 / 138&nbsp;B',
-    typesFoot: 'A carga útil líquida é para ECC-M. Todos os tipos, incluindo H, podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido. Em H fica, por predefinição, no canto superior esquerdo. As imagens dos tipos O e A usam a opção de localizador QR central, por isso diferem da predefinição atual do gerador (localizador TL central com um QR de reserva exterior no canto superior esquerdo).',
+    typesFoot: 'A carga útil líquida é para ECC-M. Todos os tipos, incluindo H, podem levar ao lado um <strong>QR de reserva</strong>, de modo que reste um caminho onde um código TL não possa ser lido. Em H fica, por predefinição, no canto superior esquerdo.',
 
     howTitle: 'Como funciona',
     how1Title: '1. Célula = três losangos', how1Desc: 'Uma pavimentação rhombille divide cada célula hexagonal nas faces T, L e R.',
