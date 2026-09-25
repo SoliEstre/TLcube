@@ -1906,6 +1906,80 @@ function centralN7PatchScore(luma, center, modulePitch, degrees, scratch = null)
   return agree / count + correlation * 1e-3;
 }
 
+/**
+ * 평탄부 탐색 창. 배율은 상대 오프셋(±12 %, 0.25 % 간격), 회전은 도(±8°, 0.25° 간격).
+ * 창 폭은 실측 평탄부(피치 ±6 % 안팎 · 회전 수 도)를 덮고, 간격은 k=10 별 꼭짓점
+ * (3k 셀)에서도 한 칸이 0.1 셀 안팎이 되게 잡았다.
+ */
+const CENTRAL_N7_PLATEAU = Object.freeze({
+  scaleStep: 0.0025,
+  scaleSpan: 0.12,
+  degreeStep: 0.25,
+  degreeSpan: 8,
+});
+
+/** 일치율 격자(1/90)만 남기고 Pearson 항(±1e-3)을 떼어 낸다 — 1/180 반올림. */
+function centralN7AgreementLevel(score) {
+  return score === null ? -1 : Math.round(score * 180) / 180;
+}
+
+/**
+ * 0 을 포함하는 «최고 수준 연속 구간» 의 중점. 0 이 창 안의 최고 수준이 아니면
+ * (평탄부에 안 서 있으면) null — 호출자는 포즈를 그대로 둔다.
+ */
+function plateauMidpoint(levelAt, step, span) {
+  const n = Math.round(span / step);
+  const base = levelAt(0);
+  if (base < 0) return null;
+  for (let index = -n; index <= n; index += 1) {
+    if (levelAt(index * step) > base) return null;
+  }
+  let lo = 0;
+  while (lo > -n && levelAt((lo - 1) * step) >= base) lo -= 1;
+  let hi = 0;
+  while (hi < n && levelAt((hi + 1) * step) >= base) hi += 1;
+  return { offset: ((lo + hi) / 2) * step, lo: lo * step, hi: hi * step };
+}
+
+/**
+ * n=7 locator 포즈를 이진 일치율 «만점 평탄부» 의 중점으로 옮긴다 (2026-09-25 n7-scale).
+ *
+ * 왜: centralN7PatchScore 의 1차 항은 90면 이진 일치율이라 참 포즈 근처에서 피치
+ * ±6 % · 회전 수 도가 전부 동률이다. 정련(CENTRAL_N7_REFINE_ROUNDS)은 «더 큰 점수»
+ * 로만 움직이므로 seed 가 평탄부에 닿는 순간 멈추고, 그 자리는 평탄부 가장자리다.
+ * 7모듈 locator 안에서는 무해하지만 바깥 격자 H 는 이 포즈를 반경 k 까지 외삽하므로
+ * 오차가 ε·k 셀로 증폭된다 — 실측(hub-media 정지 이미지): O V2 k=8 에서 피치 −6 % 로
+ * 본문 RS 전멸, 평탄부 중점은 참값의 −0.4 ~ −1.7 %. 평탄부는 참 포즈에 대해 대칭이라
+ * 중점이 참값의 추정이다. 회전도 같은 원리다 (k=10 별 꼭짓점에서 1° ≈ 0.5 셀).
+ *
+ * 순서는 배율 → 회전 → 배율 한 번씩. 새 문턱은 없다 — 동률 안에서 «어디에 설지» 만
+ * 정한다. 결과는 호출자가 **추가** finder 로 쓴다 (centralN7FindersFromShapes).
+ */
+export function centralN7PlateauPose(luma, center, modulePitch, degrees) {
+  const {
+    scaleStep, scaleSpan, degreeStep, degreeSpan,
+  } = CENTRAL_N7_PLATEAU;
+  const scaleLevel = (pitch, angle) => (offset) => centralN7AgreementLevel(
+    centralN7PatchScore(luma, center, pitch * (1 + offset), angle),
+  );
+  let pitch = modulePitch;
+  let angle = degrees;
+  const firstScale = plateauMidpoint(scaleLevel(pitch, angle), scaleStep, scaleSpan);
+  if (firstScale) pitch *= 1 + firstScale.offset;
+  const rotation = plateauMidpoint(
+    (offset) => centralN7AgreementLevel(centralN7PatchScore(luma, center, pitch, angle + offset)),
+    degreeStep, degreeSpan,
+  );
+  if (rotation) angle += rotation.offset;
+  const secondScale = plateauMidpoint(scaleLevel(pitch, angle), scaleStep, scaleSpan);
+  if (secondScale) pitch *= 1 + secondScale.offset;
+  return {
+    modulePitch: pitch,
+    degrees: angle,
+    plateau: { scale: secondScale ?? firstScale, rotation },
+  };
+}
+
 function affineCentralN7Homography(center, modulePitch, degrees) {
   const radians = degrees * Math.PI / 180;
   const cosine = Math.cos(radians);

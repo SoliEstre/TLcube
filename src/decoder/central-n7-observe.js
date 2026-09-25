@@ -20,6 +20,7 @@ import {
 import { decodeCentralN7 } from '../centralN7Codec.js';
 import { ranksToDigit } from '../lehmer.js';
 import {
+  centralN7PlateauPose,
   detectCellSurfaceBlockShapes,
   detectCentralN7BlockShapes,
 } from './cellsurface-block-detect.js';
@@ -324,15 +325,38 @@ export function centralN7CenterPriorSeeds(luma, verifiedCoreHits = []) {
   return seeds;
 }
 
-/** 검출된 n7 shape를 tone/payload finder로 바꾸고 정본 순서·dedupe를 적용한다. */
-export function centralN7FindersFromShapes(luma, shapes) {
+/**
+ * 검출된 n7 shape를 tone/payload finder로 바꾸고 정본 순서·dedupe를 적용한다.
+ *
+ * `options.plateauCentred === true` 면 각 shape 의 포즈를 locator 일치율 평탄부 중점
+ * (centralN7PlateauPose)으로 옮긴 finder 를 **앞에** 두고, 종전 finder 목록을 **그대로**
+ * 뒤에 붙인다 (2026-09-25 n7-scale). 종전 목록을 중복 제거로 줄이지 않는 이유: 원근이
+ * 큰 저해상도 사진(n7tl2 K2-mid1x)에서는 평탄부 자체가 참 배율을 안 품어, 종전의
+ * 가장자리 포즈 + 앵커 배율 탐색이 유일한 성공 경로였다 — 추가만 해야 종전 성공이
+ * 전부 남는다. 하류(bootstrap)는 두 번째 이후 finder 의 가설 id 를 구분해 받는다.
+ * 기본은 종전 목록 그대로다 — R2 라이브 엔진 소비자(adapter-c · planar-observe ·
+ * shared-central-n7)는 프레임 예산이 걸려 있어 이 축을 따로 재기 전에는 켜지 않는다.
+ */
+export function centralN7FindersFromShapes(luma, shapes, options = {}) {
+  const located = centralN7FindersFromPoses(luma, shapes, (shape) => ({
+    modulePitch: shape.blockLocator.modulePitch,
+    degrees: shape.blockLocator.rotationDegrees,
+  }));
+  if (options.plateauCentred !== true) return located;
+  const centred = centralN7FindersFromPoses(luma, shapes, (shape) => centralN7PlateauPose(
+    luma, shape.center, shape.blockLocator.modulePitch, shape.blockLocator.rotationDegrees,
+  ));
+  return [...centred, ...located];
+}
+
+/** shape 마다 poseOf(shape) 포즈로 finder 를 만들고 정본 순서·dedupe 를 적용한다. */
+function centralN7FindersFromPoses(luma, shapes, poseOf) {
   const finders = [];
   for (const shape of shapes) {
     if (shape.estimatedN !== CENTRAL_N7_SIZE
       || shape.blockLocator?.family !== CENTRAL_N7_PATTERN_FAMILY_ID
       || shape.blockLocator?.schemaId !== CENTRAL_N7_SCHEMA_ID) continue;
-    const modulePitch = shape.blockLocator.modulePitch;
-    const degrees = shape.blockLocator.rotationDegrees;
+    const { modulePitch, degrees } = poseOf(shape);
     const tone = verifyCentralN7LocatorTones(luma, shape.center, modulePitch, degrees);
     if (!tone.pass) continue;
     const payload = readCentralN7Payload(luma, shape.center, modulePitch, degrees, tone);
@@ -400,6 +424,10 @@ export function centralN7FindersFromShapes(luma, shapes) {
   return unique;
 }
 
+/**
+ * `options.plateauCentred` 는 centralN7FindersFromShapes 로 그대로 넘긴다. 일회성 복호
+ * 입구(discoverCentralN7Finders · central-v0-observe)만 켜고, R2 adapter-c 는 기본(끔)이다.
+ */
 export function centralN7Finders(luma, verifiedCoreHits, options = {}) {
   const timing = typeof options.timing === 'function' ? options.timing : null;
   let started = timing ? performance.now() : 0;
@@ -407,7 +435,9 @@ export function centralN7Finders(luma, verifiedCoreHits, options = {}) {
   if (timing) { timing({ stage: 'e1.seed-enumeration', ms: performance.now() - started }); started = performance.now(); }
   const detected = detectCentralN7BlockShapes(luma, seeds);
   if (timing) { timing({ stage: 'e1.n7-blocks', ms: performance.now() - started }); started = performance.now(); }
-  const unique = centralN7FindersFromShapes(luma, detected.shapes);
+  const unique = centralN7FindersFromShapes(luma, detected.shapes, {
+    plateauCentred: options.plateauCentred === true,
+  });
   if (timing) timing({ stage: 'e1.tones-payload', ms: performance.now() - started });
   return unique;
 }
@@ -439,5 +469,5 @@ export function discoverCentralN7Finders(luma, options = {}) {
     },
   });
   if (timing) timing({ stage: 'e1.cs-blocks', ms: performance.now() - started });
-  return centralN7Finders(luma, detected.diagnostics?.verified || [], { timing });
+  return centralN7Finders(luma, detected.diagnostics?.verified || [], { timing, plateauCentred: true });
 }

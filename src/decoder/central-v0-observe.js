@@ -347,7 +347,11 @@ export function centralV0FindersFromObservation(luma, { shapes, verified }, opti
     }
   }
   if (options.centralN7 !== false) {
-    finders.push(...centralN7Finders(luma, verified));
+    // 평탄부 중점 n7 finder 는 일회성 입구(discoverCentralBeaconFinders)만 켠다 —
+    // R2 비동기 입구(discoverCentralBeaconFindersSteps)는 종전 그대로 (central-n7-observe 헤더).
+    finders.push(...centralN7Finders(luma, verified, {
+      plateauCentred: options.centralN7PlateauCentred === true,
+    }));
   }
   finders.push(...centerPriorBeaconFinders(luma, finders));
   // 대조 일치율 내림차순 — 하류 검증에는 예산이 있어 **순서가 곧 생사**다.
@@ -388,7 +392,7 @@ export function discoverCentralBeaconFinders(luma, options = {}) {
   return centralV0FindersFromObservation(luma, {
     shapes: detected.shapes,
     verified: detected.diagnostics?.verified || [],
-  }, overrides);
+  }, { ...overrides, centralN7PlateauCentred: true });
 }
 
 /**

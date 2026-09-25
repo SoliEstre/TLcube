@@ -3992,7 +3992,9 @@ function assembleGeometryHypotheses(
             : discoverCentralN7Finders(luma, options),
       );
       addHypothesisAssemblyCounter(assemblyCall, 'beaconFinderCount', beaconFinders.length);
+      let centralN7FinderIndex = 0;
       for (const finder of beaconFinders) {
+        const finderHypothesisStart = hypotheses.length;
         // K 코어도 같은 중앙 19셀 슬롯을 쓰므로 같은 포즈에서 star 가설을 추가한다.
         // 포맷 7/8 + 본문 RS가 소유자를 가르며 기존 수용 게이트는 바뀌지 않는다.
         const beaconFamilies = finder.centralN7
@@ -4099,6 +4101,25 @@ function assembleGeometryHypotheses(
               addHypothesisAssemblyCounter(assemblyCall, 'beaconTurnCloneCount');
             }
           }
+        }
+        /*
+         * 두 번째 이후 n7 finder 의 가설 id 를 구분한다 (2026-09-25 n7-scale).
+         * 가설 id 는 (family, k, finderPatternId) 만 담아 finder 가 달라도 같다 —
+         * deduplicateHypotheses 는 id 첫 항목만 남기므로, 배율·회전이 다른 n7 finder
+         * 여럿이 와도 **첫 finder 의 가설만** 검증됐다 (실측: O V2 에서 −6 % 배율의
+         * 첫 finder 만 남고 참값 쪽 finder 의 가설은 조용히 버려졌다). 첫 finder 는
+         * 종전 id 그대로 — 단일 finder 프레임은 비트 동일하다.
+         */
+        if (finder.centralN7) {
+          if (centralN7FinderIndex > 0) {
+            for (let index = finderHypothesisStart; index < hypotheses.length; index += 1) {
+              hypotheses[index] = {
+                ...hypotheses[index],
+                hypothesisId: `${hypotheses[index].hypothesisId}-n7f${centralN7FinderIndex}`,
+              };
+            }
+          }
+          centralN7FinderIndex += 1;
         }
       }
     }
