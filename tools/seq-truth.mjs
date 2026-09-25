@@ -106,10 +106,16 @@ async function main() {
   console.log(`시퀀스 ${sequences.length} · 프레임 ${frames.length} · 샤드 ${shardCount}`);
 
   const wallT0 = process.hrtime.bigint();
+  const cpuT0 = process.cpuUsage();
   const rows = shardCount === 1
     ? runSequential(frames, decodeFrontend, lumaToRaster, readLumaDump)
     : await runSharded(frames, shardCount, frontendPath);
   const wallMs = Number(process.hrtime.bigint() - wallT0) / 1e6;
+  // 프로세스 전체(워커 스레드 포함) CPU. 벽시계는 호스트 부하를 따라 몇 배씩 흔들리지만
+  // 이 값은 «복호에 든 일의 양» 에 더 가깝다 — 느려졌을 때 부하인지 복호기 감속인지
+  // 가르는 데 쓴다. 단 부하와 무관하지는 않다(경합·부스트 하락으로 는다).
+  const cpuUsed = process.cpuUsage(cpuT0);
+  const cpuMs = (cpuUsed.user + cpuUsed.system) / 1000;
   process.stdout.write('\n');
 
   const rowByName = new Map(rows.map((row) => [row.name, row]));
@@ -172,6 +178,7 @@ async function main() {
       falseAccept,
       trueAccept,
       wallMs: Math.round(wallMs),
+      cpuMs: Math.round(cpuMs),
       shards: shardCount,
     },
     surpriseTexts,
@@ -201,7 +208,8 @@ async function main() {
     }
   }
 
-  console.log(`falseAccept ${falseAccept} · trueAccept ${trueAccept} · 벽시계 ${Math.round(wallMs / 1000)}s → ${outPath}`);
+  console.log(`falseAccept ${falseAccept} · trueAccept ${trueAccept} · 벽시계 ${Math.round(wallMs / 1000)}s`
+    + ` · CPU ${Math.round(cpuMs / 1000)}s → ${outPath}`);
 
   if (basePath) {
     const resolvedBase = resolve(basePath);

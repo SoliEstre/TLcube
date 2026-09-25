@@ -11,10 +11,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { listLumaSequences } from '../tools/read-luma.mjs';
+import { runWithProgressWatchdog } from './helpers/progress-watchdog.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LABELS_PATH = path.join(ROOT, 'test', 'sequence-truth.json');
@@ -65,22 +65,47 @@ test('sequence-truth.json 라벨과 러너가 있다', () => {
     '유도 라벨은 expect 가 아니라 expectDerived 에 산다 — 측정과 유도를 섞지 않는다');
 });
 
-test('seq-truth: falseAccept 0 (와이어 플립 트리거 ①)', {
-  timeout: 1_800_000,
-}, (t) => {
+// ⚠ **총 벽시계 상한을 걸지 않는다** (2026-09-25). 전에는 자식에 1,800,000 ms 를 걸었고,
+// 같은 트리·같은 975 프레임이 단독 1,098,141 ms · 부하·절전이 겹친 전수에서 상한 초과로
+// 죽었다 (09-24 full-013). 총 시간은 호스트 부하를 재고, 이 자의 성질(falseAccept 0)은
+// 시간과 무관하다 — 복호기에 벽시계로 결정하는 곳이 없다(시계는 프로파일 계측용뿐).
+// 시간 상한이 잡을 것은 «멈춤» 하나라서, 러너가 프레임마다 찍는 진행 문자로 잰다:
+// 깨어 있는 STALL_TICKS × TICK_MS 동안 출력이 0 이면 멈춤으로 보고 죽인다.
+// 창 근거 (2026-09-25 계측, 이 PC 16T · 6 샤드 · 배경 부하 있음 · 975 프레임):
+//   완료 간 최대 간격 18.5 s · 기동+첫 프레임 10.2 s · 프레임 하나 CPU 최대 25.4 s
+//   (벽시계 최대 85.1 s — CPU 14.6 s 프레임이 부하로 5.8 배 늘었다).
+//   간격은 «가장 무거운 프레임 하나» 를 넘을 수 없으니, 10 분 창은 그 프레임이 통째로
+//   간격이 되는 최악에서도 벽시계/CPU 23 배 부하까지 버틴다(보통 간격 기준으로는 30 배+).
+//   멈춤이면 정상 실행 + 10 분 뒤에 빨갛다 — 드문 실패 경로의 비용이라 받아들인다.
+// ⚠ 이 자가 더는 안 지키는 축: **복호기 감속.** 10 배 느려져도 진행만 하면 통과한다.
+//   그 축은 러너 끝줄의 «CPU s» 를 영수증끼리 대조해 본다 — 벽시계보다 부하에 훨씬 덜
+//   흔들리지만 무관하지는 않다(경합·부스트 하락으로 CPU 시간도 는다). 몇 배 단위의
+//   변화만 감속 신호로 읽는다.
+const TICK_MS = 5_000;
+const STALL_TICKS = 120;
+
+/** 러너 stdout 의 진행 줄(머리줄 다음 줄)에서 끝난 프레임 수를 센다 — 멈춤 진단용. */
+function countDoneFrames(stdout) {
+  const progressLine = stdout.split('\n')[1] ?? '';
+  return (progressLine.match(/[.x]/g) ?? []).length;
+}
+
+test('seq-truth: falseAccept 0 (와이어 플립 트리거 ①)', async (t) => {
   const sequences = listLumaSequences();
   if (sequences.length === 0) {
     t.skip('휘도 시퀀스 없음');
     return;
   }
-  const result = spawnSync(process.execPath, [RUNNER_PATH, '--shards', '6'], {
+  const result = await runWithProgressWatchdog(process.execPath, [RUNNER_PATH, '--shards', '6'], {
     cwd: ROOT,
-    encoding: 'utf8',
-    timeout: 1_800_000,
+    tickMs: TICK_MS,
+    stallTicks: STALL_TICKS,
   });
-  const output = (result.stderr || '') + '\n' + (result.stdout || '');
-  if (result.error?.code === 'ETIMEDOUT') {
-    assert.fail('seq-truth 자식이 1,800,000ms 제한에서 timeout 됐다 — falseAccept 실패가 아니다.\n' + output);
+  const output = result.stderr + '\n' + result.stdout;
+  if (result.stalled) {
+    assert.fail(`seq-truth 자식이 깨어 있는 ${STALL_TICKS * TICK_MS / 60_000}분 동안 프레임을 하나도 `
+      + `끝내지 못해 멈춤으로 보고 죽였다 (끝난 프레임 ${countDoneFrames(result.stdout)}) `
+      + '— falseAccept 실패가 아니다.\n' + output);
   }
   if (result.status === null) {
     assert.fail('seq-truth 자식이 exit status 없이 끝났다 (signal=' + (result.signal ?? 'unknown')
@@ -93,4 +118,7 @@ test('seq-truth: falseAccept 0 (와이어 플립 트리거 ①)', {
     true,
     result.stdout,
   );
+  const summary = result.stdout.split('\n').find((line) => line.startsWith('falseAccept '));
+  if (summary) t.diagnostic(summary);
+  t.diagnostic(`진행 감시: 최대 무진행 ${result.maxIdleTicks}틱 / 한도 ${STALL_TICKS}틱 (틱 ${TICK_MS} ms)`);
 });
