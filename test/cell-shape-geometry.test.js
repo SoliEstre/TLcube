@@ -748,11 +748,10 @@ describe('resolveCellShapeSpec', () => {
           const res = resolveCellShapeSpec(state, ctx, STUB); // 빈 표 주입(기본 모듈은 생성본)
           assert.equal(res.spec, null, `${choice.cellShape} 는 스텁에서 잠겨야 한다`);
           assert.ok(reasons.has(res.lockReason), `사유 ${res.lockReason}`);
-          const exposed = EXPOSED_CELL_SHAPES.includes(choice.cellShape);
-          // 구조 잠금(허용표보다 먼저) → 노출형 × 틈 등급 → 미측정. 이 두 문맥은 bevel-raised 말고는
-          // 구조 잠금에 걸리지 않는다(Y 는 코너/없음 QR · v0 · 3톤 · cell-surface 로케이터).
-          const expected = isRaisedBevel(choice) ? CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED
-            : exposed && gapGrade !== 'white' ? 'exposed-gap' : 'unmeasured';
+          // 구조 잠금(허용표보다 먼저) → 미측정. 빈 표엔 흰 틈 형제 행이 없으므로 노출형 × 비흰 틈도
+          // exposed-gap 이 아니다(«틈 탓» 은 표가 틈 축으로 가를 때만 — 아래 fixture 자). 이 두 문맥은
+          // bevel-raised 말고는 구조 잠금에 걸리지 않는다(Y 는 코너/없음 QR · v0 · 3톤 · cell-surface 로케이터).
+          const expected = isRaisedBevel(choice) ? CELL_SHAPE_LOCK_REASONS.BEVEL_RAISED : 'unmeasured';
           assert.equal(res.lockReason, expected, `${base.type} ${JSON.stringify(choice)} ${gapGrade}`);
           if (isRaisedBevel(choice)) raised += 1;
           assert.equal(JSON.stringify(state), before);
@@ -800,6 +799,36 @@ describe('resolveCellShapeSpec', () => {
       const { [k]: _drop, ...missing } = CTX_Y;
       const res = resolveCellShapeSpec({ cellShape: 'round-bevel' }, missing, allow);
       assert.deepEqual(res, { spec: null, lockReason: CELL_SHAPE_LOCK_REASONS.CTX_INCOMPLETE }, `키 ${k}`);
+    }
+  });
+
+  test('사유는 표에서 유도한다: exposed-gap ⇔ 노출형 × 비흰 틈 × 흰 틈 형제 행(틈 · 바탕만 다른 행)이 있다', () => {
+    const R = CELL_SHAPE_LOCK_REASONS;
+    const round = (param) => ({ cellShape: 'round', cellRound: param });
+    for (const [table, base, other] of [['oak', CTX_OAK, { version: 'V9' }], ['y', CTX_Y, { nBand: '21' }]]) {
+      // 흰 틈 · 흰 바탕 행 둘 — 노출형 round 0.7, 비노출 bevel 0.6.
+      const allow = deepFreeze({ ROWS: [
+        { table, ...base, cellShape: 'round', param: 0.7 },
+        { table, ...base, cellShape: 'bevel', param: 0.6 },
+      ] });
+      for (const [gapGrade, bgMode] of [['unknown', 'transparent'], ['black', 'black'], ['unknown', 'white']]) {
+        const ctx = { ...base, gapGrade, bgMode };
+        const at = `${table} ${gapGrade}/${bgMode}`;
+        // 같은 문맥 · 모양 · 강도의 흰 틈 형제 → 틈이 가르는 축이다.
+        assert.equal(resolveCellShapeSpec(round(0.7), ctx, allow).lockReason, R.EXPOSED_GAP, at);
+        // 강도가 다르면 형제가 아니다.
+        assert.equal(resolveCellShapeSpec(round(1.0), ctx, allow).lockReason, R.UNMEASURED, `${at} round 1.0`);
+        // 비노출형은 틈이 드러나지 않는다 — 형제가 있어도 «틈 탓» 이 아니다.
+        assert.equal(resolveCellShapeSpec({ cellShape: 'bevel', cellBevel: 0.6 }, ctx, allow).lockReason, R.UNMEASURED, `${at} bevel`);
+        // 틈 · 바탕 밖 표 키(O 버전 · Y n)가 다르면 형제가 아니다 — 행이 없는 버전 · n 을 «틈 탓» 이라 말하지 않는다
+        // (2026-09-27 화면 확인: Y 투명 n21 이 «틈이 알 수 없는 표면으로 드러나» 로 나왔다. n13 은 같은 틈에서 열린다).
+        assert.equal(resolveCellShapeSpec(round(0.7), { ...ctx, ...other }, allow).lockReason, R.UNMEASURED, `${at} ${JSON.stringify(other)}`);
+      }
+      // 흰 틈 문맥에서 행이 없으면 틈 탓일 수 없다.
+      assert.equal(resolveCellShapeSpec(round(0.7), { ...base, ...other }, allow).lockReason, R.UNMEASURED, `${table} white ${JSON.stringify(other)}`);
+      // 형제가 흰 틈이 아니면(검정 틈 행만) 미지 틈 문맥의 사유는 unmeasured.
+      const blackOnly = deepFreeze({ ROWS: [{ table, ...base, gapGrade: 'black', bgMode: 'black', cellShape: 'round', param: 0.7 }] });
+      assert.equal(resolveCellShapeSpec(round(0.7), { ...base, gapGrade: 'unknown', bgMode: 'transparent' }, blackOnly).lockReason, R.UNMEASURED, `${table} black-only`);
     }
   });
 

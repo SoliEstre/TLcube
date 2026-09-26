@@ -352,14 +352,24 @@ test('② 빈 허용표(스텁 주입)에서 보이는 모든 꾸미기 카드�
 
 test('② «흰색으로 두면 열릴 수 있어요» 권유(g1164)는 따르면 실제로 열리는 카드에만 붙는다', () => {
   const state = { ...TYPE_STATES.Y, bgMode: 'transparent', cellShape: 'round' };
-  // 빈 표(스텁 주입) — 흰색으로 바꿔도 «미측정» 으로 바뀔 뿐이라 권유 없는 문구다.
+  // 빈 표(스텁 주입) — 흰 틈 형제 행이 없으니 «틈 탓» 이 아니다: 미확인(g1162)이고 틈 문구는 둘 다 안 보인다.
   const stub = harness({ state, quietColor: 'none', allow: STUB });
   stub.render();
-  assert.equal(stub.card('cellShape', 'round').dataset.lockReason, 'exposed-gap', '투명 배경 Y 에서 틈 노출 사유가 아니다 — 전제가 바뀌었다');
+  assert.equal(stub.card('cellShape', 'round').dataset.lockReason, 'unmeasured', '형제 행 없는 표에서 «틈 탓» 사유가 나왔다');
   const plainKey = stub.run('DECORATION_EXPOSED_GAP_PLAIN_KEY');
-  assert.equal(stub.card('cellShape', 'round').dataset.lockKey, plainKey);
-  assert.ok(stub.$('cellShapeLockHint').textContent.includes(plainKey));
-  assert.ok(!stub.$('cellShapeLockHint').textContent.includes('g1164'), '스텁 표인데 권유 문구가 보인다');
+  assert.equal(stub.card('cellShape', 'round').dataset.lockKey, 'g1162');
+  for (const k of [plainKey, 'g1164']) assert.ok(!stub.$('cellShapeLockHint').textContent.includes(k), `스텁 표인데 틈 문구 ${k} 가 보인다`);
+  // 흰 틈 형제 행이 **흰 바탕에만** 있는 fixture — 틈이 가르는 축이라 exposed-gap 이지만, 안전영역만 흰색으로 두면
+  // (투명 바탕 그대로) 열리지 않으므로 권유 없는 문구다.
+  const white = harness({ state, quietColor: 'white' });
+  white.render();
+  const bgWhiteRows = openAllCellRows({ ...white.c.current.deco.ctx, bgMode: 'white' });
+  const plain = harness({ state, quietColor: 'none', allow: { ROWS: bgWhiteRows } });
+  plain.render();
+  assert.equal(plain.card('cellShape', 'round').dataset.lockReason, 'exposed-gap', '흰 틈 형제 행이 있는데 틈 사유가 아니다');
+  assert.equal(plain.card('cellShape', 'round').dataset.lockKey, plainKey);
+  assert.ok(plain.$('cellShapeLockHint').textContent.includes(plainKey));
+  assert.ok(!plain.$('cellShapeLockHint').textContent.includes('g1164'), '안전영역 흰색으로는 안 열리는데 권유 문구가 보인다');
   // 흰 판 문맥에서 열리는 fixture — 권유가 참이 되고, 따르면(안전영역 흰색) 정말 열린다.
   const probe = harness({ state, quietColor: 'white' });
   probe.render();

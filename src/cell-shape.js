@@ -616,8 +616,8 @@ export const CELL_SHAPE_LOCK_CTX_KEYS = Object.freeze({
  * 매핑이 끊기므로 바꾸지 않는다(새 사유는 새 id 로).
  */
 export const CELL_SHAPE_LOCK_REASONS = Object.freeze({
-  UNMEASURED: 'unmeasured', // 허용표에 행이 없다(미측정 조합)
-  EXPOSED_GAP: 'exposed-gap', // 노출형인데 틈이 검정 판·미지 표면이다
+  UNMEASURED: 'unmeasured', // 허용표에 행이 없다(판독 미확인 — 미측정 · 측정 실패 · 판정 무효를 표는 가르지 않는다)
+  EXPOSED_GAP: 'exposed-gap', // 노출형인데 틈이 검정 판·미지 표면이고, 흰 틈 형제 행은 있다(틈이 가르는 축)
   UNKNOWN_SHAPE: 'unknown-shape',
   PARAM_OUT_OF_DOMAIN: 'param-out-of-domain',
   TYPE_NOT_RHOMBUS: 'type-not-rhombus', // H 등 마름모 셀이 아닌 타입
@@ -738,10 +738,20 @@ export function resolveCellShapeSpec(state, ctx, allow = DEFAULT_ALLOW) {
     && keys.every((k) => Object.prototype.hasOwnProperty.call(row, k) && row[k] === ctx[k]));
   if (hit) return { spec: { kind, param } };
 
-  const lockReason = EXPOSED_CELL_SHAPES.includes(kind) && ctx.gapGrade !== 'white'
-    ? R.EXPOSED_GAP
-    : R.UNMEASURED;
-  return { spec: null, lockReason };
+  // 사유도 표에서 유도한다. exposed-gap = 노출형 × 비흰 틈 × **흰 틈 형제 행이 있다**(틈 · 바탕만 다르고
+  // 나머지 표 키 · 모양 · 강도가 같은 행 — 측정 격자에서 틈 등급과 bgMode 는 짝지어 움직인다). 틈이 실제로
+  // 가르는 축일 때만 «틈 탓» 이다. 스텁 표 시절의 «노출형 × 비흰 틈 ⇒ 틈 탓» 은 실측 표에서 거짓이 됐다 —
+  // Y 투명(unknown) n13 은 둥글게를 여는데 행이 없는 n21 에서도 «틈 탓» 이라 말했다(2026-09-27 화면 확인).
+  // 그 밖은 unmeasured — 미측정 · 측정 실패 · 판정 무효를 표는 가르지 않으므로 «판독이 확인되지 않음» 이다.
+  const whiteSibling = EXPOSED_CELL_SHAPES.includes(kind) && ctx.gapGrade !== 'white'
+    && rows.some((row) => row
+      && row.table === table
+      && row.cellShape === kind
+      && row.param === param
+      && row.gapGrade === 'white'
+      && keys.every((k) => k === 'gapGrade' || k === 'bgMode'
+        || (Object.prototype.hasOwnProperty.call(row, k) && row[k] === ctx[k])));
+  return { spec: null, lockReason: whiteSibling ? R.EXPOSED_GAP : R.UNMEASURED };
 }
 
 // ── 문맥 (§2.3 ctx · 통합자 결정 1) ──────────────────────────────────────────────

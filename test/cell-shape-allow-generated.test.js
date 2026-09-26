@@ -18,6 +18,8 @@
 //      하면 잠긴다(열림의 원인이 그 행이다). H 행은 실제 encodeH 가 그 문맥을 만든다(제품이 도달할 수 있는 문맥).
 //   ⓖ 판별력 — 생성 표 사본에 결함을 하나씩 심으면(구조 잠금 행 · 키 빠진 행 · 중복 행 · 순서 뒤집기 · 도메인 밖 ·
 //      여분 키 · 메타 결함 · 주석 행 수 어긋남) 그 결함의 범주가 **각각** 잡힌다.
+//   ⓗ 잠금 사유가 표에서 유도된다 — 흰 틈 노출형 행의 미지 틈 문맥은 (열리지 않으면) exposed-gap, 표에 없는 버전 · n 은
+//      unmeasured(«틈 탓» 이라 말하지 않는다 — 2026-09-27 화면의 Y n21 오안내).
 // 못 재는 것: 행이 측정적으로 참인가(영수증 · 승격 게이트 재측정의 몫 — §7.6). y 행의 구조 잠금 문맥 키(qrPosition ·
 //   qrWindow · qrSlot)는 표에 없어 «제품 기본 Y(코너 QR · 윈도 아님 · 슬롯 없음)» 값으로 채워 잰다 — 다른 QR 배치에서
 //   열리는지는 이 자 밖이다(구조 잠금 쪽은 cell-shape-allowlist ③ 이 잰다).
@@ -28,7 +30,7 @@ import { readFileSync } from 'node:fs';
 
 import {
   CELL_SHAPES, CELL_SHAPE_ALLOW_KEYS, CELL_SHAPE_DEFAULT, CELL_SHAPE_LOCK_CTX_KEYS, CELL_SHAPE_PARAMS, CELL_GAP_GRADES,
-  Y_SEAM_ADJACENT_PRODUCT, cellShapeStructuralLock, resolveCellShapeSpec,
+  EXPOSED_CELL_SHAPES, Y_SEAM_ADJACENT_PRODUCT, cellShapeStructuralLock, resolveCellShapeSpec,
 } from '../src/cell-shape.js';
 import {
   H_CELL_GROUNDS, H_CELL_STYLE_ALLOW_KEYS, H_CELL_STYLE_DEFAULT, H_CELL_STYLE_LOCK_REASONS, hCellStyleCtx,
@@ -333,6 +335,34 @@ test('ⓕ H 행의 문맥은 실제 encodeH 가 만든다(제품이 도달할 �
   // 문맥 키 + ground = 표 키(ground 만 상태에서) — 목록이 바뀌면 hCtxOf 가 틀린다.
   const ctxKeys = Object.keys(hCellStyleCtx(encodeH('TL', { version: 0, mode: 3, tones: 3, finder: 'frame', ecc: 'M' }), FRESH));
   assert.deepEqual([...ctxKeys, 'ground'].sort(), [...H_CELL_STYLE_ALLOW_KEYS].sort());
+});
+
+test('ⓗ 잠금 사유는 생성 표에서 유도된다 — «틈 탓» 은 흰 틈 형제 행이 있을 때만, 행 없는 버전 · n 은 미확인', () => {
+  // 2026-09-27 화면 확인: Y 투명 n21(21 B 이상 URL)이 «틈이 알 수 없는 표면으로 드러나 잠겨» 로 나왔다. 같은 틈(unknown)의
+  // n13 은 생성 표가 연다 — 원인은 틈이 아니라 n21 행 없음이다. 버전 · n 값은 박제하지 않고 표에 **없는** 값을 유도한다.
+  const cellRows = GEN.ROWS.filter((r) => (r.table === 'oak' || r.table === 'y') && r.gapGrade === 'white'
+    && EXPOSED_CELL_SHAPES.includes(r.cellShape));
+  assert.ok(cellRows.length > 0, '흰 틈 노출형 행이 없다 — 자가 비었다');
+  const absent = {
+    oak: { version: Math.max(...GEN.ROWS.filter((r) => r.table === 'oak').map((r) => r.version)) + 1 },
+    y: { nBand: String(Math.max(...GEN.ROWS.filter((r) => r.table === 'y').map((r) => Number(r.nBand))) + 8) },
+  };
+  let gapChecked = 0;
+  for (const row of cellRows) {
+    const state = Object.freeze(cellStateOf(row));
+    const dark = { ...cellCtxOf(row), gapGrade: 'unknown', bgMode: 'transparent' };
+    const at = JSON.stringify(row);
+    const res = resolveCellShapeSpec(state, dark, GEN);
+    if (res.spec === null && !cellShapeStructuralLock(row.table, row.cellShape, row.param, dark)) {
+      assert.equal(res.lockReason, 'exposed-gap', `흰 틈 형제 행이 있는데 틈 사유가 아니다: ${at}`);
+      gapChecked += 1;
+    }
+    for (const ctx of [dark, cellCtxOf(row)]) {
+      const moved = { ...ctx, ...absent[row.table] };
+      assert.equal(resolveCellShapeSpec(state, moved, GEN).lockReason, 'unmeasured', `행 없는 ${JSON.stringify(absent[row.table])} 인데 미확인이 아니다: ${at} ${ctx.gapGrade}`);
+    }
+  }
+  assert.ok(gapChecked > 0, '흰 틈만 열린 노출형 문맥이 없다 — exposed-gap 쪽 자가 비었다');
 });
 
 test('ⓖ 판별력: 생성 표 사본에 결함을 하나씩 심으면 그 범주가 각각 잡힌다', () => {
