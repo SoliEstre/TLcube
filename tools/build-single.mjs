@@ -138,6 +138,12 @@ export const MODULE_ORDER = [
   //   «app 코드에 './src/' specifier 가 남아있지 않다» 하나였다. 등재 안 하면
   //   번들이 상대 import 를 그대로 안고 나가 **라이브에서만** 404 로 죽는다.
   'luminance', 'palette-hue',
+  // 꾸미기 모듈(2026-09-26, DESIGN_001 §4.1) — 전부 luminance·palette-hue 뒤, scene·sceneY·
+  // h-render 앞이다. cell-shape-allow·square-cell-style·qr-function-map 은 의존 0 인 잎,
+  // cell-shape 는 luminance·cell-shape-allow, qr-colors 는 palette-hue·square-cell-style·
+  // cell-shape-allow 를 쓴다. ⚠ qr-colors 는 palette-hue 와 같은 부류다 — src 안에선
+  // 아무도 import 하지 않고 index.html app 코드만 부르므로 위상 순회로는 안 잡힌다.
+  'cell-shape-allow', 'cell-shape', 'square-cell-style', 'qr-function-map', 'qr-colors',
   // gf256→rs→qr 체인은 **scene 앞**에 와야 한다. scene.js 가 폴백 QR 을 그리려고
   // './qr.js' 를 import 하기 때문이다 — 원래는 Type Y 전용이라 보고 뒤에 뒀는데(TY8),
   // Type O 의 scene 이 그걸 쓰게 되면서 전방 참조가 됐다. 등록 순서 = 치환 가능 순서라

@@ -73,6 +73,10 @@ export const FINDER_EDITOR_MODULE_ORDER = Object.freeze([
     // formatK 는 scene 앞 (2026-08-26) — scene.js 가 육망성 외곽 판정을
   // kSpecFromFormatIndex 로 **유도**한다 (손 사본 7·8 철폐).
   'formatK',
+  // 꾸미기 모듈(2026-09-26, DESIGN_001 §4.1) — scene.js 가 셀 모양(cell-shape)과 코너 QR
+  // 스타일(square-cell-style · qr-function-map)을 import 하므로 scene 앞. qr-colors 는
+  // index.html app 코드 전용이라 이 편집기엔 싣지 않는다(build-single 만).
+  'cell-shape-allow', 'cell-shape', 'square-cell-style', 'qr-function-map',
   'gf256', 'rs', 'qr', 'encode', 'scene', 'png', 'scene-image', 'raster',
 ]);
 
