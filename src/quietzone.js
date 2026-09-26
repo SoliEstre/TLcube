@@ -254,8 +254,17 @@ export function clipToRect(poly, width, height) {
   return out;
 }
 
-/** 도형의 좌표점 (disc 는 외접 사각의 네 꼭짓점으로 근사). */
+/**
+ * 도형의 좌표점 (disc 는 외접 사각의 네 꼭짓점으로 근사).
+ *
+ * **`basePoints` 가 있으면 그것이 먼저다** (셀 꾸미기, DESIGN_001 §4.2 · wiring M13, 2026-09-26).
+ * 꾸민 셀 도형(round · bevel · gap · dot …)은 꾸미기 전 마름모 꼭짓점을 `basePoints` 로 든다.
+ * 안전영역 · 음영 외곽 · 클러스터가 그 기하를 읽어야 꾸미기 켬/끔에서 판이 같다 — 안 그러면
+ * round f=1 하나로 A 판 위쪽 y 가 8.691→9.063 으로 움직인다(설계 탐침). dot 은 kind 가
+ * disc 라도 basePoints 가 있으면 원 마름모로 읽는다.
+ */
 function shapePoints(s) {
+  if (Array.isArray(s.basePoints)) return s.basePoints;
   if (s.kind === 'polygon') return s.points;
   if (s.kind === 'disc') {
     return [
@@ -422,7 +431,8 @@ function selfQuietShapeIndices(shapes, selfQuietColors, origin) {
   const holdsOrigin = (i) => {
     if (!hasOrigin) return false;
     const s = shapes[i];
-    const pts = s.points;
+    // 꾸민 셀은 원 마름모(basePoints)로 판정한다 — shapePoints 와 같은 규칙(켬/끔 동일).
+    const pts = Array.isArray(s.basePoints) ? s.basePoints : s.points;
     if (!Array.isArray(pts) || pts.length < 3) return false;
     // 먼저 bbox 로 싸게 거르고(대부분 여기서 끝난다), 통과한 것만 정확히 판정한다.
     const b = bboxOf(s);

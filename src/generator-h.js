@@ -1,9 +1,12 @@
 /** 표시 타입Y 아래의 실질 와이어 선택과 옵션 전이. 기존Y 상태는 따로 보존해요. */
 import {orbitStateToViewerInput,orbitTToPersp,orbitRadToDeg,ORBIT_PERSP_MAX_DEG} from './generator-orbit-view.js';
-import {hAutoRotation,hPalette} from './h-render.js';
+import {hAutoRotation,hPalette,H_CELL_GROUND_LEVELS} from './h-render.js';
 import {hMaskValue} from './h-profile.js';
 import {H_ARRANGEMENTS} from './h-face-arrangement.js';
 import {composeHRotation,hOrbitRotation,hOrbitFromRotation,hDragRotation,hAlignmentRotation,H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
+import {PRESETS} from './luminance.js';
+import {SQUARE_CELL_STYLES} from './square-cell-style.js';
+import * as DEFAULT_CELL_ALLOW from './cell-shape-allow.js';
 export {H_ROTATION_TILT_MAX_DEG,H_ROTATION_TILT_DEFAULT_DEG,H_ROTATION_TILT_MODES} from './h-rotation.js';
 export {H_ARRANGEMENTS} from './h-face-arrangement.js';
 export {hOrbitFromRotation} from './h-rotation.js';
@@ -159,8 +162,62 @@ export function selectHArrangement(state,arrangement){
   const aligned=selectHAlignmentPose(rotated,arrangement);
   return {...aligned,hAutoRotate:next.hAutoRotate,hAutoRotateIntent:next.hAutoRotateIntent};
 }
-/** 화면·검증이 같은 도→라디안 및 회전 유도를 사용해요. */
-export function hPreviewOptions(state,{elapsedMs=0,palette}={}){
+// ── H 셀 꾸미기(DESIGN_001 §3.3 · §3.4) ─────────────────────────────────────
+// 스타일 어휘는 QR 과 공유(square-cell-style.js), 상태 키는 따로(hCellStyle · hCellGround — §9.3 Q1).
+// 여는 것은 허용표(cell-shape-allow.js)의 H 행뿐이에요 — 스텁(ROWS=[])이면 square 밖은 전부 잠겨요.
+/** H 셀 바탕 도메인 — level5 = 조명받는 중간톤(빈 면과 같은 색, 기본 §9.3 Q2) · white = 예약 무음영 레벨 4. */
+export const H_CELL_GROUNDS=Object.freeze(Object.keys(H_CELL_GROUND_LEVELS));
+/** 허용표 H 행의 문맥 키(와일드카드 없음 — 하나라도 빠진 행은 아무것도 허가하지 않아요). 행 모양:
+ *  { table:'h', version, finder, tones, ground, paletteGrade, hCellStyle } */
+export const H_CELL_STYLE_ALLOW_KEYS=Object.freeze(['version','finder','tones','ground','paletteGrade']);
+/** 잠금 사유 — UI 가 인라인 사유 문구(i18n)를 고르는 값. unmeasured · ctx-incomplete 는 cell-shape.js 와 같은 문자열이에요. */
+export const H_CELL_STYLE_LOCK_REASONS=Object.freeze({
+  UNKNOWN_STYLE:'h-unknown-style',UNKNOWN_GROUND:'h-unknown-ground',CTX_INCOMPLETE:'ctx-incomplete',
+  // 1차 구조 잠금(§3.3): 2톤은 colors[5]=levels[1] 이 데이터 톤이 아니라 바탕 쏠림 기전이 달라요.
+  // corners 파인더(H5–H8)는 10×10 마커·2×2 포맷 배치를 재지 않았어요. 둘 다 허용표 행이 있어도 열지 않아요 —
+  // 측정 레인이 연다면 이 두 줄을 먼저 지우고 이유를 적어야 해요.
+  TWO_TONE:'h-two-tone',CORNERS_FINDER:'h-corners-finder',UNMEASURED:'unmeasured'});
+/** 팔레트 등급 {slate, ember, mono, custom} — 모르는 프리셋은 undefined(문맥 불완전 → 잠금). */
+export function hPaletteGrade(state){
+  const preset=state?.preset;
+  if(typeof preset!=='string')return undefined;
+  if(Object.prototype.hasOwnProperty.call(PRESETS,preset))return preset;
+  return preset==='custom'?'custom':undefined;
+}
+/** 렌더 문맥 — 버전·파인더·톤은 실제 인코딩(자동 해상도·finder:'auto' 해석 뒤)에서 읽어요. */
+export function hCellStyleCtx(encoded,state){
+  if(!encoded||typeof encoded!=='object')return null;
+  return {version:encoded.version,finder:encoded.finder,tones:encoded.tones,paletteGrade:hPaletteGrade(state)};
+}
+/**
+ * 상태 + 렌더 문맥 + 허용표 → H 셀 스타일 spec. 순수 함수 — 상태를 읽기만 해요(동결 객체로도 동작).
+ * - square(키 없음 포함) → `{spec:null}` (기본값 — 사유 없음).
+ * - 허용표에 `table:'h'` · 스타일 · 문맥 키 전부가 같은 행이 있으면 `{spec:{style, ground}}`.
+ * - 그 밖은 `{spec:null, lockReason}`. 2톤 · corners 파인더는 표와 무관하게 잠가요(§3.3 1차 잠금).
+ * @param {object} state `hCellStyle` · `hCellGround` · `preset` 을 읽어요
+ * @param {{version, finder, tones, paletteGrade}|null} ctx `hCellStyleCtx(encoded, state)`
+ * @param {{ROWS?: object[]}} [allow] 허용표(기본 `src/cell-shape-allow.js`, 테스트는 fixture 주입)
+ */
+export function resolveHCellStyleSpec(state,ctx,allow=DEFAULT_CELL_ALLOW){
+  const R=H_CELL_STYLE_LOCK_REASONS,style=state?.hCellStyle??'square';
+  if(style==='square')return {spec:null};
+  if(!SQUARE_CELL_STYLES.includes(style))return {spec:null,lockReason:R.UNKNOWN_STYLE};
+  const ground=state.hCellGround??'level5';
+  if(!H_CELL_GROUNDS.includes(ground))return {spec:null,lockReason:R.UNKNOWN_GROUND};
+  const key={...(ctx||{}),ground};
+  if(!ctx||H_CELL_STYLE_ALLOW_KEYS.some(k=>key[k]===undefined))return {spec:null,lockReason:R.CTX_INCOMPLETE};
+  if(key.tones===2)return {spec:null,lockReason:R.TWO_TONE};
+  if(key.finder==='corners')return {spec:null,lockReason:R.CORNERS_FINDER};
+  const rows=allow&&Array.isArray(allow.ROWS)?allow.ROWS:[];
+  const hit=rows.some(row=>row&&row.table==='h'&&row.hCellStyle===style
+    &&H_CELL_STYLE_ALLOW_KEYS.every(k=>Object.prototype.hasOwnProperty.call(row,k)&&row[k]===key[k]));
+  return hit?{spec:Object.freeze({style,ground})}:{spec:null,lockReason:R.UNMEASURED};
+}
+/** 화면·검증이 같은 도→라디안 및 회전 유도를 사용해요.
+ *  셀 꾸미기: `encoded` 를 넘기면 `resolveHCellStyleSpec` 이 연 경우에만 `hCellStyle` · `hCellGround` 키를 실어요.
+ *  기본(square)·잠금·문맥 없음은 키를 만들지 않아요 — 꺼짐 = 현재 출력 바이트 동일(§7.1)이고, 회전·3D-on·스냅샷·영상·
+ *  renderTypeH 가 모두 이 함수를 거쳐 한 곳에서 따라와요(§4.2 wiring M2). */
+export function hPreviewOptions(state,{elapsedMs=0,palette,encoded,allow}={}){
   const view=orbitStateToViewerInput(state);
   const axis=state.hRotationMode??'y';
   // 옆 4면 전용 배치는 정렬축을 지켜 Z cap을 숨겨요. 기본 iso에는 읽기용 S 기울임을 적용해요.
@@ -169,7 +226,12 @@ export function hPreviewOptions(state,{elapsedMs=0,palette}={}){
     ?hAutoRotation(elapsedMs,{axis,speed:state.hRotationSpeed??H_ROTATION_SPEED_DEFAULT,directionX:state.hRotationDirectionX??1,directionY:state.hRotationDirectionY??1,wobble,tiltDeg:clampHRotationTilt(state.hRotationTiltDeg),tiltMode:clampHRotationTiltMode(state.hRotationTiltMode),uniformSpeed:true})
     :{rotateX:0,rotateY:0,rotateZ:0};
   const pose=composeHRotation(hOrbitRotation(view),auto);
-  return {palette,margin:2,...pose,perspective:view.perspective,arrangement:state.hArrangement??'isometric',renderFaces:state.hRenderFaces??(state.hFaces>3?6:3)};
+  const options={palette,margin:2,...pose,perspective:view.perspective,arrangement:state.hArrangement??'isometric',renderFaces:state.hRenderFaces??(state.hFaces>3?6:3)};
+  if((state.hCellStyle??'square')!=='square'){
+    const {spec}=resolveHCellStyleSpec(state,hCellStyleCtx(encoded,state),allow);
+    if(spec){options.hCellStyle=spec.style;options.hCellGround=spec.ground;}
+  }
+  return options;
 }
 const EN={true3d:'True 3D',faces:'Data faces',face1:'1 face',face2:'2 faces',face3:'3 faces',face4:'4 faces',face5:'5 faces',face6:'6 faces',version:'Resolution (module density = capacity)',mask:'Data mask',auto:'Automatic',
   arrangement:'Face arrangement',isometric:'Isometric',horizontal:'Horizontal alignment',vertical:'Vertical alignment',symmetric:'Opposite faces',arrangementNote:'Horizontal/vertical uses the four side faces and hides the Z caps during aligned Y/X rotation. Up to four data faces; changing from five or six selects four. Opposite faces (two data faces only) puts the two codes on facing sides. In opposite-faces mode the logical YM code is drawn on the physical XP face; the scanner reads logical faces (XM · YM) from the embedded tags, so its labels and net stay logical, and the two facing codes collect one after the other over a half turn. Isometric with four faces keeps the two blank faces adjacent (ZP·YP).',

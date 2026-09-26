@@ -152,6 +152,16 @@ export function clampQuietMargin(value) {
   return n;
 }
 
+/**
+ * 도형의 외곽 좌표 — 꾸민 셀(`basePoints` 를 든 도형)은 꾸미기 전 마름모로 읽는다
+ * (quietzone.js `shapePoints` 와 같은 규칙, DESIGN_001 §4.2). 안 그러면 «안전영역 없음» 의
+ * 코드 폭이 꾸미기 켬/끔에서 달라진다(gap · dot 은 실루엣 셀이 안쪽으로 줄어든다).
+ * disc(basePoints 없음)는 종전대로 점 목록이 없어 bbox 에 안 든다.
+ */
+function outlineOf(s) {
+  return Array.isArray(s.basePoints) ? s.basePoints : s.points;
+}
+
 function bboxOfPointLists(lists) {
   let minX = Infinity;
   let minY = Infinity;
@@ -193,7 +203,7 @@ export function quietCoverage(scene, selfQuietColors = undefined) {
 
   if (count === 0) {
     // 안전영역이 없다 = 균일 면이 코드 자신. 배수는 **정의상 1** 이라 폭이 판정에 안 든다.
-    const box = bboxOfPointLists(rest.map((s) => s.points));
+    const box = bboxOfPointLists(rest.map(outlineOf));
     if (box === null || box.width <= 0) return null;
     return {
       multiple: 1,
@@ -205,7 +215,7 @@ export function quietCoverage(scene, selfQuietColors = undefined) {
     };
   }
 
-  const ring = bboxOfPointLists(scene.shapes.slice(0, count).map((s) => s.points));
+  const ring = bboxOfPointLists(scene.shapes.slice(0, count).map(outlineOf));
   if (ring === null) return null;
 
   // 안전영역이 감싼 대상 — **그걸 만든 함수에게 묻는다** (§코드 폭 주석).

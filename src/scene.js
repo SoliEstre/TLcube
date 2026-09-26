@@ -68,6 +68,14 @@ import {
 // 않는다 — 지금은 우연히 같지만 그 우연에 기대면 조용히 뒤집힌다.
 const FINDER_LEVEL_FACE_INDEX = Object.freeze({ T: 0, L: 1, R: 2 });
 import { qrMatrix } from './qr.js';
+// 셀 꾸미기 · 코너 QR 꾸미기 (DESIGN_001 §3.0 · §3.1 · §4.2 · §5.2, 레인 L2b 2026-09-26).
+// 기본값(`opts.cellShape` 없음 · `palette.qrDeco` 없음)에서는 아래 셋의 함수가 **하나도 불리지
+// 않는다** — 바이트 동일은 «새 경로를 안 탄다» 로 구조 보장한다(§1.1 · §2.3).
+import {
+  CELL_SHAPES, CELL_TIERS, cellShapeTier, promoteNearT0, shapeCellFace,
+} from './cell-shape.js';
+import { styledGridShapes } from './square-cell-style.js';
+import { qrModuleColor, qrModuleRole } from './qr-function-map.js';
 
 /** 콰이어트 존 기본 배수 — margin 미지정 시 `cellSize · DEFAULT_MARGIN_FACTOR`. */
 const DEFAULT_MARGIN_FACTOR = 2;
@@ -433,8 +441,15 @@ function faceColor(entry, face, palette) {
   return palette.levels[digitToRanks(entry.digit)[face]];
 }
 
-/** 콰이어트 패치(밝음) + QR 다크 모듈들을 axis-aligned 사각형 폴리곤으로 shapes 에 밀어넣는다. */
-function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
+/**
+ * 콰이어트 패치(밝음) + QR 다크 모듈들을 axis-aligned 사각형 폴리곤으로 shapes 에 밀어넣는다.
+ *
+ * `deco`(코너 QR 꾸미기, `palette.qrDeco` — `qr-colors.resolveQrDeco` 의 deco)는 **코너 QR
+ * 호출만** 넘긴다. 중앙 QR(V*Q)은 TL 검출 입력이라 흑백·사각 고정이고(DESIGN_001 §1.3) 인자를
+ * 넘기지 않는다 — 그래서 중앙 QR 호출의 출력은 이 함수가 바뀌어도 한 바이트도 안 바뀐다.
+ * deco 가 없으면(null) 아래 종전 경로를 그대로 탄다.
+ */
+function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette, deco = null) {
   // selfQuiet: 이 블록은 자체 콰이어트 존(4모듈 밝은 패치)을 갖는다 — 안전영역
   // (quietzone.js) 이 제외 판정을 색+연결성 근사가 아니라 이 태그로 한다.
   // 색 근사는 Type A 하단 코너(코드–QR 간격 0.5셀 < 병합 실효반경)에서 무력화됐다.
@@ -447,7 +462,7 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
       { x: blockOrigin.x + blockSide, y: blockOrigin.y + blockSide },
       { x: blockOrigin.x, y: blockOrigin.y + blockSide },
     ],
-    color: palette.bullseyeLight,
+    color: deco === null ? palette.bullseyeLight : deco.light,
     selfQuiet: true,
   });
 
@@ -455,6 +470,24 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
     x: blockOrigin.x + QR_QUIET_MODULES * qrModuleSize,
     y: blockOrigin.y + QR_QUIET_MODULES * qrModuleSize,
   };
+  if (deco !== null) {
+    // 꾸민 코너 QR. 기능 모듈(파인더+분리자 · 타이밍 · 포맷 · dark module)은 qr-function-map 이
+    // 'fixed'(사각) 로, 데이터 모듈만 'data'(스타일)로 가른다. 색은 눈(파인더 7×7)만 deco.eye,
+    // 나머지는 deco.dark. ⚠ 태그 `{selfQuiet, noSeam}` 은 **필수**다 — 색을 바꾸면 안전영역
+    // 제외의 색 경로(②)가 무너져 태그 경로(①)만 남는다(A 하단 BL·BR «213/213 삼킴» 사고의
+    // 기전, quietzone.js 제외 주석). 빠지면 styledGridShapes 가 던진다.
+    shapes.push(...styledGridShapes({
+      rows: qr.size,
+      cols: qr.size,
+      style: deco.cellStyle,
+      host: 'qr',
+      role: (row, col) => qrModuleRole(qr, row, col),
+      color: (row, col) => qrModuleColor(deco, row, col),
+      map: (x, y) => ({ x: qrOrigin.x + x * qrModuleSize, y: qrOrigin.y + y * qrModuleSize }),
+      tags: { selfQuiet: true, noSeam: true },
+    }));
+    return;
+  }
   for (let y = 0; y < qr.size; y += 1) {
     for (let x = 0; x < qr.size; x += 1) {
       if (qr.modules[y * qr.size + x] !== 1) continue;
@@ -473,6 +506,120 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
       });
     }
   }
+}
+
+// ── 셀 꾸미기 (DESIGN_001 §3.0 · §3.1 · §4.2, 레인 L2b) ─────────────────────────
+
+/**
+ * 등급 술어에 넘기는 타입. `buildScene` 은 O 계열(O · C · G · A · V · K)의 **유일한** 생산자이고
+ * (Y 는 sceneY, H 는 h-render), 그 여섯 타입의 술어표는 한 줄로 같다(§3.0 표 · `cell-shape.js`
+ * `OAK_FAMILY_TYPES`). 그래서 `encoded` 에 타입 필드가 없어도 대표 'O' 로 물으면 된다 —
+ * «여섯 타입이 모든 role 에서 같은 답» 이라는 전제는 `test/cell-shape-detector-exclusion-oak`
+ * 가 잰다(전제가 깨지면 여기서 타입을 받아야 한다).
+ */
+const OAK_TIER_TYPE = 'O';
+
+/**
+ * `opts.cellShape`(resolver `resolveCellShapeSpec` 의 spec) 정규화. 없음 · null · square →
+ * null(= 종전 경로). 그 밖은 `{kind, param?, avoid?}` 여야 한다 — 모르는 모양은 조용히
+ * 사각으로 떨어뜨리지 않고 던진다(잠금은 resolver 가 사유와 함께 이미 걸렀다).
+ */
+function cellShapeSpecOf(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object' || typeof raw.kind !== 'string') {
+    throw new TypeError('cellShape 는 {kind, param} spec 이어야 한다 (resolveCellShapeSpec 결과)');
+  }
+  if (!CELL_SHAPES.includes(raw.kind)) {
+    throw new RangeError(`cellShape.kind 를 모른다: ${raw.kind}`);
+  }
+  if (raw.kind === 'square') return null;
+  if (raw.avoid !== undefined && raw.avoid !== null && !Array.isArray(raw.avoid)) {
+    throw new TypeError('cellShape.avoid 는 {r,g,b} 배열이어야 한다');
+  }
+  return raw;
+}
+
+function isRgb(c) {
+  return c !== null && typeof c === 'object'
+    && Number.isFinite(c.r) && Number.isFinite(c.g) && Number.isFinite(c.b);
+}
+
+/**
+ * 코너 QR 꾸미기(`palette.qrDeco`). 키가 없으면 null(= 종전 흑백·사각 경로). 있으면
+ * `resolveQrDeco` 의 deco 모양 `{dark, light, eye, cellStyle}` 이어야 한다 — 반쯤 빈 deco 를
+ * 조용히 기본으로 메우면 «켰는데 안 먹는» 상태가 된다.
+ * ⚠ `bullseyeDark/Light` 는 읽지도 바꾸지도 않는다 — 불스아이 링 · 셀마스크 파인더와 공유하는
+ *   값이다(`generator-render-config.js:100-106`, DESIGN_001 §5.2).
+ */
+function cornerQrDecoOf(palette) {
+  const deco = palette.qrDeco;
+  if (deco === undefined || deco === null) return null;
+  if (typeof deco !== 'object' || !isRgb(deco.dark) || !isRgb(deco.light) || !isRgb(deco.eye)
+    || typeof deco.cellStyle !== 'string') {
+    throw new TypeError('palette.qrDeco 는 {dark, light, eye, cellStyle} 여야 한다 (resolveQrDeco 결과)');
+  }
+  return deco;
+}
+
+/**
+ * 기록해 둔 셀 면을 꾸민 도형으로 **한 번에** 치환한 새 도형 배열을 돌려준다(§4.2 ⓑ).
+ *
+ * 왜 루프 안에서 바로 안 바꾸는가: 코너 QR 배치(`pullCornerBlockOut` → `blockClearance`)가
+ * 셀 도형을 읽는다. 루프 안에서 줄어든 도형(gap · dot)을 넣으면 여유가 커 보여 코너 QR 원점이
+ * 꾸미기 켬/끔에서 달라진다. 그래서 루프는 «index · 원기하 · 셀 정체» 만 적고, 코너 QR 까지
+ * 다 놓인 뒤(= return 직전) 여기서 바꾼다. `buildScene` 안에 다른 splice · filter 가 없으므로
+ * 기록한 index 는 밀리지 않는다.
+ *
+ * 등급:
+ *   ① 술어 — `cellShapeTier('O', entry)` (T1 = anchor · marker · tones · 모르는 role).
+ *   ② 발자국 승격 — `promoteNearT0(faces, t0Shapes)`: 셀과 면을 나누는 T0 도형에서 1셀 미만인
+ *      면을 T1 로(safety M2). **셀 단위로 넓힌다** — 한 면이라도 올라가면 그 셀 세 면이 전부 T1
+ *      (§3.0 «그 셀을 T1 로 올린다»). 면 단위보다 보수적이고, 꾸민 도형은 언제나 원 면 안에
+ *      머무르므로 «T0 에서 1셀 안의 픽셀은 켬/끔 동일» 이 면 단위로도 이미 성립한다.
+ *   T1 면은 **원 도형 객체 그대로** 둔다(키 · 순서 · 참조 모두).
+ *
+ * @param {object[]} shapes 코너 QR 까지 다 놓인 도형 배열(읽기만 한다)
+ * @param {Array<{index:number, points:object[], cellKey:string, entry:object}>} faces 기록한 셀 면
+ * @param {{kind:string, param?:number|null, avoid?:object[]}} spec
+ * @param {object[]} t0Shapes 셀과 면을 나누는 T0 도형(중앙 QR 블록 · 파인더 · 사괘 …)
+ * @param {{r,g,b}|null} background 장면 배경(bevel 띠 클램프의 avoid 에 더한다)
+ */
+function applyCellShapes(shapes, faces, spec, t0Shapes, background) {
+  const predicate = faces.map((f) => cellShapeTier(OAK_TIER_TYPE, f.entry));
+  const promoted = promoteNearT0(
+    faces.map((f, i) => ({ points: f.points, tier: predicate[i] })),
+    t0Shapes,
+  );
+  const liftedCells = new Set();
+  for (let i = 0; i < faces.length; i += 1) {
+    if (promoted[i] === CELL_TIERS.T1 && predicate[i] !== CELL_TIERS.T1) liftedCells.add(faces[i].cellKey);
+  }
+  // bevel 띠 클램프(§3.1): 띠가 «실효 틈 색 · 배경» 과 ≥ 0.05 떨어지게. 생산자가 확실히 아는 것은
+  // 장면 배경 하나다 — 안전영역 판 색 · 투명 배경의 실제 표면은 호출자(L5)가 `spec.avoid` 로 준다.
+  const avoid = Array.isArray(spec.avoid) ? spec.avoid.slice() : [];
+  if (isRgb(background)) avoid.push(background);
+  const faceSpec = { kind: spec.kind, param: spec.param, avoid };
+
+  const replaced = new Map();
+  for (let i = 0; i < faces.length; i += 1) {
+    const f = faces[i];
+    const tier = liftedCells.has(f.cellKey) ? CELL_TIERS.T1 : promoted[i];
+    if (tier !== CELL_TIERS.T2 && tier !== CELL_TIERS.T3) continue;
+    const original = shapes[f.index];
+    const out = shapeCellFace(f.points, original.color, faceSpec, tier, { type: OAK_TIER_TYPE, entry: f.entry });
+    // 그 셀에 허용되지 않는 모양(T2 의 dot 등)은 shapeCellFace 가 원 도형 사본을 돌려준다 —
+    // 사본 대신 원 객체를 그대로 둔다.
+    if (out.length === 1 && out[0].basePoints === undefined) continue;
+    replaced.set(f.index, out);
+  }
+  if (replaced.size === 0) return shapes;
+  const next = [];
+  for (let i = 0; i < shapes.length; i += 1) {
+    const r = replaced.get(i);
+    if (r === undefined) next.push(shapes[i]);
+    else for (const s of r) next.push(s);
+  }
+  return next;
 }
 
 /**
@@ -499,7 +646,13 @@ function pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette) {
  *   centralMarkerN7Family?: 'hex'|'tri'|'star',
  *   centralMarkerN7Turn?: 0|1|2, centralMarkerN7Parity?: 0|1,
  *   qrCorner?: 'TL'|'TR'|'BL'|'BR',
+ *   // 셀 꾸미기 (DESIGN_001 §3.1, 2026-09-26) — `resolveCellShapeSpec` 의 spec. 없으면(기본)
+ *   // 종전 경로 그대로다. `avoid` 는 bevel 띠 클램프용 실효 틈 색({r,g,b}[], 선택) —
+ *   // 장면 배경은 생산자가 더한다.
+ *   cellShape?: {kind: string, param?: number|null, avoid?: Array<{r,g,b}>} | null,
  * }} options
+ *   `palette.qrDeco`(선택, `resolveQrDeco` 의 deco `{dark, light, eye, cellStyle}`)는 **코너 QR
+ *   에만** 쓴다. 중앙 QR 은 읽지 않는다(TL 검출 입력 — 흑백·사각 고정).
  * @returns {{k: number, layout: object, width: number, height: number, background: {r,g,b}, shapes: Array}}
  */
 export function buildScene(encoded, options) {
@@ -533,6 +686,8 @@ export function buildScene(encoded, options) {
   if (palette === null || typeof palette !== 'object') {
     throw new TypeError('palette 는 객체여야 한다');
   }
+  // 셀 꾸미기 spec — null 이면 아래 기록 · 치환이 전부 건너뛰어진다(기본값 = 종전 경로).
+  const cellShapeSpec = cellShapeSpecOf(opts.cellShape);
 
   // centerQr 의 단일 소스는 encoded.centerQr 다 (Type Y 의 encoded.tones 패턴과 동형 —
   // 검증 라운드 major: 포맷 인덱스(V*Q 4~6)와 렌더된 파인더가 어긋난 자기모순 아티팩트를
@@ -759,6 +914,10 @@ export function buildScene(encoded, options) {
    * 페이로드는 코드가 아니라 검출기 자신의 몸이다 — 그 함수 주석의 표면 구분).
    */
   const cellPalettes = detectorCellLevelPalettes(palette.levels, opts.centralN7Emphasis);
+  // 셀 꾸미기 기록(§4.2 ⓐ) — 여기서는 **적기만** 한다. 치환은 코너 QR 까지 놓인 뒤 한 번(ⓑ).
+  // [cellStart, cellEnd) 가 셀 루프 구간이고, 그 밖(코너 QR 제외)이 T0 도형이다.
+  const decoFaces = cellShapeSpec === null ? null : [];
+  const cellStart = shapes.length;
   for (const [key, entry] of cellDigits) {
     const commaIdx = key.indexOf(',');
     const q = Number(key.slice(0, commaIdx));
@@ -778,6 +937,7 @@ export function buildScene(encoded, options) {
         if (p.x > cellMaxX) cellMaxX = p.x;
         if (p.y > cellMaxY) cellMaxY = p.y;
       }
+      if (decoFaces !== null) decoFaces.push({ index: shapes.length, points, cellKey: key, entry });
       shapes.push({
         kind: 'polygon',
         points,
@@ -785,6 +945,7 @@ export function buildScene(encoded, options) {
       });
     }
   }
+  const cellEnd = shapes.length;
   if (cellDigits.size > 0) {
     const eps = 1e-9;
     if (cellMinX < -eps || cellMinY < -eps
@@ -1276,6 +1437,9 @@ export function buildScene(encoded, options) {
   // 다크 모듈, QR 모듈 = cellSize/2). 위치는 qrCorner 4택(ADR 0004 §1-7) — 방위는
   // 고정하고 bbox 코너로 대칭 이동만 한다. codeBounds(k, layout) 실루엣과 무교차를
   // 코너별로 단언한다(기존 TL 전용 검사의 일반화).
+  // cornerStart 이후는 코너 QR 이다 — T0 목록(발자국 승격)에서 뺀다(§3.0 목록 밖: 실루엣에서
+  // 3.5셀 떨어져 있고, 자기 콰이어트를 가진 별도 덩어리다).
+  const cornerStart = shapes.length;
   if (needsCornerQr) {
     const qr = qrMatrix(opts.qrText);
     if (qr.size !== QR_MODULE_GRID) {
@@ -1325,8 +1489,20 @@ export function buildScene(encoded, options) {
         }
       }
     }
-    pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette);
+    // 코너 QR 에서만 palette.qrDeco 를 읽는다(§4.2 ⓒ). 중앙 QR 호출((0) 블록)은 인자 불변.
+    pushQrBlock(shapes, qr, blockOrigin, qrModuleSize, palette, cornerQrDecoOf(palette));
   }
+
+  // (4) 셀 꾸미기 치환(§4.2 ⓑ) — 코너 QR 배치까지 끝난 뒤 한 번. 기본값이면 건너뛴다.
+  const finalShapes = decoFaces === null
+    ? shapes
+    : applyCellShapes(
+      shapes,
+      decoFaces,
+      cellShapeSpec,
+      [...shapes.slice(0, cellStart), ...shapes.slice(cellEnd, cornerStart)],
+      palette.background,
+    );
 
   return {
     k,
@@ -1354,6 +1530,6 @@ export function buildScene(encoded, options) {
     //    여기만 옛 두 값으로 남아 새 버전의 안전영역이 육각으로 되돌아간다 (교훈 017).
     ...(kSpecFromFormatIndex(encoded.formatIndex, encoded.k)
       ? { markSilhouette: 'hexagram' } : {}),
-    shapes,
+    shapes: finalShapes,
   };
 }

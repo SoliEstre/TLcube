@@ -1,12 +1,88 @@
 /** H 표시 전용 GPU 미리보기. 셀 텍스처는 입력 변경 때만 만들며 정확한 내보내기 경로와 분리해요. */
-import { hPalette, hProjection } from './h-render.js';
+import { hPalette, hProjection, hCellStyleOf, hStyledCellRoles, hStyledFacePieces } from './h-render.js';
 import { hFacePoint } from './h-layout.js';
 import { H_FACE_IDS } from './h-profile.js';
 import { CUBE_OUTLINE_COLOR } from './cube-outline.js';
-import { hCornerQrMetrics } from './generator-h-qr.js';
+import { hCornerQrMetrics, hQrDecoKey, hStyledQrPieces } from './generator-h-qr.js';
 import { qrMatrix } from './qr.js';
 import {hDisplayImageSource,hDisplayMap} from './h-face-arrangement.js';
 import {resolveHLighting,hLightingGround,isHUnshadedLevel} from './h-lighting.js';
+import { rasterContoursCoverage } from './square-cell-style.js';
+
+// ── 셀 꾸미기 텍스처(DESIGN_001 §4.2 h-preview-renderer) ───────────────────────
+// 꾸밈이 켜지면 셀·모듈당 16px 로 올려 모양을 담아요. 기본은 셀당 4px · 모듈당 1px 그대로예요.
+// 모양은 CPU 장면과 **같은 다각형**(h-render `hStyledFacePieces` · generator-h-qr `hStyledQrPieces`)을 면 로컬
+// 좌표로 받아, `rasterCellCoverage` 와 같은 부표본기(`rasterContoursCoverage`, 16 부표본/px)로 칠해요 — liquid 의
+// 오목 필렛 조각까지 CPU 와 같아요. Canvas Path2D 는 쓰지 않아요: 원시 RGBA 업로드라야 alpha=0 인 데이터의 RGB 가
+// premultiply 로 사라지지 않아요(아래 faceTextureCanvas 주석, wiring M3 · safety M11).
+export const H_STYLED_CELL_PX = 16;
+export const H_STYLED_QR_MODULE_PX = 16;
+const coverageCache = new Map();
+/** 조각 하나(면 로컬 좌표)를 자기 셀 기준 [0,1]² 로 옮긴 커버리지. 같은 모양은 셀 위치와 무관하게 캐시를 공유해요. */
+function pieceCoverage(points, row, col, size) {
+  const local = points.map(point => ({ x: point.x - col, y: point.y - row }));
+  const key = `${size}:${local.map(point => `${point.x.toFixed(9)},${point.y.toFixed(9)}`).join(';')}`;
+  let coverage = coverageCache.get(key);
+  if (!coverage) { coverage = rasterContoursCoverage([local], size); coverageCache.set(key, coverage); }
+  return coverage;
+}
+/** 조각을 셀(행 우선 인덱스)별로 묶어요. 조각은 모두 한 셀 안이라(자기 모양 · liquid 오목 조각) 꼭짓점 무게중심의 floor 가 그 셀이에요. */
+function piecesByCell(pieces, cols) {
+  const byCell = new Map();
+  for (const piece of pieces) {
+    let sx = 0, sy = 0; for (const point of piece.points) { sx += point.x; sy += point.y; }
+    const row = Math.floor(sy / piece.points.length), col = Math.floor(sx / piece.points.length), k = row * cols + col;
+    if (!byCell.has(k)) byCell.set(k, []);
+    byCell.get(k).push({ piece, row, col });
+  }
+  return byCell;
+}
+/** 한 셀 블록에 조각들을 바탕 위로 합성해요. alpha 는 이진: 덮인 비율 ≥ ½ 이면 dataAlpha, 아니면 groundAlpha. */
+function compositeCell(pixels, side, size, row, col, ground, groundAlpha, dataAlpha, entries) {
+  const covers = (entries ?? []).map(({ piece }) => ({ color: piece.color, coverage: pieceCoverage(piece.points, row, col, size) }));
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let r = ground.r, g = ground.g, b = ground.b, covered = 0;
+    for (const { color, coverage } of covers) {
+      const c = coverage[y * size + x]; if (c === 0) continue;
+      r = r * (1 - c) + color.r * c; g = g * (1 - c) + color.g * c; b = b * (1 - c) + color.b * c; covered = covered * (1 - c) + c;
+    }
+    const o = ((row * size + y) * side + col * size + x) * 4;
+    pixels[o] = Math.round(r); pixels[o + 1] = Math.round(g); pixels[o + 2] = Math.round(b);
+    pixels[o + 3] = covered >= .5 ? dataAlpha : groundAlpha;
+  }
+}
+/** 꾸민 면 텍스처(원시 RGBA). 검출 셀은 기존처럼 셀 전체 한 색 + 레벨 규칙 alpha(3/4 → 255), 꾸밈 셀은 바탕 위 조각.
+ *  꾸밈 셀의 데이터(0/1/2 · 필러 5)는 음영 대상이라 alpha 0, 바탕은 그 레벨의 규칙(level5 → 0 · white=레벨 4 → 255)이에요. */
+export function hStyledFaceTexturePixels(encoded, source, palette, cellStyle) {
+  const n = encoded.n, size = H_STYLED_CELL_PX, side = n * size, pixels = new Uint8Array(side * side * 4);
+  const styledRoles = hStyledCellRoles(encoded.version, encoded.finder);
+  const colorOf = level => { const color = palette.colors[level]; if (!color) throw new RangeError('H preview level'); return color; };
+  const { pieces, isStyled } = hStyledFacePieces({ levels: source, n, styledRoles, style: cellStyle.style, color: colorOf,
+    map: (x, y) => ({ x, y }), tags: { noSeam: true } });
+  const byCell = piecesByCell(pieces, n), ground = colorOf(cellStyle.groundLevel);
+  const groundAlpha = isHUnshadedLevel(cellStyle.groundLevel) ? 255 : 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const k = i * n + j;
+    if (isStyled(k)) { compositeCell(pixels, side, size, i, j, ground, groundAlpha, 0, byCell.get(k)); continue; }
+    const level = source[k], color = colorOf(level), marker = isHUnshadedLevel(level) ? 255 : 0;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const o = ((i * size + y) * side + j * size + x) * 4;
+      pixels[o] = color.r; pixels[o + 1] = color.g; pixels[o + 2] = color.b; pixels[o + 3] = marker;
+    }
+  }
+  return { pixels, width: side, height: side, linear: false };
+}
+/** 꾸민 코너 QR 텍스처(원시 RGBA, 불투명). quiet 4모듈 포함, 밝은 판 = deco.light. */
+export function hStyledQrTexturePixels(matrix, deco, quiet = 4) {
+  const size = H_STYLED_QR_MODULE_PX, cells = matrix.size + quiet * 2, side = cells * size, pixels = new Uint8Array(side * side * 4);
+  const pieces = hStyledQrPieces(matrix, deco, (x, y) => ({ x: x + quiet, y: y + quiet }));
+  const byCell = piecesByCell(pieces, cells);
+  for (let row = 0; row < cells; row++) for (let col = 0; col < cells; col++) {
+    compositeCell(pixels, side, size, row, col, deco.light, 255, 255, byCell.get(row * cells + col));
+  }
+  // 알파가 전부 255 라 역할 비트가 없어요 — 축소 표시의 계단을 줄이려 linear 로 올려요.
+  return { pixels, width: side, height: side, linear: true };
+}
 
 const CAMERA = [-1 / Math.sqrt(3), -1 / Math.sqrt(3), -1 / Math.sqrt(3)];
 const RIGHT = [1 / Math.sqrt(2), -1 / Math.sqrt(2), 0];
@@ -113,10 +189,14 @@ function depthDenominator(point, n, { rotateX = 0, rotateY = 0, rotateZ = 0, per
   return 1 - beta * dot(q, CAMERA) / (n * Math.sqrt(3) / 2);
 }
 
-function faceTextureCanvas(encoded, face, palette, displayMap, faceImages) {
+function faceTextureCanvas(encoded, face, palette, displayMap, faceImages, cellStyle) {
   const n = encoded.n;
   const sourceFace=displayMap.physicalToLogical[face],source=sourceFace&&encoded.faces?.[sourceFace];
   const faceImage=hDisplayImageSource(displayMap,faceImages,face)?.image;
+  if(source&&cellStyle){
+    if(source.length!==n*n)throw new RangeError(`H preview face length: ${face}`);
+    return hStyledFaceTexturePixels(encoded, source, palette, cellStyle);
+  }
   if(source){
     // 원시 RGBA upload라 alpha=0인 데이터의 RGB가 Canvas premultiply로 소실되지 않아요.
     // 같은 텍스처의 alpha에 역할을 실어 프레임별 upload나 추가 sampler를 만들지 않아요.
@@ -179,6 +259,10 @@ function uploadTexture(gl, source) {
 
 function qrTexture(gl, qr) {
   if (!qr?.text || !['TL', 'TR', 'BL', 'BR'].includes(qr.corner)) return null;
+  if (qr.deco !== undefined && qr.deco !== null) {
+    const matrix = qrMatrix(qr.text);
+    return { texture: uploadTexture(gl, hStyledQrTexturePixels(matrix, qr.deco)), size: matrix.size };
+  }
   const matrix = qrMatrix(qr.text), quiet = 4, side = matrix.size + quiet * 2;
   const canvas = canvasFor(side, side), ctx = canvas?.getContext('2d'); if (!ctx) return null;
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, side, side); ctx.fillStyle = '#000';
@@ -234,7 +318,7 @@ export function createHPreviewRenderer(canvas) {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texture); gl.uniform1i(uTexture, 0);
     gl.uniform4fv(uOutline, outlineRgba); gl.uniform1f(uEdge, edge); gl.uniform1f(uOutlineOn, outline ? 1 : 0);
   }
-  function draw(encoded, { lighting, palette, rotateX = 0, rotateY = 0, rotateZ = 0, perspective = .18, margin = 2, zoom = 1, outline = true, arrangement = 'isometric', renderFaces, faceImages = {}, qr, diagnosticStrict = false } = {}) {
+  function draw(encoded, { lighting, palette, rotateX = 0, rotateY = 0, rotateZ = 0, perspective = .18, margin = 2, zoom = 1, outline = true, arrangement = 'isometric', renderFaces, faceImages = {}, qr, diagnosticStrict = false, hCellStyle, hCellGround } = {}) {
     try {
       if (lost || failed || !encoded || !Number.isInteger(encoded.n) || encoded.n < 1) return false;
       const nextDisplayMapKey = `${objectId(encoded)}|${encoded.mode}|${arrangement}|${Array.isArray(renderFaces) ? renderFaces.join('|') : String(renderFaces ?? '')}`;
@@ -244,17 +328,21 @@ export function createHPreviewRenderer(canvas) {
       }
       const displayMap = cachedDisplayMap;
       const colors = hPalette(palette, encoded.tones);
-      const nextKey = `${objectId(encoded)}|${encoded.n}|${displayMap.cacheKey}|${paletteSignature(colors)}|${faceImageSignature(faceImages,displayMap)}`;
+      // 셀 꾸미기 — CPU buildHScene 과 같은 판정(hCellStyleOf: 2톤·corners 는 null)이에요. 꺼짐이면 키 문자열 그대로.
+      const cellStyle = hCellStyleOf({ hCellStyle, hCellGround }, { tones: encoded.tones, finder: encoded.finder });
+      const nextKey = `${objectId(encoded)}|${encoded.n}|${displayMap.cacheKey}|${paletteSignature(colors)}|${faceImageSignature(faceImages,displayMap)}`
+        + (cellStyle ? `|cell:${cellStyle.style}/${cellStyle.ground}` : '');
       const resourcesChanged = nextKey !== cacheKey;
       if (resourcesChanged) {
         disposeTextures();
         for (const face of H_FACE_IDS) {
-          const source = faceTextureCanvas(encoded, face, colors, displayMap, faceImages);
+          const source = faceTextureCanvas(encoded, face, colors, displayMap, faceImages, cellStyle);
           if (source) textures.set(face, uploadTexture(gl, source));
         }
         cacheKey = nextKey;
       }
-      const qrKey = qr?.text && qr?.corner ? `${qr.text}|${qr.corner}|${encoded.n}|${perspective}` : '';
+      const qrDeco = qr?.text && qr?.corner ? hQrDecoKey(qr.deco) : '';
+      const qrKey = qr?.text && qr?.corner ? `${qr.text}|${qr.corner}|${encoded.n}|${perspective}${qrDeco ? `|deco:${qrDeco}` : ''}` : '';
       const qrChanged = qrKey !== qrCacheKey;
       if (qrChanged) { if (qrCached) gl.deleteTexture(qrCached.texture); qrCached = qrTexture(gl, qr); qrCacheKey = qrKey; }
       const view = hProjection(encoded.n, { rotateX, rotateY, rotateZ, perspective, margin, zoom });

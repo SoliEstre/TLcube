@@ -160,7 +160,11 @@ export function sceneToSvg(scene, options = {}) {
       const pts = s.points.map((p) => `${n(p.x)},${n(p.y)}`).join(' ');
       // stroke-width 는 좌표 precision 과 무관하게 고정 표기 — precision 1 에서
       // num(0.03, 1) = "0.0" 이 되어 심 커버가 소멸하는 코너를 막는다 (검증 라운드 발견).
-      lines.push(s.qr
+      // seam stroke 를 안 주는 도형: QR 조각(`qr`) · 꾸민 셀 중 틈이 의도인 것(`noSeam` — gap ·
+      // dot · 사각 스타일 조각 · H 바탕 · 꾸민 코너 QR, DESIGN_001 §4.2). stroke 가 줄눈을
+      // 메우면 gap 이 안 보이고, 코너 QR 스타일 틈이 막혀 모양이 사라진다. round/bevel 은
+      // 이웃과 변을 공유하므로 seam 을 **유지**한다(noSeam 을 안 단다).
+      lines.push(s.qr || s.noSeam
         ? `<polygon points="${pts}" fill="${fill}"/>`
         : `<polygon points="${pts}" fill="${fill}" stroke="${fill}" `
           + `stroke-width="${SEAM_STROKE_WIDTH}" stroke-linejoin="round"/>`);
