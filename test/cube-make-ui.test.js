@@ -585,7 +585,7 @@ test('표기: 용지 치수는 언어 소수점으로 적고 언어가 바뀌면
     assert.match(x.$('makePrintStatus').textContent, /^\p{Lu}/u, `${lang}: 3D 상태 줄 첫 글자`);
   }
   // ja: 이 섹션 키(g1042–g1130 · 배율 보정 g1133–g1142)에는 반각 콜론(뒤에 숫자 · 슬래시가 오지 않는)이 없어요(기존 g480 선례).
-  // (g1131 · g1132 는 이 섹션 밖 — 구 전개도 버튼 설명 — 이라 범위에서 빠져요.)
+  // (g1131 · g1132 는 이 섹션 밖이던 구 전개도 버튼 설명이었고, 3D 데이터 전개도 거울 수정(2026-09-26)과 함께 폐기했어요.)
   const sectionKey = (n) => (n >= 1042 && n <= 1130) || (n >= 1133 && n <= 1142);
   const halfColon = Object.keys(h.dict.ja).filter((k) => /^g\d{4}$/.test(k) && sectionKey(Number(k.slice(1))) && /:(?![\d/])/.test(h.dict.ja[k]));
   assert.deepEqual(halfColon, []);

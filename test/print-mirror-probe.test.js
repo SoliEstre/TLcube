@@ -1,5 +1,7 @@
 /**
- * 0단계 실측 (a) — 기존 전개도(cubeNetScene)가 접었을 때 읽히는 방향인지 재요(설계 §2.1).
+ * 0단계 실측 (a) — 3D 데이터 전개도(cubeNetScene)가 접었을 때 읽히는 방향인지 재요(설계 §2.1).
+ * 이 자가 처음 «거울» 을 쟀고(2026-09-23), 2026-09-26 writer 가 물리 좌표(PHYSICAL_SWAP)로 펼치도록 고친 뒤
+ * 판정을 «정본 방향» 으로 의도적으로 뒤집었어요. 대조군: writer 앞에서 한 번 더 뒤집은 모델(= 수정 전 좌표)은 여전히 «거울» 이에요.
  *
  * 1면(XM 만 데이터) 코드의 전개도 래스터에서 XM 영역을 잘라, 흰 여백 2셀 이상을 두른 캔버스에 붙여요.
  * 라틴 십자에서는 면이 이웃 면과 맞닿아 있어 그냥 자르면 여백이 0 이고, 검출기는 영상 가장자리에 닿은
@@ -11,6 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {encodeH,decodeH} from '../src/h-codec.js';
 import {buildHCubeModel,cubeNetScene} from '../src/cube-export.js';
+import {physicalCubeModel} from '../src/cube-physical.js';
 import {buildHFaceSheet} from '../src/h-render.js';
 import {rasterize} from '../src/raster.js';
 import {detectH} from '../src/h-detect.js';
@@ -53,6 +56,14 @@ function probe(field){
   return {original,mirrored,verdict:mirrorVerdict(original.faces.length,mirrored.faces.length)};
 }
 const singleFace=(finder,tones)=>encodeH('one',{version:finder==='frame'?3:7,mode:1,tones,ecc:'H',mask:7,finder});
+/** 대조군: writer 가 다시 반사하므로 결과 좌표는 수정 전(모델 좌표 그대로)과 같아요. 면 이름은 옮긴 평면 이름으로 맞춰요 —
+ *  그래서 이 사본의 전개도에서 시트 face 는 평면 이름이고, 원래 시트는 plane 칸에 있어요(sheetShapes 로 찾아요). */
+function remirror(model){
+  const w=physicalCubeModel(model);
+  return {...w,space:undefined,quads:w.quads.map(q=>({...q,face:q.plane})),...(w.images?{images:w.images.map(p=>({...p,face:p.plane}))}:{})};
+}
+/** 대조군 전개도에서 원래 시트 sheet 가 칠한 도형만 face 로 다시 이름 붙여요(자르기 경로를 그대로 쓰려고). */
+const sheetShapes=(net,sheet)=>({...net,shapes:net.shapes.filter(shape=>shape.plane===sheet).map(shape=>({...shape,face:sheet}))});
 
 test('판정 규칙은 짝 대조 네 칸이고, 둘 다 0 이면 «판정 불가» 로 실패해요',()=>{
   assert.equal(mirrorVerdict(0,1),'mirrored');
@@ -88,26 +99,39 @@ test('대조군: 같은 자르기 경로로 정본 면 시트의 XM 은 «정본
   }
 });
 
-test('0단계 (a): 기존 전개도의 1면 XM 은 정본의 좌우 거울상이에요(원본 0면 · 반전본 1면 이상)',()=>{
+test('0단계 (a): 3D 데이터 전개도의 1면 XM 은 정본 방향이에요(원본 1면 이상 · 반전본 0면) — 수정 전 «거울» 에서 의도적으로 뒤집었어요',()=>{
   for(const finder of ['frame','corners'])for(const tones of [2,3]){
     const e=singleFace(finder,tones),{original,mirrored,verdict}=probe(cropFace(cubeNetScene(buildHCubeModel(e)),'XM'));
     const context=`${finder}/${tones}톤: 원본 ${original.faces.length} · 반전본 ${mirrored.faces.length}`;
+    assert.equal(assertDecided(verdict,context),'proper',context);
+    // 원본이 그대로 복호돼요 — 전치·회전이 섞여도 검출기는 회전 4종을 받으므로, 거울만 아니면 읽혀요.
+    const hit=original.faces.find(row=>row.face==='XM');
+    assert.ok(hit,context);assert.equal(hit.mirror,false);
+    assert.equal(decodeH({XM:hit.levels},profile(e)).text,'one',context);
+  }
+});
+
+test('0단계 (a) 대조군: 한 번 더 뒤집은 모델(수정 전 좌표)의 전개도 XM 은 같은 자에서 여전히 «거울» 이에요',()=>{
+  for(const finder of ['frame','corners'])for(const tones of [2,3]){
+    const e=singleFace(finder,tones),{original,mirrored,verdict}=probe(cropFace(sheetShapes(cubeNetScene(remirror(buildHCubeModel(e))),'XM'),'XM'));
+    const context=`${finder}/${tones}톤 대조군: 원본 ${original.faces.length} · 반전본 ${mirrored.faces.length}`;
     assert.equal(assertDecided(verdict,context),'mirrored',context);
-    // 반전본은 순수 좌우 반전이면 그대로 복호돼요. 전치·회전이 섞인 거울이 아니라는 뜻이에요.
     const hit=mirrored.faces.find(row=>row.face==='XM');
     assert.ok(hit,context);assert.equal(hit.mirror,false);
     assert.equal(decodeH({XM:hit.levels},profile(e)).text,'one',context);
   }
 });
 
-fullOnly(()=>test('0단계 (a) 확장: 6면 코드의 전개도 여섯 면이 모두 거울상이에요',()=>{
+fullOnly(()=>test('0단계 (a) 확장: 6면 코드의 3D 데이터 전개도 여섯 면이 모두 정본 방향이고, 대조군은 모두 거울이에요',()=>{
   for(const [finder,version] of [['frame',2],['corners',5]])for(const tones of [2,3]){
-    const e=encodeH(Uint8Array.of(7,9),{version,mode:6,tones,ecc:'M',mask:3,finder}),net=cubeNetScene(buildHCubeModel(e));
+    const e=encodeH(Uint8Array.of(7,9),{version,mode:6,tones,ecc:'M',mask:3,finder}),model=buildHCubeModel(e),net=cubeNetScene(model),control=cubeNetScene(remirror(model));
     for(const face of hModeFaces(6)){
       const {original,mirrored,verdict}=probe(cropFace(net,face));
       const context=`${finder}/${tones}톤/${face}: 원본 ${original.faces.length} · 반전본 ${mirrored.faces.length}`;
-      assert.equal(assertDecided(verdict,context),'mirrored',context);
-      assert.ok(mirrored.faces.some(row=>row.face===face&&row.mirror===false),context);
+      assert.equal(assertDecided(verdict,context),'proper',context);
+      assert.ok(original.faces.some(row=>row.face===face&&row.mirror===false),context);
+      const c=probe(cropFace(sheetShapes(control,face),face));
+      assert.equal(assertDecided(c.verdict,`대조군 ${context}`),'mirrored',`대조군 ${context}`);
     }
   }
 }));

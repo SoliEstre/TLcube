@@ -87,7 +87,8 @@ Y's locators, shading or Y-style inset QR (window β / slot); H's own inset QR g
   Loops close after 720/speed seconds with Per turn, and after 360/speed seconds with Per face, None or Gyroscope.
 - **Exports.** PNG/SVG as a sheet of all data faces or the current view only. The Y group's 3D data section adds
   glTF 2.0 models, Minecraft `.schem` structures with nearest-color concrete (not complete worlds) and PNG/SVG cube
-  nets; those nets are texture layouts mirrored on every face and do not scan when folded.
+  nets, all in the same physical coordinates as the maker files: seen from outside, every face reads the same way as the preview (not mirrored).
+  One exception: the preview already draws Type Y's inset QR (window β / slot) mirrored, and these files keep that orientation.
 - **Maker files.** Paper patterns and 3D-printing files for a physical cube (details below). A cube folded from the
   one-sheet net has been read by the scanner; the wrap skin, the board pieces and a 3D-printed cube have not yet
   been verified with a real scan.
@@ -115,8 +116,8 @@ Y's locators, shading or Y-style inset QR (window β / slot); H's own inset QR g
   blank-face editor); faces that become blank later are not filled automatically. It replaces the corner QR unless
   the advanced corner-QR option is on. It reads when a phone sees that face nearly head-on, so still images and 2.5D
   carry it only when that face is visible; 3D print files (3MF/STL) omit it like other face images.
-  Like the code faces, it comes out mirrored in the model-coordinate outputs (glTF, the 3D-data net and .schem), so phone
-  reading there is not guaranteed; 2.5D PNG/SVG, the GPU preview, rotation video and the paper net are not mirrored.
+  Like the code faces, it is not mirrored when seen from outside in any output: 2.5D PNG/SVG, the GPU preview, rotation video,
+  glTF, the 3D-data net, .schem and the paper net.
   A .schem needs enough blocks per cell for the face QR, and the generator says when it does not have them.
   Corner QR preserves the cube's center and scene size.
 - Video export needs WebCodecs AVC support at every frame rate, so the loop closes on an exact frame; it never falls back to a lower FPS.
@@ -141,7 +142,7 @@ Each pattern carries a 50 mm calibration bar. If a printer driver shrinks the pa
 PNG, PDF and direct print are pre-scaled to compensate (remembered per paper size in this browser only). SVG stays unscaled
 as the real-size file for cutting machines and editing.
 A cube folded from the one-sheet net has been read by the scanner; the wrap skin, the board pieces and a 3D-printed cube have not yet been verified with a real scan.
-The older cube nets in the 3D data section are mirrored on every face and do not scan when folded — use these paper patterns instead.
+The cube nets in the 3D data section are not mirrored either, but they have no glue tabs, cut and fold marks or scale calibration — for a paper cube, use these patterns.
 
 </details>
 

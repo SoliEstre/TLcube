@@ -3746,8 +3746,6 @@ const GENERATOR_STRINGS = {
     "g1128": "판 두께가 종이 모듈 이상이에요",
     "g1129": "이 용지에 들어가지 않아요",
     "g1130": "종이 모듈이 1.0 mm보다 작아요",
-    "g1131": "면마다 화면과 좌우가 반대로 그려진 그림이에요. 인쇄해서 접어도 스캔되지 않아요.",
-    "g1132": "종이로 만들 땐 «만들기용 파일» 섹션의 종이 도안을 쓰세요.",
     "g1133": "배율 보정 — 보정 없이 인쇄한 50 mm 막대를 잰 길이(mm)",
     "g1134": "보정 없이 인쇄한 도안(막대 옆 캡션에 k= 가 없는 도안)의 50 mm 막대를 자로 잰 값을 적어요. 50이 아니면 다음 도안을 그 비율만큼 미리 키우거나 줄여 그려서, 쪽을 줄이는 프린터 드라이버에서도 실제 크기로 나와요. 보정한 도안(캡션 끝에 k=0.966 처럼 적혀요)의 막대는 50 mm여야 해요 — 다르면 그 길이를 적지 말고 ↺ 로 되돌린 뒤 보정 없이 다시 인쇄해 재요. 값은 용지 크기마다 따로, 이 브라우저에만 기억해요. 프린터를 바꾸면 다시 재요. 칸을 비우거나 ↺ 를 누르면 50(보정 없음)이에요. SVG는 보정하지 않는 커팅기·편집용 실척 파일이에요 — 보정은 PNG·PDF·인쇄에만 적용돼요.",
     "g1135": "배율 보정 {k}(보정 없이 잰 막대 {bar} mm) — 도안을 ×{factor}로 그려요",
@@ -4362,8 +4360,6 @@ const GENERATOR_STRINGS = {
     "g1128": "board at least as thick as a paper module",
     "g1129": "does not fit this paper",
     "g1130": "paper modules under 1.0 mm",
-    "g1131": "Each face is drawn mirrored compared with the screen, so it won’t scan, even when printed and folded into a cube.",
-    "g1132": "To build a paper cube, use the paper pattern in the “Maker files” section.",
     "g1133": "Scale correction — measured length of the 50 mm bar printed without correction (mm)",
     "g1134": "Enter what the 50 mm bar measures with a ruler on a pattern printed without correction (no “k=” in the caption next to the bar). If it is not 50, the next pattern is drawn scaled by that ratio in advance, so it prints at actual size even when the printer driver shrinks the page. On a corrected pattern (the caption ends in e.g. “k=0.966”) the bar should measure 50 mm — if it does not, do not enter that length: press ↺, print again without correction and measure. The value is remembered per paper size, in this browser only; measure again after changing printers. Clear the field or press ↺ for 50 (no correction). The SVG is never corrected — it is the actual-size file for cutting machines and editing; the correction applies to PNG, PDF and printing.",
     "g1135": "scale correction {k} (bar measured without correction: {bar} mm) — pattern drawn at ×{factor}",
@@ -4978,8 +4974,6 @@ const GENERATOR_STRINGS = {
     "g1128": "板の厚さが紙のモジュール以上です",
     "g1129": "この用紙に収まりません",
     "g1130": "紙のモジュールが 1.0 mm 未満です",
-    "g1131": "各面が画面と左右反転して描かれた図です。印刷して組み立ててもスキャンできません。",
-    "g1132": "紙で作るときは「製作用ファイル」セクションの紙の展開図を使ってください。",
     "g1133": "倍率補正 — 補正なしで印刷した 50 mm バーの実測長（mm）",
     "g1134": "補正なしで印刷した展開図（バー横のキャプションに k= がないもの）の 50 mm バーを定規で測った値を入力します。50 でなければ次の展開図をその比率だけ前もって拡大・縮小して描くので、ページを縮小するプリンタードライバーでも実寸で印刷されます。補正した展開図（キャプションの末尾に k=0.966 のように記されます）のバーは 50 mm になるはずです — 違う場合はその長さを入力せず、↺ で戻してから補正なしで印刷し直して測ります。値は用紙サイズごとに、このブラウザーにだけ記憶します。プリンターを替えたら測り直します。欄を空にするか ↺ を押すと 50（補正なし）に戻ります。SVG は補正しない、カッティングマシン・編集用の実寸ファイルです — 補正は PNG・PDF・印刷に適用されます。",
     "g1135": "倍率補正 {k}（補正なしのバー実測 {bar} mm） — 展開図を ×{factor} で描きます",
@@ -5593,8 +5587,6 @@ const GENERATOR_STRINGS = {
     "g1128": "carton au moins aussi épais qu’un module",
     "g1129": "ne tient pas sur ce papier",
     "g1130": "modules de moins de 1,0 mm",
-    "g1131": "Chaque face y est dessinée en miroir par rapport à l’écran. Même imprimé et plié en cube, ce dessin ne se scanne pas.",
-    "g1132": "Pour un cube en papier, utilisez le patron de la section « Fichiers de fabrication ».",
     "g1133": "Correction d’échelle — longueur mesurée de la barre de 50 mm imprimée sans correction (mm)",
     "g1134": "Saisissez la longueur, mesurée à la règle, de la barre de 50 mm d’un patron imprimé sans correction (sans « k= » dans la légende à côté de la barre). Si elle ne fait pas 50, le patron suivant est dessiné à l’échelle de ce rapport, pour sortir en taille réelle même quand le pilote d’imprimante réduit la page. Sur un patron corrigé (la légende se termine par exemple par « k=0.966 »), la barre doit mesurer 50 mm — sinon, ne saisissez pas cette longueur : appuyez sur ↺, réimprimez sans correction et mesurez. La valeur est mémorisée par format de papier, dans ce navigateur uniquement ; mesurez de nouveau après un changement d’imprimante. Videz le champ ou appuyez sur ↺ pour revenir à 50 (sans correction). Le SVG n’est jamais corrigé — c’est le fichier à taille réelle pour les machines de découpe et l’édition ; la correction s’applique au PNG, au PDF et à l’impression.",
     "g1135": "correction d’échelle {k} (barre mesurée sans correction : {bar} mm) — patron dessiné à ×{factor}",
@@ -6208,8 +6200,6 @@ const GENERATOR_STRINGS = {
     "g1128": "cartone spesso almeno quanto un modulo",
     "g1129": "non entra in questo foglio",
     "g1130": "moduli sotto 1,0 mm",
-    "g1131": "Ogni faccia è disegnata specchiata rispetto allo schermo. Anche stampato e piegato a cubo, il disegno non viene letto.",
-    "g1132": "Per un cubo di carta usa il cartamodello della sezione «File per costruire».",
     "g1133": "Correzione di scala — lunghezza misurata della barra da 50 mm stampata senza correzione (mm)",
     "g1134": "Inserisci la lunghezza, misurata con un righello, della barra da 50 mm di un modello stampato senza correzione (senza «k=» nella didascalia accanto alla barra). Se non è 50, il modello successivo viene disegnato scalato in quella proporzione, così esce in dimensioni reali anche quando il driver della stampante riduce la pagina. Su un modello corretto (la didascalia termina per esempio con «k=0.966») la barra deve misurare 50 mm — altrimenti non inserire quella lunghezza: premi ↺, ristampa senza correzione e misura. Il valore viene ricordato per formato carta, solo in questo browser; misura di nuovo se cambi stampante. Svuota il campo o premi ↺ per tornare a 50 (nessuna correzione). Il file SVG non viene mai corretto — è il file in scala reale per plotter da taglio e modifica; la correzione vale per PNG, PDF e stampa.",
     "g1135": "correzione di scala {k} (barra misurata senza correzione: {bar} mm) — modello disegnato a ×{factor}",
@@ -6823,8 +6813,6 @@ const GENERATOR_STRINGS = {
     "g1128": "Platte mindestens so dick wie ein Modul",
     "g1129": "passt nicht auf dieses Papier",
     "g1130": "Module unter 1,0 mm",
-    "g1131": "Jede Fläche ist gegenüber dem Bildschirm seitenverkehrt gezeichnet. Auch ausgedruckt und zum Würfel gefaltet lässt sich das Netz nicht scannen.",
-    "g1132": "Für einen Papierwürfel die Papiervorlage im Abschnitt „Bastel- und Druckdateien“ verwenden.",
     "g1133": "Skalierungskorrektur — gemessene Länge des ohne Korrektur gedruckten 50-mm-Balkens (mm)",
     "g1134": "Die mit dem Lineal gemessene Länge des 50-mm-Balkens einer ohne Korrektur gedruckten Vorlage eingeben (ohne „k=“ in der Beschriftung neben dem Balken). Ist sie nicht 50, wird die nächste Vorlage vorab in diesem Verhältnis skaliert gezeichnet, damit sie auch dann in Originalgröße herauskommt, wenn der Druckertreiber die Seite verkleinert. Auf einer korrigierten Vorlage (die Beschriftung endet z. B. auf „k=0.966“) muss der Balken 50 mm messen — sonst diese Länge nicht eintragen, sondern ↺ drücken, ohne Korrektur neu drucken und messen. Der Wert wird je Papierformat und nur in diesem Browser gespeichert; nach einem Druckerwechsel neu messen. Feld leeren oder ↺ drücken für 50 (keine Korrektur). Die SVG-Datei wird nie korrigiert — sie ist die Datei in Originalgröße für Schneideplotter und zum Bearbeiten; die Korrektur gilt für PNG, PDF und Druck.",
     "g1135": "Skalierungskorrektur {k} (Balken ohne Korrektur gemessen: {bar} mm) — Vorlage mit ×{factor} gezeichnet",
@@ -7438,8 +7426,6 @@ const GENERATOR_STRINGS = {
     "g1128": "cartón al menos tan grueso como un módulo",
     "g1129": "no cabe en este papel",
     "g1130": "módulos de menos de 1,0 mm",
-    "g1131": "Cada cara está dibujada en espejo respecto a la pantalla. Aunque imprimas este desarrollo y lo dobles en cubo, no se escanea.",
-    "g1132": "Para un cubo de papel, usa la plantilla de la sección «Archivos para fabricar».",
     "g1133": "Corrección de escala — longitud medida de la barra de 50 mm impresa sin corrección (mm)",
     "g1134": "Escribe lo que mide con una regla la barra de 50 mm de una plantilla impresa sin corrección (sin «k=» en el pie junto a la barra). Si no es 50, la siguiente plantilla se dibuja escalada en esa proporción, para que salga a tamaño real aunque el controlador de la impresora reduzca la página. En una plantilla corregida (el pie termina, por ejemplo, en «k=0.966») la barra debe medir 50 mm; si no, no escribas esa longitud: pulsa ↺, vuelve a imprimir sin corrección y mide. El valor se guarda por tamaño de papel y solo en este navegador; vuelve a medir si cambias de impresora. Vacía el campo o pulsa ↺ para volver a 50 (sin corrección). El SVG nunca se corrige — es el archivo a tamaño real para plotters de corte y edición; la corrección se aplica al PNG, al PDF y a la impresión.",
     "g1135": "corrección de escala {k} (barra medida sin corrección: {bar} mm) — plantilla dibujada a ×{factor}",
@@ -8053,8 +8039,6 @@ const GENERATOR_STRINGS = {
     "g1128": "placa pelo menos tão espessa como um módulo",
     "g1129": "não cabe neste papel",
     "g1130": "módulos abaixo de 1,0 mm",
-    "g1131": "Cada face está desenhada espelhada em relação ao ecrã. Mesmo impressa e dobrada em cubo, a planificação não é lida.",
-    "g1132": "Para um cubo de papel, use o molde da secção «Ficheiros para construir».",
     "g1133": "Correção de escala — comprimento medido da barra de 50 mm impressa sem correção (mm)",
     "g1134": "Introduza o que mede com uma régua a barra de 50 mm de um molde impresso sem correção (sem «k=» na legenda junto à barra). Se não for 50, o molde seguinte é desenhado à escala dessa proporção, para sair em tamanho real mesmo quando o controlador da impressora reduz a página. Num molde corrigido (a legenda termina, por exemplo, em «k=0.966») a barra deve medir 50 mm; se não medir, não introduza esse comprimento: prima ↺, volte a imprimir sem correção e meça. O valor fica guardado por tamanho de papel e só neste navegador; meça de novo se mudar de impressora. Esvazie o campo ou prima ↺ para voltar a 50 (sem correção). O SVG nunca é corrigido — é o ficheiro em tamanho real para plotters de corte e edição; a correção aplica-se ao PNG, ao PDF e à impressão.",
     "g1135": "correção de escala {k} (barra medida sem correção: {bar} mm) — molde desenhado a ×{factor}",
@@ -8434,7 +8418,7 @@ import { renderWithErrorDisplay, selfCheckVerdict } from './src/render-status.js
 import { createExportFilenameFactory } from './src/export-filename.js';
 
 // 배포 스탬프는 화면·일반 비컨이 같은 값을 쓴다. 통합자가 배포할 때만 올린다.
-const GENERATOR_BUILD = '2026-09-26.01';
+const GENERATOR_BUILD = '2026-09-26.02';
 const genBeacon = createBeacon('gen', { build: GENERATOR_BUILD });
 
 /* 첫 예제 자동 렌더는 제품 사용으로 세지 않는다. 사용자가 렌더 입력을 건드린 뒤부터
@@ -9468,8 +9452,6 @@ function syncCubeExportUi(){
   }
   for(const button of $('cubeBlockScaleCards').children){const scale=Number(button.dataset.blockScale),on=String(scale)===$('cubeBlockScale').value;button.innerHTML=hBlockIconMarkup(scale)+`<span>${scale} × ${scale}</span>`;button.classList.toggle('active',on);button.setAttribute('aria-pressed',String(on));button.disabled=cubeExportBusy;}
   $('exportCubeSchem').title=typeof CompressionStream!=='function'?cubeText('unsupported'):'Sponge v3 · Java 1.20.4+';
-  // 타입 H 의 구 전개도는 설명에 «면마다 화면과 좌우 반대 · 접어도 판독 안 됨» 을 달아요(문구·판정은 슬라이스 밖 hNetFoldNote). 산출물은 그대로예요.
-  const foldNote=hNetFoldNote();if(foldNote)for(const id of ['exportNetPng','exportNetSvg','copyNetPng','copyNetSvg']){const button=$(id);button.title=`${button.title} — ${foldNote}`;button.setAttribute('aria-label',button.title);}
   // 빈 면 QR 이 지금 셀당 블록 수로는 .schem 에서 모듈이 빠질 때만 보이는 안내예요(문구·판정은 슬라이스 밖 hSchemQrNote).
   const schemQrNote=hSchemQrNote();$('cubeSchemQrHint').hidden=!schemQrNote;$('cubeSchemQrHint').textContent=schemQrNote;
 }
@@ -9616,7 +9598,7 @@ let cubeMakeMemo=null;
 const cubeMakeNotes={paper:null,print:null};
 
 /** 표시 조건은 타입 H 하나예요 — 정식 화면과 시험판 모두 보여요(2026-09-24 정식 노출: 한 장 전개도로 만든 종이 큐브의 실물 판독과
- *  인쇄 배율 보정을 확인했어요). 경로(isLabPath)는 보지 않아요. 구 전개도 버튼의 안내 꼬리(hNetFoldNote)도 이 함수를 따라요. */
+ *  인쇄 배율 보정을 확인했어요). 경로(isLabPath)는 보지 않아요. */
 function cubeMakeVisible(){return hGeneratorActive();}
 function cubeMakeNum(value,minDigits,maxDigits=minDigits){
   return new Intl.NumberFormat(genI18n.lang||'ko',{minimumFractionDigits:minDigits,maximumFractionDigits:maxDigits}).format(value);
@@ -10050,12 +10032,6 @@ $('makePaperBarReset').addEventListener('click',()=>{
 });
 for(const id of CUBE_MAKE_IDS)$(id).addEventListener('click',()=>runCubeMake(id));
 // ── cubeMake VM 슬라이스 끝 ──
-/** 타입 H 구 전개도 버튼 설명 꼬리. 구 전개도는 2.5D 렌더러 기저(좌수 투영)에 맞춘 면 좌표를 평면에 그대로 펼쳐서,
- * 평면 도안의 면마다 이미 화면과 좌우가 반대예요(실측: 면을 잘라 복호하면 원본 0면 · 좌우 반전본만 읽힘) — 인쇄해서 접어도 판독되지 않아요.
- * 교정본은 «만들기용 파일» 섹션(물리 좌표)이 내요 — 그 섹션이 보일 때만 안내를 덧붙여요(cubeMakeVisible 을 따라가요:
- * 섹션은 타입 H 면 정식 · 시험판 모두 보여서, 지금은 H 면 두 경로 모두 안내가 붙어요). H 가 아니면 빈 문자열이에요.
- * 두 문장 사이는 공백 하나, 앞 문장이 전각 마침표(。．)로 끝나면 공백 없이 이어요. */
-function hNetFoldNote(){if(!hGeneratorActive())return '';const note=t('g1131');if(!cubeMakeVisible())return note;return note+(/[。．]$/.test(note)?'':' ')+t('g1132');}
 /** .schem 면 QR 안내 — 블록 중심 표본이라 면 한 변 블록 수(n × 셀당 블록)가 QR 모듈 수(quiet 포함)보다 적으면 모듈이 빠져 읽히지 않아요.
  *  그때만 모자람을 덮는 가장 작은 셀당 블록 카드 값을 적어요. 셀당 블록 카드는 고급 전용이라 일반 모드에서도 이 줄로 알려요.
  *  판정 입력은 .schem 이 실제로 내보내는 것(cubeExportModel = current 의 인코딩·면 이미지·배치)이에요 — 생성기 상태에서 다시 유도하지 않아요. */

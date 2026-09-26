@@ -238,13 +238,16 @@ export const MODULE_ORDER = [
   // y3d-slot-qr 는 cellSurfaceFinal·sceneY·qr 의 뒤, y3d-viewer 의 앞이다.
   'y3d-slot-qr',
   'y3d-viewer',
+  // cube-physical 은 h-profile 만 import 하는 물리 좌표 사상이에요. 3D 데이터 writer(cube-export · minecraft-schematic)가
+  // 2026-09-26 부터 이 사상으로 오른손 좌표에 옮겨 쓰므로 그 둘 **앞**이에요(만들기용 파일보다도 앞).
+  'cube-physical',
   'cube-image-export', 'cube-export', 'minecraft-schematic', 'generator-cube-export',
   // 만들기용 파일(3D 인쇄 · 종이, 2026-09-23). 의존은 h-profile · png · scene-image 와 서로뿐이라
   // 전부 이 앞에 있어요. print-mesh 는 cube-physical(orientForBed) 뒤, mesh-export 는 png(crc32) · print-mesh(삼각형 상한) 뒤예요.
   // paper-net · pdf-writer · print-sheet 는 cube-physical 을 import 하지 않아요(PhysCube 객체만 받아요).
   // print-sheet 는 paper-net **앞**이에요(2026-09-24 인쇄 배율 보정): paper-net 자체 검사가 인쇄 크롭 상수
   // (PRINT_MARGIN_MM · PRINT_HEIGHT_TRIM_MM)를 import 해요. print-sheet 는 import 가 없는 잎 모듈이라 앞당겨도 위상이 서요.
-  'cube-physical', 'print-sheet', 'paper-net', 'pdf-writer', 'print-mesh', 'mesh-export',
+  'print-sheet', 'paper-net', 'pdf-writer', 'print-mesh', 'mesh-export',
   'generator-h-qr', 'h-preview-renderer', 'cube-video-export',
   // i18n 도 의존이 없다(문구는 index.html 안에 인라인이고 여기엔 기구만 있다).
   'i18n',

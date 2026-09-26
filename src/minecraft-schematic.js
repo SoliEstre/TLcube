@@ -1,5 +1,6 @@
 /** Minecraft Java 1.20.4 Sponge Schematic v3 출력. 완성 월드/지도 파일이 아니에요. */
 import {cubeImageVoxelQuads} from './cube-image-export.js';
+import {physicalCubeMap,physicalCubeModel} from './cube-physical.js';
 
 /** sRGB 대표값은 근사치예요. 블록 id만 계약이고 텍스처 픽셀과 비트 동일하지 않아요. */
 export const CONCRETE_COLORS = Object.freeze([
@@ -117,9 +118,9 @@ function mcIndex(mx, my, mz, S) {
 }
 
 /**
- * 모델 공간에서 면을 칠한 뒤 [x,y,z]→[x,S-1-z,y] 로 MC(Y-up)에 올려요. 이 사상은 회전(det=+1)이라 거울을 더하지 않아요.
- * 다만 모델 좌표 자체가 오른손 공간에서는 정본 면 시트의 거울상이라(src/cube-physical.js), MC 안에서 바깥에서 보면
- * 코드 면·면 이미지·면 QR 이 모두 좌우 거울로 보여요(test/h-face-qr.test.js 가 «기존 거울» 로 잠가요).
+ * 렌더 좌표 모델을 physicalCubeModel 로 오른손 물리 좌표에 옮겨 면을 칠한 뒤 [x,y,z]→[x,S-1-z,y] 로 MC(Y-up)에 올려요.
+ * 이 사상은 회전(det=+1)이라 거울을 더하지 않아요 — MC 안에서 바깥에서 보면 코드 면·면 이미지·면 QR 이 2.5D 와 같은 방향이에요
+ * (test/h-face-qr.test.js 의 «방향 락 — .schem» 이 거울 아님을 잠가요). 면 이미지 블록은 렌더 좌표에서 표본한 뒤 같은 사상으로 옮겨요.
  * @param {{n:number,quads:object[]}} model
  */
 export function voxelizeCube(model, { scale = 1 } = {}) {
@@ -131,6 +132,8 @@ export function voxelizeCube(model, { scale = 1 } = {}) {
   const volume = S * S * S;
   if (volume > 10_000_000) throw new RangeError('총 블록 수가 10,000,000 을 넘어요');
   if (!Array.isArray(model.quads)) throw new TypeError('quads 배열이 필요해요');
+  const world = physicalCubeModel(model);
+  const toPhysical = physicalCubeMap(n).quad;
   const gray = nearestConcrete({ r: 54, g: 57, b: 61 });
   const palette = ['minecraft:air', gray];
   const indexOf = new Map([['minecraft:air', 0], [gray, 1]]);
@@ -163,14 +166,14 @@ export function voxelizeCube(model, { scale = 1 } = {}) {
   }
   const base = [];
   const overlay = [];
-  for (const quad of model.quads) {
+  for (const quad of world.quads) {
     if (!quad || (quad.kind !== 'module' && quad.kind !== 'back' && quad.kind !== 'overlay')) {
       throw new RangeError('kind 는 module|back|overlay 여야 해요');
     }
     (quad.kind === 'overlay' ? overlay : base).push(quad);
   }
   function paint(quad) {
-    const box = assertAxisQuad(quad.face, n, quad.corners);
+    const box = assertAxisQuad(quad.plane ?? quad.face, n, quad.corners);
     const id = pal(nearestConcrete(quad.color));
     const nrm = box.spec.at === 0 ? 0 : S - 1;
     const uStart=Math.max(1,Math.ceil(box.u0*scale+.5)),uEnd=Math.min(ns,Math.ceil(box.u1*scale+.5)-1);
@@ -190,7 +193,7 @@ export function voxelizeCube(model, { scale = 1 } = {}) {
   }
   for (const quad of base) paint(quad);
   for (const quad of overlay) paint(quad);
-  for (const quad of cubeImageVoxelQuads(model,scale)) paint(quad);
+  for (const quad of cubeImageVoxelQuads(model,scale)) paint(toPhysical(quad));
   return {
     width: S,
     height: S,

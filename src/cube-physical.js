@@ -1,9 +1,11 @@
 /**
- * 타입 H 큐브 모델(buildHCubeModel)을 오른손 «물리 좌표»로 옮겨요. 3D 인쇄·종이공작 산출물의 공통 입력이에요.
+ * 큐브 모델(buildHCubeModel · buildYCubeModel)을 오른손 «물리 좌표»로 옮겨요. 3D 인쇄·종이공작과 3D 데이터 출력의 공통 입력이에요.
  *
- * 왜 따로 두나(설계 §2.1): 2.5D 화면 기저(h-render.js RIGHT·DOWN)는 RIGHT×DOWN 이 시선의 반대라서
- * 모델 좌표를 그대로 오른손 공간(3MF·STL·접은 종이)에 두면 여섯 면이 모두 정본 면 시트의 거울상이 돼요.
- * H 검출기는 거울 면을 거부하므로, 물리 산출물은 모델 좌표에 반사 S 를 한 번 걸어 만들어요.
+ * 왜 따로 두나(설계 §2.1): 2.5D 화면 기저(h-render.js RIGHT·DOWN, 타입 Y 도 같은 기저)는 RIGHT×DOWN 이 시선의 반대라서
+ * 모델 좌표를 그대로 오른손 공간(3MF·STL·접은 종이·glTF·Minecraft)에 두면 여섯 면이 모두 정본 면 시트의 거울상이 돼요.
+ * 검출기는 거울 면을 거부하므로, 오른손 산출물은 모델 좌표에 반사 S 를 한 번 걸어 만들어요 — 만들기용은 physicalHCube,
+ * 3D 데이터(glTF · 3D 데이터 전개도 · .schem, 타입 Y 포함)는 physicalCubeModel 이에요. 둘 다 같은 S 라 같은 물체이고,
+ * 2.5D 미리보기와 같은 시선(오른손 카메라)으로 보면 미리보기와 같은 그림이에요.
  * S 는 이 파일의 상수 하나(PHYSICAL_SWAP)이고, 결정 근거는 S 와 무관한 고정 카메라 판독 왕복 테스트예요.
  *
  * 면 틀은 손 표가 아니라 모델 쿼드의 꼭짓점에서 유도해요. 모델 좌표가 바뀌면 틀도 따라 바뀌고,
@@ -184,6 +186,48 @@ function checkPhys(phys){
       throw new TypeError(`PhysCube 면 ${face} 형식`);
   }
   return phys;
+}
+
+/** 면 이름(X·Y·Z + M·P) ↔ 정수 바깥 법선. 표를 두지 않고 이름 규약에서 유도해요. 모르는 이름은 null 이에요. */
+function faceNormal(face){
+  const match=typeof face==='string'?/^([XYZ])([MP])$/.exec(face):null;
+  if(!match)return null;
+  const normal=[0,0,0];normal['XYZ'.indexOf(match[1])]=match[2]==='P'?1:-1;return normal;
+}
+const faceOfNormal=normal=>{const axis=normal.findIndex(v=>v!==0);return `${AXIS_NAMES[axis].toUpperCase()}${normal[axis]>0?'P':'M'}`;};
+
+/**
+ * 렌더 좌표 큐브(buildHCubeModel · buildYCubeModel 의 쿼드·이미지)를 오른손 물리 좌표로 옮기는 사상이에요.
+ * 3D 데이터 출력(glTF · 3D 데이터 전개도 · .schem)이 이 사상 하나를 지나요 — 만들기용 physicalHCube 와 같은 반사 S 라
+ * 모든 오른손 출력이 같은 물체예요. 부호 있는 치환이라 좌표 산술 오차가 없어요.
+ *   point(p): S·p + 평행이동 · plane(face): 옮긴 면이 놓이는 평면 이름(모르는 이름은 undefined)
+ *   quad(q): 꼭짓점을 옮기고, S 가 반사(det −1)면 감기를 [c0, c3, c2, c1] 로 뒤집어 바깥 CCW 를 지켜요.
+ *     face 는 시트 정체(모델 면 이름) 그대로 두고 기하용 plane 을 붙여요(PhysCube 가 모델 면 이름을 키로 두는 것과 같은 규약).
+ *   image(p): 꼭짓점 순서(TL·TR·BR·BL = UV 대응)는 그대로 두고 옮겨요.
+ * 모양이 틀린 입력은 고치지 않고 그대로 넘겨요 — 각 writer 가 자기 오류로 거부해요.
+ */
+export function physicalCubeMap(n,{swap=PHYSICAL_SWAP}={}){
+  const matrix=checkSignedPermutation(swap,'물리 좌표 교환'),offset=cubeOffset(matrix,n),flip=det3(matrix)<0;
+  const point=p=>Array.isArray(p)&&p.length===3?add(mulMV(matrix,p),offset):p;
+  const plane=face=>{const normal=faceNormal(face);return normal?faceOfNormal(mulMV(matrix,normal)):undefined;};
+  const rewind=corners=>flip&&corners.length>1?[corners[0],...corners.slice(1).reverse()]:corners;
+  const quad=q=>q&&typeof q==='object'?{...q,plane:plane(q.face),corners:Array.isArray(q.corners)?rewind(q.corners.map(point)):q.corners}:q;
+  const image=p=>p&&typeof p==='object'?{...p,plane:plane(p.face),corners:Array.isArray(p.corners)?p.corners.map(point):p.corners}:p;
+  return Object.freeze({matrix:freezeMatrix(matrix),offset:freezeVec(offset),flip,point,plane,quad,image});
+}
+
+/**
+ * 3D 데이터 출력용 물리 좌표 모델이에요. 모델을 변이하지 않고, 이미 옮긴 모델(space 'physical')을 다시 옮기려 하면 던져요.
+ * @param {object} model buildHCubeModel / buildYCubeModel / generatorCubeModel 반환값(렌더 좌표)
+ * @param {{swap?:number[][]}} [options] swap: 대조군·검증 전용(기본 PHYSICAL_SWAP). 제품 경로는 생략해요.
+ * @returns {object} {...model, space:'physical', quads(plane 포함), images?(plane 포함)}
+ */
+export function physicalCubeModel(model,{swap=PHYSICAL_SWAP}={}){
+  if(!model||typeof model!=='object')throw new TypeError('cube model');
+  if(model.space==='physical')throw new RangeError('이미 물리 좌표로 옮긴 큐브 모델이에요');
+  const map=physicalCubeMap(model.n,{swap});
+  return {...model,space:'physical',quads:Array.isArray(model.quads)?model.quads.map(map.quad):model.quads,
+    ...(model.images!==undefined?{images:Array.isArray(model.images)?model.images.map(map.image):model.images}:{})};
 }
 
 /**

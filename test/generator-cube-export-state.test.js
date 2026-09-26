@@ -21,7 +21,6 @@ function harness({gzip='resolve',clipboard='resolve',compression=true}={}){
   const c={TextEncoder,TextDecoder,Blob,Error,RangeError,TypeError,CompressionStream:compression?class{}:undefined,
     ClipboardItem:class{constructor(data){this.data=data;}},current:current('old'),generatorState:{type:'Y',preset:'mono',exportSize:'auto',exportWidth:1008,exportHeight:1008},genI18n:{lang:'ko'},
     $:node,document:{querySelectorAll:()=>[]},paletteOf:()=>({}),flashCopied:()=>{},hImageEditor:{flush(){}},hExportIconMarkup:()=>'',hBlockIconMarkup:()=>'',flushes:0,pendingCurrent:null,
-    foldNote:'',hNetFoldNote:()=>c.foldNote,
     // 빈 면 QR 의 .schem 블록 수 안내(판정은 슬라이스 밖 hSchemQrNote — generator-h-qr-state 가 실제 함수를 재요).
     schemNote:'',hSchemQrNote:()=>c.schemNote,
     flushScheduledRender:()=>{c.flushes++;if(c.pendingCurrent){c.current=c.pendingCurrent;c.pendingCurrent=null;return true;}return false;},
@@ -117,20 +116,22 @@ test('PNG는 이미지 Blob으로, SVG와 glTF는 문자열로 복사해요',asy
   for(const h of [png,svg,gltf])assert.equal(h.downloads.length,0);
 });
 
-test('타입 H 의 구 전개도 버튼은 설명 꼬리(hNetFoldNote)를 title·aria-label 에 달고, 다른 버튼은 그대로예요', async () => {
+test('전개도 버튼 설명은 타입과 무관하게 기본 문구 그대로예요 — 구 «거울 · 접어도 판독 안 됨» 꼬리는 폐기했어요(2026-09-26)', async () => {
+  // 3D 데이터 전개도는 물리 좌표로 펼쳐 접어도 읽혀요(test/cube-data-orientation). 그래서 H 에서만 붙던 안내 꼬리(hNetFoldNote ·
+  // g1131 · g1132)를 없앴어요. 이 자는 그 꼬리가 조용히 되살아나지 않게, 동기화 뒤 title·aria-label 이 기본 문구와 같은지 재요.
   const NET = ['exportNetPng', 'exportNetSvg', 'copyNetPng', 'copyNetSvg'], OTHER = ['exportCubeGltf', 'copyCubeGltf'];
-  const y = harness(); y.sync();
-  const plain = Object.fromEntries([...NET, ...OTHER].map((id) => [id, {title: y.node(id).title, aria: y.node(id).attrs['aria-label']}]));
-  for (const id of [...NET, ...OTHER]) assert.equal(plain[id].aria, plain[id].title, id + ' 기준선: aria-label = title');
-  const h = harness(); h.c.foldNote = '«접어도 판독 안 됨»';
-  for (let k = 0; k < 2; k += 1) { // 두 번째 동기화에서도 꼬리가 겹쳐 붙지 않아요
-    h.sync();
-    for (const id of NET) { const want = plain[id].title + ' — «접어도 판독 안 됨»'; assert.equal(h.node(id).title, want, id); assert.equal(h.node(id).attrs['aria-label'], want, id + ' aria-label'); }
-    for (const id of OTHER) { assert.equal(h.node(id).title, plain[id].title, id + ' 는 설명이 바뀌면 안 돼요'); assert.equal(h.node(id).attrs['aria-label'], plain[id].aria, id + ' aria-label'); }
+  for (const type of ['Y', 'H']) {
+    const h = harness(); h.c.generatorState.type = type; h.c.current = {...current('now'), type};
+    for (let k = 0; k < 2; k += 1) {
+      h.sync();
+      for (const id of [...NET, ...OTHER]) {
+        const want = vm.runInContext(`cubeText(${JSON.stringify({exportNetPng: 'netPng', exportNetSvg: 'netSvg', copyNetPng: 'copyPng', copyNetSvg: 'copySvg', exportCubeGltf: 'gltf', copyCubeGltf: 'copyGltf'}[id])})`, h.c);
+        assert.equal(h.node(id).title, want, `${type} ${id}: 기본 문구 그대로`); assert.equal(h.node(id).attrs['aria-label'], want, `${type} ${id} aria-label`);
+      }
+    }
   }
-  const before = harness(); await before.click('exportNetPng');
-  const after = harness(); after.c.foldNote = '«접어도 판독 안 됨»'; after.sync(); await after.click('exportNetPng');
-  assert.equal(after.downloads[0].text, before.downloads[0].text, '클릭 경로가 title·foldNote 를 읽지 않아요');
+  assert.equal(/function hNetFoldNote\(|hNetFoldNote\(\)/.test(index), false, '구 안내 꼬리 함수가 없어야 해요');
+  assert.equal(/"g113[12]"\s*:/.test(index), false, '구 안내 문구 키(g1131 · g1132)가 사전에 없어야 해요');
 });
 
 test('.schem 면 QR 안내(hSchemQrNote)는 있을 때만 버튼 옆 줄로 보이고, 없으면 숨고 비워요', async () => {
@@ -142,38 +143,4 @@ test('.schem 면 QR 안내(hSchemQrNote)는 있을 때만 버튼 옆 줄로 보�
   const markup = index.slice(index.indexOf('<section id="cubeExportSection"'), index.indexOf('</section>', index.indexOf('<section id="cubeExportSection"')));
   assert.match(markup, /id="exportCubeSchem"[^>]*aria-describedby="cubeSchemQrHint"/, '버튼이 안내 줄을 설명으로 가리켜요');
   assert.ok(markup.indexOf('id="cubeSchemQrHint"') < markup.indexOf('id="cubeBlockScaleOptions"'), '고급 전용 블록 카드 밖(앞)이라 일반 모드에서도 보여요');
-});
-
-/** index.html 에서 함수 선언 하나를 괄호 균형으로 잘라요(한 줄 여부·본문 철자에 묶이지 않게). */
-function extractFunction(src, name) {
-  const start = src.indexOf('function ' + name + '(');
-  assert.ok(start >= 0, name + ' 선언이 있어야 해요');
-  let i = src.indexOf('{', start), depth = 0;
-  for (; i < src.length; i++) { if (src[i] === '{') depth++; else if (src[i] === '}' && --depth === 0) return {text: src.slice(start, i + 1), start}; }
-  throw new Error(name + ' 괄호가 닫히지 않았어요');
-}
-
-test('hNetFoldNote: 표시 조건 = H · 새 섹션 안내 조건 = 새 섹션이 보임, 전각 마침표 뒤에는 공백 없음', () => {
-  const fn = extractFunction(index, 'hNetFoldNote');
-  assert.ok(fn.start > index.indexOf('function flashCopied('), '구 3D 데이터 슬라이스 밖에 있어야 해요');
-  // 함수 자신의 계약: 섹션 표시 여부(cubeMakeVisible)를 주입해 두 갈래를 모두 재요. 실제 표시 조건과의 조합은 아래 테스트가 재요.
-  const run = (hActive, section, t = (k) => '«' + k + '».') => { const c = {hGeneratorActive: () => hActive, cubeMakeVisible: () => hActive && section, t}; vm.createContext(c); vm.runInContext(fn.text, c); return vm.runInContext('hNetFoldNote()', c); };
-  for (const section of [false, true]) assert.equal(run(false, section), '', 'H 가 아니면 빈 문자열');
-  assert.equal(run(true, false), '«g1131».', '섹션이 숨으면 섹션 안내를 붙이지 않아요');
-  assert.equal(run(true, true), '«g1131». «g1132».');
-  const ja = (k) => (k === 'g1131' ? '反転します。' : '「製作用ファイル」を使ってください。');
-  assert.equal(run(true, true, ja), '反転します。「製作用ファイル」を使ってください。', '전각 마침표 뒤에는 공백을 넣지 않아요');
-});
-
-test('hNetFoldNote × 실제 cubeMakeVisible: 타입 H 면 정식 화면 · 시험판 모두 «만들기용 파일» 안내가 붙어요', () => {
-  const note = extractFunction(index, 'hNetFoldNote'), visible = extractFunction(index, 'cubeMakeVisible');
-  const run = (hActive, lab) => {
-    const c = {hGeneratorActive: () => hActive, isLabPath: () => lab, t: (k) => '«' + k + '».'};
-    vm.createContext(c); vm.runInContext(visible.text + '\n' + note.text, c);
-    return vm.runInContext('hNetFoldNote()', c);
-  };
-  for (const lab of [false, true]) {
-    assert.equal(run(false, lab), '', `lab=${lab}: H 가 아니면 빈 문자열`);
-    assert.equal(run(true, lab), '«g1131». «g1132».', `lab=${lab}: 정식 화면 · 시험판 모두 섹션 안내가 붙어요`);
-  }
 });
